@@ -121,7 +121,7 @@ catalogs:
   frontend:
     '@vueuse/core': ^14.4.0
     pinia: ^3.0.4
-    vue: ^3.5.39
+    vue: ^3.5.42
   icons:
     '@iconify-json/carbon': ^1.2.27
     '@iconify-json/twemoji': ^1.2.5
@@ -210,6 +210,8 @@ overrides:
   postcss: 8.5.23
   preact: 10.29.6
   qs: 6.16.1
+  proxy-addr: 2.0.8
+  source-map-js: 1.2.2
   rollup@^2.0.0: 2.80.0
   rollup@^3.0.0: 3.30.0
   rollup@^4.0.0: 4.62.2
@@ -217,7 +219,8 @@ overrides:
   serialize-javascript: 7.0.7
   seroval: 1.6.11
   shell-quote: 1.12.0
-  simple-git: 3.36.0
+  simple-git: 4.0.1
+  '@simple-git/argv-parser': 2.0.1
   socket.io-parser@^4.0.0: 4.2.7
   srvx: 0.11.21
   svgo: 4.1.0

@@ -14,7 +14,8 @@
     "audit is asked instead.",
     "2026-10-03: GHSA-86w9-cpqp-85rv (node-forge) and GHSA-vfj7-8cjw-p6xm (braces) entered the --prod audit with no patched release, failing every PR. Allowlisted for 30 days with traced paths; the owner approved the exception.",
     "2026-10-24: GHSA-jr5w-w6x2-84p9 (electron) and GHSA-mrhx-c7xc-m3w5 (zod 3.25.76) entered the --prod audit with no patch on the installed lines, failing every PR alongside dompurify, body-parser and undici advisories that the same change patched. Allowlisted for 30 days with traced paths; the owner approved the exception. GHSA-vfj7-8cjw-p6xm (braces) was withdrawn on 2026-10-23 and its entry removed.",
-    "2026-11-15: the fifteen entries dated 2026-11-09 (nuxt, simple-git, @simple-git/argv-parser, source-map-js, proxy-addr, @vue/server-renderer, tinypool, sharp) expired and failed every PR into master. Renewed unchanged for 30 days to unblock merges; the owner approved the renewal. The dependency upgrades that remove them follow in a separate PR."
+    "2026-11-15: the fifteen entries dated 2026-11-09 (nuxt, simple-git, @simple-git/argv-parser, source-map-js, proxy-addr, @vue/server-renderer, tinypool, sharp) expired and failed every PR into master. Renewed unchanged for 30 days to unblock merges; the owner approved the renewal. The dependency upgrades that remove them follow in a separate PR.",
+    "2026-11-15: Cleared source-map-js, proxy-addr, @vue/server-renderer, tinypool, sharp, simple-git and @simple-git/argv-parser after raising their patched dependency floors. packages/test keeps Vitest in devDependencies because it is a test-only workspace; Nuxt remains blocked by the measured unhead 2.1.15 to 3.x migration (#1098)."
   ],
   "advisories": [
     {
@@ -69,116 +70,6 @@
         "4.4.8"
       ],
       "reason": "Reaches --prod through apps/nexus's production dependency @sentry/nuxt@10.65.0, which depends on nuxt by construction \u2014 a Sentry integration for Nuxt cannot not. Traced with `pnpm -C apps/nexus why nuxt --prod`: @sentry/nuxt -> nuxt -> @nuxt/devtools -> @nuxt/kit. Not reclassifiable: Sentry reporting is runtime behaviour, not a build input. Blocked behind the unhead 2 -> 3 migration (#1098).",
-      "owner": "#328",
-      "expires": "2026-12-15"
-    },
-    {
-      "id": "GHSA-v5rq-49vh-5v5c",
-      "module": "@simple-git/argv-parser",
-      "severity": "critical",
-      "versions": [
-        "1.1.1"
-      ],
-      "reason": "Upstream transitive dependency advisory for @simple-git/argv-parser; allowlisted for release parity with active audit gate.",
-      "owner": "#328",
-      "expires": "2026-12-15"
-    },
-    {
-      "id": "GHSA-x6jw-m9v5-85vh",
-      "module": "simple-git",
-      "severity": "critical",
-      "versions": [
-        "3.36.0"
-      ],
-      "reason": "Upstream transitive dependency advisory for simple-git; allowlisted for release parity with active audit gate.",
-      "owner": "#328",
-      "expires": "2026-12-15"
-    },
-    {
-      "id": "GHSA-g4wm-2vf7-vfgr",
-      "module": "simple-git",
-      "severity": "high",
-      "versions": [
-        "3.36.0"
-      ],
-      "reason": "Upstream transitive dependency advisory for simple-git; allowlisted for release parity with active audit gate.",
-      "owner": "#328",
-      "expires": "2026-12-15"
-    },
-    {
-      "id": "GHSA-858h-whjf-mvg5",
-      "module": "simple-git",
-      "severity": "high",
-      "versions": [
-        "3.36.0"
-      ],
-      "reason": "Upstream transitive dependency advisory for simple-git; allowlisted for release parity with active audit gate.",
-      "owner": "#328",
-      "expires": "2026-12-15"
-    },
-    {
-      "id": "GHSA-68fv-2mgg-jv7q",
-      "module": "source-map-js",
-      "severity": "high",
-      "versions": [
-        "1.2.1"
-      ],
-      "reason": "Upstream transitive dependency advisory for source-map-js; allowlisted for release parity with active audit gate.",
-      "owner": "#328",
-      "expires": "2026-12-15"
-    },
-    {
-      "id": "GHSA-jqcg-44mw-7w3h",
-      "module": "proxy-addr",
-      "severity": "critical",
-      "versions": [
-        "2.0.7"
-      ],
-      "reason": "Upstream transitive dependency advisory for proxy-addr; allowlisted for release parity with active audit gate.",
-      "owner": "#328",
-      "expires": "2026-12-15"
-    },
-    {
-      "id": "GHSA-g2v6-rqmx-r4w6",
-      "module": "@vue/server-renderer",
-      "severity": "high",
-      "versions": [
-        "3.5.39"
-      ],
-      "reason": "Upstream transitive dependency advisory for @vue/server-renderer; allowlisted for release parity with active audit gate.",
-      "owner": "#328",
-      "expires": "2026-12-15"
-    },
-    {
-      "id": "GHSA-5gmw-xhrv-c9v3",
-      "module": "tinypool",
-      "severity": "critical",
-      "versions": [
-        "1.1.1"
-      ],
-      "reason": "Upstream transitive dependency advisory for tinypool; allowlisted for release parity with active audit gate.",
-      "owner": "#328",
-      "expires": "2026-12-15"
-    },
-    {
-      "id": "GHSA-85c8-ppgw-ccpr",
-      "module": "tinypool",
-      "severity": "critical",
-      "versions": [
-        "1.1.1"
-      ],
-      "reason": "Upstream transitive dependency advisory for tinypool; allowlisted for release parity with active audit gate.",
-      "owner": "#328",
-      "expires": "2026-12-15"
-    },
-    {
-      "id": "GHSA-wq5f-xc86-pv6w",
-      "module": "sharp",
-      "severity": "high",
-      "versions": [
-        "0.35.4"
-      ],
-      "reason": "Upstream transitive dependency advisory for sharp; allowlisted for release parity with active audit gate.",
       "owner": "#328",
       "expires": "2026-12-15"
     },

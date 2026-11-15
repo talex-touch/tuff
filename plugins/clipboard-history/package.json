@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@talex-touch/utils": "workspace:^",
-    "vue": "^3.5.39",
+    "vue": "catalog:frontend",
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
