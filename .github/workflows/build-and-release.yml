@@ -88,7 +88,7 @@ jobs:
     name: Build and Release Tuff App
     needs: release-quality
     runs-on: ${{ matrix.image }}
-    timeout-minutes: 60
+    timeout-minutes: ${{ matrix.timeout }}
     if: >
       needs.release-quality.result == 'success'
       && (github.event_name != 'workflow_dispatch' || github.event.inputs.sync_tag == '')
@@ -113,13 +113,18 @@ jobs:
         # up by that exact string. Renaming `os` therefore disables code signing silently.
         # `image` is the runner that actually executes, pinned so a tag rebuild cannot land on
         # a different toolchain. Bump `image` deliberately; leave `os` alone.
+        # `timeout` is per platform. macOS builds, signs and notarizes two architectures:
+        # v2.4.15-beta.6 took 59m51s and beta.9 56m against the old shared 60-minute cap.
         include:
           - os: windows-2022
             image: windows-2022
+            timeout: 60
           - os: macos-latest
             image: macos-26
+            timeout: 90
           - os: ubuntu-latest
             image: ubuntu-24.04
+            timeout: 60
 
     steps:
       - name: Check out git repository
