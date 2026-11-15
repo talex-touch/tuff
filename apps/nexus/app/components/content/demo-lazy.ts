@@ -63,3 +63,60 @@ export function queueDemoActivation(activate: DemoActivation, scheduler: DemoAct
       pendingActivations.splice(index, 1)
   }
 }
+
+/**
+ * Longest a loader download waits for an idle slot. Downloads run one at a time, so a longer wait
+ * costs little, and the activation queue is never held up by them.
+ */
+export const DEMO_PREFETCH_IDLE_TIMEOUT_MS = 2000
+
+/** Where requestIdleCallback is missing, the next download starts this long after the last one. */
+const DEMO_PREFETCH_FALLBACK_DELAY_MS = 200
+
+type DemoPrefetch = () => Promise<unknown>
+
+const pendingPrefetches: DemoPrefetch[] = []
+let prefetchInFlight = false
+let prefetchFlushScheduled = false
+
+function schedulePrefetchFlush(scheduler: DemoActivationScheduler) {
+  if (prefetchFlushScheduled || prefetchInFlight || !pendingPrefetches.length)
+    return
+
+  prefetchFlushScheduled = true
+  const flush = () => {
+    prefetchFlushScheduled = false
+    const prefetch = pendingPrefetches.shift()
+    if (!prefetch)
+      return
+
+    prefetchInFlight = true
+    prefetch()
+      .catch(() => {})
+      .finally(() => {
+        prefetchInFlight = false
+        schedulePrefetchFlush(scheduler)
+      })
+  }
+
+  if (typeof scheduler.requestIdleCallback === 'function') {
+    scheduler.requestIdleCallback(flush, { timeout: DEMO_PREFETCH_IDLE_TIMEOUT_MS })
+    return
+  }
+  scheduler.setTimeout(flush, DEMO_PREFETCH_FALLBACK_DELAY_MS)
+}
+
+/**
+ * Fetches a demo's loader ahead of its activation: one download at a time, in mount order, and only
+ * while the page is idle. Returns a cancel for a wrapper that unmounts before its turn.
+ */
+export function queueDemoPrefetch(prefetch: DemoPrefetch, scheduler: DemoActivationScheduler = window) {
+  pendingPrefetches.push(prefetch)
+  schedulePrefetchFlush(scheduler)
+
+  return () => {
+    const index = pendingPrefetches.indexOf(prefetch)
+    if (index >= 0)
+      pendingPrefetches.splice(index, 1)
+  }
+}

@@ -30,7 +30,7 @@ Tuffex（`@talex-touch/tuffex`）是服务 CoreBox、插件界面与本文档站
 | 套件 | 分组 | 页数 | 引入入口 |
 |------|------|------|----------|
 | [理念](./index.zh.mdc) | 安装、设计规则、概念手册与工具 | 27 | 纯文档 |
-| [模板](./template-shell.zh.mdc) | 应用框架 / 内容运营 / AI 应用 / 数据与流程 | 22 | 组合现有入口 |
+| [模板](./template-shell.zh.mdc) | 应用框架 / 内容运营 / AI 应用 / 数据与流程 | 25 | 组合现有入口 |
 | [基础套件](./base-suite.zh.mdc) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 100 | `@talex-touch/tuffex/base` |
 | [进阶套件](./pro-suite.zh.mdc) | 高级交互 / 视觉效果 / 底层原语 | 41 | `@talex-touch/tuffex/pro` |
 | [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 36 | `@talex-touch/tuffex/ai` |
@@ -60,6 +60,7 @@ code: |
 ## 教程路径
 
 - 先读《[Tuffex 组合界面教程](../getting-started/tuffex-composition.zh.mdc)》，按「操作区 → 状态区 → 数据区」切分页面。
+- 整页场景先看下方的「模板」一节。每个模板都是一整页的现成组合，先套用它的结构，再替换为真实数据。
 - 列表页用 `TxSearchInput`、`TxSearchSelect`、`TxSearchEmpty` 串起搜索与无结果恢复，`TxDataTable` + `TxPagination` 承载数据。
 - 数据区同时设计加载、空态与错误：`TxLoadingState`、`TxEmptyState`、`TxErrorState`。
 - 后台页组合 `TxDataTable`、`TxStatusBadge`、`TxProgressBar` 与图表，不手写一次性 SVG 或状态 UI；设置页用 `TxTabs` 分区、`TxDrawer` 承载高密度配置。
@@ -73,39 +74,44 @@ code: |
 
 ## 模板
 
+模板是整页组合：用现有组件拼成一个完整页面，放在统一的舞台里展示。模板只存在于文档中，不是可导入的组件。
+
 ### 应用框架
 
-- [应用外壳](./template-shell.zh.mdc)
-- [启动器](./template-launcher.zh.mdc)
-- [设置](./template-settings.zh.mdc)
-- [引导](./template-onboarding.zh.mdc)
-- [插件工作台](./template-workbench.zh.mdc)
+- [应用外壳](./template-shell.zh.mdc)：侧栏、命令面板、通知与看板组成的应用外壳
+- [启动器](./template-launcher.zh.mdc)：仿 CoreBox、带实时预览的键盘优先启动器
+- [设置](./template-settings.zh.mdc)：分区导航、分组设置行、改动即时保存的设置中心
+- [引导](./template-onboarding.zh.mdc)：从登录、工作区、偏好到系统权限的五步首启引导
+- [插件工作台](./template-workbench.zh.mdc)：带文件树、代码编辑器、终端与热重载预览的插件开发工作台
+- [账户中心](./template-account.zh.mdc)：资料、安全、会话与通知，删除会话需确认
 
 ### 内容运营
 
-- [CMS](./template-cms.zh.mdc)
-- [图库](./template-gallery.zh.mdc)
-- [收件箱](./template-inbox.zh.mdc)
-- [文件](./template-files.zh.mdc)
-- [商店](./template-store.zh.mdc)
-- [文档](./template-docs.zh.mdc)
-- [协作笔记](./template-notes.zh.mdc)
-- [版本亮点](./template-showcase.zh.mdc)
+- [CMS](./template-cms.zh.mdc)：带状态筛选、批量操作与抽屉编辑的内容后台
+- [图库](./template-gallery.zh.mdc)：带合集、三种布局与作品详情的作品墙
+- [收件箱](./template-inbox.zh.mdc)：带键盘快捷键与新邮件提示的三栏收件箱
+- [文件](./template-files.zh.mdc)：带文件夹树、多选、右键菜单与拖入上传的文件管理器
+- [商店](./template-store.zh.mdc)：带精选、搜索、权限详情与安装流程的插件商店
+- [文档](./template-docs.zh.mdc)：带目录树、本页目录与 ⌘K 检索的帮助中心阅读器
+- [协作笔记](./template-notes.zh.mdc)：带笔记本目录、所见即所得编辑与多人协作的笔记应用
+- [版本亮点](./template-showcase.zh.mdc)：用动效标题、卡片轮播与指标讲清一次版本更新的发布页
+- [搜索结果](./template-search.zh.mdc)：带类型与时间筛选、分页的搜索结果页
 
 ### AI 应用
 
-- [智能体对话](./template-agent-chat.zh.mdc)
-- [AI 回答](./template-ai-answer.zh.mdc)
-- [研究](./template-research.zh.mdc)
-- [语音速记](./template-voice.zh.mdc)
-- [图像工作室](./template-image-studio.zh.mdc)
+- [智能体对话](./template-agent-chat.zh.mdc)：带权限闸门、实时计划与改动面板的编码智能体会话
+- [AI 回答](./template-ai-answer.zh.mdc)：流式写出、带编号引用与追问的多轮问答
+- [研究](./template-research.zh.mdc)：带研究过程、编号引用与证据栏的研究助手
+- [语音速记](./template-voice.zh.mdc)：边录边转写、录完生成摘要与待办的语音速记
+- [图像工作室](./template-image-studio.zh.mdc)：带风格参数、生成占位与大图预览的图像生成工作室
 
 ### 数据与流程
 
-- [仪表盘](./template-dashboard.zh.mdc)
-- [自动化](./template-automation.zh.mdc)
-- [发布](./template-release.zh.mdc)
-- [训练实验](./template-experiments.zh.mdc)
+- [仪表盘](./template-dashboard.zh.mdc)：带指标卡、趋势图与热门插件表的产品数据看板
+- [自动化](./template-automation.zh.mdc)：带流程画布、节点配置与运行日志的自动化编辑器
+- [发布](./template-release.zh.mdc)：从 CI 构建到灰度放量、由人审批的发布控制台
+- [训练实验](./template-experiments.zh.mdc)：对比多次训练运行的曲线、超参扫描与配置的实验看板
+- [Kanban 任务看板](./template-kanban.zh.mdc)：四列任务看板，拖拽换列，方向键也能移动卡片
 
 ## 基础组件
 

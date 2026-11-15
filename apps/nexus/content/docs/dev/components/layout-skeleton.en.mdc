@@ -46,15 +46,8 @@ code: |
 ## API Reference
 
 ### Props
-::TuffPropsTable
----
-rows:
-  - name: '—'
-    type: '-'
-    default: '-'
-    description: 'No extra props; size follows the container'
----
-::
+
+No props; the size follows the container.
 
 ## Overview
 

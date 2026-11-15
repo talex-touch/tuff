@@ -37,7 +37,7 @@ code: |
 
 ### Edge and States
 
-The steppers sit inside the same inset ring, and their outer corners stay concentric with the box. State colours match the input.
+The steppers sit inside the same inset ring with concentric outer corners, and state colours match the input.
 
 :::TuffDemoWrapper{demo="NumberInputEdgeDemo" code-lang="vue"}
 ---
@@ -55,7 +55,7 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `modelValue` / `v-model` | `number \| null` | `null` | The number; `null` when the field is empty. |
+| `modelValue` | `number \| null` | `null` | The number; `null` when the field is empty, bound with `v-model`. |
 | `min` | `number` | - | Minimum value. |
 | `max` | `number` | - | Maximum value. |
 | `step` | `number` | `1` | Increment of the step buttons and the native input. |

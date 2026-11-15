@@ -19,7 +19,7 @@ Hover a mark to read its actual values. Press and drag to sweep across marks: th
 
 ### Catalog and data contracts
 
-The demo renders every original catalog ID, switches the actual supplied dataset, and includes all source controls. Filtering changes which examples are displayed; it does not alias different chart types to one drawing.
+The demo renders every original catalog ID and switches the supplied dataset; filtering changes which examples are shown, never aliasing different chart types.
 
 :::TuffDemoWrapper{demo="MonoChartDemo" code-lang="vue" title="Full mono chart catalog" description="30 original variants, repository disclosure, live-source loading, palette controls and date filtering."}
 ---
@@ -78,11 +78,14 @@ code: |
 
 ### Source capabilities
 
-`github-activity` preserves the extra `GitHubActivity` calendar: fitted recent columns, configurable cell size and month window, month headers, one-color or four/five-color intensity scales, year metadata, stacked repository avatars and controlled/uncontrolled repository expansion. Pass `data.contributions` and `data.repos` to use your source. Explicit empty arrays remain empty.
+`github-activity` is the extra `GitHubActivity` calendar; its capabilities and data sources are listed below.
 
-For real public data, pass `username`. Missing contribution/repository fields are loaded from the upstream public calendar endpoint and GitHub public events API through the shared network client, forwarding the same cancellation signal; no credentials are embedded. `activityLoader(username, signal)` replaces this adapter for a proxy or authenticated source. Failures emit `error` and show the configurable retry state; there is no generated-data fallback. Requests are aborted on source changes, offscreen suspension, deactivation and unmount; a stale response cannot replace a newer source.
-
-`periods` can select `periodData` datasets (shallowly merged with `data`) or inclusive numeric/ISO-date ranges. Ranges filter series points, categories, candles, range bands and contribution dates. A label-only period without matching data or a range merely emits the selection; it cannot invent a new time window. The demo's date filter removes real points, while its dataset switch replaces real input values across all chart types.
+| Topic | Notes |
+| --- | --- |
+| Calendar | Fits the most recent columns to the width, with adjustable cell size and month window, month headers, one-color or four/five-color intensity scales, year metadata, stacked repository avatars and repository expansion. Pass `data.contributions` and `data.repos` to use your own source; explicit empty arrays stay empty. |
+| Public data | With `username`, missing activity and repository fields load through the shared network client from the upstream public calendar endpoint and the GitHub public events API, with no credentials embedded; `activityLoader(username, signal)` swaps in a proxy or authenticated source. |
+| Failure and cancellation | A failure emits `error` and shows the configurable retry state, with no generated-data fallback; source changes, offscreen suspension, deactivation and unmount abort requests, and a stale response cannot replace a newer source. |
+| Periods | `periods` can select `periodData` datasets (shallowly merged with `data`) or inclusive numeric/ISO-date ranges, filtering series points, categories, candles, range bands and contribution dates. A period without matching data or a range only emits the selection and cannot invent a time window. |
 
 ### Best Practices
 
@@ -161,7 +164,12 @@ All types are exported from `@talex-touch/tuffex/charts`.
 
 | Event | Payload | Meaning |
 | --- | --- | --- |
-| `update:seriesMode`, `update:layout`, `update:curve`, `update:showLine`, `update:period`, `update:open` | Corresponding prop value | Controlled switch/disclosure changes; absent models use local state. |
+| `update:seriesMode` | `'single' \| 'dual'` | Controlled switch; without a matching model, local state is used. |
+| `update:layout` | `'col' \| 'row'` | Controlled switch; without a matching model, local state is used. |
+| `update:curve` | `'monotone' \| 'natural'` | Controlled switch; without a matching model, local state is used. |
+| `update:showLine` | `boolean` | Controlled switch; without a matching model, local state is used. |
+| `update:period` | `string` | Controlled switch; without a matching model, local state is used. |
+| `update:open` | `boolean` | Controlled disclosure change; without a matching model, local state is used. |
 | `hover` | `MonoChartHit \| null` | `{key,label,rows:[{name,value}],value?,x,y}`; coordinates use the SVG viewBox. Null clears inspection. |
 | `select` | `MonoChartHit` | Pointer click, legend activation, Enter or Space; ending a drag does not select. No business action is simulated. |
 | `load` | `{contributions?,repos?}` | Real source data accepted by the current request. |
@@ -191,4 +199,8 @@ All types are exported from `@talex-touch/tuffex/charts`.
 
 ## Technologies
 
-The implementation ports the distinct rendering contracts of all 29 files under Amicro `src/components/mono-charts` plus its 30-row catalog. `GitHubActivity` is an additional variant, not a renamed activity palette. Geometry is pure and data-driven; chart scale/curve/tooltip-position/Sankey helpers are reused. Weighted allocation is calculated from input rather than the upstream demo's fixed CSS grid. A drag captures the pointer on the SVG, so its reading is resolved from coordinates: the pointer is clamped into the union of the mark boxes, `elementFromPoint` finds the mark, and a gap falls to the nearest mark in its column, its row or the plane (`geometry.axis`); the slop, capture, click swallowing and Escape come from the shared `utils/press-scrub.ts`. Request abort/version ownership prevents stale updates, and the shared motion activity helper owns visibility/KeepAlive cleanup. The repository disclosure transition runs only while active and with no reduced-motion preference. No browser API is touched during SVG SSR. Final build, browser and lifecycle verification are performed by the integration owner.
+- Component source: `packages/tuffex/packages/components/src/charts/src/mono-chart/src/`.
+- Geometry is pure and driven by `data`, reusing the scale, curve, Sankey and tooltip-placement helpers; a drag captures the pointer on the SVG and reads values back from coordinates (`elementFromPoint`), while the slop, capture and Escape come from the shared `utils/press-scrub.ts`.
+- Ported from Amicro `src/components/mono-charts`; `github-activity` is an additional variant, not a renamed activity palette.
+
+<TuffDocSourceLink path="packages/tuffex/packages/components/src/charts/src/mono-chart/index.ts" />

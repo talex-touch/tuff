@@ -92,6 +92,15 @@ onMounted(() => {
 
 onUnmounted(() => {
   focusReturn.restore()
+
+  // A host that unmounts the dialog without calling close() never reaches destroy(), so the
+  // app would keep the zoom and dim applied on open. Clear them here, as destroy() does.
+  if (didApplyBackgroundBlur) {
+    const app = document.getElementById('app')
+    if (app) {
+      app.style.cssText = ''
+    }
+  }
 })
 
 /**
@@ -125,7 +134,7 @@ function applyBackgroundBlur(apply: boolean): void {
 
   if (apply) {
     Object.assign(app.style, {
-      transition: '.75s',
+      transition: 'transform .75s, opacity .75s',
       transform: 'scale(1.25)',
       opacity: '.75',
     })

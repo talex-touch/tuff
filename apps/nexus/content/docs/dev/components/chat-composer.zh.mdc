@@ -22,6 +22,7 @@ function onSend(payload: { text: string }) {
 ## 用法
 
 ### 基础
+纯文本输入与发送；要 `@` 数据源或 `/` 命令菜单时改用 [PromptBar 提示条](/docs/dev/components/prompt-bar)。
 :::TuffDemoWrapper{demo="ChatComposerChatComposerDemo" code-lang="vue"}
 ---
 code: |
@@ -36,6 +37,13 @@ code: |
 :::TuffDemoWrapper{demo="ChatComposerTrayDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const text = ref('')
+  const placement = ref<'top' | 'bottom'>('bottom')
+  </script>
+
   <template>
     <TxChatComposer v-model="text" :tray-placement="placement" tray-label="上下文" show-attachment-button>
       <template #tray>
@@ -52,6 +60,13 @@ code: |
 :::TuffDemoWrapper{demo="ChatComposerModeChipDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const text = ref('')
+  const unrestricted = ref(false)
+  </script>
+
   <template>
     <TxChatComposer v-model="text">
       <template #toolbar-left>

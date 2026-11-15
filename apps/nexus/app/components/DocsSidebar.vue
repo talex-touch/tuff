@@ -246,6 +246,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/template-settings',
     '/docs/dev/components/template-onboarding',
     '/docs/dev/components/template-workbench',
+    '/docs/dev/components/template-account',
     // templates — Content
     '/docs/dev/components/template-cms',
     '/docs/dev/components/template-gallery',
@@ -255,6 +256,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/template-docs',
     '/docs/dev/components/template-notes',
     '/docs/dev/components/template-showcase',
+    '/docs/dev/components/template-search',
     // templates — AI apps
     '/docs/dev/components/template-agent-chat',
     '/docs/dev/components/template-ai-answer',
@@ -266,6 +268,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/template-automation',
     '/docs/dev/components/template-release',
     '/docs/dev/components/template-experiments',
+    '/docs/dev/components/template-kanban',
     // ── suite: base — overview
     '/docs/dev/components/base-suite',
     // base — Basic
@@ -1868,9 +1871,8 @@ onBeforeUnmount(() => {
   /* Sticky, so a hairline rather than a shadow separates it from the list
      scrolling underneath. */
   border-bottom: 1px solid var(--tx-border-color-lighter, #ebeef5);
-  background: color-mix(in srgb, var(--tx-bg-color, #fff) 86%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  /* Opaque: a blur here resampled the sidebar's backdrop on every scroll frame. */
+  background: var(--tx-bg-color, #fff);
 }
 
 /* Under dark the page is darker than every fill token, so the thumb has to be

@@ -63,7 +63,7 @@ code: |
 :::
 
 ### Loading
-Set `loading` while a server confirms the change. The thumb stays on the old value as a spinning ring, and toggling is blocked.
+Set `loading` while a server confirms the change; the thumb stays on the old value as a spinning ring, and toggling is blocked.
 :::TuffDemoWrapper{demo="SwitchLoadingDemo" code-lang="vue"}
 ---
 code: |
@@ -92,7 +92,7 @@ code: |
 :::
 
 ### Labels
-A changing `label` crossfades; `labelPlacement` puts it before or after the track. The default slot renders as-is, without the transition.
+A changing `label` crossfades; `labelPlacement` puts it before or after the track; the default slot renders as-is, without the transition.
 :::TuffDemoWrapper{demo="SwitchLabelDemo" code-lang="vue"}
 ---
 code: |
@@ -161,6 +161,8 @@ code: |
 | `size` | `'small' \| 'default' \| 'large'` | `'default'` | Size; also sets the label's font size and gap. |
 | `disabled` | `boolean` | `false` | Blocks toggling and removes the switch from the tab order. |
 | `loading` | `boolean` | `false` | Shows a spinning ring and blocks toggling. |
+| `ariaLabel` | `string` | `'Toggle'` | Accessible name when there is no visible text; ignored once `label` or the default slot is present. |
+| `ariaLabelledby` | `string` | - | Id of a visible element that names the switch. |
 
 ### Events
 

@@ -94,7 +94,7 @@ code: |
 
 ## 技术实现
 
-- 指针移动时逐个为 `.tx-grid-layout__item` 写入光斑变量，由其 `::before` 的径向渐变读取。
+- 指针移动后，下一帧统一读取各项位置，再为 `.tx-grid-layout__item` 写入光斑变量，由其 `::before` 的径向渐变读取。
 - 源码：`packages/tuffex/packages/components/src/grid-layout/`。
 
 <TuffDocSourceLink />

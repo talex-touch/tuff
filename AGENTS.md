@@ -5,6 +5,7 @@ Work directly from the user's confirmed scope and the repository's engineering g
 ## Workflow and Knowledge
 
 - Read `docs/engineering/specs/frontend/index.md` or `docs/engineering/specs/main-process/index.md` before editing the corresponding layer, and follow the applicable checklists.
+- Nexus component docs and templates: before editing `apps/nexus/content/docs/dev/components/`, read `docs/engineering/specs/frontend/tuffex-docs-sync.md` and `docs/engineering/specs/frontend/nexus-docs-templates.md`. For page-level compositions, check the Templates tab (模板套件) first.
 - Shared engineering guides live under `docs/engineering/specs/guides/`; product plans remain under `docs/plan-prd/`.
 - `docs/comet/` preserves pre-exit requirements, specifications, verification evidence, and delivery records. Keep those records read-only; they do not define the current execution workflow or prove that a new change has passed acceptance.
 - Read `docs/engineering/workflow/backlog.md` and the relevant handoff before resuming frozen work. Confirm its current scope and acceptance criteria without changing the historical task record.

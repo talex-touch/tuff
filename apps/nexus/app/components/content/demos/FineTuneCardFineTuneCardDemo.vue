@@ -129,7 +129,7 @@ const previewStyle = computed(() => ({
 
 .fine-tune-demo__preview {
   background: linear-gradient(135deg, var(--tx-bui-accent, #0285ff), var(--tx-bui-orange, #ef720c));
-  transition: border-radius 0.2s ease, opacity 0.2s ease, width 0.2s ease, height 0.2s ease;
+  transition: border-radius 0.2s ease, opacity 0.2s ease;
 }
 
 .fine-tune-demo__log {

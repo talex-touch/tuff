@@ -1,6 +1,6 @@
 ---
 title: Workbench 插件工作台
-description: 带文件树、代码编辑器、终端与热重载预览的插件开发工作台
+description: 文件树、代码编辑器、终端与热重载预览的插件工作台
 category: TemplateApp
 status: beta
 since: 0.9.1

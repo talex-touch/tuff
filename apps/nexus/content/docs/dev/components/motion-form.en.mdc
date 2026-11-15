@@ -111,7 +111,8 @@ code: |
 | Slot | Scope | Use |
 | --- | --- | --- |
 | `label` | none | Visible label, linked to the control through a stable ID. |
-| `prefix`, `suffix` | none | Input affixes; `suffix` replaces the password reveal button. |
+| `prefix` | none | Input prefix. |
+| `suffix` | none | Input suffix; replaces the password reveal button. |
 | `option` | `{ option, selected }` | Radio and dropdown option content. |
 | `chip` | `{ option }` | Chip label; the remove button stays. |
 | `file` | `{ file, remove: () => void }` | File row content; the remove button stays. |

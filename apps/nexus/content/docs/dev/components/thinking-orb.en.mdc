@@ -99,3 +99,5 @@ code: |
 
 - Vendored from [thinking-orbs](https://github.com/Jakubantalik/thinking-orbs) v0.2.0 (MIT © Jakub Antalik); the source headers keep the attribution.
 - Source: `packages/tuffex/packages/components/src/thinking-orb/`.
+
+<TuffDocSourceLink />

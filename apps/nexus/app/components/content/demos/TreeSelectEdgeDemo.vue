@@ -10,7 +10,7 @@ const labels = computed(() => {
   return { defaultRow: 'Default', focusRow: 'Focus (click or Tab)', disabledRow: 'Disabled', placeholder: 'Please select', root: 'All teams', leaf: 'Engineering' }
 })
 
-const options = computed(() => [
+const nodes = computed(() => [
   { key: 'root', label: labels.value.root, children: [{ key: 'engineering', label: labels.value.leaf }] },
 ])
 
@@ -20,13 +20,13 @@ const model = reactive({ key: 'engineering', focus: undefined as string | undefi
 <template>
   <TxForm class="tree-select-edge-demo not-prose" :model="model">
     <TxFormItem :label="labels.defaultRow">
-      <TxTreeSelect v-model="model.key" :options="options" :placeholder="labels.placeholder" />
+      <TxTreeSelect v-model="model.key" :nodes="nodes" :placeholder="labels.placeholder" />
     </TxFormItem>
     <TxFormItem :label="labels.focusRow">
-      <TxTreeSelect v-model="model.focus" :options="options" :placeholder="labels.placeholder" />
+      <TxTreeSelect v-model="model.focus" :nodes="nodes" :placeholder="labels.placeholder" />
     </TxFormItem>
     <TxFormItem :label="labels.disabledRow">
-      <TxTreeSelect v-model="model.key" disabled :options="options" />
+      <TxTreeSelect v-model="model.key" disabled :nodes="nodes" />
     </TxFormItem>
   </TxForm>
 </template>

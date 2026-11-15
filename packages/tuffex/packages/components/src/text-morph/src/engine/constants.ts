@@ -11,4 +11,6 @@ export const ATTR_EXITING = 'tx-morph-exiting'
 /** Not a segment — every walk of root.children skips it. */
 export const ATTR_SR = 'tx-morph-sr'
 export const ATTR_DEBUG = 'tx-morph-debug'
+/** Set on the root for the length of a morph; the will-change hints are raised only under it. */
+export const ATTR_ANIMATING = 'tx-morph-animating'
 export const EMPTY_ID = 'empty'

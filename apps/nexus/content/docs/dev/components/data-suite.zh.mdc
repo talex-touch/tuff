@@ -1,6 +1,6 @@
 ---
 title: 数据套件
-description: 可视化与图表：主包内的数据展示组件，以及图表家族子路径
+description: 可视化与图表：主包数据展示组件与图表子路径
 category: DataSuite
 status: beta
 since: 0.4.0
@@ -33,6 +33,6 @@ verified: false
 ## 概述
 
 - 图表从 `@talex-touch/tuffex/charts` 引入，可视化组件在主包内；两者都随 `@talex-touch/tuffex/pro` 入口提供。
-- 除 ECharts 图表外都由 Vue 直接渲染（SVG，SparkChart 与抖动层用 Canvas），不加载 echarts；ECharts 图表挂载时才加载可选依赖 `echarts`。
+- 除 ECharts 图表外都由 Vue 直接渲染（SVG、Canvas 或 DOM/CSS），不加载 echarts；ECharts 图表挂载时才加载可选依赖 `echarts`。
 - 原生图表共用 `--tx-chart-*` 主题变量与 `ChartPalette`，随宿主明暗切换。
 - 原生图表按 ECharts 的默认时序播放动画：入场 1000ms、数据更新 500ms、状态切换 300ms；`prefers-reduced-motion: reduce` 下直接落到终帧。

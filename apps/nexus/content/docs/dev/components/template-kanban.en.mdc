@@ -1,0 +1,135 @@
+---
+title: Kanban
+description: A four-column task board with drag, keyboard moves and a drawer.
+category: TemplateData
+status: beta
+since: 0.9.3
+tags: [template, kanban, board, drag, drawer]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+### Task board
+:::TuffDemoWrapper{demo="TemplateKanbanDemo" code-lang="vue" description="Drag cards between columns, or focus a card, press Space to pick it up, move it with the arrow keys and press Space to drop it. Progress bars fill once the board is in view. Sample data."}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  type ColumnId = 'todo' | 'doing' | 'review' | 'done'
+
+  // Each column is an ordered list of card ids; the card data lives apart.
+  const board = reactive<Record<ColumnId, string[]>>({
+    todo: ['k1', 'k2', 'k3'],
+    doing: ['k4', 'k5', 'k6'],
+    review: ['k7', 'k8'],
+    done: ['k9', 'k10', 'k11'],
+  })
+  const picked = ref<string | null>(null)
+
+  // Keyboard: Space picks up, arrows move, Space or Enter drops, Escape puts
+  // the card back. The listener sits on the template root, not on window.
+  function onKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && picked.value) {
+      event.preventDefault() // keep Escape from collapsing the TemplateFrame
+      cancelPick()
+    }
+    // The other key branches are in the full demo source.
+  }
+
+  // Drag: the card is a native draggable; the drop slot is the nearest card midpoint.
+  function onColumnDragOver(event: DragEvent, column: ColumnId) {
+    event.preventDefault()
+    setDropSlot(column, event.clientY)
+  }
+  function onColumnDrop(event: DragEvent, column: ColumnId) {
+    event.preventDefault()
+    commitDrop(column)
+  }
+
+  // Playback starts from @enter, never onMounted; reduced motion shows the end state.
+  function play() {
+    fillProgress()
+  }
+  defineExpose({ resetDemo })
+  </script>
+
+  <template>
+    <TemplateFrame title="Kanban" :height="600" @enter="play">
+      <div class="kb" @keydown="onKeydown">
+        <TxFilterChips v-model="filter" :items="filterItems" aria-label="Filter cards" />
+
+        <div class="kb-board">
+          <section
+            v-for="column in COLUMNS"
+            :key="column"
+            :data-column="column"
+            @dragover="onColumnDragOver($event, column)"
+            @drop="onColumnDrop($event, column)"
+          >
+            <TxBadge :value="board[column].length" />
+            <article
+              v-for="id in board[column]"
+              :key="id"
+              class="kb-card"
+              role="button"
+              tabindex="0"
+              draggable="true"
+              :data-card-id="id"
+              @click="openDetail(id)"
+              @dragstart="onDragStart($event, id)"
+              @dragend="onDragEnd"
+            >
+              <TxTag v-for="tag in tagsOf(id)" :key="tag" :label="tag" variant="soft" />
+              <TxProgressBar :percentage="shown[id]" />
+              <TxStatusBadge size="sm" :status="dueTone(id)" :text="dueText(id)" />
+              <TxAvatar :name="ownerOf(id)" :size="20" />
+            </article>
+          </section>
+        </div>
+
+        <!-- The drawer's "Move left / Move right" buttons are the non-drag path. -->
+        <TxDrawer v-model:visible="detailOpen" :title="detailTitle" size="min(480px, 94vw)">…</TxDrawer>
+
+        <TxToastPanel :open="toast.open" side="above" :stack="0">
+          {{ toast.text }}
+          <TxButton v-if="toast.undoable" size="sm" variant="secondary" @click="undo">Undo</TxButton>
+        </TxToastPanel>
+      </div>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## Overview
+
+A team task flow with four columns, To do, In progress, In review and Done. Cards carry an owner, a priority, progress and a due date. Drag and keyboard reach the same result, and the most recent move can be undone.
+
+- Drag: cards reorder within a column or move to another one; the drop point is marked by an accent line.
+- Keyboard: focus a card and press Space to pick it up. Up and Down move it within its column, Left and Right change column, Space or Enter drops it, and Escape returns it to where it was. Focus stays on the card while it is picked up.
+- Details: a click or Enter opens the drawer. Its move buttons shift the card to the adjacent column, which is the non-drag path.
+- Filters: the chips filter by owner, high priority or overdue. Cards that do not match fade but keep their place, so drag and keyboard still work.
+- Due hints: open cards read Overdue, Due today, Due tomorrow or Due in N days; finished cards read Done.
+- Undo: after a move the toast stays for about 4 seconds, and Undo restores the state from before it. Pointer or focus on the toast keeps it open; it closes about 2 seconds after both leave.
+- Playback: once in view, each card's progress bar fills in turn. Under reduced motion the end state shows at once and no timer runs.
+- Layout: below 640px the columns stack; from 640px two sit per row; from 760px four sit side by side, each scrolling on its own.
+
+## Customization
+
+- For real data, replace `board` with the columns and order the server returns. Each move sends one request, and a failed request restores the snapshot taken before the move.
+- With another drag implementation, keep the keyboard path: picking up, moving, dropping and cancelling must all work without a pointer.
+- For a work-in-progress limit, check the target column's count before moving. Over the limit, keep the card where it is and say why in the toast.
+- Due hints use the fixed "now" of the sample data. With real data, use the current time and show dates in the reader's time zone.
+
+## Related components
+
+| Region | Components | Role |
+|---|---|---|
+| Filter | [TxFilterChips](/docs/dev/components/filter-chips) | Filter by owner, priority and overdue |
+| Column header | [TxBadge](/docs/dev/components/badge) | Card count per column |
+| Card | [TxTag](/docs/dev/components/tag), [TxAvatar](/docs/dev/components/avatar), [TxProgressBar](/docs/dev/components/progress-bar), [TxDotIndicator](/docs/dev/components/dot-indicator), [TxStatusBadge](/docs/dev/components/status-badge) | Labels, owner, progress, priority and due hint |
+| Detail drawer | [TxDrawer](/docs/dev/components/drawer), [TxButton](/docs/dev/components/button) | Details, with buttons that move the card |
+| Feedback | [TxToastPanel](/docs/dev/components/toast-panel) | Undoable result after a move |

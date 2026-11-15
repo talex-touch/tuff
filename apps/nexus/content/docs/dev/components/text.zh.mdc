@@ -1,6 +1,6 @@
 ---
 title: Text
-description: 溢出文字的省略位置可选，并支持自动、循环与悬停滚动
+description: 溢出文字的省略位置可选，支持自动、循环与悬停滚动
 category: Basic
 status: beta
 since: 0.9.3

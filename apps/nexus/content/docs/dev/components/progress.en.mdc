@@ -53,7 +53,7 @@ code: |
 
 ### Best Practices
 
-- Use `TuffProgress` for simple row progress; use `TxProgressBar` directly for segments, tooltips, messages, loading/success/error states, flow effects, or custom text placement.
+- Use `TuffProgress` for simple row progress; use [TxProgressBar](/docs/dev/components/progress-bar) directly for segments, tooltips, messages, loading/success/error states, flow effects, or custom text placement.
 - Keep `strokeWidth` modest; this component is for row-level progress, not hero metrics.
 - For work of unknown duration, use `indeterminate` and hide the text unless the value is trustworthy; never show a stale percentage.
 - Pair the bar with a short status label when the surrounding UI needs operational context.

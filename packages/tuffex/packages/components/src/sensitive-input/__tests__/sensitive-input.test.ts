@@ -95,10 +95,23 @@ describe('txSensitiveInput', () => {
     await field(wrapper).trigger('click')
 
     const eye = wrapper.find('.tx-sensitive-input__eye')
+    const copy = wrapper.find('.tx-sensitive-input__copy')
     await input(wrapper).trigger('blur', { relatedTarget: eye.element })
+    await input(wrapper).trigger('blur', { relatedTarget: copy.element })
+    await eye.trigger('blur', { relatedTarget: copy.element })
 
     expect(input(wrapper).attributes('type')).toBe('text')
     expect(wrapper.emitted('mask')).toBeUndefined()
+  })
+
+  it('re-masks when focus leaves the field from the copy button', async () => {
+    const wrapper = mountInput()
+    await field(wrapper).trigger('click')
+
+    await wrapper.find('.tx-sensitive-input__copy').trigger('blur', { relatedTarget: document.body })
+
+    expect(input(wrapper).attributes('type')).toBe('password')
+    expect(wrapper.emitted('mask')).toHaveLength(1)
   })
 
   it('does not reveal when disabled', async () => {

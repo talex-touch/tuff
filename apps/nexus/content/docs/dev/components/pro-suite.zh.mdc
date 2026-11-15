@@ -26,6 +26,10 @@ code: |
 ::DocsComponentsGallery{suite="pro"}
 ::
 
-## 相关组件
+## 概述
 
-- [数据套件](./data-suite.zh.mdc)、[动效套件](./motion-suite.zh.mdc)：组件同样从 `/pro` 引入；图表族（含 MonoChart、DitherChart）从 `@talex-touch/tuffex/charts` 引入。
+进阶套件的组件从 `@talex-touch/tuffex/pro` 引入，分为三组。数据套件与动效套件中的组件同样从 `/pro` 引入；图表族（含 MonoChart、DitherChart）从 `@talex-touch/tuffex/charts` 引入。
+
+- **高级交互**：命令面板、代码编辑器、Markdown 编辑器、搜索面板、终端、版本胶囊、虚拟列表，以及动效表单、动效控件与动效指标。
+- **视觉效果**：边框光束、玻璃与液态表面、渐变边框、渐进模糊、文字与图标变形、描边与棱镜光等表面效果。
+- **底层原语**：自适应尺寸、锚点定位、背景表面、视差浮动与尺寸过渡，是其余组件常用的基础层。

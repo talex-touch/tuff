@@ -38,7 +38,7 @@ code: |
 :::
 
 ### 指示器
-`indicatorVariant` 决定画法，`indicatorMotion` 决定滑行方式。关闭 `showIndicator` 后，激活项自己绘制底色。
+`indicatorVariant` 决定画法，`indicatorMotion` 决定滑行方式，关闭 `showIndicator` 后激活项自己绘制底色。
 :::TuffDemoWrapper{demo="TabsIndicatorVariantsMotionsDemo" code-lang="vue"}
 ---
 code: |
@@ -81,7 +81,7 @@ code: |
 :::
 
 ### 位置与头部
-`placement` 支持四个方向。`TxTabHeader` 在面板上方渲染吸顶头部，`nav-right` 插槽放置导航栏末尾的操作。
+`placement` 支持四个方向，`TxTabHeader` 在面板上方渲染吸顶头部，`nav-right` 插槽放置导航栏末尾的操作。
 :::TuffDemoWrapper{demo="TabsPlacementHeaderSlotDemo" code-lang="vue"}
 ---
 code: |
@@ -271,6 +271,21 @@ code: |
 |------|------|------|
 | `default` | - | 子级 `TxTabItem`。 |
 
+### CSS 变量
+
+| CSS 变量 | 用途 |
+|----------------------------|----------|
+| `--tx-border-color` | 外边框与导航分隔线。 |
+| `--tx-bg-color` | 容器背景。 |
+| `--tx-fill-color` / `--tx-fill-color-light` | 激活项底色（无指示器时）/ 悬停底色。 |
+| `--tx-color-primary` | `line`、`dot`、`block`、`outline` 指示器与激活图标。 |
+| `--tx-surface-raised` / `--tx-elevation-1` / `--tx-border-color-lighter` | `pill` 凸起面、投影与内描边。 |
+| `--tx-text-color-primary` / `--tx-text-color-regular` / `--tx-text-color-secondary` | 激活文字、常态文字、图标与分组标题。 |
+| `--tx-tab-item-ink` / `--tx-tab-item-icon-ink` | `.tx-tab-item` 的文字与图标颜色。 |
+| `--tx-tabs-indicator-duration` / `--tx-tabs-indicator-easing` / `--tx-tabs-indicator-strength` | 由指示器 props 生成，仅供宿主读取。 |
+| `--tx-tabs-content-duration` / `--tx-tabs-content-easing` | 由内容动画 props 生成。 |
+| `--tx-tabs-nav-duration` / `--tx-tabs-nav-easing` | 由导航动画 props 生成。 |
+
 ## 概述
 
 - 受控时以 `modelValue` 为准；未传时依次取 `defaultValue`、`activation`。
@@ -287,18 +302,3 @@ code: |
 - 源码：`packages/tuffex/packages/components/src/tabs/`。
 
 <TuffDocSourceLink />
-
-## 自定义
-
-| CSS 变量 | 用途 |
-|----------------------------|----------|
-| `--tx-border-color` | 外边框与导航分隔线。 |
-| `--tx-bg-color` | 容器背景。 |
-| `--tx-fill-color` / `--tx-fill-color-light` | 激活项底色（无指示器时）/ 悬停底色。 |
-| `--tx-color-primary` | `line`、`dot`、`block`、`outline` 指示器与激活图标。 |
-| `--tx-surface-raised` / `--tx-elevation-1` / `--tx-border-color-lighter` | `pill` 凸起面、投影与内描边。 |
-| `--tx-text-color-primary` / `--tx-text-color-regular` / `--tx-text-color-secondary` | 激活文字、常态文字、图标与分组标题。 |
-| `--tx-tab-item-ink` / `--tx-tab-item-icon-ink` | `.tx-tab-item` 的文字与图标颜色。 |
-| `--tx-tabs-indicator-duration` / `--tx-tabs-indicator-easing` / `--tx-tabs-indicator-strength` | 由指示器 props 生成，仅供宿主读取。 |
-| `--tx-tabs-content-duration` / `--tx-tabs-content-easing` | 由内容动画 props 生成。 |
-| `--tx-tabs-nav-duration` / `--tx-tabs-nav-easing` | 由导航动画 props 生成。 |

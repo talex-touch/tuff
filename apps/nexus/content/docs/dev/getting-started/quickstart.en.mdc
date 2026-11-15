@@ -113,4 +113,6 @@ code: |
 :::
 `tuff build` creates `dist/build/` and a `.tpex` package. Before publishing, run `tuff publish --dry-run` to preview the upload.
 
+Interface components and full-page templates are listed in the [component index](../components/index.en.mdc).
+
 Continue with [Plugin Development Workflow](./plugin-workflow.en.mdc).

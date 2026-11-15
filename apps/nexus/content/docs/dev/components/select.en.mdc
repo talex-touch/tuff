@@ -35,7 +35,7 @@ code: |
 :::
 
 ### Local Filtering
-With `searchable` omitted, search appears automatically at 8 registered options, including grouped and slot options. `searchThreshold` changes that threshold; explicit `searchable=false` or a nonpositive threshold disables automatic search, and explicit `true` always enables it.
+With `searchable` omitted, search appears automatically at 8 registered options, including grouped and slot options; `searchThreshold` changes that threshold, and explicit `searchable=false` or a nonpositive threshold disables automatic search while explicit `true` always enables it.
 :::TuffDemoWrapper{demo="SelectSelectSearchableDemo" code-lang="vue"}
 ---
 code: |
@@ -50,7 +50,7 @@ code: |
 :::
 
 ### Remote Search
-Pair `remote` with `editable`: the trigger becomes editable and typing emits `search` while the panel is open. Show pending results with `loading`.
+Pair `remote` with `editable`: the trigger becomes editable and typing emits `search` while the panel is open; show pending results with `loading`.
 :::TuffDemoWrapper{demo="SelectSelectRemoteSearchableDemo" code-lang="vue"}
 ---
 code: |
@@ -244,7 +244,7 @@ code: |
 
 ### Edge and States
 
-Single and multiple triggers use the input's inset ring and states. Multiple-select tags sit inside the ring, and their text greys out when disabled.
+Single and multiple triggers use the input's inset ring and states; multiple-select tags sit inside the ring, and their text greys out when disabled.
 
 :::TuffDemoWrapper{demo="SelectEdgeDemo" code-lang="vue"}
 ---

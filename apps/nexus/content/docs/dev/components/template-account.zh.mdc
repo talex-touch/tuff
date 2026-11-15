@@ -1,0 +1,136 @@
+---
+title: 账户中心
+description: 资料、安全、会话与通知，删除会话需确认
+category: TemplateApp
+status: beta
+since: 0.9.3
+tags: [template, account, profile, security, sessions]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+### 账户中心
+:::TuffDemoWrapper{demo="TemplateAccountDemo" code-lang="vue" description="切换标签页；删除会话与关闭双重验证都要先确认。图中为示例数据。"}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive, ref, watch } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // 删除会话、关闭双重验证都先开弹窗，只有读者点击确认才生效；没有计时器替他确认
+  const tab = ref('profile')
+  const twoFactor = ref(true)
+  const sessions = ref(seedSessions())
+  const confirmOpen = ref(false)
+  const profile = reactive({ displayName: '林澈', bio: '' })
+
+  // 关闭时开关先保持开启，确认之后才真正关闭
+  let allowTwoFactorOff = false
+  watch(twoFactor, (next, previous) => {
+    if (allowTwoFactorOff) {
+      allowTwoFactorOff = false
+      return
+    }
+    if (next || !previous)
+      return
+    twoFactor.value = true
+    confirmOpen.value = true
+  })
+  </script>
+
+  <template>
+    <TemplateFrame title="Account" :height="620">
+      <template #default="{ width }">
+        <header class="account__head">
+          <TxAvatar name="林澈" :size="56" />
+          <strong>林澈</strong>
+          <TxStatusBadge size="sm" text="邮箱已验证" status="success" icon="i-carbon-checkmark-filled" />
+        </header>
+
+        <TxTabs v-model="tab" :placement="width > 0 && width < 640 ? 'top' : 'left'" borderless>
+          <TxTabItemGroup name="Account">
+            <TxTabItem name="profile" icon-class="i-carbon-user">
+              <template #name>资料</template>
+              <TuffInput v-model="profile.displayName" aria-label="显示名称" />
+              <TuffInput model-value="lin_che" readonly aria-label="用户名" />
+              <TuffInput model-value="lin.che@example.com" readonly aria-label="邮箱" />
+              <TxTextarea v-model="profile.bio" :rows="3" resize="none" />
+            </TxTabItem>
+
+            <TxTabItem name="security" icon-class="i-carbon-security">
+              <template #name>安全</template>
+              <TxGroupBlock name="登录" :collapsible="false">
+                <TxBlockSlot title="双重验证" description="登录时再输入一次验证器中的代码">
+                  <TuffSwitch v-model="twoFactor" aria-label="双重验证" />
+                </TxBlockSlot>
+              </TxGroupBlock>
+            </TxTabItem>
+
+            <TxTabItem name="sessions" icon-class="i-carbon-devices">
+              <template #name>会话</template>
+              <TxDataTable :columns="tableColumns" :data="sessions" row-key="id" table-layout="fixed" sticky-header>
+                <template #cell-device="{ row }">
+                  {{ row.device }}
+                  <TxTag v-if="row.current" label="本机" variant="soft" />
+                </template>
+                <template #cell-actions="{ row }">
+                  <TxIconButton v-if="!row.current" icon="i-carbon-trash-can" size="xs" label="删除会话" @click="askRemove(row.id)" />
+                </template>
+              </TxDataTable>
+              <TxCard variant="dashed" :padding="16" :radius="14">
+                <TxButton variant="danger" size="sm" @click="askRemoveOthers">删除其他会话</TxButton>
+              </TxCard>
+            </TxTabItem>
+
+            <TxTabItem name="notifications" icon-class="i-carbon-notification">
+              <template #name>通知</template>
+              <TuffSwitch v-model="notify.product" aria-label="产品更新" />
+              <TuffSwitch v-model="notify.security" disabled aria-label="安全提醒" />
+            </TxTabItem>
+          </TxTabItemGroup>
+        </TxTabs>
+
+        <TxModal v-model="confirmOpen" title="确认操作">
+          <template #footer>
+            <TxButton size="sm" variant="ghost" @click="confirmOpen = false">取消</TxButton>
+            <TxButton size="sm" variant="danger" @click="confirmAction">确认</TxButton>
+          </template>
+        </TxModal>
+
+        <TxToastPanel :open="toastOpen" side="above" :stack="0">已保存</TxToastPanel>
+      </template>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## 概述
+
+Tuff 的账户中心：资料、安全、会话和通知放在一个页面里，头部始终显示头像与邮箱验证状态。
+
+- 资料页的显示名称与简介可以编辑；用户名和邮箱只读，保存后弹出短暂提示。
+- 安全页的双重验证开关：关闭时先弹出确认，确认之前开关保持开启。
+- 会话页列出登录设备，并用「本机」标出当前设备；删除单个会话或其他全部会话都要在弹窗里确认。
+- 危险操作区只有「删除其他会话」一项，没有计时器自动执行；没有其他会话时按钮禁用。
+- 通知页的安全提醒固定开启；宽屏（≥ 960px）多出应用列，窄屏（< 640px）标签页移到顶部，表格只留设备与操作两列。
+
+## 自定义
+
+- 接真实账户时，用接口替换示例数据；头像、邮箱与验证状态以账户服务为准，模板里不要保存副本。
+- 删除会话和关闭双重验证都应在弹窗确认后再调用接口；请求失败时保留弹窗并给出重试。
+- 「本机」标记由服务端返回的当前会话决定，不要在前端猜测。
+- 新增通知项时，安全类开关保持固定开启，并在描述里说明原因。
+
+## 相关组件
+
+| 区域 | 组件 | 作用 |
+| --- | --- | --- |
+| 资料头部 | [TxAvatar](/docs/dev/components/avatar)、[TxStatusBadge](/docs/dev/components/status-badge) | 头像、名称与验证状态 |
+| 标签页 | [TxTabs / TxTabItemGroup / TxTabItem](/docs/dev/components/tabs) | 资料、安全、会话与通知分区 |
+| 资料表单 | [TuffInput](/docs/dev/components/input)、[TxTextarea](/docs/dev/components/textarea) | 显示名称、只读邮箱与简介 |
+| 安全设置 | [TxGroupBlock / TxBlockSlot](/docs/dev/components/group-block)、[TuffSwitch](/docs/dev/components/switch)、[TxButton](/docs/dev/components/button) | 双重验证与修改密码 |
+| 会话列表 | [TxDataTable](/docs/dev/components/data-table)、[TxTag](/docs/dev/components/tag)、[TxIconButton](/docs/dev/components/button) | 登录设备、本机标记与删除 |
+| 危险操作区 | [TxCard](/docs/dev/components/card)、[TxButton](/docs/dev/components/button) | 批量删除其他会话 |
+| 确认与反馈 | [TxModal](/docs/dev/components/modal)、[TxToastPanel](/docs/dev/components/toast-panel) | 删除与关闭前确认，结果提示 |

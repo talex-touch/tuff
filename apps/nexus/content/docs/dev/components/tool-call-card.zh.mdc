@@ -50,12 +50,15 @@ code: |
 |------|------|---------|------|
 | `toolCall` | `AiToolCallPart` | — | 工具调用数据，必填。 |
 | `defaultExpanded` | `boolean` | `false` | 初始是否展开；只在挂载时读取。 |
+| `userOpen` | `boolean` | — | 宿主持有的展开状态，优先于用户点击与自动展开；不传则由组件自持。 |
 | `retryLabel` | `string` | `'Retry'` | 重试按钮文案。 |
 | `pendingLabel` | `string` | `'Queued'` | `pending` 的状态文案。 |
 | `runningLabel` | `string` | `'Running'` | `running` 的状态文案。 |
 | `doneLabel` | `string` | `'Done'` | `done` 及其他未匹配状态的文案。 |
 | `errorLabel` | `string` | `'Failed'` | `error` 的状态文案。 |
 | `inputLabel` | `string` | `'Input'` | 入参区的无障碍名称，不显示为标题。 |
+| `emptyResultLabel` | `string` | `'No output'` | `done` 且无 `output`、无 `input`、未提供 `result` 插槽时，结果区显示的文案。 |
+| `showRetry` | `boolean` | — | 是否显示重试按钮；不传时，绑定了 `retry` 监听才显示。 |
 | `linesToggleFormatter` | `(hiddenCount: number, expanded: boolean) => string` | 英文 `N more lines` / `Show less` | 入参超过四行时，折叠与展开按钮的文案。 |
 
 `AiToolCallPart` 为 `{ type, id, name, status, summary?, input?, output?, error?, logs?, durationMs? }`，`status` 取 `'pending' | 'running' | 'done' | 'error'`。
@@ -83,11 +86,11 @@ code: |
 
 ## 概述
 
-- 展开区随 `status` 切换：`running` 显示 `logs`，`done` 显示 `result` 插槽（缺省为 `output`），`error` 显示 `error` 与重试按钮；`input` 存在时始终显示。
+- 展开区随 `status` 切换：`running` 显示 `logs`，`done` 显示 `result` 插槽（缺省为 `output`），`error` 显示 `error`；`input` 存在时始终显示。
 - 标题依次为计时（进行中显示 `(1.0)`）、名称（进行中扫光）、参数（`summary`，缺省为入参首行）与耗时（结算后由 `durationMs` 给出）。
-- `pending` 与 `running` 自动展开；结算后自动收起，收起态保留输出的最后两行。日志、输出与收起预览都滚动到底部。
+- `pending` 与 `running` 自动展开；结算后自动收起，收起态保留输出的最后两行。日志、输出与收起预览都滚动到底部，`logs` 每次变化都会滚到底。
 - 入参超过四行时只露出前四行，由 `linesToggleFormatter` 生成的按钮展开或收起；底栏显示状态。
-- `logs` 每次变化，日志区都滚到底部。
+- 重试按钮只在 `error` 状态出现：`showRetry` 为真时显示，为假时隐藏；未设置时，绑定了 `retry` 监听才显示。
 - `status` 同步到根节点的 `data-status`，供外部定制样式。
 
 ## 技术实现

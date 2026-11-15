@@ -1,6 +1,6 @@
 ---
 title: "TimeseriesChart 时序图"
-description: "时序折线与堆叠柱：标记聚簇、阈值线、缩放与刷选、tooltip 全功能。"
+description: "时序折线与堆叠柱：标记、阈值、缩放与刷选"
 category: Charts
 status: beta
 since: 0.1.0
@@ -74,9 +74,12 @@ code: |
 | `type` | `'line' \| 'bar'` | `'line'` | 柱状自动堆叠。 |
 | `markers` | `TimeseriesMarker[]` | — | `{ timestamp, label?, description?, color?, lineStyle? }`。 |
 | `thresholds` | `TimeseriesThreshold[]` | — | `{ value, label?, color }`，y 轴自动扩展覆盖。 |
-| `xAxisName` / `yAxisName` | `string` | — | 轴名。 |
-| `xAxisTickCount` / `yAxisTickCount` | `number` | `5` | 建议刻度数。 |
-| `xAxisTickFormat` / `yAxisTickFormat` | `(v: number) => string` | — | 刻度格式化。不传 `xAxisTickFormat` 时，时间刻度用 d3 的默认格式，是英文。 |
+| `xAxisName` | `string` | — | X 轴名。 |
+| `yAxisName` | `string` | — | Y 轴名。 |
+| `xAxisTickCount` | `number` | `5` | X 轴建议刻度数。 |
+| `yAxisTickCount` | `number` | `5` | Y 轴建议刻度数。 |
+| `xAxisTickFormat` | `(v: number) => string` | — | X 轴刻度格式化。不传时，时间刻度用 d3 的默认格式，是英文。 |
+| `yAxisTickFormat` | `(v: number) => string` | — | Y 轴刻度格式化。 |
 | `yAxisMinInterval` | `number` | — | y 轴刻度最小间隔（ECharts `yAxis.minInterval`）：更近的刻度被丢弃，最低与最高刻度始终保留；设 `1` 时整数刻度不会再打印成 `1.0`。 |
 | `tooltipValueFormat` | `(v: number) => string` | 原值 | tooltip 数值格式化。 |
 | `tooltipMode` | `'all' \| 'single'` | `'all'` | `single` 只显示离光标 y 值最近的一条。 |
@@ -88,6 +91,7 @@ code: |
 | `gradient` | `boolean` | `false` | 折线渐变填充。 |
 | `loading` | `boolean` | `false` | 骨架态。 |
 | `highlightedSeries` | `string \| null` | — | 高亮序列，其余降到 10% 不透明度。 |
+| `hiddenSeries` | `string[]` | `[]` | 隐藏的序列名：不画，也不进 tooltip；用 `v-model:hidden-series` 绑定。 |
 | `height` | `number` | `350` | 像素高度。 |
 | `width` | `number` | 容器实测 | 显式宽度（SSR/测试用）。 |
 | `ariaDescription` | `string` | — | 图表的无障碍名称（svg `role="group"`，按键说明作为描述）；缺省用 `labels.chart`。 |
@@ -230,7 +234,7 @@ code: |
 - 首绘：折线/面积是从左到右的裁剪揭示，1000ms `easings.linear`；柱状从基线长出（y 由 `baseY` 插值到目标值、高度 0 → 目标）、散点由 0 缩放到半径并淡入，都是 1000ms cubicInOut。
 - 数据更新：几何形变 500ms cubicInOut。
 - 状态切换（emphasis / blur）：在指针到达的那一帧完成，不走 ECharts 的 300ms cubicOut（TuffEx 的悬停规则）。
-- `animationThreshold` 2000：单序列点数超过它时直接渲染终态几何，不播动画。
+- `ANIMATION_THRESHOLD` 2000（导出常量，不是 prop）：单序列点数超过它时直接渲染终态几何，不播动画。
 - tooltip：隐藏前先延迟 100ms，再用 200ms 淡出并移除 DOM，短暂划过不会闪烁；位置通过 `transform: translate3d()` 交给浏览器插值出 400ms 位移（`cubic-bezier(0.23, 1, 0.32, 1)`）；指针跟踪按 50ms 节流，取 leading + trailing 两个采样。
 - 刷选拖拽期间选区外变淡，松手立即恢复，见上节的单层 `<mask>`。
 - 缩放：刷选、鼠标滚轮与按键以临界阻尼弹簧（响应 0.35s）过渡到新窗口；触控板捏合与拖动平移 1:1 跟手，平移松手后按速度滑行。

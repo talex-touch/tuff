@@ -182,10 +182,10 @@ The mail and notification center of a Tuff account: hundreds of messages to skim
 | Reply | [TxChatComposer](/docs/dev/components/chat-composer), [TxAttachmentTray](/docs/dev/components/attachment-tray) | Shortcut send and attachments |
 | Notifications | [TxToastPanel](/docs/dev/components/toast-panel) | View and Undo notices |
 | Header (Notification center) | [TxBadge](/docs/dev/components/badge), [TxModeChip](/docs/dev/components/mode-chip), [TxButton](/docs/dev/components/button), [TxIconButton](/docs/dev/components/button), [TxPopover](/docs/dev/components/popover) | Unread, do-not-disturb, select mode |
-| Type filter (Notification center) | [TxFilterChips](/docs/dev/components/filter-chips), [TuffSwitch](/docs/dev/components/switch) | Type filter and Unread only |
+| Type filter (Notification center) | [TxFilterChips](/docs/dev/components/filter-chips), [TxSwitch](/docs/dev/components/switch) | Type filter and Unread only |
 | Notice rows (Notification center) | [TxCardItem](/docs/dev/components/card-item), [TxAvatar](/docs/dev/components/avatar), [TxIconChip](/docs/dev/components/icon-chip), [TxDotIndicator](/docs/dev/components/dot-indicator), [TxTag](/docs/dev/components/tag), [TxStatusBadge](/docs/dev/components/status-badge) | Avatar, unread dot, quick actions |
 | Row menu (Notification center) | [TxDropdownMenu / TxDropdownSubmenu](/docs/dev/components/dropdown-menu) | Snooze, mute, delete |
 | Bulk (Notification center) | [TxCheckbox](/docs/dev/components/checkbox), [TxButton](/docs/dev/components/button) | Group select and bulk bar |
 | Snoozed (Notification center) | [TxCollapse / TxCollapseItem](/docs/dev/components/collapse) | Collapsed list you can unsnooze |
-| Settings (Notification center) | [TuffSwitch](/docs/dev/components/switch), [TxSelect](/docs/dev/components/select), [TxFlatRadio](/docs/dev/components/flat-radio), [TxIconChip](/docs/dev/components/icon-chip), [TxTooltip](/docs/dev/components/tooltip) | Quiet hours and per-source delivery |
+| Settings (Notification center) | [TxSwitch](/docs/dev/components/switch), [TxSelect](/docs/dev/components/select), [TxFlatRadio](/docs/dev/components/flat-radio), [TxIconChip](/docs/dev/components/icon-chip), [TxTooltip](/docs/dev/components/tooltip) | Quiet hours and per-source delivery |
 | Empty states (Notification center) | [TxEmptyState](/docs/dev/components/empty-state) | Clear filters or see snoozed |

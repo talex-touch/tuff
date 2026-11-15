@@ -78,3 +78,11 @@ code: |
 - `wrap` 溢出时横向滚动，滚动条隐藏，两侧渐变遮罩提示可滚动。
 - `list` 的各行按位置错峰浮现（每行 90ms）；减少动态效果时直接显示。
 - 容器为 `role="list"`、胶囊为 `role="listitem"`，覆盖了按钮的隐式语义；需要按钮语义时在外层补充说明文字。
+
+## 技术实现
+
+- 列表行的错峰入场由 CSS 动画延迟完成：每行的 `--tx-suggestion-chips-index` 乘以 90 毫秒，不用脚本计时。
+- `wrap` 布局两侧的渐变遮罩由 `mask-image` 实现。
+- 源码：`packages/tuffex/packages/components/src/suggestion-chips/`。
+
+<TuffDocSourceLink />

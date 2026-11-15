@@ -83,4 +83,4 @@ code: |
 - `ai` 变体用 SVG mask 绘制，mask id 按实例生成，同页多个实例互不干扰。
 - 源码：`packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue`。
 
-<TuffDocSourceLink path="packages/tuffex/packages/components/src/chat/index.ts" />
+<TuffDocSourceLink path="packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue" />

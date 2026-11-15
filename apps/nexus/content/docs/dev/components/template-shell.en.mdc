@@ -12,7 +12,7 @@ verified: false
 ## Usage
 
 ### Sidebar workspace
-:::TuffDemoWrapper{demo="TemplateShellDemo" code-lang="vue" description="⌘K opens the command palette, the sidebar switches sections, and the bell opens notifications. Sample data."}
+:::TuffDemoWrapper{demo="TemplateShellDemo" code-lang="vue" description="⌘K opens the command palette, the sidebar switches sections, and the bell opens notifications."}
 ---
 code: |
   <script setup lang="ts">
@@ -107,7 +107,7 @@ code: |
 
 ### Top-nav console
 Navigation folds into two rows at the top, leaving the full width to content. Suits consoles with few sections and frequent product or workspace switches.
-:::TuffDemoWrapper{demo="TemplateShellConsoleDemo" code-lang="vue" description="⌘K opens the command palette; product, workspace, notifications, and account are dropdown menus. Sample data."}
+:::TuffDemoWrapper{demo="TemplateShellConsoleDemo" code-lang="vue" description="⌘K opens the command palette; product, workspace, notifications, and account are dropdown menus."}
 ---
 code: |
   <script setup lang="ts">

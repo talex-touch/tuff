@@ -62,6 +62,7 @@ code: |
 ## Overview
 
 - The component runs nothing and stores nothing; it reports a decision, and the host executes and persists it.
+- Allow and deny can only be triggered by a user click; the host must never auto-approve on a timer.
 - Deny carries `remember` too, so "deny for the rest of this session" is expressible.
 - `remember` is internal state that starts `false` and does not reset after a decision: the card is single-use.
 - The root is a `role="group"` named `${toolName} confirmation`.

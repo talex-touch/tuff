@@ -40,7 +40,7 @@ code: |
 | `usedTokens` | `number` | — | Tokens used so far. Required. |
 | `maxTokens` | `number` | — | Context window size. Required; 0 or less yields a ratio of 0. |
 | `label` | `string` | `'Context usage'` | Accessible name, written to `aria-label`. |
-| `formatter` | `(used: number, max: number) => string` | — | Text beside the ring; defaults to compact counts (`12.3K`, `1.2M`). |
+| `formatter` | `(used: number, max: number) => string` | — | Text beside the ring; defaults to compact used / max counts, such as `12.3K / 200.0K`. |
 
 ### Slots
 

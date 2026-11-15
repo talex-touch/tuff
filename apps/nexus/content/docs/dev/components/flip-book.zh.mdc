@@ -1,6 +1,6 @@
 ---
 title: "翻页书"
-description: "真实双面书页、拖动翻页、DitherBook 控件和宽屏书页预设，支持调用方内容与纸张参数。"
+description: "双面书页，支持拖动翻页与纸张参数"
 category: MotionCarousels
 status: beta
 since: 0.7.0
@@ -115,7 +115,8 @@ DitherBook 编辑器的留白范围为 0～30，圆角和折痕为 0～40，阴�
 | --- | --- |
 | `#page` | `{ page, index, side }`；side 为 `left / right / front / back`。 |
 | `#empty` | 没有页面时的内容。 |
-| `previous()` / `next()` | 按来源禁用和开场规则翻页。 |
+| `previous()` | 按来源禁用和开场规则翻到上一页。 |
+| `next()` | 按来源禁用和开场规则翻到下一页。 |
 | `goTo(index)` | 请求页面，遵循禁用、翻页忙碌和循环或边界规则。 |
 | `replayIntro()` | 仅在启用动画且未减少动态效果时重放，按可见状态开始或恢复。 |
 

@@ -71,8 +71,13 @@ defineExpose({
 </script>
 
 <template>
+  <div
+    v-if="!RuntimeEditor"
+    class="tx-code-editor-placeholder"
+    aria-hidden="true"
+  />
   <component
-    v-if="RuntimeEditor"
+    v-else
     :is="RuntimeEditor"
     ref="editorRef"
     v-bind="props"

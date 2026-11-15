@@ -81,7 +81,7 @@ code: |
 - Reach for it where the same quantity changes: counters, totals, percentages.
 - Pass `cursorIndex` for a number the user is typing, or inserting a digit before `20` reads as renumbering the column.
 - Use `TxTextTransformer` with `mode="fade"` where text must soft-wrap or ellipsise; here only `\n` breaks a line.
-- Keep high-frequency instances on one screen few; every character is an element with `will-change`.
+- Keep high-frequency instances on one screen few: every character segment is an element, and each is promoted to its own layer while it morphs.
 - Don't wrap it in `TxAutoSizer`; the engine animates the container's width and height itself.
 
 ## API Reference
@@ -111,6 +111,12 @@ code: |
 | `animation-start` | - | A morph began; never fires for the first render. |
 | `animation-complete` | - | The morph ran to its end; exactly one of this and `animation-cancel` fires per morph. |
 | `animation-cancel` | - | The next update interrupted the morph. |
+
+### Exposed Methods
+
+| Name | Type | Description |
+|------|------|-------------|
+| `rootRef` | `HTMLElement \| null` | The root element the engine writes into. |
 
 ## Overview
 

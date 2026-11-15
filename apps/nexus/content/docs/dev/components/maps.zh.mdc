@@ -1,6 +1,6 @@
 ---
 title: "Maps 地图"
-description: "GeoJSON 地图：气泡图与分级填色图，Mercator 默认投影，缩放平移。"
+description: "GeoJSON 地图：气泡图与分级填色图，缩放平移"
 category: Charts
 status: beta
 since: 0.1.0
@@ -15,7 +15,7 @@ verified: true
 
 ### 气泡图
 
-点击气泡返回对应的数据行；按下后移动超过 4 px 则改为平移地图。拖拽底图平移，⌘/Ctrl + 滚轮或双指捏合以指针为中心缩放。点位标签按文本显示，不执行 HTML。
+点击气泡返回对应的数据行，点位标签按文本渲染而不执行 HTML。
 
 :::TuffDemoWrapper{demo="MapsBubbleMapDemo" code-lang="vue" title="BubbleMap + 平移缩放" description="气泡面积正比于值；拖拽平移，⌘/Ctrl + 滚轮缩放。"}
 ---

@@ -1,6 +1,6 @@
 ---
 title: "DiffTable"
-description: "Presents an AI-proposed edit as a change set, tinting outgoing rows and expanding incoming ones stage by stage."
+description: "Shows an AI-proposed edit stage by stage: outgoing rows tint, new rows expand."
 category: Visualization
 status: beta
 since: 0.3.9
@@ -152,15 +152,8 @@ All three formatters ship English defaults: TuffEx carries no message catalog, s
 
 ## Technologies
 
-- Component source: `packages/tuffex/packages/components/src/diff-table/src/TxDiffTable.vue`.
-- Types: `packages/tuffex/packages/components/src/diff-table/src/types.ts` exports `DiffTableProps`, `DiffTableColumn`, `DiffTableRow`, `DiffChangeKind`, `DiffTablePlay`, and `DiffTableEmits`.
-- Instance: `packages/tuffex/packages/components/src/diff-table/index.ts` writes `TxDiffTableInstance` out by hand — a generic component's expose surface is typed unwrapped, so `stage` is a `number` rather than a `Ref<number>`.
-- **Test coverage:** `packages/tuffex/packages/components/src/diff-table/__tests__/diff-table.test.ts` has 15 cases using fake timers, covering the three-stage timeline, `stageChange` / `settled` emissions, all three playback modes, the three exposed methods, per-column tint and strike, grid-and-colgroup agreement, the collapsed row's `aria-hidden` / `inert`, unmount cleanup, and `play` mode switching.
+- Component source and types: `packages/tuffex/packages/components/src/diff-table/src/TxDiffTable.vue` and `types.ts`; `index.ts` writes `TxDiffTableInstance` by hand, since a generic component's expose surface is typed unwrapped.
+- **Provenance:** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT. Added rows keep their position in `rows`, and `modified` is a type this port adds.
+- **Known limitation:** Under high-contrast themes (`html[data-tx-contrast='high']`) the `--tx-bui-*` tokens keep their upstream values and do not join the high-contrast ramp.
 
 <TuffDocSourceLink />
-
-- **Provenance:** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
-- **Divergence from upstream:** Added rows render at their position in `rows` rather than being pinned last as upstream hardcodes, which preserves diff ordering and supports more than one addition; `modified` is new to this port and has no upstream counterpart.
-- **Upstream defect fixed:** Upstream tints outgoing rows with an inline `style.background`, which outranks its own hover rule and leaves exactly the rows a reader wants to inspect without hover feedback. This port drives the tint from a class instead.
-- **Dark theme:** Red and green fills come from `--tx-bui-*-tint` (translucent overlays), rather than the opaque `--tx-color-success-light-9` family, so the tint reads the same on any surface the table sits on.
-- **Known limitation:** Under high-contrast themes (`html[data-tx-contrast='high']`) the `--tx-bui-*` tokens keep their upstream values and do not join the high-contrast ramp.

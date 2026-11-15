@@ -52,7 +52,7 @@ verified: false
 ---
 code: |
   <template>
-    <TxProgressBar :percentage="40" aria-label="上传进度" />
+    <TxProgressBar :percentage="40" ariaLabel="上传进度" />
   </template>
 ---
 :::

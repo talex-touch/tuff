@@ -57,7 +57,7 @@ code: |
 
 - Positioning belongs to the host: the component draws only the tether's direction and never places itself. Put it after its origin element.
 - The root is `role="status"` with `aria-live="polite"` by default, because the panel appears without a user action.
-- With `open` false, only a class changes: opacity drops to zero and the panel returns to its travel origin.
+- With `open` false, the card goes `inert` and only a class changes: opacity drops to zero and the panel returns to its travel origin. The component runs no timers; auto-dismiss, hover and focus holding, and re-timing after leave belong to the host.
 - If focus is inside when `open` turns false or the panel unmounts, it goes back to the element it came from, or else to the nearest container above with a `tabindex`.
 - The entrance springs on `--tx-ease-spring`; under reduced motion the travel is dropped and only the fade remains.
 - The `stack` slivers are `aria-hidden` decoration with no content, capped at 2 because a third would show under a pixel of edge.

@@ -1,6 +1,6 @@
 ---
 title: "Physics motion"
-description: "61 independently retained folding, stroke, stacking and mechanical motion scenes you can grab and throw."
+description: "61 folding, stroke, stacking and mechanical scenes you can grab."
 category: MotionPhysics
 status: beta
 since: 0.7.0
@@ -97,7 +97,7 @@ Grabbing the scene again while it is returning continues from where it is drawn.
 
 | Entry | Contract |
 | --- | --- |
-| `default` slot | Optional caption outside the interactive stage, associated through a stable Vue ID. |
+| `default` | Default slot: optional caption outside the interactive stage, associated through a stable Vue ID. |
 | `replay()` | Replace the current run. If inactive, retain the request until active; reduced motion keeps the assembled pose. |
 | `reset()` | Cancel all tracks and queued replay, revealing the assembled pose. |
 | `playing` | Exposed boolean indicating that real native tracks are currently owned by this instance. |

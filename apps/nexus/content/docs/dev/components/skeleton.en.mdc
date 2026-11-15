@@ -94,11 +94,9 @@ rows:
 
 ### Slots
 
-| Component | Slot | Props | Description |
-|-----------|------|-------|-------------|
-| `TxSkeleton` | `default` | - | Real content, rendered when `loading=false`. |
-| `TxCardSkeleton` | - | - | Fixed card placeholder; no slots. |
-| `TxListItemSkeleton` | - | - | Fixed list-row placeholder; no slots. |
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Real content, rendered when `loading=false`. |
 
 ### Preset Components
 
@@ -155,7 +153,8 @@ Turns a raw loading flag into a skeleton flag that doesn't flicker.
 | `source` | `MaybeRefOrGetter<boolean>` | - | The raw loading flag. |
 | `options.delay` | `number` | `150` | Milliseconds before the skeleton shows; data that arrives sooner never shows one. |
 | `options.minDuration` | `number` | `400` | Minimum milliseconds the skeleton stays once shown. |
-| Returns | `Ref<boolean>` | - | Whether to show the skeleton. |
+
+Returns `Ref<boolean>`, which is true while the skeleton should show.
 
 ## Overview
 

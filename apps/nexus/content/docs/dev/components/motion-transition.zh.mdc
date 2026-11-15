@@ -134,15 +134,7 @@ code: |
 | `--tx-motion-transition-radius` | 随 size 变化，md 为 `16px` | card/modal 圆角。 |
 | `--tx-motion-transition-width` | 弹层模式的 `width` 属性 | modal 宽度。弹层优先用属性设置。 |
 
-## 概述
-
-离场阶段保留旧插槽子树。遮挡完成后，移除旧子树并挂载请求的内容。进场揭示新内容，Vue 提交后再发出 `completed`。液体波保留分层控制点延迟，门保留各自的铰链结构。翻转和淡化直接作用于真实视图，不使用品牌占位图。
-
-内容内的操作触发替换时，焦点先移至舞台，完成后移至新内容的首个可聚焦元素。打开弹窗时焦点进入弹窗。只有最上层弹窗处理 Tab 和 Escape，Tab 只停在显示出来、排在 Tab 顺序里的控件上。关闭后，焦点回到仍连接文档的打开按钮，不滚动页面。减少动态效果或失活会停止唯一 RAF，并提交目标。停用或卸载时释放监听器、观察器和待执行帧。`useId` 提供稳定的舞台、标题 ID 和确定性的波延迟种子，兼容服务端渲染与 hydration。
-
-## 技术实现
-
-来源为 [Amicro 提交 43c29ce](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a)，MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。`src/data/transitions.ts:23～199` 提供六个目录实现。`src/components/PageTransitionOverlay.tsx:25～196` 提供 14 点预览波、门的铰链、光圈、翻转和帘结构。`PageTransitionCard.tsx` 对应 card 预览与重播。`PageTransitionModal.tsx` 对应弹窗预览、重复触发和播放速率。`PageTransitionOverlay.tsx` 对应可复用舞台。品牌文案、源码复制展示和路由归属不属于组件业务能力。
+## 来源映射
 
 Registry 文件 `registry/ui/transitions/page-transition.tsx:4～22` 声明了 18 个名称，但第 88～135 行只实现阶梯和液体波。第 137～143 行为其他名称提供同一透明度兜底。以下逐项映射保留来源覆盖，不宣称 16 个独立效果，也不导出旧名称别名：
 
@@ -167,4 +159,14 @@ Registry 文件 `registry/ui/transitions/page-transition.tsx:4～22` 声明了 1
 | `depth-forward` | 上游只有透明度 fallback | `cross-fade` |
 | `liquid-wave` | 三层 12 点贝塞尔波，第 39～84 和 123～135 行 | `liquid-wave` |
 
-实现复用已有 `resolveTransition`、`easingFunction` 共享弹簧和 `useMotionActivity`，不引入 React、Framer Motion 或 Tailwind 运行时。真实遮挡中点和动画结束替代来源中固定 380/850 ms 的内容切换定时器。构建、自动化测试和真实浏览器验收由集成阶段执行，本页不宣称这些检查已通过。
+## 概述
+
+离场阶段保留旧插槽子树。遮挡完成后，移除旧子树并挂载请求的内容。进场揭示新内容，Vue 提交后再发出 `completed`。液体波保留分层控制点延迟，门保留各自的铰链结构。翻转和淡化直接作用于真实视图，不使用品牌占位图。
+
+内容内的操作触发替换时，焦点先移至舞台，完成后移至新内容的首个可聚焦元素。打开弹窗时焦点进入弹窗。只有最上层弹窗处理 Tab 和 Escape，Tab 只停在显示出来、排在 Tab 顺序里的控件上。关闭后，焦点回到仍连接文档的打开按钮，不滚动页面。减少动态效果或失活会停止唯一 RAF，并提交目标。停用或卸载时释放监听器、观察器和待执行帧。`useId` 提供稳定的舞台、标题 ID 和确定性的波延迟种子，兼容服务端渲染与 hydration。
+
+## 技术实现
+
+- 来源：[Amicro 提交 43c29ce](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a)，MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。六个目录实现见 `src/data/transitions.ts:23～199`，舞台、门、光圈与帘结构见 `src/components/PageTransitionOverlay.tsx:25～196`。
+- 注册表覆盖：`registry/ui/transitions/page-transition.tsx:4～22` 声明 18 个名称，只实现阶梯与液体波；其余名称共用透明度兜底，逐项映射见「来源映射」。
+- 实现：复用已有 `resolveTransition` 与 `resolveCssEase`（`utils/animation/easing.ts`）的共享缓动，经 `useMotionActivity` 管理活动边界；遮挡中点与动画结束替代来源固定的 380/850 ms 切换定时器。

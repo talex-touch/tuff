@@ -11,7 +11,7 @@ verified: true
 
 ## Installation
 
-The chart family ships inside Tuffex behind its own subpath, `@talex-touch/tuffex/charts`. Its API surface mirrors Cloudflare kumo's chart family, but the renderer is Vue-emitted SVG — no echarts and no chart framework; math comes from tree-shakeable d3 micro-modules only (`d3-scale` / `d3-shape` / `d3-sankey` / `d3-geo`). For chart types this family does not cover — and for ECharts' own option surface — use the [ECharts Family](/docs/dev/components/echart-charts), which shares these colour tokens and ships as an optional `echarts` peer.
+The chart family ships inside Tuffex behind its own subpath, `@talex-touch/tuffex/charts`. Its API surface mirrors Cloudflare kumo's chart family, but native charts render as Vue-emitted SVG, with no echarts and no chart framework; math comes from tree-shakeable d3 micro-modules only (`d3-scale` / `d3-shape` / `d3-sankey` / `d3-geo`). For chart types this family does not cover — and for ECharts' own option surface — use the [ECharts Family](/docs/dev/components/echart-charts), which shares these colour tokens and ships as an optional `echarts` peer.
 
 ```bash
 pnpm add @talex-touch/tuffex
@@ -25,11 +25,6 @@ import '@talex-touch/tuffex/charts/style.css'
 ## Usage
 
 Every chart follows ECharts' default timing: first render animates in over 1000ms `cubicInOut`, and a data update morphs geometry over 500ms `cubicInOut`. Above 2000 points in one series the animation is skipped and the final frame renders directly. Lines and areas are the exception on first render — they take the ECharts line-series default and reveal left to right with `linear`. Hover emphasis does not copy ECharts' 300ms `cubicOut`: dimming the other series or changing a colour lands on the frame the pointer arrives, per TuffEx's hover rule, and only geometric emphasis (a pie slice shifting out, a map bubble growing) still eases over 300ms `cubicOut`.
-
-The values are copied from the `echarts ^6.0.0` that kumo pins (`src/model/globalDefault.ts`, with separate defaults for the line series and the tooltip). This package ships no ECharts runtime, so they are frozen as exported constants: `ENTER_DURATION` (1000), `UPDATE_DURATION` (500), `STATE_DURATION` (300), `ANIMATION_THRESHOLD` (2000). When the host sets `prefers-reduced-motion: reduce` every animation lands on its final frame, and all CSS transitions sit inside `@media (prefers-reduced-motion: no-preference)`.
-
-What each chart does with that timing (bars growing from the base axis, scatter scaling in, arcs expanding by angle, tooltip movement and collision boundary, Sankey and maps having no geometry animation) lives on the corresponding chart page (Timeseries, Maps, Sankey, Custom Chart) and is not repeated here.
-
 ### Best Practices
 
 - Choose the dedicated chart wrapper (`TxTimeseriesChart`, `TxBubbleMap`, `TxChoroplethMap`, `TxSankeyChart`, `TxSparkChart`, or `TxEChart`) for standard metrics before assembling custom series primitives.
@@ -136,3 +131,10 @@ code: |
 - No `echarts` instance prop — the renderer is built in; consumers neither need nor can pass echarts.
 - No `isDarkMode` prop — every color reads `--tx-chart-*` CSS variables and follows the host's `.dark` / `[data-theme='dark']` automatically.
 - Every HTML-string formatter became a slot (VNodes), so there is no XSS-escaping surface.
+
+## Overview
+
+- The defaults are copied from the `echarts ^6.0.0` that kumo pins (`src/model/globalDefault.ts`, with separate defaults for the line series and the tooltip).
+- This package ships no ECharts runtime, so they are frozen as exported constants: `ENTER_DURATION` (1000), `UPDATE_DURATION` (500), `STATE_DURATION` (300), `ANIMATION_THRESHOLD` (2000).
+- When the host sets `prefers-reduced-motion: reduce` every animation lands on its final frame, and all CSS transitions sit inside `@media (prefers-reduced-motion: no-preference)`.
+- What each chart does with that timing lives on the corresponding chart page (Timeseries, Maps, Sankey, Custom Chart), not repeated here.

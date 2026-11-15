@@ -12,7 +12,7 @@ verified: false
 ## Usage
 
 ### Image generation
-:::TuffDemoWrapper{demo="TemplateImageStudioDemo" code-lang="vue" description="Plays once when it scrolls into view: picks Aurora and 16:9, types a prompt and generates four images; click or press a key to take over. The images are drawn by code; no model is called."}
+:::TuffDemoWrapper{demo="TemplateImageStudioDemo" code-lang="vue" description="Plays once when it scrolls into view: picks Aurora and 16:9, types a prompt and generates four images; click or press a key to take over."}
 ---
 code: |
   <script setup lang="ts">

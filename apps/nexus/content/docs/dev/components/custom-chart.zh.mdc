@@ -1,6 +1,6 @@
 ---
 title: "Custom Chart 自定义图表"
-description: "组合式逃生舱：TxChart 容器 + 轴/网格/系列原语，自由拼装折线、面积、柱、散点与环形。"
+description: "组合式逃生舱：拼装折线、面积、柱、散点与环形"
 category: Charts
 status: beta
 since: 0.1.0
@@ -63,7 +63,7 @@ code: |
 ---
 :::
 
-自定义图层不会自动动画：`TxChart` 只负责坐标系，动画由系列共享的导出原语提供。首绘入场用 `useEnterProgress()`（返回 0 → 1 的 `Ref<number>`），数据更新用 `useTweenedNumbers(source)`（把数值数组平滑追到最新值），要自定节奏就用 `tween()` 配 `easings` / `cubicBezier()`。时长与阈值同样导出：`ENTER_DURATION`（1000）、`UPDATE_DURATION`（500）、`STATE_DURATION`（300）、`ANIMATION_THRESHOLD`（2000）；超过阈值的序列不做动画，`prefers-reduced-motion: reduce` 下所有补间直接落到终帧。
+自定义图层不会自动动画：首绘用 `useEnterProgress()`，数据更新用 `useTweenedNumbers()`，时长与阈值沿用导出常量，减弱动效下直接落到终帧。
 
 ```vue
 <script setup lang="ts">
@@ -121,18 +121,43 @@ const enterWidth = computed(() => plot.value.width * enter.value)
 | `x` / `y` | `keyof T \| (d, i) => v` | accessor。 |
 | `color` | `string` | 缺省按挂载顺序取分类色。 |
 
-`TxLineSeries` 另有 `curve`（`linear/monotone/natural/step`）、`strokeWidth`、`showSymbol`、`dashed`，以及 `enter`（默认 `clip` 从左向右擦开；`draw` 沿线描出、描到哪个点才显示该点的标记，虚线仍用 `clip`）；`TxAreaSeries` 有 `gradient`（默认开）与 `fillOpacity`；`TxBarSeries` 有 `stack`、`barWidth`、`radius`；`TxScatterSeries` 有 `r`（常量或 accessor）；`TxArcSeries` 用 `value/name?/color?` accessor 加 `innerRadius/padAngle/cornerRadius`，点击发 `slice-click`，悬停发 `slice-hover`（带 `{ datum, index, name, value }`，指针移出弧形时为 `null`）——无轴弧形没有坐标系可读，`#overlay` 里的 `<TxChartTooltip>` 就靠它取数。弧形按住拖动时像转盘一样按角度逐片读数，松手不触发 `slice-click`；聚焦后 ← / → 逐片读数、Home / End 跳到首尾、Escape 清除，`announce` 改播报文案（默认 `name: value`）。
+#### 系列专有 Props
 
-### ChartTooltip Props
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `curve` | `'linear' \| 'monotone' \| 'natural' \| 'step'` | `'linear'` | `TxLineSeries`、`TxAreaSeries` 的曲线插值。 |
+| `strokeWidth` | `number` | `2` | `TxLineSeries`、`TxAreaSeries` 的线宽（像素）；面积图设为 `0` 时隐藏顶线。 |
+| `showSymbol` | `boolean` | `false` | `TxLineSeries`：在每个数据点画圆点。 |
+| `dashed` | `boolean` | `false` | `TxLineSeries`：虚线描边，适合不完整数据。 |
+| `enter` | `'clip' \| 'draw'` | `'clip'` | `TxLineSeries` 首绘方式：`clip` 从左到右擦开，`draw` 沿线描出；虚线始终按 `clip`。 |
+| `gradient` | `boolean` | `true` | `TxAreaSeries`：纵向渐变填充。 |
+| `fillOpacity` | `number` | `0.2` | `TxAreaSeries` 在 `gradient` 关闭时的填充不透明度；`TxScatterSeries` 的点默认 `0.9`。 |
+| `stack` | `string` | — | `TxBarSeries`：同一键的序列堆叠，无键的并排。 |
+| `barWidth` | `number` | — | `TxBarSeries`：显式柱宽（像素），默认由比例尺推导。 |
+| `radius` | `number` | `0` | `TxBarSeries`：柱的圆角半径。 |
+| `r` | `number \| accessor` | `3` | `TxScatterSeries`：点半径（像素），常量或按数据取值。 |
+| `value` | `accessor` | — | `TxArcSeries`：决定扇区角度的取值器。 |
+| `name` | `accessor` | — | `TxArcSeries`：可选名称取值器，出现在扇区事件中。 |
+| `color` | `accessor` | 分类色 | `TxArcSeries`：逐扇区颜色。 |
+| `innerRadius` | `number` | `0.6` | `TxArcSeries`：内径占外径的比例，`0` 为饼图。 |
+| `padAngle` | `number` | `0.015` | `TxArcSeries`：扇区之间的角度间隙（弧度）。 |
+| `cornerRadius` | `number` | `2` | `TxArcSeries`：扇区圆角（像素）。 |
+| `announce` | `(slice) => string` | `name: value` | `TxArcSeries`：键盘读数的播报文案。 |
+
+`TxArcSeries` 的事件：`slice-click` 点击扇区；`slice-hover` 指针进入扇区时发出扇区数据，离开弧形时为 `null`。无轴弧形没有坐标系可读，`#overlay` 里的 `<TxChartTooltip>` 靠它取数。弧形按住拖动时像转盘一样按角度逐片读数，松手不触发 `slice-click`；聚焦后 ← / → 逐片读数、Home / End 跳到首尾、Escape 清除。
+
+### TxChartTooltip Props
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `open` | `boolean \| 'auto'` | `'auto'` | `'auto'` 指针在图内即显示；布尔为受控。 |
 | `follow` | `'both' \| 'x'` | `'both'` | `x` 固定垂直位置。 |
 | `offset` | `number` | `12` | 指针与提示框间距。 |
+| `fixedY` | `number` | `0` | `follow` 为 `x` 时的顶部位置（像素）。 |
 | `footer` | `string` | — | 行列表下方追加的一行文本（对应 kumo 的 `tooltipFooter`）。 |
 | `boundary` | `'clipping-ancestors' \| Element \| Element[]` | `'clipping-ancestors'` | 碰撞边界（对应 ECharts `confine`）：默认沿裁剪祖先与视口求交后翻转。 |
 | `title` / `rows` / `hiddenCount` | — | — | 默认内容；插槽整体替换。 |
+| `moreLabel` | `(count: number) => string` | `+N more` | `hiddenCount` 折叠行的页脚文案。 |
 
 提示框的节奏同样对齐 ECharts：`hideDelay` 100ms 之后才开始 200ms 淡出并移除 DOM，指针短暂划出图表不会闪断；位移交给 `transform: translate3d()` 的 400ms 过渡由浏览器补间；指针追踪按 50ms 节流（首次与最后一次各补一次采样）。
 

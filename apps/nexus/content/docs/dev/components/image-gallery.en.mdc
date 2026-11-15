@@ -100,15 +100,12 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 
 ## Overview
 
-- Each thumbnail is a native `<button type="button">` whose `aria-label` comes from `openLabelFormatter`.
-- Thumbnail and preview `alt` text is `item.name`; unnamed images deliberately get empty alt text.
-- The preview traps Tab focus, closes on Escape, the close button, the backdrop, or dragging the image up or down, and returns focus to the thumbnail that opened it.
+- Each thumbnail is a native `<button type="button">` whose `aria-label` comes from `openLabelFormatter`; `alt` is `item.name`, and unnamed images deliberately get empty alt text.
+- The preview traps Tab focus and closes on Escape, the close button, the backdrop, dragging the image up or down, or `items` becoming empty, and returns focus to the thumbnail that opened it.
 - Once open, the wheel, a trackpad, or two fingers zoom, and a drag pans a zoomed image; at fit, a sideways swipe or ← / → turns the page. At either end the page button is `aria-disabled` rather than disabled, so focus never drops to `body`.
 - The top bar's image name and position count are an `aria-live` region, so screen readers announce each page.
 - The preview grows out of the clicked thumbnail and shrinks back into it on closing. It opens on the whole image, never cropped, and never blows a small image up past its own pixels; at 640px wide or less, or 480px tall or less, the image fills the screen under floating controls.
-- Until an image loads, its place is held at the shape of the last image looked at (4:3 for the first), and the loading effect appears only after 150 ms (`sweep-gradient` by default, set by the preview's `loadingEffect`, passed through `previewProps`); with reduced motion, it holds still.
-- An image that fails to load shows a placeholder icon in the thumbnail and a placeholder with `failedText` in the preview; the two share the record of failures, so the same URL is not retried, and a new `url` loads again.
-- When `items` becomes empty, the preview closes.
+- Until an image loads, its place is held at the shape of the last image looked at (4:3 for the first), and the loading effect appears only after 150 ms (`sweep-gradient` by default, set by the preview's `loadingEffect` through `previewProps`; with reduced motion it holds still). A failed image shows a placeholder in the thumbnail and the preview, the same URL is not retried, and a new `url` loads again.
 
 ## Technologies
 

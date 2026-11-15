@@ -1,6 +1,6 @@
 ---
 title: "Flowchart 流程画布"
-description: "点阵画布上的工作流节点：分类胶囊、卡片插槽、自动贝塞尔连线，可拖拽且始终受控。"
+description: "点阵画布上的工作流节点与连线，受控且可拖拽"
 category: Flow
 status: beta
 since: 0.6.0

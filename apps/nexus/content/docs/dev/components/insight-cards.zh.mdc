@@ -119,6 +119,12 @@ code: |
 | `tone` | `'positive' \| 'negative' \| 'neutral'` | — | 覆盖由符号推导的色调。 |
 | `formatter` | `(value: number) => string` | — | 完全接管数字格式化。 |
 
+#### 插槽
+
+| 插槽名 | 作用域参数 | 说明 |
+|------|------|------|
+| `detail` | — | 替换等宽的副行；未插入时渲染 `detail` 属性。 |
+
 ## 概述
 
 - 不传 `activeIndex` 时组件自己翻页；传入后完全由宿主控制。

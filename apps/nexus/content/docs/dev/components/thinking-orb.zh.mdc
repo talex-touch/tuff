@@ -99,3 +99,5 @@ code: |
 
 - 移植自 [thinking-orbs](https://github.com/Jakubantalik/thinking-orbs) v0.2.0（MIT © Jakub Antalik），源码文件头保留署名。
 - 源码：`packages/tuffex/packages/components/src/thinking-orb/`。
+
+<TuffDocSourceLink />

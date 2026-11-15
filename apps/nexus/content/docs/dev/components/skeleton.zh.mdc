@@ -94,11 +94,9 @@ rows:
 
 ### 插槽
 
-| 组件 | 插槽名 | 参数 | 说明 |
-|------|--------|------|------|
-| `TxSkeleton` | `default` | - | `loading=false` 时渲染的真实内容。 |
-| `TxCardSkeleton` | - | - | 固定的卡片占位，无插槽。 |
-| `TxListItemSkeleton` | - | - | 固定的列表行占位，无插槽。 |
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | `loading=false` 时渲染的真实内容。 |
 
 ### 预设组件
 
@@ -155,7 +153,8 @@ rows:
 | `source` | `MaybeRefOrGetter<boolean>` | - | 原始加载标记。 |
 | `options.delay` | `number` | `150` | 推迟显示的毫秒数；此前到达的数据不出现骨架。 |
 | `options.minDuration` | `number` | `400` | 骨架出现后至少保持的毫秒数。 |
-| 返回值 | `Ref<boolean>` | - | 是否显示骨架。 |
+
+返回 `Ref<boolean>`，表示是否显示骨架。
 
 ## 概述
 

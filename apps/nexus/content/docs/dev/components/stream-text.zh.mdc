@@ -39,9 +39,11 @@ code: |
   const reply = ref('')
   const busy = ref(true)
 
-  for await (const delta of stream)
-    reply.value += delta
-  busy.value = false
+  onMounted(async () => {
+    for await (const delta of stream)
+      reply.value += delta
+    busy.value = false
+  })
   </script>
 
   <template>
@@ -53,7 +55,7 @@ code: |
 :::
 
 ### 显影预设
-`reveal` 决定词的进场方式。内容完整时用 `replay()` 重播，`reserve` 让版面保持不动。
+`reveal` 决定词的进场方式；内容完整时用 `replay()` 重播，`reserve` 让版面保持不动。
 :::TuffDemoWrapper{demo="StreamTextPresetsDemo" code-lang="vue"}
 ---
 code: |

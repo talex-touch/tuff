@@ -12,7 +12,7 @@ verified: false
 ## Usage
 
 ### Cited research report
-:::TuffDemoWrapper{demo="TemplateResearchDemo" code-lang="vue" description="Click a numbered citation to find and highlight its entry in the evidence rail. Sample figures."}
+:::TuffDemoWrapper{demo="TemplateResearchDemo" code-lang="vue" description="Click a numbered citation to find and highlight its entry in the evidence rail."}
 ---
 code: |
   <script setup lang="ts">
@@ -91,7 +91,7 @@ code: |
 
 ## Overview
 
-A research copilot with traceable conclusions: its process, a cited conclusion, a comparison table, insights, and a recommendation arrive in turn.
+A research copilot with traceable conclusions: its process, a cited conclusion, a comparison table, insights, and a recommendation arrive in turn. The figures are sample data.
 
 - It researches once in view and takes about 10 seconds; Reset or Research again replays it, and reduced motion renders the finished answer at once.
 - A numbered citation switches the rail to the matching tab and scrolls only inside it: a citation with a retrieved chunk lands on the chunk, the rest on the source.

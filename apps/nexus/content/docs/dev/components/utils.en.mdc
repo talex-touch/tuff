@@ -27,6 +27,8 @@ One source of overlay stacking levels, so components never hard-code `z-index`.
 | `resetZIndex(seed?, reason?)` | `(seed?: number, reason?: string) => number` | Reset to the seed after unmount or in tests |
 | `configureZIndex(options)` | `(options) => void` | Set the base seed and overrides globally |
 | `onZIndexEvent(listener)` | `(listener) => () => void` | Subscribe to level changes; returns an unsubscribe |
+| `createZIndexAllocator()` | `() => TxZIndexAllocator` | Builds an allocator with its own counter, not shared module state |
+| `useZIndexAllocator()` | `() => TxZIndexAllocator` | Call in `setup` for the app-scoped allocator; falls back to the module-level one |
 
 ### Environment guards
 
@@ -46,6 +48,7 @@ Semantic patterns over `navigator.vibrate`.
 |--------|-----------|-------------|
 | `vibrate` | `{ light() … error(), stop, isSupported }` | Fire a preset directly, e.g. `vibrate.success()` |
 | `useVibrate(type, options?)` | `(type: VibrateType, options?) => void` | Trigger one configurable semantic vibration |
+| `useAutoVibrate(duration, options?)` | `(duration: number[], options?) => boolean` | Vibrates once over a millisecond pattern; returns `false` where unsupported |
 | `stopVibrate()` | `() => void` | Interrupt an in-progress vibration |
 | `isVibrateSupported()` | `() => boolean` | Capability detection |
 
@@ -58,6 +61,8 @@ A global toast queue with no per-page host; rendering still needs `TxToastHost`.
 | `toast(options)` | `(options) => string` | Show a toast; returns an id for dismissing it |
 | `dismissToast(id)` | `(id: string) => void` | Dismiss one toast |
 | `clearToasts()` | `() => void` | Clear every toast |
+| `pauseToasts()` | `() => void` | Holds every auto-dismiss countdown; repeat calls have no effect |
+| `resumeToasts()` | `() => void` | Resumes each countdown from the time it had left |
 
 ### Dialog manager
 
@@ -66,17 +71,21 @@ Queues global dialogs by priority and runs them one at a time, with lifecycle ca
 | Export | Signature | When to use |
 |--------|-----------|-------------|
 | `getDialogManager()` | `() => DialogManager` | Get the global singleton to queue or open dialogs |
+| `DialogManager` | `class` | The queue class behind `getDialogManager()`; registers and unregisters dialogs by priority |
 
 ### Animation
 
 | Export | Signature | When to use |
 |--------|-----------|-------------|
+| `useReducedMotion()` | `() => Ref<boolean>` | Reactive `prefers-reduced-motion` preference; follows mount and KeepAlive activity |
 | `useFlip(targetRef, opts?)` | `(ref, opts?) => UseFlipReturn` | Run a FLIP transition on an element (powers `TxFlipOverlay`) |
 | `useAutoResize(targetRef, opts?)` | `(ref, opts?) => UseAutoResizeReturn` | Measure and transition size changes (powers `TxAutoSizer`) |
 | `stepSpring(position, velocity, target, spring, dt)` | `(position, velocity, target, spring, dt) => [number, number]` | Step a value along a spring (`{ stiffness, damping, mass? }`, `dt` in seconds) from your own frame loop, keeping velocity when the target moves; usable as `useJellyIndicator`'s glide `integrate` |
 | `solveSpring(position, velocity, target, spring, t)` | `(position, velocity, target, spring, t) => [number, number]` | The same spring in closed form: the exact position and velocity at any `t` (seconds); for scrubbed timelines, frame-by-frame renders, and asserting where a motion is at a moment |
 | `createSpringTrack(spring, initial)` | `(spring, initial) => { retarget(t, target), sample(t) }` | A spring track retargeted along the way: each retarget keeps the position and velocity of that moment, and `sample(t)` reads any moment exactly, in any order |
 | `useMorphBox(box, content, opts?)` | `(box, content, opts?) => { morphing, settle }` | A box that springs to its content's natural size, keeping its speed when the size changes mid-flight; the size engine of `TxMorph` and `TxTransitionSmoothSize` |
+| `useIndicatorBox(options)` | `(options) => UseIndicatorBoxReturn` | Measures a target against its container so an indicator can follow it; resizes stay in sync |
+| `useJellyIndicator(options?)` | `(options?) => UseJellyIndicatorReturn` | Spring engine for a sliding indicator in `jelly` or `glide` material; the host measures and paints |
 | `resolveGsapEase(value)` | `(value: string) => string \| ((t: number) => number)` | Convert an ease before handing it to GSAP: `spring(...)` and `cubic-bezier(...)` become progress functions (GSAP knows neither and silently uses its default); GSAP names pass through |
 | `resolveCssEase(spec)` | `(spec: string \| undefined \| null) => (t: number) => number` | Evaluate a CSS timing function in JS: `cubic-bezier(...)`, evenly spaced `linear(...)`, and `linear` / `ease` / `ease-in` / `ease-out` / `ease-in-out`; anything else degrades to clamped linear, never `null`. Cached per spec, safe per frame |
 | `createSpringEase(omega?, zeta?)` | `(omega = 10, zeta = 0.72) => (t: number) => number` | Closed-form underdamped spring normalized to the timeline: overshoots 1, settles, lands on exactly 1. Unlike frame-stepped `stepSpring`, usable directly as an `ease` |

@@ -92,7 +92,7 @@ code: |
 
 ## 技术实现
 
-- 内置的 `github-markdown.css` 全局引入并与 `TxStreamMarkdown` 共用，每条规则限定在 `:where(.tx-markdown-view, .tx-stream-md)` 下，不影响宿主自己的 `.markdown-body`；重新引入上游版本时保留该限定。
+- 内置的 `github-markdown.css` 全局引入并与 `TxStreamMarkdown` 共用，每条规则限定在 `:where(.tx-md)` 下，不影响宿主自己的 `.markdown-body`；重新引入上游版本时保留该限定。
 - 源码：`packages/tuffex/packages/components/src/markdown-view/`。
 
 <TuffDocSourceLink />

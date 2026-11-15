@@ -61,3 +61,11 @@ code: |
 - 流式时 `text` 每次变化都把正文滚到底部；非流式时不干预滚动位置。
 - 头部是原生 `<button>`，带 `aria-expanded` 与指向正文的 `aria-controls`；图标为 `aria-hidden`。
 - 折叠只是收起正文，内容仍挂载在 DOM 中。
+
+## 技术实现
+
+- 折叠用 `grid-template-rows` 在 `0fr` 与 `1fr` 之间过渡（0.26 秒），正文始终挂载。
+- 流式时标签使用 `background-clip: text` 的光带，1.6 秒循环。
+- 源码：`packages/tuffex/packages/components/src/reasoning-disclosure/`。
+
+<TuffDocSourceLink />

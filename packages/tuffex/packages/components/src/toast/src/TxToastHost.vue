@@ -145,6 +145,7 @@ function depthOf(item: TxToastItem): number {
   return geometry.value[item.id]?.depth ?? 0
 }
 
+/** Hidden toasts, and folded ones behind the front card, are `inert`: focus and screen readers skip them. */
 function isInteractive(item: TxToastItem): boolean {
   const depth = depthOf(item)
   if (depth >= props.visibleToasts)
@@ -357,6 +358,7 @@ defineExpose({ pause: pauseToasts, resume: resumeToasts, expanded })
         :data-visible="depthOf(t) < visibleToasts ? 'true' : 'false'"
         :data-swiping="swipe?.id === t.id ? 'true' : 'false'"
         :role="t.variant === 'danger' ? 'alert' : undefined"
+        :inert="!isInteractive(t) || undefined"
         @pointerdown="onSwipeStart(t, $event)"
         @pointermove="onSwipeMove"
         @pointerup="onSwipeEnd(t, $event)"
