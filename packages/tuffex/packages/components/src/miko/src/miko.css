@@ -1,0 +1,693 @@
+.tx-miko {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  transition: filter 0.2s ease, transform 0.15s ease;
+}
+
+.tx-miko svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+/* 动作平滑过渡 */
+.miko-state-enter-active,
+.miko-state-leave-active {
+  transition: opacity 0.22s ease-in-out;
+}
+.miko-state-enter-from,
+.miko-state-leave-to {
+  opacity: 0;
+}
+
+/* 交互状态反馈：hover 仅柔和提亮增加光晕，严格不放大 */
+.tx-miko.is-interactive {
+  cursor: pointer;
+}
+.tx-miko.is-interactive:hover {
+  filter: brightness(1.08) drop-shadow(0 2px 10px rgba(129, 13, 198, 0.32));
+}
+.tx-miko.is-interactive:active,
+.tx-miko.is-clicked {
+  transform: translateY(1.5px);
+}
+
+/* 闪光恶魔专属辉光与悬浮 */
+.tx-miko.is-demon {
+  filter: drop-shadow(0 2px 12px rgba(239, 68, 68, 0.55));
+  animation: demonLevitate 2.4s ease-in-out infinite;
+}
+
+@keyframes demonLevitate {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+/* 漂浮爱心气泡 */
+.miko-floating-particle {
+  position: absolute;
+  top: -12px;
+  right: 12px;
+  pointer-events: none;
+  animation: floatUpParticle 0.85s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes floatUpParticle {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  30% { transform: translateY(-6px) scale(1.2); opacity: 1; }
+  100% { transform: translateY(-18px) scale(0.9); opacity: 0; }
+}
+
+/* 闪光恶魔光爆 */
+.miko-demon-burst {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: demonBurstZoom 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes demonBurstZoom {
+  0% { transform: translateX(-50%) scale(0.2) rotate(0deg); opacity: 0; }
+  40% { transform: translateX(-50%) scale(1.3) rotate(45deg); opacity: 1; }
+  100% { transform: translateX(-50%) scale(1.6) rotate(90deg); opacity: 0; }
+}
+
+/* 1. 待命 IDLE */
+@keyframes tailWag {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(10deg); }
+}
+@keyframes blinkEye {
+  0%, 94%, 100% { transform: scaleY(1); }
+  97% { transform: scaleY(0.1); }
+}
+@keyframes idleBreathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(0.5px); }
+}
+.state-idle .cat-tail {
+  transform-origin: 23px 12px;
+  animation: tailWag 2.6s ease-in-out infinite;
+}
+.state-idle .cat-eyes {
+  transform-origin: 9px 12px;
+  animation: blinkEye 4.2s infinite;
+}
+.state-idle .cat-body {
+  animation: idleBreathe 3s ease-in-out infinite;
+}
+
+/* 2. 打字 WORKING */
+@keyframes bongoPawLeft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+@keyframes bongoPawRight {
+  0%, 100% { transform: translateY(-2px); }
+  50% { transform: translateY(0); }
+}
+@keyframes fastTail {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(15deg); }
+}
+.state-working .paw-l { animation: bongoPawLeft 0.18s ease-in-out infinite; }
+.state-working .paw-r { animation: bongoPawRight 0.18s ease-in-out infinite; }
+.state-working .cat-tail {
+  transform-origin: 24px 12px;
+  animation: fastTail 0.4s ease-in-out infinite;
+}
+
+/* 3. 思考 THINKING */
+@keyframes sparkPulse {
+  0%, 100% { transform: scale(0.85); opacity: 0.5; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+@keyframes thinkFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+.state-thinking .cat-sparkle {
+  transform-origin: 19px 3px;
+  animation: sparkPulse 1.2s ease-in-out infinite;
+}
+.state-thinking .cat-body { animation: thinkFloat 2s ease-in-out infinite; }
+
+/* 4. 成功喜悦 SUCCESS */
+@keyframes happyJump {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-3px); }
+  60% { transform: translateY(-3px); }
+}
+@keyframes tailHappy {
+  0%, 100% { transform: rotate(-10deg); }
+  50% { transform: rotate(20deg); }
+}
+.state-success .cat-body { animation: happyJump 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) infinite; }
+.state-success .cat-tail {
+  transform-origin: 24px 11px;
+  animation: tailHappy 0.3s ease-in-out infinite;
+}
+
+/* 5. 警觉确认 ALERT */
+@keyframes alertPulse {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+.state-alert .cat-alert-mark { animation: alertPulse 0.6s ease-in-out infinite; }
+
+/* 6. 异常报错 ERROR */
+@keyframes errorShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-1px); }
+  75% { transform: translateX(1px); }
+}
+.state-error .cat-body { animation: errorShake 0.15s ease-in-out infinite; }
+
+/* 7. 休眠蜷缩 SLEEPING */
+@keyframes sleepBreathe {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.92); }
+}
+@keyframes zzzFloat {
+  0% { transform: translate(0, 0); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translate(2px, -4px); opacity: 0; }
+}
+.state-sleeping .cat-body {
+  transform-origin: 14px 16px;
+  animation: sleepBreathe 3.5s ease-in-out infinite;
+}
+.state-sleeping .cat-zzz { animation: zzzFloat 2.4s ease-out infinite; }
+
+/* 8. 多任务 JUGGLING */
+@keyframes juggleOrbit1 {
+  0% { transform: translate(0, 0); }
+  33% { transform: translate(6px, -2px); }
+  66% { transform: translate(12px, 2px); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes juggleOrbit2 {
+  0% { transform: translate(0, 0); }
+  33% { transform: translate(6px, 2px); }
+  66% { transform: translate(-8px, -1px); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes juggleOrbit3 {
+  0% { transform: translate(0, 0); }
+  33% { transform: translate(-10px, -2px); }
+  66% { transform: translate(-5px, 2px); }
+  100% { transform: translate(0, 0); }
+}
+.state-juggling .juggle-ball-1 { animation: juggleOrbit1 0.9s linear infinite; }
+.state-juggling .juggle-ball-2 { animation: juggleOrbit2 0.9s linear infinite; }
+.state-juggling .juggle-ball-3 { animation: juggleOrbit3 0.9s linear infinite; }
+
+/* 9. 扫地 SWEEPING */
+@keyframes sweepBroom {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-15deg); }
+}
+.state-sweeping .broom {
+  transform-origin: 2px 14px;
+  animation: sweepBroom 0.6s ease-in-out infinite;
+}
+
+/* 10. 研读 READING */
+@keyframes glanceEyes {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(1px); }
+}
+.state-reading .glasses { animation: glanceEyes 1.8s ease-in-out infinite; }
+
+/* 11. 眩晕 DIZZY */
+@keyframes dizzyTilt {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+@keyframes dizzyStars {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.state-dizzy .cat-body {
+  transform-origin: 12px 14px;
+  animation: dizzyTilt 0.8s ease-in-out infinite;
+}
+.state-dizzy .dizzy-stars {
+  transform-origin: 13px 3px;
+  animation: dizzyStars 2s linear infinite;
+}
+
+/* 12. 探头 PEEKING */
+@keyframes peekRise {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+@keyframes peekLook {
+  0%, 100% { transform: translateX(0); }
+  30% { transform: translateX(-1.5px); }
+  70% { transform: translateX(1.5px); }
+}
+.state-peeking .cat-peek { animation: peekRise 2.8s ease-in-out infinite; }
+.state-peeking .peek-eyes { animation: peekLook 2.8s ease-in-out infinite; }
+
+/* 13. 猫式伸懒腰 STRETCHING */
+@keyframes stretchBody {
+  0%, 100% { transform: scaleX(1) translateY(0); }
+  50% { transform: scaleX(1.06) translateY(0.5px); }
+}
+@keyframes stretchTail {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(8deg); }
+}
+.state-stretching .cat-stretch {
+  transform-origin: 20px 16px;
+  animation: stretchBody 2.8s ease-in-out infinite;
+}
+.state-stretching .cat-tail-stretch {
+  transform-origin: 23px 8px;
+  animation: stretchTail 2.8s ease-in-out infinite;
+}
+
+/* 14. 舔爪洗脸 BATHING */
+@keyframes pawBath {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-1px, -2px); }
+  50% { transform: translate(-2px, 0); }
+  75% { transform: translate(-1px, 1px); }
+}
+.state-bathing .paw-bath {
+  transform-origin: 14px 11px;
+  animation: pawBath 0.7s ease-in-out infinite;
+}
+
+/* 15. 好奇歪头 CURIOUS */
+@keyframes curiousHeadTilt {
+  0%, 100% { transform: rotate(12deg); }
+  50% { transform: rotate(-8deg); }
+}
+@keyframes questionBob {
+  0%, 100% { transform: translateY(0); opacity: 0.75; }
+  50% { transform: translateY(-2px); opacity: 1; }
+}
+.state-curious .curious-head {
+  transform-origin: 10px 13px;
+  animation: curiousHeadTilt 2.2s ease-in-out infinite;
+}
+.state-curious .question-mark {
+  animation: questionBob 1.4s ease-in-out infinite;
+}
+
+/* 16. 磨爪挠挠 SCRATCHING */
+@keyframes scratchPawLeft {
+  0%, 100% { transform: translateY(-1.5px); }
+  50% { transform: translateY(1.5px); }
+}
+@keyframes scratchPawRight {
+  0%, 100% { transform: translateY(1.5px); }
+  50% { transform: translateY(-1.5px); }
+}
+@keyframes scratchSpark {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+.state-scratching .scratch-paw-1 { animation: scratchPawLeft 0.16s ease-in-out infinite; }
+.state-scratching .scratch-paw-2 { animation: scratchPawRight 0.16s ease-in-out infinite; }
+.state-scratching .scratch-spark { animation: scratchSpark 0.16s ease-in-out infinite; }
+
+/* 17. 呼噜治愈 PURRING */
+@keyframes purrVibrate {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(0.4px, -0.4px); }
+  50% { transform: translate(-0.4px, 0.4px); }
+  75% { transform: translate(0.4px, 0.4px); }
+}
+@keyframes purrFloatNote {
+  0% { transform: translateY(0) scale(0.8); opacity: 0; }
+  40% { opacity: 1; }
+  100% { transform: translateY(-5px) scale(1.1); opacity: 0; }
+}
+.state-purring .cat-purr { animation: purrVibrate 0.15s linear infinite; }
+.state-purring .purr-note-1 { animation: purrFloatNote 1.8s ease-out infinite; }
+.state-purring .purr-heart { animation: purrFloatNote 2.2s ease-out 0.8s infinite; }
+
+/* 18. 吃小鱼干 EATING */
+@keyframes chewJaw {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(1px); }
+}
+@keyframes fishWiggle {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-5deg); }
+}
+.state-eating .chewing-jaw { animation: chewJaw 0.3s ease-in-out infinite; }
+.state-eating .tasty-fish {
+  transform-origin: 10px 13px;
+  animation: fishWiggle 0.6s ease-in-out infinite;
+}
+
+/* 19. 节拍摇摆 DANCING */
+@keyframes danceSway {
+  0%, 100% { transform: rotate(-6deg) translateY(0); }
+  50% { transform: rotate(6deg) translateY(-1.5px); }
+}
+@keyframes danceTailSway {
+  0%, 100% { transform: rotate(15deg); }
+  50% { transform: rotate(-15deg); }
+}
+.state-dancing .cat-dance {
+  transform-origin: 12px 16px;
+  animation: danceSway 0.6s ease-in-out infinite;
+}
+.state-dancing .cat-tail-dance {
+  transform-origin: 23px 11px;
+  animation: danceTailSway 0.6s ease-in-out infinite;
+}
+
+/* 20. 打call应援 CHEERING */
+@keyframes cheerWaveStickL {
+  0%, 100% { transform: rotate(-18deg); }
+  50% { transform: rotate(15deg); }
+}
+@keyframes cheerWaveStickR {
+  0%, 100% { transform: rotate(18deg); }
+  50% { transform: rotate(-15deg); }
+}
+@keyframes cheerBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+.state-cheering .cat-cheer { animation: cheerBounce 0.45s ease-in-out infinite; }
+.state-cheering .glowstick-pink {
+  transform-origin: 2px 8px;
+  animation: cheerWaveStickL 0.45s ease-in-out infinite;
+}
+.state-cheering .glowstick-cyan {
+  transform-origin: 23px 8px;
+  animation: cheerWaveStickR 0.45s ease-in-out infinite;
+}
+
+/* 21. 专注打机 GAMING */
+@keyframes buttonMashL {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(1px); }
+}
+@keyframes buttonMashR {
+  0%, 100% { transform: translateY(1px); }
+  50% { transform: translateY(0); }
+}
+.state-gaming .gamepad {
+  animation: buttonMashL 0.12s linear infinite;
+}
+
+/* 22. 极客超频 HACKING */
+@keyframes matrixFlicker {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+@keyframes hyperPaws {
+  0%, 100% { transform: translateY(-1px); }
+  50% { transform: translateY(1px); }
+}
+.state-hacking .hack-matrix { animation: matrixFlicker 0.2s steps(2) infinite; }
+.state-hacking .hack-paws { animation: hyperPaws 0.12s linear infinite; }
+
+/* 23. 撒花庆祝 CELEBRATING */
+@keyframes celebrateHop {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3.5px); }
+}
+@keyframes confettiFall {
+  0% { transform: translateY(-3px) rotate(0deg); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translateY(10px) rotate(180deg); opacity: 0; }
+}
+.state-celebrating .cat-celebrate { animation: celebrateHop 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) infinite; }
+.state-celebrating .confetti-stream { animation: confettiFall 0.9s linear infinite; }
+
+/* 24. 纸箱猫猫 BOX */
+@keyframes boxHideSeek {
+  0%, 100% { transform: translateY(0); }
+  25% { transform: translateY(3px); }
+  60% { transform: translateY(3px); }
+  80% { transform: translateY(-0.5px); }
+}
+.state-box .box-peeker { animation: boxHideSeek 3.6s ease-in-out infinite; }
+
+/* 25. 奔跑 RUNNING */
+@keyframes runGallop {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-2px) rotate(-2deg); }
+}
+@keyframes runPawFrontL {
+  0%, 100% { transform: translate(1px, -2px); }
+  50% { transform: translate(-2px, 1px); }
+}
+@keyframes runPawFrontR {
+  0%, 100% { transform: translate(-2px, 1px); }
+  50% { transform: translate(2px, -2px); }
+}
+@keyframes runPawBackL {
+  0%, 100% { transform: translate(-2px, 1px); }
+  50% { transform: translate(2px, -2px); }
+}
+@keyframes runPawBackR {
+  0%, 100% { transform: translate(2px, -2px); }
+  50% { transform: translate(-1px, 1px); }
+}
+@keyframes runTailWave {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-8deg); }
+}
+@keyframes dustPuff {
+  0%, 100% { opacity: 0.2; transform: translateX(0); }
+  50% { opacity: 0.9; transform: translateX(2px); }
+}
+.state-running .cat-running { animation: runGallop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) infinite; }
+.state-running .running-paw-fl { animation: runPawFrontL 0.22s linear infinite; }
+.state-running .running-paw-fr { animation: runPawFrontR 0.22s linear infinite; }
+.state-running .running-paw-bl { animation: runPawBackL 0.22s linear infinite; }
+.state-running .running-paw-br { animation: runPawBackR 0.22s linear infinite; }
+.state-running .running-tail {
+  transform-origin: 23px 10px;
+  animation: runTailWave 0.22s ease-in-out infinite;
+}
+.state-running .running-dust { animation: dustPuff 0.22s linear infinite; }
+
+/* 26. 闪光恶魔 DEMON */
+@keyframes demonWingFlapL {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-18deg) translateY(-1px); }
+}
+@keyframes demonWingFlapR {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(18deg) translateY(-1px); }
+}
+@keyframes demonTailSwish {
+  0%, 100% { transform: rotate(-6deg); }
+  50% { transform: rotate(16deg); }
+}
+@keyframes demonSparkleGlint {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+.state-demon .demon-wing-l {
+  transform-origin: 3px 8px;
+  animation: demonWingFlapL 0.35s ease-in-out infinite;
+}
+.state-demon .demon-wing-r {
+  transform-origin: 20px 8px;
+  animation: demonWingFlapR 0.35s ease-in-out infinite;
+}
+.state-demon .demon-tail {
+  transform-origin: 22px 10px;
+  animation: demonTailSwish 0.6s ease-in-out infinite;
+}
+.state-demon .demon-sparkles { animation: demonSparkleGlint 0.8s ease-in-out infinite; }
+/* 27. 品尝咖啡 COFFEE */
+@keyframes coffeeSteamUp {
+  0% { transform: translateY(0); opacity: 0.2; }
+  50% { opacity: 0.8; }
+  100% { transform: translateY(-4px); opacity: 0; }
+}
+@keyframes sipBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-0.8px); }
+}
+.state-coffee .coffee-steam { animation: coffeeSteamUp 1.6s ease-out infinite; }
+.state-coffee .cat-coffee { animation: sipBob 2.4s ease-in-out infinite; }
+
+/* 28. 弹奏吉他 GUITAR */
+@keyframes guitarStrum {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(1.5px) rotate(-10deg); }
+}
+@keyframes guitarSway {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+@keyframes noteFloat {
+  0% { transform: translate(0, 0) scale(0.8); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translate(2px, -6px) scale(1.1); opacity: 0; }
+}
+.state-guitar .strum-paw { animation: guitarStrum 0.18s ease-in-out infinite; }
+.state-guitar .cat-guitar { transform-origin: 12px 14px; animation: guitarSway 0.6s ease-in-out infinite; }
+.state-guitar .guitar-notes { animation: noteFloat 1.2s ease-out infinite; }
+
+/* 29. 困倦呵欠 SLEEPY */
+@keyframes yawnScale {
+  0%, 100% { transform: scale(1); }
+  45% { transform: scale(1.08) translateY(-1px); }
+  75% { transform: scale(0.96) translateY(0.5px); }
+}
+@keyframes bubbleFloat {
+  0% { transform: translateY(0) scale(0.8); opacity: 0; }
+  40% { opacity: 0.8; }
+  100% { transform: translateY(-5px) scale(1.2); opacity: 0; }
+}
+.state-sleepy .cat-sleepy { transform-origin: 10px 14px; animation: yawnScale 3.2s ease-in-out infinite; }
+.state-sleepy .yawn-bubble { animation: bubbleFloat 2.4s ease-out infinite; }
+
+/* 30. 忍者潜行 NINJA */
+@keyframes ninjaFlicker {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2.5px); }
+  75% { transform: translateX(2.5px); }
+}
+@keyframes ribbonWave {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-20deg) scaleX(1.1); }
+}
+@keyframes shurikenSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.state-ninja .cat-ninja { animation: ninjaFlicker 1.8s ease-in-out infinite; }
+.state-ninja .ninja-ribbon { transform-origin: 2px 8px; animation: ribbonWave 0.4s ease-in-out infinite; }
+.state-ninja .ninja-shuriken { transform-origin: 19px 14px; animation: shurikenSpin 0.35s linear infinite; }
+
+/* 31. 垂钓时光 FISHING */
+@keyframes bobberBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(1.5px); }
+}
+@keyframes fishLeap {
+  0%, 100% { transform: translate(0, 4px) rotate(20deg); opacity: 0; }
+  40%, 60% { transform: translate(-2px, -3px) rotate(-15deg); opacity: 1; }
+  80% { transform: translate(-4px, 4px) rotate(45deg); opacity: 0; }
+}
+.state-fishing .fishing-bobber { animation: bobberBob 1.2s ease-in-out infinite; }
+.state-fishing .jumping-fish { transform-origin: 31px 11px; animation: fishLeap 2.6s ease-in-out infinite; }
+
+/* 32. 施展魔法 MAGIC */
+@keyframes wandWave {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-12deg); }
+}
+@keyframes magicBurst {
+  0%, 100% { transform: scale(0.8) rotate(0deg); opacity: 0.4; }
+  50% { transform: scale(1.2) rotate(180deg); opacity: 1; }
+}
+.state-magic .magic-wand { transform-origin: 15px 13px; animation: wandWave 0.8s ease-in-out infinite; }
+.state-magic .magic-sparkles { transform-origin: 26px 4px; animation: magicBurst 1.2s linear infinite; }
+
+/* 33. 雨中漫步 UMBRELLA */
+@keyframes umbrellaTilt {
+  0%, 100% { transform: rotate(-4deg); }
+  50% { transform: rotate(4deg); }
+}
+@keyframes rainDropFall {
+  0% { transform: translateY(-4px); opacity: 0; }
+  40% { opacity: 0.9; }
+  100% { transform: translateY(8px); opacity: 0; }
+}
+.state-umbrella .umbrella-item { transform-origin: 14px 14px; animation: umbrellaTilt 2.2s ease-in-out infinite; }
+.state-umbrella .rain-drops { animation: rainDropFall 0.8s linear infinite; }
+
+/* 34. 发射爱心 HEART */
+@keyframes heartPulseStream {
+  0% { transform: scale(0.6) translate(-2px, 2px); opacity: 0; }
+  40% { opacity: 1; transform: scale(1) translate(0, 0); }
+  100% { transform: scale(1.3) translate(4px, -6px); opacity: 0; }
+}
+@keyframes bodyHeartBob {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04) translateY(-1px); }
+}
+.state-heart .floating-heart-stream { animation: heartPulseStream 1.4s ease-out infinite; }
+.state-heart .cat-heart { transform-origin: 10px 14px; animation: bodyHeartBob 0.7s ease-in-out infinite; }
+
+/* 35. 举重健身 WORKOUT */
+@keyframes liftWeights {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes sweatGlint {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; transform: translateY(1px); }
+}
+.state-workout .dumbbell-l,
+.state-workout .dumbbell-r { animation: liftWeights 0.8s ease-in-out infinite; }
+.state-workout .sweat-drop { animation: sweatGlint 0.8s ease-in-out infinite; }
+
+/* 36. DJ打碟 DJ */
+@keyframes vinylSpinL {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes vinylSpinR {
+  0% { transform: rotate(360deg); }
+  100% { transform: rotate(0deg); }
+}
+@keyframes scratchHandMove {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(1px, -1px); }
+  50% { transform: translate(-1px, 1px); }
+  75% { transform: translate(1px, 0); }
+}
+@keyframes eqDance {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1.2); }
+}
+.state-dj .vinyl-l { transform-origin: 5px 16px; animation: vinylSpinL 0.6s linear infinite; }
+.state-dj .vinyl-r { transform-origin: 16px 16px; animation: vinylSpinR 0.6s linear infinite; }
+.state-dj .scratch-hand-l { animation: scratchHandMove 0.15s linear infinite; }
+.state-dj .scratch-hand-r { animation: scratchHandMove 0.18s linear infinite; }
+.state-dj .eq-bar-1 { transform-origin: 22px 18px; animation: eqDance 0.25s ease-in-out infinite; }
+.state-dj .eq-bar-2 { transform-origin: 24px 18px; animation: eqDance 0.3s ease-in-out infinite 0.1s; }
+
+/* 37. 料理大厨 CHEF */
+@keyframes panToss {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  35% { transform: rotate(-5deg) translateY(-1.5px); }
+  50% { transform: rotate(3deg) translateY(0.5px); }
+}
+@keyframes foodFlip {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-7px) rotate(180deg); }
+}
+.state-chef .chef-pan { transform-origin: 14px 13px; animation: panToss 1.4s ease-in-out infinite; }
+.state-chef .tossing-food { transform-origin: 25px 7px; animation: foodFlip 1.4s ease-in-out infinite; }
+
+/* 38. 太空宇航 SPACE */
+@keyframes zeroGravityFloat {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-3px) rotate(3deg); }
+}
+@keyframes tetherWave {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.15) translateY(-1px); }
+}
+@keyframes planetOrbit {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(1.5px); }
+}
+.state-space .cat-space { transform-origin: 12px 12px; animation: zeroGravityFloat 3.6s ease-in-out infinite; }
+.state-space .space-tether { animation: tetherWave 2.8s ease-in-out infinite; }
+.state-space .space-planet { animation: planetOrbit 3s ease-in-out infinite; }

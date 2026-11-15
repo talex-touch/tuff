@@ -28,97 +28,97 @@ describe('txMiko', () => {
     expect(wrapperNum.attributes('style')).toContain('height: 60px;')
   })
 
-  it('switches state and updates classes and aria-label', () => {
+  it('switches state and updates classes and aria-label', async () => {
     const wrapper = mount(Miko, {
       props: { state: 'working' },
     })
 
     expect(wrapper.classes()).toContain('state-working')
     expect(wrapper.attributes('aria-label')).toBe('Miko: 执行中')
-    expect(wrapper.find('.paw-l').exists()).toBe(true)
+    await vi.waitFor(() => expect(wrapper.find('.paw-l').exists()).toBe(true))
   })
 
-  it('renders new animation states correctly (stretching, purring, box, hacking)', () => {
+  it('renders new animation states correctly (stretching, purring, box, hacking)', async () => {
     const wrapperStretch = mount(Miko, {
       props: { state: 'stretching' },
     })
     expect(wrapperStretch.classes()).toContain('state-stretching')
     expect(wrapperStretch.attributes('aria-label')).toBe('Miko: 伸懒腰')
-    expect(wrapperStretch.find('.cat-stretch').exists()).toBe(true)
+    await vi.waitFor(() => expect(wrapperStretch.find('.cat-stretch').exists()).toBe(true))
 
     const wrapperPurr = mount(Miko, {
       props: { state: 'purring' },
     })
     expect(wrapperPurr.classes()).toContain('state-purring')
     expect(wrapperPurr.attributes('aria-label')).toBe('Miko: 呼噜')
-    expect(wrapperPurr.find('.cat-purr').exists()).toBe(true)
+    await vi.waitFor(() => expect(wrapperPurr.find('.cat-purr').exists()).toBe(true))
 
     const wrapperBox = mount(Miko, {
       props: { state: 'box' },
     })
     expect(wrapperBox.classes()).toContain('state-box')
     expect(wrapperBox.attributes('aria-label')).toBe('Miko: 钻纸箱')
-    expect(wrapperBox.find('.box-peeker').exists()).toBe(true)
+    await vi.waitFor(() => expect(wrapperBox.find('.box-peeker').exists()).toBe(true))
 
     const wrapperHack = mount(Miko, {
       props: { state: 'hacking' },
     })
     expect(wrapperHack.classes()).toContain('state-hacking')
     expect(wrapperHack.attributes('aria-label')).toBe('Miko: 极客超频')
-    expect(wrapperHack.find('.sunglasses').exists()).toBe(true)
+    await vi.waitFor(() => expect(wrapperHack.find('.sunglasses').exists()).toBe(true))
   })
-  it('renders running and demon states correctly', () => {
+  it('renders running and demon states correctly', async () => {
     const wrapperRun = mount(Miko, {
       props: { state: 'running' },
     })
     expect(wrapperRun.classes()).toContain('state-running')
     expect(wrapperRun.attributes('aria-label')).toBe('Miko: 奔跑中')
-    expect(wrapperRun.find('.cat-running').exists()).toBe(true)
+    await vi.waitFor(() => expect(wrapperRun.find('.cat-running').exists()).toBe(true))
 
     const wrapperDemon = mount(Miko, {
       props: { state: 'demon' },
     })
     expect(wrapperDemon.classes()).toContain('state-demon')
     expect(wrapperDemon.classes()).toContain('is-demon')
-    expect(wrapperDemon.find('.demon-wing-l').exists()).toBe(true)
+    await vi.waitFor(() => expect(wrapperDemon.find('.demon-wing-l').exists()).toBe(true))
   })
-  it('renders occupational and whimsical states (coffee, guitar, dj, ninja, magic, space, etc.)', () => {
+  it('renders occupational and whimsical states (coffee, guitar, dj, ninja, magic, space, etc.)', async () => {
     const wrapperCoffee = mount(Miko, {
       props: { state: 'coffee' },
     })
     expect(wrapperCoffee.classes()).toContain('state-coffee')
     expect(wrapperCoffee.attributes('aria-label')).toBe('Miko: 品尝咖啡')
-    expect(wrapperCoffee.find('.coffee-cup').exists()).toBe(true)
+    await vi.waitFor(() => expect(wrapperCoffee.find('.coffee-cup').exists()).toBe(true))
 
     const wrapperGuitar = mount(Miko, {
       props: { state: 'guitar' },
     })
     expect(wrapperGuitar.classes()).toContain('state-guitar')
-    expect(wrapperGuitar.find('.guitar-instrument').exists()).toBe(true)
+    await vi.waitFor(() => expect(wrapperGuitar.find('.guitar-instrument').exists()).toBe(true))
 
     const wrapperDJ = mount(Miko, {
       props: { state: 'dj' },
     })
     expect(wrapperDJ.classes()).toContain('state-dj')
-    expect(wrapperDJ.find('.dj-deck').exists()).toBe(true)
+    await vi.waitFor(() => expect(wrapperDJ.find('.dj-deck').exists()).toBe(true))
 
     const wrapperMagic = mount(Miko, {
       props: { state: 'magic' },
     })
     expect(wrapperMagic.classes()).toContain('state-magic')
-    expect(wrapperMagic.find('.wizard-hat').exists()).toBe(true)
+    await vi.waitFor(() => expect(wrapperMagic.find('.wizard-hat').exists()).toBe(true))
 
     const wrapperSpace = mount(Miko, {
       props: { state: 'space' },
     })
     expect(wrapperSpace.classes()).toContain('state-space')
-    expect(wrapperSpace.find('.space-helmet').exists()).toBe(true)
+    await vi.waitFor(() => expect(wrapperSpace.find('.space-helmet').exists()).toBe(true))
 
     // Test fallback safety net on arbitrary unknown state
     const wrapperFallback = mount(Miko, {
       props: { state: 'unknown_test_state' as any },
     })
-    expect(wrapperFallback.find('svg g').exists()).toBe(true)
+    await vi.waitFor(() => expect(wrapperFallback.find('svg g').exists()).toBe(true))
   })
   it('supports interactive click reactions and class', async () => {
     const wrapper = mount(Miko, {
@@ -131,7 +131,7 @@ describe('txMiko', () => {
     expect(wrapper.emitted('stateChange')).toBeTruthy()
   })
 
-  it('triggers dizzy reaction on rapid clicks in interactive mode', async () => {
+  it('does not turn dizzy on rapid clicks in interactive mode', async () => {
     const wrapper = mount(Miko, {
       props: { interactive: true, mutationChance: 0 },
     })
@@ -141,8 +141,8 @@ describe('txMiko', () => {
     await wrapper.trigger('click')
     await wrapper.trigger('click')
 
-    expect(wrapper.classes()).toContain('state-dizzy')
-    expect(wrapper.attributes('aria-label')).toBe('Miko: 眩晕')
+    expect(wrapper.classes()).not.toContain('state-dizzy')
+    expect(wrapper.attributes('aria-label')).not.toBe('Miko: 眩晕')
   })
 
   it('supports custom color', () => {

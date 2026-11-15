@@ -85,6 +85,8 @@ import { useSendState } from './composables/useSendState'
 import { useWorkspaceControls } from './composables/useWorkspaceControls'
 import { useTurnMetrics } from './composables/useTurnMetrics'
 import HomeEmptyHead from './HomeEmptyHead.vue'
+import HomePet from './pet/HomePet.vue'
+import { petEnabled } from './pet/pet-settings'
 import HomePayloadModal from './HomePayloadModal.vue'
 import HomePushCard from './HomePushCard.vue'
 
@@ -134,6 +136,16 @@ const headRef = computed(() => headEl.value?.el ?? null)
  * fallback colours mid-air.
  */
 const pageRef = ref<HTMLElement | null>(null)
+const petEl = ref<InstanceType<typeof HomePet> | null>(null)
+const petOn = computed(() => petEnabled.value)
+const petHost = {
+  stage: () => pageRef.value,
+  body: () => bodyRef.value,
+  box: () => composerEl.value?.box ?? null,
+  input: () => composerEl.value?.input ?? null,
+  empty: () => isEmpty.value,
+  head: () => headRef.value
+}
 const composerHeight = ref(0)
 
 /**
@@ -772,6 +784,7 @@ const {
 // ============================================================================
 
 const { submit, pressSend, sendVoiceDraft, handleKeydown, handleComposerKeydown } = useHomeSubmit({
+  onSent: (text) => petEl.value?.notifySend(text),
   submitState,
   browserLanding: () => props.browserLanding,
   browserNavigate: props.browserNavigate,
@@ -994,6 +1007,7 @@ useHomeCommands({
             <HomeEmptyHead
               v-if="isEmpty"
               ref="headEl"
+              :mark-hidden="petOn"
               :browser-landing="browserLanding"
               :opening-enabled="homeRecommendationsEnabled"
               :phase="openingPhase"
@@ -1281,6 +1295,8 @@ useHomeCommands({
       </Transition>
     </div>
 
+    <HomePet v-if="petOn" ref="petEl" :host="petHost" />
+
     <!-- The send lift: the sent text, lifted off the composer as its own bubble and sprung to its
          row (composables/send-lift). Idle it is hidden and holds nothing. -->
     <div ref="liftGhostRef" class="HomePage-SendLift" aria-hidden="true">
@@ -1313,6 +1329,7 @@ useHomeCommands({
 
 <style lang="scss" scoped>
 .HomePage {
+  position: relative;
   /**
    * Shared by the animating slot and the panel inside it, so the two can never drift apart.
    * 360 rather than the original 280: the panel now carries five tabs and file paths, and 280
