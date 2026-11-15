@@ -56,6 +56,7 @@ const inputId = computed(() => field?.id ?? localInputId)
 const instructionId = useId()
 const liveId = useId()
 
+const groupRef = ref<HTMLDivElement | null>(null)
 const containerRef = ref<HTMLDivElement | null>(null)
 const inputRef = ref<HTMLInputElement | null>(null)
 
@@ -175,8 +176,10 @@ function handleInputKeydown(event: KeyboardEvent): void {
 function handleBlur(event: FocusEvent): void {
   const next = event.relatedTarget
   // Focus moving to the eye or copy button is still "inside the field"; masking
-  // there would yank the control out from under the click that caused it.
-  if (next instanceof Node && containerRef.value?.contains(next))
+  // there would yank the value away from the click that copies it. Leaving the
+  // group from any of the three controls masks, so tabbing past the buttons
+  // never strands a revealed secret.
+  if (next instanceof Node && groupRef.value?.contains(next))
     return
 
   maskAgain()
@@ -249,7 +252,7 @@ defineExpose({
       <span v-if="required" class="tx-sensitive-input__required" aria-hidden="true">*</span>
     </label>
 
-    <div class="tx-sensitive-input__group">
+    <div ref="groupRef" class="tx-sensitive-input__group">
       <!-- Sits above the field's top edge, outside its box. It is a sibling of
            the field so it never inherits the masked container's click handler. -->
       <button
@@ -260,6 +263,7 @@ defineExpose({
         :aria-label="copied ? text.copied : text.copy"
         @click.stop="handleCopy"
         @keydown.stop
+        @blur="handleBlur"
       >
         {{ copied ? text.copied : text.copy }}
       </button>
@@ -313,6 +317,7 @@ defineExpose({
           :aria-label="mode === 'revealed' ? text.hide : text.show"
           @click.stop="handleToggle"
           @keydown.stop
+          @blur="handleBlur"
         >
           <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true">
             <path
