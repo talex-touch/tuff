@@ -13,11 +13,27 @@ verified: false
 
 | 项目 | 值 |
 |------|----|
-| 源码版本 | **0.9.3** |
-| 发布版本 | **0.9.3**（最近一次 npm 发布） |
+| 源码版本 | **0.9.4** |
+| 发布版本 | **0.9.4**（最近一次 npm 发布） |
 | 组件模块 | **192**：基础 99 · 进阶 57 · AI 36 |
 
 ## 版本更新历程
+
+### 0.9.4 版本（2026-11-16）
+
+表单控件统一规格、Escape 归属，以及随文档对齐一起修复的组件行为。
+
+- **新增组件**：无
+- **主要更新组件**：form、text、image-preview、image-generation、input、textarea、number-input、select、flat-select、date-picker、cascader、tag-input、tree-select、sensitive-input、base-anchor、dialog、modal、drawer、radio、miko、offline-state、working-indicator、tool-call-card、grid-layout、motion-control、skeleton、toast、toast-panel、text-morph、text-transformer
+- **关键特性**：
+  - `TxFormItem` 新增 `hint`：字段说明放进标签旁的 `?`，悬停或键盘聚焦时浮出。
+  - `TxText` 新增 `scroll="loop"` 循环滚动与 `loopEdge` 边缘效果（`gap`、`clip`、`fade`、`wrap`）。
+  - `TxImagePreview` 新增 `loadingEffect` 与 `loading` 插槽，加载中可显示 TxImageGeneration 预设效果、骨架占位或不显示。
+  - 表单控件统一为 `TxInput` 的规格：数字输入、日期字段、扁平选择与多选的高度统一为 32px，圆角统一为 12px，边缘改用不改变尺寸的内描边。
+  - 打开的浮层先处理 Escape，外层 `TxModal` / `TxDrawer` 保持打开；表单字段里按 Escape 不再关闭对话框。
+  - `TxMiko` 各状态改为懒加载，默认颜色调亮为 `#9726D9`。
+  - `TxOfflineState` 转发 `primary` / `secondary` 事件；`TxWorkingIndicator` 与 `TxToolCallCard` 离开视口后停止刷新耗时。
+  - 修复：`TxRadioGroup` 指示器随分组尺寸重新测量，`TxSensitiveInput` 焦点移到复制按钮时保持明文，`TxBlowDialog` 卸载时清除页面缩放，骨架屏与收起的通知不再被屏幕阅读器读到。
 
 ### 0.9.3 版本（2026-11-03）
 
