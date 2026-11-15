@@ -140,7 +140,7 @@
     "pinia": "catalog:frontend",
     "pinyin-pro": "^3.29.4",
     "plist": "^3.1.0",
-    "sharp": "^0.35.4",
+    "sharp": "^0.35.5",
     "simple-plist": "1.4.0",
     "talex-mica-electron": "^1.0.2",
     "v-wave": "^3.1.1",
