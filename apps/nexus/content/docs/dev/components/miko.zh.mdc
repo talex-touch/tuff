@@ -1,6 +1,6 @@
 ---
 title: "Miko 桌面伴侣猫"
-description: "纯 SVG 与 CSS 关键帧驱动的像素桌宠，提供 38 种 Agent 实时交互、趣味职业与奇幻变异状态"
+description: "像素桌宠，随 Agent 生命周期切换 38 种状态"
 category: AiAgent
 status: beta
 since: 0.9.3
@@ -12,7 +12,7 @@ verified: true
 ## 用法
 
 ### 基础
-`state` 属性绑定 Agent 的实时生命周期：待命中为 `idle`，执行代码时为 `working`，工具调度奔跑为 `running`，模型推理为 `thinking`，成功则为 `success`。开启 `interactive` 和 `random` 即可拥有自主随机动作、点击互动与闪光恶魔变异。
+`state` 属性绑定 Agent 的实时生命周期：待命中为 `idle`，执行代码时为 `working`，工具调度奔跑为 `running`，模型推理为 `thinking`，成功则为 `success`；开启 `interactive` 和 `random` 后，还会出现自主随机动作、点击互动与闪光恶魔变异。
 ::::TuffDemoWrapper{demo="MikoBasicDemo" code-lang="vue"}
 ---
 code: |

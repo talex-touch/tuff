@@ -53,7 +53,7 @@ code: |
 
 ### 最佳实践
 
-- 简单的行级进度用 `TuffProgress`；需要分段、tooltip、message、loading/success/error 状态、动效或自定义文本位置时，直接用 `TxProgressBar`。
+- 简单的行级进度用 `TuffProgress`；需要分段、tooltip、message、loading/success/error 状态、动效或自定义文本位置时，直接用 [TxProgressBar 进度条](/docs/dev/components/progress-bar)。
 - `strokeWidth` 保持克制；本组件面向行级进度，不用于大号指标。
 - 时长未知的任务用 `indeterminate`，没有可信数值时隐藏文本，不要展示过期的百分比。
 - 周围界面需要操作上下文时，搭配简短的状态标签。

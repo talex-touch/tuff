@@ -147,6 +147,12 @@ const durationText = computed(() => {
 const elapsedMs = ref(0)
 let clockStartedAt = 0
 let clockTimer: ReturnType<typeof setInterval> | null = null
+let clockInFlight = false
+// An off-screen card stops its 100 ms tick. The reading is wall-clock based,
+// so it is correct again as soon as the card scrolls back into view.
+let clockOnScreen = true
+let clockObserver: IntersectionObserver | null = null
+const cardRef = ref<HTMLElement | null>(null)
 
 function stopClock(): void {
   if (clockTimer !== null)
@@ -154,27 +160,58 @@ function stopClock(): void {
   clockTimer = null
 }
 
-function syncClock(status: AiToolCallPart['status'], previous?: AiToolCallPart['status']): void {
-  if (status !== 'pending' && status !== 'running') {
+function tickClock(): void {
+  elapsedMs.value = Date.now() - clockStartedAt
+}
+
+function runClock(): void {
+  if (!clockInFlight || !clockOnScreen) {
     stopClock()
     return
   }
-  const wasInFlight = previous === 'pending' || previous === 'running'
-  if (wasInFlight && clockTimer !== null)
+  if (clockTimer !== null)
     return
-  stopClock()
-  clockStartedAt = Date.now()
-  elapsedMs.value = 0
-  clockTimer = setInterval(() => {
-    elapsedMs.value = Date.now() - clockStartedAt
-  }, 100)
+  tickClock()
+  clockTimer = setInterval(tickClock, 100)
+}
+
+function syncClock(status: AiToolCallPart['status'], previous?: AiToolCallPart['status']): void {
+  if (status !== 'pending' && status !== 'running') {
+    clockInFlight = false
+    stopClock()
+    return
+  }
+  const continuing = clockInFlight && (previous === 'pending' || previous === 'running')
+  if (!continuing) {
+    stopClock()
+    clockStartedAt = Date.now()
+    elapsedMs.value = 0
+  }
+  clockInFlight = true
+  runClock()
 }
 
 const elapsedLabel = computed(() => (elapsedMs.value / 1000).toFixed(1))
 
-onMounted(() => syncClock(props.toolCall.status))
+onMounted(() => {
+  if (typeof IntersectionObserver === 'function' && cardRef.value) {
+    clockObserver = new IntersectionObserver((entries) => {
+      const latest = entries[entries.length - 1]
+      if (latest) {
+        clockOnScreen = latest.isIntersecting
+        runClock()
+      }
+    })
+    clockObserver.observe(cardRef.value)
+  }
+  syncClock(props.toolCall.status)
+})
 watch(() => props.toolCall.status, (status, previous) => syncClock(status, previous))
-onBeforeUnmount(stopClock)
+onBeforeUnmount(() => {
+  stopClock()
+  clockObserver?.disconnect()
+  clockObserver = null
+})
 
 // Logs, output and the collapsed peek all stay pinned to their bottom, like a terminal tail.
 const logsRef = ref<HTMLElement | null>(null)
@@ -287,7 +324,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="tx-tool-call-card" :data-status="toolCall.status">
+  <div ref="cardRef" class="tx-tool-call-card" :data-status="toolCall.status">
     <button
       type="button"
       class="tx-tool-call-card__header"
@@ -693,7 +730,7 @@ onBeforeUnmount(() => {
     font-size: 11.5px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
 
     &:hover {
       background: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 20%, transparent);

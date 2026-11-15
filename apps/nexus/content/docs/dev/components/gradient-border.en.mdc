@@ -59,7 +59,7 @@ String sizes are kept as-is, so CSS variables and multi-value padding work.
 
 - Put a surface with its own background inside, with a radius of `borderRadius - borderWidth`, so no corners show.
 - Use `as` for semantics instead of adding another landmark around the component.
-- Keep one gradient highlight per region and slow `animationDuration` when several share a screen; use `TxBadge` or `TxTag` for small status accents.
+- Keep one gradient highlight per region; when several share a screen, show fewer, because a slower `animationDuration` changes only the speed, not the repaint cost. Use `TxBadge` or `TxTag` for small status accents.
 - Don't wrap controls whose focus rings must escape the border, unless the inner content styles focus itself.
 
 ## API Reference
@@ -98,6 +98,7 @@ String sizes are kept as-is, so CSS variables and multi-value padding work.
 - The ring follows `borderRadius`, and its glow is not clipped: it spreads to both sides of the wrapper's edge.
 - `.tx-gradient-border__inner` is `overflow: hidden` with the same radius, so child focus rings or shadows past it are clipped.
 - Under reduced motion the rotation stops and the border rests at a static gradient angle.
+- The rotating gradient repaints every frame under a blur that covers the whole wrapper, so the cost adds up across instances on a screen.
 
 ## Technologies
 

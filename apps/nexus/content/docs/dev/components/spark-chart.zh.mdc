@@ -1,6 +1,6 @@
 ---
 title: "SparkChart 迷你折线图"
-description: "带平滑曲线、可选坐标轴、活动十字线与可访问悬停读值的 canvas 趋势图。"
+description: "带平滑曲线与悬停读值的 canvas 趋势图"
 category: Visualization
 status: beta
 since: 0.3.9
@@ -69,9 +69,12 @@ code: |
 | `gridLines` | `number` | `4` | 网格线条数。 |
 | `lineWidth` | `number` | `2.25` | 线宽（CSS 像素）。 |
 | `curve` | `LineCurve` | `'monotone'` | `linear`、`monotone`、`natural` 或 `step`。 |
-| `xAxis` / `yAxis` | `boolean` | `false` | 是否画紧凑 x/y 基线与标签。 |
-| `xTicks` / `yTicks` | `number` | `3` / `4` | x/y 标签条数。 |
-| `xTickFormat` / `yTickFormat` | `(value: number) => string` | — | 覆盖 x/y 标签格式化。 |
+| `xAxis` | `boolean` | `false` | 是否画紧凑的 x 轴基线与标签。 |
+| `yAxis` | `boolean` | `false` | 是否画紧凑的 y 轴基线与标签。 |
+| `xTicks` | `number` | `3` | x 轴标签条数。 |
+| `yTicks` | `number` | `4` | y 轴标签条数。 |
+| `xTickFormat` | `(value: number) => string` | — | 覆盖 x 轴标签格式化。 |
+| `yTickFormat` | `(value: number) => string` | — | 覆盖 y 轴标签格式化。 |
 | `padding` | `Partial<SparkChartPadding>` | `{ top: 24, right: 0, bottom: 22, left: 0 }` | 内边距；坐标轴会额外保留最小边缘。 |
 | `domain` | `[number, number]` | — | 固定纵轴范围，省略则按数据自适应。 |
 | `activeIndex` | `number \| null` | — | 受控的高亮采样点。 |
@@ -111,6 +114,18 @@ code: |
 | `leave` | — | 指针离开、抬起或被取消。 |
 | `update:activeIndex` | `(index: number \| null)` | 受控写回。 |
 
+### 暴露方法
+
+| 名称 | 说明 |
+|------|------|
+| `redraw()` | 按当前测得的容器尺寸与数据重绘画布。 |
+
+### 插槽
+
+| 插槽 | 说明 |
+|------|------|
+| `default` | `TxChartScrubber` 包裹的图表（通常是 `TxSparkChart`）；擦洗层按它的绘图区换算指针位置。 |
+
 ## 尺寸与主题
 
 图表填满容器，尺寸从**容器**量出来而不是靠宽高 prop 指定。外层必须有确定高度。`ResizeObserver` 会在尺寸变化后重绘；位图按 `devicePixelRatio`（上限 2）放大，绘制计算仍使用 CSS 像素。
@@ -134,14 +149,8 @@ code: |
 
 ## 技术实现
 
-- 组件源码：`packages/tuffex/packages/components/src/spark-chart/src/TxSparkChart.vue`、`TxChartScrubber.vue`。
-- 投影与绘制：`packages/tuffex/packages/components/src/spark-chart/src/geometry.ts`、`draw.ts`。
-- 类型：`packages/tuffex/packages/components/src/spark-chart/src/types.ts`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/spark-chart/__tests__/spark-chart.test.ts`（33 项）覆盖定义域、投影、monotone canvas 描边、x/y 坐标轴与边缘标签收边、悬停点、键盘状态、擦洗层受控模式与可访问性。
+- 组件源码：`packages/tuffex/packages/components/src/spark-chart/src/TxSparkChart.vue`、`TxChartScrubber.vue`；投影与绘制见 `geometry.ts`、`draw.ts`，类型见 `types.ts`。
+- 以 canvas 绘制，`ResizeObserver` 在尺寸变化后重绘；悬停提示框由 `TxChartScrubber` 以 DOM 呈现，canvas 仍画出高亮点。
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
-
-- 图表刻意以 canvas 为先：即使 jsdom 没有 2D 上下文，绘制调用面仍可测试。
-- 完整图表族已位于 `@talex-touch/tuffex/charts`；SparkChart 仍是根 TuffEx 入口里的紧凑卡片原语。
-- 不提供面积填充：用户要的是可读趋势，不是在稀疏点之间做不确定的外推。

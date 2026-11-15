@@ -156,7 +156,7 @@ Tuff 文档与博客的内容工作台：按状态找稿件、批量发布或归
 - 筛选、搜索、排序与翻页各模拟约 350ms 的取数：表格先留旧数据，超过 120ms 才换成同版式的骨架行，版面不跳。
 - 排序作用于过滤后的全部文章，再切出当前页；翻页或换筛选会清空选择，因为表头全选只覆盖当前页。
 - 编辑、发布、归档与删除立即生效，提示停留约 5 秒可「撤销」；抽屉只在保存时校验。
-- 列内点行直接打开抽屉；展开后（≥ 960px）增加三列与详情栏；窄于 640px 时只留标题列。
+- 列内点行直接打开抽屉；展开后（≥ 960px）增加三列与详情栏；窄于 640px 时只留标题与操作列。
 - 看板排期：列内拖动重排，拖到另一列即换状态，展开后拖到本周某天即排期；每次移动都可撤销。
 - 看板排期：键盘上每列一个停靠点，空格拿起、↑ / ↓ 移动、← / → 换列、Esc 取消；窄于 640px 时一次只显示一列。
 - 看板排期：进入视口后有协作者上线并移动一张卡片；点击或按键即停止；减少动态效果时直接显示最终状态。
@@ -181,7 +181,7 @@ Tuff 文档与博客的内容工作台：按状态找稿件、批量发布或归
 | 底栏 | [TxPagination](/docs/dev/components/pagination)、[TxButton](/docs/dev/components/button) | 分页与批量操作 |
 | 结果提示 | [TxToastPanel](/docs/dev/components/toast-panel) | 可撤销的结果提示 |
 | 详情栏（展开后） | [TxCellLink](/docs/dev/components/cell-link)、[TxDescriptions](/docs/dev/components/descriptions)、[TxMarkdownView](/docs/dev/components/markdown-view)、[TxNoSelection](/docs/dev/components/no-selection) | 摘要、元数据与正文预览 |
-| 编辑抽屉 | [TxDrawer](/docs/dev/components/drawer)、[TxForm](/docs/dev/components/form)、[TxInput](/docs/dev/components/input)、[TxSelect](/docs/dev/components/select)、[TxTagInput](/docs/dev/components/tag-input)、[TxDatePicker](/docs/dev/components/date-picker)、[TxFlatRadio](/docs/dev/components/flat-radio)、[TuffSwitch](/docs/dev/components/switch)、[TxTextarea](/docs/dev/components/textarea)、[TxSplitButton](/docs/dev/components/button) | 带校验的编辑表单 |
+| 编辑抽屉 | [TxDrawer](/docs/dev/components/drawer)、[TxForm](/docs/dev/components/form)、[TxInput](/docs/dev/components/input)、[TxSelect](/docs/dev/components/select)、[TxTagInput](/docs/dev/components/tag-input)、[TxDatePicker](/docs/dev/components/date-picker)、[TxFlatRadio](/docs/dev/components/flat-radio)、[TxSwitch](/docs/dev/components/switch)、[TxTextarea](/docs/dev/components/textarea)、[TxSplitButton](/docs/dev/components/button) | 带校验的编辑表单 |
 | 顶栏（看板排期） | [TxAvatarGroup / TxAvatar](/docs/dev/components/avatar) | 在线协作者 |
 | 快捷筛选（看板排期） | [TxFilterChips](/docs/dev/components/filter-chips)、[TxDropdownMenu](/docs/dev/components/dropdown-menu) | 淡化不匹配的卡片 |
 | 看板列（看板排期） | [TxSortableList](/docs/dev/components/sortable-list)、[TxBadge](/docs/dev/components/badge)、[TxTooltip](/docs/dev/components/tooltip) | 列内拖动与在制上限 |

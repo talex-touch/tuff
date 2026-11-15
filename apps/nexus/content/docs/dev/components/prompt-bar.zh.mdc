@@ -59,7 +59,7 @@ code: |
 - 听写只呈现状态；识别在宿主完成，结果用 `insert()` 或 `v-model` 写回草稿。
 - 品牌图标走 `#source-icon` 插槽，组件不内置第三方 SVG。
 - 菜单相对输入条绝对定位，会被祖先的 `overflow: hidden` 裁切且不翻转；不要把输入条放进会裁剪的滚动容器。
-- 只要块状输入框、不需要菜单时，用 `TxChatComposer`。
+- 只要块状输入框、不需要菜单时，用 [ChatComposer 消息输入](/docs/dev/components/chat-composer)（`TxChatComposer`）。
 
 ## API 参考
 
@@ -86,8 +86,20 @@ code: |
 | `sendOnEnter` | `boolean` | `true` | Enter 发送，Shift+Enter 换行。 |
 | `allowEmptySend` | `boolean` | `false` | 允许无文本也无附件时发送。 |
 | `clearOnSend` | `boolean` | `true` | 发送后清空草稿；关闭时文本保留，由宿主清空。 |
+| `sourcesHintText` | `string` | `'Type to search sources & files'` | `@` 菜单无查询词时的提示文案。 |
+| `commandsHintText` | `string` | `'Type to search commands'` | `/` 菜单无查询词时的提示文案。 |
+| `emptyTextFormatter` | `(query: string) => string` | `` `` (query) => `No matches for "${query}"` `` `` | 菜单没有匹配时的文案，参数为查询词。 |
+| `connectText` | `string` | `'Connect'` | 未连接的可连接行上的按钮文字。 |
+| `connectedText` | `string` | `'Connected'` | 已连接的可连接行上的文字。 |
+| `sendLabel` | `string` | `'Send'` | 发送键的可访问名称。 |
+| `attachLabel` | `string` | `'Add attachments and sources'` | 附件按钮的可访问名称。 |
+| `modelLabel` | `string` | `'Choose model'` | 模型按钮的可访问名称。 |
+| `startDictationLabel` | `string` | `'Start dictation'` | 未听写时听写按钮的可访问名称。 |
+| `stopDictationLabel` | `string` | `'Stop dictation'` | 听写进行中时听写按钮的可访问名称。 |
+| `attachmentFallbackLabel` | `string` | `'Attachment'` | 没有名称的附件所显示的胶囊文字。 |
+| `removeAttachmentLabelFormatter` | `(name: string) => string` | `` `` (name) => `Remove ${name}` `` `` | 附件删除按钮的可访问名称，参数为附件名。 |
 
-文案 props 均有英文默认值，可逐个覆盖：`sourcesHintText`、`commandsHintText`、`emptyTextFormatter`、`connectText`、`connectedText`、`sendLabel`、`attachLabel`、`modelLabel`、`startDictationLabel`、`stopDictationLabel`、`attachmentFallbackLabel`、`removeAttachmentLabelFormatter`。
+文案 props 均有英文默认值，可逐个覆盖，见上表。
 
 `PromptBarSource` 为 `{ key, name, desc?, attach?, connectable?, connected? }`；`PromptBarCommand` 为 `{ key, name, desc? }`；`PromptBarModel` 为 `{ key, name, tag? }`。
 
@@ -106,7 +118,8 @@ code: |
 | `commandSelect` | `(command: PromptBarCommand)` | 插入命令后触发。 |
 | `connectToggle` | `(source: PromptBarSource)` | 激活未连接的可连接行时触发。 |
 | `paste` | `(event: ClipboardEvent)` | 原始粘贴事件，不阻止默认行为。 |
-| `focus` / `blur` | `(event: FocusEvent)` | 输入框焦点变化时触发。 |
+| `focus` | `(event: FocusEvent)` | 输入框获得焦点时触发。 |
+| `blur` | `(event: FocusEvent)` | 输入框失去焦点时触发。 |
 
 ### 插槽
 

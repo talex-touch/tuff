@@ -12,7 +12,7 @@ verified: true
 ## Usage
 
 ### Basic
-Each step checks only its own fields, and the last one submits. With `persist`, the draft keeps the current step too, so a reload comes back to it.
+Each step checks only its own fields and the last one submits; with `persist`, the draft keeps the current step too, so a reload comes back to it.
 ::::TuffDemoWrapper{demo="StepsFormBasicDemo" code-lang="vue"}
 ---
 code: |
@@ -81,7 +81,7 @@ code: |
 ::::
 
 ### Skipping and Custom Actions
-The `actions` slot replaces the buttons at the bottom. A parent that sets `active` moves straight there without any check, which can skip an optional step.
+The `actions` slot replaces the buttons at the bottom; a parent that sets `active` moves straight there without any check, which can skip an optional step.
 
 ```vue
 <TxStepsForm v-model:active="active" :model="team" @submit="create">
@@ -108,8 +108,6 @@ The `actions` slot replaces the buttons at the bottom. A parent that sets `activ
 
 #### Props
 
-Every `TxForm` prop except `autosave` applies too: `model`, `rules`, `layout`, `persist`, `leaveConfirm`, `readonly` and the rest.
-
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `active` | `number` | - | The step shown, counted from 0. Use with `v-model:active`, or leave it to the form. |
@@ -117,12 +115,36 @@ Every `TxForm` prop except `autosave` applies too: `model`, `rules`, `layout`, `
 | `nextText` | `string` | `'Next'` | Text of the Next button. |
 | `submitText` | `string` | `'Submit'` | Text of the submit button on the last step. |
 
+#### Inherited from TxForm
+
+Every `TxForm` prop except `autosave` applies too.
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `id` | `string` | - | Form id; prefixes the `<form>` and every field id, and keys the draft. |
+| `model` | `FormValues` | - | The form's data; a `TxFormItem`'s `prop` points at a field in it. |
+| `rules` | `FormRules` | - | Validation rules, keyed by field. |
+| `schema` | `FormStandardSchema` | - | A Standard Schema v1 validator, such as Zod or Valibot, checked against the whole model. |
+| `layout` | `'stacked' \| 'side' \| 'auto' \| 'inline'` | `'auto'` | Label layout; `auto` uses side labels from 520px wide. |
+| `labelPosition` | `'left' \| 'right' \| 'top'` | - | Older label placement: `top` is `stacked`; `left` and `right` are `side`. |
+| `labelAlign` | `'start' \| 'end'` | `'end'` | Alignment inside the side label column; `start` when `labelPosition="left"`. |
+| `labelWidth` | `string \| number` | - | Widest the side label column may grow; narrower when every label is. |
+| `requiredMark` | `'asterisk' \| 'optional' \| 'none'` | - | How required fields are marked. |
+| `validateOn` | `'blur' \| 'submit'` | - | When a field's first message appears; it re-checks on every edit after that. |
+| `messages` | `Partial<FormMessages>` | - | Overrides built-in text, such as the draft notices and error prefixes. |
+| `size` | `'small' \| 'medium' \| 'large'` | - | Passed to the controls inside that have sizes. |
+| `disabled` | `boolean` | `false` | Disables every control inside that reads the form. |
+| `readonly` | `boolean` | `false` | Shows values to read: controls can be focused and copied but not changed, and no field is marked required; submitting still works. |
+| `reconcile` | `FormReconcile` | - | Decides what the model holds when incoming values meet fields the user changed. |
+| `persist` | `boolean \| FormPersistOptions` | - | Saves input as a draft under `id`, restored after a reload, including the current step. |
+| `leaveConfirm` | `FormLeaveConfirm \| false` | - | Whether to ask before leaving with unsaved changes; `false` never asks. |
+| `onSubmit` | `(values: FormValues, event?: Event) => unknown` | - | Submit callback, called once every check passes; the same as `@submit`. |
+
 #### Events
 
 | Event | Payload | Description |
 |-------|---------|-------------|
 | `update:active` | `(step: number)` | The form moved forward, back, or to a step whose field failed. |
-| `submit` | `(values: FormValues, event?: Event)` | Called when the last step is submitted and every field passes its checks. |
 | `submit-success` | `(values: FormValues)` | The last step was submitted and went through. |
 | `validate` | `(valid: boolean)` | As on `TxForm`. |
 | `persist-error` | `(error: unknown)` | As on `TxForm`. |

@@ -12,7 +12,7 @@ verified: false
 ## 用法
 
 ### 多轮问答
-:::TuffDemoWrapper{demo="TemplateAiAnswerDemo" code-lang="vue" description="进入视口后自动演示并追问一次；点击或按键即交给你。图中为示例数据。"}
+:::TuffDemoWrapper{demo="TemplateAiAnswerDemo" code-lang="vue" description="进入视口后自动演示并追问一次；点击或按键即交给你。"}
 ---
 code: |
   <script setup lang="ts">
@@ -62,7 +62,7 @@ code: |
 
 ## 概述
 
-结论可溯源的多轮问答：每轮回答由一个 TxStreamElement 流式写出。
+结论可溯源的多轮问答：每轮回答由一个 TxStreamElement 流式写出；图中为示例数据。
 
 - 进入视口后自动演示，第一问写完约 1.6 秒后自动追问一次；点击或按键即停止自动追问。
 - 回答写完才出现操作行、来源与追问；点追问在下方追加一轮。

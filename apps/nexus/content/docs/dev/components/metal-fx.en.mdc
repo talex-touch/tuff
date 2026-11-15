@@ -106,6 +106,12 @@ code: |
 |------|------|-------------|
 | `default` | - | Exactly one host element; it keeps its own event handlers. |
 
+#### Exposed Methods
+
+| Name | Type | Description |
+|------|------|-------------|
+| `el` | `HTMLDivElement \| null` | The wrapped element (the root node); points at the fallback container when WebGL2 is unavailable. |
+
 #### CSS Variables
 
 | Variable | Source | Description |

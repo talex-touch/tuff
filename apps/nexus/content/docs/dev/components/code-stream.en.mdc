@@ -20,9 +20,11 @@ code: |
   const code = ref('')
   const busy = ref(true)
 
-  for await (const delta of stream)
-    code.value += delta
-  busy.value = false
+  onMounted(async () => {
+    for await (const delta of stream)
+      code.value += delta
+    busy.value = false
+  })
   </script>
 
   <template>
@@ -66,7 +68,7 @@ code: |
 :::
 
 ### Rendered Preview
-Once `html`, `svg` or `xml` code stops arriving, a "Preview" toggle appears in the header; it renders the code as a page in a sandboxed `iframe`, and the same button returns to the source. It never appears while streaming or in diff mode. `auto-preview` opens on the rendering as soon as the code settles; the reader can still switch back to the source.
+Once `html`, `svg` or `xml` code stops arriving, a "Preview" toggle appears in the header and renders it in a sandboxed `iframe`, and the same button returns to the source; it never appears while streaming or in diff mode, and `auto-preview` opens the rendering as soon as the code settles.
 :::TuffDemoWrapper{demo="CodeStreamPreviewDemo" code-lang="vue"}
 ---
 code: |
@@ -83,7 +85,7 @@ code: |
 :::
 
 ### Unified Diff
-`diff` renders a unified diff. A removed row and the added row replacing it share a number, so numbers are given per row.
+`diff` renders a unified diff; a removed row and the added row replacing it share a number, so numbers are given per row.
 :::TuffDemoWrapper{demo="CodeStreamDiffDemo" code-lang="vue"}
 ---
 code: |

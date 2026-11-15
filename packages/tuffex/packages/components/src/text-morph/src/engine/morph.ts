@@ -14,6 +14,7 @@ import { animateGroupEnter, animateGroupExit, replacedRuns } from './animate-gro
 import { animateNumberEnter, animateNumberExit, animateNumberPersist } from './animate-number'
 import { animateEnterOrPersist, animateExit } from './animate-text'
 import {
+  ATTR_ANIMATING,
   ATTR_DEBUG,
   ATTR_EXITING,
   ATTR_ID,
@@ -53,6 +54,7 @@ export class TextMorphEngine {
   private reducedMotion: ReducedMotionState | null = null
   private srNode: HTMLElement | null = null
   private hasSetup = false
+  private animatingTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(options: TextMorphEngineOptions) {
     // A prop left off arrives as an explicit `undefined`, which would spread over the
@@ -106,7 +108,26 @@ export class TextMorphEngine {
       this.element.setAttribute(ATTR_DEBUG, '')
   }
 
+  /**
+   * Holds the will-change hints for one morph's length plus a short tail. Each update
+   * re-arms the window, so an interrupted run cannot leave the hints standing.
+   */
+  private markAnimating() {
+    if (this.animatingTimer != null)
+      clearTimeout(this.animatingTimer)
+    this.element.setAttribute(ATTR_ANIMATING, '')
+    this.animatingTimer = setTimeout(() => this.clearAnimating(), this.options.durationMs + 50)
+  }
+
+  private clearAnimating() {
+    if (this.animatingTimer != null)
+      clearTimeout(this.animatingTimer)
+    this.animatingTimer = null
+    this.element.removeAttribute(ATTR_ANIMATING)
+  }
+
   destroy() {
+    this.clearAnimating()
     this.reducedMotion?.destroy()
     clearContainerTransition(this.element)
     getAnimationsOf(this.element).forEach(anim => anim.cancel())
@@ -136,6 +157,7 @@ export class TextMorphEngine {
 
     if (this.isDisabled()) {
       // Plain text is already the whole accessible value.
+      this.clearAnimating()
       this.srNode = null
       this.element.textContent = formatted
       // A later diff against these would animate from elements no longer in the DOM.
@@ -145,6 +167,9 @@ export class TextMorphEngine {
     }
 
     this.setup()
+
+    if (!this.isInitialRender)
+      this.markAnimating()
 
     if (this.options.onAnimationStart && !this.isInitialRender)
       this.options.onAnimationStart()

@@ -1,6 +1,6 @@
 ---
 title: "Custom Chart"
-description: "The composable escape hatch: a TxChart container plus axis/grid/series primitives for lines, areas, bars, scatter and donuts."
+description: "The composable escape hatch: lines, areas, bars, scatter and donuts from primitives."
 category: Charts
 status: beta
 since: 0.1.0
@@ -63,7 +63,7 @@ code: |
 ---
 :::
 
-A custom layer does not animate on its own: `TxChart` only supplies the coordinate system, and the exported primitives the series share do the motion. Use `useEnterProgress()` for the first render (a 0 → 1 `Ref<number>`), `useTweenedNumbers(source)` for data updates (tweens a number array towards its latest values), and `tween()` with `easings` / `cubicBezier()` when you need your own cadence. Durations and the threshold are exported too: `ENTER_DURATION` (1000), `UPDATE_DURATION` (500), `STATE_DURATION` (300), `ANIMATION_THRESHOLD` (2000). Series above the threshold do not animate, and under `prefers-reduced-motion: reduce` every tween lands on its final frame.
+A custom layer does not animate on its own: use `useEnterProgress()` for the first render and `useTweenedNumbers()` for data updates, with the exported durations and threshold; reduced motion lands on the final frame.
 
 ```vue
 <script setup lang="ts">
@@ -121,18 +121,43 @@ const enterWidth = computed(() => plot.value.width * enter.value)
 | `x` / `y` | `keyof T \| (d, i) => v` | Accessors. |
 | `color` | `string` | Defaults to categorical slots in mount order. |
 
-`TxLineSeries` adds `curve` (`linear/monotone/natural/step`), `strokeWidth`, `showSymbol`, `dashed`, and `enter` (`clip` by default wipes the plot open left to right; `draw` traces the stroke along its length and shows each symbol once the line reaches it; a dashed stroke still clips); `TxAreaSeries` adds `gradient` (on by default) and `fillOpacity`; `TxBarSeries` adds `stack`, `barWidth`, `radius`; `TxScatterSeries` adds `r` (constant or accessor); `TxArcSeries` takes `value/name?/color?` accessors plus `innerRadius/padAngle/cornerRadius`, and emits `slice-click` plus `slice-hover` with the hovered slice (`{ datum, index, name, value }`, and `null` once the pointer leaves the arc) — the axis-free arc has no chart context to read, so this is how an `#overlay` `<TxChartTooltip>` gets its values. A press-drag reads the ring like a dial, slice by slice by angle, and its release does not fire `slice-click`; with the chart focused, ← / → read slice by slice, Home / End jump to either end and Escape clears, and `announce` sets what is spoken (`name: value` by default).
+#### Series-specific Props
 
-### ChartTooltip Props
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `curve` | `'linear' \| 'monotone' \| 'natural' \| 'step'` | `'linear'` | Curve interpolation for `TxLineSeries` and `TxAreaSeries`. |
+| `strokeWidth` | `number` | `2` | Stroke width in pixels for `TxLineSeries` and `TxAreaSeries`; `0` hides an area's top line. |
+| `showSymbol` | `boolean` | `false` | `TxLineSeries`: draws a dot at each data point. |
+| `dashed` | `boolean` | `false` | `TxLineSeries`: dashes the stroke, for incomplete data. |
+| `enter` | `'clip' \| 'draw'` | `'clip'` | `TxLineSeries` first-render reveal: `clip` wipes open left to right, `draw` traces the stroke; a dashed stroke always clips. |
+| `gradient` | `boolean` | `true` | `TxAreaSeries`: vertical gradient fill. |
+| `fillOpacity` | `number` | `0.2` | `TxAreaSeries` fill opacity when `gradient` is off; `TxScatterSeries` dots default to `0.9`. |
+| `stack` | `string` | — | `TxBarSeries`: series sharing a key stack; without one they sit side by side. |
+| `barWidth` | `number` | — | `TxBarSeries`: explicit bar width in pixels, derived from the scale by default. |
+| `radius` | `number` | `0` | `TxBarSeries`: corner radius of bars. |
+| `r` | `number \| accessor` | `3` | `TxScatterSeries`: dot radius in pixels, constant or per datum. |
+| `value` | `accessor` | — | `TxArcSeries`: accessor that sets each slice's angle. |
+| `name` | `accessor` | — | `TxArcSeries`: optional name accessor, exposed on slice events. |
+| `color` | `accessor` | categorical | `TxArcSeries`: per-slice color. |
+| `innerRadius` | `number` | `0.6` | `TxArcSeries`: inner radius as a fraction of the outer radius; `0` draws a pie. |
+| `padAngle` | `number` | `0.015` | `TxArcSeries`: angular gap between slices, in radians. |
+| `cornerRadius` | `number` | `2` | `TxArcSeries`: slice corner radius in pixels. |
+| `announce` | `(slice) => string` | `name: value` | `TxArcSeries`: text spoken for a keyboard reading. |
+
+`TxArcSeries` emits `slice-click` when a slice is clicked and `slice-hover` with the hovered slice, or `null` once the pointer leaves the arc. The axis-free arc has no chart context to read, so an `#overlay` `<TxChartTooltip>` takes its values from `slice-hover`. A press-drag reads the ring like a dial, slice by slice by angle, and its release does not fire `slice-click`; with the chart focused, ← / → read slice by slice, Home / End jump to either end and Escape clears.
+
+### TxChartTooltip Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
 | `open` | `boolean \| 'auto'` | `'auto'` | `'auto'` shows while the pointer is inside; a boolean is controlled mode. |
 | `follow` | `'both' \| 'x'` | `'both'` | `x` pins the vertical position. |
 | `offset` | `number` | `12` | Gap between pointer and tooltip. |
+| `fixedY` | `number` | `0` | Vertical position in pixels when `follow` is `x`. |
 | `footer` | `string` | — | Extra line below the row list (kumo's `tooltipFooter`). |
 | `boundary` | `'clipping-ancestors' \| Element \| Element[]` | `'clipping-ancestors'` | Collision boundary (ECharts `confine`): by default intersects the clipping ancestors with the viewport and flips. |
 | `title` / `rows` / `hiddenCount` | — | — | Default content; the slot replaces it entirely. |
+| `moreLabel` | `(count: number) => string` | `+N more` | Footer text for the rows folded by `hiddenCount`. |
 
 The tooltip keeps ECharts' cadence as well: it waits out a 100ms `hideDelay` before the 200ms fade-out and DOM removal, so a brief pointer excursion does not flicker it; movement is handed to the browser as a 400ms `transform: translate3d()` transition; and pointer tracking is throttled to 50ms, sampling once on entry and once on exit.
 

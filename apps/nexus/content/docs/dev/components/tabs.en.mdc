@@ -38,7 +38,7 @@ code: |
 :::
 
 ### Indicator
-`indicatorVariant` sets how the indicator is drawn and `indicatorMotion` how it travels. With `showIndicator` off, the active item paints its own fill.
+`indicatorVariant` sets how the indicator is drawn and `indicatorMotion` how it travels; with `showIndicator` off, the active item paints its own fill.
 :::TuffDemoWrapper{demo="TabsIndicatorVariantsMotionsDemo" code-lang="vue"}
 ---
 code: |
@@ -81,7 +81,7 @@ code: |
 :::
 
 ### Placement and Header
-`placement` takes four directions. `TxTabHeader` renders a sticky header above the panel, and the `nav-right` slot holds actions at the end of the nav bar.
+`placement` takes four directions; `TxTabHeader` renders a sticky header above the panel, and the `nav-right` slot holds actions at the end of the nav bar.
 :::TuffDemoWrapper{demo="TabsPlacementHeaderSlotDemo" code-lang="vue"}
 ---
 code: |
@@ -271,6 +271,21 @@ code: |
 |------|------|------|
 | `default` | - | Child `TxTabItem` nodes. |
 
+### CSS Variables
+
+| CSS variable | Used for |
+|----------------------------|----------|
+| `--tx-border-color` | Outer border and nav divider. |
+| `--tx-bg-color` | Container background. |
+| `--tx-fill-color` / `--tx-fill-color-light` | Active fill (without indicator) / hover fill. |
+| `--tx-color-primary` | The `line`, `dot`, `block`, and `outline` indicators and the active icon. |
+| `--tx-surface-raised` / `--tx-elevation-1` / `--tx-border-color-lighter` | The `pill` surface, its shadow, and its inset ring. |
+| `--tx-text-color-primary` / `--tx-text-color-regular` / `--tx-text-color-secondary` | Active text, resting text, icons and group labels. |
+| `--tx-tab-item-ink` / `--tx-tab-item-icon-ink` | Text and icon color of `.tx-tab-item`. |
+| `--tx-tabs-indicator-duration` / `--tx-tabs-indicator-easing` / `--tx-tabs-indicator-strength` | Generated from the indicator props, for hosts to read. |
+| `--tx-tabs-content-duration` / `--tx-tabs-content-easing` | Generated from the content animation props. |
+| `--tx-tabs-nav-duration` / `--tx-tabs-nav-easing` | Generated from the nav animation props. |
+
 ## Overview
 
 - When controlled, `modelValue` wins; otherwise `defaultValue`, then `activation`.
@@ -287,18 +302,3 @@ code: |
 - Source: `packages/tuffex/packages/components/src/tabs/`.
 
 <TuffDocSourceLink />
-
-## Customization
-
-| CSS variable | Used for |
-|----------------------------|----------|
-| `--tx-border-color` | Outer border and nav divider. |
-| `--tx-bg-color` | Container background. |
-| `--tx-fill-color` / `--tx-fill-color-light` | Active fill (without indicator) / hover fill. |
-| `--tx-color-primary` | The `line`, `dot`, `block`, and `outline` indicators and the active icon. |
-| `--tx-surface-raised` / `--tx-elevation-1` / `--tx-border-color-lighter` | The `pill` surface, its shadow, and its inset ring. |
-| `--tx-text-color-primary` / `--tx-text-color-regular` / `--tx-text-color-secondary` | Active text, resting text, icons and group labels. |
-| `--tx-tab-item-ink` / `--tx-tab-item-icon-ink` | Text and icon color of `.tx-tab-item`. |
-| `--tx-tabs-indicator-duration` / `--tx-tabs-indicator-easing` / `--tx-tabs-indicator-strength` | Generated from the indicator props, for hosts to read. |
-| `--tx-tabs-content-duration` / `--tx-tabs-content-easing` | Generated from the content animation props. |
-| `--tx-tabs-nav-duration` / `--tx-tabs-nav-easing` | Generated from the nav animation props. |

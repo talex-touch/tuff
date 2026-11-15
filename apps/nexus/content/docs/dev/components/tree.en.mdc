@@ -112,7 +112,7 @@ code: |
 | `defaultSelectedKeys` | `Array<string \| number>` | - | Initial uncontrolled selection; ignored while `modelValue` is bound. |
 | `expandedKeys` | `Array<string \| number>` | - | Controlled expanded keys; the parent passes them back after `update:expandedKeys`. |
 | `indent` | `number` | `16` | Per-level indent in px. |
-| `filterText` | `string` | `''` | Filter query; matching branches expand while it is non-empty. |
+| `filterText` | `string` | - | Filter query; matching branches expand while it is non-empty. |
 | `filterMethod` | `(node: TreeNode, query: string) => boolean` | - | Custom matcher given the trimmed original query; the default is a lowercased label match. |
 | `emptyText` | `string` | `'No results'` | Text shown when no row is left to show; pass it in the page's language. |
 | `expandLabel` | `string` | `'Expand'` | Accessible name of a collapsed node's caret. |

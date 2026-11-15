@@ -1,6 +1,6 @@
 ---
 title: "DiffTable 变更表格"
-description: "以变更集语义呈现 AI 提议的改动，按阶段依次标红、展开新增行。"
+description: "按阶段呈现 AI 提议的改动：标红、展开新增行"
 category: Visualization
 status: beta
 since: 0.3.9
@@ -152,15 +152,8 @@ code: |
 
 ## 技术实现
 
-- Component source: `packages/tuffex/packages/components/src/diff-table/src/TxDiffTable.vue`。
-- Types: `packages/tuffex/packages/components/src/diff-table/src/types.ts` 导出 `DiffTableProps`、`DiffTableColumn`、`DiffTableRow`、`DiffChangeKind`、`DiffTablePlay`、`DiffTableEmits`。
-- Instance: `packages/tuffex/packages/components/src/diff-table/index.ts` 手写 `TxDiffTableInstance`（泛型组件的 expose 面按解包类型声明，`stage` 是 `number` 而非 `Ref<number>`）。
-- **实测覆盖:** `packages/tuffex/packages/components/src/diff-table/__tests__/diff-table.test.ts` 共 15 例，用假定时器覆盖三段阶段时序、`stageChange` / `settled` 发射、三种播放模式、expose 三方法、逐列染色与删除线、网格与 colgroup 同源、折叠行的 `aria-hidden` / `inert`、卸载清理与 `play` 切换。
+- 组件源码：`packages/tuffex/packages/components/src/diff-table/src/TxDiffTable.vue`；类型见 `types.ts`，`index.ts` 手写 `TxDiffTableInstance`（泛型组件的 expose 面按解包类型声明）。
+- **来源：** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT。新增行按 `rows` 中的位置渲染，`modified` 为本移植新增。
+- **已知限制：** 高对比主题（`html[data-tx-contrast='high']`）下 `--tx-bui-*` 保持 BUI 原值，不参与高对比 ramp。
 
 <TuffDocSourceLink />
-
-- **来源：** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT。
-- **与上游的差异：** 新增行按其在 `rows` 中的位置渲染，而不是上游写死的「永远在最后」，因此顺序得以保留且支持多条新增行；`modified` 是本移植新增的变更类型，上游没有。
-- **修正的上游缺陷：** 上游用内联 `style.background` 给标红行上色，其优先级压过自身的 hover 规则，导致最该被检视的那几行反而没有悬停反馈；本组件改为 class 驱动。
-- **暗色适配：** 红/绿底色取 `--tx-bui-*-tint`（半透明叠加），而不是不透明的 `--tx-color-success-light-9` 一族——半透明叠加放在任何底色上观感都一致。
-- **已知限制：** 高对比主题（`html[data-tx-contrast='high']`）下 `--tx-bui-*` 保持 BUI 原值，不参与高对比 ramp。

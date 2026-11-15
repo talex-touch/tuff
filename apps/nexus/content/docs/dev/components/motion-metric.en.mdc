@@ -6,6 +6,7 @@ status: beta
 since: 0.7.0
 tags: [motion, metrics, charts, pro]
 syncStatus: reviewed
+verified: true
 ---
 
 ## Usage
@@ -70,7 +71,7 @@ code: |
 | `animated` | `boolean` | `true` | Enables value and gauge motion, still gated by visibility and reduced motion. |
 | `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `md` | Spacing and numeral size. |
 | `labels` | `Partial<MotionMetricLabels>` | `English defaults` | Overrides control and empty-state strings. |
-| `formatValue` | `(value, unit?) => string` | `Number with up to 2 decimals + unit` | Formats display only; chart data is untouched. |
+| `formatValue` | `(value: number \| string, unit?: string) => string` | `Number with up to 2 decimals + unit` | Formats display only; chart data is untouched. |
 
 ### Events
 
@@ -240,3 +241,5 @@ The catalog's 15 interactions plus the 14 below make up all 29 branches. Pass on
 - Reuses SVG/D3 charts, `TxStatCard`, `TxSlider`, `TxInput`, `TxButton`, and `TxTextMorph`.
 - Upstream: the Metrics components at [Amicro commit 43c29ce](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a), MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN.
 - Source: `packages/tuffex/packages/components/src/motion-metric/`.
+
+<TuffDocSourceLink />

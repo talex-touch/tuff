@@ -1,6 +1,6 @@
 ---
 title: MotionText
-description: "45 source-mapped text effects, four registry reveals, scramble, inline caller media and interactive focus blur."
+description: "45 source-mapped text effects with scramble and inline media."
 category: MotionText
 status: beta
 since: 0.7.0
@@ -13,7 +13,7 @@ verified: false
 
 `TxMotionText` preserves the 45 original Amicro catalog IDs and seven independent registry/source additions. Each preset keeps its own direction, grouping, stagger, scale, blur, mask, 3D transform or continuous rhythm. `MOTION_TEXT_VARIANTS` provides typed names, groups, segmentation and fixed source references; `MOTION_TEXT_VARIANT_IDS` is the complete ID list.
 
-Entrance and decorative playback are separate from **value changes**. A mounted `TxTextMorph` owns every text update; there is no second diff engine and replay does not remount it. The original is exposed to screen readers once. Only one text layer is selectable: the decorative original during normal playback, the unchanged original during scramble, and the TextMorph layer at rest. Whitespace, newlines, emoji ZWJ sequences and combining marks are retained.
+Entrance and decorative playback are separate from **value changes**. Only the always-mounted `TxTextMorph` handles value changes; its segmentation, diffing and accessibility behavior are documented on the [TextMorph](./text-morph.en.mdc) page and not repeated here. During decorative playback only one text layer is selectable: the decorative original during normal playback, the unchanged original during scramble, and the TextMorph layer at rest.
 
 ## Usage
 
@@ -229,10 +229,8 @@ Ink, glow, focus, surfaces and rings use the existing `--tx-*` theme tokens.
 
 ## Technologies
 
-- Fixed upstream [Amicro](https://github.com/Subhan-code/Amicro--Micro-transitions-) commit `43c29ce9cdd16459e3eab4992381b8d35b38776a`; MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN.
-- The 45 catalog rows map to `src/data/textAnimations.ts` and their individual `src/components/text/AnimatedText.tsx` branches. The four registry sources live in `registry/ui/text/`. Extra sources are `ScrambleHover.tsx`, `MediaBetweenText.tsx`, and both `FocusBlur.tsx` implementations. Exact ranges are exported in `MOTION_TEXT_VARIANTS` and shown by the demo.
-- Implementation: `motion-text/src/TxMotionText.vue`, source trajectories in `src/presets.ts`, typed API in `src/types.ts`. Decorative WAAPI resources and the single scramble timeout have an idempotent cancel boundary through `useMotionActivity`; value changes reuse `TxTextMorph`, word grouping reuses `stream-text/src/segment.ts`, and spring easing reuses `liquid/src/spring.ts`.
+- Fixed upstream [Amicro](https://github.com/Subhan-code/Amicro--Micro-transitions-) commit `43c29ce9cdd16459e3eab4992381b8d35b38776a`; MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN. The 45 catalog rows map to `src/data/textAnimations.ts` and their individual `src/components/text/AnimatedText.tsx` branches. The four registry sources live in `registry/ui/text/`. Extra sources are `ScrambleHover.tsx`, `MediaBetweenText.tsx`, and both `FocusBlur.tsx` implementations. Exact ranges are exported in `MOTION_TEXT_VARIANTS` and shown by the demo.
+- Implementation: `motion-text/src/TxMotionText.vue`, source trajectories in `src/presets.ts`, typed API in `src/types.ts`. Decorative WAAPI resources and the single scramble timeout have an idempotent cancel boundary through `useMotionActivity`; value changes go only through `TxTextMorph`; word grouping reuses `stream-text/src/segment.ts`, while decorative grapheme splitting calls `Intl.Segmenter` directly (decoration never changes the value, so it does not reuse TextMorph's value segmentation); spring easing reuses `liquid/src/spring.ts`.
 - Typewriter is stepped by whole graphemes rather than cropping half a glyph. Spacing settles to natural body spacing. The two hover catalog IDs that share an upstream switch branch remain separately discoverable without pretending to have different source trajectories.
-- This page documents implementation behavior; integration/build/browser acceptance is performed by the owning workflow, not claimed by this page.
 
 <TuffDocSourceLink />

@@ -162,7 +162,7 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
-| `modelValue` / `v-model` | `string \| number \| (string \| number)[]` | *必填* | 单选为单值，多选为数组。 |
+| `modelValue` | `string \| number \| (string \| number)[]` | *必填* | 单选为单值，多选为数组；配合 `v-model` 使用。 |
 | `multiple` | `boolean` | `false` | 多选：各项像复选框一样切换，不显示滑块。 |
 | `disabled` | `boolean` | `false` | 禁用整组，移出 Tab 序列并阻止变更。 |
 | `size` | `'sm' \| 'md' \| 'lg' \| 'xl'` | `'md'` | 尺寸。 |

@@ -20,7 +20,7 @@ code: |
     <TxButton variant="primary" @click="open = true">Open Modal</TxButton>
     <TxButton variant="ghost" @click="fullscreen = true">Open fullscreen preview</TxButton>
 
-    <TxModal v-model="open" title="Confirm sync settings" width="min(92vw, 520px)">
+    <TxModal v-model="open" title="Confirm sync settings" close-label="Close" width="min(92vw, 520px)">
       <p>Use a modal for short confirmations or compact forms.</p>
       <template #footer>
         <TxButton variant="ghost" @click="open = false">Cancel</TxButton>
@@ -28,7 +28,7 @@ code: |
       </template>
     </TxModal>
 
-    <TxModal v-model="fullscreen" fullscreen title="Release notes">
+    <TxModal v-model="fullscreen" fullscreen title="Release notes" close-label="Close">
       <p>Long content scrolls inside the panel; the bars stay put.</p>
       <template #footer>
         <TxButton variant="ghost" @click="fullscreen = false">Close preview</TxButton>
@@ -92,22 +92,17 @@ code: |
 
 ## Overview
 
-- The overlay teleports to `body`, takes a fresh layer from the shared z-index manager on open, and is removed with `v-if` on close. For the 200 ms it fades out, it is `inert`: the pointer and focus reach the layer below, and it no longer counts as topmost, so a drawer underneath answers Escape by then.
-- The overlay is `role="dialog"` with `aria-modal="true"`; it takes focus on open and, on close or unmount, returns it to the previous element without scrolling the page.
-- Tab and Shift+Tab cycle inside the topmost modal; even with focus on `body`, a drawer underneath doesn't react to Escape.
+- The overlay teleports to `body`, takes a fresh layer from the shared z-index manager on open, and is removed with `v-if` on close. For the 200 ms it fades out, it is `inert`: the pointer and focus reach the layer below, and it no longer counts as topmost, so a drawer underneath answers Escape by then. Tab and Shift+Tab cycle inside the topmost modal; even with focus on `body`, a drawer underneath doesn't react to Escape.
+- The overlay is `role="dialog"` with `aria-modal="true"`; it takes focus on open and, on close or unmount, returns it to the previous element without scrolling the page. Tab stops only at controls that show and are in the tab order: it passes by hidden ones, ones under `inert` and ones with `tabindex="-1"`, and stops at an editable region (`contenteditable`) too.
 - Escape with focus inside a `TxForm`, including its fields, a field's `?`, and buttons in the form, does not close the dialog. A plain input outside any `TxForm` closes it as usual. An open popover or menu inside the dialog closes first, and the dialog stays open.
-- Tab stops only at controls that show and are in the tab order: it passes by hidden ones, ones under `inert` and ones with `tabindex="-1"`, and stops at an editable region (`contenteditable`) too.
-- A backdrop click, Escape, and the close button ask `beforeClose`, then emit `update:modelValue(false)` and `close`; setting `modelValue` asks nothing.
-- `fullscreen` changes only the layout, not the dialog semantics or focus handling; it leaves no backdrop to click, so keep a visible close control in the header or footer.
-- The panel background is a card-preset `TxBaseSurface` (`fake`) under the header, body and footer, `refraction` by default: a 50% base colour keeps text legible while the page behind still shows through to be blurred and refracted.
-- The overlay's dim and blur are painted on a pseudo-element of the overlay rather than on its own background and opacity, so the panel's material samples the page, not only the dim.
+- A backdrop click, Escape, and the close button ask `beforeClose`, then emit `update:modelValue(false)` and `close`; setting `modelValue` asks nothing. `fullscreen` changes only the layout, not the dialog semantics or focus handling; it leaves no backdrop to click, so keep a visible close control in the header or footer.
+- The panel background is a card-preset `TxBaseSurface` (`fake`) under the header, body and footer, `refraction` by default: a 50% base colour keeps text legible while the page behind still shows through to be blurred and refracted. The overlay's dim and blur are painted on a pseudo-element of the overlay rather than on its own background and opacity, so the panel's material samples the page, not only the dim.
 - The panel only scales as it opens and closes; it never fades as a whole. Once its opacity animates, every backdrop filter inside it samples nothing but the panel, and the frost would drop out for the whole transition. What fades is each part of the panel instead: the header, body and footer, the shadow and outline, and each layer of the material, so a material with a backdrop filter (such as the default `refraction`) samples the page from the first frame to the last.
-- `TModal` forwards props, attrs, events, and the `default` / `header` / `footer` slots to `TxModal`.
 
 ## Technologies
 
 - The fullscreen panel uses a `100dvh` height where supported, and its footer padding includes `safe-area-inset-bottom`; fullscreen drops the overlay's blur, since the panel's own material already covers the viewport.
 - Under reduced motion (`prefers-reduced-motion: reduce`) the panel fades in place, without scaling or moving.
-- Source: `packages/tuffex/packages/components/src/modal/` (`TxModal.vue` and the `TModal.vue` wrapper).
+- Source: `packages/tuffex/packages/components/src/modal/` (`TxModal.vue` and the `TModal.vue` wrapper); `TModal` forwards props, attrs, events, and the `default` / `header` / `footer` slots to `TxModal`.
 
 <TuffDocSourceLink />

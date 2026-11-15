@@ -1,6 +1,6 @@
 ---
 title: "AllocationBar"
-description: "A pill split by share, with legend chips — selecting a segment changes what you are inspecting."
+description: "A share-split pill with legend chips; selecting a segment changes the inspected item."
 category: Visualization
 status: beta
 since: 0.3.9
@@ -39,6 +39,7 @@ code: |
 - The default ladder already paints the headline share with the accent and leaves the rest in receding inks; pass `color` only when the segments have real category colours — colouring everything erases the point of the bar.
 - Colour is never the only carrier: the legend always shows the code and the percentage, and the detail panel names the segment in full.
 - Render the headline figure (`$51,785`) yourself, reading it off `segments` by `modelValue`, so the card's height does not change with the selection.
+- A progress bar expresses one advancing quantity and this expresses composition; they look alike but are not interchangeable.
 
 ## API Reference
 
@@ -82,16 +83,7 @@ The selection is fully controlled. With no `modelValue` the first segment reads 
 
 ## Technologies
 
-- Component source: `packages/tuffex/packages/components/src/allocation-bar/src/TxAllocationBar.vue`.
-- Types: `packages/tuffex/packages/components/src/allocation-bar/src/types.ts`.
-- Drag selection: `packages/tuffex/packages/utils/press-scrub.ts`, shared with MonoChart and DitherChart.
-- **Tested coverage:** `packages/tuffex/packages/components/src/allocation-bar/__tests__/allocation-bar.test.ts` (17 cases) covers the exact rendered widths at the demo width once the gaps are carved out, accessible names and the radio-group semantics, arrow-key selection, the colour-ladder fallback and its contrast across both themes, the detail label's resolved colour, controlled selection, silence on a repeat click, legend/segment parity, the formatter, the detail panel switch, and the reduced-motion contract against compiled CSS.
-- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+- Component source and types: `packages/tuffex/packages/components/src/allocation-bar/src/` (`TxAllocationBar.vue`, `types.ts`).
+- Drag selection reuses `packages/tuffex/packages/utils/press-scrub.ts`, shared with MonoChart and DitherChart.- Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-- **Versus `TxProgressBar`:** a progress bar expresses one advancing quantity; this expresses composition. They look similar and mean different things, so they are not interchangeable.
-- **The detail panel is additive:** upstream puts that panel in the card rather than the bar. Here it is a `detail` switch, off by default, which keeps "bar plus legend" as the smallest reusable unit.
-- **Reduced motion:** the only element resting at `opacity: 0` is the selection sheen, and it is lit by the `.is-active` class rather than an animation fill — a contract the tests pin separately.
-- **Geometry:** the gap budget is subtracted from each width in proportion to `percent` up front rather than left to flex to shrink afterwards, so the declared share is the rendered share while the over-100% shrink fallback still holds.
-- **Accessibility:** the bar and the legend share one `radiogroup` (the legend used to sit outside the `role="group"`), and `aria-pressed` became `aria-checked` — this expresses a single choice, not buttons that toggle independently.

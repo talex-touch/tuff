@@ -74,3 +74,11 @@ code: |
 - The read-aloud button is a toggle: every click emits `speak`, even while `loading`, and the host starts or stops playback; `aria-pressed` is true while `speaking`.
 - The bar is a `role="toolbar"`: one Tab stop, arrow keys cycle through the controls, and Home / End jump to the ends.
 - The arrow-key order is read live from the DOM (`button:not([disabled])`, `[href]`, any non-`-1` `tabindex`), so disabled buttons are excluded.
+
+## Technologies
+
+- Arrow-key order is re-read from the live DOM with `querySelectorAll` on each call, not cached; focusable slot content joins it.
+- Copying goes through `navigator.clipboard.writeText`; the copied state clears after a 1200ms `setTimeout`, and the previous timer is cleared before a new copy re-arms it.
+- Source: `packages/tuffex/packages/components/src/message-actions/`.
+
+<TuffDocSourceLink />

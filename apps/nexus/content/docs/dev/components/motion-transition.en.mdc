@@ -134,15 +134,7 @@ code: |
 | `--tx-motion-transition-radius` | Size-dependent, `16px` at md | Card/modal radius. |
 | `--tx-motion-transition-width` | `width` prop in dialog modes | Modal width. Prefer the prop when using a dialog. |
 
-## Overview
-
-The outgoing slot subtree is retained during leave. At full coverage, it is removed and the requested keyed subtree mounts. Enter reveals the new content, then `completed` fires after Vue's commit. Waves retain layered point delays; doors retain their independent hinge geometry; flip and fade animate the actual view instead of a branded placeholder.
-
-A content action transfers focus to the stage during motion and then to the first focusable item in the incoming view. Dialog opening focuses the dialog. Only the topmost modal owns Tab and Escape, and Tab stops only at controls that show and are in the tab order; closure restores the connected opener without scrolling. Reduced motion and activity loss stop the single RAF and commit the target. Listeners, observers and pending frames are released on deactivation/unmount. `useId` supplies stable stage/title IDs and deterministic wave delay seeds for SSR and hydration.
-
-## Technologies
-
-Sources are [Amicro at commit 43c29ce](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a), MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN. `src/data/transitions.ts:23–199` supplies the six catalog implementations; `src/components/PageTransitionOverlay.tsx:25–196` supplies the 14-point preview wave, door origins, iris, flip and curtain structures. `PageTransitionCard.tsx` maps to card preview/replay; `PageTransitionModal.tsx` maps to dialog preview, repeat and playback rate; `PageTransitionOverlay.tsx` maps to the reusable stage. Brand copy, clipboard showcase actions and router ownership are not component business behavior.
+## Source mapping
 
 The registry file `registry/ui/transitions/page-transition.tsx:4–22` declares 18 names, but lines 88–135 implement only stairs and wave. Lines 137–143 use one opacity fallback for all other names. This mapping preserves the source coverage without claiming 16 independent effects or exporting obsolete aliases:
 
@@ -167,4 +159,14 @@ The registry file `registry/ui/transitions/page-transition.tsx:4–22` declares 
 | `depth-forward` | Upstream fallback-only opacity | `cross-fade` |
 | `liquid-wave` | Three 12-point Bezier layers, lines 39–84 and 123–135 | `liquid-wave` |
 
-The implementation uses the existing `resolveTransition`/`easingFunction` spring and `useMotionActivity`, with no React, Framer Motion or Tailwind runtime. The source's 380/850 ms content-swap timers are replaced by the actual covered midpoint and animation completion. Build, automated tests and real-browser acceptance are owned by the integration verification, not claimed by this page.
+## Overview
+
+The outgoing slot subtree is retained during leave. At full coverage, it is removed and the requested keyed subtree mounts. Enter reveals the new content, then `completed` fires after Vue's commit. Waves retain layered point delays; doors retain their independent hinge geometry; flip and fade animate the actual view instead of a branded placeholder.
+
+A content action transfers focus to the stage during motion and then to the first focusable item in the incoming view. Dialog opening focuses the dialog. Only the topmost modal owns Tab and Escape, and Tab stops only at controls that show and are in the tab order; closure restores the connected opener without scrolling. Reduced motion and activity loss stop the single RAF and commit the target. Listeners, observers and pending frames are released on deactivation/unmount. `useId` supplies stable stage/title IDs and deterministic wave delay seeds for SSR and hydration.
+
+## Technologies
+
+- Sources: [Amicro at commit 43c29ce](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a), MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN. The six catalogue implementations are in `src/data/transitions.ts:23–199`; the stage, door, iris and curtain structures are in `src/components/PageTransitionOverlay.tsx:25–196`.
+- Registry coverage: `registry/ui/transitions/page-transition.tsx:4–22` declares 18 names, but only stairs and wave are implemented; the other names share one opacity fallback, mapped one by one in the source mapping.
+- Implementation: reuses the existing `resolveTransition` and `resolveCssEase` (`utils/animation/easing.ts`) easing, with `useMotionActivity` owning the activity boundary; the covered midpoint and animation completion replace the source's fixed 380/850 ms swap timers.

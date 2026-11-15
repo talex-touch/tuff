@@ -151,11 +151,11 @@ rows:
     description: 面板为空时的文案；传元组则左右各用一条。
   - name: maxHeight
     type: "string | number"
-    default: "'320px'"
+    default: "未设置（CSS 默认 320px）"
     description: 面板高度上限，数字按 px；写入 --tx-transfer-max-height。
   - name: minHeight
     type: "string | number"
-    default: "'240px'"
+    default: "未设置（CSS 默认 240px）"
     description: 面板高度下限，数字按 px；写入 --tx-transfer-min-height。
   - name: addAriaLabel
     type: string

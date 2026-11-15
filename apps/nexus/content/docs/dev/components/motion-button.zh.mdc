@@ -1,6 +1,6 @@
 ---
 title: "MotionButton 动效按钮"
-description: "保留原生按钮和链接语义的 13 类交互与 35 个来源图标组合"
+description: "保留原生语义的 13 类交互与 35 种图标组合"
 category: MotionButtons
 status: beta
 since: 0.7.0
@@ -225,22 +225,9 @@ const lastLabel = ref('')
 | `expand-ring` | 图标缩放至 1.1，独立轮廓在 600 ms 内从 1 扩散至 1.15，并淡出。 |
 | `focus-blur` | 其他真实链接/按钮模糊并降低透明度，活动条目的虚线轮廓沿 350/20 弹簧从 1.3 缩放至 1.1。 |
 
-## 概述
+## 来源映射
 
-- 显式 `variant`、图标、颜色和 `holdDuration` 优先于 `sourceId`。来源标签只用于归属信息，不自动变成应用文案。
-- 悬停、聚焦、指针按下和回放驱动装饰。`selected` 保留目标图标并启用 `activeLabel`，始终由调用方提供。来源实现中仅凭悬停宣称“已复制”的行为不沿用。
-- 内容和装饰层不拦指针事件。普通控件使用原生按钮/链接，焦点模糊的各条目也保留原生语义和可见键盘轮廓。禁用链接没有 `href`、Tab 停靠或激活事件。
-- 原生表单提交/重置和链接导航不改成 JavaScript 键盘模拟。Enter/空格按下装饰遵循实际元素支持的按键。
-- 共享活动边界停止 CSS 循环、待执行回放帧、保留/回放定时器、磁吸 RAF 和图标/文字变形。SSR 不读取浏览器 API。减少动态效果时保留可读内容与静态端点。
-- 回放只处理视觉：先绘制静止姿态，再进入同一轨迹。磁吸回放只读一次控件尺寸，复用拉动和归零弹簧；焦点模糊回放强调首个启用条目。
-
-## 技术实现
-
-- 上游：[Amicro](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a)，MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。
-- 行为来源：`src/components/AnimatedButton.tsx:39～415`、`src/data/buttons.tsx:43～77` 和 `src/components/cards/FocusBlur.tsx:17～73`。已阅读 registry 的 `hover/magnetic-button.tsx` 与 `hover/glow-button.tsx`，独立 registry 版本归入 Motion 交互组件族。
-- 原始图标来自上游锁文件固定的 [lucide-react 0.546.0](https://unpkg.com/lucide-react@0.546.0/LICENSE)。全部 46 个 SVG 图标保留原始节点和几何属性，仅移除 React key。ISC 与 Feather 派生部分的 MIT 声明完整保存在 `icons.ts` 的 `@license` 头中。
-- TuffEx 落点：`motion-button/src/TxMotionButton.vue`、`catalog.ts`、`icons.ts` 和 `MotionButtonGlyph.vue`。图标变形复用 IconMorph，文字值变化复用 TextMorph，物理与生命周期复用已有共享弹簧和 `useMotionActivity`。活动边界变化时以实例 key 销毁旧变形控制器，不只改变减少动态效果标志。
-- 下表保留全部 35 个实际组合。ID 改变图标、轨迹参数、填充和保留时间，不只是更换标签。固定标签属于来源元数据，可见文案由调用方提供。
+下表保留全部 35 个实际组合。ID 改变图标、轨迹参数、填充和保留时间，不只是更换标签。固定标签属于来源元数据，可见文案由调用方提供。
 
 | 来源 ID | 来源组合 | 交互 | 图标 | 来源 |
 | --- | --- | --- | --- | --- |
@@ -279,5 +266,20 @@ const lastLabel = ref('')
 | `33` | Magnetic Field | magnetic | GitHub 与真实指针拉动 | `buttons.tsx:75` |
 | `34` | Expand Ring | expand-ring | Link 与独立扩散轮廓 | `buttons.tsx:76` |
 | `35` | Focus Blur Links | focus-blur | 调用方提供的链接/按钮分组 | `buttons.tsx:77` |
+
+## 概述
+
+- 显式 `variant`、图标、颜色和 `holdDuration` 优先于 `sourceId`。来源标签只用于归属信息，不自动变成应用文案。
+- 悬停、聚焦、指针按下和回放驱动装饰。`selected` 保留目标图标并启用 `activeLabel`，始终由调用方提供。来源实现中仅凭悬停宣称“已复制”的行为不沿用。
+- 内容和装饰层不拦指针事件。普通控件使用原生按钮/链接，焦点模糊的各条目也保留原生语义和可见键盘轮廓。禁用链接没有 `href`、Tab 停靠或激活事件。
+- 原生表单提交/重置和链接导航不改成 JavaScript 键盘模拟。Enter/空格按下装饰遵循实际元素支持的按键。
+- 共享活动边界停止 CSS 循环、待执行回放帧、保留/回放定时器、磁吸 RAF 和图标/文字变形。SSR 不读取浏览器 API。减少动态效果时保留可读内容与静态端点。
+- 回放只处理视觉：先绘制静止姿态，再进入同一轨迹。磁吸回放只读一次控件尺寸，复用拉动和归零弹簧；焦点模糊回放强调首个启用条目。
+
+## 技术实现
+
+- 上游：[Amicro](https://github.com/Subhan-code/Amicro--Micro-transitions-/tree/43c29ce9cdd16459e3eab4992381b8d35b38776a)，MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。原始图标来自上游锁文件固定的 [lucide-react 0.546.0](https://unpkg.com/lucide-react@0.546.0/LICENSE)。全部 46 个 SVG 图标保留原始节点和几何属性，仅移除 React key。ISC 与 Feather 派生部分的 MIT 声明完整保存在 `icons.ts` 的 `@license` 头中。
+- 行为来源：`src/components/AnimatedButton.tsx:39～415`、`src/data/buttons.tsx:43～77` 和 `src/components/cards/FocusBlur.tsx:17～73`。已阅读 registry 的 `hover/magnetic-button.tsx` 与 `hover/glow-button.tsx`，独立 registry 版本归入 Motion 交互组件族。
+- TuffEx 落点：`motion-button/src/TxMotionButton.vue`、`catalog.ts`、`icons.ts` 和 `MotionButtonGlyph.vue`。图标变形复用 IconMorph，文字值变化复用 TextMorph，物理与生命周期复用已有共享弹簧和 `useMotionActivity`。活动边界变化时以实例 key 销毁旧变形控制器，不只改变减少动态效果标志。
 
 <TuffDocSourceLink />

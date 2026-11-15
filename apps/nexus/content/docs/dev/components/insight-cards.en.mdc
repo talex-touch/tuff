@@ -119,6 +119,12 @@ code: |
 | `tone` | `'positive' \| 'negative' \| 'neutral'` | — | Overrides the tone derived from the sign. |
 | `formatter` | `(value: number) => string` | — | Takes over number formatting entirely. |
 
+#### Slots
+
+| Slot | Scope | Description |
+|------|------|-------------|
+| `detail` | — | Replaces the mono second line; falls back to the `detail` prop. |
+
 ## Overview
 
 - Without `activeIndex` the component pages itself; bind it and the host owns the page.

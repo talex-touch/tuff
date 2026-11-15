@@ -46,15 +46,8 @@ code: |
 ## API 参考
 
 ### 属性
-::TuffPropsTable
----
-rows:
-  - name: '—'
-    type: '-'
-    default: '-'
-    description: '无额外 props，尺寸由容器决定'
----
-::
+
+无属性；尺寸由外层容器决定。
 
 ## 概述
 

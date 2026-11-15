@@ -238,7 +238,7 @@ onBeforeUnmount(() => {
 
 .tx-text-transformer__layer--current {
   opacity: 1;
-  filter: blur(0px);
+  filter: none;
 }
 
 .tx-text-transformer__layer--prev {
@@ -247,13 +247,13 @@ onBeforeUnmount(() => {
   right: 0;
   top: 0;
   opacity: 1;
-  filter: blur(0px);
+  filter: none;
   pointer-events: none;
 }
 
 .tx-text-transformer.is-animating .tx-text-transformer__layer--current {
   opacity: 1;
-  filter: blur(0px);
+  filter: none;
 }
 
 .tx-text-transformer.has-prev .tx-text-transformer__layer--current {
@@ -263,7 +263,7 @@ onBeforeUnmount(() => {
 
 .tx-text-transformer.has-prev.is-animating .tx-text-transformer__layer--current {
   opacity: 1;
-  filter: blur(0px);
+  filter: none;
 }
 
 /*

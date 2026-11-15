@@ -220,7 +220,7 @@ code: |
 ::::
 
 ### Copy Button
-A copy draws a check and morphs the label into `copiedLabel`; a failure draws a cross and emits `error`. `iconOnly` shows the label only while reporting.
+A copy draws a check and morphs the label into `copiedLabel`; a failure draws a cross and emits `error`, and `iconOnly` expands the label only while reporting.
 ::::TuffDemoWrapper{demo="CopyButtonCopyButtonDemo" code-lang="vue"}
 ---
 code: |

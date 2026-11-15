@@ -226,6 +226,22 @@ rows:
 ::TuffPropsTable
 ---
 rows:
+  - name: icon
+    type: 'TxIconSource | null'
+    default: '-'
+    description: '结构化图标来源（type / value），与 name 二选一。'
+  - name: name
+    type: 'string'
+    default: '-'
+    description: '类名或内置图标名。'
+  - name: alt
+    type: 'string'
+    default: "''"
+    description: '可访问名称，写入 title；也用作兜底图片的 alt。'
+  - name: empty
+    type: 'string'
+    default: "''"
+    description: '未解析出图标时显示的兜底图片 URL。'
   - name: colorful
     type: 'boolean'
     default: 'true'

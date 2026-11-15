@@ -162,7 +162,7 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `modelValue` / `v-model` | `string \| number \| (string \| number)[]` | *required* | A single value, or an array in `multiple` mode. |
+| `modelValue` | `string \| number \| (string \| number)[]` | *required* | A single value, or an array in `multiple` mode; bound with `v-model`. |
 | `multiple` | `boolean` | `false` | Multi-select: items toggle like checkboxes and the thumb is hidden. |
 | `disabled` | `boolean` | `false` | Disables the whole group, removing it from the tab order and blocking changes. |
 | `size` | `'sm' \| 'md' \| 'lg' \| 'xl'` | `'md'` | Size. |

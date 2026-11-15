@@ -78,3 +78,11 @@ code: |
 - `wrap` scrolls horizontally on overflow, with a hidden scrollbar and edge masks that signal the overflow.
 - `list` rows stagger in by position, 90ms apart; under reduced motion they simply appear.
 - The container is `role="list"` and each chip `role="listitem"`, which overrides the button semantics; add surrounding text where button semantics matter.
+
+## Technologies
+
+- The list rows' stagger is a CSS animation delay: each row's `--tx-suggestion-chips-index` times 90ms, with no script timer.
+- The edge fades on the `wrap` layout are `mask-image` gradients.
+- Source: `packages/tuffex/packages/components/src/suggestion-chips/`.
+
+<TuffDocSourceLink />

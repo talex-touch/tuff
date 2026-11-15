@@ -20,9 +20,9 @@ code: |
   import { computed, ref } from 'vue'
 
   const rows = [
-    { task: '补货芒果雪葩', status: 'todo' },
-    { task: '搅拌黑芝麻', status: 'progress' },
-    { task: '订购华夫蛋筒', status: 'done' },
+    { task: '补货芒果雪葩', status: 'todo', dueAt: Date.UTC(2026, 11, 3) },
+    { task: '搅拌黑芝麻', status: 'progress', dueAt: Date.UTC(2026, 8, 22) },
+    { task: '订购华夫蛋筒', status: 'done', dueAt: Date.UTC(2026, 3, 14) },
   ]
 
   const filter = ref('all')
@@ -58,7 +58,14 @@ code: |
   const columns = [
     { key: 'task', title: '任务名称', minWidth: 180 },
     // 排序读时间戳字段，展示才做格式化
-    { key: 'dueAt', title: '日期', width: 110, sortable: true, sorter: (a, b) => a.dueAt - b.dueAt },
+    {
+      key: 'dueAt',
+      title: '日期',
+      width: 110,
+      sortable: true,
+      sorter: (a, b) => a.dueAt - b.dueAt,
+      format: (value: number) => new Date(value).toISOString().slice(0, 10),
+    },
     { key: 'status', title: '状态', width: 140 },
   ]
   </script>

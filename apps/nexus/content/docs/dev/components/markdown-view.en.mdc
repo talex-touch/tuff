@@ -92,7 +92,7 @@ code: |
 
 ## Technologies
 
-- The bundled `github-markdown.css` is a global import shared with `TxStreamMarkdown`; every rule is scoped to `:where(.tx-markdown-view, .tx-stream-md)`, so a host's own `.markdown-body` is untouched. Keep the scope when re-vendoring it.
+- The bundled `github-markdown.css` is a global import shared with `TxStreamMarkdown`; every rule is scoped to `:where(.tx-md)`, so a host's own `.markdown-body` is untouched. Keep the scope when re-vendoring it.
 - Source: `packages/tuffex/packages/components/src/markdown-view/`.
 
 <TuffDocSourceLink />

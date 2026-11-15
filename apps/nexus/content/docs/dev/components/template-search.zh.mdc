@@ -1,0 +1,142 @@
+---
+title: 搜索结果
+description: 带类型与时间筛选、分页的搜索结果页
+category: TemplateContent
+status: beta
+since: 0.9.3
+tags: [template, search, input, filter, pagination]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+### 搜索结果
+:::TuffDemoWrapper{demo="TemplateSearchDemo" code-lang="vue" description="防抖搜索、类型与时间筛选、分页与空状态。图中为示例数据。"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref, watch } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const PAGE_SIZE = 3
+  const query = ref('')
+  const applied = ref('')
+  const kind = ref('all')
+  const range = ref('any')
+  const page = ref(1)
+  const searchRef = ref<{ focus: () => void } | null>(null)
+
+  // 搜索框自己防抖 search 事件，宿主不需要计时器。
+  const results = computed(() => filterHits(applied.value, kind.value, range.value))
+  const pageRows = computed(() => results.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE))
+
+  // 关键词、类型或时间变化都从第一页重新开始。
+  watch([applied, kind, range], () => {
+    page.value = 1
+  })
+
+  // 快捷键绑在模板根上，不绑 window：app.vue 占有站点的 ⌘K 与 /。
+  function onRootKeydown(event: KeyboardEvent) {
+    const modifier = event.metaKey || event.ctrlKey
+    const focusKey = (modifier && event.key.toLowerCase() === 'k')
+      || (!modifier && event.key === '/' && !isTyping(event.target))
+    if (focusKey) {
+      event.preventDefault()
+      searchRef.value?.focus()
+    }
+  }
+
+  function resetFilters() {
+    query.value = ''
+    applied.value = ''
+    kind.value = 'all'
+    range.value = 'any'
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="搜索结果" :height="580">
+      <div class="tpl-search" @keydown="onRootKeydown">
+        <TxSearchInput
+          ref="searchRef"
+          v-model="query"
+          remote
+          :search-debounce="220"
+          aria-label="搜索 Tuff 文档与更新日志"
+          @search="applied = $event"
+        />
+
+        <div class="tpl-search__filters">
+          <TxFilterChips v-model="kind" :items="kindItems" aria-label="按类型筛选" />
+          <TxFilterChips v-model="range" :items="rangeItems" aria-label="按时间筛选" />
+        </div>
+
+        <TxSearchEmpty
+          v-if="!results.length"
+          size="small"
+          surface="card"
+          icon="i-carbon-search"
+          title="没有找到匹配的结果"
+          description="换个关键词，或清除全部筛选后再试。"
+          :primary-action="{ label: '清除筛选', icon: 'i-carbon-filter-remove' }"
+          @primary="resetFilters"
+        />
+
+        <ol v-else class="tpl-search__list">
+          <li v-for="hit in pageRows" :key="hit.id" class="tpl-search__item">
+            <div class="tpl-search__meta">
+              <span class="tpl-search__kind">{{ kinds[hit.kind] }}</span>
+              <span>{{ hit.source[lang] }}</span>
+              <time :datetime="hit.updatedAt">{{ formatDate(hit.updatedAt) }}</time>
+            </div>
+            <!-- 标题与摘要按关键词拆分，命中的部分包进 <mark> -->
+            <h3 class="tpl-search__title">{{ hit.title[lang] }}</h3>
+            <p class="tpl-search__summary">{{ hit.summary[lang] }}</p>
+          </li>
+        </ol>
+
+        <footer class="tpl-search__foot">
+          <span aria-live="polite">共 {{ results.length }} 条结果</span>
+          <span><kbd>/</kbd> 聚焦搜索</span>
+          <TxPagination
+            v-if="results.length"
+            v-model:current-page="page"
+            :page-size="PAGE_SIZE"
+            :total="results.length"
+            prev-icon="i-carbon-chevron-left"
+            next-icon="i-carbon-chevron-right"
+            aria-label="结果分页"
+          />
+        </footer>
+      </div>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## 概述
+
+搜索 Tuff 文档、插件与更新日志的结果页：顶部一个搜索框，下面用类型与时间两组筛选收窄范围，结果按更新时间倒序分页，关键词在标题与摘要中高亮。
+
+- 输入后约 220 ms 才更新结果，防抖由搜索框自己完成；按回车立即搜索，清空即恢复全部结果。
+- 类型芯片上的数字随关键词与时间范围变化，不随所选类型变化，方便比较各类的命中数。
+- 关键词、类型或时间任一变化都回到第一页；无结果时显示空状态，「清除筛选」一次复位全部条件。
+- 焦点在模板内时，⌘K 与 / 聚焦本模板的搜索框，不打开站点搜索。
+- 展开后（≥ 960px）结果排成两列；窄于 640px 时元信息自动换行，摘要最多两行。
+
+## 自定义
+
+- 接入真实索引时，用接口结果替换本地数组；关键词、类型与时间一起交给接口，分页改为服务端。
+- 按数据源调整 `search-debounce`：本地数组可以更短，远程接口可以更长，并在新请求发出时取消上一次。
+- 芯片的数字要从结果派生，不要写死；类型很多时改用下拉选择，避免整排芯片换行。
+- 高亮只拆分纯文本，不把结果拼进 `v-html`；需要富文本摘要时先清洗，再交给 TxMarkdownView 渲染。
+
+## 相关组件
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 搜索框 | [TxSearchInput](/docs/dev/components/search-input) | 防抖的远程搜索、回车立即搜索与清空 |
+| 类型与时间筛选 | [TxFilterChips](/docs/dev/components/filter-chips) | 两组单选芯片，类型带结果计数 |
+| 空状态 | [TxSearchEmpty](/docs/dev/components/search-empty) | 无结果提示与一次清除全部筛选 |
+| 底部分页 | [TxPagination](/docs/dev/components/pagination) | 翻页，并与结果总数同步 |

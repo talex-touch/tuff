@@ -1,6 +1,6 @@
 ---
 title: "AllocationBar 占比条"
-description: "按份额分段的胶囊条 + 图例胶囊，选中哪段就检查哪段。"
+description: "按份额分段的胶囊条 + 图例胶囊，选中哪段就检查哪段"
 category: Visualization
 status: beta
 since: 0.3.9
@@ -39,6 +39,7 @@ code: |
 - 默认阶梯已经把主份额涂成强调色、其余留作逐级淡出的墨色；只有分段有真实类目色时才传 `color`——全部上色会让「谁是重点」这件事消失。
 - 颜色不是唯一载体：图例里始终带短码与百分比，明细面板带完整名称。
 - 需要主数字（如 `$51,785`）时由宿主渲染，跟随 `modelValue` 从 `segments` 里取——这样卡片高度不随选中变化。
+- 进度条表达单一进度，这里表达构成；两者视觉相近但语义不同，不要互相替代。
 
 ## API 参考
 
@@ -82,16 +83,7 @@ code: |
 
 ## 技术实现
 
-- 组件源码：`packages/tuffex/packages/components/src/allocation-bar/src/TxAllocationBar.vue`。
-- 类型：`packages/tuffex/packages/components/src/allocation-bar/src/types.ts`。
-- 拖动选择：`packages/tuffex/packages/utils/press-scrub.ts`，与 MonoChart、DitherChart 共用。
-- **实测覆盖:** `packages/tuffex/packages/components/src/allocation-bar/__tests__/allocation-bar.test.ts`（17 项）覆盖示例宽度下扣除间隙后的精确渲染宽度、可访问名与单选组语义、方向键选中、颜色阶梯回退与两套主题下的阶梯对比度、明细标签的解析色、受控选中、重复点击静默、图例与分段同源、格式化器、明细面板开关，以及编译后 CSS 的减弱动效契约。
-- 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
+- 组件源码与类型：`packages/tuffex/packages/components/src/allocation-bar/src/`（`TxAllocationBar.vue`、`types.ts`）。
+- 拖动选择复用 `packages/tuffex/packages/utils/press-scrub.ts`，与 MonoChart、DitherChart 共用。- 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
-
-- **与 `TxProgressBar` 的分工:** 进度条表达单一进度，这里表达构成。两者视觉相近但语义不同，不要互相替代。
-- **明细面板是加法:** 上游把面板写在卡片里而不是条子里；这里做成 `detail` 开关，默认关闭，保持「条 + 图例」这个最小可复用单元不变。
-- **减弱动效:** 唯一静止在 `opacity: 0` 的元素是选中高光，它由 `.is-active` 类点亮而不是靠动画填充——这是测试里单独锁住的一条。
-- **几何:** 间隙预算按 `percent` 的比例先从各段宽度里扣掉，而不是让 flex 事后等比收缩；这样声明的份额就是渲染出来的份额，同时保住总和超 100% 时的收缩兜底。
-- **可访问性:** 条与图例共用一个 `radiogroup`（图例原先在 `role="group"` 之外），`aria-pressed` 换成 `aria-checked`——这里表达的是单选，而不是可各自开关的按钮组。

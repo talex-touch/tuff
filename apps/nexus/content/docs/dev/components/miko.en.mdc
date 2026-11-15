@@ -1,6 +1,6 @@
 ---
 title: "Miko Desktop Companion"
-description: "Pure SVG and CSS keyframe-animated pixel desktop companion with 38 real-time Agent interactive, occupational, and fantasy mutation states"
+description: "A pixel desktop pet that mirrors 38 Agent states."
 category: AiAgent
 status: beta
 since: 0.9.3
@@ -12,7 +12,7 @@ verified: true
 ## Usage
 
 ### Basic
-The `state` property binds directly to the Agent lifecycle: `idle` on standby, `working` while executing tool calls, `running` during step dispatch, `thinking` during inference, and `success` when complete. Enable `interactive` and `random` for autonomous playful behaviors, click reactions, and Shiny Devil mutations.
+The `state` property binds directly to the Agent lifecycle: `idle` on standby, `working` while executing tool calls, `running` during step dispatch, `thinking` during inference, and `success` when complete; with `interactive` and `random` enabled, it also plays autonomous idle behaviors, click reactions, and Shiny Devil mutations.
 ::::TuffDemoWrapper{demo="MikoBasicDemo" code-lang="vue"}
 ---
 code: |
@@ -89,7 +89,7 @@ code: |
 - 38 supported states: `idle`, `working`, `running`, `demon`, `coffee`, `guitar`, `sleepy`, `ninja`, `fishing`, `magic`, `umbrella`, `heart`, `workout`, `dj`, `chef`, `space`, `thinking`, `success`, `alert`, `error`, `sleeping`, `juggling`, `sweeping`, `reading`, `dizzy`, `peeking`, `stretching`, `bathing`, `curious`, `scratching`, `purring`, `eating`, `dancing`, `cheering`, `gaming`, `hacking`, `celebrating`, and `box`.
 - Driven entirely by native CSS `@keyframes` without external GIF or PNG assets.
 
-## Technical Details
+## Technologies
 
 - Source located at `packages/tuffex/packages/components/src/miko/`.
 - Fixed 1.8:1 aspect ratio with internal `viewBox="0 0 36 20"`.

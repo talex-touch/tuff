@@ -129,7 +129,7 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
-| `modelValue` / `v-model` | `boolean` | `false` | 选中状态。 |
+| `modelValue` | `boolean` | `false` | 选中状态，配合 `v-model` 使用。 |
 | `disabled` | `boolean` | `false` | 禁止切换，并移出 Tab 序列。 |
 | `loading` | `boolean` | `false` | 显示旋转环并禁止切换，不套用禁用态配色。 |
 | `label` | `string` | - | 方框旁的文案。 |
@@ -156,8 +156,7 @@ code: |
 - 根节点是原生 `<button role="checkbox">`；点击、Enter 或 Space 切换。
 - 受控组件：切换只派发事件，父级回写 `modelValue` 后外观才更新。
 - `indeterminate` 时 `aria-checked="mixed"`；加载中已选中与部分选中外观相同，靠它区分。
-- `disabled` 与 `loading` 都设置原生 `disabled`；`loading` 另设 `aria-busy="true"`。
-- 有可见文案时不渲染 `aria-label`。
+- `disabled` 与 `loading` 都设置原生 `disabled`；`loading` 另设 `aria-busy="true"`，有可见文案时不渲染 `aria-label`。
 - 在 `TxFormItem` 中，表单项的 label 经 `for` 命名复选框；复选框自带文案时改用 `aria-labelledby`，同时引用两者。表单的 `disabled` 同样生效。
 - 减少动态效果时，加载环停止旋转。
 

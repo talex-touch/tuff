@@ -61,3 +61,11 @@ code: |
 - While streaming, each change to `text` scrolls the body to the bottom; otherwise the scroll position is left alone.
 - The header is a native `<button>` with `aria-expanded` and an `aria-controls` pointing at the body; the icons are `aria-hidden`.
 - Collapsing hides the body but keeps it mounted.
+
+## Technologies
+
+- Folding transitions `grid-template-rows` between `0fr` and `1fr` over 0.26s; the body stays mounted.
+- While streaming, the label carries a `background-clip: text` shimmer on a 1.6s loop.
+- Source: `packages/tuffex/packages/components/src/reasoning-disclosure/`.
+
+<TuffDocSourceLink />

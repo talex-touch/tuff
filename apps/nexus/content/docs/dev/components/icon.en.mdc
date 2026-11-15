@@ -226,6 +226,22 @@ rows:
 ::TuffPropsTable
 ---
 rows:
+  - name: icon
+    type: 'TxIconSource | null'
+    default: '-'
+    description: 'Structured icon source (type / value); an alternative to name.'
+  - name: name
+    type: 'string'
+    default: '-'
+    description: 'Class or built-in icon name.'
+  - name: alt
+    type: 'string'
+    default: "''"
+    description: 'Accessible name, written to title; also the alt of the fallback image.'
+  - name: empty
+    type: 'string'
+    default: "''"
+    description: 'Fallback image URL shown when no icon resolves.'
   - name: colorful
     type: 'boolean'
     default: 'true'

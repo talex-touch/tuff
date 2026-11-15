@@ -67,6 +67,7 @@ TAXONOMY: dict[str, list[str]] = {
         "template-settings",
         "template-onboarding",
         "template-workbench",
+        "template-account",
     ],
     "TemplateContent": [
         "template-cms",
@@ -77,6 +78,7 @@ TAXONOMY: dict[str, list[str]] = {
         "template-docs",
         "template-notes",
         "template-showcase",
+        "template-search",
     ],
     "TemplateAi": [
         "template-agent-chat",
@@ -90,6 +92,7 @@ TAXONOMY: dict[str, list[str]] = {
         "template-automation",
         "template-release",
         "template-experiments",
+        "template-kanban",
     ],
     # ── suite: base 基础组件 ──────────────────────────────────────────────
     # Suite overview page: rendered as the suite's first standalone link.
@@ -107,6 +110,7 @@ TAXONOMY: dict[str, list[str]] = {
         "icon-chip",
         "kbd",
         "divider",
+        "text",
     ],
     "Form": [
         "form",

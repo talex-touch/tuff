@@ -30,7 +30,7 @@ Tuffex (`@talex-touch/tuffex`) is the Vue 3 component library behind CoreBox, pl
 | Suite | Groups | Pages | Entry |
 |-------|--------|-------|-------|
 | [Concepts](./index.en.mdc) | Installation, design rules, concepts manual, helpers | 27 | Documentation only |
-| [Templates](./template-shell.en.mdc) | App shells / Content / AI apps / Data & flow | 22 | Compositions of existing entries |
+| [Templates](./template-shell.en.mdc) | App shells / Content / AI apps / Data & flow | 25 | Compositions of existing entries |
 | [Basics Suite](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 100 | `@talex-touch/tuffex/base` |
 | [Pro Suite](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 41 | `@talex-touch/tuffex/pro` |
 | [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 36 | `@talex-touch/tuffex/ai` |
@@ -60,6 +60,7 @@ code: |
 ## Tutorial Path
 
 - Start with [Composing Tuffex interfaces](../getting-started/tuffex-composition.en.mdc): split a page into actions → status → data.
+- For a full-page scenario, start with the Templates section below. Each template is a ready-made page composition: adapt its structure, then swap in real data.
 - On list pages, `TxSearchInput`, `TxSearchSelect` and `TxSearchEmpty` carry search and no-match recovery; `TxDataTable` + `TxPagination` carry the data.
 - Design loading, empty and error states together: `TxLoadingState`, `TxEmptyState`, `TxErrorState`.
 - Compose dashboards from `TxDataTable`, `TxStatusBadge`, `TxProgressBar` and charts, not one-off SVG or status UI; settings pages use `TxTabs` for sections and `TxDrawer` for dense configuration.
@@ -73,39 +74,44 @@ code: |
 
 ## Templates
 
+A template is a full-page composition of existing components, shown in a shared stage. Templates exist only in these docs and are not importable components.
+
 ### App shells
 
-- [Shell](./template-shell.en.mdc)
-- [Launcher](./template-launcher.en.mdc)
-- [Settings](./template-settings.en.mdc)
-- [Onboarding](./template-onboarding.en.mdc)
-- [Workbench](./template-workbench.en.mdc)
+- [Shell](./template-shell.en.mdc): An app shell with a sidebar, command palette, notifications, and a dashboard.
+- [Launcher](./template-launcher.en.mdc): A keyboard-first, CoreBox-style launcher with a live preview.
+- [Settings](./template-settings.en.mdc): A settings center with sectioned navigation and rows that save as you go.
+- [Onboarding](./template-onboarding.en.mdc): A five-step first run through sign-in, a workspace, preferences, and permissions.
+- [Workbench](./template-workbench.en.mdc): A plugin workbench with a file tree, a code editor, a terminal, and a hot-reload preview.
+- [Account](./template-account.en.mdc): Profile, security, sessions and notifications, with confirmed removal.
 
 ### Content
 
-- [CMS](./template-cms.en.mdc)
-- [Gallery](./template-gallery.en.mdc)
-- [Inbox](./template-inbox.en.mdc)
-- [Files](./template-files.en.mdc)
-- [Store](./template-store.en.mdc)
-- [Docs](./template-docs.en.mdc)
-- [Notes](./template-notes.en.mdc)
-- [Showcase](./template-showcase.en.mdc)
+- [CMS](./template-cms.en.mdc): A content admin with status filters, bulk actions, and a drawer editor.
+- [Gallery](./template-gallery.en.mdc): A showcase wall with collections, three layouts, and artwork details.
+- [Inbox](./template-inbox.en.mdc): A three-pane inbox with keyboard shortcuts and new-mail alerts.
+- [Files](./template-files.en.mdc): A file manager with a folder tree, multi-select, a context menu, and drag-in upload.
+- [Store](./template-store.en.mdc): A plugin store with featured picks, search, permission details, and install flows.
+- [Docs](./template-docs.en.mdc): A help center reader with a contents tree, outline, and ⌘K search.
+- [Notes](./template-notes.en.mdc): A notes app with a notebook tree, WYSIWYG editing, and live collaboration.
+- [Showcase](./template-showcase.en.mdc): A release page that tells one update through a motion headline, a card carousel, and metrics.
+- [Search results](./template-search.en.mdc): A search results page with filters, paging, and an empty state.
 
 ### AI apps
 
-- [Agent chat](./template-agent-chat.en.mdc)
-- [AI answer](./template-ai-answer.en.mdc)
-- [Research](./template-research.en.mdc)
-- [Voice notes](./template-voice.en.mdc)
-- [Image studio](./template-image-studio.en.mdc)
+- [Agent chat](./template-agent-chat.en.mdc): A coding agent session with a write gate, live plan, and changed files.
+- [AI answer](./template-ai-answer.en.mdc): A multi-turn Q&A with streamed answers, numbered citations, and follow-ups.
+- [Research](./template-research.en.mdc): A research copilot with its process, numbered citations, and an evidence rail.
+- [Voice notes](./template-voice.en.mdc): Voice notes that transcribe while recording and turn the recording into a summary and to-dos.
+- [Image studio](./template-image-studio.en.mdc): An image generation studio with style controls, generating placeholders, and a full-size viewer.
 
 ### Data & flow
 
-- [Dashboard](./template-dashboard.en.mdc)
-- [Automation](./template-automation.en.mdc)
-- [Release](./template-release.en.mdc)
-- [Experiments](./template-experiments.en.mdc)
+- [Dashboard](./template-dashboard.en.mdc): A product analytics board with KPI cards, a trend chart, and a plugin table.
+- [Automation](./template-automation.en.mdc): An automation editor with a flow canvas, node settings, and a run log.
+- [Release](./template-release.en.mdc): A release console from CI build to a staged rollout a person approves.
+- [Experiments](./template-experiments.en.mdc): An experiment board that compares training runs by curves, a hyperparameter sweep, and configs.
+- [Kanban](./template-kanban.en.mdc): A four-column task board with drag, keyboard moves and a drawer.
 
 ## Basics
 

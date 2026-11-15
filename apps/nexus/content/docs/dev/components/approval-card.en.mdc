@@ -12,7 +12,7 @@ verified: true
 ## Usage
 
 ### Multi-Question Walkthrough
-One question at a time. A single choice advances after `autoAdvanceDelay`; a multiple choice waits for the send control.
+One question shows at a time; a single choice advances after `autoAdvanceDelay`, and a multiple choice waits for the send control.
 :::TuffDemoWrapper{demo="ApprovalCardWalkthroughDemo" code-lang="vue"}
 ---
 code: |

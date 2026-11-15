@@ -1,6 +1,6 @@
 ---
 title: "ECharts Family"
-description: "ECharts-backed charts for Tuffex: themed TxEChart plus typed line, bar, pie, funnel, radar, gauge, scatter, heatmap and treemap wrappers."
+description: "ECharts-backed charts: a themed host plus typed wrappers for common chart types."
 category: Charts
 status: beta
 since: 0.6.0
@@ -42,10 +42,8 @@ Every chart in the family accepts the shared props below plus its own data props
 | `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | `auto` follows the surrounding theme. |
 | `ariaLabel` | `string` | — | Accessible name; adds `role="img"` to the host. |
 | `loading` | `boolean` | `false` | Themed loading mask until data arrives. |
-
-`update` only exists on `TxEChart`: `'replace'` (default) swaps the series array so removed series stop being drawn, `'merge'` keeps ECharts' own merge semantics.
-
-`cooperativeWheel` (default `true`) exists on `TxEChart` and on the wrappers that zoom: line, bar, scatter and treemap. See Pointer Input.
+| `update` | `'replace' \| 'merge'` | `'replace'` | `TxEChart` only: `replace` swaps the series array so removed series stop being drawn; `merge` keeps ECharts' own merge semantics. |
+| `cooperativeWheel` | `boolean` | `true` | A plain wheel scrolls the page; `false` hands the wheel back to ECharts. On `TxEChart` and the zooming wrappers, see Pointer Input. |
 
 ### Per-chart props
 
@@ -340,16 +338,14 @@ Compared with the native maps and Sankey:
 
 ## Technologies
 
-- Component source: `packages/tuffex/packages/components/src/charts/src/echart/src/`.
-- Option builders: `packages/tuffex/packages/components/src/charts/src/echart/src/options/`.
-- Theme and tokens: `packages/tuffex/packages/components/src/charts/src/echart/src/core/theme.ts`.
-- Pointer input: `packages/tuffex/packages/components/src/charts/src/echart/src/core/interaction.ts`.
+- Component source and option builders: `packages/tuffex/packages/components/src/charts/src/echart/src/` (builders in `options/`).
+- Theme and pointer input: `core/theme.ts` resolves `--tx-chart-*` into canvas-ready colors; `core/interaction.ts` handles the wheel and brushing.
 - Adapted from Cloudflare kumo (https://github.com/cloudflare/kumo), © Cloudflare, Inc., MIT — `EChart.tsx`.
 
-<TuffDocSourceLink />
+<TuffDocSourceLink path="packages/tuffex/packages/components/src/charts/src/echart/index.ts" />
 
 ## Use cases
 
-The native SVG family (`TxChart`, `TxTimeseriesChart`, `TxSankeyChart`, `TxChoroplethMap`, `TxSparkChart`, `TxAllocationBar`) stays the default: smaller, themeable through CSS tokens, and shaped for what the product actually renders. Reach for `TxEChart` and its typed wrappers when you need a chart type the native family does not have, or when you want ECharts' own option surface — dataZoom, visualMap, custom series, per-point styling.
+The native family (`TxChart`, `TxTimeseriesChart`, `TxSankeyChart`, `TxChoroplethMap`, `TxSparkChart`, `TxAllocationBar`) stays the default, with `TxSparkChart` on canvas, `TxAllocationBar` in the DOM and the rest in SVG: smaller, themeable through CSS tokens, and shaped for what the product actually renders. Reach for `TxEChart` and its typed wrappers when you need a chart type the native family does not have, or when you want ECharts' own option surface — dataZoom, visualMap, custom series, per-point styling.
 
 Both families read the same colour tokens, so an ECharts chart dropped next to a native one matches it in either theme without a single styling prop.

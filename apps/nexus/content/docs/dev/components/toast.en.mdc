@@ -86,6 +86,14 @@ code: |
 | `ariaLabel` | `string` | `'Notifications'` | Accessible name of the notification region. |
 | `closeLabel` | `string` | `'Dismiss notification'` | Accessible name of each toast's close button. |
 
+### TxToastHost Exposed Methods
+
+| Name | Type | Description |
+|------|------|-------------|
+| `pause` | `() => void` | Freezes every countdown, the same as `pauseToasts()`. |
+| `resume` | `() => void` | Resumes every countdown from its remaining time, the same as `resumeToasts()`. |
+| `expanded` | `boolean` | Whether the stack is fanned out now (read-only): true when `expand` is set, or while the pointer or focus is inside. |
+
 ### toast(options)
 
 Import it from `@talex-touch/tuffex/utils`:
@@ -140,7 +148,7 @@ code: |
 
 - The host teleports to `body` as a `role="region"` labeled `aria-label="Notifications"` and a polite live region; `danger` escalates to `role="alert"`, and each toast has a close button named `Dismiss notification`.
 - `toast()` returns the id; the same `id` replaces the existing toast and restarts timing from its `duration`; `duration: 0` stays until `dismissToast(id)` or `clearToasts()`.
-- The newest toast is in front, and each one behind sits back by `gap` pixels at 5% smaller scale; collapsed, only the front toast takes the pointer, and the host's empty area clicks through.
+- The newest toast is in front, and each one behind sits back by `gap` pixels at 5% smaller scale; collapsed, only the front toast takes the pointer, and the host's empty area clicks through. Hidden toasts, and those collapsed behind the front one, are `inert`, so keyboard focus and screen readers never reach their actions or close buttons.
 - Pointer or keyboard focus entering the stack expands it and calls `pauseToasts()`; leaving collapses it and calls `resumeToasts()`.
 - Dragging toward the anchored edge dismisses past 45px, or past 12px for a flick faster than 0.32px/ms; the other way moves a fifth as far and springs back, and a drag that starts on a button goes to the button.
 - Only the first host to mount draws; later hosts render an empty container so hydration matches, and warn in development. When the owner unmounts, the next takes over; toasts appear the tick after mount.

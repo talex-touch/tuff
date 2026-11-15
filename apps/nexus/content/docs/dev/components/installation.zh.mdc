@@ -48,7 +48,7 @@ code: |
 
 ### 按套件引入
 
-`base`、`pro`、`ai` 三个入口互不重叠，每个组件只属于其中一个。套件入口只提供具名导出，样式按组件引入。
+`base`、`pro`、`ai` 三个入口互不重叠，套件入口只提供具名导出，动效组件从 `pro` 引入，图表另有 `@talex-touch/tuffex/charts` 入口。
 
 :::TuffCodeBlock{lang="typescript"}
 ---
@@ -62,8 +62,6 @@ code: |
   app.use(TuffSwitch)
 ---
 :::
-
-数据与动效套件的组件从 `pro` 引入；图表族另有 `@talex-touch/tuffex/charts` 入口。
 
 :::TuffCodeBlock{lang="typescript"}
 ---
@@ -87,15 +85,13 @@ code: |
 
 ### 样式
 
-样式不会随 JavaScript 自动注入。
+样式不会随 JavaScript 自动注入，覆盖 token 见《[主题定制](./theming.zh.mdc)》。
 
 | 样式文件 | 内容 | 是否必需 |
 |----------|------|----------|
 | `@talex-touch/tuffex/base.css` | `--tx-*` 变量、重置样式、主题选择器 | 必需，全局引入一次 |
 | `@talex-touch/tuffex/<name>/style.css` | 单个组件的样式 | 用到哪个组件引哪个 |
 | `@talex-touch/tuffex/style.css` | 全部组件的样式 | 仅根入口 |
-
-覆盖 token 见《[主题定制](./theming.zh.mdc)》。
 
 ### 工具函数
 

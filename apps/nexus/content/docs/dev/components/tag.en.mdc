@@ -114,7 +114,9 @@ code: |
 | `dotSize` | `number` | `6` | Dot diameter in px. |
 | `count` | `number` | - | Trailing count; `0` renders, omitting it renders nothing. |
 
-| `variant` | Fill | Hairline | Text | Use |
+### Types
+
+| Value | Fill | Hairline | Text | Use |
 |------|------|------|------|------|
 | `outline` | 12% | 32% | Full-strength hue | Default |
 | `soft` | 20% | 34% | 92% hue mixed toward ink | 11px text on a colored fill |

@@ -5,8 +5,8 @@ category: Navigation
 status: beta
 since: 0.3.9
 tags: [dropdown, flat, navigation, floating, menu]
-syncStatus: migrated
-verified: false
+syncStatus: reviewed
+verified: true
 ---
 
 ## 用法
@@ -33,7 +33,7 @@ code: |
 
 - 破坏性或会改变状态的菜单用 `trigger="click"`；悬停展开在触控板上容易误触。
 - 斜向移入面板由悬停桥与安全三角处理，不要为此调大 `closeDelay`。
-- 需要继承容器的层叠或裁剪上下文时设 `teleport="false"`；就地渲染会受祖先 `overflow: hidden` 裁剪。
+- 需要继承容器的层叠或裁剪上下文时设 `:teleport="false"`；就地渲染会受祖先 `overflow: hidden` 裁剪。
 - 面板翻转到触发器另一侧时，用 `side` 插槽参数翻转自己的装饰（箭头、阴影）。
 - 面板位置在展开后异步写回；需要读取绝对几何时放进 `requestAnimationFrame` 测量。
 

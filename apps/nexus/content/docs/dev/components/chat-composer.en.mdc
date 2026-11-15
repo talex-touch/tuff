@@ -22,6 +22,7 @@ function onSend(payload: { text: string }) {
 ## Usage
 
 ### Basic
+Plain text input and sending; for `@` sources or `/` commands, use [PromptBar](/docs/dev/components/prompt-bar) instead.
 :::TuffDemoWrapper{demo="ChatComposerChatComposerDemo" code-lang="vue"}
 ---
 code: |
@@ -36,6 +37,13 @@ The `tray` slot renders a tray outside the card; `trayPlacement` puts it below t
 :::TuffDemoWrapper{demo="ChatComposerTrayDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const text = ref('')
+  const placement = ref<'top' | 'bottom'>('bottom')
+  </script>
+
   <template>
     <TxChatComposer v-model="text" :tray-placement="placement" tray-label="Context" show-attachment-button>
       <template #tray>
@@ -52,6 +60,13 @@ Put a [ModeChip](/docs/dev/components/mode-chip) in the `toolbar-left` slot.
 :::TuffDemoWrapper{demo="ChatComposerModeChipDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const text = ref('')
+  const unrestricted = ref(false)
+  </script>
+
   <template>
     <TxChatComposer v-model="text">
       <template #toolbar-left>

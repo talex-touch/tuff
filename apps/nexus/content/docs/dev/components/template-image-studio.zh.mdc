@@ -12,7 +12,7 @@ verified: false
 ## 用法
 
 ### 图像生成
-:::TuffDemoWrapper{demo="TemplateImageStudioDemo" code-lang="vue" description="进入视口后演示一次：选好极光风格与 16:9，写下提示词并生成四张；点击或按键即可接手。图像由代码绘制，不调用模型。"}
+:::TuffDemoWrapper{demo="TemplateImageStudioDemo" code-lang="vue" description="进入视口后演示一次：选好极光风格与 16:9，写下提示词并生成四张；点击或按键即可接手。"}
 ---
 code: |
   <script setup lang="ts">

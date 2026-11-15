@@ -11,6 +11,8 @@ verified: true
 
 ## 用法
 
+底层进度条：支持不确定、加载、分段、上传明细与 tooltip；只需要行级百分比时用 [Progress 进度](/docs/dev/components/progress)。
+
 ### 状态
 `status` 设置状态色；`success` 表示完成，`loading` 表示时长未知的加载。
 :::TuffDemoWrapper{demo="ProgressBarStatefulProgressDemo" code-lang="vue"}

@@ -12,7 +12,7 @@ verified: true
 ## Usage
 
 ### Basic
-Each open edits a copy of `initialValues`. The dialog closes once the submit succeeds, and asks before closing on unsaved changes.
+Each open edits a copy of `initialValues`; the dialog closes once the submit succeeds, and asks before closing on unsaved changes.
 ::::TuffDemoWrapper{demo="ModalFormBasicDemo" code-lang="vue"}
 ---
 code: |
@@ -64,7 +64,7 @@ code: |
 ::::
 
 ### Custom Footer
-The `footer` slot receives `formId`, `submitting` and `cancel`. The submit button points at the form with `form`, so Enter and a click make the same submit.
+The `footer` slot receives `formId`, `submitting` and `cancel`; the submit button points at the form with `form`, so Enter and a click submit alike.
 
 ```vue
 <TxModalForm v-model="open" :initial-values="member" @submit="save">
@@ -89,7 +89,7 @@ The `footer` slot receives `formId`, `submitting` and `cancel`. The submit butto
 
 ### Props
 
-Every `TxForm` prop except `model` and `autosave` applies too: `rules`, `layout`, `messages`, `persist`, `leaveConfirm`, `readonly` and the rest.
+The `TxForm` props below apply too: the dialog builds `model` from `initialValues`, and `autosave` does not apply.
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
@@ -100,13 +100,29 @@ Every `TxForm` prop except `model` and `autosave` applies too: `rules`, `layout`
 | `submitText` | `string` | `'Save'` | Text of the submit button. |
 | `cancelText` | `string` | `'Cancel'` | Text of the cancel button. |
 | `modalProps` | `Record<string, unknown>` | - | Any other `TxModal` prop, such as `surface` or `fullscreen`. Closing is asked of the form, not of `beforeClose`. |
+| `id` | `string` | generated | The form's id, and the prefix of every field id. |
+| `rules` | `FormRules` | - | Form-level rules keyed by field path. |
+| `schema` | `FormStandardSchema` | - | A Standard Schema v1 validator checked against the whole `model`; issues with no matching field are listed in the error summary. |
+| `layout` | `'auto' \| 'side' \| 'stacked' \| 'inline'` | `'auto'` | Field layout. |
+| `labelPosition` | `'left' \| 'right' \| 'top'` | - | Older spelling of `layout`. |
+| `labelAlign` | `'start' \| 'end'` | `'end'` | Label alignment in the side column. |
+| `labelWidth` | `string \| number` | `16em` | Widest the side label column may grow; numbers are in pixels. |
+| `requiredMark` | `'asterisk' \| 'optional' \| 'none'` | `'asterisk'` | Marks required fields with an asterisk, optional fields with `messages.optional`, or neither. |
+| `validateOn` | `'blur' \| 'submit'` | `'blur'` | When the first message appears: on leaving a changed field, or on the first submit. |
+| `messages` | `Partial<FormMessages>` | - | Overrides the built-in text. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Size of the controls inside; the dialog width is `width`. |
+| `disabled` | `boolean` | `false` | Disables the controls inside that read the form, and blocks submit. |
+| `readonly` | `boolean` | `false` | Shows the values as a record: controls can be focused and copied, not changed; no field is marked required. |
+| `reconcile` | `FormReconcile` | - | Decides what `model` holds when fetched values reach fields the user changed. |
+| `persist` | `boolean \| FormPersistOptions` | `false` | Keeps what the user typed under `id`; `true` takes the defaults. |
+| `leaveConfirm` | `FormLeaveConfirm \| false` | host's, then `window.confirm` | Asked before leaving with changes no draft holds; `false` never asks. |
+| `onSubmit` | `(values: FormValues, event?: Event) => unknown` | - | Called once every check passes; the dialog stays open until a returned promise settles. `@submit` binds it. |
 
 ### Events
 
 | Event | Payload | Description |
 |-------|---------|-------------|
 | `update:modelValue` | `(value: boolean)` | The dialog opens or closes. |
-| `submit` | `(values: FormValues, event?: Event)` | Called once every check passes. The dialog stays open until a returned promise settles. |
 | `submit-success` | `(values: FormValues)` | The submit went through; the dialog closes next. |
 | `validate` | `(valid: boolean)` | As on `TxForm`. |
 | `persist-error` | `(error: unknown)` | As on `TxForm`. |

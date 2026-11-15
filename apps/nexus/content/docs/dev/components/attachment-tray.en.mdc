@@ -69,7 +69,8 @@ code: |
 | `previewTitle` | `string` | `'Preview'` | The preview dialog's accessible name, followed by the image's `name`; also starts each thumbnail's accessible name unless `openLabelFormatter` builds it. |
 | `previousLabel` | `string` | `'Previous image'` | Accessible name of the previous button. |
 | `nextLabel` | `string` | `'Next image'` | Accessible name of the next button. |
-| `previousText` / `nextText` | `string` | — | Deprecated and not shown: the preview's page buttons are icons, named by `previousLabel` / `nextLabel`. |
+| `previousText` | `string` | — | Deprecated and not shown: the preview's previous button is an icon, named by `previousLabel`. |
+| `nextText` | `string` | — | Deprecated and not shown: the preview's next button is an icon, named by `nextLabel`. |
 | `closeLabel` | `string` | `'Close'` | Accessible name of the preview's close button. |
 | `zoomInLabel` | `string` | `'Zoom in'` | Accessible name of the preview's zoom-in button. |
 | `zoomOutLabel` | `string` | `'Zoom out'` | Accessible name of the preview's zoom-out button. |

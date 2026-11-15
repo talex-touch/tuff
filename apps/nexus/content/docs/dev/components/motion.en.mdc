@@ -1,6 +1,6 @@
 ---
 title: "Motion"
-description: "Caller-driven entrance, pointer, hover, scroll and visibility interactions."
+description: "Entrance effects driven by pointer, scroll and hover."
 category: MotionInteraction
 status: beta
 since: 0.7.0

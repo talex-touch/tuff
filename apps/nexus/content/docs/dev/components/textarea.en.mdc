@@ -41,7 +41,7 @@ code: |
 
 ### Edge and States
 
-The textarea uses the same inset ring as the input. Error and focus only change the ring colour and glow; the size stays the same.
+The textarea uses the same inset ring as the input; error and focus only change the ring colour and glow, and the size stays the same.
 
 :::TuffDemoWrapper{demo="TextareaEdgeDemo" code-lang="vue"}
 ---

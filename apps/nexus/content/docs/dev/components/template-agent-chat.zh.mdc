@@ -90,7 +90,7 @@ code: |
 
 ### 侧边 Copilot
 给已有页面（文档编辑器、CMS 正文、工单回复）配的停靠助手，只给出由你决定是否应用的建议。
-:::TuffDemoWrapper{demo="TemplateAgentChatCopilotDemo" code-lang="vue" description="自动演示一次润色并停在建议上，也可在文章里划词。回答均为预写。"}
+:::TuffDemoWrapper{demo="TemplateAgentChatCopilotDemo" code-lang="vue" description="自动演示一次润色并停在建议上，也可在文章里划词。"}
 ---
 code: |
   <script setup lang="ts">
@@ -161,7 +161,7 @@ code: |
 
 ## 概述
 
-编码智能体处理一条需求的完整会话：澄清问题由人回答，写文件由人放行。
+编码智能体处理一条需求的完整会话：澄清问题由人回答，写文件由人放行；回答均为预写。
 
 - 进入视口后自动演示，停在写权限闸门；减少动态效果时直接显示到闸门为止的状态。
 - 澄清问题闲置 3 秒后按推荐项作答；点任意选项则改为等你提交。

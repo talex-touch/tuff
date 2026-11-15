@@ -500,7 +500,7 @@ function focusFrequency() {
   .tx-motion-control__hint:is(:hover, :focus-visible):not(:disabled) { scale: 1.08; }
   .tx-motion-control__state-pill:hover:not(:disabled) { scale: 1.05; }
   .tx-motion-control__launch { transition: max-width 200ms var(--tx-mc-ease), opacity 200ms; }
-  .tx-motion-control__frequency-label { transition: filter 300ms, opacity 300ms; }
+  .tx-motion-control__frequency-label { transition: opacity 300ms; }
   .tx-motion-control__theme-icon { transition: rotate var(--tx-mc-duration) var(--tx-mc-ease); }
   .tx-motion-control__step-fill { transition: scale 400ms cubic-bezier(.16,1,.3,1); }
   .tx-motion-control__step-node, .tx-motion-control__segment { transition: scale var(--tx-mc-duration) var(--tx-mc-ease); }
@@ -512,8 +512,8 @@ function focusFrequency() {
   .tx-motion-control__tab-label { transition: max-width 300ms ease-out, opacity 300ms; }
   &.tx-motion-control--tab-bar :deep(.tx-tab-item) { transition: padding-inline 500ms var(--tx-mc-ease); }
   :deep(.tx-pagination__button) { transition: width var(--tx-mc-duration) var(--tx-mc-ease), translate var(--tx-mc-duration) var(--tx-mc-ease); }
-  .tx-mc-frequency-enter-active, .tx-mc-frequency-leave-active { transition: opacity 300ms, scale 300ms, filter 300ms, translate 300ms; }
-  .tx-mc-frequency-enter-from, .tx-mc-frequency-leave-to { opacity: 0; scale: .95; filter: blur(4px); translate: 12px 0; }
+  .tx-mc-frequency-enter-active, .tx-mc-frequency-leave-active { transition: opacity 300ms, scale 300ms, translate 300ms; }
+  .tx-mc-frequency-enter-from, .tx-mc-frequency-leave-to { opacity: 0; scale: .95; translate: 12px 0; }
   .tx-mc-close-enter-active, .tx-mc-close-leave-active, .tx-mc-close-move { transition: opacity 200ms, scale 200ms, transform 200ms; }
   .tx-mc-close-enter-from, .tx-mc-close-leave-to { opacity: 0; scale: .8; }
   .tx-mc-close-leave-active { position: absolute; }

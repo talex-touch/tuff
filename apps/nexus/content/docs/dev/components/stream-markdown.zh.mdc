@@ -79,6 +79,10 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
+| `lang` | `string` | `''` | 围栏语言，决定高亮与是否提供预览；留空时显示为纯文本。 |
+| `code` | `string` | `''` | 源码文本。 |
+| `closed` | `boolean` | `true` | 仅在流式中仍在增长的尾部围栏上为 `false`；为 `false` 时不提供预览。 |
+| `theme` | `'light' \| 'dark'` | `'light'` | 高亮与配色主题。 |
 | `previewable` | `boolean` | `true` | 已闭合的 HTML、SVG、XML 围栏提供渲染预览。 |
 | `inlinePreview` | `boolean` | `true` | 设为 `false` 时不在代码块下方渲染预览，预览按钮改为发出 `preview` 事件。 |
 | `previewLabel` | `string` | `'Preview'` | 切换到渲染预览的按钮文字。 |
@@ -93,6 +97,9 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
+| `code` | `string` | `''` | 图表源码。 |
+| `closed` | `boolean` | `false` | 仅在流式中仍在增长的尾部围栏上为 `false`。 |
+| `theme` | `'light' \| 'dark'` | `'light'` | 图表的配色主题。 |
 | `zoomLabel` | `string` | `'Zoom diagram'` | 渲染好的图表（点击打开预览）的可访问名称。 |
 | `previewLabel` | `string` | `'Diagram preview'` | 全屏预览及其中图表滚动区的可访问名称。 |
 | `closeLabel` | `string` | `'Close preview'` | 预览关闭按钮的可访问名称。 |
@@ -101,6 +108,7 @@ code: |
 | `copiedLabel` | `string` | `'Copied'` | 复制成功后按钮短暂显示的文字。 |
 | `downloadLabel` | `string` | `'Download'` | 图表预览里「保存」操作的名称。 |
 | `copyFailedText` | `string` | `'Could not copy'` | 图表预览里复制源码失败时的提示。 |
+| `maxHeight` | `number` | `480` | 图表绘制的最大高度（px），超出后在框内滚动；放大预览仍显示完整图表。 |
 
 ### 事件
 
@@ -121,3 +129,11 @@ code: |
 - DOMPurify 动态加载；`sanitize` 开启时，加载完成前或加载失败时不渲染任何内容。净化不能替代服务端的信任边界。
 - 图片放行记录是模块级的，所有实例共享；切换会话时调用导出的 `resetRemoteImagePolicy()` 清除。
 - 每个实例持有自己的 `Marked`（`gfm`、`breaks`）；GitHub Markdown 样式表限定在 `:where(.tx-md)` 下，不会改写宿主的 `.markdown-body`。
+
+## 技术实现
+
+- 内容先由 `createBlockStream` 切分为块，已稳定的块复用缓存的 HTML。
+- `DOMPurify` 按需动态加载；`sanitize` 开启时，加载完成前不渲染任何内容。每个实例持有自己的 `Marked`。
+- 源码：`packages/tuffex/packages/components/src/stream-markdown/`。
+
+<TuffDocSourceLink />

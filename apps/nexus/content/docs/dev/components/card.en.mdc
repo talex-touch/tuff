@@ -103,7 +103,7 @@ code: |
 :::
 
 ### Backgrounds
-`background` picks the surface material from the same values as [BaseSurface](/docs/dev/components/base-surface)'s `mode`; `refraction` is the default and the recommendation. Refraction runs no SVG displacement layer by default; pass `refraction-renderer="svg"` where the backdrop has detail and the refraction should show, and set its strength with `refraction-glass-opacity`.
+`background` picks the surface material from the same values as [BaseSurface](/docs/dev/components/base-surface)'s `mode`, with `refraction` as the default and the recommendation; refraction runs no SVG displacement layer unless you pass `refraction-renderer="svg"`, and `refraction-glass-opacity` sets its strength.
 :::TuffDemoWrapper{demo="CardCardBackgroundsScrollDemo" code-lang="vue"}
 ---
 code: |
@@ -119,7 +119,7 @@ code: |
 :::
 
 ### Specular light
-`specular` gives the card a faint light that follows the pointer in dark themes: a 600px white radial light over the surface (6%, gone by 40%), and where it crosses the border, a tighter 240px glint in the ring the border occupies. The light trails the pointer by exponential smoothing, lights up right under the pointer on the way in, and fades out over 240ms on leave; with reduced motion it jumps straight to the pointer. Light themes and high contrast don't draw it, and a `dashed` border gets no glint. It follows `clickable` when absent and is off while disabled. Where each value comes from is in [Alpha Noise Masks & Specular Tracking](/docs/dev/concepts/noise-and-specular).
+`specular` lights the card surface with a pointer-following glow in dark themes, plus a narrow glint along the border; light themes and high contrast draw nothing, `dashed` borders get no glint, and [Alpha Noise Masks & Specular Tracking](/docs/dev/concepts/noise-and-specular) explains where the values come from.
 :::TuffDemoWrapper{demo="ConceptCardSpecularDemo" code-lang="vue"}
 ---
 code: |

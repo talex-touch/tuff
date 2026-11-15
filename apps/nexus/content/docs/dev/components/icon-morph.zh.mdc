@@ -75,6 +75,12 @@ code: |
 | `progress` | `number` | 只读，当前形变进度；静止时为 `1`。 |
 | `getMorph` | `() => Morph \| null` | 返回底层 `Morph` 驱动；尚未出现图标时为 `null`。 |
 
+## 概述
+
+- `label` 决定无障碍名称：设置后渲染 `role="img"` 与 `<title>`，否则图标为 `aria-hidden="true"`。
+- `reducedMotion` 为 `user` 时跟随系统的减少动态效果设置，为 `always` 时每次都直接跳到终点。
+- 同时设置 `from` 与 `to` 时进入受控模式，此时 `icon` 的变化被忽略；去掉其中之一后，路径交回 `icon`。
+
 ## 技术实现
 
 - 引擎用二维 Procrustes 对齐两条路径并探测旋转，在极坐标空间插值，由阻尼弹簧驱动。

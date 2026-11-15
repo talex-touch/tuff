@@ -104,3 +104,5 @@ code: |
 
 - The virtual window takes `{ start, end }` from a position cache (a prefix sum of measured heights, kept by key); a scroll frame that crosses no row boundary keeps the previous window and doesn't re-invoke the `item` slot.
 - Source: `packages/tuffex/packages/components/src/conversation-stream/`.
+
+<TuffDocSourceLink />

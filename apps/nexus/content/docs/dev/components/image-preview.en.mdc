@@ -6,7 +6,7 @@ status: beta
 since: 0.9.2
 tags: [image, zoom, gesture, lightbox]
 syncStatus: reviewed
-verified: false
+verified: true
 ---
 
 ## Usage
@@ -209,6 +209,10 @@ const preview = ref<TxImagePreviewInstance | null>(null)
 
 | Slot | Description |
 |------|------|
+| `default` | Custom content for each image, used when `item` is not given. Receives `{ item, index, scale, turns, view, stage }`. |
+| `item` | Custom content for each image; takes precedence over `default` and receives the same props. |
+| `thumbnail` | Replaces each thumbnail in the bottom strip. Receives `{ item, index, current }`. |
+| `minimap` | Replaces the minimap in the lower-right corner. Receives `{ item, index, turns, view, stage }`. |
 | `loading` | Replaces the default loading placeholder. Receives `{ item, index }` and renders in the picture's place, at the placeholder's size. |
 
 ### Exposed Methods
@@ -230,11 +234,17 @@ const preview = ref<TxImagePreviewInstance | null>(null)
 
 | Field | Type | Default | Description |
 |------|------|---------|-------------|
-| `url` | `string` | required | The image URL, which also keys its loading state: a new URL loads afresh. |
+| `url` | `string` | required | The image URL, which also keys its loading state: a new URL loads afresh. Custom content may omit it. |
+| `type` | `'image' \| 'custom'` | `'image'` | Set to `'custom'` for custom content. |
 | `name` | `string` | - | Shown in the top bar and after the dialog's name; also the alt text when `alt` is absent. |
 | `alt` | `string` | - | The image's alt text. |
 | `width` / `height` | `number` | - | The image's own size; the placeholder takes its shape before it loads. |
 | `thumbnail` | `string` | - | A smaller copy for the strip; `url` stands in without one. |
+| `component` | `Component` | - | The component rendered for custom content; it receives `item` and `payload` props. |
+| `payload` | `unknown` | - | Data passed to `component` as `payload`. |
+| `raw` | `string` | - | Trusted HTML or SVG markup; sanitize untrusted markup first. |
+| `svg` | `string` | - | Trusted SVG markup, rendered without fetching an external image. |
+| `copyText` | `string` | - | Clipboard text for custom content without a `url`; without it, the `svg` or `raw` markup is copied as text. |
 
 #### ImagePreviewOrigin
 

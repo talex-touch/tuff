@@ -49,7 +49,7 @@ code: |
 
 ### Edge and States
 
-The date field matches the input's height, and its hover, open and disabled colours come from the input. Disabled does not lower opacity.
+The date field matches the input's height and takes its hover, open and disabled colours from the input, without lowering opacity when disabled.
 
 :::TuffDemoWrapper{demo="DatePickerEdgeDemo" code-lang="vue"}
 ---
@@ -101,6 +101,17 @@ code: |
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `--tx-date-picker-selected-shade` | `#111827` | Dark end of the gradient on the selected day, month or year in the field calendar, mixed into the primary at 28%. |
+
+### Types
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  type DateRangeValue = [string, string] // [start, end], each YYYY-MM-DD
+---
+:::
+
+The `range` value; it is emitted only once both ends are chosen.
 
 ## Overview
 

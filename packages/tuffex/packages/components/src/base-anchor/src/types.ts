@@ -180,6 +180,8 @@ export interface BaseAnchorProps {
    * make that call. Explicitly a prop rather than an inject — a bare anchor
    * rendered inside someone else's panel would inject the enclosing tooltip's
    * node and clobber its floating-element registration.
+   *
+   * @internal
    */
   delayNode?: AnchorDelayNode | null
 }

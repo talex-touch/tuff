@@ -104,6 +104,7 @@ code: |
 |------|------|------|
 | `open` | `() => void` | 重新显示已关闭的 Alert。 |
 | `close` | `() => void` | 隐藏 Alert 并派发 `close`。 |
+| `visible` | `boolean` | 当前是否显示；由 Alert 自己维护，外部改用 `open` 与 `close`。 |
 
 ## 概述
 
@@ -112,7 +113,7 @@ code: |
 - 点击关闭按钮会隐藏自身并派发 `close`；宿主仍可用 `v-if` 控制显示。
 - 只过渡 opacity 与 transform，不收拢高度；需要收拢空位时用 `<TransitionGroup>` 包裹。
 - 减少动态效果时只淡入淡出，不位移。
-- 关闭按钮只有图标，带 `aria-label="Close"`。
+- 关闭按钮只有图标，`aria-label` 取 `closeLabel`，默认 `Close`。
 
 ## 技术实现
 

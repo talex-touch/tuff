@@ -12,7 +12,7 @@ verified: true
 ## Usage
 
 ### Modes
-`mode` picks the material: `refraction` (the default), `glass`, `acrylic`, `blur` backdrop blur, `mask` translucent overlay, `mica`, `pure` solid (`flat` is an alias), or `plain`, which paints no material. Each material's pipeline and cost are in [Surface 8-Material Taxonomy & Gatekeepers](/docs/dev/concepts/surface-taxonomy).
+`mode` picks the material: `refraction` (the default), `glass`, `acrylic`, `blur` backdrop blur, `mask` translucent overlay, `mica`, `pure` solid (`flat` is an alias), or `plain`, which paints no material; each material's pipeline and cost are in [Surface 8-Material Taxonomy & Gatekeepers](/docs/dev/concepts/surface-taxonomy).
 :::TuffDemoWrapper{demo="BaseSurfaceModesDemo" code-lang="vue"}
 ---
 code: |
@@ -30,7 +30,7 @@ code: |
 :::
 
 ### Advanced Lab
-`filter*` props tune the filter layer, `refraction*` props the refraction layer, and `preset="card"` applies the card tuning. Displacement, distortion, and the RGB offsets take effect only with `refractionRenderer="svg"`.
+`filter*` props tune the filter layer, `refraction*` props the refraction layer, and `preset="card"` applies the card tuning; displacement, distortion, and the RGB offsets take effect only with `refractionRenderer="svg"`.
 :::TuffDemoWrapper{demo="BaseSurfaceAdvancedDemo" code-lang="vue"}
 ---
 code: |
@@ -55,7 +55,7 @@ code: |
 :::
 
 ### Fake Mode
-`fake` paints the background on a pseudo-element, matching the existing `.fake-background` layering; slot content sits above it naturally. Under `pure` (`flat`) that base is opaque and under `mask` it follows the mask opacity; under `blur`, `acrylic`, `glass` and `refraction` it sits beneath the material at `opacity`, so the page behind still shows through to be blurred and refracted; `mica` paints its own opaque base and `plain` paints nothing, so neither takes it.
+`fake` paints the background on a pseudo-element, and slot content sits above it; the base is opaque under `pure` (`flat`), follows the mask opacity under `mask`, sits beneath `blur`, `acrylic`, `glass` and `refraction` at `opacity`, and is skipped by `mica` and `plain`.
 :::TuffDemoWrapper{demo="BaseSurfaceFakeDemo" code-lang="vue"}
 ---
 code: |
@@ -71,7 +71,7 @@ code: |
 :::
 
 ### Motion Fallback
-When a surface moves with its element, `backdrop-filter` samples lag behind the element's position, and the filter layers drag a misaligned patch of backdrop along. With `moving` set, `blur`, `glass` and `acrylic` degrade to `fallbackMode` and recover smoothly when it stops; `refraction` keeps its mode and fades its filter layers out, then back in once it stops.
+With `moving` set, `blur`, `glass` and `acrylic` degrade to `fallbackMode` and recover smoothly when it stops; `refraction` keeps its mode and fades its filter layers out, then back in, so a stale backdrop sample is never dragged along.
 :::TuffDemoWrapper{demo="BaseSurfaceFallbackDemo" code-lang="vue"}
 ---
 code: |
@@ -114,7 +114,7 @@ code: |
 :::
 
 ### Environment sensing
-With `autoDetect` on, the surface combines five runtime signals: transforms on itself and its ancestors, the speed of a pressed pointer (above 1.2px/ms), window moves and resizes, a frame-budget probe, and power saving. The first three trigger the motion fallback, which starts to recover 140ms after the signal stops; under power saving or a `reduced` frame budget, `refraction`, `glass` and `acrylic` become `blur`, and under `minimal` they and `blur` become `flat`, returning to the declared material once the condition clears. How each signal is read is in [Adaptive Surface Deduction & 120Hz Fallback](/docs/dev/concepts/surface-deduction).
+With `autoDetect` on, the surface combines five runtime signals (transforms on itself and its ancestors, pointer speed, window moves and resizes, a frame-budget probe, and power saving): the first three trigger the motion fallback; under power saving or a `reduced` frame budget, `refraction`, `glass` and `acrylic` become `blur`, and under `minimal` `blur` becomes `flat` too (see [Adaptive Surface Deduction & 120Hz Fallback](/docs/dev/concepts/surface-deduction)).
 
 A page receives no event when its window moves, so the host forwards one; a host that knows the power state can override the battery API's reading:
 
@@ -129,7 +129,7 @@ setSurfacePowerSaving(true)
 ```
 
 ### Maximum performance
-`setSurfacePerformanceMode('max')` gives every surface on the page a solid fill (`flat`): `refraction`, `glass`, `acrylic` and `blur` stop sampling the backdrop, and `mica` stops repainting with each scroll. It applies with `autoDetect` or without; a surface over a system backdrop (`systemBackdrop`) keeps its material. Pass `'default'` to restore.
+`setSurfacePerformanceMode('max')` gives every surface on the page a solid fill (`flat`) with or without `autoDetect`, except a surface over a system backdrop (`systemBackdrop`), which keeps its material; pass `'default'` to restore.
 
 ```ts
 import { setSurfacePerformanceMode } from '@talex-touch/tuffex'
@@ -152,7 +152,7 @@ code: |
 :::
 
 ### System backdrop
-A transparent Electron window lets the desktop show through its own system material (vibrancy on macOS, Mica on Windows), and a page's `backdrop-filter` cannot reach that material: the filter samples only the surface's own veil and lays the copy over that veil, so a 75% veil stacked twice is all but opaque and the desktop no longer shows through. `systemBackdrop` runs no `backdrop-filter` on the surface: the glass layer doesn't render and the filter layer keeps only its tint, leaving the blur to the system; the veil, mask, flow light and rim draw as usual. With nothing sampled from the page, `moving` and `autoDetect` have no effect either.
+A page's `backdrop-filter` cannot reach a transparent window's system material (vibrancy on macOS, Mica on Windows), so `systemBackdrop` runs no `backdrop-filter` on the surface and leaves the blur to the system, while the veil, mask, flow light and rim draw as usual.
 
 ```vue
 <!-- core-app's CoreBox: a transparent window, its surface over the system material -->
@@ -190,14 +190,18 @@ A transparent Electron window lets the desktop show through its own system mater
 | `borderWidth` | `number` | `0.07` | Edge width factor of the glass layer. |
 | `displace` | `number` | `0.5` | Refraction displacement amount. |
 | `distortionScale` | `number` | `-180` | Refraction distortion scale. |
-| `redOffset` / `greenOffset` / `blueOffset` | `number` | `0 / 10 / 20` | RGB channel offsets that control dispersion. |
-| `xChannel` / `yChannel` | `'R' \| 'G' \| 'B'` | `'R' / 'G'` | Channels sampled by the displacement map. |
+| `redOffset` | `number` | `0` | Red channel offset that controls dispersion. |
+| `greenOffset` | `number` | `10` | Green channel offset that controls dispersion. |
+| `blueOffset` | `number` | `20` | Blue channel offset that controls dispersion. |
+| `xChannel` | `'R' \| 'G' \| 'B'` | `'R'` | Channel the displacement samples on X. |
+| `yChannel` | `'R' \| 'G' \| 'B'` | `'G'` | Channel the displacement samples on Y. |
 | `mixBlendMode` | `string` | `'difference'` | Refraction blend mode. |
 | `refractionStrength` | `number` | `62` | Refraction strength, 0–100. |
 | `refractionProfile` | `'soft' \| 'filmic' \| 'cinematic'` | `'filmic'` | Refraction style preset. |
 | `refractionTone` | `'mist' \| 'balanced' \| 'vivid'` | `'balanced'` | Refraction tone: `vivid` is clearer, `mist` softer. |
 | `refractionAngle` | `number` | `-24` | Main dispersion angle in degrees. |
-| `refractionLightX` / `refractionLightY` | `number` | - | Light anchor (0–1). |
+| `refractionLightX` | `number` | - | Light anchor on X (0–1). |
+| `refractionLightY` | `number` | - | Light anchor on Y (0–1). |
 | `refractionHaloOpacity` | `number` | - | Halo opacity (0–1); the built-in filmic model applies when unset. |
 | `overlayOpacity` | `number` | `0` | Extra mask opacity for non-mask modes. |
 | `flowLight` | `'corners' \| 'rim' \| 'aurora' \| false` | - | The flow light's variant; absent or `false` is off, any `mode` can have it. |
@@ -265,14 +269,11 @@ Import from `@talex-touch/tuffex`.
 ## Overview
 
 - `pure` and `flat` render only the root background; `mask` renders a mask layer with opacity clamped to `0..1`; `acrylic` is a filter layer blurring three times as wide under a tint whose alpha carries fractal noise; `mica` paints the root with an opaque base and two glows anchored to the viewport (`background-attachment: fixed`), reading no backdrop but repainting with every scroll of its container, so keep it off bases that scroll; `plain` keeps only the radius and the overflow clip.
-- `blur`, `glass` and `acrylic` degrade while `moving` is set or `autoDetect` senses motion: `fallbackMode="mask"` prefers `fallbackMaskOpacity`, and `pure` and `flat` render no mask layer.
-- `refraction` keeps its mode in motion: the glass / blur layers that lose their sampling fade out, a translucent motion cover holds the weight, and both cross-fade back on settle.
-- The glass layer renders only in `glass` mode and under `refraction`'s `svg` renderer, where its opacity is `refractionGlassOpacity`. The `css` renderer draws the filter layer, tint, halo and rim only.
-- Passing any of `refractionStrength`, `refractionAngle`, or `refractionProfile` switches to the derived refraction model; unset ones fall back to `62` / `-24` / `'filmic'`.
-- `autoDetect` listens on the root and every ancestor for their own `transform` / `translate` transitions (`transitionstart` / `transitionend` / `transitioncancel`) and watches their inline `style` with a `MutationObserver`; the pointer, window, frame-probe and battery listeners are page-wide, shared by every surface with `autoDetect`, and removed when the last one unmounts.
-- With `systemBackdrop`, the glass layer doesn't render and the filter layer's `backdrop-filter` is `none`, keeping its tint; neither the motion fallback nor environment sensing runs. The veil, mask, flow light and rim are unaffected.
-- Under the `max` performance mode, `refraction`, `glass`, `acrylic`, `blur` and `mica` all render as `flat`, except on `systemBackdrop` surfaces.
-- Under high contrast (triggers in [Theming](./theming.en.mdc)), every mode but `plain` paints only the opaque root background, like `pure`: the glass, blur, mask, motion-cover and refraction-edge layers don't render, and the `fake` base shows at full opacity; `plain` gets no fill even then.
+- `blur`, `glass` and `acrylic` degrade while `moving` is set or `autoDetect` senses motion: `fallbackMode="mask"` prefers `fallbackMaskOpacity`, and `pure` and `flat` render no mask layer. `refraction` keeps its mode in motion: the glass and blur layers that lose their sampling fade out, a translucent motion cover holds the weight, and both cross-fade back on settle.
+- The glass layer renders only in `glass` mode and under `refraction`'s `svg` renderer, where its opacity is `refractionGlassOpacity`. Passing any of `refractionStrength`, `refractionAngle`, or `refractionProfile` switches to the derived refraction model; unset ones fall back to `62` / `-24` / `'filmic'`.
+- `autoDetect` listens on the root and every ancestor for their own `transform` / `translate` transitions and watches their inline `style` with a `MutationObserver`; the pointer, window, frame-probe and battery listeners are page-wide and shared by every surface with `autoDetect`.
+- `systemBackdrop` and the `max` performance mode both rewrite the material: under `systemBackdrop` the glass layer doesn't render and the filter layer's `backdrop-filter` is `none`, and under `max` `refraction`, `glass`, `acrylic`, `blur` and `mica` render as `flat`, except on `systemBackdrop` surfaces.
+- Under high contrast (triggers in [Theming](./theming.en.mdc)), every mode but `plain` paints only the opaque root background, like `pure`, and the `fake` base shows at full opacity; `plain` gets no fill even then.
 
 ## Technologies
 

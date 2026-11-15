@@ -117,7 +117,7 @@ const { selection, clear } = useSelectionAnchor({
 
 ### Exposed Methods
 
-| Method | Description |
+| Name | Description |
 |------|-------------|
 | `updatePosition()` | Repositions against the current `selection.rects`; a streaming host must call it. |
 | `focusInput()` | Focuses the free-text field. |

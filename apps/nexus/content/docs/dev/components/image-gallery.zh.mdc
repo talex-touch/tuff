@@ -100,15 +100,12 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 
 ## 概述
 
-- 每个缩略图是原生 `<button type="button">`，`aria-label` 由 `openLabelFormatter` 生成。
-- 缩略图与预览图的 `alt` 取 `item.name`；未命名图片有意使用空 alt。
-- 预览困住 Tab 焦点，Escape、关闭按钮、点击背景或把图片上下拖走都会关闭，焦点回到触发的缩略图。
+- 缩略图是原生 `<button type="button">`，`aria-label` 由 `openLabelFormatter` 生成；`alt` 取 `item.name`，未命名图片有意使用空 alt。
+- 预览困住 Tab 焦点；Escape、关闭按钮、点击背景、把图片上下拖走或 `items` 变空都会关闭，焦点回到触发的缩略图。
 - 打开后可用滚轮、触控板或双指缩放，放大后拖动平移；未放大时左右滑动或 ← / → 翻页。翻到两端时翻页按钮设为 `aria-disabled` 而不禁用，焦点不会掉到 `body`。
 - 顶栏的图片名称与「当前 / 总数」计数是 `aria-live` 区域，翻页后读屏会播报。
 - 预览从点击的缩略图放大飞出，关闭时缩回它；打开后整张图片完整显示、不裁切，小图不放大到超过原始像素；宽度不超过 640px 或高度不超过 480px 时图片铺满屏幕，控件浮在图片上。
-- 图片加载完成前按上一张看过的图片的比例（第一张按 4:3）留出位置，150 ms 后仍未加载才显示加载效果（默认 `sweep-gradient`，由预览的 `loadingEffect` 决定，经 `previewProps` 传入）；减少动态效果时效果静止。
-- 图片加载失败后，缩略图显示占位图标，预览显示占位与 `failedText`；两边共用失败记录，同一地址不再重试，`url` 变化后重新加载。
-- `items` 变为空时预览关闭。
+- 图片加载前按上一张看过的图片的比例（第一张按 4:3）留出位置，150 ms 后仍未加载才显示加载效果（默认 `sweep-gradient`，经 `previewProps` 的 `loadingEffect` 设置；减少动态效果时静止）；加载失败时缩略图与预览都显示占位，同一地址不再重试，`url` 变化后重新加载。
 
 ## 技术实现
 
