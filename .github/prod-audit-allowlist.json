@@ -15,7 +15,7 @@
     "2026-10-03: GHSA-86w9-cpqp-85rv (node-forge) and GHSA-vfj7-8cjw-p6xm (braces) entered the --prod audit with no patched release, failing every PR. Allowlisted for 30 days with traced paths; the owner approved the exception.",
     "2026-10-24: GHSA-jr5w-w6x2-84p9 (electron) and GHSA-mrhx-c7xc-m3w5 (zod 3.25.76) entered the --prod audit with no patch on the installed lines, failing every PR alongside dompurify, body-parser and undici advisories that the same change patched. Allowlisted for 30 days with traced paths; the owner approved the exception. GHSA-vfj7-8cjw-p6xm (braces) was withdrawn on 2026-10-23 and its entry removed.",
     "2026-11-15: the fifteen entries dated 2026-11-09 (nuxt, simple-git, @simple-git/argv-parser, source-map-js, proxy-addr, @vue/server-renderer, tinypool, sharp) expired and failed every PR into master. Renewed unchanged for 30 days to unblock merges; the owner approved the renewal. The dependency upgrades that remove them follow in a separate PR.",
-    "2026-11-15: Cleared source-map-js, proxy-addr, @vue/server-renderer, tinypool, sharp, simple-git and @simple-git/argv-parser after raising their patched dependency floors. packages/test keeps Vitest in devDependencies because it is a test-only workspace; Nuxt remains blocked by the measured unhead 2.1.15 to 3.x migration (#1098)."
+    "2026-11-15: Cleared source-map-js, proxy-addr, @vue/server-renderer, tinypool and sharp after raising their patched dependency floors. packages/test keeps Vitest in devDependencies because it is a test-only workspace. simple-git and @simple-git/argv-parser stay: their only fix is simple-git 4.x, which drops the default export @nuxt/devtools 3.4.2 imports, and @nuxt/devtools 3.4.3+ (which no longer depends on simple-git) needs @nuxt/kit ^4.5.1, outside the nuxt family pinned at 4.4.8 by #1098. Nuxt remains blocked by the measured unhead 2.1.15 to 3.x migration (#1098)."
   ],
   "advisories": [
     {
@@ -70,6 +70,50 @@
         "4.4.8"
       ],
       "reason": "Reaches --prod through apps/nexus's production dependency @sentry/nuxt@10.65.0, which depends on nuxt by construction \u2014 a Sentry integration for Nuxt cannot not. Traced with `pnpm -C apps/nexus why nuxt --prod`: @sentry/nuxt -> nuxt -> @nuxt/devtools -> @nuxt/kit. Not reclassifiable: Sentry reporting is runtime behaviour, not a build input. Blocked behind the unhead 2 -> 3 migration (#1098).",
+      "owner": "#328",
+      "expires": "2026-12-15"
+    },
+    {
+      "id": "GHSA-v5rq-49vh-5v5c",
+      "module": "@simple-git/argv-parser",
+      "severity": "critical",
+      "versions": [
+        "1.1.1"
+      ],
+      "reason": "Reaches --prod only through simple-git 3.36.0 (apps__nexus>@sentry/nuxt>nuxt>@nuxt/devtools>simple-git>@simple-git/argv-parser). Not loaded at runtime: apps/nexus/nuxt.config.ts sets devtools.enabled: false, so @nuxt/devtools and simple-git are never imported. Fixed only alongside simple-git 4.x; see the simple-git entries for why that is blocked behind #1098.",
+      "owner": "#328",
+      "expires": "2026-12-15"
+    },
+    {
+      "id": "GHSA-x6jw-m9v5-85vh",
+      "module": "simple-git",
+      "severity": "critical",
+      "versions": [
+        "3.36.0"
+      ],
+      "reason": "Reaches --prod only through apps__nexus>@sentry/nuxt>nuxt>@nuxt/devtools 3.4.2, which declares simple-git ^3.36.0. Not loaded at runtime: apps/nexus/nuxt.config.ts sets devtools.enabled: false. No 3.x release is patched. Measured 2026-11-15: an override to simple-git 4.0.1 breaks @nuxt/devtools 3.4.2, whose dist/chunks/module-main.mjs does `import Git from 'simple-git'` while 4.x exports only the named simpleGit (ESM default is undefined). @nuxt/devtools 3.4.3+ drops simple-git but requires @nuxt/kit ^4.5.1, outside the nuxt family pinned at 4.4.8 by the unhead 2 -> 3 migration (#1098). Remove with that migration.",
+      "owner": "#328",
+      "expires": "2026-12-15"
+    },
+    {
+      "id": "GHSA-g4wm-2vf7-vfgr",
+      "module": "simple-git",
+      "severity": "high",
+      "versions": [
+        "3.36.0"
+      ],
+      "reason": "Same path and blocker as GHSA-x6jw-m9v5-85vh: simple-git 3.36.0 via @nuxt/devtools 3.4.2, not loaded because apps/nexus disables devtools; the only fix (simple-git 4.x) breaks @nuxt/devtools 3.4.2's default import, and devtools 3.4.3+ needs @nuxt/kit ^4.5.1 behind #1098.",
+      "owner": "#328",
+      "expires": "2026-12-15"
+    },
+    {
+      "id": "GHSA-858h-whjf-mvg5",
+      "module": "simple-git",
+      "severity": "high",
+      "versions": [
+        "3.36.0"
+      ],
+      "reason": "Same path and blocker as GHSA-x6jw-m9v5-85vh: simple-git 3.36.0 via @nuxt/devtools 3.4.2, not loaded because apps/nexus disables devtools; the only fix (simple-git 4.x) breaks @nuxt/devtools 3.4.2's default import, and devtools 3.4.3+ needs @nuxt/kit ^4.5.1 behind #1098.",
       "owner": "#328",
       "expires": "2026-12-15"
     },
