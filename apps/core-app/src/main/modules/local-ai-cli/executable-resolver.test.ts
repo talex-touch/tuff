@@ -91,13 +91,15 @@ function nextImmediate(): Promise<void> {
   return promise
 }
 
+/**
+ * The file's content once it has some. The child creates the file before it writes the PID, and
+ * an empty read parsed as PID 0 would make `process.kill(0, 0)` probe the whole process group.
+ */
 async function waitForFile(path: string): Promise<string> {
   for (;;) {
-    try {
-      return await readFile(path, 'utf8')
-    } catch {
-      await nextImmediate()
-    }
+    const text = await readFile(path, 'utf8').catch(() => '')
+    if (text.trim()) return text
+    await nextImmediate()
   }
 }
 
