@@ -92,15 +92,24 @@ function nextImmediate(): Promise<void> {
 }
 
 /**
+ * How long a helper polls before failing with what it waited for. Under the 5 s test timeout, as a
+ * timeout does not cancel the loop: it would go on polling after the test has failed. `Date.now`,
+ * which the fake-timer tests leave real.
+ */
+const POLL_DEADLINE_MS = 4_000
+
+/**
  * The file's content once it has some. The child creates the file before it writes the PID, and
  * an empty read parsed as PID 0 would make `process.kill(0, 0)` probe the whole process group.
  */
 async function waitForFile(path: string): Promise<string> {
-  for (;;) {
+  const deadline = Date.now() + POLL_DEADLINE_MS
+  while (Date.now() < deadline) {
     const text = await readFile(path, 'utf8').catch(() => '')
     if (text.trim()) return text
     await nextImmediate()
   }
+  throw new Error(`${path} still empty after ${POLL_DEADLINE_MS} ms: the probe never wrote its PID`)
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -113,7 +122,13 @@ function isProcessAlive(pid: number): boolean {
 }
 
 async function waitForProcessExit(pid: number): Promise<void> {
-  while (isProcessAlive(pid)) await nextImmediate()
+  const deadline = Date.now() + POLL_DEADLINE_MS
+  while (isProcessAlive(pid)) {
+    if (Date.now() >= deadline) {
+      throw new Error(`process ${pid} still alive after ${POLL_DEADLINE_MS} ms`)
+    }
+    await nextImmediate()
+  }
 }
 
 async function fileExists(path: string): Promise<boolean> {
