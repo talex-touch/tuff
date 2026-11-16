@@ -191,7 +191,9 @@ jobs:
             exit 1
           fi
 
-          # Everything but notes and the revision timestamp must be as it was.
+          # Every other release field must be as it was, bar the revision timestamp. Assets are read
+          # with assets=false and not compared: PATCH only writes release columns, and each asset's
+          # signed downloadUrl (exp/sig) changes on every request.
           if ! jq -e --slurpfile before /tmp/nexus-before.json \
             '(.release | del(.notes, .notesHtml, .updatedAt)) == ($before[0].release | del(.notes, .notesHtml, .updatedAt))' \
             /tmp/nexus-after.json >/dev/null; then
