@@ -76,6 +76,13 @@ const versionOutputs = new Map<string, Promise<string | null>>()
 const runningProbes = new Set<ChildProcess>()
 
 /**
+ * The probe each path is running, until its process exits. A refresh forgets the answers in
+ * {@link versionOutputs} but not these, so a read after it shares a run still going instead of
+ * starting a second process for the path.
+ */
+const liveProbes = new Map<string, Promise<string | null>>()
+
+/**
  * Set by the quit sweep. A status read still in its executable lookup when the sweep runs would
  * otherwise start a probe after it, and nothing is left to reap that one. Quitting is one-way
  * (the sweep's quit step runs once per process), so this is never cleared.
@@ -84,9 +91,9 @@ let quitting = false
 
 /**
  * Runs `path --version` and resolves with its output, or `null` when it fails, times out or says
- * too much. `onFailedExit` runs once the failed run's process is gone.
+ * too much. `onExit` runs once the run's process is gone, told whether the run failed.
  */
-function runVersionProbe(path: string, onFailedExit: () => void): Promise<string | null> {
+function runVersionProbe(path: string, onExit: (failed: boolean) => void): Promise<string | null> {
   const { promise, resolve } = Promise.withResolvers<string | null>()
   let child: ChildProcess
   try {
@@ -99,7 +106,7 @@ function runVersionProbe(path: string, onFailedExit: () => void): Promise<string
     })
   } catch {
     resolve(null)
-    queueMicrotask(onFailedExit)
+    queueMicrotask(() => onExit(true))
     return promise
   }
 
@@ -129,7 +136,7 @@ function runVersionProbe(path: string, onFailedExit: () => void): Promise<string
     clearTimeout(timeout)
     clearTimeout(killTimer)
     runningProbes.delete(child)
-    if (answer === null) onFailedExit()
+    onExit(answer === null)
   }
 
   runningProbes.add(child)
@@ -154,17 +161,21 @@ function runVersionProbe(path: string, onFailedExit: () => void): Promise<string
 }
 
 function readVersionOutput(path: string): Promise<string | null> {
-  let pending = versionOutputs.get(path)
-  if (!pending) {
-    if (quitting) return Promise.resolve(null)
-    const probe: Promise<string | null> = runVersionProbe(path, () => {
-      // Only this probe's own entry: a refresh may have started another for the path meanwhile.
-      if (versionOutputs.get(path) === probe) versionOutputs.delete(path)
-    })
-    pending = probe
-    versionOutputs.set(path, pending)
-  }
-  return pending
+  const pending = versionOutputs.get(path)
+  if (pending) return pending
+  // A run from before a refresh, still going: shared, so the path keeps one process, but not
+  // kept as the answer, as it may describe the program from before the change.
+  const live = liveProbes.get(path)
+  if (live) return live
+  if (quitting) return Promise.resolve(null)
+  const probe: Promise<string | null> = runVersionProbe(path, (failed) => {
+    // Only this probe's own entries: a refresh may have cleared the memo meanwhile.
+    if (liveProbes.get(path) === probe) liveProbes.delete(path)
+    if (failed && versionOutputs.get(path) === probe) versionOutputs.delete(path)
+  })
+  liveProbes.set(path, probe)
+  versionOutputs.set(path, probe)
+  return probe
 }
 
 /**

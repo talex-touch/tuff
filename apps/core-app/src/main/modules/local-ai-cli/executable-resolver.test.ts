@@ -320,6 +320,66 @@ describe('local agent CLI status', () => {
     expect(getResolvedCliExecutable('tuff-probe-codex')).toMatchObject({ path: after })
   })
 
+  it('shares a hanging probe across refresh without starting a second process', async () => {
+    const pidFile = join(workDir, 'probe.pid')
+    process.env.TUFF_PROBE_PID = pidFile
+    const program = await writeHangingProgram(binDir, 'tuff-probe-omp')
+
+    const first = probeCliVersion('oh-my-pi', program)
+    const pid = Number((await waitForFile(pidFile)).trim())
+    await refreshLocalAiCliExecutables(settings())
+    const second = probeCliVersion('oh-my-pi', program)
+    for (let i = 0; i < 10_000; i++) await nextImmediate()
+    expect(await runCount()).toBe(1)
+
+    stopLocalAiCliVersionProbes()
+    await expect(first).resolves.toBeUndefined()
+    await expect(second).resolves.toBeUndefined()
+    await waitForProcessExit(pid)
+  })
+
+  it('re-probes with a new answer after a pre-refresh probe exits', async () => {
+    const pidFile = join(workDir, 'probe.pid')
+    const releaseFile = join(workDir, 'release.probe')
+    process.env.TUFF_PROBE_PID = pidFile
+    process.env.TUFF_PROBE_MARKER = releaseFile
+    const program = join(binDir, 'tuff-probe-omp')
+    await writeFile(
+      program,
+      [
+        `#!${process.execPath}`,
+        `const fs = require('node:fs')`,
+        `fs.appendFileSync(process.env.TUFF_PROBE_RUNS, 'run\\n')`,
+        `fs.writeFileSync(process.env.TUFF_PROBE_PID, String(process.pid))`,
+        'const poll = setInterval(() => {',
+        '  if (fs.existsSync(process.env.TUFF_PROBE_MARKER)) {',
+        '    clearInterval(poll)',
+        `    process.stdout.write('omp/18.4.3\\n')`,
+        '  }',
+        '}, 1)',
+        ''
+      ].join('\n'),
+      'utf8'
+    )
+    await chmod(program, 0o755)
+
+    const first = probeCliVersion('oh-my-pi', program)
+    const pid = Number((await waitForFile(pidFile)).trim())
+    await refreshLocalAiCliExecutables(settings())
+    const second = probeCliVersion('oh-my-pi', program)
+    for (let i = 0; i < 10_000; i++) await nextImmediate()
+    expect(await runCount()).toBe(1)
+
+    await writeFile(releaseFile, 'release', 'utf8')
+    await expect(first).resolves.toBe('18.4.3')
+    await expect(second).resolves.toBe('18.4.3')
+    await waitForProcessExit(pid)
+
+    await writeProgram(binDir, 'tuff-probe-omp', 'omp/18.4.4')
+    await expect(probeCliVersion('oh-my-pi', program)).resolves.toBe('18.4.4')
+    expect(await runCount()).toBe(2)
+  })
+
   it('stops a stuck version probe and leaves no child process behind', async () => {
     const pidFile = join(workDir, 'probe.pid')
     process.env.TUFF_PROBE_PID = pidFile

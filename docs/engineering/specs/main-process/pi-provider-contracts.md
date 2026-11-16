@@ -513,13 +513,15 @@ resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executa
 - A probe asks, it never installs: it runs with `MISE_AUTO_INSTALL=false` (and the
   older `MISE_NOT_FOUND_AUTO_INSTALL=false`), so a mise shim whose tool version is
   missing fails at once instead of downloading it. A probe that times out (5 s) gets
-  SIGTERM, then SIGKILL 1 s later; until it has exited a read of that path answers
-  with the failure rather than starting another, so a hang costs one process per
-  path. Every probe still running is killed at `BEFORE_QUIT_STOP_WATCHERS`, the
-  quit flow's first step, and no probe starts after it (a status read still in its
-  lookup answers unavailable): one the app leaves behind is reparented to launchd
-  and never reaped (51 hung `shims/pi --version` processes, 2026-11-15). A crash or
-  SIGKILL of the app still skips this.
+  SIGTERM, then SIGKILL 1 s later. Until a probe's process has exited, a read of
+  that path shares it rather than starting another, after a refresh too (a run from
+  before the refresh is shared but not kept as the answer), so a hang costs one
+  process per path. Every probe still running is killed at
+  `BEFORE_QUIT_STOP_WATCHERS`, the quit flow's first step, and no probe starts
+  after it (a status read still in its lookup answers unavailable): one the app
+  leaves behind is reparented to launchd and never reaped (51 hung
+  `shims/pi --version` processes, 2026-11-15). A crash or SIGKILL of the app still
+  skips this.
 - Bare commands of adopted stdio MCP servers (`npx`, `node`, `uvx`) resolve through
   the same roots (`findCommandInSearchRoots`: no override, no fallback; a cached hit
   is re-checked, a miss is not cached) and run by absolute path with PATH = their
