@@ -1,0 +1,204 @@
+name: Sync Nexus Release Notes
+
+# Pushes the committed bilingual notes of an already-published release to its Nexus record.
+# Build and Release's sync-nexus-release also re-links assets and re-publishes, after the full
+# release quality gate; this only PATCHes `notes` + `notesHtml` and reads them back. Use it when
+# notes/update_<version>.{zh,en}.md change after the tag shipped.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Released tag whose committed notes go to Nexus, e.g. v2.4.15-beta.9
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexus-release-notes-${{ inputs.tag }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  sync-notes:
+    name: Sync Nexus release notes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXUS_BASE_URL: ${{ vars.NEXUS_SYNC_BASE_URL || 'https://tuff.tagzxia.com' }}
+      NEXUS_API_KEY: ${{ secrets.NEXUS_API_KEY }}
+      # Same credential sources as sync-nexus-release: the CF Access client secret is read from
+      # secrets only, never from a plaintext variable (#541).
+      NEXUS_CF_ACCESS_CLIENT_ID: ${{ vars.ADMIN_CF_ACCESS_CLIENT_ID || secrets.ADMIN_CF_ACCESS_CLIENT_ID }}
+      NEXUS_CF_ACCESS_CLIENT_SECRET: ${{ secrets.ADMIN_CF_ACCESS_CLIENT_SECRET }}
+      TAG: ${{ inputs.tag }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Validate credentials and tag
+        run: |
+          set -euo pipefail
+
+          if [ -z "${NEXUS_API_KEY}" ]; then
+            echo "NEXUS_API_KEY is required."
+            exit 1
+          fi
+
+          if [ -n "${NEXUS_CF_ACCESS_CLIENT_ID}" ] && [ -z "${NEXUS_CF_ACCESS_CLIENT_SECRET}" ]; then
+            echo "NEXUS_CF_ACCESS_CLIENT_ID is set but secrets.ADMIN_CF_ACCESS_CLIENT_SECRET is empty."
+            exit 1
+          fi
+
+          if [ -z "${NEXUS_CF_ACCESS_CLIENT_ID}" ] && [ -n "${NEXUS_CF_ACCESS_CLIENT_SECRET}" ]; then
+            echo "NEXUS_CF_ACCESS_CLIENT_SECRET is set but NEXUS_CF_ACCESS_CLIENT_ID is empty."
+            exit 1
+          fi
+
+          # The tag ends up in a URL path, so nothing beyond a release tag's characters.
+          if ! printf '%s' "${TAG}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "Invalid tag: ${TAG}. Expected a release tag like v2.4.15 or v2.4.15-beta.9."
+            exit 1
+          fi
+
+      # The dispatched ref, not the tag: notes edited after the release live on the branch.
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check the tag exists
+        run: |
+          if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "Tag ${TAG} does not exist."
+            exit 1
+          fi
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install release tooling dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # Same generator and arguments as sync-nexus-release, so Nexus gets what a release sync
+      # would send, including the strict bilingual contract check on the committed notes.
+      - name: Generate release notes
+        run: |
+          node scripts/generate-release-notes.mjs \
+            --tag "${TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target-ref "${GITHUB_SHA}" \
+            --output-dir /tmp/generated-release-notes
+
+      - name: Build notes payload
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG#v}"
+          notes_zh_file="/tmp/generated-release-notes/update_${VERSION}.zh.md"
+          notes_en_file="/tmp/generated-release-notes/update_${VERSION}.en.md"
+
+          if [ ! -s "${notes_zh_file}" ] || [ ! -s "${notes_en_file}" ]; then
+            echo "Generated bilingual release notes are required."
+            exit 1
+          fi
+
+          # -f: a failed render must fail the step, not become the notes HTML.
+          render_markdown() {
+            jq -nc --rawfile text "$1" --arg context "${GITHUB_REPOSITORY}" \
+              '{text: $text, mode: "gfm", context: $context}' \
+              | curl -fsS -X POST "https://api.github.com/markdown" \
+                -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                -H "Content-Type: application/json" \
+                --data-binary @-
+          }
+
+          render_markdown "${notes_zh_file}" > /tmp/notes.zh.html
+          render_markdown "${notes_en_file}" > /tmp/notes.en.html
+
+          jq -n \
+            --rawfile zh "${notes_zh_file}" \
+            --rawfile en "${notes_en_file}" \
+            --rawfile htmlZh /tmp/notes.zh.html \
+            --rawfile htmlEn /tmp/notes.en.html \
+            '{notes: {zh: $zh, en: $en}, notesHtml: {zh: $htmlZh, en: $htmlEn}}' \
+            > /tmp/nexus-notes-payload.json
+
+          jq -r '"notes zh=\(.notes.zh | length) en=\(.notes.en | length) chars; html zh=\(.notesHtml.zh | length) en=\(.notesHtml.en | length) chars"' \
+            /tmp/nexus-notes-payload.json
+
+      - name: Update and verify Nexus release notes
+        run: |
+          set -euo pipefail
+
+          nexus_headers=(
+            -H "Authorization: Bearer ${NEXUS_API_KEY}"
+            -H "Accept: application/json"
+            -H "User-Agent: tuff-release-sync/1.0"
+          )
+          if [ -n "${NEXUS_CF_ACCESS_CLIENT_ID}" ] && [ -n "${NEXUS_CF_ACCESS_CLIENT_SECRET}" ]; then
+            nexus_headers+=(
+              -H "CF-Access-Client-Id: ${NEXUS_CF_ACCESS_CLIENT_ID}"
+              -H "CF-Access-Client-Secret: ${NEXUS_CF_ACCESS_CLIENT_SECRET}"
+            )
+          fi
+
+          # A JSON body of the expected shape, not only a 2xx: an HTML error page or a proxy
+          # page must not pass as success.
+          assert_release_response() {
+            local file_path="$1" http_code="$2"
+            if [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ] \
+              || ! jq -e --arg tag "${TAG}" '.release.tag? == $tag' "${file_path}" >/dev/null 2>&1; then
+              echo "Unexpected Nexus response (HTTP ${http_code}):"
+              head -c 2000 "${file_path}"
+              echo
+              return 1
+            fi
+          }
+
+          before_code=$(curl -sS -o /tmp/nexus-before.json -w '%{http_code}' \
+            "${nexus_headers[@]}" "${NEXUS_BASE_URL}/api/releases/${TAG}?assets=false")
+          assert_release_response /tmp/nexus-before.json "${before_code}"
+
+          patch_code=$(curl -sS -o /tmp/nexus-patch.json -w '%{http_code}' \
+            -X PATCH "${NEXUS_BASE_URL}/api/releases/${TAG}" \
+            "${nexus_headers[@]}" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/nexus-notes-payload.json)
+          assert_release_response /tmp/nexus-patch.json "${patch_code}"
+
+          after_code=$(curl -sS -o /tmp/nexus-after.json -w '%{http_code}' \
+            "${nexus_headers[@]}" "${NEXUS_BASE_URL}/api/releases/${TAG}?assets=false")
+          assert_release_response /tmp/nexus-after.json "${after_code}"
+
+          if ! jq -e --slurpfile want /tmp/nexus-notes-payload.json \
+            '.release.notes == $want[0].notes and .release.notesHtml == $want[0].notesHtml' \
+            /tmp/nexus-after.json >/dev/null; then
+            echo "Nexus did not return the notes that were sent."
+            exit 1
+          fi
+
+          # Everything but notes and the revision timestamp must be as it was.
+          if ! jq -e --slurpfile before /tmp/nexus-before.json \
+            '(.release | del(.notes, .notesHtml, .updatedAt)) == ($before[0].release | del(.notes, .notesHtml, .updatedAt))' \
+            /tmp/nexus-after.json >/dev/null; then
+            echo "Fields other than notes changed on the Nexus release."
+            exit 1
+          fi
+
+          jq -r --slurpfile before /tmp/nexus-before.json \
+            '"\(.release.tag): notes \(if .release.notes == $before[0].release.notes then "unchanged" else "updated" end), status \(.release.status), updatedAt \($before[0].release.updatedAt) -> \(.release.updatedAt)"' \
+            /tmp/nexus-after.json
