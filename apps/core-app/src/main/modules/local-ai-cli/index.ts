@@ -22,7 +22,6 @@ import type {
 } from '@talex-touch/utils/transport/main'
 import type { WebContents } from 'electron'
 import type { ChildProcess } from 'node:child_process'
-import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { PiEntriesSnapshot, PiSessionFileCapture } from './pi-native-session'
 import type { StoredLocalAiCliSession } from './session-store'
 import type { PtySessionOwner } from '../terminal/pty-session-core'
@@ -42,6 +41,7 @@ import {
 } from '@talex-touch/utils/transport/events/local-ai-cli'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { clipboard, dialog, shell } from 'electron'
+import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { t } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
@@ -63,7 +63,8 @@ import { LocalAiCliApprovalBroker } from './approval-broker'
 import {
   refreshLocalAiCliExecutables,
   resolveAllLocalAiCliProviderStatuses,
-  resolveLocalAiCliProviderStatus
+  resolveLocalAiCliProviderStatus,
+  stopLocalAiCliVersionProbes
 } from './executable-resolver'
 import { nativeSessionLeaseRegistry } from './native-session-lease'
 import { isNativeSessionMissingError, isPiSessionNotFoundError } from './native-session-errors'
@@ -329,6 +330,8 @@ export class LocalAiCliModule extends BaseModule {
   private lastMasterSwitch: boolean | null = null
   /** The picks last seen, to notice one being cleared; `null` until the first settings read. */
   private lastExecutableOverrides: Record<LocalAiCliProviderId, string> | null = null
+  /** Its own function per module, as the event bus refuses one handler registered twice. */
+  private readonly stopProbesOnQuit = (): void => stopLocalAiCliVersionProbes()
 
   constructor() {
     super(LocalAiCliModule.key, { create: true })
@@ -346,6 +349,12 @@ export class LocalAiCliModule extends BaseModule {
     await mkdir(this.workspacePath, { recursive: true })
     setLocalAiCliWorkspaceRoot(this.workspacePath)
     this.registerHandlers()
+    // The quit flow's first step: module unload is what its budget and the dev force-exit cut
+    // off, and a `--version` probe the app leaves behind is never reaped.
+    touchEventBus.on(TalexEvents.BEFORE_QUIT_STOP_WATCHERS, this.stopProbesOnQuit)
+    this.disposers.push(() =>
+      touchEventBus.off(TalexEvents.BEFORE_QUIT_STOP_WATCHERS, this.stopProbesOnQuit)
+    )
     if (isLocalAiCliPlatformSupported()) {
       // Read once here as well as through the subscription: the subscription only replays a
       // value the store has already loaded.
@@ -1929,6 +1938,7 @@ export class LocalAiCliModule extends BaseModule {
     this.lastExecutableOverrides = null
     this.approvals.destroy()
     for (const dispose of this.disposers.splice(0)) dispose()
+    stopLocalAiCliVersionProbes()
     const persistentSessions = [...this.persistentPiSessions.values()]
     this.persistentPiSessions.clear()
     await Promise.allSettled(

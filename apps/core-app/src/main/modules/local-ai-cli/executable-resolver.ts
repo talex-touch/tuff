@@ -1,3 +1,4 @@
+import type { ChildProcess } from 'node:child_process'
 import type {
   LocalAiCliProviderId,
   LocalAiCliProviderStatus
@@ -5,7 +6,7 @@ import type {
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { CliExecutableLookup } from '../ai/providers/cli/cli-executable'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
-import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
+import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import {
   refreshCliExecutables,
   resolveCliExecutable,
@@ -34,6 +35,18 @@ import { getLocalAiCliProviderDefinition, LOCAL_AI_CLI_PROVIDERS } from './provi
  */
 
 const PROBE_TIMEOUT_MS = 5_000
+/** How long a probe that was asked to stop (SIGTERM) gets before it is killed outright. */
+const PROBE_KILL_GRACE_MS = 1_000
+const PROBE_OUTPUT_LIMIT = 16_384
+
+/**
+ * A mise shim whose tool version is not installed installs it before running (`auto_install`,
+ * on by default): a `--version` probe would download a runtime from the network, and a slow
+ * mirror or a dead proxy kept it running long past {@link PROBE_TIMEOUT_MS}. A probe only asks
+ * what is there, so it runs with installs off and a missing tool fails fast like any other miss.
+ * `not_found_auto_install` is the older name of the shim's own switch; other programs ignore both.
+ */
+const PROBE_ENV = { MISE_AUTO_INSTALL: 'false', MISE_NOT_FOUND_AUTO_INSTALL: 'false' }
 
 /** One lookup per CLI, shared with the chat providers. */
 const LOOKUPS: Readonly<Record<LocalAiCliProviderId, CliExecutableLookup>> = {
@@ -49,32 +62,108 @@ const LOOKUPS: Readonly<Record<LocalAiCliProviderId, CliExecutableLookup>> = {
  * is kept: which CLI's pattern it is read with depends on who asks, and the user can point two
  * providers at one file.
  *
- * Only an answer is kept. A run that failed or timed out (`null`) is dropped once it settles, so
- * the next read asks again: a CLI caught mid-update or slow to start is not written off for the
- * rest of the session.
+ * Only an answer is kept. A run that failed or timed out (`null`) is dropped once its process has
+ * exited, so the next read asks again: a CLI caught mid-update or slow to start is not written off
+ * for the rest of the session. Until that exit the failure stands, so a program that hangs costs
+ * one process per path, not one per read.
  */
 const versionOutputs = new Map<string, Promise<string | null>>()
+
+/**
+ * Probes whose process is still running. Their parent is the app: a probe outliving it is never
+ * reaped, so {@link stopLocalAiCliVersionProbes} kills them on quit.
+ */
+const runningProbes = new Set<ChildProcess>()
+
+/**
+ * Runs `path --version` and resolves with its output, or `null` when it fails, times out or says
+ * too much. `onFailedExit` runs once the failed run's process is gone.
+ */
+function runVersionProbe(path: string, onFailedExit: () => void): Promise<string | null> {
+  const { promise, resolve } = Promise.withResolvers<string | null>()
+  let child: ChildProcess
+  try {
+    // Run by the path as found, with its own directory on PATH: a `#!/usr/bin/env node` CLI
+    // finds the `node` beside it, which a GUI launch's PATH does not have.
+    child = spawnSafe(path, ['--version'], {
+      env: { ...withExecutableDirOnPath(process.env, path), ...PROBE_ENV },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true
+    })
+  } catch {
+    resolve(null)
+    queueMicrotask(onFailedExit)
+    return promise
+  }
+
+  let output = ''
+  /** `undefined` until the run has an outcome. */
+  let answer: string | null | undefined
+  let finished = false
+  let killTimer: NodeJS.Timeout | undefined
+  const settle = (value: string | null): void => {
+    if (answer !== undefined) return
+    answer = value
+    resolve(value)
+  }
+  // SIGTERM first, so a CLI may clean up; one that ignores it is killed.
+  const stop = (): void => {
+    settle(null)
+    if (killTimer) return
+    child.kill('SIGTERM')
+    killTimer = setTimeout(() => child.kill('SIGKILL'), PROBE_KILL_GRACE_MS)
+    killTimer.unref()
+  }
+  const timeout = setTimeout(stop, PROBE_TIMEOUT_MS)
+  timeout.unref()
+  const finish = (): void => {
+    if (finished) return
+    finished = true
+    clearTimeout(timeout)
+    clearTimeout(killTimer)
+    runningProbes.delete(child)
+    if (answer === null) onFailedExit()
+  }
+
+  runningProbes.add(child)
+  const collect = (chunk: Buffer): void => {
+    output += chunk.toString('utf8')
+    if (output.length > PROBE_OUTPUT_LIMIT) stop()
+  }
+  child.stdout?.on('data', collect)
+  child.stderr?.on('data', collect)
+  child.once('error', () => {
+    settle(null)
+    // Never started (ENOENT, EACCES): no exit is coming.
+    if (child.pid === undefined) finish()
+  })
+  child.once('close', (code) => {
+    settle(code === 0 ? output.trim() : null)
+    finish()
+  })
+  return promise
+}
 
 function readVersionOutput(path: string): Promise<string | null> {
   let pending = versionOutputs.get(path)
   if (!pending) {
-    // Run by the path as found, with its own directory on PATH: a `#!/usr/bin/env node` CLI finds
-    // the `node` beside it, which a GUI launch's PATH does not have.
-    const probe: Promise<string | null> = execFileSafe(path, ['--version'], {
-      timeout: PROBE_TIMEOUT_MS,
-      maxBuffer: 16_384,
-      env: withExecutableDirOnPath(process.env, path)
+    const probe: Promise<string | null> = runVersionProbe(path, () => {
+      // Only this probe's own entry: a refresh may have started another for the path meanwhile.
+      if (versionOutputs.get(path) === probe) versionOutputs.delete(path)
     })
-      .then(({ stdout, stderr }) => `${stdout}\n${stderr}`.trim())
-      .catch(() => {
-        // Only this probe's own entry: a refresh may have started another for the path meanwhile.
-        if (versionOutputs.get(path) === probe) versionOutputs.delete(path)
-        return null
-      })
     pending = probe
     versionOutputs.set(path, pending)
   }
   return pending
+}
+
+/**
+ * Kills every `--version` probe still running. The app calls it on quit, before anything that the
+ * quit budget may cut off: an app that exits leaves its probes to launchd, and a hung one (a mise
+ * shim stuck in uninterruptible wait, 2026-11-15) then never ends.
+ */
+export function stopLocalAiCliVersionProbes(): void {
+  for (const child of runningProbes) child.kill('SIGKILL')
 }
 
 /**

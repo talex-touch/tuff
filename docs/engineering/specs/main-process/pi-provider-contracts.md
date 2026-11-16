@@ -506,9 +506,19 @@ resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executa
   hangs off the resolved form, so a `pie`-only machine still reads "Pi · Touch Pie".
 - The local agent adds a `--version` check: the output must carry the CLI's own
   identity (`codex-cli x.y.z`, `x.y.z (Claude Code)`, `omp/x.y.z`; pi prints only the
-  number). It is memoised per path, a failure is never memoised, and while the
-  master switch `localAiCli.enabled` is off `status.get` runs no CLI unless the
-  request asks for `detail` (Settings does); everyone else gets `NOT_PROBED`.
+  number). It is memoised per path, a failure is not memoised past its process's
+  exit, and while the master switch `localAiCli.enabled` is off `status.get` runs no
+  CLI unless the request asks for `detail` (Settings does); everyone else gets
+  `NOT_PROBED`.
+- A probe asks, it never installs: it runs with `MISE_AUTO_INSTALL=false` (and the
+  older `MISE_NOT_FOUND_AUTO_INSTALL=false`), so a mise shim whose tool version is
+  missing fails at once instead of downloading it. A probe that times out (5 s) gets
+  SIGTERM, then SIGKILL 1 s later; until it has exited a read of that path answers
+  with the failure rather than starting another, so a hang costs one process per
+  path. Every probe still running is killed at `BEFORE_QUIT_STOP_WATCHERS`, the
+  quit flow's first step: one the app leaves behind is reparented to launchd and
+  never reaped (51 hung `shims/pi --version` processes, 2026-11-15). A crash or
+  SIGKILL of the app still skips this.
 - Bare commands of adopted stdio MCP servers (`npx`, `node`, `uvx`) resolve through
   the same roots (`findCommandInSearchRoots`: no override, no fallback; a cached hit
   is re-checked, a miss is not cached) and run by absolute path with PATH = their
@@ -577,8 +587,11 @@ resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executa
   authoritative, `pie` fallback form, version-manager roots in numeric order,
   probe-cache reset, and a refresh that never exposes `undefined`.
 - Local agent status: a mise shim never resolves to mise (and `mise --version`
-  fails every identity pattern), a failed `--version` is retried, and no CLI runs
-  while the master switch is off unless `detail` is asked for.
+  fails every identity pattern), a failed `--version` is retried once its process
+  has exited and not before, a probe that ignores SIGTERM is gone after the
+  timeout and after `stopLocalAiCliVersionProbes()`, a probe never runs with mise
+  auto-install on, and no CLI runs while the master switch is off unless `detail`
+  is asked for.
 - Model options: four rows when present, row removed when probed absent, row
   retained when unprobed.
 - Mutation checks that must fail: swap `is_error` for `subtype` in the claude
