@@ -76,6 +76,13 @@ const versionOutputs = new Map<string, Promise<string | null>>()
 const runningProbes = new Set<ChildProcess>()
 
 /**
+ * Set by the quit sweep. A status read still in its executable lookup when the sweep runs would
+ * otherwise start a probe after it, and nothing is left to reap that one. Quitting is one-way
+ * (the sweep's quit step runs once per process), so this is never cleared.
+ */
+let quitting = false
+
+/**
  * Runs `path --version` and resolves with its output, or `null` when it fails, times out or says
  * too much. `onFailedExit` runs once the failed run's process is gone.
  */
@@ -127,6 +134,8 @@ function runVersionProbe(path: string, onFailedExit: () => void): Promise<string
 
   runningProbes.add(child)
   const collect = (chunk: Buffer): void => {
+    // Still read once there is an outcome, so the pipe drains, but no longer kept.
+    if (answer !== undefined) return
     output += chunk.toString('utf8')
     if (output.length > PROBE_OUTPUT_LIMIT) stop()
   }
@@ -147,6 +156,7 @@ function runVersionProbe(path: string, onFailedExit: () => void): Promise<string
 function readVersionOutput(path: string): Promise<string | null> {
   let pending = versionOutputs.get(path)
   if (!pending) {
+    if (quitting) return Promise.resolve(null)
     const probe: Promise<string | null> = runVersionProbe(path, () => {
       // Only this probe's own entry: a refresh may have started another for the path meanwhile.
       if (versionOutputs.get(path) === probe) versionOutputs.delete(path)
@@ -160,9 +170,11 @@ function readVersionOutput(path: string): Promise<string | null> {
 /**
  * Kills every `--version` probe still running. The app calls it on quit, before anything that the
  * quit budget may cut off: an app that exits leaves its probes to launchd, and a hung one (a mise
- * shim stuck in uninterruptible wait, 2026-11-15) then never ends.
+ * shim stuck in uninterruptible wait, 2026-11-15) then never ends. With `quitting`, no probe
+ * starts afterwards either.
  */
-export function stopLocalAiCliVersionProbes(): void {
+export function stopLocalAiCliVersionProbes(options: { quitting?: boolean } = {}): void {
+  if (options.quitting) quitting = true
   for (const child of runningProbes) child.kill('SIGKILL')
 }
 

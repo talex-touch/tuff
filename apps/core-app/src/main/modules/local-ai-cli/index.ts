@@ -331,7 +331,7 @@ export class LocalAiCliModule extends BaseModule {
   /** The picks last seen, to notice one being cleared; `null` until the first settings read. */
   private lastExecutableOverrides: Record<LocalAiCliProviderId, string> | null = null
   /** Its own function per module, as the event bus refuses one handler registered twice. */
-  private readonly stopProbesOnQuit = (): void => stopLocalAiCliVersionProbes()
+  private readonly stopProbesOnQuit = (): void => stopLocalAiCliVersionProbes({ quitting: true })
 
   constructor() {
     super(LocalAiCliModule.key, { create: true })

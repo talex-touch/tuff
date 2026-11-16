@@ -516,8 +516,9 @@ resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executa
   SIGTERM, then SIGKILL 1 s later; until it has exited a read of that path answers
   with the failure rather than starting another, so a hang costs one process per
   path. Every probe still running is killed at `BEFORE_QUIT_STOP_WATCHERS`, the
-  quit flow's first step: one the app leaves behind is reparented to launchd and
-  never reaped (51 hung `shims/pi --version` processes, 2026-11-15). A crash or
+  quit flow's first step, and no probe starts after it (a status read still in its
+  lookup answers unavailable): one the app leaves behind is reparented to launchd
+  and never reaped (51 hung `shims/pi --version` processes, 2026-11-15). A crash or
   SIGKILL of the app still skips this.
 - Bare commands of adopted stdio MCP servers (`npx`, `node`, `uvx`) resolve through
   the same roots (`findCommandInSearchRoots`: no override, no fallback; a cached hit
