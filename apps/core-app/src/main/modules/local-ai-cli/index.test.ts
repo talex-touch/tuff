@@ -85,7 +85,8 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
 vi.mock('./executable-resolver', () => ({
   resolveLocalAiCliProviderStatus: resolveProviderStatusMock,
   resolveAllLocalAiCliProviderStatuses: resolveAllProviderStatusesMock,
-  refreshLocalAiCliExecutables: refreshExecutablesMock
+  refreshLocalAiCliExecutables: refreshExecutablesMock,
+  stopLocalAiCliVersionProbes: vi.fn()
 }))
 
 vi.mock('../storage', () => ({

@@ -54,7 +54,8 @@ vi.mock('../storage', () => ({
 }))
 vi.mock('./executable-resolver', () => ({
   resolveAllLocalAiCliProviderStatuses: mocks.resolveAllLocalAiCliProviderStatuses,
-  resolveLocalAiCliProviderStatus: mocks.resolveLocalAiCliProviderStatus
+  resolveLocalAiCliProviderStatus: mocks.resolveLocalAiCliProviderStatus,
+  stopLocalAiCliVersionProbes: vi.fn()
 }))
 vi.mock('../global-shortcon', () => ({
   shortcutModule: { registerMainShortcut: mocks.registerMainShortcut }
