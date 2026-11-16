@@ -1718,7 +1718,8 @@ jobs:
               --arg context "${GITHUB_REPOSITORY}" \
               '{text: $text, mode: "gfm", context: $context}')
 
-            curl -sS \
+            # -f: a failed render must fail the step, not become the notes HTML.
+            curl -fsS \
               -X POST "https://api.github.com/markdown" \
               -H "Authorization: Bearer ${GITHUB_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
