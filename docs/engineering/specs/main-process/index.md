@@ -93,8 +93,9 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   main-thread liveness: streaming requests default to a fetch-through-EOF
   deadline, caller-owned idle streams opt in explicitly, caller cancellation is
   source-provenanced and cooldown-neutral, protocol completion/cancellation use
-  controlled lifecycle methods, native OCR isolated in a one-shot utility process
-  with parent-owned deadlines and post-callback child exit; macOS translation uses a persistent
+  controlled lifecycle methods, native OCR isolated in a persistent Rust
+  `tuff-native-ocr` helper with native image resize and one-shot
+  utility-process fallback under parent-owned deadlines; macOS translation uses a persistent
   Swift helper with readiness-gated runtime routing and bounded request lifetimes; the local
   embedding helper's priority job queue and in-process asset digest cache; PollingService defaults,
   outbox round budgets, child-process backoff, bounded interactive `waitForIdle()`,

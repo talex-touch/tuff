@@ -20,7 +20,7 @@ import { enterPerfContext } from '../../../utils/perf-context'
 import { getNetworkService } from '../../network'
 import { getLocalEmbeddingRuntime } from '../local-embedding-runtime'
 import { LOCAL_EMBEDDING_MODEL_KEY } from '../local-embedding-model'
-import { recognizeImageTextIsolated } from '../../ocr/ocr-process-client'
+import { recognizeOcrSourceIsolated } from '../../ocr/ocr-runtime'
 import { OpenAiCompatibleLangChainProvider } from './langchain-openai-compatible-provider'
 
 interface OllamaChatResponse {
@@ -388,13 +388,13 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
     const traceId = this.generateTraceId()
     const startedAt = Date.now()
 
-    const image = await this.getImageBuffer(payload.source)
-    const nativeResult = await recognizeImageTextIsolated(
+    const nativeResult = await recognizeOcrSourceIsolated(
       {
-        image,
+        source: payload.source,
         languageHint: payload.language,
         includeLayout: payload.includeLayout,
-        maxBlocks: 120
+        maxBlocks: 120,
+        decodeBuffer: (source) => this.getImageBuffer(source)
       },
       {
         timeoutMs: this.resolveRequestTimeout(options, 30_000),

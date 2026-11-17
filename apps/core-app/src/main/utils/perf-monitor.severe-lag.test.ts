@@ -49,7 +49,7 @@ vi.mock('./workflow-debug', () => ({
   appendWorkflowDebugLog: vi.fn()
 }))
 
-import { inferEventLoopLagCause, perfMonitor } from './perf-monitor'
+import { inferEventLoopLagCause, perfMonitor, selectPrimaryPerfContext } from './perf-monitor'
 
 type PerfMonitorTestAccess = {
   severeLagWindowHits: number[]
@@ -186,5 +186,21 @@ describe('inferEventLoopLagCause attribution', () => {
     })
 
     expect(cause).toBeNull()
+  })
+
+  it('prefers blocking contexts over longer async duration contexts for primary attribution', () => {
+    expect(
+      selectPrimaryPerfContext([
+        { label: 'Intelligence.invoke', durationMs: 34086, mode: 'duration' },
+        { label: 'IndexingDiagnostics.source', durationMs: 498, mode: 'blocking' }
+      ])?.label
+    ).toBe('IndexingDiagnostics.source')
+
+    expect(
+      selectPrimaryPerfContext([
+        { label: 'Intelligence.invoke', durationMs: 34086, mode: 'duration' },
+        { label: 'DownloadCenter.cleanupTempFiles', durationMs: 349, mode: 'duration' }
+      ])?.label
+    ).toBe('Intelligence.invoke')
   })
 })

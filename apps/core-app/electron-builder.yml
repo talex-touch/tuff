@@ -13,6 +13,8 @@ asarUnpack:
   - '**/*.dll'
   - '**/*.so'
   - '**/tuff-native-translation'
+  - '**/tuff-native-ocr'
+  - '**/tuff-native-ocr.exe'
   - '**/tuff-native-update'
   - '**/tuff-browser-bridge'
   - '**/tuff-browser-bridge.exe'

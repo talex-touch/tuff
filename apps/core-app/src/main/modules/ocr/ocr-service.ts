@@ -9,7 +9,6 @@ import type { IClipboardItem } from '../clipboard'
 
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { existsSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
@@ -98,6 +97,9 @@ const ocrDashboardEvent = defineRawEvent<
 const WORKER_CONCURRENCY = 1
 const OCR_MIN_START_INTERVAL_MS = 10_000
 const OCR_COMPLETION_COOLDOWN_MS = 5_000
+// Cold macOS Vision warmup under startup contention routinely approaches 30s; give the
+// background clipboard queue a 45s ceiling so warmup finishes once instead of killing at 30s.
+const OCR_BACKGROUND_INVOKE_TIMEOUT_MS = 45_000
 
 const MAX_OCR_IMAGE_BYTES = 8 * 1024 * 1024
 const MAX_OCR_RESULT_RAW_CHARS = 2000
@@ -120,6 +122,8 @@ const RETRY_DELAYS: Record<string, number> = {
   'Provider factory missing': 1800, // 30分钟
   'Native OCR module unavailable': 3600, // 1小时
   'OCR provider network failure': 300, // 5分钟
+  'OCR process timed out': 30,
+  'OCR process exited': 30,
   default: 120 // 默认2分钟
 }
 const getRetryDelaySeconds = (lastError: string | null | undefined): number => {
@@ -632,13 +636,10 @@ class OcrService {
         }
       }
 
-      if (!existsSync(content)) {
-        throw new Error('[OCR] Clipboard image source file does not exist')
-      }
-      const stats = await stat(content)
-      if (stats.size > MAX_OCR_IMAGE_BYTES) {
-        throw new Error(`[OCR] Image file too large: ${stats.size} > ${MAX_OCR_IMAGE_BYTES}`)
-      }
+      await this.ensureImageFileWithinBudget(
+        content,
+        '[OCR] Clipboard image source file does not exist'
+      )
 
       return {
         clipboardId,
@@ -655,13 +656,8 @@ class OcrService {
       try {
         const files = JSON.parse(item.content) as string[]
         const imagePath = files.find((file) => this.isImageFile(file))
-        if (!imagePath || !existsSync(imagePath)) {
+        if (!imagePath || !(await this.ensureImageFileWithinBudget(imagePath, null))) {
           return null
-        }
-
-        const stats = await stat(imagePath)
-        if (stats.size > MAX_OCR_IMAGE_BYTES) {
-          throw new Error(`[OCR] Image file too large: ${stats.size} > ${MAX_OCR_IMAGE_BYTES}`)
         }
 
         return {
@@ -682,6 +678,27 @@ class OcrService {
     }
 
     return null
+  }
+
+  private async ensureImageFileWithinBudget(
+    filePath: string,
+    missingError: string | null
+  ): Promise<boolean> {
+    let stats: Awaited<ReturnType<typeof stat>>
+    try {
+      stats = await stat(filePath)
+    } catch (error) {
+      const code = (error as { code?: unknown } | null)?.code
+      if (code === 'ENOENT' || code === 'ENOTDIR') {
+        if (missingError === null) return false
+        throw new Error(missingError)
+      }
+      throw error
+    }
+    if (stats.size > MAX_OCR_IMAGE_BYTES) {
+      throw new Error(`[OCR] Image file too large: ${stats.size} > ${MAX_OCR_IMAGE_BYTES}`)
+    }
+    return true
   }
 
   private isImageFile(filePath: string): boolean {
@@ -734,13 +751,10 @@ class OcrService {
           }
           return { type: 'data-url', dataUrl: content }
         }
-        if (!existsSync(content)) {
-          throw new Error('[OCR] Clipboard image source file does not exist')
-        }
-        const stats = await stat(content)
-        if (stats.size > MAX_OCR_IMAGE_BYTES) {
-          throw new Error(`[OCR] Image file too large: ${stats.size} > ${MAX_OCR_IMAGE_BYTES}`)
-        }
+        await this.ensureImageFileWithinBudget(
+          content,
+          '[OCR] Clipboard image source file does not exist'
+        )
         return { type: 'file', filePath: content }
       }
 
@@ -752,13 +766,13 @@ class OcrService {
           throw new Error('[OCR] Invalid clipboard file list payload')
         }
         const imagePath = files.find((file) => this.isImageFile(file))
-        if (!imagePath || !existsSync(imagePath)) {
+        if (!imagePath) {
           throw new Error('[OCR] No image file found for clipboard payload')
         }
-        const stats = await stat(imagePath)
-        if (stats.size > MAX_OCR_IMAGE_BYTES) {
-          throw new Error(`[OCR] Image file too large: ${stats.size} > ${MAX_OCR_IMAGE_BYTES}`)
-        }
+        await this.ensureImageFileWithinBudget(
+          imagePath,
+          '[OCR] No image file found for clipboard payload'
+        )
         return { type: 'file', filePath: imagePath }
       }
 
@@ -766,10 +780,10 @@ class OcrService {
     }
 
     if (source.type === 'file' && source.filePath) {
-      const stats = await stat(source.filePath)
-      if (stats.size > MAX_OCR_IMAGE_BYTES) {
-        throw new Error(`[OCR] Image file too large: ${stats.size} > ${MAX_OCR_IMAGE_BYTES}`)
-      }
+      await this.ensureImageFileWithinBudget(
+        source.filePath,
+        '[OCR] Clipboard image source file does not exist'
+      )
       return { type: 'file', filePath: source.filePath }
     }
 
@@ -923,6 +937,7 @@ class OcrService {
         {
           modelPreference,
           allowedProviderIds,
+          timeout: OCR_BACKGROUND_INVOKE_TIMEOUT_MS,
           metadata: { caller: OCR_CLIPBOARD_CALLER }
         }
       )
@@ -982,6 +997,7 @@ class OcrService {
   }
 
   private classifyRetryableAgentError(error: unknown): string | null {
+    const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined
     const message = error instanceof Error ? error.message : String(error)
     if (message.includes('No enabled providers')) {
       return 'No enabled providers available'
@@ -997,6 +1013,12 @@ class OcrService {
     }
     if (message.includes('fetch failed')) {
       return 'OCR provider network failure'
+    }
+    if (code === 'OCR_PROCESS_TIMEOUT' || message.includes('OCR process timed out')) {
+      return 'OCR process timed out'
+    }
+    if (code === 'OCR_PROCESS_EXITED' || message.includes('OCR process exited')) {
+      return 'OCR process exited'
     }
     return null
   }
@@ -1421,7 +1443,7 @@ class OcrService {
 
     if (status === 'failed') {
       void details
-    } else {
+    } else if (!nextRetryAt || nextRetryAt.getTime() <= Date.now()) {
       setImmediate(() => {
         this.processQueue().catch(() => {})
       })
