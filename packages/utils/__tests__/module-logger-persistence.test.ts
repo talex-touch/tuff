@@ -96,6 +96,38 @@ describe('ModuleLogger main-process log persistence', () => {
     expect(line).toContain('"self":"[Circular]"')
   })
 
+  it('serializes Date, custom toJSON, cyclic toJSON, and nested bigint values safely', () => {
+    const defaultSink = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn()
+    }
+    globalTarget.logger = defaultSink
+
+    const timestamp = new Date('2026-11-18T00:00:00.000Z')
+    const cyclicToJson: Record<string, unknown> = {}
+    cyclicToJson.toJSON = () => cyclicToJson
+
+    const dbLog = loggerManager.getLogger('database')
+    dbLog.setLevel(LogLevel.INFO)
+    dbLog.info('Search index metrics snapshot', {
+      at: timestamp,
+      custom: {
+        toJSON: () => ({ ok: true, count: 42n })
+      },
+      cyclicToJson,
+      rows: 9007199254740993n
+    })
+
+    expect(defaultSink.info).toHaveBeenCalledTimes(1)
+    const line = String(defaultSink.info.mock.calls[0]?.[0] ?? '')
+    expect(line).toContain('"at":"2026-11-18T00:00:00.000Z"')
+    expect(line).toContain('"custom":{"ok":true,"count":"42"}')
+    expect(line).toContain('"cyclicToJson":"[Circular]"')
+    expect(line).toContain('"rows":"9007199254740993"')
+  })
+
   it('does not throw when globalThis.logger is absent (renderer or isolated unit tests)', () => {
     delete globalTarget.logger
     delete globalTarget.errLogger

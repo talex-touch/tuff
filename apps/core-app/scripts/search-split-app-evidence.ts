@@ -1633,6 +1633,9 @@ export async function waitForIndexQuiescence(
         stableSince = null
         lastSignature = progress.signature
       }
+    } else {
+      stableSince = null
+      lastSignature = ''
     }
     await sleep(1000)
   }

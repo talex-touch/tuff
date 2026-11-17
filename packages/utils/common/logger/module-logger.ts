@@ -76,6 +76,8 @@ function toSerializableError(
 }
 
 function toSerializable(value: unknown, depth = 0, seen = new WeakSet<object>()): unknown {
+  if (typeof value === 'bigint')
+    return value.toString()
   if (value === null || typeof value !== 'object')
     return value
   if (seen.has(value))
@@ -86,6 +88,9 @@ function toSerializable(value: unknown, depth = 0, seen = new WeakSet<object>())
   try {
     if (value instanceof Error)
       return toSerializableError(value, depth, seen)
+    const maybeToJson = (value as { toJSON?: unknown }).toJSON
+    if (typeof maybeToJson === 'function')
+      return toSerializable(maybeToJson.call(value), depth + 1, seen)
     if (Array.isArray(value))
       return value.map(item => toSerializable(item, depth + 1, seen))
     const out: Record<string, unknown> = {}

@@ -1391,6 +1391,35 @@ describe('waitForIndexQuiescence', () => {
     expect(result.settled).toBe(false)
     expect(result.rows).toBe(0)
   })
+
+  it('resets stability state when topology measurement is missing across a gap', async () => {
+    let nowMs = 0
+    let step = 0
+    const result = await waitForIndexQuiescence('/tmp/p', {
+      phase: 'split',
+      maxIndexMs: 10_000,
+      stableMs: 2_000,
+      now: () => nowMs,
+      sleep: async (ms) => {
+        nowMs += ms
+      },
+      measure: async () => {
+        step += 1
+        // step 1 (t=0): records signature; step 2 (t=1000): opens stableSince=1000
+        if (step <= 2) return makeMeasurement({ app: 1 }, { file: 3 })
+        // step 3 (t=2000): unobserved gap must clear stableSince and lastSignature
+        if (step === 3) return null
+        // steps 4..7 (t=3000..6000): fresh signature + full stableMs=2000 window
+        return makeMeasurement({ app: 1 }, { file: 3 })
+      }
+    })
+
+    expect(result.settled).toBe(true)
+    expect(result.rows).toBe(3)
+    // step 4 (t=3000) re-records lastSignature, step 5 (t=4000) sets stableSince=4000,
+    // step 7 (t=6000) satisfies stableMs=2000.
+    expect(result.samples).toBe(7)
+  })
 })
 
 describe('ModuleLogger -> log4js -> parseSplitLogSignals contract', () => {
