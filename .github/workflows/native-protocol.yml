@@ -122,6 +122,11 @@ jobs:
       - name: Build Chrome Native Messaging host
         run: node packages/tuff-native/scripts/build-browser-bridge.js
 
+      - name: Build and test Rust OCR helper
+        run: >-
+          pnpm -C packages/tuff-native run build:ocr &&
+          pnpm -C packages/tuff-native run test:ocr-helper
+
       - name: Build deterministic screenshot addon
         env:
           TUFF_SCREENSHOT_PROTOCOL_TEST_BACKEND: '1'
