@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
@@ -6,6 +6,8 @@ import { createServer as HttpServer } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { createClient } from '@libsql/client'
+import { loggerManager } from '@talex-touch/utils/common/logger'
+import log4js from 'log4js'
 import {
   APP_CATALOG_CHECK_NAME,
   SPLIT_FLAG_ENV,
@@ -25,6 +27,7 @@ import {
   buildSentinelGuards,
   compareQueryResults,
   digestRows,
+  judgeBusyStorm,
   judgeNoPrimaryFallback,
   judgeReadinessSignals,
   judgeRollbackTopology,
@@ -39,6 +42,7 @@ import {
   parseCli,
   parseSplitLogSignals,
   pickFreePort,
+  readQuiescenceProgress,
   readSentinel,
   redactReport,
   sliceLogForPhase,
@@ -46,6 +50,7 @@ import {
   terminateChild,
   tryResolveProfileLayout,
   waitForCdpEndpoint,
+  waitForIndexQuiescence,
   type HomeMeasurement,
   type MeasurementQueries,
   type PhaseLogWindow,
@@ -1239,5 +1244,260 @@ describe('parseCli', () => {
 
   it('requires a profile', () => {
     expect(() => parseCli(['--phase', 'all'], coreAppDir)).toThrow(/--profile is required/)
+  })
+})
+
+describe('waitForIndexQuiescence', () => {
+  const makeMeasurement = (
+    primaryFilesByType: Record<string, number>,
+    searchFilesByType: Record<string, number>,
+    extra: Partial<Pick<Topology, 'primary' | 'search'>> = {}
+  ): HomeMeasurement => ({
+    measuredAt: '2026-11-18T00:00:00.000Z',
+    primaryExists: true,
+    searchExists: true,
+    primaryWalBytes: 0,
+    searchWalBytes: 0,
+    primaryMtimeMs: 1,
+    searchMtimeMs: 1,
+    topology: {
+      profile: '/tmp/p',
+      primary: {
+        file_index_progress: 0,
+        scan_progress: 0,
+        search_index: 0,
+        keyword_mappings: 0,
+        ...extra.primary
+      },
+      search: {
+        file_index_progress: 4,
+        scan_progress: 1,
+        search_index: 4,
+        keyword_mappings: 0,
+        ...extra.search
+      },
+      primaryFilesByType,
+      searchFilesByType,
+      primaryNonAppExtensions: 0
+    },
+    queries: { primary: [], search: [] }
+  })
+
+  it('readQuiescenceProgress targets search for split phases and primary for rollback', () => {
+    const splitOnly = topology({ primaryFilesByType: { app: 1 }, searchFilesByType: { file: 4 } })
+    expect(readQuiescenceProgress(splitOnly, 'bootstrap')).toMatchObject({
+      targetHome: 'search',
+      targetRows: 4
+    })
+    expect(readQuiescenceProgress(splitOnly, 'rollback')).toMatchObject({
+      targetHome: 'primary',
+      targetRows: 0
+    })
+
+    const rolledBack = topology({
+      primaryFilesByType: { app: 1, file: 4 },
+      searchFilesByType: { file: 4 }
+    })
+    expect(readQuiescenceProgress(rolledBack, 'rollback')).toMatchObject({
+      targetHome: 'primary',
+      targetRows: 4
+    })
+  })
+
+  it('does not settle during rollback while stale search rows exist and primary is still unindexed', async () => {
+    // Regression: previously rollback summed primary + search rows, so stale search-index.db rows
+    // made rows=4 from sample 1 and settled after 8s before FileProvider wrote database.db.
+    let nowMs = 0
+    let step = 0
+    const result = await waitForIndexQuiescence('/tmp/p', {
+      phase: 'rollback',
+      maxIndexMs: 30_000,
+      stableMs: 8_000,
+      now: () => nowMs,
+      sleep: async (ms) => {
+        nowMs += ms
+      },
+      measure: async () => {
+        step += 1
+        // Samples 1..12 (11s > stableMs=8s): primary still has only app catalog, search has stale 4 files
+        if (step <= 12) {
+          return makeMeasurement({ app: 1 }, { file: 4 })
+        }
+        // Sample 13: partial rollback write lands in primary
+        if (step === 13) {
+          return makeMeasurement(
+            { app: 1, file: 2 },
+            { file: 4 },
+            { primary: { file_index_progress: 2, search_index: 2 } }
+          )
+        }
+        // Samples 14+: full rollback index settles on primary
+        return makeMeasurement(
+          { app: 1, file: 4 },
+          { file: 4 },
+          { primary: { file_index_progress: 4, scan_progress: 1, search_index: 4 } }
+        )
+      }
+    })
+
+    expect(result.settled).toBe(true)
+    expect(result.rows).toBe(4)
+    expect(result.samples).toBeGreaterThan(14)
+  })
+
+  it('resets the quiet window when target search_index rows keep advancing', async () => {
+    let nowMs = 0
+    let step = 0
+    const result = await waitForIndexQuiescence('/tmp/p', {
+      phase: 'bootstrap',
+      maxIndexMs: 25_000,
+      stableMs: 3_000,
+      now: () => nowMs,
+      sleep: async (ms) => {
+        nowMs += ms
+      },
+      measure: async () => {
+        step += 1
+        // files=4 from step 1, but FTS search_index rows keep climbing through step 3
+        const fts = Math.min(step, 3)
+        return makeMeasurement(
+          {},
+          { file: 4 },
+          { search: { search_index: fts, file_index_progress: 4, scan_progress: 1 } }
+        )
+      }
+    })
+
+    expect(result.settled).toBe(true)
+    expect(result.rows).toBe(4)
+    // step 3 (t=2000) records lastSignature='4:4:3:1:0'; step 4 (t=3000) opens stableSince;
+    // stableMs=3000 is reached at t=6000 (sample 7).
+    expect(result.samples).toBe(7)
+  })
+
+  it('returns settled=false if the target store stays empty until maxIndexMs expires', async () => {
+    let nowMs = 0
+    const result = await waitForIndexQuiescence('/tmp/p', {
+      phase: 'rollback',
+      maxIndexMs: 5_000,
+      stableMs: 2_000,
+      now: () => nowMs,
+      sleep: async (ms) => {
+        nowMs += ms
+      },
+      measure: async () => makeMeasurement({ app: 1 }, { file: 4 })
+    })
+
+    expect(result.settled).toBe(false)
+    expect(result.rows).toBe(0)
+  })
+
+  it('resets stability state when topology measurement is missing across a gap', async () => {
+    let nowMs = 0
+    let step = 0
+    const result = await waitForIndexQuiescence('/tmp/p', {
+      phase: 'split',
+      maxIndexMs: 10_000,
+      stableMs: 2_000,
+      now: () => nowMs,
+      sleep: async (ms) => {
+        nowMs += ms
+      },
+      measure: async () => {
+        step += 1
+        // step 1 (t=0): records signature; step 2 (t=1000): opens stableSince=1000
+        if (step <= 2) return makeMeasurement({ app: 1 }, { file: 3 })
+        // step 3 (t=2000): unobserved gap must clear stableSince and lastSignature
+        if (step === 3) return null
+        // steps 4..7 (t=3000..6000): fresh signature + full stableMs=2000 window
+        return makeMeasurement({ app: 1 }, { file: 3 })
+      }
+    })
+
+    expect(result.settled).toBe(true)
+    expect(result.rows).toBe(3)
+    // step 4 (t=3000) re-records lastSignature, step 5 (t=4000) sets stableSince=4000,
+    // step 7 (t=6000) satisfies stableMs=2000.
+    expect(result.samples).toBe(7)
+  })
+})
+
+describe('ModuleLogger -> log4js -> parseSplitLogSignals contract', () => {
+  it('persists database split init and readiness logs into D.*.log in parseable format', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'tuff-split-log-contract-'))
+    const logsDir = path.join(dir, 'tuff-dev', 'logs')
+    await mkdir(logsDir, { recursive: true })
+    const g = globalThis as { logger?: unknown; errLogger?: unknown }
+    const prevLogger = g.logger
+    const prevErrLogger = g.errLogger
+    const expectedSearchDb = path.join(dir, 'tuff-dev', 'modules', 'database', 'search-index.db')
+    const startedAtMs = Date.now()
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      log4js.configure({
+        appenders: {
+          all: {
+            type: 'dateFile',
+            keepFileExt: true,
+            filename: path.join(logsDir, 'D'),
+            maxLogSize: 10485760,
+            backups: 1,
+            alwaysIncludePattern: true,
+            pattern: 'yyyy-MM-dd.log'
+          },
+          error: {
+            type: 'dateFile',
+            keepFileExt: true,
+            filename: path.join(logsDir, 'E'),
+            maxLogSize: 10485760,
+            backups: 1,
+            alwaysIncludePattern: true,
+            pattern: 'yyyy-MM-dd.err'
+          }
+        },
+        categories: {
+          default: { appenders: ['all'], level: 'INFO' },
+          error: { appenders: ['all', 'error'], level: 'ERROR' }
+        }
+      })
+      g.logger = log4js.getLogger()
+      g.errLogger = log4js.getLogger('error')
+      loggerManager.reset()
+
+      const dbLog = loggerManager.getLogger('database')
+      const fileProviderLog = loggerManager.getLogger('file-provider')
+      dbLog.info('Search index database initialized', { meta: { path: expectedSearchDb } })
+      fileProviderLog.warn('File persistence port operation skipped: readiness unavailable', {
+        reason: 'test-probe'
+      })
+
+      await new Promise<void>((resolve) => log4js.shutdown(() => resolve()))
+      const endedAtMs = Date.now()
+      const logFiles = (await readdir(logsDir)).filter((name) => /^D\..*\.log$/.test(name))
+      expect(logFiles.length).toBeGreaterThan(0)
+      const rawLog = await readFile(path.join(logsDir, logFiles[0]!), 'utf8')
+      const window: PhaseLogWindow = { startedAtMs, endedAtMs, bounded: false }
+      const sliced = sliceLogForPhase(rawLog, window)
+      expect(window.bounded).toBe(true)
+
+      const signals = parseSplitLogSignals(sliced)
+      expect(judgeSearchDbMarker(signals, expectedSearchDb).status).toBe('passed')
+      expect(judgeNoPrimaryFallback(signals).status).toBe('passed')
+      expect(
+        judgeReadinessSignals(signals).find(
+          (c) => c.name === 'provider writes waited for writer readiness'
+        )?.status
+      ).toBe('failed')
+      expect(judgeBusyStorm(sliced).every((c) => c.status === 'passed')).toBe(true)
+    } finally {
+      infoSpy.mockRestore()
+      warnSpy.mockRestore()
+      g.logger = prevLogger
+      g.errLogger = prevErrLogger
+      loggerManager.reset()
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

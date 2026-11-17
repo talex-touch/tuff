@@ -1490,6 +1490,68 @@ describe('tuffIntelligenceSDK invoke', () => {
     expect(firstProviderVision).toHaveBeenCalledOnce()
     expect(secondProviderVision).toHaveBeenCalledOnce()
   })
+
+  it('skips payload stringification and result caching for vision.ocr even when enableCache is true', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'vision.ocr',
+      type: IntelligenceCapabilityType.VISION_OCR,
+      name: 'Vision OCR',
+      description: 'test non-cacheable vision capability',
+      supportedProviders: [IntelligenceProviderType.LOCAL]
+    })
+
+    const vision = vi
+      .fn()
+      .mockResolvedValueOnce({
+        result: { text: 'first read' } as IntelligenceVisionOcrResult,
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        model: 'system-ocr',
+        latency: 10,
+        traceId: 'trace-vision-1',
+        provider: IntelligenceProviderType.LOCAL
+      })
+      .mockResolvedValueOnce({
+        result: { text: 'second read' } as IntelligenceVisionOcrResult,
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        model: 'system-ocr',
+        latency: 12,
+        traceId: 'trace-vision-2',
+        provider: IntelligenceProviderType.LOCAL
+      })
+
+    const provider = createProvider(
+      {
+        id: 'local-system-ocr',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'System OCR',
+        enabled: true,
+        priority: 1,
+        models: [{ id: 'system-ocr' }],
+        capabilities: ['vision.ocr']
+      },
+      vision
+    )
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: true
+    })
+    const cacheKeySpy = vi.spyOn(
+      sdk as unknown as { getCacheKey: (...args: unknown[]) => string },
+      'getCacheKey'
+    )
+    const payload = { source: { type: 'file', filePath: '/tmp/clipboard-shot.png' } }
+
+    const first = await sdk.invoke<IntelligenceVisionOcrResult>('vision.ocr', payload)
+    const second = await sdk.invoke<IntelligenceVisionOcrResult>('vision.ocr', payload)
+
+    expect(first.result.text).toBe('first read')
+    expect(second.result.text).toBe('second read')
+    expect(vision).toHaveBeenCalledTimes(2)
+    expect(cacheKeySpy).not.toHaveBeenCalled()
+  })
   it('composes semantic search from provider embeddings with model preference and skips unusable vectors', async () => {
     intelligenceCapabilityRegistry.register({
       id: 'search.semantic',

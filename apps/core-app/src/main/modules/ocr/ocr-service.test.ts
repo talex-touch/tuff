@@ -239,6 +239,7 @@ describe('OcrService runAgentJob local-first options', () => {
     expect(call[2].modelPreference[0]).toBe('system-ocr')
     // Stable usage-ledger caller of the clipboard OCR agent (AC-B5).
     expect(call[2].metadata).toEqual({ caller: 'core.ocr.clipboard' })
+    expect(call[2].timeout).toBe(45_000)
   })
 
   it('counts the OCR text embedding under its own stable caller', async () => {
@@ -287,6 +288,18 @@ describe('OcrService runAgentJob local-first options', () => {
     const service = ocrService as unknown as OcrServiceTestAccess
     const reason = service.classifyRetryableAgentError(new Error('fetch failed'))
     expect(reason).toBe('OCR provider network failure')
+  })
+
+  it('classifies OCR process timeouts and exits as retryable', () => {
+    const service = ocrService as unknown as OcrServiceTestAccess
+    const timeoutErr = Object.assign(new Error('OCR process timed out after 45000ms'), {
+      code: 'OCR_PROCESS_TIMEOUT'
+    })
+    const exitErr = Object.assign(new Error('OCR process exited with code 1'), {
+      code: 'OCR_PROCESS_EXITED'
+    })
+    expect(service.classifyRetryableAgentError(timeoutErr)).toBe('OCR process timed out')
+    expect(service.classifyRetryableAgentError(exitErr)).toBe('OCR process exited')
   })
 
   it('ends a job the global usage limit refused with that code and never retries it', async () => {
@@ -559,6 +572,37 @@ describe('OcrService runAgentJob local-first options', () => {
     // burn the job as fatal.
     expect(aiInvokeMock).toHaveBeenCalledOnce()
     expect(deferSpy).toHaveBeenCalledOnce()
+    expect(failSpy).not.toHaveBeenCalled()
+    expect(persistSpy).not.toHaveBeenCalled()
+  })
+
+  it('defers OCR process timeout instead of failing the job on the first attempt', async () => {
+    const service = ocrService as unknown as OcrServiceTestAccess
+    getCapabilityOptionsMock.mockReturnValue({
+      allowedProviderIds: ['local-system-ocr'],
+      modelPreference: ['system-ocr']
+    })
+    aiInvokeMock.mockRejectedValue(
+      Object.assign(new Error('OCR process timed out after 45000ms'), {
+        code: 'OCR_PROCESS_TIMEOUT'
+      })
+    )
+
+    const { persistSpy, deferSpy, failSpy } = stubAgentJobDeps(service, '/tmp/ocr-timeout.png')
+
+    await service.runAgentJob(13, {
+      id: 13,
+      clipboardId: 888,
+      attempts: 1,
+      payloadHash: 'hash-timeout',
+      meta: JSON.stringify({ source: { type: 'clipboard' }, options: {} })
+    })
+
+    expect(aiInvokeMock).toHaveBeenCalledOnce()
+    expect(deferSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 13 }),
+      'OCR process timed out'
+    )
     expect(failSpy).not.toHaveBeenCalled()
     expect(persistSpy).not.toHaveBeenCalled()
   })

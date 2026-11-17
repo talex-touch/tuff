@@ -23,6 +23,9 @@ export interface BrowserPersistedWorkspace {
   bookmarks: BrowserSavedPage[]
 }
 
+export const DEFAULT_MAX_WARM_GUESTS = 6
+export const DEFAULT_IDLE_DISCARD_MS = 10 * 60 * 1000
+
 export interface BrowserWorkspaceDependencies {
   owner: BrowserWindow
   createView: () => WebContentsView
@@ -31,6 +34,10 @@ export interface BrowserWorkspaceDependencies {
   notifySnapshot?: (tabId: string, snapshot: string) => void
   focusAddress?: () => void
   now?: () => number
+  /** Maximum live background/foreground WebContentsView guests retained at once. */
+  maxWarmGuests?: number
+  /** Duration in ms before an inactive (or hidden) guest WebContentsView is discarded. */
+  idleDiscardMs?: number
 }
 
 interface Guest {
@@ -38,6 +45,7 @@ interface Guest {
   disposers: Array<() => void>
   generation: number
   attached: boolean
+  lastActiveAt: number
 }
 
 const persistedTabSchema = z.object({
@@ -87,11 +95,26 @@ export class BrowserWorkspaceManager {
   private writes: Promise<void> = Promise.resolve()
   private disposed = false
   private readonly ownerDisposers: Array<() => void> = []
+  private readonly maxWarmGuests: number
+  private readonly idleDiscardMs: number
+  private discardTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(
     private readonly deps: BrowserWorkspaceDependencies,
     restored?: unknown
   ) {
+    this.maxWarmGuests =
+      typeof deps.maxWarmGuests === 'number' &&
+      Number.isFinite(deps.maxWarmGuests) &&
+      deps.maxWarmGuests >= 1
+        ? Math.floor(deps.maxWarmGuests)
+        : DEFAULT_MAX_WARM_GUESTS
+    this.idleDiscardMs =
+      typeof deps.idleDiscardMs === 'number' &&
+      !Number.isNaN(deps.idleDiscardMs) &&
+      deps.idleDiscardMs >= 0
+        ? deps.idleDiscardMs
+        : DEFAULT_IDLE_DISCARD_MS
     const result = restoredWorkspaceSchema.safeParse(restored)
     const value = result.success
       ? result.data
@@ -147,6 +170,111 @@ export class BrowserWorkspaceManager {
       canGoForward: false,
       error: null
     }
+  }
+
+  private now(): number {
+    return (this.deps.now ?? Date.now)()
+  }
+
+  private clearDiscardTimer(): void {
+    if (this.discardTimer !== null) {
+      clearTimeout(this.discardTimer)
+      this.discardTimer = null
+    }
+  }
+
+  private isGuestIdleEligible(id: string): boolean {
+    if (id !== this.activeTabId) return true
+    return !this.viewport.visible || this.deps.owner.isDestroyed() || !this.deps.owner.isVisible()
+  }
+
+  private scheduleDiscardTimer(): void {
+    this.clearDiscardTimer()
+    if (
+      this.disposed ||
+      this.idleDiscardMs <= 0 ||
+      !Number.isFinite(this.idleDiscardMs) ||
+      this.guests.size === 0
+    )
+      return
+
+    let earliestDeadline = Infinity
+    for (const [id, guest] of this.guests) {
+      if (!this.isGuestIdleEligible(id)) continue
+      earliestDeadline = Math.min(earliestDeadline, guest.lastActiveAt + this.idleDiscardMs)
+    }
+    if (!Number.isFinite(earliestDeadline)) return
+
+    const delay = Math.max(0, earliestDeadline - this.now())
+    this.discardTimer = setTimeout(() => {
+      this.discardTimer = null
+      this.discardIdleGuests()
+    }, delay)
+    this.discardTimer.unref?.()
+  }
+
+  private discardGuest(id: string): { discarded: boolean; stateChanged: boolean } {
+    const guest = this.guests.get(id)
+    if (!guest) return { discarded: false, stateChanged: false }
+    this.closeGuest(id)
+    const tab = this.tabs.find((item) => item.id === id)
+    let stateChanged = false
+    if (tab) {
+      stateChanged = tab.loading || tab.canGoBack || tab.canGoForward
+      tab.loading = false
+      tab.canGoBack = false
+      tab.canGoForward = false
+    }
+    return { discarded: true, stateChanged }
+  }
+
+  private evictExcessGuests(): void {
+    if (this.guests.size <= this.maxWarmGuests) return
+    const candidates = Array.from(this.guests.entries())
+      .filter(([id]) => id !== this.activeTabId)
+      .sort(([idA, guestA], [idB, guestB]) => {
+        const loadingA = this.tabs.find((item) => item.id === idA)?.loading ? 1 : 0
+        const loadingB = this.tabs.find((item) => item.id === idB)?.loading ? 1 : 0
+        if (loadingA !== loadingB) return loadingA - loadingB
+        return guestA.lastActiveAt - guestB.lastActiveAt
+      })
+
+    let stateChanged = false
+    for (const [id] of candidates) {
+      if (this.guests.size <= this.maxWarmGuests) break
+      const result = this.discardGuest(id)
+      if (result.stateChanged) stateChanged = true
+    }
+    if (stateChanged) this.changed()
+  }
+
+  /** Discards any inactive (or long-hidden) guest views past the idle threshold. */
+  discardIdleGuests(): number {
+    if (this.disposed || this.idleDiscardMs <= 0 || !Number.isFinite(this.idleDiscardMs)) return 0
+    const cutoff = this.now() - this.idleDiscardMs
+    let count = 0
+    let stateChanged = false
+    for (const [id, guest] of Array.from(this.guests.entries())) {
+      if (!this.isGuestIdleEligible(id)) continue
+      if (guest.lastActiveAt <= cutoff) {
+        const result = this.discardGuest(id)
+        if (result.discarded) count += 1
+        if (result.stateChanged) stateChanged = true
+      }
+    }
+    if (stateChanged) this.changed()
+    this.scheduleDiscardTimer()
+    return count
+  }
+
+  /** Releases a background tab's WebContentsView immediately while keeping its tab entry. */
+  discardTab(id: string): boolean {
+    this.tab(id)
+    if (!this.isGuestIdleEligible(id)) return false
+    const result = this.discardGuest(id)
+    if (result.stateChanged) this.changed()
+    this.scheduleDiscardTimer()
+    return result.discarded
   }
 
   getState(): BrowserWorkspaceState {
@@ -267,7 +395,10 @@ export class BrowserWorkspaceManager {
       }
     } else {
       const guest = this.guests.get(id)
-      if (guest) this.load(tab, guest)
+      if (guest) {
+        guest.lastActiveAt = this.now()
+        this.load(tab, guest)
+      }
     }
     this.refreshViewport()
     this.changed()
@@ -277,7 +408,9 @@ export class BrowserWorkspaceManager {
 
   async back(id: string): Promise<BrowserWorkspaceState> {
     const tab = this.tab(id)
-    const wc = this.guests.get(id)?.view.webContents
+    const guest = this.guests.get(id)
+    if (guest) guest.lastActiveAt = this.now()
+    const wc = guest?.view.webContents
     if (wc?.navigationHistory.canGoBack()) wc.navigationHistory.goBack()
     this.updateHistory(tab)
     this.changed()
@@ -286,7 +419,9 @@ export class BrowserWorkspaceManager {
 
   async forward(id: string): Promise<BrowserWorkspaceState> {
     const tab = this.tab(id)
-    const wc = this.guests.get(id)?.view.webContents
+    const guest = this.guests.get(id)
+    if (guest) guest.lastActiveAt = this.now()
+    const wc = guest?.view.webContents
     if (wc?.navigationHistory.canGoForward()) wc.navigationHistory.goForward()
     this.updateHistory(tab)
     this.changed()
@@ -297,8 +432,10 @@ export class BrowserWorkspaceManager {
     const tab = this.tab(id)
     tab.error = null
     const guest = this.guests.get(id)
-    if (guest) guest.view.webContents.reload()
-    else this.refreshViewport()
+    if (guest) {
+      guest.lastActiveAt = this.now()
+      guest.view.webContents.reload()
+    } else this.refreshViewport()
     this.changed()
     return this.getState()
   }
@@ -368,13 +505,22 @@ export class BrowserWorkspaceManager {
     if (this.disposed) throw new Error('BROWSER_DISPOSED')
     const [width, height] = this.deps.owner.getContentSize()
     clampBrowserViewport(request, { width, height })
-    if (!request.visible && this.viewport.visible && this.deps.notifySnapshot) {
-      const activeId = this.activeTabId
-      void this.captureSnapshot(activeId).then((snapshot) => {
-        if (snapshot && this.deps.notifySnapshot) {
-          this.deps.notifySnapshot(activeId, snapshot)
-        }
-      })
+    if (!request.visible && this.viewport.visible) {
+      const activeGuest = this.guests.get(this.activeTabId)
+      if (activeGuest) activeGuest.lastActiveAt = this.now()
+      if (this.deps.notifySnapshot) {
+        const activeId = this.activeTabId
+        void this.captureSnapshot(activeId).then((snapshot) => {
+          if (
+            !this.disposed &&
+            this.tabs.some((item) => item.id === activeId) &&
+            snapshot &&
+            this.deps.notifySnapshot
+          ) {
+            this.deps.notifySnapshot(activeId, snapshot)
+          }
+        })
+      }
     }
     this.viewport = { visible: request.visible, bounds: { ...request.bounds } }
     this.refreshViewport()
@@ -390,11 +536,13 @@ export class BrowserWorkspaceManager {
     )
     if (bounds && this.deps.owner.isVisible() && isRemote && !this.guests.has(tab!.id))
       this.createGuest(tab!)
+    const currentNow = this.now()
     for (const [id, guest] of this.guests) {
       const visible = Boolean(
         bounds && this.deps.owner.isVisible() && id === this.activeTabId && isRemote
       )
       if (visible && bounds) {
+        guest.lastActiveAt = currentNow
         guest.view.setBounds(bounds)
         if (!guest.attached) {
           this.deps.owner.contentView.addChildView(guest.view)
@@ -403,10 +551,13 @@ export class BrowserWorkspaceManager {
       }
       guest.view.setVisible(visible)
       if (!visible && guest.attached) {
+        guest.lastActiveAt = currentNow
         this.deps.owner.contentView.removeChildView(guest.view)
         guest.attached = false
       }
     }
+    this.evictExcessGuests()
+    this.scheduleDiscardTimer()
   }
 
   private updateHistory(tab: BrowserTabState): void {
@@ -419,7 +570,13 @@ export class BrowserWorkspaceManager {
     const view = this.deps.createView()
     view.setVisible(false)
     const wc = view.webContents
-    const guest: Guest = { view, disposers: [], generation: 0, attached: false }
+    const guest: Guest = {
+      view,
+      disposers: [],
+      generation: 0,
+      attached: false,
+      lastActiveAt: this.now()
+    }
     this.guests.set(tab.id, guest)
     const on = <Args extends unknown[]>(event: string, listener: (...args: Args) => void) => {
       wc.on(event as never, listener)
@@ -491,36 +648,65 @@ export class BrowserWorkspaceManager {
       )
         return
       const key = input.key.toLowerCase()
-      const command = (input.meta || input.control) && !input.alt && !input.shift
+      const code = typeof input.code === 'string' ? input.code : ''
+      const isMac = process.platform === 'darwin'
+      const hasPrimaryModifier = isMac ? input.meta && !input.control : input.control && !input.meta
+      const command = hasPrimaryModifier && !input.alt && !input.shift
+      const commandWithOptionalShift = hasPrimaryModifier && !input.alt
+      const previousActiveId = this.activeTabId
       let action: Promise<BrowserWorkspaceState> | undefined
-      if (command && key === 'l' && this.deps.focusAddress) {
+      if (command && (code === 'KeyL' || key === 'l') && this.deps.focusAddress) {
         event.preventDefault()
-        this.deps.owner.webContents.focus()
+        if (!this.deps.owner.isDestroyed() && !this.deps.owner.webContents.isDestroyed()) {
+          this.deps.owner.webContents.focus()
+        }
         this.deps.focusAddress()
         return
       }
-      if (command && key === 't') action = this.createTab()
-      else if (command && key === 'w') action = this.closeTab(tab.id)
-      else if (command && key === 'r') action = this.reload(tab.id)
-      else if (input.alt && !input.meta && !input.control && key === 'arrowleft')
+      if (command && (code === 'KeyT' || key === 't')) action = this.createTab()
+      else if (command && (code === 'KeyW' || key === 'w')) action = this.closeTab(tab.id)
+      else if (commandWithOptionalShift && (code === 'KeyR' || key === 'r'))
+        action = this.reload(tab.id)
+      else if (
+        input.alt &&
+        !input.meta &&
+        !input.control &&
+        !input.shift &&
+        (code === 'ArrowLeft' || key === 'arrowleft')
+      )
         action = this.back(tab.id)
-      else if (input.alt && !input.meta && !input.control && key === 'arrowright')
+      else if (
+        input.alt &&
+        !input.meta &&
+        !input.control &&
+        !input.shift &&
+        (code === 'ArrowRight' || key === 'arrowright')
+      )
         action = this.forward(tab.id)
       if (action) {
         event.preventDefault()
-        if (command && (key === 't' || key === 'w')) {
+        const isTabSwitch =
+          command && (code === 'KeyT' || key === 't' || code === 'KeyW' || key === 'w')
+        if (isTabSwitch && this.activeTabId !== previousActiveId) {
           const active = this.tabs.find((item) => item.id === this.activeTabId)
-          if (active && !active.url) {
-            this.deps.owner.webContents.focus()
-            this.deps.focusAddress?.()
-          } else if (active) {
-            this.guests.get(active.id)?.view.webContents.focus()
+          const activeGuest = active ? this.guests.get(active.id) : undefined
+          if (active && (!active.url || !activeGuest)) {
+            if (!this.deps.owner.isDestroyed() && !this.deps.owner.webContents.isDestroyed()) {
+              this.deps.owner.webContents.focus()
+            }
+            if (!active.url) this.deps.focusAddress?.()
+          } else if (activeGuest && !activeGuest.view.webContents.isDestroyed()) {
+            activeGuest.view.webContents.focus()
           }
         }
-        void action.catch(() => {
+        void action.catch((failure: unknown) => {
+          if (this.disposed) return
           const active = this.tabs.find((item) => item.id === this.activeTabId)
           if (active && !active.error) {
-            active.error = 'BROWSER_COMMAND_FAILED'
+            active.error =
+              failure instanceof Error && /^BROWSER_[A-Z_]+$/.test(failure.message)
+                ? failure.message
+                : 'BROWSER_COMMAND_FAILED'
             this.changed()
           }
         })
@@ -616,16 +802,19 @@ export class BrowserWorkspaceManager {
     this.guests.delete(id)
     guest.generation += 1
     for (const dispose of guest.disposers) dispose()
+    guest.disposers.length = 0
     guest.view.setVisible(false)
     if (guest.attached && !this.deps.owner.isDestroyed())
       this.deps.owner.contentView.removeChildView(guest.view)
+    guest.attached = false
     if (!guest.view.webContents.isDestroyed())
       guest.view.webContents.close({ waitForBeforeUnload: false })
   }
 
   resetGuests(): void {
+    this.clearDiscardTimer()
     this.viewport.visible = false
-    for (const id of this.guests.keys()) this.closeGuest(id)
+    for (const id of Array.from(this.guests.keys())) this.closeGuest(id)
     for (const tab of this.tabs) {
       tab.loading = false
       tab.canGoBack = false
@@ -637,9 +826,10 @@ export class BrowserWorkspaceManager {
   async dispose(): Promise<void> {
     if (this.disposed) return
     this.disposed = true
+    this.clearDiscardTimer()
     for (const dispose of this.ownerDisposers) dispose()
     this.ownerDisposers.length = 0
-    for (const id of this.guests.keys()) this.closeGuest(id)
+    for (const id of Array.from(this.guests.keys())) this.closeGuest(id)
     await this.writes.catch(() => {})
   }
 }

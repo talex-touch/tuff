@@ -70,6 +70,7 @@ import type { IntelligenceAuditLogEntry } from './intelligence-audit-logger'
 import { format } from 'node:util'
 import { PromptTemplate } from '@langchain/core/prompts'
 import {
+  IntelligenceCapabilityType,
   IntelligenceProviderType,
   resolveIntelligencePromptTemplate,
   toRuntimeCapabilityId
@@ -114,6 +115,25 @@ import {
 
 const intelligenceLog = createLogger('Intelligence')
 const formatLogMessage = (...args: unknown[]) => format(...args)
+
+/**
+ * Capabilities backed by binary payloads or mutable file paths must not pass through `getCacheKey`
+ * (`JSON.stringify(payload)`): large base64 data URLs block the main thread and pin megabytes in V8
+ * heap, while pathname strings can go stale across file overwrites.
+ */
+const NON_CACHEABLE_CAPABILITY_TYPES = new Set<string>([
+  IntelligenceCapabilityType.VISION,
+  IntelligenceCapabilityType.VISION_OCR,
+  IntelligenceCapabilityType.IMAGE_CAPTION,
+  IntelligenceCapabilityType.IMAGE_ANALYZE,
+  IntelligenceCapabilityType.IMAGE_TRANSLATE_E2E,
+  IntelligenceCapabilityType.IMAGE_GENERATE,
+  IntelligenceCapabilityType.IMAGE_EDIT,
+  IntelligenceCapabilityType.TTS,
+  IntelligenceCapabilityType.STT,
+  IntelligenceCapabilityType.ASR,
+  IntelligenceCapabilityType.AUDIO_TRANSCRIBE
+])
 
 /**
  * The caller a request is counted and quota-checked under.
@@ -760,9 +780,13 @@ export class TuffIntelligenceSDK {
         options
       )
 
-      // Image calls always revalidate source identity; a pathname is not a content cache key.
+      // Image and media calls always revalidate source identity; a pathname is not a content cache
+      // key, and stringifying multi-MB data URLs stalls the main thread and pins heap.
       const cacheKey =
-        this.config.enableCache && capabilityId !== 'audio.stt' && !localImageInput
+        this.config.enableCache &&
+        capabilityId !== 'audio.stt' &&
+        !localImageInput &&
+        !NON_CACHEABLE_CAPABILITY_TYPES.has(capability.type)
           ? this.getCacheKey(capabilityId, payload, runtimeOptions)
           : null
       throwIfIntelligenceCancelled(signal)

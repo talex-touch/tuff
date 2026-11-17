@@ -1,178 +1,62 @@
-<script lang="ts" name="TPopperDialog" setup>
-import type { Component, VNodeChild } from 'vue'
-import { TxButton } from '@talex-touch/tuffex/button'
-import type { DialogMessageHtml } from '@talex-touch/tuffex/dialog'
-import { sleep } from '@talex-touch/utils/common'
-import { defineComponent, onMounted, provide, ref } from 'vue'
+<script lang="ts" setup>
+import type { DialogMessageHtml, DialogSurfaceProps } from '@talex-touch/tuffex/dialog'
+import type { Component, VNode, VNodeChild } from 'vue'
+import { TxPopperDialog } from '@talex-touch/tuffex/dialog'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TxScroll } from '@talex-touch/tuffex/scroll'
+
+defineOptions({ name: 'TPopperDialog' })
 
 interface Props {
+  /** Callback function to close the dialog */
   close: () => void
+  /** Dialog title */
   title?: string
+  /** Dialog message content */
   message?: string
+  /** Trusted HTML dialog message content */
   messageHtml?: DialogMessageHtml
+  /** Confirm button label */
+  confirmText?: string
+  /** Component to render */
   comp?: Component
+  /** Render function */
   render?: () => VNodeChild
+  /** Surface material mode */
+  surface?: DialogSurfaceProps['surface']
+  /** Surface tint colour */
+  surfaceColor?: string
+  /** Surface tint opacity */
+  surfaceOpacity?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
   title: '',
   message: '',
   messageHtml: '',
+  confirmText: undefined,
   comp: undefined,
-  render: undefined
+  render: undefined,
+  surface: undefined,
+  surfaceColor: undefined,
+  surfaceOpacity: undefined
 })
 
 const { t } = useI18n()
-const isClosing = ref(false)
-const renderComp = ref<Component | null>(null)
-
-onMounted(() => {
-  if (props.render) {
-    renderComp.value = defineComponent({
-      render: props.render
-    })
-  }
-})
-
-async function destroy(): Promise<void> {
-  isClosing.value = true
-  await sleep(550)
-  props.close()
-}
-
-provide('destroy', destroy)
+const resolvedRender = computed(() => props.render as (() => VNode) | undefined)
 </script>
 
 <template>
-  <div
-    :class="{ close: isClosing }"
-    class="TPopperDialog-Wrapper absolute left-0 top-0 w-full h-full flex justify-center items-center z-10000 bg-black/30"
-    role="dialog"
-    aria-modal="true"
-    :aria-labelledby="title ? 'dialog-title' : undefined"
-    :aria-describedby="message || messageHtml ? 'dialog-content' : undefined"
-  >
-    <div
-      class="TPopperDialog-Container fake-background relative p-4 w-360px max-w-80% max-h-80% rounded-2xl box-border overflow-hidden"
-      style="backdrop-filter: blur(10px) saturate(180%) brightness(1.5)"
-    >
-      <component :is="renderComp" v-if="renderComp" />
-      <component :is="comp" v-else-if="comp" />
-      <template v-else>
-        <p v-if="title" id="dialog-title" class="text-1.5rem font-600 text-center">
-          {{ title }}
-        </p>
-        <TxScroll
-          id="dialog-content"
-          native
-          no-padding
-          class="TPopperDialog-Content relative mb-60px top-0 left-0 right-0 h-full max-h-300px box-border"
-        >
-          <!-- eslint-disable vue/no-v-html -->
-          <span
-            v-if="messageHtml"
-            class="w-full block text-center my-1rem leading-1.25rem"
-            style="position: relative; height: 100%"
-            v-html="messageHtml"
-          />
-          <!-- eslint-enable vue/no-v-html -->
-          <span
-            v-else
-            class="w-full block text-center my-1rem leading-1.25rem"
-            style="position: relative; height: 100%"
-          >
-            {{ message }}
-          </span>
-        </TxScroll>
-        <TxButton
-          class="absolute w-[calc(100%-40px)] bottom-1.5rem"
-          variant="flat"
-          type="primary"
-          block
-          :aria-label="t('common.confirmAndClose')"
-          @click="destroy"
-        >
-          {{ t('common.confirm') }}
-        </TxButton>
-      </template>
-    </div>
-  </div>
+  <TxPopperDialog
+    :close="props.close"
+    :title="props.title"
+    :message="props.message"
+    :message-html="props.messageHtml"
+    :confirm-text="props.confirmText ?? t('common.confirm')"
+    :comp="props.comp"
+    :render="resolvedRender"
+    :surface="props.surface"
+    :surface-color="props.surfaceColor"
+    :surface-opacity="props.surfaceOpacity"
+  />
 </template>
-
-<style lang="scss">
-$dialog-animation-duration: 0.5s;
-$dialog-animation-easing: cubic-bezier(0.785, 0.135, 0.15, 0.86);
-$fade-in-duration: 0.55s;
-$fade-in-easing: cubic-bezier(0.785, 0.135, 0.15, 0.86);
-
-@keyframes Popper-outer {
-  from {
-    opacity: 1;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0.75;
-    transform: scale(1.25);
-  }
-}
-
-@keyframes Popper {
-  0% {
-    opacity: 0;
-    transform: scale(1.25);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes fade-in {
-  0% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-.Popper-outer {
-  animation: Popper-outer $fade-in-duration forwards $fade-in-easing;
-}
-
-.Popper-outer-reverse {
-  animation-direction: reverse;
-}
-
-.TPopperDialog-Wrapper {
-  &.close {
-    opacity: 0;
-  }
-
-  transition: $dialog-animation-easing $dialog-animation-duration;
-  animation: $dialog-animation-easing $dialog-animation-duration;
-}
-
-.TPopperDialog-Container {
-  --fake-radius: 8px;
-  --fake-inner-opacity: 0.15;
-
-  transition: $dialog-animation-duration $dialog-animation-easing;
-  animation: Popper $dialog-animation-duration $dialog-animation-easing;
-
-  .FlatMarkdown-Container {
-    --fake-inner-opacity: 0;
-  }
-
-  .TPopperDialog-Content span {
-    white-space: pre-line;
-  }
-}
-
-.close .TPopperDialog-Container {
-  opacity: 0;
-  transform: scale(1.2);
-}
-</style>

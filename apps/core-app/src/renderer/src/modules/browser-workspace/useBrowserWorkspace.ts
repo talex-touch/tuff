@@ -17,6 +17,7 @@ const pluginToolbarOpen = ref(false)
 const accountOpen = ref(false)
 let retryAction: (() => Promise<BrowserWorkspaceState>) | null = null
 let consumers = 0
+let refreshRun = 0
 let unsubscribe: (() => void) | undefined
 
 // The push listener is installed before getState. Both command replies and the first read may
@@ -28,18 +29,23 @@ function applyState(next: BrowserWorkspaceState): void {
 }
 
 async function refreshState(): Promise<void> {
-  connecting.value = true
+  const run = ++refreshRun
+  connecting.value = !state.value
   error.value = ''
   try {
-    applyState(await browserSdk().getState())
+    const next = await browserSdk().getState()
+    if (consumers === 0 || run !== refreshRun) return
+    applyState(next)
   } catch (failure) {
+    if (consumers === 0 || run !== refreshRun) return
     error.value = failure instanceof Error ? failure.message : String(failure)
   } finally {
-    connecting.value = false
+    if (consumers > 0 && run === refreshRun) connecting.value = false
   }
 }
 
 async function command(action: () => Promise<BrowserWorkspaceState>): Promise<boolean> {
+  refreshRun += 1
   error.value = ''
   try {
     applyState(await action())
@@ -65,10 +71,18 @@ export function useBrowserWorkspace() {
     void refreshState()
   })
   onBeforeUnmount(() => {
-    consumers -= 1
+    consumers = Math.max(0, consumers - 1)
     if (consumers > 0) return
+    refreshRun += 1
     unsubscribe?.()
     unsubscribe = undefined
+    retryAction = null
+    state.value = null
+    connecting.value = true
+    error.value = ''
+    tabMenuOpen.value = false
+    pluginToolbarOpen.value = false
+    accountOpen.value = false
   })
 
   return {
