@@ -15,6 +15,6 @@
     "@talex-touch/tuffex": "workspace:*"
   },
   "devDependencies": {
-    "vue": "^3.5.39"
+    "vue": "catalog:frontend"
   }
 }

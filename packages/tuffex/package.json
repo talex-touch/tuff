@@ -1,6 +1,6 @@
 {
   "name": "@talex-touch/tuffex",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "engines": {
     "node": ">=26.0.0"
   },
@@ -176,7 +176,7 @@
     "vite": "^7.3.6",
     "vite-plugin-dts": "^4.5.4",
     "vitest": "^3.2.7",
-    "vue": "^3.5.39",
+    "vue": "catalog:frontend",
     "vue-tsc": "^3.3.6"
   }
 }

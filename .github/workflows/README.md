@@ -35,6 +35,13 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - Nexus `create / patch / get / link-github / publish` 成功响应会额外校验最小 JSON 结构，避免 HTML 错页或错误代理页被误判为成功
   - Gate D remote manifest check validates `tuff-release-manifest.json` on the GitHub Release; Nexus assets remain the downloadable platform matrix and should not use fake platform/arch slots for metadata
 
+- **`sync-nexus-release-notes.yml`** - Push corrected release notes of a shipped tag to Nexus
+  - Manual `workflow_dispatch` with `tag` (e.g. `v2.4.15-beta.9`); reads `notes/update_<version>.{zh,en}.md` from the dispatched branch, so notes fixed after the tag shipped are what Nexus gets
+  - Same generator and arguments as `sync-nexus-release`, so the strict bilingual contract still applies; HTML comes from the GitHub Markdown API and a failed render fails the run
+  - Only `PATCH /api/releases/<tag>` with `notes` + `notesHtml`: no create, asset re-link, publish, rebuild, or release quality gate, and the GitHub Release is untouched
+  - Reads the release back and fails unless the notes match what was sent and every other release field (status, publishedAt, rollback fields…) is unchanged; assets are not compared, since `PATCH` cannot change them and each asset's signed `downloadUrl` differs on every read
+  - Needs `NEXUS_API_KEY` with `release:write`; CF Access credentials as in `sync-nexus-release`
+
 - **`pr-flags.yml`** - PR flag management
   - Adds/removes labels based on PR content
 

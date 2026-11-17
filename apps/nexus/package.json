@@ -108,7 +108,7 @@
     "unocss": "catalog:build",
     "vitepress": "catalog:",
     "vitest": "^3.2.7",
-    "vue": "^3.5.39",
+    "vue": "catalog:frontend",
     "vue-tsc": "catalog:dev",
     "webpack": "catalog:dev",
     "wrangler": "catalog:dev"

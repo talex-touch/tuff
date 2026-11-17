@@ -24,6 +24,28 @@ describe('hydration-aware i18n message loader', () => {
     await call
   })
 
+  it('awaits a different locale while letting the current locale load proceed during hydration', async () => {
+    const load = vi.fn<(locale: string) => Promise<unknown>>()
+    const zh = Promise.withResolvers<unknown>()
+    load.mockImplementation((locale) => locale === 'zh' ? zh.promise : Promise.resolve('loaded'))
+    const ctx = { preloaded: true, getLocale: () => 'en', loadMessages: load }
+    installHydrationAwareMessageLoader({ isHydrating: true }, ctx)
+
+    let zhSettled = false
+    const zhCall = ctx.loadMessages('zh').then(() => { zhSettled = true })
+    let enSettled = false
+    const enCall = ctx.loadMessages('en').then(() => { enSettled = true })
+    await Promise.resolve()
+
+    expect(load).toHaveBeenNthCalledWith(1, 'zh')
+    expect(load).toHaveBeenNthCalledWith(2, 'en')
+    expect(zhSettled).toBe(false)
+    expect(enSettled).toBe(true)
+
+    zh.resolve('loaded')
+    await Promise.all([zhCall, enCall])
+  })
+
   it('awaits the load when the page was not preloaded', async () => {
     const { ctx, load } = createContext(false)
     load.mockResolvedValue('loaded')

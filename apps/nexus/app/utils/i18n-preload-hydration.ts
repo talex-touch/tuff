@@ -15,6 +15,7 @@
  */
 export interface HydrationAwareMessageContext {
   preloaded: boolean
+  getLocale?: () => string
   loadMessages: (locale: string) => Promise<unknown>
 }
 
@@ -33,8 +34,9 @@ export function installHydrationAwareMessageLoader(nuxtApp: HydrationAwareNuxtAp
       return pending
     }
 
-    if (nuxtApp.isHydrating && ctx.preloaded) {
-      // The render already has what it needs; let the full set arrive while hydration proceeds.
+    const isCurrentLocale = !ctx.getLocale || ctx.getLocale() === locale
+    if (nuxtApp.isHydrating && ctx.preloaded && isCurrentLocale) {
+      // The render already has what it needs for the active locale; let the full set arrive while hydration proceeds.
       deferred.set(locale, load(locale).catch(() => undefined))
       return
     }
