@@ -33,7 +33,7 @@
 
 目标：复用现有 Capability / Provider 路由，把通过运行时探针的 macOS 系统能力作为机器本地 provider 自动注入；不把机器可用性持久化或同步到其他设备，也不建立第二套同名能力路由。
 
-- [ ] **原生 OCR / `vision.ocr`**：先确认现有 `local-system-ocr` 的实际底层引擎、语言覆盖、布局数据和取消语义；若未使用 Apple Vision，再评估以 Vision 文本识别作为 macOS provider。已有 provider 不重复注册。
+- [ ] **原生 OCR / `vision.ocr`**：已确认并完成常驻 Rust 化升级（不重复注册）——`local-system-ocr`（`LocalProvider.visionOcr`）已通过 `@talex-touch/tuff-native` 封装 macOS Apple Vision（`apple-vision`）与 Windows WinRT（`windows-ocr`），支持 `blocks` 布局坐标、语言提示与 `AbortSignal` / 超时取消；现已升级为常驻 Rust `tuff-native-ocr` helper（`file` 直读与 ImageIO/WIC `<= 2000px` 原生缩放 + `utilityProcess` 降级，避免 `sharp` 主/子进程搬运与大图卡顿，并免除 `vision.ocr` 缓存 key 序列化）。待补：非沙盒 macOS `pnpm core:dev` 的 `.accurate` 实图冒烟，以及 Windows CI 对 `winrt_ocr.cpp` 与 `tuff-native-ocr.exe` 的编译/运行验收。
 - [x] **原生翻译 / `text.translate`**：已接入 macOS 26+ 的后台 `TranslationSession(installedSource:target:)`。`local-system-translation` 仅在实际会话就绪后注入，复用 Swift 进程与语言对会话；translation 插件优先使用本地路由。macOS 27 真机中英互译、插件宿主、测试进程禁网、缺包、取消和超时恢复已通过。语言包由系统设置安装，不自动下载；macOS 26 真机与正式安装包验收未覆盖。
 - [x] **语言识别（翻译内部）**：已使用 `NLLanguageRecognizer` 自动识别源语言。简繁共用字短句按已安装的中文语言包提供识别提示；显式源语言不变。不新增独立渠道。
 - [ ] **原生语音识别 / `audio.stt`**：评估 Speech framework 的实时/批量、离线能力、语言覆盖、模型下载与权限恢复；只有真实流式延迟和稳定性达到现有语音会话要求时才进入渠道列表。
