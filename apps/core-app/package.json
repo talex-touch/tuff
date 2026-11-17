@@ -1,6 +1,6 @@
 {
   "name": "@talex-touch/core-app",
-  "version": "2.4.15-beta.9",
+  "version": "2.4.15-beta.10",
   "private": true,
   "description": "A strong adaptation more platform all-tool program.",
   "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",
@@ -140,7 +140,7 @@
     "pinia": "catalog:frontend",
     "pinyin-pro": "^3.29.4",
     "plist": "^3.1.0",
-    "sharp": "^0.35.4",
+    "sharp": "^0.35.5",
     "simple-plist": "1.4.0",
     "talex-mica-electron": "^1.0.2",
     "v-wave": "^3.1.1",

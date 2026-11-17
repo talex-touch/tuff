@@ -50,6 +50,7 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
   let lastPointer = { x: 0, y: 0, ts: 0 }
   let lastPointerVelocity = { x: 0, y: 0 }
   let cleanupDarkMode: (() => void) | undefined
+  let resizeObserver: ResizeObserver | null = null
 
   function updateDarkMode(): (() => void) | undefined {
     if (!hasWindow()) {
@@ -456,13 +457,22 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
     cleanupDarkMode = updateDarkMode()
     await nextTick()
     queueUpdateIndicator(false)
-    window.addEventListener('resize', onResize)
+    // Watch the group, not the window. Its box changes without the window doing
+    // so: a scrollbar appearing in a sidebar narrows it, a late stylesheet or web
+    // font reflows its buttons. An indicator measured against the old box then
+    // sits beside its button or past the track's edge.
+    const root = groupRef.value
+    if (root && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(onResize)
+      resizeObserver.observe(root)
+    }
   })
 
   onBeforeUnmount(() => {
     if (indicatorRaf != null)
       cancelAnimationFrame(indicatorRaf)
-    window.removeEventListener('resize', onResize)
+    resizeObserver?.disconnect()
+    resizeObserver = null
     removeDragListeners()
     cleanupDarkMode?.()
   })

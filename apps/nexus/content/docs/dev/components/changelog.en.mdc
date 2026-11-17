@@ -13,11 +13,27 @@ verified: false
 
 | Item | Value |
 |------|-------|
-| Source version | **0.9.3** |
-| Release version | **0.9.3** (latest npm release) |
+| Source version | **0.9.4** |
+| Release version | **0.9.4** (latest npm release) |
 | Component modules | **192**: Base 99 · Pro 57 · AI 36 |
 
 ## Release History
+
+### Version 0.9.4 (2026-11-16)
+
+Form controls on one spec, Escape ownership, and component behavior fixed alongside the docs alignment.
+
+- **New components**: none
+- **Main updated components**: form, text, image-preview, image-generation, input, textarea, number-input, select, flat-select, date-picker, cascader, tag-input, tree-select, sensitive-input, base-anchor, dialog, modal, drawer, radio, miko, offline-state, working-indicator, tool-call-card, grid-layout, motion-control, skeleton, toast, toast-panel, text-morph, text-transformer
+- **Key features**:
+  - `TxFormItem` gains `hint`: field help sits behind a `?` beside the label and opens on hover or keyboard focus.
+  - `TxText` gains `scroll="loop"` and `loopEdge` edge effects (`gap`, `clip`, `fade`, `wrap`).
+  - `TxImagePreview` gains `loadingEffect` and a `loading` slot: while loading it shows a TxImageGeneration preset, a skeleton, or nothing.
+  - Form controls follow `TxInput`: number input, date field, flat select and multi select are 32px tall, corners are 12px, and edges are inset rings that keep the box size.
+  - An open anchored layer handles Escape first, so the surrounding `TxModal` / `TxDrawer` stays open; Escape from a form field no longer closes the dialog.
+  - `TxMiko` loads each state lazily; its default color is the lighter `#9726D9`.
+  - `TxOfflineState` forwards `primary` / `secondary`; `TxWorkingIndicator` and `TxToolCallCard` stop ticking while off screen.
+  - Fixes: the `TxRadioGroup` indicator re-measures when the group resizes, `TxSensitiveInput` stays revealed while focus moves to its copy button, `TxBlowDialog` clears the page zoom on unmount, and skeletons and collapsed toasts are hidden from screen readers.
 
 ### Version 0.9.3 (2026-11-03)
 

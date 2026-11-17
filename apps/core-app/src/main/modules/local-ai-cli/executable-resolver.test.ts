@@ -38,10 +38,18 @@ import {
 import {
   probeCliVersion,
   refreshLocalAiCliExecutables,
-  resolveLocalAiCliProviderStatus
+  resolveLocalAiCliProviderStatus,
+  stopLocalAiCliVersionProbes
 } from './executable-resolver'
 
-const ENV_KEYS = ['PATH', 'HOME', 'USERPROFILE', 'TUFF_PROBE_RUNS'] as const
+const ENV_KEYS = [
+  'PATH',
+  'HOME',
+  'USERPROFILE',
+  'TUFF_PROBE_RUNS',
+  'TUFF_PROBE_PID',
+  'TUFF_PROBE_MARKER'
+] as const
 
 let workDir: string
 let binDir: string
@@ -55,6 +63,81 @@ async function writeProgram(directory: string, name: string, output: string): Pr
   await writeFile(path, `#!/bin/sh\necho run >> "$TUFF_PROBE_RUNS"\necho '${output}'\n`, 'utf8')
   await chmod(path, 0o755)
   return path
+}
+
+async function writeHangingProgram(directory: string, name: string): Promise<string> {
+  await mkdir(directory, { recursive: true })
+  const path = join(directory, name)
+  await writeFile(
+    path,
+    [
+      `#!${process.execPath}`,
+      "const fs = require('node:fs')",
+      "fs.appendFileSync(process.env.TUFF_PROBE_RUNS, 'run\\n')",
+      'fs.writeFileSync(process.env.TUFF_PROBE_PID, String(process.pid))',
+      "process.on('SIGTERM', () => {})",
+      'setInterval(() => {}, 1000)',
+      ''
+    ].join('\n'),
+    'utf8'
+  )
+  await chmod(path, 0o755)
+  return path
+}
+
+function nextImmediate(): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>()
+  setImmediate(resolve)
+  return promise
+}
+
+/**
+ * How long a helper polls before failing with what it waited for. Under the 5 s test timeout, as a
+ * timeout does not cancel the loop: it would go on polling after the test has failed. `Date.now`,
+ * which the fake-timer tests leave real.
+ */
+const POLL_DEADLINE_MS = 4_000
+
+/**
+ * The file's content once it has some. The child creates the file before it writes the PID, and
+ * an empty read parsed as PID 0 would make `process.kill(0, 0)` probe the whole process group.
+ */
+async function waitForFile(path: string): Promise<string> {
+  const deadline = Date.now() + POLL_DEADLINE_MS
+  while (Date.now() < deadline) {
+    const text = await readFile(path, 'utf8').catch(() => '')
+    if (text.trim()) return text
+    await nextImmediate()
+  }
+  throw new Error(`${path} still empty after ${POLL_DEADLINE_MS} ms: the probe never wrote its PID`)
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function waitForProcessExit(pid: number): Promise<void> {
+  const deadline = Date.now() + POLL_DEADLINE_MS
+  while (isProcessAlive(pid)) {
+    if (Date.now() >= deadline) {
+      throw new Error(`process ${pid} still alive after ${POLL_DEADLINE_MS} ms`)
+    }
+    await nextImmediate()
+  }
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await readFile(path)
+    return true
+  } catch {
+    return false
+  }
 }
 
 async function runCount(): Promise<number> {
@@ -102,6 +185,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  stopLocalAiCliVersionProbes?.()
+  vi.useRealTimers()
   ENV_KEYS.forEach((key, index) => {
     const previous = savedEnv[index]
     if (previous === undefined) delete process.env[key]
@@ -250,5 +335,169 @@ describe('local agent CLI status', () => {
     await refreshing
 
     expect(getResolvedCliExecutable('tuff-probe-codex')).toMatchObject({ path: after })
+  })
+
+  it('shares a hanging probe across refresh without starting a second process', async () => {
+    const pidFile = join(workDir, 'probe.pid')
+    process.env.TUFF_PROBE_PID = pidFile
+    const program = await writeHangingProgram(binDir, 'tuff-probe-omp')
+
+    const first = probeCliVersion('oh-my-pi', program)
+    const pid = Number((await waitForFile(pidFile)).trim())
+    await refreshLocalAiCliExecutables(settings())
+    const second = probeCliVersion('oh-my-pi', program)
+    for (let i = 0; i < 10_000; i++) await nextImmediate()
+    expect(await runCount()).toBe(1)
+
+    stopLocalAiCliVersionProbes()
+    await expect(first).resolves.toBeUndefined()
+    await expect(second).resolves.toBeUndefined()
+    await waitForProcessExit(pid)
+  })
+
+  it('re-probes with a new answer after a pre-refresh probe exits', async () => {
+    const pidFile = join(workDir, 'probe.pid')
+    const releaseFile = join(workDir, 'release.probe')
+    process.env.TUFF_PROBE_PID = pidFile
+    process.env.TUFF_PROBE_MARKER = releaseFile
+    const program = join(binDir, 'tuff-probe-omp')
+    await writeFile(
+      program,
+      [
+        `#!${process.execPath}`,
+        `const fs = require('node:fs')`,
+        `fs.appendFileSync(process.env.TUFF_PROBE_RUNS, 'run\\n')`,
+        `fs.writeFileSync(process.env.TUFF_PROBE_PID, String(process.pid))`,
+        'const poll = setInterval(() => {',
+        '  if (fs.existsSync(process.env.TUFF_PROBE_MARKER)) {',
+        '    clearInterval(poll)',
+        `    process.stdout.write('omp/18.4.3\\n')`,
+        '  }',
+        '}, 1)',
+        ''
+      ].join('\n'),
+      'utf8'
+    )
+    await chmod(program, 0o755)
+
+    const first = probeCliVersion('oh-my-pi', program)
+    const pid = Number((await waitForFile(pidFile)).trim())
+    await refreshLocalAiCliExecutables(settings())
+    const second = probeCliVersion('oh-my-pi', program)
+    for (let i = 0; i < 10_000; i++) await nextImmediate()
+    expect(await runCount()).toBe(1)
+
+    await writeFile(releaseFile, 'release', 'utf8')
+    await expect(first).resolves.toBe('18.4.3')
+    await expect(second).resolves.toBe('18.4.3')
+    await waitForProcessExit(pid)
+
+    await writeProgram(binDir, 'tuff-probe-omp', 'omp/18.4.4')
+    await expect(probeCliVersion('oh-my-pi', program)).resolves.toBe('18.4.4')
+    expect(await runCount()).toBe(2)
+  })
+
+  it('stops a stuck version probe and leaves no child process behind', async () => {
+    const pidFile = join(workDir, 'probe.pid')
+    process.env.TUFF_PROBE_PID = pidFile
+    const program = await writeHangingProgram(binDir, 'tuff-probe-omp')
+
+    const probing = probeCliVersion('oh-my-pi', program)
+    const pid = Number((await waitForFile(pidFile)).trim())
+    expect(isProcessAlive(pid)).toBe(true)
+
+    stopLocalAiCliVersionProbes()
+    await expect(probing).resolves.toBeUndefined()
+    await waitForProcessExit(pid)
+    expect(isProcessAlive(pid)).toBe(false)
+  })
+
+  it('returns unavailable at timeout and kills a probe that ignores SIGTERM', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const pidFile = join(workDir, 'probe.pid')
+    process.env.TUFF_PROBE_PID = pidFile
+    await writeHangingProgram(binDir, 'tuff-probe-omp')
+
+    const status = resolveLocalAiCliProviderStatus('oh-my-pi', settings())
+    const pid = Number((await waitForFile(pidFile)).trim())
+    vi.advanceTimersByTime(5_000)
+    await expect(status).resolves.toMatchObject({ installed: false })
+
+    vi.advanceTimersByTime(1_000)
+    await waitForProcessExit(pid)
+    expect(isProcessAlive(pid)).toBe(false)
+  })
+
+  it('shares a timed-out probe until exit, then probes the path again', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const pidFile = join(workDir, 'probe.pid')
+    const marker = join(workDir, 'first-run.marker')
+    process.env.TUFF_PROBE_PID = pidFile
+    process.env.TUFF_PROBE_MARKER = marker
+    const program = join(binDir, 'tuff-probe-omp')
+    await writeFile(
+      program,
+      [
+        `#!${process.execPath}`,
+        "const fs = require('node:fs')",
+        "fs.appendFileSync(process.env.TUFF_PROBE_RUNS, 'run\\n')",
+        'if (!fs.existsSync(process.env.TUFF_PROBE_MARKER)) {',
+        "  fs.writeFileSync(process.env.TUFF_PROBE_MARKER, 'first')",
+        '  fs.writeFileSync(process.env.TUFF_PROBE_PID, String(process.pid))',
+        "  process.on('SIGTERM', () => {})",
+        '  setInterval(() => {}, 1000)',
+        '} else {',
+        "  process.stdout.write('omp/18.4.4\\n')",
+        '}',
+        ''
+      ].join('\n'),
+      'utf8'
+    )
+    await chmod(program, 0o755)
+
+    const first = probeCliVersion('oh-my-pi', program)
+    const pid = Number((await waitForFile(pidFile)).trim())
+    vi.advanceTimersByTime(5_000)
+    await expect(first).resolves.toBeUndefined()
+
+    await expect(probeCliVersion('oh-my-pi', program)).resolves.toBeUndefined()
+    expect(await runCount()).toBe(1)
+    vi.advanceTimersByTime(1_000)
+    await waitForProcessExit(pid)
+    await nextImmediate()
+    await expect(probeCliVersion('oh-my-pi', program)).resolves.toBe('18.4.4')
+    expect(await runCount()).toBe(2)
+  })
+
+  it('disables mise auto-install for a version probe', async () => {
+    const marker = join(workDir, 'mise-installed.marker')
+    const pidFile = join(workDir, 'probe.pid')
+    process.env.TUFF_PROBE_MARKER = marker
+    process.env.TUFF_PROBE_PID = pidFile
+    const shim = join(binDir, 'tuff-probe-omp')
+    await writeFile(
+      shim,
+      [
+        `#!${process.execPath}`,
+        "const fs = require('node:fs')",
+        "fs.appendFileSync(process.env.TUFF_PROBE_RUNS, 'run\\n')",
+        "if (process.env.MISE_AUTO_INSTALL !== 'false' || process.env.MISE_NOT_FOUND_AUTO_INSTALL !== 'false') {",
+        "  fs.writeFileSync(process.env.TUFF_PROBE_MARKER, 'installed')",
+        '  fs.writeFileSync(process.env.TUFF_PROBE_PID, String(process.pid))',
+        "  process.on('SIGTERM', () => {})",
+        '  setInterval(() => {}, 1000)',
+        '}',
+        "process.stdout.write('omp/18.4.4\\n')",
+        ''
+      ].join('\n'),
+      'utf8'
+    )
+    await chmod(shim, 0o755)
+
+    await expect(resolveLocalAiCliProviderStatus('oh-my-pi', settings())).resolves.toMatchObject({
+      installed: true,
+      version: '18.4.4'
+    })
+    expect(await fileExists(marker)).toBe(false)
   })
 })

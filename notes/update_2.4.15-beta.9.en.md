@@ -27,6 +27,10 @@
 - Accounts without a sign-in method no longer receive long device grants, and renewals check the sign-in method.
 - Windows packaged builds: fixed how the Everything SDK wrapper is resolved.
 - File-index stats and enrichment run on the read worker, reducing main-process work.
+- AI tool-call cards in a conversation stop updating their elapsed time while scrolled off screen and show the real elapsed time when they return, so long conversations scroll with less work.
+- Number and status text morphs read layout in one pass before cancelling earlier animations, so Insights, context usage and run status updates repeat less layout work.
+- In file preview, the "Open with" and image-size text transitions no longer keep an empty blur filter at rest.
+- Loading skeletons in the model provider list are marked as decorative, so screen readers no longer announce the placeholder rows.
 
 ## Known Limitations
 
