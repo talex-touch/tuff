@@ -4,6 +4,7 @@
 // Private to TxPromptBar: the shell, the gliding highlight and the listbox
 // semantics for both popups. Row content comes from the parent's slot, so the
 // element refs the highlight measures never leave this file.
+import type { PromptBarMenuPlacement } from './types'
 import { computed, ref, watchPostEffect } from 'vue'
 
 defineOptions({ name: 'TxPromptBarMenu' })
@@ -21,6 +22,8 @@ const props = withDefaults(
     selectedIndex?: number
     /** `stretch` spans the composer; `end` pins a fixed width to its right. */
     align?: 'stretch' | 'end'
+    /** Opens above or below the prompt bar. @default 'top' */
+    placement?: PromptBarMenuPlacement
     width?: number
     rowHeight?: number
     emptyText?: string
@@ -30,6 +33,7 @@ const props = withDefaults(
   {
     selectedIndex: -1,
     align: 'stretch',
+    placement: 'top',
     rowHeight: 36,
   },
 )
@@ -61,6 +65,8 @@ watchPostEffect(() => {
   rowEls.length = props.rows.length
   const target = rowEls[props.activeIndex]
   box.value = target ? { top: target.offsetTop, height: target.offsetHeight } : null
+  if (props.engaged && target && typeof target.scrollIntoView === 'function')
+    target.scrollIntoView({ block: 'nearest' })
 })
 
 const highlightStyle = computed(() => ({
@@ -78,7 +84,7 @@ const rootStyle = computed(() => ({
 <template>
   <div
     class="tx-bui-prompt-bar-menu"
-    :class="`is-${align}`"
+    :class="[`is-${align}`, `is-placement-${placement}`]"
     :style="rootStyle"
     @mouseleave="emit('leave')"
   >
@@ -146,6 +152,21 @@ const rootStyle = computed(() => ({
     transform-origin: bottom right;
   }
 
+  &.is-placement-bottom {
+    top: 100%;
+    bottom: auto;
+    margin-top: 8px;
+    margin-bottom: 0;
+
+    &.is-stretch {
+      transform-origin: top center;
+    }
+
+    &.is-end {
+      transform-origin: top right;
+    }
+  }
+
   // One highlight glides between rows instead of each row toggling its own
   // background — the same gesture as the gliding pill in the sidebar.
   .tx-bui-prompt-bar-menu__highlight {
@@ -164,6 +185,8 @@ const rootStyle = computed(() => ({
   .tx-bui-prompt-bar-menu__list {
     position: relative;
     z-index: 1;
+    max-height: var(--tx-bui-prompt-bar-menu-max-height, 260px);
+    overflow-y: auto;
     margin: 0;
     padding: 0;
     list-style: none;

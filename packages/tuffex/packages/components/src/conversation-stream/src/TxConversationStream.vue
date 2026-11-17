@@ -10,6 +10,8 @@ const props = withDefaults(defineProps<ConversationStreamProps<T>>(), {
   estimatedItemHeight: 96,
   overscan: 4,
   streaming: false,
+  scrollToBottomLabel: 'Scroll to bottom',
+  emptyAlign: 'center',
   // Explicit `undefined` opts out of Vue's absent-Boolean-prop → `false`
   // casting; "not provided" must stay distinguishable from "no history".
   hasMoreInitial: undefined,
@@ -17,16 +19,32 @@ const props = withDefaults(defineProps<ConversationStreamProps<T>>(), {
 
 const emit = defineEmits<{
   'at-bottom-change': [atBottom: boolean]
+  'following-change': [following: boolean]
+  'active-index-change': [index: number]
   'load-error': [error: unknown]
 }>()
 
 defineSlots<{
   item?: (props: { item: T, index: number }) => any
   empty?: () => any
+  header?: () => any
+  footer?: () => any
   'top-loading'?: () => any
   'top-error'?: (props: { retry: () => void }) => any
   'top-done'?: () => any
-  'scroll-to-bottom'?: (props: { streaming: boolean }) => any
+  'scroll-to-bottom'?: (props: { streaming: boolean, scrollToBottom: (behavior?: ScrollBehavior) => void }) => any
+  rail?: (props: {
+    items: T[]
+    activeIndex: number
+    scrollToIndex: (index: number) => void
+    scrollToBottom: (behavior?: ScrollBehavior) => void
+  }) => any
+  overlay?: (props: {
+    atBottom: boolean
+    following: boolean
+    streaming: boolean
+    scrollToBottom: (behavior?: ScrollBehavior) => void
+  }) => any
 }>()
 
 const scrollerRef = ref<HTMLElement | null>(null)
@@ -66,6 +84,30 @@ const cache = createPositionCache(props.estimatedItemHeight)
 const stick = useStickToBottom(scrollerRef)
 
 watch(stick.atBottom, value => emit('at-bottom-change', value))
+watch(stick.following, value => emit('following-change', value))
+
+function toCssLength(value?: number | string): string | undefined {
+  if (value === undefined || value === null || value === '')
+    return undefined
+  return typeof value === 'number' ? `${value}px` : value
+}
+
+const rootStyle = computed(() => {
+  const vars: Record<string, string> = {}
+  const top = toCssLength(props.topPadding)
+  const bottom = toCssLength(props.bottomClearance)
+  const pill = toCssLength(props.pillBottom)
+  const gap = toCssLength(props.itemGap)
+  if (top)
+    vars['--tx-conversation-stream-pad-top'] = top
+  if (bottom)
+    vars['--tx-conversation-stream-pad-bottom'] = bottom
+  if (pill)
+    vars['--tx-conversation-stream-pill-bottom'] = pill
+  if (gap)
+    vars['--tx-conversation-stream-item-gap'] = gap
+  return vars
+})
 
 // ---------------------------------------------------------------------------
 // Keys and zones. The live zone is always the last item — streaming or not —
@@ -87,6 +129,21 @@ const liveItem = computed(() => (props.items.length > 0 ? props.items[props.item
 const liveKey = computed(() =>
   props.items.length > 0 ? keyOf(props.items[props.items.length - 1] as T, props.items.length - 1) : null,
 )
+const allKeys = computed(() => props.items.map((item, index) => keyOf(item, index)))
+
+const activeIndex = computed(() => {
+  const total = props.items.length
+  if (total === 0)
+    return -1
+  if (stick.atBottom.value)
+    return total - 1
+  void layoutVersion.value
+  const focusOffset = Math.max(0, scrollTop.value - spacerTop.value + viewportHeight.value * 0.35)
+  const { start } = cache.visibleRange(focusOffset, 1, 0)
+  return Math.max(0, Math.min(total - 1, start))
+})
+
+watch(activeIndex, index => emit('active-index-change', index))
 
 // ---------------------------------------------------------------------------
 // Virtual window
@@ -239,37 +296,43 @@ function trackItem(el: unknown, key: ConversationStreamKey): void {
 }
 
 // ---------------------------------------------------------------------------
-// Prepend anchoring: any batch of items appearing before the previously-first
-// key shifts the layout by exactly their prefix height — add it back to
-// scrollTop after the DOM settles and the viewport doesn't move.
+// Prepend anchoring & tail-append follow: track the previously-first key
+// across all items (including 1-item threads where virtualKeys was empty). Any
+// batch prepended ahead of it shifts scrollTop by the prefix height once DOM settles.
 // ---------------------------------------------------------------------------
 
+let previousFirstKey: ConversationStreamKey | null = null
+
 watch(
-  virtualKeys,
-  (nextKeys, previousKeys) => {
+  allKeys,
+  (nextAllKeys, previousAllKeys) => {
     // The live key rides along un-listed: its height is recorded while it
     // streams, and pruning it here would send the row that is about to
     // migrate back to the estimate.
-    cache.syncKeys(nextKeys, liveKey.value)
+    cache.syncKeys(virtualKeys.value, liveKey.value)
     layoutVersion.value += 1
 
-    if (!previousKeys || previousKeys.length === 0)
-      return
+    const prevFirst = previousFirstKey
+    previousFirstKey = nextAllKeys[0] ?? null
 
-    const previousFirst = previousKeys[0]
-    if (previousFirst === undefined)
-      return
-    const shifted = nextKeys.indexOf(previousFirst)
-    if (shifted <= 0)
-      return
-
-    void nextTick(() => {
-      const scroller = scrollerRef.value
-      if (!scroller)
+    if (prevFirst !== null) {
+      const shifted = nextAllKeys.indexOf(prevFirst)
+      if (shifted > 0) {
+        void nextTick(() => {
+          const scroller = scrollerRef.value
+          if (!scroller)
+            return
+          scroller.scrollTop += cache.prefixHeight(shifted)
+          scrollTop.value = scroller.scrollTop
+        })
         return
-      scroller.scrollTop += cache.prefixHeight(shifted)
-      scrollTop.value = scroller.scrollTop
-    })
+      }
+    }
+
+    // When new items append at the tail while sticking, re-follow even if the
+    // new live wrapper happens to have the same height as the prior turn.
+    if (previousAllKeys && nextAllKeys.length > previousAllKeys.length)
+      void nextTick(() => stick.followIfSticking(props.streaming ? 220 : 0))
   },
   { immediate: true },
 )
@@ -482,18 +545,28 @@ defineExpose({
   // way, but the flat named type keeps the drift contract's structural
   // comparison stable where DeepReadonly's conditionals are not.
   atBottom: computed(() => stick.atBottom.value),
+  following: computed(() => stick.following.value),
 })
 </script>
 
 <template>
-  <div class="tx-conversation-stream">
+  <div class="tx-conversation-stream" :style="rootStyle">
     <div
       ref="scrollerRef"
       class="tx-conversation-stream__scroller"
       @scroll.passive="onScroll"
       @wheel.passive="onWheel"
     >
-      <div v-if="items.length === 0" class="tx-conversation-stream__empty">
+      <slot name="header" />
+
+      <div
+        v-if="items.length === 0"
+        class="tx-conversation-stream__empty"
+        :class="{
+          'is-top': emptyAlign === 'top',
+          'is-bottom': emptyAlign === 'bottom',
+        }"
+      >
         <slot name="empty" />
       </div>
 
@@ -538,11 +611,33 @@ defineExpose({
           </div>
         </div>
 
-        <div v-if="liveItem !== undefined" ref="liveRef" class="tx-conversation-stream__live">
+        <div
+          v-if="liveItem !== undefined"
+          ref="liveRef"
+          class="tx-conversation-stream__live"
+        >
           <slot name="item" :item="liveItem" :index="items.length - 1" />
         </div>
       </template>
+
+      <slot name="footer" />
     </div>
+
+    <slot
+      name="rail"
+      :items="items"
+      :active-index="activeIndex"
+      :scroll-to-index="scrollToIndex"
+      :scroll-to-bottom="scrollToBottom"
+    />
+
+    <slot
+      name="overlay"
+      :at-bottom="stick.atBottom.value"
+      :following="stick.following.value"
+      :streaming="streaming"
+      :scroll-to-bottom="scrollToBottom"
+    />
 
     <!-- Only for a reader who left the bottom: while the stream glides there on its own (a send, a
          programmatic scroll) it is not at the bottom yet, but nobody needs to be offered a way back. -->
@@ -551,10 +646,10 @@ defineExpose({
       type="button"
       class="tx-conversation-stream__pill"
       :class="{ 'is-streaming': streaming }"
-      aria-label="Scroll to bottom"
+      :aria-label="scrollToBottomLabel"
       @click="scrollToBottom('smooth')"
     >
-      <slot name="scroll-to-bottom" :streaming="streaming">
+      <slot name="scroll-to-bottom" :streaming="streaming" :scroll-to-bottom="scrollToBottom">
         <span class="tx-conversation-stream__pill-arrow" aria-hidden="true">↓</span>
       </slot>
     </button>
@@ -572,6 +667,9 @@ defineExpose({
 .tx-conversation-stream__scroller {
   width: 100%;
   height: 100%;
+  box-sizing: border-box;
+  padding-top: var(--tx-conversation-stream-pad-top, 0px);
+  padding-bottom: var(--tx-conversation-stream-pad-bottom, 0px);
   overflow-y: auto;
   // The component runs its own anchoring; the browser's would double-correct.
   overflow-anchor: none;
@@ -637,6 +735,7 @@ defineExpose({
   right: 0;
   left: 0;
   box-sizing: border-box;
+  padding-bottom: var(--tx-conversation-stream-item-gap, 0px);
 }
 
 .tx-conversation-stream__live {
@@ -647,35 +746,60 @@ defineExpose({
 .tx-conversation-stream__empty {
   display: grid;
   place-items: center;
-  height: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+
+  &.is-top {
+    place-items: start center;
+  }
+
+  &.is-bottom {
+    place-items: end center;
+  }
 }
 
 .tx-conversation-stream__pill {
   position: absolute;
-  bottom: 16px;
+  bottom: var(--tx-conversation-stream-pill-bottom, 16px);
   left: 50%;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   min-width: 32px;
   height: 32px;
   padding: 0 10px;
-  border: 1px solid var(--tx-border-color-light, #e4e7ed);
+  border: 0;
   border-radius: 999px;
-  background: var(--tx-fill-color-blank, #fff);
+  background: color-mix(in srgb, var(--tx-fill-color-blank, #fff) 88%, transparent);
+  backdrop-filter: blur(12px) saturate(160%);
   color: var(--tx-text-color-primary, #303133);
-  box-shadow: 1px 2px 10px color-mix(in srgb, var(--tx-color-black, #000) 12%, transparent);
+  box-shadow:
+    inset 0 0 0 1px var(--tx-border-color-light, #e4e7ed),
+    1px 2px 10px color-mix(in srgb, var(--tx-color-black, #000) 12%, transparent);
+  font-family: inherit;
+  font-size: 12px;
   cursor: pointer;
   transform: translateX(-50%);
   animation: tx-conversation-stream-pill-in 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 
   &:hover {
-    border-color: var(--tx-color-primary, #409eff);
+    box-shadow:
+      inset 0 0 0 1px var(--tx-color-primary, #409eff),
+      1px 2px 12px color-mix(in srgb, var(--tx-color-black, #000) 14%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--tx-color-primary, #409eff);
+    outline-offset: 2px;
   }
 
   // Streaming while detached: the pill doubles as a "new content" beacon.
   &.is-streaming {
-    border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 55%, transparent);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 55%, transparent),
+      1px 2px 12px color-mix(in srgb, var(--tx-color-black, #000) 14%, transparent);
     color: var(--tx-color-primary, #409eff);
   }
 }
@@ -698,7 +822,8 @@ defineExpose({
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tx-conversation-stream__pill {
+  .tx-conversation-stream__pill,
+  .tx-conversation-stream__spinner.is-loading {
     animation: none;
   }
 }

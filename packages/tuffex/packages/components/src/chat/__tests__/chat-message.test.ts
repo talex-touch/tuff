@@ -72,3 +72,65 @@ describe('txChatList attachment names', () => {
     expect(wrapper.find('.tx-chat-message__thumb').attributes('aria-label')).toBe('Open image attachment')
   })
 })
+
+describe('txChatMessage rich variants, status, and actions', () => {
+  it('supports hybrid layout, metrics, error retry, and collapsible TxMessageActions', async () => {
+    const wrapper = mount(TxChatMessage, {
+      props: {
+        markdown: false,
+        variant: 'hybrid',
+        copyable: true,
+        regenerable: true,
+        speakable: true,
+        actions: 'always',
+        message: {
+          id: 'a1',
+          role: 'assistant',
+          content: 'Synthesized reply',
+          status: 'error',
+          error: 'Upstream timeout',
+          metrics: '1.2s · 42 tok/s',
+          attachments: [
+            { id: 'f1', kind: 'file', name: 'report.csv', size: 1024 },
+          ],
+        },
+      },
+    })
+
+    expect(wrapper.classes()).toContain('is-variant-hybrid')
+    expect(wrapper.classes()).toContain('is-error')
+    expect(wrapper.classes()).toContain('is-actions-always')
+    // No fallback avatar rendered in hybrid mode unless avatarUrl/#avatar/showAvatar is set
+    expect(wrapper.find('.tx-chat-message__avatar').exists()).toBe(false)
+    expect(wrapper.find('.tx-chat-message__metrics').text()).toBe('1.2s · 42 tok/s')
+    expect(wrapper.find('.tx-chat-message__error').text()).toContain('Upstream timeout')
+    expect(wrapper.find('.tx-attachment-tray').exists()).toBe(true)
+
+    await wrapper.find('.tx-chat-message__retry').trigger('click')
+    expect(wrapper.emitted('retry')).toEqual([['a1']])
+
+    const actionButtons = wrapper.findAll('.tx-message-actions button')
+    expect(actionButtons.length).toBeGreaterThanOrEqual(3)
+    await wrapper.find('.tx-message-actions button[aria-label="Regenerate"]').trigger('click')
+    expect(wrapper.emitted('regenerate')).toEqual([['a1']])
+    await wrapper.find('.tx-message-actions button[aria-label="Read aloud"]').trigger('click')
+    expect(wrapper.emitted('speak')).toEqual([['a1']])
+  })
+
+  it('shows pending typing dots when pending with empty content', () => {
+    const wrapper = mount(TxChatMessage, {
+      props: {
+        markdown: false,
+        message: {
+          id: 'p1',
+          role: 'assistant',
+          content: '',
+          status: 'pending',
+        },
+      },
+    })
+
+    expect(wrapper.classes()).toContain('is-pending')
+    expect(wrapper.findAll('.tx-chat-message__typing i')).toHaveLength(3)
+  })
+})

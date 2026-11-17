@@ -430,4 +430,99 @@ describe('txPromptBar', () => {
     expect(wrapper.find('.tx-bui-prompt-bar__send').attributes('disabled')).toBeDefined()
     expect(wrapper.classes()).toContain('is-disabled')
   })
+
+  it('guards keyCode 229 on IME, supports Home/End in token menu and bottom menuPlacement', async () => {
+    const wrapper = mountBar({ menuPlacement: 'bottom' })
+    const input = wrapper.find('textarea')
+    await input.setValue('@')
+    expect(wrapper.find('.tx-bui-prompt-bar-menu').classes()).toContain('is-placement-bottom')
+
+    await input.trigger('keydown', { key: 'End' })
+    const options = wrapper.findAll('[role="option"]')
+    expect(options.at(-1)?.classes()).toContain('is-active')
+
+    await input.trigger('keydown', { key: 'Home' })
+    expect(options[0]?.classes()).toContain('is-active')
+
+    await input.trigger('keydown', { key: 'Enter', keyCode: 229 })
+    expect(wrapper.emitted('sourceSelect')).toBeUndefined()
+  })
+
+  it('supports capsule stop/queue send states, dictation Esc cancel, dragover counter, tray, and status dock', async () => {
+    const wrapper = mount(TxPromptBar, {
+      props: {
+        sources,
+        models: [{ key: 'm1', name: 'Model 1', effort: 'High' }],
+        dictatable: true,
+        streaming: true,
+        stopText: 'Stop now',
+        surface: 'refraction',
+        conversing: true,
+        beamActive: true,
+        trayPlacement: 'top',
+        trayLabel: 'Context tray',
+        contextUsage: { used: 500, max: 1000, label: 'Context' },
+        runStatus: { step: 'Searching files', elapsed: '00:04', active: true, tone: 'working' },
+      },
+      slots: {
+        tray: '<div class="tray-slot">Pin</div>',
+      },
+    })
+
+    expect(wrapper.classes()).toContain('is-surface-refraction')
+    expect(wrapper.classes()).toContain('is-conversing')
+    expect(wrapper.classes()).toContain('is-beam')
+    expect(wrapper.classes()).toContain('is-streaming')
+    expect(wrapper.find('.tx-bui-prompt-bar__context-pct').text()).toBe('50%')
+    expect(wrapper.find('.tx-bui-prompt-bar__run-step').text()).toBe('Searching files')
+    expect(wrapper.find('.tx-bui-prompt-bar__tray').attributes('aria-label')).toBe('Context tray')
+    expect(wrapper.find('.tx-bui-prompt-bar__model-effort').text()).toBe('High')
+    expect(wrapper.find('.tx-bui-prompt-bar__dictate-slot').classes()).toContain('is-yielding')
+
+    const sendBtn = wrapper.find('.tx-bui-prompt-bar__send')
+    expect(sendBtn.classes()).toContain('is-stop')
+    await sendBtn.trigger('click')
+    expect(wrapper.emitted('stop')).toHaveLength(1)
+
+    await wrapper.setProps({ sendQueues: true, modelValue: 'queued prompt' })
+    expect(sendBtn.classes()).toContain('is-queue')
+    await sendBtn.trigger('click')
+    expect(wrapper.emitted('send')?.[0]).toEqual([{ text: 'queued prompt', attachments: [] }])
+
+    // Nested dragenter/dragleave counter avoids flickering
+    const composer = wrapper.find('.tx-bui-prompt-bar__composer')
+    const file = new File(['abc'], 'drop.txt', { type: 'text/plain' })
+    const makeDrag = (type: string) => {
+      const ev = new Event(type, { bubbles: true, cancelable: true }) as DragEvent
+      Object.defineProperty(ev, 'dataTransfer', { value: { types: ['Files'], files: [file] } })
+      return ev
+    }
+    composer.element.dispatchEvent(makeDrag('dragenter'))
+    composer.element.dispatchEvent(makeDrag('dragenter'))
+    composer.element.dispatchEvent(makeDrag('dragleave'))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.classes()).toContain('is-dragover')
+    composer.element.dispatchEvent(makeDrag('drop'))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.classes()).not.toContain('is-dragover')
+    expect(wrapper.emitted('attachmentAdd')).toEqual([[[file]]])
+
+    // Dictation active + Esc cancel
+    await wrapper.setProps({ streaming: false, listening: true, dictationState: 'listening', dictationElapsedMs: 12000 })
+    expect(wrapper.find('textarea').attributes('readonly')).toBeDefined()
+    expect(wrapper.find('.tx-bui-prompt-bar__dictate-timer').text()).toBe('00:12')
+    await wrapper.find('textarea').trigger('keydown', { key: 'Escape' })
+    expect(wrapper.emitted('dictationCancel')).toHaveLength(1)
+    expect(wrapper.emitted('update:listening')?.at(-1)).toEqual([false])
+
+    const vm = wrapper.vm as unknown as {
+      box: HTMLElement | null
+      input: HTMLTextAreaElement | null
+      blur: () => void
+      launch: () => Promise<void>
+    }
+    expect(vm.box).toBeTruthy()
+    expect(vm.input).toBeTruthy()
+    await expect(vm.launch()).resolves.toBeUndefined()
+  })
 })

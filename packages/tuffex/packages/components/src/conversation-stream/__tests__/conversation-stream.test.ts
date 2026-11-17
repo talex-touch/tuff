@@ -459,4 +459,65 @@ describe('txConversationStream', () => {
     wrapper.vm.scrollToIndex(10)
     expect((control.element as any).scrollTop).toBe(28 + 10 * 96)
   })
+
+  it('anchors scrollTop even when prepending onto a 1-item thread', async () => {
+    const wrapper = mountStream({ items: makeMessages(100, 1) })
+    const control = stubScroller(wrapper, { clientHeight: 600, scrollHeight: 800 })
+    fireResize(control.element, 600)
+    await nextTick()
+
+    ;(control.element as any).scrollTop = 200
+    await wrapper.find('.tx-conversation-stream__scroller').trigger('scroll')
+
+    await wrapper.setProps({ items: [...makeMessages(95, 5), ...makeMessages(100, 1)] })
+    await nextTick()
+    await nextTick()
+
+    expect((control.element as any).scrollTop).toBe(200 + 5 * 96)
+  })
+
+  it('exposes reactive following, emits following-change, and renders rail/overlay/header/footer/padding props', async () => {
+    const wrapper = mount(TxConversationStream as any, {
+      props: {
+        items: makeMessages(0, 10),
+        itemKey: 'id',
+        topPadding: 24,
+        bottomClearance: 120,
+        pillBottom: 42,
+        itemGap: 16,
+        scrollToBottomLabel: 'Jump down',
+      },
+      slots: {
+        header: '<div class="stream-header">Start</div>',
+        footer: '<div class="stream-footer">End</div>',
+        rail: ({ items, activeIndex }: { items: Message[], activeIndex: number }) =>
+          h('div', { class: 'stream-rail' }, `${items.length}:${activeIndex}`),
+        overlay: ({ following }: { following: boolean }) =>
+          h('div', { class: 'stream-overlay' }, String(following)),
+        item: ({ item }: { item: Message }) => h('div', { class: 'msg' }, item.text),
+      },
+    })
+    const control = stubScroller(wrapper, { clientHeight: 400, scrollHeight: 2000 })
+    fireResize(control.element, 400)
+    await nextTick()
+
+    const styleAttr = wrapper.find('.tx-conversation-stream').attributes('style') ?? ''
+    expect(styleAttr).toContain('--tx-conversation-stream-pad-top: 24px')
+    expect(styleAttr).toContain('--tx-conversation-stream-pad-bottom: 120px')
+    expect(styleAttr).toContain('--tx-conversation-stream-pill-bottom: 42px')
+    expect(styleAttr).toContain('--tx-conversation-stream-item-gap: 16px')
+    expect(wrapper.find('.stream-header').text()).toBe('Start')
+    expect(wrapper.find('.stream-footer').text()).toBe('End')
+    expect(wrapper.find('.stream-rail').text()).toBe('10:9')
+    expect(wrapper.vm.following).toBe(true)
+
+    ;(control.element as any).scrollTop = 100
+    await wrapper.find('.tx-conversation-stream__scroller').trigger('scroll')
+    await nextTick()
+
+    expect(wrapper.vm.following).toBe(false)
+    expect(wrapper.emitted('following-change')?.at(-1)).toEqual([false])
+    expect(wrapper.find('.stream-overlay').text()).toBe('false')
+    expect(wrapper.find('.tx-conversation-stream__pill').attributes('aria-label')).toBe('Jump down')
+  })
 })
