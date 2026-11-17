@@ -88,12 +88,18 @@ const publishedAt = computed<string>(() => {
   font-size: 12px;
 }
 
+:global(.tx-blow-dialog__container:has(> .AppUpgradation-Container)) {
+  width: auto;
+  max-width: 100%;
+}
+
 .AppUpgradation-Container {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-width: 480px;
+  min-width: min(480px, 100%);
   width: min(720px, 90vw);
+  max-width: 100%;
   height: min(70vh, 560px);
   min-height: 360px;
   overflow: hidden;
