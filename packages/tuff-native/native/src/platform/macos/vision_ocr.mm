@@ -21,37 +21,94 @@ std::string ToStdString(NSString* text) {
   return cstr ? std::string(cstr) : std::string();
 }
 
-CGImageRef CreateImageFromBytes(const std::vector<uint8_t>& bytes, OcrError& error) {
+constexpr size_t kMaxOcrImageEdge = 2000;
+
+struct DecodedOcrImage {
+  CGImageRef image = nullptr;
+  size_t originalWidth = 0;
+  size_t originalHeight = 0;
+};
+
+bool ReadPositiveIntProperty(NSDictionary* dict, CFStringRef key, size_t& out) {
+  id raw = dict[(__bridge NSString*)key];
+  if (![raw isKindOfClass:[NSNumber class]]) return false;
+  const long long value = [(NSNumber*)raw longLongValue];
+  if (value <= 0) return false;
+  out = static_cast<size_t>(value);
+  return true;
+}
+
+DecodedOcrImage CreateImageFromBytes(const std::vector<uint8_t>& bytes, OcrError& error) {
+  DecodedOcrImage decoded;
   if (bytes.empty()) {
     error.code = "ERR_OCR_DECODE_FAILED";
     error.message = "Image payload is empty";
-    return nil;
+    return decoded;
   }
 
   NSData* data = [NSData dataWithBytes:bytes.data() length:bytes.size()];
   if (data == nil || [data length] == 0) {
     error.code = "ERR_OCR_DECODE_FAILED";
     error.message = "Failed to create NSData from image bytes";
-    return nil;
+    return decoded;
   }
 
   CGImageSourceRef source = CGImageSourceCreateWithData((__bridge CFDataRef)data, nullptr);
   if (source == nullptr) {
     error.code = "ERR_OCR_DECODE_FAILED";
     error.message = "Failed to decode image source";
-    return nil;
+    return decoded;
   }
 
-  CGImageRef image = CGImageSourceCreateImageAtIndex(source, 0, nullptr);
+  size_t orientedWidth = 0;
+  size_t orientedHeight = 0;
+  size_t orientation = 1;
+  CFDictionaryRef rawProps = CGImageSourceCopyPropertiesAtIndex(source, 0, nullptr);
+  if (rawProps != nullptr) {
+    NSDictionary* props = (__bridge NSDictionary*)rawProps;
+    size_t pixelWidth = 0;
+    size_t pixelHeight = 0;
+    ReadPositiveIntProperty(props, kCGImagePropertyPixelWidth, pixelWidth);
+    ReadPositiveIntProperty(props, kCGImagePropertyPixelHeight, pixelHeight);
+    ReadPositiveIntProperty(props, kCGImagePropertyOrientation, orientation);
+    if (pixelWidth > 0 && pixelHeight > 0) {
+      const bool swapsAxes = orientation >= 5 && orientation <= 8;
+      orientedWidth = swapsAxes ? pixelHeight : pixelWidth;
+      orientedHeight = swapsAxes ? pixelWidth : pixelHeight;
+    }
+    CFRelease(rawProps);
+  }
+
+  CGImageRef image = nullptr;
+  const bool needsResize = orientedWidth > kMaxOcrImageEdge || orientedHeight > kMaxOcrImageEdge;
+  const bool needsOrientationTransform = orientation > 1;
+  if (needsResize || needsOrientationTransform) {
+    const size_t maxEdge = std::max(orientedWidth, orientedHeight);
+    const size_t targetMaxEdge =
+        maxEdge > 0 ? std::min(maxEdge, kMaxOcrImageEdge) : kMaxOcrImageEdge;
+    NSDictionary* options = @{
+      (__bridge NSString*)kCGImageSourceCreateThumbnailFromImageAlways : @YES,
+      (__bridge NSString*)kCGImageSourceCreateThumbnailWithTransform : @YES,
+      (__bridge NSString*)kCGImageSourceThumbnailMaxPixelSize : @(targetMaxEdge)
+    };
+    image = CGImageSourceCreateThumbnailAtIndex(source, 0, (__bridge CFDictionaryRef)options);
+  }
+
+  if (image == nullptr) {
+    image = CGImageSourceCreateImageAtIndex(source, 0, nullptr);
+  }
   CFRelease(source);
 
   if (image == nullptr) {
     error.code = "ERR_OCR_DECODE_FAILED";
     error.message = "Failed to create CGImage from source";
-    return nil;
+    return decoded;
   }
 
-  return image;
+  decoded.image = image;
+  decoded.originalWidth = orientedWidth > 0 ? orientedWidth : CGImageGetWidth(image);
+  decoded.originalHeight = orientedHeight > 0 ? orientedHeight : CGImageGetHeight(image);
+  return decoded;
 }
 
 std::array<double, 4> ToBoundingBox(CGRect normalizedRect, size_t imageWidth, size_t imageHeight) {
@@ -70,13 +127,14 @@ bool PerformPlatformOcr(const OcrOptions& options, OcrResult& result, OcrError& 
   @autoreleasepool {
     const auto startedAt = std::chrono::steady_clock::now();
 
-    CGImageRef image = CreateImageFromBytes(options.image, error);
+    const DecodedOcrImage decoded = CreateImageFromBytes(options.image, error);
+    CGImageRef image = decoded.image;
     if (image == nullptr) {
       return false;
     }
 
-    const size_t imageWidth = CGImageGetWidth(image);
-    const size_t imageHeight = CGImageGetHeight(image);
+    const size_t imageWidth = decoded.originalWidth;
+    const size_t imageHeight = decoded.originalHeight;
 
     VNRecognizeTextRequest* request = [[VNRecognizeTextRequest alloc] init];
     request.recognitionLevel = VNRequestTextRecognitionLevelAccurate;
