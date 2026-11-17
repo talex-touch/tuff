@@ -32,12 +32,19 @@ globalThis.__filename = __filename
 globalThis.__dirname = __dirname
 
 const runtimeLogger = log4js.getLogger('runtime')
+// Bind the log4js default/error categories that ModuleLogger.writeMainProcessLog writes into
+// (`D.*.log` / `E.*.err`) without monkey-patching `console.*`.
+globalThis.logger = log4js.getLogger()
+globalThis.errLogger = log4js.getLogger('error')
 
 // check debug settings
 if (fse.existsSync(path.join(app.getPath('userData'), 'debug.talex'))) {
   process.env.DEBUG = 'true'
   runtimeLogger.level = 'debug'
+  globalThis.logger.level = 'debug'
 } else {
+  // Keep globalThis.logger at precore's 'INFO' default so packaged and dev runs persist INFO
+  // lifecycle/diagnostic records (e.g. search-split initialization) without flooding DEBUG lines.
   runtimeLogger.level = app.isPackaged ? 'warn' : 'info'
 }
 
