@@ -244,6 +244,38 @@ fn read_bounded_image_file(raw_path: &str) -> Result<Vec<u8>, (&'static str, Str
     Ok(bytes)
 }
 
+fn validate_request_source(req: &HelperRequest) -> Result<(), (&'static str, String)> {
+    if let Some(raw_path) = req.file_path.as_deref() {
+        let trimmed = raw_path.trim();
+        if trimmed.is_empty() {
+            return Err((
+                "ERR_OCR_DECODE_FAILED",
+                "Image filePath is empty".to_string(),
+            ));
+        }
+        if !Path::new(trimmed).is_absolute() {
+            return Err((
+                "ERR_OCR_INVALID_REQUEST",
+                "Image filePath must be an absolute path".to_string(),
+            ));
+        }
+        return Ok(());
+    }
+    if let Some(encoded) = req.image_base64.as_deref() {
+        if encoded.trim().is_empty() {
+            return Err((
+                "ERR_OCR_DECODE_FAILED",
+                "Image payload is empty".to_string(),
+            ));
+        }
+        return Ok(());
+    }
+    Err((
+        "ERR_OCR_INVALID_REQUEST",
+        "OCR request requires filePath or imageBase64".to_string(),
+    ))
+}
+
 fn load_request_bytes(req: &HelperRequest) -> Result<Vec<u8>, (&'static str, String)> {
     if let Some(file_path) = req.file_path.as_deref() {
         return read_bounded_image_file(file_path);
@@ -266,18 +298,9 @@ fn load_request_bytes(req: &HelperRequest) -> Result<Vec<u8>, (&'static str, Str
 }
 
 fn handle_ocr_request(req: HelperRequest) -> HelperResponse {
-    if !unsafe { tuff_ocr_is_supported() } {
-        return HelperResponse::error(
-            req.id,
-            "ERR_OCR_UNSUPPORTED_PLATFORM",
-            "Native OCR is not supported on this platform",
-        );
+    if let Err((code, message)) = validate_request_source(&req) {
+        return HelperResponse::error(req.id, code, message);
     }
-
-    let image_bytes = match load_request_bytes(&req) {
-        Ok(bytes) => bytes,
-        Err((code, message)) => return HelperResponse::error(req.id, code, message),
-    };
 
     let language_c = match req.language_hint.as_deref().map(str::trim) {
         Some(lang) if !lang.is_empty() => match CString::new(lang) {
@@ -291,6 +314,19 @@ fn handle_ocr_request(req: HelperRequest) -> HelperResponse {
             }
         },
         _ => None,
+    };
+
+    if !unsafe { tuff_ocr_is_supported() } {
+        return HelperResponse::error(
+            req.id,
+            "ERR_OCR_UNSUPPORTED_PLATFORM",
+            "Native OCR is not supported on this platform",
+        );
+    }
+
+    let image_bytes = match load_request_bytes(&req) {
+        Ok(bytes) => bytes,
+        Err((code, message)) => return HelperResponse::error(req.id, code, message),
     };
 
     let include_layout = req.include_layout.unwrap_or(false);
@@ -504,6 +540,9 @@ mod tests {
 
         let resp = resp.expect("response");
         assert!(!resp.ok);
-        assert!(resp.code.is_some());
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
+        assert_eq!(resp.code.as_deref(), Some("ERR_OCR_DECODE_FAILED"));
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        assert_eq!(resp.code.as_deref(), Some("ERR_OCR_UNSUPPORTED_PLATFORM"));
     }
 }

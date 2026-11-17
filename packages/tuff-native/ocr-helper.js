@@ -288,7 +288,20 @@ function drainQueue() {
   }
 
   clearIdleTimer()
-  const proc = ensureHelperProcess(status.helperPath)
+  let proc
+  try {
+    proc = ensureHelperProcess(status.helperPath)
+  }
+  catch (error) {
+    next.reject(
+      createError(
+        'OCR_HELPER_SPAWN_FAILED',
+        error instanceof Error ? error.message : 'OCR helper failed to start',
+      ),
+    )
+    drainQueue()
+    return
+  }
   const requestId = randomUUID()
   next.proc = proc
   next.requestId = requestId

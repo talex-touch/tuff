@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict')
 const { Buffer } = require('node:buffer')
+const { spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
@@ -13,9 +14,84 @@ const {
   closeRustOcrHelper,
 } = require('./ocr-helper')
 
+function buildWindowsFakeHelperExe(dir) {
+  const rsTarget = path.join(dir, 'fake-ocr.rs')
+  const exeTarget = path.join(dir, 'fake-ocr.exe')
+  fs.writeFileSync(
+    rsTarget,
+    `use std::io::{self, BufRead, Write};
+
+fn extract_str<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+    let needle = format!("\\"{key}\\":\\"");
+    let start = line.find(&needle)? + needle.len();
+    let rest = &line[start..];
+    let end = rest.find('"')?;
+    Some(&rest[..end])
+}
+
+fn main() {
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+    let mut out = io::BufWriter::new(stdout.lock());
+    for line in stdin.lock().lines() {
+        let Ok(line) = line else { break };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let id = extract_str(&line, "id").unwrap_or("");
+        let op = extract_str(&line, "operation").unwrap_or("");
+        if op == "shutdown" {
+            let _ = writeln!(out, "{{\\"id\\":\\"{id}\\",\\"ok\\":true}}");
+            let _ = out.flush();
+            std::process::exit(0);
+        }
+        let file_path = extract_str(&line, "filePath");
+        if let Some(fp) = file_path {
+            if fp.contains("hang") {
+                continue;
+            }
+            if fp.contains("crash") {
+                std::process::exit(2);
+            }
+            if fp.contains("no-text") {
+                let _ = writeln!(
+                    out,
+                    "{{\\"id\\":\\"{id}\\",\\"ok\\":false,\\"code\\":\\"ERR_OCR_RECOGNIZE_FAILED\\",\\"message\\":\\"Apple Vision recognized no text in the image\\"}}"
+                );
+                let _ = out.flush();
+                continue;
+            }
+        }
+        let tag = file_path.unwrap_or("buf");
+        let pid = std::process::id();
+        let _ = writeln!(
+            out,
+            "{{\\"id\\":\\"{id}\\",\\"ok\\":true,\\"text\\":\\"pid:{pid}:{tag}\\",\\"engine\\":\\"apple-vision\\",\\"durationMs\\":7}}"
+        );
+        let _ = out.flush();
+    }
+}
+`,
+    'utf8',
+  )
+  const compile = spawnSync('rustc', [rsTarget, '-O', '-o', exeTarget], {
+    encoding: 'utf8',
+  })
+  assert.equal(
+    compile.status,
+    0,
+    `Failed to compile fake-ocr.exe with rustc: ${compile.stderr || compile.error?.message || ''}`,
+  )
+  return exeTarget
+}
+
 function makeFakeHelperScript() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tuff-ocr-helper-test-'))
-  const scriptPath = path.join(dir, process.platform === 'win32' ? 'fake-ocr.cmd' : 'fake-ocr.js')
+  if (process.platform === 'win32') {
+    return { dir, scriptPath: buildWindowsFakeHelperExe(dir) }
+  }
+
+  const scriptPath = path.join(dir, 'fake-ocr.js')
   const jsTarget = path.join(dir, 'worker.js')
 
   fs.writeFileSync(
@@ -57,13 +133,8 @@ rl.on('line', (line) => {
     'utf8',
   )
 
-  if (process.platform === 'win32') {
-    fs.writeFileSync(scriptPath, `@echo off\r\n"${process.execPath}" "${jsTarget}"\r\n`, 'utf8')
-  }
-  else {
-    fs.writeFileSync(scriptPath, `#!/bin/sh\nexec "${process.execPath}" "${jsTarget}"\n`, 'utf8')
-    fs.chmodSync(scriptPath, 0o755)
-  }
+  fs.writeFileSync(scriptPath, `#!/bin/sh\nexec "${process.execPath}" "${jsTarget}"\n`, 'utf8')
+  fs.chmodSync(scriptPath, 0o755)
 
   return { dir, scriptPath }
 }
