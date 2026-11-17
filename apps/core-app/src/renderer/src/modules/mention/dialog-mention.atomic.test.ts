@@ -22,16 +22,15 @@ vi.mock('./dialog-manager', () => ({
 
 vi.mock('@talex-touch/tuffex/utils', () => ({ nextZIndex: () => 1000 }))
 
-vi.mock('~/components/base/dialog/TouchTip.vue', () => ({ default: { name: 'TouchTip' } }))
-vi.mock('~/components/base/dialog/TBlowDialog.vue', () => ({ default: { name: 'TBlowDialog' } }))
-vi.mock('~/components/base/dialog/TBottomDialog.vue', () => ({
-  default: { name: 'TBottomDialog' }
+vi.mock('@talex-touch/tuffex/dialog', () => ({
+  TxTouchTip: { name: 'TxTouchTip' },
+  TxBlowDialog: { name: 'TxBlowDialog' },
+  TxBottomDialog: { name: 'TxBottomDialog' },
+  TxPopperDialog: { name: 'TxPopperDialog' }
 }))
+
 vi.mock('~/components/base/dialog/TDialogMention.vue', () => ({
   default: { name: 'TDialogMention' }
-}))
-vi.mock('~/components/base/dialog/TPopperDialog.vue', () => ({
-  default: { name: 'TPopperDialog' }
 }))
 
 import { forTouchTip } from './dialog-mention'
