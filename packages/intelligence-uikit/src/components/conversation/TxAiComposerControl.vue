@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TxAiComposerControlProps } from '../../types'
+import { ref } from 'vue'
 
 defineOptions({ name: 'TxAiComposerControl' })
 
@@ -13,10 +14,17 @@ withDefaults(defineProps<TxAiComposerControlProps>(), {
 const emit = defineEmits<{
   click: [event: MouseEvent]
 }>()
+
+const buttonRef = ref<HTMLButtonElement | null>(null)
+
+defineExpose({
+  focus: () => buttonRef.value?.focus(),
+})
 </script>
 
 <template>
   <button
+    ref="buttonRef"
     type="button"
     class="tx-ai-composer-control"
     :class="[

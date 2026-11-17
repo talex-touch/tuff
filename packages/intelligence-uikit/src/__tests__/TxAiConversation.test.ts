@@ -108,4 +108,63 @@ describe('txAiConversation', () => {
     expect(vm.tweenToBottom).toBeTypeOf('function')
     expect(vm.syncScrollState).toBeTypeOf('function')
   })
+
+  it('avoids duplicate back-to-bottom buttons and only auto-follows when tail message key changes', async () => {
+    const scrollToBottom = vi.fn()
+    const wrapper = mount(TxAiConversation, {
+      props: {
+        autoFollow: true,
+        messages: [{ id: 'm1', role: 'user', content: 'Current tail' }],
+      },
+      global: {
+        stubs: {
+          TxConversationStream: {
+            name: 'TxConversationStream',
+            props: ['items'],
+            emits: ['at-bottom-change', 'load-error'],
+            data() {
+              return { atBottom: true }
+            },
+            methods: {
+              scrollToBottom,
+              scrollToIndex: vi.fn(),
+              tweenToBottom: vi.fn(async () => true),
+            },
+            template: '<div class="stream-stub"><slot v-for="(item, idx) in items" :key="idx" name="item" :item="item" :index="idx" /></div>',
+          },
+          TxStreamMarkdown: {
+            props: ['content'],
+            template: '<div>{{ content }}</div>',
+          },
+        },
+      },
+    })
+
+    const streamStub = wrapper.findComponent({ name: 'TxConversationStream' })
+    streamStub.vm.$emit('at-bottom-change', false)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.tx-ai-conversation__back').exists()).toBe(false)
+
+    streamStub.vm.$emit('at-bottom-change', true)
+    await wrapper.vm.$nextTick()
+
+    // Prepending older history keeps the tail key unchanged, so auto-follow stays quiet.
+    await wrapper.setProps({
+      messages: [
+        { id: 'm0', role: 'user', content: 'Older turn' },
+        { id: 'm1', role: 'user', content: 'Current tail' },
+      ],
+    })
+    expect(scrollToBottom).not.toHaveBeenCalled()
+
+    // Appending a new tail message while at bottom triggers auto-follow.
+    await wrapper.setProps({
+      messages: [
+        { id: 'm0', role: 'user', content: 'Older turn' },
+        { id: 'm1', role: 'user', content: 'Current tail' },
+        { id: 'm2', role: 'assistant', content: 'New reply' },
+      ],
+    })
+    expect(scrollToBottom).toHaveBeenCalledWith('auto')
+  })
 })

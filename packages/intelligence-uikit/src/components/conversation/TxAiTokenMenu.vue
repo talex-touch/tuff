@@ -10,6 +10,7 @@ const props = withDefaults(defineProps<{
   menu: PromptBarMenuKind | null
   rows: TxAiTokenMenuRow[]
   activeIndex: number
+  engaged?: boolean
   placement?: 'top' | 'bottom'
   sourcesHint?: string
   commandsHint?: string
@@ -17,6 +18,7 @@ const props = withDefaults(defineProps<{
   connectLabel?: string
   connectedLabel?: string
 }>(), {
+  engaged: true,
   placement: 'top',
   sourcesHint: 'Sources & files',
   commandsHint: 'Slash commands',
@@ -37,9 +39,9 @@ function isSourceRow(row: TxAiTokenMenuRow): row is PromptBarSource {
 }
 
 watch(
-  () => [props.menu, props.activeIndex] as const,
-  async ([menu, index]) => {
-    if (!menu)
+  () => [props.menu, props.activeIndex, props.engaged] as const,
+  async ([menu, index, engaged]) => {
+    if (!menu || !engaged)
       return
     await nextTick()
     const el = itemRefs.value[index]
@@ -71,10 +73,10 @@ watch(
       type="button"
       role="option"
       class="tx-ai-token-menu__option"
-      :class="{ 'is-active': index === activeIndex }"
-      :aria-selected="index === activeIndex ? 'true' : 'false'"
+      :class="{ 'is-active': engaged && index === activeIndex }"
+      :aria-selected="engaged && index === activeIndex ? 'true' : 'false'"
       @mouseenter="emit('engage', index)"
-      @mousedown.prevent="emit('select', row)"
+      @mousedown.prevent
       @click="emit('select', row)"
     >
       <span class="tx-ai-token-menu__name">{{ row.name }}</span>

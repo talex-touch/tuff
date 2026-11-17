@@ -229,14 +229,25 @@ function handleRailNavigate(messageIndex: number) {
   scrollToIndex(messageIndex)
 }
 
-watch(
-  () => props.messages.length,
-  (nextLen, prevLen) => {
-    if (props.autoFollow && nextLen > prevLen && atBottom.value) {
-      streamRef.value?.scrollToBottom('auto')
-    }
-  },
-)
+const tailKey = computed(() => {
+  const last = props.messages.at(-1)
+  if (!last)
+    return undefined
+  if (typeof props.itemKey === 'function')
+    return props.itemKey(last, props.messages.length - 1)
+  if (typeof props.itemKey === 'string') {
+    const value = (last as unknown as Record<string, unknown>)[props.itemKey]
+    if (typeof value === 'string' || typeof value === 'number')
+      return value
+  }
+  return last.id
+})
+
+watch(tailKey, (nextKey, prevKey) => {
+  if (props.autoFollow && nextKey !== undefined && nextKey !== prevKey && atBottom.value) {
+    streamRef.value?.scrollToBottom('auto')
+  }
+})
 
 defineExpose({
   scrollToBottom,
@@ -400,14 +411,6 @@ defineExpose({
 
     <div class="tx-ai-conversation__floating">
       <slot name="floating" :scroll-to-bottom="scrollToBottom" :show-back-to-bottom="!atBottom">
-        <button
-          v-if="!atBottom && !$slots['scroll-to-bottom']"
-          type="button"
-          class="tx-ai-conversation__back"
-          @click="scrollToBottom('smooth')"
-        >
-          {{ resolvedLabels.backToBottom }}
-        </button>
         <button
           v-if="generating"
           type="button"

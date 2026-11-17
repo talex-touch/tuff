@@ -89,6 +89,8 @@ const emit = defineEmits<{
 const boxRef = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 const ghostRef = ref<HTMLElement | null>(null)
+const modelPickerRef = ref<HTMLElement | null>(null)
+const modelTriggerRef = ref<InstanceType<typeof TxAiComposerControl> | null>(null)
 
 const internalDraft = ref(props.modelValue)
 watch(
@@ -224,14 +226,30 @@ watch([() => normalizedAttachments.value.length, isDictating], () => {
   withBoxMorph(() => {})
 })
 
+function handleDocumentPointerDown(event: PointerEvent) {
+  const target = event.target as Node | null
+  if (modelMenuOpen.value && modelPickerRef.value && target && !modelPickerRef.value.contains(target))
+    modelMenuOpen.value = false
+}
+
 onMounted(() => {
   void nextTick(syncHeight)
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
 })
 
 onBeforeUnmount(() => {
   stopMorph?.()
   stopLaunch?.()
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
 })
+
+function closeModelMenu(restoreFocus = false) {
+  if (!modelMenuOpen.value)
+    return
+  modelMenuOpen.value = false
+  if (restoreFocus)
+    void nextTick(() => modelTriggerRef.value?.focus())
+}
 
 function closeMenus() {
   forcedAtOpen.value = false
@@ -281,10 +299,6 @@ function handleAttachOrSources() {
     forcedAtOpen.value = !forcedAtOpen.value
     if (forcedAtOpen.value)
       tokenMenu.resume()
-    return
-  }
-  if (props.sources.length > 0 && props.showAttachmentButton) {
-    emit('attachmentClick')
     return
   }
   emit('attachmentClick')
@@ -497,6 +511,7 @@ defineExpose({
         :menu="tokenMenu.menu.value"
         :rows="tokenMenu.rows.value"
         :active-index="tokenMenu.activeIndex.value"
+        :engaged="tokenMenu.engaged.value"
         :sources-hint="resolvedLabels.sourcesHint"
         :commands-hint="resolvedLabels.commandsHint"
         :no-matches="resolvedLabels.noMatches"
@@ -598,12 +613,20 @@ defineExpose({
                 <slot name="mode" />
 
                 <slot name="model" :model="activeModel" :models="models">
-                  <div v-if="models.length" class="tx-ai-composer__model-picker">
+                  <div
+                    v-if="models.length"
+                    ref="modelPickerRef"
+                    class="tx-ai-composer__model-picker"
+                    @keydown.escape.stop="closeModelMenu(true)"
+                  >
                     <TxAiComposerControl
+                      ref="modelTriggerRef"
                       size="sm"
                       :label="activeModel?.name || resolvedLabels.modelLabel"
                       :active="modelMenuOpen"
                       :disabled="disabled"
+                      aria-haspopup="listbox"
+                      :aria-expanded="modelMenuOpen ? 'true' : 'false'"
                       @click="modelMenuOpen = !modelMenuOpen"
                     >
                       <span>{{ activeModel?.name }}</span>

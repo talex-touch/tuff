@@ -123,4 +123,61 @@ describe('txAiComposer', () => {
     })
     expect(wrapper.emitted('attachmentAdd')?.[0]?.[0]).toHaveLength(1)
   })
+
+  it('syncs token menu highlight with engaged state, ignores mousedown selection, and dismisses model menu cleanly', async () => {
+    const wrapper = mount(TxAiComposer, {
+      attachTo: document.body,
+      props: {
+        sources: [
+          { key: 'alpha', name: 'alpha', desc: 'First source' },
+          { key: 'beta', name: 'beta', desc: 'Second source' },
+        ],
+        models: [
+          { key: 'gpt-5.4', name: 'GPT-5.4' },
+          { key: 'local', name: 'Local' },
+        ],
+        model: 'gpt-5.4',
+      },
+    })
+
+    const textarea = wrapper.get('textarea')
+    await textarea.setValue('@')
+    const options = wrapper.findAll('.tx-ai-token-menu__option')
+    expect(options).toHaveLength(2)
+    expect(options.some(opt => opt.classes().includes('is-active'))).toBe(false)
+    expect(options.some(opt => opt.attributes('aria-selected') === 'true')).toBe(false)
+
+    await textarea.trigger('keydown', { key: 'ArrowDown' })
+    expect(options[0].classes()).toContain('is-active')
+    expect(options[0].attributes('aria-selected')).toBe('true')
+
+    await textarea.trigger('keydown', { key: 'ArrowDown' })
+    expect(options[1].classes()).toContain('is-active')
+
+    await options[0].trigger('mousedown')
+    expect(wrapper.emitted('sourceSelect')).toBeUndefined()
+    await options[0].trigger('click')
+    expect(wrapper.emitted('sourceSelect')).toHaveLength(1)
+
+    const modelTrigger = wrapper.get('.tx-ai-composer__model-picker .tx-ai-composer-control')
+    expect(modelTrigger.attributes('aria-haspopup')).toBe('listbox')
+    expect(modelTrigger.attributes('aria-expanded')).toBe('false')
+
+    await modelTrigger.trigger('click')
+    expect(modelTrigger.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('.tx-ai-composer__model-menu').exists()).toBe(true)
+
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(modelTrigger.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('.tx-ai-composer__model-menu').exists()).toBe(false)
+
+    await modelTrigger.trigger('click')
+    expect(wrapper.find('.tx-ai-composer__model-menu').exists()).toBe(true)
+    await wrapper.get('.tx-ai-composer__model-menu').trigger('keydown', { key: 'Escape' })
+    expect(wrapper.find('.tx-ai-composer__model-menu').exists()).toBe(false)
+    expect(document.activeElement).toBe(modelTrigger.element)
+
+    wrapper.unmount()
+  })
 })
