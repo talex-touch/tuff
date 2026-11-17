@@ -38,7 +38,7 @@
 - **Schema 与数据结构减容（已合入主线）**：
   - `0053_search_index_document_locators.sql`：新增 `search_index_meta.{fts_rowid,document_hash}` 及 `search_index_maintenance_progress`、`search_index_pending_commits`、`search_index_file_maintenance` 持久化表；
   - `0055_search_keyword_postings.sql`（A10，`ed48495a1`）：`search_keyword_postings`（`WITHOUT ROWID`）以整数 `doc_id` 替代完整路径，关键词表实测 −81.8%，并在维护轮渐进搬迁旧表；
-  - `FILE_CONTENT_MAX_CHARS = 50_000` 内容长度截断、`float32 BLOB` 向量存储（`1c275e282` / `77db102f7` / `d4bd5f915`）与 `PRAGMA auto_vacuum = INCREMENTAL` 均已落地。
+  - `FILE_CONTENT_MAX_CHARS = 50_000` 超长文件正文整篇跳过（超过 50,000 字符或触及解析预算的文件不做前缀截断索引，直接置 `content = null` / `content-too-long` 并保留 `≤ 50,000` 字符文件全量正文索引）、`float32 BLOB` 向量存储（`1c275e282` / `77db102f7` / `d4bd5f915`）与 `PRAGMA auto_vacuum = INCREMENTAL` 均已落地。
 - **Read-worker 下沉与运行稳定性（已合入主线）**：`search-index-read-worker` 已接管文件向量扫描、索引统计计数（`b11cdff1a`、`84a8a8668`）与恢复分页（`6d2bd10a8`）；已合入 subtree 状态持久化与热目录启动追赶（`72b06c1eb`）、热源事件 leading-trailing 节流（`ba6447df4`）、容量模式驱逐与删除余量保护（`38f9cf445` / `9e77b1fa6`）、分批刷写（`835861fa3`）以及 `2.5.1` 文件动作与 `file.search`（`687d48f3f`）。
 - **模块拆分与体积止血**：`FileProvider` 第一轮子服务抽离已落地（`file-provider.ts` 降至 3,195 原始行 / 2,790 代码行），且 `search-core.ts`（2,405 代码行 / 2,850 原始行）已纳入 `.github/module-size-ratchet.json`。
 - **当前核心未闭环门禁（收敛剩余项）**：

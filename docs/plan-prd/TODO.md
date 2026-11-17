@@ -53,7 +53,7 @@
 ## Version-planned work
 
 - [ ] **2.5.1：文件搜索与文件动作融合。** 主要功能已随 `2.4.15-beta.x` 迭代合入主线：P0 正文语义穿透已落地（目录结果与 `.app` 去重、⌘K 打开方式与 7 组文件动作、应用版本与真实创建时间摘要、权限/删除错误反馈）；B9 文件名错字 n-gram；PDF/code 分段、页码/行号片段和受控 EmbeddingGemma 2 本地 runtime contract 已接入；P1 原生 Scanner 对比已在 20,000 文件下实测完成（19ms vs 285ms，7.5MB vs 114MB，支持取消）；P3 文件移动/复制/废纸篓已落地，支持单文件原子硬链接防同名覆盖与跨卷身份复核（46 项单测通过）；P4 显式源码正文检索 `file.search` 工具已落地（5 项单测通过）。仍待实施的是签名 helper 的 packaged release 验收、Windows Everything CoreBox UI 采证，以及 `D1`/`C1-C2` 后续评估；模型与运行边界见 [调研报告](../engineering/reports/file-search-integration-2.5.1-2026-10-11.md)。本条不改变前述全局执行顺序。
-- [ ] **2.5.2：现代浏览器工作区（Beta / 实验室特性）。** 走路线 1（`WebContentsView` + Vue 3 自研现代外壳 + 核心能力原生内置），规避通用 Chrome 扩展与 DRM 授权包袱。当前 `packages/utils/common/storage/entity/app-settings.ts` 已默认开启 `betaFeatures.browserWorkspace: true`（`storage/index.ts` 含存量配置一次性迁移翻开），且 `BrowserTabStrip` 已迁入 `AppShell` 全局顶栏（PR #2195）；关闭开关时侧边栏隐藏浏览器入口并重定向路由，开启后在侧边栏与全局顶栏显示入口，提供多标签工作区、无边框视口与快捷导航。当前仅余 Phase 2 顶栏拖拽区/布局、快捷键及 `WebContentsView` 生命周期收尾（注：`2.4.15-beta.9` 发布说明仍沿用“默认关闭”旧措辞，下版更新说明需对齐）。PRD 见 [2.5.2 浏览器工作区规划](./03-features/browser-workspace-2.5.2-plan-prd.md)。本条不改变前述全局执行顺序。
+- [ ] **2.5.2：现代浏览器工作区（Beta / 实验室特性）。** 走路线 1（`WebContentsView` + Vue 3 自研现代外壳 + 核心能力原生内置），规避通用 Chrome 扩展与 DRM 授权包袱；功能与默认开关策略以 [2.5.2 浏览器工作区规划](./03-features/browser-workspace-2.5.2-plan-prd.md) 为准（已由原默认关闭改为默认开启，需在后续发布说明中同步校正 `2.4.15-beta.9` 仍沿用的“默认关闭”旧措辞）。当前仅余 Phase 2 体验与生命周期收尾验收；本条不改变前述全局执行顺序。
 
 ## Release follow-ups
 
