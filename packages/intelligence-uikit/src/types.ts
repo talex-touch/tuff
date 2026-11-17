@@ -2,13 +2,26 @@ import type { Ref } from 'vue'
 import type { FormFieldValue } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 
 import type {
+  AiAttachment,
   AiChainStep,
+  AiMessagePart,
   AiToolCallPart,
-} from "@talex-touch/tuffex/ai-elements";
+} from '@talex-touch/tuffex/ai-elements'
 import type {
   ChatComposerAttachment,
   ChatMessageModel,
-} from "@talex-touch/tuffex/chat";
+} from '@talex-touch/tuffex/chat'
+import type {
+  ConversationStreamItemKey,
+  ConversationStreamLoadResult,
+} from '@talex-touch/tuffex/conversation-stream'
+import type {
+  PromptBarCommand,
+  PromptBarModel,
+  PromptBarSource,
+} from '@talex-touch/tuffex/prompt-bar'
+import type { AiRunStep, AiSendState } from './utils/composer-state'
+import type { TxAiRailTurn } from './utils/message-rail'
 
 export type TxAiMotionPreset =
   | "none"
@@ -85,6 +98,27 @@ export interface TxAiAttachment {
   name?: string;
 }
 
+export type TxAiComposerAttachment =
+  | TxAiAttachment
+  | ChatComposerAttachment
+  | AiAttachment;
+
+export type TxAiMessagePart =
+  | AiMessagePart
+  | {
+    type: string;
+    text?: string;
+    status?: string;
+    [key: string]: unknown;
+  };
+
+export interface TxAiVoiceClipMeta {
+  src?: string;
+  durationMs?: number;
+  peaks?: readonly number[];
+  unavailableLabel?: string;
+}
+
 export interface TxAiMessageModel {
   id: string;
   role: TxAiMessageRole;
@@ -92,15 +126,89 @@ export interface TxAiMessageModel {
   createdAt?: number;
   avatarUrl?: string;
   status?: TxAiMessageStatus;
-  attachments?: TxAiAttachment[];
+  attachments?: TxAiComposerAttachment[];
   blocks?: TxAiRichBlockModel[];
+  parts?: TxAiMessagePart[];
+  segments?: TxAiSegment[];
+  voiceClip?: TxAiVoiceClipMeta;
+  footer?: TxAiTurnFooterProps;
+  error?: TxAiErrorBlockProps;
+  waiting?: boolean;
+  thinkingVerb?: string;
+  thinkingLabel?: string;
+  compacting?: boolean;
+  compactingLabel?: string;
   meta?: Record<string, unknown>;
+}
+
+export interface TxAiMessageLabels {
+  generating?: string;
+  copy?: string;
+  copied?: string;
+  regenerate?: string;
+  actions?: string;
+  speak?: string;
+  stopSpeak?: string;
+  attachment?: string;
+  voicePlay?: string;
+  voicePause?: string;
+  voiceSeek?: string;
+  voiceUnavailable?: string;
+  planning?: string;
+  thinking?: string;
+  reasoning?: string;
+  toolCall?: string;
+  errorFallback?: string;
+  retry?: string;
+  payload?: string;
 }
 
 export interface TxAiMessageProps {
   message: TxAiMessageModel;
   markdown?: boolean;
   reveal?: boolean;
+  showAvatar?: boolean;
+  showActions?: boolean;
+  copyable?: boolean;
+  regenerable?: boolean;
+  speakable?: boolean;
+  speakState?: TxAiSpeakState;
+  showFooter?: boolean;
+  variant?: 'hybrid' | 'bubble' | 'clean';
+  motion?: TxAiMotionPreset;
+  openui?: boolean;
+  openuiLabels?: Record<string, string>;
+  resolveOpenuiImage?: (query: string) => Promise<string | null>;
+  widgetSandbox?: TxAiWidgetSandbox;
+  hasToolFace?: (part: AiToolCallPart) => boolean;
+  submittedForms?: ReadonlySet<string>;
+  formDrafts?: ReadonlyMap<string, Record<string, FormFieldValue>>;
+  showToolPayload?: boolean;
+  labels?: TxAiMessageLabels;
+}
+
+export interface TxAiConversationLabels {
+  backToBottom?: string;
+  stopGenerating?: string;
+  loadingOlder?: string;
+  loadOlderFailed?: string;
+  retry?: string;
+  beginning?: string;
+  emptyTitle?: string;
+  emptySubtitle?: string;
+  railTitle?: string;
+  railTurnPrefix?: string;
+  railImageTag?: string;
+  railCodeTag?: string;
+  generating?: string;
+}
+
+export interface TxAiConversationSuggestion {
+  key?: string;
+  text: string;
+  description?: string;
+  icon?: string;
+  tone?: TxAiTone;
 }
 
 export interface TxAiConversationProps {
@@ -109,27 +217,203 @@ export interface TxAiConversationProps {
   autoFollow?: boolean;
   followGap?: number;
   generating?: boolean;
+  itemKey?: ConversationStreamItemKey<TxAiMessageModel>;
+  estimatedItemHeight?: number;
+  overscan?: number;
+  loadOlder?: () => Promise<ConversationStreamLoadResult>;
+  hasMoreInitial?: boolean;
+  blurMasks?: boolean;
+  showEmptyState?: boolean;
+  showRail?: boolean;
+  emptyTitle?: string;
+  emptySubtitle?: string;
+  suggestions?: Array<string | TxAiConversationSuggestion>;
+  composerClearance?: number | string;
+  variant?: 'hybrid' | 'bubble' | 'clean';
+  showAvatar?: boolean;
+  showActions?: boolean;
+  showFooter?: boolean;
+  openui?: boolean;
+  openuiLabels?: Record<string, string>;
+  resolveOpenuiImage?: (query: string) => Promise<string | null>;
+  widgetSandbox?: TxAiWidgetSandbox;
+  hasToolFace?: (part: AiToolCallPart) => boolean;
+  submittedForms?: ReadonlySet<string>;
+  formDrafts?: ReadonlyMap<string, Record<string, FormFieldValue>>;
+  labels?: TxAiConversationLabels;
+}
+
+export type TxAiComposerDictationState =
+  | 'idle'
+  | 'starting'
+  | 'listening'
+  | 'finishing';
+
+export interface TxAiComposerLabels {
+  placeholder?: string;
+  ariaLabel?: string;
+  send?: string;
+  stop?: string;
+  queue?: string;
+  attach?: string;
+  removeAttachment?: string;
+  cancelAttachment?: string;
+  previewTitle?: string;
+  sourcesHint?: string;
+  commandsHint?: string;
+  noMatches?: string;
+  connect?: string;
+  connected?: string;
+  modelLabel?: string;
+  dictateStart?: string;
+  dictateStop?: string;
+  dictateCancel?: string;
+  dictatingStatus?: string;
+  dictatingFinisher?: string;
+  dictateEscHint?: string;
+  queueHint?: string;
+  sendHint?: string;
+  newLineHint?: string;
+  contextLabel?: string;
+}
+
+export interface TxAiRunStatusProps {
+  step?: AiRunStep | null;
+  steps?: readonly AiRunStep[];
+  elapsedMs?: number;
+  queuedCount?: number;
+  streaming?: boolean;
+  waiting?: boolean;
+  compacting?: boolean;
+  activeTools?: readonly Pick<AiToolCallPart, 'name' | 'status' | 'summary'>[];
+  labels?: Record<string, string>;
+}
+
+export interface TxAiContextMeterProps {
+  usedTokens?: number;
+  maxTokens?: number;
+  label?: string;
+  detail?: string;
+  compact?: boolean;
+  warningThreshold?: number;
+  dangerThreshold?: number;
+}
+
+export interface TxAiVoiceDraftProps {
+  active?: boolean;
+  state?: TxAiComposerDictationState;
+  elapsedMs?: number;
+  statusText?: string;
+  escHint?: string;
+  cancelLabel?: string;
+  level?: number | (() => number);
+}
+
+export interface TxAiMessageRailProps {
+  messages: readonly TxAiMessageModel[];
+  turns?: readonly TxAiRailTurn[];
+  activeIndex?: number;
+  ariaLabel?: string;
+  imageTag?: string;
+  codeTag?: string;
+  turnPrefix?: string;
+}
+
+export interface TxAiComposerControlProps {
+  label?: string;
+  title?: string;
+  active?: boolean;
+  disabled?: boolean;
+  circle?: boolean;
+  size?: 'sm' | 'md';
+}
+
+export interface TxAiComposerChipProps {
+  label?: string;
+  value?: string;
+  active?: boolean;
+  disabled?: boolean;
+  removable?: boolean;
+  tone?: TxAiTone;
+  removeLabel?: string;
+}
+
+export interface TxAiComposerMicProps {
+  state?: TxAiComposerDictationState;
+  listening?: boolean;
+  blocked?: boolean;
+  disabled?: boolean;
+  hidden?: boolean;
+  startLabel?: string;
+  stopLabel?: string;
+}
+
+export interface TxAiComposerSendIslandProps {
+  state: AiSendState;
+  disabled?: boolean;
+  queuedCount?: number;
+  sendLabel?: string;
+  stopLabel?: string;
+  queueLabel?: string;
 }
 
 export interface TxAiComposerProps {
   modelValue?: string;
+  variant?: 'rounded' | 'pill';
+  surface?: 'solid' | 'refraction';
   placeholder?: string;
+  ariaLabel?: string;
   disabled?: boolean;
   submitting?: boolean;
-  attachments?: ChatComposerAttachment[];
+  busy?: boolean;
+  sendState?: AiSendState;
+  queuedCount?: number;
+  attachments?: TxAiComposerAttachment[];
   allowAttachmentWhileSubmitting?: boolean;
   minRows?: number;
   maxRows?: number;
+  minHeight?: number;
+  maxHeight?: number;
+  autoResize?: boolean;
   sendOnEnter?: boolean;
   sendOnMetaEnter?: boolean;
   allowEmptySend?: boolean;
+  clearOnSend?: boolean;
   sendButtonText?: string;
+  stopButtonText?: string;
+  queueButtonText?: string;
   showAttachmentButton?: boolean;
   attachmentButtonText?: string;
+  sources?: PromptBarSource[];
+  commands?: PromptBarCommand[];
+  models?: PromptBarModel[];
+  model?: string;
+  dictatable?: boolean;
+  listening?: boolean;
+  dictationState?: TxAiComposerDictationState;
+  dictationBlocked?: boolean;
+  dictationElapsedMs?: number;
+  dictationStatusText?: string;
+  dictationEscHint?: string;
+  listeningPlaceholder?: string;
+  voiceLevel?: number | (() => number);
+  voiceStream?: MediaStream | null;
+  beamActive?: boolean;
+  conversing?: boolean;
+  alertText?: string;
+  alertTone?: TxAiTone;
+  runStatus?: TxAiRunStatusProps | null;
+  contextMeter?: TxAiContextMeterProps | null;
+  labels?: TxAiComposerLabels;
 }
 
 export interface TxAiSuggestionProps {
   text: string;
+  description?: string;
+  icon?: string;
+  tone?: TxAiTone;
+  variant?: 'chip' | 'card';
+  size?: 'sm' | 'md';
   disabled?: boolean;
   active?: boolean;
 }
@@ -147,6 +431,8 @@ export interface TxAiCodeBlockProps {
   language?: string;
   title?: string;
   copyable?: boolean;
+  copyLabel?: string;
+  copiedLabel?: string;
 }
 
 export interface TxAiRichBlockModel {
@@ -161,12 +447,21 @@ export interface TxAiRichBlockModel {
 
 export interface TxAiRichBlockProps {
   block: TxAiRichBlockModel;
+  labels?: Pick<
+    TxAiMessageLabels,
+    'planning' | 'thinking' | 'reasoning' | 'toolCall' | 'errorFallback' | 'copy' | 'copied'
+  >;
 }
 
 export interface TxAiToolCallProps {
-  name: string;
+  name?: string;
   status?: TxAiToolStatus;
   description?: string;
+  toolCall?: AiToolCallPart;
+  defaultExpanded?: boolean;
+  userOpen?: boolean;
+  showRetry?: boolean;
+  labels?: Record<string, string>;
 }
 
 export interface TxAiResultCardProps {
@@ -299,12 +594,20 @@ export interface TxAiAssistantTurnProps {
 export function toTuffexChatMessage(
   message: TxAiMessageModel,
 ): ChatMessageModel {
+  const legacyImages = (message.attachments ?? []).flatMap((item) => {
+    if ('type' in item && item.type === 'image')
+      return [{ type: 'image' as const, url: item.url, name: item.name }]
+    if ('kind' in item && item.kind === 'image' && 'url' in item && typeof item.url === 'string')
+      return [{ type: 'image' as const, url: item.url, name: item.name }]
+    return []
+  })
+
   return {
     id: message.id,
     role: message.role,
-    content: message.content ?? "",
+    content: message.content ?? '',
     createdAt: message.createdAt,
     avatarUrl: message.avatarUrl,
-    attachments: message.attachments,
-  };
+    attachments: legacyImages.length ? legacyImages : undefined,
+  }
 }

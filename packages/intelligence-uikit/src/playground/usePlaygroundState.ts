@@ -1,615 +1,558 @@
+import type { AiAttachmentFile, AiMessagePart } from '@talex-touch/tuffex/ai-elements'
+import type { ConversationStreamLoadResult } from '@talex-touch/tuffex/conversation-stream'
+import type { PromptBarCommand, PromptBarModel, PromptBarSource } from '@talex-touch/tuffex/prompt-bar'
 import type {
+  TxAiComposerAttachment,
+  TxAiContextMeterProps,
   TxAiMessageModel,
-  TxAiRichBlockModel,
+  TxAiRunStatusProps,
   TxAiToolStatus,
-} from "../types";
-import { computed, onBeforeUnmount, ref } from "vue";
+} from '../types'
+import { CHART_RESULT_PREFIX } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
+import { computed, onBeforeUnmount, ref } from 'vue'
 
-type MockPhase = "empty" | "waiting" | "streaming" | "tool" | "done" | "error";
-type MockBranch = "success" | "error";
-type MockSession = "conversation" | "tools" | "markdown";
+export type MockPhase = 'empty' | 'waiting' | 'streaming' | 'tool' | 'done' | 'error'
+export type MockBranch = 'success' | 'error'
+export type MockSession = 'conversation' | 'tools' | 'markdown'
+
 interface MockTimelineStep {
-  label: string;
-  description: string;
-  phase: MockPhase;
-  messages: TxAiMessageModel[];
+  label: string
+  description: string
+  phase: MockPhase
+  messages: TxAiMessageModel[]
 }
 
 interface MockSessionConfig {
-  id: MockSession;
-  title: string;
-  heading: string;
-  eyebrow: string;
-  prompt: string;
-  adapterName: string;
-  adapterDescription: string;
-  suggestions: string[];
-  citations: Array<{ title: string; description: string }>;
+  id: MockSession
+  title: string
+  heading: string
+  eyebrow: string
+  prompt: string
+  adapterName: string
+  adapterDescription: string
+  suggestions: Array<{ text: string; description: string }>
+  citations: Array<{ title: string; description: string }>
 }
 
 const sessionConfigs: MockSessionConfig[] = [
   {
-    id: "conversation",
-    title: "Conversation extraction",
-    heading: "Chat generation mockup",
-    eyebrow: "AI conversation surface",
-    prompt: "把 AI 聊天体验抽成一组可以复用的 AI UI Kit，并保留动画调试入口。",
-    adapterName: "Conversation Adapter",
-    adapterDescription: "blocks normalized",
+    id: 'conversation',
+    title: 'CoreApp Home parity',
+    heading: 'Stream, turn & composer workspace',
+    eyebrow: 'AI conversation surface',
+    prompt: 'Audit the composer shell, attach runtime logs, and chart weekly latency with an interactive follow-up.',
+    adapterName: 'Conversation Adapter',
+    adapterDescription: 'stream + segments + composer',
     suggestions: [
-      "拆出消息 hover 工具栏",
-      "补齐 markdown 段落 reveal",
-      "模拟 tool-call collapse",
+      { text: 'Compare attachment tray & voice clip density', description: 'Check CoreApp user bubble parity' },
+      { text: 'Test @source mentions and /commands', description: 'Verify keyboard navigation and token insertion' },
+      { text: 'Inspect live OpenUI form + chart turn', description: 'Preview segments + turn footer metrics' },
     ],
     citations: [
-      { title: "ChatItem.vue", description: "message blocks" },
-      { title: "ThChat.vue", description: "scroll behavior" },
-      { title: "MilkdownRender.vue", description: "rich content" },
+      { title: 'TxAiConversation.vue', description: 'virtual stream + rail + clearance' },
+      { title: 'TxAiMessage.vue', description: 'hybrid user bubble + assistant turn' },
+      { title: 'TxAiComposer.vue', description: 'beam + tray + dictation + capsule send' },
     ],
   },
   {
-    id: "tools",
-    title: "Tool result cards",
-    heading: "Tool result mockup",
-    eyebrow: "AI tool execution surface",
-    prompt:
-      "模拟一次工具调用，从运行中、结果卡、错误卡到最终状态都要能调动画。",
-    adapterName: "Tool Adapter",
-    adapterDescription: "tool states",
-    suggestions: ["展开工具调用详情", "切换错误结果卡", "调试运行中 shimmer"],
+    id: 'tools',
+    title: 'Tool faces & OpenUI',
+    heading: 'Structured tool workbench',
+    eyebrow: 'AI tool execution surface',
+    prompt: 'Run a chart query and confirm the rollout plan before queueing the next turn.',
+    adapterName: 'Tool Adapter',
+    adapterDescription: 'tool-call + chart + error recovery',
+    suggestions: [
+      { text: 'Toggle tool payload drawer', description: 'Verify tool-call card collapse state' },
+      { text: 'Switch error recovery branch', description: 'Test retry & warning limit styling' },
+      { text: 'Inspect OpenUI action dispatch', description: 'Check live action banner output' },
+    ],
     citations: [
-      { title: "run-event-card.ts", description: "tool event shell" },
-      { title: "TxAiToolCall.vue", description: "status display" },
-      { title: "TxAiResultCard.vue", description: "result surface" },
+      { title: 'TxAiToolChart.vue', description: 'editable series workbench' },
+      { title: 'TxAiToolForm.vue', description: 'scoped accessible form' },
+      { title: 'TxAiToolCall.vue', description: 'collapsible card face' },
     ],
   },
   {
-    id: "markdown",
-    title: "Markdown streaming",
-    heading: "Markdown streaming mockup",
-    eyebrow: "AI content rendering surface",
-    prompt:
-      "模拟 markdown 内容逐段生成，并测试逐字 fade in / fade out、代码块和引用块的出现节奏。",
-    adapterName: "Markdown Adapter",
-    adapterDescription: "stream renderer",
-    suggestions: ["调试逐字 fade", "调试段落 reveal", "检查代码块进入"],
+    id: 'markdown',
+    title: 'Markdown & dictation',
+    heading: 'Streaming prose & voice draft',
+    eyebrow: 'AI content rendering surface',
+    prompt: 'Summarize the migration diff, including voice note replay and fenced code copy feedback.',
+    adapterName: 'Markdown Adapter',
+    adapterDescription: 'pacer + voice clip + code block',
+    suggestions: [
+      { text: 'Stream incremental markdown heading', description: 'Check sticky scroll behavior' },
+      { text: 'Toggle dictation simulation', description: 'Preview VoiceBeam pill + Esc cancel' },
+      { text: 'Load older history batch', description: 'Verify top prepend scroll anchoring' },
+    ],
     citations: [
-      { title: "TxAiMarkdown.vue", description: "markdown shell" },
-      { title: "TxAiStreamText.vue", description: "character fade" },
-      { title: "TxMarkdownView.vue", description: "base renderer" },
+      { title: 'TxAiMarkdown.vue', description: 'streaming markdown view' },
+      { title: 'TxAiVoiceDraft.vue', description: 'dictation timer + VoiceBeam' },
+      { title: 'TxAiMessageRail.vue', description: 'turn outline navigation' },
     ],
   },
-];
+]
 
 const phaseOptions: Array<{ label: string; value: MockPhase }> = [
-  { label: "流式", value: "streaming" },
-  { label: "工具", value: "tool" },
-  { label: "完成", value: "done" },
-  { label: "错误", value: "error" },
-];
+  { label: 'Empty', value: 'empty' },
+  { label: 'Streaming', value: 'streaming' },
+  { label: 'Tool', value: 'tool' },
+  { label: 'Done', value: 'done' },
+  { label: 'Error', value: 'error' },
+]
+
+const composerSources: PromptBarSource[] = [
+  { key: 'attach', name: 'Add photos & files', desc: 'Attach workspace context', attach: true },
+  { key: 'workspace', name: 'workspace', desc: 'packages/intelligence-uikit/src', connectable: true, connected: true },
+  { key: 'core-home', name: 'core-home', desc: 'HomePage.vue & TuffAIComposer.vue', connectable: true, connected: true },
+  { key: 'diagnostics', name: 'diagnostics', desc: 'Live telemetry & Vitest logs', connectable: true, connected: false },
+]
+
+const composerCommands: PromptBarCommand[] = [
+  { key: 'explain', name: '/explain', desc: 'Walk through the selected file or turn' },
+  { key: 'chart', name: '/chart', desc: 'Render an interactive ECharts breakdown' },
+  { key: 'review', name: '/review', desc: 'Audit accessibility, motion, and parity' },
+]
+
+const composerModels: PromptBarModel[] = [
+  { key: 'gpt-5.4', name: 'GPT-5.4', tag: 'Flagship' },
+  { key: 'claude-4.6', name: 'Claude 4.6', tag: 'Reasoning' },
+  { key: 'tuff-local', name: 'Tuff Local', tag: 'On-device' },
+]
 
 export function usePlaygroundState() {
-  const mockStartedAt = Date.now() - 240_000;
-  const activeSession = ref<MockSession>("conversation");
-  const branch = ref<MockBranch>("success");
-  const timelineIndex = ref(3);
-  const isPlaying = ref(false);
-  const draft = ref("");
-  let playTimer: ReturnType<typeof setInterval> | undefined;
+  const mockStartedAt = Date.now() - 180_000
+  const activeSession = ref<MockSession>('conversation')
+  const branch = ref<MockBranch>('success')
+  const timelineIndex = ref(3)
+  const isPlaying = ref(false)
+  const draft = ref('')
+  const selectedModel = ref('gpt-5.4')
+  const webSearchEnabled = ref(true)
+  const olderLoaded = ref(false)
+  const queuedPrompts = ref<string[]>([])
+  const listening = ref(false)
+  const dictationElapsedMs = ref(0)
+  const customMessages = ref<TxAiMessageModel[]>([])
 
-  const activeSessionConfig = computed(() => {
-    return (
-      sessionConfigs.find((item) => item.id === activeSession.value) ??
-      sessionConfigs[0]
-    );
-  });
+  const extraAttachments = ref<TxAiComposerAttachment[]>([
+    {
+      kind: 'file',
+      id: 'att-uikit',
+      name: 'TxAiComposer.vue',
+      size: 18_420,
+    },
+  ])
 
-  function createUserMessage(): TxAiMessageModel {
-    return {
-      id: "user-1",
-      role: "user",
-      content: activeSessionConfig.value.prompt,
-      createdAt: mockStartedAt,
-    };
-  }
+  let playTimer: ReturnType<typeof setInterval> | undefined
+  let dictationTimer: ReturnType<typeof setInterval> | undefined
 
-  function createAssistantMessage(
-    status: TxAiMessageModel["status"],
-    blocks: TxAiRichBlockModel[] = [],
-  ): TxAiMessageModel {
-    return {
-      id: "assistant-1",
-      role: "assistant",
-      status,
-      createdAt: mockStartedAt + 90_000,
-      blocks,
-    };
-  }
+  const activeSessionConfig = computed(
+    () => sessionConfigs.find(item => item.id === activeSession.value) ?? sessionConfigs[0],
+  )
 
-  function createThinkingBlock(
-    kind: "planning" | "thinking" | "thought",
-    content: string,
-    status: TxAiToolStatus = "success",
-  ): TxAiRichBlockModel {
-    return {
-      id: kind,
-      type: "card",
-      name:
-        kind === "planning"
-          ? "规划中"
-          : kind === "thinking"
-            ? "思考中"
-            : "思考内容",
-      status,
-      content,
-      meta: { kind },
-    };
-  }
-
-  function createPlanBlock(
-    variant: "partial" | "full",
-    status: TxAiToolStatus = "success",
-  ): TxAiRichBlockModel {
-    const session = activeSession.value;
-    const title =
-      session === "tools"
-        ? "### 工具结果切片"
-        : session === "markdown"
-          ? "### Markdown 渲染切片"
-          : "### 迁移切片";
-    const lines =
-      session === "tools"
-        ? [
-            "- ToolCall 层展示 running、success、error、cancelled。",
-            "- ResultCard 层承接结构化结果、摘要和二次操作。",
-            "- Error branch 需要保留红色语义和可恢复交互。",
-          ]
-        : session === "markdown"
-          ? [
-              "- StreamText 层负责逐字 fade in / fade out。",
-              "- Markdown 层负责段落、引用、列表和代码块渲染。",
-              "- Reveal 层负责内容渐显和段落级进入。",
-            ]
-          : [
-              "- Foundation 层负责 reveal、stream text、thinking、loading hint。",
-              "- Conversation 层负责消息、滚动跟随、停止生成和输入区域。",
-              "- Content 层承接 markdown、code block、tool/card/error blocks。",
-            ];
-
-    return {
-      id: "plan",
-      type: "markdown",
-      status,
-      content: [
-        title,
-        "",
-        ...lines.slice(0, variant === "full" ? 3 : 2),
-        "",
-        variant === "full"
-          ? "> 当前内容稳定，适合调试 hover、collapse 和 completed state。"
-          : "> 正在生成内容，适合调试段落进入、流式 cursor 和 markdown reveal。",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    };
-  }
-
-  function createToolBlock(status: TxAiToolStatus): TxAiRichBlockModel {
-    const session = activeSession.value;
-    return {
-      id: "tool-search",
-      type: "tool",
-      name:
-        session === "tools"
-          ? "Tool result pipeline"
-          : session === "markdown"
-            ? "Markdown stream parser"
-            : "Conversation block timeline",
-      status,
-      content:
-        status === "running"
-          ? session === "tools"
-            ? "执行 mock 工具调用，等待结构化结果和错误分支。"
-            : session === "markdown"
-              ? "解析 markdown token，等待段落和代码块进入。"
-              : "整理 ChatItem blocks、suggest-card、tool card 与 run event card 的抽象边界。"
-          : session === "tools"
-            ? "工具结果已归一化为 TxAiResultCard 输入。"
-            : session === "markdown"
-              ? "Markdown token 已归一化为内容 block。"
-              : "已归档为 TxAiRichBlock 的兼容输入。",
-    };
-  }
-
-  function createCodeBlock(): TxAiRichBlockModel {
-    const session = activeSession.value;
-    return {
-      id: "code",
-      type: "code",
-      content:
-        session === "tools"
-          ? [
-              "const result = normalizeToolResult(toolEvent)",
-              "const status = mapToolStatus(toolEvent.state)",
-              "",
-              "return <TxAiResultCard tone={status} />",
-            ].join("\n")
-          : session === "markdown"
-            ? [
-                "const chars = Array.from(streamText)",
-                "const blocks = parseMarkdownTokens(tokens)",
-                "",
-                'return <TxAiStreamText motion="fade" streaming />',
-              ].join("\n")
-            : [
-                "const blocks = mapAIChatBlocksToAiBlocks(conversationBlocks)",
-                "const message = mapAIChatMessageToAiMessage(conversationMessage)",
-                "",
-                "return <TxAiConversation messages={messages} generating />",
-              ].join("\n"),
-      meta: { language: "ts" },
-    };
-  }
-
-  function createResultBlock(): TxAiRichBlockModel {
-    if (branch.value === "error") {
-      return {
-        id: "error",
-        type: "error",
-        content:
-          "工具卡模拟失败：用于调试 error state、红色语义和进入/退出动画。",
-      };
-    }
-
-    return {
-      id: "run-card",
-      type: "card",
-      name:
-        activeSession.value === "tools"
-          ? "tool_result_card"
-          : activeSession.value === "markdown"
-            ? "markdown_stream_result"
-            : "ai_run_event_card",
-      content:
-        activeSession.value === "tools"
-          ? "工具返回 2 个结果字段，1 个错误分支已准备。"
-          : activeSession.value === "markdown"
-            ? "4 段内容已进入，逐字 fade 动画可调。"
-            : "3 个 blocks 已归一化，2 个动画入口等待实现。",
-    };
-  }
+  const sampleChartOutput = `${CHART_RESULT_PREFIX}${JSON.stringify({
+    type: 'line',
+    title: 'Turn latency across stream frames (ms)',
+    labels: ['Frame 1', 'Frame 2', 'Frame 3', 'Frame 4', 'Frame 5'],
+    series: [{ name: 'P95 ms', values: [42, 39, 36, 33, 29] }],
+    yLabel: 'ms',
+    showValues: true,
+  })}`
 
   const timelineSteps = computed<MockTimelineStep[]>(() => {
-    const userMessage = createUserMessage();
-    const planningText =
-      activeSession.value === "tools"
-        ? "正在拆分工具调用状态，先覆盖运行中、成功、失败和取消四种节点。"
-        : activeSession.value === "markdown"
-          ? "正在拆分 markdown stream 的显示节奏，先确定逐字、逐段、代码块三层动画。"
-          : "正在拆分 AI 聊天页的可复用边界，先确定消息、内容、工具调用三条主线。";
-    const thinkingText =
-      activeSession.value === "tools"
-        ? "对比 run event card 和 result card 的职责，工具数据只做展示映射，不引入业务请求。"
-        : activeSession.value === "markdown"
-          ? "逐字 fade 需要保留空格、标点和换行节奏，同时尊重 reduced motion。"
-          : "对比 ThChat、ChatItem、MilkdownRender 的职责，避免把 AI 业务状态带进 UI Kit。";
-    const thoughtText =
-      activeSession.value === "tools"
-        ? "工具卡负责状态语义、摘要和结果壳层；错误分支独立进入，方便调红色状态和恢复操作。"
-        : activeSession.value === "markdown"
-          ? "字符层处理 fade in / fade out；markdown 层处理语义结构；两者避免互相抢布局。"
-          : "消息容器只处理滚动、贴底、停止生成；block renderer 只处理展示形态；动画通过 class 和 motion prop 扩展。";
-    const planningBlock = createThinkingBlock("planning", planningText);
-    const planningRunningBlock = createThinkingBlock(
-      "planning",
-      planningText,
-      "running",
-    );
-    const thinkingBlock = createThinkingBlock("thinking", thinkingText);
-    const thinkingRunningBlock = createThinkingBlock(
-      "thinking",
-      thinkingText,
-      "running",
-    );
-    const thoughtBlock = createThinkingBlock("thought", thoughtText);
-    const thoughtRunningBlock = createThinkingBlock(
-      "thought",
-      thoughtText,
-      "running",
-    );
-    const planPartialStreaming = createPlanBlock("partial", "running");
-    const planFull = createPlanBlock("full");
-    const planFullStreaming = createPlanBlock("full", "running");
-    const runningTool = createToolBlock("running");
-    const finalTool = createToolBlock(
-      branch.value === "error" ? "error" : "success",
-    );
-    const status = branch.value === "error" ? "error" : "done";
-    const finalPhase = branch.value === "error" ? "error" : "done";
+    const cfg = activeSessionConfig.value
+    const userMessage: TxAiMessageModel = {
+      id: `${cfg.id}-user-1`,
+      role: 'user',
+      content: cfg.prompt,
+      createdAt: mockStartedAt,
+      voiceClip: {
+        durationMs: 4200,
+        peaks: [0.22, 0.55, 0.78, 0.64, 0.35, 0.72, 0.85, 0.48, 0.3, 0.6],
+      },
+      attachments: [
+        { kind: 'file', id: 'ctx-1', name: 'HomePage.vue', size: 61_200 },
+      ],
+    }
+
+    const streamingParts: AiMessagePart[] = [
+      {
+        type: 'reasoning',
+        text: 'Inspecting CoreApp stream clearance, ResizeObserver dock measurements, and turn footer hover thresholds.',
+        done: false,
+      },
+      {
+        type: 'text',
+        text: 'Upgrading `TxAiConversation` onto `TxConversationStream` with `TxGradualBlur` masks, outline rail navigation, and resize-observed composer clearance…',
+      },
+    ]
+
+    const toolParts: AiMessagePart[] = [
+      {
+        type: 'reasoning',
+        text: 'Verified CoreApp HomeMessageRow parity and TX modular CSS limits.',
+        done: true,
+        durationMs: 920,
+      },
+      {
+        type: 'tool-call',
+        id: 'tool-render-chart',
+        name: 'tuff_render_chart',
+        status: 'running',
+        summary: 'Comparing frame jitter across stream chunks',
+      },
+    ]
+
+    const doneParts: AiMessagePart[] = [
+      {
+        type: 'reasoning',
+        text: 'Completed parity check across stream virtualization, composer beam states, and turn footer metrics.',
+        done: true,
+        durationMs: 1280,
+      },
+      {
+        type: 'tool-call',
+        id: 'tool-render-chart',
+        name: 'tuff_render_chart',
+        status: 'done',
+        summary: 'Frame jitter settled at 29ms P95',
+        output: sampleChartOutput,
+        durationMs: 410,
+      },
+      {
+        type: 'text',
+        text: [
+          '### Parity summary',
+          '',
+          '- `TxAiConversation` wraps `TxConversationStream` with `TxAiMessageRail`, `TxMiko` empty state, and live composer dock clearance.',
+          '- `TxAiComposer` integrates `TxBorderBeam`, `TxVoiceBeam`, `TxAttachmentTray`, `@`/`/` token completion, and the capsule Send/Stop/Queue island.',
+          '',
+          '```ts',
+          'const sendState = deriveAiSendState({ sending, busy, hasDraft, allowEmptySend })',
+          '```',
+        ].join('\n'),
+      },
+    ]
+
+    const errorMessage: TxAiMessageModel = {
+      id: `${cfg.id}-assistant-error`,
+      role: 'assistant',
+      status: 'error',
+      content: 'Partial stream persisted before interruption.',
+      parts: [
+        {
+          type: 'reasoning',
+          text: 'Connecting to remote worker endpoint…',
+          done: true,
+          durationMs: 650,
+        },
+        {
+          type: 'text',
+          text: 'Partial stream persisted before the upstream worker closed early.',
+        },
+      ],
+      error: {
+        title: 'Upstream coordinator timed out',
+        detail: 'No response delta received after 15 seconds. You can retry the turn safely.',
+        reportCode: 'STREAM_TIMEOUT',
+        tone: 'danger',
+        retryable: true,
+        retryLabel: 'Retry turn',
+      },
+      footer: {
+        content: 'Partial stream persisted before the upstream worker closed early.',
+        regenerable: true,
+        metrics: { latencyMs: 1520, totalTokens: 164, model: selectedModel.value },
+      },
+    }
+
+    const doneAssistant: TxAiMessageModel = {
+      id: `${cfg.id}-assistant-done`,
+      role: 'assistant',
+      status: 'done',
+      parts: doneParts,
+      footer: {
+        content: 'Completed parity check across stream virtualization, composer beam states, and turn footer metrics.',
+        regenerable: true,
+        branchable: true,
+        metrics: { latencyMs: 1280, completionTokens: 196, totalTokens: 312, cacheReadTokens: 64, model: selectedModel.value, coordinator: 'Tuff Pi' },
+      },
+    }
 
     return [
       {
-        label: "Start",
-        description: "空会话，只保留输入区",
-        phase: "empty",
+        label: 'Empty state',
+        description: 'Idle workspace with TxMiko empty head and starter suggestions',
+        phase: 'empty',
         messages: [],
       },
       {
-        label: "用户消息",
-        description: "用户消息气泡进入",
-        phase: "waiting",
-        messages: [userMessage],
-      },
-      {
-        label: "规划中",
-        description: "助手消息壳出现，展示规划中的轻量卡片",
-        phase: "waiting",
+        label: 'Streaming response',
+        description: 'Live token pacing with border beam + stop capsule active',
+        phase: 'streaming',
         messages: [
           userMessage,
-          createAssistantMessage("waiting", [planningRunningBlock]),
+          { id: `${cfg.id}-assistant-stream`, role: 'assistant', status: 'streaming', parts: streamingParts },
         ],
       },
       {
-        label: "思考中",
-        description: "思考状态继续递增，适合调 dots 和呼吸动画",
-        phase: "waiting",
+        label: 'Tool execution',
+        description: 'Tool call running in-stream with run status pill updating',
+        phase: 'tool',
         messages: [
           userMessage,
-          createAssistantMessage("waiting", [
-            planningBlock,
-            thinkingRunningBlock,
-          ]),
+          { id: `${cfg.id}-assistant-tool`, role: 'assistant', status: 'streaming', parts: toolParts },
         ],
       },
       {
-        label: "思考内容",
-        description: "思考内容展开，适合调折叠/展开/渐显",
-        phase: "waiting",
+        label: branch.value === 'error' ? 'Turn interrupted' : 'Turn complete',
+        description: branch.value === 'error' ? 'Error recovery block + preserved turn footer' : 'Complete turn with interactive ECharts tool face and metrics footer',
+        phase: branch.value === 'error' ? 'error' : 'done',
         messages: [
           userMessage,
-          createAssistantMessage("waiting", [
-            planningBlock,
-            thinkingBlock,
-            thoughtRunningBlock,
-          ]),
+          branch.value === 'error' ? errorMessage : doneAssistant,
         ],
       },
-      {
-        label: "计划草稿",
-        description: "markdown 计划开始流式出现",
-        phase: "streaming",
-        messages: [
-          userMessage,
-          createAssistantMessage("streaming", [
-            planningBlock,
-            thinkingBlock,
-            thoughtBlock,
-            planPartialStreaming,
-          ]),
-        ],
-      },
-      {
-        label: "计划完整",
-        description: "markdown 内容补齐，适合调段落递进",
-        phase: "streaming",
-        messages: [
-          userMessage,
-          createAssistantMessage("streaming", [
-            planningBlock,
-            thinkingBlock,
-            thoughtBlock,
-            planFullStreaming,
-          ]),
-        ],
-      },
-      {
-        label: "工具调用",
-        description: "工具卡进入并保持 running",
-        phase: "tool",
-        messages: [
-          userMessage,
-          createAssistantMessage("streaming", [
-            planningBlock,
-            thinkingBlock,
-            thoughtBlock,
-            planFull,
-            runningTool,
-          ]),
-        ],
-      },
-      {
-        label: "代码块",
-        description: "代码块在工具卡下方展开",
-        phase: "tool",
-        messages: [
-          userMessage,
-          createAssistantMessage("streaming", [
-            planningBlock,
-            thinkingBlock,
-            thoughtBlock,
-            planFull,
-            runningTool,
-            createCodeBlock(),
-          ]),
-        ],
-      },
-      {
-        label: branch.value === "error" ? "错误结束" : "完成",
-        description:
-          branch.value === "error"
-            ? "错误块替代最终结果卡"
-            : "最终结果卡和 success 状态可见",
-        phase: finalPhase,
-        messages: [
-          userMessage,
-          createAssistantMessage(status, [
-            planningBlock,
-            thinkingBlock,
-            thoughtBlock,
-            planFull,
-            finalTool,
-            createCodeBlock(),
-            createResultBlock(),
-          ]),
-        ],
-      },
-    ];
-  });
+    ]
+  })
 
-  const activeStep = computed(
-    () => timelineSteps.value[timelineIndex.value] ?? timelineSteps.value[0],
-  );
-  const phase = computed<MockPhase>(() => activeStep.value.phase);
-  const messages = computed<TxAiMessageModel[]>(
-    () => activeStep.value.messages,
-  );
-  const timelineProgress = computed(
-    () => `${timelineIndex.value + 1}/${timelineSteps.value.length}`,
-  );
+  const activeStep = computed(() => timelineSteps.value[timelineIndex.value] ?? timelineSteps.value[0])
+  const phase = computed(() => activeStep.value.phase)
+  const generating = computed(() => phase.value === 'waiting' || phase.value === 'streaming' || phase.value === 'tool')
+  const modeLabel = computed(() => activeSessionConfig.value.title)
+  const currentStepLabel = computed(() => activeStep.value.label)
+
   const toolStatus = computed<TxAiToolStatus>(() => {
-    if (phase.value === "error") return "error";
-    if (phase.value === "done") return "success";
-    if (phase.value === "empty") return "pending";
-    return "running";
-  });
-  const generating = computed(
-    () =>
-      phase.value === "waiting" ||
-      phase.value === "streaming" ||
-      phase.value === "tool",
-  );
-  const workspacePhase = computed<MockPhase>(() => phase.value);
-  const modeLabel = "Mock timeline";
-  const currentStepLabel = computed(
-    () =>
-      `${timelineProgress.value} · ${activeStep.value.label} · ${activeStep.value.description}`,
-  );
-  const composerAttachments = computed(() => [
-    {
-      id: "a1",
-      label: `${activeSessionConfig.value.title.toLowerCase().replaceAll(" ", "-")}.ts`,
-      kind: "ts",
-    },
-    {
-      id: "a2",
-      label:
-        activeSession.value === "markdown"
-          ? "TxAiStreamText.vue"
-          : activeSession.value === "tools"
-            ? "TxAiResultCard.vue"
-            : "ChatItem.vue",
-      kind: "vue",
-      pending: phase.value === "tool",
-    },
-  ]);
+    if (phase.value === 'error')
+      return 'error'
+    if (phase.value === 'done')
+      return 'success'
+    if (phase.value === 'empty')
+      return 'pending'
+    return 'running'
+  })
+
+  const workspacePhase = computed(() => `${activeSession.value}:${phase.value}`)
+
+  const messages = computed<TxAiMessageModel[]>(() => {
+    const older: TxAiMessageModel[] = olderLoaded.value
+      ? [
+          { id: 'hist-user-0', role: 'user', content: 'Earlier thread: check previous CSS import audit results.', createdAt: mockStartedAt - 90_000 },
+          { id: 'hist-asst-0', role: 'assistant', status: 'done', content: 'Earlier check passed with modular `@talex-touch/tuffex/*/style.css` imports.', createdAt: mockStartedAt - 85_000 },
+        ]
+      : []
+    return [...older, ...activeStep.value.messages, ...customMessages.value]
+  })
+
+  const runStatus = computed<TxAiRunStatusProps | null>(() => {
+    if (!generating.value && !queuedPrompts.value.length)
+      return null
+    return {
+      streaming: phase.value === 'streaming',
+      waiting: phase.value === 'waiting',
+      queuedCount: queuedPrompts.value.length,
+      elapsedMs: phase.value === 'tool' ? 2400 : 1200,
+      activeTools: phase.value === 'tool'
+        ? [{ name: 'tuff_render_chart', status: 'running', summary: 'Analyzing frame latency' }]
+        : [],
+    }
+  })
+
+  const contextMeter = computed<TxAiContextMeterProps>(() => ({
+    usedTokens: 18_400 + messages.value.length * 420,
+    maxTokens: 128_000,
+  }))
+
+  async function loadOlderMessages(): Promise<ConversationStreamLoadResult> {
+    await new Promise(resolve => setTimeout(resolve, 250))
+    olderLoaded.value = true
+    return { hasMore: false }
+  }
 
   function stopPlayback() {
     if (playTimer) {
-      clearInterval(playTimer);
-      playTimer = undefined;
+      clearInterval(playTimer)
+      playTimer = undefined
     }
-    isPlaying.value = false;
+    isPlaying.value = false
+  }
+
+  function stopDictation() {
+    if (dictationTimer) {
+      clearInterval(dictationTimer)
+      dictationTimer = undefined
+    }
+    listening.value = false
+    dictationElapsedMs.value = 0
+  }
+
+  function toggleDictation() {
+    if (listening.value) {
+      stopDictation()
+      if (!draft.value.trim())
+        draft.value = 'Inspect focus rings and reduced-motion rules across every toolbar chip.'
+      return
+    }
+    listening.value = true
+    dictationElapsedMs.value = 300
+    dictationTimer = setInterval(() => {
+      dictationElapsedMs.value += 200
+    }, 200)
   }
 
   function playFromStart() {
-    stopPlayback();
-    timelineIndex.value = 0;
-    isPlaying.value = true;
-
+    stopPlayback()
+    timelineIndex.value = 0
+    isPlaying.value = true
     playTimer = setInterval(() => {
       if (timelineIndex.value >= timelineSteps.value.length - 1) {
-        stopPlayback();
-        return;
+        stopPlayback()
+        return
       }
-
-      timelineIndex.value += 1;
-    }, 1100);
+      timelineIndex.value += 1
+    }, 1100)
   }
 
   function resetTimeline() {
-    stopPlayback();
-    timelineIndex.value = 0;
+    stopPlayback()
+    olderLoaded.value = false
+    customMessages.value = []
+    queuedPrompts.value = []
+    timelineIndex.value = 0
   }
 
   function nextTimelineStep() {
-    stopPlayback();
-    timelineIndex.value = Math.min(
-      timelineIndex.value + 1,
-      timelineSteps.value.length - 1,
-    );
+    stopPlayback()
+    timelineIndex.value = Math.min(timelineIndex.value + 1, timelineSteps.value.length - 1)
   }
 
   function completeTimeline() {
-    stopPlayback();
-    timelineIndex.value = timelineSteps.value.length - 1;
+    stopPlayback()
+    timelineIndex.value = timelineSteps.value.length - 1
   }
 
   function selectPhase(nextPhase: MockPhase) {
-    stopPlayback();
-    if (nextPhase === "error") branch.value = "error";
-    if (nextPhase === "done") branch.value = "success";
-
-    const targetIndex = timelineSteps.value.findIndex(
-      (step) => step.phase === nextPhase,
-    );
-    timelineIndex.value =
-      targetIndex >= 0 ? targetIndex : timelineSteps.value.length - 1;
+    stopPlayback()
+    if (nextPhase === 'error')
+      branch.value = 'error'
+    if (nextPhase === 'done')
+      branch.value = 'success'
+    const targetIndex = timelineSteps.value.findIndex(step => step.phase === nextPhase)
+    timelineIndex.value = targetIndex >= 0 ? targetIndex : timelineSteps.value.length - 1
   }
 
   function selectBranch(nextBranch: MockBranch) {
-    branch.value = nextBranch;
-    if (timelineIndex.value === timelineSteps.value.length - 1)
-      timelineIndex.value = timelineSteps.value.length - 1;
+    branch.value = nextBranch
   }
 
   function selectSession(session: MockSession) {
-    stopPlayback();
-    activeSession.value = session;
-    branch.value = "success";
-    timelineIndex.value = 3;
-    draft.value = "";
+    stopPlayback()
+    activeSession.value = session
+    branch.value = 'success'
+    timelineIndex.value = 3
+    customMessages.value = []
+    queuedPrompts.value = []
+    draft.value = ''
+  }
+
+  function addSampleAttachment() {
+    const id = `att-${Date.now()}`
+    extraAttachments.value = [
+      ...extraAttachments.value,
+      { kind: 'file', id, name: `note-${extraAttachments.value.length + 1}.md`, size: 3200 },
+    ]
+  }
+
+  function removeAttachment(id: string) {
+    extraAttachments.value = extraAttachments.value.filter(item => !('id' in item && item.id === id))
+  }
+
+  function openAttachment(att: AiAttachmentFile) {
+    draft.value = draft.value ? `${draft.value} @${att.name}` : `@${att.name} `
   }
 
   function sendDraft(payload?: { text: string }) {
-    const text = (payload?.text ?? draft.value).trim();
-    if (!text) return;
-
-    draft.value = "";
-    timelineIndex.value = Math.min(
-      timelineIndex.value + 1,
-      timelineSteps.value.length - 1,
-    );
+    const text = (payload?.text ?? draft.value).trim()
+    if (!text)
+      return
+    draft.value = ''
+    customMessages.value = [
+      ...customMessages.value,
+      { id: `user-${Date.now()}`, role: 'user', content: text, createdAt: Date.now() },
+      {
+        id: `asst-${Date.now() + 1}`,
+        role: 'assistant',
+        status: 'done',
+        content: `Received follow-up (${selectedModel.value}${webSearchEnabled.value ? ' · Search on' : ''}): **${text}**`,
+        footer: {
+          content: `Received follow-up: ${text}`,
+          regenerable: true,
+          metrics: { latencyMs: 640, completionTokens: 28, totalTokens: 86, model: selectedModel.value },
+        },
+      },
+    ]
   }
 
-  onBeforeUnmount(stopPlayback);
+  function queueDraft(payload?: { text: string }) {
+    const text = (payload?.text ?? draft.value).trim()
+    if (!text)
+      return
+    queuedPrompts.value = [...queuedPrompts.value, text]
+    draft.value = ''
+  }
+
+  onBeforeUnmount(() => {
+    stopPlayback()
+    stopDictation()
+  })
 
   return {
     activeSession,
     activeSessionConfig,
     activeStep,
+    addSampleAttachment,
     branch,
-    composerAttachments,
     completeTimeline,
+    composerAttachments: extraAttachments,
+    composerCommands,
+    composerModels,
+    composerSources,
+    contextMeter,
     currentStepLabel,
+    dictationElapsedMs,
     draft,
     generating,
     isPlaying,
+    listening,
+    loadOlderMessages,
     messages,
     modeLabel,
     nextTimelineStep,
+    olderLoaded,
+    openAttachment,
     phase,
     phaseOptions,
     playFromStart,
+    queueDraft,
+    queuedPrompts,
+    removeAttachment,
     resetTimeline,
+    runStatus,
     selectBranch,
     selectPhase,
     selectSession,
+    selectedModel,
     sendDraft,
     sessionConfigs,
+    stopDictation,
     stopPlayback,
     timelineIndex,
     timelineSteps,
+    toggleDictation,
     toolStatus,
+    webSearchEnabled,
     workspacePhase,
-  };
+  }
 }

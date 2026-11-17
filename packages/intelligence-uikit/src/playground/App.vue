@@ -3,10 +3,10 @@ import {
   TxAiAgentBadge,
   TxAiCitation,
   TxAiComposer,
+  TxAiComposerChip,
   TxAiConversation,
   TxAiLoadingHint,
   TxAiResultCard,
-  TxAiSuggestion,
   TxAiToolCall,
 } from "../index";
 import { usePlaygroundState } from "./usePlaygroundState";
@@ -15,29 +15,47 @@ const {
   activeSession,
   activeSessionConfig,
   activeStep,
+  addSampleAttachment,
   branch,
-  composerAttachments,
   completeTimeline,
+  composerAttachments,
+  composerCommands,
+  composerModels,
+  composerSources,
+  contextMeter,
   currentStepLabel,
+  dictationElapsedMs,
   draft,
   generating,
   isPlaying,
+  listening,
+  loadOlderMessages,
   messages,
   modeLabel,
   nextTimelineStep,
+  olderLoaded,
+  openAttachment,
   phase,
   phaseOptions,
   playFromStart,
+  queueDraft,
+  queuedPrompts,
+  removeAttachment,
   resetTimeline,
+  runStatus,
   selectBranch,
   selectPhase,
   selectSession,
+  selectedModel,
   sendDraft,
   sessionConfigs,
+  stopDictation,
   stopPlayback,
   timelineIndex,
   timelineSteps,
+  toggleDictation,
   toolStatus,
+  webSearchEnabled,
   workspacePhase,
 } = usePlaygroundState();
 </script>
@@ -49,7 +67,7 @@ const {
         <span class="uikit-mockup__mark">iu</span>
         <div>
           <strong>intelligence-uikit</strong>
-          <span>mock workspace</span>
+          <span>CoreApp parity workspace</span>
         </div>
       </div>
 
@@ -63,6 +81,11 @@ const {
         >
           {{ session.title }}
         </button>
+      </nav>
+
+      <nav class="uikit-mockup__routes" aria-label="Additional playgrounds">
+        <a href="/turn">Turn playground</a>
+        <a href="/openui">OpenUI playground</a>
       </nav>
 
       <TxAiAgentBadge
@@ -105,37 +128,60 @@ const {
         class="uikit-mockup__conversation"
         :messages="messages"
         :generating="generating"
+        :load-older="olderLoaded ? undefined : loadOlderMessages"
+        :has-more-initial="!olderLoaded"
+        :suggestions="activeSessionConfig.suggestions"
+        @suggestion-select="draft = $event"
+        @retry="selectBranch('success')"
         @stop="completeTimeline"
       >
         <template #before>
           <div class="uikit-mockup__timeline-note">
             <TxAiLoadingHint
               label="Runtime trace"
-              description="session restored, stream cursor attached"
+              description="virtualized stream cursor attached · try scrolling up or picking a turn anchor"
               :status="toolStatus"
             />
           </div>
         </template>
+
+        <template #composer>
+          <TxAiComposer
+            v-model="draft"
+            v-model:model="selectedModel"
+            class="uikit-mockup__composer"
+            show-attachment-button
+            :submitting="generating"
+            :queued-count="queuedPrompts.length"
+            :attachments="composerAttachments"
+            :sources="composerSources"
+            :commands="composerCommands"
+            :models="composerModels"
+            :dictatable="true"
+            :listening="listening"
+            :dictation-state="listening ? 'listening' : 'idle'"
+            :dictation-elapsed-ms="dictationElapsedMs"
+            :run-status="runStatus"
+            :context-meter="contextMeter"
+            @attachment-click="addSampleAttachment"
+            @attachment-remove="removeAttachment"
+            @attachment-open="openAttachment"
+            @mic="toggleDictation"
+            @dictate-cancel="stopDictation"
+            @stop="completeTimeline"
+            @queue="queueDraft"
+            @send="sendDraft"
+          >
+            <template #mode>
+              <TxAiComposerChip
+                label="Web Search"
+                :active="webSearchEnabled"
+                @click="webSearchEnabled = !webSearchEnabled"
+              />
+            </template>
+          </TxAiComposer>
+        </template>
       </TxAiConversation>
-
-      <div class="uikit-mockup__suggestions">
-        <TxAiSuggestion
-          v-for="suggestion in activeSessionConfig.suggestions"
-          :key="suggestion"
-          :text="suggestion"
-          @select="draft = $event"
-        />
-      </div>
-
-      <TxAiComposer
-        v-model="draft"
-        class="uikit-mockup__composer"
-        placeholder="输入消息..."
-        show-attachment-button
-        :submitting="generating"
-        :attachments="composerAttachments"
-        @send="sendDraft"
-      />
     </section>
 
     <aside class="uikit-mockup__inspector">
@@ -362,9 +408,34 @@ button {
   }
 }
 
+.uikit-mockup__routes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--mock-border);
+
+  a {
+    color: var(--mock-accent);
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--mock-accent);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+  }
+}
+
 .uikit-mockup__workspace {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   overflow: hidden;
 }

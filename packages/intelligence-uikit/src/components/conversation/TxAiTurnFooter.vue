@@ -78,8 +78,8 @@ const footerLabels = computed<Record<string, string>>(() => ({
             :title="metricTokensTitle(metricMessage, footerLabels)"
           >
             <span class="i-ri-database-2-line" aria-hidden="true" />
-            <span>{{ metrics.totalTokens }} tokens</span>
-            <span v-if="calculateTokenSpeed(metricMessage)" class="tx-ai-turn-footer-Speed">({{ calculateTokenSpeed(metricMessage) }} t/s)</span>
+            <span>{{ metrics.totalTokens }} {{ footerLabels.tokensUnit || 'tokens' }}</span>
+            <span v-if="calculateTokenSpeed(metricMessage)" class="tx-ai-turn-footer-Speed">({{ calculateTokenSpeed(metricMessage) }} {{ footerLabels.speedUnit || 't/s' }})</span>
           </span>
 
           <!-- 缓存读取 (Cache read) -->
@@ -136,6 +136,7 @@ const footerLabels = computed<Record<string, string>>(() => ({
 // descendant selector: `:global(…) .x` makes the scoped compiler drop `.x`, so hover never opens it.
 .tx-ai-turn-footer:not(.is-resting),
 .HomePage-Message:hover .tx-ai-turn-footer,
+.tx-ai-message:hover .tx-ai-turn-footer,
 .tx-ai-turn:hover .tx-ai-turn-footer,
 .tx-ai-turn-footer:focus-within {
   grid-template-rows: 1fr;
@@ -182,7 +183,6 @@ const footerLabels = computed<Record<string, string>>(() => ({
   font-family: var(--shell-font-mono, monospace);
   line-height: 1.2;
   user-select: none;
-  transition: color 0.15s ease;
 
   &:hover {
     color: var(--shell-text, var(--tx-text-color-primary));
