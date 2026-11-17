@@ -102,10 +102,11 @@ const hasText = computed(() => Boolean((value.value ?? '').trim()))
 const hasContent = computed(() => hasText.value || Boolean(props.allowEmptySend && attachmentItems.value.length > 0))
 
 const isBusyState = computed(() =>
-  props.sendState === 'streaming'
-  || props.sendState === 'waiting'
-  || props.sendState === 'blocked'
-  || Boolean(props.streaming),
+  props.sendState !== undefined
+    ? (props.sendState === 'streaming'
+      || props.sendState === 'waiting'
+      || props.sendState === 'blocked')
+    : Boolean(props.streaming),
 )
 
 const isQueueActive = computed(() =>
@@ -155,15 +156,21 @@ const canAttach = computed(() => {
   return true
 })
 
-const canSend = computed(() => {
+const canDeliverDraft = computed(() => {
   if (props.disabled)
     return false
-  if (isQueueActive.value || isStopMode.value)
-    return true
+  if (isBusyState.value)
+    return isQueueActive.value
   if (props.submitting)
+    return Boolean(props.sendState === 'ready' && props.sendQueues)
+  if (props.sendState === 'ready')
+    return true
+  if (props.sendState === 'empty')
     return false
   return hasContent.value
 })
+
+const canSend = computed(() => !props.disabled && (isStopMode.value || canDeliverDraft.value))
 
 const sendAriaLabel = computed(() => {
   if (isStopMode.value)
@@ -261,15 +268,8 @@ function onDrop(event: DragEvent): void {
 }
 
 function trySend(): void {
-  if (props.disabled)
+  if (!canDeliverDraft.value)
     return
-  if (isBusyState.value) {
-    if (!isQueueActive.value)
-      return
-  }
-  else if (props.submitting || !hasContent.value) {
-    return
-  }
   const text = (value.value ?? '').trim()
   emit('send', { text })
 }

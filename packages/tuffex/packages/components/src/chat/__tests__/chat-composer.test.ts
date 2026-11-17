@@ -295,4 +295,29 @@ describe('txChatComposer', () => {
     expect(vm.ghost).toBeTruthy()
     await expect(vm.launch()).resolves.toBeUndefined()
   })
+
+  it('lets explicit sendState="ready" and sendState="empty" override draft inference', async () => {
+    const readyEmpty = mount(TxChatComposer, {
+      props: { modelValue: '', sendOnMetaEnter: false, sendState: 'ready' },
+    })
+    const readyBtn = readyEmpty.find('.tx-chat-composer__send')
+    expect(readyEmpty.classes()).toContain('is-send-ready')
+    expect(readyBtn.attributes('disabled')).toBeUndefined()
+    await readyBtn.trigger('click')
+    await readyEmpty.find('textarea').trigger('keydown', { key: 'Enter' })
+    expect(readyEmpty.emitted('send')).toEqual([[{ text: '' }], [{ text: '' }]])
+
+    await readyEmpty.setProps({ submitting: true })
+    expect(readyBtn.attributes('disabled')).toBeDefined()
+
+    const forcedEmpty = mount(TxChatComposer, {
+      props: { modelValue: 'has draft', sendOnMetaEnter: false, sendState: 'empty' },
+    })
+    const emptyBtn = forcedEmpty.find('.tx-chat-composer__send')
+    expect(forcedEmpty.classes()).toContain('is-send-empty')
+    expect(emptyBtn.attributes('disabled')).toBeDefined()
+    await emptyBtn.trigger('click')
+    await forcedEmpty.find('textarea').trigger('keydown', { key: 'Enter' })
+    expect(forcedEmpty.emitted('send')).toBeUndefined()
+  })
 })

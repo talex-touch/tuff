@@ -181,10 +181,11 @@ const hasDraftOrAttachment = computed(() =>
 )
 
 const isBusyState = computed(() =>
-  props.sendState === 'streaming'
-  || props.sendState === 'waiting'
-  || props.sendState === 'blocked'
-  || Boolean(props.streaming),
+  props.sendState !== undefined
+    ? (props.sendState === 'streaming'
+      || props.sendState === 'waiting'
+      || props.sendState === 'blocked')
+    : Boolean(props.streaming),
 )
 
 const isQueueActive = computed(() =>
@@ -193,13 +194,21 @@ const isQueueActive = computed(() =>
 
 const isStopMode = computed(() => Boolean(isBusyState.value && !isQueueActive.value))
 
-const canSend = computed(() => {
+const canDeliverDraft = computed(() => {
   if (props.disabled)
     return false
-  if (isStopMode.value || isQueueActive.value)
+  if (isBusyState.value)
+    return isQueueActive.value
+  if (props.submitting)
+    return Boolean(props.sendState === 'ready' && props.sendQueues)
+  if (props.sendState === 'ready')
     return true
-  return !props.submitting && hasDraftOrAttachment.value
+  if (props.sendState === 'empty')
+    return false
+  return hasDraftOrAttachment.value
 })
+
+const canSend = computed(() => !props.disabled && (isStopMode.value || canDeliverDraft.value))
 
 const primaryActionLabel = computed(() => {
   if (isStopMode.value)
@@ -379,15 +388,8 @@ function pickRow(row: PromptBarSource | PromptBarCommand): void {
 }
 
 function send(): void {
-  if (props.disabled)
+  if (!canDeliverDraft.value)
     return
-  if (isBusyState.value) {
-    if (!isQueueActive.value)
-      return
-  }
-  else if (props.submitting || !hasDraftOrAttachment.value) {
-    return
-  }
 
   emit('send', { text: draft.value, attachments: attachments.value })
   if (props.clearOnSend)

@@ -525,4 +525,29 @@ describe('txPromptBar', () => {
     expect(vm.input).toBeTruthy()
     await expect(vm.launch()).resolves.toBeUndefined()
   })
+
+  it('lets explicit sendState="ready" and sendState="empty" override draft inference', async () => {
+    const readyEmpty = mount(TxPromptBar, {
+      props: { modelValue: '', sendState: 'ready', clearOnSend: false },
+    })
+    const readyBtn = readyEmpty.find('.tx-bui-prompt-bar__send')
+    expect(readyBtn.attributes('disabled')).toBeUndefined()
+    expect(readyBtn.classes()).toContain('is-ready')
+    await readyBtn.trigger('click')
+    await readyEmpty.find('textarea').trigger('keydown', { key: 'Enter' })
+    expect(readyEmpty.emitted('send')).toHaveLength(2)
+
+    await readyEmpty.setProps({ submitting: true })
+    expect(readyBtn.attributes('disabled')).toBeDefined()
+
+    const forcedEmpty = mount(TxPromptBar, {
+      props: { modelValue: 'unsent words', sendState: 'empty' },
+    })
+    const emptyBtn = forcedEmpty.find('.tx-bui-prompt-bar__send')
+    expect(emptyBtn.attributes('disabled')).toBeDefined()
+    expect(emptyBtn.classes()).not.toContain('is-ready')
+    await emptyBtn.trigger('click')
+    await forcedEmpty.find('textarea').trigger('keydown', { key: 'Enter' })
+    expect(forcedEmpty.emitted('send')).toBeUndefined()
+  })
 })
