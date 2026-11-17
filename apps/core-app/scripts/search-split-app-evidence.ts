@@ -1565,35 +1565,76 @@ async function readJsonOrNull<T>(file: string): Promise<T | null> {
   }
 }
 
-async function waitForIndexQuiescence(
+export interface QuiescenceProgress {
+  targetHome: 'primary' | 'search'
+  targetRows: number
+  signature: string
+}
+
+/**
+ * Progress snapshot for the phase's **live** target home (`search-index.db` for bootstrap/split,
+ * `database.db` for rollback). Watching the union caused rollback to count stale `search-index.db`
+ * rows from the split phase and declare quiescence before `database.db` received any index rows.
+ */
+export function readQuiescenceProgress(topology: Topology, phase: PhaseName): QuiescenceProgress {
+  const targetHome = phase === 'rollback' ? 'primary' : 'search'
+  const targetRows = nonAppFileRows(
+    targetHome === 'primary' ? topology.primaryFilesByType : topology.searchFilesByType
+  )
+  const counts = targetHome === 'primary' ? topology.primary : topology.search
+  const otherRows = nonAppFileRows(
+    targetHome === 'primary' ? topology.searchFilesByType : topology.primaryFilesByType
+  )
+  const signature = [
+    targetRows,
+    counts.file_index_progress ?? 0,
+    counts.search_index ?? 0,
+    counts.scan_progress ?? 0,
+    otherRows
+  ].join(':')
+  return { targetHome, targetRows, signature }
+}
+
+export interface WaitForIndexQuiescenceOptions {
+  phase: PhaseName
+  maxIndexMs: number
+  stableMs: number
+  measure?: (profile: string) => Promise<HomeMeasurement | null>
+  sleep?: (ms: number) => Promise<void>
+  now?: () => number
+}
+
+export async function waitForIndexQuiescence(
   profile: string,
-  options: { maxIndexMs: number; stableMs: number }
+  options: WaitForIndexQuiescenceOptions
 ): Promise<{ settled: boolean; samples: number; rows: number }> {
-  const deadline = Date.now() + options.maxIndexMs
+  const now = options.now ?? Date.now
+  const measure = options.measure ?? ((target: string) => measureProfile(target).catch(() => null))
+  const sleep =
+    options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+  const deadline = now() + options.maxIndexMs
   let lastSignature = ''
-  let stableSince = 0
+  let stableSince: number | null = null
   let samples = 0
   let rows = 0
 
-  while (Date.now() < deadline) {
-    const measurement = await measureProfile(profile).catch(() => null)
+  while (now() < deadline) {
+    const measurement = await measure(profile)
     samples += 1
     const topology = measurement?.topology
     if (topology) {
-      rows =
-        nonAppFileRows(topology.primaryFilesByType) + nonAppFileRows(topology.searchFilesByType)
-      const pending =
-        (topology.primary.file_index_progress ?? 0) + (topology.search.file_index_progress ?? 0)
-      const signature = `${rows}:${pending}`
-      if (rows > 0 && signature === lastSignature) {
-        if (stableSince === 0) stableSince = Date.now()
-        if (Date.now() - stableSince >= options.stableMs) return { settled: true, samples, rows }
+      const progress = readQuiescenceProgress(topology, options.phase)
+      rows = progress.targetRows
+      const current = now()
+      if (progress.targetRows > 0 && progress.signature === lastSignature) {
+        if (stableSince === null) stableSince = current
+        if (current - stableSince >= options.stableMs) return { settled: true, samples, rows }
       } else {
-        stableSince = 0
-        lastSignature = signature
+        stableSince = null
+        lastSignature = progress.signature
       }
     }
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    await sleep(1000)
   }
 
   return { settled: false, samples, rows }
@@ -1641,6 +1682,7 @@ async function runPhase(
     const cdpUrl = `http://127.0.0.1:${options.cdpPort}/json/list`
     const appReachedCdp = await waitForCdpEndpoint(cdpUrl, options.launchTimeoutMs)
     const quiescence = await waitForIndexQuiescence(options.profile, {
+      phase,
       maxIndexMs: options.maxIndexMs,
       stableMs: options.quiescenceStableMs
     })
@@ -2401,6 +2443,11 @@ export function runSelfCheck(): number {
   assert(
     'a phase window keeps its own lines only',
     sliceLogForPhase(HEALTHY_LOG, bounded).split('\n').length === 2
+  )
+  assert(
+    'rollback quiescence ignores stale split rows until primary is populated',
+    readQuiescenceProgress(HEALTHY_SPLIT_TOPOLOGY, 'rollback').targetRows === 0 &&
+      readQuiescenceProgress(ROLLED_BACK_TOPOLOGY, 'rollback').targetRows === 4
   )
 
   console.log(
