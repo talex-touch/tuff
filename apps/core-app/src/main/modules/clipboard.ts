@@ -73,11 +73,10 @@ import {
   type ClipboardFreshnessState
 } from './clipboard/clipboard-freshness'
 import {
-  CLIPBOARD_HTML_FORMATS,
-  CLIPBOARD_IMAGE_FORMATS,
   CLIPBOARD_TEXT_FORMATS,
   ClipboardFreshnessStore,
   ClipboardHelper,
+  detectClipboardFormatFlags,
   includesAnyClipboardFormat
 } from './clipboard/clipboard-capture-freshness'
 import { ClipboardCapturePipeline } from './clipboard/clipboard-capture-pipeline'
@@ -170,6 +169,22 @@ function isOnBatteryPowerSafe(): boolean {
 
 const CLIPBOARD_META_LOG_THROTTLE_MS = 5_000
 const CLIPBOARD_STAGE_B_LOG_THROTTLE_MS = 5_000
+const ACTIVE_APP_QUERY_WITHOUT_ICON = Object.freeze({ includeIcon: false })
+const TRANSPORT_META_KEYS = [
+  'image_original_url',
+  'image_preview_url',
+  'image_content_kind',
+  'image_size',
+  'image_file_size',
+  'ocr_status',
+  'ocr_text',
+  'ocr_excerpt',
+  'ocr_language',
+  'ocr_confidence',
+  'ocr_keywords',
+  'ocr_provider',
+  'ocr_model'
+] as const
 
 export class ClipboardModule extends BaseModule {
   /** 当前生效的类别保留时长；null 表示永久保留或策略关闭。见 refreshRetentionPolicy。 */
@@ -740,24 +755,12 @@ export class ClipboardModule extends BaseModule {
     const annotation = readClipboardAnnotation(item.meta)
     const meta: Record<string, unknown> = {}
     if (clientItem.meta && typeof clientItem.meta === 'object') {
-      for (const key of [
-        'image_original_url',
-        'image_preview_url',
-        'image_content_kind',
-        'image_size',
-        'image_file_size',
-        'ocr_status',
-        'ocr_text',
-        'ocr_excerpt',
-        'ocr_language',
-        'ocr_confidence',
-        'ocr_keywords',
-        'ocr_provider',
-        'ocr_model'
-      ]) {
-        const value = (clientItem.meta as Record<string, unknown>)[key]
-        if (value !== undefined && value !== null) {
-          meta[key] = value
+      const sourceMeta = clientItem.meta as Record<string, unknown>
+      for (let i = 0; i < TRANSPORT_META_KEYS.length; i += 1) {
+        const key = TRANSPORT_META_KEYS[i]
+        const fieldValue = sourceMeta[key]
+        if (fieldValue !== undefined && fieldValue !== null) {
+          meta[key] = fieldValue
         }
       }
     }
@@ -810,20 +813,23 @@ export class ClipboardModule extends BaseModule {
   private async readClipboardSnapshot(): Promise<ClipboardReadResponse> {
     const formats = clipboard.availableFormats()
     const reader = this.resolveClipboardReader()
+    const {
+      hasHtml: hasHtmlFormat,
+      hasImage: hasImageFormat,
+      hasFile: hasFileFormatFlag
+    } = detectClipboardFormatFlags(formats)
     const hasText =
       formats.length === 0 || includesAnyClipboardFormat(formats, CLIPBOARD_TEXT_FORMATS)
-    const hasHtml =
-      formats.length === 0 || includesAnyClipboardFormat(formats, CLIPBOARD_HTML_FORMATS)
+    const hasHtml = formats.length === 0 || hasHtmlFormat
     const hasFileFormat =
-      formats.length === 0 || Boolean(this.clipboardHelper?.hasFileFormats(formats))
+      formats.length === 0 ||
+      hasFileFormatFlag ||
+      Boolean(this.clipboardHelper?.hasFileFormats(formats))
     const text = hasText ? await reader.readText() : ''
     const html = hasHtml ? await reader.readHtml() : ''
     const files = hasFileFormat ? await reader.readFiles() : []
     const hasFiles = files.length > 0
-    const hasImage =
-      formats.length > 0
-        ? includesAnyClipboardFormat(formats, CLIPBOARD_IMAGE_FORMATS)
-        : (await reader.readImage()) !== null
+    const hasImage = formats.length > 0 ? hasImageFormat : (await reader.readImage()) !== null
     return { text, html, hasImage, hasFiles, formats }
   }
 
@@ -834,10 +840,12 @@ export class ClipboardModule extends BaseModule {
   }
 
   private buildTransportChangePayload(): ClipboardChangePayload {
-    const history = this.historyPersistence
-      .getCachedItems()
-      .map((item) => this.toTransportItem(item))
-      .filter((item): item is ClipboardItem => !!item)
+    const cached = this.historyPersistence.getCachedItems()
+    const history: ClipboardItem[] = []
+    for (let i = 0; i < cached.length; i += 1) {
+      const converted = this.toTransportItem(cached[i])
+      if (converted) history.push(converted)
+    }
     const latest = history.length > 0 ? history[0] : null
     return { latest, history }
   }
@@ -875,15 +883,23 @@ export class ClipboardModule extends BaseModule {
 
   private async refreshActiveAppSnapshot(): Promise<void> {
     if (this.isDestroyed) return
-    const now = Date.now()
     try {
-      const activeApp = await activeAppService.getActiveApp({
-        includeIcon: false
-      })
-      this.activeAppCache = { value: activeApp, fetchedAt: now }
+      const activeApp = await activeAppService.getActiveApp(ACTIVE_APP_QUERY_WITHOUT_ICON)
+      if (this.isDestroyed) return
+      const fetchedAt = Date.now()
+      if (this.activeAppCache && this.activeAppCache.value === activeApp) {
+        this.activeAppCache.fetchedAt = fetchedAt
+        return
+      }
+      this.activeAppCache = { value: activeApp, fetchedAt }
     } catch (error) {
       clipboardLog.debug('Failed to refresh active app info', { error })
-      this.activeAppCache = { value: null, fetchedAt: now }
+      const fetchedAt = Date.now()
+      if (this.activeAppCache && this.activeAppCache.value === null) {
+        this.activeAppCache.fetchedAt = fetchedAt
+        return
+      }
+      this.activeAppCache = { value: null, fetchedAt }
     }
   }
 

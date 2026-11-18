@@ -43,8 +43,98 @@ export const CLIPBOARD_TEXT_FORMATS = new Set([
 
 export const CLIPBOARD_HTML_FORMATS = new Set(['text/html', 'public.html'])
 
-export function includesAnyClipboardFormat(formats: string[], candidates: Set<string>): boolean {
-  return formats.some((format) => candidates.has(format))
+const CLIPBOARD_FILE_READ_FORMATS = [
+  'public.file-url',
+  'NSFilenamesPboardType',
+  'text/uri-list'
+] as const
+
+const PLIST_STRING_TAG_PATTERN = /<string>([^<]+)<\/string>/g
+const LINE_SPLIT_PATTERN = /\r\n|\n|\r/
+const isClipboardDebugVerbose =
+  typeof process !== 'undefined' &&
+  (process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development')
+
+export interface ClipboardFormatFlags {
+  hasHtml: boolean
+  hasImage: boolean
+  hasFile: boolean
+}
+
+export function includesAnyClipboardFormat(
+  formats: readonly string[],
+  candidates: Set<string>
+): boolean {
+  for (let i = 0; i < formats.length; i += 1) {
+    if (candidates.has(formats[i])) return true
+  }
+  return false
+}
+
+export function isClipboardImageFormat(format: string): boolean {
+  if (CLIPBOARD_IMAGE_FORMATS.has(format)) return true
+  if (format.length < 6) return false
+  const firstChar = format.charCodeAt(0) | 32
+  if (firstChar === 105 /* 'i' */) {
+    return format.startsWith('image/') || format.toLowerCase().startsWith('image/')
+  }
+  if (firstChar === 112 /* 'p' */ && (format.length === 10 || format.length === 11)) {
+    const lower = format.toLowerCase()
+    return lower === 'public.png' || lower === 'public.tiff'
+  }
+  return false
+}
+
+export function hasClipboardImageFormat(formats: readonly string[]): boolean {
+  for (let i = 0; i < formats.length; i += 1) {
+    if (isClipboardImageFormat(formats[i])) return true
+  }
+  return false
+}
+
+export function hasClipboardFileFormat(formats: readonly string[]): boolean {
+  return includesAnyClipboardFormat(formats, FILE_URL_FORMATS)
+}
+
+/**
+ * Classifies HTML, image, and file-URL formats in a single linear pass over
+ * `formats` without allocating intermediate closures or redundant Set lookups.
+ */
+export function detectClipboardFormatFlags(formats: readonly string[]): ClipboardFormatFlags {
+  let hasHtml = false
+  let hasImage = false
+  let hasFile = false
+  for (let i = 0; i < formats.length; i += 1) {
+    const format = formats[i]
+    if (!hasHtml && CLIPBOARD_HTML_FORMATS.has(format)) {
+      hasHtml = true
+    }
+    if (!hasFile && FILE_URL_FORMATS.has(format)) {
+      hasFile = true
+    }
+    if (!hasImage && isClipboardImageFormat(format)) {
+      hasImage = true
+    }
+    if (hasHtml && hasImage && hasFile) {
+      break
+    }
+  }
+  return { hasHtml, hasImage, hasFile }
+}
+
+function extractPlistStringPaths(raw: string, requireNoIdSegment: boolean): string[] {
+  const paths: string[] = []
+  for (const match of raw.matchAll(PLIST_STRING_TAG_PATTERN)) {
+    const candidate = match[1]?.trim()
+    if (!candidate) continue
+    if (
+      (candidate.startsWith('/') || candidate.includes(':\\')) &&
+      (!requireNoIdSegment || !candidate.includes('/id='))
+    ) {
+      paths.push(candidate)
+    }
+  }
+  return paths
 }
 
 interface ClipboardFreshnessItem {
@@ -121,13 +211,14 @@ export class ClipboardHelper {
     } catch {
       this.lastFormats = []
     }
-    this.lastFormats = [...this.lastFormats].sort()
+    this.lastFormats = Array.isArray(this.lastFormats) ? [...this.lastFormats].sort() : []
     this.lastFormatsKey = this.lastFormats.join(',')
     const formatsKey = this.lastFormatsKey
     const textSignature = this.getTextQuickSignature(this.lastText)
+    const { hasFile, hasImage } = detectClipboardFormatFlags(this.lastFormats)
 
     let filesSignature = '0:0'
-    if (includesAnyClipboardFormat(this.lastFormats, FILE_URL_FORMATS)) {
+    if (hasFile) {
       try {
         this.lastFiles = this.readClipboardFiles()
       } catch {
@@ -139,7 +230,7 @@ export class ClipboardHelper {
     }
 
     let imageQuickSignature = ''
-    if (includesAnyClipboardFormat(this.lastFormats, CLIPBOARD_IMAGE_FORMATS)) {
+    if (hasImage) {
       try {
         const image = clipboard.readImage()
         const resolvedImage = image.isEmpty() ? null : image
@@ -287,142 +378,109 @@ export class ClipboardHelper {
     if (rawPng && rawPng.length > 0) {
       const size = parsePngDimensions(rawPng) ?? image.getSize()
       const edge = 256
-      const head = rawPng.subarray(0, edge)
-      const tail = rawPng.length > edge ? rawPng.subarray(-edge) : Buffer.alloc(0)
-      const digest = crypto.createHash('sha1').update(head).update(tail).digest('hex')
+      const hasher = crypto.createHash('sha1').update(rawPng.subarray(0, edge))
+      if (rawPng.length > edge) {
+        hasher.update(rawPng.subarray(-edge))
+      }
+      const digest = hasher.digest('hex')
       return `${size.width}x${size.height}:${rawPng.length}:${digest}`
     }
     return this.getImageHash(image)
   }
 
   public readClipboardFiles(): string[] {
-    const formats = ['public.file-url', 'NSFilenamesPboardType', 'text/uri-list']
     let hasFileIDPlaceholder = false
 
-    for (const format of formats) {
+    for (const format of CLIPBOARD_FILE_READ_FORMATS) {
       try {
         const raw = clipboard.read(format).toString()
         if (!raw) continue
 
-        clipboardCaptureLog.debug(`Raw clipboard data from ${format}`, {
-          meta: { sample: raw.substring(0, 200) }
-        })
+        if (isClipboardDebugVerbose) {
+          clipboardCaptureLog.debug(`Raw clipboard data from ${format}`, {
+            meta: { sample: raw.substring(0, 200) }
+          })
+        }
 
         if (raw.includes('<?xml') && raw.includes('<plist') && raw.includes('<string>')) {
-          clipboardCaptureLog.debug('Detected plist XML format, parsing')
-          const stringMatches = raw.match(/<string>([^<]+)<\/string>/g)
-          if (stringMatches && stringMatches.length > 0) {
-            const paths = stringMatches
-              .map((match) => {
-                const path = match.replace(/<string>|<\/string>/g, '').trim()
-                if ((path.startsWith('/') || path.includes(':\\')) && !path.includes('/id=')) {
-                  clipboardCaptureLog.debug('Extracted file path from plist', { meta: { path } })
-                  return path
-                }
-                return null
-              })
-              .filter((p): p is string => p !== null)
-
-            if (paths.length > 0) {
+          const paths = extractPlistStringPaths(raw, true)
+          if (paths.length > 0) {
+            if (isClipboardDebugVerbose) {
               clipboardCaptureLog.debug(`Read ${paths.length} file(s) from plist XML`)
-              return paths
             }
+            return paths
           }
-          clipboardCaptureLog.debug('No valid paths found in plist XML')
           continue
         }
 
-        const paths = raw
-          .split(/\r\n|\n|\r/)
-          .filter(Boolean)
-          .map((url) => {
-            try {
-              if (url.includes('file/id=') || url.includes('/.file/id=')) {
-                clipboardCaptureLog.debug('Detected file ID placeholder', { meta: { url } })
-                hasFileIDPlaceholder = true
-                return ''
-              }
-
-              const parsedUrl = new URL(url)
-              const pathname = decodeURI(parsedUrl.pathname)
-
-              if (!pathname || pathname === '/' || pathname.includes('/id=')) {
-                clipboardCaptureLog.debug('Invalid file path from URL', { meta: { url } })
-                return ''
-              }
-
-              clipboardCaptureLog.debug('Extracted file path', { meta: { pathname } })
-              return pathname
-            } catch {
-              const trimmed = url.trim()
-              const looksLikePath = trimmed.startsWith('/') || trimmed.includes(':\\')
-              const isNotID = !trimmed.includes('/id=')
-
-              if (looksLikePath && isNotID) {
-                clipboardCaptureLog.debug('Using direct path', { meta: { path: trimmed } })
-                return trimmed
-              }
-
-              clipboardCaptureLog.debug('Rejected as not a valid path', {
-                meta: { value: trimmed }
-              })
-              return ''
+        const lines = raw.split(LINE_SPLIT_PATTERN)
+        const paths: string[] = []
+        for (let i = 0; i < lines.length; i += 1) {
+          const url = lines[i]
+          if (!url) continue
+          try {
+            if (url.includes('file/id=') || url.includes('/.file/id=')) {
+              hasFileIDPlaceholder = true
+              continue
             }
-          })
-          .filter(Boolean)
+
+            const parsedUrl = new URL(url)
+            const pathname = decodeURI(parsedUrl.pathname)
+            if (!pathname || pathname === '/' || pathname.includes('/id=')) {
+              continue
+            }
+            paths.push(pathname)
+          } catch {
+            const trimmed = url.trim()
+            if ((trimmed.startsWith('/') || trimmed.includes(':\\')) && !trimmed.includes('/id=')) {
+              paths.push(trimmed)
+            }
+          }
+        }
 
         if (paths.length > 0) {
-          clipboardCaptureLog.debug(`Read ${paths.length} file(s) from format: ${format}`)
+          if (isClipboardDebugVerbose) {
+            clipboardCaptureLog.debug(`Read ${paths.length} file(s) from format: ${format}`)
+          }
           return paths
-        } else if (hasFileIDPlaceholder) {
+        }
+        if (hasFileIDPlaceholder && isClipboardDebugVerbose) {
           clipboardCaptureLog.debug(
             'File ID placeholders detected but no valid paths - files may still be preparing'
           )
-        } else {
-          clipboardCaptureLog.debug(`No valid paths extracted from ${format}`)
         }
       } catch (error) {
-        clipboardCaptureLog.debug(`Failed to read format ${format}`, { error })
+        if (isClipboardDebugVerbose) {
+          clipboardCaptureLog.debug(`Failed to read format ${format}`, { error })
+        }
       }
     }
 
     if (hasFileIDPlaceholder) {
-      clipboardCaptureLog.debug('Attempting to read file path from clipboard text as fallback')
       try {
         const text = clipboard.readText().trim()
         if (text && text.length > 0 && text.length < 10000) {
           if (text.startsWith('/') && !text.includes('<')) {
-            clipboardCaptureLog.debug('Found file path in fallback text')
             return [text]
           }
 
           if (text.includes('<plist') && text.includes('<string>')) {
-            clipboardCaptureLog.debug('Detected plist XML in fallback text, parsing')
-            const stringMatches = text.match(/<string>([^<]+)<\/string>/g)
-            if (stringMatches && stringMatches.length > 0) {
-              const paths = stringMatches
-                .map((match) => {
-                  const path = match.replace(/<string>|<\/string>/g, '').trim()
-                  if (path.startsWith('/') || path.includes(':\\')) {
-                    return path
-                  }
-                  return null
-                })
-                .filter((p): p is string => p !== null)
-
-              if (paths.length > 0) {
-                clipboardCaptureLog.debug('Extracted file paths from fallback plist')
-                return paths
-              }
+            const paths = extractPlistStringPaths(text, false)
+            if (paths.length > 0) {
+              return paths
             }
           }
         }
       } catch (error) {
-        clipboardCaptureLog.debug('Failed to read fallback text', { error })
+        if (isClipboardDebugVerbose) {
+          clipboardCaptureLog.debug('Failed to read fallback text', { error })
+        }
       }
-      clipboardCaptureLog.debug(
-        'Files contain ID placeholders - skipping to avoid treating as text'
-      )
+      if (isClipboardDebugVerbose) {
+        clipboardCaptureLog.debug(
+          'Files contain ID placeholders - skipping to avoid treating as text'
+        )
+      }
     }
     return []
   }
@@ -433,11 +491,17 @@ export class ClipboardHelper {
 
   public didFilesChange(nextFiles: string[]): boolean {
     if (nextFiles.length === 0) return false
-    if (
-      nextFiles.length === this.lastFiles.length &&
-      nextFiles.every((file, index) => file === this.lastFiles[index])
-    ) {
-      return false
+    if (nextFiles.length === this.lastFiles.length) {
+      let allEqual = true
+      for (let i = 0; i < nextFiles.length; i += 1) {
+        if (nextFiles[i] !== this.lastFiles[i]) {
+          allEqual = false
+          break
+        }
+      }
+      if (allEqual) {
+        return false
+      }
     }
     this.lastFiles = [...nextFiles]
     return true

@@ -396,6 +396,13 @@ if (process.platform === 'darwin') {
     env,
     stdio: 'inherit'
   })
+  if (process.env.TUFF_DISABLE_NATIVE_FILE_INDEX !== '1') {
+    execFileSync(process.execPath, [path.join(nativeRoot, 'scripts', 'build-file-index.js')], {
+      cwd: nativeRoot,
+      env,
+      stdio: 'inherit'
+    })
+  }
 }
 
 execFileSync(process.execPath, [path.join(__dirname, 'prepare-browser-connector.cjs')], {

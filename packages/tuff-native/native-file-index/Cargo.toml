@@ -1,0 +1,33 @@
+[package]
+name = "tuff-native-file-index"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+name = "tuff_native_file_index"
+
+[package.metadata.tuff-native]
+macos-deployment-target = "12.3"
+
+[features]
+linkedit-align-pad = []
+
+[dependencies]
+napi.workspace = true
+napi-derive.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2.189"
+objc2 = { version = "=0.6.4", default-features = false, features = ["std"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSRunningApplication", "NSWorkspace", "libc"] }
+objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFArray", "CFBase", "CFDate", "CFDictionary", "CFNumber", "CFString", "CFURL", "CFUUID"] }
+objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std", "CGWindow", "CGWindowLevel", "libc"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSString", "NSURL"] }
+
+[build-dependencies]
+napi-build.workspace = true
+
+[dev-dependencies]
+napi = { workspace = true, features = ["dyn-symbols"] }
