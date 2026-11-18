@@ -1,6 +1,6 @@
 # Tuff R3 Search / Indexing Runtime TODO
 
-> 更新时间：2026-07-18
+> 更新时间：2026-11-17
 > 范围：Roadmap R3 / Search Provider 与 Indexing Runtime。专题设计以 `03-features/search/INDEXING-RUNTIME-V1-PLAN.md` 为准；全局执行顺序服从 [`TODO.md`](./TODO.md)。
 
 ## 当前口径
@@ -32,6 +32,21 @@
 - 2026-06-25 新增 `scan_progress` source-scope 副本仿真 CLI：`pnpm -C "apps/core-app" run search:scan-progress-simulate -- --db <sqlite.db> --output <simulation.json>` 会用 `VACUUM INTO` 生成 simulation copy，并只在副本上执行 source-scope migration helper，输出源库前后 scan_progress snapshot、copy migration 前后 plan/snapshot、backup rows 与 gate；artifact 显式记录 `sourceMutationPolicy=source-not-mutated-copy-execute` 与 `sourceSnapshotUnchanged=true`。2026-07-04 新增 `evidenceSource` 与 `--requireRealProfileEvidence` gate，临时 `/tmp` DB 会被拒绝标记为 real-profile；该工具不修改 `--db`，用于在真实执行确认前验证迁移草案，但 isolated artifact 不替代真实 profile simulation evidence。
 - source-scoped `scan_progress` schema migration 属高风险数据结构变更；代码路径与 resource migration 已接入，执行真实 profile 前仍必须单独确认影响范围并保留 preflight evidence。
 - focused tests 可以证明边界合同，不能等同于完整 durable scheduler 或 SQLite/FTS 迁移完成。
+
+## 2026-10 ~ 11 搜索与索引运行时增量落地
+
+- **Schema 与数据结构减容（已合入主线）**：
+  - `0053_search_index_document_locators.sql`：新增 `search_index_meta.{fts_rowid,document_hash}` 及 `search_index_maintenance_progress`、`search_index_pending_commits`、`search_index_file_maintenance` 持久化表；
+  - `0055_search_keyword_postings.sql`（A10，`ed48495a1`）：`search_keyword_postings`（`WITHOUT ROWID`）以整数 `doc_id` 替代完整路径，关键词表实测 −81.8%，并在维护轮渐进搬迁旧表；
+  - `FILE_CONTENT_MAX_CHARS = 50_000` 超长文件正文整篇跳过（超过 50,000 字符或触及解析预算的文件不做前缀截断索引，直接置 `content = null` / `content-too-long` 并保留 `≤ 50,000` 字符文件全量正文索引）、`float32 BLOB` 向量存储（`1c275e282` / `77db102f7` / `d4bd5f915`）与 `PRAGMA auto_vacuum = INCREMENTAL` 均已落地。
+- **Read-worker 下沉与运行稳定性（已合入主线）**：`search-index-read-worker` 已接管文件向量扫描、索引统计计数（`b11cdff1a`、`84a8a8668`）与恢复分页（`6d2bd10a8`）；已合入 subtree 状态持久化与热目录启动追赶（`72b06c1eb`）、热源事件 leading-trailing 节流（`ba6447df4`）、容量模式驱逐与删除余量保护（`38f9cf445` / `9e77b1fa6`）、分批刷写（`835861fa3`）以及 `2.5.1` 文件动作与 `file.search`（`687d48f3f`）。
+- **模块拆分与体积止血**：`FileProvider` 第一轮子服务抽离已落地（`file-provider.ts` 降至 3,195 原始行 / 2,790 代码行），且 `search-core.ts`（2,405 代码行 / 2,850 原始行）已纳入 `.github/module-size-ratchet.json`。
+- **当前核心未闭环门禁（收敛剩余项）**：
+  1. `search-split:app-evidence` 3 阶段隔离实跑（bootstrap → split → rollback 真机闭环，排除非 Electron 自检替代）；
+  2. 真实 profile `search:index-migration:evidence-verify -- --strict`（含 `indexing-diagnostics-probe` cold-start `SIGABRT` 隔离修复或 attach-only 采证、`scan_progress` 迁移执行与自然 recent task Settings 截图）；
+  3. Windows Everything CoreBox UI 采证（普通、`@file`、结构化 filter 截图并入 strict acceptance manifest）；
+  4. Quicklinks persistent feed 与 Browser Bookmarks 真实平台/持久源证据；
+  5. 后续低风险存储减容（`FILE-AND-APP-INDEX-ROADMAP` `A14`/`A15`/`A16`）与运行时隐患（`E2`/`E3`/`E5`）。
 
 ## 已完成
 
