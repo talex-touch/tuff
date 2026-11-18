@@ -1,4 +1,6 @@
 import type { SupportedLocale } from '~/composables/useLocaleOrchestrator'
+import { hasWindow } from '@talex-touch/utils/env'
+import { recoverFromStaleChunkError } from '~/utils/chunk-recovery'
 
 export type RouteLocaleChunkName = 'dashboard' | 'landing'
 
@@ -56,6 +58,23 @@ export function resolveRouteLocaleChunks(path: string): RouteLocaleChunkName[] {
   return chunks
 }
 
+export function registerActiveRouteLocaleChunk(
+  activeChunks: readonly RouteLocaleChunkName[],
+  chunk: RouteLocaleChunkName,
+): RouteLocaleChunkName[] {
+  return activeChunks.includes(chunk) ? [...activeChunks] : [...activeChunks, chunk]
+}
+
+export function resolveAllRouteLocaleChunks(
+  path: string,
+  activeChunks: readonly RouteLocaleChunkName[] = [],
+): RouteLocaleChunkName[] {
+  const routeChunks = resolveRouteLocaleChunks(path)
+  if (activeChunks.length === 0)
+    return routeChunks
+  return Array.from(new Set([...routeChunks, ...activeChunks]))
+}
+
 export async function loadRouteLocaleChunk(locale: SupportedLocale, chunk: RouteLocaleChunkName) {
   const key = getRouteLocaleChunkKey(locale, chunk)
   const existing = loadingChunks.get(key)
@@ -64,6 +83,11 @@ export async function loadRouteLocaleChunk(locale: SupportedLocale, chunk: Route
 
   const promise = routeLocaleChunkLoaders[locale][chunk]()
     .then(module => module.default)
+    .catch((error) => {
+      if (hasWindow())
+        recoverFromStaleChunkError(error)
+      throw error
+    })
     .finally(() => {
       loadingChunks.delete(key)
     })
