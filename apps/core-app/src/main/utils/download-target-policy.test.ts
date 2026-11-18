@@ -7,15 +7,17 @@ import { evaluateDownloadTarget, getAllowedDownloadRoots } from './download-targ
 
 const electronAppMock = vi.hoisted(() => ({
   isPackaged: true,
-  getAppPath: () => '/tmp/tuff-app',
+  getAppPath: () => '/var/tuff-profile/app',
   getPath: vi.fn((name: string) => {
+    // Keep mocked profile directories outside `/tmp`: on Linux `os.tmpdir()` is `/tmp`,
+    // which `getAllowedDownloadRoots()` itself includes.
     switch (name) {
       case 'userData':
-        return '/tmp/tuff-user-data'
+        return path.resolve('/var/tuff-profile/core-app')
       case 'downloads':
-        return '/tmp/user-downloads'
+        return path.resolve('/var/tuff-profile/downloads')
       case 'temp':
-        return '/tmp/os-temp'
+        return path.resolve('/var/tuff-profile/os-temp')
       default:
         throw new Error(`unexpected path: ${name}`)
     }
@@ -131,7 +133,8 @@ describe('getAllowedDownloadRoots', () => {
   })
 
   it('allows TempFileService subdirectories under userData/temp while rejecting bare userData', () => {
-    const userData = path.resolve('/tmp/tuff-user-data')
+    // Must not sit under `/tmp`, which equals `os.tmpdir()` (an allowed root) on Linux.
+    const userData = path.resolve('/var/tuff-profile/core-app')
     const roots = getAllowedDownloadRoots()
 
     expect(roots).toContain(path.join(userData, 'temp'))
