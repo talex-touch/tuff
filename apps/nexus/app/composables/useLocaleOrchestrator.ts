@@ -170,20 +170,24 @@ export function useLocaleOrchestrator() {
 
     const requestSeq = ++localeRequestSeq
     const prefetchedChunks = resolveAllRouteLocaleChunks(route.path || '/', activeRouteLocaleChunks.value)
-    const prefetchedPromise = ensureRouteLocaleChunks(normalized, prefetchedChunks)
+    try {
+      await ensureRouteLocaleChunks(normalized, prefetchedChunks)
+    }
+    catch (error) {
+      if (requestSeq === localeRequestSeq)
+        throw error
+      await localeSetQueue.catch(() => {})
+      return normalizeLocale(locale.value) || normalized
+    }
+
+    if (requestSeq !== localeRequestSeq) {
+      await localeSetQueue.catch(() => {})
+      return normalizeLocale(locale.value) || normalized
+    }
 
     localeSetQueue = localeSetQueue
       .catch(() => {})
       .then(async () => {
-        try {
-          await prefetchedPromise
-        }
-        catch (error) {
-          if (requestSeq === localeRequestSeq)
-            throw error
-          return
-        }
-
         if (requestSeq !== localeRequestSeq)
           return
 
@@ -193,13 +197,21 @@ export function useLocaleOrchestrator() {
         if (locale.value === normalized)
           return
 
-        const currentChunks = resolveAllRouteLocaleChunks(route.path || '/', activeRouteLocaleChunks.value)
-        const missingChunks = currentChunks.filter(chunk => !prefetchedChunks.includes(chunk))
-        if (missingChunks.length > 0) {
+        const loadedChunks = new Set<RouteLocaleChunkName>(prefetchedChunks)
+        let missingChunks = resolveAllRouteLocaleChunks(route.path || '/', activeRouteLocaleChunks.value)
+          .filter(chunk => !loadedChunks.has(chunk))
+        while (missingChunks.length > 0) {
           await ensureRouteLocaleChunks(normalized, missingChunks)
           if (requestSeq !== localeRequestSeq)
             return
+          missingChunks.forEach(chunk => loadedChunks.add(chunk))
+          missingChunks = resolveAllRouteLocaleChunks(route.path || '/', activeRouteLocaleChunks.value)
+            .filter(chunk => !loadedChunks.has(chunk))
         }
+
+        const postChunkDocsLocale = explicitDocsLocale()
+        if (postChunkDocsLocale && postChunkDocsLocale !== normalized)
+          return
 
         try {
           await setLocale(normalized)
@@ -221,7 +233,13 @@ export function useLocaleOrchestrator() {
     if (chunks.length === 0)
       return
 
-    await Promise.all(chunks.map(chunk => ensureRouteLocaleChunk(composer, targetLocale, chunk, activeRouteLocaleChunks, routeLocaleChunkRevision)))
+    await Promise.all(chunks.map(chunk => ensureRouteLocaleChunk(
+      composer,
+      targetLocale,
+      chunk,
+      chunk === 'landing' ? activeRouteLocaleChunks : undefined,
+      routeLocaleChunkRevision,
+    )))
   }
 
   const reconcileClientLocale = async (input?: { isAuthenticated?: boolean, profileLocale?: string | null }) => {

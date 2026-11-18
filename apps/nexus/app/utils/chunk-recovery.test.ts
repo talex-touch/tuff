@@ -127,6 +127,23 @@ describe('chunk-recovery helpers', () => {
     })).toBe(false)
     expect(navigate).not.toHaveBeenCalled()
 
+    const setItemSpy = vi.fn()
+    const readFailingStorage = {
+      getItem: () => {
+        throw new Error('SecurityError')
+      },
+      setItem: setItemSpy,
+    }
+    expect(recoverFromStaleChunkError(err, {
+      now: 1500,
+      href: 'https://tuff.tagzxia.com/',
+      pathname: '/',
+      storage: readFailingStorage,
+      navigate,
+    })).toBe(false)
+    expect(setItemSpy).not.toHaveBeenCalled()
+    expect(navigate).not.toHaveBeenCalled()
+
     vi.stubGlobal('window', Object.defineProperty(
       { location: { href: 'https://tuff.tagzxia.com/', pathname: '/', replace: navigate } },
       'sessionStorage',

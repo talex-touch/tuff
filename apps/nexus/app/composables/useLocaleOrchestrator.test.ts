@@ -471,4 +471,24 @@ describe('locale contracts', () => {
     expect(settledLocale).toBe('en')
     expect(activeLocale.value).toBe('en')
   })
+
+  it('does not leak route-only dashboard chunk registration onto later /updates switches', async () => {
+    const mergeCalls: string[] = []
+    fakes.onMergeLocaleMessage = (locale, payload) => {
+      mergeCalls.push(`${locale}:${Object.keys(payload).join(',')}`)
+    }
+
+    const orchestrator = useLocaleOrchestrator()
+    routePath = '/dashboard'
+    await orchestrator.setLocaleSerial('zh', 'manual')
+
+    expect(nuxtState.get('nexus-active-route-locale-chunks')?.value).toEqual([])
+
+    routePath = '/updates'
+    mergeCalls.length = 0
+    await orchestrator.setLocaleSerial('en', 'manual')
+
+    expect(mergeCalls).toEqual([])
+    expect(activeLocale.value).toBe('en')
+  })
 })

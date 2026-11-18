@@ -90,10 +90,16 @@ function readUnexpiredCooldowns(
 ): Record<string, number> | null {
   if (!storage)
     return null
+  let raw: string | null
   try {
-    const raw = storage.getItem(CHUNK_RELOAD_STORAGE_KEY)
-    if (!raw)
-      return {}
+    raw = storage.getItem(CHUNK_RELOAD_STORAGE_KEY)
+  }
+  catch {
+    return null
+  }
+  if (!raw)
+    return {}
+  try {
     const parsed = JSON.parse(raw) as unknown
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
       return {}
