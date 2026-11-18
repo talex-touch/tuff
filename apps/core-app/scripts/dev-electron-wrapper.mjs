@@ -380,6 +380,15 @@ if (process.env.TUFF_DISABLE_NATIVE_AUDIO !== '1') {
   })
 }
 
+if (process.env.TUFF_DISABLE_RUST_OCR !== '1' && process.env.TUFF_DISABLE_NATIVE_OCR !== '1') {
+  const nativeRoot = path.dirname(require.resolve('@talex-touch/tuff-native/ocr-helper'))
+  execFileSync(process.execPath, [path.join(nativeRoot, 'scripts', 'build-ocr.js')], {
+    cwd: nativeRoot,
+    env,
+    stdio: 'inherit'
+  })
+}
+
 if (process.platform === 'darwin') {
   const nativeRoot = path.dirname(require.resolve('@talex-touch/tuff-native/translation'))
   execFileSync(process.execPath, [path.join(nativeRoot, 'scripts', 'build-translation.js')], {
@@ -387,6 +396,13 @@ if (process.platform === 'darwin') {
     env,
     stdio: 'inherit'
   })
+  if (process.env.TUFF_DISABLE_NATIVE_FILE_INDEX !== '1') {
+    execFileSync(process.execPath, [path.join(nativeRoot, 'scripts', 'build-file-index.js')], {
+      cwd: nativeRoot,
+      env,
+      stdio: 'inherit'
+    })
+  }
 }
 
 execFileSync(process.execPath, [path.join(__dirname, 'prepare-browser-connector.cjs')], {

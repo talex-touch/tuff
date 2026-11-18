@@ -16,6 +16,11 @@
       "require": "./index.js",
       "default": "./index.js"
     },
+    "./ocr-helper": {
+      "types": "./ocr-helper.d.ts",
+      "require": "./ocr-helper.js",
+      "default": "./ocr-helper.js"
+    },
     "./everything": {
       "types": "./everything.d.ts",
       "require": "./everything.js",
@@ -50,6 +55,11 @@
       "types": "./protocol-contract.d.ts",
       "require": "./protocol-contract.js",
       "node": "./protocol-contract.js"
+    },
+    "./file-index": {
+      "types": "./file-index.d.ts",
+      "require": "./file-index.js",
+      "default": "./file-index.js"
     }
   },
   "files": [
@@ -111,6 +121,20 @@
     "native-audio/Cargo.toml",
     "native-audio/build.rs",
     "native-audio/src",
+    "native-ocr/Cargo.toml",
+    "native-ocr/build.rs",
+    "native-ocr/src",
+    "ocr-helper.js",
+    "ocr-helper.d.ts",
+    "scripts/build-ocr.js",
+    "build/Release/tuff-native-ocr",
+    "build/Release/tuff-native-ocr.exe",
+    "native-file-index/Cargo.toml",
+    "native-file-index/build.rs",
+    "native-file-index/src",
+    "file-index.js",
+    "file-index.d.ts",
+    "scripts/build-file-index.js",
     "build/Release/*.node",
     "everything.js",
     "everything.d.ts",
@@ -126,11 +150,15 @@
     "build": "node-gyp configure build",
     "build:screenshot": "node scripts/build-screenshot.js",
     "build:audio": "node scripts/build-audio.js",
+    "build:ocr": "node scripts/build-ocr.js",
+    "build:file-index": "node scripts/build-file-index.js",
     "build:translation": "node scripts/build-translation.js",
     "build:update": "node scripts/build-update.js",
     "build:browser-bridge": "node scripts/build-browser-bridge.js",
     "build:protocol-fixture": "node scripts/build-protocol-fixture.js",
     "test:protocol": "node --test protocol-contract.test.js protocol-napi.test.js protocol-carrier.test.js protocol-package.test.js protocol-error-cause.test.js protocol-error-envelope.test.js",
+    "test:ocr-helper": "node --test ocr-helper.test.js",
+    "test:file-index": "node --test file-index.test.js",
     "test:screenshot-protocol": "node --test screenshot-addon-contract.test.js screenshot-protocol.test.js",
     "verify:audio-production": "node scripts/verify-audio-production.js",
     "verify:screenshot-production": "node scripts/verify-screenshot-production.js",

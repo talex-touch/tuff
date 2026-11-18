@@ -457,7 +457,13 @@ const pageStyleBudgets = [
     // 177,688 B (173.5 KiB) in 27. edge-fade-mask (434 B) joins the page because stream-markdown now
     // depends on it; stream-markdown grew 282 B and base-anchor shrank 22 B. Minimal headroom, growth
     // from here fails.
-    limit: 174.5 * 1024,
+    // 174.5 -> 190.5 on 2026-11-18 for CoreApp Home AI parity upgrades across `chat/style.css`
+    // (TxChatComposer capsule stop/mic/glow/refraction + TxChatMessage hybrid/status/error/actions),
+    // `prompt-bar/style.css` (status dock, run/context meters, tray, dictation bar, stop capsule),
+    // and `conversation-stream/style.css` (frosted pill, scroller clearance/gap vars, emptyAlign):
+    // measured 194,383 B (189.8 KiB) across 28 sheets (gzip 29.0 KiB). Minimal headroom, growth
+    // from here fails.
+    limit: 190.5 * 1024,
   },
 ]
 

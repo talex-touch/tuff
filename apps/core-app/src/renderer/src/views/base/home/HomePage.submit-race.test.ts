@@ -114,16 +114,36 @@ const AttachmentPaint = {
       props.attachments.map((item) => h('span', item.name))
     )
 }
+const streamCalls = vi.hoisted(() => ({
+  scrollToIndex: vi.fn()
+}))
 const StreamPaint = {
-  props: { items: { type: Array as PropType<ConversationMessage[]>, required: true } },
+  name: 'TxConversationStream',
+  props: {
+    items: { type: Array as PropType<ConversationMessage[]>, required: true },
+    topPadding: [Number, String],
+    bottomClearance: [Number, String],
+    pillBottom: [Number, String]
+  },
+  emits: ['following-change'],
   setup(props: { items: ConversationMessage[] }, { slots, expose }: SetupContext) {
-    expose({ scrollToBottom: () => {}, scrollToIndex: () => {}, tweenToBottom: async () => {} })
+    expose({
+      scrollToBottom: () => {},
+      scrollToIndex: streamCalls.scrollToIndex,
+      tweenToBottom: async () => true,
+      atBottom: true,
+      following: true
+    })
     return () =>
-      h(
-        'div',
-        { class: 'tx-conversation-stream__scroller' },
-        props.items.map((item, index) => slots.item?.({ item, index }))
-      )
+      h('div', { class: 'tx-conversation-stream__scroller' }, [
+        ...props.items.map((item, index) => slots.item?.({ item, index })),
+        slots.rail?.({
+          items: props.items,
+          activeIndex: 0,
+          scrollToIndex: streamCalls.scrollToIndex,
+          scrollToBottom: () => {}
+        })
+      ])
   }
 }
 vi.mock('@talex-touch/tuffex/attachment-tray', () => ({ TxAttachmentTray: AttachmentPaint }))
@@ -357,6 +377,7 @@ let main: MainHost
 
 beforeEach(() => {
   vi.resetModules()
+  streamCalls.scrollToIndex.mockReset()
   for (const key of Object.keys(boundary.settings)) delete boundary.settings[key]
   Object.assign(boundary.settings, {
     conversation: { reasoningEffort: 'low' },
@@ -525,6 +546,66 @@ describe('HomePage failed conversation report', () => {
     expect(report.text()).toContain(detail)
     expect(report.find('img').exists()).toBe(false)
     expect(report.find('script').exists()).toBe(false)
+  })
+})
+
+describe('HomePage stream and rail integration', () => {
+  it('passes native stream clearance props, tracks following-change, and wires #rail navigation', async () => {
+    const id = 'rail-stream'
+    const base = state(id)
+    const richThread: ConversationWorkspaceState = {
+      ...base,
+      messages: [
+        {
+          id: `${id}-u1`,
+          role: 'user',
+          content: 'First **prompt** with `code`',
+          status: 'complete',
+          seq: 0,
+          createdAt: 1
+        },
+        {
+          id: `${id}-a1`,
+          role: 'assistant',
+          content: 'Assistant answer',
+          status: 'complete',
+          seq: 1,
+          createdAt: 2
+        },
+        {
+          id: `${id}-u2`,
+          role: 'user',
+          content: 'Second prompt ![shot](tfile:///shot.png)',
+          status: 'complete',
+          seq: 2,
+          createdAt: 3
+        }
+      ]
+    }
+    const { view } = await page([richThread], `/home/c/${id}`)
+
+    const stream = view.findComponent({ name: 'TxConversationStream' })
+    expect(stream.props('topPadding')).toBe(72)
+    expect(stream.props('bottomClearance')).toBe('calc(var(--home-composer-height, 112px) + 88px)')
+    expect(stream.props('pillBottom')).toBe('calc(var(--home-composer-height, 112px) + 32px)')
+    expect(stream.attributes('data-following')).toBe('true')
+
+    stream.vm.$emit('following-change', false)
+    await flushPromises()
+    expect(stream.attributes('data-following')).toBe('false')
+
+    const railButtons = view.findAll('.HomeMessageRail-BarWrap')
+    expect(railButtons).toHaveLength(2)
+    expect(railButtons[0]!.attributes('aria-current')).toBe('true')
+    expect(railButtons[1]!.attributes('aria-current')).toBeUndefined()
+
+    await view.findAll('.HomeMessageRail-Turn')[1]!.trigger('mouseenter')
+    await flushPromises()
+    expect(view.get('.HomeMessageRail-PromptText').text()).toContain('Second prompt')
+    expect(view.get('.HomeMessageRail-ImageTag').text()).toBe('#IMAGE1')
+
+    await railButtons[1]!.trigger('click')
+    expect(streamCalls.scrollToIndex).toHaveBeenCalledWith(2)
   })
 })
 

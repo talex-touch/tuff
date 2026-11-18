@@ -1,6 +1,6 @@
 # Tuff AI Stable TODO
 
-> 更新时间：2026-10-10
+> 更新时间：2026-11-17
 > 范围：Roadmap R2 / AI 2.5.0 Stable。主验收矩阵以 `04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md` 为准；全局执行顺序服从 [`TODO.md`](./TODO.md)，本文件不单独抢占稳定化窗口。
 
 ## 当前口径
@@ -33,7 +33,7 @@
 
 目标：复用现有 Capability / Provider 路由，把通过运行时探针的 macOS 系统能力作为机器本地 provider 自动注入；不把机器可用性持久化或同步到其他设备，也不建立第二套同名能力路由。
 
-- [ ] **原生 OCR / `vision.ocr`**：先确认现有 `local-system-ocr` 的实际底层引擎、语言覆盖、布局数据和取消语义；若未使用 Apple Vision，再评估以 Vision 文本识别作为 macOS provider。已有 provider 不重复注册。
+- [ ] **原生 OCR / `vision.ocr`**：已确认（macOS `packages/tuff-native/native/src/platform/macos/vision_ocr.mm` 调用 `<Vision/Vision.h>` / `VNRecognizeTextRequest`）并完成常驻 Rust 化升级（不重复注册）——`local-system-ocr`（`LocalProvider.visionOcr`）已通过 `@talex-touch/tuff-native` 封装 macOS Apple Vision（`apple-vision`）与 Windows WinRT（`windows-ocr`），支持 `blocks` 布局坐标、语言提示与 `AbortSignal` / 超时取消；现已升级为常驻 Rust `tuff-native-ocr` helper（`file` 直读与 ImageIO/WIC `<= 2000px` 原生缩放 + `utilityProcess` 降级，避免 `sharp` 主/子进程搬运与大图卡顿，并免除 `vision.ocr` 缓存 key 序列化）。**待补**：① 非沙盒 macOS `pnpm core:dev` 的 `.accurate` 实图冒烟，以及 Windows CI 对 `winrt_ocr.cpp` 与 `tuff-native-ocr.exe` 的编译/运行验收；② 修复 `apps/core-app/src/main/modules/ai/intelligence-config.ts` 当前仅凭 `TUFF_DISABLE_NATIVE_OCR !== '1'` 注入与放行 `local-system-ocr`、未调用 `getNativeOcrSupport()` 探针校验可用性（违反下方接入门禁 1，导致非支持平台也会暴露渠道）的问题，并补齐跨平台对齐（Linux stub 实现）与多语言评测边界。
 - [x] **原生翻译 / `text.translate`**：已接入 macOS 26+ 的后台 `TranslationSession(installedSource:target:)`。`local-system-translation` 仅在实际会话就绪后注入，复用 Swift 进程与语言对会话；translation 插件优先使用本地路由。macOS 27 真机中英互译、插件宿主、测试进程禁网、缺包、取消和超时恢复已通过。语言包由系统设置安装，不自动下载；macOS 26 真机与正式安装包验收未覆盖。
 - [x] **语言识别（翻译内部）**：已使用 `NLLanguageRecognizer` 自动识别源语言。简繁共用字短句按已安装的中文语言包提供识别提示；显式源语言不变。不新增独立渠道。
 - [ ] **原生语音识别 / `audio.stt`**：评估 Speech framework 的实时/批量、离线能力、语言覆盖、模型下载与权限恢复；只有真实流式延迟和稳定性达到现有语音会话要求时才进入渠道列表。
@@ -46,6 +46,16 @@
 3. 每项能力必须定义权限、模型/语言包未安装、用户取消、系统不支持和执行失败的稳定错误语义及云端 fallback。
 4. 明确本地处理与可能触发的系统下载/提示，不因“原生”标签弱化隐私和网络行为说明。
 5. 先完成真实 Mac smoke 与目标系统版本矩阵，再进入默认启用或发布验收。
+
+## 2026-10 ~ 11 AI 运行时与 UI 增量落地
+
+> 注：本节补录 2026-10-10 以后已合入主线的非 Stable-manifest 运行时能力，不改变上方 `R2 AI Stable` 的 `--requireCurrentVersion` 当前版本重采要求（manifest baseline 仍为 `2.4.12-beta.8`，相对当前版本 `2.4.15-beta.9` 仍需重采）。
+
+- **`local-ai-cli` 与调度器路由不变量（已落地）**：`localAiCliModule`（`local_ai_cli_sessions`、`pi` / `omp` / `codex` / `claude` 可执行探测、工作区隔离与 `--version` 探测进程回收）已合入；`providers/pi-cli-provider.ts` 与 `providers/cli-config-provider.ts` 确立“调度器决定执行器”不变量——第三方 CLI 仅在其对应调度器配置（`profile:cli:{codex,claude,omp}`）下启动进程，其他调度器或未指定调度器仅复用 `~/.codex/config.toml`、`~/.claude/settings.json`、`~/.omp/agent/models.{yml,yaml,json}` 端点（分别标记为 `codex-config` / `claude-config` / `omp-config`）。
+- **`models.dev` 定价目录与 `usage-ledger` 全局账本（已落地）**：`pricing/models-dev-catalog.ts`、`pricing/model-pricing.ts` 与 `usage-ledger/`（含全局 backfill、配额拒绝与限额校验）已接入主进程。
+- **OpenAI Responses API 与 `pi-agent-core@0.85.1`（已落地）**：`ai-import-config-parser.ts` 与 `langchain-openai-compatible-provider.ts` 支持 `openai-responses`（`transport: 'responses'`）；内置智能体运行宿主使用 `@earendil-works/pi-agent-core@0.85.1`（`PiAgentRuntimeHost`），并接入 `tool-gateway` / `mcp-host` 与 `0056_ai_orchestrator_run_messages.sql` 运行日志持久化。
+- **`omp` ACP 底座（已建未接 orchestrator）**：`OmpAcpClient`（`packages/tuff-intelligence/src/omp/omp-acp-client.ts`）与 `OmpAgentRuntimeHost`（`apps/core-app/src/main/modules/ai/omp/omp-agent-runtime-host.ts`）及单元测试已实现，但 `ai-cli-orchestrator.ts`（第 530 行）生产路径仍只实例化 `PiAgentRuntimeHost`；`pi-cli-provider.ts` 中的 `omp` 仍走 `omp --print --mode json` 单次子进程（详情见 [`omp-runtime-and-tern-gui-integration-analysis-2026-11-01.md`](../engineering/reports/omp-runtime-and-tern-gui-integration-analysis-2026-11-01.md)）。
+- **Home AI UI 与 `intelligence-uikit` 演进原则**：`HomePage.vue` 已瘦身至 1,941 行，已部分接入 `@talex-touch/intelligence-uikit`（`HomeMessageRow.vue` 使用 `TxAiAssistantTurn`，主进程 `home-conversation-injection.ts` 使用 `openUIPrompt`）；对话流容器与输入区仍采用 `TxConversationStream` 与 `TuffAIComposer.vue`（390 行 + `composer/*`）。后续**先以 CoreApp 现存真实 UI 为基线**升级 `@talex-touch/tuffex` 与 `intelligence-uikit` 的对话/输入框组件，不把生产界面降级迁移到占位壳组件。
 
 ## 已完成
 

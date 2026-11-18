@@ -366,7 +366,9 @@ const { paletteOpen, commands, runCommand } = useMainWindowCommands()
     // frame of the resize. macOS re-syncs the window shape each time, which shows up as the
     // sidebar flickering behind the cursor.
     .ShellSidebar,
-    .ShellChromeBar {
+    .ShellChromeBar,
+    .BrowserTabStrip,
+    [data-browser-window-drag] {
       -webkit-app-region: no-drag;
     }
   }

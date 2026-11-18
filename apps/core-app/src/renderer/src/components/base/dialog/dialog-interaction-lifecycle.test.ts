@@ -5,13 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import TBlowDialog from './TBlowDialog.vue'
 import TBottomDialog from './TBottomDialog.vue'
 import TDialogMention from './TDialogMention.vue'
+import TPopperDialog from './TPopperDialog.vue'
 import TouchTip from './TouchTip.vue'
 
 // The dialogs' own labels come from vue-i18n. These tests are about rendering and focus, so the
 // translator answers in English instead of installing the catalogs.
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
-    t: (key: string) => ({ 'common.confirm': 'Confirm' })[key] ?? key
+    t: (key: string) =>
+      ({
+        'common.confirm': 'Confirm',
+        'common.close': 'Close'
+      })[key] ?? key
   })
 }))
 
@@ -37,28 +42,36 @@ type DialogButton = {
 }
 
 type ButtonDialogDefinition = {
+  buttonSelector: string
   component: Component
   closeDelay: number
+  lockStrategy: 'body-overflow' | 'window-scroll'
   name: string
   propName: 'btns' | 'buttons'
 }
 
 const buttonDialogs: ButtonDialogDefinition[] = [
   {
+    buttonSelector: '.tx-bottom-dialog__row',
     component: TBottomDialog,
     closeDelay: 350,
+    lockStrategy: 'body-overflow',
     name: 'TBottomDialog',
     propName: 'btns'
   },
   {
+    buttonSelector: '.tx-button',
     component: TDialogMention,
     closeDelay: 500,
+    lockStrategy: 'window-scroll',
     name: 'TDialogMention',
     propName: 'btns'
   },
   {
+    buttonSelector: '.tx-button',
     component: TouchTip,
-    closeDelay: 700,
+    closeDelay: 400,
+    lockStrategy: 'body-overflow',
     name: 'TouchTip',
     propName: 'buttons'
   }
@@ -84,6 +97,11 @@ beforeEach(() => {
     dispatchEvent: vi.fn(() => true)
   }))
   vi.stubGlobal('matchMedia', matchMediaMock)
+  document.body.style.overflow = ''
+  document.body.style.paddingRight = ''
+  delete document.body.dataset.txFlipOverlayLockCount
+  delete document.body.dataset.txFlipOverlayLockOverflow
+  delete document.body.dataset.txFlipOverlayLockPaddingRight
 })
 
 function mountButtonDialog(
@@ -105,8 +123,8 @@ function mountButtonDialog(
   return wrapper
 }
 
-function getButton(label: string): HTMLButtonElement {
-  const button = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.tx-button')).find(
+function getButton(label: string, selector = '.tx-button'): HTMLButtonElement {
+  const button = Array.from(document.body.querySelectorAll<HTMLButtonElement>(selector)).find(
     (candidate) => candidate.textContent?.includes(label)
   )
 
@@ -126,6 +144,11 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.useRealTimers()
   document.body.replaceChildren()
+  document.body.style.overflow = ''
+  document.body.style.paddingRight = ''
+  delete document.body.dataset.txFlipOverlayLockCount
+  delete document.body.dataset.txFlipOverlayLockOverflow
+  delete document.body.dataset.txFlipOverlayLockPaddingRight
 })
 
 describe('base dialog interaction and lifecycle contracts', () => {
@@ -145,7 +168,7 @@ describe('base dialog interaction and lifecycle contracts', () => {
         },
         close
       )
-      const button = getButton('Working')
+      const button = getButton('Working', definition.buttonSelector)
 
       expect(button.disabled).toBe(true)
       button.click()
@@ -179,12 +202,12 @@ describe('base dialog interaction and lifecycle contracts', () => {
       close
     )
 
-    getButton('Decline').click()
+    getButton('Decline', definition.buttonSelector).click()
     await vi.advanceTimersByTimeAsync(200)
     expect(declinedAction).toHaveBeenCalledTimes(1)
     expect(close).not.toHaveBeenCalled()
 
-    getButton('Confirm').click()
+    getButton('Confirm', definition.buttonSelector).click()
     await vi.advanceTimersByTimeAsync(definition.closeDelay)
 
     expect(confirmedAction).toHaveBeenCalledTimes(1)
@@ -206,17 +229,23 @@ describe('base dialog interaction and lifecycle contracts', () => {
         vi.fn()
       )
 
-      window.dispatchEvent(new Event('scroll'))
-      expect(scrollTo).toHaveBeenCalledTimes(1)
-      expect(scrollTo).toHaveBeenCalledWith({ top: 0 })
+      if (definition.lockStrategy === 'body-overflow') {
+        expect(document.body.style.overflow).toBe('hidden')
+        unmountDialog(wrapper)
+        expect(document.body.style.overflow).toBe('')
+      } else {
+        window.dispatchEvent(new Event('scroll'))
+        expect(scrollTo).toHaveBeenCalledTimes(1)
+        expect(scrollTo).toHaveBeenCalledWith({ top: 0 })
 
-      unmountDialog(wrapper)
-      window.dispatchEvent(new Event('scroll'))
-      expect(scrollTo).toHaveBeenCalledTimes(1)
+        unmountDialog(wrapper)
+        window.dispatchEvent(new Event('scroll'))
+        expect(scrollTo).toHaveBeenCalledTimes(1)
+      }
     }
   )
 
-  it('TBlowDialog focuses its confirmation action, does not lock scrolling, and restores focus after unmount', async () => {
+  it('TBlowDialog focuses its dialog surface, does not lock scrolling, and restores focus after close', async () => {
     vi.useFakeTimers()
 
     const app = document.createElement('main')
@@ -238,9 +267,12 @@ describe('base dialog interaction and lifecycle contracts', () => {
     })
     mountedWrappers.push(wrapper)
 
+    const dialog = document.body.querySelector<HTMLElement>('.tx-blow-dialog')
     const confirm = getButton('Confirm')
-    expect(document.activeElement).toBe(confirm)
+    expect(document.activeElement).toBe(dialog)
+    expect(dialog?.querySelector('.tx-base-surface--refraction')).toBeTruthy()
     expect(app.style.transform).toBe('scale(1.25)')
+    expect(document.body.style.overflow).toBe('')
 
     window.dispatchEvent(new Event('scroll'))
     expect(scrollTo).not.toHaveBeenCalled()
@@ -252,6 +284,38 @@ describe('base dialog interaction and lifecycle contracts', () => {
     expect(app.style.transform).toBe('')
     expect(app.style.opacity).toBe('')
 
+    unmountDialog(wrapper)
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('TPopperDialog uses refraction surface, localizes Confirm, closes on Escape, and restores focus', async () => {
+    vi.useFakeTimers()
+
+    const trigger = document.createElement('button')
+    trigger.textContent = 'Trigger'
+    document.body.append(trigger)
+    trigger.focus()
+
+    const close = vi.fn()
+    const wrapper = mount(TPopperDialog, {
+      attachTo: document.body,
+      props: {
+        close,
+        title: 'Popper',
+        message: 'Short notice'
+      }
+    })
+    mountedWrappers.push(wrapper)
+
+    const dialog = document.body.querySelector<HTMLElement>('.tx-popper-dialog')
+    expect(dialog?.querySelector('.tx-base-surface--refraction')).toBeTruthy()
+    expect(document.activeElement).toBe(dialog)
+    expect(getButton('Confirm')).toBeTruthy()
+
+    dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await vi.advanceTimersByTimeAsync(250)
+
+    expect(close).toHaveBeenCalledTimes(1)
     unmountDialog(wrapper)
     expect(document.activeElement).toBe(trigger)
   })

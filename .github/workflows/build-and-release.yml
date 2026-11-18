@@ -514,6 +514,9 @@ jobs:
           pnpm -C packages/tuff-native run build:screenshot &&
           pnpm -C packages/tuff-native run verify:screenshot-production
 
+      - name: Build Rust OCR helper
+        run: node packages/tuff-native/scripts/build-ocr.js ${{ matrix.os == 'macos-latest' && '--universal' || '' }}
+
       - name: Build Chrome Native Messaging host
         run: node packages/tuff-native/scripts/build-browser-bridge.js ${{ matrix.os == 'macos-latest' && '--universal' || '' }}
 

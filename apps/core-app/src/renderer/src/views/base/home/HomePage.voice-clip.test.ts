@@ -114,15 +114,31 @@ const TextPaint = {
   setup: (props: { content?: string }) => () => h('span', props.content)
 }
 const StreamPaint = {
-  props: { items: { type: Array as PropType<ConversationMessage[]>, required: true } },
+  props: {
+    items: { type: Array as PropType<ConversationMessage[]>, required: true },
+    topPadding: [Number, String],
+    bottomClearance: [Number, String],
+    pillBottom: [Number, String]
+  },
+  emits: ['following-change'],
   setup(props: { items: ConversationMessage[] }, { slots, expose }: SetupContext) {
-    expose({ scrollToBottom: () => {}, scrollToIndex: () => {}, tweenToBottom: async () => {} })
+    expose({
+      scrollToBottom: () => {},
+      scrollToIndex: () => {},
+      tweenToBottom: async () => true,
+      atBottom: true,
+      following: true
+    })
     return () =>
-      h(
-        'div',
-        { class: 'tx-conversation-stream__scroller' },
-        props.items.map((item, index) => slots.item?.({ item, index }))
-      )
+      h('div', { class: 'tx-conversation-stream__scroller' }, [
+        ...props.items.map((item, index) => slots.item?.({ item, index })),
+        slots.rail?.({
+          items: props.items,
+          activeIndex: -1,
+          scrollToIndex: () => {},
+          scrollToBottom: () => {}
+        })
+      ])
   }
 }
 vi.mock('@talex-touch/tuffex/voice-clip', () => ({ TxVoiceClip: ClipPaint }))

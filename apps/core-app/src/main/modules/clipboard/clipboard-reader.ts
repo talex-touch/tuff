@@ -37,6 +37,8 @@ export interface ClipboardReader {
 }
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+const PNG_IHDR_TAG = Buffer.from('IHDR')
+const PNG_MIN_IHDR_BYTES = 24
 
 /** True when `buffer` starts with the PNG file signature. */
 export function isPngBuffer(buffer: Buffer): boolean {
@@ -44,6 +46,66 @@ export function isPngBuffer(buffer: Buffer): boolean {
     buffer.length > PNG_SIGNATURE.length &&
     buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
   )
+}
+
+/**
+ * Reads width and height directly from a PNG `IHDR` header without decoding pixel data.
+ * Returns `null` when `buffer` is shorter than 24 bytes, lacks a valid PNG/IHDR header,
+ * or declares zero dimensions.
+ */
+export function parsePngDimensions(buffer: Buffer): { width: number; height: number } | null {
+  if (!Buffer.isBuffer(buffer) || buffer.length < PNG_MIN_IHDR_BYTES) {
+    return null
+  }
+  if (!buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+    return null
+  }
+  if (!buffer.subarray(12, 16).equals(PNG_IHDR_TAG)) {
+    return null
+  }
+  const width = buffer.readUInt32BE(16)
+  const height = buffer.readUInt32BE(20)
+  if (width <= 0 || height <= 0) {
+    return null
+  }
+  return { width, height }
+}
+
+/**
+ * Wraps already-encoded PNG bytes in a `NativeImage` facade whose common metadata/persistence
+ * methods (`isEmpty`, `getSize`, `toPNG`) answer directly from `buffer` + `dimensions` without
+ * running synchronous `nativeImage.createFromBuffer` on the main thread. Any other `NativeImage`
+ * operation lazily decodes once on demand.
+ */
+export function createLazyPngNativeImage(
+  buffer: Buffer,
+  dimensions: { width: number; height: number }
+): NativeImage {
+  let decoded: NativeImage | null = null
+  const ensureDecoded = (): NativeImage => {
+    decoded ??= nativeImage.createFromBuffer(buffer)
+    return decoded
+  }
+  const target = {} as NativeImage
+  return new Proxy(target, {
+    get(_target, prop) {
+      if (prop === 'isEmpty') {
+        return () => false
+      }
+      if (prop === 'getSize') {
+        return () => ({ width: dimensions.width, height: dimensions.height })
+      }
+      if (prop === 'toPNG') {
+        return () => buffer
+      }
+      if (prop === 'then' || typeof prop === 'symbol') {
+        return Reflect.get(_target, prop)
+      }
+      const image = ensureDecoded()
+      const value = Reflect.get(image as object, prop, image)
+      return typeof value === 'function' ? value.bind(image) : value
+    }
+  })
 }
 
 /** Pasteboard formats under which the platform exposes raw PNG bytes. */
@@ -62,7 +124,7 @@ export interface NativeClipboardReaderModule {
   getText?: () => Promise<string>
   getHtml?: () => Promise<string>
   getFiles?: () => Promise<string[]>
-  getImageBinary?: () => Promise<number[]>
+  getImageBinary?: () => Promise<Uint8Array | Buffer | number[]>
 }
 
 /** True when a resolved native module exposes the full async reader surface. */
@@ -118,12 +180,16 @@ export class NativeClipboardReader implements ClipboardReader {
     return (await this.readImageWithEncoded())?.image ?? null
   }
 
-  /** `getImageBinary` is documented as PNG bytes; the signature check keeps that an observation. */
+  /** `getImageBinary` is documented as PNG bytes; `IHDR` parsing avoids eager main-thread decode. */
   async readImageWithEncoded(): Promise<ClipboardImageRead | null> {
     try {
       const bytes = await this.module.getImageBinary?.()
       if (!bytes || bytes.length === 0) return null
-      const buffer = Buffer.from(bytes)
+      const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes)
+      const dimensions = parsePngDimensions(buffer)
+      if (dimensions) {
+        return { image: createLazyPngNativeImage(buffer, dimensions), png: buffer }
+      }
       const image = nativeImage.createFromBuffer(buffer)
       if (image.isEmpty()) return null
       return { image, png: isPngBuffer(buffer) ? buffer : null }
@@ -167,9 +233,16 @@ export class ElectronClipboardReader implements ClipboardReader {
   }
 
   async readImageWithEncoded(): Promise<ClipboardImageRead | null> {
+    const png = this.readNativePng()
+    if (png) {
+      const dimensions = parsePngDimensions(png)
+      if (dimensions) {
+        return { image: createLazyPngNativeImage(png, dimensions), png }
+      }
+    }
     const image = await this.readImage()
     if (!image) return null
-    return { image, png: this.readNativePng() }
+    return { image, png }
   }
 
   /** Raw PNG straight off the pasteboard, or `null` when the OS holds the image another way. */

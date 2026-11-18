@@ -2,6 +2,7 @@ import type { AiAttachment } from '../../ai-elements/src/types'
 import type { PromptBarCommand, PromptBarModel, PromptBarSource } from '../src/types'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, ref } from 'vue'
 import TxPromptBar from '../src/TxPromptBar.vue'
 
 // An open menu holds a document-level pointerdown listener. Bars left mounted
@@ -429,5 +430,207 @@ describe('txPromptBar', () => {
     expect(wrapper.find('.tx-bui-prompt-bar__model').attributes('disabled')).toBeDefined()
     expect(wrapper.find('.tx-bui-prompt-bar__send').attributes('disabled')).toBeDefined()
     expect(wrapper.classes()).toContain('is-disabled')
+  })
+
+  it('guards keyCode 229 on IME, supports Home/End in token menu and bottom menuPlacement', async () => {
+    const wrapper = mountBar({ menuPlacement: 'bottom' })
+    const input = wrapper.find('textarea')
+    await input.setValue('@')
+    expect(wrapper.find('.tx-bui-prompt-bar-menu').classes()).toContain('is-placement-bottom')
+
+    await input.trigger('keydown', { key: 'End' })
+    const options = wrapper.findAll('[role="option"]')
+    expect(options.at(-1)?.classes()).toContain('is-active')
+
+    await input.trigger('keydown', { key: 'Home' })
+    expect(options[0]?.classes()).toContain('is-active')
+
+    await input.trigger('keydown', { key: 'Enter', keyCode: 229 })
+    expect(wrapper.emitted('sourceSelect')).toBeUndefined()
+  })
+
+  it('supports capsule stop/queue send states, dictation Esc cancel, dragover counter, tray, and status dock', async () => {
+    const wrapper = mount(TxPromptBar, {
+      props: {
+        sources,
+        models: [{ key: 'm1', name: 'Model 1', effort: 'High' }],
+        dictatable: true,
+        streaming: true,
+        stopText: 'Stop now',
+        surface: 'refraction',
+        conversing: true,
+        beamActive: true,
+        trayPlacement: 'top',
+        trayLabel: 'Context tray',
+        contextUsage: { used: 500, max: 1000, label: 'Context' },
+        runStatus: { step: 'Searching files', elapsed: '00:04', active: true, tone: 'working' },
+      },
+      slots: {
+        tray: '<div class="tray-slot">Pin</div>',
+      },
+    })
+
+    expect(wrapper.classes()).toContain('is-surface-refraction')
+    expect(wrapper.classes()).toContain('is-conversing')
+    expect(wrapper.classes()).toContain('is-beam')
+    expect(wrapper.classes()).toContain('is-streaming')
+    expect(wrapper.find('.tx-bui-prompt-bar__context-pct').text()).toBe('50%')
+    expect(wrapper.find('.tx-bui-prompt-bar__run-step').text()).toBe('Searching files')
+    expect(wrapper.find('.tx-bui-prompt-bar__tray').attributes('aria-label')).toBe('Context tray')
+    expect(wrapper.find('.tx-bui-prompt-bar__model-effort').text()).toBe('High')
+    expect(wrapper.find('.tx-bui-prompt-bar__dictate-slot').classes()).toContain('is-yielding')
+
+    const sendBtn = wrapper.find('.tx-bui-prompt-bar__send')
+    expect(sendBtn.classes()).toContain('is-stop')
+    await sendBtn.trigger('click')
+    expect(wrapper.emitted('stop')).toHaveLength(1)
+
+    await wrapper.setProps({ sendQueues: true, modelValue: 'queued prompt' })
+    expect(sendBtn.classes()).toContain('is-queue')
+    await sendBtn.trigger('click')
+    expect(wrapper.emitted('send')?.[0]).toEqual([{ text: 'queued prompt', attachments: [] }])
+
+    // Nested dragenter/dragleave counter avoids flickering
+    const composer = wrapper.find('.tx-bui-prompt-bar__composer')
+    const file = new File(['abc'], 'drop.txt', { type: 'text/plain' })
+    const makeDrag = (type: string) => {
+      const ev = new Event(type, { bubbles: true, cancelable: true }) as DragEvent
+      Object.defineProperty(ev, 'dataTransfer', { value: { types: ['Files'], files: [file] } })
+      return ev
+    }
+    composer.element.dispatchEvent(makeDrag('dragenter'))
+    composer.element.dispatchEvent(makeDrag('dragenter'))
+    composer.element.dispatchEvent(makeDrag('dragleave'))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.classes()).toContain('is-dragover')
+    composer.element.dispatchEvent(makeDrag('drop'))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.classes()).not.toContain('is-dragover')
+    expect(wrapper.emitted('attachmentAdd')).toEqual([[[file]]])
+
+    // Dictation active + Esc cancel
+    await wrapper.setProps({ streaming: false, listening: true, dictationState: 'listening', dictationElapsedMs: 12000 })
+    expect(wrapper.find('textarea').attributes('readonly')).toBeDefined()
+    expect(wrapper.find('.tx-bui-prompt-bar__dictate-timer').text()).toBe('00:12')
+    await wrapper.find('textarea').trigger('keydown', { key: 'Escape' })
+    expect(wrapper.emitted('dictationCancel')).toHaveLength(1)
+    expect(wrapper.emitted('update:listening')?.at(-1)).toEqual([false])
+
+    const vm = wrapper.vm as unknown as {
+      box: HTMLElement | null
+      input: HTMLTextAreaElement | null
+      blur: () => void
+      launch: () => Promise<void>
+    }
+    expect(vm.box).toBeTruthy()
+    expect(vm.input).toBeTruthy()
+    await expect(vm.launch()).resolves.toBeUndefined()
+  })
+
+  it('lets explicit sendState="ready" and sendState="empty" override draft inference', async () => {
+    const readyEmpty = mount(TxPromptBar, {
+      props: { modelValue: '', sendState: 'ready', clearOnSend: false },
+    })
+    const readyBtn = readyEmpty.find('.tx-bui-prompt-bar__send')
+    expect(readyBtn.attributes('disabled')).toBeUndefined()
+    expect(readyBtn.classes()).toContain('is-ready')
+    await readyBtn.trigger('click')
+    await readyEmpty.find('textarea').trigger('keydown', { key: 'Enter' })
+    expect(readyEmpty.emitted('send')).toHaveLength(2)
+
+    await readyEmpty.setProps({ submitting: true })
+    expect(readyBtn.attributes('disabled')).toBeDefined()
+
+    const forcedEmpty = mount(TxPromptBar, {
+      props: { modelValue: 'unsent words', sendState: 'empty' },
+    })
+    const emptyBtn = forcedEmpty.find('.tx-bui-prompt-bar__send')
+    expect(emptyBtn.attributes('disabled')).toBeDefined()
+    expect(emptyBtn.classes()).not.toContain('is-ready')
+    await emptyBtn.trigger('click')
+    await forcedEmpty.find('textarea').trigger('keydown', { key: 'Enter' })
+    expect(forcedEmpty.emitted('send')).toBeUndefined()
+  })
+
+  it('preserves mid-draft caret token menu when v-model parent echoes input, and resets on external change', async () => {
+    const externalDraft = ref(' trailing')
+    const Host = defineComponent({
+      components: { TxPromptBar },
+      setup() {
+        return { externalDraft, sources }
+      },
+      template: `<TxPromptBar v-model="externalDraft" :sources="sources" />`,
+    })
+
+    const wrapper = mount(Host)
+    const textarea = wrapper.find('textarea').element as HTMLTextAreaElement
+    textarea.value = '@sco trailing'
+    textarea.setSelectionRange(4, 4)
+    textarea.dispatchEvent(new Event('input'))
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.$nextTick()
+
+    expect(externalDraft.value).toBe('@sco trailing')
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(true)
+    expect(wrapper.find('[role="option"]').text()).toContain('Scoop Data')
+
+    // Distinct external overwrite resets caret to trailing end, closing the mid-draft @ menu.
+    externalDraft.value = '@sco replaced externally'
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
+  })
+
+  it('shows active dictation bar even without sources or lead slots and passes delivery eligibility to #actions', async () => {
+    const wrapper = mount(TxPromptBar, {
+      props: {
+        dictatable: true,
+        listening: true,
+        dictationState: 'listening',
+        dictationElapsedMs: 12000,
+      },
+      slots: {
+        actions: `<template #actions="{ canSend, send }"><button type="button" class="custom-send" :disabled="!canSend" @click="send">Custom Send</button></template>`,
+      },
+    })
+
+    expect(wrapper.find('.tx-bui-prompt-bar__controls').classes()).not.toContain('is-leadless')
+    expect(wrapper.find('.tx-bui-prompt-bar__dictate-bar').exists()).toBe(true)
+    expect(wrapper.find('.tx-bui-prompt-bar__dictate-timer').text()).toBe('00:12')
+
+    await wrapper.setProps({ listening: false, dictationState: 'idle', dictationElapsedMs: 0, modelValue: 'hello', streaming: true })
+    expect(wrapper.find('.tx-bui-prompt-bar__controls').classes()).toContain('is-leadless')
+    // Built-in primary button stays enabled to stop, while #actions custom send reflects canDeliverDraft (false).
+    expect(wrapper.find('.tx-bui-prompt-bar__send').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('.custom-send').attributes('disabled')).toBeDefined()
+
+    await wrapper.setProps({ sendQueues: true })
+    expect(wrapper.find('.custom-send').attributes('disabled')).toBeUndefined()
+  })
+
+  it('keeps the menu highlight inside the scrolling viewport coordinate system across tall option lists', async () => {
+    const manySources: PromptBarSource[] = Array.from({ length: 10 }, (_, idx) => ({
+      key: `s${idx}`,
+      name: `Source ${idx}`,
+      desc: `Row ${idx}`,
+    }))
+    const wrapper = mountBar({ sources: manySources })
+    const input = wrapper.find('textarea')
+    await input.setValue('@')
+
+    const options = wrapper.findAll('[role="option"]')
+    expect(options).toHaveLength(10)
+    options.forEach((opt, idx) => {
+      Object.defineProperty(opt.element, 'offsetTop', { value: idx * 36, configurable: true })
+      Object.defineProperty(opt.element, 'offsetHeight', { value: 36, configurable: true })
+    })
+
+    await input.trigger('keydown', { key: 'End' })
+    await wrapper.vm.$nextTick()
+
+    const viewport = wrapper.find('.tx-bui-prompt-bar-menu__viewport')
+    expect(viewport.exists()).toBe(true)
+    expect(viewport.find('.tx-bui-prompt-bar-menu__highlight').exists()).toBe(true)
+    expect(viewport.find('.tx-bui-prompt-bar-menu__list').exists()).toBe(true)
+    expect(viewport.find('.tx-bui-prompt-bar-menu__highlight').attributes('style')).toContain('top: 324px')
   })
 })

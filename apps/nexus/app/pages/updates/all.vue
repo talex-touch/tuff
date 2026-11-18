@@ -1,25 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import UpdatesAllView from '~/components/updates/UpdatesAllView.vue'
-import { requestJson } from '~/utils/request'
-
-interface LocalizedText {
-  zh: string
-  en: string
-}
-
-interface DashboardUpdate {
-  id: string
-  type: 'news' | 'release' | 'announcement' | 'config' | 'data'
-  scope: 'web' | 'system' | 'both'
-  channels: string[]
-  releaseTag: string | null
-  title: LocalizedText
-  timestamp: string
-  summary: LocalizedText
-  tags: string[]
-  link: string
-}
+import { usePublicUpdates } from '~/composables/usePublicUpdates'
 
 definePageMeta({
   layout: 'home',
@@ -30,12 +12,7 @@ definePageMeta({
 })
 
 const { t } = useI18n()
-
-const { data: updatesPayload } = await useAsyncData('public-updates-all', () =>
-  requestJson<{ updates: DashboardUpdate[] }>('/api/updates'),
-)
-
-const updateItems = computed<DashboardUpdate[]>(() => updatesPayload.value?.updates ?? [])
+const { updateItems } = await usePublicUpdates()
 
 const pageTitle = computed(() => `${t('updates.all.title')} · Tuff`)
 useSeoMeta({

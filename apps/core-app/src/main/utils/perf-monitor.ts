@@ -226,6 +226,16 @@ function shouldSendToNexus(incident: PerfIncident): boolean {
   }
 }
 
+/**
+ * Picks the primary attribution context for an event-loop lag sample: a synchronous `blocking`
+ * span always takes precedence over an async `duration` span (such as a child-process RPC).
+ */
+export function selectPrimaryPerfContext<
+  T extends { label: string; durationMs: number; mode?: 'duration' | 'blocking' }
+>(entries: readonly T[]): T | undefined {
+  return entries.find((entry) => entry.mode === 'blocking') ?? entries[0]
+}
+
 export function inferEventLoopLagCause(input: EventLoopLagCauseInput): EventLoopLagCause | null {
   if (input.lagMs < LOOP_LAG_ERROR_MS) {
     return null
@@ -886,11 +896,13 @@ export class PerfMonitor {
               ? (task.lastMeta as { phaseDurations?: Record<string, number> }).phaseDurations
               : undefined
         }))
-      const primaryContext = contexts[0]
-        ? `${contexts[0].label} ${formatDuration(contexts[0].durationMs)}`
+      const primaryContextEntry = selectPrimaryPerfContext(contexts)
+      const primaryContext = primaryContextEntry
+        ? `${primaryContextEntry.label} ${formatDuration(primaryContextEntry.durationMs)}`
         : undefined
-      const primaryRecentContext = recentContexts[0]
-        ? `${recentContexts[0].label} ${formatDuration(recentContexts[0].durationMs)}`
+      const primaryRecentContextEntry = selectPrimaryPerfContext(recentContexts)
+      const primaryRecentContext = primaryRecentContextEntry
+        ? `${primaryRecentContextEntry.label} ${formatDuration(primaryRecentContextEntry.durationMs)}`
         : undefined
       const primaryPollingActive = pollingActive[0]
         ? `${pollingActive[0].id} ${formatDuration(pollingActive[0].ageMs)}`

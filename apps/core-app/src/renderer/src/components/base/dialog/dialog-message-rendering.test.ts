@@ -12,7 +12,11 @@ import TouchTip from './TouchTip.vue'
 // translator answers in English instead of installing the catalogs.
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
-    t: (key: string) => ({ 'common.confirm': 'Confirm' })[key] ?? key
+    t: (key: string) =>
+      ({
+        'common.confirm': 'Confirm',
+        'common.close': 'Close'
+      })[key] ?? key
   })
 }))
 
@@ -32,7 +36,7 @@ describe('base dialog message rendering', () => {
       attachTo: document.body
     })
 
-    const content = document.body.querySelector<HTMLElement>('.TDialogTip-Content')
+    const content = document.body.querySelector<HTMLElement>('.tx-touch-tip__content')
 
     expect(content?.textContent).toBe('<script>alert(1)</script>\nNext')
     expect(content?.querySelector('script')).toBeNull()
@@ -51,7 +55,7 @@ describe('base dialog message rendering', () => {
       attachTo: document.body
     })
 
-    const content = document.body.querySelector<HTMLElement>('.TDialogTip-Content')
+    const content = document.body.querySelector<HTMLElement>('.tx-touch-tip__content')
 
     expect(content?.querySelector('strong')?.textContent).toBe('Trusted')
 
@@ -69,7 +73,7 @@ describe('base dialog message rendering', () => {
       attachTo: document.body
     })
 
-    const content = document.body.querySelector<HTMLElement>('.dialog-content')
+    const content = document.body.querySelector<HTMLElement>('.tx-bottom-dialog__content')
 
     expect(content?.textContent).toBe('<img src=x onerror=alert(1)>')
     expect(content?.querySelector('img')).toBeNull()
@@ -116,7 +120,7 @@ describe('base dialog message rendering', () => {
       attachTo: document.body
     })
 
-    let content = document.body.querySelector<HTMLElement>('.TPopperDialog-Content')
+    let content = document.body.querySelector<HTMLElement>('.tx-popper-dialog__content')
     expect(content?.textContent?.trim()).toBe('<strong>Text</strong>')
     expect(content?.querySelector('strong')).toBeNull()
     textWrapper.unmount()
@@ -130,7 +134,7 @@ describe('base dialog message rendering', () => {
       attachTo: document.body
     })
 
-    content = document.body.querySelector<HTMLElement>('.TPopperDialog-Content')
+    content = document.body.querySelector<HTMLElement>('.tx-popper-dialog__content')
     expect(content?.querySelector('strong')?.textContent).toBe('Trusted')
     htmlWrapper.unmount()
   })
@@ -145,7 +149,7 @@ describe('base dialog message rendering', () => {
       attachTo: document.body
     })
 
-    let content = document.body.querySelector<HTMLElement>('.TBlowDialog-Content')
+    let content = document.body.querySelector<HTMLElement>('.tx-blow-dialog__content')
     expect(content?.textContent?.trim()).toBe('<em>Text</em>')
     expect(content?.querySelector('em')).toBeNull()
     textWrapper.unmount()
@@ -159,7 +163,7 @@ describe('base dialog message rendering', () => {
       attachTo: document.body
     })
 
-    content = document.body.querySelector<HTMLElement>('.TBlowDialog-Content')
+    content = document.body.querySelector<HTMLElement>('.tx-blow-dialog__content')
     expect(content?.querySelector('em')?.textContent).toBe('Trusted')
     htmlWrapper.unmount()
   })

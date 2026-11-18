@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest'
 import {
   buildCandidateSemanticProfile,
   buildRecommendationSemanticProfile,
-  calculateLocalSemanticScore
+  calculateLocalSemanticScore,
+  CANDIDATE_SEMANTIC_PROFILE_CACHE_MAX,
+  clearCandidateSemanticProfileCache,
+  getCandidateSemanticProfileCacheSize
 } from './semantic-profile'
 
 const devFocusContext: ContextSignal = {
@@ -107,5 +110,37 @@ describe('recommendation semantic profile', () => {
     expect(contextProfile.text).not.toContain('net_private')
     expect(contextProfile.text).not.toContain('loc_private')
     expect(contextProfile.text).not.toContain('Asia/Shanghai')
+  })
+
+  it('memoizes candidate profiles with a bounded 512-entry LRU while preserving number[] vector shape', () => {
+    clearCandidateSemanticProfileCache()
+
+    const first = buildCandidateSemanticProfile({
+      sourceId: 'app-provider',
+      itemId: '/Applications/Visual Studio Code.app',
+      sourceType: 'application',
+      source: 'frequent'
+    })
+    const second = buildCandidateSemanticProfile({
+      sourceId: 'app-provider',
+      itemId: '/Applications/Visual Studio Code.app',
+      sourceType: 'application',
+      source: 'frequent'
+    })
+
+    expect(second).toBe(first)
+    expect(Array.isArray(first.vector)).toBe(true)
+    expect(first.vector).toHaveLength(64)
+    expect(Object.keys(first)).toEqual(['tokens', 'text', 'vector'])
+
+    for (let i = 0; i < CANDIDATE_SEMANTIC_PROFILE_CACHE_MAX + 25; i += 1) {
+      buildCandidateSemanticProfile({
+        sourceId: 'file-provider',
+        itemId: `/Users/x/Documents/doc-${i}.md`,
+        sourceType: 'file'
+      })
+    }
+
+    expect(getCandidateSemanticProfileCacheSize()).toBe(CANDIDATE_SEMANTIC_PROFILE_CACHE_MAX)
   })
 })

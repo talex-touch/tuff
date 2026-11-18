@@ -69,3 +69,17 @@ export interface NativeNotificationAuthResult {
 }
 
 export declare function getNotificationAuthorizationStatus(): Promise<NativeNotificationAuthResult>
+
+export interface DarwinFrontmostApplicationResult {
+  supported: boolean
+  available: boolean
+  appName?: string
+  bundleId?: string
+  processId?: number
+  bundlePath?: string
+  executablePath?: string
+  windowTitle?: string
+  reason?: string
+}
+
+export declare function getDarwinFrontmostApplication(): Promise<DarwinFrontmostApplicationResult>

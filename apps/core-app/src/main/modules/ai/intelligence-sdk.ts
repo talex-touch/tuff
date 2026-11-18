@@ -70,6 +70,7 @@ import type { IntelligenceAuditLogEntry } from './intelligence-audit-logger'
 import { format } from 'node:util'
 import { PromptTemplate } from '@langchain/core/prompts'
 import {
+  IntelligenceCapabilityType,
   IntelligenceProviderType,
   resolveIntelligencePromptTemplate,
   toRuntimeCapabilityId
@@ -104,6 +105,7 @@ import {
 import { IntelligenceProvider } from './runtime/base-provider'
 import { getLocalEmbeddingRuntime, type LocalEmbeddingImageInput } from './local-embedding-runtime'
 import { LOCAL_EMBEDDING_MODEL_KEY } from './local-embedding-model'
+import { shouldPersistAuditDetail } from './usage-ledger/audit-retention-policy'
 import { HOME_CONVERSATION_CALLER } from './usage-ledger/constants'
 import {
   isUsageLimitError,
@@ -114,6 +116,25 @@ import {
 
 const intelligenceLog = createLogger('Intelligence')
 const formatLogMessage = (...args: unknown[]) => format(...args)
+
+/**
+ * Capabilities backed by binary payloads or mutable file paths must not pass through `getCacheKey`
+ * (`JSON.stringify(payload)`): large base64 data URLs block the main thread and pin megabytes in V8
+ * heap, while pathname strings can go stale across file overwrites.
+ */
+const NON_CACHEABLE_CAPABILITY_TYPES = new Set<string>([
+  IntelligenceCapabilityType.VISION,
+  IntelligenceCapabilityType.VISION_OCR,
+  IntelligenceCapabilityType.IMAGE_CAPTION,
+  IntelligenceCapabilityType.IMAGE_ANALYZE,
+  IntelligenceCapabilityType.IMAGE_TRANSLATE_E2E,
+  IntelligenceCapabilityType.IMAGE_GENERATE,
+  IntelligenceCapabilityType.IMAGE_EDIT,
+  IntelligenceCapabilityType.TTS,
+  IntelligenceCapabilityType.STT,
+  IntelligenceCapabilityType.ASR,
+  IntelligenceCapabilityType.AUDIO_TRANSCRIBE
+])
 
 /**
  * The caller a request is counted and quota-checked under.
@@ -760,9 +781,13 @@ export class TuffIntelligenceSDK {
         options
       )
 
-      // Image calls always revalidate source identity; a pathname is not a content cache key.
+      // Image and media calls always revalidate source identity; a pathname is not a content cache
+      // key, and stringifying multi-MB data URLs stalls the main thread and pins heap.
       const cacheKey =
-        this.config.enableCache && capabilityId !== 'audio.stt' && !localImageInput
+        this.config.enableCache &&
+        capabilityId !== 'audio.stt' &&
+        !localImageInput &&
+        !NON_CACHEABLE_CAPABILITY_TYPES.has(capability.type)
           ? this.getCacheKey(capabilityId, payload, runtimeOptions)
           : null
       throwIfIntelligenceCancelled(signal)
@@ -2868,12 +2893,26 @@ export class TuffIntelligenceSDK {
     return Boolean(this.config.enableAudit)
   }
 
+  /**
+   * Decides whether a single invocation should append a detail row into
+   * `intelligence_audit_logs`. High-frequency background file embedding calls
+   * still emit count-only ledger updates (`detail: false`), preventing hundreds
+   * of thousands of redundant rows while preserving usage accounting.
+   */
+  shouldPersistAuditDetail(
+    log: Pick<IntelligenceAuditLogEntry, 'capabilityId' | 'caller'>
+  ): boolean {
+    return shouldPersistAuditDetail(this.isAuditEnabled(), log)
+  }
+
   private async logAudit(
     log: IntelligenceAuditLogEntry,
     usageAdmission?: UsageAdmission
   ): Promise<void> {
     try {
-      const logged = intelligenceAuditLogger.log(log, { detail: this.isAuditEnabled() })
+      const logged = intelligenceAuditLogger.log(log, {
+        detail: this.shouldPersistAuditDetail(log)
+      })
       // `log()` adds the entry to the pending global usage before it returns, so freeing the
       // request slot in the same synchronous run hands the call from "in flight" to "logged" with
       // no moment where a limit check sees it twice or not at all.

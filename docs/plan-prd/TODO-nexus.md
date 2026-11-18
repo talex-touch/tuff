@@ -1,6 +1,6 @@
 # Nexus Performance TODO
 
-> 更新时间：2026-07-16
+> 更新时间：2026-11-17
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台性能收口。全局执行顺序服从 [`TODO.md`](./TODO.md)。
 
 ## Goal
@@ -137,6 +137,12 @@
 | route matrix 二轮 | guarded | public/static routes 已合并到 `nexus-static-routes.mjs`；Cloudflare `_routes.json` rule-cap 已用 docs exact/wildcard 规则收口，本地 static desktop/mobile smoke、worker-owned route matrix、dashboard runtime chunk guard、docs bfcache blocker artifact guard、local static back/forward smoke 与 local Wrangler route smoke 已补。仍需 deployed Cloudflare preview、authenticated dashboard 与 bfcache 命中实测。 |
 | production chunk / payload / CSS | guarded | docs/store/dashboard/landing/public-info/auth source boundary、docs metadata-only payload、client Content SQLite zero-runtime guard、静态 route files、初始 JS/CSS budget、worker/dist budget、Worker sourcemap retention、PWA precache trim、remote font artifact guard、local static HAR/screenshot smoke 与 local Wrangler runtime smoke 已有守卫；仍需 deployed Cloudflare Pages preview HAR 作为最终结论。 |
 | 首页 warnings | guarded | `Invalid scope`、async lifecycle `onBeforeUnmount` 与 ScrollTo `autoKill` 配置已修复；desktop/mobile local Wrangler 加载、滚动、截图 smoke warning/error `0`。WebGL `ReadPixels` 在当前干净 Chrome 样本中未复现。 |
+
+## 2026-10 ~ 11 进度同步（Admin Console 与发布基础设施）
+
+- **Admin Console 迁移与退役 AI 运行时清理（已完成）**：`apps/nexus/app/pages/admin/*.vue` 下 **13/16** 个管理页（`analytics`、`audits`、`emergency`、`governance`、`images`、`intelligence-audits`、`intelligence-overview`、`provider-registry`、`reviews`、`risk`、`subscriptions`、`updates`、`users`；余 `index`、`codes`、`credits` 3 页）已统一迁移至 `AdminPageShell` 与 Admin Console Kit（`27a8e62ae`、`ae3225e09` 等），并已彻底移除退役的后台 AI Agent 运行时（`/api/admin/intelligence-agent/*`、`intelligence-lab/*` 及分析页 AI 面板，`14cbc855c`）。
+- **TuffEx & 文档同步基础设施更新**：`packages/tuffex` 已发布 `0.9.4`（`a2e2cbd9b`）；docs 导航 i18n keys（`#2216`）、docs section switch 样式首屏加载（`3bdf85575`）及 `.github/workflows/sync-nexus-release-notes.yml`（`#2213`/`#2214`）已合入主线。
+- **当前唯一代码侧阻塞**：仍为下方 `2026-10-24` 记录的 `build:analyze-worker` 体积与 route-level 初始资产超预算回归（Worker gzip `> 2.70 MiB`、`dist > 60 MiB`），以及外部 `--require-deployed-preview` 门禁（待后续 route-level code splitting / CSS 收口并补充真实 deployed preview HAR）。
 
 ## 2026-10-24 本轮剩余
 

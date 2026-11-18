@@ -9,7 +9,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { TxInput } from '@talex-touch/tuffex/input'
 import { TxSelect } from '@talex-touch/tuffex/select'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 
 defineOptions({ name: 'TxAiToolForm' })
 
@@ -105,8 +105,14 @@ watch(
   }
 )
 
+const formUid = useId()
+
 function labelId(key: string): string {
-  return `tool-form-${key}`
+  return `${formUid}-label-${key}`
+}
+
+function errorId(key: string): string {
+  return `${formUid}-error-${key}`
 }
 
 /** Text-shaped fields; a boolean can only land here through a bad default. */
@@ -210,6 +216,8 @@ function reset(): void {
         :model-value="checkedValue(field)"
         :disabled="isSubmitted"
         :aria-labelledby="labelId(field.key)"
+        :aria-invalid="missingKeys.includes(field.key) ? 'true' : undefined"
+        :aria-describedby="missingKeys.includes(field.key) ? errorId(field.key) : undefined"
         @update:model-value="(value: boolean) => setValue(field, value)"
       />
       <TxSelect
@@ -220,6 +228,8 @@ function reset(): void {
         :disabled="isSubmitted"
         :status="missingKeys.includes(field.key) ? 'error' : 'default'"
         :aria-labelledby="labelId(field.key)"
+        :aria-invalid="missingKeys.includes(field.key) ? 'true' : undefined"
+        :aria-describedby="missingKeys.includes(field.key) ? errorId(field.key) : undefined"
         @update:model-value="(value: TxSelectModelValue) => setValue(field, value)"
       />
       <TxInput
@@ -229,11 +239,19 @@ function reset(): void {
         :placeholder="field.placeholder || ''"
         :rows="3"
         :disabled="isSubmitted"
+        :class="{ 'is-error': missingKeys.includes(field.key) }"
         :aria-labelledby="labelId(field.key)"
+        :aria-invalid="missingKeys.includes(field.key) ? 'true' : undefined"
+        :aria-describedby="missingKeys.includes(field.key) ? errorId(field.key) : undefined"
         @update:model-value="(value: string | number) => setValue(field, value)"
       />
 
-      <p v-if="missingKeys.includes(field.key)" class="tx-ai-tool-form-Error" role="alert">
+      <p
+        v-if="missingKeys.includes(field.key)"
+        :id="errorId(field.key)"
+        class="tx-ai-tool-form-Error"
+        role="alert"
+      >
         {{ requiredHint }}
       </p>
     </div>
@@ -302,6 +320,10 @@ function reset(): void {
   margin: 0;
   color: var(--shell-danger, var(--tx-color-danger));
   font-size: var(--shell-fs-sm, 13px);
+}
+
+.tx-ai-tool-form :deep(.is-error) {
+  border-color: var(--shell-danger, var(--tx-color-danger));
 }
 
 .tx-ai-tool-form-Actions {

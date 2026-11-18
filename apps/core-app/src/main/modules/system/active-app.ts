@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
+import { getDarwinFrontmostApplication } from '@talex-touch/tuff-native'
 import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
 import { iconService } from '../../service/icon-service'
 import { createLogger } from '../../utils/logger'
@@ -178,6 +179,11 @@ class ActiveAppService {
   private macosConsecutiveTimeouts = 0
   private lastMacOSNoFrontmostLogAt = 0
   private lastMacOSResolveFailureLogAt = 0
+  private readonly osHandlers = {
+    darwin: () => this.resolveActiveWindowMacOS(),
+    win32: () => this.resolveActiveWindowWindows(),
+    linux: () => this.resolveActiveWindowLinux()
+  }
 
   constructor() {
     this.currentPlatform = this.detectPlatform()
@@ -272,12 +278,30 @@ class ActiveAppService {
   }
 
   /**
-   * macOS-specific: Use a single AppleScript call to get all active application info.
-   * Previously used 3+ separate osascript/shell invocations which could take 1-3s total.
+   * macOS-specific: Prefer native NSWorkspace + CGWindowListCopyWindowInfo + bounded AXUIElement
+   * lookup from `@talex-touch/tuff-native` so periodic refreshes do not spawn `osascript` every
+   * 1.5s. Falls back to `osascript` only when the native binding is unsupported/disabled.
    */
   private async resolveActiveWindowMacOSOnce(): Promise<Partial<ActiveAppInfo> | null> {
-    try {
-      const script = `
+    const nativeResult = await getDarwinFrontmostApplication()
+    if (nativeResult.supported) {
+      if (!nativeResult.available) {
+        return null
+      }
+      return {
+        displayName: nativeResult.appName || null,
+        windowTitle: nativeResult.windowTitle || null,
+        bundleId: nativeResult.bundleId || null,
+        processId:
+          typeof nativeResult.processId === 'number' && Number.isFinite(nativeResult.processId)
+            ? nativeResult.processId
+            : null,
+        executablePath: nativeResult.bundlePath || nativeResult.executablePath || null,
+        platform: 'macos'
+      }
+    }
+
+    const script = `
 tell application "System Events"
   set frontApp to first application process whose frontmost is true
   set appName to name of frontApp
@@ -295,41 +319,44 @@ tell application "System Events"
   return appName & "||" & appID & "||" & (appPID as text) & "||" & winTitle
 end tell`
 
-      // The only command in this file that used to run unbounded. AppleScript's
-      // 'first application process whose frontmost is true' blocks while the frontmost app is
-      // beachballing or a TCC prompt is up, and resolveActiveWindowMacOS dedupes callers onto
-      // macosResolveInFlight - so one hung call left that field set for the rest of the session
-      // and every later lookup returned the same promise that never settles (#770).
-      const { stdout } = await execFileAsync('osascript', ['-e', script], {
-        timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS
-      })
-      const parts = stdout.trim().split('||')
-      const appName = parts[0] ?? ''
-      const bundleId = parts[1] || null
-      const pid = Number.parseInt(parts[2] ?? '', 10)
-      const windowTitle = parts[3] || null
+    // The only command in this file that used to run unbounded. AppleScript's
+    // 'first application process whose frontmost is true' blocks while the frontmost app is
+    // beachballing or a TCC prompt is up, and resolveActiveWindowMacOS dedupes callers onto
+    // macosResolveInFlight - so one hung call left that field set for the rest of the session
+    // and every later lookup returned the same promise that never settles (#770).
+    const { stdout } = await execFileAsync('osascript', ['-e', script], {
+      timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS
+    })
+    const parts = stdout.trim().split('||')
+    const appName = parts[0] ?? ''
+    const bundleId = parts[1] || null
+    const pid = Number.parseInt(parts[2] ?? '', 10)
+    const windowTitle = parts[3] || null
 
-      return {
-        displayName: appName || null,
-        windowTitle,
-        bundleId,
-        processId: Number.isFinite(pid) ? pid : null,
-        executablePath: null,
-        platform: 'macos'
-      }
-    } catch (error) {
-      throw error
+    return {
+      displayName: appName || null,
+      windowTitle,
+      bundleId,
+      processId: Number.isFinite(pid) ? pid : null,
+      executablePath: null,
+      platform: 'macos'
     }
   }
 
+  private clearMacOSBackoffs(): void {
+    this.macosPermissionBackoffUntil = 0
+    this.macosEbadfBackoffUntil = 0
+    this.macosTimeoutBackoffUntil = 0
+    this.macosConsecutiveTimeouts = 0
+  }
+
   private async resolveActiveWindowMacOS(): Promise<Partial<ActiveAppInfo> | null> {
-    if (Date.now() < this.macosPermissionBackoffUntil) {
-      return null
-    }
-    if (Date.now() < this.macosEbadfBackoffUntil) {
-      return null
-    }
-    if (Date.now() < this.macosTimeoutBackoffUntil) {
+    const now = Date.now()
+    if (
+      now < this.macosPermissionBackoffUntil ||
+      now < this.macosEbadfBackoffUntil ||
+      now < this.macosTimeoutBackoffUntil
+    ) {
       return null
     }
 
@@ -340,10 +367,7 @@ end tell`
     const resolveTask = (async () => {
       try {
         const result = await this.resolveActiveWindowMacOSOnce()
-        this.macosPermissionBackoffUntil = 0
-        this.macosEbadfBackoffUntil = 0
-        this.macosTimeoutBackoffUntil = 0
-        this.macosConsecutiveTimeouts = 0
+        this.clearMacOSBackoffs()
         return result
       } catch (firstError) {
         if (isMacOSNoFrontmostAppError(firstError)) {
@@ -370,10 +394,7 @@ end tell`
 
         try {
           const result = await this.resolveActiveWindowMacOSOnce()
-          this.macosPermissionBackoffUntil = 0
-          this.macosEbadfBackoffUntil = 0
-          this.macosTimeoutBackoffUntil = 0
-          this.macosConsecutiveTimeouts = 0
+          this.clearMacOSBackoffs()
           return result
         } catch (retryError) {
           if (isMacOSNoFrontmostAppError(retryError)) {
@@ -564,17 +585,9 @@ try {
    * Currently only macOS is implemented
    */
   private async resolveActiveWindow(): Promise<Partial<ActiveAppInfo> | null> {
-    const result = await withOSAdapter<void, Promise<Partial<ActiveAppInfo> | null>>({
-      darwin: async () => {
-        return await this.resolveActiveWindowMacOS()
-      },
-      win32: async () => {
-        return await this.resolveActiveWindowWindows()
-      },
-      linux: async () => {
-        return await this.resolveActiveWindowLinux()
-      }
-    })
+    const result = await withOSAdapter<void, Promise<Partial<ActiveAppInfo> | null>>(
+      this.osHandlers
+    )
 
     return result ?? null
   }
@@ -594,10 +607,6 @@ try {
     }
   }
 
-  private toCacheKey(includeIcon: boolean): 'withIcon' | 'withoutIcon' {
-    return includeIcon ? 'withIcon' : 'withoutIcon'
-  }
-
   private cloneWithoutIcon(info: ActiveAppInfo): ActiveAppInfo {
     if (!info.icon) {
       return info
@@ -608,9 +617,12 @@ try {
     }
   }
 
-  private getCacheEntry(includeIcon: boolean): ActiveAppCacheEntry | null {
+  private getCacheEntry(
+    includeIcon: boolean,
+    now: number = Date.now()
+  ): ActiveAppCacheEntry | null {
     const cache = includeIcon ? this.cacheWithIcon : this.cacheWithoutIcon
-    if (cache && cache.expiresAt > Date.now()) {
+    if (cache && cache.expiresAt > now) {
       return cache
     }
 
@@ -622,8 +634,8 @@ try {
     return null
   }
 
-  private setCacheEntry(info: ActiveAppInfo, includeIcon: boolean): void {
-    const expiresAt = Date.now() + this.cacheTTL
+  private setCacheEntry(info: ActiveAppInfo, includeIcon: boolean, now: number = Date.now()): void {
+    const expiresAt = now + this.cacheTTL
     if (includeIcon) {
       this.cacheWithIcon = { info, expiresAt }
       this.cacheWithoutIcon = { info: this.cloneWithoutIcon(info), expiresAt }
@@ -633,43 +645,34 @@ try {
     this.cacheWithoutIcon = { info: this.cloneWithoutIcon(info), expiresAt }
   }
 
-  private normalizeQueryOptions(
-    forceRefreshOrOptions: boolean | ActiveAppQueryOptions
-  ): Required<ActiveAppQueryOptions> {
-    if (typeof forceRefreshOrOptions === 'boolean') {
-      return {
-        forceRefresh: forceRefreshOrOptions,
-        includeIcon: false
-      }
-    }
-
-    return {
-      forceRefresh: forceRefreshOrOptions.forceRefresh === true,
-      includeIcon: forceRefreshOrOptions.includeIcon === true
-    }
-  }
-
   /**
    * Public API: Get active application information
    */
   public async getActiveApp(
     forceRefreshOrOptions: boolean | ActiveAppQueryOptions = false
   ): Promise<ActiveAppInfo | null> {
-    const { forceRefresh, includeIcon } = this.normalizeQueryOptions(forceRefreshOrOptions)
-    const cacheKey = this.toCacheKey(includeIcon)
+    const forceRefresh =
+      typeof forceRefreshOrOptions === 'boolean'
+        ? forceRefreshOrOptions
+        : forceRefreshOrOptions.forceRefresh === true
+    const includeIcon =
+      typeof forceRefreshOrOptions === 'boolean'
+        ? false
+        : forceRefreshOrOptions.includeIcon === true
 
     // Return cached data if available and not expired
     if (!forceRefresh) {
-      const cached = this.getCacheEntry(includeIcon)
+      const now = Date.now()
+      const cached = this.getCacheEntry(includeIcon, now)
       if (cached) {
         return cached.info
       }
 
       if (!includeIcon) {
-        const iconCache = this.getCacheEntry(true)
+        const iconCache = this.getCacheEntry(true, now)
         if (iconCache) {
           const normalized = this.cloneWithoutIcon(iconCache.info)
-          this.setCacheEntry(normalized, false)
+          this.setCacheEntry(normalized, false, now)
           return normalized
         }
       }
@@ -683,6 +686,7 @@ try {
       return null
     }
 
+    const resolvedAt = Date.now()
     // Build the complete info object
     const info: ActiveAppInfo = {
       identifier:
@@ -695,7 +699,7 @@ try {
       windowTitle: activeWindow.windowTitle || null,
       url: activeWindow.url || null,
       icon: null,
-      lastUpdated: Date.now()
+      lastUpdated: resolvedAt
     }
 
     if (includeIcon) {
@@ -704,11 +708,7 @@ try {
     }
 
     // Cache the result
-    this.setCacheEntry(info, includeIcon)
-
-    if (cacheKey === 'withoutIcon') {
-      return this.cloneWithoutIcon(info)
-    }
+    this.setCacheEntry(info, includeIcon, resolvedAt)
     return info
   }
 }

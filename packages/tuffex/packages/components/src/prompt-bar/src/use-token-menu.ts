@@ -18,8 +18,10 @@ export interface PromptBarToken {
  */
 const TOKEN_PATTERN = /(^|\s)([@/])([\w-]*)$/
 
-export function parseToken(draft: string): PromptBarToken | null {
-  const match = TOKEN_PATTERN.exec(draft)
+export function parseToken(draft: string, cursor?: number): PromptBarToken | null {
+  const limit = cursor === undefined ? draft.length : Math.max(0, Math.min(draft.length, cursor))
+  const slice = limit === draft.length ? draft : draft.slice(0, limit)
+  const match = TOKEN_PATTERN.exec(slice)
   if (!match)
     return null
 
@@ -45,6 +47,8 @@ export interface UseTokenMenuOptions<
   TCommand extends TokenMenuRow,
 > {
   draft: MaybeRefOrGetter<string>
+  /** Active caret position inside `draft`; omit to evaluate the trailing end. */
+  cursor?: MaybeRefOrGetter<number | undefined>
   sources?: MaybeRefOrGetter<readonly TSource[] | undefined>
   commands?: MaybeRefOrGetter<readonly TCommand[] | undefined>
   /** Forces the `at` menu open with an empty query — the composer's + button. */
@@ -65,6 +69,7 @@ export interface UseTokenMenuReturn<
   engaged: Ref<boolean>
   dismissed: Ref<boolean>
   move: (direction: 1 | -1) => void
+  jump: (index: number) => void
   engage: (index: number) => void
   dismiss: () => void
   resume: () => void
@@ -85,7 +90,9 @@ export function useTokenMenu<
   const engaged = ref(false)
   const dismissed = ref(false)
 
-  const token = computed(() => (dismissed.value ? null : parseToken(toValue(options.draft))))
+  const token = computed(() =>
+    dismissed.value ? null : parseToken(toValue(options.draft), toValue(options.cursor)),
+  )
 
   const menu = computed<PromptBarMenuKind | null>(() =>
     toValue(options.forced) ? 'at' : token.value?.kind ?? null,
@@ -152,6 +159,14 @@ export function useTokenMenu<
     activeIndex.value = (activeIndex.value + (direction === 1 ? 1 : total - 1)) % total
   }
 
+  function jump(index: number): void {
+    const total = rows.value.length
+    if (total === 0)
+      return
+    engaged.value = true
+    activeIndex.value = Math.max(0, Math.min(total - 1, index))
+  }
+
   function engage(index: number): void {
     activeIndex.value = index
     engaged.value = true
@@ -169,12 +184,18 @@ export function useTokenMenu<
   function insert(replacement: string): string {
     const draft = toValue(options.draft)
     const pending = token.value
-    const head = pending ? draft.slice(0, pending.start) : draft
+    const rawCursor = toValue(options.cursor)
+    const cursor = rawCursor === undefined ? draft.length : Math.max(0, Math.min(draft.length, rawCursor))
+    const spanStart = pending ? pending.start : cursor
+    const spanEnd = pending ? pending.start + 1 + pending.query.length : cursor
+    const head = draft.slice(0, spanStart)
+    const tail = draft.slice(spanEnd)
     // With no pending token (the + button opened the menu mid-word) upstream
     // splices the mention straight onto the preceding word. Keep them apart.
     const separator = head.length > 0 && !/\s$/.test(head) ? ' ' : ''
+    const trailing = tail.length === 0 || !/^\s/.test(tail) ? ' ' : ''
 
-    return `${head}${separator}${replacement} `
+    return `${head}${separator}${replacement}${trailing}${tail}`
   }
 
   return {
@@ -187,6 +208,7 @@ export function useTokenMenu<
     engaged,
     dismissed,
     move,
+    jump,
     engage,
     dismiss,
     resume,

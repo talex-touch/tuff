@@ -1059,15 +1059,20 @@ async function openRebuildConfirm(payload?: {
   showCriticalWarning?: boolean
 }) {
   await new Promise<void>((resolve, reject) => {
-    popperMention(t('settings.settingFileIndex.rebuildTitle'), () =>
-      h(RebuildConfirmDialog, {
-        battery: payload?.battery ?? null,
-        minBattery: payload?.minBattery ?? defaultMinBattery,
-        criticalBattery: payload?.criticalBattery ?? defaultCriticalBattery,
-        showCriticalWarning: payload?.showCriticalWarning ?? false,
-        onConfirm: () => resolve(),
-        onCancel: () => reject(new Error('Cancelled'))
-      })
+    Promise.resolve(
+      popperMention(t('settings.settingFileIndex.rebuildTitle'), () =>
+        h(RebuildConfirmDialog, {
+          battery: payload?.battery ?? null,
+          minBattery: payload?.minBattery ?? defaultMinBattery,
+          criticalBattery: payload?.criticalBattery ?? defaultCriticalBattery,
+          showCriticalWarning: payload?.showCriticalWarning ?? false,
+          onConfirm: () => resolve(),
+          onCancel: () => reject(new Error('Cancelled'))
+        })
+      )
+    ).then(
+      () => reject(new Error('Cancelled')),
+      (error) => reject(error)
     )
   })
 }
@@ -1081,12 +1086,9 @@ function openFailedFilesDialog() {
 }
 
 /**
- * The failed-file list is a `TPopperDialog`, pinned at `z-10000` while every drawer sits on the
- * shared allocator at `>= 10000` — opened from inside the drawer it would come up *behind* it and
- * swallow the clicks on its own buttons. Close the drawer first instead of fighting that order,
- * and wait the close out: a drawer keeps painting for its whole transition (`--tx-drawer-transition`
- * is 0.4s and `visibility` stays `visible` until the slide-out ends), which would leave the dialog
- * sitting behind the fading mask.
+ * Close the drawer before opening the `TxPopperDialog` failed-file list and wait out the
+ * `--tx-drawer-transition` (0.4s, keeping `visibility: visible` until slide-out ends) so the
+ * dialog does not appear over an animating drawer backdrop.
  */
 async function openFailedFilesFromStatsDrawer() {
   statsDrawerVisible.value = false

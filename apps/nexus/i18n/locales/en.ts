@@ -351,6 +351,7 @@ export default {
     badge: 'Release cadence',
     title: 'Updates & downloads',
     subtitle: 'Pick the channel that matches your risk tolerance and explore the latest builds.',
+    heroSubtitle: 'Get the latest version and unlock a stronger creative workflow.',
     news: {
       title: 'Updates & news',
       subtitle: 'Latest official news and release highlights.',
@@ -421,7 +422,15 @@ export default {
     },
     downloads: {
       downloadFor: 'Download for',
+      downloadForPlatform: 'Download for {platform}',
       otherPlatforms: 'Other platforms',
+      otherPlatformsAndVersions: 'Other Platforms',
+      moreVersions: 'More versions',
+      requirements: {
+        darwin: 'macOS 13.0+ · Apple Silicon or Intel',
+        win32: 'Windows 10+ · x64 or ARM64',
+        generic: '{platform} · x64 or ARM64',
+      },
       previewPortal: 'Preview portal',
       previewPortalDescription: 'Includes experimental builds, validation notes, and rollback steps.',
       releasePortal: 'Release portal',

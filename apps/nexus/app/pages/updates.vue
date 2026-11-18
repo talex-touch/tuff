@@ -1,28 +1,11 @@
 <script setup lang="ts">
 import type { AppRelease, ReleaseChannel } from '~/composables/useReleases'
-import { computed, defineAsyncComponent, ref } from 'vue'
+import type { DashboardUpdate, LocalizedText } from '~/utils/public-updates'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
+import { usePublicUpdates } from '~/composables/usePublicUpdates'
 import { detectArch, detectPlatform, findAssetForPlatform, formatFileSize, getArchLabel, getPlatformLabel } from '~/composables/useReleases'
-import { requestJson } from '~/utils/request'
 
 const UpdatesAllView = defineAsyncComponent(() => import('~/components/updates/UpdatesAllView.vue'))
-
-interface LocalizedText {
-  zh: string
-  en: string
-}
-
-interface DashboardUpdate {
-  id: string
-  type: 'news' | 'release' | 'announcement' | 'config' | 'data'
-  scope: 'web' | 'system' | 'both'
-  channels: string[]
-  releaseTag: string | null
-  title: LocalizedText
-  timestamp: string
-  summary: LocalizedText
-  tags: string[]
-  link: string
-}
 
 definePageMeta({
   layout: 'home',
@@ -40,9 +23,7 @@ const route = useRoute()
 const router = useRouter()
 
 const { fetchLatestRelease } = useReleases()
-const { data: updatesPayload } = await useAsyncData('public-updates', () =>
-  requestJson<{ updates: DashboardUpdate[] }>('/api/updates'),
-)
+const { updateItems } = await usePublicUpdates()
 
 // Detect user's platform
 const userPlatform = ref(detectPlatform())
@@ -84,17 +65,16 @@ const primaryDownloadIcon = computed(() => {
 })
 const platformRequirementLabel = computed(() => {
   if (primaryDownloadPlatform.value === 'darwin')
-    return 'macOS 13.0+ · Apple Silicon or Intel'
+    return t('updates.downloads.requirements.darwin')
   if (primaryDownloadPlatform.value === 'win32')
-    return 'Windows 10+ · x64 or ARM64'
-  return `${primaryDownloadPlatformLabel.value} · x64 or ARM64`
+    return t('updates.downloads.requirements.win32')
+  return t('updates.downloads.requirements.generic', { platform: primaryDownloadPlatformLabel.value })
 })
 const latestVersionText = computed(() => latestRelease.value?.version || latestRelease.value?.tag || '')
 const primaryDownloadVersionText = computed(() => latestRelease.value?.name || latestRelease.value?.tag || latestVersionText.value)
 const isZh = computed(() => locale.value.startsWith('zh'))
-const heroSubtitle = computed(() => isZh.value ? '获取最新版本，体验更强大的创作能力。' : 'Get the latest version and unlock a stronger creative workflow.')
+const heroSubtitle = computed(() => t('updates.heroSubtitle'))
 
-const updateItems = computed<DashboardUpdate[]>(() => updatesPayload.value?.updates ?? [])
 const isAllUpdatesView = computed(() => route.path === '/updates/all' || route.query.view === 'all')
 const featuredUpdateLimit = 3
 const releaseUpdates = computed(() => updateItems.value.filter(update => update.type !== 'announcement').slice(0, featuredUpdateLimit))
@@ -221,7 +201,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
           >
             <span :class="primaryDownloadIcon" class="updates-download-icon" aria-hidden="true" />
             <span class="updates-download-copy">
-              <strong>{{ isZh ? `下载 ${primaryDownloadPlatformLabel} 版` : `Download for ${primaryDownloadPlatformLabel}` }}</strong>
+              <strong>{{ t('updates.downloads.downloadForPlatform', { platform: primaryDownloadPlatformLabel }) }}</strong>
               <small v-if="primaryDownloadVersionText">{{ primaryDownloadVersionText }}</small>
             </span>
           </a>
@@ -239,7 +219,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
           <div class="updates-platform-menu">
             <button type="button" class="updates-platform-menu__button">
               <span class="i-carbon-apps updates-download-icon" aria-hidden="true" />
-              <span>{{ isZh ? '其他平台与版本' : 'Other Platforms' }}</span>
+              <span>{{ t('updates.downloads.otherPlatformsAndVersions') }}</span>
               <span class="i-carbon-chevron-down text-lg" aria-hidden="true" />
             </button>
             <div v-if="allDownloads.length" class="updates-platform-menu__list">
@@ -261,7 +241,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
             <span>{{ platformRequirementLabel }}</span>
             <span class="updates-platform-hint__dot">·</span>
             <a :href="GITHUB_RELEASES_URL" target="_blank" rel="noopener" class="updates-more-versions">
-              <span>More versions</span>
+              <span>{{ t('updates.downloads.moreVersions') }}</span>
               <span class="i-carbon-chevron-right" aria-hidden="true" />
             </a>
           </p>
@@ -276,7 +256,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
               <p>{{ t('updates.news.latestHint') }}</p>
             </div>
             <NuxtLink to="/updates?view=all" class="updates-news-more">
-              {{ isZh ? '查看全部' : 'View all' }}
+              {{ t('updates.news.viewAll') }}
             </NuxtLink>
           </div>
 

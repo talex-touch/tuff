@@ -5,7 +5,10 @@ const mocks = vi.hoisted(() => ({
   readHTML: vi.fn(() => '<b>electron</b>'),
   readImage: vi.fn((): { isEmpty: () => boolean } => ({ isEmpty: () => true })),
   readBuffer: vi.fn((_format: string): Buffer => Buffer.alloc(0)),
-  createFromBuffer: vi.fn((buffer: Buffer) => ({ isEmpty: () => buffer.length === 0 }))
+  createFromBuffer: vi.fn((buffer: Buffer) => ({
+    isEmpty: () => buffer.length === 0,
+    toDataURL: () => 'data:image/png;base64,decoded'
+  }))
 }))
 
 vi.mock('electron', () => ({
@@ -24,10 +27,15 @@ import {
   ElectronClipboardReader,
   NativeClipboardReader,
   hasNativeReaderApi,
-  isPngBuffer
+  isPngBuffer,
+  parsePngDimensions
 } from './clipboard-reader'
 
 const PNG_BYTES = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]
+const VALID_1X1_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
+  'base64'
+)
 
 describe('hasNativeReaderApi', () => {
   it('is true only when every async getter is present', () => {
@@ -107,6 +115,26 @@ describe('NativeClipboardReader', () => {
     await expect(reader.readFiles()).resolves.toEqual([])
     await expect(reader.readImage()).resolves.toBeNull()
   })
+
+  it('parses IHDR dimensions and returns a lazy NativeImage without main-thread createFromBuffer decode', async () => {
+    expect(parsePngDimensions(VALID_1X1_PNG)).toEqual({ width: 1, height: 1 })
+    expect(parsePngDimensions(Buffer.from(PNG_BYTES))).toBeNull()
+
+    const reader = new NativeClipboardReader({
+      getImageBinary: async () => VALID_1X1_PNG
+    })
+    const read = await reader.readImageWithEncoded()
+
+    expect(read).not.toBeNull()
+    expect(read?.png).toEqual(VALID_1X1_PNG)
+    expect(read?.image.isEmpty()).toBe(false)
+    expect(read?.image.getSize()).toEqual({ width: 1, height: 1 })
+    expect(read?.image.toPNG()).toBe(VALID_1X1_PNG)
+    expect(mocks.createFromBuffer).not.toHaveBeenCalled()
+
+    expect(read?.image.toDataURL()).toBe('data:image/png;base64,decoded')
+    expect(mocks.createFromBuffer).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('ElectronClipboardReader', () => {
@@ -148,5 +176,17 @@ describe('ElectronClipboardReader', () => {
       throw new Error('format not available')
     })
     await expect(reader.readImageWithEncoded()).resolves.toEqual({ image, png: null })
+  })
+
+  it('skips synchronous clipboard.readImage when a valid PNG buffer is on the pasteboard', async () => {
+    const reader = new ElectronClipboardReader({ readFiles: () => [] })
+    mocks.readBuffer.mockReturnValueOnce(VALID_1X1_PNG)
+
+    const read = await reader.readImageWithEncoded()
+
+    expect(read?.png).toEqual(VALID_1X1_PNG)
+    expect(read?.image.getSize()).toEqual({ width: 1, height: 1 })
+    expect(mocks.readImage).not.toHaveBeenCalled()
+    expect(mocks.createFromBuffer).not.toHaveBeenCalled()
   })
 })

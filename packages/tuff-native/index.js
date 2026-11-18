@@ -10,6 +10,7 @@ const { nativeBinding, loadError } = loadNativeBinding({
 })
 
 const DISABLE_FLAG = 'TUFF_DISABLE_NATIVE_OCR'
+const ACTIVE_APP_DISABLE_FLAG = 'TUFF_DISABLE_NATIVE_ACTIVE_APP'
 
 function isDisabledByEnv() {
   return process.env[DISABLE_FLAG] === '1'
@@ -134,9 +135,52 @@ async function getNotificationAuthorizationStatus() {
   }
 }
 
+/**
+ * Resolves the macOS frontmost application and active window title via native
+ * NSWorkspace + CGWindowListCopyWindowInfo + bounded AXUIElement APIs, avoiding
+ * osascript child-process spawns. Degrades cleanly with `supported: false` when
+ * disabled via `TUFF_DISABLE_NATIVE_ACTIVE_APP=1`, on non-macOS platforms, or
+ * when the native binding is unavailable.
+ */
+async function getDarwinFrontmostApplication() {
+  if (process.env[ACTIVE_APP_DISABLE_FLAG] === '1') {
+    return {
+      supported: false,
+      available: false,
+      reason: 'disabled-by-env',
+    }
+  }
+
+  if (
+    !nativeBinding
+    || typeof nativeBinding.getDarwinFrontmostApplication !== 'function'
+  ) {
+    return {
+      supported: false,
+      available: false,
+      reason:
+        loadError instanceof Error
+          ? loadError.message
+          : 'native-module-not-loaded',
+    }
+  }
+
+  try {
+    return await nativeBinding.getDarwinFrontmostApplication()
+  }
+  catch (error) {
+    return {
+      supported: false,
+      available: false,
+      reason: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
 module.exports = {
   getNativeOcrSupport,
   recognizeImageText,
   writeDarwinAppIcon,
   getNotificationAuthorizationStatus,
+  getDarwinFrontmostApplication,
 }

@@ -92,11 +92,12 @@ describe('static cache headers guard', () => {
       publicStaticHtmlHeaderRoutes.length + docsStaticHtmlHeaderRoutes.length + docsStaticJsonHeaderRoutes.length + i18nMessagesHeaderRoutes.length,
     )
   })
-  it('keeps every public prerendered HTML route on the shared edge window', () => {
+  it('keeps every public prerendered HTML route edge-cacheable with browser revalidation across deploys', () => {
     const expectedRoutes = ['/', '/new', '/next', '/pricing', '/store', '/license', '/privacy', '/protocol', '/updates']
     const rules = createStaticCacheRouteRules()
 
     expect(publicStaticHtmlHeaderRoutes).toEqual(expectedRoutes)
+    expect(PRERENDERED_HTML_CACHE_CONTROL).toBe('public, max-age=0, s-maxage=60, must-revalidate')
     for (const route of expectedRoutes)
       expect(rules[route]?.headers).toEqual({ 'cache-control': PRERENDERED_HTML_CACHE_CONTROL })
 

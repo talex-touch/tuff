@@ -1,3 +1,4 @@
+import type { DarwinFrontmostApplicationResult } from '@talex-touch/tuff-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -5,11 +6,19 @@ const {
   readlinkMock,
   withOSAdapterMock,
   getFileIconMock,
-  activeAppLoggerMock
+  activeAppLoggerMock,
+  getDarwinFrontmostApplicationMock
 } = vi.hoisted(() => ({
   execFilePromiseMock: vi.fn(),
   readlinkMock: vi.fn(),
   withOSAdapterMock: vi.fn(),
+  getDarwinFrontmostApplicationMock: vi.fn(
+    async (): Promise<DarwinFrontmostApplicationResult> => ({
+      supported: false,
+      available: false,
+      reason: 'native-module-not-loaded'
+    })
+  ),
   activeAppLoggerMock: {
     debug: vi.fn(),
     info: vi.fn(),
@@ -45,6 +54,10 @@ vi.mock('@talex-touch/utils/electron/env-tool', () => ({
   withOSAdapter: withOSAdapterMock
 }))
 
+vi.mock('@talex-touch/tuff-native', () => ({
+  getDarwinFrontmostApplication: getDarwinFrontmostApplicationMock
+}))
+
 // resolveActiveWindowLinux probes for xdotool before doing anything else, so
 // without this the Linux case depends on the runner having it installed and
 // returns null on CI. Spread the real module so only the probe is stubbed.
@@ -72,6 +85,11 @@ function mockExecFileSuccess(stdout: string) {
 
 afterEach(() => {
   vi.clearAllMocks()
+  getDarwinFrontmostApplicationMock.mockResolvedValue({
+    supported: false,
+    available: false,
+    reason: 'native-module-not-loaded'
+  })
   ;(
     activeAppService as unknown as {
       cacheWithIcon: unknown
@@ -328,6 +346,58 @@ ConvertTo-Json -Compress`),
     })
   })
 
+  it('resolves macOS frontmost app and icon via native API without spawning osascript', async () => {
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.darwin()
+      }
+    )
+    getDarwinFrontmostApplicationMock.mockResolvedValueOnce({
+      supported: true,
+      available: true,
+      appName: 'Safari',
+      bundleId: 'com.apple.Safari',
+      processId: 512,
+      bundlePath: '/Applications/Safari.app',
+      executablePath: '/Applications/Safari.app/Contents/MacOS/Safari',
+      windowTitle: 'Apple Developer Documentation'
+    })
+
+    const result = await activeAppService.getActiveApp({ forceRefresh: true, includeIcon: true })
+
+    expect(result).toMatchObject({
+      identifier: '/Applications/Safari.app',
+      displayName: 'Safari',
+      bundleId: 'com.apple.Safari',
+      processId: 512,
+      executablePath: '/Applications/Safari.app',
+      windowTitle: 'Apple Developer Documentation',
+      platform: 'macos',
+      icon: 'data:image/png;base64,icon'
+    })
+    expect(getFileIconMock).toHaveBeenCalledWith('/Applications/Safari.app', { size: 'small' })
+    expect(execFilePromiseMock).not.toHaveBeenCalled()
+  })
+
+  it('returns null without spawning osascript when native macOS lookup reports no frontmost app', async () => {
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.darwin()
+      }
+    )
+    getDarwinFrontmostApplicationMock.mockResolvedValueOnce({
+      supported: true,
+      available: false,
+      reason: 'no-frontmost-application'
+    })
+
+    await expect(
+      activeAppService.getActiveApp({ forceRefresh: true, includeIcon: false })
+    ).resolves.toBeNull()
+
+    expect(execFilePromiseMock).not.toHaveBeenCalled()
+  })
+
   it('macOS osascript 带超时,卡住的调用不会永久占住 in-flight 去重', async () => {
     // AppleScript's frontmost-process query blocks while the foreground app is beachballing or a
     // TCC prompt is up. Without a timeout the promise never settles, macosResolveInFlight is
@@ -544,5 +614,32 @@ describe('active-app repeated macOS timeouts', () => {
     // Each of these used to write a full stack trace embedding the AppleScript
     // source to the log file.
     expect(activeAppLoggerMock.error).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('active-app macOS native TTL cache reuse', () => {
+  it('reuses cached active-app result within TTL across repeated calls without extra native probes', async () => {
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.darwin()
+      }
+    )
+    getDarwinFrontmostApplicationMock.mockResolvedValue({
+      supported: true,
+      available: true,
+      appName: 'Terminal',
+      bundleId: 'com.apple.Terminal',
+      processId: 4201,
+      bundlePath: '/System/Applications/Utilities/Terminal.app',
+      executablePath: '/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal',
+      windowTitle: 'zsh'
+    })
+
+    const first = await activeAppService.getActiveApp({ includeIcon: false })
+    const second = await activeAppService.getActiveApp({ includeIcon: false })
+
+    expect(first).toBe(second)
+    expect(getDarwinFrontmostApplicationMock).toHaveBeenCalledTimes(1)
+    expect(execFilePromiseMock).not.toHaveBeenCalled()
   })
 })

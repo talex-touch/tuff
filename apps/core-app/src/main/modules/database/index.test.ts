@@ -74,10 +74,14 @@ vi.mock('../box-tool/search-engine/scan-progress-schema', () => ({
   runScanProgressSourceScopeMigration: scanProgressMigrationMocks.run
 }))
 
+import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { DatabaseModule } from './index'
 
-function createModule(client: { execute: ReturnType<typeof vi.fn> }): DatabaseModule {
+function createModule(client: {
+  execute: ReturnType<typeof vi.fn>
+  executeMultiple?: ReturnType<typeof vi.fn>
+}): DatabaseModule {
   const module = new DatabaseModule()
   ;(module as unknown as { client: typeof client; mainDbPath: string }).client = client
   ;(module as unknown as { client: typeof client; mainDbPath: string }).mainDbPath =
@@ -302,6 +306,106 @@ describe('DatabaseModule WAL checkpoint maintenance', () => {
         })
       })
     )
+  })
+
+  it('skips periodic WAL TRUNCATE when WAL file is below 16 MiB threshold', async () => {
+    const client = {
+      execute: vi.fn(async () => ({ rows: [{ busy: 0, log: 1, checkpointed: 1 }] }))
+    }
+    const module = createModule(client)
+    const internals = module as unknown as {
+      registerWalMaintenanceTasks: () => void
+      getWalSizeBytes: () => Promise<number>
+      runWalCheckpoint: (mode: 'PASSIVE' | 'TRUNCATE') => Promise<void>
+    }
+    internals.getWalSizeBytes = vi.fn(async () => 4 * 1024 * 1024)
+    const checkpointSpy = vi.spyOn(internals, 'runWalCheckpoint').mockResolvedValue(undefined)
+
+    internals.registerWalMaintenanceTasks()
+    const truncateCall = vi
+      .mocked(pollingService.register)
+      .mock.calls.find(([id]) => id === 'database_wal_checkpoint_truncate')
+    expect(truncateCall).toBeDefined()
+    await (truncateCall?.[1] as () => Promise<void>)()
+    expect(checkpointSpy).not.toHaveBeenCalled()
+
+    internals.getWalSizeBytes = vi.fn(async () => 20 * 1024 * 1024)
+    await (truncateCall?.[1] as () => Promise<void>)()
+    expect(checkpointSpy).toHaveBeenCalledWith('TRUNCATE')
+  })
+
+  it('runs bounded PRAGMA incremental_vacuum(256) before WAL TRUNCATE when auto_vacuum=2 and freelist>=256', async () => {
+    const order: string[] = []
+    const execute = vi.fn(async (statement: string) => {
+      order.push(statement)
+      if (statement === 'PRAGMA auto_vacuum') {
+        return { rows: [{ auto_vacuum: 2 }] }
+      }
+      if (statement === 'PRAGMA freelist_count') {
+        return { rows: [{ freelist_count: 400 }] }
+      }
+      return { rows: [{ busy: 0, log: 3, checkpointed: 3 }] }
+    })
+    const executeMultiple = vi.fn(async (statement: string) => {
+      order.push(statement)
+    })
+    const module = createModule({ execute, executeMultiple })
+
+    await runWalCheckpoint(module, 'TRUNCATE')
+
+    expect(order).toEqual([
+      'PRAGMA auto_vacuum',
+      'PRAGMA freelist_count',
+      'PRAGMA incremental_vacuum(256);',
+      'PRAGMA wal_checkpoint(TRUNCATE)'
+    ])
+    expect(dbLogMock.info).toHaveBeenCalledWith(
+      'WAL checkpoint TRUNCATE complete',
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          mode: 'TRUNCATE',
+          reclaimedFreePages: 256
+        })
+      })
+    )
+  })
+
+  it('skips PRAGMA incremental_vacuum before WAL TRUNCATE when freelist is below 256 pages', async () => {
+    const execute = vi.fn(async (statement: string) => {
+      if (statement === 'PRAGMA auto_vacuum') {
+        return { rows: [{ auto_vacuum: 2 }] }
+      }
+      if (statement === 'PRAGMA freelist_count') {
+        return { rows: [{ freelist_count: 120 }] }
+      }
+      return { rows: [{ busy: 0, log: 2, checkpointed: 2 }] }
+    })
+    const executeMultiple = vi.fn(async () => undefined)
+    const module = createModule({ execute, executeMultiple })
+
+    await runWalCheckpoint(module, 'TRUNCATE')
+
+    expect(executeMultiple).not.toHaveBeenCalled()
+    expect(execute).toHaveBeenCalledWith('PRAGMA wal_checkpoint(TRUNCATE)')
+  })
+
+  it('reclaimFreePages runs incremental_vacuum through dbWriteScheduler when pages are free', async () => {
+    const execute = vi.fn(async (statement: string) => {
+      if (statement === 'PRAGMA auto_vacuum') {
+        return { rows: [{ auto_vacuum: 2 }] }
+      }
+      if (statement === 'PRAGMA freelist_count') {
+        return { rows: [{ freelist_count: 90 }] }
+      }
+      return { rows: [] }
+    })
+    const executeMultiple = vi.fn(async () => undefined)
+    const module = createModule({ execute, executeMultiple })
+
+    const reclaimed = await module.reclaimFreePages(64)
+
+    expect(reclaimed).toBe(64)
+    expect(executeMultiple).toHaveBeenCalledWith('PRAGMA incremental_vacuum(64);')
   })
 })
 

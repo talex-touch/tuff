@@ -118,8 +118,15 @@ export const docsPrerenderEvidenceRoutes = [
  * value and the rule's TTL equal. `/_i18n/**` is hash-versioned in the path, so it can be held
  * longer.
  */
-export const PRERENDERED_HTML_CACHE_CONTROL = 'public, max-age=300, s-maxage=300'
-export const DOCS_STATIC_CACHE_CONTROL = PRERENDERED_HTML_CACHE_CONTROL
+/**
+ * Public app-shell entry HTML (`/` , `/updates`, `/pricing`, …) loads dynamic `/_nuxt/*.js`
+ * chunks whose hashes change on every deploy, and Cloudflare Pages does not purge edge HTML
+ * caches on deploy. Keep a positive `s-maxage` for fast CDN hits, while forcing browser
+ * revalidation (`max-age=0, must-revalidate`) and shrinking the edge window to 60s so post-deploy
+ * stale HTML clears quickly (and stale dynamic chunks trigger client cache-bust reload).
+ */
+export const PRERENDERED_HTML_CACHE_CONTROL = 'public, max-age=0, s-maxage=60, must-revalidate'
+export const DOCS_STATIC_CACHE_CONTROL = 'public, max-age=300, s-maxage=300'
 
 export const I18N_MESSAGES_CACHE_CONTROL = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800'
 

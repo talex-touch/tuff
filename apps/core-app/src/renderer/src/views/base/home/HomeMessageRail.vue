@@ -1,10 +1,16 @@
 <script lang="ts" name="HomeMessageRail" setup>
+import type { TxAiMessageModel, TxAiRailTurn } from '@talex-touch/intelligence-uikit'
+import { buildMessageRailTurns } from '@talex-touch/intelligence-uikit/utils'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import { computed, ref } from 'vue'
 
-const props = defineProps<{
-  items: ConversationMessage[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    items: ConversationMessage[]
+    activeIndex?: number
+  }>(),
+  { activeIndex: -1 }
+)
 
 const emit = defineEmits<{
   (event: 'navigate', index: number): void
@@ -17,93 +23,77 @@ interface PromptSegment {
   value: string
 }
 
-interface TurnNavEntry {
-  id: string
-  turnNumber: number
-  userIndex: number
+interface TurnNavEntry extends TxAiRailTurn {
   segments: PromptSegment[]
 }
 
-function parseSegments(content: string, attachments?: unknown[]): PromptSegment[] {
+const IMAGE_SENTINEL = '§§RAILIMAGE§§'
+
+function isImageAttachment(att: unknown): boolean {
+  if (typeof att !== 'object' || att === null) return false
+  if ('kind' in att && (att as { kind?: unknown }).kind === 'image') return true
+  if ('mimeType' in att && String((att as { mimeType?: unknown }).mimeType).startsWith('image/'))
+    return true
+  return false
+}
+
+function resolveImageAttachmentCount(message: ConversationMessage): number {
+  const attachments =
+    message.attachments ??
+    (message as ConversationMessage & { modelAttachments?: unknown[] }).modelAttachments
+  if (!Array.isArray(attachments)) return 0
+  return attachments.filter(isImageAttachment).length
+}
+
+function toPromptSegments(
+  title: string,
+  hasContent: boolean,
+  extraImageCount: number
+): PromptSegment[] {
   const segments: PromptSegment[] = []
   let imgIdx = 0
-  const pattern = /!\[.*?\]\(.*?\)/g
-  let lastEnd = 0
-  let match: RegExpExecArray | null
-
-  while ((match = pattern.exec(content || '')) !== null) {
-    const start = match.index
-    const end = pattern.lastIndex
-    if (start > lastEnd) {
-      segments.push({ type: 'text', value: (content || '').slice(lastEnd, start) })
-    }
-    imgIdx++
-    segments.push({ type: 'image', value: `#IMAGE${imgIdx}` })
-    lastEnd = end
-  }
-
-  if (lastEnd < (content || '').length) {
-    segments.push({ type: 'text', value: (content || '').slice(lastEnd) })
-  }
-
-  // Handle external attachments
-  if (Array.isArray(attachments)) {
-    attachments.forEach((att) => {
-      const isImg =
-        (typeof att === 'object' &&
-          att !== null &&
-          'kind' in att &&
-          (att as { kind?: unknown }).kind === 'image') ||
-        (typeof att === 'object' &&
-          att !== null &&
-          'mimeType' in att &&
-          String((att as { mimeType?: unknown }).mimeType).startsWith('image/'))
-      if (isImg) {
-        imgIdx++
+  if (hasContent || extraImageCount === 0) {
+    const parts = title.split(IMAGE_SENTINEL)
+    parts.forEach((part, index) => {
+      if (part.trim().length > 0) {
+        segments.push({ type: 'text', value: part })
+      }
+      if (index < parts.length - 1) {
+        imgIdx += 1
         segments.push({ type: 'image', value: `#IMAGE${imgIdx}` })
       }
     })
   }
-
-  // Clean text segments
-  return segments
-    .map((seg) => {
-      if (seg.type === 'text') {
-        const cleaned = seg.value
-          .replace(/```[\s\S]*?```/g, ' [代码] ')
-          .replace(/^#+\s+/gm, '')
-          .replace(/(\*\*|__)(.*?)\1/g, '$2')
-          .replace(/(\*|_)(.*?)\1/g, '$2')
-          .replace(/`([^`]+)`/g, '$1')
-          .replace(/\s+/g, ' ')
-        return { type: 'text' as const, value: cleaned }
-      }
-      return seg
-    })
-    .filter((seg) => seg.type === 'image' || seg.value.trim().length > 0)
+  for (let i = 0; i < extraImageCount; i += 1) {
+    imgIdx += 1
+    segments.push({ type: 'image', value: `#IMAGE${imgIdx}` })
+  }
+  return segments.length ? segments : [{ type: 'text', value: '消息' }]
 }
 
-const turns = computed<TurnNavEntry[]>(() => {
-  const result: TurnNavEntry[] = []
+const railMessages = computed<TxAiMessageModel[]>(() =>
+  props.items.map((msg) => ({
+    id: msg.id,
+    role: msg.role,
+    content: msg.content
+  }))
+)
 
-  props.items.forEach((msg, index) => {
-    if (msg.role === 'user') {
-      const rawText = msg.content || ''
-      const segments = parseSegments(
-        rawText,
-        msg.attachments || (msg as typeof msg & { modelAttachments?: unknown[] }).modelAttachments
-      )
-      result.push({
-        id: msg.id || `turn-${index}`,
-        turnNumber: result.length + 1,
-        userIndex: index,
-        segments: segments.length ? segments : [{ type: 'text', value: rawText || '消息' }]
-      })
+const turns = computed<TurnNavEntry[]>(() =>
+  buildMessageRailTurns(railMessages.value, {
+    imageTag: IMAGE_SENTINEL,
+    codeTag: '[代码]',
+    fallbackLabel: '消息',
+    maxLength: 200
+  }).map((turn) => {
+    const source = props.items[turn.messageIndex]
+    const extraImages = source ? resolveImageAttachmentCount(source) : 0
+    return {
+      ...turn,
+      segments: toPromptSegments(turn.title, Boolean(source?.content?.trim()), extraImages)
     }
   })
-
-  return result
-})
+)
 </script>
 
 <template>
@@ -111,21 +101,22 @@ const turns = computed<TurnNavEntry[]>(() => {
     <div class="HomeMessageRail-Track">
       <div
         v-for="turn in turns"
-        :key="turn.id"
+        :key="turn.key"
         class="HomeMessageRail-Turn"
         :class="{
-          'is-hovered': hoveredTurn === turn.id,
+          'is-active': activeIndex === turn.messageIndex,
+          'is-hovered': hoveredTurn === turn.key,
           'is-first': turn.turnNumber === 1
         }"
-        @mouseenter="hoveredTurn = turn.id"
+        @mouseenter="hoveredTurn = turn.key"
         @mouseleave="hoveredTurn = null"
       >
         <!-- 纯文本小字展示，绝无卡片背景与边框阴影，最多三行 -->
         <Transition name="rail-text">
           <div
-            v-if="hoveredTurn === turn.id"
+            v-if="hoveredTurn === turn.key"
             class="HomeMessageRail-PromptText"
-            @click.stop="emit('navigate', turn.userIndex)"
+            @click.stop="emit('navigate', turn.messageIndex)"
           >
             <template v-for="(seg, idx) in turn.segments" :key="idx">
               <span v-if="seg.type === 'image'" class="HomeMessageRail-ImageTag">{{
@@ -141,7 +132,8 @@ const turns = computed<TurnNavEntry[]>(() => {
           type="button"
           class="HomeMessageRail-BarWrap"
           :aria-label="`第 ${turn.turnNumber} 轮提问`"
-          @click="emit('navigate', turn.userIndex)"
+          :aria-current="activeIndex === turn.messageIndex ? 'true' : undefined"
+          @click="emit('navigate', turn.messageIndex)"
         >
           <span class="HomeMessageRail-Bar" />
           <span class="HomeMessageRail-Index">#{{ turn.turnNumber }}</span>

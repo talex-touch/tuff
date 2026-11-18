@@ -107,6 +107,16 @@ export const COVERAGE = [
     command: 'node --test scripts/everything-selfcheck.test.js everything-resources.test.js',
   },
   {
+    root: 'packages/tuff-native/ocr-helper.test.js',
+    workflow: '.github/workflows/native-protocol.yml',
+    command: 'pnpm -C packages/tuff-native run test:ocr-helper',
+  },
+  {
+    root: 'packages/tuff-native/file-index.test.js',
+    workflow: '.github/workflows/native-protocol.yml',
+    command: 'pnpm -C packages/tuff-native run test:file-index',
+  },
+  {
     root: 'packages/tuff-native',
     workflow: '.github/workflows/native-protocol.yml',
     command: 'pnpm -C packages/tuff-native run test:protocol',

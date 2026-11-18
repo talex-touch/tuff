@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { computed, ref, toRef } from 'vue'
 import type { TxAiWidgetSandbox } from '../../types'
 
@@ -25,21 +26,24 @@ const failureReason = computed(() => {
 </script>
 
 <template>
-  <div class="tx-ai-tool-widget">
+  <div class="tx-ai-tool-widget" :aria-busy="status === 'loading' ? 'true' : undefined">
     <!--
       Outside the frame on purpose. A widget can draw anything inside itself,
       including a convincing app dialog, so the one mark that says "a model
       wrote this" has to live where the widget cannot paint over it.
     -->
     <div class="tx-ai-tool-widget-Bar">
-      <span class="i-ri-sparkling-2-line tx-ai-tool-widget-BarIcon" />
+      <span class="i-ri-sparkling-2-line tx-ai-tool-widget-BarIcon" aria-hidden="true" />
       <span class="tx-ai-tool-widget-BarText">{{ props.title || widgetLabels.generated }}</span>
       <span class="tx-ai-tool-widget-BarNote">{{ widgetLabels.sandboxed }}</span>
     </div>
 
-    <p v-if="status === 'loading'" class="tx-ai-tool-widget-Status">
-      {{ widgetLabels.loading }}
-    </p>
+    <div v-if="status === 'loading'" class="tx-ai-tool-widget-Loading" role="status" aria-live="polite">
+      <TxSkeleton :loading="true" variant="text" :lines="2" :gap="6" />
+      <p class="tx-ai-tool-widget-Status">
+        {{ widgetLabels.loading }}
+      </p>
+    </div>
 
     <div v-if="status === 'failed'" class="tx-ai-tool-widget-Failed" role="alert">
       <p class="tx-ai-tool-widget-FailedTitle">
@@ -110,6 +114,12 @@ const failureReason = computed(() => {
   background: transparent;
   // The frame reports its own height; past the host's ceiling it scrolls itself.
   overflow: auto;
+}
+
+.tx-ai-tool-widget-Loading {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .tx-ai-tool-widget-Status {

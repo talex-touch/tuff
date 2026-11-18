@@ -99,6 +99,11 @@ const emit = defineEmits<{ retry: []; action: [] }>()
   &:hover {
     background: color-mix(in srgb, var(--shell-danger, var(--tx-color-danger)) 12%, transparent);
   }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-danger, var(--tx-color-danger));
+    outline-offset: 2px;
+  }
 }
 
 /*
@@ -119,6 +124,11 @@ const emit = defineEmits<{ retry: []; action: [] }>()
 
     &:hover {
       background: color-mix(in srgb, var(--shell-warning, var(--tx-color-warning)) 12%, transparent);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--shell-warning, var(--tx-color-warning));
+      outline-offset: 2px;
     }
   }
 }

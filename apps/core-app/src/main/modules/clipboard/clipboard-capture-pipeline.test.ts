@@ -5,10 +5,16 @@ import {
   type ClipboardClassificationSettings
 } from './clipboard-classification-settings'
 import { ClipboardHelper } from './clipboard-capture-freshness'
+import { NativeClipboardReader } from './clipboard-reader'
 import {
   resetClipboardCaptureSuppression,
   withClipboardCaptureSuppressed
 } from './clipboard-capture-suppression'
+
+const VALID_1X1_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
+  'base64'
+)
 
 interface FakeClipboardImage {
   isEmpty: () => boolean
@@ -43,6 +49,7 @@ const mocks = vi.hoisted(() => ({
   readText: vi.fn(),
   readHTML: vi.fn(),
   readImage: vi.fn(createEmptyImage),
+  createFromBuffer: vi.fn(() => createEmptyImage()),
   sendToPlugin: vi.fn(async () => undefined),
   getAttachedPlugin: vi.fn(),
   shouldForwardClipboardChange: vi.fn(),
@@ -71,6 +78,9 @@ vi.mock('electron', () => ({
     readText: mocks.readText,
     readHTML: mocks.readHTML,
     readImage: mocks.readImage
+  },
+  nativeImage: {
+    createFromBuffer: mocks.createFromBuffer
   }
 }))
 
@@ -391,6 +401,39 @@ describe('clipboard-capture-pipeline', () => {
 
     expect(context.createClipboardImageFile).toHaveBeenCalledWith(Buffer.from('native-png'))
     expect(toPNG).not.toHaveBeenCalled()
+  })
+
+  it('captures and thumbnails a valid PNG via sharp without any main-thread NativeImage decode', async () => {
+    mocks.availableFormats.mockReturnValue(['public.png'])
+    const nativeReader = new NativeClipboardReader({
+      getText: async () => '',
+      getHtml: async () => '',
+      getFiles: async () => [],
+      getImageBinary: async () => VALID_1X1_PNG
+    })
+    mocks.values.mockReturnValueOnce({
+      returning: vi.fn(async () => [
+        {
+          id: 15,
+          type: 'image',
+          content: '/tmp/tuff/clipboard/images/image.png',
+          rawContent: '',
+          thumbnail: 'data:image/png;base64,sharp',
+          metadata: null
+        }
+      ])
+    })
+    const context = createPipeline(undefined, {
+      readImageWithEncoded: () => nativeReader.readImageWithEncoded()
+    })
+
+    await context.pipeline.process('corebox-show-baseline')
+
+    expect(mocks.createFromBuffer).not.toHaveBeenCalled()
+    expect(mocks.readImage).not.toHaveBeenCalled()
+    expect(context.createClipboardImageFile).toHaveBeenCalledWith(VALID_1X1_PNG)
+    const insertedRecord = mocks.values.mock.calls.at(-1)?.[0]
+    expect(insertedRecord?.thumbnail).toMatch(/^data:image\/png;base64,/)
   })
 
   it('keeps background polling deduped for a bootstrap-seen image', async () => {
