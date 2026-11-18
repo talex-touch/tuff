@@ -1,7 +1,8 @@
+import type { AppPathLike } from './app-root-path'
 import os from 'node:os'
 import path from 'node:path'
-import { app } from 'electron'
 import { isSafePathSegment } from '@talex-touch/utils/common/utils/safe-path'
+import { app } from 'electron'
 import { resolveRuntimeRootPath } from './app-root-path'
 
 export type DownloadTargetRejection =
@@ -13,9 +14,18 @@ export type DownloadTargetDecision =
   | { allowed: true; destination: string; filename: string }
   | { allowed: false; reason: DownloadTargetRejection }
 
-function safeAppPath(name: 'downloads' | 'temp'): string | null {
+export type AppPathName = 'downloads' | 'temp' | 'userData'
+
+export interface DownloadRootsAppLike extends AppPathLike {
+  getPath: (name: AppPathName) => string
+}
+
+function safeAppPath(
+  appLike: Pick<DownloadRootsAppLike, 'getPath'>,
+  name: AppPathName
+): string | null {
   try {
-    return app.getPath(name)
+    return appLike.getPath(name)
   } catch {
     return name === 'temp' ? os.tmpdir() : null
   }
@@ -26,22 +36,29 @@ function safeAppPath(name: 'downloads' | 'temp'): string | null {
  *
  * Derived from where downloads actually go today rather than from a guess:
  *
- * - the app's own data root — update packages (`modules/update-packages`) and the Everything
- *   bootstrap (`Downloads/dependencies/everything`) both sit under it
- * - the temp directory — the temp-file service, which useSvgContent downloads through
+ * - the app's own runtime root (`${userData}/tuff(-dev)`) — update packages
+ *   (`modules/update-packages`) and the Everything bootstrap
+ *   (`Downloads/dependencies/everything`) both sit under it
+ * - `${userData}/temp` — `TempFileService`'s base directory (e.g. `useSvgContent` caches
+ *   remote SVGs under `${userData}/temp/icons/svg-cache`). Only the `temp` subdirectory is
+ *   included — never bare `userData`, which holds `config.json`, `plugins`, and Electron
+ *   profile state (#905)
+ * - the OS temp directory (`app.getPath('temp')` / `os.tmpdir()`)
  * - the user's Downloads folder, which is the configured default destination
  */
-export function getAllowedDownloadRoots(): string[] {
+export function getAllowedDownloadRoots(appLike: DownloadRootsAppLike = app): string[] {
+  const userData = safeAppPath(appLike, 'userData')
   const roots: Array<string | null> = [
     (() => {
       try {
-        return resolveRuntimeRootPath(app)
+        return resolveRuntimeRootPath(appLike)
       } catch {
         return null
       }
     })(),
-    safeAppPath('downloads'),
-    safeAppPath('temp'),
+    userData ? path.join(userData, 'temp') : null,
+    safeAppPath(appLike, 'downloads'),
+    safeAppPath(appLike, 'temp'),
     os.tmpdir()
   ]
 

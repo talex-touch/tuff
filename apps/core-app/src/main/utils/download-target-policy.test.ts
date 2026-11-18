@@ -1,8 +1,30 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
-import { evaluateDownloadTarget } from './download-target-policy'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { resetRuntimeRootPathForTests } from './app-root-path'
+import { evaluateDownloadTarget, getAllowedDownloadRoots } from './download-target-policy'
+
+const electronAppMock = vi.hoisted(() => ({
+  isPackaged: true,
+  getAppPath: () => '/tmp/tuff-app',
+  getPath: vi.fn((name: string) => {
+    switch (name) {
+      case 'userData':
+        return '/tmp/tuff-user-data'
+      case 'downloads':
+        return '/tmp/user-downloads'
+      case 'temp':
+        return '/tmp/os-temp'
+      default:
+        throw new Error(`unexpected path: ${name}`)
+    }
+  })
+}))
+
+vi.mock('electron', () => ({
+  app: electronAppMock
+}))
 
 /**
  * Where a download task is allowed to write (#905).
@@ -21,8 +43,9 @@ const ROOT = path.resolve('/tmp/tuff-root')
 const DOWNLOADS = path.resolve('/tmp/user-downloads')
 const ROOTS = [ROOT, DOWNLOADS]
 
-const check = (destination: string | undefined, filename: string) =>
-  evaluateDownloadTarget(destination, filename, ROOTS)
+function check(destination: string | undefined, filename: string) {
+  return evaluateDownloadTarget(destination, filename, ROOTS)
+}
 
 /**
  * The rejection reason, or undefined when the target was allowed.
@@ -98,6 +121,43 @@ describe('evaluateDownloadTarget', () => {
     // Both are hostile here. The filename reason is the more specific one to report, and
     // pinning the order keeps the message stable for whoever reads the log.
     expect(rejection('/nowhere', '../evil.sh')).toBe('unsafe-filename')
+  })
+})
+
+describe('getAllowedDownloadRoots', () => {
+  afterEach(() => {
+    resetRuntimeRootPathForTests()
+    vi.clearAllMocks()
+  })
+
+  it('allows TempFileService subdirectories under userData/temp while rejecting bare userData', () => {
+    const userData = path.resolve('/tmp/tuff-user-data')
+    const roots = getAllowedDownloadRoots()
+
+    expect(roots).toContain(path.join(userData, 'temp'))
+    expect(roots).not.toContain(userData)
+
+    const svgCacheDir = path.join(userData, 'temp', 'icons', 'svg-cache')
+    expect(evaluateDownloadTarget(svgCacheDir, 'icon.svg', roots)).toEqual({
+      allowed: true,
+      destination: svgCacheDir,
+      filename: 'icon.svg'
+    })
+
+    expect(evaluateDownloadTarget(userData, 'config.json', roots)).toEqual({
+      allowed: false,
+      reason: 'destination-outside-roots'
+    })
+    expect(
+      evaluateDownloadTarget(path.join(userData, 'plugins', 'evil'), 'index.js', roots)
+    ).toEqual({
+      allowed: false,
+      reason: 'destination-outside-roots'
+    })
+    expect(evaluateDownloadTarget(path.join(userData, 'temp-evil'), 'file.svg', roots)).toEqual({
+      allowed: false,
+      reason: 'destination-outside-roots'
+    })
   })
 })
 
