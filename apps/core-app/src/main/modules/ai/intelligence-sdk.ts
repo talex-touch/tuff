@@ -105,6 +105,7 @@ import {
 import { IntelligenceProvider } from './runtime/base-provider'
 import { getLocalEmbeddingRuntime, type LocalEmbeddingImageInput } from './local-embedding-runtime'
 import { LOCAL_EMBEDDING_MODEL_KEY } from './local-embedding-model'
+import { shouldPersistAuditDetail } from './usage-ledger/audit-retention-policy'
 import { HOME_CONVERSATION_CALLER } from './usage-ledger/constants'
 import {
   isUsageLimitError,
@@ -2892,12 +2893,26 @@ export class TuffIntelligenceSDK {
     return Boolean(this.config.enableAudit)
   }
 
+  /**
+   * Decides whether a single invocation should append a detail row into
+   * `intelligence_audit_logs`. High-frequency background file embedding calls
+   * still emit count-only ledger updates (`detail: false`), preventing hundreds
+   * of thousands of redundant rows while preserving usage accounting.
+   */
+  shouldPersistAuditDetail(
+    log: Pick<IntelligenceAuditLogEntry, 'capabilityId' | 'caller'>
+  ): boolean {
+    return shouldPersistAuditDetail(this.isAuditEnabled(), log)
+  }
+
   private async logAudit(
     log: IntelligenceAuditLogEntry,
     usageAdmission?: UsageAdmission
   ): Promise<void> {
     try {
-      const logged = intelligenceAuditLogger.log(log, { detail: this.isAuditEnabled() })
+      const logged = intelligenceAuditLogger.log(log, {
+        detail: this.shouldPersistAuditDetail(log)
+      })
       // `log()` adds the entry to the pending global usage before it returns, so freeing the
       // request slot in the same synchronous run hands the call from "in flight" to "logged" with
       // no moment where a limit check sees it twice or not at all.

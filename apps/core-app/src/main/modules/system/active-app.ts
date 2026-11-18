@@ -179,6 +179,11 @@ class ActiveAppService {
   private macosConsecutiveTimeouts = 0
   private lastMacOSNoFrontmostLogAt = 0
   private lastMacOSResolveFailureLogAt = 0
+  private readonly osHandlers = {
+    darwin: () => this.resolveActiveWindowMacOS(),
+    win32: () => this.resolveActiveWindowWindows(),
+    linux: () => this.resolveActiveWindowLinux()
+  }
 
   constructor() {
     this.currentPlatform = this.detectPlatform()
@@ -338,14 +343,20 @@ end tell`
     }
   }
 
+  private clearMacOSBackoffs(): void {
+    this.macosPermissionBackoffUntil = 0
+    this.macosEbadfBackoffUntil = 0
+    this.macosTimeoutBackoffUntil = 0
+    this.macosConsecutiveTimeouts = 0
+  }
+
   private async resolveActiveWindowMacOS(): Promise<Partial<ActiveAppInfo> | null> {
-    if (Date.now() < this.macosPermissionBackoffUntil) {
-      return null
-    }
-    if (Date.now() < this.macosEbadfBackoffUntil) {
-      return null
-    }
-    if (Date.now() < this.macosTimeoutBackoffUntil) {
+    const now = Date.now()
+    if (
+      now < this.macosPermissionBackoffUntil ||
+      now < this.macosEbadfBackoffUntil ||
+      now < this.macosTimeoutBackoffUntil
+    ) {
       return null
     }
 
@@ -356,10 +367,7 @@ end tell`
     const resolveTask = (async () => {
       try {
         const result = await this.resolveActiveWindowMacOSOnce()
-        this.macosPermissionBackoffUntil = 0
-        this.macosEbadfBackoffUntil = 0
-        this.macosTimeoutBackoffUntil = 0
-        this.macosConsecutiveTimeouts = 0
+        this.clearMacOSBackoffs()
         return result
       } catch (firstError) {
         if (isMacOSNoFrontmostAppError(firstError)) {
@@ -386,10 +394,7 @@ end tell`
 
         try {
           const result = await this.resolveActiveWindowMacOSOnce()
-          this.macosPermissionBackoffUntil = 0
-          this.macosEbadfBackoffUntil = 0
-          this.macosTimeoutBackoffUntil = 0
-          this.macosConsecutiveTimeouts = 0
+          this.clearMacOSBackoffs()
           return result
         } catch (retryError) {
           if (isMacOSNoFrontmostAppError(retryError)) {
@@ -580,17 +585,9 @@ try {
    * Currently only macOS is implemented
    */
   private async resolveActiveWindow(): Promise<Partial<ActiveAppInfo> | null> {
-    const result = await withOSAdapter<void, Promise<Partial<ActiveAppInfo> | null>>({
-      darwin: async () => {
-        return await this.resolveActiveWindowMacOS()
-      },
-      win32: async () => {
-        return await this.resolveActiveWindowWindows()
-      },
-      linux: async () => {
-        return await this.resolveActiveWindowLinux()
-      }
-    })
+    const result = await withOSAdapter<void, Promise<Partial<ActiveAppInfo> | null>>(
+      this.osHandlers
+    )
 
     return result ?? null
   }
@@ -610,10 +607,6 @@ try {
     }
   }
 
-  private toCacheKey(includeIcon: boolean): 'withIcon' | 'withoutIcon' {
-    return includeIcon ? 'withIcon' : 'withoutIcon'
-  }
-
   private cloneWithoutIcon(info: ActiveAppInfo): ActiveAppInfo {
     if (!info.icon) {
       return info
@@ -624,9 +617,12 @@ try {
     }
   }
 
-  private getCacheEntry(includeIcon: boolean): ActiveAppCacheEntry | null {
+  private getCacheEntry(
+    includeIcon: boolean,
+    now: number = Date.now()
+  ): ActiveAppCacheEntry | null {
     const cache = includeIcon ? this.cacheWithIcon : this.cacheWithoutIcon
-    if (cache && cache.expiresAt > Date.now()) {
+    if (cache && cache.expiresAt > now) {
       return cache
     }
 
@@ -638,8 +634,8 @@ try {
     return null
   }
 
-  private setCacheEntry(info: ActiveAppInfo, includeIcon: boolean): void {
-    const expiresAt = Date.now() + this.cacheTTL
+  private setCacheEntry(info: ActiveAppInfo, includeIcon: boolean, now: number = Date.now()): void {
+    const expiresAt = now + this.cacheTTL
     if (includeIcon) {
       this.cacheWithIcon = { info, expiresAt }
       this.cacheWithoutIcon = { info: this.cloneWithoutIcon(info), expiresAt }
@@ -649,43 +645,34 @@ try {
     this.cacheWithoutIcon = { info: this.cloneWithoutIcon(info), expiresAt }
   }
 
-  private normalizeQueryOptions(
-    forceRefreshOrOptions: boolean | ActiveAppQueryOptions
-  ): Required<ActiveAppQueryOptions> {
-    if (typeof forceRefreshOrOptions === 'boolean') {
-      return {
-        forceRefresh: forceRefreshOrOptions,
-        includeIcon: false
-      }
-    }
-
-    return {
-      forceRefresh: forceRefreshOrOptions.forceRefresh === true,
-      includeIcon: forceRefreshOrOptions.includeIcon === true
-    }
-  }
-
   /**
    * Public API: Get active application information
    */
   public async getActiveApp(
     forceRefreshOrOptions: boolean | ActiveAppQueryOptions = false
   ): Promise<ActiveAppInfo | null> {
-    const { forceRefresh, includeIcon } = this.normalizeQueryOptions(forceRefreshOrOptions)
-    const cacheKey = this.toCacheKey(includeIcon)
+    const forceRefresh =
+      typeof forceRefreshOrOptions === 'boolean'
+        ? forceRefreshOrOptions
+        : forceRefreshOrOptions.forceRefresh === true
+    const includeIcon =
+      typeof forceRefreshOrOptions === 'boolean'
+        ? false
+        : forceRefreshOrOptions.includeIcon === true
 
     // Return cached data if available and not expired
     if (!forceRefresh) {
-      const cached = this.getCacheEntry(includeIcon)
+      const now = Date.now()
+      const cached = this.getCacheEntry(includeIcon, now)
       if (cached) {
         return cached.info
       }
 
       if (!includeIcon) {
-        const iconCache = this.getCacheEntry(true)
+        const iconCache = this.getCacheEntry(true, now)
         if (iconCache) {
           const normalized = this.cloneWithoutIcon(iconCache.info)
-          this.setCacheEntry(normalized, false)
+          this.setCacheEntry(normalized, false, now)
           return normalized
         }
       }
@@ -699,6 +686,7 @@ try {
       return null
     }
 
+    const resolvedAt = Date.now()
     // Build the complete info object
     const info: ActiveAppInfo = {
       identifier:
@@ -711,7 +699,7 @@ try {
       windowTitle: activeWindow.windowTitle || null,
       url: activeWindow.url || null,
       icon: null,
-      lastUpdated: Date.now()
+      lastUpdated: resolvedAt
     }
 
     if (includeIcon) {
@@ -720,11 +708,7 @@ try {
     }
 
     // Cache the result
-    this.setCacheEntry(info, includeIcon)
-
-    if (cacheKey === 'withoutIcon') {
-      return this.cloneWithoutIcon(info)
-    }
+    this.setCacheEntry(info, includeIcon, resolvedAt)
     return info
   }
 }

@@ -105,6 +105,7 @@ vi.mock('electron', () => ({
   },
   clipboard: {
     readText: vi.fn(() => ''),
+    readHTML: vi.fn(() => ''),
     availableFormats: vi.fn(() => []),
     read: vi.fn(() => Buffer.from('')),
     readBuffer: vi.fn(() => Buffer.from('')),
@@ -1836,5 +1837,51 @@ describe('ClipboardModule exact captured file preview authorization', () => {
     } finally {
       await state.cleanup()
     }
+  })
+})
+
+describe('ClipboardModule.readClipboardSnapshot format guard', () => {
+  interface SnapshotHandle {
+    readClipboardSnapshot: () => Promise<{
+      text: string
+      html: string
+      hasImage: boolean
+      hasFiles: boolean
+      formats: string[]
+    }>
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('skips clipboard.readImage() and readHTML() when formats only advertise text/plain', async () => {
+    vi.mocked(clipboard.availableFormats).mockReturnValueOnce(['text/plain'])
+    vi.mocked(clipboard.readText).mockReturnValueOnce('hello')
+
+    const module = new ClipboardModule() as unknown as SnapshotHandle
+    const snapshot = await module.readClipboardSnapshot()
+
+    expect(snapshot).toEqual({
+      text: 'hello',
+      html: '',
+      hasImage: false,
+      hasFiles: false,
+      formats: ['text/plain']
+    })
+    expect(clipboard.readImage).not.toHaveBeenCalled()
+    expect(clipboard.readHTML).not.toHaveBeenCalled()
+  })
+
+  it('detects image availability from format list without decoding PNG bytes on main thread', async () => {
+    vi.mocked(clipboard.availableFormats).mockReturnValueOnce(['IMAGE/AVIF'])
+
+    const module = new ClipboardModule() as unknown as SnapshotHandle
+    const snapshot = await module.readClipboardSnapshot()
+
+    expect(snapshot.hasImage).toBe(true)
+    expect(snapshot.text).toBe('')
+    expect(clipboard.readImage).not.toHaveBeenCalled()
+    expect(clipboard.readText).not.toHaveBeenCalled()
   })
 })

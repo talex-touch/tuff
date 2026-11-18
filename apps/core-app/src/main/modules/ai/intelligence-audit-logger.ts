@@ -8,7 +8,7 @@ import type { GlobalBackfillOutcome } from './usage-ledger/global-backfill'
 import type { UsageDelta } from './usage-ledger/global-deltas'
 import crypto from 'node:crypto'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { and, asc, desc, eq, gt, gte, inArray, lt, lte, or } from 'drizzle-orm'
+import { and, desc, eq, gte, lte } from 'drizzle-orm'
 import { scheduleDbWrite } from '../../db/db-write'
 import { getStartupDegradeWindowRemainingMs } from '../../db/runtime-flags'
 import { intelligenceAuditLogs, intelligenceUsageStats } from '../../db/schema'
@@ -16,6 +16,24 @@ import { createLogger } from '../../utils/logger'
 import { enterPerfContext } from '../../utils/perf-context'
 import { databaseModule } from '../database'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
+import {
+  AUDIT_INCREMENTAL_VACUUM_PAGES,
+  AUDIT_RETENTION_BATCH_SIZE,
+  AUDIT_RETENTION_DAYS,
+  AUDIT_RETENTION_INTERVAL_MS,
+  AUDIT_RETENTION_MAX_BATCHES_PER_RUN,
+  AUDIT_RETENTION_MAX_ROWS,
+  AUDIT_RETENTION_MIN_DELAY_MS,
+  AUDIT_RETENTION_TASK_ID,
+  cleanupAuditRetentionPage,
+  cleanupExcessAuditDetailPage,
+  runBoundedAuditRetention,
+  type AuditExcessDetailPageResult,
+  type AuditRetentionCursor,
+  type AuditRetentionPageResult,
+  type AuditRetentionRunOptions,
+  type AuditRetentionRunResult
+} from './usage-ledger/audit-retention-policy'
 import { GLOBAL_USAGE_CALLER_ID, GLOBAL_USAGE_CALLER_TYPE } from './usage-ledger/constants'
 import { ensureGlobalBackfillMarker, runGlobalUsageBackfill } from './usage-ledger/global-backfill'
 import {
@@ -279,10 +297,12 @@ export function sanitizeIntelligenceAuditEntry(
 export class IntelligenceAuditLogger {
   private memoryLogs: IntelligenceAuditLogEntry[] = []
   private readonly maxMemoryLogs = 1000
+  private readonly maxMemoryLogSlack = 128
   private readonly pollingService = PollingService.getInstance()
   private readonly flushTaskId = 'intelligence-audit.flush'
   private pendingLogs: IntelligenceAuditLogEntry[] = []
   private readonly flushBatchSize = 20
+  private readonly countOnlyFlushBatchSize = 200
   private readonly flushIntervalMs = 30_000
   private readonly flushDelayMs = 200
   private flushPromise: Promise<void> | null = null
@@ -323,10 +343,20 @@ export class IntelligenceAuditLogger {
   private backfillRun: Promise<GlobalBackfillOutcome | null> | null = null
   private backfillSettled = false
   private lastBackfillErrorLogAt = Number.NEGATIVE_INFINITY
+  private readonly auditRetentionTaskId = AUDIT_RETENTION_TASK_ID
+  private readonly auditRetentionMaxRows = AUDIT_RETENTION_MAX_ROWS
+  private readonly auditRetentionDays = AUDIT_RETENTION_DAYS
+  private readonly auditRetentionIntervalMs = AUDIT_RETENTION_INTERVAL_MS
+  private readonly auditRetentionMinDelayMs = AUDIT_RETENTION_MIN_DELAY_MS
+  private readonly auditRetentionBatchSize = AUDIT_RETENTION_BATCH_SIZE
+  private readonly auditRetentionMaxBatchesPerRun = AUDIT_RETENTION_MAX_BATCHES_PER_RUN
+  private auditRetentionRun: Promise<AuditRetentionRunResult> | null = null
+  private lastAuditRetentionErrorLogAt = Number.NEGATIVE_INFINITY
 
   constructor() {
     this.startFlushInterval()
     this.startGlobalBackfillSchedule()
+    this.startAuditRetentionSchedule()
   }
 
   private getDb(): LibSQLDatabase<typeof schema> {
@@ -364,10 +394,10 @@ export class IntelligenceAuditLogger {
 
     const detail = options.detail !== false && sanitized.timestamp >= this.retentionFloorMs
     if (detail) {
-      // Add to memory cache
+      // Amortize O(N) memmove by trimming only once slack overflows maxMemoryLogs.
       this.memoryLogs.push(sanitized)
-      if (this.memoryLogs.length > this.maxMemoryLogs) {
-        this.memoryLogs.shift()
+      if (this.memoryLogs.length > this.maxMemoryLogs + this.maxMemoryLogSlack) {
+        this.memoryLogs.splice(0, this.memoryLogs.length - this.maxMemoryLogs)
       }
     } else {
       this.countOnlyEntries.add(sanitized)
@@ -406,6 +436,7 @@ export class IntelligenceAuditLogger {
       this.flushTimer = null
       void this.flushToDB()
     }, delayMs)
+    this.flushTimer.unref?.()
   }
 
   /**
@@ -477,6 +508,29 @@ export class IntelligenceAuditLogger {
     this.suppressedUsageStatsErrorCount = 0
   }
 
+  private takeNextFlushBatch(): IntelligenceAuditLogEntry[] {
+    if (this.pendingLogs.length === 0) return []
+    let batchEnd = Math.min(this.flushBatchSize, this.pendingLogs.length)
+    // Coalesce contiguous count-only entries (`detail: false`, e.g. embedding bursts)
+    // into one transaction instead of opening a SQLite transaction per 20 zero-detail rows.
+    if (batchEnd === this.flushBatchSize) {
+      let hasDetail = false
+      for (let i = 0; i < batchEnd; i += 1) {
+        if (this.isDetailEntry(this.pendingLogs[i])) {
+          hasDetail = true
+          break
+        }
+      }
+      if (!hasDetail) {
+        const maxEnd = Math.min(this.countOnlyFlushBatchSize, this.pendingLogs.length)
+        while (batchEnd < maxEnd && !this.isDetailEntry(this.pendingLogs[batchEnd])) {
+          batchEnd += 1
+        }
+      }
+    }
+    return this.pendingLogs.splice(0, batchEnd)
+  }
+
   /**
    * Flush buffered logs to database
    */
@@ -489,7 +543,7 @@ export class IntelligenceAuditLogger {
 
     this.flushPromise = (async () => {
       while (this.pendingLogs.length > 0) {
-        const logsToFlush = this.pendingLogs.splice(0, this.flushBatchSize)
+        const logsToFlush = this.takeNextFlushBatch()
         if (logsToFlush.length === 0) {
           break
         }
@@ -846,7 +900,8 @@ export class IntelligenceAuditLogger {
    * Get recent logs from memory cache
    */
   getRecentLogs(limit: number = 100): IntelligenceAuditLogEntry[] {
-    return this.memoryLogs.slice(-limit)
+    if (limit <= 0) return this.memoryLogs.slice(0)
+    return this.memoryLogs.slice(-Math.min(limit, this.maxMemoryLogs))
   }
 
   /**
@@ -871,79 +926,137 @@ export class IntelligenceAuditLogger {
     cutoffMs: number,
     batchSize: number,
     signal: AbortSignal,
-    cursor?: { readonly timestampMs: number; readonly id: number },
+    cursor?: AuditRetentionCursor,
     admissionFloorMs = cutoffMs
-  ): Promise<{
-    deletedCount: number
-    hasMore: boolean
-    cancelled: boolean
-    cursor?: { readonly timestampMs: number; readonly id: number }
-  }> {
-    if (
-      !Number.isSafeInteger(cutoffMs) ||
-      !Number.isSafeInteger(admissionFloorMs) ||
-      !Number.isFinite(batchSize)
-    ) {
-      throw new Error('INTELLIGENCE_AUDIT_RETENTION_INVALID')
-    }
-    this.retentionFloorMs = Math.max(this.retentionFloorMs, admissionFloorMs)
-    // Pending entries below the cutoff lose their detail row but are still counted: retention and
-    // privacy deletion remove details, never the usage counters.
-    for (const entry of this.pendingLogs) {
-      if (entry.timestamp < cutoffMs) this.countOnlyEntries.add(entry)
-    }
-    this.memoryLogs = this.memoryLogs.filter((entry) => entry.timestamp >= cutoffMs)
-    await this.flushToDB()
-    if (signal.aborted) return { deletedCount: 0, hasMore: false, cancelled: true }
+  ): Promise<AuditRetentionPageResult> {
+    return cleanupAuditRetentionPage({
+      db: this.getDb(),
+      cutoffMs,
+      batchSize,
+      signal,
+      cursor,
+      admissionFloorMs,
+      beforeQuery: async (safeCutoffMs, safeFloorMs) => {
+        const needsCutoffPurge =
+          cursor === undefined ||
+          safeFloorMs > this.retentionFloorMs ||
+          this.pendingLogs.length > 0 ||
+          this.flushPromise !== null
+        this.retentionFloorMs = Math.max(this.retentionFloorMs, safeFloorMs)
+        if (!needsCutoffPurge) return
 
-    const limit = Math.min(200, Math.max(1, Math.floor(batchSize)))
-    const db = this.getDb()
-    const cursorCondition = cursor
-      ? or(
-          gt(intelligenceAuditLogs.timestamp, cursor.timestampMs),
-          and(
-            eq(intelligenceAuditLogs.timestamp, cursor.timestampMs),
-            gt(intelligenceAuditLogs.id, cursor.id)
-          )
-        )
-      : undefined
-    const candidates = await db
-      .select({ id: intelligenceAuditLogs.id, timestamp: intelligenceAuditLogs.timestamp })
-      .from(intelligenceAuditLogs)
-      .where(and(lt(intelligenceAuditLogs.timestamp, cutoffMs), cursorCondition))
-      .orderBy(asc(intelligenceAuditLogs.timestamp), asc(intelligenceAuditLogs.id))
-      .limit(limit + 1)
-    const page = candidates.slice(0, limit)
-    const ids = page.map((row) => row.id)
-    if (ids.length === 0) {
-      return { deletedCount: 0, hasMore: false, cancelled: false, cursor }
-    }
-    if (signal.aborted) return { deletedCount: 0, hasMore: false, cancelled: true, cursor }
+        // Pending entries below the cutoff lose their detail row but are still counted:
+        // retention and privacy deletion remove details, never the usage counters.
+        for (const entry of this.pendingLogs) {
+          if (entry.timestamp < safeCutoffMs) this.countOnlyEntries.add(entry)
+        }
+        if (this.memoryLogs.length > 0) {
+          this.memoryLogs = this.memoryLogs.filter((entry) => entry.timestamp >= safeCutoffMs)
+        }
+        if (this.pendingLogs.length > 0 || this.flushPromise) {
+          await this.flushToDB()
+        }
+      }
+    })
+  }
 
-    const result = await scheduleDbWrite(
-      'intelligence.audit.retention',
-      () =>
-        db
-          .delete(intelligenceAuditLogs)
-          .where(
-            and(
-              inArray(intelligenceAuditLogs.id, ids),
-              lt(intelligenceAuditLogs.timestamp, cutoffMs)
-            )
-          ),
+  async cleanupExcessDetailPage(
+    maxRows: number = this.auditRetentionMaxRows,
+    batchSize: number = this.auditRetentionBatchSize,
+    signal?: AbortSignal
+  ): Promise<AuditExcessDetailPageResult> {
+    const page = await cleanupExcessAuditDetailPage({
+      db: this.getDb(),
+      maxRows,
+      batchSize,
+      signal
+    })
+    return {
+      deletedCount: page.deletedCount,
+      hasMore: page.hasMore,
+      cancelled: page.cancelled
+    }
+  }
+
+  private async reclaimRetentionFreePages(): Promise<number> {
+    const reclaim = (databaseModule as { reclaimFreePages?: (maxPages: number) => Promise<number> })
+      .reclaimFreePages
+    if (typeof reclaim !== 'function') return 0
+    return await reclaim.call(databaseModule, AUDIT_INCREMENTAL_VACUUM_PAGES)
+  }
+
+  /**
+   * Bounded automatic retention: waits until global usage backfill has settled so
+   * `intelligence_usage_stats` keeps every call's totals, then removes age-expired and
+   * above-cap rows in small primary-key batches.
+   */
+  async enforceAuditRetention(
+    options?: AuditRetentionRunOptions
+  ): Promise<AuditRetentionRunResult> {
+    if (options?.requireBackfillSettled !== false && !this.backfillSettled) {
+      return { deletedAge: 0, deletedExcess: 0 }
+    }
+    if (this.auditRetentionRun) {
+      return this.auditRetentionRun
+    }
+
+    const run = runBoundedAuditRetention({
+      db: this.getDb(),
+      isBackfillSettled: () => this.backfillSettled,
+      cleanupAgePage: (cutoffMs, batchSize, signal, cursor) =>
+        this.cleanupRetentionPage(cutoffMs, batchSize, signal, cursor),
+      reclaimFreePages: () => this.reclaimRetentionFreePages(),
+      runOptions: {
+        maxRows: options?.maxRows ?? this.auditRetentionMaxRows,
+        retentionDays: options?.retentionDays ?? this.auditRetentionDays,
+        batchSize: options?.batchSize ?? this.auditRetentionBatchSize,
+        maxBatches: options?.maxBatches ?? this.auditRetentionMaxBatchesPerRun,
+        signal: options?.signal,
+        requireBackfillSettled: options?.requireBackfillSettled
+      }
+    })
+
+    this.auditRetentionRun = run
+    try {
+      return await run
+    } finally {
+      if (this.auditRetentionRun === run) {
+        this.auditRetentionRun = null
+      }
+    }
+  }
+
+  private startAuditRetentionSchedule(): void {
+    if (this.pollingService.isRegistered(this.auditRetentionTaskId)) {
+      this.pollingService.unregister(this.auditRetentionTaskId)
+    }
+    this.pollingService.register(
+      this.auditRetentionTaskId,
+      () => {
+        void this.enforceAuditRetention().catch(() => {
+          const now = Date.now()
+          if (now - this.lastAuditRetentionErrorLogAt >= this.flushErrorThrottleMs) {
+            this.lastAuditRetentionErrorLogAt = now
+            auditLog.warn('Scheduled intelligence audit retention step failed', {
+              meta: { code: 'INTELLIGENCE_AUDIT_RETENTION_FAILED' }
+            })
+          }
+        })
+      },
       {
-        priority: 'background',
-        dropPolicy: 'none',
-        maxQueueWaitMs: 15_000
+        interval: this.auditRetentionIntervalMs,
+        unit: 'milliseconds',
+        initialDelayMs: Math.max(
+          this.auditRetentionMinDelayMs,
+          getStartupDegradeWindowRemainingMs()
+        ),
+        lane: 'maintenance',
+        backpressure: 'latest_wins',
+        dedupeKey: this.auditRetentionTaskId,
+        maxInFlight: 1
       }
     )
-    const last = page.at(-1)
-    return {
-      deletedCount: Number(result.rowsAffected ?? 0),
-      hasMore: candidates.length > limit,
-      cancelled: false,
-      cursor: last ? { timestampMs: last.timestamp, id: last.id } : cursor
-    }
+    this.pollingService.start()
   }
 
   /**
@@ -1036,8 +1149,13 @@ export class IntelligenceAuditLogger {
    * Stop and cleanup
    */
   async destroy(): Promise<void> {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer)
+      this.flushTimer = null
+    }
     this.pollingService.unregister(this.flushTaskId)
     this.pollingService.unregister(this.backfillTaskId)
+    this.pollingService.unregister(this.auditRetentionTaskId)
     await this.flushToDB()
   }
 }

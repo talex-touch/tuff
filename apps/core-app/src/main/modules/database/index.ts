@@ -8,7 +8,6 @@ import path from 'node:path'
 import { createClient } from '@libsql/client'
 import { createTiming } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
-import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import chalk from 'chalk'
 import { eq } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
@@ -19,11 +18,9 @@ import migrationsLocator from '../../../../resources/db/locator.json?commonjs-ex
 import * as schema from '../../db/schema'
 import { resolveRuntimeRootPath } from '../../utils/app-root-path'
 import { t } from '../../utils/i18n-helper'
-import { dbWriteScheduler } from '../../db/db-write-scheduler'
-import { setAuxDbResolver, setDbBusyRecovery } from '../../db/db-write'
+import { scheduleDbWrite, setAuxDbResolver, setDbBusyRecovery } from '../../db/db-write'
 import { DB_AUX_ENABLED, DB_SEARCH_SPLIT_ENABLED } from '../../db/runtime-flags'
 import {
-  getSqliteBusyRetryCount,
   isSqliteBusyError,
   isSqliteCorruptionError,
   isSqliteStorageFullError,
@@ -39,24 +36,22 @@ import {
 } from '../../db/search-index-size-cap'
 import { BaseModule } from '../abstract-base-module'
 import { operationalErrorService } from '../observability'
-import { searchIndexWriter } from '../box-tool/search-engine/search-index-writer'
 import {
   planScanProgressSourceScopeMigration,
   runScanProgressSourceScopeMigration
 } from '../box-tool/search-engine/scan-progress-schema'
+import {
+  DB_WAL_INCREMENTAL_VACUUM_MAX_PAGES,
+  DatabaseWalMaintenance,
+  parseSqliteCount,
+  readOpenFdCount,
+  readWalFileSizeBytes,
+  reclaimIncrementalVacuumPages,
+  type WalCheckpointMode
+} from './wal-maintenance'
 
 const dbLog = getLogger('database')
 const AUX_MIGRATION_MARKER_KEY = 'db.aux.migration.v2.complete'
-const DB_WAL_PASSIVE_TASK_ID = 'database_wal_checkpoint_passive'
-const DB_WAL_TRUNCATE_TASK_ID = 'database_wal_checkpoint_truncate'
-const DB_HEALTH_REPORT_TASK_ID = 'database_health_report'
-const DB_WAL_PASSIVE_INTERVAL_MS = 5 * 60 * 1000
-const DB_WAL_TRUNCATE_INTERVAL_MS = 30 * 60 * 1000
-const DB_HEALTH_REPORT_INTERVAL_MS = 10 * 60 * 1000
-const DB_WAL_TRUNCATE_MAX_QUEUED_WRITES = 2
-const DB_WAL_CHECKPOINT_MAX_QUEUE_WAIT_MS = 5_000
-const DB_WAL_CHECKPOINT_SKIPPED_BUSY = 'DB_WAL_CHECKPOINT_SKIPPED_BUSY'
-const WAL_WARN_THRESHOLD_BYTES = 512 * 1024 * 1024
 // The LibSQL local binding runs synchronously on the calling thread, so a write
 // that busy-waits for the single WAL writer lock freezes that thread for the
 // full busy_timeout. On the MAIN process that is a visible UI freeze, so the
@@ -66,11 +61,6 @@ const WAL_WARN_THRESHOLD_BYTES = 512 * 1024 * 1024
 // long 30s timeout — it runs off the main thread, where a synchronous busy-wait
 // never blocks the UI. See issue #295.
 const MAIN_DB_BUSY_TIMEOUT_MS = 2_000
-const DB_BUSY_RETRY_WARN_DELTA = 10
-const DB_SCHEDULER_BUSY_FAILURE_WARN_DELTA = 3
-const DB_SCHEDULER_QUEUE_WARN_THRESHOLD = 20
-const DB_WRITER_PENDING_WARN_THRESHOLD = 20
-const DB_OPEN_FD_WARN_THRESHOLD = 256
 const AUX_COPY_TABLES = [
   'analytics_snapshots',
   'plugin_analytics',
@@ -119,11 +109,15 @@ export class DatabaseModule extends BaseModule {
   private walMaintenanceRegistered = false
   private backgroundStartupPromise: Promise<void> | null = null
   private destroying = false
-  private walPeakBytes = 0
-  private schedulerQueuePeak = 0
-  private lastHealthBusyRetryCount = 0
-  private lastHealthSchedulerBusyFailures = 0
   private disposeRetryExhaustedListener: (() => void) | null = null
+  private readonly walMaintenance = new DatabaseWalMaintenance({
+    getClient: () => this.client,
+    getWalSizeBytes: () => this.getWalSizeBytes(),
+    getOpenFdCount: () => this.getOpenFdCount(),
+    runWalCheckpoint: (mode) => this.runWalCheckpoint(mode),
+    reportDatabaseHealth: (source) => this.reportDatabaseHealth(source),
+    log: dbLog
+  })
 
   static key: symbol = Symbol.for('Database')
   name: ModuleKey = DatabaseModule.key
@@ -294,9 +288,11 @@ export class DatabaseModule extends BaseModule {
     client: Client,
     label: 'primary' | 'aux' | 'search'
   ): Promise<void> {
-    // Must precede WAL: once WAL writes the header, only a VACUUM can change it. Lets the index
-    // hand freed pages back to the disk in bounded steps (`search-index-compaction.ts`).
-    if (label === 'search') await client.execute('PRAGMA auto_vacuum = INCREMENTAL')
+    // Must precede WAL: once WAL writes the header, only a VACUUM can change it. Lets both
+    // primary and search databases hand freed pages back to the disk incrementally.
+    if (label === 'search' || label === 'primary') {
+      await client.execute('PRAGMA auto_vacuum = INCREMENTAL')
+    }
     const journalModeResult = await client.execute('PRAGMA journal_mode = WAL')
     const journalMode = String(
       (journalModeResult.rows?.[0] as Record<string, unknown> | undefined)?.journal_mode ?? ''
@@ -508,330 +504,55 @@ export class DatabaseModule extends BaseModule {
   }
 
   private parseCount(raw: unknown): number {
-    if (typeof raw === 'number' && Number.isFinite(raw)) return raw
-    if (typeof raw === 'bigint') return Number(raw)
-    if (typeof raw === 'string') {
-      const parsed = Number.parseInt(raw, 10)
-      if (Number.isFinite(parsed)) return parsed
-    }
-    return 0
+    return parseSqliteCount(raw)
   }
 
   private async getWalSizeBytes(): Promise<number> {
-    if (!this.mainDbPath) return 0
-    try {
-      const walPath = `${this.mainDbPath}-wal`
-      const stat = await fs.stat(walPath)
-      return stat.size
-    } catch {
-      return 0
-    }
+    return readWalFileSizeBytes(this.mainDbPath)
   }
 
   private async getOpenFdCount(): Promise<number | null> {
-    const candidates = ['/proc/self/fd', '/dev/fd']
-    for (const candidate of candidates) {
-      try {
-        const entries = await fs.readdir(candidate)
-        return entries.length
-      } catch {
-        // Try next candidate.
-      }
-    }
-    return null
+    return readOpenFdCount()
   }
 
-  private parseCheckpointRow(row: unknown): { busy: number; log: number; checkpointed: number } {
-    if (!row || typeof row !== 'object') {
-      return { busy: 0, log: 0, checkpointed: 0 }
-    }
-    const record = row as Record<string, unknown>
-    return {
-      busy: this.parseCount(record.busy ?? record[0]),
-      log: this.parseCount(record.log ?? record[1]),
-      checkpointed: this.parseCount(record.checkpointed ?? record[2])
-    }
-  }
-
-  private getDbSchedulerBusyReason(): {
-    reason: 'db-write-scheduler'
-    queued: number
-    processing: boolean
-    currentTaskLabel?: string
-  } | null {
-    const stats = dbWriteScheduler.getStats()
-    this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, stats.queued)
-    // WAL checkpoints run against the PRIMARY file (database.db), so the busy
-    // gate consults the primary lane only: an aux-lane backlog writes a
-    // different file and must not skip a primary-file checkpoint (lane split,
-    // design D3/FR4).
-    const primaryLane = stats.lanes.primary
-    if (primaryLane.queued > 0 || primaryLane.processing) {
-      return {
-        reason: 'db-write-scheduler',
-        queued: primaryLane.queued,
-        processing: primaryLane.processing,
-        currentTaskLabel: primaryLane.currentTaskLabel ?? undefined
-      }
-    }
-    return null
-  }
-
-  private getWalCheckpointBusyReason(): {
-    reason: 'db-write-scheduler'
-    queued: number
-    processing: boolean
-    currentTaskLabel?: string
-  } | null {
-    return this.getDbSchedulerBusyReason()
-  }
-
-  private logWalCheckpointSkippedBusy(
-    mode: 'PASSIVE' | 'TRUNCATE',
-    busy: NonNullable<ReturnType<DatabaseModule['getWalCheckpointBusyReason']>>
-  ): void {
-    dbLog.info(DB_WAL_CHECKPOINT_SKIPPED_BUSY, {
-      meta: {
-        mode,
-        reason: busy.reason,
-        busyQueueDepth: busy.queued,
-        busyProcessing: busy.processing,
-        currentTaskLabel: busy.currentTaskLabel
-      }
-    })
-  }
-
-  private isSearchIndexWriterPausedAndDrained(
-    status: ReturnType<typeof searchIndexWriter.getStatus>
-  ): boolean {
-    return status.admissionPaused && status.activeAdmissions === 0 && status.pending === 0
-  }
-
-  private logWalCheckpointSkippedWriter(
-    mode: 'PASSIVE' | 'TRUNCATE',
-    reason: 'search-index-writer-drain-timeout' | 'search-index-writer-not-quiescent',
-    status: ReturnType<typeof searchIndexWriter.getStatus>
-  ): void {
-    dbLog.info(DB_WAL_CHECKPOINT_SKIPPED_BUSY, {
-      meta: {
-        mode,
-        reason,
-        busyQueueDepth: status.pending,
-        busyProcessing: status.activeAdmissions > 0,
-        admissionPaused: status.admissionPaused
-      }
-    })
-  }
-
-  private async runWalCheckpoint(mode: 'PASSIVE' | 'TRUNCATE'): Promise<void> {
-    if (!this.client) return
-
-    const busyBeforeSchedule = this.getWalCheckpointBusyReason()
-    if (busyBeforeSchedule) {
-      this.logWalCheckpointSkippedBusy(mode, busyBeforeSchedule)
-      return
-    }
-
-    try {
-      await searchIndexWriter.withPausedAdmission(
-        `database.wal-checkpoint.${mode.toLowerCase()}`,
-        async (pausedStatus) => {
-          if (!this.isSearchIndexWriterPausedAndDrained(pausedStatus)) {
-            this.logWalCheckpointSkippedWriter(
-              mode,
-              'search-index-writer-not-quiescent',
-              pausedStatus
-            )
-            return
-          }
-
-          await dbWriteScheduler.schedule(
-            `database.wal-checkpoint.${mode.toLowerCase()}`,
-            async () => {
-              const statusBeforeExecute = searchIndexWriter.getStatus()
-              if (!this.isSearchIndexWriterPausedAndDrained(statusBeforeExecute)) {
-                this.logWalCheckpointSkippedWriter(
-                  mode,
-                  'search-index-writer-not-quiescent',
-                  statusBeforeExecute
-                )
-                return
-              }
-
-              const checkpointStart = Date.now()
-              dbLog.debug('DB_WAL_CHECKPOINT_START', {
-                meta: { mode }
-              })
-              const result = await this.client!.execute(`PRAGMA wal_checkpoint(${mode})`)
-              const parsed = this.parseCheckpointRow(result.rows?.[0])
-              const walSize = await this.getWalSizeBytes()
-              this.walPeakBytes = Math.max(this.walPeakBytes, walSize)
-
-              dbLog.info(`WAL checkpoint ${mode} complete`, {
-                meta: {
-                  mode,
-                  busy: parsed.busy,
-                  logFrames: parsed.log,
-                  checkpointedFrames: parsed.checkpointed,
-                  walSizeBytes: walSize,
-                  walPeakBytes: this.walPeakBytes,
-                  durationMs: Date.now() - checkpointStart,
-                  schedulerQueuePeak: this.schedulerQueuePeak
-                }
-              })
-            },
-            {
-              priority: 'best_effort',
-              dropPolicy: 'drop',
-              maxQueueWaitMs: DB_WAL_CHECKPOINT_MAX_QUEUE_WAIT_MS
-            }
-          )
-        },
-        DB_WAL_CHECKPOINT_MAX_QUEUE_WAIT_MS
-      )
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        (error.message === 'SEARCH_INDEX_WRITER_DRAIN_TIMEOUT' ||
-          error.message === 'SEARCH_INDEX_WRITER_ADMISSION_DRAIN_TIMEOUT')
-      ) {
-        this.logWalCheckpointSkippedWriter(
-          mode,
-          'search-index-writer-drain-timeout',
-          searchIndexWriter.getStatus()
-        )
-        return
-      }
-      dbLog.warn(`WAL checkpoint ${mode} failed`, { error })
-    }
+  private async runWalCheckpoint(mode: WalCheckpointMode): Promise<void> {
+    await this.walMaintenance.runWalCheckpoint(mode)
   }
 
   private async reportDatabaseHealth(source: 'periodic' | 'threshold'): Promise<void> {
-    const scheduler = dbWriteScheduler.getDetailedStats()
-    this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, scheduler.queued)
-    const writer = searchIndexWriter.getStatus()
-
-    const [walSizeBytes, openFdCount] = await Promise.all([
-      this.getWalSizeBytes(),
-      this.getOpenFdCount()
-    ])
-    this.walPeakBytes = Math.max(this.walPeakBytes, walSizeBytes)
-
-    const busyRetryCount = getSqliteBusyRetryCount()
-    const busyRetryDelta = Math.max(0, busyRetryCount - this.lastHealthBusyRetryCount)
-    this.lastHealthBusyRetryCount = busyRetryCount
-    const schedulerBusyFailureDelta = Math.max(
-      0,
-      scheduler.busyFailures - this.lastHealthSchedulerBusyFailures
-    )
-    this.lastHealthSchedulerBusyFailures = scheduler.busyFailures
-    const unhealthy =
-      walSizeBytes >= WAL_WARN_THRESHOLD_BYTES ||
-      busyRetryDelta >= DB_BUSY_RETRY_WARN_DELTA ||
-      schedulerBusyFailureDelta >= DB_SCHEDULER_BUSY_FAILURE_WARN_DELTA ||
-      scheduler.queued >= DB_SCHEDULER_QUEUE_WARN_THRESHOLD ||
-      writer.pending >= DB_WRITER_PENDING_WARN_THRESHOLD ||
-      (openFdCount !== null && openFdCount >= DB_OPEN_FD_WARN_THRESHOLD)
-    const payload = {
-      source,
-      walSizeBytes,
-      walPeakBytes: this.walPeakBytes,
-      busyRetryCount,
-      busyRetryDelta,
-      schedulerBusyFailureDelta,
-      // Aggregate depth (sum across lanes) keeps the snapshot shape; per-lane
-      // depths locate which FILE a backlog belongs to (lane split).
-      schedulerQueueDepth: scheduler.queued,
-      schedulerQueueDepthPrimary: scheduler.lanes.primary.queued,
-      schedulerQueueDepthAux: scheduler.lanes.aux.queued,
-      schedulerQueuePeak: this.schedulerQueuePeak,
-      writerPending: writer.pending,
-      writerActive: writer.activeAdmissions,
-      writerAdmissionPaused: writer.admissionPaused,
-      openFdCount: openFdCount ?? undefined
-    }
-    this.schedulerQueuePeak = scheduler.queued
-    this.walPeakBytes = walSizeBytes
-
-    if (!unhealthy) {
-      dbLog.info('Database health snapshot', { meta: payload })
-      return
-    }
-
-    dbLog.warn('Database health snapshot exceeded contention threshold', { meta: payload })
-    operationalErrorService.report({
-      domain: 'database',
-      operation: 'health-window',
-      error: new Error('DATABASE_CONTENTION_THRESHOLD_EXCEEDED'),
-      code: 'DATABASE_CONTENTION',
-      severity: 'warning',
-      retryable: true,
-      userImpact: 'degraded',
-      captureDetail: false,
-      dedupeWindowMs: DB_HEALTH_REPORT_INTERVAL_MS,
-      context: payload
-    })
+    await this.walMaintenance.reportDatabaseHealth(source)
   }
 
   private registerWalMaintenanceTasks(): void {
     if (this.walMaintenanceRegistered) return
     this.walMaintenanceRegistered = true
+    this.walMaintenance.registerTasks()
+  }
 
-    pollingService.register(
-      DB_WAL_PASSIVE_TASK_ID,
-      async () => {
-        await this.runWalCheckpoint('PASSIVE')
-      },
-      {
-        interval: DB_WAL_PASSIVE_INTERVAL_MS,
-        unit: 'milliseconds',
-        lane: 'maintenance',
-        backpressure: 'coalesce',
-        dedupeKey: DB_WAL_PASSIVE_TASK_ID,
-        maxInFlight: 1
-      }
-    )
-
-    pollingService.register(
-      DB_WAL_TRUNCATE_TASK_ID,
-      async () => {
-        const stats = dbWriteScheduler.getStats()
-        this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, stats.queued)
-        // Primary-lane depth only: TRUNCATE checkpoints the primary file, and
-        // an aux-lane backlog must not defer it (lane split, design D3/FR4).
-        const primaryQueueDepth = stats.lanes.primary.queued
-        if (primaryQueueDepth > DB_WAL_TRUNCATE_MAX_QUEUED_WRITES) {
-          dbLog.info('Skipping WAL TRUNCATE checkpoint due to active write backlog', {
-            meta: { schedulerQueueDepth: primaryQueueDepth }
-          })
-          return
+  /**
+   * Reclaims up to `maxPages` free pages from the primary `INCREMENTAL` auto_vacuum
+   * database via `scheduleDbWrite`. Returns the number of reclaimed pages (0 if skipped).
+   */
+  public async reclaimFreePages(
+    maxPages: number = DB_WAL_INCREMENTAL_VACUUM_MAX_PAGES
+  ): Promise<number> {
+    if (this.destroying || !this.client) return 0
+    try {
+      return await scheduleDbWrite(
+        'database.incremental-vacuum',
+        async () => {
+          if (this.destroying || !this.client) return 0
+          return await reclaimIncrementalVacuumPages(this.client, maxPages, 1)
+        },
+        {
+          priority: 'background',
+          dropPolicy: 'drop',
+          maxQueueWaitMs: 5_000
         }
-        await this.runWalCheckpoint('TRUNCATE')
-      },
-      {
-        interval: DB_WAL_TRUNCATE_INTERVAL_MS,
-        unit: 'milliseconds',
-        lane: 'maintenance',
-        backpressure: 'latest_wins',
-        dedupeKey: DB_WAL_TRUNCATE_TASK_ID,
-        maxInFlight: 1
-      }
-    )
-
-    pollingService.register(
-      DB_HEALTH_REPORT_TASK_ID,
-      async () => {
-        await this.reportDatabaseHealth('periodic')
-      },
-      {
-        interval: DB_HEALTH_REPORT_INTERVAL_MS,
-        unit: 'milliseconds',
-        lane: 'maintenance',
-        backpressure: 'coalesce',
-        dedupeKey: DB_HEALTH_REPORT_TASK_ID,
-        maxInFlight: 1
-      }
-    )
+      )
+    } catch {
+      return 0
+    }
   }
 
   private async getTableCount(client: Client, tableName: string): Promise<number> {
@@ -1428,8 +1149,7 @@ export class DatabaseModule extends BaseModule {
   async onInit({ file }: ModuleInitContext<TalexEvents>): Promise<void> {
     const { dirPath } = file
     this.destroying = false
-    this.lastHealthBusyRetryCount = getSqliteBusyRetryCount()
-    this.lastHealthSchedulerBusyFailures = dbWriteScheduler.getDetailedStats().busyFailures
+    this.walMaintenance.resetHealthBaselines()
     this.disposeRetryExhaustedListener?.()
     this.disposeRetryExhaustedListener = setSqliteRetryExhaustedListener((event) => {
       operationalErrorService.report({
@@ -1880,9 +1600,7 @@ export class DatabaseModule extends BaseModule {
     }
 
     if (this.walMaintenanceRegistered) {
-      pollingService.unregister(DB_WAL_PASSIVE_TASK_ID)
-      pollingService.unregister(DB_WAL_TRUNCATE_TASK_ID)
-      pollingService.unregister(DB_HEALTH_REPORT_TASK_ID)
+      this.walMaintenance.unregisterTasks()
       this.walMaintenanceRegistered = false
     }
     // Flush the WAL back into the main db before closing. DatabaseModule is
