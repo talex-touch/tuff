@@ -1,23 +1,6 @@
 <script setup lang="ts">
+import type { DashboardUpdate, LocalizedText } from '~/utils/public-updates'
 import { computed, ref } from 'vue'
-
-interface LocalizedText {
-  zh: string
-  en: string
-}
-
-interface DashboardUpdate {
-  id: string
-  type: 'news' | 'release' | 'announcement' | 'config' | 'data'
-  scope: 'web' | 'system' | 'both'
-  channels: string[]
-  releaseTag: string | null
-  title: LocalizedText
-  timestamp: string
-  summary: LocalizedText
-  tags: string[]
-  link: string
-}
 
 type UpdateTypeFilter = 'all' | DashboardUpdate['type']
 type TimeFilter = 'all' | '7d' | '30d' | '90d' | '365d'
