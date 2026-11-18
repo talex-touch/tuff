@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TxAiCodeBlockProps } from '../../types'
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 
 defineOptions({
   name: 'TxAiCodeBlock',
@@ -10,20 +10,39 @@ const props = withDefaults(defineProps<TxAiCodeBlockProps>(), {
   language: '',
   title: '',
   copyable: true,
+  copyLabel: 'Copy',
+  copiedLabel: 'Copied',
 })
 
 const copied = ref(false)
+let resetTimer: number | null = null
 const label = computed(() => props.title || props.language || 'code')
+
+function clearResetTimer() {
+  if (resetTimer !== null) {
+    window.clearTimeout(resetTimer)
+    resetTimer = null
+  }
+}
+
+onBeforeUnmount(clearResetTimer)
 
 async function copyCode() {
   if (!props.copyable || typeof navigator === 'undefined' || !navigator.clipboard)
     return
 
-  await navigator.clipboard.writeText(props.code)
-  copied.value = true
-  window.setTimeout(() => {
+  try {
+    await navigator.clipboard.writeText(props.code)
+    copied.value = true
+    clearResetTimer()
+    resetTimer = window.setTimeout(() => {
+      copied.value = false
+      resetTimer = null
+    }, 1200)
+  }
+  catch {
     copied.value = false
-  }, 1200)
+  }
 }
 </script>
 
@@ -36,9 +55,10 @@ async function copyCode() {
           v-if="copyable"
           type="button"
           class="tx-ai-code-block__copy"
+          :aria-label="copied ? copiedLabel : copyLabel"
           @click="copyCode"
         >
-          {{ copied ? 'Copied' : 'Copy' }}
+          {{ copied ? copiedLabel : copyLabel }}
         </button>
       </slot>
     </figcaption>

@@ -42,7 +42,7 @@ const MODULE_DEFAULTS: Record<string, { enabled: boolean, level: LogLevel, color
   'file-provider': { enabled: true, level: LogLevel.INFO, color: 'green' },
   'app-provider': { enabled: true, level: LogLevel.INFO, color: 'blue' },
   'plugin-system': { enabled: true, level: LogLevel.INFO, color: 'magenta' },
-  'database': { enabled: false, level: LogLevel.WARN, color: 'yellow' },
+  'database': { enabled: true, level: LogLevel.INFO, color: 'yellow' },
   'storage': { enabled: false, level: LogLevel.WARN, color: 'yellow' },
   'clipboard': { enabled: false, level: LogLevel.INFO, color: 'cyan' },
   'flow-bus': { enabled: true, level: LogLevel.INFO, color: 'green' },

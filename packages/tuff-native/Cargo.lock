@@ -2801,6 +2801,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tuff-native-ocr"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "tuff-native-protocol-fixture"
 version = "0.1.0"
 dependencies = [

@@ -4,6 +4,7 @@ import {
   deriveSendState,
   isAwaitingFirstToken,
   isCapsuleSendState,
+  toAiSendState,
   type SendState,
   type SendStateInput
 } from './send-state'
@@ -92,5 +93,16 @@ describe('isAwaitingFirstToken', () => {
     expect(isAwaitingFirstToken(assistant({ status: 'complete' }))).toBe(false)
     expect(isAwaitingFirstToken(assistant({ status: 'failed' }))).toBe(false)
     expect(isAwaitingFirstToken({ ...assistant({}), role: 'user' })).toBe(false)
+  })
+})
+
+describe('toAiSendState', () => {
+  it('maps five CoreApp states onto UIKit AiSendState', () => {
+    expect(toAiSendState('empty')).toBe('disabled')
+    expect(toAiSendState('ready')).toBe('send')
+    expect(toAiSendState('ready', true)).toBe('queue')
+    expect(toAiSendState('waiting')).toBe('stop')
+    expect(toAiSendState('streaming')).toBe('stop')
+    expect(toAiSendState('blocked')).toBe('stop')
   })
 })

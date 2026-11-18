@@ -75,9 +75,9 @@ export interface ClipboardTransportHandlers {
     request: ClipboardCopyAndPasteRequest,
     context: HandlerContext
   ) => Promise<ClipboardActionResult>
-  readClipboard: () => ClipboardReadResponse
+  readClipboard: () => Promise<ClipboardReadResponse> | ClipboardReadResponse
   readImage: (request: ClipboardReadImageRequest) => Promise<ClipboardReadImageResponse | null>
-  readFiles: () => string[]
+  readFiles: () => Promise<string[]> | string[]
   buildChangePayload: () => ClipboardChangePayload
   getStatus: () => ClipboardStatus
 }
@@ -287,7 +287,7 @@ export class ClipboardTransportHandlersRegistry {
         ClipboardEvents.read,
         async (_request: void, context: HandlerContext): Promise<ClipboardReadResponse> => {
           handlers.enforcePermission(context.plugin?.name, 'clipboard:read', undefined)
-          return handlers.readClipboard()
+          return await handlers.readClipboard()
         }
       ),
       transport.on(
@@ -302,7 +302,7 @@ export class ClipboardTransportHandlersRegistry {
       ),
       transport.on(ClipboardEvents.readFiles, async (_request: void, context: HandlerContext) => {
         handlers.enforcePermission(context.plugin?.name, 'clipboard:read', undefined)
-        return handlers.readFiles()
+        return await handlers.readFiles()
       }),
       transport.on(
         ClipboardEvents.getStatus,

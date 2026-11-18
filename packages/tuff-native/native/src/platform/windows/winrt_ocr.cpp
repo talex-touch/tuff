@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <windows.h>
 #include <chrono>
 #include <cstdint>
@@ -71,9 +72,17 @@ winrt::Windows::Media::Ocr::OcrEngine CreateEngine(const std::string& languageHi
   return fallback;
 }
 
+constexpr uint32_t kMaxOcrImageEdge = 2000;
+
+struct DecodedWinrtBitmap {
+  winrt::Windows::Graphics::Imaging::SoftwareBitmap bitmap{nullptr};
+  double scaleX = 1.0;
+  double scaleY = 1.0;
+};
+
 bool BuildBitmapFromBytes(
     const std::vector<uint8_t>& image,
-    winrt::Windows::Graphics::Imaging::SoftwareBitmap& outBitmap,
+    DecodedWinrtBitmap& outDecoded,
     OcrError& error) {
   using namespace winrt::Windows::Graphics::Imaging;
   using namespace winrt::Windows::Storage::Streams;
@@ -94,7 +103,39 @@ bool BuildBitmapFromBytes(
     stream.Seek(0);
 
     auto decoder = BitmapDecoder::CreateAsync(stream).get();
-    outBitmap = decoder.GetSoftwareBitmapAsync(BitmapPixelFormat::Bgra8, BitmapAlphaMode::Ignore).get();
+    const uint32_t rawWidth = decoder.PixelWidth();
+    const uint32_t rawHeight = decoder.PixelHeight();
+    const uint32_t orientedWidth = decoder.OrientedPixelWidth();
+    const uint32_t orientedHeight = decoder.OrientedPixelHeight();
+
+    if (rawWidth > kMaxOcrImageEdge || rawHeight > kMaxOcrImageEdge) {
+      const double scale = std::min(
+          static_cast<double>(kMaxOcrImageEdge) / static_cast<double>(rawWidth),
+          static_cast<double>(kMaxOcrImageEdge) / static_cast<double>(rawHeight));
+      BitmapTransform transform;
+      transform.ScaledWidth(std::max<uint32_t>(1, static_cast<uint32_t>(std::lround(rawWidth * scale))));
+      transform.ScaledHeight(std::max<uint32_t>(1, static_cast<uint32_t>(std::lround(rawHeight * scale))));
+      transform.InterpolationMode(BitmapInterpolationMode::Fant);
+      outDecoded.bitmap = decoder.GetSoftwareBitmapAsync(
+          BitmapPixelFormat::Bgra8,
+          BitmapAlphaMode::Ignore,
+          transform,
+          ExifOrientationMode::RespectExifOrientation,
+          ColorManagementMode::DoNotColorManage).get();
+    } else {
+      outDecoded.bitmap = decoder.GetSoftwareBitmapAsync(
+          BitmapPixelFormat::Bgra8,
+          BitmapAlphaMode::Ignore).get();
+    }
+
+    const uint32_t decodedWidth = outDecoded.bitmap.PixelWidth();
+    const uint32_t decodedHeight = outDecoded.bitmap.PixelHeight();
+    outDecoded.scaleX = (orientedWidth > 0 && decodedWidth > 0)
+        ? static_cast<double>(orientedWidth) / static_cast<double>(decodedWidth)
+        : 1.0;
+    outDecoded.scaleY = (orientedHeight > 0 && decodedHeight > 0)
+        ? static_cast<double>(orientedHeight) / static_cast<double>(decodedHeight)
+        : 1.0;
     return true;
   } catch (const winrt::hresult_error& ex) {
     error.code = "ERR_OCR_DECODE_FAILED";
@@ -110,7 +151,10 @@ bool BuildBitmapFromBytes(
   }
 }
 
-std::array<double, 4> MergeWordBoundingBox(const winrt::Windows::Media::Ocr::OcrLine& line) {
+std::array<double, 4> MergeWordBoundingBox(
+    const winrt::Windows::Media::Ocr::OcrLine& line,
+    double scaleX,
+    double scaleY) {
   bool initialized = false;
   double minX = 0.0;
   double minY = 0.0;
@@ -143,7 +187,11 @@ std::array<double, 4> MergeWordBoundingBox(const winrt::Windows::Media::Ocr::Ocr
     return {0.0, 0.0, 0.0, 0.0};
   }
 
-  return {minX, minY, std::max(0.0, maxX - minX), std::max(0.0, maxY - minY)};
+  return {
+      minX * scaleX,
+      minY * scaleY,
+      std::max(0.0, maxX - minX) * scaleX,
+      std::max(0.0, maxY - minY) * scaleY};
 }
 
 /**
@@ -198,8 +246,8 @@ bool PerformPlatformOcr(const OcrOptions& options, OcrResult& result, OcrError& 
     // Destroyed on every exit from this try block, including the throwing ones below.
     const ApartmentScope apartment;
 
-    winrt::Windows::Graphics::Imaging::SoftwareBitmap bitmap{nullptr};
-    if (!BuildBitmapFromBytes(options.image, bitmap, error)) {
+    DecodedWinrtBitmap decoded;
+    if (!BuildBitmapFromBytes(options.image, decoded, error)) {
       return false;
     }
 
@@ -210,7 +258,7 @@ bool PerformPlatformOcr(const OcrOptions& options, OcrResult& result, OcrError& 
       return false;
     }
 
-    auto ocrResult = engine.RecognizeAsync(bitmap).get();
+    auto ocrResult = engine.RecognizeAsync(decoded.bitmap).get();
     result.text = ToUtf8(ocrResult.Text());
 
     if (result.text.empty()) {
@@ -232,7 +280,7 @@ bool PerformPlatformOcr(const OcrOptions& options, OcrResult& result, OcrError& 
           continue;
         }
         block.hasBoundingBox = true;
-        block.boundingBox = MergeWordBoundingBox(line);
+        block.boundingBox = MergeWordBoundingBox(line, decoded.scaleX, decoded.scaleY);
         result.blocks.push_back(std::move(block));
 
         if (maxBlocks > 0 && static_cast<int>(result.blocks.size()) >= maxBlocks) {

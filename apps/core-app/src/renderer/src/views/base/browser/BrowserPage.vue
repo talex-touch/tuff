@@ -26,6 +26,9 @@ import {
   isOpenableBrowserUrl,
   useBrowserConnection
 } from '~/modules/browser-connection/useBrowserConnection'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-window-shortcuts'
+import { commandModifierHeld } from '~/modules/shortcuts/shortcut-chord'
 import Store from '~/views/base/Store.vue'
 import HomePage from '../home/HomePage.vue'
 import BrowserSettingsTab from './BrowserSettingsTab.vue'
@@ -36,6 +39,7 @@ import { describeBrowserError } from './browser-errors'
 
 const { t, locale } = useI18n()
 const route = useRoute()
+const { isMac } = useRendererPlatform()
 const sdk = createBrowserSdk(useTuffTransport())
 const {
   state,
@@ -158,6 +162,9 @@ watch(
     for (const id of autoSyncedTabDomains.keys()) {
       if (!openIds.has(id)) autoSyncedTabDomains.delete(id)
     }
+    for (const id of Object.keys(snapshots.value)) {
+      if (!openIds.has(id)) delete snapshots.value[id]
+    }
   }
 )
 
@@ -207,6 +214,7 @@ watch(
 watch(
   () => [route.query.category, route.query.tab] as const,
   async ([category, tab]) => {
+    if (route.path !== '/browser') return
     if (category) {
       const s = state.value ?? (await sdk.getState().catch(() => null))
       if (s) {
@@ -254,7 +262,7 @@ watch(isSuspended, (suspended) => {
   if (suspended && activeTab.value?.id) {
     const tabId = activeTab.value.id
     void sdk.captureSnapshot(tabId).then((res) => {
-      if (res?.snapshot) {
+      if (!disposed && res?.snapshot && state.value?.tabs.some((tab) => tab.id === tabId)) {
         snapshots.value[tabId] = res.snapshot
       }
     })
@@ -277,8 +285,16 @@ function runActive(action: 'back' | 'forward' | 'reload' | 'stop' | 'bookmark' |
 
 function focusAddress(): void {
   if (!onRoute.value) return
-  addressInput.value?.focus()
-  addressInput.value?.select()
+  if (addressInput.value) {
+    addressInput.value.focus()
+    addressInput.value.select()
+    return
+  }
+  void nextTick(() => {
+    if (!onRoute.value || isSettingsTab.value || isStoreTab.value) return
+    addressInput.value?.focus()
+    addressInput.value?.select()
+  })
 }
 
 function onAddressFocus(): void {
@@ -350,6 +366,8 @@ let lastViewport = ''
 let resizeObserver: ResizeObserver | null = null
 let overlayObserver: MutationObserver | null = null
 let unsubscribeFocus: (() => void) | undefined
+let disposeFocusCommand: (() => void) | undefined
+let surfaceListenersAttached = false
 let disposed = false
 
 function enqueueViewport(request: BrowserViewportRequest): void {
@@ -375,6 +393,17 @@ function hideViewport(): void {
   enqueueViewport({ visible: false, bounds: { x: 0, y: 0, width: 0, height: 0 } })
 }
 
+function hasBlockingOverlay(): boolean {
+  return Boolean(
+    overlayOpen.value ||
+    tabMenuOpen.value ||
+    pluginToolbarOpen.value ||
+    accountOpen.value ||
+    chromeSaveOpen.value ||
+    cookieDialogOpen.value
+  )
+}
+
 function measureViewport(): void {
   viewportFrame = 0
   if (
@@ -384,11 +413,7 @@ function measureViewport(): void {
     activeTab.value.error ||
     error.value ||
     panel.value ||
-    overlayOpen.value ||
-    tabMenuOpen.value ||
-    pluginToolbarOpen.value ||
-    accountOpen.value ||
-    chromeSaveOpen.value ||
+    hasBlockingOverlay() ||
     !viewport.value
   ) {
     hideViewport()
@@ -406,11 +431,7 @@ function scheduleViewport(): void {
   if (
     !onRoute.value ||
     document.hidden ||
-    overlayOpen.value ||
-    tabMenuOpen.value ||
-    pluginToolbarOpen.value ||
-    accountOpen.value ||
-    chromeSaveOpen.value ||
+    hasBlockingOverlay() ||
     panel.value ||
     !activeTab.value?.url ||
     activeTab.value.error ||
@@ -425,27 +446,34 @@ function scheduleViewport(): void {
 function onKeydown(event: KeyboardEvent): void {
   if (
     !onRoute.value ||
+    event.repeat ||
     event.isComposing ||
     event.keyCode === 229 ||
-    overlayOpen.value ||
-    tabMenuOpen.value ||
-    pluginToolbarOpen.value ||
-    accountOpen.value ||
-    chromeSaveOpen.value
+    hasBlockingOverlay()
   )
     return
-  const modifier = event.metaKey || event.ctrlKey
-  if (modifier && !event.shiftKey && event.key.toLowerCase() === 'l') {
+  const modifier = commandModifierHeld(event, isMac.value) && !event.altKey
+  const key = event.key.toLowerCase()
+  if (modifier && !event.shiftKey && (event.code === 'KeyL' || key === 'l')) {
+    if (isSettingsTab.value || isStoreTab.value) return
     event.preventDefault()
-    addressInput.value?.focus()
-    addressInput.value?.select()
-  } else if (modifier && !event.shiftKey && event.key.toLowerCase() === 't') {
+    focusAddress()
+  } else if (modifier && !event.shiftKey && (event.code === 'KeyT' || key === 't')) {
     event.preventDefault()
-    void command(() => sdk.createTab())
-  } else if (modifier && !event.shiftKey && event.key.toLowerCase() === 'w' && activeTab.value) {
+    panel.value = null
+    void command(() => sdk.createTab()).then((accepted) => {
+      if (accepted) focusAddress()
+    })
+  } else if (
+    modifier &&
+    !event.shiftKey &&
+    (event.code === 'KeyW' || key === 'w') &&
+    activeTab.value
+  ) {
     event.preventDefault()
+    panel.value = null
     void command(() => sdk.closeTab(activeTab.value!.id))
-  } else if (modifier && event.key.toLowerCase() === 'r' && activeTab.value?.url) {
+  } else if (modifier && (event.code === 'KeyR' || key === 'r') && activeTab.value?.url) {
     event.preventDefault()
     void command(() => sdk.reload(activeTab.value!.id))
   } else if (event.key === 'Escape' && panel.value) {
@@ -470,6 +498,7 @@ watch(
     pluginToolbarOpen,
     accountOpen,
     chromeSaveOpen,
+    cookieDialogOpen,
     error,
     () => activeTab.value?.error
   ],
@@ -478,51 +507,106 @@ watch(
     flush: 'sync'
   }
 )
+// While the Browser landing tab hosts HomePage, ⌘L / Ctrl+L belongs to the browser address bar
+// rather than the embedded chat composer. Register post-flush so it overrides HomePage's binding.
+watch(
+  () =>
+    onRoute.value &&
+    isLandingTab.value &&
+    !panel.value &&
+    !overlayOpen.value &&
+    !tabMenuOpen.value &&
+    !pluginToolbarOpen.value &&
+    !accountOpen.value &&
+    !chromeSaveOpen.value &&
+    !cookieDialogOpen.value,
+  (active) => {
+    disposeFocusCommand?.()
+    disposeFocusCommand = active
+      ? registerMainWindowCommandHandlers([
+          {
+            id: 'focus-composer',
+            enabled: () =>
+              onRoute.value && !isSettingsTab.value && !isStoreTab.value && !hasBlockingOverlay(),
+            run: focusAddress
+          }
+        ])
+      : undefined
+  },
+  { immediate: true, flush: 'post' }
+)
 // A revoked or deselected profile unmounts the save form; its open flag must not keep the guest hidden.
 watch(chromeProfile, (profile) => {
   if (!profile) chromeSaveOpen.value = false
 })
-onMounted(() => {
-  unsubscribeFocus = sdk.onFocusAddress(focusAddress)
-  unsubscribeSnapshot = sdk.onSnapshot(({ tabId, snapshot }) => {
-    snapshots.value[tabId] = snapshot
-  })
-  resizeObserver = new ResizeObserver(scheduleViewport)
-  if (viewport.value) resizeObserver.observe(viewport.value)
-  overlayObserver = new MutationObserver((mutations) => {
-    if (!onRoute.value) return
-    if (
-      mutations.some((mutation) => {
-        const target = mutation.target instanceof Element ? mutation.target : null
-        if (target?.matches(overlayMutationSelector) || target?.closest(overlayMutationSelector))
-          return true
-        return Array.from(mutation.addedNodes)
-          .concat(Array.from(mutation.removedNodes))
-          .some(
-            (node) =>
-              node instanceof Element &&
-              (node.matches(overlayMutationSelector) || node.querySelector(overlayMutationSelector))
-          )
-      })
-    )
-      updateOverlays()
-  })
-  overlayObserver.observe(document.body, {
-    subtree: true,
-    childList: true,
-    attributes: true,
-    attributeFilter: ['class', 'style', 'open', 'aria-hidden', 'inert']
-  })
+
+function attachSurfaceListeners(): void {
+  if (surfaceListenersAttached || disposed) return
+  surfaceListenersAttached = true
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(scheduleViewport)
+    if (viewport.value) resizeObserver.observe(viewport.value)
+  }
+  if (typeof MutationObserver !== 'undefined') {
+    overlayObserver = new MutationObserver((mutations) => {
+      if (!onRoute.value) return
+      if (
+        mutations.some((mutation) => {
+          const target = mutation.target instanceof Element ? mutation.target : null
+          if (target?.matches(overlayMutationSelector) || target?.closest(overlayMutationSelector))
+            return true
+          return Array.from(mutation.addedNodes)
+            .concat(Array.from(mutation.removedNodes))
+            .some(
+              (node) =>
+                node instanceof Element &&
+                (node.matches(overlayMutationSelector) ||
+                  node.querySelector(overlayMutationSelector))
+            )
+        })
+      )
+        updateOverlays()
+    })
+    overlayObserver.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['class', 'style', 'open', 'aria-hidden', 'inert']
+    })
+  }
   updateOverlays()
   window.addEventListener('resize', scheduleViewport)
   window.addEventListener('scroll', scheduleViewport, true)
   window.addEventListener('keydown', onKeydown)
   document.addEventListener('visibilitychange', scheduleViewport)
+}
+
+function detachSurfaceListeners(): void {
+  if (!surfaceListenersAttached) return
+  surfaceListenersAttached = false
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  overlayObserver?.disconnect()
+  overlayObserver = null
+  window.removeEventListener('resize', scheduleViewport)
+  window.removeEventListener('scroll', scheduleViewport, true)
+  window.removeEventListener('keydown', onKeydown)
+  document.removeEventListener('visibilitychange', scheduleViewport)
+}
+
+onMounted(() => {
+  unsubscribeFocus = sdk.onFocusAddress(focusAddress)
+  unsubscribeSnapshot = sdk.onSnapshot(({ tabId, snapshot }) => {
+    if (!disposed && state.value?.tabs.some((tab) => tab.id === tabId)) {
+      snapshots.value[tabId] = snapshot
+    }
+  })
+  attachSurfaceListeners()
 })
 onActivated(() => {
   surfaceActive.value = true
   lastViewport = ''
-  updateOverlays()
+  attachSurfaceListeners()
   void nextTick(scheduleViewport)
 })
 onDeactivated(() => {
@@ -530,20 +614,24 @@ onDeactivated(() => {
   tabMenuOpen.value = false
   pluginToolbarOpen.value = false
   chromeSaveOpen.value = false
+  cookieDialogOpen.value = false
+  disposeFocusCommand?.()
+  disposeFocusCommand = undefined
+  detachSurfaceListeners()
   hideViewport()
 })
 onBeforeUnmount(() => {
   disposed = true
   surfaceActive.value = false
+  disposeFocusCommand?.()
+  disposeFocusCommand = undefined
   hideViewport()
   unsubscribeFocus?.()
   unsubscribeSnapshot?.()
-  resizeObserver?.disconnect()
-  overlayObserver?.disconnect()
-  window.removeEventListener('resize', scheduleViewport)
-  window.removeEventListener('scroll', scheduleViewport, true)
-  window.removeEventListener('keydown', onKeydown)
-  document.removeEventListener('visibilitychange', scheduleViewport)
+  detachSurfaceListeners()
+  snapshots.value = {}
+  autoSyncedTabDomains.clear()
+  lastAutoSyncTimes.clear()
 })
 </script>
 

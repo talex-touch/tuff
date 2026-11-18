@@ -262,7 +262,7 @@
   - 对字符串化的 JSON `content` 引入结构化稳定解析，消除属性序列化顺序差异导致的假失效。
   - 新增 `search-core-utils.test.ts`（10 项单元测试），专门断言「相同查询 → 严格相同键」、键序列化顺序无关性、激活 Provider 顺序无关性、合法选项区分以及动态元数据隔离。61 项搜索契约套件全数通过。
 - [x] **C4 — 死代码** ✅ 已修（[#342](https://github.com/talex-touch/tuff/issues/342) / [PR #1083](https://github.com/talex-touch/tuff/pull/1083)，2026-08-07）：两个 handler 连同只为它们存在的 `enqueueIncrementalUpdate` 依赖（声明/字段/构造赋值/上游传入的闭包）与三个类型 import 一并删除。确认路径：`file-provider.ts:2442` 传的是 `subscribeToFileSystemEvents: () => undefined`，真实增量在 `indexed-source-event-router.ts:93` 绑的是另一套命名的 `handleFileAddedOrChanged`。
-- [ ] **C5 — Windows OCR COM apartment**：`winrt_ocr.cpp:157` 每次 init 不 uninit → 线程复用下 `RPC_E_CHANGED_MODE` 风险。
+- [x] **C5 — Windows OCR COM apartment** ✅ 已修（[#344](https://github.com/talex-touch/tuff/issues/344) / [PR #1679](https://github.com/talex-touch/tuff/pull/1679)，提交 `542db9a5b`）：`winrt_ocr.cpp` 通过 RAII `ApartmentScope` 在每次调用退出时配对 `winrt::uninit_apartment()`，并在 `RPC_E_CHANGED_MODE` 时安全借用外部单线程套间。后续 `tuff-native-ocr` 常驻 Rust helper 复用了同套 `ApartmentScope` 实现与 WIC `<= 2000px` 原生缩放解码。
 - [ ] **C6 — Windows 全链路重依赖 PowerShell**：应用扫描 4 源 + Everything 装 PATH 全经 `powershell -Command`，ExecutionPolicy 受限时大面积降级且扫描侧无降级 UI。
 - [x] **C7 — CoreBox 对话搜索按每次按键全表 `instr` 扫消息** ✅ 已修（2026-10-18）：
   - 位置：`modules/conversation/conversation-store.ts:searchConversations`。

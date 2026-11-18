@@ -12,12 +12,13 @@ import {
   TxContextMenuItem
 } from '@talex-touch/tuffex/context-menu'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { APP_SURFACE_ROUTES } from '../../../../shared/app-surface-routes'
 import { useBrowserWorkspace } from '~/modules/browser-workspace/useBrowserWorkspace'
 import { tabIcon } from '~/modules/browser-workspace/tab-presentation'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import BrowserPluginToolbar from '~/views/base/browser/BrowserPluginToolbar.vue'
 import type { BrowserTabMenuAction } from '~/views/base/browser/tab-actions'
 import { describeBrowserError } from '~/views/base/browser/browser-errors'
@@ -27,6 +28,7 @@ import ShellAccountAvatar from './ShellAccountAvatar.vue'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const { isMac, platform } = useRendererPlatform()
 const sdk = createBrowserSdk(useTuffTransport())
 const {
   state,
@@ -60,6 +62,22 @@ const tabMenuTarget = computed(() => state.value?.tabs[tabMenuIndex.value])
 async function runInBrowser(action: () => Promise<BrowserWorkspaceState>): Promise<boolean> {
   if (!onBrowserRoute.value) await router.push(APP_SURFACE_ROUTES.browser)
   return command(action)
+}
+
+function activateOrOpenTab(tab: BrowserTabState): void {
+  if (onBrowserRoute.value && tab.id === activeTabId.value && !tab.error) return
+  void runInBrowser(() => sdk.activateTab(tab.id))
+}
+
+function onTablistWheel(event: WheelEvent): void {
+  const list = event.currentTarget
+  if (!(list instanceof HTMLElement)) return
+  if (list.scrollWidth <= list.clientWidth) return
+  const delta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX
+  if (delta !== 0) {
+    event.preventDefault()
+    list.scrollLeft += delta
+  }
 }
 
 function tabTitle(tab: BrowserTabState): string {
@@ -162,6 +180,7 @@ function dropTab(event: DragEvent, targetId: string | null): void {
 
 function tabKeydown(event: KeyboardEvent, index: number): void {
   const tabs = state.value?.tabs ?? []
+  if (!tabs.length) return
   if (event.altKey && event.shiftKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
     event.preventDefault()
     event.stopPropagation()
@@ -192,6 +211,18 @@ function tabKeydown(event: KeyboardEvent, index: number): void {
   })
 }
 
+watch(
+  () => state.value?.tabs,
+  (tabs) => {
+    const ids = new Set((tabs ?? []).map((tab) => tab.id))
+    if (tabMenuOpen.value && tabMenuTargetId.value && !ids.has(tabMenuTargetId.value)) {
+      tabMenuOpen.value = false
+    }
+    if (draggedTabId.value && !ids.has(draggedTabId.value)) {
+      resetTabDrag()
+    }
+  }
+)
 watch(activeTabId, (id, previousId) => {
   if (id === previousId) return
   void nextTick(() => {
@@ -208,30 +239,38 @@ watch(tabMenuOpen, (open) => {
     document.getElementById(`browser-tab-${tabId}`)?.focus()
   })
 })
+onBeforeUnmount(() => {
+  resetTabDrag()
+})
 </script>
 
 <template>
   <div
-    class="flex h-11 flex-none items-center gap-1 px-2 pt-1"
+    class="BrowserTabStrip flex h-11 flex-none items-center gap-1 px-2 pt-1"
+    :class="{ 'is-window-controls': !isMac }"
+    :data-platform="platform"
     data-browser-tabbar
-    style="background: var(--tx-fill-color-light); -webkit-app-region: drag"
+    @dragover.self="showTabDropTarget($event, null)"
+    @drop.self="dropTab($event, null)"
   >
     <div
-      class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+      class="BrowserTabStrip-TabList BrowserTabStrip-NoDrag flex min-w-0 shrink items-center gap-1 overflow-x-auto"
       role="tablist"
       :aria-label="t('browser.tabs')"
-      style="-webkit-app-region: drag"
+      @wheel="onTablistWheel"
       @dragover.self="showTabDropTarget($event, null)"
       @drop.self="dropTab($event, null)"
     >
       <div
         v-for="(tab, index) in state?.tabs ?? []"
         :key="tab.id"
-        class="relative flex min-w-32 max-w-56 items-center rounded-t-lg"
-        :class="{ 'opacity-50': draggedTabId === tab.id }"
-        style="-webkit-app-region: no-drag"
-        :style="{ background: tab.id === state?.activeTabId ? 'var(--tx-bg-color)' : undefined }"
+        class="BrowserTabStrip-Tab BrowserTabStrip-NoDrag relative flex min-w-32 max-w-56 items-center gap-0.5 rounded-t-lg pr-1.5"
+        :class="{
+          'opacity-50': draggedTabId === tab.id,
+          'is-active': tab.id === state?.activeTabId
+        }"
         @contextmenu="openTabMenu(tab.id, $event)"
+        @auxclick.middle.prevent="command(() => sdk.closeTab(tab.id))"
         @dragover="showTabDropTarget($event, tab.id)"
         @drop="dropTab($event, tab.id)"
       >
@@ -245,12 +284,12 @@ watch(tabMenuOpen, (open) => {
           aria-haspopup="menu"
           :aria-description="t('browser.reorderTabsHint')"
           :aria-expanded="tabMenuOpen && tabMenuTargetId === tab.id"
-          class="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-t-lg px-3 text-sm outline-offset-[-3px]"
+          class="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-t-lg pl-3 pr-1 text-sm outline-offset-[-3px]"
           :title="tabTitle(tab)"
           :draggable="!tabMovePending"
           @dragstart="startTabDrag(tab.id, $event)"
           @dragend="resetTabDrag"
-          @click="runInBrowser(() => sdk.activateTab(tab.id))"
+          @click="activateOrOpenTab(tab)"
           @keydown="tabKeydown($event, index)"
         >
           <span class="inline-flex h-4 w-4 flex-none" :class="tabIcon(tab)" aria-hidden="true" />
@@ -269,6 +308,17 @@ watch(tabMenuOpen, (open) => {
           :class="tabDropTarget.before ? 'left-0' : 'right-0'"
         />
       </div>
+    </div>
+    <div
+      class="BrowserTabStrip-NoDrag relative flex flex-none items-center gap-1"
+      @dragover="showTabDropTarget($event, null)"
+      @drop="dropTab($event, null)"
+    >
+      <span
+        v-if="draggedTabId && tabDropTarget?.id === null"
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-y-1 left-0 w-0.5 bg-[var(--tx-color-primary)]"
+      />
       <TxSkeleton v-if="connecting && !state" :width="150" :height="30" :radius="8" />
       <TxIconButton
         icon="i-ri-add-line"
@@ -276,7 +326,6 @@ watch(tabMenuOpen, (open) => {
         :label="t('browser.addTab')"
         :disabled="!state"
         class="flex-none"
-        style="-webkit-app-region: no-drag"
         @click="runInBrowser(() => sdk.createTab())"
       />
     </div>
@@ -284,19 +333,13 @@ watch(tabMenuOpen, (open) => {
       data-browser-window-drag
       aria-hidden="true"
       :title="t('browser.dragWindow')"
-      class="relative h-full w-12 flex-none"
-      style="-webkit-app-region: drag"
+      class="BrowserTabStrip-DragRegion relative h-full min-w-12 flex-1 self-stretch"
       @dragover="showTabDropTarget($event, null)"
       @drop="dropTab($event, null)"
-    >
-      <span
-        v-if="draggedTabId && tabDropTarget?.id === null"
-        class="pointer-events-none absolute inset-y-1 left-0 w-0.5 bg-[var(--tx-color-primary)]"
-      />
-    </div>
+    />
     <div
-      class="shell-chrome-safe-inline-end flex flex-none items-center gap-0.5"
-      style="-webkit-app-region: no-drag"
+      class="BrowserTabStrip-Actions shell-chrome-safe-inline-end flex flex-none items-center gap-0.5"
+      :class="{ 'BrowserTabStrip-NoDrag': onBrowserRoute }"
     >
       <template v-if="onBrowserRoute">
         <BrowserPluginToolbar active @overlay-change="onPluginToolbarOverlay" />
@@ -307,8 +350,7 @@ watch(tabMenuOpen, (open) => {
   <div
     v-if="error && !onBrowserRoute"
     role="alert"
-    class="flex flex-none items-center gap-3 bg-[var(--tx-color-danger-light-9)] px-2 py-1.5 text-sm"
-    style="-webkit-app-region: no-drag"
+    class="BrowserTabStrip-NoDrag flex flex-none items-center gap-3 bg-[var(--tx-color-danger-light-9)] px-2 py-1.5 text-sm"
   >
     <span class="min-w-0 flex-1 break-words">{{
       t('browser.actionFailedWithReason', { reason: describeBrowserError(error, t) })
@@ -350,3 +392,41 @@ watch(tabMenuOpen, (open) => {
     </template>
   </TxContextMenu>
 </template>
+
+<style lang="scss" scoped>
+.BrowserTabStrip {
+  background: var(--tx-fill-color-light);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.BrowserTabStrip-DragRegion {
+  -webkit-app-region: drag;
+}
+
+.BrowserTabStrip-NoDrag {
+  -webkit-app-region: no-drag;
+
+  :deep(*) {
+    -webkit-app-region: no-drag;
+  }
+}
+
+.BrowserTabStrip-TabList {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.BrowserTabStrip-Tab {
+  &:not(.is-active):hover {
+    background: var(--tx-fill-color);
+  }
+
+  &.is-active {
+    background: var(--tx-bg-color);
+  }
+}
+</style>

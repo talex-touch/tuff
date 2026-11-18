@@ -1,41 +1,39 @@
 # FileProvider 巨石架构深拆分析与演进方案
 
-> 日期：2026-10-18  
-> 关联任务：[TODO-BACKLOG-LONG-TERM.md](../../plan-prd/TODO-BACKLOG-LONG-TERM.md#a-架构与质量债务)（SRP Wave C）  
-> 涉及文件：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`（当前 4,073 行）  
+> 日期：2026-10-18
+> 状态同步：2026-11-17（`HEAD 37b3fc7e9`）
+> 关联任务：[TODO-BACKLOG-LONG-TERM.md](../../plan-prd/TODO-BACKLOG-LONG-TERM.md#a-架构与质量债务)（SRP Wave C）
+> 涉及文件：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`（10-18 基线 4,073 行 → **当前 3,195 原始行 / 2,790 代码行**，棘轮上限 `2,790`）
 > 关联报告：[`search-crossplatform-audit.md`](./search-crossplatform-audit.md)、[`file-search-integration-2.5.1-2026-10-11.md`](./file-search-integration-2.5.1-2026-10-11.md)
 
 ---
 
 ## 一、背景与问题核查
 
-在 SRP Wave C 治理中，`file-provider.ts` 目前代码量达 **4,073 行**。经工程核查，此前历史提交中**已经抽离出 20 余个独立子服务与专用 Worker 线程**，包括：
+在 SRP Wave C 治理中，`file-provider.ts` 在 2026-10-18 基线时代码量达 **4,073 行**；截至 2026-11-17（`HEAD 37b3fc7e9`），经过多轮子服务抽离已降至 **3,195 原始行 / 2,790 代码行**。经工程核查，**已抽离出 25+ 独立子服务与专用 Worker 线程**，包括：
 
 1. **文件监听**：`FileProviderWatchService`、`file-watch-subtree-service.ts`、`FileProviderWatchSubtreeReconcileService`；
 2. **内容提取与策略**：`FileProviderContentIndexPolicyService`、`FileProviderContentCapacityService`、`FileProviderIndexSchedulerService`、`FileProviderIndexRuntimeService`、`FileProviderEnrichmentResumeService`、`FileIndexWorkerClient`（Worker 线程）；
-3. **向量化**：`EmbeddingService`、`FileProviderEmbeddingIndexService`；
-4. **电池状态**：`deviceIdleService`（全局服务）。
+3. **历史迁移、持久路由与引导（10-20 ~ 10-31 新增抽离）**：`FileProviderBootPassService`、`FileProviderPathNormalizationService`、`FileProviderKeywordBackfillService`、`FileProviderIndexRowStore`（`indexRowStore`）、`FileProviderSubtreePersistService`、`FileProviderOverlongContentCleanupService`、`FileProviderEmbeddingBlobMigrationService`；
+4. **向量化与电池状态**：`EmbeddingService`、`FileProviderEmbeddingIndexService`、`deviceIdleService`（全局服务）。
 
-### 为什么抽离后依然膨胀到 4,073 行？
+### 为什么抽离后仍达 3,195 原始行（2,790 代码行）？
 
-代码 AST 与方法调用频次证明：**“子服务抽离了底层算法，但宿主类未做职责剥离，把所有的依赖装配胶水、跨服务状态同步、分库分支和控制面 IPC 全都留在了 `FileProvider`”**。
+代码实况与方法分布证明：**“子服务与 Step 2 历史迁移已经抽离，但宿主类仍兼任核心角色，且把装配胶水、剩余分库分支和控制面 IPC 留在了 `FileProvider`”**：
 
 ```
-file-provider.ts (4,073 行)
-├── 1. 构造函数依赖注入样板（第 555-1118 行，整整 563 行）
-│   └── 实例化 25+ 个子服务，给每个子服务手写长达数十行的匿名闭包回调。
-├── 2. 扫描与遍历落盘管线（约 1,000 行）
-│   ├── _initialize（140 行）、rebuildIndex（113 行）、startIndexing（82 行）
-│   └── persistAndPublishFullScanBatch（73 行）、persistSubtreeRecordBatch（71 行）、persistReconciledUpdates（44 行）
-├── 3. 增量变更与文件记录构建（约 600 行）
-│   ├── persistIncrementalRecords（84 行）、buildFileRecord（68 行）、handleIncrementalAddsOrChanges（57 行）
-│   └── 包含大量 stat 探测、扩展名提取、NFC/NFD 路径比对及 LibSQL 批量执行逻辑。
-├── 4. 历史版本迁移与 Backfill 残留（约 350 行）
-│   ├── schedulePathNormalizationMigration / rewriteFilePathToNormalizedForm（NFC 路径修正）
-│   └── scheduleKeywordSchemaBackfill / loadKeywordBackfillRowsPage（关键词版本升 V3 回填）
-└── 5. 控制面 IPC 事件中继与流式广播（约 500 行）
-    ├── registerProgressStream（131 行！进度计算、节流与 StreamContext 销毁）
-    └── addWatchPath（95 行）、registerOpenersChannel（45 行）、状态与证据导出（80 行）
+file-provider.ts (2026-11-17 实测: 3,195 原始行 / 2,790 代码行；10-18 基线曾为 4,073 行)
+├── 1. 构造函数依赖注入样板（第 505-1092 行，约 588 行）— [Step 1 未落地]
+│   └── 现场实例化 25+ 个子服务并内联编写匿名闭包回调。
+├── 2. 扫描、初始化与落盘协调管线 — [Step 4 未落地]
+│   ├── _initialize（第 2942 行）、rebuildIndex（第 2386 行）、startIndexing（第 1772 行）
+│   └── persistAndPublishFullScanBatch（第 1344 行）等协调与增量落盘逻辑仍在宿主。
+├── 3. 历史版本迁移与 Backfill — [Step 2 已于 10-20 落地]
+│   └── loadPathNormalizationRowsPage、rewriteFilePathToNormalizedForm、emitKeywordBackfillRows 已从 file-provider.ts 彻底移除，下沉至 boot-pass-service / path-normalization-service / keyword-backfill-service。
+├── 4. 分库双拓扑条件分支 — [Step 3 部分落地]
+│   └── indexRowStore 与 subtreePersistService 已抽离，但文件内仍余 8 处 isSearchSplitEnabledNow() 调用（含定义共 9 处）及 6 处 databaseManager.isSearchSplitEnabled() 分支。
+└── 5. 控制面 IPC 事件中继与流式广播 — [Step 4 未落地]
+    └── addWatchPath（第 2500 行）、registerProgressStream（第 2596 行）、状态与证据导出。
 ```
 
 ---
@@ -73,23 +71,23 @@ graph TD
 
 采用增量重构，每一步可独立提交、独立运行测试，禁止破坏既有并发与持久化保证：
 
-### Step 1：抽离依赖装配工厂（收益：立即减少 ~560 行，风险：零）
-- **操作**：创建 `file-provider-service-container.ts`，将 `FileProvider` constructor 中实例化子服务及匿名配置对象的代码移入 `createFileProviderServices(deps)`。
-- **效果**：`file-provider.ts` 从 4,073 行直接降至 ~3,500 行。纯代码位置搬移，不改任何调用链与状态机，测试 100% 通过。
+### Step 1：抽离依赖装配工厂 — `[ ] 未落地`（收益：立即减少 ~588 行，风险：零）
+- **操作**：创建 `file-provider-service-container.ts`，将 `FileProvider` constructor（当前位于第 505–1092 行，共 588 行）中实例化子服务及匿名配置对象的代码移入 `createFileProviderServices(deps)`。
+- **效果**：`file-provider.ts` 从当前 **3,195 原始行 / 2,790 代码行** 降至 ~2,600 原始行。纯代码位置搬移，不改任何调用链与状态机，测试 100% 通过。
 
-### Step 2：历史迁移任务闭环下沉（收益：减少 ~350 行，风险：极低）
-- **操作**：把 `loadPathNormalizationRowsPage`、`rewriteFilePathToNormalizedForm`、`emitKeywordBackfillRows` 等底层 SQL 分页与重写逻辑，彻底移入对应已存在的 `FileProviderPathNormalizationService` 和 `FileProviderKeywordBackfillService`。
-- **效果**：`FileProvider` 不再充当迁移脚本的执行器，仅保留调度触发入口。
+### Step 2：历史迁移任务闭环下沉 — `[x] 已落地`（2026-10-20 合入主线）
+- **实况**：`loadPathNormalizationRowsPage`、`rewriteFilePathToNormalizedForm`、`emitKeywordBackfillRows` 已从 `file-provider.ts` 彻底移除（零残留），迁入 `services/file-provider-boot-pass-service.ts`、`services/file-provider-path-normalization-service.ts` 与 `services/file-provider-keyword-backfill-service.ts`。
+- **效果**：`FileProvider` 不再充当迁移脚本执行器，仅保留调度触发入口；原文件体积已从 4,073 行降至 3,195 原始行。
 
-### Step 3：分库双拓扑持久化收敛（收益：减少 ~300 行样板，风险：低）
-- **操作**：抽象轻量级 `FilePersistenceRouter`，把贯穿各处的 `this.isSearchSplitEnabledNow() ? searchIndexWriter.execWrite(...) : scheduleDbWrite(...)` 收敛成统一的 `persist(label, sql, mode)` 调度器。
-- **效果**：消除全量扫、增量扫、文件删除、元数据更新等十多处重复的条件分支。
+### Step 3：分库双拓扑持久化收敛 — `[~] 部分落地`（剩余 ~14 处 split 分支待收口）
+- **实况**：`FileProviderIndexRowStore`（`indexRowStore`）与 `FileProviderSubtreePersistService`（`subtreePersistService`）已抽离，但 `file-provider.ts` 内仍残余 **8 处** `isSearchSplitEnabledNow()` 调用（加定义共 9 处）及 **6 处**直接 `databaseManager.isSearchSplitEnabled()` 条件分支。
+- **操作**：在 `search-split:app-evidence` 3 阶段实跑验收通过后，抽象轻量级 `FilePersistenceRouter`，把上述条件分支收敛为统一调度器。
 
-### Step 4：彻底剥离搜索 Provider 与索引协调引擎（收益：终态架构，风险：中）
+### Step 4：彻底剥离搜索 Provider 与索引协调引擎 — `[ ] 未落地`（建议与 3.0 Phase 1 `utilityProcess` 及 `F1–F3` 合并）
 - **操作**：
-  1. 将全量扫描批处理落盘（`persistAndPublishFullScanBatch`）与增量变更（`persistIncrementalRecords`）移入 `FileIndexPipelineCoordinator`；
-  2. 让 `file-indexed-source.ts` 直接挂接 `FileIndexedSourceBackend`，解除对整个 `FileProvider` 神级对象的直接引用；
-  3. `FileProvider` 蜕变为纯粹的只读搜索 Provider。
+  1. 结合 `docs/plan-prd/03-features/search/FILE-AND-APP-INDEX-ROADMAP.md` §3.F 先清理 `F1`（纯记录映射 ~50 行）、`F2`（`_initialize` 第 2942 行）与 `F3`（47 行死公开成员及重复 yield/sleep 闭包）；
+  2. 将全量扫描批处理落盘（`persistAndPublishFullScanBatch` 第 1344 行）、`startIndexing`（第 1772 行）、`rebuildIndex`（第 2386 行）与控制面 IPC（`addWatchPath` 第 2500 行、`registerProgressStream` 第 2596 行）按 4 角色拆分移入 `FileIndexPipelineCoordinator` / `FileIndexCoordinator`；
+  3. 让 `file-indexed-source.ts` 直接挂接 `FileIndexedSourceBackend`，解除对 `FileProvider` 宿主对象的直接引用，`FileProvider` 蜕变为纯粹的只读搜索 Provider（同步对齐 3.0 Phase 1 内核进程边界，避免改两次接口）。
 
 ---
 

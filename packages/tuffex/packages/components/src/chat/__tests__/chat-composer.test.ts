@@ -218,4 +218,141 @@ describe('txChatComposer', () => {
     })
     expect(explicit.find('textarea').attributes('aria-label')).toBe('消息输入框')
   })
+
+  it('guards keyCode 229 and isComposing Enter presses during IME composition', async () => {
+    const wrapper = mount(TxChatComposer, {
+      props: {
+        modelValue: 'nihao',
+        sendOnMetaEnter: false,
+      },
+    })
+
+    await wrapper.find('textarea').trigger('keydown', { key: 'Enter', isComposing: true })
+    await wrapper.find('textarea').trigger('keydown', { key: 'Enter', keyCode: 229 })
+    expect(wrapper.emitted('send')).toBeUndefined()
+
+    await wrapper.find('textarea').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('send')).toEqual([[{ text: 'nihao' }]])
+  })
+
+  it('supports capsule stop island, sendQueues, dictation, removable AiAttachments, and refraction glow', async () => {
+    const streaming = mount(TxChatComposer, {
+      props: {
+        modelValue: '',
+        streaming: true,
+        dictatable: true,
+        stopButtonText: 'Stop run',
+        surface: 'refraction',
+        conversing: true,
+        beamActive: true,
+        attachments: [
+          { id: 'doc1', kind: 'file', name: 'notes.md', uploading: true },
+        ],
+        attachmentRemovable: true,
+      },
+    })
+
+    expect(streaming.classes()).toContain('is-surface-refraction')
+    expect(streaming.classes()).toContain('is-conversing')
+    expect(streaming.classes()).toContain('is-beam')
+    expect(streaming.classes()).toContain('is-streaming')
+    expect(streaming.find('.tx-chat-composer__attachment').classes()).toContain('is-pending')
+    expect(streaming.find('.tx-chat-composer__mic-slot').classes()).toContain('is-yielding')
+
+    const stopBtn = streaming.find('.tx-chat-composer__send')
+    expect(stopBtn.classes()).toContain('is-stop')
+    expect(stopBtn.attributes('disabled')).toBeUndefined()
+    await stopBtn.trigger('click')
+    expect(streaming.emitted('stop')).toHaveLength(1)
+
+    await streaming.find('.tx-chat-composer__attachment-remove').trigger('click')
+    expect(streaming.emitted('attachmentRemove')).toEqual([['doc1']])
+
+    // With sendQueues + draft text during streaming, primary action queues/sends instead of stopping
+    await streaming.setProps({ modelValue: 'Follow-up', sendQueues: true })
+    expect(stopBtn.classes()).toContain('is-queue')
+    await stopBtn.trigger('click')
+    expect(streaming.emitted('send')).toEqual([[{ text: 'Follow-up' }]])
+
+    // Dictation active + Esc cancels dictation and marks textarea readonly
+    await streaming.setProps({ streaming: false, listening: true, micState: 'listening', micElapsedMs: 65000 })
+    expect(streaming.find('textarea').attributes('readonly')).toBeDefined()
+    expect(streaming.find('.tx-chat-composer__dictate-timer').text()).toBe('01:05')
+    await streaming.find('textarea').trigger('keydown', { key: 'Escape' })
+    expect(streaming.emitted('dictateCancel')).toHaveLength(1)
+    expect(streaming.emitted('update:listening')?.at(-1)).toEqual([false])
+
+    const vm = streaming.vm as unknown as {
+      box: HTMLElement | null
+      input: HTMLTextAreaElement | null
+      ghost: HTMLElement | null
+      focus: () => void
+      blur: () => void
+      launch: () => Promise<void>
+    }
+    expect(vm.box).toBeTruthy()
+    expect(vm.input).toBeTruthy()
+    expect(vm.ghost).toBeTruthy()
+    await expect(vm.launch()).resolves.toBeUndefined()
+  })
+
+  it('lets explicit sendState="ready" and sendState="empty" override draft inference', async () => {
+    const readyEmpty = mount(TxChatComposer, {
+      props: { modelValue: '', sendOnMetaEnter: false, sendState: 'ready' },
+    })
+    const readyBtn = readyEmpty.find('.tx-chat-composer__send')
+    expect(readyEmpty.classes()).toContain('is-send-ready')
+    expect(readyBtn.attributes('disabled')).toBeUndefined()
+    await readyBtn.trigger('click')
+    await readyEmpty.find('textarea').trigger('keydown', { key: 'Enter' })
+    expect(readyEmpty.emitted('send')).toEqual([[{ text: '' }], [{ text: '' }]])
+
+    await readyEmpty.setProps({ submitting: true })
+    expect(readyBtn.attributes('disabled')).toBeDefined()
+
+    const forcedEmpty = mount(TxChatComposer, {
+      props: { modelValue: 'has draft', sendOnMetaEnter: false, sendState: 'empty' },
+    })
+    const emptyBtn = forcedEmpty.find('.tx-chat-composer__send')
+    expect(forcedEmpty.classes()).toContain('is-send-empty')
+    expect(emptyBtn.attributes('disabled')).toBeDefined()
+    await emptyBtn.trigger('click')
+    await forcedEmpty.find('textarea').trigger('keydown', { key: 'Enter' })
+    expect(forcedEmpty.emitted('send')).toBeUndefined()
+  })
+
+  it('cancels dictation on Escape from focused child controls without letting Enter outside textarea submit', async () => {
+    const wrapper = mount(TxChatComposer, {
+      props: {
+        modelValue: 'Draft text',
+        sendOnMetaEnter: false,
+        dictatable: true,
+        listening: true,
+        micState: 'listening',
+      },
+    })
+
+    const micBtn = wrapper.find('.tx-chat-composer__mic')
+    await micBtn.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('send')).toBeUndefined()
+
+    await micBtn.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.emitted('dictateCancel')).toHaveLength(1)
+    expect(wrapper.emitted('update:listening')).toEqual([[false]])
+  })
+
+  it('disables attachment removal when the composer itself is disabled', async () => {
+    const wrapper = mount(TxChatComposer, {
+      props: {
+        disabled: true,
+        attachmentRemovable: true,
+        attachments: [{ id: 'att-1', label: 'report.pdf' }],
+      },
+    })
+
+    const removeBtn = wrapper.find('.tx-chat-composer__attachment-remove')
+    expect(removeBtn.attributes('disabled')).toBeDefined()
+    await removeBtn.trigger('click')
+    expect(wrapper.emitted('attachmentRemove')).toBeUndefined()
+  })
 })

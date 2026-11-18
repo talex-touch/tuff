@@ -331,4 +331,35 @@ describe('useStickToBottom tweenToBottom', () => {
     expect(el.scrollTop).toBe(escaped)
     expect(stick.following.value).toBe(false)
   })
+
+  it('releases programmatic guard when the user scrolls upward (thumb drag or PageUp)', () => {
+    const { el, stick } = setup()
+    el.scrollTop = 0
+    stick.scrollToBottom() // scrollTop -> 1000, programmatic armed while scrollHeight might change
+    el.scrollHeight = 1600
+
+    // User drags scrollbar up cleanly without wheel deltaY.
+    el.scrollTop = 300
+    stick.handleScroll()
+    expect(stick.following.value).toBe(false)
+    expect(stick.atBottom.value).toBe(false)
+  })
+
+  it('clears programmatic guard when settled within sub-pixel threshold on spring follow', async () => {
+    const clock = makeClock()
+    const { el, stick } = setup()
+    el.scrollTop = 599.9
+    el.scrollHeight = 1000
+    stick.handleScroll()
+
+    stick.followIfSticking(200)
+    await clock.tick(0)
+    await clock.tick(16)
+    expect(el.scrollTop).toBe(600)
+
+    // Subsequent upward scroll without explicit wheel must disengage cleanly.
+    el.scrollTop = 100
+    stick.handleScroll()
+    expect(stick.following.value).toBe(false)
+  })
 })

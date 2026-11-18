@@ -4,6 +4,7 @@ import {
   isCloneError,
   summarizeClonePayload
 } from '@talex-touch/utils/common/utils/clone-diagnostics'
+import { hasDocument } from '@talex-touch/utils/env'
 import { formatPayloadPreview } from '@talex-touch/utils/common/utils/payload-preview'
 import { BROWSER_CONNECTION_EVENT_PREFIX } from '@talex-touch/utils/transport/sdk/domains/browser-connection'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
@@ -14,9 +15,65 @@ const ipcRenderer = window.electron.ipcRenderer
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
 const CHANNEL_SEND_WARN_MS = 500
 const CHANNEL_SEND_ERROR_MS = 2_000
+const CHANNEL_SUSPENSION_SKEW_MS = 1_500
 const CHANNEL_ROUTE_MAIN = 'main' as const
 const DATA_CODE_SUCCESS = 200
 const DATA_CODE_ERROR = 100
+
+export type ChannelSendSuspensionReason =
+  | 'timer-overshoot'
+  | 'clock-skew'
+  | 'renderer-freeze'
+  | 'hidden-background-telemetry'
+
+export interface ChannelSendSuspensionInput {
+  eventName: string
+  durationMs: number
+  wallDurationMs: number
+  timeoutMs: number
+  startedWhileHidden: boolean
+  freezeOccurred: boolean
+}
+
+/**
+ * Distinguishes OS sleep / renderer timer suspension from a genuinely slow main-process handler.
+ *
+ * When a laptop sleeps or Chromium freezes a hidden renderer, `performance.now()` and/or
+ * `Date.now()` advance across the sleep while the JS timer queue is paused, so `setTimeout` does
+ * not fire at `timeoutMs` and a late reply appears to have taken e.g. 147,333ms on a 60,000ms
+ * timeout. Emitting `channel.send.slow` in those cases produces false error spikes on wake.
+ */
+export function detectChannelSendSuspension(
+  input: ChannelSendSuspensionInput
+): ChannelSendSuspensionReason | null {
+  if (input.durationMs > input.timeoutMs + CHANNEL_SUSPENSION_SKEW_MS) {
+    return 'timer-overshoot'
+  }
+  if (Math.abs(input.wallDurationMs - input.durationMs) >= CHANNEL_SUSPENSION_SKEW_MS) {
+    return 'clock-skew'
+  }
+  if (input.freezeOccurred) {
+    return 'renderer-freeze'
+  }
+  if (input.startedWhileHidden && input.eventName === 'sentry:record-performance') {
+    return 'hidden-background-telemetry'
+  }
+  return null
+}
+
+let freezeEpoch = 0
+let freezeListenerAttached = false
+
+function ensureFreezeListener(): void {
+  if (freezeListenerAttached) return
+  if (!hasDocument() || typeof document.addEventListener !== 'function') {
+    return
+  }
+  freezeListenerAttached = true
+  document.addEventListener('freeze', () => {
+    freezeEpoch += 1
+  })
+}
 
 /**
  * A reply that is not `SUCCESS` is the main process saying the call failed; it never carries result
@@ -238,12 +295,16 @@ class TouchChannel implements TouchClientChannelLike {
     arg?: TRequest,
     options?: { timeout?: number }
   ): Promise<TResponse> {
+    ensureFreezeListener()
     const uniqueId = `${new Date().getTime()}#${eventName}@${Math.random().toString(12)}`
     const requestTimeoutMs =
       typeof options?.timeout === 'number' && Number.isFinite(options.timeout)
         ? Math.max(1, options.timeout)
         : CHANNEL_DEFAULT_TIMEOUT
     const startedAt = performance.now()
+    const startedWallAt = Date.now()
+    const startedFreezeEpoch = freezeEpoch
+    const startedWhileHidden = hasDocument() && Boolean(document.hidden)
     const stack = new Error().stack
 
     const data = {
@@ -317,7 +378,16 @@ class TouchChannel implements TouchClientChannelLike {
         this.pendingMap.delete(uniqueId)
 
         const duration = performance.now() - startedAt
-        if (duration >= CHANNEL_SEND_ERROR_MS) {
+        const wallDurationMs = Date.now() - startedWallAt
+        const suspensionReason = detectChannelSendSuspension({
+          eventName,
+          durationMs: duration,
+          wallDurationMs,
+          timeoutMs,
+          startedWhileHidden,
+          freezeOccurred: freezeEpoch !== startedFreezeEpoch
+        })
+        if (suspensionReason === null && duration >= CHANNEL_SEND_ERROR_MS) {
           const logSlow = eventName === 'store:http-request' ? console.warn : console.error
           logSlow(`[Channel][send][slow] \"${eventName}\" took ${duration.toFixed(1)}ms`, {
             payloadPreview: this.formatPayloadPreview(arg, eventName),
@@ -333,7 +403,7 @@ class TouchChannel implements TouchClientChannelLike {
             stack,
             meta: { threshold: CHANNEL_SEND_ERROR_MS, syncId: uniqueId }
           })
-        } else if (duration >= CHANNEL_SEND_WARN_MS) {
+        } else if (suspensionReason === null && duration >= CHANNEL_SEND_WARN_MS) {
           console.warn(`[Channel][send][slow] \"${eventName}\" took ${duration.toFixed(1)}ms`, {
             payloadPreview: this.formatPayloadPreview(arg, eventName),
             stack

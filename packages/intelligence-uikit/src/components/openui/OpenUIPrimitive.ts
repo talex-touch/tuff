@@ -116,7 +116,7 @@ export default defineComponent({
       if (name === 'Badge') return h(TxBadge, { variant: ({ info: 'primary', danger: 'error', success: 'success', warning: 'warning' } as const)[String(p.color) as 'info'] ?? 'default' }, { default: () => [p.icon ? icon(p.icon, 'sm') : null, text] })
       if (name === 'Link') {
         const url = /^https?:\/\//i.test(String(p.url)) ? String(p.url) : undefined
-        return h('a', { class: 'tx-ai-openui__link', href: url, 'aria-disabled': disabled, onClick: (event: Event) => { event.preventDefault(); if (!disabled && url) ctx.trigger({ type: 'open_url', params: { url } }) } }, text)
+        return h('a', { class: 'tx-ai-openui__link', href: url, 'aria-disabled': disabled, tabindex: disabled ? -1 : undefined, onClick: (event: Event) => { event.preventDefault(); if (!disabled && url) ctx.trigger({ type: 'open_url', params: { url } }) } }, text)
       }
       if (name === 'Markdown') return h(TxAiMarkdown, { content: text, streaming: ctx.streaming.value, reveal: false })
       if (name === 'Quote') return h('blockquote', { class: 'tx-ai-openui__quote' }, [h('p', text), p.attribution ? h('cite', String(p.attribution)) : null])

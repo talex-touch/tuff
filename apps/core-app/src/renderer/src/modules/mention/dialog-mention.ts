@@ -1,12 +1,15 @@
+import type { DialogButton, DialogButtonType, TouchTipButton } from '@talex-touch/tuffex/dialog'
 import type { ITuffIcon } from '@talex-touch/utils'
 import type { AppContext, Component } from 'vue'
+import {
+  TxBlowDialog,
+  TxBottomDialog,
+  TxPopperDialog,
+  TxTouchTip
+} from '@talex-touch/tuffex/dialog'
 import { nextZIndex } from '@talex-touch/tuffex/utils'
 import { createVNode, getCurrentInstance, render } from 'vue'
-import TBlowDialog from '~/components/base/dialog/TBlowDialog.vue'
-import TBottomDialog from '~/components/base/dialog/TBottomDialog.vue'
 import TDialogMention from '~/components/base/dialog/TDialogMention.vue'
-import TouchTip from '~/components/base/dialog/TouchTip.vue'
-import TPopperDialog from '~/components/base/dialog/TPopperDialog.vue'
 import { useI18nText } from '~/modules/lang/useI18nText'
 import { useDialogManager } from './dialog-manager'
 
@@ -21,7 +24,9 @@ type DialogButtonClickHandler = (...args: unknown[]) => unknown
 export interface DialogBtn {
   content: string
   type: string
+  icon?: string
   onClick: DialogButtonClickHandler
+  loading?: (done: () => void) => void
 }
 
 /**
@@ -98,17 +103,6 @@ function generateDialogId(prefix: string): string {
  * @param allowInCoreBox - Whether dialog can show in CoreBox window
  * @returns Object with cleanup function and dialog ID
  * @throws {Error} 如果既不在 Vue 上下文中，也没有捕获过全局上下文
- *
- * @example
- * ```ts
- * // 在 Vue 组件中
- * const { cleanup, id } = renderComponent(MyDialog, { title: 'Hello' }, container, 'my-dialog', true)
- *
- * // 在 DOM 事件监听器中（需要先调用 captureAppContext）
- * document.addEventListener('drop', () => {
- *   const { cleanup, id } = renderComponent(MyDialog, { title: 'Dropped!' }, container, 'drop-dialog', true)
- * })
- * ```
  */
 function renderComponent(
   component: Component,
@@ -119,7 +113,7 @@ function renderComponent(
 ): { cleanup: () => void; id: string } {
   const vnode = createVNode(component, props)
 
-  // 尝试获取当前组件实例的上下文（如果在 Vue 组件中调用）
+  // 尝试获取当前组件实例的上下文（如果在 Vue 上下文中调用）
   const currentInstance = getCurrentInstance()
   const appContext = currentInstance?.appContext || globalAppContext
 
@@ -153,6 +147,111 @@ function renderComponent(
   return { cleanup, id: dialogId }
 }
 
+function normalizeDialogButtonType(type?: string): DialogButtonType {
+  if (type === 'danger' || type === 'error') return 'error'
+  if (type === 'warning' || type === 'success' || type === 'info') return type
+  return 'info'
+}
+
+function toTouchTipButtons(buttons: readonly DialogBtn[]): TouchTipButton[] {
+  return buttons.map((button) => ({
+    content: button.content,
+    type: normalizeDialogButtonType(button.type),
+    loading: button.loading,
+    onClick: async () => Boolean(await button.onClick())
+  }))
+}
+
+function toBottomDialogButtons(buttons: readonly BottomDialogBtn[]): DialogButton[] {
+  return buttons.map((button) => ({
+    content: button.content,
+    type: normalizeDialogButtonType(button.type),
+    icon: button.icon,
+    time: button.time,
+    loading: button.loading,
+    onClick: async () => Boolean(await button.onClick())
+  }))
+}
+
+function resolveDynamicDialogPropName(
+  message: string | Component | DialogButtonClickHandler
+): 'message' | 'render' | 'comp' {
+  if (message instanceof String || typeof message === 'string') return 'message'
+  if (typeof message === 'function') return 'render'
+  return 'comp'
+}
+
+interface ManagedDialogOptions<T> {
+  prefix: string
+  component: Component
+  allowInCoreBox?: boolean
+  setupRoot?: (root: HTMLElement) => void
+  buildProps: (context: {
+    dialogManager: ReturnType<typeof useDialogManager>
+    close: () => Promise<void>
+  }) => Record<string, unknown>
+  resolveResult: () => T
+  onAfterClose?: () => void
+}
+
+function mountManagedDialog<T>(options: ManagedDialogOptions<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const root = document.createElement('div')
+    const dialogId = generateDialogId(options.prefix)
+    let closed = false
+    let closeRequested = false
+    let cleanupHandle: { cleanup: () => void; id: string } | null = null
+
+    root.id = dialogId
+    options.setupRoot?.(root)
+    document.body.appendChild(root)
+
+    try {
+      const dialogManager = useDialogManager()
+
+      const finalizeClose = (): void => {
+        if (!cleanupHandle) return
+        const handle = cleanupHandle
+        cleanupHandle = null
+        dialogManager.unregister(handle.id)
+        handle.cleanup()
+        root.remove()
+        options.onAfterClose?.()
+        resolve(options.resolveResult())
+      }
+
+      const close = async (): Promise<void> => {
+        if (closed) return
+        closed = true
+        if (!cleanupHandle) {
+          closeRequested = true
+          return
+        }
+        finalizeClose()
+      }
+
+      const props = options.buildProps({ dialogManager, close })
+      cleanupHandle = renderComponent(
+        options.component,
+        props,
+        root,
+        dialogId,
+        options.allowInCoreBox ?? true
+      )
+
+      if (closeRequested) {
+        finalizeClose()
+      }
+    } catch (error) {
+      // renderComponent throws when no app context was ever captured (or DialogManager rejects
+      // CoreBox). The host node is already in the document by this point, so it has to come back
+      // out or every failed attempt leaves one behind.
+      root.remove()
+      reject(error)
+    }
+  })
+}
+
 /** The single button a dialog gets when its caller passes none. */
 function defaultConfirmButtons(): DialogBtn[] {
   return [{ content: useI18nText().t('common.confirm'), type: 'info', onClick: async () => true }]
@@ -166,7 +265,7 @@ function defaultConfirmButtons(): DialogBtn[] {
  * @param buttons - Array of dialog buttons
  * @returns Promise that resolves when dialog is closed
  */
-export async function forTouchTip(
+export function forTouchTip(
   title: string,
   message: string,
   buttons: DialogBtn[] = defaultConfirmButtons(),
@@ -177,45 +276,20 @@ export async function forTouchTip(
     if (activeDialog) return activeDialog
   }
 
-  const pending = new Promise<void>((resolve, reject) => {
-    const root = document.createElement('div')
-    const dialogId = generateDialogId('touch-tip')
-    const dialogManager = useDialogManager()
-
-    root.id = dialogId
-    root.style.position = 'fixed'
-    root.style.inset = '0'
-    root.style.zIndex = `${nextZIndex()}`
-
-    document.body.appendChild(root)
-
-    try {
-      const { cleanup, id } = renderComponent(
-        TouchTip,
-        {
-          message,
-          title,
-          buttons,
-          close: async () => {
-            dialogManager.unregister(id)
-            cleanup()
-            document.body.removeChild(root)
-            if (atomicKey) {
-              activeAtomicDialogs.delete(atomicKey)
-            }
-            resolve()
-          }
-        },
-        root,
-        dialogId,
-        true
-      )
-    } catch (error) {
-      // renderComponent throws when no app context was ever captured. The host node is already in
-      // the document by this point, so it has to come back out or every failed attempt leaves one
-      // behind.
-      root.remove()
-      reject(error)
+  const pending = mountManagedDialog<void>({
+    prefix: 'touch-tip',
+    component: TxTouchTip,
+    buildProps: ({ close }) => ({
+      title,
+      message,
+      buttons: toTouchTipButtons(buttons),
+      close
+    }),
+    resolveResult: () => undefined,
+    onAfterClose: () => {
+      if (atomicKey) {
+        activeAtomicDialogs.delete(atomicKey)
+      }
     }
   })
 
@@ -249,36 +323,22 @@ export async function forDialogMention(
   icon: ITuffIcon | string | null = null,
   btns: DialogBtn[] = defaultConfirmButtons()
 ): Promise<void> {
-  return new Promise<void>((resolve) => {
-    const root = document.createElement('div')
-    const dialogId = generateDialogId('dialog-mention')
-    const dialogManager = useDialogManager()
-
-    root.id = dialogId
-    root.style.zIndex = `${nextZIndex()}`
-
-    document.body.appendChild(root)
-
-    const { cleanup, id } = renderComponent(
-      TDialogMention,
-      {
-        message,
-        index: dialogManager.getStackSize(),
-        title,
-        btns,
-        icon,
-        loading: false,
-        close: async () => {
-          dialogManager.unregister(id)
-          cleanup()
-          document.body.removeChild(root)
-          resolve()
-        }
-      },
-      root,
-      dialogId,
-      true
-    )
+  return mountManagedDialog<void>({
+    prefix: 'dialog-mention',
+    component: TDialogMention,
+    setupRoot: (root) => {
+      root.style.zIndex = `${nextZIndex()}`
+    },
+    buildProps: ({ dialogManager, close }) => ({
+      message,
+      index: dialogManager.getStackSize(),
+      title,
+      btns: toBottomDialogButtons(btns),
+      icon,
+      loading: false,
+      close
+    }),
+    resolveResult: () => undefined
   })
 }
 
@@ -296,31 +356,20 @@ export async function forApplyMention(
     { content: useI18nText().t('common.confirm'), type: 'info', onClick: async () => true, time: 0 }
   ]
 ): Promise<void> {
-  const root = document.createElement('div')
-  const dialogId = generateDialogId('bottom-dialog')
-  const dialogManager = useDialogManager()
-
-  root.id = dialogId
-
-  document.body.appendChild(root)
-
-  const { cleanup, id } = renderComponent(
-    TBottomDialog,
-    {
+  const { t } = useI18nText()
+  return mountManagedDialog<void>({
+    prefix: 'bottom-dialog',
+    component: TxBottomDialog,
+    buildProps: ({ dialogManager, close }) => ({
       message,
       index: dialogManager.getStackSize(),
       title,
-      btns,
-      close: async () => {
-        dialogManager.unregister(id)
-        cleanup()
-        document.body.removeChild(root)
-      }
-    },
-    root,
-    dialogId,
-    true
-  )
+      btns: toBottomDialogButtons(btns),
+      closeLabel: t('common.close'),
+      close
+    }),
+    resolveResult: () => undefined
+  })
 }
 
 /**
@@ -334,39 +383,19 @@ export async function blowMention(
   title: string,
   message: string | Component | DialogButtonClickHandler
 ): Promise<string> {
-  return new Promise((resolve) => {
-    const root = document.createElement('div')
-    const dialogId = generateDialogId('blow-dialog')
-    const dialogManager = useDialogManager()
+  const propName = resolveDynamicDialogPropName(message)
+  const { t } = useI18nText()
 
-    root.id = dialogId
-
-    const propName =
-      message instanceof String || typeof message === 'string'
-        ? 'message'
-        : typeof message === 'function'
-          ? 'render'
-          : 'component'
-
-    root.style.zIndex = `${nextZIndex()}`
-    document.body.appendChild(root)
-
-    const { cleanup, id } = renderComponent(
-      TBlowDialog,
-      {
-        [propName]: message,
-        title,
-        close: async () => {
-          resolve(propName)
-          dialogManager.unregister(id)
-          cleanup()
-          document.body.removeChild(root)
-        }
-      },
-      root,
-      dialogId,
-      true
-    )
+  return mountManagedDialog<string>({
+    prefix: 'blow-dialog',
+    component: TxBlowDialog,
+    buildProps: ({ close }) => ({
+      [propName]: message,
+      title,
+      confirmText: t('common.confirm'),
+      close
+    }),
+    resolveResult: () => propName
   })
 }
 
@@ -380,34 +409,18 @@ export async function popperMention(
   title: string,
   message: string | Component | DialogButtonClickHandler
 ): Promise<void> {
-  const root = document.createElement('div')
-  const dialogId = generateDialogId('popper-dialog')
-  const dialogManager = useDialogManager()
+  const propName = resolveDynamicDialogPropName(message)
+  const { t } = useI18nText()
 
-  root.id = dialogId
-
-  const propName =
-    message instanceof String || typeof message === 'string'
-      ? 'message'
-      : typeof message === 'function'
-        ? 'render'
-        : 'component'
-
-  document.body.appendChild(root)
-
-  const { cleanup, id } = renderComponent(
-    TPopperDialog,
-    {
+  return mountManagedDialog<void>({
+    prefix: 'popper-dialog',
+    component: TxPopperDialog,
+    buildProps: ({ close }) => ({
       [propName]: message,
       title,
-      close: async () => {
-        dialogManager.unregister(id)
-        cleanup()
-        document.body.removeChild(root)
-      }
-    },
-    root,
-    dialogId,
-    true
-  )
+      confirmText: t('common.confirm'),
+      close
+    }),
+    resolveResult: () => undefined
+  })
 }

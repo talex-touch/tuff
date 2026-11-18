@@ -165,12 +165,17 @@ function close() {
 </template>
 
 <style scoped>
+:global(.tx-popper-dialog__container:has(> .failed-files-dialog)) {
+  width: min(560px, 88vw);
+}
+
 .failed-files-dialog {
   padding: 8px;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-width: 400px;
+  width: 100%;
+  min-width: 0;
   max-width: 560px;
 }
 
