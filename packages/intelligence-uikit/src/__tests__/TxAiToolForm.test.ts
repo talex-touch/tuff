@@ -95,7 +95,10 @@ describe('txAiToolForm rendering', () => {
       spec: spec({ submitLabel: 'Send it', fields: [{ key: 'a', label: 'Field A', type: 'text' }] })
     })
 
-    expect(wrapper.get('#tool-form-a').text()).toContain('Field A')
+    const control = wrapper.get('input[type="text"]')
+    const labelId = control.attributes('aria-labelledby')
+    expect(labelId).toBeTruthy()
+    expect(wrapper.get(`#${labelId}`).text()).toContain('Field A')
     expect(wrapper.get('button[type="submit"]').text()).toBe('Send it')
   })
 })

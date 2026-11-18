@@ -4,6 +4,7 @@ members = [
   "native-napi",
   "native-screenshot",
   "native-audio",
+  "native-ocr",
   "fixtures/native-protocol-addon",
 ]
 resolver = "3"

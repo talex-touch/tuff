@@ -54,12 +54,24 @@ describe('LoggerManager per-module log level', () => {
   })
 
   it('leaves MODULE_DEFAULTS bounded by the global level', () => {
-    // 'database' defaults to WARN. A quieter global must not be talked down by a default,
+    // 'storage' defaults to WARN. A quieter global must not be talked down by a default,
     // because defaults are not stated intent the way setModuleConfig is.
     loggerManager.setGlobalLevel(LogLevel.ERROR)
 
-    const logger = loggerManager.getLogger('database')
+    const storageLogger = loggerManager.getLogger('storage')
+    const databaseLogger = loggerManager.getLogger('database')
 
-    expect(logger.getLevel()).toBe(LogLevel.ERROR)
+    expect(storageLogger.getLevel()).toBe(LogLevel.ERROR)
+    expect(databaseLogger.getLevel()).toBe(LogLevel.ERROR)
+  })
+
+  it('enables database lifecycle INFO logging by default while keeping WARN/ERROR bounds', () => {
+    loggerManager.setGlobalLevel(LogLevel.DEBUG)
+    const devDbLogger = loggerManager.getLogger('database')
+    expect(devDbLogger.isEnabled()).toBe(true)
+    expect(devDbLogger.getLevel()).toBe(LogLevel.INFO)
+
+    loggerManager.setGlobalLevel(LogLevel.WARN)
+    expect(devDbLogger.getLevel()).toBe(LogLevel.WARN)
   })
 })

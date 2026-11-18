@@ -350,6 +350,7 @@ export default {
     badge: '版本通道',
     title: '更新与下载',
     subtitle: '选择最适合你团队节奏的通道，获取最新构建与历史版本。',
+    heroSubtitle: '获取最新版本，体验更强大的创作能力。',
     news: {
       title: '更新与要闻',
       subtitle: '最新官方要闻与版本更新速览。',
@@ -420,7 +421,15 @@ export default {
     },
     downloads: {
       downloadFor: '下载适用于',
+      downloadForPlatform: '下载 {platform} 版',
       otherPlatforms: '其他平台',
+      otherPlatformsAndVersions: '其他平台与版本',
+      moreVersions: '更多版本',
+      requirements: {
+        darwin: 'macOS 13.0+ · Apple Silicon 或 Intel',
+        win32: 'Windows 10+ · x64 或 ARM64',
+        generic: '{platform} · x64 或 ARM64',
+      },
       previewPortal: '预览入口',
       previewPortalDescription: '包含实验构建、验证说明与回滚指引。',
       releasePortal: '正式入口',

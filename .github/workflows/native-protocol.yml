@@ -122,6 +122,11 @@ jobs:
       - name: Build Chrome Native Messaging host
         run: node packages/tuff-native/scripts/build-browser-bridge.js
 
+      - name: Build and test Rust OCR helper
+        run: >-
+          pnpm -C packages/tuff-native run build:ocr &&
+          pnpm -C packages/tuff-native run test:ocr-helper
+
       - name: Build deterministic screenshot addon
         env:
           TUFF_SCREENSHOT_PROTOCOL_TEST_BACKEND: '1'
@@ -162,8 +167,10 @@ jobs:
           # no native OCR to reach, so demanding one there asserts a platform fact rather than
           # coverage. Learned by demanding it everywhere and watching the ubuntu leg go red.
           TUFF_NATIVE_OCR_REQUIRED: ${{ runner.os == 'Linux' && '0' || '1' }}
+          TUFF_NATIVE_ACTIVE_APP_REQUIRED: ${{ runner.os == 'macOS' && '1' || '0' }}
         run: >-
           pnpm -C packages/test exec vitest run
+          src/native/tuff-native-active-app.test.ts
           src/native/tuff-native-audio.test.ts
           src/native/tuff-native-ocr.test.ts
           src/native/tuff-native-screenshot.test.ts

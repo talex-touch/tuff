@@ -162,4 +162,27 @@ describe('useTokenMenu', () => {
     expect(menu.activeRow.value?.key).toBe('scoop')
     scope.stop()
   })
+
+  it('tracks mid-draft caret tokens and preserves trailing text on insert', () => {
+    expect(parseToken('check @sco later', 10)).toEqual({ kind: 'at', query: 'sco', start: 6 })
+    expect(parseToken('check @sco later', 4)).toBeNull()
+
+    const draft = ref('check @sco later')
+    const cursor = ref<number | undefined>(10)
+    const scope = effectScope()
+    const menu = scope.run(() =>
+      useTokenMenu<PromptBarSource, PromptBarCommand>({ draft, cursor, sources, commands }),
+    )!
+
+    expect(menu.query.value).toBe('sco')
+    expect(menu.insert('@Scoop Data')).toBe('check @Scoop Data later')
+
+    draft.value = 'check @ later'
+    cursor.value = 7
+    menu.jump(2)
+    expect(menu.activeIndex.value).toBe(2)
+    menu.jump(0)
+    expect(menu.activeIndex.value).toBe(0)
+    scope.stop()
+  })
 })

@@ -1,8 +1,32 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
-import { evaluateDownloadTarget } from './download-target-policy'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { resetRuntimeRootPathForTests } from './app-root-path'
+import { evaluateDownloadTarget, getAllowedDownloadRoots } from './download-target-policy'
+
+const electronAppMock = vi.hoisted(() => ({
+  isPackaged: true,
+  getAppPath: () => '/var/tuff-profile/app',
+  getPath: vi.fn((name: string) => {
+    // Keep mocked profile directories outside `/tmp`: on Linux `os.tmpdir()` is `/tmp`,
+    // which `getAllowedDownloadRoots()` itself includes.
+    switch (name) {
+      case 'userData':
+        return path.resolve('/var/tuff-profile/core-app')
+      case 'downloads':
+        return path.resolve('/var/tuff-profile/downloads')
+      case 'temp':
+        return path.resolve('/var/tuff-profile/os-temp')
+      default:
+        throw new Error(`unexpected path: ${name}`)
+    }
+  })
+}))
+
+vi.mock('electron', () => ({
+  app: electronAppMock
+}))
 
 /**
  * Where a download task is allowed to write (#905).
@@ -21,8 +45,9 @@ const ROOT = path.resolve('/tmp/tuff-root')
 const DOWNLOADS = path.resolve('/tmp/user-downloads')
 const ROOTS = [ROOT, DOWNLOADS]
 
-const check = (destination: string | undefined, filename: string) =>
-  evaluateDownloadTarget(destination, filename, ROOTS)
+function check(destination: string | undefined, filename: string) {
+  return evaluateDownloadTarget(destination, filename, ROOTS)
+}
 
 /**
  * The rejection reason, or undefined when the target was allowed.
@@ -98,6 +123,44 @@ describe('evaluateDownloadTarget', () => {
     // Both are hostile here. The filename reason is the more specific one to report, and
     // pinning the order keeps the message stable for whoever reads the log.
     expect(rejection('/nowhere', '../evil.sh')).toBe('unsafe-filename')
+  })
+})
+
+describe('getAllowedDownloadRoots', () => {
+  afterEach(() => {
+    resetRuntimeRootPathForTests()
+    vi.clearAllMocks()
+  })
+
+  it('allows TempFileService subdirectories under userData/temp while rejecting bare userData', () => {
+    // Must not sit under `/tmp`, which equals `os.tmpdir()` (an allowed root) on Linux.
+    const userData = path.resolve('/var/tuff-profile/core-app')
+    const roots = getAllowedDownloadRoots()
+
+    expect(roots).toContain(path.join(userData, 'temp'))
+    expect(roots).not.toContain(userData)
+
+    const svgCacheDir = path.join(userData, 'temp', 'icons', 'svg-cache')
+    expect(evaluateDownloadTarget(svgCacheDir, 'icon.svg', roots)).toEqual({
+      allowed: true,
+      destination: svgCacheDir,
+      filename: 'icon.svg'
+    })
+
+    expect(evaluateDownloadTarget(userData, 'config.json', roots)).toEqual({
+      allowed: false,
+      reason: 'destination-outside-roots'
+    })
+    expect(
+      evaluateDownloadTarget(path.join(userData, 'plugins', 'evil'), 'index.js', roots)
+    ).toEqual({
+      allowed: false,
+      reason: 'destination-outside-roots'
+    })
+    expect(evaluateDownloadTarget(path.join(userData, 'temp-evil'), 'file.svg', roots)).toEqual({
+      allowed: false,
+      reason: 'destination-outside-roots'
+    })
   })
 })
 

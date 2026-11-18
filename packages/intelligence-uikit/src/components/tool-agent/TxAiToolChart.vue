@@ -354,12 +354,39 @@ onMounted(() => {
     themeObserver = new MutationObserver(() => void render(true))
     themeObserver.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['class']
+      attributeFilter: ['class', 'data-theme']
     })
   }
 })
 
-watch(effectiveSpec, () => void render())
+function serializeSpec(spec: TxAiToolChartSpec): string {
+  return JSON.stringify({
+    type: spec.type,
+    title: spec.title ?? '',
+    xLabel: spec.xLabel ?? '',
+    yLabel: spec.yLabel ?? '',
+    stacked: Boolean(spec.stacked),
+    showValues: Boolean(spec.showValues),
+    labels: spec.labels,
+    series: spec.series.map(entry => ({
+      name: entry.name ?? '',
+      values: entry.values,
+    })),
+  })
+}
+
+watch(
+  () => serializeSpec(props.spec),
+  (next, prev) => {
+    if (next === prev)
+      return
+    draft.value = null
+    view.value = null
+    hiddenSeries.clear()
+  },
+)
+
+watch(() => serializeSpec(effectiveSpec.value), () => void render())
 
 onBeforeUnmount(() => {
   disposed = true
@@ -452,6 +479,7 @@ onBeforeUnmount(() => {
                         <input
                           class="tx-ai-tool-chart-Input"
                           :value="label"
+                          :aria-label="`${chartLabels.label} #${rowIndex + 1}`"
                           @change="setLabel(rowIndex, ($event.target as HTMLInputElement).value)"
                         >
                       </td>
@@ -460,6 +488,7 @@ onBeforeUnmount(() => {
                           class="tx-ai-tool-chart-Input is-number"
                           type="number"
                           :value="entry.values[rowIndex] ?? 0"
+                          :aria-label="`${entry.name || `#${seriesIndex + 1}`} (${label})`"
                           @change="
                             setCell(seriesIndex, rowIndex, ($event.target as HTMLInputElement).value)
                           "
@@ -484,6 +513,7 @@ onBeforeUnmount(() => {
                     v-model="newLabel"
                     class="tx-ai-tool-chart-Input"
                     :placeholder="chartLabels.addPlaceholder"
+                    :aria-label="chartLabels.addPlaceholder"
                   >
                   <button class="tx-ai-tool-chart-AddBtn" type="submit" :disabled="!newLabel.trim()">
                     <span class="i-ri-add-line" />
@@ -546,6 +576,11 @@ onBeforeUnmount(() => {
     border-color: var(--shell-border-strong, var(--tx-border-color));
   }
 
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary, var(--tx-color-primary));
+    outline-offset: 2px;
+  }
+
   &.is-off {
     opacity: 0.45;
 
@@ -590,6 +625,11 @@ onBeforeUnmount(() => {
     background: var(--shell-surface-2, var(--tx-fill-color-light));
     color: var(--shell-text-primary, var(--tx-text-color-primary));
   }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary, var(--tx-color-primary));
+    outline-offset: 1px;
+  }
 }
 
 .tx-ai-tool-chart-Edit {
@@ -608,6 +648,11 @@ onBeforeUnmount(() => {
 
   &:hover {
     border-color: var(--shell-border-strong, var(--tx-border-color));
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary, var(--tx-color-primary));
+    outline-offset: 2px;
   }
 
   &.is-active {
@@ -685,6 +730,11 @@ onBeforeUnmount(() => {
     background: var(--shell-danger-soft, var(--tx-color-danger-light-9));
     color: var(--shell-danger, var(--tx-color-danger));
   }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary, var(--tx-color-primary));
+    outline-offset: 1px;
+  }
 }
 
 .tx-ai-tool-chart-AddRow {
@@ -719,11 +769,22 @@ onBeforeUnmount(() => {
   &:hover:not(:disabled) {
     background: var(--shell-surface, var(--tx-bg-color));
   }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary, var(--tx-color-primary));
+    outline-offset: 2px;
+  }
 }
 
 .tx-ai-tool-chart-Failed {
   margin: 0;
   color: var(--shell-text-muted, var(--tx-text-color-secondary));
   font-size: var(--shell-fs-sm, 13px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-ai-tool-chart-Chip {
+    transition: none;
+  }
 }
 </style>

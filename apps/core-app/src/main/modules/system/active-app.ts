@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
+import { getDarwinFrontmostApplication } from '@talex-touch/tuff-native'
 import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
 import { iconService } from '../../service/icon-service'
 import { createLogger } from '../../utils/logger'
@@ -272,12 +273,30 @@ class ActiveAppService {
   }
 
   /**
-   * macOS-specific: Use a single AppleScript call to get all active application info.
-   * Previously used 3+ separate osascript/shell invocations which could take 1-3s total.
+   * macOS-specific: Prefer native NSWorkspace + CGWindowListCopyWindowInfo + bounded AXUIElement
+   * lookup from `@talex-touch/tuff-native` so periodic refreshes do not spawn `osascript` every
+   * 1.5s. Falls back to `osascript` only when the native binding is unsupported/disabled.
    */
   private async resolveActiveWindowMacOSOnce(): Promise<Partial<ActiveAppInfo> | null> {
-    try {
-      const script = `
+    const nativeResult = await getDarwinFrontmostApplication()
+    if (nativeResult.supported) {
+      if (!nativeResult.available) {
+        return null
+      }
+      return {
+        displayName: nativeResult.appName || null,
+        windowTitle: nativeResult.windowTitle || null,
+        bundleId: nativeResult.bundleId || null,
+        processId:
+          typeof nativeResult.processId === 'number' && Number.isFinite(nativeResult.processId)
+            ? nativeResult.processId
+            : null,
+        executablePath: nativeResult.bundlePath || nativeResult.executablePath || null,
+        platform: 'macos'
+      }
+    }
+
+    const script = `
 tell application "System Events"
   set frontApp to first application process whose frontmost is true
   set appName to name of frontApp
@@ -295,30 +314,27 @@ tell application "System Events"
   return appName & "||" & appID & "||" & (appPID as text) & "||" & winTitle
 end tell`
 
-      // The only command in this file that used to run unbounded. AppleScript's
-      // 'first application process whose frontmost is true' blocks while the frontmost app is
-      // beachballing or a TCC prompt is up, and resolveActiveWindowMacOS dedupes callers onto
-      // macosResolveInFlight - so one hung call left that field set for the rest of the session
-      // and every later lookup returned the same promise that never settles (#770).
-      const { stdout } = await execFileAsync('osascript', ['-e', script], {
-        timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS
-      })
-      const parts = stdout.trim().split('||')
-      const appName = parts[0] ?? ''
-      const bundleId = parts[1] || null
-      const pid = Number.parseInt(parts[2] ?? '', 10)
-      const windowTitle = parts[3] || null
+    // The only command in this file that used to run unbounded. AppleScript's
+    // 'first application process whose frontmost is true' blocks while the frontmost app is
+    // beachballing or a TCC prompt is up, and resolveActiveWindowMacOS dedupes callers onto
+    // macosResolveInFlight - so one hung call left that field set for the rest of the session
+    // and every later lookup returned the same promise that never settles (#770).
+    const { stdout } = await execFileAsync('osascript', ['-e', script], {
+      timeout: ACTIVE_APP_COMMAND_TIMEOUT_MS
+    })
+    const parts = stdout.trim().split('||')
+    const appName = parts[0] ?? ''
+    const bundleId = parts[1] || null
+    const pid = Number.parseInt(parts[2] ?? '', 10)
+    const windowTitle = parts[3] || null
 
-      return {
-        displayName: appName || null,
-        windowTitle,
-        bundleId,
-        processId: Number.isFinite(pid) ? pid : null,
-        executablePath: null,
-        platform: 'macos'
-      }
-    } catch (error) {
-      throw error
+    return {
+      displayName: appName || null,
+      windowTitle,
+      bundleId,
+      processId: Number.isFinite(pid) ? pid : null,
+      executablePath: null,
+      platform: 'macos'
     }
   }
 

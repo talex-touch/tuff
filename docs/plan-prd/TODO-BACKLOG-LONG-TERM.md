@@ -1,18 +1,18 @@
 # TODO 长期债务池（Long-term Backlog）
 
-> 更新时间：2026-10-18
+> 更新时间：2026-11-17
 > 说明：本文承接 `docs/plan-prd/TODO.md` 的非 2 周执行项。主 TODO 只保留当前 release window；本页只保留长尾债务与后续专题。
 
 ## A. 架构与质量债务
 
 - [x] Transport Wave A：MessagePort 高频通道迁移、`sendSync` 清理与 retained raw event 分批 typed builder 迁移。（承接：[Transport Wave A](https://github.com/talex-touch/tuff/blob/0ca5b37b8c4a8e177b6dc0ac06f30e51c5ea748e/.trellis/tasks/archive/2026-07/07-17-transport-wave-a/prd.md)，已归档任务记录）
 - [x] Transport Wave A：legacy alias registry、legacy hit evidence 与双监听关闭条件。（承接：[Transport Legacy Cutover Evidence](https://github.com/talex-touch/tuff/blob/0ca5b37b8c4a8e177b6dc0ac06f30e51c5ea748e/.trellis/tasks/archive/2026-07/07-17-transport-legacy-cutover-evidence/prd.md)，已归档任务记录）
-- [ ] AI Wave B：`retired-ai-app` 存量 typecheck/lint 债务逐批清理。
+- [x] AI Wave B：`retired-ai-app` 已彻底移除并退役关闭（2026-11-17 核对确认 `apps/` 下已无该目录或残留包，无需继续清退其 typecheck/lint 债务）。
 - [ ] AI Wave B：SSE 断线、鉴权与渠道矩阵集成回归补齐。
-- [ ] SRP Wave C：`plugin-module`、`search-core`、`file-provider` 大文件职责拆分。`file-provider.ts`（4,073 行）已完成深度架构审计与演进方案设计（见 [`file-provider-architecture-refactoring-analysis-2026-10-18.md`](../engineering/reports/file-provider-architecture-refactoring-analysis-2026-10-18.md)）：归因为已抽离子服务但宿主仍兼任 4 种角色及 560 行构造器胶水；确立 4 角色解耦模型（SearchProvider 瘦门面、IndexedSource 管道后端、IndexCoordinator 控制面、ServiceContainer 装配工厂）及 4 步无破坏演进路径。
+- [ ] SRP Wave C：`plugin-module`、`plugin`、`search-core`、`app-provider`、`file-provider` 大文件职责拆分。截至 2026-11-17：`file-provider.ts` 已由 4,073 行降至 **3,195 原始行 / 2,790 代码行**（Step 2 历史迁移下沉已落地，`indexRowStore` / `subtree-persist` 已抽离，余 Step 1 588 行构造器、Step 3 分库路由收敛及 Step 4 四角色拆分 + `F1–F3`，见 [`file-provider-architecture-refactoring-analysis-2026-10-18.md`](../engineering/reports/file-provider-architecture-refactoring-analysis-2026-10-18.md)）；同步纳入 `.github/module-size-ratchet.json` 止血的巨石模块包括 `app-provider.ts`（4,582 原始行 / 3,878 代码行）、`plugin.ts`（3,854 原始行 / 3,244 代码行）、`plugin-module.ts`（3,568 原始行 / 3,322 代码行，新增棘轮）与 `search-core.ts`（2,850 原始行 / 2,405 代码行，自 ~1,880 回涨，新增棘轮）。
 - [x] Runtime Safety：动态执行边界治理已闭环（2026-10-18）。C1 已彻底剥离 mathjs 死依赖；CoreBox 算式采用手写有限深度 SafeMathParser（无 eval/Function，限深 32、限长 240），单位换算采用纯静态代数算子字典；widget runtime sandbox 采用严格 CSP、词法 AST 阻断、原型与构造器 Proxy 封禁。
-- [ ] Storage：配置域 SQLite SoT 迁移与 fallback 回归补齐。
-- [ ] Quality：`quality:release` 被既有 lint debt 阻断的项分批清退或显式降权。
+- [ ] Storage：配置域 SQLite SoT 主迁移已默认启用（`0029_app_config_sot.sql` 与 `ApplicationConfigRepository` 默认使用 `'sqlite'`），仅剩 `TALEX_CONFIG_STORAGE_BACKEND=legacy` 与 `TALEX_CONFIG_LEGACY_MIRROR` 双写镜像在稳定版覆盖确认后的退场窗口及单测清理。
+- [ ] Quality：`quality:release` 已于 2026-09-13（见 [`release-gate-and-worktree-closeout-2026-09-13.md`](../engineering/reports/release-gate-and-worktree-closeout-2026-09-13.md)，历史基线 `55da5867d` / `da19acba8`）5/5 段通过并已在 `.github/workflows/build-and-release.yml` 强制执行；当前精确残余工程债务为：`apps/core-app/eslint.config.mjs` 对 `src/renderer/**/*.{ts,mts,tsx,vue}` 与 `**/*.{ts,mts,tsx}` 设 `@typescript-eslint/no-explicit-any: 'warn'`（及 `**/*.{ts,mts,tsx,js,mjs,cjs}` `@typescript-eslint/no-unused-vars: 'warn'`）与根 `scripts/lint.mjs` `--max-warnings=0` 口径冲突、`apps/tuff-analyse/package.json` 缺少包级 `lint` 脚本（仅由根 `scripts/lint.mjs` 覆盖），以及清理 `.github/workflows/ci.yml` 中关于 `docs_verify`（#1254）的过时注释。
 - [x] Composer：深色普通主题下权限弹层确认提示对比度已修（2026-10-18）。`HomePermissionMenu.vue` 将小字颜色混合至正文色，真实深色像素采样对比度达到 5.44:1，浅色达到 6.41:1，均达标 WCAG AA 4.5:1。
 - [x] TuffEx：TxSwitch 移除 `.tuff-switch__track` 的 `transition: all`（2026-10-18）。仅对 `box-shadow` 保留过渡，thumb 填充移至 `::before` 仅淡出透明度；真实浏览器测量弹层收起后 16ms 立即为 `hidden`，消除 250~500ms 残影；对应 Nexus 文档已同步。
 - [ ] Quality：`coreapp-packaged-tool-confirmation-acceptance.ts` 的旧选择器已修（2026-10-18），完整 packaged 重跑仍待运行窗口。权限胶囊改用实际 `.HomePermissionMenu-Chip` 与精确 `data-mode=review`，不以“不危险”冒充审查模式；模型菜单按实际来源 tab、provider/model 标记选择，读取直接标签以排除动画 ghost。验收脚本 33 项、权限及模型组件 42 项通过；真实浏览器以生产 `submitControlledTurn` 配合实际权限组件验证 review 可发送、off 拒绝且不增加发送计数，gateway 为受控夹具，未宣称真实工具宿主或签名包通过。
@@ -21,9 +21,10 @@
 - [x] TuffEx：高对比主题下 TxSearchInput 双重焦点框已修（2026-10-18）。高对比下将单一外框 outline 赋给 `.tx-search-input.is-focused` 并消除内部 input 的全局 `box-shadow`；真实浏览器实测证实双重矩形焦点消除，仅保留单一高对比焦点环；对应 Nexus 文档已同步。
 - [x] Composer：Agent profile 分叉改为 child-only override（2026-10-18）。`WorkspaceForkRequest.profileId` 经主进程校验后只写子会话 settings；HomePage 不再先配置源会话。真实 SQLite 回归验证子配置、父 settings/revision/messages 不变，以及非法锚点拒绝后完整数据库无变化；相关 30 项回归和渲染层类型检查通过。未在用户正式会话创建分支，不代表签名包验收完成。
 - [x] CoreApp / TuffEx：UnoCSS 白名单剥离与图标按需 classGlyph 渲染已落地（2026-10-18）。`apps/core-app/uno.config.ts` 已彻底剥离全量 `ICON_CATALOG_CLASSES` safelist 及模块依赖；TxIcon 接入 `classGlyph` 优先解析 SVG 路径，`IntelligenceProviderHeader`、`ProviderList`、`IntelligenceItem`、`IntelligenceChannelsPage`、`AuditBreakdownCard` 与 `TxIconPicker` 局部提供 `provideIconPickerGlyphs()`；IconPicker 接入 AI/品牌/图标分块懒加载与 12 种形状；30 项图标单测及真实浏览器实测（78 个 AI 矢量图标完整渲染、首屏无闪烁）通过。
-- [ ] CoreApp：对话框组件统一收敛。core-app 历史自研的 4 个对话框副本（`TBlowDialog`、`TBottomDialog`、`TPopperDialog`、`TouchTip`）与 `dialog-mention.ts` 及独立单测深度耦合，待 PR #2120（全量琉光材质铺设）合并后，单开专项重构分支做生命周期平迁，收敛至 TuffEx 统一组件。（来源：2026-10-17 #2120 旁路问题审计）
-- [ ] TuffEx / PR #2120：琉光材质与旁路问题收口（工区 `/private/tmp/tuff-side-issues-1017`，分支 `task/feat/refraction-surfaces-and-concept-docs`，共 31 文件）。已修复 BottomDialog 150ms 截断闪退、TxFlatRadio 高对比度/强制颜色选中态隐形、TxBlowDialog/TBlowDialog 安全移除样式、TxModal/TxDrawer 焦点环与防视口跳动、refractionRenderer="css" 毛玻璃降级、着色模式抽屉跑偏等 10+ 项旁路问题，当前 120 项单测与体积门禁通过，等待 review 与合入。（来源：2026-10-17 PR #2120 旁路问题收口）
+- [ ] CoreApp：对话框组件统一收敛。PR #2120 已合入主线，4 个历史对话框副本（`TBlowDialog`、`TBottomDialog`、`TPopperDialog`、`TouchTip`）与 `dialog-mention.ts` 收敛至 `@talex-touch/tuffex` 统一组件的专项重构正推进收尾。（来源：2026-10-17 #2120 旁路问题审计）
+- [x] TuffEx / PR #2120：琉光材质与旁路问题收口（2026-10-17/18 已通过 `154c61b48` / `20860d02b` 合入主线，TuffEx 已推进至 `0.9.4`）。
 - [x] TuffEx / CoreApp：TxIconPicker 模块化与图标分块资产已合入当前主工程（2026-10-18）。已合并 `catalog-ai/brand/emoji/icon`、12 种形状与 `glyphs.ts`，CoreApp 局部提供 `provideIconPickerGlyphs()`，30 项组件单测与真实浏览器渲染通过。
+- [ ] TuffEx / UIKit / Home AI UI 对齐演进（2026-11-17 明确原则）：**严禁**将 CoreApp 现有真实生产的 `HomePage.vue`（1,941 行）与 `TuffAIComposer.vue`（390 行 + `composer/*`、`HomeMessageRow.vue`）降级迁移至当前尚为占位壳的 `TxAiConversation`（120 行）/ `TxAiComposer`（58 行）/ `TxPromptBar`。必须**先以 CoreApp 现存真实 UI 为视觉、结构与交互基准**，升级完善 `@talex-touch/tuffex`（`TxConversationStream`、`TxPromptBar`、`TxChatComposer`、`TxChatList`、`TxChatMessage`）与 `@talex-touch/intelligence-uikit`（`TxAiConversation`、`TxAiComposer` 等），达到并超越现有生产体验后，再讨论 CoreApp 上层容器的瘦身复用（详见 [`omp-runtime-and-tern-gui-integration-analysis-2026-11-01.md`](../engineering/reports/omp-runtime-and-tern-gui-integration-analysis-2026-11-01.md)）。
 
 ## B. 插件与 View 生态
 

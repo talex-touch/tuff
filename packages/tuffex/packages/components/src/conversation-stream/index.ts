@@ -1,4 +1,5 @@
 import type {
+  ConversationStreamEmptyAlign,
   ConversationStreamItemKey,
   ConversationStreamKey,
   ConversationStreamLoadResult,
@@ -15,6 +16,7 @@ export type { PositionCache } from './src/use-position-cache'
 export { useStickToBottom } from './src/use-stick-to-bottom'
 export type { StickToBottomOptions } from './src/use-stick-to-bottom'
 export type {
+  ConversationStreamEmptyAlign,
   ConversationStreamItemKey,
   ConversationStreamKey,
   ConversationStreamLoadResult,
@@ -38,6 +40,7 @@ export interface TxConversationStreamInstance {
   /** Fixed-duration glide to the bottom; resolves `false` if interrupted. */
   tweenToBottom: (duration?: number) => Promise<boolean>
   atBottom: boolean
+  following: boolean
 }
 
 export default ConversationStream

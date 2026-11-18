@@ -123,17 +123,22 @@ try {
 }
 ```
 
-## Scenario: Native OCR belongs to a one-shot utility process
+## Scenario: Native OCR runs in an isolated child runtime
 
 ### 1. Scope / Trigger
 
-CoreApp `vision.ocr` recognition invokes a native/N-API addon. A native timeout or
-abort must fail one request, never terminate the Electron main process. A Node
-worker thread is not a crash boundary: its native code shares the main process.
+CoreApp `vision.ocr` recognition invokes platform native OCR (Apple Vision / WinRT).
+A native timeout, crash or abort must fail one request, never terminate the Electron main
+process. A Node worker thread is not a crash boundary: its native code shares the main process.
 
 ### 2. Signatures
 
 ```ts
+recognizeOcrSourceIsolated(
+  options: RecognizeOcrSourceOptions,
+  invocation?: { timeoutMs?: number; signal?: AbortSignal }
+): Promise<NativeOcrResult>
+
 recognizeImageTextIsolated(
   options: NativeOcrOptions,
   invocation?: { timeoutMs?: number; signal?: AbortSignal }
@@ -144,30 +149,46 @@ type OcrProcessMessage =
   | { type: 'ocr.error'; requestId: string; code?: string; message: string }
 ```
 
-The runtime entry is `ocr-process.js`; `LocalProvider.visionOcr` calls the client.
-`OcrService` invokes the configured `vision.ocr` provider route once. It must not
-run a second native worker first or fall back to native recognition on main.
+`LocalProvider.visionOcr` routes through `recognizeOcrSourceIsolated` (`ocr-runtime.ts`),
+which prefers the persistent Rust helper (`@talex-touch/tuff-native/ocr-helper` →
+`tuff-native-ocr`) and falls back to the one-shot `ocr-process.js` utility process only when
+the Rust binary is unavailable or fails before spawning.
+`OcrService` invokes the configured `vision.ocr` provider route once (with a 45,000 ms
+background deadline and 30 s retry backoff on `OCR_PROCESS_TIMEOUT` / `OCR_PROCESS_EXITED`).
+It must not run a second native worker first or fall back to native recognition on main.
 
 ### 3. Contracts
 
-- One request owns one `utilityProcess.fork`. Wait for `spawn` before sending
-  `{ type: 'ocr.request', requestId, options }`; the deadline also covers that wait.
-- Default deadline: 30,000 ms. A finite positive caller deadline overrides it.
-  Timeout, cancellation and application quit reclaim only the owned OS process.
-- Structured clone yields `Uint8Array`; the child restores a Buffer view with
-  `Buffer.from(value.buffer, value.byteOffset, value.byteLength)`.
-- Only the matching request identity can settle. Success requires string `text`,
-  a supported native engine and finite `durationMs`. Preserve native error codes.
-- A terminal frame clears the deadline and disarms cancellation/quit hooks, but
-  never kills the child. The child detaches its request listener and schedules
-  exit after the N-API callback has unwound (`setImmediate`, not inline exit).
-- Settle once. Late frames cannot turn timeout/abort into success; an observed
-  failing/exited child must not receive a second kill.
-- Image preparation stays inside the OCR child. Inputs longer than 2000 pixels on
-  either axis are resized proportionally (never enlarged); smaller inputs retain
-  their original bytes. Sharp resizing uses one thread in this one-shot process.
-  Native layout boxes are mapped back with the actual per-axis pixel ratios,
-  including integer rounding, before replying. Clipboard originals are untouched.
+- **Rust helper path (`tuff-native-ocr`)**:
+  - Serializes one active request at a time in a persistent JSONL child process with idle
+    TTL reclamation (`180_000 ms`) and `stdin` EOF exit on parent death.
+  - File sources pass `filePath` directly so Rust reads bounded image bytes off disk without
+    loading or structured-cloning multi-MB Buffers on main; `data-url`/`base64` sources reject
+    empty payloads on main before spawning.
+  - Native decoders (`vision_ocr.mm` ImageIO / `winrt_ocr.cpp` WIC) cap recognition dimensions
+    to `<= 2000 px` and map bounding boxes back to original oriented pixel dimensions without
+    requiring `sharp`.
+  - Timeout (`OCR_PROCESS_TIMEOUT`) or abort (`OCR_PROCESS_ABORTED`) sends `SIGKILL` to the
+    active child only and respawns a fresh process for queued followers.
+- **Fallback utility-process path (`ocr-process.js`)**:
+  - One request owns one `utilityProcess.fork`. Wait for `spawn` before sending
+    `{ type: 'ocr.request', requestId, options }`; the deadline also covers that wait.
+  - Default deadline: 30,000 ms. A finite positive caller deadline overrides it.
+    Timeout, cancellation and application quit reclaim only the owned OS process.
+  - Structured clone yields `Uint8Array`; the child restores a Buffer view with
+    `Buffer.from(value.buffer, value.byteOffset, value.byteLength)`.
+  - Only the matching request identity can settle. Success requires string `text`,
+    a supported native engine and finite `durationMs`. Preserve native error codes.
+  - A terminal frame clears the deadline and disarms cancellation/quit hooks, but
+    never kills the child. The child detaches its request listener and schedules
+    exit after the N-API callback has unwound (`setImmediate`, not inline exit).
+  - Settle once. Late frames cannot turn timeout/abort into success; an observed
+    failing/exited child must not receive a second kill.
+  - Image preparation stays inside the OCR child. Inputs longer than 2000 pixels on
+    either axis are resized proportionally (never enlarged); smaller inputs retain
+    their original bytes. Sharp resizing uses one thread in this one-shot process.
+    Native layout boxes are mapped back with the actual per-axis pixel ratios,
+    including integer rounding, before replying. Clipboard originals are untouched.
 - Background `OcrService` admission is serial, with at least 10 seconds between
   starts and at least 5 seconds after each job settles (success or failure).
   All enqueue/start/poll paths use the same gate, before selecting a pending job

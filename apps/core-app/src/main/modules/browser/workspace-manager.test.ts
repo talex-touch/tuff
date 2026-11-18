@@ -1,7 +1,7 @@
 import type { BrowserWindow, Rectangle, WebContentsView } from 'electron'
 import type { BrowserPersistedWorkspace } from './workspace-manager'
 import { EventEmitter } from 'node:events'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BrowserWorkspaceManager } from './workspace-manager'
 
 type LoadRequest = {
@@ -13,6 +13,8 @@ type LoadRequest = {
 
 class GuestContents extends EventEmitter {
   destroyed = false
+  focusCalls = 0
+  reloadCalls = 0
   url = ''
   title = ''
   loads: LoadRequest[] = []
@@ -29,6 +31,9 @@ class GuestContents extends EventEmitter {
 
   isDestroyed() {
     return this.destroyed
+  }
+  focus() {
+    this.focusCalls += 1
   }
   getURL() {
     return this.url
@@ -61,6 +66,7 @@ class GuestContents extends EventEmitter {
   }
 
   reload() {
+    this.reloadCalls += 1
     this.emit('did-start-loading')
   }
   stop() {
@@ -86,8 +92,12 @@ class GuestView {
 
 class OwnerWindow extends EventEmitter {
   visible = true
+  ownerFocusCalls = 0
   webContents = Object.assign(new EventEmitter(), {
     isDestroyed: () => false,
+    focus: () => {
+      this.ownerFocusCalls += 1
+    },
     mainFrame: { parent: null, isDestroyed: () => false }
   })
 
@@ -122,7 +132,13 @@ const managers: BrowserWorkspaceManager[] = []
 function createWorkspace(
   persistFailure?: () => boolean,
   restored?: unknown,
-  persistWrite?: (state: BrowserPersistedWorkspace) => Promise<void>
+  persistWrite?: (state: BrowserPersistedWorkspace) => Promise<void>,
+  options?: {
+    now?: () => number
+    maxWarmGuests?: number
+    idleDiscardMs?: number
+    focusAddress?: () => void
+  }
 ) {
   const owner = new OwnerWindow()
   const guests: GuestView[] = []
@@ -144,7 +160,10 @@ function createWorkspace(
       notify: (state) => {
         revisions.push(state.revision)
       },
-      now: () => 123456
+      focusAddress: options?.focusAddress,
+      maxWarmGuests: options?.maxWarmGuests,
+      idleDiscardMs: options?.idleDiscardMs,
+      now: options?.now ?? (() => 123456)
     },
     restored ?? {
       tabs: [{ id: 'first', url: 'https://one.example/', title: 'One' }],
@@ -836,5 +855,237 @@ describe('internal workspace tabs (tuff://)', () => {
     expect(guests.length).toBe(0)
 
     await manager.dispose()
+  })
+})
+
+describe('inactive tab discarding & memory hygiene', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('evicts the least-recently-used inactive guest when exceeding maxWarmGuests and recreates it on reactivation', async () => {
+    let clock = 1000
+    const { manager, guests, owner } = createWorkspace(
+      undefined,
+      {
+        tabs: [
+          { id: 't1', url: 'https://t1.example/', title: 'One' },
+          { id: 't2', url: 'https://t2.example/', title: 'Two' },
+          { id: 't3', url: 'https://t3.example/', title: 'Three' }
+        ],
+        activeTabId: 't1',
+        recent: [],
+        bookmarks: []
+      },
+      undefined,
+      { now: () => clock, maxWarmGuests: 2, idleDiscardMs: 0 }
+    )
+    manager.setViewport(visibleViewport)
+    expect(guests).toHaveLength(1)
+
+    clock = 2000
+    await manager.activateTab('t2')
+    expect(guests).toHaveLength(2)
+    expect(guests[0]!.webContents.destroyed).toBe(false)
+
+    clock = 3000
+    await manager.activateTab('t3')
+    expect(guests).toHaveLength(3)
+    expect(guests[0]!.webContents.destroyed).toBe(true)
+    expect(guests[1]!.webContents.destroyed).toBe(false)
+    expect(guests[2]!.webContents.destroyed).toBe(false)
+    expect([...owner.attached]).toEqual([guests[2]])
+    expect(tab(manager, 't1')).toMatchObject({
+      url: 'https://t1.example/',
+      title: 'One',
+      loading: false,
+      canGoBack: false,
+      canGoForward: false
+    })
+
+    clock = 4000
+    await manager.activateTab('t1')
+    expect(guests).toHaveLength(4)
+    expect(guests[3]!.webContents.loads.map((load) => load.url)).toEqual(['https://t1.example/'])
+    expect(guests[1]!.webContents.destroyed).toBe(true)
+    expect([...owner.attached]).toEqual([guests[3]])
+  })
+
+  it('discards idle background guests after idleDiscardMs without discarding the active visible tab', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-17T00:00:00Z'))
+    const { manager, guests, owner } = createWorkspace(
+      undefined,
+      {
+        tabs: [
+          { id: 'first', url: 'https://one.example/', title: 'One' },
+          { id: 'second', url: 'https://two.example/', title: 'Two' }
+        ],
+        activeTabId: 'first',
+        recent: [],
+        bookmarks: []
+      },
+      undefined,
+      { now: () => Date.now(), maxWarmGuests: 6, idleDiscardMs: 5_000 }
+    )
+
+    manager.setViewport(visibleViewport)
+    await vi.advanceTimersByTimeAsync(2_000)
+    await manager.activateTab('second')
+    expect(guests).toHaveLength(2)
+    expect(guests[0]!.webContents.destroyed).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(4_999)
+    expect(guests[0]!.webContents.destroyed).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(guests[0]!.webContents.destroyed).toBe(true)
+    expect(guests[1]!.webContents.destroyed).toBe(false)
+    expect([...owner.attached]).toEqual([guests[1]])
+
+    // Active visible tab remains alive past idleDiscardMs.
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(guests[1]!.webContents.destroyed).toBe(false)
+
+    // Once hidden from screen, the active tab also discards after idleDiscardMs.
+    manager.setViewport({ ...visibleViewport, visible: false })
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(guests[1]!.webContents.destroyed).toBe(true)
+    expect(owner.attached.size).toBe(0)
+  })
+
+  it('allows explicit discardTab on inactive tabs while protecting the active visible tab, and clears timers on dispose', async () => {
+    vi.useFakeTimers()
+    const { manager, guests } = createWorkspace(
+      undefined,
+      {
+        tabs: [
+          { id: 'first', url: 'https://one.example/', title: 'One' },
+          { id: 'second', url: 'https://two.example/', title: 'Two' }
+        ],
+        activeTabId: 'first',
+        recent: [],
+        bookmarks: []
+      },
+      undefined,
+      { now: () => Date.now(), idleDiscardMs: 5_000 }
+    )
+    manager.setViewport(visibleViewport)
+    await manager.activateTab('second')
+
+    expect(manager.discardTab('second')).toBe(false)
+    expect(guests[1]!.webContents.destroyed).toBe(false)
+
+    expect(manager.discardTab('first')).toBe(true)
+    expect(guests[0]!.webContents.destroyed).toBe(true)
+    expect(tab(manager, 'first').loading).toBe(false)
+
+    await manager.dispose()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+describe('guest keyboard shortcuts (before-input-event)', () => {
+  const commandModifier =
+    process.platform === 'darwin'
+      ? { meta: true, control: false, alt: false, shift: false }
+      : { meta: false, control: true, alt: false, shift: false }
+
+  it('handles address focus, tab creation, tab closing onto internal tabs, reload, and ignores auto-repeat/foreign modifiers', async () => {
+    const focusAddress = vi.fn()
+    const { manager, guests, owner } = createWorkspace(
+      undefined,
+      {
+        tabs: [
+          { id: 'store', url: 'tuff://store', title: '' },
+          { id: 'web', url: 'https://one.example/', title: 'One' }
+        ],
+        activeTabId: 'web',
+        recent: [],
+        bookmarks: []
+      },
+      undefined,
+      { focusAddress }
+    )
+    manager.setViewport(visibleViewport)
+    const guest = guests[0]!
+
+    // Auto-repeat and wrong platform modifier are ignored.
+    const repeatEvent = { preventDefault: vi.fn() }
+    guest.webContents.emit('before-input-event', repeatEvent, {
+      type: 'keyDown',
+      key: 'w',
+      code: 'KeyW',
+      isAutoRepeat: true,
+      ...commandModifier
+    })
+    expect(repeatEvent.preventDefault).not.toHaveBeenCalled()
+
+    const wrongModifierEvent = { preventDefault: vi.fn() }
+    guest.webContents.emit('before-input-event', wrongModifierEvent, {
+      type: 'keyDown',
+      key: 'w',
+      code: 'KeyW',
+      isAutoRepeat: false,
+      meta: process.platform !== 'darwin',
+      control: process.platform === 'darwin',
+      alt: false,
+      shift: false
+    })
+    expect(wrongModifierEvent.preventDefault).not.toHaveBeenCalled()
+
+    // Command+L focuses owner and triggers focusAddress.
+    const focusEvent = { preventDefault: vi.fn() }
+    guest.webContents.emit('before-input-event', focusEvent, {
+      type: 'keyDown',
+      key: 'l',
+      code: 'KeyL',
+      isAutoRepeat: false,
+      ...commandModifier
+    })
+    expect(focusEvent.preventDefault).toHaveBeenCalledTimes(1)
+    expect(owner.ownerFocusCalls).toBe(1)
+    expect(focusAddress).toHaveBeenCalledTimes(1)
+
+    // Command+R reloads active guest.
+    const reloadEvent = { preventDefault: vi.fn() }
+    guest.webContents.emit('before-input-event', reloadEvent, {
+      type: 'keyDown',
+      key: 'r',
+      code: 'KeyR',
+      isAutoRepeat: false,
+      ...commandModifier
+    })
+    expect(reloadEvent.preventDefault).toHaveBeenCalledTimes(1)
+    expect(guest.webContents.reloadCalls).toBe(1)
+
+    // Command+W closes remote tab and hands focus back to owner when landing on tuff://store.
+    const closeEvent = { preventDefault: vi.fn() }
+    guest.webContents.emit('before-input-event', closeEvent, {
+      type: 'keyDown',
+      key: 'w',
+      code: 'KeyW',
+      isAutoRepeat: false,
+      ...commandModifier
+    })
+    expect(closeEvent.preventDefault).toHaveBeenCalledTimes(1)
+    expect(manager.getState().activeTabId).toBe('store')
+    expect(owner.ownerFocusCalls).toBe(2)
+
+    // Re-open remote tab and verify Command+T opens blank tab and focuses address bar.
+    await manager.createTab('https://two.example/')
+    const secondGuest = guests[1]!
+    const newTabEvent = { preventDefault: vi.fn() }
+    secondGuest.webContents.emit('before-input-event', newTabEvent, {
+      type: 'keyDown',
+      key: 't',
+      code: 'KeyT',
+      isAutoRepeat: false,
+      ...commandModifier
+    })
+    expect(newTabEvent.preventDefault).toHaveBeenCalledTimes(1)
+    expect(owner.ownerFocusCalls).toBe(3)
+    expect(focusAddress).toHaveBeenCalledTimes(2)
+    expect(tab(manager, manager.getState().activeTabId).url).toBe('')
   })
 })

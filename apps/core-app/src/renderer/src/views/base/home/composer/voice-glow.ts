@@ -1,3 +1,5 @@
+import { voiceGlowDriveLevel as clampVoiceGlowDriveLevel } from '@talex-touch/intelligence-uikit/utils'
+
 /**
  * The colour of each stop in a CSS gradient stop list, in order: `#0894ff, #c959dd 27%, …` →
  * `['#0894ff', '#c959dd', …]`. Commas inside a colour function (`rgb(…)`) do not split a stop, and
@@ -87,6 +89,5 @@ export function voiceGlowResponse(reducedMotion: boolean): {
  * each one.
  */
 export function voiceGlowDriveLevel(level: number): number {
-  if (!Number.isFinite(level) || level <= 0) return 0
-  return Math.min(1, level) ** 4
+  return clampVoiceGlowDriveLevel(level) ** 4
 }

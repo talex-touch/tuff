@@ -52,13 +52,64 @@ const LEVEL_LABELS: Record<LogLevel, string> = {
   [LogLevel.NONE]: 'NONE ',
 }
 
+const MAX_SERIALIZE_DEPTH = 6
+
+function toSerializableError(
+  error: Error,
+  depth: number,
+  seen: WeakSet<object>
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    name: error.name,
+    message: error.message
+  }
+  const extras = error as Error & { code?: unknown; rawCode?: unknown; cause?: unknown }
+  if (extras.code !== undefined)
+    out.code = extras.code
+  if (extras.rawCode !== undefined)
+    out.rawCode = extras.rawCode
+  if (error.stack)
+    out.stack = error.stack
+  if (extras.cause !== undefined && depth < MAX_SERIALIZE_DEPTH)
+    out.cause = toSerializable(extras.cause, depth + 1, seen)
+  return out
+}
+
+function toSerializable(value: unknown, depth = 0, seen = new WeakSet<object>()): unknown {
+  if (typeof value === 'bigint')
+    return value.toString()
+  if (value === null || typeof value !== 'object')
+    return value
+  if (seen.has(value))
+    return '[Circular]'
+  if (depth >= MAX_SERIALIZE_DEPTH)
+    return value instanceof Error ? `${value.name}: ${value.message}` : '[MaxDepth]'
+  seen.add(value)
+  try {
+    if (value instanceof Error)
+      return toSerializableError(value, depth, seen)
+    const maybeToJson = (value as { toJSON?: unknown }).toJSON
+    if (typeof maybeToJson === 'function')
+      return toSerializable(maybeToJson.call(value), depth + 1, seen)
+    if (Array.isArray(value))
+      return value.map(item => toSerializable(item, depth + 1, seen))
+    const out: Record<string, unknown> = {}
+    for (const [key, entry] of Object.entries(value))
+      out[key] = toSerializable(entry, depth + 1, seen)
+    return out
+  }
+  finally {
+    seen.delete(value)
+  }
+}
+
 function serializeArg(arg: unknown): string {
   if (arg instanceof Error)
     return arg.stack || `${arg.name}: ${arg.message}`
   if (typeof arg === 'string')
     return arg
   try {
-    return JSON.stringify(arg)
+    return JSON.stringify(toSerializable(arg))
   }
   catch {
     return String(arg)
