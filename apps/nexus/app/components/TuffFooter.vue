@@ -19,12 +19,29 @@ let auroraIdleId: number | null = null
 
 const year = new Date().getFullYear()
 
+async function loadLandingChunkWithFallback(targetLocale: 'en' | 'zh') {
+  try {
+    await ensureRouteLocaleChunk(targetLocale, 'landing')
+  }
+  catch (error) {
+    console.warn('[TuffFooter] failed to load landing locale chunk', {
+      locale: targetLocale,
+      error,
+    })
+    if (targetLocale !== 'en') {
+      await ensureRouteLocaleChunk('en', 'landing').catch(() => {})
+      if (normalizeLocale(locale.value) === targetLocale)
+        chunkRevision.value += 1
+    }
+  }
+}
+
 async function ensureLandingChunkForCurrentLocale() {
   let currentLocale = normalizeLocale(locale.value) || 'en'
   let loadedLocale = currentLocale
   do {
     loadedLocale = currentLocale
-    await ensureRouteLocaleChunk(loadedLocale, 'landing')
+    await loadLandingChunkWithFallback(loadedLocale)
     currentLocale = normalizeLocale(locale.value) || 'en'
   } while (currentLocale !== loadedLocale)
 }
@@ -34,7 +51,7 @@ if (import.meta.client) {
     () => normalizeLocale(locale.value),
     (nextLocale, prevLocale) => {
       if (nextLocale && nextLocale !== prevLocale)
-        void ensureRouteLocaleChunk(nextLocale, 'landing')
+        void loadLandingChunkWithFallback(nextLocale)
     },
   )
 }

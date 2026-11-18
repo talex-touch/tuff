@@ -1,6 +1,7 @@
 import { effectScope, ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizeLocale, useLocaleOrchestrator } from '~/composables/useLocaleOrchestrator'
+import { useRouteLocaleChunks } from '~/composables/useRouteLocaleChunks'
 
 type Locale = 'en' | 'zh'
 
@@ -411,6 +412,63 @@ describe('locale contracts', () => {
 
     expect(callOrder).toEqual(['setLocale:zh', 'merge:en:landing', 'setLocale:en'])
     expect(nuxtState.get('nexus-route-locale-chunk-revision')?.value).toBe(1)
+    expect(activeLocale.value).toBe('en')
+  })
+
+  it('registers the landing chunk through useRouteLocaleChunks and merges target locale before switching', async () => {
+    routePath = '/updates'
+    const callOrder: string[] = []
+    fakes.onMergeLocaleMessage = (locale, payload) => {
+      callOrder.push(`merge:${locale}:${Object.keys(payload).join(',')}`)
+    }
+    setLocale = async (locale) => {
+      callOrder.push(`setLocale:${locale}`)
+      activeLocale.value = locale
+    }
+
+    const { chunkRevision, ensureRouteLocaleChunk } = useRouteLocaleChunks()
+    await ensureRouteLocaleChunk('en', 'landing')
+    expect(callOrder).toEqual(['merge:en:landing'])
+    expect(chunkRevision.value).toBe(1)
+
+    await useLocaleOrchestrator().setLocaleSerial('zh', 'manual')
+
+    expect(callOrder).toEqual(['merge:en:landing', 'merge:zh:landing', 'setLocale:zh'])
+    expect(chunkRevision.value).toBe(2)
+    expect(activeLocale.value).toBe('zh')
+  })
+
+  it('keeps the latest locale authoritative when a newer selection overtakes an earlier chunk load', async () => {
+    routePath = '/updates'
+    nuxtState.set('nexus-active-route-locale-chunks', { value: ['landing'] })
+    const localeWrites: Locale[] = []
+    setLocale = async (locale) => {
+      localeWrites.push(locale)
+      activeLocale.value = locale
+    }
+
+    const orchestrator = useLocaleOrchestrator()
+    const first = orchestrator.setLocaleSerial('zh', 'manual')
+    const second = orchestrator.setLocaleSerial('en', 'manual')
+    await Promise.all([first, second])
+
+    expect(localeWrites).toEqual([])
+    expect(activeLocale.value).toBe('en')
+  })
+
+  it('skips loading active route chunks when docs route rejects the requested locale', async () => {
+    routePath = '/en/docs/guide/start'
+    activeLocale.value = 'en'
+    nuxtState.set('nexus-active-route-locale-chunks', { value: ['landing'] })
+    const mergeCalls: string[] = []
+    fakes.onMergeLocaleMessage = (locale, payload) => {
+      mergeCalls.push(`${locale}:${Object.keys(payload).join(',')}`)
+    }
+
+    const settledLocale = await useLocaleOrchestrator().setLocaleSerial('zh', 'manual')
+
+    expect(mergeCalls).toEqual([])
+    expect(settledLocale).toBe('en')
     expect(activeLocale.value).toBe('en')
   })
 })

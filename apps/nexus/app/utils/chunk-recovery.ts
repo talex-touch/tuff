@@ -73,26 +73,62 @@ export function stripCacheBustParamFromUrl(href: string): string | null {
   return `${url.pathname}${search ? `?${search}` : ''}${url.hash}`
 }
 
+function resolveSessionStorage(): ChunkReloadStorage | null {
+  if (!hasWindow())
+    return null
+  try {
+    return window.sessionStorage
+  }
+  catch {
+    return null
+  }
+}
+
+function readUnexpiredCooldowns(
+  storage: ChunkReloadStorage | null | undefined,
+  now: number,
+): Record<string, number> | null {
+  if (!storage)
+    return null
+  try {
+    const raw = storage.getItem(CHUNK_RELOAD_STORAGE_KEY)
+    if (!raw)
+      return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+      return {}
+
+    // Support legacy single-entry format `{ path, expiresAt }` as well as per-path map.
+    const record = parsed as Record<string, unknown>
+    if (typeof record.path === 'string' && typeof record.expiresAt === 'number') {
+      return Number.isFinite(record.expiresAt) && record.expiresAt > now
+        ? { [record.path]: record.expiresAt }
+        : {}
+    }
+
+    const active: Record<string, number> = {}
+    for (const [key, value] of Object.entries(record)) {
+      if (typeof value === 'number' && Number.isFinite(value) && value > now)
+        active[key] = value
+    }
+    return active
+  }
+  catch {
+    return {}
+  }
+}
+
 export function canAttemptChunkReload(
   storage: ChunkReloadStorage | null | undefined,
   pathname: string,
   now: number,
   _cooldownMs = DEFAULT_CHUNK_RELOAD_COOLDOWN_MS,
 ): boolean {
-  if (!storage)
+  const active = readUnexpiredCooldowns(storage, now)
+  if (!active)
     return false
-  try {
-    const raw = storage.getItem(CHUNK_RELOAD_STORAGE_KEY)
-    if (!raw)
-      return true
-    const parsed = JSON.parse(raw) as { path?: unknown, expiresAt?: unknown }
-    if (parsed?.path !== pathname)
-      return true
-    return typeof parsed.expiresAt !== 'number' || parsed.expiresAt <= now
-  }
-  catch {
-    return true
-  }
+  const expiresAt = active[pathname]
+  return typeof expiresAt !== 'number' || expiresAt <= now
 }
 
 export function markChunkReloadAttempt(
@@ -100,17 +136,17 @@ export function markChunkReloadAttempt(
   pathname: string,
   now: number,
   cooldownMs = DEFAULT_CHUNK_RELOAD_COOLDOWN_MS,
-): void {
-  if (!storage)
-    return
+): boolean {
+  const active = readUnexpiredCooldowns(storage, now)
+  if (!active || !storage)
+    return false
   try {
-    storage.setItem(CHUNK_RELOAD_STORAGE_KEY, JSON.stringify({
-      path: pathname,
-      expiresAt: now + cooldownMs,
-    }))
+    active[pathname] = now + cooldownMs
+    storage.setItem(CHUNK_RELOAD_STORAGE_KEY, JSON.stringify(active))
+    return true
   }
   catch {
-    // Ignore storage quota or private browsing errors cleanly.
+    return false
   }
 }
 
@@ -130,7 +166,7 @@ export function recoverFromStaleChunkError(
   const pathname = options.pathname ?? (hasBrowserWindow ? window.location.pathname : undefined)
   const storage = options.storage !== undefined
     ? options.storage
-    : (hasBrowserWindow ? window.sessionStorage : null)
+    : resolveSessionStorage()
   const navigate = options.navigate ?? (hasBrowserWindow
     ? (url: string) => window.location.replace(url)
     : undefined)
@@ -142,7 +178,9 @@ export function recoverFromStaleChunkError(
   if (!canAttemptChunkReload(storage, pathname, now, options.cooldownMs))
     return false
 
-  markChunkReloadAttempt(storage, pathname, now, options.cooldownMs)
+  if (!markChunkReloadAttempt(storage, pathname, now, options.cooldownMs))
+    return false
+
   navigate(buildCacheBustReloadUrl(href, now))
   return true
 }

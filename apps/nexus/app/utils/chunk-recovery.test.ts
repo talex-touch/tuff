@@ -72,4 +72,77 @@ describe('chunk-recovery helpers', () => {
     })).toBe(true)
     expect(navigate).toHaveBeenCalledTimes(2)
   })
+
+  it('retains unexpired cooldown deadlines independently per pathname', () => {
+    const storage = createMemoryStorage()
+    const navigate = vi.fn()
+    const err = new TypeError('Failed to fetch dynamically imported module: https://tuff.tagzxia.com/_nuxt/old.js')
+
+    expect(recoverFromStaleChunkError(err, {
+      now: 1000,
+      cooldownMs: 15_000,
+      href: 'https://tuff.tagzxia.com/updates?view=all',
+      pathname: '/updates',
+      storage,
+      navigate,
+    })).toBe(true)
+
+    expect(recoverFromStaleChunkError(err, {
+      now: 2000,
+      cooldownMs: 15_000,
+      href: 'https://tuff.tagzxia.com/store',
+      pathname: '/store',
+      storage,
+      navigate,
+    })).toBe(true)
+
+    // Returning to /updates within its 15s cooldown is still blocked even after /store reloaded.
+    expect(recoverFromStaleChunkError(err, {
+      now: 5000,
+      cooldownMs: 15_000,
+      href: 'https://tuff.tagzxia.com/updates?view=all',
+      pathname: '/updates',
+      storage,
+      navigate,
+    })).toBe(false)
+    expect(navigate).toHaveBeenCalledTimes(2)
+  })
+
+  it('skips reload when cooldown storage writes fail or sessionStorage getter throws', () => {
+    const err = new TypeError('Failed to fetch dynamically imported module: https://tuff.tagzxia.com/_nuxt/old.js')
+    const navigate = vi.fn()
+    const writeFailingStorage = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('QuotaExceededError')
+      },
+    }
+
+    expect(recoverFromStaleChunkError(err, {
+      now: 1000,
+      href: 'https://tuff.tagzxia.com/',
+      pathname: '/',
+      storage: writeFailingStorage,
+      navigate,
+    })).toBe(false)
+    expect(navigate).not.toHaveBeenCalled()
+
+    vi.stubGlobal('window', Object.defineProperty(
+      { location: { href: 'https://tuff.tagzxia.com/', pathname: '/', replace: navigate } },
+      'sessionStorage',
+      {
+        configurable: true,
+        get() {
+          throw new Error('SecurityError')
+        },
+      },
+    ))
+    try {
+      expect(recoverFromStaleChunkError(err, { now: 2000 })).toBe(false)
+      expect(navigate).not.toHaveBeenCalled()
+    }
+    finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })

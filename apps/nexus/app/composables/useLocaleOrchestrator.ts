@@ -29,6 +29,7 @@ function logLocaleInitialized(source: LocaleSource, locale: SupportedLocale, ext
 }
 
 let localeSetQueue: Promise<void> = Promise.resolve()
+let localeRequestSeq = 0
 let localeInitQueue: Promise<SupportedLocale | null> | null = null
 
 export function normalizeLocale(value?: string | null): SupportedLocale | null {
@@ -163,12 +164,29 @@ export function useLocaleOrchestrator() {
     if (!normalized)
       return normalizeLocale(locale.value)
 
+    const initialDocsLocale = explicitDocsLocale()
+    if (initialDocsLocale && initialDocsLocale !== normalized)
+      return normalizeLocale(locale.value)
+
+    const requestSeq = ++localeRequestSeq
     const prefetchedChunks = resolveAllRouteLocaleChunks(route.path || '/', activeRouteLocaleChunks.value)
-    await ensureRouteLocaleChunks(normalized, prefetchedChunks)
+    const prefetchedPromise = ensureRouteLocaleChunks(normalized, prefetchedChunks)
 
     localeSetQueue = localeSetQueue
       .catch(() => {})
       .then(async () => {
+        try {
+          await prefetchedPromise
+        }
+        catch (error) {
+          if (requestSeq === localeRequestSeq)
+            throw error
+          return
+        }
+
+        if (requestSeq !== localeRequestSeq)
+          return
+
         const docsLocale = explicitDocsLocale()
         if (docsLocale && docsLocale !== normalized)
           return
@@ -177,8 +195,11 @@ export function useLocaleOrchestrator() {
 
         const currentChunks = resolveAllRouteLocaleChunks(route.path || '/', activeRouteLocaleChunks.value)
         const missingChunks = currentChunks.filter(chunk => !prefetchedChunks.includes(chunk))
-        if (missingChunks.length > 0)
+        if (missingChunks.length > 0) {
           await ensureRouteLocaleChunks(normalized, missingChunks)
+          if (requestSeq !== localeRequestSeq)
+            return
+        }
 
         try {
           await setLocale(normalized)

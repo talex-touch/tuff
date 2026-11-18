@@ -1,5 +1,6 @@
 import type { SupportedLocale } from '~/composables/useLocaleOrchestrator'
 import type { RouteLocaleChunkName } from '~/utils/route-locale-chunks'
+import { useI18n, useState } from '#imports'
 import { loadRouteLocaleChunk, registerActiveRouteLocaleChunk } from '~/utils/route-locale-chunks'
 
 export const ACTIVE_ROUTE_LOCALE_CHUNKS_STATE_KEY = 'nexus-active-route-locale-chunks'
