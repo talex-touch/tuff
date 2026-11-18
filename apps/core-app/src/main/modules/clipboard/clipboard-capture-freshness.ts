@@ -1,5 +1,6 @@
 import type { ClipboardCaptureSource } from '@talex-touch/utils/transport/events/types'
 import type { NativeImage } from 'electron'
+import type { ClipboardReader } from './clipboard-reader'
 import crypto from 'node:crypto'
 import { clipboard } from 'electron'
 import { createLogger } from '../../utils/logger'
@@ -7,6 +8,7 @@ import {
   createIneligibleClipboardFreshnessState,
   type ClipboardFreshnessState
 } from './clipboard-freshness'
+import { parsePngDimensions } from './clipboard-reader'
 
 const clipboardCaptureLog = createLogger('Clipboard')
 
@@ -102,6 +104,7 @@ export class ClipboardHelper {
   private lastImageHash = ''
   private lastFiles: string[] = []
   private bootstrapped = false
+  private bootstrapInFlight: Promise<void> | null = null
 
   public bootstrap(): void {
     if (this.bootstrapped) {
@@ -135,18 +138,109 @@ export class ClipboardHelper {
       this.lastFiles = []
     }
 
+    let imageQuickSignature = ''
     if (includesAnyClipboardFormat(this.lastFormats, CLIPBOARD_IMAGE_FORMATS)) {
       try {
         const image = clipboard.readImage()
-        this.lastImageHash = this.getImageQuickSignature(image.isEmpty() ? null : image)
+        const resolvedImage = image.isEmpty() ? null : image
+        imageQuickSignature = this.getImageQuickSignature(resolvedImage)
+        this.lastImageHash = resolvedImage ? this.computeImageContentHash(resolvedImage) : ''
       } catch {
+        imageQuickSignature = ''
         this.lastImageHash = ''
       }
     } else {
       this.lastImageHash = ''
     }
 
-    this.lastChangeHash = `${formatsKey}|t:${textSignature}|f:${filesSignature}|i:${this.lastImageHash}`
+    this.lastChangeHash = `${formatsKey}|t:${textSignature}|f:${filesSignature}|i:${imageQuickSignature}`
+  }
+
+  public async bootstrapAsync(reader?: ClipboardReader): Promise<void> {
+    if (this.bootstrapped) {
+      return
+    }
+    if (!reader) {
+      this.bootstrap()
+      return
+    }
+    if (this.bootstrapInFlight) {
+      await this.bootstrapInFlight
+      return
+    }
+
+    this.bootstrapInFlight = (async () => {
+      try {
+        let formats: string[] = []
+        try {
+          formats = clipboard.availableFormats()
+        } catch {
+          formats = []
+        }
+        this.lastFormats = [...formats].sort()
+        this.lastFormatsKey = this.lastFormats.join(',')
+        const formatsKey = this.lastFormatsKey
+
+        if (includesAnyClipboardFormat(this.lastFormats, CLIPBOARD_TEXT_FORMATS)) {
+          try {
+            this.lastText = await reader.readText()
+          } catch {
+            this.lastText = ''
+          }
+        } else {
+          this.lastText = ''
+        }
+        const textSignature = this.getTextQuickSignature(this.lastText)
+
+        let filesSignature = '0:0'
+        if (includesAnyClipboardFormat(this.lastFormats, FILE_URL_FORMATS)) {
+          try {
+            this.lastFiles = await reader.readFiles()
+          } catch {
+            this.lastFiles = []
+          }
+          filesSignature = this.getFilesQuickSignature(this.lastFiles)
+        } else {
+          this.lastFiles = []
+        }
+
+        let imageQuickSignature = ''
+        if (includesAnyClipboardFormat(this.lastFormats, CLIPBOARD_IMAGE_FORMATS)) {
+          try {
+            const read = reader.readImageWithEncoded
+              ? await reader.readImageWithEncoded()
+              : { image: await reader.readImage(), png: null }
+            const resolvedImage = read?.image && !read.image.isEmpty() ? read.image : null
+            const rawPng = read?.png ?? null
+            imageQuickSignature = this.getImageQuickSignature(resolvedImage, rawPng)
+            this.lastImageHash = resolvedImage
+              ? this.computeImageContentHash(resolvedImage, rawPng)
+              : ''
+          } catch {
+            imageQuickSignature = ''
+            this.lastImageHash = ''
+          }
+        } else {
+          this.lastImageHash = ''
+        }
+
+        this.lastChangeHash = `${formatsKey}|t:${textSignature}|f:${filesSignature}|i:${imageQuickSignature}`
+        this.bootstrapped = true
+      } finally {
+        this.bootstrapInFlight = null
+      }
+    })()
+
+    await this.bootstrapInFlight
+  }
+
+  public computeImageContentHash(image: NativeImage, rawPng?: Buffer | null): string {
+    if (!image || image.isEmpty()) return ''
+    if (rawPng && rawPng.length > 0) {
+      const size = parsePngDimensions(rawPng) ?? image.getSize()
+      return `${size.width}x${size.height}:${crypto.createHash('sha1').update(rawPng).digest('hex')}`
+    }
+    return this.getImageHash(image)
   }
 
   private getImageHash(image: NativeImage): string {
@@ -191,7 +285,7 @@ export class ClipboardHelper {
   ): string {
     if (!image || image.isEmpty()) return ''
     if (rawPng && rawPng.length > 0) {
-      const size = image.getSize()
+      const size = parsePngDimensions(rawPng) ?? image.getSize()
       const edge = 256
       const head = rawPng.subarray(0, edge)
       const tail = rawPng.length > edge ? rawPng.subarray(-edge) : Buffer.alloc(0)
@@ -353,16 +447,17 @@ export class ClipboardHelper {
     return [...this.lastFiles]
   }
 
-  public didImageChange(image: NativeImage): boolean {
+  public didImageChange(image: NativeImage, rawPng?: Buffer | null): boolean {
     if (image.isEmpty()) return false
-    const hash = this.getImageHash(image)
+    const hash = this.computeImageContentHash(image, rawPng)
     if (hash === this.lastImageHash) return false
     this.lastImageHash = hash
     return true
   }
 
-  public primeImage(image: NativeImage | null): void {
-    this.lastImageHash = image && !image.isEmpty() ? this.getImageHash(image) : ''
+  public primeImage(image: NativeImage | null, rawPng?: Buffer | null): void {
+    this.lastImageHash =
+      image && !image.isEmpty() ? this.computeImageContentHash(image, rawPng) : ''
   }
 
   public primeFiles(files: string[]): void {

@@ -6,15 +6,18 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { NativeImage } from 'electron'
 import type * as schema from '../../db/schema'
 import type { LogOptions } from '../../utils/logger'
+import type { ClipboardReader } from './clipboard-reader'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { toTfileUrl } from '@talex-touch/utils/network'
 import { and, eq } from 'drizzle-orm'
 import { clipboard, nativeImage } from 'electron'
+import sharp from 'sharp'
 import { clipboardHistory } from '../../db/schema'
 import { tempFileService } from '../../service/temp-file.service'
 import { isDataUrl, isLikelyLocalPath } from './clipboard-history-persistence'
+import { parsePngDimensions } from './clipboard-reader'
 
 const CLIPBOARD_IMAGE_NAMESPACE = 'clipboard/images'
 const CLIPBOARD_LIVE_IMAGE_NAMESPACE = 'clipboard/live-images'
@@ -22,6 +25,7 @@ const CLIPBOARD_IMAGE_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000
 
 export interface ClipboardImagePersistenceOptions {
   getDatabase: () => LibSQLDatabase<typeof schema> | undefined
+  getReader?: () => ClipboardReader
   logInfo: (message: string, data?: LogOptions) => void
   logWarn: (message: string, data?: LogOptions) => void
 }
@@ -147,14 +151,43 @@ export class ClipboardImagePersistence {
   public async readClipboardImage(
     request: ClipboardReadImageRequest
   ): Promise<ClipboardReadImageResponse | null> {
-    const image = clipboard.readImage()
-    if (image.isEmpty()) {
+    let image: NativeImage | null = null
+    let png: Buffer | null = null
+    if (this.options.getReader) {
+      const reader = this.options.getReader()
+      if (reader.readImageWithEncoded) {
+        const read = await reader.readImageWithEncoded()
+        image = read?.image ?? null
+        png = read?.png ?? null
+      } else {
+        image = await reader.readImage()
+      }
+    } else {
+      const legacyImage = clipboard.readImage()
+      image = legacyImage.isEmpty() ? null : legacyImage
+    }
+
+    if (!image || image.isEmpty()) {
       return null
     }
 
-    const size = image.getSize()
+    const size = (png ? parsePngDimensions(png) : null) ?? image.getSize()
     const preview = request?.preview ?? true
-    const previewDataUrl = image.resize({ width: 256 }).toDataURL()
+    let previewDataUrl: string
+    if (png && parsePngDimensions(png)) {
+      try {
+        const previewBuffer = await sharp(png)
+          .resize({ width: 256, withoutEnlargement: true })
+          .png()
+          .toBuffer()
+        previewDataUrl = `data:image/png;base64,${previewBuffer.toString('base64')}`
+      } catch {
+        previewDataUrl = image.resize({ width: 256 }).toDataURL()
+      }
+    } else {
+      previewDataUrl = image.resize({ width: 256 }).toDataURL()
+    }
+
     if (preview) {
       return {
         dataUrl: previewDataUrl,
@@ -166,7 +199,7 @@ export class ClipboardImagePersistence {
     const stored = await tempFileService.createFile({
       namespace: CLIPBOARD_LIVE_IMAGE_NAMESPACE,
       ext: 'png',
-      buffer: image.toPNG(),
+      buffer: png ?? image.toPNG(),
       prefix: 'clipboard-read'
     })
     return {
