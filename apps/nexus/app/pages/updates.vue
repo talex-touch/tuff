@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import type { AppRelease, ReleaseChannel } from '~/composables/useReleases'
-import type { DashboardUpdate, LocalizedText, PublicUpdatesPayload } from '~/utils/public-updates'
+import type { DashboardUpdate, LocalizedText } from '~/utils/public-updates'
 import { computed, onMounted, ref } from 'vue'
 import UpdatesAllView from '~/components/updates/UpdatesAllView.vue'
+import { usePublicUpdates } from '~/composables/usePublicUpdates'
 import { detectArch, detectPlatform, findAssetForPlatform, formatFileSize, getArchLabel, getPlatformLabel } from '~/composables/useReleases'
-import { hydratePrerenderedUpdates, resolvePublicUpdatesFromApp } from '~/utils/public-updates'
-import { requestJson } from '~/utils/request'
 
 definePageMeta({
   layout: 'home',
@@ -18,19 +17,12 @@ definePageMeta({
 const GITHUB_RELEASES_URL = 'https://github.com/talex-touch/tuff/releases'
 const STABLE_RELEASE_CHANNEL: ReleaseChannel = 'RELEASE'
 
-const nuxtApp = useNuxtApp()
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
 const { fetchLatestRelease } = useReleases()
-const { data: updatesPayload, refresh: refreshUpdates } = await useAsyncData(
-  'public-updates',
-  () => requestJson<PublicUpdatesPayload>('/api/updates'),
-  {
-    getCachedData: key => resolvePublicUpdatesFromApp(nuxtApp, key),
-  },
-)
+const { updateItems } = await usePublicUpdates()
 
 // Detect user's platform
 const userPlatform = ref(detectPlatform())
@@ -43,12 +35,7 @@ onMounted(() => {
 })
 
 onMounted(async () => {
-  await Promise.all([
-    fetchLatestRelease(STABLE_RELEASE_CHANNEL).then((release) => {
-      latestRelease.value = release
-    }),
-    hydratePrerenderedUpdates(updatesPayload.value, refreshUpdates),
-  ])
+  latestRelease.value = await fetchLatestRelease(STABLE_RELEASE_CHANNEL)
 })
 
 // Get download asset for user's platform
@@ -87,7 +74,6 @@ const primaryDownloadVersionText = computed(() => latestRelease.value?.name || l
 const isZh = computed(() => locale.value.startsWith('zh'))
 const heroSubtitle = computed(() => t('updates.heroSubtitle'))
 
-const updateItems = computed<DashboardUpdate[]>(() => updatesPayload.value?.updates ?? [])
 const isAllUpdatesView = computed(() => route.path === '/updates/all' || route.query.view === 'all')
 const featuredUpdateLimit = 3
 const releaseUpdates = computed(() => updateItems.value.filter(update => update.type !== 'announcement').slice(0, featuredUpdateLimit))
