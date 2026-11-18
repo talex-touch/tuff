@@ -38,7 +38,7 @@ async function loadLandingChunkWithFallback(targetLocale: 'en' | 'zh') {
 
 async function ensureLandingChunkForCurrentLocale() {
   let currentLocale = normalizeLocale(locale.value) || 'en'
-  let loadedLocale = currentLocale
+  let loadedLocale: 'en' | 'zh'
   do {
     loadedLocale = currentLocale
     await loadLandingChunkWithFallback(loadedLocale)
