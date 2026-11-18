@@ -62,10 +62,21 @@ const { component: streamMarkdownComp, load: loadStreamMarkdown } = useLazyCompo
   () => import('../../stream-markdown').then(module => module.TxStreamMarkdown),
   () => {},
 )
+const voiceClipLoadFailed = ref(false)
 const { component: voiceClipComp, load: loadVoiceClip } = useLazyComponent<typeof TxVoiceClipComponent>(
-  () => import('../../voice-clip').then(module => module.TxVoiceClip),
-  () => {},
+  () => import('../../voice-clip').then((module) => {
+    voiceClipLoadFailed.value = false
+    return module.TxVoiceClip
+  }),
+  () => {
+    voiceClipLoadFailed.value = true
+  },
 )
+
+function retryVoiceClipLoad(): void {
+  voiceClipLoadFailed.value = false
+  loadVoiceClip()
+}
 
 watch(
   () => Boolean(props.markdown && props.streamMarkdown && isStreaming.value),
@@ -77,9 +88,10 @@ watch(
 )
 
 watch(
-  () => Boolean(props.message.voice?.src),
-  (hasVoice) => {
-    if (hasVoice)
+  () => props.message.voice?.src,
+  (src) => {
+    voiceClipLoadFailed.value = false
+    if (src && !voiceClipComp.value)
       loadVoiceClip()
   },
   { immediate: true },
@@ -160,6 +172,24 @@ function onImageClick(url: string, name?: string): void {
               :duration-ms="message.voice.durationMs"
               :peaks="message.voice.peaks"
             />
+            <div
+              v-else-if="voiceClipLoadFailed && message.voice?.src"
+              class="tx-chat-message__voice-fallback"
+            >
+              <audio
+                class="tx-chat-message__voice-audio"
+                controls
+                preload="metadata"
+                :src="message.voice.src"
+              />
+              <button
+                type="button"
+                class="tx-chat-message__retry"
+                @click="retryVoiceClipLoad"
+              >
+                {{ retryLabel }}
+              </button>
+            </div>
           </slot>
         </div>
 
@@ -308,6 +338,18 @@ function onImageClick(url: string, name?: string): void {
 
 .tx-chat-message__voice {
   display: flex;
+}
+
+.tx-chat-message__voice-fallback {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.tx-chat-message__voice-audio {
+  height: 32px;
+  max-width: 100%;
 }
 
 .tx-chat-message__bubble {

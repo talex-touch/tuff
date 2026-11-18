@@ -304,12 +304,21 @@ function onAttachmentClick(): void {
   emit('attachmentClick')
 }
 
-function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape' && isListening.value) {
-    e.preventDefault()
-    cancelDictation()
+function onAttachmentRemove(id: string): void {
+  if (props.disabled)
     return
+  emit('attachmentRemove', id)
+}
+
+function onShellKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape' && !e.defaultPrevented && isListening.value) {
+    e.preventDefault()
+    e.stopPropagation()
+    cancelDictation()
   }
+}
+
+function onKeydown(e: KeyboardEvent): void {
   // Enter during IME composition confirms the candidate, never sends.
   if (e.isComposing || e.keyCode === 229)
     return
@@ -538,6 +547,7 @@ onBeforeUnmount(stopTrayMotion)
     @dragover="onDragOver"
     @dragleave="onDragLeave"
     @drop="onDrop"
+    @keydown="onShellKeydown"
   >
     <Transition name="tx-chat-composer-tray" :css="trayMotion">
       <div
@@ -581,7 +591,8 @@ onBeforeUnmount(stopTrayMotion)
               type="button"
               class="tx-chat-composer__attachment-remove"
               :aria-label="removeAttachmentLabelFormatter ? removeAttachmentLabelFormatter(item.label) : `Remove ${item.label}`"
-              @click="emit('attachmentRemove', item.id)"
+              :disabled="disabled"
+              @click="onAttachmentRemove(item.id)"
             >
               ×
             </button>
@@ -894,8 +905,13 @@ onBeforeUnmount(stopTrayMotion)
   line-height: 1;
   cursor: pointer;
 
-  &:hover {
+  &:hover:not(:disabled) {
     color: var(--tx-text-color-primary, #111827);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
   }
 
   &:focus-visible {

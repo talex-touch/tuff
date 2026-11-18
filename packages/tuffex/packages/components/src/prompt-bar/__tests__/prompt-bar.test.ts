@@ -2,6 +2,7 @@ import type { AiAttachment } from '../../ai-elements/src/types'
 import type { PromptBarCommand, PromptBarModel, PromptBarSource } from '../src/types'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, ref } from 'vue'
 import TxPromptBar from '../src/TxPromptBar.vue'
 
 // An open menu holds a document-level pointerdown listener. Bars left mounted
@@ -549,5 +550,87 @@ describe('txPromptBar', () => {
     await emptyBtn.trigger('click')
     await forcedEmpty.find('textarea').trigger('keydown', { key: 'Enter' })
     expect(forcedEmpty.emitted('send')).toBeUndefined()
+  })
+
+  it('preserves mid-draft caret token menu when v-model parent echoes input, and resets on external change', async () => {
+    const externalDraft = ref(' trailing')
+    const Host = defineComponent({
+      components: { TxPromptBar },
+      setup() {
+        return { externalDraft, sources }
+      },
+      template: `<TxPromptBar v-model="externalDraft" :sources="sources" />`,
+    })
+
+    const wrapper = mount(Host)
+    const textarea = wrapper.find('textarea').element as HTMLTextAreaElement
+    textarea.value = '@sco trailing'
+    textarea.setSelectionRange(4, 4)
+    textarea.dispatchEvent(new Event('input'))
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.$nextTick()
+
+    expect(externalDraft.value).toBe('@sco trailing')
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(true)
+    expect(wrapper.find('[role="option"]').text()).toContain('Scoop Data')
+
+    // Distinct external overwrite resets caret to trailing end, closing the mid-draft @ menu.
+    externalDraft.value = '@sco replaced externally'
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
+  })
+
+  it('shows active dictation bar even without sources or lead slots and passes delivery eligibility to #actions', async () => {
+    const wrapper = mount(TxPromptBar, {
+      props: {
+        dictatable: true,
+        listening: true,
+        dictationState: 'listening',
+        dictationElapsedMs: 12000,
+      },
+      slots: {
+        actions: `<template #actions="{ canSend, send }"><button type="button" class="custom-send" :disabled="!canSend" @click="send">Custom Send</button></template>`,
+      },
+    })
+
+    expect(wrapper.find('.tx-bui-prompt-bar__controls').classes()).not.toContain('is-leadless')
+    expect(wrapper.find('.tx-bui-prompt-bar__dictate-bar').exists()).toBe(true)
+    expect(wrapper.find('.tx-bui-prompt-bar__dictate-timer').text()).toBe('00:12')
+
+    await wrapper.setProps({ listening: false, dictationState: 'idle', dictationElapsedMs: 0, modelValue: 'hello', streaming: true })
+    expect(wrapper.find('.tx-bui-prompt-bar__controls').classes()).toContain('is-leadless')
+    // Built-in primary button stays enabled to stop, while #actions custom send reflects canDeliverDraft (false).
+    expect(wrapper.find('.tx-bui-prompt-bar__send').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('.custom-send').attributes('disabled')).toBeDefined()
+
+    await wrapper.setProps({ sendQueues: true })
+    expect(wrapper.find('.custom-send').attributes('disabled')).toBeUndefined()
+  })
+
+  it('keeps the menu highlight inside the scrolling viewport coordinate system across tall option lists', async () => {
+    const manySources: PromptBarSource[] = Array.from({ length: 10 }, (_, idx) => ({
+      key: `s${idx}`,
+      name: `Source ${idx}`,
+      desc: `Row ${idx}`,
+    }))
+    const wrapper = mountBar({ sources: manySources })
+    const input = wrapper.find('textarea')
+    await input.setValue('@')
+
+    const options = wrapper.findAll('[role="option"]')
+    expect(options).toHaveLength(10)
+    options.forEach((opt, idx) => {
+      Object.defineProperty(opt.element, 'offsetTop', { value: idx * 36, configurable: true })
+      Object.defineProperty(opt.element, 'offsetHeight', { value: 36, configurable: true })
+    })
+
+    await input.trigger('keydown', { key: 'End' })
+    await wrapper.vm.$nextTick()
+
+    const viewport = wrapper.find('.tx-bui-prompt-bar-menu__viewport')
+    expect(viewport.exists()).toBe(true)
+    expect(viewport.find('.tx-bui-prompt-bar-menu__highlight').exists()).toBe(true)
+    expect(viewport.find('.tx-bui-prompt-bar-menu__list').exists()).toBe(true)
+    expect(viewport.find('.tx-bui-prompt-bar-menu__highlight').attributes('style')).toContain('top: 324px')
   })
 })

@@ -73,4 +73,32 @@ describe('txChatList stream delegation', () => {
     })
     expect(wrapper.find('.tx-chat-list__empty').text()).toBe('Start a conversation')
   })
+
+  it('scrolls to indexed items in list mode even when custom item/message slots omit .tx-chat-message', () => {
+    const wrapper = mount(TxChatList, {
+      props: {
+        mode: 'list',
+        stagger: false,
+        messages: [
+          { id: 'm0', role: 'user', content: 'First' },
+          { id: 'm1', role: 'assistant', content: 'Second' },
+          { id: 'm2', role: 'user', content: 'Third' },
+        ],
+      },
+      slots: {
+        item: '<template #item="{ message }"><article class="custom-row">{{ message.content }}</article></template>',
+      },
+    })
+
+    expect(wrapper.find('.tx-chat-message').exists()).toBe(false)
+    const anchors = wrapper.findAll('.tx-chat-list__item')
+    expect(anchors).toHaveLength(3)
+
+    const scrollSpy = vi.fn()
+    ;(anchors[1]!.element as HTMLElement).scrollIntoView = scrollSpy
+
+    const vm = wrapper.vm as unknown as { scrollToIndex: (index: number) => void }
+    vm.scrollToIndex(1)
+    expect(scrollSpy).toHaveBeenCalledWith({ block: 'start' })
+  })
 })

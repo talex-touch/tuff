@@ -48,6 +48,7 @@ defineSlots<{
 }>()
 
 const scrollerRef = ref<HTMLElement | null>(null)
+const headerRef = ref<HTMLElement | null>(null)
 const topZoneRef = ref<HTMLElement | null>(null)
 const sentinelRef = ref<HTMLElement | null>(null)
 const spacerRef = ref<HTMLElement | null>(null)
@@ -55,6 +56,7 @@ const liveRef = ref<HTMLElement | null>(null)
 
 const scrollTop = ref(0)
 const viewportHeight = ref(0)
+const headerHeight = ref(0)
 const topZoneHeight = ref(0)
 
 /**
@@ -70,8 +72,20 @@ function measureSpacerTop(): void {
   const spacer = spacerRef.value
   if (!scroller || !spacer)
     return
-  spacerTop.value
-    = spacer.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop
+  const scrollerRect = scroller.getBoundingClientRect()
+  const spacerRect = spacer.getBoundingClientRect()
+  const hasLayoutBox
+    = scrollerRect.height !== 0
+      || scrollerRect.width !== 0
+      || spacerRect.height !== 0
+      || spacerRect.width !== 0
+      || spacerRect.top !== 0
+      || scrollerRect.top !== 0
+  if (hasLayoutBox) {
+    spacerTop.value = spacerRect.top - scrollerRect.top + scroller.scrollTop
+    return
+  }
+  spacerTop.value = headerHeight.value + topZoneHeight.value
 }
 
 // The spacer mounts and unmounts with the item count crossing zero.
@@ -139,6 +153,8 @@ const activeIndex = computed(() => {
     return total - 1
   void layoutVersion.value
   const focusOffset = Math.max(0, scrollTop.value - spacerTop.value + viewportHeight.value * 0.35)
+  if (focusOffset >= cache.totalHeight())
+    return total - 1
   const { start } = cache.visibleRange(focusOffset, 1, 0)
   return Math.max(0, Math.min(total - 1, start))
 })
@@ -216,6 +232,20 @@ function handleResizeEntries(entries: ResizeObserverEntry[]): void {
       // measured (no item deltas left to fire) — a following reader must be
       // re-pinned or they strand at the top with `following` still true.
       grew = true
+      continue
+    }
+
+    if (target === headerRef.value) {
+      const next = entryHeight(entry)
+      const delta = next - headerHeight.value
+      headerHeight.value = next
+      measureSpacerTop()
+      if (delta !== 0) {
+        if (scrollTop.value > 0 && !stick.atBottom.value)
+          compensation += delta
+        else
+          grew = true
+      }
       continue
     }
 
@@ -492,11 +522,15 @@ function scrollToIndex(index: number): void {
 
 onMounted(() => {
   const scroller = scrollerRef.value
+  if (headerRef.value)
+    headerHeight.value = headerRef.value.getBoundingClientRect().height
 
   if (typeof ResizeObserver !== 'undefined') {
     observer = new ResizeObserver(handleResizeEntries)
     if (scroller)
       observer.observe(scroller)
+    if (headerRef.value)
+      observer.observe(headerRef.value)
     if (topZoneRef.value)
       observer.observe(topZoneRef.value)
     if (liveRef.value)
@@ -557,7 +591,9 @@ defineExpose({
       @scroll.passive="onScroll"
       @wheel.passive="onWheel"
     >
-      <slot name="header" />
+      <div ref="headerRef" class="tx-conversation-stream__header">
+        <slot name="header" />
+      </div>
 
       <div
         v-if="items.length === 0"
@@ -673,6 +709,10 @@ defineExpose({
   overflow-y: auto;
   // The component runs its own anchoring; the browser's would double-correct.
   overflow-anchor: none;
+}
+
+.tx-conversation-stream__header {
+  display: flow-root;
 }
 
 .tx-conversation-stream__top {

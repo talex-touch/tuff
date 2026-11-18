@@ -123,6 +123,7 @@ const internalListening = ref(false)
 const cursorIndex = ref<number | undefined>(undefined)
 const caretTracked = ref(false)
 let updatingFromInput = false
+let lastEmittedDraft: string | undefined
 
 const draft = computed(() => props.modelValue ?? internalDraft.value)
 const attachments = computed(() => props.attachments ?? [])
@@ -134,11 +135,16 @@ const isListening = computed(() =>
 
 watch(
   () => props.modelValue,
-  () => {
-    if (!updatingFromInput) {
-      cursorIndex.value = undefined
-      caretTracked.value = false
+  (next) => {
+    if (updatingFromInput)
+      return
+    if (lastEmittedDraft !== undefined && next === lastEmittedDraft) {
+      lastEmittedDraft = undefined
+      return
     }
+    lastEmittedDraft = undefined
+    cursorIndex.value = undefined
+    caretTracked.value = false
   },
 )
 
@@ -161,8 +167,14 @@ const tokenMenu = useTokenMenu<PromptBarSource, PromptBarCommand>({
 const { menu, rows, activeIndex, engaged } = tokenMenu
 
 const hasSources = computed(() => (props.sources?.length ?? 0) > 0)
+const showDictationBar = computed(() =>
+  Boolean(
+    isListening.value
+    && (props.dictationElapsedMs || props.dictationStatusText || (props.dictationState && props.dictationState !== 'idle')),
+  ),
+)
 const hasLeadTools = computed(() =>
-  hasSources.value || Boolean(slots['toolbar-left'] || slots.mode),
+  hasSources.value || showDictationBar.value || Boolean(slots['toolbar-left'] || slots.mode),
 )
 /** Without rows to offer, the textarea is a plain text box, not a combobox. */
 const mentionsEnabled = computed(() => hasSources.value || (props.commands?.length ?? 0) > 0)
@@ -307,6 +319,10 @@ function updateDraft(value: string, preserveCursor = false): void {
   if (!preserveCursor) {
     cursorIndex.value = undefined
     caretTracked.value = false
+    lastEmittedDraft = undefined
+  }
+  else {
+    lastEmittedDraft = value
   }
   internalDraft.value = value
   updatingFromInput = true
@@ -890,7 +906,7 @@ defineExpose({
             </svg>
           </button>
 
-          <div v-if="isListening && (dictationElapsedMs || dictationStatusText || dictationState !== 'idle')" class="tx-bui-prompt-bar__dictate-bar">
+          <div v-if="showDictationBar" class="tx-bui-prompt-bar__dictate-bar">
             <span class="tx-bui-prompt-bar__rec-dot" aria-hidden="true" />
             <span class="tx-bui-prompt-bar__dictate-status">{{ dictationStatusResolved }}</span>
             <span v-if="dictationElapsedMs" class="tx-bui-prompt-bar__dictate-timer">{{ dictationTimerText }}</span>
@@ -959,7 +975,7 @@ defineExpose({
             </button>
           </slot>
 
-          <slot name="actions" :send="send" :stop="() => emit('stop')" :can-send="canSend" />
+          <slot name="actions" :send="send" :stop="() => emit('stop')" :can-send="canDeliverDraft" />
 
           <div
             v-if="dictatable"

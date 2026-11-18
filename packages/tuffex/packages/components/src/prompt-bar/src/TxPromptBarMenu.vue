@@ -88,31 +88,33 @@ const rootStyle = computed(() => ({
     :style="rootStyle"
     @mouseleave="emit('leave')"
   >
-    <span class="tx-bui-prompt-bar-menu__highlight" aria-hidden="true" :style="highlightStyle" />
+    <div class="tx-bui-prompt-bar-menu__viewport">
+      <span class="tx-bui-prompt-bar-menu__highlight" aria-hidden="true" :style="highlightStyle" />
 
-    <ul :id="id" class="tx-bui-prompt-bar-menu__list" role="listbox" :aria-label="label">
-      <li
-        v-for="(row, index) in rows"
-        :id="optionId(index)"
-        :key="row.key"
-        :ref="(element) => captureRow(element, index)"
-        class="tx-bui-prompt-bar-menu__option"
-        :class="{ 'is-active': index === activeIndex }"
-        role="option"
-        :aria-selected="index === selectedIndex"
-        @mousedown.prevent
-        @mouseenter="emit('hover', index)"
-        @click="emit('pick', row, index)"
-      >
-        <slot
-          name="row"
-          :row="row"
-          :index="index"
-          :active="index === activeIndex"
-          :selected="index === selectedIndex"
-        />
-      </li>
-    </ul>
+      <ul :id="id" class="tx-bui-prompt-bar-menu__list" role="listbox" :aria-label="label">
+        <li
+          v-for="(row, index) in rows"
+          :id="optionId(index)"
+          :key="row.key"
+          :ref="(element) => captureRow(element, index)"
+          class="tx-bui-prompt-bar-menu__option"
+          :class="{ 'is-active': index === activeIndex }"
+          role="option"
+          :aria-selected="index === selectedIndex"
+          @mousedown.prevent
+          @mouseenter="emit('hover', index)"
+          @click="emit('pick', row, index)"
+        >
+          <slot
+            name="row"
+            :row="row"
+            :index="index"
+            :active="index === activeIndex"
+            :selected="index === selectedIndex"
+          />
+        </li>
+      </ul>
+    </div>
 
     <div v-if="rows.length === 0 && emptyText" class="tx-bui-prompt-bar-menu__empty">
       {{ emptyText }}
@@ -167,12 +169,18 @@ const rootStyle = computed(() => ({
     }
   }
 
+  .tx-bui-prompt-bar-menu__viewport {
+    position: relative;
+    max-height: var(--tx-bui-prompt-bar-menu-max-height, 260px);
+    overflow-y: auto;
+  }
+
   // One highlight glides between rows instead of each row toggling its own
   // background — the same gesture as the gliding pill in the sidebar.
   .tx-bui-prompt-bar-menu__highlight {
     position: absolute;
-    left: 4px;
-    right: 4px;
+    left: 0;
+    right: 0;
     border-radius: 6px;
     background: var(--tx-bui-hover, #f4f5f6);
     pointer-events: none;
@@ -185,8 +193,6 @@ const rootStyle = computed(() => ({
   .tx-bui-prompt-bar-menu__list {
     position: relative;
     z-index: 1;
-    max-height: var(--tx-bui-prompt-bar-menu-max-height, 260px);
-    overflow-y: auto;
     margin: 0;
     padding: 0;
     list-style: none;

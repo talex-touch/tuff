@@ -1,7 +1,26 @@
-import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
+import { h, nextTick } from 'vue'
 import TxChatList from '../src/TxChatList.vue'
 import TxChatMessage from '../src/TxChatMessage.vue'
+
+const voiceImportState = vi.hoisted(() => ({
+  shouldFail: false,
+}))
+
+vi.mock('../../voice-clip', () => {
+  if (voiceImportState.shouldFail)
+    throw new Error('voice chunk unavailable')
+  return {
+    TxVoiceClip: {
+      name: 'TxVoiceClip',
+      props: ['src', 'durationMs', 'peaks'],
+      setup(props: { src?: string }) {
+        return () => h('div', { class: 'tx-voice-clip', 'data-src': props.src })
+      },
+    },
+  }
+})
 
 function messageWith(attachments: Array<{ type: 'image', url: string, name?: string }>) {
   return {
@@ -132,5 +151,42 @@ describe('txChatMessage rich variants, status, and actions', () => {
 
     expect(wrapper.classes()).toContain('is-pending')
     expect(wrapper.findAll('.tx-chat-message__typing i')).toHaveLength(3)
+  })
+
+  it('renders a native audio fallback and retry control when lazy TxVoiceClip loading fails', async () => {
+    voiceImportState.shouldFail = true
+    vi.resetModules()
+
+    const wrapper = mount(TxChatMessage, {
+      props: {
+        markdown: false,
+        retryLabel: 'Retry audio',
+        message: {
+          id: 'v1',
+          role: 'user',
+          content: '',
+          voice: { src: 'blob:voice-1', durationMs: 4000 },
+        },
+      },
+    })
+    await flushPromises()
+
+    const fallbackAudio = wrapper.find('.tx-chat-message__voice-audio')
+    expect(fallbackAudio.exists()).toBe(true)
+    expect(fallbackAudio.attributes('src')).toBe('blob:voice-1')
+    expect(fallbackAudio.attributes('controls')).toBeDefined()
+
+    const retryBtn = wrapper.find('.tx-chat-message__voice-fallback .tx-chat-message__retry')
+    expect(retryBtn.text()).toBe('Retry audio')
+
+    voiceImportState.shouldFail = false
+    vi.resetModules()
+    await retryBtn.trigger('click')
+    await flushPromises()
+    await nextTick()
+
+    expect(wrapper.find('.tx-voice-clip').exists()).toBe(true)
+    expect(wrapper.find('.tx-voice-clip').attributes('data-src')).toBe('blob:voice-1')
+    expect(wrapper.find('.tx-chat-message__voice-fallback').exists()).toBe(false)
   })
 })

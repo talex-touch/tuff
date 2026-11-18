@@ -71,6 +71,13 @@ function speakStateFor(message: ChatMessageModel) {
   return props.speakStateOf?.(message) ?? 'idle'
 }
 
+function resolveItemKey(message: ChatMessageModel, index: number): string | number {
+  if (typeof props.itemKey === 'function')
+    return props.itemKey(message, index)
+  const raw = (message as unknown as Record<string, unknown> | null | undefined)?.[props.itemKey]
+  return typeof raw === 'string' || typeof raw === 'number' ? raw : message.id ?? index
+}
+
 function scrollToBottom(behavior: ScrollBehavior = 'auto'): void {
   if (props.mode === 'stream') {
     streamRef.value?.scrollToBottom(behavior)
@@ -91,8 +98,11 @@ function scrollToIndex(index: number): void {
     return
   }
   const el = rootRef.value
-  const children = el?.querySelectorAll('.tx-chat-message')
-  const target = children?.[Math.max(0, index)]
+  const children = el?.querySelectorAll('.tx-chat-list__item:not(.tx-stagger-leave-active)')
+  if (!children?.length)
+    return
+  const clamped = Math.max(0, Math.min(children.length - 1, index))
+  const target = children[clamped]
   if (target && typeof (target as HTMLElement).scrollIntoView === 'function')
     (target as HTMLElement).scrollIntoView({ block: 'start' })
 }
@@ -251,7 +261,12 @@ defineExpose({
         :tag="stagger ? 'div' : undefined"
         class="tx-chat-list__inner"
       >
-        <template v-for="(m, index) in list" :key="m.id">
+        <div
+          v-for="(m, index) in list"
+          :key="resolveItemKey(m, index)"
+          class="tx-chat-list__item"
+          :data-chat-index="index"
+        >
           <slot v-if="$slots.item" name="item" :message="m" :item="m" :index="index" />
           <slot v-else-if="$slots.message" name="message" :message="m" :index="index" />
           <TxChatMessage
@@ -302,7 +317,7 @@ defineExpose({
               <slot name="message-footer" v-bind="slotProps" />
             </template>
           </TxChatMessage>
-        </template>
+        </div>
       </component>
 
       <slot name="footer" />
@@ -324,6 +339,10 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: var(--tx-chat-list-gap, 10px);
+}
+
+.tx-chat-list__item {
+  min-width: 0;
 }
 
 .tx-chat-list__empty {

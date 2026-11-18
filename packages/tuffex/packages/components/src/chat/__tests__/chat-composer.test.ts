@@ -320,4 +320,39 @@ describe('txChatComposer', () => {
     await forcedEmpty.find('textarea').trigger('keydown', { key: 'Enter' })
     expect(forcedEmpty.emitted('send')).toBeUndefined()
   })
+
+  it('cancels dictation on Escape from focused child controls without letting Enter outside textarea submit', async () => {
+    const wrapper = mount(TxChatComposer, {
+      props: {
+        modelValue: 'Draft text',
+        sendOnMetaEnter: false,
+        dictatable: true,
+        listening: true,
+        micState: 'listening',
+      },
+    })
+
+    const micBtn = wrapper.find('.tx-chat-composer__mic')
+    await micBtn.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('send')).toBeUndefined()
+
+    await micBtn.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.emitted('dictateCancel')).toHaveLength(1)
+    expect(wrapper.emitted('update:listening')).toEqual([[false]])
+  })
+
+  it('disables attachment removal when the composer itself is disabled', async () => {
+    const wrapper = mount(TxChatComposer, {
+      props: {
+        disabled: true,
+        attachmentRemovable: true,
+        attachments: [{ id: 'att-1', label: 'report.pdf' }],
+      },
+    })
+
+    const removeBtn = wrapper.find('.tx-chat-composer__attachment-remove')
+    expect(removeBtn.attributes('disabled')).toBeDefined()
+    await removeBtn.trigger('click')
+    expect(wrapper.emitted('attachmentRemove')).toBeUndefined()
+  })
 })

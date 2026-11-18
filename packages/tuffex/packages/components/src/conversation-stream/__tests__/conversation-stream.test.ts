@@ -520,4 +520,68 @@ describe('txConversationStream', () => {
     expect(wrapper.find('.stream-overlay').text()).toBe('false')
     expect(wrapper.find('.tx-conversation-stream__pill').attributes('aria-label')).toBe('Jump down')
   })
+
+  it('reports the live item index when detached inside a tall live response past cache.totalHeight()', async () => {
+    const wrapper = mount(TxConversationStream as any, {
+      props: {
+        items: makeMessages(0, 5),
+        itemKey: 'id',
+        estimatedItemHeight: 100,
+      },
+      slots: {
+        rail: ({ activeIndex }: { activeIndex: number }) =>
+          h('div', { class: 'stream-rail' }, String(activeIndex)),
+        item: ({ item }: { item: Message }) => h('div', { class: 'msg' }, item.text),
+      },
+    })
+    // 4 virtual items = 400px spacer, plus a 1400px tall live response (scrollHeight 1800px).
+    const control = stubScroller(wrapper, { clientHeight: 400, scrollHeight: 1800 })
+    fireResize(control.element, 400)
+    await nextTick()
+
+    // Scroll mid-way inside the live response (scrollTop 600 < maxScroll 1400, so atBottom is false).
+    ;(control.element as any).scrollTop = 600
+    await wrapper.find('.tx-conversation-stream__scroller').trigger('scroll')
+    await nextTick()
+
+    expect(wrapper.vm.atBottom).toBe(false)
+    expect(wrapper.find('.stream-rail').text()).toBe('4')
+  })
+
+  it('observes #header height changes, refreshes spacerTop, and preserves detached scroll position', async () => {
+    const wrapper = mount(TxConversationStream as any, {
+      props: {
+        items: makeMessages(0, 20),
+        itemKey: 'id',
+        estimatedItemHeight: 100,
+      },
+      slots: {
+        header: '<div class="dynamic-header">Context summary</div>',
+        item: ({ item }: { item: Message }) => h('div', { class: 'msg' }, item.text),
+      },
+    })
+    const control = stubScroller(wrapper, { clientHeight: 400, scrollHeight: 2200 })
+    const header = wrapper.find('.tx-conversation-stream__header').element as HTMLElement
+    expect(observedTargets.has(header)).toBe(true)
+
+    fireResize(control.element, 400)
+    fireResize(header, 40)
+    await nextTick()
+
+    // Detach mid-history.
+    ;(control.element as any).scrollTop = 500
+    await wrapper.find('.tx-conversation-stream__scroller').trigger('scroll')
+    await nextTick()
+    expect(wrapper.vm.atBottom).toBe(false)
+
+    // Header expands from 40px to 110px (+70px): detached reader shifts by +70px and spacerTop becomes 110px.
+    control.setScrollHeight(2270)
+    fireResize(header, 110)
+    await nextTick()
+
+    expect((control.element as any).scrollTop).toBe(570)
+
+    wrapper.vm.scrollToIndex(3)
+    expect((control.element as any).scrollTop).toBe(110 + 3 * 100)
+  })
 })
