@@ -85,17 +85,17 @@ import {
 } from './constants'
 import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
 import { getFileTraversalExclusionReason, getScanChildExclusionReason } from './utils'
+import {
+  FileProviderNativeBridge,
+  validateDeferredWorkerEntries
+} from './services/file-provider-native-index-service'
 import { FileIndexWorkerClient } from './workers/file-index-worker-client'
 import { FileReconcileWorkerClient } from './workers/file-reconcile-worker-client'
 import { FileScanWorkerClient } from './workers/file-scan-worker-client'
 import { EmbeddingService } from './embedding-service'
 import { iconService } from '../../../../service/icon-service'
 import { ThumbnailWorkerClient } from './workers/thumbnail-worker-client'
-import {
-  createIndexedFileAssetLookup,
-  registerFileAssetBridge,
-  sanitizeIndexedFileExtensions
-} from './file-asset-bridge'
+import { sanitizeIndexedFileExtensions } from './file-asset-bridge'
 import { AdaptiveBatchScheduler } from '../../search-engine/adaptive-batch-scheduler'
 import type { IndexedWriteDeleteExecutorResult } from '../../search-engine/indexing-write-delete-executor-service'
 import {
@@ -355,7 +355,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     logDebug: (message, meta) => this.logDebug(message, meta)
   })
   private readonly thumbnailWorker = new ThumbnailWorkerClient()
-  private disposeAssetBridge: (() => void) | null = null
 
   private filePersistencePort: FilePersistencePort | null = null
   private filePersistenceReady: Promise<boolean> | null = null
@@ -459,6 +458,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   public readonly assetService: FileProviderAssetService
   private readonly searchResultService: FileProviderSearchResultService
   private readonly searchItemService: FileProviderSearchItemService
+  private readonly nativeIndexBridge: FileProviderNativeBridge
   private readonly maintenanceService = new FileProviderMaintenanceService({
     sourceId: this.id,
     getDbUtils: () => this.dbUtils,
@@ -555,18 +555,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       thumbnailWorker: this.thumbnailWorker,
       enableIconExtraction: this.enableFileIconExtraction,
       iconWriteMaxQueue: FILE_ICON_WRITE_MAX_QUEUE
-    })
-    const lookupIndexedFiles = createIndexedFileAssetLookup({
-      getDbUtils: () => this.dbUtils,
-      logWarn: (message, error, meta) => this.logWarn(message, error, meta)
-    })
-    // Spotlight, Everything and the recommendation engine render file rows this provider did not
-    // hand them; through the bridge they get the index's thumbnails and the same lazy generation
-    // search results have. See file-asset-bridge.ts.
-    this.disposeAssetBridge = registerFileAssetBridge({
-      lookupIndexedFiles,
-      ensureThumbnail: (file, extensions) =>
-        this.assetService.ensureThumbnail(file.id, file.path, file, extensions)
     })
     this.openerService = new FileProviderOpenerService({
       emptyLogo: EMPTY_OPENER_LOGO,
@@ -993,35 +981,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           signal: AbortSignal.any([signal, this.maintenanceService.signal])
         })
       },
-      prepareDeferredEntries: async (entries, leaseId) => {
-        if (!this.dbUtils || this.shuttingDown) return false
-        const current = new Map<number, typeof filesSchema.$inferSelect>()
-        for (const batch of chunkArray(entries, 100)) {
-          const rows = await this.dbUtils
-            .getFileIndexReadDb()
-            .select()
-            .from(filesSchema)
-            .where(
-              inArray(
-                filesSchema.id,
-                batch.map((entry) => entry.fileId)
-              )
-            )
-          for (const row of rows) current.set(row.id, row)
-        }
-        return entries.every((entry) => {
-          const row = current.get(entry.fileId)
-          return (
-            row &&
-            leaseId &&
-            !this.isIndexWorkerMutationLeaseCancelled(leaseId) &&
-            this.isWithinWatchRoots(row.path) &&
-            !this.maintenanceService.isStaleExcludedIndexPath(row.path) &&
-            (entry.fileVersion == null ||
-              (this.toTimestamp(row.mtime) === entry.fileVersion && row.size === entry.fileSize))
-          )
-        })
-      },
+      prepareDeferredEntries: (entries, leaseId) =>
+        validateDeferredWorkerEntries({
+          dbUtils: this.dbUtils,
+          shuttingDown: this.shuttingDown,
+          entries,
+          leaseId,
+          isLeaseCancelled: (id) => this.isIndexWorkerMutationLeaseCancelled(id),
+          isPathEligible: (p) =>
+            this.isWithinWatchRoots(p) && !this.maintenanceService.isStaleExcludedIndexPath(p),
+          toTimestamp: (v) => this.toTimestamp(v)
+        }),
       isMutationLeaseCancelled: (leaseId) => this.isIndexWorkerMutationLeaseCancelled(leaseId),
       flushBatchScheduler: this.flushBatchScheduler,
       getDbUtils: () => this.dbUtils,
@@ -1086,6 +1056,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       formatDuration,
       now: () => performance.now()
     })
+    this.nativeIndexBridge = new FileProviderNativeBridge({
+      providerId: this.id,
+      providerName: this.name,
+      getWatchPaths: () => this.watchPaths,
+      getStorageDir: () => (this.databaseFilePath ? path.dirname(this.databaseFilePath) : null),
+      getDbUtils: () => this.dbUtils,
+      getEmbeddingService: () => this.embeddingService,
+      ensureThumbnail: (file, exts) =>
+        this.assetService.ensureThumbnail(file.id, file.path, file, exts),
+      isContentIndexingEnabled: () => this.contentIndexPolicyService.isEnabled(),
+      isShuttingDown: () => this.shuttingDown,
+      isPathAdmitted: (filePath) => this.isSearchPathAdmitted(filePath),
+      normalizePath: (rawPath) => this.normalizePath(rawPath),
+      extractFilters: (rawText) => this.searchResultService.extractFilters(rawText)
+    })
     this.logDebug('Watching paths', {
       count: this.watchPaths.length
     })
@@ -1144,14 +1129,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.enrichmentResumeService.stop()
     this.indexSchedulerService.close()
     this.fileIndexWorker.shutdown()
-    this.disposeAssetBridge?.()
-    this.disposeAssetBridge = null
     this.watchService.dispose()
+    const nativeIndexDrain = this.nativeIndexBridge.stop()
     const assetDrain = this.assetService.close()
     const openerDrain = this.openerService.close()
     this.bootPassService.cancel()
     try {
       const producerDrains: Promise<void>[] = [
+        this.awaitShutdownProducer(nativeIndexDrain, 'file-native-index'),
         this.awaitShutdownProducer(assetDrain, 'file-assets'),
         this.awaitShutdownProducer(openerDrain, 'file-openers'),
         this.awaitShutdownProducer(
@@ -1668,6 +1653,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           this.assetService.scheduleLegacyIconMigration(
             Math.max(30_000, getStartupDegradeWindowRemainingMs())
           )
+          this.nativeIndexBridge.startIfSupported()
         } else {
           const error = new Error('Search index worker initialization failed')
           this.backgroundStartupError = error
@@ -1735,6 +1721,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private async runAutoIndexing(): Promise<boolean> {
     if (this.shuttingDown || isIndexFullFailure(this.initializationFailure)) return false
+    if (this.nativeIndexBridge.isActive()) return true
     const decision = await this.shouldRunAutoIndexing()
     if (!decision.allowed) {
       this.logDebug('Auto index scan skipped', {
@@ -1890,7 +1877,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   public resolvePreviewResourcePath(rawPath: string): Promise<string | null> {
-    return this.assetService.resolvePreviewResourcePath(rawPath)
+    return this.nativeIndexBridge.resolvePreviewWithFallback(rawPath, (candidate) =>
+      this.assetService.resolvePreviewResourcePath(candidate)
+    )
   }
 
   public async *streamIndexedSourceSnapshot(
@@ -2231,7 +2220,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   public updateContentIndexSettings(contentIndexingEnabled: boolean) {
-    return this.contentIndexPolicyService.update(contentIndexingEnabled)
+    return this.nativeIndexBridge.updateContentIndexing(contentIndexingEnabled, (enabled) =>
+      this.contentIndexPolicyService.update(enabled)
+    )
   }
 
   private async clearContentIndexingDataWithLease(): Promise<void> {
@@ -2310,8 +2301,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private async computeIndexStats(): Promise<FileIndexStats> {
-    return await computeFileIndexStats(this.searchIndex, this.id)
+  private computeIndexStats(): Promise<FileIndexStats> {
+    return this.nativeIndexBridge.computeEnrichedIndexStats(() =>
+      computeFileIndexStats(this.searchIndex, this.id)
+    )
   }
 
   public async getIndexedSourceEvidence(): Promise<IndexedSourceEvidence[]> {
@@ -2482,6 +2475,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     await this.ensureFileSystemWatchers()
+    this.nativeIndexBridge.rebuildIfSupported()
     this.manualRebuildPendingNotification = true
     void this.requireRuntimeMutationDelegate()
       .scanSource(IndexedSourceScanReasons.ManualRebuild)
@@ -3183,8 +3177,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return this.searchResultService.hasFilters(rawText)
   }
 
-  async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
-    return await this.searchResultService.search(query, signal)
+  onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
+    return this.nativeIndexBridge.searchOrFallback(query, signal, (q, s) =>
+      this.searchResultService.search(q, s)
+    )
   }
 
   onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
