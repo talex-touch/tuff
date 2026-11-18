@@ -72,7 +72,14 @@ import {
   createIneligibleClipboardFreshnessState,
   type ClipboardFreshnessState
 } from './clipboard/clipboard-freshness'
-import { ClipboardFreshnessStore, ClipboardHelper } from './clipboard/clipboard-capture-freshness'
+import {
+  CLIPBOARD_HTML_FORMATS,
+  CLIPBOARD_IMAGE_FORMATS,
+  CLIPBOARD_TEXT_FORMATS,
+  ClipboardFreshnessStore,
+  ClipboardHelper,
+  includesAnyClipboardFormat
+} from './clipboard/clipboard-capture-freshness'
 import { ClipboardCapturePipeline } from './clipboard/clipboard-capture-pipeline'
 import {
   DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS,
@@ -202,6 +209,7 @@ export class ClipboardModule extends BaseModule {
   })
   private readonly imagePersistence = new ClipboardImagePersistence({
     getDatabase: () => this.db,
+    getReader: () => this.resolveClipboardReader(),
     logInfo: (message, data?: LogOptions) => {
       clipboardLog.info(message, data)
     },
@@ -799,14 +807,23 @@ export class ClipboardModule extends BaseModule {
     return await this.historyPersistence.queryClipboardHistory(request)
   }
 
-  private readClipboardSnapshot(): ClipboardReadResponse {
+  private async readClipboardSnapshot(): Promise<ClipboardReadResponse> {
     const formats = clipboard.availableFormats()
-    const text = clipboard.readText()
-    const html = clipboard.readHTML()
-    const image = clipboard.readImage()
-    const hasImage = !image.isEmpty()
-    const files = this.clipboardHelper?.readClipboardFiles() ?? []
+    const reader = this.resolveClipboardReader()
+    const hasText =
+      formats.length === 0 || includesAnyClipboardFormat(formats, CLIPBOARD_TEXT_FORMATS)
+    const hasHtml =
+      formats.length === 0 || includesAnyClipboardFormat(formats, CLIPBOARD_HTML_FORMATS)
+    const hasFileFormat =
+      formats.length === 0 || Boolean(this.clipboardHelper?.hasFileFormats(formats))
+    const text = hasText ? await reader.readText() : ''
+    const html = hasHtml ? await reader.readHtml() : ''
+    const files = hasFileFormat ? await reader.readFiles() : []
     const hasFiles = files.length > 0
+    const hasImage =
+      formats.length > 0
+        ? includesAnyClipboardFormat(formats, CLIPBOARD_IMAGE_FORMATS)
+        : (await reader.readImage()) !== null
     return { text, html, hasImage, hasFiles, formats }
   }
 
@@ -960,8 +977,12 @@ export class ClipboardModule extends BaseModule {
       return
     }
     if (!this.monitoringStarted) {
-      this.clipboardHelper.bootstrap()
       this.monitoringStarted = true
+      if (typeof this.clipboardHelper.bootstrapAsync === 'function') {
+        void this.clipboardHelper.bootstrapAsync(this.resolveClipboardReader())
+      } else {
+        this.clipboardHelper.bootstrap()
+      }
     }
 
     this.updateClipboardPolling(true)
@@ -1478,9 +1499,9 @@ export class ClipboardModule extends BaseModule {
         read: async (request, _context, signal) => {
           if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
           if (request.op === 'text') {
-            return { op: 'text' as const, text: this.readClipboardSnapshot().text }
+            return { op: 'text' as const, text: await this.resolveClipboardReader().readText() }
           }
-          return { op: 'snapshot' as const, ...this.readClipboardSnapshot() }
+          return { op: 'snapshot' as const, ...(await this.readClipboardSnapshot()) }
         },
         write: async (request, _context, signal) => {
           if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
@@ -1607,9 +1628,9 @@ export class ClipboardModule extends BaseModule {
       },
       copyAndPaste: async (request, context) =>
         await this.handleCopyAndPasteRequest(request, context),
-      readClipboard: () => this.readClipboardSnapshot(),
+      readClipboard: async () => await this.readClipboardSnapshot(),
       readImage: async (request) => await this.readClipboardImage(request),
-      readFiles: () => this.clipboardHelper?.readClipboardFiles() ?? [],
+      readFiles: async () => await this.resolveClipboardReader().readFiles(),
       buildChangePayload: () => this.buildTransportChangePayload(),
       getStatus: () => this.getStatus()
     })

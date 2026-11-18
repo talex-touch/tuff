@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
     isEmpty: vi.fn(() => true)
   },
   clipboardReadImage: vi.fn(),
+  createFromBuffer: vi.fn(() => ({ isEmpty: () => true })),
   createEmpty: vi.fn(() => ({ isEmpty: () => true })),
   createFromDataURL: vi.fn(() => ({ isEmpty: () => false, source: 'data' })),
   createFromPath: vi.fn(() => ({ isEmpty: () => false, source: 'path' })),
@@ -43,6 +44,7 @@ vi.mock('electron', () => ({
     readImage: mocks.clipboardReadImage
   },
   nativeImage: {
+    createFromBuffer: mocks.createFromBuffer,
     createEmpty: mocks.createEmpty,
     createFromDataURL: mocks.createFromDataURL,
     createFromPath: mocks.createFromPath
@@ -111,6 +113,12 @@ import {
   ClipboardImagePersistence,
   createNativeImageFromClipboardSource
 } from './clipboard-image-persistence'
+import { NativeClipboardReader } from './clipboard-reader'
+
+const VALID_1X1_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
+  'base64'
+)
 
 function createDb(imagePaths: string[]) {
   let candidateIndex = 0
@@ -196,6 +204,40 @@ describe('clipboard-image-persistence', () => {
   it('returns null when clipboard image is empty', async () => {
     mocks.clipboardReadImage.mockReturnValueOnce(mocks.emptyImage)
     await expect(createPersistence().readClipboardImage({ preview: true })).resolves.toBeNull()
+  })
+
+  it('reads and resizes PNG via async reader + sharp without calling clipboard.readImage or createFromBuffer', async () => {
+    const reader = new NativeClipboardReader({
+      getImageBinary: async () => VALID_1X1_PNG
+    })
+    const persistence = new ClipboardImagePersistence({
+      getDatabase: () => undefined,
+      getReader: () => reader,
+      logInfo: mocks.logInfo,
+      logWarn: mocks.logWarn
+    })
+
+    const previewResult = await persistence.readClipboardImage({ preview: true })
+    expect(previewResult).toMatchObject({
+      width: 1,
+      height: 1,
+      dataUrl: expect.stringMatching(/^data:image\/png;base64,/)
+    })
+
+    const fullResult = await persistence.readClipboardImage({ preview: false })
+    expect(fullResult).toMatchObject({
+      width: 1,
+      height: 1,
+      tfileUrl: 'tfile:///tmp/tuff/clipboard/live-images/read.png'
+    })
+    expect(mocks.clipboardReadImage).not.toHaveBeenCalled()
+    expect(mocks.createFromBuffer).not.toHaveBeenCalled()
+    expect(mocks.createFile).toHaveBeenCalledWith({
+      namespace: 'clipboard/live-images',
+      ext: 'png',
+      buffer: VALID_1X1_PNG,
+      prefix: 'clipboard-read'
+    })
   })
 
   it('keeps native image source reconstruction behavior compatible', () => {

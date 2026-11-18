@@ -12,6 +12,7 @@ import type { ClipboardReader } from './clipboard-reader'
 import { performance } from 'node:perf_hooks'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { clipboard } from 'electron'
+import sharp from 'sharp'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { clipboardHistory } from '../../db/schema'
 import { enterPerfContext } from '../../utils/perf-context'
@@ -39,6 +40,26 @@ import {
 } from './clipboard-phase-diagnostics'
 import { createClipboardFreshnessState } from './clipboard-freshness'
 import { isClipboardCaptureSuppressed } from './clipboard-capture-suppression'
+import { parsePngDimensions } from './clipboard-reader'
+
+async function buildClipboardThumbnailDataUrl(
+  image: NativeImage,
+  encodedPng: Buffer | null | undefined,
+  width: number
+): Promise<string> {
+  if (encodedPng && parsePngDimensions(encodedPng)) {
+    try {
+      const thumbBuffer = await sharp(encodedPng)
+        .resize({ width, withoutEnlargement: true })
+        .png()
+        .toBuffer()
+      return `data:image/png;base64,${thumbBuffer.toString('base64')}`
+    } catch {
+      // Fall back to NativeImage resize when libvips rejects malformed PNG data.
+    }
+  }
+  return image.resize({ width }).toDataURL()
+}
 
 const CLIPBOARD_META_QUEUE_LIMIT = 6
 const CLIPBOARD_SLOW_THRESHOLD_MS = 200
@@ -157,9 +178,11 @@ export class ClipboardCapturePipeline {
     previousScanAt: number | null
     phaseDurations: ClipboardPhaseDurations
   }): Promise<void> {
-    trackPhase(phaseDurations, 'helper.bootstrap', () => {
-      helper.bootstrap()
-    })
+    // One reader per capture keeps the single-reader invariant (no two readers
+    // disagreeing) while the reads run off the main thread when native — so a
+    // large clipboard image no longer freezes the main-process event loop.
+    const reader = this.options.getReader()
+    await trackPhaseAsync(phaseDurations, 'helper.bootstrap', () => helper.bootstrapAsync(reader))
 
     const formats = trackPhase(phaseDurations, 'clipboard.availableFormats', () => {
       return clipboard.availableFormats()
@@ -178,10 +201,6 @@ export class ClipboardCapturePipeline {
     const hasImageFormats = includesAnyClipboardFormat(formats, CLIPBOARD_IMAGE_FORMATS)
     const hasTextFormats = includesAnyClipboardFormat(formats, CLIPBOARD_TEXT_FORMATS)
     const hasHtmlFormats = includesAnyClipboardFormat(formats, CLIPBOARD_HTML_FORMATS)
-    // One reader per capture keeps the single-reader invariant (no two readers
-    // disagreeing) while the reads run off the main thread when native — so a
-    // large clipboard image no longer freezes the main-process event loop.
-    const reader = this.options.getReader()
     let prefetchedText: string | undefined
     let prefetchedHtml: string | undefined
     let prefetchedFiles: string[] | undefined
@@ -270,10 +289,11 @@ export class ClipboardCapturePipeline {
 
     if (hasFileFormats) {
       const files = await readPrefetchedFiles()
-      item = this.tryBuildFilesItem({
+      item = await this.tryBuildFilesItem({
         helper,
         files,
         cachedImage,
+        encodedPng: prefetchedPng,
         phaseDurations,
         metaEntries
       })
@@ -380,19 +400,21 @@ export class ClipboardCapturePipeline {
     this.forwardClipboardChangeToPlugin(persisted)
   }
 
-  private tryBuildFilesItem({
+  private async tryBuildFilesItem({
     helper,
     files,
     cachedImage,
+    encodedPng,
     phaseDurations,
     metaEntries
   }: {
     helper: ClipboardHelper
     files: string[]
     cachedImage: NativeImage | null
+    encodedPng?: Buffer | null
     phaseDurations: ClipboardPhaseDurations
     metaEntries: ClipboardMetaEntry[]
-  }): PendingClipboardItem | null {
+  }): Promise<PendingClipboardItem | null> {
     if (!trackPhase(phaseDurations, 'diff.files', () => helper.didFilesChange(files))) {
       return null
     }
@@ -404,12 +426,12 @@ export class ClipboardCapturePipeline {
     if (cachedImage) {
       const currentImage = cachedImage
       trackPhase(phaseDurations, 'image.prime', () => {
-        helper.primeImage(currentImage)
+        helper.primeImage(currentImage, encodedPng)
       })
       imageSize = trackPhase(phaseDurations, 'image.size', () => currentImage.getSize())
-      thumbnail = trackPhase(phaseDurations, 'image.thumbnail', () => {
-        return currentImage.resize({ width: 128 }).toDataURL()
-      })
+      thumbnail = await trackPhaseAsync(phaseDurations, 'image.thumbnail', () =>
+        buildClipboardThumbnailDataUrl(currentImage, encodedPng, 128)
+      )
       this.options.logInfo('File with thumbnail detected', {
         meta: { width: imageSize.width, height: imageSize.height }
       })
@@ -450,7 +472,10 @@ export class ClipboardCapturePipeline {
     phaseDurations: ClipboardPhaseDurations
     metaEntries: ClipboardMetaEntry[]
   }): Promise<{ item: PendingClipboardItem | null; cachedImage: NativeImage | null }> {
-    if (!trackPhase(phaseDurations, 'diff.image', () => force || helper.didImageChange(image))) {
+    const changed = trackPhase(phaseDurations, 'diff.image', () =>
+      helper.didImageChange(image, encodedPng)
+    )
+    if (!force && !changed) {
       return { item: null, cachedImage: image }
     }
 
@@ -460,9 +485,9 @@ export class ClipboardCapturePipeline {
     const size = trackPhase(phaseDurations, 'image.size', () => image.getSize())
     metaEntries.push({ key: 'image_size', value: size })
 
-    const thumbnail = trackPhase(phaseDurations, 'image.thumbnail', () => {
-      return image.resize({ width: 128 }).toDataURL()
-    })
+    const thumbnail = await trackPhaseAsync(phaseDurations, 'image.thumbnail', () =>
+      buildClipboardThumbnailDataUrl(image, encodedPng, 128)
+    )
 
     await trackPhaseAsync(
       phaseDurations,
