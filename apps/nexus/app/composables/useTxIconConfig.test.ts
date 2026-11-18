@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { isApiSvgIconUrl, sanitizePluginSvg } from './useTxIconConfig'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { fetchSanitizedSvg, getCachedSvgDataUrl, isApiSvgIconUrl, sanitizePluginSvg } from './useTxIconConfig'
 
 describe('useTxIconConfig SVG sanitization', () => {
   it('preserves clean monochrome Tabler SVG icons returned by /api/images/*.svg', () => {
@@ -31,5 +31,29 @@ describe('useTxIconConfig SVG sanitization', () => {
     expect(isApiSvgIconUrl('/api/images/icon.SVG?v=1')).toBe(true)
     expect(isApiSvgIconUrl('/api/images/icon.png')).toBe(false)
     expect(isApiSvgIconUrl(null)).toBe(false)
+  })
+})
+
+describe('fetchSanitizedSvg caching', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('evicts failed or empty SVG fetches so later calls retry', async () => {
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new Error('transient error'))
+      .mockResolvedValueOnce('<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1"/></svg>')
+    vi.stubGlobal('window', {})
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const url = '/api/images/retry-icon-test.svg'
+    expect(await fetchSanitizedSvg(url)).toBe('')
+    expect(getCachedSvgDataUrl(url)).toBeUndefined()
+
+    const second = await fetchSanitizedSvg(url)
+    expect(second).toContain('<svg')
+    expect(getCachedSvgDataUrl(url)).toContain('data:image/svg+xml;utf8,')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasDocument } from '@talex-touch/utils/env'
 import { ref } from 'vue'
 
 interface Props {
@@ -15,6 +16,7 @@ const buttonRef = ref<HTMLButtonElement | null>(null)
 
 defineExpose({
   focus: () => buttonRef.value?.focus(),
+  isFocused: () => hasDocument() && Boolean(buttonRef.value) && document.activeElement === buttonRef.value,
 })
 </script>
 

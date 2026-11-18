@@ -1768,6 +1768,7 @@ watch(
                 :components="docsProseComponents"
                 :class="[
                   'docs-prose',
+                  'docs-rendered-body',
                   'markdown-body',
                   'max-w-none',
                   'prose',

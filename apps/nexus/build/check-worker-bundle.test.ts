@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { createGenerator } from 'unocss'
+import { hasRenderedDocsBody } from './check-worker-bundle.mjs'
 import enLocale from '../i18n/locales/en'
 import zhLocale from '../i18n/locales/zh'
 import unoConfig from '../uno.config'
@@ -580,5 +581,25 @@ describe('Nexus deploy asset budget', () => {
     expect(collectorSource).toContain('authenticated dashboard smoke is pending')
     expect(collectorSource).toContain('nexus-cloudflare-pages-preview-runtime-smoke/v1')
     expect(collectorSource).toContain('node build/check-runtime-evidence.mjs --require-deployed-preview')
+  })
+
+  it('rejects skeleton-only docs HTML while accepting rendered docs bodies', () => {
+    const skeletonOnlyHtml = [
+      '<div class="docs-prose docs-prose-skeleton markdown-body max-w-none">',
+      '  <span class="docs-prose-skeleton__line is-wide"></span>',
+      '  <span class="docs-prose-skeleton__block"></span>',
+      '</div>',
+    ].join('\n')
+    const emptyRendererHtml = '<div class="docs-prose docs-rendered-body markdown-body"><!-- empty --></div>'
+    const renderedBodyHtml = [
+      '<div class="docs-prose docs-rendered-body markdown-body max-w-none">',
+      '  <h2>Getting Started</h2>',
+      '  <p>Install Tuff and run the quickstart guide.</p>',
+      '</div>',
+    ].join('\n')
+
+    expect(hasRenderedDocsBody(skeletonOnlyHtml)).toBe(false)
+    expect(hasRenderedDocsBody(emptyRendererHtml)).toBe(false)
+    expect(hasRenderedDocsBody(renderedBodyHtml)).toBe(true)
   })
 })

@@ -303,6 +303,8 @@ async function loadPluginCommunity(slug: string) {
     ratingSummary.value = ratingResponse.rating
   }
   catch (error: unknown) {
+    if (loadedCommunitySlug.value === slug)
+      loadedCommunitySlug.value = null
     reviewsError.value = error instanceof Error ? error.message : t('store.detail.reviews.error', 'Unable to load reviews.')
   }
   finally {
@@ -323,6 +325,8 @@ async function loadPluginContentPackages(plugin: StorePluginDetail) {
     contentPackages.value = response.packages ?? []
   }
   catch (error: unknown) {
+    if (loadedContentSlug.value === plugin.slug)
+      loadedContentSlug.value = null
     contentPackagesError.value = error instanceof Error
       ? error.message
       : t('store.detail.content.error', 'Unable to load shared content.')

@@ -67,8 +67,6 @@ function viewDetails(event: MouseEvent | KeyboardEvent) {
     @pointerenter="emit('prefetchDetail', plugin)"
     @focus="emit('prefetchDetail', plugin)"
     @click="viewDetails"
-    @keydown.enter.prevent="viewDetails"
-    @keydown.space.prevent="viewDetails"
   >
     <div class="StoreItem-Inner">
       <div class="StoreItem-Header">

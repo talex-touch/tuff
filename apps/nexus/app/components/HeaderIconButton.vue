@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { hasDocument } from '@talex-touch/utils/env'
+import { ref } from 'vue'
+
 interface Props {
   icon: string
   label: string
@@ -6,10 +9,17 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const buttonRef = ref<HTMLButtonElement | null>(null)
+
+defineExpose({
+  focus: () => buttonRef.value?.focus(),
+  isFocused: () => hasDocument() && Boolean(buttonRef.value) && document.activeElement === buttonRef.value,
+})
 </script>
 
 <template>
   <button
+    ref="buttonRef"
     type="button"
     class="HeaderIconBtn"
     :aria-label="props.label"

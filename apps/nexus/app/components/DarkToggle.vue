@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import HeaderIconButton from '~/components/HeaderIconButton.vue'
 import { useLazyDropdownMenu } from '~/composables/useLazyMenu'
 import { useTheme } from '~/composables/useTheme'
 
+const triggerRef = ref<InstanceType<typeof HeaderIconButton> | null>(null)
 const {
   isOpen,
   menuActivated,
   activateMenu,
   TxDropdownMenu,
   TxDropdownItem,
-} = useLazyDropdownMenu()
+} = useLazyDropdownMenu(triggerRef)
 
 type ThemeMode = 'auto' | 'dark' | 'light'
 
@@ -71,6 +72,7 @@ function selectTheme(mode: ThemeMode, event: MouseEvent) {
     >
       <template #trigger>
         <HeaderIconButton
+          ref="triggerRef"
           icon="i-carbon-moon"
           :label="triggerAriaLabel"
           :title="triggerTitle"
@@ -97,6 +99,7 @@ function selectTheme(mode: ThemeMode, event: MouseEvent) {
     </TxDropdownMenu>
     <HeaderIconButton
       v-else
+      ref="triggerRef"
       icon="i-carbon-moon"
       :label="triggerAriaLabel"
       :title="triggerTitle"

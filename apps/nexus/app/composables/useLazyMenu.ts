@@ -1,17 +1,47 @@
-import { defineAsyncComponent, nextTick, ref } from 'vue'
+import { hasDocument } from '@talex-touch/utils/env'
+import { defineAsyncComponent, nextTick, ref, watch } from 'vue'
+import type { Ref } from 'vue'
+
+export interface LazyDropdownTriggerHandle {
+  focus: () => void
+  isFocused?: () => boolean
+}
 
 /**
  * Delays importing `@talex-touch/tuffex/dropdown-menu` (and its floating/popover
  * style closure) until a user hovers, focuses, or activates the menu trigger.
  */
-export function useLazyDropdownMenu() {
+export function useLazyDropdownMenu(triggerRef?: Ref<LazyDropdownTriggerHandle | null>) {
   const isOpen = ref(false)
   const menuActivated = ref(false)
+  const pendingFocusRestore = ref(false)
   let loadingPromise: Promise<typeof import('@talex-touch/tuffex/dropdown-menu')> | null = null
 
   const loadDropdown = () => {
-    loadingPromise ??= import('@talex-touch/tuffex/dropdown-menu')
+    if (!loadingPromise) {
+      loadingPromise = import('@talex-touch/tuffex/dropdown-menu').catch((error) => {
+        loadingPromise = null
+        throw error
+      })
+    }
     return loadingPromise
+  }
+
+  if (triggerRef) {
+    watch(
+      () => triggerRef.value,
+      (handle, previousHandle) => {
+        if (!pendingFocusRestore.value || !handle || handle === previousHandle)
+          return
+        pendingFocusRestore.value = false
+        if (!hasDocument())
+          return
+        const active = document.activeElement
+        if (!active || active === document.body || active === document.documentElement)
+          handle.focus()
+      },
+      { flush: 'post' },
+    )
   }
 
   const TxDropdownMenu = defineAsyncComponent(() => loadDropdown().then(m => m.TxDropdownMenu))
@@ -23,14 +53,22 @@ export function useLazyDropdownMenu() {
         isOpen.value = true
       return
     }
-    void loadDropdown().then(() => {
-      menuActivated.value = true
-      if (openAfterLoad) {
-        void nextTick(() => {
-          isOpen.value = true
-        })
-      }
-    })
+    loadDropdown()
+      .then(() => {
+        const shouldRestoreFocus = !openAfterLoad && Boolean(triggerRef?.value?.isFocused?.())
+        if (shouldRestoreFocus)
+          pendingFocusRestore.value = true
+        menuActivated.value = true
+        if (openAfterLoad) {
+          void nextTick(() => {
+            isOpen.value = true
+          })
+        }
+      })
+      .catch((error) => {
+        pendingFocusRestore.value = false
+        console.warn('[useLazyDropdownMenu] failed to load dropdown menu chunk', error)
+      })
   }
 
   return {

@@ -95,17 +95,11 @@ function selectCategory(next: FilterChipValue) {
   height: 44px;
   padding: 0 16px;
   border-radius: 14px;
-  border-color: rgba(15, 23, 42, 0.12);
-  background-color: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
-}
-
-.dark .StoreSearch-Field :deep(.StoreSearch-Input.tx-input) {
-  border-color: rgba(255, 255, 255, 0.14);
-  background-color: rgba(20, 23, 30, 0.85);
+  border-color: color-mix(in srgb, var(--tx-border-color-lighter, #cbd5e1) 70%, transparent);
+  background-color: color-mix(in srgb, var(--tx-bg-color-overlay, var(--tx-bg-color, #fff)) 82%, transparent);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 10px 28px rgba(0, 0, 0, 0.25);
+    inset 0 1px 0 color-mix(in srgb, var(--tx-bg-color-overlay, var(--tx-bg-color, #fff)) 14%, transparent),
+    0 8px 24px color-mix(in srgb, var(--tx-text-color-primary, #0f172a) 6%, transparent);
 }
 
 .StoreSearch-Field :deep(.StoreSearch-Input .tx-input__inner) {

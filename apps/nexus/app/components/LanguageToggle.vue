@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import HeaderIconButton from '~/components/HeaderIconButton.vue'
 import { useLazyDropdownMenu } from '~/composables/useLazyMenu'
 import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 
+const triggerRef = ref<InstanceType<typeof HeaderIconButton> | null>(null)
 const {
   isOpen,
   menuActivated,
   activateMenu,
   TxDropdownMenu,
   TxDropdownItem,
-} = useLazyDropdownMenu()
+} = useLazyDropdownMenu(triggerRef)
 
 type SupportedLocale = 'zh' | 'en'
 
@@ -68,6 +69,7 @@ async function selectLocale(option: LanguageOption) {
     >
       <template #trigger>
         <HeaderIconButton
+          ref="triggerRef"
           icon="i-carbon-language"
           :label="triggerAriaLabel"
           :title="triggerTitle"
@@ -93,6 +95,7 @@ async function selectLocale(option: LanguageOption) {
     </TxDropdownMenu>
     <HeaderIconButton
       v-else
+      ref="triggerRef"
       icon="i-carbon-language"
       :label="triggerAriaLabel"
       :title="triggerTitle"

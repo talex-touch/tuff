@@ -730,14 +730,14 @@ const suiteDocCounts = computed(() => {
   return counts
 })
 
+const suiteTriggerRef = ref<InstanceType<typeof DocsSuiteTriggerButton> | null>(null)
 const {
   isOpen: suiteMenuOpen,
   menuActivated: suiteMenuActivated,
   activateMenu: activateSuiteMenu,
   TxDropdownMenu,
   TxDropdownItem,
-} = useLazyDropdownMenu()
-const suiteTriggerRef = ref<InstanceType<typeof DocsSuiteTriggerButton> | null>(null)
+} = useLazyDropdownMenu(suiteTriggerRef)
 let suiteFocusFrame: number | null = null
 
 function visibleSuiteOptions() {

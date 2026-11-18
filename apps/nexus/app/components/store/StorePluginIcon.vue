@@ -52,6 +52,8 @@ async function hydrateSvgIcon(url: string) {
   }
 
   const clean = await fetchSanitizedSvg(url)
+  if (url !== normalizedUrl.value)
+    return
   if (!clean) {
     loadFailed.value = true
     resolvedSvgDataUrl.value = ''

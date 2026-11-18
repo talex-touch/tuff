@@ -1,4 +1,5 @@
 import type { TxIconConfig } from '@talex-touch/tuffex/icon'
+import { hasWindow } from '@talex-touch/utils/env'
 import { TX_ICON_CONFIG_KEY } from '@talex-touch/tuffex/icon'
 import { provide } from 'vue'
 
@@ -41,7 +42,7 @@ type FetchSvgText = (
 ) => Promise<string>
 
 export async function fetchSanitizedSvg(url: string): Promise<string> {
-  if (!import.meta.client || !url)
+  if (import.meta.server || !hasWindow() || !url)
     return ''
 
   const existing = svgCache.get(url)
@@ -61,6 +62,11 @@ export async function fetchSanitizedSvg(url: string): Promise<string> {
       return clean
     })
     .catch(() => '')
+    .then((clean) => {
+      if (!clean)
+        svgCache.delete(url)
+      return clean
+    })
 
   svgCache.set(url, task)
   return task

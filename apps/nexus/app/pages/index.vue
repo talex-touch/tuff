@@ -8,10 +8,6 @@ definePageMeta({
   colorMode: 'dark',
 })
 
-useHead({
-  htmlAttrs: { class: 'dark' },
-})
-
 const pageTitle = computed(() => `Tuff`)
 
 useSeoMeta({

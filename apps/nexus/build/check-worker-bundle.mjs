@@ -1083,6 +1083,19 @@ function isDocsDetailHtml(relativePath) {
   return /^(?:en|zh)\/docs\/.+\.html$/.test(relativePath) && !isDocsRootHtml(relativePath)
 }
 
+export function hasRenderedDocsBody(source) {
+  const markerMatch = /<([a-z0-9-]+)\b[^>]*\bclass="[^"]*\bdocs-rendered-body\b[^"]*"[^>]*>/i.exec(source)
+  if (!markerMatch)
+    return false
+
+  const bodyStart = markerMatch.index + markerMatch[0].length
+  const afterOpen = source.slice(bodyStart, bodyStart + 8192).replace(/<!--[\s\S]*?-->/g, '')
+  if (afterOpen.trimStart().startsWith(`</${markerMatch[1]}>`))
+    return false
+
+  return /<(?:h[1-6]|p|ul|ol|blockquote|pre|table|section)\b|<div\b(?![^>]*\bdocs-prose-skeleton\b)/i.test(afterOpen)
+}
+
 function checkDocsDetailHtmlPayload(distFiles) {
   const findings = []
   const docsDetailHtmlFiles = distFiles.filter(file => isDocsDetailHtml(file.relativePath))
@@ -1095,7 +1108,7 @@ function checkDocsDetailHtmlPayload(distFiles) {
       issues.push(`html ${formatBytes(file.bytes)} > ${formatBytes(distBudget.maxDocsDetailHtmlBytes)}`)
     if (source.includes('/api/docs/navigation'))
       issues.push('contains navigation API payload')
-    if (!source.includes('docs-prose'))
+    if (!hasRenderedDocsBody(source))
       issues.push('missing rendered docs body')
     if (source.includes('docs.aside.copyPrompt'))
       issues.push('contains raw i18n key: docs.aside.copyPrompt')
