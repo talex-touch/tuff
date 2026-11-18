@@ -20,6 +20,16 @@ export interface PublicUpdatesPayload {
   updates: DashboardUpdate[]
 }
 
+export interface PublicUpdatesCacheSource {
+  isHydrating?: boolean
+  payload: {
+    data: Record<string, unknown>
+  }
+  static: {
+    data: Record<string, unknown>
+  }
+}
+
 export function hasPopulatedUpdates(
   payload: { updates?: readonly unknown[] } | null | undefined,
 ): boolean {
@@ -40,6 +50,14 @@ export function resolvePublicUpdatesCachedData<T extends { updates?: readonly un
   if (isHydrating)
     return payload
   return hasPopulatedUpdates(payload) ? payload : undefined
+}
+
+export function resolvePublicUpdatesFromApp(
+  nuxtApp: PublicUpdatesCacheSource,
+  key: string,
+): PublicUpdatesPayload | undefined {
+  const cached = (nuxtApp.payload.data[key] ?? nuxtApp.static.data[key]) as PublicUpdatesPayload | undefined
+  return resolvePublicUpdatesCachedData(cached, nuxtApp.isHydrating)
 }
 
 export async function hydratePrerenderedUpdates(

@@ -3,6 +3,7 @@ import {
   hasPopulatedUpdates,
   hydratePrerenderedUpdates,
   resolvePublicUpdatesCachedData,
+  resolvePublicUpdatesFromApp,
 } from './public-updates'
 
 const sampleItem = {
@@ -33,6 +34,29 @@ describe('public-updates cold hydration helpers', () => {
     expect(resolvePublicUpdatesCachedData(empty, true)).toBe(empty)
     expect(resolvePublicUpdatesCachedData(empty, false)).toBeUndefined()
     expect(resolvePublicUpdatesCachedData(populated, false)).toBe(populated)
+  })
+
+  it('reads populated payload.data across client SPA navigations and drops empty static entries', () => {
+    const empty = { updates: [] }
+    const populated = { updates: [sampleItem] }
+
+    expect(resolvePublicUpdatesFromApp({
+      isHydrating: true,
+      payload: { data: { 'public-updates': empty } },
+      static: { data: {} },
+    }, 'public-updates')).toBe(empty)
+
+    expect(resolvePublicUpdatesFromApp({
+      isHydrating: false,
+      payload: { data: {} },
+      static: { data: { 'public-updates': empty } },
+    }, 'public-updates')).toBeUndefined()
+
+    expect(resolvePublicUpdatesFromApp({
+      isHydrating: false,
+      payload: { data: { 'public-updates': populated } },
+      static: { data: {} },
+    }, 'public-updates')).toBe(populated)
   })
 
   it('refreshes on mount when prerendered payload is empty and skips refresh when already populated', async () => {

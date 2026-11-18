@@ -2,7 +2,7 @@
 import type { DashboardUpdate, PublicUpdatesPayload } from '~/utils/public-updates'
 import { computed, onMounted } from 'vue'
 import UpdatesAllView from '~/components/updates/UpdatesAllView.vue'
-import { hydratePrerenderedUpdates, resolvePublicUpdatesCachedData } from '~/utils/public-updates'
+import { hydratePrerenderedUpdates, resolvePublicUpdatesFromApp } from '~/utils/public-updates'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({
@@ -20,10 +20,7 @@ const { data: updatesPayload, refresh: refreshUpdates } = await useAsyncData(
   'public-updates-all',
   () => requestJson<PublicUpdatesPayload>('/api/updates'),
   {
-    getCachedData: key => resolvePublicUpdatesCachedData(
-      (nuxtApp.isHydrating ? nuxtApp.payload.data[key] : nuxtApp.static.data[key]) as PublicUpdatesPayload | undefined,
-      nuxtApp.isHydrating,
-    ),
+    getCachedData: key => resolvePublicUpdatesFromApp(nuxtApp, key),
   },
 )
 

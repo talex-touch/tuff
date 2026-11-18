@@ -4,7 +4,7 @@ import type { DashboardUpdate, LocalizedText, PublicUpdatesPayload } from '~/uti
 import { computed, onMounted, ref } from 'vue'
 import UpdatesAllView from '~/components/updates/UpdatesAllView.vue'
 import { detectArch, detectPlatform, findAssetForPlatform, formatFileSize, getArchLabel, getPlatformLabel } from '~/composables/useReleases'
-import { hydratePrerenderedUpdates, resolvePublicUpdatesCachedData } from '~/utils/public-updates'
+import { hydratePrerenderedUpdates, resolvePublicUpdatesFromApp } from '~/utils/public-updates'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({
@@ -28,10 +28,7 @@ const { data: updatesPayload, refresh: refreshUpdates } = await useAsyncData(
   'public-updates',
   () => requestJson<PublicUpdatesPayload>('/api/updates'),
   {
-    getCachedData: key => resolvePublicUpdatesCachedData(
-      (nuxtApp.isHydrating ? nuxtApp.payload.data[key] : nuxtApp.static.data[key]) as PublicUpdatesPayload | undefined,
-      nuxtApp.isHydrating,
-    ),
+    getCachedData: key => resolvePublicUpdatesFromApp(nuxtApp, key),
   },
 )
 
