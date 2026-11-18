@@ -21,8 +21,6 @@ import 'katex/dist/katex.min.css'
 const DOCS_FULL_BODY_RETRY_DELAYS_MS = [800, 2400] as const
 const DOCS_PAGER_FULL_BODY_PREFETCH_DELAY_MS = 900
 const DOCS_PAGER_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 2400
-const DOCS_DEFERRED_BODY_IDLE_TIMEOUT_MS = 3200
-const DOCS_DEFERRED_BODY_INTENT_EVENTS = ['scroll', 'wheel', 'keydown', 'touchstart'] as const
 const DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX = 'docs-current-page'
 const prefetchedDocRouteTargets = new Set<string>()
 const prefetchedDocFullBodyTargets = new Set<string>()
@@ -59,6 +57,7 @@ const seoOrigin = computed(
   () => (runtimeConfig.public.siteUrl as string | undefined) || requestUrl.origin,
 )
 const { t } = useI18n()
+useI18nPreloadKeys(['docs', 'common'])
 const { setLocaleSerial } = useLocaleOrchestrator()
 const activeRoutePath = ref(route.path)
 if (import.meta.client) {
@@ -94,9 +93,9 @@ function shouldSplitDocsPageBody(path: string) {
 
 const requestKey = computed(() => `doc:${docPath.value}:${docsLocale.value}`)
 const shouldSplitDocBody = computed(() => shouldSplitDocsPageBody(activeRoutePath.value))
-// SSR ships metadata and a stable skeleton; the browser fetches the immutable body JSON after hydration.
-// SPA navigation uses the same static body response, so the full document never inflates prerendered HTML.
-const DOCS_PAGE_RENDER_BODY_MODE = '0'
+// SSR fetches and renders the complete body (`body=1`) so pre-rendered static HTML ships full prose,
+// headings, and components on first byte (`docs/engineering/specs/frontend/nexus-docs-rendering-contract.md`).
+const DOCS_PAGE_RENDER_BODY_MODE = '1'
 const currentDocsPageFetchKey = computed(() => `${DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX}:${docPath.value}:${docsLocale.value}:${DOCS_PAGE_RENDER_BODY_MODE}`)
 // The concepts handbook shows in the components sidebar, so it asks for the same scope DocsSidebar does.
 const docsNavigationScope = computed(() => (
@@ -555,20 +554,13 @@ const viewCount = ref<number | null>(null)
 const docsClientPanelsMounted = ref(false)
 const shouldMountDocClientPanels = ref(false)
 const shouldMountDocEngagementPanels = ref(false)
-const shouldRenderDeferredDocBody = ref(false)
 // The renderer resolves the components a body uses before it draws anything, so
-// a part can be mounted and still empty. Each part sits in a Suspense, and these
-// record its resolve: the skeleton and the deferred shell hold their space until
-// then, and work on the rendered DOM waits for it. The deferred part mounts only
-// after the primary one, which it would otherwise be able to land above. A body
-// that is already here at setup was rendered on the server, and hydration must
-// agree with that.
+// the skeleton holds space until Suspense resolves. A body already present at setup
+// was rendered on the server, and hydration must agree with that.
 const primaryDocBodyResolved = ref(Boolean(renderDoc.value?.body))
-const deferredDocBodyResolved = ref(false)
-// The heading the URL points at, until the part of the body holding it renders.
+// The heading the URL points at until hydration finishes and can scroll into view.
 let pendingDocHash = ''
 const docEngagementAnchorRef = ref<HTMLElement | null>(null)
-const deferredDocBodySentinelRef = ref<HTMLElement | null>(null)
 
 watch(
   () => requestKey.value,
@@ -579,11 +571,8 @@ watch(
     docMetaState.value = {}
     clearDocClientPanelIntentListeners()
     clearDocClientPanelSchedule()
-    clearDeferredDocBodySchedule()
     shouldMountDocClientPanels.value = false
     shouldMountDocEngagementPanels.value = false
-    shouldRenderDeferredDocBody.value = false
-    deferredDocBodyResolved.value = false
     pendingDocHash = ''
   },
 )
@@ -966,121 +955,6 @@ const isDocPerformancePending = computed(() => {
   return !hasReviewedSyncStatus || !isDocVerified.value
 })
 
-function readBodyChildren(body: unknown) {
-  if (!body || typeof body !== 'object')
-    return []
-
-  const record = body as Record<string, unknown>
-  if (Array.isArray(record.children))
-    return record.children
-  if (Array.isArray(record.value))
-    return record.value
-  return []
-}
-
-function isBodyHeadingNode(node: unknown, tag: string) {
-  if (Array.isArray(node))
-    return node[0] === tag
-
-  return Boolean(
-    node
-    && typeof node === 'object'
-    && (node as Record<string, unknown>).tag === tag,
-  )
-}
-
-function readBodyNodeTag(node: unknown) {
-  if (Array.isArray(node) && typeof node[0] === 'string')
-    return node[0]
-  if (node && typeof node === 'object' && typeof (node as Record<string, unknown>).tag === 'string')
-    return String((node as Record<string, unknown>).tag)
-  return ''
-}
-
-function isDeferredBoundaryNode(node: unknown) {
-  const tag = readBodyNodeTag(node).toLowerCase()
-  return tag === 'tuff-demo-wrapper'
-    || tag === 'tuffpropstable'
-    || tag === 'tuff-props-table'
-    || tag === 'tuffeventstable'
-    || tag === 'tuff-events-table'
-    || tag === 'tuffslotstable'
-    || tag === 'tuff-slots-table'
-}
-
-function resolveDeferredBodySplitIndex(body: unknown) {
-  const children = readBodyChildren(body)
-  if (children.length < 5)
-    return -1
-
-  let secondH2SplitIndex = -1
-  let h2Count = 0
-  for (let index = 0; index < children.length; index += 1) {
-    if (!isBodyHeadingNode(children[index], 'h2'))
-      continue
-
-    h2Count += 1
-    if (h2Count === 2) {
-      secondH2SplitIndex = index
-      break
-    }
-  }
-
-  let deferredBoundaryCount = 0
-  for (let index = 3; index < children.length; index += 1) {
-    if (!isDeferredBoundaryNode(children[index]))
-      continue
-
-    deferredBoundaryCount += 1
-    if (deferredBoundaryCount < 2 && secondH2SplitIndex > 0)
-      continue
-
-    const boundarySplitIndex = index > 3 && isBodyHeadingNode(children[index - 1], 'h3')
-      ? index - 1
-      : index
-
-    if (secondH2SplitIndex > 0)
-      return Math.min(secondH2SplitIndex, boundarySplitIndex)
-
-    return boundarySplitIndex
-  }
-
-  return secondH2SplitIndex
-}
-
-// Demos, API tables and galleries are what deferral saves. Prose, lists and plain
-// tables cost little to draw, and holding them back only buys a placeholder that
-// cannot know how tall they are.
-function hasDeferredBodyWeight(children: unknown[]) {
-  return children.some(node =>
-    isDeferredBoundaryNode(node)
-    || readBodyNodeTag(node).toLowerCase() === 'docs-components-gallery',
-  )
-}
-
-function cloneDocWithBodyChildren(source: Record<string, any> | null | undefined, children: unknown[]) {
-  if (!source?.body || typeof source.body !== 'object')
-    return source
-
-  const body = source.body as Record<string, unknown>
-  const childKey = Array.isArray(body.children)
-    ? 'children'
-    : Array.isArray(body.value)
-      ? 'value'
-      : null
-
-  if (!childKey)
-    return source
-
-  return {
-    ...source,
-    body: {
-      ...body,
-      [childKey]: children,
-    },
-  }
-}
-
 const heroSyncBanner = computed(() => {
   if (!docScope.value.isComponent || docSyncStatus.value === 'verified')
     return null
@@ -1232,46 +1106,12 @@ const currentDocRenderKey = computed(() => {
   return `${path}:${docsLocale.value}:${source?.body ? 'body' : 'meta'}`
 })
 const isDocsContentReady = computed(() => viewState.value === 'content' && Boolean(doc.value))
-const deferredBodySplitIndex = computed(() => resolveDeferredBodySplitIndex(renderDoc.value?.body))
-const shouldDeferDocBodySections = computed(() => (
-  docScope.value.isComponent
-  && deferredBodySplitIndex.value > 0
-  && hasDeferredBodyWeight(readBodyChildren(renderDoc.value?.body).slice(deferredBodySplitIndex.value))
-))
-const primaryRenderDoc = computed(() => {
-  if (!shouldDeferDocBodySections.value)
-    return renderDoc.value
-
-  return cloneDocWithBodyChildren(
-    renderDoc.value as Record<string, any> | null,
-    readBodyChildren(renderDoc.value?.body).slice(0, deferredBodySplitIndex.value),
-  )
-})
-const deferredRenderDoc = computed(() => {
-  if (!shouldDeferDocBodySections.value)
-    return null
-
-  return cloneDocWithBodyChildren(
-    renderDoc.value as Record<string, any> | null,
-    readBodyChildren(renderDoc.value?.body).slice(deferredBodySplitIndex.value),
-  )
-})
-// The shell arrives with the primary part, which would push it down if it were
-// already showing, and stays until the deferred part has rendered in its place.
-const shouldShowDeferredDocBodyShell = computed(() =>
-  shouldDeferDocBodySections.value
-  && Boolean(deferredRenderDoc.value?.body)
-  && primaryDocBodyResolved.value
-  && !deferredDocBodyResolved.value,
-)
 const shouldShowDocBodySkeleton = computed(() =>
   renderDoc.value?.body ? !primaryDocBodyResolved.value : !fullDocError.value,
 )
 let lastEnhancedDocKey = ''
-const DOC_ENGAGEMENT_PANEL_DELAY_MS = 3200
-const DOC_ENGAGEMENT_PANEL_IDLE_TIMEOUT_MS = 5000
-const DOC_ENGAGEMENT_PANEL_ROOT_MARGIN = '360px 0px'
-const DOC_CLIENT_PANEL_IDLE_TIMEOUT_MS = 2500
+const DOC_ENGAGEMENT_PANEL_ROOT_MARGIN = '480px 0px'
+const DOC_CLIENT_PANEL_IDLE_TIMEOUT_MS = 250
 const DOC_CLIENT_PANEL_INTENT_EVENTS = ['scroll', 'pointerdown', 'keydown', 'touchstart'] as const
 
 watch(
@@ -1305,7 +1145,6 @@ onBeforeUnmount(() => {
   clearPagerFullBodyPrefetchSchedules()
   clearDocClientPanelIntentListeners()
   clearDocClientPanelSchedule()
-  clearDeferredDocBodySchedule()
   clearEngagementPanelSchedule()
   clearRenderedCodeHeaders()
   if (import.meta.client) {
@@ -1524,12 +1363,9 @@ let codeEnhanceTimer: ReturnType<typeof setTimeout> | null = null
 let codeEnhanceRaf: number | null = null
 let codeEnhanceRunId = 0
 const codeHeaderTargets = new Set<HTMLElement>()
-let engagementPanelTimer: ReturnType<typeof setTimeout> | null = null
 let engagementPanelIdleId: number | null = null
+let engagementPanelFrameId: number | null = null
 let engagementPanelObserver: IntersectionObserver | null = null
-let deferredBodyTimer: ReturnType<typeof setTimeout> | null = null
-let deferredBodyIntentTimer: ReturnType<typeof setTimeout> | null = null
-let deferredBodyIntentDisposers: Array<() => void> = []
 let docClientPanelIdleId: number | null = null
 let docClientPanelFrameId: number | null = null
 let docClientPanelIntentDisposers: Array<() => void> = []
@@ -1566,9 +1402,9 @@ function clearEngagementPanelSchedule() {
   if (import.meta.server)
     return
 
-  if (engagementPanelTimer) {
-    clearTimeout(engagementPanelTimer)
-    engagementPanelTimer = null
+  if (engagementPanelFrameId !== null) {
+    window.cancelAnimationFrame(engagementPanelFrameId)
+    engagementPanelFrameId = null
   }
   if (engagementPanelIdleId !== null && 'cancelIdleCallback' in window) {
     window.cancelIdleCallback(engagementPanelIdleId)
@@ -1580,51 +1416,16 @@ function clearEngagementPanelSchedule() {
   }
 }
 
-function clearDeferredDocBodySchedule() {
-  if (import.meta.server)
-    return
-
-  if (deferredBodyTimer) {
-    clearTimeout(deferredBodyTimer)
-    deferredBodyTimer = null
-  }
-  if (deferredBodyIntentTimer) {
-    clearTimeout(deferredBodyIntentTimer)
-    deferredBodyIntentTimer = null
-  }
-  for (const dispose of deferredBodyIntentDisposers)
-    dispose()
-  deferredBodyIntentDisposers = []
-}
-
-function mountDeferredDocBodySections() {
-  if (!shouldDeferDocBodySections.value || shouldRenderDeferredDocBody.value)
-    return
-
-  shouldRenderDeferredDocBody.value = true
-  clearDeferredDocBodySchedule()
-}
-
 function handlePrimaryDocBodyPending() {
   primaryDocBodyResolved.value = false
-  // The deferred part is the rest of this body, so it waits for the primary again.
-  deferredDocBodyResolved.value = false
 }
 
 function handlePrimaryDocBodyResolve() {
   primaryDocBodyResolved.value = true
-  void scheduleCodeEnhance(80)
-  void scheduleOutlineSync(80)
-  // The body arrives after hydration, so the browser found no heading to scroll to.
+  void scheduleCodeEnhance(0)
+  void scheduleOutlineSync(0)
+  // The body may arrive after SPA navigation, so retry scrolling to the active hash target.
   scrollToDocHashTarget(pendingDocHash || window.location.hash)
-}
-
-function handleDeferredDocBodyResolve() {
-  deferredDocBodyResolved.value = true
-  void scheduleCodeEnhance(80)
-  void scheduleOutlineSync(80)
-  if (pendingDocHash)
-    scrollToDocHashTarget(pendingDocHash)
 }
 
 function scrollToDocHashTarget(hash: string) {
@@ -1640,69 +1441,12 @@ function scrollToDocHashTarget(hash: string) {
 
   void nextTick(() => {
     const target = document.getElementById(id)
-    // A heading exists only once the part of the body holding it has rendered.
     if (!target) {
       pendingDocHash = hash
       return
     }
     pendingDocHash = ''
     target.scrollIntoView({ block: 'start' })
-  })
-}
-
-function revealDeferredDocBodyForHash(hash = route.hash) {
-  if (!import.meta.client || !hash || !shouldDeferDocBodySections.value)
-    return false
-
-  mountDeferredDocBodySections()
-  scrollToDocHashTarget(hash)
-  return true
-}
-
-function handleDeferredDocBodyIntent() {
-  if (shouldRenderDeferredDocBody.value)
-    return
-  if (deferredBodyIntentTimer)
-    clearTimeout(deferredBodyIntentTimer)
-  deferredBodyIntentTimer = setTimeout(() => {
-    deferredBodyIntentTimer = null
-    mountDeferredDocBodySections()
-  }, 500)
-}
-
-function bindDeferredDocBodyIntentListeners() {
-  if (import.meta.server || deferredBodyIntentDisposers.length)
-    return
-
-  for (const eventName of DOCS_DEFERRED_BODY_INTENT_EVENTS) {
-    window.addEventListener(eventName, handleDeferredDocBodyIntent, { passive: true })
-    deferredBodyIntentDisposers.push(() => {
-      window.removeEventListener(eventName, handleDeferredDocBodyIntent)
-    })
-  }
-}
-
-function scheduleDeferredDocBodySections() {
-  if (import.meta.server || !shouldDeferDocBodySections.value || shouldRenderDeferredDocBody.value)
-    return
-
-  clearDeferredDocBodySchedule()
-
-  void nextTick(() => {
-    if (!shouldDeferDocBodySections.value || shouldRenderDeferredDocBody.value)
-      return
-    if (revealDeferredDocBodyForHash())
-      return
-    if (window.scrollY > 0) {
-      mountDeferredDocBodySections()
-      return
-    }
-
-    bindDeferredDocBodyIntentListeners()
-    deferredBodyTimer = setTimeout(() => {
-      deferredBodyTimer = null
-      mountDeferredDocBodySections()
-    }, DOCS_DEFERRED_BODY_IDLE_TIMEOUT_MS)
   })
 }
 
@@ -1781,16 +1525,18 @@ function scheduleDocEngagementPanels() {
 
   clearEngagementPanelSchedule()
 
-  const schedule = () => {
+  engagementPanelFrameId = window.requestAnimationFrame(() => {
+    engagementPanelFrameId = null
     if (shouldMountDocEngagementPanels.value)
       return
-    mountDocEngagementPanels()
-  }
 
-  engagementPanelTimer = setTimeout(() => {
-    engagementPanelTimer = null
     const anchor = docEngagementAnchorRef.value
     if ('IntersectionObserver' in window && anchor) {
+      const rect = anchor.getBoundingClientRect()
+      if (rect.top <= window.innerHeight + 480) {
+        mountDocEngagementPanels()
+        return
+      }
       engagementPanelObserver = new IntersectionObserver((entries) => {
         if (entries.some(entry => entry.isIntersecting || entry.intersectionRatio > 0))
           mountDocEngagementPanels()
@@ -1800,11 +1546,11 @@ function scheduleDocEngagementPanels() {
     }
 
     if ('requestIdleCallback' in window) {
-      engagementPanelIdleId = window.requestIdleCallback(schedule, { timeout: DOC_ENGAGEMENT_PANEL_IDLE_TIMEOUT_MS })
+      engagementPanelIdleId = window.requestIdleCallback(mountDocEngagementPanels, { timeout: 600 })
       return
     }
-    schedule()
-  }, DOC_ENGAGEMENT_PANEL_DELAY_MS)
+    mountDocEngagementPanels()
+  })
 }
 
 function enhanceCodeBlocks() {
@@ -1894,11 +1640,11 @@ watch(
       return
 
     bindDocClientPanelIntentListeners()
-    scheduleDeferredDocBodySections()
+    scheduleDocClientPanels()
     if (lastEnhancedDocKey !== renderKey) {
       lastEnhancedDocKey = renderKey
-      void scheduleCodeEnhance(260)
-      void scheduleOutlineSync(280)
+      void scheduleCodeEnhance(0)
+      void scheduleOutlineSync(0)
       scheduleDocEngagementPanels()
     }
   },
@@ -1909,10 +1655,10 @@ watch(
   () => route.hash,
   (hash) => {
     // The latest fragment wins: a heading the reader has since left, or cleared, is
-    // not scrolled to when the part holding it renders.
+    // not scrolled to when the body resolves.
     pendingDocHash = ''
     if (hash)
-      revealDeferredDocBodyForHash(hash)
+      scrollToDocHashTarget(hash)
   },
 )
 
@@ -1923,9 +1669,9 @@ watch(
       return
 
     bindDocClientPanelIntentListeners()
-    scheduleDeferredDocBodySections()
-    void scheduleCodeEnhance(260)
-    void scheduleOutlineSync(280)
+    scheduleDocClientPanels()
+    void scheduleCodeEnhance(0)
+    void scheduleOutlineSync(0)
     scheduleDocEngagementPanels()
   },
 )
@@ -2017,7 +1763,7 @@ watch(
             <Suspense :timeout="0" @pending="handlePrimaryDocBodyPending" @resolve="handlePrimaryDocBodyResolve">
               <ContentRenderer
                 :key="currentDocRenderKey"
-                :value="primaryRenderDoc ?? {}"
+                :value="renderDoc ?? {}"
                 :prose="false"
                 :components="docsProseComponents"
                 :class="[
@@ -2029,28 +1775,6 @@ watch(
                   'dark:prose-invert',
                   { 'docs-prose--hero': showDocHero },
                 ]"
-              />
-            </Suspense>
-            <div
-              v-if="shouldShowDeferredDocBodyShell"
-              ref="deferredDocBodySentinelRef"
-              class="docs-deferred-body-shell"
-              aria-hidden="true"
-            >
-              <span class="docs-deferred-body-shell__line is-wide" />
-              <span class="docs-deferred-body-shell__line" />
-              <span class="docs-deferred-body-shell__block" />
-            </div>
-            <Suspense
-              v-if="shouldRenderDeferredDocBody && primaryDocBodyResolved && deferredRenderDoc?.body"
-              @resolve="handleDeferredDocBodyResolve"
-            >
-              <ContentRenderer
-                :key="`${currentDocRenderKey}:deferred`"
-                :value="deferredRenderDoc ?? {}"
-                :prose="false"
-                :components="docsProseComponents"
-                class="docs-prose docs-prose--deferred markdown-body max-w-none prose prose-neutral dark:prose-invert"
               />
             </Suspense>
           </template>

@@ -37,8 +37,12 @@ const nitroHeaders = [
 ].join('\n')
 
 describe('early hints', () => {
-  it('reads the entry script and stylesheets out of prerendered HTML', () => {
-    const html = page('/_nuxt/Cabc.js', ['/_nuxt/entry.D1.css', '/_nuxt/docs.D2.css'])
+  it('reads the entry script and stylesheets out of prerendered HTML while skipping print-media sheets', () => {
+    const html = page(
+      '/_nuxt/Cabc.js',
+      ['/_nuxt/entry.D1.css', '/_nuxt/docs.D2.css'],
+      '<link rel="stylesheet" href="/_nuxt/deferred.D3.css" media="print" crossorigin>',
+    )
     expect(extractEarlyHintTargets(html)).toEqual({
       entry: '/_nuxt/Cabc.js',
       styles: ['/_nuxt/entry.D1.css', '/_nuxt/docs.D2.css'],

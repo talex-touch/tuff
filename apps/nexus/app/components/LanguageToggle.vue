@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
-import { TxIconButton } from '@talex-touch/tuffex/button'
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
+import HeaderIconButton from '~/components/HeaderIconButton.vue'
+import { useLazyDropdownMenu } from '~/composables/useLazyMenu'
 import { toLocalizedDocsPath } from '#shared/utils/docs-path'
+
+const {
+  isOpen,
+  menuActivated,
+  activateMenu,
+  TxDropdownMenu,
+  TxDropdownItem,
+} = useLazyDropdownMenu()
 
 type SupportedLocale = 'zh' | 'en'
 
@@ -26,7 +34,6 @@ const languageOptions: LanguageOption[] = [
 const { locale, t } = useI18n()
 const { setManualLocale } = useLocaleOrchestrator()
 const route = useRoute()
-const isOpen = ref(false)
 
 const nextLocale = computed(() => (locale.value === 'zh' ? 'en' : 'zh'))
 const triggerAriaLabel = computed(() =>
@@ -53,18 +60,17 @@ async function selectLocale(option: LanguageOption) {
 <template>
   <div class="LanguageToggle">
     <TxDropdownMenu
+      v-if="menuActivated"
       v-model="isOpen"
       trigger="hover"
       placement="bottom-end"
       :offset="10"
     >
       <template #trigger>
-        <TxIconButton
+        <HeaderIconButton
           icon="i-carbon-language"
           :label="triggerAriaLabel"
           :title="triggerTitle"
-          size="sm"
-          shape="circle"
           class="LanguageToggle-Trigger"
           aria-haspopup="menu"
           :aria-expanded="isOpen"
@@ -85,6 +91,18 @@ async function selectLocale(option: LanguageOption) {
           </template>
         </TxDropdownItem>
     </TxDropdownMenu>
+    <HeaderIconButton
+      v-else
+      icon="i-carbon-language"
+      :label="triggerAriaLabel"
+      :title="triggerTitle"
+      class="LanguageToggle-Trigger"
+      aria-haspopup="menu"
+      :aria-expanded="isOpen"
+      @pointerenter="activateMenu()"
+      @focus="activateMenu()"
+      @click="activateMenu(true)"
+    />
   </div>
 </template>
 

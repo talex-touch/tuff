@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import TuffLandingSection from './TuffLandingSection.vue'
 
 // Questions people actually ask before installing, answered the way the app
@@ -66,27 +66,9 @@ function onPointerLeave() {
 
 // ── Entrance ───────────────────────────────────────────────────────────────
 const rootRef = ref<HTMLElement | null>(null)
-const entered = ref(false)
-let observer: IntersectionObserver | null = null
-
-onMounted(() => {
-  const root = rootRef.value
-  if (!root || typeof IntersectionObserver === 'undefined') {
-    entered.value = true
-    return
-  }
-  observer = new IntersectionObserver((entries) => {
-    if (!entries.some(entry => entry.isIntersecting))
-      return
-    entered.value = true
-    observer?.disconnect()
-    observer = null
-  }, { threshold: 0.2 })
-  observer.observe(root)
-})
+const { revealed: entered } = useLandingReveal(rootRef)
 
 onBeforeUnmount(() => {
-  observer?.disconnect()
   if (frame)
     cancelAnimationFrame(frame)
 })

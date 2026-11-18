@@ -10,15 +10,12 @@ const LazyBackToTop = defineAsyncComponent(() => import('~/components/ui/BackToT
 const LazyTuffFooter = defineAsyncComponent(() => import('~/components/TuffFooter.vue'))
 const TuffexDocsHeroBackground = defineAsyncComponent(() => import('~/components/docs/TuffexDocsHeroBackground.vue'))
 const BACK_TO_TOP_MOUNT_SCROLL_Y = 240
-const DOCS_FOOTER_IDLE_TIMEOUT_MS = 2000
-const DOCS_ASIDE_SHELL_MOUNT_DELAY_MS = 2400
-const DOCS_ASIDE_SHELL_IDLE_TIMEOUT_MS = 3600
-const DOCS_OUTLINE_MOUNT_DELAY_MS = 2000
-const DOCS_OUTLINE_IDLE_TIMEOUT_MS = 3200
+const DOCS_FOOTER_IDLE_TIMEOUT_MS = 180
 const TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS = 2200
 const TUFFEX_DOCS_BACKGROUND_INTENT_EVENTS = ['scroll', 'pointerdown', 'keydown', 'touchstart'] as const
 
 const { t } = useI18n()
+useI18nPreloadKeys(['docs', 'common'])
 const route = useRoute()
 const sidebarVisible = ref(false)
 const outlineVisible = ref(false)
@@ -32,11 +29,7 @@ const shouldMountTuffexBackground = ref(false)
 let docsFooterIdleId: number | null = null
 let docsFooterFrameId: number | null = null
 let backToTopFrameId: number | null = null
-let docsAsideShellTimer: ReturnType<typeof setTimeout> | null = null
-let docsAsideShellIdleId: number | null = null
 let docsAsideShellFrameId: number | null = null
-let docsOutlineTimer: ReturnType<typeof setTimeout> | null = null
-let docsOutlineIdleId: number | null = null
 let docsOutlineFrameId: number | null = null
 let tuffexBackgroundIdleId: number | null = null
 let tuffexBackgroundFrameId: number | null = null
@@ -205,14 +198,6 @@ function clearDocsAsideShellSchedule() {
   if (import.meta.server)
     return
 
-  if (docsAsideShellTimer) {
-    clearTimeout(docsAsideShellTimer)
-    docsAsideShellTimer = null
-  }
-  if (docsAsideShellIdleId !== null && 'cancelIdleCallback' in window) {
-    window.cancelIdleCallback(docsAsideShellIdleId)
-    docsAsideShellIdleId = null
-  }
   if (docsAsideShellFrameId !== null) {
     window.cancelAnimationFrame(docsAsideShellFrameId)
     docsAsideShellFrameId = null
@@ -233,35 +218,17 @@ function scheduleDocsAsideShellMount() {
   clearDocsAsideShellSchedule()
 
   const mount = () => {
-    docsAsideShellTimer = null
-    docsAsideShellIdleId = null
     docsAsideShellFrameId = null
     mountDocsAsideShell()
   }
 
-  docsAsideShellTimer = setTimeout(() => {
-    docsAsideShellTimer = null
-    if (typeof window.requestIdleCallback === 'function') {
-      docsAsideShellIdleId = window.requestIdleCallback(mount, { timeout: DOCS_ASIDE_SHELL_IDLE_TIMEOUT_MS })
-      return
-    }
-
-    docsAsideShellFrameId = window.requestAnimationFrame(mount)
-  }, DOCS_ASIDE_SHELL_MOUNT_DELAY_MS)
+  docsAsideShellFrameId = window.requestAnimationFrame(mount)
 }
 
 function clearDocsOutlineSchedule() {
   if (import.meta.server)
     return
 
-  if (docsOutlineTimer) {
-    clearTimeout(docsOutlineTimer)
-    docsOutlineTimer = null
-  }
-  if (docsOutlineIdleId !== null && 'cancelIdleCallback' in window) {
-    window.cancelIdleCallback(docsOutlineIdleId)
-    docsOutlineIdleId = null
-  }
   if (docsOutlineFrameId !== null) {
     window.cancelAnimationFrame(docsOutlineFrameId)
     docsOutlineFrameId = null
@@ -287,24 +254,12 @@ function scheduleDocsOutlineMount() {
   clearDocsOutlineSchedule()
 
   const mount = () => {
-    docsOutlineTimer = null
-    docsOutlineIdleId = null
     docsOutlineFrameId = null
     if (shouldShowAsideOutline.value)
       mountDocsOutline()
   }
 
-  docsOutlineTimer = setTimeout(() => {
-    docsOutlineTimer = null
-    if (!shouldShowAsideOutline.value)
-      return
-    if (typeof window.requestIdleCallback === 'function') {
-      docsOutlineIdleId = window.requestIdleCallback(mount, { timeout: DOCS_OUTLINE_IDLE_TIMEOUT_MS })
-      return
-    }
-
-    docsOutlineFrameId = window.requestAnimationFrame(mount)
-  }, DOCS_OUTLINE_MOUNT_DELAY_MS)
+  docsOutlineFrameId = window.requestAnimationFrame(mount)
 }
 
 function clearTuffexBackgroundSchedule() {
@@ -490,25 +445,27 @@ onBeforeUnmount(() => {
                     </div>
                   </div>
                 </div>
-                <section
-                  v-if="shouldShowDocsAsideAiNotice"
-                  class="docs-aside-ai-notice"
-                  aria-live="polite"
-                >
-                  <div class="docs-aside-ai-notice__title">
-                    <span class="docs-aside-ai-notice__sparkle" aria-hidden="true">⚠</span>
-                    {{ docsAsideAiNoticeTitle }}
-                  </div>
-                  <p class="docs-aside-ai-notice__desc">
-                    {{ docsAsideAiNoticeDescription }}
-                  </p>
-                </section>
-                <!-- The button renders from the start; only the resources below it wait for the shell. -->
-                <div class="docs-aside-actions">
-                  <DocsCopyPromptButton />
-                  <LazyDocsAsideCardsShell v-if="shouldMountDocsAsideShell" />
-                </div>
               </ClientOnly>
+              <section
+                v-if="shouldShowDocsAsideAiNotice"
+                class="docs-aside-ai-notice"
+                aria-live="polite"
+              >
+                <div class="docs-aside-ai-notice__title">
+                  <span class="docs-aside-ai-notice__sparkle" aria-hidden="true">⚠</span>
+                  {{ docsAsideAiNoticeTitle }}
+                </div>
+                <p class="docs-aside-ai-notice__desc">
+                  {{ docsAsideAiNoticeDescription }}
+                </p>
+              </section>
+              <!-- The copy button renders on SSR immediately; cards below mount on the first frame. -->
+              <div class="docs-aside-actions">
+                <DocsCopyPromptButton />
+                <ClientOnly>
+                  <LazyDocsAsideCardsShell v-if="shouldMountDocsAsideShell" />
+                </ClientOnly>
+              </div>
             </div>
           </aside>
         </div>

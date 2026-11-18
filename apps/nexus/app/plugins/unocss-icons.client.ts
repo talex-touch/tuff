@@ -14,10 +14,6 @@
  * Importing it dynamically rather than statically is what keeps it off the critical path: a
  * static import would land in the entry chunk's CSS again.
  */
-const ICONS_IDLE_TIMEOUT_MS = 3000
-/** A page whose root Suspense never resolves still gets its icons, a little later. */
-const ICONS_FALLBACK_MS = 8000
-
 export default defineNuxtPlugin({
   name: 'nexus:unocss-icons',
   setup(nuxtApp) {
@@ -29,16 +25,10 @@ export default defineNuxtPlugin({
       if (scheduled)
         return
       scheduled = true
-      if (typeof window.requestIdleCallback === 'function') {
-        window.requestIdleCallback(loadIcons, { timeout: ICONS_IDLE_TIMEOUT_MS })
-        return
-      }
-      window.setTimeout(loadIcons, 0)
+      window.requestAnimationFrame(loadIcons)
     }
 
     nuxtApp.hook('app:suspense:resolve', scheduleIcons)
-    nuxtApp.hook('app:mounted', () => {
-      window.setTimeout(scheduleIcons, ICONS_FALLBACK_MS)
-    })
+    nuxtApp.hook('app:mounted', scheduleIcons)
   },
 })

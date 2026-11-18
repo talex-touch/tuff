@@ -412,7 +412,7 @@ describe('Nexus deploy asset budget', () => {
     expect(guardSource).toContain('isDocsRootHtml')
     expect(guardSource).toContain('isDocsDetailHtml')
     expect(guardSource).toContain('checkDocsDetailHtmlPayload')
-    expect(guardSource).toContain('contains full docs body payload')
+    expect(guardSource).toContain('missing rendered docs body')
     expect(guardSource).toContain('contains navigation API payload')
     expect(guardSource).toContain('forbiddenDocsInitialLifecyclePatterns')
     expect(guardSource).toContain('checkDocsInitialLifecycleBlockers')

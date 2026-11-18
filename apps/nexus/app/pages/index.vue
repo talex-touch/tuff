@@ -5,6 +5,11 @@ const TuffHome = defineAsyncComponent(() => import('~/components/tuff/TuffHome.v
 
 definePageMeta({
   layout: 'home',
+  colorMode: 'dark',
+})
+
+useHead({
+  htmlAttrs: { class: 'dark' },
 })
 
 const pageTitle = computed(() => `Tuff`)

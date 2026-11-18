@@ -246,28 +246,13 @@ async function copyInstall() {
 
 // ── Entrance ───────────────────────────────────────────────────────────────
 
-const entered = ref(false)
-let observer: IntersectionObserver | null = null
+const { revealed: entered } = useLandingReveal(rootRef)
 
 onMounted(() => {
   reduceMotion.value = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  const root = rootRef.value
-  if (!root || typeof IntersectionObserver === 'undefined') {
-    entered.value = true
-    return
-  }
-  observer = new IntersectionObserver((entries) => {
-    if (!entries.some(entry => entry.isIntersecting))
-      return
-    entered.value = true
-    observer?.disconnect()
-    observer = null
-  }, { threshold: 0.18 })
-  observer.observe(root)
 })
 
 onBeforeUnmount(() => {
-  observer?.disconnect()
   if (frame)
     cancelAnimationFrame(frame)
   if (morphFrame)
@@ -733,14 +718,15 @@ onBeforeUnmount(() => {
 /* The figure keeps its own 5:4 ratio; size it by whichever side runs out. */
 .DesignSpec-Figure {
   flex: 1;
-  min-height: 0;
+  min-height: 12rem;
   display: grid;
   place-items: center;
   container-type: size;
 }
 
 .DesignSpec-Hairline {
-  width: min(100cqw, 125cqh);
+  width: min(100cqw, max(12rem, 125cqh));
+  max-width: 100%;
 }
 
 .DesignSpec-Readout {
@@ -1155,6 +1141,14 @@ onBeforeUnmount(() => {
 
   .DesignSpec-Board {
     min-height: 22rem;
+  }
+
+  .DesignSpec-Figure {
+    container-type: inline-size;
+  }
+
+  .DesignSpec-Hairline {
+    width: min(100%, 24rem);
   }
 }
 

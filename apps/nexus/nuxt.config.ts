@@ -20,6 +20,7 @@ import { createNexusPrerenderRoutes } from './build/nexus-prerender-routes'
 import { contentApiRouteExcludes, createStaticCacheRouteRules } from './build/nexus-static-routes.mjs'
 import { tuffexOnDemandStylePlugin } from '../../packages/tuffex/packages/script/build/on-demand-style-plugin'
 import { nexusDemoLoadersPlugin } from './build/nexus-demo-loaders'
+import { resolveNexusManualChunk } from './build/nexus-manual-chunks'
 
 loadEnv({ path: '.env' })
 loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}` })
@@ -156,12 +157,16 @@ function isSidebaseAuthClientPlugin(file: string | undefined) {
 }
 
 function isSidebaseAuthMiddleware(name: string | undefined, file: string | undefined) {
-  if (name !== 'auth' || !file)
+  if ((name !== 'auth' && name !== 'sidebase-auth') || !file)
     return false
 
   const normalized = file.replace(/\\/g, '/').replace(/\.js$/, '')
   return normalized.endsWith('/@sidebase/nuxt-auth/dist/runtime/middleware/auth')
-    || (normalized.includes('/@sidebase+nuxt-auth') && normalized.endsWith('/dist/runtime/middleware/auth'))
+    || normalized.endsWith('/@sidebase/nuxt-auth/dist/runtime/middleware/sidebase-auth')
+    || (normalized.includes('/@sidebase+nuxt-auth') && (
+      normalized.endsWith('/dist/runtime/middleware/auth')
+      || normalized.endsWith('/dist/runtime/middleware/sidebase-auth')
+    ))
 }
 
 function removeSidebaseAuthAppRuntime(app: {
@@ -578,16 +583,7 @@ export default defineNuxtConfig({
       chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
-          // A docs page preloaded 61 chunks, about twenty of them under 1 KB; each is a request
-          // and, on HTTP/1.1, a queue slot. Rollup folds chunks below this size into an importer
-          // when doing so cannot make any entry load more than it needs. Measured: 1157 → 952
-          // client chunks, 61 → 50 preloads on a component page, bytes unchanged.
-          //
-          // Nuxt's SFC style inlining (`features.inlineStyles`) was tried alongside this and
-          // reverted: tuffex ships its styles as `.css` files that the on-demand style plugin
-          // imports from inside SFCs, so Nuxt inlined them *and* kept them linked — 78 KB of
-          // duplicated CSS and +10 KB gzip on every docs page for no fewer requests.
-          experimentalMinChunkSize: 4096,
+          manualChunks: resolveNexusManualChunk,
         },
       },
     },

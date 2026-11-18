@@ -1,6 +1,6 @@
 <script lang="ts">
 import { hasWindow } from '@talex-touch/utils/env'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 
 // One figure from @lucasmarkes/hairline (MIT): an isometric line drawing that
 // answers the pointer. The build is vendored under public/ rather than bundled,
@@ -56,11 +56,16 @@ const emit = defineEmits<{
 
 const hostRef = ref<HTMLElement | null>(null)
 let instance: HairlineFigure | null = null
-let observer: IntersectionObserver | null = null
 let disposed = false
 
+const { revealed: nearViewport } = useLandingReveal(hostRef, {
+  rootMargin: '480px 0px',
+  threshold: 0,
+  viewportRatio: 1,
+})
+
 async function mountFigure() {
-  if (instance || !hostRef.value)
+  if (instance || !hostRef.value || !hasWindow())
     return
   let mod: HairlineModule
   try {
@@ -83,30 +88,16 @@ async function mountFigure() {
   })
 }
 
-onMounted(() => {
-  if (!hasWindow() || !hostRef.value)
-    return
-  if (!('IntersectionObserver' in window)) {
+watch(nearViewport, (visible) => {
+  if (visible)
     void mountFigure()
-    return
-  }
-  observer = new IntersectionObserver((entries) => {
-    if (!entries.some(entry => entry.isIntersecting))
-      return
-    observer?.disconnect()
-    observer = null
-    void mountFigure()
-  }, { rootMargin: '240px 0px' })
-  observer.observe(hostRef.value)
-})
+}, { immediate: true })
 
 watch(() => props.intensity, value => instance?.update({ intensity: value }))
 watch(() => props.label, value => instance?.update({ label: value }))
 
 onBeforeUnmount(() => {
   disposed = true
-  observer?.disconnect()
-  observer = null
   instance?.destroy()
   instance = null
 })
