@@ -146,7 +146,7 @@ test('Rust OCR helper reuses one process across calls, isolates hangs/crashes, a
   process.env.TUFF_RUST_OCR_HELPER_PATH = scriptPath
   delete process.env.TUFF_DISABLE_RUST_OCR
 
-  t.after(() => {
+  t.after(async () => {
     closeRustOcrHelper()
     if (prevPath === undefined) {
       delete process.env.TUFF_RUST_OCR_HELPER_PATH
@@ -160,7 +160,7 @@ test('Rust OCR helper reuses one process across calls, isolates hangs/crashes, a
     else {
       process.env.TUFF_DISABLE_RUST_OCR = prevDisable
     }
-    fs.rmSync(dir, { recursive: true, force: true })
+    await fs.promises.rm(dir, { recursive: true, force: true, maxRetries: 15, retryDelay: 100 })
   })
 
   assert.equal(getRustOcrHelperStatus().available, true)
