@@ -214,8 +214,6 @@ export interface TxAiConversationSuggestion {
 export interface TxAiConversationProps {
   messages: TxAiMessageModel[];
   markdown?: boolean;
-  autoFollow?: boolean;
-  followGap?: number;
   generating?: boolean;
   itemKey?: ConversationStreamItemKey<TxAiMessageModel>;
   estimatedItemHeight?: number;

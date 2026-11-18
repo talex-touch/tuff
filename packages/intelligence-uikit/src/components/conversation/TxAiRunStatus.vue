@@ -40,37 +40,70 @@ const elapsedText = computed(() => {
     return ''
   return formatAiElapsed(props.elapsedMs)
 })
+
+const liveAnnouncement = computed(() => {
+  const step = activeStep.value
+  if (!step)
+    return ''
+  return step.detail ? `${step.label}: ${step.detail}` : step.label
+})
 </script>
 
 <template>
-  <button
-    v-if="activeStep"
-    type="button"
-    class="tx-ai-run-status"
-    :class="`is-${activeStep.status}`"
-    role="status"
-    aria-live="polite"
-    @click="emit('inspect')"
-  >
-    <span class="tx-ai-run-status__dot" aria-hidden="true" />
-    <TxTextMorph
-      class="tx-ai-run-status__label"
-      :text="activeStep.label"
-      :respect-reduced-motion="true"
-    />
-    <span v-if="activeStep.detail" class="tx-ai-run-status__detail">
-      {{ activeStep.detail }}
+  <span v-if="activeStep" class="tx-ai-run-status-wrap">
+    <button
+      type="button"
+      class="tx-ai-run-status"
+      :class="`is-${activeStep.status}`"
+      @click="emit('inspect')"
+    >
+      <span class="tx-ai-run-status__dot" aria-hidden="true" />
+      <TxTextMorph
+        class="tx-ai-run-status__label"
+        :text="activeStep.label"
+        :respect-reduced-motion="true"
+      />
+      <span v-if="activeStep.detail" class="tx-ai-run-status__detail">
+        {{ activeStep.detail }}
+      </span>
+      <span v-if="steps.length > 1" class="tx-ai-run-status__count">
+        {{ steps.filter(s => s.status === 'done').length }}/{{ steps.length }}
+      </span>
+      <span v-if="elapsedText" class="tx-ai-run-status__elapsed">
+        {{ elapsedText }}
+      </span>
+    </button>
+    <span
+      class="tx-ai-run-status__sr"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
+      {{ liveAnnouncement }}
     </span>
-    <span v-if="steps.length > 1" class="tx-ai-run-status__count">
-      {{ steps.filter(s => s.status === 'done').length }}/{{ steps.length }}
-    </span>
-    <span v-if="elapsedText" class="tx-ai-run-status__elapsed">
-      {{ elapsedText }}
-    </span>
-  </button>
+  </span>
 </template>
 
 <style scoped lang="scss">
+.tx-ai-run-status-wrap {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.tx-ai-run-status__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .tx-ai-run-status {
   display: inline-flex;
   align-items: center;

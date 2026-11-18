@@ -5,7 +5,7 @@ import type { TxAiMessageProps, TxAiTurnFooterProps } from '../../types'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
 import { TxVoiceClip } from '@talex-touch/tuffex/voice-clip'
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { toMessageSegments } from '../../utils/chain-steps'
 import { isAiAwaitingFirstToken, normalizeComposerAttachments } from '../../utils/composer-state'
 import TxAiRichBlock from '../content/TxAiRichBlock.vue'
@@ -90,6 +90,43 @@ const resolvedSegments = computed(() => {
   return toMessageSegments(aiParts, isGenerating.value)
 })
 
+const FOOTER_REVEAL_MS = 4500
+const fallbackFooterRevealed = ref(false)
+let fallbackFooterTimer: ReturnType<typeof setTimeout> | undefined
+
+function clearFallbackFooterTimer() {
+  if (fallbackFooterTimer !== undefined) {
+    clearTimeout(fallbackFooterTimer)
+    fallbackFooterTimer = undefined
+  }
+}
+
+watch(
+  [() => props.message.id, () => props.message.role, isGenerating],
+  ([nextId, role, generating], [prevId, prevRole, wasGenerating]) => {
+    if (nextId !== prevId || role !== 'assistant') {
+      clearFallbackFooterTimer()
+      fallbackFooterRevealed.value = false
+      return
+    }
+    if (generating) {
+      clearFallbackFooterTimer()
+      fallbackFooterRevealed.value = false
+      return
+    }
+    if (wasGenerating && prevRole === 'assistant') {
+      fallbackFooterRevealed.value = true
+      clearFallbackFooterTimer()
+      fallbackFooterTimer = setTimeout(() => {
+        fallbackFooterRevealed.value = false
+        fallbackFooterTimer = undefined
+      }, FOOTER_REVEAL_MS)
+    }
+  },
+)
+
+onBeforeUnmount(clearFallbackFooterTimer)
+
 const resolvedFooter = computed<TxAiTurnFooterProps | undefined>(() => {
   if (!props.showFooter)
     return undefined
@@ -103,7 +140,7 @@ const resolvedFooter = computed<TxAiTurnFooterProps | undefined>(() => {
     content: props.message.content,
     regenerable: props.regenerable,
     speakState: props.speakState,
-    resting: false,
+    resting: !fallbackFooterRevealed.value,
     motion: props.motion,
     metrics: props.message.meta as TxAiTurnFooterProps['metrics'] | undefined,
   }

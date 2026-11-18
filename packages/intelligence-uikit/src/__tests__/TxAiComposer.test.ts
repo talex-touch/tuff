@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
+import { h } from 'vue'
 import TxAiComposer from '../components/conversation/TxAiComposer.vue'
 
 describe('txAiComposer', () => {
@@ -142,22 +143,33 @@ describe('txAiComposer', () => {
 
     const textarea = wrapper.get('textarea')
     await textarea.setValue('@')
+    const listbox = wrapper.get('.tx-ai-token-menu[role="listbox"]')
+    const listboxId = listbox.attributes('id')
+    expect(listboxId).toBeTruthy()
+    expect(textarea.attributes('aria-controls')).toBe(listboxId)
+    expect(textarea.attributes('aria-activedescendant')).toBeUndefined()
+
     const options = wrapper.findAll('.tx-ai-token-menu__option')
     expect(options).toHaveLength(2)
+    expect(options[0].attributes('id')).toBeTruthy()
     expect(options.some(opt => opt.classes().includes('is-active'))).toBe(false)
     expect(options.some(opt => opt.attributes('aria-selected') === 'true')).toBe(false)
 
     await textarea.trigger('keydown', { key: 'ArrowDown' })
     expect(options[0].classes()).toContain('is-active')
     expect(options[0].attributes('aria-selected')).toBe('true')
+    expect(textarea.attributes('aria-activedescendant')).toBe(options[0].attributes('id'))
 
     await textarea.trigger('keydown', { key: 'ArrowDown' })
     expect(options[1].classes()).toContain('is-active')
+    expect(textarea.attributes('aria-activedescendant')).toBe(options[1].attributes('id'))
 
     await options[0].trigger('mousedown')
     expect(wrapper.emitted('sourceSelect')).toBeUndefined()
     await options[0].trigger('click')
     expect(wrapper.emitted('sourceSelect')).toHaveLength(1)
+    expect(textarea.attributes('aria-controls')).toBeUndefined()
+    expect(textarea.attributes('aria-activedescendant')).toBeUndefined()
 
     const modelTrigger = wrapper.get('.tx-ai-composer__model-picker .tx-ai-composer-control')
     expect(modelTrigger.attributes('aria-haspopup')).toBe('listbox')
@@ -173,11 +185,147 @@ describe('txAiComposer', () => {
     expect(wrapper.find('.tx-ai-composer__model-menu').exists()).toBe(false)
 
     await modelTrigger.trigger('click')
+    const modelOptions = wrapper.findAll('.tx-ai-composer__model-option')
+    ;(modelOptions[1].element as HTMLButtonElement).focus()
+    await modelOptions[1].trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('update:model')?.[0]).toEqual(['local'])
+    expect(wrapper.find('.tx-ai-composer__model-menu').exists()).toBe(false)
+    expect(document.activeElement).toBe(modelTrigger.element)
+
+    await modelTrigger.trigger('click')
     expect(wrapper.find('.tx-ai-composer__model-menu').exists()).toBe(true)
     await wrapper.get('.tx-ai-composer__model-menu').trigger('keydown', { key: 'Escape' })
     expect(wrapper.find('.tx-ai-composer__model-menu').exists()).toBe(false)
     expect(document.activeElement).toBe(modelTrigger.element)
 
     wrapper.unmount()
+  })
+
+  it('gives explicit maxHeight precedence over maxRows while respecting minHeight', async () => {
+    const wrapper = mount(TxAiComposer, {
+      props: {
+        maxHeight: 80,
+        maxRows: 6,
+      },
+    })
+
+    const textarea = wrapper.get('textarea')
+    Object.defineProperty(textarea.element, 'scrollHeight', {
+      configurable: true,
+      get: () => 120,
+    })
+
+    await textarea.setValue('Line 1\nLine 2\nLine 3\nLine 4\nLine 5')
+    await wrapper.vm.$nextTick()
+    expect((textarea.element as HTMLTextAreaElement).style.height).toBe('80px')
+    expect((textarea.element as HTMLTextAreaElement).style.overflowY).toBe('auto')
+
+    await wrapper.setProps({ maxHeight: undefined, maxRows: 3 })
+    await textarea.trigger('input')
+    await wrapper.vm.$nextTick()
+    expect((textarea.element as HTMLTextAreaElement).style.height).toBe('72px')
+
+    await wrapper.setProps({ minHeight: 96, maxHeight: 80 })
+    await textarea.trigger('input')
+    await wrapper.vm.$nextTick()
+    expect((textarea.element as HTMLTextAreaElement).style.height).toBe('96px')
+  })
+
+  it('guards toolbar submit callback on resolved sendState and enforces attachment permissions across paste and drag/drop', async () => {
+    const wrapper = mount(TxAiComposer, {
+      props: {
+        modelValue: 'Ready draft',
+        sendState: 'disabled',
+        submitting: true,
+        allowAttachmentWhileSubmitting: false,
+      },
+      slots: {
+        toolbar: ({ submit }: { submit: () => void }) =>
+          h('button', { type: 'button', class: 'custom-submit', onClick: () => submit() }, 'Custom send'),
+      },
+    })
+
+    await wrapper.get('.custom-submit').trigger('click')
+    expect(wrapper.emitted('send')).toBeUndefined()
+    expect(wrapper.emitted('queue')).toBeUndefined()
+
+    await wrapper.setProps({ sendState: 'stop' })
+    await wrapper.get('.custom-submit').trigger('click')
+    expect(wrapper.emitted('send')).toBeUndefined()
+    expect(wrapper.emitted('queue')).toBeUndefined()
+
+    const file = new File(['hello'], 'locked.txt', { type: 'text/plain' })
+    const root = wrapper.get('.tx-ai-composer')
+
+    await root.trigger('dragenter', { dataTransfer: { types: ['Files'] } })
+    expect(root.classes()).not.toContain('is-dragging')
+
+    const dragOverEvent = new Event('dragover', { bubbles: true, cancelable: true })
+    Object.defineProperty(dragOverEvent, 'dataTransfer', { value: { types: ['Files'] } })
+    root.element.dispatchEvent(dragOverEvent)
+    expect(dragOverEvent.defaultPrevented).toBe(false)
+
+    await root.trigger('drop', { dataTransfer: { files: [file], types: ['Files'] } })
+    expect(wrapper.emitted('attachmentAdd')).toBeUndefined()
+
+    const pasteEvent = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: { files: [file], getData: () => 'ordinary text' },
+    })
+    wrapper.get('textarea').element.dispatchEvent(pasteEvent)
+    expect(pasteEvent.defaultPrevented).toBe(false)
+    expect(wrapper.emitted('paste')).toHaveLength(1)
+    expect(wrapper.emitted('attachmentAdd')).toBeUndefined()
+
+    await wrapper.setProps({ sendState: 'queue', allowAttachmentWhileSubmitting: true })
+    wrapper.get('textarea').element.dispatchEvent(pasteEvent)
+    expect(wrapper.emitted('attachmentAdd')).toHaveLength(1)
+
+    await wrapper.get('.custom-submit').trigger('click')
+    expect(wrapper.emitted('queue')?.[0]).toEqual([{ text: 'Ready draft' }])
+  })
+
+  it('scopes unique token listbox IDs across instances and keeps run status button role separate from sibling live region', async () => {
+    const pair = mount({
+      components: { TxAiComposer },
+      template: `
+        <div>
+          <TxAiComposer :sources="sources" model-value="@" :run-status="runStatus" />
+          <TxAiComposer :sources="sources" model-value="@" />
+        </div>
+      `,
+      data() {
+        return {
+          sources: [{ key: 'docs', name: 'docs' }],
+          runStatus: {
+            step: { key: 'tool', label: 'Running check', detail: 'eslint', status: 'running' as const },
+            steps: [
+              { key: 's1', label: 'Lint', status: 'done' as const },
+              { key: 's2', label: 'Test', status: 'running' as const },
+            ],
+            elapsedMs: 2400,
+          },
+        }
+      },
+    })
+
+    await pair.vm.$nextTick()
+    const listboxes = pair.findAll('.tx-ai-token-menu[role="listbox"]')
+    expect(listboxes).toHaveLength(2)
+    expect(listboxes[0].attributes('id')).not.toBe(listboxes[1].attributes('id'))
+
+    const statusBtn = pair.get('button.tx-ai-run-status')
+    expect(statusBtn.attributes('role')).toBeUndefined()
+    expect(statusBtn.attributes('aria-live')).toBeUndefined()
+    expect(statusBtn.text()).toContain('1/2')
+    expect(statusBtn.text()).toContain('2.4s')
+
+    const liveRegion = pair.get('.tx-ai-run-status__sr')
+    expect(liveRegion.attributes('role')).toBe('status')
+    expect(liveRegion.attributes('aria-live')).toBe('polite')
+    expect(liveRegion.text()).toBe('Running check: eslint')
+    expect(liveRegion.text()).not.toContain('1/2')
+    expect(liveRegion.text()).not.toContain('2.4s')
   })
 })

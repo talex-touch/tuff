@@ -359,16 +359,34 @@ onMounted(() => {
   }
 })
 
+function serializeSpec(spec: TxAiToolChartSpec): string {
+  return JSON.stringify({
+    type: spec.type,
+    title: spec.title ?? '',
+    xLabel: spec.xLabel ?? '',
+    yLabel: spec.yLabel ?? '',
+    stacked: Boolean(spec.stacked),
+    showValues: Boolean(spec.showValues),
+    labels: spec.labels,
+    series: spec.series.map(entry => ({
+      name: entry.name ?? '',
+      values: entry.values,
+    })),
+  })
+}
+
 watch(
-  () => props.spec,
-  () => {
+  () => serializeSpec(props.spec),
+  (next, prev) => {
+    if (next === prev)
+      return
     draft.value = null
     view.value = null
     hiddenSeries.clear()
-  }
+  },
 )
 
-watch(effectiveSpec, () => void render())
+watch(() => serializeSpec(effectiveSpec.value), () => void render())
 
 onBeforeUnmount(() => {
   disposed = true

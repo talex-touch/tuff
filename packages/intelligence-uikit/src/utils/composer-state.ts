@@ -183,6 +183,8 @@ export type ComposerAttachmentInput =
 function isCanonicalAiAttachment(item: ComposerAttachmentInput): item is AiAttachment {
   if (!item || typeof item !== 'object' || !('kind' in item))
     return false
+  if ('label' in item || 'pending' in item)
+    return false
   if (item.kind === 'image')
     return 'url' in item && typeof item.url === 'string' && 'id' in item
   if (item.kind === 'file')
@@ -220,14 +222,25 @@ export function normalizeComposerAttachments(
       return
     }
 
-    const legacy = item as ChatComposerAttachment & { url?: string, size?: number, mime?: string, progress?: number }
+    const legacy = item as ChatComposerAttachment & {
+      url?: string
+      name?: string
+      width?: number
+      height?: number
+      size?: number
+      mime?: string
+      uploading?: boolean
+      progress?: number
+    }
     if (legacy.kind === 'image' && typeof legacy.url === 'string') {
       normalized.push({
         kind: 'image',
         id: legacy.id || `composer-img-${index}`,
         url: legacy.url,
-        name: legacy.label,
-        uploading: legacy.pending,
+        name: legacy.name ?? legacy.label,
+        ...(legacy.width !== undefined ? { width: legacy.width } : {}),
+        ...(legacy.height !== undefined ? { height: legacy.height } : {}),
+        uploading: legacy.uploading ?? legacy.pending,
         progress: legacy.progress,
       })
       return
@@ -236,10 +249,10 @@ export function normalizeComposerAttachments(
     normalized.push({
       kind: 'file',
       id: legacy.id || `composer-file-${index}`,
-      name: legacy.label || 'Attachment',
+      name: legacy.name || legacy.label || 'Attachment',
       size: legacy.size,
       mime: legacy.mime,
-      uploading: legacy.pending,
+      uploading: legacy.uploading ?? legacy.pending,
       progress: legacy.progress,
     })
   })

@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent } from 'vue'
+import { usePlaygroundState } from '../playground/usePlaygroundState'
 import {
   buildMessageRailTurns,
   calculateAiContextPercent,
@@ -13,6 +16,10 @@ import {
   voiceGlowDriveLevel,
   voiceGlowResponse,
 } from '../utils'
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe('composer-state & message-rail utilities', () => {
   it('derives send, stop, queue, and disabled states', () => {
@@ -77,16 +84,20 @@ describe('composer-state & message-rail utilities', () => {
     expect(voiceGlowResponse(0.5)).toBeGreaterThan(0.5)
   })
 
-  it('normalizes canonical, ChatComposer, and legacy image attachments', () => {
+  it('normalizes canonical, ChatComposer, and legacy image attachments including pending/label keys', () => {
     const result = normalizeComposerAttachments([
       { type: 'image', url: 'https://example.com/a.png', name: 'a.png' },
       { id: 'c1', label: 'notes.md', kind: 'file', pending: true },
+      { id: 'c2', label: 'shot.png', kind: 'image', url: 'blob:shot', pending: true, progress: 0.4 } as any,
+      { id: 'f0', name: 'archive.zip', kind: 'file', pending: true } as any,
       { kind: 'file', id: 'f1', name: 'spec.json', size: 512 },
     ])
 
     expect(result).toEqual([
       { kind: 'image', id: 'legacy-img-0-a.png', url: 'https://example.com/a.png', name: 'a.png' },
       { kind: 'file', id: 'c1', name: 'notes.md', size: undefined, mime: undefined, uploading: true, progress: undefined },
+      { kind: 'image', id: 'c2', url: 'blob:shot', name: 'shot.png', uploading: true, progress: 0.4 },
+      { kind: 'file', id: 'f0', name: 'archive.zip', size: undefined, mime: undefined, uploading: true, progress: undefined },
       { kind: 'file', id: 'f1', name: 'spec.json', size: 512 },
     ])
   })
@@ -123,5 +134,59 @@ describe('composer-state & message-rail utilities', () => {
       hasImages: true,
     })
     expect(summarizeRailMessage({ id: 'u3', role: 'user', content: 'A'.repeat(40) }, { maxLength: 10 })).toHaveLength(10)
+  })
+
+  it('guards playground loadOlderMessages across resetTimeline and preserves/clears attachments on sendDraft', async () => {
+    vi.useFakeTimers()
+
+    let state!: ReturnType<typeof usePlaygroundState>
+    const Harness = defineComponent({
+      setup() {
+        state = usePlaygroundState()
+        return () => null
+      },
+    })
+    const wrapper = mount(Harness)
+
+    // Start an older-history load, then reset before 250ms settles.
+    const staleLoad = state.loadOlderMessages()
+    await vi.advanceTimersByTimeAsync(100)
+    state.resetTimeline()
+    await vi.advanceTimersByTimeAsync(200)
+    const staleResult = await staleLoad
+
+    expect(state.olderLoaded.value).toBe(false)
+    expect(state.messages.value).toHaveLength(0)
+    expect(staleResult).toEqual({ hasMore: true })
+
+    // Subsequent uninterrupted load completes cleanly.
+    const validLoad = state.loadOlderMessages()
+    await vi.advanceTimersByTimeAsync(250)
+    const validResult = await validLoad
+    expect(state.olderLoaded.value).toBe(true)
+    expect(validResult).toEqual({ hasMore: false })
+
+    // Sending a draft copies attachments into the submitted user turn and clears composer attachments.
+    expect(state.composerAttachments.value).toHaveLength(1)
+    state.sendDraft({ text: 'Inspect composer parity' })
+    expect(state.composerAttachments.value).toHaveLength(0)
+
+    const sentWithAttachment = state.messages.value.at(-2)
+    expect(sentWithAttachment).toMatchObject({
+      role: 'user',
+      content: 'Inspect composer parity',
+      attachments: [{ kind: 'file', id: 'att-uikit', name: 'TxAiComposer.vue', size: 18_420 }],
+    })
+
+    // Text-only follow-up stays clean without attachments.
+    state.sendDraft({ text: 'Second turn without files' })
+    const textOnlyTurn = state.messages.value.at(-2)
+    expect(textOnlyTurn).toMatchObject({
+      role: 'user',
+      content: 'Second turn without files',
+    })
+    expect(textOnlyTurn?.attachments).toBeUndefined()
+
+    wrapper.unmount()
   })
 })

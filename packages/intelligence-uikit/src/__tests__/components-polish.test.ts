@@ -101,14 +101,17 @@ describe('uikit leaf polish, accessibility & design-rule contracts', () => {
     expect(wrapper.get(`#${describedBy}`).attributes('role')).toBe('alert')
   })
 
-  it('resets local draft when TxAiToolChart spec changes and labels edit inputs', async () => {
+  it('preserves local draft, view, and hidden series on identical spec re-parses and resets when spec content changes', async () => {
     const wrapper = mount(TxAiToolChart, {
       props: {
         spec: {
           type: 'bar',
           title: 'Initial',
           labels: ['Q1'],
-          series: [{ name: 'Sales', values: [10] }],
+          series: [
+            { name: 'Sales', values: [10] },
+            { name: 'Costs', values: [4] },
+          ],
         },
       },
       global: {
@@ -122,21 +125,51 @@ describe('uikit leaf polish, accessibility & design-rule contracts', () => {
       },
     })
 
+    const seriesChips = wrapper.findAll('.tx-ai-tool-chart-Chip')
+    await seriesChips[1].trigger('click')
+    expect(seriesChips[1].classes()).toContain('is-off')
+
+    const viewButtons = wrapper.findAll('.tx-ai-tool-chart-View')
+    await viewButtons[0].trigger('click')
+    expect(viewButtons[0].classes()).toContain('is-active')
+
     await wrapper.get('.tx-ai-tool-chart-Edit').trigger('click')
     const tableInputs = wrapper.findAll('tbody input')
     expect(tableInputs[0].attributes('aria-label')).toContain('Label')
     expect(tableInputs[1].attributes('aria-label')).toContain('Sales')
 
     await tableInputs[0].setValue('Edited')
+
+    // Re-parsed object with identical content must keep local workbench state intact.
+    await wrapper.setProps({
+      spec: {
+        type: 'bar',
+        title: 'Initial',
+        labels: ['Q1'],
+        series: [
+          { name: 'Sales', values: [10] },
+          { name: 'Costs', values: [4] },
+        ],
+      },
+    })
+    expect((wrapper.findAll('tbody input')[0].element as HTMLInputElement).value).toBe('Edited')
+    expect(wrapper.findAll('.tx-ai-tool-chart-Chip')[1].classes()).toContain('is-off')
+    expect(wrapper.findAll('.tx-ai-tool-chart-View')[0].classes()).toContain('is-active')
+
+    // Genuine content change resets draft, view, and hidden series.
     await wrapper.setProps({
       spec: {
         type: 'line',
         title: 'Next',
         labels: ['Q2'],
-        series: [{ name: 'Users', values: [25] }],
+        series: [
+          { name: 'Users', values: [25] },
+          { name: 'Active', values: [18] },
+        ],
       },
     })
     expect((wrapper.findAll('tbody input')[0].element as HTMLInputElement).value).toBe('Q2')
+    expect(wrapper.findAll('.tx-ai-tool-chart-Chip')[1].classes()).not.toContain('is-off')
   })
 
   it('marks TxAiToolWidget aria-busy while loading and renders skeleton placeholder', () => {
@@ -170,5 +203,38 @@ describe('uikit leaf polish, accessibility & design-rule contracts', () => {
     expect(scss).toContain('.tx-ai-rich-block__thought-header')
     expect(scss).toContain('&:focus-visible')
     expect(scss).not.toMatch(/\.tx-ai-rich-block__thought-header[\s\S]*?outline:\s*none/)
+
+    // Message rail resting bar must maintain >= 3:1 WCAG 1.4.11 contrast across light and dark themes.
+    const railVue = fs.readFileSync(path.resolve(__dirname, '../components/conversation/TxAiMessageRail.vue'), 'utf8')
+    expect(railVue).toContain('var(--tx-text-color-regular, #475569)')
+    expect(railVue).toContain('opacity: 0.76;')
+
+    const toLinear = (c: number) => {
+      const s = c / 255
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+    }
+    const parseHex = (hex: string) => {
+      const v = Number.parseInt(hex.slice(1), 16)
+      return [(v >> 16) & 255, (v >> 8) & 255, v & 255] as const
+    }
+    const luminance = ([r, g, b]: readonly [number, number, number]) =>
+      0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b)
+    const contrastAtAlpha = (fgHex: string, bgHex: string, alpha: number) => {
+      const fg = parseHex(fgHex)
+      const bg = parseHex(bgHex)
+      const blended: [number, number, number] = [
+        fg[0] * alpha + bg[0] * (1 - alpha),
+        fg[1] * alpha + bg[1] * (1 - alpha),
+        fg[2] * alpha + bg[2] * (1 - alpha),
+      ]
+      const l1 = luminance(blended)
+      const l2 = luminance(bg)
+      return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)
+    }
+
+    expect(contrastAtAlpha('#606266', '#ffffff', 0.76)).toBeGreaterThanOrEqual(3)
+    expect(contrastAtAlpha('#606266', '#f2f3f5', 0.76)).toBeGreaterThanOrEqual(3)
+    expect(contrastAtAlpha('#475569', '#ffffff', 0.76)).toBeGreaterThanOrEqual(3)
+    expect(contrastAtAlpha('#cfd3dc', '#141414', 0.76)).toBeGreaterThanOrEqual(3)
   })
 })

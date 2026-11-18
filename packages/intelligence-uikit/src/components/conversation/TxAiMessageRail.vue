@@ -102,12 +102,13 @@ const resolvedTurns = computed(() => {
   border: none;
   border-radius: 999px;
   background: transparent;
-  color: var(--tx-text-color-placeholder, #94a3b8);
+  color: var(--tx-text-color-regular, #475569);
   font-family: var(--shell-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 10px;
   cursor: pointer;
 
   &:hover,
+  .is-preview &,
   .is-active & {
     color: var(--tx-color-primary, #3b82f6);
   }
@@ -118,14 +119,19 @@ const resolvedTurns = computed(() => {
   }
 }
 
+// Resting contrast measured against TuffEx theme backgrounds (WCAG 1.4.11 >= 3:1):
+// light `--tx-text-color-regular #606266` @ 0.76 -> 3.55:1 on `#ffffff`, 3.32:1 on `#f2f3f5`
+// (fallback `#475569` @ 0.76 -> 4.07:1 on `#ffffff`); dark `#cfd3dc` @ 0.76 -> 7.50:1 on `#141414`;
+// high-contrast light/dark -> 6.77:1 / 10.55:1.
 .tx-ai-message-rail__bar {
   width: 12px;
   height: 2.5px;
   border-radius: 999px;
   background: currentColor;
-  opacity: 0.48;
+  opacity: 0.76;
 
   .tx-ai-message-rail__trigger:hover &,
+  .is-preview &,
   .is-active & {
     width: 18px;
     opacity: 1;
@@ -137,6 +143,7 @@ const resolvedTurns = computed(() => {
   font-weight: 600;
 
   .tx-ai-message-rail__trigger:hover &,
+  .is-preview &,
   .is-active & {
     opacity: 1;
   }

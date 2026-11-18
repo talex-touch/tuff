@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PromptBarCommand, PromptBarMenuKind, PromptBarSource } from '@talex-touch/tuffex/prompt-bar'
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 
 export type TxAiTokenMenuRow = PromptBarSource | PromptBarCommand
 
@@ -11,6 +11,8 @@ const props = withDefaults(defineProps<{
   rows: TxAiTokenMenuRow[]
   activeIndex: number
   engaged?: boolean
+  id?: string
+  textarea?: HTMLTextAreaElement | null
   placement?: 'top' | 'bottom'
   sourcesHint?: string
   commandsHint?: string
@@ -19,6 +21,8 @@ const props = withDefaults(defineProps<{
   connectedLabel?: string
 }>(), {
   engaged: true,
+  id: undefined,
+  textarea: null,
   placement: 'top',
   sourcesHint: 'Sources & files',
   commandsHint: 'Slash commands',
@@ -32,11 +36,59 @@ const emit = defineEmits<{
   engage: [index: number]
 }>()
 
+const uid = useId()
+const listboxId = computed(() => props.id || `tx-ai-token-menu-${uid}`)
+
+function optionId(index: number): string {
+  return `${listboxId.value}-option-${index}`
+}
+
+const activeOptionId = computed(() => {
+  if (!props.menu || !props.engaged || props.activeIndex < 0 || props.activeIndex >= props.rows.length)
+    return undefined
+  return optionId(props.activeIndex)
+})
+
 const itemRefs = ref<HTMLElement[]>([])
 
 function isSourceRow(row: TxAiTokenMenuRow): row is PromptBarSource {
   return 'attach' in row || 'connectable' in row || 'connected' in row
 }
+
+function clearTextareaAria(el: HTMLTextAreaElement | null | undefined) {
+  if (!el)
+    return
+  el.removeAttribute('aria-controls')
+  el.removeAttribute('aria-activedescendant')
+}
+
+watch(
+  () => [props.textarea, props.menu, listboxId.value, activeOptionId.value] as const,
+  ([el, menu, listId, activeId], prev) => {
+    const prevEl = prev?.[0]
+    if (prevEl && prevEl !== el)
+      clearTextareaAria(prevEl)
+    if (!el)
+      return
+    if (menu) {
+      el.setAttribute('aria-controls', listId)
+    }
+    else {
+      el.removeAttribute('aria-controls')
+    }
+    if (activeId) {
+      el.setAttribute('aria-activedescendant', activeId)
+    }
+    else {
+      el.removeAttribute('aria-activedescendant')
+    }
+  },
+  { immediate: true, flush: 'post' },
+)
+
+onBeforeUnmount(() => {
+  clearTextareaAria(props.textarea)
+})
 
 watch(
   () => [props.menu, props.activeIndex, props.engaged] as const,
@@ -49,11 +101,18 @@ watch(
       el.scrollIntoView({ block: 'nearest' })
   },
 )
+
+defineExpose({
+  listboxId,
+  activeOptionId,
+  optionId,
+})
 </script>
 
 <template>
   <div
     v-if="menu"
+    :id="listboxId"
     class="tx-ai-token-menu"
     :class="`is-${placement}`"
     role="listbox"
@@ -68,6 +127,7 @@ watch(
     <button
       v-for="(row, index) in rows"
       v-else
+      :id="optionId(index)"
       :key="row.key"
       ref="itemRefs"
       type="button"

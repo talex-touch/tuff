@@ -147,6 +147,7 @@ export function usePlaygroundState() {
 
   let playTimer: ReturnType<typeof setInterval> | undefined
   let dictationTimer: ReturnType<typeof setInterval> | undefined
+  let loadOlderGeneration = 0
 
   const activeSessionConfig = computed(
     () => sessionConfigs.find(item => item.id === activeSession.value) ?? sessionConfigs[0],
@@ -366,7 +367,10 @@ export function usePlaygroundState() {
   }))
 
   async function loadOlderMessages(): Promise<ConversationStreamLoadResult> {
+    const generation = ++loadOlderGeneration
     await new Promise(resolve => setTimeout(resolve, 250))
+    if (generation !== loadOlderGeneration)
+      return { hasMore: !olderLoaded.value }
     olderLoaded.value = true
     return { hasMore: false }
   }
@@ -417,6 +421,7 @@ export function usePlaygroundState() {
 
   function resetTimeline() {
     stopPlayback()
+    loadOlderGeneration += 1
     olderLoaded.value = false
     customMessages.value = []
     queuedPrompts.value = []
@@ -475,19 +480,28 @@ export function usePlaygroundState() {
 
   function sendDraft(payload?: { text: string }) {
     const text = (payload?.text ?? draft.value).trim()
-    if (!text)
+    const submittedAttachments = extraAttachments.value.map(item => ({ ...item }))
+    if (!text && submittedAttachments.length === 0)
       return
     draft.value = ''
+    extraAttachments.value = []
+    const replySummary = text || submittedAttachments.map(item => ('name' in item && item.name) ? item.name : ('label' in item ? item.label : 'attachment')).join(', ')
     customMessages.value = [
       ...customMessages.value,
-      { id: `user-${Date.now()}`, role: 'user', content: text, createdAt: Date.now() },
+      {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: text || undefined,
+        ...(submittedAttachments.length ? { attachments: submittedAttachments } : {}),
+        createdAt: Date.now(),
+      },
       {
         id: `asst-${Date.now() + 1}`,
         role: 'assistant',
         status: 'done',
-        content: `Received follow-up (${selectedModel.value}${webSearchEnabled.value ? ' · Search on' : ''}): **${text}**`,
+        content: `Received follow-up (${selectedModel.value}${webSearchEnabled.value ? ' · Search on' : ''}): **${replySummary}**`,
         footer: {
-          content: `Received follow-up: ${text}`,
+          content: `Received follow-up: ${replySummary}`,
           regenerable: true,
           metrics: { latencyMs: 640, completionTokens: 28, totalTokens: 86, model: selectedModel.value },
         },
@@ -504,6 +518,7 @@ export function usePlaygroundState() {
   }
 
   onBeforeUnmount(() => {
+    loadOlderGeneration += 1
     stopPlayback()
     stopDictation()
   })

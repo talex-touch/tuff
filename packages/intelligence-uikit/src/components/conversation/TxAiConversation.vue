@@ -7,7 +7,7 @@ import type { TxAiConversationProps, TxAiConversationSuggestion, TxAiMessageMode
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
 import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { TxMiko } from '@talex-touch/tuffex/miko'
-import { computed, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
+import { computed, onBeforeUnmount, onBeforeUpdate, onMounted, ref, useSlots, watch } from 'vue'
 import { buildMessageRailTurns } from '../../utils/message-rail'
 import TxAiMessage from './TxAiMessage.vue'
 import TxAiMessageRail from './TxAiMessageRail.vue'
@@ -19,12 +19,10 @@ defineOptions({
 
 const props = withDefaults(defineProps<TxAiConversationProps>(), {
   markdown: true,
-  autoFollow: true,
-  followGap: 64,
   generating: false,
   estimatedItemHeight: 160,
   overscan: 3,
-  hasMoreInitial: false,
+  hasMoreInitial: undefined,
   blurMasks: true,
   showEmptyState: true,
   showRail: true,
@@ -71,6 +69,18 @@ const atBottom = ref(true)
 const activeMessageIndex = ref(-1)
 const measuredComposerHeight = ref(0)
 
+const hasBeforeSlot = ref(Boolean(slots.before))
+const hasAfterSlot = ref(Boolean(slots.after))
+const hasComposerSlot = ref(Boolean(slots.composer))
+
+function syncSlotPresence() {
+  hasBeforeSlot.value = Boolean(slots.before)
+  hasAfterSlot.value = Boolean(slots.after)
+  hasComposerSlot.value = Boolean(slots.composer)
+}
+
+onBeforeUpdate(syncSlotPresence)
+
 let dockObserver: ResizeObserver | null = null
 
 function updateDockHeight() {
@@ -83,12 +93,18 @@ function updateDockHeight() {
   measuredComposerHeight.value = Math.ceil(rect.height || 0)
 }
 
-onMounted(() => {
+function syncDockObserver() {
+  dockObserver?.disconnect()
+  dockObserver = null
   updateDockHeight()
   if (typeof ResizeObserver !== 'undefined' && composerDockRef.value) {
     dockObserver = new ResizeObserver(updateDockHeight)
     dockObserver.observe(composerDockRef.value)
   }
+}
+
+onMounted(() => {
+  syncDockObserver()
 })
 
 onBeforeUnmount(() => {
@@ -96,19 +112,13 @@ onBeforeUnmount(() => {
   dockObserver = null
 })
 
-watch(() => Boolean(slots.composer), () => {
-  if (typeof ResizeObserver === 'undefined')
-    return
-  dockObserver?.disconnect()
-  if (composerDockRef.value) {
-    dockObserver = new ResizeObserver(updateDockHeight)
-    dockObserver.observe(composerDockRef.value)
-  }
-  updateDockHeight()
-})
-
-const hasBeforeSlot = computed(() => Boolean(slots.before))
-const hasAfterSlot = computed(() => Boolean(slots.after))
+watch(
+  [hasComposerSlot, composerDockRef],
+  () => {
+    syncDockObserver()
+  },
+  { flush: 'post' },
+)
 
 const streamEntries = computed<StreamEntry[]>(() => {
   if (!props.messages.length && !hasBeforeSlot.value && !hasAfterSlot.value)
@@ -244,7 +254,7 @@ const tailKey = computed(() => {
 })
 
 watch(tailKey, (nextKey, prevKey) => {
-  if (props.autoFollow && nextKey !== undefined && nextKey !== prevKey && atBottom.value) {
+  if (nextKey !== undefined && nextKey !== prevKey && atBottom.value) {
     streamRef.value?.scrollToBottom('auto')
   }
 })
@@ -430,7 +440,7 @@ defineExpose({
       :strength="1.35"
     />
 
-    <div v-if="$slots.composer" ref="composerDockRef" class="tx-ai-conversation__composer-dock">
+    <div v-if="hasComposerSlot" ref="composerDockRef" class="tx-ai-conversation__composer-dock">
       <slot name="composer" />
     </div>
   </section>

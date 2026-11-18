@@ -35,7 +35,7 @@ const props = withDefaults(defineProps<TxAiComposerProps>(), {
   minRows: 1,
   maxRows: 6,
   minHeight: 28,
-  maxHeight: 144,
+  maxHeight: undefined,
   autoResize: true,
   sendOnEnter: true,
   sendOnMetaEnter: false,
@@ -126,6 +126,9 @@ const isDictating = computed(() =>
 )
 
 const isSendingOrBusy = computed(() => props.submitting || props.busy)
+const canModifyAttachments = computed(() =>
+  !props.disabled && (!props.submitting || props.allowAttachmentWhileSubmitting),
+)
 const normalizedAttachments = computed(() => normalizeComposerAttachments(props.attachments))
 const hasDraftOrAttachments = computed(() => draft.value.trim().length > 0 || normalizedAttachments.value.length > 0)
 
@@ -187,7 +190,10 @@ const tokenMenu = useTokenMenu<PromptBarSource, PromptBarCommand>({
 })
 
 const effectiveTextareaMinHeight = computed(() => Math.max(props.minHeight, props.minRows * 22))
-const effectiveTextareaMaxHeight = computed(() => Math.max(effectiveTextareaMinHeight.value, props.maxHeight, props.maxRows * 24))
+const effectiveTextareaMaxHeight = computed(() => {
+  const limit = props.maxHeight ?? props.maxRows * 24
+  return Math.max(effectiveTextareaMinHeight.value, limit)
+})
 
 function syncHeight() {
   const el = inputRef.value
@@ -270,9 +276,11 @@ function launch() {
   stopLaunch = animateComposerLaunch(boxRef.value, ghostRef.value)
 }
 
-function submitDraft(mode: 'send' | 'queue' = resolvedSendState.value === 'queue' ? 'queue' : 'send') {
-  if (props.disabled)
+function submitDraft(mode?: 'send' | 'queue') {
+  const actionState = resolvedSendState.value
+  if (props.disabled || (actionState !== 'send' && actionState !== 'queue'))
     return
+  const resolvedMode = mode ?? (actionState === 'queue' ? 'queue' : 'send')
   const text = draft.value
   const trimmed = text.trim()
   const canSend = trimmed.length > 0 || normalizedAttachments.value.length > 0 || props.allowEmptySend
@@ -280,7 +288,7 @@ function submitDraft(mode: 'send' | 'queue' = resolvedSendState.value === 'queue
     return
 
   launch()
-  if (mode === 'queue') {
+  if (resolvedMode === 'queue') {
     emit('queue', { text })
   }
   else {
@@ -295,6 +303,8 @@ function submitDraft(mode: 'send' | 'queue' = resolvedSendState.value === 'queue
 }
 
 function handleAttachOrSources() {
+  if (!canModifyAttachments.value)
+    return
   if (props.sources.length > 0 && !props.showAttachmentButton) {
     forcedAtOpen.value = !forcedAtOpen.value
     if (forcedAtOpen.value)
@@ -333,7 +343,7 @@ function handleTokenSelect(row: TxAiTokenMenuRow) {
 }
 
 function selectModel(model: PromptBarModel) {
-  modelMenuOpen.value = false
+  closeModelMenu(true)
   emit('update:model', model.key)
 }
 
@@ -406,22 +416,29 @@ function handleBlur(event: FocusEvent) {
   emit('blur', event)
 }
 
+watch(canModifyAttachments, (allowed) => {
+  if (!allowed)
+    dragDepth.value = 0
+})
+
 function handlePaste(event: ClipboardEvent) {
   emit('paste', event)
+  if (!canModifyAttachments.value)
+    return
   const files = Array.from(event.clipboardData?.files ?? [])
   if (files.length)
     emit('attachmentAdd', files)
 }
 
 function handleDragEnter(event: DragEvent) {
-  if (props.disabled)
+  if (!canModifyAttachments.value)
     return
   if (event.dataTransfer?.types?.includes('Files'))
     dragDepth.value += 1
 }
 
 function handleDragOver(event: DragEvent) {
-  if (props.disabled)
+  if (!canModifyAttachments.value)
     return
   if (event.dataTransfer?.types?.includes('Files'))
     event.preventDefault()
@@ -434,7 +451,7 @@ function handleDragLeave() {
 
 function handleDrop(event: DragEvent) {
   dragDepth.value = 0
-  if (props.disabled)
+  if (!canModifyAttachments.value)
     return
   const files = Array.from(event.dataTransfer?.files ?? [])
   if (files.length) {
@@ -512,6 +529,7 @@ defineExpose({
         :rows="tokenMenu.rows.value"
         :active-index="tokenMenu.activeIndex.value"
         :engaged="tokenMenu.engaged.value"
+        :textarea="inputRef"
         :sources-hint="resolvedLabels.sourcesHint"
         :commands-hint="resolvedLabels.commandsHint"
         :no-matches="resolvedLabels.noMatches"
@@ -547,7 +565,7 @@ defineExpose({
             <slot name="attachments" :attachments="normalizedAttachments">
               <TxAttachmentTray
                 :attachments="normalizedAttachments"
-                :removable="!disabled && (!submitting || allowAttachmentWhileSubmitting)"
+                :removable="canModifyAttachments"
                 :remove-label="resolvedLabels.removeAttachment"
                 :cancel-label="resolvedLabels.cancelAttachment"
                 :preview-title="resolvedLabels.previewTitle"
@@ -600,7 +618,7 @@ defineExpose({
                   v-if="showAttachmentButton || sources.length > 0"
                   circle
                   :label="resolvedLabels.attach"
-                  :disabled="disabled || (submitting && !allowAttachmentWhileSubmitting)"
+                  :disabled="!canModifyAttachments"
                   :active="forcedAtOpen"
                   @click="handleAttachOrSources"
                 >
