@@ -616,3 +616,30 @@ describe('active-app repeated macOS timeouts', () => {
     expect(activeAppLoggerMock.error).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('active-app macOS native TTL cache reuse', () => {
+  it('reuses cached active-app result within TTL across repeated calls without extra native probes', async () => {
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.darwin()
+      }
+    )
+    getDarwinFrontmostApplicationMock.mockResolvedValue({
+      supported: true,
+      available: true,
+      appName: 'Terminal',
+      bundleId: 'com.apple.Terminal',
+      processId: 4201,
+      bundlePath: '/System/Applications/Utilities/Terminal.app',
+      executablePath: '/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal',
+      windowTitle: 'zsh'
+    })
+
+    const first = await activeAppService.getActiveApp({ includeIcon: false })
+    const second = await activeAppService.getActiveApp({ includeIcon: false })
+
+    expect(first).toBe(second)
+    expect(getDarwinFrontmostApplicationMock).toHaveBeenCalledTimes(1)
+    expect(execFilePromiseMock).not.toHaveBeenCalled()
+  })
+})

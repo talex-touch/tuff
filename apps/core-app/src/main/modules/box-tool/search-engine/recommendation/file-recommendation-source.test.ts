@@ -14,6 +14,7 @@ vi.mock('../../../../utils/local-renderable-assets', () => ({
 }))
 
 import { registerFileAssetBridge } from '../../addon/files/file-asset-bridge'
+import { registerFileRecommendationBridge } from '../../addon/files/file-recommendation-bridge'
 import { createFileRecommendationSource } from './file-recommendation-source'
 
 const fileRow = (path: string, isDir = false): Record<string, unknown> => ({
@@ -344,5 +345,155 @@ describe('file recommendation source thumbnail warm-up', () => {
 
     expect(items).toEqual([{ id: '/Users/x/Pictures/shot.png' }])
     expect(db.getFileExtensionsByFileIds).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('file recommendation source NativeFileArena bridge fallback', () => {
+  let disposeBridge: (() => void) | null = null
+
+  afterEach(() => {
+    disposeBridge?.()
+    disposeBridge = null
+    vi.clearAllMocks()
+  })
+
+  it('rebuilds NativeFileArena-only files cleanly when SQLite misses them', async () => {
+    const mtime = new Date('2026-10-18T10:00:00.000Z')
+    const ctime = new Date('2026-10-18T09:00:00.000Z')
+    const db = makeDb([{ ...fileRow('/Users/x/Documents/indexed.md'), id: 42 }])
+    const lookupFilesByPaths = vi.fn(async (paths: readonly string[]) => {
+      const map = new Map()
+      if (paths.includes('/Users/x/Downloads/arena-only.pdf')) {
+        map.set('/Users/x/Downloads/arena-only.pdf', {
+          path: '/Users/x/Downloads/arena-only.pdf',
+          name: 'arena-only.pdf',
+          extension: '.pdf',
+          size: 4096,
+          mtime,
+          ctime,
+          isDir: false
+        })
+      }
+      return map
+    })
+    disposeBridge = registerFileRecommendationBridge({
+      lookupFilesByPaths,
+      listRecentFiles: async () => [],
+      recallSemanticFiles: async () => []
+    })
+
+    mapFileToTuffItemMock.mockImplementation((file: { path: string }) => ({ id: file.path }))
+    normalizeTuffItemLocalAssetsMock.mockImplementation((item: unknown) => ({ item }))
+
+    const result = await createFileRecommendationSource(db as never).rebuild([
+      '/Users/x/Documents/indexed.md',
+      '/Users/x/Downloads/arena-only.pdf'
+    ])
+
+    expect(lookupFilesByPaths).toHaveBeenCalledTimes(1)
+    expect(lookupFilesByPaths).toHaveBeenCalledWith(['/Users/x/Downloads/arena-only.pdf'])
+    expect(db.getFileExtensionsByFileIds).toHaveBeenCalledWith([42])
+    expect(mapFileToTuffItemMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: -1,
+        path: '/Users/x/Downloads/arena-only.pdf',
+        name: 'arena-only.pdf',
+        extension: '.pdf',
+        size: 4096,
+        mtime,
+        ctime,
+        lastIndexedAt: mtime,
+        isDir: false,
+        type: 'file',
+        content: null,
+        embeddingStatus: 'none'
+      }),
+      {},
+      'file-provider',
+      'File Provider'
+    )
+    expect(result.map((item) => (item as { id: string }).id)).toEqual([
+      '/Users/x/Documents/indexed.md',
+      '/Users/x/Downloads/arena-only.pdf'
+    ])
+  })
+
+  it('drops NativeFileArena files that vanished from disk or fail local asset normalization', async () => {
+    const now = new Date('2026-10-18T10:00:00.000Z')
+    const db = makeDb([])
+    disposeBridge = registerFileRecommendationBridge({
+      lookupFilesByPaths: async () =>
+        new Map([
+          [
+            '/Users/x/Downloads/deleted-after-stat.pdf',
+            {
+              path: '/Users/x/Downloads/deleted-after-stat.pdf',
+              name: 'deleted-after-stat.pdf',
+              extension: '.pdf',
+              size: 128,
+              mtime: now,
+              ctime: now,
+              isDir: false
+            }
+          ],
+          [
+            '/Users/x/Downloads/alive.pdf',
+            {
+              path: '/Users/x/Downloads/alive.pdf',
+              name: 'alive.pdf',
+              extension: '.pdf',
+              size: 512,
+              mtime: now,
+              ctime: now,
+              isDir: false
+            }
+          ]
+        ]),
+      listRecentFiles: async () => [],
+      recallSemanticFiles: async () => []
+    })
+
+    mapFileToTuffItemMock.mockImplementation((file: { path: string }) => ({ id: file.path }))
+    normalizeTuffItemLocalAssetsMock.mockImplementation((item: { id: string }) =>
+      item.id === '/Users/x/Downloads/deleted-after-stat.pdf' ? { item: null } : { item }
+    )
+
+    const result = await createFileRecommendationSource(db as never).rebuild([
+      '/Users/x/Downloads/never-in-arena.pdf',
+      '/Users/x/Downloads/deleted-after-stat.pdf',
+      '/Users/x/Downloads/alive.pdf'
+    ])
+
+    expect(db.getFileExtensionsByFileIds).not.toHaveBeenCalled()
+    expect(normalizeTuffItemLocalAssetsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ dropMissingFile: true, fallbackKind: 'file' })
+    )
+    expect(result.map((item) => (item as { id: string }).id)).toEqual([
+      '/Users/x/Downloads/alive.pdf'
+    ])
+  })
+
+  it('keeps SQLite-backed files when the NativeFileArena bridge throws', async () => {
+    const db = makeDb([{ ...fileRow('/Users/x/Documents/sqlite-safe.txt'), id: 5 }])
+    disposeBridge = registerFileRecommendationBridge({
+      lookupFilesByPaths: async () => {
+        throw new Error('bridge unavailable')
+      },
+      listRecentFiles: async () => [],
+      recallSemanticFiles: async () => []
+    })
+
+    mapFileToTuffItemMock.mockImplementation((file: { path: string }) => ({ id: file.path }))
+    normalizeTuffItemLocalAssetsMock.mockImplementation((item: unknown) => ({ item }))
+
+    const result = await createFileRecommendationSource(db as never).rebuild([
+      '/Users/x/Documents/sqlite-safe.txt',
+      '/Users/x/Downloads/arena-missing.txt'
+    ])
+
+    expect(result.map((item) => (item as { id: string }).id)).toEqual([
+      '/Users/x/Documents/sqlite-safe.txt'
+    ])
   })
 })

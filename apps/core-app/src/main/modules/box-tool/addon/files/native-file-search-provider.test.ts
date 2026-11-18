@@ -2,11 +2,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 const {
   execFileMock,
+  getFileIndexSupportMock,
   getMainConfigMock,
   getPathMock,
   iconCacheEnsureMock,
   iconCacheGetMock,
   originalPlatform,
+  querySpotlightNativeMock,
   readdirMock,
   statMock
 } = vi.hoisted(() => {
@@ -18,15 +20,29 @@ const {
   Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
   return {
     execFileMock: vi.fn(),
+    getFileIndexSupportMock: vi.fn(() => ({
+      supported: false,
+      platform: 'darwin',
+      hasBulkScanner: false,
+      hasNativeFsevents: false,
+      hasNativeSpotlight: false,
+      hasNativeFrontmostApp: false
+    })),
     getMainConfigMock: vi.fn(),
     getPathMock: vi.fn(),
     iconCacheEnsureMock: vi.fn(),
     iconCacheGetMock: vi.fn(),
     originalPlatform: platform,
+    querySpotlightNativeMock: vi.fn(async () => [] as Array<{ path: string }>),
     readdirMock: vi.fn(),
     statMock: vi.fn()
   }
 })
+
+vi.mock('@talex-touch/tuff-native/file-index', () => ({
+  getFileIndexSupport: getFileIndexSupportMock,
+  querySpotlightNative: querySpotlightNativeMock
+}))
 
 vi.mock('electron', () => ({
   app: {
@@ -663,6 +679,111 @@ describe('native-file-search-provider', () => {
       } finally {
         provider.backend = null
       }
+    })
+
+    it('prefers in-process MDQueryCreate without spawning mdfind when native spotlight is available', async () => {
+      getFileIndexSupportMock.mockReturnValueOnce({
+        supported: true,
+        platform: 'darwin',
+        hasBulkScanner: true,
+        hasNativeFsevents: true,
+        hasNativeSpotlight: true,
+        hasNativeFrontmostApp: true
+      })
+      querySpotlightNativeMock.mockResolvedValueOnce([
+        { path: '/Users/demo/Documents/native-wx.md' }
+      ])
+      stubFolders({})
+      stubStat()
+
+      const provider = macSpotlightFileProvider as unknown as SearchableSpotlightProvider
+      const results = await provider.searchNative('wx', new AbortController().signal)
+
+      expect(results.map((result) => result.path)).toEqual(['/Users/demo/Documents/native-wx.md'])
+      expect(execFileMock).not.toHaveBeenCalled()
+    })
+
+    it('falls back to mdfind if native MDQueryCreate throws', async () => {
+      getFileIndexSupportMock.mockReturnValueOnce({
+        supported: true,
+        platform: 'darwin',
+        hasBulkScanner: true,
+        hasNativeFsevents: true,
+        hasNativeSpotlight: true,
+        hasNativeFrontmostApp: true
+      })
+      querySpotlightNativeMock.mockRejectedValueOnce(new Error('MDQuery unavailable'))
+      stubFolders({})
+      stubMdfind(['/Users/demo/Documents/fallback-wx.md'])
+      stubStat()
+
+      const provider = macSpotlightFileProvider as unknown as SearchableSpotlightProvider
+      const results = await provider.searchNative('wx', new AbortController().signal)
+
+      expect(results.map((result) => result.path)).toEqual(['/Users/demo/Documents/fallback-wx.md'])
+      expect(execFileMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('cancels pending native MDQuery immediately on abort and times out cleanly without leaking timers', async () => {
+      vi.useFakeTimers()
+      try {
+        getFileIndexSupportMock.mockReturnValue({
+          supported: true,
+          platform: 'darwin',
+          hasBulkScanner: true,
+          hasNativeFsevents: true,
+          hasNativeSpotlight: true,
+          hasNativeFrontmostApp: true
+        })
+
+        // 1. AbortController cancellation settles immediately and cleans up timeout timer & listener
+        querySpotlightNativeMock.mockImplementationOnce(() => new Promise(() => undefined))
+        const controller = new AbortController()
+        const provider = macSpotlightFileProvider as unknown as SearchableSpotlightProvider
+        const abortedSearch = provider.searchNative('hang', controller.signal)
+        controller.abort()
+        await expect(abortedSearch).resolves.toEqual([])
+        expect(vi.getTimerCount()).toBe(0)
+
+        // 2. Timeout settles without falling back to mdfind and leaves zero pending timers
+        querySpotlightNativeMock.mockImplementationOnce(() => new Promise(() => undefined))
+        const timedOutSearch = provider.searchNative('hang', new AbortController().signal)
+        await vi.advanceTimersByTimeAsync(600)
+        await expect(timedOutSearch).resolves.toEqual([])
+        expect(execFileMock).not.toHaveBeenCalled()
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+        getFileIndexSupportMock.mockReturnValue({
+          supported: false,
+          platform: 'darwin',
+          hasBulkScanner: false,
+          hasNativeFsevents: false,
+          hasNativeSpotlight: false,
+          hasNativeFrontmostApp: false
+        })
+      }
+    })
+
+    it('inspects only 50 candidates when first 50 folders are visible instead of reading tail folders', async () => {
+      const documents = Array.from(
+        { length: 80 },
+        (_, index) => `/Users/demo/Documents/proj-${index}/build/doc-${index}.md`
+      )
+      stubFolders({})
+      readdirMock.mockResolvedValue([])
+      stubMdfind(documents)
+      stubStat()
+
+      const provider = macSpotlightFileProvider as unknown as SearchableSpotlightProvider
+      const results = await provider.searchNative('doc', new AbortController().signal)
+
+      expect(results).toHaveLength(50)
+      expect(statMock).toHaveBeenCalledTimes(50)
+      const readDirs = new Set(readdirMock.mock.calls.map(([dir]) => dir))
+      expect(readDirs.has('/Users/demo/Documents/proj-0')).toBe(true)
+      expect(readDirs.has('/Users/demo/Documents/proj-50')).toBe(false)
+      expect(readDirs.has('/Users/demo/Documents/proj-79')).toBe(false)
     })
   })
 })

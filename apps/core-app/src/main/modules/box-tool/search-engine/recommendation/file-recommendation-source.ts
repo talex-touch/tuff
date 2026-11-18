@@ -1,8 +1,10 @@
 import type { TuffItem } from '@talex-touch/utils'
 import type { files as filesSchema } from '../../../../db/schema'
 import type { DbUtils } from '../../../../db/utils'
+import type { NativeRecommendedFileRecord } from '../../addon/files/file-recommendation-bridge'
 import path from 'node:path'
 import { getFileAssetBridge } from '../../addon/files/file-asset-bridge'
+import { getFileRecommendationBridge } from '../../addon/files/file-recommendation-bridge'
 import { normalizeExtension, THUMBNAIL_EXTENSIONS } from '../../addon/files/thumbnail-config'
 import { mapFileToTuffItem } from '../../addon/files/utils'
 import { normalizeTuffItemLocalAssets } from '../../../../utils/local-renderable-assets'
@@ -44,20 +46,21 @@ export const FILE_RECOMMENDATION_ALIASES = [
 ] as const
 
 /**
- * `file_extensions` rows for the given files, keyed by file id.
+ * `file_extensions` rows for the given SQLite-backed files, keyed by file id.
  *
- * One batched read; per-file lookups here would be an N+1 on the empty-query path. A failure is
- * swallowed because a missing thumbnail costs an icon, not the card.
+ * Synthetic `NativeFileArena`-only rows carry negative ids and have no `file_extensions` rows, so
+ * they are excluded before querying SQLite.
  */
 async function loadExtensionsByFileId(
   dbUtils: DbUtils,
   files: Array<{ id: number }>
 ): Promise<Map<number, Record<string, string>>> {
   const byFileId = new Map<number, Record<string, string>>()
-  if (files.length === 0) return byFileId
+  const persistedFiles = files.filter((file) => file.id > 0)
+  if (persistedFiles.length === 0) return byFileId
 
   try {
-    const rows = await dbUtils.getFileExtensionsByFileIds(files.map((file) => file.id))
+    const rows = await dbUtils.getFileExtensionsByFileIds(persistedFiles.map((file) => file.id))
     for (const row of rows) {
       if (row.value == null) continue
       const bucket = byFileId.get(row.fileId) ?? {}
@@ -67,17 +70,61 @@ async function loadExtensionsByFileId(
   } catch (error) {
     fileSourceLog.warn('Failed to load file extensions for recommendations', {
       error,
-      meta: { fileCount: files.length }
+      meta: { fileCount: persistedFiles.length }
     })
   }
 
   return byFileId
 }
 
+function synthesizeNativeFileRow(record: NativeRecommendedFileRecord, index: number): FileRow {
+  return {
+    id: -(index + 1),
+    path: record.path,
+    name: record.name || path.basename(record.path),
+    displayName: null,
+    extension: record.extension || path.extname(record.name || record.path) || '',
+    size: record.size ?? null,
+    mtime: record.mtime,
+    ctime: record.ctime,
+    lastIndexedAt: record.mtime,
+    isDir: record.isDir,
+    type: 'file',
+    content: null,
+    embeddingStatus: 'none'
+  }
+}
+
+async function resolveArenaFallbackFiles(missingPaths: readonly string[]): Promise<FileRow[]> {
+  if (missingPaths.length === 0) return []
+  const bridge = getFileRecommendationBridge()
+  if (!bridge) return []
+
+  try {
+    const resolvedByPath = await bridge.lookupFilesByPaths(missingPaths)
+    const synthesized: FileRow[] = []
+    let synthIndex = 0
+    for (const missingPath of missingPaths) {
+      const record = resolvedByPath.get(missingPath)
+      if (!record) continue
+      synthesized.push(synthesizeNativeFileRow(record, synthIndex))
+      synthIndex += 1
+    }
+    return synthesized
+  } catch (error) {
+    fileSourceLog.warn('Failed to resolve NativeFileArena fallback files', {
+      error,
+      meta: { missingCount: missingPaths.length }
+    })
+    return []
+  }
+}
+
 function isMissingThumbnail(
   file: FileRow,
   extensions: Record<string, string> | undefined
 ): boolean {
+  if (file.id <= 0) return false
   if (extensions?.thumbnail) return false
   const extension = normalizeExtension(file.extension || path.extname(file.name) || '')
   return THUMBNAIL_EXTENSIONS.has(extension)
@@ -104,9 +151,9 @@ function settlesWithin(work: Promise<unknown>, ms: number): Promise<boolean> {
  * File rows as a recommendation source.
  *
  * Registered as a standalone source rather than as a `FileProvider` capability because the lookup
- * must go through the engine's split-aware handle: under the search split (#295) FILE rows live in
- * the worker-owned `search-index.db`, and `FileProvider` holds a separate `createDbUtils` instance.
- * Reading through the provider's handle would silently change which database answers.
+ * must go through the engine's split-aware handle: under the search split (#295) hot-doc FILE rows
+ * live in the worker-owned `search-index.db`, while general non-content files live in
+ * `NativeFileArena` and resolve via `FileRecommendationBridge.lookupFilesByPaths`.
  */
 export function createFileRecommendationSource(
   dbUtils: DbUtils,
@@ -118,14 +165,6 @@ export function createFileRecommendationSource(
 } {
   const thumbnailWaitMs = options.thumbnailWaitMs ?? DEFAULT_THUMBNAIL_WAIT_MS
 
-  /**
-   * Ask the file provider for the thumbnails these files lack, and give them a moment to land.
-   *
-   * Search results get theirs lazily through the mapper's callback; recommendations never did, and
-   * the deferred sweep only runs after a full index pass — so a screenshot taken a minute ago sat in
-   * "recent picks" as a grey OS icon until it happened to come up in a search. Resolves once the
-   * extension rows are worth re-reading; `false` means some generation is still running.
-   */
   async function warmMissingThumbnails(
     files: FileRow[],
     extensionsByFileId: Map<number, Record<string, string>>
@@ -160,7 +199,12 @@ export function createFileRecommendationSource(
       if (itemIds.length === 0) return []
 
       try {
-        const files = await dbUtils.getFilesByPaths([...itemIds])
+        const requestedPaths = [...itemIds]
+        const dbFiles = await dbUtils.getFilesByPaths(requestedPaths)
+        const foundPaths = new Set(dbFiles.map((file) => file.path))
+        const missingPaths = requestedPaths.filter((itemPath) => !foundPaths.has(itemPath))
+        const arenaFiles = await resolveArenaFallbackFiles(missingPaths)
+        const files = arenaFiles.length > 0 ? [...dbFiles, ...arenaFiles] : dbFiles
         if (files.length === 0) return []
 
         // Without these the mapper receives `{}` and every image falls back to a generic glyph:

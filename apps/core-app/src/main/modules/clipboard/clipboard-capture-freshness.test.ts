@@ -1,7 +1,22 @@
 import type { ClipboardCaptureSource } from '@talex-touch/utils/transport/events/types'
-import { describe, expect, it } from 'vitest'
-import { ClipboardFreshnessStore } from './clipboard-capture-freshness'
+import { clipboard } from 'electron'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  ClipboardFreshnessStore,
+  ClipboardHelper,
+  detectClipboardFormatFlags,
+  hasClipboardImageFormat
+} from './clipboard-capture-freshness'
 import { createClipboardFreshnessState } from './clipboard-freshness'
+
+vi.mock('electron', () => ({
+  clipboard: {
+    read: vi.fn(() => Buffer.from('')),
+    readText: vi.fn(() => ''),
+    availableFormats: vi.fn(() => []),
+    readImage: vi.fn(() => ({ isEmpty: () => true }))
+  }
+}))
 
 describe('clipboard-capture-freshness file authorization evidence', () => {
   const content = JSON.stringify(['/captured/截图.png'])
@@ -83,5 +98,47 @@ describe('clipboard-capture-freshness file authorization evidence', () => {
     if (operation === 'delete') store.delete(41)
     else store.clear()
     expect(store.getCapturedFilesContent(41)).toBeUndefined()
+  })
+})
+
+describe('clipboard format classification and file extraction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('detects html, image, and file formats in one pass including case-insensitive image flavors', () => {
+    expect(detectClipboardFormatFlags(['public.utf8-plain-text', 'text/plain'])).toEqual({
+      hasHtml: false,
+      hasImage: false,
+      hasFile: false
+    })
+    expect(detectClipboardFormatFlags(['text/html', 'IMAGE/AVIF', 'public.file-url'])).toEqual({
+      hasHtml: true,
+      hasImage: true,
+      hasFile: true
+    })
+    expect(hasClipboardImageFormat(['PUBLIC.PNG'])).toBe(true)
+    expect(hasClipboardImageFormat(['PUBLIC.TIFF'])).toBe(true)
+    expect(hasClipboardImageFormat(['public.utf8-plain-text'])).toBe(false)
+  })
+
+  it('extracts file paths from plist XML and file:// URI lists', () => {
+    const helper = new ClipboardHelper()
+    vi.mocked(clipboard.read).mockImplementation((format: string) => {
+      if (format === 'public.file-url') {
+        return 'file:///Users/alice/Documents/hello%20world.txt\n'
+      }
+      return ''
+    })
+    expect(helper.readClipboardFiles()).toEqual(['/Users/alice/Documents/hello world.txt'])
+
+    vi.mocked(clipboard.read).mockImplementation((format: string) => {
+      if (format === 'NSFilenamesPboardType') {
+        return `<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><array><string>/Users/alice/a.png</string><string>/Users/alice/b.pdf</string></array></plist>`
+      }
+      return ''
+    })
+    expect(helper.readClipboardFiles()).toEqual(['/Users/alice/a.png', '/Users/alice/b.pdf'])
   })
 })
