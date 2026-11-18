@@ -4,7 +4,9 @@ import { contextPercent, deriveRunStep, formatElapsed, formatWindow } from './ru
 describe('formatWindow', () => {
   it('formats token windows across M, k, and sub-k scales while rejecting non-positive values', () => {
     expect(formatWindow(1_000_000)).toBe('1M')
+    expect(formatWindow(1_040_000)).toBe('1M')
     expect(formatWindow(1_500_000)).toBe('1.5M')
+    expect(formatWindow(131_072)).toBe('131.1k')
     expect(formatWindow(128_000)).toBe('128k')
     expect(formatWindow(4_096)).toBe('4.1k')
     expect(formatWindow(950)).toBe('950')

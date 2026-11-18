@@ -1,8 +1,5 @@
 import type { AiMessagePart } from '@talex-touch/tuffex/ai-elements'
-import {
-  calculateAiContextPercent,
-  formatAiContextWindow
-} from '@talex-touch/intelligence-uikit/utils'
+import { calculateAiContextPercent } from '@talex-touch/intelligence-uikit/utils'
 
 /**
  * What the run-status line above the composer says about the turn in flight.
@@ -67,7 +64,13 @@ export function formatElapsed(ms: number): string {
 /** `1M`, `128k`, `950` — the window's own scale, one decimal only when it is not whole. */
 export function formatWindow(tokens: number): string {
   if (!Number.isFinite(tokens) || tokens <= 0) return ''
-  return formatAiContextWindow(tokens)
+  const scale = (value: number, unit: string): string => {
+    const rounded = Math.round(value * 10) / 10
+    return `${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)}${unit}`
+  }
+  if (tokens >= 1_000_000) return scale(tokens / 1_000_000, 'M')
+  if (tokens >= 1_000) return scale(tokens / 1_000, 'k')
+  return `${Math.round(tokens)}`
 }
 
 /**
