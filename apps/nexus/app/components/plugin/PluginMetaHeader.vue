@@ -2,6 +2,7 @@
 import type { DashboardArtifactType, PluginChannel, PluginStatus } from '~/types/dashboard-plugin'
 import { TxPluginMetaHeader } from '@talex-touch/tuff-business'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
+import StorePluginIcon from '~/components/store/StorePluginIcon.vue'
 
 interface PluginMetaHeaderVersion {
   channel: PluginChannel
@@ -116,8 +117,17 @@ const metaItems = computed(() => {
     :meta-items="metaItems"
     :icon-url="plugin.iconUrl"
     :icon-alt="plugin.name"
+    :icon-framed="false"
     :official="false"
   >
+    <template #icon>
+      <StorePluginIcon
+        :icon-url="plugin.iconUrl"
+        :name="plugin.name"
+        :category="plugin.category"
+        :size="64"
+      />
+    </template>
     <template #title-extra>
       <span
         v-if="plugin.isOfficial"

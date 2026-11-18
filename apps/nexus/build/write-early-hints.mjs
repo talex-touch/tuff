@@ -36,14 +36,24 @@ export const earlyHintFamilies = [
 ]
 
 const ENTRY_SCRIPT_RE = /<script[^>]*\btype="module"[^>]*\bsrc="(\/_nuxt\/[^"]+\.js)"/
-const STYLESHEET_RE = /<link\b(?=[^>]*\brel="stylesheet")[^>]*\bhref="(\/_nuxt\/[^"]+\.css)"/g
+const STYLESHEET_TAG_RE = /<link\b[^>]*\brel=(['"])stylesheet\1[^>]*>/gi
+const STYLESHEET_HREF_RE = /\bhref=(['"])(\/_nuxt\/[^"']+\.css)\1/i
+const PRINT_MEDIA_RE = /\bmedia=(['"])print\1/i
 
 /** Pages measures the trimmed line, `Link: ` included. */
 const MAX_LINK_VALUE_LENGTH = CLOUDFLARE_HEADERS_MAX_LINE_LENGTH - 'Link: '.length
 
 export function extractEarlyHintTargets(html) {
   const entry = html.match(ENTRY_SCRIPT_RE)?.[1] ?? null
-  const styles = Array.from(html.matchAll(STYLESHEET_RE), match => match[1])
+  const styles = []
+  for (const match of html.matchAll(STYLESHEET_TAG_RE)) {
+    const tag = match[0]
+    if (PRINT_MEDIA_RE.test(tag))
+      continue
+    const href = tag.match(STYLESHEET_HREF_RE)?.[2]
+    if (href)
+      styles.push(href)
+  }
   return { entry, styles }
 }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { TxIconButton } from '@talex-touch/tuffex/button'
 import { computed } from 'vue'
+import HeaderIconButton from '~/components/HeaderIconButton.vue'
 import { useGlobalSearchState } from '~/composables/useGlobalSearchState'
 
 interface Props {
@@ -41,12 +41,10 @@ function onSearchClick(event: MouseEvent) {
       v-if="props.showSearchButton"
       class="relative"
     >
-      <TxIconButton
+      <HeaderIconButton
         icon="i-carbon-search"
         :label="searchButtonAriaLabel"
         :title="searchButtonLabel"
-        size="sm"
-        shape="circle"
         data-role="global-search-trigger"
         @click="onSearchClick"
       />

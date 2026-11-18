@@ -158,15 +158,13 @@ function resolveTypeLabel(type: string) {
                   </div>
                   <span class="ai-preview-demo__card-ability">instant.{{ widget.type }}</span>
                 </div>
-                <TxButton
-                  variant="bare"
-                  size="sm"
-                  native-type="button"
+                <button
+                  type="button"
                   class="ai-preview-demo__card-hint"
                 >
                   <span class="ai-preview-demo__card-hint-key">↵</span>
                   <span>{{ copyLabel }}</span>
-                </TxButton>
+                </button>
               </div>
 
               <div class="InstantPreview-CardInput">

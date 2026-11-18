@@ -36,13 +36,17 @@ export function nexusDemoLoadersPlugin(nexusRoot: string, loaderBase: string): P
     outputOptions(options) {
       if (!clientBuild)
         return null
+      const baseManualChunks = typeof options.manualChunks === 'function'
+        ? options.manualChunks
+        : undefined
       return {
         ...options,
         onlyExplicitManualChunks: true,
-        manualChunks(id) {
+        manualChunks(id, meta) {
           // Keep Demo implementations out of shared dependency chunks, even when
           // Rollup merges small automatic chunks into frequently used components.
-          return demoChunks[id.split('?')[0] ?? id]
+          const cleanId = id.split('?')[0] ?? id
+          return demoChunks[cleanId] ?? baseManualChunks?.(id, meta)
         },
       }
     },

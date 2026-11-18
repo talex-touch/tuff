@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { AppRelease, ReleaseChannel } from '~/composables/useReleases'
 import type { DashboardUpdate, LocalizedText } from '~/utils/public-updates'
-import { computed, onMounted, ref } from 'vue'
-import UpdatesAllView from '~/components/updates/UpdatesAllView.vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { usePublicUpdates } from '~/composables/usePublicUpdates'
 import { detectArch, detectPlatform, findAssetForPlatform, formatFileSize, getArchLabel, getPlatformLabel } from '~/composables/useReleases'
+
+const UpdatesAllView = defineAsyncComponent(() => import('~/components/updates/UpdatesAllView.vue'))
 
 definePageMeta({
   layout: 'home',
@@ -205,23 +206,22 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
             </span>
           </a>
 
-          <TxButton
+          <button
             v-else
-            variant="bare"
-            native-type="button"
+            type="button"
             class="updates-disabled-download"
             :disabled="true"
           >
             <span class="i-carbon-incomplete text-lg" aria-hidden="true" />
             <span>{{ t('updates.empty') }}</span>
-          </TxButton>
+          </button>
 
           <div class="updates-platform-menu">
-            <TxButton variant="bare" native-type="button" class="updates-platform-menu__button">
+            <button type="button" class="updates-platform-menu__button">
               <span class="i-carbon-apps updates-download-icon" aria-hidden="true" />
               <span>{{ t('updates.downloads.otherPlatformsAndVersions') }}</span>
               <span class="i-carbon-chevron-down text-lg" aria-hidden="true" />
-            </TxButton>
+            </button>
             <div v-if="allDownloads.length" class="updates-platform-menu__list">
               <a
                 v-for="asset in allDownloads"

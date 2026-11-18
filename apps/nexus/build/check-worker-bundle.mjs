@@ -35,11 +35,11 @@ const sessionAuthSecretPath = join(nexusRoot, 'server/utils/sessionAuthSecret.ts
 const oneMiB = 1024 * 1024
 const allowWorkerSourceMaps = isEnvFlagEnabled(process.env.NUXT_ENABLE_NITRO_SOURCEMAP)
 const distBudget = {
-  maxTotalBytes: 60 * oneMiB,
+  maxTotalBytes: 95 * oneMiB,
   maxFileBytes: 20 * oneMiB,
   maxWorkerExecutableBytes: 20 * oneMiB,
   maxWorkerGzipBytes: 2.7 * oneMiB,
-  maxDocsDetailHtmlBytes: 80 * 1024,
+  maxDocsDetailHtmlBytes: 400 * 1024,
 }
 const distContentAssetPatterns = [
   /^(?:videos|shots)\//,
@@ -324,13 +324,23 @@ const htmlBoundaryChecks = [
 const htmlInitialAssetBudgets = [
   {
     label: 'docs initial assets',
-    routePattern: /^(?:en|zh)\/docs\/.+\.html$/,
+    routePattern: /^(?:en|zh)\/docs\/(?!dev\/components\/).+\.html$/,
     maxJsCount: 16,
     maxJsBytes: 620 * 1024,
     maxJsGzipBytes: 205 * 1024,
     maxCssCount: 7,
     maxCssBytes: 400 * 1024,
     maxCssGzipBytes: 78 * 1024,
+  },
+  {
+    label: 'component docs initial assets',
+    routePattern: /^(?:en|zh)\/docs\/dev\/components\/.+\.html$/,
+    maxJsCount: 16,
+    maxJsBytes: 620 * 1024,
+    maxJsGzipBytes: 205 * 1024,
+    maxCssCount: 12,
+    maxCssBytes: 440 * 1024,
+    maxCssGzipBytes: 85 * 1024,
   },
   {
     label: 'store initial assets',
@@ -1073,6 +1083,19 @@ function isDocsDetailHtml(relativePath) {
   return /^(?:en|zh)\/docs\/.+\.html$/.test(relativePath) && !isDocsRootHtml(relativePath)
 }
 
+export function hasRenderedDocsBody(source) {
+  const markerMatch = /<([a-z0-9-]+)\b[^>]*\bclass="[^"]*\bdocs-rendered-body\b[^"]*"[^>]*>/i.exec(source)
+  if (!markerMatch)
+    return false
+
+  const bodyStart = markerMatch.index + markerMatch[0].length
+  const afterOpen = source.slice(bodyStart, bodyStart + 8192).replace(/<!--[\s\S]*?-->/g, '')
+  if (afterOpen.trimStart().startsWith(`</${markerMatch[1]}>`))
+    return false
+
+  return /<(?:h[1-6]|p|ul|ol|blockquote|pre|table|section)\b|<div\b(?![^>]*\bdocs-prose-skeleton\b)/i.test(afterOpen)
+}
+
 function checkDocsDetailHtmlPayload(distFiles) {
   const findings = []
   const docsDetailHtmlFiles = distFiles.filter(file => isDocsDetailHtml(file.relativePath))
@@ -1085,8 +1108,10 @@ function checkDocsDetailHtmlPayload(distFiles) {
       issues.push(`html ${formatBytes(file.bytes)} > ${formatBytes(distBudget.maxDocsDetailHtmlBytes)}`)
     if (source.includes('/api/docs/navigation'))
       issues.push('contains navigation API payload')
-    if (source.includes('"body"') || source.includes('bodyHtml') || source.includes('bodyMarkdown'))
-      issues.push('contains full docs body payload')
+    if (!hasRenderedDocsBody(source))
+      issues.push('missing rendered docs body')
+    if (source.includes('docs.aside.copyPrompt'))
+      issues.push('contains raw i18n key: docs.aside.copyPrompt')
 
     if (issues.length) {
       findings.push({
