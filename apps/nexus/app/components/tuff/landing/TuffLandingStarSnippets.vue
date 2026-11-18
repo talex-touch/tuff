@@ -75,15 +75,13 @@ const starSnippets = computed(() => ({
           </div>
         </div>
         <div class="relative">
-          <TxButton
-            variant="bare"
-            size="sm"
-            native-type="button"
-            class="inline-flex items-center gap-2 text-sm text-white font-semibold transition hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 border-0 bg-transparent p-0 text-sm text-white font-semibold transition cursor-pointer hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
           >
             {{ category.action }}
             <span class="i-carbon-arrow-up-right text-base" aria-hidden="true" />
-          </TxButton>
+          </button>
         </div>
       </article>
     </div>

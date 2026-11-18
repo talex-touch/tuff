@@ -87,12 +87,16 @@ function handleClose() {
           ref="containerRef"
           class="apple-card-panel relative z-[60] mx-auto my-10 h-fit max-w-5xl rounded-3xl bg-white p-4 font-sans dark:bg-neutral-900 md:p-10"
         >
-          <TxButton variant="bare" circle native-type="button" class="sticky right-0 top-4 ml-auto size-8 flex items-center justify-center bg-black dark:bg-white" @click="handleClose">
+          <button
+            type="button"
+            class="sticky right-0 top-4 ml-auto size-8 flex items-center justify-center rounded-full border-0 cursor-pointer bg-black dark:bg-white"
+            @click="handleClose"
+          >
             <Icon
               name="tabler:x"
               class="size-6 text-neutral-100 dark:text-neutral-900"
             />
-          </TxButton>
+          </button>
           <div class="text-base text-black font-medium dark:text-white">
             {{ card.category }}
           </div>

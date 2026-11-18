@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { HairlineFigureName } from './TuffLandingHairline.vue'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import TuffLandingHairline from './TuffLandingHairline.vue'
 import TuffLandingSection from './TuffLandingSection.vue'
 
@@ -38,28 +38,7 @@ const cards = computed(() => FEATURES.map((feature, index) => ({
 })))
 
 const rootRef = ref<HTMLElement | null>(null)
-const entered = ref(false)
-let observer: IntersectionObserver | null = null
-
-onMounted(() => {
-  const root = rootRef.value
-  if (!root || typeof IntersectionObserver === 'undefined') {
-    entered.value = true
-    return
-  }
-  observer = new IntersectionObserver((entries) => {
-    if (!entries.some(entry => entry.isIntersecting))
-      return
-    entered.value = true
-    observer?.disconnect()
-    observer = null
-  }, { threshold: 0.18 })
-  observer.observe(root)
-})
-
-onBeforeUnmount(() => {
-  observer?.disconnect()
-})
+const { revealed: entered } = useLandingReveal(rootRef)
 </script>
 
 <template>
@@ -197,7 +176,7 @@ onBeforeUnmount(() => {
 /* The figure keeps its 5:4 ratio; size it by whichever side runs out. */
 .Showcase-Figure {
   flex: 1;
-  min-height: 0;
+  min-height: 9rem;
   display: grid;
   place-items: center;
   container-type: size;
@@ -214,7 +193,8 @@ onBeforeUnmount(() => {
 }
 
 .Showcase-Hairline {
-  width: min(100cqw, 125cqh);
+  width: min(100cqw, max(9rem, 125cqh));
+  max-width: 100%;
 }
 
 .Showcase-Body {

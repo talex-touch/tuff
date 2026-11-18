@@ -1,4 +1,5 @@
 import type { Ref } from 'vue'
+import { hasWindow } from '@talex-touch/utils/env'
 import { onBeforeUnmount, onMounted } from 'vue'
 
 type TweenVars = gsap.TweenVars
@@ -39,7 +40,10 @@ export function useGsapReveal(
 
   onMounted(async () => {
     const scope = container.value
-    if (!scope)
+    if (!scope || !hasWindow())
+      return
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches)
       return
 
     const { default: gsap } = await import('gsap')
@@ -52,6 +56,13 @@ export function useGsapReveal(
       gsap.registerPlugin(ScrollTrigger)
       scrollTriggerRegistered = true
     }
+
+    const viewHeight = window.innerHeight || document.documentElement.clientHeight
+    const rect = scope.getBoundingClientRect()
+    // Wait for dynamic gsap imports may finish after the section is already visible or passed;
+    // avoid flashing already-visible content back to opacity: 0.
+    if (rect.top <= viewHeight * 0.9)
+      return
 
     const fallbackFrom: TweenVars = {
       opacity: 0,
@@ -78,12 +89,13 @@ export function useGsapReveal(
         stagger: options.stagger ?? 0.12,
         scrollTrigger: {
           trigger: scope,
-          start: 'top 82%',
+          start: 'top 88%',
           once: options.once ?? true,
           ...options.scrollTrigger,
         },
       })
     }, scope)
+    ScrollTrigger.refresh()
   })
 
   onBeforeUnmount(() => {

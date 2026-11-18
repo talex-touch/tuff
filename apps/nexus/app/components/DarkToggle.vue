@@ -1,8 +1,17 @@
 <script setup lang="ts">
-import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
-import { TxIconButton } from '@talex-touch/tuffex/button'
 import { computed, ref } from 'vue'
+import HeaderIconButton from '~/components/HeaderIconButton.vue'
+import { useLazyDropdownMenu } from '~/composables/useLazyMenu'
 import { useTheme } from '~/composables/useTheme'
+
+const triggerRef = ref<InstanceType<typeof HeaderIconButton> | null>(null)
+const {
+  isOpen,
+  menuActivated,
+  activateMenu,
+  TxDropdownMenu,
+  TxDropdownItem,
+} = useLazyDropdownMenu(triggerRef)
 
 type ThemeMode = 'auto' | 'dark' | 'light'
 
@@ -19,7 +28,6 @@ const themeOptions: ThemeOption[] = [
 
 const { color, toggleDark } = useTheme()
 const { t } = useI18n()
-const isOpen = ref(false)
 
 useHead({
   meta: [{
@@ -56,18 +64,18 @@ function selectTheme(mode: ThemeMode, event: MouseEvent) {
 <template>
   <div class="DarkToggle">
     <TxDropdownMenu
+      v-if="menuActivated"
       v-model="isOpen"
       trigger="hover"
       placement="bottom-end"
       :offset="10"
     >
       <template #trigger>
-        <TxIconButton
+        <HeaderIconButton
+          ref="triggerRef"
           icon="i-carbon-moon"
           :label="triggerAriaLabel"
           :title="triggerTitle"
-          size="sm"
-          shape="circle"
           class="DarkToggle-Trigger"
           aria-haspopup="menu"
           :aria-expanded="isOpen"
@@ -89,6 +97,19 @@ function selectTheme(mode: ThemeMode, event: MouseEvent) {
           </template>
         </TxDropdownItem>
     </TxDropdownMenu>
+    <HeaderIconButton
+      v-else
+      ref="triggerRef"
+      icon="i-carbon-moon"
+      :label="triggerAriaLabel"
+      :title="triggerTitle"
+      class="DarkToggle-Trigger"
+      aria-haspopup="menu"
+      :aria-expanded="isOpen"
+      @pointerenter="activateMenu()"
+      @focus="activateMenu()"
+      @click="activateMenu(true)"
+    />
   </div>
 </template>
 
