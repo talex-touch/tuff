@@ -662,13 +662,11 @@ class FallbackFileArena implements NativeFileArenaHandle {
                 if (fullVar.startsWith(qLower) && vIdx === 0) {
                   bestScore = 0.9
                   matchKind = 'pinyin'
-                  pyMatched = true
                   break
                 }
                 if (fullVar.includes(qLower)) {
                   bestScore = 0.82
                   matchKind = 'pinyin'
-                  pyMatched = true
                   break
                 }
               }
