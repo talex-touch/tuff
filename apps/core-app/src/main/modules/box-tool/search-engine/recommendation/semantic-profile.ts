@@ -1,6 +1,12 @@
 import type { ContextSignal } from '@talex-touch/utils/core-box'
 
 const VECTOR_DIMENSIONS = 64
+const VECTOR_DIMENSION_MASK = VECTOR_DIMENSIONS - 1
+
+export const CANDIDATE_SEMANTIC_PROFILE_CACHE_MAX = 512
+
+const TYPED_VECTOR = Symbol('recommendation.semanticProfile.typedVector')
+const TOKEN_SET = Symbol('recommendation.semanticProfile.tokenSet')
 
 const STOP_TOKENS = new Set([
   'app',
@@ -17,10 +23,88 @@ const STOP_TOKENS = new Set([
   'windows'
 ])
 
+const IDE_NEEDLES = [
+  'vscode',
+  'visual studio code',
+  'codium',
+  'jetbrains',
+  'intellij',
+  'pycharm',
+  'webstorm',
+  'goland',
+  'rider',
+  'xcode',
+  'android studio'
+] as const
+
+const TERMINAL_NEEDLES = [
+  'terminal',
+  'iterm',
+  'wezterm',
+  'alacritty',
+  'kitty',
+  'powershell',
+  'cmd',
+  'shell'
+] as const
+
+const BROWSER_NEEDLES = [
+  'chrome',
+  'safari',
+  'firefox',
+  'edge',
+  'brave',
+  'opera',
+  'browser'
+] as const
+
+const DESIGN_NEEDLES = [
+  'figma',
+  'sketch',
+  'photoshop',
+  'illustrator',
+  'pixelmator',
+  'preview',
+  'gimp',
+  'krita',
+  'canva'
+] as const
+
+const EDITOR_NEEDLES = [
+  'textedit',
+  'sublime',
+  'bbedit',
+  'coteditor',
+  'typora',
+  'vim',
+  'neovim'
+] as const
+
+const FILE_MANAGER_NEEDLES = ['finder', 'explorer', 'files', 'file manager'] as const
+
+const SOCIAL_NEEDLES = [
+  'discord',
+  'telegram',
+  'wechat',
+  'spotify',
+  'music',
+  'netflix',
+  'youtube',
+  'twitter',
+  'x.com'
+] as const
+
+const API_CLIENT_NEEDLES = ['postman', 'insomnia'] as const
+
 export interface RecommendationSemanticProfile {
   tokens: string[]
   text: string
   vector: number[]
+}
+
+interface InternalSemanticProfile extends RecommendationSemanticProfile {
+  [TYPED_VECTOR]?: Float32Array
+  [TOKEN_SET]?: ReadonlySet<string>
 }
 
 export interface RecommendationSemanticCandidateInput {
@@ -30,6 +114,16 @@ export interface RecommendationSemanticCandidateInput {
   source?: string
   title?: string
   subtitle?: string
+}
+
+const candidateProfileMemo = new Map<string, RecommendationSemanticProfile>()
+
+export function clearCandidateSemanticProfileCache(): void {
+  candidateProfileMemo.clear()
+}
+
+export function getCandidateSemanticProfileCacheSize(): number {
+  return candidateProfileMemo.size
 }
 
 export function buildRecommendationSemanticProfile(
@@ -141,6 +235,14 @@ export function buildRecommendationSemanticProfile(
 export function buildCandidateSemanticProfile(
   candidate: RecommendationSemanticCandidateInput
 ): RecommendationSemanticProfile {
+  const cacheKey = buildCandidateMemoKey(candidate)
+  const cached = candidateProfileMemo.get(cacheKey)
+  if (cached) {
+    candidateProfileMemo.delete(cacheKey)
+    candidateProfileMemo.set(cacheKey, cached)
+    return cached
+  }
+
   const tokens: string[] = [
     `source:${candidate.source ?? 'unknown'}`,
     `source-type:${candidate.sourceType}`
@@ -152,7 +254,15 @@ export function buildCandidateSemanticProfile(
   tokens.push(...splitIdentifier(candidate.subtitle))
   tokens.push(...inferAppCategoryTokens(`${candidate.itemId} ${candidate.title ?? ''}`))
 
-  return createProfile(tokens)
+  const profile = createProfile(tokens)
+  if (candidateProfileMemo.size >= CANDIDATE_SEMANTIC_PROFILE_CACHE_MAX) {
+    const oldestKey = candidateProfileMemo.keys().next().value
+    if (oldestKey !== undefined) {
+      candidateProfileMemo.delete(oldestKey)
+    }
+  }
+  candidateProfileMemo.set(cacheKey, profile)
+  return profile
 }
 
 export function calculateLocalSemanticScore(
@@ -163,18 +273,34 @@ export function calculateLocalSemanticScore(
     return 0
   }
 
-  const cosine = cosineSimilarity(contextProfile.vector, candidateProfile.vector)
-  const overlap = calculateTokenOverlap(contextProfile.tokens, candidateProfile.tokens)
+  const cosine = cosineSimilarity(
+    contextProfile as InternalSemanticProfile,
+    candidateProfile as InternalSemanticProfile
+  )
+  const overlap = calculateTokenOverlap(
+    contextProfile as InternalSemanticProfile,
+    candidateProfile as InternalSemanticProfile
+  )
   return clamp01(cosine * 0.75 + overlap * 0.25)
 }
 
+function buildCandidateMemoKey(candidate: RecommendationSemanticCandidateInput): string {
+  return `${candidate.sourceId}\0${candidate.itemId}\0${candidate.sourceType}\0${candidate.source ?? ''}\0${candidate.title ?? ''}\0${candidate.subtitle ?? ''}`
+}
+
 function createProfile(tokens: string[]): RecommendationSemanticProfile {
-  const normalized = normalizeTokens(tokens)
-  return {
+  const { normalized, seen } = normalizeTokensWithSet(tokens)
+  const { vector, typedVector } = vectorizeTokens(normalized)
+  const profile: InternalSemanticProfile = {
     tokens: normalized,
     text: normalized.join(' '),
-    vector: vectorizeTokens(normalized)
+    vector
   }
+  Object.defineProperties(profile, {
+    [TYPED_VECTOR]: { value: typedVector, enumerable: false },
+    [TOKEN_SET]: { value: seen, enumerable: false }
+  })
+  return profile
 }
 
 function splitIdentifier(value?: string): string[] {
@@ -196,115 +322,86 @@ function inferAppCategoryTokens(identifier: string): string[] {
   const value = identifier.toLowerCase()
   const tokens: string[] = []
 
-  if (
-    includesAny(value, [
-      'vscode',
-      'visual studio code',
-      'codium',
-      'jetbrains',
-      'intellij',
-      'pycharm',
-      'webstorm',
-      'goland',
-      'rider',
-      'xcode',
-      'android studio'
-    ])
-  ) {
+  if (includesAny(value, IDE_NEEDLES)) {
     tokens.push('app:ide', 'task:dev', 'code', 'editor', 'work')
   }
 
-  if (
-    includesAny(value, [
-      'terminal',
-      'iterm',
-      'wezterm',
-      'alacritty',
-      'kitty',
-      'powershell',
-      'cmd',
-      'shell'
-    ])
-  ) {
+  if (includesAny(value, TERMINAL_NEEDLES)) {
     tokens.push('app:terminal', 'task:dev', 'shell', 'work')
   }
 
-  if (includesAny(value, ['chrome', 'safari', 'firefox', 'edge', 'brave', 'opera', 'browser'])) {
+  if (includesAny(value, BROWSER_NEEDLES)) {
     tokens.push('app:browser', 'task:web', 'research')
   }
 
-  if (
-    includesAny(value, [
-      'figma',
-      'sketch',
-      'photoshop',
-      'illustrator',
-      'pixelmator',
-      'preview',
-      'gimp',
-      'krita',
-      'canva'
-    ])
-  ) {
+  if (includesAny(value, DESIGN_NEEDLES)) {
     tokens.push('app:design', 'image', 'creative')
   }
 
-  if (
-    includesAny(value, ['textedit', 'sublime', 'bbedit', 'coteditor', 'typora', 'vim', 'neovim'])
-  ) {
+  if (includesAny(value, EDITOR_NEEDLES)) {
     tokens.push('editor', 'docs', 'work')
   }
 
-  if (includesAny(value, ['finder', 'explorer', 'files', 'file manager'])) {
+  if (includesAny(value, FILE_MANAGER_NEEDLES)) {
     tokens.push('app:file-manager', 'local-first', 'docs')
   }
 
-  if (
-    includesAny(value, [
-      'discord',
-      'telegram',
-      'wechat',
-      'spotify',
-      'music',
-      'netflix',
-      'youtube',
-      'twitter',
-      'x.com'
-    ])
-  ) {
+  if (includesAny(value, SOCIAL_NEEDLES)) {
     tokens.push('app:social', 'entertainment')
   }
 
-  if (includesAny(value, ['postman', 'insomnia'])) {
+  if (includesAny(value, API_CLIENT_NEEDLES)) {
     tokens.push('developer-tool', 'task:dev', 'api', 'work')
   }
 
   return tokens
 }
 
-function vectorizeTokens(tokens: string[]): number[] {
-  const vector = Array.from({ length: VECTOR_DIMENSIONS }, () => 0)
-  for (const token of tokens) {
-    vector[hashToken(token) % VECTOR_DIMENSIONS] += 1
+function vectorizeTokens(tokens: string[]): { vector: number[]; typedVector: Float32Array } {
+  const typedVector = new Float32Array(VECTOR_DIMENSIONS)
+  for (let i = 0; i < tokens.length; i += 1) {
+    typedVector[hashToken(tokens[i]!) & VECTOR_DIMENSION_MASK] += 1
   }
 
-  const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0))
-  if (magnitude === 0) return vector
-  return vector.map((value) => value / magnitude)
+  let sumSq = 0
+  for (let i = 0; i < VECTOR_DIMENSIONS; i += 1) {
+    const value = typedVector[i]!
+    sumSq += value * value
+  }
+
+  const vector = new Array<number>(VECTOR_DIMENSIONS)
+  if (sumSq === 0) {
+    for (let i = 0; i < VECTOR_DIMENSIONS; i += 1) {
+      vector[i] = 0
+    }
+    return { vector, typedVector }
+  }
+
+  const invMagnitude = 1 / Math.sqrt(sumSq)
+  for (let i = 0; i < VECTOR_DIMENSIONS; i += 1) {
+    const normalized = typedVector[i]! * invMagnitude
+    typedVector[i] = normalized
+    vector[i] = normalized
+  }
+
+  return { vector, typedVector }
 }
 
-function normalizeTokens(tokens: Array<string | undefined>): string[] {
-  const result: string[] = []
+function normalizeTokensWithSet(tokens: Array<string | undefined>): {
+  normalized: string[]
+  seen: Set<string>
+} {
+  const normalized: string[] = []
   const seen = new Set<string>()
 
-  for (const raw of tokens) {
-    const token = normalizeToken(raw)
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = normalizeToken(tokens[i])
     if (!token || seen.has(token)) continue
     seen.add(token)
-    result.push(token)
+    normalized.push(token)
   }
 
-  return result
+  return { normalized, seen }
 }
 
 function normalizeToken(raw?: string): string | null {
@@ -323,26 +420,64 @@ function hashToken(token: string): number {
   return hash >>> 0
 }
 
-function cosineSimilarity(left: number[], right: number[]): number {
-  const length = Math.min(left.length, right.length)
+function cosineSimilarity(left: InternalSemanticProfile, right: InternalSemanticProfile): number {
+  const leftTyped = left[TYPED_VECTOR]
+  const rightTyped = right[TYPED_VECTOR]
+  if (leftTyped && rightTyped) {
+    let score = 0
+    for (let i = 0; i < VECTOR_DIMENSIONS; i += 1) {
+      score += leftTyped[i]! * rightTyped[i]!
+    }
+    return clamp01(score)
+  }
+
+  const leftVec = left.vector
+  const rightVec = right.vector
+  const length = Math.min(leftVec.length, rightVec.length)
   let score = 0
   for (let i = 0; i < length; i += 1) {
-    score += left[i] * right[i]
+    score += leftVec[i]! * rightVec[i]!
   }
   return clamp01(score)
 }
 
-function calculateTokenOverlap(left: string[], right: string[]): number {
-  const rightSet = new Set(right)
-  let overlap = 0
-  for (const token of left) {
-    if (rightSet.has(token)) overlap += 1
+function ensureTokenSet(profile: InternalSemanticProfile): ReadonlySet<string> {
+  let set = profile[TOKEN_SET]
+  if (!set) {
+    set = new Set(profile.tokens)
+    Object.defineProperty(profile, TOKEN_SET, { value: set, enumerable: false })
   }
-  return clamp01(overlap / Math.sqrt(left.length * right.length))
+  return set
 }
 
-function includesAny(value: string, needles: string[]): boolean {
-  return needles.some((needle) => value.includes(needle))
+function calculateTokenOverlap(
+  left: InternalSemanticProfile,
+  right: InternalSemanticProfile
+): number {
+  const leftTokens = left.tokens
+  const rightTokens = right.tokens
+  let overlap = 0
+
+  if (leftTokens.length <= rightTokens.length) {
+    const rightSet = ensureTokenSet(right)
+    for (let i = 0; i < leftTokens.length; i += 1) {
+      if (rightSet.has(leftTokens[i]!)) overlap += 1
+    }
+  } else {
+    const leftSet = ensureTokenSet(left)
+    for (let i = 0; i < rightTokens.length; i += 1) {
+      if (leftSet.has(rightTokens[i]!)) overlap += 1
+    }
+  }
+
+  return clamp01(overlap / Math.sqrt(leftTokens.length * rightTokens.length))
+}
+
+function includesAny(value: string, needles: readonly string[]): boolean {
+  for (let i = 0; i < needles.length; i += 1) {
+    if (value.includes(needles[i]!)) return true
+  }
+  return false
 }
 
 function clamp01(value: number): number {

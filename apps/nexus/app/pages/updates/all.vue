@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import type { DashboardUpdate, PublicUpdatesPayload } from '~/utils/public-updates'
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import UpdatesAllView from '~/components/updates/UpdatesAllView.vue'
-import { hydratePrerenderedUpdates, resolvePublicUpdatesFromApp } from '~/utils/public-updates'
-import { requestJson } from '~/utils/request'
+import { usePublicUpdates } from '~/composables/usePublicUpdates'
 
 definePageMeta({
   layout: 'home',
@@ -13,22 +11,8 @@ definePageMeta({
   },
 })
 
-const nuxtApp = useNuxtApp()
 const { t } = useI18n()
-
-const { data: updatesPayload, refresh: refreshUpdates } = await useAsyncData(
-  'public-updates-all',
-  () => requestJson<PublicUpdatesPayload>('/api/updates'),
-  {
-    getCachedData: key => resolvePublicUpdatesFromApp(nuxtApp, key),
-  },
-)
-
-onMounted(async () => {
-  await hydratePrerenderedUpdates(updatesPayload.value, refreshUpdates)
-})
-
-const updateItems = computed<DashboardUpdate[]>(() => updatesPayload.value?.updates ?? [])
+const { updateItems } = await usePublicUpdates()
 
 const pageTitle = computed(() => `${t('updates.all.title')} · Tuff`)
 useSeoMeta({

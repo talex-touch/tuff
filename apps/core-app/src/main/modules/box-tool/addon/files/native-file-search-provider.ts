@@ -9,9 +9,15 @@ import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { execFile } from 'node:child_process'
+import {
+  getFileIndexSupport,
+  querySpotlightNative,
+  type NativeSpotlightHit
+} from '@talex-touch/tuff-native/file-index'
 import { StorageList, TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { toTfileUrl } from '@talex-touch/utils/network'
 import { resolveIndexedWatchRootSet } from '@talex-touch/utils/search'
 import { app, shell } from 'electron'
 import { normalizeTuffItemLocalAssets } from '../../../../utils/local-renderable-assets'
@@ -108,15 +114,29 @@ class NativeSearchDirectoryFilter {
     limit: number,
     rootKeyOf: (filePath: string) => string | null = () => null
   ): Promise<string[]> {
-    const reasons = await Promise.all(
-      candidates.map((candidate) =>
-        this.getDirectoryReason(path.dirname(candidate), rootKeyOf(candidate))
-      )
-    )
+    if (limit <= 0 || candidates.length === 0) return []
     const visible: string[] = []
-    for (let index = 0; index < candidates.length && visible.length < limit; index += 1) {
-      if (reasons[index] === null) visible.push(candidates[index]!)
+    let cursor = 0
+
+    while (cursor < candidates.length && visible.length < limit) {
+      const remaining = limit - visible.length
+      const batchSize =
+        cursor === 0
+          ? Math.min(candidates.length, remaining)
+          : Math.min(candidates.length - cursor, Math.max(remaining, 8))
+      const slice = candidates.slice(cursor, cursor + batchSize)
+      cursor += batchSize
+
+      const reasons = await Promise.all(
+        slice.map((candidate) =>
+          this.getDirectoryReason(path.dirname(candidate), rootKeyOf(candidate))
+        )
+      )
+      for (let index = 0; index < slice.length && visible.length < limit; index += 1) {
+        if (reasons[index] === null) visible.push(slice[index]!)
+      }
     }
+
     return visible
   }
 
@@ -125,6 +145,9 @@ class NativeSearchDirectoryFilter {
     results: NativeFileSearchResult[],
     rootKeyOf: (filePath: string) => string | null = () => null
   ): Promise<NativeFileSearchResult[]> {
+    if (results.length === 0 || results.every((result) => !result.isDir)) {
+      return results
+    }
     const reasons = await Promise.all(
       results.map((result) =>
         result.isDir
@@ -139,7 +162,8 @@ class NativeSearchDirectoryFilter {
     directoryPath: string,
     rootKey: string | null
   ): Promise<FileFilterReason | null> {
-    const key = `${rootKey ?? ''}\u0000${directoryPath}`
+    const normalizedDir = this.normalizeKey(directoryPath)
+    const key = `${rootKey ?? ''}\u0000${normalizedDir}`
     const now = this.now()
     const cached = this.verdicts.get(key)
     if (cached && cached.expiresAt > now) {
@@ -149,7 +173,7 @@ class NativeSearchDirectoryFilter {
       return cached.reason
     }
 
-    const reason = this.resolveDirectoryReason(directoryPath, rootKey)
+    const reason = this.resolveDirectoryReason(directoryPath, normalizedDir, rootKey)
     this.verdicts.delete(key)
     this.verdicts.set(key, {
       reason,
@@ -165,9 +189,10 @@ class NativeSearchDirectoryFilter {
 
   private async resolveDirectoryReason(
     directoryPath: string,
+    normalizedDir: string,
     rootKey: string | null
   ): Promise<FileFilterReason | null> {
-    if (rootKey !== null && this.normalizeKey(directoryPath) === rootKey) return null
+    if (rootKey !== null && normalizedDir === rootKey) return null
     // Ancestors first: inside an excluded tree nothing below needs its own (possibly readdir)
     // check.
     const parent = path.dirname(directoryPath)
@@ -238,22 +263,24 @@ function getMacSpotlightSearchRoots(): MacSpotlightSearchRoot[] {
   ])
 }
 
-function isWithinMacSpotlightSearchRoots(
-  filePath: string,
-  roots: readonly MacSpotlightSearchRoot[]
-): boolean {
-  return findMacSpotlightSearchRootKey(filePath, roots) !== null
-}
-
-function findMacSpotlightSearchRootKey(
-  filePath: string,
+function findMacSpotlightSearchRootKeyByKey(
+  fileKey: string,
   roots: readonly MacSpotlightSearchRoot[]
 ): string | null {
-  const fileKey = normalizeMacSpotlightPathKey(filePath)
   return (
     roots.find((root) => fileKey === root.key || fileKey.startsWith(`${root.key}/`))?.key ?? null
   )
 }
+
+function isWithinMacSpotlightSearchRoots(
+  filePath: string,
+  roots: readonly MacSpotlightSearchRoot[]
+): boolean {
+  return findMacSpotlightSearchRootKeyByKey(normalizeMacSpotlightPathKey(filePath), roots) !== null
+}
+
+let cachedMacHomePath: string | null = null
+let cachedMacICloudRootKey: string | null = null
 
 /**
  * iCloud Drive is the exception to the `~/Library` rule (user decision, 2026-09-26): the user's own
@@ -265,18 +292,17 @@ function findMacSpotlightSearchRootKey(
 function getMacICloudDriveRootKey(): string | null {
   try {
     const home = app.getPath('home')
-    return home
-      ? normalizeMacSpotlightPathKey(path.join(home, 'Library', 'Mobile Documents'))
-      : null
+    if (!home) return null
+    if (home !== cachedMacHomePath) {
+      cachedMacHomePath = home
+      cachedMacICloudRootKey = normalizeMacSpotlightPathKey(
+        path.join(home, 'Library', 'Mobile Documents')
+      )
+    }
+    return cachedMacICloudRootKey
   } catch {
     return null
   }
-}
-
-function findMacICloudDriveRootKey(filePath: string): string | null {
-  const rootKey = getMacICloudDriveRootKey()
-  if (!rootKey) return null
-  return normalizeMacSpotlightPathKey(filePath).startsWith(`${rootKey}/`) ? rootKey : null
 }
 
 function emptyResult(query: TuffQuery): TuffSearchResult {
@@ -400,6 +426,28 @@ async function buildNativeSearchItems(
       }
     }
 
+    const basicIcon = item.render.basic?.icon
+    if (
+      !item.render.preview?.image &&
+      basicIcon &&
+      (basicIcon.type === 'class' || (basicIcon.type === 'file' && basicIcon.value === result.path))
+    ) {
+      if (basicIcon.type === 'file') {
+        item.render = {
+          ...item.render,
+          basic: {
+            ...item.render.basic!,
+            icon: {
+              ...basicIcon,
+              type: 'url',
+              value: toTfileUrl(result.path)
+            }
+          }
+        }
+      }
+      return [item]
+    }
+
     const normalized = normalizeTuffItemLocalAssets(item, {
       dropMissingFile: false,
       fallbackKind: result.isDir ? 'folder' : 'file'
@@ -521,6 +569,49 @@ function isProcessTimeoutError(error: unknown): boolean {
   return false
 }
 
+async function querySpotlightWithAbortAndTimeout(
+  text: string,
+  rootPaths: string[],
+  limit: number,
+  timeoutMs: number,
+  signal: AbortSignal
+): Promise<{ hits: NativeSpotlightHit[]; aborted: boolean; timedOut: boolean }> {
+  if (signal.aborted) {
+    return { hits: [], aborted: true, timedOut: false }
+  }
+
+  let timer: NodeJS.Timeout | null = null
+  let onAbort: (() => void) | null = null
+  const nativePromise = querySpotlightNative(text, rootPaths, limit, timeoutMs)
+
+  const guardPromise = new Promise<{
+    hits: NativeSpotlightHit[]
+    aborted: boolean
+    timedOut: boolean
+  }>((resolve) => {
+    onAbort = () => resolve({ hits: [], aborted: true, timedOut: false })
+    signal.addEventListener('abort', onAbort, { once: true })
+    timer = setTimeout(() => {
+      resolve({ hits: [], aborted: false, timedOut: true })
+    }, timeoutMs + 50)
+    timer.unref?.()
+  })
+
+  try {
+    const result = await Promise.race([
+      nativePromise.then((hits) => ({ hits, aborted: false, timedOut: false })),
+      guardPromise
+    ])
+    if (result.aborted || result.timedOut) {
+      void nativePromise.catch(() => undefined)
+    }
+    return result
+  } finally {
+    if (timer !== null) clearTimeout(timer)
+    if (onAbort !== null) signal.removeEventListener('abort', onAbort)
+  }
+}
+
 class MacSpotlightFileProvider extends BaseNativeFileSearchProvider {
   readonly id = 'macos-spotlight-provider'
   readonly name = 'Spotlight Search'
@@ -543,17 +634,109 @@ class MacSpotlightFileProvider extends BaseNativeFileSearchProvider {
   )
 
   protected async detect(): Promise<boolean> {
+    if (getFileIndexSupport().hasNativeSpotlight) {
+      return true
+    }
     await execFileAsync('mdfind', ['-version'], { timeout: 1000 }).catch(() => undefined)
     return true
+  }
+
+  private async finalizeSpotlightPaths(
+    rawPaths: Iterable<string>,
+    searchRoots: MacSpotlightSearchRoot[],
+    iCloudRootKey: string | null,
+    signal: AbortSignal
+  ): Promise<NativeFileSearchResult[]> {
+    const seen = new Set<string>()
+    const rootKeyByCandidate = new Map<string, string | null>()
+    const candidates: string[] = []
+
+    for (const rawEntry of rawPaths) {
+      const trimmed = rawEntry.trim()
+      if (!trimmed || seen.has(trimmed)) continue
+      seen.add(trimmed)
+
+      const entryKey = normalizeMacSpotlightPathKey(trimmed)
+      const searchRootKey = findMacSpotlightSearchRootKeyByKey(entryKey, searchRoots)
+      if (searchRootKey === null) continue
+      if (fileFilterService.getSearchExclusionReason({ path: trimmed }) !== null) continue
+
+      const rootKey =
+        iCloudRootKey && entryKey.startsWith(`${iCloudRootKey}/`) ? iCloudRootKey : searchRootKey
+      rootKeyByCandidate.set(trimmed, rootKey)
+      candidates.push(trimmed)
+      if (candidates.length >= NATIVE_SEARCH_CANDIDATE_POOL) break
+    }
+
+    if (candidates.length === 0 || signal.aborted) return []
+
+    const rootKeyOf = (entry: string): string | null => {
+      if (rootKeyByCandidate.has(entry)) {
+        return rootKeyByCandidate.get(entry) ?? null
+      }
+      const entryKey = normalizeMacSpotlightPathKey(entry)
+      return (
+        (iCloudRootKey && entryKey.startsWith(`${iCloudRootKey}/`) ? iCloudRootKey : null) ??
+        findMacSpotlightSearchRootKeyByKey(entryKey, searchRoots)
+      )
+    }
+
+    const paths = await this.directoryFilter.selectVisible(
+      candidates,
+      NATIVE_SEARCH_MAX_RESULTS,
+      rootKeyOf
+    )
+    if (signal.aborted || paths.length === 0) return []
+    const results = await Promise.all(paths.map((filePath) => toNativeResult(filePath)))
+    return await this.directoryFilter.dropExcludedDirectories(
+      results.filter((result): result is NativeFileSearchResult => Boolean(result)),
+      rootKeyOf
+    )
   }
 
   protected async searchNative(
     text: string,
     signal: AbortSignal
   ): Promise<NativeFileSearchResult[]> {
+    if (signal.aborted) return []
     const searchRoots = getMacSpotlightSearchRoots()
     if (searchRoots.length === 0) {
       return []
+    }
+
+    const iCloudRootKey = getMacICloudDriveRootKey()
+    const timeout =
+      Number(process.env.TUFF_SPOTLIGHT_TIMEOUT_MS) || DEFAULT_SPOTLIGHT_SEARCH_TIMEOUT_MS
+
+    if (getFileIndexSupport().hasNativeSpotlight) {
+      try {
+        const nativeOutcome = await querySpotlightWithAbortAndTimeout(
+          text,
+          searchRoots.map((root) => root.path),
+          NATIVE_SEARCH_CANDIDATE_POOL,
+          timeout,
+          signal
+        )
+        if (nativeOutcome.aborted || signal.aborted) return []
+        if (nativeOutcome.timedOut) {
+          nativeFileSearchLog.debug(
+            `[${this.id}] in-process Spotlight MDQuery timed out after ${timeout}ms, skipping`
+          )
+          return []
+        }
+        return await this.finalizeSpotlightPaths(
+          nativeOutcome.hits.map((hit) => hit.path),
+          searchRoots,
+          iCloudRootKey,
+          signal
+        )
+      } catch (error) {
+        if (signal.aborted) return []
+        nativeFileSearchLog.debug(
+          `[${this.id}] in-process Spotlight MDQuery failed, falling back to mdfind`,
+          { error }
+        )
+      }
     }
 
     const escaped = text.replace(/["\\]/g, '\\$&')
@@ -561,8 +744,6 @@ class MacSpotlightFileProvider extends BaseNativeFileSearchProvider {
     // 900-1245ms vs 300-350ms on a 6GB-index library, with the paths returned being identical.
     const query = `kMDItemFSName == "*${escaped}*"cd`
     const scopeArgs = searchRoots.flatMap((root) => ['-onlyin', root.path])
-    const timeout =
-      Number(process.env.TUFF_SPOTLIGHT_TIMEOUT_MS) || DEFAULT_SPOTLIGHT_SEARCH_TIMEOUT_MS
     let stdout = ''
     try {
       const result = await execFileAsync('mdfind', ['-0', ...scopeArgs, query], {
@@ -580,29 +761,7 @@ class MacSpotlightFileProvider extends BaseNativeFileSearchProvider {
       }
       throw error
     }
-    const candidates = Array.from(
-      new Set(
-        stdout
-          .split('\0')
-          .map((entry) => entry.trim())
-          .filter(Boolean)
-          .filter((entry) => isWithinMacSpotlightSearchRoots(entry, searchRoots))
-          .filter((entry) => fileFilterService.getSearchExclusionReason({ path: entry }) === null)
-      )
-    ).slice(0, NATIVE_SEARCH_CANDIDATE_POOL)
-    const rootKeyOf = (entry: string): string | null =>
-      findMacICloudDriveRootKey(entry) ?? findMacSpotlightSearchRootKey(entry, searchRoots)
-    const paths = await this.directoryFilter.selectVisible(
-      candidates,
-      NATIVE_SEARCH_MAX_RESULTS,
-      rootKeyOf
-    )
-    if (signal.aborted) return []
-    const results = await Promise.all(paths.map((filePath) => toNativeResult(filePath)))
-    return await this.directoryFilter.dropExcludedDirectories(
-      results.filter((result): result is NativeFileSearchResult => Boolean(result)),
-      rootKeyOf
-    )
+    return await this.finalizeSpotlightPaths(stdout.split('\0'), searchRoots, iCloudRootKey, signal)
   }
 }
 
@@ -650,7 +809,7 @@ class LinuxNativeFileProvider extends BaseNativeFileSearchProvider {
     text: string,
     signal: AbortSignal
   ): Promise<NativeFileSearchResult[]> {
-    if (!this.backend) return []
+    if (!this.backend || signal.aborted) return []
 
     const { command, args } = this.buildSearchCommand(text)
     const { stdout } = await execFileAsync(command, args, {

@@ -584,6 +584,98 @@ describe('flush transaction', () => {
   })
 })
 
+describe('background embedding audit exemption & bounded retention', () => {
+  it('omits detail rows for core.files.embedding while still updating usage counters', async () => {
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: true,
+      enableQuota: false,
+      enableCache: false
+    })
+    const callerId = 'core.files.embedding'
+    const now = Date.now()
+    const before = await snapshotBuckets(callerId, now)
+
+    expect(
+      sdk.shouldPersistAuditDetail({ capabilityId: 'embedding.generate', caller: callerId })
+    ).toBe(false)
+    expect(sdk.shouldPersistAuditDetail({ capabilityId: 'text.chat', caller: 'plugin:user' })).toBe(
+      true
+    )
+
+    await (
+      sdk as unknown as {
+        logAudit: (entry: IntelligenceAuditLogEntry) => Promise<void>
+      }
+    ).logAudit({
+      traceId: 'trace-embedding-exempt-1',
+      timestamp: now,
+      capabilityId: 'embedding.generate',
+      provider: 'local',
+      model: 'bge-small',
+      caller: callerId,
+      usage: { promptTokens: 12, completionTokens: 0, totalTokens: 12 },
+      estimatedCost: 0,
+      latency: 4,
+      success: true
+    })
+    await intelligenceAuditLogger.flushToDB()
+
+    expect(await detailRows('trace-embedding-exempt-1')).toHaveLength(0)
+    const after = await snapshotBuckets(callerId, now)
+    expect(minus(after.globalDay, before.globalDay).requestCount).toBe(1)
+    expect(minus(after.callerDay, before.callerDay).requestCount).toBe(1)
+  })
+
+  it('prunes excess detail rows down to maxRows once backfill is settled', async () => {
+    const internals = intelligenceAuditLogger as unknown as { backfillSettled: boolean }
+    const previousSettled = internals.backfillSettled
+    const baseTime = Date.now() - 10_000
+    try {
+      for (let i = 0; i < 6; i += 1) {
+        await intelligenceAuditLogger.log({
+          traceId: `trace-cap-${i}`,
+          timestamp: baseTime + i,
+          capabilityId: 'text.chat',
+          provider: 'custom-ledger-channel',
+          model: 'gpt-4o-mini',
+          caller: 'plugin:retention-cap',
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+          estimatedCost: 0,
+          latency: 2,
+          success: true
+        })
+      }
+      await intelligenceAuditLogger.flushToDB()
+
+      internals.backfillSettled = false
+      await expect(
+        intelligenceAuditLogger.enforceAuditRetention({
+          maxRows: 3,
+          retentionDays: 30,
+          batchSize: 2,
+          maxBatches: 10
+        })
+      ).resolves.toEqual({ deletedAge: 0, deletedExcess: 0 })
+
+      internals.backfillSettled = true
+      const stats = await intelligenceAuditLogger.enforceAuditRetention({
+        maxRows: 3,
+        retentionDays: 30,
+        batchSize: 2,
+        maxBatches: 20
+      })
+      expect(stats.deletedExcess).toBeGreaterThanOrEqual(3)
+
+      const remaining = await db
+        .select({ id: intelligenceAuditLogs.id })
+        .from(intelligenceAuditLogs)
+      expect(remaining.length).toBeLessThanOrEqual(3)
+    } finally {
+      internals.backfillSettled = previousSettled
+    }
+  })
+})
+
 describe('privacy floor (runs last: it deletes every earlier detail row)', () => {
   it('a call that started before a privacy delete is counted but keeps no detail row', async () => {
     const callerId = 'plugin:ledger-floor'

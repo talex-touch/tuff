@@ -415,10 +415,11 @@ describe('enforcement through the SDK (AC-C2)', () => {
     expect(chat).toHaveBeenCalledTimes(2)
     expect(embedding).toHaveBeenCalledTimes(1)
 
-    // Refused calls are neither audited nor counted.
+    // Refused calls are neither audited nor counted, and background file embedding
+    // emits count-only ledger updates (`detail: false`) without writing detail rows.
     await intelligenceAuditLogger.flushToDB()
     expect(await storedGlobalRequests(now)).toBe(3)
-    expect(await detailRowsAt(now)).toHaveLength(3)
+    expect(await detailRowsAt(now)).toHaveLength(2)
     expect(usageLimitGate.inflightRequests(dayPeriod(localDayKey(now)))).toBe(0)
   })
 
