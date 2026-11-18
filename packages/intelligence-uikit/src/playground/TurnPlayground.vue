@@ -154,6 +154,7 @@ onBeforeUnmount(() => {
         @form-submit="handleFormSubmit"
         @copy="record('copy', $event)"
         @regenerate="record('regenerate', null)"
+        @branch="record('branch', null)"
       />
     </section>
 

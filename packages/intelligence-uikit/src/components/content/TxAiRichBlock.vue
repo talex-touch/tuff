@@ -27,10 +27,10 @@ const thoughtKind = computed(() => {
 const isThoughtBlock = computed(() => Boolean(thoughtKind.value))
 const thoughtTitle = computed(() => {
   if (thoughtKind.value === 'planning')
-    return '规划中'
+    return props.labels?.planning ?? 'Planning'
   if (thoughtKind.value === 'thinking')
-    return '思考中'
-  return '思考内容'
+    return props.labels?.thinking ?? 'Thinking'
+  return props.labels?.reasoning ?? 'Reasoning'
 })
 const thoughtText = computed(() => String(props.block.content ?? props.block.value ?? ''))
 const isThoughtRunning = computed(() => props.block.status === 'running' || props.block.status === 'waiting' || props.block.status === 'streaming')
@@ -152,6 +152,8 @@ watch(
         v-else-if="block.type === 'code'"
         :code="String(block.content ?? block.value ?? '')"
         :language="typeof block.meta?.language === 'string' ? block.meta.language : ''"
+        :copy-label="labels?.copy"
+        :copied-label="labels?.copied"
       />
 
       <!-- Nothing listens for a click on a block image: the conversation's `imageClick`
@@ -163,13 +165,13 @@ watch(
 
       <TxAiLoadingHint
         v-else-if="block.type === 'tool'"
-        :label="block.name || 'Tool call'"
+        :label="block.name || labels?.toolCall || 'Tool call'"
         :description="String(block.content ?? '')"
         :status="toolStatus"
       />
 
       <div v-else-if="block.type === 'error'" class="tx-ai-rich-block__error" role="alert">
-        {{ String(block.content ?? block.value ?? 'Something went wrong') }}
+        {{ String(block.content ?? block.value ?? labels?.errorFallback ?? 'Something went wrong') }}
       </div>
 
       <div v-else class="tx-ai-rich-block__card">

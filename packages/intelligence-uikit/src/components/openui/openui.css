@@ -31,8 +31,11 @@
 .tx-ai-openui .tx-ai-openui__caption, .tx-ai-openui .tx-ai-openui__notice { color: var(--tx-text-color-secondary, #909399); }
 .tx-ai-openui .tx-ai-openui__label { font-size: 13px; font-weight: 500; }
 .tx-ai-openui .tx-ai-openui__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.tx-ai-openui .tx-ai-openui__link { color: var(--tx-color-primary, #409eff); text-decoration: underline; }
-.tx-ai-openui .tx-ai-openui__link[aria-disabled=true] { pointer-events: none; }
+.tx-ai-openui .tx-ai-openui__link { color: var(--tx-color-primary, #409eff); text-decoration: underline; border-radius: 3px; }
+.tx-ai-openui .tx-ai-openui__link:focus-visible,
+.tx-ai-openui .tx-ai-openui__carousel:focus-visible,
+.tx-ai-openui .tx-ai-openui__table-scroll:focus-visible { outline: 2px solid var(--tx-color-primary, #409eff); outline-offset: 2px; }
+.tx-ai-openui .tx-ai-openui__link[aria-disabled=true] { pointer-events: none; opacity: 0.6; }
 .tx-ai-openui .tx-ai-openui__quote { margin: 0; padding: 8px 16px; border-inline-start: 3px solid var(--tx-border-color, #dcdfe6); color: var(--tx-text-color-secondary, #909399); }
 .tx-ai-openui .tx-ai-openui__quote cite { font-size: 12px; }
 .tx-ai-openui .tx-ai-openui__code { margin: 0; padding: 12px; border-radius: 8px; background: var(--tx-fill-color-light, #f5f7fa); overflow: auto; font-size: 12px; }
