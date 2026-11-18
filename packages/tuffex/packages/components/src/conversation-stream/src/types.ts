@@ -13,6 +13,8 @@ export interface ConversationStreamLoadResult {
   hasMore: boolean
 }
 
+export type ConversationStreamEmptyAlign = 'center' | 'top' | 'bottom'
+
 export interface ConversationStreamProps<T> {
   items: T[]
   itemKey: ConversationStreamItemKey<T>
@@ -26,4 +28,16 @@ export interface ConversationStreamProps<T> {
   hasMoreInitial?: boolean
   /** Drives the scroll-to-bottom pill's "new content" state. */
   streaming?: boolean
+  /** Scroller top padding (`--tx-conversation-stream-pad-top`). */
+  topPadding?: number | string
+  /** Scroller bottom clearance for floating composers (`--tx-conversation-stream-pad-bottom`). */
+  bottomClearance?: number | string
+  /** Vertical gap between rows (`--tx-conversation-stream-item-gap`). */
+  itemGap?: number | string
+  /** Bottom offset for the jump-to-latest pill (`--tx-conversation-stream-pill-bottom`). */
+  pillBottom?: number | string
+  /** Accessible label for the jump-to-latest pill. @default 'Scroll to bottom' */
+  scrollToBottomLabel?: string
+  /** Vertical placement of the empty slot. @default 'center' */
+  emptyAlign?: ConversationStreamEmptyAlign
 }

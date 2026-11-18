@@ -1,11 +1,18 @@
 import type {
   PromptBarCommand,
+  PromptBarContextUsage,
+  PromptBarDictationState,
   PromptBarEmits,
   PromptBarMenuKind,
+  PromptBarMenuPlacement,
   PromptBarModel,
   PromptBarProps,
+  PromptBarRunStatus,
   PromptBarSendPayload,
+  PromptBarSendState,
   PromptBarSource,
+  PromptBarSurface,
+  PromptBarTrayPlacement,
   PromptBarVariant,
 } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
@@ -27,12 +34,19 @@ export type {
 
 export type {
   PromptBarCommand,
+  PromptBarContextUsage,
+  PromptBarDictationState,
   PromptBarEmits,
   PromptBarMenuKind,
+  PromptBarMenuPlacement,
   PromptBarModel,
   PromptBarProps,
+  PromptBarRunStatus,
   PromptBarSendPayload,
+  PromptBarSendState,
   PromptBarSource,
+  PromptBarSurface,
+  PromptBarTrayPlacement,
   PromptBarVariant,
 }
 
