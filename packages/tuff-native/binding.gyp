@@ -6,7 +6,8 @@
         "native/src/addon.cc",
         "native/src/platform/stub/ocr_stub.cpp",
         "native/src/platform/stub/notification_stub.cpp",
-        "native/src/platform/stub/app_icon_stub.cpp"
+        "native/src/platform/stub/app_icon_stub.cpp",
+        "native/src/platform/stub/active_app_stub.cpp"
       ],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")",
@@ -34,12 +35,14 @@
             "sources!": [
               "native/src/platform/stub/ocr_stub.cpp",
               "native/src/platform/stub/notification_stub.cpp",
-              "native/src/platform/stub/app_icon_stub.cpp"
+              "native/src/platform/stub/app_icon_stub.cpp",
+              "native/src/platform/stub/active_app_stub.cpp"
             ],
             "sources+": [
               "native/src/platform/macos/vision_ocr.mm",
               "native/src/platform/macos/notification_permission.mm",
-              "native/src/platform/macos/app_icon.mm"
+              "native/src/platform/macos/app_icon.mm",
+              "native/src/platform/macos/active_app.mm"
             ],
             "xcode_settings": {
               "CLANG_CXX_LANGUAGE_STANDARD": "c++17",
@@ -54,6 +57,8 @@
                 "Vision",
                 "-framework",
                 "AppKit",
+                "-framework",
+                "ApplicationServices",
                 "-framework",
                 "ImageIO",
                 "-framework",

@@ -5,6 +5,7 @@
 
 #include <napi.h>
 
+#include "common/active_app_types.h"
 #include "common/app_icon_types.h"
 #include "common/notification_types.h"
 #include "common/ocr_types.h"
@@ -323,6 +324,71 @@ Napi::Value GetNotificationAuthorizationStatus(const Napi::CallbackInfo &info) {
   return deferred.Promise();
 }
 
+Napi::Object ToJsResult(Napi::Env env, const DarwinFrontmostAppResult &result) {
+  auto output = Napi::Object::New(env);
+  output.Set("supported", Napi::Boolean::New(env, result.supported));
+  output.Set("available", Napi::Boolean::New(env, result.available));
+
+  if (!result.appName.empty()) {
+    output.Set("appName", Napi::String::New(env, result.appName));
+  }
+  if (!result.bundleId.empty()) {
+    output.Set("bundleId", Napi::String::New(env, result.bundleId));
+  }
+  if (result.processId > 0) {
+    output.Set("processId", Napi::Number::New(env, result.processId));
+  }
+  if (!result.bundlePath.empty()) {
+    output.Set("bundlePath", Napi::String::New(env, result.bundlePath));
+  }
+  if (!result.executablePath.empty()) {
+    output.Set("executablePath", Napi::String::New(env, result.executablePath));
+  }
+  if (!result.windowTitle.empty()) {
+    output.Set("windowTitle", Napi::String::New(env, result.windowTitle));
+  }
+  if (!result.reason.empty()) {
+    output.Set("reason", Napi::String::New(env, result.reason));
+  }
+
+  return output;
+}
+
+class DarwinFrontmostAppWorker : public Napi::AsyncWorker {
+public:
+  DarwinFrontmostAppWorker(Napi::Env env, DarwinFrontmostAppSnapshot snapshot,
+                           Napi::Promise::Deferred deferred)
+      : Napi::AsyncWorker(env), snapshot_(std::move(snapshot)),
+        deferred_(deferred) {}
+
+  void Execute() override {
+    result_ = ResolveDarwinFrontmostWindowAndFallbackBlocking(snapshot_);
+  }
+
+  void OnOK() override { deferred_.Resolve(ToJsResult(Env(), result_)); }
+
+  void OnError(const Napi::Error &error) override {
+    deferred_.Reject(error.Value());
+  }
+
+private:
+  DarwinFrontmostAppSnapshot snapshot_;
+  DarwinFrontmostAppResult result_;
+  Napi::Promise::Deferred deferred_;
+};
+
+Napi::Value GetDarwinFrontmostApplication(const Napi::CallbackInfo &info) {
+  auto env = info.Env();
+  DarwinFrontmostAppSnapshot snapshot;
+  CaptureDarwinFrontmostApplicationMainThreadSnapshot(snapshot);
+
+  auto deferred = Napi::Promise::Deferred::New(env);
+  auto *worker =
+      new DarwinFrontmostAppWorker(env, std::move(snapshot), deferred);
+  worker->Queue();
+  return deferred.Promise();
+}
+
 } // namespace
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
@@ -337,6 +403,9 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("getNotificationAuthorizationStatus",
               Napi::Function::New(env, GetNotificationAuthorizationStatus,
                                   "getNotificationAuthorizationStatus"));
+  exports.Set("getDarwinFrontmostApplication",
+              Napi::Function::New(env, GetDarwinFrontmostApplication,
+                                  "getDarwinFrontmostApplication"));
   return exports;
 }
 
