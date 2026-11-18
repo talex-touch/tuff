@@ -117,6 +117,7 @@ const bodyRef = ref<HTMLElement | null>(null)
 const selectionBarRef = ref<HTMLElement | null>(null)
 /** Scroll behaviour (stick-to-bottom, follow, back-to-bottom pill) lives inside the stream now. */
 const streamRef = ref<TxConversationStreamInstance | null>(null)
+const streamFollowing = ref(true)
 /** The composer component; the page reads its box, field and draft ghost through it. */
 const composerEl = ref<InstanceType<typeof TuffAIComposer> | null>(null)
 /** The field the draft is typed in. */
@@ -225,6 +226,9 @@ const modelScope = provideHomeModelScope({
 
 const conversation = useHomeConversation({ workspace: () => workspace.adapter })
 const { isCompacting, isEmpty, isStreaming, lastTurn, messages } = conversation
+watch([conversationId, isEmpty], () => {
+  streamFollowing.value = true
+})
 
 const panelOpen = ref(false)
 const panelTab = ref('outputs')
@@ -997,11 +1001,6 @@ useHomeCommands({
           :z-index="4"
           class="HomePage-BottomBlur"
         />
-        <HomeMessageRail
-          v-if="!isEmpty && !panelOpen"
-          :items="messages"
-          @navigate="streamRef?.scrollToIndex($event)"
-        />
         <div class="HomePage-Center">
           <Transition name="home-head">
             <HomeEmptyHead
@@ -1030,6 +1029,11 @@ useHomeCommands({
               :items="streamItems"
               item-key="id"
               :streaming="isStreaming"
+              :top-padding="72"
+              bottom-clearance="calc(var(--home-composer-height, 112px) + 88px)"
+              pill-bottom="calc(var(--home-composer-height, 112px) + 32px)"
+              :data-following="streamFollowing"
+              @following-change="streamFollowing = $event"
             >
               <template #item="{ item: message, index }">
                 <!-- The voice clip waits where the message it may become will land. -->
@@ -1065,6 +1069,14 @@ useHomeCommands({
                     @code-preview="showCodePreview"
                   />
                 </div>
+              </template>
+              <template #rail="{ activeIndex, scrollToIndex }">
+                <HomeMessageRail
+                  v-if="!isEmpty && !panelOpen"
+                  :items="messages"
+                  :active-index="activeIndex"
+                  @navigate="scrollToIndex($event)"
+                />
               </template>
             </TxConversationStream>
           </Transition>
@@ -1575,19 +1587,9 @@ useHomeCommands({
   width: 100%;
   min-height: 0;
 
-  /**
-   * The tail and back-to-bottom pill clear the measured composer stack. That stack grows when a
-   * tool confirmation is pending, so neither the last tool row nor its status can sit underneath
-   * an actionable card. `:deep` is required because both controls live inside the stream.
-   */
-  :deep(.tx-conversation-stream__scroller) {
-    padding: 72px 0 calc(var(--home-composer-height, 112px) + 88px);
-    box-sizing: border-box;
-  }
-
+  /** Keep the jump-to-latest pill above `--home-z-bottomblur` (4) and `--home-z-composer` (8). */
   :deep(.tx-conversation-stream__pill) {
     z-index: 10;
-    bottom: calc(var(--home-composer-height, 112px) + 32px);
   }
 }
 
