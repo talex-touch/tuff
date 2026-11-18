@@ -96,9 +96,10 @@ function selectCategory(next: FilterChipValue) {
   padding: 0 16px;
   border-radius: 14px;
   border-color: color-mix(in srgb, var(--tx-border-color-lighter, #cbd5e1) 70%, transparent);
-  background-color: color-mix(in srgb, var(--tx-bg-color, #fff) 72%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background-color: color-mix(in srgb, var(--tx-bg-color-overlay, var(--tx-bg-color, #fff)) 82%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--tx-bg-color-overlay, var(--tx-bg-color, #fff)) 14%, transparent),
+    0 8px 24px color-mix(in srgb, var(--tx-text-color-primary, #0f172a) 6%, transparent);
 }
 
 .StoreSearch-Field :deep(.StoreSearch-Input .tx-input__inner) {

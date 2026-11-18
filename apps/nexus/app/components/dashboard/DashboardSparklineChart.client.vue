@@ -127,6 +127,8 @@ function buildOptions(): EChartsOption {
 }
 
 async function renderChart() {
+  if (!import.meta.client)
+    return
   if (!chartRef.value || !hasData.value) {
     chart.value?.clear()
     return

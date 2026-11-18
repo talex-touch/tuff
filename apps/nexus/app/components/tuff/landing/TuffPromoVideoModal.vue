@@ -125,21 +125,25 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
+function activateOpenState() {
+  currentLang.value = locale.value.startsWith('zh') ? 'zh' : 'en'
+  if (hasDocument()) {
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKeydown)
+  }
+  nextTick(() => {
+    if (videoRef.value) {
+      videoRef.value.currentTime = 0
+      void videoRef.value.play().catch(() => {
+        // Autoplay may be restricted without user interaction; user can press play
+      })
+    }
+  })
+}
+
 watch(() => props.modelValue, (isOpen) => {
   if (isOpen) {
-    currentLang.value = locale.value.startsWith('zh') ? 'zh' : 'en'
-    if (hasDocument()) {
-      document.body.style.overflow = 'hidden'
-      window.addEventListener('keydown', onKeydown)
-    }
-    nextTick(() => {
-      if (videoRef.value) {
-        videoRef.value.currentTime = 0
-        void videoRef.value.play().catch(() => {
-          // Autoplay may be restricted without user interaction; user can press play
-        })
-      }
-    })
+    activateOpenState()
   }
   else {
     if (hasDocument()) {
@@ -154,10 +158,8 @@ watch(() => props.modelValue, (isOpen) => {
 })
 
 onMounted(() => {
-  if (props.modelValue && hasDocument()) {
-    document.body.style.overflow = 'hidden'
-    window.addEventListener('keydown', onKeydown)
-  }
+  if (props.modelValue)
+    activateOpenState()
 })
 
 onBeforeUnmount(() => {

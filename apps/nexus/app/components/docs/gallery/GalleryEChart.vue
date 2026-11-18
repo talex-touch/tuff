@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import type { EChartsOption } from 'echarts'
-import { TxEChart } from '@talex-touch/tuffex/charts/src/echart'
-import { computed } from 'vue'
-import DocsGallerySpecimen from '../DocsGallerySpecimen.vue'
+import { computed, defineAsyncComponent } from 'vue'
+
+// Keep ECharts out of the SSR worker bundle (~1 MiB+) by loading TxEChart strictly on the client.
+const TxEChart = defineAsyncComponent(() => {
+  if (import.meta.server)
+    return Promise.resolve({ render: () => null } as any)
+  return import('@talex-touch/tuffex/charts/src/echart').then(m => m.TxEChart)
+})
 
 const { locale } = useI18n()
 const copy = computed(() => locale.value === 'zh'
@@ -47,18 +52,16 @@ const option = computed<EChartsOption>(() => ({
 </script>
 
 <template>
-  <div class="docs-gallery__stage not-prose">
-    <DocsGallerySpecimen>
-      <div class="docs-gallery__block">
-        <TxEChart :option="option" :height="220" :aria-label="copy.chart" />
-        <p class="gallery-hint">
-          {{ copy.hint }}
-        </p>
-      </div>
+  <div class="docs-gallery__block">
+    <ClientOnly>
+      <TxEChart :option="option" :height="220" :aria-label="copy.chart" />
       <template #fallback>
-        <div class="docs-gallery__ph" />
+        <div style="height: 220px" aria-hidden="true" />
       </template>
-    </DocsGallerySpecimen>
+    </ClientOnly>
+    <p class="gallery-hint">
+      {{ copy.hint }}
+    </p>
   </div>
 </template>
 

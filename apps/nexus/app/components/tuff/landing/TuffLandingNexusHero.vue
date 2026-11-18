@@ -761,7 +761,7 @@ onBeforeUnmount(() => {
     </ClientOnly>
 
     <!-- Promo Video Modal -->
-    <LazyPromoVideoModal v-model="videoModalOpen" />
+    <LazyPromoVideoModal v-if="videoModalOpen" v-model="videoModalOpen" />
   </section>
 </template>
 

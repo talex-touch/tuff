@@ -59,7 +59,6 @@ let scrollTriggerRegistered = false;
 let gsapContext: GsapContext | null = null;
 let scrollTrigger: ScrollTriggerInstance | null = null;
 let enterTimeline: GsapTimeline | null = null;
-let exitTimeline: GsapTimeline | null = null;
 
 const SCENARIO_DURATION = 16000;
 let lastTime = 0;
@@ -107,15 +106,16 @@ async function setupGsapAnimations() {
   const controlsEl = controlsRef.value;
   const featureCardsEl = featureCardsRef.value;
   const backgroundEl = backgroundRef.value;
-  const sectionEl = triggerEl?.closest("section") ?? null;
-  const triggerTarget = sectionEl ?? triggerEl;
+
+  if (!triggerEl || !borderEl || !contentEl || !controlsEl || !featureCardsEl || !backgroundEl)
+    return;
+
+  const sectionEl = triggerEl.closest("section") ?? null;
+  const triggerTarget: HTMLElement = sectionEl ?? triggerEl;
   const textTargets = [
     sectionEl?.querySelector<HTMLElement>(".ai-overview-sticky") ?? null,
     sectionEl?.querySelector<HTMLElement>(".ai-overview-header") ?? null,
   ].filter((target): target is HTMLElement => Boolean(target));
-
-  if (!triggerEl || !borderEl || !contentEl || !controlsEl || !featureCardsEl || !backgroundEl)
-    return;
 
   const [{ default: gsap }, scrollTriggerModule] = await Promise.all([
     import("gsap"),
@@ -129,12 +129,26 @@ async function setupGsapAnimations() {
   }
 
   gsapContext = gsap.context(() => {
-    gsap.set(textTargets, { opacity: 0.18, y: 10 });
-    gsap.set(contentEl, { opacity: 0.2, y: 12, scale: 0.99, transformOrigin: "center" });
-    gsap.set(controlsEl, { opacity: 0.2, y: 8 });
-    gsap.set(featureCardsEl, { opacity: 0.18, y: 10 });
-    gsap.set(backgroundEl, { opacity: 0.35, scale: 1.01, transformOrigin: "center" });
-    gsap.set(borderEl, { opacity: 0.35, scale: 0.99, transformOrigin: "center" });
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const rect = triggerTarget.getBoundingClientRect()
+    const viewHeight = window.innerHeight || document.documentElement.clientHeight
+    const isAlreadyVisible = prefersReducedMotion || rect.top <= viewHeight * 0.9
+
+    if (isAlreadyVisible) {
+      gsap.set([...textTargets, contentEl, controlsEl, featureCardsEl, backgroundEl, borderEl], {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+      })
+      return
+    }
+
+    gsap.set(textTargets, { opacity: 0.18, y: 10 })
+    gsap.set(contentEl, { opacity: 0.2, y: 12, scale: 0.99, transformOrigin: "center" })
+    gsap.set(controlsEl, { opacity: 0.2, y: 8 })
+    gsap.set(featureCardsEl, { opacity: 0.18, y: 10 })
+    gsap.set(backgroundEl, { opacity: 0.35, scale: 1.01, transformOrigin: "center" })
+    gsap.set(borderEl, { opacity: 0.35, scale: 0.99, transformOrigin: "center" })
 
     enterTimeline = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } })
       .to(textTargets, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08 })
@@ -143,36 +157,16 @@ async function setupGsapAnimations() {
       .to(featureCardsEl, { opacity: 1, y: 0, duration: 0.45 }, ">-0.05")
       .to(borderEl, { opacity: 1, scale: 1, duration: 0.4 }, ">-0.05");
 
-    exitTimeline = gsap.timeline({ paused: true, defaults: { ease: "power2.in" } })
-      .to(borderEl, { opacity: 0, scale: 0.98, duration: 0.25 })
-      .to(
-        [...textTargets, contentEl, controlsEl, featureCardsEl, backgroundEl],
-        { opacity: 0, y: 16, scale: 0.99, duration: 0.45 },
-        ">-0.05",
-      );
-
     scrollTrigger = ScrollTrigger.create({
       trigger: triggerTarget,
-      start: "top 80%",
-      end: "bottom 15%",
+      start: "top 88%",
+      once: true,
       onEnter: () => {
-        exitTimeline?.pause();
-        enterTimeline?.restart();
-      },
-      onEnterBack: () => {
-        exitTimeline?.pause();
-        enterTimeline?.restart();
-      },
-      onLeave: () => {
-        enterTimeline?.pause();
-        exitTimeline?.restart();
-      },
-      onLeaveBack: () => {
-        enterTimeline?.pause();
-        exitTimeline?.restart();
+        enterTimeline?.play(0);
       },
     });
   }, triggerEl);
+  ScrollTrigger.refresh();
 }
 
 onMounted(() => {
@@ -187,7 +181,6 @@ onBeforeUnmount(() => {
   gsapContext = null;
   scrollTrigger = null;
   enterTimeline = null;
-  exitTimeline = null;
 });
 </script>
 

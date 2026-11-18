@@ -4279,7 +4279,14 @@ function specimenStyle(item: { readonly doc?: string, readonly name?: string, re
         <NuxtLink class="docs-gallery__label" :to="docPath('echart-charts')">
           {{ cellLabel('ECharts', 'ECharts 图表') }}
         </NuxtLink>
-        <GalleryEChart />
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryEChart />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
       </section>
     </div>
 

@@ -100,7 +100,9 @@ function sessionIdentity(session: NexusAuthSession | null): string | null {
   return id || (typeof user.email === 'string' ? user.email : '') || null
 }
 
-const authFetch = $fetch as unknown as <T>(request: string, options?: NexusAuthFetchOptions & { credentials?: 'include' }) => Promise<T>
+function resolveAuthFetch() {
+  return $fetch as unknown as <T>(request: string, options?: NexusAuthFetchOptions & { credentials?: 'include' }) => Promise<T>
+}
 
 /**
  * Whether this browser may hold a session, read from the non-httpOnly hint cookie the auth
@@ -126,6 +128,7 @@ async function fetchAuth<T>(path: string, options: NexusAuthFetchOptions = {}) {
       headers.cookie = requestHeaders.cookie
   }
 
+  const authFetch = resolveAuthFetch()
   return await authFetch<T>(`${AUTH_BASE_URL}${path}`, {
     credentials: 'include',
     ...options,

@@ -13,15 +13,17 @@ import type {
   StorePluginSearchResponse,
   StorePluginSummary,
 } from '~/types/store'
+import { TxAvatar } from '@talex-touch/tuffex/avatar'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
+import { TxInput } from '@talex-touch/tuffex/input'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue'
 import StoreItem from '~/components/store/StoreItem.vue'
 import StoreSearch from '~/components/store/StoreSearch.vue'
-import Input from '~/components/ui/Input.vue'
-import StatusBadge from '~/components/ui/StatusBadge.vue'
-import Tag from '~/components/ui/Tag.vue'
 import { useStoreCategories } from '~/composables/useStoreCategories'
 import { useStoreFormatters } from '~/composables/useStoreFormatters'
 import { useToast } from '~/composables/useToast'
@@ -34,6 +36,17 @@ const LazyTxTabs = defineAsyncComponent(() => import('@talex-touch/tuffex/tabs')
 const LazyTxTabItem = defineAsyncComponent(() => import('@talex-touch/tuffex/tabs').then(module => module.TxTabItem))
 const LazySharedPluginDetailReadme = defineAsyncComponent(() => import('@talex-touch/utils/renderer/shared/components').then(module => module.SharedPluginDetailReadme))
 const LazySharedPluginDetailVersions = defineAsyncComponent(() => import('@talex-touch/utils/renderer/shared/components').then(module => module.SharedPluginDetailVersions))
+
+let detailChunksWarmed = false
+function warmDetailOverlayChunks() {
+  if (detailChunksWarmed || !import.meta.client)
+    return
+  detailChunksWarmed = true
+  void import('~/components/base/dialog/FlipDialog.vue')
+  void import('~/components/plugin/PluginMetaHeader.vue')
+  void import('@talex-touch/tuffex/tabs')
+  void import('@talex-touch/utils/renderer/shared/components')
+}
 
 definePageMeta({
   layout: 'store',
@@ -290,6 +303,8 @@ async function loadPluginCommunity(slug: string) {
     ratingSummary.value = ratingResponse.rating
   }
   catch (error: unknown) {
+    if (loadedCommunitySlug.value === slug)
+      loadedCommunitySlug.value = null
     reviewsError.value = error instanceof Error ? error.message : t('store.detail.reviews.error', 'Unable to load reviews.')
   }
   finally {
@@ -310,6 +325,8 @@ async function loadPluginContentPackages(plugin: StorePluginDetail) {
     contentPackages.value = response.packages ?? []
   }
   catch (error: unknown) {
+    if (loadedContentSlug.value === plugin.slug)
+      loadedContentSlug.value = null
     contentPackagesError.value = error instanceof Error
       ? error.message
       : t('store.detail.content.error', 'Unable to load shared content.')
@@ -400,32 +417,112 @@ async function submitReview() {
   }
 }
 
-async function openPluginDetailBySlug(slug: string, source: HTMLElement | null = null) {
-  selectedSlug.value = slug
-  detailOverlaySource.value = source
-  selectedPlugin.value = null
-  detailPending.value = true
-  detailError.value = null
-  detailTab.value = requestedDetailTab.value
-  resetReviewState()
-  resetContentPackageState()
-  try {
-    const response = await requestJson<{ plugin: StorePluginDetail }>(`/api/store/plugins/${slug}`)
-    selectedPlugin.value = response.plugin
-    void loadPluginCommunity(slug)
-    void loadPluginContentPackages(response.plugin)
-  }
-  catch (error: unknown) {
-    detailError.value = error instanceof Error ? error.message : t('store.detail.error', 'Unable to load plugin details.')
-  }
-  finally {
-    detailPending.value = false
+const pluginDetailCache = new Map<string, StorePluginDetail>()
+const pluginDetailInflight = new Map<string, Promise<StorePluginDetail>>()
+const loadedCommunitySlug = ref<string | null>(null)
+const loadedContentSlug = ref<string | null>(null)
+
+function fetchPluginDetailCached(slug: string): Promise<StorePluginDetail> {
+  const cached = pluginDetailCache.get(slug)
+  if (cached)
+    return Promise.resolve(cached)
+
+  const existing = pluginDetailInflight.get(slug)
+  if (existing)
+    return existing
+
+  const request = requestJson<{ plugin: StorePluginDetail }>(`/api/store/plugins/${slug}`)
+    .then((response) => {
+      pluginDetailCache.set(slug, response.plugin)
+      return response.plugin
+    })
+    .finally(() => {
+      pluginDetailInflight.delete(slug)
+    })
+
+  pluginDetailInflight.set(slug, request)
+  return request
+}
+
+function handlePrefetchPluginDetail(plugin: StorePluginSummary) {
+  warmDetailOverlayChunks()
+  if (!pluginDetailCache.has(plugin.slug))
+    void fetchPluginDetailCached(plugin.slug).catch(() => undefined)
+}
+
+function createOptimisticPluginDetail(plugin: StorePluginSummary): StorePluginDetail {
+  return {
+    ...plugin,
+    versions: plugin.latestVersion ? [plugin.latestVersion] : [],
   }
 }
 
-async function openPluginDetail(plugin: StorePluginSummary, source: HTMLElement | null = null) {
-  await openPluginDetailBySlug(plugin.slug, source)
+async function openPluginDetailBySlug(
+  slug: string,
+  source: HTMLElement | null = null,
+  seedSummary: StorePluginSummary | null = null,
+) {
+  warmDetailOverlayChunks()
+  selectedSlug.value = slug
+  detailOverlaySource.value = source
+  const cachedDetail = pluginDetailCache.get(slug)
+  selectedPlugin.value = cachedDetail ?? (seedSummary ? createOptimisticPluginDetail(seedSummary) : null)
+  detailPending.value = !cachedDetail
+  detailError.value = null
+  detailTab.value = requestedDetailTab.value
+  loadedCommunitySlug.value = null
+  loadedContentSlug.value = null
+  resetReviewState()
+  resetContentPackageState()
+
+  try {
+    const plugin = cachedDetail ?? await fetchPluginDetailCached(slug)
+    if (selectedSlug.value !== slug)
+      return
+    selectedPlugin.value = plugin
+    if (detailTab.value === 'reviews')
+      void ensureCommunityLoaded(slug)
+    else if (detailTab.value === 'content')
+      void ensureContentLoaded(plugin)
+  }
+  catch (error: unknown) {
+    if (selectedSlug.value === slug)
+      detailError.value = error instanceof Error ? error.message : t('store.detail.error', 'Unable to load plugin details.')
+  }
+  finally {
+    if (selectedSlug.value === slug)
+      detailPending.value = false
+  }
 }
+
+function ensureCommunityLoaded(slug: string) {
+  if (loadedCommunitySlug.value === slug || reviewsPending.value)
+    return
+  loadedCommunitySlug.value = slug
+  return loadPluginCommunity(slug)
+}
+
+function ensureContentLoaded(plugin: StorePluginDetail) {
+  if (loadedContentSlug.value === plugin.slug || contentPackagesPending.value)
+    return
+  loadedContentSlug.value = plugin.slug
+  return loadPluginContentPackages(plugin)
+}
+
+async function openPluginDetail(plugin: StorePluginSummary, source: HTMLElement | null = null) {
+  await openPluginDetailBySlug(plugin.slug, source, plugin)
+}
+
+watch(detailTab, (tab) => {
+  const slug = selectedSlug.value
+  const plugin = selectedPlugin.value
+  if (!slug || !plugin)
+    return
+  if (tab === 'reviews')
+    void ensureCommunityLoaded(slug)
+  else if (tab === 'content')
+    void ensureContentLoaded(plugin)
+})
 
 watch(
   [requestedPluginSlug, requestedDetailTab, allPlugins],
@@ -501,11 +598,21 @@ useSeoMeta({
     <!-- Skeleton cards in the grid's own shape, so the list lands without a jump. -->
     <div v-if="pluginsPending" class="StorePage-Grid" aria-busy="true">
       <div v-for="index in 4" :key="index" class="StorePage-Skeleton">
-        <TxSkeleton variant="rect" :width="48" :height="48" :radius="14" />
-        <div class="StorePage-SkeletonLines">
-          <TxSkeleton width="42%" :height="14" />
-          <TxSkeleton width="88%" :height="12" />
-          <TxSkeleton width="56%" :height="12" />
+        <div class="StorePage-SkeletonTop">
+          <TxSkeleton variant="rect" :width="46" :height="46" :radius="13" />
+          <div class="StorePage-SkeletonTitle">
+            <TxSkeleton width="52%" :height="15" />
+            <TxSkeleton width="36%" :height="11" />
+          </div>
+          <TxSkeleton width="54px" :height="22" :radius="999" />
+        </div>
+        <div class="StorePage-SkeletonBody">
+          <TxSkeleton width="92%" :height="12" />
+          <TxSkeleton width="68%" :height="12" />
+        </div>
+        <div class="StorePage-SkeletonFoot">
+          <TxSkeleton width="58px" :height="20" :radius="999" />
+          <TxSkeleton width="96px" :height="12" />
         </div>
       </div>
     </div>
@@ -540,6 +647,7 @@ useSeoMeta({
           v-for="plugin in filteredPlugins"
           :key="plugin.id"
           :plugin="plugin"
+          @prefetch-detail="handlePrefetchPluginDetail"
           @view-detail="openPluginDetail"
         />
       </div>
@@ -577,14 +685,17 @@ useSeoMeta({
       <template #default>
         <div class="StoreDetailOverlay-Inner">
           <div class="StoreDetailOverlay-Body">
-            <div v-if="detailPending" class="StoreDetailStateText flex items-center justify-center gap-3 py-16 text-sm">
-              <span class="i-carbon-circle-dash animate-spin text-base" aria-hidden="true" />
-              <span>{{ t('store.detail.loading') }}</span>
-            </div>
-            <div v-else-if="detailError" class="StoreDetailError mt-4 rounded-xl p-4 text-sm">
+            <div v-if="detailError && !selectedPlugin" class="StoreDetailError mt-4 rounded-xl p-4 text-sm">
               {{ detailError }}
             </div>
+            <div v-else-if="detailPending && !selectedPlugin" class="StoreDetailStateText flex items-center justify-center gap-3 py-16 text-sm">
+              <TxSpinner :size="18" />
+              <span>{{ t('store.detail.loading') }}</span>
+            </div>
             <div v-else-if="selectedPlugin && sharedDetail" class="StoreDetailPlugin">
+              <div v-if="detailError" class="StoreDetailError rounded-xl p-4 text-sm">
+                {{ detailError }}
+              </div>
               <section class="StoreDetailPlugin-Content">
                 <LazyTxTabs
                   v-model="detailTab"
@@ -600,7 +711,14 @@ useSeoMeta({
                     </template>
                     <div class="space-y-4 py-1">
                       <div class="StoreDetailPanel p-5">
+                        <div v-if="detailPending && !sharedDetail.readme?.markdown" class="space-y-3 py-2">
+                          <TxSkeleton width="36%" :height="18" />
+                          <TxSkeleton width="92%" :height="13" />
+                          <TxSkeleton width="84%" :height="13" />
+                          <TxSkeleton width="66%" :height="13" />
+                        </div>
                         <LazySharedPluginDetailReadme
+                          v-else
                           :readme="sharedDetail.readme"
                           :title="t('store.detail.readme')"
                           :empty-text="t('store.detail.noReadme')"
@@ -633,7 +751,7 @@ useSeoMeta({
                     </template>
                     <section class="space-y-4 py-1">
                       <div v-if="contentPackagesPending" class="StoreDetailTextSubtle flex items-center gap-2 py-6 text-sm">
-                        <span class="i-carbon-circle-dash animate-spin text-sm" aria-hidden="true" />
+                        <TxSpinner :size="15" />
                         <span>{{ t('store.detail.content.loading', 'Loading shared content...') }}</span>
                       </div>
                       <div v-else-if="contentPackagesError" class="StoreDetailError rounded-xl p-4 text-sm">
@@ -657,7 +775,7 @@ useSeoMeta({
                                 {{ contentPackage.summary }}
                               </p>
                             </div>
-                            <Tag :label="contentPackage.kind" size="sm" icon="i-carbon-package" />
+                            <TxTag :label="contentPackage.kind" size="sm" icon="i-carbon-package" variant="soft" />
                           </div>
                           <div class="StoreDetailTextMuted mt-3 flex flex-wrap items-center gap-3 text-xs">
                             <span>{{ contentPackage.manifest?.format || contentPackage.kind }}</span>
@@ -693,7 +811,7 @@ useSeoMeta({
                                 {{ t('store.detail.reviews.count', { count: ratingCount }) }}
                               </span>
                             </div>
-                            <Tag :label="t('store.detail.reviews.tag')" size="sm" icon="i-carbon-chat" />
+                            <TxTag :label="t('store.detail.reviews.tag')" size="sm" icon="i-carbon-chat" variant="soft" />
                           </div>
                           <p class="StoreDetailTextMuted mt-2 text-xs">
                             {{ t('store.detail.reviews.helper') }}
@@ -723,11 +841,11 @@ useSeoMeta({
                                 {{ reviewForm.rating || '-' }}
                               </span>
                             </div>
-                            <Input
+                            <TxInput
                               v-model="reviewForm.title"
                               :placeholder="t('store.detail.reviews.titlePlaceholder')"
                             />
-                            <Input
+                            <TxInput
                               v-model="reviewForm.content"
                               type="textarea"
                               :rows="4"
@@ -737,8 +855,7 @@ useSeoMeta({
                               <p class="StoreDetailTextMuted text-xs">
                                 {{ t('store.detail.reviews.submitHint') }}
                               </p>
-                              <TxButton size="sm" :disabled="reviewSubmitting" @click="submitReview">
-                                <span v-if="reviewSubmitting" class="i-carbon-circle-dash animate-spin text-sm" aria-hidden="true" />
+                              <TxButton size="sm" :loading="reviewSubmitting" :disabled="reviewSubmitting" @click="submitReview">
                                 {{ t('store.detail.reviews.submit') }}
                               </TxButton>
                             </div>
@@ -748,7 +865,7 @@ useSeoMeta({
 
                       <div class="space-y-3">
                         <div v-if="reviewsPending" class="StoreDetailTextSubtle flex items-center gap-2 text-sm">
-                          <span class="i-carbon-circle-dash animate-spin text-sm" aria-hidden="true" />
+                          <TxSpinner :size="15" />
                           <span>{{ t('store.detail.reviews.loading') }}</span>
                         </div>
                         <div v-else-if="reviewsError" class="StoreDetailError rounded-xl p-4 text-sm">
@@ -765,15 +882,12 @@ useSeoMeta({
                           >
                             <div class="flex flex-wrap items-start justify-between gap-3">
                               <div class="flex items-center gap-3">
-                                <span class="StoreDetailAvatar size-9 flex items-center justify-center overflow-hidden rounded-full font-semibold">
-                                  <img
-                                    v-if="review.author?.avatarUrl"
-                                    :src="review.author.avatarUrl"
-                                    :alt="review.author?.name || t('store.detail.reviews.anonymous')"
-                                    class="h-full w-full object-cover"
-                                  >
-                                  <span v-else>{{ review.author?.name?.charAt(0) || '?' }}</span>
-                                </span>
+                                <TxAvatar
+                                  :src="review.author?.avatarUrl || undefined"
+                                  :name="review.author?.name || t('store.detail.reviews.anonymous')"
+                                  :size="36"
+                                  shape="circle"
+                                />
                                 <div>
                                   <p class="StoreDetailTextStrong text-sm font-semibold">
                                     {{ review.author?.name || t('store.detail.reviews.anonymous') }}
@@ -791,7 +905,7 @@ useSeoMeta({
                                   </div>
                                 </div>
                               </div>
-                              <StatusBadge
+                              <TxStatusBadge
                                 v-if="review.status && review.status !== 'approved'"
                                 :text="t(`store.detail.reviews.status.${review.status}`)"
                                 :status="review.status === 'pending' ? 'warning' : 'danger'"
@@ -843,25 +957,56 @@ useSeoMeta({
 
 .StorePage-Grid {
   display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  gap: 1.125rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
 }
 
 .StorePage-Skeleton {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 1rem;
-  border-radius: 1.5rem;
-  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 40%, transparent);
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.82);
 }
 
-.StorePage-SkeletonLines {
+.dark .StorePage-Skeleton {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(20, 23, 30, 0.72);
+}
+
+.StorePage-SkeletonTop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.StorePage-SkeletonTitle {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 10px;
-  padding-top: 4px;
+  gap: 6px;
+}
+
+.StorePage-SkeletonBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.StorePage-SkeletonFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.dark .StorePage-SkeletonFoot {
+  border-top-color: rgba(255, 255, 255, 0.07);
 }
 
 /*

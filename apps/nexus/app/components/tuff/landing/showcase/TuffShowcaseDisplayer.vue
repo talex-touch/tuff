@@ -57,6 +57,7 @@ const slides = computed<ShowcaseSlide[]>(() => [
       references: [],
       media: {
         src: '/shots/SearchApp.mp4',
+        poster: '/shots/SearchApp.jpg',
         alt: t('landing.os.aiSpotlight.corebox.slides.search.alt'),
       },
       results: [],
@@ -96,6 +97,7 @@ const slides = computed<ShowcaseSlide[]>(() => [
       references: [],
       media: {
         src: '/shots/PluginTranslate.mp4',
+        poster: '/shots/PluginTranslate.jpg',
         alt: t('landing.os.aiSpotlight.corebox.slides.tool.alt'),
       },
       results: [],
@@ -522,6 +524,13 @@ watch(slides, (list) => {
 onMounted(() => {
   const target = viewportRef.value
   if (!target || !('IntersectionObserver' in window)) {
+    activateMedia()
+    return
+  }
+
+  const rect = target.getBoundingClientRect()
+  const viewHeight = window.innerHeight || document.documentElement.clientHeight
+  if (rect.top <= viewHeight && rect.bottom >= 0) {
     activateMedia()
     return
   }

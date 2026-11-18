@@ -10,12 +10,19 @@ withDefaults(defineProps<{
 })
 
 const HeaderUserMenu = defineAsyncComponent(() => import('./HeaderUserMenu.vue'))
+const LazyUiDrawer = defineAsyncComponent(() => import('~/components/ui/Drawer.vue'))
 
 const route = useRoute()
 const { status } = useNexusAuth()
 
 const scrolled = ref(false)
 const mobileMenuOpen = ref(false)
+const mobileMenuMounted = ref(false)
+
+function openMobileMenu() {
+  mobileMenuMounted.value = true
+  mobileMenuOpen.value = true
+}
 const { locale, t } = useI18n()
 const docsLink = (path: string) => toLocalizedDocsPath(path, locale.value === 'zh' ? 'zh' : 'en')
 
@@ -169,7 +176,7 @@ onUnmounted(() => {
           :aria-label="t('nav.menu')"
           :aria-expanded="mobileMenuOpen"
           aria-haspopup="dialog"
-          @click="mobileMenuOpen = true"
+          @click="openMobileMenu"
         >
           <span class="i-carbon-menu" aria-hidden="true" />
         </button>
@@ -177,7 +184,8 @@ onUnmounted(() => {
     </div>
 
     <ClientOnly>
-      <UiDrawer
+      <LazyUiDrawer
+        v-if="mobileMenuMounted"
         v-model:visible="mobileMenuOpen"
         :title="t('nav.menu')"
         direction="right"
@@ -220,7 +228,7 @@ onUnmounted(() => {
             <HeaderUserMenu />
           </div>
         </div>
-      </UiDrawer>
+      </LazyUiDrawer>
     </ClientOnly>
   </header>
 </template>

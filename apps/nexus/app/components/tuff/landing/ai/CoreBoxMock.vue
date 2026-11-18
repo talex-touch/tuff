@@ -104,11 +104,10 @@ function handleSelect(command: CoreBoxCommand, index: number) {
           {{ resultsTitle }}
         </div>
         <div class="corebox-mock__list">
-          <TxButton
+          <button
             v-for="(command, index) in commands"
             :key="command.id"
-            variant="bare"
-            native-type="button"
+            type="button"
             class="corebox-mock__item"
             :class="{ 'is-selected': selectedCommand?.id === command.id }"
             @click="handleSelect(command, index)"
@@ -123,7 +122,7 @@ function handleSelect(command: CoreBoxCommand, index: number) {
               <span class="corebox-mock__item-label">{{ command.label }}</span>
               <span v-if="command.description" class="corebox-mock__item-desc">{{ command.description }}</span>
             </div>
-          </TxButton>
+          </button>
         </div>
       </div>
     </Transition>

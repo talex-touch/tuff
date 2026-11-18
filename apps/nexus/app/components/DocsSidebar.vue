@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import DocSection from './docs/DocSection.vue'
-import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
+import DocsSuiteTriggerButton from './docs/DocsSuiteTriggerButton.vue'
 import type { TxRadioValue } from '@talex-touch/tuffex/radio'
 import { TxRadio, TxRadioGroup } from '@talex-touch/tuffex/radio'
 import type { JellyIndicatorFrame } from '@talex-touch/tuffex/utils'
 import { GLIDE, stepSpring, useIndicatorBox, useJellyIndicator } from '@talex-touch/tuffex/utils'
 import { hasWindow } from '@talex-touch/utils/env'
+import { useLazyDropdownMenu } from '~/composables/useLazyMenu'
 import type { DocsSuiteKey } from '~/utils/docs-suites'
 import { coerceJsonArray } from '~/utils/docs-api'
 import { CONCEPTS_MANUAL_GROUPS, CONCEPTS_MANUAL_PATH, isConceptsManualPath } from '~/utils/docs-concepts-manual'
@@ -729,8 +730,14 @@ const suiteDocCounts = computed(() => {
   return counts
 })
 
-const suiteMenuOpen = ref(false)
-const suiteTriggerRef = ref<HTMLButtonElement | null>(null)
+const suiteTriggerRef = ref<InstanceType<typeof DocsSuiteTriggerButton> | null>(null)
+const {
+  isOpen: suiteMenuOpen,
+  menuActivated: suiteMenuActivated,
+  activateMenu: activateSuiteMenu,
+  TxDropdownMenu,
+  TxDropdownItem,
+} = useLazyDropdownMenu(suiteTriggerRef)
 let suiteFocusFrame: number | null = null
 
 function visibleSuiteOptions() {
@@ -1639,7 +1646,7 @@ onBeforeUnmount(() => {
         </TxRadio>
       </TxRadioGroup>
       <TxDropdownMenu
-        v-if="activeTopSection === 'components'"
+        v-if="activeTopSection === 'components' && suiteMenuActivated"
         v-model="suiteMenuOpen"
         trigger="click"
         placement="bottom-start"
@@ -1648,25 +1655,16 @@ onBeforeUnmount(() => {
         reference-full-width
       >
         <template #trigger>
-          <button
+          <DocsSuiteTriggerButton
             ref="suiteTriggerRef"
-            type="button"
-            class="docs-suite-trigger"
-            aria-haspopup="menu"
-            :aria-expanded="suiteMenuOpen"
+            :label="activeSuiteDef.label"
+            :sr-label="t('docsSidebar.suiteSwitcher')"
+            :icon="suiteIcon(activeSuite)"
+            :count="suiteDocCounts[activeSuite]"
+            :open="suiteMenuOpen"
             @keydown.down.prevent="suiteMenuOpen = true"
             @keydown.up.prevent="suiteMenuOpen = true"
-          >
-            <span class="docs-suite-trigger__icon" aria-hidden="true">
-              <span :class="suiteIcon(activeSuite)" />
-            </span>
-            <span class="sr-only">{{ t('docsSidebar.suiteSwitcher') }}</span>
-            <span class="docs-suite-trigger__name">{{ activeSuiteDef.label }}</span>
-            <span v-if="suiteDocCounts[activeSuite]" class="docs-suite-trigger__count">
-              {{ suiteDocCounts[activeSuite] }}
-            </span>
-            <span class="docs-suite-trigger__chevron i-carbon-chevron-sort" aria-hidden="true" />
-          </button>
+          />
         </template>
 
         <!-- Escape is handled on the item and stopped there. Left to bubble to
@@ -1701,6 +1699,20 @@ onBeforeUnmount(() => {
           </template>
         </TxDropdownItem>
       </TxDropdownMenu>
+      <DocsSuiteTriggerButton
+        v-else-if="activeTopSection === 'components'"
+        ref="suiteTriggerRef"
+        :label="activeSuiteDef.label"
+        :sr-label="t('docsSidebar.suiteSwitcher')"
+        :icon="suiteIcon(activeSuite)"
+        :count="suiteDocCounts[activeSuite]"
+        :open="suiteMenuOpen"
+        @pointerenter="activateSuiteMenu()"
+        @focus="activateSuiteMenu()"
+        @click="activateSuiteMenu(true)"
+        @keydown.down.prevent="activateSuiteMenu(true)"
+        @keydown.up.prevent="activateSuiteMenu(true)"
+      />
     </div>
 
     <!-- Scrollable content.

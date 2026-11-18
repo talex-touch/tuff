@@ -16,6 +16,9 @@ const props = withDefaults(defineProps<{
 
 const { locale } = useI18n()
 const copied = ref(false)
+const copiedInstall = ref(false)
+let copiedTimer: ReturnType<typeof setTimeout> | null = null
+let copiedInstallTimer: ReturnType<typeof setTimeout> | null = null
 const codeRef = ref<HTMLElement | null>(null)
 const mermaidRef = ref<HTMLElement | null>(null)
 const highlightKey = ref('')
@@ -117,41 +120,61 @@ watch(
   },
 )
 
-async function handleCopy() {
-  if (!import.meta.client || !canCopy.value)
+async function copyWithFeedback(text: string, flag: typeof copied, timerRef: { current: ReturnType<typeof setTimeout> | null }) {
+  if (!import.meta.client || !text.trim())
     return
   try {
-    await navigator.clipboard.writeText(props.code)
-    copied.value = true
-    window.setTimeout(() => {
-      copied.value = false
+    await navigator.clipboard.writeText(text)
+    flag.value = true
+    if (timerRef.current)
+      clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      flag.value = false
+      timerRef.current = null
     }, 1600)
   }
   catch {
     // ignore clipboard errors
   }
 }
+
+async function handleCopy() {
+  if (!canCopy.value)
+    return
+  await copyWithFeedback(props.code, copied, {
+    get current() { return copiedTimer },
+    set current(v) { copiedTimer = v },
+  })
+}
+
+async function handleCopyInstall() {
+  await copyWithFeedback(installCommand.value, copiedInstall, {
+    get current() { return copiedInstallTimer },
+    set current(v) { copiedInstallTimer = v },
+  })
+}
 </script>
 
 <template>
-  <!-- The panel follows the page theme, so the switch and copy button take
-       TuffEx's tokens for the same surface they sit on. -->
+  <!-- The panel follows the page theme, so the switch follows TuffEx's surface tokens. -->
   <div v-if="install" class="tuff-code-block tuff-code-block--install">
     <div class="tuff-install__head">
       <TxFlatRadio v-model="manager" size="sm" :aria-label="installLabels.manager">
         <TxFlatRadioItem v-for="name in MANAGERS" :key="name" :value="name" :label="name" />
       </TxFlatRadio>
-      <TxCopyButton
-        icon-only
-        :text="installCommand"
-        :copy-label="installLabels.copy"
-        :copied-label="installLabels.copied"
-        :failed-label="installLabels.failed"
-      />
+      <button
+        type="button"
+        class="tuff-code-block__copy tuff-install__copy"
+        :aria-label="copiedInstall ? installLabels.copied : installLabels.copy"
+        :title="copiedInstall ? installLabels.copied : installLabels.copy"
+        @click="handleCopyInstall"
+      >
+        <span :class="copiedInstall ? 'i-carbon-checkmark' : 'i-carbon-copy'" aria-hidden="true" />
+      </button>
     </div>
     <div class="tuff-install__command">
       <span class="tuff-install__prompt" aria-hidden="true">$</span>
-      <TxTextTransformer :text="installCommand" />
+      <code>{{ installCommand }}</code>
     </div>
   </div>
   <div v-else class="tuff-code-block" :class="{ 'tuff-code-block--embedded': props.embedded }">
@@ -362,6 +385,15 @@ async function handleCopy() {
   gap: 12px;
   padding: 8px 8px 8px 10px;
   border-bottom: 1px solid var(--tuff-code-hairline);
+}
+
+.tuff-install__copy {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 14px;
 }
 
 .tuff-install__command {
