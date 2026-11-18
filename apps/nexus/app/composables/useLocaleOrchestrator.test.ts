@@ -14,13 +14,16 @@ const fakes = vi.hoisted(() => ({
   profileWrites: [] as Array<{ locale?: string | null }>,
   fetchStarted: null as (() => void) | null,
   fetchGate: null as Promise<void> | null,
+  onMergeLocaleMessage: null as ((locale: string, payload: Record<string, unknown>) => void) | null,
 }))
 vi.mock('#imports', () => ({
   useCookie: () => ({ value: null }),
   useI18n: () => ({
     locale: activeLocale,
     setLocale,
-    mergeLocaleMessage: vi.fn(),
+    mergeLocaleMessage: vi.fn((locale: string, payload: Record<string, unknown>) => {
+      fakes.onMergeLocaleMessage?.(locale, payload)
+    }),
   }),
   useNexusAuth: () => ({ status: authStatus }),
   useRequestHeaders: () => ({}),
@@ -85,6 +88,7 @@ function resetFakes() {
   fakes.profileWrites.length = 0
   fakes.fetchStarted = null
   fakes.fetchGate = null
+  fakes.onMergeLocaleMessage = null
 }
 
 beforeEach(() => {
@@ -350,6 +354,24 @@ describe('locale contracts', () => {
     await locale.reconcileClientLocale(input)
 
     expect(localeWrites).toEqual(['zh'])
+    expect(activeLocale.value).toBe('zh')
+  })
+
+  it('merges registered active chunks (such as footer landing messages) before switching locale on /updates', async () => {
+    routePath = '/updates'
+    nuxtState.set('nexus-active-route-locale-chunks', { value: ['landing'] })
+    const callOrder: string[] = []
+    fakes.onMergeLocaleMessage = (locale, payload) => {
+      callOrder.push(`merge:${locale}:${Object.keys(payload).join(',')}`)
+    }
+    setLocale = async (locale) => {
+      callOrder.push(`setLocale:${locale}`)
+      activeLocale.value = locale
+    }
+
+    await useLocaleOrchestrator().setLocaleSerial('zh', 'browser')
+
+    expect(callOrder).toEqual(['merge:zh:landing', 'setLocale:zh'])
     expect(activeLocale.value).toBe('zh')
   })
 })

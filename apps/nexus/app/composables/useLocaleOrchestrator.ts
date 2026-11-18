@@ -1,9 +1,10 @@
+import type { RouteLocaleChunkName } from '~/utils/route-locale-chunks'
 import { useI18n, useNexusAuth, useRequestHeaders, useRoute, useState } from '#imports'
 import { watch } from 'vue'
 import { useLocalePreference } from '~/composables/useLocalePreference'
 
-import { ensureRouteLocaleChunk } from '~/composables/useRouteLocaleChunks'
-import { resolveRouteLocaleChunks } from '~/utils/route-locale-chunks'
+import { ACTIVE_ROUTE_LOCALE_CHUNKS_STATE_KEY, ensureRouteLocaleChunk } from '~/composables/useRouteLocaleChunks'
+import { resolveAllRouteLocaleChunks } from '~/utils/route-locale-chunks'
 
 export type SupportedLocale = 'en' | 'zh'
 type LocaleSource = 'profile' | 'cookie' | 'browser' | 'manual'
@@ -80,6 +81,7 @@ export function useLocaleOrchestrator() {
     en: 0,
     zh: 0,
   }))
+  const activeRouteLocaleChunks = useState<RouteLocaleChunkName[]>(ACTIVE_ROUTE_LOCALE_CHUNKS_STATE_KEY, () => [])
 
   const normalizeLocaleWithMetrics = (value: unknown, source: LocaleSource): SupportedLocale | null => {
     const text = typeof value === 'string' ? value : null
@@ -188,11 +190,11 @@ export function useLocaleOrchestrator() {
   }
 
   const ensureCurrentRouteLocaleChunks = async (targetLocale: SupportedLocale) => {
-    const chunks = resolveRouteLocaleChunks(route.path || '/')
+    const chunks = resolveAllRouteLocaleChunks(route.path || '/', activeRouteLocaleChunks.value)
     if (chunks.length === 0)
       return
 
-    await Promise.all(chunks.map(chunk => ensureRouteLocaleChunk(composer, targetLocale, chunk)))
+    await Promise.all(chunks.map(chunk => ensureRouteLocaleChunk(composer, targetLocale, chunk, activeRouteLocaleChunks)))
   }
 
   const reconcileClientLocale = async (input?: { isAuthenticated?: boolean, profileLocale?: string | null }) => {

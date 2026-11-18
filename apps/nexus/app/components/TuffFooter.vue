@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import BetaIcon from './BetaIcon.vue'
 import Logo from './icon/Logo.vue'
 import { normalizeLocale } from '~/composables/useLocaleOrchestrator'
@@ -18,6 +18,16 @@ let auroraFallbackTimer: ReturnType<typeof setTimeout> | null = null
 let auroraIdleId: number | null = null
 
 const year = new Date().getFullYear()
+
+if (import.meta.client) {
+  watch(
+    () => normalizeLocale(locale.value),
+    (nextLocale, prevLocale) => {
+      if (nextLocale && nextLocale !== prevLocale)
+        void ensureRouteLocaleChunk(nextLocale, 'landing')
+    },
+  )
+}
 
 await ensureRouteLocaleChunk(normalizeLocale(locale.value) || 'en', 'landing')
 
