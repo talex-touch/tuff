@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
+import { reactive } from 'vue'
 import {
   hasNonAnnouncementUpdates,
   hasPopulatedUpdates,
   hydratePrerenderedUpdates,
+  isLivePublicUpdatesPayload,
+  markLivePublicUpdatesPayload,
   resolvePublicUpdatesCachedData,
   resolvePublicUpdatesFromApp,
   shouldRefreshPublicUpdates,
@@ -110,54 +113,58 @@ describe('public-updates cold hydration helpers', () => {
     })).toBe(populated)
   })
 
-  it('reads payload.data on SPA navigation after liveLoaded is marked', () => {
+  it('reads payload.data on SPA navigation after committed live payload is marked', () => {
     const staticOnly = { updates: [staticAnnouncement] }
-    const populated = { updates: [staticAnnouncement, releaseItem] }
+    const committedLive = markLivePublicUpdatesPayload({ updates: [staticAnnouncement, releaseItem] })
+    const proxiedLive = reactive(markLivePublicUpdatesPayload({ updates: [staticAnnouncement, releaseItem] }))
+
+    expect(isLivePublicUpdatesPayload(staticOnly)).toBe(false)
+    expect(isLivePublicUpdatesPayload(committedLive)).toBe(true)
+    expect(isLivePublicUpdatesPayload(proxiedLive)).toBe(true)
 
     expect(resolvePublicUpdatesFromApp({
       isHydrating: false,
       payload: { prerenderedAt: undefined, data: {} },
       static: { data: { 'public-updates': staticOnly } },
-    }, 'public-updates', false, 'initial')).toBeUndefined()
+    }, 'public-updates', 'initial')).toBeUndefined()
 
     expect(resolvePublicUpdatesFromApp({
       isHydrating: false,
-      payload: { prerenderedAt: 1794996369434, data: { 'public-updates': populated } },
+      payload: { prerenderedAt: 1794996369434, data: { 'public-updates': committedLive } },
       static: { data: {} },
-    }, 'public-updates', true, 'initial')).toBe(populated)
+    }, 'public-updates', 'initial')).toBe(committedLive)
+
+    // Unmarked prerendered payload stays ineligible even if a stale superseded call finished in the background
+    expect(resolvePublicUpdatesFromApp({
+      isHydrating: false,
+      payload: { prerenderedAt: 1794996369434, data: { 'public-updates': staticOnly } },
+      static: { data: {} },
+    }, 'public-updates', 'initial')).toBeUndefined()
 
     expect(resolvePublicUpdatesFromApp({
       isHydrating: true,
       payload: { prerenderedAt: 1794996369434, data: { 'public-updates': staticOnly } },
       static: { data: {} },
-    }, 'public-updates', false, 'refresh:manual')).toBeUndefined()
+    }, 'public-updates', 'refresh:manual')).toBeUndefined()
   })
 
-  it('refreshes on cold mount of prerendered payload and marks liveLoaded only after refresh settles', async () => {
+  it('refreshes on cold mount of prerendered payload and only skips once committed live payload exists', async () => {
     const refresh = vi.fn().mockResolvedValue(undefined)
-    const markLiveLoaded = vi.fn()
 
     await expect(hydratePrerenderedUpdates({
       payload: { updates: [staticAnnouncement] },
       prerenderedAt: 1794996369434,
-      liveLoaded: false,
       refresh,
-      markLiveLoaded,
     })).resolves.toBe(true)
     expect(refresh).toHaveBeenCalledTimes(1)
-    expect(markLiveLoaded).toHaveBeenCalledTimes(1)
 
     refresh.mockClear()
-    markLiveLoaded.mockClear()
 
     await expect(hydratePrerenderedUpdates({
-      payload: { updates: [staticAnnouncement, releaseItem] },
+      payload: markLivePublicUpdatesPayload({ updates: [staticAnnouncement, releaseItem] }),
       prerenderedAt: 1794996369434,
-      liveLoaded: true,
       refresh,
-      markLiveLoaded,
     })).resolves.toBe(false)
     expect(refresh).not.toHaveBeenCalled()
-    expect(markLiveLoaded).not.toHaveBeenCalled()
   })
 })

@@ -1,3 +1,5 @@
+import { toRaw } from 'vue'
+
 export interface LocalizedText {
   zh: string
   en: string
@@ -31,10 +33,42 @@ export interface PublicUpdatesCacheSource {
   }
 }
 
+const LIVE_PUBLIC_UPDATES = Symbol('livePublicUpdates')
+
+type MarkedPublicUpdatesPayload = PublicUpdatesPayload & {
+  [LIVE_PUBLIC_UPDATES]?: true
+}
+
 export interface PublicUpdatesRefreshState {
   payload: PublicUpdatesPayload | null | undefined
   prerenderedAt?: unknown
-  liveLoaded: boolean
+  liveLoaded?: boolean
+}
+
+export function markLivePublicUpdatesPayload(
+  payload: PublicUpdatesPayload,
+): PublicUpdatesPayload {
+  const raw = toRaw(payload)
+  const committed: PublicUpdatesPayload = {
+    updates: Array.isArray(raw?.updates) ? [...raw.updates] : [],
+  }
+  Object.defineProperty(committed, LIVE_PUBLIC_UPDATES, {
+    value: true,
+    enumerable: false,
+  })
+  return committed
+}
+
+export function isLivePublicUpdatesPayload(
+  payload: PublicUpdatesPayload | null | undefined,
+): boolean {
+  if (!payload || typeof payload !== 'object')
+    return false
+  const raw = toRaw(payload) as MarkedPublicUpdatesPayload
+  return Boolean(
+    (payload as MarkedPublicUpdatesPayload)[LIVE_PUBLIC_UPDATES]
+    || raw[LIVE_PUBLIC_UPDATES],
+  )
 }
 
 export function hasPopulatedUpdates(
@@ -58,7 +92,8 @@ export function hasNonAnnouncementUpdates(
 export function shouldRefreshPublicUpdates(
   state: PublicUpdatesRefreshState,
 ): boolean {
-  if (state.liveLoaded && hasPopulatedUpdates(state.payload))
+  const liveLoaded = Boolean(state.liveLoaded || isLivePublicUpdatesPayload(state.payload))
+  if (liveLoaded && hasPopulatedUpdates(state.payload))
     return false
   if (state.prerenderedAt)
     return true
@@ -70,7 +105,7 @@ export function shouldRefreshPublicUpdates(
  * HTML payload carries only static fallback entries (`prerenderedAt` is set).
  * Keep that payload during initial client hydration so the first client VDOM
  * matches SSR HTML, then ignore stale/static payloads outside hydration until
- * live `/api/updates` has loaded.
+ * a committed live `/api/updates` response is present.
  */
 export function resolvePublicUpdatesCachedData(
   payload: PublicUpdatesPayload | undefined,
@@ -78,7 +113,7 @@ export function resolvePublicUpdatesCachedData(
     cause?: string
     isHydrating?: boolean
     prerenderedAt?: unknown
-    liveLoaded: boolean
+    liveLoaded?: boolean
   },
 ): PublicUpdatesPayload | undefined {
   if (options.cause === 'refresh:manual' || options.cause === 'refresh:hook')
@@ -87,7 +122,8 @@ export function resolvePublicUpdatesCachedData(
     return payload
   if (!hasPopulatedUpdates(payload))
     return undefined
-  if (options.liveLoaded)
+  const liveLoaded = Boolean(options.liveLoaded || isLivePublicUpdatesPayload(payload))
+  if (liveLoaded)
     return payload
   if (options.prerenderedAt || !hasNonAnnouncementUpdates(payload))
     return undefined
@@ -97,7 +133,6 @@ export function resolvePublicUpdatesCachedData(
 export function resolvePublicUpdatesFromApp(
   nuxtApp: PublicUpdatesCacheSource,
   key: string,
-  liveLoaded: boolean,
   cause?: string,
 ): PublicUpdatesPayload | undefined {
   const cached = (nuxtApp.payload.data[key] ?? nuxtApp.static.data[key]) as PublicUpdatesPayload | undefined
@@ -105,19 +140,16 @@ export function resolvePublicUpdatesFromApp(
     cause,
     isHydrating: nuxtApp.isHydrating,
     prerenderedAt: nuxtApp.payload.prerenderedAt,
-    liveLoaded,
   })
 }
 
 export async function hydratePrerenderedUpdates(
   options: PublicUpdatesRefreshState & {
     refresh: () => Promise<unknown>
-    markLiveLoaded: () => void
   },
 ): Promise<boolean> {
   if (!shouldRefreshPublicUpdates(options))
     return false
   await options.refresh()
-  options.markLiveLoaded()
   return true
 }
