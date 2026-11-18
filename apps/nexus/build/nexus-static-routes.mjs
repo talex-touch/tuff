@@ -130,7 +130,7 @@ export const I18N_MESSAGES_CACHE_CONTROL = 'public, max-age=3600, s-maxage=86400
  */
 export const docsStaticHtmlHeaderRoutes = ['/en/docs', '/zh/docs', '/en/docs/**', '/zh/docs/**']
 /** Public prerendered pages contain no user-specific state and can share a short edge copy. */
-export const publicStaticHtmlHeaderRoutes = ['/', '/new', '/next', '/pricing', '/license', '/privacy', '/protocol', '/updates']
+export const publicStaticHtmlHeaderRoutes = ['/', '/new', '/next', '/pricing', '/store', '/license', '/privacy', '/protocol', '/updates']
 /**
  * Prerendered JSON has no file extension, so Pages served it as `application/octet-stream`;
  * the explicit content-type is part of the same rule.

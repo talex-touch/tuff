@@ -93,7 +93,7 @@ describe('static cache headers guard', () => {
     )
   })
   it('keeps every public prerendered HTML route on the shared edge window', () => {
-    const expectedRoutes = ['/', '/new', '/next', '/pricing', '/license', '/privacy', '/protocol', '/updates']
+    const expectedRoutes = ['/', '/new', '/next', '/pricing', '/store', '/license', '/privacy', '/protocol', '/updates']
     const rules = createStaticCacheRouteRules()
 
     expect(publicStaticHtmlHeaderRoutes).toEqual(expectedRoutes)
