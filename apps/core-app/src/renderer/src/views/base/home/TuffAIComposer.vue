@@ -4,11 +4,12 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
 import type { SendState } from './composer/send-state'
 import type { useComposerDictation } from './composer/useComposerDictation'
+import { normalizeComposerAttachments } from '@talex-touch/intelligence-uikit/utils'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
 import { TxVoiceBeam } from '@talex-touch/tuffex/voice-beam'
 import { usePreferredReducedMotion } from '@vueuse/core'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolvedTheme } from '~/modules/storage/theme-style'
 import ComposerToolbar from './composer/ComposerToolbar.vue'
@@ -109,12 +110,18 @@ onMounted(() => {
   }
 })
 
+const normalizedAttachments = computed(() => normalizeComposerAttachments(props.attachments))
+
 /** T3, at the press — `submit()` calls it right after its guard. */
 function launch(): void {
   toolbarRef.value?.launch()
 }
 
-defineExpose({ box: boxRef, input: inputEl, ghost: ghostEl, launch })
+function focus(): void {
+  inputEl.value?.focus()
+}
+
+defineExpose({ box: boxRef, input: inputEl, ghost: ghostEl, focus, launch })
 </script>
 
 <template>
@@ -154,9 +161,9 @@ defineExpose({ box: boxRef, input: inputEl, ghost: ghostEl, launch })
       </TxVoiceBeam>
 
       <TxAttachmentTray
-        v-if="attachments.length"
+        v-if="normalizedAttachments.length"
         class="TuffAIComposer-Tray"
-        :attachments="attachments"
+        :attachments="normalizedAttachments"
         removable
         :remove-label="t('home.attachRemove')"
         :cancel-label="t('home.attachCancel')"

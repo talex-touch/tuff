@@ -1,4 +1,5 @@
 import type { ResolvedTransition, SpringConfig } from '@talex-touch/tuffex/liquid'
+import { prefersReducedMotion as uikitPrefersReducedMotion } from '@talex-touch/intelligence-uikit/utils'
 import { resolveTransition } from '@talex-touch/tuffex/liquid'
 import { hasWindow } from '@talex-touch/utils/env'
 
@@ -111,9 +112,7 @@ export function releaseCurve(): ResolvedTransition {
   return release
 }
 
-export function prefersReducedMotion(): boolean {
-  return hasWindow() && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
-}
+export const prefersReducedMotion = uikitPrefersReducedMotion
 
 /**
  * `element.animate`, or `null` where the runtime has none (jsdom). Keyframes go through a

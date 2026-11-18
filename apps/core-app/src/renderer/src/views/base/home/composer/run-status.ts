@@ -1,4 +1,5 @@
 import type { AiMessagePart } from '@talex-touch/tuffex/ai-elements'
+import { calculateAiContextPercent } from '@talex-touch/intelligence-uikit/utils'
 
 /**
  * What the run-status line above the composer says about the turn in flight.
@@ -103,5 +104,5 @@ export function contextPercent(
   if (!Number.isFinite(occupancy) || !Number.isFinite(window) || window <= 0 || occupancy < 0) {
     return null
   }
-  return Math.min(100, Math.round((occupancy / window) * 100))
+  return calculateAiContextPercent(occupancy, window)
 }

@@ -1,4 +1,10 @@
+import type { AiSendState } from '@talex-touch/intelligence-uikit/utils'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
+import {
+  deriveAiSendState,
+  isAiAwaitingFirstToken,
+  isAiCapsuleSendState
+} from '@talex-touch/intelligence-uikit/utils'
 
 /**
  * What the composer's send key is showing. Derived, never stored: every input is state the page
@@ -28,9 +34,20 @@ export interface SendStateInput {
   dictating: boolean
 }
 
+/** Map CoreApp's five-state send face onto UIKit's `AiSendState` vocabulary. */
+export function toAiSendState(state: SendState, sendQueues = false): AiSendState {
+  if (state === 'empty') return 'disabled'
+  if (state === 'ready') return sendQueues ? 'queue' : 'send'
+  return 'stop'
+}
+
 export function deriveSendState(input: SendStateInput): SendState {
-  if (input.hasText || (!input.streaming && input.dictating)) return 'ready'
-  if (!input.streaming) return 'empty'
+  const aiState = deriveAiSendState({
+    sending: input.streaming,
+    hasDraft: input.hasText || (!input.streaming && input.dictating)
+  })
+  if (aiState === 'send' || aiState === 'queue') return 'ready'
+  if (aiState === 'disabled') return 'empty'
   if (input.blocked) return 'blocked'
   if (input.awaitingFirstToken) return 'waiting'
   return 'streaming'
@@ -38,7 +55,7 @@ export function deriveSendState(input: SendStateInput): SendState {
 
 /** The capsule states: the key is a stop button and the microphone has yielded its slot to it. */
 export function isCapsuleSendState(state: SendState): boolean {
-  return state === 'waiting' || state === 'streaming' || state === 'blocked'
+  return isAiCapsuleSendState(toAiSendState(state))
 }
 
 /**
@@ -52,10 +69,22 @@ export function isAwaitingFirstToken(
 ): boolean {
   if (!message || message.role !== 'assistant' || message.status !== 'streaming') return false
   if (message.content) return false
-  return !(message.parts ?? []).some(
-    (part) =>
-      part.type === 'reasoning' ||
-      part.type === 'tool-call' ||
-      (part.type === 'text' && !!part.text)
-  )
+  const parts = message.parts ?? []
+  // Reasoning spans (even empty) and non-empty text / tool-calls already produce a segment in the
+  // transcript; UIKit's `isAiAwaitingFirstToken` only inspects non-empty text and running/done tools.
+  if (
+    parts.some(
+      (part) =>
+        part.type === 'reasoning' ||
+        part.type === 'tool-call' ||
+        (part.type === 'text' && !!part.text)
+    )
+  ) {
+    return false
+  }
+  return isAiAwaitingFirstToken({
+    status: message.status,
+    content: message.content,
+    parts
+  })
 }

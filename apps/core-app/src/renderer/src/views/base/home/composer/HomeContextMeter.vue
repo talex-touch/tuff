@@ -1,4 +1,5 @@
 <script lang="ts" name="HomeContextMeter" setup>
+import { calculateAiContextPercent } from '@talex-touch/intelligence-uikit/utils'
 import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -17,7 +18,8 @@ const props = defineProps<{
 
 const { t } = useI18n()
 
-const fillWidth = computed(() => `${Math.max(0, Math.min(100, props.percent))}%`)
+const clampedPercent = computed(() => calculateAiContextPercent(props.percent, 100))
+const fillWidth = computed(() => `${clampedPercent.value}%`)
 // Centre kept clear of both ends: half a label (2ch, `100%` is the widest) inside the left edge, and
 // left of the window label by its own width plus a gap, so the two never print over each other.
 const labelLeft = computed(
