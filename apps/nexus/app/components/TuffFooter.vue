@@ -8,7 +8,7 @@ import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 const LazyTouchAurora = defineAsyncComponent(() => import('./tuff/background/TouchAurora.vue'))
 
 const { locale, t } = useI18n()
-const { ensureRouteLocaleChunk } = useRouteLocaleChunks()
+const { chunkRevision, ensureRouteLocaleChunk } = useRouteLocaleChunks()
 const docsLink = (path: string) => toLocalizedDocsPath(path, locale.value === 'zh' ? 'zh' : 'en')
 const FOOTER_AURORA_ROOT_MARGIN = '480px 0px'
 const shouldMountAurora = ref(false)
@@ -18,6 +18,16 @@ let auroraFallbackTimer: ReturnType<typeof setTimeout> | null = null
 let auroraIdleId: number | null = null
 
 const year = new Date().getFullYear()
+
+async function ensureLandingChunkForCurrentLocale() {
+  let currentLocale = normalizeLocale(locale.value) || 'en'
+  let loadedLocale = currentLocale
+  do {
+    loadedLocale = currentLocale
+    await ensureRouteLocaleChunk(loadedLocale, 'landing')
+    currentLocale = normalizeLocale(locale.value) || 'en'
+  } while (currentLocale !== loadedLocale)
+}
 
 if (import.meta.client) {
   watch(
@@ -29,36 +39,53 @@ if (import.meta.client) {
   )
 }
 
-await ensureRouteLocaleChunk(normalizeLocale(locale.value) || 'en', 'landing')
+await ensureLandingChunkForCurrentLocale()
 
-const footerSections = computed(() => [
-  {
-    title: t('landing.footer.sections.product'),
-    links: [
-      { to: '/store', label: t('nav.store') },
-      { to: docsLink('/docs/guide/start'), label: t('nav.tutorial') },
-      { to: docsLink('/docs/dev'), label: t('nav.developer') },
-      { to: '/updates', label: t('nav.download') },
-      { to: '/pricing', label: t('nav.pricing') },
-    ],
-  },
-  {
-    title: t('landing.footer.sections.resources'),
-    links: [
-      { to: docsLink('/docs'), label: t('nav.doc') },
-      { to: '/privacy', label: t('nav.privacy', 'Privacy') },
-      { to: '/protocol', label: t('nav.license', 'License') },
-    ],
-  },
-])
+const footerCopy = computed(() => {
+  void chunkRevision.value
+  return {
+    tagline: t('landing.footer.tagline'),
+    rights: t('landing.footer.rights'),
+    privacy: t('landing.footer.privacy'),
+    terms: t('landing.footer.terms'),
+    license: t('landing.footer.license'),
+  }
+})
 
-const socialLinks = computed(() => [
-  {
-    href: 'https://github.com/talex-touch/tuff',
-    label: t('landing.footer.socials.github'),
-    icon: 'i-carbon-logo-github',
-  },
-])
+const footerSections = computed(() => {
+  void chunkRevision.value
+  return [
+    {
+      title: t('landing.footer.sections.product'),
+      links: [
+        { to: '/store', label: t('nav.store') },
+        { to: docsLink('/docs/guide/start'), label: t('nav.tutorial') },
+        { to: docsLink('/docs/dev'), label: t('nav.developer') },
+        { to: '/updates', label: t('nav.download') },
+        { to: '/pricing', label: t('nav.pricing') },
+      ],
+    },
+    {
+      title: t('landing.footer.sections.resources'),
+      links: [
+        { to: docsLink('/docs'), label: t('nav.doc') },
+        { to: '/privacy', label: t('nav.privacy', 'Privacy') },
+        { to: '/protocol', label: t('nav.license', 'License') },
+      ],
+    },
+  ]
+})
+
+const socialLinks = computed(() => {
+  void chunkRevision.value
+  return [
+    {
+      href: 'https://github.com/talex-touch/tuff',
+      label: t('landing.footer.socials.github'),
+      icon: 'i-carbon-logo-github',
+    },
+  ]
+})
 
 function mountAurora() {
   shouldMountAurora.value = true
@@ -148,7 +175,7 @@ onBeforeUnmount(() => {
             </NuxtLink>
 
             <p class="max-w-md text-sm text-black/50 leading-relaxed dark:text-white/50">
-              {{ t('landing.footer.tagline') }}
+              {{ footerCopy.tagline }}
             </p>
 
             <div class="flex gap-2">
@@ -194,17 +221,17 @@ onBeforeUnmount(() => {
         <div class="mt-12 border-t border-white/5 pt-8">
           <div class="flex flex-col gap-4 text-xs text-black/40 sm:flex-row sm:items-center sm:justify-between dark:text-white/40">
             <p>
-              © {{ year }} Tuff Labs. {{ t('landing.footer.rights') }}
+              © {{ year }} Tuff Labs. {{ footerCopy.rights }}
             </p>
             <div class="flex items-center gap-6">
               <NuxtLink to="/privacy" class="text-black/60 no-underline transition-colors dark:text-white/60 hover:op-70">
-                {{ t('landing.footer.privacy') }}
+                {{ footerCopy.privacy }}
               </NuxtLink>
               <NuxtLink to="/license" class="text-black/60 no-underline transition-colors dark:text-white/60 hover:op-70">
-                {{ t('landing.footer.terms') }}
+                {{ footerCopy.terms }}
               </NuxtLink>
               <NuxtLink to="/protocol" class="text-black/60 no-underline transition-colors dark:text-white/60 hover:op-70">
-                {{ t('landing.footer.license') }}
+                {{ footerCopy.license }}
               </NuxtLink>
             </div>
           </div>

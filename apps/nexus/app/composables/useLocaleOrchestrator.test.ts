@@ -372,6 +372,45 @@ describe('locale contracts', () => {
     await useLocaleOrchestrator().setLocaleSerial('zh', 'browser')
 
     expect(callOrder).toEqual(['merge:zh:landing', 'setLocale:zh'])
+    expect(nuxtState.get('nexus-route-locale-chunk-revision')?.value).toBe(1)
     expect(activeLocale.value).toBe('zh')
+  })
+
+  it('loads active chunks registered mid-queue before switching locale', async () => {
+    routePath = '/updates'
+    const callOrder: string[] = []
+    let signalFirstSwitchStarted!: () => void
+    const firstSwitchStarted = new Promise<void>((resolve) => {
+      signalFirstSwitchStarted = resolve
+    })
+    let releaseFirstSwitch!: () => void
+    const firstSwitchGate = new Promise<void>((resolve) => {
+      releaseFirstSwitch = resolve
+    })
+    fakes.onMergeLocaleMessage = (locale, payload) => {
+      callOrder.push(`merge:${locale}:${Object.keys(payload).join(',')}`)
+    }
+    setLocale = async (locale) => {
+      callOrder.push(`setLocale:${locale}`)
+      if (callOrder.length === 1) {
+        signalFirstSwitchStarted()
+        await firstSwitchGate
+      }
+      activeLocale.value = locale
+    }
+
+    const orchestrator = useLocaleOrchestrator()
+    const first = orchestrator.setLocaleSerial('zh', 'browser')
+    await firstSwitchStarted
+    const second = orchestrator.setLocaleSerial('en', 'manual')
+    await Promise.resolve()
+    nuxtState.get('nexus-active-route-locale-chunks')!.value = ['landing']
+
+    releaseFirstSwitch()
+    await Promise.all([first, second])
+
+    expect(callOrder).toEqual(['setLocale:zh', 'merge:en:landing', 'setLocale:en'])
+    expect(nuxtState.get('nexus-route-locale-chunk-revision')?.value).toBe(1)
+    expect(activeLocale.value).toBe('en')
   })
 })
