@@ -378,4 +378,46 @@ describe('search index migration preflight', () => {
       })
     )
   })
+
+  it('accounts for search_keyword_postings row counts, orphans, and missing metadata', () => {
+    const base = buildSnapshot()
+    const report = buildSearchIndexMigrationPreflightReport(
+      buildSnapshot({
+        tables: {
+          ...base.tables,
+          keywordMappings: table({ rowCount: 0 }),
+          searchKeywordPostings: table({ rowCount: 12 })
+        },
+        ftsOwnership: {
+          ...base.ftsOwnership,
+          keywordMappingsByProvider: [],
+          keywordPostingsByProvider: [{ providerId: 'file-provider', rows: 12 }],
+          sourceKeywordRows: 12,
+          sourceKeywordPostingsRows: 12,
+          orphanKeywordRows: 2,
+          orphanKeywordPostingsRows: 2,
+          keywordRowsMissingMeta: 1,
+          keywordPostingsRowsMissingMeta: 1
+        }
+      })
+    )
+
+    expect(report.gate.passed).toBe(false)
+    expect(report.gate.failedChecks).toEqual(['keyword-orphans', 'search-index-meta-coverage'])
+    expect(report.migrationReadiness.sqliteFtsOwnership).toBe('blocked')
+    expect(report.nextActions).toContain(
+      'Clean or rebuild orphan search_keyword_postings before changing FTS ownership.'
+    )
+    expect(report.migrationDryRun.steps).toContainEqual(
+      expect.objectContaining({
+        id: 'sqlite-fts-ownership',
+        status: 'blocked',
+        estimatedRows: 16,
+        blockers: expect.arrayContaining([
+          'orphan search_keyword_postings rows',
+          'search_keyword_postings rows missing metadata'
+        ])
+      })
+    )
+  })
 })

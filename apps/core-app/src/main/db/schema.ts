@@ -101,7 +101,8 @@ export const searchIndexMeta = sqliteTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.providerId, table.itemId] }),
-    updatedIdx: index('idx_search_index_meta_updated_at').on(table.updatedAt),
+    // `idx_search_index_meta_updated_at` (from historical migration 0021) has zero query callers
+    // and is retired asynchronously by `SearchIndexWriter.retireRedundantIndexes`.
     docIdUnique: uniqueIndex('idx_search_index_meta_doc_id')
       .on(table.docId)
       .where(sql`${table.docId} IS NOT NULL`)
