@@ -136,6 +136,21 @@ async function catalogSnapshot(client: Client) {
   }
 }
 
+function installSplitWriterForwarder(client: Client, writerQueries: string[] = []): void {
+  vi.spyOn(searchIndexWriter, 'execWrite').mockImplementation(async (statements) => {
+    writerQueries.push(...statements.map((stmt) => stmt.sql))
+    const batchResult = await client.batch(
+      statements.map((stmt) => ({ sql: stmt.sql, args: stmt.args as InValue[] })),
+      'write'
+    )
+    return batchResult.map((entry) => ({
+      rowsAffected: Number(entry.rowsAffected ?? 0),
+      lastInsertRowid: null,
+      rows: []
+    }))
+  })
+}
+
 describe('cleanupFileIndex actual storage ownership', () => {
   it.each(['split', 'primary-fallback'] as const)(
     'clears file projections and derivatives but preserves app catalog on %s',
@@ -145,6 +160,11 @@ describe('cleanupFileIndex actual storage ownership', () => {
       const live = topology === 'split' ? await openHome('search-index.sqlite') : primary
       primaryDb = primary.db
       fileHomeDb = live.db
+      splitEnabled = topology === 'split'
+      const writerQueries: string[] = []
+      if (topology === 'split') {
+        installSplitWriterForwarder(live.client, writerQueries)
+      }
       const primaryBefore = await catalogSnapshot(primary.client)
       expect(
         (await live.search.search('file-provider', 'fileindextitle')).map((row) => row.itemId)
@@ -191,6 +211,7 @@ describe('cleanupFileIndex actual storage ownership', () => {
       ).toEqual([])
       expect((await live.client.execute('SELECT id FROM query_completions')).rows).toEqual([])
       if (topology === 'split') {
+        expect(writerQueries.length).toBeGreaterThan(0)
         expect(await catalogSnapshot(primary.client)).toEqual(primaryBefore)
         expect(
           (await primary.search.search('app-provider', 'managedapptitle')).map((row) => row.itemId)
@@ -207,6 +228,11 @@ describe('cleanupFileIndex actual storage ownership', () => {
       const live = topology === 'split' ? await openHome('search-index.sqlite') : primary
       primaryDb = primary.db
       fileHomeDb = live.db
+      splitEnabled = topology === 'split'
+      const writerQueries: string[] = []
+      if (topology === 'split') {
+        installSplitWriterForwarder(live.client, writerQueries)
+      }
       await live.client.execute(`INSERT INTO search_index_maintenance_progress (task, cursor)
         VALUES ('file-capacity:horizon', 1700000000), ('file-capacity:sweep', 0), ('unrelated', 5)`)
       const result = await cleanupFileIndex({
@@ -215,6 +241,9 @@ describe('cleanupFileIndex actual storage ownership', () => {
         rebuild: false
       })
       expect(result).toEqual({ success: true, removedCount: 4 })
+      if (topology === 'split') {
+        expect(writerQueries.length).toBeGreaterThan(0)
+      }
       expect((await live.client.execute('SELECT id,path,type FROM files')).rows).toEqual([
         { id: 1, path: '/managed/outside/App.app', type: 'app' }
       ])
@@ -267,26 +296,7 @@ describe('cleanupFileIndex actual storage ownership', () => {
 
       const writerQueries: string[] = []
       if (topology === 'split') {
-        vi.spyOn(searchIndexWriter, 'getStatus').mockReturnValue({
-          readiness: 'ready',
-          admissionPaused: false,
-          activeAdmissions: 0,
-          pending: 0,
-          waitingAdmissions: 0,
-          capacityWaiters: 0
-        })
-        vi.spyOn(searchIndexWriter, 'execWrite').mockImplementation(async (statements) => {
-          writerQueries.push(...statements.map((stmt) => stmt.sql))
-          const batchResult = await live.client.batch(
-            statements.map((stmt) => ({ sql: stmt.sql, args: stmt.args as InValue[] })),
-            'write'
-          )
-          return batchResult.map((entry) => ({
-            rowsAffected: Number(entry.rowsAffected ?? 0),
-            lastInsertRowid: null,
-            rows: []
-          }))
-        })
+        installSplitWriterForwarder(live.client, writerQueries)
       }
 
       // Exact payload sent by Storagable.vue (`{ clearSearchIndex: true }`, no `includeEmbeddings`).
@@ -318,6 +328,38 @@ describe('cleanupFileIndex actual storage ownership', () => {
       }
     }
   )
+
+  it('fails closed on split when searchIndexWriter rejects instead of falling back to main-thread SQLite writes', async () => {
+    directory = await mkdtemp(join(tmpdir(), 'tuff-storage-maintenance-'))
+    const primary = await openHome('primary.sqlite')
+    const search = await openHome('search-index.sqlite')
+    primaryDb = primary.db
+    fileHomeDb = search.db
+    splitEnabled = true
+
+    const primaryBefore = await catalogSnapshot(primary.client)
+    const searchBefore = await catalogSnapshot(search.client)
+    const searchEmbeddingsBefore = (
+      await search.client.execute('SELECT source_id, source_type FROM embeddings ORDER BY id')
+    ).rows
+
+    const execWriteSpy = vi
+      .spyOn(searchIndexWriter, 'execWrite')
+      .mockRejectedValue(new Error('SEARCH_INDEX_WRITER_UNAVAILABLE'))
+
+    await expect(cleanupFileIndex({ clearSearchIndex: true })).rejects.toThrow(
+      'SEARCH_INDEX_WRITER_UNAVAILABLE'
+    )
+    expect(execWriteSpy).toHaveBeenCalledTimes(1)
+
+    // Neither search-index.sqlite nor primary.sqlite was mutated directly on the main thread.
+    expect(await catalogSnapshot(search.client)).toEqual(searchBefore)
+    expect(
+      (await search.client.execute('SELECT source_id, source_type FROM embeddings ORDER BY id'))
+        .rows
+    ).toEqual(searchEmbeddingsBefore)
+    expect(await catalogSnapshot(primary.client)).toEqual(primaryBefore)
+  })
 
   it('still purges orphaned file embeddings when includeEmbeddings is explicitly false', async () => {
     directory = await mkdtemp(join(tmpdir(), 'tuff-storage-maintenance-'))

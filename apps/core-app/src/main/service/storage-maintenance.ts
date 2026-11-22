@@ -134,9 +134,7 @@ export async function cleanupFileIndex(
   const db = await getFileIndexDb()
   if (!db) return { success: false }
 
-  const writerStatus = searchIndexWriter.getStatus()
-  const useSearchWriter =
-    databaseModule.isSearchSplitEnabled?.() === true && writerStatus.readiness === 'ready'
+  const useSearchWriter = databaseModule.isSearchSplitEnabled?.() === true
 
   const execQuery = async (query: {
     toSQL: () => { sql: string; params: unknown[] }
