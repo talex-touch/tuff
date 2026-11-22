@@ -427,6 +427,10 @@ vi.mock('electron', () => ({
     }
   },
   BrowserWindow: class BrowserWindow {},
+  ipcMain: {
+    handle: vi.fn()
+  },
+  MessageChannelMain: class MessageChannelMain {},
   nativeTheme: {},
   powerSaveBlocker: {
     start: vi.fn(() => 1),
@@ -2786,5 +2790,244 @@ describe('SearchEngineCore facade contracts', () => {
     await expect(core.destroy()).resolves.toBeUndefined()
 
     expect(state.writerBeginShutdown).toHaveBeenCalledTimes(2)
+  })
+
+  it('settles destroy promptly after a core-box:search:query to a window with no push reply listener while preserving mutation drain failures', async () => {
+    vi.useFakeTimers()
+    try {
+      const [
+        { getTuffTransportMain: createRealMainTransport },
+        { createSenderSearchSink },
+        { DEFAULT_BEFORE_QUIT_TIMEOUT_MS }
+      ] = await Promise.all([
+        vi.importActual<typeof import('@talex-touch/utils/transport/main')>(
+          '@talex-touch/utils/transport/main'
+        ),
+        import('../core-box/ipc'),
+        import('../../../core/before-quit-guard')
+      ])
+      const { fileProvider } = await import('../addon/files/file-provider')
+      const channelDefaultTimeoutMs = 60_000
+      const channel = {
+        regChannel: vi.fn(() => () => {}),
+        sendTo: vi.fn(
+          (_win: unknown, _type: unknown, eventName: string) =>
+            new Promise((resolve) => {
+              const timer = setTimeout(() => {
+                resolve({
+                  code: 500,
+                  data: {
+                    message: `Channel request "${eventName}" timed out after ${channelDefaultTimeoutMs}ms`,
+                    reason: 'timeout',
+                    eventName
+                  }
+                })
+              }, channelDefaultTimeoutMs)
+              timer.unref?.()
+            })
+        ),
+        sendPlugin: vi.fn(),
+        broadcast: vi.fn(),
+        broadcastTo: vi.fn(),
+        broadcastPlugin: vi.fn()
+      }
+      const keyManager = {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn(),
+        resolveKey: vi.fn(),
+        isValidKey: vi.fn(() => false),
+        resolveIdentity: vi.fn(),
+        resolveCurrentIdentity: vi.fn(),
+        resolveSenderIdentity: vi.fn(() => undefined)
+      }
+      const realTransport = createRealMainTransport(channel, keyManager)
+      const mainWindowSender = {
+        id: 1,
+        send: vi.fn(),
+        isDestroyed: vi.fn(() => false)
+      }
+
+      core.registerProvider(
+        buildProvider('fast-query-provider', async () =>
+          new TuffSearchResultBuilder({ text: 'report', inputs: [] })
+            .setItems([buildItem('fast-1', 'fast-query-provider', 'Fast Report')])
+            .build()
+        ) as never
+      )
+      vi.mocked(fileProvider.onSearch).mockImplementationOnce(async (query) =>
+        new TuffSearchResultBuilder(query)
+          .setItems([
+            {
+              ...buildItem('/scope/report.md', 'file-provider', 'report.md'),
+              kind: 'file',
+              meta: { file: { path: '/scope/report.md' } },
+              source: { id: 'file-provider', name: 'Files', type: 'file' }
+            }
+          ])
+          .build()
+      )
+
+      const searchPromise = core.search(
+        { text: 'report', inputs: [] },
+        {
+          caller: { kind: 'core-box', id: 'core-box:sender:1', senderId: 1 },
+          sink: createSenderSearchSink(realTransport, mainWindowSender as never)
+        }
+      )
+      const initialResult = await searchPromise
+      expect(initialResult.items.map((item) => item.id)).toEqual(['fast-1'])
+
+      // Let the deferred layer (50ms delay) emit its update and complete the gather.
+      await vi.advanceTimersByTimeAsync(100)
+      // Even after waiting out one full 60s push request timeout ("等推送请求超时之后再退出"),
+      // a serialized second RPC (`core-box:search:end`) would still block sessionRegistry.destroy().
+      await vi.advanceTimersByTimeAsync(channelDefaultTimeoutMs + 100)
+
+      // Also cover the empty-query no-results + end push sequence on the same sender sink.
+      await core.search(
+        { text: '', inputs: [] },
+        {
+          caller: { kind: 'core-box', id: 'core-box:sender:1', senderId: 1 },
+          sink: createSenderSearchSink(realTransport, mainWindowSender as never)
+        }
+      )
+
+      // Real in-flight mutation drain guarantees must still fail closed on the first destroy attempt.
+      state.fileProviderPrepareForShutdown.mockRejectedValueOnce(
+        new Error('in-flight file mutation failed')
+      )
+      let firstDestroyFailure: unknown
+      const firstDestroy = core.destroy().catch((error) => {
+        firstDestroyFailure = error
+      })
+      await vi.advanceTimersByTimeAsync(DEFAULT_BEFORE_QUIT_TIMEOUT_MS)
+      expect(firstDestroyFailure).toBeInstanceOf(AggregateError)
+      expect((firstDestroyFailure as Error).message).toBe('SEARCH_CORE_INDEX_DRAIN_FAILED')
+      await firstDestroy
+
+      let retrySettled = false
+      const retryDestroy = core.destroy().then(() => {
+        retrySettled = true
+      })
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(retrySettled).toBe(true)
+      await retryDestroy
+
+      expect(channel.sendTo).not.toHaveBeenCalled()
+      expect(channel.broadcastTo).toHaveBeenCalledWith(
+        { webContents: mainWindowSender },
+        'main',
+        CoreBoxEvents.search.update.toEventName(),
+        expect.objectContaining({
+          items: [expect.objectContaining({ id: '/scope/report.md' })]
+        }),
+        undefined
+      )
+      expect(channel.broadcastTo).toHaveBeenCalledWith(
+        { webContents: mainWindowSender },
+        'main',
+        CoreBoxEvents.search.noResults.toEventName(),
+        { shouldShrink: true },
+        undefined
+      )
+      expect(channel.broadcastTo).toHaveBeenCalledWith(
+        { webContents: mainWindowSender },
+        'main',
+        CoreBoxEvents.search.end.toEventName(),
+        expect.objectContaining({ searchId: initialResult.sessionId }),
+        undefined
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('settles destroy immediately when quitting right after core-box:search:query resolves while deferred providers are still running', async () => {
+    vi.useFakeTimers()
+    try {
+      const [{ getTuffTransportMain: createRealMainTransport }, { createSenderSearchSink }] =
+        await Promise.all([
+          vi.importActual<typeof import('@talex-touch/utils/transport/main')>(
+            '@talex-touch/utils/transport/main'
+          ),
+          import('../core-box/ipc')
+        ])
+      const { fileProvider } = await import('../addon/files/file-provider')
+      const channel = {
+        regChannel: vi.fn(() => () => {}),
+        sendTo: vi.fn(() => new Promise(() => {})),
+        sendPlugin: vi.fn(),
+        broadcast: vi.fn(),
+        broadcastTo: vi.fn(),
+        broadcastPlugin: vi.fn()
+      }
+      const keyManager = {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn(),
+        resolveKey: vi.fn(),
+        isValidKey: vi.fn(() => false),
+        resolveIdentity: vi.fn(),
+        resolveCurrentIdentity: vi.fn(),
+        resolveSenderIdentity: vi.fn(() => undefined)
+      }
+      const realTransport = createRealMainTransport(channel, keyManager)
+      const mainWindowSender = {
+        id: 1,
+        send: vi.fn(),
+        isDestroyed: vi.fn(() => false)
+      }
+
+      core.registerProvider(
+        buildProvider('fast-immediate-quit-provider', async () =>
+          new TuffSearchResultBuilder({ text: 'quit-now', inputs: [] })
+            .setItems([buildItem('fast-q', 'fast-immediate-quit-provider', 'Quit Now')])
+            .build()
+        ) as never
+      )
+      vi.mocked(fileProvider.onSearch).mockImplementationOnce(
+        async (query, signal) =>
+          await new Promise((_resolve, reject) => {
+            signal.addEventListener(
+              'abort',
+              () => {
+                const abortError = new Error('Search provider aborted')
+                abortError.name = 'AbortError'
+                reject(abortError)
+              },
+              { once: true }
+            )
+            void query
+          })
+      )
+
+      const initialResult = await core.search(
+        { text: 'quit-now', inputs: [] },
+        {
+          caller: { kind: 'core-box', id: 'core-box:sender:1', senderId: 1 },
+          sink: createSenderSearchSink(realTransport, mainWindowSender as never)
+        }
+      )
+      expect(initialResult.items.map((item) => item.id)).toEqual(['fast-q'])
+
+      let destroySettled = false
+      const destroying = core.destroy().then(() => {
+        destroySettled = true
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(destroySettled).toBe(true)
+      await destroying
+
+      expect(channel.sendTo).not.toHaveBeenCalled()
+      expect(channel.broadcastTo).toHaveBeenCalledWith(
+        { webContents: mainWindowSender },
+        'main',
+        CoreBoxEvents.search.end.toEventName(),
+        expect.objectContaining({ searchId: initialResult.sessionId, cancelled: true }),
+        undefined
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
