@@ -16,6 +16,7 @@ import {
   toRuntimeCapabilityId
 } from '@talex-touch/tuff-intelligence'
 import { StorageList } from '@talex-touch/utils'
+import { getNativeOcrSupport } from '@talex-touch/tuff-native'
 import { isSystemTranslationAvailable } from '@talex-touch/tuff-native/translation'
 import {
   DASHSCOPE_QWEN_ASR_REALTIME_MODELS,
@@ -80,6 +81,22 @@ const INTERNAL_SYSTEM_OCR_PROVIDER: IntelligenceProviderConfig = {
 
 const INTERNAL_SYSTEM_OCR_CAPABILITY_ID = 'vision.ocr'
 const INTERNAL_SYSTEM_OCR_MODEL = 'system-ocr'
+
+/**
+ * Fails closed so disabled env flags, unsupported platforms, missing native bindings, or probe
+ * errors never expose `local-system-ocr`.
+ */
+function isNativeOcrAvailable(): boolean {
+  if (process.env.TUFF_DISABLE_NATIVE_OCR === '1') {
+    return false
+  }
+
+  try {
+    return Boolean(getNativeOcrSupport()?.supported)
+  } catch {
+    return false
+  }
+}
 
 const INTERNAL_SYSTEM_TRANSLATION_PROVIDER_ID = 'local-system-translation'
 const INTERNAL_SYSTEM_TRANSLATION_PROVIDER: IntelligenceProviderConfig = {
@@ -1089,7 +1106,7 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
     }
   }
 
-  if (process.env.TUFF_DISABLE_NATIVE_OCR !== '1') {
+  if (isNativeOcrAvailable()) {
     if (!config.capabilities[INTERNAL_SYSTEM_OCR_CAPABILITY_ID]) {
       config.capabilities[INTERNAL_SYSTEM_OCR_CAPABILITY_ID] = cloneValue(
         DEFAULT_CAPABILITIES[INTERNAL_SYSTEM_OCR_CAPABILITY_ID]
@@ -1251,11 +1268,10 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
     })
     .map(normalizeProviderForRuntime)
 
-  const nativeOcrDisabledByEnv = process.env.TUFF_DISABLE_NATIVE_OCR === '1'
   const hasInternalProvider = providers.some(
     (provider) => provider.id === INTERNAL_SYSTEM_OCR_PROVIDER_ID
   )
-  if (!nativeOcrDisabledByEnv && !hasInternalProvider) {
+  if (isNativeOcrAvailable() && !hasInternalProvider) {
     providers.unshift({ ...INTERNAL_SYSTEM_OCR_PROVIDER })
   }
   if (isSystemTranslationAvailable()) {
@@ -1389,10 +1405,7 @@ export function getCapabilityOptions(
       .filter((provider) => provider.enabled !== false)
       .map((provider) => provider.id)
   )
-  if (
-    normalizedCapabilityId === INTERNAL_SYSTEM_OCR_CAPABILITY_ID &&
-    process.env.TUFF_DISABLE_NATIVE_OCR !== '1'
-  ) {
+  if (normalizedCapabilityId === INTERNAL_SYSTEM_OCR_CAPABILITY_ID && isNativeOcrAvailable()) {
     enabledProviderIds.add(INTERNAL_SYSTEM_OCR_PROVIDER_ID)
   }
   if (normalizedCapabilityId === 'text.translate' && isSystemTranslationAvailable()) {
