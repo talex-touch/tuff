@@ -45,6 +45,7 @@ const TABLE_NAMES = {
   searchIndex: 'search_index',
   searchIndexMeta: 'search_index_meta',
   keywordMappings: 'keyword_mappings',
+  searchKeywordPostings: 'search_keyword_postings',
   indexedSourceTaskState: 'indexed_source_task_state'
 } as const
 
@@ -318,6 +319,7 @@ async function buildSnapshot(
     searchIndex: await readTableSnapshot(client, TABLE_NAMES.searchIndex),
     searchIndexMeta: await readTableSnapshot(client, TABLE_NAMES.searchIndexMeta),
     keywordMappings: await readTableSnapshot(client, TABLE_NAMES.keywordMappings),
+    searchKeywordPostings: await readTableSnapshot(client, TABLE_NAMES.searchKeywordPostings),
     indexedSourceTaskState: await readTableSnapshot(client, TABLE_NAMES.indexedSourceTaskState)
   }
   const sqliteRuntime = await readSqliteRuntimeSnapshot(client)
@@ -367,19 +369,30 @@ async function buildSnapshot(
 
   const hasSearchIndex = tables.searchIndex.exists
   const hasKeywordMappings = tables.keywordMappings.exists
+  const hasKeywordPostings = tables.searchKeywordPostings.exists
   const hasSearchIndexMeta = tables.searchIndexMeta.exists
+  const metaHasDocId = hasColumn(tables.searchIndexMeta, 'doc_id')
+  const metaHasFtsRowId = hasColumn(tables.searchIndexMeta, 'fts_rowid')
   const sourceIndexedRows = hasSearchIndex
     ? await safeCount(client, 'SELECT count(*) AS count FROM search_index WHERE provider = ?', [
         sourceId
       ])
     : 0
-  const sourceKeywordRows = hasKeywordMappings
+  const legacySourceKeywordRows = hasKeywordMappings
     ? await safeCount(
         client,
         'SELECT count(*) AS count FROM keyword_mappings WHERE provider_id = ?',
         [sourceId]
       )
     : 0
+  const sourceKeywordPostingsRows = hasKeywordPostings
+    ? await safeCount(
+        client,
+        'SELECT count(*) AS count FROM search_keyword_postings WHERE provider_id = ?',
+        [sourceId]
+      )
+    : 0
+  const sourceKeywordRows = legacySourceKeywordRows + sourceKeywordPostingsRows
   const sourceMetaRows = hasSearchIndexMeta
     ? await safeCount(
         client,
@@ -395,6 +408,103 @@ async function buildSnapshot(
           sourceRecordType
         ])
       : (tables.files.rowCount ?? 0)
+
+  const orphanLegacyKeywordRows =
+    hasKeywordMappings && hasSearchIndex
+      ? await safeCount(
+          client,
+          `SELECT count(*) AS count
+           FROM keyword_mappings km
+           WHERE km.provider_id = ?
+             AND NOT EXISTS (
+               SELECT 1 FROM search_index si
+               WHERE si.provider = km.provider_id
+                 AND si.item_id = km.item_id
+             )`,
+          [sourceId]
+        )
+      : 0
+  const orphanKeywordPostingsRows =
+    !hasKeywordPostings || !hasSearchIndex
+      ? 0
+      : !hasSearchIndexMeta || !metaHasDocId
+        ? sourceKeywordPostingsRows
+        : metaHasFtsRowId
+          ? await safeCount(
+              client,
+              `SELECT count(*) AS count
+             FROM search_keyword_postings kp
+             WHERE kp.provider_id = ?
+               AND NOT EXISTS (
+                 SELECT 1
+                 FROM search_index_meta sm
+                 CROSS JOIN search_index si
+                 WHERE sm.doc_id = kp.doc_id
+                   AND +sm.provider_id = kp.provider_id
+                   AND sm.fts_rowid IS NOT NULL
+                   AND si.rowid = sm.fts_rowid
+                   AND si.provider = sm.provider_id
+                   AND si.item_id = sm.item_id
+               )
+               AND NOT EXISTS (
+                 SELECT 1
+                 FROM search_index_meta sm
+                 CROSS JOIN search_index si
+                 WHERE sm.doc_id = kp.doc_id
+                   AND +sm.provider_id = kp.provider_id
+                   AND sm.fts_rowid IS NULL
+                   AND si.provider = sm.provider_id
+                   AND si.item_id = sm.item_id
+               )`,
+              [sourceId]
+            )
+          : await safeCount(
+              client,
+              `SELECT count(*) AS count
+             FROM search_keyword_postings kp
+             WHERE kp.provider_id = ?
+               AND NOT EXISTS (
+                 SELECT 1
+                 FROM search_index_meta sm
+                 CROSS JOIN search_index si
+                 WHERE sm.doc_id = kp.doc_id
+                   AND +sm.provider_id = kp.provider_id
+                   AND si.provider = sm.provider_id
+                   AND si.item_id = sm.item_id
+               )`,
+              [sourceId]
+            )
+  const legacyKeywordRowsMissingMeta =
+    hasKeywordMappings && hasSearchIndexMeta
+      ? await safeCount(
+          client,
+          `SELECT count(*) AS count
+           FROM keyword_mappings km
+           WHERE km.provider_id = ?
+             AND NOT EXISTS (
+               SELECT 1 FROM search_index_meta sm
+               WHERE sm.provider_id = km.provider_id
+                 AND sm.item_id = km.item_id
+             )`,
+          [sourceId]
+        )
+      : 0
+  const keywordPostingsRowsMissingMeta = !hasKeywordPostings
+    ? 0
+    : !hasSearchIndexMeta || !metaHasDocId
+      ? sourceKeywordPostingsRows
+      : await safeCount(
+          client,
+          `SELECT count(*) AS count
+           FROM search_keyword_postings kp
+           WHERE kp.provider_id = ?
+             AND NOT EXISTS (
+               SELECT 1 FROM search_index_meta sm
+               WHERE sm.doc_id = kp.doc_id
+                 AND +sm.provider_id = kp.provider_id
+             )`,
+          [sourceId]
+        )
 
   return {
     generatedAt: new Date().toISOString(),
@@ -413,27 +523,20 @@ async function buildSnapshot(
       searchIndexShadowTables,
       searchIndexByProvider: await countByProvider(client, 'search_index', 'provider'),
       keywordMappingsByProvider: await countByProvider(client, 'keyword_mappings', 'provider_id'),
+      keywordPostingsByProvider: await countByProvider(
+        client,
+        'search_keyword_postings',
+        'provider_id'
+      ),
       searchIndexMetaByProvider: await countByProvider(client, 'search_index_meta', 'provider_id'),
       sourceIndexedRows,
       sourceKeywordRows,
+      sourceKeywordPostingsRows,
       sourceMetaRows,
       filesRows: sourceFilesRows,
       fileFtsRows: tables.fileFts.exists ? (tables.fileFts.rowCount ?? 0) : null,
-      orphanKeywordRows:
-        hasKeywordMappings && hasSearchIndex
-          ? await safeCount(
-              client,
-              `SELECT count(*) AS count
-               FROM keyword_mappings km
-               WHERE km.provider_id = ?
-                 AND NOT EXISTS (
-                   SELECT 1 FROM search_index si
-                   WHERE si.provider = km.provider_id
-                     AND si.item_id = km.item_id
-                 )`,
-              [sourceId]
-            )
-          : 0,
+      orphanKeywordRows: orphanLegacyKeywordRows + orphanKeywordPostingsRows,
+      orphanKeywordPostingsRows,
       orphanMetaRows:
         hasSearchIndexMeta && hasSearchIndex
           ? await safeCount(
@@ -464,21 +567,8 @@ async function buildSnapshot(
               [sourceId]
             )
           : 0,
-      keywordRowsMissingMeta:
-        hasKeywordMappings && hasSearchIndexMeta
-          ? await safeCount(
-              client,
-              `SELECT count(*) AS count
-               FROM keyword_mappings km
-               WHERE km.provider_id = ?
-                 AND NOT EXISTS (
-                   SELECT 1 FROM search_index_meta sm
-                   WHERE sm.provider_id = km.provider_id
-                     AND sm.item_id = km.item_id
-                 )`,
-              [sourceId]
-            )
-          : 0
+      keywordRowsMissingMeta: legacyKeywordRowsMissingMeta + keywordPostingsRowsMissingMeta,
+      keywordPostingsRowsMissingMeta
     }
   }
 }

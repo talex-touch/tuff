@@ -96,6 +96,14 @@ describe('judgeTopology under the default-on split', () => {
       'split'
     )
     expect(failing(checks)).toContain('keyword_mappings is not written on the primary')
+
+    const postingsChecks = judgeTopology(
+      topology({ primary: { ...topology().primary, search_keyword_postings: 42 } }),
+      'split'
+    )
+    expect(failing(postingsChecks)).toContain(
+      'search_keyword_postings is not written on the primary'
+    )
   })
 
   /**

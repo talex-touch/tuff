@@ -115,4 +115,130 @@ describe('search index migration preflight cli', () => {
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it('inspects search_keyword_postings coverage and flags orphan or unmapped postings', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'search-index-preflight-postings-'))
+    try {
+      const healthyDb = path.join(dir, 'healthy.sqlite')
+      const healthyClient = createClient({ url: `file:${healthyDb}` })
+      try {
+        await healthyClient.execute('CREATE TABLE files (id INTEGER PRIMARY KEY, type TEXT)')
+        await healthyClient.execute("INSERT INTO files (id, type) VALUES (1, 'file')")
+        await healthyClient.execute(
+          'CREATE TABLE scan_progress (source_id TEXT NOT NULL, path TEXT NOT NULL, last_scanned INTEGER NOT NULL, PRIMARY KEY (source_id, path))'
+        )
+        await healthyClient.execute(
+          'CREATE VIRTUAL TABLE search_index USING fts5(item_id UNINDEXED, provider UNINDEXED, title)'
+        )
+        const inserted = await healthyClient.execute(
+          "INSERT INTO search_index (item_id, provider, title) VALUES ('/tmp/a.ts', 'file-provider', 'a')"
+        )
+        const ftsRowId = Number(inserted.lastInsertRowid)
+        await healthyClient.execute(
+          'CREATE TABLE search_index_meta (provider_id TEXT NOT NULL, item_id TEXT NOT NULL, keyword_hash TEXT NOT NULL, fts_rowid INTEGER, doc_id INTEGER, PRIMARY KEY (provider_id, item_id))'
+        )
+        await healthyClient.execute({
+          sql: "INSERT INTO search_index_meta (provider_id, item_id, keyword_hash, fts_rowid, doc_id) VALUES ('file-provider', '/tmp/a.ts', 'h1', ?, 10)",
+          args: [ftsRowId]
+        })
+        await healthyClient.execute(
+          'CREATE TABLE keyword_mappings (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, item_id TEXT NOT NULL, keyword TEXT NOT NULL, priority REAL NOT NULL DEFAULT 1)'
+        )
+        await healthyClient.execute(
+          'CREATE TABLE search_keyword_postings (provider_id TEXT NOT NULL, keyword TEXT NOT NULL, doc_id INTEGER NOT NULL, priority REAL NOT NULL DEFAULT 1, PRIMARY KEY (provider_id, keyword, doc_id)) WITHOUT ROWID'
+        )
+        await healthyClient.execute(
+          "INSERT INTO search_keyword_postings (provider_id, keyword, doc_id, priority) VALUES ('file-provider', 'alpha', 10, 1.2), ('file-provider', 'ng:al', 10, 0.5)"
+        )
+      } finally {
+        healthyClient.close()
+      }
+
+      const healthyOut = execFileSync(
+        'corepack',
+        ['pnpm', 'exec', 'tsx', scriptPath, '--db', healthyDb, '--compact'],
+        { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+      )
+      const healthyReport = JSON.parse(healthyOut)
+      expect(healthyReport.gate.passed).toBe(true)
+      expect(healthyReport.snapshot.ftsOwnership).toMatchObject({
+        sourceKeywordRows: 2,
+        sourceKeywordPostingsRows: 2,
+        orphanKeywordRows: 0,
+        orphanKeywordPostingsRows: 0,
+        keywordRowsMissingMeta: 0,
+        keywordPostingsRowsMissingMeta: 0
+      })
+
+      const brokenDb = path.join(dir, 'broken.sqlite')
+      const brokenClient = createClient({ url: `file:${brokenDb}` })
+      try {
+        await brokenClient.execute('CREATE TABLE files (id INTEGER PRIMARY KEY, type TEXT)')
+        await brokenClient.execute("INSERT INTO files (id, type) VALUES (1, 'file')")
+        await brokenClient.execute(
+          'CREATE TABLE scan_progress (source_id TEXT NOT NULL, path TEXT NOT NULL, last_scanned INTEGER NOT NULL, PRIMARY KEY (source_id, path))'
+        )
+        await brokenClient.execute(
+          'CREATE VIRTUAL TABLE search_index USING fts5(item_id UNINDEXED, provider UNINDEXED, title)'
+        )
+        const inserted = await brokenClient.execute(
+          "INSERT INTO search_index (item_id, provider, title) VALUES ('/tmp/a.ts', 'file-provider', 'a')"
+        )
+        const ftsRowId = Number(inserted.lastInsertRowid)
+        await brokenClient.execute(
+          'CREATE TABLE search_index_meta (provider_id TEXT NOT NULL, item_id TEXT NOT NULL, keyword_hash TEXT NOT NULL, fts_rowid INTEGER, doc_id INTEGER, PRIMARY KEY (provider_id, item_id))'
+        )
+        await brokenClient.execute({
+          sql: "INSERT INTO search_index_meta (provider_id, item_id, keyword_hash, fts_rowid, doc_id) VALUES ('file-provider', '/tmp/a.ts', 'h1', ?, 10), ('file-provider', '/tmp/stale.ts', 'h2', 9999, 20)",
+          args: [ftsRowId]
+        })
+        await brokenClient.execute(
+          'CREATE TABLE keyword_mappings (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, item_id TEXT NOT NULL, keyword TEXT NOT NULL, priority REAL NOT NULL DEFAULT 1)'
+        )
+        await brokenClient.execute(
+          'CREATE TABLE search_keyword_postings (provider_id TEXT NOT NULL, keyword TEXT NOT NULL, doc_id INTEGER NOT NULL, priority REAL NOT NULL DEFAULT 1, PRIMARY KEY (provider_id, keyword, doc_id)) WITHOUT ROWID'
+        )
+        // doc_id 10 = valid, doc_id 20 = meta exists with stale fts_rowid, doc_id 99 = missing meta
+        await brokenClient.execute(
+          "INSERT INTO search_keyword_postings (provider_id, keyword, doc_id, priority) VALUES ('file-provider', 'ok', 10, 1.0), ('file-provider', 'stalefts', 20, 1.0), ('file-provider', 'nometa', 99, 1.0)"
+        )
+      } finally {
+        brokenClient.close()
+      }
+
+      const brokenOutputPath = path.join(dir, 'broken-report.json')
+      expect(() =>
+        execFileSync(
+          'corepack',
+          [
+            'pnpm',
+            'exec',
+            'tsx',
+            scriptPath,
+            '--db',
+            brokenDb,
+            '--output',
+            brokenOutputPath,
+            '--compact'
+          ],
+          { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+        )
+      ).toThrow()
+      const brokenReport = JSON.parse(readFileSync(brokenOutputPath, 'utf8'))
+      expect(brokenReport.gate.passed).toBe(false)
+      expect(brokenReport.gate.failedChecks).toEqual(
+        expect.arrayContaining(['keyword-orphans', 'search-index-meta-coverage'])
+      )
+      expect(brokenReport.snapshot.ftsOwnership).toMatchObject({
+        sourceKeywordRows: 3,
+        sourceKeywordPostingsRows: 3,
+        orphanKeywordRows: 2,
+        orphanKeywordPostingsRows: 2,
+        keywordRowsMissingMeta: 1,
+        keywordPostingsRowsMissingMeta: 1
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })

@@ -295,27 +295,6 @@ function createDbUtilsInternal(
      */
     getFileIndexReadDb: () => readDb,
 
-    // Keyword Mappings
-    async addKeywordMapping(keyword: string, itemId: string, providerId: string, priority = 1.0) {
-      return runWrite(
-        db
-          .insert(schema.keywordMappings)
-          .values({ keyword, itemId, providerId, priority })
-          .returning()
-      )
-    },
-    async getKeywordMapping(keyword: string) {
-      return readDb
-        .select()
-        .from(schema.keywordMappings)
-        .where(eq(schema.keywordMappings.keyword, keyword))
-    },
-    async removeKeywordMapping(keyword: string) {
-      return runWrite(
-        db.delete(schema.keywordMappings).where(eq(schema.keywordMappings.keyword, keyword))
-      )
-    },
-
     // Files
     async addFile(file: typeof schema.files.$inferInsert) {
       return runWrite(db.insert(schema.files).values(file).returning())

@@ -115,9 +115,6 @@ export class SearchIndexDocumentStore {
     await this.db.run(
       sql`CREATE INDEX IF NOT EXISTS idx_search_keyword_postings_doc ON search_keyword_postings(doc_id, priority)`
     )
-    await this.db.run(
-      sql`CREATE INDEX IF NOT EXISTS idx_search_index_meta_updated_at ON search_index_meta(updated_at)`
-    )
     await this.db.run(sql`CREATE TABLE IF NOT EXISTS search_index_maintenance_progress (
       task TEXT PRIMARY KEY NOT NULL, cursor INTEGER NOT NULL DEFAULT 0
     )`)
