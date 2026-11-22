@@ -16,7 +16,8 @@
     "2026-10-24: GHSA-jr5w-w6x2-84p9 (electron) and GHSA-mrhx-c7xc-m3w5 (zod 3.25.76) entered the --prod audit with no patch on the installed lines, failing every PR alongside dompurify, body-parser and undici advisories that the same change patched. Allowlisted for 30 days with traced paths; the owner approved the exception. GHSA-vfj7-8cjw-p6xm (braces) was withdrawn on 2026-10-23 and its entry removed.",
     "2026-11-15: the fifteen entries dated 2026-11-09 (nuxt, simple-git, @simple-git/argv-parser, source-map-js, proxy-addr, @vue/server-renderer, tinypool, sharp) expired and failed every PR into master. Renewed unchanged for 30 days to unblock merges; the owner approved the renewal. The dependency upgrades that remove them follow in a separate PR.",
     "2026-11-15: Cleared source-map-js, proxy-addr, @vue/server-renderer, tinypool and sharp after raising their patched dependency floors. packages/test keeps Vitest in devDependencies because it is a test-only workspace. simple-git and @simple-git/argv-parser stay: their only fix is simple-git 4.x, which drops the default export @nuxt/devtools 3.4.2 imports, and @nuxt/devtools 3.4.3+ (which no longer depends on simple-git) needs @nuxt/kit ^4.5.1, outside the nuxt family pinned at 4.4.8 by #1098. Nuxt remains blocked by the measured unhead 2.1.15 to 3.x migration (#1098).",
-    "2026-11-18: GHSA-fc5q-39xc-vjpf (picomatch 2.3.2, 4.0.5) entered the --prod audit with patched_versions: null (no upstream fix published yet), failing every PR. Allowlisted for 30 days with traced paths; remove once picomatch ships a patched release."
+    "2026-11-18: GHSA-fc5q-39xc-vjpf (picomatch 2.3.2, 4.0.5) entered the --prod audit with patched_versions: null (no upstream fix published yet), failing every PR. Allowlisted for 30 days with traced paths; remove once picomatch ships a patched release.",
+    "2026-11-22: GHSA-fc5q-39xc-vjpf (picomatch) no longer matches a live advisory in pnpm audit --prod and its allowlist entry was removed."
   ],
   "advisories": [
     {
@@ -128,18 +129,6 @@
       "reason": "The runtime the packaged app ships. Reaches --prod through the root package.json's electron ^41.10.6 dependency and through @electron-toolkit/preload and @electron-toolkit/utils, production dependencies of @talex-touch/core-app that take electron as a peer (`pnpm audit --prod --json`, 3 paths). The advisory is Chromium's distrust of compromised eMudhra intermediate certificates: until the runtime moves, the app's network stack still accepts certificates chained to them. No 41.x release carries the fix (patched in 42.11.16, 43.8.1, 44.9.1 and 45.0.0-beta.6), and leaving Electron 41 is a major upgrade with its own native-module and packaging verification. Remove this entry when core-app moves to a patched major.",
       "owner": "#328",
       "expires": "2026-11-23"
-    },
-    {
-      "id": "GHSA-fc5q-39xc-vjpf",
-      "module": "picomatch",
-      "severity": "high",
-      "versions": [
-        "2.3.2",
-        "4.0.5"
-      ],
-      "reason": "ReDoS via single-branch repeated extglobs in picomatch <= 4.0.7 (patched_versions: null — no upstream fix published yet). Reached in --prod via apps/core-app > chokidar@3.6.0 (chokidar-fsevents) > anymatch/readdirp > picomatch@2.3.2 (matches local watch globs, never untrusted input), root @sentry/vite-plugin and apps/core-app > v-wave > @nuxt/kit > tinyglobby/unplugin > picomatch@4.0.5 (build-time bundler/kit graph), and apps/nexus > nitropack/@sentry/nuxt/@nuxtjs/mdc (build-time Nuxt/Nitro graph). Remove once picomatch ships a patched release.",
-      "owner": "#328",
-      "expires": "2026-12-18"
     }
   ]
 }
