@@ -1,6 +1,7 @@
+import process from 'node:process'
 import { DEFAULT_CAPABILITIES, IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { getLogger } from '@talex-touch/utils/common/logger'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ensureIntelligenceConfigLoaded, getCapabilityOptions } from './intelligence-config'
 import { tuffIntelligence } from './intelligence-sdk'
 
@@ -146,11 +147,47 @@ vi.mock('../auth', () => ({
   getAuthToken: vi.fn(() => (authMocks.session.isSignedIn ? 'nexus-access-token' : null))
 }))
 
+const nativeOcrMocks = vi.hoisted(() => ({
+  getNativeOcrSupport: vi.fn<() => { supported: boolean; platform: string; reason?: string }>(
+    () => ({
+      supported: true,
+      platform: 'darwin'
+    })
+  )
+}))
+
+vi.mock('@talex-touch/tuff-native', () => ({
+  getNativeOcrSupport: nativeOcrMocks.getNativeOcrSupport
+}))
+
+const originalDisableNativeOcr = process.env.TUFF_DISABLE_NATIVE_OCR
+
+function resetNativeOcrProbeMock(): void {
+  nativeOcrMocks.getNativeOcrSupport.mockReset()
+  nativeOcrMocks.getNativeOcrSupport.mockReturnValue({
+    supported: true,
+    platform: 'darwin'
+  })
+}
+
+function restoreNativeOcrEnv(): void {
+  resetNativeOcrProbeMock()
+  if (originalDisableNativeOcr === undefined) {
+    delete process.env.TUFF_DISABLE_NATIVE_OCR
+  } else {
+    process.env.TUFF_DISABLE_NATIVE_OCR = originalDisableNativeOcr
+  }
+}
+
 describe('intelligence-config capability options', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetNativeOcrProbeMock()
+    delete process.env.TUFF_DISABLE_NATIVE_OCR
     storageMocks.storedConfig = undefined
   })
+
+  afterEach(restoreNativeOcrEnv)
 
   it('does not enable Nexus by default for a fresh intelligence config', () => {
     ensureIntelligenceConfigLoaded(true)
@@ -766,6 +803,173 @@ describe('intelligence-config capability options', () => {
       allowedProviderIds: ['local-system-ocr'],
       modelPreference: ['system-ocr']
     })
+  })
+})
+
+describe('intelligence-config native OCR availability gate', () => {
+  function createVisionOcrStoredConfig(options?: {
+    includePreseededSystemOcrBinding?: boolean
+    includeEnabledCloudProvider?: boolean
+  }) {
+    const providers = [
+      {
+        id: 'openai-vision',
+        type: IntelligenceProviderType.OPENAI,
+        name: 'OpenAI Vision',
+        enabled: options?.includeEnabledCloudProvider ?? false,
+        priority: 2,
+        apiKey: 'sk-vision',
+        capabilities: ['vision.ocr']
+      }
+    ]
+    const visionBindings = [
+      ...(options?.includePreseededSystemOcrBinding
+        ? [
+            {
+              providerId: 'local-system-ocr',
+              priority: 0,
+              enabled: true,
+              models: ['system-ocr']
+            }
+          ]
+        : []),
+      {
+        providerId: 'openai-vision',
+        priority: 2,
+        enabled: options?.includeEnabledCloudProvider ?? false,
+        models: ['gpt-4o-mini']
+      }
+    ]
+    return {
+      providers,
+      globalConfig: {
+        defaultStrategy: 'adaptive-default',
+        enableAudit: true,
+        enableCache: false,
+        enableQuota: true
+      },
+      capabilities: {
+        'vision.ocr': {
+          id: 'vision.ocr',
+          name: 'OCR',
+          type: 'vision',
+          providers: visionBindings
+        }
+      },
+      promptRegistry: [],
+      promptBindings: [],
+      version: 2
+    }
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetNativeOcrProbeMock()
+    delete process.env.TUFF_DISABLE_NATIVE_OCR
+    storageMocks.storedConfig = undefined
+  })
+
+  afterEach(restoreNativeOcrEnv)
+
+  it('injects and admits local-system-ocr when getNativeOcrSupport returns supported: true', () => {
+    nativeOcrMocks.getNativeOcrSupport.mockReturnValue({
+      supported: true,
+      platform: 'darwin'
+    })
+    const stored = createVisionOcrStoredConfig()
+    storageMocks.storedConfig = stored
+
+    ensureIntelligenceConfigLoaded(true)
+
+    const runtimeConfig = vi.mocked(tuffIntelligence.updateConfig).mock.calls.at(-1)?.[0]
+    expect(runtimeConfig?.providers?.map((provider) => provider.id)).toContain('local-system-ocr')
+    expect(stored.capabilities['vision.ocr']?.providers.map((b) => b.providerId)).toContain(
+      'local-system-ocr'
+    )
+    expect(getCapabilityOptions('vision.ocr')).toMatchObject({
+      allowedProviderIds: ['local-system-ocr'],
+      modelPreference: ['system-ocr']
+    })
+  })
+
+  it('excludes local-system-ocr when getNativeOcrSupport returns supported: false', () => {
+    nativeOcrMocks.getNativeOcrSupport.mockReturnValue({
+      supported: false,
+      platform: 'linux',
+      reason: 'unsupported-platform'
+    })
+    const unseeded = createVisionOcrStoredConfig({
+      includePreseededSystemOcrBinding: false,
+      includeEnabledCloudProvider: true
+    })
+    storageMocks.storedConfig = unseeded
+
+    ensureIntelligenceConfigLoaded(true)
+
+    const unseededRuntime = vi.mocked(tuffIntelligence.updateConfig).mock.calls.at(-1)?.[0]
+    expect(unseededRuntime?.providers?.map((provider) => provider.id)).not.toContain(
+      'local-system-ocr'
+    )
+    expect(unseeded.capabilities['vision.ocr']?.providers.map((b) => b.providerId)).not.toContain(
+      'local-system-ocr'
+    )
+    expect(getCapabilityOptions('vision.ocr').allowedProviderIds).toEqual(['openai-vision'])
+
+    // Even a synced/pre-existing vision.ocr binding for local-system-ocr must not be admitted.
+    const preseeded = createVisionOcrStoredConfig({
+      includePreseededSystemOcrBinding: true,
+      includeEnabledCloudProvider: false
+    })
+    storageMocks.storedConfig = preseeded
+
+    ensureIntelligenceConfigLoaded(true)
+
+    const preseededRuntime = vi.mocked(tuffIntelligence.updateConfig).mock.calls.at(-1)?.[0]
+    expect(preseededRuntime?.providers?.map((provider) => provider.id)).not.toContain(
+      'local-system-ocr'
+    )
+    expect(getCapabilityOptions('vision.ocr').allowedProviderIds).toBeUndefined()
+  })
+
+  it('disables local-system-ocr when TUFF_DISABLE_NATIVE_OCR is 1 even if supported: true', () => {
+    process.env.TUFF_DISABLE_NATIVE_OCR = '1'
+    nativeOcrMocks.getNativeOcrSupport.mockReturnValue({
+      supported: true,
+      platform: 'darwin'
+    })
+    const stored = createVisionOcrStoredConfig()
+    storageMocks.storedConfig = stored
+
+    ensureIntelligenceConfigLoaded(true)
+
+    const runtimeConfig = vi.mocked(tuffIntelligence.updateConfig).mock.calls.at(-1)?.[0]
+    expect(runtimeConfig?.providers?.map((provider) => provider.id)).not.toContain(
+      'local-system-ocr'
+    )
+    expect(stored.capabilities['vision.ocr']?.providers.map((b) => b.providerId)).not.toContain(
+      'local-system-ocr'
+    )
+    expect(getCapabilityOptions('vision.ocr').allowedProviderIds).toBeUndefined()
+    expect(nativeOcrMocks.getNativeOcrSupport).not.toHaveBeenCalled()
+  })
+
+  it('fails closed without throwing when getNativeOcrSupport throws', () => {
+    nativeOcrMocks.getNativeOcrSupport.mockImplementation(() => {
+      throw new Error('native OCR probe crashed')
+    })
+    const stored = createVisionOcrStoredConfig({
+      includePreseededSystemOcrBinding: true,
+      includeEnabledCloudProvider: true
+    })
+    storageMocks.storedConfig = stored
+
+    expect(() => ensureIntelligenceConfigLoaded(true)).not.toThrow()
+    const runtimeConfig = vi.mocked(tuffIntelligence.updateConfig).mock.calls.at(-1)?.[0]
+    expect(runtimeConfig?.providers?.map((provider) => provider.id)).not.toContain(
+      'local-system-ocr'
+    )
+    expect(() => getCapabilityOptions('vision.ocr')).not.toThrow()
+    expect(getCapabilityOptions('vision.ocr').allowedProviderIds).toEqual(['openai-vision'])
   })
 })
 
