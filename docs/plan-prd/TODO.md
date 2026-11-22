@@ -47,7 +47,7 @@
   - FTS 的 `content` 与 `files.content` 内容并不相同（一个已小写、一个是原文），不能直接改成 FTS 外部内容表（`content=`），否则要改分词与写入路径，召回结果会变；
   - `embedding-service` 的写入栅栏（`files.content IS NULL` 且 `embedding_status = 'pending'`）、`search-index-service` 读取 `files.content` 的查询，以及 `file.search` 工具取片段的路径都要改成从别处取正文；
   - 改完必须做一次存量迁移与 `VACUUM`，否则文件不会变小，而 `VACUUM` 需要约两倍活数据的空闲磁盘。
-  - 已经做掉的部分：超过 50,000 字符的文件整体不再做内容索引（`FILE_CONTENT_MAX_CHARS`，见 [search-hotpath-contracts](../engineering/specs/main-process/search-hotpath-contracts.md)）、向量改存 float32 BLOB（`d4bd5f915`）、`0055_search_keyword_postings.sql`（A10 整数 `doc_id`，关键词表体积实测 −81.8%）以及 `PRAGMA auto_vacuum = INCREMENTAL` 均已落地。方案 C 评估应基于当前已降载库容（并在补完 `FILE-AND-APP-INDEX-ROADMAP` 低风险减容 `A14`/`A15`/`A16` 后复测），不再以 10-31 前旧库容为唯一依据。
+  - 已经做掉的部分：超过 50,000 字符的文件整体不再做内容索引（`FILE_CONTENT_MAX_CHARS`，见 [search-hotpath-contracts](../engineering/specs/main-process/search-hotpath-contracts.md)）、向量改存 float32 BLOB（`d4bd5f915`）、`0055_search_keyword_postings.sql`（A10 整数 `doc_id`，关键词表体积实测 −81.8%）、`PRAGMA auto_vacuum = INCREMENTAL` 以及 `FILE-AND-APP-INDEX-ROADMAP` 的 `A14`/`A15`/`A16` 低风险减容（不含按 R3 契约保留的 `file_fts`）均已落地。方案 C 评估应基于减容后的当前 profile 复测，不再以 10-31 前旧库容为唯一依据。
   - `content_chunks`（语义命中后定位片段用，约 344 MB）不是纯冗余，不在本条范围内。
 
 ## Version-planned work
