@@ -65,7 +65,8 @@ vi.mock('../../../../resources/db/locator.json?commonjs-external&asset', () => {
   return { default: resolve(testDir, '../../../../resources/db/locator.json') }
 })
 
-vi.mock('../box-tool/search-engine/search-index-writer', () => ({
+vi.mock('../box-tool/search-engine/search-index-writer', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../box-tool/search-engine/search-index-writer')>()),
   searchIndexWriter: {
     getStatus: vi.fn(),
     withPausedAdmission: vi.fn()
@@ -92,6 +93,7 @@ vi.mock('../../db/runtime-flags', async (importOriginal) => ({
 import { DatabaseModule } from './index'
 import { operationalErrorService } from '../observability'
 import { SearchIndexService } from '../box-tool/search-engine/search-index-service'
+import { RETIRED_SEARCH_INDEX_INDEXES } from '../box-tool/search-engine/search-index-writer'
 import {
   acknowledgeFileDeletionCommitsInHome,
   removeFileRecordsInTransaction,
@@ -754,6 +756,63 @@ describe('initSearchDatabase size cap', () => {
       expect(kept.rows).toHaveLength(1)
     } finally {
       moduleInternals(second).searchClient?.close()
+    }
+  })
+
+  it('stops creating retired keyword/meta indexes and does not recreate them after retirement', async () => {
+    const module = new DatabaseModule()
+    const internals = moduleInternals(module)
+    await internals.initSearchDatabase(dir)
+    const client = internals.searchClient!
+    try {
+      const writer = openWriter(client)
+      await writer.warmup()
+      await writer.indexItems([
+        {
+          providerId: 'file-provider',
+          itemId: '/tmp/budget.xlsx',
+          type: 'file',
+          name: 'budget.xlsx',
+          path: '/tmp'
+        }
+      ])
+
+      const indexNames = async (): Promise<string[]> =>
+        (
+          await client.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name IN ('keyword_mappings', 'search_index_meta') ORDER BY name"
+          )
+        ).rows.map((row) => String(row.name))
+
+      // Writer warmup must not build the zero-caller keyword indexes.
+      const beforeRetirement = await indexNames()
+      expect(beforeRetirement).not.toContain('idx_keyword_mappings_keyword')
+      expect(beforeRetirement).not.toContain('idx_keyword_mappings_provider_cursor')
+      expect(beforeRetirement).not.toContain('idx_keyword_mappings_provider_item')
+      expect(beforeRetirement).toContain('idx_keyword_mappings_provider_keyword')
+      expect(beforeRetirement).toContain('idx_keyword_mappings_provider_item_keyword')
+      // Historical migration 0021 still creates idx_search_index_meta_updated_at initially;
+      // background retirement drops it, and subsequent writer warmups must not recreate it.
+      expect(beforeRetirement).toContain('idx_search_index_meta_updated_at')
+
+      for (const name of RETIRED_SEARCH_INDEX_INDEXES) {
+        await client.execute(`DROP INDEX IF EXISTS ${name}`)
+      }
+      const reopenedWriter = openWriter(client)
+      await reopenedWriter.warmup()
+
+      const afterRetirement = await indexNames()
+      for (const name of RETIRED_SEARCH_INDEX_INDEXES) {
+        expect(afterRetirement).not.toContain(name)
+      }
+      expect(afterRetirement).toContain('idx_keyword_mappings_provider_keyword')
+      expect(afterRetirement).toContain('idx_keyword_mappings_provider_item_keyword')
+      expect(afterRetirement).toContain('idx_search_index_meta_doc_id')
+      expect(await reopenedWriter.lookupByNgrams('file-provider', 'budgte')).toEqual([
+        { itemId: '/tmp/budget.xlsx', overlapCount: expect.any(Number) }
+      ])
+    } finally {
+      internals.searchClient?.close()
     }
   })
 })

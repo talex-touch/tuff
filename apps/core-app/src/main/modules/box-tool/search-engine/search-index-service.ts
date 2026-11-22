@@ -1806,20 +1806,19 @@ export class SearchIndexService {
   }
 
   private async createKeywordMappingIndexes(): Promise<void> {
-    await this.db.run(
-      sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_keyword ON keyword_mappings(keyword)`
-    )
+    // Kept while `keyword_mappings` drains into `search_keyword_postings` (A10 gradual mover and
+    // downgrade/re-upgrade safety): pinned by `lookupByNgrams` (`INDEXED BY`) and used by the
+    // dual-read exact/prefix/subsequence arms. Once drained, each empty index takes one root page.
     await this.db.run(
       sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_provider_keyword ON keyword_mappings(provider_id, keyword)`
     )
-    // No `(provider_id, item_id)` index: it is a prefix of the next one, which already serves every
-    // lookup by item. Existing files lose theirs in `SearchIndexWriter.retireRedundantIndexes`.
+    // Serves `listItemKeywords`, `writeKeywordPostings`, `remove`, and `moveLegacyKeywords` item
+    // probes while `keyword_mappings` drains; also prefix-covers `(provider_id)` and
+    // `(provider_id, item_id)`. Unused `idx_keyword_mappings_keyword`,
+    // `idx_keyword_mappings_provider_item`, and `idx_keyword_mappings_provider_cursor` are dropped
+    // asynchronously in `SearchIndexWriter.retireRedundantIndexes`.
     await this.db.run(
       sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_provider_item_keyword ON keyword_mappings(provider_id, item_id, keyword)`
-    )
-    // Paged the old orphan sweep; nothing reads through it since keywords moved to postings.
-    await this.db.run(
-      sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_provider_cursor ON keyword_mappings(provider_id)`
     )
   }
 
