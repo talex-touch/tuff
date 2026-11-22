@@ -27,6 +27,18 @@
 - 6 月以前 reports 已移除；后续不再把历史 benchmark 流水账提交进文档树。
 - `.gitignore` 已覆盖 `docs/engineering/reports/**/raw/`、`logs/`、`user-data/`、cache/profile/DB/secret 类产物。
 
+## workmac E2E 网页报告
+
+从仓库根目录运行生成脚本。第一个参数指向本地证据目录，第二个参数指向已安装的 answer-me-with-html 渲染器。
+
+```bash
+node scripts/build-workmac-e2e-report.mjs /path/to/tuff-e2e /path/to/am.mjs
+```
+
+证据目录包含同一快照的 `README.md`、`feature-inventory.json`、两份装包回执 `bundle-check.json` 和 `bundle-native-index-check.json`，以及 `batches/`、`published-batches/` 及报告中引用的文件。生成器对照主线与官方发布批次的统计，校验最新截图的尺寸和 SHA-256。
+
+成功后在证据目录打开 `index.html`。用例和批次支持搜索、排序，并通过相对路径打开原始 PNG 和 JSON 回执。网页、批次数据及截图留在本地证据目录。
+
 ## 当前 reports
 
 - `coreapp-visible-ai-stable-2026-06-18/`：AI Stable / visible experience curated evidence。
