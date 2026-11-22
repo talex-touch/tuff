@@ -3,8 +3,9 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { StorageCleanupResult } from './types/storage-maintenance'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { eq, inArray, lt, ne, sql } from 'drizzle-orm'
+import { and, eq, inArray, lt, ne, notInArray, sql } from 'drizzle-orm'
 import { app } from 'electron'
+import { scheduleDbWrite } from '../db/db-write'
 import {
   analyticsReportQueue,
   analyticsSnapshots,
@@ -42,6 +43,7 @@ import {
   usageTrendDaily
 } from '../db/schema'
 import { FILE_CAPACITY_TASKS } from '../modules/box-tool/addon/files/services/file-provider-capacity-service'
+import { searchIndexWriter } from '../modules/box-tool/search-engine/search-index-writer'
 import { clipboardModule } from '../modules/clipboard'
 import { databaseModule } from '../modules/database'
 import { tempFileService } from './temp-file.service'
@@ -132,86 +134,145 @@ export async function cleanupFileIndex(
   const db = await getFileIndexDb()
   if (!db) return { success: false }
 
+  const writerStatus = searchIndexWriter.getStatus()
+  const useSearchWriter =
+    databaseModule.isSearchSplitEnabled?.() === true && writerStatus.readiness === 'ready'
+
+  const execQuery = async (query: {
+    toSQL: () => { sql: string; params: unknown[] }
+  }): Promise<void> => {
+    if (useSearchWriter) {
+      const compiled = query.toSQL()
+      await searchIndexWriter.execWrite([{ sql: compiled.sql, args: compiled.params }], 'single')
+      return
+    }
+    await (query as unknown as Promise<unknown>)
+  }
+
+  const execRawSql = async (rawStatement: string): Promise<void> => {
+    if (useSearchWriter) {
+      await searchIndexWriter.execWrite([{ sql: rawStatement, args: [] }], 'single')
+      return
+    }
+    await db.run(sql.raw(rawStatement))
+  }
+
   const removedCount: number[] = []
 
-  const removeAll = async (table: DeleteTable) => {
-    const rows = await db.select({ count: sql<number>`count(*)` }).from(table)
-    removedCount.push(rows[0]?.count ?? 0)
-    await db.delete(table)
-  }
+  const runCleanupDeletes = async (): Promise<void> => {
+    const removeAll = async (table: DeleteTable) => {
+      const rows = await db.select({ count: sql<number>`count(*)` }).from(table)
+      removedCount.push(rows[0]?.count ?? 0)
+      await execQuery(db.delete(table))
+    }
 
-  /**
-   * `files` is shared: `type: 'app'` rows are the app catalog, which `app-provider` keeps on the
-   * primary connection on purpose because it includes user-authored managed entries added through
-   * `addAppByPath`. Those entries exist nowhere else -- there is no separate store -- and
-   * `rebuildIndex()` only rescans the watch paths, so an app added from outside them cannot come
-   * back. An unscoped `delete(files)` here deleted them, and had done so since this function was
-   * written, independently of the split.
-   */
-  const fileRows = ne(files.type, 'app')
-  const removeScoped = async (table: DeleteTable, where: SQL): Promise<void> => {
-    const rows = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(table)
-      .where(where)
-    removedCount.push(rows[0]?.count ?? 0)
-    await db.delete(table).where(where)
-  }
+    /**
+     * `files` is shared: `type: 'app'` rows are the app catalog, which `app-provider` keeps on the
+     * primary connection on purpose because it includes user-authored managed entries added through
+     * `addAppByPath`. Those entries exist nowhere else -- there is no separate store -- and
+     * `rebuildIndex()` only rescans the watch paths, so an app added from outside them cannot come
+     * back. An unscoped `delete(files)` here deleted them, and had done so since this function was
+     * written, independently of the split.
+     */
+    const fileRows = ne(files.type, 'app')
+    const removeScoped = async (table: DeleteTable, where: SQL): Promise<void> => {
+      const rows = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(table)
+        .where(where)
+      removedCount.push(rows[0]?.count ?? 0)
+      await execQuery(db.delete(table).where(where))
+    }
 
-  // The capacity horizon kept old files out of a full index; an emptied one takes them again.
-  // Cleared first: a failure below leaves the files without a horizon, never an emptied index
-  // that still refuses them.
-  await db
-    .delete(searchIndexMaintenanceProgress)
-    .where(
-      inArray(searchIndexMaintenanceProgress.task, [
-        FILE_CAPACITY_TASKS.horizon,
-        FILE_CAPACITY_TASKS.sweep
-      ])
+    // The capacity horizon kept old files out of a full index; an emptied one takes them again.
+    // Cleared first: a failure below leaves the files without a horizon, never an emptied index
+    // that still refuses them.
+    await execQuery(
+      db
+        .delete(searchIndexMaintenanceProgress)
+        .where(
+          inArray(searchIndexMaintenanceProgress.task, [
+            FILE_CAPACITY_TASKS.horizon,
+            FILE_CAPACITY_TASKS.sweep
+          ])
+        )
     )
-  await removeAll(fileIndexProgress)
-  await removeScoped(
-    fileExtensions,
-    inArray(fileExtensions.fileId, db.select({ id: files.id }).from(files).where(fileRows))
-  )
-  await removeScoped(files, fileRows)
-  await removeAll(scanProgress)
-  await db
-    .delete(searchIndexPendingCommits)
-    .where(eq(searchIndexPendingCommits.sourceId, 'file-provider'))
-  await db
-    .delete(searchIndexFileMaintenance)
-    .where(eq(searchIndexFileMaintenance.sourceId, 'file-provider'))
+    await removeAll(fileIndexProgress)
+    // Preserve only `type = 'app'` extensions so both non-app file extensions and already-orphaned
+    // `file_extensions` rows (whose `file_id` is absent from `files`) are removed.
+    await removeScoped(
+      fileExtensions,
+      notInArray(
+        fileExtensions.fileId,
+        db.select({ id: files.id }).from(files).where(eq(files.type, 'app'))
+      )
+    )
+    await removeScoped(files, fileRows)
+    await removeAll(scanProgress)
+    await execQuery(
+      db
+        .delete(searchIndexPendingCommits)
+        .where(eq(searchIndexPendingCommits.sourceId, 'file-provider'))
+    )
+    await execQuery(
+      db
+        .delete(searchIndexFileMaintenance)
+        .where(eq(searchIndexFileMaintenance.sourceId, 'file-provider'))
+    )
 
-  if (options?.includeEmbeddings) {
-    await db.delete(embeddings).where(eq(embeddings.sourceType, 'file'))
+    // Deleting non-app `files` rows orphans every `source_type = 'file'` vector (`source_id` is
+    // `String(files.id)` and file ids are not preserved across re-scans). Always remove file
+    // vectors unless explicitly told to keep live ones (and even then purge orphans).
+    if (options?.includeEmbeddings !== false) {
+      await execQuery(db.delete(embeddings).where(eq(embeddings.sourceType, 'file')))
+    } else {
+      await execQuery(
+        db
+          .delete(embeddings)
+          .where(
+            and(
+              eq(embeddings.sourceType, 'file'),
+              sql`NOT EXISTS (SELECT 1 FROM ${files} f WHERE f.id = CAST(${embeddings.sourceId} AS INTEGER) AND CAST(f.id AS TEXT) = ${embeddings.sourceId} AND +f.type = 'file')`
+            )
+          )
+      )
+    }
+
+    // Adjacent gap, deliberately not widened here (#1770): `search_index` and `keyword_mappings`
+    // below carry the app catalog's searchable projection as well as the file index, so
+    // `clearSearchIndex` clears both. That is defensible while `rebuild` re-projects the catalog,
+    // and it is opt-in, but it is the same shape of over-broad delete as the one fixed above.
+    if (options?.clearSearchIndex) {
+      try {
+        await execRawSql('DELETE FROM search_index')
+      } catch {
+        // ignore
+      }
+      try {
+        await execRawSql('DELETE FROM file_fts')
+      } catch {
+        // ignore
+      }
+      await execQuery(db.delete(keywordMappings))
+      await execQuery(db.delete(searchKeywordPostings))
+      // Meta rows describe documents in `search_index`; kept past its wipe they would claim
+      // documents that are gone (the app health count reads them) and hold keyword hashes for
+      // mappings deleted just above.
+      await execQuery(db.delete(searchIndexMeta))
+      await execQuery(db.delete(searchIndexMaintenanceProgress))
+      await execQuery(db.delete(searchIndexPendingCommits))
+      await execQuery(db.delete(searchIndexFileMaintenance))
+      await execQuery(db.delete(queryCompletions))
+    }
   }
 
-  // Adjacent gap, deliberately not widened here (#1770): `search_index` and `keyword_mappings`
-  // below carry the app catalog's searchable projection as well as the file index, so
-  // `clearSearchIndex` clears both. That is defensible while `rebuild` re-projects the catalog,
-  // and it is opt-in, but it is the same shape of over-broad delete as the one fixed above.
-  if (options?.clearSearchIndex) {
-    try {
-      await db.run(sql`DELETE FROM search_index`)
-    } catch {
-      // ignore
-    }
-    try {
-      await db.run(sql`DELETE FROM file_fts`)
-    } catch {
-      // ignore
-    }
-    await db.delete(keywordMappings)
-    await db.delete(searchKeywordPostings)
-    // Meta rows describe documents in `search_index`; kept past its wipe they would claim
-    // documents that are gone (the app health count reads them) and hold keyword hashes for
-    // mappings deleted just above.
-    await db.delete(searchIndexMeta)
-    await db.delete(searchIndexMaintenanceProgress)
-    await db.delete(searchIndexPendingCommits)
-    await db.delete(searchIndexFileMaintenance)
-    await db.delete(queryCompletions)
+  if (useSearchWriter) {
+    await runCleanupDeletes()
+  } else {
+    await scheduleDbWrite('storage.cleanup.file-index', runCleanupDeletes, {
+      priority: 'interactive',
+      dropPolicy: 'none'
+    })
   }
 
   const removedTotal = removedCount.reduce((sum, value) => sum + value, 0)

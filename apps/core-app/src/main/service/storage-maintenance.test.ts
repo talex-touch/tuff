@@ -1,4 +1,4 @@
-import { createClient, type Client } from '@libsql/client'
+import { createClient, type Client, type InValue } from '@libsql/client'
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -6,9 +6,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '../db/schema'
 import { SearchIndexService } from '../modules/box-tool/search-engine/search-index-service'
+import { searchIndexWriter } from '../modules/box-tool/search-engine/search-index-writer'
 
 let primaryDb: LibSQLDatabase<typeof schema>
 let fileHomeDb: LibSQLDatabase<typeof schema>
+let splitEnabled = false
 let directory: string | undefined
 const clients: Client[] = []
 
@@ -16,7 +18,8 @@ vi.mock('../modules/database', () => ({
   databaseModule: {
     getDb: () => primaryDb,
     getSearchDb: () => fileHomeDb,
-    getAuxDb: () => primaryDb
+    getAuxDb: () => primaryDb,
+    isSearchSplitEnabled: () => splitEnabled
   }
 }))
 vi.mock('../modules/clipboard', () => ({ clipboardModule: { cleanupHistory: vi.fn() } }))
@@ -28,6 +31,8 @@ vi.mock('electron', () => ({ app: { getPath: () => '/tmp' } }))
 import { cleanupFileIndex } from './storage-maintenance'
 
 afterEach(async () => {
+  vi.restoreAllMocks()
+  splitEnabled = false
   for (const client of clients.splice(0)) client.close()
   if (directory) await rm(directory, { recursive: true, force: true })
   directory = undefined
@@ -242,4 +247,89 @@ describe('cleanupFileIndex actual storage ownership', () => {
       ).toEqual([{ task: 'unrelated', cursor: 5 }])
     }
   )
+
+  it.each(['split', 'primary-fallback'] as const)(
+    'removes file embeddings and orphan file_extensions by default when UI omits includeEmbeddings on %s',
+    async (topology) => {
+      directory = await mkdtemp(join(tmpdir(), 'tuff-storage-maintenance-'))
+      const primary = await openHome('primary.sqlite')
+      const live = topology === 'split' ? await openHome('search-index.sqlite') : primary
+      primaryDb = primary.db
+      fileHomeDb = live.db
+      splitEnabled = topology === 'split'
+
+      // Seed an already-orphaned file_extensions row and an already-orphaned file embedding.
+      await live.client.executeMultiple(`
+        INSERT INTO file_extensions(file_id, key, value) VALUES (999, 'keywords', '["orphan"]');
+        INSERT INTO embeddings(id, source_id, source_type, embedding, model, created_at)
+          VALUES (3, '999', 'file', X'00000000', 'fixture', 13);
+      `)
+
+      const writerQueries: string[] = []
+      if (topology === 'split') {
+        vi.spyOn(searchIndexWriter, 'getStatus').mockReturnValue({
+          readiness: 'ready',
+          admissionPaused: false,
+          activeAdmissions: 0,
+          pending: 0,
+          waitingAdmissions: 0,
+          capacityWaiters: 0
+        })
+        vi.spyOn(searchIndexWriter, 'execWrite').mockImplementation(async (statements) => {
+          writerQueries.push(...statements.map((stmt) => stmt.sql))
+          const batchResult = await live.client.batch(
+            statements.map((stmt) => ({ sql: stmt.sql, args: stmt.args as InValue[] })),
+            'write'
+          )
+          return batchResult.map((entry) => ({
+            rowsAffected: Number(entry.rowsAffected ?? 0),
+            lastInsertRowid: null,
+            rows: []
+          }))
+        })
+      }
+
+      // Exact payload sent by Storagable.vue (`{ clearSearchIndex: true }`, no `includeEmbeddings`).
+      const result = await cleanupFileIndex({ clearSearchIndex: true })
+      expect(result).toEqual({ success: true, removedCount: 5 })
+
+      expect(
+        (await live.client.execute('SELECT source_id, source_type FROM embeddings')).rows
+      ).toEqual([{ source_id: 'note-owner', source_type: 'note' }])
+      expect(
+        (await live.client.execute('SELECT file_id, key, value FROM file_extensions')).rows
+      ).toEqual([{ file_id: 1, key: 'managed-entry', value: 'only-catalog-copy' }])
+
+      if (topology === 'split') {
+        expect(writerQueries.some((query) => /delete\s+from\s+"?embeddings"?/i.test(query))).toBe(
+          true
+        )
+        // Primary DB embeddings and catalog remain untouched.
+        expect(
+          (
+            await primary.client.execute(
+              'SELECT source_id, source_type FROM embeddings ORDER BY id'
+            )
+          ).rows
+        ).toEqual([
+          { source_id: '2', source_type: 'file' },
+          { source_id: 'note-owner', source_type: 'note' }
+        ])
+      }
+    }
+  )
+
+  it('still purges orphaned file embeddings when includeEmbeddings is explicitly false', async () => {
+    directory = await mkdtemp(join(tmpdir(), 'tuff-storage-maintenance-'))
+    const primary = await openHome('primary.sqlite')
+    primaryDb = primary.db
+    fileHomeDb = primary.db
+
+    await cleanupFileIndex({ includeEmbeddings: false, clearSearchIndex: false, rebuild: false })
+
+    // Deleting non-app `files` rows orphaned source_id = '2', while 'note' stays intact.
+    expect(
+      (await primary.client.execute('SELECT source_id, source_type FROM embeddings')).rows
+    ).toEqual([{ source_id: 'note-owner', source_type: 'note' }])
+  })
 })

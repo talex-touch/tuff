@@ -166,8 +166,6 @@ import {
   logFileProviderWarn
 } from './file-provider-log'
 import { getStartupDegradeWindowRemainingMs } from '../../../../db/runtime-flags'
-import { FileProviderWriteSideEffectService } from './services/file-provider-write-side-effect-service'
-import { FileProviderExtensionService } from './services/file-provider-extension-service'
 import {
   FileProviderIndexingProgressService,
   type FileProviderIndexingProgressResult
@@ -409,10 +407,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     typeof filesSchema.$inferSelect,
     typeof filesSchema.$inferSelect
   >
-  private readonly writeSideEffectService: FileProviderWriteSideEffectService<
-    typeof filesSchema.$inferSelect
-  >
-  private readonly extensionService: FileProviderExtensionService
   private readonly indexingProgressService: FileProviderIndexingProgressService
   private readonly fileUpdateExecutor: IndexedWriteUpdateExecutorService<
     FileUpdateRecord,
@@ -493,6 +487,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     isRuntimeReady: () => Boolean(this.dbUtils && this.indexedSourceRuntimeMutationDelegate),
     getRuntimeMutationDelegate: () => this.requireRuntimeMutationDelegate(),
     getMaintenance: () => this.maintenanceService,
+    runLegacyIconMigration: () => this.assetService.runLegacyIconMigration(),
+    getEmbeddingService: () => this.embeddingService,
+    onStaleEmbeddingsRequeued: (reason) => this.enrichmentResumeService.resume(reason),
     getWatchPaths: () => this.watchPaths,
     countIndexedRows: (reason) => this.countSearchIndexByProvider(this.id, reason),
     mapRecord: (row) => this.mapFileToIndexedSourceRecord(row),
@@ -708,30 +705,15 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         ]),
       resumeMaintenance: () => this.maintenanceService.scheduleFileMaintenance()
     })
-    this.extensionService = new FileProviderExtensionService({
-      getDbUtils: () => this.dbUtils,
-      isSearchSplitEnabledNow: () => this.isSearchSplitEnabledNow(),
-      waitForCacheWriteCapacity: (maxQueue, label) =>
-        this.waitForCacheWriteCapacity(maxQueue, label)
-    })
     this.indexingProgressService = new FileProviderIndexingProgressService(() => this.dbUtils)
-    this.writeSideEffectService = new FileProviderWriteSideEffectService({
-      processFileExtensions: (files) => this.processFileExtensions(files),
-      scheduleIndexing: (files, reason, mutationLeaseId) =>
-        this.scheduleIndexing(files, reason, mutationLeaseId),
-      logWarn: (message, error, meta) => this.logWarn(message, error, meta)
-    })
     this.fileUpdateExecutor = new IndexedWriteUpdateExecutorService({
       waitBeforeChunk: async () => {
         if (!this.isSearchSplitEnabledNow()) await dbWriteScheduler.waitForCapacity(4)
       },
       updateChunk: (records) => this.indexRowStore.updateFileMetadataChunk(records),
       refreshUpdated: (records) => this.indexRowStore.refreshFileUpdateRecords(records),
-      dispatchUpdated: (records) => {
-        return this.writeSideEffectService.dispatch(records, {
-          extensionContext: 'file-update',
-          indexReason: 'file-update'
-        })
+      dispatchUpdated: async (records) => {
+        await this.scheduleIndexing(records, 'file-update')
       },
       runQueue: (chunks, handler, options) => runAdaptiveTaskQueue(chunks, handler, options),
       now: () => performance.now(),
@@ -741,11 +723,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
     this.incrementalInsertExecutor = new IndexedWriteInsertExecutorService({
       persist: (records) => this.indexRowStore.persistIncrementalRecords(records),
-      dispatchInserted: (records) => {
-        return this.writeSideEffectService.dispatch(records, {
-          extensionContext: 'incremental',
-          indexReason: 'incremental-insert'
-        })
+      dispatchInserted: async (records) => {
+        await this.scheduleIndexing(records, 'incremental-insert')
       },
       logDebug: (message, meta) => this.logDebug(message, meta),
       successMessage: 'Incremental index completed'
@@ -1217,15 +1196,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       files.map((file) => file.id)
     )
     const indexingFiles = filterFileIndexCandidatesByProgress(files, progressRows)
-    await this.writeSideEffectService.dispatch(
-      files,
-      {
-        extensionContext: 'runtime-writer-ack',
-        indexReason: 'runtime-writer-ack',
-        mutationLeaseId
-      },
-      indexingFiles
-    )
+    if (indexingFiles.length > 0) {
+      await this.scheduleIndexing(indexingFiles, 'runtime-writer-ack', mutationLeaseId)
+    }
   }
 
   private requireFilePersistencePort(): FilePersistencePort {
@@ -1305,10 +1278,19 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       await this.preemptBackgroundIndexing(request.reason === IndexedSourceResetReasons.UserClear)
     }
     if (request.clearSearchIndex) {
-      return await this.resetFileIndexRuntimeStateViaIndexedRuntime(request)
+      const result = await this.resetFileIndexRuntimeStateViaIndexedRuntime(request)
+      if (!result.error) {
+        this.initializationFailed = false
+        this.initializationFailure = null
+      }
+      return result
     }
 
     const result = await this.runtimeResetService.reset({ request })
+    if (!result.error) {
+      this.initializationFailed = false
+      this.initializationFailure = null
+    }
     return {
       ...result,
       clearedSearchIndex: false,
@@ -2109,6 +2091,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         getPrimaryDb: () => context.databaseManager.getDb(),
         checkContentCapacity: () => this.contentIndexPolicyService.checkAdmission(),
         recordStorageFailure: (error) => this.contentIndexPolicyService.recordStorageFailure(error),
+        onActiveModelChanged: (model) =>
+          this.bootPassService.handleActiveEmbeddingModelChanged(
+            model,
+            this.contentIndexPolicyService.isEnabled()
+          ),
         execWrite: async (statements, mode) => await searchIndexWriter.execWrite(statements, mode)
       })
     } catch (error) {
@@ -2474,6 +2461,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
+    this.initializationFailed = false
+    this.initializationFailure = null
     await this.ensureFileSystemWatchers()
     this.nativeIndexBridge.rebuildIfSupported()
     this.manualRebuildPendingNotification = true
@@ -3082,10 +3071,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return await this.fileUpdateExecutor.execute(filesToUpdate, chunkSize, {
       dispatchSideEffects: false
     })
-  }
-
-  private async processFileExtensions(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
-    return this.extensionService.processFileExtensions(files)
   }
 
   public async getIndexingProgress(paths?: string[]): Promise<FileProviderIndexingProgressResult> {
