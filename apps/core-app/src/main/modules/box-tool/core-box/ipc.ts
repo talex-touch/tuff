@@ -1,4 +1,5 @@
 import type { TuffItem } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
+import type { TuffEvent } from '@talex-touch/utils/transport/event/types'
 import type {
   HandlerContext,
   ITuffTransportMain,
@@ -137,18 +138,39 @@ function resolveSearchCaller(surface: unknown, senderId: number): SearchCallerId
   }
 }
 
-type SearchSender = Parameters<ITuffTransportMain['sendTo']>[0]
+type SearchSender = HandlerContext['sender']
+type SearchPlugin = HandlerContext['plugin']
 
-function createSenderSearchSink(transport: ITuffTransportMain, sender: SearchSender): SearchSink {
+/**
+ * Compatibility push sink for `CoreBoxEvents.search.query`.
+ *
+ * `search.update`, `search.noResults`, and `search.end` are void notification events; sending them
+ * via request-response `sendTo` registers a 60s `CHANNEL_DEFAULT_TIMEOUT` timer per push on any
+ * sender without a reply listener (such as the main window), holding `SearchSession.completed`
+ * inside `SearchSessionRegistry` across serialized `deliveryTail` steps and stalling
+ * `SearchEngineCore.destroy()` past the 8s `before-quit` budget.
+ */
+export function createSenderSearchSink(
+  transport: Pick<ITuffTransportMain, 'notifyTo'>,
+  sender: SearchSender,
+  plugin?: SearchPlugin
+): SearchSink {
+  const notify = <TReq>(event: TuffEvent<TReq, void>, payload: TReq): void => {
+    if (plugin !== undefined) {
+      transport.notifyTo(sender, event, payload, plugin)
+      return
+    }
+    transport.notifyTo(sender, event, payload)
+  }
   return {
-    update: async (payload) => {
-      await transport.sendTo(sender, CoreBoxEvents.search.update, payload)
+    update: (payload) => {
+      notify(CoreBoxEvents.search.update, payload)
     },
-    noResults: async () => {
-      await transport.sendTo(sender, CoreBoxEvents.search.noResults, { shouldShrink: true })
+    noResults: () => {
+      notify(CoreBoxEvents.search.noResults, { shouldShrink: true })
     },
-    complete: async (payload) => {
-      await transport.sendTo(sender, CoreBoxEvents.search.end, payload)
+    complete: (payload) => {
+      notify(CoreBoxEvents.search.end, payload)
     }
   }
 }
@@ -400,7 +422,7 @@ export class IpcManager {
         return await coreBoxManager.search(query, {
           caller: resolveSearchCaller(surface, senderId),
           activations,
-          sink: createSenderSearchSink(transport, context.sender)
+          sink: createSenderSearchSink(transport, context.sender, context.plugin)
         })
       })
     )

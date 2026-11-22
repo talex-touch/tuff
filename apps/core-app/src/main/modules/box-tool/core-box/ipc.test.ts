@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => ({
     }
   ),
   sendTo: vi.fn(),
+  notifyTo: vi.fn(() => true),
   trigger: vi.fn(),
   shrink: vi.fn(),
   expand: vi.fn(),
@@ -95,12 +96,30 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 
+const mockTransport = vi.hoisted(() => ({
+  on: mocks.on,
+  onStream: mocks.onStream,
+  sendTo: mocks.sendTo,
+  notifyTo: mocks.notifyTo
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getAppPath: vi.fn(() => process.cwd()),
+    getPath: vi.fn(() => '/tmp')
+  },
+  ipcMain: {
+    handle: vi.fn()
+  },
+  MessageChannelMain: class MessageChannelMain {},
+  BrowserWindow: {
+    getFocusedWindow: vi.fn(() => null),
+    getAllWindows: vi.fn(() => [])
+  }
+}))
+
 vi.mock('@talex-touch/utils/transport/main', () => ({
-  getTuffTransportMain: vi.fn(() => ({
-    on: mocks.on,
-    onStream: mocks.onStream,
-    sendTo: mocks.sendTo
-  }))
+  getTuffTransportMain: vi.fn(() => mockTransport)
 }))
 
 vi.mock('../../../core/runtime-accessor', () => ({
@@ -217,7 +236,7 @@ vi.mock('../../../../shared/events/corebox-scenes', () => ({
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { OnboardingGateError } from '../../storage'
-import { ipcManager } from './ipc'
+import { createSenderSearchSink, ipcManager } from './ipc'
 
 /**
  * Reads the single handler registered for an event, failing if the count is anything but one.
@@ -456,56 +475,78 @@ describe('CoreBox IPC hide transport', () => {
     ])
     expect(firstContext.end).toHaveBeenCalledTimes(1)
     const queryHandler = soleHandler(CoreBoxEvents.search.query) as unknown as
-      | ((payload: unknown, context: { sender: { id: number } }) => Promise<unknown>)
+      | ((
+          payload: unknown,
+          context: { sender: { id: number }; plugin?: unknown }
+        ) => Promise<unknown>)
       | undefined
     mocks.search.mockImplementation(
       async (
         _query: unknown,
         options: {
           sink: {
-            update: (payload: { searchId: string; items: unknown[] }) => Promise<void>
-            complete: (payload: { searchId: string; sources: unknown[] }) => Promise<void>
+            update: (payload: { searchId: string; items: unknown[] }) => void | Promise<void>
+            noResults: (sessionId: string) => void | Promise<void>
+            complete: (payload: { searchId: string; sources: unknown[] }) => void | Promise<void>
           }
         }
       ) => {
         await options.sink.update({ searchId: 'compatibility-session', items: [] })
+        await options.sink.noResults('compatibility-session')
         await options.sink.complete({ searchId: 'compatibility-session', sources: [] })
         return { items: [], query: { text: 'sender scoped', inputs: [] }, duration: 0, sources: [] }
       }
     )
 
+    const pluginContext = { name: 'demo-plugin', uniqueKey: 'plugin-key-1' }
     await queryHandler?.(
       { query: { text: 'sender scoped', inputs: [] }, surface: 'core-box' },
       { sender: firstContext.sender }
     )
     await queryHandler?.(
       { query: { text: 'sender scoped', inputs: [] }, surface: 'core-box' },
-      { sender: secondContext.sender }
+      { sender: secondContext.sender, plugin: pluginContext }
     )
 
-    expect(mocks.sendTo).toHaveBeenNthCalledWith(
+    expect(mocks.sendTo).not.toHaveBeenCalled()
+    expect(mocks.notifyTo).toHaveBeenNthCalledWith(
       1,
       firstContext.sender,
       CoreBoxEvents.search.update,
       expect.objectContaining({ searchId: 'compatibility-session' })
     )
-    expect(mocks.sendTo).toHaveBeenNthCalledWith(
+    expect(mocks.notifyTo).toHaveBeenNthCalledWith(
       2,
+      firstContext.sender,
+      CoreBoxEvents.search.noResults,
+      { shouldShrink: true }
+    )
+    expect(mocks.notifyTo).toHaveBeenNthCalledWith(
+      3,
       firstContext.sender,
       CoreBoxEvents.search.end,
       expect.objectContaining({ searchId: 'compatibility-session' })
     )
-    expect(mocks.sendTo).toHaveBeenNthCalledWith(
-      3,
-      secondContext.sender,
-      CoreBoxEvents.search.update,
-      expect.objectContaining({ searchId: 'compatibility-session' })
-    )
-    expect(mocks.sendTo).toHaveBeenNthCalledWith(
+    expect(mocks.notifyTo).toHaveBeenNthCalledWith(
       4,
       secondContext.sender,
+      CoreBoxEvents.search.update,
+      expect.objectContaining({ searchId: 'compatibility-session' }),
+      pluginContext
+    )
+    expect(mocks.notifyTo).toHaveBeenNthCalledWith(
+      5,
+      secondContext.sender,
+      CoreBoxEvents.search.noResults,
+      { shouldShrink: true },
+      pluginContext
+    )
+    expect(mocks.notifyTo).toHaveBeenNthCalledWith(
+      6,
+      secondContext.sender,
       CoreBoxEvents.search.end,
-      expect.objectContaining({ searchId: 'compatibility-session' })
+      expect.objectContaining({ searchId: 'compatibility-session' }),
+      pluginContext
     )
     expect(secondContext.end).toHaveBeenCalledTimes(1)
 
@@ -851,5 +892,48 @@ describe('CoreBox IPC hide transport', () => {
         expect(logged).not.toContain(secret)
       }
     })
+  })
+
+  it('delivers search query pushes only to the concrete live recipient without creating RPC waits', async () => {
+    const { getTuffTransportMain: createRealMainTransport } = await vi.importActual<
+      typeof import('@talex-touch/utils/transport/main')
+    >('@talex-touch/utils/transport/main')
+    const channel = {
+      regChannel: vi.fn(() => () => {}),
+      sendTo: vi.fn(() => new Promise(() => {})),
+      sendPlugin: vi.fn(),
+      broadcast: vi.fn(),
+      broadcastTo: vi.fn(),
+      broadcastPlugin: vi.fn()
+    }
+    const keyManager = {
+      requestKey: vi.fn(),
+      revokeKey: vi.fn(),
+      resolveKey: vi.fn(),
+      isValidKey: vi.fn(() => false),
+      resolveIdentity: vi.fn(),
+      resolveCurrentIdentity: vi.fn(),
+      resolveSenderIdentity: vi.fn(() => undefined)
+    }
+    const realTransport = createRealMainTransport(channel, keyManager)
+    let destroyed = false
+    const liveSender = { id: 9, isDestroyed: () => destroyed }
+    const foreignSameNumericId = { id: 9, isDestroyed: () => false }
+
+    const sink = createSenderSearchSink(realTransport, liveSender as never)
+    await sink.update?.({ searchId: 's-1', items: [] })
+    await sink.noResults?.('s-1')
+    await sink.complete?.({ searchId: 's-1', sources: [] })
+
+    expect(channel.sendTo).not.toHaveBeenCalled()
+    expect(channel.broadcastTo).toHaveBeenCalledTimes(3)
+    for (const [target] of channel.broadcastTo.mock.calls) {
+      expect((target as { webContents: unknown }).webContents).toBe(liveSender)
+      expect((target as { webContents: unknown }).webContents).not.toBe(foreignSameNumericId)
+    }
+
+    destroyed = true
+    await sink.complete?.({ searchId: 's-1', sources: [] })
+    expect(channel.broadcastTo).toHaveBeenCalledTimes(3)
   })
 })
