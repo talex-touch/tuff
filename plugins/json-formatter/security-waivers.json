@@ -8,7 +8,7 @@
       "owner": "TalexTouch Team",
       "reason": "Monaco 编辑器核心包 4.1MB，超过 2MB 单文件扫描上限，扫描器无法完整检查。第三方产物，来自 monaco-editor 0.57.0。它只引入单独成块的 Vite 预加载函数（vite.config.ts 的 manualChunks），插件自身代码改动不会再改变它的哈希。",
       "createdAt": "2026-08-15T00:00:00.000Z",
-      "expiresAt": "2026-11-15T00:00:00.000Z"
+      "expiresAt": "2027-02-15T00:00:00.000Z"
     },
     {
       "id": "json-formatter-monaco-ts-worker-size",
@@ -17,7 +17,7 @@
       "owner": "TalexTouch Team",
       "reason": "Monaco TypeScript 语言 worker 7MB，同样超过单文件扫描上限。第三方产物，随 monaco-editor 版本固定。",
       "createdAt": "2026-08-15T00:00:00.000Z",
-      "expiresAt": "2026-11-15T00:00:00.000Z"
+      "expiresAt": "2027-02-15T00:00:00.000Z"
     },
     {
       "id": "json-formatter-expression-query-eval",
@@ -26,7 +26,7 @@
       "owner": "TalexTouch Team",
       "reason": "smartParse 与 JavaScript 表达式查询是本插件的既有能力，需要对用户输入求值。输入仅来自用户手动粘贴的本地文本，不接受远端内容。求值代码在 src/utils/expression-eval.ts，单独成块，只有改这个文件才需要更新哈希。",
       "createdAt": "2026-08-15T00:00:00.000Z",
-      "expiresAt": "2026-11-15T00:00:00.000Z"
+      "expiresAt": "2027-02-15T00:00:00.000Z"
     }
   ]
 }
