@@ -1317,3 +1317,126 @@ describe('EmbeddingService failed text vectors', () => {
     expect(await consumer.indexCommittedEntries([entry])).toEqual({ retryFileIds: [1] })
   })
 })
+
+describe('EmbeddingService orphan and stale-model cleanup (A16)', () => {
+  it.each([true, false] as const)(
+    'removes orphan file vectors and re-arms stale-model files when split=%s without touching non-file vectors',
+    async (split) => {
+      const main = await makeDb(`cleanup-main-${split}`)
+      const search = split ? await makeDb('cleanup-search') : main
+      await search.client.execute(`
+        CREATE TABLE file_index_progress (
+          file_id INTEGER PRIMARY KEY,
+          status TEXT NOT NULL,
+          progress INTEGER NOT NULL DEFAULT 0,
+          processed_bytes INTEGER,
+          total_bytes INTEGER,
+          last_error TEXT,
+          started_at INTEGER,
+          updated_at INTEGER NOT NULL DEFAULT 0
+        )
+      `)
+      // File 1: live text file with stale model vector -> vector deleted & marked pending.
+      // File 2: live text file already in active model -> kept as completed.
+      // File 3: live image file (content NULL) with obsolete model -> vector deleted & marked pending.
+      // File 4: app row -> any 'file' vector pointing at id 4 is an orphan -> deleted.
+      await search.client.executeMultiple(`
+        UPDATE files SET content = 'lease text', embedding_status = 'completed' WHERE id = 1;
+        UPDATE files SET content = 'other text', embedding_status = 'completed' WHERE id = 2;
+        INSERT INTO files (id, path, name, mtime, ctime, size, type, content, embedding_status)
+          VALUES (3, '/photo.png', 'photo.png', 2, 2, 64, 'file', NULL, 'completed'),
+                 (4, '/Applications/App.app', 'App.app', 2, 2, 64, 'app', NULL, 'none');
+        INSERT INTO file_index_progress (file_id, status, progress, updated_at)
+          VALUES (1, 'completed', 100, 10),
+                 (2, 'completed', 100, 10),
+                 (3, 'completed', 100, 10);
+        INSERT INTO embeddings (source_id, source_type, embedding, model, content_hash) VALUES
+          ('1', 'file', '[1,0,0]', 'obsolete-text-model@v1', 'h1'),
+          ('2', 'file', '[0,1,0]', '${MODEL}', 'h2'),
+          ('3', 'file', '[0,0,1]', 'obsolete-image-model@v0', NULL),
+          ('4', 'file', '[1,0,0]', '${MODEL}', 'app-collision'),
+          ('999', 'file', '[1,0,0]', '${MODEL}', 'deleted-file'),
+          ('note-42', 'note', '[1,0,0]', 'obsolete-text-model@v1', 'note-hash');
+      `)
+
+      const observedModels: string[] = []
+      const workerQueries: string[] = []
+      let currentModel = 'obsolete-text-model@v1'
+      const service = createEmbeddingService(
+        {
+          isSplitEnabled: () => split,
+          getReadDb: () => search.db,
+          getDatabasePath: () => search.databasePath,
+          getPrimaryDb: () => main.db,
+          onActiveModelChanged: (nextModel) => observedModels.push(nextModel),
+          execWrite: async (statements) => {
+            workerQueries.push(...statements.map((stmt) => stmt.sql))
+            return search.client.batch(
+              statements.map((stmt) => ({ sql: stmt.sql, args: stmt.args as InValue[] })),
+              'write'
+            )
+          }
+        },
+        async () => ({ vector: [0, 1, 0], model: currentModel })
+      )
+
+      await expect(service.isAvailable()).resolves.toBe(true)
+      expect(service.getActiveTextModel()).toBe('obsolete-text-model@v1')
+      expect(observedModels).toEqual([])
+
+      // Switching model triggers onActiveModelChanged when next query/probe observes MODEL.
+      currentModel = MODEL
+      await service.semanticSearch('probe new model')
+      expect(observedModels).toEqual([MODEL])
+      expect(service.getActiveTextModel()).toBe(MODEL)
+
+      const summary = await service.cleanupStaleEmbeddings({ batchSize: 2 })
+      expect(summary).toEqual({
+        orphanedRemoved: 2,
+        staleModelRemoved: 2,
+        requeuedFiles: 2
+      })
+
+      const remainingEmbeddings = (
+        await search.client.execute(
+          'SELECT source_id, source_type, model FROM embeddings ORDER BY id ASC'
+        )
+      ).rows
+      expect(remainingEmbeddings).toEqual([
+        { source_id: '2', source_type: 'file', model: MODEL },
+        { source_id: 'note-42', source_type: 'note', model: 'obsolete-text-model@v1' }
+      ])
+
+      const fileStatuses = (
+        await search.client.execute(
+          'SELECT id, embedding_status FROM files WHERE id IN (1, 2, 3, 4) ORDER BY id ASC'
+        )
+      ).rows
+      expect(fileStatuses).toEqual([
+        { id: 1, embedding_status: 'pending' },
+        { id: 2, embedding_status: 'completed' },
+        { id: 3, embedding_status: 'pending' },
+        { id: 4, embedding_status: 'none' }
+      ])
+
+      const progressStatuses = (
+        await search.client.execute(
+          'SELECT file_id, status, progress FROM file_index_progress ORDER BY file_id ASC'
+        )
+      ).rows
+      expect(progressStatuses).toEqual([
+        { file_id: 1, status: 'pending', progress: 0 },
+        { file_id: 2, status: 'completed', progress: 100 },
+        { file_id: 3, status: 'pending', progress: 0 }
+      ])
+
+      if (split) {
+        expect(
+          workerQueries.some((sqlText) => /delete\s+from\s+"?embeddings"?/i.test(sqlText))
+        ).toBe(true)
+      } else {
+        expect(workerQueries).toEqual([])
+      }
+    }
+  )
+})

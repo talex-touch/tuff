@@ -168,7 +168,7 @@ vi.mock('../../../../db/sqlite-retry', async (importOriginal) => {
   const actual = await importOriginal<typeof SqliteRetryModule>()
   return {
     ...actual,
-    isSqliteBusyError: vi.fn(() => false),
+    isSqliteBusyError: vi.fn((error: unknown) => actual.isSqliteBusyError(error)),
     withSqliteRetry: vi.fn((operation: () => Promise<unknown>) => operation())
   }
 })
@@ -1193,6 +1193,159 @@ describe('file-provider startup readiness', () => {
       expect(runtimeScanSource).not.toHaveBeenCalled()
     } finally {
       provider.dbUtils = originalDbUtils
+      provider.watchService.shouldRunAutoIndexing = originalShouldRunAutoIndexing
+      provider.initializationFailed = false
+      provider.initializationFailure = null
+      reportSpy.mockRestore()
+    }
+  })
+
+  it('treats transient SQLITE_BUSY scan failures as retryable without latching initializationFailed, and clears prior errors on reset or manual rebuild', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi & {
+      rebuildIndex: (request?: { force?: boolean }) => Promise<{ success: boolean }>
+      runAutoIndexing: () => Promise<boolean>
+      resetIndexedSourceRuntimeState: (request: {
+        sourceId: string
+        reason: IndexedSourceResetReason
+        clearSearchIndex?: boolean
+        clearScanProgress?: boolean
+      }) => Promise<{ clearedScanProgress: boolean }>
+      dbUtils: unknown
+      initializationFailed: boolean
+      initializationFailure: unknown
+      watchService: { shouldRunAutoIndexing: () => Promise<{ allowed: boolean }> }
+    }
+    const originalDbUtils = provider.dbUtils
+    const originalContext = provider.initializationContext
+    const originalShouldRunAutoIndexing = provider.watchService.shouldRunAutoIndexing
+    const reportSpy = vi.spyOn(operationalErrorService, 'report')
+    const runtimeReset = vi.fn<
+      NonNullable<Parameters<typeof provider.setIndexedSourceRuntimeResetDelegate>[0]>
+    >(async (request) => ({
+      sourceId: request.sourceId,
+      reason: request.reason,
+      clearedSearchIndex: request.clearSearchIndex === true,
+      clearedScanProgress: request.clearScanProgress === true,
+      scanProgressRows: 0,
+      startedAt: 1,
+      completedAt: 2
+    }))
+    const busyError = Object.assign(new Error('SQLITE_BUSY: database is locked'), {
+      code: 'SQLITE_BUSY'
+    })
+    let shouldFail: Error | null = busyError
+
+    resetProviderState(provider)
+    provider.setIndexedSourceRuntimeResetDelegate(runtimeReset)
+    provider.watchService.shouldRunAutoIndexing = vi.fn(async () => ({ allowed: true }))
+    provider.dbUtils = {
+      getFileIndexReadDb: () => {
+        if (shouldFail) throw shouldFail
+        return {}
+      }
+    }
+
+    try {
+      // 1. Transient SQLITE_BUSY does NOT latch initializationFailed (watch & retry stay alive).
+      await expect(provider.startIndexing('auto')).resolves.toEqual(
+        expect.objectContaining({ errors: 1 })
+      )
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({
+          initializationFailed: false,
+          errorCode: 'FILE_INDEX_DATABASE_BUSY',
+          retryable: true
+        })
+      )
+      expect(reportSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ code: 'FILE_INDEX_DATABASE_BUSY', retryable: true })
+      )
+      await expect(provider.runAutoIndexing()).resolves.toBe(true)
+      expect(runtimeScanSource).toHaveBeenCalledWith(IndexedSourceScanReasons.Startup)
+      runtimeScanSource.mockClear()
+
+      // 2. Once contention clears, the next scan succeeds and clears the degraded errorCode.
+      shouldFail = null
+      provider.dbUtils = null
+      await expect(provider.startIndexing('auto')).resolves.toEqual(
+        expect.objectContaining({ errors: 0 })
+      )
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({
+          initializationFailed: false,
+          errorCode: null,
+          reportId: null
+        })
+      )
+
+      // 3. After a genuine halting failure (`initializationFailed: true`), manual rebuild clears
+      // `initializationFailed` BEFORE invoking `scanSource(ManualRebuild)` so the runtime eligibility
+      // check sees a healthy source instead of skipping the rebuild scan with `health:error`.
+      shouldFail = new Error('Fatal scan query error')
+      provider.dbUtils = {
+        getFileIndexReadDb: () => {
+          if (shouldFail) throw shouldFail
+          return {}
+        }
+      }
+      await provider.startIndexing('auto')
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({
+          initializationFailed: true,
+          errorCode: 'FILE_INDEX_SCAN_FAILED'
+        })
+      )
+
+      shouldFail = null
+      provider.initializationContext = createContext()
+      let statusAtScanIngress: ReturnType<typeof provider.getIndexingStatus> | null = null
+      runtimeScanSource.mockImplementationOnce(async () => {
+        statusAtScanIngress = provider.getIndexingStatus()
+      })
+
+      await expect(provider.rebuildIndex({ force: true })).resolves.toEqual(
+        expect.objectContaining({ success: true })
+      )
+      expect(runtimeReset).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceId: 'file-provider',
+          reason: IndexedSourceResetReasons.ManualRebuild,
+          clearSearchIndex: true,
+          clearScanProgress: true
+        })
+      )
+      expect(runtimeScanSource).toHaveBeenCalledWith(IndexedSourceScanReasons.ManualRebuild)
+      expect(statusAtScanIngress).toEqual(
+        expect.objectContaining({
+          initializationFailed: false,
+          errorCode: null,
+          reportId: null
+        })
+      )
+
+      // 4. `resetIndexedSourceRuntimeState` (called by `cleanupFileIndex({ rebuild: true })` via
+      // `IndexingRuntime.resetSource` -> `scanSource`) also clears a prior halting failure.
+      shouldFail = new Error('Fatal scan query error before cleanup reset')
+      await provider.startIndexing('auto')
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({ initializationFailed: true })
+      )
+      await provider.resetIndexedSourceRuntimeState({
+        sourceId: 'file-provider',
+        reason: IndexedSourceResetReasons.UserClear,
+        clearSearchIndex: true,
+        clearScanProgress: true
+      })
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({
+          initializationFailed: false,
+          errorCode: null,
+          reportId: null
+        })
+      )
+    } finally {
+      provider.dbUtils = originalDbUtils
+      provider.initializationContext = originalContext
       provider.watchService.shouldRunAutoIndexing = originalShouldRunAutoIndexing
       provider.initializationFailed = false
       provider.initializationFailure = null
@@ -3049,7 +3202,6 @@ interface FileProviderRuntimeAckTestApi extends FileProviderIndexingLifecycleTes
     records: ReadonlyArray<{ path: string; metadata?: Record<string, unknown> }>,
     mutationLeaseId?: string
   ) => Promise<void>
-  processFileExtensions: (files: RuntimeAckFileRow[]) => Promise<void>
   scheduleIndexing: (
     files: RuntimeAckFileRow[],
     reason: string,
@@ -3065,7 +3217,9 @@ function createRuntimeAckDbUtils(
   files: RuntimeAckFileRow[],
   progress: Array<{ fileId: number; status: string }>
 ) {
+  const addFileExtensions = vi.fn(async () => undefined)
   return {
+    addFileExtensions,
     getFileIndexReadDb: () => ({
       select: () => ({ from: () => ({ where: vi.fn(async () => files) }) })
     }),
@@ -3078,14 +3232,12 @@ function createRuntimeAckDbUtils(
  * re-admission from the durable `file_index_progress` rows: a file that already
  * reached a terminal status must not be flipped back to pending by the ack, or
  * every ack re-queues work the worker already finished (the re-admission loop).
- * The extension refresh is NOT that decision — it is a per-row side effect and
- * still has to cover the whole acknowledged batch.
+ * Per A15, base acknowledgements also write zero `file_extensions.keywords` rows.
  */
 describe('runtime writer ack re-admission', () => {
-  it('schedules only files without terminal progress while refreshing extensions for the whole batch', async () => {
+  it('schedules only files without terminal progress and writes no unread file_extensions.keywords rows', async () => {
     const provider = fileProvider as unknown as FileProviderRuntimeAckTestApi
     const originalDbUtils = provider.dbUtils
-    const originalProcessFileExtensions = provider.processFileExtensions
     const originalScheduleIndexing = provider.scheduleIndexing
     const records = [
       { path: '/tmp/ack-completed.txt', metadata: { runtimePublication: 'base' } },
@@ -3097,42 +3249,37 @@ describe('runtime writer ack re-admission', () => {
       { path: '/tmp/ack-unenriched.txt', metadata: { runtimePublication: 'base' } }
     ]
     const files = records.map((record, index) => runtimeAckFile(index + 1, record.path))
-    provider.dbUtils = createRuntimeAckDbUtils(files, [
+    const ackDbUtils = createRuntimeAckDbUtils(files, [
       { fileId: 1, status: 'completed' },
       { fileId: 2, status: 'skipped' },
       { fileId: 3, status: 'failed' },
       { fileId: 4, status: 'pending' },
       { fileId: 5, status: 'processing' }
     ])
+    provider.dbUtils = ackDbUtils
     const scheduledCalls: Array<{ ids: number[]; reason: string; mutationLeaseId?: string }> = []
-    const extensionBatches: number[][] = []
     provider.scheduleIndexing = vi.fn(
       async (batch: RuntimeAckFileRow[], reason: string, mutationLeaseId?: string) => {
         scheduledCalls.push({ ids: batch.map((file) => file.id), reason, mutationLeaseId })
       }
     )
-    provider.processFileExtensions = vi.fn(async (batch: RuntimeAckFileRow[]) => {
-      extensionBatches.push(batch.map((file) => file.id))
-    })
 
     try {
       await provider.handleIndexedSourceRuntimeRecordsApplied(records, 'lease-ack')
     } finally {
       provider.dbUtils = originalDbUtils
-      provider.processFileExtensions = originalProcessFileExtensions
       provider.scheduleIndexing = originalScheduleIndexing
     }
 
     expect(scheduledCalls).toEqual([
       { ids: [4, 5, 6], reason: 'runtime-writer-ack', mutationLeaseId: 'lease-ack' }
     ])
-    expect(extensionBatches).toEqual([[1, 2, 3, 4, 5, 6]])
+    expect(ackDbUtils.addFileExtensions).not.toHaveBeenCalled()
   })
 
-  it('keeps an all-terminal batch out of the scheduler but still refreshes its extensions', async () => {
+  it('keeps an all-terminal batch out of the scheduler without writing file_extensions', async () => {
     const provider = fileProvider as unknown as FileProviderRuntimeAckTestApi
     const originalDbUtils = provider.dbUtils
-    const originalProcessFileExtensions = provider.processFileExtensions
     const originalScheduleIndexing = provider.scheduleIndexing
     const records = [
       { path: '/tmp/ack-completed.txt', metadata: { runtimePublication: 'base' } },
@@ -3140,57 +3287,48 @@ describe('runtime writer ack re-admission', () => {
       { path: '/tmp/ack-failed.txt', metadata: { runtimePublication: 'base' } }
     ]
     const files = records.map((record, index) => runtimeAckFile(index + 1, record.path))
-    provider.dbUtils = createRuntimeAckDbUtils(files, [
+    const ackDbUtils = createRuntimeAckDbUtils(files, [
       { fileId: 1, status: 'completed' },
       { fileId: 2, status: 'skipped' },
       { fileId: 3, status: 'failed' }
     ])
+    provider.dbUtils = ackDbUtils
     const scheduleIndexing = vi.fn(async () => undefined)
-    const extensionBatches: number[][] = []
     provider.scheduleIndexing = scheduleIndexing
-    provider.processFileExtensions = vi.fn(async (batch: RuntimeAckFileRow[]) => {
-      extensionBatches.push(batch.map((file) => file.id))
-    })
 
     try {
       await provider.handleIndexedSourceRuntimeRecordsApplied(records, 'lease-ack')
     } finally {
       provider.dbUtils = originalDbUtils
-      provider.processFileExtensions = originalProcessFileExtensions
       provider.scheduleIndexing = originalScheduleIndexing
     }
 
     expect(scheduleIndexing).not.toHaveBeenCalled()
-    expect(extensionBatches).toEqual([[1, 2, 3]])
+    expect(ackDbUtils.addFileExtensions).not.toHaveBeenCalled()
   })
 
   it('ignores records that were not published as the base batch', async () => {
     const provider = fileProvider as unknown as FileProviderRuntimeAckTestApi
     const originalDbUtils = provider.dbUtils
-    const originalProcessFileExtensions = provider.processFileExtensions
     const originalScheduleIndexing = provider.scheduleIndexing
     const records = [
       { path: '/tmp/ack-enriched.txt', metadata: { runtimePublication: 'worker-enrichment' } }
     ]
     const files = [runtimeAckFile(1, records[0].path)]
-    provider.dbUtils = createRuntimeAckDbUtils(files, [])
+    const ackDbUtils = createRuntimeAckDbUtils(files, [])
+    provider.dbUtils = ackDbUtils
     const scheduleIndexing = vi.fn(async () => undefined)
-    const extensionBatches: number[][] = []
     provider.scheduleIndexing = scheduleIndexing
-    provider.processFileExtensions = vi.fn(async (batch: RuntimeAckFileRow[]) => {
-      extensionBatches.push(batch.map((file) => file.id))
-    })
 
     try {
       await provider.handleIndexedSourceRuntimeRecordsApplied(records)
     } finally {
       provider.dbUtils = originalDbUtils
-      provider.processFileExtensions = originalProcessFileExtensions
       provider.scheduleIndexing = originalScheduleIndexing
     }
 
     expect(scheduleIndexing).not.toHaveBeenCalled()
-    expect(extensionBatches).toEqual([])
+    expect(ackDbUtils.addFileExtensions).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -3227,9 +3365,6 @@ describe('runtime writer ack re-admission', () => {
       const originalSearchIndex = provider.searchIndex
       const originalScheduler = provider.indexSchedulerService
       const originalSettings = capacityFixture.fileIndexSettings
-      const extensionRefresh = vi
-        .spyOn(provider, 'processFileExtensions')
-        .mockResolvedValue(undefined)
       // The background drain is outside this admission contract; the actual progress write,
       // writer acknowledgement filter and policy-controlled scheduler ingress remain intact.
       const drain = vi.spyOn(provider, 'drainIndexedSourceMutations').mockResolvedValue(undefined)
@@ -3342,7 +3477,6 @@ describe('runtime writer ack re-admission', () => {
         provider.indexSchedulerService = originalScheduler
         capacityFixture.fileIndexSettings = originalSettings
         installRuntimeDependencies(provider)
-        extensionRefresh.mockRestore()
         drain.mockRestore()
         fileMetadata.mockRestore()
         client.close()

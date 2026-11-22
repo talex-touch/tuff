@@ -12,7 +12,7 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../db/schema'
 import { performance } from 'node:perf_hooks'
 import { stat } from 'node:fs/promises'
-import { eq, and, isNull, sql } from 'drizzle-orm'
+import { eq, and, gt, inArray, isNull, sql } from 'drizzle-orm'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import {
   embeddings as embeddingsSchema,
@@ -75,6 +75,8 @@ interface CachedEmbedding {
 export interface EmbeddingDbRouting {
   checkContentCapacity?: () => Promise<boolean>
   recordStorageFailure?: (error: unknown) => boolean
+  /** Notifies the host when the active text-embedding model changes at runtime. */
+  onActiveModelChanged?: (model: string) => void
   /** Call-time split decision — mirrors DbUtilsSplitContext.enabled. */
   isSplitEnabled(): boolean
   /** Read connection: the search file when the split is on (falls back to primary until ready). */
@@ -88,6 +90,12 @@ export interface EmbeddingDbRouting {
     statements: Array<{ sql: string; args: unknown[] }>,
     mode?: 'single' | 'transaction'
   ): Promise<unknown>
+}
+
+export interface EmbeddingCleanupSummary {
+  orphanedRemoved: number
+  staleModelRemoved: number
+  requeuedFiles: number
 }
 
 type CompilableQuery = BatchItem<'sqlite'> & {
@@ -152,6 +160,7 @@ function usableVector(vector: number[]): boolean {
 
 export class EmbeddingService {
   private available: boolean | null = null
+  private activeTextModel: string | null = null
   private lastProbeAt = 0
   private queryCache = new Map<string, CachedEmbedding>()
   private usageLimitPause: EmbeddingUsageLimitPause | null = null
@@ -317,6 +326,7 @@ export class EmbeddingService {
       try {
         const result = await this.generate('test')
         this.available = usableVector(result.vector)
+        if (this.available) this.noteActiveTextModel(result.model)
       } finally {
         disposeCheck()
       }
@@ -334,7 +344,22 @@ export class EmbeddingService {
   /** Reset availability cache (e.g. after config change). */
   resetAvailability(): void {
     this.available = null
+    this.activeTextModel = null
     this.queryCache.clear()
+  }
+
+  /** Last verified text-embedding model identifier observed in this session, if any. */
+  getActiveTextModel(): string | null {
+    return this.activeTextModel
+  }
+
+  private noteActiveTextModel(model: string | null | undefined): void {
+    if (!model || model === 'unknown') return
+    const changed = this.activeTextModel !== null && this.activeTextModel !== model
+    this.activeTextModel = model
+    if (changed) {
+      this.routing.onActiveModelChanged?.(model)
+    }
   }
 
   /**
@@ -369,6 +394,7 @@ export class EmbeddingService {
         return 'paused'
       if (!usableVector(first.vector) || !first.model)
         throw new Error('FILE_EMBEDDING_INVALID_VECTOR')
+      this.noteActiveTextModel(first.model)
 
       const existing = await this.routing
         .getReadDb()
@@ -656,6 +682,195 @@ export class EmbeddingService {
     )
   }
 
+  /**
+   * Bounded maintenance sweep for `source_type = 'file'` vectors (A16):
+   *   1. Removes orphan file vectors whose `source_id` no longer resolves to a live `files` row
+   *      (`type = 'file'`) in the active home.
+   *   2. When the active text model is known (or for image rows pinned to `LOCAL_EMBEDDING_MODEL_KEY`),
+   *      removes vectors written under an obsolete model and re-arms affected live files to
+   *      `pending` so `FileProviderEnrichmentResumeService` can re-embed them.
+   *
+   * Never touches non-file embeddings (`source_type != 'file'`) and never materializes vector
+   * BLOBs or file body text on the main thread.
+   */
+  async cleanupStaleEmbeddings(options?: {
+    activeTextModel?: string | null
+    batchSize?: number
+    signal?: AbortSignal
+    yieldBetweenWindows?: () => Promise<void>
+  }): Promise<EmbeddingCleanupSummary> {
+    const summary: EmbeddingCleanupSummary = {
+      orphanedRemoved: 0,
+      staleModelRemoved: 0,
+      requeuedFiles: 0
+    }
+    if (this.closed || options?.signal?.aborted) return summary
+
+    const windowSize = Math.max(1, Math.min(500, Math.floor(options?.batchSize ?? 200)))
+    const rawTextModel =
+      options?.activeTextModel !== undefined ? options.activeTextModel : this.activeTextModel
+    const resolvedTextModel =
+      rawTextModel && rawTextModel !== 'unknown'
+        ? rawTextModel
+        : getLocalEmbeddingRuntime().isReady()
+          ? LOCAL_EMBEDDING_MODEL_KEY
+          : null
+
+    const readDb = this.routing.getReadDb()
+    const progressTableRows = await readDb.all<{ present: number }>(sql`
+      SELECT 1 AS present
+      FROM sqlite_master
+      WHERE type = 'table' AND name = 'file_index_progress'
+      LIMIT 1
+    `)
+    const hasProgressTable = progressTableRows.length > 0
+
+    let afterId = 0
+    while (!this.closed && !options?.signal?.aborted) {
+      const rows = await this.routing
+        .getReadDb()
+        .select({
+          id: embeddingsSchema.id,
+          sourceId: embeddingsSchema.sourceId,
+          model: embeddingsSchema.model
+        })
+        .from(embeddingsSchema)
+        .where(and(eq(embeddingsSchema.sourceType, SOURCE_TYPE), gt(embeddingsSchema.id, afterId)))
+        .orderBy(embeddingsSchema.id)
+        .limit(windowSize)
+      if (rows.length === 0) break
+      afterId = rows[rows.length - 1]!.id
+
+      const candidateFileIds = new Set<number>()
+      for (const row of rows) {
+        if (/^\d+$/.test(row.sourceId)) {
+          const parsed = Number(row.sourceId)
+          if (Number.isSafeInteger(parsed) && parsed > 0) candidateFileIds.add(parsed)
+        }
+      }
+
+      const liveFilesById = new Map<number, { hasContent: boolean }>()
+      if (candidateFileIds.size > 0) {
+        const fileRows = await this.routing.getReadDb().all<{ id: number; hasContent: number }>(
+          sql`SELECT id, CASE WHEN content IS NULL THEN 0 ELSE 1 END AS hasContent
+              FROM files
+              WHERE +type = 'file'
+                AND id IN (${sql.join(
+                  [...candidateFileIds].map((id) => sql`${id}`),
+                  sql`, `
+                )})`
+        )
+        for (const fileRow of fileRows) {
+          liveFilesById.set(Number(fileRow.id), { hasContent: Number(fileRow.hasContent) === 1 })
+        }
+      }
+
+      const orphanEmbeddingIds: number[] = []
+      const staleEmbeddingIds: number[] = []
+      const staleFiles = new Map<number, string>()
+
+      for (const row of rows) {
+        const numericId = /^\d+$/.test(row.sourceId) ? Number(row.sourceId) : NaN
+        const liveFile =
+          Number.isSafeInteger(numericId) && numericId > 0
+            ? liveFilesById.get(numericId)
+            : undefined
+        if (!liveFile) {
+          orphanEmbeddingIds.push(row.id)
+          continue
+        }
+        const expectedModel = liveFile.hasContent ? resolvedTextModel : LOCAL_EMBEDDING_MODEL_KEY
+        if (expectedModel && row.model !== expectedModel) {
+          staleEmbeddingIds.push(row.id)
+          staleFiles.set(numericId, expectedModel)
+        }
+      }
+
+      if (this.closed || options?.signal?.aborted) break
+
+      const writeDb = this.routing.getPrimaryDb()
+      if (orphanEmbeddingIds.length > 0) {
+        await this.runWrite(
+          'embedding.cleanup',
+          [
+            writeDb
+              .delete(embeddingsSchema)
+              .where(
+                and(
+                  eq(embeddingsSchema.sourceType, SOURCE_TYPE),
+                  inArray(embeddingsSchema.id, orphanEmbeddingIds)
+                )
+              )
+          ],
+          'single'
+        )
+        summary.orphanedRemoved += orphanEmbeddingIds.length
+      }
+
+      if (staleEmbeddingIds.length > 0 && !this.closed && !options?.signal?.aborted) {
+        const queries: CompilableQuery[] = [
+          writeDb
+            .delete(embeddingsSchema)
+            .where(
+              and(
+                eq(embeddingsSchema.sourceType, SOURCE_TYPE),
+                inArray(embeddingsSchema.id, staleEmbeddingIds)
+              )
+            )
+        ]
+        for (const [fileId, expectedModel] of staleFiles) {
+          const sourceId = String(fileId)
+          const missingActiveVector = sql`NOT EXISTS (
+            SELECT 1 FROM ${embeddingsSchema}
+            WHERE ${embeddingsSchema.sourceType} = ${SOURCE_TYPE}
+              AND ${embeddingsSchema.sourceId} = ${sourceId}
+              AND ${embeddingsSchema.model} = ${expectedModel}
+          )`
+          queries.push(
+            writeDb
+              .update(filesSchema)
+              .set({ embeddingStatus: 'pending' })
+              .where(
+                and(
+                  eq(filesSchema.id, fileId),
+                  sql`+${filesSchema.type} = 'file'`,
+                  missingActiveVector
+                )
+              )
+          )
+          if (hasProgressTable) {
+            queries.push(
+              writeDb
+                .update(fileIndexProgress)
+                .set({
+                  status: 'pending',
+                  progress: 0,
+                  lastError: null,
+                  updatedAt: new Date()
+                })
+                .where(
+                  and(
+                    eq(fileIndexProgress.fileId, fileId),
+                    sql`EXISTS (SELECT 1 FROM ${filesSchema} WHERE ${filesSchema.id} = ${fileId} AND +${filesSchema.type} = 'file')`,
+                    missingActiveVector
+                  )
+                )
+            )
+          }
+        }
+        await this.runWrite('embedding.cleanup', queries, 'transaction')
+        summary.staleModelRemoved += staleEmbeddingIds.length
+        summary.requeuedFiles += staleFiles.size
+      }
+
+      await (options?.yieldBetweenWindows
+        ? options.yieldBetweenWindows()
+        : new Promise<void>((resolve) => setImmediate(resolve)))
+    }
+
+    return summary
+  }
+
   /** Embed the query locally/configured-provider, then read and score on an independent worker. */
   async semanticSearch(
     query: string,
@@ -722,6 +937,7 @@ export class EmbeddingService {
         this.generate(query, signal, 'query')
       )
       if (!usableVector(result.vector) || !result.model) return null
+      this.noteActiveTextModel(result.model)
       const entry = { vector: result.vector, model: result.model, timestamp: Date.now() }
       this.queryCache.set(cacheKey, entry)
       if (this.queryCache.size > 100) {
