@@ -337,6 +337,8 @@ export default defineConfig({
             'src/main/modules/box-tool/search-engine/workers/search-index-worker.ts',
           'search-index-read-worker':
             'src/main/modules/box-tool/search-engine/workers/search-index-read-worker.ts',
+          'search-kernel-process':
+            'src/main/modules/box-tool/search-engine/kernel/search-kernel-process.ts',
           'pi-agent-runtime-worker': 'src/main/modules/ai/pi-agent-runtime-worker.ts',
           'live-mcp-smoke': 'src/main/live-mcp-smoke.ts',
           'privacy-lifecycle-smoke': 'src/main/privacy-lifecycle-smoke.ts'
@@ -359,6 +361,8 @@ export default defineConfig({
               return 'search-index-worker.js'
             } else if (chunkInfo.name === 'search-index-read-worker') {
               return 'search-index-read-worker.js'
+            } else if (chunkInfo.name === 'search-kernel-process') {
+              return 'search-kernel-process.js'
             } else if (chunkInfo.name === 'plugin-host') {
               return 'plugin-host.js'
             } else if (chunkInfo.name === 'plugin-image-tools-worker') {
