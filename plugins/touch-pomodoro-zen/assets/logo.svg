@@ -1,0 +1,18 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="pomo-zen-bg" x1="12" y1="8" x2="116" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#18181B"/>
+      <stop offset="100%" stop-color="#27272A"/>
+    </linearGradient>
+    <linearGradient id="pomo-zen-ring" x1="24" y1="24" x2="104" y2="104" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FB7185"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#pomo-zen-bg)"/>
+  <circle cx="64" cy="68" r="36" stroke="#3F3F46" stroke-width="8"/>
+  <path d="M64 32 A36 36 0 1 1 32.8 86" stroke="url(#pomo-zen-ring)" stroke-width="8" stroke-linecap="round"/>
+  <path d="M64 46V68L79 77" stroke="#F8FAFC" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M56 20C60 15 68 15 72 20" stroke="#34D399" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="64" cy="68" r="4.5" fill="#FB7185"/>
+</svg>

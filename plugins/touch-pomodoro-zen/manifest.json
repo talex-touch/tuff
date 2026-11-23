@@ -1,0 +1,145 @@
+{
+  "id": "com.tuffex.touch-pomodoro-zen",
+  "name": "touch-pomodoro-zen",
+  "displayName": {
+    "default": "Pomodoro Zen",
+    "locales": {
+      "zh-CN": "禅意番茄钟",
+      "en-US": "Pomodoro Zen"
+    }
+  },
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 261011,
+  "category": "productivity",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": {
+    "default": "Focus timer with wall-clock persistence, 25/5 & 50/10 or custom presets, daily/weekly streak tracker, guided micro-break cards, and optional completion alerts",
+    "locales": {
+      "zh-CN": "禅意番茄专注计时器：支持 25/5、50/10 与自定义专注任务、跨会话时钟持久化、日/周专注统计与连续打卡、微休息引导卡片及可选系统通知提醒",
+      "en-US": "Focus timer with wall-clock persistence, 25/5 & 50/10 or custom presets, daily/weekly streak tracker, guided micro-break cards, and optional completion alerts"
+    }
+  },
+  "main": "index.js",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  },
+  "permissions": {
+    "required": [
+      "storage.plugin"
+    ],
+    "optional": [
+      "system.notification",
+      "clipboard.write"
+    ]
+  },
+  "permissionReasons": {
+    "storage.plugin": {
+      "default": "Persist active wall-clock timer timestamps, daily/weekly focus minutes, streak history, and alert preferences",
+      "locales": {
+        "zh-CN": "持久化保存当前计时时间戳、每日/每周专注时长、连续打卡记录与提醒偏好",
+        "en-US": "Persist active wall-clock timer timestamps, daily/weekly focus minutes, streak history, and alert preferences"
+      }
+    },
+    "system.notification": {
+      "default": "Send optional desktop alerts when a focus session or micro-break finishes",
+      "locales": {
+        "zh-CN": "在专注或微休息计时结束时发送可选桌面系统提醒",
+        "en-US": "Send optional desktop alerts when a focus session or micro-break finishes"
+      }
+    },
+    "clipboard.write": {
+      "default": "Copy daily/weekly focus summaries or guided micro-break routines to the clipboard",
+      "locales": {
+        "zh-CN": "将每日/每周专注报告或微休息引导卡片复制到剪贴板",
+        "en-US": "Copy daily/weekly focus summaries or guided micro-break routines to the clipboard"
+      }
+    }
+  },
+  "searchProviders": [
+    {
+      "id": "touch-pomodoro-zen.pomodoro-zen",
+      "displayName": {
+        "default": "Pomodoro Zen",
+        "locales": {
+          "zh-CN": "禅意番茄钟",
+          "en-US": "Pomodoro Zen"
+        }
+      },
+      "featureId": "pomodoro-zen",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 112,
+      "permissionScopes": [],
+      "defaultState": "enabled"
+    }
+  ],
+  "features": [
+    {
+      "id": "pomodoro-zen",
+      "name": {
+        "default": "Pomodoro Zen",
+        "locales": {
+          "zh-CN": "禅意番茄钟",
+          "en-US": "Pomodoro Zen"
+        }
+      },
+      "desc": {
+        "default": "Wall-clock focus timer, daily/weekly streak tracker, and guided micro-break coach",
+        "locales": {
+          "zh-CN": "专注番茄计时、日/周连续打卡统计与科学微休息教练",
+          "en-US": "Wall-clock focus timer, daily/weekly streak tracker, and guided micro-break coach"
+        }
+      },
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": [
+        "pomo",
+        "pomodoro",
+        "focus",
+        "zen",
+        "timer",
+        "streak",
+        "break",
+        "microbreak",
+        "breathing",
+        "番茄计时",
+        "专注计时",
+        "休息"
+      ],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": [
+        "text"
+      ],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": [
+            "pomo",
+            "pomodoro",
+            "focus",
+            "zen",
+            "microbreak",
+            "番茄计时",
+            "专注计时"
+          ]
+        }
+      ]
+    }
+  ]
+}
