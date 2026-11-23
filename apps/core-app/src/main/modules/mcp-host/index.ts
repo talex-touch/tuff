@@ -413,6 +413,15 @@ export class McpHostModule extends BaseModule<TalexEvents> {
     }
   }
 
+  /**
+   * Host-only read of the live loopback MCP endpoint when the user has enabled
+   * the server and it is already listening. Never starts the listener ("off means off").
+   */
+  getActiveServerConfig(): { url: string; token: string } | null {
+    if (!this.isEnabled() || !this.handle || !this.token) return null
+    return { url: this.handle.url, token: this.token }
+  }
+
   onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     const runtime = resolveMainRuntime(ctx, 'McpHostModule.onInit')
     const transport = runtime.transport as unknown as {

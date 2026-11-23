@@ -652,6 +652,12 @@ export class ConversationWorkspaceRunner {
           this.delta(slot, undefined, update.delta)
         }
       }
+    } else if (event.type === 'text' && typeof payload.delta === 'string') {
+      slot.assembler.delta(payload.delta)
+      this.delta(slot, payload.delta)
+    } else if (event.type === 'reasoning' && typeof payload.delta === 'string') {
+      slot.assembler.part({ kind: 'reasoning-delta', delta: payload.delta })
+      this.delta(slot, undefined, payload.delta)
     } else if (event.type === 'message_end') {
       const message = payload.message
       if (
@@ -701,7 +707,8 @@ export class ConversationWorkspaceRunner {
         })
       }
     }
-    if (event.type !== 'message_update') this.snapshot(slot)
+    if (event.type !== 'message_update' && event.type !== 'text' && event.type !== 'reasoning')
+      this.snapshot(slot)
     await this.persist(slot, event.type === 'message_end' || event.type === 'tool_execution_end')
   }
 
