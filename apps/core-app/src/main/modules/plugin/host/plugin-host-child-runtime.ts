@@ -1380,45 +1380,35 @@ const CONTEXT_BOOTSTRAP = String.raw`
     hasIntelligenceContextStreamFacade
   const hasSnipasteFacade = hasDeclaredCapability('process.spawn')
   const hasWorkspaceScriptsFacade =
-    (snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('workspaceScripts'))} ||
-      snapshot.manifest.sdkapi >= 261011) &&
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('workspaceScripts'))} &&
     hasDeclaredCapability('process.workspace-scripts')
   const hasSystemFacade = hasDeclaredCapability('system.invoke')
   const hasBrowserDataFacade =
-    (snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('browserData'))} ||
-      snapshot.manifest.sdkapi >= 261011) &&
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('browserData'))} &&
     hasDeclaredCapability('browser-data.scan')
   const hasBrowserOpenFacade =
-    (snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('browserOpen'))} ||
-      snapshot.manifest.sdkapi >= 261011) &&
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('browserOpen'))} &&
     hasDeclaredCapability('system.browser-open')
   const hasWindowPresetFacade =
-    (snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('windowPresets'))} ||
-      snapshot.manifest.sdkapi >= 261011) &&
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('windowPresets'))} &&
     hasDeclaredCapability('system.window-presets')
   const hasWindowManagerFacade =
-    (snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('windowManager'))} ||
-      snapshot.manifest.sdkapi >= 261011) &&
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('windowManager'))} &&
     hasDeclaredCapability('system.window-manager')
   const hasHostsFacade =
-    (snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('hosts'))} ||
-      snapshot.manifest.sdkapi >= 261011) &&
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('hosts'))} &&
     hasDeclaredCapability('system.hosts')
   const hasVscodeProjectsFacade =
-    (snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('vscodeProjects'))} ||
-      snapshot.manifest.sdkapi >= 261011) &&
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('vscodeProjects'))} &&
     hasDeclaredCapability('filesystem.vscode-projects')
   const hasOrcaFacade =
-    (snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('orca'))} ||
-      snapshot.manifest.sdkapi >= 261011) &&
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('orca'))} &&
     hasDeclaredCapability('orchestration.orca')
   const hasAiSessionsFacade =
-    (snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('aiSessions'))} ||
-      snapshot.manifest.sdkapi >= 261011) &&
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('aiSessions'))} &&
     hasDeclaredCapability('intelligence.sessions')
   const hasImageToolsFacade =
-    (snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('imageTools'))} ||
-      snapshot.manifest.sdkapi >= 261011) &&
+    snapshot.manifest.name === ${JSON.stringify(privilegedPluginFor('imageTools'))} &&
     hasDeclaredCapability('media.image-tools')
   const hidesRawHostCapabilities =
     hasDeclaredCapability('system.hosts') ||

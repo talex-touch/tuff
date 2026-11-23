@@ -7,6 +7,7 @@ import {
   PluginHostCapabilityError,
   type PluginHostCapabilityDefinition
 } from './plugin-host-capabilities'
+import { isPrivilegedPluginFor } from '../../../../shared/privileged-plugins'
 
 export const PLUGIN_SNIPASTE_ACTION_IDS = Object.freeze([
   'launch',
@@ -586,7 +587,7 @@ export function createPluginSnipasteProcessCapability(
     invalid()
   }
   const expectedActivation = snapshotActivation(options.activation)
-  if (expectedActivation.name !== 'touch-snipaste') invalid()
+  if (!isPrivilegedPluginFor('snipasteProcess', expectedActivation.name)) invalid()
   const platform = options.platform as NodeJS.Platform
   const resolveCurrentActivation =
     options.resolveCurrentActivation as PluginSnipasteProcessCapabilityOptions['resolveCurrentActivation']
