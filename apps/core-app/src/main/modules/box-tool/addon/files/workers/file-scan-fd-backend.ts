@@ -67,6 +67,15 @@ export async function scanDirectoryBatchesWithFd(
   signal?.throwIfAborted()
   const batchSize = Math.max(1, Math.floor(batchOptions.batchSize ?? 500))
   const maxDepth = Math.max(0, Math.floor(options.maxDepth ?? FILE_SCAN_MAX_DEPTH))
+  const normalizedRoot = path.resolve(rootPath)
+  const canonicalRoot = await resolveCanonicalPath(normalizedRoot)
+  const normalizedExcludeRoots = await resolveExcludeRoots(
+    excludePaths,
+    normalizedRoot,
+    canonicalRoot
+  )
+  signal?.throwIfAborted()
+
   const args = [
     '--type',
     'f',
@@ -83,10 +92,10 @@ export async function scanDirectoryBatchesWithFd(
     // Directories the shared policy rejects in any context are never enumerated. Everything fd
     // still returns goes through the same policy below.
     ...fileFilterService
-      .getTraversalPruneGlobs(path.resolve(rootPath))
+      .getTraversalPruneGlobs(canonicalRoot)
       .flatMap((glob) => ['--exclude', glob]),
     '.',
-    rootPath
+    canonicalRoot
   ]
 
   const child = spawn(binaryPath, args, {
@@ -119,10 +128,6 @@ export async function scanDirectoryBatchesWithFd(
   const outputBatch: ScannedFileInfo[] = []
   const pathBatch: string[] = []
   const traversalCache = new Map<string, Promise<boolean>>()
-  const normalizedRoot = path.resolve(rootPath)
-  const normalizedExcludeRoots = excludePaths
-    ? Array.from(excludePaths, (excludedPath) => path.resolve(excludedPath))
-    : []
   const decoder = new StringDecoder('utf8')
   let textRemainder = ''
 
@@ -137,7 +142,15 @@ export async function scanDirectoryBatchesWithFd(
     signal?.throwIfAborted()
     const resolvedPath = path.resolve(rawPath)
     if (isExcludedPath(resolvedPath, normalizedExcludeRoots)) return null
-    if (await isTraversalExcluded(resolvedPath, normalizedRoot, options, traversalCache)) {
+    if (
+      await isTraversalExcluded(
+        resolvedPath,
+        canonicalRoot,
+        normalizedRoot,
+        options,
+        traversalCache
+      )
+    ) {
       return null
     }
 
@@ -216,25 +229,76 @@ export async function scanDirectoryBatchesWithFd(
   }
 }
 
+async function resolveCanonicalPath(targetPath: string): Promise<string> {
+  const resolved = path.resolve(targetPath)
+  try {
+    return await fs.realpath(resolved)
+  } catch {
+    return resolved
+  }
+}
+
+async function resolveExcludeRoots(
+  excludePaths: Set<string> | undefined,
+  normalizedRoot: string,
+  canonicalRoot: string
+): Promise<string[]> {
+  if (!excludePaths || excludePaths.size === 0) return []
+  const roots = new Set<string>()
+  const rootDiffers = canonicalRoot !== normalizedRoot
+  await Promise.all(
+    Array.from(excludePaths, async (excludedPath) => {
+      const resolved = path.resolve(excludedPath)
+      roots.add(resolved)
+      const canonical = await resolveCanonicalPath(resolved)
+      roots.add(canonical)
+      if (rootDiffers && isPathInsideRoot(resolved, normalizedRoot)) {
+        roots.add(path.join(canonicalRoot, path.relative(normalizedRoot, resolved)))
+      }
+      if (rootDiffers && isPathInsideRoot(canonical, canonicalRoot)) {
+        roots.add(path.join(normalizedRoot, path.relative(canonicalRoot, canonical)))
+      }
+    })
+  )
+  return Array.from(roots)
+}
+
 function isExcludedPath(filePath: string, excludeRoots: readonly string[]): boolean {
   for (const excludedRoot of excludeRoots) {
-    if (filePath === excludedRoot || filePath.startsWith(`${excludedRoot}${path.sep}`)) return true
+    const prefix = excludedRoot.endsWith(path.sep) ? excludedRoot : `${excludedRoot}${path.sep}`
+    if (filePath === excludedRoot || filePath.startsWith(prefix)) return true
   }
   return false
 }
 
+function resolveContainingRoot(
+  directoryPath: string,
+  canonicalRoot: string,
+  normalizedRoot: string
+): string | null {
+  if (isPathInsideRoot(directoryPath, canonicalRoot)) return canonicalRoot
+  if (canonicalRoot !== normalizedRoot && isPathInsideRoot(directoryPath, normalizedRoot)) {
+    return normalizedRoot
+  }
+  return null
+}
+
 async function isTraversalExcluded(
   filePath: string,
-  rootPath: string,
+  canonicalRoot: string,
+  normalizedRoot: string,
   options: FileScanOptions,
   cache: Map<string, Promise<boolean>>
 ): Promise<boolean> {
   let directoryPath = path.dirname(filePath)
-  while (isPathInsideRoot(directoryPath, rootPath)) {
+  const effectiveRoot = resolveContainingRoot(directoryPath, canonicalRoot, normalizedRoot)
+  if (!effectiveRoot) return true
+
+  while (isPathInsideRoot(directoryPath, effectiveRoot)) {
     let decision = cache.get(directoryPath)
     if (!decision) {
       decision = Promise.resolve(
-        directoryPath === rootPath
+        directoryPath === effectiveRoot
           ? fileFilterService.getTraversalExclusionReason(directoryPath, options, {
               siblingNames: undefined
             }) !== null
@@ -249,7 +313,7 @@ async function isTraversalExcluded(
       cache.set(directoryPath, decision)
     }
     if (await decision) return true
-    if (directoryPath === rootPath) return false
+    if (directoryPath === effectiveRoot) return false
     directoryPath = path.dirname(directoryPath)
   }
   return true
