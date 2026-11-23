@@ -102,6 +102,11 @@ export interface PinnedNetworkRequestPolicy {
   readonly maxResponseBytes: number
 }
 
+export type NetworkFetchInit = RequestInit & {
+  timeoutMs?: number
+  streamTimeoutMode?: NetworkStreamTimeoutMode
+}
+
 type NetworkResultLifecycle<T> = (result: T, settlement: NetworkPolicySettlement) => T
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -837,9 +842,10 @@ export class NetworkService {
     })
   }
 
-  async fetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  async fetch(input: RequestInfo | URL, init: NetworkFetchInit = {}): Promise<Response> {
     const url = typeof input === 'string' ? input : input.toString()
     const method = (init.method ?? 'GET').toUpperCase() as NetworkRequestOptions['method']
+    const timeoutMode = init.streamTimeoutMode ?? 'deadline'
 
     const options: NetworkRequestOptions = {
       method,
@@ -849,14 +855,122 @@ export class NetworkService {
       signal: init.signal ?? undefined,
       validateStatus: Array.from({ length: 600 }, (_, status) => status)
     }
-    const timeoutMs = resolveRequestTimeoutMs(undefined, this.getConfigFromSettings().timeoutMs)
-    const abortContext = createNetworkAbortContext(options.signal, timeoutMs)
+    if (timeoutMode === 'caller-signal' && !options.signal) {
+      throw new Error('NETWORK_CALLER_SIGNAL_REQUIRED')
+    }
+    const timeoutMs = resolveRequestTimeoutMs(
+      init.timeoutMs,
+      this.getConfigFromSettings().timeoutMs
+    )
+    const abortContext = createNetworkAbortContext(options.signal, timeoutMs, timeoutMode)
     try {
-      return await this.executeFetch(options, 'follow', abortContext)
+      const response = await this.executeFetch(options, 'follow', abortContext)
+      return this.wrapFetchResponse(response, abortContext)
     } catch (error) {
       abortContext.dispose()
       throw error
     }
+  }
+
+  private wrapFetchResponse(response: Response, abortContext: NetworkAbortContext): Response {
+    if (!response.body) {
+      abortContext.dispose()
+      return response
+    }
+
+    const reader = response.body.getReader()
+    let settled = false
+    let streamController: ReadableStreamDefaultController<Uint8Array> | null = null
+
+    const cleanup = () => {
+      abortContext.signal.removeEventListener('abort', onAbort)
+      abortContext.dispose()
+    }
+    const failStream = (error: unknown) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      try {
+        streamController?.error(error)
+      } catch {
+        // Stream controller may already be closed or errored.
+      }
+    }
+    const closeStream = () => {
+      if (settled) return
+      settled = true
+      cleanup()
+      try {
+        streamController?.close()
+      } catch {
+        // Stream controller may already be closed or errored.
+      }
+    }
+    const onAbort = () => {
+      const abortError = abortContext.getAbortError()
+      if (abortError) {
+        failStream(abortError)
+      }
+      void reader.cancel(abortError ?? undefined).catch(() => undefined)
+    }
+
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        streamController = controller
+        if (abortContext.signal.aborted) {
+          onAbort()
+        } else {
+          abortContext.signal.addEventListener('abort', onAbort, { once: true })
+        }
+      },
+      async pull() {
+        if (settled) return
+        const earlyAbort = abortContext.getAbortError()
+        if (earlyAbort) {
+          failStream(earlyAbort)
+          void reader.cancel(earlyAbort).catch(() => undefined)
+          return
+        }
+        try {
+          const { done, value } = await reader.read()
+          if (settled) return
+          const postReadAbort = abortContext.getAbortError()
+          if (postReadAbort) {
+            failStream(postReadAbort)
+            return
+          }
+          if (done) {
+            closeStream()
+            return
+          }
+          if (value !== undefined) {
+            streamController?.enqueue(value)
+          }
+        } catch (error) {
+          failStream(projectNetworkRequestError(error, abortContext))
+        }
+      },
+      async cancel(reason) {
+        if (!settled) {
+          settled = true
+          cleanup()
+        }
+        await reader.cancel(reason).catch(() => undefined)
+      }
+    })
+
+    const wrapped = new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers
+    })
+    if (response.url) {
+      Object.defineProperty(wrapped, 'url', {
+        value: response.url,
+        configurable: true
+      })
+    }
+    return wrapped
   }
 
   async requestStream(options: NetworkRequestOptions): Promise<NetworkStreamResponse> {

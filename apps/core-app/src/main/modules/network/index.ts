@@ -3,5 +3,6 @@ export {
   DEFAULT_NETWORK_CONFIG,
   getNetworkService,
   normalizeNetworkConfig,
-  setNetworkServiceInstance
+  setNetworkServiceInstance,
+  type NetworkFetchInit
 } from './network-service'

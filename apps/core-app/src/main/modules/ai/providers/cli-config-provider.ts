@@ -223,11 +223,11 @@ export class CliConfigProvider extends OpenAiCompatibleLangChainProvider {
   /** These endpoints answer without the key the SDK asks for. */
   protected readonly requireApiKey = false
 
-  protected override resolveFetch(): OpenAiClientFetch {
+  protected override resolveFetch(timeoutMs?: number): OpenAiClientFetch {
     const headers = this.config.metadata?.headers
     // The SDK's placeholder bearer stands in only when no key is configured.
     return withExtraHeaders(
-      createNetworkServiceFetch(),
+      createNetworkServiceFetch(timeoutMs !== undefined ? { timeoutMs } : undefined),
       headers && typeof headers === 'object' ? (headers as Record<string, string>) : {},
       { replaceAuthorization: !this.config.apiKey }
     )
