@@ -1,0 +1,72 @@
+{
+  "name": "@talex-touch/touch-svg-craft-plugin",
+  "version": "1.0.0",
+  "private": false,
+  "description": "SVG Craft for Tuff: 86 built-in crisp vector icons across UI/Dev/Media/Nav/Status, SVG optimizer & normalizer, and one-click Raw SVG / Vue 3 SFC / React JSX / CSS Data URI / Base64 converter.",
+  "author": "TalexTouch Team",
+  "license": "MIT",
+  "keywords": [
+    "tuff-plugin",
+    "design",
+    "svg",
+    "icons",
+    "vector",
+    "svgo",
+    "vue",
+    "react",
+    "jsx"
+  ],
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./manifest.json": "./manifest.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "manifest.json",
+    "index.js",
+    "assets/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node ../../packages/tuff-cli/bin/tuff.js builder",
+    "test": "node --test index.test.cjs"
+  },
+  "dependencies": {},
+  "engines": {
+    "tuff": ">=261011"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "pnpm@11.24.0",
+  "tuff": {
+    "schemaVersion": 1,
+    "id": "com.tuffex.touch-svg-craft",
+    "name": "touch-svg-craft",
+    "displayName": {
+      "default": "SVG Craft",
+      "locales": {
+        "zh-CN": "SVG 矢量工坊",
+        "en-US": "SVG Craft"
+      }
+    },
+    "sdkapi": 261011,
+    "category": "design",
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "permissions": {
+      "required": [],
+      "optional": ["clipboard.write"]
+    },
+    "platforms": {
+      "win32": true,
+      "darwin": true,
+      "linux": true
+    },
+    "surface": "prelude",
+    "manifest": "./manifest.json"
+  }
+}
