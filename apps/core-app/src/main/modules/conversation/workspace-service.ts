@@ -133,21 +133,36 @@ const submitSchema = z
   })
   .strict()
 
+export const MAX_WORKSPACE_TURN_RECOVERY_ATTEMPTS = 1
+
+export interface WorkspaceTurnRecoveryContext {
+  attempt: number
+  priorContent: string
+  priorParts?: unknown[]
+}
+
 export interface WorkspaceAdmittedTurn {
   input: WorkspaceQueuedInput
   user: StoredConversationMessage
   assistant: StoredConversationMessage
   context?: ConversationWorkspaceState['context']
+  recovery?: WorkspaceTurnRecoveryContext
 }
 export type WorkspaceDirectAdmission =
   | { disposition: 'duplicate'; state: ConversationWorkspaceState }
   | { disposition: 'started'; turn: WorkspaceAdmittedTurn; state: ConversationWorkspaceState }
+
+export interface WorkspaceInitializeOptions {
+  autoResumeOnStartup?: boolean
+}
 
 export interface WorkspaceServiceOptions {
   getDb?: () => MainDatabase
   attachments?: WorkspaceAttachmentStore
   validateSettings?: (settings: ConversationWorkspaceSettings) => Promise<void>
   onChanged?: (state: ConversationWorkspaceState) => void
+  /** Whether cold initialization preserves eligible active turns & queues for startup auto-resume. */
+  autoResumeOnStartup?: boolean | (() => boolean)
   /** The file behind a kept voice clip's id, or `null` once it is gone (voice module). */
   resolveVoiceRecording?: (recordingId: string) => string | null
   /** The clip has been copied into the conversation; its kept original can go. */
@@ -179,6 +194,9 @@ export class ConversationWorkspaceService {
   private readonly queues = new Map<string, TurnQueue>()
   private readonly admissions = new Map<string, PendingAdmission>()
   private readonly claims = new Map<string, PendingClaim>()
+  private readonly recoverableActiveTurns = new Map<string, string>()
+  private readonly recoverableQueueConversations = new Set<string>()
+  private readonly startupInterruptedConversations = new Set<string>()
   private readonly attachments: WorkspaceAttachmentStore
   private readonly db: () => MainDatabase
 
@@ -187,10 +205,16 @@ export class ConversationWorkspaceService {
     this.attachments = options.attachments ?? new WorkspaceAttachmentStore()
   }
 
-  async initialize(): Promise<void> {
+  async initialize(options?: WorkspaceInitializeOptions): Promise<void> {
     if (this.initialized) return
     if (this.initializing) return this.initializing
     this.initializing = (async () => {
+      const autoResume =
+        options?.autoResumeOnStartup ??
+        resolveAutoResumeOption(this.options.autoResumeOnStartup, false)
+      const preservedActive = new Map<string, string>()
+      const preservedQueues = new Set<string>()
+      const interruptedOnInit = new Set<string>()
       const db = this.db()
       await scheduleDbWrite('conversation.workspace.restore', async () => {
         await db.transaction(async (tx) => {
@@ -203,64 +227,350 @@ export class ConversationWorkspaceService {
               .where(eq(conversationQueuedInputs.conversationId, workspace.conversationId))
               .limit(1)
             if (!active && !pending) continue
-            await tx
-              .update(conversationWorkspaces)
-              .set({
-                queueHeld: true,
-                ...(active
-                  ? { status: 'interrupted', activeTurnId: null, runId: null, pendingRunJson: null }
-                  : {}),
-                revision: workspace.revision + 1,
-                updatedAt: Date.now()
-              })
-              .where(eq(conversationWorkspaces.conversationId, workspace.conversationId))
-            if (active) {
-              await tx
-                .update(conversationWorkspaceReceipts)
-                .set({ status: 'interrupted', updatedAt: Date.now() })
-                .where(
-                  and(
-                    eq(conversationWorkspaceReceipts.conversationId, workspace.conversationId),
-                    eq(conversationWorkspaceReceipts.id, active)
-                  )
+            const now = Date.now()
+            if (!autoResume) {
+              if (active) {
+                await interruptActiveTurnInTx(
+                  tx,
+                  workspace.conversationId,
+                  active,
+                  now,
+                  'interrupted',
+                  'WORKSPACE_TURN_INTERRUPTED'
                 )
+                interruptedOnInit.add(workspace.conversationId)
+              } else {
+                await tx
+                  .update(conversationWorkspaces)
+                  .set({
+                    queueHeld: true,
+                    revision: workspace.revision + 1,
+                    updatedAt: now
+                  })
+                  .where(eq(conversationWorkspaces.conversationId, workspace.conversationId))
+              }
+              continue
+            }
+
+            if (active) {
               const rows = await tx
                 .select()
                 .from(conversationMessages)
-                .where(
-                  and(
-                    eq(conversationMessages.conversationId, workspace.conversationId),
-                    eq(conversationMessages.status, 'streaming')
-                  )
-                )
-              for (const row of rows) {
-                const meta = parseMeta(row.meta)
+                .where(eq(conversationMessages.conversationId, workspace.conversationId))
+                .orderBy(asc(conversationMessages.seq))
+              const mapped: StoredConversationMessage[] = rows.map((row) => ({
+                id: row.id,
+                role: row.role as StoredConversationMessage['role'],
+                content: row.content,
+                status: row.status as StoredConversationMessage['status'],
+                meta: parseMetaSafe(row.meta),
+                seq: row.seq,
+                createdAt: row.createdAt
+              }))
+              const pair = findActiveAssistantAndUser(mapped, active)
+              const parsedSettings = settingsSchema.safeParse(safeJsonParse(workspace.settingsJson))
+              const attempts = pair ? readRecoveryAttempts(pair.assistant.meta) : Infinity
+              const eligible =
+                workspace.status === 'running' &&
+                workspace.queueHeld === false &&
+                pair !== null &&
+                pair.user.content.trim().length > 0 &&
+                parsedSettings.success &&
+                attempts < MAX_WORKSPACE_TURN_RECOVERY_ATTEMPTS
+
+              if (eligible) {
                 await tx
-                  .update(conversationMessages)
+                  .update(conversationWorkspaces)
                   .set({
-                    status: 'failed',
-                    meta: JSON.stringify({
-                      ...meta,
-                      outcome: 'interrupted',
-                      errorCode: 'WORKSPACE_TURN_INTERRUPTED'
-                    })
+                    runId: null,
+                    pendingRunJson: null,
+                    revision: workspace.revision + 1,
+                    updatedAt: now
                   })
-                  .where(
-                    and(
-                      eq(conversationMessages.conversationId, workspace.conversationId),
-                      eq(conversationMessages.id, row.id)
-                    )
-                  )
+                  .where(eq(conversationWorkspaces.conversationId, workspace.conversationId))
+                preservedActive.set(workspace.conversationId, active)
+              } else {
+                await interruptActiveTurnInTx(
+                  tx,
+                  workspace.conversationId,
+                  active,
+                  now,
+                  'interrupted',
+                  'WORKSPACE_TURN_INTERRUPTED'
+                )
+                interruptedOnInit.add(workspace.conversationId)
+              }
+            } else if (pending) {
+              if (workspace.queueHeld === false && workspace.status === 'idle') {
+                preservedQueues.add(workspace.conversationId)
+              } else if (!workspace.queueHeld) {
+                await tx
+                  .update(conversationWorkspaces)
+                  .set({
+                    queueHeld: true,
+                    revision: workspace.revision + 1,
+                    updatedAt: now
+                  })
+                  .where(eq(conversationWorkspaces.conversationId, workspace.conversationId))
               }
             }
           }
         })
       })
+      for (const [conversationId, turnId] of preservedActive) {
+        this.recoverableActiveTurns.set(conversationId, turnId)
+      }
+      for (const conversationId of preservedQueues) {
+        this.recoverableQueueConversations.add(conversationId)
+      }
+      for (const conversationId of interruptedOnInit) {
+        this.startupInterruptedConversations.add(conversationId)
+      }
       this.initialized = true
     })().finally(() => {
       this.initializing = undefined
     })
     return this.initializing
+  }
+
+  async listRecoverableConversations(): Promise<{
+    activeConversationIds: string[]
+    queuedConversationIds: string[]
+  }> {
+    await this.initialize()
+    return {
+      activeConversationIds: [...this.recoverableActiveTurns.keys()],
+      queuedConversationIds: [...this.recoverableQueueConversations]
+    }
+  }
+
+  listStartupInterruptedConversations(): string[] {
+    return [...this.startupInterruptedConversations]
+  }
+
+  async finalizeDisabledRecovery(): Promise<string[]> {
+    await this.initialize()
+    const interrupted = new Set<string>(this.startupInterruptedConversations)
+    const activeEntries = [...this.recoverableActiveTurns.entries()]
+    const queuedIds = [...this.recoverableQueueConversations]
+
+    for (const [conversationId, preservedTurnId] of activeEntries) {
+      await this.serial(conversationId, async () => {
+        this.recoverableActiveTurns.delete(conversationId)
+        this.recoverableQueueConversations.delete(conversationId)
+        const row = await this.workspaceRow(conversationId)
+        if (!row || row.activeTurnId !== preservedTurnId) return
+        this.queues.get(conversationId)?.hold(conversationId)
+        const now = Date.now()
+        await scheduleDbWrite('conversation.workspace.interrupt-recovery', () =>
+          this.db().transaction(async (tx) => {
+            const [current] = await tx
+              .select()
+              .from(conversationWorkspaces)
+              .where(eq(conversationWorkspaces.conversationId, conversationId))
+            if (!current || current.activeTurnId !== preservedTurnId) return
+            await interruptActiveTurnInTx(
+              tx,
+              conversationId,
+              preservedTurnId,
+              now,
+              'interrupted',
+              'WORKSPACE_TURN_INTERRUPTED'
+            )
+          })
+        )
+        interrupted.add(conversationId)
+        this.startupInterruptedConversations.add(conversationId)
+        await this.changed(conversationId, true)
+      })
+    }
+
+    for (const conversationId of queuedIds) {
+      await this.serial(conversationId, async () => {
+        this.recoverableQueueConversations.delete(conversationId)
+        const row = await this.workspaceRow(conversationId)
+        if (!row || row.activeTurnId || row.queueHeld) return
+        const [pending] = await this.db()
+          .select({ id: conversationQueuedInputs.id })
+          .from(conversationQueuedInputs)
+          .where(eq(conversationQueuedInputs.conversationId, conversationId))
+          .limit(1)
+        if (!pending) return
+        this.queues.get(conversationId)?.hold(conversationId)
+        await scheduleDbWrite('conversation.workspace.hold-recovery-queue', () =>
+          this.db()
+            .update(conversationWorkspaces)
+            .set({
+              queueHeld: true,
+              revision: sql`${conversationWorkspaces.revision} + 1`,
+              updatedAt: Date.now()
+            })
+            .where(eq(conversationWorkspaces.conversationId, conversationId))
+        )
+        await this.changed(conversationId)
+      })
+    }
+
+    return [...interrupted]
+  }
+
+  async claimRecoverableTurn(conversationId: string): Promise<WorkspaceAdmittedTurn | undefined> {
+    return this.serial(conversationId, async () => {
+      this.recoverableActiveTurns.delete(conversationId)
+      const row = await this.workspaceRow(conversationId)
+      const conversation = await getConversation(conversationId)
+      if (!row || !conversation || !row.activeTurnId) return undefined
+      if (row.status !== 'running' || row.queueHeld) return undefined
+      const turnId = row.activeTurnId
+
+      const interruptMalformed = async (): Promise<undefined> => {
+        this.queues.get(conversationId)?.hold(conversationId)
+        const now = Date.now()
+        await scheduleDbWrite('conversation.workspace.interrupt-recovery', () =>
+          this.db().transaction(async (tx) => {
+            const [current] = await tx
+              .select()
+              .from(conversationWorkspaces)
+              .where(eq(conversationWorkspaces.conversationId, conversationId))
+            if (!current || current.activeTurnId !== turnId) return
+            await interruptActiveTurnInTx(
+              tx,
+              conversationId,
+              turnId,
+              now,
+              'interrupted',
+              'WORKSPACE_TURN_INTERRUPTED'
+            )
+          })
+        )
+        this.startupInterruptedConversations.add(conversationId)
+        await this.changed(conversationId, true)
+        return undefined
+      }
+
+      const pair = findActiveAssistantAndUser(conversation.messages, turnId)
+      if (!pair) return interruptMalformed()
+      const priorAttempts = readRecoveryAttempts(pair.assistant.meta)
+      if (priorAttempts >= MAX_WORKSPACE_TURN_RECOVERY_ATTEMPTS) return interruptMalformed()
+
+      const parsedSettings = settingsSchema.safeParse(safeJsonParse(row.settingsJson))
+      if (!parsedSettings.success) return interruptMalformed()
+
+      const links = await this.db()
+        .select()
+        .from(conversationMessageAttachments)
+        .where(
+          and(
+            eq(conversationMessageAttachments.conversationId, conversationId),
+            eq(conversationMessageAttachments.messageId, pair.user.id)
+          )
+        )
+      const attachmentIds = links.map((link) => link.attachmentId)
+      const attachmentRows = attachmentIds.length
+        ? await this.db()
+            .select()
+            .from(conversationAttachments)
+            .where(
+              and(
+                eq(conversationAttachments.conversationId, conversationId),
+                inArray(conversationAttachments.id, attachmentIds)
+              )
+            )
+        : []
+      const refs: WorkspaceAttachmentRef[] = attachmentRows.map((asset) => ({
+        id: asset.id,
+        kind: asset.mimeType === 'audio/wav' ? ('audio' as const) : ('image' as const),
+        mimeType: asset.mimeType as WorkspaceAttachmentRef['mimeType'],
+        size: asset.size,
+        ...(asset.name ? { name: asset.name } : {})
+      }))
+
+      const parsedInput = inputSchema.safeParse({
+        id: turnId,
+        conversationId,
+        text: pair.user.content,
+        settings: parsedSettings.data,
+        projectId: conversation.projectId,
+        createdAt: pair.assistant.createdAt,
+        ...(refs.length ? { attachments: refs } : {})
+      })
+      if (!parsedInput.success) return interruptMalformed()
+      const input: WorkspaceQueuedInput = parsedInput.data
+
+      try {
+        await this.validate(input.settings, input.projectId)
+      } catch {
+        return interruptMalformed()
+      }
+
+      const now = Date.now()
+      const nextAttempt = priorAttempts + 1
+      const priorContent = pair.assistant.content
+      const priorParts = Array.isArray(pair.assistant.meta?.parts)
+        ? pair.assistant.meta.parts
+        : undefined
+      const nextMeta: Record<string, unknown> = {
+        ...(pair.assistant.meta ?? {}),
+        turnId,
+        recoveryAttempts: nextAttempt,
+        recoveredAt: now
+      }
+
+      let claimed = false
+      await scheduleDbWrite('conversation.workspace.claim-recovery', () =>
+        this.db().transaction(async (tx) => {
+          const [current] = await tx
+            .select()
+            .from(conversationWorkspaces)
+            .where(eq(conversationWorkspaces.conversationId, conversationId))
+          if (
+            !current ||
+            current.activeTurnId !== turnId ||
+            current.status !== 'running' ||
+            current.queueHeld
+          ) {
+            return
+          }
+          await tx
+            .update(conversationMessages)
+            .set({ meta: JSON.stringify(nextMeta) })
+            .where(
+              and(
+                eq(conversationMessages.conversationId, conversationId),
+                eq(conversationMessages.id, pair.assistant.id)
+              )
+            )
+          await tx
+            .update(conversationWorkspaces)
+            .set({
+              runId: null,
+              pendingRunJson: null,
+              revision: sql`${conversationWorkspaces.revision} + 1`,
+              updatedAt: now
+            })
+            .where(eq(conversationWorkspaces.conversationId, conversationId))
+          claimed = true
+        })
+      )
+      if (!claimed) return undefined
+
+      const updatedAssistant: StoredConversationMessage = {
+        ...pair.assistant,
+        meta: nextMeta
+      }
+      await this.changed(conversationId)
+      return {
+        input,
+        user: pair.user,
+        assistant: updatedAssistant,
+        context: row.contextJson ? JSON.parse(row.contextJson) : undefined,
+        recovery: {
+          attempt: nextAttempt,
+          priorContent,
+          ...(priorParts ? { priorParts } : {})
+        }
+      }
+    })
   }
 
   private async serial<T>(conversationId: string, operation: () => Promise<T>): Promise<T> {
@@ -1390,12 +1700,40 @@ export class ConversationWorkspaceService {
 
   async pause(
     conversationId: string,
-    idleStatus: ConversationWorkspaceStatus = 'cancelled'
+    idleStatus: ConversationWorkspaceStatus = 'cancelled',
+    options?: { cancelUnclaimedActive?: boolean }
   ): Promise<ConversationWorkspaceState> {
     return this.serial(conversationId, async () => {
       const row = await this.workspaceRow(conversationId)
       if (!row) throw new Error('WORKSPACE_NOT_FOUND')
+      this.recoverableQueueConversations.delete(conversationId)
       ;(await this.queue(conversationId)).hold(conversationId)
+      const isPreservedRecoverable =
+        Boolean(row.activeTurnId) &&
+        this.recoverableActiveTurns.get(conversationId) === row.activeTurnId
+      if (row.activeTurnId && (isPreservedRecoverable || options?.cancelUnclaimedActive)) {
+        const activeTurnId = row.activeTurnId
+        this.recoverableActiveTurns.delete(conversationId)
+        const now = Date.now()
+        const outcome: 'cancelled' | 'interrupted' | 'failed' =
+          idleStatus === 'interrupted'
+            ? 'interrupted'
+            : idleStatus === 'failed'
+              ? 'failed'
+              : 'cancelled'
+        const errorCode =
+          outcome === 'interrupted'
+            ? 'WORKSPACE_TURN_INTERRUPTED'
+            : outcome === 'failed'
+              ? 'WORKSPACE_EXECUTION_FAILED'
+              : 'WORKSPACE_TURN_CANCELLED'
+        await scheduleDbWrite('conversation.workspace.pause', () =>
+          this.db().transaction(async (tx) => {
+            await interruptActiveTurnInTx(tx, conversationId, activeTurnId, now, outcome, errorCode)
+          })
+        )
+        return this.changed(conversationId, true)
+      }
       await scheduleDbWrite('conversation.workspace.pause', () =>
         this.db()
           .update(conversationWorkspaces)
@@ -1703,17 +2041,131 @@ export class ConversationWorkspaceService {
       if (existing) return
       await this.attachments.cleanupOwner(conversationId)
       this.queues.delete(conversationId)
+      this.recoverableActiveTurns.delete(conversationId)
+      this.recoverableQueueConversations.delete(conversationId)
+      this.startupInterruptedConversations.delete(conversationId)
     })
   }
 }
 
+type MainDbTransaction = Parameters<Parameters<MainDatabase['transaction']>[0]>[0]
+
 function key(conversationId: string, id: string): string {
   return `${conversationId}\0${id}`
+}
+function safeJsonParse(value: string | null): unknown {
+  if (!value) return undefined
+  try {
+    return JSON.parse(value)
+  } catch {
+    return undefined
+  }
 }
 function parseMeta(value: string | null): Record<string, unknown> | undefined {
   if (!value) return undefined
   const parsed: unknown = JSON.parse(value)
   return z.record(z.string(), z.unknown()).parse(parsed)
+}
+function parseMetaSafe(value: string | null): Record<string, unknown> | undefined {
+  if (!value) return undefined
+  const parsed = safeJsonParse(value)
+  const result = z.record(z.string(), z.unknown()).safeParse(parsed)
+  return result.success ? result.data : undefined
+}
+function resolveAutoResumeOption(
+  option: boolean | (() => boolean) | undefined,
+  fallback: boolean
+): boolean {
+  if (typeof option === 'function') {
+    try {
+      return Boolean(option())
+    } catch {
+      return fallback
+    }
+  }
+  if (typeof option === 'boolean') return option
+  return fallback
+}
+function readRecoveryAttempts(meta: Record<string, unknown> | undefined): number {
+  const value = meta?.recoveryAttempts
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0
+}
+function findActiveAssistantAndUser(
+  messages: StoredConversationMessage[],
+  activeTurnId: string
+): { assistant: StoredConversationMessage; user: StoredConversationMessage } | null {
+  const assistant =
+    messages.find(
+      (message) =>
+        message.role === 'assistant' &&
+        message.status === 'streaming' &&
+        (message.id === `assistant-${activeTurnId}` || message.meta?.turnId === activeTurnId)
+    ) ??
+    messages.findLast((message) => message.role === 'assistant' && message.status === 'streaming')
+  if (!assistant) return null
+  const user =
+    messages.find((message) => message.role === 'user' && message.id === `user-${activeTurnId}`) ??
+    messages.findLast((message) => message.role === 'user' && message.seq < assistant.seq)
+  if (!user) return null
+  return { assistant, user }
+}
+async function interruptActiveTurnInTx(
+  tx: MainDbTransaction,
+  conversationId: string,
+  activeTurnId: string,
+  now: number,
+  outcome: 'interrupted' | 'cancelled' | 'failed',
+  errorCode: string
+): Promise<void> {
+  await tx
+    .update(conversationWorkspaces)
+    .set({
+      queueHeld: true,
+      status: outcome,
+      activeTurnId: null,
+      runId: null,
+      pendingRunJson: null,
+      revision: sql`${conversationWorkspaces.revision} + 1`,
+      updatedAt: now
+    })
+    .where(eq(conversationWorkspaces.conversationId, conversationId))
+  await tx
+    .update(conversationWorkspaceReceipts)
+    .set({ status: outcome, updatedAt: now })
+    .where(
+      and(
+        eq(conversationWorkspaceReceipts.conversationId, conversationId),
+        eq(conversationWorkspaceReceipts.id, activeTurnId)
+      )
+    )
+  const streamingRows = await tx
+    .select()
+    .from(conversationMessages)
+    .where(
+      and(
+        eq(conversationMessages.conversationId, conversationId),
+        eq(conversationMessages.status, 'streaming')
+      )
+    )
+  for (const row of streamingRows) {
+    const meta = parseMetaSafe(row.meta)
+    await tx
+      .update(conversationMessages)
+      .set({
+        status: 'failed',
+        meta: JSON.stringify({
+          ...meta,
+          outcome,
+          errorCode
+        })
+      })
+      .where(
+        and(
+          eq(conversationMessages.conversationId, conversationId),
+          eq(conversationMessages.id, row.id)
+        )
+      )
+  }
 }
 function messageRow(conversationId: string, message: StoredConversationMessage) {
   return {

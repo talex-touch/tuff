@@ -35,6 +35,44 @@ function printableToolInput(value: unknown): string {
   return boundedPartText(typeof safe === 'string' ? safe : JSON.stringify(safe ?? null, null, 2))
 }
 
+export interface WorkspaceMessageAssemblerOptions {
+  preserveInitial?: boolean
+}
+
+function hydrateInitialParts(
+  rawParts: unknown,
+  tools: Map<string, AiToolCallPart>
+): AiMessagePart[] | undefined {
+  if (!Array.isArray(rawParts) || rawParts.length === 0) return undefined
+  const hydrated: AiMessagePart[] = []
+  for (const raw of rawParts) {
+    if (!raw || typeof raw !== 'object' || !('type' in raw)) continue
+    const part = raw as AiMessagePart
+    if (part.type === 'text') {
+      hydrated.push({ ...part, text: typeof part.text === 'string' ? part.text : '' })
+    } else if (part.type === 'reasoning') {
+      hydrated.push({
+        ...part,
+        text: typeof part.text === 'string' ? part.text : '',
+        done: true
+      })
+    } else if (part.type === 'tool-call') {
+      const cloned: AiToolCallPart = { ...part }
+      if (cloned.status === 'running' || cloned.status === 'pending') {
+        cloned.status = 'error'
+        cloned.error = 'TOOL_EXECUTION_INTERRUPTED'
+      }
+      if (typeof cloned.id === 'string' && cloned.id.length > 0) {
+        tools.set(cloned.id, cloned)
+      }
+      hydrated.push(cloned)
+    } else {
+      hydrated.push({ ...part })
+    }
+  }
+  return hydrated.length > 0 ? hydrated : undefined
+}
+
 /** Main's canonical turn projection. Commit/reset follows the existing Home contract. */
 export class WorkspaceMessageAssembler {
   private parts: AiMessagePart[] | undefined
@@ -50,12 +88,25 @@ export class WorkspaceMessageAssembler {
   private status: StoredConversationMessage['status'] = 'streaming'
   private compacting = false
   private providerActivity = false
+  private readonly hydratedInitial: boolean
 
   constructor(
     private readonly initial: StoredConversationMessage,
-    turnId: string
+    turnId: string,
+    options?: WorkspaceMessageAssemblerOptions
   ) {
     this.meta = { ...initial.meta, turnId }
+    if (options?.preserveInitial) {
+      delete this.meta.errorCode
+      delete this.meta.errorDetail
+      delete this.meta.outcome
+      this.content = typeof initial.content === 'string' ? initial.content : ''
+      this.parts = hydrateInitialParts(initial.meta?.parts, this.tools)
+      this.commit()
+    }
+    this.hydratedInitial =
+      options?.preserveInitial === true &&
+      (this.content.length > 0 || (this.parts?.length ?? 0) > 0)
   }
 
   get hasProviderActivity(): boolean {
@@ -297,6 +348,18 @@ export class WorkspaceMessageAssembler {
             if (tail?.type === 'text') tail.text = tail.text.slice(0, this.committed.textLength)
           }
           this.delta(text.slice(committedPrefix.length))
+        } else if (this.hydratedInitial) {
+          // Continuation-only completion after recovery hydration must never wipe pre-crash text.
+          this.content = committedPrefix
+          if (this.parts) {
+            const tail = this.parts[this.committed.partsLength - 1]
+            this.parts = this.parts.filter(
+              (part, index) => index < this.committed.partsLength || part.type !== 'text'
+            )
+            if (tail?.type === 'text') tail.text = tail.text.slice(0, this.committed.textLength)
+          }
+          const needsSep = this.content.length > 0 && !/\s$/.test(this.content) && !/^\s/.test(text)
+          this.delta((needsSep ? '\n\n' : '') + text)
         } else {
           this.content = text
           if (this.parts) {

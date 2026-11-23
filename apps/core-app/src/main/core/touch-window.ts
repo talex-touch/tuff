@@ -10,6 +10,7 @@ import process from 'node:process'
 import { app, BrowserWindow, nativeTheme } from 'electron'
 import { IS_WINDOWS_11, MicaBrowserWindow, useMicaElectron, WIN10 } from 'talex-mica-electron'
 import { createLogger } from '../utils/logger'
+import { isAutoResumeOnStartupEnabled } from '../modules/ai/auto-resume-setting'
 import { operationalErrorService } from '../modules/observability'
 import {
   OPAQUE_WINDOW_ENV_VAR,
@@ -20,6 +21,20 @@ import { OpenExternalUrlEvent, TalexEvents, touchEventBus } from './eventbus/tou
 
 const touchWindowLog = createLogger('TouchWindow')
 const degradedRenderProcessGoneWindows = new WeakSet<BrowserWindow>()
+
+export const RENDERER_CRASH_RELOAD_MAX_ATTEMPTS = 2
+export const RENDERER_CRASH_RELOAD_WINDOW_MS = 60_000
+export const RENDERER_CRASH_RELOAD_BACKOFF_MS = [500, 2_000] as const
+
+const RECOVERABLE_RENDER_PROCESS_GONE_REASONS = new Set<RenderProcessGoneDetails['reason']>([
+  'crashed',
+  'oom',
+  'abnormal-exit'
+])
+
+type LastLoadTarget =
+  | { kind: 'url'; target: string; options?: TalexTouch.LoadURLOptions }
+  | { kind: 'file'; target: string; options?: TalexTouch.LoadFileOptions }
 
 // Determine if we should use MicaBrowserWindow (Windows only)
 const isWindows = process.platform === 'win32'
@@ -38,6 +53,10 @@ if (isWindows) {
 export class TouchWindow implements TalexTouch.ITouchWindow {
   window: BrowserWindow
   private isMicaWindow: boolean = false
+  private loadListenersAttached = false
+  private lastLoadTarget: LastLoadTarget | null = null
+  private crashReloadTimestamps: number[] = []
+  private crashReloadTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(rawOptions?: TalexTouch.TouchWindowConstructorOptions) {
     // Every window in the app is built through here, so this is the one place the escape
@@ -124,10 +143,108 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
         this.window.show()
       }
     })
+
+    this.window.once('closed', () => {
+      this.clearCrashReloadTimer()
+    })
   }
 
   close(): void {
+    this.clearCrashReloadTimer()
     this.window.close()
+  }
+
+  private clearCrashReloadTimer(): void {
+    if (this.crashReloadTimer !== null) {
+      clearTimeout(this.crashReloadTimer)
+      this.crashReloadTimer = null
+    }
+  }
+
+  private isWindowOrContentsDestroyed(): boolean {
+    const winDestroyed =
+      typeof this.window.isDestroyed === 'function' ? this.window.isDestroyed() : false
+    const contentsDestroyed =
+      typeof this.window.webContents?.isDestroyed === 'function'
+        ? this.window.webContents.isDestroyed()
+        : false
+    return winDestroyed || contentsDestroyed
+  }
+
+  private scheduleCrashReload(details: RenderProcessGoneDetails): void {
+    if (!RECOVERABLE_RENDER_PROCESS_GONE_REASONS.has(details.reason)) return
+    if (this.isWindowOrContentsDestroyed()) return
+    if (!isAutoResumeOnStartupEnabled()) return
+    if (this.crashReloadTimer !== null) return
+
+    const now = Date.now()
+    this.crashReloadTimestamps = this.crashReloadTimestamps.filter(
+      (timestamp) => now - timestamp < RENDERER_CRASH_RELOAD_WINDOW_MS
+    )
+    if (this.crashReloadTimestamps.length >= RENDERER_CRASH_RELOAD_MAX_ATTEMPTS) {
+      touchWindowLog.error('Renderer crash auto-reload limit reached; skipping reload', {
+        meta: {
+          reason: details.reason,
+          exitCode: details.exitCode,
+          attempts: this.crashReloadTimestamps.length,
+          windowMs: RENDERER_CRASH_RELOAD_WINDOW_MS
+        }
+      })
+      return
+    }
+
+    const attemptIndex = this.crashReloadTimestamps.length
+    const delayMs =
+      RENDERER_CRASH_RELOAD_BACKOFF_MS[
+        Math.min(attemptIndex, RENDERER_CRASH_RELOAD_BACKOFF_MS.length - 1)
+      ]
+    this.crashReloadTimestamps.push(now)
+    touchWindowLog.warn('Scheduling renderer auto-reload after unexpected crash', {
+      meta: {
+        reason: details.reason,
+        exitCode: details.exitCode,
+        attempt: attemptIndex + 1,
+        maxAttempts: RENDERER_CRASH_RELOAD_MAX_ATTEMPTS,
+        delayMs
+      }
+    })
+
+    this.crashReloadTimer = setTimeout(() => {
+      this.crashReloadTimer = null
+      void this.executeCrashReload(details, attemptIndex + 1)
+    }, delayMs)
+  }
+
+  private async executeCrashReload(
+    details: RenderProcessGoneDetails,
+    attempt: number
+  ): Promise<void> {
+    if (this.isWindowOrContentsDestroyed()) return
+    if (degradedRenderProcessGoneWindows.has(this.window)) return
+    if (!isAutoResumeOnStartupEnabled()) return
+
+    try {
+      const currentUrl =
+        typeof this.window.webContents?.getURL === 'function'
+          ? this.window.webContents.getURL()
+          : ''
+      if (currentUrl && currentUrl !== 'about:blank') {
+        this.window.webContents.reload()
+      } else if (this.lastLoadTarget?.kind === 'url') {
+        await this.window.loadURL(this.lastLoadTarget.target, this.lastLoadTarget.options)
+      } else if (this.lastLoadTarget?.kind === 'file') {
+        await this.window.loadFile(this.lastLoadTarget.target, this.lastLoadTarget.options)
+      }
+    } catch (error) {
+      touchWindowLog.error('Failed to auto-reload renderer after crash', {
+        meta: {
+          reason: details.reason,
+          exitCode: details.exitCode,
+          attempt
+        },
+        error
+      })
+    }
   }
 
   minimize(): void {
@@ -227,73 +344,79 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     options?: TalexTouch.LoadURLOptions | undefined
   ): Promise<void> {
     void options
-    this.window.webContents.on(
-      'did-fail-load',
-      (event: ElectronEvent, errorCode: number, errorDescription: string, url: string) => {
-        touchWindowLog.error(`Failed to load from target [${target}]`, {
-          meta: {
-            errorCode,
-            errorDescription,
-            url
-          },
-          error: event
-        })
-      }
-    )
-
-    this.window.webContents.addListener(
-      'render-process-gone',
-      (_event: ElectronEvent, details: RenderProcessGoneDetails) => {
-        if (!app.isPackaged && details.reason === 'killed') {
-          touchWindowLog.info('Development renderer process stopped during reload', {
-            meta: { reason: details.reason, exitCode: details.exitCode }
-          })
-          return
-        }
-
-        if (degradedRenderProcessGoneWindows.has(this.window)) {
-          touchWindowLog.warn('Renderer process gone for degraded window', {
+    if (!this.loadListenersAttached) {
+      this.loadListenersAttached = true
+      this.window.webContents.on(
+        'did-fail-load',
+        (event: ElectronEvent, errorCode: number, errorDescription: string, url: string) => {
+          const currentTarget = this.lastLoadTarget?.target ?? target
+          touchWindowLog.error(`Failed to load from target [${currentTarget}]`, {
             meta: {
-              reason: details.reason,
-              exitCode: details.exitCode
-            }
-          })
-          return
-        }
-
-        touchWindowLog.error(
-          details.reason === 'crashed'
-            ? 'Renderer process crashed unexpectedly'
-            : 'Renderer process gone',
-          {
-            meta: {
-              reason: details.reason,
-              exitCode: details.exitCode
+              errorCode,
+              errorDescription,
+              url
             },
-            error: details
+            error: event
+          })
+        }
+      )
+
+      this.window.webContents.addListener(
+        'render-process-gone',
+        (_event: ElectronEvent, details: RenderProcessGoneDetails) => {
+          if (!app.isPackaged && details.reason === 'killed') {
+            touchWindowLog.info('Development renderer process stopped during reload', {
+              meta: { reason: details.reason, exitCode: details.exitCode }
+            })
+            return
           }
-        )
-        operationalErrorService.report({
-          domain: 'renderer-process',
-          operation: 'process-gone',
-          error: new Error('RENDER_PROCESS_GONE'),
-          code:
-            details.reason === 'oom'
-              ? 'RENDER_PROCESS_OOM'
-              : details.reason === 'crashed'
-                ? 'RENDER_PROCESS_CRASH'
-                : 'RENDER_PROCESS_GONE',
-          severity:
-            details.reason === 'oom' ||
-            details.reason === 'crashed' ||
-            details.reason === 'integrity-failure'
-              ? 'fatal'
-              : 'error',
-          userImpact: 'blocked',
-          context: { reason: details.reason, exitCode: details.exitCode }
-        })
-      }
-    )
+
+          if (degradedRenderProcessGoneWindows.has(this.window)) {
+            touchWindowLog.warn('Renderer process gone for degraded window', {
+              meta: {
+                reason: details.reason,
+                exitCode: details.exitCode
+              }
+            })
+            return
+          }
+
+          touchWindowLog.error(
+            details.reason === 'crashed'
+              ? 'Renderer process crashed unexpectedly'
+              : 'Renderer process gone',
+            {
+              meta: {
+                reason: details.reason,
+                exitCode: details.exitCode
+              },
+              error: details
+            }
+          )
+          operationalErrorService.report({
+            domain: 'renderer-process',
+            operation: 'process-gone',
+            error: new Error('RENDER_PROCESS_GONE'),
+            code:
+              details.reason === 'oom'
+                ? 'RENDER_PROCESS_OOM'
+                : details.reason === 'crashed'
+                  ? 'RENDER_PROCESS_CRASH'
+                  : 'RENDER_PROCESS_GONE',
+            severity:
+              details.reason === 'oom' ||
+              details.reason === 'crashed' ||
+              details.reason === 'integrity-failure'
+                ? 'fatal'
+                : 'error',
+            userImpact: 'blocked',
+            context: { reason: details.reason, exitCode: details.exitCode }
+          })
+
+          this.scheduleCrashReload(details)
+        }
+      )
+    }
 
     touchWindowLog.debug(`Try load webContents from target [${target}]`)
   }
@@ -302,6 +425,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     url: string,
     options?: TalexTouch.LoadURLOptions | undefined
   ): Promise<WebContents> {
+    this.lastLoadTarget = { kind: 'url', target: url, options }
     this.__beforeLoad(url, options)
 
     await this.window.loadURL(url, options)
@@ -319,6 +443,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     filePath: string,
     options?: TalexTouch.LoadFileOptions | undefined
   ): Promise<WebContents> {
+    this.lastLoadTarget = { kind: 'file', target: filePath, options }
     this.__beforeLoad(filePath, options)
 
     await this.window.loadFile(filePath, options)

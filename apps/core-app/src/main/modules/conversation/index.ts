@@ -7,10 +7,11 @@
 
 import type { MaybePromise, ModuleInitContext } from '@talex-touch/utils'
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
-import type { TalexEvents } from '../../core/eventbus/touch-event'
+import type { WorkspaceStartupRecoveryResult } from './workspace-runner'
 import { ConversationEvents } from '@talex-touch/utils/transport/sdk/domains/conversation'
 import { AgentWorkspaceEvents } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import { ConversationReviewEvents } from '@talex-touch/utils/transport/sdk/domains/conversation-review'
+import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { fileReviewService, setFileReviewGatewayProvider } from './file-review-service'
 import { toolGatewayModule } from '../tool-gateway'
 import { ConversationWorkspaceRunner } from './workspace-runner'
@@ -56,6 +57,13 @@ export class ConversationModule extends BaseModule<TalexEvents> {
       onMessageUpdate: (update) => transport.broadcast(AgentWorkspaceEvents.messageUpdate, update)
     })
     this.runner = runner
+    const handleBeforeModulesUnload = (): void => {
+      this.beginShutdown()
+    }
+    touchEventBus.on(TalexEvents.BEFORE_MODULES_UNLOAD, handleBeforeModulesUnload)
+    this.disposers.push(() => {
+      touchEventBus.off(TalexEvents.BEFORE_MODULES_UNLOAD, handleBeforeModulesUnload)
+    })
     this.disposers.push(
       registerConversationMutationFence({
         write: (id, operation) => runner.writeFence(id, operation),
@@ -170,7 +178,17 @@ export class ConversationModule extends BaseModule<TalexEvents> {
     conversationLog.info('Conversation channels registered')
   }
 
+  beginShutdown(): void {
+    this.runner?.beginShutdown()
+  }
+
+  async recoverOnStartup(): Promise<WorkspaceStartupRecoveryResult | null> {
+    if (!this.runner) return null
+    return this.runner.recoverOnStartup()
+  }
+
   async onDestroy(): Promise<void> {
+    this.runner?.beginShutdown()
     await this.runner?.close()
     this.runner = undefined
     for (const dispose of this.disposers) dispose()
