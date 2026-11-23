@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 3416",
     "build": "vue-tsc --noEmit -p tsconfig.json && vite build",
+    "lint": "pnpm exec eslint --cache --max-warnings=0 --no-warn-ignored --no-error-on-unmatched-pattern \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\"",
+    "lint:fix": "pnpm exec eslint --cache --fix --max-warnings=0 --no-warn-ignored --no-error-on-unmatched-pattern \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\"",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "preview": "vite preview --host 127.0.0.1 --port 3417"
   },

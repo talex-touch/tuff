@@ -106,9 +106,7 @@ jobs:
           # (scripts/run-eslint-changed.mjs), which works because the repository is public.
           persist-credentials: false
 
-      # actionlint comes from mise's [tools], the same way docs:verify's toolchain does. It runs
-      # here rather than in the Documentation Quality job because that one is red on every PR
-      # (#1254) -- a new check added there would report into a job nobody can read a signal from.
+      # actionlint and shellcheck come from mise's [tools], the same way docs:verify's toolchain does.
       - name: Setup mise
         uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
         with:
