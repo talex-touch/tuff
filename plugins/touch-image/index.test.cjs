@@ -211,6 +211,8 @@ test('reports unavailable and failed capability outcomes without attempting loca
   await lifecycle.onFeatureTriggered('image-tools', imageQuery())
   assert.equal(state.items[0].id, 'image-tools-capability-unavailable')
   assert.equal(state.items[0].title, '图片导出能力不可用')
+  assert.match(state.items[0].subtitle, /capability-unavailable/)
+  assert.doesNotMatch(state.items[0].subtitle, /权限/)
 
   globalThis.plugin.imageTools = {
     async save() {
@@ -242,4 +244,38 @@ test('destroy invalidates every issued image export action before it reaches the
     reason: 'invalid-action',
   })
   assert.deepEqual(state.saveCalls, [])
+})
+
+test('maps permission-unavailable and timeout host errors distinctly in errorResult', async () => {
+  const cases = [
+    {
+      code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE',
+      expected: { externalAction: true, success: false, status: 'blocked', reason: 'permission-unavailable' },
+    },
+    {
+      code: 'PLUGIN_HOST_CAPABILITY_TIMEOUT',
+      expected: { externalAction: true, success: false, status: 'failed', reason: 'timeout' },
+    },
+    {
+      code: 'PLUGIN_HOST_REQUEST_TIMEOUT',
+      expected: { externalAction: true, success: false, status: 'failed', reason: 'timeout' },
+    },
+  ]
+
+  for (const entry of cases) {
+    globalThis.plugin.imageTools = {
+      async save() {
+        const error = new Error('host error')
+        error.code = entry.code
+        throw error
+      },
+    }
+    await lifecycle.onFeatureTriggered('image-tools', imageQuery())
+    const item = itemByAction('image-tools.save-png')
+    assert.deepEqual(
+      await lifecycle.onItemAction(item, { actionId: 'image-tools.save-png' }),
+      entry.expected,
+      entry.code,
+    )
+  }
 })

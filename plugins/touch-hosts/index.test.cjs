@@ -373,3 +373,74 @@ test('foreign feature never reads facade', async () => {
   assert.equal(result, false)
   assert.equal(state.reads, 0)
 })
+
+test('consumes issued action token on execution to reject sequential and concurrent replay', async () => {
+  state.snapshot = {
+    status: 'ready',
+    revision: 'r7',
+    entries: [{ hostname: 'api.example.com', addresses: ['192.0.2.10'] }],
+  }
+  await pluginModule.onFeatureTriggered('hosts', { text: '' })
+  const item = JSON.parse(JSON.stringify(state.items[0]))
+
+  let releaseApply
+  globalThis.plugin.hosts.apply = async (request) => {
+    state.applies.push(request)
+    return new Promise((resolve) => {
+      releaseApply = () => resolve({ status: 'started' })
+    })
+  }
+
+  const first = pluginModule.onItemAction(item, { actionId: 'hosts.upsert' })
+  const concurrentReplay = await pluginModule.onItemAction(item, { actionId: 'hosts.upsert' })
+  assert.deepEqual(concurrentReplay, {
+    externalAction: true,
+    success: false,
+    status: 'blocked',
+    reason: 'invalid-action',
+  })
+
+  releaseApply()
+  assert.deepEqual(await first, { externalAction: true, success: true, status: 'started' })
+
+  const sequentialReplay = await pluginModule.onItemAction(item, { actionId: 'hosts.upsert' })
+  assert.deepEqual(sequentialReplay, {
+    externalAction: true,
+    success: false,
+    status: 'blocked',
+    reason: 'invalid-action',
+  })
+  assert.equal(state.applies.length, 1)
+})
+
+test('maps permission-unavailable separately from capability-unavailable with dedicated message', async () => {
+  globalThis.plugin.hosts = {
+    async read() {
+      throw Object.assign(new Error('permission subsystem offline'), {
+        code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE',
+      })
+    },
+    async apply() {
+      throw Object.assign(new Error('permission subsystem offline'), {
+        code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE',
+      })
+    },
+  }
+  await pluginModule.onFeatureTriggered('hosts', { text: '' })
+  assert.equal(state.items[0].render.basic.subtitle, '权限系统不可用')
+
+  globalThis.plugin.hosts.read = async () => ({
+    status: 'ready',
+    revision: 'r8',
+    entries: [{ hostname: 'api.example.com', addresses: ['192.0.2.10'] }],
+  })
+  await pluginModule.onFeatureTriggered('hosts', { text: '' })
+  const item = JSON.parse(JSON.stringify(state.items[0]))
+  const result = await pluginModule.onItemAction(item, { actionId: 'hosts.upsert' })
+  assert.deepEqual(result, {
+    externalAction: true,
+    success: false,
+    status: 'failed',
+    reason: 'permission-unavailable',
+  })
+})

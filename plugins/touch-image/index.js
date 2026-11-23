@@ -228,11 +228,17 @@ function errorResult(error) {
   if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED') {
     return { externalAction: true, success: false, status: 'blocked', reason: 'permission-denied' }
   }
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE') {
+    return { externalAction: true, success: false, status: 'blocked', reason: 'permission-unavailable' }
+  }
   if (
-    code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE'
+    code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE'
     || code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE'
   ) {
     return { externalAction: true, success: false, status: 'blocked', reason: 'capability-unavailable' }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT' || code === 'PLUGIN_HOST_REQUEST_TIMEOUT') {
+    return { externalAction: true, success: false, status: 'failed', reason: 'timeout' }
   }
   return { externalAction: true, success: false, status: 'failed', reason: 'save-failed' }
 }
@@ -323,7 +329,7 @@ const lifecycle = {
 
     if (!plugin?.imageTools || typeof plugin.imageTools.save !== 'function') {
       return await publishItems(
-        [infoItem('capability-unavailable', '图片导出能力不可用', '请检查图片读取与保存权限后重试')],
+        [infoItem('capability-unavailable', '图片导出能力不可用', '当前环境未提供图片导出宿主能力 · capability-unavailable')],
         generation,
       )
     }
