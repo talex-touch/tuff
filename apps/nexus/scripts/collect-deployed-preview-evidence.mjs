@@ -98,6 +98,55 @@ export function summarizeBfcacheResult(summary, harPath) {
   }
 }
 
+export function collectDeployedPreviewFailures({
+  api = [],
+  routes = [],
+  bfcache = null,
+  authProviderCallback = null,
+  authenticatedDashboard = null,
+} = {}) {
+  return [
+    ...api
+      .filter(probe => probe?.ok !== true)
+      .map((probe) => {
+        const label = probe?.name ?? probe?.path ?? 'unknown'
+        const expected = Array.isArray(probe?.expected) && probe.expected.length
+          ? `, expected ${probe.expected.join(' or ')}`
+          : ''
+        return `API probe failed (${label}): returned ${probe?.status ?? 'unknown'}${expected}`
+      }),
+    ...routes
+      .filter(route => route?.ok !== true)
+      .map(route => `route probe failed (${route?.path ?? 'unknown'}): returned ${route?.status ?? 'unknown'}`),
+    ...(bfcache?.realBfcacheHit === true ? [] : ['real bfcache hit not observed']),
+    ...(authProviderCallback?.authenticated ? [] : ['real provider callback is pending']),
+    ...(authProviderCallback?.authenticated && authProviderCallback?.ok !== true
+      ? ['real provider callback evidence is not ok']
+      : []),
+    ...(authenticatedDashboard?.authenticated ? [] : ['authenticated dashboard smoke is pending']),
+  ]
+}
+
+export function resolveDeployedPreviewStatus({
+  authState = '',
+  routes = [],
+  api = [],
+  failures = [],
+  warnings = [],
+} = {}) {
+  const hasAuthState = Boolean(typeof authState === 'string' ? authState.trim() : authState)
+  const allRoutesOk = routes.every(route => route?.ok === true)
+  const allApiOk = api.every(probe => probe?.ok === true)
+
+  if (!allRoutesOk || !allApiOk)
+    return 'FAIL'
+  if (hasAuthState && failures.length > 0)
+    return 'FAIL'
+  if (!hasAuthState)
+    return 'PENDING_AUTH'
+  return warnings.length > 0 ? 'PASS_WITH_WARNINGS' : 'PASS'
+}
+
 export function parseArgs(values) {
   const parsed = {}
   for (let index = 0; index < values.length; index += 1) {
@@ -170,9 +219,26 @@ async function runCli(argv) {
       : pendingProviderCallback('missing --provider-callback-evidence from an interactive OAuth callback smoke')
 
     const publicRoutes = summarizePublicRoutes(routes)
+    const failures = collectDeployedPreviewFailures({
+      api,
+      routes,
+      bfcache,
+      authProviderCallback,
+      authenticatedDashboard,
+    })
+    const warnings = [
+      ...(authState ? [] : ['No authenticated storage state supplied; authenticated dashboard and provider callback are pending']),
+    ]
+    const status = resolveDeployedPreviewStatus({
+      authState,
+      routes,
+      api,
+      failures,
+      warnings,
+    })
     const evidence = {
       schema: 'nexus-cloudflare-pages-preview-runtime-smoke/v1',
-      status: authState ? 'PASS_WITH_WARNINGS' : 'PENDING_AUTH',
+      status,
       generatedAt: new Date().toISOString(),
       baseUrl,
       build: {
@@ -193,14 +259,8 @@ async function runCli(argv) {
       bfcache,
       authProviderCallback,
       authenticatedDashboard,
-      failures: [
-        ...(bfcache.realBfcacheHit ? [] : ['real bfcache hit not observed']),
-        ...(authProviderCallback.authenticated ? [] : ['real provider callback is pending']),
-        ...(authenticatedDashboard.authenticated ? [] : ['authenticated dashboard smoke is pending']),
-      ],
-      warnings: [
-        ...(authState ? [] : ['No authenticated storage state supplied; authenticated dashboard and provider callback are pending']),
-      ],
+      failures,
+      warnings,
     }
 
     const jsonPath = join(outputRoot, `${evidencePrefix}.json`)

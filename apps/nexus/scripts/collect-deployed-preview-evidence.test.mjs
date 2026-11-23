@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   apiProbes,
   CHROMIUM_LAUNCH_OPTIONS,
+  collectDeployedPreviewFailures,
   extractServiceWorkerPrecacheUrls,
   parseArgs,
   relativeEvidencePath,
+  resolveDeployedPreviewStatus,
   resolveOutputEvidenceFile,
   resolveOutputRoot,
   routeBudgets,
@@ -119,5 +121,112 @@ describe('collect-deployed-preview-evidence helpers', () => {
 
     expect(miss.realBfcacheHit).toBe(false)
     expect(miss.navigationType).toBe('back_forward')
+  })
+
+  it('resolves deployed preview status across PASS, PASS_WITH_WARNINGS, PENDING_AUTH, and FAIL', () => {
+    const okRoutes = [{ path: '/', ok: true, status: 200 }, { path: '/store/', ok: true, status: 200 }]
+    const okApi = [{ name: 'docs navigation', ok: true, status: 200, expected: [200] }]
+
+    expect(resolveDeployedPreviewStatus({
+      authState: 'output/playwright/auth.json',
+      routes: okRoutes,
+      api: okApi,
+      failures: [],
+      warnings: [],
+    })).toBe('PASS')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: 'output/playwright/auth.json',
+      routes: okRoutes,
+      api: okApi,
+      failures: [],
+      warnings: ['non-fatal observation'],
+    })).toBe('PASS_WITH_WARNINGS')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: '',
+      routes: okRoutes,
+      api: okApi,
+      failures: ['real provider callback is pending', 'authenticated dashboard smoke is pending'],
+      warnings: ['No authenticated storage state supplied; authenticated dashboard and provider callback are pending'],
+    })).toBe('PENDING_AUTH')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: '   ',
+      routes: okRoutes,
+      api: okApi,
+      failures: [],
+      warnings: [],
+    })).toBe('PENDING_AUTH')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: '',
+      routes: [{ path: '/', ok: true, status: 200 }, { path: '/store/', ok: false, status: 500 }],
+      api: okApi,
+      failures: ['route probe failed (/store/): returned 500'],
+      warnings: ['No authenticated storage state supplied'],
+    })).toBe('FAIL')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: '',
+      routes: okRoutes,
+      api: [{ name: 'docs navigation', ok: false, status: 502, expected: [200] }],
+      failures: ['API probe failed (docs navigation): returned 502, expected 200'],
+      warnings: [],
+    })).toBe('FAIL')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: 'output/playwright/auth.json',
+      routes: okRoutes,
+      api: okApi,
+      failures: ['real bfcache hit not observed'],
+      warnings: [],
+    })).toBe('FAIL')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: 'output/playwright/auth.json',
+      routes: okRoutes,
+      api: okApi,
+      failures: ['real provider callback is pending'],
+      warnings: [],
+    })).toBe('FAIL')
+  })
+
+  it('collects honest failure summaries for failed routes, API probes, bfcache, and auth checks', () => {
+    expect(collectDeployedPreviewFailures({
+      api: [
+        { name: 'docs navigation', ok: true, status: 200, expected: [200] },
+        { name: 'auth session shell', ok: false, status: 500, expected: [200] },
+      ],
+      routes: [
+        { path: '/', ok: true, status: 200 },
+        { path: '/store/', ok: false, status: 503 },
+      ],
+      bfcache: { realBfcacheHit: false },
+      authProviderCallback: { ok: false, authenticated: false },
+      authenticatedDashboard: { ok: false, authenticated: false },
+    })).toEqual([
+      'API probe failed (auth session shell): returned 500, expected 200',
+      'route probe failed (/store/): returned 503',
+      'real bfcache hit not observed',
+      'real provider callback is pending',
+      'authenticated dashboard smoke is pending',
+    ])
+
+    expect(collectDeployedPreviewFailures({
+      api: [{ name: 'docs navigation', ok: true, status: 200, expected: [200] }],
+      routes: [{ path: '/', ok: true, status: 200 }],
+      bfcache: { realBfcacheHit: true },
+      authProviderCallback: { ok: true, authenticated: true },
+      authenticatedDashboard: { ok: true, authenticated: true },
+    })).toEqual([])
+
+    expect(collectDeployedPreviewFailures({
+      api: [{ name: 'docs navigation', ok: true, status: 200, expected: [200] }],
+      routes: [{ path: '/', ok: true, status: 200 }],
+      bfcache: { realBfcacheHit: true },
+      authProviderCallback: { ok: false, authenticated: true },
+      authenticatedDashboard: { ok: true, authenticated: true },
+    })).toEqual(['real provider callback evidence is not ok'])
   })
 })

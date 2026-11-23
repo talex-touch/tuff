@@ -14,28 +14,32 @@ describe('ompAcpClient live integration smoke', () => {
       cwd: '/tmp'
     })
 
-    expect(client.agentInfo).toBeDefined()
-    expect(client.agentInfo?.name).toBe('omp')
+    let session: Awaited<ReturnType<typeof client.createSession>> | undefined
+    try {
+      expect(client.agentInfo).toBeDefined()
+      expect(client.agentInfo?.name).toBe('omp')
 
-    const session = await client.createSession({
-      cwd: '/tmp',
-      model: 'cpa/gemini-3.8-flash'
-    })
+      const liveModel = process.env.TUFF_OMP_LIVE_MODEL?.trim()
+      session = await client.createSession({
+        cwd: '/tmp',
+        ...(liveModel ? { model: liveModel } : {})
+      })
 
-    expect(session.sessionId).toBeDefined()
+      expect(session.sessionId).toBeDefined()
 
-    const receivedChunks: string[] = []
-    const res = await session.prompt('Say "Live ACP Smoke Pass" in exactly 4 words.', (ev) => {
-      if (ev.type === 'delta' && ev.text) {
-        receivedChunks.push(ev.text)
-      }
-    })
+      const receivedChunks: string[] = []
+      const res = await session.prompt('Say "Live ACP Smoke Pass" in exactly 4 words.', (ev) => {
+        if (ev.type === 'delta' && ev.text) {
+          receivedChunks.push(ev.text)
+        }
+      })
 
-    expect(res.output).toBeDefined()
-    expect(res.output.toLowerCase()).toContain('live acp smoke pass')
-    expect(receivedChunks.length).toBeGreaterThan(0)
-
-    await session.close()
-    await client.close()
-  }, 20000)
+      expect(res.output).toBeDefined()
+      expect(res.output.toLowerCase()).toContain('live acp smoke pass')
+      expect(receivedChunks.length).toBeGreaterThan(0)
+    } finally {
+      await session?.close()
+      await client.close()
+    }
+  }, 60000)
 })
