@@ -1,4 +1,4 @@
-import { getZIndex, refreshZIndex } from '@talex-touch/tuffex/utils'
+import { getZIndex, refreshZIndex } from '@talex-touch/tuffex/utils/z-index-manager'
 
 /**
  * Tuffex's shared z-index manager seeds at 2000, but nexus paints its fixed

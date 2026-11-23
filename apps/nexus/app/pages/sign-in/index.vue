@@ -1,12 +1,14 @@
 <script setup lang="ts">
+import { defineAsyncComponent } from 'vue'
 import Logo from '~/components/icon/Logo.vue'
 import { useSignIn } from '~/composables/useSignIn'
-import SignInBindEmailStep from './components/SignInBindEmailStep.vue'
 import SignInEmailStep from './components/SignInEmailStep.vue'
-import SignInOauthStep from './components/SignInOauthStep.vue'
-import SignInPasskeyStep from './components/SignInPasskeyStep.vue'
-import SignInSuccessStep from './components/SignInSuccessStep.vue'
 import SignInStepCarousel from './components/SignInStepCarousel.vue'
+
+const SignInBindEmailStep = defineAsyncComponent(() => import('./components/SignInBindEmailStep.vue'))
+const SignInOauthStep = defineAsyncComponent(() => import('./components/SignInOauthStep.vue'))
+const SignInPasskeyStep = defineAsyncComponent(() => import('./components/SignInPasskeyStep.vue'))
+const SignInSuccessStep = defineAsyncComponent(() => import('./components/SignInSuccessStep.vue'))
 
 definePageMeta({
   layout: false,

@@ -41,20 +41,38 @@ const TUFFEX_DATA_STYLE_COMPONENTS = new Set([
 ])
 
 const HEADER_COMPONENT_PATTERN = /\/app\/components\/(?:TheHeader|HeaderControls|HeaderIconButton|DarkToggle|LanguageToggle|icon\/Logo)\.vue$/
+const DOCS_LAYOUT_COMPONENT_PATTERN = /\/app\/(?:layouts\/docs|components\/DocsOutline|components\/DocsSidebar|components\/docs\/DocsAsideCardsShell|components\/docs\/DocsCopyPromptButton)\.vue$/
+const DOCS_DEMO_SHELL_COMPONENT_PATTERN = /\/app\/components\/content\/(?:TuffDemoWrapper|TuffDemoClientRenderer\.client|TuffDocSourceLink)\.vue$/
+const DOCS_SURFACE_STYLE_PATTERN = /\/app\/(?:layouts\/docs|components\/DocsOutline|components\/DocsSidebar|components\/docs\/(?:DocsAsideCardsShell|DocsCopyPromptButton|DocApiTable)|components\/content\/(?:TuffDemoWrapper|TuffDocSourceLink|TuffCodeBlockRenderer))\.vue$/
+const LANDING_IMAGE_ASSET_PATTERN = /\/app\/images\/assets\//
 const TUFFEX_DIST_COMPONENT_PATTERN = /\/packages\/tuffex\/dist\/es\/([^/]+)\//
 
 /**
- * Consolidates tiny shared header SFCs and TuffEx style-only dependency entrypoints
+ * Consolidates tiny shared header/docs SFCs and TuffEx style-only dependency entrypoints
  * into predictable family chunks without pulling unrelated app code across routes.
+ * Landing image URL stubs stay isolated so `experimentalMinChunkSize` never folds them
+ * into shared Nuxt runtime chunks loaded by non-landing routes.
  */
 export function resolveNexusManualChunk(id: string): string | undefined {
   const cleanId = (id.split('?')[0] ?? id).replace(/\\/g, '/')
+  if (LANDING_IMAGE_ASSET_PATTERN.test(cleanId))
+    return 'nexus-landing-assets'
+
   const isStyleAsset = cleanId.endsWith('.css') || id.includes('type=style')
-  if (!isStyleAsset)
+  if (!isStyleAsset) {
+    if (HEADER_COMPONENT_PATTERN.test(cleanId))
+      return 'nexus-header-controls'
+    if (DOCS_LAYOUT_COMPONENT_PATTERN.test(cleanId))
+      return 'docs-layout'
+    if (DOCS_DEMO_SHELL_COMPONENT_PATTERN.test(cleanId))
+      return 'docs-demo-shell'
     return undefined
+  }
 
   if (HEADER_COMPONENT_PATTERN.test(cleanId))
     return 'nexus-header'
+  if (DOCS_SURFACE_STYLE_PATTERN.test(cleanId))
+    return 'docs-surface'
 
   const tuffexMatch = cleanId.match(TUFFEX_DIST_COMPONENT_PATTERN)
   if (!tuffexMatch)

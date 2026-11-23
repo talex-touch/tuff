@@ -1,5 +1,5 @@
-import type { FormMessages } from '@talex-touch/tuffex/utils'
-import { provideTxFormHost } from '@talex-touch/tuffex/utils'
+import type { FormMessages } from '@talex-touch/tuffex/utils/form-host'
+import { provideTxFormHost } from '@talex-touch/tuffex/utils/form-host'
 
 type NexusI18n = ReturnType<typeof useNuxtApp>['$i18n']
 

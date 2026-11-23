@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { TxButton } from '@talex-touch/tuffex/button'
-import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({
@@ -47,6 +45,9 @@ async function ensureAuthenticatedSession() {
   const firstSession = await getSessionWithTimeout()
   if (hasActiveSession(firstSession))
     return true
+
+  if (!hasSessionHint())
+    return false
 
   await new Promise(resolve => setTimeout(resolve, 200))
 
@@ -259,8 +260,8 @@ onUnmounted(() => {
     </template>
 
     <div class="mb-16 w-full max-w-md text-center">
-      <div v-if="status === 'loading'" class="flex flex-col items-center gap-4">
-        <TxSpinner :size="30" />
+      <div v-if="status === 'loading'" class="flex flex-col items-center gap-4" role="status" aria-live="polite">
+        <span class="app-callback-spinner" aria-hidden="true" />
         <p class="text-base text-white/90">
           {{ t('auth.callbackProcessing', '正在处理登录回调，请稍候…') }}
         </p>
@@ -281,12 +282,12 @@ onUnmounted(() => {
           </p>
           <code class="block max-h-24 overflow-auto break-all text-xs text-white/85">{{ sessionToken }}</code>
           <div class="flex justify-center gap-2">
-            <TxButton variant="primary" size="sm" @click="copyToken">
+            <button type="button" class="app-callback-btn app-callback-btn--primary app-callback-btn--sm" @click="copyToken">
               {{ copied ? '✓ Copied!' : 'Copy Token' }}
-            </TxButton>
-            <TxButton variant="ghost" size="sm" @click="requestCloseTab">
+            </button>
+            <button type="button" class="app-callback-btn app-callback-btn--ghost app-callback-btn--sm" @click="requestCloseTab">
               {{ t('common.close', '关闭') }}
-            </TxButton>
+            </button>
           </div>
         </div>
       </div>
@@ -299,9 +300,9 @@ onUnmounted(() => {
         <p class="text-sm text-red-300/90">
           {{ errorMessage }}
         </p>
-        <TxButton variant="primary" size="lg" @click="goTo('/sign-in')">
+        <button type="button" class="app-callback-btn app-callback-btn--primary app-callback-btn--lg" @click="goTo('/sign-in')">
           {{ t('auth.tryAgain', 'Try Again') }}
-        </TxButton>
+        </button>
       </div>
     </div>
 
@@ -310,3 +311,69 @@ onUnmounted(() => {
     </template>
   </AuthVisualShell>
 </template>
+
+<style scoped>
+.app-callback-spinner {
+  width: 30px;
+  height: 30px;
+  border: 2.5px solid rgba(255, 255, 255, 0.22);
+  border-top-color: #fff;
+  border-radius: 999px;
+  animation: app-callback-spin 0.8s linear infinite;
+}
+
+@keyframes app-callback-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.app-callback-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, opacity 0.16s ease;
+}
+
+.app-callback-btn:focus-visible {
+  outline: 2px solid rgba(167, 139, 250, 0.8);
+  outline-offset: 2px;
+}
+
+.app-callback-btn--sm {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.app-callback-btn--lg {
+  height: 44px;
+  padding: 0 22px;
+  font-size: 14px;
+}
+
+.app-callback-btn--primary {
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: #fff;
+  color: #09090b;
+  font-weight: 600;
+}
+
+.app-callback-btn--primary:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.app-callback-btn--ghost {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.app-callback-btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+</style>

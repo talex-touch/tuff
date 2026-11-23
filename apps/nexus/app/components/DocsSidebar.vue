@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import DocSection from './docs/DocSection.vue'
 import DocsSuiteTriggerButton from './docs/DocsSuiteTriggerButton.vue'
-import type { TxRadioValue } from '@talex-touch/tuffex/radio'
-import { TxRadio, TxRadioGroup } from '@talex-touch/tuffex/radio'
-import type { JellyIndicatorFrame } from '@talex-touch/tuffex/utils'
-import { GLIDE, stepSpring, useIndicatorBox, useJellyIndicator } from '@talex-touch/tuffex/utils'
+import { GLIDE } from '@talex-touch/tuffex/utils/animation/jelly'
+import { stepSpring } from '@talex-touch/tuffex/utils/animation/spring'
+import { useIndicatorBox } from '@talex-touch/tuffex/utils/use-indicator-box'
+import type { JellyIndicatorFrame } from '@talex-touch/tuffex/utils/use-jelly-indicator'
+import { useJellyIndicator } from '@talex-touch/tuffex/utils/use-jelly-indicator'
 import { hasWindow } from '@talex-touch/utils/env'
 import { useLazyDropdownMenu } from '~/composables/useLazyMenu'
 import type { DocsSuiteKey } from '~/utils/docs-suites'
@@ -978,11 +979,58 @@ function sortTree(items: any[], parentPath: string | null): any[] {
 }
 
 const items = computed(() => coerceJsonArray<any>(navigationTreePayload.value))
+
+function collectEmbeddedComponentDocs(nodes: any[], localeCode: 'en' | 'zh'): SidebarComponentDoc[] {
+  const results: SidebarComponentDoc[] = []
+  let hasEmbeddedMetadata = false
+
+  const visit = (list: any[]) => {
+    for (const node of list) {
+      if (!node || typeof node !== 'object') continue
+      const path = typeof node.path === 'string' ? node.path : ''
+      const normalized = path ? normalizeContentPath(path) : null
+      if (normalized && normalized.startsWith('/docs/dev/components/')) {
+        const nodeLocale: 'en' | 'zh' = path.endsWith('.zh') ? 'zh' : path.endsWith('.en') ? 'en' : localeCode
+        if (nodeLocale === localeCode) {
+          if ('category' in node || 'syncStatus' in node || 'verified' in node || 'since' in node)
+            hasEmbeddedMetadata = true
+          const verified = node.verified === true
+          const rawStatus = typeof node.syncStatus === 'string' ? node.syncStatus.trim() : ''
+          const syncStatus: SyncStatusKey = verified
+            ? 'verified'
+            : (COMPONENT_SYNC_STATUS_ALIASES[rawStatus] ?? 'not_started')
+          results.push({
+            title: typeof node.title === 'string' && node.title ? node.title : fallbackTitleFromPath(path),
+            path,
+            normalizedPath: normalized,
+            locale: nodeLocale,
+            category: typeof node.category === 'string' ? node.category : null,
+            since: typeof node.since === 'string' && node.since.trim() ? node.since.trim() : null,
+            syncStatus,
+            verified,
+          })
+        }
+      }
+      if (Array.isArray(node.children) && node.children.length > 0)
+        visit(node.children)
+    }
+  }
+
+  visit(nodes)
+  return hasEmbeddedMetadata ? results : []
+}
+
+const embeddedComponentItems = computed(() =>
+  collectEmbeddedComponentDocs(items.value, docsLocale.value),
+)
 const componentItems = computed(
-  () =>
-    coerceJsonArray<SidebarComponentDoc>(componentDocsPayload.value).filter(
+  () => {
+    if (embeddedComponentItems.value.length > 0)
+      return embeddedComponentItems.value as any[]
+    return coerceJsonArray<SidebarComponentDoc>(componentDocsPayload.value).filter(
       item => item.locale === docsLocale.value,
-    ) as any[],
+    ) as any[]
+  },
 )
 const lastComponentSections = shallowRef<any[]>([])
 const isTutorialRoute = computed(() => normalizedRoutePath.value.startsWith('/docs/guide'))
@@ -1212,20 +1260,43 @@ const activeTopSection = computed(() => {
   return defaultSection.value
 })
 
+const activeTopSectionIndex = computed(() => {
+  const index = TOP_SECTIONS.value.findIndex(section => section.key === activeTopSection.value)
+  return index >= 0 ? index : 0
+})
+
 // The section switch is a real radiogroup. Its selection reads the route, and
 // picking a segment is a navigation: `activeTopSection` updates when the new
 // page lands, which is what moves the group's indicator. A pick that names the
 // section already showing is ignored rather than re-navigating.
-function onTopSectionChange(key: TxRadioValue) {
+function onTopSectionChange(key: string) {
   const section = TOP_SECTIONS.value.find(candidate => candidate.key === key)
   if (!section || section.key === activeTopSection.value) return
   void navigateTo(localizedDocsPath(section.entryPath || section.basePath))
 }
 
+const topSectionButtonRefs = ref<Array<HTMLButtonElement | null>>([])
+
+function setTopSectionButtonRef(index: number, el: unknown) {
+  topSectionButtonRefs.value[index] = el instanceof HTMLButtonElement ? el : null
+}
+
+function cycleTopSection(delta: -1 | 1) {
+  const sections = TOP_SECTIONS.value
+  if (sections.length < 2)
+    return
+  const nextIndex = (activeTopSectionIndex.value + delta + sections.length) % sections.length
+  const nextSection = sections[nextIndex]
+  if (nextSection) {
+    topSectionButtonRefs.value[nextIndex]?.focus()
+    onTopSectionChange(nextSection.key)
+  }
+}
+
 const sidebarPending = computed(() => pending.value)
 
 function hasComponentDocsMetadata() {
-  return coerceJsonArray(componentDocsPayload.value).length > 0
+  return embeddedComponentItems.value.length > 0 || coerceJsonArray(componentDocsPayload.value).length > 0
 }
 
 function clearComponentDocsMetadataSchedule() {
@@ -1240,13 +1311,13 @@ function clearComponentDocsMetadataSchedule() {
 }
 
 function requestComponentDocsMetadata() {
-  if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata()) return
+  if (!shouldLoadComponentDocs.value || pending.value || hasComponentDocsMetadata()) return
   clearComponentDocsMetadataSchedule()
   void refreshComponentDocs()
 }
 
 function requestComponentDocsMetadataOnIntent() {
-  if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata()) return
+  if (!shouldLoadComponentDocs.value || pending.value || hasComponentDocsMetadata()) return
 
   clearComponentDocsMetadataSchedule()
   componentDocsMetadataTimer = setTimeout(() => {
@@ -1256,12 +1327,12 @@ function requestComponentDocsMetadataOnIntent() {
 }
 
 function scheduleComponentDocsMetadata() {
-  if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata()) return
+  if (!shouldLoadComponentDocs.value || pending.value || hasComponentDocsMetadata()) return
 
   clearComponentDocsMetadataSchedule()
   componentDocsMetadataTimer = setTimeout(() => {
     componentDocsMetadataTimer = null
-    if (!shouldLoadComponentDocs.value || hasComponentDocsMetadata()) return
+    if (!shouldLoadComponentDocs.value || pending.value || hasComponentDocsMetadata()) return
     if (hasWindow() && 'requestIdleCallback' in window) {
       componentDocsMetadataIdleId = window.requestIdleCallback(
         () => {
@@ -1277,9 +1348,9 @@ function scheduleComponentDocsMetadata() {
 }
 
 watch(
-  shouldLoadComponentDocs,
-  shouldLoad => {
-    if (!shouldLoad) {
+  () => [shouldLoadComponentDocs.value, pending.value, embeddedComponentItems.value.length] as const,
+  ([shouldLoad, navPending, embeddedCount]) => {
+    if (!shouldLoad || navPending || embeddedCount > 0) {
       clearComponentDocsMetadataSchedule()
       return
     }
@@ -1629,22 +1700,31 @@ onBeforeUnmount(() => {
     <!-- Section switch + suite switcher (sticky within sidebar). Two fixed rows:
          the suites used to be a second tab row that wrapped once it outgrew 230px. -->
     <div v-if="!isTutorialRoute" class="docs-nav-head">
-      <TxRadioGroup
-        :model-value="activeTopSection"
-        type="button"
+      <div
         class="docs-nav-sections"
+        role="radiogroup"
         :aria-label="t('docsSidebar.sections')"
-        @change="onTopSectionChange"
+        :data-active-index="activeTopSectionIndex"
       >
-        <TxRadio
-          v-for="sec in TOP_SECTIONS"
+        <span class="docs-nav-sections__thumb" aria-hidden="true" />
+        <button
+          v-for="(sec, index) in TOP_SECTIONS"
           :key="sec.key"
-          :value="sec.key"
+          :ref="(el) => setTopSectionButtonRef(index, el)"
+          type="button"
+          role="radio"
+          class="docs-nav-section"
+          :class="{ 'is-checked': activeTopSection === sec.key }"
+          :aria-checked="activeTopSection === sec.key"
+          :tabindex="activeTopSection === sec.key ? 0 : -1"
+          @click="onTopSectionChange(sec.key)"
+          @keydown.left.prevent="cycleTopSection(-1)"
+          @keydown.right.prevent="cycleTopSection(1)"
         >
           <span :class="sec.icon" class="docs-nav-section__icon" aria-hidden="true" />
           <span class="docs-nav-section__label">{{ sec.label }}</span>
-        </TxRadio>
-      </TxRadioGroup>
+        </button>
+      </div>
       <TxDropdownMenu
         v-if="activeTopSection === 'components' && suiteMenuActivated"
         v-model="suiteMenuOpen"
@@ -1895,13 +1975,10 @@ onBeforeUnmount(() => {
   --docs-nav-switch-thumb: var(--tx-fill-color, #303030);
 }
 
-/* Section switch. TxRadioGroup ships the segmented control — real radiogroup
-   semantics, a roving tab stop and the travelling indicator — so this is the
-   skin it needs to become the sidebar's own full-width two-segment control:
-   the component's rules are one class deep, and every rule below is anchored
-   on `.docs-nav-head` (or raises specificity further) so it wins regardless of
-   stylesheet order. */
+/* Section switch: native radiogroup with roving tabindex and sliding thumb so
+   every docs page avoids pulling TuffEx radio/glass-surface chunks on load. */
 .docs-nav-head .docs-nav-sections {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   width: 100%;
@@ -1914,11 +1991,32 @@ onBeforeUnmount(() => {
   flex-wrap: nowrap;
 }
 
-.docs-nav-head .docs-nav-sections :deep(.tx-radio) {
+.docs-nav-head .docs-nav-sections__thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 8px) / 2);
+  border-radius: 7px;
+  background: var(--docs-nav-switch-thumb);
+  box-shadow: var(--tx-elevation-1, 1px 2px 4px rgba(0, 0, 0, 0.08));
+  pointer-events: none;
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.docs-nav-head .docs-nav-sections[data-active-index='1'] .docs-nav-sections__thumb {
+  transform: translateX(calc(100% + 2px));
+}
+
+.docs-nav-head .docs-nav-section {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   min-width: 0;
   height: 28px;
-  justify-content: center;
   gap: 6px;
   /* Concentric with the track: 10px outer radius minus the 3px inset. */
   padding: 0 8px;
@@ -1927,37 +2025,22 @@ onBeforeUnmount(() => {
   background: transparent;
   overflow: hidden;
   white-space: nowrap;
+  font: inherit;
   font-size: 13px;
   font-weight: 500;
   color: var(--docs-nav-ink);
+  cursor: pointer;
+  transition: color 0.16s ease;
 }
 
-.docs-nav-head .docs-nav-sections :deep(.tx-radio.is-checked) {
+.docs-nav-head .docs-nav-section.is-checked {
   color: var(--tx-text-color-primary, #303133);
 }
 
-/* The component fills a hovered segment; the sheet's own thumb is the only
-   fill that should read, and it slides under the pointer. */
-.docs-nav-head .docs-nav-sections :deep(.tx-radio--button:hover:not(.is-disabled):not(.is-checked)) {
-  background: transparent;
-}
-
-.docs-nav-head .docs-nav-sections :deep(.tx-radio:focus-visible) {
+.docs-nav-head .docs-nav-section:focus-visible {
   box-shadow: none;
   outline: 2px solid var(--tx-color-primary, #409eff);
   outline-offset: 1px;
-}
-
-.docs-nav-head .docs-nav-sections :deep(.tx-radio-group__indicator-plain) {
-  border: 0;
-  border-radius: 7px;
-  background: var(--docs-nav-switch-thumb);
-  box-shadow: var(--tx-elevation-1, 1px 2px 4px rgba(0, 0, 0, 0.08));
-}
-
-.docs-nav-head .docs-nav-sections :deep(.tx-radio-group__indicator-outline),
-.docs-nav-head .docs-nav-sections :deep(.tx-radio-group__indicator-hit) {
-  border-radius: 7px;
 }
 
 .docs-nav-section__icon {
