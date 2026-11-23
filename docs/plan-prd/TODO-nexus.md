@@ -154,6 +154,7 @@
 - [ ] **线上 `--require-deployed-preview` 最终 Cloudflare Pages 实测门禁（等待外部部署与操作员凭据）**：
   - 2026-11-23 合并前在 `https://tuff.tagzxia.com` 的只读基线已确认线上运行时绑定可达（`/api/releases?limit=12&assets=featured` `200` / `162,795 B`）；上述 PR `#2265`（`5c3e67a33`）代码修复已合入 `master` 并在本地 Wrangler 复验闭环，不以本地结果代替线上实测。
   - 当前 `--require-deployed-preview` 仅等待：将含 `5c3e67a33` 的版本部署至 Cloudflare Pages preview 后，由操作员提供真实 `--auth-state` 与 `--provider-callback-evidence` 凭据采集最终 preview HAR/JSON 并通过 `node build/check-runtime-evidence.mjs --require-deployed-preview`（门禁保持开放、不放宽）。
+  - **2026-11-23 `https://tuff.tagzxia.com` 实测 deployed preview 采证同步**：`8/8` 路由均 HTTP `200`，`0` failed / page / hydration error；公开路由累计 `_nuxt` `236/320`，`/en/docs/dev/components/tabs/` `_nuxt` `39/40` 且 `docs` `1/1`；SW precache `9/9`；真实 `bfcache` 命中（`pageshowPersisted: [false, true]`）；真实 GitHub OAuth callback 验收通过（`authenticated: true`）且已认证 `/dashboard/` 返回 HTTP `200`。同步配套 PR `#2272`（collector status 推导修复）与 PR `#2274`（`API_PROBE_SAMPLE_LENGTH` 采样切片、路由预算边界与 `--deployed-only` 同步）。
 - [ ] **Pages API runtime smoke**：本地 Pages 预览的根页面返回 `200` 且 `cache-control: public, max-age=300, s-maxage=300` 正确；`/api/releases?limit=12&assets=featured` 仍因本地 Worker build/runtime credential 未配置有效值返回 `NEXUS_RUNTIME_CREDENTIAL_INVALID`。下一步使用有效本地 runtime bindings 或 deployed preview 复验 API，不用当前结果宣称生产 API 已验收。
 - [ ] **开发实例切换**：代码已将 `nexus:dev` 指向 `dev:pure`；现有 3200 端口进程仍是旧 supervisor，需重启开发实例后再做一次实际页面 smoke。
 

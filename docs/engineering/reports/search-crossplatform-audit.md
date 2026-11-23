@@ -159,6 +159,10 @@
   - 实测证据（2026-09-27）：本地 `CI=true pnpm build:app --target=mac --type=snapshot` 跑完 `afterPack` —— 日志同时出现 `✓ Native module found: …tuff_native_audio.node` 与 `[afterPack] Verified packaged native addons: tuff_native_ocr.node, tuff_native_audio.node`；产出的 `dist/mac-arm64/tuff.app/Contents/Resources/node_modules/@talex-touch/tuff-native/build/Release/` 含 **4 个** addon（audio / screenshot / ocr / everything，对比安装版 beta.47 只有 2 个），`app.asar.unpacked` 同步含 4 个；直接 `require` 打包树里的 `tuff_native_audio.node` 返回 `{supported:true, platform:"macos"}` 且导出齐全。该次构建唯一失败点是 `forceCodeSigning` 找不到 Developer ID（本地无证书，CI 提供），发生在 `afterPack` 之后，与本项无关。
   - 仍未闭环：`screenshot` 的**打包运行时**证据（真的在有屏幕的会话里截一张）仍由 `07-29-screenshot-packaged-evidence` 承接；#321 / #322 需在下次 tag 发布后核对产物再关。
   - 2026-10-18 官方安装包只读复核：arm64 `2.4.15-beta.7` 的物理 `app.asar.unpacked` 包含 screenshot、audio、OCR、Everything addon 与 translation helper；Developer ID/deep strict codesign、Gatekeeper、公证与 RSA build-attestation/asar 摘要校验通过。未启动该安装包截图，也未把 Node/浏览器 smoke 当 packaged 原生运行证据。
+  - **2026-11-23 官方签名打包运行实证（`/Applications/Tuff.app` `v2.4.15-beta.13`, `darwin/arm64`, commit `645e8a01a`）**：
+    - `codesign --verify --deep --strict` 与 `spctl --assess`（Notarized Developer ID）及运行期官方构建证明（`BuildVerificationModule`）全部通过；`app.asar.unpacked` 与 `Resources/node_modules/@talex-touch/tuff-native/build/Release/` 含全部 4 个 `.node` addon（screenshot / audio / ocr / everything）。
+    - 通过 `/Applications/Tuff.app/Contents/MacOS/tuff`（`ELECTRON_RUN_AS_NODE=1`）加载打包内 `screenshot-protocol.js` -> `loadScreenshotCarrier()` -> `handshake`（`engine: screen-capture-kit`, `state: available`, `buildProfile: release`）-> `probe`（`screenRecording: granted`, `accessibility: granted`, `72ms`）-> `refresh`（`2` 显示器、`32` 窗口）-> `capture`（主屏 `display:mac:1:1` 真实截屏 `4112x2658` PNG、`2,310,105 bytes`、魔数 `89504e470d0a1a0a`、`944ms`）；同包 `tuff_native_audio.node`（`{supported: true, platform: 'macos'}`）与 `tuff_native_ocr.node`（`{supported: true, platform: 'darwin'}`）加载通过。
+    - R1 保持开放：macOS arm64 官方签名包截图运行实证已完成，仍留待 Windows / Linux 打包实机截图验收与 issue `#321` / `#322` 关闭收口（不以 macOS arm64 实证替代 Windows / Linux 跨平台运行验收）。
 
 - [ ] **R2 — macOS 双架构已发行，跨架构运行证据仍需核对**
   - 2026-10-18 当前源码及正式资产复核：`electron-builder.yml` 的 DMG/ZIP 均声明 `arm64` 与 `x64`。官方 `v2.4.15-beta.7` GitHub inventory 含两种架构的 DMG、ZIP 及签名；发布 manifest 为 `darwin/arm64` 与 `darwin/x64` 分别列出首选 DMG、SHA-256 和签名。
@@ -204,6 +208,9 @@
   - R9 仍保持 open：App Provider 尚未迁入 search-index worker typed persistence port，`db/utils.ts` policy-free mutations、libSQL client/session owner registry 和 aux compatibility mirror 退场仍待后续收敛。
   - Remaining R9 search-index split write migration is owned by `07-28-migrate-search-index-split-write-paths`: the split has defaulted on since `cd39bdbf6`; `=0` is the emergency rollback. Every remaining 2d/2e writer and provider-before-`searchIndexWriter` readiness assertion still needs focused verification and isolated-profile runtime evidence.
   - 2026-09-27 **dev 分支与已发布 beta 漂移造成 writer 病态退化**：当前 dev PID 88881（master 尚缺 stage 上已发布的 `9ed43e307` / `bcac84591`）对 7.41GB `search-index.db` 保持 241 个描述符；`app-provider` 每 50 条写批次实测 52.7–94.8s，随后文件 enrichment 的 30s persist barrier 与 scheduler drain 连锁超时。含两笔修复的隔离 build 在同机 100k campaign 已推进 6.3 万文件时仅保持 10 个该库描述符。两笔已发布提交已同步回当前工作树；正在运行的旧 dev 进程需重启后才生效。
+  - **2026-11-23 `v2.4.15-beta.13` 打包 split 验收与 `fd` 符号链接根修复**：
+    - `search-split:app-evidence --launch packaged --appBundle /Applications/Tuff.app --seedAppCatalog`（非系统隔离沙箱路径）**62/62 全部通过**（`bootstrap` 19/19、`split` 20/20、`rollback` 16/16、`parity` 7/7；`0 SQLITE_BUSY` / `0 SQLITE_LOCKED` / `0` 主库越界写入；`database.db` `198` app 行、`search-index.db` `4` 非 app 文件行与 `202` `search_index` 行、回滚正对照 `13` 写、双拓扑查询与计数完全一致）。
+    - 同步发现并修复了 `file-scan-fd-backend.ts` 对符号链接监听根未做 `fs.realpath` 规范化导致 `isPathInsideRoot` 静默丢弃全部文件的缺陷（PR `#2273`）。
 
 - [x] **R10 — indexing 期间主进程同步 SQLite 语句与每事件 diagnostics 扇出** ✅ 已逐项量化、修复或证伪（2026-09-27）
   - 2026-09-21 现场证据（dev 会话 `tuff-dev/logs/D.2026-09-21.log`）：fullScan 期间 `[Perf:EventLoop] Event loop lag` 连续 0.4–1.3s，并使一次 `storage:app:save` 的 IPC 请求超时——配置未落盘，UI 显示「存储服务返回失败（版本 71）」，而主进程日志里没有任何 storage 侧失败、DB revision 停在 71。
