@@ -168,13 +168,14 @@ function contentSwitch(wrapper: VueWrapper) {
   )
 }
 
-function paused(status: 'low-space' | 'unavailable'): FileIndexContentSettings {
+function paused(status: 'low-space' | 'index-full' | 'unavailable'): FileIndexContentSettings {
   return {
     contentIndexingEnabled: true,
     state: 'paused',
     storage: {
       status,
-      availableBytes: status === 'low-space' ? 1.125 * GIB : null,
+      availableBytes:
+        status === 'low-space' ? 1.125 * GIB : status === 'index-full' ? 20 * GIB : null,
       requiredBytes: 3 * GIB,
       checkedAt: 1234,
       ...{ path: SECRET_PATH, error: 'private-token ENOSPC' }
@@ -207,8 +208,48 @@ describe('SettingFileIndex capacity feedback', () => {
     }
   )
 
+  it('shows index-full pause feedback instead of misreporting insufficient disk space', async () => {
+    const { wrapper } = await mountSettings(paused('index-full'), paused('index-full'), undefined, {
+      fileBytes: Math.round(7.95 * GIB),
+      maxBytes: 8 * GIB,
+      resetFromBytes: null
+    })
+    expect(contentSwitch(wrapper).attributes('aria-checked')).toBe('true')
+    const warning = wrapper.find('[role="status"]')
+    expect(warning.attributes('data-tone')).toBe('warning')
+    expect(warning.text()).toContain(
+      i18n.global.t('settings.settingFileIndex.contentIndexStorageIndexFull')
+    )
+    expect(warning.text()).toContain(
+      i18n.global.t('settings.settingFileIndex.contentIndexStorageIndexFullRecovery')
+    )
+    expect(warning.text()).toContain('7.95')
+    expect(warning.text()).toContain('8')
+    expect(warning.text()).not.toContain(
+      i18n.global.t('settings.settingFileIndex.contentIndexStorageLow')
+    )
+    expect(wrapper.text()).not.toContain(SECRET_PATH)
+    expect(wrapper.text()).not.toContain('private-token')
+  })
+
+  it('shows fallback index-full summary when indexStorage bytes are not available', async () => {
+    const { wrapper } = await mountSettings(paused('index-full'))
+    const warning = wrapper.find('[role="status"]')
+    expect(warning.attributes('data-tone')).toBe('warning')
+    expect(warning.text()).toContain(
+      i18n.global.t('settings.settingFileIndex.contentIndexStorageIndexFull')
+    )
+    expect(warning.text()).toContain(
+      i18n.global.t('settings.settingFileIndex.contentIndexStorageIndexFullSummaryUnknown')
+    )
+    expect(warning.text()).not.toContain(
+      i18n.global.t('settings.settingFileIndex.contentIndexStorageLow')
+    )
+  })
+
   it.each([
     { name: 'paused low space', response: paused('low-space'), tone: 'warning' },
+    { name: 'paused index full', response: paused('index-full'), tone: 'warning' },
     { name: 'paused unavailable', response: paused('unavailable'), tone: 'warning' },
     {
       name: 'admitted',

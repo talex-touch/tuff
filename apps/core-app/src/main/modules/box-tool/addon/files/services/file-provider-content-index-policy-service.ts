@@ -6,7 +6,10 @@ import { IndexedWorkerPersistEntryMapperService } from '@talex-touch/utils/searc
 import type { FileIndexSettings } from '../types'
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
 import type { FilePersistenceEntry } from '../../../search-engine/file-index-persistence-repository'
-import type { FileProviderContentCapacityService } from './file-provider-content-capacity-service'
+import type {
+  ContentCapacityFailureOptions,
+  FileProviderContentCapacityService
+} from './file-provider-content-capacity-service'
 
 interface FileProviderContentIndexPolicyDeps {
   capacity?: FileProviderContentCapacityService
@@ -65,10 +68,17 @@ export class FileProviderContentIndexPolicyService {
     }
   }
 
-  recordStorageFailure(error: unknown): boolean {
-    const paused = this.deps.capacity?.recordFailure(error) ?? false
+  recordStorageFailure(error: unknown, options?: ContentCapacityFailureOptions): boolean {
+    const paused = this.deps.capacity?.recordFailure(error, options) ?? false
     if (paused) this.handleStorageChange()
     return paused
+  }
+
+  async notifyIndexSpaceFreed(): Promise<boolean> {
+    if (!this.deps.capacity) return this.isAdmissionEnabled()
+    await this.deps.capacity.notifyIndexSpaceFreed()
+    this.handleStorageChange()
+    return this.isAdmissionEnabled()
   }
 
   dispose(): void {
@@ -141,7 +151,7 @@ export class FileProviderContentIndexPolicyService {
         try {
           await this.deps.updateSettings({ contentIndexingEnabled: true })
         } catch (error) {
-          if (this.recordStorageFailure(error)) {
+          if (this.recordStorageFailure(error, { source: 'disk' })) {
             throw Object.assign(new Error('FILE_CONTENT_STORAGE_PAUSED'), {
               code: 'FILE_CONTENT_STORAGE_PAUSED'
             })
@@ -163,6 +173,7 @@ export class FileProviderContentIndexPolicyService {
       this.deps.cancelPending()
       try {
         await this.deps.clearData()
+        this.deps.capacity?.clearIndexFullPause()
         await this.deps.updateSettings({
           contentIndexingEnabled: false,
           contentIndexCleanupVersion: this.deps.cleanupVersion

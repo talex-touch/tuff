@@ -147,7 +147,7 @@ import { FileProviderRuntimeResetService } from './services/file-provider-runtim
 import { FileProviderScanProgressService } from './services/file-provider-scan-progress-service'
 import { FileProviderEnrichmentResumeService } from './services/file-provider-enrichment-resume-service'
 import { FileProviderContentIndexPolicyService } from './services/file-provider-content-index-policy-service'
-import { FileProviderContentCapacityService } from './services/file-provider-content-capacity-service'
+import { createDatabaseContentCapacityService } from './services/file-provider-content-capacity-service'
 import { classifyRunFailure, isIndexFullFailure } from './services/file-provider-run-failure'
 import { FileProviderBootPassService } from './services/file-provider-boot-pass-service'
 import { FileProviderIndexRowStore } from './services/file-provider-index-row-store'
@@ -420,8 +420,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     onBaseCommitReady: () => this.enrichmentResumeService.resume('base-maintenance-commit'),
     onCapacityEvicted: () => {
       if (isIndexFullFailure(this.initializationFailure)) this.initializationFailure = null
+      void this.contentIndexPolicyService.notifyIndexSpaceFreed()
       void this.runAutoIndexing()
     },
+    onIndexSpaceFreed: () => void this.contentIndexPolicyService.notifyIndexSpaceFreed(),
     emitCleanupProgress: (current, total) => {
       if (this.isInitializing !== null) {
         this.progressState.emit('cleanup', current, total)
@@ -849,15 +851,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       logWarn: (message, error, meta) => this.logWarn(message, error, meta)
     })
     this.contentIndexPolicyService = new FileProviderContentIndexPolicyService({
-      capacity: new FileProviderContentCapacityService({
-        getDirectory: () => {
-          const database = this.initializationContext?.databaseManager
-          if (!database) return null
-          const target = database.getSearchDatabaseFilePath()
-          return target && target !== ':memory:' ? path.dirname(target) : null
-        },
-        onChange: () => this.contentIndexPolicyService.handleStorageChange()
-      }),
+      capacity: createDatabaseContentCapacityService(
+        () => this.initializationContext?.databaseManager,
+        () => this.contentIndexPolicyService.handleStorageChange()
+      ),
       cleanupVersion: FILE_CONTENT_INDEX_POLICY_VERSION,
       getSettings: () => this.fileIndexSettings,
       updateSettings: (patch) => this.watchService.updateFileIndexSettings(patch),
@@ -1191,7 +1188,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       throw new Error('INDEXED_SOURCE_RUNTIME_RESET_DELEGATE_UNAVAILABLE')
     }
     if (request.clearSearchIndex) await this.maintenanceService.capacity.reset()
-    return await this.indexedSourceRuntimeResetDelegate(request)
+    const result = await this.indexedSourceRuntimeResetDelegate(request)
+    if (request.clearSearchIndex && !result.error)
+      void this.contentIndexPolicyService.notifyIndexSpaceFreed()
+    return result
   }
 
   public async resetIndexedSourceRuntimeState(

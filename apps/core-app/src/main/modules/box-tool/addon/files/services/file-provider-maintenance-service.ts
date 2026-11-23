@@ -133,6 +133,8 @@ export interface FileProviderMaintenanceDeps {
   onBaseCommitReady: () => void
   /** A capacity sweep removed files, so a scan the cap stopped can go on. */
   onCapacityEvicted?: () => void
+  /** Compaction or cleanup freed index space, so a paused index-full content lane may re-check. */
+  onIndexSpaceFreed?: () => void
   emitCleanupProgress: (current: number, total: number) => void
   /** Whether a folder is a linked worktree; defaults to reading its `.git`. Tests inject one. */
   isLinkedWorktreeRoot?: (directoryPath: string) => Promise<boolean>
@@ -294,6 +296,7 @@ export class FileProviderMaintenanceService {
     options?: FileIndexRunOptions
   ): Promise<FileProviderCleanupDeleteResult> {
     const result = await this.cleanupDeleteService.execute(options)
+    if (result.deletedCount > 0) this.deps.onIndexSpaceFreed?.()
     this.maintenanceCleanupPending = !result.done
     if (!result.done) this.scheduleFileMaintenance()
     return result
@@ -1238,6 +1241,7 @@ export class FileProviderMaintenanceService {
         freelistBytesAfter: last.freelistBytesAfter,
         durationMs
       })
+      if (last.ran) this.deps.onIndexSpaceFreed?.()
     } catch (error) {
       this.deps.logWarn('Search index compaction failed', error, { reason })
     }
@@ -1279,6 +1283,7 @@ export class FileProviderMaintenanceService {
         }
         if (this.maintenanceCleanupNext && this.maintenanceCleanupPending) {
           const cleanup = await this.cleanupDeleteService.execute(options)
+          if (cleanup.deletedCount > 0) this.deps.onIndexSpaceFreed?.()
           this.maintenanceCleanupPending = !cleanup.done
           this.scheduleFileMaintenance()
         } else if (this.dbUtils) {
