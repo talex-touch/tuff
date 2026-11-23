@@ -17,7 +17,6 @@ import {
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { finished } from 'node:stream/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import sharp from 'sharp'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -633,8 +632,7 @@ async function createPackagedApp(
     mkdirSync(path.dirname(entryPath), { recursive: true })
     writeFileSync(entryPath, contents, 'utf8')
   }
-  const archiveStream = await createPackage(asarSource, appAsar)
-  await finished(archiveStream)
+  await createPackage(asarSource, appAsar)
   return appBundle
 }
 

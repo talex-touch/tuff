@@ -20,7 +20,7 @@ napi-derive.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2.189"
-objc2 = { version = "=0.6.4", default-features = false, features = ["std"] }
+objc2 = { version = "=0.6.5", default-features = false, features = ["std"] }
 objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSRunningApplication", "NSWorkspace", "libc"] }
 objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFArray", "CFBase", "CFDate", "CFDictionary", "CFNumber", "CFString", "CFURL", "CFUUID"] }
 objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std", "CGWindow", "CGWindowLevel", "libc"] }
