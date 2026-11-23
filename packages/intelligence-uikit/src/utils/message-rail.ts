@@ -56,6 +56,64 @@ export function summarizeRailMessage(
   return normalized
 }
 
+export interface TxAiRailPromptSegment {
+  type: 'text' | 'image'
+  value: string
+}
+
+export const RAIL_IMAGE_SENTINEL = '§§RAILIMAGE§§'
+
+export function isRailImageAttachment(att: unknown): boolean {
+  if (typeof att !== 'object' || att === null)
+    return false
+  if ('kind' in att && (att as { kind?: unknown }).kind === 'image')
+    return true
+  if ('type' in att && (att as { type?: unknown }).type === 'image')
+    return true
+  if ('mimeType' in att && String((att as { mimeType?: unknown }).mimeType).startsWith('image/'))
+    return true
+  return false
+}
+
+export function countRailImageAttachments(message: {
+  attachments?: readonly unknown[]
+  modelAttachments?: readonly unknown[]
+}): number {
+  const attachments = message.attachments ?? message.modelAttachments
+  if (!Array.isArray(attachments))
+    return 0
+  return attachments.filter(isRailImageAttachment).length
+}
+
+export function buildMessageRailSegments(
+  title: string,
+  hasContent: boolean,
+  extraImageCount: number,
+  options: { sentinel?: string, fallbackLabel?: string } = {},
+): TxAiRailPromptSegment[] {
+  const sentinel = options.sentinel ?? RAIL_IMAGE_SENTINEL
+  const fallbackLabel = options.fallbackLabel ?? 'Message'
+  const segments: TxAiRailPromptSegment[] = []
+  let imgIdx = 0
+
+  if (hasContent || extraImageCount === 0) {
+    const parts = title.split(sentinel)
+    parts.forEach((part, index) => {
+      if (part.trim().length > 0)
+        segments.push({ type: 'text', value: part })
+      if (index < parts.length - 1) {
+        imgIdx += 1
+        segments.push({ type: 'image', value: `#IMAGE${imgIdx}` })
+      }
+    })
+  }
+  for (let i = 0; i < extraImageCount; i += 1) {
+    imgIdx += 1
+    segments.push({ type: 'image', value: `#IMAGE${imgIdx}` })
+  }
+  return segments.length ? segments : [{ type: 'text', value: fallbackLabel }]
+}
+
 /**
  * Extract numbered turn anchors (`#1`, `#2`, ...) from user prompts for the rail.
  */

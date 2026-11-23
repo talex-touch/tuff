@@ -1,6 +1,6 @@
-import type { AiAttachment, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
+import type { AiAttachment, AiMessagePart, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
 import type { ChatComposerAttachment } from '@talex-touch/tuffex/chat'
-import type { TxAiAttachment, TxAiMessagePart, TxAiSegment } from '../types'
+import type { TxAiAttachment, TxAiMessageModel, TxAiMessagePart, TxAiSegment } from '../types'
 
 export type AiSendState = 'disabled' | 'send' | 'stop' | 'queue'
 
@@ -35,6 +35,11 @@ export interface AwaitingFirstTokenInput {
   content?: string
   parts?: readonly TxAiMessagePart[]
   segments?: readonly TxAiSegment[]
+  /**
+   * When true, any reasoning span (even empty) or tool-call part counts as
+   * rendered transcript output, matching CoreApp's thinking-orb condition.
+   */
+  includeReasoning?: boolean
 }
 
 /**
@@ -47,7 +52,7 @@ export function isAiAwaitingFirstToken(input: AwaitingFirstTokenInput): boolean 
   if (input.status !== 'streaming')
     return false
 
-  if (typeof input.content === 'string' && input.content.trim().length > 0)
+  if (typeof input.content === 'string' && (input.includeReasoning ? input.content.length > 0 : input.content.trim().length > 0))
     return false
 
   if (input.segments?.some((segment) => {
@@ -55,22 +60,75 @@ export function isAiAwaitingFirstToken(input: AwaitingFirstTokenInput): boolean 
       return segment.text.trim().length > 0
     if (segment.kind === 'tool')
       return segment.part.status === 'running' || segment.part.status === 'done'
+    if (input.includeReasoning && segment.kind === 'reasoning')
+      return true
     return false
   })) {
     return false
   }
 
   if (input.parts?.some((part) => {
-    if (part.type === 'text' && typeof part.text === 'string' && part.text.trim().length > 0)
+    if (part.type === 'text' && typeof part.text === 'string') {
+      return input.includeReasoning ? part.text.length > 0 : part.text.trim().length > 0
+    }
+    if (input.includeReasoning && part.type === 'reasoning')
       return true
-    if (part.type === 'tool-call' || part.type === 'tool')
-      return part.status === 'running' || part.status === 'done'
+    if (part.type === 'tool-call' || part.type === 'tool') {
+      return input.includeReasoning
+        ? true
+        : part.status === 'running' || part.status === 'done'
+    }
     return false
   })) {
     return false
   }
 
   return true
+}
+
+export type TxAiPartRunStep =
+  | { kind: 'waiting' }
+  | { kind: 'thinking', title?: string }
+  | { kind: 'tool', name: string, summary?: string }
+  | { kind: 'writing' }
+
+const RUN_STEP_TITLE_LIMIT = 64
+
+function extractFirstLineTitle(text: string): string {
+  const line = text.split('\n').find(candidate => candidate.trim()) ?? ''
+  const plain = line
+    .replace(/\*\*/g, '')
+    .replace(/^#+\s*/, '')
+    .trim()
+  return plain.length > RUN_STEP_TITLE_LIMIT
+    ? `${plain.slice(0, RUN_STEP_TITLE_LIMIT - 1)}…`
+    : plain
+}
+
+/**
+ * Derive the current inline run-status step from the tail of streamed message parts.
+ * Pending/running tools win over preceding parts; settled tools yield to thinking.
+ */
+export function deriveAiRunStepFromParts(parts: readonly AiMessagePart[] | undefined): TxAiPartRunStep {
+  if (!parts)
+    return { kind: 'waiting' }
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index]
+    if (!part)
+      continue
+    if (part.type === 'tool-call') {
+      if (part.status === 'pending' || part.status === 'running')
+        return { kind: 'tool', name: part.name, summary: part.summary }
+      return { kind: 'thinking' }
+    }
+    if (part.type === 'reasoning') {
+      const title = extractFirstLineTitle(part.text)
+      return title ? { kind: 'thinking', title } : { kind: 'thinking' }
+    }
+    if (part.type === 'text' && part.text)
+      return { kind: 'writing' }
+  }
+  return { kind: 'waiting' }
 }
 
 export interface AiRunStep {
@@ -155,6 +213,19 @@ export function formatAiElapsed(elapsedMs?: number): string {
   return `${minutes}m ${String(seconds).padStart(2, '0')}s`
 }
 
+/** Whole-unit elapsed clock (`3s`, `44m 3s`, `1h 2m`) for inline run-status bars. */
+export function formatAiCompactElapsed(ms?: number): string {
+  const seconds = Math.max(0, Math.floor((Number.isFinite(ms) ? (ms ?? 0) : 0) / 1000))
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const rest = seconds % 60
+  if (hours > 0)
+    return `${hours}h ${minutes}m`
+  if (minutes > 0)
+    return `${minutes}m ${rest}s`
+  return `${rest}s`
+}
+
 export function formatAiContextWindow(tokens?: number): string {
   if (!Number.isFinite(tokens) || !tokens || tokens <= 0)
     return '0'
@@ -167,6 +238,53 @@ export function formatAiContextWindow(tokens?: number): string {
     return `${k >= 100 || k % 1 === 0 ? Math.round(k) : k.toFixed(1)}k`
   }
   return String(Math.round(tokens))
+}
+
+/**
+ * Window scale label (`1M`, `1.5M`, `131.1k`, `128k`, `4.1k`, `950`), returning
+ * an empty string for unknown / non-positive windows.
+ */
+export function formatAiWindowText(tokens?: number): string {
+  if (!Number.isFinite(tokens) || !tokens || tokens <= 0)
+    return ''
+  const scale = (value: number, unit: string): string => {
+    const rounded = Math.round(value * 10) / 10
+    return `${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)}${unit}`
+  }
+  if (tokens >= 1_000_000)
+    return scale(tokens / 1_000_000, 'M')
+  if (tokens >= 1_000)
+    return scale(tokens / 1_000, 'k')
+  return `${Math.round(tokens)}`
+}
+
+/** Lightweight CJK/ASCII token estimate for live context-meter fallback before usage settles. */
+export function estimateAiTextTokens(text: string): number {
+  if (!text)
+    return 0
+  let count = 0
+  for (let i = 0; i < text.length; i += 1) {
+    count += text.charCodeAt(i) > 0x7F ? 1 : 0.25
+  }
+  return Math.ceil(count)
+}
+
+export function estimateAiTranscriptTokens(
+  messages: readonly Pick<TxAiMessageModel, 'content' | 'parts'>[],
+): number {
+  let total = 0
+  for (const msg of messages) {
+    if (msg.content)
+      total += estimateAiTextTokens(msg.content)
+    if (msg.parts) {
+      for (const part of msg.parts) {
+        if ((part.type === 'text' || part.type === 'reasoning') && typeof part.text === 'string' && part.text) {
+          total += estimateAiTextTokens(part.text)
+        }
+      }
+    }
+  }
+  return Math.max(1, total)
 }
 
 export function calculateAiContextPercent(usedTokens?: number, maxTokens?: number): number {

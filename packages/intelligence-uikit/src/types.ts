@@ -20,6 +20,7 @@ import type {
   PromptBarModel,
   PromptBarSource,
 } from '@talex-touch/tuffex/prompt-bar'
+import type { MikoState } from '@talex-touch/tuffex/miko'
 import type { AiRunStep, AiSendState } from './utils/composer-state'
 import type { TxAiRailTurn } from './utils/message-rail'
 
@@ -276,9 +277,19 @@ export interface TxAiComposerLabels {
 }
 
 export interface TxAiRunStatusProps {
+  /** `pill`: clickable status pill (default); `line`: inline composer-dock status row with TxMiko & rolling clock. */
+  variant?: 'pill' | 'line';
   step?: AiRunStep | null;
   steps?: readonly AiRunStep[];
   elapsedMs?: number;
+  /** Epoch timestamp (ms) for a live 1s rolling clock in `line` variant. */
+  startedAt?: number;
+  /** Explicit Miko animation state for `line` variant. */
+  mikoState?: MikoState;
+  /** Explicit single-line step label for `line` variant. */
+  lineLabel?: string;
+  /** Semantic tone for the step text in `line` variant (`tool` highlights in accent ink). */
+  tone?: 'default' | 'tool';
   queuedCount?: number;
   streaming?: boolean;
   waiting?: boolean;
@@ -288,8 +299,16 @@ export interface TxAiRunStatusProps {
 }
 
 export interface TxAiContextMeterProps {
+  /** `pill`: circular ring badge (default); `bar`: 2px linear composer-edge strip with rolling TxTextMorph percent. */
+  variant?: 'pill' | 'bar';
   usedTokens?: number;
   maxTokens?: number;
+  /** Direct percentage reading (0–100+, clamped visually) for `bar` variant. */
+  percent?: number;
+  /** Formatted window ceiling (e.g. `128k`, `1M`) for `bar` variant. */
+  windowText?: string;
+  /** Accessible `aria-valuetext` override for `bar` variant. */
+  valueText?: string;
   label?: string;
   detail?: string;
   compact?: boolean;
@@ -308,13 +327,18 @@ export interface TxAiVoiceDraftProps {
 }
 
 export interface TxAiMessageRailProps {
-  messages: readonly TxAiMessageModel[];
+  /** `popover`: card tooltip rail (default); `minimal`: bare-text floating preview rail with inline `#IMAGE` tags. */
+  variant?: 'popover' | 'minimal';
+  messages: readonly (TxAiMessageModel & { modelAttachments?: readonly unknown[] })[];
   turns?: readonly TxAiRailTurn[];
   activeIndex?: number;
   ariaLabel?: string;
   imageTag?: string;
   codeTag?: string;
+  fallbackLabel?: string;
+  maxLength?: number;
   turnPrefix?: string;
+  turnAriaLabel?: (turnNumber: number, title: string) => string;
 }
 
 export interface TxAiComposerControlProps {

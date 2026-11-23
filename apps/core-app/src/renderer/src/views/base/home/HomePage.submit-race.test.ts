@@ -594,15 +594,15 @@ describe('HomePage stream and rail integration', () => {
     await flushPromises()
     expect(stream.attributes('data-following')).toBe('false')
 
-    const railButtons = view.findAll('.HomeMessageRail-BarWrap')
+    const railButtons = view.findAll('.tx-ai-message-rail__bar-wrap')
     expect(railButtons).toHaveLength(2)
     expect(railButtons[0]!.attributes('aria-current')).toBe('true')
     expect(railButtons[1]!.attributes('aria-current')).toBeUndefined()
 
-    await view.findAll('.HomeMessageRail-Turn')[1]!.trigger('mouseenter')
+    await view.findAll('.tx-ai-message-rail__turn')[1]!.trigger('mouseenter')
     await flushPromises()
-    expect(view.get('.HomeMessageRail-PromptText').text()).toContain('Second prompt')
-    expect(view.get('.HomeMessageRail-ImageTag').text()).toBe('#IMAGE1')
+    expect(view.get('.tx-ai-message-rail__prompt-text').text()).toContain('Second prompt')
+    expect(view.get('.tx-ai-message-rail__image-tag').text()).toBe('#IMAGE1')
 
     await railButtons[1]!.trigger('click')
     expect(streamCalls.scrollToIndex).toHaveBeenCalledWith(2)
