@@ -130,7 +130,10 @@ function renderComponent(
 
   render(vnode, container)
 
+  let cleaned = false
   const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
     render(null, container)
     container.remove()
   }
@@ -231,8 +234,10 @@ function mountManagedDialog<T>(options: ManagedDialogOptions<T>): Promise<T> {
 
       const handleExternalDestroy = (): void => {
         if (!cleanupHandle) return
+        const handle = cleanupHandle
         cleanupHandle = null
         closed = true
+        handle.cleanup()
         settleClosed()
       }
 

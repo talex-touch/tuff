@@ -407,4 +407,37 @@ describe('dialog-mention with TuffEx dialogs', () => {
     expect(document.body.querySelector('[id^="touch-tip-"]')).toBeNull()
     expect(document.body.querySelector('.tx-touch-tip')).toBeNull()
   })
+
+  it('external unregister unmounts dialog, removes host container, settles promise, and releases atomic key', async () => {
+    let firstSettled = false
+    const first = forTouchTip('Atomic', 'Unregister me', undefined, 'atomic-unregister-key').then(
+      () => {
+        firstSettled = true
+      }
+    )
+
+    const visible = useDialogManager().getVisibleDialog()
+    expect(visible).toBeTruthy()
+    expect(document.body.querySelectorAll('[id^="touch-tip-"]')).toHaveLength(1)
+    expect(document.body.querySelectorAll('.tx-touch-tip')).toHaveLength(1)
+
+    useDialogManager().unregister(visible!.id)
+    await first
+
+    expect(firstSettled).toBe(true)
+    expect(useDialogManager().getStackSize()).toBe(0)
+    expect(document.body.querySelector('[id^="touch-tip-"]')).toBeNull()
+    expect(document.body.querySelector('.tx-touch-tip')).toBeNull()
+
+    const second = forTouchTip('Atomic', 'Reopened', undefined, 'atomic-unregister-key')
+    expect(document.body.querySelectorAll('.tx-touch-tip')).toHaveLength(1)
+
+    const confirmBtn = document.body.querySelector<HTMLButtonElement>('.tx-touch-tip__btn')
+    confirmBtn?.click()
+    await vi.advanceTimersByTimeAsync(400)
+    await second
+
+    expect(document.body.querySelector('[id^="touch-tip-"]')).toBeNull()
+    expect(document.body.querySelector('.tx-touch-tip')).toBeNull()
+  })
 })
