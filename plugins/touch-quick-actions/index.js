@@ -7,22 +7,15 @@ const DYNAMIC_FEATURE_PREFIX = 'quick-action-'
 const ACTION_ID = 'quick-actions'
 const RUN_ACTION_ID = 'run-action'
 const ICON = { type: 'class', value: 'i-ri-settings-3-line' }
-const COMMON_ACTION_IDS = ['restart', 'shutdown', 'lock-screen', 'mute-toggle', 'focus-settings']
+const COMMON_ACTION_IDS = [
+  'lock-screen',
+  'mute-toggle',
+  'focus-settings',
+  'notification-settings',
+  'sound-settings',
+  'display-settings',
+]
 const ACTIONS = [
-  {
-    id: 'restart',
-    name: '重启',
-    description: '立即重启系统（高风险）',
-    group: 'instant',
-    keywords: ['restart', 'reboot', '重启', '重新启动'],
-  },
-  {
-    id: 'shutdown',
-    name: '关机',
-    description: '立即关闭系统（高风险）',
-    group: 'instant',
-    keywords: ['shutdown', 'power off', '关机', '关闭电脑'],
-  },
   {
     id: 'lock-screen',
     name: '锁定屏幕',
@@ -72,6 +65,7 @@ const GROUP_META = {
   settings: { title: '系统设置', subtitle: '通知 / 声音 / 显示' },
 }
 let dynamicFeaturesInitialized = false
+const registeredDynamicFeatureIds = new Set()
 
 function normalizeText(value) {
   return String(value ?? '').trim()
@@ -138,8 +132,10 @@ async function registerDynamicFeatures(actions, value = currentPlatform()) {
 
   let added = 0
   for (const feature of buildDynamicFeatures(actions, value)) {
-    if (await features.addFeature(feature))
+    if (await features.addFeature(feature)) {
+      registeredDynamicFeatureIds.add(feature.id)
       added += 1
+    }
   }
   dynamicFeaturesInitialized = true
   return added
@@ -206,6 +202,10 @@ function stableFailure(error) {
     return blocked('permission-denied', '缺少 system.shell 权限')
   if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
     return blocked('permission-unavailable', '权限系统不可用')
+  if (code === 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED')
+    return blocked('permission-check-failed', '权限请求失败')
+  if (code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE' || code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE')
+    return blocked('capability-unavailable', '系统快捷动作不可用')
   if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED')
     return blocked('cancelled', '操作已取消', 'cancelled')
   if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT')
@@ -218,7 +218,7 @@ async function runAction(actionId) {
   if (!action)
     return blocked('invalid-action', '无效动作')
   if (!system || typeof system.runAction !== 'function')
-    return blocked('system-capability-unavailable', '系统快捷动作不可用')
+    return blocked('capability-unavailable', '系统快捷动作不可用')
 
   try {
     const result = await system.runAction(action.id)
@@ -367,8 +367,20 @@ const pluginLifecycle = {
     return await runAction(selectedAction?.payload?.actionId)
   },
 
-  onDestroy() {
+  async onDestroy() {
+    const featureIds = Array.from(registeredDynamicFeatureIds)
+    registeredDynamicFeatureIds.clear()
     dynamicFeaturesInitialized = false
+    if (typeof features?.removeFeature === 'function') {
+      for (const featureId of featureIds) {
+        try {
+          await features.removeFeature(featureId)
+        }
+        catch {
+          logger?.error?.('[touch-quick-actions] Failed to remove dynamic feature')
+        }
+      }
+    }
   },
 }
 

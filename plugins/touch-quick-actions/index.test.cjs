@@ -6,9 +6,11 @@ const test = require('node:test')
 
 const state = {
   features: [],
+  removedFeatures: [],
   items: [],
   systemCalls: [],
   systemResult: { actionId: 'lock-screen', status: 'started' },
+  systemError: null,
 }
 
 class FakeBuilder {
@@ -67,10 +69,16 @@ globalThis.features = {
     state.features.push(feature)
     return true
   },
+  async removeFeature(featureId) {
+    state.removedFeatures.push(featureId)
+    return true
+  },
 }
 globalThis.system = {
   async runAction(actionId) {
     state.systemCalls.push(actionId)
+    if (state.systemError)
+      throw state.systemError
     return state.systemResult
   },
 }
@@ -90,6 +98,7 @@ test.beforeEach(() => {
   state.items = []
   state.systemCalls = []
   state.systemResult = { actionId: 'lock-screen', status: 'started' }
+  state.systemError = null
 })
 
 test('production Prelude has no privileged or test-only child surface', () => {
@@ -107,15 +116,15 @@ test('production Prelude has no privileged or test-only child surface', () => {
   assert.deepEqual(Object.keys(pluginModule).sort(), ['onDestroy', 'onFeatureTriggered', 'onInit', 'onItemAction'])
 })
 
-test('onInit awaits registration of all fixed display-only features', async () => {
+test('onInit registers only safe display-only features and onDestroy cleans them up', async () => {
+  state.features.length = 0
+  state.removedFeatures.length = 0
   await pluginModule.onInit()
 
-  assert.equal(state.features.length, 8)
+  assert.equal(state.features.length, 6)
   assert.deepEqual(
     state.features.map(feature => feature.id),
     [
-      'quick-action-restart',
-      'quick-action-shutdown',
       'quick-action-lock-screen',
       'quick-action-mute-toggle',
       'quick-action-focus-settings',
@@ -124,6 +133,7 @@ test('onInit awaits registration of all fixed display-only features', async () =
       'quick-action-display-settings',
     ],
   )
+  assert.equal(state.features.some(feature => /restart|shutdown/.test(feature.id)), false)
   assert.deepEqual(state.features[0].platform, {
     win: { enable: false, arch: [], os: [] },
     darwin: { enable: true, arch: [], os: [] },
@@ -133,19 +143,37 @@ test('onInit awaits registration of all fixed display-only features', async () =
     state.features.some(feature => 'command' in feature),
     false,
   )
+
+  await pluginModule.onDestroy()
+  assert.deepEqual(state.removedFeatures, [
+    'quick-action-lock-screen',
+    'quick-action-mute-toggle',
+    'quick-action-focus-settings',
+    'quick-action-notification-settings',
+    'quick-action-sound-settings',
+    'quick-action-display-settings',
+  ])
 })
 
-test('feature trigger publishes action IDs without command payloads', async () => {
+test('feature trigger publishes safe action IDs without high-risk power actions or command payloads', async () => {
   await pluginModule.onFeatureTriggered('quick-actions', { text: '' })
 
-  assert.equal(state.items.length, 5)
-  const firstAction = state.items[0].actions[0]
-  assert.equal(firstAction.id, 'run-action')
-  assert.equal(firstAction.payload.actionId, 'restart')
+  assert.equal(state.items.length, 6)
+  const publishedIds = state.items.map(entry => entry.actions[0].payload.actionId)
+  assert.deepEqual(publishedIds, [
+    'lock-screen',
+    'mute-toggle',
+    'focus-settings',
+    'notification-settings',
+    'sound-settings',
+    'display-settings',
+  ])
+  assert.equal(publishedIds.includes('restart'), false)
+  assert.equal(publishedIds.includes('shutdown'), false)
   assert.equal(JSON.stringify(state.items).includes('command'), false)
 })
 
-test('safe item action invokes only the fixed system action ID', async () => {
+test('safe item action invokes only the fixed system action ID and blocks forged power actions', async () => {
   await pluginModule.onFeatureTriggered('quick-actions', { text: '锁屏' })
   const item = state.items.find(entry => entry.actions?.[0]?.payload?.actionId === 'lock-screen')
   assert.ok(item)
@@ -155,28 +183,62 @@ test('safe item action invokes only the fixed system action ID', async () => {
   assert.deepEqual(state.systemCalls, ['lock-screen'])
   assert.equal(result.status, 'started')
   assert.equal(result.success, true)
+
+  const forgedShutdown = await pluginModule.onItemAction(
+    {
+      meta: { defaultAction: 'quick-actions' },
+      actions: [{ id: 'run-action', payload: { actionId: 'shutdown' } }],
+    },
+    { actionId: 'run-action' },
+  )
+  assert.equal(forgedShutdown.status, 'blocked')
+  assert.equal(forgedShutdown.reason, 'invalid-action')
+  assert.deepEqual(state.systemCalls, ['lock-screen'])
 })
 
 test('main-owned blocked status is preserved without local execution fallback', async () => {
   state.systemResult = {
-    actionId: 'shutdown',
+    actionId: 'lock-screen',
     status: 'blocked',
     reason: 'confirmation-denied',
   }
 
-  // Routed through the item now: a dynamic feature publishes and onItemAction runs (#817).
-  // What this test is about — a blocked status from main is preserved rather than falling
-  // back to local execution — is unchanged.
-  await pluginModule.onFeatureTriggered('quick-action-shutdown', { text: '' })
-  const item = state.items.find(entry => entry.actions?.[0]?.payload?.actionId === 'shutdown')
+  await pluginModule.onFeatureTriggered('quick-action-lock-screen', { text: '' })
+  const item = state.items.find(entry => entry.actions?.[0]?.payload?.actionId === 'lock-screen')
   assert.ok(item)
 
   const result = await pluginModule.onItemAction(item, { actionId: 'run-action' })
 
-  assert.deepEqual(state.systemCalls, ['shutdown'])
+  assert.deepEqual(state.systemCalls, ['lock-screen'])
   assert.equal(result.status, 'blocked')
   assert.equal(result.reason, 'confirmation-denied')
   assert.equal(result.success, false)
+})
+
+test('maps permission request failures canonically and ignores unrelated items', async () => {
+  const unrelated = await pluginModule.onItemAction(
+    {
+      meta: { defaultAction: 'other-plugin' },
+      actions: [{ id: 'run-action', payload: { actionId: 'lock-screen' } }],
+    },
+    { actionId: 'run-action' },
+  )
+  assert.equal(unrelated, undefined)
+  assert.deepEqual(state.systemCalls, [])
+
+  state.systemError = Object.assign(new Error('/private/perm'), {
+    code: 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED',
+  })
+  const failed = await pluginModule.onItemAction(
+    {
+      meta: { defaultAction: 'quick-actions' },
+      actions: [{ id: 'run-action', payload: { actionId: 'lock-screen' } }],
+    },
+    { actionId: 'run-action' },
+  )
+  assert.equal(failed.status, 'blocked')
+  assert.equal(failed.reason, 'permission-check-failed')
+  assert.doesNotMatch(JSON.stringify(failed), /private/)
 })
 
 test('a dynamic feature publishes an item instead of running the action', async () => {

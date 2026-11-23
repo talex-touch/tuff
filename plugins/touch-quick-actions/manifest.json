@@ -68,7 +68,7 @@
       "commands": [
         {
           "type": "contain",
-          "value": ["quick", "actions", "quick actions", "快捷", "系统快捷", "系统动作"]
+          "value": ["quick", "actions", "quick actions", "快捷", "系统快捷", "设置入口"]
         }
       ]
     }

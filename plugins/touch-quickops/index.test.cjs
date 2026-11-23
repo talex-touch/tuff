@@ -267,3 +267,54 @@ test('projectItemsForHost publishes only whitelisted meta, so request detail can
 
   assert.doesNotMatch(JSON.stringify(state.items), /secret-token-abc123/)
 })
+
+test('saveDeveloperPreview rejections are caught and mapped to canonical blocked reasons without leaks', async () => {
+  for (const [code, expectedReason] of [
+    ['PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED', 'permission-denied'],
+    ['PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE', 'permission-unavailable'],
+    ['PLUGIN_HOST_PERMISSION_REQUEST_FAILED', 'permission-check-failed'],
+    ['PLUGIN_HOST_CAPABILITY_UNAVAILABLE', 'capability-unavailable'],
+    ['UNKNOWN_SAVE_ERROR', 'developer-preview-save-failed'],
+  ]) {
+    const { plugin } = loadPlugin({
+      quickOps: {
+        async saveDeveloperPreview() {
+          throw Object.assign(new Error('/private/preview-secret'), { code })
+        },
+      },
+    })
+    const result = await plugin.onItemAction(
+      {
+        meta: { defaultAction: 'quickops-developer-preview-save-svg' },
+        actions: [{ id: 'quickops-developer-preview-save-svg', payload: { developerPreviewPayload: { ok: true } } }],
+      },
+      { actionId: 'quickops-developer-preview-save-svg' },
+    )
+    assert.equal(result.externalAction, true)
+    assert.equal(result.success, false)
+    assert.equal(result.status, 'blocked')
+    assert.equal(result.reason, expectedReason, code)
+    assert.doesNotMatch(JSON.stringify(result), /private|preview-secret/)
+  }
+})
+
+test('flow.dispatch maps permission-unavailable, permission-request-failed and capability-unavailable canonically', async () => {
+  for (const [code, expectedReason] of [
+    ['PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE', 'permission-unavailable'],
+    ['PLUGIN_HOST_PERMISSION_REQUEST_FAILED', 'permission-check-failed'],
+    ['PLUGIN_HOST_CAPABILITY_UNAVAILABLE', 'capability-unavailable'],
+  ]) {
+    const { plugin, state } = loadPlugin({
+      flow: {
+        async dispatch() {
+          throw Object.assign(new Error('/private/flow'), { code })
+        },
+      },
+    })
+    await plugin.onFeatureTriggered('quickops', { text: 'stop timer' })
+    const result = await plugin.onItemAction(flowItem(state.items))
+    assert.equal(result.status, 'blocked')
+    assert.equal(result.reason, expectedReason, code)
+    assert.doesNotMatch(JSON.stringify(result), /private/)
+  }
+})

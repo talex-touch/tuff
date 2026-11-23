@@ -106,7 +106,7 @@
         "type": "file",
         "value": "assets/logo.svg"
       },
-      "keywords": ["window", "preset", "layout", "分屏", "布局", "窗口预设"],
+      "keywords": ["wm-preset", "window-preset", "窗口分屏", "窗口布局"],
       "push": true,
       "priority": 7,
       "acceptedInputTypes": ["text"],
@@ -118,7 +118,7 @@
       "commands": [
         {
           "type": "over",
-          "value": ["window", "preset", "layout", "分屏", "布局"]
+          "value": ["wm-preset", "window-preset", "窗口分屏", "窗口布局"]
         }
       ]
     }

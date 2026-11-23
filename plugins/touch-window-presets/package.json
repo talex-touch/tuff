@@ -2,9 +2,42 @@
   "name": "@talex-touch/touch-window-presets-plugin",
   "private": true,
   "version": "1.0.0",
-  "packageManager": "pnpm@10.34.4",
+  "description": "窗口预设：一键应用常用桌面布局",
+  "license": "MIT",
+  "packageManager": "pnpm@11.24.0",
+  "keywords": ["tuff-plugin", "utilities", "window-presets", "layout", "split"],
+  "main": "./index.js",
+  "engines": {
+    "tuff": ">=261011"
+  },
   "scripts": {
     "test": "node --test index.test.cjs",
     "build": "node ../../packages/tuff-cli/bin/tuff.js builder"
+  },
+  "tuff": {
+    "schemaVersion": 1,
+    "id": "com.tuffex.window-presets",
+    "name": "touch-window-presets",
+    "displayName": {
+      "en": "Window Presets",
+      "zh": "窗口预设"
+    },
+    "sdkapi": 261011,
+    "category": "utilities",
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "permissions": {
+      "required": ["system.shell", "search.root-results"],
+      "optional": []
+    },
+    "platforms": {
+      "win32": true,
+      "darwin": false,
+      "linux": false
+    },
+    "surface": "prelude",
+    "manifest": "./manifest.json"
   }
 }

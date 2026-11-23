@@ -158,6 +158,10 @@ function stableFailure(error) {
     return blocked('permission-denied', '缺少 system.shell 权限')
   if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
     return blocked('permission-unavailable', '权限系统不可用')
+  if (code === 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED')
+    return blocked('permission-check-failed', '权限请求失败')
+  if (code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE' || code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE')
+    return blocked('capability-unavailable', '系统操作能力不可用')
   if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED')
     return blocked('cancelled', '操作已取消', 'cancelled')
   if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT')
@@ -171,7 +175,7 @@ async function runAction(actionId) {
   if (!action || !ACTION_IDS.has(actionId))
     return blocked('invalid-action', '无效系统操作')
   if (!system || typeof system.runAction !== 'function')
-    return blocked('system-capability-unavailable', '系统操作能力不可用')
+    return blocked('capability-unavailable', '系统操作能力不可用')
 
   try {
     const result = await system.runAction(action.id)
@@ -220,7 +224,7 @@ const pluginLifecycle = {
   async onInit() {},
 
   async onFeatureTriggered(featureId, query) {
-    if (featureId !== FEATURE_ID && featureId !== 'quick-actions')
+    if (featureId !== FEATURE_ID)
       return false
 
     const actions = availableActions()
@@ -277,6 +281,11 @@ const pluginLifecycle = {
   },
 
   async onItemAction(item, context = {}) {
+    if (!item?.meta || item.meta.defaultAction !== FEATURE_ID)
+      return
+    const selectedId = context?.actionId || item.actions?.[0]?.id
+    if (selectedId !== RUN_ACTION_ID)
+      return
     const actionId = selectedActionId(item, context)
     if (!actionId)
       return blocked('invalid-action', '无效系统操作')

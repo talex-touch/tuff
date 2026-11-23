@@ -13,8 +13,8 @@
   "main": "index.js",
   "dev": {
     "enable": false,
-    "source": true,
-    "address": "http://127.0.0.1:5174/"
+    "source": false,
+    "address": ""
   },
   "permissions": {
     "required": ["intelligence.basic", "intelligence.context", "search.root-results", "storage.plugin"],
@@ -37,6 +37,62 @@
       "mode": "push",
       "priority": "fast",
       "defaultOrder": 106,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    },
+    {
+      "id": "touch-intelligence.intelligence-rewrite",
+      "displayName": "AI 改写",
+      "featureId": "intelligence-rewrite",
+      "kind": "ai",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 107,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    },
+    {
+      "id": "touch-intelligence.intelligence-summarize",
+      "displayName": "AI 摘要",
+      "featureId": "intelligence-summarize",
+      "kind": "ai",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 108,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    },
+    {
+      "id": "touch-intelligence.intelligence-explain",
+      "displayName": "AI 解释",
+      "featureId": "intelligence-explain",
+      "kind": "ai",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 109,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    },
+    {
+      "id": "touch-intelligence.intelligence-command-registry",
+      "displayName": "AI 命令管理",
+      "featureId": "intelligence-command-registry",
+      "kind": "ai",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 110,
       "permissionScopes": ["root-results"],
       "defaultState": "ask",
       "requiresUserConsent": true,

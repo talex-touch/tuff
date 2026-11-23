@@ -45,19 +45,28 @@ function bytesToBase64(value) {
 
 function base64ToBytes(value) {
   const normalized = String(value)
+  if (normalized.length % 4 !== 0)
+    throw new TypeError('INVALID_BASE64')
   const bytes = []
   for (let index = 0; index < normalized.length; index += 4) {
+    const isLastBlock = index + 4 === normalized.length
     const a = BASE64_ALPHABET.indexOf(normalized[index])
     const b = BASE64_ALPHABET.indexOf(normalized[index + 1])
-    const c = normalized[index + 2] === '=' ? 0 : BASE64_ALPHABET.indexOf(normalized[index + 2])
-    const d = normalized[index + 3] === '=' ? 0 : BASE64_ALPHABET.indexOf(normalized[index + 3])
+    const cPad = normalized[index + 2] === '='
+    const dPad = normalized[index + 3] === '='
+    if ((cPad || dPad) && !isLastBlock)
+      throw new TypeError('INVALID_BASE64')
+    if (cPad && !dPad)
+      throw new TypeError('INVALID_BASE64')
+    const c = cPad ? 0 : BASE64_ALPHABET.indexOf(normalized[index + 2])
+    const d = dPad ? 0 : BASE64_ALPHABET.indexOf(normalized[index + 3])
     if (a < 0 || b < 0 || c < 0 || d < 0)
       throw new TypeError('INVALID_BASE64')
     const chunk = (a << 18) | (b << 12) | (c << 6) | d
     bytes.push((chunk >>> 16) & 0xFF)
-    if (normalized[index + 2] !== '=')
+    if (!cPad)
       bytes.push((chunk >>> 8) & 0xFF)
-    if (normalized[index + 3] !== '=')
+    if (!dPad)
       bytes.push(chunk & 0xFF)
   }
   return Uint8Array.from(bytes)
@@ -175,13 +184,23 @@ const pluginLifecycle = {
 
       const base64Candidate = rawText.replace(/\s+/g, '')
       if (isProbablyBase64(base64Candidate)) {
-        addCopyItem(items, seen, {
-          id: `${featureId}-b64-decode`,
-          featureId,
-          title: 'Base64 解码',
-          subtitle: '复制解码后的文本',
-          output: new TextDecoder().decode(base64ToBytes(base64Candidate)),
-        })
+        try {
+          addCopyItem(items, seen, {
+            id: `${featureId}-b64-decode`,
+            featureId,
+            title: 'Base64 解码',
+            subtitle: '复制解码后的文本',
+            output: new TextDecoder().decode(base64ToBytes(base64Candidate)),
+          })
+        }
+        catch {
+          items.push(buildInfoItem({
+            id: `${featureId}-b64-invalid`,
+            featureId,
+            title: 'Base64 解码',
+            subtitle: '输入不是有效的 Base64 编码文本',
+          }))
+        }
       }
 
       addCopyItem(items, seen, {
@@ -241,29 +260,33 @@ const pluginLifecycle = {
         }
       }
 
-      addCopyItem(items, seen, {
-        id: `${featureId}-md5`,
-        featureId,
-        title: 'MD5',
-        subtitle: '复制 MD5 哈希',
-        output: await digestHex('MD5', rawText),
-      })
-
-      addCopyItem(items, seen, {
-        id: `${featureId}-sha1`,
-        featureId,
-        title: 'SHA1',
-        subtitle: '复制 SHA1 哈希',
-        output: await digestHex('SHA-1', rawText),
-      })
-
-      addCopyItem(items, seen, {
-        id: `${featureId}-sha256`,
-        featureId,
-        title: 'SHA256',
-        subtitle: '复制 SHA256 哈希',
-        output: await digestHex('SHA-256', rawText),
-      })
+      let hashDegraded = false
+      for (const [suffix, label, algorithm] of [
+        ['md5', 'MD5', 'MD5'],
+        ['sha1', 'SHA1', 'SHA-1'],
+        ['sha256', 'SHA256', 'SHA-256'],
+      ]) {
+        try {
+          addCopyItem(items, seen, {
+            id: `${featureId}-${suffix}`,
+            featureId,
+            title: label,
+            subtitle: `复制 ${label} 哈希`,
+            output: await digestHex(algorithm, rawText),
+          })
+        }
+        catch {
+          hashDegraded = true
+        }
+      }
+      if (hashDegraded) {
+        items.push(buildInfoItem({
+          id: `${featureId}-hash-unavailable`,
+          featureId,
+          title: '哈希计算不可用',
+          subtitle: '当前环境不支持或输入超出长度限制，其余文本转换仍可使用',
+        }))
+      }
 
       if (signal?.aborted)
         return true
@@ -293,9 +316,10 @@ const pluginLifecycle = {
     }
   },
 
-  async onItemAction(item) {
+  async onItemAction(item, context = {}) {
     try {
-      if (item?.meta?.defaultAction !== COPY_ACTION_ID)
+      const selectedActionId = context?.actionId || item?.meta?.defaultAction
+      if (selectedActionId !== COPY_ACTION_ID)
         return
 
       const copyAction = item.actions?.find(action => action.id === COPY_ACTION_ID || action.type === COPY_ACTION_ID)
@@ -323,13 +347,49 @@ const pluginLifecycle = {
     }
     catch (error) {
       logger?.error?.('[touch-text-tools] Action failed')
-      const permissionDenied = error?.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
+      const code = error && typeof error === 'object' && typeof error.code === 'string' ? error.code : ''
+      if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED') {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: 'permission-denied',
+          message: '缺少 clipboard.write 权限',
+        }
+      }
+      if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE') {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: 'permission-unavailable',
+          message: '权限系统不可用',
+        }
+      }
+      if (code === 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED') {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: 'permission-check-failed',
+          message: '权限请求失败',
+        }
+      }
+      if (code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE' || code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE') {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: 'capability-unavailable',
+          message: '剪贴板能力不可用',
+        }
+      }
       return {
         externalAction: true,
         success: false,
         status: 'blocked',
-        reason: permissionDenied ? 'permission-denied' : 'clipboard-write-failed',
-        message: permissionDenied ? '缺少 clipboard.write 权限' : '复制失败',
+        reason: 'clipboard-write-failed',
+        message: '复制失败',
       }
     }
   },

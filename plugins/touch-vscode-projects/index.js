@@ -2,12 +2,18 @@ const { plugin, TuffItemBuilder: Builder } = globalThis
 
 const FEATURE_ID = 'vscode-projects'
 const SOURCE_ID = 'touch-vscode-projects'
+const INDEXED_SOURCE_ID = 'vscode-projects'
+const SOURCE_STATE_FILE = 'source-state.json'
 const MAX_REASON = 160
 const MAX_ITEMS = 100
 const TOKEN_PATTERN = /^vsp_[\w-]{32}$/
+const MANAGEMENT_ACTIONS = new Set(['enable-source', 'disable-source', 'clear-source', 'rebuild-source'])
+const MANAGEMENT_QUERY_PATTERN = /\b(?:manage|source|index|enable|disable|clear|rebuild)\b|管理|来源|索引|启用|停用|清除|重建/i
 
 let issuedTokens = new Set()
 let triggerGeneration = 0
+let sourceEnabled = true
+let sourceStateLoaded = false
 
 function text(value, limit = 256) {
   if (typeof value !== 'string')
@@ -25,16 +31,16 @@ function hasControlCharacter(value) {
   return false
 }
 
-function stableReason(error, fallback = 'capability-failed') {
+function stableReason(error, fallback = 'action-failed') {
   const code = error?.code
   if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED')
     return 'permission-denied'
   if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
     return 'permission-unavailable'
-  if (code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE')
+  if (code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE' || code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE')
     return 'capability-unavailable'
   if (code === 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED')
-    return 'permission-request-failed'
+    return 'permission-check-failed'
   if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED' || code === 'PLUGIN_HOST_REQUEST_CANCELLED')
     return 'cancelled'
   if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT' || code === 'PLUGIN_HOST_REQUEST_TIMEOUT')
@@ -44,11 +50,45 @@ function stableReason(error, fallback = 'capability-failed') {
 
 function safeReason(value, fallback = 'degraded') {
   const reason = text(value, MAX_REASON)
-  return /^(?:permission-denied|permission-unavailable|permission-request-failed|capability-unavailable|platform-unsupported|source-disabled|storage-missing|storage-invalid|storage-too-large|read-failed|project-missing|project-replaced|token-expired|open-failed|degraded|cancelled|timeout)$/.test(
+  return /^(?:permission-denied|permission-unavailable|permission-sdk-unavailable|permission-check-failed|capability-unavailable|platform-unsupported|source-disabled|source-cleared|storage-missing|storage-invalid|storage-too-large|read-failed|project-missing|project-replaced|token-expired|open-failed|degraded|cancelled|timeout)$/.test(
     reason,
   )
     ? reason
     : fallback
+}
+
+async function loadSourceEnabled() {
+  if (sourceStateLoaded)
+    return sourceEnabled
+  sourceStateLoaded = true
+  if (typeof plugin?.storage?.getFile !== 'function')
+    return sourceEnabled
+  try {
+    const stored = await plugin.storage.getFile(SOURCE_STATE_FILE)
+    if (stored && typeof stored === 'object' && typeof stored.enabled === 'boolean') {
+      sourceEnabled = stored.enabled
+    }
+  }
+  catch {
+    // Keep in-memory state when plugin storage is unavailable.
+  }
+  return sourceEnabled
+}
+
+async function persistSourceEnabled(enabled) {
+  sourceEnabled = Boolean(enabled)
+  sourceStateLoaded = true
+  if (typeof plugin?.storage?.setFile !== 'function')
+    return
+  try {
+    await plugin.storage.setFile(SOURCE_STATE_FILE, {
+      sourceId: INDEXED_SOURCE_ID,
+      enabled: sourceEnabled,
+    })
+  }
+  catch {
+    // Keep in-memory state even if persistence is optional/ungranted.
+  }
 }
 
 function normalizeProject(project) {
@@ -100,6 +140,39 @@ function messageItem(title, subtitle) {
     .build()
 }
 
+function makeManagementItem(actionId, title, subtitle, label) {
+  return new Builder(`${FEATURE_ID}-${actionId}`)
+    .setSource('plugin', SOURCE_ID, 'VS Code Projects')
+    .setTitle(title)
+    .setSubtitle(subtitle)
+    .setIcon({ type: 'file', value: 'assets/logo.svg' })
+    .setMeta({ defaultAction: actionId, featureId: FEATURE_ID, indexedSourceId: INDEXED_SOURCE_ID })
+    .createAndAddAction(actionId, 'plugin', label, { sourceId: INDEXED_SOURCE_ID })
+    .build()
+}
+
+function buildManagementItems(enabled) {
+  if (!enabled) {
+    return [
+      makeManagementItem('enable-source', '启用 VS Code 项目来源', '重新启用 VS Code 最近项目索引与搜索', '启用来源'),
+      makeManagementItem('clear-source', '清除 VS Code 项目结果', '清除当前缓存与已签发令牌', '清除缓存'),
+    ]
+  }
+  return [
+    makeManagementItem('rebuild-source', '重建 VS Code 项目索引', '重新读取已授权的 VS Code 最近项目', '重建索引'),
+    makeManagementItem('clear-source', '清除 VS Code 项目结果', '清除当前面板结果并撤销旧令牌', '清除结果'),
+    makeManagementItem('disable-source', '停用 VS Code 项目来源', '暂停读取 VS Code 最近项目并清除令牌', '停用来源'),
+  ]
+}
+
+function shouldIncludeManagementItems(needle, kind) {
+  if (kind)
+    return false
+  if (!needle)
+    return true
+  return MANAGEMENT_QUERY_PATTERN.test(needle)
+}
+
 async function publish(items, generation) {
   if (generation !== triggerGeneration)
     return false
@@ -117,6 +190,20 @@ const lifecycle = {
     issuedTokens = new Set()
     const vscodeProjects = plugin?.vscodeProjects
     try {
+      const enabled = await loadSourceEnabled()
+      if (generation !== triggerGeneration)
+        return true
+      if (!enabled) {
+        issuedTokens = new Set()
+        await publish(
+          [
+            messageItem('VS Code 项目来源已停用', 'source-disabled'),
+            ...buildManagementItems(false),
+          ],
+          generation,
+        )
+        return true
+      }
       if (!vscodeProjects || typeof vscodeProjects.list !== 'function') {
         if (generation !== triggerGeneration)
           return true
@@ -134,15 +221,17 @@ const lifecycle = {
       }
       if (snapshot.status !== 'ready') {
         issuedTokens = new Set()
-        await publish(
-          [
-            messageItem(
-              snapshot.status === 'unsupported' ? '当前平台不支持 VS Code 项目' : 'VS Code 项目暂不可用',
-              safeReason(snapshot.reason, snapshot.status),
-            ),
-          ],
-          generation,
-        )
+        const resolvedReason = safeReason(snapshot.reason, snapshot.status)
+        const degradedItems = [
+          messageItem(
+            snapshot.status === 'unsupported' ? '当前平台不支持 VS Code 项目' : 'VS Code 项目暂不可用',
+            resolvedReason,
+          ),
+        ]
+        if (resolvedReason === 'source-disabled') {
+          degradedItems.push(...buildManagementItems(false))
+        }
+        await publish(degradedItems, generation)
         return true
       }
       const { needle, kind } = queryParts(query)
@@ -157,13 +246,21 @@ const lifecycle = {
       )
       const nextTokens = new Set()
       const items = matched.map((project, index) => makeItem(project, index, nextTokens))
-      if (!items.length) {
+      if (!items.length && !shouldIncludeManagementItems(needle, kind)) {
         items.push(
           messageItem(
             needle || kind ? '没有匹配的 VS Code 项目' : '没有 VS Code 最近项目',
             '请尝试其他关键词或启用项目来源',
           ),
         )
+      }
+      if (shouldIncludeManagementItems(needle, kind)) {
+        if (!items.length && !needle) {
+          items.push(
+            messageItem('没有 VS Code 最近项目', '请尝试重建索引或检查 VS Code 项目来源'),
+          )
+        }
+        items.push(...buildManagementItems(true))
       }
       const published = await publish(items, generation)
       if (!published)
@@ -192,10 +289,85 @@ const lifecycle = {
       || typeof target !== 'object'
       || target.source?.type !== 'plugin'
       || ![SOURCE_ID, 'plugin-features'].includes(target.source.id)
-      || target.meta?.defaultAction !== 'open'
       || target.meta?.featureId !== FEATURE_ID
-      || selectedActionId !== 'open'
     ) {
+      return
+    }
+
+    if (MANAGEMENT_ACTIONS.has(selectedActionId) && target.meta?.defaultAction === selectedActionId) {
+      const action = Array.isArray(target.actions)
+        ? target.actions.find(candidate => candidate?.id === selectedActionId && candidate?.type === 'plugin')
+        : null
+      const payload = action?.payload
+      const validPayload
+        = payload
+          && typeof payload === 'object'
+          && !Array.isArray(payload)
+          && Object.keys(payload).length === 1
+          && payload.sourceId === INDEXED_SOURCE_ID
+      if (!validPayload) {
+        return { externalAction: true, status: 'blocked', reason: 'invalid-action' }
+      }
+
+      const vscodeProjects = plugin?.vscodeProjects
+      try {
+        if (selectedActionId === 'enable-source') {
+          if (typeof vscodeProjects?.enable === 'function')
+            await vscodeProjects.enable()
+          await persistSourceEnabled(true)
+          await lifecycle.onFeatureTriggered(FEATURE_ID, '')
+          return { externalAction: true, status: 'started' }
+        }
+        if (selectedActionId === 'disable-source') {
+          issuedTokens = new Set()
+          if (typeof vscodeProjects?.disable === 'function')
+            await vscodeProjects.disable()
+          await persistSourceEnabled(false)
+          const generation = ++triggerGeneration
+          await publish(
+            [
+              messageItem('VS Code 项目来源已停用', 'source-disabled'),
+              ...buildManagementItems(false),
+            ],
+            generation,
+          )
+          return { externalAction: true, status: 'started' }
+        }
+        if (selectedActionId === 'clear-source') {
+          issuedTokens = new Set()
+          if (typeof vscodeProjects?.clear === 'function')
+            await vscodeProjects.clear()
+          const generation = ++triggerGeneration
+          await publish(
+            [
+              messageItem('已清除 VS Code 项目结果', 'source-cleared'),
+              ...buildManagementItems(await loadSourceEnabled()),
+            ],
+            generation,
+          )
+          return { externalAction: true, status: 'started' }
+        }
+        if (selectedActionId === 'rebuild-source') {
+          if (!(await loadSourceEnabled())) {
+            return { externalAction: true, status: 'blocked', reason: 'source-disabled' }
+          }
+          issuedTokens = new Set()
+          if (typeof vscodeProjects?.rebuild === 'function') {
+            await vscodeProjects.rebuild()
+          }
+          else if (!vscodeProjects || typeof vscodeProjects.list !== 'function') {
+            return { externalAction: true, status: 'blocked', reason: 'capability-unavailable' }
+          }
+          await lifecycle.onFeatureTriggered(FEATURE_ID, '')
+          return { externalAction: true, status: 'started' }
+        }
+      }
+      catch (error) {
+        return { externalAction: true, status: 'blocked', reason: stableReason(error, 'action-failed') }
+      }
+    }
+
+    if (target.meta?.defaultAction !== 'open' || selectedActionId !== 'open') {
       return
     }
     const action = Array.isArray(target.actions)
@@ -220,6 +392,9 @@ const lifecycle = {
       if (result?.status === 'blocked') {
         return { externalAction: true, status: 'blocked', reason: safeReason(result.reason, 'blocked') }
       }
+      if (result?.status === 'unsupported') {
+        return { externalAction: true, status: 'blocked', reason: safeReason(result.reason, 'platform-unsupported') }
+      }
       if (result?.status === 'failed') {
         return { externalAction: true, status: 'failed', reason: safeReason(result.reason, 'open-failed') }
       }
@@ -233,6 +408,7 @@ const lifecycle = {
   onDestroy() {
     triggerGeneration += 1
     issuedTokens = new Set()
+    sourceStateLoaded = false
   },
 }
 

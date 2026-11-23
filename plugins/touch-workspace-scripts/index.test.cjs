@@ -51,6 +51,7 @@ const state = {
   items: [],
   calls: [],
   runResult: null,
+  runError: null,
 }
 
 globalThis.logger = { error() {} }
@@ -89,6 +90,8 @@ globalThis.plugin = {
     },
     async run(scriptToken) {
       state.calls.push({ operation: 'run', scriptToken })
+      if (state.runError)
+        throw state.runError
       return state.runResult || {
         operation: 'run-script',
         status: 'started',
@@ -113,6 +116,7 @@ test.beforeEach(async () => {
   state.items = []
   state.calls = []
   state.runResult = null
+  state.runError = null
   await pluginModule.onDestroy()
 })
 
@@ -197,6 +201,46 @@ test('keeps permission, cancellation and token failures stable and redacted', as
     reason: 'token-expired',
   })
   assert.doesNotMatch(JSON.stringify(expired), /path|command|stack|key/i)
+})
+
+test('ignores unrelated items and maps permission-request-failed and capability-unavailable canonically', async () => {
+  const unrelated = await pluginModule.onItemAction(
+    {
+      meta: { defaultAction: 'copy' },
+      actions: [{ id: 'copy', payload: { text: 'hello' } }],
+    },
+    { actionId: 'copy' },
+  )
+  assert.equal(unrelated, undefined)
+
+  const foreign = await pluginModule.onItemAction(
+    {
+      meta: { pluginName: 'other-plugin', defaultAction: 'run-script' },
+      actions: [{ id: 'run-script', payload: { scriptToken: SCRIPT_TOKEN } }],
+    },
+    { actionId: 'run-script' },
+  )
+  assert.equal(foreign, undefined)
+  assert.deepEqual(state.calls, [])
+
+  await pluginModule.onFeatureTriggered('workspace-scripts', '')
+  const selectItem = state.items.find(item => item.meta.defaultAction === 'select-workspace')
+  await pluginModule.onItemAction(selectItem, { actionId: 'select-workspace' })
+  const scriptItem = state.items.find(item => item.title === 'lint')
+
+  for (const [code, expectedReason] of [
+    ['PLUGIN_HOST_PERMISSION_REQUEST_FAILED', 'permission-check-failed'],
+    ['PLUGIN_HOST_CAPABILITY_UNAVAILABLE', 'capability-unavailable'],
+  ]) {
+    state.runError = Object.assign(new Error('/private/path'), { code })
+    const result = await pluginModule.onItemAction(scriptItem, { actionId: 'run-script' })
+    assert.deepEqual(result, {
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: expectedReason,
+    })
+  }
 })
 
 test('production Prelude contains no privileged, reflective or test-only surface', () => {

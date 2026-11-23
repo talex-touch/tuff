@@ -1,4 +1,6 @@
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
 const test = require('node:test')
 
 const published = []
@@ -200,4 +202,104 @@ test('destroy invalidates every issued project token', async () => {
     reason: 'invalid-action',
   })
   assert.deepEqual(opened, [])
+})
+
+test('handles PLUGIN_HOST_CAPABILITY_UNAVAILABLE, PLUGIN_HOST_PERMISSION_REQUEST_FAILED and unsupported status', async () => {
+  const originalOpen = globalThis.plugin.vscodeProjects.open
+  try {
+    await plugin.onFeatureTriggered('vscode-projects', '')
+    const item = clone(lastItems()[0])
+
+    globalThis.plugin.vscodeProjects.open = async () => {
+      throw Object.assign(new Error('/private/unavailable'), { code: 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE' })
+    }
+    assert.deepEqual(await plugin.onItemAction(item, { actionId: 'open' }), {
+      externalAction: true,
+      status: 'blocked',
+      reason: 'capability-unavailable',
+    })
+
+    globalThis.plugin.vscodeProjects.open = async () => {
+      throw Object.assign(new Error('/private/perm'), { code: 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED' })
+    }
+    assert.deepEqual(await plugin.onItemAction(item, { actionId: 'open' }), {
+      externalAction: true,
+      status: 'blocked',
+      reason: 'permission-check-failed',
+    })
+
+    globalThis.plugin.vscodeProjects.open = async () => ({
+      status: 'unsupported',
+      reason: 'platform-unsupported',
+    })
+    assert.deepEqual(await plugin.onItemAction(item, { actionId: 'open' }), {
+      externalAction: true,
+      status: 'blocked',
+      reason: 'platform-unsupported',
+    })
+  }
+  finally {
+    globalThis.plugin.vscodeProjects.open = originalOpen
+  }
+})
+
+test('supports disable, enable, clear and rebuild indexed-source management actions', async () => {
+  opened.length = 0
+  await plugin.onFeatureTriggered('vscode-projects', '')
+  const projectItem = clone(lastItems()[0])
+  const disableItem = lastItems().find(item => item.meta.defaultAction === 'disable-source')
+  const clearItem = lastItems().find(item => item.meta.defaultAction === 'clear-source')
+  const rebuildItem = lastItems().find(item => item.meta.defaultAction === 'rebuild-source')
+  assert.ok(disableItem)
+  assert.ok(clearItem)
+  assert.ok(rebuildItem)
+
+  assert.deepEqual(await plugin.onItemAction(disableItem, { actionId: 'disable-source' }), {
+    externalAction: true,
+    status: 'started',
+  })
+  assert.equal(lastItems()[0].subtitle, 'source-disabled')
+  assert.deepEqual(await plugin.onItemAction(projectItem, { actionId: 'open' }), {
+    externalAction: true,
+    status: 'blocked',
+    reason: 'invalid-action',
+  })
+
+  const enableItem = lastItems().find(item => item.meta.defaultAction === 'enable-source')
+  assert.ok(enableItem)
+  assert.deepEqual(await plugin.onItemAction(enableItem, { actionId: 'enable-source' }), {
+    externalAction: true,
+    status: 'started',
+  })
+  assert.equal(lastItems()[0].title, 'Alpha')
+
+  assert.deepEqual(await plugin.onItemAction(clearItem, { actionId: 'clear-source' }), {
+    externalAction: true,
+    status: 'started',
+  })
+  assert.equal(lastItems()[0].subtitle, 'source-cleared')
+
+  assert.deepEqual(await plugin.onItemAction(rebuildItem, { actionId: 'rebuild-source' }), {
+    externalAction: true,
+    status: 'started',
+  })
+  assert.equal(lastItems()[0].title, 'Alpha')
+})
+
+test('manifest declares high-privacy indexedSources metadata aligned with AGENTS.md', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, 'manifest.json'), 'utf8'))
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'))
+
+  assert.equal(Array.isArray(manifest.indexedSources), true)
+  assert.equal(manifest.indexedSources[0].id, 'vscode-projects')
+  assert.equal(manifest.indexedSources[0].kind, 'vscode-workspace')
+  assert.equal(manifest.indexedSources[0].privacy, 'high')
+  assert.equal(manifest.indexedSources[0].admission.defaultState, 'disabled')
+  assert.equal(manifest.indexedSources[0].admission.requiresUserConsent, true)
+  assert.equal(manifest.indexedSources[0].admission.clearable, true)
+  assert.equal(manifest.indexedSources[0].admission.rebuildable, true)
+  assert.equal(manifest.searchProviders[0].indexedSourceId, 'vscode-projects')
+  assert.equal(pkg.packageManager, 'pnpm@11.24.0')
+  assert.equal(pkg.keywords.includes('tuff-plugin'), true)
+  assert.equal(pkg.tuff.id, manifest.id)
 })

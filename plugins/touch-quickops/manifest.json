@@ -6,8 +6,8 @@
   "sdkapi": 261011,
   "category": "utilities",
   "icon": {
-    "type": "emoji",
-    "value": "⚡"
+    "type": "file",
+    "value": "assets/logo.svg"
   },
   "description": "Tuff QuickOps 官方迁移插件：承接本地快捷工具入口、运行状态与审计摘要",
   "main": "index.js",
@@ -51,8 +51,8 @@
         }
       },
       "icon": {
-        "type": "emoji",
-        "value": "⚡"
+        "type": "file",
+        "value": "assets/logo.svg"
       },
       "keywords": [
         "quickops",
