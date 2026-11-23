@@ -13,11 +13,20 @@ verified: false
 
 | Item | Value |
 |------|-------|
-| Source version | **0.9.4** |
-| Release version | **0.9.4** (latest npm release) |
-| Component modules | **192**: Base 99 · Pro 57 · AI 36 |
+| Source version | **0.9.5** |
+| Release version | **0.9.5** (latest npm release) |
+| Component modules | **193**: Base 99 · Pro 58 · AI 36 |
 
 ## Release History
+
+### Version 0.9.5 (2026-11-23)
+
+Add Pro fold-page and paper-peel components with default refraction surfaces.
+
+- **New components**: fold-page
+- **Main updated components**: none
+- **Key features**:
+  - New `TxFoldPage` and `TxFoldCorner` (`@talex-touch/tuffex/pro`): 3D accordion and gate tri-fold brochures plus 4-corner paper-peel cards with default `refraction` surface.
 
 ### Version 0.9.4 (2026-11-16)
 
@@ -287,6 +296,7 @@ Introduction versions and installation barrels for all 192 component modules. Do
 | [`flex`](./flex.en.mdc) | base | 0.3.4 |
 | [`flip-book`](./flip-book.en.mdc) | pro | 0.7.0 |
 | [`flip-overlay`](./flip-overlay.en.mdc) | pro | 0.3.4 |
+| [`fold-page`](./fold-page.en.mdc) | pro | 0.9.5 |
 | [`floating`](./floating.en.mdc) | pro | 0.3.4 |
 | [`flow-light`](./flow-light.en.mdc) | pro | 0.8.0 |
 | [`flowchart`](./flowchart.en.mdc) | ai | 0.6.0 |

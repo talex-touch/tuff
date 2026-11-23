@@ -416,6 +416,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/flow-light',
     '/docs/dev/components/liquid',
     '/docs/dev/components/flip-overlay',
+    '/docs/dev/components/fold-page',
     '/docs/dev/components/image-generation',
     '/docs/dev/components/metal-fx',
     '/docs/dev/components/voice-beam',

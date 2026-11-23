@@ -1,8 +1,18 @@
 {
   "$schema": "./components-lifecycle.schema.json",
-  "currentVersion": "0.9.4",
-  "totalComponents": 192,
+  "currentVersion": "0.9.5",
+  "totalComponents": 193,
   "versions": [
+    {
+      "version": "0.9.5",
+      "date": "2026-11-23",
+      "title": "新增 Pro 折页组件 (Pro FoldPage & FoldCorner)",
+      "newComponents": [
+        "fold-page"
+      ],
+      "updatedComponents": [],
+      "summary": "新增 @talex-touch/tuffex/pro 的 TxFoldPage 3D 多面板折页（风琴折与对开三折）及 TxFoldCorner 四向纸角掀起组件，默认采用 refraction 琉光材质。"
+    },
     {
       "version": "0.9.4",
       "date": "2026-11-16",
@@ -812,6 +822,11 @@
     "flip-overlay": {
       "slug": "flip-overlay",
       "since": "0.3.4",
+      "suite": "pro"
+    },
+    "fold-page": {
+      "slug": "fold-page",
+      "since": "0.9.5",
       "suite": "pro"
     },
     "floating": {

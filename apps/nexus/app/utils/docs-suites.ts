@@ -202,6 +202,7 @@ export const STATIC_COMPONENT_SUITE_MAP: Record<string, DocsSuiteKey> = {
   '/docs/dev/components/flex': 'base',
   '/docs/dev/components/flip-book': 'motion',
   '/docs/dev/components/flip-overlay': 'pro',
+  '/docs/dev/components/fold-page': 'pro',
   '/docs/dev/components/floating': 'pro',
   '/docs/dev/components/flow-light': 'pro',
   '/docs/dev/components/flow-suite': 'flow',
