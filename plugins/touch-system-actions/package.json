@@ -5,7 +5,14 @@
   "description": "系统高级控制：关机 / 重启 / 锁屏 / 音量 / 亮度",
   "license": "MIT",
   "packageManager": "pnpm@11.24.0",
-  "keywords": ["tuff-plugin", "utilities", "system-actions", "power", "audio", "display"],
+  "keywords": [
+    "tuff-plugin",
+    "utilities",
+    "system-actions",
+    "power",
+    "audio",
+    "display"
+  ],
   "main": "./index.js",
   "engines": {
     "tuff": ">=261011"
@@ -29,8 +36,12 @@
       "value": "assets/logo.svg"
     },
     "permissions": {
-      "required": ["search.root-results"],
-      "optional": ["system.shell"]
+      "required": [
+        "search.root-results"
+      ],
+      "optional": [
+        "system.shell"
+      ]
     },
     "platforms": {
       "win32": true,
@@ -39,5 +50,10 @@
     },
     "surface": "prelude",
     "manifest": "./manifest.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-system-actions"
   }
 }

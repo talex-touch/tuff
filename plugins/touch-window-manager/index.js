@@ -18,28 +18,6 @@ const ACTION_LABELS = {
   'launch': '启动',
 }
 
-const PRESET_ICON = { type: 'class', value: 'i-ri-layout-column-line' }
-const PRESETS = [
-  {
-    id: 'preset-two-column',
-    title: '双列平铺（前两窗口）',
-    subtitle: '自动将前两窗口分到左右半屏',
-    keywords: ['split', 'tile', '双列', '平铺', '左右'],
-  },
-  {
-    id: 'preset-dev-split',
-    title: '开发工作台（终端+浏览器）',
-    subtitle: '终端贴左，浏览器贴右，适合开发调试',
-    keywords: ['dev', 'terminal', 'browser', '开发', '终端', '浏览器'],
-  },
-  {
-    id: 'preset-clear-topmost',
-    title: '取消全部置顶',
-    subtitle: '批量取消当前可见窗口的置顶状态',
-    keywords: ['topmost', 'cleanup', '置顶', '清理'],
-  },
-]
-const PRESET_IDS = new Set(PRESETS.map(p => p.id))
 function normalizeText(value) {
   return String(value ?? '').trim()
 }
@@ -139,43 +117,6 @@ function stableFailure(error) {
   return blocked('window-manager-failed', '窗口操作失败', 'failed')
 }
 
-function selectedPresetId(item, context) {
-  const selectedId = normalizeText(context?.actionId || item?.actions?.[0]?.id || item?.meta?.defaultAction)
-  if (selectedId !== 'run-preset')
-    return ''
-  const action = Array.isArray(item?.actions)
-    ? item.actions.find(candidate => candidate?.id === 'run-preset' && (!candidate?.type || candidate.type === 'plugin'))
-    : null
-  const payload = action?.payload
-  if (payload && typeof payload === 'object') {
-    if (
-      Object.keys(payload).length !== 1
-      || !Object.prototype.hasOwnProperty.call(payload, 'presetId')
-      || typeof payload.presetId !== 'string'
-    ) {
-      return ''
-    }
-    const candidate = normalizeText(payload.presetId)
-    return PRESET_IDS.has(candidate) ? candidate : ''
-  }
-  const fallback = normalizeText(item?.meta?.presetId)
-  return PRESET_IDS.has(fallback) ? fallback : ''
-}
-
-function presetBlockedMessage(reason) {
-  if (reason === 'insufficient-windows')
-    return '可见窗口数量不足'
-  if (reason === 'permission-denied')
-    return '缺少 system.shell 权限'
-  if (reason === 'permission-unavailable')
-    return '权限系统不可用'
-  if (reason === 'permission-check-failed')
-    return '权限请求失败'
-  if (reason === 'platform-unsupported')
-    return '当前平台暂不支持窗口预设'
-  return '窗口预设不可用'
-}
-
 function selectedAction(item, context) {
   const selectedId = normalizeText(context?.actionId || item?.meta?.defaultAction)
   if (!ACTIONS.has(selectedId) || !Array.isArray(item?.actions))
@@ -212,47 +153,6 @@ const pluginLifecycle = {
   async onInit() {},
 
   async onFeatureTriggered(featureId, query) {
-    if (featureId === 'window-presets') {
-      if (currentPlatform() !== 'win32') {
-        await publishItems([
-          new TuffItemBuilder(`${featureId}-unsupported`)
-            .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
-            .setTitle('当前平台暂不支持窗口预设')
-            .setSubtitle('窗口预设当前仅支持 Windows')
-            .setIcon(PRESET_ICON)
-            .setMeta({ pluginName: PLUGIN_NAME, featureId })
-            .build(),
-        ])
-        return true
-      }
-      const keyword = normalizeText(getQueryText(query)).toLowerCase()
-      const matched = PRESETS.filter(
-        p => !keyword || [p.id, p.title, p.subtitle, ...p.keywords].join(' ').toLowerCase().includes(keyword),
-      )
-      const items = matched.map(p =>
-        new TuffItemBuilder(`window-preset-${p.id}`)
-          .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
-          .setTitle(p.title)
-          .setSubtitle(p.subtitle)
-          .setIcon(PRESET_ICON)
-          .setMeta({ pluginName: PLUGIN_NAME, featureId, defaultAction: 'run-preset', presetId: p.id })
-          .createAndAddAction('run-preset', 'plugin', '应用预设', { presetId: p.id })
-          .build(),
-      )
-      if (items.length === 0) {
-        items.push(
-          new TuffItemBuilder(`${featureId}-empty`)
-            .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
-            .setTitle('暂无匹配预设')
-            .setSubtitle('可输入 dev / split / topmost 过滤')
-            .setIcon(PRESET_ICON)
-            .setMeta({ pluginName: PLUGIN_NAME, featureId })
-            .build(),
-        )
-      }
-      await publishItems(items)
-      return true
-    }
     if (featureId !== FEATURE_ID)
       return false
 
@@ -365,40 +265,6 @@ const pluginLifecycle = {
   async onItemAction(item, context = {}) {
     if (item?.meta?.pluginName && item.meta.pluginName !== PLUGIN_NAME)
       return
-
-    if (item?.meta?.defaultAction === 'run-preset') {
-      const selectedId = normalizeText(context?.actionId || item?.actions?.[0]?.id || item?.meta?.defaultAction)
-      if (selectedId !== 'run-preset')
-        return
-      const presetId = selectedPresetId(item, context)
-      if (!presetId)
-        return blocked('invalid-action', '无效窗口预设')
-      if (currentPlatform() !== 'win32')
-        return blocked('platform-unsupported', '当前平台暂不支持窗口预设')
-      if (!plugin.windowPresets || typeof plugin.windowPresets.runAction !== 'function')
-        return blocked('capability-unavailable', '窗口预设能力不可用')
-      try {
-        const result = await plugin.windowPresets.runAction(presetId)
-        if (result?.status === 'completed') {
-          return {
-            externalAction: true,
-            success: true,
-            status: 'completed',
-            message: `已处理 ${result.affectedWindows ?? 0} 个窗口`,
-          }
-        }
-        if (result?.status === 'blocked') {
-          const reason = normalizeText(result.reason) || 'blocked'
-          return blocked(reason, presetBlockedMessage(reason))
-        }
-        return blocked('execution-failed', '窗口预设执行失败', 'failed')
-      }
-      catch (error) {
-        const failure = stableFailure(error)
-        logger?.error?.(`[touch-window-manager] ${failure.reason}`)
-        return failure
-      }
-    }
 
     const candidateActionId = normalizeText(context?.actionId || item?.meta?.defaultAction)
     if (!ACTIONS.has(candidateActionId))

@@ -5,7 +5,6 @@ import {
   extractTuffPackageMetadata,
   formatNpmPluginSource,
   inferPluginNameFromNpmPackage,
-  isOfficialNpmPluginPackageName,
   isValidNpmPackageName,
   parseNpmPluginSource,
 } from '../npm-contract'
@@ -90,7 +89,8 @@ function normalizeNpmPlugin(pkg: NpmPackageInfo): StorePluginInfo {
     author: authorName,
     icon: resolveIconString(tuffMeta?.icon),
     source: 'npm',
-    isOfficial: isOfficialNpmPluginPackageName(pkg.name),
+    // Security invariant: @talex-touch/ naming scope never confers cryptographic official trust.
+    isOfficial: false,
     category: tuffMeta?.category,
     keywords: tuffMeta?.tags ?? pkg.keywords,
     homepage: pkg.homepage,

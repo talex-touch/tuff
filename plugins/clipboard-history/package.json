@@ -5,6 +5,11 @@
   "private": true,
   "packageManager": "pnpm@11.24.0",
   "description": "Cross-platform clipboard history manager plugin for Tuff.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/clipboard-history"
+  },
   "keywords": [
     "tuff-plugin",
     "utilities",

@@ -71,6 +71,8 @@ function createHarness(options = {}) {
             return storageFiles.has(name) ? structuredClone(storageFiles.get(name)) : null
           },
           async setFile(name, value) {
+            if (typeof options.onSetFile === 'function')
+              await options.onSetFile(name, value)
             state.storageWrites.push({ name, value: structuredClone(value) })
             storageFiles.set(name, structuredClone(value))
           },
@@ -495,4 +497,20 @@ test('blocks clipboard copy when clipboard.write is denied and ignores foreign i
     actions: [{ id: 'copy-curl', type: 'plugin', payload: { token: 'fake' } }],
   })
   assert.equal(foreign, undefined)
+})
+
+test('rolls back newly written secret if collections.json persistence fails', async () => {
+  const harness = createHarness({
+    onSetFile: async () => {
+      throw new Error('disk full')
+    },
+  })
+  await harness.module.onFeatureTriggered('api-lens', {
+    text: 'save fail-api curl https://api.example.com/fail -H "Authorization: Bearer secret-token-123"',
+  })
+  const saveItem = findItemByAction(harness.state.items, 'save-preset')
+  const res = await harness.module.onItemAction(saveItem)
+  assert.equal(res.success, false)
+  assert.equal(res.status, 'blocked')
+  assert.equal(harness.secretStore.size, 0)
 })

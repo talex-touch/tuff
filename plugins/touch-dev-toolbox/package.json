@@ -61,5 +61,10 @@
     },
     "surface": "prelude",
     "manifest": "./manifest.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-dev-toolbox"
   }
 }

@@ -689,9 +689,11 @@ export function parseTarBufferEntries(
 
 function canonicalFileMapJson(filesObject: Record<string, string>): string {
   const sortedKeys = Object.keys(filesObject).sort()
-  const sortedObject: Record<string, string> = {}
+  const sortedObject: Record<string, string> = Object.create(null)
   for (const key of sortedKeys) {
-    sortedObject[key] = filesObject[key] ?? ''
+    sortedObject[key] = Object.prototype.hasOwnProperty.call(filesObject, key)
+      ? (filesObject[key] ?? '')
+      : ''
   }
   return JSON.stringify(sortedObject)
 }
@@ -737,7 +739,7 @@ export function verifyManifestFileMapIntegrity(
     return { valid: false, stamped: true, reason: 'manifest._signature is missing or invalid' }
   }
 
-  const expectedNormalized: Record<string, string> = {}
+  const expectedNormalized: Record<string, string> = Object.create(null)
   for (const [rawKey, rawHash] of Object.entries(rawFiles)) {
     if (typeof rawHash !== 'string' || !SHA256_FILE_HASH_RE.test(rawHash)) {
       return {
@@ -747,7 +749,7 @@ export function verifyManifestFileMapIntegrity(
       }
     }
     const normalizedKey = rawKey.replace(/^\.\//, '').replace(/\\/g, '/')
-    if (expectedNormalized[normalizedKey] !== undefined) {
+    if (Object.prototype.hasOwnProperty.call(expectedNormalized, normalizedKey)) {
       return {
         valid: false,
         stamped: true,
@@ -757,7 +759,7 @@ export function verifyManifestFileMapIntegrity(
     expectedNormalized[normalizedKey] = rawHash.toLowerCase()
   }
 
-  const actualFiles: Record<string, string> = {}
+  const actualFiles: Record<string, string> = Object.create(null)
   for (const [filePath, fileBuffer] of files.entries()) {
     if (filePath === 'manifest.json' || filePath === 'key.talex') continue
     actualFiles[filePath] = `sha256-${sha256Hex(fileBuffer)}`

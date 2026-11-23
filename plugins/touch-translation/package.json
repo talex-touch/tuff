@@ -82,5 +82,10 @@
     "schemaVersion": 1,
     "sdkapi": 261011,
     "surface": "webcontent"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-translation"
   }
 }

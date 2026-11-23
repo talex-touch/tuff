@@ -461,19 +461,35 @@ export class NpmPackageProvider extends BaseStoreProvider {
       return null
     }
 
-    const distTags = packument['dist-tags'] ?? {}
-    const resolvedDistTag = distTags[options.distTag]
+    const rawDistTags = packument['dist-tags']
+    const distTags = rawDistTags && typeof rawDistTags === 'object' ? rawDistTags : {}
+    const readOwnTag = (tag: string): string | undefined => {
+      if (!Object.prototype.hasOwnProperty.call(distTags, tag)) {
+        return undefined
+      }
+      return readTrimmedString(distTags[tag])
+    }
+    const requestedTagVersion = readOwnTag(options.distTag)
+    const latestTagVersion = readOwnTag('latest')
+    const resolvedDistTag = requestedTagVersion
       ? options.distTag
-      : distTags.latest
+      : latestTagVersion
         ? 'latest'
         : options.distTag
-    const resolvedVersion = distTags[resolvedDistTag] ?? distTags.latest ?? searchEntry.version
+    const resolvedVersion =
+      readOwnTag(resolvedDistTag) ?? latestTagVersion ?? readTrimmedString(searchEntry.version)
     if (!resolvedVersion) {
       return null
     }
 
-    const versionData = packument.versions?.[resolvedVersion]
-    if (!versionData) {
+    const versions = packument.versions
+    const versionData =
+      versions &&
+      typeof versions === 'object' &&
+      Object.prototype.hasOwnProperty.call(versions, resolvedVersion)
+        ? versions[resolvedVersion]
+        : undefined
+    if (!versionData || typeof versionData !== 'object') {
       return null
     }
 

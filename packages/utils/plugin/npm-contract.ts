@@ -25,7 +25,10 @@ export const NPM_FORBIDDEN_LIFECYCLE_SCRIPTS = [
   'preinstall',
   'install',
   'postinstall',
+  'preprepare',
   'prepare',
+  'postprepare',
+  'prepublish',
 ] as const
 
 export type ForbiddenNpmLifecycleScript = (typeof NPM_FORBIDDEN_LIFECYCLE_SCRIPTS)[number]

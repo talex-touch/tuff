@@ -5,7 +5,14 @@
   "description": "系统快捷动作：锁屏、静音与常用设置入口",
   "license": "MIT",
   "packageManager": "pnpm@11.24.0",
-  "keywords": ["tuff-plugin", "utilities", "quick-actions", "settings", "lock", "mute"],
+  "keywords": [
+    "tuff-plugin",
+    "utilities",
+    "quick-actions",
+    "settings",
+    "lock",
+    "mute"
+  ],
   "main": "./index.js",
   "engines": {
     "tuff": ">=261011"
@@ -29,7 +36,10 @@
       "value": "assets/logo.svg"
     },
     "permissions": {
-      "required": ["system.shell", "search.root-results"],
+      "required": [
+        "system.shell",
+        "search.root-results"
+      ],
       "optional": []
     },
     "platforms": {
@@ -39,5 +49,10 @@
     },
     "surface": "prelude",
     "manifest": "./manifest.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-quick-actions"
   }
 }

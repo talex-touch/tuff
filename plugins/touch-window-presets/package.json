@@ -5,7 +5,13 @@
   "description": "窗口预设：一键应用常用桌面布局",
   "license": "MIT",
   "packageManager": "pnpm@11.24.0",
-  "keywords": ["tuff-plugin", "utilities", "window-presets", "layout", "split"],
+  "keywords": [
+    "tuff-plugin",
+    "utilities",
+    "window-presets",
+    "layout",
+    "split"
+  ],
   "main": "./index.js",
   "engines": {
     "tuff": ">=261011"
@@ -29,7 +35,10 @@
       "value": "assets/logo.svg"
     },
     "permissions": {
-      "required": ["system.shell", "search.root-results"],
+      "required": [
+        "system.shell",
+        "search.root-results"
+      ],
       "optional": []
     },
     "platforms": {
@@ -39,5 +48,10 @@
     },
     "surface": "prelude",
     "manifest": "./manifest.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-window-presets"
   }
 }

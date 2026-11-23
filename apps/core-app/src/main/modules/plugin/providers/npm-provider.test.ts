@@ -2,14 +2,20 @@ import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
+import { Readable } from 'node:stream'
 import zlib from 'node:zlib'
-import { CURRENT_SDK_VERSION, NPM_ABBREVIATED_PACKUMENT_ACCEPT } from '@talex-touch/utils/plugin'
+import {
+  CURRENT_SDK_VERSION,
+  NPM_ABBREVIATED_PACKUMENT_ACCEPT,
+  PLUGIN_PACKAGE_MAX_ARCHIVE_BYTES
+} from '@talex-touch/utils/plugin'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import fse from 'fs-extra'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   request: vi.fn(),
+  requestStreamManualRedirect: vi.fn(),
   downloadToTempFile: vi.fn(),
   getEnabledNpmSources: vi.fn()
 }))
@@ -24,7 +30,8 @@ vi.mock('electron', () => ({
 
 vi.mock('../../network', () => ({
   getNetworkService: () => ({
-    request: mocks.request
+    request: mocks.request,
+    requestStreamManualRedirect: mocks.requestStreamManualRedirect
   })
 }))
 
@@ -176,11 +183,37 @@ describe('Provider registry order', () => {
   })
 })
 
+function jsonStreamResponse(
+  url: string,
+  data: unknown,
+  status = 200,
+  headers: Record<string, string> = {}
+) {
+  return {
+    status,
+    statusText: status === 200 ? 'OK' : 'Redirect',
+    headers,
+    url,
+    stream: Readable.from([Buffer.from(JSON.stringify(data), 'utf8')])
+  }
+}
+
+function redirectStreamResponse(url: string, location: string, status = 302) {
+  return {
+    status,
+    statusText: 'Found',
+    headers: { location },
+    url,
+    stream: Readable.from([])
+  }
+}
+
 describe('NpmPluginProvider', () => {
   const tempDirs: string[] = []
 
   beforeEach(() => {
     mocks.request.mockReset()
+    mocks.requestStreamManualRedirect.mockReset()
     mocks.downloadToTempFile.mockReset()
     mocks.getEnabledNpmSources.mockReset()
     mocks.getEnabledNpmSources.mockReturnValue([])
@@ -276,12 +309,8 @@ describe('NpmPluginProvider', () => {
     const tgzPath = path.join(dir, 'demo-1.2.0.tgz')
     await fse.writeFile(tgzPath, pkg.tgz)
 
-    mocks.request.mockResolvedValueOnce({
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      url: 'https://registry.npmjs.org/@talex-touch%2Fdemo-plugin',
-      data: {
+    mocks.requestStreamManualRedirect.mockResolvedValueOnce(
+      jsonStreamResponse('https://registry.npmjs.org/@talex-touch%2Fdemo-plugin', {
         name: '@talex-touch/demo-plugin',
         'dist-tags': { latest: '1.2.0' },
         versions: {
@@ -296,8 +325,8 @@ describe('NpmPluginProvider', () => {
             }
           }
         }
-      }
-    })
+      })
+    )
     mocks.downloadToTempFile.mockResolvedValueOnce(tgzPath)
 
     const provider = new NpmPluginProvider()
@@ -305,12 +334,21 @@ describe('NpmPluginProvider', () => {
       source: 'npm:@talex-touch/demo-plugin@latest'
     })
 
-    expect(mocks.request).toHaveBeenCalledWith(
+    expect(mocks.requestStreamManualRedirect).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'GET',
         url: 'https://registry.npmjs.org/@talex-touch%2Fdemo-plugin',
         headers: { Accept: NPM_ABBREVIATED_PACKUMENT_ACCEPT },
         timeoutMs: 30_000
+      })
+    )
+    expect(mocks.downloadToTempFile).toHaveBeenCalledWith(
+      'https://registry.npmjs.org/@talex-touch/demo-plugin/-/demo-plugin-1.2.0.tgz',
+      '.tgz',
+      expect.objectContaining({
+        forceExt: true,
+        maxBytes: PLUGIN_PACKAGE_MAX_ARCHIVE_BYTES,
+        validateRedirectUrl: expect.any(Function)
       })
     )
     expect(result.provider).toBe(PluginProviderType.NPM)
@@ -360,12 +398,8 @@ describe('NpmPluginProvider', () => {
       }
     ])
 
-    mocks.request.mockResolvedValueOnce({
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      url: 'https://registry.store.example/tuff-plugin-hello',
-      data: {
+    mocks.requestStreamManualRedirect.mockResolvedValueOnce(
+      jsonStreamResponse('https://registry.store.example/tuff-plugin-hello', {
         name: 'tuff-plugin-hello',
         'dist-tags': { latest: '0.5.0' },
         versions: {
@@ -379,13 +413,13 @@ describe('NpmPluginProvider', () => {
             }
           }
         }
-      }
-    })
+      })
+    )
     mocks.downloadToTempFile.mockResolvedValueOnce(tgzPath)
 
     const provider = new NpmPluginProvider()
     const result = await provider.install({ source: 'tuff-plugin-hello' })
-    expect(mocks.request.mock.calls[0]![0].url).toBe(
+    expect(mocks.requestStreamManualRedirect.mock.calls[0]![0].url).toBe(
       'https://registry.store.example/tuff-plugin-hello'
     )
     expect(result.metadata).toMatchObject({
@@ -412,12 +446,8 @@ describe('NpmPluginProvider', () => {
     ).rejects.toThrow('PLUGIN_NPM_REGISTRY_INVALID')
 
     // Loopback HTTP permitted in unpackaged dev/test mode (allowLocalHttp: true)
-    mocks.request.mockResolvedValueOnce({
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      url: 'http://127.0.0.1:4873/tuff-plugin-hello',
-      data: {
+    mocks.requestStreamManualRedirect.mockResolvedValueOnce(
+      jsonStreamResponse('http://127.0.0.1:4873/tuff-plugin-hello', {
         name: 'tuff-plugin-hello',
         'dist-tags': { latest: '0.5.0' },
         versions: {
@@ -430,8 +460,8 @@ describe('NpmPluginProvider', () => {
             }
           }
         }
-      }
-    })
+      })
+    )
     mocks.downloadToTempFile.mockResolvedValueOnce(tgzPath)
 
     const devProvider = new NpmPluginProvider({ allowLocalHttp: true })
@@ -455,12 +485,8 @@ describe('NpmPluginProvider', () => {
     const tgzPath = path.join(dir, 'tampered.tgz')
     await fse.writeFile(tgzPath, pkg.tgz)
 
-    mocks.request.mockResolvedValueOnce({
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      url: 'https://registry.npmjs.org/tuff-plugin-tampered',
-      data: {
+    mocks.requestStreamManualRedirect.mockResolvedValueOnce(
+      jsonStreamResponse('https://registry.npmjs.org/tuff-plugin-tampered', {
         name: 'tuff-plugin-tampered',
         'dist-tags': { latest: '1.0.0' },
         versions: {
@@ -472,8 +498,8 @@ describe('NpmPluginProvider', () => {
             }
           }
         }
-      }
-    })
+      })
+    )
     mocks.downloadToTempFile.mockResolvedValueOnce(tgzPath)
 
     const provider = new NpmPluginProvider()
@@ -481,5 +507,94 @@ describe('NpmPluginProvider', () => {
       code: 'PLUGIN_NPM_INTEGRITY_MISMATCH'
     })
     expect(await fse.pathExists(tgzPath)).toBe(false)
+  })
+
+  it('blocks packument 3xx redirects to cleartext HTTP or private SSRF targets fail-closed', async () => {
+    mocks.requestStreamManualRedirect.mockResolvedValueOnce(
+      redirectStreamResponse(
+        'https://registry.npmjs.org/tuff-plugin-ssrf',
+        'http://169.254.169.254/latest/meta-data/'
+      )
+    )
+
+    const provider = new NpmPluginProvider()
+    await expect(provider.install({ source: 'npm:tuff-plugin-ssrf' })).rejects.toThrow(
+      'PLUGIN_NPM_TARBALL_URL_DISALLOWED'
+    )
+    expect(mocks.requestStreamManualRedirect).toHaveBeenCalledTimes(1)
+
+    mocks.requestStreamManualRedirect.mockClear()
+    mocks.requestStreamManualRedirect.mockResolvedValueOnce(
+      redirectStreamResponse(
+        'https://registry.npmjs.org/tuff-plugin-loopback',
+        'http://127.0.0.1:4873/tuff-plugin-loopback'
+      )
+    )
+    await expect(provider.install({ source: 'npm:tuff-plugin-loopback' })).rejects.toThrow(
+      'PLUGIN_NPM_TARBALL_URL_DISALLOWED'
+    )
+    expect(mocks.requestStreamManualRedirect).toHaveBeenCalledTimes(1)
+  })
+
+  it('downloadToTempFile forces .tgz ext, validates redirect hops, and enforces streaming maxBytes cap', async () => {
+    const actualUtils = await vi.importActual<typeof import('./utils')>('./utils')
+
+    // 1. Force .tgz extension even if URL pathname ends with .zip
+    mocks.requestStreamManualRedirect.mockResolvedValueOnce({
+      status: 200,
+      statusText: 'OK',
+      headers: { 'content-length': '4' },
+      url: 'https://registry.example/pkg.zip',
+      stream: Readable.from([Buffer.from('test')])
+    })
+    const forcedPath = await actualUtils.downloadToTempFile(
+      'https://registry.example/pkg.zip',
+      '.tgz',
+      {
+        forceExt: true,
+        maxBytes: 1024,
+        validateRedirectUrl: (hop) => {
+          if (hop.protocol !== 'https:') throw new Error('PLUGIN_NPM_TARBALL_URL_DISALLOWED')
+        }
+      }
+    )
+    try {
+      expect(forcedPath.endsWith('.tgz')).toBe(true)
+    } finally {
+      await fse.remove(forcedPath).catch(() => undefined)
+    }
+
+    // 2. Redirect to disallowed http:// target is blocked before following hop
+    mocks.requestStreamManualRedirect.mockResolvedValueOnce(
+      redirectStreamResponse(
+        'https://registry.example/pkg.tgz',
+        'http://169.254.169.254/secret.tgz'
+      )
+    )
+    await expect(
+      actualUtils.downloadToTempFile('https://registry.example/pkg.tgz', '.tgz', {
+        forceExt: true,
+        maxBytes: 1024,
+        validateRedirectUrl: (hop) => {
+          if (hop.protocol !== 'https:') throw new Error('PLUGIN_NPM_TARBALL_URL_DISALLOWED')
+        }
+      })
+    ).rejects.toThrow('PLUGIN_NPM_TARBALL_URL_DISALLOWED')
+
+    // 3. Streaming overflow exceeding maxBytes aborts and rejects with PLUGIN_PACKAGE_ARCHIVE_TOO_LARGE
+    mocks.requestStreamManualRedirect.mockResolvedValueOnce({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      url: 'https://registry.example/huge.tgz',
+      stream: Readable.from([Buffer.alloc(64, 0x41), Buffer.alloc(64, 0x42)])
+    })
+    await expect(
+      actualUtils.downloadToTempFile('https://registry.example/huge.tgz', '.tgz', {
+        forceExt: true,
+        maxBytes: 100,
+        validateRedirectUrl: () => undefined
+      })
+    ).rejects.toThrow('PLUGIN_PACKAGE_ARCHIVE_TOO_LARGE')
   })
 })

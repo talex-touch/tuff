@@ -15,6 +15,7 @@ import {
   extractTuffPackageMetadata,
   hasTuffNpmDiscoveryKeyword,
   inferPluginNameFromNpmPackage,
+  isAllowedNpmRegistryUrl,
   isOfficialNpmPluginPackageName,
   isTuffNpmPluginPackageName,
   NPM_ABBREVIATED_PACKUMENT_ACCEPT,
@@ -111,10 +112,27 @@ export class NpmProvider implements PluginProvider {
       throw new Error(`Package not found: ${packageName}`)
     }
 
-    const tarballUrl = packageInfo.dist?.tarball
-    if (!tarballUrl) {
+    const rawTarballUrl = typeof packageInfo.dist?.tarball === 'string'
+      ? packageInfo.dist.tarball.trim()
+      : ''
+    if (!rawTarballUrl) {
       throw new Error(`Package tarball unavailable: ${packageName}@${packageInfo.version}`)
     }
+
+    let parsedTarballUrl: URL
+    try {
+      parsedTarballUrl = new URL(rawTarballUrl)
+    }
+    catch {
+      throw new Error('PLUGIN_NPM_TARBALL_URL_INVALID')
+    }
+    if (parsedTarballUrl.username || parsedTarballUrl.password) {
+      throw new Error('PLUGIN_NPM_TARBALL_URL_INVALID')
+    }
+    if (!isAllowedNpmRegistryUrl(parsedTarballUrl.origin, this.registryOptions)) {
+      throw new Error('PLUGIN_NPM_TARBALL_URL_DISALLOWED')
+    }
+    const tarballUrl = parsedTarballUrl.toString()
 
     const downloadRes = await networkClient.request<ArrayBuffer>({
       method: 'GET',
@@ -122,6 +140,59 @@ export class NpmProvider implements PluginProvider {
       responseType: 'arrayBuffer',
     })
     const arrayBuffer = downloadRes.data
+    const tarballBuffer = Buffer.from(arrayBuffer)
+
+    // Verify SRI integrity (sha512/sha384/sha256) or shasum (sha1) fail-closed before writing to disk.
+    if (typeof process !== 'undefined') {
+      const crypto = await import('node:crypto')
+      const rawIntegrity = typeof packageInfo.dist?.integrity === 'string'
+        ? packageInfo.dist.integrity.trim()
+        : ''
+      const rawShasum = typeof packageInfo.dist?.shasum === 'string'
+        ? packageInfo.dist.shasum.trim().toLowerCase()
+        : ''
+
+      if (rawIntegrity) {
+        const sriTokens = rawIntegrity.split(/\s+/).filter(Boolean)
+        const rank: Record<string, number> = { sha512: 3, sha384: 2, sha256: 1 }
+        const candidates: Array<{ algo: 'sha512' | 'sha384' | 'sha256', digest: Buffer }> = []
+        for (const token of sriTokens) {
+          const match = /^(sha512|sha384|sha256)-([A-Za-z0-9+/]+={0,2})$/.exec(token)
+          if (!match)
+            continue
+          candidates.push({
+            algo: match[1] as 'sha512' | 'sha384' | 'sha256',
+            digest: Buffer.from(match[2]!, 'base64'),
+          })
+        }
+        if (candidates.length === 0) {
+          throw new Error('PLUGIN_NPM_INTEGRITY_MISMATCH')
+        }
+        const maxRank = Math.max(...candidates.map(c => rank[c.algo] ?? 0))
+        const strongest = candidates.filter(c => (rank[c.algo] ?? 0) === maxRank)
+        const matched = strongest.some((candidate) => {
+          const actual = crypto.createHash(candidate.algo).update(tarballBuffer).digest()
+          return actual.length === candidate.digest.length && crypto.timingSafeEqual(actual, candidate.digest)
+        })
+        if (!matched) {
+          throw new Error('PLUGIN_NPM_INTEGRITY_MISMATCH')
+        }
+      }
+      else if (rawShasum) {
+        if (!/^[a-f0-9]{40}$/.test(rawShasum)) {
+          throw new Error('PLUGIN_NPM_INTEGRITY_MISMATCH')
+        }
+        const expected = Buffer.from(rawShasum, 'hex')
+        const actual = crypto.createHash('sha1').update(tarballBuffer).digest()
+        if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) {
+          throw new Error('PLUGIN_NPM_INTEGRITY_MISMATCH')
+        }
+      }
+      else {
+        throw new Error('PLUGIN_NPM_INTEGRITY_MISMATCH')
+      }
+    }
+
     const tempDir = context?.tempDir ?? '/tmp'
     const safePackageName = packageName.replace(/[@/]/g, '-')
     const fileName = `${safePackageName}-${packageInfo.version}.tgz`
@@ -129,7 +200,7 @@ export class NpmProvider implements PluginProvider {
 
     if (typeof process !== 'undefined') {
       const fs = await import('node:fs/promises')
-      await fs.writeFile(filePath, Buffer.from(arrayBuffer))
+      await fs.writeFile(filePath, tarballBuffer)
     }
 
     const authorName = typeof packageInfo.author === 'string'
@@ -197,15 +268,29 @@ export class NpmProvider implements PluginProvider {
     }
 
     const data = res.data
-    const distTags = data['dist-tags'] ?? {}
+    const rawDistTags = data?.['dist-tags']
+    const distTags: Record<string, unknown> = rawDistTags && typeof rawDistTags === 'object'
+      ? (rawDistTags as Record<string, unknown>)
+      : {}
+    const resolveTag = (tag: string): string | undefined => {
+      if (!Object.prototype.hasOwnProperty.call(distTags, tag))
+        return undefined
+      const value = distTags[tag]
+      return typeof value === 'string' && value.trim() ? value.trim() : undefined
+    }
+
     const targetVersion = !versionOrSpec
-      ? distTags.latest
-      : distTags[versionOrSpec] ?? versionOrSpec
+      ? resolveTag('latest')
+      : (resolveTag(versionOrSpec) ?? versionOrSpec)
 
     if (!targetVersion)
       return null
 
-    return data.versions?.[targetVersion] ?? null
+    const versions = data?.versions
+    if (!versions || typeof versions !== 'object' || !Object.prototype.hasOwnProperty.call(versions, targetVersion))
+      return null
+
+    return versions[targetVersion] ?? null
   }
 
   /**

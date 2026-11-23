@@ -6,6 +6,11 @@
   "description": "程序员工具：UUID、时间戳、JWT、命名转换、Query String 与字符串转义",
   "author": "TalexTouch Team",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-dev-utils"
+  },
   "keywords": [
     "tuff-plugin",
     "utilities",
@@ -21,9 +26,9 @@
   },
   "main": "./index.js",
   "files": [
-    "manifest.json",
+    "assets/",
     "index.js",
-    "assets/"
+    "manifest.json"
   ],
   "engines": {
     "tuff": ">=261011"

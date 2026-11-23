@@ -310,13 +310,24 @@ export async function checkNpmPluginUpdates(
         return null
       }
 
-      const distTags = response.data['dist-tags']
-      const latestVersion =
-        readTrimmedString(distTags?.[distTag]) ?? readTrimmedString(distTags?.latest)
+      const rawDistTags = response.data['dist-tags']
+      const distTags = rawDistTags && typeof rawDistTags === 'object' ? rawDistTags : undefined
+      const readOwnTag = (tag: string): string | undefined => {
+        if (!distTags || !Object.prototype.hasOwnProperty.call(distTags, tag)) return undefined
+        return readTrimmedString(distTags[tag])
+      }
+      const latestVersion = readOwnTag(distTag) ?? readOwnTag('latest')
       if (!latestVersion) return null
 
       const hasUpdate = compareUpdateVersions(latestVersion, plugin.version) === 1
-      const tarballUrl = readTrimmedString(response.data.versions?.[latestVersion]?.dist?.tarball)
+      const versions = response.data.versions
+      const versionEntry =
+        versions &&
+        typeof versions === 'object' &&
+        Object.prototype.hasOwnProperty.call(versions, latestVersion)
+          ? versions[latestVersion]
+          : undefined
+      const tarballUrl = readTrimmedString(versionEntry?.dist?.tarball)
       const installSource = formatNpmPluginSource(packageName, latestVersion)
 
       return {

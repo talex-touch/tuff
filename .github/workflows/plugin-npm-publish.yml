@@ -105,17 +105,12 @@ jobs:
             PACK_ARGS+=("--filter" "${INPUT_PLUGIN_FILTER}")
           fi
 
-          if [ "${INPUT_DRY_RUN}" = "true" ]; then
-            DRY_PACK_ARGS=(--dry-run)
-            if [ -n "${INPUT_PLUGIN_FILTER}" ]; then
-              DRY_PACK_ARGS+=(--filter "${INPUT_PLUGIN_FILTER}")
-            fi
-            node scripts/pack-npm-plugins.mjs "${DRY_PACK_ARGS[@]}"
-          else
-            node scripts/pack-npm-plugins.mjs "${PACK_ARGS[@]}"
-          fi
+          # Always stage plugins/<dir>/dist/npm/ (and verify policy + security scan + .tgz)
+          # so the subsequent `tuff publish --target npm` step (including --dry-run) validates
+          # the exact staged package directory.
+          node scripts/pack-npm-plugins.mjs "${PACK_ARGS[@]}"
 
-          mapfile -t TARGET_DIRS < <(node -e '
+          mapfile -t TARGET_ENTRIES < <(node -e '
             const fs = require("node:fs")
             const path = require("node:path")
             const rawFilter = (process.env.INPUT_PLUGIN_FILTER || "").trim()
@@ -136,18 +131,26 @@ jobs:
               if (filters.length > 0 && !filters.includes(dir) && !filters.includes(pkg.name)) {
                 continue
               }
-              console.log(dir)
+              console.log(`${dir}\t${pkg.name}\t${pkg.version}`)
             }
           ')
 
-          if [ "${#TARGET_DIRS[@]}" -eq 0 ]; then
+          if [ "${#TARGET_ENTRIES[@]}" -eq 0 ]; then
             echo "No publishable plugins matched filter '${INPUT_PLUGIN_FILTER}'."
             exit 1
           fi
 
           CLI_BIN="${PWD}/packages/tuff-cli/bin/tuff.js"
-          for dir in "${TARGET_DIRS[@]}"; do
-            echo "::group::Publish plugins/${dir} to npm (dry_run=${INPUT_DRY_RUN})"
+          for entry in "${TARGET_ENTRIES[@]}"; do
+            IFS=$'\t' read -r dir pkg_name pkg_version <<< "${entry}"
+            if [ "${INPUT_DRY_RUN}" != "true" ] && [ -z "${INPUT_PLUGIN_FILTER}" ]; then
+              if npm view "${pkg_name}@${pkg_version}" version --registry "${INPUT_REGISTRY}" >/dev/null 2>&1; then
+                echo "Skipping ${pkg_name}@${pkg_version} (already published on ${INPUT_REGISTRY})."
+                continue
+              fi
+            fi
+
+            echo "::group::Publish plugins/${dir} (${pkg_name}@${pkg_version}) to npm (dry_run=${INPUT_DRY_RUN})"
             PUBLISH_ARGS=(
               publish
               --target npm

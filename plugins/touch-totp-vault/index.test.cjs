@@ -506,3 +506,29 @@ test('trigger generation guard prevents stale async secret lookup from overwriti
   await slowTrigger
   assert.equal(h.state.items[0].id, 'totp-vault-empty')
 })
+
+test('blocks saving a 129th account at MAX_ACCOUNTS without writing an orphan secret', async () => {
+  const existing = Array.from({ length: 128 }, (_, index) => ({
+    id: `acct_${index}`,
+    secretKey: `totp.acct_${index}`,
+    issuer: `Issuer${index}`,
+    label: `user${index}@test`,
+    algorithm: 'SHA-1',
+    digits: 6,
+    period: 30,
+    createdAt: index + 1,
+  }))
+  const h = createHarness({
+    nowMs: 59 * 1000,
+    files: [['totp-accounts.json', { version: 1, accounts: existing }]],
+  })
+
+  await h.module.onFeatureTriggered('totp-vault', {
+    text: `add Overflow overflow@test ${RFC_SHA1_SEED}`,
+  })
+  const res = await h.module.onItemAction(h.state.items[0], { actionId: 'save-account' })
+  assert.equal(res.success, false)
+  assert.equal(res.status, 'blocked')
+  assert.equal(res.reason, 'account-limit-reached')
+  assert.equal(h.secrets.size, 0)
+})

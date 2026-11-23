@@ -67,5 +67,10 @@
   "scripts": {
     "build": "node ../../packages/tuff-cli/bin/tuff.js builder",
     "test": "node --test index.test.cjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-world-time"
   }
 }

@@ -5,7 +5,13 @@
   "description": "Tuff QuickOps 官方迁移插件：承接本地快捷工具入口、运行状态与审计摘要",
   "license": "MIT",
   "packageManager": "pnpm@11.24.0",
-  "keywords": ["tuff-plugin", "utilities", "quickops", "system", "diagnostics"],
+  "keywords": [
+    "tuff-plugin",
+    "utilities",
+    "quickops",
+    "system",
+    "diagnostics"
+  ],
   "main": "./index.js",
   "engines": {
     "tuff": ">=261011"
@@ -29,8 +35,16 @@
       "value": "assets/logo.svg"
     },
     "permissions": {
-      "required": ["search.root-results"],
-      "optional": ["storage.shared", "fs.read", "fs.write", "clipboard.read", "clipboard.write"]
+      "required": [
+        "search.root-results"
+      ],
+      "optional": [
+        "storage.shared",
+        "fs.read",
+        "fs.write",
+        "clipboard.read",
+        "clipboard.write"
+      ]
     },
     "platforms": {
       "win32": true,
@@ -39,5 +53,10 @@
     },
     "surface": "prelude",
     "manifest": "./manifest.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-quickops"
   }
 }

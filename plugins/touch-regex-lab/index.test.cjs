@@ -326,3 +326,23 @@ test('trigger generation guard and onDestroy prevent stale async publishes', asy
   assert.equal(h.pushedBatches.length, 0)
   assert.deepEqual(Object.keys(h.mod).sort(), ['onDestroy', 'onFeatureTriggered', 'onItemAction'])
 })
+
+test('ReDoS guard blocks escaped nested quantifiers, escaped overlaps, and non-capturing/named group overlaps', async () => {
+  const h = createHarness()
+  const dangerousQueries = [
+    '/(\\d+)+$/ :: 111111111111111111111111!',
+    '/(\\w+)+$/ :: aaaaaaaaaaaaaaaaaaaaaaaa!',
+    '/(\\d|\\w)+$/ :: 111111111111111111111111!',
+    '/(?:a|aa)+$/ :: aaaaaaaaaaaaaaaaaaaaaaaa!',
+    '/(?:a|a)+$/ :: aaaaaaaaaaaaaaaaaaaaaaaa!',
+    '/(?<x>a|aa)+$/ :: aaaaaaaaaaaaaaaaaaaaaaaa!',
+  ]
+
+  for (const query of dangerousQueries) {
+    h.pushedBatches.length = 0
+    await h.mod.onFeatureTriggered('regex-lab', { text: query })
+    const items = h.pushedBatches.at(-1) || []
+    const blockedItem = items.find(item => /ReDoS|风险|blocked|拒绝/i.test(`${item.title} ${item.subtitle}`))
+    assert.ok(blockedItem, `expected ReDoS guard to block: ${query} (got: ${JSON.stringify(items.map(i => i.title))})`)
+  }
+})

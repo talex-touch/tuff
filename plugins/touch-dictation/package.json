@@ -35,8 +35,13 @@
       "value": "assets/logo.svg"
     },
     "permissions": {
-      "required": ["voice.dictation", "search.root-results"],
-      "optional": ["clipboard.read"]
+      "required": [
+        "voice.dictation",
+        "search.root-results"
+      ],
+      "optional": [
+        "clipboard.read"
+      ]
     },
     "platforms": {
       "win32": true,
@@ -45,5 +50,10 @@
     },
     "surface": "prelude",
     "manifest": "./manifest.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-dictation"
   }
 }

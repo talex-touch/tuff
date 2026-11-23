@@ -471,6 +471,25 @@ async function enrollAccountFailClosed(draft) {
     }
   }
 
+  let existingAccounts
+  try {
+    existingAccounts = await loadAccounts()
+  }
+  catch (error) {
+    logger?.error?.('[touch-totp-vault] Failed to load existing accounts before save')
+    return mapHostError(error, 'storage-read-failed', '读取账户列表失败，未保存新账户')
+  }
+
+  if (existingAccounts.length >= MAX_ACCOUNTS) {
+    return {
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'account-limit-reached',
+      message: `已达到最大账户数上限（${MAX_ACCOUNTS}），请先删除不需要的账户后再添加`,
+    }
+  }
+
   const accountId = generateAccountId()
   const secretKey = buildSecretKey(accountId)
 
@@ -485,7 +504,6 @@ async function enrollAccountFailClosed(draft) {
 
   // Step 2: Only after secret.set succeeded, persist sanitized metadata to plugin.storage.
   try {
-    const accounts = await loadAccounts()
     const metadata = sanitizeAccountMetadata({
       id: accountId,
       secretKey,
@@ -496,7 +514,7 @@ async function enrollAccountFailClosed(draft) {
       period: draft.period,
       createdAt: Date.now(),
     })
-    await saveAccounts([...accounts, metadata])
+    await saveAccounts([...existingAccounts, metadata])
     return {
       externalAction: true,
       success: true,

@@ -5,14 +5,17 @@ import type {
   PluginProviderContext
 } from '@talex-touch/utils/plugin/providers'
 import type { NpmTarballDistInfo } from '../npm-tarball-inspector'
+import { Buffer } from 'node:buffer'
 import { createRequire } from 'node:module'
 import process from 'node:process'
+import { finished } from 'node:stream/promises'
 import {
   DEFAULT_NPM_REGISTRY_URL,
   encodeNpmPackagePath,
   isAllowedNpmRegistryUrl,
   NPM_ABBREVIATED_PACKUMENT_ACCEPT,
   parseNpmPluginSource,
+  PLUGIN_PACKAGE_MAX_ARCHIVE_BYTES,
   resolveNpmRegistryUrl
 } from '@talex-touch/utils/plugin'
 import { resolvePackageDownloadTimeout } from '@talex-touch/utils/plugin/install-budgets'
@@ -22,7 +25,12 @@ import { getEnabledNpmSources } from '../../../service/store-api.service'
 import { getNetworkService } from '../../network'
 import { inspectNpmPluginTarball } from '../npm-tarball-inspector'
 import { createProviderLogger } from './logger'
-import { downloadToTempFile } from './utils'
+import { downloadToTempFile, stripAuthorizationHeader } from './utils'
+
+const PACKUMENT_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
+const PACKUMENT_VALIDATE_STATUSES = [200, 404, ...PACKUMENT_REDIRECT_STATUSES]
+const MAX_PACKUMENT_REDIRECTS = 5
+const MAX_PACKUMENT_BYTES = 8 * 1024 * 1024
 
 interface NpmVersionMetadata {
   name?: string
@@ -416,6 +424,116 @@ function validateTarballUrl(tarballUrl: string, allowLocalHttp: boolean): string
   return parsed.toString()
 }
 
+function getHeaderCaseInsensitive(
+  headers: Readonly<Record<string, string>>,
+  name: string
+): string | undefined {
+  const lower = name.toLowerCase()
+  return Object.entries(headers).find(([key]) => key.toLowerCase() === lower)?.[1]
+}
+
+async function readBoundedStreamBuffer(
+  stream: NodeJS.ReadableStream,
+  maxBytes: number,
+  overflowErrorCode: string
+): Promise<Buffer> {
+  const chunks: Buffer[] = []
+  let total = 0
+  for await (const rawChunk of stream) {
+    const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk)
+    total += chunk.length
+    if (total > maxBytes) {
+      if ('destroy' in stream && typeof stream.destroy === 'function') {
+        stream.destroy()
+      }
+      throw new Error(overflowErrorCode)
+    }
+    chunks.push(chunk)
+  }
+  return Buffer.concat(chunks, total)
+}
+
+async function fetchPackumentWithManualRedirects(
+  metadataUrl: string,
+  allowLocalHttp: boolean
+): Promise<{ status: number; data: NpmAbbreviatedPackument | null }> {
+  const networkService = getNetworkService()
+  let currentUrl = new URL(validateTarballUrl(metadataUrl, allowLocalHttp))
+  let currentHeaders: Record<string, string> = {
+    Accept: NPM_ABBREVIATED_PACKUMENT_ACCEPT
+  }
+  let redirectCount = 0
+
+  while (true) {
+    validateTarballUrl(currentUrl.toString(), allowLocalHttp)
+
+    const response = await networkService.requestStreamManualRedirect({
+      method: 'GET',
+      url: currentUrl.toString(),
+      timeoutMs: 30_000,
+      headers: currentHeaders,
+      responseType: 'stream',
+      validateStatus: PACKUMENT_VALIDATE_STATUSES
+    })
+
+    if (response.status >= 300 && response.status < 400) {
+      response.stream.destroy()
+      await finished(response.stream).catch(() => undefined)
+      if (!PACKUMENT_REDIRECT_STATUSES.has(response.status)) {
+        throw new Error('PLUGIN_DOWNLOAD_REDIRECT_STATUS_UNSUPPORTED')
+      }
+      if (redirectCount >= MAX_PACKUMENT_REDIRECTS) {
+        throw new Error('PLUGIN_DOWNLOAD_REDIRECT_LIMIT_EXCEEDED')
+      }
+      const location = getHeaderCaseInsensitive(response.headers, 'location')
+      if (!location) {
+        throw new Error('PLUGIN_DOWNLOAD_REDIRECT_LOCATION_MISSING')
+      }
+      let nextUrl: URL
+      try {
+        nextUrl = new URL(location, currentUrl)
+      } catch {
+        throw new Error('PLUGIN_NPM_TARBALL_URL_INVALID')
+      }
+      validateTarballUrl(nextUrl.toString(), allowLocalHttp)
+      if (nextUrl.origin !== currentUrl.origin) {
+        currentHeaders = stripAuthorizationHeader(currentHeaders)
+      }
+      currentUrl = nextUrl
+      redirectCount += 1
+      continue
+    }
+
+    if (response.status === 404) {
+      response.stream.destroy()
+      await finished(response.stream).catch(() => undefined)
+      return { status: 404, data: null }
+    }
+
+    if (response.status !== 200) {
+      response.stream.destroy()
+      await finished(response.stream).catch(() => undefined)
+      return { status: response.status, data: null }
+    }
+
+    const bodyBuffer = await readBoundedStreamBuffer(
+      response.stream,
+      MAX_PACKUMENT_BYTES,
+      'PLUGIN_NPM_PACKUMENT_TOO_LARGE'
+    )
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(bodyBuffer.toString('utf8'))
+    } catch {
+      throw new Error('PLUGIN_NPM_PACKUMENT_INVALID')
+    }
+    return {
+      status: 200,
+      data: parsed && typeof parsed === 'object' ? (parsed as NpmAbbreviatedPackument) : null
+    }
+  }
+}
+
 export class NpmPluginProvider implements PluginProvider {
   readonly type = PluginProviderType.NPM
   private readonly log = createProviderLogger(this.type)
@@ -499,16 +617,7 @@ export class NpmPluginProvider implements PluginProvider {
         meta: { packageName: parsed.packageName, registry, spec: parsed.spec ?? 'latest' }
       })
 
-      const response = await getNetworkService().request<NpmAbbreviatedPackument>({
-        method: 'GET',
-        url: metadataUrl,
-        timeoutMs: 30_000,
-        responseType: 'json',
-        headers: {
-          Accept: NPM_ABBREVIATED_PACKUMENT_ACCEPT
-        },
-        validateStatus: [200, 404]
-      })
+      const response = await fetchPackumentWithManualRedirects(metadataUrl, allowLocalHttp)
 
       if (response.status === 404) {
         throw new Error('PLUGIN_NOT_FOUND')
@@ -536,7 +645,12 @@ export class NpmPluginProvider implements PluginProvider {
 
       downloadedFilePath = await downloadToTempFile(tarballUrl, '.tgz', {
         timeout: resolvePackageDownloadTimeout(versionMeta.dist?.unpackedSize),
-        ...context?.downloadOptions
+        ...context?.downloadOptions,
+        forceExt: true,
+        maxBytes: PLUGIN_PACKAGE_MAX_ARCHIVE_BYTES,
+        validateRedirectUrl: (hopUrl) => {
+          validateTarballUrl(hopUrl.toString(), allowLocalHttp)
+        }
       })
 
       // Fail-closed pre-extraction inspection: SRI/shasum, bounded gunzip, package/ root,

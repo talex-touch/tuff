@@ -370,6 +370,7 @@ export class PluginInstallQueue {
     const providerResult = task.prepared?.providerResult
     if (providerResult?.provider === PluginProviderType.NPM) {
       options.enforceProdMode = true
+      options.archiveFormat = 'tgz'
       options.stripRootDir = 'package'
       const npmTrustTier = readNpmTrustTier(providerResult.metadata)
       if (npmTrustTier === 'npm-community' && providerResult.metadata?.unstamped !== false) {

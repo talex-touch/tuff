@@ -378,4 +378,79 @@ describe('PluginResolver', () => {
     expect(await fse.readFile(path.join(targetDir, 'logs', 'app.log'), 'utf-8')).toBe('old-log')
     expect(await fse.pathExists(path.join(installRoot, '.staging'))).toBe(false)
   })
+
+  it('extracts forced tgz installs via extractTgzSafely even if filename ends with .zip (defeats GZIP FEXTRA polyglot)', async () => {
+    const root = await fse.mkdtemp(path.join(tmpdir(), 'plugin-resolver-polyglot-'))
+    createdRoots.push(root)
+    const installRoot = path.join(root, 'installed-plugins')
+    await fse.ensureDir(installRoot)
+    pluginModuleMock.filePath = installRoot
+
+    const benignIndex = 'module.exports = { safe: true }\n'
+    const manifestJson = JSON.stringify({
+      id: 'com.example.polyglot',
+      name: 'polyglot-check',
+      version: '1.0.0',
+      description: 'polyglot check',
+      author: 'Tester',
+      main: 'index.js',
+      sdkapi: CURRENT_SDK_VERSION,
+      category: 'utilities'
+    })
+    const pkgJson = JSON.stringify({
+      name: 'tuff-plugin-polyglot-check',
+      version: '1.0.0',
+      dependencies: {}
+    })
+
+    // Build a valid .tgz, then embed a real malicious ZIP archive inside the RFC 1952 GZIP
+    // FEXTRA header (`FLG |= 0x04`) and save the file with a `.zip` suffix.
+    const benignTgz = buildNpmTgz({
+      'package/manifest.json': manifestJson,
+      'package/package.json': pkgJson,
+      'package/index.js': benignIndex
+    })
+    const evilZipDir = path.join(root, 'evil-zip-src')
+    await fse.ensureDir(evilZipDir)
+    await fse.writeFile(path.join(evilZipDir, 'manifest.json'), manifestJson, 'utf-8')
+    await fse.writeFile(
+      path.join(evilZipDir, 'index.js'),
+      'require("child_process").execSync("id")\n',
+      'utf-8'
+    )
+    const evilZipPath = path.join(root, 'evil.zip')
+    const compressing = (await import('compressing')).default
+    await compressing.zip.compressDir(evilZipDir, evilZipPath, { ignoreBase: true })
+    const evilZipBytes = await fse.readFile(evilZipPath)
+
+    // Inject FEXTRA into the 10-byte GZIP header (bytes 0..9, FLG at byte 3)
+    const header = Buffer.from(benignTgz.subarray(0, 10))
+    header[3] = (header[3]! | 0x04) & 0xff
+    const xlen = Buffer.alloc(2)
+    xlen.writeUInt16LE(evilZipBytes.length, 0)
+    const polyglotBytes = Buffer.concat([header, xlen, evilZipBytes, benignTgz.subarray(10)])
+
+    const polyglotZipNamedPath = path.join(root, 'pkg.zip')
+    await fse.writeFile(polyglotZipNamedPath, polyglotBytes)
+
+    const cb = vi.fn()
+    await new PluginResolver(polyglotZipNamedPath).install(
+      JSON.parse(manifestJson) as IManifest,
+      cb,
+      {
+        archiveFormat: 'tgz',
+        stripRootDir: 'package',
+        allowUnstampedNpm: true,
+        enforceProdMode: true
+      }
+    )
+
+    expect(cb).toHaveBeenCalledWith('success', 'success')
+    const installedIndex = await fse.readFile(
+      path.join(installRoot, 'polyglot-check', 'index.js'),
+      'utf-8'
+    )
+    expect(installedIndex).toBe(benignIndex)
+    expect(installedIndex).not.toContain('child_process')
+  })
 })

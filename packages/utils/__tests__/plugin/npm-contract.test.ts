@@ -899,6 +899,11 @@ describe('npm plugin contract', () => {
 
       const tempDir = await mkdtemp(path.join(tmpdir(), 'tuff-npm-provider-test-'))
       try {
+        const tarballBytes = new Uint8Array([1, 2, 3])
+        const { createHash } = await import('node:crypto')
+        const expectedShasum = createHash('sha1').update(tarballBytes).digest('hex')
+        const expectedIntegrity = `sha512-${createHash('sha512').update(tarballBytes).digest('base64')}`
+
         requestSpy.mockResolvedValueOnce({
           status: 200,
           statusText: 'OK',
@@ -915,8 +920,8 @@ describe('npm plugin contract', () => {
                 author: 'Talex Touch',
                 dist: {
                   tarball: 'https://registry.npmjs.org/@talex-touch/clipboard-history-plugin/-/clipboard-history-plugin-1.2.0.tgz',
-                  shasum: 'deadbeef',
-                  integrity: 'sha512-abc',
+                  shasum: expectedShasum,
+                  integrity: expectedIntegrity,
                 },
                 tuff: {
                   schemaVersion: 1,
@@ -935,7 +940,7 @@ describe('npm plugin contract', () => {
           statusText: 'OK',
           headers: {},
           url: 'https://registry.npmjs.org/@talex-touch/clipboard-history-plugin/-/clipboard-history-plugin-1.2.0.tgz',
-          data: new Uint8Array([1, 2, 3]).buffer,
+          data: tarballBytes.buffer,
         } as never)
 
         const installResult = await provider.install(
@@ -958,9 +963,66 @@ describe('npm plugin contract', () => {
           requestedSpec: '1.2.0',
           registry: DEFAULT_NPM_REGISTRY_URL,
           officialScope: true,
-          shasum: 'deadbeef',
-          integrity: 'sha512-abc',
+          shasum: expectedShasum,
+          integrity: expectedIntegrity,
         })
+
+        // Disallowed tarball origin rejected before download
+        requestSpy.mockResolvedValueOnce({
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          url: 'https://registry.npmjs.org/tuff-plugin-evil',
+          data: {
+            'name': 'tuff-plugin-evil',
+            'dist-tags': { latest: '1.0.0' },
+            'versions': {
+              '1.0.0': {
+                name: 'tuff-plugin-evil',
+                version: '1.0.0',
+                dist: {
+                  tarball: 'http://169.254.169.254/latest/meta-data.tgz',
+                  integrity: expectedIntegrity,
+                },
+              },
+            },
+          },
+        } as never)
+        await expect(
+          provider.install({ source: 'npm:tuff-plugin-evil@1.0.0' }, { tempDir }),
+        ).rejects.toThrow('PLUGIN_NPM_TARBALL_URL_DISALLOWED')
+
+        // Tampered tarball bytes rejected by SRI check before writing
+        requestSpy.mockResolvedValueOnce({
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          url: 'https://registry.npmjs.org/tuff-plugin-tampered',
+          data: {
+            'name': 'tuff-plugin-tampered',
+            'dist-tags': { latest: '1.0.0' },
+            'versions': {
+              '1.0.0': {
+                name: 'tuff-plugin-tampered',
+                version: '1.0.0',
+                dist: {
+                  tarball: 'https://registry.npmjs.org/tuff-plugin-tampered/-/tampered-1.0.0.tgz',
+                  integrity: expectedIntegrity,
+                },
+              },
+            },
+          },
+        } as never)
+        requestSpy.mockResolvedValueOnce({
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          url: 'https://registry.npmjs.org/tuff-plugin-tampered/-/tampered-1.0.0.tgz',
+          data: new Uint8Array([9, 9, 9]).buffer,
+        } as never)
+        await expect(
+          provider.install({ source: 'npm:tuff-plugin-tampered@1.0.0' }, { tempDir }),
+        ).rejects.toThrow('PLUGIN_NPM_INTEGRITY_MISMATCH')
       }
       finally {
         await rm(tempDir, { recursive: true, force: true })
@@ -1013,7 +1075,7 @@ describe('npm plugin contract', () => {
       expect(list[0]).toMatchObject({
         id: '@talex-touch/clipboard-history-plugin',
         name: 'clipboard-history',
-        isOfficial: true,
+        isOfficial: false,
         category: 'productivity',
         icon: 'i-ri-clipboard-line',
         packageUrl: undefined,

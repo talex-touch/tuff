@@ -1304,7 +1304,55 @@ async function handleSavePreset(presetName, request) {
   const { publicHeaders, sensitiveHeaders, secretHeaderNames } = splitHeaders(request.headers || {})
   const secretKey = secretHeaderNames.length > 0 ? buildSecretKey(safeName) : null
 
-  // CRITICAL: Persist secrets BEFORE touching plugin.storage; fail closed on any error.
+  let presets
+  let existingIndex
+  let previous
+  let nextPreset
+  try {
+    const existingRaw = await plugin.storage.getFile(COLLECTIONS_FILE)
+    presets = parseCollectionsStore(existingRaw).presets
+    const now = Date.now()
+    existingIndex = presets.findIndex(p => p.name.toLowerCase() === safeName.toLowerCase())
+    previous = existingIndex >= 0 ? presets[existingIndex] : null
+
+    nextPreset = sanitizePresetForStorage({
+      id: previous?.id || `preset-${fnv1aHex(safeName.toLowerCase())}`,
+      name: safeName,
+      method: request.method,
+      url: request.url,
+      headers: publicHeaders,
+      secretHeaderNames,
+      secretKey,
+      body: request.body,
+      createdAt: previous?.createdAt || now,
+      updatedAt: now,
+    })
+  }
+  catch (error) {
+    logger?.warn?.('[touch-api-lens] Failed to read collections metadata before save')
+    return {
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: mapHostErrorReason(error, 'storage-read-failed'),
+      message: 'Failed to load existing presets before saving',
+    }
+  }
+
+  if (!nextPreset) {
+    return {
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'invalid-action',
+      message: 'Unable to sanitize preset',
+    }
+  }
+
+  // CRITICAL: Persist secrets BEFORE touching plugin.storage; fail closed and roll back on metadata write failure.
+  let wroteSecret = false
+  let previousSecretValue = null
+  const replacingSameSecretKey = Boolean(secretKey && previous?.secretKey === secretKey)
   if (secretHeaderNames.length > 0) {
     if (typeof secret?.set !== 'function') {
       return {
@@ -1315,8 +1363,17 @@ async function handleSavePreset(presetName, request) {
         message: 'Secret storage capability is unavailable; preset was not saved',
       }
     }
+    if (replacingSameSecretKey && typeof secret?.get === 'function') {
+      try {
+        previousSecretValue = await secret.get(secretKey)
+      }
+      catch {
+        previousSecretValue = null
+      }
+    }
     try {
       await secret.set(secretKey, JSON.stringify(sensitiveHeaders))
+      wroteSecret = true
     }
     catch (error) {
       logger?.warn?.('[touch-api-lens] Failed to store preset secret')
@@ -1331,35 +1388,6 @@ async function handleSavePreset(presetName, request) {
   }
 
   try {
-    const existingRaw = await plugin.storage.getFile(COLLECTIONS_FILE)
-    const { presets } = parseCollectionsStore(existingRaw)
-    const now = Date.now()
-    const existingIndex = presets.findIndex(p => p.name.toLowerCase() === safeName.toLowerCase())
-    const previous = existingIndex >= 0 ? presets[existingIndex] : null
-
-    const nextPreset = sanitizePresetForStorage({
-      id: previous?.id || `preset-${fnv1aHex(safeName.toLowerCase())}`,
-      name: safeName,
-      method: request.method,
-      url: request.url,
-      headers: publicHeaders,
-      secretHeaderNames,
-      secretKey,
-      body: request.body,
-      createdAt: previous?.createdAt || now,
-      updatedAt: now,
-    })
-
-    if (!nextPreset) {
-      return {
-        externalAction: true,
-        success: false,
-        status: 'blocked',
-        reason: 'invalid-action',
-        message: 'Unable to sanitize preset',
-      }
-    }
-
     const updated = [...presets]
     if (existingIndex >= 0)
       updated[existingIndex] = nextPreset
@@ -1388,6 +1416,19 @@ async function handleSavePreset(presetName, request) {
     }
   }
   catch (error) {
+    if (wroteSecret && secretKey) {
+      try {
+        if (replacingSameSecretKey && typeof previousSecretValue === 'string') {
+          await secret.set(secretKey, previousSecretValue)
+        }
+        else if (typeof secret?.delete === 'function') {
+          await secret.delete(secretKey)
+        }
+      }
+      catch {
+        logger?.warn?.('[touch-api-lens] Failed to rollback preset secret after metadata write failure')
+      }
+    }
     logger?.warn?.('[touch-api-lens] Failed to persist collections metadata')
     return {
       externalAction: true,

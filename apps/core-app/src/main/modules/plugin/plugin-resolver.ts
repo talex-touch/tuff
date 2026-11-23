@@ -39,6 +39,11 @@ export interface ResolverInstallOptions {
    */
   stripRootDir?: string | 'auto' | false
   /**
+   * Explicit archive container format. When set to `'tgz'`, bypasses filename-suffix dispatch
+   * and always extracts via `extractTgzSafely` (prevents archive polyglot bypasses).
+   */
+  archiveFormat?: 'tgz' | 'tpex' | 'tar' | 'zip'
+  /**
    * Permit unstamped npm community packages (both `_files` and `_signature` absent).
    * Must only be passed from the verified `npm-community` install pipeline.
    */
@@ -61,11 +66,29 @@ export class PluginResolver {
     return lower.endsWith('.tar.gz') || lower.endsWith('.tgz')
   }
 
+  private isForcedTgzArchive(source: string, options?: ResolverInstallOptions): boolean {
+    return (
+      options?.archiveFormat === 'tgz' ||
+      options?.stripRootDir === 'package' ||
+      this.isTgzArchive(source)
+    )
+  }
+
   private async uncompress(
     source: string,
     target: string,
     options?: ResolverInstallOptions
   ): Promise<void> {
+    // Explicit tgz/NPM package installs NEVER dispatch by filename suffix, preventing archive
+    // polyglots (e.g. a GZIP FEXTRA ZIP served from a `.zip` URL) from hitting zip extraction.
+    if (options?.archiveFormat === 'tgz' || options?.stripRootDir === 'package') {
+      await extractTgzSafely(source, target, {
+        stripRootDir: options?.stripRootDir ?? 'package',
+        skipNodeModules: true
+      })
+      return
+    }
+
     const lower = source.toLowerCase()
     if (lower.endsWith('.tar') || lower.endsWith('.tpex')) {
       await compressing.tar.uncompress(source, target)
@@ -180,7 +203,7 @@ export class PluginResolver {
       const integrity = await ensurePluginRuntimeIntegrity({
         pluginDir: stagingDir,
         manifest: installedManifest,
-        archivePath: this.isTgzArchive(this.filePath) ? undefined : this.filePath
+        archivePath: this.isForcedTgzArchive(this.filePath, options) ? undefined : this.filePath
       })
       if (integrity.missingFiles.length > 0) {
         throw new Error(

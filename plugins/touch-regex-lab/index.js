@@ -765,12 +765,40 @@ function branchesOverlapRisk(branches) {
       if (a.startsWith(b) || b.startsWith(a)) {
         return true
       }
-      if ((a === '\\d' && b === '\\w') || (a === '\\w' && b === '\\d') || a === '.' || b === '.') {
+      const pair = [a, b].sort().join('|')
+      if (
+        a === '.'
+        || b === '.'
+        || pair === '\\d|\\w'
+        || pair === '\\S|\\d'
+        || pair === '\\S|\\w'
+        || pair === '\\D|\\w'
+      ) {
         return true
       }
     }
   }
   return false
+}
+
+function readEscapedAtomEnd(pattern, backslashIndex) {
+  const next = pattern[backslashIndex + 1]
+  if (!next) {
+    return backslashIndex
+  }
+  if ((next === 'p' || next === 'P' || next === 'u') && pattern[backslashIndex + 2] === '{') {
+    const closeBrace = pattern.indexOf('}', backslashIndex + 3)
+    if (closeBrace > backslashIndex + 2) {
+      return closeBrace
+    }
+  }
+  if (next === 'x' && /^[0-9a-f]{2}/i.test(pattern.slice(backslashIndex + 2, backslashIndex + 4))) {
+    return backslashIndex + 3
+  }
+  if (next === 'u' && /^[0-9a-f]{4}/i.test(pattern.slice(backslashIndex + 2, backslashIndex + 6))) {
+    return backslashIndex + 5
+  }
+  return backslashIndex + 1
 }
 
 function analyzeRedosRisk(pattern) {
@@ -783,19 +811,36 @@ function analyzeRedosRisk(pattern) {
     }
   }
 
-  let escaped = false
   let inClass = false
   const groupStack = []
   let consecutiveWildcardRuns = 0
 
   for (let i = 0; i < pattern.length; i += 1) {
     const ch = pattern[i]
-    if (escaped) {
-      escaped = false
-      continue
-    }
     if (ch === '\\') {
-      escaped = true
+      const atomEnd = readEscapedAtomEnd(pattern, i)
+      const atom = pattern.slice(i, atomEnd + 1)
+      i = atomEnd
+      if (inClass) {
+        continue
+      }
+      if (groupStack.length > 0) {
+        const top = groupStack[groupStack.length - 1]
+        top.branches[top.branches.length - 1] += atom
+      }
+      const nextQ = readQuantifierAt(pattern, i + 1)
+      if (nextQ) {
+        if (nextQ.maxBound !== Infinity && nextQ.maxBound > MAX_QUANTIFIER_BOUND) {
+          issues.push(`Excessive quantifier bound ${nextQ.raw} exceeds ${MAX_QUANTIFIER_BOUND}`)
+        }
+        if (nextQ.unbounded && groupStack.length > 0) {
+          groupStack[groupStack.length - 1].hasInnerQuantifier = true
+        }
+        i = nextQ.endIndex - 1
+      }
+      else {
+        consecutiveWildcardRuns = 0
+      }
       continue
     }
     if (ch === '[' && !inClass) {
@@ -824,13 +869,23 @@ function analyzeRedosRisk(pattern) {
       const isLookaround = /^\(\?(?:=|!|<=|<!)/.test(pattern.slice(i))
       let bodyStart = i + 1
       if (pattern[bodyStart] === '?') {
-        if (pattern.slice(bodyStart, bodyStart + 2) === '?:') {
+        const rest = pattern.slice(bodyStart)
+        if (rest.startsWith('?<=') || rest.startsWith('?<!')) {
+          bodyStart += 3
+        }
+        else if (rest.startsWith('?:') || rest.startsWith('?=') || rest.startsWith('?!')) {
           bodyStart += 2
         }
-        else if (pattern.slice(bodyStart, bodyStart + 2) === '?<') {
+        else if (rest.startsWith('?<')) {
           const closeAngle = pattern.indexOf('>', bodyStart + 2)
           if (closeAngle > bodyStart) {
             bodyStart = closeAngle + 1
+          }
+        }
+        else {
+          const modMatch = /^\?[a-z-]*:/i.exec(rest)
+          if (modMatch) {
+            bodyStart += modMatch[0].length
           }
         }
       }
@@ -841,6 +896,7 @@ function analyzeRedosRisk(pattern) {
         isLookaround,
         branches: [''],
       })
+      i = bodyStart - 1
       continue
     }
 

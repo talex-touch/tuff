@@ -524,6 +524,7 @@ describe('PluginInstallQueue npm trust tier gate', () => {
     expect(installer.finalizeInstall).toHaveBeenCalledWith(prepared, {
       installOptions: {
         enforceProdMode: true,
+        archiveFormat: 'tgz',
         stripRootDir: 'package'
       }
     })
@@ -585,6 +586,7 @@ describe('PluginInstallQueue npm trust tier gate', () => {
     expect(installer.finalizeInstall).toHaveBeenCalledWith(prepared, {
       installOptions: {
         enforceProdMode: true,
+        archiveFormat: 'tgz',
         stripRootDir: 'package',
         allowUnstampedNpm: true
       }

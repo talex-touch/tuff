@@ -51,8 +51,6 @@ const state = {
   items: [],
   calls: [],
   result: null,
-  presetResult: null,
-  presetError: null,
   actError: null,
 }
 
@@ -108,14 +106,6 @@ globalThis.plugin = {
       return state.result || { operation: 'act', action, status: 'completed' }
     },
   },
-  windowPresets: {
-    async runAction(presetId) {
-      state.calls.push({ operation: 'run-preset', presetId })
-      if (state.presetError)
-        throw state.presetError
-      return state.presetResult || { operation: 'run-action', actionId: presetId, status: 'completed', affectedWindows: 2 }
-    },
-  },
 }
 
 function loadPluginModule(filename) {
@@ -133,8 +123,6 @@ test.beforeEach(() => {
   state.items = []
   state.calls = []
   state.result = null
-  state.presetResult = null
-  state.presetError = null
   state.actError = null
   globalThis.platform.platform = 'win32'
 })
@@ -217,45 +205,15 @@ test('keeps expired token, permission and unsupported outcomes stable and redact
   )
 })
 
-test('window-presets feature executes presets, handles blocked/errors, and guards platform and empty matches', async () => {
-  assert.equal(await pluginModule.onFeatureTriggered('window-presets', 'dev'), true)
-  assert.equal(state.items.length, 1)
-  const presetItem = state.items[0]
-  assert.equal(presetItem.actions[0].id, 'run-preset')
-  assert.equal(presetItem.actions[0].type, 'plugin')
-  assert.deepEqual(presetItem.actions[0].payload, { presetId: 'preset-dev-split' })
-
-  const executed = await pluginModule.onItemAction(presetItem, { actionId: 'run-preset' })
-  assert.deepEqual(executed, {
-    externalAction: true,
-    success: true,
-    status: 'completed',
-    message: '已处理 2 个窗口',
-  })
-  assert.deepEqual(state.calls.at(-1), { operation: 'run-preset', presetId: 'preset-dev-split' })
-
-  state.presetResult = { status: 'blocked', reason: 'insufficient-windows' }
-  const blockedResult = await pluginModule.onItemAction(presetItem, { actionId: 'run-preset' })
-  assert.equal(blockedResult.status, 'blocked')
-  assert.equal(blockedResult.reason, 'insufficient-windows')
-  assert.equal(blockedResult.message, '可见窗口数量不足')
-
-  state.presetResult = null
-  state.presetError = Object.assign(new Error('/private/perm'), {
-    code: 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED',
-  })
-  const failedResult = await pluginModule.onItemAction(presetItem, { actionId: 'run-preset' })
-  assert.equal(failedResult.status, 'blocked')
-  assert.equal(failedResult.reason, 'permission-check-failed')
-  assert.doesNotMatch(JSON.stringify(failedResult), /private/)
-
-  state.presetError = null
-  await pluginModule.onFeatureTriggered('window-presets', 'no-matching-preset-xyz')
-  assert.equal(state.items[0].title, '暂无匹配预设')
-
-  globalThis.platform.platform = 'darwin'
-  await pluginModule.onFeatureTriggered('window-presets', '')
-  assert.equal(state.items[0].title, '当前平台暂不支持窗口预设')
+test('does not claim window-presets feature or invoke touch-window-presets host capability', async () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, 'manifest.json'), 'utf8'))
+  assert.equal(manifest.features.some(f => f.id === 'window-presets'), false)
+  assert.equal(manifest.searchProviders.some(p => p.featureId === 'window-presets'), false)
+  assert.equal(await pluginModule.onFeatureTriggered('window-presets', 'dev'), false)
+  assert.equal(state.items.length, 0)
+  assert.equal(state.calls.length, 0)
+  const source = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8')
+  assert.doesNotMatch(source, /\bwindowPresets\b/)
 })
 
 test('ignores unrelated items in onItemAction and maps permission failures canonically', async () => {

@@ -66,5 +66,10 @@
     "sdkapi": 261011,
     "surface": "prelude"
   },
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-cron-craft"
+  }
 }
