@@ -370,9 +370,6 @@ async function runModeA(args) {
   const writerWorker = new Worker(path.join(outMainDir, 'search-index-worker.js'))
   const writerRpc = createWorkerRpcClient(writerWorker)
 
-  let readerWorker = null
-  let readerRpc = null
-
   try {
     const writeStart = performance.now()
     await writerRpc.send('init-1', { type: 'init', taskId: 'init-1', dbPath })
@@ -432,7 +429,7 @@ async function runModeA(args) {
     })
     const writeDurationMs = performance.now() - writeStart
 
-    readerWorker = new Worker(path.join(outMainDir, 'search-index-read-worker.js'), {
+    const readerWorker = new Worker(path.join(outMainDir, 'search-index-read-worker.js'), {
       workerData: { databasePath: dbPath },
       resourceLimits: {
         maxOldGenerationSizeMb: 64,
@@ -440,7 +437,7 @@ async function runModeA(args) {
         stackSizeMb: 4
       }
     })
-    readerRpc = createWorkerRpcClient(readerWorker)
+    const readerRpc = createWorkerRpcClient(readerWorker)
 
     const queryStart = performance.now()
     let totalFtsRows = 0
@@ -480,16 +477,14 @@ async function runModeA(args) {
 
     await writerRpc.send('shutdown-1', { type: 'shutdown', taskId: 'shutdown-1' })
     await writerWorker.terminate()
-    if (readerWorker) {
-      await new Promise((resolve) => {
-        const timer = setTimeout(resolve, 2000)
-        readerWorker.once('exit', () => {
-          clearTimeout(timer)
-          resolve()
-        })
-        readerWorker.postMessage({ type: 'shutdown' })
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, 2000)
+      readerWorker.once('exit', () => {
+        clearTimeout(timer)
+        resolve()
       })
-    }
+      readerWorker.postMessage({ type: 'shutdown' })
+    })
 
     process.stdout.write(
       `${JSON.stringify({

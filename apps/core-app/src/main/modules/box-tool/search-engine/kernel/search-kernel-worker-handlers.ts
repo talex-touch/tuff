@@ -275,6 +275,7 @@ export function createSearchKernelWorkerHandlers(
   let writerPendingTasks = new Map<string, PendingWaiter<SearchKernelWriterRequestResult>>()
   let writerPendingMetrics = new Map<string, PendingWaiter<SearchKernelWriterRequestResult>>()
   let writerClosePromise: Promise<SearchKernelWriterCloseResult> | null = null
+  let writerCloseSeq = 0
   let shutdownSequence = 0
 
   const rejectWriterWaiters = (
@@ -443,11 +444,12 @@ export function createSearchKernelWorkerHandlers(
       return { closed: true, gracefulAck, terminated: true }
     })()
 
+    const closeId = ++writerCloseSeq
     writerClosePromise = closeTask
     try {
       return await closeTask
     } finally {
-      if (writerClosePromise === closeTask) {
+      if (writerCloseSeq === closeId) {
         writerClosePromise = null
       }
     }
