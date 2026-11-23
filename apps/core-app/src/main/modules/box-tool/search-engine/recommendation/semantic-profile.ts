@@ -1,4 +1,5 @@
 import type { ContextSignal } from '@talex-touch/utils/core-box'
+import { isTerminalApp } from './app-category-rules'
 
 const VECTOR_DIMENSIONS = 64
 const VECTOR_DIMENSION_MASK = VECTOR_DIMENSIONS - 1
@@ -39,14 +40,35 @@ const IDE_NEEDLES = [
 
 const TERMINAL_NEEDLES = [
   'terminal',
+  '终端',
   'iterm',
   'wezterm',
   'alacritty',
   'kitty',
+  'ghostty',
+  'tabby',
+  'cmux',
+  'waveterm',
+  'windterm',
+  'electerm',
+  'pwsh',
   'powershell',
-  'cmd',
-  'shell'
+  'git bash',
+  'git-bash',
+  'command prompt',
+  'shell',
+  'dev.warp.warp',
+  'co.zeit.hyper',
+  'com.raphaelamorim.rio',
+  'rio terminal',
+  'rioterm',
+  'microsoft.windowsterminal',
+  'konsole',
+  'ptyxis',
+  'tilix'
 ] as const
+
+const EXACT_TITLE_TERMINAL_NAMES = new Set(['cmd', 'wt', 'hyper'])
 
 const BROWSER_NEEDLES = [
   'chrome',
@@ -186,7 +208,8 @@ export function buildRecommendationSemanticProfile(
 
   if (context.foregroundApp) {
     const foregroundTokens = inferAppCategoryTokens(
-      `${context.foregroundApp.bundleId} ${context.foregroundApp.name}`
+      context.foregroundApp.bundleId,
+      context.foregroundApp.name
     )
     tokens.push(...foregroundTokens)
 
@@ -252,7 +275,7 @@ export function buildCandidateSemanticProfile(
   tokens.push(...splitIdentifier(candidate.itemId))
   tokens.push(...splitIdentifier(candidate.title))
   tokens.push(...splitIdentifier(candidate.subtitle))
-  tokens.push(...inferAppCategoryTokens(`${candidate.itemId} ${candidate.title ?? ''}`))
+  tokens.push(...inferAppCategoryTokens(candidate.itemId, candidate.title))
 
   const profile = createProfile(tokens)
   if (candidateProfileMemo.size >= CANDIDATE_SEMANTIC_PROFILE_CACHE_MAX) {
@@ -318,15 +341,26 @@ function splitIdentifier(value?: string): string[] {
   )
 }
 
-function inferAppCategoryTokens(identifier: string): string[] {
-  const value = identifier.toLowerCase()
+function isTerminalIdentity(
+  primaryId: string,
+  secondaryName: string | undefined,
+  loweredCombined: string
+): boolean {
+  if (isTerminalApp(primaryId)) return true
+  if (includesAny(loweredCombined, TERMINAL_NEEDLES)) return true
+  const normalizedTitle = secondaryName?.trim().toLowerCase()
+  return Boolean(normalizedTitle && EXACT_TITLE_TERMINAL_NAMES.has(normalizedTitle))
+}
+
+function inferAppCategoryTokens(primaryId: string, secondaryName?: string): string[] {
+  const value = `${primaryId} ${secondaryName ?? ''}`.toLowerCase()
   const tokens: string[] = []
 
   if (includesAny(value, IDE_NEEDLES)) {
     tokens.push('app:ide', 'task:dev', 'code', 'editor', 'work')
   }
 
-  if (includesAny(value, TERMINAL_NEEDLES)) {
+  if (isTerminalIdentity(primaryId, secondaryName, value)) {
     tokens.push('app:terminal', 'task:dev', 'shell', 'work')
   }
 

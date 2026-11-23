@@ -3,7 +3,7 @@ import { normalizeStringList } from './app-utils'
 import { createAppCatalogNeedleMatcher } from './app-catalog-matching'
 import { resolveAppToolSourceAliases } from './app-tool-source-catalog'
 
-export const APP_SEMANTIC_ALIAS_CATALOG_VERSION = 5
+export const APP_SEMANTIC_ALIAS_CATALOG_VERSION = 6
 
 /**
  * Adding a language: append its tag here, add a rule to LOCALE_ALIAS_EXPANSIONS, then add the
@@ -358,7 +358,34 @@ const APP_SEMANTIC_CATALOG: readonly AppSemanticCatalogEntry[] = [
   {
     // `dev.warp.warp` rather than a bare `warp`: the bare token also matches "Cloudflare WARP",
     // which then answered searches for 终端 / terminal.
-    match: ['terminal', 'iterm', 'dev.warp.warp', 'hyper', 'tabby', 'ghostty', 'cmux'],
+    // Likewise `rio` and `wave` stay qualified (`com.raphaelamorim.rio`, `rio terminal`,
+    // `rioterm`, `waveterm`, `dev.waveterm.waveterm`) so unrelated apps carrying "Rio" or
+    // "Wave" never inherit terminal aliases.
+    match: [
+      'terminal',
+      'iterm',
+      'iterm2',
+      'dev.warp.warp',
+      'hyper',
+      'tabby',
+      'ghostty',
+      'cmux',
+      'wezterm',
+      'kitty',
+      'alacritty',
+      'com.raphaelamorim.rio',
+      'rio terminal',
+      'rioterm',
+      'waveterm',
+      'dev.waveterm.waveterm',
+      'windows terminal',
+      'microsoft.windowsterminal',
+      'wt.exe',
+      'powershell',
+      'pwsh',
+      'git bash',
+      'command prompt'
+    ],
     aliases: [...DEV_ALIASES, ...TERMINAL_ALIASES]
   },
   {
@@ -436,6 +463,14 @@ const APP_SEMANTIC_CATALOG: readonly AppSemanticCatalogEntry[] = [
   {
     match: ['mobaxterm'],
     aliases: [...DEV_ALIASES, ...TERMINAL_ALIASES, ...REMOTE_ALIASES, 'mobaxterm']
+  },
+  {
+    match: ['windterm'],
+    aliases: [...DEV_ALIASES, ...TERMINAL_ALIASES, ...REMOTE_ALIASES, 'windterm']
+  },
+  {
+    match: ['electerm'],
+    aliases: [...DEV_ALIASES, ...TERMINAL_ALIASES, ...REMOTE_ALIASES, 'electerm']
   },
   {
     match: ['xshell'],

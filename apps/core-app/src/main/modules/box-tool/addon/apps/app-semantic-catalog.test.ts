@@ -56,6 +56,127 @@ describe('app semantic alias catalog', () => {
     ).toEqual(expect.arrayContaining(['terminal', '终端']))
   })
 
+  it('recognizes cross-platform terminal emulators without leaking onto unrelated Rio or Wave apps', () => {
+    expect(
+      resolveAppSemanticAliases({
+        name: 'WezTerm',
+        bundleId: 'com.github.wez.wezterm',
+        path: '/Applications/WezTerm.app'
+      })
+    ).toEqual(expect.arrayContaining(['terminal', 'shell', '终端']))
+    expect(
+      resolveAppSemanticAliases({
+        name: 'WezTerm',
+        path: 'C:\\Program Files\\WezTerm\\wezterm-gui.exe'
+      })
+    ).toEqual(expect.arrayContaining(['terminal', 'shell']))
+    expect(
+      resolveAppSemanticAliases({
+        name: 'kitty',
+        bundleId: 'net.kovidgoyal.kitty',
+        path: '/Applications/kitty.app'
+      })
+    ).toEqual(expect.arrayContaining(['terminal', 'shell', '终端']))
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Alacritty',
+        bundleId: 'org.alacritty',
+        path: '/Applications/Alacritty.app'
+      })
+    ).toEqual(expect.arrayContaining(['terminal', 'shell', '终端']))
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Rio',
+        bundleId: 'com.raphaelamorim.rio',
+        path: '/Applications/Rio.app'
+      })
+    ).toEqual(expect.arrayContaining(['terminal', 'shell', '终端']))
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Rio Terminal',
+        path: '/Applications/Rio Terminal.app'
+      })
+    ).toEqual(expect.arrayContaining(['terminal', 'shell']))
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Wave',
+        bundleId: 'dev.waveterm.waveterm',
+        path: '/Applications/Wave.app'
+      })
+    ).toEqual(expect.arrayContaining(['terminal', 'shell', '终端']))
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Wave',
+        bundleId: 'dev.commandline.waveterm',
+        path: '/Applications/Wave.app'
+      })
+    ).toEqual(expect.arrayContaining(['terminal', 'shell']))
+    expect(resolveAppSemanticAliases({ name: 'WaveTerm' })).toEqual(
+      expect.arrayContaining(['terminal', 'shell'])
+    )
+    expect(resolveAppSemanticAliases({ name: 'WindTerm' })).toEqual(
+      expect.arrayContaining(['terminal', 'ssh', 'remote', 'windterm', '终端'])
+    )
+    expect(resolveAppSemanticAliases({ name: 'Electerm' })).toEqual(
+      expect.arrayContaining(['terminal', 'ssh', 'remote', 'electerm', '终端'])
+    )
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Windows Terminal',
+        bundleId: 'Microsoft.WindowsTerminal_8wekyb3d8bbwe'
+      })
+    ).toEqual(expect.arrayContaining(['terminal', 'shell', '终端']))
+    expect(
+      resolveAppSemanticAliases({
+        name: '终端',
+        bundleId: 'Microsoft.WindowsTerminal_8wekyb3d8bbwe',
+        path: 'C:\\Users\\x\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe'
+      })
+    ).toEqual(expect.arrayContaining(['terminal', 'shell', 'command line']))
+    expect(
+      resolveAppSemanticAliases({
+        name: 'PowerShell 7',
+        path: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+      })
+    ).toEqual(expect.arrayContaining(['terminal', 'shell']))
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Git Bash',
+        path: 'C:\\Program Files\\Git\\git-bash.exe'
+      })
+    ).toEqual(expect.arrayContaining(['terminal', 'shell']))
+
+    // Negative controls: unrelated apps containing "Rio" or "Wave" must never inherit terminal aliases.
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Angry Birds Rio',
+        bundleId: 'com.rovio.angrybirdsrio',
+        path: '/Applications/Angry Birds Rio.app'
+      })
+    ).not.toContain('terminal')
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Rio',
+        bundleId: 'com.example.rio',
+        path: '/Applications/Rio.app'
+      })
+    ).not.toContain('terminal')
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Wave',
+        bundleId: 'com.waveapps.wave',
+        path: '/Applications/Wave.app'
+      })
+    ).not.toContain('terminal')
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Sound Wave',
+        bundleId: 'com.audio.soundwave',
+        path: '/Applications/Sound Wave.app'
+      })
+    ).not.toContain('terminal')
+  })
+
   it('resolves database, API and DevOps aliases without assigning git to IDEs', () => {
     expect(resolveAppSemanticAliases({ name: 'TablePlus' })).toEqual(
       expect.arrayContaining(['db', 'database', 'sql', '数据库'])
@@ -290,7 +411,7 @@ describe('app semantic alias catalog', () => {
   })
 
   it('pins the catalog version so stored keywords refresh on the next scan', () => {
-    expect(APP_SEMANTIC_ALIAS_CATALOG_VERSION).toBe(5)
+    expect(APP_SEMANTIC_ALIAS_CATALOG_VERSION).toBe(6)
   })
 
   it('keeps ambiguous Illustrator away from the AI alias', () => {

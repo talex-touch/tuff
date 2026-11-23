@@ -194,6 +194,160 @@ describe('openDirectoryInTerminal', () => {
       { cwd: dirPath }
     )
   })
+
+  it('passes explicit safe working-directory flags for every supported Linux terminal', async () => {
+    const dirPath = '/home/x/My Folder; rm -rf ~ $(id)'
+    const cases: Array<{ id: string; bin: string; expectedArgs: string[] }> = [
+      {
+        id: 'xfce4-terminal',
+        bin: 'xfce4-terminal',
+        expectedArgs: [`--working-directory=${dirPath}`]
+      },
+      { id: 'ptyxis', bin: 'ptyxis', expectedArgs: [`--working-directory=${dirPath}`] },
+      { id: 'ghostty', bin: 'ghostty', expectedArgs: [`--working-directory=${dirPath}`] },
+      { id: 'foot', bin: 'foot', expectedArgs: [`--working-directory=${dirPath}`] },
+      { id: 'tilix', bin: 'tilix', expectedArgs: [`--working-directory=${dirPath}`] },
+      { id: 'terminator', bin: 'terminator', expectedArgs: [`--working-directory=${dirPath}`] },
+      { id: 'rio', bin: 'rio', expectedArgs: ['--working-dir', dirPath] },
+      { id: 'alacritty', bin: 'alacritty', expectedArgs: ['--working-directory', dirPath] },
+      { id: 'kitty', bin: 'kitty', expectedArgs: ['--directory', dirPath] },
+      { id: 'wezterm', bin: 'wezterm', expectedArgs: ['start', '--cwd', dirPath] },
+      { id: 'x-terminal-emulator', bin: 'x-terminal-emulator', expectedArgs: [] }
+    ]
+
+    const spawnFile = vi.fn(async () => undefined)
+    const stat = vi.fn(async (target: string): Promise<DirectoryTerminalStats> => {
+      if (target === dirPath) return directoryStats()
+      if (target.startsWith('/usr/bin/')) return fileStats()
+      throw new Error(`ENOENT: ${target}`)
+    })
+
+    for (const [index, entry] of cases.entries()) {
+      const target = `/usr/bin/${entry.bin}`
+      const opened = await openDirectoryInTerminal(
+        {
+          id: entry.id,
+          name: entry.id,
+          target,
+          kind: 'linux-bin',
+          source: 'installed'
+        },
+        dirPath,
+        { stat, spawnFile }
+      )
+      expect(opened).toBe(true)
+      expect(spawnFile).toHaveBeenNthCalledWith(index + 1, target, entry.expectedArgs, {
+        cwd: dirPath
+      })
+    }
+  })
+
+  it('passes safe working-directory flags or cwd for every supported Windows terminal', async () => {
+    const dirPath = 'C:\\Users\\x\\My Folder & calc; echo pwned'
+    const cases: Array<{ id: string; target: string; expectedArgs: string[] }> = [
+      {
+        id: 'windows-terminal',
+        target: 'C:\\Users\\x\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe',
+        expectedArgs: ['-d', dirPath]
+      },
+      {
+        id: 'pwsh',
+        target: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+        expectedArgs: ['-NoExit', '-WorkingDirectory', dirPath]
+      },
+      {
+        id: 'powershell',
+        target: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        expectedArgs: ['-NoExit']
+      },
+      {
+        id: 'git-bash',
+        target: 'C:\\Program Files\\Git\\git-bash.exe',
+        expectedArgs: [`--cd=${dirPath}`]
+      },
+      {
+        id: 'wezterm',
+        target: 'C:\\Program Files\\WezTerm\\wezterm-gui.exe',
+        expectedArgs: ['start', '--cwd', dirPath]
+      },
+      {
+        id: 'alacritty',
+        target: 'C:\\Program Files\\Alacritty\\alacritty.exe',
+        expectedArgs: ['--working-directory', dirPath]
+      },
+      {
+        id: 'tabby',
+        target: 'C:\\Users\\x\\AppData\\Local\\Programs\\Tabby\\Tabby.exe',
+        expectedArgs: ['open', dirPath]
+      },
+      {
+        id: 'cmd',
+        target: 'C:\\Windows\\System32\\cmd.exe',
+        expectedArgs: []
+      }
+    ]
+
+    const targets = new Set(cases.map((entry) => entry.target))
+    const spawnFile = vi.fn(async () => undefined)
+    const stat = vi.fn(async (target: string): Promise<DirectoryTerminalStats> => {
+      if (target === dirPath) return directoryStats()
+      if (targets.has(target)) return fileStats()
+      throw new Error(`ENOENT: ${target}`)
+    })
+
+    for (const [index, entry] of cases.entries()) {
+      const opened = await openDirectoryInTerminal(
+        {
+          id: entry.id,
+          name: entry.id,
+          target: entry.target,
+          kind: 'win-exe',
+          source: entry.id === 'cmd' ? 'system-default' : 'installed'
+        },
+        dirPath,
+        { stat, spawnFile }
+      )
+      expect(opened).toBe(true)
+      expect(spawnFile).toHaveBeenNthCalledWith(index + 1, entry.target, entry.expectedArgs, {
+        cwd: dirPath
+      })
+    }
+  })
+
+  it('refuses to spawn a Windows or Linux terminal binary that vanished after discovery', async () => {
+    const spawnFile = vi.fn(async () => undefined)
+    const stat = vi.fn(async (target: string): Promise<DirectoryTerminalStats> => {
+      if (target === '/tmp/dir' || target === 'C:\\Users\\x\\dir') return directoryStats()
+      throw new Error(`ENOENT: ${target}`)
+    })
+
+    const linuxOpened = await openDirectoryInTerminal(
+      {
+        id: 'ghostty',
+        name: 'Ghostty',
+        target: '/usr/bin/ghostty',
+        kind: 'linux-bin',
+        source: 'installed'
+      },
+      '/tmp/dir',
+      { stat, spawnFile }
+    )
+    const winOpened = await openDirectoryInTerminal(
+      {
+        id: 'pwsh',
+        name: 'PowerShell 7',
+        target: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+        kind: 'win-exe',
+        source: 'installed'
+      },
+      'C:\\Users\\x\\dir',
+      { stat, spawnFile }
+    )
+
+    expect(linuxOpened).toBe(false)
+    expect(winOpened).toBe(false)
+    expect(spawnFile).not.toHaveBeenCalled()
+  })
 })
 
 describe('getDirectoryTerminals', () => {
@@ -246,6 +400,151 @@ describe('getDirectoryTerminals', () => {
     expect(resolvePreferredTerminal(inventory, 'ghostty')).toEqual({
       terminal: inventory.all[0],
       configured: true
+    })
+  })
+
+  it('discovers Rio, Wave, WindTerm, and Electerm on macOS only when Info.plist declares folder support', async () => {
+    const inventory = await getDirectoryTerminals({
+      platform: 'darwin',
+      appDirs: ['/Applications'],
+      stat: statReporting([
+        '/Applications/Rio.app',
+        '/Applications/Wave.app',
+        '/Applications/WindTerm.app',
+        '/Applications/Electerm.app'
+      ]),
+      readFile: async (target) => {
+        if (target.startsWith('/Applications/Rio.app')) {
+          return Buffer.from('<string>public.folder</string>')
+        }
+        if (target.startsWith('/Applications/Wave.app')) {
+          return Buffer.from('<string>public.directory</string>')
+        }
+        if (target.startsWith('/Applications/WindTerm.app')) {
+          return Buffer.from('<string>public.plain-text</string>')
+        }
+        throw new Error('ENOENT')
+      }
+    })
+
+    expect(inventory.all.map((terminal) => terminal.id)).toEqual(['rio', 'wave'])
+  })
+
+  it('discovers installed Linux terminals from PATH including modern emulators', async () => {
+    const installedBins = new Set([
+      '/usr/bin/ptyxis',
+      '/usr/local/bin/ghostty',
+      '/usr/bin/foot',
+      '/usr/bin/tilix',
+      '/usr/bin/terminator',
+      '/usr/local/bin/rio',
+      '/usr/bin/alacritty',
+      '/usr/bin/kitty',
+      '/usr/bin/wezterm'
+    ])
+    const inventory = await getDirectoryTerminals({
+      platform: 'linux',
+      pathEnv: '/usr/local/bin:/usr/bin',
+      stat: async (target) => {
+        if (installedBins.has(target)) return fileStats()
+        throw new Error(`ENOENT: ${target}`)
+      }
+    })
+
+    expect(inventory.default).toMatchObject({
+      id: 'ptyxis',
+      target: '/usr/bin/ptyxis',
+      kind: 'linux-bin',
+      source: 'system-default'
+    })
+    expect(inventory.all.map((terminal) => terminal.id)).toEqual([
+      'ptyxis',
+      'ghostty',
+      'alacritty',
+      'kitty',
+      'wezterm',
+      'rio',
+      'foot',
+      'tilix',
+      'terminator'
+    ])
+  })
+
+  it('discovers installed Windows terminals across PATH and standard install roots while keeping cmd as default', async () => {
+    const existingFiles = new Set([
+      'C:\\Users\\x\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe',
+      'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+      'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+      'C:\\Users\\x\\AppData\\Local\\Programs\\Git\\git-bash.exe',
+      'C:\\Program Files\\WezTerm\\wezterm-gui.exe',
+      'C:\\Tools\\alacritty.exe',
+      'C:\\Users\\x\\AppData\\Local\\Programs\\Tabby\\Tabby.exe',
+      'C:\\Windows\\System32\\cmd.exe'
+    ])
+
+    const inventory = await getDirectoryTerminals({
+      platform: 'win32',
+      pathEnv: 'C:\\Tools',
+      env: {
+        SystemRoot: 'C:\\Windows',
+        ProgramFiles: 'C:\\Program Files',
+        LOCALAPPDATA: 'C:\\Users\\x\\AppData\\Local'
+      },
+      stat: async (target) => {
+        if (existingFiles.has(target)) return fileStats()
+        throw new Error(`ENOENT: ${target}`)
+      }
+    })
+
+    expect(inventory.default).toMatchObject({
+      id: 'cmd',
+      name: 'Command Prompt',
+      target: 'C:\\Windows\\System32\\cmd.exe',
+      kind: 'win-exe',
+      source: 'system-default'
+    })
+    expect(inventory.installed.map((terminal) => terminal.id)).toEqual([
+      'windows-terminal',
+      'pwsh',
+      'powershell',
+      'git-bash',
+      'wezterm',
+      'alacritty',
+      'tabby'
+    ])
+    expect(resolvePreferredTerminal(inventory, 'git-bash')).toEqual({
+      terminal: expect.objectContaining({
+        id: 'git-bash',
+        target: 'C:\\Users\\x\\AppData\\Local\\Programs\\Git\\git-bash.exe'
+      }),
+      configured: true
+    })
+  })
+
+  it('discovers Git Bash from %ProgramFiles%\\Git\\git-bash.exe when not in PATH', async () => {
+    const existingFiles = new Set([
+      'C:\\Program Files\\Git\\git-bash.exe',
+      'C:\\Windows\\System32\\cmd.exe'
+    ])
+
+    const inventory = await getDirectoryTerminals({
+      platform: 'win32',
+      pathEnv: '',
+      env: {
+        SystemRoot: 'C:\\Windows',
+        ProgramFiles: 'C:\\Program Files',
+        LOCALAPPDATA: 'C:\\Users\\x\\AppData\\Local'
+      },
+      stat: async (target) => {
+        if (existingFiles.has(target)) return fileStats()
+        throw new Error(`ENOENT: ${target}`)
+      }
+    })
+
+    expect(inventory.all.map((terminal) => terminal.id)).toEqual(['git-bash', 'cmd'])
+    expect(inventory.installed[0]).toMatchObject({
+      id: 'git-bash',
+      target: 'C:\\Program Files\\Git\\git-bash.exe'
     })
   })
 })
