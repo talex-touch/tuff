@@ -654,4 +654,42 @@ describe('createSearchKernelRuntime', () => {
     expect(onShutdown).toHaveBeenCalledTimes(1)
     expect(exitSpy).toHaveBeenCalledWith(0)
   })
+
+  it('bounds hung cleanup/onShutdown hooks with cleanupTimeoutMs so kernel.shutdown always finishes', async () => {
+    vi.useFakeTimers()
+    const port = createMockParentPort()
+    const exitSpy = vi.fn()
+
+    const runtime = createSearchKernelRuntime({
+      port,
+      pid: 5151,
+      registerDefaultWorkerHandlers: false,
+      cleanupTimeoutMs: 250,
+      onShutdown: () => new Promise<void>(() => undefined),
+      exit: exitSpy,
+      scheduleExit: (cb) => cb()
+    })
+
+    port.emitMessage({
+      kind: 'request',
+      protocolVersion: SEARCH_KERNEL_PROTOCOL_VERSION,
+      requestId: 'shutdown-cleanup-timeout',
+      op: 'kernel.shutdown'
+    })
+
+    await vi.advanceTimersByTimeAsync(249)
+    expect(runtime.getState()).toBe('draining')
+    expect(exitSpy).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+    await flushMicrotasks()
+
+    expect(runtime.getState()).toBe('stopped')
+    expect(port.posted.at(-1)).toMatchObject({
+      requestId: 'shutdown-cleanup-timeout',
+      op: 'kernel.shutdown',
+      ok: true
+    })
+    expect(exitSpy).toHaveBeenCalledWith(0)
+  })
 })

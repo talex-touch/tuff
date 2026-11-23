@@ -76,6 +76,7 @@ export type SearchKernelReaderResult = SearchKernelReaderRowsResult | SearchKern
 export interface SearchKernelReaderCancelPayload {
   lane: string
   requestId: string
+  databasePath?: string
 }
 
 export interface SearchKernelReaderCancelResult {
@@ -126,6 +127,7 @@ export interface SearchKernelWorkerHandlersOptions {
 export interface SearchKernelWorkerHandlersBundle {
   handlers: Record<SearchKernelTaskName, SearchKernelTaskHandler>
   cleanup: () => Promise<void>
+  hasPendingActivity: () => boolean
   getActiveSemanticCancelCount: () => number
   getActiveReaderLaneCount: () => number
   hasActiveWriterWorker: () => boolean
@@ -242,8 +244,8 @@ function readerKey(lane: string, databasePath: string): string {
   return `${lane}\u0000${databasePath}`
 }
 
-function semanticCancelKey(lane: string, requestId: string): string {
-  return `${lane}:${requestId}`
+function semanticCancelKey(lane: string, databasePath: string, requestId: string): string {
+  return `${lane}\u0000${databasePath}\u0000${requestId}`
 }
 
 /**
@@ -385,6 +387,7 @@ export function createSearchKernelWorkerHandlers(
         clearTimeout(timer)
         worker.off('message', onMessage)
         worker.off('exit', onExit)
+        worker.off('error', onError)
         resolve(acked)
       }
       const onMessage = (raw: unknown): void => {
@@ -395,10 +398,14 @@ export function createSearchKernelWorkerHandlers(
       const onExit = (): void => {
         finish(true)
       }
+      const onError = (): void => {
+        finish(false)
+      }
       const timer = setTimeout(() => finish(false), timeoutMs)
       timer.unref?.()
       worker.on('message', onMessage)
       worker.on('exit', onExit)
+      worker.on('error', onError)
       try {
         worker.postMessage({ type: 'shutdown', taskId })
       } catch {
@@ -420,6 +427,10 @@ export function createSearchKernelWorkerHandlers(
 
     const graceful = payload.graceful !== false
     const timeoutMs = normalizePositiveMs(payload.timeoutMs, defaultWriterCloseTimeoutMs)
+    // Attach a close-specific error listener BEFORE detaching the active writer listeners so
+    // an error emitted during graceful shutdown can never become an unhandled EventEmitter crash.
+    const onCloseError = (): void => undefined
+    worker.on('error', onCloseError)
     const detached = detachCurrentWriter(worker)
 
     const closeTask = (async (): Promise<SearchKernelWriterCloseResult> => {
@@ -435,7 +446,6 @@ export function createSearchKernelWorkerHandlers(
           createCodedError('SEARCH_INDEX_WRITER_CLOSED', 'Search index writer closed', false)
         )
       }
-      worker.on('error', () => undefined)
       try {
         await worker.terminate()
       } catch {
@@ -575,7 +585,16 @@ export function createSearchKernelWorkerHandlers(
   // ---------- Reader Worker State ----------
 
   const readers = new Map<string, ReaderWorkerEntry>()
-  const activeSemanticCancels = new Map<string, SharedArrayBuffer>()
+  const activeReaderRetirements = new Set<Promise<void>>()
+  const activeSemanticCancels = new Map<
+    string,
+    {
+      lane: string
+      databasePath: string
+      requestId: string
+      cancelFlag: SharedArrayBuffer
+    }
+  >()
 
   const rejectReaderPending = (entry: ReaderWorkerEntry, error: Error): void => {
     const waiters = Array.from(entry.pending.values())
@@ -714,43 +733,51 @@ export function createSearchKernelWorkerHandlers(
     })
   }
 
-  const retireReaderEntry = async (entry: ReaderWorkerEntry, timeoutMs: number): Promise<void> => {
-    if (readers.get(entry.key) === entry) {
-      readers.delete(entry.key)
-    }
-    entry.retired = true
-    rejectReaderPending(
-      entry,
-      createCodedError('SEARCH_INDEX_READER_RETIRED', `Reader lane ${entry.lane} retired`, true)
-    )
+  const retireReaderEntry = (entry: ReaderWorkerEntry, timeoutMs: number): Promise<void> => {
+    const retirement = (async (): Promise<void> => {
+      if (readers.get(entry.key) === entry) {
+        readers.delete(entry.key)
+      }
+      entry.retired = true
+      rejectReaderPending(
+        entry,
+        createCodedError('SEARCH_INDEX_READER_RETIRED', `Reader lane ${entry.lane} retired`, true)
+      )
 
-    // Never call `worker.terminate()` on a libSQL read worker (neon SIGABRT risk while a native
-    // query is in flight). Ask it to close cleanly and await exit with a bounded deadline.
-    entry.worker.unref?.()
-    entry.detachListeners()
-    entry.worker.on('error', () => undefined)
-    try {
-      entry.worker.postMessage({ type: 'shutdown' })
-    } catch {
-      return
-    }
+      // Never call `worker.terminate()` on a libSQL read worker (neon SIGABRT risk while a native
+      // query is in flight). Ask it to close cleanly and await exit with a bounded deadline.
+      entry.worker.unref?.()
+      entry.worker.on('error', () => undefined)
+      entry.detachListeners()
+      try {
+        entry.worker.postMessage({ type: 'shutdown' })
+      } catch {
+        return
+      }
 
-    if (entry.exited) return
-    let timer: ReturnType<typeof setTimeout> | null = null
-    try {
-      await Promise.race([
-        entry.exitPromise,
-        new Promise<void>((resolve) => {
-          timer = setTimeout(() => {
-            timer = null
-            resolve()
-          }, timeoutMs)
-          timer.unref?.()
-        })
-      ])
-    } finally {
-      if (timer) clearTimeout(timer)
-    }
+      if (entry.exited) return
+      let timer: ReturnType<typeof setTimeout> | null = null
+      try {
+        await Promise.race([
+          entry.exitPromise,
+          new Promise<void>((resolve) => {
+            timer = setTimeout(() => {
+              timer = null
+              resolve()
+            }, timeoutMs)
+            timer.unref?.()
+          })
+        ])
+      } finally {
+        if (timer) clearTimeout(timer)
+      }
+    })()
+
+    activeReaderRetirements.add(retirement)
+    void retirement.finally(() => {
+      activeReaderRetirements.delete(retirement)
+    })
+    return retirement
   }
 
   const retireReaders = async (
@@ -829,8 +856,13 @@ export function createSearchKernelWorkerHandlers(
     }
 
     const cancelFlag = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)
-    const cancelKey = semanticCancelKey(payload.lane, payload.requestId)
-    activeSemanticCancels.set(cancelKey, cancelFlag)
+    const cancelKey = semanticCancelKey(payload.lane, payload.databasePath, payload.requestId)
+    activeSemanticCancels.set(cancelKey, {
+      lane: payload.lane,
+      databasePath: payload.databasePath,
+      requestId: payload.requestId,
+      cancelFlag
+    })
 
     const onShutdownAbort = (): void => {
       Atomics.store(new Int32Array(cancelFlag), 0, 1)
@@ -873,12 +905,24 @@ export function createSearchKernelWorkerHandlers(
         false
       )
     }
-    const cancelFlag = activeSemanticCancels.get(semanticCancelKey(payload.lane, payload.requestId))
-    if (!cancelFlag) {
-      return { cancelled: false }
+    if (isNonEmptyString(payload.databasePath)) {
+      const match = activeSemanticCancels.get(
+        semanticCancelKey(payload.lane, payload.databasePath, payload.requestId)
+      )
+      if (!match) {
+        return { cancelled: false }
+      }
+      Atomics.store(new Int32Array(match.cancelFlag), 0, 1)
+      return { cancelled: true }
     }
-    Atomics.store(new Int32Array(cancelFlag), 0, 1)
-    return { cancelled: true }
+    let cancelled = false
+    for (const entry of activeSemanticCancels.values()) {
+      if (entry.lane === payload.lane && entry.requestId === payload.requestId) {
+        Atomics.store(new Int32Array(entry.cancelFlag), 0, 1)
+        cancelled = true
+      }
+    }
+    return { cancelled }
   }
 
   const handleReaderRetire: SearchKernelTaskHandler<
@@ -897,22 +941,28 @@ export function createSearchKernelWorkerHandlers(
     return await closeWriter(isRecord(payload) ? (payload as SearchKernelWriterClosePayload) : {})
   }
 
+  const hasPendingActivity = (): boolean =>
+    writerWorker !== null ||
+    writerClosePromise !== null ||
+    readers.size > 0 ||
+    activeReaderRetirements.size > 0 ||
+    activeSemanticCancels.size > 0
+
   let cleanupPromise: Promise<void> | null = null
   const cleanup = (): Promise<void> => {
     if (cleanupPromise) return cleanupPromise
-    if (
-      !writerWorker &&
-      !writerClosePromise &&
-      readers.size === 0 &&
-      activeSemanticCancels.size === 0
-    ) {
+    if (!hasPendingActivity()) {
       return Promise.resolve()
     }
     cleanupPromise = (async () => {
-      for (const cancelFlag of activeSemanticCancels.values()) {
-        Atomics.store(new Int32Array(cancelFlag), 0, 1)
+      for (const entry of activeSemanticCancels.values()) {
+        Atomics.store(new Int32Array(entry.cancelFlag), 0, 1)
       }
-      await Promise.allSettled([closeWriter({ graceful: true }), retireReaders({})])
+      await Promise.allSettled([
+        closeWriter({ graceful: true }),
+        retireReaders({}),
+        ...Array.from(activeReaderRetirements)
+      ])
     })().finally(() => {
       cleanupPromise = null
     })
@@ -930,6 +980,7 @@ export function createSearchKernelWorkerHandlers(
       [SEARCH_KERNEL_TASKS.READER_RETIRE]: handleReaderRetire as SearchKernelTaskHandler
     },
     cleanup,
+    hasPendingActivity,
     getActiveSemanticCancelCount: () => activeSemanticCancels.size,
     getActiveReaderLaneCount: () => readers.size,
     hasActiveWriterWorker: () => writerWorker !== null

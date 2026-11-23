@@ -138,6 +138,7 @@ export interface SearchKernelClientOptions {
   restartBaseDelayMs?: number
   restartMaxDelayMs?: number
   autoRestart?: boolean
+  beforeStart?: () => Promise<void>
   onEvent?: (event: SearchKernelEvent) => void
   onStateChange?: (state: SearchKernelLifecycleState, previous: SearchKernelLifecycleState) => void
 }
@@ -226,6 +227,7 @@ export class SearchKernelClient {
   private readonly restartBaseDelayMs: number
   private readonly restartMaxDelayMs: number
   private readonly autoRestart: boolean
+  private readonly beforeStart?: () => Promise<void>
   private readonly onEvent?: (event: SearchKernelEvent) => void
   private readonly onStateChange?: (
     state: SearchKernelLifecycleState,
@@ -287,6 +289,7 @@ export class SearchKernelClient {
       DEFAULT_RESTART_MAX_DELAY_MS
     )
     this.autoRestart = options.autoRestart ?? true
+    this.beforeStart = options.beforeStart
     this.onEvent = options.onEvent
     this.onStateChange = options.onStateChange
   }
@@ -363,7 +366,26 @@ export class SearchKernelClient {
     this.clearRestartTimer()
     this.shuttingDown = false
 
-    const startPromise = this.spawnChild()
+    const startPromise = this.beforeStart
+      ? (async () => {
+          await this.beforeStart!()
+          if (this.disposed || this.shuttingDown) {
+            throw new SearchKernelClientError(
+              SEARCH_KERNEL_ERROR_CODES.SHUTTING_DOWN,
+              'Search kernel client was shut down before start',
+              false
+            )
+          }
+          if (this.state === 'degraded') {
+            throw new SearchKernelClientError(
+              SEARCH_KERNEL_ERROR_CODES.DEGRADED,
+              'Search kernel entered degraded state after repeated crashes',
+              false
+            )
+          }
+          await this.spawnChild()
+        })()
+      : this.spawnChild()
     this.startPromise = startPromise
     try {
       await startPromise
@@ -994,27 +1016,63 @@ export class SearchKernelClient {
 }
 
 let sharedSearchKernelClient: SearchKernelClient | null = null
+let sharedSearchKernelDisposal: Promise<void> | null = null
+let sharedSearchKernelDisposalSeq = 0
 
 /**
  * Returns the process-wide shared `SearchKernelClient` so `SearchIndexWorkerClient` and all
  * `SearchIndexReadWorkerClient` lanes share a single `utilityProcess` when enabled.
+ *
+ * If a previous shared client is still disposing, the replacement client serializes its
+ * startup behind that disposal so two kernels never open the same SQLite file concurrently.
  */
 export function getSharedSearchKernelClient(
   options?: SearchKernelClientOptions
 ): SearchKernelClient {
   if (!sharedSearchKernelClient) {
-    sharedSearchKernelClient = new SearchKernelClient(options)
+    const pendingDisposal = sharedSearchKernelDisposal
+    const clientOptions: SearchKernelClientOptions | undefined = pendingDisposal
+      ? {
+          ...options,
+          beforeStart: async () => {
+            await pendingDisposal
+            await options?.beforeStart?.()
+          }
+        }
+      : options
+    sharedSearchKernelClient = new SearchKernelClient(clientOptions)
   }
   return sharedSearchKernelClient
 }
 
 /**
  * Clears and disposes the process-wide shared `SearchKernelClient` (used in tests and teardown).
+ * Concurrent resets await the same in-flight disposal before resolving.
  */
 export async function resetSharedSearchKernelClient(): Promise<void> {
   const current = sharedSearchKernelClient
+  const previousDisposal = sharedSearchKernelDisposal
+  if (!current) {
+    if (previousDisposal) {
+      await previousDisposal
+    }
+    return
+  }
+
   sharedSearchKernelClient = null
-  if (current) {
+  const disposalId = ++sharedSearchKernelDisposalSeq
+  const disposal = (async () => {
+    if (previousDisposal) {
+      await previousDisposal.catch(() => undefined)
+    }
     await current.dispose().catch(() => undefined)
+  })()
+  sharedSearchKernelDisposal = disposal
+  try {
+    await disposal
+  } finally {
+    if (sharedSearchKernelDisposalSeq === disposalId) {
+      sharedSearchKernelDisposal = null
+    }
   }
 }

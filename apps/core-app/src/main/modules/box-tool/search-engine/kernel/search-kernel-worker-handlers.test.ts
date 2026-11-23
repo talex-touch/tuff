@@ -522,4 +522,142 @@ describe('createSearchKernelWorkerHandlers — reader handlers & semantic cancel
     expect(readerWorkers[0].messages.at(-1)).toEqual({ type: 'shutdown' })
     expect(readerWorkers[0].terminateCalls).toBe(0)
   })
+
+  it('keeps an error listener attached during graceful writer close and settles immediately on worker error', async () => {
+    const writerWorkers: FakeManagedWorker[] = []
+    const bundle = createSearchKernelWorkerHandlers({
+      resolveWriterWorkerPath: () => '/virtual/search-index-worker.js',
+      createWriterWorker: (workerPath) => {
+        const worker = new FakeManagedWorker(workerPath)
+        worker.autoAckShutdown = false
+        writerWorkers.push(worker)
+        return worker
+      }
+    })
+
+    const init = bundle.handlers[SEARCH_KERNEL_TASKS.WRITER_REQUEST](
+      { message: { type: 'init', taskId: 'init-err', dbPath: '/tmp/db.sqlite' } },
+      createTaskContext(SEARCH_KERNEL_TASKS.WRITER_REQUEST).context
+    )
+    writerWorkers[0].emit('message', { type: 'result', taskId: 'init-err' })
+    await init
+
+    const closePromise = bundle.handlers[SEARCH_KERNEL_TASKS.WRITER_CLOSE](
+      { graceful: true, timeoutMs: 5_000 },
+      createTaskContext(SEARCH_KERNEL_TASKS.WRITER_CLOSE).context
+    )
+    // Error listener MUST remain attached during graceful close so emitting error does not crash.
+    expect(writerWorkers[0].listeners.get('error')?.size ?? 0).toBeGreaterThan(0)
+    writerWorkers[0].emit('error', new Error('writer threw during close'))
+
+    await expect(closePromise).resolves.toEqual({
+      closed: true,
+      gracefulAck: false,
+      terminated: true
+    })
+    expect(writerWorkers[0].terminateCalls).toBe(1)
+  })
+
+  it('joins already-detached in-progress writer close and reader retirement during kernel.shutdown', async () => {
+    const port = createMockParentPort()
+    const writerWorkers: FakeManagedWorker[] = []
+    const readerWorkers: FakeManagedWorker[] = []
+    const exitSpy = vi.fn()
+    let resolveWriterTerminate!: (code: number) => void
+
+    createSearchKernelRuntime({
+      port,
+      pid: 6201,
+      drainTimeoutMs: 5,
+      cleanupTimeoutMs: 5_000,
+      exit: exitSpy,
+      scheduleExit: (cb) => cb(),
+      workerHandlersOptions: {
+        resolveWriterWorkerPath: () => '/virtual/search-index-worker.js',
+        resolveReaderWorkerPath: () => '/virtual/search-index-read-worker.js',
+        createWriterWorker: (workerPath) => {
+          const worker = new FakeManagedWorker(workerPath)
+          worker.terminate = () => {
+            worker.terminateCalls += 1
+            return new Promise<number>((resolve) => {
+              resolveWriterTerminate = resolve
+            })
+          }
+          writerWorkers.push(worker)
+          return worker
+        },
+        createReaderWorker: (workerPath, options) => {
+          const worker = new FakeManagedWorker(workerPath, options)
+          worker.autoExitOnShutdown = false
+          readerWorkers.push(worker)
+          return worker
+        }
+      }
+    })
+
+    // Spawn writer & reader, finish their initial tasks.
+    port.emitMessage({
+      kind: 'request',
+      protocolVersion: SEARCH_KERNEL_PROTOCOL_VERSION,
+      requestId: 'init-w',
+      op: 'kernel.task',
+      taskType: SEARCH_KERNEL_TASKS.WRITER_REQUEST,
+      payload: { message: { type: 'init', taskId: 'init-w', dbPath: '/tmp/join.sqlite' } }
+    })
+    port.emitMessage({
+      kind: 'request',
+      protocolVersion: SEARCH_KERNEL_PROTOCOL_VERSION,
+      requestId: 'q-r',
+      op: 'kernel.task',
+      taskType: SEARCH_KERNEL_TASKS.READER_QUERY,
+      payload: {
+        lane: 'deferred',
+        databasePath: '/tmp/join.sqlite',
+        requestId: 'q-r',
+        sql: 'SELECT 1',
+        args: []
+      }
+    })
+    writerWorkers[0].emit('message', { type: 'result', taskId: 'init-w' })
+    readerWorkers[0].emit('message', { type: 'result', requestId: 'q-r', rows: [] })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // Start explicit WRITER_CLOSE and READER_RETIRE so both are detached from active maps
+    // while still waiting for terminate() / exit!
+    port.emitMessage({
+      kind: 'request',
+      protocolVersion: SEARCH_KERNEL_PROTOCOL_VERSION,
+      requestId: 'close-w',
+      op: 'kernel.task',
+      taskType: SEARCH_KERNEL_TASKS.WRITER_CLOSE,
+      payload: { graceful: true, timeoutMs: 200 }
+    })
+    port.emitMessage({
+      kind: 'request',
+      protocolVersion: SEARCH_KERNEL_PROTOCOL_VERSION,
+      requestId: 'retire-r',
+      op: 'kernel.task',
+      taskType: SEARCH_KERNEL_TASKS.READER_RETIRE,
+      payload: { lane: 'deferred', timeoutMs: 5_000 }
+    })
+    await vi.waitFor(() => expect(writerWorkers[0].terminateCalls).toBe(1))
+    expect(readerWorkers[0].messages.at(-1)).toEqual({ type: 'shutdown' })
+
+    // Now request kernel.shutdown while drainTimeoutMs (5ms) expires before teardown finishes.
+    port.emitMessage({
+      kind: 'request',
+      protocolVersion: SEARCH_KERNEL_PROTOCOL_VERSION,
+      requestId: 'shut-join',
+      op: 'kernel.shutdown'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    // Kernel must NOT have exited yet because detached close/retire are still running!
+    expect(exitSpy).not.toHaveBeenCalled()
+
+    // Finish both detached teardowns -> kernel.shutdown immediately completes and exits.
+    resolveWriterTerminate(0)
+    readerWorkers[0].emit('exit', 0)
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(0))
+  })
 })

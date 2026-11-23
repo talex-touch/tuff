@@ -335,15 +335,29 @@ function createWorkerRpcClient(worker) {
     }
     waiter.resolve(msg)
   })
-  worker.on('error', (error) => {
+  let workerClosedError = null
+  const rejectAllPending = (error) => {
+    workerClosedError = error
     for (const waiter of pending.values()) waiter.reject(error)
     pending.clear()
+  }
+  worker.on('error', (error) => {
+    rejectAllPending(error instanceof Error ? error : new Error(String(error)))
+  })
+  worker.on('exit', (code) => {
+    rejectAllPending(new Error(`Worker exited unexpectedly (code=${String(code)})`))
   })
   return {
     send(key, message) {
+      if (workerClosedError) return Promise.reject(workerClosedError)
       return new Promise((resolve, reject) => {
         pending.set(key, { resolve, reject })
-        worker.postMessage(message)
+        try {
+          worker.postMessage(message)
+        } catch (error) {
+          pending.delete(key)
+          reject(error instanceof Error ? error : new Error(String(error)))
+        }
       })
     }
   }
@@ -539,12 +553,29 @@ async function runModeB(args) {
   const pending = new Map()
   let reqSeq = 0
   let capabilities = []
+  let kernelClosedError = null
+  let sampler = null
+
+  const rejectAllPending = (error) => {
+    if (!kernelClosedError) {
+      kernelClosedError = error
+    }
+    if (sampler) {
+      clearInterval(sampler)
+      sampler = null
+    }
+    for (const waiter of pending.values()) {
+      waiter.reject(kernelClosedError)
+    }
+    pending.clear()
+  }
 
   const readyPromise = new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('Kernel ready timeout')), 15_000)
     const onMessage = (msg) => {
       if (msg && typeof msg === 'object' && msg.kind === 'event' && msg.event === 'kernel.ready') {
         clearTimeout(timer)
+        kernelChild.off('message', onMessage)
         capabilities = Array.isArray(msg.capabilities) ? msg.capabilities : []
         resolve(msg)
       }
@@ -552,7 +583,21 @@ async function runModeB(args) {
     kernelChild.on('message', onMessage)
     kernelChild.once('exit', (code) => {
       clearTimeout(timer)
-      reject(new Error(`Kernel exited before ready (code=${String(code)})`))
+      const exitErr = new Error(`Kernel exited (code=${String(code)})`)
+      rejectAllPending(exitErr)
+      reject(exitErr)
+    })
+    kernelChild.once('disconnect', () => {
+      clearTimeout(timer)
+      const disconnectErr = new Error('Kernel IPC disconnected unexpectedly')
+      rejectAllPending(disconnectErr)
+      reject(disconnectErr)
+    })
+    kernelChild.once('error', (error) => {
+      clearTimeout(timer)
+      const childErr = error instanceof Error ? error : new Error(String(error))
+      rejectAllPending(childErr)
+      reject(childErr)
     })
   })
 
@@ -571,16 +616,27 @@ async function runModeB(args) {
   })
 
   const sendKernelOp = (op, extra = {}) => {
+    if (kernelClosedError) {
+      return Promise.reject(kernelClosedError)
+    }
+    if (kernelChild.exitCode !== null || !kernelChild.connected) {
+      return Promise.reject(new Error('Kernel child process is no longer connected'))
+    }
     const requestId = `kreq-${++reqSeq}`
     return new Promise((resolve, reject) => {
       pending.set(requestId, { resolve, reject })
-      kernelChild.send({
-        kind: 'request',
-        protocolVersion: SEARCH_KERNEL_PROTOCOL_VERSION,
-        requestId,
-        op,
-        ...extra
-      })
+      try {
+        kernelChild.send({
+          kind: 'request',
+          protocolVersion: SEARCH_KERNEL_PROTOCOL_VERSION,
+          requestId,
+          op,
+          ...extra
+        })
+      } catch (error) {
+        pending.delete(requestId)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
     })
   }
 
@@ -600,7 +656,7 @@ async function runModeB(args) {
     }
   }
 
-  const sampler = setInterval(sampleMainRss, 40)
+  sampler = setInterval(sampleMainRss, 40)
 
   try {
     await readyPromise
@@ -755,7 +811,10 @@ async function runModeB(args) {
       })}\n`
     )
   } finally {
-    clearInterval(sampler)
+    if (sampler) {
+      clearInterval(sampler)
+      sampler = null
+    }
     if (!kernelChild.killed && kernelChild.exitCode === null) {
       kernelChild.kill()
     }

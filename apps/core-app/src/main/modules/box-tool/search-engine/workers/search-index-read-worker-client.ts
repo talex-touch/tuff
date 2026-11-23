@@ -30,6 +30,7 @@ const READER_RETIRE_TIMEOUT_MS = 3_000
 /** The lane every reader belonged to before fast providers got their own; keeps old log shapes. */
 const DEFAULT_LANE = 'deferred'
 const sqliteDialect = new SQLiteSyncDialect()
+let nextKernelReaderClientInstanceId = 0
 
 /**
  * A reader that failed once used to be a reader that never worked again.
@@ -112,7 +113,6 @@ interface PendingRead {
   onAbort?: () => void
   abortKernelDispatch?: () => void
   cancelDispatched?: boolean
-  cancelledByCaller?: boolean
   settled: boolean
 }
 
@@ -196,6 +196,7 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
   private readonly maxQueueDepth: number
   private readonly useKernelProcess: boolean
   private readonly kernelClient: SearchKernelClient | null
+  private readonly kernelClientInstanceId: number
   private kernelReaderLive = false
   private kernelLaneTouched = false
   private kernelDispatchToken = 0
@@ -211,12 +212,20 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
     this.kernelClient = this.useKernelProcess
       ? (options.kernelClient ?? getSharedSearchKernelClient())
       : null
+    this.kernelClientInstanceId = this.useKernelProcess ? ++nextKernelReaderClientInstanceId : 0
     this.workerPath = this.useKernelProcess
       ? (options.workerPath ?? '')
       : (options.workerPath ?? resolveSearchIndexReadWorkerPath())
     this.timeoutMs = positiveInteger(options.timeoutMs, DEFAULT_QUERY_TIMEOUT_MS)
     this.maxQueueDepth = positiveInteger(options.maxQueueDepth, DEFAULT_MAX_QUEUE_DEPTH)
     this.lane = options.lane?.trim() || DEFAULT_LANE
+  }
+
+  private createRequestId(): string {
+    const seq = ++this.sequence
+    return this.useKernelProcess
+      ? `search-index-read-${this.lane}-${this.kernelClientInstanceId}-${seq}`
+      : `search-index-read-${this.lane}-${seq}`
   }
 
   semanticSearch(
@@ -228,7 +237,7 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
     return this.enqueue<SearchIndexSemanticMatch>(
       {
         type: 'semantic-search',
-        requestId: `search-index-read-${this.lane}-${++this.sequence}`,
+        requestId: this.createRequestId(),
         vector,
         model,
         limit,
@@ -250,7 +259,7 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
     return this.enqueue<T>(
       {
         type: 'query',
-        requestId: `search-index-read-${this.lane}-${++this.sequence}`,
+        requestId: this.createRequestId(),
         sql: compiled.sql,
         args: compiled.params
       },
@@ -404,41 +413,38 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
     void rpcPromise.then(
       (result) => {
         if (this.active !== pending || dispatchToken !== this.kernelDispatchToken) return
-        this.clearOperationTimeout()
-        this.active = null
         if (
           result &&
           typeof result === 'object' &&
           'rows' in result &&
           Array.isArray(result.rows)
         ) {
+          this.clearOperationTimeout()
+          this.active = null
           this.consecutiveFailures = 0
           this.cooldownUntil = 0
           this.settlePending(pending, undefined, result.rows)
-        } else if (
+          this.dispatchNext()
+          return
+        }
+        if (
           result &&
           typeof result === 'object' &&
           'error' in result &&
           result.error &&
           typeof result.error === 'object'
         ) {
-          this.settlePending(pending, deserializeSearchIndexWorkerError(result.error))
-        } else {
-          this.failKernelReader(
-            new SearchIndexReadWorkerUnavailableError('invalid-kernel-response')
-          )
-          return
-        }
-        this.dispatchNext()
-      },
-      (error: unknown) => {
-        if (this.active !== pending || dispatchToken !== this.kernelDispatchToken) return
-        if (pending.cancelledByCaller) {
           this.clearOperationTimeout()
           this.active = null
+          this.settlePending(pending, deserializeSearchIndexWorkerError(result.error))
           this.dispatchNext()
           return
         }
+        // Keep `this.active` intact so `failKernelReader` rejects both `pending` and queued reads.
+        this.failKernelReader(new SearchIndexReadWorkerUnavailableError('invalid-kernel-response'))
+      },
+      (error: unknown) => {
+        if (this.active !== pending || dispatchToken !== this.kernelDispatchToken) return
         if (
           error instanceof SearchKernelClientError &&
           error.code === SEARCH_KERNEL_ERROR_CODES.TIMEOUT
@@ -474,7 +480,11 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
     void this.kernelClient
       .invokeTask(
         SEARCH_KERNEL_TASKS.READER_CANCEL,
-        { lane: this.lane, requestId: pending.request.requestId },
+        {
+          lane: this.lane,
+          databasePath: this.databasePath,
+          requestId: pending.request.requestId
+        },
         { timeoutMs: READER_CANCEL_TIMEOUT_MS }
       )
       .catch(() => undefined)
@@ -487,7 +497,7 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
     await this.kernelClient
       .invokeTask(
         SEARCH_KERNEL_TASKS.READER_RETIRE,
-        { lane: this.lane },
+        { lane: this.lane, databasePath: this.databasePath },
         { timeoutMs: READER_RETIRE_TIMEOUT_MS }
       )
       .catch(() => undefined)
@@ -569,15 +579,12 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
   private cancelPending(pending: PendingRead): void {
     const error = new SearchIndexReadWorkerCancelledError()
     if (this.active === pending) {
-      pending.cancelledByCaller = true
-      if (this.useKernelProcess) {
-        if (pending.request.type === 'semantic-search') {
-          this.fireKernelReaderCancel(pending)
-        }
-        pending.abortKernelDispatch?.()
+      if (this.useKernelProcess && pending.request.type === 'semantic-search') {
+        this.fireKernelReaderCancel(pending)
       }
-      // Do not clear `active` here. The worker may still be inside synchronous
-      // native SQLite, and dispatching another request would reintroduce overlap.
+      // Do not clear `active` or abort the kernel RPC here. The reader worker may still be
+      // inside synchronous native SQLite; keep the single-in-flight fence and deadline armed
+      // until the worker reports completion or the lane retires.
       this.settlePending(pending, error)
       return
     }

@@ -281,7 +281,17 @@ describe('SearchIndexReadWorkerClient — utilityProcess kernel bridge', () => {
     await expect(semantic).rejects.toBeInstanceOf(SearchIndexReadWorkerCancelledError)
     await vi.waitFor(() => expect(Atomics.load(cancelView, 0)).toBe(1))
 
-    // Queued query dispatches on the SAME healthy reader worker!
+    // Single-in-flight fence: queued query MUST stay fenced until the cancelled active search replies!
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(reader.messages).toHaveLength(1)
+
+    // Worker observes cancelFlag === 1 and returns empty rows -> queued query now dispatches!
+    reader.emit('message', {
+      type: 'result',
+      requestId: requestIdOf(reader.messages[0]),
+      rows: []
+    })
     await vi.waitFor(() => expect(reader.messages).toHaveLength(2))
     reader.emit('message', {
       type: 'result',
@@ -417,5 +427,80 @@ describe('SearchIndexReadWorkerClient — utilityProcess kernel bridge', () => {
     ).toBe(shared)
 
     await Promise.all([writer.shutdown(), deferredReader.close(), fastReader.close()])
+  })
+
+  it('rejects active and queued reads cleanly when the kernel returns an invalid reader response', async () => {
+    const harness = createWiredReaderKernelHarness()
+    const invokeSpy = vi
+      .spyOn(harness.kernelClient, 'invokeTask')
+      .mockResolvedValueOnce({} as never)
+
+    const client = new SearchIndexReadWorkerClient('/tmp/invalid-resp.db', {
+      kernelClient: harness.kernelClient,
+      timeoutMs: 5_000
+    })
+
+    const active = client.all(sql`SELECT 'invalid'`)
+    const queued = client.all(sql`SELECT 'queued'`)
+
+    await expect(active).rejects.toThrow('invalid-kernel-response')
+    await expect(active).rejects.toBeInstanceOf(SearchIndexReadWorkerUnavailableError)
+    await expect(queued).rejects.toBeInstanceOf(SearchIndexReadWorkerUnavailableError)
+    expect(invokeSpy).toHaveBeenCalled()
+
+    await client.close()
+    await harness.kernelClient.shutdown()
+  })
+
+  it('isolates requestIds, READER_CANCEL, and READER_RETIRE across same-lane clients targeting different DBs', async () => {
+    const harness = createWiredReaderKernelHarness()
+    const clientA = new SearchIndexReadWorkerClient('/tmp/db-a.sqlite', {
+      kernelClient: harness.kernelClient,
+      lane: 'deferred',
+      timeoutMs: 10_000
+    })
+    const clientB = new SearchIndexReadWorkerClient('/tmp/db-b.sqlite', {
+      kernelClient: harness.kernelClient,
+      lane: 'deferred',
+      timeoutMs: 10_000
+    })
+
+    const abortA = new AbortController()
+    const semA = clientA.semanticSearch([1, 0], 'model-a', 5, abortA.signal)
+    const semB = clientB.semanticSearch([0, 1], 'model-b', 5)
+
+    await vi.waitFor(() => expect(harness.children[0]?.readerWorkers).toHaveLength(2))
+    const workerA = harness.children[0].readerWorkers[0]
+    const workerB = harness.children[0].readerWorkers[1]
+    const msgA = workerA.messages[0] as { requestId: string; cancelFlag: SharedArrayBuffer }
+    const msgB = workerB.messages[0] as { requestId: string; cancelFlag: SharedArrayBuffer }
+
+    // Distinct requestIds even though both clients are on lane 'deferred' at sequence 1.
+    expect(msgA.requestId).not.toBe(msgB.requestId)
+    const flagA = new Int32Array(msgA.cancelFlag)
+    const flagB = new Int32Array(msgB.cancelFlag)
+
+    // Cancelling client A flips ONLY client A's cancelFlag (never client B's!).
+    abortA.abort()
+    await expect(semA).rejects.toBeInstanceOf(SearchIndexReadWorkerCancelledError)
+    await vi.waitFor(() => expect(Atomics.load(flagA, 0)).toBe(1))
+    expect(Atomics.load(flagB, 0)).toBe(0)
+
+    // Closing client A retires ONLY db-a's reader worker, leaving db-b serving normally!
+    await clientA.close()
+    await vi.waitFor(() => expect(workerA.messages.at(-1)).toEqual({ type: 'shutdown' }))
+    expect(workerB.messages.some((m) => (m as { type?: string }).type === 'shutdown')).toBe(false)
+
+    workerB.emit('message', {
+      type: 'result',
+      requestId: msgB.requestId,
+      rows: [{ sourceId: 'file:/b.md', score: 0.95, contentHash: null }]
+    })
+    await expect(semB).resolves.toEqual([
+      { sourceId: 'file:/b.md', score: 0.95, contentHash: null }
+    ])
+
+    await clientB.close()
+    await harness.kernelClient.shutdown()
   })
 })

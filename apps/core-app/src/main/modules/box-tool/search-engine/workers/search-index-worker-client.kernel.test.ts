@@ -534,4 +534,113 @@ describe('SearchIndexWorkerClient — utilityProcess kernel bridge', () => {
 
     await autoClient.shutdown()
   })
+
+  it('joins concurrent ensureInitialized calls into a single in-flight init while kernel startup is pending', async () => {
+    const harness = createWiredKernelHarness()
+    let releaseStart!: () => void
+    const originalEnsureStarted = harness.kernelClient.ensureStarted.bind(harness.kernelClient)
+    vi.spyOn(harness.kernelClient, 'ensureStarted').mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          releaseStart = () => {
+            void originalEnsureStarted().then(resolve, reject)
+          }
+        })
+    )
+
+    const client = new SearchIndexWorkerClient({ kernelClient: harness.kernelClient })
+    // Call init() and immediately issue countByProvider() while ensureStarted() is still pending.
+    const initPromise = client.init('/tmp/concurrent-init.db')
+    const countPromise = client.countByProvider('file-provider')
+
+    await Promise.resolve()
+    releaseStart()
+
+    await vi.waitFor(() => expect(harness.children[0]?.writerWorkers).toHaveLength(1))
+    const writer = harness.children[0].writerWorkers[0]
+    await vi.waitFor(() => expect(writer.messages).toHaveLength(1))
+    expect(writer.messages[0]).toMatchObject({ type: 'init', dbPath: '/tmp/concurrent-init.db' })
+
+    writer.emit('message', { type: 'result', taskId: taskIdOf(writer.messages[0]) })
+    await initPromise
+
+    await vi.waitFor(() => expect(writer.messages).toHaveLength(2))
+    // Exactly ONE init message followed by countByProvider (no duplicate init).
+    expect(writer.messages.map((m) => (m as { type: string }).type)).toEqual([
+      'init',
+      'countByProvider'
+    ])
+    writer.emit('message', {
+      type: 'result',
+      taskId: taskIdOf(writer.messages[1]),
+      result: 7
+    })
+    await expect(countPromise).resolves.toBe(7)
+
+    await client.shutdown()
+    await harness.kernelClient.shutdown()
+  })
+
+  it('stays fail-closed during a slow WRITER_CLOSE past terminationTimeoutMs and recovers once confirmed', async () => {
+    vi.useFakeTimers()
+    const harness = createWiredKernelHarness()
+    const client = new SearchIndexWorkerClient({
+      kernelClient: harness.kernelClient,
+      commitResponseTimeoutMs: 25,
+      terminationTimeoutMs: 50,
+      outcomeLookupTimeoutMs: 100,
+      outcomeLookupAttempts: 1
+    })
+
+    const initPromise = client.init('/tmp/slow-close.db')
+    await vi.advanceTimersByTimeAsync(0)
+    const writer1 = harness.children[0].writerWorkers[0]
+    writer1.emit('message', { type: 'result', taskId: taskIdOf(writer1.messages[0]) })
+    await initPromise
+
+    // Hold writer1.terminate() past terminationTimeoutMs (50ms) so the caller deadline fires first.
+    let resolveTerminate!: (code: number) => void
+    writer1.terminate = () => {
+      writer1.terminateCalls += 1
+      return new Promise<number>((resolve) => {
+        resolveTerminate = resolve
+      })
+    }
+
+    const commitPromise = client.commitProviderReplacement('file-provider', 'repl-slow-close')
+    const commitRejection = expect(commitPromise).rejects.toThrow(
+      'SEARCH_INDEX_WORKER_TERMINATION_UNCONFIRMED:timeout'
+    )
+    await vi.advanceTimersByTimeAsync(0)
+
+    // 25ms commit timeout + 50ms terminationTimeoutMs -> caller sees timeout, barrier remains pending.
+    await vi.advanceTimersByTimeAsync(25)
+    await vi.advanceTimersByTimeAsync(50)
+    await commitRejection
+
+    // Writes remain blocked while termination is unconfirmed.
+    await expect(client.countByProvider('file-provider')).rejects.toThrow(
+      'SEARCH_INDEX_WORKER_TERMINATION_UNCONFIRMED:pending'
+    )
+
+    // Late termination confirmation clears the barrier cleanly instead of latching permanent failure!
+    resolveTerminate(0)
+    await vi.advanceTimersByTimeAsync(0)
+
+    const recoveredCount = client.countByProvider('file-provider')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(harness.children[0].writerWorkers).toHaveLength(2)
+    const writer2 = harness.children[0].writerWorkers[1]
+    writer2.emit('message', { type: 'result', taskId: taskIdOf(writer2.messages[0]) })
+    await vi.advanceTimersByTimeAsync(0)
+    writer2.emit('message', {
+      type: 'result',
+      taskId: taskIdOf(writer2.messages[1]),
+      result: 99
+    })
+    await expect(recoveredCount).resolves.toBe(99)
+
+    await client.shutdown()
+    await harness.kernelClient.shutdown()
+  })
 })

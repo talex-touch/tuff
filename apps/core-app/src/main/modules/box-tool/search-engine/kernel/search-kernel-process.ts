@@ -56,6 +56,7 @@ export interface SearchKernelRuntimeOptions {
   memoryUsage?: () => NodeJS.MemoryUsage
   exit?: (code: number) => void
   drainTimeoutMs?: number
+  cleanupTimeoutMs?: number
   scheduleExit?: (callback: () => void) => void
 }
 
@@ -99,6 +100,12 @@ export function createSearchKernelRuntime(
     options.drainTimeoutMs > 0
       ? options.drainTimeoutMs
       : DEFAULT_DRAIN_TIMEOUT_MS
+  const cleanupTimeoutMs =
+    typeof options.cleanupTimeoutMs === 'number' &&
+    Number.isFinite(options.cleanupTimeoutMs) &&
+    options.cleanupTimeoutMs > 0
+      ? options.cleanupTimeoutMs
+      : drainTimeoutMs
   const scheduleExit =
     options.scheduleExit ??
     ((callback: () => void) => {
@@ -119,11 +126,7 @@ export function createSearchKernelRuntime(
       handlers.set(taskType, handler)
     }
     cleanupHooks.push(() => {
-      if (
-        !defaultWorkerHandlers.hasActiveWriterWorker() &&
-        defaultWorkerHandlers.getActiveReaderLaneCount() === 0 &&
-        defaultWorkerHandlers.getActiveSemanticCancelCount() === 0
-      ) {
+      if (!defaultWorkerHandlers.hasPendingActivity()) {
         return
       }
       return defaultWorkerHandlers.cleanup()
@@ -287,7 +290,21 @@ export function createSearchKernelRuntime(
 
       const pendingCleanup = runCleanupHooks()
       if (pendingCleanup) {
-        await pendingCleanup
+        let cleanupTimer: ReturnType<typeof setTimeout> | null = null
+        try {
+          await Promise.race([
+            pendingCleanup,
+            new Promise<void>((resolve) => {
+              cleanupTimer = setTimeout(() => {
+                cleanupTimer = null
+                resolve()
+              }, cleanupTimeoutMs)
+              cleanupTimer.unref?.()
+            })
+          ])
+        } finally {
+          if (cleanupTimer) clearTimeout(cleanupTimer)
+        }
       }
 
       state = 'stopped'
