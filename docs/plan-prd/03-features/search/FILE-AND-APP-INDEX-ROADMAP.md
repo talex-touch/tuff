@@ -1,7 +1,7 @@
 # 文件与应用索引 Roadmap
 
 > 状态：Roadmap / 未排期
-> 更新时间：2026-11-22
+> 更新时间：2026-11-23
 > 范围：应用发现、文件扫描与过滤、名字查询、索引存储
 > 非目标：全局执行顺序（服从 [`TODO.md`](../../TODO.md)）；Windows Everything 路径；正文语义召回的 Provider 验收（活审计 B1）
 
@@ -28,6 +28,7 @@
 | `SQLITE_BUSY` 不再锁死文件源（E2，11-22） | PR `#2250`（`5693e3b8a`）：`classifyRunFailure` 对 `SQLITE_BUSY`（`FILE_INDEX_DATABASE_BUSY`，`retryable: true`）置 `halts: false`，保持 `initializationFailed = false`（`FileIndexedSource.getStatus()` 同步报告 `health = 'degraded'`），使瞬时锁竞争不再阻断后续监听事件、启动重试与手动重建，真正不可重试的扫描错误（`FILE_INDEX_SCAN_FAILED`）仍置 `initializationFailed = true`；同时在 `resetIndexedSourceRuntimeState` 成功后及 `rebuildIndex` 触发 `scanSource(ManualRebuild)` 前清零 `initializationFailed` 与 `initializationFailure` | `file-provider-startup.test.ts`（55 个用例）与 `file-indexed-source.test.ts`（19 个用例）覆盖 `SQLITE_BUSY` 瞬时失败、自动重试恢复、致命错误停机与手动重建/重置前解除锁死。验证时本机运行着 `/Applications/Tuff.app`，未在隔离 Electron 实例复测 |
 | 搜索推送改单向通知消除退出卡顿（E3，11-22） | PR `#2249`（`1591d7717`）：`core-box/ipc.ts` 的 `createSenderSearchSink` 将 `CoreBoxEvents.search.{update,noResults,end}` 三条 `void` 通知从等待回包的 `await transport.sendTo(...)`（每条挂 60 秒 `CHANNEL_DEFAULT_TIMEOUT` 并串行排在 `SearchSession.deliveryTail` 上）改为单向 `transport.notifyTo(sender, event, payload, plugin)`，消除阻塞 `SearchEngineCore.destroy()` → `sessionRegistry.destroy()` 超出 8 秒退出预算的悬空会话，同时保留索引排空失败时的 `SEARCH_CORE_INDEX_DRAIN_FAILED` `AggregateError` fail-closed 契约 | `search-core.contracts.test.ts` 与 `core-box/ipc.test.ts`（共 8 个套件 / 152 个用例）用确定性假时钟复现修复前卡满退出预算并验证修复后立即结算（含 60 秒窗口后、空查询 `noResults` 与采集中途退出）。验证时本机运行着 `/Applications/Tuff.app`，未在隔离 Electron 实例复测 |
 | 维护片连续失败指数退避（E5，11-22） | PR `#2247`（`9762f3e24`）：`IndexMaintenanceRunner` 记录连续非取消失败次数（覆盖维护片执行、提交发布与提交确认），退避延迟按 `1s → 2s → 4s → 8s → 16s → 32s → 60s` 封顶；在重新 `start()`/`stop()` 或非 `deferred` 维护片（含待确认通知链路）完整成功后清零退避，空闲/未就绪跳过与 `result.deferred` 保持既有计数且正常推进仍维持 `250ms`（全部完成时 `60_000ms`） | `index-maintenance-runner.test.ts` 新增 7 个确定性假时钟用例（连同 `app-index-maintenance-service.test.ts` 共 9/9 通过），覆盖 `1s..60s` 阶梯、发布/确认失败退避、`deferred` 保序与成功复位。验证时本机运行着 `/Applications/Tuff.app`，未在隔离 Electron 实例复测 |
+| `file-provider.ts` F1 纯记录映射与 F3 清理（11-23） | PR `#2263`（`f22d7f9c6`）：将 F1 纯记录映射抽离至 `file-provider-record-mapper.ts`（批量发布逻辑与变更租约顺序保持原处不动），并完成 F3 清理（删除 4 个无生产调用方的公开成员、抽离重复 yield/abort 异步辅助函数至 `file-provider-async-utils.ts`） | `file-provider.ts` 降至 **2,650 代码行**（`.github/module-size-ratchet.json` 棘轮同步收紧 `2,790 -> 2,650`）；单测与契约回归通过，验证时本机运行着 `/Applications/Tuff.app`，未在隔离 Electron 实例实测 |
 
 ## 2. 实测：索引为什么这么大（2026-10-20）
 
@@ -128,9 +129,9 @@
 
 | ID | 事项 | 证据 | 前置与验收 |
 | --- | --- | --- | --- |
-| F1 | 批量发布和记录映射 | 约 290 行。依赖变更租约分片和「租约内提交、租约外发布进度」的顺序，还有一处中止竞态 | 先单独挪出两个纯函数的记录映射（约 50 行，几乎无风险） |
+| F1 | 批量发布和记录映射（纯记录映射已于 11-23 落地，PR `#2263` `f22d7f9c6`；批量发布保留原处） | 约 290 行。纯记录映射已抽离至 `file-provider-record-mapper.ts`；剩余批量发布依赖变更租约分片和「租约内提交、租约外发布进度」的顺序，还有一处中止竞态 | 批量发布暂留原处，后续若拆须锁死租约提交与进度发布顺序 |
 | F2 | 索引运行流水线 `_initialize` | 约 90 行，需要约 14 个惰性依赖，测试会替换其中几个 | 保留 `runIntegrityCheck` 和 `startIndexing` 在原处 |
-| F3 | 没有调用方的公开成员和重复的构造写法 | 4 个公开成员共 12 行没有生产调用方；构造函数里有 5 个相同的 yield 闭包和一个 20 行的可中止 sleep，约 35 行 | 改测试里的少量 mock |
+| F3 | 没有调用方的公开成员和重复的构造写法（已完成 11-23，PR `#2263` `f22d7f9c6`） | 4 个无生产调用方的公开成员已移除，重复 yield 闭包与可中止 sleep 辅助函数已抽离至 `file-provider-async-utils.ts` | `file-provider.ts` 降至 `2,650` 代码行，棘轮收紧至 `2,650`（未在隔离 Electron 实例复测） |
 
 关停顺序、正文补全和排空这几块共享可变状态，测试又直接替换内部成员，风险高，暂不拆。
 
