@@ -2,15 +2,14 @@
 import type { Component, VNode } from 'vue'
 import type { PopperDialogProps } from './types'
 import {
-
+  computed,
   defineComponent,
+  markRaw,
   onMounted,
   onUnmounted,
-
   provide,
   ref,
   useId,
-
 } from 'vue'
 import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
@@ -44,24 +43,29 @@ const contentId = useId()
 // The two phases the parts fade in (see the styles): the entrance, until it has played, and the close.
 const isEntering = ref(true)
 const isClosing = ref(false)
-const renderComp = ref<Component | null>(null)
+const renderComp = computed<Component | null>(() =>
+  props.render
+    ? markRaw(defineComponent({ render: props.render as unknown as () => VNode }))
+    : null,
+)
 const dialogWrapper = ref<HTMLElement | null>(null)
 const zIndex = ref(zIndexAllocator.get())
 const focusReturn = createFocusReturn()
+let closeTimer: ReturnType<typeof setTimeout> | null = null
+let isUnmounted = false
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => {
+    closeTimer = setTimeout(() => {
+      closeTimer = null
+      resolve()
+    }, ms)
+  })
 }
 
 onMounted(() => {
   zIndex.value = zIndexAllocator.next()
   focusReturn.save()
-
-  if (props.render) {
-    renderComp.value = defineComponent({
-      render: props.render as unknown as () => VNode,
-    })
-  }
 
   if (dialogWrapper.value) {
     dialogWrapper.value.setAttribute('tabindex', '-1')
@@ -70,6 +74,11 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  isUnmounted = true
+  if (closeTimer) {
+    clearTimeout(closeTimer)
+    closeTimer = null
+  }
   focusReturn.restore()
 })
 
@@ -89,6 +98,8 @@ async function destroy(): Promise<void> {
   focusReturn.restore()
   isClosing.value = true
   await sleep(250)
+  if (isUnmounted)
+    return
   props.close()
 }
 

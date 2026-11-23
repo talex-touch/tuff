@@ -44,9 +44,22 @@ const zIndex = ref(zIndexAllocator.get())
 const titleId = useId()
 const messageId = useId()
 const focusReturn = createFocusReturn()
+const activeTimers = new Set<ReturnType<typeof setTimeout>>()
+let isUnmounted = false
+
+function clearActiveTimers(): void {
+  activeTimers.forEach(timer => clearTimeout(timer))
+  activeTimers.clear()
+}
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      activeTimers.delete(timer)
+      resolve()
+    }, ms)
+    activeTimers.add(timer)
+  })
 }
 
 function resolveButtonType(type?: ButtonState['type']): 'info' | 'warning' | 'danger' | 'success' {
@@ -82,14 +95,22 @@ watchEffect(() => {
 })
 
 async function clickBtn(btn: { value: ButtonState }): Promise<void> {
+  if (btn.value.loading || leaving.value || isUnmounted)
+    return
+
   btn.value.loading = true
-  await sleep(120)
+  try {
+    await sleep(120)
+    if (isUnmounted || leaving.value)
+      return
 
-  if (await btn.value.onClick()) {
-    await forClose()
+    if (await btn.value.onClick()) {
+      await forClose()
+    }
   }
-
-  btn.value.loading = false
+  finally {
+    btn.value.loading = false
+  }
 }
 
 /** aria-modal="true" promises the page behind is inert, so Tab stays inside. */
@@ -103,17 +124,21 @@ function keepTab(event: KeyboardEvent): void {
  * and a second Escape reaches what is under it.
  */
 async function forClose(): Promise<void> {
-  if (!wholeDom.value || leaving.value)
+  if (!wholeDom.value || leaving.value || isUnmounted)
     return
 
   leaving.value = true
   focusReturn.restore()
   await sleep(60)
+  if (isUnmounted)
+    return
 
   // The panel grows a touch while its parts fade (see `--closing`).
   closing.value = true
 
   await sleep(220)
+  if (isUnmounted)
+    return
 
   props.close()
 }
@@ -124,7 +149,7 @@ onMounted(() => {
 
   if (wholeDom.value) {
     wholeDom.value.setAttribute('tabindex', '-1')
-    wholeDom.value.focus()
+    wholeDom.value.focus({ preventScroll: true })
   }
 
   // The page holds still while the tip is open.
@@ -132,6 +157,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  isUnmounted = true
+  clearActiveTimers()
   unlockBodyScroll()
   focusReturn.restore()
 })

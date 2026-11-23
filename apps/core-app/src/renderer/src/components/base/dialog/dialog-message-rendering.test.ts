@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
+import {
+  asTrustedDialogHtml,
+  TxBlowDialog,
+  TxBottomDialog,
+  TxPopperDialog,
+  TxTouchTip
+} from '@talex-touch/tuffex/dialog'
 import { mount } from '@vue/test-utils'
-import { asTrustedDialogHtml } from '@talex-touch/tuffex/dialog'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import TBlowDialog from './TBlowDialog.vue'
-import TBottomDialog from './TBottomDialog.vue'
 import TDialogMention from './TDialogMention.vue'
-import TPopperDialog from './TPopperDialog.vue'
-import TouchTip from './TouchTip.vue'
 
 // The dialogs' own labels come from vue-i18n. These tests are about rendering and focus, so the
 // translator answers in English instead of installing the catalogs.
@@ -25,8 +27,8 @@ describe('base dialog message rendering', () => {
     document.body.innerHTML = ''
   })
 
-  it('renders TouchTip message as text by default', () => {
-    const wrapper = mount(TouchTip, {
+  it('renders TxTouchTip message as text by default', () => {
+    const wrapper = mount(TxTouchTip, {
       props: {
         title: 'Tip',
         message: '<script>alert(1)</script>\nNext',
@@ -44,8 +46,8 @@ describe('base dialog message rendering', () => {
     wrapper.unmount()
   })
 
-  it('renders TouchTip messageHtml only through the explicit trusted prop', () => {
-    const wrapper = mount(TouchTip, {
+  it('renders TxTouchTip messageHtml only through the explicit trusted prop', () => {
+    const wrapper = mount(TxTouchTip, {
       props: {
         title: 'Tip',
         messageHtml: asTrustedDialogHtml('<strong>Trusted</strong>'),
@@ -62,8 +64,8 @@ describe('base dialog message rendering', () => {
     wrapper.unmount()
   })
 
-  it('renders BottomDialog message as text', () => {
-    const wrapper = mount(TBottomDialog, {
+  it('renders TxBottomDialog message as text', () => {
+    const wrapper = mount(TxBottomDialog, {
       props: {
         title: 'Bottom',
         message: '<img src=x onerror=alert(1)>',
@@ -110,8 +112,8 @@ describe('base dialog message rendering', () => {
     htmlWrapper.unmount()
   })
 
-  it('renders PopperDialog message as text and messageHtml as trusted html', () => {
-    const textWrapper = mount(TPopperDialog, {
+  it('renders TxPopperDialog message as text and messageHtml as trusted html', () => {
+    const textWrapper = mount(TxPopperDialog, {
       props: {
         title: 'Text',
         message: '<strong>Text</strong>',
@@ -125,7 +127,7 @@ describe('base dialog message rendering', () => {
     expect(content?.querySelector('strong')).toBeNull()
     textWrapper.unmount()
 
-    const htmlWrapper = mount(TPopperDialog, {
+    const htmlWrapper = mount(TxPopperDialog, {
       props: {
         title: 'HTML',
         messageHtml: asTrustedDialogHtml('<strong>Trusted</strong>'),
@@ -139,8 +141,8 @@ describe('base dialog message rendering', () => {
     htmlWrapper.unmount()
   })
 
-  it('renders BlowDialog message as text and messageHtml as trusted html', () => {
-    const textWrapper = mount(TBlowDialog, {
+  it('renders TxBlowDialog message as text and messageHtml as trusted html', () => {
+    const textWrapper = mount(TxBlowDialog, {
       props: {
         title: 'Text',
         message: '<em>Text</em>',
@@ -154,7 +156,7 @@ describe('base dialog message rendering', () => {
     expect(content?.querySelector('em')).toBeNull()
     textWrapper.unmount()
 
-    const htmlWrapper = mount(TBlowDialog, {
+    const htmlWrapper = mount(TxBlowDialog, {
       props: {
         title: 'HTML',
         messageHtml: asTrustedDialogHtml('<em>Trusted</em>'),
