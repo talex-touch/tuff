@@ -254,6 +254,13 @@ describe('BrowserTabStrip layout, drag regions & tab actions', () => {
       /\.BrowserTabStrip-NoDrag\s+:deep\(\*\)\s*\{[\s\S]*-webkit-app-region:\s*no-drag;/
     )
     expect(stripCss).toMatch(/\.BrowserTabStrip-TabList\s*\{[\s\S]*scrollbar-width:\s*none;/)
+    expect(stripCss).toMatch(/\.BrowserTabStrip-Tab\s*\{[\s\S]*border-radius:\s*999px;/)
+    expect(stripCss).toMatch(
+      /@supports\s*\(corner-shape:\s*superellipse\(2\)\)\s*\{[\s\S]*\.BrowserTabStrip-Tab\s*\{[\s\S]*corner-shape:\s*var\(--tx-corner-smooth-shape/
+    )
+    expect(stripCss).toMatch(
+      /@supports\s*\(corner-shape:\s*superellipse\(2\)\)\s*\{[\s\S]*\.BrowserTabStrip-AddBtn\s*\{[\s\S]*corner-shape:\s*var\(--tx-corner-smooth-shape/
+    )
 
     const shellCss = extractSfcCss('../../views/layout/AppShell.vue')
     expect(shellCss).toMatch(
