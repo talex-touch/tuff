@@ -30,8 +30,13 @@
     "source": false
   },
   "permissions": {
-    "required": [],
-    "optional": ["clipboard.write", "intelligence.basic"]
+    "required": [
+      "search.root-results"
+    ],
+    "optional": [
+      "clipboard.write",
+      "intelligence.basic"
+    ]
   },
   "permissionReasons": {
     "clipboard.write": {
@@ -47,6 +52,13 @@
         "zh-CN": "在用户显式触发时，将自然语言描述转换为 Mermaid 图表代码",
         "en-US": "Convert natural-language descriptions into Mermaid diagrams only when explicitly triggered by the user"
       }
+    },
+    "search.root-results": {
+      "default": "Push Diagram Sketch entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 架构简图工坊 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push Diagram Sketch entries into CoreBox root search results"
+      }
     }
   },
   "searchProviders": [
@@ -58,10 +70,12 @@
       "owner": "official-plugin",
       "mode": "push",
       "priority": "fast",
-      "permissionScopes": [],
-      "defaultState": "enabled",
-      "requiresUserConsent": false,
-      "pushesToRootResults": false
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
     }
   ],
   "features": [
@@ -105,7 +119,9 @@
       ],
       "push": true,
       "priority": 8,
-      "acceptedInputTypes": ["text"],
+      "acceptedInputTypes": [
+        "text"
+      ],
       "platform": {
         "win32": true,
         "darwin": true,

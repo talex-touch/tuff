@@ -58,8 +58,13 @@
       "value": "assets/logo.svg"
     },
     "permissions": {
-      "required": [],
-      "optional": ["clipboard.write", "intelligence.basic"]
+      "required": [
+        "search.root-results"
+      ],
+      "optional": [
+        "clipboard.write",
+        "intelligence.basic"
+      ]
     },
     "platforms": {
       "win32": true,

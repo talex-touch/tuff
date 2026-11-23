@@ -23,7 +23,9 @@
     "source": false
   },
   "permissions": {
-    "required": [],
+    "required": [
+      "search.root-results"
+    ],
     "optional": [
       "clipboard.write"
     ]
@@ -34,6 +36,13 @@
       "locales": {
         "zh-CN": "将 Cron 表达式、可读说明、计划执行时间及 GitHub Actions 配置复制到剪贴板",
         "en-US": "Copy cron expressions, human-readable descriptions, next run schedules, and GitHub Actions YAML to clipboard"
+      }
+    },
+    "search.root-results": {
+      "default": "Push touch-cron-craft entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 touch-cron-craft 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push touch-cron-craft entries into CoreBox root search results"
       }
     }
   },
@@ -47,10 +56,12 @@
       "mode": "push",
       "priority": "fast",
       "defaultOrder": 111,
-      "permissionScopes": [],
-      "defaultState": "enabled",
-      "requiresUserConsent": false,
-      "pushesToRootResults": false
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
     }
   ],
   "features": [

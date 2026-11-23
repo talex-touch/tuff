@@ -23,7 +23,9 @@
     "source": false
   },
   "permissions": {
-    "required": [],
+    "required": [
+      "search.root-results"
+    ],
     "optional": [
       "clipboard.write"
     ]
@@ -34,6 +36,13 @@
       "locales": {
         "zh-CN": "将正则表达式、匹配捕获结果、替换预览及 JS/Python 代码片段复制到剪贴板",
         "en-US": "Copy regex patterns, capture results, replace outputs, and JS/Python snippets to clipboard"
+      }
+    },
+    "search.root-results": {
+      "default": "Push touch-regex-lab entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 touch-regex-lab 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push touch-regex-lab entries into CoreBox root search results"
       }
     }
   },
@@ -47,10 +56,12 @@
       "mode": "push",
       "priority": "fast",
       "defaultOrder": 110,
-      "permissionScopes": [],
-      "defaultState": "enabled",
-      "requiresUserConsent": false,
-      "pushesToRootResults": false
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
     }
   ],
   "features": [

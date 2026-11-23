@@ -3436,7 +3436,7 @@ describe('intelligence plugin', () => {
     )
 
     expect(permission.check).toHaveBeenCalledWith('clipboard.write')
-    expect(permission.request).not.toHaveBeenCalled()
+    expect(permission.request).toHaveBeenCalledWith('clipboard.write', expect.any(String))
     expect(writeText).not.toHaveBeenCalled()
     expect(clearItems).toHaveBeenCalled()
     expect(pushItems).toHaveBeenCalledOnce()
@@ -3564,7 +3564,7 @@ describe('intelligence plugin', () => {
       externalAction: true,
       success: false,
       status: 'blocked',
-      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_SDK_UNAVAILABLE,
     })
   })
 
@@ -3623,15 +3623,15 @@ describe('intelligence plugin', () => {
       answer: 'hello',
       status: 'ready',
       copyStatus: 'failed',
-      copyError: '复制失败：缺少 clipboard.write 权限',
-      copyRecovery: '请在插件权限中允许 clipboard.write 后重试。',
+      copyError: '复制失败：剪贴板写入失败',
+      copyRecovery: '请稍后重试，或手动复制回答内容。',
     })
     expect(result).toMatchObject({
       externalAction: true,
       success: false,
       shouldActivate: true,
       status: 'blocked',
-      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
+      reason: 'clipboard-write-failed',
     })
   })
 
@@ -3714,7 +3714,7 @@ describe('intelligence plugin', () => {
     )
 
     expect(permission.check).toHaveBeenCalledWith('clipboard.write')
-    expect(permission.request).not.toHaveBeenCalled()
+    expect(permission.request).toHaveBeenCalledWith('clipboard.write', expect.any(String))
     expect(copyAndPaste).not.toHaveBeenCalled()
     expect(pushItems.mock.calls[0][0][0].render.custom.data).toMatchObject({
       answer: 'replacement',
@@ -3728,7 +3728,7 @@ describe('intelligence plugin', () => {
       success: false,
       shouldActivate: true,
       status: 'blocked',
-      reason: 'PERMISSION_DENIED',
+      reason: PLUGIN_BLOCKED_REASONS.PERMISSION_DENIED,
     })
   })
 

@@ -24,7 +24,8 @@
   },
   "permissions": {
     "required": [
-      "storage.plugin"
+      "storage.plugin",
+      "search.root-results"
     ],
     "optional": [
       "clipboard.write"
@@ -44,6 +45,13 @@
         "zh-CN": "将换算后的时区时间或会议时段摘要复制到剪贴板",
         "en-US": "Copy converted times or meeting overlap summaries to your clipboard"
       }
+    },
+    "search.root-results": {
+      "default": "Push touch-world-time entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 touch-world-time 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push touch-world-time entries into CoreBox root search results"
+      }
     }
   },
   "searchProviders": [
@@ -56,10 +64,12 @@
       "mode": "push",
       "priority": "fast",
       "defaultOrder": 87,
-      "permissionScopes": [],
-      "defaultState": "enabled",
-      "requiresUserConsent": false,
-      "pushesToRootResults": false
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
     }
   ],
   "features": [

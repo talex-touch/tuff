@@ -337,7 +337,7 @@ describe('classic utility lifecycle action transport', () => {
       await expect(
         runtime.callLifecycle('onFeatureTriggered', [entry.featureId]).promise
       ).resolves.toBe(true)
-      expect(items).toHaveLength(1)
+      expect(items).toHaveLength(entry.pluginName === 'touch-vscode-projects' ? 4 : 1)
       const clonedItem = JSON.parse(JSON.stringify(items[0]))
       await expect(
         runtime.callLifecycle('onItemAction', [clonedItem]).promise

@@ -119,7 +119,7 @@ describe('quick actions isolated Prelude', () => {
 
     await state.module.onInit()
 
-    expect(state.features).toHaveLength(8)
+    expect(state.features).toHaveLength(6)
     expect(state.features.map(feature => feature.id)).toContain('quick-action-lock-screen')
     expect(state.features[0]?.platform).toEqual({
       win: { enable: false, arch: [], os: [] },
@@ -154,25 +154,25 @@ describe('quick actions isolated Prelude', () => {
 
   it('preserves main-owned confirmation denial as a stable blocked result', async () => {
     const state = harness({
-      actionId: 'shutdown',
+      actionId: 'lock-screen',
       status: 'blocked',
       reason: 'confirmation-denied',
     })
 
     // A dynamic quick-action-* feature only publishes its item; the action runs from the explicit
-    // selection (#817). Triggering used to run it, so every keystroke re-raised the destructive
-    // confirmation. The denial contract below is unchanged — only where it is observed.
-    await state.module.onFeatureTriggered('quick-action-shutdown', { text: '' })
+    // selection (#817). Triggering used to run it, so every keystroke re-raised confirmation.
+    // The denial contract below is unchanged — only where it is observed.
+    await state.module.onFeatureTriggered('quick-action-lock-screen', { text: '' })
     expect(state.systemCalls).toEqual([])
 
-    const item = actionItem(state.items, 'shutdown')
+    const item = actionItem(state.items, 'lock-screen')
     expect(item).toBeTruthy()
     await expect(state.module.onItemAction(item!, { actionId: 'run-action' })).resolves.toMatchObject({
       status: 'blocked',
       reason: 'confirmation-denied',
       success: false,
     })
-    expect(state.systemCalls).toEqual(['shutdown'])
+    expect(state.systemCalls).toEqual(['lock-screen'])
   })
 
   it('redacts capability failures and never attempts a generic command fallback', async () => {

@@ -30,7 +30,9 @@
     "source": false
   },
   "permissions": {
-    "required": [],
+    "required": [
+      "search.root-results"
+    ],
     "optional": [
       "network.internet",
       "storage.plugin",
@@ -58,26 +60,31 @@
         "zh-CN": "将格式化响应、脱敏 cURL 命令或 fetch() 代码片段复制到剪贴板",
         "en-US": "Copy formatted responses, redacted cURL commands, or fetch() snippets to the clipboard"
       }
+    },
+    "search.root-results": {
+      "default": "Push API Lens entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 API 透镜 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push API Lens entries into CoreBox root search results"
+      }
     }
   },
   "searchProviders": [
     {
       "id": "touch-api-lens.api-lens",
-      "displayName": {
-        "default": "API Lens",
-        "locales": {
-          "zh-CN": "API 透镜",
-          "en-US": "API Lens"
-        }
-      },
+      "displayName": "API Lens",
       "featureId": "api-lens",
       "kind": "plugin",
       "owner": "official-plugin",
       "mode": "push",
       "priority": "fast",
       "defaultOrder": 110,
-      "permissionScopes": [],
-      "defaultState": "enabled"
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
     }
   ],
   "features": [

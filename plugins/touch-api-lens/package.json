@@ -48,7 +48,9 @@
       "value": "assets/logo.svg"
     },
     "permissions": {
-      "required": [],
+      "required": [
+        "search.root-results"
+      ],
       "optional": [
         "network.internet",
         "storage.plugin",

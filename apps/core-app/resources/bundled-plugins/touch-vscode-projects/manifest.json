@@ -3,7 +3,7 @@
   "name": "touch-vscode-projects",
   "version": "1.0.0",
   "author": "TalexTouch Team",
-  "sdkapi": 260817,
+  "sdkapi": 261011,
   "category": "utilities",
   "icon": {
     "type": "file",
@@ -18,15 +18,50 @@
     "optional": [
       "fs.read",
       "fs.index",
-      "system.shell"
+      "system.shell",
+      "storage.plugin"
     ]
   },
   "permissionReasons": {
     "search.root-results": "将 VS Code 最近项目入口展示在 CoreBox 根搜索结果",
     "fs.read": "读取宿主允许的 VS Code 最近项目元数据",
     "fs.index": "建立和刷新 VS Code 最近项目索引",
-    "system.shell": "由宿主通过固定 VS Code 启动器打开项目"
+    "system.shell": "由宿主通过固定 VS Code 启动器打开项目",
+    "storage.plugin": "保存 VS Code 项目数据源启用与管理状态"
   },
+  "indexedSources": [
+    {
+      "id": "vscode-projects",
+      "kind": "vscode-workspace",
+      "displayName": "VS Code Projects",
+      "platforms": [
+        "win32",
+        "darwin",
+        "linux"
+      ],
+      "priority": "fast",
+      "storage": "ephemeral",
+      "privacy": "high",
+      "capabilities": {
+        "scan": true,
+        "watch": false,
+        "reconcile": true,
+        "clear": true,
+        "open": true
+      },
+      "admission": {
+        "owner": "official-plugin",
+        "permissionScopes": [
+          "file-system"
+        ],
+        "defaultState": "disabled",
+        "requiresUserConsent": true,
+        "clearable": true,
+        "rebuildable": true,
+        "notes": "VS Code recent workspaces remain disabled/ask by default until explicitly enabled; opaque project tokens are issued by the host and support enable, disable, clear, and rebuild controls."
+      }
+    }
+  ],
   "searchProviders": [
     {
       "id": "touch-vscode-projects.projects",
@@ -43,14 +78,21 @@
       ],
       "defaultState": "ask",
       "requiresUserConsent": true,
-      "pushesToRootResults": true
+      "pushesToRootResults": true,
+      "indexedSourceId": "vscode-projects"
     }
   ],
   "features": [
     {
       "id": "vscode-projects",
       "name": "VS Code Projects",
-      "desc": "查看并打开最近使用的 VS Code 项目",
+      "desc": {
+        "default": "查看并打开最近使用的 VS Code 项目",
+        "locales": {
+          "zh-CN": "查看并打开最近使用的 VS Code 项目",
+          "en-US": "Browse and open recent VS Code projects"
+        }
+      },
       "icon": {
         "type": "file",
         "value": "assets/logo.svg"
@@ -87,10 +129,10 @@
     }
   ],
   "_files": {
-    "index.js": "sha256-81993e5f88bb8adeee728442b5523b8f2d8eb649f728b842ae92e3f07f8c4b36",
+    "index.js": "sha256-b5d4988e1fcd7d58c83273f7aac0424f6d4d58df66e19a88eab1a0c5a0f2b1cd",
     "assets/logo.svg": "sha256-61034a20c94b10a2f736033f3dab3d757c3a9f13f6d4a4538c063e2ceaec2259"
   },
-  "_signature": "iGU7Ts4HmCtLwHinz8SFT1DP0vKnq7jaf5UJXRZaV2A=",
+  "_signature": "V2oltR6/PGqOOf+zz1PMOjxokhXY/ifTUW8mSC24yu0=",
   "dev": {
     "enable": false,
     "address": "",

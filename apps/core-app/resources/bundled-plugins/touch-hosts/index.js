@@ -196,7 +196,9 @@ function reasonCode(value, fallback = 'host-capability-failed') {
   const raw = text(value).toLowerCase()
   if (/permission.*denied/.test(raw))
     return 'permission-denied'
-  if (/permission.*unavailable|capability.*unavailable|unavailable/.test(raw))
+  if (/permission.*unavailable/.test(raw))
+    return 'permission-unavailable'
+  if (/capability.*unavailable|unavailable/.test(raw))
     return 'capability-unavailable'
   if (/confirm.*denied|cancel/.test(raw))
     return 'confirmation-denied'
@@ -219,6 +221,7 @@ function reasonMessage(reason) {
   return (
     {
       'permission-denied': '没有 Hosts 读写权限',
+      'permission-unavailable': '权限系统不可用',
       'capability-unavailable': 'Hosts 能力不可用',
       'confirmation-denied': '操作已取消',
       'timeout': 'Hosts 操作超时',
@@ -431,7 +434,8 @@ const pluginLifecycle = {
     if (![UPSERT_ACTION_ID, REMOVE_ACTION_ID].includes(selectedActionId))
       return blocked('invalid-action')
     const declared = item.actions?.find?.(action => action?.id === selectedActionId)
-    const issued = issuedActions.get(declared?.payload?.actionToken)
+    const token = declared?.payload?.actionToken
+    const issued = issuedActions.get(token)
     if (
       !declared
       || declared.type !== 'plugin'
@@ -446,6 +450,7 @@ const pluginLifecycle = {
     const facade = plugin?.hosts
     if (!facade || typeof facade.apply !== 'function')
       return blocked('capability-unavailable')
+    issuedActions.delete(token)
     try {
       return mutationResult(
         await facade.apply({

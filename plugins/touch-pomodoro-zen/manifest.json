@@ -31,7 +31,8 @@
   },
   "permissions": {
     "required": [
-      "storage.plugin"
+      "storage.plugin",
+      "search.root-results"
     ],
     "optional": [
       "system.notification",
@@ -59,26 +60,31 @@
         "zh-CN": "将每日/每周专注报告或微休息引导卡片复制到剪贴板",
         "en-US": "Copy daily/weekly focus summaries or guided micro-break routines to the clipboard"
       }
+    },
+    "search.root-results": {
+      "default": "Push Pomodoro Zen entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 禅意番茄钟 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push Pomodoro Zen entries into CoreBox root search results"
+      }
     }
   },
   "searchProviders": [
     {
       "id": "touch-pomodoro-zen.pomodoro-zen",
-      "displayName": {
-        "default": "Pomodoro Zen",
-        "locales": {
-          "zh-CN": "禅意番茄钟",
-          "en-US": "Pomodoro Zen"
-        }
-      },
+      "displayName": "Pomodoro Zen",
       "featureId": "pomodoro-zen",
       "kind": "plugin",
       "owner": "official-plugin",
       "mode": "push",
       "priority": "fast",
       "defaultOrder": 112,
-      "permissionScopes": [],
-      "defaultState": "enabled"
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
     }
   ],
   "features": [

@@ -54,17 +54,30 @@ const EXPECTED_PLUGIN_DOC_GAPS = new Set([
   'clipboard-history',
   'json-formatter',
   'touch-ai-sessions',
+  'touch-api-lens',
   'touch-browser-data',
+  'touch-calc-pad',
+  'touch-color-studio',
+  'touch-cron-craft',
+  'touch-diagram-sketch',
   'touch-dictation',
+  'touch-docs-atlas',
   'touch-emoji-symbols',
   'touch-hosts',
   'touch-image',
+  'touch-markdown-craft',
+  'touch-music',
   'touch-orca',
+  'touch-pomodoro-zen',
   'touch-quickops',
+  'touch-regex-lab',
   'touch-snipaste',
   'touch-snippets',
+  'touch-svg-craft',
   'touch-text-tools',
+  'touch-totp-vault',
   'touch-vscode-projects',
+  'touch-world-time',
 ])
 
 function loadOfficialManifests(): LoadedManifest[] {
@@ -203,40 +216,14 @@ describe('official plugin manifest trust boundary', () => {
         declaredPermissionIds: declaredPermissions,
       })
 
-      // touch-intelligence declares 5 push features and 1 provider. That is a real gap --
-      // four features reach root results with no admission policy of their own -- and it is
-      // tracked in #1203, where the resolver now names them instead of reporting nothing.
-      //
-      // Exempted by name rather than by relaxing the rule, so every other plugin is still
-      // held to it and a permanently-red file does not end up masking the seven assertions
-      // around this one. Remove the entry when the manifest is settled.
-      const PARTIAL_PROVIDER_COVERAGE_EXEMPT = new Set(['touch-intelligence'])
-      const exempt = PARTIAL_PROVIDER_COVERAGE_EXEMPT.has(manifest.name)
-
-      // The exemption covers exactly the warning that names the gap, not the whole issue list:
-      // once #1203 made the resolver report it, this assertion started failing for the plugin
-      // the count assertion below already excused. Any other issue on touch-intelligence is
-      // still fatal, and the negative assertion keeps the entry from outliving the gap.
-      const issues = exempt
-        ? providerResolution.issues.filter(issue => issue.code !== 'SEARCH_PROVIDER_PARTIAL_PUSH_FEATURE_COVERAGE')
-        : providerResolution.issues
-      expect(issues, `${manifest.name} search provider issues`).toEqual([])
-      if (exempt) {
-        expect(
-          providerResolution.issues.map(issue => issue.code),
-          `${manifest.name} is exempt for a gap it no longer has`,
-        ).toContain('SEARCH_PROVIDER_PARTIAL_PUSH_FEATURE_COVERAGE')
-      }
+      expect(providerResolution.issues, `${manifest.name} search provider issues`).toEqual([])
       expect(
         providerResolution.derivedFromPushFeatures,
         `${manifest.name} must not use legacy provider derivation`,
       ).toBe(false)
-
-      if (!exempt) {
-        expect(providerResolution.descriptors.length, `${manifest.name} provider count`).toBeGreaterThanOrEqual(
-          pushIds.length,
-        )
-      }
+      expect(providerResolution.descriptors.length, `${manifest.name} provider count`).toBeGreaterThanOrEqual(
+        pushIds.length,
+      )
 
       for (const provider of providerResolution.descriptors) {
         expect(provider.policy.owner, `${manifest.name}/${provider.id} owner`).toBe('official-plugin')
@@ -268,6 +255,8 @@ describe('official plugin manifest trust boundary', () => {
     // touch-browser-open:browser-open-settings is the plugin's settings surface: a form
     // that manages engines, hot-search entries and the default engine, which needs the
     // full-height view to be usable rather than a squeezed panel.
+    // touch-music:touch-music is the full-height Vue music player surface migrated from
+    // legacy init.json onto manifest.json (sdkapi 261011).
     expect(fullHeightSurfaces.sort()).toEqual([
       'clipboard-history:clipboard-history',
       'json-formatter:json-formatter-format',
@@ -277,6 +266,7 @@ describe('official plugin manifest trust boundary', () => {
       'touch-intelligence:intelligence-explain',
       'touch-intelligence:intelligence-rewrite',
       'touch-intelligence:intelligence-summarize',
+      'touch-music:touch-music',
       'touch-translation:screenshot-translate',
       'touch-translation:touch-translate',
     ])
@@ -331,7 +321,10 @@ describe('official plugin manifest trust boundary', () => {
   it('keeps indexed source declarations permission-gated and metadata-only at manifest level', () => {
     const manifestsWithIndexedSources = manifests.filter(({ manifest }) => (manifest.indexedSources ?? []).length > 0)
 
-    expect(manifestsWithIndexedSources.map(({ manifest }) => manifest.name)).toEqual(['touch-browser-data'])
+    expect(manifestsWithIndexedSources.map(({ manifest }) => manifest.name)).toEqual([
+      'touch-browser-data',
+      'touch-vscode-projects',
+    ])
 
     for (const { manifest } of manifestsWithIndexedSources) {
       const indexedSourceResolution = resolveIndexedSourceManifestDescriptors({
@@ -345,39 +338,54 @@ describe('official plugin manifest trust boundary', () => {
 
       expect(indexedSourceResolution.issues, `${manifest.name} indexed source issues`).toEqual([])
 
-      // Two sources now, not one. browser-history was added alongside bookmarks; both are
-      // asserted so a third cannot arrive without this list moving.
-      expect(indexedSourceResolution.descriptors.map(descriptor => descriptor.id)).toEqual([
-        'browser-bookmarks',
-        'browser-history',
-      ])
+      if (manifest.name === 'touch-browser-data') {
+        // Two sources now, not one. browser-history was added alongside bookmarks; both are
+        // asserted so a third cannot arrive without this list moving.
+        expect(indexedSourceResolution.descriptors.map(descriptor => descriptor.id)).toEqual([
+          'browser-bookmarks',
+          'browser-history',
+        ])
 
-      // The gate that matters is the same for both: disabled until the user consents, and
-      // scoped to browser-data plus file-system. The manifest declares only an id -- the
-      // policy comes from the resolver, which is what "metadata-only at manifest level"
-      // means here.
-      for (const descriptor of indexedSourceResolution.descriptors) {
-        expect(descriptor.admission, `${descriptor.id} admission`).toMatchObject({
-          owner: 'official-plugin',
-          permissionScopes: ['browser-data', 'file-system'],
-          defaultState: 'disabled',
-          requiresUserConsent: true,
+        // The gate that matters is the same for both: disabled until the user consents, and
+        // scoped to browser-data plus file-system. The manifest declares only an id -- the
+        // policy comes from the resolver, which is what "metadata-only at manifest level"
+        // means here.
+        for (const descriptor of indexedSourceResolution.descriptors) {
+          expect(descriptor.admission, `${descriptor.id} admission`).toMatchObject({
+            owner: 'official-plugin',
+            permissionScopes: ['browser-data', 'file-system'],
+            defaultState: 'disabled',
+            requiresUserConsent: true,
+          })
+        }
+
+        // Where they differ, and why it is worth pinning: browser-history is neither
+        // clearable nor rebuildable because it has no CoreApp indexed-source runtime handler
+        // yet -- its own note says so. That asymmetry is a real gap rather than a setting,
+        // so the test states it instead of letting both look alike.
+        const byId = new Map(indexedSourceResolution.descriptors.map(d => [d.id, d]))
+        expect(byId.get('browser-bookmarks')?.admission).toMatchObject({
+          clearable: true,
+          rebuildable: true,
+        })
+        expect(byId.get('browser-history')?.admission).toMatchObject({
+          clearable: false,
+          rebuildable: false,
         })
       }
-
-      // Where they differ, and why it is worth pinning: browser-history is neither
-      // clearable nor rebuildable because it has no CoreApp indexed-source runtime handler
-      // yet -- its own note says so. That asymmetry is a real gap rather than a setting,
-      // so the test states it instead of letting both look alike.
-      const byId = new Map(indexedSourceResolution.descriptors.map(d => [d.id, d]))
-      expect(byId.get('browser-bookmarks')?.admission).toMatchObject({
-        clearable: true,
-        rebuildable: true,
-      })
-      expect(byId.get('browser-history')?.admission).toMatchObject({
-        clearable: false,
-        rebuildable: false,
-      })
+      else if (manifest.name === 'touch-vscode-projects') {
+        expect(indexedSourceResolution.descriptors.map(descriptor => descriptor.id)).toEqual([
+          'vscode-projects',
+        ])
+        expect(indexedSourceResolution.descriptors[0]?.admission).toMatchObject({
+          owner: 'official-plugin',
+          permissionScopes: ['file-system'],
+          defaultState: 'disabled',
+          requiresUserConsent: true,
+          clearable: true,
+          rebuildable: true,
+        })
+      }
     }
   })
 })

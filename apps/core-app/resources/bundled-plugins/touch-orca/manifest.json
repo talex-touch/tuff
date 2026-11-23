@@ -3,7 +3,7 @@
   "name": "touch-orca",
   "version": "1.0.0",
   "author": "TalexTouch Team",
-  "sdkapi": 260817,
+  "sdkapi": 261011,
   "category": "utilities",
   "icon": {
     "type": "file",
@@ -45,7 +45,13 @@
     {
       "id": "orca",
       "name": "Orca",
-      "desc": "查看 Orca 状态并打开 Orca",
+      "desc": {
+        "default": "查看 Orca 状态并打开 Orca",
+        "locales": {
+          "zh-CN": "查看 Orca 状态并打开 Orca",
+          "en-US": "Check Orca status and open Orca"
+        }
+      },
       "icon": {
         "type": "file",
         "value": "assets/logo.svg"
@@ -81,10 +87,10 @@
     }
   ],
   "_files": {
-    "index.js": "sha256-7d3d5977875ddb685a45deee432e380a0518ea153f252722af247ff65612220f",
+    "index.js": "sha256-c770fb47d5c2941f84c0e4a668d2cabe511112a92fa077b050cc3e198efc2b44",
     "assets/logo.svg": "sha256-16dfb011bbaad2028e1f12e21a6f3777ae5f00c6d8f01ff9e3540913dcfca58d"
   },
-  "_signature": "DbPtBR4o7HM/HC6BsGvCHtSQEN9fnBs9tzPrq7gCfrw=",
+  "_signature": "Ttn/8rXgrJ2E1SqFo9KJphCvdsGpcA+jfIRxUTPrHdU=",
   "dev": {
     "enable": false,
     "address": "",

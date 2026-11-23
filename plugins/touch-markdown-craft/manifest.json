@@ -30,7 +30,9 @@
     "source": false
   },
   "permissions": {
-    "required": [],
+    "required": [
+      "search.root-results"
+    ],
     "optional": [
       "clipboard.write"
     ]
@@ -42,26 +44,31 @@
         "zh-CN": "将生成的 Markdown 表格、徽章、目录、字数统计、代码块或纯文本复制到剪贴板",
         "en-US": "Copy generated Markdown tables, badges, TOCs, stats summaries, code fences, or stripped plain text to the clipboard"
       }
+    },
+    "search.root-results": {
+      "default": "Push Markdown Craft entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 Markdown 工坊 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push Markdown Craft entries into CoreBox root search results"
+      }
     }
   },
   "searchProviders": [
     {
       "id": "touch-markdown-craft.markdown-craft",
-      "displayName": {
-        "default": "Markdown Craft",
-        "locales": {
-          "zh-CN": "Markdown 工坊",
-          "en-US": "Markdown Craft"
-        }
-      },
+      "displayName": "Markdown Craft",
       "featureId": "markdown-craft",
       "kind": "plugin",
       "owner": "official-plugin",
       "mode": "push",
       "priority": "fast",
       "defaultOrder": 111,
-      "permissionScopes": [],
-      "defaultState": "enabled"
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
     }
   ],
   "features": [

@@ -1,4 +1,22 @@
-const { plugin, logger, TuffItemBuilder } = globalThis
+const {
+  plugin,
+  filesystem: initialFilesystem,
+  logger,
+  TuffItemBuilder,
+  permission: initialPermission,
+} = globalThis
+
+function resolvePermission() {
+  return Object.prototype.hasOwnProperty.call(globalThis, 'permission')
+    ? globalThis.permission
+    : initialPermission
+}
+
+function resolveFilesystem() {
+  return Object.prototype.hasOwnProperty.call(globalThis, 'filesystem')
+    ? globalThis.filesystem
+    : initialFilesystem
+}
 
 const PLUGIN_NAME = 'touch-batch-rename'
 const SOURCE_ID = 'plugin-features'
@@ -237,7 +255,7 @@ function buildRenamePlan(paths, rules, now = new Date()) {
  * ensurePermission.
  */
 async function ensurePermission(permissionId) {
-  const permissionFacade = globalThis.permission
+  const permissionFacade = resolvePermission()
   if (!permissionFacade || typeof permissionFacade.check !== 'function')
     return { granted: false, reason: 'permission-sdk-unavailable', message: '权限系统不可用' }
   try {
@@ -470,7 +488,7 @@ const pluginLifecycle = {
       const writeAccess = await ensurePermission('fs.write')
       if (!writeAccess.granted)
         return blocked(writeAccess.reason, writeAccess.message)
-      const fsFacade = globalThis.filesystem
+      const fsFacade = resolveFilesystem()
       if (!fsFacade || typeof fsFacade.renameBatch !== 'function')
         return blocked('capability-unavailable', '文件系统重命名能力不可用')
       try {
@@ -495,7 +513,7 @@ const pluginLifecycle = {
       const writeAccess = await ensurePermission('fs.write')
       if (!writeAccess.granted)
         return blocked(writeAccess.reason, writeAccess.message)
-      const fsFacade = globalThis.filesystem
+      const fsFacade = resolveFilesystem()
       if (!fsFacade || typeof fsFacade.renameBatch !== 'function')
         return blocked('capability-unavailable', '文件系统重命名能力不可用')
       try {

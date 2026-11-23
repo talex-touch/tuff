@@ -30,8 +30,12 @@
     "source": false
   },
   "permissions": {
-    "required": [],
-    "optional": ["clipboard.write"]
+    "required": [
+      "search.root-results"
+    ],
+    "optional": [
+      "clipboard.write"
+    ]
   },
   "permissionReasons": {
     "clipboard.write": {
@@ -39,6 +43,13 @@
       "locales": {
         "zh-CN": "将 SVG 图标、优化后的 SVG、Vue 3 SFC、React JSX、CSS Data URI 或 Base64 复制到剪贴板",
         "en-US": "Copy vector icons, optimized SVG, Vue 3 SFC, React JSX, CSS Data URI, or Base64 output to the clipboard"
+      }
+    },
+    "search.root-results": {
+      "default": "Push SVG Craft entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 SVG 矢量工坊 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push SVG Craft entries into CoreBox root search results"
       }
     }
   },
@@ -51,10 +62,12 @@
       "owner": "official-plugin",
       "mode": "push",
       "priority": "fast",
-      "permissionScopes": [],
-      "defaultState": "enabled",
-      "requiresUserConsent": false,
-      "pushesToRootResults": false
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
     }
   ],
   "features": [
@@ -94,7 +107,9 @@
       ],
       "push": true,
       "priority": 8,
-      "acceptedInputTypes": ["text"],
+      "acceptedInputTypes": [
+        "text"
+      ],
       "platform": {
         "win32": true,
         "darwin": true,

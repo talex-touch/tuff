@@ -23,7 +23,9 @@
     "source": false
   },
   "permissions": {
-    "required": [],
+    "required": [
+      "search.root-results"
+    ],
     "optional": [
       "clipboard.write"
     ]
@@ -34,6 +36,13 @@
       "locales": {
         "zh-CN": "将 HTTP 状态码说明、chmod 命令、CIDR 子网结果、MIME 类型、ANSI 转义码与速查命令复制到剪贴板",
         "en-US": "Copy HTTP status summaries, chmod commands, CIDR subnet details, MIME headers, ANSI sequences, and cheatsheet commands to clipboard"
+      }
+    },
+    "search.root-results": {
+      "default": "Push touch-docs-atlas entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 touch-docs-atlas 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push touch-docs-atlas entries into CoreBox root search results"
       }
     }
   },
@@ -47,10 +56,12 @@
       "mode": "push",
       "priority": "fast",
       "defaultOrder": 112,
-      "permissionScopes": [],
-      "defaultState": "enabled",
-      "requiresUserConsent": false,
-      "pushesToRootResults": false
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
     }
   ],
   "features": [

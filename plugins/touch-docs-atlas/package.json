@@ -54,7 +54,9 @@
       "optional": [
         "clipboard.write"
       ],
-      "required": []
+      "required": [
+        "search.root-results"
+      ]
     },
     "platforms": {
       "darwin": true,

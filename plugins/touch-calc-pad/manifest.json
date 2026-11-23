@@ -24,7 +24,8 @@
   },
   "permissions": {
     "required": [
-      "storage.plugin"
+      "storage.plugin",
+      "search.root-results"
     ],
     "optional": [
       "clipboard.write"
@@ -44,6 +45,13 @@
         "zh-CN": "将计算或换算结果复制到剪贴板",
         "en-US": "Copy calculated or converted results to your clipboard"
       }
+    },
+    "search.root-results": {
+      "default": "Push touch-calc-pad entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 touch-calc-pad 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push touch-calc-pad entries into CoreBox root search results"
+      }
     }
   },
   "searchProviders": [
@@ -56,10 +64,12 @@
       "mode": "push",
       "priority": "fast",
       "defaultOrder": 86,
-      "permissionScopes": [],
-      "defaultState": "enabled",
-      "requiresUserConsent": false,
-      "pushesToRootResults": false
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
     }
   ],
   "features": [
@@ -77,7 +87,7 @@
         "locales": {
           "zh-CN": "自然语言数学、百分比、程序员进制、单位与传输时间、比例与日期运算",
           "en-US": "Natural math, percentages, programmer bases, unit/transfer/aspect conversions & date arithmetic"
-      }
+        }
       },
       "icon": {
         "type": "file",

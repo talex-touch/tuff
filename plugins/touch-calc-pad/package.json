@@ -50,7 +50,8 @@
     },
     "permissions": {
       "required": [
-        "storage.plugin"
+        "storage.plugin",
+        "search.root-results"
       ],
       "optional": [
         "clipboard.write"

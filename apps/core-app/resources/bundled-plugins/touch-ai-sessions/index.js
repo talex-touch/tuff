@@ -223,7 +223,7 @@ const lifecycle = {
     if (!clipboard || typeof clipboard.writeText !== 'function')
       return { externalAction: true, success: false, status: 'blocked', reason: 'clipboard-sdk-unavailable' }
     try {
-      const snapshot = await aiSessions.list({ query: id, limit: 1 })
+      const snapshot = await aiSessions.list({ query: id, limit: MAX_ITEMS })
       if (!snapshot || !['ready', 'degraded', 'unsupported'].includes(snapshot.status)) {
         return { externalAction: true, success: false, status: 'blocked', reason: 'invalid-response' }
       }

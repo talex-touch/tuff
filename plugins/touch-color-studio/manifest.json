@@ -30,8 +30,12 @@
     "source": false
   },
   "permissions": {
-    "required": [],
-    "optional": ["clipboard.write"]
+    "required": [
+      "search.root-results"
+    ],
+    "optional": [
+      "clipboard.write"
+    ]
   },
   "permissionReasons": {
     "clipboard.write": {
@@ -39,6 +43,13 @@
       "locales": {
         "zh-CN": "将颜色值、Tailwind Token、对比度报告或 CSS 渐变复制到剪贴板",
         "en-US": "Copy converted color values, Tailwind tokens, WCAG contrast reports, or CSS gradients to the clipboard"
+      }
+    },
+    "search.root-results": {
+      "default": "Push Color Studio entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 色彩工坊 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push Color Studio entries into CoreBox root search results"
       }
     }
   },
@@ -51,10 +62,12 @@
       "owner": "official-plugin",
       "mode": "push",
       "priority": "fast",
-      "permissionScopes": [],
-      "defaultState": "enabled",
-      "requiresUserConsent": false,
-      "pushesToRootResults": false
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
     }
   ],
   "features": [
@@ -98,7 +111,9 @@
       ],
       "push": true,
       "priority": 9,
-      "acceptedInputTypes": ["text"],
+      "acceptedInputTypes": [
+        "text"
+      ],
       "platform": {
         "win32": true,
         "darwin": true,
