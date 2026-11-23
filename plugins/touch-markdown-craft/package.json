@@ -1,0 +1,69 @@
+{
+  "name": "@talex-touch/touch-markdown-craft-plugin",
+  "version": "1.0.0",
+  "private": false,
+  "description": "Markdown power workbench: GFM table generator, Shields.io badge builder, TOC & anchor extractor, CJK/LLM-token estimator, code-fence wrapper, and plain-text stripper for Tuff.",
+  "author": "TalexTouch Team",
+  "license": "MIT",
+  "packageManager": "pnpm@11.24.0",
+  "keywords": [
+    "tuff-plugin",
+    "utilities",
+    "markdown",
+    "gfm",
+    "table",
+    "badges",
+    "toc"
+  ],
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./manifest.json": "./manifest.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "manifest.json",
+    "index.js",
+    "assets/",
+    "README.md"
+  ],
+  "dependencies": {},
+  "engines": {
+    "tuff": ">=261011"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "tuff": {
+    "schemaVersion": 1,
+    "id": "com.tuffex.touch-markdown-craft",
+    "name": "touch-markdown-craft",
+    "displayName": {
+      "en": "Markdown Craft",
+      "zh": "Markdown 工坊"
+    },
+    "sdkapi": 261011,
+    "category": "utilities",
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "permissions": {
+      "required": [],
+      "optional": [
+        "clipboard.write"
+      ]
+    },
+    "platforms": {
+      "win32": true,
+      "darwin": true,
+      "linux": true
+    },
+    "surface": "prelude",
+    "manifest": "./manifest.json"
+  },
+  "scripts": {
+    "build": "node ../../packages/tuff-cli/bin/tuff.js builder",
+    "test": "node --test index.test.cjs"
+  }
+}

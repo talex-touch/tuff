@@ -1,0 +1,71 @@
+{
+  "name": "@talex-touch/touch-pomodoro-zen-plugin",
+  "version": "1.0.0",
+  "private": false,
+  "description": "Focus timer with wall-clock persistence, Pomodoro streak tracker, guided micro-break coach, and optional system notification alerts for Tuff.",
+  "author": "TalexTouch Team",
+  "license": "MIT",
+  "packageManager": "pnpm@11.24.0",
+  "keywords": [
+    "tuff-plugin",
+    "productivity",
+    "pomodoro",
+    "focus",
+    "timer",
+    "wellness"
+  ],
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./manifest.json": "./manifest.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "manifest.json",
+    "index.js",
+    "assets/",
+    "README.md"
+  ],
+  "dependencies": {},
+  "engines": {
+    "tuff": ">=261011"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "tuff": {
+    "schemaVersion": 1,
+    "id": "com.tuffex.touch-pomodoro-zen",
+    "name": "touch-pomodoro-zen",
+    "displayName": {
+      "en": "Pomodoro Zen",
+      "zh": "禅意番茄钟"
+    },
+    "sdkapi": 261011,
+    "category": "productivity",
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "permissions": {
+      "required": [
+        "storage.plugin"
+      ],
+      "optional": [
+        "system.notification",
+        "clipboard.write"
+      ]
+    },
+    "platforms": {
+      "win32": true,
+      "darwin": true,
+      "linux": true
+    },
+    "surface": "prelude",
+    "manifest": "./manifest.json"
+  },
+  "scripts": {
+    "build": "node ../../packages/tuff-cli/bin/tuff.js builder",
+    "test": "node --test index.test.cjs"
+  }
+}
