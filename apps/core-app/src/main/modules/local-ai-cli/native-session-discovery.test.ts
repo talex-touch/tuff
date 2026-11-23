@@ -336,4 +336,18 @@ describe('findNativeSessionFile', () => {
       await rm(elsewhere, { recursive: true, force: true })
     }
   })
+
+  it('answers null for ACP providers without a file-backed native archive instead of searching codex', async () => {
+    await writeJsonl(join(roots.codex, 'shared-1.jsonl'), [
+      {
+        type: 'session_meta',
+        payload: { id: 'shared-1', cwd: projectRoot, timestamp: '2026-01-02T03:04:05.000Z' }
+      }
+    ])
+
+    const { findNativeSessionFile } = await import('./native-session-discovery')
+    for (const provider of ['antigravity', 'opencode', 'gemini', 'kiro', 'cursor'] as const) {
+      expect(await findNativeSessionFile(provider, 'shared-1', projectRoot, { roots })).toBeNull()
+    }
+  })
 })

@@ -2,6 +2,7 @@ import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { TuffEvent } from '@talex-touch/utils/transport'
 import type {
+  LocalAiCliApprovalRequest,
   LocalAiCliErrorCode,
   LocalAiCliPasteBackRequest,
   LocalAiCliPasteBackResult,
@@ -23,12 +24,15 @@ import type {
 import type { WebContents } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import type { PiEntriesSnapshot, PiSessionFileCapture } from './pi-native-session'
+import type { LocalAiCliTaskSpec } from './provider-registry'
 import type { StoredLocalAiCliSession } from './session-store'
 import type { PtySessionOwner } from '../terminal/pty-session-core'
 import { randomUUID } from 'node:crypto'
 import { mkdir, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { AcpClient, AcpSession } from '@talex-touch/tuff-intelligence'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
+import { normalizeLocalAiCliSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import {
   LOCAL_AI_CLI_LIMITS,
@@ -160,6 +164,10 @@ function readSettings(): AppSetting {
   return getMainConfig(StorageList.APP_SETTING) as AppSetting
 }
 
+function readLocalAiCliSettings(): AppSetting['localAiCli'] {
+  return normalizeLocalAiCliSetting(readSettings()?.localAiCli)
+}
+
 /** The 「选择程序」 picks, one per CLI, in a form two snapshots can be compared by. */
 function executableOverrides(
   settings: AppSetting['localAiCli']
@@ -167,7 +175,7 @@ function executableOverrides(
   return Object.fromEntries(
     LOCAL_AI_CLI_PROVIDERS.map((provider) => [
       provider.id,
-      settings.providers[provider.id]?.executableOverride?.trim() ?? ''
+      settings.providers?.[provider.id]?.executableOverride?.trim() ?? ''
     ])
   ) as Record<LocalAiCliProviderId, string>
 }
@@ -184,7 +192,7 @@ function unprobedProviderStatus(
   return {
     id: providerId,
     label: getLocalAiCliProviderDefinition(providerId).label,
-    enabled: settings.providers[providerId]?.enabled === true,
+    enabled: settings.providers?.[providerId]?.enabled === true,
     installed: false,
     issueCode: 'NOT_PROBED',
     capabilities: {
@@ -276,6 +284,14 @@ function terminalArgs(
         '--no-chrome',
         ...resumeArgs
       ]
+    case 'antigravity':
+      return ['--mode', 'plan', '--sandbox', ...resumeArgs]
+    case 'cursor':
+      return ['--mode', 'plan', ...resumeArgs]
+    case 'opencode':
+    case 'gemini':
+    case 'kiro':
+      throw new Error('LOCAL_AI_CLI_TERMINAL_UNAVAILABLE')
   }
 }
 
@@ -375,7 +391,8 @@ export class LocalAiCliModule extends BaseModule {
    */
   private applySettings(settings: AppSetting['localAiCli'] | undefined): void {
     if (!settings) return
-    const enabled = settings.enabled === true
+    const normalized = normalizeLocalAiCliSetting(settings)
+    const enabled = normalized.enabled === true
     this.syncQuickOpenShortcut(enabled)
     // The panel's 「交给本机代理」 follows the switch too; an open panel reads its actions again.
     if (this.lastMasterSwitch !== null && this.lastMasterSwitch !== enabled) {
@@ -383,14 +400,14 @@ export class LocalAiCliModule extends BaseModule {
     }
     this.lastMasterSwitch = enabled
 
-    const overrides = executableOverrides(settings)
+    const overrides = executableOverrides(normalized)
     const previous = this.lastExecutableOverrides
     this.lastExecutableOverrides = overrides
     const cleared =
       previous !== null &&
       LOCAL_AI_CLI_PROVIDERS.some((provider) => previous[provider.id] && !overrides[provider.id])
     if (cleared) {
-      void refreshLocalAiCliExecutables(settings).catch((error) => {
+      void refreshLocalAiCliExecutables(normalized).catch((error) => {
         localAiCliLog.warn('Local AI CLI re-probe after a cleared executable pick failed', {
           error
         })
@@ -595,7 +612,7 @@ export class LocalAiCliModule extends BaseModule {
    * the user decides.
    */
   private async getStatus(request: LocalAiCliStatusRequest = {}): Promise<LocalAiCliStatus> {
-    const settings = readSettings().localAiCli
+    const settings = readLocalAiCliSettings()
     if (!isLocalAiCliPlatformSupported()) {
       return {
         betaAvailable: false,
@@ -653,6 +670,7 @@ export class LocalAiCliModule extends BaseModule {
     }
     const appSettings = readSettings()
     const nextSettings = structuredClone(appSettings)
+    nextSettings.localAiCli = normalizeLocalAiCliSetting(nextSettings.localAiCli)
     nextSettings.localAiCli.providers[definition.id].executableOverride = result.filePaths[0]!
     await saveMainConfig(StorageList.APP_SETTING, nextSettings)
     // The pick is used as chosen, never resolved through its links (a shim dispatches on the name
@@ -666,7 +684,7 @@ export class LocalAiCliModule extends BaseModule {
     access: LocalAiCliTerminalCreateRequest['access']
   ): Promise<LocalAiCliProviderStatus> {
     if (!isLocalAiCliPlatformSupported()) throw new Error('LOCAL_AI_CLI_BETA_UNAVAILABLE')
-    const settings = readSettings().localAiCli
+    const settings = readLocalAiCliSettings()
     if (!settings.enabled) throw new Error('LOCAL_AI_CLI_FEATURE_DISABLED')
     if (!settings.providers[providerId]?.enabled) {
       throw new Error('LOCAL_AI_CLI_PROVIDER_DISABLED')
@@ -1154,6 +1172,363 @@ export class LocalAiCliModule extends BaseModule {
     }
   }
 
+  private async runAcpTask(
+    callId: string,
+    request: LocalAiCliStartRequest,
+    prompt: string,
+    ownerId: number,
+    executablePath: string,
+    spec: LocalAiCliTaskSpec,
+    execution: LocalAiCliExecution,
+    context: StreamContext<LocalAiCliTaskChunk>
+  ): Promise<void> {
+    let pointer = execution.pointer
+    let releaseLease = pointer ? this.acquirePointerLease(pointer) : undefined
+    let child: ChildProcess
+    try {
+      child = spawnSafe(executablePath, spec.args, {
+        cwd: execution.cwd,
+        env: withExecutableDirOnPath(sanitizedChildEnv(), executablePath),
+        stdio: ['pipe', 'pipe', 'pipe']
+      })
+    } catch {
+      releaseLease?.()
+      context.emit({ type: 'failed', callId, code: 'PROCESS_START_FAILED', recoverable: true })
+      context.end()
+      return
+    }
+
+    const abortController = new AbortController()
+    let settleTask!: () => void
+    const taskDone = new Promise<void>((resolve) => {
+      settleTask = resolve
+    })
+    const taskRecord: TaskProcessSession = {
+      process: child,
+      abortController,
+      releaseLease,
+      done: taskDone
+    }
+    this.taskProcesses.set(callId, taskRecord)
+    context.emit({ type: 'status', callId, status: 'starting' })
+
+    const onContextAbort = (): void => abortController.abort()
+    if (context.signal.aborted) abortController.abort()
+    else context.signal.addEventListener('abort', onContextAbort, { once: true })
+
+    const definition = getLocalAiCliProviderDefinition(request.provider)
+    let sawSpawnError = false
+    let sawProtocolError = false
+    let initialized = false
+    let activeSession: AcpSession | null = null
+
+    const client = new AcpClient(child, {
+      label: definition.label,
+      onPermission: async (permissionReq) => {
+        if (request.access !== 'workspace-write') {
+          return {
+            approved: false,
+            reason: 'This local-agent request does not allow tool approvals'
+          }
+        }
+        if (context.isCancelled() || abortController.signal.aborted) {
+          return { approved: false, cancelled: true }
+        }
+        const operation: LocalAiCliApprovalRequest['operation'] =
+          permissionReq.riskHint === 'execute'
+            ? 'command'
+            : permissionReq.riskHint === 'read'
+              ? 'read'
+              : 'write'
+        context.emit({ type: 'status', callId, status: 'waiting-approval' })
+        try {
+          const decision = await this.approvals.request({
+            callId,
+            ownerId,
+            provider: request.provider,
+            toolName: permissionReq.toolName || `${definition.label} tool`,
+            operation,
+            summary:
+              permissionReq.summary ||
+              `${definition.label} requested permission for a tool in the selected workspace`,
+            signal: abortController.signal,
+            emit: (approval) => context.emit({ type: 'approval', callId, approval })
+          })
+          if (!context.isCancelled() && !abortController.signal.aborted) {
+            context.emit({ type: 'status', callId, status: 'running' })
+          }
+          if (decision === 'allow-once') {
+            const hasAllowOnce = permissionReq.acpOptions?.some(
+              (option) =>
+                option && option.kind === 'allow_once' && typeof option.optionId === 'string'
+            )
+            return hasAllowOnce ? { approved: true } : { approved: false, cancelled: true }
+          }
+          return { approved: false }
+        } catch {
+          return { approved: false, cancelled: true }
+        }
+      }
+    })
+
+    client.on('protocol_error', () => {
+      sawProtocolError = true
+      void client.close().catch(() => undefined)
+    })
+    client.on('error', () => {
+      sawSpawnError = true
+    })
+
+    const onAbort = (): void => {
+      if (activeSession) {
+        void activeSession.cancel().catch(() => undefined)
+      }
+      void client.close().catch(() => undefined)
+    }
+    if (abortController.signal.aborted) onAbort()
+    else abortController.signal.addEventListener('abort', onAbort, { once: true })
+
+    try {
+      const initResult = await client.initialize({
+        protocolVersion: 1,
+        clientCapabilities: {
+          fs: { readTextFile: false, writeTextFile: false },
+          terminal: false
+        },
+        clientInfo: { name: 'talex-touch', title: 'Talex Touch', version: '1' }
+      })
+      if (!initResult || typeof initResult !== 'object') {
+        throw new Error('PROTOCOL_INVALID')
+      }
+      initialized = true
+      if (context.isCancelled() || abortController.signal.aborted) {
+        context.emit({ type: 'cancelled', callId })
+        return
+      }
+      context.emit({ type: 'status', callId, status: 'running' })
+
+      if (pointer) {
+        const supportsSessionResume =
+          request.provider === 'oh-my-pi' ||
+          Boolean(initResult.agentCapabilities?.sessionCapabilities?.resume)
+        const supportsLoadSession = initResult.agentCapabilities?.loadSession === true
+
+        if (supportsSessionResume) {
+          const updateQueue: Array<Record<string, unknown>> = []
+          let resolveNextUpdate: ((params: Record<string, unknown>) => void) | null = null
+          let rejectNextUpdate: ((error: Error) => void) | null = null
+          const onNotification = (method: string, params: unknown): void => {
+            if (method !== 'session/update') return
+            const record = asObject(params)
+            if (!record) return
+            if (resolveNextUpdate) {
+              const resolve = resolveNextUpdate
+              resolveNextUpdate = null
+              rejectNextUpdate = null
+              resolve(record)
+            } else {
+              updateQueue.push(record)
+            }
+          }
+          const onCloseDuringResume = (): void => {
+            if (rejectNextUpdate) {
+              const reject = rejectNextUpdate
+              resolveNextUpdate = null
+              rejectNextUpdate = null
+              reject(new Error('PROCESS_EXITED'))
+            }
+          }
+          const onAbortDuringResume = (): void => {
+            if (rejectNextUpdate) {
+              const reject = rejectNextUpdate
+              resolveNextUpdate = null
+              rejectNextUpdate = null
+              reject(new Error('CANCELLED'))
+            }
+          }
+          client.on('notification', onNotification)
+          client.once('close', onCloseDuringResume)
+          abortController.signal.addEventListener('abort', onAbortDuringResume, { once: true })
+          try {
+            let rawResult: unknown
+            try {
+              rawResult = await client.sendRequest<unknown>('session/resume', {
+                sessionId: pointer.nativeSessionId,
+                cwd: execution.cwd,
+                mcpServers: []
+              })
+            } catch (error) {
+              if (sawProtocolError || sawSpawnError || abortController.signal.aborted) throw error
+              await markLocalAiCliSessionState(pointer.id, 'missing')
+              throw new Error('NATIVE_SESSION_MISSING')
+            }
+            const resumeResult = asObject(rawResult)
+            const returnedSessionId =
+              typeof resumeResult?.sessionId === 'string' && resumeResult.sessionId
+                ? resumeResult.sessionId
+                : undefined
+            if (returnedSessionId) {
+              if (returnedSessionId !== pointer.nativeSessionId) {
+                await markLocalAiCliSessionState(pointer.id, 'missing')
+                throw new Error('NATIVE_SESSION_MISSING')
+              }
+            } else {
+              // ACP ResumeSessionResponse may omit sessionId (e.g. OMP): wait for the first
+              // authoritative session/update before delivering any prompt.
+              const confirming =
+                updateQueue.shift() ??
+                (await new Promise<Record<string, unknown>>((resolve, reject) => {
+                  if (client.isClosed()) {
+                    reject(new Error('PROCESS_EXITED'))
+                    return
+                  }
+                  if (abortController.signal.aborted) {
+                    reject(new Error('CANCELLED'))
+                    return
+                  }
+                  resolveNextUpdate = resolve
+                  rejectNextUpdate = reject
+                }))
+              const confirmedId =
+                typeof confirming.sessionId === 'string' ? confirming.sessionId : ''
+              if (confirmedId !== pointer.nativeSessionId) {
+                await markLocalAiCliSessionState(pointer.id, 'missing')
+                throw new Error('NATIVE_SESSION_MISSING')
+              }
+            }
+          } finally {
+            client.removeListener('notification', onNotification)
+            client.removeListener('close', onCloseDuringResume)
+            abortController.signal.removeEventListener('abort', onAbortDuringResume)
+          }
+          activeSession = new AcpSession(pointer.nativeSessionId, client)
+          await this.touchNativeSession(pointer)
+          context.emit({
+            type: 'session',
+            callId,
+            provider: request.provider,
+            sessionRef: pointer.id
+          })
+        } else if (supportsLoadSession) {
+          let loaded: AcpSession
+          try {
+            loaded = await client.loadSession({
+              sessionId: pointer.nativeSessionId,
+              cwd: execution.cwd,
+              mcpServers: []
+            })
+          } catch (error) {
+            if (sawProtocolError || sawSpawnError || abortController.signal.aborted) throw error
+            await markLocalAiCliSessionState(pointer.id, 'missing')
+            throw new Error('NATIVE_SESSION_MISSING')
+          }
+          if (loaded.sessionId !== pointer.nativeSessionId) {
+            await markLocalAiCliSessionState(pointer.id, 'missing')
+            throw new Error('NATIVE_SESSION_MISSING')
+          }
+          activeSession = loaded
+          await this.touchNativeSession(pointer)
+          context.emit({
+            type: 'session',
+            callId,
+            provider: request.provider,
+            sessionRef: pointer.id
+          })
+        } else {
+          throw new Error('PROVIDER_RESUME_UNSUPPORTED')
+        }
+      } else {
+        const created = await client.createSession({
+          cwd: execution.cwd,
+          mcpServers: []
+        })
+        if (typeof created.sessionId !== 'string' || !created.sessionId.trim()) {
+          throw new Error('PROTOCOL_INVALID')
+        }
+        activeSession = created
+        const registered = await this.registerFreshNativeSession(
+          execution,
+          request.provider,
+          created.sessionId,
+          request.prompt
+        )
+        pointer = registered.pointer
+        releaseLease = registered.releaseLease
+        taskRecord.releaseLease = releaseLease
+        context.emit({
+          type: 'session',
+          callId,
+          provider: request.provider,
+          sessionRef: pointer.id
+        })
+      }
+
+      let completeText = ''
+      for await (const event of activeSession.promptStream(prompt, {
+        signal: abortController.signal
+      })) {
+        if (event.type === 'delta' && event.text) {
+          completeText += event.text
+          context.emit({ type: 'text-delta', callId, text: event.text })
+        }
+      }
+
+      if (context.isCancelled() || abortController.signal.aborted) {
+        context.emit({ type: 'cancelled', callId })
+      } else if (sawProtocolError) {
+        context.emit({ type: 'failed', callId, code: 'PROTOCOL_INVALID', recoverable: true })
+      } else if (pointer && completeText.trim()) {
+        await this.touchNativeSession(pointer)
+        context.emit({ type: 'complete', callId, text: completeText.trim() })
+      } else {
+        context.emit({ type: 'failed', callId, code: 'PROCESS_EXITED', recoverable: true })
+      }
+    } catch (error) {
+      if (context.isCancelled() || abortController.signal.aborted) {
+        context.emit({ type: 'cancelled', callId })
+      } else {
+        let failure: unknown = error
+        if (sawSpawnError) {
+          failure = new Error('PROCESS_START_FAILED')
+        } else if (sawProtocolError) {
+          failure = new Error('PROTOCOL_INVALID')
+        } else if (pointer && isNativeSessionMissingError(error)) {
+          await markLocalAiCliSessionState(pointer.id, 'missing').catch(() => undefined)
+          failure = new Error('NATIVE_SESSION_MISSING')
+        } else if (
+          initialized &&
+          !(
+            error instanceof Error &&
+            (error.message === 'NATIVE_SESSION_MISSING' ||
+              error.message === 'NATIVE_SESSION_CONFLICT' ||
+              error.message === 'NATIVE_SESSION_BUSY' ||
+              error.message === 'PROVIDER_RESUME_UNSUPPORTED' ||
+              error.message === 'WORKSPACE_INVALID' ||
+              error.message === 'PROTOCOL_INVALID')
+          )
+        ) {
+          failure = new Error('PROCESS_EXITED')
+        }
+        const code = taskFailureCode(failure)
+        context.emit({
+          type: 'failed',
+          callId,
+          code,
+          recoverable: code !== 'NATIVE_SESSION_CONFLICT' && code !== 'NATIVE_SESSION_MISSING'
+        })
+      }
+    } finally {
+      context.signal.removeEventListener('abort', onContextAbort)
+      abortController.signal.removeEventListener('abort', onAbort)
+      this.approvals.cancelCall(callId)
+      await client.close().catch(() => undefined)
+      this.taskProcesses.delete(callId)
+      releaseLease?.()
+      context.end()
+      settleTask()
+    }
+  }
+
   private async runTask(
     rawRequest: unknown,
     ownerId: number,
@@ -1185,13 +1560,27 @@ export class LocalAiCliModule extends BaseModule {
       return
     }
 
-    let releaseLease = execution.pointer ? this.acquirePointerLease(execution.pointer) : undefined
     const spec = createLocalAiCliTaskSpec(
       request.provider,
       prompt,
       request.access,
       execution.pointer?.nativeSessionId
     )
+    if (spec.protocol === 'acp') {
+      await this.runAcpTask(
+        callId,
+        request,
+        prompt,
+        ownerId,
+        status.executablePath!,
+        spec,
+        execution,
+        context
+      )
+      return
+    }
+
+    let releaseLease = execution.pointer ? this.acquirePointerLease(execution.pointer) : undefined
     let child: ChildProcess
     try {
       child = spawnSafe(status.executablePath!, spec.args, {
@@ -1222,7 +1611,6 @@ export class LocalAiCliModule extends BaseModule {
     let piState: { sessionId: string; sessionFile: string } | null = null
     let piRun: PiRunState | null = null
     let piAttemptFailed = false
-    let ompResumeAwaitingConfirmation = false
     let protocolChain = Promise.resolve()
     let settleTask!: () => void
     const taskDone = new Promise<void>((resolve) => {
@@ -1297,17 +1685,7 @@ export class LocalAiCliModule extends BaseModule {
                 : { type: 'readOnly' }
           }
         })
-        return
       }
-      writeProtocol({
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'session/prompt',
-        params: {
-          sessionId: nativeSessionId,
-          prompt: [{ type: 'text', text: spec.prompt }]
-        }
-      })
     }
 
     const handleProtocolLine = async (line: string): Promise<void> => {
@@ -1433,50 +1811,7 @@ export class LocalAiCliModule extends BaseModule {
         return
       }
 
-      if (spec.protocol === 'omp-acp' && nativeEvent.id === 1) {
-        if (!nativeEvent.result) throw new Error('PROTOCOL_INVALID')
-        writeProtocol({
-          jsonrpc: '2.0',
-          id: 2,
-          method: pointer ? 'session/resume' : 'session/new',
-          params: pointer
-            ? { sessionId: pointer.nativeSessionId, cwd: execution.cwd, mcpServers: [] }
-            : { cwd: execution.cwd, mcpServers: [] }
-        })
-        return
-      }
-
-      if (spec.protocol === 'omp-acp' && nativeEvent.id === 2) {
-        if (nativeEvent.error) {
-          if (pointer) await markMissingAndThrow()
-          throw new Error('PROTOCOL_INVALID')
-        }
-        if (pointer) {
-          ompResumeAwaitingConfirmation = true
-          return
-        }
-        const result = asObject(nativeEvent.result)
-        const sessionId = typeof result?.sessionId === 'string' ? result.sessionId : ''
-        if (!sessionId) throw new Error('PROTOCOL_INVALID')
-        await publishNativeSession(sessionId)
-        requestProviderPrompt(sessionId)
-        return
-      }
-
       const nativeMethod = typeof nativeEvent.method === 'string' ? nativeEvent.method : ''
-      if (
-        spec.protocol === 'omp-acp' &&
-        ompResumeAwaitingConfirmation &&
-        nativeMethod === 'session/update'
-      ) {
-        const params = asObject(nativeEvent.params)
-        const sessionId = typeof params?.sessionId === 'string' ? params.sessionId : ''
-        if (!pointer || sessionId !== pointer.nativeSessionId) await markMissingAndThrow()
-        ompResumeAwaitingConfirmation = false
-        await publishNativeSession(sessionId)
-        requestProviderPrompt(sessionId)
-        return
-      }
       if (
         spec.protocol === 'codex-app-server' &&
         nativeEvent.id !== undefined &&
@@ -1514,49 +1849,6 @@ export class LocalAiCliModule extends BaseModule {
                 : { scope: 'turn', permissions: {} }
               : { decision: decision === 'allow-once' ? 'accept' : 'decline' }
             writeProtocol({ id: nativeEvent.id, result })
-            context.emit({ type: 'status', callId, status: 'running' })
-          })
-          .catch(() => undefined)
-        return
-      }
-
-      if (
-        spec.protocol === 'omp-acp' &&
-        nativeMethod === 'session/request_permission' &&
-        nativeEvent.id !== undefined
-      ) {
-        const params = asObject(nativeEvent.params)
-        const toolCall = asObject(params?.toolCall)
-        const options = Array.isArray(params?.options)
-          ? params.options
-              .map(asObject)
-              .filter((option): option is Record<string, unknown> => Boolean(option))
-          : []
-        context.emit({ type: 'status', callId, status: 'waiting-approval' })
-        void this.approvals
-          .request({
-            callId,
-            ownerId,
-            provider: 'oh-my-pi',
-            toolName: typeof toolCall?.title === 'string' ? toolCall.title : 'OMP tool',
-            operation: 'write',
-            summary: 'OMP requested permission for a tool in the selected workspace',
-            signal: context.signal,
-            emit: (approval) => context.emit({ type: 'approval', callId, approval })
-          })
-          .then((decision) => {
-            if (finalized || !child.stdin?.writable) return
-            const wantedKind = decision === 'allow-once' ? 'allow_once' : 'reject_once'
-            const selected = options.find((option) => option.kind === wantedKind)
-            const outcome =
-              typeof selected?.optionId === 'string'
-                ? { outcome: 'selected', optionId: selected.optionId }
-                : { outcome: 'cancelled' }
-            writeProtocol({
-              jsonrpc: '2.0',
-              id: nativeEvent.id,
-              result: { outcome }
-            })
             context.emit({ type: 'status', callId, status: 'running' })
           })
           .catch(() => undefined)
@@ -1713,7 +2005,7 @@ export class LocalAiCliModule extends BaseModule {
   }
 
   private async pasteBack(payload: LocalAiCliPasteBackRequest): Promise<LocalAiCliPasteBackResult> {
-    if (!isLocalAiCliPlatformSupported() || !readSettings().localAiCli.enabled) {
+    if (!isLocalAiCliPlatformSupported() || !readLocalAiCliSettings().enabled) {
       return { success: false, reason: 'target-unavailable' }
     }
     const text =
@@ -1781,6 +2073,9 @@ export class LocalAiCliModule extends BaseModule {
       const execution = await this.resolveLocalAiCliExecution(request)
       if (request.access === 'workspace-write' && !status.capabilities.terminalWriteApproval) {
         throw new Error('LOCAL_AI_CLI_WRITE_APPROVAL_UNAVAILABLE')
+      }
+      if (!status.capabilities.terminalRead) {
+        throw new Error('LOCAL_AI_CLI_TERMINAL_UNAVAILABLE')
       }
       if (execution.pointer && !status.capabilities.terminalResume) {
         throw new Error('PROVIDER_RESUME_UNSUPPORTED')

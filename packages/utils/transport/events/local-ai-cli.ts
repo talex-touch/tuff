@@ -1,7 +1,18 @@
-import type { AiCliProviderId } from '../../types/ai-orchestrator'
 import { defineEvent } from '../event/builder'
 
-export type LocalAiCliProviderId = Extract<AiCliProviderId, 'pi' | 'codex' | 'claude' | 'oh-my-pi'>
+export const LOCAL_AI_CLI_PROVIDER_IDS = [
+  'pi',
+  'codex',
+  'claude',
+  'oh-my-pi',
+  'antigravity',
+  'opencode',
+  'gemini',
+  'kiro',
+  'cursor',
+] as const
+
+export type LocalAiCliProviderId = (typeof LOCAL_AI_CLI_PROVIDER_IDS)[number]
 
 export type LocalAiCliMode = 'task' | 'terminal'
 export type LocalAiCliAccess = 'answer-only' | 'workspace-read' | 'workspace-write'
@@ -244,9 +255,13 @@ export interface LocalAiCliSessionDiscoveryResult {
   incomplete: boolean
 }
 
-const PROVIDERS = new Set<LocalAiCliProviderId>(['pi', 'codex', 'claude', 'oh-my-pi'])
+const PROVIDERS = new Set<string>(LOCAL_AI_CLI_PROVIDER_IDS)
 const ACCESS = new Set<LocalAiCliAccess>(['answer-only', 'workspace-read', 'workspace-write'])
 const CONTEXT_KINDS = new Set<LocalAiCliContextKind>(['selection', 'clipboard', 'active-app', 'active-window'])
+
+export function isLocalAiCliProviderId(value: unknown): value is LocalAiCliProviderId {
+  return typeof value === 'string' && PROVIDERS.has(value)
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value))
@@ -284,7 +299,7 @@ export function normalizeLocalAiCliSessionRef(value: unknown): string | undefine
 export function normalizeLocalAiCliStartRequest(value: unknown): LocalAiCliStartRequest {
   if (!isRecord(value))
     throw new Error('LOCAL_AI_CLI_REQUEST_INVALID')
-  if (!PROVIDERS.has(value.provider as LocalAiCliProviderId)) {
+  if (!isLocalAiCliProviderId(value.provider)) {
     throw new Error('LOCAL_AI_CLI_PROVIDER_INVALID')
   }
   if (!ACCESS.has(value.access as LocalAiCliAccess)) {
@@ -305,7 +320,7 @@ export function normalizeLocalAiCliStartRequest(value: unknown): LocalAiCliStart
   const projectId = normalizeLocalAiCliProjectId(value.projectId)
   const sessionRef = normalizeLocalAiCliSessionRef(value.sessionRef)
   return {
-    provider: value.provider as LocalAiCliProviderId,
+    provider: value.provider,
     prompt: boundedText(value.prompt, LOCAL_AI_CLI_LIMITS.promptChars, 'PROMPT'),
     access: value.access as LocalAiCliAccess,
     context,
@@ -320,7 +335,7 @@ export function normalizeLocalAiCliTerminalCreateRequest(
 ): LocalAiCliTerminalCreateRequest {
   if (!isRecord(value))
     throw new Error('LOCAL_AI_CLI_REQUEST_INVALID')
-  if (!PROVIDERS.has(value.provider as LocalAiCliProviderId)) {
+  if (!isLocalAiCliProviderId(value.provider)) {
     throw new Error('LOCAL_AI_CLI_PROVIDER_INVALID')
   }
   if (!ACCESS.has(value.access as LocalAiCliAccess)) {
@@ -332,7 +347,7 @@ export function normalizeLocalAiCliTerminalCreateRequest(
     throw new Error('LOCAL_AI_CLI_REQUEST_INVALID')
   }
   return {
-    provider: value.provider as LocalAiCliProviderId,
+    provider: value.provider,
     access: value.access as LocalAiCliAccess,
     cols: typeof value.cols === 'number' ? value.cols : 0,
     rows: typeof value.rows === 'number' ? value.rows : 0,

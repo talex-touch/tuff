@@ -194,4 +194,57 @@ describe('main storage app settings normalization', () => {
       requiresReauthenticationOnNextStartup: true
     })
   })
+
+  it('backfills new localAiCli providers on legacy 4-key settings and retains new provider defaults', () => {
+    const migrated = resolveMainStorageValue(StorageList.APP_SETTING, {
+      localAiCli: {
+        enabled: true,
+        defaultProvider: 'codex',
+        terminalFontFamily: 'Menlo',
+        providers: {
+          pi: { enabled: true, executableOverride: ' /usr/local/bin/pi ' },
+          codex: { enabled: true, executableOverride: '' },
+          claude: { enabled: false, executableOverride: '' },
+          'oh-my-pi': { enabled: false, executableOverride: '' }
+        }
+      }
+    })
+
+    expect(migrated.localAiCli).toMatchObject({
+      enabled: true,
+      defaultProvider: 'codex',
+      terminalFontFamily: 'Menlo',
+      providers: {
+        pi: { enabled: true, executableOverride: '/usr/local/bin/pi' },
+        codex: { enabled: true, executableOverride: '' },
+        claude: { enabled: false, executableOverride: '' },
+        'oh-my-pi': { enabled: false, executableOverride: '' },
+        antigravity: { enabled: false, executableOverride: '' },
+        opencode: { enabled: false, executableOverride: '' },
+        gemini: { enabled: false, executableOverride: '' },
+        kiro: { enabled: false, executableOverride: '' },
+        cursor: { enabled: false, executableOverride: '' }
+      }
+    })
+
+    const withNewDefault = resolveMainStorageValue(StorageList.APP_SETTING, {
+      localAiCli: {
+        enabled: true,
+        defaultProvider: 'opencode',
+        providers: {
+          opencode: { enabled: true, executableOverride: '/opt/homebrew/bin/opencode' }
+        }
+      }
+    })
+    expect(withNewDefault.localAiCli.defaultProvider).toBe('opencode')
+    expect(withNewDefault.localAiCli.providers.opencode).toEqual({
+      enabled: true,
+      executableOverride: '/opt/homebrew/bin/opencode'
+    })
+    expect(
+      resolveMainStorageValue(StorageList.APP_SETTING, {
+        localAiCli: { defaultProvider: 'unknown-provider' }
+      }).localAiCli.defaultProvider
+    ).toBeNull()
+  })
 })

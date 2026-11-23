@@ -1,4 +1,5 @@
 import type { LocalAiCliProviderId } from '@talex-touch/utils/transport/events/local-ai-cli'
+import { isLocalAiCliProviderId } from '@talex-touch/utils/transport/events/local-ai-cli'
 import { randomUUID } from 'node:crypto'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import { scheduleDbWrite } from '../../db/db-write'
@@ -70,10 +71,7 @@ function publishSessionMutation(
 
 function asStoredSession(row: typeof localAiCliSessions.$inferSelect): StoredLocalAiCliSession {
   if (
-    (row.provider !== 'pi' &&
-      row.provider !== 'codex' &&
-      row.provider !== 'claude' &&
-      row.provider !== 'oh-my-pi') ||
+    !isLocalAiCliProviderId(row.provider) ||
     (row.state !== 'available' && row.state !== 'missing' && row.state !== 'conflict') ||
     (row.origin !== 'tuff' && row.origin !== 'discovered')
   ) {

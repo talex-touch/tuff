@@ -1,7 +1,14 @@
 import type { LocalAiCliTerminalCreateRequest } from '../transport/events/local-ai-cli'
 import type { ITuffTransport } from '../transport/types'
 import { describe, expect, it } from 'vitest'
-import { LocalAiCliEvents } from '../transport/events/local-ai-cli'
+import { normalizeLocalAiCliSetting } from '../common/storage/entity/app-settings'
+import {
+  isLocalAiCliProviderId,
+  LOCAL_AI_CLI_PROVIDER_IDS,
+  LocalAiCliEvents,
+  normalizeLocalAiCliStartRequest,
+  normalizeLocalAiCliTerminalCreateRequest
+} from '../transport/events/local-ai-cli'
 import { createLocalAiCliSdk } from '../transport/sdk/domains/local-ai-cli'
 
 const request: LocalAiCliTerminalCreateRequest = {
@@ -140,5 +147,86 @@ describe('local AI terminal SDK unconfirmed cleanup failure', () => {
     else expect(error.errors[0]).toMatchObject({ name: 'AbortError' })
     expect(f.subscriptions()).toBe(0)
     expect(f.kills).toEqual([{ creationToken: f.requests[0].creationToken }])
+  })
+})
+
+describe('local AI CLI provider registry & settings normalization', () => {
+  it('accepts all 9 provider IDs in start and terminal request normalizers', () => {
+    expect(LOCAL_AI_CLI_PROVIDER_IDS).toEqual([
+      'pi',
+      'codex',
+      'claude',
+      'oh-my-pi',
+      'antigravity',
+      'opencode',
+      'gemini',
+      'kiro',
+      'cursor',
+    ])
+    for (const provider of LOCAL_AI_CLI_PROVIDER_IDS) {
+      expect(isLocalAiCliProviderId(provider)).toBe(true)
+      expect(
+        normalizeLocalAiCliStartRequest({
+          provider,
+          prompt: 'hello',
+          access: 'workspace-read',
+          context: [],
+        }).provider,
+      ).toBe(provider)
+      expect(
+        normalizeLocalAiCliTerminalCreateRequest({
+          provider,
+          access: 'workspace-read',
+          cols: 80,
+          rows: 24,
+        }).provider,
+      ).toBe(provider)
+    }
+    expect(isLocalAiCliProviderId('unknown-cli')).toBe(false)
+    expect(() =>
+      normalizeLocalAiCliStartRequest({
+        provider: 'unknown-cli',
+        prompt: 'hello',
+        access: 'workspace-read',
+        context: [],
+      }),
+    ).toThrow('LOCAL_AI_CLI_PROVIDER_INVALID')
+  })
+
+  it('backfills missing new provider entries when normalizing legacy 4-provider settings', () => {
+    const normalized = normalizeLocalAiCliSetting({
+      enabled: true,
+      defaultProvider: 'codex',
+      terminalFontFamily: 'JetBrains Mono',
+      providers: {
+        pi: { enabled: true, executableOverride: ' /opt/bin/pi ' },
+        codex: { enabled: true, executableOverride: '' },
+        claude: { enabled: false, executableOverride: '' },
+        'oh-my-pi': { enabled: false, executableOverride: '' },
+      },
+    })
+
+    expect(normalized.enabled).toBe(true)
+    expect(normalized.defaultProvider).toBe('codex')
+    expect(normalized.terminalFontFamily).toBe('JetBrains Mono')
+    expect(normalized.providers.pi).toEqual({ enabled: true, executableOverride: '/opt/bin/pi' })
+    for (const id of ['antigravity', 'opencode', 'gemini', 'kiro', 'cursor'] as const) {
+      expect(normalized.providers[id]).toEqual({ enabled: false, executableOverride: '' })
+    }
+
+    const withNewDefault = normalizeLocalAiCliSetting({
+      enabled: true,
+      defaultProvider: 'antigravity',
+      providers: {
+        antigravity: { enabled: true, executableOverride: '/usr/local/bin/agy' },
+      },
+    })
+    expect(withNewDefault.defaultProvider).toBe('antigravity')
+    expect(withNewDefault.providers.antigravity).toEqual({
+      enabled: true,
+      executableOverride: '/usr/local/bin/agy',
+    })
+
+    expect(normalizeLocalAiCliSetting({ defaultProvider: 'invalid-cli' }).defaultProvider).toBeNull()
   })
 })

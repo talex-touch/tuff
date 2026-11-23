@@ -97,6 +97,26 @@ describe('localAiAgentChoices', () => {
       )
     ).toEqual([{ id: 'claude', label: 'Claude Code', blocker: null }])
   })
+
+  it('surfaces all newly registered ACP providers with accurate blockers', () => {
+    expect(
+      localAiAgentChoices(
+        status([
+          provider('antigravity', { label: 'Antigravity' }),
+          provider('opencode', { label: 'OpenCode', enabled: false }),
+          provider('gemini', { label: 'Gemini CLI', installed: false }),
+          provider('kiro', { label: 'Kiro' }),
+          provider('cursor', { label: 'Cursor' })
+        ])
+      )
+    ).toEqual([
+      { id: 'antigravity', label: 'Antigravity', blocker: null },
+      { id: 'opencode', label: 'OpenCode', blocker: 'turned-off' },
+      { id: 'gemini', label: 'Gemini CLI', blocker: 'not-installed' },
+      { id: 'kiro', label: 'Kiro', blocker: null },
+      { id: 'cursor', label: 'Cursor', blocker: null }
+    ])
+  })
 })
 
 describe('isLocalAiCliStatus', () => {

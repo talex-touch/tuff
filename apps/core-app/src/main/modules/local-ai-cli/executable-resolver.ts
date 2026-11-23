@@ -5,6 +5,7 @@ import type {
 } from '@talex-touch/utils/transport/events/local-ai-cli'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { CliExecutableLookup } from '../ai/providers/cli/cli-executable'
+import type { LocalAiCliProviderDefinition } from './provider-registry'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import {
@@ -48,12 +49,39 @@ const PROBE_OUTPUT_LIMIT = 16_384
  */
 const PROBE_ENV = { MISE_AUTO_INSTALL: 'false', MISE_NOT_FOUND_AUTO_INSTALL: 'false' }
 
-/** One lookup per CLI, shared with the chat providers. */
-const LOOKUPS: Readonly<Record<LocalAiCliProviderId, CliExecutableLookup>> = {
+/** Lookups shared directly with the chat providers in `pi-cli-runtime`. */
+const SHARED_CLI_LOOKUPS: Partial<Record<LocalAiCliProviderId, CliExecutableLookup>> = {
   pi: PI_CLI_LOOKUP,
   'oh-my-pi': OMP_CLI_LOOKUP,
   codex: CODEX_CLI_LOOKUP,
   claude: CLAUDE_CLI_LOOKUP
+}
+
+function createProviderLookup(definition: LocalAiCliProviderDefinition): CliExecutableLookup {
+  return (
+    SHARED_CLI_LOOKUPS[definition.id] ?? {
+      command: definition.command,
+      ...(definition.fallbackCommands?.length
+        ? { fallbackCommands: definition.fallbackCommands }
+        : {}),
+      envOverride: definition.envOverride
+    }
+  )
+}
+
+/** One lookup per CLI, reusing shared chat-provider lookups where defined and building the rest data-driven. */
+const LOOKUPS: Readonly<Record<LocalAiCliProviderId, CliExecutableLookup>> = Object.fromEntries(
+  LOCAL_AI_CLI_PROVIDERS.map((provider) => [provider.id, createProviderLookup(provider)])
+) as Record<LocalAiCliProviderId, CliExecutableLookup>
+
+function lookupCommands(lookup: CliExecutableLookup): string[] {
+  return [lookup.command, ...(lookup.fallbackCommands ?? [])]
+}
+
+function matchesLookup(candidate: CliExecutableLookup, target: CliExecutableLookup): boolean {
+  if (candidate.command === target.command) return true
+  const candidateCommands = new Set(lookupCommands(candidate))
+  return lookupCommands(target).some((command) => candidateCommands.has(command))
 }
 
 /**
@@ -200,7 +228,7 @@ export async function probeCliVersion(
   const output = await readVersionOutput(path)
   if (!output) return undefined
   const match = output.match(getLocalAiCliProviderDefinition(providerId).versionPattern)
-  return match ? (match[1] ?? match[0]) : undefined
+  return match ? (match.slice(1).find((group) => group !== undefined) ?? match[0]) : undefined
 }
 
 /**
@@ -209,11 +237,11 @@ export async function probeCliVersion(
  * the same pick.
  */
 export function readLocalAiCliExecutableOverride(lookup: CliExecutableLookup): string | undefined {
-  const providerId = LOCAL_AI_CLI_PROVIDERS.find(
-    (provider) => LOOKUPS[provider.id].command === lookup.command
+  const providerId = LOCAL_AI_CLI_PROVIDERS.find((provider) =>
+    matchesLookup(LOOKUPS[provider.id], lookup)
   )?.id
   if (!providerId) return undefined
-  const settings = (getMainConfig(StorageList.APP_SETTING) as AppSetting).localAiCli
+  const settings = (getMainConfig(StorageList.APP_SETTING) as AppSetting | undefined)?.localAiCli
   return settings?.providers?.[providerId]?.executableOverride?.trim() || undefined
 }
 
@@ -223,8 +251,8 @@ export async function resolveLocalAiCliProviderStatus(
 ): Promise<LocalAiCliProviderStatus> {
   const definition = getLocalAiCliProviderDefinition(providerId)
   const lookup = LOOKUPS[providerId]
-  const providerSettings = settings.providers[providerId]
-  const override = providerSettings.executableOverride?.trim() || undefined
+  const providerSettings = settings?.providers?.[providerId]
+  const override = providerSettings?.executableOverride?.trim() || undefined
   const resolved = await resolveCliExecutable(lookup, { settingsOverride: override })
   const version = resolved ? await probeCliVersion(providerId, resolved.path) : undefined
   const installed = Boolean(resolved && version)
@@ -237,7 +265,7 @@ export async function resolveLocalAiCliProviderStatus(
   return {
     id: providerId,
     label: definition.label,
-    enabled: providerSettings.enabled,
+    enabled: providerSettings?.enabled === true,
     installed,
     ...(resolved && installed
       ? { executablePath: resolved.path, version }
@@ -260,10 +288,10 @@ export async function resolveAllLocalAiCliProviderStatuses(
 }
 
 /**
- * Looks the four CLIs up again under the picks in `settings` and forgets every `--version` answer,
- * so an install, a removal, an update or a new pick shows without a restart. The lookups are the
- * chat providers' memo too, which config assembly reads synchronously on every invoke: the new
- * answers replace the old in one step once all four are in, and no read in between finds a CLI
+ * Looks every registered CLI up again under the picks in `settings` and forgets every `--version`
+ * answer, so an install, a removal, an update or a new pick shows without a restart. The lookups
+ * are the chat providers' memo too, which config assembly reads synchronously on every invoke: the
+ * new answers replace the old in one step once all are in, and no read in between finds a CLI
  * unprobed and drops its chat row. Nothing is run here; the next read that needs a version asks.
  */
 export async function refreshLocalAiCliExecutables(
@@ -272,7 +300,7 @@ export async function refreshLocalAiCliExecutables(
   await refreshCliExecutables(
     LOCAL_AI_CLI_PROVIDERS.map((provider) => ({
       lookup: LOOKUPS[provider.id],
-      settingsOverride: settings.providers[provider.id]?.executableOverride
+      settingsOverride: settings?.providers?.[provider.id]?.executableOverride
     }))
   )
   // After the swap, not before: until then reads answer from the old lookups and what those said.

@@ -579,14 +579,17 @@ export async function findNativeSessionFile(
   const canonicalProjectRoot = await canonicalDirectory(projectRoot)
   if (!canonicalProjectRoot || canonicalProjectRoot !== projectRoot) return null
   const roots = options.roots ?? resolveNativeSessionDiscoveryRoots()
-  const archive: ProviderArchive =
+  const archive: ProviderArchive | null =
     provider === 'pi'
       ? { provider, root: roots.pi, maxDepth: 1 }
       : provider === 'oh-my-pi'
         ? { provider, root: roots['oh-my-pi'], maxDepth: 1 }
         : provider === 'claude'
           ? { provider, root: roots.claude, maxDepth: 1 }
-          : { provider, root: roots.codex, maxDepth: MAX_DEPTH }
+          : provider === 'codex'
+            ? { provider, root: roots.codex, maxDepth: MAX_DEPTH }
+            : null
+  if (!archive) return null
   let canonicalRoot: string | null
   try {
     canonicalRoot = await canonicalDirectory(archive.root)

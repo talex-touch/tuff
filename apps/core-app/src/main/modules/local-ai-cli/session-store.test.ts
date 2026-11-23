@@ -353,4 +353,26 @@ describe('local AI CLI session pointer store', () => {
     // A partially committed batch would leave `native-good` behind.
     expect(await listLocalAiCliSessions()).toHaveLength(0)
   })
+
+  it('persists and reads sessions for all newly supported ACP providers', async () => {
+    for (const provider of ['antigravity', 'opencode', 'gemini', 'kiro', 'cursor'] as const) {
+      const created = await upsert({
+        provider,
+        projectRoot: '/projects/acp',
+        nativeSessionId: `${provider}-session-1`,
+        prompt: `${provider} first prompt`
+      })
+      expect(created.provider).toBe(provider)
+      expect((await getLocalAiCliSession(created.id))?.provider).toBe(provider)
+    }
+
+    const all = await listLocalAiCliSessions()
+    expect(all.map((session) => session.provider).sort()).toEqual([
+      'antigravity',
+      'cursor',
+      'gemini',
+      'kiro',
+      'opencode'
+    ])
+  })
 })

@@ -1,4 +1,5 @@
 import type { ReasoningEffortSetting } from '../../../intelligence/reasoning-effort'
+import type { LocalAiCliProviderId } from '../../../transport/events/local-ai-cli'
 import type { CoreBoxCanvasConfig, CoreBoxThemeConfig, LayoutAtomConfig, LayoutCanvasConfig } from './layout-atom-types'
 import { DEFAULT_REASONING_EFFORT_SETTING } from '../../../intelligence/reasoning-effort'
 
@@ -251,13 +252,18 @@ const _appSettingOriginData = {
   },
   localAiCli: {
     enabled: false,
-    defaultProvider: null as null | 'pi' | 'codex' | 'claude' | 'oh-my-pi',
+    defaultProvider: null as null | LocalAiCliProviderId,
     terminalFontFamily: '',
     providers: {
       'pi': { enabled: false, executableOverride: '' },
       'codex': { enabled: false, executableOverride: '' },
       'claude': { enabled: false, executableOverride: '' },
       'oh-my-pi': { enabled: false, executableOverride: '' },
+      'antigravity': { enabled: false, executableOverride: '' },
+      'opencode': { enabled: false, executableOverride: '' },
+      'gemini': { enabled: false, executableOverride: '' },
+      'kiro': { enabled: false, executableOverride: '' },
+      'cursor': { enabled: false, executableOverride: '' },
     },
   },
   voiceWake: {
@@ -638,6 +644,64 @@ export const appSettingOriginData = Object.freeze(_appSettingOriginData)
  */
 export type AppSetting = typeof _appSettingOriginData & {
   [key: string]: any
+}
+
+export interface LocalAiCliProviderSetting {
+  enabled: boolean
+  executableOverride: string
+}
+
+export interface LocalAiCliSetting {
+  enabled: boolean
+  defaultProvider: LocalAiCliProviderId | null
+  terminalFontFamily: string
+  providers: Record<LocalAiCliProviderId, LocalAiCliProviderSetting>
+}
+
+export function normalizeLocalAiCliSetting(
+  value: unknown,
+  fallback: LocalAiCliSetting = _appSettingOriginData.localAiCli,
+): LocalAiCliSetting {
+  const source = isSettingRecord(value) ? value : {}
+  const sourceProviders = isSettingRecord(source.providers) ? source.providers : {}
+  const providerIds = Object.keys(fallback.providers) as LocalAiCliProviderId[]
+  const providers = Object.fromEntries(
+    providerIds.map((providerId) => {
+      const candidate = isSettingRecord(sourceProviders[providerId])
+        ? sourceProviders[providerId]
+        : {}
+      const providerFallback = fallback.providers[providerId]
+      return [
+        providerId,
+        {
+          enabled:
+            typeof candidate.enabled === 'boolean'
+              ? candidate.enabled
+              : providerFallback.enabled,
+          executableOverride:
+            typeof candidate.executableOverride === 'string'
+              ? candidate.executableOverride.trim()
+              : providerFallback.executableOverride,
+        },
+      ]
+    }),
+  ) as Record<LocalAiCliProviderId, LocalAiCliProviderSetting>
+
+  const defaultProvider =
+    typeof source.defaultProvider === 'string'
+    && providerIds.includes(source.defaultProvider as LocalAiCliProviderId)
+      ? (source.defaultProvider as LocalAiCliProviderId)
+      : fallback.defaultProvider
+
+  return {
+    enabled: typeof source.enabled === 'boolean' ? source.enabled : fallback.enabled,
+    defaultProvider,
+    terminalFontFamily:
+      typeof source.terminalFontFamily === 'string'
+        ? source.terminalFontFamily
+        : fallback.terminalFontFamily,
+    providers,
+  }
 }
 
 export interface VoiceInputSetting {

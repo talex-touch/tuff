@@ -17,7 +17,8 @@ import type { SentryConfig } from '../sentry/sentry-service'
 import { StorageList } from '@talex-touch/utils'
 import {
   appSettingOriginData,
-  ensureVoiceInputSetting
+  ensureVoiceInputSetting,
+  normalizeLocalAiCliSetting
 } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { openersOriginData } from '@talex-touch/utils/common/storage/entity/openers'
 import { shortcutSettingOriginData } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
@@ -172,33 +173,6 @@ function normalizeAppSetting(value: unknown, fallback: AppSetting): AppSetting {
   const setup = isPlainObject(nextValue.setup) ? nextValue.setup : {}
   const window = isPlainObject(nextValue.window) ? nextValue.window : {}
   const omniPanel = isPlainObject(nextValue.omniPanel) ? nextValue.omniPanel : {}
-  const localAiCli = isPlainObject(nextValue.localAiCli) ? nextValue.localAiCli : {}
-  const localAiCliProviders = isPlainObject(localAiCli.providers) ? localAiCli.providers : {}
-  const providerIds = ['pi', 'codex', 'claude', 'oh-my-pi'] as const
-  const normalizedProviders = Object.fromEntries(
-    providerIds.map((providerId) => {
-      const candidate = isPlainObject(localAiCliProviders[providerId])
-        ? localAiCliProviders[providerId]
-        : {}
-      const providerFallback = fallback.localAiCli.providers[providerId]
-      return [
-        providerId,
-        {
-          enabled:
-            typeof candidate.enabled === 'boolean' ? candidate.enabled : providerFallback.enabled,
-          executableOverride:
-            typeof candidate.executableOverride === 'string'
-              ? candidate.executableOverride.trim()
-              : providerFallback.executableOverride
-        }
-      ]
-    })
-  ) as AppSetting['localAiCli']['providers']
-  const defaultProvider = providerIds.includes(
-    localAiCli.defaultProvider as (typeof providerIds)[number]
-  )
-    ? (localAiCli.defaultProvider as AppSetting['localAiCli']['defaultProvider'])
-    : fallback.localAiCli.defaultProvider
   const auth = getAuthSettings(nextValue)
 
   return {
@@ -220,12 +194,7 @@ function normalizeAppSetting(value: unknown, fallback: AppSetting): AppSetting {
           ? omniPanel.autoMountFirstFeatureOnPluginInstall
           : fallback.omniPanel.autoMountFirstFeatureOnPluginInstall
     },
-    localAiCli: {
-      enabled:
-        typeof localAiCli.enabled === 'boolean' ? localAiCli.enabled : fallback.localAiCli.enabled,
-      defaultProvider,
-      providers: normalizedProviders
-    }
+    localAiCli: normalizeLocalAiCliSetting(nextValue.localAiCli, fallback.localAiCli)
   } as AppSetting
 }
 

@@ -8,6 +8,10 @@ export interface LocalAiCliProviderDefinition {
   id: LocalAiCliProviderId
   label: string
   command: string
+  fallbackCommands?: readonly string[]
+  envOverride: string
+  /** Subcommand/flag arguments that launch this provider in ACP stdio mode, when supported. */
+  acpArgs?: readonly string[]
   /**
    * Matches this CLI's own `--version` output and nothing else's; the version is the first capture
    * group, or the whole match when there is none. A bare `\d+\.\d+\.\d+` also matches
@@ -22,7 +26,7 @@ export interface LocalAiCliProviderDefinition {
 export interface LocalAiCliTaskSpec {
   args: string[]
   stdin: string
-  protocol?: 'pi-rpc' | 'codex-app-server' | 'omp-acp'
+  protocol?: 'pi-rpc' | 'codex-app-server' | 'acp'
   prompt?: string
   terminateOnComplete?: boolean
 }
@@ -40,6 +44,8 @@ export const LOCAL_AI_CLI_PROVIDERS: readonly LocalAiCliProviderDefinition[] = [
     id: 'pi',
     label: 'Pi',
     command: 'pi',
+    fallbackCommands: ['pie'],
+    envOverride: 'TUFF_PI_CLI_PATH',
     versionPattern: /^\d+\.\d+\.\d+/m,
     capabilities: {
       taskRead: true,
@@ -54,6 +60,7 @@ export const LOCAL_AI_CLI_PROVIDERS: readonly LocalAiCliProviderDefinition[] = [
     id: 'codex',
     label: 'Codex',
     command: 'codex',
+    envOverride: 'TUFF_CODEX_CLI_PATH',
     versionPattern: /codex-cli\s+(\d+\.\d+\.\d+)/i,
     capabilities: {
       taskRead: true,
@@ -68,6 +75,7 @@ export const LOCAL_AI_CLI_PROVIDERS: readonly LocalAiCliProviderDefinition[] = [
     id: 'claude',
     label: 'Claude Code',
     command: 'claude',
+    envOverride: 'TUFF_CLAUDE_CLI_PATH',
     versionPattern: /(\d+\.\d+\.\d+)\s+\(Claude Code\)/i,
     capabilities: {
       taskRead: true,
@@ -82,6 +90,8 @@ export const LOCAL_AI_CLI_PROVIDERS: readonly LocalAiCliProviderDefinition[] = [
     id: 'oh-my-pi',
     label: 'OMP',
     command: 'omp',
+    envOverride: 'TUFF_OMP_CLI_PATH',
+    acpArgs: ['acp'],
     versionPattern: /\bomp(?:\/|\s+v)(\d+\.\d+\.\d+)/i,
     capabilities: {
       taskRead: true,
@@ -90,6 +100,92 @@ export const LOCAL_AI_CLI_PROVIDERS: readonly LocalAiCliProviderDefinition[] = [
       terminalWriteApproval: false,
       taskResume: true,
       terminalResume: true
+    }
+  },
+  {
+    id: 'antigravity',
+    label: 'Antigravity',
+    command: 'agy',
+    envOverride: 'TUFF_ANTIGRAVITY_CLI_PATH',
+    acpArgs: ['acp'],
+    versionPattern:
+      /^[ \t]*(?:(?:agy|antigravity)[\s/]+)?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)[ \t]*$/im,
+    capabilities: {
+      taskRead: true,
+      taskWriteApproval: true,
+      terminalRead: true,
+      terminalWriteApproval: false,
+      taskResume: true,
+      terminalResume: false
+    }
+  },
+  {
+    id: 'opencode',
+    label: 'OpenCode',
+    command: 'opencode',
+    envOverride: 'TUFF_OPENCODE_CLI_PATH',
+    acpArgs: ['acp'],
+    versionPattern: /^[ \t]*(?:opencode[\s/]+)?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)[ \t]*$/im,
+    capabilities: {
+      taskRead: true,
+      taskWriteApproval: true,
+      terminalRead: false,
+      terminalWriteApproval: false,
+      taskResume: true,
+      terminalResume: false
+    }
+  },
+  {
+    id: 'gemini',
+    label: 'Gemini CLI',
+    command: 'gemini',
+    envOverride: 'TUFF_GEMINI_CLI_PATH',
+    acpArgs: ['--experimental-acp'],
+    versionPattern:
+      /^[ \t]*(?:gemini(?:-cli)?[\s/]+)?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)[ \t]*$/im,
+    capabilities: {
+      taskRead: true,
+      taskWriteApproval: true,
+      terminalRead: false,
+      terminalWriteApproval: false,
+      taskResume: false,
+      terminalResume: false
+    }
+  },
+  {
+    id: 'kiro',
+    label: 'Kiro',
+    command: 'kiro-cli',
+    fallbackCommands: ['kiro'],
+    envOverride: 'TUFF_KIRO_CLI_PATH',
+    acpArgs: ['acp'],
+    versionPattern:
+      /(?:kiro(?:-cli)?[\s/]+v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)|^[ \t]*v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)[ \t]*$)/im,
+    capabilities: {
+      taskRead: true,
+      taskWriteApproval: true,
+      terminalRead: false,
+      terminalWriteApproval: false,
+      taskResume: false,
+      terminalResume: false
+    }
+  },
+  {
+    id: 'cursor',
+    label: 'Cursor',
+    command: 'cursor-agent',
+    fallbackCommands: ['agent'],
+    envOverride: 'TUFF_CURSOR_CLI_PATH',
+    acpArgs: ['acp'],
+    versionPattern:
+      /^[ \t]*(?:(?:cursor-agent|cursor|agent)[\s/]+)?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)[ \t]*$/im,
+    capabilities: {
+      taskRead: true,
+      taskWriteApproval: true,
+      terminalRead: true,
+      terminalWriteApproval: false,
+      taskResume: true,
+      terminalResume: false
     }
   }
 ] as const
@@ -141,25 +237,27 @@ export function createLocalAiCliTaskSpec(
           '--no-extensions',
           '--no-skills',
           '--no-rules',
-          'acp'
+          ...(getLocalAiCliProviderDefinition('oh-my-pi').acpArgs ?? ['acp'])
         ],
-        stdin: `${JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'initialize',
-          params: {
-            protocolVersion: 1,
-            clientCapabilities: {
-              fs: { readTextFile: false, writeTextFile: false },
-              terminal: false
-            },
-            clientInfo: { name: 'talex-touch', title: 'Talex Touch', version: '1' }
-          }
-        })}\n`,
-        protocol: 'omp-acp',
+        stdin: '',
+        protocol: 'acp',
         prompt,
         terminateOnComplete: true
       }
+    case 'antigravity':
+    case 'opencode':
+    case 'gemini':
+    case 'kiro':
+    case 'cursor': {
+      const definition = getLocalAiCliProviderDefinition(provider)
+      return {
+        args: [...(definition.acpArgs ?? ['acp'])],
+        stdin: '',
+        protocol: 'acp',
+        prompt,
+        terminateOnComplete: true
+      }
+    }
     case 'codex':
       return {
         args: [
@@ -249,7 +347,7 @@ export function decodeLocalAiCliEvent(
     return {}
   }
 
-  if (provider === 'oh-my-pi') {
+  if (getLocalAiCliProviderDefinition(provider).acpArgs) {
     const method = stringValue(event.method)
     const params = asRecord(event.params)
     const update = asRecord(params?.update)
@@ -333,5 +431,13 @@ export function createLocalAiCliResumeArgs(
       return ['resume', nativeSessionId]
     case 'claude':
       return ['--resume', nativeSessionId]
+    case 'antigravity':
+      return ['--conversation', nativeSessionId]
+    case 'cursor':
+      return ['--resume', nativeSessionId]
+    case 'opencode':
+    case 'gemini':
+    case 'kiro':
+      throw new Error('PROVIDER_RESUME_UNSUPPORTED')
   }
 }
