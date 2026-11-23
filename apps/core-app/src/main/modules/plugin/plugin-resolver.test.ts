@@ -1,6 +1,9 @@
 import type { IManifest } from '@talex-touch/utils/plugin'
+import { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { tmpdir } from 'node:os'
+import zlib from 'node:zlib'
 import fse from 'fs-extra'
 import { CURRENT_SDK_VERSION, PluginStatus } from '@talex-touch/utils/plugin'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -21,8 +24,41 @@ vi.mock('./plugin-module', () => ({
   pluginModule: pluginModuleMock
 }))
 
-import { PluginResolver } from './plugin-resolver'
+import { PluginResolver, ResolverStatus } from './plugin-resolver'
 import { PRIVILEGED_PLUGIN_NAMES } from '../../../shared/privileged-plugins'
+
+function writeOctal(buffer: Buffer, offset: number, length: number, value: number): void {
+  const str = value.toString(8).padStart(length - 1, '0')
+  buffer.write(`${str}\0`, offset, length, 'ascii')
+}
+
+function buildNpmTgz(files: Record<string, string>): Buffer {
+  const chunks: Buffer[] = []
+  for (const [name, content] of Object.entries(files)) {
+    const body = Buffer.from(content, 'utf8')
+    const header = Buffer.alloc(512, 0)
+    header.write(name, 0, 100, 'utf8')
+    writeOctal(header, 100, 8, 0o644)
+    writeOctal(header, 108, 8, 0)
+    writeOctal(header, 116, 8, 0)
+    writeOctal(header, 124, 12, body.length)
+    writeOctal(header, 136, 12, 1_700_000_000)
+    header.write('0', 156, 1, 'ascii')
+    header.write('ustar\0', 257, 6, 'ascii')
+    header.write('00', 263, 2, 'ascii')
+    header.fill(0x20, 148, 156)
+    let sum = 0
+    for (let i = 0; i < 512; i += 1) sum += header[i]!
+    header.write(`${sum.toString(8).padStart(6, '0')}\0 `, 148, 8, 'ascii')
+    chunks.push(header)
+    if (body.length > 0) {
+      const rem = body.length % 512
+      chunks.push(rem === 0 ? body : Buffer.concat([body, Buffer.alloc(512 - rem, 0)]))
+    }
+  }
+  chunks.push(Buffer.alloc(1024, 0))
+  return zlib.gzipSync(Buffer.concat(chunks))
+}
 
 async function createSourcePluginDir(root: string, manifest: IManifest): Promise<string> {
   const sourceDir = path.join(root, 'source-plugin')
@@ -167,4 +203,179 @@ describe('PluginResolver', () => {
       expect(pluginModuleMock.pluginManager.loadPlugin).not.toHaveBeenCalled()
     })
   }
+
+  it('unwraps npm package/ root in resolve() and enforces allowUnstampedNpm gate', async () => {
+    const root = await fse.mkdtemp(path.join(tmpdir(), 'plugin-resolver-npm-tgz-'))
+    createdRoots.push(root)
+    const installRoot = path.join(root, 'installed-plugins')
+    await fse.ensureDir(installRoot)
+    pluginModuleMock.filePath = installRoot
+
+    const indexJs = 'module.exports = { ok: true }\n'
+    const pkgJson = JSON.stringify({
+      name: 'tuff-plugin-npm-demo',
+      version: '1.0.0',
+      dependencies: {}
+    })
+    const fileHashes = {
+      'index.js': `sha256-${createHash('sha256').update(indexJs).digest('hex')}`,
+      'package.json': `sha256-${createHash('sha256').update(pkgJson).digest('hex')}`
+    }
+    const sig = createHash('sha256').update(JSON.stringify(fileHashes)).digest('base64')
+
+    const stampedTgzPath = path.join(root, 'stamped.tgz')
+    await fse.writeFile(
+      stampedTgzPath,
+      buildNpmTgz({
+        'package/manifest.json': JSON.stringify({
+          id: 'com.example.npm.demo',
+          name: 'npm-demo',
+          version: '1.0.0',
+          description: 'demo',
+          author: 'Talex',
+          main: 'index.js',
+          sdkapi: CURRENT_SDK_VERSION,
+          category: 'utilities',
+          dev: { enable: true, address: 'http://localhost:5173', source: true },
+          _files: fileHashes,
+          _signature: sig
+        }),
+        'package/package.json': pkgJson,
+        'package/index.js': indexJs
+      })
+    )
+
+    const stampedResult = await new Promise<{ event: { msg: unknown }; type: string }>(
+      (resolve) => {
+        void new PluginResolver(stampedTgzPath).resolve(resolve, true, {
+          installOptions: { enforceProdMode: true }
+        })
+      }
+    )
+    expect(stampedResult.type).toBe('success')
+    const installedDir = path.join(installRoot, 'npm-demo')
+    expect(await fse.pathExists(path.join(installedDir, 'manifest.json'))).toBe(true)
+    expect(await fse.pathExists(path.join(installedDir, 'package'))).toBe(false)
+    const installedManifest = await fse.readJSON(path.join(installedDir, 'manifest.json'))
+    expect(installedManifest.dev).toEqual({ enable: false, address: '', source: false })
+
+    // Unstamped tarball rejected without allowUnstampedNpm, accepted with allowUnstampedNpm: true
+    const unstampedTgzPath = path.join(root, 'unstamped.tgz')
+    await fse.writeFile(
+      unstampedTgzPath,
+      buildNpmTgz({
+        'package/manifest.json': JSON.stringify({
+          id: 'com.example.npm.community',
+          name: 'npm-community',
+          version: '1.0.0',
+          description: 'community',
+          author: 'Community',
+          main: 'index.js',
+          sdkapi: CURRENT_SDK_VERSION,
+          category: 'utilities'
+        }),
+        'package/package.json': JSON.stringify({
+          name: 'tuff-plugin-npm-community',
+          version: '1.0.0',
+          dependencies: {}
+        }),
+        'package/index.js': indexJs
+      })
+    )
+
+    const rejected = await new Promise<{ event: { msg: unknown }; type: string }>((resolve) => {
+      void new PluginResolver(unstampedTgzPath).resolve(resolve, false)
+    })
+    expect(rejected.type).toBe('error')
+    expect(rejected.event.msg).toBe(ResolverStatus.INVALID_MANIFEST)
+
+    const allowed = await new Promise<{ event: { msg: unknown }; type: string }>((resolve) => {
+      void new PluginResolver(unstampedTgzPath).resolve(resolve, true, {
+        installOptions: { allowUnstampedNpm: true, enforceProdMode: true }
+      })
+    })
+    expect(allowed.type).toBe('success')
+    expect(await fse.pathExists(path.join(installRoot, 'npm-community', 'index.js'))).toBe(true)
+  })
+
+  it('preserves data/ and logs/ on atomic forceUpdate and rolls back cleanly when loadPlugin fails', async () => {
+    const root = await fse.mkdtemp(path.join(tmpdir(), 'plugin-resolver-atomic-swap-'))
+    createdRoots.push(root)
+    const installRoot = path.join(root, 'installed-plugins')
+    const targetDir = path.join(installRoot, 'touch-atomic')
+    await fse.ensureDir(path.join(targetDir, 'data'))
+    await fse.ensureDir(path.join(targetDir, 'logs'))
+    await fse.writeFile(path.join(targetDir, 'index.js'), 'module.exports = { v: 1 }', 'utf-8')
+    await fse.writeFile(path.join(targetDir, 'data', 'state.json'), '{"count":42}', 'utf-8')
+    await fse.writeFile(path.join(targetDir, 'logs', 'app.log'), 'old-log', 'utf-8')
+    pluginModuleMock.filePath = installRoot
+
+    const v2Manifest: IManifest = {
+      name: 'touch-atomic',
+      version: '2.0.0',
+      description: 'atomic update',
+      icon: 'logo.svg',
+      author: 'Talex',
+      main: 'index.js',
+      sdkapi: CURRENT_SDK_VERSION,
+      features: []
+    }
+    const sourceDir = await createSourcePluginDir(root, v2Manifest)
+    await fse.writeFile(path.join(sourceDir, 'index.js'), 'module.exports = { v: 2 }', 'utf-8')
+
+    const disable = vi.fn().mockResolvedValue(true)
+    const enable = vi.fn().mockResolvedValue(true)
+    pluginModuleMock.pluginManager.getPluginByName.mockReturnValue({
+      status: PluginStatus.ENABLED,
+      disable,
+      enable
+    })
+    pluginModuleMock.pluginManager.unloadPlugin.mockResolvedValue(true)
+    pluginModuleMock.pluginManager.loadPlugin.mockResolvedValueOnce(true)
+
+    const updateCb = vi.fn()
+    await new PluginResolver(sourceDir).install(v2Manifest, updateCb, {
+      forceUpdate: true,
+      autoReEnable: true
+    })
+
+    expect(updateCb).toHaveBeenCalledWith('success', 'success')
+    expect(await fse.readFile(path.join(targetDir, 'index.js'), 'utf-8')).toBe(
+      'module.exports = { v: 2 }'
+    )
+    expect(await fse.readFile(path.join(targetDir, 'data', 'state.json'), 'utf-8')).toBe(
+      '{"count":42}'
+    )
+    expect(await fse.readFile(path.join(targetDir, 'logs', 'app.log'), 'utf-8')).toBe('old-log')
+    expect(enable).toHaveBeenCalledOnce()
+
+    // Now simulate a failing loadPlugin on v3 -> must roll back to v2 with data/ & logs/ intact!
+    const v3SourceDir = path.join(root, 'source-plugin-v3')
+    await fse.ensureDir(v3SourceDir)
+    await fse.writeJSON(path.join(v3SourceDir, 'manifest.json'), {
+      ...v2Manifest,
+      version: '3.0.0'
+    })
+    await fse.writeFile(path.join(v3SourceDir, 'index.js'), 'module.exports = { v: 3 }', 'utf-8')
+
+    pluginModuleMock.pluginManager.loadPlugin
+      .mockRejectedValueOnce(new Error('LOAD_BOOM'))
+      .mockResolvedValueOnce(true)
+
+    const rollbackCb = vi.fn()
+    await new PluginResolver(v3SourceDir).install({ ...v2Manifest, version: '3.0.0' }, rollbackCb, {
+      forceUpdate: true,
+      autoReEnable: true
+    })
+
+    expect(rollbackCb).toHaveBeenCalledWith('LOAD_BOOM', 'error')
+    expect(await fse.readFile(path.join(targetDir, 'index.js'), 'utf-8')).toBe(
+      'module.exports = { v: 2 }'
+    )
+    expect(await fse.readFile(path.join(targetDir, 'data', 'state.json'), 'utf-8')).toBe(
+      '{"count":42}'
+    )
+    expect(await fse.readFile(path.join(targetDir, 'logs', 'app.log'), 'utf-8')).toBe('old-log')
+    expect(await fse.pathExists(path.join(installRoot, '.staging'))).toBe(false)
+  })
 })
