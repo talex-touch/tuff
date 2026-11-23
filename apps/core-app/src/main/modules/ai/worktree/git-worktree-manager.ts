@@ -342,6 +342,60 @@ function cloneLease(lease: WorktreeLease): WorktreeLease {
   return { ...lease }
 }
 
+function isSafeBaseRef(value: string): boolean {
+  try {
+    validateBaseRef(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function isSafeBranchName(value: string): boolean {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 256) {
+    return false
+  }
+  if (
+    value.startsWith('-') ||
+    value.startsWith('/') ||
+    value.endsWith('/') ||
+    value.startsWith('.') ||
+    value.endsWith('.') ||
+    value.endsWith('.lock') ||
+    hasControlChar(value) ||
+    WHITESPACE_PATTERN.test(value) ||
+    value.includes('..') ||
+    value.includes('@{') ||
+    value.includes('//') ||
+    value.includes('/.') ||
+    value.includes('\\') ||
+    /[~^:?*[\]]/.test(value)
+  ) {
+    return false
+  }
+  for (const segment of value.split('/')) {
+    if (
+      !segment ||
+      segment.startsWith('-') ||
+      segment.startsWith('.') ||
+      segment.endsWith('.lock')
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+function isCleanAbsolutePath(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    !value.includes('\0') &&
+    path.isAbsolute(value) &&
+    !hasPathTraversalSegment(value)
+  )
+}
+
 function isValidPersistedLease(value: unknown): value is WorktreeLease {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Record<string, unknown>
@@ -349,17 +403,18 @@ function isValidPersistedLease(value: unknown): value is WorktreeLease {
     typeof candidate.worktreeId === 'string' &&
     SAFE_WORKTREE_ID_PATTERN.test(candidate.worktreeId) &&
     typeof candidate.runId === 'string' &&
-    candidate.runId.length > 0 &&
+    candidate.runId.trim().length > 0 &&
+    !hasControlChar(candidate.runId) &&
     (candidate.conversationId === undefined || typeof candidate.conversationId === 'string') &&
-    typeof candidate.repoRoot === 'string' &&
-    path.isAbsolute(candidate.repoRoot) &&
-    typeof candidate.worktreePath === 'string' &&
-    path.isAbsolute(candidate.worktreePath) &&
-    typeof candidate.effectiveCwd === 'string' &&
-    path.isAbsolute(candidate.effectiveCwd) &&
-    (candidate.branchName === null || typeof candidate.branchName === 'string') &&
+    isCleanAbsolutePath(candidate.repoRoot) &&
+    isCleanAbsolutePath(candidate.worktreePath) &&
+    isCleanAbsolutePath(candidate.effectiveCwd) &&
+    (candidate.branchName === null ||
+      (typeof candidate.branchName === 'string' && isSafeBranchName(candidate.branchName))) &&
     typeof candidate.baseRef === 'string' &&
+    isSafeBaseRef(candidate.baseRef) &&
     typeof candidate.baseCommit === 'string' &&
+    COMMIT_HASH_PATTERN.test(candidate.baseCommit) &&
     typeof candidate.createdAt === 'number' &&
     Number.isFinite(candidate.createdAt)
   )
@@ -1282,11 +1337,11 @@ export class GitWorktreeManager {
     try {
       await this.withRepoLock(canonicalRepoRoot, async () => {
         await this.execGit(
-          ['-C', canonicalRepoRoot, 'worktree', 'remove', '--force', worktreePath],
+          ['-C', canonicalRepoRoot, 'worktree', 'remove', '--force', '--', worktreePath],
           { cwd: canonicalRepoRoot }
         ).catch(() => undefined)
         if (branchName) {
-          await this.execGit(['-C', canonicalRepoRoot, 'branch', '-D', branchName], {
+          await this.execGit(['-C', canonicalRepoRoot, 'branch', '-D', '--', branchName], {
             cwd: canonicalRepoRoot
           }).catch(() => undefined)
         }
@@ -1484,8 +1539,8 @@ export class GitWorktreeManager {
         let removedByGit = false
         if (repoExists) {
           const removeArgs = force
-            ? ['-C', lease.repoRoot, 'worktree', 'remove', '--force', canonicalWorktreePath]
-            : ['-C', lease.repoRoot, 'worktree', 'remove', canonicalWorktreePath]
+            ? ['-C', lease.repoRoot, 'worktree', 'remove', '--force', '--', canonicalWorktreePath]
+            : ['-C', lease.repoRoot, 'worktree', 'remove', '--', canonicalWorktreePath]
           try {
             await this.execGit(removeArgs, { cwd: lease.repoRoot, timeoutMs })
             removedByGit = true
@@ -1531,7 +1586,7 @@ export class GitWorktreeManager {
         const unchangedBranch = headCommit !== null && headCommit === lease.baseCommit
         const deleteFlag = force || unchangedBranch ? '-D' : '-d'
         try {
-          await this.execGit(['-C', lease.repoRoot, 'branch', deleteFlag, lease.branchName], {
+          await this.execGit(['-C', lease.repoRoot, 'branch', deleteFlag, '--', lease.branchName], {
             cwd: lease.repoRoot,
             timeoutMs
           })
@@ -1790,10 +1845,7 @@ export class GitWorktreeManager {
       const terminateBounded = (onFallback: () => void): void => {
         if (terminating) return
         terminating = true
-        if (child.stdout) {
-          child.stdout.removeAllListeners('data')
-          if (!child.stdout.destroyed) child.stdout.destroy()
-        }
+        detachStreams()
         if (exited) {
           onFallback()
           return
@@ -1823,6 +1875,11 @@ export class GitWorktreeManager {
         }, DIFF_SIGTERM_GRACE_MS)
         sigtermTimer.unref?.()
       }
+
+      // Track process exit immediately so SIGKILL escalation never fires after exit.
+      child.once('exit', () => {
+        exited = true
+      })
 
       // Keep error listeners attached to prevent unhandled error events during teardown.
       child.stdout?.on('error', () => undefined)

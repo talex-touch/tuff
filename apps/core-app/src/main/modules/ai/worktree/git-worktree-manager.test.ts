@@ -733,4 +733,43 @@ exec git "$@"
 
     await manager.releaseWorktree(lease.worktreeId, { force: true })
   })
+
+  it('rejects git option injection via tampered persisted .meta lease fields', async () => {
+    await initGitRepo(repoDir)
+    const creator = new GitWorktreeManager({ baseDir })
+    const lease = await creator.acquireWorktree({ runId: 'run-meta-ref', repoRoot: repoDir })
+    const canonicalBase = await realpath(baseDir)
+    const metaPath = path.join(canonicalBase, '.meta', `${lease.worktreeId}.json`)
+    const injectedOutputFile = path.join(sandboxDir, 'git-option-injected.txt')
+
+    const tamperedCases: Array<Record<string, unknown>> = [
+      { baseCommit: `--output=${injectedOutputFile}` },
+      { baseCommit: 'not-a-commit-sha' },
+      { baseRef: '--exec=pwn' },
+      { baseRef: 'HEAD..main' },
+      { branchName: '-f' },
+      { branchName: 'bad..branch' },
+      { branchName: 'bad@{0}' }
+    ]
+
+    for (const override of tamperedCases) {
+      await writeFile(metaPath, JSON.stringify({ ...lease, ...override }), 'utf8')
+      const reloaded = new GitWorktreeManager({ baseDir })
+
+      await expectWorktreeError(reloaded.inspectWorktree(lease.worktreeId), 'WORKTREE_PATH_ESCAPE')
+      await expectWorktreeError(reloaded.getWorktreeDiff(lease.worktreeId), 'WORKTREE_PATH_ESCAPE')
+      await expectWorktreeError(
+        reloaded.releaseWorktree(lease.worktreeId, { force: true }),
+        'WORKTREE_PATH_ESCAPE'
+      )
+
+      const reapRes = await reloaded.reapOrphans({ force: false })
+      expect(reapRes.failedIds).toContain(lease.worktreeId)
+      expect(await pathExists(injectedOutputFile)).toBe(false)
+    }
+
+    // Restore clean metadata and release cleanly.
+    await writeFile(metaPath, JSON.stringify(lease), 'utf8')
+    await creator.releaseWorktree(lease.worktreeId, { force: true })
+  })
 })
