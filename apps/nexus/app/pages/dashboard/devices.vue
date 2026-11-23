@@ -9,7 +9,14 @@ import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { useToast } from '~/composables/useToast'
 import { requestJson, useTypedFetch } from '~/utils/request'
 
-const LazyGeoBubbleMap = defineAsyncComponent(() => import('~/components/dashboard/GeoBubbleMap.client.vue'))
+type GeoBubbleMapComponent = typeof import('~/components/dashboard/GeoBubbleMap.client.vue').default
+const emptyServerGeoBubbleMap = { render: () => null }
+// Guard the `.client.vue` map import so Vite SSR tree-shakes `@talex-touch/tuffex/charts` out of the Worker.
+const LazyGeoBubbleMap = defineAsyncComponent((): Promise<GeoBubbleMapComponent> => (
+  import.meta.server
+    ? Promise.resolve(emptyServerGeoBubbleMap as unknown as GeoBubbleMapComponent)
+    : import('~/components/dashboard/GeoBubbleMap.client.vue').then(module => module.default)
+))
 
 defineI18nRoute(false)
 

@@ -459,6 +459,12 @@ jobs:
       - name: Build
         run: pnpm -C apps/nexus build
 
+      # Enforce the Nexus Worker gzip, dist runtime, shared entry CSS, docs SSR body,
+      # static delivery (_routes.json, _headers, _redirects, 404.html), and route-family
+      # initial JS/CSS budgets on every Nexus PR so regressions cannot slip in silently.
+      - name: Verify worker bundle and route budgets
+        run: pnpm -C apps/nexus build:analyze-worker
+
 
   job_app_tests:
     name: App suites (${{ matrix.app }})
