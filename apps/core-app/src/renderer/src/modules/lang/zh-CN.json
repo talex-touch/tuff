@@ -3004,7 +3004,9 @@
   "settingsConversation": {
     "title": "对话偏好",
     "showMetricsTitle": "显示运行指标",
-    "showMetricsDesc": "在每次回复底部显示耗时、Token 生成速度、模型与调度器"
+    "showMetricsDesc": "在每次回复底部显示耗时、Token 生成速度、模型与调度器",
+    "autoResumeTitle": "启动时自动恢复中断任务",
+    "autoResumeDesc": "应用重启或异常中断后，自动续跑未完成的对话、后台代理任务与自动化，并自动重载崩溃窗口"
   },
   "intelligenceAudit": {
     "loading": "正在读取用量…",

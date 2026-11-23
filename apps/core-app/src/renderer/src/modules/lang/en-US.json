@@ -3004,7 +3004,9 @@
   "settingsConversation": {
     "title": "Conversation Preferences",
     "showMetricsTitle": "Show Execution Metrics",
-    "showMetricsDesc": "Display latency, token speed, model, and coordinator beneath replies"
+    "showMetricsDesc": "Display latency, token speed, model, and coordinator beneath replies",
+    "autoResumeTitle": "Auto-Resume Interrupted Tasks on Startup",
+    "autoResumeDesc": "Automatically recover unfinished conversations, background agent runs, and automations after restart or crash, and reload crashed windows"
   },
   "intelligenceAudit": {
     "loading": "Loading usage…",
