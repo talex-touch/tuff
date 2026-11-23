@@ -254,6 +254,7 @@ TAXONOMY: dict[str, list[str]] = {
         "flow-light",
         "liquid",
         "flip-overlay",
+        "fold-page",
         "image-generation",
         "metal-fx",
         "voice-beam",

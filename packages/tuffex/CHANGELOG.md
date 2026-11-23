@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-11-23
+
+### 📦 组件变动 (Components)
+
+- **新增组件**: `fold-page`
+
+### ✨ 组件增强
+
+- 新增 `TxFoldPage` 与 `TxFoldCorner`（`@talex-touch/tuffex/pro`）：提供水平/垂直风琴折与对开三折页（`accordion` / `gate`），以及四向纸角卷折掀开效果（基于垂直平分线多边形裁剪与 2D 反射矩阵，支持悬停、拖拽惯性与键盘开关），默认采用 `refraction` 琉光材质。
+
 ## [0.9.4] - 2026-11-16
 
 ### 📦 组件变动 (Components)

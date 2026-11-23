@@ -13,11 +13,20 @@ verified: false
 
 | 项目 | 值 |
 |------|----|
-| 源码版本 | **0.9.4** |
-| 发布版本 | **0.9.4**（最近一次 npm 发布） |
-| 组件模块 | **192**：基础 99 · 进阶 57 · AI 36 |
+| 源码版本 | **0.9.5** |
+| 发布版本 | **0.9.5**（最近一次 npm 发布） |
+| 组件模块 | **193**：基础 99 · 进阶 58 · AI 36 |
 
 ## 版本更新历程
+
+### 0.9.5 版本（2026-11-23）
+
+在 Pro 套件中新增 3D 多面板折页与四角纸角卷折组件。
+
+- **新增组件**：fold-page
+- **主要更新组件**：无
+- **关键特性**：
+  - 新增 `TxFoldPage` 与 `TxFoldCorner`（`@talex-touch/tuffex/pro`）：支持水平/垂直风琴折、对开翼板三折页以及四向纸角卷折掀开效果，默认采用 `refraction` 琉光材质。
 
 ### 0.9.4 版本（2026-11-16）
 
@@ -287,6 +296,7 @@ TuffEx 独立包初始基线。
 | [`flex`](./flex.zh.mdc) | base | 0.3.4 |
 | [`flip-book`](./flip-book.zh.mdc) | pro | 0.7.0 |
 | [`flip-overlay`](./flip-overlay.zh.mdc) | pro | 0.3.4 |
+| [`fold-page`](./fold-page.zh.mdc) | pro | 0.9.5 |
 | [`floating`](./floating.zh.mdc) | pro | 0.3.4 |
 | [`flow-light`](./flow-light.zh.mdc) | pro | 0.8.0 |
 | [`flowchart`](./flowchart.zh.mdc) | ai | 0.6.0 |
