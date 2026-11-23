@@ -31,7 +31,9 @@ import cliProgress from 'cli-progress'
 import fs from 'fs-extra'
 import { globSync } from 'glob'
 import path from 'pathe'
+import { resolveBuildPackageFormat } from './args'
 import { CompressLimit, TalexCompress } from './compress-util'
+import { packNpmPlugin } from './npm-packager'
 import { collectPackageEntries } from './package-files'
 import {
   assertPluginSecurityScan,
@@ -42,11 +44,22 @@ import { generateFilesSha256, generateSignature } from './security-util'
 
 type Chalk = (typeof import('chalk'))['default']
 
+type OptionalOptionKeys
+  = | 'assets'
+    | 'versionSync'
+    | 'manifestPath'
+    | 'securityWaivers'
+    | 'format'
+    | 'npm'
+    | 'npmPackageName'
+    | 'npmAccess'
+
+type ResolvedExporterOptions
+  = Required<Omit<Options, OptionalOptionKeys>>
+    & Pick<Options, Exclude<OptionalOptionKeys, 'manifestPath'>>
+
 // Default configuration
-const DEFAULT_OPTIONS: Required<
-  Omit<Options, 'assets' | 'versionSync' | 'manifestPath' | 'securityWaivers'>
->
-& Pick<Options, 'assets' | 'versionSync' | 'securityWaivers'> = {
+const DEFAULT_OPTIONS: ResolvedExporterOptions = {
   root: process.cwd(),
   manifest: './manifest.json',
   outDir: 'dist',
@@ -63,14 +76,20 @@ const DEFAULT_OPTIONS: Required<
   versionSync: undefined,
   // Undefined means "use the conventional security-waivers.json in the plugin root, if any".
   securityWaivers: undefined,
+  format: undefined,
+  npm: undefined,
+  npmPackageName: undefined,
+  npmAccess: undefined,
 }
 
-const GENERATED_PACKAGE_OUTPUT_DIRECTORIES = new Set(['out', 'build'])
+const GENERATED_PACKAGE_OUTPUT_DIRECTORIES = new Set(['out', 'build', 'npm'])
 
 function isGeneratedPackageOutputEntry(entryName: string): boolean {
+  const lower = entryName.toLowerCase()
   return (
     GENERATED_PACKAGE_OUTPUT_DIRECTORIES.has(entryName)
-    || entryName.toLowerCase().endsWith('.tpex')
+    || lower.endsWith('.tpex')
+    || lower.endsWith('.tgz')
   )
 }
 
@@ -178,8 +197,7 @@ function normalizeIndexConfig(
  */
 function resolveOptions(
   options?: Options,
-): Required<Omit<Options, 'assets' | 'versionSync' | 'manifestPath' | 'securityWaivers'>>
-  & Pick<Options, 'assets' | 'versionSync' | 'securityWaivers'> {
+): ResolvedExporterOptions {
   return {
     ...DEFAULT_OPTIONS,
     ...options,
@@ -1072,7 +1090,10 @@ export async function build(userOptions?: Options) {
   console.log('\n\n\n')
 
   // Check version sync before building
-  await checkVersionSync(opts, chalk)
+  const versionSyncResult = await checkVersionSync(opts, chalk)
+  if (versionSyncResult.synced && versionSyncResult.version) {
+    sourceManifest.version = versionSyncResult.version
+  }
 
   // 步骤1：备份 Vite 构建产物到 dist/out
   // Prior package artifacts are not build output, so none of them feed back into the next package.
@@ -1241,54 +1262,113 @@ export async function build(userOptions?: Options) {
     + chalk.greenBright(' Manifest.json generated successfully!'),
   )
 
-  // 步骤3：压缩生成 .tpex
-  const tpexPath = await compressPlugin(manifest, buildDir, opts, chalk)
-  assertPluginPackagePolicy(
-    validatePluginPackagePolicy({
-      profile: 'staged-package',
-      manifest,
-      entries: collectPackageEntries(buildDir),
-      archiveSize: fs.statSync(tpexPath).size,
-    }),
-    'archive size validation',
-  )
-  const securityWaivers = resolveSecurityScanWaivers({
-    root: opts.root,
-    waiversPath: opts.securityWaivers,
+  // 步骤3：生成目标格式包（tpex / npm / both）
+  const packageFormat = resolveBuildPackageFormat({
+    format: opts.format,
+    npm: opts.npm,
   })
-  const securityScan = scanBuiltPluginPackage({
-    packagePath: tpexPath,
-    waivers: securityWaivers,
-  })
-  assertPluginSecurityScan(securityScan, securityWaivers)
-  const waivedFindings = securityScan.findings.filter(finding => finding.waiver)
-  for (const finding of waivedFindings) {
-    // Waived findings must stay visible: a package that ships with accepted risk should say so
-    // on every build, not only in the file nobody opens.
-    console.warn(
-      `Security finding waived: ${finding.code} ${finding.location.path}`
-      + ` [by ${finding.waiver?.owner}, expires ${finding.waiver?.expiresAt}]`,
+  const shouldEmitTpex = packageFormat === 'tpex' || packageFormat === 'both'
+  const shouldEmitNpm = packageFormat === 'npm' || packageFormat === 'both'
+
+  finalizeBuildManifest(manifest, buildDir)
+
+  if (shouldEmitTpex) {
+    const tpexPath = await compressPlugin(manifest, buildDir, opts, chalk)
+    assertPluginPackagePolicy(
+      validatePluginPackagePolicy({
+        profile: 'staged-package',
+        manifest,
+        entries: collectPackageEntries(buildDir),
+        archiveSize: fs.statSync(tpexPath).size,
+      }),
+      'archive size validation',
     )
-  }
-  if (securityScan.decision === 'review-required') {
-    console.warn(
-      `Plugin security scan requires review (${securityScan.findings.length} finding(s)).`,
+    const securityWaivers = resolveSecurityScanWaivers({
+      root: opts.root,
+      waiversPath: opts.securityWaivers,
+    })
+    const securityScan = scanBuiltPluginPackage({
+      packagePath: tpexPath,
+      waivers: securityWaivers,
+    })
+    assertPluginSecurityScan(securityScan, securityWaivers)
+    const waivedFindings = securityScan.findings.filter(finding => finding.waiver)
+    for (const finding of waivedFindings) {
+      // Waived findings must stay visible: a package that ships with accepted risk should say so
+      // on every build, not only in the file nobody opens.
+      console.warn(
+        `Security finding waived: ${finding.code} ${finding.location.path}`
+        + ` [by ${finding.waiver?.owner}, expires ${finding.waiver?.expiresAt}]`,
+      )
+    }
+    if (securityScan.decision === 'review-required') {
+      console.warn(
+        `Plugin security scan requires review (${securityScan.findings.length} finding(s)).`,
+      )
+    }
+
+    // Check plugin size
+    checkPluginSize(tpexPath, opts.maxSizeMB, chalk)
+
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.greenBright(
+        ` Export plugin ${manifest.name}-${manifest.version}.tpex successfully!`,
+      ),
+    )
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.cyan(` Output path: ${chalk.yellow(tpexPath)}`),
     )
   }
 
-  // Check plugin size
-  checkPluginSize(tpexPath, opts.maxSizeMB, chalk)
+  if (shouldEmitNpm) {
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.blueBright(` Staging npm plugin package in ${opts.outDir}/npm/...`),
+    )
+    const npmResult = await packNpmPlugin({
+      root: opts.root,
+      outDir: opts.outDir,
+      buildDir,
+      manifest: opts.manifest,
+      packageName: opts.npmPackageName,
+      access: opts.npmAccess,
+      securityWaivers: opts.securityWaivers,
+    })
+    const waivedFindings = npmResult.securityScan.findings.filter(finding => finding.waiver)
+    for (const finding of waivedFindings) {
+      console.warn(
+        `Security finding waived: ${finding.code} ${finding.location.path}`
+        + ` [by ${finding.waiver?.owner}, expires ${finding.waiver?.expiresAt}]`,
+      )
+    }
+    if (npmResult.securityScan.decision === 'review-required') {
+      console.warn(
+        `NPM plugin security scan requires review (${npmResult.securityScan.findings.length} finding(s)).`,
+      )
+    }
+    if (npmResult.tarballPath) {
+      checkPluginSize(npmResult.tarballPath, opts.maxSizeMB, chalk)
+    }
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.greenBright(
+        ` Export npm plugin ${npmResult.packageName}@${npmResult.version} successfully!`,
+      ),
+    )
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.cyan(` NPM staging dir: ${chalk.yellow(npmResult.npmDir)}`),
+    )
+    if (npmResult.tarballPath) {
+      console.info(
+        chalk.bgBlack.white(' Talex-Touch ')
+        + chalk.cyan(` NPM tarball: ${chalk.yellow(npmResult.tarballPath)}`),
+      )
+    }
+  }
 
-  console.info(
-    chalk.bgBlack.white(' Talex-Touch ')
-    + chalk.greenBright(
-      ` Export plugin ${manifest.name}-${manifest.version}.tpex successfully!`,
-    ),
-  )
-  console.info(
-    chalk.bgBlack.white(' Talex-Touch ')
-    + chalk.cyan(` Output path: ${chalk.yellow(tpexPath)}`),
-  )
   console.log('\n\n\n')
 }
 
@@ -1467,24 +1547,7 @@ async function mergeAssets(
   )
 }
 
-async function compressPlugin(
-  manifest: IManifest,
-  buildDir: string,
-  opts: ReturnType<typeof resolveOptions>,
-  chalk: Chalk,
-): Promise<string> {
-  const buildConfig = manifest.build || {
-    files: [],
-    secret: {
-      pos: 'TalexTouch',
-      addon: ['windows', 'darwin', 'linux'],
-    },
-    version: {
-      update: 'auto',
-      downgrade: false,
-    },
-  }
-
+function finalizeBuildManifest(manifest: IManifest, buildDir: string): void {
   // Generate file hashes and signature
   const filesInBuild = globSync('**/*', {
     cwd: buildDir,
@@ -1493,8 +1556,7 @@ async function compressPlugin(
     dot: true,
   })
   const filesToHash = filesInBuild.filter(
-    file =>
-      path.basename(file) !== 'manifest.json',
+    file => path.basename(file) !== 'manifest.json',
   )
 
   manifest._files = generateFilesSha256(filesToHash, buildDir)
@@ -1521,6 +1583,25 @@ async function compressPlugin(
     }),
     'staged package validation',
   )
+}
+
+async function compressPlugin(
+  manifest: IManifest,
+  buildDir: string,
+  opts: ReturnType<typeof resolveOptions>,
+  chalk: Chalk,
+): Promise<string> {
+  const buildConfig = manifest.build || {
+    files: [],
+    secret: {
+      pos: 'TalexTouch',
+      addon: ['windows', 'darwin', 'linux'],
+    },
+    version: {
+      update: 'auto',
+      downgrade: false,
+    },
+  }
 
   buildConfig.files = [buildDir]
 
