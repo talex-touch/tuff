@@ -98,6 +98,90 @@ export function summarizeBfcacheResult(summary, harPath) {
   }
 }
 
+export function collectRouteBudgetFailures(route) {
+  const requests = route?.requests
+  const budget = requests?.budget
+  if (!requests || !budget)
+    return []
+
+  const pathLabel = route?.path ?? 'unknown'
+  const findings = []
+  if (typeof budget.maxDocs === 'number' && requests.docs > budget.maxDocs)
+    findings.push(`route probe ${pathLabel} made ${requests.docs} docs requests, expected <= ${budget.maxDocs}`)
+  if (typeof budget.maxNuxt === 'number' && requests.nuxtChunkAssets > budget.maxNuxt)
+    findings.push(`route probe ${pathLabel} made ${requests.nuxtChunkAssets} _nuxt chunk/asset requests, expected <= ${budget.maxNuxt}`)
+  if (typeof budget.maxTotal === 'number' && requests.total > budget.maxTotal)
+    findings.push(`route probe ${pathLabel} made ${requests.total} total requests, expected <= ${budget.maxTotal}`)
+
+  const failed = Array.isArray(requests.failed) ? requests.failed : []
+  if (typeof budget.maxFailed === 'number' && failed.length > budget.maxFailed)
+    findings.push(`route probe ${pathLabel} has ${failed.length} failed requests, expected <= ${budget.maxFailed}`)
+
+  const allowMediaAbortFailures = budget.allowMediaAbortFailures
+    ?? routeBudgets.find(item => item.path === route?.path)?.allowMediaAbortFailures
+    ?? false
+  if (!allowMediaAbortFailures && failed.length > 0) {
+    findings.push(`route probe ${pathLabel} has unexpected failed requests`)
+  }
+  else if (allowMediaAbortFailures) {
+    const unexpectedFailed = failed.filter(request => request?.failure !== 'net::ERR_ABORTED' || !request?.url?.includes('/shots/'))
+    if (unexpectedFailed.length > 0)
+      findings.push(`route probe ${pathLabel} has unexpected failed requests: ${unexpectedFailed.map(request => request?.url ?? 'unknown').join(', ')}`)
+  }
+
+  return findings
+}
+
+export function collectDeployedPreviewFailures({
+  api = [],
+  routes = [],
+  bfcache = null,
+  authProviderCallback = null,
+  authenticatedDashboard = null,
+} = {}) {
+  return [
+    ...api
+      .filter(probe => probe?.ok !== true)
+      .map((probe) => {
+        const label = probe?.name ?? probe?.path ?? 'unknown'
+        const expected = Array.isArray(probe?.expected) && probe.expected.length
+          ? `, expected ${probe.expected.join(' or ')}`
+          : ''
+        return `API probe failed (${label}): returned ${probe?.status ?? 'unknown'}${expected}`
+      }),
+    ...routes.flatMap(route => [
+      ...(route?.ok === true ? [] : [`route probe failed (${route?.path ?? 'unknown'}): returned ${route?.status ?? 'unknown'}`]),
+      ...collectRouteBudgetFailures(route),
+    ]),
+    ...(bfcache?.realBfcacheHit === true ? [] : ['real bfcache hit not observed']),
+    ...(authProviderCallback?.authenticated ? [] : ['real provider callback is pending']),
+    ...(authProviderCallback?.authenticated && authProviderCallback?.ok !== true
+      ? ['real provider callback evidence is not ok']
+      : []),
+    ...(authenticatedDashboard?.authenticated ? [] : ['authenticated dashboard smoke is pending']),
+  ]
+}
+
+export function resolveDeployedPreviewStatus({
+  authState = '',
+  routes = [],
+  api = [],
+  failures = [],
+  warnings = [],
+} = {}) {
+  const hasAuthState = Boolean(typeof authState === 'string' ? authState.trim() : authState)
+  const allRoutesOk = routes.every(route => route?.ok === true && collectRouteBudgetFailures(route).length === 0)
+  const allApiOk = api.every(probe => probe?.ok === true)
+
+  if (!allRoutesOk || !allApiOk)
+    return 'FAIL'
+  if (hasAuthState && failures.length > 0)
+    return 'FAIL'
+  if (!hasAuthState)
+    return 'PENDING_AUTH'
+  return warnings.length > 0 ? 'PASS_WITH_WARNINGS' : 'PASS'
+}
+
 export function parseArgs(values) {
   const parsed = {}
   for (let index = 0; index < values.length; index += 1) {
@@ -170,9 +254,26 @@ async function runCli(argv) {
       : pendingProviderCallback('missing --provider-callback-evidence from an interactive OAuth callback smoke')
 
     const publicRoutes = summarizePublicRoutes(routes)
+    const failures = collectDeployedPreviewFailures({
+      api,
+      routes,
+      bfcache,
+      authProviderCallback,
+      authenticatedDashboard,
+    })
+    const warnings = [
+      ...(authState ? [] : ['No authenticated storage state supplied; authenticated dashboard and provider callback are pending']),
+    ]
+    const status = resolveDeployedPreviewStatus({
+      authState,
+      routes,
+      api,
+      failures,
+      warnings,
+    })
     const evidence = {
       schema: 'nexus-cloudflare-pages-preview-runtime-smoke/v1',
-      status: authState ? 'PASS_WITH_WARNINGS' : 'PENDING_AUTH',
+      status,
       generatedAt: new Date().toISOString(),
       baseUrl,
       build: {
@@ -193,14 +294,8 @@ async function runCli(argv) {
       bfcache,
       authProviderCallback,
       authenticatedDashboard,
-      failures: [
-        ...(bfcache.realBfcacheHit ? [] : ['real bfcache hit not observed']),
-        ...(authProviderCallback.authenticated ? [] : ['real provider callback is pending']),
-        ...(authenticatedDashboard.authenticated ? [] : ['authenticated dashboard smoke is pending']),
-      ],
-      warnings: [
-        ...(authState ? [] : ['No authenticated storage state supplied; authenticated dashboard and provider callback are pending']),
-      ],
+      failures,
+      warnings,
     }
 
     const jsonPath = join(outputRoot, `${evidencePrefix}.json`)
@@ -388,6 +483,7 @@ function summarizeRouteRequests(requests, route) {
       maxNuxt: route.maxNuxt,
       maxTotal: route.maxTotal,
       maxFailed: route.maxFailed,
+      ...(route.allowMediaAbortFailures ? { allowMediaAbortFailures: true } : {}),
     },
   }
 }
