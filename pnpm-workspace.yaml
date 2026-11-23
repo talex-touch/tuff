@@ -85,7 +85,7 @@ catalog:
   uncrypto: ^0.1.3
   vitepress: 2.0.0-alpha.18
   vitest: ^3.2.7
-  vue-router: ^5.1.0
+  vue-router: ^5.5.0
   vue-sonner: ^2.0.9
 
 catalogs:
@@ -230,6 +230,9 @@ overrides:
   uuid: 14.0.1
   vite: 7.3.7
   vue-i18n: 11.4.16
+  # Nuxt (#app) and apps/nexus sfc-typed-router must share one vue-router copy so
+  # RouteNamedMap and NavigationGuard types do not split across two resolved versions.
+  vue-router: ^5.5.0
   ws: 8.21.0
   yaml@^1.0.0: 1.10.3
   yaml@^2.0.0: 2.9.0
