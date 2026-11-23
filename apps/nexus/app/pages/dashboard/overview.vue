@@ -4,8 +4,15 @@ import { computed, defineAsyncComponent } from 'vue'
 import { formatCompactAccountLabel } from '~/utils/account-display'
 import { useTypedFetch } from '~/utils/request'
 
+type GeoBubbleMapComponent = typeof import('~/components/dashboard/GeoBubbleMap.client.vue').default
+const emptyServerGeoBubbleMap = { render: () => null }
 const LazyDashboardSparklineChart = defineAsyncComponent(() => import('~/components/dashboard/DashboardSparklineChart.client.vue'))
-const LazyGeoBubbleMap = defineAsyncComponent(() => import('~/components/dashboard/GeoBubbleMap.client.vue'))
+// Guard the `.client.vue` map import so Vite SSR tree-shakes `@talex-touch/tuffex/charts` out of the Worker.
+const LazyGeoBubbleMap = defineAsyncComponent((): Promise<GeoBubbleMapComponent> => (
+  import.meta.server
+    ? Promise.resolve(emptyServerGeoBubbleMap as unknown as GeoBubbleMapComponent)
+    : import('~/components/dashboard/GeoBubbleMap.client.vue').then(module => module.default)
+))
 
 defineI18nRoute(false)
 
