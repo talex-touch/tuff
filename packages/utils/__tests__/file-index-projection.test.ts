@@ -315,18 +315,40 @@ describe('file index capacity public projection', () => {
   }
 
   it('retains paused opt-in and only the safe capacity fields at both transport surfaces', () => {
-    const rawStorage = { ...storage, path: POSIX_PATH_CANARY, error: SQL_CANARY, cause: CAUSE_CANARY }
-    const settings = projectFileIndexContentSettings({
-      contentIndexingEnabled: true, state: 'paused', storage: rawStorage, path: WINDOWS_PATH_CANARY,
-    })
-    const status = projectFileIndexStatus({
-      ...rawStatusPayload(), contentIndexingEnabled: true, contentIndexingState: 'paused', contentIndexStorage: rawStorage,
-    })
-    expect(settings).toEqual({ contentIndexingEnabled: true, state: 'paused', storage })
-    expect(status).toMatchObject({ contentIndexingEnabled: true, contentIndexingState: 'paused', contentIndexStorage: storage })
-    expect(status.contentIndexStorage).toEqual(storage)
-    expectNoCanary(settings)
-    expectNoCanary(status)
+    for (const statusValue of ['low-space', 'index-full'] as const) {
+      const candidate = { ...storage, status: statusValue }
+      const rawStorage = {
+        ...candidate,
+        path: POSIX_PATH_CANARY,
+        error: SQL_CANARY,
+        cause: CAUSE_CANARY,
+      }
+      const settings = projectFileIndexContentSettings({
+        contentIndexingEnabled: true,
+        state: 'paused',
+        storage: rawStorage,
+        path: WINDOWS_PATH_CANARY,
+      })
+      const status = projectFileIndexStatus({
+        ...rawStatusPayload(),
+        contentIndexingEnabled: true,
+        contentIndexingState: 'paused',
+        contentIndexStorage: rawStorage,
+      })
+      expect(settings).toEqual({
+        contentIndexingEnabled: true,
+        state: 'paused',
+        storage: candidate,
+      })
+      expect(status).toMatchObject({
+        contentIndexingEnabled: true,
+        contentIndexingState: 'paused',
+        contentIndexStorage: candidate,
+      })
+      expect(status.contentIndexStorage).toEqual(candidate)
+      expectNoCanary(settings)
+      expectNoCanary(status)
+    }
   })
 
   it.each([

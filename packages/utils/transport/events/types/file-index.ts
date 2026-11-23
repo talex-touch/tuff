@@ -55,7 +55,7 @@ export const FILE_CONTENT_INDEX_MIN_FREE_BYTES = 2 * 1024 ** 3;
 export const FILE_CONTENT_INDEX_RESUME_FREE_BYTES = 3 * 1024 ** 3;
 
 export interface FileIndexContentStorage {
-  status: "ready" | "low-space" | "unavailable";
+  status: "ready" | "low-space" | "index-full" | "unavailable";
   availableBytes: number | null;
   requiredBytes: number;
   checkedAt: number | null;

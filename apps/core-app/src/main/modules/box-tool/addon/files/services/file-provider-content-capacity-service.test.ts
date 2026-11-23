@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { FileProviderContentCapacityService } from './file-provider-content-capacity-service'
+import { searchIndexReserveReachedError } from '../../../../../db/search-index-size-cap'
+import {
+  createDatabaseContentCapacityService,
+  FileProviderContentCapacityService
+} from './file-provider-content-capacity-service'
+import { FILE_INDEX_STORAGE_FULL } from './file-provider-run-failure'
 
 const GIB = 1024 ** 3
 const guards: FileProviderContentCapacityService[] = []
@@ -129,20 +134,7 @@ describe('FileProviderContentCapacityService admission', () => {
     expect(guard.getSnapshot().status).toBe('unavailable')
   })
 
-  it.each([
-    {
-      name: 'nested SQLITE_FULL',
-      error: new Error('write wrapper', {
-        cause: Object.assign(new Error('database full'), { code: 'SQLITE_FULL' })
-      })
-    },
-    {
-      name: 'nested ENOSPC',
-      error: new Error('write wrapper', {
-        cause: Object.assign(new Error('device full'), { code: 'ENOSPC' })
-      })
-    }
-  ])('$name revokes admission immediately and requires the recovery margin', async ({ error }) => {
+  it('nested ENOSPC revokes admission immediately as low-space and requires the recovery margin', async () => {
     let available = 4 * GIB
     let now = 0
     const guard = createGuard({
@@ -152,8 +144,12 @@ describe('FileProviderContentCapacityService admission', () => {
       statfs: async () => ({ bavail: available, bsize: 1 })
     })
     await guard.check(true)
+    const error = new Error('write wrapper', {
+      cause: Object.assign(new Error('device full'), { code: 'ENOSPC' })
+    })
     expect(guard.recordFailure(error)).toBe(true)
     expect(guard.isReady()).toBe(false)
+    expect(guard.getSnapshot().status).toBe('low-space')
     // A real quota/disk write failure cannot be immediately undone by a healthy
     // statfs result; even forced reads wait for the controlled check interval.
     await expect(guard.check(true)).resolves.toBe(false)
@@ -164,6 +160,194 @@ describe('FileProviderContentCapacityService admission', () => {
     await expect(guard.check(true)).resolves.toBe(false)
     available = 3 * GIB
     await expect(guard.check(true)).resolves.toBe(true)
+  })
+
+  it.each([
+    {
+      name: 'SEARCH_INDEX_RESERVE_REACHED',
+      error: searchIndexReserveReachedError()
+    },
+    {
+      name: 'nested SQLITE_FULL with plentiful disk',
+      error: new Error('write wrapper', {
+        cause: Object.assign(new Error('database full'), { code: 'SQLITE_FULL' })
+      })
+    },
+    {
+      name: 'explicit FILE_INDEX_STORAGE_FULL error code',
+      error: Object.assign(new Error('index cap reached'), { code: FILE_INDEX_STORAGE_FULL })
+    }
+  ])(
+    '$name pauses as index-full without 30s retry spin while disk stays plentiful and recovers once index space is freed',
+    async ({ error }) => {
+      vi.useFakeTimers()
+      const changes: string[] = []
+      const guard = createGuard({
+        getDirectory: () => '/synthetic/index',
+        checkIntervalMs: 30_000,
+        statfs: async () => ({ bavail: 20 * GIB, bsize: 1 }),
+        onChange: (storage) => changes.push(storage.status)
+      })
+      await expect(guard.check(true)).resolves.toBe(true)
+      guard.start()
+
+      expect(guard.recordFailure(error)).toBe(true)
+      expect(guard.isReady()).toBe(false)
+      expect(guard.getSnapshot().status).toBe('index-full')
+
+      // Advance through multiple 30s polling ticks: abundant OS disk space must NEVER auto-resume.
+      for (let tick = 0; tick < 5; tick++) {
+        await vi.advanceTimersByTimeAsync(30_000)
+        expect(guard.isReady()).toBe(false)
+        expect(guard.getSnapshot().status).toBe('index-full')
+      }
+      await expect(guard.check(true)).resolves.toBe(false)
+      expect(guard.getSnapshot().status).toBe('index-full')
+      expect(changes).toEqual(['ready', 'index-full'])
+
+      // Recovery once index space is actually freed (e.g. eviction, compaction, cleanup, rebuild).
+      await expect(guard.notifyIndexSpaceFreed()).resolves.toBe(true)
+      expect(guard.isReady()).toBe(true)
+      expect(guard.getSnapshot().status).toBe('ready')
+      expect(changes).toEqual(['ready', 'index-full', 'ready'])
+    }
+  )
+
+  it('re-verifies OS disk headroom when recovering from an index-full pause', async () => {
+    let available = 10 * GIB
+    const guard = createGuard({
+      getDirectory: () => '/synthetic/index',
+      statfs: async () => ({ bavail: available, bsize: 1 })
+    })
+    await expect(guard.check(true)).resolves.toBe(true)
+    expect(guard.recordFailure(searchIndexReserveReachedError())).toBe(true)
+    expect(guard.getSnapshot().status).toBe('index-full')
+
+    // Even after index space is freed, low OS disk space keeps indexing paused as low-space.
+    available = 2 * GIB
+    await expect(guard.notifyIndexSpaceFreed()).resolves.toBe(false)
+    expect(guard.isReady()).toBe(false)
+    expect(guard.getSnapshot().status).toBe('low-space')
+
+    available = 3 * GIB
+    await expect(guard.check(true)).resolves.toBe(true)
+    expect(guard.getSnapshot().status).toBe('ready')
+  })
+
+  it('transitions bare SQLITE_FULL to low-space if fresh statfs proves disk actually dropped below 3 GiB', async () => {
+    let available = 10 * GIB
+    let now = 0
+    const guard = createGuard({
+      getDirectory: () => '/synthetic/index',
+      now: () => now,
+      checkIntervalMs: 1000,
+      statfs: async () => ({ bavail: available, bsize: 1 })
+    })
+    await expect(guard.check(true)).resolves.toBe(true)
+
+    // Disk suddenly filled after the last statfs read, causing bare SQLITE_FULL.
+    available = 1 * GIB
+    const error = Object.assign(new Error('database or disk is full'), { code: 'SQLITE_FULL' })
+    expect(guard.recordFailure(error)).toBe(true)
+    expect(guard.getSnapshot().status).toBe('index-full')
+
+    now = 1000
+    await expect(guard.check(true)).resolves.toBe(false)
+    expect(guard.getSnapshot().status).toBe('low-space')
+
+    // Once the user frees OS disk space, recovery succeeds automatically.
+    available = 3 * GIB
+    await expect(guard.check(true)).resolves.toBe(true)
+    expect(guard.getSnapshot().status).toBe('ready')
+  })
+
+  it('classifies bare SQLITE_FULL before any initial statfs read as index-full when disk proves plentiful', async () => {
+    let now = 0
+    const guard = createGuard({
+      getDirectory: () => '/synthetic/index',
+      now: () => now,
+      checkIntervalMs: 1000,
+      statfs: async () => ({ bavail: 10 * GIB, bsize: 1 })
+    })
+    const error = Object.assign(new Error('database or disk is full'), { code: 'SQLITE_FULL' })
+    expect(guard.recordFailure(error)).toBe(true)
+    expect(guard.isReady()).toBe(false)
+
+    now = 1000
+    await expect(guard.check(true)).resolves.toBe(false)
+    expect(guard.getSnapshot().status).toBe('index-full')
+
+    now = 2000
+    await expect(guard.check(true)).resolves.toBe(false)
+    expect(guard.getSnapshot().status).toBe('index-full')
+  })
+
+  it('auto-recovers from index-full when getIndexStorage drops strictly below baseline and cap headroom', async () => {
+    let now = 0
+    let fileBytes = Math.round(7.95 * GIB)
+    const maxBytes = 8 * GIB
+    const guard = createGuard({
+      getDirectory: () => '/synthetic/index',
+      getIndexStorage: () => ({ fileBytes, maxBytes, resetFromBytes: null }),
+      now: () => now,
+      checkIntervalMs: 1000,
+      statfs: async () => ({ bavail: 20 * GIB, bsize: 1 })
+    })
+    await expect(guard.check(true)).resolves.toBe(true)
+    expect(guard.recordFailure(searchIndexReserveReachedError())).toBe(true)
+    await Promise.resolve()
+
+    // Still at cap -> stays paused.
+    now = 1000
+    await expect(guard.check(true)).resolves.toBe(false)
+    expect(guard.getSnapshot().status).toBe('index-full')
+
+    // Minor WAL shrink still inside the 2x reserve headroom band -> stays paused.
+    fileBytes = Math.round(7.91 * GIB)
+    now = 2000
+    await expect(guard.check(true)).resolves.toBe(false)
+    expect(guard.getSnapshot().status).toBe('index-full')
+
+    // Compaction/cleanup frees meaningful space below cap headroom -> resumes.
+    fileBytes = 5 * GIB
+    now = 3000
+    await expect(guard.check(true)).resolves.toBe(true)
+    expect(guard.getSnapshot().status).toBe('ready')
+  })
+
+  it('treats explicit disk-source SQLITE_FULL failures as low-space even when cached volume space is high', async () => {
+    const guard = createGuard({
+      getDirectory: () => '/synthetic/index',
+      statfs: async () => ({ bavail: 10 * GIB, bsize: 1 })
+    })
+    await expect(guard.check(true)).resolves.toBe(true)
+    const error = Object.assign(new Error('database full'), { code: 'SQLITE_FULL' })
+    expect(guard.recordFailure(error, { source: 'disk' })).toBe(true)
+    expect(guard.getSnapshot().status).toBe('low-space')
+  })
+
+  it('createDatabaseContentCapacityService wires search index directory and storage probe', async () => {
+    const getSearchIndexStorage = vi.fn(async () => ({
+      fileBytes: 2 * GIB,
+      maxBytes: 8 * GIB,
+      resetFromBytes: null
+    }))
+    const guard = createDatabaseContentCapacityService(() => ({
+      getSearchDatabaseFilePath: () => '/synthetic/db/search-index.db',
+      getSearchIndexStorage
+    }))
+    guards.push(guard)
+    const deps = (
+      guard as unknown as {
+        deps: ConstructorParameters<typeof FileProviderContentCapacityService>[0]
+      }
+    ).deps
+    expect(deps.getDirectory()).toBe('/synthetic/db')
+    await expect(deps.getIndexStorage?.()).resolves.toEqual({
+      fileBytes: 2 * GIB,
+      maxBytes: 8 * GIB,
+      resetFromBytes: null
+    })
   })
 
   it('does not mistake an ordinary parser failure for disk exhaustion', async () => {
