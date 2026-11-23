@@ -38,9 +38,9 @@
     },
     {
       "file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts",
-      "ceiling": 3878,
+      "ceiling": 3868,
       "issue": "#343",
-      "note": "~4,223 when #343 was filed, which is exactly the number that issue cites. +377 since. 2026-09-22: logging and stage timing moved to app-provider-log.ts, 3,985 -> 3,878."
+      "note": "~4,223 when #343 was filed, which is exactly the number that issue cites. +377 since. 2026-09-22: logging and stage timing moved to app-provider-log.ts, 3,985 -> 3,878. 2026-11-23: B1 item stability probe moved to app-provider-item-stability.ts and unstable paths routed into the retry ladder, 3,878 -> 3,868."
     },
     {
       "file": "apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts",

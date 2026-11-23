@@ -84,6 +84,11 @@ import { launchApp } from './app-launcher'
 
 import { appScanner, type AppScannerSourceScanResult } from './app-scanner'
 import { resolveApplicationProjection } from './app-resolution-service'
+import {
+  getRetryableStabilityError,
+  waitForItemStability,
+  type ItemStabilityResult
+} from './app-provider-item-stability'
 import { AppProviderSourceScanner } from './app-provider-source-scanner'
 import { AppIndexedSourceRecordMapper } from './services/app-index-record-sync-service'
 import { AppIndexMaintenanceService } from './services/app-index-maintenance-service'
@@ -226,17 +231,6 @@ const STARTUP_BACKFILL_MIN_INTERVAL_DEV_MS = 6 * 60 * 60 * 1000
 const STARTUP_MDLS_SCAN_MIN_INTERVAL_DEV_MS = 6 * 60 * 60 * 1000
 const PROD_MDLS_SCAN_MIN_INTERVAL_MS = 60 * 60 * 1000
 const WINDOWS_REALTIME_APP_EXTENSIONS = new Set(['.lnk', '.exe', '.appref-ms'])
-
-// Install-to-searchable budget for one app, summed across the watch chain:
-//   FSEvents dispatch  0.1-1s   (OS, chokidar-fsevents)
-// + event coalescing   0.4s     (APP_WATCH_COALESCE_WINDOW_MS, indexed-source-event-router)
-// + stability wait     0.55s    (APP_STABILITY_PROBE_INTERVAL_MS + APP_STABILITY_SETTLE_MS)
-// + app info + upsert  ~0.35s
-//   = 1.5-2.5s against a 10s target.
-// The shared watcher now uses a bounded 500ms write-settle window; the probe pair still catches a
-// bundle that is being copied in after the first stable filesystem notification.
-const APP_STABILITY_PROBE_INTERVAL_MS = 300
-const APP_STABILITY_SETTLE_MS = 250
 
 // Per-path resolution retry (F1). A transient failure — chunk load, mdls throttle, Spotlight lag,
 // bundle mid-write — is retried out of band so the watch route (and its source mutation lease) is
@@ -3044,6 +3038,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       discovery?: AppDiscoveryKind
     } = {}
   ): Promise<AppIndexProcessPathResult> {
+    if (this.shuttingDown) {
+      return { success: false, status: 'invalid', reason: 'unstable' }
+    }
     if (this.processingPaths.has(appPath)) {
       // A second event for a bundle that is still resolving used to be dropped here, and nothing
       // ever looked at the path again until the next full sync. Remember it and run it once more
@@ -3059,9 +3056,19 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     try {
       const isVirtualWindowsApp = process.platform === 'win32' && isWindowsUwpShellPath(appPath)
-      if (!isVirtualWindowsApp && !(await this._waitForItemStable(appPath))) {
-        logApp(`Item is unstable, skipping: ${chalk.yellow(appPath)}`, LogStyle.warning)
-        return { success: false, status: 'invalid', reason: 'unstable' }
+      if (!isVirtualWindowsApp) {
+        const stability = await this._checkItemStability(appPath)
+        if (stability.status !== 'stable') {
+          if (stability.status === 'missing') {
+            this.forgetAppResolutionFailure(appPath)
+          } else {
+            const retryError = getRetryableStabilityError(stability)
+            if (retryError !== null) {
+              this.handleAppResolutionFailure(appPath, retryError, options)
+            }
+          }
+          return { success: false, status: 'invalid', reason: 'unstable' }
+        }
       }
 
       logApp(`Fetching app info: ${chalk.cyan(appPath)}`, LogStyle.process)
@@ -3176,7 +3183,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (this.shuttingDown) return
     try {
       const result = await this.processAppPath(appPath, { managedEntry })
-      if (!result.success || !result.appInfo) return
+      if (this.shuttingDown || !result.success || !result.appInfo) return
       logApp(`App resolution recovered on retry: ${chalk.green(appPath)}`, LogStyle.success)
       await this.publishRecoveredAppResolution(result.appInfo)
     } catch (error) {
@@ -3292,6 +3299,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         managedEntry: entry.managedEntry,
         scheduleRetry: false
       })
+      if (this.shuttingDown) {
+        this.stopAppResolutionSweep()
+        return
+      }
       if (result.success && result.appInfo) {
         logApp(`App resolution recovered on sweep: ${chalk.green(appPath)}`, LogStyle.success)
         await this.publishRecoveredAppResolution(result.appInfo)
@@ -3319,6 +3330,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       entry.timer = null
     }
     this.appResolutionRetries.clear()
+    this.appResolutionDeadLetters.clear()
     this.stopAppResolutionSweep()
   }
 
@@ -3839,46 +3851,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
-  private async _waitForItemStable(
-    itemPath: string,
-    delay = APP_STABILITY_PROBE_INTERVAL_MS,
-    retries = 5
-  ): Promise<boolean> {
-    logApp(`Waiting for item to stabilize: ${chalk.cyan(itemPath)}`, LogStyle.info)
-
-    // A `.app` is a directory whose st_size is constant (96 on APFS) however much is still being
-    // copied into it, so comparing sizes declared every bundle stable on the first probe. The
-    // directory mtime moves as entries land; files keep the size comparison and add mtime.
-    const fingerprintOf = (stats: { size: number; mtimeMs: number; isDirectory(): boolean }) =>
-      stats.isDirectory() ? `dir:${stats.mtimeMs}` : `file:${stats.size}:${stats.mtimeMs}`
-
-    for (let i = 0; i < retries; i++) {
-      try {
-        const size1 = fingerprintOf(await fs.stat(itemPath))
-        await new Promise((resolve) => setTimeout(resolve, delay))
-        const size2 = fingerprintOf(await fs.stat(itemPath))
-
-        if (size1 === size2) {
-          logApp(`Item stabilized: ${chalk.green(itemPath)}`, LogStyle.success)
-          await sleep(APP_STABILITY_SETTLE_MS)
-          return true
-        } else {
-          logApp(
-            `Item still changing: ${chalk.yellow(itemPath)}, retry ${i + 1}/${retries}`,
-            LogStyle.info
-          )
-        }
-      } catch (error) {
-        logApp(
-          `Failed to check item stability: ${chalk.red((error as Error).message)}`,
-          LogStyle.error
-        )
-        return false
-      }
-    }
-
-    logApp(`Item did not stabilize: ${chalk.yellow(itemPath)}`, LogStyle.warning)
-    return false
+  private async _checkItemStability(itemPath: string): Promise<ItemStabilityResult> {
+    return await waitForItemStability(itemPath, { signal: this.startupProducerAbort.signal })
   }
 
   private getMainWindow(): BrowserWindow | null {
