@@ -1,6 +1,6 @@
 # Tuff AI Stable TODO
 
-> 更新时间：2026-11-17
+> 更新时间：2026-11-23
 > 范围：Roadmap R2 / AI 2.5.0 Stable。主验收矩阵以 `04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md` 为准；全局执行顺序服从 [`TODO.md`](./TODO.md)，本文件不单独抢占稳定化窗口。
 
 ## 当前口径
@@ -54,7 +54,7 @@
 - **`local-ai-cli` 与调度器路由不变量（已落地）**：`localAiCliModule`（`local_ai_cli_sessions`、`pi` / `omp` / `codex` / `claude` 可执行探测、工作区隔离与 `--version` 探测进程回收）已合入；`providers/pi-cli-provider.ts` 与 `providers/cli-config-provider.ts` 确立“调度器决定执行器”不变量——第三方 CLI 仅在其对应调度器配置（`profile:cli:{codex,claude,omp}`）下启动进程，其他调度器或未指定调度器仅复用 `~/.codex/config.toml`、`~/.claude/settings.json`、`~/.omp/agent/models.{yml,yaml,json}` 端点（分别标记为 `codex-config` / `claude-config` / `omp-config`）。
 - **`models.dev` 定价目录与 `usage-ledger` 全局账本（已落地）**：`pricing/models-dev-catalog.ts`、`pricing/model-pricing.ts` 与 `usage-ledger/`（含全局 backfill、配额拒绝与限额校验）已接入主进程。
 - **OpenAI Responses API 与 `pi-agent-core@0.85.1`（已落地）**：`ai-import-config-parser.ts` 与 `langchain-openai-compatible-provider.ts` 支持 `openai-responses`（`transport: 'responses'`）；内置智能体运行宿主使用 `@earendil-works/pi-agent-core@0.85.1`（`PiAgentRuntimeHost`），并接入 `tool-gateway` / `mcp-host` 与 `0056_ai_orchestrator_run_messages.sql` 运行日志持久化。
-- **`omp` ACP 底座（已建未接 orchestrator）**：`OmpAcpClient`（`packages/tuff-intelligence/src/omp/omp-acp-client.ts`）与 `OmpAgentRuntimeHost`（`apps/core-app/src/main/modules/ai/omp/omp-agent-runtime-host.ts`）及单元测试已实现，但 `ai-cli-orchestrator.ts`（第 530 行）生产路径仍只实例化 `PiAgentRuntimeHost`；`pi-cli-provider.ts` 中的 `omp` 仍走 `omp --print --mode json` 单次子进程（详情见 [`omp-runtime-and-tern-gui-integration-analysis-2026-11-01.md`](../engineering/reports/omp-runtime-and-tern-gui-integration-analysis-2026-11-01.md)）。
+- **`omp` ACP 底座与 orchestrator 接线（2026-11-23 已接线，PR `#2254`，`282ae52cc`）**：`OmpAcpClient`（`packages/tuff-intelligence/src/omp/omp-acp-client.ts`）与 `OmpAgentRuntimeHost`（`apps/core-app/src/main/modules/ai/omp/omp-agent-runtime-host.ts`）已正式接入 `ai-cli-orchestrator.ts`，严格守住 `AGENTS.md`“调度器决定执行器”不变量——仅 `profile:cli:omp` 路由至 `OmpAgentRuntimeHost`，内置 Tuff 调度、未指定调度及 `profile:cli:{codex,claude}` 均保持不变；同步打通 MCP Host 环回桥接、fail-closed `session/request_permission` 工具确认门禁、有界 SIGTERM→SIGKILL 进程回收、重启安全恢复（运行中标记 `interrupted`、排队任务续跑）与实时 text/reasoning 增量流式透出。`packages/tuff-intelligence` 11 files / 46 tests 与 `apps/core-app` AI/MCP/conversation 153 files / 1,871 tests 通过（单测与集成验证；真实本机 `omp` 二进制与打包 Electron 端到端实测另行单独验收；详情见 [`omp-runtime-and-tern-gui-integration-analysis-2026-11-01.md`](../engineering/reports/omp-runtime-and-tern-gui-integration-analysis-2026-11-01.md)）。
 - **Home AI UI 与 `intelligence-uikit` 演进原则**：`HomePage.vue` 已瘦身至 1,941 行，已部分接入 `@talex-touch/intelligence-uikit`（`HomeMessageRow.vue` 使用 `TxAiAssistantTurn`，主进程 `home-conversation-injection.ts` 使用 `openUIPrompt`）；对话流容器与输入区仍采用 `TxConversationStream` 与 `TuffAIComposer.vue`（390 行 + `composer/*`）。后续**先以 CoreApp 现存真实 UI 为基线**升级 `@talex-touch/tuffex` 与 `intelligence-uikit` 的对话/输入框组件，不把生产界面降级迁移到占位壳组件。
 
 ## 已完成
