@@ -94,8 +94,15 @@ function remapWindow(value: number, start: number, end: number): number {
   return clamp01((value - start) / (end - start))
 }
 
+export function normalizeFoldPanelCount(value: unknown, fallback = 3): number {
+  const numericFallback = Number.isFinite(fallback) ? Math.max(2, Math.floor(fallback)) : 3
+  if (typeof value !== 'number' || !Number.isFinite(value))
+    return numericFallback
+  return Math.max(2, Math.floor(value))
+}
+
 export function computeFoldPageLayout(input: FoldPageLayoutInput): FoldPageLayoutResult {
-  const count = Math.max(2, Math.floor(input.count || 2))
+  const count = normalizeFoldPanelCount(input.count, 2)
   const width = Math.max(1, Number.isFinite(input.width) ? input.width : 540)
   const height = Math.max(1, Number.isFinite(input.height) ? input.height : 240)
   const progress = clamp01(input.progress)
@@ -173,7 +180,38 @@ export function computeFoldPageLayout(input: FoldPageLayoutInput): FoldPageLayou
     const leftMaxAngle = clamp(baseMaxAngle - 4, 20, 168)
     const rightPhi = rightClosed * rightMaxAngle
     const leftPhi = leftClosed * leftMaxAngle
-    const leftBaseZ = roundPx(Math.max(12, panelSpan * 0.08))
+    const rightZ = rightClosed > 0 ? 1 : 0
+    const leftRad = (leftPhi * Math.PI) / 180
+    const rightRad = (rightPhi * Math.PI) / 180
+    const cosL = Math.cos(leftRad)
+    const sinL = Math.sin(leftRad)
+    const cosR = Math.cos(rightRad)
+    const sinR = Math.sin(rightRad)
+    const leftHinge = panelSpan
+    const rightHinge = (count - 1) * panelSpan
+    const xL0 = leftHinge
+    const xL1 = leftHinge - panelSpan * cosL
+    const xR0 = rightHinge
+    const xR1 = rightHinge + panelSpan * cosR
+    const xMin = Math.max(Math.min(xL0, xL1), Math.min(xR0, xR1))
+    const xMax = Math.min(Math.max(xL0, xL1), Math.max(xR0, xR1))
+    const clearance = Math.max(4, panelSpan * 0.025)
+    const ramp = Math.min(1, leftClosed / 0.12)
+    let neededZ = (rightZ + clearance) * ramp
+
+    if (xMax > xMin + 1e-4 && Math.abs(cosL) > 1e-6 && Math.abs(cosR) > 1e-6) {
+      for (const x of [xMin, xMax]) {
+        const u = clamp((leftHinge - x) / cosL, 0, panelSpan)
+        const v = clamp((x - rightHinge) / cosR, 0, panelSpan)
+        const zLRel = u * sinL
+        const zR = rightZ + v * sinR
+        neededZ = Math.max(neededZ, zR - zLRel + clearance)
+      }
+    }
+
+    const leftBaseZ = leftClosed > 0
+      ? roundPx(Math.max(Math.max(12, panelSpan * 0.08) * ramp, neededZ))
+      : 0
     const rotateAxis = isHorizontal ? 'Y' : 'X'
     const coverRotateTransform = isHorizontal ? 'rotateY(180deg)' : 'rotateX(180deg)'
 

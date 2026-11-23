@@ -81,6 +81,9 @@ const velY = ref(0)
 let activePointerId: number | null = null
 let dragStartX = 0
 let dragStartY = 0
+let preDragProgress = 0
+let lastDragProgress: number | null = null
+let pendingCancelRestore: number | null = null
 let dragMoved = false
 let suppressClick = false
 let resizeObserver: ResizeObserver | null = null
@@ -114,13 +117,21 @@ const geometry = computed(() =>
   }),
 )
 
-const isUnderInert = computed(() => currentProgress.value < 0.08)
+const underRevealThreshold = computed(() => {
+  const previewCeiling = Math.max(clamp01(props.restPeel), allowsHover.value ? clamp01(props.hoverPeel) : 0)
+  const openTarget = clamp01(props.openPeel)
+  if (openTarget <= previewCeiling)
+    return Math.max(0.08, openTarget * 0.5)
+  return Math.max(0.28, previewCeiling + (openTarget - previewCeiling) * 0.35)
+})
+
+const isUnderInert = computed(() => !isOpen.value && currentProgress.value < underRevealThreshold.value)
 const isMoving = computed(() => isDragging.value || isAnimating.value)
 
 const handleLabel = computed(() => {
   if (isOpen.value)
-    return props.labels?.flatten ?? 'Flatten corner'
-  return props.labels?.peel ?? 'Peel corner'
+    return props.labels?.flatten ?? props.labels?.toggle ?? 'Flatten corner'
+  return props.labels?.peel ?? props.labels?.toggle ?? 'Peel corner'
 })
 
 const rootClasses = computed(() => [
@@ -253,16 +264,26 @@ function animateToProgress(progressValue: number, endValue: boolean | null = nul
   frameLoop.start()
 }
 
+function resolveReleaseTarget(nextOpen: boolean): number {
+  if (nextOpen)
+    return clamp01(props.openPeel)
+  if (!isControlledProgress.value && isHovered.value && allowsHover.value && !props.disabled)
+    return clamp01(props.hoverPeel)
+  return clamp01(props.restPeel)
+}
+
 function commitOpenState(nextOpen: boolean): void {
+  pendingCancelRestore = null
+  lastDragProgress = null
   const changed = nextOpen !== localOpen.value
   localOpen.value = nextOpen
   emit('peel-start', nextOpen)
   emit('update:modelValue', nextOpen)
   if (changed)
     emit('change', nextOpen)
-  const target = nextOpen ? clamp01(props.openPeel) : clamp01(isHovered.value && allowsHover.value && !props.disabled ? props.hoverPeel : props.restPeel)
+  const target = resolveReleaseTarget(nextOpen)
   if (isControlledProgress.value)
-    emit('update:progress', nextOpen ? clamp01(props.openPeel) : clamp01(props.restPeel))
+    emit('update:progress', target)
   animateToProgress(target, nextOpen)
 }
 
@@ -287,6 +308,8 @@ function toggle(): void {
 function setProgress(value: number): void {
   if (props.disabled)
     return
+  pendingCancelRestore = null
+  lastDragProgress = null
   const clamped = clamp01(value)
   frameLoop.stop()
   isAnimating.value = false
@@ -343,13 +366,16 @@ function onPointerLeave(): void {
 }
 
 function onPointerDown(event: PointerEvent): void {
-  if (props.disabled || !allowsDrag.value)
+  if (props.disabled || !allowsDrag.value || activePointerId !== null)
     return
   if (event.button !== 0 || isInteractiveDescendant(event.target))
     return
+  pendingCancelRestore = null
+  lastDragProgress = null
   activePointerId = event.pointerId
   dragStartX = event.clientX
   dragStartY = event.clientY
+  preDragProgress = isControlledProgress.value ? clamp01(props.progress!) : currentProgress.value
   dragMoved = false
   const local = pointerLocalCoords(event.clientX, event.clientY)
   velocityTracker.reset(event.timeStamp || performance.now(), local.x, local.y)
@@ -387,7 +413,9 @@ function onWindowPointerMove(event: PointerEvent): void {
   tipY.value = clamped.y
   targetTipX.value = clamped.x
   targetTipY.value = clamped.y
-  emit('update:progress', currentProgress.value)
+  const nextDrag = currentProgress.value
+  lastDragProgress = nextDrag
+  emit('update:progress', nextDrag)
 }
 
 function cleanupWindowListeners(): void {
@@ -405,13 +433,43 @@ function cleanupWindowListeners(): void {
   activePointerId = null
 }
 
+function cancelActiveGesture(): void {
+  cleanupWindowListeners()
+  const wasDragging = dragMoved || isDragging.value
+  dragMoved = false
+  if (!wasDragging)
+    return
+  isDragging.value = false
+  if (isControlledProgress.value) {
+    const restore = preDragProgress
+    pendingCancelRestore = restore
+    localOpen.value = restore >= (props.restPeel + props.openPeel) * 0.5
+    emit('update:progress', restore)
+    animateToProgress(restore, localOpen.value)
+  }
+  else {
+    animateToProgress(desiredIdleProgress(), localOpen.value)
+  }
+}
+
 function onWindowPointerUp(event: PointerEvent): void {
   if (activePointerId === null || event.pointerId !== activePointerId)
     return
+  if (event.type === 'pointercancel') {
+    if (dragMoved) {
+      suppressClick = true
+      requestAnimationFrame(() => {
+        suppressClick = false
+      })
+    }
+    cancelActiveGesture()
+    return
+  }
   cleanupWindowListeners()
 
   if (!dragMoved)
     return
+  dragMoved = false
 
   isDragging.value = false
   suppressClick = true
@@ -419,10 +477,8 @@ function onWindowPointerUp(event: PointerEvent): void {
     suppressClick = false
   })
 
-  if (event.type === 'pointercancel') {
-    animateToProgress(desiredIdleProgress(), localOpen.value)
-    return
-  }
+  pendingCancelRestore = null
+  lastDragProgress = null
 
   const [vx, vy] = velocityTracker.velocity(event.timeStamp || performance.now())
   const projectedX = tipX.value + projectMomentum(vx, 0.99)
@@ -444,9 +500,9 @@ function onWindowPointerUp(event: PointerEvent): void {
   emit('update:modelValue', nextOpen)
   if (changed)
     emit('change', nextOpen)
-  const target = nextOpen ? clamp01(props.openPeel) : clamp01(isHovered.value && allowsHover.value && !props.disabled ? props.hoverPeel : props.restPeel)
+  const target = resolveReleaseTarget(nextOpen)
   if (isControlledProgress.value)
-    emit('update:progress', nextOpen ? clamp01(props.openPeel) : clamp01(props.restPeel))
+    emit('update:progress', target)
   animateToProgress(target, nextOpen)
 }
 
@@ -463,19 +519,23 @@ function syncDimensions(): void {
   if (!el)
     return
   const rect = el.getBoundingClientRect()
-  const nextW = rect.width > 0 ? rect.width : width.value
-  const nextH = rect.height > 0 ? rect.height : height.value
-  if (nextW === width.value && nextH === height.value)
+  const prevW = width.value
+  const prevH = height.value
+  const nextW = rect.width > 0 ? rect.width : prevW
+  const nextH = rect.height > 0 ? rect.height : prevH
+  if (nextW === prevW && nextH === prevH)
     return
 
-  const activeProg = currentProgress.value
+  const activeProg = projectPointerToPeelProgress(props.corner, prevW, prevH, tipX.value, tipY.value)
+  const targetProg = projectPointerToPeelProgress(props.corner, prevW, prevH, targetTipX.value, targetTipY.value)
   width.value = nextW
   height.value = nextH
-  const pt = resolveCornerTipFromProgress(props.corner, nextW, nextH, isDragging.value ? activeProg : desiredIdleProgress())
+  const pt = resolveCornerTipFromProgress(props.corner, nextW, nextH, activeProg)
+  const targetPt = resolveCornerTipFromProgress(props.corner, nextW, nextH, targetProg)
   tipX.value = pt.x
   tipY.value = pt.y
-  targetTipX.value = pt.x
-  targetTipY.value = pt.y
+  targetTipX.value = targetPt.x
+  targetTipY.value = targetPt.y
 }
 
 watch(
@@ -494,11 +554,32 @@ watch(
     if (val === undefined || isDragging.value)
       return
     const next = clamp01(val)
+    if (pendingCancelRestore !== null) {
+      if (Math.abs(next - pendingCancelRestore) <= 1e-3) {
+        pendingCancelRestore = null
+        lastDragProgress = null
+      }
+      else if (lastDragProgress !== null && Math.abs(next - lastDragProgress) <= 1e-3) {
+        return
+      }
+      else {
+        pendingCancelRestore = null
+        lastDragProgress = null
+      }
+    }
     localOpen.value = next >= (props.restPeel + props.openPeel) * 0.5
     const pt = resolveCornerTipFromProgress(props.corner, width.value, height.value, next)
     if (Math.hypot(pt.x - targetTipX.value, pt.y - targetTipY.value) < 0.1)
       return
     animateToProgress(next, null)
+  },
+)
+
+watch(
+  () => props.disabled,
+  (disabled) => {
+    if (disabled)
+      cancelActiveGesture()
   },
 )
 

@@ -1,16 +1,19 @@
+import type { Plugin } from 'vue'
 import { withInstall } from '../../../utils/withInstall'
-import TxFoldCorner from './src/TxFoldCorner.vue'
-import TxFoldPage from './src/TxFoldPage.vue'
+import TxFoldCornerSfc from './src/TxFoldCorner.vue'
+import TxFoldPageSfc from './src/TxFoldPage.vue'
 
-withInstall(TxFoldPage)
-withInstall(TxFoldCorner)
+const TxFoldPage: typeof TxFoldPageSfc & Plugin = withInstall(TxFoldPageSfc)
+const TxFoldCorner: typeof TxFoldCornerSfc & Plugin = withInstall(TxFoldCornerSfc)
+const FoldPage: typeof TxFoldPageSfc & Plugin = TxFoldPage
+const FoldCorner: typeof TxFoldCornerSfc & Plugin = TxFoldCorner
 
-export { TxFoldCorner, TxFoldPage }
-export { TxFoldCorner as FoldCorner, TxFoldPage as FoldPage }
+export { FoldCorner, FoldPage, TxFoldCorner, TxFoldPage }
 export {
   clipPolygonHalfPlane,
   computeCornerPeelGeometry,
   computeFoldPageLayout,
+  normalizeFoldPanelCount,
   projectPointerToPeelProgress,
   resolveCornerTipFromProgress,
 } from './src/geometry'

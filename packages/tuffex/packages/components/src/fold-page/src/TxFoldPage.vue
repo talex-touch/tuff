@@ -13,7 +13,7 @@ import { createFrameLoop } from '../../../../utils/frame-loop'
 import { createVelocityTracker, projectMomentum, rubberband } from '../../../../utils/gesture'
 import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
-import { clamp, clamp01, computeFoldPageLayout } from './geometry'
+import { clamp, clamp01, computeFoldPageLayout, normalizeFoldPanelCount } from './geometry'
 
 defineOptions({
   name: 'TxFoldPage',
@@ -68,6 +68,9 @@ let activePointerId: number | null = null
 let dragStartX = 0
 let dragStartY = 0
 let dragStartProgress = 0
+let preDragProgress = 0
+let lastDragProgress: number | null = null
+let pendingCancelRestore: number | null = null
 let dragSign = 1
 let dragMoved = false
 let suppressClick = false
@@ -79,7 +82,13 @@ const velocityTracker = createVelocityTracker(100, 3200)
 const resolvedPanels = computed<FoldPagePanel[]>(() => {
   if (props.panels && props.panels.length >= 2)
     return props.panels
-  const total = Math.max(2, Math.floor(props.count || 3))
+  if (props.panels && props.panels.length === 1) {
+    return [
+      props.panels[0]!,
+      { id: 1, title: 'Panel 2' },
+    ]
+  }
+  const total = normalizeFoldPanelCount(props.count, 3)
   return Array.from({ length: total }, (_, index) => ({
     id: index,
     title: `Panel ${index + 1}`,
@@ -116,8 +125,8 @@ const isOpen = computed(() => {
 
 const toggleLabel = computed(() => {
   if (isOpen.value)
-    return props.labels?.collapse ?? 'Collapse fold page'
-  return props.labels?.expand ?? 'Expand fold page'
+    return props.labels?.collapse ?? props.labels?.toggle ?? 'Collapse fold page'
+  return props.labels?.expand ?? props.labels?.toggle ?? 'Expand fold page'
 })
 
 const rootClasses = computed(() => [
@@ -240,6 +249,8 @@ function animateTo(nextTarget: number, endValue: boolean | null = null): void {
 }
 
 function commitOpenState(nextOpen: boolean): void {
+  pendingCancelRestore = null
+  lastDragProgress = null
   const changed = nextOpen !== localOpen.value
   localOpen.value = nextOpen
   emit('fold-start', nextOpen)
@@ -272,6 +283,8 @@ function toggle(): void {
 function setProgress(value: number): void {
   if (props.disabled)
     return
+  pendingCancelRestore = null
+  lastDragProgress = null
   const clamped = clamp01(value)
   frameLoop.stop()
   isAnimating.value = false
@@ -289,16 +302,25 @@ function setProgress(value: number): void {
   }
 }
 
+function isNestedFoldControl(target: EventTarget | null): boolean {
+  if (!(target instanceof Element))
+    return false
+  const owner = target.closest('.tx-fold-corner, .tx-fold-page')
+  return Boolean(owner && owner !== rootRef.value)
+}
+
 function isInteractiveTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element))
     return false
+  if (isNestedFoldControl(target))
+    return true
   if (target.closest('.tx-fold-page__toggle'))
     return false
   return Boolean(target.closest('a, button, input, textarea, select, [role="button"], [contenteditable]'))
 }
 
 function onPointerDown(event: PointerEvent): void {
-  if (props.disabled || !props.draggable)
+  if (props.disabled || !props.draggable || activePointerId !== null)
     return
   if (event.button !== 0 || isInteractiveTarget(event.target))
     return
@@ -306,10 +328,13 @@ function onPointerDown(event: PointerEvent): void {
   if (!el)
     return
 
+  pendingCancelRestore = null
+  lastDragProgress = null
   const rect = el.getBoundingClientRect()
   activePointerId = event.pointerId
   dragStartX = event.clientX
   dragStartY = event.clientY
+  preDragProgress = isControlledProgress.value ? clamp01(props.progress!) : currentProgress.value
   dragStartProgress = currentProgress.value
   dragMoved = false
 
@@ -335,8 +360,8 @@ function onWindowPointerMove(event: PointerEvent): void {
   if (activePointerId === null || event.pointerId !== activePointerId)
     return
 
-  const dx = event.clientX - dragStartX
-  const dy = event.clientY - dragStartY
+  let dx = event.clientX - dragStartX
+  let dy = event.clientY - dragStartY
   if (!dragMoved) {
     if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX)
       return
@@ -344,6 +369,11 @@ function onWindowPointerMove(event: PointerEvent): void {
     isDragging.value = true
     frameLoop.stop()
     isAnimating.value = false
+    dragStartProgress = currentProgress.value
+    dragStartX = event.clientX
+    dragStartY = event.clientY
+    dx = 0
+    dy = 0
     emit('fold-start', !isOpen.value)
     try {
       rootRef.value?.setPointerCapture?.(event.pointerId)
@@ -369,6 +399,7 @@ function onWindowPointerMove(event: PointerEvent): void {
   const clamped = clamp01(rawProgress)
   if (Math.abs(clamped - currentProgress.value) > 1e-4) {
     currentProgress.value = clamped
+    lastDragProgress = clamped
     emit('update:progress', clamped)
   }
 }
@@ -388,13 +419,43 @@ function cleanupWindowListeners(): void {
   activePointerId = null
 }
 
+function cancelActiveGesture(): void {
+  cleanupWindowListeners()
+  const wasDragging = dragMoved || isDragging.value
+  dragMoved = false
+  if (!wasDragging)
+    return
+  isDragging.value = false
+  if (isControlledProgress.value) {
+    const restore = preDragProgress
+    pendingCancelRestore = restore
+    localOpen.value = restore >= 0.5
+    emit('update:progress', restore)
+    animateTo(restore, localOpen.value)
+  }
+  else {
+    animateTo(localOpen.value ? 1 : 0, localOpen.value)
+  }
+}
+
 function onWindowPointerUp(event: PointerEvent): void {
   if (activePointerId === null || event.pointerId !== activePointerId)
     return
+  if (event.type === 'pointercancel') {
+    if (dragMoved) {
+      suppressClick = true
+      requestAnimationFrame(() => {
+        suppressClick = false
+      })
+    }
+    cancelActiveGesture()
+    return
+  }
   cleanupWindowListeners()
 
   if (!dragMoved)
     return
+  dragMoved = false
 
   isDragging.value = false
   suppressClick = true
@@ -402,10 +463,8 @@ function onWindowPointerUp(event: PointerEvent): void {
     suppressClick = false
   })
 
-  if (event.type === 'pointercancel') {
-    animateTo(localOpen.value ? 1 : 0, localOpen.value)
-    return
-  }
+  pendingCancelRestore = null
+  lastDragProgress = null
 
   const span = getSpanPx()
   const [vx] = velocityTracker.velocity(event.timeStamp || performance.now())
@@ -435,9 +494,7 @@ function onRootClick(event: MouseEvent): void {
 function onRootKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape' && isDragging.value) {
     event.preventDefault()
-    cleanupWindowListeners()
-    isDragging.value = false
-    animateTo(localOpen.value ? 1 : 0, localOpen.value)
+    cancelActiveGesture()
   }
 }
 
@@ -468,10 +525,31 @@ watch(
     if (val === undefined || isDragging.value)
       return
     const next = clamp01(val)
+    if (pendingCancelRestore !== null) {
+      if (Math.abs(next - pendingCancelRestore) <= 1e-3) {
+        pendingCancelRestore = null
+        lastDragProgress = null
+      }
+      else if (lastDragProgress !== null && Math.abs(next - lastDragProgress) <= 1e-3) {
+        return
+      }
+      else {
+        pendingCancelRestore = null
+        lastDragProgress = null
+      }
+    }
     localOpen.value = next >= 0.5
     if (Math.abs(next - targetProgress.value) < 1e-4)
       return
     animateTo(next, null)
+  },
+)
+
+watch(
+  () => props.disabled,
+  (disabled) => {
+    if (disabled)
+      cancelActiveGesture()
   },
 )
 

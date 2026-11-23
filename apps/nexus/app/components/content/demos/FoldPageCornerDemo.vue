@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasNavigator } from '@talex-touch/utils/env'
 import { computed, ref } from 'vue'
 
 const { locale } = useI18n()
@@ -62,7 +63,15 @@ const copy = computed(() => (locale.value === 'zh'
       ],
     }))
 
-function handleCopy() {
+async function handleCopy() {
+  if (!hasNavigator() || !navigator.clipboard?.writeText)
+    return
+  try {
+    await navigator.clipboard.writeText(copy.value.underCode)
+  }
+  catch {
+    return
+  }
   copied.value = true
   if (copyTimer)
     clearTimeout(copyTimer)
