@@ -897,7 +897,7 @@ defineExpose({
   background: color-mix(in srgb, var(--tx-bg-color-overlay, #ffffff) 88%, transparent);
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color, #dcdfe6) 80%, transparent),
-    0 2px 8px rgb(0 0 0 / 0.1);
+    1px 2px 8px rgb(0 0 0 / 0.1);
   transition: transform 200ms var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
 
   &:hover:not(:disabled) {
