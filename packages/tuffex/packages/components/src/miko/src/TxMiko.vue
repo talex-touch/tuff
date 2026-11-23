@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Component, CSSProperties } from 'vue'
 import type { MikoEmits, MikoProps, MikoState } from './types'
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from 'vue'
 import { MIKO_DEFAULT_COLOR, MIKO_DEFAULT_LABELS } from './types'
 import './miko.css'
 
@@ -30,9 +30,43 @@ const isMutatedDemon = ref(false)
 const isClicked = ref(false)
 const showFloatingHeart = ref(false)
 const showDemonBurst = ref(false)
+const isDocumentHidden = ref(typeof document !== 'undefined' ? Boolean(document.hidden) : false)
+const isWindowFocused = ref(
+  typeof document !== 'undefined' && typeof document.hasFocus === 'function'
+    ? document.hasFocus()
+    : true,
+)
+const isActivated = ref(true)
+const isLowBatteryMotion = ref(
+  typeof document !== 'undefined'
+    ? document.documentElement?.getAttribute('data-low-battery-motion') === '1'
+    : false,
+)
+const isPaused = computed(() =>
+  isDocumentHidden.value
+  || !isWindowFocused.value
+  || !isActivated.value
+  || isLowBatteryMotion.value,
+)
 let clickTimer: ReturnType<typeof setTimeout> | null = null
 let demonTimer: ReturnType<typeof setTimeout> | null = null
 let randomTimer: ReturnType<typeof setTimeout> | null = null
+let preloadTimer: ReturnType<typeof setTimeout> | null = null
+let preloadIdleId: number | null = null
+const unmountCleanups: Array<() => void> = []
+
+function readLowBatteryMotion(): boolean {
+  return typeof document !== 'undefined'
+    ? document.documentElement?.getAttribute('data-low-battery-motion') === '1'
+    : false
+}
+
+function clearRandomTimer() {
+  if (randomTimer) {
+    clearTimeout(randomTimer)
+    randomTimer = null
+  }
+}
 
 const CASUAL_RANDOM_STATES: MikoState[] = [
   'stretching',
@@ -210,14 +244,16 @@ function triggerDemonMutation(duration = 9000) {
 }
 
 function scheduleRandomState() {
-  if (!props.random)
+  clearRandomTimer()
+  if (!props.random || isPaused.value || typeof window === 'undefined')
     return
-  if (randomTimer)
-    clearTimeout(randomTimer)
 
   // 动作衔接机制：动作完成后平稳过渡回 idle，在 idle 沉浸后再触发下一动作
   if (randomState.value && randomState.value !== 'idle') {
     randomTimer = setTimeout(() => {
+      randomTimer = null
+      if (!props.random || isPaused.value)
+        return
       randomState.value = 'idle'
       emit('stateChange', 'idle')
       emit('update:state', 'idle')
@@ -230,6 +266,9 @@ function scheduleRandomState() {
   const delay = Math.max(3000, props.randomInterval + jitter)
 
   randomTimer = setTimeout(() => {
+    randomTimer = null
+    if (!props.random || isPaused.value)
+      return
     if (reactionState.value || (props.state && props.state !== 'idle')) {
       scheduleRandomState()
       return
@@ -300,44 +339,108 @@ function handleClick(event: MouseEvent) {
 }
 
 watch(
-  () => props.random,
-  (val) => {
-    if (val) {
-      scheduleRandomState()
-    }
-    else {
-      if (randomTimer)
-        clearTimeout(randomTimer)
+  [() => props.random, isPaused],
+  ([random, paused]) => {
+    if (!random) {
+      clearRandomTimer()
       randomState.value = null
+      return
+    }
+    if (paused) {
+      clearRandomTimer()
+      return
+    }
+    if (!randomTimer) {
+      scheduleRandomState()
     }
   },
   { immediate: true },
 )
 
-onMounted(() => {
-  if (props.random) {
-    scheduleRandomState()
+onActivated(() => {
+  isActivated.value = true
+  isDocumentHidden.value = typeof document !== 'undefined' ? Boolean(document.hidden) : false
+  if (typeof document !== 'undefined' && typeof document.hasFocus === 'function' && !document.hasFocus()) {
+    isWindowFocused.value = false
   }
+  isLowBatteryMotion.value = readLowBatteryMotion()
+})
+
+onDeactivated(() => {
+  isActivated.value = false
 })
 
 onMounted(() => {
+  if (typeof document !== 'undefined') {
+    isDocumentHidden.value = Boolean(document.hidden)
+    isWindowFocused.value = typeof document.hasFocus === 'function' ? document.hasFocus() : true
+    isLowBatteryMotion.value = readLowBatteryMotion()
+
+    const onVisibilityChange = (): void => {
+      isDocumentHidden.value = Boolean(document.hidden)
+      if (!document.hidden) {
+        if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
+          isWindowFocused.value = false
+        }
+        isLowBatteryMotion.value = readLowBatteryMotion()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    unmountCleanups.push(() => document.removeEventListener('visibilitychange', onVisibilityChange))
+
+    if (typeof MutationObserver !== 'undefined' && document.documentElement) {
+      const lowBatteryMo = new MutationObserver(() => {
+        isLowBatteryMotion.value = readLowBatteryMotion()
+      })
+      lowBatteryMo.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-low-battery-motion'],
+      })
+      unmountCleanups.push(() => lowBatteryMo.disconnect())
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    const onWindowFocus = (): void => {
+      isWindowFocused.value = true
+      isLowBatteryMotion.value = readLowBatteryMotion()
+    }
+    const onWindowBlur = (): void => {
+      isWindowFocused.value = false
+    }
+    window.addEventListener('focus', onWindowFocus)
+    window.addEventListener('blur', onWindowBlur)
+    unmountCleanups.push(() => {
+      window.removeEventListener('focus', onWindowFocus)
+      window.removeEventListener('blur', onWindowBlur)
+    })
+  }
+
   const preloadStates = () => {
+    preloadTimer = null
+    preloadIdleId = null
     for (const load of [...Object.values(stateLoaders), fallbackLoader])
       load()
   }
   if (typeof requestIdleCallback === 'function')
-    requestIdleCallback(preloadStates)
+    preloadIdleId = requestIdleCallback(preloadStates)
   else
-    setTimeout(preloadStates, 200)
+    preloadTimer = setTimeout(preloadStates, 200)
 })
 
 onUnmounted(() => {
-  if (randomTimer)
-    clearTimeout(randomTimer)
+  while (unmountCleanups.length > 0) {
+    unmountCleanups.pop()?.()
+  }
+  clearRandomTimer()
   if (clickTimer)
     clearTimeout(clickTimer)
   if (demonTimer)
     clearTimeout(demonTimer)
+  if (preloadTimer)
+    clearTimeout(preloadTimer)
+  if (preloadIdleId !== null && typeof cancelIdleCallback === 'function')
+    cancelIdleCallback(preloadIdleId)
 })
 </script>
 
@@ -350,6 +453,7 @@ onUnmounted(() => {
         'is-interactive': interactive,
         'is-clicked': isClicked,
         'is-demon': isDemonMode,
+        'is-paused': isPaused,
       },
     ]"
     :style="rootStyle"

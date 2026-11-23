@@ -691,3 +691,16 @@
 .state-space .cat-space { transform-origin: 12px 12px; animation: zeroGravityFloat 3.6s ease-in-out infinite; }
 .state-space .space-tether { animation: tetherWave 2.8s ease-in-out infinite; }
 .state-space .space-planet { animation: planetOrbit 3s ease-in-out infinite; }
+
+.tx-miko.is-paused,
+.tx-miko.is-paused * {
+  animation-play-state: paused !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-miko,
+  .tx-miko * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

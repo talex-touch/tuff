@@ -87,7 +87,7 @@ code: |
 
 - 渲染为携带 `role="img"` 的高精度像素 SVG，并应用 `shape-rendering="crispEdges"`。
 - 包含 38 种状态：待命 (`idle`)、敲代码 (`working`)、急步奔跑 (`running`)、闪光恶魔 (`demon`)、品尝咖啡 (`coffee`)、弹奏吉他 (`guitar`)、困倦呵欠 (`sleepy`)、忍者潜行 (`ninja`)、垂钓时光 (`fishing`)、施展魔法 (`magic`)、雨中漫步 (`umbrella`)、发射爱心 (`heart`)、举重健身 (`workout`)、DJ打碟 (`dj`)、料理大厨 (`chef`)、太空宇航 (`space`)、思考 (`thinking`)、成功 (`success`)、警觉 (`alert`)、报错 (`error`)、休眠 (`sleeping`)、多任务 (`juggling`)、扫地 (`sweeping`)、研读 (`reading`)、眩晕 (`dizzy`)、探头 (`peeking`)、猫式伸展 (`stretching`)、舔爪洗脸 (`bathing`)、好奇歪头 (`curious`)、磨爪挠挠 (`scratching`)、呼噜发颤 (`purring`)、吃小鱼干 (`eating`)、节拍摇摆 (`dancing`)、打call应援 (`cheering`)、专注打机 (`gaming`)、极客超频 (`hacking`)、撒花庆祝 (`celebrating`)、纸箱猫猫 (`box`)。
-- 动画全程通过纯 CSS `@keyframes` 驱动，零外部帧序列依赖。
+- 动画全程通过纯 CSS `@keyframes` 驱动，零外部帧序列依赖；遵循 `prefers-reduced-motion: reduce`，并在页面隐藏、窗口失焦、`<KeepAlive>` 失活或低电量减动效模式下暂停动画与随机切换计时器。
 
 ## 技术实现
 

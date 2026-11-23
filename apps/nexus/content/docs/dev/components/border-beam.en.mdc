@@ -132,7 +132,7 @@ code: |
 
 - Every effect layer is `pointer-events: none` and never blocks the slot; the slot content supplies its own focus styling.
 - Without `borderRadius`, the first slot element's `border-top-left-radius` is used, falling back to the type preset.
-- Offscreen (256px margin), the animation pauses without emitting `activate` / `deactivate`.
+- Offscreen (256px margin), hidden, blurred, `<KeepAlive>`-deactivated, or low-battery (`html[data-low-battery-motion="1"]`) instances pause animations and stop the pulse rAF driver without emitting `activate` / `deactivate`.
 - Under reduced motion, the pulse types stop breathing.
 
 ## Technologies
