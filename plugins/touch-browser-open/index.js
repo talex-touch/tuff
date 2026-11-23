@@ -368,7 +368,7 @@ function normalizeEngineEntry(raw, builtin) {
   const urlTemplate = normalizeText(source.urlTemplate || builtin?.urlTemplate)
   if (!urlTemplate || urlTemplate.length > 512 || containsControlCharacter(urlTemplate))
     return null
-  if (!urlTemplate.includes('{query}'))
+  if (!urlTemplate.includes('{query}') || !/^https?:\/\//i.test(urlTemplate) || !buildTemplateUrl(urlTemplate, 'test'))
     return null
   const enabled = typeof source.enabled === 'boolean' ? source.enabled : Boolean(builtin)
   return {

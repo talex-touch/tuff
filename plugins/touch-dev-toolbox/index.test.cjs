@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict')
 const { readFileSync } = require('node:fs')
+const path = require('node:path')
 const test = require('node:test')
 const vm = require('node:vm')
 
@@ -51,6 +52,8 @@ function createHarness(options = {}) {
   const plugin = {
     storage: {
       async getFile(name) {
+        if (options.onGetFile)
+          await options.onGetFile(name)
         return files.get(name) ?? null
       },
       async setFile(name, value) {
@@ -76,6 +79,11 @@ function createHarness(options = {}) {
     plugin,
     openUrl: async (url) => {
       state.opened.push(url)
+      if (options.openErrorCode) {
+        throw Object.assign(new Error('/private/open error'), {
+          code: options.openErrorCode,
+        })
+      }
       if (options.denyOpen) {
         throw Object.assign(new Error('/private/open denied'), {
           code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED',
@@ -107,6 +115,7 @@ test('initializes storage, publishes configured links and exports lifecycle only
   await harness.module.onFeatureTriggered('dev-toolbox', { text: 'Docs' })
 
   assert.equal(harness.module.__test, undefined)
+  assert.deepEqual(Object.keys(harness.module).sort(), ['onDestroy', 'onFeatureTriggered', 'onInit', 'onItemAction'])
   assert.equal(
     harness.state.items.some(item => item.actions.some(action => action.id === 'open-link')),
     true,
@@ -117,25 +126,116 @@ test('initializes storage, publishes configured links and exports lifecycle only
   )
 })
 
-test('maps a host permission denial to a stable blocked result', async () => {
-  const harness = createHarness({ denyOpen: true, permissionGranted: false })
-  const result = await harness.module.onItemAction({
-    meta: { defaultAction: 'dev-toolbox' },
-    actions: [{ id: 'open-link', payload: { url: 'https://example.com/docs' } }],
+test('ignores null/non-object/invalid links without crashing and displays valid link count', async () => {
+  const harness = createHarness({
+    files: [
+      [
+        'toolbox.json',
+        {
+          links: [
+            null,
+            undefined,
+            'not-an-object',
+            42,
+            { title: 'Bad Scheme', url: 'javascript:alert(1)' },
+            { title: 'Docs', url: 'https://example.com/docs' },
+            { title: '', url: 'https://example.com/api' },
+          ],
+        },
+      ],
+    ],
   })
 
-  assert.equal(harness.state.opened.length, 1)
-  assert.equal(result.reason, 'permission-denied')
-  assert.doesNotMatch(JSON.stringify(result), /private|open denied/)
+  assert.equal(await harness.module.onFeatureTriggered('dev-toolbox', ''), true)
+  const countItem = harness.state.items.find(item => item.id === 'dev-toolbox-counts')
+  assert.ok(countItem)
+  assert.equal(countItem.render.basic.subtitle, '2')
+  const openItems = harness.state.items.filter(item => item.actions.some(action => action.id === 'open-link'))
+  assert.equal(openItems.length, 2)
 })
 
-test('opens a validated link when the host capability grants the call', async () => {
-  const harness = createHarness()
-  const result = await harness.module.onItemAction({
+test('maps host permission denial, permission-unavailable, cancelled and timeout distinctly', async () => {
+  const denied = createHarness({ denyOpen: true, permissionGranted: false })
+  const deniedResult = await denied.module.onItemAction({
     meta: { defaultAction: 'dev-toolbox' },
     actions: [{ id: 'open-link', payload: { url: 'https://example.com/docs' } }],
   })
+  assert.equal(denied.state.opened.length, 1)
+  assert.equal(deniedResult.reason, 'permission-denied')
+  assert.doesNotMatch(JSON.stringify(deniedResult), /private|open denied/)
 
+  const cases = [
+    ['PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE', 'blocked', 'permission-unavailable'],
+    ['PLUGIN_HOST_CAPABILITY_CANCELLED', 'cancelled', 'cancelled'],
+    ['PLUGIN_HOST_CAPABILITY_TIMEOUT', 'failed', 'timeout'],
+  ]
+  for (const [code, expectedStatus, expectedReason] of cases) {
+    const harness = createHarness({ openErrorCode: code })
+    const result = await harness.module.onItemAction({
+      meta: { defaultAction: 'dev-toolbox' },
+      actions: [{ id: 'open-link', payload: { url: 'https://example.com/docs' } }],
+    })
+    assert.equal(result.status, expectedStatus)
+    assert.equal(result.reason, expectedReason)
+  }
+})
+
+test('opens a validated link and honors context.actionId', async () => {
+  const harness = createHarness()
+  const multiActionItem = {
+    meta: { defaultAction: 'dev-toolbox' },
+    actions: [
+      { id: 'config-init', payload: {} },
+      { id: 'open-link', payload: { url: 'https://example.com/docs' } },
+    ],
+  }
+
+  const result = await harness.module.onItemAction(multiActionItem, { actionId: 'open-link' })
   assert.equal(result.status, 'started')
   assert.deepEqual(harness.state.opened, ['https://example.com/docs'])
+
+  const missing = await harness.module.onItemAction(multiActionItem, { actionId: 'unknown' })
+  assert.equal(missing.status, 'blocked')
+  assert.equal(missing.reason, 'invalid-action')
+})
+
+test('generation guard and onDestroy drop stale async triggers', async () => {
+  let release
+  let startedResolve
+  const started = new Promise((resolve) => {
+    startedResolve = resolve
+  })
+  let pending = true
+  const harness = createHarness({
+    files: [['toolbox.json', { links: [{ title: 'Docs', url: 'https://example.com/docs' }] }]],
+    async onGetFile() {
+      if (pending) {
+        pending = false
+        startedResolve()
+        await new Promise((resolve) => {
+          release = resolve
+        })
+      }
+    },
+  })
+
+  const run = harness.module.onFeatureTriggered('dev-toolbox', '')
+  await started
+  await harness.module.onDestroy()
+  release()
+  await run
+  assert.deepEqual(harness.state.items, [])
+})
+
+test('manifest and package.json align featureId, indexedSourceId and npm metadata', () => {
+  const manifest = JSON.parse(readFileSync(path.join(__dirname, 'manifest.json'), 'utf8'))
+  const pkg = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf8'))
+
+  assert.equal(manifest.searchProviders[0].featureId, 'dev-toolbox')
+  assert.equal(manifest.searchProviders[0].indexedSourceId, 'quicklinks')
+  assert.equal(pkg.version, manifest.version)
+  assert.equal(pkg.packageManager, 'pnpm@11.24.0')
+  assert.ok(pkg.keywords.includes('tuff-plugin'))
+  assert.equal(pkg.tuff.id, manifest.id)
+  assert.equal(pkg.tuff.name, manifest.name)
 })

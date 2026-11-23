@@ -1,10 +1,66 @@
 {
   "name": "@talex-touch/touch-browser-bookmarks-plugin",
-  "private": true,
   "version": "1.0.0",
-  "packageManager": "pnpm@10.34.4",
+  "private": true,
+  "packageManager": "pnpm@11.24.0",
+  "description": "快速链接：手动收藏、置顶链接、最近使用与快速打开",
+  "author": "TalexTouch Team",
+  "license": "MIT",
+  "keywords": [
+    "tuff-plugin",
+    "utilities",
+    "bookmarks",
+    "quicklinks",
+    "url"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./manifest.json": "./manifest.json",
+    "./package.json": "./package.json"
+  },
+  "main": "./index.js",
+  "files": [
+    "manifest.json",
+    "index.js",
+    "assets/"
+  ],
+  "engines": {
+    "tuff": ">=261011"
+  },
   "scripts": {
-    "test": "node --test index.test.cjs",
-    "build": "node ../../packages/tuff-cli/bin/tuff.js builder"
+    "build": "node ../../packages/tuff-cli/bin/tuff.js builder",
+    "test": "node --test index.test.cjs"
+  },
+  "tuff": {
+    "schemaVersion": 1,
+    "id": "com.tuffex.browser-bookmarks",
+    "name": "touch-browser-bookmarks",
+    "displayName": {
+      "en": "Quick Links",
+      "zh": "手动快速链接"
+    },
+    "sdkapi": 261011,
+    "category": "utilities",
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "permissions": {
+      "required": [
+        "search.root-results",
+        "storage.plugin"
+      ],
+      "optional": [
+        "clipboard.write",
+        "network.internet"
+      ]
+    },
+    "platforms": {
+      "win32": true,
+      "darwin": true,
+      "linux": true
+    },
+    "surface": "prelude",
+    "manifest": "./manifest.json"
   }
 }

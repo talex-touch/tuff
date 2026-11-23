@@ -1,10 +1,67 @@
 {
   "name": "@talex-touch/touch-browser-data-plugin",
-  "private": true,
   "version": "1.0.0",
-  "packageManager": "pnpm@10.34.4",
+  "private": true,
+  "packageManager": "pnpm@11.24.0",
+  "description": "浏览器数据：只读搜索 Chrome、Edge、Brave、Arc 的本地书签与最近历史",
+  "author": "TalexTouch Team",
+  "license": "MIT",
+  "keywords": [
+    "tuff-plugin",
+    "utilities",
+    "browser",
+    "bookmarks",
+    "history"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./manifest.json": "./manifest.json",
+    "./package.json": "./package.json"
+  },
+  "main": "./index.js",
+  "files": [
+    "manifest.json",
+    "index.js",
+    "assets/"
+  ],
+  "engines": {
+    "tuff": ">=261011"
+  },
   "scripts": {
-    "test": "node --test index.test.cjs",
-    "build": "node ../../packages/tuff-cli/bin/tuff.js builder"
+    "build": "node ../../packages/tuff-cli/bin/tuff.js builder",
+    "test": "node --test index.test.cjs"
+  },
+  "tuff": {
+    "schemaVersion": 1,
+    "id": "com.tuffex.browser-data",
+    "name": "touch-browser-data",
+    "displayName": {
+      "en": "Browser Data",
+      "zh": "浏览器数据"
+    },
+    "sdkapi": 261011,
+    "category": "utilities",
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "permissions": {
+      "required": [
+        "fs.read",
+        "fs.index",
+        "search.root-results"
+      ],
+      "optional": [
+        "clipboard.write",
+        "network.internet"
+      ]
+    },
+    "platforms": {
+      "win32": true,
+      "darwin": true,
+      "linux": true
+    },
+    "surface": "prelude",
+    "manifest": "./manifest.json"
   }
 }

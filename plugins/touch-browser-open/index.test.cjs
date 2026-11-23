@@ -466,3 +466,78 @@ test('maps capability denial to a deterministic redacted result', async () => {
     return { operation: 'open', status: 'completed' }
   }
 })
+
+test('rejects non-http(s) urlTemplate entries from stored settings', async () => {
+  state.files.set('search-settings.json', {
+    engines: [
+      {
+        id: 'evil-js',
+        name: 'Evil',
+        keyword: 'evil',
+        urlTemplate: 'javascript:alert({query})',
+        enabled: true,
+      },
+      {
+        id: 'evil-file',
+        name: 'Local',
+        keyword: 'local',
+        urlTemplate: 'file:///{query}',
+        enabled: true,
+      },
+    ],
+    hotEntries: [],
+  })
+  await pluginModule.onInit()
+
+  assert.equal(feature('search-open-evil-js'), undefined)
+  assert.equal(feature('search-open-evil-file'), undefined)
+  assert.ok(feature('search-open-google'))
+})
+
+test('supports Linux default browser flow consistently with manifest platform flags', async () => {
+  const prevPlatform = globalThis.platform.platform
+  globalThis.platform.platform = 'linux'
+  state.listResult = {
+    operation: 'list',
+    status: 'available',
+    defaultAvailable: true,
+    browsers: [],
+  }
+  try {
+    await pluginModule.onInit()
+    const defaultFeature = feature('browser-direct-default')
+    assert.ok(defaultFeature)
+    assert.equal(defaultFeature.platform.linux.enable, true)
+
+    const result = await pluginModule.onFeatureTriggered('browser-direct-default', {
+      text: 'https://example.org/linux',
+    })
+    assert.equal(result, false)
+    assert.deepEqual(state.openCalls, [{ url: 'https://example.org/linux', token: undefined }])
+  }
+  finally {
+    globalThis.platform.platform = prevPlatform
+  }
+})
+
+test('aligns settings surface theme, preload bridge, validation, manifest and npm metadata', () => {
+  const bridge = fs.readFileSync(path.join(__dirname, 'settings-bridge.ts'), 'utf8')
+  const html = fs.readFileSync(path.join(__dirname, 'settings.html'), 'utf8')
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, 'manifest.json'), 'utf8'))
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'))
+
+  assert.match(bridge, /export\s*\{\s*initializePluginTheme\s*\}/)
+  assert.match(bridge, /export\s+function\s+initTuff\b/)
+  assert.match(html, /initializePluginTheme\(\)/)
+  assert.match(html, /initTuff\(window\)/)
+  assert.match(html, /@media\s*\(prefers-color-scheme:\s*dark\)/)
+  assert.match(html, /DEFAULT_HOT_ENTRIES/)
+  assert.match(html, /isValidHttpUrlTemplate/)
+  assert.match(html, /degraded-banner/)
+  assert.equal(manifest.features.find(f => f.id === 'browser-open')?.platform?.linux, true)
+  assert.equal(pkg.version, manifest.version)
+  assert.equal(pkg.packageManager, 'pnpm@11.24.0')
+  assert.ok(pkg.keywords.includes('tuff-plugin'))
+  assert.equal(pkg.tuff.id, manifest.id)
+  assert.equal(pkg.tuff.name, manifest.name)
+})

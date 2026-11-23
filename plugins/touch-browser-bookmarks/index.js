@@ -15,6 +15,13 @@ const SHOW_BOOKMARKS = 20
 const SHOW_RECENT = 8
 const RECENT_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
+let triggerGeneration = 0
+let destroyed = false
+
+function isStaleGeneration(generation) {
+  return destroyed || generation !== triggerGeneration
+}
+
 function normalizeText(value) {
   return String(value ?? '').trim()
 }
@@ -320,15 +327,67 @@ function upsertBookmark(items, payload, now = Date.now()) {
   return cleanupBookmarks(list, now)
 }
 
+function findBookmarkIndex(list, payload) {
+  const targetId = normalizeText(payload?.id)
+  if (targetId) {
+    const byId = list.findIndex(item => item.id === targetId)
+    if (byId >= 0)
+      return byId
+  }
+  const targetUrl = normalizeUrlInput(payload?.url)
+  if (targetUrl)
+    return list.findIndex(item => item.url === targetUrl)
+  return -1
+}
+
+function togglePinBookmark(items, payload, now = Date.now()) {
+  const list = cleanupBookmarks(items, now)
+  const index = findBookmarkIndex(list, payload)
+  if (index < 0)
+    return { found: false, items: list, pinned: false }
+
+  const current = list[index]
+  const nextPinned = typeof payload?.pinned === 'boolean' ? payload.pinned : !current.pinned
+  list[index] = {
+    ...current,
+    pinned: nextPinned,
+    updatedAt: now,
+  }
+  return {
+    found: true,
+    items: cleanupBookmarks(list, now),
+    pinned: nextPinned,
+  }
+}
+
+function removeBookmarkRecord(items, payload, now = Date.now()) {
+  const list = cleanupBookmarks(items, now)
+  const index = findBookmarkIndex(list, payload)
+  if (index < 0)
+    return { removed: false, items: list }
+
+  list.splice(index, 1)
+  return {
+    removed: true,
+    items: cleanupBookmarks(list, now),
+  }
+}
+
 async function checkPermissionStatus(permissionId) {
   if (!permission?.check)
     return { granted: false, status: 'permission-missing', reason: 'permission-sdk-unavailable' }
 
   try {
     const granted = Boolean(await permission.check(permissionId))
-    return granted
-      ? { granted: true, status: 'available', reason: '' }
-      : { granted: false, status: 'permission-missing', reason: `${permissionId.replace('.', '-')}-permission-required` }
+    if (granted)
+      return { granted: true, status: 'available', reason: '' }
+    return {
+      granted: false,
+      status: 'permission-missing',
+      reason: permissionId === NETWORK_PERMISSION_ID
+        ? 'network-internet-permission-required'
+        : 'permission-denied',
+    }
   }
   catch {
     logger?.warn?.('[touch-browser-bookmarks] Failed to check permission')
@@ -440,13 +499,27 @@ function buildNetworkOpenCapability({ featureId, source, url, status = 'availabl
 function formatNetworkCapabilitySuffix(capabilityState) {
   if (!capabilityState || capabilityState.status === 'available')
     return ''
+  if (capabilityState.reason === 'permission-sdk-unavailable')
+    return ' · 权限 SDK 不可用（缺少 network.internet 权限）'
+  if (capabilityState.reason === 'permission-check-failed')
+    return ' · 权限检查失败（缺少 network.internet 权限）'
   if (capabilityState.status === 'permission-missing')
     return ' · 缺少 network.internet 权限'
   return capabilityState.reason ? ` · ${capabilityState.reason}` : ''
 }
 
-function buildActionItem({ id, featureId, title, subtitle, actionId, payload, capability, sourceType = 'manual-quicklink' }) {
-  return new TuffItemBuilder(id)
+function buildActionItem({
+  id,
+  featureId,
+  title,
+  subtitle,
+  actionId,
+  payload,
+  capability,
+  sourceType = 'manual-quicklink',
+  extraActions = [],
+}) {
+  const builder = new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
@@ -461,7 +534,15 @@ function buildActionItem({ id, featureId, title, subtitle, actionId, payload, ca
       sourceType,
       ...(capability ? { capability } : {}),
     })
-    .build()
+
+  for (const extra of extraActions) {
+    builder.createAndAddAction(extra.id, 'plugin', extra.title, {
+      ...(extra.payload || {}),
+      sourceType,
+    })
+  }
+
+  return builder.build()
 }
 
 function buildBookmarkItems(featureId, bookmarks, networkCapabilityState) {
@@ -474,6 +555,7 @@ function buildBookmarkItems(featureId, bookmarks, networkCapabilityState) {
       subtitle: `${truncateText(item.url)}${item.pinned ? ' · PINNED' : ''}${formatNetworkCapabilitySuffix(networkCapabilityState)}`,
       actionId: 'open-url',
       payload: {
+        id: item.id,
         url: item.url,
         title: item.title,
         source: 'bookmark',
@@ -486,6 +568,23 @@ function buildBookmarkItems(featureId, bookmarks, networkCapabilityState) {
         status: networkCapabilityState?.status,
         reason: networkCapabilityState?.reason,
       }),
+      extraActions: [
+        {
+          id: 'toggle-pin-bookmark',
+          title: item.pinned ? '取消置顶' : '置顶收藏',
+          payload: { id: item.id, url: item.url, pinned: !item.pinned },
+        },
+        {
+          id: 'copy-url',
+          title: '复制 URL',
+          payload: { url: item.url },
+        },
+        {
+          id: 'remove-bookmark',
+          title: '移除收藏',
+          payload: { id: item.id, url: item.url },
+        },
+      ],
     })
   })
 }
@@ -510,14 +609,72 @@ function buildRecentItems(featureId, recentItems, networkCapabilityState) {
       status: networkCapabilityState?.status,
       reason: networkCapabilityState?.reason,
     }),
+    extraActions: [
+      {
+        id: 'copy-url',
+        title: '复制 URL',
+        payload: { url: item.url },
+      },
+      {
+        id: 'add-bookmark',
+        title: '添加到收藏',
+        payload: { url: item.url, title: item.title },
+      },
+    ],
   }))
+}
+
+function classifyHostCapabilityError(error, {
+  fallbackReason,
+  fallbackMessage,
+  deniedMessage,
+  unavailableMessage,
+  cancelledMessage,
+  timeoutMessage,
+}) {
+  const code = error && typeof error === 'object' && typeof error.code === 'string' ? error.code : ''
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED') {
+    return {
+      status: 'blocked',
+      reason: 'permission-denied',
+      message: deniedMessage,
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE') {
+    return {
+      status: 'blocked',
+      reason: 'permission-unavailable',
+      message: unavailableMessage,
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED') {
+    return {
+      status: 'cancelled',
+      reason: 'cancelled',
+      message: cancelledMessage,
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT' || code === 'PLUGIN_HOST_REQUEST_TIMEOUT') {
+    return {
+      status: 'failed',
+      reason: 'timeout',
+      message: timeoutMessage,
+    }
+  }
+  return {
+    status: 'blocked',
+    reason: fallbackReason,
+    message: fallbackMessage,
+  }
 }
 
 async function tryCopyUrl(url) {
   if (!clipboard?.writeText) {
     return {
       copied: false,
+      status: 'blocked',
       reason: 'clipboard-unavailable',
+      message: '当前环境不支持写入剪贴板',
     }
   }
 
@@ -526,11 +683,19 @@ async function tryCopyUrl(url) {
     return { copied: true }
   }
   catch (error) {
+    const failure = classifyHostCapabilityError(error, {
+      fallbackReason: 'clipboard-write-failed',
+      fallbackMessage: '复制失败',
+      deniedMessage: '复制失败：缺少 clipboard.write 权限',
+      unavailableMessage: '复制失败：权限系统暂时不可用',
+      cancelledMessage: '已取消复制',
+      timeoutMessage: '复制超时，请重试',
+    })
     return {
       copied: false,
-      reason: error?.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
-        ? 'permission-denied'
-        : 'clipboard-write-failed',
+      status: failure.status,
+      reason: failure.reason,
+      message: failure.message,
     }
   }
 }
@@ -548,14 +713,27 @@ function resolveGroupOrder(groups) {
   return order
 }
 
+function resolveItemAction(item, context = {}) {
+  const actions = Array.isArray(item?.actions) ? item.actions : []
+  const requestedActionId = normalizeText(context?.actionId)
+  if (requestedActionId)
+    return actions.find(candidate => candidate?.id === requestedActionId) || null
+  return actions[0] || null
+}
+
 const pluginLifecycle = {
   async onInit() {
+    destroyed = false
     await ensureDataFiles()
   },
 
   async onFeatureTriggered(featureId, query) {
+    destroyed = false
+    const generation = ++triggerGeneration
     try {
       await ensureDataFiles()
+      if (isStaleGeneration(generation))
+        return true
 
       const input = normalizeText(getQueryText(query))
       const inputUrl = normalizeUrlInput(input)
@@ -564,6 +742,8 @@ const pluginLifecycle = {
       const bookmarks = await loadBookmarks()
       const recent = await loadRecent()
       const networkCapabilityState = await resolveNetworkOpenCapabilityState()
+      if (isStaleGeneration(generation))
+        return true
 
       const filteredBookmarks = inputUrl
         ? bookmarks.filter(item => item.url === inputUrl)
@@ -674,12 +854,18 @@ const pluginLifecycle = {
         }
       })
 
+      if (isStaleGeneration(generation))
+        return true
       await plugin.feature.clearItems()
+      if (isStaleGeneration(generation))
+        return true
       await plugin.feature.pushItems(items)
       return true
     }
     catch {
       logger?.error?.('[touch-browser-bookmarks] Failed to handle feature')
+      if (isStaleGeneration(generation))
+        return true
       try {
         await plugin.feature.clearItems()
         await plugin.feature.pushItems([
@@ -699,13 +885,23 @@ const pluginLifecycle = {
     }
   },
 
-  async onItemAction(item) {
+  async onItemAction(item, context = {}) {
     if (item?.meta?.defaultAction !== ACTION_ID)
       return
 
-    const action = Array.isArray(item.actions) ? item.actions[0] : null
-    const actionId = action?.id
-    const payload = action?.payload || {}
+    const action = resolveItemAction(item, context)
+    if (!action) {
+      return {
+        externalAction: true,
+        success: false,
+        status: 'blocked',
+        reason: 'invalid-action',
+        message: '未找到可执行操作',
+      }
+    }
+
+    const actionId = action.id
+    const payload = action.payload || {}
 
     try {
       if (actionId === 'copy-url') {
@@ -718,14 +914,9 @@ const pluginLifecycle = {
           return {
             externalAction: true,
             success: false,
-            status: 'blocked',
+            status: copyResult.status || 'blocked',
             reason: copyResult.reason || 'permission-denied',
-            message:
-              copyResult.reason === 'clipboard-unavailable'
-                ? '当前环境不支持写入剪贴板'
-                : copyResult.reason === 'permission-denied'
-                  ? '复制失败：缺少 clipboard.write 权限'
-                  : '复制失败',
+            message: copyResult.message || '复制失败',
           }
         }
 
@@ -749,6 +940,50 @@ const pluginLifecycle = {
         return { externalAction: true }
       }
 
+      if (actionId === 'toggle-pin-bookmark') {
+        const bookmarks = await loadBookmarks()
+        const toggled = togglePinBookmark(bookmarks, payload)
+        if (!toggled.found) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'bookmark-not-found',
+            message: '未找到对应收藏',
+          }
+        }
+        await saveBookmarks(toggled.items)
+        return {
+          externalAction: true,
+          success: true,
+          status: 'completed',
+          pinned: toggled.pinned,
+          message: toggled.pinned ? '已置顶收藏' : '已取消置顶',
+        }
+      }
+
+      if (actionId === 'remove-bookmark') {
+        const bookmarks = await loadBookmarks()
+        const result = removeBookmarkRecord(bookmarks, payload)
+        if (!result.removed) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'bookmark-not-found',
+            message: '未找到对应收藏',
+          }
+        }
+        await saveBookmarks(result.items)
+        return {
+          externalAction: true,
+          success: true,
+          status: 'completed',
+          removed: true,
+          message: '已移除收藏',
+        }
+      }
+
       if (actionId === 'open-url') {
         const url = normalizeUrlInput(payload.url)
         if (!url)
@@ -768,13 +1003,20 @@ const pluginLifecycle = {
           await openUrl(url)
         }
         catch (error) {
-          const permissionDenied = error?.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
+          const failure = classifyHostCapabilityError(error, {
+            fallbackReason: 'open-url-failed',
+            fallbackMessage: '打开外部链接失败',
+            deniedMessage: '缺少 network.internet 权限',
+            unavailableMessage: '权限系统暂时不可用',
+            cancelledMessage: '已取消打开链接',
+            timeoutMessage: '打开链接超时，请重试',
+          })
           return {
             externalAction: true,
             success: false,
-            status: 'blocked',
-            reason: permissionDenied ? 'permission-denied' : 'open-url-failed',
-            message: permissionDenied ? '缺少 network.internet 权限' : '打开外部链接失败',
+            status: failure.status,
+            reason: failure.reason,
+            message: failure.message,
           }
         }
 
@@ -795,6 +1037,11 @@ const pluginLifecycle = {
         message: '执行失败',
       }
     }
+  },
+
+  async onDestroy() {
+    destroyed = true
+    triggerGeneration += 1
   },
 }
 
