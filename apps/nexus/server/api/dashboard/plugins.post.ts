@@ -36,6 +36,10 @@ export default defineEventHandler(async (event) => {
   const statusField = getString('status')
   const isOfficialField = getString('isOfficial')
   const artifactTypeField = getString('artifactType')
+  const npmPackageName = getString('npmPackageName')
+  const npmRegistry = getString('npmRegistry')
+  const npmIntegrity = getString('npmIntegrity')
+  const npmTarballSha256 = getString('npmTarballSha256')
 
   let readmeMarkdown = ''
   if (typeof readmeField === 'string')
@@ -158,6 +162,8 @@ export default defineEventHandler(async (event) => {
       readmeMarkdown,
       iconKey,
       iconUrl,
+      ...(npmPackageName !== undefined ? { npmPackageName: npmPackageName.length ? npmPackageName : null } : {}),
+      ...(npmRegistry !== undefined ? { npmRegistry: npmRegistry.length ? npmRegistry : null } : {}),
       status,
     })
   }
@@ -195,6 +201,10 @@ export default defineEventHandler(async (event) => {
         ...(getString('publisherKeyValidUntil')
           ? { publisherKeyValidUntil: getString('publisherKeyValidUntil') }
           : {}),
+        ...(npmPackageName !== undefined ? { npmPackageName: npmPackageName.length ? npmPackageName : null } : {}),
+        ...(npmRegistry !== undefined ? { npmRegistry: npmRegistry.length ? npmRegistry : null } : {}),
+        ...(npmIntegrity !== undefined ? { npmIntegrity: npmIntegrity.length ? npmIntegrity : null } : {}),
+        ...(npmTarballSha256 !== undefined ? { npmTarballSha256: npmTarballSha256.length ? npmTarballSha256 : null } : {}),
         createdBy: userId,
         canModerate: isAdmin,
       })
