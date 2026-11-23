@@ -32,7 +32,7 @@ import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { TxButton } from '../../button'
-import { useDialogSurface } from './dialog-surface'
+import { createBlowBackgroundBlur, useDialogSurface } from './dialog-surface'
 
 // Resolved in setup: inject is only valid here, while allocation happens later.
 const zIndexAllocator = useZIndexAllocator()
@@ -67,8 +67,7 @@ const zIndex = ref(zIndexAllocator.get())
 const titleId = useId()
 const contentId = useId()
 const focusReturn = createFocusReturn()
-let didApplyBackgroundBlur = false
-let previousAppStyle: { transition: string, transform: string, opacity: string } | null = null
+const backgroundBlur = createBlowBackgroundBlur()
 let closeTimer: ReturnType<typeof setTimeout> | null = null
 let isUnmounted = false
 
@@ -85,36 +84,11 @@ function sleep(ms: number): Promise<void> {
   })
 }
 
-/**
- * Restores only the `#app` inline style properties touched by `applyBackgroundBlur`
- * so unrelated inline styles or CSS custom properties on `#app` are preserved.
- */
-function clearBackgroundBlur(): void {
-  if (!didApplyBackgroundBlur)
-    return
-  didApplyBackgroundBlur = false
-
-  const app = document.getElementById('app')
-  if (!app) {
-    previousAppStyle = null
-    return
-  }
-
-  for (const prop of ['transition', 'transform', 'opacity'] as const) {
-    const prev = previousAppStyle?.[prop]
-    if (prev)
-      app.style.setProperty(prop, prev)
-    else
-      app.style.removeProperty(prop)
-  }
-  previousAppStyle = null
-}
-
 onMounted(() => {
   zIndex.value = zIndexAllocator.next()
   focusReturn.save()
 
-  applyBackgroundBlur(true)
+  backgroundBlur.acquire()
   setFocusToDialog()
 })
 
@@ -127,8 +101,8 @@ onUnmounted(() => {
   focusReturn.restore()
 
   // A host that unmounts the dialog without calling close() never reaches destroy(), so the
-  // app would keep the zoom and dim applied on open. Clear them here, as destroy() does.
-  clearBackgroundBlur()
+  // app would keep the zoom and dim applied on open. Release this instance's blur lock here.
+  backgroundBlur.finishRelease()
 })
 
 /**
@@ -148,40 +122,6 @@ function keepTab(event: KeyboardEvent): void {
 }
 
 /**
- * Applies or removes background blur effect on the app container.
- * @param apply - Whether to apply the blur effect
- */
-function applyBackgroundBlur(apply: boolean): void {
-  const isVitePress = !!document.querySelector('.VPApp')
-  if (isVitePress)
-    return
-
-  const app = document.getElementById('app')
-  if (!app)
-    return
-
-  if (apply) {
-    previousAppStyle = {
-      transition: app.style.getPropertyValue('transition'),
-      transform: app.style.getPropertyValue('transform'),
-      opacity: app.style.getPropertyValue('opacity'),
-    }
-    Object.assign(app.style, {
-      transition: 'transform .75s, opacity .75s',
-      transform: 'scale(1.25)',
-      opacity: '.75',
-    })
-    didApplyBackgroundBlur = true
-  }
-  else {
-    Object.assign(app.style, {
-      transform: 'scale(1)',
-      opacity: '1',
-    })
-  }
-}
-
-/**
  * Destroys the dialog with animation. It is gone for the keys and the pointer at once: focus goes
  * back, the dialog is inert while it leaves, and a second Escape reaches what is under it.
  */
@@ -189,14 +129,14 @@ async function destroy(): Promise<void> {
   if (isClosing.value)
     return
   focusReturn.restore()
-  applyBackgroundBlur(false)
+  backgroundBlur.beginRelease()
   isClosing.value = true
   await sleep(550)
 
   if (isUnmounted)
     return
 
-  clearBackgroundBlur()
+  backgroundBlur.finishRelease()
 
   props.close()
 }

@@ -563,4 +563,42 @@ describe('dialog components', () => {
     expect(document.body.querySelector('.tx-popper-dialog__confirm')).toBeNull()
     popperWrapper.unmount()
   })
+
+  it('keeps #app blurred until the last stacked BlowDialog closes and restores original styles once', async () => {
+    const app = document.createElement('div')
+    app.id = 'app'
+    app.style.setProperty('--app-accent', 'coral')
+    document.body.appendChild(app)
+
+    const closeFirst = vi.fn()
+    const closeSecond = vi.fn()
+    const first = mount(TxBlowDialog, {
+      props: { title: 'First', close: closeFirst },
+      attachTo: document.body,
+    })
+    const second = mount(TxBlowDialog, {
+      props: { title: 'Second', close: closeSecond },
+      attachTo: document.body,
+    })
+
+    expect(app.style.transform).toBe('scale(1.25)')
+
+    // Closing the first dialog while the second is still open keeps #app blurred.
+    const buttons = document.body.querySelectorAll<HTMLButtonElement>('.tx-blow-dialog__confirm')
+    buttons[0]?.click()
+    await vi.advanceTimersByTimeAsync(550)
+    expect(closeFirst).toHaveBeenCalledTimes(1)
+    first.unmount()
+    expect(app.style.transform).toBe('scale(1.25)')
+
+    // Closing the last dialog restores the original (empty) transform/opacity and preserves unrelated styles.
+    buttons[1]?.click()
+    await vi.advanceTimersByTimeAsync(550)
+    expect(closeSecond).toHaveBeenCalledTimes(1)
+    second.unmount()
+    expect(app.style.transform).toBe('')
+    expect(app.style.opacity).toBe('')
+    expect(app.style.transition).toBe('')
+    expect(app.style.getPropertyValue('--app-accent')).toBe('coral')
+  })
 })
