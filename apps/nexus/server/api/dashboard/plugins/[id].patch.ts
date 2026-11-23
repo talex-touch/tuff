@@ -43,6 +43,8 @@ export default defineEventHandler(async (event) => {
   const isOfficialField = getString('isOfficial')
   const statusField = getString('status')
   const removeIcon = getString('removeIcon') === 'true'
+  const npmPackageName = getString('npmPackageName')
+  const npmRegistry = getString('npmRegistry')
 
   let readmeMarkdown: string | undefined
   if (typeof readmeField === 'string')
@@ -60,6 +62,10 @@ export default defineEventHandler(async (event) => {
     updates.category = category
   if (homepage !== undefined)
     updates.homepage = homepage.length ? homepage : null
+  if (npmPackageName !== undefined)
+    updates.npmPackageName = npmPackageName.length ? npmPackageName : null
+  if (npmRegistry !== undefined)
+    updates.npmRegistry = npmRegistry.length ? npmRegistry : null
   if (readmeMarkdown !== undefined)
     updates.readmeMarkdown = readmeMarkdown
 

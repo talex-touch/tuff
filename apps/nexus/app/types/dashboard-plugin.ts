@@ -26,6 +26,10 @@ export interface DashboardPluginVersion {
   status: VersionStatus
   reviewedAt?: string | null
   rejectReason?: string | null
+  npmPackageName?: string | null
+  npmRegistry?: string | null
+  npmIntegrity?: string | null
+  npmTarballSha256?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -70,6 +74,8 @@ export interface DashboardPlugin {
   status: PluginStatus
   readmeMarkdown?: string | null
   iconUrl?: string | null
+  npmPackageName?: string | null
+  npmRegistry?: string | null
   createdAt: string
   updatedAt: string
   versions?: DashboardPluginVersion[]

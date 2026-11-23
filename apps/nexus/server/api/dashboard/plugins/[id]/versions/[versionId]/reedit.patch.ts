@@ -30,6 +30,10 @@ export default defineEventHandler(async (event) => {
   const publisherPublicKey = formData.get('publisherPublicKey')
   const publisherKeyValidFrom = formData.get('publisherKeyValidFrom')
   const publisherKeyValidUntil = formData.get('publisherKeyValidUntil')
+  const npmPackageName = formData.get('npmPackageName')
+  const npmRegistry = formData.get('npmRegistry')
+  const npmIntegrity = formData.get('npmIntegrity')
+  const npmTarballSha256 = formData.get('npmTarballSha256')
 
   if (!isFile(packageFile))
     throw createError({ statusCode: 400, statusMessage: 'Package file is required.' })
@@ -54,6 +58,10 @@ export default defineEventHandler(async (event) => {
     ...(typeof publisherKeyValidUntil === 'string' && publisherKeyValidUntil.trim()
       ? { publisherKeyValidUntil: publisherKeyValidUntil.trim() }
       : {}),
+    ...(typeof npmPackageName === 'string' ? { npmPackageName: npmPackageName.trim() || null } : {}),
+    ...(typeof npmRegistry === 'string' ? { npmRegistry: npmRegistry.trim() || null } : {}),
+    ...(typeof npmIntegrity === 'string' ? { npmIntegrity: npmIntegrity.trim() || null } : {}),
+    ...(typeof npmTarballSha256 === 'string' ? { npmTarballSha256: npmTarballSha256.trim() || null } : {}),
     changelog: changelog.trim(),
     updatedBy: userId,
     canModerate: isAdmin,
