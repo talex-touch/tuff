@@ -26,6 +26,10 @@ const mocks = vi.hoisted(() => {
     runMessages,
     tools,
     resolveOmpExecutable: vi.fn(async (): Promise<string | null> => '/mock/bin/omp'),
+    resolveCodexAcpExecutable: vi.fn(async (): Promise<string | null> => null),
+    resolveCodexExecutable: vi.fn(async (): Promise<string | null> => null),
+    resolveClaudeAcpExecutable: vi.fn(async (): Promise<string | null> => null),
+    resolveClaudeExecutable: vi.fn(async (): Promise<string | null> => null),
     activeMcpServer: null as { url: string; token: string } | null,
     gatewayMode: 'review' as 'review' | 'full',
     requestConfirmation: vi.fn(async () => ({ approved: true, remember: false })),
@@ -224,7 +228,11 @@ vi.mock('./providers/pi-cli-runtime', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./providers/pi-cli-runtime')>()
   return {
     ...actual,
-    resolveOmpExecutable: mocks.resolveOmpExecutable
+    resolveOmpExecutable: mocks.resolveOmpExecutable,
+    resolveCodexAcpExecutable: mocks.resolveCodexAcpExecutable,
+    resolveCodexExecutable: mocks.resolveCodexExecutable,
+    resolveClaudeAcpExecutable: mocks.resolveClaudeAcpExecutable,
+    resolveClaudeExecutable: mocks.resolveClaudeExecutable
   }
 })
 
@@ -320,6 +328,10 @@ describe('AiCliOrchestrator OMP ACP runtime wiring', () => {
     mocks.activeMcpServer = null
     mocks.gatewayMode = 'review'
     mocks.resolveOmpExecutable.mockReset().mockResolvedValue('/mock/bin/omp')
+    mocks.resolveCodexAcpExecutable.mockReset().mockResolvedValue(null)
+    mocks.resolveCodexExecutable.mockReset().mockResolvedValue(null)
+    mocks.resolveClaudeAcpExecutable.mockReset().mockResolvedValue(null)
+    mocks.resolveClaudeExecutable.mockReset().mockResolvedValue(null)
     mocks.requestConfirmation.mockReset().mockResolvedValue({ approved: true, remember: false })
     mocks.piExecute.mockReset().mockImplementation(async (payload: PiRuntimeStartPayload) => ({
       runId: payload.run.id,
@@ -433,8 +445,6 @@ describe('AiCliOrchestrator OMP ACP runtime wiring', () => {
     it.each([
       ['default-pi (Tuff scheduler)', 'default-pi'],
       ['no profileId (defaults to Tuff scheduler)', undefined],
-      ['profile:cli:codex', CODEX_CLI_PROFILE_ID],
-      ['profile:cli:claude', CLAUDE_CLI_PROFILE_ID],
       ['custom profile with omp model preference', 'custom-omp-model-profile']
     ])(
       'never routes %s to OmpAgentRuntimeHost even when handed an omp-sourced model',
@@ -459,6 +469,40 @@ describe('AiCliOrchestrator OMP ACP runtime wiring', () => {
         expect(run.output).toBe('pi-output')
         expect(mocks.piExecute).toHaveBeenCalledTimes(1)
         expect(spawnSpy).not.toHaveBeenCalled()
+      }
+    )
+
+    it.each([
+      ['profile:cli:codex', CODEX_CLI_PROFILE_ID, 'CODEX_CLI_NOT_FOUND'],
+      ['profile:cli:claude', CLAUDE_CLI_PROFILE_ID, 'CLAUDE_CLI_NOT_FOUND']
+    ])(
+      'never spawns OMP for %s even when handed an omp-sourced model (fails on its own missing binary)',
+      async (_label, profileId, expectedDetail) => {
+        const onRunResult = vi.fn(async () => undefined)
+        const run = await orchestrator.executeWorkspace(
+          {
+            objective: 'Use omp model under another CLI scheduler',
+            profileId
+          },
+          {
+            conversationId: `conv-${profileId}`,
+            turnId: 'turn-1',
+            projectId: null,
+            providerId: OMP_CLI_PROVIDER_ID,
+            model: 'cpa/gemini-3.8-flash',
+            history: [],
+            assertAuthority: async () => undefined,
+            onRunResult
+          }
+        )
+
+        expect(run.status).toBe('failed')
+        expect(onRunResult).toHaveBeenCalledWith(
+          expect.objectContaining({ id: run.id, status: 'failed' }),
+          expect.stringContaining(expectedDetail)
+        )
+        expect(spawnSpy).not.toHaveBeenCalled()
+        expect(mocks.piExecute).not.toHaveBeenCalled()
       }
     )
   })

@@ -1,0 +1,89 @@
+import type {
+  AcpMcpServerConfig,
+  AcpPermissionOption,
+  AcpPermissionRequestParams,
+  AcpPermissionRequestResult,
+  AcpPromptContent,
+  CliPermissionDecision,
+  CliPermissionRequest,
+  CliPermissionRiskKind,
+  CliRuntimeClient,
+  CliRuntimeKind,
+  CliRuntimeProtocol,
+  CliRuntimeSession,
+  CliRuntimeStreamEvent
+} from '@talex-touch/tuff-intelligence'
+import type { PiWorkspaceAuthority } from '../pi-agent-runtime-host'
+import type {
+  PiRuntimeRunEvent,
+  PiRuntimeRunRecord,
+  PiRuntimeStartPayload
+} from '../pi-agent-runtime-protocol'
+import type {
+  GitWorktreeManager,
+  ReleaseWorktreeOptions,
+  ReleaseWorktreeResult,
+  WorktreeDiffResult,
+  WorktreeLease
+} from '../worktree'
+
+export type {
+  AcpMcpServerConfig,
+  AcpPermissionOption,
+  AcpPermissionRequestParams,
+  AcpPermissionRequestResult,
+  AcpPromptContent,
+  CliPermissionDecision,
+  CliPermissionRequest,
+  CliPermissionRiskKind,
+  CliRuntimeClient,
+  CliRuntimeKind,
+  CliRuntimeProtocol,
+  CliRuntimeSession,
+  CliRuntimeStreamEvent,
+  ReleaseWorktreeOptions,
+  ReleaseWorktreeResult,
+  WorktreeDiffResult,
+  WorktreeLease
+}
+
+export interface CliDriverResolution {
+  readonly kind: CliRuntimeKind
+  readonly protocol: CliRuntimeProtocol
+  readonly executablePath: string
+  readonly adapterName: string
+}
+
+export interface CliWorktreeRequestOptions {
+  enabled?: boolean
+  baseRef?: string
+  branchPrefix?: string
+  detached?: boolean
+  cleanupOnComplete?: boolean
+  forceCleanup?: boolean
+}
+
+export interface CliPermissionRequestContext {
+  runId: string
+  kind: CliRuntimeKind
+  protocol: CliRuntimeProtocol
+  payload: PiRuntimeStartPayload
+  workspace?: PiWorkspaceAuthority
+  signal: AbortSignal
+}
+
+export interface CliAgentRuntimeHostOptions {
+  onEvent?: (event: PiRuntimeRunEvent) => void | Promise<void>
+  onRecord?: (runId: string, record: PiRuntimeRunRecord) => void | Promise<void>
+  resolveMcpServers?: (
+    payload: PiRuntimeStartPayload,
+    workspace?: PiWorkspaceAuthority
+  ) => AcpMcpServerConfig[] | Promise<AcpMcpServerConfig[]>
+  onPermissionRequest?: (
+    request: CliPermissionRequest,
+    context: CliPermissionRequestContext
+  ) => CliPermissionDecision | Promise<CliPermissionDecision>
+  sanitizeToolOutput?: (value: unknown) => unknown
+  worktreeManager?: GitWorktreeManager
+  resolveDriver?: (kind: CliRuntimeKind) => Promise<CliDriverResolution>
+}

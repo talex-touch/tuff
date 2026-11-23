@@ -66,9 +66,9 @@ export function createAgentRunStreamMapper(
           }
           return []
         }
-        // `OmpAgentRuntimeHost` reports a bare `{ delta }` under its own event names; they mean
-        // the same as the Pi worker's `thinking_delta` / `text_delta`, so both runtimes reach the
-        // renderer as one stream shape.
+        // `CliAgentRuntimeHost` (OMP / Codex / Claude) and `OmpAgentRuntimeHost` report a bare
+        // `{ delta }` under their own event names; they mean the same as the Pi worker's
+        // `thinking_delta` / `text_delta`, so every runtime reaches the renderer as one stream shape.
         case 'reasoning': {
           const delta = asText(payload.delta)
           if (!delta) return []
