@@ -456,6 +456,7 @@ export class CodexAppServerSession implements CliRuntimeSession {
             const itemId = readNonEmptyString(item.id, params.itemId)
             const alreadyStreamed = itemId
               ? streamedAgentMessageItemIds.has(itemId)
+              || (streamedAgentMessageItemIds.size === 0 && sawAnyAgentMessageDelta)
               : sawAnyAgentMessageDelta
             const text = readRawNonEmptyString(item.text)
             if (text && !alreadyStreamed) {

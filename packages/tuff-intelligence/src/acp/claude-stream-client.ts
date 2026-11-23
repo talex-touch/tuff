@@ -940,11 +940,41 @@ export class ClaudeStreamClient extends EventEmitter implements CliRuntimeClient
         stdio: ['pipe', 'pipe', 'pipe'],
       })
 
-      return new ClaudeStreamClient(proc, {
+      const client = new ClaudeStreamClient(proc, {
         onPermission: options.onPermission,
         mcpConfigPath,
         initialSessionId: options.resumeSessionId,
       })
+
+      try {
+        await new Promise<void>((resolve, reject) => {
+          function cleanup(): void {
+            proc.removeListener('spawn', onSpawn)
+            proc.removeListener('error', onError)
+            proc.removeListener('exit', onExit)
+          }
+          function onSpawn(): void {
+            cleanup()
+            resolve()
+          }
+          function onError(err: Error): void {
+            cleanup()
+            reject(err)
+          }
+          function onExit(code: number | null, signal: NodeJS.Signals | null): void {
+            cleanup()
+            reject(formatProcessExitError('Claude stream', code, signal, client.stderrTail()))
+          }
+          proc.once('spawn', onSpawn)
+          proc.once('error', onError)
+          proc.once('exit', onExit)
+        })
+        return client
+      }
+      catch (spawnError) {
+        await client.close().catch(() => undefined)
+        throw spawnError
+      }
     }
     catch (error) {
       if (mcpConfigPath) {

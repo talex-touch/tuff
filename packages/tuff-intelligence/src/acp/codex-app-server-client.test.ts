@@ -1,5 +1,8 @@
 import type { CliPermissionRequest, CliRuntimeStreamEvent } from './types'
+import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
+import os from 'node:os'
+import path from 'node:path'
 import process from 'node:process'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
@@ -226,6 +229,26 @@ rl.on('line', (line) => {
       process.exit(2);
     }
 
+    if (text === 'delta-without-item-id') {
+      send({
+        method: 'item/agentMessage/delta',
+        params: { threadId, turnId, delta: 'No-id delta' },
+      });
+      send({
+        method: 'item/completed',
+        params: {
+          threadId,
+          turnId,
+          item: { id: 'msg-final-id', type: 'agentMessage', text: 'No-id delta' },
+        },
+      });
+      send({
+        method: 'turn/completed',
+        params: { threadId, turn: { id: turnId, status: 'completed' } },
+      });
+      return;
+    }
+
     if (text === 'hang') {
       return;
     }
@@ -236,18 +259,6 @@ rl.on('line', (line) => {
   }
 });
 `
-
-function spawnFakeCodexClient(
-  script: string,
-  options?: { onPermission?: (req: CliPermissionRequest) => any, initTimeoutMs?: number },
-): Promise<CodexAppServerClient> {
-  return CodexAppServerClient.spawn({
-    executablePath: process.execPath,
-    args: [],
-    // Override default spawn args by instantiating directly via fake-exec wrapper in tests below.
-    ...options,
-  })
-}
 
 describe('codexAppServerClient unit & fake-subprocess tests', () => {
   it('serializes MCP secrets into child env vars (NEVER literal tokens in argv) and supports strictMcpServers', () => {
@@ -613,11 +624,31 @@ describe('codexAppServerClient unit & fake-subprocess tests', () => {
     await client.close()
   })
 
-  it('rejects cleanly when CodexAppServerClient.spawn cannot find executable', async () => {
+  it('deduplicates item/completed agentMessage when prior deltas omitted itemId', async () => {
+    const { spawn } = await import('node:child_process')
+    const proc = spawn(process.execPath, ['-e', FAKE_CODEX_SERVER], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    const client = new CodexAppServerClient(proc)
+    try {
+      await client.initialize()
+      const session = await client.createSession({ cwd: process.cwd() })
+      const deltas: string[] = []
+      for await (const ev of session.promptStream('delta-without-item-id')) {
+        if (ev.type === 'delta')
+          deltas.push(ev.text)
+      }
+      expect(deltas).toEqual(['No-id delta'])
+    }
+    finally {
+      await client.close()
+    }
+  })
+
+  it('rejects cleanly with ENOENT when CodexAppServerClient.spawn cannot find executable', async () => {
+    const missingBin = path.join(os.tmpdir(), `tuff-missing-codex-${randomUUID()}`)
     await expect(
-      spawnFakeCodexClient('', { initTimeoutMs: 500 }).catch((e) => {
-        throw e
-      }),
-    ).rejects.toThrow()
+      CodexAppServerClient.spawn({ executablePath: missingBin, initTimeoutMs: 500 }),
+    ).rejects.toThrow(/ENOENT/)
   })
 })

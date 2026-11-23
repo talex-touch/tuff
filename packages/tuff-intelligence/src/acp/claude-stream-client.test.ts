@@ -1,7 +1,10 @@
 import type { CliPermissionRequest, CliRuntimeStreamEvent } from './types'
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { readFile, stat } from 'node:fs/promises'
+import { chmod, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import process from 'node:process'
 import { describe, expect, it } from 'vitest'
 import {
@@ -236,68 +239,110 @@ describe('claudeStreamClient unit & fake-subprocess tests', () => {
     expect(() => buildClaudeStreamArgs({ permissionMode: 'bypassPermissions' as any })).toThrow(/Unsupported Claude permissionMode/)
   })
 
-  it('writes MCP secrets to a mode-0600 temp file (never argv) and unlinks on close() and spawn error', async () => {
-    const client = await ClaudeStreamClient.spawn({
-      executablePath: process.execPath,
-      extraArgs: ['-e', 'setInterval(() => {}, 10000);'],
-      mcpServers: [
-        {
-          name: 'tuff-host',
-          type: 'http',
-          url: 'http://127.0.0.1:9999/mcp',
-          headers: [{ name: 'Authorization', value: 'Bearer secret-claude-token-xyz' }],
-        },
-      ],
-      strictMcpConfig: true,
-    })
+  it('writes MCP secrets to a mode-0600 temp file (never argv) and unlinks on close() and ENOENT spawn error', async () => {
+    const shimPath = path.join(os.tmpdir(), `tuff-fake-claude-${randomUUID()}.mjs`)
+    await writeFile(
+      shimPath,
+      `#!${process.execPath}
+import readline from 'node:readline'
+const rl = readline.createInterface({ input: process.stdin, terminal: false })
+rl.on('line', () => {
+  process.stdout.write(JSON.stringify({
+    type: 'stream_event',
+    event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: JSON.stringify(process.argv.slice(2)) } },
+  }) + '\\n')
+  process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', is_error: false }) + '\\n')
+})
+`,
+      { encoding: 'utf8', mode: 0o700 },
+    )
+    await chmod(shimPath, 0o700)
 
-    const configPath = client.getMcpConfigPath()
-    expect(configPath).toBeTruthy()
-    expect(existsSync(configPath!)).toBe(true)
-
+    let configPath: string | null = null
     try {
-      const builtArgs = buildClaudeStreamArgs(
-        {
-          mcpServers: [
-            {
-              name: 'tuff-host',
-              type: 'http',
-              url: 'http://127.0.0.1:9999/mcp',
-              headers: [{ name: 'Authorization', value: 'Bearer secret-claude-token-xyz' }],
-            },
-          ],
-          strictMcpConfig: true,
-        },
-        configPath!,
-      )
-      expect(builtArgs.join(' ')).not.toContain('secret-claude-token-xyz')
-      expect(builtArgs).toContain(configPath!)
-
-      const info = await stat(configPath!)
-      expect(info.mode & 0o777).toBe(0o600)
-
-      const content = JSON.parse(await readFile(configPath!, 'utf8'))
-      expect(content).toEqual({
-        mcpServers: {
-          'tuff-host': {
+      const client = await ClaudeStreamClient.spawn({
+        executablePath: shimPath,
+        mcpServers: [
+          {
+            name: 'tuff-host',
             type: 'http',
             url: 'http://127.0.0.1:9999/mcp',
-            headers: {
-              Authorization: 'Bearer secret-claude-token-xyz',
+            headers: [{ name: 'Authorization', value: 'Bearer secret-claude-token-xyz' }],
+          },
+        ],
+        strictMcpConfig: true,
+      })
+
+      configPath = client.getMcpConfigPath()
+      expect(configPath).toBeTruthy()
+      expect(existsSync(configPath!)).toBe(true)
+
+      try {
+        const session = await client.createSession({ cwd: process.cwd() })
+        let childArgvJson = ''
+        for await (const ev of session.promptStream('check-argv')) {
+          if (ev.type === 'delta')
+            childArgvJson += ev.text
+        }
+        const childArgv = JSON.parse(childArgvJson) as string[]
+        expect(childArgv.join(' ')).not.toContain('secret-claude-token-xyz')
+        expect(childArgv).toContain('--mcp-config')
+        expect(childArgv).toContain(configPath!)
+        expect(childArgv).toContain('--strict-mcp-config')
+
+        const info = await stat(configPath!)
+        expect(info.mode & 0o777).toBe(0o600)
+
+        const content = JSON.parse(await readFile(configPath!, 'utf8'))
+        expect(content).toEqual({
+          mcpServers: {
+            'tuff-host': {
+              type: 'http',
+              url: 'http://127.0.0.1:9999/mcp',
+              headers: {
+                Authorization: 'Bearer secret-claude-token-xyz',
+              },
             },
           },
-        },
-      })
+        })
+      }
+      finally {
+        await client.close()
+      }
+
+      // Temp MCP config file MUST be unlinked after close()
+      expect(existsSync(configPath!)).toBe(false)
+      expect(client.getMcpConfigPath()).toBeNull()
     }
     finally {
-      await client.close()
+      await unlink(shimPath).catch(() => undefined)
     }
 
-    // Temp MCP config file MUST be unlinked after close()
-    expect(existsSync(configPath!)).toBe(false)
-    expect(client.getMcpConfigPath()).toBeNull()
+    // Missing executable MUST reject spawn() directly with ENOENT AND unlink its temp MCP file
+    const beforeTmpFiles = new Set(
+      (await readdir(os.tmpdir())).filter(name => name.startsWith('tuff-claude-mcp-')),
+    )
+    const missingBin = path.join(os.tmpdir(), `tuff-missing-claude-${randomUUID()}`)
+    await expect(
+      ClaudeStreamClient.spawn({
+        executablePath: missingBin,
+        mcpServers: [
+          {
+            name: 'tuff-host',
+            type: 'http',
+            url: 'http://127.0.0.1:9999/mcp',
+            headers: [{ name: 'Authorization', value: 'Bearer never-leaked' }],
+          },
+        ],
+      }),
+    ).rejects.toThrow(/ENOENT/)
 
-    // Spawn error cleanup (invalid permissionMode throws before spawn)
+    const afterTmpFiles = (await readdir(os.tmpdir())).filter(
+      name => name.startsWith('tuff-claude-mcp-') && !beforeTmpFiles.has(name),
+    )
+    expect(afterTmpFiles).toEqual([])
+
+    // Invalid permissionMode throws before spawn and leaves no temp MCP file
     await expect(
       ClaudeStreamClient.spawn({
         executablePath: process.execPath,
