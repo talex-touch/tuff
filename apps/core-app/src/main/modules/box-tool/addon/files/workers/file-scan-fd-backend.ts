@@ -246,17 +246,35 @@ async function resolveExcludeRoots(
   if (!excludePaths || excludePaths.size === 0) return []
   const roots = new Set<string>()
   const rootDiffers = canonicalRoot !== normalizedRoot
+  const canonicalParentOfLogicalRoot = rootDiffers
+    ? path.join(
+        await resolveCanonicalPath(path.dirname(normalizedRoot)),
+        path.basename(normalizedRoot)
+      )
+    : normalizedRoot
   await Promise.all(
     Array.from(excludePaths, async (excludedPath) => {
       const resolved = path.resolve(excludedPath)
       roots.add(resolved)
       const canonical = await resolveCanonicalPath(resolved)
       roots.add(canonical)
-      if (rootDiffers && isPathInsideRoot(resolved, normalizedRoot)) {
+      if (!rootDiffers) return
+      if (isPathInsideRoot(resolved, normalizedRoot)) {
         roots.add(path.join(canonicalRoot, path.relative(normalizedRoot, resolved)))
       }
-      if (rootDiffers && isPathInsideRoot(canonical, canonicalRoot)) {
+      if (isPathInsideRoot(canonical, canonicalRoot)) {
         roots.add(path.join(normalizedRoot, path.relative(canonicalRoot, canonical)))
+      }
+      if (
+        isPathInsideRoot(normalizedRoot, resolved) ||
+        isPathInsideRoot(normalizedRoot, canonical) ||
+        isPathInsideRoot(canonicalParentOfLogicalRoot, resolved) ||
+        isPathInsideRoot(canonicalParentOfLogicalRoot, canonical)
+      ) {
+        roots.add(canonicalRoot)
+      }
+      if (isPathInsideRoot(canonicalRoot, resolved) || isPathInsideRoot(canonicalRoot, canonical)) {
+        roots.add(normalizedRoot)
       }
     })
   )
