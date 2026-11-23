@@ -375,3 +375,22 @@ test('guards against stale trigger generations and halts publishing on onDestroy
   releaseDestroy()
   assert.equal(await pending, false)
 })
+
+test('strips ascii-diagram and box-diagram manifest command prefixes cleanly', async () => {
+  const { mod, state } = setupHarness()
+
+  await mod.onFeatureTriggered('diagram-sketch', 'ascii-diagram')
+  assert.ok(state.pushed.some(item => item.id.startsWith('diagram-sketch-tpl-')))
+  assert.equal(state.pushed.some(item => /AI 生成/.test(item.title || '')), false)
+
+  await mod.onFeatureTriggered('diagram-sketch', 'box-diagram')
+  assert.ok(state.pushed.some(item => item.id.startsWith('diagram-sketch-tpl-')))
+  assert.equal(state.pushed.some(item => /AI 生成/.test(item.title || '')), false)
+
+  await mod.onFeatureTriggered('diagram-sketch', 'ascii-diagram Client -> API')
+  const mermaidAction = state.pushed[0]?.actions?.find(action => action.id === 'copy-mermaid')
+  assert.ok(mermaidAction)
+  assert.doesNotMatch(mermaidAction.payload.text, /ascii-diagram/)
+  assert.match(mermaidAction.payload.text, /Client/)
+  assert.match(mermaidAction.payload.text, /API/)
+})

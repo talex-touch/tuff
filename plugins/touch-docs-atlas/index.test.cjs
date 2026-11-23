@@ -131,6 +131,12 @@ test('HTTP status code lookup covers 1xx-5xx codes, class filters, and keywords'
   await h.mod.onFeatureTriggered('docs-atlas', { text: 'http 5xx' })
   assert.ok(h.pushed.some(i => i.id === 'docs-atlas-http-502'))
   assert.ok(h.pushed.some(i => i.id === 'docs-atlas-http-504'))
+
+  await h.mod.onFeatureTriggered('docs-atlas', { text: 'http-status 404' })
+  assert.ok(h.pushed.some(i => i.id === 'docs-atlas-http-404'))
+
+  await h.mod.onFeatureTriggered('docs-atlas', { text: 'status-code 502' })
+  assert.ok(h.pushed.some(i => i.id === 'docs-atlas-http-502'))
 })
 
 test('chmod calculator converts octal <-> symbolic including setuid/sticky bits and security warnings', async () => {

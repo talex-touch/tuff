@@ -8,6 +8,8 @@ const COMMAND_PREFIXES = [
   'diagram',
   'mermaid',
   'mmd',
+  'ascii-diagram',
+  'box-diagram',
   'ascii',
   'flowchart',
   'sequence',

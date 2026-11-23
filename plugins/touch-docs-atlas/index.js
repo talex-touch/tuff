@@ -1396,7 +1396,15 @@ function buildResultItems(featureId, rawText) {
   const head = (firstSpace >= 0 ? input.slice(0, firstSpace) : input).toLowerCase()
   const rest = firstSpace >= 0 ? input.slice(firstSpace + 1).trim() : ''
 
-  if (head === 'http' || head === 'httpcode' || head === 'statuscode' || head === 'status' || head === '状态码') {
+  if (
+    head === 'http'
+    || head === 'http-status'
+    || head === 'httpcode'
+    || head === 'status-code'
+    || head === 'statuscode'
+    || head === 'status'
+    || head === '状态码'
+  ) {
     return buildHttpStatusItems(featureId, rest)
   }
   if (head === 'chmod' || head === '权限计算') {
