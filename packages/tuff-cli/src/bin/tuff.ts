@@ -130,12 +130,12 @@ function printHelp() {
   console.log('')
   console.log('Commands:')
   console.log('  create      Create a new Tuff plugin from template')
-  console.log('  build       Run Vite build and package .tpex output')
-  console.log('  builder     Package existing build output into .tpex')
+  console.log('  build       Run Vite build and package .tpex and/or npm output')
+  console.log('  builder     Package existing build output into .tpex and/or npm tarball')
   console.log('  dev         Start Vite dev server for plugin development')
-  console.log('  publish     Publish plugin package to Tuff Nexus')
+  console.log('  publish     Publish plugin package to Tuff Nexus and/or npm registry')
   console.log('  scan        Security-scan a built .tpex package')
-  console.log('  validate    Validate manifest.json and permission declarations')
+  console.log('  validate    Validate manifest.json, package.json parity, and permissions')
   console.log('  login       Authenticate with Tuff Nexus')
   console.log('  logout      Clear authentication')
   console.log('  doctor      Inspect local AI tools, config files, MCP readiness, and skills')
@@ -162,12 +162,12 @@ function printAbout() {
   console.log('')
   console.log('Tools:')
   console.log('  - create:  Create new plugins from templates')
-  console.log('  - build:   Run Vite build and package .tpex output')
-  console.log('  - builder: Package existing build output into .tpex')
+  console.log('  - build:   Run Vite build and package .tpex / npm output')
+  console.log('  - builder: Package existing build output into .tpex / npm tarball')
   console.log('  - dev:     Start a Vite dev server for plugin development')
-  console.log('  - publish: Publish plugin packages to Nexus server')
+  console.log('  - publish: Publish plugin packages to Nexus server and/or npm registry')
   console.log('  - scan:    Security-scan built plugin packages')
-  console.log('  - validate: Validate manifest compatibility and permissions')
+  console.log('  - validate: Validate manifest compatibility, package.json parity, and permissions')
   console.log('  - doctor:  Inspect local AI tools and skill readiness')
   console.log('  - setup:   Configure optional Codex skills and MCP capability hints')
 }
@@ -180,10 +180,23 @@ function printBuildHelp() {
   console.log(`Usage: ${CLI_COMMAND_NAME} build [options]`)
   console.log('')
   console.log('Options:')
-  console.log('  --watch         Watch files and rebuild on changes')
-  console.log('  --dev           Use development mode (no minify, sourcemap)')
-  console.log('  --output <dir>  Output directory (default: dist)')
-  console.log('  --help, -h      Show this help message')
+  console.log('  --watch             Watch files and rebuild on changes')
+  console.log('  --dev               Use development mode (no minify, sourcemap)')
+  console.log('  --output <dir>      Output directory (default: dist)')
+  console.log('  --npm               Also stage dist/npm/ and pack reproducible .tgz tarball')
+  console.log('  --format <fmt>      Package format: tpex (default), npm, or both')
+  console.log('  --help, -h          Show this help message')
+  console.log('')
+}
+
+function printBuilderHelp() {
+  console.log(`Usage: ${CLI_COMMAND_NAME} builder [options]`)
+  console.log('')
+  console.log('Options:')
+  console.log('  --output <dir>      Output directory (default: dist)')
+  console.log('  --npm               Also stage dist/npm/ and pack reproducible .tgz tarball')
+  console.log('  --format <fmt>      Package format: tpex (default), npm, or both')
+  console.log('  --help, -h          Show this help message')
   console.log('')
 }
 
@@ -203,6 +216,7 @@ function printValidateHelp() {
   console.log('')
   console.log('Options:')
   console.log('  --manifest <path>  Manifest file path (default: ./manifest.json)')
+  console.log('  --npm              Require npm publish-ready package.json contract')
   console.log('  --strict           Treat warnings as errors')
   console.log('  --help, -h         Show this help message')
   console.log('')
@@ -426,21 +440,30 @@ async function loadPublishModule() {
   return await import('@talex-touch/tuff-cli-core')
 }
 
-async function runPublishWithTracking(): Promise<void> {
-  const onboardingReady = await ensureOnboarding()
-  if (!onboardingReady)
-    return
-
+async function runPublishWithTracking(args: string[] = []): Promise<void> {
   const publishModule = await loadPublishModule()
+  const cliOverrides = publishModule.parsePublishArgs(args)
+  if (process.env.TUFF_NON_INTERACTIVE === '1' && cliOverrides.nonInteractive === undefined) {
+    cliOverrides.nonInteractive = true
+  }
   const publishConfig = await publishModule.resolvePublishConfig(
     process.cwd(),
-    publishModule.parsePublishArgs(process.argv.slice(3)),
+    cliOverrides,
   )
 
-  if (!publishConfig.dryRun) {
-    const authenticated = await ensureAuthenticated({ reloginStrategy: 'oauth' })
-    if (!authenticated)
+  const target = publishConfig.target ?? 'nexus'
+  const needsNexus = target === 'nexus' || target === 'both'
+
+  if (needsNexus) {
+    const onboardingReady = await ensureOnboarding()
+    if (!onboardingReady)
       return
+
+    if (!publishConfig.dryRun) {
+      const authenticated = await ensureAuthenticated({ reloginStrategy: 'oauth' })
+      if (!authenticated)
+        return
+    }
   }
 
   await trackRepository('publish')
@@ -458,9 +481,30 @@ async function runPublishWithTracking(): Promise<void> {
   })
 }
 
-async function runBuilder() {
+async function runBuilder(args: string[] = []) {
+  if (args.includes('--help') || args.includes('-h')) {
+    printBuilderHelp()
+    return
+  }
+
   console.log(`Running: ${CLI_COMMAND_NAME} builder`)
-  await build()
+  const { outputDir, format, npm } = parseBuildArgs(args)
+  const cliOverrides: BuildConfig = {}
+  if (outputDir)
+    cliOverrides.outDir = outputDir
+  if (format)
+    cliOverrides.format = format
+  if (npm !== undefined)
+    cliOverrides.npm = npm
+
+  const buildConfig = await resolveBuildConfig(process.cwd(), cliOverrides)
+  await build({
+    outDir: buildConfig.outDir,
+    minify: buildConfig.minify,
+    sourcemap: buildConfig.sourcemap,
+    format: buildConfig.format,
+    npm: buildConfig.npm,
+  })
 }
 
 async function runBuild(args: string[] = []) {
@@ -471,13 +515,17 @@ async function runBuild(args: string[] = []) {
 
   await trackRepository('build')
 
-  const { watch, dev, outputDir } = parseBuildArgs(args)
+  const { watch, dev, outputDir, format, npm } = parseBuildArgs(args)
 
   const cliOverrides: BuildConfig = {}
   if (watch !== undefined)
     cliOverrides.watch = watch
   if (outputDir)
     cliOverrides.outDir = outputDir
+  if (format)
+    cliOverrides.format = format
+  if (npm !== undefined)
+    cliOverrides.npm = npm
   if (dev) {
     cliOverrides.minify = false
     cliOverrides.sourcemap = true
@@ -491,6 +539,8 @@ async function runBuild(args: string[] = []) {
     outDir: buildConfig.outDir,
     minify: buildConfig.minify,
     sourcemap: buildConfig.sourcemap,
+    format: buildConfig.format,
+    npm: buildConfig.npm,
   }
 
   try {
@@ -1717,7 +1767,7 @@ async function main() {
       await runBuild(commandArgs)
     }
     else if (command === 'builder') {
-      await runBuilder()
+      await runBuilder(commandArgs)
     }
     else if (command === 'dev') {
       await runDev(commandArgs)
@@ -1744,7 +1794,7 @@ async function main() {
         printPublishHelp()
       }
       else {
-        await runPublishWithTracking()
+        await runPublishWithTracking(commandArgs)
       }
     }
     else if (command === 'login') {
