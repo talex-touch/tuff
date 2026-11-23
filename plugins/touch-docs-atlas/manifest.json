@@ -1,0 +1,136 @@
+{
+  "id": "com.tuffex.touch-docs-atlas",
+  "name": "touch-docs-atlas",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 261011,
+  "category": "developer",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": {
+    "default": "Offline Dev Reference Atlas: HTTP status codes 1xx-5xx, chmod calculator, IPv4 CIDR subnet calculator, MIME types, ASCII/ANSI codes, and Git/Docker/SQL/cURL/tmux cheatsheets",
+    "locales": {
+      "zh-CN": "离线开发者参考手册：HTTP 状态码 1xx-5xx、chmod 权限计算器、IPv4 CIDR 子网计算器、MIME 类型、ASCII/ANSI 编码与 Git/Docker/SQL/cURL/tmux 速查",
+      "en-US": "Offline Dev Reference Atlas: HTTP status codes 1xx-5xx, chmod calculator, IPv4 CIDR subnet calculator, MIME types, ASCII/ANSI codes, and Git/Docker/SQL/cURL/tmux cheatsheets"
+    }
+  },
+  "main": "index.js",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  },
+  "permissions": {
+    "required": [],
+    "optional": [
+      "clipboard.write"
+    ]
+  },
+  "permissionReasons": {
+    "clipboard.write": {
+      "default": "Copy HTTP status summaries, chmod commands, CIDR subnet details, MIME headers, ANSI sequences, and cheatsheet commands to clipboard",
+      "locales": {
+        "zh-CN": "将 HTTP 状态码说明、chmod 命令、CIDR 子网结果、MIME 类型、ANSI 转义码与速查命令复制到剪贴板",
+        "en-US": "Copy HTTP status summaries, chmod commands, CIDR subnet details, MIME headers, ANSI sequences, and cheatsheet commands to clipboard"
+      }
+    }
+  },
+  "searchProviders": [
+    {
+      "id": "touch-docs-atlas.docs-atlas",
+      "displayName": "Docs Atlas",
+      "featureId": "docs-atlas",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 112,
+      "permissionScopes": [],
+      "defaultState": "enabled",
+      "requiresUserConsent": false,
+      "pushesToRootResults": false
+    }
+  ],
+  "features": [
+    {
+      "id": "docs-atlas",
+      "name": {
+        "default": "Dev Docs Atlas",
+        "locales": {
+          "zh-CN": "开发者参考手册",
+          "en-US": "Dev Docs Atlas"
+        }
+      },
+      "desc": {
+        "default": "Instant offline lookup for HTTP codes, chmod, IPv4 CIDR, MIME, ASCII/ANSI, and Git/Docker/SQL/cURL/tmux cheatsheets",
+        "locales": {
+          "zh-CN": "离线速查 HTTP 状态码、chmod、CIDR 子网、MIME、ASCII/ANSI 与 Git/Docker/SQL/cURL/tmux 常用命令",
+          "en-US": "Instant offline lookup for HTTP codes, chmod, IPv4 CIDR, MIME, ASCII/ANSI, and Git/Docker/SQL/cURL/tmux cheatsheets"
+        }
+      },
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": [
+        "atlas",
+        "devref",
+        "http",
+        "status",
+        "chmod",
+        "cidr",
+        "subnet",
+        "mime",
+        "ascii",
+        "ansi",
+        "cheatsheet",
+        "git",
+        "docker",
+        "sql",
+        "tmux",
+        "速查",
+        "参考手册",
+        "状态码",
+        "子网"
+      ],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": [
+        "text"
+      ],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": [
+            "atlas",
+            "devref",
+            "docs-atlas",
+            "http",
+            "httpcode",
+            "statuscode",
+            "chmod",
+            "cidr",
+            "subnet",
+            "mime",
+            "ascii",
+            "ansi",
+            "cheat",
+            "cheatsheet",
+            "速查",
+            "参考手册",
+            "状态码",
+            "子网",
+            "权限计算"
+          ]
+        }
+      ]
+    }
+  ]
+}

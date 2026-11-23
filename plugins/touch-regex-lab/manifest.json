@@ -1,0 +1,118 @@
+{
+  "id": "com.tuffex.touch-regex-lab",
+  "name": "touch-regex-lab",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 261011,
+  "category": "developer",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": {
+    "default": "Interactive Regex Studio with capture-group inspector, replace preview, ReDoS guard, and curated regex library",
+    "locales": {
+      "zh-CN": "交互式正则表达式实验室：捕获组检查、替换预览、ReDoS 安全防护与 24+ 常用正则库",
+      "en-US": "Interactive Regex Studio with capture-group inspector, replace preview, ReDoS guard, and curated regex library"
+    }
+  },
+  "main": "index.js",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  },
+  "permissions": {
+    "required": [],
+    "optional": [
+      "clipboard.write"
+    ]
+  },
+  "permissionReasons": {
+    "clipboard.write": {
+      "default": "Copy regex patterns, capture results, replace outputs, and JS/Python snippets to clipboard",
+      "locales": {
+        "zh-CN": "将正则表达式、匹配捕获结果、替换预览及 JS/Python 代码片段复制到剪贴板",
+        "en-US": "Copy regex patterns, capture results, replace outputs, and JS/Python snippets to clipboard"
+      }
+    }
+  },
+  "searchProviders": [
+    {
+      "id": "touch-regex-lab.regex-lab",
+      "displayName": "Regex Lab",
+      "featureId": "regex-lab",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 110,
+      "permissionScopes": [],
+      "defaultState": "enabled",
+      "requiresUserConsent": false,
+      "pushesToRootResults": false
+    }
+  ],
+  "features": [
+    {
+      "id": "regex-lab",
+      "name": {
+        "default": "Regex Lab",
+        "locales": {
+          "zh-CN": "正则实验室",
+          "en-US": "Regex Lab"
+        }
+      },
+      "desc": {
+        "default": "Test regexes live, inspect capture groups, preview replacements, and browse curated patterns",
+        "locales": {
+          "zh-CN": "实时测试正则、检查命名/编号捕获组、预览替换结果与检索精选正则库",
+          "en-US": "Test regexes live, inspect capture groups, preview replacements, and browse curated patterns"
+        }
+      },
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": [
+        "regex",
+        "regexp",
+        "rx",
+        "pattern",
+        "match",
+        "replace",
+        "capture",
+        "group",
+        "正则",
+        "正则表达式",
+        "匹配",
+        "替换"
+      ],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": [
+        "text"
+      ],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": [
+            "regex",
+            "regexp",
+            "rx",
+            "reglab",
+            "regex-lab",
+            "正则",
+            "正则表达式",
+            "正则测试"
+          ]
+        }
+      ]
+    }
+  ]
+}
