@@ -33,11 +33,36 @@ interface PulseInstance {
 const instances = new Set<PulseInstance>();
 let rafId: number | null = null;
 let lastFrame = 0;
+let envListenersAttached = false;
+let documentHidden = false;
+let windowFocused = true;
+let lowBatteryMotion = false;
+let lowBatteryObserver: MutationObserver | null = null;
 
 // ~30 fps. Subtract a small slack so a frame that lands a hair early still runs.
 const FRAME_INTERVAL = 1000 / 30 - 2;
 
 const TWO_PI = Math.PI * 2;
+
+function readDocumentHidden(): boolean {
+  return typeof document !== 'undefined' ? Boolean(document.hidden) : false;
+}
+
+function readWindowFocused(): boolean {
+  return typeof document !== 'undefined' && typeof document.hasFocus === 'function'
+    ? document.hasFocus()
+    : true;
+}
+
+function readLowBatteryMotion(): boolean {
+  return typeof document !== 'undefined'
+    ? document.documentElement?.getAttribute('data-low-battery-motion') === '1'
+    : false;
+}
+
+function isEnvironmentPaused(): boolean {
+  return documentHidden || !windowFocused || lowBatteryMotion;
+}
 
 /** Cosine ease-in-out factor in [0, 1]: 0 at phase 0/1, 1 at phase 0.5. */
 function pingPong(phase: number): number {
@@ -45,6 +70,9 @@ function pingPong(phase: number): number {
 }
 
 function frame(ts: number): void {
+  rafId = null;
+  if (instances.size === 0 || isEnvironmentPaused()) return;
+
   rafId = requestAnimationFrame(frame);
 
   if (ts - lastFrame < FRAME_INTERVAL) return;
@@ -76,16 +104,94 @@ function frame(ts: number): void {
 }
 
 function startLoop(): void {
-  if (rafId == null) {
+  if (rafId == null && instances.size > 0 && !isEnvironmentPaused()) {
     lastFrame = 0;
     rafId = requestAnimationFrame(frame);
   }
 }
 
-function stopLoopIfIdle(): void {
-  if (instances.size === 0 && rafId != null) {
+function stopLoop(): void {
+  if (rafId != null) {
     cancelAnimationFrame(rafId);
     rafId = null;
+  }
+  lastFrame = 0;
+}
+
+function syncLoop(): void {
+  if (instances.size === 0 || isEnvironmentPaused()) {
+    stopLoop();
+  } else {
+    startLoop();
+  }
+}
+
+function onVisibilityChange(): void {
+  documentHidden = readDocumentHidden();
+  if (!documentHidden) {
+    if (typeof document !== 'undefined' && typeof document.hasFocus === 'function' && !document.hasFocus()) {
+      windowFocused = false;
+    }
+    lowBatteryMotion = readLowBatteryMotion();
+  }
+  syncLoop();
+}
+
+function onWindowFocus(): void {
+  windowFocused = true;
+  lowBatteryMotion = readLowBatteryMotion();
+  syncLoop();
+}
+
+function onWindowBlur(): void {
+  windowFocused = false;
+  syncLoop();
+}
+
+function attachEnvListeners(): void {
+  if (envListenersAttached) return;
+  envListenersAttached = true;
+  documentHidden = readDocumentHidden();
+  windowFocused = readWindowFocused();
+  lowBatteryMotion = readLowBatteryMotion();
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    if (typeof MutationObserver !== 'undefined' && document.documentElement) {
+      lowBatteryObserver = new MutationObserver(() => {
+        lowBatteryMotion = readLowBatteryMotion();
+        syncLoop();
+      });
+      lowBatteryObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-low-battery-motion'],
+      });
+    }
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', onWindowFocus);
+    window.addEventListener('blur', onWindowBlur);
+  }
+}
+
+function detachEnvListeners(): void {
+  if (!envListenersAttached) return;
+  envListenersAttached = false;
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+  }
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('focus', onWindowFocus);
+    window.removeEventListener('blur', onWindowBlur);
+  }
+  lowBatteryObserver?.disconnect();
+  lowBatteryObserver = null;
+}
+
+function stopLoopIfIdle(): void {
+  if (instances.size === 0) {
+    stopLoop();
+    detachEnvListeners();
   }
 }
 
@@ -100,8 +206,11 @@ export function registerPulseInstance(
   config: PulseDriverConfig
 ): () => void {
   const instance: PulseInstance = { el, config };
+  if (instances.size === 0) {
+    attachEnvListeners();
+  }
   instances.add(instance);
-  startLoop();
+  syncLoop();
 
   return () => {
     instances.delete(instance);

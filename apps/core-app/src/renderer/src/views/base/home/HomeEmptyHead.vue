@@ -25,7 +25,7 @@ const props = defineProps<{
   busy: boolean
   /** Screen-reader text while the opening loads. */
   loadingLabel: string
-  /** The roaming pet stands in for the mark; visibility, not v-if, keeps the box and the layout. */
+  /** The roaming pet stands in for the mark; the fixed-height host keeps layout while unmounting the duplicate TxMiko. */
   markHidden?: boolean
 }>()
 
@@ -43,13 +43,18 @@ defineExpose({ el })
 
 <template>
   <div ref="el" class="HomeEmptyHead">
-    <div class="HomeEmptyHead-MarkHost" :class="{ 'is-pet-host': markHidden }">
+    <div
+      class="HomeEmptyHead-MarkHost"
+      :class="{ 'is-pet-host': markHidden }"
+      :aria-hidden="markHidden ? 'true' : undefined"
+    >
       <TxMiko
+        v-if="!markHidden"
         class="HomeEmptyHead-Mark"
         :size="68"
         :state="computedMikoState"
-        :interactive="!markHidden"
-        :random="!markHidden"
+        :interactive="true"
+        :random="true"
       />
     </div>
     <TxMotionText
@@ -114,10 +119,6 @@ defineExpose({ el })
 
 .HomeEmptyHead-Mark {
   filter: drop-shadow(0 4px 14px rgba(129, 13, 198, 0.25));
-}
-
-.HomeEmptyHead-MarkHost.is-pet-host .HomeEmptyHead-Mark {
-  visibility: hidden;
 }
 
 .HomeEmptyHead-Greeting {

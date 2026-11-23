@@ -1,7 +1,45 @@
 import type { App } from 'vue'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, h, KeepAlive, nextTick, ref } from 'vue'
 import Miko, { Miko as InstalledMiko } from '../index'
+
+const mountedWrappers: Array<{ unmount: () => void }> = []
+
+function mountTracked(...args: Parameters<typeof mount>) {
+  const wrapper = mount(...args)
+  mountedWrappers.push(wrapper)
+  return wrapper
+}
+
+function setDocumentHidden(hidden: boolean): void {
+  Object.defineProperty(document, 'hidden', {
+    configurable: true,
+    get: () => hidden,
+  })
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    get: () => (hidden ? 'hidden' : 'visible'),
+  })
+}
+
+beforeEach(() => {
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  document.documentElement.removeAttribute('data-low-battery-motion')
+  setDocumentHidden(false)
+})
+
+afterEach(() => {
+  while (mountedWrappers.length > 0) {
+    mountedWrappers.pop()?.unmount()
+  }
+  document.documentElement.removeAttribute('data-low-battery-motion')
+  setDocumentHidden(false)
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 describe('txMiko', () => {
   it('renders default state idle with role and aria-label', () => {
@@ -165,5 +203,107 @@ describe('txMiko', () => {
     InstalledMiko.install?.(app)
 
     expect(app.component).toHaveBeenCalledWith('TxMiko', InstalledMiko)
+  })
+
+  it('defines reduced-motion and paused rules in miko.css', () => {
+    const css = readFileSync(resolve(__dirname, '../src/miko.css'), 'utf8')
+    expect(css).toContain('@media (prefers-reduced-motion: reduce)')
+    expect(css).toContain('.tx-miko.is-paused')
+    expect(css).toContain('animation-play-state: paused !important;')
+  })
+
+  it('pauses randomTimer and adds is-paused on blur, hidden, and low-battery and resumes cleanly', async () => {
+    vi.useFakeTimers()
+    const wrapper = mountTracked(Miko, {
+      props: { random: true, randomInterval: 3000, mutationChance: 0 },
+    })
+    await nextTick()
+    expect(wrapper.classes()).not.toContain('is-paused')
+
+    // Blur window -> pauses timer and adds is-paused
+    window.dispatchEvent(new Event('blur'))
+    await nextTick()
+    expect(wrapper.classes()).toContain('is-paused')
+
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(wrapper.emitted('stateChange')).toBeUndefined()
+
+    // Focus window -> resumes random timer
+    window.dispatchEvent(new Event('focus'))
+    await nextTick()
+    expect(wrapper.classes()).not.toContain('is-paused')
+
+    await vi.advanceTimersByTimeAsync(5000)
+    const countAfterFocus = wrapper.emitted('stateChange')?.length ?? 0
+    expect(countAfterFocus).toBeGreaterThanOrEqual(1)
+
+    // Document hidden -> pauses timer again
+    setDocumentHidden(true)
+    document.dispatchEvent(new Event('visibilitychange'))
+    await nextTick()
+    expect(wrapper.classes()).toContain('is-paused')
+
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(wrapper.emitted('stateChange')?.length).toBe(countAfterFocus)
+
+    // Document visible -> resumes
+    setDocumentHidden(false)
+    document.dispatchEvent(new Event('visibilitychange'))
+    await nextTick()
+    expect(wrapper.classes()).not.toContain('is-paused')
+
+    await vi.advanceTimersByTimeAsync(5000)
+    const countAfterVisible = wrapper.emitted('stateChange')?.length ?? 0
+    expect(countAfterVisible).toBeGreaterThan(countAfterFocus)
+
+    // Low-battery mode -> pauses timer
+    document.documentElement.setAttribute('data-low-battery-motion', '1')
+    await Promise.resolve()
+    await nextTick()
+    expect(wrapper.classes()).toContain('is-paused')
+
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(wrapper.emitted('stateChange')?.length).toBe(countAfterVisible)
+
+    wrapper.unmount()
+  })
+
+  it('pauses randomTimer on KeepAlive deactivation and resumes on activation', async () => {
+    vi.useFakeTimers()
+    const visible = ref(true)
+    const onStateChange = vi.fn()
+
+    const Host = defineComponent({
+      setup() {
+        return () =>
+          h(KeepAlive, null, {
+            default: () =>
+              visible.value
+                ? h(Miko, {
+                    key: 'miko',
+                    random: true,
+                    randomInterval: 3000,
+                    mutationChance: 0,
+                    onStateChange,
+                  })
+                : null,
+          })
+      },
+    })
+
+    const wrapper = mountTracked(Host)
+    await nextTick()
+
+    visible.value = false
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(onStateChange).not.toHaveBeenCalled()
+
+    visible.value = true
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(onStateChange).toHaveBeenCalled()
+
+    wrapper.unmount()
   })
 })

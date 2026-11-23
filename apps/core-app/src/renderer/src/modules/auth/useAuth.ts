@@ -11,6 +11,7 @@ import { AuthEvents, SentryEvents } from '@talex-touch/utils/transport/events'
 import {
   computed,
   createVNode,
+  effectScope,
   getCurrentInstance,
   onMounted,
   onUnmounted,
@@ -844,20 +845,60 @@ function setupAuthFocusPrompt(): void {
   }
 
   const handleFocus = () => {
-    if (!document.hasFocus()) return
+    if (!pendingBrowserLogin.value || !document.hasFocus()) return
     schedulePromptIfNeeded()
   }
 
-  const pendingPromptPollerId = window.setInterval(() => {
-    if (!document.hasFocus()) return
-    schedulePromptIfNeeded()
-  }, 1000)
+  let pendingPromptPollerId: number | null = null
+  let focusListenerAttached = false
 
-  window.addEventListener('focus', handleFocus)
-  focusPromptCleanup = () => {
+  const stopPendingPromptWatchers = () => {
+    if (pendingPromptPollerId != null) {
+      window.clearInterval(pendingPromptPollerId)
+      pendingPromptPollerId = null
+    }
+    if (focusListenerAttached) {
+      window.removeEventListener('focus', handleFocus)
+      focusListenerAttached = false
+    }
     clearDelayedPromptTimer()
-    window.clearInterval(pendingPromptPollerId)
-    window.removeEventListener('focus', handleFocus)
+  }
+
+  const startPendingPromptWatchers = () => {
+    if (!focusListenerAttached) {
+      window.addEventListener('focus', handleFocus)
+      focusListenerAttached = true
+    }
+    if (pendingPromptPollerId == null) {
+      pendingPromptPollerId = window.setInterval(() => {
+        if (!pendingBrowserLogin.value) {
+          stopPendingPromptWatchers()
+          return
+        }
+        if (!document.hasFocus()) return
+        schedulePromptIfNeeded()
+      }, 1000)
+    }
+  }
+
+  const watcherScope = effectScope(true)
+  watcherScope.run(() => {
+    watch(
+      () => pendingBrowserLogin.value !== null,
+      (hasPending) => {
+        if (hasPending) {
+          startPendingPromptWatchers()
+        } else {
+          stopPendingPromptWatchers()
+        }
+      },
+      { immediate: true, flush: 'sync' }
+    )
+  })
+
+  focusPromptCleanup = () => {
+    watcherScope.stop()
+    stopPendingPromptWatchers()
   }
 }
 

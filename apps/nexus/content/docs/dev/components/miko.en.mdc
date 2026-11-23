@@ -87,7 +87,7 @@ code: |
 
 - Renders an ultra-sharp pixel SVG with `role="img"` and `shape-rendering="crispEdges"`.
 - 38 supported states: `idle`, `working`, `running`, `demon`, `coffee`, `guitar`, `sleepy`, `ninja`, `fishing`, `magic`, `umbrella`, `heart`, `workout`, `dj`, `chef`, `space`, `thinking`, `success`, `alert`, `error`, `sleeping`, `juggling`, `sweeping`, `reading`, `dizzy`, `peeking`, `stretching`, `bathing`, `curious`, `scratching`, `purring`, `eating`, `dancing`, `cheering`, `gaming`, `hacking`, `celebrating`, and `box`.
-- Driven entirely by native CSS `@keyframes` without external GIF or PNG assets.
+- Driven entirely by native CSS `@keyframes` without external GIF or PNG assets; respects `prefers-reduced-motion: reduce` and pauses animations and random cycling when hidden, blurred, `<KeepAlive>`-deactivated, or in low-battery motion mode.
 
 ## Technologies
 
