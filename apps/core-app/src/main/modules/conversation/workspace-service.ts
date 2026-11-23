@@ -414,8 +414,12 @@ export class ConversationWorkspaceService {
     return [...interrupted]
   }
 
-  async claimRecoverableTurn(conversationId: string): Promise<WorkspaceAdmittedTurn | undefined> {
+  async claimRecoverableTurn(
+    conversationId: string,
+    options?: { canCommit?: () => boolean }
+  ): Promise<WorkspaceAdmittedTurn | undefined> {
     return this.serial(conversationId, async () => {
+      if (options?.canCommit && !options.canCommit()) return undefined
       this.recoverableActiveTurns.delete(conversationId)
       const row = await this.workspaceRow(conversationId)
       const conversation = await getConversation(conversationId)
@@ -453,8 +457,34 @@ export class ConversationWorkspaceService {
       const priorAttempts = readRecoveryAttempts(pair.assistant.meta)
       if (priorAttempts >= MAX_WORKSPACE_TURN_RECOVERY_ATTEMPTS) return interruptMalformed()
 
-      const parsedSettings = settingsSchema.safeParse(safeJsonParse(row.settingsJson))
+      const assistantMeta =
+        pair.assistant.meta && typeof pair.assistant.meta === 'object'
+          ? (pair.assistant.meta as Record<string, unknown>)
+          : {}
+      const parsedSettings = settingsSchema.safeParse(
+        assistantMeta.admittedSettings !== undefined
+          ? assistantMeta.admittedSettings
+          : safeJsonParse(row.settingsJson)
+      )
       if (!parsedSettings.success) return interruptMalformed()
+
+      const isRetryTurn =
+        pair.user.id !== `user-${turnId}` || typeof assistantMeta.retryOfMessageId === 'string'
+      let admittedText: string
+      let retryOfMessageId: string | undefined
+      if (isRetryTurn) {
+        if (typeof assistantMeta.retryText !== 'string' || !assistantMeta.retryText.trim()) {
+          // Legacy retry turn whose admitted retry text was not persisted: fail closed rather
+          // than substituting the broader/older original user message objective.
+          return interruptMalformed()
+        }
+        admittedText = assistantMeta.retryText
+        if (typeof assistantMeta.retryOfMessageId === 'string') {
+          retryOfMessageId = assistantMeta.retryOfMessageId
+        }
+      } else {
+        admittedText = pair.user.content
+      }
 
       const links = await this.db()
         .select()
@@ -488,11 +518,12 @@ export class ConversationWorkspaceService {
       const parsedInput = inputSchema.safeParse({
         id: turnId,
         conversationId,
-        text: pair.user.content,
+        text: admittedText,
         settings: parsedSettings.data,
         projectId: conversation.projectId,
         createdAt: pair.assistant.createdAt,
-        ...(refs.length ? { attachments: refs } : {})
+        ...(refs.length ? { attachments: refs } : {}),
+        ...(retryOfMessageId ? { retryOfMessageId } : {})
       })
       if (!parsedInput.success) return interruptMalformed()
       const input: WorkspaceQueuedInput = parsedInput.data
@@ -501,6 +532,11 @@ export class ConversationWorkspaceService {
         await this.validate(input.settings, input.projectId)
       } catch {
         return interruptMalformed()
+      }
+
+      if (options?.canCommit && !options.canCommit()) {
+        this.recoverableActiveTurns.set(conversationId, turnId)
+        return undefined
       }
 
       const now = Date.now()
@@ -512,6 +548,8 @@ export class ConversationWorkspaceService {
       const nextMeta: Record<string, unknown> = {
         ...(pair.assistant.meta ?? {}),
         turnId,
+        admittedSettings: input.settings,
+        ...(retryOfMessageId ? { retryOfMessageId, retryText: admittedText } : {}),
         recoveryAttempts: nextAttempt,
         recoveredAt: now
       }
@@ -519,6 +557,9 @@ export class ConversationWorkspaceService {
       let claimed = false
       await scheduleDbWrite('conversation.workspace.claim-recovery', () =>
         this.db().transaction(async (tx) => {
+          if (options?.canCommit && !options.canCommit()) {
+            return
+          }
           const [current] = await tx
             .select()
             .from(conversationWorkspaces)
@@ -552,13 +593,24 @@ export class ConversationWorkspaceService {
           claimed = true
         })
       )
-      if (!claimed) return undefined
+      if (!claimed) {
+        if (options?.canCommit && !options.canCommit()) {
+          this.recoverableActiveTurns.set(conversationId, turnId)
+        }
+        return undefined
+      }
 
       const updatedAssistant: StoredConversationMessage = {
         ...pair.assistant,
         meta: nextMeta
       }
-      await this.changed(conversationId)
+      // State publication failure must never abandon an already-committed claim and strand
+      // the turn as running without a runner slot.
+      try {
+        await this.changed(conversationId)
+      } catch {
+        // Runner still owns the committed turn and will emit subsequent snapshots/settlements.
+      }
       return {
         input,
         user: pair.user,
@@ -569,6 +621,82 @@ export class ConversationWorkspaceService {
           priorContent,
           ...(priorParts ? { priorParts } : {})
         }
+      }
+    })
+  }
+
+  async releaseUnstartedRecoveryClaim(
+    conversationId: string,
+    turnId: string,
+    priorAttempts: number
+  ): Promise<void> {
+    await this.serial(conversationId, async () => {
+      const conversation = await getConversation(conversationId)
+      const assistant = conversation?.messages.find(
+        (message) => message.role === 'assistant' && message.id === `assistant-${turnId}`
+      )
+      if (!assistant) return
+      const restoredMeta: Record<string, unknown> = { ...(assistant.meta ?? {}) }
+      if (priorAttempts <= 0) {
+        delete restoredMeta.recoveryAttempts
+        delete restoredMeta.recoveredAt
+      } else {
+        restoredMeta.recoveryAttempts = priorAttempts
+      }
+      await scheduleDbWrite('conversation.workspace.release-unstarted-recovery', () =>
+        this.db().transaction(async (tx) => {
+          const [current] = await tx
+            .select()
+            .from(conversationWorkspaces)
+            .where(eq(conversationWorkspaces.conversationId, conversationId))
+          if (!current || current.activeTurnId !== turnId || current.status !== 'running') return
+          await tx
+            .update(conversationMessages)
+            .set({ meta: JSON.stringify(restoredMeta) })
+            .where(
+              and(
+                eq(conversationMessages.conversationId, conversationId),
+                eq(conversationMessages.id, assistant.id)
+              )
+            )
+          await tx
+            .update(conversationWorkspaces)
+            .set({
+              revision: sql`${conversationWorkspaces.revision} + 1`,
+              updatedAt: Date.now()
+            })
+            .where(eq(conversationWorkspaces.conversationId, conversationId))
+        })
+      )
+      this.recoverableActiveTurns.set(conversationId, turnId)
+    })
+  }
+
+  async interruptClaimedTurn(conversationId: string, turnId: string): Promise<void> {
+    await this.serial(conversationId, async () => {
+      this.queues.get(conversationId)?.hold(conversationId)
+      const now = Date.now()
+      await scheduleDbWrite('conversation.workspace.interrupt-claimed', () =>
+        this.db().transaction(async (tx) => {
+          const [current] = await tx
+            .select()
+            .from(conversationWorkspaces)
+            .where(eq(conversationWorkspaces.conversationId, conversationId))
+          if (!current || current.activeTurnId !== turnId) return
+          await interruptActiveTurnInTx(
+            tx,
+            conversationId,
+            turnId,
+            now,
+            'interrupted',
+            'WORKSPACE_TURN_INTERRUPTED'
+          )
+        })
+      )
+      try {
+        await this.changed(conversationId, true)
+      } catch {
+        // Best-effort state publication during failure reconciliation.
       }
     })
   }
@@ -1332,7 +1460,13 @@ export class ConversationWorkspaceService {
         role: 'assistant',
         content: '',
         status: 'streaming',
-        meta: { turnId: input.id },
+        meta: {
+          turnId: input.id,
+          admittedSettings: input.settings,
+          ...(input.retryOfMessageId
+            ? { retryOfMessageId: input.retryOfMessageId, retryText: input.text }
+            : {})
+        },
         seq: 0,
         createdAt: now
       }
@@ -1545,7 +1679,13 @@ export class ConversationWorkspaceService {
         role: 'assistant',
         content: '',
         status: 'streaming',
-        meta: { turnId: input.id },
+        meta: {
+          turnId: input.id,
+          admittedSettings: input.settings,
+          ...(input.retryOfMessageId
+            ? { retryOfMessageId: input.retryOfMessageId, retryText: input.text }
+            : {})
+        },
         seq: 0,
         createdAt: now
       }

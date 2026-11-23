@@ -456,7 +456,8 @@ export class AiAutomationScheduler {
               missedCount: missed.count,
               firstTriggeredAt: missed.firstTriggeredAt,
               lastTriggeredAt: missed.lastTriggeredAt
-            }
+            },
+            ...(run.triggerType === 'recovery' ? { recovery: { attempts: 0 } } : {})
           },
           missed.count
         ).catch((error) =>

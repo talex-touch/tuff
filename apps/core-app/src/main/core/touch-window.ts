@@ -198,7 +198,6 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
       RENDERER_CRASH_RELOAD_BACKOFF_MS[
         Math.min(attemptIndex, RENDERER_CRASH_RELOAD_BACKOFF_MS.length - 1)
       ]
-    this.crashReloadTimestamps.push(now)
     touchWindowLog.warn('Scheduling renderer auto-reload after unexpected crash', {
       meta: {
         reason: details.reason,
@@ -222,6 +221,26 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     if (this.isWindowOrContentsDestroyed()) return
     if (degradedRenderProcessGoneWindows.has(this.window)) return
     if (!isAutoResumeOnStartupEnabled()) return
+
+    const executedAt = Date.now()
+    this.crashReloadTimestamps = this.crashReloadTimestamps.filter(
+      (timestamp) => executedAt - timestamp < RENDERER_CRASH_RELOAD_WINDOW_MS
+    )
+    if (this.crashReloadTimestamps.length >= RENDERER_CRASH_RELOAD_MAX_ATTEMPTS) {
+      touchWindowLog.error(
+        'Renderer crash auto-reload limit reached at execution; skipping reload',
+        {
+          meta: {
+            reason: details.reason,
+            exitCode: details.exitCode,
+            attempts: this.crashReloadTimestamps.length,
+            windowMs: RENDERER_CRASH_RELOAD_WINDOW_MS
+          }
+        }
+      )
+      return
+    }
+    this.crashReloadTimestamps.push(executedAt)
 
     try {
       const currentUrl =
@@ -425,6 +444,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     url: string,
     options?: TalexTouch.LoadURLOptions | undefined
   ): Promise<WebContents> {
+    this.clearCrashReloadTimer()
     this.lastLoadTarget = { kind: 'url', target: url, options }
     this.__beforeLoad(url, options)
 
@@ -443,6 +463,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     filePath: string,
     options?: TalexTouch.LoadFileOptions | undefined
   ): Promise<WebContents> {
+    this.clearCrashReloadTimer()
     this.lastLoadTarget = { kind: 'file', target: filePath, options }
     this.__beforeLoad(filePath, options)
 

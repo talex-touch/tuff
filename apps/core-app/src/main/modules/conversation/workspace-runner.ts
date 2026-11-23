@@ -179,6 +179,12 @@ export class ConversationWorkspaceRunner {
     })
   }
 
+  private async ensureDisabledRecoveryFinalized(): Promise<void> {
+    if (this.isAutoResumeEnabled()) return
+    await this.service.initialize({ autoResumeOnStartup: false })
+    await this.service.finalizeDisabledRecovery()
+  }
+
   async recoverOnStartup(): Promise<WorkspaceStartupRecoveryResult> {
     if (this.recoveryPromise) return this.recoveryPromise
     if (this.closing) {
@@ -233,10 +239,39 @@ export class ConversationWorkspaceRunner {
         context: {}
       }
       this.slots.set(conversationId, slot)
+      let claimedTurn: WorkspaceAdmittedTurn | undefined
       try {
-        const turn = await this.service.claimRecoverableTurn(conversationId)
-        if (!turn || this.closing || slot.shuttingDown) {
+        const turn = await this.service.claimRecoverableTurn(conversationId, {
+          canCommit: () => !this.closing && !slot.shuttingDown && !slot.userPaused
+        })
+        if (!turn) {
           if (this.slots.get(conversationId) === slot) this.slots.delete(conversationId)
+          if (slot.userPaused || slot.controller.signal.aborted) {
+            await this.service
+              .pause(conversationId, 'cancelled', { cancelUnclaimedActive: true })
+              .catch(() => undefined)
+          }
+          continue
+        }
+        claimedTurn = turn
+        if (slot.userPaused || slot.controller.signal.aborted) {
+          slot.ended = true
+          if (this.slots.get(conversationId) === slot) this.slots.delete(conversationId)
+          await this.service
+            .pause(conversationId, 'cancelled', { cancelUnclaimedActive: true })
+            .catch(() => undefined)
+          continue
+        }
+        if (this.closing || slot.shuttingDown) {
+          slot.ended = true
+          if (this.slots.get(conversationId) === slot) this.slots.delete(conversationId)
+          await this.service
+            .releaseUnstartedRecoveryClaim(
+              conversationId,
+              turn.input.id,
+              Math.max(0, (turn.recovery?.attempt ?? 1) - 1)
+            )
+            .catch(() => undefined)
           continue
         }
         slot.turn = turn
@@ -248,6 +283,11 @@ export class ConversationWorkspaceRunner {
         this.launchSlotExecution(slot)
         resumedTurns.push(conversationId)
       } catch (error) {
+        if (claimedTurn) {
+          await this.service
+            .interruptClaimedTurn(conversationId, claimedTurn.input.id)
+            .catch(() => undefined)
+        }
         if (this.slots.get(conversationId) === slot) this.slots.delete(conversationId)
         log.warn('Failed to resume interrupted workspace turn on startup', {
           conversationId,
@@ -279,6 +319,7 @@ export class ConversationWorkspaceRunner {
 
   async submit(request: WorkspaceSubmitRequest): Promise<WorkspaceSubmitResult> {
     if (this.closing || this.deleting.has(request.conversationId)) throw new Error('WORKSPACE_BUSY')
+    await this.ensureDisabledRecoveryFinalized()
     const canDirect =
       !this.slots.has(request.conversationId) &&
       (await this.service.canStartDirectly(request.conversationId))
@@ -336,6 +377,9 @@ export class ConversationWorkspaceRunner {
   }
 
   private async kick(conversationId: string): Promise<string | undefined> {
+    if (this.closing || this.deleting.has(conversationId) || this.slots.has(conversationId))
+      return undefined
+    await this.ensureDisabledRecoveryFinalized()
     if (this.closing || this.deleting.has(conversationId) || this.slots.has(conversationId))
       return undefined
     const slot: ExecutionSlot = {
@@ -735,7 +779,7 @@ export class ConversationWorkspaceRunner {
         },
         onEvent: (event) => this.agentEvent(slot, event),
         onRunResult: async (run, failureDetail) => {
-          if (slot.ended || slot.shuttingDown) return
+          if (slot.ended) return
           if (run.status === 'pending_approval') {
             slot.pendingApproval = true
             await this.persist(slot, true)
@@ -749,7 +793,10 @@ export class ConversationWorkspaceRunner {
                 requestedAt: run.updatedAt
               }
             })
-          } else if (run.status === 'completed') {
+            return
+          }
+          if (slot.shuttingDown) return
+          if (run.status === 'completed') {
             slot.pendingApproval = false
             slot.assembler!.complete(run.output)
             await this.complete(slot)
@@ -911,6 +958,7 @@ export class ConversationWorkspaceRunner {
 
   async resume(conversationId: string): Promise<ConversationWorkspaceState> {
     if (this.deleting.has(conversationId)) throw new Error('WORKSPACE_BUSY')
+    await this.ensureDisabledRecoveryFinalized()
     await this.service.resume(conversationId)
     await this.kick(conversationId)
     return (await this.service.get(conversationId))!
@@ -1145,6 +1193,27 @@ function summarizePriorToolCalls(priorParts: unknown[] | undefined, sanitize: bo
   return summaries
 }
 
+const RECOVERY_TOOL_SUMMARY_BYTE_LIMIT = 2_048
+const RECOVERY_TAIL_TRUNCATION_PREFIX = '…[earlier output truncated]\n'
+
+function boundedUtf8Tail(value: string, maxBytes: number): string {
+  if (Buffer.byteLength(value, 'utf8') <= maxBytes) return value
+  const prefixBytes = Buffer.byteLength(RECOVERY_TAIL_TRUNCATION_PREFIX, 'utf8')
+  const budget = Math.max(0, maxBytes - prefixBytes)
+  if (budget === 0) return boundedUtf8Text(RECOVERY_TAIL_TRUNCATION_PREFIX, maxBytes)
+  const chars = Array.from(value)
+  let start = chars.length
+  let bytes = 0
+  while (start > 0) {
+    const ch = chars[start - 1]!
+    const width = Buffer.byteLength(ch, 'utf8')
+    if (bytes + width > budget) break
+    bytes += width
+    start -= 1
+  }
+  return RECOVERY_TAIL_TRUNCATION_PREFIX + chars.slice(start).join('')
+}
+
 function buildRecoveryContinuationPrompt(
   recovery: WorkspaceTurnRecoveryContext,
   sanitize: boolean
@@ -1153,17 +1222,33 @@ function buildRecoveryContinuationPrompt(
   const toolSummaries = summarizePriorToolCalls(recovery.priorParts, sanitize)
   if (!priorText && toolSummaries.length === 0) return null
 
-  const sections: string[] = [
+  const header = [
     '[Recovery Continuation]',
     'This turn was interrupted by an application restart or crash before completion. Continue seamlessly from where the response stopped without repeating already-shown output or redoing completed side effects.'
-  ]
+  ].join('\n\n')
+
+  const sections: string[] = [header]
   if (toolSummaries.length > 0) {
-    sections.push(`Prior tool calls:\n${toolSummaries.join('\n')}`)
+    const toolHeader = 'Prior tool calls:\n'
+    const toolBodyBudget = Math.max(
+      0,
+      RECOVERY_TOOL_SUMMARY_BYTE_LIMIT - Buffer.byteLength(toolHeader, 'utf8')
+    )
+    const boundedTools = boundedUtf8Tail(toolSummaries.join('\n'), toolBodyBudget)
+    sections.push(`${toolHeader}${boundedTools}`)
   }
   if (priorText) {
-    sections.push(
-      `Already-shown partial assistant output:\n${sanitizeRecoveryText(priorText, sanitize)}`
+    const textHeader = 'Already-shown partial assistant output:\n'
+    const usedBytes =
+      Buffer.byteLength(sections.join('\n\n'), 'utf8') +
+      Buffer.byteLength('\n\n', 'utf8') +
+      Buffer.byteLength(textHeader, 'utf8')
+    const remainingBudget = Math.max(0, RECOVERY_CONTINUATION_BYTE_LIMIT - usedBytes)
+    const sanitizedTail = boundedUtf8Tail(
+      sanitizeRecoveryText(priorText, sanitize),
+      remainingBudget
     )
+    sections.push(`${textHeader}${sanitizedTail}`)
   }
   return boundedUtf8Text(sections.join('\n\n'), RECOVERY_CONTINUATION_BYTE_LIMIT)
 }

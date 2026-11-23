@@ -585,6 +585,7 @@ export class GitWorktreeManager {
       }
       const canonicalRepoRoot = await realpath(lease.repoRoot)
       await assertNoEnclosingRepoSymlinkEscape(lease.repoRoot, canonicalRepoRoot)
+      await this.assertRegisteredGitWorktree(canonicalWorktreePath, canonicalRepoRoot)
 
       const reattached: WorktreeLease = {
         ...lease,
@@ -595,6 +596,175 @@ export class GitWorktreeManager {
       this.leases.set(reattached.worktreeId, reattached)
       return cloneLease(reattached)
     })
+  }
+
+  async findPersistedLeaseByRunId(runId: string): Promise<WorktreeLease | null> {
+    if (typeof runId !== 'string' || runId.trim().length === 0 || hasControlChar(runId)) {
+      return null
+    }
+    for (const lease of this.leases.values()) {
+      if (lease.runId === runId) {
+        return cloneLease(lease)
+      }
+    }
+
+    const canonicalBaseDir = await this.ensureBaseDir()
+    const metaDir = path.join(canonicalBaseDir, META_DIR_NAME)
+    let entries
+    try {
+      entries = await readdir(metaDir, { withFileTypes: true })
+    } catch (error) {
+      if (isEnoentError(error)) return null
+      throw new GitWorktreeError(
+        'WORKTREE_GIT_FAILED',
+        'Unable to read persisted worktree metadata directory',
+        { cause: error }
+      )
+    }
+
+    let sawCorrupt = false
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) continue
+      const id = entry.name.slice(0, -'.json'.length)
+      if (!SAFE_WORKTREE_ID_PATTERN.test(id)) {
+        sawCorrupt = true
+        continue
+      }
+      const { lease, corrupt } = await this.tryReadLeaseMetadata(canonicalBaseDir, id)
+      if (corrupt) {
+        sawCorrupt = true
+        continue
+      }
+      if (lease && lease.runId === runId) {
+        return cloneLease(lease)
+      }
+    }
+
+    if (sawCorrupt) {
+      throw new GitWorktreeError(
+        'WORKTREE_PATH_ESCAPE',
+        'Corrupt persisted worktree metadata prevented safe run lease lookup'
+      )
+    }
+    return null
+  }
+
+  private async assertRegisteredGitWorktree(
+    canonicalWorktreePath: string,
+    canonicalRepoRoot: string
+  ): Promise<void> {
+    const gitFilePath = path.join(canonicalWorktreePath, '.git')
+    let isLinked = false
+    try {
+      const gitFileStat = await lstat(gitFilePath)
+      if (gitFileStat.isFile() && !gitFileStat.isSymbolicLink()) {
+        const content = await readFile(gitFilePath, 'utf8')
+        isLinked = isLinkedWorktreeGitFile(content)
+      }
+    } catch {
+      isLinked = false
+    }
+    if (!isLinked) {
+      throw new GitWorktreeError(
+        'WORKTREE_INVALID_REPO',
+        'Persisted worktree path is not a linked git worktree'
+      )
+    }
+
+    let wtLines: string[]
+    let repoCommonDir: string
+    let worktreeListStdout: string
+    try {
+      const [wtProbe, repoProbe, listProbe] = await Promise.all([
+        this.execGit(
+          [
+            '-C',
+            canonicalWorktreePath,
+            'rev-parse',
+            '--show-toplevel',
+            '--path-format=absolute',
+            '--git-common-dir',
+            '--is-inside-work-tree'
+          ],
+          { cwd: canonicalWorktreePath }
+        ),
+        this.execGit(
+          ['-C', canonicalRepoRoot, 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+          { cwd: canonicalRepoRoot }
+        ),
+        this.execGit(['-C', canonicalRepoRoot, 'worktree', 'list', '--porcelain'], {
+          cwd: canonicalRepoRoot
+        })
+      ])
+      wtLines = wtProbe.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+      repoCommonDir = repoProbe.stdout.trim()
+      worktreeListStdout = listProbe.stdout
+    } catch (error) {
+      if (error instanceof GitWorktreeError && error.code === 'WORKTREE_GIT_TIMEOUT') {
+        throw error
+      }
+      throw new GitWorktreeError(
+        'WORKTREE_INVALID_REPO',
+        'Persisted worktree failed git repository verification',
+        { cause: error }
+      )
+    }
+
+    const [wtTopLevel, wtCommonDir, wtInside] = wtLines
+    if (!wtTopLevel || !wtCommonDir || wtInside !== 'true' || !repoCommonDir) {
+      throw new GitWorktreeError(
+        'WORKTREE_INVALID_REPO',
+        'Persisted worktree is not an active git working tree'
+      )
+    }
+
+    const [canonicalWtTopLevel, canonicalWtCommonDir, canonicalRepoCommonDir] = await Promise.all([
+      realpath(wtTopLevel).catch(() => ''),
+      realpath(wtCommonDir).catch(() => ''),
+      realpath(repoCommonDir).catch(() => '')
+    ])
+    if (
+      !canonicalWtTopLevel ||
+      normalizePathForCompare(canonicalWtTopLevel) !==
+        normalizePathForCompare(canonicalWorktreePath) ||
+      !canonicalWtCommonDir ||
+      !canonicalRepoCommonDir ||
+      normalizePathForCompare(canonicalWtCommonDir) !==
+        normalizePathForCompare(canonicalRepoCommonDir)
+    ) {
+      throw new GitWorktreeError(
+        'WORKTREE_INVALID_REPO',
+        'Persisted worktree does not belong to its recorded git repository'
+      )
+    }
+
+    const registeredPaths: string[] = []
+    for (const line of worktreeListStdout.split(/\r?\n/)) {
+      if (line.startsWith('worktree ')) {
+        const listedPath = line.slice('worktree '.length).trim()
+        if (listedPath) registeredPaths.push(listedPath)
+      }
+    }
+    let registeredMatch = false
+    for (const listedPath of registeredPaths) {
+      const canonicalListed = await realpath(listedPath).catch(() => '')
+      if (
+        canonicalListed &&
+        normalizePathForCompare(canonicalListed) === normalizePathForCompare(canonicalWorktreePath)
+      ) {
+        registeredMatch = true
+        break
+      }
+    }
+    if (!registeredMatch) {
+      throw new GitWorktreeError(
+        'WORKTREE_INVALID_REPO',
+        'Persisted worktree is not registered in its recorded git repository'
+      )
+    }
   }
 
   async acquireWorktree(options: AcquireWorktreeOptions): Promise<WorktreeLease> {

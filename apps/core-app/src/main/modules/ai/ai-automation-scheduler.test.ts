@@ -531,4 +531,84 @@ describe('aiAutomationScheduler', () => {
     expect(afterThirdBoot?.error).toBe('Automation recovery limit reached')
     expect(afterThirdBoot?.completedAt).toBeDefined()
   })
+
+  it('initializes recovery.attempts=0 on coalesced follow-up runs triggered during recovery so they remain recoverable once', async () => {
+    const definition = automation({
+      approvalMode: 'preauthorized',
+      trigger: { type: 'interval', intervalMs: 60_000 }
+    })
+    schedulerStoreMocks.state.definitions.set(definition.id, definition)
+    const now = Date.now()
+    const seedRun: AiAutomationRunRecord = {
+      id: 'auto-run-seed-coalesce',
+      automationId: definition.id,
+      triggerType: 'interval',
+      status: 'interrupted',
+      approved: true,
+      missedCount: 0,
+      policyVersion: definition.policy.version,
+      createdAt: now,
+      updatedAt: now
+    }
+    schedulerStoreMocks.state.runs.set(seedRun.id, { ...seedRun })
+    schedulerStoreMocks.listRecoverableAutomationRuns.mockImplementation(async () =>
+      Array.from(schedulerStoreMocks.state.runs.values()).filter(
+        (run) => run.status === 'queued' || run.status === 'running' || run.status === 'interrupted'
+      )
+    )
+
+    let resolveFirst!: (run: AiOrchestratorRunRecord) => void
+    let resolveFollowUp!: (run: AiOrchestratorRunRecord) => void
+    let execCount = 0
+    const firstScheduler = new AiAutomationScheduler()
+    firstScheduler.setExecutor(
+      vi.fn(() => {
+        execCount += 1
+        if (execCount === 1) {
+          return new Promise<AiOrchestratorRunRecord>((resolve) => {
+            resolveFirst = resolve
+          })
+        }
+        return new Promise<AiOrchestratorRunRecord>((resolve) => {
+          resolveFollowUp = resolve
+        })
+      })
+    )
+    await firstScheduler.initialize()
+    await settleAsyncWork()
+    expect(execCount).toBe(1)
+
+    // Coalesce a trigger while the recovered run is active
+    await firstScheduler.runNow(definition.id, true, { source: 'coalesced-trigger' })
+    resolveFirst(completedOrchestratorRun())
+    await settleAsyncWork()
+    expect(execCount).toBe(2)
+
+    // Interrupt the newly created coalesced follow-up run during graceful shutdown
+    firstScheduler.stopTriggers()
+    resolveFollowUp({
+      ...completedOrchestratorRun(),
+      status: 'interrupted',
+      error: 'AI_RUN_INTERRUPTED'
+    })
+    await firstScheduler.stop()
+
+    const followUp = Array.from(schedulerStoreMocks.state.runs.values()).find(
+      (run) => run.id !== seedRun.id
+    )!
+    expect(followUp.triggerType).toBe('recovery')
+    expect(followUp.status).toBe('interrupted')
+    expect(followUp.payload).toMatchObject({ recovery: { attempts: 0 } })
+
+    // Next boot recovers the coalesced follow-up run once instead of treating it as exhausted
+    const secondExecutor = vi.fn(async () => completedOrchestratorRun())
+    const secondScheduler = new AiAutomationScheduler()
+    secondScheduler.setExecutor(secondExecutor)
+    await secondScheduler.initialize()
+    await settleAsyncWork()
+    await secondScheduler.stop()
+
+    expect(secondExecutor).toHaveBeenCalledOnce()
+    expect(schedulerStoreMocks.state.runs.get(followUp.id)?.status).toBe('completed')
+  })
 })

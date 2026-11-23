@@ -525,4 +525,37 @@ describe('WorkspaceMessageAssembler durable consumer output', () => {
     expect(resumed.snapshot().content).toBe('Partial answer\nRemaining answer.')
     expect(resumed.snapshot().status).toBe('complete')
   })
+
+  it('preserveInitial retains pre-crash prefix but fails with CONVERSATION_EMPTY_RESPONSE when recovered stream produces no new text', () => {
+    const preCrash: StoredConversationMessage = {
+      id: 'assistant-rec-empty',
+      role: 'assistant',
+      content: 'Pre-crash partial text',
+      status: 'streaming',
+      seq: 2,
+      createdAt: 1,
+      meta: { turnId: 'turn-rec-empty' }
+    }
+    const resumedNoArg = new WorkspaceMessageAssembler(preCrash, 'turn-rec-empty', {
+      preserveInitial: true
+    })
+    resumedNoArg.complete()
+    expect(resumedNoArg.snapshot().content).toBe('Pre-crash partial text')
+    expect(resumedNoArg.snapshot().status).toBe('failed')
+    expect(resumedNoArg.snapshot().meta).toMatchObject({
+      errorCode: 'CONVERSATION_EMPTY_RESPONSE',
+      outcome: 'failed'
+    })
+
+    const resumedEmptyStr = new WorkspaceMessageAssembler(preCrash, 'turn-rec-empty', {
+      preserveInitial: true
+    })
+    resumedEmptyStr.complete('   ')
+    expect(resumedEmptyStr.snapshot().content).toBe('Pre-crash partial text')
+    expect(resumedEmptyStr.snapshot().status).toBe('failed')
+    expect(resumedEmptyStr.snapshot().meta).toMatchObject({
+      errorCode: 'CONVERSATION_EMPTY_RESPONSE',
+      outcome: 'failed'
+    })
+  })
 })

@@ -74,6 +74,13 @@ const mocks = vi.hoisted(() => {
       }
       return lease
     }),
+    worktreeFindByRunId: vi.fn(async (runId: string) => {
+      for (const lease of worktreeLeases.values()) {
+        if (lease.runId === runId) return lease
+      }
+      return null
+    }),
+    automationInitialize: vi.fn(async () => undefined),
     worktreeReapOrphans: vi.fn(async (_opts?: { activeRunIds?: Iterable<string> }) => ({
       reapedIds: [],
       skippedActiveIds: [],
@@ -201,6 +208,7 @@ vi.mock('./worktree', () => ({
   gitWorktreeManager: {
     acquireWorktree: mocks.worktreeAcquire,
     reattachWorktree: mocks.worktreeReattach,
+    findPersistedLeaseByRunId: mocks.worktreeFindByRunId,
     getLease: mocks.worktreeGetLease,
     listLeases: vi.fn(() => Array.from(mocks.worktreeLeases.values())),
     inspectWorktree: vi.fn(),
@@ -257,7 +265,7 @@ vi.mock('./ai-orchestrator-store', () => ({
 vi.mock('./ai-automation-scheduler', () => ({
   aiAutomationScheduler: {
     setExecutor: vi.fn(),
-    initialize: vi.fn(async () => undefined),
+    initialize: mocks.automationInitialize,
     stopTriggers: vi.fn(),
     stop: vi.fn(async () => undefined)
   }
@@ -411,7 +419,9 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
     }))
     mocks.worktreeAcquire.mockClear()
     mocks.worktreeReattach.mockClear()
+    mocks.worktreeFindByRunId.mockClear()
     mocks.worktreeReapOrphans.mockClear()
+    mocks.automationInitialize.mockReset().mockResolvedValue(undefined)
     mocks.worktreeGetDiff.mockClear()
     mocks.worktreeRelease.mockClear()
     mocks.worktreeDisposeAll.mockClear()
@@ -977,6 +987,62 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
         'run.interrupted',
         expect.objectContaining({ reason: 'auto_resume_disabled', previousStatus: 'running' })
       )
+    })
+
+    it('reattaches legacy running CLI worktree via runId lookup and does not spend recoveryAttempts when scheduler init fails', async () => {
+      await orchestrator.shutdown()
+      const claudeProfile = makeProfile(CLAUDE_CLI_PROFILE_ID)
+      mocks.worktreeLeases.set('wt-legacy-claude', {
+        worktreeId: 'wt-legacy-claude',
+        runId: 'legacy-claude-run',
+        repoRoot: '/tmp',
+        worktreePath: '/mock-userdata/ai-worktrees/wt-legacy-claude',
+        effectiveCwd: '/mock-userdata/ai-worktrees/wt-legacy-claude',
+        branchName: 'tuff/wt/legacy-claude-run',
+        baseRef: 'HEAD',
+        baseCommit: 'abc123',
+        createdAt: Date.now()
+      })
+      mocks.runs.set('legacy-claude-run', {
+        id: 'legacy-claude-run',
+        sessionId: 's-legacy',
+        objective: 'Legacy worktree run without worktreeId metadata',
+        profileId: CLAUDE_CLI_PROFILE_ID,
+        runtimeProvider: 'pi-core',
+        cwd: '/tmp',
+        status: 'running',
+        metadata: {
+          schemaVersion: 1,
+          executionBudget: { maxSteps: 10, maxChildRuns: 0, maxConcurrency: 1 },
+          allowedToolRefs: [opaqueRef('pi-tool', 'file.read')],
+          requestInputPresent: false,
+          profileAuthorityVersion: claudeProfile.updatedAt,
+          profileAuthorityDigest: profileAuthorityDigest(claudeProfile)
+        },
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      })
+
+      // 1. If aiAutomationScheduler.initialize() throws, recoveryAttempts must NOT be consumed
+      mocks.automationInitialize.mockRejectedValueOnce(new Error('scheduler init transient error'))
+      const failedBoot = new AiCliOrchestrator()
+      await expect(failedBoot.initialize()).rejects.toThrow('scheduler init transient error')
+      expect(mocks.runs.get('legacy-claude-run')?.metadata?.recoveryAttempts).toBeUndefined()
+
+      // 2. Subsequent successful boot resolves legacy worktree by runId and executes inside it
+      const recoveredBoot = new AiCliOrchestrator()
+      await recoveredBoot.initialize()
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        if (mocks.runs.get('legacy-claude-run')?.status === 'completed') break
+        await new Promise((r) => setTimeout(r, 10))
+      }
+      await recoveredBoot.shutdown()
+
+      expect(mocks.worktreeFindByRunId).toHaveBeenCalledWith('legacy-claude-run')
+      expect(mocks.worktreeReattach).toHaveBeenCalledWith('wt-legacy-claude', 'legacy-claude-run')
+      expect(claudeCwdCaptured).toBe('/mock-userdata/ai-worktrees/wt-legacy-claude')
+      expect(mocks.runs.get('legacy-claude-run')?.status).toBe('completed')
+      expect(mocks.runs.get('legacy-claude-run')?.metadata?.recoveryAttempts).toBe(1)
     })
   })
 })

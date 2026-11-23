@@ -1105,7 +1105,26 @@ export class AiCliOrchestrator {
       throw error
     }
     // Only now: a resumed run is an execution, and the orchestrator admits none before it is up.
-    for (const run of resumable) this.resumeInBackground(run)
+    // Persist the incremented recoveryAttempts count ONLY after initialization succeeded so a
+    // failed startup never consumes a run's recovery budget, while still committing before spawn.
+    for (const item of resumable) {
+      if (this.closing) break
+      const nextAttempt =
+        item.recoveryAttempt ?? readRecoveryAttempts(toRecord(item.run.metadata)) + 1
+      const updatedMetadata: Record<string, unknown> = {
+        ...projectPersistedRunMetadata(item.run.metadata),
+        recoveryAttempts: nextAttempt
+      }
+      await this.withRunWriteLease(item.run.id, async () => {
+        await aiOrchestratorStore.updateOrchestratorRun(item.run.id, {
+          metadata: updatedMetadata,
+          updatedAt: Date.now()
+        })
+      })
+      item.run = { ...item.run, metadata: updatedMetadata }
+      item.recoveryAttempt = nextAttempt
+      this.resumeInBackground(item)
+    }
   }
 
   /**
@@ -1144,19 +1163,7 @@ export class AiCliOrchestrator {
         await this.interruptForRestart(run, 'application_restart')
         continue
       }
-      const nextAttempt = priorAttempts + 1
-      const updatedMetadata: Record<string, unknown> = {
-        ...projectPersistedRunMetadata(prepared.run.metadata),
-        recoveryAttempts: nextAttempt
-      }
-      await this.withRunWriteLease(prepared.run.id, async () => {
-        await aiOrchestratorStore.updateOrchestratorRun(prepared.run.id, {
-          metadata: updatedMetadata,
-          updatedAt: Date.now()
-        })
-      })
-      prepared.run = { ...prepared.run, metadata: updatedMetadata }
-      prepared.recoveryAttempt = nextAttempt
+      prepared.recoveryAttempt = priorAttempts + 1
       resumable.push(prepared)
     }
     return resumable
@@ -1217,11 +1224,23 @@ export class AiCliOrchestrator {
       const authority = await this.restoreRunAuthority(run)
       if (externalCliKind) {
         const worktreeOptions = parseWorktreeRequestOptions(metadata.worktreeOptions) ?? undefined
+        const hasRawWorktreeId =
+          Object.hasOwn(metadata, 'worktreeId') && metadata.worktreeId !== undefined
         const boundWorktreeId = readSafeWorktreeId(metadata.worktreeId)
+        if (hasRawWorktreeId && !boundWorktreeId) {
+          this.clearVolatileRunState(run.id)
+          return null
+        }
         let reattachWorktreeId: string | undefined
         if (boundWorktreeId) {
           const lease = await gitWorktreeManager.reattachWorktree(boundWorktreeId, run.id)
           reattachWorktreeId = lease.worktreeId
+        } else if (run.status === 'running') {
+          const legacyLease = await gitWorktreeManager.findPersistedLeaseByRunId?.(run.id)
+          if (legacyLease) {
+            const lease = await gitWorktreeManager.reattachWorktree(legacyLease.worktreeId, run.id)
+            reattachWorktreeId = lease.worktreeId
+          }
         }
         return {
           run,

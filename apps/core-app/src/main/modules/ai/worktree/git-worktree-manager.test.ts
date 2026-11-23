@@ -804,7 +804,54 @@ exec git "$@"
       'WORKTREE_NOT_FOUND'
     )
 
+    // Replace with an ordinary non-git directory -> fail closed with WORKTREE_INVALID_REPO
+    await mkdir(lease.worktreePath, { recursive: true })
+    await writeFile(path.join(lease.worktreePath, 'plain.txt'), 'not a git worktree\n', 'utf8')
+    const fourthBoot = new GitWorktreeManager({ baseDir })
+    await expectWorktreeError(
+      fourthBoot.reattachWorktree(lease.worktreeId, 'run-reattach-1'),
+      'WORKTREE_INVALID_REPO'
+    )
+
+    // Replace with a worktree belonging to a DIFFERENT git repository -> fail closed
+    await rm(lease.worktreePath, { recursive: true, force: true })
+    const otherRepo = path.join(sandboxDir, 'other-repo')
+    await mkdir(otherRepo, { recursive: true })
+    await initGitRepo(otherRepo)
+    await runGit(otherRepo, ['worktree', 'add', '--detach', lease.worktreePath, 'HEAD'])
+    const fifthBoot = new GitWorktreeManager({ baseDir })
+    await expectWorktreeError(
+      fifthBoot.reattachWorktree(lease.worktreeId, 'run-reattach-1'),
+      'WORKTREE_INVALID_REPO'
+    )
+
+    await runGit(otherRepo, ['worktree', 'remove', '--force', lease.worktreePath]).catch(
+      () => undefined
+    )
     await creator.releaseWorktree(lease.worktreeId, { force: true }).catch(() => undefined)
+  })
+
+  it('finds persisted leases by runId and fails closed if .meta contains corrupt records', async () => {
+    await initGitRepo(repoDir)
+    const creator = new GitWorktreeManager({ baseDir })
+    const lease = await creator.acquireWorktree({ runId: 'run-legacy-lookup', repoRoot: repoDir })
+
+    const restarted = new GitWorktreeManager({ baseDir })
+    const found = await restarted.findPersistedLeaseByRunId('run-legacy-lookup')
+    expect(found?.worktreeId).toBe(lease.worktreeId)
+    expect(await restarted.findPersistedLeaseByRunId('run-not-present')).toBeNull()
+
+    // Corrupt metadata file prevents proving an unknown run had no worktree -> fail closed
+    const canonicalBase = await realpath(baseDir)
+    const corruptMeta = path.join(canonicalBase, '.meta', 'wt-corrupt-lookup.json')
+    await writeFile(corruptMeta, '{not-json', 'utf8')
+    await expectWorktreeError(
+      restarted.findPersistedLeaseByRunId('run-not-present'),
+      'WORKTREE_PATH_ESCAPE'
+    )
+
+    await rm(corruptMeta, { force: true })
+    await creator.releaseWorktree(lease.worktreeId, { force: true })
   })
 
   it('preserves leases in preserveRunIds during disposeAll while releasing others', async () => {

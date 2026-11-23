@@ -318,6 +318,8 @@ function registerCrashedBoot(
   runner: ConversationWorkspaceRunner,
   gate: PromiseWithResolvers<void>
 ): void {
+  // Observe gate rejection even if submit() fails before the stream awaits gate.promise.
+  void gate.promise.catch(() => undefined)
   crashedRunners.push({
     runner,
     release: () => {
@@ -1002,5 +1004,222 @@ describe('Home Conversation durable startup auto-recovery', () => {
       (await getConversation('conv-retry'))?.messages.find((m) => m.id === 'assistant-t-retry')
         ?.content
     ).toBe('Recovered retry answer.')
+  })
+
+  it('preserves admitted turn settings and retry text, fails closed on legacy retries, holds restored queues on disabled submit, retains continuation tail, and persists pending_approval during shutdown', async () => {
+    // Add second agent profile to test mid-turn configure() isolation
+    await db.insert(aiAgentProfiles).values({
+      id: 'agent-profile-2',
+      name: 'Agent Profile 2',
+      description: '',
+      runtimeProvider: 'pi-core',
+      enabled: true,
+      modelPreference: '[]',
+      allowedToolIds: '["file.write"]',
+      enabledSkillIds: '[]',
+      permissionPolicy: JSON.stringify({
+        mode: 'manual',
+        allowedPermissions: ['file:write']
+      }),
+      timeoutMs: 10_000,
+      createdAt: 1,
+      updatedAt: 10
+    })
+
+    // 1. Admitted settings (agent-profile-1) stay pinned even after configure() switches to agent-profile-2
+    const seenAgentCalls: Array<{ objective: string; profileId?: string }> = []
+    executeWorkspaceHandler = async (request, workspace) => {
+      seenAgentCalls.push({ objective: request.objective, profileId: request.profileId })
+      const run = {
+        id: `run-${seenAgentCalls.length}`,
+        profileId: request.profileId,
+        status: 'completed',
+        output: `done-${request.profileId}`,
+        updatedAt: Date.now()
+      }
+      await workspace.onRunCreated(run)
+      await workspace.onRunResult(run)
+    }
+
+    const boot1 = trackRunner(makeRunner())
+    await boot1.service.admitDirectly(
+      submitReq('conv-settings-pin', 't-pin', 'Run under profile 1', {
+        mode: 'agent',
+        profileId: 'agent-profile-1'
+      })
+    )
+    // User switches workspace config to profile 2 while turn is active
+    await boot1.service.configure('conv-settings-pin', {
+      mode: 'agent',
+      profileId: 'agent-profile-2'
+    })
+
+    // 2. Retry turn with narrowed text restores narrowed text; legacy retry without retryText interrupts
+    await boot1.service.enqueue(
+      submitReq('conv-retry-narrow', 't-wide', 'Inspect the entire project', {
+        mode: 'agent',
+        profileId: 'agent-profile-1'
+      })
+    )
+    await boot1.service.takeNext('conv-retry-narrow')
+    await boot1.service.mutateMessages('conv-retry-narrow', 't-wide', (messages) => {
+      const assistant = messages.find((m) => m.id === 'assistant-t-wide')!
+      assistant.status = 'failed'
+      assistant.meta = { ...assistant.meta, outcome: 'failed', errorCode: 'ERR' }
+    })
+    await boot1.service.finishTurn('conv-retry-narrow', 't-wide', 'failed')
+    await boot1.service.resume('conv-retry-narrow')
+    await boot1.service.admitDirectly({
+      conversationId: 'conv-retry-narrow',
+      id: 't-narrow-retry',
+      text: 'Inspect only src',
+      settings: { mode: 'agent', profileId: 'agent-profile-1' },
+      retryOfMessageId: 'assistant-t-wide'
+    })
+
+    // Legacy retry: strip retryText from assistant meta to simulate pre-PR retry row
+    await boot1.service.enqueue(
+      submitReq('conv-retry-legacy', 't-leg-orig', 'Broad legacy objective', {
+        mode: 'agent',
+        profileId: 'agent-profile-1'
+      })
+    )
+    await boot1.service.takeNext('conv-retry-legacy')
+    await boot1.service.mutateMessages('conv-retry-legacy', 't-leg-orig', (messages) => {
+      const assistant = messages.find((m) => m.id === 'assistant-t-leg-orig')!
+      assistant.status = 'failed'
+      assistant.meta = { ...assistant.meta, outcome: 'failed', errorCode: 'ERR' }
+    })
+    await boot1.service.finishTurn('conv-retry-legacy', 't-leg-orig', 'failed')
+    await boot1.service.resume('conv-retry-legacy')
+    await boot1.service.admitDirectly({
+      conversationId: 'conv-retry-legacy',
+      id: 't-leg-retry',
+      text: 'Narrowed legacy retry',
+      settings: { mode: 'agent', profileId: 'agent-profile-1' },
+      retryOfMessageId: 'assistant-t-leg-orig'
+    })
+    await boot1.service.mutateMessages('conv-retry-legacy', 't-leg-retry', (messages) => {
+      const assistant = messages.find((m) => m.id === 'assistant-t-leg-retry')!
+      const meta = { ...(assistant.meta ?? {}) }
+      delete meta.retryText
+      assistant.meta = meta
+    })
+
+    // 3. Long partial output (> 8 KiB) + verbose tool calls keeps the tail of assistant output
+    let capturedContinuation = ''
+    streamHandler = async function* (payload) {
+      const sys = payload.messages.find((m) => m.role === 'system')
+      if (sys) capturedContinuation = sys.content
+      yield { type: 'delta', capabilityId: 'text.chat', delta: 'Final tail continuation.' }
+      yield { type: 'end', capabilityId: 'text.chat' }
+    }
+    await boot1.service.admitDirectly(
+      submitReq('conv-long-tail', 't-tail', 'Explain everything', chatSettings)
+    )
+    const longPartial = `${'A'.repeat(9000)}\nUNIQUE-RECENT-TAIL-MARKER-99`
+    const noisyTools = Array.from({ length: 12 }, (_, idx) => ({
+      type: 'tool-call',
+      id: `call-${idx}`,
+      name: `tool.inspect_${idx}`,
+      status: 'done',
+      output: 'X'.repeat(400)
+    }))
+    await boot1.service.mutateMessages('conv-long-tail', 't-tail', (messages) => {
+      const assistant = messages.find((m) => m.id === 'assistant-t-tail')!
+      assistant.content = longPartial
+      assistant.meta = {
+        ...assistant.meta,
+        parts: [...noisyTools, { type: 'text', text: longPartial }]
+      }
+    })
+
+    const boot2 = trackRunner(makeRunner())
+    const rec2 = await boot2.recoverOnStartup()
+    expect(rec2.resumedTurns).toContain('conv-settings-pin')
+    expect(rec2.resumedTurns).toContain('conv-retry-narrow')
+    expect(rec2.resumedTurns).toContain('conv-long-tail')
+    expect(rec2.interruptedTurns).toContain('conv-retry-legacy')
+
+    await waitFor(async () => {
+      const [s1, s2, s3] = await Promise.all([
+        boot2.service.get('conv-settings-pin'),
+        boot2.service.get('conv-retry-narrow'),
+        boot2.service.get('conv-long-tail')
+      ])
+      return s1?.status === 'idle' && s2?.status === 'idle' && s3?.status === 'idle'
+    })
+
+    expect(seenAgentCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          objective: 'Run under profile 1',
+          profileId: 'agent-profile-1'
+        }),
+        expect.objectContaining({
+          objective: 'Inspect only src',
+          profileId: 'agent-profile-1'
+        })
+      ])
+    )
+    expect(seenAgentCalls.some((c) => c.objective.includes('Broad legacy objective'))).toBe(false)
+    expect(capturedContinuation).toContain('UNIQUE-RECENT-TAIL-MARKER-99')
+    expect(Buffer.byteLength(capturedContinuation, 'utf8')).toBeLessThanOrEqual(8192)
+
+    // 4. Early get() + submit() before recoverOnStartup() with autoResumeOnStartup=false holds old idle queue
+    await boot2.service.enqueue(submitReq('conv-disabled-q', 't-old-q', 'Old restored queued msg'))
+    const dispatchedPrompts: string[] = []
+    streamHandler = async function* (payload) {
+      const lastUser = payload.messages.findLast((m) => m.role === 'user')
+      if (lastUser) dispatchedPrompts.push(lastUser.content)
+      yield { type: 'delta', capabilityId: 'text.chat', delta: 'ok' }
+      yield { type: 'end', capabilityId: 'text.chat' }
+    }
+    setAutoResumeOnStartupReader(() => true)
+    const boot3 = trackRunner(makeRunner())
+    // Simulate early read before IntelligenceModule binds false
+    await boot3.service.get('conv-disabled-q')
+    setAutoResumeOnStartupReader(() => false)
+    const submitted = await boot3.submit(
+      submitReq('conv-disabled-q', 't-new-q', 'New msg while disabled')
+    )
+    expect(submitted.disposition).toBe('queued')
+    expect(submitted.state.queueHeld).toBe(true)
+    expect(dispatchedPrompts).toEqual([])
+    // Explicit user resume still drains the queue
+    await boot3.resume('conv-disabled-q')
+    await waitFor(async () => (await boot3.service.get('conv-disabled-q'))?.status === 'idle')
+    expect(dispatchedPrompts).toEqual(['Old restored queued msg', 'New msg while disabled'])
+
+    // 5. pending_approval arriving after beginShutdown() is still persisted and refused on next boot
+    setAutoResumeOnStartupReader(() => true)
+    const approvalGate = Promise.withResolvers<void>()
+    executeWorkspaceHandler = async (request, workspace) => {
+      const run = {
+        id: 'run-shutdown-approval',
+        profileId: request.profileId,
+        status: 'pending_approval',
+        approvalReason: 'Needs write permission',
+        updatedAt: Date.now()
+      }
+      await workspace.onRunCreated(run)
+      await approvalGate.promise
+      await workspace.onRunResult(run)
+    }
+    const boot4 = trackRunner(makeRunner())
+    await boot4.submit(
+      submitReq('conv-shutdown-approval', 't-shut-app', 'Edit file', {
+        mode: 'agent',
+        profileId: 'agent-profile-1'
+      })
+    )
+    boot4.beginShutdown()
+    approvalGate.resolve()
+    await boot4.close()
+
+    const boot5 = trackRunner(makeRunner())
+    const rec5 = await boot5.recoverOnStartup()
+    expect(rec5.resumedTurns).not.toContain('conv-shutdown-approval')
+    expect(rec5.interruptedTurns).toContain('conv-shutdown-approval')
   })
 })

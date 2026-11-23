@@ -258,4 +258,44 @@ describe('TouchWindow bounded render-process-gone auto-reload', () => {
     await vi.advanceTimersByTimeAsync(5_000)
     expect(mocks.reload).not.toHaveBeenCalled()
   })
+
+  it('cancels pending crash recovery timer when explicit loadURL or loadFile starts', async () => {
+    const win = new TouchWindow()
+    await win.loadURL('http://localhost:5173/#/home')
+    mocks.reload.mockClear()
+
+    emitRenderProcessGone({ reason: 'crashed', exitCode: 11 })
+    await win.loadURL('http://localhost:5173/#/recovered')
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(mocks.reload).not.toHaveBeenCalled()
+
+    emitRenderProcessGone({ reason: 'crashed', exitCode: 11 })
+    await win.loadFile('/app/recovered.html')
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(mocks.reload).not.toHaveBeenCalled()
+  })
+
+  it('enforces the 2-per-60s budget at reload execution time even when timer callbacks fire late', async () => {
+    const win = new TouchWindow()
+    await win.loadURL('http://localhost:5173/#/home')
+
+    // 1st crash at t=0: simulate timer callback executing late at t=2500ms
+    const baseMs = Date.now()
+    emitRenderProcessGone({ reason: 'crashed', exitCode: 11 })
+    vi.setSystemTime(baseMs + 2_500)
+    await vi.advanceTimersByTimeAsync(RENDERER_CRASH_RELOAD_BACKOFF_MS[0])
+    expect(mocks.reload).toHaveBeenCalledTimes(1)
+
+    // 2nd crash at t=30_000: executes at t=32_000ms
+    vi.setSystemTime(baseMs + 30_000)
+    emitRenderProcessGone({ reason: 'oom', exitCode: 137 })
+    await vi.advanceTimersByTimeAsync(RENDERER_CRASH_RELOAD_BACKOFF_MS[1])
+    expect(mocks.reload).toHaveBeenCalledTimes(2)
+
+    // 3rd crash at t=60_000: 1st executed at t=3000ms (< 60s ago) -> blocked!
+    vi.setSystemTime(baseMs + 60_000)
+    emitRenderProcessGone({ reason: 'crashed', exitCode: 11 })
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(mocks.reload).toHaveBeenCalledTimes(2)
+  })
 })
