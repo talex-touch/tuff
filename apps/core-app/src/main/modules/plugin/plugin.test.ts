@@ -3232,6 +3232,168 @@ describe('touchPlugin.enable', () => {
     }
   })
 
+  it('keeps privileged host capabilities closed for non-privileged sdkapi 261011 plugins', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-external-261011-'))
+    try {
+      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+      const runtime = createRuntimeServiceMock()
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        keyManager: {
+          requestKey: vi.fn(() => 'external-261011-key'),
+          revokeKey: vi.fn(() => true)
+        },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      const privilegedFactories = {
+        snipasteProcess: vi.fn(),
+        systemAction: vi.fn(),
+        browserOpen: vi.fn(),
+        browserData: vi.fn(),
+        windowManager: vi.fn(),
+        windowPreset: vi.fn(),
+        workspaceScript: vi.fn(),
+        hosts: vi.fn(),
+        vscodeProjects: vi.fn(),
+        orca: vi.fn(),
+        aiSessions: vi.fn(),
+        imageTools: vi.fn()
+      }
+      installCapability({
+        runtimeService: runtime as never,
+        snipasteProcess: privilegedFactories.snipasteProcess as never,
+        systemAction: privilegedFactories.systemAction as never,
+        browserOpen: privilegedFactories.browserOpen as never,
+        browserData: privilegedFactories.browserData as never,
+        windowManager: privilegedFactories.windowManager as never,
+        windowPreset: privilegedFactories.windowPreset as never,
+        workspaceScript: privilegedFactories.workspaceScript as never,
+        hosts: privilegedFactories.hosts as never,
+        vscodeProjects: privilegedFactories.vscodeProjects as never,
+        orca: privilegedFactories.orca as never,
+        aiSessions: privilegedFactories.aiSessions as never,
+        imageTools: privilegedFactories.imageTools as never
+      })
+      const plugin = new TouchPlugin(
+        'community-external-plugin',
+        { type: 'class', value: 'i-ri-puzzle-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      plugin.sdkapi = SdkApi.V261011
+      plugin.declaredPermissions = {
+        required: [
+          'fs.read',
+          'fs.write',
+          'fs.index',
+          'system.shell',
+          'system.applications',
+          'network.internet'
+        ],
+        optional: [],
+        reasons: {}
+      }
+      plugin.setPreludeContract({ main: 'index.js' })
+
+      await expect(plugin.enable()).resolves.toBe(true)
+      const startOptions = vi.mocked(runtime.startActivation).mock
+        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(startOptions.capabilityDefinitions).toBeUndefined()
+      expect(startOptions.closeResources).toBeUndefined()
+      for (const factory of Object.values(privilegedFactories)) {
+        expect(factory).not.toHaveBeenCalled()
+      }
+    } finally {
+      fse.removeSync(root)
+    }
+  })
+
+  it('grants only its own privileged capability to a named official sdkapi 261011 plugin', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-official-261011-'))
+    try {
+      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+      const runtime = createRuntimeServiceMock()
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        keyManager: {
+          requestKey: vi.fn(() => 'official-261011-key'),
+          revokeKey: vi.fn(() => true)
+        },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      const browserOpenFactory = vi.fn(() => ({
+        definitions: Object.freeze([{ id: 'system.browser-open', permission: 'system.shell' }]),
+        close: vi.fn(async () => undefined)
+      }))
+      const unrelatedFactories = {
+        snipasteProcess: vi.fn(),
+        systemAction: vi.fn(),
+        browserData: vi.fn(),
+        windowManager: vi.fn(),
+        windowPreset: vi.fn(),
+        workspaceScript: vi.fn(),
+        hosts: vi.fn(),
+        vscodeProjects: vi.fn(),
+        orca: vi.fn(),
+        aiSessions: vi.fn(),
+        imageTools: vi.fn()
+      }
+      installCapability({
+        runtimeService: runtime as never,
+        browserOpen: browserOpenFactory as never,
+        snipasteProcess: unrelatedFactories.snipasteProcess as never,
+        systemAction: unrelatedFactories.systemAction as never,
+        browserData: unrelatedFactories.browserData as never,
+        windowManager: unrelatedFactories.windowManager as never,
+        windowPreset: unrelatedFactories.windowPreset as never,
+        workspaceScript: unrelatedFactories.workspaceScript as never,
+        hosts: unrelatedFactories.hosts as never,
+        vscodeProjects: unrelatedFactories.vscodeProjects as never,
+        orca: unrelatedFactories.orca as never,
+        aiSessions: unrelatedFactories.aiSessions as never,
+        imageTools: unrelatedFactories.imageTools as never
+      })
+      const plugin = new TouchPlugin(
+        'touch-browser-open',
+        { type: 'class', value: 'i-ri-global-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      plugin.sdkapi = SdkApi.V261011
+      plugin.declaredPermissions = {
+        required: ['system.shell', 'network.internet'],
+        optional: [],
+        reasons: {}
+      }
+      plugin.setPreludeContract({ main: 'index.js' })
+
+      await expect(plugin.enable()).resolves.toBe(true)
+      const startOptions = vi.mocked(runtime.startActivation).mock
+        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(browserOpenFactory).toHaveBeenCalledOnce()
+      expect(startOptions.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
+        'system.browser-open'
+      ])
+      for (const factory of Object.values(unrelatedFactories)) {
+        expect(factory).not.toHaveBeenCalled()
+      }
+    } finally {
+      fse.removeSync(root)
+    }
+  })
+
   it('loads a declared canonical build artifact instead of a stale root projection', async () => {
     const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-prelude-canonical-'))
     try {

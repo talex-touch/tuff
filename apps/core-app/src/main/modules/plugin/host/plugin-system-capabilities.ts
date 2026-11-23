@@ -385,14 +385,7 @@ function isActionId(value: unknown): value is PluginSystemActionId {
   )
 }
 
-function isActionAllowedForPlugin(
-  pluginName: string,
-  actionId: PluginSystemActionId,
-  sdkapi?: number
-): boolean {
-  if (typeof sdkapi === 'number' && sdkapi >= 261011) {
-    return QUICK_ACTION_IDS.has(actionId) || ADVANCED_SYSTEM_ACTION_IDS.has(actionId)
-  }
+function isActionAllowedForPlugin(pluginName: string, actionId: PluginSystemActionId): boolean {
   return isPrivilegedPluginFor('systemActionsBasic', pluginName)
     ? QUICK_ACTION_IDS.has(actionId)
     : isPrivilegedPluginFor('systemActionsAdvanced', pluginName) &&

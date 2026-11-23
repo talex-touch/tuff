@@ -1,14 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
 import { loadPluginPrelude } from './plugin-host-child-runtime'
 
-function payload(scriptContent: string, pluginName = 'touch-window-manager', declared = true) {
+function payload(
+  scriptContent: string,
+  pluginName = 'touch-window-manager',
+  declared = true,
+  sdkapi?: number
+) {
   return {
     scriptContent,
     snapshot: {
       platform: 'win32',
       arch: 'x64',
       locale: 'zh-CN',
-      manifest: { name: pluginName }
+      manifest: { name: pluginName, ...(sdkapi === undefined ? {} : { sdkapi }) }
     },
     capabilityManifest: declared
       ? [{ id: 'system.window-manager', callbackLifetime: 'transient', callbackFields: [] }]
@@ -118,7 +123,7 @@ describe('plugin host child window manager facade', () => {
     runtime.shutdown()
   })
 
-  it('does not project the facade for another plugin or without the declaration', async () => {
+  it('does not project the facade for another plugin (even at sdkapi 261011) or without the declaration', async () => {
     for (const input of [
       payload(
         'module.exports={onInit(){return typeof plugin.windowManager}}',
@@ -126,8 +131,15 @@ describe('plugin host child window manager facade', () => {
       ),
       payload(
         'module.exports={onInit(){return typeof plugin.windowManager}}',
+        'community-external-plugin',
+        true,
+        261011
+      ),
+      payload(
+        'module.exports={onInit(){return typeof plugin.windowManager}}',
         'touch-window-manager',
-        false
+        false,
+        261011
       )
     ]) {
       const runtime = loadPluginPrelude(input)

@@ -566,6 +566,37 @@ describe('isolated Snipaste process capability', () => {
     expect(() => createWithDiscovery(signed)).not.toThrow()
   })
 
+  it('rejects construction for any non-privileged plugin activation', () => {
+    const discovery = createFixedPluginSnipasteDiscovery({
+      platform: 'darwin',
+      fileSystem: Object.freeze({
+        kind: vi.fn(async () => 'missing' as const),
+        realpath: vi.fn(async (target: string) => target)
+      })
+    })
+    const executor = createFixedPluginSnipasteExecutor({
+      platform: 'darwin',
+      environment: {},
+      spawn: vi.fn(() => controlledProcess().process)
+    })
+
+    for (const name of ['community-snipaste', 'touch-browser-open']) {
+      const foreignActivation = Object.freeze({ ...activation, name })
+      expect(() =>
+        createPluginSnipasteProcessCapability({
+          activation: foreignActivation,
+          platform: 'darwin',
+          resolveCurrentActivation: () => foreignActivation,
+          resolveHostGeneration: () => 7,
+          authorizeShell: () => true,
+          watchShellPermissionRevoked: () => () => undefined,
+          discovery,
+          executor
+        })
+      ).toThrow('PLUGIN_SNIPASTE_PROCESS_INVALID')
+    }
+  })
+
   it('rejects an untrusted process adapter before invoking its lifecycle methods', () => {
     const fake = Object.freeze({
       started: vi.fn(async () => undefined),

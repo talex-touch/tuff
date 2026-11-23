@@ -140,14 +140,18 @@ const facadeCases = [
   }
 ] as const
 
-function payload(pluginName: string, capabilityManifest: readonly PluginHostCapability[]) {
+function payload(
+  pluginName: string,
+  capabilityManifest: readonly PluginHostCapability[],
+  sdkapi?: number
+) {
   return {
     scriptContent: '',
     snapshot: {
       platform: 'darwin',
       arch: 'arm64',
       locale: 'zh-CN',
-      manifest: { name: pluginName }
+      manifest: { name: pluginName, ...(sdkapi === undefined ? {} : { sdkapi }) }
     },
     capabilityManifest: capabilityManifest.map((id) => ({
       id,
@@ -206,17 +210,18 @@ describe('classic utility plugin host facades', () => {
   )
 
   it.each(facadeCases)(
-    '$name stays hidden for a foreign manifest or undeclared capability',
+    '$name stays hidden for a foreign manifest (including sdkapi 261011) or undeclared capability',
     async (entry) => {
       const script = `module.exports = { onInit() {
       return { facade: typeof plugin.${entry.facade}, raw: typeof hostCapabilities }
     } }`
-      for (const [pluginName, capabilities] of [
-        ['unrelated-plugin', [entry.capability]],
-        [entry.pluginName, []]
+      for (const [pluginName, capabilities, sdkapi] of [
+        ['unrelated-plugin', [entry.capability], undefined],
+        ['unrelated-plugin', [entry.capability], 261011],
+        [entry.pluginName, [], 261011]
       ] as const) {
         const runtime = loadPluginPrelude({
-          ...payload(pluginName, capabilities),
+          ...payload(pluginName, capabilities, sdkapi),
           scriptContent: script
         })
         await expect(runtime.callLifecycle('onInit', []).promise).resolves.toEqual({
