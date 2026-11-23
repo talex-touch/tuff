@@ -157,6 +157,7 @@ sequenceDiagram
    - **终轮达标（`7d3df3c1f`）**：继续在零生产 UI 降级前提下完成编排抽离，将 `HomePage.vue` 从 `1,162` 行进一步收敛至 **`781` 行**（达成 `<= 800` 行目标），并修复 `HomePage.submit-race.test.ts` 测试抖动（`4,317ms -> 181ms`）；单测与类型检查通过，实机 Electron 验收仍独立追踪。
 3. **第三阶段：`OmpAgentRuntimeHost` 生产接线与 MCP 工具网关暴露（2026-11-23 已完成接线，PR `#2254` / `282ae52cc`）**
    - **代码现状（2026-11-23 更新）**：`apps/core-app/src/main/modules/ai/ai-cli-orchestrator.ts` 已实例化并接入 `OmpAgentRuntimeHost`（与 `PiAgentRuntimeHost` 并行），严格仅在 `profile:cli:omp` 时切换至 `OmpAgentRuntimeHost`，并桥接活跃环回 `mcpHostModule.getActiveServerConfig()` 与 fail-closed `session/request_permission -> toolGatewayModule.requestConfirmation` 审批门禁，补齐有界 SIGTERM→SIGKILL 回收、重启安全恢复与实时 text/reasoning 流式投递（`packages/tuff-intelligence` 11 files / 46 tests、`apps/core-app` AI/MCP/conversation 153 files / 1,871 tests 通过；真实本机 `omp` 二进制与打包 Electron 端到端实测另行验收）。
+   - **实机 `omp/18.16.0` ACP 流式验证（2026-11-23，PR `#2272` 后复验）**：在本机真实 `omp/18.16.0` 上完成 `OmpAcpClient.spawn()` -> `createSession` -> 流式 `prompt` 验证（收到 `5` 个 chunks）；PR `#2272` 修正默认模型与嵌套 client 回收后，`omp-acp-client.live.test.ts` 实测 `1/1` 通过。打包 Electron 端到端交互验收与第四阶段（Tern Daemon attach 互通）仍保持开放，不以独立 ACP live 实测替代打包 Electron UI 验收。
    - **边界保持**：继续严守 `AGENTS.md` 的 **调度器决定执行器** 不变量——第三方 CLI（`codex`、`claude`、`omp`）仅在其对应调度器配置（`profile:cli:{codex,claude,omp}`）下启动子进程，其他调度器或未命名调度器继续经 `cli-config-provider.ts` 复用配置端点（`codex-config`、`claude-config`、`omp-config`）。
 4. **第四阶段：Tern Daemon 互通（待推进）**
    - 允许检测本地是否存在运行中的 Tern Daemon（`daemon.sock`），提供“无缝漫游”选项，实现终端 Agent 与桌面 GUI 的会话与状态共享。
