@@ -246,7 +246,7 @@ function sliceUtf8BufferToMaxBytes(buffer: Buffer, maxBytes: number): Buffer {
   }
 
   const lead = buffer[i]!
-  let expectedLen = 1
+  let expectedLen: number
   if ((lead & 0x80) === 0x00) {
     expectedLen = 1
   } else if ((lead & 0xe0) === 0xc0) {
