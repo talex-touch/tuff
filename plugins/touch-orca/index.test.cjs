@@ -248,6 +248,48 @@ test('destroy invalidates every issued Orca action token', async () => {
   })
   assert.equal(state.calls.includes('open'), false)
 })
+test('fails closed when globalThis.crypto.randomUUID is unavailable', async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
+  try {
+    Object.defineProperty(globalThis, 'crypto', {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    })
+    assert.equal(await lifecycle.onFeatureTriggered('orca'), true)
+    assert.equal(state.items.length, 1)
+    assert.equal(state.items[0].subtitle, 'capability-unavailable')
+    assert.deepEqual(state.items[0].actions, [])
+
+    Object.defineProperty(globalThis, 'crypto', {
+      value: {},
+      configurable: true,
+      writable: true,
+    })
+    assert.equal(await lifecycle.onFeatureTriggered('orca'), true)
+    assert.equal(state.items[0].subtitle, 'capability-unavailable')
+    assert.deepEqual(state.items[0].actions, [])
+
+    const forged = {
+      source: { type: 'plugin', id: 'touch-orca', name: 'Orca' },
+      meta: { defaultAction: 'open', featureId: 'orca' },
+      actions: [{ id: 'open', type: 'plugin', payload: { actionToken: '' } }],
+    }
+    assert.deepEqual(await lifecycle.onItemAction(forged), {
+      externalAction: true,
+      status: 'blocked',
+      reason: 'invalid-action',
+    })
+    assert.equal(state.calls.includes('open'), false)
+  }
+  finally {
+    if (descriptor)
+      Object.defineProperty(globalThis, 'crypto', descriptor)
+    else
+      delete globalThis.crypto
+  }
+})
+
 test('production Prelude has no privileged runtime surface', () => {
   const source = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8')
   for (const pattern of [

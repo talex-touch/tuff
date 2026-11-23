@@ -1,10 +1,49 @@
 {
   "name": "@talex-touch/touch-dictation-plugin",
-  "private": true,
   "version": "1.0.0",
-  "packageManager": "pnpm@10.34.4",
+  "private": true,
+  "description": "语音听写：说话即输入，自动清理口水词并润色后粘贴到当前应用",
+  "keywords": [
+    "tuff-plugin",
+    "utilities",
+    "voice",
+    "dictation",
+    "tts"
+  ],
+  "license": "MIT",
+  "main": "./index.js",
   "scripts": {
-    "test": "node --test index.test.cjs",
-    "build": "node ../../packages/tuff-cli/bin/tuff.js builder"
+    "build": "node ../../packages/tuff-cli/bin/tuff.js builder",
+    "test": "node --test index.test.cjs"
+  },
+  "engines": {
+    "tuff": ">=261011"
+  },
+  "packageManager": "pnpm@11.24.0",
+  "tuff": {
+    "schemaVersion": 1,
+    "id": "com.tuffex.dictation",
+    "name": "touch-dictation",
+    "displayName": {
+      "en": "Dictation",
+      "zh": "语音听写"
+    },
+    "sdkapi": 261011,
+    "category": "utilities",
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "permissions": {
+      "required": ["voice.dictation", "search.root-results"],
+      "optional": ["clipboard.read"]
+    },
+    "platforms": {
+      "win32": true,
+      "darwin": true,
+      "linux": true
+    },
+    "surface": "prelude",
+    "manifest": "./manifest.json"
   }
 }

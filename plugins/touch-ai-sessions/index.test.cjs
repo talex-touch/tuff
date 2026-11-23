@@ -194,7 +194,45 @@ test('copies only the issued redacted reference through clipboard facade', async
 
   assert.deepEqual(await plugin.onItemAction(item), { externalAction: true, success: true, status: 'copied' })
   assert.equal(listCalls, 2)
-  assert.deepEqual(listRequests[1], { query: 'abc123def4567890', limit: 1 })
+  assert.deepEqual(listRequests[1], { query: 'abc123def4567890', limit: 100 })
+  assert.deepEqual(calls, ['AI session abc123def456 · codex · 2026-09-01T10:00:00.000Z'])
+})
+
+test('finds exact session id on revalidation when another substring match sorts first', async () => {
+  const calls = []
+  const listRequests = []
+  const exact = fixture.sessions[0]
+  const substringDistractor = {
+    id: 'other00000000001',
+    platform: 'claude',
+    project: `notes-${exact.id}`,
+    updatedAt: '2026-09-02T10:00:00.000Z',
+    state: 'active',
+    turnCount: 2,
+  }
+  const { plugin, state } = loadPlugin({
+    sessions: {
+      async list(request) {
+        listRequests.push(request)
+        const limit = request?.limit ?? 100
+        return {
+          status: 'ready',
+          sessions: [substringDistractor, exact].slice(0, limit),
+        }
+      },
+    },
+    clipboard: {
+      async writeText(value) {
+        calls.push(value)
+      },
+    },
+  })
+  await plugin.onFeatureTriggered('ai-sessions')
+  const exactItem = clone(state.items.find(item => item.actions?.[0]?.payload?.id === exact.id))
+  assert.ok(exactItem)
+
+  assert.deepEqual(await plugin.onItemAction(exactItem), { externalAction: true, success: true, status: 'copied' })
+  assert.equal(listRequests[1].limit, 100)
   assert.deepEqual(calls, ['AI session abc123def456 · codex · 2026-09-01T10:00:00.000Z'])
 })
 

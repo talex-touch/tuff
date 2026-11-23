@@ -1,10 +1,48 @@
 {
   "name": "@talex-touch/touch-batch-rename-plugin",
-  "private": true,
   "version": "1.0.0",
-  "packageManager": "pnpm@10.34.4",
+  "private": true,
+  "description": "文件批量重命名：前后缀、编号、正则替换",
+  "keywords": [
+    "tuff-plugin",
+    "utilities",
+    "files",
+    "rename"
+  ],
+  "license": "MIT",
+  "main": "./index.js",
   "scripts": {
-    "test": "node --test index.test.cjs",
-    "build": "node ../../packages/tuff-cli/bin/tuff.js builder"
+    "build": "node ../../packages/tuff-cli/bin/tuff.js builder",
+    "test": "node --test index.test.cjs"
+  },
+  "engines": {
+    "tuff": ">=261011"
+  },
+  "packageManager": "pnpm@11.24.0",
+  "tuff": {
+    "schemaVersion": 1,
+    "id": "com.tuffex.batch-rename",
+    "name": "touch-batch-rename",
+    "displayName": {
+      "en": "Batch Rename",
+      "zh": "批量重命名"
+    },
+    "sdkapi": 261011,
+    "category": "utilities",
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "permissions": {
+      "required": ["fs.read", "fs.write", "search.root-results", "storage.plugin"],
+      "optional": []
+    },
+    "platforms": {
+      "win32": true,
+      "darwin": true,
+      "linux": true
+    },
+    "surface": "prelude",
+    "manifest": "./manifest.json"
   }
 }
