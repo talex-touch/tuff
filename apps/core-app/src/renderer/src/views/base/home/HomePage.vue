@@ -1,50 +1,24 @@
 <script lang="ts" name="HomePage" setup>
-import type { TxConversationStreamInstance } from '@talex-touch/tuffex/conversation-stream'
-import type { StreamMarkdownCodePreview } from '@talex-touch/tuffex/stream-markdown'
-import type { AgentWorkspaceError } from '~/modules/conversation/useAgentWorkspace'
-import { TxButton } from '@talex-touch/tuffex/button'
-import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
-import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { TxSelectionActions } from '@talex-touch/tuffex/selection-actions'
-import { initialReasoningSettingForNewSession } from '@talex-touch/utils/intelligence/model-binding'
 import { useAppSdk, useIntelligenceSdk } from '@talex-touch/utils/renderer'
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { computed, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
-import { toast } from 'vue-sonner'
-import { prefersReducedMotion, useSendChoreography } from '~/composables/useSendChoreography'
-import { createWorkingConversationTitle } from '~/modules/conversation/conversation-title'
-import { provideHomeModelScope } from '~/modules/conversation/home-model-scope'
-import { reasoningLevelLabelKey } from '~/modules/conversation/reasoning-effort-display'
-import {
-  AgentWorkspaceRequestError,
-  toAgentWorkspaceError,
-  useAgentWorkspace,
-  WORKSPACE_QUEUE_LIMIT
-} from '~/modules/conversation/useAgentWorkspace'
-import { useCodePreviewTabs } from '~/modules/conversation/useCodePreviewTabs'
+import { useRouter } from 'vue-router'
+import { WORKSPACE_QUEUE_LIMIT } from '~/modules/conversation/useAgentWorkspace'
 import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
-import { useConversationLoading } from '~/modules/conversation/useConversationLoading'
-import { useHomeConversation } from '~/modules/conversation/useHomeConversation'
-import { useModelOptions } from '~/modules/conversation/useModelOptions'
-import { useReasoningEffort } from '~/modules/conversation/useReasoningEffort'
-import { createOpeningLeadNote } from '~/modules/home-push/opening'
-import { appSetting } from '~/modules/storage/app-storage'
-import { useProjectStore } from '~/stores/projects'
-import { describeFailure } from '~/utils/failure-text'
-import { homeLog } from './composables/home-log'
 import { homeMessageContextKey } from './composables/home-message-context'
 import { useConversationRestore } from './composables/useConversationRestore'
 import { useConversationTitle } from './composables/useConversationTitle'
-import { useFileLinkClick } from './composables/useFileLinkClick'
-import { useHomeAgentTools } from './composables/useHomeAgentTools'
 import { useHomeAttachments } from './composables/useHomeAttachments'
 import { useHomeCommands } from './composables/useHomeCommands'
 import { useHomeComposerLayout } from './composables/useHomeComposerLayout'
-import { useHomeDictation, VOICE_DRAFT_ID } from './composables/useHomeDictation'
+import { useHomeDictation } from './composables/useHomeDictation'
 import { useHomeOpening } from './composables/useHomeOpening'
+import { useHomePreviewPanels } from './composables/useHomePreviewPanels'
 import { useHomeRunTelemetry } from './composables/useHomeRunTelemetry'
+import { useHomeSendChoreography } from './composables/useHomeSendChoreography'
 import { useHomeSubmit } from './composables/useHomeSubmit'
+import { useHomeWorkspaceSession } from './composables/useHomeWorkspaceSession'
 import { useLeavingHead } from './composables/useLeavingHead'
 import { useMessageParts } from './composables/useMessageParts'
 import { usePassageSelection } from './composables/usePassageSelection'
@@ -53,22 +27,20 @@ import { useSendState } from './composables/useSendState'
 import { useTurnMetrics } from './composables/useTurnMetrics'
 import { useWorkspaceControls } from './composables/useWorkspaceControls'
 import HomeRunDock from './composer/HomeRunDock.vue'
-import HomeVoiceDraft from './composer/HomeVoiceDraft.vue'
-import { modelPillFace } from './composer/model-pill'
-import { deriveSendState, isAwaitingFirstToken } from './composer/send-state'
+import HomeComposerModeSlot from './HomeComposerModeSlot.vue'
 import HomeComposerStackHead from './HomeComposerStackHead.vue'
+import HomeConversationStream from './HomeConversationStream.vue'
 import HomeEmptyHead from './HomeEmptyHead.vue'
-import HomeMessageRail from './HomeMessageRail.vue'
-import HomeMessageRow from './HomeMessageRow.vue'
 import HomePayloadModal from './HomePayloadModal.vue'
-import HomePushCard from './HomePushCard.vue'
+import HomePushCardSlot from './HomePushCardSlot.vue'
+import HomeSendLiftOverlay from './HomeSendLiftOverlay.vue'
 import HomeSidePanelSlot from './HomeSidePanelSlot.vue'
+import HomeStageBlurs from './HomeStageBlurs.vue'
 import HomeTopBar from './HomeTopBar.vue'
 import HomePet from './pet/HomePet.vue'
 import { petEnabled } from './pet/pet-settings'
 import HomeFilePreviewDrawer from './preview/HomeFilePreviewDrawer.vue'
 import TuffAIComposer from './TuffAIComposer.vue'
-import HomeWorkspaceModeMenu from './workspace/HomeWorkspaceModeMenu.vue'
 
 /**
  * The empty state and message stream share one composer node, preserving focus across the first
@@ -91,7 +63,8 @@ const browserNavigating = ref(false)
 const draft = ref('')
 const bodyRef = ref<HTMLElement | null>(null)
 const selectionBarRef = ref<HTMLElement | null>(null)
-const streamRef = ref<TxConversationStreamInstance | null>(null)
+const streamEl = ref<InstanceType<typeof HomeConversationStream> | null>(null)
+const streamRef = computed(() => streamEl.value?.stream ?? null)
 const streamFollowing = ref(true)
 const composerEl = ref<InstanceType<typeof TuffAIComposer> | null>(null)
 const inputRef = computed(() => composerEl.value?.input ?? null)
@@ -111,129 +84,61 @@ const petHost = {
   empty: () => isEmpty.value,
   head: () => headRef.value
 }
-const liftGhostRef = ref<HTMLElement | null>(null)
-const liftFillRef = ref<HTMLElement | null>(null)
-const liftTextRef = ref<HTMLElement | null>(null)
+const liftOverlayEl = ref<InstanceType<typeof HomeSendLiftOverlay> | null>(null)
 const router = useRouter()
-const route = useRoute()
 
 const { composerClearance, autoGrow, collapseDraft, bubbleMaxWidth } = useHomeComposerLayout({
   input: inputRef,
   composerGroup: composerGroupRef
 })
 
-const {
-  resolvedChoice: globalResolvedModel,
-  routing: modelRouting,
-  ensureLoaded: ensureModelOptionsLoaded
-} = useModelOptions()
-const { setting: reasoningEffortSetting } = useReasoningEffort()
-onMounted(() => {
-  void ensureModelOptionsLoaded()
-})
-
 const conversationId = ref<string | null>(null)
 const projectId = ref<string | null>(null)
 
-const isHomeRoute = computed(() =>
-  props.browserLanding
-    ? route.path === '/browser' && props.browserActive
-    : route.path === '/home' || route.path.startsWith('/home/c/')
-)
-
 const {
-  autoContext,
+  isHomeRoute,
+  modelRouting,
+  ensureModelOptionsLoaded,
   agentTools,
   agentToolsMode,
   resetRememberedApprovals,
   gatewayApprovals,
-  pendingGatewayOrigin
-} = useHomeAgentTools({ isHomeRoute, conversationId })
-
-function workspaceErrorText(failure: AgentWorkspaceError): string {
-  return t(`home.workspace.error.${failure.code === 'unknown' ? 'unknown' : failure.code}`)
-}
-
-function reportWorkspaceError(failure: AgentWorkspaceError, action: string): void {
-  homeLog.warn(`Workspace ${action} rejected`, failure.detail)
-  const description = failure.code === 'unknown' ? describeFailure(failure.detail, t, '') : ''
-  toast.error(workspaceErrorText(failure), description ? { description } : undefined)
-}
-
-function reportSubmitError(error: unknown): void {
-  const failure =
-    error instanceof AgentWorkspaceRequestError ? error.failure : toAgentWorkspaceError(error)
-  reportWorkspaceError(failure, 'submit')
-}
-
-const workspace = useAgentWorkspace({
-  conversationId: () => conversationId.value,
-  projectId: () => projectId.value,
-  title: createWorkingConversationTitle,
-  defaults: () => ({
-    providerId: modelRouting.value.providerId,
-    model: modelRouting.value.model,
-    reasoningEffort:
-      appSetting.conversation?.reasoningEffort === undefined
-        ? (initialReasoningSettingForNewSession(globalResolvedModel.value?.binding) ??
-          reasoningEffortSetting.value)
-        : reasoningEffortSetting.value,
-    autoContext: autoContext.value
-  }),
-  leadNote: createOpeningLeadNote(t),
-  onError: (failure, action) => reportWorkspaceError(failure, action)
+  pendingGatewayOrigin,
+  workspaceErrorText,
+  reportSubmitError,
+  workspace,
+  modelScope,
+  conversation,
+  composerModel
+} = useHomeWorkspaceSession({
+  browserLanding: () => props.browserLanding,
+  browserActive: () => props.browserActive,
+  conversationId,
+  projectId
 })
 
-const modelScope = provideHomeModelScope({
-  settings: () => workspace.sessionModel.value,
-  configure: (patch) => void workspace.configure(patch)
-})
-
-const conversation = useHomeConversation({ workspace: () => workspace.adapter })
 const { isCompacting, isEmpty, isStreaming, lastTurn, messages } = conversation
 watch([conversationId, isEmpty], () => {
   streamFollowing.value = true
 })
 
-const panelOpen = ref(false)
-const panelTab = ref('outputs')
 const {
-  tabs: codeTabs,
-  activeId: activeCodeTabId,
-  open: openCodeTab,
-  select: selectCodeTab,
-  close: closeCodeTab
-} = useCodePreviewTabs(conversationId)
-
-function showCodePreview(preview: StreamMarkdownCodePreview): void {
-  openCodeTab(preview)
-  panelTab.value = 'preview'
-  panelOpen.value = true
-}
-const { setConversationLoading } = useConversationLoading()
-
-const modelPill = computed(() =>
-  modelPillFace(modelScope.resolvedChoice.value, t('home.modelName'))
-)
-const composerModel = computed(() => {
-  const level = modelScope.pillLevel.value
-  return { ...modelPill.value, effort: level ? t(reasoningLevelLabelKey(level)) : undefined }
-})
+  panelOpen,
+  panelTab,
+  codeTabs,
+  activeCodeTabId,
+  selectCodeTab,
+  closeCodeTab,
+  showCodePreview,
+  fileDrawerVisible,
+  previewFilePath,
+  previewDisplayPath,
+  projectStore,
+  currentProject
+} = useHomePreviewPanels({ conversationId, projectId, bodyRef })
 
 const submitState = useSendState({ choreography: () => choreography })
 const { sending, lifting, openingHold } = submitState
-
-watch(
-  [
-    () => (typeof route.params.id === 'string' ? route.params.id : conversationId.value),
-    isStreaming,
-    sending
-  ],
-  ([id, streaming, isSending]) => {
-    if (id) setConversationLoading(id, Boolean(streaming || isSending))
-  },
-  { immediate: true }
-)
 
 const { dictation, streamItems, voiceSendBlocked } = useHomeDictation({
   draft,
@@ -249,75 +154,32 @@ const { dictation, streamItems, voiceSendBlocked } = useHomeDictation({
   onLeaveHome: () => submitState.invalidatePageSubmission()
 })
 
-const canSend = computed(
-  () =>
-    draft.value.trim().length > 0 &&
-    isHomeRoute.value &&
-    (typeof route.params.id !== 'string' || route.params.id === conversationId.value) &&
-    !dictation.active.value &&
-    !sending.value &&
-    !browserNavigating.value &&
-    !workspace.loading.value &&
-    !workspace.loadError.value
-)
-
-const sendQueues = computed(
-  () => workspace.busy.value || (workspace.state.value?.queue.length ?? 0) > 0
-)
-
-const sendState = computed(() =>
-  deriveSendState({
-    hasText: draft.value.trim().length > 0,
-    streaming: isStreaming.value,
-    awaitingFirstToken: isAwaitingFirstToken(messages.value.at(-1)),
-    blocked: Boolean(agentTools.pending.value) || Boolean(workspace.state.value?.pendingRun),
-    dictating: dictation.active.value
-  })
-)
-
-const composerBeamActive = computed(
-  () =>
-    !props.browserLanding &&
-    isHomeRoute.value &&
-    isEmpty.value &&
-    !isStreaming.value &&
-    !dictation.active.value
-)
-
-const choreography = useSendChoreography({
+const {
+  choreography,
+  enteringMessages,
+  canSend,
+  sendQueues,
+  sendState,
+  composerBeamActive,
+  setConversationLoading
+} = useHomeSendChoreography({
+  browserLanding: () => props.browserLanding,
+  isHomeRoute,
+  isEmpty,
+  isStreaming,
+  messages,
+  conversationId,
+  draft,
+  browserNavigating,
+  dictationActive: () => dictation.active.value,
+  workspace,
+  pendingTool: () => agentTools.pending.value,
+  submitState,
   host: () => pageRef.value,
-  scroller: () =>
-    pageRef.value?.querySelector<HTMLElement>('.tx-conversation-stream__scroller') ?? null,
   composerGroup: () => composerGroupRef.value,
   composer: () => composerRef.value,
-  liftOverlay: () => {
-    const ghost = liftGhostRef.value
-    const fill = liftFillRef.value
-    const text = liftTextRef.value
-    return ghost && fill && text ? { ghost, fill, text } : null
-  }
+  liftOverlay: () => liftOverlayEl.value?.overlay() ?? null
 })
-const enteringMessages = choreography.enteringMessages
-
-onBeforeUnmount(() => {
-  choreography.cancel()
-})
-
-watch(
-  () => messages.value.length,
-  (length, previous) => {
-    const claimed = submitState.consumeChoreographedSend()
-    if (!isStreaming.value || prefersReducedMotion()) return
-    const appended = messages.value.slice(previous ?? 0, length)
-    choreography.markEntering(appended.map((message) => message.id))
-    if (claimed && appended.some((message) => message.role === 'user')) return
-    void nextTick(() => {
-      for (const message of appended) {
-        choreography.playEntrance(message.id, message.role === 'user' ? 0.8 : 0.6)
-      }
-    })
-  }
-)
 
 const intelligenceSdk = useIntelligenceSdk()
 const { toggleSpeak, speakStateOf } = useReadAloud()
@@ -339,25 +201,6 @@ const { passageSelection, passageActions, runPassageAction } = usePassageSelecti
   draft,
   conversationId,
   autoGrow
-})
-
-const fileDrawerVisible = ref(false)
-const previewFilePath = ref('')
-const previewDisplayPath = ref('')
-
-const projectStore = useProjectStore()
-const currentProject = computed(() =>
-  projectId.value ? (projectStore.projects.find((p) => p.id === projectId.value) ?? null) : null
-)
-
-useFileLinkClick({
-  container: bodyRef,
-  projectRoot: computed(() => currentProject.value?.rootPath),
-  onOpenRight: ({ absolutePath, displayPath }) => {
-    previewFilePath.value = absolutePath
-    previewDisplayPath.value = displayPath
-    fileDrawerVisible.value = true
-  }
 })
 
 const { measureLeavingHead, pinLeavingHead } = useLeavingHead(headRef)
@@ -562,24 +405,7 @@ useHomeCommands({
 
     <div class="HomePage-Split">
       <div ref="bodyRef" class="HomePage-Body">
-        <TxGradualBlur
-          v-if="!isEmpty"
-          position="top"
-          height="72px"
-          :strength="2.5"
-          curve="bezier"
-          :z-index="4"
-          class="HomePage-TopBlur"
-        />
-        <TxGradualBlur
-          v-if="!isEmpty"
-          position="bottom"
-          height="calc(var(--home-composer-height, 112px) + 96px)"
-          :strength="2.5"
-          curve="bezier"
-          :z-index="4"
-          class="HomePage-BottomBlur"
-        />
+        <HomeStageBlurs :visible="!isEmpty" />
         <div class="HomePage-Center">
           <Transition name="home-head">
             <HomeEmptyHead
@@ -596,66 +422,34 @@ useHomeCommands({
             />
           </Transition>
 
-          <Transition name="home-stream">
-            <TxConversationStream
-              v-if="!isEmpty"
-              ref="streamRef"
-              :key="conversationId ?? 'draft'"
-              class="HomePage-Stream"
-              role="log"
-              :items="streamItems"
-              item-key="id"
-              :streaming="isStreaming"
-              :top-padding="72"
-              bottom-clearance="calc(var(--home-composer-height, 112px) + 88px)"
-              pill-bottom="calc(var(--home-composer-height, 112px) + 32px)"
-              :data-following="streamFollowing"
-              @following-change="streamFollowing = $event"
-            >
-              <template #item="{ item: message, index }">
-                <div v-if="message.id === VOICE_DRAFT_ID" class="HomePage-StreamRow">
-                  <div class="HomePage-VoiceRow">
-                    <HomeVoiceDraft
-                      v-if="dictation.clip.value"
-                      :clip="dictation.clip.value"
-                      :dictating="dictation.active.value"
-                      :send-blocked="voiceSendBlocked"
-                      @retry="dictation.recognizeClip()"
-                      @send="sendVoiceDraft()"
-                      @dismiss="dictation.dismissClip()"
-                    />
-                  </div>
-                </div>
-                <div v-else class="HomePage-StreamRow">
-                  <HomeMessageRow
-                    :message="message"
-                    :entering="enteringMessages.has(message.id)"
-                    :latest="index === messages.length - 1"
-                    :streaming="isStreaming"
-                    :compacting="isCompacting"
-                    :resting="isTurnFooterResting(message)"
-                    :branchable="canBranchFrom(message, index)"
-                    :branching="branching"
-                    :speak-state="speakStateOf(message)"
-                    :show-metrics="showTurnMetrics"
-                    @retry="conversation.retry()"
-                    @regenerate="conversation.retry()"
-                    @speak="toggleSpeak(message)"
-                    @branch="branchTo({ messageId: message.id })"
-                    @code-preview="showCodePreview"
-                  />
-                </div>
-              </template>
-              <template #rail="{ activeIndex, scrollToIndex }">
-                <HomeMessageRail
-                  v-if="!isEmpty && !panelOpen"
-                  :items="messages"
-                  :active-index="activeIndex"
-                  @navigate="scrollToIndex($event)"
-                />
-              </template>
-            </TxConversationStream>
-          </Transition>
+          <HomeConversationStream
+            ref="streamEl"
+            v-model:following="streamFollowing"
+            :visible="!isEmpty"
+            :conversation-id="conversationId"
+            :stream-items="streamItems"
+            :messages="messages"
+            :is-streaming="isStreaming"
+            :is-compacting="isCompacting"
+            :panel-open="panelOpen"
+            :entering-messages="enteringMessages"
+            :branching="branching"
+            :show-turn-metrics="showTurnMetrics"
+            :dictation-clip="dictation.clip.value"
+            :dictating="dictation.active.value"
+            :voice-send-blocked="voiceSendBlocked"
+            :is-turn-footer-resting="isTurnFooterResting"
+            :can-branch-from="canBranchFrom"
+            :speak-state-of="speakStateOf"
+            @voice-retry="dictation.recognizeClip()"
+            @voice-send="sendVoiceDraft()"
+            @voice-dismiss="dictation.dismissClip()"
+            @retry="conversation.retry()"
+            @regenerate="conversation.retry()"
+            @speak="toggleSpeak"
+            @branch="branchTo({ messageId: $event })"
+            @code-preview="showCodePreview"
+          />
 
           <HomePayloadModal />
 
@@ -736,31 +530,12 @@ useHomeCommands({
               @reset-approvals="resetRememberedApprovals"
             >
               <template #mode>
-                <template v-if="browserLanding">
-                  <TxButton
-                    size="sm"
-                    variant="flat"
-                    :type="browserMode === 'browse' ? 'primary' : 'text'"
-                    :aria-pressed="browserMode === 'browse'"
-                    :disabled="pendingAttachments.length > 0 || browserNavigating"
-                    icon="i-ri-global-line"
-                    @click="browserMode = 'browse'"
-                    >{{ t('browser.browse') }}</TxButton
-                  >
-                  <TxButton
-                    size="sm"
-                    variant="flat"
-                    :type="browserMode === 'ask' ? 'primary' : 'text'"
-                    :aria-pressed="browserMode === 'ask'"
-                    :disabled="browserNavigating"
-                    icon="i-ri-search-line"
-                    @click="browserMode = 'ask'"
-                    >{{ t('browser.ask') }}</TxButton
-                  >
-                </template>
-                <HomeWorkspaceModeMenu
-                  v-if="!browserLanding"
-                  :mode="workspace.settings.value.mode"
+                <HomeComposerModeSlot
+                  v-model:browser-mode="browserMode"
+                  :browser-landing="browserLanding"
+                  :browser-navigating="browserNavigating"
+                  :has-attachments="pendingAttachments.length > 0"
+                  :workspace-mode="workspace.settings.value.mode"
                   :profile-id="workspace.settings.value.profileId"
                   :profiles="workspace.profiles.value"
                   :profiles-loading="workspace.profilesLoading.value"
@@ -776,26 +551,19 @@ useHomeCommands({
               </template>
             </TuffAIComposer>
 
-            <Transition
-              name="home-card"
-              appear
-              appear-from-class="home-card-appear-from"
-              appear-active-class="home-card-appear-active"
-            >
-              <HomePushCard
-                v-if="isEmpty && homeRecommendationsEnabled"
-                v-model:step="pushStep"
-                :steps="pushSteps"
-                :selected="pushSelected"
-                :loading="pushSkeleton"
-                :loading-rows="pushLoadingRows"
-                :settling="pushSettling"
-                :prev-label="pushLabels.prev"
-                :next-label="pushLabels.next"
-                :slot-style="pushSlotStyle"
-                @select="choosePush"
-              />
-            </Transition>
+            <HomePushCardSlot
+              v-model:step="pushStep"
+              :visible="isEmpty && homeRecommendationsEnabled"
+              :steps="pushSteps"
+              :selected="pushSelected"
+              :loading="pushSkeleton"
+              :loading-rows="pushLoadingRows"
+              :settling="pushSettling"
+              :prev-label="pushLabels.prev"
+              :next-label="pushLabels.next"
+              :slot-style="pushSlotStyle"
+              @select="choosePush"
+            />
             <slot v-if="browserLanding" name="browser-footer" />
           </div>
         </div>
@@ -822,11 +590,7 @@ useHomeCommands({
     </div>
 
     <HomePet v-if="petOn" ref="petEl" :host="petHost" />
-
-    <div ref="liftGhostRef" class="HomePage-SendLift" aria-hidden="true">
-      <div ref="liftFillRef" class="HomePage-SendLiftFill" />
-      <div ref="liftTextRef" class="HomePage-UserBubble HomePage-SendLiftText" />
-    </div>
+    <HomeSendLiftOverlay ref="liftOverlayEl" />
 
     <TxSelectionActions
       v-if="passageSelection"
@@ -912,39 +676,6 @@ useHomeCommands({
   }
 }
 
-.HomePage-TopBlur {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 72px;
-  z-index: var(--home-z-topblur);
-  pointer-events: none;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--shell-bg) 80%, transparent) 0%,
-    color-mix(in srgb, var(--shell-bg) 35%, transparent) 40%,
-    transparent 100%
-  );
-}
-
-.HomePage-BottomBlur {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: calc(var(--home-composer-height, 112px) + 96px);
-  z-index: var(--home-z-bottomblur);
-  pointer-events: none;
-  background: linear-gradient(
-    to top,
-    color-mix(in srgb, var(--shell-bg) 85%, transparent) 0%,
-    color-mix(in srgb, var(--shell-bg) 60%, transparent) 35%,
-    color-mix(in srgb, var(--shell-bg) 25%, transparent) 70%,
-    transparent 100%
-  );
-}
-
 .HomePage-Center {
   display: flex;
   flex-direction: column;
@@ -962,77 +693,6 @@ useHomeCommands({
     min-height: 0;
     padding-bottom: 0;
   }
-}
-
-.home-stream-leave-active {
-  position: absolute;
-  z-index: var(--home-z-leaving);
-  inset: 0;
-  transition: opacity 0.26s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.home-stream-leave-to {
-  opacity: 0;
-}
-
-.home-stream-enter-active {
-  transition: opacity 0.24s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.home-stream-enter-from {
-  opacity: 0;
-}
-
-.HomePage-Stream {
-  flex: 1;
-  width: 100%;
-  min-height: 0;
-
-  :deep(.tx-conversation-stream__pill) {
-    z-index: 10;
-  }
-}
-
-.HomePage-StreamRow {
-  width: var(--home-chat-lane-width);
-  min-width: 0;
-  margin: 0 auto;
-  padding-bottom: 20px;
-  box-sizing: border-box;
-}
-
-.HomePage-VoiceRow {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-
-.HomePage-SendLift {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: var(--home-z-lift);
-  pointer-events: none;
-  visibility: hidden;
-
-  &.is-active {
-    visibility: visible;
-    will-change: transform;
-  }
-}
-
-.HomePage-SendLiftFill {
-  position: absolute;
-  inset: 0;
-  border-radius: var(--shell-radius-lg);
-  background: var(--shell-surface-2);
-  opacity: 0;
-}
-
-.HomePage-UserBubble.HomePage-SendLiftText {
-  position: relative;
-  margin: 0;
-  background: none;
 }
 
 .HomePage-ComposerGroup {
@@ -1087,42 +747,6 @@ useHomeCommands({
   filter: blur(8px);
 }
 
-.home-card-enter-active,
-.home-card-appear-active {
-  transition:
-    opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.home-card-enter-active {
-  transition-delay: 0.45s;
-}
-
-.home-card-appear-active {
-  transition-delay: 0.08s;
-}
-
-.home-card-enter-from,
-.home-card-appear-from {
-  opacity: 0;
-  transform: translateY(10px);
-}
-
-.home-card-leave-active {
-  position: absolute;
-  top: calc(100% + var(--home-card-gap));
-  left: 50%;
-  transform: translateX(-50%);
-  transition:
-    opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.home-card-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(8px);
-}
-
 @property --home-glow-on {
   syntax: '<number>';
   inherits: true;
@@ -1150,12 +774,7 @@ useHomeCommands({
 
 @media (prefers-reduced-motion: reduce) {
   .home-head-leave-active,
-  .home-head-enter-active,
-  .home-card-leave-active,
-  .home-card-enter-active,
-  .home-card-appear-active,
-  .home-stream-leave-active,
-  .home-stream-enter-active {
+  .home-head-enter-active {
     transition: none;
   }
 }

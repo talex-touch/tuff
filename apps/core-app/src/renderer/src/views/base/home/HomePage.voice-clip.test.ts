@@ -17,7 +17,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, disposePinia } from 'pinia'
 import { h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * The voice clip at page level: HomePage, its dictation, workspace adapter, router and Pinia run
@@ -73,6 +73,10 @@ vi.mock('~/modules/storage/app-storage', async () => {
     appSettingStore: { isHydrated: () => true, whenHydrated: async () => undefined }
   }
 })
+vi.mock('~/modules/storage/theme-style', async () => {
+  const { ref } = await import('vue')
+  return { resolvedTheme: ref('light') }
+})
 vi.mock('~/utils/renderer-log', () => ({
   createRendererLogger: () => ({ error: () => {}, warn: () => {}, info: () => {}, debug: () => {} })
 }))
@@ -103,6 +107,12 @@ const ToolbarPaint = {
   setup(_: Record<string, unknown>, { slots, expose }: SetupContext) {
     expose({ launch: () => {} })
     return () => h('div', slots.mode?.())
+  }
+}
+const PetPaint = {
+  setup(_: Record<string, unknown>, { expose }: SetupContext) {
+    expose({ notifySend: () => {} })
+    return () => h('div')
   }
 }
 const ClipPaint = {
@@ -163,10 +173,14 @@ vi.mock('@talex-touch/tuffex/stream-markdown', () => ({
 }))
 vi.mock('@talex-touch/tuffex/tool-call-card', () => ({ TxToolCallCard: Paint }))
 vi.mock('@talex-touch/tuffex/tool-confirmation', () => ({ TxToolConfirmation: Paint }))
+vi.mock('@talex-touch/tuffex/miko', () => ({ TxMiko: Paint }))
+vi.mock('@talex-touch/tuffex/motion-text', () => ({ TxMotionText: Paint }))
 vi.mock('~/components/icon/AppLogo.vue', () => ({ default: Paint }))
 vi.mock('./composer/ComposerToolbar.vue', () => ({ default: ToolbarPaint }))
 vi.mock('./HomeTopBar.vue', () => ({ default: Paint }))
 vi.mock('./HomeSidePanel.vue', () => ({ default: Paint }))
+vi.mock('./pet/HomePet.vue', () => ({ default: PetPaint }))
+vi.mock('./preview/HomeFilePreviewDrawer.vue', () => ({ default: Paint }))
 vi.mock('./workspace/HomeRunApproval.vue', () => ({ default: Paint }))
 vi.mock('./workspace/HomeWorkspaceModeMenu.vue', () => ({ default: Paint }))
 vi.mock('./workspace/HomeWorkspaceQueue.vue', () => ({ default: Paint }))
@@ -307,6 +321,10 @@ let wrapper: VueWrapper | null = null
 let pinia: Pinia | null = null
 let main: VoiceHost
 
+beforeAll(async () => {
+  await import('./HomePage.vue')
+  vi.resetModules()
+}, 15_000)
 beforeEach(() => {
   vi.resetModules()
   for (const key of Object.keys(boundary.settings)) delete boundary.settings[key]
