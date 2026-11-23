@@ -1,3 +1,4 @@
+import type { NpmPackageIdentityIssueCode } from './npm-contract'
 import {
   CATEGORY_REQUIRED_MIN_VERSION,
   checkSdkCompatibility,
@@ -7,6 +8,7 @@ import {
   normalizePermissionId,
   permissionRegistry,
 } from '../permission'
+import { validateNpmPackageIdentity } from './npm-contract'
 
 export const PLUGIN_PACKAGE_POLICY_VERSION = '1'
 export const PLUGIN_PACKAGE_MAX_ARCHIVE_BYTES = 200 * 1024 * 1024
@@ -22,6 +24,7 @@ export type PluginPackagePolicyProfile
   = | 'source-manifest'
     | 'staged-package'
     | 'registry-admission'
+    | 'npm-package'
 
 export type PluginPackageEntryType
   = | 'file'
@@ -42,6 +45,8 @@ export interface PluginPackageExpectedIdentity {
   pluginId?: string
   pluginName?: string
   version?: string
+  /** Expected npm package name for `'npm-package'` profile parity validation. */
+  npmPackageName?: string
 }
 
 export interface PluginPackagePolicyInput {
@@ -50,6 +55,14 @@ export interface PluginPackagePolicyInput {
   entries?: readonly PluginPackageEntry[]
   archiveSize?: number
   expected?: PluginPackageExpectedIdentity
+  /** Parsed `package.json` from the npm package (required for `'npm-package'` profile). */
+  packageJson?: unknown
+  /**
+   * For `'npm-package'` profile only: allow third-party community npm packages that omit both
+   * `manifest._files` and `manifest._signature`. Defaults to `false` (strict verification).
+   * If either `_files` or `_signature` is present, strict validation applies to both.
+   */
+  allowUnstampedCommunity?: boolean
 }
 
 export type PluginPackageViolationCode
@@ -87,6 +100,20 @@ export type PluginPackageViolationCode
     | 'PLUGIN_PACKAGE_EXPECTED_ID_MISMATCH'
     | 'PLUGIN_PACKAGE_EXPECTED_NAME_MISMATCH'
     | 'PLUGIN_PACKAGE_EXPECTED_VERSION_MISMATCH'
+    | 'PLUGIN_PACKAGE_NODE_MODULES_FORBIDDEN'
+    | 'PLUGIN_PACKAGE_NPM_PACKAGE_JSON_ENTRY_MISSING'
+    | 'PLUGIN_PACKAGE_NPM_PACKAGE_JSON_ENTRY_DUPLICATE'
+    | 'PLUGIN_PACKAGE_NPM_PACKAGE_JSON_INVALID'
+    | 'PLUGIN_PACKAGE_NPM_NAME_REQUIRED'
+    | 'PLUGIN_PACKAGE_NPM_NAME_INVALID'
+    | 'PLUGIN_PACKAGE_NPM_NAME_MISMATCH'
+    | 'PLUGIN_PACKAGE_NPM_VERSION_REQUIRED'
+    | 'PLUGIN_PACKAGE_NPM_VERSION_INVALID'
+    | 'PLUGIN_PACKAGE_NPM_VERSION_MISMATCH'
+    | 'PLUGIN_PACKAGE_NPM_METADATA_MISMATCH'
+    | 'PLUGIN_PACKAGE_NPM_DEPENDENCIES_FORBIDDEN'
+    | 'PLUGIN_PACKAGE_NPM_LIFECYCLE_SCRIPTS_FORBIDDEN'
+    | 'PLUGIN_PACKAGE_NPM_PRIVATE_FORBIDDEN'
 
 export interface PluginPackageViolation {
   code: PluginPackageViolationCode
@@ -404,6 +431,93 @@ function validatePackagedDevMode(
   }
 }
 
+const NPM_ISSUE_CODE_TO_POLICY_CODE: Record<NpmPackageIdentityIssueCode, PluginPackageViolationCode> = {
+  NPM_PACKAGE_JSON_INVALID: 'PLUGIN_PACKAGE_NPM_PACKAGE_JSON_INVALID',
+  NPM_PACKAGE_NAME_REQUIRED: 'PLUGIN_PACKAGE_NPM_NAME_REQUIRED',
+  NPM_PACKAGE_NAME_INVALID: 'PLUGIN_PACKAGE_NPM_NAME_INVALID',
+  NPM_PACKAGE_NAME_CONVENTION_MISMATCH: 'PLUGIN_PACKAGE_NPM_NAME_INVALID',
+  NPM_PACKAGE_EXPECTED_NAME_MISMATCH: 'PLUGIN_PACKAGE_NPM_NAME_MISMATCH',
+  NPM_PACKAGE_OFFICIAL_NAME_MISMATCH: 'PLUGIN_PACKAGE_NPM_NAME_MISMATCH',
+  NPM_PACKAGE_VERSION_REQUIRED: 'PLUGIN_PACKAGE_NPM_VERSION_REQUIRED',
+  NPM_PACKAGE_VERSION_INVALID: 'PLUGIN_PACKAGE_NPM_VERSION_INVALID',
+  NPM_PACKAGE_VERSION_MISMATCH: 'PLUGIN_PACKAGE_NPM_VERSION_MISMATCH',
+  NPM_PACKAGE_TUFF_METADATA_INVALID: 'PLUGIN_PACKAGE_NPM_PACKAGE_JSON_INVALID',
+  NPM_PACKAGE_TUFF_ID_MISMATCH: 'PLUGIN_PACKAGE_NPM_METADATA_MISMATCH',
+  NPM_PACKAGE_TUFF_NAME_MISMATCH: 'PLUGIN_PACKAGE_NPM_METADATA_MISMATCH',
+  NPM_PACKAGE_TUFF_SDKAPI_MISMATCH: 'PLUGIN_PACKAGE_NPM_METADATA_MISMATCH',
+  NPM_PACKAGE_TUFF_CATEGORY_MISMATCH: 'PLUGIN_PACKAGE_NPM_METADATA_MISMATCH',
+  NPM_PACKAGE_DISCOVERY_KEYWORD_MISSING: 'PLUGIN_PACKAGE_NPM_PACKAGE_JSON_INVALID',
+  NPM_PACKAGE_RUNTIME_DEPENDENCIES_FORBIDDEN: 'PLUGIN_PACKAGE_NPM_DEPENDENCIES_FORBIDDEN',
+  NPM_PACKAGE_LIFECYCLE_SCRIPTS_FORBIDDEN: 'PLUGIN_PACKAGE_NPM_LIFECYCLE_SCRIPTS_FORBIDDEN',
+  NPM_PACKAGE_PRIVATE_FORBIDDEN: 'PLUGIN_PACKAGE_NPM_PRIVATE_FORBIDDEN',
+}
+
+function hasNodeModulesSegment(normalizedPath: string): boolean {
+  return normalizedPath
+    .split('/')
+    .some(segment => segment.toLowerCase() === 'node_modules')
+}
+
+function validateNpmPackageEntries(
+  entries: readonly NormalizedEntry[],
+  regularFiles: readonly NormalizedEntry[],
+  violations: PluginPackageViolation[],
+): void {
+  for (const entry of entries) {
+    if (entry.normalizedPath && hasNodeModulesSegment(entry.normalizedPath)) {
+      addViolation(
+        violations,
+        'PLUGIN_PACKAGE_NODE_MODULES_FORBIDDEN',
+        `entries[${entry.originalIndex}].path`,
+        { path: entry.normalizedPath },
+      )
+    }
+  }
+
+  const packageJsonEntries = regularFiles.filter(entry => entry.normalizedPath === 'package.json')
+  if (packageJsonEntries.length === 0) {
+    addViolation(
+      violations,
+      'PLUGIN_PACKAGE_NPM_PACKAGE_JSON_ENTRY_MISSING',
+      'entries',
+    )
+  }
+  else if (packageJsonEntries.length > 1) {
+    addViolation(
+      violations,
+      'PLUGIN_PACKAGE_NPM_PACKAGE_JSON_ENTRY_DUPLICATE',
+      'entries',
+      { count: packageJsonEntries.length },
+    )
+  }
+}
+
+function validateNpmPackageMetadata(
+  input: PluginPackagePolicyInput,
+  manifest: ManifestRecord,
+  violations: PluginPackageViolation[],
+): void {
+  const result = validateNpmPackageIdentity({
+    packageJson: input.packageJson,
+    manifest,
+    expectedPackageName: input.expected?.npmPackageName,
+    forbidPrivate: true,
+    forbidRuntimeDependencies: true,
+    forbidLifecycleScripts: true,
+  })
+  if (result.ok)
+    return
+
+  for (const issue of result.issues) {
+    addViolation(
+      violations,
+      NPM_ISSUE_CODE_TO_POLICY_CODE[issue.code],
+      issue.location,
+      issue.meta ? { ...issue.meta } : undefined,
+    )
+  }
+}
+
 export function validatePluginPackagePolicy(
   input: PluginPackagePolicyInput,
 ): PluginPackagePolicyResult {
@@ -493,7 +607,16 @@ export function validatePluginPackagePolicy(
 
   let inventory: NormalizedPluginPackageInventory | undefined
   if (input.profile !== 'source-manifest') {
+    const isNpmPackage = input.profile === 'npm-package'
+    const hasFileMap = manifest._files !== undefined
+    const hasSignature = manifest._signature !== undefined && manifest._signature !== null && manifest._signature !== ''
+    const requireIntegrityStamp = !isNpmPackage || !input.allowUnstampedCommunity || hasFileMap || hasSignature
+
     validatePackagedDevMode(manifest, violations)
+
+    if (isNpmPackage) {
+      validateNpmPackageMetadata(input, manifest, violations)
+    }
 
     if (!input.entries) {
       addViolation(violations, 'PLUGIN_PACKAGE_ENTRIES_REQUIRED', 'entries')
@@ -542,7 +665,14 @@ export function validatePluginPackagePolicy(
         )
       }
 
-      validateFileMap(manifest, entries, violations)
+      if (isNpmPackage) {
+        validateNpmPackageEntries(entries, regularFiles, violations)
+      }
+
+      if (requireIntegrityStamp) {
+        validateFileMap(manifest, entries, violations)
+      }
+
       inventory = {
         ...(input.archiveSize === undefined ? {} : { archiveBytes: input.archiveSize }),
         entryCount: entries.length,
@@ -553,12 +683,14 @@ export function validatePluginPackagePolicy(
       }
     }
 
-    const signature = manifest._signature
-    if (signature === undefined || signature === null || signature === '') {
-      addViolation(violations, 'PLUGIN_PACKAGE_SIGNATURE_REQUIRED', 'manifest._signature')
-    }
-    else if (typeof signature !== 'string' || !signature.trim()) {
-      addViolation(violations, 'PLUGIN_PACKAGE_SIGNATURE_INVALID', 'manifest._signature')
+    if (requireIntegrityStamp) {
+      const signature = manifest._signature
+      if (signature === undefined || signature === null || signature === '') {
+        addViolation(violations, 'PLUGIN_PACKAGE_SIGNATURE_REQUIRED', 'manifest._signature')
+      }
+      else if (typeof signature !== 'string' || !signature.trim()) {
+        addViolation(violations, 'PLUGIN_PACKAGE_SIGNATURE_INVALID', 'manifest._signature')
+      }
     }
 
     if (input.archiveSize !== undefined) {

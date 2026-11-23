@@ -1,4 +1,5 @@
 import type { IManifest } from '..'
+import type { NpmRegistryUrlOptions, TuffNpmPackageIcon, TuffNpmPackageMetadata } from '../npm-contract'
 import type {
   PluginInstallRequest,
   PluginInstallResult,
@@ -8,11 +9,21 @@ import type {
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
 import { networkClient } from '../../network'
+import {
+  DEFAULT_NPM_REGISTRY_URL,
+  encodeNpmPackagePath,
+  extractTuffPackageMetadata,
+  hasTuffNpmDiscoveryKeyword,
+  inferPluginNameFromNpmPackage,
+  isOfficialNpmPluginPackageName,
+  isTuffNpmPluginPackageName,
+  NPM_ABBREVIATED_PACKUMENT_ACCEPT,
+  NPM_PLUGIN_CANONICAL_KEYWORD,
+  parseNpmPluginSource,
+  resolveNpmRegistryUrl,
+} from '../npm-contract'
 import { PluginProviderType } from './types'
 
-const NPM_REGISTRY = 'https://registry.npmjs.org'
-const TUFF_PLUGIN_PREFIX = 'tuff-plugin-'
-const TUFF_PLUGIN_SCOPE = '@tuff/'
 const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
 
 export interface NpmPackageInfo {
@@ -22,15 +33,15 @@ export interface NpmPackageInfo {
   author?: string | { name: string, email?: string }
   main?: string
   keywords?: string[]
-  dist: {
+  homepage?: string
+  dist?: {
     tarball: string
-    shasum: string
+    shasum?: string
     integrity?: string
+    unpackedSize?: number
   }
-  tuff?: {
-    icon?: string
-    activationKeywords?: string[]
-  }
+  tuff?: TuffNpmPackageMetadata | Record<string, unknown>
+  tuffPlugin?: Record<string, unknown>
 }
 
 export interface NpmPackageVersions {
@@ -42,96 +53,73 @@ export interface NpmPackageVersions {
   'versions': Record<string, NpmPackageInfo>
 }
 
-/**
- * Parse NPM source string to extract package name and optional version
- * Formats:
- * - "npm:package-name"
- * - "npm:package-name@version"
- * - "npm:@scope/package-name"
- * - "npm:@scope/package-name@version"
- * - "tuff-plugin-xxx" (when hintType is NPM)
- * - "@tuff/xxx" (when hintType is NPM)
- */
-function parseNpmSource(source: string): { packageName: string, version?: string } | null {
-  const npmMatch = source.match(/^npm:(@?[a-z0-9][\w\-.]*(?:\/[a-z0-9][\w\-.]*)?)(?:@(.+))?$/i)
-  if (npmMatch) {
-    const packageName = npmMatch[1]
-    if (!packageName)
-      return null
-    const version = npmMatch[2]
-    return version ? { packageName, version } : { packageName }
-  }
-
-  const scopedMatch = source.match(/^(@tuff\/[a-z0-9][\w\-.]*)(?:@(.+))?$/i)
-  if (scopedMatch) {
-    const packageName = scopedMatch[1]
-    if (!packageName)
-      return null
-    const version = scopedMatch[2]
-    return version ? { packageName, version } : { packageName }
-  }
-
-  const prefixMatch = source.match(/^(tuff-plugin-[a-z0-9][\w\-.]*)(?:@(.+))?$/i)
-  if (prefixMatch) {
-    const packageName = prefixMatch[1]
-    if (!packageName)
-      return null
-    const version = prefixMatch[2]
-    return version ? { packageName, version } : { packageName }
-  }
-
-  return null
+export interface NpmProviderSearchOptions {
+  scope?: string
+  discoveryKeyword?: string
+  registry?: string
 }
 
-/**
- * Check if a package name looks like a Tuff plugin
- */
-function isTuffPluginPackage(name: string): boolean {
-  return name.startsWith(TUFF_PLUGIN_PREFIX) || name.startsWith(TUFF_PLUGIN_SCOPE)
+function resolveIconString(icon: string | TuffNpmPackageIcon | undefined): string | undefined {
+  if (!icon)
+    return undefined
+  return typeof icon === 'string' ? icon : icon.value
 }
 
 export class NpmProvider implements PluginProvider {
   readonly type = PluginProviderType.NPM
   private registry: string
+  private registryOptions: NpmRegistryUrlOptions
 
-  constructor(registry: string = NPM_REGISTRY) {
-    this.registry = registry.replace(/\/$/, '')
+  constructor(
+    registry: string = DEFAULT_NPM_REGISTRY_URL,
+    options: NpmRegistryUrlOptions = {},
+  ) {
+    this.registryOptions = options
+    this.registry = resolveNpmRegistryUrl([registry], options)
+  }
+
+  getRegistryUrl(): string {
+    return this.registry
   }
 
   canHandle(request: PluginInstallRequest): boolean {
-    if (request.hintType === PluginProviderType.NPM) {
-      return parseNpmSource(request.source) !== null
-    }
-
-    if (request.source.startsWith('npm:')) {
-      return true
-    }
-
-    const parsed = parseNpmSource(request.source)
-    return parsed !== null && isTuffPluginPackage(parsed.packageName)
+    return parseNpmPluginSource(request.source, {
+      allowAnyBarePackageName: request.hintType === PluginProviderType.NPM,
+    }) !== null
   }
 
   async install(
     request: PluginInstallRequest,
     context?: PluginProviderContext,
   ): Promise<PluginInstallResult> {
-    const parsed = parseNpmSource(request.source)
+    const parsed = parseNpmPluginSource(request.source, {
+      allowAnyBarePackageName: request.hintType === PluginProviderType.NPM,
+    })
     if (!parsed) {
       throw new Error(`Invalid NPM source format: ${request.source}`)
     }
 
-    const { packageName, version } = parsed
-    const packageInfo = await this.getPackageInfo(packageName, version)
+    const requestRegistry = typeof request.metadata?.registry === 'string'
+      ? request.metadata.registry
+      : undefined
+    const registry = resolveNpmRegistryUrl([requestRegistry, this.registry], this.registryOptions)
+
+    const { packageName, spec } = parsed
+    const packageInfo = await this.getPackageInfo(packageName, spec, registry)
 
     if (!packageInfo) {
       throw new Error(`Package not found: ${packageName}`)
     }
 
-    const tarballUrl = packageInfo.dist.tarball
+    const tarballUrl = packageInfo.dist?.tarball
+    if (!tarballUrl) {
+      throw new Error(`Package tarball unavailable: ${packageName}@${packageInfo.version}`)
+    }
+
     const downloadRes = await networkClient.request<ArrayBuffer>({
       method: 'GET',
       url: tarballUrl,
-      responseType: 'arrayBuffer'
+      responseType: 'arrayBuffer',
     })
     const arrayBuffer = downloadRes.data
     const tempDir = context?.tempDir ?? '/tmp'
@@ -147,29 +135,37 @@ export class NpmProvider implements PluginProvider {
     const authorName = typeof packageInfo.author === 'string'
       ? packageInfo.author
       : packageInfo.author?.name ?? 'Unknown'
+    const tuffMeta = extractTuffPackageMetadata(packageInfo)
 
     const manifest: IManifest = {
-      id: packageInfo.name,
-      name: packageInfo.name.replace(TUFF_PLUGIN_PREFIX, '').replace(TUFF_PLUGIN_SCOPE, ''),
+      id: tuffMeta?.id ?? packageInfo.name,
+      name: tuffMeta?.name ?? inferPluginNameFromNpmPackage(packageInfo.name) ?? packageInfo.name,
       version: packageInfo.version,
+      ...(tuffMeta?.sdkapi !== undefined ? { sdkapi: tuffMeta.sdkapi } : {}),
+      ...(tuffMeta?.category ? { category: tuffMeta.category } : {}),
       description: packageInfo.description ?? '',
       author: authorName,
       main: packageInfo.main ?? 'index.js',
-      icon: packageInfo.tuff?.icon,
-      activationKeywords: packageInfo.tuff?.activationKeywords ?? packageInfo.keywords,
+      icon: resolveIconString(tuffMeta?.icon),
+      activationKeywords: tuffMeta?.activationKeywords ?? packageInfo.keywords,
     }
 
     return {
       provider: PluginProviderType.NPM,
       filePath,
-      official: packageName.startsWith(TUFF_PLUGIN_SCOPE),
+      // Naming scope alone never confers cryptographic official trust; Nexus attestation is required.
+      official: false,
       manifest,
       metadata: {
         packageName: packageInfo.name,
         version: packageInfo.version,
+        ...(spec ? { requestedSpec: spec } : {}),
+        registry,
+        officialScope: isOfficialNpmPluginPackageName(packageInfo.name),
         tarball: tarballUrl,
-        shasum: packageInfo.dist.shasum,
-        integrity: packageInfo.dist.integrity,
+        ...(packageInfo.dist?.shasum ? { shasum: packageInfo.dist.shasum } : {}),
+        ...(packageInfo.dist?.integrity ? { integrity: packageInfo.dist.integrity } : {}),
+        ...(tuffMeta ? { tuff: tuffMeta } : {}),
       },
     }
   }
@@ -177,12 +173,21 @@ export class NpmProvider implements PluginProvider {
   /**
    * Get package info from npm registry
    */
-  async getPackageInfo(packageName: string, version?: string): Promise<NpmPackageInfo | null> {
-    const encodedName = encodeURIComponent(packageName).replace('%40', '@')
+  async getPackageInfo(
+    packageName: string,
+    versionOrSpec?: string,
+    registryOverride?: string,
+  ): Promise<NpmPackageInfo | null> {
+    const encodedName = encodeNpmPackagePath(packageName)
+    const registry = resolveNpmRegistryUrl([registryOverride, this.registry], this.registryOptions)
+
     const res = await networkClient.request<NpmPackageVersions>({
       method: 'GET',
-      url: `${this.registry}/${encodedName}`,
-      validateStatus: ALL_HTTP_STATUS
+      url: `${registry}/${encodedName}`,
+      headers: {
+        Accept: NPM_ABBREVIATED_PACKUMENT_ACCEPT,
+      },
+      validateStatus: ALL_HTTP_STATUS,
     })
 
     if (res.status < 200 || res.status >= 300) {
@@ -192,44 +197,59 @@ export class NpmProvider implements PluginProvider {
     }
 
     const data = res.data
-    const targetVersion = version ?? data['dist-tags'].latest
+    const distTags = data['dist-tags'] ?? {}
+    const targetVersion = !versionOrSpec
+      ? distTags.latest
+      : distTags[versionOrSpec] ?? versionOrSpec
 
-    return data.versions[targetVersion] ?? null
+    if (!targetVersion)
+      return null
+
+    return data.versions?.[targetVersion] ?? null
   }
 
   /**
    * Search for Tuff plugins on npm
    */
-  async searchPlugins(keyword?: string): Promise<NpmPackageInfo[]> {
+  async searchPlugins(
+    keyword?: string,
+    options: NpmProviderSearchOptions = {},
+  ): Promise<NpmPackageInfo[]> {
+    const registry = resolveNpmRegistryUrl([options.registry, this.registry], this.registryOptions)
+    const discoveryKeyword = options.discoveryKeyword?.trim() || NPM_PLUGIN_CANONICAL_KEYWORD
+    const scope = options.scope?.trim().replace(/^@/, '')
     const searchTerms = [
-      `keywords:tuff-plugin`,
-      keyword ? `${keyword}` : '',
-    ].filter(Boolean).join('+')
+      scope ? `scope:${scope}` : '',
+      `keywords:${discoveryKeyword}`,
+      keyword?.trim() ?? '',
+    ].filter(Boolean).join(' ')
 
     const res = await networkClient.request<{
-      objects: Array<{ package: NpmPackageInfo }>
+      objects?: Array<{ package: NpmPackageInfo }>
     }>({
       method: 'GET',
-      url: `${this.registry}/-/v1/search?text=${encodeURIComponent(searchTerms)}&size=100`,
-      validateStatus: ALL_HTTP_STATUS
+      url: `${registry}/-/v1/search?text=${encodeURIComponent(searchTerms)}&size=100`,
+      validateStatus: ALL_HTTP_STATUS,
     })
 
     if (res.status < 200 || res.status >= 300) {
       throw new Error(`Failed to search packages: HTTP ${res.status}`)
     }
 
-    const data = res.data
-
-    return data.objects
+    const objects = Array.isArray(res.data?.objects) ? res.data.objects : []
+    return objects
       .map(obj => obj.package)
-      .filter(pkg => isTuffPluginPackage(pkg.name))
+      .filter(pkg =>
+        Boolean(pkg?.name)
+        && (isTuffNpmPluginPackageName(pkg.name) || hasTuffNpmDiscoveryKeyword(pkg.keywords)),
+      )
   }
 
   /**
    * List all available Tuff plugins from npm
    */
-  async listPlugins(): Promise<NpmPackageInfo[]> {
-    return this.searchPlugins()
+  async listPlugins(options: NpmProviderSearchOptions = {}): Promise<NpmPackageInfo[]> {
+    return this.searchPlugins(undefined, options)
   }
 }
 
