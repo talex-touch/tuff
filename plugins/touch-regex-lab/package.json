@@ -1,0 +1,68 @@
+{
+  "author": "TalexTouch Team",
+  "dependencies": {},
+  "description": "Interactive Regex Studio for Tuff: capture-group inspector, replace preview, ReDoS-safe matcher, and curated pattern library",
+  "engines": {
+    "tuff": ">=261011"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./manifest.json": "./manifest.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "manifest.json",
+    "index.js",
+    "assets/",
+    "README.md"
+  ],
+  "keywords": [
+    "tuff-plugin",
+    "developer",
+    "regex",
+    "regexp",
+    "pattern",
+    "redos"
+  ],
+  "license": "MIT",
+  "main": "./index.js",
+  "name": "@talex-touch/touch-regex-lab-plugin",
+  "packageManager": "pnpm@11.24.0",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node ../../packages/tuff-cli/bin/tuff.js builder",
+    "test": "node --test index.test.cjs"
+  },
+  "tuff": {
+    "category": "developer",
+    "displayName": {
+      "en": "Regex Lab",
+      "zh": "正则实验室"
+    },
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "id": "com.tuffex.touch-regex-lab",
+    "manifest": "./manifest.json",
+    "name": "touch-regex-lab",
+    "permissions": {
+      "optional": [
+        "clipboard.write"
+      ],
+      "required": []
+    },
+    "platforms": {
+      "darwin": true,
+      "linux": true,
+      "win32": true
+    },
+    "schemaVersion": 1,
+    "sdkapi": 261011,
+    "surface": "prelude"
+  },
+  "version": "1.0.0"
+}

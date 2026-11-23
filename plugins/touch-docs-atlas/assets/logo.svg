@@ -1,0 +1,24 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="atlasBg" x1="12" y1="8" x2="116" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="55%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#134E4A"/>
+    </linearGradient>
+    <linearGradient id="atlasCompass" x1="28" y1="24" x2="100" y2="104" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#2DD4BF"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#atlasBg)"/>
+  <!-- Open atlas / handbook cover -->
+  <path d="M24 34C24 29.5817 27.5817 26 32 26H56C60.4183 26 64 29.5817 64 34V96C64 91.5817 60.4183 88 56 88H32C27.5817 88 24 91.5817 24 96V34Z" fill="#0B1120" stroke="#38BDF8" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M104 34C104 29.5817 100.418 26 96 26H72C67.5817 26 64 29.5817 64 34V96C64 91.5817 67.5817 88 72 88H96C100.418 88 104 91.5817 104 96V34Z" fill="#0B1120" stroke="#2DD4BF" stroke-width="4" stroke-linejoin="round"/>
+  <!-- Left page code lines -->
+  <path d="M35 44H53M35 56H49M35 68H53" stroke="#94A3B8" stroke-width="4.5" stroke-linecap="round"/>
+  <!-- Right page compass diamond -->
+  <polygon points="84,42 93,59 84,76 75,59" fill="url(#atlasCompass)"/>
+  <circle cx="84" cy="59" r="3.5" fill="#0F172A"/>
+  <!-- Bottom bookmark accent -->
+  <path d="M64 96V106" stroke="#FBBF24" stroke-width="5" stroke-linecap="round"/>
+</svg>

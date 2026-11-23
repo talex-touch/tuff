@@ -1,0 +1,25 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="regexBg" x1="12" y1="8" x2="116" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E1B4B"/>
+      <stop offset="55%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#042F2E"/>
+    </linearGradient>
+    <linearGradient id="regexAccent" x1="28" y1="30" x2="100" y2="98" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#A78BFA"/>
+      <stop offset="55%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#regexBg)"/>
+  <rect x="14" y="14" width="100" height="100" rx="20" fill="#0B1120" fill-opacity="0.72" stroke="url(#regexAccent)" stroke-opacity="0.45" stroke-width="2.5"/>
+  <!-- Leading slash -->
+  <path d="M40 90L54 38" stroke="#A78BFA" stroke-width="7.5" stroke-linecap="round"/>
+  <!-- Trailing slash -->
+  <path d="M84 90L98 38" stroke="#34D399" stroke-width="7.5" stroke-linecap="round"/>
+  <!-- Center dot and star/quantifier motif (.*) -->
+  <circle cx="57" cy="74" r="5.5" fill="#38BDF8"/>
+  <path d="M72 47V69M62.5 52.5L81.5 63.5M81.5 52.5L62.5 63.5" stroke="#FBBF24" stroke-width="5.5" stroke-linecap="round"/>
+  <!-- Subtle flag badge dot -->
+  <circle cx="100" cy="86" r="4.5" fill="#34D399"/>
+</svg>
