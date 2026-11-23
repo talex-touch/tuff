@@ -4,7 +4,7 @@
 <script setup>
 import MusicWaving from '@comp/icon/MusicWaving.vue'
 import Singers from '@comp/music/song/Singers.vue'
-import DayJS from 'dayjs'
+import { formatDuration } from '@modules/utils'
 import { onMounted, ref } from 'vue'
 
 defineOptions({
@@ -38,7 +38,7 @@ const props = defineProps({
 const time = ref('00:00')
 
 onMounted(() => {
-  time.value = DayJS(props.song.dt).format('mm:ss')
+  time.value = formatDuration(props.song?.dt)
 })
 </script>
 

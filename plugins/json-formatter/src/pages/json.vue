@@ -4,7 +4,7 @@ import type { Component } from 'vue'
 import { useClipboard } from '@talex-touch/utils/plugin/sdk/clipboard'
 import { isDark } from '~/composables/dark'
 import { forceMaxCoreBox, useCoreBoxInput } from '~/composables/useCoreBoxInput'
-import { useJsonFormatter } from '~/composables/useJsonFormatter'
+import { formatClipboardError, useJsonFormatter } from '~/composables/useJsonFormatter'
 import { waitForMonacoReady } from '~/modules/monaco'
 
 defineOptions({
@@ -21,9 +21,12 @@ const {
   queryExpression,
   errorMessage,
   isValidJson,
+  isDiffMode,
   showToast,
   toastMessage,
   toastType,
+  consumeSkipAutoExecute,
+  showNotification,
   formatJson,
   minifyJson,
   validateJson,
@@ -187,21 +190,24 @@ function onEditorMount(editor: MonacoEditorNamespace.IStandaloneCodeEditor) {
         ])
       }
       catch (e) {
-        console.warn('Paste failed:', e)
+        showNotification(formatClipboardError(e, 'read'), 'error')
       }
     },
   })
 }
 
-const outputEditorOptions = {
+const outputEditorOptions = computed(() => ({
   ...editorOptions,
-  readOnly: true,
-}
+  readOnly: !isDiffMode.value,
+}))
 
 // Watch input changes for auto-execution
 watch(
   [inputJson, queryExpression],
   () => {
+    if (consumeSkipAutoExecute() || isDiffMode.value) {
+      return
+    }
     if (inputJson.value.trim()) {
       executeQuery()
     }
@@ -303,9 +309,15 @@ onUnmounted(() => {
           <div i-carbon-flow />
           <span class="btn-text">扁平化</span>
         </button>
-        <button class="toolbar-btn group" @click="diffJson">
+        <button
+          class="toolbar-btn group"
+          :class="{ 'is-active': isDiffMode }"
+          :aria-pressed="isDiffMode"
+          :title="isDiffMode ? '执行左右 JSON 差异对比' : '对比左右两侧 JSON（首次点击开启右侧编辑）'"
+          @click="diffJson"
+        >
           <div i-carbon-compare />
-          <span class="btn-text">对比</span>
+          <span class="btn-text">{{ isDiffMode ? '执行对比' : '对比' }}</span>
         </button>
       </div>
 

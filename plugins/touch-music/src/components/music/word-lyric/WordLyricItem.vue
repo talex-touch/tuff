@@ -3,7 +3,7 @@
 
 <script setup>
 import { musicManager } from '@modules/music'
-import DayJS from 'dayjs'
+import { formatDuration } from '@modules/utils'
 import gsap from 'gsap'
 import { computed, inject, onMounted, reactive, ref, watch } from 'vue'
 
@@ -138,7 +138,7 @@ watch(() => props.lyric, () => {
     </div>
 
     <div class="WordLyricItem-Time">
-      {{ DayJS().startOf('day').add(lyricOptions.time.start_time, 'millisecond').format('mm:ss:SSS') }}
+      {{ formatDuration(lyricOptions.time.start_time, true) }}
     </div>
   </div>
 </template>

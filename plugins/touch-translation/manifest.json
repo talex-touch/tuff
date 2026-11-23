@@ -13,8 +13,8 @@
   "main": "index.js",
   "dev": {
     "enable": false,
-    "address": "http://localhost:3733/",
-    "source": true
+    "address": "",
+    "source": false
   },
   "permissions": {
     "required": ["network.internet", "intelligence.basic", "storage.plugin"],

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TranslationResult } from '../types/translation'
 import { useClipboard } from '@talex-touch/utils/plugin/sdk/clipboard'
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 
 interface Props {
   providerId: string
@@ -30,18 +30,74 @@ catch {
   clipboard = null
 }
 
+const copyFeedback = ref<{ type: 'success' | 'error', message: string } | null>(null)
+let feedbackTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearFeedbackTimer() {
+  if (feedbackTimer !== null) {
+    clearTimeout(feedbackTimer)
+    feedbackTimer = null
+  }
+}
+
+function showCopyFeedback(type: 'success' | 'error', message: string) {
+  clearFeedbackTimer()
+  copyFeedback.value = { type, message }
+  feedbackTimer = setTimeout(() => {
+    feedbackTimer = null
+    copyFeedback.value = null
+  }, 3000)
+}
+
+function formatClipboardWriteError(err: unknown): string {
+  const code = typeof (err as { code?: unknown } | null)?.code === 'string'
+    ? String((err as { code?: string }).code).toUpperCase()
+    : ''
+  const message = err instanceof Error ? err.message.toLowerCase() : String(err ?? '').toLowerCase()
+
+  if (
+    code.includes('PERMISSION_UNAVAILABLE')
+    || code.includes('PERMISSION_SDK_UNAVAILABLE')
+    || message.includes('permission-unavailable')
+    || message.includes('permission-sdk-unavailable')
+    || message.includes('permission service unavailable')
+  ) {
+    return '剪贴板权限服务暂不可用，请稍后重试'
+  }
+
+  if (
+    code.includes('PERMISSION_DENIED')
+    || code.includes('PERMISSION')
+    || message.includes('permission-denied')
+    || message.includes('permission denied')
+    || message.includes('not granted')
+  ) {
+    return '未授予剪贴板写入权限（clipboard.write）'
+  }
+
+  return '复制失败，请稍后重试'
+}
+
 async function copyResult() {
-  if (!props.result?.text || !clipboard) {
+  if (!props.result?.text) {
+    return
+  }
+
+  if (!clipboard) {
+    showCopyFeedback('error', '剪贴板服务不可用，无法复制')
     return
   }
 
   try {
     await clipboard.writeText(props.result.text)
+    showCopyFeedback('success', '已复制到剪贴板')
   }
   catch (err) {
-    void err
+    showCopyFeedback('error', formatClipboardWriteError(err))
   }
 }
+
+onBeforeUnmount(clearFeedbackTimer)
 
 const providerTitle = computed(() => {
   return props.providerName || props.result?.provider || props.providerId
@@ -77,7 +133,7 @@ const providerDetail = computed(() => {
           v-if="error"
           class="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-red-500"
           title="重试翻译"
-          @click="$emit('retry', providerId)"
+          @click="emit('retry', providerId)"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -94,6 +150,18 @@ const providerDetail = computed(() => {
           </svg>
         </button>
       </div>
+    </div>
+
+    <div
+      v-if="copyFeedback"
+      data-testid="copy-feedback"
+      role="status"
+      class="mb-2 rounded px-2 py-1 text-xs"
+      :class="copyFeedback.type === 'error'
+        ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300'
+        : 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300'"
+    >
+      {{ copyFeedback.message }}
     </div>
 
     <!-- 翻译结果 -->

@@ -1,6 +1,6 @@
 import { axios } from '@modules/axios'
 import { NormalLyric, WordLyric } from '@modules/lyric'
-import DayJS from 'dayjs'
+import { formatDuration } from '@modules/utils'
 import { Howl } from 'howler'
 import { reactive } from 'vue'
 
@@ -103,7 +103,7 @@ export class SingleSongManager {
         this._flag = 1
 
         this.progress.total = this.audio.duration()
-        this.progress.total_time = DayJS().startOf('day').add(this.progress.total, 'second').format('mm:ss')
+        this.progress.total_time = formatDuration(this.progress.total * 1000)
         this.progress.now_lyric = this.detail.song.name
 
         // global.$asyncMainProcessMessage('update-title', `正在播放：${this.detail.song.name} - ${this.detail.song.ar[0].name}`)
@@ -127,7 +127,7 @@ export class SingleSongManager {
 
           if (that._flag === 1) {
             that.progress.current = that.audio.seek()
-            that.progress.now_time = DayJS().startOf('day').add(that.progress.current, 'second').format('mm:ss:SSS')
+            that.progress.now_time = formatDuration(that.progress.current * 1000, true)
 
             const _lyric = that.lyric.lyric.get(Math.floor(that.progress.current))
             if (_lyric && that.progress.now_lyric !== _lyric)

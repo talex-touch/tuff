@@ -1,28 +1,71 @@
 {
   "name": "@talex-touch/touch-music-plugin",
   "type": "module",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@11.24.0",
+  "description": "Cross-platform music search and playback plugin with word-by-word lyrics for Tuff.",
+  "keywords": [
+    "tuff-plugin",
+    "media",
+    "music",
+    "lyrics",
+    "player"
+  ],
   "scripts": {
+    "build": "vite build && node ../../packages/tuff-cli/bin/tuff.js builder",
     "dev": "vite",
-    "build": "vite build",
     "lint": "pnpm exec eslint --cache \"src/**/*.{js,ts,tsx,vue}\" \"vite.config.*\"",
     "lint:fix": "pnpm exec eslint --cache --fix \"src/**/*.{js,ts,tsx,vue}\" \"vite.config.*\"",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test index.test.cjs && vitest run"
   },
   "dependencies": {
     "@talex-touch/tuffex": "workspace:^",
-    "@types/howler": "^2.2.13",
-    "axios": "^1.20.0",
+    "@talex-touch/utils": "workspace:^",
     "gsap": "catalog:",
     "howler": "^2.2.4",
     "remixicon": "^4.9.1",
     "rgbaster": "^2.1.1",
-    "typescript": "^5.9.3",
     "vue": "catalog:frontend"
   },
   "devDependencies": {
+    "@types/howler": "^2.2.13",
     "@vitejs/plugin-vue": "^6.0.7",
-    "vite": "^7.3.6"
+    "@vue/test-utils": "^2.4.11",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "vitest": "^3.2.7"
+  },
+  "tuff": {
+    "category": "media",
+    "displayName": {
+      "en": "Touch Music",
+      "zh": "音乐"
+    },
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "id": "com.tuffex.music",
+    "manifest": "./manifest.json",
+    "name": "touch-music",
+    "permissions": {
+      "optional": [
+        "clipboard.write"
+      ],
+      "required": [
+        "network.internet"
+      ]
+    },
+    "platforms": {
+      "darwin": true,
+      "linux": true,
+      "win32": true
+    },
+    "schemaVersion": 1,
+    "sdkapi": 261011,
+    "surface": "webcontent"
   }
 }
