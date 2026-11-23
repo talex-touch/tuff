@@ -278,10 +278,16 @@ export function parsePsProcessList(stdout) {
 }
 
 function extractUserDataDirArg(args) {
-  const equalsMatch = args.match(/--user-data-dir=(?:"([^"]+)"|'([^']+)'|(\S+))/)
-  if (equalsMatch) return equalsMatch[1] || equalsMatch[2] || equalsMatch[3] || null
-  const spaceMatch = args.match(/--user-data-dir\s+(?:"([^"]+)"|'([^']+)'|(\S+))/)
-  if (spaceMatch) return spaceMatch[1] || spaceMatch[2] || spaceMatch[3] || null
+  const equalsMatch = args.match(/--user-data-dir=(?:"([^"]+)"|'([^']+)'|(.+?)(?=\s+--|$))/)
+  if (equalsMatch) {
+    const value = (equalsMatch[1] || equalsMatch[2] || equalsMatch[3] || '').trim()
+    return value || null
+  }
+  const spaceMatch = args.match(/--user-data-dir\s+(?:"([^"]+)"|'([^']+)'|(.+?)(?=\s+--|$))/)
+  if (spaceMatch) {
+    const value = (spaceMatch[1] || spaceMatch[2] || spaceMatch[3] || '').trim()
+    return value || null
+  }
   return null
 }
 
@@ -298,12 +304,20 @@ function isIsolatedTempProfile(userDataDir) {
 
 export function detectLiveDefaultInstances({
   psOutput = '',
+  psFailed = false,
+  psError = null,
   vitePortOpen = false,
   currentPid = process.pid
 } = {}) {
   const rows = parsePsProcessList(psOutput)
   const matches = []
   const reasons = new Set()
+
+  if (psFailed) {
+    reasons.add(
+      `Unable to inspect running processes via ps (failing closed${psError ? `: ${psError}` : ''})`
+    )
+  }
 
   for (const row of rows) {
     if (row.pid === currentPid) continue
@@ -782,22 +796,33 @@ export function parsePowermetricsTasksOutput(
 
     if (matchedTasks.length === 0 && !allTasksRow) continue
 
-    const totalEnergyImpact = roundNumber(
-      matchedTasks.reduce((sum, task) => sum + task.energyImpact, 0),
-      2
-    )
-    const totalCpuMsPerSec = roundNumber(
-      matchedTasks.reduce((sum, task) => sum + task.cpuMsPerSec, 0),
-      2
-    )
-    const totalIdleWakeupsPerSec = roundNumber(
-      matchedTasks.reduce((sum, task) => sum + (task.idleWakeupsPerSec ?? 0), 0),
-      2
-    )
+    const totalEnergyImpact =
+      matchedTasks.length > 0
+        ? roundNumber(
+            matchedTasks.reduce((sum, task) => sum + task.energyImpact, 0),
+            2
+          )
+        : null
+    const totalCpuMsPerSec =
+      matchedTasks.length > 0
+        ? roundNumber(
+            matchedTasks.reduce((sum, task) => sum + task.cpuMsPerSec, 0),
+            2
+          )
+        : null
+    const totalIdleWakeupsPerSec =
+      matchedTasks.length > 0
+        ? roundNumber(
+            matchedTasks.reduce((sum, task) => sum + (task.idleWakeupsPerSec ?? 0), 0),
+            2
+          )
+        : null
 
-    sampleEnergyTotals.push(totalEnergyImpact)
-    sampleCpuTotals.push(totalCpuMsPerSec)
-    sampleWakeupTotals.push(totalIdleWakeupsPerSec)
+    if (matchedTasks.length > 0) {
+      sampleEnergyTotals.push(totalEnergyImpact)
+      sampleCpuTotals.push(totalCpuMsPerSec)
+      sampleWakeupTotals.push(totalIdleWakeupsPerSec)
+    }
     if (allTasksRow) systemEnergyTotals.push(allTasksRow.energyImpact)
 
     samples.push({
@@ -813,6 +838,7 @@ export function parsePowermetricsTasksOutput(
 
   return {
     sampleCount: samples.length,
+    matchedSampleCount: sampleEnergyTotals.length,
     matchedTaskNames: [...matchedTaskNames].sort(),
     matchedPids: [...matchedPids].sort((a, b) => a - b),
     energyImpact: computeSummaryStats(sampleEnergyTotals, 2),
@@ -832,6 +858,41 @@ export function buildManualPowermetricsCommand({
   return `sudo powermetrics --samplers tasks -i ${intervalMs} -n ${sampleCount} > ${outputPath}`
 }
 
+function finalizeParsedPowermetrics(parsed, { source, inputPath, manualCommand }) {
+  if (parsed.sampleCount === 0) {
+    return {
+      status: 'parse-empty',
+      source,
+      inputPath,
+      reason:
+        source === 'file'
+          ? 'powermetrics input file contained no parseable Running tasks blocks'
+          : 'live powermetrics execution produced no parseable Running tasks blocks',
+      manualCommand,
+      parsed
+    }
+  }
+  if (parsed.matchedPids.length === 0) {
+    return {
+      status: 'no-matching-tasks',
+      source,
+      inputPath,
+      reason:
+        'powermetrics output contained Running tasks blocks, but zero tasks matched the target process filter/PIDs',
+      manualCommand,
+      parsed
+    }
+  }
+  return {
+    status: 'measured',
+    source,
+    inputPath,
+    reason: null,
+    manualCommand,
+    parsed
+  }
+}
+
 export async function collectPowermetricsEnergy(
   options,
   {
@@ -839,7 +900,8 @@ export async function collectPowermetricsEnergy(
     geteuid = typeof process.geteuid === 'function' ? () => process.geteuid() : () => 1000,
     readFileFn = readFile,
     execPowermetrics = runPowermetricsCommand,
-    targetPids = null
+    targetPids = null,
+    rawLiveOutput = null
   } = {}
 ) {
   const outputHint = options.outputDir
@@ -864,21 +926,17 @@ export async function collectPowermetricsEnergy(
   if (options.powermetricsInput) {
     const resolvedInput = path.resolve(options.powermetricsInput)
     const rawText = await readFileFn(resolvedInput, 'utf8')
+    // Offline powermetrics captures come from a prior run with different PIDs, so always
+    // match by processFilter rather than live child PIDs.
     const parsed = parsePowermetricsTasksOutput(rawText, {
       processFilter: options.processFilter,
-      targetPids
+      targetPids: null
     })
-    return {
-      status: parsed.sampleCount > 0 ? 'measured' : 'parse-empty',
+    return finalizeParsedPowermetrics(parsed, {
       source: 'file',
       inputPath: resolvedInput,
-      reason:
-        parsed.sampleCount > 0
-          ? null
-          : 'powermetrics input file contained no parseable Running tasks blocks',
-      manualCommand,
-      parsed
-    }
+      manualCommand
+    })
   }
 
   if (platform !== 'darwin') {
@@ -907,25 +965,22 @@ export async function collectPowermetricsEnergy(
     1,
     Math.round((options.idleSeconds * 1000) / options.powermetricsIntervalMs)
   )
-  const rawText = await execPowermetrics({
-    intervalMs: options.powermetricsIntervalMs,
-    sampleCount
-  })
+  const rawText =
+    typeof rawLiveOutput === 'string'
+      ? rawLiveOutput
+      : await execPowermetrics({
+          intervalMs: options.powermetricsIntervalMs,
+          sampleCount
+        })
   const parsed = parsePowermetricsTasksOutput(rawText, {
     processFilter: options.processFilter,
     targetPids
   })
-  return {
-    status: parsed.sampleCount > 0 ? 'measured' : 'parse-empty',
+  return finalizeParsedPowermetrics(parsed, {
     source: 'live-powermetrics',
     inputPath: null,
-    reason:
-      parsed.sampleCount > 0
-        ? null
-        : 'live powermetrics execution produced no parseable Running tasks blocks',
-    manualCommand,
-    parsed
-  }
+    manualCommand
+  })
 }
 
 async function runPowermetricsCommand({ intervalMs, sampleCount }) {
@@ -1219,12 +1274,24 @@ async function checkTcpPortOpen(port, host = '127.0.0.1', timeoutMs = 400) {
 }
 
 function readLocalPsOutput() {
-  if (process.platform === 'win32') return ''
+  if (process.platform === 'win32') {
+    return { ok: true, stdout: '', error: null }
+  }
   const result = spawnSync('ps', ['-A', '-o', 'pid=,ppid=,rss=,%cpu=,args='], {
     encoding: 'utf8',
     maxBuffer: 16 * 1024 * 1024
   })
-  return result.status === 0 ? result.stdout : ''
+  if (result.error) {
+    return { ok: false, stdout: '', error: result.error.message }
+  }
+  if (result.status !== 0) {
+    return {
+      ok: false,
+      stdout: '',
+      error: (result.stderr || `ps exited with code ${result.status}`).trim()
+    }
+  }
+  return { ok: true, stdout: result.stdout, error: null }
 }
 
 async function loadCdpTargets(remoteDebuggingUrl) {
@@ -1426,7 +1493,8 @@ async function sampleProcessMemoryOnce({ remoteDebuggingUrl, rootPid, processFil
     }
   }
 
-  const psRows = parsePsProcessList(readLocalPsOutput())
+  const psResult = readLocalPsOutput()
+  const psRows = parsePsProcessList(psResult.stdout)
   const selected = selectProcessTreeFromPs(psRows, { rootPid, processFilter })
   return normalizePsMemorySnapshot(selected, Date.now())
 }
@@ -1547,9 +1615,14 @@ export async function runProbe(options, deps = {}) {
   const checkLiveInstancesFn =
     deps.checkLiveInstances ??
     (async () => {
-      const psOutput = readLocalPsOutput()
+      const psResult = readLocalPsOutput()
       const vitePortOpen = await checkTcpPortOpen(DEFAULT_VITE_DEV_PORT)
-      return detectLiveDefaultInstances({ psOutput, vitePortOpen })
+      return detectLiveDefaultInstances({
+        psOutput: psResult.stdout,
+        psFailed: !psResult.ok,
+        psError: psResult.error,
+        vitePortOpen
+      })
     })
 
   const liveCheck = await checkLiveInstancesFn()
@@ -1596,10 +1669,22 @@ export async function runProbe(options, deps = {}) {
     const memorySamples = []
     const sampleMemoryFn = deps.sampleProcessMemoryOnce ?? sampleProcessMemoryOnce
     const idleDeadline = Date.now() + options.idleSeconds * 1000
-    const powermetricsPromise = collectPowermetricsEnergy(options, {
-      ...deps,
-      targetPids: child?.pid ? [child.pid] : null
-    })
+
+    const platform = deps.platform ?? process.platform
+    const geteuid =
+      deps.geteuid ?? (typeof process.geteuid === 'function' ? () => process.geteuid() : () => 1000)
+    const execPowermetrics = deps.execPowermetrics ?? runPowermetricsCommand
+    const shouldRunLivePowermetrics =
+      !options.powermetricsInput && platform === 'darwin' && geteuid() === 0
+    const livePowermetricsPromise = shouldRunLivePowermetrics
+      ? execPowermetrics({
+          intervalMs: options.powermetricsIntervalMs,
+          sampleCount: Math.max(
+            1,
+            Math.round((options.idleSeconds * 1000) / options.powermetricsIntervalMs)
+          )
+        })
+      : Promise.resolve(null)
 
     const maxSamples = Math.max(
       1,
@@ -1621,7 +1706,28 @@ export async function runProbe(options, deps = {}) {
       )
     }
 
-    const powermetrics = await powermetricsPromise
+    const rawLiveOutput = await livePowermetricsPromise
+    const observedPids = new Set()
+    for (const sample of memorySamples) {
+      for (const proc of sample.processes ?? []) {
+        if (Number.isInteger(proc.pid) && proc.pid > 0) observedPids.add(proc.pid)
+      }
+    }
+    if (child?.pid) {
+      observedPids.add(child.pid)
+      const psResult = readLocalPsOutput()
+      if (psResult.ok) {
+        const tree = selectProcessTreeFromPs(parsePsProcessList(psResult.stdout), {
+          rootPid: child.pid
+        })
+        for (const row of tree) observedPids.add(row.pid)
+      }
+    }
+    const powermetrics = await collectPowermetricsEnergy(options, {
+      ...deps,
+      rawLiveOutput,
+      targetPids: !options.powermetricsInput && observedPids.size > 0 ? [...observedPids] : null
+    })
     const memorySummary = aggregateProcessMemorySamples(memorySamples)
 
     const report = {

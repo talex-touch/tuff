@@ -140,6 +140,38 @@ describe('coreapp-energy-baseline-probe CLI validation & guards', () => {
       allowed: true
     })
   })
+
+  it('fails closed on main Electron process with unquoted macOS Application Support path and on ps failure', () => {
+    const psOutput = [
+      '  301     1 320000  1.2 /Users/dev/project/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron --user-data-dir=/Users/dev/Library/Application Support/@talex-touch/core-app --enable-features=Metal'
+    ].join('\n')
+
+    const liveCheck = detectLiveDefaultInstances({
+      psOutput,
+      vitePortOpen: false,
+      currentPid: 9999
+    })
+    expect(liveCheck.blocked).toBe(true)
+    expect(liveCheck.matches).toHaveLength(1)
+    expect(liveCheck.reasons[0]).toContain(
+      '/Users/dev/Library/Application Support/@talex-touch/core-app'
+    )
+    expect(() => assertSafeToLaunchOrAttach(parseArgs([]), liveCheck)).toThrow(
+      /Refusing to launch Electron/
+    )
+
+    const psFailedCheck = detectLiveDefaultInstances({
+      psOutput: '',
+      psFailed: true,
+      psError: 'EPERM',
+      vitePortOpen: false
+    })
+    expect(psFailedCheck.blocked).toBe(true)
+    expect(psFailedCheck.reasons[0]).toContain('Unable to inspect running processes via ps')
+    expect(() => assertSafeToLaunchOrAttach(parseArgs([]), psFailedCheck)).toThrow(
+      /Refusing to launch Electron/
+    )
+  })
 })
 
 describe('Metric 2 — powermetrics --samplers tasks parsing and sudo fallback', () => {
@@ -200,7 +232,7 @@ ALL_TASKS                          -2     40.00     0.00   0.00                2
     expect(result.parsed).toBeNull()
   })
 
-  it('imports and parses --powermetricsInput file cleanly without needing sudo', async () => {
+  it('imports and parses --powermetricsInput file cleanly without needing sudo and ignores live targetPids', async () => {
     const dir = await makeTempDir('tuff-pm-')
     const inputPath = path.join(dir, 'powermetrics.txt')
     await writeFile(inputPath, samplePowermetrics, 'utf8')
@@ -208,12 +240,98 @@ ALL_TASKS                          -2     40.00     0.00   0.00                2
     const options = parseArgs(['--powermetricsInput', inputPath])
     const result = await collectPowermetricsEnergy(options, {
       platform: 'darwin',
-      geteuid: () => 501
+      geteuid: () => 501,
+      targetPids: [99999]
     })
     expect(result.status).toBe('measured')
     expect(result.source).toBe('file')
     expect(result.parsed?.sampleCount).toBe(2)
+    expect(result.parsed?.matchedPids).toEqual([1010, 1011, 1012])
     expect(result.parsed?.energyImpact.max).toBe(20)
+  })
+
+  it('returns status no-matching-tasks and baselineClaimable false when capture has only ALL_TASKS and unrelated tasks', async () => {
+    const unrelatedCapture = `
+*** Running tasks ***
+
+Name                               ID     CPU ms/s  User%  Deadlines (<2 ms, 2-5 ms)  Wakeups (Intr, Pkg idle)  Energy Impact
+Safari                             2020   15.00     85.00  0.00   0.00                6.00   2.00               18.00
+WindowServer                       111    12.00     60.00  0.00   0.00                8.00   3.00               14.00
+ALL_TASKS                          -2     50.00     70.00  0.00   0.00                25.00  9.00               60.00
+`
+    const dir = await makeTempDir('tuff-pm-empty-')
+    const inputPath = path.join(dir, 'powermetrics-unrelated.txt')
+    await writeFile(inputPath, unrelatedCapture, 'utf8')
+
+    const result = await collectPowermetricsEnergy(parseArgs(['--powermetricsInput', inputPath]), {
+      platform: 'darwin',
+      geteuid: () => 501
+    })
+    expect(result.status).toBe('no-matching-tasks')
+    expect(result.parsed?.sampleCount).toBe(1)
+    expect(result.parsed?.matchedPids).toEqual([])
+    expect(result.parsed?.energyImpact.median).toBeNull()
+
+    const readiness = evaluateBaselineReadiness({
+      mode: 'isolated-launch',
+      dryRun: false,
+      metrics: {
+        coldStart: { status: 'measured' },
+        idleEnergy: {
+          powermetrics: result,
+          activityMonitor: { status: 'imported' }
+        },
+        processMemory: { status: 'measured' }
+      }
+    })
+    expect(readiness.baselineClaimable).toBe(false)
+    expect(readiness.missingBaselineRequirements).toContain(
+      "Metric 2a (powermetrics) status is 'no-matching-tasks', expected 'measured'"
+    )
+  })
+
+  it('matches Browser, GPU, Renderer, and Utility PIDs in live root powermetrics run', async () => {
+    const report = await runProbe(
+      parseArgs([
+        '--attachOnly',
+        '--remoteDebuggingUrl',
+        'http://127.0.0.1:9712/json/list',
+        '--idleSeconds',
+        '0',
+        '--activityMonitorEnergyImpact',
+        '1.1'
+      ]),
+      {
+        platform: 'darwin',
+        geteuid: () => 0,
+        skipCdpWait: true,
+        checkLiveInstances: async () => ({ blocked: false, reasons: [], matches: [] }),
+        execPowermetrics: async () => samplePowermetrics,
+        sampleProcessMemoryOnce: async () =>
+          normalizeAppMetricsReport({
+            processes: [
+              {
+                pid: 1010,
+                electronType: 'Browser',
+                workingSetBytes: 200 * 1024 * 1024,
+                cpuPercent: 1
+              },
+              {
+                pid: 1011,
+                electronType: 'Tab',
+                workingSetBytes: 100 * 1024 * 1024,
+                cpuPercent: 0.5
+              },
+              { pid: 1012, electronType: 'GPU', workingSetBytes: 80 * 1024 * 1024, cpuPercent: 0.3 }
+            ]
+          })
+      }
+    )
+
+    expect(report.metrics.idleEnergy.powermetrics.status).toBe('measured')
+    expect(report.metrics.idleEnergy.powermetrics.source).toBe('live-powermetrics')
+    expect(report.metrics.idleEnergy.powermetrics.parsed?.matchedPids).toEqual([1010, 1011, 1012])
+    expect(report.metrics.idleEnergy.powermetrics.parsed?.energyImpact.max).toBe(20)
   })
 
   it('reports skipped-non-macos on Linux/Windows hosts without input file', async () => {
