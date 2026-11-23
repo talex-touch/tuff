@@ -61,10 +61,32 @@ const tuffexComponentTypePathEntry = useTuffexSource
   ? tuffexComponentSourceTypePathEntry
   : tuffexComponentDistTypePathEntry
 const tuffexComponentStyleTypePathEntry = resolve(tuffexDistRoot, '*/style.css')
-const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
+const tuffexUtilsSourceRoot = resolve(currentDir, '../../packages/tuffex/packages/utils')
+const tuffexUtilsEntry = resolve(tuffexUtilsSourceRoot, 'index.ts')
 const tuffexDistUtilsEntry = useTuffexSource
   ? tuffexUtilsEntry
   : resolve(tuffexDistRoot, 'utils/index.js')
+const tuffexUtilsSubpathEntry = useTuffexSource
+  ? `${tuffexUtilsSourceRoot}/$1.ts`
+  : `${resolve(tuffexDistRoot, 'utils/internal')}/$1.js`
+const tuffexUtilsSubpathTypePathEntry = useTuffexSource
+  ? `${tuffexUtilsSourceRoot}/*.ts`
+  : `${resolve(tuffexDistRoot, 'packages/tuffex/packages/utils')}/*.d.ts`
+const tuffexUtilsDirectNitroAliases = Object.fromEntries(
+  [
+    'form-host',
+    'z-index-manager',
+    'use-indicator-box',
+    'use-jelly-indicator',
+    'animation/jelly',
+    'animation/spring',
+  ].map(subpath => [
+    `@talex-touch/tuffex/utils/${subpath}`,
+    useTuffexSource
+      ? resolve(tuffexUtilsSourceRoot, `${subpath}.ts`)
+      : resolve(tuffexDistRoot, `utils/internal/${subpath}.js`),
+  ]),
+)
 const requireFromConfig = createRequire(import.meta.url)
 
 /**
@@ -501,6 +523,7 @@ export default defineNuxtConfig({
     alias: {
       '@panva/hkdf': hkdfCompatEntry,
       'next-auth/core': nextAuthCoreEntry,
+      ...tuffexUtilsDirectNitroAliases,
       '@talex-touch/tuffex/utils': tuffexDistUtilsEntry,
     },
     preset: isDev && !useCloudflareDev ? 'node-server' : 'cloudflare-pages',
@@ -583,6 +606,11 @@ export default defineNuxtConfig({
       chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
+          // Fold sub-12 KB automatic client chunks into importers so routes do not fan out into
+          // dozens of sub-KB requests (`nexus-demo-loaders.ts` preserves isolated `demo-*` chunks
+          // via `onlyExplicitManualChunks: true`, and `nexus-manual-chunks.ts` isolates landing
+          // image URL modules so they never fold into shared Nuxt runtime helpers).
+          experimentalMinChunkSize: 12288,
           manualChunks: resolveNexusManualChunk,
         },
       },
@@ -624,6 +652,7 @@ export default defineNuxtConfig({
         { find: /^@talex-touch\/tuff-business$/, replacement: tuffBusinessSourceEntry },
         { find: /^@tuffex-components\/(.+)$/, replacement: tuffexComponentAutoImportEntry },
         { find: /^@talex-touch\/tuffex$/, replacement: useTuffexSource ? tuffexSourceEntry : tuffexDistEntry },
+        { find: /^@talex-touch\/tuffex\/utils\/(.+)$/, replacement: tuffexUtilsSubpathEntry },
         { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexDistUtilsEntry },
         { find: /^@talex-touch\/tuffex\/base\.css$/, replacement: tuffexBaseStyleEntry },
         { find: /^@talex-touch\/tuffex\/([^/]+)\/style\.css$/, replacement: tuffexComponentStyleEntry },
@@ -657,6 +686,7 @@ export default defineNuxtConfig({
           '@talex-touch/tuffex': [useTuffexSource ? tuffexSourceEntry : tuffexDistEntry],
           '@talex-touch/tuffex/base.css': [tuffexBaseStyleEntry],
           '@talex-touch/tuffex/*/style.css': [tuffexComponentStyleTypePathEntry],
+          '@talex-touch/tuffex/utils/*': [tuffexUtilsSubpathTypePathEntry],
           '@talex-touch/tuffex/utils': [tuffexDistUtilsEntry],
           '@talex-touch/tuffex/*': [tuffexComponentTypePathEntry],
         },

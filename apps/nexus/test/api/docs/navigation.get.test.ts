@@ -3,6 +3,7 @@ import { docsContentAvailability } from '../../../server/utils/docsContentCache'
 
 const contentMocks = vi.hoisted(() => ({
   queryCollectionNavigation: vi.fn(),
+  queryCollection: vi.fn(),
 }))
 
 vi.mock('@nuxt/content/server', () => contentMocks)
@@ -207,5 +208,67 @@ describe('/api/docs/navigation', () => {
 
     await expect(handler({})).rejects.toThrow('database is locked')
     expect(contentMocks.queryCollectionNavigation).toHaveBeenCalledTimes(1)
+  })
+
+  it('embeds component sidebar metadata on components-scoped navigation without changing all-scope output', async () => {
+    const rawTree = [
+      {
+        title: 'Docs',
+        path: '/docs',
+        children: [
+          {
+            title: 'Dev',
+            path: '/docs/dev',
+            children: [
+              {
+                title: 'Components',
+                path: '/docs/dev/components',
+                children: [
+                  { title: 'Tabs', path: '/docs/dev/components/tabs.en' },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ]
+    contentMocks.queryCollectionNavigation.mockResolvedValue(rawTree)
+    contentMocks.queryCollection.mockReturnValue({
+      where: () => ({
+        all: async () => [
+          {
+            path: '/docs/dev/components/tabs.en',
+            category: 'Navigation',
+            since: '0.8.0',
+            syncStatus: 'verified',
+            verified: true,
+          },
+        ],
+      }),
+    })
+
+    const scoped = await handler({ context: { params: { locale: 'en', scope: 'components' } } })
+    expect(scoped).toEqual([
+      {
+        title: 'Components',
+        path: '/docs/dev/components',
+        children: [
+          {
+            title: 'Tabs',
+            path: '/docs/dev/components/tabs.en',
+            category: 'Navigation',
+            since: '0.8.0',
+            syncStatus: 'verified',
+            verified: true,
+          },
+        ],
+      },
+    ])
+
+    const full = await handler({ context: { params: { locale: 'en' } } })
+    expect(full[0].children[0].children[0].children[0]).toEqual({
+      title: 'Tabs',
+      path: '/docs/dev/components/tabs.en',
+    })
   })
 })

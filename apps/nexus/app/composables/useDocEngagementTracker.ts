@@ -824,8 +824,20 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
         markInteraction()
       })
 
-      useEventListener(window, 'pagehide', () => {
+      useEventListener(window, 'pagehide', (event?: PageTransitionEvent) => {
+        stopTimer()
+        // When the browser freezes the page into bfcache (`event.persisted === true`), starting an
+        // async WebCrypto digest + fetch during `pagehide` evicts the page from bfcache.
+        if (event?.persisted)
+          return
         void flush('pagehide')
+      })
+
+      useEventListener(window, 'pageshow', (event?: PageTransitionEvent) => {
+        if (!event?.persisted)
+          return
+        lastTickAt = Date.now()
+        markInteraction()
       })
 
       useEventListener(document, 'selectionchange', () => {

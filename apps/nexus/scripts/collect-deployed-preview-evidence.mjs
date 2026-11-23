@@ -1,23 +1,19 @@
 #!/usr/bin/env node
 import { Buffer } from 'node:buffer'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { redactHarFile } from './redact-har.mjs'
 import { fileURLToPath } from 'node:url'
 
-const currentDir = dirname(fileURLToPath(import.meta.url))
+const currentFile = fileURLToPath(import.meta.url)
+const currentDir = dirname(currentFile)
 const nexusRoot = resolve(currentDir, '..')
 const workspaceRoot = resolve(nexusRoot, '..', '..')
-const outputRoot = join(workspaceRoot, 'output/playwright')
+const defaultOutputRoot = join(workspaceRoot, 'output/playwright')
 const dateStamp = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date())
 const evidencePrefix = `nexus-cloudflare-pages-preview-runtime-smoke-${dateStamp}`
-const args = parseArgs(process.argv.slice(2))
-const baseUrl = trimTrailingSlash(args['base-url'] ?? process.env.NEXUS_DEPLOYED_PREVIEW_URL ?? '')
-const authState = args['auth-state'] ?? process.env.NEXUS_DEPLOYED_AUTH_STATE ?? ''
-const providerCallbackEvidencePath = args['provider-callback-evidence'] ?? process.env.NEXUS_DEPLOYED_PROVIDER_CALLBACK_EVIDENCE ?? ''
-const dryRun = Boolean(args['dry-run'] ?? !baseUrl)
 
-const routeBudgets = [
+export const routeBudgets = [
   { key: 'home', path: '/', maxDocs: 0, maxNuxt: 100, maxTotal: 120, maxFailed: 3, allowMediaAbortFailures: true },
   { key: 'next', path: '/next/', maxDocs: 0, maxNuxt: 90, maxTotal: 100, maxFailed: 2, allowMediaAbortFailures: true },
   { key: 'store', path: '/store/', maxDocs: 0, maxNuxt: 75, maxTotal: 80, maxFailed: 0 },
@@ -28,11 +24,17 @@ const routeBudgets = [
   { key: 'auth-app-callback', path: '/auth/app-callback/', maxDocs: 0, maxNuxt: 50, maxTotal: 55, maxFailed: 0 },
 ]
 
-const apiProbes = [
-  { name: 'docs page full body', path: '/api/docs/page?path=/docs/dev/components/tabs&locale=en&body=1', expected: [200] },
-  { name: 'docs page static body', path: '/api/docs/page/en/body/dev/components/tabs.json', expected: [200] },
-  { name: 'docs navigation', path: '/api/docs/navigation?locale=en', expected: [200] },
-  { name: 'docs sidebar components', path: '/api/docs/sidebar-components?locale=en', expected: [200] },
+// Production docs read endpoints are static path-shaped twins excluded from the Worker, while the
+// legacy query-string forms return 404 via content-runtime-guard / _routes.json so Cloudflare
+// Workers never rebuild Nuxt Content SQLite/D1 tables inline (`nexus-docs-static-delivery.md`).
+export const apiProbes = [
+  { name: 'docs page full body', path: '/api/docs/page/en/body/dev/components/tabs.json', expected: [200] },
+  { name: 'docs navigation', path: '/api/docs/navigation/en/all', expected: [200] },
+  { name: 'docs navigation components', path: '/api/docs/navigation/en/components', expected: [200] },
+  { name: 'docs sidebar components', path: '/api/docs/sidebar-components/en', expected: [200] },
+  { name: 'docs query guard (page)', path: '/api/docs/page?path=/docs/dev/components/tabs&locale=en&body=1', expected: [404] },
+  { name: 'docs query guard (navigation)', path: '/api/docs/navigation?locale=en', expected: [404] },
+  { name: 'docs query guard (sidebar-components)', path: '/api/docs/sidebar-components?locale=en', expected: [404] },
   { name: 'docs view unauth read', path: '/api/docs/view?path=/docs/dev/components/tabs&locale=en', expected: [200] },
   { name: 'auth session shell', path: '/api/auth/session', expected: [200] },
   { name: 'auth providers shell', path: '/api/auth/providers', expected: [200] },
@@ -40,93 +42,71 @@ const apiProbes = [
   { name: 'dashboard auth boundary', path: '/api/dashboard/team', expected: [401] },
 ]
 
-if (dryRun) {
-  printDryRunPlan()
-  process.exit(0)
+export const CHROMIUM_LAUNCH_OPTIONS = {
+  headless: true,
+  // Playwright passes `--disable-back-forward-cache` by default, which forces
+  // BackForwardCacheDisabledByCommandLine on every page regardless of real app eligibility.
+  ignoreDefaultArgs: ['--disable-back-forward-cache'],
 }
 
-if (isLocalUrl(baseUrl)) {
-  console.error(`[nexus-deployed-preview-evidence] refusing local base URL for deployed preview evidence: ${baseUrl}`)
-  process.exit(1)
+export function resolveOutputRoot(rawOutputDir, rootDir = workspaceRoot) {
+  if (rawOutputDir === undefined)
+    return join(rootDir, 'output/playwright')
+  if (typeof rawOutputDir !== 'string' || !rawOutputDir.trim())
+    throw new Error('--output-dir requires a non-empty directory path')
+  return resolve(rootDir, rawOutputDir.trim())
 }
 
-if (!isHttpsUrl(baseUrl)) {
-  console.error(`[nexus-deployed-preview-evidence] refusing non-HTTPS base URL for deployed preview evidence: ${baseUrl}`)
-  process.exit(1)
+export function extractServiceWorkerPrecacheUrls(source) {
+  if (typeof source !== 'string' || !source)
+    return []
+
+  const precacheMatch = source.match(/precacheAndRoute\(\s*(\[[\s\S]*?\])\s*(?:,|\))/)
+  const scanTarget = precacheMatch ? precacheMatch[1] : source
+  const urlPattern = /(?:^|[{,\s])(?:"url"|'url'|url)\s*:\s*(?:"([^"]+)"|'([^']+)')/g
+  return Array.from(scanTarget.matchAll(urlPattern), match => match[1] ?? match[2] ?? '').filter(Boolean)
 }
 
-const { chromium } = await importPlaywright()
-await mkdir(outputRoot, { recursive: true })
-
-const browser = await chromium.launch({ headless: true })
-try {
-  const api = await collectApiProbes()
-  const routes = []
-  for (const route of routeBudgets)
-    routes.push(await collectRoute(browser, route))
-
-  const serviceWorkerPrecache = await collectServiceWorkerPrecache(browser)
-  const bfcache = await collectBfcache(browser)
-  const authenticatedDashboard = authState
-    ? await collectAuthenticatedDashboard(browser)
-    : pendingAuthenticatedDashboard()
-  const authProviderCallback = providerCallbackEvidencePath
-    ? await readProviderCallbackEvidence(providerCallbackEvidencePath)
-    : pendingProviderCallback('missing --provider-callback-evidence from an interactive OAuth callback smoke')
-
-  const publicRoutes = summarizePublicRoutes(routes)
-  const evidence = {
-    schema: 'nexus-cloudflare-pages-preview-runtime-smoke/v1',
-    status: authState ? 'PASS_WITH_WARNINGS' : 'PENDING_AUTH',
-    generatedAt: new Date().toISOString(),
-    baseUrl,
-    build: {
-      serviceWorkerPrecache,
-    },
-    sourceGuards: {
-      authHandlerSingleton: true,
-    },
-    api,
-    routes,
-    networkSummary: {
-      totalRequests: routes.reduce((total, route) => total + (route.requests?.total ?? 0), 0),
-      publicRoutes,
-    },
-    consoleSummary: {
-      errors: routes.flatMap(route => route.consoleErrors ?? []),
-    },
-    bfcache,
-    authProviderCallback,
-    authenticatedDashboard,
-    failures: [
-      ...(bfcache.realBfcacheHit ? [] : ['real bfcache hit not observed']),
-      ...(authProviderCallback.authenticated ? [] : ['real provider callback is pending']),
-      ...(authenticatedDashboard.authenticated ? [] : ['authenticated dashboard smoke is pending']),
-    ],
-    warnings: [
-      ...(authState ? [] : ['No authenticated storage state supplied; authenticated dashboard and provider callback are pending']),
-    ],
+export function summarizeServiceWorkerPrecache(source) {
+  const urls = extractServiceWorkerPrecacheUrls(source)
+  return {
+    total: urls.length,
+    urls,
+    docs: urls.filter(url => /(?:^|\/)(?:en|zh)\/docs(?:\/|$)/.test(url)),
+    routeHtml: urls.filter(url => /\.html?$/.test(url) || /\/$/.test(url)),
+    nuxtChunkAssets: urls.filter(url => /^_nuxt\//.test(url) && !/^_nuxt\/builds\//.test(url)),
+    nuxtBuildMetadata: urls.filter(url => /^_nuxt\/builds\//.test(url)),
+    runtimeContentAssets: urls.filter(url => url.includes('__nuxt_content') || /dump\..+\.sql/.test(url) || /sqlite3|\.wasm/.test(url)),
   }
-
-  const jsonPath = join(outputRoot, `${evidencePrefix}.json`)
-  const mdPath = join(outputRoot, `${evidencePrefix}.md`)
-  await writeFile(jsonPath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8')
-  await writeFile(mdPath, renderMarkdown(evidence), 'utf8')
-  console.log(`[nexus-deployed-preview-evidence] wrote ${relativeEvidencePath(jsonPath)}`)
-  console.log(`[nexus-deployed-preview-evidence] wrote ${relativeEvidencePath(mdPath)}`)
-  console.log('[nexus-deployed-preview-evidence] run `node build/check-runtime-evidence.mjs --require-deployed-preview` after auth and bfcache evidence are complete')
-}
-finally {
-  await browser.close()
 }
 
-function parseArgs(values) {
+export function summarizeBfcacheResult(summary, harPath) {
+  const events = Array.isArray(summary?.events) ? summary.events : []
+  const pageshowPersisted = events.filter(event => event.type === 'pageshow').map(event => event.persisted)
+  const realBfcacheHit = pageshowPersisted.includes(true)
+  const rawPerformanceNavigationType = summary?.navigationType ?? 'unknown'
+  return {
+    ...summary,
+    // Navigation Timing Level 2 keeps the original entry (`navigate`) when thawing a page from
+    // bfcache without reloading; record `back_forward` when `pageshow.persisted === true` proves
+    // a real back/forward cache restore while preserving the raw PerformanceNavigationTiming type.
+    navigationType: realBfcacheHit ? 'back_forward' : rawPerformanceNavigationType,
+    rawPerformanceNavigationType,
+    pageshowPersisted,
+    realBfcacheHit,
+    har: harPath,
+  }
+}
+
+export function parseArgs(values) {
   const parsed = {}
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index]
     if (!value.startsWith('--'))
       continue
-    const [rawKey, inlineValue] = value.slice(2).split('=')
+    const eqIndex = value.indexOf('=')
+    const rawKey = eqIndex === -1 ? value.slice(2) : value.slice(2, eqIndex)
+    const inlineValue = eqIndex === -1 ? undefined : value.slice(eqIndex + 1)
     parsed[rawKey] = inlineValue ?? (values[index + 1]?.startsWith('--') ? true : values[index + 1] ?? true)
     if (inlineValue === undefined && typeof parsed[rawKey] === 'string')
       index += 1
@@ -134,11 +114,115 @@ function parseArgs(values) {
   return parsed
 }
 
-function printDryRunPlan() {
+const isMainModule = process.argv[1] && resolve(process.argv[1]) === currentFile
+if (isMainModule) {
+  await runCli(process.argv.slice(2))
+}
+
+async function runCli(argv) {
+  const args = parseArgs(argv)
+  let outputRoot = defaultOutputRoot
+  try {
+    outputRoot = resolveOutputRoot(args['output-dir'])
+  }
+  catch (error) {
+    console.error(`[nexus-deployed-preview-evidence] ${error instanceof Error ? error.message : String(error)}`)
+    process.exit(1)
+  }
+
+  const baseUrl = trimTrailingSlash(args['base-url'] ?? process.env.NEXUS_DEPLOYED_PREVIEW_URL ?? '')
+  const authState = args['auth-state'] ?? process.env.NEXUS_DEPLOYED_AUTH_STATE ?? ''
+  const providerCallbackEvidencePath = args['provider-callback-evidence'] ?? process.env.NEXUS_DEPLOYED_PROVIDER_CALLBACK_EVIDENCE ?? ''
+  const dryRun = Boolean(args['dry-run'] ?? !baseUrl)
+
+  if (dryRun) {
+    printDryRunPlan(outputRoot)
+    process.exit(0)
+  }
+
+  if (isLocalUrl(baseUrl)) {
+    console.error(`[nexus-deployed-preview-evidence] refusing local base URL for deployed preview evidence: ${baseUrl}`)
+    process.exit(1)
+  }
+
+  if (!isHttpsUrl(baseUrl)) {
+    console.error(`[nexus-deployed-preview-evidence] refusing non-HTTPS base URL for deployed preview evidence: ${baseUrl}`)
+    process.exit(1)
+  }
+
+  const { chromium } = await importPlaywright()
+  await mkdir(outputRoot, { recursive: true })
+
+  const browser = await chromium.launch(CHROMIUM_LAUNCH_OPTIONS)
+  try {
+    const api = await collectApiProbes(baseUrl)
+    const routes = []
+    for (const route of routeBudgets)
+      routes.push(await collectRoute(browser, baseUrl, outputRoot, route))
+
+    const serviceWorkerPrecache = await collectServiceWorkerPrecache(browser, baseUrl)
+    const bfcache = await collectBfcache(browser, baseUrl, outputRoot)
+    const authenticatedDashboard = authState
+      ? await collectAuthenticatedDashboard(browser, baseUrl, outputRoot, authState)
+      : pendingAuthenticatedDashboard()
+    const authProviderCallback = providerCallbackEvidencePath
+      ? await readProviderCallbackEvidence(outputRoot, providerCallbackEvidencePath)
+      : pendingProviderCallback('missing --provider-callback-evidence from an interactive OAuth callback smoke')
+
+    const publicRoutes = summarizePublicRoutes(routes)
+    const evidence = {
+      schema: 'nexus-cloudflare-pages-preview-runtime-smoke/v1',
+      status: authState ? 'PASS_WITH_WARNINGS' : 'PENDING_AUTH',
+      generatedAt: new Date().toISOString(),
+      baseUrl,
+      build: {
+        serviceWorkerPrecache,
+      },
+      sourceGuards: {
+        authHandlerSingleton: true,
+      },
+      api,
+      routes,
+      networkSummary: {
+        totalRequests: routes.reduce((total, route) => total + (route.requests?.total ?? 0), 0),
+        publicRoutes,
+      },
+      consoleSummary: {
+        errors: routes.flatMap(route => route.consoleErrors ?? []),
+      },
+      bfcache,
+      authProviderCallback,
+      authenticatedDashboard,
+      failures: [
+        ...(bfcache.realBfcacheHit ? [] : ['real bfcache hit not observed']),
+        ...(authProviderCallback.authenticated ? [] : ['real provider callback is pending']),
+        ...(authenticatedDashboard.authenticated ? [] : ['authenticated dashboard smoke is pending']),
+      ],
+      warnings: [
+        ...(authState ? [] : ['No authenticated storage state supplied; authenticated dashboard and provider callback are pending']),
+      ],
+    }
+
+    const jsonPath = join(outputRoot, `${evidencePrefix}.json`)
+    const mdPath = join(outputRoot, `${evidencePrefix}.md`)
+    await writeFile(jsonPath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8')
+    await writeFile(mdPath, renderMarkdown(evidence), 'utf8')
+    console.log(`[nexus-deployed-preview-evidence] wrote ${relativeEvidencePath(jsonPath)}`)
+    console.log(`[nexus-deployed-preview-evidence] wrote ${relativeEvidencePath(mdPath)}`)
+    console.log('[nexus-deployed-preview-evidence] run `node build/check-runtime-evidence.mjs --require-deployed-preview` after auth and bfcache evidence are complete')
+  }
+  finally {
+    await browser.close()
+  }
+}
+
+function printDryRunPlan(outputRoot) {
+  const displayOutputDir = relativeEvidencePath(outputRoot)
   const plan = {
     status: 'DRY_RUN',
-    command: 'node scripts/collect-deployed-preview-evidence.mjs --base-url https://<cloudflare-pages-preview-host> --auth-state output/playwright/<storage-state>.json --provider-callback-evidence output/playwright/<provider-callback-evidence>.json',
-    output: `output/playwright/${evidencePrefix}.{json,md}`,
+    command: 'node scripts/collect-deployed-preview-evidence.mjs --base-url https://<cloudflare-pages-preview-host> [--output-dir output/playwright] --auth-state output/playwright/<storage-state>.json --provider-callback-evidence output/playwright/<provider-callback-evidence>.json',
+    outputDir: displayOutputDir,
+    output: `${displayOutputDir}/${evidencePrefix}.{json,md}`,
     baseUrlRequired: true,
     refusesLocalBaseUrl: true,
     requiresHttpsBaseUrl: true,
@@ -151,7 +235,7 @@ function printDryRunPlan() {
       provider: 'github',
       authenticated: true,
       session: { authenticated: true },
-      har: `output/playwright/${evidencePrefix}-auth-provider-callback.har`,
+      har: `${displayOutputDir}/${evidencePrefix}-auth-provider-callback.har`,
     },
     routeProbes: routeBudgets.map(({ key, path, maxDocs, maxNuxt, maxTotal }) => ({ key, path, maxDocs, maxNuxt, maxTotal })),
     apiProbes: apiProbes.map(({ name, path, expected }) => ({ name, path, expected })),
@@ -159,16 +243,17 @@ function printDryRunPlan() {
   console.log(JSON.stringify(plan, null, 2))
 }
 
-function resolveOutputEvidenceFile(filePath, label) {
+export function resolveOutputEvidenceFile(outputRoot, filePath, label) {
   const evidencePath = resolve(workspaceRoot, filePath)
-  if (!evidencePath.startsWith(`${outputRoot}/`)) {
+  const rel = relative(outputRoot, evidencePath)
+  if (!rel || rel.startsWith('..') || isAbsolute(rel)) {
     throw new Error(`${label} must live under ${relativeEvidencePath(outputRoot)}`)
   }
   return evidencePath
 }
 
-async function readProviderCallbackEvidence(filePath) {
-  const evidencePath = resolveOutputEvidenceFile(filePath, 'provider callback evidence')
+async function readProviderCallbackEvidence(outputRoot, filePath) {
+  const evidencePath = resolveOutputEvidenceFile(outputRoot, filePath, 'provider callback evidence')
   const source = JSON.parse(await readFile(evidencePath, 'utf8'))
   return {
     ok: source.ok === true,
@@ -191,7 +276,7 @@ async function importPlaywright() {
   }
 }
 
-async function collectApiProbes() {
+async function collectApiProbes(baseUrl) {
   const results = []
   for (const probe of apiProbes) {
     const startedAt = performance.now()
@@ -212,7 +297,7 @@ async function collectApiProbes() {
   return results
 }
 
-async function collectRoute(browser, route) {
+async function collectRoute(browser, baseUrl, outputRoot, route) {
   const harPath = join(outputRoot, `${evidencePrefix}-${route.key}.har`)
   const context = await browser.newContext({
     recordHar: { path: harPath, content: 'embed' },
@@ -307,28 +392,20 @@ function summarizeRouteRequests(requests, route) {
   }
 }
 
-async function collectServiceWorkerPrecache(browser) {
+async function collectServiceWorkerPrecache(browser, baseUrl) {
   const context = await browser.newContext()
   const page = await context.newPage()
   const response = await page.goto(`${baseUrl}/sw.js`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
   const source = response ? await response.text() : ''
   await context.close()
-  const urls = Array.from(source.matchAll(/"url":"([^"]+)"/g)).map(match => match[1])
-  return {
-    total: urls.length,
-    urls,
-    docs: urls.filter(url => /(?:^|\/)(?:en|zh)\/docs(?:\/|$)/.test(url)),
-    routeHtml: urls.filter(url => /\.html?$/.test(url) || /\/$/.test(url)),
-    nuxtChunkAssets: urls.filter(url => /^_nuxt\//.test(url) && !/^_nuxt\/builds\//.test(url)),
-    nuxtBuildMetadata: urls.filter(url => /^_nuxt\/builds\//.test(url)),
-    runtimeContentAssets: urls.filter(url => url.includes('__nuxt_content') || /dump\..+\.sql/.test(url) || /sqlite3|\.wasm/.test(url)),
-  }
+  return summarizeServiceWorkerPrecache(source)
 }
 
-async function collectBfcache(browser) {
+async function collectBfcache(browser, baseUrl, outputRoot) {
   const harPath = join(outputRoot, `${evidencePrefix}-docs-store-back.har`)
   const context = await browser.newContext({
     recordHar: { path: harPath, content: 'embed' },
+    serviceWorkers: 'block',
   })
   const page = await context.newPage()
   await page.addInitScript(() => {
@@ -336,10 +413,12 @@ async function collectBfcache(browser) {
     window.addEventListener('pageshow', event => window.__nexusBfcacheEvents.push({ type: 'pageshow', persisted: event.persisted, href: location.href, ts: Date.now() }))
     window.addEventListener('pagehide', event => window.__nexusBfcacheEvents.push({ type: 'pagehide', persisted: event.persisted, href: location.href, ts: Date.now() }))
   })
-  await page.goto(`${baseUrl}/en/docs/dev/components/tabs/`, { waitUntil: 'networkidle', timeout: 45_000 })
-  await page.goto(`${baseUrl}/store/`, { waitUntil: 'networkidle', timeout: 45_000 })
-  await page.goBack({ waitUntil: 'networkidle', timeout: 45_000 })
+  await page.goto(`${baseUrl}/en/docs/dev/components/tabs`, { waitUntil: 'networkidle', timeout: 45_000 })
   await page.waitForTimeout(500)
+  await page.goto(`${baseUrl}/store`, { waitUntil: 'networkidle', timeout: 45_000 })
+  await page.waitForTimeout(500)
+  await page.goBack({ waitUntil: 'commit', timeout: 45_000 })
+  await page.waitForTimeout(800)
   const summary = await page.evaluate(() => ({
     href: location.href,
     navigationType: performance.getEntriesByType('navigation').at(-1)?.type ?? 'unknown',
@@ -347,20 +426,14 @@ async function collectBfcache(browser) {
   }))
   await context.close()
   await redactHarFile(harPath)
-  const pageshowPersisted = summary.events.filter(event => event.type === 'pageshow').map(event => event.persisted)
-  return {
-    ...summary,
-    pageshowPersisted,
-    realBfcacheHit: pageshowPersisted.includes(true),
-    har: relativeEvidencePath(harPath),
-  }
+  return summarizeBfcacheResult(summary, relativeEvidencePath(harPath))
 }
 
-async function collectAuthenticatedDashboard(browser) {
+async function collectAuthenticatedDashboard(browser, baseUrl, outputRoot, authState) {
   const harPath = join(outputRoot, `${evidencePrefix}-dashboard-authenticated.har`)
   const context = await browser.newContext({
     recordHar: { path: harPath, content: 'embed' },
-    storageState: resolveOutputEvidenceFile(authState, 'auth state'),
+    storageState: resolveOutputEvidenceFile(outputRoot, authState, 'auth state'),
     serviceWorkers: 'block',
   })
   const page = await context.newPage()
@@ -463,6 +536,9 @@ function trimTrailingSlash(value) {
   return String(value).replace(/\/$/, '')
 }
 
-function relativeEvidencePath(filePath) {
-  return filePath.replace(`${workspaceRoot}/`, '')
+export function relativeEvidencePath(filePath, rootDir = workspaceRoot) {
+  const rel = relative(rootDir, filePath)
+  if (!rel || rel.startsWith('..') || isAbsolute(rel))
+    return filePath
+  return rel
 }

@@ -94,4 +94,14 @@ describe('store page remote search performance boundaries', () => {
     expect(storePage).not.toContain("import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'")
     expect(storePage).not.toContain("import {\n  SharedPluginDetailReadme,\n  SharedPluginDetailVersions,\n} from '@talex-touch/utils/renderer/shared/components'")
   })
+
+  it('keeps SSR idle state and client hydrating pending state on the same skeleton branch', () => {
+    // With `server: false` + `lazy: true`, SSR renders with `status === 'idle'` (`pending === false`)
+    // whereas client hydration starts with `status === 'pending'` (`pending === true`).
+    // Gating the skeleton strictly on `pluginsPending` caused a Vue hydration mismatch on /store.
+    expect(storePage).toContain('status: pluginsStatus')
+    expect(storePage).toContain("const showPluginsSkeleton = computed(() => pluginsPending.value || pluginsStatus.value === 'idle')")
+    expect(storePage).toContain('<div v-if="showPluginsSkeleton" class="StorePage-Grid" aria-busy="true">')
+    expect(storePage).not.toContain('<div v-if="pluginsPending" class="StorePage-Grid" aria-busy="true">')
+  })
 })

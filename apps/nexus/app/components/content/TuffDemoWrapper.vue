@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { type ComponentPublicInstance, computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import TuffDemoClientRenderer from './TuffDemoClientRenderer.client.vue'
 import { queueDemoActivation, queueDemoPrefetch, shouldActivateDemo } from './demo-lazy'
 import { loadDemoComponent } from './demo-component-loader'
 
@@ -57,6 +58,7 @@ const demoInstanceRef = ref<DemoResetController | null>(null)
 const isResetting = ref(false)
 const windowBodyRef = ref<HTMLElement | null>(null)
 const toggleRowRef = ref<HTMLElement | null>(null)
+const demoSectionRef = ref<HTMLElement | null>(null)
 
 const toggleLabel = computed(() => {
   if (showCode.value)
@@ -128,8 +130,11 @@ function handleDemoInstanceChange(instance: DemoResetController | null) {
   demoInstanceRef.value = instance
 }
 
+const DEMO_VIEWPORT_ROOT_MARGIN = '0px'
 let cancelQueuedActivation: (() => void) | null = null
 let cancelQueuedPrefetch: (() => void) | null = null
+let demoVisibilityObserver: IntersectionObserver | null = null
+let demoQueued = false
 
 function activateDemo() {
   cancelQueuedActivation = null
@@ -139,19 +144,49 @@ function activateDemo() {
   isDemoActive.value = true
 }
 
+function enqueueDemoLoad() {
+  if (demoQueued || !props.demo)
+    return
+  demoQueued = true
+  if (demoVisibilityObserver) {
+    demoVisibilityObserver.disconnect()
+    demoVisibilityObserver = null
+  }
+
+  // The loader download waits in the same idle order as activation, one at a time, so visible
+  // demos mount cleanly without turning into a single long task or fetching off-screen demos.
+  const demo = props.demo
+  cancelQueuedPrefetch = queueDemoPrefetch(() => loadDemoComponent(demo))
+  cancelQueuedActivation = queueDemoActivation(activateDemo)
+}
+
 onMounted(() => {
   if (!props.demo)
     return
 
-  // The loader download waits in the same idle order as activation, one at a time, so a page of
-  // demos does not start every download on mount. Activation then joins that download, or finds
-  // the module cached if it finished first.
-  const demo = props.demo
-  cancelQueuedPrefetch = queueDemoPrefetch(() => loadDemoComponent(demo))
-  cancelQueuedActivation = queueDemoActivation(activateDemo)
+  const target = demoSectionRef.value
+  if ('IntersectionObserver' in window && target) {
+    const rect = target.getBoundingClientRect()
+    if (rect.top < window.innerHeight * 0.75 && rect.bottom > 0) {
+      enqueueDemoLoad()
+      return
+    }
+    demoVisibilityObserver = new IntersectionObserver((entries) => {
+      if (entries.some(entry => entry.isIntersecting && entry.intersectionRatio >= 0.25))
+        enqueueDemoLoad()
+    }, { rootMargin: DEMO_VIEWPORT_ROOT_MARGIN, threshold: [0.25] })
+    demoVisibilityObserver.observe(target)
+    return
+  }
+
+  enqueueDemoLoad()
 })
 
 onBeforeUnmount(() => {
+  if (demoVisibilityObserver) {
+    demoVisibilityObserver.disconnect()
+    demoVisibilityObserver = null
+  }
   cancelQueuedPrefetch?.()
   cancelQueuedPrefetch = null
   cancelQueuedActivation?.()
@@ -161,7 +196,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="tuff-demo">
+  <section ref="demoSectionRef" class="tuff-demo">
     <header v-if="props.title || props.description" class="tuff-demo__header">
       <h3 v-if="props.title" class="tuff-demo__title">
         {{ props.title }}
@@ -193,7 +228,7 @@ onBeforeUnmount(() => {
       <div ref="windowBodyRef" class="tuff-demo__window-body">
         <div class="tuff-demo__preview">
           <ClientOnly>
-            <LazyTuffDemoClientRenderer
+            <TuffDemoClientRenderer
               v-if="isDemoActive"
               :demo="props.demo"
               :is-active="isDemoActive"

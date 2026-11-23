@@ -1,6 +1,6 @@
 import type { H3Event } from 'h3'
 import process from 'node:process'
-import { queryCollectionNavigation } from '@nuxt/content/server'
+import { queryCollection, queryCollectionNavigation } from '@nuxt/content/server'
 import { cacheDocsContent } from '../../utils/docsContentCache'
 import { isMissingDocsContentTableError } from '../../utils/docsContentError'
 import { normalizeDocsPagePath } from '../../utils/docsPath'
@@ -8,9 +8,126 @@ import { normalizeDocsPagePath } from '../../utils/docsPath'
 const DEV_NAVIGATION_RETRY_ATTEMPTS = 3
 const DEV_NAVIGATION_RETRY_DELAY_MS = 80
 const NAVIGATION_COMPONENTS_SCOPE = 'components'
+const COMPONENT_DOC_PREFIX = '/docs/dev/components/'
 // The concepts handbook lives beside the component docs but is listed in the
 // components sidebar's Concepts suite, so the scope carries both trees.
 const NAVIGATION_COMPONENTS_SCOPE_ROOTS = ['/docs/dev/components', '/docs/dev/concepts']
+
+type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
+
+const STATUS_ALIASES: Record<string, SyncStatusKey> = {
+  未迁移: 'not_started',
+  迁移中: 'in_progress',
+  已迁移: 'migrated',
+  已确认: 'verified',
+  not_started: 'not_started',
+  in_progress: 'in_progress',
+  migrated: 'migrated',
+  verified: 'verified',
+}
+
+interface ComponentNavMeta {
+  category: string | null
+  since: string | null
+  syncStatus: SyncStatusKey
+  verified: boolean
+}
+
+function parseDocMeta(meta: unknown): Record<string, unknown> | null {
+  if (!meta)
+    return null
+  if (typeof meta === 'string') {
+    try {
+      return JSON.parse(meta) as Record<string, unknown>
+    }
+    catch {
+      return null
+    }
+  }
+  if (typeof meta === 'object' && !Array.isArray(meta))
+    return meta as Record<string, unknown>
+  return null
+}
+
+function resolveSince(recordValue: unknown, metaValue: unknown) {
+  const value = recordValue ?? metaValue
+  if (value === null || value === undefined)
+    return null
+  return String(value).trim() || null
+}
+
+function normalizeStatus(raw: unknown, verified: boolean): SyncStatusKey {
+  if (verified)
+    return 'verified'
+  const value = typeof raw === 'string' ? raw.trim() : ''
+  return STATUS_ALIASES[value] ?? 'not_started'
+}
+
+async function queryComponentNavMeta(
+  event: H3Event,
+  locale: 'en' | 'zh' | null,
+): Promise<Map<string, ComponentNavMeta>> {
+  const map = new Map<string, ComponentNavMeta>()
+  if (typeof queryCollection !== 'function')
+    return map
+
+  try {
+    const pattern = locale ? `${COMPONENT_DOC_PREFIX}%.${locale}` : `${COMPONENT_DOC_PREFIX}%`
+    const docs = await queryCollection(event, 'docs')
+      .where('path', 'LIKE', pattern)
+      .all()
+
+    for (const item of docs) {
+      if (typeof item?.path !== 'string')
+        continue
+      const record = item as unknown as Record<string, unknown>
+      const meta = parseDocMeta(record.meta)
+      const verified = record.verified === true || meta?.verified === true
+      map.set(item.path, {
+        category: typeof record.category === 'string'
+          ? record.category
+          : typeof meta?.category === 'string'
+            ? meta.category
+            : null,
+        since: resolveSince(record.since, meta?.since),
+        syncStatus: normalizeStatus(record.syncStatus ?? meta?.syncStatus, verified),
+        verified,
+      })
+    }
+  }
+  catch {
+    // Component sidebar metadata enrichment is best-effort; DocsSidebar falls back to
+    // `/api/docs/sidebar-components/:locale` if these fields are absent.
+  }
+
+  return map
+}
+
+function attachComponentNavMeta(items: unknown, metaByPath: Map<string, ComponentNavMeta>): unknown {
+  if (!metaByPath.size || !Array.isArray(items))
+    return items
+
+  return items.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item))
+      return item
+
+    const record = item as Record<string, unknown>
+    const path = typeof record.path === 'string' ? record.path : null
+    const extra = path ? metaByPath.get(path) : undefined
+    const children = Array.isArray(record.children)
+      ? attachComponentNavMeta(record.children, metaByPath)
+      : undefined
+
+    if (!extra && children === undefined)
+      return record
+
+    return {
+      ...record,
+      ...(extra ?? {}),
+      ...(children !== undefined ? { children } : {}),
+    }
+  })
+}
 
 function toPlainJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -132,8 +249,11 @@ const resolveDocsNavigation = cacheDocsContent(async (
   const navigation = await queryDocsNavigation(event)
   const localizedNavigation = filterNavigationByLocale(navigation, locale)
   const scopedNavigation = scopeNavigation(localizedNavigation, scope)
+  const enrichedNavigation = scope === NAVIGATION_COMPONENTS_SCOPE
+    ? attachComponentNavMeta(scopedNavigation, await queryComponentNavMeta(event, locale))
+    : scopedNavigation
 
-  return toPlainJson(Array.isArray(scopedNavigation) ? scopedNavigation : [])
+  return toPlainJson(Array.isArray(enrichedNavigation) ? enrichedNavigation : [])
 }, {
   name: 'docs-navigation',
   getKey: (locale, scope) => `${locale ? `locale:${locale}` : 'locale:all'}:${scope ? `scope:${scope}` : 'scope:all'}`,
