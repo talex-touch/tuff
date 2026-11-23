@@ -442,3 +442,152 @@ describe('install confirmation cannot be waived by the request', () => {
     expect(sourceConfirmRequests).toHaveLength(1)
   })
 })
+
+describe('PluginInstallQueue npm trust tier gate', () => {
+  it('handles @talex-touch/* npm-verified installs without PLUGIN_TRUST_METADATA_REQUIRED and requires source + permission prompts', async () => {
+    const installRequest: PluginInstallRequest = {
+      source: 'npm:@talex-touch/clipboard-history-plugin@1.2.0',
+      metadata: { official: true }
+    }
+    const prepared = {
+      request: installRequest,
+      providerResult: {
+        provider: 'npm',
+        // Even if a caller/mock set official:true without Nexus attestation, queue must enforce official:false
+        official: true,
+        filePath: '/tmp/clipboard-history-1.2.0.tgz',
+        metadata: {
+          packageName: '@talex-touch/clipboard-history-plugin',
+          resolvedVersion: '1.2.0',
+          trustTier: 'npm-verified',
+          officialScope: true,
+          unstamped: false
+        }
+      },
+      manifest: {
+        name: 'clipboard-history',
+        version: '1.2.0',
+        sdkapi: CURRENT_SDK_VERSION
+      }
+    } as unknown as PreparedPluginInstall
+
+    const installer = {
+      prepareInstall: vi.fn().mockResolvedValue(prepared),
+      finalizeInstall: vi.fn().mockResolvedValue({
+        manifest: prepared.manifest,
+        providerResult: prepared.providerResult
+      }),
+      discardPrepared: vi.fn().mockResolvedValue(undefined)
+    } as unknown as PluginInstaller
+
+    const receivedConfirmations: PluginInstallConfirmRequest[] = []
+    let queueRef: PluginInstallQueue | null = null
+    const transport = {
+      sendToWindow: vi.fn().mockImplementation(async (_windowId, event, payload) => {
+        if (event !== PluginEvents.install.confirm) return
+        const req = payload as PluginInstallConfirmRequest
+        receivedConfirmations.push(req)
+        queueRef?.handleConfirmResponse({
+          taskId: req.taskId,
+          decision: 'accept',
+          grantMode: 'always'
+        })
+      })
+    } as unknown as ITuffTransportMain
+
+    const onInstallCompleted = vi.fn().mockResolvedValue(undefined)
+    const queue = new PluginInstallQueue(installer, transport, 1, {
+      resolvePermissionConfirmation: () => ({
+        taskId: '',
+        kind: 'permissions',
+        pluginId: 'clipboard-history',
+        pluginName: 'clipboard-history',
+        permissions: {
+          required: ['clipboard.read'],
+          optional: [],
+          reasons: { 'clipboard.read': 'read clipboard history' }
+        }
+      }),
+      onInstallCompleted
+    })
+    queueRef = queue
+
+    const result = await queue.enqueue(installRequest)
+
+    expect(result).toMatchObject({
+      status: 'success',
+      provider: 'npm',
+      official: false
+    })
+    expect(receivedConfirmations.map((req) => req.kind)).toEqual(['source', 'permissions'])
+    expect(receivedConfirmations[0]?.official).toBe(false)
+    expect(installer.finalizeInstall).toHaveBeenCalledWith(prepared, {
+      installOptions: {
+        enforceProdMode: true,
+        stripRootDir: 'package'
+      }
+    })
+    expect(onInstallCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerResult: expect.objectContaining({ official: false })
+      })
+    )
+  })
+
+  it('passes allowUnstampedNpm only for verified unstamped npm-community installs', async () => {
+    const installRequest: PluginInstallRequest = {
+      source: 'npm:tuff-plugin-community@1.0.0'
+    }
+    const prepared = {
+      request: installRequest,
+      providerResult: {
+        provider: 'npm',
+        official: false,
+        filePath: '/tmp/community-1.0.0.tgz',
+        metadata: {
+          packageName: 'tuff-plugin-community',
+          resolvedVersion: '1.0.0',
+          trustTier: 'npm-community',
+          officialScope: false,
+          unstamped: true
+        }
+      },
+      manifest: {
+        name: 'community',
+        version: '1.0.0',
+        sdkapi: CURRENT_SDK_VERSION
+      }
+    } as unknown as PreparedPluginInstall
+
+    const installer = {
+      prepareInstall: vi.fn().mockResolvedValue(prepared),
+      finalizeInstall: vi.fn().mockResolvedValue({
+        manifest: prepared.manifest,
+        providerResult: prepared.providerResult
+      }),
+      discardPrepared: vi.fn().mockResolvedValue(undefined)
+    } as unknown as PluginInstaller
+
+    let queueRef: PluginInstallQueue | null = null
+    const transport = {
+      sendToWindow: vi.fn().mockImplementation(async (_windowId, event, payload) => {
+        if (event !== PluginEvents.install.confirm) return
+        const req = payload as PluginInstallConfirmRequest
+        queueRef?.handleConfirmResponse({ taskId: req.taskId, decision: 'accept' })
+      })
+    } as unknown as ITuffTransportMain
+
+    const queue = new PluginInstallQueue(installer, transport, 1, {})
+    queueRef = queue
+
+    const result = await queue.enqueue(installRequest)
+    expect(result.status).toBe('success')
+    expect(installer.finalizeInstall).toHaveBeenCalledWith(prepared, {
+      installOptions: {
+        enforceProdMode: true,
+        stripRootDir: 'package',
+        allowUnstampedNpm: true
+      }
+    })
+  })
+})
