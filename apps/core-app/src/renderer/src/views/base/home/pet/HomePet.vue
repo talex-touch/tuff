@@ -2,7 +2,7 @@
 import type { PetHost } from './usePetController'
 import type { PetPose } from './pet-motion'
 import { TxMiko } from '@talex-touch/tuffex/miko'
-import { hasWindow } from '@talex-touch/utils/env'
+import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { computed, onActivated, onDeactivated, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { PET_SIZE, PET_WIDTH } from './pet-physics'
@@ -14,7 +14,9 @@ const props = defineProps<{ host: PetHost }>()
 
 const { t } = useI18n()
 const reducedQuery = hasWindow() ? window.matchMedia('(prefers-reduced-motion: reduce)') : null
-const reduced = () => reducedQuery?.matches === true
+const reduced = () =>
+  reducedQuery?.matches === true ||
+  (hasDocument() && document.documentElement?.getAttribute('data-low-battery-motion') === '1')
 
 const petEl = ref<HTMLElement | null>(null)
 const shadowEl = ref<HTMLElement | null>(null)
@@ -133,7 +135,8 @@ defineExpose({ notifySend: (text: string) => pet.notifySend(text) })
       'is-wings': pet.tints.wings,
       'is-purr': pet.tints.purr,
       'is-sparkle': pet.tints.sparkle,
-      'is-fading': pet.tints.fading
+      'is-fading': pet.tints.fading,
+      'is-paused': pet.paused.value
     }"
   >
     <div ref="shadowEl" class="HomePet-Shadow" aria-hidden="true" />
@@ -635,6 +638,13 @@ defineExpose({ notifySend: (text: string) => pet.notifySend(text) })
   to {
     transform: rotate(360deg) translateX(30px) rotate(-360deg);
   }
+}
+
+.HomePet.is-paused,
+.HomePet.is-paused *,
+.HomePet.is-paused *::before,
+.HomePet.is-paused *::after {
+  animation-play-state: paused !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

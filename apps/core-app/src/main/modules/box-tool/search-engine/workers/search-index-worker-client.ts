@@ -58,6 +58,15 @@ import { deserializeSearchIndexWorkerError } from './search-index-worker-error'
 import { normalizeScanProgressUpsert } from './search-index-worker-scan-progress'
 import { operationalErrorService } from '../../../observability'
 import { isIndexMaintenanceIdle } from '../search-activity'
+import {
+  SEARCH_KERNEL_ERROR_CODES,
+  SEARCH_KERNEL_TASKS,
+  SearchKernelClientError,
+  getSharedSearchKernelClient,
+  isSearchKernelUtilityProcessEnabled,
+  type SearchKernelClient,
+  type SearchKernelMemorySnapshot
+} from '../kernel'
 import type {
   IndexMaintenanceNotification,
   IndexMaintenanceSlice
@@ -68,6 +77,9 @@ const DEFAULT_COMMIT_RESPONSE_TIMEOUT_MS = 60_000
 const DEFAULT_OUTCOME_LOOKUP_TIMEOUT_MS = 5_000
 const DEFAULT_OUTCOME_LOOKUP_ATTEMPTS = 2
 const DEFAULT_TERMINATION_TIMEOUT_MS = 1_000
+const KERNEL_DEFAULT_WRITER_TASK_TIMEOUT_MS = 10 * 60_000
+const KERNEL_VACUUM_TASK_TIMEOUT_MS = 60 * 60_000
+const KERNEL_METRICS_TIMEOUT_MS = 300
 // Bound the wait for the worker to checkpoint + close its DB before we hard
 // terminate it. Always falls through to terminate() so teardown can't hang.
 const GRACEFUL_CLOSE_TIMEOUT_MS = 2_000
@@ -123,6 +135,8 @@ export interface SearchIndexWorkerClientOptions {
   outcomeLookupTimeoutMs?: number
   outcomeLookupAttempts?: number
   terminationTimeoutMs?: number
+  kernelClient?: SearchKernelClient
+  useKernelProcess?: boolean
 }
 
 // ---------- Message Types (mirrors worker) ----------
@@ -151,6 +165,7 @@ interface PendingTask {
   reject: (error: Error) => void
   startedAt: number
   timeout?: ReturnType<typeof setTimeout>
+  abort?: () => void
 }
 
 class SearchIndexWorkerTaskTimeoutError extends Error {
@@ -199,7 +214,14 @@ export class SearchIndexWorkerClient {
   private readonly outcomeLookupTimeoutMs: number
   private readonly outcomeLookupAttempts: number
   private readonly terminationTimeoutMs: number
+  private readonly useKernelProcess: boolean
+  private readonly kernelClient: SearchKernelClient | null
+  private kernelWriterActive = false
+  private kernelInitInFlight = false
+  private kernelInitGeneration = 0
+  private initAttemptSeq = 0
   private terminationBarrier: Promise<void> | null = null
+  private terminationSeq = 0
   private terminationFailure: Error | null = null
   private readonly idleShutdown = new IdleWorkerShutdownController({
     timeoutMs: FILE_WORKER_IDLE_SHUTDOWN_MS,
@@ -234,6 +256,12 @@ export class SearchIndexWorkerClient {
       options.terminationTimeoutMs,
       DEFAULT_TERMINATION_TIMEOUT_MS
     )
+    this.useKernelProcess =
+      options.useKernelProcess ??
+      (Boolean(options.kernelClient) || isSearchKernelUtilityProcessEnabled())
+    this.kernelClient = this.useKernelProcess
+      ? (options.kernelClient ?? getSharedSearchKernelClient())
+      : null
   }
 
   /**
@@ -247,14 +275,22 @@ export class SearchIndexWorkerClient {
     if (this.initPromise) {
       return this.initPromise
     }
-    this.initPromise = this.doInit(dbPath).catch((error) => {
-      this.initPromise = null
+    const attemptId = ++this.initAttemptSeq
+    const attempt = this.doInit(dbPath, attemptId).catch((error) => {
+      if (this.initAttemptSeq === attemptId) {
+        this.initPromise = null
+      }
       throw error
     })
-    return this.initPromise
+    this.initPromise = attempt
+    return attempt
   }
 
-  private async doInit(dbPath: string): Promise<void> {
+  private async doInit(dbPath: string, attemptId: number): Promise<void> {
+    if (this.useKernelProcess) {
+      await this.doInitKernel(dbPath, attemptId)
+      return
+    }
     const worker = this.ensureWorker()
     const taskId = this.generateTaskId('init')
 
@@ -266,6 +302,40 @@ export class SearchIndexWorkerClient {
       })
       worker.postMessage({ type: 'init', taskId, dbPath })
     })
+  }
+
+  private async doInitKernel(dbPath: string, attemptId: number): Promise<void> {
+    const kernelClient = this.kernelClient!
+    this.assertTerminationConfirmed()
+    this.idleShutdown.cancel()
+    this.kernelInitInFlight = true
+    try {
+      await kernelClient.ensureStarted()
+      if (this.initAttemptSeq !== attemptId) return
+      const generation =
+        typeof kernelClient.getSpawnGeneration === 'function'
+          ? kernelClient.getSpawnGeneration()
+          : 1
+      const taskId = this.generateTaskId('init')
+      this.kernelWriterActive = true
+      if (this.workerStartedAt === null) {
+        this.workerStartedAt = Date.now()
+      }
+      await this.sendKernelMessage(taskId, { type: 'init', taskId, dbPath })
+      if (this.initAttemptSeq === attemptId) {
+        this.kernelInitGeneration = generation
+      }
+    } catch (error) {
+      if (this.initAttemptSeq === attemptId) {
+        this.kernelInitGeneration = 0
+        this.kernelWriterActive = false
+      }
+      throw error
+    } finally {
+      if (this.initAttemptSeq === attemptId) {
+        this.kernelInitInFlight = false
+      }
+    }
   }
 
   /** Atomically retire legacy IDs and upsert provider items in the worker. */
@@ -645,7 +715,10 @@ export class SearchIndexWorkerClient {
       return null
     }
 
-    const cancellation = signal ? new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT) : undefined
+    const cancellation =
+      signal && !this.useKernelProcess
+        ? new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)
+        : undefined
     const cancellationState = cancellation ? new Int32Array(cancellation) : null
     const abort = (): void => {
       if (cancellationState) Atomics.store(cancellationState, 0, 1)
@@ -653,10 +726,8 @@ export class SearchIndexWorkerClient {
     signal?.addEventListener('abort', abort, { once: true })
     try {
       signal?.throwIfAborted()
-      const result = await this.sendAndWaitWithResult<T>(message.taskId, {
-        ...message,
-        cancellation
-      })
+      const payload = cancellation ? { ...message, cancellation } : { ...message }
+      const result = await this.sendAndWaitWithResult<T>(message.taskId, payload)
       if (result === undefined || result === null)
         throw new Error(
           message.type === 'runIndexMaintenanceSlice'
@@ -773,7 +844,35 @@ export class SearchIndexWorkerClient {
     return result ?? []
   }
 
+  async getMetrics(): Promise<WorkerMetricsPayload | null> {
+    return await this.requestMetrics()
+  }
+
   async getStatus(): Promise<WorkerStatusSnapshot> {
+    if (this.useKernelProcess && this.kernelClient) {
+      const pendingCount = this.pending.size
+      const kernelState = this.kernelClient.getState()
+      const kernelPid = this.kernelClient.getPid()
+      const isOnline = this.kernelWriterActive && kernelState === 'ready'
+      const metrics = isOnline ? await this.requestMetrics() : null
+      this.scheduleIdleShutdown()
+      return {
+        name: 'search-index',
+        threadId: isOnline ? kernelPid : null,
+        state: !isOnline ? 'offline' : pendingCount > 0 ? 'busy' : 'idle',
+        pending: pendingCount,
+        lastTask: this.lastTask,
+        lastError: this.lastError,
+        uptimeMs: isOnline && this.workerStartedAt ? Date.now() - this.workerStartedAt : null,
+        metrics:
+          this.toStatusMetrics(metrics) ??
+          (isOnline ? await this.readKernelMemoryFallback() : null),
+        executionMode: 'utility-process',
+        kernelState,
+        kernelPid
+      }
+    }
+
     const worker = this.worker
     const pendingCount = this.pending.size
     const metrics = worker ? await this.requestMetrics() : null
@@ -788,6 +887,29 @@ export class SearchIndexWorkerClient {
       uptimeMs: worker && this.workerStartedAt ? Date.now() - this.workerStartedAt : null,
       metrics:
         this.toStatusMetrics(metrics) ?? (worker ? await this.readHeapStatistics(worker) : null)
+    }
+  }
+
+  private async readKernelMemoryFallback(): Promise<WorkerStatusSnapshot['metrics']> {
+    if (!this.kernelClient || this.kernelClient.getState() !== 'ready') return null
+    try {
+      const snapshot: SearchKernelMemorySnapshot = await this.kernelClient.memory({
+        timeoutMs: KERNEL_METRICS_TIMEOUT_MS
+      })
+      return {
+        capturedAt: snapshot.capturedAt,
+        memory: {
+          rss: snapshot.rssBytes,
+          heapUsed: snapshot.heapUsedBytes,
+          heapTotal: snapshot.heapTotalBytes,
+          external: snapshot.externalBytes,
+          arrayBuffers: snapshot.arrayBuffersBytes
+        },
+        cpu: { user: 0, system: 0, percent: null },
+        eventLoop: null
+      }
+    } catch {
+      return null
     }
   }
 
@@ -877,6 +999,28 @@ export class SearchIndexWorkerClient {
 
   async shutdown(): Promise<void> {
     this.shuttingDown = true
+    if (this.useKernelProcess) {
+      const termination = this.beginWorkerTermination({
+        keepInitState: false,
+        graceful: true,
+        gracefulTimeoutMs: SHUTDOWN_GRACEFUL_CLOSE_TIMEOUT_MS
+      })
+      this.rejectPendingTasks(new Error('SEARCH_INDEX_WRITER_CLOSED'))
+      this.resolvePendingMetrics()
+      this.replacementSessions.clear()
+      await Promise.race([
+        termination.catch((error) => {
+          log.warn('[SearchIndexWorkerClient] Kernel writer close did not settle after shutdown', {
+            error
+          })
+        }),
+        new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, SHUTDOWN_GRACEFUL_CLOSE_TIMEOUT_MS)
+          timer.unref?.()
+        })
+      ])
+      return
+    }
     // A native libSQL call cannot process the close message until it returns. Detach first so an
     // uninterruptible SQLite wait cannot keep Electron alive, then give healthy writes a short
     // grace period before requesting termination.
@@ -911,6 +1055,28 @@ export class SearchIndexWorkerClient {
   private async ensureInitialized(signal?: AbortSignal): Promise<void> {
     signal?.throwIfAborted()
     this.assertTerminationConfirmed()
+    if (
+      this.useKernelProcess &&
+      this.kernelClient &&
+      this.initPromise &&
+      !this.kernelInitInFlight
+    ) {
+      const currentGeneration =
+        typeof this.kernelClient.getSpawnGeneration === 'function'
+          ? this.kernelClient.getSpawnGeneration()
+          : this.kernelInitGeneration
+      const kernelState = this.kernelClient.getState()
+      if (
+        !this.kernelWriterActive ||
+        kernelState !== 'ready' ||
+        (this.kernelInitGeneration > 0 && currentGeneration !== this.kernelInitGeneration)
+      ) {
+        this.initAttemptSeq += 1
+        this.initPromise = null
+        this.kernelInitGeneration = 0
+        this.kernelWriterActive = false
+      }
+    }
     const initialization = this.initPromise ?? (this.dbPath ? this.init(this.dbPath) : null)
     if (!initialization) {
       throw new Error('SearchIndexWorkerClient not initialized — call init(dbPath) first')
@@ -985,6 +1151,11 @@ export class SearchIndexWorkerClient {
   }
 
   private sendAndWait(taskId: string, message: unknown): Promise<void> {
+    if (this.useKernelProcess) {
+      return this.sendKernelMessage<void>(taskId, message as Record<string, unknown>).then(
+        () => undefined
+      )
+    }
     return new Promise<void>((resolve, reject) => {
       this.pending.set(taskId, {
         resolve: () => resolve(),
@@ -1000,6 +1171,9 @@ export class SearchIndexWorkerClient {
     message: unknown,
     timeoutMs?: number
   ): Promise<T | undefined> {
+    if (this.useKernelProcess) {
+      return this.sendKernelMessage<T>(taskId, message as Record<string, unknown>, timeoutMs)
+    }
     return new Promise<T | undefined>((resolve, reject) => {
       const pending: PendingTask = {
         resolve: (value) => resolve(value as T | undefined),
@@ -1018,6 +1192,172 @@ export class SearchIndexWorkerClient {
       this.pending.set(taskId, pending)
       this.ensureWorker().postMessage(message)
     })
+  }
+
+  private sendKernelMessage<T>(
+    taskId: string,
+    message: Record<string, unknown>,
+    timeoutMs?: number
+  ): Promise<T | undefined> {
+    this.assertTerminationConfirmed()
+    this.idleShutdown.cancel()
+    const kernelClient = this.kernelClient!
+    const startedAt = Date.now()
+    const abortController = new AbortController()
+    const kernelTimeoutMs =
+      timeoutMs !== undefined
+        ? timeoutMs
+        : message.type === 'vacuum'
+          ? KERNEL_VACUUM_TASK_TIMEOUT_MS
+          : KERNEL_DEFAULT_WRITER_TASK_TIMEOUT_MS
+
+    return new Promise<T | undefined>((resolve, reject) => {
+      const pending: PendingTask = {
+        resolve: (value) => resolve(value as T | undefined),
+        reject,
+        startedAt,
+        abort: () => abortController.abort()
+      }
+      if (timeoutMs !== undefined) {
+        pending.timeout = setTimeout(() => {
+          if (this.pending.get(taskId) !== pending) return
+          this.pending.delete(taskId)
+          abortController.abort()
+          this.resolveDrainWaitersIfIdle()
+          pending.reject(new SearchIndexWorkerTaskTimeoutError(taskId, timeoutMs))
+        }, timeoutMs)
+        pending.timeout.unref?.()
+      }
+      this.pending.set(taskId, pending)
+
+      void kernelClient
+        .invokeTask<WorkerMessage>(
+          SEARCH_KERNEL_TASKS.WRITER_REQUEST,
+          { message },
+          { timeoutMs: kernelTimeoutMs, signal: abortController.signal }
+        )
+        .then(
+          (response) => {
+            if (this.pending.get(taskId) !== pending) return
+            this.handleKernelWriterResponse(taskId, pending, response)
+          },
+          (error: unknown) => {
+            if (this.pending.get(taskId) !== pending) return
+            this.pending.delete(taskId)
+            if (pending.timeout) clearTimeout(pending.timeout)
+            this.resolveDrainWaitersIfIdle()
+            const mapped = this.mapKernelWriterError(taskId, timeoutMs, error)
+            const report = operationalErrorService.report({
+              domain: 'search-index-worker',
+              operation: resolveTaskOperation(taskId),
+              error: mapped,
+              severity: 'error',
+              userImpact: 'degraded',
+              captureDetail: false
+            })
+            this.lastError = report.publicMessage
+            this.lastTask = {
+              id: taskId,
+              startedAt: new Date(pending.startedAt).toISOString(),
+              finishedAt: new Date().toISOString(),
+              durationMs: Date.now() - pending.startedAt,
+              error: report.publicMessage
+            }
+            pending.reject(mapped)
+            this.scheduleIdleShutdown()
+          }
+        )
+    })
+  }
+
+  private handleKernelWriterResponse(
+    taskId: string,
+    pending: PendingTask,
+    response: unknown
+  ): void {
+    this.pending.delete(taskId)
+    if (pending.timeout) clearTimeout(pending.timeout)
+    this.resolveDrainWaitersIfIdle()
+
+    if (
+      response &&
+      typeof response === 'object' &&
+      'type' in response &&
+      (response.type === 'done' || response.type === 'result')
+    ) {
+      this.lastTask = {
+        id: taskId,
+        startedAt: new Date(pending.startedAt).toISOString(),
+        finishedAt: new Date().toISOString(),
+        durationMs: Date.now() - pending.startedAt,
+        error: null
+      }
+      pending.resolve((response as DoneMessage | WorkerResultMessage).result)
+      this.scheduleIdleShutdown()
+      return
+    }
+
+    if (
+      response &&
+      typeof response === 'object' &&
+      'type' in response &&
+      response.type === 'error'
+    ) {
+      const errorPayload = (response as LegacyErrorMessage | SearchIndexWorkerErrorMessage).error
+      const remoteError = deserializeSearchIndexWorkerError(errorPayload)
+      if (remoteError.message.includes('Worker not initialized')) {
+        this.initPromise = null
+        this.kernelInitGeneration = 0
+        this.kernelWriterActive = false
+      }
+      const report = operationalErrorService.report({
+        domain: 'search-index-worker',
+        operation: resolveTaskOperation(taskId),
+        error: remoteError,
+        severity: 'error',
+        userImpact: 'degraded',
+        captureDetail: false
+      })
+      this.lastError = report.publicMessage
+      this.lastTask = {
+        id: taskId,
+        startedAt: new Date(pending.startedAt).toISOString(),
+        finishedAt: new Date().toISOString(),
+        durationMs: Date.now() - pending.startedAt,
+        error: report.publicMessage
+      }
+      pending.reject(remoteError)
+      this.scheduleIdleShutdown()
+      return
+    }
+
+    pending.reject(new Error('SEARCH_INDEX_KERNEL_INVALID_WRITER_RESPONSE'))
+    this.scheduleIdleShutdown()
+  }
+
+  private mapKernelWriterError(
+    taskId: string,
+    timeoutMs: number | undefined,
+    error: unknown
+  ): Error {
+    if (error instanceof SearchKernelClientError) {
+      if (error.code === SEARCH_KERNEL_ERROR_CODES.TIMEOUT && timeoutMs !== undefined) {
+        return new SearchIndexWorkerTaskTimeoutError(taskId, timeoutMs)
+      }
+      if (
+        error.code === SEARCH_KERNEL_ERROR_CODES.EXITED ||
+        error.code === SEARCH_KERNEL_ERROR_CODES.NOT_READY ||
+        error.code === SEARCH_KERNEL_ERROR_CODES.SHUTTING_DOWN ||
+        error.code === SEARCH_KERNEL_ERROR_CODES.DEGRADED ||
+        error.code === 'SEARCH_INDEX_WRITER_EXITED'
+      ) {
+        this.initPromise = null
+        this.kernelInitGeneration = 0
+        this.kernelWriterActive = false
+      }
+      return error
+    }
+    return error instanceof Error ? error : new Error(String(error))
   }
 
   private handleMessage(message: WorkerMessage): void {
@@ -1177,6 +1517,7 @@ export class SearchIndexWorkerClient {
   private rejectPendingTasks(error: Error): void {
     for (const pending of this.pending.values()) {
       if (pending.timeout) clearTimeout(pending.timeout)
+      pending.abort?.()
       pending.reject(error)
     }
     this.pending.clear()
@@ -1205,6 +1546,55 @@ export class SearchIndexWorkerClient {
   }
 
   private async requestMetrics(): Promise<WorkerMetricsPayload | null> {
+    if (this.useKernelProcess) {
+      if (
+        !this.kernelWriterActive ||
+        !this.kernelClient ||
+        this.kernelClient.getState() !== 'ready'
+      ) {
+        return null
+      }
+      const kernelClient = this.kernelClient
+      const requestId = `metrics-${Date.now()}-${Math.random().toString(16).slice(2)}`
+      const abortController = new AbortController()
+      return new Promise((resolve) => {
+        const settle = (value: WorkerMetricsPayload | null): void => {
+          const entry = this.metricsPending.get(requestId)
+          if (!entry) return
+          this.metricsPending.delete(requestId)
+          clearTimeout(entry.timeout)
+          resolve(value)
+          this.scheduleIdleShutdown()
+        }
+        const timeout = setTimeout(() => {
+          abortController.abort()
+          settle(null)
+        }, KERNEL_METRICS_TIMEOUT_MS)
+        timeout.unref?.()
+        this.metricsPending.set(requestId, { resolve, timeout })
+        void kernelClient
+          .invokeTask<
+            WorkerMetricsResponse | { type: 'metrics'; requestId: string; metrics: null }
+          >(SEARCH_KERNEL_TASKS.WRITER_REQUEST, { message: { type: 'metrics', requestId } }, { timeoutMs: KERNEL_METRICS_TIMEOUT_MS, signal: abortController.signal })
+          .then(
+            (response) => {
+              const payload =
+                response &&
+                typeof response === 'object' &&
+                response.type === 'metrics' &&
+                response.metrics &&
+                typeof response.metrics === 'object'
+                  ? response.metrics
+                  : null
+              settle(payload)
+            },
+            () => {
+              settle(null)
+            }
+          )
+      })
+    }
+
     const worker = this.worker
     if (!worker) return null
 
@@ -1255,8 +1645,9 @@ export class SearchIndexWorkerClient {
   }
 
   private scheduleIdleShutdown(): void {
+    const hasActiveWorker = this.useKernelProcess ? this.kernelWriterActive : this.worker !== null
     if (
-      !this.worker ||
+      !hasActiveWorker ||
       this.pending.size > 0 ||
       this.metricsPending.size > 0 ||
       this.replacementSessions.size > 0 ||
@@ -1313,11 +1704,81 @@ export class SearchIndexWorkerClient {
   private beginWorkerTermination(options: {
     keepInitState: boolean
     graceful?: boolean
+    gracefulTimeoutMs?: number
   }): Promise<void> {
     this.idleShutdown.cancel()
     if (!options.keepInitState) this.dbPath = null
     if (this.terminationFailure) return Promise.reject(this.terminationFailure)
     if (this.terminationBarrier) return this.terminationBarrier
+
+    if (this.useKernelProcess) {
+      const wasActive = this.kernelWriterActive
+      this.initAttemptSeq += 1
+      this.kernelInitInFlight = false
+      this.kernelWriterActive = false
+      this.workerStartedAt = null
+      this.lastMetricsSample = null
+      this.initPromise = null
+      this.kernelInitGeneration = 0
+
+      if (!wasActive || !this.kernelClient || this.kernelClient.getState() !== 'ready') {
+        return Promise.resolve()
+      }
+
+      const graceful = options.graceful === true
+      const gracefulTimeoutMs = options.gracefulTimeoutMs ?? GRACEFUL_CLOSE_TIMEOUT_MS
+      const kernelClient = this.kernelClient
+      const termId = ++this.terminationSeq
+      // Close ONLY the writer worker inside the kernel process — never shut down the shared
+      // kernel process itself because reader lanes share the same utilityProcess.
+      // Mirror the direct worker_threads contract: do NOT bound the underlying confirmation
+      // promise with the short caller deadline (`this.terminationTimeoutMs`), so a slow close
+      // keeps writes fail-closed (`pending`) until confirmed and recovers cleanly once exited
+      // instead of permanently latching `terminationFailure`.
+      const termination = (async (): Promise<void> => {
+        for (let attempt = 0; ; attempt += 1) {
+          if (kernelClient.getState() !== 'ready') return
+          try {
+            await kernelClient.invokeTask(
+              SEARCH_KERNEL_TASKS.WRITER_CLOSE,
+              { graceful: attempt === 0 ? graceful : false, timeoutMs: gracefulTimeoutMs },
+              { timeoutMs: KERNEL_DEFAULT_WRITER_TASK_TIMEOUT_MS }
+            )
+            return
+          } catch (error) {
+            if (error instanceof SearchKernelClientError) {
+              if (
+                error.code === SEARCH_KERNEL_ERROR_CODES.EXITED ||
+                error.code === SEARCH_KERNEL_ERROR_CODES.SHUTTING_DOWN ||
+                error.code === SEARCH_KERNEL_ERROR_CODES.NOT_READY ||
+                error.code === SEARCH_KERNEL_ERROR_CODES.DEGRADED
+              ) {
+                return
+              }
+              if (error.code === SEARCH_KERNEL_ERROR_CODES.TIMEOUT) {
+                // Re-query the kernel's in-flight close promise rather than latching failure.
+                continue
+              }
+            }
+            throw error
+          }
+        }
+      })()
+      this.terminationBarrier = termination
+      void termination.then(
+        () => {
+          if (this.terminationSeq !== termId) return
+          this.terminationBarrier = null
+          this.resolveDrainWaitersIfIdle()
+        },
+        () => {
+          if (this.terminationSeq !== termId) return
+          this.terminationFailure = new SearchIndexWorkerTerminationUnconfirmedError('rejected')
+          this.resolveDrainWaitersIfIdle()
+        }
+      )
+      return termination
+    }
 
     const worker = this.worker
     this.worker = null

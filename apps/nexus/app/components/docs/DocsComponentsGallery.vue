@@ -201,6 +201,9 @@ const copy = computed(() => (localeKey.value === 'zh'
       },
       next: '下一步',
       hoverMe: '悬停',
+      foldCardTitle: '折角预览',
+      foldCardHint: '悬停或点击右下角掀开',
+      foldUnderTitle: '底层已解锁',
     }
   : {
       suiteBase: 'Basics',
@@ -317,6 +320,9 @@ const copy = computed(() => (localeKey.value === 'zh'
       },
       next: 'Next',
       hoverMe: 'hover me',
+      foldCardTitle: 'Corner Peel',
+      foldCardHint: 'Hover or click corner to peel',
+      foldUnderTitle: 'Underlay unlocked',
     }))
 
 const inputValue = ref('')
@@ -612,6 +618,7 @@ const paletteItems = computed(() => [
 ])
 const searchPanelValue = ref('')
 const flipped = ref(false)
+const foldGalleryPeeled = ref(false)
 const resizeWide = ref(false)
 const flipTriggerRef = ref<{ $el?: HTMLElement } | null>(null)
 const flipTriggerEl = computed(() => flipTriggerRef.value?.$el ?? null)
@@ -3034,6 +3041,34 @@ function specimenStyle(item: { readonly doc?: string, readonly name?: string, re
                 {{ copy.aboutBody }}
               </p>
             </TxFlipOverlay>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('fold-page')">
+          {{ cellLabel('FoldPage', '折页') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 150px">
+          <ClientOnly>
+            <div class="docs-gallery__fold">
+              <TxFoldCorner v-model="foldGalleryPeeled" corner="bottom-right" size="sm" :radius="14">
+                <template #default>
+                  <div class="docs-gallery__fold-sheet">
+                    <span class="docs-gallery__fold-title">{{ copy.foldCardTitle }}</span>
+                    <span class="docs-gallery__fold-hint">{{ copy.foldCardHint }}</span>
+                  </div>
+                </template>
+                <template #under>
+                  <div class="docs-gallery__fold-under">
+                    <span class="docs-gallery__fold-title">{{ copy.foldUnderTitle }}</span>
+                  </div>
+                </template>
+              </TxFoldCorner>
+            </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>

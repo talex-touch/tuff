@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
 import type { BorderBeamProps } from './types'
-import { computed, h, onBeforeUnmount, onMounted, ref, useId, watch, watchEffect } from 'vue'
+import { computed, h, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, useId, watch, watchEffect } from 'vue'
 import { registerPulseInstance } from './pulse-driver'
 import { generateBeamCSS, getPulseDriverConfig, sizePresets, sizeThemePresets } from './styles'
 
@@ -53,8 +53,46 @@ const systemTheme = ref<'dark' | 'light'>('dark')
 const isActive = ref(props.active)
 const isFading = ref(false)
 const isVisible = ref(true)
+const isDocumentHidden = ref(typeof document !== 'undefined' ? Boolean(document.hidden) : false)
+const isWindowFocused = ref(
+  typeof document !== 'undefined' && typeof document.hasFocus === 'function'
+    ? document.hasFocus()
+    : true,
+)
+const isActivated = ref(true)
+const isReducedMotion = ref(
+  typeof window !== 'undefined'
+    ? (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
+    : false,
+)
+const isLowBatteryMotion = ref(
+  typeof document !== 'undefined'
+    ? document.documentElement?.getAttribute('data-low-battery-motion') === '1'
+    : false,
+)
 const detectedRadius = ref<number | null>(null)
 const pulseGlowScale = ref({ x: 1, y: 1 })
+
+function readLowBatteryMotion(): boolean {
+  return typeof document !== 'undefined'
+    ? document.documentElement?.getAttribute('data-low-battery-motion') === '1'
+    : false
+}
+
+function readReducedMotion(): boolean {
+  return typeof window !== 'undefined'
+    ? (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
+    : false
+}
+
+function syncEnvironmentState(): void {
+  isDocumentHidden.value = typeof document !== 'undefined' ? Boolean(document.hidden) : false
+  if (typeof document !== 'undefined' && typeof document.hasFocus === 'function' && !document.hasFocus()) {
+    isWindowFocused.value = false
+  }
+  isLowBatteryMotion.value = readLowBatteryMotion()
+  isReducedMotion.value = readReducedMotion()
+}
 
 watch([() => props.active, isActive, isFading], ([active]) => {
   if (active && !isActive.value && !isFading.value)
@@ -126,15 +164,79 @@ function syncGlowObserver(): void {
 watch(() => props.borderRadius, detectRadius)
 watch(() => props.size, syncGlowObserver)
 
+const unmountCleanups: Array<() => void> = []
+
+onActivated(() => {
+  isActivated.value = true
+  syncEnvironmentState()
+})
+
+onDeactivated(() => {
+  isActivated.value = false
+})
+
 onMounted(() => {
+  isDocumentHidden.value = typeof document !== 'undefined' ? Boolean(document.hidden) : false
+  isWindowFocused.value =
+    typeof document !== 'undefined' && typeof document.hasFocus === 'function'
+      ? document.hasFocus()
+      : true
+  isLowBatteryMotion.value = readLowBatteryMotion()
+  isReducedMotion.value = readReducedMotion()
+
   if (window.matchMedia) {
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     systemTheme.value = mq.matches ? 'dark' : 'light'
     const onChange = (e: MediaQueryListEvent): void => {
       systemTheme.value = e.matches ? 'dark' : 'light'
     }
-    mq.addEventListener('change', onChange)
-    onBeforeUnmount(() => mq.removeEventListener('change', onChange))
+    mq.addEventListener?.('change', onChange)
+    unmountCleanups.push(() => mq.removeEventListener?.('change', onChange))
+
+    const reducedMq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    isReducedMotion.value = reducedMq.matches
+    const onReducedChange = (e: MediaQueryListEvent): void => {
+      isReducedMotion.value = e.matches
+    }
+    reducedMq.addEventListener?.('change', onReducedChange)
+    unmountCleanups.push(() => reducedMq.removeEventListener?.('change', onReducedChange))
+  }
+
+  const onVisibilityChange = (): void => {
+    isDocumentHidden.value = Boolean(document.hidden)
+    if (!document.hidden) {
+      if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
+        isWindowFocused.value = false
+      }
+      isLowBatteryMotion.value = readLowBatteryMotion()
+    }
+  }
+  const onWindowFocus = (): void => {
+    isWindowFocused.value = true
+    isLowBatteryMotion.value = readLowBatteryMotion()
+  }
+  const onWindowBlur = (): void => {
+    isWindowFocused.value = false
+  }
+
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  window.addEventListener('focus', onWindowFocus)
+  window.addEventListener('blur', onWindowBlur)
+  unmountCleanups.push(() => {
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+    window.removeEventListener('focus', onWindowFocus)
+    window.removeEventListener('blur', onWindowBlur)
+  })
+
+  if (typeof MutationObserver !== 'undefined' && document.documentElement) {
+    const lowBatteryMo = new MutationObserver(() => {
+      isLowBatteryMotion.value = readLowBatteryMotion()
+    })
+    lowBatteryMo.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-low-battery-motion'],
+    })
+    unmountCleanups.push(() => lowBatteryMo.disconnect())
   }
 
   // Pause the (paint-heavy) animations while the element is scrolled
@@ -149,7 +251,7 @@ onMounted(() => {
       { rootMargin: '256px' },
     )
     io.observe(rootEl.value)
-    onBeforeUnmount(() => io.disconnect())
+    unmountCleanups.push(() => io.disconnect())
   }
 
   detectRadius()
@@ -162,13 +264,16 @@ onMounted(() => {
       syncGlowObserver()
     })
     mo.observe(rootEl.value, { childList: true, subtree: false })
-    onBeforeUnmount(() => mo.disconnect())
+    unmountCleanups.push(() => mo.disconnect())
   }
+})
 
-  onBeforeUnmount(() => {
-    glowObserver?.disconnect()
-    glowObserver = null
-  })
+onBeforeUnmount(() => {
+  while (unmountCleanups.length > 0) {
+    unmountCleanups.pop()?.()
+  }
+  glowObserver?.disconnect()
+  glowObserver = null
 })
 
 function onAnimationEnd(e: AnimationEvent): void {
@@ -224,18 +329,25 @@ const driverConfig = computed(() =>
     : null,
 )
 
+const isMotionPaused = computed(() =>
+  !isVisible.value
+  || isDocumentHidden.value
+  || !isWindowFocused.value
+  || !isActivated.value
+  || isReducedMotion.value
+  || isLowBatteryMotion.value,
+)
+
 // Drive the Pulse breathing from the shared, fps-capped rAF loop while the
-// instance is on, onscreen, and the user hasn't requested reduced motion.
+// instance is on, onscreen, visible, focused, activated, and motion is allowed.
 watchEffect((onCleanup) => {
   const config = driverConfig.value
   if (!config)
     return
-  if (!(isActive.value || isFading.value) || !isVisible.value)
+  if (!(isActive.value || isFading.value) || isMotionPaused.value)
     return
   const el = rootEl.value
   if (!el)
-    return
-  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
     return
   onCleanup(registerPulseInstance(el, config))
 })
@@ -257,7 +369,7 @@ const rootStyle = computed<CSSProperties>(() => ({
     :data-beam="id"
     :data-active="isActive && !isFading ? '' : undefined"
     :data-fading="isFading ? '' : undefined"
-    :data-paused="isActive && !isFading && !isVisible ? '' : undefined"
+    :data-paused="isActive && !isFading && isMotionPaused ? '' : undefined"
     :style="rootStyle"
     @animationend="onAnimationEnd"
   >

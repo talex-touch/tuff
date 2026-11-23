@@ -1,10 +1,16 @@
+import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
 import {
+  API_PROBE_SAMPLE_LENGTH,
   apiProbes,
   CHROMIUM_LAUNCH_OPTIONS,
+  collectApiProbes,
+  collectDeployedPreviewFailures,
+  collectRouteBudgetFailures,
   extractServiceWorkerPrecacheUrls,
   parseArgs,
   relativeEvidencePath,
+  resolveDeployedPreviewStatus,
   resolveOutputEvidenceFile,
   resolveOutputRoot,
   routeBudgets,
@@ -119,5 +125,250 @@ describe('collect-deployed-preview-evidence helpers', () => {
 
     expect(miss.realBfcacheHit).toBe(false)
     expect(miss.navigationType).toBe('back_forward')
+  })
+
+  it('resolves deployed preview status across PASS, PASS_WITH_WARNINGS, PENDING_AUTH, and FAIL', () => {
+    const okRoutes = [{ path: '/', ok: true, status: 200 }, { path: '/store/', ok: true, status: 200 }]
+    const okApi = [{ name: 'docs navigation', ok: true, status: 200, expected: [200] }]
+
+    expect(resolveDeployedPreviewStatus({
+      authState: 'output/playwright/auth.json',
+      routes: okRoutes,
+      api: okApi,
+      failures: [],
+      warnings: [],
+    })).toBe('PASS')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: 'output/playwright/auth.json',
+      routes: okRoutes,
+      api: okApi,
+      failures: [],
+      warnings: ['non-fatal observation'],
+    })).toBe('PASS_WITH_WARNINGS')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: '',
+      routes: okRoutes,
+      api: okApi,
+      failures: ['real provider callback is pending', 'authenticated dashboard smoke is pending'],
+      warnings: ['No authenticated storage state supplied; authenticated dashboard and provider callback are pending'],
+    })).toBe('PENDING_AUTH')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: '   ',
+      routes: okRoutes,
+      api: okApi,
+      failures: [],
+      warnings: [],
+    })).toBe('PENDING_AUTH')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: '',
+      routes: [{ path: '/', ok: true, status: 200 }, { path: '/store/', ok: false, status: 500 }],
+      api: okApi,
+      failures: ['route probe failed (/store/): returned 500'],
+      warnings: ['No authenticated storage state supplied'],
+    })).toBe('FAIL')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: '',
+      routes: okRoutes,
+      api: [{ name: 'docs navigation', ok: false, status: 502, expected: [200] }],
+      failures: ['API probe failed (docs navigation): returned 502, expected 200'],
+      warnings: [],
+    })).toBe('FAIL')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: 'output/playwright/auth.json',
+      routes: okRoutes,
+      api: okApi,
+      failures: ['real bfcache hit not observed'],
+      warnings: [],
+    })).toBe('FAIL')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: 'output/playwright/auth.json',
+      routes: okRoutes,
+      api: okApi,
+      failures: ['real provider callback is pending'],
+      warnings: [],
+    })).toBe('FAIL')
+  })
+
+  it('collects honest failure summaries for failed routes, API probes, bfcache, and auth checks', () => {
+    expect(collectDeployedPreviewFailures({
+      api: [
+        { name: 'docs navigation', ok: true, status: 200, expected: [200] },
+        { name: 'auth session shell', ok: false, status: 500, expected: [200] },
+      ],
+      routes: [
+        { path: '/', ok: true, status: 200 },
+        { path: '/store/', ok: false, status: 503 },
+      ],
+      bfcache: { realBfcacheHit: false },
+      authProviderCallback: { ok: false, authenticated: false },
+      authenticatedDashboard: { ok: false, authenticated: false },
+    })).toEqual([
+      'API probe failed (auth session shell): returned 500, expected 200',
+      'route probe failed (/store/): returned 503',
+      'real bfcache hit not observed',
+      'real provider callback is pending',
+      'authenticated dashboard smoke is pending',
+    ])
+
+    expect(collectDeployedPreviewFailures({
+      api: [{ name: 'docs navigation', ok: true, status: 200, expected: [200] }],
+      routes: [{ path: '/', ok: true, status: 200 }],
+      bfcache: { realBfcacheHit: true },
+      authProviderCallback: { ok: true, authenticated: true },
+      authenticatedDashboard: { ok: true, authenticated: true },
+    })).toEqual([])
+
+    expect(collectDeployedPreviewFailures({
+      api: [{ name: 'docs navigation', ok: true, status: 200, expected: [200] }],
+      routes: [{ path: '/', ok: true, status: 200 }],
+      bfcache: { realBfcacheHit: true },
+      authProviderCallback: { ok: false, authenticated: true },
+      authenticatedDashboard: { ok: true, authenticated: true },
+    })).toEqual(['real provider callback evidence is not ok'])
+  })
+
+  it('flags route request budget violations as FAIL even when HTTP status is 200', () => {
+    const overDocsRoute = {
+      path: '/store/',
+      ok: true,
+      status: 200,
+      requests: {
+        docs: 1,
+        nuxtChunkAssets: 40,
+        total: 45,
+        failed: [],
+        budget: { maxDocs: 0, maxNuxt: 75, maxTotal: 80, maxFailed: 0 },
+      },
+    }
+    const okMediaAbortRoute = {
+      path: '/',
+      ok: true,
+      status: 200,
+      requests: {
+        docs: 0,
+        nuxtChunkAssets: 80,
+        total: 90,
+        failed: [{ url: 'https://tuff.tagzxia.com/shots/demo.mp4', status: null, failure: 'net::ERR_ABORTED' }],
+        budget: { maxDocs: 0, maxNuxt: 100, maxTotal: 120, maxFailed: 3, allowMediaAbortFailures: true },
+      },
+    }
+    const unexpectedFailHomeRoute = {
+      path: '/',
+      ok: true,
+      status: 200,
+      requests: {
+        docs: 0,
+        nuxtChunkAssets: 80,
+        total: 90,
+        failed: [{ url: 'https://tuff.tagzxia.com/api/other', status: null, failure: 'net::ERR_FAILED' }],
+        budget: { maxDocs: 0, maxNuxt: 100, maxTotal: 120, maxFailed: 3, allowMediaAbortFailures: true },
+      },
+    }
+    const okApi = [{ name: 'docs navigation', ok: true, status: 200, expected: [200] }]
+
+    expect(collectRouteBudgetFailures(okMediaAbortRoute)).toEqual([])
+    expect(collectRouteBudgetFailures(overDocsRoute)).toEqual([
+      'route probe /store/ made 1 docs requests, expected <= 0',
+    ])
+    expect(collectRouteBudgetFailures(unexpectedFailHomeRoute)).toEqual([
+      'route probe / has unexpected failed requests: https://tuff.tagzxia.com/api/other',
+    ])
+
+    expect(resolveDeployedPreviewStatus({
+      authState: 'output/playwright/auth.json',
+      routes: [okMediaAbortRoute],
+      api: okApi,
+      failures: [],
+      warnings: [],
+    })).toBe('PASS')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: 'output/playwright/auth.json',
+      routes: [overDocsRoute],
+      api: okApi,
+      failures: [],
+      warnings: [],
+    })).toBe('FAIL')
+
+    expect(resolveDeployedPreviewStatus({
+      authState: '',
+      routes: [unexpectedFailHomeRoute],
+      api: okApi,
+      failures: [],
+      warnings: [],
+    })).toBe('FAIL')
+
+    expect(collectDeployedPreviewFailures({
+      api: okApi,
+      routes: [overDocsRoute],
+      bfcache: { realBfcacheHit: true },
+      authProviderCallback: { ok: true, authenticated: true },
+      authenticatedDashboard: { ok: true, authenticated: true },
+    })).toEqual(['route probe /store/ made 1 docs requests, expected <= 0'])
+  })
+
+  it('captures up to 512 chars per API probe sample so sidebar normalizedPath is preserved', async () => {
+    expect(API_PROBE_SAMPLE_LENGTH).toBe(512)
+
+    const longSidebarPayload = `${JSON.stringify([{
+      title: 'Alert',
+      description: 'Displays important feedback messages with semantic styling, icons, dismiss controls, and accessible announcements for users.',
+      tags: ['feedback', 'status', 'banner', 'notification'],
+      normalizedPath: '/docs/dev/components/alert',
+    }])}${'x'.repeat(600)}`
+
+    expect(longSidebarPayload.indexOf('normalizedPath')).toBeGreaterThan(160)
+    expect(longSidebarPayload.indexOf('normalizedPath')).toBeLessThan(API_PROBE_SAMPLE_LENGTH)
+
+    const mockFetch = async (url) => {
+      if (url.endsWith('/api/docs/sidebar-components/en')) {
+        return {
+          status: 200,
+          headers: new Headers(),
+          text: async () => longSidebarPayload,
+        }
+      }
+      if (url.includes('/api/auth/callback/github')) {
+        return {
+          status: 302,
+          headers: new Headers({ location: '/api/auth/error?error=Callback' }),
+          text: async () => 'Redirecting to /api/auth/error?error=Callback',
+        }
+      }
+      if (url.endsWith('/api/dashboard/team')) {
+        return {
+          status: 401,
+          headers: new Headers(),
+          text: async () => '{"statusCode": 401,"message": "Unauthorized"}',
+        }
+      }
+      if (url.includes('?path=/docs/') && !url.includes('/api/docs/view')) {
+        return { status: 404, headers: new Headers(), text: async () => 'Not Found' }
+      }
+      if (url.includes('/api/docs/navigation?locale=en') || url.includes('/api/docs/sidebar-components?locale=en')) {
+        return { status: 404, headers: new Headers(), text: async () => 'Not Found' }
+      }
+      return {
+        status: 200,
+        headers: new Headers(),
+        text: async () => '{}',
+      }
+    }
+
+    const results = await collectApiProbes('https://tuff.tagzxia.com', mockFetch)
+    const sidebarProbe = results.find(item => item.name === 'docs sidebar components')
+
+    expect(sidebarProbe).toBeDefined()
+    expect(sidebarProbe.ok).toBe(true)
+    expect(sidebarProbe.sample.length).toBe(512)
+    expect(sidebarProbe.sample).toContain('"normalizedPath"')
+    expect(sidebarProbe.bytes).toBe(Buffer.byteLength(longSidebarPayload))
   })
 })

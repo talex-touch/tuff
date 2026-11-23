@@ -23,6 +23,11 @@ export const DEFAULT_VITE_DEV_PORT = 5173
 export const DEFAULT_PROCESS_FILTER = 'tuff|talex'
 export const RAW_MAIN_PROCESS_CHANNEL = '@main-process-message'
 export const PERFORMANCE_GET_REPORT_EVENT = 'app:performance:get-report'
+export const ISOLATED_PROFILE_ROOT_NAMES = ['tuff', 'tuff-dev']
+export const ISOLATED_APP_SETTINGS = Object.freeze({
+  beginner: Object.freeze({ init: true }),
+  dev: Object.freeze({ developerMode: true })
+})
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1'])
 const PROCESS_ROLES = ['Browser', 'GPU', 'Renderer', 'Utility', 'Other']
@@ -1408,15 +1413,142 @@ export function validateWebSocketDebuggerUrl(wsUrl) {
   return parsed.toString()
 }
 
-function selectCoreBoxTarget(targets) {
+export function buildIsolatedPackagedLaunchEnv({
+  userDataDir,
+  isolatedHome,
+  baseEnv = process.env,
+  platform = process.platform
+} = {}) {
+  if (!userDataDir || typeof userDataDir !== 'string' || !userDataDir.trim()) {
+    throw new Error('buildIsolatedPackagedLaunchEnv requires a non-empty userDataDir')
+  }
+  const resolvedUserDataDir = path.resolve(userDataDir)
+  const resolvedIsolatedHome =
+    isolatedHome && typeof isolatedHome === 'string' && isolatedHome.trim()
+      ? path.resolve(isolatedHome)
+      : path.join(resolvedUserDataDir, 'home')
+
+  const env = { ...baseEnv }
+  for (const key of Object.keys(env)) {
+    if (
+      key === 'ELECTRON_RUN_AS_NODE' ||
+      key === 'INIT_CWD' ||
+      key.startsWith('NODE_') ||
+      key.startsWith('TSX_') ||
+      key.startsWith('npm_') ||
+      key.startsWith('PNPM_')
+    ) {
+      delete env[key]
+    }
+  }
+
+  const delimiter = platform === 'win32' ? ';' : ':'
+  if (typeof env.PATH === 'string' && env.PATH.length > 0) {
+    env.PATH = env.PATH.split(delimiter)
+      .filter((entry) => {
+        if (!entry) return false
+        const isAbs =
+          platform === 'win32' ? path.win32.isAbsolute(entry) : path.posix.isAbsolute(entry)
+        const normalized = entry.replace(/\\/g, '/')
+        return isAbs && !normalized.includes('node_modules/.bin')
+      })
+      .join(delimiter)
+  }
+
+  return {
+    ...env,
+    FORCE_COLOR: '0',
+    HOME: resolvedIsolatedHome,
+    TUFF_FILE_PROVIDER_BASE_WATCH_PATHS: resolvedIsolatedHome,
+    TUFF_STARTUP_BENCHMARK_USER_DATA_DIR: resolvedUserDataDir,
+    TUFF_PACKAGED_ACCEPTANCE_ISOLATED: '1'
+  }
+}
+
+export async function seedIsolatedProfileSettings(userDataDir, { isolatedHome } = {}) {
+  if (!userDataDir || typeof userDataDir !== 'string' || !userDataDir.trim()) {
+    throw new Error('seedIsolatedProfileSettings requires a non-empty userDataDir')
+  }
+  const resolvedUserDataDir = path.resolve(userDataDir)
+  const resolvedIsolatedHome =
+    isolatedHome && typeof isolatedHome === 'string' && isolatedHome.trim()
+      ? path.resolve(isolatedHome)
+      : path.join(resolvedUserDataDir, 'home')
+
+  await mkdir(resolvedUserDataDir, { recursive: true })
+  await mkdir(resolvedIsolatedHome, { recursive: true })
+
+  const settingsPaths = []
+  for (const rootName of ISOLATED_PROFILE_ROOT_NAMES) {
+    const configDir = path.join(resolvedUserDataDir, rootName, 'modules', 'config')
+    const settingsPath = path.join(configDir, 'app-setting.ini')
+    await mkdir(configDir, { recursive: true })
+
+    let merged = {
+      beginner: { init: true },
+      dev: { developerMode: true }
+    }
+    if (existsSync(settingsPath)) {
+      try {
+        const parsed = JSON.parse(await readFile(settingsPath, 'utf8'))
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          merged = {
+            ...parsed,
+            beginner: {
+              ...(parsed.beginner && typeof parsed.beginner === 'object' ? parsed.beginner : {}),
+              init: true
+            },
+            dev: {
+              ...(parsed.dev && typeof parsed.dev === 'object' ? parsed.dev : {}),
+              developerMode: true
+            }
+          }
+        }
+      } catch {
+        // Overwrite malformed settings with canonical isolated defaults
+      }
+    }
+
+    await writeFile(settingsPath, `${JSON.stringify(merged, null, 2)}\n`, 'utf8')
+    settingsPaths.push(settingsPath)
+  }
+
+  return {
+    userDataDir: resolvedUserDataDir,
+    isolatedHome: resolvedIsolatedHome,
+    settingsPaths
+  }
+}
+
+export function rankCoreBoxCandidateTargets(targets) {
+  if (!Array.isArray(targets)) return []
   const pageTargets = targets.filter(
-    (target) => target && target.type === 'page' && typeof target.webSocketDebuggerUrl === 'string'
+    (target) =>
+      target &&
+      target.type === 'page' &&
+      typeof target.webSocketDebuggerUrl === 'string' &&
+      !/^devtools:\/\//i.test(String(target.url ?? ''))
   )
-  return (
-    pageTargets.find((target) => /corebox|core-box|box/i.test(`${target.title} ${target.url}`)) ||
-    pageTargets[0] ||
-    null
-  )
+
+  const scoreTarget = (target) => {
+    const label = `${target.title ?? ''} ${target.url ?? ''}`
+    if (/\bcorebox\b|core-box|\/#\/?(?:core-?box|box)(?:[/?#]|$)/i.test(label)) {
+      return 0
+    }
+    if (/meta-overlay|division|voice-dock|screenshot|omni-panel/i.test(label)) {
+      return 2
+    }
+    return 1
+  }
+
+  return pageTargets
+    .map((target, index) => ({ target, score: scoreTarget(target), index }))
+    .sort((a, b) => a.score - b.score || a.index - b.index)
+    .map((entry) => entry.target)
+}
+
+export function selectCoreBoxTarget(targets) {
+  return rankCoreBoxCandidateTargets(targets)[0] || null
 }
 
 async function withCdpTarget(target, callback) {
@@ -1506,19 +1638,113 @@ async function evaluateCdp(send, expression, timeoutMs = 15_000) {
   return response.result?.result?.value
 }
 
-function buildCoreBoxInteractiveExpression() {
+export function buildCoreBoxInteractiveExpression() {
   return `(() => {
-    const ready = document.readyState === 'complete' || document.readyState === 'interactive'
+    const readyState = document.readyState
+    const visibilityState = document.visibilityState
+    const href = String(location.href || '')
+    const title = String(document.title || '')
+    let startupContext = null
+    try {
+      startupContext =
+        typeof window.api?.getStartupContextSnapshot === 'function'
+          ? window.api.getStartupContextSnapshot()
+          : null
+    } catch {
+      startupContext = null
+    }
+    const windowMode = startupContext?.windowMode ?? null
+    const touchType = startupContext?.role?.touchType ?? null
+    const coreType = startupContext?.role?.coreType ?? null
+    const bodyClasses = document.body?.classList
+    const hasCoreBoxBodyClass = Boolean(
+      bodyClasses?.contains('core-box') && !bodyClasses?.contains('division-box')
+    )
+    const isDivisionBoxBodyClass = Boolean(bodyClasses?.contains('division-box'))
+    const isCoreBoxRoute = /#\\/?(?:core-?box|box)(?:[/?#]|$)/i.test(href)
+    const isExcludedWindowMode =
+      Boolean(windowMode && windowMode !== 'CoreBox') || isDivisionBoxBodyClass
+    const isCoreBoxContext =
+      !isExcludedWindowMode &&
+      (windowMode === 'CoreBox' ||
+        (touchType === 'core-box' && !coreType) ||
+        hasCoreBoxBodyClass ||
+        isCoreBoxRoute)
+
     const coreBoxRoot = document.querySelector('.CoreBox, [data-corebox-root]')
-    const input = document.querySelector('.CoreBox input, .CoreBox textarea, input[data-corebox-input]')
-    const inputVisible = Boolean(input && !input.disabled && input.getBoundingClientRect().width > 0)
+    const coreBoxStyle =
+      coreBoxRoot && typeof getComputedStyle === 'function' ? getComputedStyle(coreBoxRoot) : null
+    const coreBoxDisplay = coreBoxStyle ? coreBoxStyle.display : null
+    const coreBoxRendered = Boolean(coreBoxRoot && coreBoxDisplay !== 'none')
+
+    const input = document.querySelector(
+      '#core-box-input, #corebox-input, .CoreBox input, .CoreBox textarea, input[data-corebox-input]'
+    )
+    const inputStyle =
+      input && typeof getComputedStyle === 'function' ? getComputedStyle(input) : null
+    const inputRect =
+      input && typeof input.getBoundingClientRect === 'function'
+        ? input.getBoundingClientRect()
+        : null
+    const inputRectWidth = inputRect && Number.isFinite(inputRect.width) ? inputRect.width : 0
+    const inputRectHeight = inputRect && Number.isFinite(inputRect.height) ? inputRect.height : 0
+    const inputMounted = Boolean(
+      input &&
+        input.isConnected !== false &&
+        !input.disabled &&
+        (!inputStyle || (inputStyle.display !== 'none' && inputStyle.visibility !== 'hidden'))
+    )
+    const inputVisible = Boolean(inputMounted && inputRectWidth > 0 && inputRectHeight > 0)
+
+    const ipc = window.electron?.ipcRenderer
+    const hasIpcBridge = Boolean(
+      ipc && typeof ipc.send === 'function' && typeof ipc.on === 'function'
+    )
+
+    const isHiddenWindow =
+      visibilityState === 'hidden' ||
+      (typeof window.innerWidth === 'number' && window.innerWidth === 0)
+    const visibleInteractive =
+      (readyState === 'complete' || readyState === 'interactive') &&
+      isCoreBoxContext &&
+      coreBoxRendered &&
+      inputVisible &&
+      hasIpcBridge
+    const hiddenPrewarmedReady =
+      isHiddenWindow &&
+      readyState === 'complete' &&
+      isCoreBoxContext &&
+      coreBoxRendered &&
+      inputMounted &&
+      hasIpcBridge
+    const interactive = visibleInteractive || hiddenPrewarmedReady
+    const readinessMode = visibleInteractive
+      ? 'visible-interactive'
+      : hiddenPrewarmedReady
+        ? 'hidden-prewarmed-ready'
+        : 'not-ready'
+
     return {
-      readyState: document.readyState,
-      href: location.href,
-      title: document.title,
+      readyState,
+      visibilityState,
+      href,
+      title,
+      windowMode,
+      touchType,
+      hasCoreBoxBodyClass,
+      isCoreBoxRoute,
+      isCoreBoxContext,
       hasCoreBoxRoot: Boolean(coreBoxRoot),
+      coreBoxDisplay,
+      coreBoxRendered,
+      inputId: input?.id || null,
+      inputMounted,
       inputVisible,
-      interactive: ready && Boolean(coreBoxRoot) && inputVisible
+      inputRectWidth,
+      inputRectHeight,
+      hasIpcBridge,
+      readinessMode,
+      interactive
     }
   })()`
 }
@@ -1557,43 +1783,177 @@ function buildPerformanceReportIpcExpression(timeoutMs = 10_000) {
   })()`
 }
 
-async function waitForCoreBoxInteractive(remoteDebuggingUrl, timeoutMs, getChildFailure = null) {
-  const deadline = Date.now() + timeoutMs
+function formatTargetDiagnosticEntry(entry) {
+  const target = entry.target ?? {}
+  const base = `[id=${target.id ?? 'unknown'} title=${JSON.stringify(target.title ?? '')} url=${JSON.stringify(target.url ?? '')}]`
+  if (entry.error) {
+    return `${base} error=${entry.error}`
+  }
+  const s = entry.snapshot ?? {}
+  return (
+    `${base} windowMode=${s.windowMode ?? 'null'} readyState=${s.readyState ?? 'unknown'} ` +
+    `visibility=${s.visibilityState ?? 'unknown'} coreBoxContext=${Boolean(s.isCoreBoxContext)} ` +
+    `coreBoxRoot=${Boolean(s.hasCoreBoxRoot)} display=${s.coreBoxDisplay ?? 'null'} ` +
+    `inputMounted=${Boolean(s.inputMounted)} inputVisible=${Boolean(s.inputVisible)} ` +
+    `ipc=${Boolean(s.hasIpcBridge)} mode=${s.readinessMode ?? 'not-ready'}`
+  )
+}
+
+export async function waitForCoreBoxInteractive(
+  remoteDebuggingUrl,
+  timeoutMs,
+  getChildFailure = null,
+  deps = {}
+) {
+  const loadTargetsFn = deps.loadCdpTargets ?? loadCdpTargets
+  const inspectTargetFn =
+    deps.inspectTarget ??
+    (async (target) =>
+      await withCdpTarget(target, (send) =>
+        evaluateCdp(send, buildCoreBoxInteractiveExpression(), 5_000)
+      ))
+  const getChildDiagnostics = deps.getChildDiagnostics ?? null
+  const nowFn = deps.now ?? Date.now
+  const sleepFn =
+    deps.sleep ?? ((ms) => new Promise((resolvePromise) => setTimeout(resolvePromise, ms)))
+  const pollIntervalMs = deps.pollIntervalMs ?? 250
+
+  const deadline = nowFn() + timeoutMs
   let lastError = null
-  while (Date.now() < deadline) {
+  let lastTargets = []
+  let lastInspections = []
+
+  while (nowFn() < deadline) {
     const childFailure = getChildFailure?.()
     if (childFailure) {
       throw childFailure
     }
     try {
-      const targets = await loadCdpTargets(remoteDebuggingUrl)
-      const target = selectCoreBoxTarget(targets)
-      if (target) {
-        const snapshot = await withCdpTarget(target, (send) =>
-          evaluateCdp(send, buildCoreBoxInteractiveExpression(), 5_000)
-        )
-        if (snapshot?.interactive) {
-          return {
-            readyAt: Date.now(),
-            target: { id: target.id, title: target.title, url: target.url },
-            snapshot
+      const targets = await loadTargetsFn(remoteDebuggingUrl)
+      lastTargets = Array.isArray(targets) ? targets : []
+      const candidates = rankCoreBoxCandidateTargets(lastTargets)
+      const roundInspections = []
+      for (const target of candidates) {
+        const midChildFailure = getChildFailure?.()
+        if (midChildFailure) {
+          throw midChildFailure
+        }
+        try {
+          const snapshot = await inspectTargetFn(target)
+          roundInspections.push({ target, snapshot, error: null })
+          if (snapshot?.interactive) {
+            return {
+              readyAt: nowFn(),
+              target: { id: target.id, title: target.title, url: target.url },
+              snapshot,
+              inspectedTargetCount: candidates.length
+            }
           }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          lastError = message
+          roundInspections.push({ target, snapshot: null, error: message })
         }
       }
+      lastInspections = roundInspections
     } catch (error) {
+      if (error === getChildFailure?.()) {
+        throw error
+      }
       lastError = error instanceof Error ? error.message : String(error)
     }
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 250))
+    await sleepFn(pollIntervalMs)
   }
+
+  const diagnosticParts = []
+  if (lastError) diagnosticParts.push(`lastError=${lastError}`)
+  diagnosticParts.push(`cdpTargets=${lastTargets.length}`)
+  if (lastInspections.length > 0) {
+    diagnosticParts.push(
+      `inspected=[${lastInspections.map((entry) => formatTargetDiagnosticEntry(entry)).join('; ')}]`
+    )
+  } else if (lastTargets.length > 0) {
+    diagnosticParts.push(
+      `rawTargets=[${lastTargets
+        .map(
+          (t) =>
+            `${t?.type ?? 'unknown'}:${JSON.stringify(t?.title ?? '')}:${JSON.stringify(t?.url ?? '')}`
+        )
+        .join('; ')}]`
+    )
+  }
+  const childDiag = getChildDiagnostics?.()
+  if (childDiag) diagnosticParts.push(`child=(${childDiag})`)
+
   throw new Error(
-    `Timed out after ${timeoutMs}ms waiting for CoreBox interactive at ${remoteDebuggingUrl}${
-      lastError ? ` (last error: ${lastError})` : ''
-    }`
+    `Timed out after ${timeoutMs}ms waiting for CoreBox interactive at ${remoteDebuggingUrl} (${diagnosticParts.join(' | ')})`
   )
 }
 
-async function terminateChildAndWait(child, timeoutMs = 3_000) {
-  if (!child || child.exitCode !== null || child.signalCode !== null) return
+function appendBounded(buffer, chunk, limit = 8_000) {
+  const next = `${buffer}${String(chunk)}`
+  return next.length > limit ? next.slice(next.length - limit) : next
+}
+
+function captureChildOutput(child) {
+  let stdout = ''
+  let stderr = ''
+  child.stdout?.on('data', (chunk) => {
+    stdout = appendBounded(stdout, chunk)
+  })
+  child.stderr?.on('data', (chunk) => {
+    stderr = appendBounded(stderr, chunk)
+  })
+  return () =>
+    [
+      `pid=${child.pid ?? 'unknown'}`,
+      `exitCode=${child.exitCode ?? 'null'}`,
+      `signalCode=${child.signalCode ?? 'null'}`,
+      stderr.trim() ? `stderrTail=${JSON.stringify(stderr.trim().slice(-600))}` : null,
+      stdout.trim() ? `stdoutTail=${JSON.stringify(stdout.trim().slice(-600))}` : null
+    ]
+      .filter(Boolean)
+      .join(', ')
+}
+
+function signalChildProcessTree(
+  child,
+  signal,
+  { platform = process.platform, killProcess = process.kill } = {}
+) {
+  const hasPid = Number.isInteger(child?.pid) && child.pid > 0
+  if (platform !== 'win32' && hasPid) {
+    try {
+      killProcess(-child.pid, signal)
+      return true
+    } catch {
+      // Fall back to direct child.kill if process group no longer exists or child was not detached
+    }
+  }
+  try {
+    child.kill(signal)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function terminateChildAndWait(
+  child,
+  timeoutMs = 3_000,
+  { platform = process.platform, killProcess = process.kill } = {}
+) {
+  if (!child) return
+  if (child.exitCode !== null || child.signalCode !== null) {
+    if (platform !== 'win32' && Number.isInteger(child.pid) && child.pid > 0) {
+      try {
+        killProcess(-child.pid, 'SIGTERM')
+      } catch {
+        // Process group already gone
+      }
+    }
+    return
+  }
   await new Promise((resolvePromise) => {
     let settled = false
     const done = () => {
@@ -1605,32 +1965,43 @@ async function terminateChildAndWait(child, timeoutMs = 3_000) {
     child.once('exit', done)
     child.once('close', done)
     const timer = setTimeout(() => {
-      try {
-        child.kill('SIGKILL')
-      } catch {
-        // Ignore escalation errors
-      }
+      signalChildProcessTree(child, 'SIGKILL', { platform, killProcess })
       done()
     }, timeoutMs)
-    try {
-      child.kill('SIGTERM')
-    } catch {
+    const signaled = signalChildProcessTree(child, 'SIGTERM', { platform, killProcess })
+    if (!signaled) {
       done()
     }
   })
 }
 
-async function sampleProcessMemoryOnce({ remoteDebuggingUrl, rootPid, processFilter }) {
+async function sampleProcessMemoryOnce({
+  remoteDebuggingUrl,
+  preferredTargetId = null,
+  rootPid,
+  processFilter
+}) {
   if (remoteDebuggingUrl) {
     try {
       const targets = await loadCdpTargets(remoteDebuggingUrl)
-      const target = selectCoreBoxTarget(targets)
-      if (target) {
-        const reply = await withCdpTarget(target, (send) =>
-          evaluateCdp(send, buildPerformanceReportIpcExpression(8_000), 10_000)
-        )
-        if (reply?.ok && reply.data && Array.isArray(reply.data.processes)) {
-          return normalizeAppMetricsReport(reply.data, Date.now())
+      const candidates = rankCoreBoxCandidateTargets(targets)
+      if (preferredTargetId) {
+        candidates.sort((a, b) => {
+          const aMatch = a.id === preferredTargetId ? 0 : 1
+          const bMatch = b.id === preferredTargetId ? 0 : 1
+          return aMatch - bMatch
+        })
+      }
+      for (const target of candidates) {
+        try {
+          const reply = await withCdpTarget(target, (send) =>
+            evaluateCdp(send, buildPerformanceReportIpcExpression(8_000), 10_000)
+          )
+          if (reply?.ok && reply.data && Array.isArray(reply.data.processes)) {
+            return normalizeAppMetricsReport(reply.data, Date.now())
+          }
+        } catch {
+          // Try next renderer target before falling back to ps
         }
       }
     } catch {
@@ -1677,7 +2048,7 @@ export function buildDryRunPlan(options, { staticAudit = null, powermetrics } = 
     executionPlan: [
       options.attachOnly
         ? `1. Attach read-only to loopback CDP endpoint ${remoteDebuggingUrl} and verify CoreBox target readiness.`
-        : `1. Verify no live /Applications/Tuff.app, default @talex-touch/core-app Electron profile, or Vite :${DEFAULT_VITE_DEV_PORT} listener is active; launch ${executablePath} with isolated --user-data-dir and --remote-debugging-port=${options.cdpPort}, measuring spawn -> CoreBox interactive ms.`,
+        : `1. Verify no live /Applications/Tuff.app, default @talex-touch/core-app Electron profile, or Vite :${DEFAULT_VITE_DEV_PORT} listener is active; seed isolated profile settings (beginner.init=true) and launch ${executablePath} with isolated env (HOME, TUFF_STARTUP_BENCHMARK_USER_DATA_DIR, TUFF_PACKAGED_ACCEPTANCE_ISOLATED=1), --user-data-dir, and --remote-debugging-port=${options.cdpPort}, measuring spawn -> CoreBox interactive ms.`,
       `2. Observe idle window (${options.idleSeconds}s): collect macOS powermetrics --samplers tasks (or import --powermetricsInput) and Activity Monitor Energy Impact slot (--activityMonitorEnergyImpact).`,
       `3. Sample per-process resident memory & CPU every ${options.sampleIntervalMs}ms via app.getAppMetrics() (${PERFORMANCE_GET_REPORT_EVENT}) with ps fallback across Browser / GPU / Renderer / Utility roles and compute min/median/p95/max + total RSS.`,
       '4. Emit structured JSON + Markdown summary without claiming live baseline numbers unless all live metrics are measured.'
@@ -1775,6 +2146,7 @@ export async function runProbe(options, deps = {}) {
 
   let child = null
   let tempUserDataDir = null
+  let readyTargetId = null
   const remoteDebuggingUrl =
     options.remoteDebuggingUrl || `http://127.0.0.1:${options.cdpPort}/json/list`
   let coldStartMetric = {
@@ -1784,11 +2156,19 @@ export async function runProbe(options, deps = {}) {
       'Attached to an already-running instance via --attachOnly; process cold start was not launched by this harness'
   }
 
+  const accessFileFn = deps.accessFile ?? access
+  const checkTcpPortOpenFn = deps.checkTcpPortOpen ?? checkTcpPortOpen
+  const seedProfileFn = deps.seedIsolatedProfileSettings ?? seedIsolatedProfileSettings
+  const spawnProcessFn = deps.spawnProcess ?? spawn
+  const waitForCoreBoxFn = deps.waitForCoreBoxInteractive ?? waitForCoreBoxInteractive
+  const terminateChildFn = deps.terminateChildAndWait ?? terminateChildAndWait
+  const launchPlatform = deps.platform ?? process.platform
+
   try {
     if (safety.mode === 'isolated-launch') {
       const executablePath = resolveExecutablePath(options.appPath)
-      await access(executablePath)
-      if (await checkTcpPortOpen(options.cdpPort)) {
+      await accessFileFn(executablePath)
+      if (await checkTcpPortOpenFn(options.cdpPort)) {
         throw new Error(
           `CDP port ${options.cdpPort} is already in use; refusing to attach isolated cold-start measurement to an existing listener`
         )
@@ -1796,39 +2176,59 @@ export async function runProbe(options, deps = {}) {
       tempUserDataDir =
         options.userDataDir ||
         path.join(os.tmpdir(), `tuff-energy-baseline-${Date.now()}-${process.pid}`)
-      await mkdir(tempUserDataDir, { recursive: true })
+      const seededProfile = await seedProfileFn(tempUserDataDir)
+      const launchEnv = buildIsolatedPackagedLaunchEnv({
+        userDataDir: seededProfile.userDataDir,
+        isolatedHome: seededProfile.isolatedHome,
+        platform: launchPlatform
+      })
 
       let childFailure = null
       const launchStartedAt = Date.now()
-      child = spawn(
+      child = spawnProcessFn(
         executablePath,
-        [`--remote-debugging-port=${options.cdpPort}`, `--user-data-dir=${tempUserDataDir}`],
-        { stdio: 'ignore' }
+        [
+          `--remote-debugging-port=${options.cdpPort}`,
+          `--user-data-dir=${seededProfile.userDataDir}`
+        ],
+        {
+          cwd: process.cwd(),
+          env: launchEnv,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          detached: launchPlatform !== 'win32'
+        }
       )
+      const getChildDiagnostics = captureChildOutput(child)
       child.once('error', (error) => {
         childFailure = new Error(`Failed to spawn ${executablePath}: ${error.message}`)
       })
       child.once('exit', (code, signal) => {
         if (!childFailure) {
+          const diag = getChildDiagnostics()
           childFailure = new Error(
-            `Launched app exited before CoreBox became interactive (code=${code}, signal=${signal})`
+            `Launched app exited before CoreBox became interactive (code=${code}, signal=${signal}; ${diag})`
           )
         }
       })
-      const ready = await waitForCoreBoxInteractive(
+      const ready = await waitForCoreBoxFn(
         remoteDebuggingUrl,
         options.launchTimeoutMs,
-        () => childFailure
+        () => childFailure,
+        { getChildDiagnostics }
       )
+      readyTargetId = ready.target?.id ?? null
       coldStartMetric = {
         status: 'measured',
         coldStartToCoreBoxInteractiveMs: Math.max(0, ready.readyAt - launchStartedAt),
         target: ready.target,
+        readinessMode: ready.snapshot?.readinessMode ?? null,
         reason: null
       }
     } else if (deps.skipCdpWait !== true) {
-      const ready = await waitForCoreBoxInteractive(remoteDebuggingUrl, options.launchTimeoutMs)
+      const ready = await waitForCoreBoxFn(remoteDebuggingUrl, options.launchTimeoutMs)
+      readyTargetId = ready.target?.id ?? null
       coldStartMetric.target = ready.target
+      coldStartMetric.readinessMode = ready.snapshot?.readinessMode ?? null
     }
 
     const memorySamples = []
@@ -1864,6 +2264,7 @@ export async function runProbe(options, deps = {}) {
     for (let index = 0; index < maxSamples; index += 1) {
       const sample = await sampleMemoryFn({
         remoteDebuggingUrl,
+        preferredTargetId: readyTargetId,
         rootPid: child?.pid ?? null,
         processFilter: options.processFilter
       })
@@ -1963,7 +2364,7 @@ export async function runProbe(options, deps = {}) {
     return report
   } finally {
     if (child) {
-      await terminateChildAndWait(child)
+      await terminateChildFn(child, 3_000, { platform: launchPlatform })
     }
     if (tempUserDataDir && !options.keepUserData && !options.userDataDir) {
       await rm(tempUserDataDir, { recursive: true, force: true }).catch(() => {})

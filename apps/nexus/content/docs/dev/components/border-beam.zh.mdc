@@ -132,7 +132,7 @@ code: |
 
 - 特效层均为 `pointer-events: none`，不拦截插槽交互，焦点样式由插槽内容提供。
 - 未设 `borderRadius` 时读取首个插槽元素的 `border-top-left-radius`，读不到则用形态预设值。
-- 滚出视口（余量 256px）时暂停动画，不派发 `activate` / `deactivate`。
+- 滚出视口（余量 256px）、页面隐藏、窗口失焦、`<KeepAlive>` 失活或低电量减动效（`html[data-low-battery-motion="1"]`）时暂停动画并停止脉冲 rAF 驱动，不派发 `activate` / `deactivate`。
 - 减少动态效果时，脉冲形态停止呼吸。
 
 ## 技术实现

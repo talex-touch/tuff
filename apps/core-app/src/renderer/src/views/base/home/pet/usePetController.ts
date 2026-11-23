@@ -2,7 +2,7 @@ import type { PetEggEvent, PetEggs } from './pet-eggs'
 import type { BreakoutState, Brick, JuggleState, PetGame } from './pet-games'
 import type { PetAction, PetPose, PlayField } from './pet-motion'
 import type { PetSurface } from './pet-physics'
-import { hasWindow } from '@talex-touch/utils/env'
+import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { computed, onScopeDispose, reactive, ref, shallowRef } from 'vue'
 import { mixHex } from './pet-color'
 import { createEggs, loadEggs, resolveVisual, saveEggs, tickEggs } from './pet-eggs'
@@ -134,6 +134,7 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
   const fishCount = computed(() => eggs.value.fishEaten)
   const tanPercent = computed(() => Math.round(eggs.value.tan))
   const heart = ref(0)
+  const paused = ref(false)
 
   const rects = {
     stage: null as DOMRect | null,
@@ -141,10 +142,15 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
     box: null as DOMRect | null
   }
   let field: PlayField | null = null
+  let mounted = false
   let running = false
   let suspended = false
+  let windowFocused = true
+  let lowBatteryMotion = false
+  let lowBatteryObserver: MutationObserver | null = null
   let spawned = false
   let raf = 0
+  let fadeTimer = 0
   let last = 0
   let acc = 0
   let beatAcc = 0
@@ -867,9 +873,15 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
     const range = surface.x1 - surface.x0 - PET_WIDTH
     const nextX = surface.x0 + Math.random() * Math.max(0, range)
     tints.fading = true
-    window.setTimeout(() => {
+    if (fadeTimer) window.clearTimeout(fadeTimer)
+    fadeTimer = window.setTimeout(() => {
+      fadeTimer = 0
+      if (!running || !surface) {
+        tints.fading = false
+        return
+      }
       x = clampX(nextX)
-      y = standTop(surface!)
+      y = standTop(surface)
       tints.fading = false
     }, 300)
     setPose(Math.random() < 0.5 ? 'sit' : 'sleep')
@@ -899,12 +911,16 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
       raf = requestAnimationFrame(frame)
       return
     }
+    if (idleTimer) window.clearTimeout(idleTimer)
     idleTimer = window.setTimeout(() => {
+      idleTimer = 0
+      if (!running) return
       raf = requestAnimationFrame(frame)
     }, IDLE_FRAME_MS)
   }
 
   function frame(ts: number): void {
+    raf = 0
     if (!running) return
     const dtReal = Math.min(0.1, (ts - last) / 1000)
     last = ts
@@ -982,21 +998,70 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
     spawned = true
   }
 
+  function readWindowFocused(): boolean {
+    return hasDocument() && typeof document.hasFocus === 'function' ? document.hasFocus() : true
+  }
+
+  function readLowBatteryMotion(): boolean {
+    return hasDocument()
+      ? document.documentElement?.getAttribute('data-low-battery-motion') === '1'
+      : false
+  }
+
+  function canRun(): boolean {
+    return (
+      mounted &&
+      !disposed &&
+      !suspended &&
+      document.visibilityState === 'visible' &&
+      windowFocused &&
+      !lowBatteryMotion
+    )
+  }
+
+  function syncRunState(): void {
+    if (canRun()) {
+      start()
+    } else {
+      stop()
+    }
+  }
+
   function start(): void {
-    if (running || suspended) return
+    if (running || !canRun()) return
     running = true
+    paused.value = false
     last = performance.now()
+    acc = 0
+    beatAcc = 0
+    needRead = true
     sessionStart = Date.now()
     readRects()
-    if (!spawned) spawn()
+    if (!spawned) {
+      spawn()
+      write()
+    }
     raf = requestAnimationFrame(frame)
   }
 
   function stop(): void {
+    const wasRunning = running
     running = false
-    cancelAnimationFrame(raf)
-    window.clearTimeout(idleTimer)
-    persist()
+    paused.value = true
+    if (raf) {
+      cancelAnimationFrame(raf)
+      raf = 0
+    }
+    if (idleTimer) {
+      window.clearTimeout(idleTimer)
+      idleTimer = 0
+    }
+    if (fadeTimer) {
+      window.clearTimeout(fadeTimer)
+      fadeTimer = 0
+      tints.fading = false
+    }
+    if (wasRunning) persist()
   }
 
   function suspend(): void {
@@ -1006,12 +1071,36 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
 
   function resume(): void {
     suspended = false
-    if (!disposed) start()
+    if (mounted && !disposed) {
+      if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
+        windowFocused = false
+      }
+      lowBatteryMotion = readLowBatteryMotion()
+      syncRunState()
+    }
   }
 
   function onVisibilityChange(): void {
-    if (document.visibilityState === 'visible') start()
-    else stop()
+    if (document.visibilityState === 'visible') {
+      if (typeof document.hasFocus === 'function' && !document.hasFocus()) {
+        windowFocused = false
+      }
+      lowBatteryMotion = readLowBatteryMotion()
+      syncRunState()
+    } else {
+      stop()
+    }
+  }
+
+  function onWindowFocus(): void {
+    windowFocused = true
+    lowBatteryMotion = readLowBatteryMotion()
+    syncRunState()
+  }
+
+  function onWindowBlur(): void {
+    windowFocused = false
+    stop()
   }
 
   function onResize(): void {
@@ -1260,6 +1349,9 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
   }
 
   function mount(): void {
+    mounted = true
+    windowFocused = readWindowFocused()
+    lowBatteryMotion = readLowBatteryMotion()
     eggs.value = loadEggs(Date.now(), storage)
     best.value = eggs.value.bestScore
     lastSave = Date.now()
@@ -1271,19 +1363,41 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
       if (box) ro.observe(box)
       observers.push(ro)
     }
+    if (typeof MutationObserver !== 'undefined' && document.documentElement) {
+      lowBatteryObserver = new MutationObserver(() => {
+        lowBatteryMotion = readLowBatteryMotion()
+        syncRunState()
+      })
+      lowBatteryObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-low-battery-motion']
+      })
+    }
     window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('resize', onResize)
+    window.addEventListener('focus', onWindowFocus)
+    window.addEventListener('blur', onWindowBlur)
     document.addEventListener('visibilitychange', onVisibilityChange)
     const input = host.input()
     input?.addEventListener('input', onComposerInput)
     input?.addEventListener('keydown', onComposerKeyDown)
-    if (document.visibilityState === 'visible') start()
+    if (canRun()) {
+      start()
+    } else {
+      paused.value = true
+      if (document.visibilityState === 'visible' && !spawned) {
+        readRects()
+        spawn()
+        write()
+      }
+    }
   }
 
   function dispose(): void {
     disposed = true
+    mounted = false
     cancelPendingDouble()
     stop()
     window.clearTimeout(press?.timer)
@@ -1291,7 +1405,11 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
     window.removeEventListener('pointerup', onPointerUp)
     window.removeEventListener('keydown', onKeyDown)
     window.removeEventListener('resize', onResize)
+    window.removeEventListener('focus', onWindowFocus)
+    window.removeEventListener('blur', onWindowBlur)
     document.removeEventListener('visibilitychange', onVisibilityChange)
+    lowBatteryObserver?.disconnect()
+    lowBatteryObserver = null
     const input = host.input()
     input?.removeEventListener('input', onComposerInput)
     input?.removeEventListener('keydown', onComposerKeyDown)
@@ -1326,6 +1444,7 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
     fishCount,
     tanPercent,
     heart,
+    paused,
     suspend,
     resume
   }

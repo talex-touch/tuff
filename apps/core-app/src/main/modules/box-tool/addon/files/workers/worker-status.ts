@@ -60,6 +60,9 @@ export interface WorkerStatusSnapshot {
     }
     eventLoop: WorkerMetricsPayload['eventLoop']
   } | null
+  executionMode?: 'worker-thread' | 'utility-process'
+  kernelState?: string | null
+  kernelPid?: number | null
 }
 
 export function getWorkerMemorySnapshot(
