@@ -379,4 +379,32 @@ describe('dialog-mention with TuffEx dialogs', () => {
     expect(useDialogManager().getStackSize()).toBe(0)
     expect(document.body.querySelector('.tx-popper-dialog')).toBeNull()
   })
+
+  it('clearAll removes host containers, settles pending dialogs, and releases atomic keys', async () => {
+    let firstSettled = false
+    const first = forTouchTip('Atomic', 'First', undefined, 'atomic-clear-key').then(() => {
+      firstSettled = true
+    })
+
+    expect(document.body.querySelectorAll('[id^="touch-tip-"]')).toHaveLength(1)
+    expect(document.body.querySelectorAll('.tx-touch-tip')).toHaveLength(1)
+
+    useDialogManager().clearAll()
+    await first
+
+    expect(firstSettled).toBe(true)
+    expect(document.body.querySelector('[id^="touch-tip-"]')).toBeNull()
+    expect(document.body.querySelector('.tx-touch-tip')).toBeNull()
+
+    const second = forTouchTip('Atomic', 'Second', undefined, 'atomic-clear-key')
+    expect(document.body.querySelectorAll('.tx-touch-tip')).toHaveLength(1)
+
+    const confirmBtn = document.body.querySelector<HTMLButtonElement>('.tx-touch-tip__btn')
+    confirmBtn?.click()
+    await vi.advanceTimersByTimeAsync(400)
+    await second
+
+    expect(document.body.querySelector('[id^="touch-tip-"]')).toBeNull()
+    expect(document.body.querySelector('.tx-touch-tip')).toBeNull()
+  })
 })

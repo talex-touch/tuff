@@ -19,15 +19,14 @@ import type { BlowDialogProps } from './types'
  * @component
  */
 import {
-
+  computed,
   defineComponent,
+  markRaw,
   onMounted,
   onUnmounted,
-
   provide,
   ref,
   useId,
-
 } from 'vue'
 import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
@@ -58,7 +57,9 @@ const { surfaceMode, surfaceColor, surfaceOpacity } = useDialogSurface(props)
 // The two phases the parts fade in (see the styles): the entrance, until it has played, and the close.
 const isEntering = ref(true)
 const isClosing = ref(false)
-const renderComp = ref<Component | null>(null)
+const renderComp = computed<Component | null>(() =>
+  props.render ? markRaw(defineComponent({ render: props.render })) : null,
+)
 const dialogWrapper = ref<HTMLElement | null>(null)
 const zIndex = ref(zIndexAllocator.get())
 // Instance-scoped ids (mirroring Bottom/TouchTip) so the dialog announces both its
@@ -67,40 +68,67 @@ const titleId = useId()
 const contentId = useId()
 const focusReturn = createFocusReturn()
 let didApplyBackgroundBlur = false
+let previousAppStyle: { transition: string, transform: string, opacity: string } | null = null
+let closeTimer: ReturnType<typeof setTimeout> | null = null
+let isUnmounted = false
 
 /**
  * Utility function to sleep for a specified duration.
  * @param ms - Duration in milliseconds
  */
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => {
+    closeTimer = setTimeout(() => {
+      closeTimer = null
+      resolve()
+    }, ms)
+  })
+}
+
+/**
+ * Restores only the `#app` inline style properties touched by `applyBackgroundBlur`
+ * so unrelated inline styles or CSS custom properties on `#app` are preserved.
+ */
+function clearBackgroundBlur(): void {
+  if (!didApplyBackgroundBlur)
+    return
+  didApplyBackgroundBlur = false
+
+  const app = document.getElementById('app')
+  if (!app) {
+    previousAppStyle = null
+    return
+  }
+
+  for (const prop of ['transition', 'transform', 'opacity'] as const) {
+    const prev = previousAppStyle?.[prop]
+    if (prev)
+      app.style.setProperty(prop, prev)
+    else
+      app.style.removeProperty(prop)
+  }
+  previousAppStyle = null
 }
 
 onMounted(() => {
   zIndex.value = zIndexAllocator.next()
   focusReturn.save()
 
-  if (props.render) {
-    renderComp.value = defineComponent({
-      render: props.render,
-    })
-  }
-
   applyBackgroundBlur(true)
   setFocusToDialog()
 })
 
 onUnmounted(() => {
+  isUnmounted = true
+  if (closeTimer) {
+    clearTimeout(closeTimer)
+    closeTimer = null
+  }
   focusReturn.restore()
 
   // A host that unmounts the dialog without calling close() never reaches destroy(), so the
   // app would keep the zoom and dim applied on open. Clear them here, as destroy() does.
-  if (didApplyBackgroundBlur) {
-    const app = document.getElementById('app')
-    if (app) {
-      app.style.cssText = ''
-    }
-  }
+  clearBackgroundBlur()
 })
 
 /**
@@ -133,6 +161,11 @@ function applyBackgroundBlur(apply: boolean): void {
     return
 
   if (apply) {
+    previousAppStyle = {
+      transition: app.style.getPropertyValue('transition'),
+      transform: app.style.getPropertyValue('transform'),
+      opacity: app.style.getPropertyValue('opacity'),
+    }
     Object.assign(app.style, {
       transition: 'transform .75s, opacity .75s',
       transform: 'scale(1.25)',
@@ -160,12 +193,10 @@ async function destroy(): Promise<void> {
   isClosing.value = true
   await sleep(550)
 
-  if (didApplyBackgroundBlur) {
-    const app = document.getElementById('app')
-    if (app) {
-      app.style.cssText = ''
-    }
-  }
+  if (isUnmounted)
+    return
+
+  clearBackgroundBlur()
 
   props.close()
 }

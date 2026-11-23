@@ -382,4 +382,185 @@ describe('dialog components', () => {
     expect(close).toHaveBeenCalledTimes(1)
     wrapper.unmount()
   })
+
+  it('preserves unrelated inline styles on #app when BlowDialog closes or unmounts', async () => {
+    const app = document.createElement('div')
+    app.id = 'app'
+    app.style.setProperty('--app-accent', 'teal')
+    app.style.minHeight = '100vh'
+    document.body.appendChild(app)
+
+    const close = vi.fn()
+    const wrapper = mount(TxBlowDialog, {
+      props: {
+        title: 'Heads up',
+        message: 'Check styles',
+        close,
+      },
+      attachTo: document.body,
+    })
+
+    expect(app.style.transform).toBe('scale(1.25)')
+    expect(app.style.getPropertyValue('--app-accent')).toBe('teal')
+    expect(app.style.minHeight).toBe('100vh')
+
+    document.body.querySelector<HTMLButtonElement>('.tx-blow-dialog__confirm')?.click()
+    await vi.advanceTimersByTimeAsync(550)
+
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(app.style.transform).toBe('')
+    expect(app.style.opacity).toBe('')
+    expect(app.style.transition).toBe('')
+    expect(app.style.getPropertyValue('--app-accent')).toBe('teal')
+    expect(app.style.minHeight).toBe('100vh')
+    wrapper.unmount()
+
+    const unmountClose = vi.fn()
+    const openWrapper = mount(TxBlowDialog, {
+      props: {
+        title: 'Unmount open',
+        close: unmountClose,
+      },
+      attachTo: document.body,
+    })
+    expect(app.style.transform).toBe('scale(1.25)')
+    openWrapper.unmount()
+    expect(app.style.transform).toBe('')
+    expect(app.style.getPropertyValue('--app-accent')).toBe('teal')
+    expect(app.style.minHeight).toBe('100vh')
+  })
+
+  it('resets loading state when BottomDialog or TouchTip button action rejects', async () => {
+    const capturedErrors: unknown[] = []
+    const errorHandler = (err: unknown) => {
+      capturedErrors.push(err)
+    }
+
+    const bottomClose = vi.fn()
+    const bottomWrapper = mount(TxBottomDialog, {
+      props: {
+        title: 'Retryable',
+        close: bottomClose,
+        btns: [
+          {
+            content: 'Fail once',
+            onClick: async () => {
+              throw new Error('bottom boom')
+            },
+          },
+        ],
+      },
+      global: { config: { errorHandler } },
+      attachTo: document.body,
+    })
+
+    const rowBtn = document.body.querySelector<HTMLButtonElement>('.tx-bottom-dialog__row')
+    rowBtn?.click()
+    await vi.advanceTimersByTimeAsync(200)
+    expect(rowBtn?.disabled).toBe(false)
+    expect(bottomClose).not.toHaveBeenCalled()
+    bottomWrapper.unmount()
+
+    const tipClose = vi.fn()
+    const tipWrapper = mount(TxTouchTip, {
+      props: {
+        title: 'Retryable tip',
+        close: tipClose,
+        buttons: [
+          {
+            content: 'Fail once',
+            onClick: async () => {
+              throw new Error('tip boom')
+            },
+          },
+        ],
+      },
+      global: { config: { errorHandler } },
+      attachTo: document.body,
+    })
+
+    const tipBtn = document.body.querySelector<HTMLButtonElement>('.tx-touch-tip__btn')
+    tipBtn?.click()
+    await vi.advanceTimersByTimeAsync(120)
+    expect(tipBtn?.disabled).toBe(false)
+    expect(tipClose).not.toHaveBeenCalled()
+    expect(capturedErrors).toHaveLength(2)
+    tipWrapper.unmount()
+  })
+
+  it('does not invoke close callback when dialogs unmount mid-close animation', async () => {
+    const blowClose = vi.fn()
+    const blowWrapper = mount(TxBlowDialog, {
+      props: { title: 'Blow', close: blowClose },
+      attachTo: document.body,
+    })
+    document.body.querySelector<HTMLButtonElement>('.tx-blow-dialog__confirm')?.click()
+    await vi.advanceTimersByTimeAsync(100)
+    blowWrapper.unmount()
+    await vi.advanceTimersByTimeAsync(600)
+    expect(blowClose).not.toHaveBeenCalled()
+
+    const popperClose = vi.fn()
+    const popperWrapper = mount(TxPopperDialog, {
+      props: { title: 'Popper', close: popperClose },
+      attachTo: document.body,
+    })
+    document.body.querySelector<HTMLButtonElement>('.tx-popper-dialog__confirm')?.click()
+    await vi.advanceTimersByTimeAsync(50)
+    popperWrapper.unmount()
+    await vi.advanceTimersByTimeAsync(300)
+    expect(popperClose).not.toHaveBeenCalled()
+
+    const bottomClose = vi.fn()
+    const bottomWrapper = mount(TxBottomDialog, {
+      props: { title: 'Bottom', close: bottomClose },
+      attachTo: document.body,
+    })
+    document.body.querySelector<HTMLButtonElement>('.tx-bottom-dialog__close')?.click()
+    await vi.advanceTimersByTimeAsync(50)
+    bottomWrapper.unmount()
+    await vi.advanceTimersByTimeAsync(200)
+    expect(bottomClose).not.toHaveBeenCalled()
+
+    const tipClose = vi.fn()
+    const tipWrapper = mount(TxTouchTip, {
+      props: { title: 'Tip', buttons: [], close: tipClose },
+      attachTo: document.body,
+    })
+    document.body
+      .querySelector<HTMLElement>('.tx-touch-tip__container')
+      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await vi.advanceTimersByTimeAsync(50)
+    tipWrapper.unmount()
+    await vi.advanceTimersByTimeAsync(350)
+    expect(tipClose).not.toHaveBeenCalled()
+  })
+
+  it('renders custom render functions immediately on BlowDialog and PopperDialog without flashing fallback controls', () => {
+    const blowWrapper = mount(TxBlowDialog, {
+      props: {
+        title: 'Ignored title',
+        render: () => h('div', { class: 'custom-blow-body' }, 'Custom Blow'),
+        close: vi.fn(),
+      },
+      attachTo: document.body,
+    })
+
+    expect(document.body.querySelector('.custom-blow-body')?.textContent).toBe('Custom Blow')
+    expect(document.body.querySelector('.tx-blow-dialog__confirm')).toBeNull()
+    blowWrapper.unmount()
+
+    const popperWrapper = mount(TxPopperDialog, {
+      props: {
+        title: 'Ignored title',
+        render: () => h('div', { class: 'custom-popper-body' }, 'Custom Popper'),
+        close: vi.fn(),
+      },
+      attachTo: document.body,
+    })
+
+    expect(document.body.querySelector('.custom-popper-body')?.textContent).toBe('Custom Popper')
+    expect(document.body.querySelector('.tx-popper-dialog__confirm')).toBeNull()
+    popperWrapper.unmount()
+  })
 })
