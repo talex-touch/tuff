@@ -5,7 +5,12 @@ import type { StorePluginListItem } from './useStoreData'
  *
  * Provides unified logic for checking installed plugins and upgrade availability
  */
-import { checkSdkCompatibility } from '@talex-touch/utils/plugin'
+import {
+  checkSdkCompatibility,
+  inferPluginNameFromNpmPackage,
+  isValidNpmPackageName,
+  parseNpmPluginSource
+} from '@talex-touch/utils/plugin'
 import { computed } from 'vue'
 import { PRIVILEGED_PLUGIN_NAMES } from '../../../../shared/privileged-plugins'
 import { getPluginCompositeKey } from '~/modules/install/install-manager'
@@ -16,20 +21,35 @@ interface PluginInstallSourceMetadata {
   providerId?: string
   officialId?: string
   pluginId?: string
+  packageName?: string
+  npmPackageName?: string
 }
 
 interface PluginInstallSourceClientMetadata {
   providerId?: string
   pluginId?: string
   pluginName?: string
+  packageName?: string
+}
+
+interface PluginInstallSourceProviderMetadata {
+  packageName?: string
+  npmPackageName?: string
+  resolvedVersion?: string
+  registry?: string
+  distTag?: string
 }
 
 interface PluginInstallSource {
+  source?: string | null
+  provider?: string | null
   metadata?: PluginInstallSourceMetadata | null
   clientMetadata?: PluginInstallSourceClientMetadata | null
+  providerMetadata?: PluginInstallSourceProviderMetadata | null
 }
 
 interface PluginStoreEntry {
+  id?: string
   name?: string
   version?: string
   installSource?: PluginInstallSource | null
@@ -80,6 +100,44 @@ export function usePluginVersionStatus() {
     addLookupKey(keys, getPluginCompositeKey(normalizedId, normalizedProviderId))
   }
 
+  function extractNpmPackageName(
+    value: unknown,
+    allowAnyBarePackageName = false
+  ): string | undefined {
+    if (typeof value !== 'string') return undefined
+    const trimmed = value.trim()
+    if (!trimmed) return undefined
+    if (allowAnyBarePackageName && isValidNpmPackageName(trimmed)) {
+      return trimmed
+    }
+    const parsed = parseNpmPluginSource(trimmed, { allowAnyBarePackageName })
+    return parsed?.packageName
+  }
+
+  function addNpmPackageAliases(
+    keys: Set<string>,
+    value: unknown,
+    providerId?: unknown,
+    options: { allowAnyBarePackageName?: boolean; includeInferredName?: boolean } = {}
+  ): void {
+    const packageName = extractNpmPackageName(value, options.allowAnyBarePackageName ?? true)
+    if (!packageName) return
+
+    const prefixed = `npm:${packageName}`
+    addLookupKey(keys, packageName)
+    addLookupKey(keys, prefixed)
+    addCompositeLookupKey(keys, packageName, providerId)
+    addCompositeLookupKey(keys, prefixed, providerId)
+
+    if (options.includeInferredName) {
+      const inferredName = inferPluginNameFromNpmPackage(packageName)
+      if (inferredName) {
+        addLookupKey(keys, inferredName)
+        addCompositeLookupKey(keys, inferredName, providerId)
+      }
+    }
+  }
+
   function buildStoreLookupKeys(plugin: StorePluginListItem): string[] {
     const keys = new Set<string>()
     const identities = [plugin.id, plugin.name, plugin.manifest?.id, plugin.manifest?.name]
@@ -87,6 +145,27 @@ export function usePluginVersionStatus() {
     for (const identity of identities) {
       addLookupKey(keys, identity)
       addCompositeLookupKey(keys, identity, plugin.providerId)
+    }
+
+    const metadataNpm =
+      plugin.metadata?.npm && typeof plugin.metadata.npm === 'object'
+        ? (plugin.metadata.npm as { packageName?: unknown })
+        : undefined
+    const npmPackageCandidates: unknown[] = [
+      plugin.install?.type === 'npm' ? plugin.install.packageName : undefined,
+      plugin.metadata?.packageName,
+      plugin.metadata?.npmPackageName,
+      metadataNpm?.packageName
+    ]
+    if (typeof plugin.id === 'string' && plugin.id.trim().startsWith('npm:')) {
+      npmPackageCandidates.push(plugin.id)
+    }
+
+    for (const candidate of npmPackageCandidates) {
+      addNpmPackageAliases(keys, candidate, plugin.providerId, {
+        allowAnyBarePackageName: true,
+        includeInferredName: true
+      })
     }
 
     return [...keys]
@@ -103,9 +182,12 @@ export function usePluginVersionStatus() {
       const aliases = new Set<string>()
       addLookupKey(aliases, name)
       addLookupKey(aliases, pluginEntry.name)
+      addLookupKey(aliases, pluginEntry.id)
 
-      const metadata = pluginEntry.installSource?.metadata
-      const clientMetadata = pluginEntry.installSource?.clientMetadata
+      const installSource = pluginEntry.installSource
+      const metadata = installSource?.metadata
+      const clientMetadata = installSource?.clientMetadata
+      const providerMetadata = installSource?.providerMetadata
       const providerId = metadata?.providerId ?? clientMetadata?.providerId
       const identities = [
         metadata?.officialId,
@@ -117,6 +199,27 @@ export function usePluginVersionStatus() {
       for (const identity of identities) {
         addLookupKey(aliases, identity)
         addCompositeLookupKey(aliases, identity, providerId)
+      }
+
+      const npmPackageCandidates = [
+        providerMetadata?.packageName,
+        providerMetadata?.npmPackageName,
+        metadata?.packageName,
+        metadata?.npmPackageName,
+        clientMetadata?.packageName
+      ]
+      for (const candidate of npmPackageCandidates) {
+        addNpmPackageAliases(aliases, candidate, providerId, {
+          allowAnyBarePackageName: true,
+          includeInferredName: false
+        })
+      }
+
+      if (installSource?.source) {
+        addNpmPackageAliases(aliases, installSource.source, providerId, {
+          allowAnyBarePackageName: installSource.provider === 'npm',
+          includeInferredName: false
+        })
       }
 
       for (const alias of aliases) {
