@@ -1,8 +1,14 @@
 <script setup lang="ts" name="PluginNew">
-import type { IManifest } from '@talex-touch/utils/plugin'
+import type { IManifest, ParsedNpmPluginSource } from '@talex-touch/utils/plugin'
 import type { PluginInstallSourceRequest } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
+import {
+  formatNpmPluginSource,
+  isAllowedNpmRegistryUrl,
+  normalizeNpmRegistryUrl,
+  parseNpmPluginSource
+} from '@talex-touch/utils/plugin'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers/types'
 import { EnvDetector } from '@talex-touch/utils/renderer/touch-sdk/env'
 import { TxInput } from '@talex-touch/tuffex/input'
@@ -51,8 +57,45 @@ const installState = reactive({
   official: false
 })
 
-const currentInstallTask = computed(() =>
-  installManager.getTaskBySource(installState.source.trim())
+const allowLocalNpmRegistryHttp = computed(() => {
+  const env = (import.meta as { env?: Record<string, unknown> }).env
+  return Boolean(env?.DEV) || env?.MODE === 'test'
+})
+
+const detectedNpmSource = computed<ParsedNpmPluginSource | null>(() => {
+  const trimmed = installState.source.trim()
+  if (!trimmed) return null
+  if (installState.hintType && installState.hintType !== PluginProviderType.NPM) {
+    return null
+  }
+  return parseNpmPluginSource(trimmed, {
+    allowAnyBarePackageName: installState.hintType === PluginProviderType.NPM
+  })
+})
+
+const canonicalInstallSource = computed(() => {
+  if (detectedNpmSource.value) {
+    return formatNpmPluginSource(detectedNpmSource.value.packageName, detectedNpmSource.value.spec)
+  }
+  return installState.source.trim()
+})
+
+const sourceInputPlaceholder = computed(() =>
+  installState.hintType === PluginProviderType.NPM
+    ? 'npm:@talex-touch/clipboard-history-plugin@latest'
+    : t('plugin.new.install.sourcePlaceholder')
+)
+
+const metadataInputPlaceholder = computed(() =>
+  installState.hintType === PluginProviderType.NPM || detectedNpmSource.value
+    ? '{ "registry": "https://registry.npmjs.org" }'
+    : t('plugin.new.install.metadataPlaceholder')
+)
+
+const currentInstallTask = computed(
+  () =>
+    installManager.getTaskBySource(canonicalInstallSource.value) ??
+    installManager.getTaskBySource(installState.source.trim())
 )
 const currentInstallStage = computed(() => currentInstallTask.value?.stage)
 const currentInstallProgress = computed(() => {
@@ -264,12 +307,39 @@ async function installPluginFromSource(): Promise<void> {
   let metadata: Record<string, unknown> | undefined
   if (installState.metadataText.trim()) {
     try {
-      metadata = JSON.parse(installState.metadataText)
-    } catch (error) {
+      const parsedMetadata: unknown = JSON.parse(installState.metadataText)
+      if (!parsedMetadata || typeof parsedMetadata !== 'object' || Array.isArray(parsedMetadata)) {
+        installState.status = 'error'
+        installState.message = t('plugin.new.install.invalidMetadata')
+        return
+      }
+      metadata = { ...(parsedMetadata as Record<string, unknown>) }
+    } catch {
       installState.status = 'error'
       installState.message = t('plugin.new.install.invalidMetadata')
       return
     }
+  }
+
+  const parsedNpm = detectedNpmSource.value
+  if (installState.hintType === PluginProviderType.NPM && !parsedNpm) {
+    installState.status = 'error'
+    installState.message = resolveStoreInstallFailureReason('PLUGIN_SOURCE_INVALID', t)
+    return
+  }
+
+  if (parsedNpm && metadata?.registry !== undefined) {
+    if (
+      typeof metadata.registry !== 'string' ||
+      !isAllowedNpmRegistryUrl(metadata.registry, {
+        allowLocalHttp: allowLocalNpmRegistryHttp.value
+      })
+    ) {
+      installState.status = 'error'
+      installState.message = t('plugin.new.install.invalidMetadata')
+      return
+    }
+    metadata.registry = normalizeNpmRegistryUrl(metadata.registry)
   }
 
   installState.installing = true
@@ -280,21 +350,40 @@ async function installPluginFromSource(): Promise<void> {
   installState.official = false
 
   try {
-    const manifestName = (installState.manifest as IManifest | undefined)?.name
+    const resolvedSource = parsedNpm
+      ? formatNpmPluginSource(parsedNpm.packageName, parsedNpm.spec)
+      : trimmedSource
+    const resolvedHintType = parsedNpm ? PluginProviderType.NPM : installState.hintType || undefined
+    const resolvedMetadata: Record<string, unknown> | undefined = parsedNpm
+      ? {
+          packageName: parsedNpm.packageName,
+          officialScope: parsedNpm.classification.officialScope,
+          ...(parsedNpm.spec ? { requestedSpec: parsedNpm.spec } : {}),
+          ...(parsedNpm.spec && parsedNpm.specKind === 'dist-tag'
+            ? { distTag: parsedNpm.spec }
+            : {}),
+          ...(parsedNpm.spec && parsedNpm.specKind === 'exact' ? { version: parsedNpm.spec } : {}),
+          ...(metadata ?? {})
+        }
+      : metadata
+
     const payload: PluginInstallSourceRequest = {
-      source: trimmedSource,
+      source: resolvedSource,
       clientMetadata: {
-        pluginName: manifestName || trimmedSource,
-        source: trimmedSource
+        pluginName: parsedNpm
+          ? parsedNpm.classification.inferredPluginName || parsedNpm.packageName
+          : resolvedSource,
+        ...(parsedNpm ? { packageName: parsedNpm.packageName } : {}),
+        source: resolvedSource
       }
     }
 
-    if (installState.hintType) {
-      payload.hintType = installState.hintType
+    if (resolvedHintType) {
+      payload.hintType = resolvedHintType
     }
 
-    if (metadata) {
-      payload.metadata = metadata
+    if (resolvedMetadata) {
+      payload.metadata = resolvedMetadata
     }
 
     const result = (await transport.send(
@@ -476,9 +565,13 @@ async function handleInstallDegit(): Promise<void> {
           <label>{{ t('plugin.new.install.sourceLabel') }}</label>
           <TxInput
             v-model="installState.source"
-            :placeholder="t('plugin.new.install.sourcePlaceholder')"
+            :placeholder="sourceInputPlaceholder"
             class="w-96!"
           />
+          <div v-if="detectedNpmSource" class="InstallDetectedSource">
+            <span class="InstallDetectedSource-Badge">NPM</span>
+            <code class="InstallDetectedSource-Code">{{ canonicalInstallSource }}</code>
+          </div>
         </div>
         <div class="InstallForm-Line">
           <label>{{ t('plugin.new.install.sourceTypeLabel') }}</label>
@@ -505,7 +598,7 @@ async function handleInstallDegit(): Promise<void> {
           <TxInput
             v-model="installState.metadataText"
             type="textarea"
-            :placeholder="t('plugin.new.install.metadataPlaceholder')"
+            :placeholder="metadataInputPlaceholder"
           />
         </div>
         <p class="InstallHint">{{ t('plugin.new.install.metadataHint') }}</p>
@@ -816,6 +909,32 @@ async function handleInstallDegit(): Promise<void> {
 .InstallHint {
   font-size: 12px;
   color: var(--tx-text-color-secondary);
+}
+
+.InstallDetectedSource {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--tx-fill-color-light);
+  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter);
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
+}
+
+.InstallDetectedSource-Badge {
+  font-weight: 600;
+  color: var(--tx-color-primary);
+}
+
+.InstallDetectedSource-Code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--tx-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .InstallStatus {
