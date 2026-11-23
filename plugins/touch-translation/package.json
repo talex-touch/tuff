@@ -1,17 +1,25 @@
 {
   "name": "@talex-touch/touch-translation-plugin",
-  "private": true,
   "type": "module",
   "version": "1.0.18-beta.4",
-  "packageManager": "pnpm@10.34.4",
+  "private": true,
+  "packageManager": "pnpm@11.24.0",
+  "description": "Multi-provider translation and screenshot OCR plugin for Tuff.",
+  "keywords": [
+    "tuff-plugin",
+    "utilities",
+    "translation",
+    "ocr",
+    "multi-provider"
+  ],
   "scripts": {
     "build": "vite build && tuff builder",
     "dev": "vite --port 3733 --open",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
-    "typecheck": "vue-tsc --noEmit",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest run",
+    "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
     "@talex-touch/tuff-intelligence": "workspace:^",
@@ -42,5 +50,37 @@
     "vite": "^7.3.6",
     "vitest": "^3.2.7",
     "vue-tsc": "^3.3.6"
+  },
+  "tuff": {
+    "category": "utilities",
+    "displayName": {
+      "en": "Translate",
+      "zh": "翻译"
+    },
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "id": "com.tuffex.translation",
+    "manifest": "./manifest.json",
+    "name": "touch-translation",
+    "permissions": {
+      "optional": [
+        "clipboard.write"
+      ],
+      "required": [
+        "network.internet",
+        "intelligence.basic",
+        "storage.plugin"
+      ]
+    },
+    "platforms": {
+      "darwin": true,
+      "linux": true,
+      "win32": true
+    },
+    "schemaVersion": 1,
+    "sdkapi": 261011,
+    "surface": "webcontent"
   }
 }

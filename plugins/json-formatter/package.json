@@ -3,12 +3,22 @@
   "type": "module",
   "version": "1.0.9-beta.4",
   "private": true,
-  "packageManager": "pnpm@10.24.0",
+  "packageManager": "pnpm@11.24.0",
+  "description": "Cross-platform JSON workbench plugin for Tuff with formatting, querying, conversion, and diffing.",
+  "keywords": [
+    "tuff-plugin",
+    "utilities",
+    "json",
+    "formatter",
+    "yaml",
+    "xml"
+  ],
   "scripts": {
     "build": "vite build && tuff builder",
     "dev": "vite --port 5555",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test": "vitest run",
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
@@ -43,6 +53,38 @@
     "vite": "^7.3.6",
     "vite-plugin-vue-devtools": "^8.0.5",
     "vite-plugin-vue-layouts": "^0.11.0",
+    "vitest": "^3.2.7",
     "vue-tsc": "^3.3.6"
+  },
+  "tuff": {
+    "category": "utilities",
+    "displayName": {
+      "en": "Format JSON",
+      "zh": "JSON格式化"
+    },
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "id": "com.tuffex.json-formatter",
+    "manifest": "./manifest.json",
+    "name": "json-formatter",
+    "permissions": {
+      "optional": [
+        "clipboard.write",
+        "network.internet"
+      ],
+      "required": [
+        "clipboard.read"
+      ]
+    },
+    "platforms": {
+      "darwin": true,
+      "linux": true,
+      "win32": true
+    },
+    "schemaVersion": 1,
+    "sdkapi": 261011,
+    "surface": "webcontent"
   }
 }

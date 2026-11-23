@@ -390,8 +390,11 @@ async function handleCopy(): Promise<void> {
   }
 
   copyPending.value = true
+  errorMessage.value = ''
   try {
     await clipboard.write(payload)
+  } catch (error) {
+    errorMessage.value = error instanceof Error && error.message ? error.message : '复制失败'
   } finally {
     copyPending.value = false
   }
@@ -407,12 +410,29 @@ async function handleOpenLink(url: string): Promise<void> {
   try {
     await system.openExternal(url)
   } catch (error) {
-    // system.shell is optional in the manifest, so a denial is a normal outcome here,
-    // not a bug — degrade to the clipboard and say which of the two happened.
-    await handleCopyText(url)
-    errorMessage.value = isPermissionDenied(error)
-      ? '未授予打开链接的权限，已复制到剪贴板'
-      : '无法直接打开链接，已复制到剪贴板'
+    // system.shell is optional in the manifest, so a denial or unavailable permission service
+    // is a normal outcome here — degrade to the clipboard and report both outcomes accurately.
+    const copied = await handleCopyText(url)
+    const permissionFailure = classifyShellPermissionError(error)
+    if (copied) {
+      if (permissionFailure === 'denied') {
+        errorMessage.value = '未授予打开链接的权限，已复制到剪贴板'
+      } else if (permissionFailure === 'unavailable') {
+        errorMessage.value = '打开链接权限服务暂不可用，已复制到剪贴板'
+      } else {
+        errorMessage.value = '无法直接打开链接，已复制到剪贴板'
+      }
+      return
+    }
+
+    const copyFailureSuffix = errorMessage.value ? `（${errorMessage.value}）` : ''
+    if (permissionFailure === 'denied') {
+      errorMessage.value = `未授予打开链接的权限，且复制到剪贴板失败${copyFailureSuffix}`
+    } else if (permissionFailure === 'unavailable') {
+      errorMessage.value = `打开链接权限服务暂不可用，且复制到剪贴板失败${copyFailureSuffix}`
+    } else {
+      errorMessage.value = `无法直接打开链接，且复制到剪贴板失败${copyFailureSuffix}`
+    }
   }
 }
 
@@ -440,26 +460,39 @@ async function handlePrimaryAction(): Promise<void> {
   await handleCopy()
 }
 
-async function handleCopyText(value: string): Promise<void> {
+async function handleCopyText(value: string): Promise<boolean> {
   if (!value) {
-    return
+    return false
   }
 
   errorMessage.value = ''
   try {
     await clipboard.write({ text: value })
+    return true
   } catch (error) {
     errorMessage.value = error instanceof Error && error.message ? error.message : '复制文本失败'
+    return false
   }
 }
 
+type ShellPermissionFailure = 'denied' | 'unavailable' | 'other'
+
 /**
- * 主进程把权限拒绝序列化成带 `code` 的普通对象，不是 Error 实例——
- * 用 instanceof 判会漏掉，所以读 code 字段。
+ * 主进程把权限结果序列化成带 `code` 的普通对象，不是 Error 实例——
+ * 用 instanceof 判会漏掉，所以读 code 字段并区分用户拒绝与权限服务不可用。
  */
-function isPermissionDenied(error: unknown): boolean {
+function classifyShellPermissionError(error: unknown): ShellPermissionFailure {
   const code = (error as { code?: unknown } | null)?.code
-  return typeof code === 'string' && code.startsWith('SYSTEM_SHELL_PERMISSION_')
+  if (code === 'SYSTEM_SHELL_PERMISSION_DENIED') {
+    return 'denied'
+  }
+  if (code === 'SYSTEM_SHELL_PERMISSION_UNAVAILABLE') {
+    return 'unavailable'
+  }
+  if (typeof code === 'string' && code.startsWith('SYSTEM_SHELL_PERMISSION_')) {
+    return 'unavailable'
+  }
+  return 'other'
 }
 
 /**
@@ -525,10 +558,27 @@ async function handleRevealFile(path: string): Promise<void> {
   try {
     await system.showInFolder(path)
   } catch (error) {
-    await handleCopyText(path)
-    errorMessage.value = isPermissionDenied(error)
-      ? '未授予定位文件的权限，已复制文件路径'
-      : '无法定位该文件，已复制文件路径'
+    const copied = await handleCopyText(path)
+    const permissionFailure = classifyShellPermissionError(error)
+    if (copied) {
+      if (permissionFailure === 'denied') {
+        errorMessage.value = '未授予定位文件的权限，已复制文件路径'
+      } else if (permissionFailure === 'unavailable') {
+        errorMessage.value = '定位文件权限服务暂不可用，已复制文件路径'
+      } else {
+        errorMessage.value = '无法定位该文件，已复制文件路径'
+      }
+      return
+    }
+
+    const copyFailureSuffix = errorMessage.value ? `（${errorMessage.value}）` : ''
+    if (permissionFailure === 'denied') {
+      errorMessage.value = `未授予定位文件的权限，且复制文件路径失败${copyFailureSuffix}`
+    } else if (permissionFailure === 'unavailable') {
+      errorMessage.value = `定位文件权限服务暂不可用，且复制文件路径失败${copyFailureSuffix}`
+    } else {
+      errorMessage.value = `无法定位该文件，且复制文件路径失败${copyFailureSuffix}`
+    }
   }
 }
 
@@ -554,6 +604,7 @@ async function handleToggleFavorite(): Promise<void> {
   }
 
   favoritePending.value = true
+  errorMessage.value = ''
   const targetId = selectedItem.value.id
 
   try {
@@ -578,6 +629,8 @@ async function handleToggleFavorite(): Promise<void> {
           }
         : item,
     )
+  } catch (error) {
+    errorMessage.value = error instanceof Error && error.message ? error.message : '更新收藏状态失败'
   } finally {
     favoritePending.value = false
   }
@@ -589,6 +642,7 @@ async function handleDelete(): Promise<void> {
   }
 
   deletePending.value = true
+  errorMessage.value = ''
   const removedId = selectedItem.value.id
   const removedIndex = items.value.findIndex(item => item.id === removedId)
 
@@ -597,6 +651,8 @@ async function handleDelete(): Promise<void> {
     items.value = items.value.filter(item => item.id !== removedId)
     total.value = Math.max(0, total.value - 1)
     syncSelection(removedId, removedIndex)
+  } catch (error) {
+    errorMessage.value = error instanceof Error && error.message ? error.message : '删除记录失败'
   } finally {
     deletePending.value = false
   }

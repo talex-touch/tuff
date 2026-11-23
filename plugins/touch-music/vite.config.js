@@ -20,8 +20,30 @@ const testModuleResolver = {
   },
 }
 
+// Chromium/Electron renders WOFF2 icon fonts natively; stripping legacy EOT/TTF/WOFF/SVG
+// font fallbacks drops the 3MB remixicon.svg asset and keeps the bundle compact.
+const slimRemixIconFonts = {
+  name: 'touch-music-slim-remixicon-fonts',
+  enforce: 'pre',
+  transform(code, id) {
+    if (!id.endsWith('remixicon/fonts/remixicon.css'))
+      return null
+    return {
+      code: code.replace(
+        /@font-face\s*\{[\s\S]*?\}/,
+        `@font-face {\n  font-family: "remixicon";\n  src: url('remixicon.woff2') format("woff2");\n  font-display: swap;\n}`,
+      ),
+      map: null,
+    }
+  },
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: './',
+  build: {
+    modulePreload: { polyfill: false },
+  },
   resolve: {
     alias: [
       {
@@ -38,14 +60,9 @@ export default defineConfig({
       },
     ],
   },
-  plugins: [testModuleResolver, vue()],
-  experimental: {
-    renderBuiltUrl(filename, host) {
-      //      console.log(filename, hostType)
-      const { hostType } = host
-      //      if( hostType === 'js' ) return `./js/${filename}`
-      //      if( hostType === 'css' ) return `./css/${filename}`
-      return `./${filename}`
-    },
+  plugins: [testModuleResolver, slimRemixIconFonts, vue()],
+  test: {
+    environment: 'jsdom',
+    include: ['src/**/*.test.{ts,js}'],
   },
 })

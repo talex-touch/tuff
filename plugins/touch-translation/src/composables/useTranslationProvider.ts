@@ -96,40 +96,54 @@ export function useTranslationProvider() {
     return next
   }
 
-  const saveProviderSecrets = async (providerId: string, config: Record<string, any>): Promise<boolean> => {
+  const saveProviderSecrets = async (
+    providerId: string,
+    config: Record<string, any>,
+  ): Promise<{ success: boolean, error?: string }> => {
     const fields = (PROVIDER_SECRET_FIELDS[providerId] || []).filter(field => field in config)
     const entries = fields.map((field) => {
       const value = typeof config[field] === 'string' ? config[field] : ''
       return { key: getProviderSecretKey(providerId, field), value: value.trim() ? value : null }
     })
     if (entries.length === 0) {
-      return true
+      return { success: true }
     }
-    const result = await secret.setMany(entries)
-    if (result.success) {
+    try {
+      const result = await secret.setMany(entries)
+      if (!result?.success) {
+        return { success: false, error: result?.error || '密钥保存失败，配置未更新' }
+      }
       for (const field of fields) {
         delete pendingLegacyCredentials[providerId]?.[field]
       }
+      return { success: true }
     }
-    return result.success
+    catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error && error.message ? error.message : '密钥保存失败，配置未更新',
+      }
+    }
   }
 
-  const deleteAllProviderSecrets = async (): Promise<boolean> => {
+  const deleteAllProviderSecrets = async (): Promise<{ success: boolean, error?: string }> => {
     const entries = Object.entries(PROVIDER_SECRET_FIELDS).flatMap(([providerId, fields]) =>
       fields.map(field => ({ key: getProviderSecretKey(providerId, field), value: null })),
     )
-    const result = await secret.setMany(entries)
-    if (result.success) {
+    try {
+      const result = await secret.setMany(entries)
+      if (!result?.success) {
+        return { success: false, error: result?.error || '密钥清理失败，配置未重置' }
+      }
       pendingLegacyCredentials = {}
+      return { success: true }
     }
-    return result.success
-  }
-
-  async function persistProviderConfig(providerId: string, config: Record<string, any>) {
-    if (hasProviderSecretFields(providerId, config) && !(await saveProviderSecrets(providerId, config))) {
-      return
+    catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error && error.message ? error.message : '密钥清理失败，配置未重置',
+      }
     }
-    await saveProvidersConfig()
   }
 
   // 初始化所有提供者
@@ -242,21 +256,47 @@ export function useTranslationProvider() {
     }
   }
 
-  // 更新提供者配置
-  const updateProviderConfig = (id: string, config: Record<string, any>) => {
+  // 更新提供者配置（fail-closed：先写密钥，失败时保持原配置并回滚）
+  const updateProviderConfig = async (
+    id: string,
+    config: Record<string, any>,
+  ): Promise<{ success: boolean, error?: string }> => {
     const provider = providers.get(id)
-    if (provider && provider.config) {
-      const metadataConfig = stripProviderSecrets(id, config)
-      provider.config = { ...provider.config, ...metadataConfig }
-      persistProviderConfig(id, config)
-        .then(async () => {
-          if (hasProviderSecretFields(id, config)) {
-            provider.config = await mergeProviderSecrets(id, provider.config || {})
-          }
-        })
-        .catch((err) => {
-          void err
-        })
+    if (!provider || !provider.config) {
+      return { success: false, error: '未找到对应的翻译源配置' }
+    }
+
+    const previousConfig = { ...provider.config }
+    const previousLegacy = pendingLegacyCredentials[id] ? { ...pendingLegacyCredentials[id] } : undefined
+    const hasSecrets = hasProviderSecretFields(id, config)
+
+    if (hasSecrets) {
+      const secretResult = await saveProviderSecrets(id, config)
+      if (!secretResult.success) {
+        return secretResult
+      }
+    }
+
+    const metadataConfig = stripProviderSecrets(id, config)
+    const nextConfig = { ...previousConfig, ...metadataConfig }
+    provider.config = nextConfig
+
+    try {
+      await saveProvidersConfig()
+      if (hasSecrets) {
+        provider.config = await mergeProviderSecrets(id, stripProviderSecrets(id, nextConfig))
+      }
+      return { success: true }
+    }
+    catch (error) {
+      provider.config = previousConfig
+      if (previousLegacy) {
+        pendingLegacyCredentials[id] = previousLegacy
+      }
+      return {
+        success: false,
+        error: error instanceof Error && error.message ? error.message : '保存翻译源配置失败',
+      }
     }
   }
 
@@ -278,8 +318,24 @@ export function useTranslationProvider() {
     })
   }
 
-  // 重置所有提供者配置
-  const resetProvidersConfig = () => {
+  // 重置所有提供者配置（fail-closed：先清理安全存储中的密钥，失败时不清空内存或存储配置）
+  const resetProvidersConfig = async (): Promise<{ success: boolean, error?: string }> => {
+    const snapshots = new Map<string, { enabled: boolean, config?: Record<string, any> }>()
+    providers.forEach((provider, id) => {
+      snapshots.set(id, {
+        enabled: provider.enabled,
+        config: provider.config ? { ...provider.config } : undefined,
+      })
+    })
+    const previousLegacy: PendingLegacyCredentials = Object.fromEntries(
+      Object.entries(pendingLegacyCredentials).map(([id, creds]) => [id, { ...creds }]),
+    )
+
+    const secretResult = await deleteAllProviderSecrets()
+    if (!secretResult.success) {
+      return secretResult
+    }
+
     providers.forEach((provider) => {
       provider.enabled = isDefaultEnabledProvider(provider.id)
       if (provider.config) {
@@ -327,15 +383,27 @@ export function useTranslationProvider() {
         }
       }
     })
-    deleteAllProviderSecrets()
-      .then((success) => {
-        if (success) {
-          return saveProvidersConfig()
+
+    try {
+      await saveProvidersConfig()
+      return { success: true }
+    }
+    catch (error) {
+      snapshots.forEach((snapshot, id) => {
+        const provider = providers.get(id)
+        if (!provider)
+          return
+        provider.enabled = snapshot.enabled
+        if (snapshot.config) {
+          provider.config = snapshot.config
         }
       })
-      .catch((err) => {
-        void err
-      })
+      pendingLegacyCredentials = previousLegacy
+      return {
+        success: false,
+        error: error instanceof Error && error.message ? error.message : '重置翻译源配置失败',
+      }
+    }
   }
 
   // 自动初始化

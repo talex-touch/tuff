@@ -64,5 +64,27 @@ describe('TranslationCard clipboard boundary', () => {
 
     expect(sdkMocks.clipboard.writeText).not.toHaveBeenCalled()
     expect(nativeClipboardWrite).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="copy-feedback"]').text()).toContain('剪贴板服务不可用')
+  })
+
+  it('surfaces distinct clipboard permission denied vs unavailable feedback', async () => {
+    const wrapper = mount(TranslationCard, {
+      props: {
+        providerId: 'baidu',
+        result: createResult(),
+      },
+    })
+
+    sdkMocks.clipboard.writeText.mockRejectedValueOnce(
+      Object.assign(new Error('denied'), { code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED' }),
+    )
+    await wrapper.find('button[title="复制翻译结果"]').trigger('click')
+    expect(wrapper.get('[data-testid="copy-feedback"]').text()).toContain('clipboard.write')
+
+    sdkMocks.clipboard.writeText.mockRejectedValueOnce(
+      Object.assign(new Error('unavailable'), { code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE' }),
+    )
+    await wrapper.find('button[title="复制翻译结果"]').trigger('click')
+    expect(wrapper.get('[data-testid="copy-feedback"]').text()).toContain('权限服务暂不可用')
   })
 })

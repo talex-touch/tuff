@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { axios } from '@modules/axios'
 import { sleep } from '@modules/utils'
-import { onMounted, reactive, ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 
 const img1 = ref<HTMLElement>()
 const img2 = ref<HTMLElement>()
 const banners = reactive([])
+let rafId: number | null = null
+let active = true
 
 const banner = reactive({
   now: 0,
@@ -16,11 +18,25 @@ const banner = reactive({
 })
 
 onMounted(async () => {
-  const res = await axios.get('/banner')
-  if (res.code !== 200)
-    return
+  rafId = requestAnimationFrame(refresh)
+  try {
+    const res = await axios.get('/banner')
+    if (!active || res?.code !== 200 || !Array.isArray(res.banners))
+      return
 
-  Object.assign(banners, res.banners)
+    Object.assign(banners, res.banners)
+  }
+  catch {
+    // Fail closed without unhandled rejection when network.internet is denied or unavailable.
+  }
+})
+
+onBeforeUnmount(() => {
+  active = false
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId)
+    rafId = null
+  }
 })
 
 async function setImage() {
@@ -61,6 +77,9 @@ async function setImage() {
 }
 
 async function refresh() {
+  if (!active)
+    return
+
   if (banners.length) {
     if (banner.t.n <= 0) {
       banner.t.n = banner.t.m
@@ -72,10 +91,10 @@ async function refresh() {
     }
   }
 
-  requestAnimationFrame(refresh)
+  if (active) {
+    rafId = requestAnimationFrame(refresh)
+  }
 }
-
-requestAnimationFrame(refresh)
 </script>
 
 <template>

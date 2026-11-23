@@ -3,14 +3,6 @@ declare interface Window {
   MonacoEnvironment?: MonacoEnvironment
 }
 
-// with unplugin-vue-markdown, markdown files can be treated as Vue components
-declare module '*.md' {
-  import type { DefineComponent } from 'vue'
-
-  const component: DefineComponent<object, object, any>
-  export default component
-}
-
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
 
@@ -46,26 +38,7 @@ declare module 'monaco-editor/languages/features/json/json.worker?worker' {
   export default MonacoJsonWorker
 }
 
-declare module 'monaco-editor/languages/features/css/css.worker?worker' {
-  class MonacoCssWorker extends Worker {
-    constructor()
-  }
-
-  export default MonacoCssWorker
-}
-
-declare module 'monaco-editor/languages/features/html/html.worker?worker' {
-  class MonacoHtmlWorker extends Worker {
-    constructor()
-  }
-
-  export default MonacoHtmlWorker
-}
-
-declare module 'monaco-editor/languages/features/typescript/ts.worker?worker' {
-  class MonacoTsWorker extends Worker {
-    constructor()
-  }
-
-  export default MonacoTsWorker
-}
+declare module 'monaco-editor/editor/browser/*'
+declare module 'monaco-editor/editor/contrib/*'
+declare module 'monaco-editor/languages/definitions/*'
+declare module 'monaco-editor/base/*'

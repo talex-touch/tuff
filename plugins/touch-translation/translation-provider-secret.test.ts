@@ -104,7 +104,7 @@ describe('touch-translation provider secret storage', () => {
     })
   })
 
-  it('keeps failed secret updates out of runtime config and normal storage', async () => {
+  it('keeps failed secret updates out of runtime config and normal storage (fail-closed rollback)', async () => {
     sdkMocks.secret.get.mockResolvedValue('')
     sdkMocks.secret.setMany.mockResolvedValue({ success: false, error: 'secure-store-unavailable' })
     sdkMocks.storage.getFile.mockResolvedValue(undefined)
@@ -114,14 +114,15 @@ describe('touch-translation provider secret storage', () => {
     const translationProvider = useTranslationProvider()
     await flushAsyncInit()
 
-    translationProvider.updateProviderConfig('tencent', {
+    const initialRegion = translationProvider.getProvider('tencent')?.config?.region
+    const result = await translationProvider.updateProviderConfig('tencent', {
       apiUrl: 'https://tmt.tencentcloudapi.com',
       region: 'ap-shanghai',
       secretId: '  next-id  ',
       secretKey: '  next-key  ',
     })
-    await flushAsyncInit()
 
+    expect(result).toEqual({ success: false, error: 'secure-store-unavailable' })
     expect(sdkMocks.secret.setMany).toHaveBeenCalledWith([
       { key: 'providers.tencent.secretId', value: '  next-id  ' },
       { key: 'providers.tencent.secretKey', value: '  next-key  ' },
@@ -129,10 +130,7 @@ describe('touch-translation provider secret storage', () => {
     expect(sdkMocks.storage.setFile).not.toHaveBeenCalled()
 
     const provider = translationProvider.getProvider('tencent')
-    expect(provider?.config).toMatchObject({
-      apiUrl: 'https://tmt.tencentcloudapi.com',
-      region: 'ap-shanghai',
-    })
+    expect(provider?.config?.region).toBe(initialRegion)
     expect(provider?.config?.secretId).not.toBe('  next-id  ')
     expect(provider?.config?.secretKey).not.toBe('  next-key  ')
   })
@@ -218,12 +216,35 @@ describe('touch-translation provider secret storage', () => {
     await settle()
 
     useStatefulVault()
-    translationProvider.resetProvidersConfig()
-    await settle()
+    const resetResult = await translationProvider.resetProvidersConfig()
+    expect(resetResult).toEqual({ success: true })
 
     const saved = sdkMocks.storage.setFile.mock.calls.at(-1)?.[1]
     expect(saved.tencent.config).not.toHaveProperty('secretId')
     expect(saved.tencent.config).not.toHaveProperty('secretKey')
     expect(JSON.stringify(saved)).not.toContain('synthetic-legacy')
+  })
+
+  it('aborts resetProvidersConfig fail-closed when secret deletion fails without wiping in-memory config', async () => {
+    const vault = useStatefulVault()
+    sdkMocks.storage.getFile.mockResolvedValue(LEGACY_TENCENT)
+    sdkMocks.storage.setFile.mockResolvedValue({ success: true })
+
+    const { useTranslationProvider } = await import('./src/composables/useTranslationProvider')
+    const translationProvider = useTranslationProvider()
+    await settle()
+
+    expect(vault.get('providers.tencent.secretKey')).toBe('synthetic-legacy-key')
+    sdkMocks.storage.setFile.mockClear()
+    sdkMocks.secret.setMany.mockResolvedValueOnce({ success: false, error: 'vault-locked' })
+
+    const result = await translationProvider.resetProvidersConfig()
+    expect(result).toEqual({ success: false, error: 'vault-locked' })
+    expect(sdkMocks.storage.setFile).not.toHaveBeenCalled()
+    expect(translationProvider.getProvider('tencent')?.config).toMatchObject({
+      region: 'ap-shanghai',
+      secretId: 'synthetic-legacy-id',
+      secretKey: 'synthetic-legacy-key',
+    })
   })
 })
