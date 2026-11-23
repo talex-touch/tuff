@@ -371,11 +371,13 @@ async function importPlaywright() {
   }
 }
 
-async function collectApiProbes(baseUrl) {
+export const API_PROBE_SAMPLE_LENGTH = 512
+
+export async function collectApiProbes(baseUrl, fetchImpl = fetch) {
   const results = []
   for (const probe of apiProbes) {
     const startedAt = performance.now()
-    const response = await fetch(`${baseUrl}${probe.path}`, { redirect: probe.redirect ?? 'follow' })
+    const response = await fetchImpl(`${baseUrl}${probe.path}`, { redirect: probe.redirect ?? 'follow' })
     const text = await response.text()
     results.push({
       name: probe.name,
@@ -386,7 +388,7 @@ async function collectApiProbes(baseUrl) {
       bytes: Buffer.byteLength(text),
       durationMs: Math.round(performance.now() - startedAt),
       location: response.headers.get('location'),
-      sample: text.slice(0, 160),
+      sample: text.slice(0, API_PROBE_SAMPLE_LENGTH),
     })
   }
   return results

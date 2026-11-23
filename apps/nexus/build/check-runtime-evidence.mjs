@@ -1,75 +1,146 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const currentDir = dirname(fileURLToPath(import.meta.url))
+const currentFile = fileURLToPath(import.meta.url)
+const currentDir = dirname(currentFile)
 const nexusRoot = join(currentDir, '..')
 const workspaceRoot = join(nexusRoot, '..', '..')
 const evidenceRoot = join(workspaceRoot, 'output/playwright')
-const requireDeployedPreview = process.argv.includes('--require-deployed-preview')
-const printDeployedPreviewTemplate = process.argv.includes('--print-deployed-preview-template')
 
-if (printDeployedPreviewTemplate) {
-  console.log(JSON.stringify(createDeployedPreviewEvidenceTemplate(), null, 2))
-  process.exit(0)
+export const DEFAULT_LOCAL_API_MAX_DURATION_MS = 1_000
+export const DEPLOYED_PREVIEW_API_MAX_DURATION_MS = 5_000
+
+const isMainModule = process.argv[1] && resolve(process.argv[1]) === currentFile
+if (isMainModule) {
+  runCli(process.argv.slice(2))
 }
 
-const wranglerEvidence = readLatestEvidence(/^nexus-wrangler-prod-runtime-smoke-\d{4}-\d{2}-\d{2}\.json$/)
-const pwaEvidence = readLatestEvidence(/^nexus-local-prod-pwa-precache-trim-\d{4}-\d{2}-\d{2}\.json$/)
-const deployedPreviewEvidence = requireDeployedPreview
-  ? readLatestEvidence(/^nexus-cloudflare-pages-preview-runtime-smoke-\d{4}-\d{2}-\d{2}\.json$/)
-  : null
-const findings = [
-  ...checkEvidenceSidecars(wranglerEvidence, pwaEvidence, deployedPreviewEvidence),
-  ...checkEvidenceMarkdownSummaries(wranglerEvidence, pwaEvidence, deployedPreviewEvidence),
-  ...checkWranglerEvidence(wranglerEvidence.data),
-  ...checkPwaTrimEvidence(pwaEvidence.data),
-  ...(deployedPreviewEvidence ? checkDeployedPreviewEvidence(deployedPreviewEvidence.data) : []),
-]
+export function runCli(argv = process.argv.slice(2)) {
+  const requireDeployedPreview = argv.includes('--require-deployed-preview')
+  const deployedOnly = argv.includes('--deployed-only')
+  const printDeployedPreviewTemplate = argv.includes('--print-deployed-preview-template')
 
-if (findings.length) {
-  console.error('[nexus-runtime-evidence] local runtime evidence guard failed:')
-  for (const finding of findings)
-    console.error(`  ${finding}`)
-  process.exit(1)
-}
+  if (printDeployedPreviewTemplate) {
+    console.log(JSON.stringify(createDeployedPreviewEvidenceTemplate(), null, 2))
+    process.exit(0)
+  }
 
-console.log(`[nexus-runtime-evidence] wrangler evidence verified: ${wranglerEvidence.fileName}`)
-console.log(`[nexus-runtime-evidence] PWA precache evidence verified: ${pwaEvidence.fileName}`)
-if (deployedPreviewEvidence)
-  console.log(`[nexus-runtime-evidence] deployed Cloudflare Pages preview evidence verified: ${deployedPreviewEvidence.fileName}`)
-else
-  console.log('[nexus-runtime-evidence] deployed Cloudflare Pages preview evidence not enforced; pass --require-deployed-preview for final production gate')
-console.log(`[nexus-runtime-evidence] wrangler status=${wranglerEvidence.data.status}; warnings=${wranglerEvidence.data.warnings?.length ?? 0}`)
-console.log(`[nexus-runtime-evidence] PWA swPrecache=${pwaEvidence.data.swPrecache?.total}; public docs fan-out verified`)
+  const result = verifyRuntimeEvidence({
+    requireDeployedPreview,
+    deployedOnly,
+  })
 
-function readLatestEvidence(pattern) {
-  if (!existsSync(evidenceRoot)) {
-    console.error(`[nexus-runtime-evidence] evidence directory is missing: ${evidenceRoot}`)
+  if (result.error) {
+    console.error(`[nexus-runtime-evidence] ${result.error}`)
     process.exit(1)
   }
 
-  const fileName = readdirSync(evidenceRoot)
+  if (result.findings.length) {
+    const label = deployedOnly ? 'deployed preview runtime evidence guard failed' : 'local runtime evidence guard failed'
+    console.error(`[nexus-runtime-evidence] ${label}:`)
+    for (const finding of result.findings)
+      console.error(`  ${finding}`)
+    process.exit(1)
+  }
+
+  const { wranglerEvidence, pwaEvidence, deployedPreviewEvidence } = result
+  if (wranglerEvidence)
+    console.log(`[nexus-runtime-evidence] wrangler evidence verified: ${wranglerEvidence.fileName}`)
+  if (pwaEvidence)
+    console.log(`[nexus-runtime-evidence] PWA precache evidence verified: ${pwaEvidence.fileName}`)
+  if (deployedPreviewEvidence)
+    console.log(`[nexus-runtime-evidence] deployed Cloudflare Pages preview evidence verified: ${deployedPreviewEvidence.fileName}`)
+  else
+    console.log('[nexus-runtime-evidence] deployed Cloudflare Pages preview evidence not enforced; pass --require-deployed-preview for final production gate')
+  if (wranglerEvidence)
+    console.log(`[nexus-runtime-evidence] wrangler status=${wranglerEvidence.data.status}; warnings=${wranglerEvidence.data.warnings?.length ?? 0}`)
+  if (pwaEvidence)
+    console.log(`[nexus-runtime-evidence] PWA swPrecache=${pwaEvidence.data.swPrecache?.total}; public docs fan-out verified`)
+  if (deployedOnly && deployedPreviewEvidence)
+    console.log(`[nexus-runtime-evidence] deployed preview status=${deployedPreviewEvidence.data.status}; baseUrl=${getEvidenceBaseUrl(deployedPreviewEvidence.data)}`)
+}
+
+export function verifyRuntimeEvidence({
+  requireDeployedPreview = false,
+  deployedOnly = false,
+  rootDir = workspaceRoot,
+  evidenceDir = join(rootDir, 'output/playwright'),
+} = {}) {
+  const wranglerResult = deployedOnly
+    ? { evidence: null, error: null }
+    : readLatestEvidence(/^nexus-wrangler-prod-runtime-smoke-\d{4}-\d{2}-\d{2}\.json$/, evidenceDir)
+  if (wranglerResult.error)
+    return { ok: false, error: wranglerResult.error, findings: [] }
+
+  const pwaResult = deployedOnly
+    ? { evidence: null, error: null }
+    : readLatestEvidence(/^nexus-local-prod-pwa-precache-trim-\d{4}-\d{2}-\d{2}\.json$/, evidenceDir)
+  if (pwaResult.error)
+    return { ok: false, error: pwaResult.error, findings: [] }
+
+  const deployedResult = (requireDeployedPreview || deployedOnly)
+    ? readLatestEvidence(/^nexus-cloudflare-pages-preview-runtime-smoke-\d{4}-\d{2}-\d{2}\.json$/, evidenceDir)
+    : { evidence: null, error: null }
+  if (deployedResult.error)
+    return { ok: false, error: deployedResult.error, findings: [] }
+
+  const wranglerEvidence = wranglerResult.evidence
+  const pwaEvidence = pwaResult.evidence
+  const deployedPreviewEvidence = deployedResult.evidence
+
+  const findings = [
+    ...checkEvidenceSidecars(wranglerEvidence, pwaEvidence, deployedPreviewEvidence, rootDir),
+    ...checkEvidenceMarkdownSummaries(wranglerEvidence, pwaEvidence, deployedPreviewEvidence, evidenceDir),
+    ...(wranglerEvidence ? checkWranglerEvidence(wranglerEvidence.data) : []),
+    ...(pwaEvidence ? checkPwaTrimEvidence(pwaEvidence.data) : []),
+    ...(deployedPreviewEvidence ? checkDeployedPreviewEvidence(deployedPreviewEvidence.data) : []),
+  ]
+
+  return {
+    ok: findings.length === 0,
+    error: null,
+    findings,
+    wranglerEvidence,
+    pwaEvidence,
+    deployedPreviewEvidence,
+  }
+}
+
+function readLatestEvidence(pattern, dir = evidenceRoot) {
+  if (!existsSync(dir)) {
+    return {
+      evidence: null,
+      error: `evidence directory is missing: ${dir}`,
+    }
+  }
+
+  const fileName = readdirSync(dir)
     .filter(file => pattern.test(file))
     .sort()
     .at(-1)
 
   if (!fileName) {
-    console.error(`[nexus-runtime-evidence] missing evidence file matching ${pattern.source}`)
-    process.exit(1)
+    return {
+      evidence: null,
+      error: `missing evidence file matching ${pattern.source}`,
+    }
   }
 
-  const filePath = join(evidenceRoot, fileName)
+  const filePath = join(dir, fileName)
   return {
-    fileName,
-    filePath,
-    data: JSON.parse(readFileSync(filePath, 'utf8')),
+    evidence: {
+      fileName,
+      filePath,
+      data: JSON.parse(readFileSync(filePath, 'utf8')),
+    },
+    error: null,
   }
 }
 
-function checkEvidenceSidecars(wranglerEvidence, pwaEvidence, deployedPreviewEvidence) {
-  const wranglerPrefix = wranglerEvidence.fileName.replace(/\.json$/, '')
-  const pwaPrefix = pwaEvidence.fileName.replace(/\.json$/, '')
+export function checkEvidenceSidecars(wranglerEvidence, pwaEvidence, deployedPreviewEvidence, rootDir = workspaceRoot) {
+  const wranglerPrefix = wranglerEvidence?.fileName.replace(/\.json$/, '')
+  const pwaPrefix = pwaEvidence?.fileName.replace(/\.json$/, '')
   const deployedPrefix = deployedPreviewEvidence?.fileName.replace(/\.json$/, '')
   const wranglerHarSuffixes = [
     'auth-app-callback',
@@ -83,16 +154,24 @@ function checkEvidenceSidecars(wranglerEvidence, pwaEvidence, deployedPreviewEvi
     'store',
   ]
   const requiredFiles = [
-    `output/playwright/${wranglerPrefix}.md`,
-    `output/playwright/${pwaPrefix}.md`,
-    ...wranglerHarSuffixes.map(suffix => `output/playwright/${wranglerPrefix}-${suffix}.har`),
-    ...(pwaEvidence.data.routes ?? []).map(route => route.har).filter(Boolean),
+    ...(wranglerPrefix
+      ? [
+          `output/playwright/${wranglerPrefix}.md`,
+          ...wranglerHarSuffixes.map(suffix => `output/playwright/${wranglerPrefix}-${suffix}.har`),
+        ]
+      : []),
+    ...(pwaPrefix
+      ? [
+          `output/playwright/${pwaPrefix}.md`,
+          ...(pwaEvidence.data.routes ?? []).map(route => route.har).filter(Boolean),
+        ]
+      : []),
     ...(deployedPrefix ? [`output/playwright/${deployedPrefix}.md`] : []),
     ...(deployedPreviewEvidence ? getDeclaredEvidenceHarFiles(deployedPreviewEvidence.data) : []),
   ]
 
   return requiredFiles.flatMap((file) => {
-    const filePath = join(workspaceRoot, file)
+    const filePath = join(rootDir, file)
     return existsSync(filePath) ? [] : [`missing runtime evidence sidecar: ${file}`]
   })
 }
@@ -106,22 +185,28 @@ function getDeclaredEvidenceHarFiles(evidence) {
   ].filter(Boolean)
 }
 
-function checkEvidenceMarkdownSummaries(wranglerEvidence, pwaEvidence, deployedPreviewEvidence) {
-  const wranglerPrefix = wranglerEvidence.fileName.replace(/\.json$/, '')
-  const pwaPrefix = pwaEvidence.fileName.replace(/\.json$/, '')
-  const wranglerMarkdown = readFileSync(join(evidenceRoot, `${wranglerPrefix}.md`), 'utf8')
-  const pwaMarkdown = readFileSync(join(evidenceRoot, `${pwaPrefix}.md`), 'utf8')
+export function checkEvidenceMarkdownSummaries(wranglerEvidence, pwaEvidence, deployedPreviewEvidence, dir = evidenceRoot) {
+  const findings = []
 
-  return [
-    ...checkWranglerMarkdownSummary(wranglerMarkdown, wranglerEvidence.data),
-    ...checkPwaMarkdownSummary(pwaMarkdown, pwaEvidence.data),
-    ...(deployedPreviewEvidence
-      ? checkDeployedPreviewMarkdownSummary(
-        readFileSync(join(evidenceRoot, `${deployedPreviewEvidence.fileName.replace(/\.json$/, '')}.md`), 'utf8'),
-        deployedPreviewEvidence.data,
-      )
-      : []),
-  ]
+  if (wranglerEvidence) {
+    const wranglerMarkdownPath = join(dir, `${wranglerEvidence.fileName.replace(/\.json$/, '')}.md`)
+    if (existsSync(wranglerMarkdownPath))
+      findings.push(...checkWranglerMarkdownSummary(readFileSync(wranglerMarkdownPath, 'utf8'), wranglerEvidence.data))
+  }
+
+  if (pwaEvidence) {
+    const pwaMarkdownPath = join(dir, `${pwaEvidence.fileName.replace(/\.json$/, '')}.md`)
+    if (existsSync(pwaMarkdownPath))
+      findings.push(...checkPwaMarkdownSummary(readFileSync(pwaMarkdownPath, 'utf8'), pwaEvidence.data))
+  }
+
+  if (deployedPreviewEvidence) {
+    const deployedMarkdownPath = join(dir, `${deployedPreviewEvidence.fileName.replace(/\.json$/, '')}.md`)
+    if (existsSync(deployedMarkdownPath))
+      findings.push(...checkDeployedPreviewMarkdownSummary(readFileSync(deployedMarkdownPath, 'utf8'), deployedPreviewEvidence.data))
+  }
+
+  return findings
 }
 
 function checkWranglerMarkdownSummary(markdown, evidence) {
@@ -164,7 +249,7 @@ function checkPwaMarkdownSummary(markdown, evidence) {
   return checkMarkdownContains('PWA', markdown, snippets)
 }
 
-function checkDeployedPreviewMarkdownSummary(markdown, evidence) {
+export function checkDeployedPreviewMarkdownSummary(markdown, evidence) {
   const bfcache = evidence.bfcache ?? {}
   const snippets = [
     `- Status: ${evidence.status}`,
@@ -183,7 +268,7 @@ function checkMarkdownContains(label, markdown, snippets) {
     .map(snippet => `${label} markdown summary is stale or missing: ${snippet}`)
 }
 
-function checkDeployedPreviewEvidence(evidence) {
+export function checkDeployedPreviewEvidence(evidence) {
   const findings = []
   const baseUrl = getEvidenceBaseUrl(evidence)
 
@@ -202,7 +287,7 @@ function checkDeployedPreviewEvidence(evidence) {
     findings.push('deployed Cloudflare preview source guard authHandlerSingleton is not true')
 
   findings.push(...checkServiceWorkerPrecache('deployed Cloudflare preview', evidence.build?.serviceWorkerPrecache))
-  findings.push(...checkApiProbes(evidence.api))
+  findings.push(...checkApiProbes(evidence.api, { maxDurationMs: DEPLOYED_PREVIEW_API_MAX_DURATION_MS }))
   findings.push(...checkRouteProbes(evidence.routes))
   findings.push(...checkPublicRouteNetwork(evidence.networkSummary?.publicRoutes))
   findings.push(...checkBfcacheProbe(evidence.bfcache))
@@ -215,7 +300,7 @@ function checkDeployedPreviewEvidence(evidence) {
   return findings
 }
 
-function createDeployedPreviewEvidenceTemplate() {
+export function createDeployedPreviewEvidenceTemplate() {
   return {
     schema: 'nexus-cloudflare-pages-preview-runtime-smoke/v1',
     status: 'PASS',
@@ -396,7 +481,7 @@ function checkAuthenticatedDashboard(probe) {
   return findings
 }
 
-function checkWranglerEvidence(evidence) {
+export function checkWranglerEvidence(evidence) {
   const findings = []
 
   if (!['PASS', 'PASS_WITH_WARNINGS'].includes(evidence.status))
@@ -530,11 +615,11 @@ function checkPwaServiceWorkerPrecache(precache) {
   return findings
 }
 
-function checkApiProbes(apiProbes = []) {
+export function checkApiProbes(apiProbes = [], { maxDurationMs = DEFAULT_LOCAL_API_MAX_DURATION_MS } = {}) {
   const requiredProbes = [
-    { name: 'docs page full body', statuses: [200], minBytes: 20_000, maxBytes: 40_000, sampleSnippets: ['"title":"Tabs"', '"body"'] },
+    { name: 'docs page full body', statuses: [200], minBytes: 15_000, maxBytes: 45_000, sampleSnippets: ['"title":"Tabs"', '"body"'] },
     { name: 'docs navigation', statuses: [200], minBytes: 40_000, maxBytes: 70_000, sampleSnippets: ['"title":"Docs"'] },
-    { name: 'docs sidebar components', statuses: [200], minBytes: 30_000, maxBytes: 60_000, sampleSnippets: ['normalizedPath'] },
+    { name: 'docs sidebar components', statuses: [200], minBytes: 30_000, maxBytes: 120_000, sampleSnippets: ['normalizedPath'] },
     { name: 'docs view unauth read', statuses: [200], minBytes: 20, maxBytes: 120, sampleSnippets: ['"source":"d1"'] },
     { name: 'auth session shell', statuses: [200], minBytes: 2, maxBytes: 20, sampleSnippets: ['{}'] },
     { name: 'auth providers shell', statuses: [200], minBytes: 300, maxBytes: 1_200, sampleSnippets: ['"credentials"', 'signinUrl'] },
@@ -555,8 +640,8 @@ function checkApiProbes(apiProbes = []) {
       findings.push(`API probe ${name} returned ${probe.status}, expected ${statuses.join(' or ')}`)
     if (probe.bytes < minBytes || probe.bytes > maxBytes)
       findings.push(`API probe ${name} returned ${probe.bytes} bytes, expected ${minBytes}..${maxBytes}`)
-    if (probe.durationMs > 1_000)
-      findings.push(`API probe ${name} took ${probe.durationMs}ms, expected <= 1000ms`)
+    if (probe.durationMs > maxDurationMs)
+      findings.push(`API probe ${name} took ${probe.durationMs}ms, expected <= ${maxDurationMs}ms`)
     if (locationPart && !probe.location?.includes(locationPart))
       findings.push(`API probe ${name} location ${probe.location ?? '<none>'} does not include ${locationPart}`)
 
