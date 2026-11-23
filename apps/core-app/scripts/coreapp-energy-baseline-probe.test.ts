@@ -1,12 +1,17 @@
+import { EventEmitter } from 'node:events'
+import { existsSync } from 'node:fs'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import vm from 'node:vm'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   DEFAULT_IDLE_SECONDS,
   SCHEMA_VERSION,
   aggregateProcessMemorySamples,
   assertSafeToLaunchOrAttach,
+  buildCoreBoxInteractiveExpression,
+  buildIsolatedPackagedLaunchEnv,
   buildManualPowermetricsCommand,
   classifyElectronProcessRole,
   collectPowermetricsEnergy,
@@ -18,13 +23,18 @@ import {
   parseArgs,
   parsePowermetricsTasksOutput,
   parsePsProcessList,
+  rankCoreBoxCandidateTargets,
   renderMarkdownSummary,
   runProbe,
   runStaticEnergyAudit,
+  seedIsolatedProfileSettings,
+  selectCoreBoxTarget,
   selectProcessTreeFromPs,
+  terminateChildAndWait,
   validateOptions,
   validateRemoteDebuggingUrl,
-  validateWebSocketDebuggerUrl
+  validateWebSocketDebuggerUrl,
+  waitForCoreBoxInteractive
 } from './coreapp-energy-baseline-probe.mjs'
 
 const tempDirs: string[] = []
@@ -681,5 +691,530 @@ describe('Dry-run honesty, artifact generation, and static audit', () => {
     expect(attachReport.readiness.missingBaselineRequirements).toEqual([
       "Metric 1 (coldStart) status is 'attach-only-unmeasured', expected 'measured'"
     ])
+  })
+})
+
+function evaluateCoreBoxExpressionInMockDom({
+  readyState = 'complete',
+  visibilityState = 'visible',
+  href = 'file:///Applications/Tuff.app/Contents/Resources/app.asar/out/renderer/index.html',
+  title = 'Tuff',
+  windowMode = 'CoreBox' as string | null,
+  touchType = 'core-box' as string | null,
+  coreType = undefined as string | undefined,
+  hasStartupApi = true,
+  bodyClasses = ['core-box'],
+  hasCoreBoxRoot = true,
+  coreBoxDisplay = 'flex',
+  input = {
+    id: 'core-box-input',
+    disabled: false,
+    isConnected: true,
+    display: 'block',
+    visibility: 'visible',
+    width: 580,
+    height: 48
+  } as null | {
+    id?: string
+    disabled?: boolean
+    isConnected?: boolean
+    display?: string
+    visibility?: string
+    width?: number
+    height?: number
+  },
+  hasIpcBridge = true,
+  innerWidth = 720
+} = {}) {
+  const coreBoxEl = hasCoreBoxRoot ? { __type: 'corebox', display: coreBoxDisplay } : null
+  const inputEl = input
+    ? {
+        __type: 'input',
+        id: input.id ?? '',
+        disabled: Boolean(input.disabled),
+        isConnected: input.isConnected ?? true,
+        display: input.display ?? 'block',
+        visibility: input.visibility ?? 'visible',
+        getBoundingClientRect: () => ({
+          width: input.width ?? 0,
+          height: input.height ?? 0
+        })
+      }
+    : null
+  const classSet = new Set(bodyClasses)
+  const doc = {
+    readyState,
+    visibilityState,
+    title,
+    body: {
+      classList: {
+        contains: (name: string) => classSet.has(name)
+      }
+    },
+    querySelector: (selector: string) => {
+      if (selector.includes('.CoreBox, [data-corebox-root]')) return coreBoxEl
+      if (selector.includes('#core-box-input')) return inputEl
+      return null
+    }
+  }
+  const win: Record<string, unknown> = {
+    innerWidth,
+    electron: hasIpcBridge
+      ? {
+          ipcRenderer: {
+            send: () => {},
+            on: () => () => {}
+          }
+        }
+      : undefined,
+    api: hasStartupApi
+      ? {
+          getStartupContextSnapshot: () => ({
+            windowMode,
+            role: { touchType, coreType }
+          })
+        }
+      : undefined
+  }
+  const context = {
+    window: win,
+    document: doc,
+    location: { href },
+    getComputedStyle: (el: { display?: string; visibility?: string }) => ({
+      display: el.display ?? 'block',
+      visibility: el.visibility ?? 'visible'
+    })
+  }
+  return vm.runInNewContext(buildCoreBoxInteractiveExpression(), context)
+}
+
+describe('Isolated packaged launch contract, CoreBox CDP readiness, and process-group cleanup', () => {
+  it('buildIsolatedPackagedLaunchEnv sets Tuff isolation vars and strips Node/pnpm/Electron runner vars', () => {
+    const env = buildIsolatedPackagedLaunchEnv({
+      userDataDir: '/tmp/tuff-energy-test-profile',
+      baseEnv: {
+        PATH: '/usr/local/bin:/Users/dev/repo/node_modules/.bin:relative/bin:/usr/bin:/bin',
+        LANG: 'en_US.UTF-8',
+        ELECTRON_RUN_AS_NODE: '1',
+        INIT_CWD: '/Users/dev/repo',
+        NODE_ENV: 'test',
+        NODE_OPTIONS: '--max-old-space-size=4096',
+        TSX_TSCONFIG_PATH: '/tmp/tsconfig.json',
+        npm_lifecycle_event: 'test',
+        npm_config_registry: 'https://registry.npmjs.org/',
+        PNPM_HOME: '/Users/dev/.pnpm',
+        PNPM_SCRIPT_SRC_DIR: '/Users/dev/repo'
+      },
+      platform: 'darwin'
+    })
+
+    expect(env.HOME).toBe(path.resolve('/tmp/tuff-energy-test-profile', 'home'))
+    expect(env.TUFF_FILE_PROVIDER_BASE_WATCH_PATHS).toBe(
+      path.resolve('/tmp/tuff-energy-test-profile', 'home')
+    )
+    expect(env.TUFF_STARTUP_BENCHMARK_USER_DATA_DIR).toBe(
+      path.resolve('/tmp/tuff-energy-test-profile')
+    )
+    expect(env.TUFF_PACKAGED_ACCEPTANCE_ISOLATED).toBe('1')
+    expect(env.FORCE_COLOR).toBe('0')
+    expect(env.LANG).toBe('en_US.UTF-8')
+    expect(env.PATH).toBe('/usr/local/bin:/usr/bin:/bin')
+
+    expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined()
+    expect(env.INIT_CWD).toBeUndefined()
+    expect(env.NODE_ENV).toBeUndefined()
+    expect(env.NODE_OPTIONS).toBeUndefined()
+    expect(env.TSX_TSCONFIG_PATH).toBeUndefined()
+    expect(env.npm_lifecycle_event).toBeUndefined()
+    expect(env.npm_config_registry).toBeUndefined()
+    expect(env.PNPM_HOME).toBeUndefined()
+    expect(env.PNPM_SCRIPT_SRC_DIR).toBeUndefined()
+    // Must NOT set auto-exit benchmark flag so 600s idle capture stays alive
+    expect(env.TUFF_STARTUP_BENCHMARK_ONCE).toBeUndefined()
+  })
+
+  it('seedIsolatedProfileSettings creates isolatedHome and seeds onboarding settings for tuff and tuff-dev', async () => {
+    const profileDir = await makeTempDir('tuff-seed-profile-')
+    const seeded = await seedIsolatedProfileSettings(profileDir)
+
+    expect(seeded.userDataDir).toBe(path.resolve(profileDir))
+    expect(seeded.isolatedHome).toBe(path.join(path.resolve(profileDir), 'home'))
+    expect(existsSync(seeded.isolatedHome)).toBe(true)
+
+    for (const rootName of ['tuff', 'tuff-dev']) {
+      const settingsPath = path.join(profileDir, rootName, 'modules', 'config', 'app-setting.ini')
+      const content = JSON.parse(await readFile(settingsPath, 'utf8'))
+      expect(content).toEqual({
+        beginner: { init: true },
+        dev: { developerMode: true }
+      })
+    }
+
+    // Re-seeding preserves existing unrelated config keys while keeping beginner.init=true
+    const tuffSettingsPath = path.join(profileDir, 'tuff', 'modules', 'config', 'app-setting.ini')
+    await writeFile(
+      tuffSettingsPath,
+      JSON.stringify({ customFlag: 'keep', beginner: { init: false, step: 3 } }),
+      'utf8'
+    )
+    await seedIsolatedProfileSettings(profileDir)
+    const merged = JSON.parse(await readFile(tuffSettingsPath, 'utf8'))
+    expect(merged).toEqual({
+      customFlag: 'keep',
+      beginner: { init: true, step: 3 },
+      dev: { developerMode: true }
+    })
+  })
+
+  it('rankCoreBoxCandidateTargets excludes devtools and keeps both MainWindow and CoreBox pages inspectable', () => {
+    const targets = [
+      {
+        id: 'sw-1',
+        type: 'service_worker',
+        title: 'SW',
+        url: 'file:///sw.js',
+        webSocketDebuggerUrl: 'ws://127.0.0.1:9712/devtools/page/sw'
+      },
+      {
+        id: 'devtools-1',
+        type: 'page',
+        title: 'DevTools',
+        url: 'devtools://devtools/bundled/inspector.html',
+        webSocketDebuggerUrl: 'ws://127.0.0.1:9712/devtools/page/dt'
+      },
+      {
+        id: 'overlay-1',
+        type: 'page',
+        title: 'Tuff',
+        url: 'file:///out/renderer/index.html#/meta-overlay',
+        webSocketDebuggerUrl: 'ws://127.0.0.1:9712/devtools/page/overlay'
+      },
+      {
+        id: 'main-1',
+        type: 'page',
+        title: 'Tuff',
+        url: 'file:///out/renderer/index.html',
+        webSocketDebuggerUrl: 'ws://127.0.0.1:9712/devtools/page/main'
+      },
+      {
+        id: 'corebox-1',
+        type: 'page',
+        title: 'Tuff',
+        url: 'file:///out/renderer/index.html',
+        webSocketDebuggerUrl: 'ws://127.0.0.1:9712/devtools/page/corebox'
+      }
+    ]
+
+    const ranked = rankCoreBoxCandidateTargets(targets)
+    expect(ranked.map((t: { id: string }) => t.id)).toEqual(['main-1', 'corebox-1', 'overlay-1'])
+
+    const explicitTargets = [
+      targets[3],
+      {
+        id: 'explicit-box',
+        type: 'page',
+        title: 'Tuff CoreBox',
+        url: 'file:///out/renderer/index.html#/box',
+        webSocketDebuggerUrl: 'ws://127.0.0.1:9712/devtools/page/explicit'
+      }
+    ]
+    expect(selectCoreBoxTarget(explicitTargets)?.id).toBe('explicit-box')
+  })
+
+  it('buildCoreBoxInteractiveExpression distinguishes real visible/hidden-prewarmed CoreBox from MainWindow and unmounted DOM', () => {
+    // 1. Visible CoreBox window
+    const visible = evaluateCoreBoxExpressionInMockDom({
+      readyState: 'interactive',
+      visibilityState: 'visible',
+      windowMode: 'CoreBox'
+    })
+    expect(visible.interactive).toBe(true)
+    expect(visible.readinessMode).toBe('visible-interactive')
+    expect(visible.inputId).toBe('core-box-input')
+
+    // 2. Hidden prewarmed CoreBox on packaged macOS cold start (even with 0x0 rect)
+    const hiddenReady = evaluateCoreBoxExpressionInMockDom({
+      readyState: 'complete',
+      visibilityState: 'hidden',
+      windowMode: 'CoreBox',
+      input: { id: 'core-box-input', width: 0, height: 0 }
+    })
+    expect(hiddenReady.interactive).toBe(true)
+    expect(hiddenReady.readinessMode).toBe('hidden-prewarmed-ready')
+
+    // 3. Hidden CoreBox still loading (readyState !== complete) with 0x0 rect must NOT pass yet
+    const hiddenLoading = evaluateCoreBoxExpressionInMockDom({
+      readyState: 'interactive',
+      visibilityState: 'hidden',
+      windowMode: 'CoreBox',
+      input: { id: 'core-box-input', width: 0, height: 0 }
+    })
+    expect(hiddenLoading.interactive).toBe(false)
+
+    // 4. MainWindow must NEVER pass even if DOM were queried
+    const mainWin = evaluateCoreBoxExpressionInMockDom({
+      windowMode: 'MainApp',
+      touchType: 'main',
+      bodyClasses: [],
+      hasCoreBoxRoot: false,
+      input: null
+    })
+    expect(mainWin.interactive).toBe(false)
+
+    // 5. DivisionBox must NEVER be mistaken for CoreBox
+    const divisionWin = evaluateCoreBoxExpressionInMockDom({
+      windowMode: 'DivisionBox',
+      touchType: 'core-box',
+      coreType: 'division-box',
+      bodyClasses: ['core-box', 'division-box']
+    })
+    expect(divisionWin.interactive).toBe(false)
+
+    // 6. CoreBox before body.core-box activates CSS (div.CoreBox display: none) must NOT pass
+    const preCssCoreBox = evaluateCoreBoxExpressionInMockDom({
+      windowMode: 'CoreBox',
+      coreBoxDisplay: 'none'
+    })
+    expect(preCssCoreBox.interactive).toBe(false)
+
+    // 7. Missing IPC bridge or disabled input must NOT pass
+    expect(evaluateCoreBoxExpressionInMockDom({ hasIpcBridge: false }).interactive).toBe(false)
+    expect(
+      evaluateCoreBoxExpressionInMockDom({
+        input: { id: 'core-box-input', disabled: true, width: 580, height: 48 }
+      }).interactive
+    ).toBe(false)
+
+    // 8. Route-based /#/box CoreBox works even without window.api
+    const routeBox = evaluateCoreBoxExpressionInMockDom({
+      hasStartupApi: false,
+      href: 'file:///out/renderer/index.html#/box',
+      bodyClasses: ['core-box']
+    })
+    expect(routeBox.interactive).toBe(true)
+  })
+
+  it('waitForCoreBoxInteractive inspects all page targets and reports rich diagnostics on timeout', async () => {
+    const targets = [
+      {
+        id: 'main-target',
+        type: 'page',
+        title: 'Tuff',
+        url: 'file:///Applications/Tuff.app/Contents/Resources/app.asar/out/renderer/index.html',
+        webSocketDebuggerUrl: 'ws://127.0.0.1:9712/devtools/page/main'
+      },
+      {
+        id: 'corebox-target',
+        type: 'page',
+        title: 'Tuff',
+        url: 'file:///Applications/Tuff.app/Contents/Resources/app.asar/out/renderer/index.html',
+        webSocketDebuggerUrl: 'ws://127.0.0.1:9712/devtools/page/corebox'
+      }
+    ]
+
+    // First target is MainApp (not interactive), second target is hidden prewarmed CoreBox
+    const ready = await waitForCoreBoxInteractive('http://127.0.0.1:9712/json/list', 2_000, null, {
+      loadCdpTargets: async () => targets,
+      inspectTarget: async (target: { id: string }) => {
+        if (target.id === 'main-target') {
+          return { windowMode: 'MainApp', readyState: 'complete', interactive: false }
+        }
+        return {
+          windowMode: 'CoreBox',
+          readyState: 'complete',
+          visibilityState: 'hidden',
+          hasCoreBoxRoot: true,
+          inputMounted: true,
+          hasIpcBridge: true,
+          readinessMode: 'hidden-prewarmed-ready',
+          interactive: true
+        }
+      },
+      sleep: async () => {}
+    })
+
+    expect(ready.target.id).toBe('corebox-target')
+    expect(ready.snapshot.readinessMode).toBe('hidden-prewarmed-ready')
+    expect(ready.inspectedTargetCount).toBe(2)
+
+    // Timeout produces diagnostic summary of inspected targets + child output
+    let tick = 0
+    await expect(
+      waitForCoreBoxInteractive('http://127.0.0.1:9712/json/list', 50, null, {
+        now: () => {
+          tick += 30
+          return tick
+        },
+        sleep: async () => {},
+        loadCdpTargets: async () => targets,
+        inspectTarget: async (target: { id: string }) => ({
+          windowMode: target.id === 'main-target' ? 'MainApp' : 'CoreBox',
+          readyState: 'loading',
+          visibilityState: 'hidden',
+          isCoreBoxContext: target.id !== 'main-target',
+          hasCoreBoxRoot: false,
+          coreBoxDisplay: null,
+          inputMounted: false,
+          inputVisible: false,
+          hasIpcBridge: true,
+          readinessMode: 'not-ready',
+          interactive: false
+        }),
+        getChildDiagnostics: () => 'pid=4242, exitCode=null, stderrTail="booting"'
+      })
+    ).rejects.toThrow(
+      /cdpTargets=2.*windowMode=MainApp.*windowMode=CoreBox.*child=\(pid=4242, exitCode=null, stderrTail="booting"\)/
+    )
+  })
+
+  it('terminateChildAndWait signals detached process group -pid on macOS/Linux with SIGKILL escalation', async () => {
+    const signals: Array<{ pid: number; signal: string }> = []
+
+    const hangingChild = Object.assign(new EventEmitter(), {
+      pid: 43210,
+      exitCode: null as number | null,
+      signalCode: null as string | null,
+      kill: () => true
+    })
+
+    await terminateChildAndWait(hangingChild, 20, {
+      platform: 'darwin',
+      killProcess: (pid: number, signal: string) => {
+        signals.push({ pid, signal })
+      }
+    })
+
+    expect(signals).toEqual([
+      { pid: -43210, signal: 'SIGTERM' },
+      { pid: -43210, signal: 'SIGKILL' }
+    ])
+
+    // Already-exited child still gets best-effort process group sweep
+    const exitedSignals: Array<{ pid: number; signal: string }> = []
+    const exitedChild = Object.assign(new EventEmitter(), {
+      pid: 55555,
+      exitCode: 0,
+      signalCode: null,
+      kill: () => true
+    })
+    await terminateChildAndWait(exitedChild, 20, {
+      platform: 'darwin',
+      killProcess: (pid: number, signal: string) => {
+        exitedSignals.push({ pid, signal })
+      }
+    })
+    expect(exitedSignals).toEqual([{ pid: -55555, signal: 'SIGTERM' }])
+  })
+
+  it('runProbe isolated-launch seeds profile, passes isolated env + detached spawn, and cleans up child group', async () => {
+    const userDataDir = await makeTempDir('tuff-isolated-launch-')
+    let capturedSpawn: {
+      executable: string
+      args: string[]
+      spawnOptions: {
+        detached?: boolean
+        env?: Record<string, string | undefined>
+        stdio?: unknown
+      }
+    } | null = null
+    let terminatedChildPid: number | null = null
+    let sampledPreferredTargetId: string | null = null
+
+    const mockChild = Object.assign(new EventEmitter(), {
+      pid: 67890,
+      exitCode: null as number | null,
+      signalCode: null as string | null,
+      stdout: new EventEmitter(),
+      stderr: new EventEmitter(),
+      kill: () => true
+    })
+
+    const report = await runProbe(
+      parseArgs([
+        '--appPath',
+        '/Applications/Tuff.app',
+        '--userDataDir',
+        userDataDir,
+        '--cdpPort',
+        '9719',
+        '--idleSeconds',
+        '0',
+        '--keepUserData'
+      ]),
+      {
+        platform: 'darwin',
+        geteuid: () => 501,
+        checkLiveInstances: async () => ({ blocked: false, reasons: [], matches: [] }),
+        accessFile: async () => {},
+        checkTcpPortOpen: async () => false,
+        spawnProcess: (
+          executable: string,
+          args: string[],
+          spawnOptions: {
+            detached?: boolean
+            env?: Record<string, string | undefined>
+            stdio?: unknown
+          }
+        ) => {
+          capturedSpawn = { executable, args, spawnOptions }
+          return mockChild
+        },
+        waitForCoreBoxInteractive: async () => ({
+          readyAt: Date.now() + 25,
+          target: {
+            id: 'corebox-page-2',
+            title: 'Tuff',
+            url: 'file:///Applications/Tuff.app/Contents/Resources/app.asar/out/renderer/index.html'
+          },
+          snapshot: { readinessMode: 'hidden-prewarmed-ready', interactive: true }
+        }),
+        sampleProcessMemoryOnce: async ({ preferredTargetId }: { preferredTargetId?: string }) => {
+          sampledPreferredTargetId = preferredTargetId ?? null
+          return normalizeAppMetricsReport({
+            processes: [
+              {
+                pid: 67890,
+                electronType: 'Browser',
+                workingSetBytes: 250 * 1024 * 1024,
+                cpuPercent: 0.4
+              }
+            ]
+          })
+        },
+        terminateChildAndWait: async (child: { pid?: number }) => {
+          terminatedChildPid = child.pid ?? null
+        }
+      }
+    )
+
+    expect(capturedSpawn).not.toBeNull()
+    expect(capturedSpawn!.args).toEqual([
+      '--remote-debugging-port=9719',
+      `--user-data-dir=${path.resolve(userDataDir)}`
+    ])
+    expect(capturedSpawn!.spawnOptions.detached).toBe(true)
+    expect(capturedSpawn!.spawnOptions.stdio).toEqual(['ignore', 'pipe', 'pipe'])
+    expect(capturedSpawn!.spawnOptions.env?.TUFF_PACKAGED_ACCEPTANCE_ISOLATED).toBe('1')
+    expect(capturedSpawn!.spawnOptions.env?.TUFF_STARTUP_BENCHMARK_USER_DATA_DIR).toBe(
+      path.resolve(userDataDir)
+    )
+    expect(capturedSpawn!.spawnOptions.env?.HOME).toBe(path.join(path.resolve(userDataDir), 'home'))
+    expect(capturedSpawn!.spawnOptions.env?.TUFF_FILE_PROVIDER_BASE_WATCH_PATHS).toBe(
+      path.join(path.resolve(userDataDir), 'home')
+    )
+    expect(capturedSpawn!.spawnOptions.env?.FORCE_COLOR).toBe('0')
+
+    // Seeded settings exist on disk
+    const tuffSetting = JSON.parse(
+      await readFile(path.join(userDataDir, 'tuff', 'modules', 'config', 'app-setting.ini'), 'utf8')
+    )
+    expect(tuffSetting.beginner.init).toBe(true)
+
+    expect(report.mode).toBe('isolated-launch')
+    expect(report.metrics.coldStart.status).toBe('measured')
+    expect(report.metrics.coldStart.readinessMode).toBe('hidden-prewarmed-ready')
+    expect(report.metrics.coldStart.target?.id).toBe('corebox-page-2')
+    expect(sampledPreferredTargetId).toBe('corebox-page-2')
+    expect(terminatedChildPid).toBe(67890)
   })
 })
