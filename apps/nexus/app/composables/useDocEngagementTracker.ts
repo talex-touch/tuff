@@ -826,10 +826,12 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
 
       useEventListener(window, 'pagehide', (event?: PageTransitionEvent) => {
         stopTimer()
-        // When the browser freezes the page into bfcache (`event.persisted === true`), starting an
-        // async WebCrypto digest + fetch during `pagehide` evicts the page from bfcache.
-        if (event?.persisted)
+        // When the browser freezes the page into bfcache (`event.persisted === true`), capture
+        // visible reading time synchronously and skip async WebCrypto/fetch work that evicts bfcache.
+        if (event?.persisted) {
+          applyElapsed(Date.now())
           return
+        }
         void flush('pagehide')
       })
 

@@ -164,7 +164,7 @@ onMounted(() => {
   if (!props.demo)
     return
 
-  const target = demoSectionRef.value
+  const target = windowBodyRef.value ?? demoSectionRef.value
   if ('IntersectionObserver' in window && target) {
     const rect = target.getBoundingClientRect()
     if (rect.top < window.innerHeight * 0.75 && rect.bottom > 0) {
@@ -172,9 +172,9 @@ onMounted(() => {
       return
     }
     demoVisibilityObserver = new IntersectionObserver((entries) => {
-      if (entries.some(entry => entry.isIntersecting && entry.intersectionRatio >= 0.25))
+      if (entries.some(entry => entry.isIntersecting))
         enqueueDemoLoad()
-    }, { rootMargin: DEMO_VIEWPORT_ROOT_MARGIN, threshold: [0.25] })
+    }, { rootMargin: DEMO_VIEWPORT_ROOT_MARGIN, threshold: 0 })
     demoVisibilityObserver.observe(target)
     return
   }

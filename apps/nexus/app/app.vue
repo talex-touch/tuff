@@ -241,12 +241,19 @@ onMounted(() => {
       settleAnonymousSession()
     }
     else if (isProtectedRoute.value) {
-      protectedSessionRecheckRunning.value = true
+      // Anonymous visitors without a session-hint cookie do not need the watcher's second recovery
+      // read, while authenticated or hinted sessions keep the one-shot recovery marker available.
+      const anonymousWithoutHint = !hasSessionHint()
+      if (anonymousWithoutHint)
+        protectedSessionRecheckRunning.value = true
       void getSession()
         .catch(() => {})
         .finally(() => {
-          protectedSessionRecheckRunning.value = false
-          protectedSessionRecheckDone.value = true
+          if (anonymousWithoutHint) {
+            protectedSessionRecheckRunning.value = false
+            if (status.value !== 'authenticated')
+              protectedSessionRecheckDone.value = true
+          }
         })
     }
     else {

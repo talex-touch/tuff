@@ -201,10 +201,11 @@ describe('docs engagement reports', () => {
     await advance(60_000)
     expect(reports).toEqual([])
 
-    // Returning from bfcache resumes tracking cleanly without counting frozen time.
+    // Returning from bfcache preserves pre-hide reading time and excludes frozen time.
     dispatch('pageshow', { persisted: true })
     await advance(15_000)
     expect(reports).toHaveLength(1)
-    expect(reports[0]!.totalDurationMs).toBeLessThanOrEqual(20_000)
+    expect(reports[0]!.totalDurationMs).toBeGreaterThanOrEqual(19_000)
+    expect(reports[0]!.totalDurationMs).toBeLessThanOrEqual(20_500)
   })
 })

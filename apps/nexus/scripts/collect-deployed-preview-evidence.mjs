@@ -536,6 +536,9 @@ function trimTrailingSlash(value) {
   return String(value).replace(/\/$/, '')
 }
 
+// Paths inside `workspaceRoot` stay relative so `output/playwright` runs satisfy
+// `build/check-runtime-evidence.mjs`. Custom `--output-dir` paths outside the workspace (for
+// example `/tmp/...` dry/probe runs) are recorded as-is and are diagnostic only, not gate evidence.
 export function relativeEvidencePath(filePath, rootDir = workspaceRoot) {
   const rel = relative(rootDir, filePath)
   if (!rel || rel.startsWith('..') || isAbsolute(rel))

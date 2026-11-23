@@ -95,7 +95,7 @@ const lastUsedLabel = computed(() => props.t('auth.lastUsed', '上次使用'))
       autocomplete="email"
       :placeholder="t('auth.email', '邮箱')"
       class="auth-input"
-      @keydown.enter.prevent="emit('email-next')"
+      @keydown.enter.prevent="!emailCheckLoading && emit('email-next')"
     >
 
     <div class="auth-method auth-method--full">

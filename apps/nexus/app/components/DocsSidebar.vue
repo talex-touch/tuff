@@ -1275,14 +1275,22 @@ function onTopSectionChange(key: string) {
   void navigateTo(localizedDocsPath(section.entryPath || section.basePath))
 }
 
+const topSectionButtonRefs = ref<Array<HTMLButtonElement | null>>([])
+
+function setTopSectionButtonRef(index: number, el: unknown) {
+  topSectionButtonRefs.value[index] = el instanceof HTMLButtonElement ? el : null
+}
+
 function cycleTopSection(delta: -1 | 1) {
   const sections = TOP_SECTIONS.value
   if (sections.length < 2)
     return
   const nextIndex = (activeTopSectionIndex.value + delta + sections.length) % sections.length
   const nextSection = sections[nextIndex]
-  if (nextSection)
+  if (nextSection) {
+    topSectionButtonRefs.value[nextIndex]?.focus()
     onTopSectionChange(nextSection.key)
+  }
 }
 
 const sidebarPending = computed(() => pending.value)
@@ -1700,8 +1708,9 @@ onBeforeUnmount(() => {
       >
         <span class="docs-nav-sections__thumb" aria-hidden="true" />
         <button
-          v-for="sec in TOP_SECTIONS"
+          v-for="(sec, index) in TOP_SECTIONS"
           :key="sec.key"
+          :ref="(el) => setTopSectionButtonRef(index, el)"
           type="button"
           role="radio"
           class="docs-nav-section"
