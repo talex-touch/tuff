@@ -6,6 +6,8 @@ import type {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AiAutomationScheduler, cronMatches } from './ai-automation-scheduler'
+import { setAutoResumeOnStartupReader } from './auto-resume-setting'
+import { createRunInterruptedError } from './pi-agent-runtime-control-error'
 
 interface SchedulerStoreState {
   definitions: Map<string, AiAutomationDefinition>
@@ -38,7 +40,7 @@ const schedulerStoreMocks = vi.hoisted(() => {
       return next
     }),
     countAutomationRunsSince: vi.fn(async () => 0),
-    listRecoverableAutomationRuns: vi.fn(async () => [])
+    listRecoverableAutomationRuns: vi.fn(async (): Promise<AiAutomationRunRecord[]> => [])
   }
 })
 
@@ -108,6 +110,7 @@ describe('aiAutomationScheduler', () => {
   })
 
   afterEach(() => {
+    setAutoResumeOnStartupReader(null)
     vi.useRealTimers()
   })
 
@@ -334,5 +337,198 @@ describe('aiAutomationScheduler', () => {
       status: 'failed',
       error: 'provider disconnected'
     })
+  })
+
+  it('gates interrupted automation recovery on autoResumeOnStartup, skips settled rows, and enforces crash-loop cap', async () => {
+    const definition = automation({
+      approvalMode: 'preauthorized',
+      trigger: { type: 'interval', intervalMs: 60_000 }
+    })
+    schedulerStoreMocks.state.definitions.set(definition.id, definition)
+
+    const now = Date.now()
+    const recoverableRun: AiAutomationRunRecord = {
+      id: 'auto-run-recoverable',
+      automationId: definition.id,
+      triggerType: 'interval',
+      status: 'interrupted',
+      approved: true,
+      missedCount: 0,
+      policyVersion: definition.policy.version,
+      createdAt: now,
+      updatedAt: now
+    }
+    const alreadySettledRun: AiAutomationRunRecord = {
+      id: 'auto-run-settled',
+      automationId: definition.id,
+      triggerType: 'interval',
+      status: 'interrupted',
+      approved: true,
+      missedCount: 0,
+      policyVersion: definition.policy.version,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: now
+    }
+    const cappedRun: AiAutomationRunRecord = {
+      id: 'auto-run-capped',
+      automationId: definition.id,
+      triggerType: 'recovery',
+      status: 'interrupted',
+      approved: true,
+      missedCount: 0,
+      policyVersion: definition.policy.version,
+      payload: { recovery: { attempts: 1, recoveredAt: now - 1_000 } },
+      createdAt: now,
+      updatedAt: now
+    }
+    const legacyRecoveryRun: AiAutomationRunRecord = {
+      id: 'auto-run-legacy-recovery',
+      automationId: definition.id,
+      triggerType: 'recovery',
+      status: 'interrupted',
+      approved: true,
+      missedCount: 0,
+      policyVersion: definition.policy.version,
+      createdAt: now,
+      updatedAt: now
+    }
+
+    for (const run of [recoverableRun, alreadySettledRun, cappedRun, legacyRecoveryRun]) {
+      schedulerStoreMocks.state.runs.set(run.id, { ...run })
+    }
+    schedulerStoreMocks.listRecoverableAutomationRuns.mockImplementation(async () =>
+      Array.from(schedulerStoreMocks.state.runs.values()).filter(
+        (run) => run.status === 'queued' || run.status === 'running' || run.status === 'interrupted'
+      )
+    )
+
+    // 1. Disabled auto-resume marks unsettled runs interrupted with completedAt and executes nothing
+    setAutoResumeOnStartupReader(() => false)
+    const disabledExecutor = vi.fn(async () => completedOrchestratorRun())
+    const disabledScheduler = new AiAutomationScheduler()
+    disabledScheduler.setExecutor(disabledExecutor)
+    await disabledScheduler.initialize()
+    await settleAsyncWork()
+    await disabledScheduler.stop()
+
+    expect(disabledExecutor).not.toHaveBeenCalled()
+    expect(schedulerStoreMocks.state.runs.get(recoverableRun.id)).toMatchObject({
+      status: 'interrupted',
+      error: 'Auto-resume on startup is disabled'
+    })
+    expect(schedulerStoreMocks.state.runs.get(recoverableRun.id)?.completedAt).toBeDefined()
+    expect(schedulerStoreMocks.state.runs.get(alreadySettledRun.id)?.error).toBeUndefined()
+
+    // 2. Enabled auto-resume recovers unsettled run once, skips settled & capped/legacy-recovery runs
+    setAutoResumeOnStartupReader(() => true)
+    schedulerStoreMocks.state.runs.set(recoverableRun.id, { ...recoverableRun })
+    schedulerStoreMocks.state.runs.set(cappedRun.id, { ...cappedRun })
+    schedulerStoreMocks.state.runs.set(legacyRecoveryRun.id, { ...legacyRecoveryRun })
+
+    const enabledExecutor = vi.fn(async () => completedOrchestratorRun())
+    const enabledScheduler = new AiAutomationScheduler()
+    enabledScheduler.setExecutor(enabledExecutor)
+    await enabledScheduler.initialize()
+    await settleAsyncWork()
+    await enabledScheduler.stop()
+
+    expect(enabledExecutor).toHaveBeenCalledOnce()
+    expect(schedulerStoreMocks.state.runs.get(recoverableRun.id)).toMatchObject({
+      status: 'completed',
+      triggerType: 'recovery',
+      payload: expect.objectContaining({
+        recovery: expect.objectContaining({ attempts: 1 })
+      })
+    })
+    expect(schedulerStoreMocks.state.runs.get(cappedRun.id)).toMatchObject({
+      status: 'interrupted',
+      error: 'Automation recovery limit reached'
+    })
+    expect(schedulerStoreMocks.state.runs.get(cappedRun.id)?.completedAt).toBeDefined()
+    expect(schedulerStoreMocks.state.runs.get(legacyRecoveryRun.id)).toMatchObject({
+      status: 'interrupted',
+      error: 'Automation recovery limit reached'
+    })
+    expect(schedulerStoreMocks.state.runs.get(legacyRecoveryRun.id)?.completedAt).toBeDefined()
+  })
+
+  it('leaves automation run unsettled on graceful shutdown so next boot auto-resumes once, then stops on repeat interruption', async () => {
+    const definition = automation({
+      approvalMode: 'preauthorized',
+      trigger: { type: 'interval', intervalMs: 60_000 }
+    })
+    schedulerStoreMocks.state.definitions.set(definition.id, definition)
+    schedulerStoreMocks.listRecoverableAutomationRuns.mockImplementation(async () =>
+      Array.from(schedulerStoreMocks.state.runs.values()).filter(
+        (run) => run.status === 'queued' || run.status === 'running' || run.status === 'interrupted'
+      )
+    )
+
+    // First boot: run is interrupted during graceful shutdown via orchestrator returning status='interrupted'
+    let resolveFirst!: (run: AiOrchestratorRunRecord) => void
+    const firstScheduler = new AiAutomationScheduler()
+    firstScheduler.setExecutor(
+      vi.fn(
+        () =>
+          new Promise<AiOrchestratorRunRecord>((resolve) => {
+            resolveFirst = resolve
+          })
+      )
+    )
+    await firstScheduler.initialize()
+    const created = await firstScheduler.runNow(definition.id, true)
+    await settleAsyncWork()
+
+    firstScheduler.stopTriggers()
+    resolveFirst({
+      ...completedOrchestratorRun(),
+      status: 'interrupted',
+      error: 'AI_RUN_INTERRUPTED'
+    })
+    await firstScheduler.stop()
+
+    const afterFirstShutdown = schedulerStoreMocks.state.runs.get(created.id)
+    expect(afterFirstShutdown?.status).toBe('interrupted')
+    expect(afterFirstShutdown?.completedAt).toBeUndefined()
+
+    // Second boot: auto-resumes once, then gets interrupted again by rejected RunInterruptedError during shutdown
+    let rejectSecond!: (error: unknown) => void
+    const secondExecutor = vi.fn(
+      () =>
+        new Promise<AiOrchestratorRunRecord>((_resolve, reject) => {
+          rejectSecond = reject
+        })
+    )
+    const secondScheduler = new AiAutomationScheduler()
+    secondScheduler.setExecutor(secondExecutor)
+    await secondScheduler.initialize()
+    await settleAsyncWork()
+
+    expect(secondExecutor).toHaveBeenCalledOnce()
+    secondScheduler.stopTriggers()
+    rejectSecond(createRunInterruptedError())
+    await secondScheduler.stop()
+
+    const afterSecondShutdown = schedulerStoreMocks.state.runs.get(created.id)
+    expect(afterSecondShutdown?.status).toBe('interrupted')
+    expect(afterSecondShutdown?.completedAt).toBeUndefined()
+    expect(afterSecondShutdown?.payload).toMatchObject({
+      recovery: expect.objectContaining({ attempts: 1 })
+    })
+
+    // Third boot: hits crash-loop cap (attempts === 1) and settles with completedAt without executing
+    const thirdExecutor = vi.fn(async () => completedOrchestratorRun())
+    const thirdScheduler = new AiAutomationScheduler()
+    thirdScheduler.setExecutor(thirdExecutor)
+    await thirdScheduler.initialize()
+    await settleAsyncWork()
+    await thirdScheduler.stop()
+
+    expect(thirdExecutor).not.toHaveBeenCalled()
+    const afterThirdBoot = schedulerStoreMocks.state.runs.get(created.id)
+    expect(afterThirdBoot?.status).toBe('interrupted')
+    expect(afterThirdBoot?.error).toBe('Automation recovery limit reached')
+    expect(afterThirdBoot?.completedAt).toBeDefined()
   })
 })

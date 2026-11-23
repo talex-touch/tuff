@@ -532,6 +532,71 @@ export class GitWorktreeManager {
     return Array.from(this.leases.values(), cloneLease)
   }
 
+  async reattachWorktree(worktreeId: string, expectedRunId: string): Promise<WorktreeLease> {
+    assertValidWorktreeId(worktreeId)
+    if (
+      typeof expectedRunId !== 'string' ||
+      expectedRunId.trim().length === 0 ||
+      hasControlChar(expectedRunId)
+    ) {
+      throw new GitWorktreeError('WORKTREE_PATH_ESCAPE', 'expectedRunId must be a non-empty string')
+    }
+
+    return await this.withWorktreeLock(worktreeId, async () => {
+      const canonicalBaseDir = await this.ensureBaseDir()
+      const lease = await this.resolveLeaseForId(worktreeId, canonicalBaseDir)
+      if (lease.runId !== expectedRunId) {
+        throw new GitWorktreeError(
+          'WORKTREE_PATH_ESCAPE',
+          `Worktree "${worktreeId}" does not belong to run "${expectedRunId}"`
+        )
+      }
+
+      const canonicalWorktreePath = await this.assertManagedWorktreePath(
+        lease.worktreePath,
+        canonicalBaseDir
+      )
+
+      if (!isPathSameOrInside(lease.effectiveCwd, canonicalWorktreePath)) {
+        throw new GitWorktreeError(
+          'WORKTREE_PATH_ESCAPE',
+          'Persisted effectiveCwd escapes managed worktree directory'
+        )
+      }
+      if (!(await this.isDirectoryPresent(lease.effectiveCwd))) {
+        throw new GitWorktreeError(
+          'WORKTREE_NOT_FOUND',
+          'Persisted worktree effectiveCwd does not exist'
+        )
+      }
+      const canonicalEffectiveCwd = await realpath(lease.effectiveCwd)
+      if (!isPathSameOrInside(canonicalEffectiveCwd, canonicalWorktreePath)) {
+        throw new GitWorktreeError(
+          'WORKTREE_PATH_ESCAPE',
+          'Canonical effectiveCwd escapes managed worktree directory'
+        )
+      }
+
+      if (!(await this.isDirectoryPresent(lease.repoRoot))) {
+        throw new GitWorktreeError(
+          'WORKTREE_NOT_FOUND',
+          'Persisted worktree repository root does not exist'
+        )
+      }
+      const canonicalRepoRoot = await realpath(lease.repoRoot)
+      await assertNoEnclosingRepoSymlinkEscape(lease.repoRoot, canonicalRepoRoot)
+
+      const reattached: WorktreeLease = {
+        ...lease,
+        repoRoot: canonicalRepoRoot,
+        worktreePath: canonicalWorktreePath,
+        effectiveCwd: canonicalEffectiveCwd
+      }
+      this.leases.set(reattached.worktreeId, reattached)
+      return cloneLease(reattached)
+    })
+  }
+
   async acquireWorktree(options: AcquireWorktreeOptions): Promise<WorktreeLease> {
     if (
       typeof options.runId !== 'string' ||
@@ -1024,6 +1089,7 @@ export class GitWorktreeManager {
 
   async disposeAll(options?: DisposeAllWorktreesOptions): Promise<void> {
     const force = options?.force === true
+    const preserveRunIds = options?.preserveRunIds ? new Set(options.preserveRunIds) : null
     const totalBudgetMs =
       typeof options?.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
         ? Math.max(200, Math.floor(options.timeoutMs))
@@ -1037,6 +1103,13 @@ export class GitWorktreeManager {
     if (!canonicalBaseDir) return
 
     for (const lease of snapshot) {
+      if (preserveRunIds?.has(lease.runId)) {
+        worktreeLog.info('Preserving managed worktree for startup recovery', {
+          meta: { worktreeId: lease.worktreeId }
+        })
+        continue
+      }
+
       const remainingMs = deadline - this.now()
       if (remainingMs <= 0) {
         worktreeLog.warn('Worktree disposeAll hit shutdown budget; stopping early', {
@@ -1048,6 +1121,7 @@ export class GitWorktreeManager {
       await this.withWorktreeLock(lease.worktreeId, async () => {
         const liveLease = this.leases.get(lease.worktreeId)
         if (!liveLease) return
+        if (preserveRunIds?.has(liveLease.runId)) return
         const perItemTimeoutMs = Math.max(100, Math.min(this.gitTimeoutMs, remainingMs))
         try {
           await this.releaseResolvedLease(liveLease, canonicalBaseDir, {

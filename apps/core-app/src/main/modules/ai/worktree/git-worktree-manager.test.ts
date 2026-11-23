@@ -772,4 +772,54 @@ exec git "$@"
     await writeFile(metaPath, JSON.stringify(lease), 'utf8')
     await creator.releaseWorktree(lease.worktreeId, { force: true })
   })
+
+  it('reattaches a persisted worktree for the matching runId and fails closed on mismatch or missing dir', async () => {
+    await initGitRepo(repoDir)
+    const creator = new GitWorktreeManager({ baseDir })
+    const lease = await creator.acquireWorktree({ runId: 'run-reattach-1', repoRoot: repoDir })
+    await writeFile(path.join(lease.worktreePath, 'partial.txt'), 'wip-content\n', 'utf8')
+
+    const restarted = new GitWorktreeManager({ baseDir })
+    expect(restarted.getLease(lease.worktreeId)).toBeUndefined()
+
+    await expectWorktreeError(
+      restarted.reattachWorktree(lease.worktreeId, 'wrong-run-id'),
+      'WORKTREE_PATH_ESCAPE'
+    )
+    expect(restarted.getLease(lease.worktreeId)).toBeUndefined()
+
+    const reattached = await restarted.reattachWorktree(lease.worktreeId, 'run-reattach-1')
+    expect(reattached.worktreeId).toBe(lease.worktreeId)
+    expect(reattached.effectiveCwd).toBe(lease.effectiveCwd)
+    expect(restarted.getLease(lease.worktreeId)?.runId).toBe('run-reattach-1')
+    expect(await readFile(path.join(reattached.worktreePath, 'partial.txt'), 'utf8')).toBe(
+      'wip-content\n'
+    )
+
+    // Remove directory on disk -> fail closed with WORKTREE_NOT_FOUND on next restart
+    await rm(lease.worktreePath, { recursive: true, force: true })
+    const thirdBoot = new GitWorktreeManager({ baseDir })
+    await expectWorktreeError(
+      thirdBoot.reattachWorktree(lease.worktreeId, 'run-reattach-1'),
+      'WORKTREE_NOT_FOUND'
+    )
+
+    await creator.releaseWorktree(lease.worktreeId, { force: true }).catch(() => undefined)
+  })
+
+  it('preserves leases in preserveRunIds during disposeAll while releasing others', async () => {
+    await initGitRepo(repoDir)
+    const manager = new GitWorktreeManager({ baseDir })
+    const preserved = await manager.acquireWorktree({ runId: 'run-keep-1', repoRoot: repoDir })
+    const disposable = await manager.acquireWorktree({ runId: 'run-drop-1', repoRoot: repoDir })
+
+    await manager.disposeAll({ force: false, preserveRunIds: ['run-keep-1'] })
+
+    expect(manager.getLease(preserved.worktreeId)).toBeDefined()
+    expect(await pathExists(preserved.worktreePath)).toBe(true)
+    expect(manager.getLease(disposable.worktreeId)).toBeUndefined()
+    expect(await pathExists(disposable.worktreePath)).toBe(false)
+
+    await manager.releaseWorktree(preserved.worktreeId, { force: true })
+  })
 })

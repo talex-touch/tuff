@@ -40,10 +40,12 @@ import type {
   PiRuntimeRunRecord
 } from './pi-agent-runtime-protocol'
 import type {
+  CliExecuteRuntimeOptions,
   CliPermissionDecision,
   CliPermissionRequest,
   CliPermissionRequestContext,
-  CliRuntimeKind
+  CliRuntimeKind,
+  CliWorktreeRequestOptions
 } from './cli-runtime'
 import type {
   ReleaseWorktreeOptions,
@@ -69,6 +71,7 @@ import { discardRunInput, loadRunInput, saveRunInput } from './ai-run-input-vaul
 import { buildObjectivePrompt, planRunResume } from './pi-agent-run-log'
 import { openRunRecords, sealRunRecord } from './ai-run-record-seal'
 import { aiOrchestratorStore, DEFAULT_PROFILE_ID } from './ai-orchestrator-store'
+import { isAutoResumeOnStartupEnabled } from './auto-resume-setting'
 import {
   CliAgentRuntimeHost,
   cliCapabilityProviderForKind,
@@ -167,6 +170,10 @@ interface ResumableRun {
   input?: unknown
   /** Where the run's log says it had got to; absent when the log has nothing to resume from. */
   resume?: PiRuntimeResume
+  reattachWorktreeId?: string
+  worktreeOptions?: CliWorktreeRequestOptions
+  resumedFromInterruption?: boolean
+  recoveryAttempt?: number
 }
 
 function profileAuthorityDigest(profile: AiAgentProfile): string {
@@ -379,6 +386,19 @@ function toRecord(value: unknown): Record<string, unknown> {
     : {}
 }
 
+const MAX_ORCHESTRATOR_RECOVERY_ATTEMPTS = 1
+const SAFE_WORKTREE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/
+
+function readRecoveryAttempts(metadata: Record<string, unknown>): number {
+  const value = metadata.recoveryAttempts
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) return 0
+  return Math.min(100, value)
+}
+
+function readSafeWorktreeId(value: unknown): string | undefined {
+  return typeof value === 'string' && SAFE_WORKTREE_ID_PATTERN.test(value) ? value : undefined
+}
+
 const RUN_METADATA_KEYS = [
   'schemaVersion',
   'executionBudget',
@@ -403,6 +423,15 @@ function projectPersistedRunMetadata(value: unknown): Record<string, unknown> {
   const projected = Object.fromEntries(
     RUN_METADATA_KEYS.filter((key) => Object.hasOwn(source, key)).map((key) => [key, source[key]])
   )
+
+  const recoveryAttempts = readRecoveryAttempts(source)
+  if (recoveryAttempts > 0) projected.recoveryAttempts = recoveryAttempts
+
+  const worktreeId = readSafeWorktreeId(source.worktreeId)
+  if (worktreeId) projected.worktreeId = worktreeId
+
+  const worktreeOptions = parseWorktreeRequestOptions(source.worktreeOptions)
+  if (worktreeOptions) projected.worktreeOptions = worktreeOptions
 
   const rawStates = toRecord(source.toolCallStates)
   const stateEntries: Array<[string, Record<string, unknown>]> = []
@@ -558,6 +587,12 @@ export class AiCliOrchestrator {
   private readonly runLogSeq = new Map<string, number>()
   /** Runs whose log stopped being written; what was written stays a valid prefix. */
   private readonly runLogBroken = new Set<string>()
+  /** Runs intentionally kept `running` during graceful shutdown for startup auto-recovery. */
+  private readonly suspendedForRestartRunIds = new Set<string>()
+  /** Host-internal worktree IDs to reattach on recovery, consumed once by `executePreparedRun`. */
+  private readonly recoveryWorktreeIds = new Map<string, string>()
+  /** Host-internal flag for external CLI runs resumed after interruption. */
+  private readonly resumedExternalRunIds = new Set<string>()
 
   /**
    * The scheduler decides the executor (`AGENTS.md`): ONLY `profile:cli:omp`, `profile:cli:codex`,
@@ -721,9 +756,19 @@ export class AiCliOrchestrator {
     }
   }
 
+  private async handleExternalCliWorktreeBound(runId: string, lease: WorktreeLease): Promise<void> {
+    const worktreeId = readSafeWorktreeId(lease.worktreeId)
+    if (!worktreeId) return
+    await this.mutateToolCallMetadata(runId, (metadata) => {
+      metadata.worktreeId = worktreeId
+      return { value: undefined, persist: true }
+    })
+  }
+
   private readonly cliRuntimeHost = new CliAgentRuntimeHost({
     onRecord: (runId, record) => this.handleRuntimeRecord(runId, record),
     onEvent: (event) => this.handleRuntimeEvent(event),
+    onWorktreeBound: (runId, lease) => this.handleExternalCliWorktreeBound(runId, lease),
     sanitizeToolOutput: sanitizeToolOutputForRuntime,
     resolveMcpServers: (payload) => this.resolveExternalCliMcpServers(payload),
     onPermissionRequest: (request, context) =>
@@ -1027,9 +1072,20 @@ export class AiCliOrchestrator {
     }
     if (this.initialized) return
     this.closing = false
+    this.suspendedForRestartRunIds.clear()
     await aiOrchestratorStore.initialize()
     await aiImportedConfigRuntime.initialize()
     const resumable = await this.recoverPersistedRuns()
+    const pendingApprovalRuns = await aiOrchestratorStore
+      .listOrchestratorRuns({ status: 'pending_approval', limit: 200 })
+      .catch(() => [])
+    const activeRunIds = new Set<string>([
+      ...resumable.map((item) => item.run.id),
+      ...pendingApprovalRuns.map((run) => run.id)
+    ])
+    await gitWorktreeManager.reapOrphans?.({ activeRunIds }).catch((error) => {
+      orchestratorLog.warn('Failed to reap orphaned worktrees during startup', { error })
+    })
     this.registerDelegationTool()
     this.registerImportedRuntimeTools()
     aiAutomationScheduler.setExecutor((request, automationId) =>
@@ -1042,9 +1098,10 @@ export class AiCliOrchestrator {
       orchestratorLog.info('AI CLI orchestrator control plane initialized')
     } catch (error) {
       this.initialized = false
-      await aiAutomationScheduler.stop().catch(() => undefined)
+      aiAutomationScheduler.stopTriggers?.()
       await this.runtimeHost.stop().catch(() => undefined)
       await this.cliRuntimeHost.stop().catch(() => undefined)
+      await aiAutomationScheduler.stop().catch(() => undefined)
       throw error
     }
     // Only now: a resumed run is an execution, and the orchestrator admits none before it is up.
@@ -1052,14 +1109,13 @@ export class AiCliOrchestrator {
   }
 
   /**
-   * A run that was `queued` or `running` when the app last stopped is picked up again, not written
-   * off. It resumes only when everything it needs is still there - the profile and tools it was
-   * granted, and its input, which must match the digest the run row recorded. Anything less and
-   * it is interrupted as before: the reason is recorded, nothing is guessed.
+   * A run that was `queued` or `running` when the app last stopped is picked up again when
+   * `autoResumeOnStartup` is enabled and its persisted `recoveryAttempts` cap has not been hit.
+   * It resumes only when everything it needs is still there - the profile and tools it was
+   * granted, its input (matching the digest on the run row), and any bound managed worktree.
+   * Anything less and it is interrupted cleanly with the reason recorded; nothing is guessed.
    *
    * Returns the runs to resume; `initialize` starts them once it is ready to admit executions.
-   * Safe to repeat: tool calls that had started before the stop are refused a second execution
-   * (`beginToolCall`), so a resumed run stops at the first one it cannot prove unfinished.
    * Workspace (conversation) runs are left to their own controller, which owns their authority.
    */
   private async recoverPersistedRuns(): Promise<ResumableRun[]> {
@@ -1070,18 +1126,57 @@ export class AiCliOrchestrator {
         if (run.status === status) recoverable.set(run.id, run)
       }
     }
+    if (!isAutoResumeOnStartupEnabled()) {
+      for (const run of recoverable.values()) {
+        await this.interruptForRestart(run, 'auto_resume_disabled')
+      }
+      return []
+    }
     const resumable: ResumableRun[] = []
     for (const run of recoverable.values()) {
+      const priorAttempts = readRecoveryAttempts(toRecord(run.metadata))
+      if (priorAttempts >= MAX_ORCHESTRATOR_RECOVERY_ATTEMPTS) {
+        await this.interruptForRestart(run, 'recovery_limit_reached', priorAttempts)
+        continue
+      }
       const prepared = await this.prepareResume(run)
-      if (prepared) resumable.push(prepared)
-      else await this.interruptForRestart(run)
+      if (!prepared) {
+        await this.interruptForRestart(run, 'application_restart')
+        continue
+      }
+      const nextAttempt = priorAttempts + 1
+      const updatedMetadata: Record<string, unknown> = {
+        ...projectPersistedRunMetadata(prepared.run.metadata),
+        recoveryAttempts: nextAttempt
+      }
+      await this.withRunWriteLease(prepared.run.id, async () => {
+        await aiOrchestratorStore.updateOrchestratorRun(prepared.run.id, {
+          metadata: updatedMetadata,
+          updatedAt: Date.now()
+        })
+      })
+      prepared.run = { ...prepared.run, metadata: updatedMetadata }
+      prepared.recoveryAttempt = nextAttempt
+      resumable.push(prepared)
     }
     return resumable
   }
 
-  private async interruptForRestart(run: AiOrchestratorRunRecord): Promise<void> {
+  private async interruptForRestart(
+    run: AiOrchestratorRunRecord,
+    reason:
+      | 'application_restart'
+      | 'auto_resume_disabled'
+      | 'recovery_limit_reached' = 'application_restart',
+    recoveryAttempt?: number
+  ): Promise<void> {
     const interruptedAt = Date.now()
-    const error = `Run was interrupted by application restart while ${run.status}`
+    const error =
+      reason === 'auto_resume_disabled'
+        ? `Run was interrupted by application restart while ${run.status} (auto-resume disabled)`
+        : reason === 'recovery_limit_reached'
+          ? `Run exceeded automatic startup recovery limit while ${run.status}`
+          : `Run was interrupted by application restart while ${run.status}`
     await this.withRunWriteLease(run.id, async () => {
       await aiOrchestratorStore.updateOrchestratorRun(run.id, {
         status: 'interrupted',
@@ -1091,8 +1186,9 @@ export class AiCliOrchestrator {
         updatedAt: interruptedAt
       })
       await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.interrupted', {
-        reason: 'application_restart',
-        previousStatus: run.status
+        reason,
+        previousStatus: run.status,
+        ...(recoveryAttempt !== undefined && recoveryAttempt > 0 ? { recoveryAttempt } : {})
       })
     })
     this.clearVolatileRunState(run.id)
@@ -1109,12 +1205,7 @@ export class AiCliOrchestrator {
     // A conversation turn belongs to the conversation controller, which no longer holds its
     // authority after a restart; resuming it here would run it without one.
     if (metadata.workspaceExecution === true || run.automationId || run.parentRunId) return null
-    // An already-running external CLI subprocess (OMP / Codex / Claude) executes its own internal
-    // tool loop outside Tuff's per-call durable journal (`beginToolCall`), so restarting it from
-    // scratch after a crash could duplicate side effects. Mark it interrupted cleanly; a `queued`
-    // run never started yet and can safely resume without reading Pi worker replay logs.
     const externalCliKind = this.resolveExternalCliKind(run.profileId)
-    if (externalCliKind && run.status === 'running') return null
     if (metadata.requestInputPresent === true) {
       const stored = await loadRunInput(run.id)
       if (!stored) return null
@@ -1125,7 +1216,20 @@ export class AiCliOrchestrator {
     try {
       const authority = await this.restoreRunAuthority(run)
       if (externalCliKind) {
-        return { run, ...authority }
+        const worktreeOptions = parseWorktreeRequestOptions(metadata.worktreeOptions) ?? undefined
+        const boundWorktreeId = readSafeWorktreeId(metadata.worktreeId)
+        let reattachWorktreeId: string | undefined
+        if (boundWorktreeId) {
+          const lease = await gitWorktreeManager.reattachWorktree(boundWorktreeId, run.id)
+          reattachWorktreeId = lease.worktreeId
+        }
+        return {
+          run,
+          ...authority,
+          ...(reattachWorktreeId ? { reattachWorktreeId } : {}),
+          ...(worktreeOptions ? { worktreeOptions } : {}),
+          resumedFromInterruption: run.status === 'running'
+        }
       }
       // Only after the authority check passed: a run that is refused never has its log read.
       const resume = await this.loadResume(run, authority.input)
@@ -1187,16 +1291,40 @@ export class AiCliOrchestrator {
    * the caller that started the run is gone.
    */
   private resumeInBackground(resumable: ResumableRun): void {
-    const { run, profile, allowedToolIds, input, automationPolicy, resume } = resumable
+    const {
+      run,
+      profile,
+      allowedToolIds,
+      input,
+      automationPolicy,
+      resume,
+      reattachWorktreeId,
+      worktreeOptions,
+      resumedFromInterruption,
+      recoveryAttempt
+    } = resumable
     if (resume) this.resumePlans.set(run.id, resume)
+    if (reattachWorktreeId) this.recoveryWorktreeIds.set(run.id, reattachWorktreeId)
+    if (resumedFromInterruption) this.resumedExternalRunIds.add(run.id)
     const budget = resolveExecutionBudget({
       objective: run.objective,
       budget: toRecord(toRecord(run.metadata).executionBudget) as Partial<AiExecutionBudget>
     })
+    const effectiveWorktreeOptions =
+      worktreeOptions ?? (reattachWorktreeId ? { enabled: true } : undefined)
+    const requestMetadata: Record<string, unknown> | undefined =
+      automationPolicy || effectiveWorktreeOptions
+        ? {
+            ...(automationPolicy ? { automationPolicy } : {}),
+            ...(effectiveWorktreeOptions ? { worktree: effectiveWorktreeOptions } : {})
+          }
+        : undefined
     void this.trackExecution(async () => {
       await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.resumed', {
         reason: 'application_restart',
-        previousStatus: run.status
+        previousStatus: run.status,
+        recoveryAttempt: recoveryAttempt ?? readRecoveryAttempts(toRecord(run.metadata)),
+        ...(reattachWorktreeId ? { reusedWorktree: true, worktreeId: reattachWorktreeId } : {})
       })
       return await this.executePreparedRun(
         run,
@@ -1208,7 +1336,7 @@ export class AiCliOrchestrator {
           approved: false,
           allowedToolIds,
           sessionId: run.sessionId,
-          metadata: automationPolicy ? { automationPolicy } : undefined,
+          metadata: requestMetadata,
           budget
         },
         profile,
@@ -1231,7 +1359,7 @@ export class AiCliOrchestrator {
   private async performShutdown(): Promise<void> {
     const failures: unknown[] = []
     try {
-      await aiAutomationScheduler.stop()
+      aiAutomationScheduler.stopTriggers?.()
     } catch (error) {
       failures.push(error)
     }
@@ -1245,12 +1373,24 @@ export class AiCliOrchestrator {
     } catch (error) {
       failures.push(error)
     }
-    await this.drainExecutions()
     try {
-      await gitWorktreeManager.disposeAll({ force: false })
+      await aiAutomationScheduler.stop()
     } catch (error) {
       failures.push(error)
     }
+    await this.drainExecutions()
+    try {
+      await gitWorktreeManager.disposeAll(
+        this.suspendedForRestartRunIds.size > 0
+          ? { force: false, preserveRunIds: new Set(this.suspendedForRestartRunIds) }
+          : { force: false }
+      )
+    } catch (error) {
+      failures.push(error)
+    }
+    this.suspendedForRestartRunIds.clear()
+    this.recoveryWorktreeIds.clear()
+    this.resumedExternalRunIds.clear()
     this.volatileRunInputs.clear()
     this.resumePlans.clear()
     this.runLogSeq.clear()
@@ -1286,15 +1426,21 @@ export class AiCliOrchestrator {
     }
   }
 
-  private clearVolatileRunState(runId: string): void {
+  private clearInMemoryRunState(runId: string): void {
     this.volatileRunInputs.delete(runId)
     this.trustedAllowedToolIds.delete(runId)
     this.trustedAutomationPolicies.delete(runId)
     this.workspaceAuthorities.delete(runId)
-    // The stored copies go wherever the in-memory ones do: every terminal path calls this.
     this.resumePlans.delete(runId)
     this.runLogSeq.delete(runId)
     this.runLogBroken.delete(runId)
+    this.recoveryWorktreeIds.delete(runId)
+    this.resumedExternalRunIds.delete(runId)
+  }
+
+  private clearVolatileRunState(runId: string): void {
+    this.clearInMemoryRunState(runId)
+    // The stored copies go wherever the in-memory ones do: every terminal path calls this.
     const discard = this.discardStoredRunState(runId)
     this.pendingInputDiscards.add(discard)
     void discard.finally(() => this.pendingInputDiscards.delete(discard))
@@ -1508,6 +1654,7 @@ export class AiCliOrchestrator {
     const requestInputDigest = requestInputPresent
       ? digestStructuredValue(request.input)
       : undefined
+    const worktreeOption = parseWorktreeRequestOptions(toRecord(request.metadata).worktree)
     const run: AiOrchestratorRunRecord = {
       id: runId,
       automationId,
@@ -1524,6 +1671,7 @@ export class AiCliOrchestrator {
         allowedToolRefs: toAllowedToolRefs(allowedToolIds),
         requestInputPresent,
         ...(requestInputDigest ? { requestInputDigest } : {}),
+        ...(worktreeOption ? { worktreeOptions: worktreeOption } : {}),
         profileAuthorityVersion: profile.updatedAt,
         profileAuthorityDigest: profileAuthorityDigest(profile),
         ...(automationPolicy
@@ -1564,7 +1712,6 @@ export class AiCliOrchestrator {
     })
     await workspace?.onRunCreated?.(run)
 
-    const worktreeOption = parseWorktreeRequestOptions(toRecord(request.metadata).worktree)
     const preparedMetadata: Record<string, unknown> | undefined =
       automationPolicy || worktreeOption
         ? {
@@ -1732,6 +1879,16 @@ export class AiCliOrchestrator {
         const useExternalCliRuntime = this.resolveExternalCliKind(profile.id) !== null
         const resume = !useExternalCliRuntime ? this.resumePlans.get(run.id) : undefined
         this.resumePlans.delete(run.id)
+        const reattachWorktreeId = this.recoveryWorktreeIds.get(run.id)
+        this.recoveryWorktreeIds.delete(run.id)
+        const resumedFromInterruption = this.resumedExternalRunIds.delete(run.id)
+        const cliRuntimeOptions: CliExecuteRuntimeOptions | undefined =
+          reattachWorktreeId || resumedFromInterruption
+            ? {
+                ...(reattachWorktreeId ? { reattachWorktreeId } : {}),
+                ...(resumedFromInterruption ? { resumedFromInterruption } : {})
+              }
+            : undefined
         const startPayload = {
           run: { ...run, status: 'running' as const, startedAt, updatedAt: startedAt },
           request,
@@ -1742,7 +1899,7 @@ export class AiCliOrchestrator {
           budget
         }
         const result = useExternalCliRuntime
-          ? await this.cliRuntimeHost.execute(startPayload, workspace)
+          ? await this.cliRuntimeHost.execute(startPayload, workspace, cliRuntimeOptions)
           : await this.runtimeHost.execute(startPayload, workspace)
         const completedAt = Date.now()
         const persisted = await aiOrchestratorStore.getOrchestratorRun(run.id)
@@ -1797,9 +1954,46 @@ export class AiCliOrchestrator {
           orchestratorLog.error(`Agent run ${run.id} failed: ${detail ?? 'no reason reported'}`)
           if (workspace && detail) this.failureDetails.set(run.id, detail)
         }
-        const completedAt = status === 'pending_approval' ? undefined : Date.now()
         const persisted = await aiOrchestratorStore.getOrchestratorRun(run.id)
         const metadata = projectPersistedRunMetadata(persisted?.metadata ?? run.metadata)
+        const preserveForRestart =
+          this.closing &&
+          isRunInterruptedControlError(error) &&
+          !isInterruptedToolCallControlError(error) &&
+          isAutoResumeOnStartupEnabled() &&
+          metadata.workspaceExecution !== true &&
+          !run.automationId &&
+          !run.parentRunId &&
+          readRecoveryAttempts(metadata) < MAX_ORCHESTRATOR_RECOVERY_ATTEMPTS
+
+        if (preserveForRestart) {
+          const worktreeId = readSafeWorktreeId(metadata.worktreeId)
+          this.suspendedForRestartRunIds.add(run.id)
+          await aiOrchestratorStore.appendOrchestratorEvent(
+            run.id,
+            'run.suspended_for_restart',
+            {
+              reason: 'application_restart',
+              previousStatus: 'running',
+              recoveryAttempt: readRecoveryAttempts(metadata),
+              ...(worktreeId ? { worktreeId } : {})
+            },
+            'info'
+          )
+          this.clearInMemoryRunState(run.id)
+          const suspendedAt = Date.now()
+          return {
+            ...run,
+            status: 'interrupted',
+            error: AI_RUN_INTERRUPTED,
+            delegationPlan: persisted?.delegationPlan,
+            startedAt,
+            completedAt: suspendedAt,
+            updatedAt: suspendedAt
+          }
+        }
+
+        const completedAt = status === 'pending_approval' ? undefined : Date.now()
         delete metadata.approved
         delete metadata.approvalGranted
         delete metadata.approvedAt

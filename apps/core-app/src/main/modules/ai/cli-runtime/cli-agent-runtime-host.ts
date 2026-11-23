@@ -6,6 +6,7 @@ import type {
   AcpPromptContent,
   CliAgentRuntimeHostOptions,
   CliDriverResolution,
+  CliExecuteRuntimeOptions,
   CliPermissionDecision,
   CliPermissionRequest,
   CliRuntimeClient,
@@ -199,7 +200,8 @@ function resolveReasoningEffort(workspace?: PiWorkspaceAuthority): string | unde
 function buildCliPromptContent(
   payload: PiRuntimeStartPayload,
   workspace: PiWorkspaceAuthority | undefined,
-  includeSystemPrompt: boolean
+  includeSystemPrompt: boolean,
+  resumedFromInterruption: boolean
 ): string | AcpPromptContent[] {
   const objective = payload.run.objective || payload.request.objective || ''
   const objectiveWithInput = buildObjectivePrompt(objective, payload.request.input)
@@ -210,10 +212,14 @@ function buildCliPromptContent(
           ...payload.history.map((entry) => `${entry.role}: ${entry.text}`)
         ].join('\n')
       : ''
+  const recoveryBlock = resumedFromInterruption
+    ? '[Recovery Notice] A previous attempt of this task was interrupted before completion. Before making changes, inspect the current working directory state (including any partial edits or files already on disk) and continue from where the previous attempt left off without duplicating already-completed work.'
+    : ''
 
   const promptText = [
     includeSystemPrompt ? payload.profile.systemPrompt : '',
     historyBlock,
+    recoveryBlock,
     objectiveWithInput
   ]
     .filter(Boolean)
@@ -299,6 +305,7 @@ export class CliAgentRuntimeHost {
 
   private readonly onEvent?: CliAgentRuntimeHostOptions['onEvent']
   private readonly onRecord?: CliAgentRuntimeHostOptions['onRecord']
+  private readonly onWorktreeBound?: CliAgentRuntimeHostOptions['onWorktreeBound']
   private readonly resolveMcpServers?: CliAgentRuntimeHostOptions['resolveMcpServers']
   private readonly onPermissionRequest?: CliAgentRuntimeHostOptions['onPermissionRequest']
   private readonly sanitizeToolOutput: (value: unknown) => unknown
@@ -308,6 +315,7 @@ export class CliAgentRuntimeHost {
   constructor(options: CliAgentRuntimeHostOptions = {}) {
     this.onEvent = options.onEvent
     this.onRecord = options.onRecord
+    this.onWorktreeBound = options.onWorktreeBound
     this.resolveMcpServers = options.resolveMcpServers
     this.onPermissionRequest = options.onPermissionRequest
     this.sanitizeToolOutput = options.sanitizeToolOutput ?? defaultSanitizeValue
@@ -725,7 +733,8 @@ export class CliAgentRuntimeHost {
 
   async execute(
     payload: PiRuntimeStartPayload,
-    workspace?: PiWorkspaceAuthority
+    workspace?: PiWorkspaceAuthority,
+    runtimeOptions?: CliExecuteRuntimeOptions
   ): Promise<PiRuntimeRunResult> {
     const kind = resolveCliProfileKind(payload.profile.id)
     if (!kind) {
@@ -745,6 +754,11 @@ export class CliAgentRuntimeHost {
     )
 
     const runGen = this.generation
+    const reattachWorktreeId =
+      typeof runtimeOptions?.reattachWorktreeId === 'string'
+        ? runtimeOptions.reattachWorktreeId.trim()
+        : ''
+    const resumedFromInterruption = runtimeOptions?.resumedFromInterruption === true
     let session: CliRuntimeSession | null = null
     let runOwnedClient: CliRuntimeClient | null = null
     let retainedPersistentClient: CliRuntimeClient | null = null
@@ -767,7 +781,11 @@ export class CliAgentRuntimeHost {
       const hasAutomationPolicy = Boolean(requestMetadata.automationPolicy)
       worktreeOpts = parseWorktreeRequestOptions(requestMetadata.worktree)
 
-      if (worktreeOpts) {
+      if (reattachWorktreeId) {
+        worktreeLease = await this.worktreeManager.reattachWorktree(reattachWorktreeId, runId)
+        this.runWorktrees.set(runId, worktreeLease)
+        worktreeOpts = worktreeOpts ?? { enabled: true }
+      } else if (worktreeOpts) {
         worktreeLease = await this.worktreeManager.acquireWorktree({
           runId,
           conversationId: workspace?.conversationId ?? payload.run.sessionId,
@@ -777,6 +795,10 @@ export class CliAgentRuntimeHost {
           ...(worktreeOpts.detached !== undefined ? { detached: worktreeOpts.detached } : {})
         })
         this.runWorktrees.set(runId, worktreeLease)
+      }
+
+      if (worktreeLease) {
+        await this.onWorktreeBound?.(runId, worktreeLease)
       }
 
       if (this.generation !== runGen) throw createRunInterruptedError()
@@ -895,7 +917,12 @@ export class CliAgentRuntimeHost {
 
       // ACP does not accept a standalone system role on prompt input, while Codex app-server
       // receives `developerInstructions` on `thread/start` and Claude receives `--system-prompt`.
-      const promptContent = buildCliPromptContent(payload, workspace, driver.protocol === 'acp')
+      const promptContent = buildCliPromptContent(
+        payload,
+        workspace,
+        driver.protocol === 'acp',
+        resumedFromInterruption
+      )
 
       for await (const event of session.promptStream(promptContent, {
         signal: controller.signal
@@ -1036,7 +1063,9 @@ export class CliAgentRuntimeHost {
       if (retainedPersistentClient) {
         await this.releaseClientForRun(retainedPersistentClient, runId)
       }
+      const interruptedByShutdown = activeRun?.interrupted === true || this.generation !== runGen
       if (
+        !interruptedByShutdown &&
         worktreeLease &&
         worktreeOpts &&
         (!activeRun || worktreeOpts.cleanupOnComplete !== false)

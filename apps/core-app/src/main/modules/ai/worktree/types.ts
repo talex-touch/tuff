@@ -145,4 +145,6 @@ export interface ReapOrphansResult {
 export interface DisposeAllWorktreesOptions {
   force?: boolean
   timeoutMs?: number
+  /** Run IDs whose managed worktrees should remain preserved on disk across shutdown. */
+  preserveRunIds?: Iterable<string>
 }

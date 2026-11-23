@@ -12,6 +12,8 @@ import process from 'node:process'
 import { createLogger } from '../../utils/logger'
 import { aiOrchestratorStore } from './ai-orchestrator-store'
 import { normalizeAutomationPolicy } from './ai-automation-policy'
+import { isAutoResumeOnStartupEnabled } from './auto-resume-setting'
+import { isRunInterruptedControlError } from './pi-agent-runtime-control-error'
 
 export type AiAutomationExecutor = (
   request: AiOrchestratorExecuteRequest,
@@ -32,6 +34,23 @@ interface CoalescedAutomationTrigger {
 
 const schedulerLog = createLogger('Intelligence').child('AiAutomationScheduler')
 const CRON_POLL_INTERVAL_MS = 30_000
+const MAX_AUTOMATION_RECOVERY_ATTEMPTS = 1
+
+function readAutomationRecoveryAttempts(run: AiAutomationRunRecord): number {
+  const payload =
+    run.payload && typeof run.payload === 'object' && !Array.isArray(run.payload)
+      ? (run.payload as Record<string, unknown>)
+      : null
+  const recovery =
+    payload?.recovery && typeof payload.recovery === 'object' && !Array.isArray(payload.recovery)
+      ? (payload.recovery as Record<string, unknown>)
+      : null
+  const attempts = recovery?.attempts
+  if (typeof attempts === 'number' && Number.isInteger(attempts) && attempts >= 0) {
+    return Math.min(100, attempts)
+  }
+  return run.triggerType === 'recovery' ? 1 : 0
+}
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -161,14 +180,29 @@ function validateDefinition(definition: AiAutomationDefinition): void {
 
 export class AiAutomationScheduler {
   private executor: AiAutomationExecutor | null = null
+  private autoResumeReader: (() => boolean) | null = null
   private initialized = false
   private readonly triggerCleanup = new Map<string, () => void>()
   private readonly activeRuns = new Map<string, ActiveAutomationRun>()
   private readonly missedTriggers = new Map<string, CoalescedAutomationTrigger>()
   private readonly lastCronMinute = new Map<string, string>()
 
+  constructor(options?: { isAutoResumeEnabled?: () => boolean }) {
+    this.autoResumeReader = options?.isAutoResumeEnabled ?? null
+  }
+
   setExecutor(executor: AiAutomationExecutor): void {
     this.executor = executor
+  }
+
+  setAutoResumeReader(reader: (() => boolean) | null): void {
+    this.autoResumeReader = reader
+  }
+
+  private isAutoResumeEnabled(): boolean {
+    return this.autoResumeReader
+      ? this.autoResumeReader() !== false
+      : isAutoResumeOnStartupEnabled()
   }
 
   async initialize(): Promise<void> {
@@ -180,12 +214,16 @@ export class AiAutomationScheduler {
     await this.recoverInterruptedRuns()
   }
 
-  async stop(): Promise<void> {
+  stopTriggers(): void {
     this.initialized = false
     for (const cleanup of this.triggerCleanup.values()) cleanup()
     this.triggerCleanup.clear()
     this.lastCronMinute.clear()
     this.missedTriggers.clear()
+  }
+
+  async stop(): Promise<void> {
+    this.stopTriggers()
     await Promise.allSettled(Array.from(this.activeRuns.values()).map((run) => run.promise))
     this.activeRuns.clear()
   }
@@ -461,6 +499,14 @@ export class AiAutomationScheduler {
         },
         definition.id
       )
+      if (!this.initialized && orchestratorRun.status === 'interrupted') {
+        await aiOrchestratorStore.updateAutomationRun(run.id, {
+          orchestratorRunId: orchestratorRun.id,
+          status: 'interrupted',
+          error: 'Host restarted during execution'
+        })
+        return
+      }
       await aiOrchestratorStore.updateAutomationRun(run.id, {
         orchestratorRunId: orchestratorRun.id,
         status: orchestratorRun.status,
@@ -468,6 +514,13 @@ export class AiAutomationScheduler {
         completedAt: Date.now()
       })
     } catch (error) {
+      if (!this.initialized && isRunInterruptedControlError(error)) {
+        await aiOrchestratorStore.updateAutomationRun(run.id, {
+          status: 'interrupted',
+          error: 'Host restarted during execution'
+        })
+        return
+      }
       await aiOrchestratorStore.updateAutomationRun(run.id, {
         status: 'failed',
         error: toErrorMessage(error),
@@ -478,7 +531,28 @@ export class AiAutomationScheduler {
 
   private async recoverInterruptedRuns(): Promise<void> {
     const runs = await aiOrchestratorStore.listRecoverableAutomationRuns()
+    const autoResumeEnabled = this.isAutoResumeEnabled()
     for (const run of runs) {
+      if (run.completedAt !== undefined) {
+        continue
+      }
+      if (!autoResumeEnabled) {
+        await aiOrchestratorStore.updateAutomationRun(run.id, {
+          status: 'interrupted',
+          error: 'Auto-resume on startup is disabled',
+          completedAt: Date.now()
+        })
+        continue
+      }
+      const recoveryAttempts = readAutomationRecoveryAttempts(run)
+      if (recoveryAttempts >= MAX_AUTOMATION_RECOVERY_ATTEMPTS) {
+        await aiOrchestratorStore.updateAutomationRun(run.id, {
+          status: 'interrupted',
+          error: 'Automation recovery limit reached',
+          completedAt: Date.now()
+        })
+        continue
+      }
       const definition = await aiOrchestratorStore.getAutomation(run.automationId)
       if (!definition || !definition.enabled) {
         await aiOrchestratorStore.updateAutomationRun(run.id, {
@@ -503,15 +577,24 @@ export class AiAutomationScheduler {
         })
         continue
       }
+      const nextPayload: Record<string, unknown> = {
+        ...(run.payload ?? {}),
+        recovery: {
+          attempts: recoveryAttempts + 1,
+          recoveredAt: Date.now()
+        }
+      }
       await aiOrchestratorStore.updateAutomationRun(run.id, {
         status: 'queued',
         triggerType: 'recovery',
+        payload: nextPayload,
         error: ''
       })
       this.executeExisting(definition, {
         ...run,
         triggerType: 'recovery',
         status: 'queued',
+        payload: nextPayload,
         updatedAt: Date.now()
       })
     }

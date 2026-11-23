@@ -253,6 +253,7 @@ vi.mock('./pi-agent-runtime-host', async (importOriginal) => {
 })
 
 import { AiCliOrchestrator } from './ai-cli-orchestrator'
+import { setAutoResumeOnStartupReader } from './auto-resume-setting'
 import {
   CLAUDE_CLI_PROFILE_ID,
   CODEX_CLI_PROFILE_ID,
@@ -412,6 +413,7 @@ describe('AiCliOrchestrator OMP ACP runtime wiring', () => {
   })
 
   afterEach(async () => {
+    setAutoResumeOnStartupReader(null)
     await orchestrator.shutdown().catch(() => undefined)
     vi.restoreAllMocks()
   })
@@ -719,7 +721,7 @@ describe('AiCliOrchestrator OMP ACP runtime wiring', () => {
     expect(clientCloseSpy).toHaveBeenCalled()
   })
 
-  it('interrupts running OMP runs on restart without re-running them, while resuming queued OMP runs safely', async () => {
+  it('auto-resumes running and queued OMP runs once with crash-loop cap and respects autoResumeOnStartup=false', async () => {
     await orchestrator.shutdown()
     const ompProfile = makeProfile(OMP_CLI_PROFILE_ID)
     const baseMetadata = {
@@ -729,6 +731,16 @@ describe('AiCliOrchestrator OMP ACP runtime wiring', () => {
       requestInputPresent: false,
       profileAuthorityVersion: ompProfile.updatedAt,
       profileAuthorityDigest: profileAuthorityDigest(ompProfile)
+    }
+
+    const promptsSeen: string[] = []
+    promptStreamImpl = async function* (prompt) {
+      promptsSeen.push(typeof prompt === 'string' ? prompt : JSON.stringify(prompt))
+      yield { type: 'delta', text: 'omp-answer' }
+      yield {
+        type: 'usage',
+        usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 }
+      }
     }
 
     mocks.runs.set('omp-running-before-crash', {
@@ -755,21 +767,73 @@ describe('AiCliOrchestrator OMP ACP runtime wiring', () => {
       createdAt: Date.now(),
       updatedAt: Date.now()
     })
+    mocks.runs.set('omp-crash-loop-capped', {
+      id: 'omp-crash-loop-capped',
+      sessionId: 'sess-crash-3',
+      objective: 'Already recovered once',
+      profileId: OMP_CLI_PROFILE_ID,
+      runtimeProvider: 'pi-core',
+      cwd: '/tmp',
+      status: 'running',
+      metadata: { ...baseMetadata, recoveryAttempts: 1 },
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    })
 
     const restarted = new AiCliOrchestrator()
     await restarted.initialize()
     for (let attempt = 0; attempt < 50; attempt += 1) {
-      if (mocks.runs.get('omp-queued-before-crash')?.status === 'completed') break
+      if (
+        mocks.runs.get('omp-running-before-crash')?.status === 'completed' &&
+        mocks.runs.get('omp-queued-before-crash')?.status === 'completed'
+      ) {
+        break
+      }
       await new Promise((resolve) => setTimeout(resolve, 10))
     }
     await restarted.shutdown()
 
-    // Already-running OMP run was safely marked interrupted, never re-executed
-    expect(mocks.runs.get('omp-running-before-crash')?.status).toBe('interrupted')
-    // Queued OMP run (never started yet) resumed cleanly through OmpAgentRuntimeHost
+    // Both running and queued OMP runs auto-resumed with recoveryAttempts persisted as 1
+    expect(mocks.runs.get('omp-running-before-crash')?.status).toBe('completed')
+    expect(mocks.runs.get('omp-running-before-crash')?.output).toBe('omp-answer')
+    expect(mocks.runs.get('omp-running-before-crash')?.metadata?.recoveryAttempts).toBe(1)
     expect(mocks.runs.get('omp-queued-before-crash')?.status).toBe('completed')
-    expect(mocks.runs.get('omp-queued-before-crash')?.output).toBe('omp-answer')
+    expect(mocks.runs.get('omp-queued-before-crash')?.metadata?.recoveryAttempts).toBe(1)
+    expect(promptsSeen.some((p) => p.includes('[Recovery Notice]'))).toBe(true)
+
+    // Crash-loop cap stops runs that already had recoveryAttempts >= 1
+    expect(mocks.runs.get('omp-crash-loop-capped')?.status).toBe('interrupted')
+    expect(mocks.appendOrchestratorEvent).toHaveBeenCalledWith(
+      'omp-crash-loop-capped',
+      'run.interrupted',
+      expect.objectContaining({ reason: 'recovery_limit_reached', recoveryAttempt: 1 })
+    )
     expect(mocks.piExecute).not.toHaveBeenCalled()
     expect(mocks.listRunMessages).not.toHaveBeenCalled()
+
+    // When autoResumeOnStartup is false, all persisted queued/running OMP runs are interrupted cleanly
+    setAutoResumeOnStartupReader(() => false)
+    mocks.runs.set('omp-disabled-1', {
+      id: 'omp-disabled-1',
+      sessionId: 'sess-disabled-1',
+      objective: 'Should not auto-resume',
+      profileId: OMP_CLI_PROFILE_ID,
+      runtimeProvider: 'pi-core',
+      cwd: '/tmp',
+      status: 'running',
+      metadata: baseMetadata,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    })
+    const disabledBoot = new AiCliOrchestrator()
+    await disabledBoot.initialize()
+    await disabledBoot.shutdown()
+
+    expect(mocks.runs.get('omp-disabled-1')?.status).toBe('interrupted')
+    expect(mocks.appendOrchestratorEvent).toHaveBeenCalledWith(
+      'omp-disabled-1',
+      'run.interrupted',
+      expect.objectContaining({ reason: 'auto_resume_disabled', previousStatus: 'running' })
+    )
   })
 })
