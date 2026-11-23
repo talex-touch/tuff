@@ -51,7 +51,28 @@ export interface CliDriverResolution {
   readonly kind: CliRuntimeKind
   readonly protocol: CliRuntimeProtocol
   readonly executablePath: string
+  readonly args?: readonly string[]
   readonly adapterName: string
+}
+
+export interface CliDriverCandidateSpec {
+  readonly protocol: CliRuntimeProtocol
+  readonly resolveExecutable: () => Promise<string | null>
+  readonly resolveArgs?: () => readonly string[]
+  readonly adapterName: string
+}
+
+export interface CliDriverDescriptor {
+  readonly kind: CliRuntimeKind
+  readonly displayName: string
+  readonly profileId: string
+  readonly providerId: string
+  readonly capabilityProvider: string
+  readonly notFoundCode: string
+  readonly notFoundMessage: string
+  readonly defaultModelByProtocol: Readonly<Partial<Record<CliRuntimeProtocol, string>>>
+  readonly fallbackModelLabel: string
+  readonly candidates: readonly CliDriverCandidateSpec[]
 }
 
 export interface CliWorktreeRequestOptions {

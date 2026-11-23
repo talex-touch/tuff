@@ -13,6 +13,9 @@ import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PiCliProvider } from './pi-cli-provider'
 import {
+  ANTIGRAVITY_CLI_ORIGIN,
+  ANTIGRAVITY_CLI_PROFILE_ID,
+  ANTIGRAVITY_CLI_PROVIDER_ID,
   CLAUDE_CLI_ORIGIN,
   CLAUDE_CLI_PROFILE_ID,
   CLAUDE_CLI_PROVIDER_ID,
@@ -506,6 +509,62 @@ describe('PiCliProvider claude', () => {
     }).rejects.toThrow(/ATTACHMENTS_UNSUPPORTED/)
 
     // Decided from the argv, so the child never existed: nothing was spawned and nothing billed.
+    expect(existsSync(spawnMarker)).toBe(false)
+  })
+})
+
+describe('PiCliProvider ACP-only external CLIs never spawn binaries', () => {
+  const ANTIGRAVITY_CONFIG: IntelligenceProviderConfig = {
+    ...CONFIG,
+    id: ANTIGRAVITY_CLI_PROVIDER_ID,
+    name: 'Antigravity (local CLI)',
+    metadata: { origin: ANTIGRAVITY_CLI_ORIGIN }
+  }
+  let spawnMarker: string
+
+  beforeEach(async () => {
+    spawnMarker = join(workDir, 'unexpected-binary-spawned')
+    await writeFile(
+      stubPath,
+      `#!/usr/bin/env node\nrequire('node:fs').writeFileSync(${JSON.stringify(spawnMarker)}, 'spawned')\n`,
+      'utf8'
+    )
+    await chmod(stubPath, 0o755)
+    process.env.TUFF_PI_CLI_PATH = stubPath
+    process.env.TUFF_ANTIGRAVITY_CLI_PATH = stubPath
+    resetAllCliExecutableCaches()
+  })
+
+  afterEach(() => {
+    delete process.env.TUFF_ANTIGRAVITY_CLI_PATH
+    resetAllCliExecutableCaches()
+  })
+
+  it('never spawns pi or agy under default-pi, unnamed run, or profile:cli:antigravity', async () => {
+    const cliProvider = new PiCliProvider({ ...ANTIGRAVITY_CONFIG }, () => true)
+
+    await expect(async () => {
+      for await (const _chunk of cliProvider.chatStream(userTurn(), {
+        metadata: { profileId: 'default-pi' }
+      })) {
+        void _chunk
+      }
+    }).rejects.toThrow(/ANTIGRAVITY_CONFIG_PROVIDER_UNAVAILABLE/)
+
+    await expect(async () => {
+      for await (const _chunk of cliProvider.chatStream(userTurn(), {})) {
+        void _chunk
+      }
+    }).rejects.toThrow(/ANTIGRAVITY_CONFIG_PROVIDER_UNAVAILABLE/)
+
+    await expect(async () => {
+      for await (const _chunk of cliProvider.chatStream(userTurn(), {
+        metadata: { profileId: ANTIGRAVITY_CLI_PROFILE_ID }
+      })) {
+        void _chunk
+      }
+    }).rejects.toThrow(/ANTIGRAVITY_ACP_RUNTIME_REQUIRED/)
+
     expect(existsSync(spawnMarker)).toBe(false)
   })
 })

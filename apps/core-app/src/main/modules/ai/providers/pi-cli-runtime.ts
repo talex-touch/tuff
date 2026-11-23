@@ -29,15 +29,58 @@ export const PI_CLI_ORIGIN = 'pi-cli'
 
 export const OMP_CLI_PROVIDER_ID = 'omp-cli'
 export const OMP_CLI_ORIGIN = 'omp-cli'
+export const OMP_CLI_PROFILE_ID = 'profile:cli:omp'
 
 export const CODEX_CLI_PROVIDER_ID = 'codex-cli'
 export const CODEX_CLI_ORIGIN = 'codex-cli'
 export const CODEX_CLI_PROFILE_ID = 'profile:cli:codex'
-export const CLAUDE_CLI_PROFILE_ID = 'profile:cli:claude'
-export const OMP_CLI_PROFILE_ID = 'profile:cli:omp'
 
 export const CLAUDE_CLI_PROVIDER_ID = 'claude-cli'
 export const CLAUDE_CLI_ORIGIN = 'claude-cli'
+export const CLAUDE_CLI_PROFILE_ID = 'profile:cli:claude'
+
+export const ANTIGRAVITY_CLI_PROVIDER_ID = 'antigravity-cli'
+export const ANTIGRAVITY_CLI_ORIGIN = 'antigravity-cli'
+export const ANTIGRAVITY_CLI_PROFILE_ID = 'profile:cli:antigravity'
+
+export const OPENCODE_CLI_PROVIDER_ID = 'opencode-cli'
+export const OPENCODE_CLI_ORIGIN = 'opencode-cli'
+export const OPENCODE_CLI_PROFILE_ID = 'profile:cli:opencode'
+
+export const GEMINI_CLI_PROVIDER_ID = 'gemini-cli'
+export const GEMINI_CLI_ORIGIN = 'gemini-cli'
+export const GEMINI_CLI_PROFILE_ID = 'profile:cli:gemini'
+
+export const KIRO_CLI_PROVIDER_ID = 'kiro-cli'
+export const KIRO_CLI_ORIGIN = 'kiro-cli'
+export const KIRO_CLI_PROFILE_ID = 'profile:cli:kiro'
+
+export const CURSOR_CLI_PROVIDER_ID = 'cursor-cli'
+export const CURSOR_CLI_ORIGIN = 'cursor-cli'
+export const CURSOR_CLI_PROFILE_ID = 'profile:cli:cursor'
+
+const EXTERNAL_CLI_PROVIDER_IDS = new Set<string>([
+  OMP_CLI_PROVIDER_ID,
+  CODEX_CLI_PROVIDER_ID,
+  CLAUDE_CLI_PROVIDER_ID,
+  ANTIGRAVITY_CLI_PROVIDER_ID,
+  OPENCODE_CLI_PROVIDER_ID,
+  GEMINI_CLI_PROVIDER_ID,
+  KIRO_CLI_PROVIDER_ID,
+  CURSOR_CLI_PROVIDER_ID
+])
+
+const EXTERNAL_CLI_ORIGINS = new Set<string>([
+  OMP_CLI_ORIGIN,
+  CODEX_CLI_ORIGIN,
+  CLAUDE_CLI_ORIGIN,
+  ANTIGRAVITY_CLI_ORIGIN,
+  OPENCODE_CLI_ORIGIN,
+  GEMINI_CLI_ORIGIN,
+  KIRO_CLI_ORIGIN,
+  CURSOR_CLI_ORIGIN
+])
+
 /**
  * `pi` ships its own credentials, so the provider has no key to fall back on. When the binary is
  * missing there is nothing to degrade to — the caller has to be told to install it or pick another
@@ -57,15 +100,10 @@ export function isPiCliProviderConfig(config: IntelligenceProviderConfig): boole
 }
 
 export function isCliAgentProviderConfig(config: IntelligenceProviderConfig): boolean {
-  return (
-    isPiCliProviderConfig(config) ||
-    config.id === OMP_CLI_PROVIDER_ID ||
-    config.metadata?.origin === OMP_CLI_ORIGIN ||
-    config.id === CODEX_CLI_PROVIDER_ID ||
-    config.metadata?.origin === CODEX_CLI_ORIGIN ||
-    config.id === CLAUDE_CLI_PROVIDER_ID ||
-    config.metadata?.origin === CLAUDE_CLI_ORIGIN
-  )
+  if (isPiCliProviderConfig(config)) return true
+  if (EXTERNAL_CLI_PROVIDER_IDS.has(config.id)) return true
+  const origin = config.metadata?.origin
+  return typeof origin === 'string' && EXTERNAL_CLI_ORIGINS.has(origin)
 }
 
 // ============================================================================
@@ -247,13 +285,116 @@ export function getResolvedClaudeAcpExecutable(): string | null | undefined {
   return resolved === undefined ? undefined : (resolved?.path ?? null)
 }
 
+export const ANTIGRAVITY_CLI_LOOKUP: CliExecutableLookup = {
+  command: 'agy',
+  envOverride: 'TUFF_ANTIGRAVITY_CLI_PATH'
+}
+
+export async function resolveAntigravityExecutable(): Promise<string | null> {
+  return (await resolveWithSettings(ANTIGRAVITY_CLI_LOOKUP))?.path ?? null
+}
+
+export function getResolvedAntigravityExecutable(): string | null | undefined {
+  const resolved = getResolvedWithSettings(ANTIGRAVITY_CLI_LOOKUP)
+  return resolved === undefined ? undefined : (resolved?.path ?? null)
+}
+
+export async function probeAntigravityCliAvailability(): Promise<boolean> {
+  return Boolean(await resolveAntigravityExecutable())
+}
+
+export const OPENCODE_CLI_LOOKUP: CliExecutableLookup = {
+  command: 'opencode',
+  envOverride: 'TUFF_OPENCODE_CLI_PATH'
+}
+
+export async function resolveOpencodeExecutable(): Promise<string | null> {
+  return (await resolveWithSettings(OPENCODE_CLI_LOOKUP))?.path ?? null
+}
+
+export function getResolvedOpencodeExecutable(): string | null | undefined {
+  const resolved = getResolvedWithSettings(OPENCODE_CLI_LOOKUP)
+  return resolved === undefined ? undefined : (resolved?.path ?? null)
+}
+
+export async function probeOpencodeCliAvailability(): Promise<boolean> {
+  return Boolean(await resolveOpencodeExecutable())
+}
+
+export const GEMINI_CLI_LOOKUP: CliExecutableLookup = {
+  command: 'gemini',
+  envOverride: 'TUFF_GEMINI_CLI_PATH'
+}
+
+export async function resolveGeminiExecutable(): Promise<string | null> {
+  return (await resolveWithSettings(GEMINI_CLI_LOOKUP))?.path ?? null
+}
+
+export function getResolvedGeminiExecutable(): string | null | undefined {
+  const resolved = getResolvedWithSettings(GEMINI_CLI_LOOKUP)
+  return resolved === undefined ? undefined : (resolved?.path ?? null)
+}
+
+export async function probeGeminiCliAvailability(): Promise<boolean> {
+  return Boolean(await resolveGeminiExecutable())
+}
+
+export const KIRO_CLI_LOOKUP: CliExecutableLookup = {
+  command: 'kiro-cli',
+  fallbackCommands: ['kiro'],
+  envOverride: 'TUFF_KIRO_CLI_PATH'
+}
+
+export async function resolveKiroExecutable(): Promise<string | null> {
+  return (await resolveWithSettings(KIRO_CLI_LOOKUP))?.path ?? null
+}
+
+export function getResolvedKiroExecutable(): string | null | undefined {
+  const resolved = getResolvedWithSettings(KIRO_CLI_LOOKUP)
+  return resolved === undefined ? undefined : (resolved?.path ?? null)
+}
+
+export async function probeKiroCliAvailability(): Promise<boolean> {
+  return Boolean(await resolveKiroExecutable())
+}
+
+export const CURSOR_CLI_LOOKUP: CliExecutableLookup = {
+  command: 'cursor-agent',
+  fallbackCommands: ['agent'],
+  envOverride: 'TUFF_CURSOR_CLI_PATH'
+}
+
+export async function resolveCursorExecutable(): Promise<string | null> {
+  return (await resolveWithSettings(CURSOR_CLI_LOOKUP))?.path ?? null
+}
+
+export function getResolvedCursorExecutable(): string | null | undefined {
+  const resolved = getResolvedWithSettings(CURSOR_CLI_LOOKUP)
+  return resolved === undefined ? undefined : (resolved?.path ?? null)
+}
+
+export async function probeCursorCliAvailability(): Promise<boolean> {
+  return Boolean(await resolveCursorExecutable())
+}
+
+const ALL_CLI_LOOKUPS: readonly CliExecutableLookup[] = [
+  PI_CLI_LOOKUP,
+  OMP_CLI_LOOKUP,
+  CODEX_CLI_LOOKUP,
+  CLAUDE_CLI_LOOKUP,
+  CODEX_ACP_LOOKUP,
+  CLAUDE_ACP_LOOKUP,
+  ANTIGRAVITY_CLI_LOOKUP,
+  OPENCODE_CLI_LOOKUP,
+  GEMINI_CLI_LOOKUP,
+  KIRO_CLI_LOOKUP,
+  CURSOR_CLI_LOOKUP
+]
+
 export function resetAllCliExecutableCaches(): void {
-  resetCliExecutableCache(PI_CLI_LOOKUP.command)
-  resetCliExecutableCache(OMP_CLI_LOOKUP.command)
-  resetCliExecutableCache(CODEX_CLI_LOOKUP.command)
-  resetCliExecutableCache(CLAUDE_CLI_LOOKUP.command)
-  resetCliExecutableCache(CODEX_ACP_LOOKUP.command)
-  resetCliExecutableCache(CLAUDE_ACP_LOOKUP.command)
+  for (const lookup of ALL_CLI_LOOKUPS) {
+    resetCliExecutableCache(lookup.command)
+  }
 }
 
 /**
@@ -266,28 +407,45 @@ export interface CliExecutablesSummary {
   omp: 'omp' | 'absent'
   codex: 'codex' | 'absent'
   claude: 'claude' | 'absent'
+  antigravity: 'agy' | 'absent'
+  opencode: 'opencode' | 'absent'
+  gemini: 'gemini' | 'absent'
+  kiro: 'kiro-cli' | 'kiro' | 'absent'
+  cursor: 'cursor-agent' | 'agent' | 'absent'
 }
 
 export function describeResolvedCliExecutables(): CliExecutablesSummary {
+  const kiroCmd = getResolvedWithSettings(KIRO_CLI_LOOKUP)?.command
+  const cursorCmd = getResolvedWithSettings(CURSOR_CLI_LOOKUP)?.command
   return {
     pi: getResolvedPiExecutable() === undefined ? 'unprobed' : (getResolvedPiForm() ?? 'absent'),
     omp: getResolvedOmpExecutable() ? 'omp' : 'absent',
     codex: getResolvedCodexExecutable() ? 'codex' : 'absent',
-    claude: getResolvedClaudeExecutable() ? 'claude' : 'absent'
+    claude: getResolvedClaudeExecutable() ? 'claude' : 'absent',
+    antigravity: getResolvedAntigravityExecutable() ? 'agy' : 'absent',
+    opencode: getResolvedOpencodeExecutable() ? 'opencode' : 'absent',
+    gemini: getResolvedGeminiExecutable() ? 'gemini' : 'absent',
+    kiro: kiroCmd === 'kiro-cli' || kiroCmd === 'kiro' ? kiroCmd : 'absent',
+    cursor: cursorCmd === 'cursor-agent' || cursorCmd === 'agent' ? cursorCmd : 'absent'
   }
 }
 
 /**
- * Resolves all four CLIs with the current settings overrides, so config assembly — which reads the
+ * Resolves all local CLIs with the current settings overrides, so config assembly — which reads the
  * memo synchronously on every invoke — sees each one as present or absent rather than unprobed.
- * A CLI that fails to resolve is just absent: most machines do not have all four.
+ * A CLI that fails to resolve is just absent: most machines do not have every CLI installed.
  */
 export async function probeAllCliExecutables(): Promise<CliExecutablesSummary> {
   await Promise.allSettled([
     probeOmpCliAvailability(),
     probePiCliAvailability(),
     probeCodexCliAvailability(),
-    probeClaudeCliAvailability()
+    probeClaudeCliAvailability(),
+    probeAntigravityCliAvailability(),
+    probeOpencodeCliAvailability(),
+    probeGeminiCliAvailability(),
+    probeKiroCliAvailability(),
+    probeCursorCliAvailability()
   ])
   return describeResolvedCliExecutables()
 }
@@ -894,6 +1052,51 @@ export const LOCAL_CLI_PROFILE_SPECS: CliAgentProfileSpec[] = [
     systemPrompt:
       'You are OMP, operating as a local workspace agent. Use host tools to inspect files, execute tasks, and coordinate with the user.',
     getExecutable: getResolvedOmpExecutable
+  },
+  {
+    id: ANTIGRAVITY_CLI_PROFILE_ID,
+    name: 'Antigravity',
+    description: 'Local Antigravity CLI agent (ACP) with host tools.',
+    providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
+    systemPrompt:
+      'You are Antigravity, operating as a local workspace agent. Use host tools to inspect files, execute tasks, and coordinate with the user.',
+    getExecutable: getResolvedAntigravityExecutable
+  },
+  {
+    id: OPENCODE_CLI_PROFILE_ID,
+    name: 'OpenCode',
+    description: 'Local OpenCode CLI agent (ACP) with host tools.',
+    providerId: OPENCODE_CLI_PROVIDER_ID,
+    systemPrompt:
+      'You are OpenCode, operating as a local workspace agent. Use host tools to inspect files, execute tasks, and coordinate with the user.',
+    getExecutable: getResolvedOpencodeExecutable
+  },
+  {
+    id: GEMINI_CLI_PROFILE_ID,
+    name: 'Gemini CLI',
+    description: 'Local Gemini CLI agent (ACP) with host tools.',
+    providerId: GEMINI_CLI_PROVIDER_ID,
+    systemPrompt:
+      'You are Gemini CLI, operating as a local workspace agent. Use host tools to inspect files, execute tasks, and coordinate with the user.',
+    getExecutable: getResolvedGeminiExecutable
+  },
+  {
+    id: KIRO_CLI_PROFILE_ID,
+    name: 'Kiro',
+    description: 'Local Kiro CLI agent (ACP) with host tools.',
+    providerId: KIRO_CLI_PROVIDER_ID,
+    systemPrompt:
+      'You are Kiro, operating as a local workspace agent. Use host tools to inspect files, execute tasks, and coordinate with the user.',
+    getExecutable: getResolvedKiroExecutable
+  },
+  {
+    id: CURSOR_CLI_PROFILE_ID,
+    name: 'Cursor',
+    description: 'Local Cursor Agent CLI (ACP) with host tools.',
+    providerId: CURSOR_CLI_PROVIDER_ID,
+    systemPrompt:
+      'You are Cursor Agent, operating as a local workspace agent. Use host tools to inspect files, execute tasks, and coordinate with the user.',
+    getExecutable: getResolvedCursorExecutable
   }
 ]
 
@@ -901,5 +1104,10 @@ export const CLI_PROFILE_PROVIDER_MAP: Readonly<Record<string, string>> = Object
   'default-pi': PI_CLI_PROVIDER_ID,
   [CLAUDE_CLI_PROFILE_ID]: CLAUDE_CLI_PROVIDER_ID,
   [CODEX_CLI_PROFILE_ID]: CODEX_CLI_PROVIDER_ID,
-  [OMP_CLI_PROFILE_ID]: OMP_CLI_PROVIDER_ID
+  [OMP_CLI_PROFILE_ID]: OMP_CLI_PROVIDER_ID,
+  [ANTIGRAVITY_CLI_PROFILE_ID]: ANTIGRAVITY_CLI_PROVIDER_ID,
+  [OPENCODE_CLI_PROFILE_ID]: OPENCODE_CLI_PROVIDER_ID,
+  [GEMINI_CLI_PROFILE_ID]: GEMINI_CLI_PROVIDER_ID,
+  [KIRO_CLI_PROFILE_ID]: KIRO_CLI_PROVIDER_ID,
+  [CURSOR_CLI_PROFILE_ID]: CURSOR_CLI_PROVIDER_ID
 })

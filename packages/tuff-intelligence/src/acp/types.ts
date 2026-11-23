@@ -126,24 +126,34 @@ export interface AcpUsageUpdate {
 
 export type AcpSessionUpdateType
   = | 'available_commands_update'
+    | 'current_mode_update'
     | 'session_info_update'
     | 'config_option_update'
     | 'agent_thought_chunk'
     | 'agent_message_chunk'
+    | 'user_message_chunk'
+    | 'plan'
     | 'usage_update'
     | 'tool_call'
     | 'tool_call_update'
     | 'tool_result'
+    | (string & {})
 
 export interface AcpSessionUpdateNotification {
   sessionId: string
   update: {
     sessionUpdate: AcpSessionUpdateType
-    content?: {
-      type: string
-      text?: string
-      [key: string]: unknown
-    }
+    content?:
+      | {
+          type: string
+          text?: string
+          [key: string]: unknown
+        }
+      | Array<{
+          type?: string
+          text?: string
+          [key: string]: unknown
+        }>
     configOptions?: AcpConfigOption[]
     usage?: AcpUsageUpdate
     [key: string]: unknown
@@ -200,7 +210,18 @@ export interface AcpSessionCreateOptions {
   resumeSessionId?: string
 }
 
-export type CliRuntimeKind = 'omp' | 'codex' | 'claude'
+export const CLI_RUNTIME_KINDS = [
+  'omp',
+  'codex',
+  'claude',
+  'antigravity',
+  'opencode',
+  'gemini',
+  'kiro',
+  'cursor',
+] as const
+
+export type CliRuntimeKind = (typeof CLI_RUNTIME_KINDS)[number]
 export type CliRuntimeProtocol = 'acp' | 'codex-app-server' | 'claude-stream-json'
 export type CliPermissionRiskKind = 'read' | 'write' | 'execute'
 
@@ -281,7 +302,7 @@ export interface CliRuntimeClient {
 
 export interface AcpSpawnOptions {
   executablePath: string
-  args?: string[]
+  args?: readonly string[]
   cwd?: string
   env?: Record<string, string | undefined>
   clientInfo?: AcpClientInfo

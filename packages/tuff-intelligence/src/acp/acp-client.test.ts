@@ -4,6 +4,7 @@ import process from 'node:process'
 import { describe, expect, it } from 'vitest'
 import { OmpAcpClient, OmpAcpSession } from '../omp/omp-acp-client'
 import { AcpClient, AcpSession, mapDecisionToAcpPermissionResult } from './acp-client'
+import { CLI_RUNTIME_KINDS } from './types'
 
 /**
  * Spawns a real Node child process running an inline script to test real OS stdio pipes,
@@ -410,6 +411,136 @@ ${STANDARD_FAKE_ACP_SERVER}
       const session = await client.createSession({ cwd: process.cwd() })
       expect(session).toBeInstanceOf(OmpAcpSession)
       expect(session).toBeInstanceOf(AcpSession)
+    }
+    finally {
+      await client.close()
+    }
+  })
+
+  it('forwards arbitrary ACP spawn args verbatim and handles set_model fallback, array content blocks, and snake_case usage', async () => {
+    expect(CLI_RUNTIME_KINDS).toEqual([
+      'omp',
+      'codex',
+      'claude',
+      'antigravity',
+      'opencode',
+      'gemini',
+      'kiro',
+      'cursor',
+    ])
+
+    const quirkyServer = `
+const readline = require('node:readline');
+const rl = readline.createInterface({ input: process.stdin, terminal: false });
+const cliArgs = process.argv.slice(1);
+let selectedModel = null;
+
+function send(obj) {
+  process.stdout.write(JSON.stringify(obj) + '\\n');
+}
+
+rl.on('line', (line) => {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+  const msg = JSON.parse(trimmed);
+
+  if (msg.method === 'initialize') {
+    send({
+      jsonrpc: '2.0',
+      id: String(msg.id),
+      result: {
+        protocolVersion: 1,
+        agentInfo: { name: 'quirky-acp', version: '1.2.3' },
+      },
+    });
+    return;
+  }
+
+  if (msg.method === 'session/new') {
+    send({ jsonrpc: '2.0', id: msg.id, result: { sessionId: 'q-1' } });
+    return;
+  }
+
+  if (msg.method === 'session/set_config_option') {
+    send({
+      jsonrpc: '2.0',
+      id: msg.id,
+      error: { code: -32601, message: 'Method not found: session/set_config_option' },
+    });
+    return;
+  }
+
+  if (msg.method === 'session/set_model') {
+    selectedModel = msg.params?.modelId ?? null;
+    send({ jsonrpc: '2.0', id: msg.id, result: { ok: true } });
+    return;
+  }
+
+  if (msg.method === 'session/prompt') {
+    send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: msg.params.sessionId,
+        update: {
+          sessionUpdate: 'agent_thought_chunk',
+          content: [{ type: 'text', text: 'plan:' }, { type: 'text', text: selectedModel || 'none' }],
+        },
+      },
+    });
+    send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: msg.params.sessionId,
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: [{ type: 'text', text: 'args=' + cliArgs.join(',') }],
+        },
+      },
+    });
+    send({
+      jsonrpc: '2.0',
+      id: msg.id,
+      result: {
+        stopReason: 'end_turn',
+        usage: { input_tokens: 7, output_tokens: 3, total_tokens: 10, cached_read_tokens: 2 },
+      },
+    });
+    return;
+  }
+
+  if (msg.method === 'session/close') {
+    send({ jsonrpc: '2.0', id: msg.id, result: { closed: true } });
+  }
+});
+`
+    const client = await AcpClient.spawn({
+      executablePath: process.execPath,
+      args: ['-e', quirkyServer, '--', '--experimental-acp', '--stdio'],
+      label: 'gemini-acp',
+    })
+    try {
+      expect(client.agentInfo).toEqual({ name: 'quirky-acp', version: '1.2.3' })
+      const session = await client.createSession({
+        cwd: process.cwd(),
+        model: 'gemini-2.5-pro',
+      })
+      expect(session.currentModel).toBe('gemini-2.5-pro')
+
+      const events: CliRuntimeStreamEvent[] = []
+      for await (const event of session.promptStream('hello')) {
+        events.push(event)
+      }
+      expect(events).toEqual([
+        expect.objectContaining({ type: 'thinking', text: 'plan:gemini-2.5-pro' }),
+        expect.objectContaining({ type: 'delta', text: 'args=--experimental-acp,--stdio' }),
+        expect.objectContaining({
+          type: 'usage',
+          usage: { inputTokens: 7, outputTokens: 3, totalTokens: 10, cacheReadTokens: 2 },
+        }),
+      ])
+      await session.close()
     }
     finally {
       await client.close()
