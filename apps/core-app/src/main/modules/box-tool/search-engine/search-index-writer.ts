@@ -71,12 +71,20 @@ const pausedAdmissionScope = new AsyncLocalStorage<true>()
 const VISIBILITY_RETRY_DELAYS_MS = [100, 500, 2_000] as const
 
 /**
- * Indexes earlier versions created that nothing reads any more. `(provider_id, item_id)` is a
- * prefix of `(provider_id, item_id, keyword)`, which the planner already picks for every lookup by
- * item, so the shorter one only cost a write per keyword row: 419 MB and 2.8 M entries on a 7.6 GB
- * dev index, 2026-10-20.
+ * Indexes earlier versions created that nothing reads any more:
+ * - `idx_keyword_mappings_provider_item`: prefix of `(provider_id, item_id, keyword)` (419 MB dev).
+ * - `idx_keyword_mappings_keyword`: un-scoped `(keyword)` index with zero query callers (65 MB prod).
+ * - `idx_keyword_mappings_provider_cursor`: `(provider_id)` prefix of the remaining provider indexes,
+ *   formerly used only by the pre-A10 orphan sweep (76 MB prod).
+ * - `idx_search_index_meta_updated_at`: created by migration 0021 on live `search_index_meta`,
+ *   updated on every document write, with zero query callers.
  */
-const RETIRED_SEARCH_INDEX_INDEXES = ['idx_keyword_mappings_provider_item'] as const
+export const RETIRED_SEARCH_INDEX_INDEXES = [
+  'idx_keyword_mappings_provider_item',
+  'idx_keyword_mappings_keyword',
+  'idx_keyword_mappings_provider_cursor',
+  'idx_search_index_meta_updated_at'
+] as const
 /** Lets startup traffic go first; the drop reads every page it frees (8.9 s cold for that one). */
 const INDEX_RETIREMENT_DELAY_MS = 60_000
 

@@ -78,6 +78,8 @@ const focusReturn = createFocusReturn()
  * when the buttons change or the dialog unmounts.
  */
 const countdownTimers: Array<ReturnType<typeof setTimeout>> = []
+const activeTimers = new Set<ReturnType<typeof setTimeout>>()
+let isUnmounted = false
 
 /**
  * Cancels all pending button countdown timers.
@@ -87,12 +89,23 @@ function clearCountdownTimers(): void {
   countdownTimers.length = 0
 }
 
+function clearActiveTimers(): void {
+  activeTimers.forEach(timer => clearTimeout(timer))
+  activeTimers.clear()
+}
+
 /**
  * Utility function to sleep for a specified duration.
  * @param ms - Duration in milliseconds
  */
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      activeTimers.delete(timer)
+      resolve()
+    }, ms)
+    activeTimers.add(timer)
+  })
 }
 
 /**
@@ -111,14 +124,22 @@ function isDestructive(type?: ButtonState['type']): boolean {
  * @param btn.value - The underlying button state
  */
 async function clickBtn(btn: { value: ButtonState }): Promise<void> {
+  if (btn.value.loading || closing.value || isUnmounted)
+    return
+
   btn.value.loading = true
-  await sleep(200)
+  try {
+    await sleep(200)
+    if (isUnmounted || closing.value)
+      return
 
-  if (await btn.value.onClick()) {
-    await forClose()
+    if (await btn.value.onClick()) {
+      await forClose()
+    }
   }
-
-  btn.value.loading = false
+  finally {
+    btn.value.loading = false
+  }
 }
 
 /**
@@ -156,7 +177,7 @@ watchEffect((onCleanup) => {
           if (obj.value.time && obj.value.time > 0) {
             obj.value.time -= 1
             if (obj.value.time <= 0) {
-              _clickBtn(obj)
+              void _clickBtn(obj).catch(() => {})
               return
             }
             refresh()
@@ -178,15 +199,17 @@ onMounted(() => {
   baseZIndex.value = zIndexAllocator.next()
   focusReturn.save()
   if (wholeDom.value) {
-    wholeDom.value.focus()
+    wholeDom.value.focus({ preventScroll: true })
   }
   // The page holds still while the dialog is open.
   lockBodyScroll()
 })
 
 onUnmounted(() => {
+  isUnmounted = true
   unlockBodyScroll()
   clearCountdownTimers()
+  clearActiveTimers()
   focusReturn.restore()
 })
 
@@ -202,13 +225,15 @@ function keepTab(event: KeyboardEvent): void {
  * countdown fires.
  */
 async function forClose(): Promise<void> {
-  if (!wholeDom.value || closing.value)
+  if (!wholeDom.value || closing.value || isUnmounted)
     return
   clearCountdownTimers()
   focusReturn.restore()
   // The sheet drops at once and its parts fade from 50ms on (see `--closing`).
   closing.value = true
   await sleep(150)
+  if (isUnmounted)
+    return
   props.close()
 }
 </script>

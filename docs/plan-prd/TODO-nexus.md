@@ -1,6 +1,6 @@
 # Nexus Performance TODO
 
-> 更新时间：2026-11-17
+> 更新时间：2026-11-23
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台性能收口。全局执行顺序服从 [`TODO.md`](./TODO.md)。
 
 ## Goal
@@ -142,11 +142,11 @@
 
 - **Admin Console 迁移与退役 AI 运行时清理（已完成）**：`apps/nexus/app/pages/admin/*.vue` 下 **13/16** 个管理页（`analytics`、`audits`、`emergency`、`governance`、`images`、`intelligence-audits`、`intelligence-overview`、`provider-registry`、`reviews`、`risk`、`subscriptions`、`updates`、`users`；余 `index`、`codes`、`credits` 3 页）已统一迁移至 `AdminPageShell` 与 Admin Console Kit（`27a8e62ae`、`ae3225e09` 等），并已彻底移除退役的后台 AI Agent 运行时（`/api/admin/intelligence-agent/*`、`intelligence-lab/*` 及分析页 AI 面板，`14cbc855c`）。
 - **TuffEx & 文档同步基础设施更新**：`packages/tuffex` 已发布 `0.9.4`（`a2e2cbd9b`）；docs 导航 i18n keys（`#2216`）、docs section switch 样式首屏加载（`3bdf85575`）及 `.github/workflows/sync-nexus-release-notes.yml`（`#2213`/`#2214`）已合入主线。
-- **当前唯一代码侧阻塞**：仍为下方 `2026-10-24` 记录的 `build:analyze-worker` 体积与 route-level 初始资产超预算回归（Worker gzip `> 2.70 MiB`、`dist > 60 MiB`），以及外部 `--require-deployed-preview` 门禁（待后续 route-level code splitting / CSS 收口并补充真实 deployed preview HAR）。
+- **代码侧构建/预算门禁已清零（2026-11-23）**：下方 `2026-10-24` 记录的 `build:analyze-worker` 体积与 route-level 初始资产预算回归已通过 PR `#2230` 与 PR `#2255`（`a5532b389`）彻底收口，并将 `pnpm -C apps/nexus build:analyze-worker` 接入 `.github/workflows/ci.yml` `job_nexus` 阻断门禁；当前仅剩外部 `--require-deployed-preview` Cloudflare Pages 真实 preview HAR 与本地 runtime credential / 开发实例复验项保持开放。
 
 ## 2026-10-24 本轮剩余
 
-- [ ] **生产 bundle / CSS 预算收口**：本轮 `pnpm -C apps/nexus run build` 已通过，但 `build:analyze-worker` 仍被当前工作区的初始资产、shared icon CSS、Worker gzip 与 dist 总大小预算拦截；观测值包括 Worker gzip `2.76 MiB > 2.70 MiB`、dist `106.34 MiB > 60 MiB`，以及 docs/updates/auth route family 的初始 JS/CSS 超预算。下一步做独立的 route-level code splitting / CSS 收口，再重跑完整预算门禁；不能把本地构建通过当作预算通过。
+- [x] **生产 bundle / CSS 预算收口（2026-11-23，PR `#2230` + PR `#2255` `a5532b389`）**：`pnpm -C apps/nexus run build` 与 `pnpm -C apps/nexus run build:analyze-worker`（`check-worker-bundle.mjs` 原始预算阈值与白名单未放宽）已 100% 通过并接入 CI `job_nexus` 阻断门禁。实测收敛指标：Worker 可执行 JS `10.62 MiB <= 20.00 MiB`（565 files）、Worker gzip `2.35 MiB <= 2.70 MiB`（由 `2.76 MiB` → `2.53 MiB` → `2.35 MiB`）、`dist` runtime `76.17 MiB <= 95.00 MiB`（总计 `107.24 MiB` / content `31.07 MiB`）、shared entry CSS `123.8 KiB / 19.2 KiB gz <= 278 KiB / 50 KiB gz`（`0` `--un-icon:`）、`779 routes / 6 families` 初始资产 `0` 违规、`client.precomputed.mjs` 解析重序列化去重降至 `718.7 KiB`（`75.8 KiB gz`）、SSR `@talex-touch/tuffex/charts` 降至 `0 B`。外部 `--require-deployed-preview` Cloudflare Pages preview HAR 仍作为最终线上结论独立追踪。
 - [ ] **Pages API runtime smoke**：本地 Pages 预览的根页面返回 `200` 且 `cache-control: public, max-age=300, s-maxage=300` 正确；`/api/releases?limit=12&assets=featured` 仍因本地 Worker build/runtime credential 未配置有效值返回 `NEXUS_RUNTIME_CREDENTIAL_INVALID`。下一步使用有效本地 runtime bindings 或 deployed preview 复验 API，不用当前结果宣称生产 API 已验收。
 - [ ] **开发实例切换**：代码已将 `nexus:dev` 指向 `dev:pure`；现有 3200 端口进程仍是旧 supervisor，需重启开发实例后再做一次实际页面 smoke。
 

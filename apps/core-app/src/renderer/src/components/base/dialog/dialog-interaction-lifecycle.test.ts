@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
+import {
+  TxBlowDialog,
+  TxBottomDialog,
+  TxPopperDialog,
+  TxTouchTip
+} from '@talex-touch/tuffex/dialog'
 import { mount } from '@vue/test-utils'
 import type { Component } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import TBlowDialog from './TBlowDialog.vue'
-import TBottomDialog from './TBottomDialog.vue'
 import TDialogMention from './TDialogMention.vue'
-import TPopperDialog from './TPopperDialog.vue'
-import TouchTip from './TouchTip.vue'
 
 // The dialogs' own labels come from vue-i18n. These tests are about rendering and focus, so the
 // translator answers in English instead of installing the catalogs.
@@ -53,10 +55,10 @@ type ButtonDialogDefinition = {
 const buttonDialogs: ButtonDialogDefinition[] = [
   {
     buttonSelector: '.tx-bottom-dialog__row',
-    component: TBottomDialog,
+    component: TxBottomDialog,
     closeDelay: 350,
     lockStrategy: 'body-overflow',
-    name: 'TBottomDialog',
+    name: 'TxBottomDialog',
     propName: 'btns'
   },
   {
@@ -69,10 +71,10 @@ const buttonDialogs: ButtonDialogDefinition[] = [
   },
   {
     buttonSelector: '.tx-button',
-    component: TouchTip,
+    component: TxTouchTip,
     closeDelay: 400,
     lockStrategy: 'body-overflow',
-    name: 'TouchTip',
+    name: 'TxTouchTip',
     propName: 'buttons'
   }
 ]
@@ -245,7 +247,7 @@ describe('base dialog interaction and lifecycle contracts', () => {
     }
   )
 
-  it('TBlowDialog focuses its dialog surface, does not lock scrolling, and restores focus after close', async () => {
+  it('TxBlowDialog focuses its dialog surface, does not lock scrolling, and restores focus after close', async () => {
     vi.useFakeTimers()
 
     const app = document.createElement('main')
@@ -257,7 +259,7 @@ describe('base dialog interaction and lifecycle contracts', () => {
 
     const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
     const close = vi.fn()
-    const wrapper = mount(TBlowDialog, {
+    const wrapper = mount(TxBlowDialog, {
       attachTo: document.body,
       props: {
         close,
@@ -288,7 +290,7 @@ describe('base dialog interaction and lifecycle contracts', () => {
     expect(document.activeElement).toBe(trigger)
   })
 
-  it('TPopperDialog uses refraction surface, localizes Confirm, closes on Escape, and restores focus', async () => {
+  it('TxPopperDialog uses refraction surface, renders Confirm, closes on Escape, and restores focus', async () => {
     vi.useFakeTimers()
 
     const trigger = document.createElement('button')
@@ -297,7 +299,7 @@ describe('base dialog interaction and lifecycle contracts', () => {
     trigger.focus()
 
     const close = vi.fn()
-    const wrapper = mount(TPopperDialog, {
+    const wrapper = mount(TxPopperDialog, {
       attachTo: document.body,
       props: {
         close,

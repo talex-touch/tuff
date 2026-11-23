@@ -75,11 +75,13 @@ async function getFileIndexedSourceHealth(): Promise<IndexedSourceHealth> {
   // 公共健康面只携带稳定分类码；原始错误文本保留在主进程本地诊断。
   const lastError = status.errorCode || status.startupErrorCode || null
   const hasPendingPermissionRoots = fileProvider.getPendingWatchPermissionPaths().length > 0
+  // Transient retryable failures (e.g. SQLITE_BUSY) degrade health without halting watch/rebuild.
+  const isHaltingFailure = status.initializationFailed && status.retryable !== true
 
   return {
     status: hasPendingPermissionRoots
       ? 'permission-required'
-      : status.initializationFailed
+      : isHaltingFailure
         ? 'error'
         : isWarming
           ? 'warming'
@@ -105,7 +107,7 @@ async function getFileIndexedSourceHealth(): Promise<IndexedSourceHealth> {
 function resolveFileSourceProgressStatus(
   status: ReturnType<typeof fileProvider.getIndexingStatus>
 ): IndexedSourceProgressStatus {
-  if (status.initializationFailed) return 'failed'
+  if (status.initializationFailed && status.retryable !== true) return 'failed'
   if (status.progress.stage === 'completed') return 'complete'
   if (status.progress.stage === 'idle') return 'idle'
   if (status.isInitializing) {

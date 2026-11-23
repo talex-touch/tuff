@@ -2,7 +2,8 @@ import type { IndexedSourceRecordBatch } from '@talex-touch/utils/search'
 import {
   IndexedSourceResetReasons,
   IndexedSourceScanReasons,
-  isIndexedSourceAdmissionReady
+  isIndexedSourceAdmissionReady,
+  resolveIndexedSourceTaskEligibility
 } from '@talex-touch/utils/search'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildFileIndexedSource, buildFileIndexedSourceDescriptor } from './file-indexed-source'
@@ -145,6 +146,90 @@ describe('fileIndexedSource', () => {
         itemCount: 12
       })
     ])
+  })
+
+  it('keeps source health degraded and watch/scan/reconcile eligible on retryable SQLITE_BUSY failure while halting on non-retryable scan failure', async () => {
+    const source = buildFileIndexedSource()
+
+    fileProviderMock.getIndexingStatus.mockReturnValue({
+      isInitializing: false,
+      startupPending: false,
+      startupReady: true,
+      initializationFailed: false,
+      errorCode: 'FILE_INDEX_DATABASE_BUSY',
+      retryable: true,
+      startupErrorCode: null,
+      startTime: null,
+      progress: { stage: 'idle', current: 0, total: 0 }
+    })
+
+    const busyHealth = await source.getHealth()
+    expect(busyHealth).toMatchObject({
+      status: 'degraded',
+      watchState: 'active',
+      reason: 'FILE_INDEX_DATABASE_BUSY',
+      lastError: 'FILE_INDEX_DATABASE_BUSY'
+    })
+    await expect(source.getProgress?.()).resolves.toMatchObject({
+      status: 'idle',
+      reason: 'FILE_INDEX_DATABASE_BUSY'
+    })
+    for (const task of ['watch', 'scan', 'reconcile'] as const) {
+      expect(
+        resolveIndexedSourceTaskEligibility({
+          descriptor: source.descriptor,
+          health: busyHealth,
+          task
+        })
+      ).toEqual({ eligible: true })
+    }
+
+    // Defense-in-depth: even if a caller passes initializationFailed: true with retryable: true,
+    // the source degrades rather than latching into unrecoverable `error`.
+    fileProviderMock.getIndexingStatus.mockReturnValue({
+      isInitializing: false,
+      startupPending: false,
+      startupReady: true,
+      initializationFailed: true,
+      errorCode: 'FILE_INDEX_DATABASE_BUSY',
+      retryable: true,
+      startupErrorCode: null,
+      startTime: null,
+      progress: { stage: 'idle', current: 0, total: 0 }
+    })
+    await expect(source.getHealth()).resolves.toMatchObject({
+      status: 'degraded',
+      lastError: 'FILE_INDEX_DATABASE_BUSY'
+    })
+
+    // Non-retryable scan failures still report `error` and block automatic task eligibility.
+    fileProviderMock.getIndexingStatus.mockReturnValue({
+      isInitializing: false,
+      startupPending: false,
+      startupReady: true,
+      initializationFailed: true,
+      errorCode: 'FILE_INDEX_SCAN_FAILED',
+      retryable: false,
+      startupErrorCode: null,
+      startTime: null,
+      progress: { stage: 'idle', current: 0, total: 0 }
+    })
+    const fatalHealth = await source.getHealth()
+    expect(fatalHealth).toMatchObject({
+      status: 'error',
+      lastError: 'FILE_INDEX_SCAN_FAILED'
+    })
+    await expect(source.getProgress?.()).resolves.toMatchObject({
+      status: 'failed',
+      reason: 'FILE_INDEX_SCAN_FAILED'
+    })
+    expect(
+      resolveIndexedSourceTaskEligibility({
+        descriptor: source.descriptor,
+        health: fatalHealth,
+        task: 'scan'
+      })
+    ).toEqual({ eligible: false, reason: 'health:error' })
   })
 
   it('exposes FileProvider index flush evidence through indexed source diagnostics', async () => {

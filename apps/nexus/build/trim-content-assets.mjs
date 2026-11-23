@@ -1,8 +1,8 @@
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { dirname, join, relative, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const nexusRoot = join(currentDir, '..')
@@ -101,190 +101,192 @@ function trimPrerenderedClientSqlDumps() {
   console.log(`[nexus-content-assets] verified Cloudflare root SQL dumps: ${verifiedDumps.join(', ')}`)
   console.log(`[nexus-content-assets] removed prerendered client SQL dumps: ${removedBytes} bytes`)
 }
-function findMatchingBrace(source, openingIndex) {
-  let depth = 0
-  let quote = null
-  let escaped = false
+const PRECOMPUTED_MANIFEST_DEMO_LOADER_PREFIX = '../nexus-demo-loader:'
+const PRECOMPUTED_MANIFEST_DEMO_COMPONENT_RE = /(?:^|\/)components\/content\/demos\//
+const PRECOMPUTED_MANIFEST_STATIC_ASSET_RE = /\.(?:css|ttf|woff2?|jpg|jpeg|png|svg|webp)$/i
+const PRECOMPUTED_MANIFEST_BUCKETS = ['scripts', 'styles', 'preload']
+const VAR_NAME_ALPHABET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$'
 
-  for (let index = openingIndex; index < source.length; index++) {
-    const character = source[index]
-    if (quote) {
-      if (escaped)
-        escaped = false
-      else if (character === '\\')
-        escaped = true
-      else if (character === quote)
-        quote = null
-      continue
-    }
-
-    if (character === '"' || character === '\'' || character === '`') {
-      quote = character
-      continue
-    }
-    if (character === '{') {
-      depth++
-      continue
-    }
-    if (character === '}') {
-      depth--
-      if (depth === 0)
-        return index
-    }
-  }
-
-  throw new Error(`unclosed object starting at ${openingIndex}`)
+function indexToVarName(index) {
+  let n = index
+  let out = ''
+  do {
+    out = VAR_NAME_ALPHABET[n % VAR_NAME_ALPHABET.length] + out
+    n = Math.floor(n / VAR_NAME_ALPHABET.length) - 1
+  } while (n >= 0)
+  return `_${out}`
 }
 
-function trimTopLevelProperties(source, marker, keyPrefix) {
-  const markerIndex = source.indexOf(marker)
-  if (markerIndex === -1)
-    throw new Error(`precomputed manifest marker is missing: ${marker}`)
+export function classifyPrecomputedDependency(key, entrypointSet) {
+  if (entrypointSet.has(key))
+    return 'keep'
+  if (key.startsWith(PRECOMPUTED_MANIFEST_DEMO_LOADER_PREFIX))
+    return 'demo-loader'
+  if (PRECOMPUTED_MANIFEST_DEMO_COMPONENT_RE.test(key))
+    return 'demo-component'
+  if (PRECOMPUTED_MANIFEST_STATIC_ASSET_RE.test(key))
+    return 'static-asset'
+  return 'keep'
+}
 
-  const openingIndex = markerIndex + marker.length - 1
-  const closingIndex = findMatchingBrace(source, openingIndex)
-  const removals = []
-  let depth = 1
-  let index = openingIndex + 1
+/**
+ * Rebuilds `client.precomputed.mjs` from the parsed manifest object instead of slicing its
+ * minified source: Vite/Nitro hoists shared asset descriptor objects (`e={...}`) inside
+ * property values, so deleting a demo key by string slicing would break later references.
+ *
+ * `vue-bundle-renderer` only looks up keys present in `entrypoints` or registered via
+ * `ssrContext.modules` during SSR; client-only demo loaders, demo SFCs (never bundled into
+ * the Worker), and top-level static asset keys (`.css`, fonts, images) are unreachable at
+ * Worker runtime because every `.vue`/`.js` entry already carries its flattened `styles`
+ * and `preload` maps.
+ */
+export function serializePrecomputedClientManifest(manifest) {
+  const dependencies = manifest?.dependencies && typeof manifest.dependencies === 'object'
+    ? manifest.dependencies
+    : {}
+  const entrypoints = Array.isArray(manifest?.entrypoints) ? manifest.entrypoints : []
+  const entrypointSet = new Set(entrypoints)
 
-  while (index < closingIndex) {
-    const character = source[index]
-    if (character === '"' || character === '\'' || character === '`') {
-      const quote = character
-      let end = index + 1
-      let escaped = false
-      while (end < closingIndex) {
-        const value = source[end]
-        if (escaped)
-          escaped = false
-        else if (value === '\\')
-          escaped = true
-        else if (value === quote)
-          break
-        end++
-      }
+  const retainedEntries = []
+  let removedDemoLoaders = 0
+  let removedDemoComponents = 0
+  let removedStaticAssets = 0
+  let removedPrefetchMaps = 0
 
-      const key = source.slice(index + 1, end)
-      if (depth === 1 && quote === '"' && key.startsWith(keyPrefix)) {
-        let valueStart = end + 1
-        while (/\s/.test(source[valueStart] ?? ''))
-          valueStart++
-        if (source[valueStart] !== ':') {
-          index = end + 1
-          continue
-        }
-        valueStart++
-        while (/\s/.test(source[valueStart] ?? ''))
-          valueStart++
-        if (source[valueStart] !== '{')
-          throw new Error(`precomputed demo property is not an object: ${key}`)
+  for (const [key, entry] of Object.entries(dependencies)) {
+    const classification = classifyPrecomputedDependency(key, entrypointSet)
+    if (classification === 'demo-loader') {
+      removedDemoLoaders++
+      continue
+    }
+    if (classification === 'demo-component') {
+      removedDemoComponents++
+      continue
+    }
+    if (classification === 'static-asset') {
+      removedStaticAssets++
+      continue
+    }
+    if (entry && typeof entry === 'object' && 'prefetch' in entry)
+      removedPrefetchMaps++
+    retainedEntries.push([key, entry])
+  }
 
-        let propertyEnd = findMatchingBrace(source, valueStart) + 1
-        while (/\s/.test(source[propertyEnd] ?? ''))
-          propertyEnd++
-        if (source[propertyEnd] === ',')
-          propertyEnd++
-        removals.push([index, propertyEnd])
-        index = propertyEnd
+  const leafCounts = new Map()
+  const leafJsonByObject = new WeakMap()
+  for (const [, entry] of retainedEntries) {
+    if (!entry || typeof entry !== 'object')
+      continue
+    for (const bucket of PRECOMPUTED_MANIFEST_BUCKETS) {
+      const map = entry[bucket]
+      if (!map || typeof map !== 'object')
         continue
+      for (const value of Object.values(map)) {
+        if (!value || typeof value !== 'object')
+          continue
+        let json = leafJsonByObject.get(value)
+        if (!json) {
+          json = JSON.stringify(value)
+          leafJsonByObject.set(value, json)
+        }
+        leafCounts.set(json, (leafCounts.get(json) ?? 0) + 1)
       }
+    }
+  }
 
-      index = end + 1
+  const jsonToVar = new Map()
+  const declarations = []
+  let varIndex = 0
+  for (const [json, count] of [...leafCounts.entries()].sort((a, b) => b[1] - a[1])) {
+    if (count < 2)
       continue
-    }
-
-    if (character === '{')
-      depth++
-    else if (character === '}')
-      depth--
-    index++
+    const name = indexToVarName(varIndex++)
+    jsonToVar.set(json, name)
+    declarations.push(`${name}=${json}`)
   }
 
-  for (let index = removals.length - 1; index >= 0; index--) {
-    const [start, end] = removals[index]
-    source = source.slice(0, start) + source.slice(end)
+  const serializedEntries = retainedEntries.map(([key, entry]) => {
+    const buckets = PRECOMPUTED_MANIFEST_BUCKETS.map((bucket) => {
+      const map = entry && typeof entry === 'object' && entry[bucket] && typeof entry[bucket] === 'object'
+        ? entry[bucket]
+        : {}
+      const pairs = Object.entries(map).map(([assetKey, value]) => {
+        const json = value && typeof value === 'object'
+          ? (leafJsonByObject.get(value) ?? JSON.stringify(value))
+          : JSON.stringify(value)
+        const ref = jsonToVar.get(json) ?? json
+        return `${JSON.stringify(assetKey)}:${ref}`
+      })
+      return `${bucket}:{${pairs.join(',')}}`
+    })
+    return `${JSON.stringify(key)}:{${buckets.join(',')}}`
+  })
+
+  const prefix = declarations.length ? `const ${declarations.join(',')};` : ''
+  const source = `${prefix}export default{dependencies:{${serializedEntries.join(',')}},entrypoints:${JSON.stringify(entrypoints)},modules:{}};`
+
+  return {
+    source,
+    keptDependencies: retainedEntries.length,
+    removedDemoLoaders,
+    removedDemoComponents,
+    removedStaticAssets,
+    removedPrefetchMaps,
   }
-  return { source, removed: removals.length }
 }
 
-function replaceLastObjectSection(source, marker, replacement) {
-  const markerIndex = source.lastIndexOf(marker)
-  if (markerIndex === -1)
-    throw new Error(`precomputed manifest marker is missing: ${marker}`)
-  const openingIndex = markerIndex + marker.length - 1
-  const closingIndex = findMatchingBrace(source, openingIndex)
-  return source.slice(0, openingIndex) + replacement + source.slice(closingIndex + 1)
-}
-function removeObjectProperties(source, marker) {
-  let removed = 0
-  let markerIndex = source.indexOf(marker)
-  while (markerIndex !== -1) {
-    const openingIndex = markerIndex + marker.length - 1
-    const closingIndex = findMatchingBrace(source, openingIndex)
-    let trailingIndex = closingIndex + 1
-    while (/\s/.test(source[trailingIndex] ?? ''))
-      trailingIndex++
-
-    const hasTrailingComma = source[trailingIndex] === ','
-    let start = markerIndex
-    const end = hasTrailingComma ? trailingIndex + 1 : trailingIndex
-    if (!hasTrailingComma) {
-      let previousIndex = markerIndex - 1
-      while (/\s/.test(source[previousIndex] ?? ''))
-        previousIndex--
-      if (source[previousIndex] === ',')
-        start = previousIndex
-    }
-
-    source = source.slice(0, start) + source.slice(end)
-    removed++
-    markerIndex = source.indexOf(marker, start)
-  }
-  return { source, removed }
-}
-
-function trimPrecomputedClientManifest() {
-  const manifestPath = walkFiles(workerRoot).find(file => file.endsWith('/chunks/build/client.precomputed.mjs'))
+export async function trimPrecomputedClientManifest(root = workerRoot) {
+  const manifestPath = walkFiles(root).find(file => file.endsWith('/chunks/build/client.precomputed.mjs'))
   if (!manifestPath)
-    return
+    return null
 
   const original = readFileSync(manifestPath, 'utf8')
-  let source = original
-  const trimmedDependencies = trimTopLevelProperties(source, 'dependencies:{', '../nexus-demo-loader:')
-  source = trimmedDependencies.source
-  source = replaceLastObjectSection(source, 'modules:{', '{}')
-  const trimmedPrefetch = removeObjectProperties(source, 'prefetch:{')
-  source = trimmedPrefetch.source
+  const moduleUrl = `${pathToFileURL(manifestPath).href}?t=${Date.now()}`
+  const loaded = await import(moduleUrl)
+  const manifest = loaded?.default
+  if (!manifest || typeof manifest !== 'object' || !manifest.dependencies)
+    throw new Error(`precomputed manifest default export is invalid: ${manifestPath}`)
 
-  if (source === original)
-    return
-  writeFileSync(manifestPath, source)
-  console.log(`[nexus-content-assets] trimmed client precomputed manifest: ${trimmedDependencies.removed} demo loaders, ${trimmedPrefetch.removed} prefetch maps; ${Buffer.byteLength(original) - Buffer.byteLength(source)} bytes removed`)
+  const result = serializePrecomputedClientManifest(manifest)
+  writeFileSync(manifestPath, result.source)
+  const removedBytes = Buffer.byteLength(original) - Buffer.byteLength(result.source)
+  console.log(
+    `[nexus-content-assets] trimmed client precomputed manifest: ${result.removedDemoLoaders} demo loaders, ${result.removedDemoComponents} demo components, ${result.removedStaticAssets} static asset keys, ${result.removedPrefetchMaps} prefetch maps (${result.keptDependencies} kept); ${removedBytes} bytes removed`,
+  )
+  return { ...result, removedBytes }
 }
 
+async function main() {
+  trimDuplicateSqliteWasm()
+  trimPrerenderedClientSqlDumps()
+  await trimPrecomputedClientManifest()
 
-trimDuplicateSqliteWasm()
-trimPrerenderedClientSqlDumps()
-trimPrecomputedClientManifest()
+  const remainingDuplicateWasm = walkFiles(nuxtRoot)
+    .map(file => relative(nuxtRoot, file))
+    .filter(file => /^sqlite3-[A-Za-z0-9_-]+\.wasm$/.test(file))
 
-const remainingDuplicateWasm = walkFiles(nuxtRoot)
-  .map(file => relative(nuxtRoot, file))
-  .filter(file => /^sqlite3-[A-Za-z0-9_-]+\.wasm$/.test(file))
+  if (remainingDuplicateWasm.length) {
+    console.error('[nexus-content-assets] duplicate sqlite wasm files remain:')
+    for (const file of remainingDuplicateWasm)
+      console.error(`  ${file}`)
+    process.exit(1)
+  }
 
-if (remainingDuplicateWasm.length) {
-  console.error('[nexus-content-assets] duplicate sqlite wasm files remain:')
-  for (const file of remainingDuplicateWasm)
-    console.error(`  ${file}`)
-  process.exit(1)
+  const remainingClientSqlDumps = walkFiles(distRoot)
+    .map(file => relative(distRoot, file))
+    .filter(file => /^__nuxt_content\/[A-Za-z0-9_-]+\/sql_dump\.txt$/.test(file))
+
+  if (remainingClientSqlDumps.length) {
+    console.error('[nexus-content-assets] prerendered client SQL dumps remain:')
+    for (const file of remainingClientSqlDumps)
+      console.error(`  ${file}`)
+    process.exit(1)
+  }
 }
 
-const remainingClientSqlDumps = walkFiles(distRoot)
-  .map(file => relative(distRoot, file))
-  .filter(file => /^__nuxt_content\/[A-Za-z0-9_-]+\/sql_dump\.txt$/.test(file))
-
-if (remainingClientSqlDumps.length) {
-  console.error('[nexus-content-assets] prerendered client SQL dumps remain:')
-  for (const file of remainingClientSqlDumps)
-    console.error(`  ${file}`)
-  process.exit(1)
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error)
+    process.exit(1)
+  })
 }
