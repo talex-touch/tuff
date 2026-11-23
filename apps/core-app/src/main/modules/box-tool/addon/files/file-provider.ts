@@ -19,7 +19,6 @@ import type {
   FileIndexStats
 } from '@talex-touch/utils/transport/events/types'
 import type {
-  IndexedFileSourceRecordRow,
   IndexedSourceDelta,
   IndexedSourceEvidence,
   IndexedSourceRecord,
@@ -58,7 +57,6 @@ import {
   IndexedWriteFlushSnapshotService,
   IndexedSourceResetReasons,
   IndexedSourceScanReasons,
-  mapIndexedFileSourceRecord,
   resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
 import { and, eq, gt, inArray } from 'drizzle-orm'
@@ -77,12 +75,7 @@ import { deviceIdleService } from '../../../../service/device-idle-service'
 import { formatDuration } from '../../../../utils/logger'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { getMainConfig, saveMainConfig } from '../../../storage'
-import {
-  chunkArray,
-  getTypeTagsForExtension,
-  KEYWORD_MAP,
-  WHITELISTED_EXTENSIONS
-} from './constants'
+import { chunkArray, WHITELISTED_EXTENSIONS } from './constants'
 import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
 import { getFileTraversalExclusionReason, getScanChildExclusionReason } from './utils'
 import {
@@ -217,6 +210,17 @@ import {
   type FileUpdateRecord
 } from './file-provider-index-contracts'
 import { resolveFileProviderBaseWatchPaths } from './file-provider-watch-paths'
+import {
+  awaitWithAbort,
+  sleepWithAbort,
+  yieldToEventLoop
+} from './services/file-provider-async-utils'
+import {
+  classifyFailedFileIndexError,
+  mapFileToIndexedSourceRecord,
+  mapWorkerResultToIndexedSourceRecord,
+  toFileTimestamp
+} from './services/file-provider-record-mapper'
 
 const FILE_ICON_WRITE_MAX_QUEUE = 24
 /**
@@ -233,58 +237,6 @@ const FILE_INDEX_STATS_CACHE_MS = 1_000
 const FILE_PROVIDER_BASE_WATCH_PATHS_ENV = 'TUFF_FILE_PROVIDER_BASE_WATCH_PATHS'
 
 const EMPTY_OPENER_LOGO = `data:image/svg+xml;utf8,${encodeURIComponent(emptyOpenerSvg.trim())}`
-
-/**
- * Stable public classification for a failed indexed file. The raw parser or
- * SQLite error text stays in main-process diagnostics; only the code crosses.
- */
-function classifyFailedFileIndexError(lastError: string | null): string | null {
-  if (!lastError) return null
-  return lastError.includes('SQLITE_BUSY') ? 'FILE_INDEX_DATABASE_BUSY' : 'FILE_INDEX_ITEM_FAILED'
-}
-
-// class ProgressLogger {
-//   private processed = 0
-//   private lastLoggedAt = 0
-//   private readonly startTime = performance.now()
-
-//   constructor(
-//     private readonly label: string,
-//     private readonly total: number,
-//     private readonly logFn: (message: string) => void,
-//     private readonly intervalMs = 5_000
-//   ) {}
-
-//   advance(by: number): void {
-//     if (by <= 0) {
-//       return
-//     }
-//     this.processed = Math.min(this.processed + by, this.total)
-//     this.maybeLog()
-//   }
-
-//   finish(): void {
-//     this.maybeLog(true)
-//   }
-
-//   private maybeLog(force = false): void {
-//     const now = performance.now()
-//     if (!force && this.processed < this.total && now - this.lastLoggedAt < this.intervalMs) {
-//       return
-//     }
-
-//     this.lastLoggedAt = now
-//     const safeTotal = this.total || 0
-//     const percent = safeTotal > 0 ? Math.min(100, (this.processed / safeTotal) * 100) : 100
-//     const elapsedSec = (now - this.startTime) / 1000
-//     const totalDisplay = safeTotal > 0 ? safeTotal.toString() : '–'
-
-//     const progress = `${this.label} ${this.processed}/${totalDisplay} (${percent.toFixed(
-//       1
-//     )}%) elapsed ${elapsedSec.toFixed(1)}s`
-//     this.logFn(progress)
-//   }
-// }
 
 const FILE_INDEX_SEARCH_DRAIN_TIMEOUT_MS = 30_000
 const FILE_INDEX_SEARCH_DRAIN_INTERVAL_MS = 100
@@ -464,7 +416,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     isInitializing: () => this.isInitializing !== null,
     isWithinWatchRoots: (filePath) => this.isWithinWatchRoots(filePath),
     normalizePath: (filePath) => this.normalizePath(filePath),
-    mapRecord: (record) => this.mapFileToIndexedSourceRecord(record),
+    mapRecord: (record) => mapFileToIndexedSourceRecord(record, this.id),
     onBaseCommitReady: () => this.enrichmentResumeService.resume('base-maintenance-commit'),
     onCapacityEvicted: () => {
       if (isIndexFullFailure(this.initializationFailure)) this.initializationFailure = null
@@ -492,7 +444,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     onStaleEmbeddingsRequeued: (reason) => this.enrichmentResumeService.resume(reason),
     getWatchPaths: () => this.watchPaths,
     countIndexedRows: (reason) => this.countSearchIndexByProvider(this.id, reason),
-    mapRecord: (row) => this.mapFileToIndexedSourceRecord(row),
+    mapRecord: (row) => mapFileToIndexedSourceRecord(row, this.id),
     emitRecordBatch: (batch) => this.emitIndexedSourceRecordBatchFromBatch(batch),
     logInfo: (message, meta) => this.logInfo(message, meta),
     logDebug: (message, meta) => this.logDebug(message, meta),
@@ -544,8 +496,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       waitForIdle: async () => {
         await appTaskGate.waitForIdle()
       },
-      yieldToEventLoop: async () => await new Promise<void>((resolve) => setImmediate(resolve)),
-      toTimestamp: (value) => this.toTimestamp(value),
+      yieldToEventLoop,
+      toTimestamp: toFileTimestamp,
       logDebug: (message, meta) => this.logDebug(message, meta),
       logWarn: (message, error, meta) => this.logWarn(message, error, meta),
       iconService,
@@ -613,9 +565,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.scanStrategyService = new FileProviderScanStrategyService({
       getCompletedPaths: (watchPaths) => this.scanProgressService.getCompletedPaths(watchPaths),
       normalizePath: (rawPath) => this.normalizePath(rawPath),
-      yieldAfterRead: async () => {
-        await new Promise<void>((resolve) => setImmediate(resolve))
-      },
+      yieldAfterRead: yieldToEventLoop,
       now: () => performance.now(),
       formatDuration,
       logDebug: (message, meta) => this.logDebug(message, meta),
@@ -659,7 +609,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       maintenance: this.maintenanceService,
       planner: this.incrementalWritePlanner,
       readRows: (paths) => readFileRowsByPath(this.dbUtils, paths),
-      mapRecord: (row) => this.mapFileToIndexedSourceRecord(row),
+      mapRecord: (row) => mapFileToIndexedSourceRecord(row, this.id),
       applyBatchWithPersistence: (batch, records) =>
         this.requireRuntimeMutationDelegate().applyBatchWithPersistence(batch, records),
       emitCommittedScanProgress: (count, options) => this.emitCommittedScanProgress(count, options)
@@ -672,7 +622,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       ensureFileSystemWatchers: () => this.ensureFileSystemWatchers(),
       isWithinWatchRoots: (rawPath) => this.isWithinWatchRoots(rawPath),
       getWatchDepthForPath: resolveWatchDepthForPath,
-      mapFileToIndexedSourceRecord: (record) => this.mapFileToIndexedSourceRecord(record),
+      mapFileToIndexedSourceRecord: (record) => mapFileToIndexedSourceRecord(record, this.id),
       scanDirectoryBatchesWithWorker: (dirPath, excludePathsSet, signal, onStats, options) =>
         this.scanDirectoryBatchesWithWorker(dirPath, excludePathsSet, signal, onStats, options),
       buildFileRecord: (rawPath, options) => this.buildFileRecord(rawPath, options),
@@ -769,9 +719,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           runOptions
         ),
       emitProgress: (current, total) => this.progressState.emit('scanning', current, total),
-      yieldAfterScan: async () => {
-        await new Promise<void>((resolve) => setImmediate(resolve))
-      },
+      yieldAfterScan: yieldToEventLoop,
       now: () => performance.now(),
       formatDuration,
       logDebug: (message, meta) => this.logDebug(message, meta),
@@ -788,26 +736,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       persistAndEmitBatch: (records, runOptions) =>
         this.persistAndPublishFullScanBatch(records, runOptions),
       emitProgress: (current, total) => this.progressState.emit('indexing', current, total),
-      sleep: async (durationMs, runOptions) => {
-        const signal = runOptions?.signal ?? this.maintenanceService.signal
-        signal.throwIfAborted()
-        await new Promise<void>((resolve, reject) => {
-          const finish = () => {
-            clearTimeout(timer)
-            signal.removeEventListener('abort', abort)
-          }
-          const abort = () => {
-            finish()
-            reject(signal.reason)
-          }
-          const timer = setTimeout(() => {
-            finish()
-            resolve()
-          }, durationMs)
-          signal.addEventListener('abort', abort, { once: true })
-          if (signal.aborted) abort()
-        })
-      },
+      sleep: (durationMs, runOptions) =>
+        sleepWithAbort(durationMs, runOptions?.signal ?? this.maintenanceService.signal),
       now: () => performance.now(),
       formatDuration,
       logInfo: (message, meta) => this.logInfo(message, meta),
@@ -871,12 +801,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       insertRecords: (records, runOptions) =>
         this.reconciliationInsertService.execute(records, runOptions),
       emitProgress: (current, total) => this.progressState.emit('reconciliation', current, total),
-      yieldAfterDbRead: async () => {
-        await new Promise<void>((resolve) => setImmediate(resolve))
-      },
-      yieldAfterPathScan: async () => {
-        await new Promise<void>((resolve) => setImmediate(resolve))
-      },
+      yieldAfterDbRead: yieldToEventLoop,
+      yieldAfterPathScan: yieldToEventLoop,
       now: () => performance.now(),
       formatDuration,
       logDebug: (message, meta) => this.logDebug(message, meta),
@@ -918,7 +844,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }),
       scheduleIndexing: (files, reason, leaseId) => this.scheduleIndexing(files, reason, leaseId),
       waitForSearchIndexDrain: (reason, leaseId) => this.waitForSearchIndexDrain(reason, leaseId),
-      yieldToEventLoop: async () => await new Promise<void>((resolve) => setImmediate(resolve)),
+      yieldToEventLoop,
       logInfo: (message, meta) => this.logInfo(message, meta),
       logWarn: (message, error, meta) => this.logWarn(message, error, meta)
     })
@@ -969,7 +895,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           isLeaseCancelled: (id) => this.isIndexWorkerMutationLeaseCancelled(id),
           isPathEligible: (p) =>
             this.isWithinWatchRoots(p) && !this.maintenanceService.isStaleExcludedIndexPath(p),
-          toTimestamp: (v) => this.toTimestamp(v)
+          toTimestamp: toFileTimestamp
         }),
       isMutationLeaseCancelled: (leaseId) => this.isIndexWorkerMutationLeaseCancelled(leaseId),
       flushBatchScheduler: this.flushBatchScheduler,
@@ -1325,7 +1251,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           return await mutation(
             {
               sourceId: this.id,
-              records: acceptedRecords.map((record) => this.mapFileToIndexedSourceRecord(record)),
+              records: acceptedRecords.map((record) =>
+                mapFileToIndexedSourceRecord(record, this.id)
+              ),
               mutationLeaseId
             },
             acceptedRecords
@@ -1412,7 +1340,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         return await mutation(
           {
             sourceId: this.id,
-            records: current.map((record) => this.mapFileToIndexedSourceRecord(record)),
+            records: current.map((record) => mapFileToIndexedSourceRecord(record, this.id)),
             mutationLeaseId
           },
           current
@@ -1439,84 +1367,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         cursor
       })
     )
-    if (!signal) {
-      await publication
-      return
-    }
-    await new Promise<void>((resolve, reject) => {
-      const abort = () => {
-        signal.removeEventListener('abort', abort)
-        reject(signal.reason)
-      }
-      signal.addEventListener('abort', abort, { once: true })
-      void publication.then(
-        () => {
-          signal.removeEventListener('abort', abort)
-          resolve()
-        },
-        (error) => {
-          signal.removeEventListener('abort', abort)
-          reject(error)
-        }
-      )
-      if (signal.aborted) abort()
-    })
-  }
-
-  private mapFileToIndexedSourceRecord(file: IndexedFileSourceRecordRow): IndexedSourceRecord {
-    const record = mapIndexedFileSourceRecord(file, { sourceId: this.id })
-    record.metadata = { ...record.metadata, runtimePublication: 'base' }
-    const extension = (file.extension || path.extname(file.name)).toLowerCase()
-    const keywords = KEYWORD_MAP[extension] ?? []
-    const tags = new Set<string>(getTypeTagsForExtension(extension))
-    if (extension) tags.add(extension.replace(/^\./, ''))
-    return {
-      ...record,
-      keywords,
-      tags: tags.size > 0 ? [...tags] : undefined,
-      search: {
-        keywords: keywords.map((value) => ({ value, priority: 1.05 }))
-      }
-    }
-  }
-
-  private mapWorkerResultToIndexedSourceRecord(result: IndexWorkerFileResult): IndexedSourceRecord {
-    const item = result.indexItem
-    const mapTerms = (terms: typeof item.keywords, priority: number) =>
-      terms
-        ?.filter((term) => term.value.length > 0)
-        .map((term) => ({
-          value: term.value,
-          priority: term.priority ?? priority
-        }))
-    const legacyItemIdsValue = (item as unknown as { legacyItemIds?: unknown }).legacyItemIds
-    const legacyItemIds = Array.isArray(legacyItemIdsValue)
-      ? legacyItemIdsValue.filter(
-          (value): value is string => typeof value === 'string' && value.length > 0
-        )
-      : undefined
-    return {
-      sourceId: this.id,
-      recordId: item.itemId,
-      stableKey: item.itemId,
-      kind: 'file',
-      title: item.displayName || item.name,
-      subtitle: item.description ?? item.path ?? undefined,
-      path: item.path ?? undefined,
-      keywords: item.keywords?.map((term) => term.value),
-      tags: item.tags,
-      metadata: {
-        content: item.content ?? undefined,
-        extension: item.extension ?? undefined,
-        type: item.type,
-        runtimePublication: 'worker-enrichment'
-      },
-      search: {
-        aliases: mapTerms(item.aliases, 1.5),
-        keywords: mapTerms(item.keywords, 1.1),
-        legacyItemIds
-      }
-    }
+    await awaitWithAbort(publication, signal)
   }
 
   private isIndexWorkerMutationLeaseCancelled(mutationLeaseId?: string): boolean {
@@ -1553,7 +1404,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       try {
         const summary = await this.requireRuntimeMutationDelegate().applyBatch({
           sourceId: this.id,
-          records: group.map((entry) => this.mapWorkerResultToIndexedSourceRecord(entry)),
+          records: group.map((entry) => mapWorkerResultToIndexedSourceRecord(entry, this.id)),
           mutationLeaseId
         })
         if (summary && typeof summary === 'object' && 'indexedItemCount' in summary) {
@@ -1604,7 +1455,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.backgroundStartupReady = false
     this.backgroundStartupError = null
     this.backgroundStartupFailure = null
-    this.backgroundStartupPromise = new Promise<void>((resolve) => setImmediate(resolve))
+    this.backgroundStartupPromise = yieldToEventLoop()
       .then(async () => {
         if (this.shuttingDown) return
         await waitForIndexMaintenanceIdle(this.maintenanceService.signal)
@@ -1680,13 +1531,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         })
         this.backgroundStartupPromise = null
       })
-  }
-
-  /**
-   * Record user activity for background task scheduling
-   */
-  recordUserActivity(): void {
-    this.watchService.recordUserActivity()
   }
 
   private async shouldRunAutoIndexing(): Promise<{
@@ -1834,18 +1678,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
   }
 
-  public isStartupReady(): boolean {
-    return this.backgroundStartupReady
-  }
-
-  public isStartupPending(): boolean {
-    return this.backgroundStartupPromise !== null
-  }
-
-  public buildStartupDegradedNotice(_query: TuffQuery): TuffItem | null {
-    return null
-  }
-
   public getWatchedPaths(): string[] {
     return [...this.watchPaths]
   }
@@ -1892,7 +1724,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       lastId = rows[rows.length - 1]!.id
       yield {
         sourceId: this.id,
-        records: rows.map((record) => this.mapFileToIndexedSourceRecord(record))
+        records: rows.map((record) => mapFileToIndexedSourceRecord(record, this.id))
       }
     }
     yield { sourceId: this.id, records: [], done: true }
@@ -2047,21 +1879,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   ): Promise<IndexedSourceDelta[]> {
     await this.maintenanceService.scheduleChangedFilterScope(event.path)
     return await this.watchSubtreeReconcileService.handleWatchEvent(event)
-  }
-
-  private toTimestamp(value: Date | number | string | null | undefined): number | null {
-    if (!value) {
-      return null
-    }
-    if (value instanceof Date) {
-      return value.getTime()
-    }
-    if (typeof value === 'number') {
-      return value
-    }
-    const parsed = new Date(value)
-    const time = parsed.getTime()
-    return Number.isNaN(time) ? null : time
   }
 
   async onLoad(context: ProviderContext): Promise<void> {
@@ -2789,7 +2606,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       )
       if (options.dispatchSideEffects !== false) {
         const records = [...result.inserted, ...result.updated, ...result.refreshed].map((record) =>
-          this.mapFileToIndexedSourceRecord(record)
+          mapFileToIndexedSourceRecord(record, this.id)
         )
         if (records.length > 0) {
           const delegate = this.requireRuntimeMutationDelegate()
@@ -2964,7 +2781,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
     }
     // Yield after heavy integrity check queries
-    await new Promise<void>((resolve) => setImmediate(resolve))
+    await yieldToEventLoop()
     options?.signal?.throwIfAborted()
 
     // --- 1. Index Cleanup (FR-IX-4) ---
