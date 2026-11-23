@@ -112,7 +112,14 @@ function projectContentStorage(raw: unknown): FileIndexContentStorage | undefine
   const input = asRecord(raw)
   if (!input) return undefined
   const status = input.status
-  if (status !== 'ready' && status !== 'low-space' && status !== 'unavailable') return undefined
+  if (
+    status !== 'ready' &&
+    status !== 'low-space' &&
+    status !== 'index-full' &&
+    status !== 'unavailable'
+  ) {
+    return undefined
+  }
   const requiredBytes = input.requiredBytes
   if (typeof requiredBytes !== 'number' || !Number.isSafeInteger(requiredBytes) || requiredBytes < 0) return undefined
   const available = input.availableBytes

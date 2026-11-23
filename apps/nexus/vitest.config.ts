@@ -1,13 +1,21 @@
+import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
+const tuffexDistUtilsInternal = fileURLToPath(new URL('../../packages/tuffex/dist/es/utils/internal', import.meta.url))
+const tuffexSourceUtilsRoot = fileURLToPath(new URL('../../packages/tuffex/packages/utils', import.meta.url))
+const tuffexUtilsSubpathReplacement = existsSync(`${tuffexDistUtilsInternal}/form-host.js`)
+  ? `${tuffexDistUtilsInternal}/$1.js`
+  : `${tuffexSourceUtilsRoot}/$1.ts`
+
 export default defineConfig({
   resolve: {
-    alias: {
-      '#imports': fileURLToPath(new URL('./test/mocks/nuxt-imports.ts', import.meta.url)),
-      '#shared': fileURLToPath(new URL('./shared', import.meta.url)),
-      '~': fileURLToPath(new URL('./app', import.meta.url)),
-    },
+    alias: [
+      { find: /^@talex-touch\/tuffex\/utils\/(.+)$/, replacement: tuffexUtilsSubpathReplacement },
+      { find: '#imports', replacement: fileURLToPath(new URL('./test/mocks/nuxt-imports.ts', import.meta.url)) },
+      { find: '#shared', replacement: fileURLToPath(new URL('./shared', import.meta.url)) },
+      { find: '~', replacement: fileURLToPath(new URL('./app', import.meta.url)) },
+    ],
   },
   test: {
     environment: 'node',

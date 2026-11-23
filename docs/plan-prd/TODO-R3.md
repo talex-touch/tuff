@@ -1,6 +1,6 @@
 # Tuff R3 Search / Indexing Runtime TODO
 
-> 更新时间：2026-11-22
+> 更新时间：2026-11-23
 > 范围：Roadmap R3 / Search Provider 与 Indexing Runtime。专题设计以 `03-features/search/INDEXING-RUNTIME-V1-PLAN.md` 为准；全局执行顺序服从 [`TODO.md`](./TODO.md)。
 
 ## 当前口径
@@ -40,7 +40,7 @@
   - `0055_search_keyword_postings.sql`（A10，`ed48495a1`）：`search_keyword_postings`（`WITHOUT ROWID`）以整数 `doc_id` 替代完整路径，关键词表实测 −81.8%，并在维护轮渐进搬迁旧表；
   - `FILE_CONTENT_MAX_CHARS = 50_000` 超长文件正文整篇跳过（超过 50,000 字符或触及解析预算的文件不做前缀截断索引，直接置 `content = null` / `content-too-long` 并保留 `≤ 50,000` 字符文件全量正文索引）、`float32 BLOB` 向量存储（`1c275e282` / `77db102f7` / `d4bd5f915`）与 `PRAGMA auto_vacuum = INCREMENTAL` 均已落地。
 - **Read-worker 下沉与运行稳定性（已合入主线）**：`search-index-read-worker` 已接管文件向量扫描、索引统计计数（`b11cdff1a`、`84a8a8668`）与恢复分页（`6d2bd10a8`）；已合入 subtree 状态持久化与热目录启动追赶（`72b06c1eb`）、热源事件 leading-trailing 节流（`ba6447df4`）、容量模式驱逐与删除余量保护（`38f9cf445` / `9e77b1fa6`）、分批刷写（`835861fa3`）以及 `2.5.1` 文件动作与 `file.search`（`687d48f3f`）。
-- **模块拆分与体积止血**：`FileProvider` 第一轮子服务抽离与冗余扩展写入清理已落地（`file-provider.ts` 降至 2,775 代码行，棘轮上限 2,790），且 `search-core.ts`（2,405 代码行 / 2,850 原始行）已纳入 `.github/module-size-ratchet.json`。
+- **模块拆分与体积止血**：`FileProvider` 第一轮子服务抽离与冗余扩展写入清理及 F1/F3 拆分（2026-11-23，PR `#2263` `f22d7f9c6`：F1 纯记录映射抽离至 `file-provider-record-mapper.ts`，批量发布保留原处；F3 移除 4 个无调用方公开成员并抽离 yield/abort 辅助函数至 `file-provider-async-utils.ts`）已落地，`file-provider.ts` 降至 **2,650 代码行**（`.github/module-size-ratchet.json` 棘轮由 `2,790` 收紧至 **`2,650`**；未在隔离 Electron 实例复测），且 `search-core.ts`（2,405 代码行 / 2,850 原始行）已纳入 `.github/module-size-ratchet.json`。
 - **当前核心未闭环门禁（收敛剩余项）**：
   1. `search-split:app-evidence` 3 阶段隔离实跑（bootstrap → split → rollback 真机闭环，排除非 Electron 自检替代）；
   2. 真实 profile `search:index-migration:evidence-verify -- --strict`（含 `indexing-diagnostics-probe` cold-start `SIGABRT` 隔离修复或 attach-only 采证、`scan_progress` 迁移执行与自然 recent task Settings 截图）；

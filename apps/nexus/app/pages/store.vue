@@ -167,6 +167,7 @@ function applyStoreSearch(value: string) {
 const {
   data: pluginsPayload,
   pending: pluginsPending,
+  status: pluginsStatus,
 } = await useAsyncData('store-plugins', () =>
   requestJson<StorePluginSearchResponse>('/api/store/search', {
     query: storeSearchQuery.value,
@@ -177,6 +178,11 @@ const {
   server: false,
   watch: [storeSearchQuery],
 })
+
+// With `server: false` in Nuxt 4, SSR settles at `status === 'idle'` (`pending === false`) while
+// the hydrating client starts in `status === 'pending'` (`pending === true`). Treating `idle` as
+// loading keeps SSR and client hydration on the exact same skeleton tree until the first fetch settles.
+const showPluginsSkeleton = computed(() => pluginsPending.value || pluginsStatus.value === 'idle')
 
 const pluginsLoadingMore = ref(false)
 
@@ -596,7 +602,7 @@ useSeoMeta({
     </StoreSearch>
 
     <!-- Skeleton cards in the grid's own shape, so the list lands without a jump. -->
-    <div v-if="pluginsPending" class="StorePage-Grid" aria-busy="true">
+    <div v-if="showPluginsSkeleton" class="StorePage-Grid" aria-busy="true">
       <div v-for="index in 4" :key="index" class="StorePage-Skeleton">
         <div class="StorePage-SkeletonTop">
           <TxSkeleton variant="rect" :width="46" :height="46" :radius="13" />

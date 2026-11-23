@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import DocsOutline from '~/components/DocsOutline.vue'
+import DocsAsideCardsShell from '~/components/docs/DocsAsideCardsShell.vue'
 import DocsCopyPromptButton from '~/components/docs/DocsCopyPromptButton.vue'
 
 const DocsDrawer = defineAsyncComponent(() => import('~/components/ui/Drawer.vue'))
-const LazyDocsAsideCardsShell = defineAsyncComponent(() => import('~/components/docs/DocsAsideCardsShell.vue'))
-const loadDocsOutline = () => import('~/components/DocsOutline.vue')
-const LazyDocsOutline = defineAsyncComponent(loadDocsOutline)
 const LazyBackToTop = defineAsyncComponent(() => import('~/components/ui/BackToTop.vue'))
 const LazyTuffFooter = defineAsyncComponent(() => import('~/components/TuffFooter.vue'))
 const TuffexDocsHeroBackground = defineAsyncComponent(() => import('~/components/docs/TuffexDocsHeroBackground.vue'))
 const BACK_TO_TOP_MOUNT_SCROLL_Y = 240
+const DOCS_FOOTER_ROOT_MARGIN = '480px 0px'
 const DOCS_FOOTER_IDLE_TIMEOUT_MS = 180
 const TUFFEX_DOCS_BACKGROUND_IDLE_TIMEOUT_MS = 2200
 const TUFFEX_DOCS_BACKGROUND_INTENT_EVENTS = ['scroll', 'pointerdown', 'keydown', 'touchstart'] as const
@@ -21,16 +21,14 @@ const sidebarVisible = ref(false)
 const outlineVisible = ref(false)
 const sidebarDrawerMounted = ref(false)
 const outlineDrawerMounted = ref(false)
-const shouldMountDocsAsideShell = ref(false)
-const shouldMountDocsOutline = ref(false)
 const shouldMountDocsFooter = ref(false)
 const shouldMountBackToTop = ref(false)
 const shouldMountTuffexBackground = ref(false)
+const docsFooterSentinelRef = ref<HTMLElement | null>(null)
 let docsFooterIdleId: number | null = null
 let docsFooterFrameId: number | null = null
+let docsFooterObserver: IntersectionObserver | null = null
 let backToTopFrameId: number | null = null
-let docsAsideShellFrameId: number | null = null
-let docsOutlineFrameId: number | null = null
 let tuffexBackgroundIdleId: number | null = null
 let tuffexBackgroundFrameId: number | null = null
 let tuffexBackgroundIntentDisposers: Array<() => void> = []
@@ -49,22 +47,6 @@ const shouldShowAsideOutline = computed(() =>
   || outlineTocState.value.length > 0
   || outlineLoadingState.value,
 )
-// The rows DocsOutline draws, its first two heading levels, so the placeholder before it mounts
-// is as tall as it will be and nothing below moves.
-const outlineShellEntries = computed(() => {
-  const links: Array<{ id: string, text: string, depth: number }> = []
-  const collect = (list: any[] | undefined) => {
-    for (const link of list ?? []) {
-      links.push(link)
-      collect(link.children)
-    }
-  }
-  collect(outlineTocState.value)
-  const base = Math.min(...links.map(link => link.depth))
-  return links
-    .filter(link => link.depth === base || link.depth === base + 1)
-    .map(link => ({ id: link.id, text: link.text, nested: link.depth !== base }))
-})
 
 type DocsAsideSyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
 
@@ -123,7 +105,6 @@ function openSidebarDrawer() {
 
 function openOutlineDrawer() {
   outlineDrawerMounted.value = true
-  mountDocsOutline()
   outlineVisible.value = true
 }
 
@@ -131,6 +112,10 @@ function clearDocsFooterSchedule() {
   if (import.meta.server)
     return
 
+  if (docsFooterObserver) {
+    docsFooterObserver.disconnect()
+    docsFooterObserver = null
+  }
   if (docsFooterIdleId !== null && 'cancelIdleCallback' in window) {
     window.cancelIdleCallback(docsFooterIdleId)
     docsFooterIdleId = null
@@ -146,13 +131,28 @@ function mountDocsFooter() {
   clearDocsFooterSchedule()
 }
 
-// Mounted once the page is idle rather than when it scrolls near: a reader who
-// jumps to the end should not land on a footer that is still appearing.
+// Mount the footer once the reader approaches the bottom of the page (or immediately on short
+// docs pages) so long component pages do not eagerly pull the landing footer locale chunk.
 function scheduleDocsFooterMount() {
   if (import.meta.server || shouldMountDocsFooter.value)
     return
 
   clearDocsFooterSchedule()
+
+  const sentinel = docsFooterSentinelRef.value
+  if ('IntersectionObserver' in window && sentinel) {
+    const rect = sentinel.getBoundingClientRect()
+    if (rect.top <= window.innerHeight + 480) {
+      mountDocsFooter()
+      return
+    }
+    docsFooterObserver = new IntersectionObserver((entries) => {
+      if (entries.some(entry => entry.isIntersecting || entry.intersectionRatio > 0))
+        mountDocsFooter()
+    }, { rootMargin: DOCS_FOOTER_ROOT_MARGIN })
+    docsFooterObserver.observe(sentinel)
+    return
+  }
 
   const mount = () => {
     docsFooterIdleId = null
@@ -192,74 +192,6 @@ function scheduleBackToTopMountCheck() {
     backToTopFrameId = null
     maybeMountBackToTop()
   })
-}
-
-function clearDocsAsideShellSchedule() {
-  if (import.meta.server)
-    return
-
-  if (docsAsideShellFrameId !== null) {
-    window.cancelAnimationFrame(docsAsideShellFrameId)
-    docsAsideShellFrameId = null
-  }
-}
-
-function mountDocsAsideShell() {
-  if (shouldMountDocsAsideShell.value)
-    return
-  shouldMountDocsAsideShell.value = true
-  clearDocsAsideShellSchedule()
-}
-
-function scheduleDocsAsideShellMount() {
-  if (import.meta.server || shouldMountDocsAsideShell.value)
-    return
-
-  clearDocsAsideShellSchedule()
-
-  const mount = () => {
-    docsAsideShellFrameId = null
-    mountDocsAsideShell()
-  }
-
-  docsAsideShellFrameId = window.requestAnimationFrame(mount)
-}
-
-function clearDocsOutlineSchedule() {
-  if (import.meta.server)
-    return
-
-  if (docsOutlineFrameId !== null) {
-    window.cancelAnimationFrame(docsOutlineFrameId)
-    docsOutlineFrameId = null
-  }
-}
-
-function mountDocsOutline() {
-  if (shouldMountDocsOutline.value)
-    return
-  clearDocsOutlineSchedule()
-  // Swap the shell out once the chunk is here: flipping first leaves the panel empty for the
-  // frames the import takes. A failed import still flips, so the async component reports it.
-  const mount = () => {
-    shouldMountDocsOutline.value = true
-  }
-  loadDocsOutline().then(mount, mount)
-}
-
-function scheduleDocsOutlineMount() {
-  if (import.meta.server || shouldMountDocsOutline.value || !shouldShowAsideOutline.value)
-    return
-
-  clearDocsOutlineSchedule()
-
-  const mount = () => {
-    docsOutlineFrameId = null
-    if (shouldShowAsideOutline.value)
-      mountDocsOutline()
-  }
-
-  docsOutlineFrameId = window.requestAnimationFrame(mount)
 }
 
 function clearTuffexBackgroundSchedule() {
@@ -335,19 +267,9 @@ watch(isTuffexDocs, (active) => {
   shouldMountTuffexBackground.value = false
 }, { immediate: true })
 
-watch(shouldShowAsideOutline, (shouldShow) => {
-  if (shouldShow) {
-    scheduleDocsOutlineMount()
-    return
-  }
-  clearDocsOutlineSchedule()
-}, { immediate: true })
-
 onMounted(() => {
   scheduleDocsFooterMount()
   scheduleBackToTopMountCheck()
-  scheduleDocsAsideShellMount()
-  scheduleDocsOutlineMount()
   window.addEventListener('scroll', scheduleBackToTopMountCheck, { passive: true })
 })
 
@@ -355,8 +277,6 @@ onBeforeUnmount(() => {
   clearDocsFooterSchedule()
   window.removeEventListener('scroll', scheduleBackToTopMountCheck)
   clearBackToTopFrame()
-  clearDocsAsideShellSchedule()
-  clearDocsOutlineSchedule()
   clearTuffexBackgroundIntentListeners()
   clearTuffexBackgroundSchedule()
 })
@@ -420,30 +340,7 @@ onBeforeUnmount(() => {
               <div id="docs-outline-tools" class="docs-outline-tools-anchor relative z-30" />
               <ClientOnly>
                 <div v-show="shouldShowAsideOutline" class="docs-outline-panel max-h-[calc(100vh-12rem)] overflow-y-auto pr-2 relative z-30">
-                  <LazyDocsOutline v-if="shouldMountDocsOutline" />
-                  <div v-else class="docs-outline-shell" aria-hidden="true">
-                    <div class="docs-outline-shell__label">
-                      <span class="docs-outline-shell__icon i-carbon-text-align-left" />
-                      <span>{{ t('docs.outlineLabel') }}</span>
-                    </div>
-                    <div v-if="outlineShellEntries.length" class="docs-outline-shell__track">
-                      <span
-                        v-for="entry in outlineShellEntries"
-                        :key="entry.id"
-                        class="docs-outline-shell__row"
-                        :class="{ 'is-nested': entry.nested }"
-                      >
-                        <span class="line-clamp-2"><span class="docs-outline-shell__text">{{ entry.text }}</span></span>
-                      </span>
-                    </div>
-                    <div v-else class="docs-outline-shell__lines">
-                      <span class="docs-outline-shell__line is-wide" />
-                      <span class="docs-outline-shell__line" />
-                      <span class="docs-outline-shell__line is-short" />
-                      <span class="docs-outline-shell__line is-wide" />
-                      <span class="docs-outline-shell__line" />
-                    </div>
-                  </div>
+                  <DocsOutline />
                 </div>
               </ClientOnly>
               <section
@@ -459,18 +356,17 @@ onBeforeUnmount(() => {
                   {{ docsAsideAiNoticeDescription }}
                 </p>
               </section>
-              <!-- The copy button renders on SSR immediately; cards below mount on the first frame. -->
+              <!-- The copy button and resource links render on SSR immediately without a post-mount chunk hop. -->
               <div class="docs-aside-actions">
                 <DocsCopyPromptButton />
-                <ClientOnly>
-                  <LazyDocsAsideCardsShell v-if="shouldMountDocsAsideShell" />
-                </ClientOnly>
+                <DocsAsideCardsShell />
               </div>
             </div>
           </aside>
         </div>
       </div>
     </div>
+    <div ref="docsFooterSentinelRef" aria-hidden="true" />
     <LazyTuffFooter v-if="shouldMountDocsFooter" class="docs-layout-footer" />
     <LazyBackToTop v-if="shouldMountBackToTop" />
     <ClientOnly>
@@ -495,7 +391,7 @@ onBeforeUnmount(() => {
         @update:visible="(v) => (outlineVisible = v)"
       >
         <div class="p-4">
-          <LazyDocsOutline v-if="outlineVisible && shouldMountDocsOutline" />
+          <DocsOutline v-if="outlineVisible" />
         </div>
       </DocsDrawer>
     </ClientOnly>

@@ -68,23 +68,10 @@ export function isAwaitingFirstToken(
   message: Pick<ConversationMessage, 'role' | 'status' | 'content' | 'parts'> | undefined
 ): boolean {
   if (!message || message.role !== 'assistant' || message.status !== 'streaming') return false
-  if (message.content) return false
-  const parts = message.parts ?? []
-  // Reasoning spans (even empty) and non-empty text / tool-calls already produce a segment in the
-  // transcript; UIKit's `isAiAwaitingFirstToken` only inspects non-empty text and running/done tools.
-  if (
-    parts.some(
-      (part) =>
-        part.type === 'reasoning' ||
-        part.type === 'tool-call' ||
-        (part.type === 'text' && !!part.text)
-    )
-  ) {
-    return false
-  }
   return isAiAwaitingFirstToken({
     status: message.status,
     content: message.content,
-    parts
+    parts: message.parts,
+    includeReasoning: true
   })
 }

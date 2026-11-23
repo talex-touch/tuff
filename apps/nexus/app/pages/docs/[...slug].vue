@@ -1640,7 +1640,6 @@ watch(
       return
 
     bindDocClientPanelIntentListeners()
-    scheduleDocClientPanels()
     if (lastEnhancedDocKey !== renderKey) {
       lastEnhancedDocKey = renderKey
       void scheduleCodeEnhance(0)
@@ -1669,7 +1668,6 @@ watch(
       return
 
     bindDocClientPanelIntentListeners()
-    scheduleDocClientPanels()
     void scheduleCodeEnhance(0)
     void scheduleOutlineSync(0)
     scheduleDocEngagementPanels()

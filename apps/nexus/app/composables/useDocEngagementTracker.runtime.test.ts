@@ -38,13 +38,13 @@ interface Report {
 }
 
 let reports: Report[]
-let listeners: Map<string, Array<() => void>>
+let listeners: Map<string, Array<(event?: unknown) => void>>
 let documentStub: { hidden: boolean }
 let stopScope: () => void
 
-function dispatch(type: string) {
+function dispatch(type: string, event?: unknown) {
   for (const listener of listeners.get(type) ?? [])
-    listener()
+    listener(event)
 }
 
 /** The real digest, captured before any test spies on it. */
@@ -187,5 +187,25 @@ describe('docs engagement reports', () => {
     const counted = reports.reduce((sum, report) => sum + report.totalDurationMs, 0)
     expect(counted).toBeGreaterThan(0)
     expect(counted).toBeLessThanOrEqual(30_000)
+  })
+
+  it('skips async pagehide flush when entering bfcache and resumes on persisted pageshow', async () => {
+    vi.advanceTimersByTime(5_000)
+    reports.length = 0
+
+    dispatch('pagehide', { persisted: true })
+    await drain()
+    expect(reports).toEqual([])
+
+    // While frozen in bfcache, interval timers must not fire.
+    await advance(60_000)
+    expect(reports).toEqual([])
+
+    // Returning from bfcache preserves pre-hide reading time and excludes frozen time.
+    dispatch('pageshow', { persisted: true })
+    await advance(15_000)
+    expect(reports).toHaveLength(1)
+    expect(reports[0]!.totalDurationMs).toBeGreaterThanOrEqual(19_000)
+    expect(reports[0]!.totalDurationMs).toBeLessThanOrEqual(20_500)
   })
 })

@@ -7,6 +7,7 @@ import { FileProviderMaintenanceService } from './file-provider-maintenance-serv
 
 function createService(splitEnabled: boolean) {
   const logs: Array<{ level: string; message: string; meta?: unknown }> = []
+  const onIndexSpaceFreed = vi.fn()
   const unsupported = (): never => {
     throw new Error('unsupported in this test')
   }
@@ -23,12 +24,13 @@ function createService(splitEnabled: boolean) {
     normalizePath: (value) => value,
     mapRecord: unsupported,
     onBaseCommitReady: () => undefined,
+    onIndexSpaceFreed,
     emitCleanupProgress: () => undefined,
     logInfo: (message, meta) => logs.push({ level: 'info', message, meta }),
     logDebug: (message, meta) => logs.push({ level: 'debug', message, meta }),
     logWarn: (message, error, meta) => logs.push({ level: 'warn', message, meta: { error, meta } })
   })
-  return { service, logs }
+  return { service, logs, onIndexSpaceFreed }
 }
 
 describe('FileProviderMaintenanceService.compactSearchIndex', () => {
@@ -45,11 +47,12 @@ describe('FileProviderMaintenanceService.compactSearchIndex', () => {
       freelistBytesBefore: 3_000,
       durationMs: 38_000
     })
-    const { service, logs } = createService(true)
+    const { service, logs, onIndexSpaceFreed } = createService(true)
 
     await service.compactSearchIndex('content-cleanup-startup')
 
     expect(writerMock.compact).toHaveBeenCalledWith('content-cleanup-startup')
+    expect(onIndexSpaceFreed).toHaveBeenCalledTimes(1)
     expect(logs).toContainEqual(
       expect.objectContaining({
         level: 'info',
@@ -109,9 +112,25 @@ describe('FileProviderMaintenanceService.compactSearchIndex', () => {
 
   it('turns a writer failure into a warning instead of a rejection', async () => {
     writerMock.compact.mockRejectedValue(new Error('worker gone'))
-    const { service, logs } = createService(true)
+    const { service, logs, onIndexSpaceFreed } = createService(true)
 
     await expect(service.compactSearchIndex('x')).resolves.toBeUndefined()
     expect(logs[0]).toMatchObject({ level: 'warn', message: 'Search index compaction failed' })
+    expect(onIndexSpaceFreed).not.toHaveBeenCalled()
+  })
+
+  it('does not signal freed space when compaction was skipped', async () => {
+    writerMock.compact.mockResolvedValue({
+      ran: false,
+      reason: 'boot-check',
+      fileBytesBefore: 5_000,
+      fileBytesAfter: 5_000,
+      freelistBytesBefore: 0,
+      durationMs: 2
+    })
+    const { service, onIndexSpaceFreed } = createService(true)
+
+    await service.compactSearchIndex('boot-check')
+    expect(onIndexSpaceFreed).not.toHaveBeenCalled()
   })
 })

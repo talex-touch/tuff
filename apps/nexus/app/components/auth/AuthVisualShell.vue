@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = withDefaults(defineProps<{
   loading?: boolean
@@ -10,16 +10,61 @@ const props = withDefaults(defineProps<{
 })
 
 const LazyTouchAurora = defineAsyncComponent(() => import('../tuff/background/TouchAurora.vue'))
+const AUTH_AURORA_INTENT_EVENTS = ['pointerdown', 'keydown', 'focusin', 'touchstart'] as const
 
 const blockMessage = computed(() => props.blockText?.trim() || '')
 const shouldMountAurora = ref(false)
+let auroraIdleId: number | null = null
+let auroraTimerId: ReturnType<typeof setTimeout> | null = null
+let auroraIntentDisposers: Array<() => void> = []
 
-onMounted(() => {
-  window.requestIdleCallback?.(() => {
-    shouldMountAurora.value = true
-  }, { timeout: 1200 }) ?? window.setTimeout(() => {
+function clearAuroraSchedule() {
+  for (const dispose of auroraIntentDisposers)
+    dispose()
+  auroraIntentDisposers = []
+  if (auroraIdleId !== null && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(auroraIdleId)
+    auroraIdleId = null
+  }
+  if (auroraTimerId !== null) {
+    clearTimeout(auroraTimerId)
+    auroraTimerId = null
+  }
+}
+
+function scheduleAuroraMount() {
+  if (shouldMountAurora.value)
+    return
+  clearAuroraSchedule()
+  if (typeof window.requestIdleCallback === 'function') {
+    auroraIdleId = window.requestIdleCallback(() => {
+      auroraIdleId = null
+      shouldMountAurora.value = true
+    }, { timeout: 1200 })
+    return
+  }
+  auroraTimerId = setTimeout(() => {
+    auroraTimerId = null
     shouldMountAurora.value = true
   }, 600)
+}
+
+onMounted(() => {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    return
+
+  // CSS radial glows render the full auth backdrop immediately; wait for real user interaction
+  // before downloading the optional WebGL TouchAurora shader bundle.
+  for (const eventName of AUTH_AURORA_INTENT_EVENTS) {
+    window.addEventListener(eventName, scheduleAuroraMount, { passive: true, once: true })
+    auroraIntentDisposers.push(() => {
+      window.removeEventListener(eventName, scheduleAuroraMount)
+    })
+  }
+})
+
+onBeforeUnmount(() => {
+  clearAuroraSchedule()
 })
 </script>
 

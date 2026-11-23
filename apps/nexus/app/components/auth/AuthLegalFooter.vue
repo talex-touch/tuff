@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { TxButton } from '@talex-touch/tuffex/button'
-
 const props = withDefaults(defineProps<{
   showAgreement?: boolean
 }>(), {
@@ -21,13 +19,13 @@ function goTo(path: string) {
         <span>{{ t('auth.copyright', '© 2026 Tuff. All rights reserved.') }}</span>
         <!-- The agreement line below links the same two pages. -->
         <div v-if="!props.showAgreement" class="flex items-center gap-2">
-          <TxButton variant="ghost" size="sm" @click="goTo('/privacy')">
+          <button type="button" class="auth-footer-link" @click="goTo('/privacy')">
             {{ t('auth.privacyPolicy', 'Privacy Policy') }}
-          </TxButton>
+          </button>
           <span class="text-white/20">·</span>
-          <TxButton variant="ghost" size="sm" @click="goTo('/license')">
+          <button type="button" class="auth-footer-link" @click="goTo('/license')">
             {{ t('auth.termsOfService', 'Terms of Service') }}
-          </TxButton>
+          </button>
         </div>
       </div>
       <div class="auth-footer-meta">
@@ -36,13 +34,13 @@ function goTo(path: string) {
         </div>
         <div v-if="props.showAgreement" class="auth-legal">
           <span>{{ t('auth.loginAgreementPrefix', 'By logging in, you agree to') }}</span>
-          <TxButton variant="ghost" size="sm" @click="goTo('/license')">
+          <button type="button" class="auth-footer-link" @click="goTo('/license')">
             {{ t('auth.termsOfService', 'Terms of Service') }}
-          </TxButton>
+          </button>
           <span>{{ t('auth.loginAgreementAnd', 'and') }}</span>
-          <TxButton variant="ghost" size="sm" @click="goTo('/privacy')">
+          <button type="button" class="auth-footer-link" @click="goTo('/privacy')">
             {{ t('auth.privacyPolicy', 'Privacy Policy') }}
-          </TxButton>
+          </button>
           <span>.</span>
         </div>
       </div>
@@ -84,5 +82,30 @@ function goTo(path: string) {
   justify-content: center;
   gap: 4px;
   color: rgba(255, 255, 255, 0.55);
+}
+
+.auth-footer-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.auth-footer-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.auth-footer-link:focus-visible {
+  outline: 2px solid rgba(167, 139, 250, 0.75);
+  outline-offset: 2px;
 }
 </style>

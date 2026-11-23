@@ -6,6 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '../../../../../db/schema'
+import { searchIndexReserveReachedError } from '../../../../../db/search-index-size-cap'
 import type { FilePersistenceEntry } from '../../../search-engine/file-index-persistence-repository'
 import { SqliteFileIndexPersistenceRepository } from '../../../search-engine/file-index-persistence-repository'
 import type { FileIndexSettings } from '../types'
@@ -218,6 +219,58 @@ describe('content capacity policy transitions', () => {
     await vi.advanceTimersByTimeAsync(120_000)
     expect(events).toEqual(afterOff)
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('stays paused with index-full across 30s polling ticks on plentiful disk and resumes once index space is freed', async () => {
+    vi.useFakeTimers()
+    const { policy, events, setAvailable } = createPolicy()
+    setAvailable(10 * GIB)
+    await policy.reconcileAtStartup()
+    expect(events).toEqual(['resume'])
+
+    expect(policy.recordStorageFailure(searchIndexReserveReachedError())).toBe(true)
+    expect(policy.getSnapshot()).toMatchObject({
+      contentIndexingEnabled: true,
+      state: 'paused',
+      storage: { status: 'index-full' }
+    })
+    expect(events).toEqual(['resume', 'stop', 'cancel'])
+
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(policy.getSnapshot()).toMatchObject({
+      contentIndexingEnabled: true,
+      state: 'paused',
+      storage: { status: 'index-full' }
+    })
+    expect(events).toEqual(['resume', 'stop', 'cancel'])
+
+    await expect(policy.notifyIndexSpaceFreed()).resolves.toBe(true)
+    expect(policy.getSnapshot()).toMatchObject({
+      contentIndexingEnabled: true,
+      state: 'idle',
+      storage: { status: 'ready' }
+    })
+    expect(events).toEqual(['resume', 'stop', 'cancel', 'resume'])
+  })
+
+  it('turning content off clears an index-full pause without leaving timers and allows re-enabling cleanly', async () => {
+    vi.useFakeTimers()
+    const { policy, events, setAvailable } = createPolicy()
+    setAvailable(10 * GIB)
+    await policy.reconcileAtStartup()
+    expect(policy.recordStorageFailure(searchIndexReserveReachedError())).toBe(true)
+    expect(policy.getSnapshot().storage?.status).toBe('index-full')
+
+    await policy.update(false)
+    expect(vi.getTimerCount()).toBe(0)
+
+    const reenabled = await policy.update(true)
+    expect(reenabled).toMatchObject({
+      contentIndexingEnabled: true,
+      state: 'idle',
+      storage: { status: 'ready' }
+    })
+    expect(events.filter((event) => event === 'resume')).toHaveLength(2)
   })
 
   it('shutdown leaves no capacity polling timers or recovery callbacks', async () => {

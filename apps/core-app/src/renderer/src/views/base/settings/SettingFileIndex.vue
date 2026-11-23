@@ -121,6 +121,9 @@ const contentIndexDialogSource = computed<HTMLElement | null>(() => {
 })
 const contentIndexStorage = computed(() => contentIndexSettings.value.storage)
 const contentIndexStorageIssue = computed(() => {
+  if (contentIndexStorage.value?.status === 'index-full') {
+    return t('settings.settingFileIndex.contentIndexStorageIndexFull')
+  }
   if (contentIndexStorage.value?.status === 'low-space') {
     return t('settings.settingFileIndex.contentIndexStorageLow')
   }
@@ -147,6 +150,16 @@ const contentIndexStoragePolicy = computed(() =>
 const contentIndexStorageSummary = computed(() => {
   const storage = contentIndexStorage.value
   if (!storage) return t('settings.settingFileIndex.contentIndexStoragePending')
+  if (storage.status === 'index-full') {
+    const indexStorage = indexStatus.value?.indexStorage
+    if (indexStorage && indexStorage.fileBytes !== null) {
+      return t('settings.settingFileIndex.contentIndexStorageIndexFullSummary', {
+        used: formatContentIndexSpace(indexStorage.fileBytes),
+        max: formatContentIndexSpace(indexStorage.maxBytes)
+      })
+    }
+    return t('settings.settingFileIndex.contentIndexStorageIndexFullSummaryUnknown')
+  }
   return t('settings.settingFileIndex.contentIndexStorageSummary', {
     available: formatContentIndexSpace(storage.availableBytes),
     required: formatContentIndexSpace(storage.requiredBytes)
@@ -194,11 +207,21 @@ const indexStorageAlert = computed(() => {
   }
   return null
 })
-const contentIndexStorageRecovery = computed(() =>
-  t(
+const contentIndexStorageRecovery = computed(() => {
+  if (contentIndexStorage.value?.status === 'index-full') {
+    return t('settings.settingFileIndex.contentIndexStorageIndexFullRecovery')
+  }
+  return t(
     contentIndexStorage.value?.status === 'low-space'
       ? 'settings.settingFileIndex.contentIndexStorageRecovery'
       : 'settings.settingFileIndex.contentIndexStorageCheckRecovery'
+  )
+})
+const contentIndexStorageConfirmPaused = computed(() =>
+  t(
+    contentIndexStorage.value?.status === 'index-full'
+      ? 'settings.settingFileIndex.contentIndexStorageIndexFullConfirmPaused'
+      : 'settings.settingFileIndex.contentIndexStorageConfirmPaused'
   )
 )
 const contentIndexDescription = computed(() => {
@@ -2370,7 +2393,7 @@ async function triggerRebuild() {
             role="status"
           >
             <span class="text-[var(--tx-text-color-primary)]">
-              {{ t('settings.settingFileIndex.contentIndexStorageConfirmPaused') }}
+              {{ contentIndexStorageConfirmPaused }}
             </span>
           </TxAlert>
           <p>

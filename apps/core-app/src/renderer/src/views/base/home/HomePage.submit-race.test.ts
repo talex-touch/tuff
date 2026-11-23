@@ -21,7 +21,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, disposePinia } from 'pinia'
 import { h, nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import enUS from '~/modules/lang/en-US.json'
 import zhCN from '~/modules/lang/zh-CN.json'
 interface HostTransport {
@@ -75,6 +75,10 @@ vi.mock('~/modules/storage/app-storage', async () => {
     appSettingStore: { isHydrated: () => true, whenHydrated: async () => undefined }
   }
 })
+vi.mock('~/modules/storage/theme-style', async () => {
+  const { ref } = await import('vue')
+  return { resolvedTheme: ref('light') }
+})
 vi.mock('~/utils/renderer-log', () => ({
   createRendererLogger: () => ({ error: () => {}, warn: () => {}, info: () => {}, debug: () => {} })
 }))
@@ -100,6 +104,12 @@ const ToolbarPaint = {
   setup(_: Record<string, unknown>, { slots, expose }: SetupContext) {
     expose({ launch: () => {} })
     return () => h('div', slots.mode?.())
+  }
+}
+const PetPaint = {
+  setup(_: Record<string, unknown>, { expose }: SetupContext) {
+    expose({ notifySend: () => {} })
+    return () => h('div')
   }
 }
 const TextPaint = {
@@ -167,10 +177,16 @@ vi.mock('@talex-touch/tuffex/stream-markdown', () => ({
 }))
 vi.mock('@talex-touch/tuffex/tool-call-card', () => ({ TxToolCallCard: Paint }))
 vi.mock('@talex-touch/tuffex/tool-confirmation', () => ({ TxToolConfirmation: Paint }))
+vi.mock('@talex-touch/tuffex/voice-beam', () => ({ TxVoiceBeam: Paint }))
+vi.mock('@talex-touch/tuffex/voice-clip', () => ({ TxVoiceClip: Paint }))
+vi.mock('@talex-touch/tuffex/miko', () => ({ TxMiko: Paint }))
+vi.mock('@talex-touch/tuffex/motion-text', () => ({ TxMotionText: Paint }))
 vi.mock('~/components/icon/AppLogo.vue', () => ({ default: Paint }))
 vi.mock('./composer/ComposerToolbar.vue', () => ({ default: ToolbarPaint }))
 vi.mock('./HomeTopBar.vue', () => ({ default: Paint }))
 vi.mock('./HomeSidePanel.vue', () => ({ default: Paint }))
+vi.mock('./pet/HomePet.vue', () => ({ default: PetPaint }))
+vi.mock('./preview/HomeFilePreviewDrawer.vue', () => ({ default: Paint }))
 vi.mock('./workspace/HomeRunApproval.vue', () => ({ default: Paint }))
 vi.mock('./workspace/HomeWorkspaceModeMenu.vue', () => ({ default: Paint }))
 vi.mock('./workspace/HomeWorkspaceQueue.vue', () => ({ default: Paint }))
@@ -375,6 +391,13 @@ let wrapper: VueWrapper | null = null
 let pinia: Pinia | null = null
 let main: MainHost
 
+beforeAll(async () => {
+  // Pre-warm Vite's transform graph outside individual test timeouts so the first `it()` block
+  // does not absorb cold SFC/dependency compilation under CI CPU load; each test still isolates
+  // module-scope mirrors via `vi.resetModules()` in `beforeEach`.
+  await import('./HomePage.vue')
+  vi.resetModules()
+}, 15_000)
 beforeEach(() => {
   vi.resetModules()
   streamCalls.scrollToIndex.mockReset()
@@ -409,6 +432,7 @@ afterAll(() => {
     '@talex-touch/utils/renderer',
     'vue-i18n',
     '~/modules/storage/app-storage',
+    '~/modules/storage/theme-style',
     '~/utils/renderer-log',
     '~/modules/platform/renderer-platform',
     '~/modules/shortcuts/main-window-shortcuts',
@@ -417,6 +441,7 @@ afterAll(() => {
     '@talex-touch/tuffex/chain-of-thought',
     '@talex-touch/tuffex/choice-card',
     '@talex-touch/tuffex/message-actions',
+    '@talex-touch/tuffex/gradual-blur',
     '@talex-touch/tuffex/modal',
     '@talex-touch/tuffex/skeleton',
     '@talex-touch/tuffex/thinking-orb',
@@ -424,10 +449,16 @@ afterAll(() => {
     '@talex-touch/tuffex/stream-markdown',
     '@talex-touch/tuffex/tool-call-card',
     '@talex-touch/tuffex/tool-confirmation',
+    '@talex-touch/tuffex/voice-beam',
+    '@talex-touch/tuffex/voice-clip',
+    '@talex-touch/tuffex/miko',
+    '@talex-touch/tuffex/motion-text',
     '~/components/icon/AppLogo.vue',
     './composer/ComposerToolbar.vue',
     './HomeTopBar.vue',
     './HomeSidePanel.vue',
+    './pet/HomePet.vue',
+    './preview/HomeFilePreviewDrawer.vue',
     './workspace/HomeRunApproval.vue',
     './workspace/HomeWorkspaceModeMenu.vue',
     './workspace/HomeWorkspaceQueue.vue'
@@ -594,15 +625,15 @@ describe('HomePage stream and rail integration', () => {
     await flushPromises()
     expect(stream.attributes('data-following')).toBe('false')
 
-    const railButtons = view.findAll('.HomeMessageRail-BarWrap')
+    const railButtons = view.findAll('.tx-ai-message-rail__bar-wrap')
     expect(railButtons).toHaveLength(2)
     expect(railButtons[0]!.attributes('aria-current')).toBe('true')
     expect(railButtons[1]!.attributes('aria-current')).toBeUndefined()
 
-    await view.findAll('.HomeMessageRail-Turn')[1]!.trigger('mouseenter')
+    await view.findAll('.tx-ai-message-rail__turn')[1]!.trigger('mouseenter')
     await flushPromises()
-    expect(view.get('.HomeMessageRail-PromptText').text()).toContain('Second prompt')
-    expect(view.get('.HomeMessageRail-ImageTag').text()).toBe('#IMAGE1')
+    expect(view.get('.tx-ai-message-rail__prompt-text').text()).toContain('Second prompt')
+    expect(view.get('.tx-ai-message-rail__image-tag').text()).toBe('#IMAGE1')
 
     await railButtons[1]!.trigger('click')
     expect(streamCalls.scrollToIndex).toHaveBeenCalledWith(2)

@@ -1,5 +1,10 @@
-import type { AiMessagePart } from '@talex-touch/tuffex/ai-elements'
-import { calculateAiContextPercent } from '@talex-touch/intelligence-uikit/utils'
+import type { TxAiPartRunStep } from '@talex-touch/intelligence-uikit/utils'
+import {
+  calculateAiContextPercent,
+  deriveAiRunStepFromParts,
+  formatAiCompactElapsed,
+  formatAiWindowText
+} from '@talex-touch/intelligence-uikit/utils'
 
 /**
  * What the run-status line above the composer says about the turn in flight.
@@ -7,71 +12,15 @@ import { calculateAiContextPercent } from '@talex-touch/intelligence-uikit/utils
  * `thinking` carries the span's own first line (what the model is working through), `tool` the
  * call's name, `writing` means prose is being typed, and `waiting` is a turn with nothing yet.
  */
-export type RunStep =
-  | { kind: 'waiting' }
-  | { kind: 'thinking'; title?: string }
-  | { kind: 'tool'; name: string; summary?: string }
-  | { kind: 'writing' }
+export type RunStep = TxAiPartRunStep
 
-const TITLE_LIMIT = 64
-
-function firstLine(text: string): string {
-  const line = text.split('\n').find((candidate) => candidate.trim()) ?? ''
-  // Models head their thoughts with `**Planning …**`; the line renders as plain text.
-  const plain = line
-    .replace(/\*\*/g, '')
-    .replace(/^#+\s*/, '')
-    .trim()
-  return plain.length > TITLE_LIMIT ? `${plain.slice(0, TITLE_LIMIT - 1)}…` : plain
-}
-
-/**
- * The step the turn is on, read off the tail of its parts: the last part that is still live decides.
- * A tool that is pending or running wins over everything before it; otherwise the last non-empty
- * part does. Attachment and source parts are not progress and are skipped.
- */
-export function deriveRunStep(parts: readonly AiMessagePart[] | undefined): RunStep {
-  if (!parts) return { kind: 'waiting' }
-  for (let index = parts.length - 1; index >= 0; index -= 1) {
-    const part = parts[index]
-    if (part.type === 'tool-call') {
-      if (part.status === 'pending' || part.status === 'running') {
-        return { kind: 'tool', name: part.name, summary: part.summary }
-      }
-      // A settled call is history: what follows it (or nothing) is the current step.
-      return { kind: 'thinking' }
-    }
-    if (part.type === 'reasoning') {
-      const title = firstLine(part.text)
-      return title ? { kind: 'thinking', title } : { kind: 'thinking' }
-    }
-    if (part.type === 'text' && part.text) return { kind: 'writing' }
-  }
-  return { kind: 'waiting' }
-}
+export const deriveRunStep = deriveAiRunStepFromParts
 
 /** `44m 3s`, `3s`, `1h 2m` — whole units, the two largest, no leading zeros. */
-export function formatElapsed(ms: number): string {
-  const seconds = Math.max(0, Math.floor((Number.isFinite(ms) ? ms : 0) / 1000))
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const rest = seconds % 60
-  if (hours > 0) return `${hours}h ${minutes}m`
-  if (minutes > 0) return `${minutes}m ${rest}s`
-  return `${rest}s`
-}
+export const formatElapsed = formatAiCompactElapsed
 
 /** `1M`, `128k`, `950` — the window's own scale, one decimal only when it is not whole. */
-export function formatWindow(tokens: number): string {
-  if (!Number.isFinite(tokens) || tokens <= 0) return ''
-  const scale = (value: number, unit: string): string => {
-    const rounded = Math.round(value * 10) / 10
-    return `${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)}${unit}`
-  }
-  if (tokens >= 1_000_000) return scale(tokens / 1_000_000, 'M')
-  if (tokens >= 1_000) return scale(tokens / 1_000, 'k')
-  return `${Math.round(tokens)}`
-}
+export const formatWindow = formatAiWindowText
 
 /**
  * The newest assistant turn the provider actually reported usage for.

@@ -23,6 +23,7 @@ import type {
 } from './file-provider-index-contracts'
 import type { FileIndexSettings } from './types'
 import { DEFAULT_FILE_INDEX_SETTINGS } from './types'
+import { mapFileToIndexedSourceRecord } from './services/file-provider-record-mapper'
 import { IndexedSourceResetReasons, IndexedSourceScanReasons } from '@talex-touch/utils/search'
 import type * as SqliteRetryModule from '../../../../db/sqlite-retry'
 import type * as DbUtilsModule from '../../../../db/utils'
@@ -199,7 +200,6 @@ vi.mock('./services/file-provider-watch-service', () => ({
     isFileSystemSubscribed: vi.fn(() => false),
     initializeBackgroundTaskService: watchServiceInitialize,
     ensureFileSystemWatchers: watchServiceEnsure,
-    recordUserActivity: vi.fn(),
     shouldRunAutoIndexing: vi.fn(async () => ({ allowed: false, reason: 'test' })),
     applyWatchPaths: vi.fn(),
     // The provider awaits the durable settings write; the mock mirrors the class API so a path
@@ -334,21 +334,6 @@ interface MutableFileProvider {
     startupPending?: boolean
     startupErrorCode?: string | null
   }
-  buildStartupDegradedNotice: (query: { text: string; inputs: unknown[] }) => {
-    render?: {
-      basic?: {
-        title?: string
-        description?: string
-      }
-    }
-    actions?: Array<{
-      id?: string
-      type?: string
-      payload?: {
-        path?: string
-      }
-    }>
-  } | null
   setFilePersistencePort: (port: FilePersistencePort | null) => void
   setIndexedSourceRuntimeMutationDelegate: (delegate: unknown | null) => void
   bootPassService: FileProviderBootPassService
@@ -475,27 +460,6 @@ interface FileProviderIndexingLifecycleTestApi extends MutableFileProvider {
     resetReason?: string | null
     resetScanProgressRows?: number
   } | null
-  mapFileToIndexedSourceRecord: (file: {
-    path: string
-    name: string
-    displayName?: string | null
-    extension?: string | null
-    size?: number | null
-    mtime: Date | number | string
-    type: string
-    isDir: boolean
-  }) => {
-    sourceId: string
-    recordId: string
-    stableKey: string
-    kind: string
-    title: string
-    subtitle?: string
-    path?: string
-    mtime?: number
-    size?: number
-    metadata?: Record<string, unknown>
-  }
   isWithinWatchRoots: (rawPath: string) => boolean
   buildFileRecord: (rawPath: string) => Promise<{
     path: string
@@ -1838,20 +1802,22 @@ describe('file-provider startup readiness', () => {
   })
 
   it('maps file rows into indexed source records', () => {
-    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
     const mtime = new Date('2026-05-30T00:00:00.000Z')
 
     expect(
-      provider.mapFileToIndexedSourceRecord({
-        path: '/Users/demo/Documents/a.md',
-        name: 'a.md',
-        displayName: null,
-        extension: '.md',
-        size: 128,
-        mtime,
-        type: 'file',
-        isDir: false
-      })
+      mapFileToIndexedSourceRecord(
+        {
+          path: '/Users/demo/Documents/a.md',
+          name: 'a.md',
+          displayName: null,
+          extension: '.md',
+          size: 128,
+          mtime,
+          type: 'file',
+          isDir: false
+        },
+        fileProvider.id
+      )
     ).toEqual({
       sourceId: 'file-provider',
       recordId: '/Users/demo/Documents/a.md',
@@ -2997,16 +2963,6 @@ describe('file-provider startup readiness', () => {
       provider.fileIndexSettings = originalSettings
       resume.mockRestore()
     }
-  })
-
-  it('does not build a File Index warming result notice while startup is pending', () => {
-    const provider = fileProvider as unknown as MutableFileProvider
-    resetProviderState(provider)
-    provider.backgroundStartupPromise = Promise.resolve()
-
-    const notice = provider.buildStartupDegradedNotice({ text: 'report', inputs: [] })
-
-    expect(notice).toBeNull()
   })
 
   it('never lets a throttled indexing payload overwrite completed or idle state, including for late subscribers', async () => {

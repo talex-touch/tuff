@@ -1,15 +1,26 @@
 <script setup lang="ts">
+import type { MikoState } from '@talex-touch/tuffex/miko'
 import type { TxAiRunStatusProps } from '../../types'
+import { TxMiko } from '@talex-touch/tuffex/miko'
 import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
-import { computed } from 'vue'
-import { deriveAiRunStep, formatAiElapsed } from '../../utils/composer-state'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import {
+  deriveAiRunStep,
+  formatAiCompactElapsed,
+  formatAiElapsed,
+} from '../../utils/composer-state'
 
 defineOptions({ name: 'TxAiRunStatus' })
 
 const props = withDefaults(defineProps<TxAiRunStatusProps>(), {
+  variant: 'pill',
   step: null,
   steps: () => [],
   elapsedMs: 0,
+  startedAt: undefined,
+  mikoState: undefined,
+  lineLabel: undefined,
+  tone: 'default',
   queuedCount: 0,
   streaming: false,
   waiting: false,
@@ -21,6 +32,31 @@ const props = withDefaults(defineProps<TxAiRunStatusProps>(), {
 const emit = defineEmits<{
   inspect: []
 }>()
+
+const now = ref(Date.now())
+let timer: ReturnType<typeof setInterval> | null = null
+
+function stopClock() {
+  if (timer !== null)
+    clearInterval(timer)
+  timer = null
+}
+
+watch(
+  [() => props.variant, () => props.startedAt],
+  ([variant, startedAt]) => {
+    stopClock()
+    if (variant !== 'line' || startedAt === undefined)
+      return
+    now.value = Date.now()
+    timer = setInterval(() => {
+      now.value = Date.now()
+    }, 1000)
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(stopClock)
 
 const activeStep = computed(() => {
   if (props.step)
@@ -41,6 +77,28 @@ const elapsedText = computed(() => {
   return formatAiElapsed(props.elapsedMs)
 })
 
+const lineElapsed = computed(() => {
+  if (props.startedAt !== undefined)
+    return formatAiCompactElapsed(now.value - props.startedAt)
+  if (props.elapsedMs && props.elapsedMs > 0)
+    return formatAiCompactElapsed(props.elapsedMs)
+  return ''
+})
+
+const resolvedLineLabel = computed(() => {
+  if (props.lineLabel !== undefined)
+    return props.lineLabel
+  return activeStep.value?.detail || activeStep.value?.label || ''
+})
+
+const resolvedMikoState = computed<MikoState>(() => {
+  if (props.mikoState)
+    return props.mikoState
+  if (props.tone === 'tool')
+    return 'running'
+  return 'thinking'
+})
+
 const liveAnnouncement = computed(() => {
   const step = activeStep.value
   if (!step)
@@ -50,7 +108,36 @@ const liveAnnouncement = computed(() => {
 </script>
 
 <template>
-  <span v-if="activeStep" class="tx-ai-run-status-wrap">
+  <div
+    v-if="variant === 'line'"
+    class="tx-ai-run-status-line"
+    role="status"
+    aria-live="off"
+  >
+    <div class="tx-ai-run-status-line__mark-slot">
+      <Transition name="tx-ai-run-miko-fade" mode="out-in">
+        <TxMiko
+          :key="resolvedMikoState"
+          class="tx-ai-run-status-line__mark"
+          :size="16"
+          :state="resolvedMikoState"
+          aria-hidden="true"
+        />
+      </Transition>
+    </div>
+    <span v-if="lineElapsed" class="tx-ai-run-status-line__time">
+      <TxTextMorph :text="lineElapsed" :duration-ms="420" />
+    </span>
+    <span class="tx-ai-run-status-line__divider" aria-hidden="true" />
+    <span
+      class="tx-ai-run-status-line__step"
+      :class="{ 'is-tool': tone === 'tool' }"
+      :title="resolvedLineLabel"
+    >
+      <TxTextMorph :text="resolvedLineLabel" :duration-ms="320" />
+    </span>
+  </div>
+  <span v-else-if="activeStep" class="tx-ai-run-status-wrap">
     <button
       type="button"
       class="tx-ai-run-status"
@@ -85,6 +172,68 @@ const liveAnnouncement = computed(() => {
 </template>
 
 <style scoped lang="scss">
+.tx-ai-run-status-line {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-width: 0;
+  padding: 0 24px;
+  box-sizing: border-box;
+  color: var(--tx-text-color-secondary, #64748b);
+  font-size: var(--shell-fs-sm, 12px);
+}
+
+.tx-ai-run-status-line__mark-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 29px;
+  height: 16px;
+}
+
+.tx-ai-run-status-line__mark {
+  flex: none;
+}
+
+.tx-ai-run-miko-fade-enter-from,
+.tx-ai-run-miko-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.88);
+}
+
+.tx-ai-run-status-line__time {
+  flex: none;
+  font-family: var(--shell-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--shell-fs-sm, 12px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.tx-ai-run-status-line__divider {
+  flex: none;
+  align-self: stretch;
+  width: 1px;
+  background: var(--tx-border-color-light, #e2e8f0);
+}
+
+.tx-ai-run-status-line__step {
+  max-width: min(60ch, 100%);
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--shell-fs-sm, 12px);
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &.is-tool {
+    color: var(--tx-color-primary, #3b82f6);
+  }
+}
+
 .tx-ai-run-status-wrap {
   position: relative;
   display: inline-flex;
@@ -180,6 +329,13 @@ const liveAnnouncement = computed(() => {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .tx-ai-run-miko-fade-enter-active,
+  .tx-ai-run-miko-fade-leave-active {
+    transition:
+      opacity 0.2s ease,
+      transform 0.2s ease;
+  }
+
   .tx-ai-run-status.is-running .tx-ai-run-status__dot {
     animation: tx-ai-status-pulse 1.5s ease-in-out infinite;
   }

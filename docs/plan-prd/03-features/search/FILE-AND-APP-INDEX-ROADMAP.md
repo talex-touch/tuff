@@ -1,7 +1,7 @@
 # 文件与应用索引 Roadmap
 
 > 状态：Roadmap / 未排期
-> 更新时间：2026-11-22
+> 更新时间：2026-11-23
 > 范围：应用发现、文件扫描与过滤、名字查询、索引存储
 > 非目标：全局执行顺序（服从 [`TODO.md`](../../TODO.md)）；Windows Everything 路径；正文语义召回的 Provider 验收（活审计 B1）
 
@@ -28,6 +28,9 @@
 | `SQLITE_BUSY` 不再锁死文件源（E2，11-22） | PR `#2250`（`5693e3b8a`）：`classifyRunFailure` 对 `SQLITE_BUSY`（`FILE_INDEX_DATABASE_BUSY`，`retryable: true`）置 `halts: false`，保持 `initializationFailed = false`（`FileIndexedSource.getStatus()` 同步报告 `health = 'degraded'`），使瞬时锁竞争不再阻断后续监听事件、启动重试与手动重建，真正不可重试的扫描错误（`FILE_INDEX_SCAN_FAILED`）仍置 `initializationFailed = true`；同时在 `resetIndexedSourceRuntimeState` 成功后及 `rebuildIndex` 触发 `scanSource(ManualRebuild)` 前清零 `initializationFailed` 与 `initializationFailure` | `file-provider-startup.test.ts`（55 个用例）与 `file-indexed-source.test.ts`（19 个用例）覆盖 `SQLITE_BUSY` 瞬时失败、自动重试恢复、致命错误停机与手动重建/重置前解除锁死。验证时本机运行着 `/Applications/Tuff.app`，未在隔离 Electron 实例复测 |
 | 搜索推送改单向通知消除退出卡顿（E3，11-22） | PR `#2249`（`1591d7717`）：`core-box/ipc.ts` 的 `createSenderSearchSink` 将 `CoreBoxEvents.search.{update,noResults,end}` 三条 `void` 通知从等待回包的 `await transport.sendTo(...)`（每条挂 60 秒 `CHANNEL_DEFAULT_TIMEOUT` 并串行排在 `SearchSession.deliveryTail` 上）改为单向 `transport.notifyTo(sender, event, payload, plugin)`，消除阻塞 `SearchEngineCore.destroy()` → `sessionRegistry.destroy()` 超出 8 秒退出预算的悬空会话，同时保留索引排空失败时的 `SEARCH_CORE_INDEX_DRAIN_FAILED` `AggregateError` fail-closed 契约 | `search-core.contracts.test.ts` 与 `core-box/ipc.test.ts`（共 8 个套件 / 152 个用例）用确定性假时钟复现修复前卡满退出预算并验证修复后立即结算（含 60 秒窗口后、空查询 `noResults` 与采集中途退出）。验证时本机运行着 `/Applications/Tuff.app`，未在隔离 Electron 实例复测 |
 | 维护片连续失败指数退避（E5，11-22） | PR `#2247`（`9762f3e24`）：`IndexMaintenanceRunner` 记录连续非取消失败次数（覆盖维护片执行、提交发布与提交确认），退避延迟按 `1s → 2s → 4s → 8s → 16s → 32s → 60s` 封顶；在重新 `start()`/`stop()` 或非 `deferred` 维护片（含待确认通知链路）完整成功后清零退避，空闲/未就绪跳过与 `result.deferred` 保持既有计数且正常推进仍维持 `250ms`（全部完成时 `60_000ms`） | `index-maintenance-runner.test.ts` 新增 7 个确定性假时钟用例（连同 `app-index-maintenance-service.test.ts` 共 9/9 通过），覆盖 `1s..60s` 阶梯、发布/确认失败退避、`deferred` 保序与成功复位。验证时本机运行着 `/Applications/Tuff.app`，未在隔离 Electron 实例复测 |
+| `file-provider.ts` F1 纯记录映射与 F3 清理（11-23） | PR `#2263`（`f22d7f9c6`）：将 F1 纯记录映射抽离至 `file-provider-record-mapper.ts`（批量发布逻辑与变更租约顺序保持原处不动），并完成 F3 清理（删除 4 个无生产调用方的公开成员、抽离重复 yield/abort 异步辅助函数至 `file-provider-async-utils.ts`） | `file-provider.ts` 降至 **2,650 代码行**（`.github/module-size-ratchet.json` 棘轮同步收紧 `2,790 -> 2,650`）；单测与契约回归通过，验证时本机运行着 `/Applications/Tuff.app`，未在隔离 Electron 实例实测 |
+| 索引上限暂停与磁盘不足区分（A6，11-23） | PR `#2268`（`813446aac`）：在 `FileIndexContentStorage['status']` 与 `projectContentStorage` 新增 `'index-full'` 状态；`FileProviderContentCapacityService` 将 `SEARCH_INDEX_RESERVE_REACHED`、`FILE_INDEX_STORAGE_FULL` 以及磁盘剩余 `>= 3 GiB` 时的裸 `SQLITE_FULL` 归类为 `'index-full'`，不再在 30 秒轮询下因磁盘有空而反复恢复撞满，同时保持 `ENOSPC` / 磁盘 `< 3 GiB` / 设置写盘失败走 `'low-space'`；通过 `notifyIndexSpaceFreed()` / `clearIndexFullPause()`（接入容量淘汰 `onCapacityEvicted`、压缩 `compactSearchIndex`、配置清理、索引重建/清空与关闭正文索引清理）及 `getIndexStorage` 低于基线且留出双倍预留余量检测触发恢复并复核磁盘空间；`SettingFileIndex.vue` 与 `en-US.json`/`zh-CN.json` 展示独立的索引已满标题、占用摘要、恢复说明与确认提示，不再误报「磁盘空间不足」 | `packages/utils` `file-index-projection.test.ts`（18/18）与 `apps/core-app` `addon/files/` 全量 + `SettingFileIndex.capacity.test.ts` + `translation-coverage.test.ts` 共 95 个套件 / 956 个用例、`typecheck:node`/`typecheck:web` 与棘轮校验（`file-provider.ts` 保持 `2,650 / 2,650`）全通过；验证时本机运行着 `/Applications/Tuff.app`，未启动隔离 Electron 实例实测 |
+| 应用目录未稳定进入重试阶梯（B1，11-23） | PR `#2267`（`74680997e`）：从 `app-provider.ts` 抽离 `_waitForItemStable` 及探针/稳定窗口常量（`300ms` / `250ms`）至 `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-item-stability.ts`，提供支持 `AbortSignal` 的结构化 `ItemStabilityResult`（`stable \| changing \| missing \| error \| aborted`）；`AppProvider.processAppPath` 将 `changing` 与非缺失 `error` 接入既有有界、按路径去重的重试阶梯（`2s/8s/30s` + 有界 3 轮死信），保持 `missing`（`ENOENT`/`ENOTDIR`）终止态并在关停时清理在途等待与定时器 | `app-provider.ts` 降至 **3,868 代码行**（`.github/module-size-ratchet.json` 棘轮由 `3,878` 收紧至 `3,868`）；`addon/apps/` 26 个套件 / 298 个用例（含 `app-provider-item-stability.test.ts` 12 项与 `app-provider.realtime-freshness.test.ts` 6 项新增 B1 用例）与 `typecheck:node` 全通过；验证时本机运行着 `/Applications/Tuff.app`，未启动隔离 Electron 实例实测 |
 
 ## 2. 实测：索引为什么这么大（2026-10-20）
 
@@ -79,7 +82,7 @@
 | A3 | 收缩 n-gram 关键词 | 已并入 A12，那里有 2026-10-20 的实测和读取路径 | — |
 | A4 | VACUUM 门槛（已完成 10-21，见上方「空间回收」） | 要求空闲空间达到文件大小的 2.5 倍（19 GB），本机只有 14 GB，所以 1.27 GB 空闲页一直回收不了（冗余索引退役后是 1.69 GB）。用户侧的表现：「清理」只做 DELETE，47.2 GB 的那台机器清理几次文件都没变小 | 改为按「2 ×（文件 − 空闲页）+ 余量」计算，或一次性切到 `auto_vacuum = INCREMENTAL` 后用 `incremental_vacuum` 分批回收 |
 | A5 | legacy（非 split）库里的冗余索引 | 在主线程 DROP 会卡住 UI，所以没处理 | split 默认开启，只影响回滚到 `=0` 的用户 |
-| A6 | 索引满时正文索引每 30 秒撞一次 | 正文写入遇到 `SQLITE_FULL` 只暂停 30 秒，恢复条件是磁盘剩余 ≥ 3 GiB（`file-provider-content-capacity-service.ts`）。索引到上限而磁盘有空时会反复恢复、反复失败，设置页还报「磁盘空间不足」 | 索引到上限时正文索引保持暂停，提示说的是索引满而不是磁盘满 |
+| A6 | 索引满时正文索引每 30 秒撞一次（已完成 11-23，见上方「索引上限暂停与磁盘不足区分」） | 原先正文写入遇到 `SQLITE_FULL` 只暂停 30 秒并按磁盘剩余 ≥ 3 GiB 自动恢复，索引到上限而磁盘有空时每 30 秒循环撞满且设置页误报「磁盘空间不足」 | 已通过 PR `#2268`（`813446aac`）将索引上限暂停独立为 `'index-full'` 状态，停止 30 秒自动恢复循环，待淘汰/压缩/清理/重建或索引占用回落至安全余量后复核磁盘空间再恢复，设置页显示索引已满提示；单测与类型检查通过（未在运行 `Tuff.app` 的本机另启隔离 Electron 实例） |
 | A7 | 到上限后首轮扫描永远完成不了 | 根没有完成记录，所以每次启动都全量走一遍（只增不删），撞满即止（已实测）；也进不了按过期触发的对账，离线删除只在过期结果被展示时才清掉（代码追踪）。10-21 容量模式之后：撞满会抬地平线并清扫，清扫删掉文件后扫描重跑并跳过地平线之前的文件，按代码几轮之后能走完（未在隔离实例实测）；满库全是近 30 天的文件时仍然走不完 | 不能把没走完的扫描当成删除授权（数据库写入契约）。先定上限下的覆盖记录该怎么写 |
 | A8 | 上限不计 `.corrupt` 隔离副本 | 损坏库会保留一份 `.corrupt`，最坏情况下占用是上限的两倍 | 决定超限时删掉副本还是计入上限 |
 | A9 | legacy（非 split）模式没有上限 | 索引表在 `database.db` 里，不能整库删掉重建 | 只影响 `TUFF_DB_SEARCH_SPLIT_ENABLED=0` 的应急回退 |
@@ -97,7 +100,7 @@
 
 | ID | 事项 | 证据 | 前置与验收 |
 | --- | --- | --- | --- |
-| B1 | 「目录还在变」时不进重试阶梯 | `app-provider.ts` 的 `processAppPath` 直接返回；近两天日志 0 次 | `app-provider.ts` 只剩 1 行额度（3877/3878），要先把 `_waitForItemStable` 挪到旁边的模块 |
+| B1 | 「目录还在变」时不进重试阶梯（已完成 11-23，见上方「应用目录未稳定进入重试阶梯」） | 原先 `app-provider.ts` 的 `processAppPath` 直接返回且仅剩 1 行棘轮额度（`3,877/3,878`） | 已通过 PR `#2267`（`74680997e`）将 `_waitForItemStable` 抽离至 `app-provider-item-stability.ts`（`app-provider.ts` 棘轮收紧 `3,878 -> 3,868`），并将 `changing` / 非缺失 `error` 接入有界去重重试阶梯；单测与类型检查通过（未启动隔离 Electron 实例） |
 | B2 | Spotlight 关闭时找不到深层应用 | 遍历深度 2，漏掉 20 个：Xcode 内嵌应用、Adobe 辅助应用、`~/Applications/CrossOver/Steam/*` | 若要加深，监听深度必须同步加深，保证快照和监听覆盖一致 |
 | B3 | 「微信搜不到」 | 两个 profile 的库里都复现不了 | 需要具体的查询词和截图再定 |
 
@@ -128,9 +131,9 @@
 
 | ID | 事项 | 证据 | 前置与验收 |
 | --- | --- | --- | --- |
-| F1 | 批量发布和记录映射 | 约 290 行。依赖变更租约分片和「租约内提交、租约外发布进度」的顺序，还有一处中止竞态 | 先单独挪出两个纯函数的记录映射（约 50 行，几乎无风险） |
+| F1 | 批量发布和记录映射（纯记录映射已于 11-23 落地，PR `#2263` `f22d7f9c6`；批量发布保留原处） | 约 290 行。纯记录映射已抽离至 `file-provider-record-mapper.ts`；剩余批量发布依赖变更租约分片和「租约内提交、租约外发布进度」的顺序，还有一处中止竞态 | 批量发布暂留原处，后续若拆须锁死租约提交与进度发布顺序 |
 | F2 | 索引运行流水线 `_initialize` | 约 90 行，需要约 14 个惰性依赖，测试会替换其中几个 | 保留 `runIntegrityCheck` 和 `startIndexing` 在原处 |
-| F3 | 没有调用方的公开成员和重复的构造写法 | 4 个公开成员共 12 行没有生产调用方；构造函数里有 5 个相同的 yield 闭包和一个 20 行的可中止 sleep，约 35 行 | 改测试里的少量 mock |
+| F3 | 没有调用方的公开成员和重复的构造写法（已完成 11-23，PR `#2263` `f22d7f9c6`） | 4 个无生产调用方的公开成员已移除，重复 yield 闭包与可中止 sleep 辅助函数已抽离至 `file-provider-async-utils.ts` | `file-provider.ts` 降至 `2,650` 代码行，棘轮收紧至 `2,650`（未在隔离 Electron 实例复测） |
 
 关停顺序、正文补全和排空这几块共享可变状态，测试又直接替换内部成员，风险高，暂不拆。
 

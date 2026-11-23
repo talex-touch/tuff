@@ -123,7 +123,7 @@ async function loadProvider() {
   const { appProvider } = await loadSubject()
   const provider = asPrivateProvider(appProvider)
   provider.searchIndex = {}
-  provider._waitForItemStable = vi.fn(async () => true)
+  provider._checkItemStability = vi.fn(async () => ({ status: 'stable' as const }))
   provider.scheduleAppIconHydration = vi.fn()
   return provider
 }

@@ -7,16 +7,13 @@ import { appName, toastHostRequestedEvent } from '~/constants'
 import type { GlobalSearchRequest } from '~/utils/global-search-boot'
 
 const LazyToastContainer = defineAsyncComponent(() => import('~/components/ToastContainer.vue'))
-// Only protected routes ever render the two auth gates below, but a static TxEmptyState here
-// put it — and the seven tuffex primitives it builds on — into the entry chunk of every page.
-const LazyAuthGateState = defineAsyncComponent(() => import('@talex-touch/tuffex/empty-state').then(module => module.TxEmptyState))
 
 useHead({
   title: appName,
   titleTemplate: title => (!title || title === appName) ? appName : (title.includes(appName) || title.includes('Tuff') ? title : `${title} · Tuff`),
 })
 
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 // Screen readers, hyphenation and CJK line breaking take the page language from here; the tags
 // match the hreflang the docs pages advertise.
 useHead({ htmlAttrs: { lang: computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en')) } })
@@ -62,6 +59,16 @@ const toastHostMounted = ref(false)
 const sessionErrorCookie = useCookie<string | null>('nexus_auth_error')
 const isAuthLoading = computed(() => status.value === 'loading')
 const isAuthenticated = computed(() => status.value === 'authenticated')
+const authGateCheckingTitle = computed(() => (
+  te('auth.checkingSession')
+    ? t('auth.checkingSession')
+    : (locale.value === 'zh' ? '正在校验登录状态…' : 'Checking your session…')
+))
+const authGateRedirectingTitle = computed(() => (
+  te('auth.redirecting')
+    ? t('auth.redirecting')
+    : (locale.value === 'zh' ? '正在跳转登录...' : 'Redirecting to sign in...')
+))
 const shouldSyncProfileLocale = computed(() => isProtectedRoute.value)
 const protectedSessionRecheckDone = ref(false)
 const protectedSessionRecheckRunning = ref(false)
@@ -230,10 +237,28 @@ onMounted(() => {
     // A public page for a reader with no session-hint cookie is the common case, and the
     // request it used to make here only ever came back empty. Protected routes and the auth
     // shell still verify with the server; everything else settles as signed-out for free.
-    if (!isProtectedRoute.value && !isAuthShellRoute.value && !hasSessionHint())
+    if (!isProtectedRoute.value && !isAuthShellRoute.value && !hasSessionHint()) {
       settleAnonymousSession()
-    else
+    }
+    else if (isProtectedRoute.value) {
+      // Anonymous visitors without a session-hint cookie do not need the watcher's second recovery
+      // read, while authenticated or hinted sessions keep the one-shot recovery marker available.
+      const anonymousWithoutHint = !hasSessionHint()
+      if (anonymousWithoutHint)
+        protectedSessionRecheckRunning.value = true
       void getSession()
+        .catch(() => {})
+        .finally(() => {
+          if (anonymousWithoutHint) {
+            protectedSessionRecheckRunning.value = false
+            if (status.value !== 'authenticated')
+              protectedSessionRecheckDone.value = true
+          }
+        })
+    }
+    else {
+      void getSession()
+    }
   }
   takeOverSearchBoot()
   window.addEventListener('keydown', handleGlobalSearchShortcut, { capture: true })
@@ -549,25 +574,23 @@ watchEffect(() => {
       v-if="isAuthLoading"
       class="grid h-screen w-screen place-content-center"
     >
-      <LazyAuthGateState
-        variant="loading"
-        :title="t('auth.checkingSession')"
-        description=""
-        size="small"
-        layout="vertical"
-      />
+      <div class="nexus-auth-gate" role="status" aria-live="polite">
+        <span class="nexus-auth-gate__spinner" aria-hidden="true" />
+        <p class="nexus-auth-gate__title">
+          {{ authGateCheckingTitle }}
+        </p>
+      </div>
     </div>
     <div
       v-else-if="!isAuthenticated"
       class="grid h-screen w-screen place-content-center"
     >
-      <LazyAuthGateState
-        variant="loading"
-        :title="t('auth.redirecting')"
-        description=""
-        size="small"
-        layout="vertical"
-      />
+      <div class="nexus-auth-gate" role="status" aria-live="polite">
+        <span class="nexus-auth-gate__spinner" aria-hidden="true" />
+        <p class="nexus-auth-gate__title">
+          {{ authGateRedirectingTitle }}
+        </p>
+      </div>
     </div>
     <NuxtLayout v-else>
       <NuxtPage />
@@ -653,5 +676,35 @@ html.dark {
 
 [id] {
   scroll-margin-top: 120px;
+}
+
+.nexus-auth-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.nexus-auth-gate__spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(148, 163, 184, 0.28);
+  border-top-color: currentColor;
+  border-radius: 999px;
+  animation: nexus-auth-gate-spin 0.75s linear infinite;
+}
+
+.nexus-auth-gate__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+@keyframes nexus-auth-gate-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
