@@ -644,7 +644,15 @@ export type AppProviderPrivate = {
   _clearPendingDeletions: () => Promise<void>
   _initialize: (options?: { forceRefresh?: boolean }) => Promise<unknown>
   _syncSemanticAliasCatalogIfNeeded: () => Promise<void>
-  _waitForItemStable: (path: string, delay?: number, retries?: number) => Promise<boolean>
+  _checkItemStability: (
+    path: string
+  ) => Promise<
+    | { status: 'stable' }
+    | { status: 'changing'; attempts: number }
+    | { status: 'missing'; error: unknown }
+    | { status: 'error'; error: unknown }
+    | { status: 'aborted' }
+  >
   publishAppRuntimeUpsert: (appInfo: { path: string }, reason: string) => Promise<void>
   upsertAppInfo: (appInfo: unknown, options?: unknown) => Promise<'added' | 'updated'>
   appResolutionRetries: Map<

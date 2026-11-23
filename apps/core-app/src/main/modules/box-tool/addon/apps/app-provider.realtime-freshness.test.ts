@@ -81,7 +81,7 @@ async function loadProvider() {
   const privateProvider = asPrivateProvider(appProvider)
   privateProvider.searchIndex = {}
   privateProvider.maintenanceSearchIndex = {}
-  privateProvider._waitForItemStable = vi.fn(async () => true)
+  privateProvider._checkItemStability = vi.fn(async () => ({ status: 'stable' as const }))
   privateProvider.scheduleAppIconHydration = vi.fn()
   return privateProvider
 }
@@ -153,11 +153,9 @@ describe('app realtime index freshness', () => {
 
   describe('F3 stability wait', () => {
     it('probes at 300ms and settles for 250ms once the bundle stops growing', async () => {
+      vi.useFakeTimers()
       const { appProvider } = await loadSubject()
       const provider = asPrivateProvider(appProvider)
-      // `vi.resetModules()` hands each test a fresh mock registry, so the sleep spy has to be read
-      // from the same registry the provider just captured rather than from a top-level import.
-      const { sleep } = await import('@talex-touch/utils')
       vi.spyOn(fs, 'stat').mockResolvedValue({
         size: 4096,
         mtimeMs: 1_000,
@@ -165,11 +163,14 @@ describe('app realtime index freshness', () => {
       } as never)
       const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
 
-      const stable = await provider._waitForItemStable(APP_PATH)
+      const pending = provider._checkItemStability(APP_PATH)
+      await vi.advanceTimersByTimeAsync(550)
+      const stability = await pending
 
-      expect(stable).toBe(true)
+      expect(stability).toEqual({ status: 'stable' })
       expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 300)
-      expect(vi.mocked(sleep)).toHaveBeenCalledWith(250)
+      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 250)
+      expect(vi.getTimerCount()).toBe(0)
     })
   })
 
@@ -368,6 +369,194 @@ describe('app realtime index freshness', () => {
 
       expect(provider.appResolutionRetries.has(APP_PATH)).toBe(false)
     })
+
+    it('routes a changing bundle directory into the retry ladder and indexes it once stable', async () => {
+      vi.useFakeTimers()
+      const { appProvider } = await loadSubject()
+      const provider = asPrivateProvider(appProvider)
+      provider.searchIndex = {}
+      provider.maintenanceSearchIndex = {}
+      provider.scheduleAppIconHydration = vi.fn()
+      const { dbUtils, insertedValues } = createDbUtils()
+      provider.dbUtils = dbUtils
+
+      let mtime = 1_000
+      let stillCopying = true
+      vi.spyOn(fs, 'stat').mockImplementation(
+        async () =>
+          ({
+            size: 96,
+            mtimeMs: stillCopying ? (mtime += 1) : mtime,
+            isDirectory: () => true
+          }) as never
+      )
+
+      const initialPending = provider.processAppPath(APP_PATH, { discovery: 'watch' })
+      // 5 stability probes x 300ms while directory mtime is still moving.
+      await vi.advanceTimersByTimeAsync(1_500)
+      const initialResult = await initialPending
+
+      expect(initialResult).toMatchObject({ success: false, status: 'invalid', reason: 'unstable' })
+      expect(resolveAppInfoByPathMock).not.toHaveBeenCalled()
+      expect(provider.appResolutionRetries.get(APP_PATH)?.attempt).toBe(1)
+      expect(vi.getTimerCount()).toBe(1)
+
+      // Copy finishes before the first 2s retry fires.
+      stillCopying = false
+      await vi.advanceTimersByTimeAsync(2_000)
+      // Retry stability probe: 300ms probe + 250ms settle.
+      await vi.advanceTimersByTimeAsync(550)
+      await drainMicrotasks()
+
+      expect(resolveAppInfoByPathMock).toHaveBeenCalledTimes(1)
+      expect(insertedValues).toHaveLength(1)
+      expect(appRuntimeApplyDeltaMock).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'app-resolution-retry-upsert' })
+      )
+      expect(provider.appResolutionRetries.size).toBe(0)
+      expect(provider.appResolutionDeadLetters.size).toBe(0)
+      expect(operationalErrorReportMock).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('deduplicates retry timers per path when repeated unstable checks arrive', async () => {
+      vi.useFakeTimers()
+      const provider = await loadProvider()
+      provider.dbUtils = createDbUtils().dbUtils
+      provider._checkItemStability = vi.fn(async () => ({
+        status: 'changing' as const,
+        attempts: 5
+      }))
+
+      await provider.processAppPath(APP_PATH, { discovery: 'watch' })
+      expect(provider.appResolutionRetries.size).toBe(1)
+      expect(provider.appResolutionRetries.get(APP_PATH)?.attempt).toBe(1)
+      expect(vi.getTimerCount()).toBe(1)
+
+      // Another unstable check for the same path replaces the prior timer instead of leaking one.
+      await provider.processAppPath(APP_PATH, { discovery: 'watch' })
+      expect(provider.appResolutionRetries.size).toBe(1)
+      expect(provider.appResolutionRetries.get(APP_PATH)?.attempt).toBe(2)
+      expect(vi.getTimerCount()).toBe(1)
+    })
+
+    it('bounds retries and dead-letter sweeps when a bundle stays unstable forever', async () => {
+      vi.useFakeTimers()
+      const provider = await loadProvider()
+      provider.dbUtils = createDbUtils().dbUtils
+      provider._checkItemStability = vi.fn(async () => ({
+        status: 'changing' as const,
+        attempts: 5
+      }))
+
+      await provider.processAppPath(APP_PATH, { discovery: 'watch' })
+      for (const delayMs of [2_000, 8_000, 30_000]) {
+        await vi.advanceTimersByTimeAsync(delayMs)
+        await drainMicrotasks()
+      }
+
+      expect(provider.appResolutionRetries.size).toBe(0)
+      expect(provider.appResolutionDeadLetters.has(APP_PATH)).toBe(true)
+      expect(operationalErrorReportMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          domain: 'app-index',
+          operation: 'resolve-path',
+          code: 'APP_INDEX_RESOLVE_RETRIES_EXHAUSTED'
+        })
+      )
+
+      for (let sweep = 0; sweep < 4; sweep += 1) {
+        await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
+        await drainMicrotasks()
+      }
+
+      expect(provider.appResolutionRetries.size).toBe(0)
+      expect(provider.appResolutionDeadLetters.size).toBe(0)
+      expect(provider.appResolutionSweepTimer).toBeNull()
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('does not schedule retries when stability stat reports the path is missing', async () => {
+      vi.useFakeTimers()
+      const provider = await loadProvider()
+      provider.dbUtils = createDbUtils().dbUtils
+      provider._checkItemStability = vi.fn(async () => ({
+        status: 'changing' as const,
+        attempts: 5
+      }))
+
+      await provider.processAppPath(APP_PATH, { discovery: 'watch' })
+      expect(provider.appResolutionRetries.has(APP_PATH)).toBe(true)
+
+      const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      provider._checkItemStability = vi.fn(async () => ({
+        status: 'missing' as const,
+        error: enoent
+      }))
+
+      const result = await provider.processAppPath(APP_PATH, { discovery: 'watch' })
+
+      expect(result).toMatchObject({ success: false, status: 'invalid', reason: 'unstable' })
+      expect(provider.appResolutionRetries.size).toBe(0)
+      expect(provider.appResolutionDeadLetters.size).toBe(0)
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('cancels in-flight stability waits and pending retry timers on shutdown without leaking timers', async () => {
+      vi.useFakeTimers()
+      const { appProvider } = await loadSubject()
+      const provider = asPrivateProvider(appProvider)
+      provider.searchIndex = {}
+      provider.maintenanceSearchIndex = {}
+      provider.scheduleAppIconHydration = vi.fn()
+      provider.dbUtils = createDbUtils().dbUtils
+
+      // Start a real stability wait that sits on its 300ms probe timer.
+      vi.spyOn(fs, 'stat').mockResolvedValue({
+        size: 96,
+        mtimeMs: 1_000,
+        isDirectory: () => true
+      } as never)
+
+      const inFlight = provider.processAppPath(APP_PATH, { discovery: 'watch' })
+      await drainMicrotasks()
+      expect(vi.getTimerCount()).toBe(1)
+
+      await appProvider.prepareForSearchIndexShutdown()
+      const result = await inFlight
+
+      expect(result).toMatchObject({ success: false, status: 'invalid', reason: 'unstable' })
+      expect(resolveAppInfoByPathMock).not.toHaveBeenCalled()
+      expect(provider.appResolutionRetries.size).toBe(0)
+      expect(provider.appResolutionDeadLetters.size).toBe(0)
+      expect(provider.appResolutionSweepTimer).toBeNull()
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('clears scheduled unstable retry and sweep timers on shutdown without leaking timers', async () => {
+      vi.useFakeTimers()
+      const { appProvider } = await loadSubject()
+      const provider = asPrivateProvider(appProvider)
+      provider.searchIndex = {}
+      provider.maintenanceSearchIndex = {}
+      provider.scheduleAppIconHydration = vi.fn()
+      provider.dbUtils = createDbUtils().dbUtils
+      provider._checkItemStability = vi.fn(async () => ({
+        status: 'changing' as const,
+        attempts: 5
+      }))
+
+      await provider.processAppPath(APP_PATH, { discovery: 'watch' })
+      expect(provider.appResolutionRetries.has(APP_PATH)).toBe(true)
+      expect(vi.getTimerCount()).toBe(1)
+
+      await appProvider.prepareForSearchIndexShutdown()
+
+      expect(provider.appResolutionRetries.size).toBe(0)
+      expect(provider.appResolutionDeadLetters.size).toBe(0)
+      expect(provider.appResolutionSweepTimer).toBeNull()
+      expect(vi.getTimerCount()).toBe(0)
+    })
   })
 
   describe('F4 filesystem cardinality probe', () => {
@@ -537,6 +726,7 @@ describe('app realtime index freshness', () => {
         // A `.app` is a directory: its st_size is a constant 96 on APFS no matter how much is being
         // copied into it, so comparing size returned "stable" immediately. The directory mtime
         // moves while entries land, and that is what a copy in progress looks like.
+        vi.useFakeTimers()
         const { appProvider } = await loadSubject()
         const provider = asPrivateProvider(appProvider)
         let mtime = 1000
@@ -544,13 +734,16 @@ describe('app realtime index freshness', () => {
           async () => ({ size: 96, mtimeMs: (mtime += 1), isDirectory: () => true }) as never
         )
 
-        const stable = await provider._waitForItemStable(APP_PATH, 0, 3)
+        const pending = provider._checkItemStability(APP_PATH)
+        await vi.advanceTimersByTimeAsync(1_500)
+        const stability = await pending
 
-        expect(stable).toBe(false)
-        expect(fs.stat).toHaveBeenCalledTimes(6)
+        expect(stability).toEqual({ status: 'changing', attempts: 5 })
+        expect(fs.stat).toHaveBeenCalledTimes(10)
       })
 
       it('settles once the bundle directory stops changing', async () => {
+        vi.useFakeTimers()
         const { appProvider } = await loadSubject()
         const provider = asPrivateProvider(appProvider)
         vi.spyOn(fs, 'stat').mockResolvedValue({
@@ -559,7 +752,9 @@ describe('app realtime index freshness', () => {
           isDirectory: () => true
         } as never)
 
-        expect(await provider._waitForItemStable(APP_PATH, 0, 3)).toBe(true)
+        const pending = provider._checkItemStability(APP_PATH)
+        await vi.advanceTimersByTimeAsync(550)
+        expect(await pending).toEqual({ status: 'stable' })
       })
     })
 

@@ -276,7 +276,7 @@ describe('appProvider rebuild maintenance', () => {
       }))
 
       getAppInfoByPathMock.mockResolvedValue(appInfo)
-      privateProvider._waitForItemStable = vi.fn(async () => true)
+      privateProvider._checkItemStability = vi.fn(async () => ({ status: 'stable' as const }))
       privateProvider.dbUtils = {
         getFileByPath: vi.fn(async () => null),
         getDb: () => ({
@@ -409,7 +409,7 @@ describe('appProvider rebuild maintenance', () => {
       }))
 
       getAppInfoByPathMock.mockResolvedValue(appInfo)
-      privateProvider._waitForItemStable = vi.fn(async () => true)
+      privateProvider._checkItemStability = vi.fn(async () => ({ status: 'stable' as const }))
       const addFileExtensionsMock = vi.fn(async () => undefined)
       privateProvider.dbUtils = {
         getFileByPath: vi.fn(async () => null),
@@ -472,10 +472,10 @@ describe('appProvider rebuild maintenance', () => {
         returning: vi.fn(async () => [insertedFile]),
         onConflictDoNothing: vi.fn(async () => undefined)
       }))
-      const waitForItemStable = vi.fn(async () => true)
+      const checkItemStability = vi.fn(async () => ({ status: 'stable' as const }))
 
       getAppInfoByPathMock.mockResolvedValue(appInfo)
-      privateProvider._waitForItemStable = waitForItemStable
+      privateProvider._checkItemStability = checkItemStability
       const addFileExtensionsMock = vi.fn(async () => undefined)
       privateProvider.dbUtils = {
         getFileByPath: vi.fn(async () => null),
@@ -489,7 +489,7 @@ describe('appProvider rebuild maintenance', () => {
       const result = await appProvider.addAppByPath(shellPath)
 
       expect(result).toEqual({ success: true, status: 'added', path: shellPath })
-      expect(waitForItemStable).not.toHaveBeenCalled()
+      expect(checkItemStability).not.toHaveBeenCalled()
       expect(getAppInfoByPathMock).toHaveBeenCalledWith(shellPath)
       expect(valuesMock).toHaveBeenCalled()
       expect(addFileExtensionsMock).toHaveBeenCalledWith(
@@ -539,11 +539,7 @@ describe('appProvider rebuild maintenance', () => {
         }
 
         getAppInfoByPathMock.mockResolvedValue(appInfo)
-        ;(
-          privateProvider as typeof privateProvider & {
-            _waitForItemStable: (filePath: string) => Promise<boolean>
-          }
-        )._waitForItemStable = vi.fn(async () => true)
+        privateProvider._checkItemStability = vi.fn(async () => ({ status: 'stable' as const }))
         privateProvider.dbUtils = {
           getFileByPath: vi.fn(async () => null),
           getDb: () => ({
@@ -625,10 +621,10 @@ describe('appProvider rebuild maintenance', () => {
       const insertMock = vi.fn(() => ({
         values: valuesMock
       }))
-      const waitForItemStable = vi.fn(async () => true)
+      const checkItemStability = vi.fn(async () => ({ status: 'stable' as const }))
 
       getAppInfoByPathMock.mockResolvedValue(appInfo)
-      privateProvider._waitForItemStable = waitForItemStable
+      privateProvider._checkItemStability = checkItemStability
       const addFileExtensionsMock = vi.fn(async () => undefined)
       privateProvider.dbUtils = {
         getFileByPath: vi.fn(async () => null),
@@ -643,7 +639,7 @@ describe('appProvider rebuild maintenance', () => {
       const result = await appProvider.addAppByPath(appId)
 
       expect(result).toEqual({ success: true, status: 'added', path: shellPath })
-      expect(waitForItemStable).not.toHaveBeenCalled()
+      expect(checkItemStability).not.toHaveBeenCalled()
       expect(getAppInfoByPathMock).toHaveBeenCalledWith(shellPath)
       expect(addFileExtensionsMock).toHaveBeenCalledWith(
         expect.arrayContaining([
@@ -2309,7 +2305,7 @@ describe('appProvider rebuild maintenance', () => {
         lastModified: new Date('2026-05-30T00:00:00.000Z')
       }
       getAppInfoByPathMock.mockResolvedValue(appInfo)
-      privateProvider._waitForItemStable = vi.fn(async () => true)
+      privateProvider._checkItemStability = vi.fn(async () => ({ status: 'stable' as const }))
       privateProvider.dbUtils = {
         getFilesByType: vi.fn(async () => []),
         getFileByPath: vi.fn(async () => null),
