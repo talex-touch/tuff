@@ -17,6 +17,10 @@ import {
   type SearchKernelShutdownResult,
   type SearchKernelSuccessResponse
 } from './search-kernel-protocol'
+import {
+  createSearchKernelWorkerHandlers,
+  type SearchKernelWorkerHandlersOptions
+} from './search-kernel-worker-handlers'
 
 const DEFAULT_DRAIN_TIMEOUT_MS = 3_000
 
@@ -44,11 +48,15 @@ export type SearchKernelTaskHandler<TPayload = unknown, TResult = unknown> = (
 export interface SearchKernelRuntimeOptions {
   port: SearchKernelParentPort
   handlers?: Record<string, SearchKernelTaskHandler>
+  registerDefaultWorkerHandlers?: boolean
+  workerHandlersOptions?: SearchKernelWorkerHandlersOptions
+  onShutdown?: () => void | Promise<void>
   now?: () => number
   pid?: number
   memoryUsage?: () => NodeJS.MemoryUsage
   exit?: (code: number) => void
   drainTimeoutMs?: number
+  cleanupTimeoutMs?: number
   scheduleExit?: (callback: () => void) => void
 }
 
@@ -92,6 +100,12 @@ export function createSearchKernelRuntime(
     options.drainTimeoutMs > 0
       ? options.drainTimeoutMs
       : DEFAULT_DRAIN_TIMEOUT_MS
+  const cleanupTimeoutMs =
+    typeof options.cleanupTimeoutMs === 'number' &&
+    Number.isFinite(options.cleanupTimeoutMs) &&
+    options.cleanupTimeoutMs > 0
+      ? options.cleanupTimeoutMs
+      : drainTimeoutMs
   const scheduleExit =
     options.scheduleExit ??
     ((callback: () => void) => {
@@ -104,12 +118,51 @@ export function createSearchKernelRuntime(
   let shutdownPromise: Promise<SearchKernelShutdownResult> | null = null
 
   const handlers = new Map<string, SearchKernelTaskHandler>()
+  const cleanupHooks: Array<() => void | Promise<void>> = []
+
+  if (options.registerDefaultWorkerHandlers !== false) {
+    const defaultWorkerHandlers = createSearchKernelWorkerHandlers(options.workerHandlersOptions)
+    for (const [taskType, handler] of Object.entries(defaultWorkerHandlers.handlers)) {
+      handlers.set(taskType, handler)
+    }
+    cleanupHooks.push(() => {
+      if (!defaultWorkerHandlers.hasPendingActivity()) {
+        return
+      }
+      return defaultWorkerHandlers.cleanup()
+    })
+  }
+
+  if (options.onShutdown) {
+    cleanupHooks.push(options.onShutdown)
+  }
+
   if (options.handlers) {
     for (const [taskType, handler] of Object.entries(options.handlers)) {
       if (taskType.length > 0) {
         handlers.set(taskType, handler)
       }
     }
+  }
+
+  let cleanupPromise: Promise<void> | null = null
+  const runCleanupHooks = (): Promise<void> | undefined => {
+    if (cleanupHooks.length === 0) return undefined
+    if (cleanupPromise) return cleanupPromise
+    const pending: Array<Promise<unknown>> = []
+    for (const hook of cleanupHooks) {
+      try {
+        const result = hook()
+        if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
+          pending.push(Promise.resolve(result))
+        }
+      } catch {
+        // Best-effort cleanup during shutdown.
+      }
+    }
+    if (pending.length === 0) return undefined
+    cleanupPromise = Promise.allSettled(pending).then(() => undefined)
+    return cleanupPromise
   }
 
   const activeTasks = new Map<string, Promise<void>>()
@@ -232,6 +285,25 @@ export function createSearchKernelRuntime(
           ])
         } finally {
           if (timer) clearTimeout(timer)
+        }
+      }
+
+      const pendingCleanup = runCleanupHooks()
+      if (pendingCleanup) {
+        let cleanupTimer: ReturnType<typeof setTimeout> | null = null
+        try {
+          await Promise.race([
+            pendingCleanup,
+            new Promise<void>((resolve) => {
+              cleanupTimer = setTimeout(() => {
+                cleanupTimer = null
+                resolve()
+              }, cleanupTimeoutMs)
+              cleanupTimer.unref?.()
+            })
+          ])
+        } finally {
+          if (cleanupTimer) clearTimeout(cleanupTimer)
         }
       }
 
@@ -397,13 +469,23 @@ export function createSearchKernelRuntime(
     }
   }
 
+  const handleBeforeExit = (): void => {
+    void runCleanupHooks()
+  }
+
   const dispose = (): void => {
     if (disposed) return
     disposed = true
     port.off('message', handleMessage)
+    if (cleanupHooks.length > 0) {
+      process.off('beforeExit', handleBeforeExit)
+    }
   }
 
   port.on('message', handleMessage)
+  if (cleanupHooks.length > 0) {
+    process.on('beforeExit', handleBeforeExit)
+  }
 
   safePost({
     kind: 'event',

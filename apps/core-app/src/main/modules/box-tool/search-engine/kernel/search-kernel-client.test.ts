@@ -17,7 +17,9 @@ import {
   SEARCH_KERNEL_UTILITY_PROCESS_ENV,
   SearchKernelClient,
   SearchKernelClientError,
+  getSharedSearchKernelClient,
   isSearchKernelUtilityProcessEnabled,
+  resetSharedSearchKernelClient,
   resolveSearchKernelEntryPath,
   type SearchKernelChildProcess
 } from './search-kernel-client'
@@ -100,6 +102,7 @@ function createWiredChild(
   pid: number,
   options: {
     handlers?: Record<string, SearchKernelTaskHandler>
+    registerDefaultWorkerHandlers?: boolean
     now?: () => number
     autoExitOnShutdown?: boolean
   } = {}
@@ -135,6 +138,7 @@ function createWiredChild(
     port: parentPort,
     pid,
     now: options.now,
+    registerDefaultWorkerHandlers: options.registerDefaultWorkerHandlers ?? false,
     handlers: options.handlers,
     exit: (code) => {
       if (options.autoExitOnShutdown !== false) {
@@ -566,5 +570,158 @@ describe('SearchKernelClient startup, roundtrips, and lifecycle', () => {
     expect(child.killMock).toHaveBeenCalledTimes(1)
     expect(client.getState()).toBe('stopped')
     expect(unregisterSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('cleans up exitWaiters after a timed-out shutdown and increments spawnGeneration on reuse', async () => {
+    vi.useFakeTimers()
+    const children: FakeUtilityProcess[] = []
+    const client = new SearchKernelClient({
+      resolveEntryPath: () => '/app/out/main/search-kernel-process.js',
+      registerBeforeQuit: () => () => {},
+      shutdownTimeoutMs: 200,
+      fork: () => {
+        const child = createFakeUtilityProcess(7800 + children.length)
+        children.push(child)
+        return child
+      }
+    })
+
+    const emitReady = (child: FakeUtilityProcess): void => {
+      child.emit('message', {
+        kind: 'event',
+        protocolVersion: SEARCH_KERNEL_PROTOCOL_VERSION,
+        event: 'kernel.ready',
+        pid: child.pid ?? 7800,
+        version: SEARCH_KERNEL_PROTOCOL_VERSION,
+        capabilities: [],
+        startedAt: 0
+      })
+    }
+
+    const firstStart = client.ensureStarted()
+    emitReady(children[0])
+    await firstStart
+    expect(client.getSpawnGeneration()).toBe(1)
+
+    // Timed-out shutdown kills child #0 without it emitting 'exit'; exitWaiters must be cleaned.
+    const shutdownPromise = client.shutdown({ reason: 'timeout-reuse' })
+    await vi.advanceTimersByTimeAsync(200)
+    await shutdownPromise
+    expect(children[0].killMock).toHaveBeenCalledTimes(1)
+    expect((client as unknown as { exitWaiters: Set<unknown> }).exitWaiters.size).toBe(0)
+
+    // Reusing the client spawns generation 2 cleanly.
+    const secondStart = client.ensureStarted()
+    emitReady(children[1])
+    await secondStart
+    expect(client.getSpawnGeneration()).toBe(2)
+    expect(client.getState()).toBe('ready')
+  })
+
+  it('shares a singleton via getSharedSearchKernelClient and disposes via resetSharedSearchKernelClient', async () => {
+    await resetSharedSearchKernelClient()
+    const child = createWiredChild(8900)
+    const first = getSharedSearchKernelClient({
+      resolveEntryPath: () => '/app/out/main/search-kernel-process.js',
+      registerBeforeQuit: () => () => {},
+      fork: () => child
+    })
+    const second = getSharedSearchKernelClient()
+    expect(second).toBe(first)
+
+    await first.ensureStarted()
+    expect(first.getState()).toBe('ready')
+
+    await resetSharedSearchKernelClient()
+    expect(first.getState()).toBe('stopped')
+
+    const third = getSharedSearchKernelClient({
+      resolveEntryPath: () => '/app/out/main/search-kernel-process.js',
+      registerBeforeQuit: () => () => {},
+      fork: () => createWiredChild(8901)
+    })
+    expect(third).not.toBe(first)
+    await resetSharedSearchKernelClient()
+  })
+
+  it('serializes concurrent resetSharedSearchKernelClient and delays replacement start until disposal finishes', async () => {
+    await resetSharedSearchKernelClient()
+    const children: FakeUtilityProcess[] = []
+    const forkSpy = vi.fn(() => {
+      const child = createFakeUtilityProcess(8950 + children.length)
+      children.push(child)
+      return child
+    })
+
+    const emitReady = (child: FakeUtilityProcess): void => {
+      child.emit('message', {
+        kind: 'event',
+        protocolVersion: SEARCH_KERNEL_PROTOCOL_VERSION,
+        event: 'kernel.ready',
+        pid: child.pid ?? 8950,
+        version: SEARCH_KERNEL_PROTOCOL_VERSION,
+        capabilities: [],
+        startedAt: 0
+      })
+    }
+
+    const first = getSharedSearchKernelClient({
+      resolveEntryPath: () => '/app/out/main/search-kernel-process.js',
+      registerBeforeQuit: () => () => {},
+      shutdownTimeoutMs: 5_000,
+      fork: forkSpy
+    })
+    const start1 = first.ensureStarted()
+    emitReady(children[0])
+    await start1
+    expect(forkSpy).toHaveBeenCalledTimes(1)
+
+    // Begin disposing client #1 (child #0 does not exit yet).
+    let reset1Done = false
+    let reset2Done = false
+    const reset1 = resetSharedSearchKernelClient().then(() => {
+      reset1Done = true
+    })
+    // A second concurrent reset must await the same in-flight disposal.
+    const reset2 = resetSharedSearchKernelClient().then(() => {
+      reset2Done = true
+    })
+    // A replacement client acquired during disposal must NOT fork child #1 until disposal finishes!
+    const replacement = getSharedSearchKernelClient({
+      resolveEntryPath: () => '/app/out/main/search-kernel-process.js',
+      registerBeforeQuit: () => () => {},
+      fork: forkSpy
+    })
+    const start2 = replacement.ensureStarted()
+
+    await flushMicrotasks()
+    expect(reset1Done).toBe(false)
+    expect(reset2Done).toBe(false)
+    expect(forkSpy).toHaveBeenCalledTimes(1)
+
+    // Complete child #0 exit -> both resets settle and ONLY THEN does replacement fork child #1!
+    const shutReq = children[0].postedMessages.at(-1) as { requestId: string }
+    children[0].emit('message', {
+      kind: 'response',
+      protocolVersion: SEARCH_KERNEL_PROTOCOL_VERSION,
+      requestId: shutReq.requestId,
+      op: 'kernel.shutdown',
+      ok: true,
+      result: { ok: true, pid: 8950, drainedRequests: 0 }
+    })
+    children[0].emit('exit', 0)
+
+    await Promise.all([reset1, reset2])
+    expect(reset1Done).toBe(true)
+    expect(reset2Done).toBe(true)
+
+    await flushMicrotasks()
+    expect(forkSpy).toHaveBeenCalledTimes(2)
+    emitReady(children[1])
+    await start2
+    expect(replacement.getState()).toBe('ready')
+
+    children[1].emit('exit', 0)
+    await resetSharedSearchKernelClient()
   })
 })
