@@ -218,11 +218,42 @@ export async function probeClaudeCliAvailability(): Promise<boolean> {
   return Boolean(await resolveClaudeExecutable())
 }
 
+export const CODEX_ACP_LOOKUP: CliExecutableLookup = {
+  command: 'codex-acp',
+  envOverride: 'TUFF_CODEX_ACP_PATH'
+}
+
+export async function resolveCodexAcpExecutable(): Promise<string | null> {
+  return (await resolveWithSettings(CODEX_ACP_LOOKUP))?.path ?? null
+}
+
+export function getResolvedCodexAcpExecutable(): string | null | undefined {
+  const resolved = getResolvedWithSettings(CODEX_ACP_LOOKUP)
+  return resolved === undefined ? undefined : (resolved?.path ?? null)
+}
+
+export const CLAUDE_ACP_LOOKUP: CliExecutableLookup = {
+  command: 'claude-agent-acp',
+  fallbackCommands: ['claude-code-acp'],
+  envOverride: 'TUFF_CLAUDE_ACP_PATH'
+}
+
+export async function resolveClaudeAcpExecutable(): Promise<string | null> {
+  return (await resolveWithSettings(CLAUDE_ACP_LOOKUP))?.path ?? null
+}
+
+export function getResolvedClaudeAcpExecutable(): string | null | undefined {
+  const resolved = getResolvedWithSettings(CLAUDE_ACP_LOOKUP)
+  return resolved === undefined ? undefined : (resolved?.path ?? null)
+}
+
 export function resetAllCliExecutableCaches(): void {
   resetCliExecutableCache(PI_CLI_LOOKUP.command)
   resetCliExecutableCache(OMP_CLI_LOOKUP.command)
   resetCliExecutableCache(CODEX_CLI_LOOKUP.command)
   resetCliExecutableCache(CLAUDE_CLI_LOOKUP.command)
+  resetCliExecutableCache(CODEX_ACP_LOOKUP.command)
+  resetCliExecutableCache(CLAUDE_ACP_LOOKUP.command)
 }
 
 /**
