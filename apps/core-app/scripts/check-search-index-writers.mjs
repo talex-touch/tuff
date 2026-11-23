@@ -31,7 +31,7 @@ const CORE_APP = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const SRC = path.join(CORE_APP, 'src', 'main')
 
 /** Tables the search-index worker owns. Schema identifiers, as written in drizzle calls. */
-const OWNED_TABLES = ['files', 'fileExtensions', 'keywordMappings']
+const OWNED_TABLES = ['files', 'fileExtensions', 'keywordMappings', 'searchKeywordPostings']
 
 /**
  * Files allowed to contain a mutation against an owned table, and why.

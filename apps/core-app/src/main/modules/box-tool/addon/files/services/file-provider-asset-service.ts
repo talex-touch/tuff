@@ -18,7 +18,10 @@ import type {
   ThumbnailGenerationResult
 } from '../workers/thumbnail-worker-client'
 import { persistFileIconCache } from './file-provider-icon-cache-service'
-import { FileProviderIconMigrationService } from './file-provider-icon-migration-service'
+import {
+  FileProviderIconMigrationService,
+  type FileProviderIconMigrationResult
+} from './file-provider-icon-migration-service'
 
 interface ThumbnailStatusPayload {
   status: 'failed' | 'unsupported'
@@ -232,6 +235,15 @@ export class FileProviderAssetService {
       })
     }, delayMs)
     this.iconMigrationTimer.unref?.()
+  }
+
+  /** Runs or joins the single-flight legacy PNG data-URL icon conversion pass. */
+  runLegacyIconMigration(): Promise<FileProviderIconMigrationResult> {
+    if (this.iconMigrationTimer) {
+      clearTimeout(this.iconMigrationTimer)
+      this.iconMigrationTimer = null
+    }
+    return this.iconMigration.run()
   }
 
   async close(): Promise<void> {

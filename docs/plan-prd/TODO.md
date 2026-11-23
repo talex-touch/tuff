@@ -47,7 +47,7 @@
   - FTS 的 `content` 与 `files.content` 内容并不相同（一个已小写、一个是原文），不能直接改成 FTS 外部内容表（`content=`），否则要改分词与写入路径，召回结果会变；
   - `embedding-service` 的写入栅栏（`files.content IS NULL` 且 `embedding_status = 'pending'`）、`search-index-service` 读取 `files.content` 的查询，以及 `file.search` 工具取片段的路径都要改成从别处取正文；
   - 改完必须做一次存量迁移与 `VACUUM`，否则文件不会变小，而 `VACUUM` 需要约两倍活数据的空闲磁盘。
-  - 已经做掉的部分：超过 50,000 字符的文件整体不再做内容索引（`FILE_CONTENT_MAX_CHARS`，见 [search-hotpath-contracts](../engineering/specs/main-process/search-hotpath-contracts.md)）、向量改存 float32 BLOB（`d4bd5f915`）、`0055_search_keyword_postings.sql`（A10 整数 `doc_id`，关键词表体积实测 −81.8%）以及 `PRAGMA auto_vacuum = INCREMENTAL` 均已落地。方案 C 评估应基于当前已降载库容（并在补完 `FILE-AND-APP-INDEX-ROADMAP` 低风险减容 `A14`/`A15`/`A16` 后复测），不再以 10-31 前旧库容为唯一依据。
+  - 已经做掉的部分：超过 50,000 字符的文件整体不再做内容索引（`FILE_CONTENT_MAX_CHARS`，见 [search-hotpath-contracts](../engineering/specs/main-process/search-hotpath-contracts.md)）、向量改存 float32 BLOB（`d4bd5f915`）、`0055_search_keyword_postings.sql`（A10 整数 `doc_id`，关键词表体积实测 −81.8%）、`PRAGMA auto_vacuum = INCREMENTAL` 以及 `FILE-AND-APP-INDEX-ROADMAP` 的 `A14`/`A15`/`A16` 低风险减容（不含按 R3 契约保留的 `file_fts`）均已落地。方案 C 评估应基于减容后的当前 profile 复测，不再以 10-31 前旧库容为唯一依据。
   - `content_chunks`（语义命中后定位片段用，约 344 MB）不是纯冗余，不在本条范围内。
 
 ## Version-planned work
@@ -57,7 +57,7 @@
 
 ## Release follow-ups
 
-- [ ] **v2.4.14 发布说明有两处与代码不符：仓库和 GitHub 已改，Nexus 副本待触发同步。** `notes/update_2.4.14.zh.md`、`notes/update_2.4.14.en.md` 和 GitHub Release 正文已于 2026-10-11（`64eb69853`）改正，且 `.github/workflows/sync-nexus-release-notes.yml`（PR #2213 / #2214）已合入主线提供纯 notes 补同步入口。Nexus 发布记录 `v2.4.14` 的 `notes` / `notesHtml` 仍为发版时旧副本；这属于对外发布变更，获授权后直接触发一次 `workflow_dispatch(tag=v2.4.14)`（或在管理台编辑）即可关闭。
+- [x] **v2.4.14 发布说明两处勘误已全部闭环（仓库、GitHub 与 Nexus 同步完成）。** `notes/update_2.4.14.zh.md`、`notes/update_2.4.14.en.md` 和 GitHub Release 正文已于 2026-10-11（`64eb69853`）改正，`.github/workflows/sync-nexus-release-notes.yml`（PR #2213 / #2214）已合入主线；2026-11-22 已执行 `sync-nexus-release-notes.yml`（run `45011852117`）完成 `v2.4.14` 双语 `notes` / `notesHtml` 回写，并通过 `tuff.tagzxia.com` 线上 API 回读验证一致。
   - 「尚未形成习惯时显示学习提示」不成立：`b8f2a2477`（10-03）先把学习提示换成空位占位网格，`0f6c75773`（10-07）又移除了习惯区的整个空态，tag 里已没有这段界面。已改为「尚未形成习惯时不填充虚构常用项目」。
   - 「支持从目录和网址直达常用操作」只对一半：目录成立，`system-actions-provider.ts` 给已存在的目录提供终端和文件管理器动作（`162809001`）；内核只把 `file://`、`tfile://` 解析成路径，普通网址直开由随应用内置的官方插件「浏览器打开」（`touch-browser-open`）提供。已改为「支持从目录直达常用操作，网址经内置 Browser 入口直开」。
 - [x] **PR #2120（全量琉光材质与概念文档对齐）已合入主线。** 旁路 10+ 项修复与全量琉光材质已通过 `154c61b48` / `20860d02b` 合入 `master`，TuffEx 已推进至 `0.9.4`。后续两条长尾子项拆分收口：183.9 KiB 图标 safelist 剥离与按需 `classGlyph` 渲染已完成，core-app 历史对话框统一收敛在独立重构中推进，见 [TODO 长期债务池](./TODO-BACKLOG-LONG-TERM.md#a-架构与质量债务)。

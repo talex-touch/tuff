@@ -1,4 +1,8 @@
 import type {
+  AcpMcpServerConfig,
+  AcpPermissionOption,
+  AcpPermissionRequestParams,
+  AcpPermissionRequestResult,
   IntelligenceAgentPayload,
   IntelligenceAgentResult,
   IntelligenceInvokeOptions,
@@ -33,7 +37,12 @@ import type {
   AiDelegationPlan
 } from '@talex-touch/utils/types/ai-orchestrator'
 import type { PiWorkspaceAuthority } from './pi-agent-runtime-host'
-import type { PiRuntimeResume, PiRuntimeRunEvent } from './pi-agent-runtime-protocol'
+import type {
+  PiRuntimeResume,
+  PiRuntimeRunEvent,
+  PiRuntimeRunRecord
+} from './pi-agent-runtime-protocol'
+import type { OmpPermissionRequestContext } from './omp/omp-agent-runtime-host'
 import type { WorkflowExecutionContext } from './intelligence-workflow-service'
 import { createHash, randomUUID } from 'node:crypto'
 import { openUIPrompt } from '@talex-touch/intelligence-uikit/openui-prompt'
@@ -52,6 +61,9 @@ import { discardRunInput, loadRunInput, saveRunInput } from './ai-run-input-vaul
 import { buildObjectivePrompt, planRunResume } from './pi-agent-run-log'
 import { openRunRecords, sealRunRecord } from './ai-run-record-seal'
 import { aiOrchestratorStore, DEFAULT_PROFILE_ID } from './ai-orchestrator-store'
+import { OmpAgentRuntimeHost } from './omp/omp-agent-runtime-host'
+import { OMP_CLI_PROFILE_ID } from './providers/pi-cli-runtime'
+import { toolGatewayModule } from '../tool-gateway'
 import {
   PiAgentRuntimeHost,
   resolvePiRuntimeToolSpecs,
@@ -265,6 +277,10 @@ function projectPiEvent(
         ...(reason ? { reason } : {})
       }
     }
+    case 'reasoning':
+      return { updateType: 'thinking_delta' }
+    case 'text':
+      return { updateType: 'text_delta' }
     case 'tool_execution_start':
     case 'tool_execution_update':
     case 'tool_execution_end': {
@@ -499,6 +515,26 @@ function toPromptWorkflowExecution(run: WorkflowRunRecord): PromptWorkflowExecut
   }
 }
 
+function pickPermissionOption(
+  options: readonly AcpPermissionOption[] | undefined,
+  preferredKinds: readonly string[]
+): AcpPermissionOption | undefined {
+  if (!Array.isArray(options) || options.length === 0) return undefined
+  for (const kind of preferredKinds) {
+    const match = options.find(
+      (option) => option.kind === kind && typeof option.optionId === 'string'
+    )
+    if (match) return match
+  }
+  return undefined
+}
+
+function resolveOmpPermissionRisk(kind: unknown): 'read' | 'write' | 'execute' {
+  if (kind === 'read' || kind === 'search' || kind === 'fetch') return 'read'
+  if (kind === 'edit' || kind === 'write' || kind === 'delete' || kind === 'move') return 'write'
+  return 'execute'
+}
+
 export class AiCliOrchestrator {
   private initialized = false
   private closing = false
@@ -527,36 +563,159 @@ export class AiCliOrchestrator {
   private readonly runLogSeq = new Map<string, number>()
   /** Runs whose log stopped being written; what was written stays a valid prefix. */
   private readonly runLogBroken = new Set<string>()
-  private readonly runtimeHost = new PiAgentRuntimeHost({
-    onRecord: async (runId, record) => {
-      // A conversation turn is never resumed here (its controller owns its authority), so what its
-      // tools returned is not kept.
-      if (this.workspaceAuthorities.has(runId) || this.runLogBroken.has(runId)) return
-      // A record that cannot be kept ends the log at the last one that was: that prefix is still a
-      // log a restart can resume from, and the run itself goes on.
-      try {
-        const seq = (this.runLogSeq.get(runId) ?? 0) + 1
-        const envelope = await sealRunRecord(runId, seq, record)
-        if (!envelope) throw new Error('RUN_RECORD_NOT_SEALED')
-        const stored = await aiOrchestratorStore.appendRunMessage(runId, envelope)
-        if (stored !== seq) throw new Error('RUN_RECORD_OUT_OF_ORDER')
-        this.runLogSeq.set(runId, seq)
-      } catch (error) {
-        this.runLogBroken.add(runId)
-        orchestratorLog.warn('Run message log stopped; a restart resumes from what was kept', {
-          error
-        })
-      }
-    },
-    onEvent: async (event) => {
-      this.notifyRunObserver(event)
-      await this.workspaceAuthorities.get(event.runId)?.onEvent?.(event)
-      const payload = projectPiEvent(event.type, event.payload)
-      if (!payload) return
-      await this.withRunWriteLease(event.runId, async () => {
-        await aiOrchestratorStore.appendOrchestratorEvent(event.runId, event.type, payload, 'info')
+
+  /**
+   * The scheduler decides the executor (`AGENTS.md`): ONLY `profile:cli:omp` routes to
+   * `OmpAgentRuntimeHost`. Tuff's built-in scheduler, unnamed runs, `profile:cli:codex`,
+   * `profile:cli:claude`, and custom profiles remain on `PiAgentRuntimeHost` regardless of model.
+   */
+  private isOmpProfile(profileId: string): boolean {
+    return profileId === OMP_CLI_PROFILE_ID
+  }
+
+  private async handleRuntimeRecord(runId: string, record: PiRuntimeRunRecord): Promise<void> {
+    // A conversation turn is never resumed here (its controller owns its authority), so what its
+    // tools returned is not kept.
+    if (this.workspaceAuthorities.has(runId) || this.runLogBroken.has(runId)) return
+    // A record that cannot be kept ends the log at the last one that was: that prefix is still a
+    // log a restart can resume from, and the run itself goes on.
+    try {
+      const seq = (this.runLogSeq.get(runId) ?? 0) + 1
+      const envelope = await sealRunRecord(runId, seq, record)
+      if (!envelope) throw new Error('RUN_RECORD_NOT_SEALED')
+      const stored = await aiOrchestratorStore.appendRunMessage(runId, envelope)
+      if (stored !== seq) throw new Error('RUN_RECORD_OUT_OF_ORDER')
+      this.runLogSeq.set(runId, seq)
+    } catch (error) {
+      this.runLogBroken.add(runId)
+      orchestratorLog.warn('Run message log stopped; a restart resumes from what was kept', {
+        error
       })
-    },
+    }
+  }
+
+  private async handleRuntimeEvent(event: PiRuntimeRunEvent): Promise<void> {
+    this.notifyRunObserver(event)
+    await this.workspaceAuthorities.get(event.runId)?.onEvent?.(event)
+    const payload = projectPiEvent(event.type, event.payload)
+    if (!payload) return
+    await this.withRunWriteLease(event.runId, async () => {
+      await aiOrchestratorStore.appendOrchestratorEvent(event.runId, event.type, payload, 'info')
+    })
+  }
+
+  private async resolveOmpMcpServers(payload: {
+    request: AiOrchestratorExecuteRequest
+  }): Promise<AcpMcpServerConfig[]> {
+    const automationPolicy = toRecord(payload.request.metadata).automationPolicy as
+      | AiAutomationPolicy
+      | undefined
+    if (automationPolicy && !automationPolicy.allowedMcpServerIds.includes('tuff-host')) {
+      return []
+    }
+    try {
+      const { mcpHostModule } = await import('../mcp-host')
+      const active = mcpHostModule.getActiveServerConfig()
+      if (!active) return []
+      return [
+        {
+          name: 'tuff-host',
+          type: 'http',
+          url: active.url,
+          headers: [{ name: 'Authorization', value: `Bearer ${active.token}` }]
+        }
+      ]
+    } catch {
+      return []
+    }
+  }
+
+  private async handleOmpPermissionRequest(
+    params: AcpPermissionRequestParams,
+    context: OmpPermissionRequestContext
+  ): Promise<AcpPermissionRequestResult> {
+    const options = Array.isArray(params.options) ? params.options : []
+    const rejectFallback = (): AcpPermissionRequestResult => {
+      const reject = pickPermissionOption(options, ['reject_once', 'reject_always'])
+      return reject
+        ? { outcome: { outcome: 'selected', optionId: reject.optionId } }
+        : { outcome: { outcome: 'cancelled' } }
+    }
+
+    if (context.signal.aborted) {
+      return { outcome: { outcome: 'cancelled' } }
+    }
+
+    const toolTitle =
+      typeof params.toolCall?.title === 'string' && params.toolCall.title.trim()
+        ? params.toolCall.title.trim()
+        : typeof params.toolCall?.kind === 'string' && params.toolCall.kind.trim()
+          ? params.toolCall.kind.trim()
+          : 'omp.tool'
+    const risk = resolveOmpPermissionRisk(params.toolCall?.kind)
+    const automationPolicy = toRecord(context.payload.request.metadata).automationPolicy as
+      | AiAutomationPolicy
+      | undefined
+    const isFullPermission =
+      !automationPolicy &&
+      (toolGatewayModule.getGatewayState().mode === 'full' ||
+        (context.payload.profile.permissionPolicy.mode === 'preauthorized' &&
+          context.payload.profile.permissionPolicy.allowedPermissions.includes('*')))
+
+    if (isFullPermission) {
+      const allow = pickPermissionOption(options, ['allow_once', 'allow_always'])
+      return allow
+        ? { outcome: { outcome: 'selected', optionId: allow.optionId } }
+        : rejectFallback()
+    }
+
+    try {
+      const decision = await toolGatewayModule.requestConfirmation(
+        {
+          tool: toolTitle,
+          risk,
+          summary: toolTitle,
+          input: JSON.stringify(
+            sanitizeToolOutputForRuntime(params.toolCall?.rawInput ?? {}),
+            null,
+            2
+          ),
+          ...(context.workspace
+            ? {
+                origin: {
+                  conversationId: context.workspace.conversationId,
+                  turnId: context.workspace.turnId
+                }
+              }
+            : {})
+        },
+        context.signal
+      )
+      if (!decision.approved) return rejectFallback()
+      const preferred =
+        decision.remember && risk === 'read'
+          ? ['allow_always', 'allow_once']
+          : ['allow_once', 'allow_always']
+      const allow = pickPermissionOption(options, preferred)
+      return allow
+        ? { outcome: { outcome: 'selected', optionId: allow.optionId } }
+        : rejectFallback()
+    } catch {
+      return rejectFallback()
+    }
+  }
+
+  private readonly ompRuntimeHost = new OmpAgentRuntimeHost({
+    onRecord: (runId, record) => this.handleRuntimeRecord(runId, record),
+    onEvent: (event) => this.handleRuntimeEvent(event),
+    sanitizeToolOutput: sanitizeToolOutputForRuntime,
+    resolveMcpServers: (payload) => this.resolveOmpMcpServers(payload),
+    onPermissionRequest: (params, context) => this.handleOmpPermissionRequest(params, context)
+  })
+
+  private readonly runtimeHost = new PiAgentRuntimeHost({
+    onRecord: (runId, record) => this.handleRuntimeRecord(runId, record),
+    onEvent: (event) => this.handleRuntimeEvent(event),
     loadToolCallResult: async (runId, toolCallId, toolId) => {
       const toolCallRef = opaqueRuntimeReference('pi-call', toolCallId)
       const toolRef = opaqueRuntimeReference('pi-tool', toolId)
@@ -867,6 +1026,7 @@ export class AiCliOrchestrator {
       this.initialized = false
       await aiAutomationScheduler.stop().catch(() => undefined)
       await this.runtimeHost.stop().catch(() => undefined)
+      await this.ompRuntimeHost.stop().catch(() => undefined)
       throw error
     }
     // Only now: a resumed run is an execution, and the orchestrator admits none before it is up.
@@ -931,6 +1091,11 @@ export class AiCliOrchestrator {
     // A conversation turn belongs to the conversation controller, which no longer holds its
     // authority after a restart; resuming it here would run it without one.
     if (metadata.workspaceExecution === true || run.automationId || run.parentRunId) return null
+    // An already-running OMP ACP subprocess executes its own internal tool loop outside Tuff's
+    // per-call durable journal (`beginToolCall`), so restarting it from scratch after a crash could
+    // duplicate side effects. Mark it interrupted cleanly; a `queued` OMP run never started yet and
+    // can safely resume without reading Pi worker replay logs.
+    if (this.isOmpProfile(run.profileId) && run.status === 'running') return null
     if (metadata.requestInputPresent === true) {
       const stored = await loadRunInput(run.id)
       if (!stored) return null
@@ -940,6 +1105,9 @@ export class AiCliOrchestrator {
     }
     try {
       const authority = await this.restoreRunAuthority(run)
+      if (this.isOmpProfile(run.profileId)) {
+        return { run, ...authority }
+      }
       // Only after the authority check passed: a run that is refused never has its log read.
       const resume = await this.loadResume(run, authority.input)
       return { run, ...authority, ...(resume ? { resume } : {}) }
@@ -1053,6 +1221,11 @@ export class AiCliOrchestrator {
     } catch (error) {
       failures.push(error)
     }
+    try {
+      await this.ompRuntimeHost.stop()
+    } catch (error) {
+      failures.push(error)
+    }
     await this.drainExecutions()
     this.volatileRunInputs.clear()
     this.resumePlans.clear()
@@ -1065,13 +1238,14 @@ export class AiCliOrchestrator {
   }
 
   isReady(): boolean {
-    return this.initialized && this.runtimeHost.isReady()
+    return this.initialized && (this.runtimeHost.isReady() || this.ompRuntimeHost.isReady())
   }
 
   isPrivacyRunProtected(runId: string): boolean {
     return (
       this.privacyRunDeletionFences.has(runId) ||
       this.runtimeHost.isRunActive(runId) ||
+      this.ompRuntimeHost.isRunActive(runId) ||
       this.toolCallMetadataMutations.has(runId) ||
       (this.runWriteLeaseCounts.get(runId) ?? 0) > 0
     )
@@ -1523,18 +1697,21 @@ export class AiCliOrchestrator {
             .join('\n\n')
         }
         if (this.closing) throw createRunInterruptedError()
-        const result = await this.runtimeHost.execute(
-          {
-            run: { ...run, status: 'running', startedAt, updatedAt: startedAt },
-            request,
-            profile: runtimeProfile,
-            tools: resolvePiRuntimeToolSpecs(allowedToolIds),
-            history,
-            ...(this.resumePlans.has(run.id) ? { resume: this.resumePlans.get(run.id) } : {}),
-            budget
-          },
-          workspace
-        )
+        const useOmpRuntime = this.isOmpProfile(profile.id)
+        const resume = !useOmpRuntime ? this.resumePlans.get(run.id) : undefined
+        this.resumePlans.delete(run.id)
+        const startPayload = {
+          run: { ...run, status: 'running' as const, startedAt, updatedAt: startedAt },
+          request,
+          profile: runtimeProfile,
+          tools: resolvePiRuntimeToolSpecs(allowedToolIds),
+          history,
+          ...(resume ? { resume } : {}),
+          budget
+        }
+        const result = useOmpRuntime
+          ? await this.ompRuntimeHost.execute(startPayload, workspace)
+          : await this.runtimeHost.execute(startPayload, workspace)
         const completedAt = Date.now()
         const persisted = await aiOrchestratorStore.getOrchestratorRun(run.id)
         const metadata = projectPersistedRunMetadata(persisted?.metadata ?? run.metadata)
@@ -1651,7 +1828,7 @@ export class AiCliOrchestrator {
     return results.filter(Boolean).length
   }
   cancel(runId: string): boolean {
-    return this.runtimeHost.cancel(runId)
+    return this.ompRuntimeHost.cancel(runId) || this.runtimeHost.cancel(runId)
   }
 
   async cancelPersistedRun(runId: string): Promise<boolean> {
@@ -1783,10 +1960,16 @@ export class AiCliOrchestrator {
     const run = await this.execute(this.agentCapabilityRequest(payload, options))
     if (run.status !== 'completed') throw new Error(run.error || 'Pi agent execution failed')
     const output = run.output || ''
+    const isOmpRun = this.isOmpProfile(run.profileId)
     return {
       result: {
         result: output,
-        steps: [{ thought: 'Executed by Tuff Pi coordinator', observation: output.slice(0, 500) }],
+        steps: [
+          {
+            thought: isOmpRun ? 'Executed by OMP ACP runtime' : 'Executed by Tuff Pi coordinator',
+            observation: output.slice(0, 500)
+          }
+        ],
         toolCalls: [],
         iterations: 1
       },
@@ -1795,10 +1978,10 @@ export class AiCliOrchestrator {
         completionTokens: run.usage?.completionTokens ?? 0,
         totalTokens: run.usage?.totalTokens ?? 0
       },
-      model: 'pi-agent-core',
+      model: isOmpRun ? 'omp-acp' : 'pi-agent-core',
       latency: Date.now() - startedAt,
       traceId: run.id,
-      provider: 'tuff-pi-runtime'
+      provider: isOmpRun ? 'tuff-omp-runtime' : 'tuff-pi-runtime'
     }
   }
 
@@ -1893,6 +2076,7 @@ export class AiCliOrchestrator {
       const run = await execution
       if (run.status !== 'completed') throw new Error(run.error || 'Pi agent execution failed')
       const output = run.output || ''
+      const isOmpRun = this.isOmpProfile(run.profileId)
       yield {
         type: 'end',
         capabilityId,
@@ -1904,8 +2088,8 @@ export class AiCliOrchestrator {
           completionTokens: run.usage?.completionTokens ?? 0,
           totalTokens: run.usage?.totalTokens ?? 0
         },
-        provider: 'tuff-pi-runtime',
-        model: 'pi-agent-core',
+        provider: isOmpRun ? 'tuff-omp-runtime' : 'tuff-pi-runtime',
+        model: isOmpRun ? 'omp-acp' : 'pi-agent-core',
         metadata: { latency: Date.now() - startedAt }
       }
     } finally {
@@ -2012,6 +2196,9 @@ export class AiCliOrchestrator {
       onUpdate: async () => undefined
     })
     const usage = toRecord(run.outputs?.usage)
+    const isOmpRun =
+      typeof options.metadata?.profileId === 'string' &&
+      this.isOmpProfile(options.metadata.profileId)
     return {
       result: toPromptWorkflowExecution(run),
       usage: {
@@ -2019,10 +2206,10 @@ export class AiCliOrchestrator {
         completionTokens: typeof usage.completionTokens === 'number' ? usage.completionTokens : 0,
         totalTokens: typeof usage.totalTokens === 'number' ? usage.totalTokens : 0
       },
-      model: 'pi-agent-core',
+      model: isOmpRun ? 'omp-acp' : 'pi-agent-core',
       latency: Date.now() - startedAt,
       traceId: run.id,
-      provider: 'tuff-pi-runtime'
+      provider: isOmpRun ? 'tuff-omp-runtime' : 'tuff-pi-runtime'
     }
   }
 

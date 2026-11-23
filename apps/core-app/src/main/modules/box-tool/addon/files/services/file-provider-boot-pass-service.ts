@@ -29,7 +29,15 @@ import {
   FileProviderKeywordBackfillService
 } from './file-provider-keyword-backfill-service'
 import { FileProviderEmbeddingBlobMigrationService } from './file-provider-embedding-blob-migration-service'
+import type { FileProviderIconMigrationResult } from './file-provider-icon-migration-service'
+import {
+  FileProviderLegacyExtensionsCleanupService,
+  MAX_LEGACY_PNG_ICON_VALUE_LENGTH,
+  type FileLegacyExtensionDeleteTarget,
+  type FileLegacyExtensionsWindow
+} from './file-provider-legacy-extensions-cleanup-service'
 import { FileProviderOverlongContentCleanupService } from './file-provider-overlong-content-cleanup-service'
+import type { EmbeddingService } from '../embedding-service'
 import type { FileProviderMaintenanceService } from './file-provider-maintenance-service'
 import {
   FileProviderPathNormalizationService,
@@ -47,6 +55,7 @@ const FILE_KEYWORD_BACKFILL_INITIAL_DELAY_MS = 30_000
 const FILE_KEYWORD_BACKFILL_CONFIG_KEY = 'file_provider_keyword_schema_version'
 const FILE_EMBEDDING_BLOB_CONFIG_KEY = 'file_provider_embedding_blob_version'
 const FILE_OVERLONG_CONTENT_CONFIG_KEY = 'file_provider_overlong_content_cleanup_version'
+const FILE_LEGACY_EXTENSIONS_CONFIG_KEY = 'file_provider_legacy_extensions_cleanup_version'
 
 export interface FileProviderBootPassServiceDeps {
   sourceId: string
@@ -58,6 +67,9 @@ export interface FileProviderBootPassServiceDeps {
   getRuntimeMutationDelegate: () => FileIndexedSourceRuntimeMutationDelegate
   /** Lazy: tests swap the maintenance service after construction. */
   getMaintenance: () => FileProviderMaintenanceService
+  runLegacyIconMigration?: () => Promise<FileProviderIconMigrationResult>
+  getEmbeddingService?: () => Pick<EmbeddingService, 'cleanupStaleEmbeddings'> | null
+  onStaleEmbeddingsRequeued?: (reason: string) => void
   getWatchPaths: () => readonly string[]
   countIndexedRows: (reason: string) => Promise<number>
   mapRecord: (row: FileRecord) => IndexedSourceRecord
@@ -91,6 +103,7 @@ export class FileProviderBootPassService {
   private readonly keywordBackfillService: FileProviderKeywordBackfillService<FileRecord>
   private readonly embeddingBlobMigrationService: FileProviderEmbeddingBlobMigrationService
   private readonly overlongContentCleanupService: FileProviderOverlongContentCleanupService<FileRecord>
+  private readonly legacyExtensionsCleanupService: FileProviderLegacyExtensionsCleanupService
 
   constructor(private readonly deps: FileProviderBootPassServiceDeps) {
     this.pathNormalizationService = new FileProviderPathNormalizationService({
@@ -178,6 +191,34 @@ export class FileProviderBootPassService {
       waitForWriteCapacity: async () => {
         await appTaskGate.waitForIdle()
         await dbWriteScheduler.waitForCapacity(4)
+      },
+      logInfo: (message, meta) => this.deps.logInfo(message, meta),
+      logWarn: (message, error, meta) => this.deps.logWarn(message, error, meta)
+    })
+    this.legacyExtensionsCleanupService = new FileProviderLegacyExtensionsCleanupService({
+      getAppliedVersion: () => this.readAppliedVersion(FILE_LEGACY_EXTENSIONS_CONFIG_KEY),
+      setAppliedVersion: (version) =>
+        this.writeAppliedVersion(
+          FILE_LEGACY_EXTENSIONS_CONFIG_KEY,
+          'file-index.legacy-extensions-cleanup.version',
+          version
+        ),
+      isReady: () => this.deps.isRuntimeReady(),
+      isStopping: () => this.deps.isShuttingDown(),
+      ensureLegacyIconsMigrated: async () => {
+        if (!this.deps.runLegacyIconMigration) return true
+        const migration = await this.deps.runLegacyIconMigration()
+        return !migration.stopped
+      },
+      loadWindow: (afterFileId, windowLimit, dropAllFileDataIcons) =>
+        this.loadLegacyExtensionsWindow(afterFileId, windowLimit, dropAllFileDataIcons),
+      deleteBatch: (targets) => this.deleteLegacyExtensionsBatch(targets),
+      waitForWriteCapacity: async () => {
+        await appTaskGate.waitForIdle()
+        await dbWriteScheduler.waitForCapacity(4)
+      },
+      yieldBetweenWindows: async () => {
+        await new Promise<void>((resolve) => setImmediate(resolve))
       },
       logInfo: (message, meta) => this.deps.logInfo(message, meta),
       logWarn: (message, error, meta) => this.deps.logWarn(message, error, meta)
@@ -423,11 +464,15 @@ export class FileProviderBootPassService {
           this.deps.logWarn('File keyword schema backfill failed', error)
         })
         .finally(() => {
-          // The backfill rewrites every file's keyword rows. Over-long bodies go first so the BLOB
-          // pass does not convert vectors that are about to be deleted, and the compaction runs once
-          // after both: it is what hands the freed pages back to the disk.
+          // The backfill rewrites every file's keyword rows. Over-long bodies, legacy unread
+          // extensions, and orphan/stale-model vectors go before the BLOB pass so we never convert
+          // vectors that are about to be deleted, and compaction runs once after all of them.
           if (this.deps.isShuttingDown()) return
           void this.runOverlongContentCleanup()
+            .then(() =>
+              this.deps.isShuttingDown() ? undefined : this.runLegacyExtensionsCleanup()
+            )
+            .then(() => (this.deps.isShuttingDown() ? undefined : this.runStaleEmbeddingCleanup()))
             .then(() => (this.deps.isShuttingDown() ? undefined : this.runEmbeddingBlobMigration()))
             .finally(() => {
               if (!this.deps.isShuttingDown()) {
@@ -570,6 +615,127 @@ export class FileProviderBootPassService {
             last_error = excluded.last_error, updated_at = excluded.updated_at`)
       })
     })
+  }
+
+  private async runLegacyExtensionsCleanup(): Promise<void> {
+    try {
+      const result = await this.legacyExtensionsCleanupService.run()
+      if (result.status === 'skipped') {
+        this.deps.logDebug('Legacy file_extensions cleanup skipped', { reason: result.reason })
+      }
+    } catch (error) {
+      this.deps.logWarn('Legacy file_extensions cleanup failed', error)
+    }
+  }
+
+  private async loadLegacyExtensionsWindow(
+    afterFileId: number,
+    windowLimit: number,
+    dropAllFileDataIcons: boolean
+  ): Promise<FileLegacyExtensionsWindow> {
+    const dbUtils = this.deps.getDbUtils()
+    if (!dbUtils) return { maxFileId: null, deletes: [] }
+    const readDb = dbUtils.getFileIndexReadDb()
+    const indexRows = await readDb.all<{ fileId: number }>(sql`
+      SELECT file_id AS fileId
+      FROM file_extensions
+      WHERE file_id > ${afterFileId}
+      ORDER BY file_id ASC, key ASC
+      LIMIT ${windowLimit}
+    `)
+    if (indexRows.length === 0) return { maxFileId: null, deletes: [] }
+    const maxFileId = Number(indexRows[indexRows.length - 1]!.fileId)
+
+    const dropAllFlag = dropAllFileDataIcons ? 1 : 0
+    const deletes = await readDb.all<FileLegacyExtensionDeleteTarget>(sql`
+      SELECT fe.file_id AS fileId, fe.key AS key
+      FROM file_extensions fe
+      LEFT JOIN files f ON f.id = fe.file_id
+      WHERE fe.file_id > ${afterFileId}
+        AND fe.file_id <= ${maxFileId}
+        AND (
+          f.id IS NULL
+          OR (
+            +f.type = 'file'
+            AND (
+              fe.key = 'keywords'
+              OR (fe.key = 'thumbnail' AND substr(fe.value, 1, 5) = 'data:')
+              OR (
+                fe.key = 'icon'
+                AND substr(fe.value, 1, 5) = 'data:'
+                AND (
+                  ${dropAllFlag} = 1
+                  OR substr(fe.value, 1, 22) != 'data:image/png;base64,'
+                  OR length(fe.value) > ${MAX_LEGACY_PNG_ICON_VALUE_LENGTH}
+                )
+              )
+            )
+          )
+        )
+      ORDER BY fe.file_id ASC, fe.key ASC
+    `)
+    return {
+      maxFileId,
+      deletes: deletes.map((row) => ({ fileId: Number(row.fileId), key: row.key }))
+    }
+  }
+
+  private async deleteLegacyExtensionsBatch(
+    targets: FileLegacyExtensionDeleteTarget[]
+  ): Promise<void> {
+    const dbUtils = this.deps.getDbUtils()
+    if (!dbUtils || targets.length === 0) return
+    if (this.deps.isSearchSplitEnabled()) {
+      await searchIndexWriter.execWrite(
+        targets.map((target) => ({
+          sql: 'DELETE FROM file_extensions WHERE file_id = ? AND key = ?',
+          args: [target.fileId, target.key]
+        })),
+        'transaction'
+      )
+      return
+    }
+    const db = dbUtils.getDb()
+    await scheduleDbWrite('file-index.legacy-extensions-cleanup', async () => {
+      await db.transaction(async (tx) => {
+        for (const target of targets) {
+          await tx.run(
+            sql`DELETE FROM file_extensions WHERE file_id = ${target.fileId} AND key = ${target.key}`
+          )
+        }
+      })
+    })
+  }
+
+  public handleActiveEmbeddingModelChanged(model: string, contentEnabled: boolean): void {
+    if (this.deps.isShuttingDown() || !contentEnabled) return
+    void this.runStaleEmbeddingCleanup(model, 'embedding-model-changed')
+  }
+
+  private async runStaleEmbeddingCleanup(
+    activeTextModel?: string,
+    requeueReason = 'embedding-model-cleanup'
+  ): Promise<void> {
+    const embeddingService = this.deps.getEmbeddingService?.()
+    if (!embeddingService) return
+    try {
+      const summary = await embeddingService.cleanupStaleEmbeddings({
+        ...(activeTextModel !== undefined ? { activeTextModel } : {}),
+        signal: this.deps.getMaintenance().signal,
+        yieldBetweenWindows: async () => {
+          await appTaskGate.waitForIdle()
+          await new Promise<void>((resolve) => setImmediate(resolve))
+        }
+      })
+      if (summary.orphanedRemoved > 0 || summary.staleModelRemoved > 0) {
+        this.deps.logInfo('Cleaned orphan and stale-model file embeddings', { ...summary })
+      }
+      if (summary.requeuedFiles > 0 && !this.deps.isShuttingDown()) {
+        this.deps.onStaleEmbeddingsRequeued?.(requeueReason)
+      }
+    } catch (error) {
+      this.deps.logWarn('Stale file embedding cleanup failed', error)
+    }
   }
 
   private async runEmbeddingBlobMigration(): Promise<void> {

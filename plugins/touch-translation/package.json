@@ -20,7 +20,7 @@
     "@talex-touch/utils": "workspace:^",
     "@vueuse/core": "^14.4.0",
     "vue": "catalog:frontend",
-    "vue-router": "^4.6.4"
+    "vue-router": "^5.5.0"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^5.4.1",

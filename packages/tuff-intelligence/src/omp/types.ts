@@ -53,12 +53,19 @@ export interface AcpConfigOption {
   }>
 }
 
+export interface AcpKeyValueHeader {
+  name: string
+  value: string
+}
+
 export interface AcpMcpServerConfig {
   name: string
+  type?: 'stdio' | 'http' | 'sse'
   command?: string
   args?: string[]
-  env?: Record<string, string>
+  env?: Record<string, string> | AcpKeyValueHeader[]
   url?: string
+  headers?: Record<string, string> | AcpKeyValueHeader[]
 }
 
 export interface AcpSessionNewParams {
@@ -103,15 +110,16 @@ export interface AcpUsageUpdate {
   }
 }
 
-export type AcpSessionUpdateType =
-  | 'available_commands_update'
-  | 'session_info_update'
-  | 'config_option_update'
-  | 'agent_thought_chunk'
-  | 'agent_message_chunk'
-  | 'usage_update'
-  | 'tool_call'
-  | 'tool_result'
+export type AcpSessionUpdateType
+  = | 'available_commands_update'
+    | 'session_info_update'
+    | 'config_option_update'
+    | 'agent_thought_chunk'
+    | 'agent_message_chunk'
+    | 'usage_update'
+    | 'tool_call'
+    | 'tool_call_update'
+    | 'tool_result'
 
 export interface AcpSessionUpdateNotification {
   sessionId: string
@@ -133,10 +141,51 @@ export interface AcpPromptResult {
   usage?: AcpUsageUpdate
 }
 
+export interface AcpPermissionOption {
+  optionId: string
+  name: string
+  kind: 'allow_once' | 'allow_always' | 'reject_once' | 'reject_always' | string
+}
+
+export interface AcpPermissionRequestParams {
+  sessionId: string
+  toolCall?: {
+    toolCallId?: string
+    title?: string
+    kind?: string
+    status?: string
+    rawInput?: unknown
+    [key: string]: unknown
+  }
+  options?: AcpPermissionOption[]
+  [key: string]: unknown
+}
+
+export interface AcpPermissionRequestResult {
+  outcome:
+    | { outcome: 'cancelled' }
+    | { outcome: 'selected', optionId: string }
+}
+
+export type AcpServerRequestHandler = (
+  method: string,
+  params: unknown,
+) => unknown | Promise<unknown>
+
+export interface OmpStreamToolCall {
+  toolCallId: string
+  toolName: string
+  args?: unknown
+  status?: string
+  result?: unknown
+  isError?: boolean
+}
+
 export interface OmpStreamEvent {
-  type: 'thinking' | 'delta' | 'usage' | 'tool_call' | 'status'
+  type: 'thinking' | 'delta' | 'usage' | 'tool_call' | 'tool_result' | 'status'
   text?: string
   usage?: AcpUsageUpdate
+  toolCall?: OmpStreamToolCall
   raw?: unknown
 }
 
@@ -144,6 +193,12 @@ export interface OmpAcpSpawnOptions {
   executablePath?: string
   cwd?: string
   env?: Record<string, string | undefined>
+  initTimeoutMs?: number
+  onRequest?: AcpServerRequestHandler
+}
+
+export interface OmpPromptStreamOptions {
+  signal?: AbortSignal
 }
 
 export interface OmpSessionCreateOptions {

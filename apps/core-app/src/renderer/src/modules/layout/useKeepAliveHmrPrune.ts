@@ -15,7 +15,7 @@ export interface HotUpdateEvents {
 /** The slice of the router this reads: each route's meta and, once loaded, its component. */
 export interface KeepAliveRoutes {
   getRoutes: () => ReadonlyArray<{
-    meta?: { keepAlive?: unknown }
+    meta?: Readonly<Record<PropertyKey, unknown>>
     components?: Readonly<Record<string, unknown>> | null
   }>
 }

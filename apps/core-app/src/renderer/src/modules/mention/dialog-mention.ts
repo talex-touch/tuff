@@ -109,7 +109,8 @@ function renderComponent(
   props: Record<string, unknown>,
   container: HTMLElement,
   dialogId: string,
-  allowInCoreBox = true
+  allowInCoreBox = true,
+  onDestroy?: () => void
 ): { cleanup: () => void; id: string } {
   const vnode = createVNode(component, props)
 
@@ -129,8 +130,12 @@ function renderComponent(
 
   render(vnode, container)
 
+  let cleaned = false
   const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
     render(null, container)
+    container.remove()
   }
 
   // Register with dialog manager
@@ -141,7 +146,8 @@ function renderComponent(
     props,
     container,
     cleanup,
-    allowInCoreBox
+    allowInCoreBox,
+    onDestroy
   })
 
   return { cleanup, id: dialogId }
@@ -209,15 +215,30 @@ function mountManagedDialog<T>(options: ManagedDialogOptions<T>): Promise<T> {
     try {
       const dialogManager = useDialogManager()
 
+      let settled = false
+      const settleClosed = (): void => {
+        if (settled) return
+        settled = true
+        options.onAfterClose?.()
+        resolve(options.resolveResult())
+      }
+
       const finalizeClose = (): void => {
         if (!cleanupHandle) return
         const handle = cleanupHandle
         cleanupHandle = null
         dialogManager.unregister(handle.id)
         handle.cleanup()
-        root.remove()
-        options.onAfterClose?.()
-        resolve(options.resolveResult())
+        settleClosed()
+      }
+
+      const handleExternalDestroy = (): void => {
+        if (!cleanupHandle) return
+        const handle = cleanupHandle
+        cleanupHandle = null
+        closed = true
+        handle.cleanup()
+        settleClosed()
       }
 
       const close = async (): Promise<void> => {
@@ -236,7 +257,8 @@ function mountManagedDialog<T>(options: ManagedDialogOptions<T>): Promise<T> {
         props,
         root,
         dialogId,
-        options.allowInCoreBox ?? true
+        options.allowInCoreBox ?? true,
+        handleExternalDestroy
       )
 
       if (closeRequested) {

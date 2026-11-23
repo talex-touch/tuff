@@ -19,21 +19,20 @@ import type { BlowDialogProps } from './types'
  * @component
  */
 import {
-
+  computed,
   defineComponent,
+  markRaw,
   onMounted,
   onUnmounted,
-
   provide,
   ref,
   useId,
-
 } from 'vue'
 import { createFocusReturn, trapTab } from '../../../../utils/focus-trap'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { TxButton } from '../../button'
-import { useDialogSurface } from './dialog-surface'
+import { createBlowBackgroundBlur, useDialogSurface } from './dialog-surface'
 
 // Resolved in setup: inject is only valid here, while allocation happens later.
 const zIndexAllocator = useZIndexAllocator()
@@ -58,7 +57,9 @@ const { surfaceMode, surfaceColor, surfaceOpacity } = useDialogSurface(props)
 // The two phases the parts fade in (see the styles): the entrance, until it has played, and the close.
 const isEntering = ref(true)
 const isClosing = ref(false)
-const renderComp = ref<Component | null>(null)
+const renderComp = computed<Component | null>(() =>
+  props.render ? markRaw(defineComponent({ render: props.render })) : null,
+)
 const dialogWrapper = ref<HTMLElement | null>(null)
 const zIndex = ref(zIndexAllocator.get())
 // Instance-scoped ids (mirroring Bottom/TouchTip) so the dialog announces both its
@@ -66,41 +67,42 @@ const zIndex = ref(zIndexAllocator.get())
 const titleId = useId()
 const contentId = useId()
 const focusReturn = createFocusReturn()
-let didApplyBackgroundBlur = false
+const backgroundBlur = createBlowBackgroundBlur()
+let closeTimer: ReturnType<typeof setTimeout> | null = null
+let isUnmounted = false
 
 /**
  * Utility function to sleep for a specified duration.
  * @param ms - Duration in milliseconds
  */
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => {
+    closeTimer = setTimeout(() => {
+      closeTimer = null
+      resolve()
+    }, ms)
+  })
 }
 
 onMounted(() => {
   zIndex.value = zIndexAllocator.next()
   focusReturn.save()
 
-  if (props.render) {
-    renderComp.value = defineComponent({
-      render: props.render,
-    })
-  }
-
-  applyBackgroundBlur(true)
+  backgroundBlur.acquire()
   setFocusToDialog()
 })
 
 onUnmounted(() => {
+  isUnmounted = true
+  if (closeTimer) {
+    clearTimeout(closeTimer)
+    closeTimer = null
+  }
   focusReturn.restore()
 
   // A host that unmounts the dialog without calling close() never reaches destroy(), so the
-  // app would keep the zoom and dim applied on open. Clear them here, as destroy() does.
-  if (didApplyBackgroundBlur) {
-    const app = document.getElementById('app')
-    if (app) {
-      app.style.cssText = ''
-    }
-  }
+  // app would keep the zoom and dim applied on open. Release this instance's blur lock here.
+  backgroundBlur.finishRelease()
 })
 
 /**
@@ -120,35 +122,6 @@ function keepTab(event: KeyboardEvent): void {
 }
 
 /**
- * Applies or removes background blur effect on the app container.
- * @param apply - Whether to apply the blur effect
- */
-function applyBackgroundBlur(apply: boolean): void {
-  const isVitePress = !!document.querySelector('.VPApp')
-  if (isVitePress)
-    return
-
-  const app = document.getElementById('app')
-  if (!app)
-    return
-
-  if (apply) {
-    Object.assign(app.style, {
-      transition: 'transform .75s, opacity .75s',
-      transform: 'scale(1.25)',
-      opacity: '.75',
-    })
-    didApplyBackgroundBlur = true
-  }
-  else {
-    Object.assign(app.style, {
-      transform: 'scale(1)',
-      opacity: '1',
-    })
-  }
-}
-
-/**
  * Destroys the dialog with animation. It is gone for the keys and the pointer at once: focus goes
  * back, the dialog is inert while it leaves, and a second Escape reaches what is under it.
  */
@@ -156,16 +129,14 @@ async function destroy(): Promise<void> {
   if (isClosing.value)
     return
   focusReturn.restore()
-  applyBackgroundBlur(false)
+  backgroundBlur.beginRelease()
   isClosing.value = true
   await sleep(550)
 
-  if (didApplyBackgroundBlur) {
-    const app = document.getElementById('app')
-    if (app) {
-      app.style.cssText = ''
-    }
-  }
+  if (isUnmounted)
+    return
+
+  backgroundBlur.finishRelease()
 
   props.close()
 }

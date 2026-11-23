@@ -43,6 +43,7 @@ export interface SearchIndexMigrationPreflightSnapshot {
     searchIndex: SearchIndexMigrationTableSnapshot
     searchIndexMeta: SearchIndexMigrationTableSnapshot
     keywordMappings: SearchIndexMigrationTableSnapshot
+    searchKeywordPostings?: SearchIndexMigrationTableSnapshot
     indexedSourceTaskState: SearchIndexMigrationTableSnapshot
   }
   scanProgress: {
@@ -57,16 +58,20 @@ export interface SearchIndexMigrationPreflightSnapshot {
     searchIndexShadowTables: Record<string, boolean>
     searchIndexByProvider: SearchIndexMigrationProviderCount[]
     keywordMappingsByProvider: SearchIndexMigrationProviderCount[]
+    keywordPostingsByProvider?: SearchIndexMigrationProviderCount[]
     searchIndexMetaByProvider: SearchIndexMigrationProviderCount[]
     sourceIndexedRows: number
     sourceKeywordRows: number
+    sourceKeywordPostingsRows?: number
     sourceMetaRows: number
     filesRows: number
     fileFtsRows: number | null
     orphanKeywordRows: number
+    orphanKeywordPostingsRows?: number
     orphanMetaRows: number
     searchIndexRowsMissingMeta: number
     keywordRowsMissingMeta: number
+    keywordPostingsRowsMissingMeta?: number
   }
 }
 
@@ -141,11 +146,11 @@ function hasTable(
   snapshot: SearchIndexMigrationPreflightSnapshot,
   table: keyof SearchIndexMigrationPreflightSnapshot['tables']
 ): boolean {
-  return snapshot.tables[table].exists
+  return snapshot.tables[table]?.exists ?? false
 }
 
-function getRowCount(table: SearchIndexMigrationTableSnapshot): number {
-  return table.rowCount ?? 0
+function getRowCount(table?: SearchIndexMigrationTableSnapshot): number {
+  return table?.rowCount ?? 0
 }
 
 function createCheck(
@@ -289,8 +294,13 @@ export function buildSearchIndexMigrationPreflightReport(
     createCheck(
       'keyword-orphans',
       countStatus(snapshot.ftsOwnership.orphanKeywordRows),
-      'keyword_mappings rows should point at search_index rows for the same provider.',
-      { orphanKeywordRows: snapshot.ftsOwnership.orphanKeywordRows }
+      'keyword_mappings and search_keyword_postings rows should point at search_index rows for the same provider.',
+      {
+        orphanKeywordRows: snapshot.ftsOwnership.orphanKeywordRows,
+        ...(snapshot.ftsOwnership.orphanKeywordPostingsRows !== undefined
+          ? { orphanKeywordPostingsRows: snapshot.ftsOwnership.orphanKeywordPostingsRows }
+          : {})
+      }
     )
   )
 
@@ -310,10 +320,15 @@ export function buildSearchIndexMigrationPreflightReport(
         snapshot.ftsOwnership.keywordRowsMissingMeta > 0
         ? 'failed'
         : 'passed',
-      'search_index and keyword_mappings rows should have matching keyword hash metadata.',
+      'search_index, keyword_mappings, and search_keyword_postings rows should have matching keyword hash metadata.',
       {
         searchIndexRowsMissingMeta: snapshot.ftsOwnership.searchIndexRowsMissingMeta,
-        keywordRowsMissingMeta: snapshot.ftsOwnership.keywordRowsMissingMeta
+        keywordRowsMissingMeta: snapshot.ftsOwnership.keywordRowsMissingMeta,
+        ...(snapshot.ftsOwnership.keywordPostingsRowsMissingMeta !== undefined
+          ? {
+              keywordPostingsRowsMissingMeta: snapshot.ftsOwnership.keywordPostingsRowsMissingMeta
+            }
+          : {})
       }
     )
   )
@@ -397,7 +412,9 @@ function buildMigrationDryRun(input: {
 }): SearchIndexMigrationDryRunPlan {
   const scanProgressRows = getRowCount(input.snapshot.tables.scanProgress)
   const searchIndexRows = getRowCount(input.snapshot.tables.searchIndex)
-  const keywordRows = getRowCount(input.snapshot.tables.keywordMappings)
+  const keywordRows =
+    getRowCount(input.snapshot.tables.keywordMappings) +
+    getRowCount(input.snapshot.tables.searchKeywordPostings)
   const metaRows = getRowCount(input.snapshot.tables.searchIndexMeta)
   const missingRequiredTables = input.missingTables.map(String)
   const scanProgressHygieneBlockers = [
@@ -409,18 +426,28 @@ function buildMigrationDryRun(input: {
       ? 'scan_progress duplicate source/path rows'
       : ''
   ].filter(Boolean)
+  const orphanPostingsRows = input.snapshot.ftsOwnership.orphanKeywordPostingsRows ?? 0
+  const orphanLegacyKeywordRows = Math.max(
+    0,
+    input.snapshot.ftsOwnership.orphanKeywordRows - orphanPostingsRows
+  )
+  const postingsMissingMeta = input.snapshot.ftsOwnership.keywordPostingsRowsMissingMeta ?? 0
+  const legacyKeywordRowsMissingMeta = Math.max(
+    0,
+    input.snapshot.ftsOwnership.keywordRowsMissingMeta - postingsMissingMeta
+  )
   const ownershipBlockers = [
     input.snapshot.ftsOwnership.sourceIndexedRows !== input.snapshot.ftsOwnership.filesRows
       ? 'source indexed rows differ from files rows'
       : '',
-    input.snapshot.ftsOwnership.orphanKeywordRows > 0 ? 'orphan keyword_mappings rows' : '',
+    orphanLegacyKeywordRows > 0 ? 'orphan keyword_mappings rows' : '',
+    orphanPostingsRows > 0 ? 'orphan search_keyword_postings rows' : '',
     input.snapshot.ftsOwnership.orphanMetaRows > 0 ? 'orphan search_index_meta rows' : '',
     input.snapshot.ftsOwnership.searchIndexRowsMissingMeta > 0
       ? 'search_index rows missing metadata'
       : '',
-    input.snapshot.ftsOwnership.keywordRowsMissingMeta > 0
-      ? 'keyword_mappings rows missing metadata'
-      : '',
+    legacyKeywordRowsMissingMeta > 0 ? 'keyword_mappings rows missing metadata' : '',
+    postingsMissingMeta > 0 ? 'search_keyword_postings rows missing metadata' : '',
     ...missingRequiredTables.map((table) => `missing required table: ${table}`)
   ].filter(Boolean)
 
@@ -542,7 +569,13 @@ function buildNextActions(input: {
     )
   }
   if (input.snapshot.ftsOwnership.orphanKeywordRows > 0) {
-    actions.push('Clean or rebuild orphan keyword_mappings before changing FTS ownership.')
+    const orphanPostingsRows = input.snapshot.ftsOwnership.orphanKeywordPostingsRows ?? 0
+    const hasLegacyOrphans = input.snapshot.ftsOwnership.orphanKeywordRows > orphanPostingsRows
+    actions.push(
+      orphanPostingsRows > 0 && !hasLegacyOrphans
+        ? 'Clean or rebuild orphan search_keyword_postings before changing FTS ownership.'
+        : 'Clean or rebuild orphan keyword_mappings before changing FTS ownership.'
+    )
   }
   if (input.snapshot.ftsOwnership.sourceIndexedRows !== input.snapshot.ftsOwnership.filesRows) {
     actions.push('Repair provider row parity or schedule provider-scoped reindex evidence.')

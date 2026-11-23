@@ -787,7 +787,7 @@ describe('SearchIndexWriter redundant index retirement', () => {
     }
   }
 
-  it('drops the redundant keyword index in the background a minute after the worker is ready', async () => {
+  it('drops the redundant keyword and meta indexes in the background a minute after the worker is ready', async () => {
     vi.useFakeTimers()
     const client = createRetirementClient()
     const writer = new SearchIndexWriter({ client: client as unknown as SearchIndexWorkerClient })
@@ -798,7 +798,12 @@ describe('SearchIndexWriter redundant index retirement', () => {
     await vi.advanceTimersByTimeAsync(60_000)
 
     expect(client.execWrite).toHaveBeenCalledWith(
-      [{ sql: 'DROP INDEX IF EXISTS idx_keyword_mappings_provider_item', args: [] }],
+      [
+        { sql: 'DROP INDEX IF EXISTS idx_keyword_mappings_provider_item', args: [] },
+        { sql: 'DROP INDEX IF EXISTS idx_keyword_mappings_keyword', args: [] },
+        { sql: 'DROP INDEX IF EXISTS idx_keyword_mappings_provider_cursor', args: [] },
+        { sql: 'DROP INDEX IF EXISTS idx_search_index_meta_updated_at', args: [] }
+      ],
       'single'
     )
   })

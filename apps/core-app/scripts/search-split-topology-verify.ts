@@ -37,7 +37,8 @@ const SEARCH_OWNED = [
   'file_index_progress',
   'scan_progress',
   'search_index',
-  'keyword_mappings'
+  'keyword_mappings',
+  'search_keyword_postings'
 ] as const
 
 /**

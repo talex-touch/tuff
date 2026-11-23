@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCard } from '@talex-touch/tuffex/card'
-import { TxBarChart, TxBubbleMap, TxChoroplethMap, TxEChart } from '@talex-touch/tuffex/charts'
 import type { MapGeoJson } from '@talex-touch/tuffex/charts'
 import type { EChartsOption } from 'echarts'
 import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
@@ -21,6 +20,23 @@ import {
   formatAnalyticsNumber, formatExchangeRate, formatPayloadPreview, toSortedAnalyticsList,
 } from '~/utils/admin-analytics'
 import { requestJson } from '~/utils/request'
+
+type TuffexChartsModule = typeof import('@talex-touch/tuffex/charts')
+type AnalyticsChartExportKey = 'TxBarChart' | 'TxBubbleMap' | 'TxChoroplethMap' | 'TxEChart'
+
+const emptyServerChartComponent = { render: () => null }
+function loadAnalyticsChart<K extends AnalyticsChartExportKey>(key: K): Promise<TuffexChartsModule[K]> {
+  if (import.meta.server)
+    return Promise.resolve(emptyServerChartComponent as unknown as TuffexChartsModule[K])
+  return import('@talex-touch/tuffex/charts').then(module => module[key])
+}
+
+// Keep `@talex-touch/tuffex/charts` (d3-geo/scale/shape + ECharts wrappers) out of the SSR Worker;
+// `/admin/analytics` is `requiresAuth: true` and renders charts strictly on the client after fetch.
+const TxBarChart = defineAsyncComponent(() => loadAnalyticsChart('TxBarChart'))
+const TxBubbleMap = defineAsyncComponent(() => loadAnalyticsChart('TxBubbleMap'))
+const TxChoroplethMap = defineAsyncComponent(() => loadAnalyticsChart('TxChoroplethMap'))
+const TxEChart = defineAsyncComponent(() => loadAnalyticsChart('TxEChart'))
 
 definePageMeta({
   layout: 'admin',
