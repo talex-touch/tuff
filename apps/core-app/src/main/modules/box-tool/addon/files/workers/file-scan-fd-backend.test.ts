@@ -209,8 +209,8 @@ function writeFile(relativePath: string, contents = 'x'): string {
  * prunes the ones the policy rejects in every context (`node_modules`, `.hidden-dir`, `Tool.app`).
  */
 function buildFixtureTree(): void {
-  // realpath: fd canonicalises the root it is handed, and /var is a symlink of /private/var on
-  // macOS. Scanning the non-canonical spelling would make every child fail root containment.
+  // Keep `root` canonical so legacy-walker comparisons share the same path spelling as `fd --absolute-path`
+  // on macOS (where `/var` symlinks to `/private/var`); symlinked-root scanning is tested explicitly below.
   root = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'tuff-fd-tree-')))
   writeFile('root.txt')
   writeFile('space name.txt')
@@ -257,6 +257,7 @@ interface ScanOutcome {
 }
 
 async function runFdScan(input: {
+  rootPath?: string
   testBinaryPath: string
   options: FileScanOptions
   excludePaths?: Set<string>
@@ -266,7 +267,7 @@ async function runFdScan(input: {
 }): Promise<ScanOutcome> {
   const batches: ScannedFileInfo[][] = []
   const stats = await scanDirectoryBatchesWithFd(
-    root,
+    input.rootPath ?? root,
     async (batch) => {
       batches.push(batch)
       input.onBatch?.(batch)
@@ -523,6 +524,180 @@ describePosix('file-scan-fd-backend', () => {
 
     const legacy = await runLegacyScan({ options, excludePaths })
     expect(admitted).toEqual(sortedPaths(legacy.files))
+  })
+
+  it('admits all files when rootPath is symlinked and fd outputs canonicalized realpath entries', async () => {
+    const options = fixtureOptions(3)
+    const symlinkRoot = path.join(fixtureDir, 'symlink-root')
+    symlinkSync(root, symlinkRoot)
+    const argvFile = path.join(fixtureDir, 'symlink-argv-probe.json')
+    // Real `fd --absolute-path` canonicalizes symlinked roots before emitting paths.
+    const canonicalizingBinary = writeFixture(
+      'canonicalizing-walker.cjs',
+      [
+        `fs.writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(argv))`,
+        'for (const file of found) {',
+        '  const realDir = fs.realpathSync(path.dirname(file))',
+        '  process.stdout.write(path.join(realDir, path.basename(file)) + separator)',
+        '}'
+      ].join('\n')
+    )
+
+    const canonicalBaseline = await runFdScan({ testBinaryPath: walkerBinary, options })
+    const { files, stats } = await runFdScan({
+      rootPath: symlinkRoot,
+      testBinaryPath: canonicalizingBinary,
+      options
+    })
+
+    expect(files.length).toBeGreaterThan(0)
+    expect(sortedPaths(files)).toEqual(sortedPaths(canonicalBaseline.files))
+    expect(stats).toEqual({ entryCount: files.length, errorCount: 0 })
+
+    const argv = JSON.parse(readFileSync(argvFile, 'utf8')) as string[]
+    expect(argv[argv.length - 1]).toBe(root)
+    const pruned = argv.filter((_, index) => argv[index - 1] === '--exclude')
+    expect(pruned).toEqual(fileFilterService.getTraversalPruneGlobs(root))
+
+    // A fixture binary that echoes paths under the caller's logical symlinkRoot without
+    // canonicalizing is also accepted rather than silently dropped.
+    const logicalBinary = writeFixture(
+      'logical-walker.cjs',
+      [
+        `const logicalRoot = ${JSON.stringify(symlinkRoot)}`,
+        'for (const file of found) {',
+        '  const relative = path.relative(currentRoot, file)',
+        '  process.stdout.write(path.join(logicalRoot, relative) + separator)',
+        '}'
+      ].join('\n')
+    )
+    const logicalOutcome = await runFdScan({
+      rootPath: symlinkRoot,
+      testBinaryPath: logicalBinary,
+      options
+    })
+    expect(logicalOutcome.files.length).toBe(canonicalBaseline.files.length)
+    expect(logicalOutcome.stats).toEqual({
+      entryCount: canonicalBaseline.files.length,
+      errorCount: 0
+    })
+  })
+
+  it('honors symlinked excludePaths inside a symlinked rootPath and tolerates missing exclude paths', async () => {
+    const options = fixtureOptions(3)
+    const symlinkRoot = path.join(fixtureDir, 'symlink-root-excludes')
+    symlinkSync(root, symlinkRoot)
+    const excludeAlias = path.join(fixtureDir, 'excluded-dir-alias')
+    symlinkSync(fixturePath('excluded-dir'), excludeAlias)
+    const canonicalizingBinary = writeFixture(
+      'canonicalizing-excludes-walker.cjs',
+      [
+        'for (const file of found) {',
+        '  const realDir = fs.realpathSync(path.dirname(file))',
+        '  process.stdout.write(path.join(realDir, path.basename(file)) + separator)',
+        '}'
+      ].join('\n')
+    )
+
+    const expectedBaseline = await runFdScan({
+      testBinaryPath: walkerBinary,
+      options,
+      excludePaths: new Set([fixturePath('excluded-dir')])
+    })
+
+    // Exclude path spelled through the symlinked root + a nonexistent exclude path (realpath fallback).
+    const throughSymlinkRoot = await runFdScan({
+      rootPath: symlinkRoot,
+      testBinaryPath: canonicalizingBinary,
+      options,
+      excludePaths: new Set([
+        path.join(symlinkRoot, 'excluded-dir'),
+        path.join(symlinkRoot, 'nonexistent-excluded-dir')
+      ])
+    })
+    const admittedThroughRoot = sortedPaths(throughSymlinkRoot.files)
+    expect(admittedThroughRoot).not.toContain(fixturePath(path.join('excluded-dir', 'skipped.txt')))
+    expect(admittedThroughRoot).toContain(
+      fixturePath(path.join('excluded-dir-sibling', 'kept.txt'))
+    )
+    expect(admittedThroughRoot).toEqual(sortedPaths(expectedBaseline.files))
+    expect(throughSymlinkRoot.stats).toEqual({
+      entryCount: expectedBaseline.files.length,
+      errorCount: 0
+    })
+
+    // Standalone symlink pointing to the excluded directory inside the scanned tree.
+    const throughExcludeAlias = await runFdScan({
+      rootPath: symlinkRoot,
+      testBinaryPath: canonicalizingBinary,
+      options,
+      excludePaths: new Set([excludeAlias])
+    })
+    expect(sortedPaths(throughExcludeAlias.files)).not.toContain(
+      fixturePath(path.join('excluded-dir', 'skipped.txt'))
+    )
+    expect(sortedPaths(throughExcludeAlias.files)).toContain(
+      fixturePath(path.join('excluded-dir-sibling', 'kept.txt'))
+    )
+    expect(sortedPaths(throughExcludeAlias.files)).toEqual(sortedPaths(expectedBaseline.files))
+  })
+
+  it('excludes all files when excludePaths contains an ancestor of a symlinked or canonical rootPath', async () => {
+    const options = fixtureOptions(3)
+    const symlinkParent = path.join(fixtureDir, 'excluded-ancestor-parent')
+    mkdirSync(symlinkParent, { recursive: true })
+    const symlinkRoot = path.join(symlinkParent, 'watch')
+    symlinkSync(root, symlinkRoot)
+
+    const canonicalizingBinary = writeFixture(
+      'canonicalizing-ancestor-exclude-walker.cjs',
+      [
+        'for (const file of found) {',
+        '  const realDir = fs.realpathSync(path.dirname(file))',
+        '  process.stdout.write(path.join(realDir, path.basename(file)) + separator)',
+        '}'
+      ].join('\n')
+    )
+
+    // Excluding the parent of the symlinked root must exclude canonicalized fd outputs under target.
+    const excludedByLogicalParent = await runFdScan({
+      rootPath: symlinkRoot,
+      testBinaryPath: canonicalizingBinary,
+      options,
+      excludePaths: new Set([symlinkParent])
+    })
+    expect(excludedByLogicalParent.files).toEqual([])
+    expect(excludedByLogicalParent.stats).toEqual({ entryCount: 0, errorCount: 0 })
+
+    // Excluding the canonicalized parent of the symlinked root must also exclude canonical outputs.
+    const excludedByCanonicalParent = await runFdScan({
+      rootPath: symlinkRoot,
+      testBinaryPath: canonicalizingBinary,
+      options,
+      excludePaths: new Set([realpathSync(symlinkParent)])
+    })
+    expect(excludedByCanonicalParent.files).toEqual([])
+    expect(excludedByCanonicalParent.stats).toEqual({ entryCount: 0, errorCount: 0 })
+
+    // Symmetric case: excluding an ancestor of canonicalRoot must exclude logical outputs too.
+    const logicalBinary = writeFixture(
+      'logical-ancestor-exclude-walker.cjs',
+      [
+        `const logicalRoot = ${JSON.stringify(symlinkRoot)}`,
+        'for (const file of found) {',
+        '  const relative = path.relative(currentRoot, file)',
+        '  process.stdout.write(path.join(logicalRoot, relative) + separator)',
+        '}'
+      ].join('\n')
+    )
+    const excludedByTargetParent = await runFdScan({
+      rootPath: symlinkRoot,
+      testBinaryPath: logicalBinary,
+      options,
+      excludePaths: new Set([path.dirname(root)])
+    })
+    expect(excludedByTargetParent.files).toEqual([])
+    expect(excludedByTargetParent.stats).toEqual({ entryCount: 0, errorCount: 0 })
   })
 
   it('rejects a non-zero fd exit even after publishing batches, so the caller restarts the root', async () => {
