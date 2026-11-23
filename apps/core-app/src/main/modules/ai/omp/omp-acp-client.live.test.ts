@@ -38,8 +38,11 @@ describe('ompAcpClient live integration smoke', () => {
       expect(res.output.toLowerCase()).toContain('live acp smoke pass')
       expect(receivedChunks.length).toBeGreaterThan(0)
     } finally {
-      await session?.close()
-      await client.close()
+      try {
+        await session?.close()
+      } finally {
+        await client.close()
+      }
     }
   }, 60000)
 })
