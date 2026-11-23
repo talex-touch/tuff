@@ -34,7 +34,7 @@ import {
   toLangChainOpenAiReasoningFields,
   toLangChainOpenAiResponsesReasoningFields
 } from '@talex-touch/utils/intelligence/reasoning-effort'
-import { getNetworkService } from '../../network'
+import { getNetworkService, type NetworkFetchInit } from '../../network'
 import { readReasoningPlan } from '../reasoning-effort-runtime'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { decodeImageAttachment } from './attachment-spill'
@@ -116,8 +116,17 @@ export function normalizeOpenAiCompatibleBaseUrl(baseUrl: string): string {
   return `${trimmed}/v1`
 }
 
-export function createNetworkServiceFetch(): OpenAiClientFetch {
-  return async (url, init) => getNetworkService().fetch(url, init)
+export function createNetworkServiceFetch(
+  options?: Pick<NetworkFetchInit, 'timeoutMs' | 'streamTimeoutMode'>
+): OpenAiClientFetch {
+  return async (url, init) =>
+    getNetworkService().fetch(url, {
+      ...init,
+      ...(options?.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+      ...(options?.streamTimeoutMode !== undefined
+        ? { streamTimeoutMode: options.streamTimeoutMode }
+        : {})
+    })
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -133,22 +142,22 @@ function numberFrom(...candidates: unknown[]): number {
   return 0
 }
 
-function extractNestedReasoningText(value: unknown, depth = 0): string {
+function extractNestedReasoningText(value: unknown, depth = 0, preserveWhitespace = false): string {
   if (depth > 4 || value === null || value === undefined) {
     return ''
   }
   if (typeof value === 'string') {
-    return value.trim()
+    return preserveWhitespace ? value : value.trim()
   }
   if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value)
   }
   if (Array.isArray(value)) {
-    return value
-      .map((item) => extractNestedReasoningText(item, depth + 1))
+    const joined = value
+      .map((item) => extractNestedReasoningText(item, depth + 1, preserveWhitespace))
       .filter(Boolean)
-      .join('\n')
-      .trim()
+      .join(preserveWhitespace ? '' : '\n')
+    return preserveWhitespace ? joined : joined.trim()
   }
   if (typeof value !== 'object') {
     return ''
@@ -164,7 +173,7 @@ function extractNestedReasoningText(value: unknown, depth = 0): string {
     row.thinking_text
   ]
   for (const candidate of directCandidates) {
-    const text = extractNestedReasoningText(candidate, depth + 1)
+    const text = extractNestedReasoningText(candidate, depth + 1, preserveWhitespace)
     if (text) return text
   }
 
@@ -177,29 +186,32 @@ function extractNestedReasoningText(value: unknown, depth = 0): string {
     row.payload
   ]
   for (const candidate of nestedCandidates) {
-    const text = extractNestedReasoningText(candidate, depth + 1)
+    const text = extractNestedReasoningText(candidate, depth + 1, preserveWhitespace)
     if (text) return text
   }
 
   return ''
 }
 
-export function extractReasoningContent(rawMessage: Record<string, unknown>): string | undefined {
+function extractReasoningValue(
+  rawMessage: Record<string, unknown>,
+  preserveWhitespace: boolean
+): string | undefined {
   const additionalKwargs = asRecord(rawMessage.additional_kwargs)
   const responseMetadata = asRecord(rawMessage.response_metadata)
   const contentBlocks = Array.isArray(rawMessage.content) ? rawMessage.content : []
-  const blockReasoning = contentBlocks
+  const blockJoined = contentBlocks
     .map((item) => {
       const row = asRecord(item)
       const type = String(row.type || '').toLowerCase()
       if (!type.includes('reasoning') && !type.includes('thinking')) {
-        return extractNestedReasoningText(row.reasoning ?? row.thinking)
+        return extractNestedReasoningText(row.reasoning ?? row.thinking, 0, preserveWhitespace)
       }
-      return extractNestedReasoningText(item)
+      return extractNestedReasoningText(item, 0, preserveWhitespace)
     })
     .filter(Boolean)
-    .join('\n')
-    .trim()
+    .join(preserveWhitespace ? '' : '\n')
+  const blockReasoning = preserveWhitespace ? blockJoined : blockJoined.trim()
 
   const candidates = [
     blockReasoning,
@@ -224,11 +236,21 @@ export function extractReasoningContent(rawMessage: Record<string, unknown>): st
   ]
 
   for (const candidate of candidates) {
-    const text = extractNestedReasoningText(candidate)
+    const text = extractNestedReasoningText(candidate, 0, preserveWhitespace)
     if (text) return text
   }
 
   return undefined
+}
+
+export function extractReasoningContent(rawMessage: Record<string, unknown>): string | undefined {
+  return extractReasoningValue(rawMessage, false)
+}
+
+export function extractStreamingReasoningDelta(
+  rawMessage: Record<string, unknown>
+): string | undefined {
+  return extractReasoningValue(rawMessage, true)
 }
 
 export function extractTextContent(content: unknown): string {
@@ -239,6 +261,8 @@ export function extractTextContent(content: unknown): string {
         if (typeof item === 'string') return item
         if (item && typeof item === 'object') {
           const row = item as Record<string, unknown>
+          const type = typeof row.type === 'string' ? row.type.toLowerCase() : ''
+          if (type.includes('reasoning') || type.includes('thinking')) return ''
           if (typeof row.text === 'string') return row.text
           if (typeof row.content === 'string') return row.content
         }
@@ -689,8 +713,8 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     return this.config.apiKey || 'tuff-local-key'
   }
 
-  protected resolveFetch(): OpenAiClientFetch {
-    return createNetworkServiceFetch()
+  protected resolveFetch(timeoutMs?: number): OpenAiClientFetch {
+    return createNetworkServiceFetch(timeoutMs !== undefined ? { timeoutMs } : undefined)
   }
 
   protected resolveRequestTimeout(
@@ -767,16 +791,17 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     // A reasoning level that applies owns the sampling: a reasoning model rejects any temperature but
     // its default, so the caller's temperature is left out, as the Nexus adapter already does.
     const chatReasoning = toLangChainOpenAiReasoningFields(plan)
+    const requestTimeoutMs = this.resolveRequestTimeout(params.options)
     const common = {
       apiKey: this.resolveApiKey(),
       model: params.model,
       temperature: chatReasoning ? undefined : params.temperature,
       maxTokens: params.maxTokens,
       streaming: params.streaming,
-      timeout: this.resolveRequestTimeout(params.options),
+      timeout: requestTimeoutMs,
       configuration: {
         baseURL: this.resolveBaseUrl(),
-        fetch: this.resolveFetch()
+        fetch: this.resolveFetch(requestTimeoutMs)
       }
     }
     if (this.usesResponsesApi(params.model)) {
@@ -853,9 +878,22 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       for (const partEvent of assembler.pushMessageChunk(chunk)) {
         yield { delta: '', done: false, partEvent }
       }
-      const text = extractTextContent(asRecord(chunk).content)
-      if (!text) continue
-      yield { delta: text, done: false }
+      const rawChunk = asRecord(chunk)
+      const reasoning = extractStreamingReasoningDelta(rawChunk)
+      if (reasoning) {
+        yield {
+          delta: '',
+          done: false,
+          partEvent: { kind: 'reasoning-delta', delta: reasoning }
+        }
+      }
+      const text = extractTextContent(rawChunk.content)
+      if (text) {
+        yield { delta: text, done: false }
+      }
+      if (hasReportedUsage(rawChunk)) {
+        yield { delta: '', done: false, usage: extractUsageInfo(rawChunk) }
+      }
     }
     for (const partEvent of assembler.finish()) yield { delta: '', done: false, partEvent }
 

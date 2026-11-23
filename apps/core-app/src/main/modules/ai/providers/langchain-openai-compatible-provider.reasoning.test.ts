@@ -12,7 +12,9 @@ import { planProviderReasoning, withReasoningPlan } from '../reasoning-effort-ru
 const wire = vi.hoisted(() => ({
   bodies: [] as Array<Record<string, unknown>>,
   urls: [] as string[],
-  streaming: false
+  timeoutMs: [] as Array<number | undefined>,
+  streaming: false,
+  customResponse: null as (() => Response) | null
 }))
 
 function completionResponse(): Response {
@@ -126,9 +128,13 @@ function streamResponse(): Response {
 
 vi.mock('../../network', () => ({
   getNetworkService: () => ({
-    fetch: async (url: unknown, init?: { body?: unknown }) => {
+    fetch: async (url: unknown, init?: { body?: unknown; timeoutMs?: number }) => {
       wire.urls.push(String(url))
+      wire.timeoutMs.push(init?.timeoutMs)
       wire.bodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+      if (wire.customResponse) {
+        return wire.customResponse()
+      }
       if (String(url).endsWith('/responses')) {
         return wire.streaming ? responsesStreamResponse() : responsesResponse()
       }
@@ -169,7 +175,9 @@ const turn = { messages: [{ role: 'user' as const, content: 'hi' }] }
 beforeEach(() => {
   wire.bodies.length = 0
   wire.urls.length = 0
+  wire.timeoutMs.length = 0
   wire.streaming = false
+  wire.customResponse = null
 })
 
 describe('OpenAI-compatible reasoning on the wire', () => {
@@ -302,5 +310,138 @@ describe('OpenAI-compatible reasoning on the wire', () => {
     expect(wire.bodies[0]).not.toHaveProperty('reasoning_effort')
     expect(wire.bodies[0]).not.toHaveProperty('thinking')
     expect(wire.bodies[0]).toEqual(wire.bodies[1])
+  })
+
+  it('forwards streaming timeoutMs to NetworkService.fetch and streams reasoning_content + usage', async () => {
+    const gateway = config({
+      id: 'omp-config',
+      type: IntelligenceProviderType.CUSTOM,
+      timeout: 120_000
+    })
+    wire.streaming = true
+    const sseChunks = [
+      {
+        id: 'chatcmpl-reason',
+        object: 'chat.completion.chunk',
+        created: 0,
+        model: 'auto/hy4-preview-f',
+        choices: [{ index: 0, delta: { role: 'assistant', content: '' }, finish_reason: null }]
+      },
+      {
+        id: 'chatcmpl-reason',
+        object: 'chat.completion.chunk',
+        created: 0,
+        model: 'auto/hy4-preview-f',
+        choices: [
+          { index: 0, delta: { content: '', reasoning_content: 'The' }, finish_reason: null }
+        ]
+      },
+      {
+        id: 'chatcmpl-reason',
+        object: 'chat.completion.chunk',
+        created: 0,
+        model: 'auto/hy4-preview-f',
+        choices: [
+          {
+            index: 0,
+            delta: { content: '', reasoning_content: ' user said hi' },
+            finish_reason: null
+          }
+        ]
+      },
+      {
+        id: 'chatcmpl-reason',
+        object: 'chat.completion.chunk',
+        created: 0,
+        model: 'auto/hy4-preview-f',
+        choices: [{ index: 0, delta: { content: 'Hello!' }, finish_reason: null }]
+      },
+      {
+        id: 'chatcmpl-reason',
+        object: 'chat.completion.chunk',
+        created: 0,
+        model: 'auto/hy4-preview-f',
+        choices: [{ index: 0, delta: { content: '' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 12, completion_tokens: 34, total_tokens: 46 }
+      }
+    ]
+    wire.customResponse = () =>
+      new Response(
+        `${sseChunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join('')}data: [DONE]\n\n`,
+        { status: 200, headers: { 'content-type': 'text/event-stream' } }
+      )
+
+    const reasoningDeltas: string[] = []
+    const textDeltas: string[] = []
+    let reportedUsage:
+      | { promptTokens: number; completionTokens: number; totalTokens: number }
+      | undefined
+
+    for await (const chunk of new CustomProvider(gateway).chatStream(
+      turn,
+      plannedOptions(gateway, 'auto/hy4-preview-f', 'high')
+    )) {
+      if (chunk.partEvent?.kind === 'reasoning-delta') {
+        reasoningDeltas.push(chunk.partEvent.delta)
+      }
+      if (chunk.delta) textDeltas.push(chunk.delta)
+      if (chunk.usage) reportedUsage = chunk.usage
+    }
+
+    expect(wire.timeoutMs[0]).toBe(120_000)
+    expect(reasoningDeltas.join('')).toBe('The user said hi')
+    expect(textDeltas.join('')).toBe('Hello!')
+    expect(reportedUsage).toMatchObject({
+      promptTokens: 12,
+      completionTokens: 34,
+      totalTokens: 46
+    })
+  })
+
+  it('surfaces NetworkTimeoutError when a stream body times out instead of completing empty', async () => {
+    const gateway = config({ id: 'omp-config', type: IntelligenceProviderType.CUSTOM })
+    wire.streaming = true
+    const timeoutError = Object.assign(new Error('NETWORK_TIMEOUT'), {
+      name: 'NetworkTimeoutError',
+      code: 'NETWORK_TIMEOUT',
+      timeoutMs: 100
+    })
+    wire.customResponse = () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            const first = JSON.stringify({
+              id: 'chatcmpl-timeout',
+              object: 'chat.completion.chunk',
+              created: 0,
+              model: 'auto/hy4-preview-f',
+              choices: [
+                {
+                  index: 0,
+                  delta: { content: '', reasoning_content: 'thinking' },
+                  finish_reason: null
+                }
+              ]
+            })
+            controller.enqueue(new TextEncoder().encode(`data: ${first}\n\n`))
+            setTimeout(() => controller.error(timeoutError), 20)
+          }
+        }),
+        { status: 200, headers: { 'content-type': 'text/event-stream' } }
+      )
+
+    const run = async () => {
+      for await (const _chunk of new CustomProvider(gateway).chatStream(
+        turn,
+        plannedOptions(gateway, 'auto/hy4-preview-f', 'high')
+      )) {
+        void _chunk
+      }
+    }
+
+    await expect(run()).rejects.toMatchObject({
+      name: 'NetworkTimeoutError',
+      code: 'NETWORK_TIMEOUT'
+    })
   })
 })

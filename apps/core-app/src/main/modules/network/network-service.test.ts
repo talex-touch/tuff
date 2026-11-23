@@ -1330,4 +1330,71 @@ describe('networkService cooldown policy', () => {
     await expect(service.request(options)).rejects.toBeInstanceOf(NetworkCooldownError)
     expect(electronMocks.fetch).toHaveBeenCalledTimes(3)
   })
+
+  it('honors caller timeoutMs on fetch() and projects post-header body timeout to NetworkTimeoutError', async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { 'content-type': 'text/event-stream' })
+      response.write('data: {"delta":"thinking"}\n\n')
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const port = (server.address() as AddressInfo).port
+    const service = new NetworkService()
+    electronMocks.fetch.mockImplementation(
+      async (url: string, init?: RequestInit) => await globalThis.fetch(url, init)
+    )
+
+    try {
+      const response = await service.fetch(`http://127.0.0.1:${port}/chat/completions`, {
+        method: 'POST',
+        body: '{}',
+        timeoutMs: 100
+      })
+      const reader = response.body!.getReader()
+      const first = await reader.read()
+      expect(first.done).toBe(false)
+      expect(new TextDecoder().decode(first.value)).toContain('thinking')
+
+      // Must reject as NetworkTimeoutError (not generic AbortError that OpenAI SDK silently eats).
+      await expect(reader.read()).rejects.toMatchObject({
+        name: 'NetworkTimeoutError',
+        code: 'NETWORK_TIMEOUT',
+        timeoutMs: 100
+      })
+    } finally {
+      server.closeAllConnections()
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve()))
+      )
+    }
+  })
+
+  it('allows fetch() streams longer than the default timeout when caller sets a larger timeoutMs', async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { 'content-type': 'text/plain' })
+      response.write('first-')
+      setTimeout(() => {
+        response.end('second')
+      }, 140)
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const port = (server.address() as AddressInfo).port
+    const service = new NetworkService()
+    service.updateConfig({ timeoutMs: 100 })
+    electronMocks.fetch.mockImplementation(
+      async (url: string, init?: RequestInit) => await globalThis.fetch(url, init)
+    )
+
+    try {
+      const response = await service.fetch(`http://127.0.0.1:${port}/stream`, {
+        method: 'GET',
+        timeoutMs: 1_000
+      })
+      await expect(response.text()).resolves.toBe('first-second')
+    } finally {
+      server.closeAllConnections()
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve()))
+      )
+    }
+  })
 })
