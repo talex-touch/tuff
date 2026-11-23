@@ -2,9 +2,42 @@
   "name": "@talex-touch/touch-quickops-plugin",
   "private": true,
   "version": "0.1.1",
-  "packageManager": "pnpm@10.34.4",
+  "description": "Tuff QuickOps 官方迁移插件：承接本地快捷工具入口、运行状态与审计摘要",
+  "license": "MIT",
+  "packageManager": "pnpm@11.24.0",
+  "keywords": ["tuff-plugin", "utilities", "quickops", "system", "diagnostics"],
+  "main": "./index.js",
+  "engines": {
+    "tuff": ">=261011"
+  },
   "scripts": {
     "test": "node --test index.test.cjs",
     "build": "node ../../packages/tuff-cli/bin/tuff.js builder"
+  },
+  "tuff": {
+    "schemaVersion": 1,
+    "id": "com.tuffex.quickops",
+    "name": "touch-quickops",
+    "displayName": {
+      "en": "Tuff QuickOps",
+      "zh": "Tuff QuickOps"
+    },
+    "sdkapi": 261011,
+    "category": "utilities",
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "permissions": {
+      "required": ["search.root-results"],
+      "optional": ["storage.shared", "fs.read", "fs.write", "clipboard.read", "clipboard.write"]
+    },
+    "platforms": {
+      "win32": true,
+      "darwin": true,
+      "linux": true
+    },
+    "surface": "prelude",
+    "manifest": "./manifest.json"
   }
 }

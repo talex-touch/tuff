@@ -28,7 +28,7 @@
       "owner": "official-plugin",
       "mode": "push",
       "priority": "fast",
-      "defaultOrder": 93,
+      "defaultOrder": 94,
       "permissionScopes": ["root-results"],
       "defaultState": "ask",
       "requiresUserConsent": true,
@@ -56,7 +56,7 @@
         "type": "file",
         "value": "assets/logo.svg"
       },
-      "keywords": ["window", "preset", "layout", "分屏", "布局", "窗口预设"],
+      "keywords": ["preset", "layout", "分屏", "布局", "窗口预设"],
       "push": true,
       "priority": 7,
       "acceptedInputTypes": ["text"],
@@ -68,7 +68,7 @@
       "commands": [
         {
           "type": "over",
-          "value": ["window", "preset", "layout", "分屏", "布局"]
+          "value": ["preset", "layout", "分屏", "布局", "窗口预设"]
         }
       ]
     }

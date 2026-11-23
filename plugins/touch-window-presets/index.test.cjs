@@ -54,6 +54,7 @@ const state = {
     status: 'completed',
     affectedWindows: 2,
   },
+  runError: null,
 }
 
 globalThis.platform = { platform: 'win32', arch: 'x64' }
@@ -75,6 +76,8 @@ globalThis.plugin = {
     },
     async runAction(actionId) {
       state.calls.push({ operation: 'run-action', actionId })
+      if (state.runError)
+        throw state.runError
       return { ...state.result, actionId }
     },
   },
@@ -101,6 +104,7 @@ test.beforeEach(() => {
     status: 'completed',
     affectedWindows: 2,
   }
+  state.runError = null
   globalThis.platform.platform = 'win32'
 })
 
@@ -160,6 +164,43 @@ test('keeps permission and unsupported outcomes stable and redacted', async () =
   await pluginModule.onFeatureTriggered('window-presets', '')
   assert.equal(state.items[0].title, '当前平台暂不支持窗口预设')
   assert.deepEqual(state.calls, [])
+})
+
+test('ignores unrelated items and maps permission request failures canonically', async () => {
+  const unrelated = await pluginModule.onItemAction(
+    {
+      meta: { defaultAction: 'copy' },
+      actions: [{ id: 'copy', payload: { text: 'hello' } }],
+    },
+    { actionId: 'copy' },
+  )
+  assert.equal(unrelated, undefined)
+  assert.deepEqual(state.calls, [])
+
+  state.runError = Object.assign(new Error('/private/perm'), {
+    code: 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED',
+  })
+  const failed = await pluginModule.onItemAction(
+    {
+      meta: { defaultAction: 'window-presets-action' },
+      actions: [{ id: 'run-action', payload: { actionId: 'preset-dev-split' } }],
+    },
+    { actionId: 'run-action' },
+  )
+  assert.equal(failed.status, 'blocked')
+  assert.equal(failed.reason, 'permission-check-failed')
+  assert.doesNotMatch(JSON.stringify(failed), /private/)
+})
+
+test('manifest commands do not collide with touch-window-manager', () => {
+  const presetsManifest = JSON.parse(fs.readFileSync(path.join(__dirname, 'manifest.json'), 'utf8'))
+  const managerManifest = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', 'touch-window-manager', 'manifest.json'), 'utf8'),
+  )
+  const presetsCommands = new Set(presetsManifest.features.flatMap(f => f.commands.flatMap(c => c.value)))
+  const managerCommands = managerManifest.features.flatMap(f => f.commands.flatMap(c => c.value))
+  const overlap = managerCommands.filter(cmd => presetsCommands.has(cmd))
+  assert.deepEqual(overlap, [])
 })
 
 test('production Prelude contains no direct privileged or test-only surface', () => {

@@ -33,20 +33,6 @@
       "defaultState": "ask",
       "requiresUserConsent": true,
       "pushesToRootResults": true
-    },
-    {
-      "id": "touch-system-actions.quick-actions",
-      "displayName": "系统快捷动作",
-      "featureId": "quick-actions",
-      "kind": "system-action",
-      "owner": "official-plugin",
-      "mode": "push",
-      "priority": "fast",
-      "defaultOrder": 91,
-      "permissionScopes": ["root-results"],
-      "defaultState": "ask",
-      "requiresUserConsent": true,
-      "pushesToRootResults": true
     }
   ],
   "features": [
@@ -60,10 +46,10 @@
         }
       },
       "desc": {
-        "default": "全量系统动作入口",
+        "default": "电源、音量与亮度系统操作入口",
         "locales": {
-          "zh-CN": "全量系统动作入口",
-          "en-US": "All system actions in one place"
+          "zh-CN": "电源、音量与亮度系统操作入口",
+          "en-US": "Power, audio and display system actions"
         }
       },
       "icon": {
@@ -83,42 +69,6 @@
         {
           "type": "over",
           "value": ["system", "sys", "系统", "系统操作"]
-        }
-      ]
-    },
-    {
-      "id": "quick-actions",
-      "name": {
-        "default": "系统快捷动作",
-        "locales": {
-          "zh-CN": "系统快捷动作",
-          "en-US": "Quick Actions"
-        }
-      },
-      "desc": {
-        "default": "高频安全动作与设置入口",
-        "locales": {
-          "zh-CN": "高频安全动作与设置入口",
-          "en-US": "Frequent safe actions and shortcuts to settings"
-        }
-      },
-      "icon": {
-        "type": "file",
-        "value": "assets/logo.svg"
-      },
-      "keywords": ["quick", "actions", "快捷", "系统", "锁屏", "静音", "settings"],
-      "push": true,
-      "priority": 7,
-      "acceptedInputTypes": ["text"],
-      "platform": {
-        "win32": true,
-        "darwin": true,
-        "linux": false
-      },
-      "commands": [
-        {
-          "type": "contain",
-          "value": ["quick", "actions", "quick actions", "快捷", "系统快捷", "系统动作"]
         }
       ]
     }

@@ -137,10 +137,9 @@ test('production Prelude has no privileged or test-only child surface', () => {
   assert.deepEqual(Object.keys(pluginModule).sort(), ['onDestroy', 'onFeatureTriggered', 'onInit', 'onItemAction'])
 })
 
-test('a foreign feature id is declined without publishing anything', async () => {
-  const handled = await pluginModule.onFeatureTriggered('not-system-actions', { text: '' })
-
-  assert.equal(handled, false)
+test('a foreign or quick-actions feature id is declined without publishing anything', async () => {
+  assert.equal(await pluginModule.onFeatureTriggered('not-system-actions', { text: '' }), false)
+  assert.equal(await pluginModule.onFeatureTriggered('quick-actions', { text: '' }), false)
   assert.deepEqual(state.items, [])
 })
 
@@ -279,7 +278,7 @@ test('a forged item cannot smuggle an action id the plugin does not own', async 
   assert.deepEqual(state.systemCalls, [])
 })
 
-test('an item that is not this plugin\'s, or names another action, executes nothing', async () => {
+test('an item that is not this plugin\'s, or names another action, is ignored without executing', async () => {
   const cases = [
     [
       { meta: { defaultAction: 'something-else' }, actions: [{ id: 'run-action', payload: { actionId: 'shutdown' } }] },
@@ -298,7 +297,7 @@ test('an item that is not this plugin\'s, or names another action, executes noth
 
   for (const [item, context] of cases) {
     const result = await pluginModule.onItemAction(item, context)
-    assert.equal(result.reason, 'invalid-action')
+    assert.equal(result, undefined)
   }
   assert.deepEqual(state.systemCalls, [])
 })
@@ -357,6 +356,8 @@ test('a thrown host capability error maps to a stable reason rather than propaga
   for (const [code, expected] of [
     ['PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED', { reason: 'permission-denied', status: 'blocked' }],
     ['PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE', { reason: 'permission-unavailable', status: 'blocked' }],
+    ['PLUGIN_HOST_PERMISSION_REQUEST_FAILED', { reason: 'permission-check-failed', status: 'blocked' }],
+    ['PLUGIN_HOST_CAPABILITY_UNAVAILABLE', { reason: 'capability-unavailable', status: 'blocked' }],
     ['PLUGIN_HOST_CAPABILITY_CANCELLED', { reason: 'cancelled', status: 'cancelled' }],
     ['PLUGIN_HOST_CAPABILITY_TIMEOUT', { reason: 'timeout', status: 'failed' }],
     ['SOMETHING_ELSE', { reason: 'system-action-failed', status: 'failed' }],
@@ -369,7 +370,7 @@ test('a thrown host capability error maps to a stable reason rather than propaga
 
   // The message is the reason, never the thrown error — `boom` reaching a log line would mean
   // host internals are surfacing through a plugin.
-  assert.equal(state.loggedErrors.length, 5)
+  assert.equal(state.loggedErrors.length, 7)
   assert.equal(
     state.loggedErrors.some(message => String(message).includes('boom')),
     false,
@@ -389,10 +390,21 @@ test('an absent system capability is refused before anything is dispatched', asy
 
     const result = await pluginModule.onItemAction(item, { actionId: 'run-action' })
 
-    assert.equal(result.reason, 'system-capability-unavailable')
+    assert.equal(result.reason, 'capability-unavailable')
     assert.equal(result.status, 'blocked')
   }
   finally {
     globalThis.system.runAction = restore
   }
+})
+
+test('package.json version matches manifest.json and has no quick-actions collision', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, 'manifest.json'), 'utf8'))
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'))
+
+  assert.equal(pkg.version, manifest.version)
+  assert.equal(pkg.version, '1.0.1')
+  assert.equal(pkg.packageManager, 'pnpm@11.24.0')
+  assert.equal(manifest.features.some(feature => feature.id === 'quick-actions'), false)
+  assert.equal(manifest.searchProviders.some(provider => provider.featureId === 'quick-actions'), false)
 })
