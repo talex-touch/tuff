@@ -1,7 +1,10 @@
+import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
 import {
+  API_PROBE_SAMPLE_LENGTH,
   apiProbes,
   CHROMIUM_LAUNCH_OPTIONS,
+  collectApiProbes,
   collectDeployedPreviewFailures,
   collectRouteBudgetFailures,
   extractServiceWorkerPrecacheUrls,
@@ -309,5 +312,63 @@ describe('collect-deployed-preview-evidence helpers', () => {
       authProviderCallback: { ok: true, authenticated: true },
       authenticatedDashboard: { ok: true, authenticated: true },
     })).toEqual(['route probe /store/ made 1 docs requests, expected <= 0'])
+  })
+
+  it('captures up to 512 chars per API probe sample so sidebar normalizedPath is preserved', async () => {
+    expect(API_PROBE_SAMPLE_LENGTH).toBe(512)
+
+    const longSidebarPayload = `${JSON.stringify([{
+      title: 'Alert',
+      description: 'Displays important feedback messages with semantic styling, icons, dismiss controls, and accessible announcements for users.',
+      tags: ['feedback', 'status', 'banner', 'notification'],
+      normalizedPath: '/docs/dev/components/alert',
+    }])}${'x'.repeat(600)}`
+
+    expect(longSidebarPayload.indexOf('normalizedPath')).toBeGreaterThan(160)
+    expect(longSidebarPayload.indexOf('normalizedPath')).toBeLessThan(API_PROBE_SAMPLE_LENGTH)
+
+    const mockFetch = async (url) => {
+      if (url.endsWith('/api/docs/sidebar-components/en')) {
+        return {
+          status: 200,
+          headers: new Headers(),
+          text: async () => longSidebarPayload,
+        }
+      }
+      if (url.includes('/api/auth/callback/github')) {
+        return {
+          status: 302,
+          headers: new Headers({ location: '/api/auth/error?error=Callback' }),
+          text: async () => 'Redirecting to /api/auth/error?error=Callback',
+        }
+      }
+      if (url.endsWith('/api/dashboard/team')) {
+        return {
+          status: 401,
+          headers: new Headers(),
+          text: async () => '{"statusCode": 401,"message": "Unauthorized"}',
+        }
+      }
+      if (url.includes('?path=/docs/') && !url.includes('/api/docs/view')) {
+        return { status: 404, headers: new Headers(), text: async () => 'Not Found' }
+      }
+      if (url.includes('/api/docs/navigation?locale=en') || url.includes('/api/docs/sidebar-components?locale=en')) {
+        return { status: 404, headers: new Headers(), text: async () => 'Not Found' }
+      }
+      return {
+        status: 200,
+        headers: new Headers(),
+        text: async () => '{}',
+      }
+    }
+
+    const results = await collectApiProbes('https://tuff.tagzxia.com', mockFetch)
+    const sidebarProbe = results.find(item => item.name === 'docs sidebar components')
+
+    expect(sidebarProbe).toBeDefined()
+    expect(sidebarProbe.ok).toBe(true)
+    expect(sidebarProbe.sample.length).toBe(512)
+    expect(sidebarProbe.sample).toContain('"normalizedPath"')
+    expect(sidebarProbe.bytes).toBe(Buffer.byteLength(longSidebarPayload))
   })
 })
