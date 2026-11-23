@@ -75,6 +75,26 @@ export function resolveExecutablePath(appPath) {
   return resolved
 }
 
+function parseStrictNumber(raw, flagName) {
+  const trimmed = String(raw).trim()
+  if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(trimmed)) {
+    throw new Error(`${flagName} must be a valid number, received: ${raw}`)
+  }
+  const value = Number(trimmed)
+  if (!Number.isFinite(value)) {
+    throw new Error(`${flagName} must be a finite number, received: ${raw}`)
+  }
+  return value
+}
+
+function parseStrictInteger(raw, flagName) {
+  const trimmed = String(raw).trim()
+  if (!/^-?\d+$/.test(trimmed)) {
+    throw new Error(`${flagName} must be a valid integer, received: ${raw}`)
+  }
+  return Number.parseInt(trimmed, 10)
+}
+
 export function parseArgs(argv) {
   const options = {
     dryRun: false,
@@ -147,19 +167,19 @@ export function parseArgs(argv) {
         break
       case '--cdpPort':
       case '--cdp-port':
-        options.cdpPort = Number.parseInt(readValue(), 10)
+        options.cdpPort = parseStrictInteger(readValue(), flag)
         break
       case '--idleSeconds':
       case '--idle-seconds':
-        options.idleSeconds = Number.parseFloat(readValue())
+        options.idleSeconds = parseStrictNumber(readValue(), flag)
         break
       case '--sampleIntervalMs':
       case '--sample-interval-ms':
-        options.sampleIntervalMs = Number.parseInt(readValue(), 10)
+        options.sampleIntervalMs = parseStrictInteger(readValue(), flag)
         break
       case '--launchTimeoutMs':
       case '--launch-timeout-ms':
-        options.launchTimeoutMs = Number.parseInt(readValue(), 10)
+        options.launchTimeoutMs = parseStrictInteger(readValue(), flag)
         break
       case '--powermetricsInput':
       case '--powermetrics-input':
@@ -167,11 +187,11 @@ export function parseArgs(argv) {
         break
       case '--powermetricsIntervalMs':
       case '--powermetrics-interval-ms':
-        options.powermetricsIntervalMs = Number.parseInt(readValue(), 10)
+        options.powermetricsIntervalMs = parseStrictInteger(readValue(), flag)
         break
       case '--activityMonitorEnergyImpact':
       case '--activity-monitor-energy-impact':
-        options.activityMonitorEnergyImpact = Number.parseFloat(readValue())
+        options.activityMonitorEnergyImpact = parseStrictNumber(readValue(), flag)
         break
       case '--outputDir':
       case '--output-dir':
@@ -696,19 +716,22 @@ function parsePowermetricsTaskLine(line, columnLayout) {
   if (numbers.length < 2) return null
 
   const cpuMsPerSec = numbers[0]
-  const energyImpact = numbers[numbers.length - 1]
+  const energyImpact = columnLayout.hasEnergyImpact ? numbers[numbers.length - 1] : null
   let userPercent = null
   let idleWakeupsPerSec = null
 
-  if (columnLayout.hasUserPercent && numbers.length >= 7) {
+  if (columnLayout.hasEnergyImpact && columnLayout.hasUserPercent && numbers.length >= 7) {
     // Name ID CPU_ms/s User% Deadlines(<2, 2-5) Wakeups(Intr, PkgIdle) EnergyImpact
     userPercent = numbers[1]
     idleWakeupsPerSec = numbers[numbers.length - 2]
-  } else if (!columnLayout.hasUserPercent && numbers.length >= 6) {
+  } else if (columnLayout.hasEnergyImpact && !columnLayout.hasUserPercent && numbers.length >= 6) {
     // Name ID CPU_ms/s Deadlines(<2, 2-5) Wakeups(Intr, PkgIdle) EnergyImpact
     idleWakeupsPerSec = numbers[numbers.length - 2]
-  } else if (numbers.length >= 4) {
+  } else if (columnLayout.hasEnergyImpact && numbers.length >= 4) {
     idleWakeupsPerSec = numbers[numbers.length - 2]
+  } else if (!columnLayout.hasEnergyImpact && numbers.length >= 2) {
+    if (columnLayout.hasUserPercent) userPercent = numbers[1]
+    idleWakeupsPerSec = numbers[numbers.length - 1]
   }
 
   return {
@@ -728,6 +751,8 @@ export function parsePowermetricsTasksOutput(
   if (!rawText || typeof rawText !== 'string') {
     return {
       sampleCount: 0,
+      matchedSampleCount: 0,
+      observedDurationSeconds: null,
       matchedTaskNames: [],
       matchedPids: [],
       energyImpact: computeSummaryStats([], 2),
@@ -740,6 +765,8 @@ export function parsePowermetricsTasksOutput(
 
   const filterPattern = new RegExp(processFilter, 'i')
   const pidSet = Array.isArray(targetPids) && targetPids.length > 0 ? new Set(targetPids) : null
+  const elapsedMatches = Array.from(rawText.matchAll(/\(([0-9]+(?:\.[0-9]+)?)ms\s+elapsed\)/gi))
+  const totalElapsedMs = elapsedMatches.reduce((sum, match) => sum + Number.parseFloat(match[1]), 0)
   const blocks = rawText.split(/\*\*\*\s*Running tasks\s*\*\*\*/i).slice(1)
   const effectiveBlocks = blocks.length > 0 ? blocks : [rawText]
 
@@ -754,7 +781,7 @@ export function parsePowermetricsTasksOutput(
   for (let blockIndex = 0; blockIndex < effectiveBlocks.length; blockIndex += 1) {
     const block = effectiveBlocks[blockIndex]
     const lines = block.split(/\r?\n/)
-    let columnLayout = { hasUserPercent: true }
+    let columnLayout = { hasUserPercent: true, hasEnergyImpact: false }
     let inTable = false
     const matchedTasks = []
     let allTasksRow = null
@@ -768,7 +795,8 @@ export function parsePowermetricsTasksOutput(
       if (/^Name\s+ID\s+/i.test(trimmed)) {
         inTable = true
         columnLayout = {
-          hasUserPercent: /\bUser%/i.test(trimmed)
+          hasUserPercent: /\bUser%/i.test(trimmed),
+          hasEnergyImpact: /\bEnergy\s+Impact\b/i.test(trimmed)
         }
         continue
       }
@@ -796,10 +824,11 @@ export function parsePowermetricsTasksOutput(
 
     if (matchedTasks.length === 0 && !allTasksRow) continue
 
+    const tasksWithEnergy = matchedTasks.filter((task) => typeof task.energyImpact === 'number')
     const totalEnergyImpact =
-      matchedTasks.length > 0
+      tasksWithEnergy.length > 0
         ? roundNumber(
-            matchedTasks.reduce((sum, task) => sum + task.energyImpact, 0),
+            tasksWithEnergy.reduce((sum, task) => sum + task.energyImpact, 0),
             2
           )
         : null
@@ -818,12 +847,14 @@ export function parsePowermetricsTasksOutput(
           )
         : null
 
+    if (totalEnergyImpact !== null) sampleEnergyTotals.push(totalEnergyImpact)
     if (matchedTasks.length > 0) {
-      sampleEnergyTotals.push(totalEnergyImpact)
       sampleCpuTotals.push(totalCpuMsPerSec)
       sampleWakeupTotals.push(totalIdleWakeupsPerSec)
     }
-    if (allTasksRow) systemEnergyTotals.push(allTasksRow.energyImpact)
+    if (allTasksRow && typeof allTasksRow.energyImpact === 'number') {
+      systemEnergyTotals.push(allTasksRow.energyImpact)
+    }
 
     samples.push({
       sampleIndex: samples.length + 1,
@@ -838,7 +869,9 @@ export function parsePowermetricsTasksOutput(
 
   return {
     sampleCount: samples.length,
-    matchedSampleCount: sampleEnergyTotals.length,
+    matchedSampleCount: sampleCpuTotals.length,
+    observedDurationSeconds:
+      elapsedMatches.length > 0 ? roundNumber(totalElapsedMs / 1000, 2) : null,
     matchedTaskNames: [...matchedTaskNames].sort(),
     matchedPids: [...matchedPids].sort((a, b) => a - b),
     energyImpact: computeSummaryStats(sampleEnergyTotals, 2),
@@ -849,16 +882,31 @@ export function parsePowermetricsTasksOutput(
   }
 }
 
+function shellQuotePath(value) {
+  const str = String(value)
+  if (/^[a-zA-Z0-9_./:-]+$/.test(str)) return str
+  return `'${str.replace(/'/g, `'\\''`)}'`
+}
+
 export function buildManualPowermetricsCommand({
   idleSeconds = DEFAULT_IDLE_SECONDS,
   intervalMs = DEFAULT_POWERMETRICS_INTERVAL_MS,
   outputPath = '/tmp/tuff-powermetrics-tasks.txt'
 } = {}) {
   const sampleCount = Math.max(1, Math.round((idleSeconds * 1000) / intervalMs))
-  return `sudo powermetrics --samplers tasks -i ${intervalMs} -n ${sampleCount} > ${outputPath}`
+  return `sudo powermetrics --samplers tasks -i ${intervalMs} -n ${sampleCount} > ${shellQuotePath(outputPath)}`
 }
 
-function finalizeParsedPowermetrics(parsed, { source, inputPath, manualCommand }) {
+function finalizeParsedPowermetrics(parsed, { source, inputPath, manualCommand, intervalMs }) {
+  const estimatedDurationSeconds =
+    parsed.observedDurationSeconds ??
+    (parsed.sampleCount > 0 && Number.isFinite(intervalMs)
+      ? roundNumber((parsed.sampleCount * intervalMs) / 1000, 2)
+      : null)
+  const enrichedParsed = {
+    ...parsed,
+    observedDurationSeconds: estimatedDurationSeconds
+  }
   if (parsed.sampleCount === 0) {
     return {
       status: 'parse-empty',
@@ -869,7 +917,7 @@ function finalizeParsedPowermetrics(parsed, { source, inputPath, manualCommand }
           ? 'powermetrics input file contained no parseable Running tasks blocks'
           : 'live powermetrics execution produced no parseable Running tasks blocks',
       manualCommand,
-      parsed
+      parsed: enrichedParsed
     }
   }
   if (parsed.matchedPids.length === 0) {
@@ -880,7 +928,18 @@ function finalizeParsedPowermetrics(parsed, { source, inputPath, manualCommand }
       reason:
         'powermetrics output contained Running tasks blocks, but zero tasks matched the target process filter/PIDs',
       manualCommand,
-      parsed
+      parsed: enrichedParsed
+    }
+  }
+  if (parsed.energyImpact.count === 0) {
+    return {
+      status: 'missing-energy-impact-column',
+      source,
+      inputPath,
+      reason:
+        'powermetrics output matched target tasks, but the Running tasks header did not include an Energy Impact column',
+      manualCommand,
+      parsed: enrichedParsed
     }
   }
   return {
@@ -889,7 +948,7 @@ function finalizeParsedPowermetrics(parsed, { source, inputPath, manualCommand }
     inputPath,
     reason: null,
     manualCommand,
-    parsed
+    parsed: enrichedParsed
   }
 }
 
@@ -935,7 +994,8 @@ export async function collectPowermetricsEnergy(
     return finalizeParsedPowermetrics(parsed, {
       source: 'file',
       inputPath: resolvedInput,
-      manualCommand
+      manualCommand,
+      intervalMs: options.powermetricsIntervalMs
     })
   }
 
@@ -979,7 +1039,8 @@ export async function collectPowermetricsEnergy(
   return finalizeParsedPowermetrics(parsed, {
     source: 'live-powermetrics',
     inputPath: null,
-    manualCommand
+    manualCommand,
+    intervalMs: options.powermetricsIntervalMs
   })
 }
 
@@ -1014,17 +1075,21 @@ function isTestFilePath(relativePath) {
   )
 }
 
-async function walkSourceFiles(rootDir, collected = []) {
+async function walkSourceFiles(rootDir, collected = [], errors = []) {
   let entries
   try {
     entries = await readdir(rootDir, { withFileTypes: true })
-  } catch {
+  } catch (error) {
+    errors.push({
+      path: rootDir,
+      error: error instanceof Error ? error.message : String(error)
+    })
     return collected
   }
   for (const entry of entries) {
     if (entry.isDirectory()) {
       if (STATIC_AUDIT_IGNORED_DIRS.has(entry.name)) continue
-      await walkSourceFiles(path.join(rootDir, entry.name), collected)
+      await walkSourceFiles(path.join(rootDir, entry.name), collected, errors)
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name)
       if (STATIC_AUDIT_EXTENSIONS.has(ext)) {
@@ -1046,6 +1111,7 @@ export async function runStaticEnergyAudit({
     requestAnimationFrame: { runtime: 0, test: 0, total: 0, filesWithMatches: 0 }
   }
   const byRoot = {}
+  const unreadablePaths = []
   const perPatternFiles = {
     setInterval: [],
     powerMonitor: [],
@@ -1055,9 +1121,12 @@ export async function runStaticEnergyAudit({
   let scannedFiles = 0
   for (const relRoot of roots) {
     const absRoot = path.resolve(resolvedRoot, relRoot)
-    const files = await walkSourceFiles(absRoot)
+    const rootErrors = []
+    const files = await walkSourceFiles(absRoot, [], rootErrors)
+    for (const err of rootErrors) unreadablePaths.push(err)
     const rootSummary = {
       scannedFiles: files.length,
+      unreadablePaths: rootErrors,
       setInterval: { runtime: 0, test: 0, total: 0 },
       powerMonitor: { runtime: 0, test: 0, total: 0 },
       requestAnimationFrame: { runtime: 0, test: 0, total: 0 }
@@ -1105,6 +1174,8 @@ export async function runStaticEnergyAudit({
     repoRoot: resolvedRoot,
     roots,
     scannedFiles,
+    incomplete: unreadablePaths.length > 0,
+    unreadablePaths,
     totals,
     byRoot,
     topRuntimeFiles
@@ -1121,10 +1192,24 @@ export function evaluateBaselineReadiness(report) {
       `Metric 1 (coldStart) status is '${report.metrics?.coldStart?.status ?? 'missing'}', expected 'measured'`
     )
   }
-  if (report.metrics?.idleEnergy?.powermetrics?.status !== 'measured') {
+  const pm = report.metrics?.idleEnergy?.powermetrics
+  if (pm?.status !== 'measured') {
     missing.push(
-      `Metric 2a (powermetrics) status is '${report.metrics?.idleEnergy?.powermetrics?.status ?? 'missing'}', expected 'measured'`
+      `Metric 2a (powermetrics) status is '${pm?.status ?? 'missing'}', expected 'measured'`
     )
+  } else {
+    const targetIdleSeconds = report.config?.idleSeconds ?? report.metrics?.idleEnergy?.idleSeconds
+    const observedSeconds = pm.parsed?.observedDurationSeconds
+    if (
+      typeof targetIdleSeconds === 'number' &&
+      targetIdleSeconds > 0 &&
+      typeof observedSeconds === 'number' &&
+      observedSeconds < targetIdleSeconds
+    ) {
+      missing.push(
+        `Metric 2a (powermetrics) observed duration ${observedSeconds}s is shorter than target idle window ${targetIdleSeconds}s`
+      )
+    }
   }
   if (report.metrics?.idleEnergy?.activityMonitor?.status !== 'imported') {
     missing.push(
@@ -1295,7 +1380,9 @@ function readLocalPsOutput() {
 }
 
 async function loadCdpTargets(remoteDebuggingUrl) {
+  validateRemoteDebuggingUrl(remoteDebuggingUrl)
   const response = await fetch(remoteDebuggingUrl, {
+    redirect: 'error',
     signal: AbortSignal.timeout(5_000)
   })
   if (!response.ok) {
@@ -1303,6 +1390,22 @@ async function loadCdpTargets(remoteDebuggingUrl) {
   }
   const payload = await response.json()
   return Array.isArray(payload) ? payload : []
+}
+
+export function validateWebSocketDebuggerUrl(wsUrl) {
+  let parsed
+  try {
+    parsed = new URL(wsUrl)
+  } catch {
+    throw new Error('CDP webSocketDebuggerUrl must be a valid URL')
+  }
+  if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') {
+    throw new Error('CDP webSocketDebuggerUrl must use ws or wss')
+  }
+  if (!LOOPBACK_HOSTS.has(parsed.hostname)) {
+    throw new Error('CDP webSocketDebuggerUrl must point at a loopback host')
+  }
+  return parsed.toString()
 }
 
 function selectCoreBoxTarget(targets) {
@@ -1317,7 +1420,8 @@ function selectCoreBoxTarget(targets) {
 }
 
 async function withCdpTarget(target, callback) {
-  const socket = new WebSocket(target.webSocketDebuggerUrl)
+  const wsUrl = validateWebSocketDebuggerUrl(target.webSocketDebuggerUrl)
+  const socket = new WebSocket(wsUrl)
   let nextId = 0
   const pending = new Map()
 
@@ -1345,16 +1449,25 @@ async function withCdpTarget(target, callback) {
   socket.onclose = () => rejectAll(new Error(`CDP socket closed for target ${target.id}`))
 
   await new Promise((resolvePromise, rejectPromise) => {
-    const timer = setTimeout(
-      () => rejectPromise(new Error(`Timed out opening CDP socket for ${target.id}`)),
-      10_000
-    )
+    const timer = setTimeout(() => {
+      try {
+        socket.close()
+      } catch {
+        // Ignore close errors on open timeout
+      }
+      rejectPromise(new Error(`Timed out opening CDP socket for ${target.id}`))
+    }, 10_000)
     socket.onopen = () => {
       clearTimeout(timer)
       resolvePromise()
     }
     socket.onerror = () => {
       clearTimeout(timer)
+      try {
+        socket.close()
+      } catch {
+        // Ignore close errors on socket error
+      }
       rejectPromise(new Error(`CDP socket error for ${target.id}`))
     }
   })
@@ -1396,16 +1509,16 @@ async function evaluateCdp(send, expression, timeoutMs = 15_000) {
 function buildCoreBoxInteractiveExpression() {
   return `(() => {
     const ready = document.readyState === 'complete' || document.readyState === 'interactive'
-    const input = document.querySelector('.CoreBox input, input[type="text"], textarea')
-    const root = document.querySelector('.CoreBox, #app')
+    const coreBoxRoot = document.querySelector('.CoreBox, [data-corebox-root]')
+    const input = document.querySelector('.CoreBox input, .CoreBox textarea, input[data-corebox-input]')
     const inputVisible = Boolean(input && !input.disabled && input.getBoundingClientRect().width > 0)
     return {
       readyState: document.readyState,
       href: location.href,
       title: document.title,
-      hasRoot: Boolean(root),
+      hasCoreBoxRoot: Boolean(coreBoxRoot),
       inputVisible,
-      interactive: ready && (inputVisible || Boolean(root))
+      interactive: ready && Boolean(coreBoxRoot) && inputVisible
     }
   })()`
 }
@@ -1444,10 +1557,14 @@ function buildPerformanceReportIpcExpression(timeoutMs = 10_000) {
   })()`
 }
 
-async function waitForCoreBoxInteractive(remoteDebuggingUrl, timeoutMs) {
+async function waitForCoreBoxInteractive(remoteDebuggingUrl, timeoutMs, getChildFailure = null) {
   const deadline = Date.now() + timeoutMs
   let lastError = null
   while (Date.now() < deadline) {
+    const childFailure = getChildFailure?.()
+    if (childFailure) {
+      throw childFailure
+    }
     try {
       const targets = await loadCdpTargets(remoteDebuggingUrl)
       const target = selectCoreBoxTarget(targets)
@@ -1473,6 +1590,34 @@ async function waitForCoreBoxInteractive(remoteDebuggingUrl, timeoutMs) {
       lastError ? ` (last error: ${lastError})` : ''
     }`
   )
+}
+
+async function terminateChildAndWait(child, timeoutMs = 3_000) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return
+  await new Promise((resolvePromise) => {
+    let settled = false
+    const done = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolvePromise()
+    }
+    child.once('exit', done)
+    child.once('close', done)
+    const timer = setTimeout(() => {
+      try {
+        child.kill('SIGKILL')
+      } catch {
+        // Ignore escalation errors
+      }
+      done()
+    }, timeoutMs)
+    try {
+      child.kill('SIGTERM')
+    } catch {
+      done()
+    }
+  })
 }
 
 async function sampleProcessMemoryOnce({ remoteDebuggingUrl, rootPid, processFilter }) {
@@ -1643,18 +1788,38 @@ export async function runProbe(options, deps = {}) {
     if (safety.mode === 'isolated-launch') {
       const executablePath = resolveExecutablePath(options.appPath)
       await access(executablePath)
+      if (await checkTcpPortOpen(options.cdpPort)) {
+        throw new Error(
+          `CDP port ${options.cdpPort} is already in use; refusing to attach isolated cold-start measurement to an existing listener`
+        )
+      }
       tempUserDataDir =
         options.userDataDir ||
         path.join(os.tmpdir(), `tuff-energy-baseline-${Date.now()}-${process.pid}`)
       await mkdir(tempUserDataDir, { recursive: true })
 
+      let childFailure = null
       const launchStartedAt = Date.now()
       child = spawn(
         executablePath,
         [`--remote-debugging-port=${options.cdpPort}`, `--user-data-dir=${tempUserDataDir}`],
         { stdio: 'ignore' }
       )
-      const ready = await waitForCoreBoxInteractive(remoteDebuggingUrl, options.launchTimeoutMs)
+      child.once('error', (error) => {
+        childFailure = new Error(`Failed to spawn ${executablePath}: ${error.message}`)
+      })
+      child.once('exit', (code, signal) => {
+        if (!childFailure) {
+          childFailure = new Error(
+            `Launched app exited before CoreBox became interactive (code=${code}, signal=${signal})`
+          )
+        }
+      })
+      const ready = await waitForCoreBoxInteractive(
+        remoteDebuggingUrl,
+        options.launchTimeoutMs,
+        () => childFailure
+      )
       coldStartMetric = {
         status: 'measured',
         coldStartToCoreBoxInteractiveMs: Math.max(0, ready.readyAt - launchStartedAt),
@@ -1667,6 +1832,7 @@ export async function runProbe(options, deps = {}) {
     }
 
     const memorySamples = []
+    const seenCaptureKeys = new Set()
     const sampleMemoryFn = deps.sampleProcessMemoryOnce ?? sampleProcessMemoryOnce
     const idleDeadline = Date.now() + options.idleSeconds * 1000
 
@@ -1676,15 +1842,20 @@ export async function runProbe(options, deps = {}) {
     const execPowermetrics = deps.execPowermetrics ?? runPowermetricsCommand
     const shouldRunLivePowermetrics =
       !options.powermetricsInput && platform === 'darwin' && geteuid() === 0
-    const livePowermetricsPromise = shouldRunLivePowermetrics
+    // Observe the promise immediately so an early failure during memory sampling never triggers
+    // an unhandled rejection.
+    const livePowermetricsOutcome = shouldRunLivePowermetrics
       ? execPowermetrics({
           intervalMs: options.powermetricsIntervalMs,
           sampleCount: Math.max(
             1,
             Math.round((options.idleSeconds * 1000) / options.powermetricsIntervalMs)
           )
-        })
-      : Promise.resolve(null)
+        }).then(
+          (value) => ({ ok: true, value }),
+          (error) => ({ ok: false, error })
+        )
+      : Promise.resolve({ ok: true, value: null })
 
     const maxSamples = Math.max(
       1,
@@ -1697,7 +1868,11 @@ export async function runProbe(options, deps = {}) {
         processFilter: options.processFilter
       })
       if (sample && Array.isArray(sample.processes) && sample.processes.length > 0) {
-        memorySamples.push(sample)
+        const captureKey = `${sample.source ?? 'unknown'}:${sample.capturedAt ?? index}`
+        if (!seenCaptureKeys.has(captureKey)) {
+          seenCaptureKeys.add(captureKey)
+          memorySamples.push(sample)
+        }
       }
       const remainingMs = idleDeadline - Date.now()
       if (remainingMs <= 0 || index === maxSamples - 1) break
@@ -1706,7 +1881,9 @@ export async function runProbe(options, deps = {}) {
       )
     }
 
-    const rawLiveOutput = await livePowermetricsPromise
+    const liveOutcome = await livePowermetricsOutcome
+    if (!liveOutcome.ok) throw liveOutcome.error
+    const rawLiveOutput = liveOutcome.value
     const observedPids = new Set()
     for (const sample of memorySamples) {
       for (const proc of sample.processes ?? []) {
@@ -1785,12 +1962,8 @@ export async function runProbe(options, deps = {}) {
     await maybeWriteArtifacts(options.outputDir, report)
     return report
   } finally {
-    if (child && !child.killed) {
-      try {
-        child.kill('SIGTERM')
-      } catch {
-        // Ignore teardown errors
-      }
+    if (child) {
+      await terminateChildAndWait(child)
     }
     if (tempUserDataDir && !options.keepUserData && !options.userDataDir) {
       await rm(tempUserDataDir, { recursive: true, force: true }).catch(() => {})

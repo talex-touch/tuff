@@ -23,7 +23,8 @@ import {
   runStaticEnergyAudit,
   selectProcessTreeFromPs,
   validateOptions,
-  validateRemoteDebuggingUrl
+  validateRemoteDebuggingUrl,
+  validateWebSocketDebuggerUrl
 } from './coreapp-energy-baseline-probe.mjs'
 
 const tempDirs: string[] = []
@@ -86,6 +87,13 @@ describe('coreapp-energy-baseline-probe CLI validation & guards', () => {
     )
     expect(validateRemoteDebuggingUrl('http://localhost:9712/json/list')).toBe(
       'http://localhost:9712/json/list'
+    )
+    expect(() => parseArgs(['--activityMonitorEnergyImpact', '12abc'])).toThrow(/valid number/)
+    expect(() => validateWebSocketDebuggerUrl('ws://192.168.1.10:9222/devtools/page/1')).toThrow(
+      /loopback/
+    )
+    expect(validateWebSocketDebuggerUrl('ws://127.0.0.1:9712/devtools/page/1')).toBe(
+      'ws://127.0.0.1:9712/devtools/page/1'
     )
   })
 
@@ -340,6 +348,51 @@ ALL_TASKS                          -2     50.00     70.00  0.00   0.00          
     expect(result.status).toBe('skipped-non-macos')
     expect(result.manualCommand).toBeNull()
   })
+
+  it('rejects missing Energy Impact column, quotes spaces in manual command, and enforces idle duration coverage', async () => {
+    const noEnergyCapture = `
+*** Running tasks ***
+
+Name                               ID     CPU ms/s  User%  Wakeups (Intr, Pkg idle)
+tuff                               1010   10.50     80.00  4.20   1.10
+ALL_TASKS                          -2     50.00     70.00  25.00  9.00
+`
+    const dir = await makeTempDir('tuff-pm-no-ei-')
+    const inputPath = path.join(dir, 'pm-no-energy.txt')
+    await writeFile(inputPath, noEnergyCapture, 'utf8')
+    const noEnergyResult = await collectPowermetricsEnergy(
+      parseArgs(['--powermetricsInput', inputPath]),
+      { platform: 'darwin', geteuid: () => 501 }
+    )
+    expect(noEnergyResult.status).toBe('missing-energy-impact-column')
+    expect(noEnergyResult.parsed?.energyImpact.count).toBe(0)
+
+    const quotedCmd = buildManualPowermetricsCommand({
+      idleSeconds: 600,
+      intervalMs: 5000,
+      outputPath: '/tmp/my dir/pm tasks.txt'
+    })
+    expect(quotedCmd).toContain("'/tmp/my dir/pm tasks.txt'")
+
+    const shortCoverageReadiness = evaluateBaselineReadiness({
+      mode: 'isolated-launch',
+      dryRun: false,
+      config: { idleSeconds: 600 },
+      metrics: {
+        coldStart: { status: 'measured' },
+        idleEnergy: {
+          idleSeconds: 600,
+          powermetrics: { status: 'measured', parsed: { observedDurationSeconds: 10 } },
+          activityMonitor: { status: 'imported' }
+        },
+        processMemory: { status: 'measured' }
+      }
+    })
+    expect(shortCoverageReadiness.baselineClaimable).toBe(false)
+    expect(shortCoverageReadiness.missingBaselineRequirements[0]).toContain(
+      'shorter than target idle window 600s'
+    )
+  })
 })
 
 describe('Metric 3 — per-process resident memory & CPU aggregation', () => {
@@ -536,6 +589,7 @@ describe('Dry-run honesty, artifact generation, and static audit', () => {
 
     const audit = await runStaticEnergyAudit({ repoRoot: repoDir })
     expect(audit.scannedFiles).toBe(3)
+    expect(audit.incomplete).toBe(false)
     expect(audit.totals.setInterval).toMatchObject({ runtime: 1, test: 1, total: 2 })
     expect(audit.totals.powerMonitor).toMatchObject({ runtime: 2, test: 1, total: 3 })
     expect(audit.totals.requestAnimationFrame).toMatchObject({ runtime: 2, test: 0, total: 2 })
@@ -544,6 +598,13 @@ describe('Dry-run honesty, artifact generation, and static audit', () => {
     expect(audit.topRuntimeFiles.requestAnimationFrame[0].file).toBe(
       'packages/tuffex/src/Surface.vue'
     )
+
+    const missingRootAudit = await runStaticEnergyAudit({
+      repoRoot: repoDir,
+      roots: ['does/not/exist']
+    })
+    expect(missingRootAudit.incomplete).toBe(true)
+    expect(missingRootAudit.unreadablePaths).toHaveLength(1)
   })
 
   it('orchestrates --attachOnly end-to-end and fails closed in launch mode when live instance exists', async () => {
