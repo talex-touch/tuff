@@ -1,10 +1,10 @@
 # omp 运行时与 Tern 预留协议 GUI 集成技术调研报告
 
 > 日期：2026-11-01
-> 状态同步：2026-11-23（PR `#2254` / `282ae52cc`）
+> 状态同步：2026-11-23（PR `#2226` / `#2227`、PR `#2254` / `282ae52cc`、PR `#2261` / `b4cc1d762`）
 > 背景：评估将 Tuff 现存的内置 `pi`（`@earendil-works/pi-agent-core`）升级为 `omp`，并复用 Tern 预留协议与组件实现 GUI 的可行性；同时对“omp 是否可以像 npm 包一样直接在进程内依赖”及“当前 Intelligence UI 现状与演进路径”进行深度论证。
-> **2026-11-17 实况校正**：`HomePage.vue` 已瘦身至 **1,941 行**并部分接入 `@talex-touch/intelligence-uikit`；UI 收敛路线已明确修正为“先基于 CoreApp 真实生产 UI 升级 TuffEx / UIKit 组件，禁止将生产 UI 降级迁向占位壳组件”。
-> **2026-11-23 状态同步**：第三阶段生产接线已通过 PR `#2254`（`282ae52cc`）合入主线——`ai-cli-orchestrator.ts` 已严格按 `profile:cli:omp` 接入 `OmpAgentRuntimeHost`（含 MCP Host 桥接、fail-closed 权限确认门禁、有界进程回收、重启安全恢复与流式 text/reasoning 透出，单测/集成验证通过；真实 `omp` 二进制与打包 Electron 验收仍独立追踪）；第一/二阶段（TuffEx / UIKit 组件对齐与 `HomePage.vue` 渐进瘦身）及第四阶段（Tern Daemon attach 互通）保持开放。
+> **2026-11-17 实况校正**：`HomePage.vue` 当时已瘦身至 **1,941 行**并部分接入 `@talex-touch/intelligence-uikit`；UI 收敛路线已明确修正为“先基于 CoreApp 真实生产 UI 升级 TuffEx / UIKit 组件，禁止将生产 UI 降级迁向占位壳组件”。
+> **2026-11-23 状态同步**：**第一阶段**（TuffEx / UIKit 对标 CoreApp 真实 UI 升级，PR `#2226` / `#2227`）、**第二阶段首轮收敛**（PR `#2261` / `b4cc1d762`，零生产 UI 降级，`HomePage.vue` `1,943 -> 1,162` 行 `-40.2%`，`HomeMessageRail.vue` `279 -> 62` 行，删除重复 `HomeContextMeter`/`HomeRunStatus` 改由 `HomeRunDock` 复用 `@talex-touch/intelligence-uikit`，`TuffAIComposer.vue` 完整保留）与 **第三阶段生产接线**（PR `#2254` / `282ae52cc`，`ai-cli-orchestrator.ts` 严格按 `profile:cli:omp` 接入 `OmpAgentRuntimeHost`，含 MCP Host 桥接、fail-closed 权限确认门禁、有界进程回收、重启安全恢复与流式 text/reasoning 透出，单测/集成验证通过；真实 `omp` 二进制与打包 Electron 验收仍独立追踪）均已合入主线；剩余 `HomePage.vue <= 800` 行收敛及第四阶段（Tern Daemon attach 互通）保持开放。
 
 ---
 
@@ -149,12 +149,12 @@ sequenceDiagram
     Adapter-->>Store: 封存 Turn Record
 ```
 
-1. **第一阶段：基于 CoreApp 真实 UI 升级 `@talex-touch/tuffex` 与 `@talex-touch/intelligence-uikit`（先强组件库）**
+1. **第一阶段：基于 CoreApp 真实 UI 升级 `@talex-touch/tuffex` 与 `@talex-touch/intelligence-uikit`（2026-11-23 已完成主体，PR `#2226` / `#2227`）**
    - **TuffEx AI 对话与输入组件重构**：对照 `HomePage.vue`、`HomeMessageRow.vue`、`TuffAIComposer.vue` 与 `composer/*`，升级 `TxPromptBar`、`TxChatComposer`（毛玻璃/折射表面、focus beam / voice glow 状态、顶部可扩展附件/上下文托盘、可组合 chip/model pill/context meter/run status/mic+语音草稿、发送/排队/停止胶囊岛、Enter/Shift+Enter/IME 组合输入守卫与 `@`/`/` token 菜单）以及 `TxConversationStream`、`TxChatList`、`TxChatMessage`（粘底弹簧、流式增高防抖、回底悬浮胶囊、触顶加载、非闪烁流式消息渲染）。
-   - **UIKit 同步对齐**：基于升级后的 TuffEx 原语重构 `@talex-touch/intelligence-uikit`（`TxAiConversation`、`TxAiComposer`、`TxAiAssistantTurn` 等），确保 `TxAiStreamText` / Markdown 增量更新不重挂载整棵 DOM 树，且能力和精细度匹配 CoreApp 生产水准。
-2. **第二阶段：`HomePage.vue` 无回归渐进瘦身**
-   - **前置条件**：仅在第一阶段 TuffEx 与 `intelligence-uikit` 已验证达到与 CoreApp 真实 UI 齐平或更优的视觉、动效与交互体验后，才启动上层容器收敛。
-   - **目标**：在不替换或降级真实功能的前提下，将 `HomePage.vue` 剩余的 957 行脚本与 612 行样式进一步拆入专用 composables 与升级后的组件边界（目标 ≤800 行）。
+   - **UIKit 同步对齐**：基于升级后的 TuffEx 原语完善 `@talex-touch/intelligence-uikit`（`TxAiConversation`、`TxAiComposer`、`TxAiAssistantTurn` 及 Stage 2 兼容增强的 `TxAiContextMeter`/`TxAiRunStatus`/`TxAiMessageRail`），确保 `TxAiStreamText` / Markdown 增量更新不重挂载整棵 DOM 树，且能力和精细度匹配 CoreApp 生产水准。
+2. **第二阶段：`HomePage.vue` 无回归渐进瘦身（2026-11-23 首轮落地，PR `#2261` / `b4cc1d762`；余 `<= 800` 行开放）**
+   - **已完成收敛（`b4cc1d762`）**：在完整保留 `TuffAIComposer.vue`（397 行）、`HomeMessageRow.vue` 与既有交互语义的前提下，删除重复 `HomeContextMeter`（106 行）与 `HomeRunStatus`（177 行）改由 `HomeRunDock` 直接复用升级后的 `TxAiRunStatus` / `TxAiContextMeter`，将 `HomeMessageRail.vue` 从 `279 -> 62` 行（复用 `TxAiMessageRail`），并通过专用 composables/子槽位将 `HomePage.vue` 从 `1,943` 行瘦身至 `1,162` 行（`-781` 行 / `-40.2%`）。
+   - **剩余目标**：继续在零生产 UI 降级前提下将 `HomePage.vue` 进一步收敛至 `<= 800` 行。
 3. **第三阶段：`OmpAgentRuntimeHost` 生产接线与 MCP 工具网关暴露（2026-11-23 已完成接线，PR `#2254` / `282ae52cc`）**
    - **代码现状（2026-11-23 更新）**：`apps/core-app/src/main/modules/ai/ai-cli-orchestrator.ts` 已实例化并接入 `OmpAgentRuntimeHost`（与 `PiAgentRuntimeHost` 并行），严格仅在 `profile:cli:omp` 时切换至 `OmpAgentRuntimeHost`，并桥接活跃环回 `mcpHostModule.getActiveServerConfig()` 与 fail-closed `session/request_permission -> toolGatewayModule.requestConfirmation` 审批门禁，补齐有界 SIGTERM→SIGKILL 回收、重启安全恢复与实时 text/reasoning 流式投递（`packages/tuff-intelligence` 11 files / 46 tests、`apps/core-app` AI/MCP/conversation 153 files / 1,871 tests 通过；真实本机 `omp` 二进制与打包 Electron 端到端实测另行验收）。
    - **边界保持**：继续严守 `AGENTS.md` 的 **调度器决定执行器** 不变量——第三方 CLI（`codex`、`claude`、`omp`）仅在其对应调度器配置（`profile:cli:{codex,claude,omp}`）下启动子进程，其他调度器或未命名调度器继续经 `cli-config-provider.ts` 复用配置端点（`codex-config`、`claude-config`、`omp-config`）。
