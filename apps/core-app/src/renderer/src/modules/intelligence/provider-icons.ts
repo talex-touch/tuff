@@ -59,16 +59,18 @@ export function providerIconForChannel(channelType: ProviderChannelKind, type: s
  * one. `pi-cli-default` is `PI_CLI_PROVIDER_ID` in `main/modules/ai/providers/pi-cli-runtime.ts`;
  * repeated here rather than imported because the renderer cannot reach main-process modules.
  *
- * Only pi exists as a provider today. omp, codex and claude are being added by the local-CLI
- * providers task, which also threads an `origin` through the transport; when that lands, this
- * table is keyed by origin instead of by seeded id and grows one row per CLI. The shape is
- * already the one that task's design names.
+ * Only marks the installed `@iconify-json/simple-icons` set actually carries belong here:
+ * `antigravity-cli` and `kiro-cli` have no glyph in simple-icons and fall back to the provider
+ * type's icon rather than rendering an empty box.
  */
 const CLI_PROVIDER_ICONS: Readonly<Record<string, ITuffIcon>> = Object.freeze({
   'pi-cli-default': { type: 'class', value: 'i-simple-icons-pi' },
   'omp-cli': { type: 'class', value: 'i-simple-icons-pi' },
   'codex-cli': { type: 'class', value: 'i-simple-icons-openai' },
-  'claude-cli': { type: 'class', value: 'i-simple-icons-anthropic' }
+  'claude-cli': { type: 'class', value: 'i-simple-icons-anthropic' },
+  'opencode-cli': { type: 'class', value: 'i-simple-icons-opencode' },
+  'gemini-cli': { type: 'class', value: 'i-simple-icons-googlegemini' },
+  'cursor-cli': { type: 'class', value: 'i-simple-icons-cursor' }
 })
 
 /** Every class `providerIconForId` can add on top of `PROVIDER_ICONS`, for the same safelist. */

@@ -8,8 +8,9 @@
  *
  * Only marks the installed `@iconify-json/simple-icons` (1.2.90) actually carries, checked against
  * the set. `codex` is OpenAI's CLI and the set has no Codex mark of its own; Pi and Oh My Pi share
- * Pi's mark because Oh My Pi is Pi's distribution. Every other agent — Kiro, Qoder, CodeBuddy,
- * Factory, Reasonix, Kilo Code, Devin, and any id this build has never heard of — draws a monogram.
+ * Pi's mark because Oh My Pi is Pi's distribution. Every other agent — Antigravity, Kiro, Qoder,
+ * CodeBuddy, Factory, Reasonix, Kilo Code, Devin, and any id this build has never heard of — draws
+ * a monogram.
  */
 export const AGENT_BRAND_ICONS: Readonly<Record<string, string>> = Object.freeze({
   claude: 'i-simple-icons-claude',
@@ -17,6 +18,7 @@ export const AGENT_BRAND_ICONS: Readonly<Record<string, string>> = Object.freeze
   gemini: 'i-simple-icons-googlegemini',
   cursor: 'i-simple-icons-cursor',
   opencode: 'i-simple-icons-opencode',
+  windsurf: 'i-simple-icons-windsurf',
   pi: 'i-simple-icons-pi',
   'oh-my-pi': 'i-simple-icons-pi'
 })

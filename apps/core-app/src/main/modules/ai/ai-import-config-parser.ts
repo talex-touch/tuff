@@ -256,7 +256,15 @@ export function parseMcpProfiles(config: Record<string, unknown>): ParsedMcpProf
       typeof rawProfile.command === 'string' && rawProfile.command.trim()
         ? rawProfile.command.trim()
         : undefined
-    const url = isHttpUrl(rawProfile.url) ? rawProfile.url : undefined
+    // Gemini CLI uses `httpUrl` for streamable HTTP and Antigravity's `mcp_config.json` uses
+    // `serverUrl`; honor them only when `url` is absent so an invalid `url` never falls through.
+    const rawUrl =
+      rawProfile.url !== undefined
+        ? rawProfile.url
+        : rawProfile.httpUrl !== undefined
+          ? rawProfile.httpUrl
+          : rawProfile.serverUrl
+    const url = isHttpUrl(rawUrl) ? rawUrl : undefined
     if ((command ? 1 : 0) + (url ? 1 : 0) !== 1) continue
     const args = Array.isArray(rawProfile.args)
       ? rawProfile.args.filter((value): value is string => typeof value === 'string')

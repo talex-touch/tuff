@@ -47,7 +47,7 @@ interface SourceLayout {
   label: string
   command: string
   userRoot: string
-  userFiles: Array<{ path: string; kind: AiImportItemKind }>
+  userFiles: Array<{ path: string; kind: AiImportItemKind; name?: string }>
   userDirs: Array<{ path: string; kind: AiImportItemKind }>
   /**
    * Absolute MCP config files outside `userRoot`. They get their own reader: `.claude.json` is a
@@ -55,7 +55,13 @@ interface SourceLayout {
    * block.
    */
   userMcpFiles?: Array<{ path: string; name: string }>
-  projectFiles: Array<{ path: string; kind: AiImportItemKind }>
+  /**
+   * Absolute config/resource files kept beside `userRoot` (for example Antigravity CLI's
+   * `~/.gemini/antigravity-cli/settings.json` beside `~/.gemini/antigravity`). Each file is
+   * contained by its own directory so preview, discovery, and apply share one containment boundary.
+   */
+  userExternalFiles?: Array<{ path: string; kind: AiImportItemKind; name?: string }>
+  projectFiles: Array<{ path: string; kind: AiImportItemKind; name?: string }>
   projectDirs: Array<{ path: string; kind: AiImportItemKind }>
 }
 
@@ -75,7 +81,15 @@ interface CandidateMetadata {
 }
 
 const SENSITIVE_KEY_PATTERN = /token|api.?key|secret|password|credential|authorization|authref/i
-const IMPORTABLE_FILE_EXTENSIONS = new Set(['.md', '.json', '.jsonc', '.toml', '.yaml', '.yml'])
+const IMPORTABLE_FILE_EXTENSIONS = new Set([
+  '.md',
+  '.mdc',
+  '.json',
+  '.jsonc',
+  '.toml',
+  '.yaml',
+  '.yml'
+])
 const MAX_SCAN_DEPTH = 4
 const MAX_SCAN_FILES_PER_SOURCE = 2_000
 const MAX_SCAN_ENTRIES_PER_SOURCE = 8_000
@@ -224,6 +238,81 @@ function layouts(home: string): SourceLayout[] {
         { path: '.opencode/commands', kind: 'command' },
         { path: '.opencode/agents', kind: 'agent' },
         { path: '.opencode/rules', kind: 'rule' }
+      ]
+    },
+    {
+      provider: 'antigravity',
+      label: 'Antigravity',
+      command: 'agy',
+      userRoot: join(home, '.gemini', 'antigravity'),
+      userFiles: [{ path: 'mcp_config.json', kind: 'mcp', name: 'Antigravity MCP' }],
+      userDirs: [{ path: 'skills', kind: 'skill' }],
+      // Antigravity CLI keeps its settings (and optional `mcpServers`) in a sibling directory next
+      // to `~/.gemini/antigravity`, so read it contained by `~/.gemini/antigravity-cli`.
+      userExternalFiles: [
+        { path: join(home, '.gemini', 'antigravity-cli', 'settings.json'), kind: 'config' }
+      ],
+      projectFiles: [],
+      projectDirs: [
+        { path: '.agent/skills', kind: 'skill' },
+        { path: '.agent/rules', kind: 'rule' },
+        { path: '.agent/workflows', kind: 'command' }
+      ]
+    },
+    {
+      provider: 'gemini',
+      label: 'Gemini CLI',
+      command: 'gemini',
+      userRoot: join(home, '.gemini'),
+      userFiles: [
+        { path: 'settings.json', kind: 'config' },
+        { path: 'GEMINI.md', kind: 'instruction' }
+      ],
+      userDirs: [
+        { path: 'skills', kind: 'skill' },
+        { path: 'commands', kind: 'command' }
+      ],
+      projectFiles: [
+        { path: 'GEMINI.md', kind: 'instruction' },
+        { path: '.gemini/settings.json', kind: 'config' }
+      ],
+      projectDirs: [
+        { path: '.gemini/skills', kind: 'skill' },
+        { path: '.gemini/commands', kind: 'command' }
+      ]
+    },
+    {
+      provider: 'cursor',
+      label: 'Cursor',
+      command: 'cursor-agent',
+      userRoot: join(home, '.cursor'),
+      userFiles: [{ path: 'mcp.json', kind: 'mcp', name: 'Cursor MCP' }],
+      userDirs: [
+        { path: 'skills', kind: 'skill' },
+        { path: 'rules', kind: 'rule' },
+        { path: 'commands', kind: 'command' }
+      ],
+      projectFiles: [{ path: '.cursor/mcp.json', kind: 'mcp' }],
+      projectDirs: [
+        { path: '.cursor/skills', kind: 'skill' },
+        { path: '.cursor/rules', kind: 'rule' },
+        { path: '.cursor/commands', kind: 'command' }
+      ]
+    },
+    {
+      provider: 'kiro',
+      label: 'Kiro',
+      command: 'kiro-cli',
+      userRoot: join(home, '.kiro'),
+      userFiles: [{ path: 'settings/mcp.json', kind: 'mcp', name: 'Kiro MCP' }],
+      userDirs: [
+        { path: 'skills', kind: 'skill' },
+        { path: 'steering', kind: 'rule' }
+      ],
+      projectFiles: [{ path: '.kiro/settings/mcp.json', kind: 'mcp' }],
+      projectDirs: [
+        { path: '.kiro/skills', kind: 'skill' },
+        { path: '.kiro/steering', kind: 'rule' }
       ]
     }
   ]
@@ -681,7 +770,8 @@ async function scanSource(
   fileSpecs: SourceLayout['userFiles'],
   dirSpecs: SourceLayout['userDirs'],
   scannedAt: number,
-  mcpFiles: NonNullable<SourceLayout['userMcpFiles']> = []
+  mcpFiles: NonNullable<SourceLayout['userMcpFiles']> = [],
+  externalFiles: NonNullable<SourceLayout['userExternalFiles']> = []
 ): Promise<{ source: AiImportSourceSnapshot; candidates: AiImportCandidate[] }> {
   let canonicalRoot = resolve(rootPath)
   try {
@@ -705,7 +795,8 @@ async function scanSource(
   for (const file of fileSpecs)
     candidates.push(
       ...(await buildCandidate(source, file.kind, join(canonicalRoot, file.path), {
-        agentLabel: layout.label
+        agentLabel: layout.label,
+        nameOverride: file.name
       }))
     )
 
@@ -714,6 +805,15 @@ async function scanSource(
     candidates.push(
       ...(await buildCandidate(source, 'mcp', file.path, {
         containedBy: dirname(file.path),
+        nameOverride: file.name
+      }))
+    )
+
+  for (const file of externalFiles)
+    candidates.push(
+      ...(await buildCandidate(source, file.kind, file.path, {
+        containedBy: dirname(file.path),
+        agentLabel: layout.label,
         nameOverride: file.name
       }))
     )
@@ -866,7 +966,8 @@ export class AiCliImportService {
           layout.userFiles,
           layout.userDirs,
           scannedAt,
-          layout.userMcpFiles ?? []
+          layout.userMcpFiles ?? [],
+          layout.userExternalFiles ?? []
         ),
         scanSource(
           layout,
