@@ -1,5 +1,14 @@
+import type { TuffNpmPackageIcon } from '../npm-contract'
 import type { NpmPackageInfo } from './npm-provider'
 import type { TpexPluginInfo } from './tpex-provider'
+import {
+  extractTuffPackageMetadata,
+  formatNpmPluginSource,
+  inferPluginNameFromNpmPackage,
+  isOfficialNpmPluginPackageName,
+  isValidNpmPackageName,
+  parseNpmPluginSource,
+} from '../npm-contract'
 import { NpmProvider } from './npm-provider'
 import { TpexProvider } from './tpex-provider'
 import { PluginProviderType } from './types'
@@ -60,23 +69,32 @@ function normalizeTpexPlugin(plugin: TpexPluginInfo): StorePluginInfo {
   }
 }
 
+function resolveIconString(icon: string | TuffNpmPackageIcon | undefined): string | undefined {
+  if (!icon)
+    return undefined
+  return typeof icon === 'string' ? icon : icon.value
+}
+
 function normalizeNpmPlugin(pkg: NpmPackageInfo): StorePluginInfo {
   const authorName = typeof pkg.author === 'string'
     ? pkg.author
     : pkg.author?.name ?? 'Unknown'
+  const tuffMeta = extractTuffPackageMetadata(pkg)
 
   return {
     id: pkg.name,
-    name: pkg.name.replace(/^tuff-plugin-/, '').replace(/^@tuff\//, ''),
+    name: tuffMeta?.name ?? inferPluginNameFromNpmPackage(pkg.name) ?? pkg.name,
     slug: pkg.name,
     version: pkg.version,
     description: pkg.description ?? '',
     author: authorName,
-    icon: pkg.tuff?.icon,
+    icon: resolveIconString(tuffMeta?.icon),
     source: 'npm',
-    isOfficial: pkg.name.startsWith('@tuff/'),
-    keywords: pkg.keywords,
-    packageUrl: pkg.dist.tarball,
+    isOfficial: isOfficialNpmPluginPackageName(pkg.name),
+    category: tuffMeta?.category,
+    keywords: tuffMeta?.tags ?? pkg.keywords,
+    homepage: pkg.homepage,
+    packageUrl: pkg.dist?.tarball,
     raw: pkg,
   }
 }
@@ -154,7 +172,11 @@ export class PluginStoreClient {
    * Get plugin details by identifier
    */
   async getPlugin(identifier: string, source?: PluginSourceType): Promise<StorePluginInfo | null> {
-    if (source === 'tpex' || (!source && !identifier.includes('/'))) {
+    const parsedNpm = parseNpmPluginSource(identifier, {
+      allowAnyBarePackageName: source === 'npm',
+    })
+
+    if (source === 'tpex' || (!source && !parsedNpm && !identifier.includes('/'))) {
       try {
         const plugin = await this.tpexProvider.getPlugin(identifier)
         if (plugin)
@@ -167,7 +189,9 @@ export class PluginStoreClient {
 
     if (source === 'npm' || !source) {
       try {
-        const pkg = await this.npmProvider.getPackageInfo(identifier)
+        const pkg = parsedNpm
+          ? await this.npmProvider.getPackageInfo(parsedNpm.packageName, parsedNpm.spec)
+          : await this.npmProvider.getPackageInfo(identifier)
         if (pkg)
           return normalizeNpmPlugin(pkg)
       }
@@ -186,7 +210,9 @@ export class PluginStoreClient {
     if (plugin.source === 'tpex') {
       return `tpex:${plugin.slug}`
     }
-    return `npm:${plugin.id}`
+    return isValidNpmPackageName(plugin.id)
+      ? formatNpmPluginSource(plugin.id)
+      : `npm:${plugin.id}`
   }
 
   /**

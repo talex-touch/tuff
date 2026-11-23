@@ -801,6 +801,7 @@ export interface IManifest {
 
 export * from './blocked-reasons'
 export * from './install'
+export * from './npm-contract'
 export * from './package-policy'
 export * from './security-scan'
 export type { IPluginLogger, LogDataType, LogItem } from './log/types'
