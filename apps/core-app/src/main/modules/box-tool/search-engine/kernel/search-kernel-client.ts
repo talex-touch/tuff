@@ -235,6 +235,7 @@ export class SearchKernelClient {
   private state: SearchKernelLifecycleState = 'idle'
   private child: SearchKernelChildProcess | null = null
   private childPid: number | null = null
+  private spawnGeneration = 0
   private capabilities: string[] = []
   private startPromise: Promise<void> | null = null
   private readyResolve: (() => void) | null = null
@@ -296,6 +297,10 @@ export class SearchKernelClient {
 
   getPid(): number | null {
     return this.childPid
+  }
+
+  getSpawnGeneration(): number {
+    return this.spawnGeneration
   }
 
   getCapabilities(): string[] {
@@ -480,10 +485,13 @@ export class SearchKernelClient {
     const runShutdown = (async (): Promise<SearchKernelShutdownResult | null> => {
       let ack: SearchKernelShutdownResult | null = null
       let exited = false
+      let onExit: (() => void) | null = null
       const exitPromise = new Promise<void>((resolve) => {
-        const onExit = (): void => {
+        onExit = (): void => {
           exited = true
-          this.exitWaiters.delete(onExit)
+          if (onExit) {
+            this.exitWaiters.delete(onExit)
+          }
           resolve()
         }
         this.exitWaiters.add(onExit)
@@ -530,6 +538,9 @@ export class SearchKernelClient {
           this.cleanupChildState(child)
         }
       } finally {
+        if (onExit) {
+          this.exitWaiters.delete(onExit)
+        }
         if (killTimer) {
           this.cancelTimer(killTimer)
         }
@@ -630,6 +641,7 @@ export class SearchKernelClient {
       return Promise.reject(wrapped)
     }
 
+    this.spawnGeneration += 1
     this.child = child
     this.childPid = typeof child.pid === 'number' ? child.pid : null
 
@@ -978,5 +990,31 @@ export class SearchKernelClient {
         )
       }
     })
+  }
+}
+
+let sharedSearchKernelClient: SearchKernelClient | null = null
+
+/**
+ * Returns the process-wide shared `SearchKernelClient` so `SearchIndexWorkerClient` and all
+ * `SearchIndexReadWorkerClient` lanes share a single `utilityProcess` when enabled.
+ */
+export function getSharedSearchKernelClient(
+  options?: SearchKernelClientOptions
+): SearchKernelClient {
+  if (!sharedSearchKernelClient) {
+    sharedSearchKernelClient = new SearchKernelClient(options)
+  }
+  return sharedSearchKernelClient
+}
+
+/**
+ * Clears and disposes the process-wide shared `SearchKernelClient` (used in tests and teardown).
+ */
+export async function resetSharedSearchKernelClient(): Promise<void> {
+  const current = sharedSearchKernelClient
+  sharedSearchKernelClient = null
+  if (current) {
+    await current.dispose().catch(() => undefined)
   }
 }

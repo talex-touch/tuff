@@ -48,7 +48,9 @@ export {
   SEARCH_KERNEL_UTILITY_PROCESS_ENV,
   SearchKernelClient,
   SearchKernelClientError,
+  getSharedSearchKernelClient,
   isSearchKernelUtilityProcessEnabled,
+  resetSharedSearchKernelClient,
   resolveSearchKernelEntryPath,
   type SearchKernelChildProcess,
   type SearchKernelClientOptions,
@@ -68,3 +70,31 @@ export {
   type SearchKernelTaskContext,
   type SearchKernelTaskHandler
 } from './search-kernel-process'
+
+export {
+  SEARCH_INDEX_READER_WORKER_FILENAME,
+  SEARCH_INDEX_WRITER_WORKER_FILENAME,
+  SEARCH_KERNEL_READER_RESOURCE_LIMITS,
+  SEARCH_KERNEL_TASKS,
+  createSearchKernelWorkerHandlers,
+  resolveSearchKernelReaderWorkerPath,
+  resolveSearchKernelWriterWorkerPath,
+  type SearchKernelManagedWorker,
+  type SearchKernelReaderCancelPayload,
+  type SearchKernelReaderCancelResult,
+  type SearchKernelReaderErrorResult,
+  type SearchKernelReaderQueryPayload,
+  type SearchKernelReaderResult,
+  type SearchKernelReaderRetirePayload,
+  type SearchKernelReaderRetireResult,
+  type SearchKernelReaderRowsResult,
+  type SearchKernelReaderSemanticSearchPayload,
+  type SearchKernelTaskName,
+  type SearchKernelWorkerHandlersBundle,
+  type SearchKernelWorkerHandlersOptions,
+  type SearchKernelWorkerPathResolveOptions,
+  type SearchKernelWriterClosePayload,
+  type SearchKernelWriterCloseResult,
+  type SearchKernelWriterRequestPayload,
+  type SearchKernelWriterRequestResult
+} from './search-kernel-worker-handlers'

@@ -13,9 +13,20 @@ import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core'
 import { deserializeSearchIndexWorkerError } from './search-index-worker-error'
 import { trackWorkerThread } from '../../../../core/worker-thread-registry'
 import { createLogger } from '../../../../utils/logger'
+import {
+  SEARCH_KERNEL_ERROR_CODES,
+  SEARCH_KERNEL_TASKS,
+  SearchKernelClientError,
+  getSharedSearchKernelClient,
+  isSearchKernelUtilityProcessEnabled,
+  type SearchKernelClient,
+  type SearchKernelReaderResult
+} from '../kernel'
 
 const DEFAULT_QUERY_TIMEOUT_MS = 15_000
 const DEFAULT_MAX_QUEUE_DEPTH = 64
+const READER_CANCEL_TIMEOUT_MS = 2_000
+const READER_RETIRE_TIMEOUT_MS = 3_000
 /** The lane every reader belonged to before fast providers got their own; keeps old log shapes. */
 const DEFAULT_LANE = 'deferred'
 const sqliteDialect = new SQLiteSyncDialect()
@@ -47,6 +58,8 @@ export interface SearchIndexReadWorkerClientOptions {
    * request ids and the retire log carry the lane name to tell them apart in a session log.
    */
   lane?: string
+  kernelClient?: SearchKernelClient
+  useKernelProcess?: boolean
 }
 
 export class SearchIndexReadWorkerCancelledError extends Error {
@@ -85,12 +98,21 @@ export class SearchIndexReadWorkerQueueFullError extends Error {
   }
 }
 
+type PendingReadRequest =
+  | SearchIndexReadWorkerQueryMessage
+  | (Omit<SearchIndexReadWorkerSemanticMessage, 'cancelFlag'> & {
+      cancelFlag?: SharedArrayBuffer
+    })
+
 interface PendingRead {
-  request: SearchIndexReadWorkerQueryMessage | SearchIndexReadWorkerSemanticMessage
+  request: PendingReadRequest
   resolve: (rows: unknown[]) => void
   reject: (error: Error) => void
   signal?: AbortSignal
   onAbort?: () => void
+  abortKernelDispatch?: () => void
+  cancelDispatched?: boolean
+  cancelledByCaller?: boolean
   settled: boolean
 }
 
@@ -172,13 +194,26 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
   private readonly workerPath: string
   private readonly timeoutMs: number
   private readonly maxQueueDepth: number
+  private readonly useKernelProcess: boolean
+  private readonly kernelClient: SearchKernelClient | null
+  private kernelReaderLive = false
+  private kernelLaneTouched = false
+  private kernelDispatchToken = 0
   readonly lane: string
 
   constructor(
     private readonly databasePath: string,
     options: SearchIndexReadWorkerClientOptions = {}
   ) {
-    this.workerPath = options.workerPath ?? resolveSearchIndexReadWorkerPath()
+    this.useKernelProcess =
+      options.useKernelProcess ??
+      (Boolean(options.kernelClient) || isSearchKernelUtilityProcessEnabled())
+    this.kernelClient = this.useKernelProcess
+      ? (options.kernelClient ?? getSharedSearchKernelClient())
+      : null
+    this.workerPath = this.useKernelProcess
+      ? (options.workerPath ?? '')
+      : (options.workerPath ?? resolveSearchIndexReadWorkerPath())
     this.timeoutMs = positiveInteger(options.timeoutMs, DEFAULT_QUERY_TIMEOUT_MS)
     this.maxQueueDepth = positiveInteger(options.maxQueueDepth, DEFAULT_MAX_QUEUE_DEPTH)
     this.lane = options.lane?.trim() || DEFAULT_LANE
@@ -197,7 +232,9 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
         vector,
         model,
         limit,
-        cancelFlag: new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)
+        ...(this.useKernelProcess
+          ? {}
+          : { cancelFlag: new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT) })
       },
       signal
     )
@@ -225,7 +262,8 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
     if (this.closed) {
       return Promise.reject(new SearchIndexReadWorkerUnavailableError('closed'))
     }
-    if (this.worker === null && Date.now() < this.cooldownUntil) {
+    const readerOffline = this.useKernelProcess ? !this.kernelReaderLive : this.worker === null
+    if (readerOffline && Date.now() < this.cooldownUntil) {
       return Promise.reject(
         new SearchIndexReadWorkerUnavailableError('reader is cooling down after repeated failures')
       )
@@ -253,6 +291,10 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
     })
   }
 
+  async shutdown(): Promise<void> {
+    return await this.close()
+  }
+
   async close(): Promise<void> {
     if (this.closePromise) return await this.closePromise
 
@@ -261,8 +303,20 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
     this.clearOperationTimeout()
     const active = this.active
     this.active = null
-    if (active) this.settlePending(active, error)
+    if (active) {
+      if (this.useKernelProcess && active.request.type === 'semantic-search') {
+        this.fireKernelReaderCancel(active)
+      }
+      active.abortKernelDispatch?.()
+      this.settlePending(active, error)
+    }
     this.rejectQueued(error)
+
+    if (this.useKernelProcess) {
+      this.kernelReaderLive = false
+      this.closePromise = this.retireKernelReader()
+      return await this.closePromise
+    }
 
     const worker = this.worker
     this.worker = null
@@ -275,6 +329,11 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
     if (this.closed || this.active || this.queued.length === 0) return
     const pending = this.queued.shift()
     if (!pending) return
+
+    if (this.useKernelProcess) {
+      this.dispatchNextKernel(pending)
+      return
+    }
 
     let worker: Worker
     try {
@@ -292,6 +351,178 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
     } catch (error) {
       this.active = pending
       this.failWorker(this.worker, asError(error))
+    }
+  }
+
+  private dispatchNextKernel(pending: PendingRead): void {
+    const kernelClient = this.kernelClient!
+    const dispatchToken = ++this.kernelDispatchToken
+    const dispatchAbort = new AbortController()
+    pending.abortKernelDispatch = () => dispatchAbort.abort()
+    this.active = pending
+    this.kernelReaderLive = true
+    this.kernelLaneTouched = true
+
+    this.timeout = setTimeout(() => {
+      if (this.active !== pending || dispatchToken !== this.kernelDispatchToken) return
+      if (pending.request.type === 'semantic-search') {
+        this.fireKernelReaderCancel(pending)
+      }
+      dispatchAbort.abort()
+      this.failKernelReader(
+        new SearchIndexReadWorkerTimeoutError(pending.request.requestId, this.timeoutMs)
+      )
+    }, this.timeoutMs)
+    this.timeout.unref?.()
+
+    const rpcPromise =
+      pending.request.type === 'semantic-search'
+        ? kernelClient.invokeTask<SearchKernelReaderResult>(
+            SEARCH_KERNEL_TASKS.READER_SEMANTIC_SEARCH,
+            {
+              lane: this.lane,
+              databasePath: this.databasePath,
+              requestId: pending.request.requestId,
+              vector: pending.request.vector,
+              model: pending.request.model,
+              limit: pending.request.limit
+            },
+            { timeoutMs: this.timeoutMs, signal: dispatchAbort.signal }
+          )
+        : kernelClient.invokeTask<SearchKernelReaderResult>(
+            SEARCH_KERNEL_TASKS.READER_QUERY,
+            {
+              lane: this.lane,
+              databasePath: this.databasePath,
+              requestId: pending.request.requestId,
+              sql: pending.request.sql,
+              args: pending.request.args
+            },
+            { timeoutMs: this.timeoutMs, signal: dispatchAbort.signal }
+          )
+
+    void rpcPromise.then(
+      (result) => {
+        if (this.active !== pending || dispatchToken !== this.kernelDispatchToken) return
+        this.clearOperationTimeout()
+        this.active = null
+        if (
+          result &&
+          typeof result === 'object' &&
+          'rows' in result &&
+          Array.isArray(result.rows)
+        ) {
+          this.consecutiveFailures = 0
+          this.cooldownUntil = 0
+          this.settlePending(pending, undefined, result.rows)
+        } else if (
+          result &&
+          typeof result === 'object' &&
+          'error' in result &&
+          result.error &&
+          typeof result.error === 'object'
+        ) {
+          this.settlePending(pending, deserializeSearchIndexWorkerError(result.error))
+        } else {
+          this.failKernelReader(
+            new SearchIndexReadWorkerUnavailableError('invalid-kernel-response')
+          )
+          return
+        }
+        this.dispatchNext()
+      },
+      (error: unknown) => {
+        if (this.active !== pending || dispatchToken !== this.kernelDispatchToken) return
+        if (pending.cancelledByCaller) {
+          this.clearOperationTimeout()
+          this.active = null
+          this.dispatchNext()
+          return
+        }
+        if (
+          error instanceof SearchKernelClientError &&
+          error.code === SEARCH_KERNEL_ERROR_CODES.TIMEOUT
+        ) {
+          if (pending.request.type === 'semantic-search') {
+            this.fireKernelReaderCancel(pending)
+          }
+          this.failKernelReader(
+            new SearchIndexReadWorkerTimeoutError(pending.request.requestId, this.timeoutMs)
+          )
+          return
+        }
+        if (
+          error instanceof SearchKernelClientError &&
+          (error.code === SEARCH_KERNEL_ERROR_CODES.EXITED ||
+            error.code === SEARCH_KERNEL_ERROR_CODES.DEGRADED ||
+            error.code === SEARCH_KERNEL_ERROR_CODES.SHUTTING_DOWN ||
+            error.code === SEARCH_KERNEL_ERROR_CODES.NOT_READY ||
+            error.code === 'SEARCH_INDEX_READER_EXITED')
+        ) {
+          this.failKernelReader(new SearchIndexReadWorkerUnavailableError(error.message))
+          return
+        }
+        this.failKernelReader(asError(error))
+      }
+    )
+  }
+
+  private fireKernelReaderCancel(pending: PendingRead): void {
+    if (pending.cancelDispatched) return
+    pending.cancelDispatched = true
+    if (!this.kernelClient || this.kernelClient.getState() !== 'ready') return
+    void this.kernelClient
+      .invokeTask(
+        SEARCH_KERNEL_TASKS.READER_CANCEL,
+        { lane: this.lane, requestId: pending.request.requestId },
+        { timeoutMs: READER_CANCEL_TIMEOUT_MS }
+      )
+      .catch(() => undefined)
+  }
+
+  private async retireKernelReader(): Promise<void> {
+    if (!this.kernelClient) return
+    if (!this.kernelLaneTouched && this.kernelClient.getState() !== 'ready') return
+    if (this.kernelClient.getState() !== 'ready') return
+    await this.kernelClient
+      .invokeTask(
+        SEARCH_KERNEL_TASKS.READER_RETIRE,
+        { lane: this.lane },
+        { timeoutMs: READER_RETIRE_TIMEOUT_MS }
+      )
+      .catch(() => undefined)
+  }
+
+  private failKernelReader(error: Error): void {
+    if (this.closed) return
+
+    this.clearOperationTimeout()
+    const active = this.active
+    this.active = null
+    if (active) {
+      active.abortKernelDispatch?.()
+      this.settlePending(active, error)
+    }
+    this.rejectQueued(error)
+
+    this.kernelReaderLive = false
+    void this.retireKernelReader()
+
+    this.consecutiveFailures += 1
+    if (this.consecutiveFailures >= FAILURE_COOLDOWN_THRESHOLD) {
+      this.cooldownUntil = Date.now() + FAILURE_COOLDOWN_MS
+    }
+    if (this.consecutiveFailures === 1 || this.consecutiveFailures === FAILURE_COOLDOWN_THRESHOLD) {
+      readWorkerLog.warn('Search index read worker retired', {
+        error,
+        meta: {
+          lane: this.lane,
+          consecutiveFailures: this.consecutiveFailures,
+          willRebuild: this.consecutiveFailures < FAILURE_COOLDOWN_THRESHOLD,
+          cooldownMs:
+            this.consecutiveFailures >= FAILURE_COOLDOWN_THRESHOLD ? FAILURE_COOLDOWN_MS : 0
+        }
+      })
     }
   }
 
@@ -338,6 +569,13 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
   private cancelPending(pending: PendingRead): void {
     const error = new SearchIndexReadWorkerCancelledError()
     if (this.active === pending) {
+      pending.cancelledByCaller = true
+      if (this.useKernelProcess) {
+        if (pending.request.type === 'semantic-search') {
+          this.fireKernelReaderCancel(pending)
+        }
+        pending.abortKernelDispatch?.()
+      }
       // Do not clear `active` here. The worker may still be inside synchronous
       // native SQLite, and dispatching another request would reintroduce overlap.
       this.settlePending(pending, error)
@@ -353,7 +591,7 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
   private settlePending(pending: PendingRead, error?: Error, rows?: unknown[]): void {
     if (pending.settled) return
     pending.settled = true
-    if (error && pending.request.type === 'semantic-search') {
+    if (error && pending.request.type === 'semantic-search' && pending.request.cancelFlag) {
       Atomics.store(new Int32Array(pending.request.cancelFlag), 0, 1)
     }
     if (pending.signal && pending.onAbort) {

@@ -131,6 +131,7 @@ describe('createSearchKernelRuntime', () => {
       pid: 4242,
       now: () => clock,
       memoryUsage: fixedMemoryUsage,
+      registerDefaultWorkerHandlers: false,
       handlers: {
         'index.write': () => ({ written: 1 }),
         'index.read': () => ({ rows: [] })
@@ -243,7 +244,8 @@ describe('createSearchKernelRuntime', () => {
     const runtime = createSearchKernelRuntime({
       port,
       pid: 777,
-      memoryUsage: fixedMemoryUsage
+      memoryUsage: fixedMemoryUsage,
+      registerDefaultWorkerHandlers: false
     })
 
     runtime.registerTask<{ batchSize: number }, { indexed: number }>(
@@ -616,6 +618,40 @@ describe('createSearchKernelRuntime', () => {
         drainedRequests: 1
       }
     })
+    expect(exitSpy).toHaveBeenCalledWith(0)
+  })
+
+  it('registers all built-in writer and reader task capabilities by default and invokes onShutdown', async () => {
+    const port = createMockParentPort()
+    const onShutdown = vi.fn()
+    const exitSpy = vi.fn()
+
+    const runtime = createSearchKernelRuntime({
+      port,
+      pid: 5150,
+      onShutdown,
+      exit: exitSpy,
+      scheduleExit: (cb) => cb()
+    })
+
+    expect(runtime.getCapabilities()).toEqual([
+      'search-index.reader.cancel',
+      'search-index.reader.query',
+      'search-index.reader.retire',
+      'search-index.reader.semantic-search',
+      'search-index.writer.close',
+      'search-index.writer.request'
+    ])
+
+    port.emitMessage({
+      kind: 'request',
+      protocolVersion: SEARCH_KERNEL_PROTOCOL_VERSION,
+      requestId: 'shutdown-default',
+      op: 'kernel.shutdown'
+    })
+    await flushMicrotasks()
+
+    expect(onShutdown).toHaveBeenCalledTimes(1)
     expect(exitSpy).toHaveBeenCalledWith(0)
   })
 })
