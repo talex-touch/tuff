@@ -11,6 +11,11 @@
   },
   "description": "浏览器打开：召唤框内直接识别网址与文字，一次回车即用所选浏览器打开且无需二次确认；支持多引擎直搜、热搜快捷入口与可自定义的设置页。",
   "main": "index.js",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  },
   "permissions": {
     "required": ["system.shell", "network.internet", "search.root-results", "storage.plugin"],
     "optional": ["clipboard.write"]
@@ -80,7 +85,7 @@
       "platform": {
         "win32": true,
         "darwin": true,
-        "linux": false
+        "linux": true
       },
       "commands": [
         {

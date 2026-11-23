@@ -7,6 +7,13 @@ const COPY_ACTION_ID = 'copy'
 const MAX_RESULTS = 24
 const QUERY_PREFIXES = ['emoji', 'symbol', 'symbols', '表情', '符号', '特殊字符']
 
+let triggerGeneration = 0
+let destroyed = false
+
+function isStaleGeneration(generation) {
+  return destroyed || generation !== triggerGeneration
+}
+
 const EMOJI_SYMBOLS = [
   {
     id: 'sparkles',
@@ -155,6 +162,140 @@ const EMOJI_SYMBOLS = [
   },
   { id: 'currency-euro', value: '€', title: 'Euro Sign', category: 'currency', keywords: ['euro', 'eur', '欧元'] },
   { id: 'currency-pound', value: '£', title: 'Pound Sign', category: 'currency', keywords: ['pound', 'gbp', '英镑'] },
+  { id: 'joy', value: '😂', title: 'Face with Tears of Joy', category: 'emoji', keywords: ['laugh', 'haha', 'lol', '笑哭', '哈哈'] },
+  { id: 'heart-eyes', value: '😍', title: 'Smiling Face with Heart-Eyes', category: 'emoji', keywords: ['love', 'adore', '花痴', '喜欢'] },
+  { id: 'sunglasses', value: '😎', title: 'Smiling Face with Sunglasses', category: 'emoji', keywords: ['cool', 'awesome', '酷', '墨镜'] },
+  { id: 'sob', value: '😭', title: 'Loudly Crying Face', category: 'emoji', keywords: ['cry', 'sad', 'tears', '大哭', '泪目'] },
+  { id: 'mind-blown', value: '🤯', title: 'Exploding Head', category: 'emoji', keywords: ['shock', 'wow', 'blown', '震撼', '炸裂'] },
+  { id: 'salute', value: '🫡', title: 'Saluting Face', category: 'emoji', keywords: ['salute', 'respect', 'roger', '敬礼', '收到'] },
+  { id: 'melting', value: '🫠', title: 'Melting Face', category: 'emoji', keywords: ['melt', 'awkward', 'embarrassed', '融化', '尴尬'] },
+  { id: 'pray', value: '🙏', title: 'Folded Hands', category: 'emoji', keywords: ['thanks', 'please', 'pray', '感谢', '拜托'] },
+  { id: 'clap', value: '👏', title: 'Clapping Hands', category: 'emoji', keywords: ['clap', 'bravo', 'applause', '鼓掌', '赞赏'] },
+  { id: 'handshake', value: '🤝', title: 'Handshake', category: 'emoji', keywords: ['deal', 'agree', 'partner', '合作', '握手'] },
+  { id: 'bulb', value: '💡', title: 'Light Bulb', category: 'emoji', keywords: ['idea', 'tip', 'insight', '灵感', '提示'] },
+  { id: 'bug', value: '🐛', title: 'Bug', category: 'emoji', keywords: ['bug', 'issue', 'fix', '缺陷', '虫子'] },
+  { id: 'wrench-hammer', value: '🛠️', title: 'Hammer and Wrench', category: 'emoji', keywords: ['build', 'tools', 'fix', '工具', '维护'] },
+  { id: 'zap', value: '⚡', title: 'High Voltage', category: 'emoji', keywords: ['fast', 'perf', 'lightning', '闪电', '性能'] },
+  { id: 'lock', value: '🔒', title: 'Locked', category: 'emoji', keywords: ['security', 'private', 'lock', '安全', '锁定'] },
+  { id: 'pin', value: '📌', title: 'Pushpin', category: 'emoji', keywords: ['pin', 'note', 'important', '置顶', '标记'] },
+  { id: 'memo', value: '📝', title: 'Memo', category: 'emoji', keywords: ['docs', 'note', 'write', '文档', '记录'] },
+  { id: 'package', value: '📦', title: 'Package', category: 'emoji', keywords: ['npm', 'bundle', 'release', '打包', '发版'] },
+  { id: 'target', value: '🎯', title: 'Direct Hit', category: 'emoji', keywords: ['goal', 'focus', 'hit', '目标', '精准'] },
+  { id: 'cross-mark', value: '❌', title: 'Cross Mark', category: 'emoji', keywords: ['error', 'fail', 'no', '错误', '失败'] },
+  { id: 'hourglass', value: '⏳', title: 'Hourglass Not Done', category: 'emoji', keywords: ['wait', 'pending', 'loading', '等待', '进行中'] },
+  { id: 'coffee', value: '☕', title: 'Hot Beverage', category: 'emoji', keywords: ['coffee', 'break', 'cafe', '咖啡', '休息'] },
+  { id: 'rainbow', value: '🌈', title: 'Rainbow', category: 'emoji', keywords: ['rainbow', 'color', 'happy', '彩虹'] },
+  { id: 'command-key', value: '⌘', title: 'Command Key', category: 'symbol', keywords: ['cmd', 'mac', 'shortcut', '快捷键', '命令键'] },
+  { id: 'option-key', value: '⌥', title: 'Option Key', category: 'symbol', keywords: ['opt', 'alt', 'mac', '选项键'] },
+  { id: 'shift-key', value: '⇧', title: 'Shift Key', category: 'symbol', keywords: ['shift', 'mac', 'shortcut', '上档键'] },
+  { id: 'control-key', value: '⌃', title: 'Control Key', category: 'symbol', keywords: ['ctrl', 'control', 'mac', '控制键'] },
+  { id: 'return-key', value: '⏎', title: 'Return Symbol', category: 'symbol', keywords: ['enter', 'return', '回车'] },
+  { id: 'arrow-left-right', value: '↔', title: 'Left Right Arrow', category: 'symbol', keywords: ['arrow', 'both', 'sync', '双向箭头'] },
+  { id: 'approx', value: '≈', title: 'Almost Equal To', category: 'math', keywords: ['approx', 'about', '约等于'] },
+  { id: 'sqrt', value: '√', title: 'Square Root', category: 'math', keywords: ['root', 'sqrt', 'check', '根号', '对勾'] },
+  { id: 'sum', value: '∑', title: 'N-Ary Summation', category: 'math', keywords: ['sum', 'sigma', 'total', '求和'] },
+  { id: 'pi', value: 'π', title: 'Greek Small Letter Pi', category: 'math', keywords: ['pi', 'circle', '圆周率'] },
+  { id: 'star-solid', value: '★', title: 'Black Star', category: 'symbol', keywords: ['star', 'rating', 'favorite', '实心星'] },
+  { id: 'star-outline', value: '☆', title: 'White Star', category: 'symbol', keywords: ['star', 'rating', 'empty', '空心星'] },
+  { id: 'section-sign', value: '§', title: 'Section Sign', category: 'punctuation', keywords: ['section', 'clause', '章节号'] },
+  { id: 'currency-won', value: '₩', title: 'Won Sign', category: 'currency', keywords: ['won', 'krw', '韩元'] },
+  { id: 'currency-rupee', value: '₹', title: 'Indian Rupee Sign', category: 'currency', keywords: ['rupee', 'inr', '卢比'] },
+  {
+    id: 'kaomoji-shrug',
+    value: '¯\\_(ツ)_/¯',
+    icon: '🤷',
+    title: 'Shrug Kaomoji',
+    category: 'kaomoji',
+    keywords: ['kaomoji', '颜文字', 'shrug', 'dunno', '摊手', '无奈'],
+  },
+  {
+    id: 'kaomoji-table-flip',
+    value: '(╯°□°）╯︵ ┻━┻',
+    icon: '😤',
+    title: 'Table Flip Kaomoji',
+    category: 'kaomoji',
+    keywords: ['kaomoji', '颜文字', 'flip', 'angry', '掀桌', '生气'],
+  },
+  {
+    id: 'kaomoji-hug',
+    value: '(づ｡◕‿‿◕｡)づ',
+    icon: '🤗',
+    title: 'Hug Kaomoji',
+    category: 'kaomoji',
+    keywords: ['kaomoji', '颜文字', 'hug', 'cute', '抱抱', '可爱'],
+  },
+  {
+    id: 'kaomoji-cheer',
+    value: '(•̀ᴗ•́)و ̑̑',
+    icon: '💪',
+    title: 'Cheer Kaomoji',
+    category: 'kaomoji',
+    keywords: ['kaomoji', '颜文字', 'cheer', 'fighting', '加油', '握拳'],
+  },
+  {
+    id: 'kaomoji-excited',
+    value: '(≧▽≦)',
+    icon: '😄',
+    title: 'Excited Kaomoji',
+    category: 'kaomoji',
+    keywords: ['kaomoji', '颜文字', 'happy', 'excited', '开心', '兴奋'],
+  },
+  {
+    id: 'kaomoji-cry',
+    value: '(╥﹏╥)',
+    icon: '😢',
+    title: 'Crying Kaomoji',
+    category: 'kaomoji',
+    keywords: ['kaomoji', '颜文字', 'cry', 'sad', '哭哭', '难过'],
+  },
+  {
+    id: 'kaomoji-side-eye',
+    value: '(¬_¬)',
+    icon: '😒',
+    title: 'Side Eye Kaomoji',
+    category: 'kaomoji',
+    keywords: ['kaomoji', '颜文字', 'disapprove', 'speechless', '无语', '嫌弃'],
+  },
+  {
+    id: 'kaomoji-confused',
+    value: '(⊙_⊙)?',
+    icon: '😵',
+    title: 'Confused Kaomoji',
+    category: 'kaomoji',
+    keywords: ['kaomoji', '颜文字', 'confused', 'shock', '疑惑', '震惊'],
+  },
+  {
+    id: 'kaomoji-smile',
+    value: '(✿◠‿◠)',
+    icon: '😊',
+    title: 'Gentle Smile Kaomoji',
+    category: 'kaomoji',
+    keywords: ['kaomoji', '颜文字', 'smile', 'flower', '微笑', '温柔'],
+  },
+  {
+    id: 'kaomoji-starry',
+    value: '(★ ω ★)',
+    icon: '🤩',
+    title: 'Starry Eyes Kaomoji',
+    category: 'kaomoji',
+    keywords: ['kaomoji', '颜文字', 'star', 'amazed', '星星眼', '期待'],
+  },
+  {
+    id: 'kaomoji-celebrate',
+    value: 'ヾ(≧▽≦*)o',
+    icon: '🎉',
+    title: 'Celebrate Kaomoji',
+    category: 'kaomoji',
+    keywords: ['kaomoji', '颜文字', 'celebrate', 'party', '欢呼', '庆祝'],
+  },
+  {
+    id: 'kaomoji-awkward',
+    value: '(￣▽￣)"',
+    icon: '😅',
+    title: 'Awkward Smile Kaomoji',
+    category: 'kaomoji',
+    keywords: ['kaomoji', '颜文字', 'awkward', 'sweat', '尴尬', '擦汗'],
+  },
 ]
 
 function normalizeText(value) {
@@ -204,8 +345,12 @@ function rankEntry(entry, query) {
     return 70
   if ((entry.keywords || []).some(keyword => keyword.toLowerCase() === lower))
     return 65
-  if (getSearchableText(entry).includes(lower))
+  const searchable = getSearchableText(entry)
+  if (searchable.includes(lower))
     return 40
+  const tokens = lower.split(/\s+/).filter(Boolean)
+  if (tokens.length > 1 && tokens.every(token => searchable.includes(token)))
+    return 50
   return 0
 }
 
@@ -226,7 +371,7 @@ function buildCopyItem({ featureId, entry }) {
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(`${entry.value} ${entry.title}`)
     .setSubtitle(`${entry.category} · ${entry.keywords.slice(0, 4).join(', ')}`)
-    .setIcon({ type: 'emoji', value: entry.value })
+    .setIcon({ type: 'emoji', value: entry.icon || entry.value })
     .setMeta({
       pluginName: PLUGIN_NAME,
       featureId,
@@ -255,22 +400,68 @@ function buildResultItems(featureId, query) {
         featureId,
         id: 'empty',
         title: '没有匹配的 Emoji 或符号',
-        subtitle: '试试输入 arrow、check、currency、表情、符号或中文关键词',
+        subtitle: '试试输入 arrow、check、kaomoji、颜文字、currency、表情或中文关键词',
       }),
     ]
   }
   return results.map(entry => buildCopyItem({ featureId, entry }))
 }
 
+function classifyClipboardError(error) {
+  const code = error && typeof error === 'object' && typeof error.code === 'string' ? error.code : ''
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED') {
+    return {
+      status: 'blocked',
+      reason: 'permission-denied',
+      message: '缺少 clipboard.write 权限',
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE') {
+    return {
+      status: 'blocked',
+      reason: 'permission-unavailable',
+      message: '权限系统暂时不可用',
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED') {
+    return {
+      status: 'cancelled',
+      reason: 'cancelled',
+      message: '已取消复制',
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT' || code === 'PLUGIN_HOST_REQUEST_TIMEOUT') {
+    return {
+      status: 'failed',
+      reason: 'timeout',
+      message: '复制超时，请重试',
+    }
+  }
+  return {
+    status: 'blocked',
+    reason: 'clipboard-write-failed',
+    message: '复制失败',
+  }
+}
+
 const pluginLifecycle = {
   async onFeatureTriggered(featureId, query) {
+    destroyed = false
+    const generation = ++triggerGeneration
     try {
+      const items = buildResultItems(featureId, query)
+      if (isStaleGeneration(generation))
+        return true
       await plugin.feature.clearItems()
-      await plugin.feature.pushItems(buildResultItems(featureId, query))
+      if (isStaleGeneration(generation))
+        return true
+      await plugin.feature.pushItems(items)
       return true
     }
     catch {
       logger?.error?.('[touch-emoji-symbols] feature failed')
+      if (isStaleGeneration(generation))
+        return true
       try {
         await plugin.feature.clearItems()
         await plugin.feature.pushItems([
@@ -290,14 +481,27 @@ const pluginLifecycle = {
     }
   },
 
-  async onItemAction(item) {
+  async onItemAction(item, context = {}) {
     try {
       if (item?.meta?.defaultAction !== COPY_ACTION_ID)
         return
 
-      const copyAction = Array.isArray(item.actions)
-        ? item.actions.find(action => action.id === COPY_ACTION_ID || action.type === COPY_ACTION_ID)
-        : null
+      const actions = Array.isArray(item.actions) ? item.actions : []
+      const requestedActionId = normalizeText(context?.actionId)
+      const copyAction = requestedActionId
+        ? actions.find(action => action?.id === requestedActionId) || null
+        : actions.find(action => action?.id === COPY_ACTION_ID || action?.type === COPY_ACTION_ID) || null
+
+      if (requestedActionId && !copyAction) {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: 'invalid-action',
+          message: '未找到可执行操作',
+        }
+      }
+
       const output = typeof copyAction?.payload === 'string' ? copyAction.payload : copyAction?.payload?.text
       if (typeof output !== 'string')
         return
@@ -317,15 +521,20 @@ const pluginLifecycle = {
     }
     catch (error) {
       logger?.error?.('[touch-emoji-symbols] clipboard write failed')
-      const permissionDenied = error?.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
+      const failure = classifyClipboardError(error)
       return {
         externalAction: true,
         success: false,
-        status: 'blocked',
-        reason: permissionDenied ? 'permission-denied' : 'clipboard-write-failed',
-        message: permissionDenied ? '缺少 clipboard.write 权限' : '复制失败',
+        status: failure.status,
+        reason: failure.reason,
+        message: failure.message,
       }
     }
+  },
+
+  async onDestroy() {
+    destroyed = true
+    triggerGeneration += 1
   },
 }
 

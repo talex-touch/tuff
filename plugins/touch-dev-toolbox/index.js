@@ -10,6 +10,13 @@ const DEFAULT_CONFIG = {
   links: [],
 }
 
+let triggerGeneration = 0
+let destroyed = false
+
+function isStaleGeneration(generation) {
+  return destroyed || generation !== triggerGeneration
+}
+
 function normalizeText(value) {
   return String(value ?? '').trim()
 }
@@ -107,24 +114,92 @@ function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) 
     .build()
 }
 
+function classifyOpenUrlError(error) {
+  const code = error && typeof error === 'object' && typeof error.code === 'string' ? error.code : ''
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED') {
+    return {
+      status: 'blocked',
+      reason: 'permission-denied',
+      message: '缺少 network.internet 权限',
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE') {
+    return {
+      status: 'blocked',
+      reason: 'permission-unavailable',
+      message: '权限系统暂时不可用',
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED') {
+    return {
+      status: 'cancelled',
+      reason: 'cancelled',
+      message: '已取消打开外部链接',
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT' || code === 'PLUGIN_HOST_REQUEST_TIMEOUT') {
+    return {
+      status: 'failed',
+      reason: 'timeout',
+      message: '打开外部链接超时，请重试',
+    }
+  }
+  return {
+    status: 'blocked',
+    reason: 'open-url-failed',
+    message: '打开外部链接失败',
+  }
+}
+
+function resolveItemAction(item, context = {}) {
+  const actions = Array.isArray(item?.actions) ? item.actions : []
+  const requestedActionId = normalizeText(context?.actionId)
+  if (requestedActionId)
+    return actions.find(candidate => candidate?.id === requestedActionId) || null
+  return actions[0] || null
+}
+
 const pluginLifecycle = {
   async onInit() {
+    destroyed = false
     await ensureToolboxFile()
   },
 
   async onFeatureTriggered(featureId, query) {
+    destroyed = false
+    const generation = ++triggerGeneration
     try {
       await ensureToolboxFile()
+      if (isStaleGeneration(generation))
+        return true
+
       const keyword = normalizeText(getQueryText(query))
       const config = await loadConfig()
+      if (isStaleGeneration(generation))
+        return true
+
       const links = Array.isArray(config.links) ? config.links : []
+      const validLinks = []
+      links.forEach((link, index) => {
+        if (!link || typeof link !== 'object')
+          return
+
+        const title = typeof link.title === 'string' && normalizeText(link.title)
+          ? normalizeText(link.title)
+          : `链接 ${index + 1}`
+        const url = normalizeExternalUrl(link.url)
+        if (!url)
+          return
+
+        validLinks.push({ index, title, url })
+      })
 
       const items = [
         buildInfoItem({
           id: `${featureId}-counts`,
           featureId,
           title: '链接数量',
-          subtitle: String(links.length),
+          subtitle: String(validLinks.length),
         }),
         buildActionItem({
           id: `${featureId}-config-init`,
@@ -136,22 +211,17 @@ const pluginLifecycle = {
       ]
 
       const linkItems = []
-      links.forEach((link, index) => {
-        const title = typeof link.title === 'string' ? link.title : `链接 ${index + 1}`
-        const url = normalizeExternalUrl(link.url)
-        if (!url)
-          return
-
-        if (!matchKeyword(title, keyword) && !matchKeyword(url, keyword))
+      validLinks.forEach((link) => {
+        if (!matchKeyword(link.title, keyword) && !matchKeyword(link.url, keyword))
           return
 
         linkItems.push(buildActionItem({
-          id: `${featureId}-link-${index}`,
+          id: `${featureId}-link-${link.index}`,
           featureId,
-          title,
-          subtitle: url,
+          title: link.title,
+          subtitle: link.url,
           actionId: 'open-link',
-          payload: { url },
+          payload: { url: link.url },
         }))
       })
 
@@ -164,12 +234,18 @@ const pluginLifecycle = {
         }))
       }
 
+      if (isStaleGeneration(generation))
+        return true
       await plugin.feature.clearItems()
+      if (isStaleGeneration(generation))
+        return true
       await plugin.feature.pushItems([...items, ...linkItems])
       return true
     }
     catch {
       logger?.error?.('[touch-dev-toolbox] Failed to handle feature')
+      if (isStaleGeneration(generation))
+        return true
       try {
         await plugin.feature.clearItems()
         await plugin.feature.pushItems([
@@ -189,14 +265,24 @@ const pluginLifecycle = {
     }
   },
 
-  async onItemAction(item) {
+  async onItemAction(item, context = {}) {
     try {
       if (item?.meta?.defaultAction !== ACTION_ID)
         return
 
-      const action = Array.isArray(item.actions) ? item.actions[0] : null
-      const actionId = action?.id
-      const payload = action?.payload || {}
+      const action = resolveItemAction(item, context)
+      if (!action) {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: 'invalid-action',
+          message: '未找到可执行操作',
+        }
+      }
+
+      const actionId = action.id
+      const payload = action.payload || {}
       if (actionId === 'config-init') {
         await ensureToolboxFile()
         return { externalAction: true }
@@ -230,13 +316,13 @@ const pluginLifecycle = {
         }
         catch (error) {
           logger?.error?.('[touch-dev-toolbox] Failed to open external URL')
-          const permissionDenied = error?.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
+          const failure = classifyOpenUrlError(error)
           return {
             externalAction: true,
             success: false,
-            status: 'blocked',
-            reason: permissionDenied ? 'permission-denied' : 'open-url-failed',
-            message: permissionDenied ? '缺少 network.internet 权限' : '打开外部链接失败',
+            status: failure.status,
+            reason: failure.reason,
+            message: failure.message,
           }
         }
       }
@@ -251,6 +337,11 @@ const pluginLifecycle = {
         message: '执行失败',
       }
     }
+  },
+
+  async onDestroy() {
+    destroyed = true
+    triggerGeneration += 1
   },
 }
 

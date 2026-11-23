@@ -1,10 +1,65 @@
 {
   "name": "@talex-touch/touch-dev-utils-plugin",
-  "private": true,
   "version": "1.0.0",
-  "packageManager": "pnpm@10.34.4",
+  "private": true,
+  "packageManager": "pnpm@11.24.0",
+  "description": "程序员工具：UUID、时间戳、JWT、命名转换、Query String 与字符串转义",
+  "author": "TalexTouch Team",
+  "license": "MIT",
+  "keywords": [
+    "tuff-plugin",
+    "utilities",
+    "developer",
+    "uuid",
+    "jwt",
+    "timestamp"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./manifest.json": "./manifest.json",
+    "./package.json": "./package.json"
+  },
+  "main": "./index.js",
+  "files": [
+    "manifest.json",
+    "index.js",
+    "assets/"
+  ],
+  "engines": {
+    "tuff": ">=261011"
+  },
   "scripts": {
-    "test": "node --test index.test.cjs",
-    "build": "node ../../packages/tuff-cli/bin/tuff.js builder"
+    "build": "node ../../packages/tuff-cli/bin/tuff.js builder",
+    "lint": "eslint .",
+    "test": "node --test index.test.cjs"
+  },
+  "tuff": {
+    "schemaVersion": 1,
+    "id": "com.tuffex.dev-utils",
+    "name": "touch-dev-utils",
+    "displayName": {
+      "en": "Dev Utilities",
+      "zh": "程序员工具"
+    },
+    "sdkapi": 261011,
+    "category": "utilities",
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "permissions": {
+      "required": [
+        "clipboard.write",
+        "search.root-results"
+      ],
+      "optional": []
+    },
+    "platforms": {
+      "win32": true,
+      "darwin": true,
+      "linux": true
+    },
+    "surface": "prelude",
+    "manifest": "./manifest.json"
   }
 }
