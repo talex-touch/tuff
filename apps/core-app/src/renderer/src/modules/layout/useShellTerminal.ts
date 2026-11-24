@@ -4,14 +4,48 @@ export const DEFAULT_TERMINAL_HEIGHT = 280
 export const MIN_TERMINAL_HEIGHT = 140
 export const MAX_TERMINAL_HEIGHT_RATIO = 0.8
 
+export type ShellTerminalTabKind = 'herdr' | 'local'
+
+export interface ShellTerminalTab {
+  id: string
+  kind: ShellTerminalTabKind
+  /** Immutable herdr-core terminal address when kind === 'herdr'. */
+  address?: string
+  /** Remote machine name, or null for local terminals. */
+  machine?: string | null
+  title: string
+  /** Incremented whenever a mounted herdr tab should re-attach (e.g. restarted). */
+  reattachNonce: number
+}
+
+export interface OpenHerdrTabOptions {
+  title?: string
+  machine?: string | null
+  openDrawer?: boolean
+}
+
+export interface OpenLocalTabOptions {
+  title?: string
+  openDrawer?: boolean
+}
+
 const terminalOpen = ref(false)
 const terminalMounted = ref(false)
 const terminalHeight = ref(DEFAULT_TERMINAL_HEIGHT)
 const isResizingTerminal = ref(false)
+const tabs = ref<ShellTerminalTab[]>([])
+const activeTabId = ref<string | null>(null)
+let localTabSequence = 0
 
 function clampTerminalHeight(height: number): number {
   const max = Math.floor(window.innerHeight * MAX_TERMINAL_HEIGHT_RATIO)
   return Math.max(MIN_TERMINAL_HEIGHT, Math.min(max, height))
+}
+
+export function resetShellTerminalTabsForTesting(): void {
+  tabs.value = []
+  activeTabId.value = null
+  localTabSequence = 0
 }
 
 export function useShellTerminal() {
@@ -29,6 +63,115 @@ export function useShellTerminal() {
 
   function closeTerminal(): void {
     terminalOpen.value = false
+  }
+
+  function findTabByAddress(address: string): ShellTerminalTab | undefined {
+    return tabs.value.find((tab) => tab.kind === 'herdr' && tab.address === address)
+  }
+
+  function openHerdrTab(address: string, options: OpenHerdrTabOptions = {}): ShellTerminalTab {
+    const existing = findTabByAddress(address)
+    if (existing) {
+      if (options.title !== undefined || options.machine !== undefined) {
+        tabs.value = tabs.value.map((tab) =>
+          tab.id === existing.id
+            ? {
+                ...tab,
+                ...(options.title !== undefined ? { title: options.title } : {}),
+                ...(options.machine !== undefined ? { machine: options.machine } : {})
+              }
+            : tab
+        )
+      }
+      activeTabId.value = existing.id
+      if (options.openDrawer !== false) {
+        openTerminal()
+      }
+      return tabs.value.find((tab) => tab.id === existing.id) ?? existing
+    }
+
+    const tab: ShellTerminalTab = {
+      id: `herdr:${address}`,
+      kind: 'herdr',
+      address,
+      machine: options.machine ?? null,
+      title: options.title || address,
+      reattachNonce: 0
+    }
+    tabs.value = [...tabs.value, tab]
+    activeTabId.value = tab.id
+    if (options.openDrawer !== false) {
+      openTerminal()
+    }
+    return tab
+  }
+
+  function openLocalTab(options: OpenLocalTabOptions = {}): ShellTerminalTab {
+    localTabSequence += 1
+    const tab: ShellTerminalTab = {
+      id: `local:${localTabSequence}`,
+      kind: 'local',
+      machine: null,
+      title: options.title ?? '',
+      reattachNonce: 0
+    }
+    tabs.value = [...tabs.value, tab]
+    activeTabId.value = tab.id
+    if (options.openDrawer !== false) {
+      openTerminal()
+    }
+    return tab
+  }
+
+  function setActiveTab(tabId: string): void {
+    if (!tabs.value.some((tab) => tab.id === tabId)) return
+    activeTabId.value = tabId
+  }
+
+  function removeTab(tabId: string): void {
+    const index = tabs.value.findIndex((tab) => tab.id === tabId)
+    if (index === -1) return
+    const nextTabs = tabs.value.filter((tab) => tab.id !== tabId)
+    tabs.value = nextTabs
+    if (activeTabId.value === tabId) {
+      if (nextTabs.length === 0) {
+        activeTabId.value = null
+      } else {
+        const fallbackIndex = Math.min(index, nextTabs.length - 1)
+        activeTabId.value = nextTabs[fallbackIndex]?.id ?? null
+      }
+    }
+  }
+
+  function updateTabMeta(
+    tabId: string,
+    patch: Partial<Pick<ShellTerminalTab, 'title' | 'machine'>>
+  ): void {
+    let changed = false
+    const nextTabs = tabs.value.map((tab) => {
+      if (tab.id !== tabId) return tab
+      const nextTitle = patch.title ?? tab.title
+      const nextMachine = patch.machine !== undefined ? patch.machine : tab.machine
+      if (nextTitle === tab.title && nextMachine === tab.machine) return tab
+      changed = true
+      return { ...tab, title: nextTitle, machine: nextMachine }
+    })
+    if (changed) {
+      tabs.value = nextTabs
+    }
+  }
+
+  function bumpTabReattach(tabIdOrAddress: string): boolean {
+    let bumped = false
+    const nextTabs = tabs.value.map((tab) => {
+      if (tab.id !== tabIdOrAddress && tab.address !== tabIdOrAddress) return tab
+      bumped = true
+      return { ...tab, reattachNonce: tab.reattachNonce + 1 }
+    })
+    if (bumped) {
+      tabs.value = nextTabs
+    }
+    return bumped
   }
 
   function startResize(event: PointerEvent): void {
@@ -76,14 +219,26 @@ export function useShellTerminal() {
     window.addEventListener('pointercancel', onEnd)
   }
 
+  const activeTab = computed(() => tabs.value.find((tab) => tab.id === activeTabId.value) ?? null)
+
   return {
     terminalOpen: computed(() => terminalOpen.value),
     terminalMounted: computed(() => terminalMounted.value),
     terminalHeight: computed(() => terminalHeight.value),
     isResizingTerminal: computed(() => isResizingTerminal.value),
+    tabs: computed(() => tabs.value),
+    activeTabId: computed(() => activeTabId.value),
+    activeTab,
     toggleTerminal,
     openTerminal,
     closeTerminal,
+    openHerdrTab,
+    openLocalTab,
+    setActiveTab,
+    removeTab,
+    updateTabMeta,
+    bumpTabReattach,
+    findTabByAddress,
     startResize
   }
 }

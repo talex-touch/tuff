@@ -584,6 +584,7 @@ import { defineEvent, defineRawEvent } from '../event/builder'
 import { AppEvents } from './app'
 import { AccountEvents, AuthEvents } from './auth'
 import { CatalogEvents } from './catalog'
+import { HerdrEvents } from './herdr'
 import { LocalAiCliEvents } from './local-ai-cli'
 import { MetaOverlayEvents } from './meta-overlay'
 
@@ -607,6 +608,7 @@ import { PrivacyEvents } from './privacy'
 import { SyncEvents } from './sync'
 import { TerminalEvents } from './terminal'
 
+export * from './herdr'
 export * from './local-ai-cli'
 // Re-export all types for convenience
 export * from './screenshot-session'
@@ -2781,6 +2783,7 @@ export const TuffEvents = {
   transport: TransportEvents,
   sentry: SentryEvents,
   sync: SyncEvents,
+  herdr: HerdrEvents,
   terminal: TerminalEvents,
   localAiCli: LocalAiCliEvents,
   opener: OpenerEvents,

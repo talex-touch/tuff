@@ -264,10 +264,20 @@
         "import": "./dist/transport/index.mjs",
         "default": "./dist/transport/index.mjs"
       },
+      "./transport/events/herdr": {
+        "types": "./dist/transport/events/herdr.d.mts",
+        "import": "./dist/transport/events/herdr.mjs",
+        "default": "./dist/transport/events/herdr.mjs"
+      },
       "./transport/events/types": {
         "types": "./dist/transport/events/types/index.d.mts",
         "import": "./dist/transport/events/types/index.mjs",
         "default": "./dist/transport/events/types/index.mjs"
+      },
+      "./transport/sdk/domains/herdr": {
+        "types": "./dist/transport/sdk/domains/herdr.d.mts",
+        "import": "./dist/transport/sdk/domains/herdr.mjs",
+        "default": "./dist/transport/sdk/domains/herdr.mjs"
       },
       "./types/intelligence": {
         "types": "./dist/types/intelligence.d.mts",

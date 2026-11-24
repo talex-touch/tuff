@@ -250,6 +250,7 @@ const _appSettingOriginData = {
     voiceQuickEdit: false,
     omniPanel: false,
     browserWorkspace: true,
+    herdrRuntime: true,
   },
   omniPanel: {
     enableShortcut: false,
@@ -270,6 +271,12 @@ const _appSettingOriginData = {
       'claude': { enabled: false, executableOverride: '' },
       'oh-my-pi': { enabled: false, executableOverride: '' },
     },
+  },
+  herdrCore: {
+    autoStart: true,
+    socketPath: '',
+    session: 'default',
+    binaryPath: '',
   },
   voiceWake: {
     enabled: false,
@@ -654,6 +661,39 @@ export const appSettingOriginData = Object.freeze(_appSettingOriginData)
  */
 export type AppSetting = typeof _appSettingOriginData & {
   [key: string]: any
+}
+
+export interface HerdrCoreSettings {
+  autoStart: boolean
+  socketPath: string
+  session: string
+  binaryPath: string
+}
+
+export const DEFAULT_HERDR_CORE_SETTINGS: Readonly<HerdrCoreSettings> = Object.freeze({
+  autoStart: true,
+  socketPath: '',
+  session: 'default',
+  binaryPath: '',
+})
+
+export function normalizeHerdrCoreSettings(value: unknown): HerdrCoreSettings {
+  const source = isSettingRecord(value) ? value : {}
+  const session = typeof source.session === 'string' && source.session.trim()
+    ? source.session.trim()
+    : DEFAULT_HERDR_CORE_SETTINGS.session
+  return {
+    autoStart: typeof source.autoStart === 'boolean'
+      ? source.autoStart
+      : DEFAULT_HERDR_CORE_SETTINGS.autoStart,
+    socketPath: typeof source.socketPath === 'string'
+      ? source.socketPath.trim()
+      : DEFAULT_HERDR_CORE_SETTINGS.socketPath,
+    session,
+    binaryPath: typeof source.binaryPath === 'string'
+      ? source.binaryPath.trim()
+      : DEFAULT_HERDR_CORE_SETTINGS.binaryPath,
+  }
 }
 
 export interface VoiceInputSetting {

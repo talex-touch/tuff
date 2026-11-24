@@ -4920,7 +4920,98 @@
     "closed": "已关闭",
     "clear": "清屏",
     "restart": "重启会话",
-    "running": "运行中"
+    "running": "运行中",
+    "herdr": {
+      "newMenuTitle": "新建或附加终端",
+      "newLocalShell": "新建本地终端 (hc)",
+      "newRemoteShell": "在 {machine} 上新建终端",
+      "newFallbackShell": "新建本地独立终端 (PTY)",
+      "unattachedSection": "附加运行中终端",
+      "detach": "分离标签页",
+      "detachTooltip": "分离标签页（终端进程将继续在后台运行）",
+      "kill": "终止进程",
+      "killTooltip": "彻底终止此终端进程（不可恢复）",
+      "interrupt": "停止当前轮次",
+      "interruptTooltip": "发送中断信号停止当前执行的轮次",
+      "badgeHc": "hc",
+      "badgeLocal": "本地",
+      "restartedNotice": "终端已重启，正在重新附加…",
+      "lostNotice": "终端连接已丢失",
+      "disconnectedNotice": "已与 herdr-core 断开连接",
+      "connecting": "正在连接 herdr-core 运行时…",
+      "viewModeLabel": "切换视图模式",
+      "modeCard": "卡片",
+      "modeTerminal": "终端"
+    }
+  },
+  "herdr": {
+    "sidebar": {
+      "title": "运行中任务",
+      "empty": "暂无运行中的终端任务",
+      "newSession": "新建运行时终端",
+      "fallbackHint": "herdr-core 未就绪，终端将使用本地 PTY 模式。",
+      "railTooltip": "{count} 个运行中任务",
+      "railBlockedTooltip": "{count} 个运行中任务（有任务等待处理）"
+    },
+    "status": {
+      "idle": "空闲",
+      "working": "运行中",
+      "blocked": "等待处理",
+      "done": "已完成",
+      "error": "异常"
+    },
+    "blockedKind": {
+      "permission": "权限确认",
+      "question": "等待回答",
+      "auth": "等待认证"
+    },
+    "actions": {
+      "quickSend": "快速发送指令",
+      "sendPlaceholder": "向此任务发送消息或命令…",
+      "sendSubmit": "发送",
+      "sendFailed": "发送指令失败",
+      "interrupt": "停止当前轮次",
+      "interruptFailed": "中断任务失败",
+      "openCardView": "以结构化卡片视图打开",
+      "attach": "在底部终端中打开",
+      "attached": "已附加到底部终端"
+    },
+    "conversation": {
+      "providerShell": "终端会话",
+      "turnCount": "第 {turn} 轮",
+      "refresh": "刷新对话记录",
+      "takeOverTerminal": "在终端中接管",
+      "openRawTerminal": "打开原始终端",
+      "nonJsonlTitle": "实时运行时会话",
+      "nonJsonlDesc": "此会话暂无结构化对话日志（例如普通 Shell 或远程机器），可直接发送指令或随时切换到底层终端。",
+      "metaProcess": "前台进程",
+      "metaState": "状态",
+      "metaCwd": "工作目录",
+      "stateLive": "运行中",
+      "stateFinished": "已结束",
+      "truncatedNotice": "仅显示最近部分历史记录",
+      "noMessages": "暂无结构化消息记录",
+      "reasoning": "思考过程",
+      "toolArgs": "输入参数",
+      "toolOutput": "执行输出",
+      "blockedHint": {
+        "permission": "该任务正在等待你的权限确认，可在终端中直接接管处理。",
+        "question": "该任务正在等待你的回答，可在下方回复或在终端中接管。",
+        "auth": "该任务需要完成身份认证，请切换到终端继续操作。",
+        "generic": "该任务正在等待交互确认，请切换到终端接管。"
+      },
+      "role": {
+        "user": "你",
+        "assistant": "助手",
+        "tool": "工具",
+        "system": "系统"
+      },
+      "toolStatus": {
+        "running": "执行中",
+        "completed": "已完成",
+        "failed": "失败"
+      }
+    }
   },
   "app": {
     "title": "Tuff",
@@ -7362,6 +7453,49 @@
       "browserWorkspace": {
         "title": "现代浏览器工作区",
         "desc": "启用基于 WebContentsView 的现代化独立浏览器工作区，支持标签页、无边框视口与快捷导航。关闭时侧边栏无入口，保持经典启动器外观。"
+      },
+      "herdrRuntime": {
+        "title": "herdr-core 持久终端与任务运行时",
+        "desc": "启用由 herdr-core 驱动的侧边栏任务卡片与多标签底部终端，支持后台常驻、断线重连与远程机器接入；不可用时自动平滑回退到本地 PTY。"
+      }
+    },
+    "herdrCore": {
+      "title": "herdr-core 运行时连接",
+      "desc": "配置 Tuff 连接本地或托管 herdr-core 守护进程的方式，控制分离重连与会话发现。",
+      "connection": {
+        "title": "运行时状态",
+        "desc": "自动发现已运行的 herdr-core 实例，或按配置启动托管实例；不可用时自动回退到本地 PTY。",
+        "socketInfo": "会话 {session} · {socketPath}",
+        "errorInfo": "连接受限：{error}"
+      },
+      "status": {
+        "connectedExternal": "已连接（外部实例）",
+        "connectedManaged": "已连接（托管实例）",
+        "connected": "已连接",
+        "connecting": "连接中…",
+        "fallbackPty": "回退至本地 PTY",
+        "unavailable": "不可用",
+        "disconnected": "未连接"
+      },
+      "actions": {
+        "reconnect": "重新连接",
+        "reconnecting": "重连中…",
+        "ensureStarted": "确保已启动",
+        "starting": "启动中…"
+      },
+      "autoStart": {
+        "title": "自动启动托管实例",
+        "desc": "未发现外部 herdr-core 时，自动启动并管理一个后台守护进程。"
+      },
+      "socketPath": {
+        "title": "Socket 路径",
+        "desc": "留空则按标准路径自动发现；填写后优先连接指定 Unix Socket。",
+        "placeholder": "自动发现（默认路径）"
+      },
+      "session": {
+        "title": "会话命名空间",
+        "desc": "用于区分不同 herdr-core 会话实例，默认为 default。",
+        "placeholder": "default"
       }
     }
   },
