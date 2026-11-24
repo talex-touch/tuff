@@ -151,7 +151,7 @@ export interface UseAgentWorkspaceReturn {
   setDraftMode: (mode: ConversationWorkspaceMode) => void
   setDraftProfile: (profileId: string | undefined) => void
   resume: () => Promise<void>
-  queueAction: (queueId: string, action: WorkspaceQueueAction) => Promise<void>
+  queueAction: (queueId: string, action: WorkspaceQueueAction) => Promise<boolean>
   updateQueued: (
     queueId: string,
     text: string,
@@ -539,11 +539,11 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
     }
   }
 
-  async function queueAction(queueId: string, action: WorkspaceQueueAction): Promise<void> {
-    if (queuePending.value) return
+  async function queueAction(queueId: string, action: WorkspaceQueueAction): Promise<boolean> {
+    if (queuePending.value) return false
     queuePending.value = { queueId, action }
     try {
-      await mutate(`queue.${action}`, (conversationId) => {
+      return await mutate(`queue.${action}`, (conversationId) => {
         if (action === 'remove') return sdk.removeQueued(conversationId, queueId)
         if (action === 'promote') return sdk.promoteQueued(conversationId, queueId)
         return sdk.reorderQueued(conversationId, queueId, action)

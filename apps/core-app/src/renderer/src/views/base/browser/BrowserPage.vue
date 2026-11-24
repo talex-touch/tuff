@@ -95,6 +95,13 @@ const isSettingsTab = computed(
 const isLandingTab = computed(() => Boolean(activeTab.value && !activeTab.value.url))
 const previewTarget = computed(() => parseBrowserFilePreviewUrl(activeTab.value?.url))
 const isPreviewTab = computed(() => Boolean(previewTarget.value))
+const previewRefreshToken = ref(0)
+const previewHistory = ref<Record<string, string[]>>({})
+const canGoBackPreview = computed(() => {
+  const tabId = activeTab.value?.id
+  return Boolean(tabId && (previewHistory.value[tabId]?.length ?? 0) > 0)
+})
+let previewNavPending = false
 const localPage = computed(
   () => isLandingTab.value || isStoreTab.value || isSettingsTab.value || isPreviewTab.value
 )
@@ -416,14 +423,52 @@ function navigateAddress(event: KeyboardEvent): void {
   }
 }
 
-function navigatePreviewFile(payload: { path: string; displayPath: string }): void {
+async function navigatePreviewFile(payload: { path: string; displayPath: string }): Promise<void> {
   const tab = activeTab.value
-  if (!tab) return
+  if (!tab || previewNavPending) return
+  const tabId = tab.id
+  const previousUrl = tab.url
   const nextUrl = buildBrowserFilePreviewUrl({
     path: payload.path,
     conversationId: previewTarget.value?.conversationId
   })
-  void command(() => sdk.navigate(tab.id, nextUrl))
+  if (nextUrl === previousUrl) return
+  previewNavPending = true
+  try {
+    const accepted = await command(() => sdk.navigate(tabId, nextUrl))
+    if (!accepted) return
+    const liveTab = state.value?.tabs.find((item) => item.id === tabId)
+    if (!liveTab || !parseBrowserFilePreviewUrl(liveTab.url)) return
+    const nextStack = [...(previewHistory.value[tabId] ?? []), previousUrl].slice(-50)
+    previewHistory.value = { ...previewHistory.value, [tabId]: nextStack }
+  } finally {
+    previewNavPending = false
+  }
+}
+
+async function goBackPreview(): Promise<void> {
+  const tab = activeTab.value
+  if (!tab || previewNavPending) return
+  const tabId = tab.id
+  const stack = previewHistory.value[tabId]
+  const previousUrl = stack?.[stack.length - 1]
+  if (!previousUrl) return
+  previewNavPending = true
+  try {
+    const accepted = await command(() => sdk.navigate(tabId, previousUrl))
+    if (!accepted) return
+    const currentStack = previewHistory.value[tabId] ?? []
+    const remaining = currentStack.slice(0, -1)
+    if (remaining.length > 0) {
+      previewHistory.value = { ...previewHistory.value, [tabId]: remaining }
+    } else {
+      const next = { ...previewHistory.value }
+      delete next[tabId]
+      previewHistory.value = next
+    }
+  } finally {
+    previewNavPending = false
+  }
 }
 
 function dateLabel(page: BrowserSavedPage): string {
@@ -582,7 +627,11 @@ function onKeydown(event: KeyboardEvent): void {
     void command(() => sdk.closeTab(activeTab.value!.id))
   } else if (modifier && (event.code === 'KeyR' || key === 'r') && activeTab.value?.url) {
     event.preventDefault()
-    void command(() => sdk.reload(activeTab.value!.id))
+    if (isPreviewTab.value) {
+      previewRefreshToken.value += 1
+    } else {
+      void command(() => sdk.reload(activeTab.value!.id))
+    }
   } else if (event.key === 'Escape' && panel.value) {
     event.preventDefault()
     panel.value = null
@@ -594,6 +643,28 @@ watch(
   ([id], [previousId]) => {
     if (!addressFocused.value || id !== previousId) address.value = activeTab.value?.url ?? ''
     scheduleViewport()
+  }
+)
+watch(
+  () => state.value?.tabs,
+  (tabs) => {
+    const entries = Object.entries(previewHistory.value)
+    if (entries.length === 0) return
+    const livePreviewIds = new Set(
+      (tabs ?? [])
+        .filter((tab) => Boolean(parseBrowserFilePreviewUrl(tab.url)))
+        .map((tab) => tab.id)
+    )
+    let changed = false
+    const pruned: Record<string, string[]> = {}
+    for (const [tabId, stack] of entries) {
+      if (livePreviewIds.has(tabId)) {
+        pruned[tabId] = stack
+      } else {
+        changed = true
+      }
+    }
+    if (changed) previewHistory.value = pruned
   }
 )
 watch(
@@ -1078,7 +1149,10 @@ onBeforeUnmount(() => {
             :display-path="previewTarget.path"
             :conversation-id="previewTarget.conversationId ?? null"
             :line="previewTarget.line"
+            :refresh-token="previewRefreshToken"
+            :can-go-back="canGoBackPreview"
             :show-open-in-browser="false"
+            @back="goBackPreview"
             @navigate="navigatePreviewFile"
           />
         </div>

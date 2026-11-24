@@ -386,13 +386,15 @@ watch(
   }
 )
 
-function recallQueuedItem(item: WorkspaceQueuedInput): void {
+async function recallQueuedItem(item: WorkspaceQueuedInput): Promise<void> {
+  const ownerId = conversationId.value
+  const removed = await workspace.queueAction(item.id, 'remove')
+  if (!removed || conversationId.value !== ownerId) return
   const existing = draft.value.trim()
   draft.value = existing ? `${item.text}\n${draft.value}` : item.text
   if (canSteer.value) {
     steerDeliveryMode.value = item.deliveryMode ?? 'queue'
   }
-  void workspace.queueAction(item.id, 'remove')
   void nextTick(() => {
     autoGrow()
     composerEl.value?.focus()
