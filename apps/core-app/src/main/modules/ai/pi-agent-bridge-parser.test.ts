@@ -592,6 +592,70 @@ describe('PiModelStreamBuffer UI leak prevention', () => {
 
     expect(streamed).toBe('准备写入文件。')
     expect(elapsedMs).toBeLessThan(2000)
+
+    const fencedPayload = [
+      '准备写入文件。',
+      '```json',
+      JSON.stringify({
+        type: 'tool',
+        name: 'file.write',
+        arguments: { path: 'big.txt', content: largeContent }
+      }),
+      '```'
+    ].join('\n')
+    const fencedStart = performance.now()
+    const fencedStreamed = streamWith(fencedPayload, 5, { toolNames })
+    const fencedElapsedMs = performance.now() - fencedStart
+
+    expect(fencedStreamed).toBe('准备写入文件。')
+    expect(fencedElapsedMs).toBeLessThan(2000)
+  })
+
+  it('handles 4-space indented fence markers, NBSP whitespace, incomplete JSON tails, and 10k-line single deltas iteratively', () => {
+    // 4-space indented ``` inside a text fence is NOT a CommonMark closer.
+    const indentedCloser = [
+      '示例：',
+      '```text',
+      '    ```',
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}'
+    ].join('\n')
+    expect(parseBridgeResponse(indentedCloser, toolNames)).toEqual({
+      type: 'final',
+      text: indentedCloser
+    })
+    expect(streamWith(indentedCloser, 5, { toolNames })).toBe(indentedCloser)
+
+    // U+00A0 NBSP before a trailing JSON directive matches whole-response whitespace trimming.
+    const nbspTrailing =
+      '正在搜索。\n\u00A0{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}'
+    expect(parseBridgeResponse(nbspTrailing, toolNames)).toEqual({
+      type: 'tool',
+      name: 'browser.search',
+      arguments: { query: 'QUIC' },
+      text: '正在搜索。'
+    })
+    expect(streamWith(nbspTrailing, 3, { toolNames })).toBe('正在搜索。')
+
+    // Incomplete JSON on line 2 followed by a valid offered directive on line 3: suppress only line 3.
+    const incompleteThenOffered = [
+      'Checking.',
+      '{"note":',
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}'
+    ].join('\n')
+    expect(parseBridgeResponse(incompleteThenOffered, toolNames)).toEqual({
+      type: 'tool',
+      name: 'browser.search',
+      arguments: { query: 'QUIC' },
+      text: 'Checking.\n{"note":'
+    })
+    expect(streamWith(incompleteThenOffered, 4, { toolNames })).toBe('Checking.\n{"note":')
+    expect(streamWith(incompleteThenOffered, incompleteThenOffered.length, { toolNames })).toBe(
+      'Checking.\n{"note":'
+    )
+
+    // 10,000-line single delta must run iteratively without stack overflow.
+    const manyLines = Array.from({ length: 10_000 }, (_, i) => `line ${i}`).join('\n')
+    expect(streamWith(manyLines, manyLines.length, { toolNames })).toBe(manyLines)
   })
 
   it('flushes documentation answers that quote tool envelopes intact', () => {

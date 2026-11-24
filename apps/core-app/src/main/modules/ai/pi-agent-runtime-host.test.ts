@@ -2057,7 +2057,14 @@ describe('piAgentRuntimeHost protocol boundary', () => {
       (msg): msg is { role: string; content: string; attachments?: unknown[] } =>
         Boolean(msg && typeof msg === 'object' && (msg as { role?: string }).role === 'user')
     )
-    expect(userMessages[1]?.attachments).toEqual([consumedImage])
+    expect(userMessages).toHaveLength(3)
+    expect(userMessages[1]).toMatchObject({
+      content: 'first steer',
+      attachments: [consumedImage]
+    })
+    expect(userMessages[2]).toMatchObject({
+      content: 'second steer without image'
+    })
     expect(userMessages[2]?.attachments).toBeUndefined()
 
     await completeRun(payload, execution)

@@ -1,6 +1,7 @@
 import {
   advanceCodeFenceState,
   extractLeadingToolEnvelopes,
+  extractTrailingToolEnvelopes,
   isCodeFenceCloser,
   isJsonToolFenceOpener,
   isToolEnvelopeStart,
@@ -26,13 +27,14 @@ interface ContainerScanState {
 }
 
 type FenceScanState =
-  | { kind: 'fence-opener'; start: number }
+  | { kind: 'fence-opener'; start: number; lineStart: number }
   | {
       kind: 'fence-body'
       start: number
       fence: CodeFenceState
       bodyStart: number
       lineCursor: number
+      searchCursor: number
     }
 
 type ActiveScanState = ContainerScanState | FenceScanState
@@ -45,8 +47,9 @@ interface TailState {
   active: ActiveScanState | null
 }
 
+/** Matches the same Unicode whitespace characters trimmed by `String.prototype.trim()` (e.g. U+00A0). */
 function isWhitespaceChar(ch: string): boolean {
-  return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r'
+  return ch.trim().length === 0
 }
 
 function findFirstNonWs(text: string, from: number): number {
@@ -56,21 +59,38 @@ function findFirstNonWs(text: string, from: number): number {
   return -1
 }
 
-function isAtLineStart(text: string, pos: number): boolean {
-  for (let i = pos - 1; i >= 0; i -= 1) {
-    const ch = text[i]
-    if (ch === '\n') return true
-    if (ch !== ' ' && ch !== '\t' && ch !== '\r') return false
+/**
+ * Returns the start offset of the line containing `pos` when preceded on that line by at most 3
+ * ASCII spaces (CommonMark §4.5 fence indentation), or `-1` otherwise.
+ */
+function findFenceLineStart(text: string, pos: number): number {
+  let spaces = 0
+  let i = pos - 1
+  while (i >= 0 && text[i] === ' ') {
+    spaces += 1
+    i -= 1
   }
-  return true
+  if (spaces > 3) return -1
+  if (i >= 0 && text[i] !== '\n') return -1
+  return i + 1
 }
 
 /**
  * Checks whether an incomplete line fragment (no newline yet) can still become a valid bare or
- * `json` CommonMark fence opener line (e.g. ```` ``` ````, ```` ```json ````, `~~~json`).
+ * `json` CommonMark fence opener line (0-3 leading ASCII spaces, then ```` ``` ```` / `~~~`).
  */
-function couldBeJsonToolFenceOpener(fragment: string): boolean {
-  const trimmed = fragment.trimStart()
+function couldBeJsonToolFenceOpener(lineFragment: string): boolean {
+  let spaces = 0
+  while (spaces < lineFragment.length && spaces < 3 && lineFragment[spaces] === ' ') {
+    spaces += 1
+  }
+  if (
+    spaces < lineFragment.length &&
+    (lineFragment[spaces] === ' ' || lineFragment[spaces] === '\t')
+  ) {
+    return false
+  }
+  const trimmed = lineFragment.slice(spaces)
   if (!trimmed) return true
   const first = trimmed[0]
   if (first !== '`' && first !== '~') return false
@@ -161,6 +181,7 @@ export class PiModelStreamBuffer {
   private fenceState: CodeFenceState | null = null
   private emittedLine = ''
   private emittedLineCanBeFence = true
+  private emittedLineHasFenceChar = false
   private readonly toolNames?: ReadonlySet<string>
 
   constructor(
@@ -175,21 +196,22 @@ export class PiModelStreamBuffer {
     for (let i = 0; i < text.length; i += 1) {
       const ch = text[i]
       if (ch === '\n') {
-        if (this.emittedLineCanBeFence) {
+        if (this.emittedLineCanBeFence && this.emittedLineHasFenceChar) {
           this.fenceState = advanceCodeFenceState(this.fenceState, this.emittedLine)
         }
         this.emittedLine = ''
         this.emittedLineCanBeFence = true
+        this.emittedLineHasFenceChar = false
       } else if (this.emittedLineCanBeFence) {
-        if (
-          this.emittedLine.trim().length === 0 &&
-          ch !== ' ' &&
-          ch !== '\t' &&
-          ch !== '\r' &&
-          ch !== '`' &&
-          ch !== '~'
-        ) {
-          this.emittedLineCanBeFence = false
+        if (!this.emittedLineHasFenceChar) {
+          if (ch === '`' || ch === '~') {
+            this.emittedLineHasFenceChar = true
+            this.emittedLine += ch
+          } else if (ch === ' ' && this.emittedLine.length < 3) {
+            this.emittedLine += ch
+          } else {
+            this.emittedLineCanBeFence = false
+          }
         } else if (this.emittedLine.length < 512) {
           this.emittedLine += ch
         } else if (ch !== ' ' && ch !== '\t' && ch !== '\r') {
@@ -226,7 +248,12 @@ export class PiModelStreamBuffer {
       } else if (ch === '[') {
         this.leadingScan = createContainerScan('array', start)
       } else if (ch === '`' || ch === '~') {
-        this.leadingScan = { kind: 'fence-opener', start }
+        const lineStart = findFenceLineStart(buf, start)
+        if (lineStart === -1) {
+          this.enterTextMode(buf)
+          return
+        }
+        this.leadingScan = { kind: 'fence-opener', start, lineStart }
       } else {
         this.enterTextMode(buf)
         return
@@ -287,14 +314,14 @@ export class PiModelStreamBuffer {
       }
 
       if (scan.kind === 'fence-opener') {
-        const nl = buf.indexOf('\n', scan.start)
+        const nl = buf.indexOf('\n', scan.lineStart)
         if (nl === -1) {
-          if (!couldBeJsonToolFenceOpener(buf.slice(scan.start))) {
+          if (!couldBeJsonToolFenceOpener(buf.slice(scan.lineStart))) {
             this.enterTextMode(buf)
           }
           return
         }
-        const fence = isJsonToolFenceOpener(buf.slice(scan.start, nl))
+        const fence = isJsonToolFenceOpener(buf.slice(scan.lineStart, nl))
         if (!fence) {
           this.enterTextMode(buf)
           return
@@ -304,7 +331,8 @@ export class PiModelStreamBuffer {
           start: scan.start,
           fence,
           bodyStart: nl + 1,
-          lineCursor: nl + 1
+          lineCursor: nl + 1,
+          searchCursor: nl + 1
         }
         continue
       }
@@ -318,19 +346,25 @@ export class PiModelStreamBuffer {
         return
       }
 
-      let cursor = scan.lineCursor
+      let lineCursor = scan.lineCursor
+      let searchCursor = scan.searchCursor
       let closeLineStart = -1
-      while (cursor < buf.length) {
-        const nl = buf.indexOf('\n', cursor)
-        if (nl === -1) break
-        const line = buf.slice(cursor, nl)
-        if (isCodeFenceCloser(scan.fence, line)) {
-          closeLineStart = cursor
+      while (searchCursor < buf.length) {
+        const nl = buf.indexOf('\n', searchCursor)
+        if (nl === -1) {
+          searchCursor = buf.length
           break
         }
-        cursor = nl + 1
+        const line = buf.slice(lineCursor, nl)
+        if (isCodeFenceCloser(scan.fence, line)) {
+          closeLineStart = lineCursor
+          break
+        }
+        lineCursor = nl + 1
+        searchCursor = nl + 1
       }
-      scan.lineCursor = cursor
+      scan.lineCursor = lineCursor
+      scan.searchCursor = searchCursor
       if (closeLineStart === -1) return
 
       const inner = buf.slice(scan.bodyStart, closeLineStart)
@@ -354,17 +388,22 @@ export class PiModelStreamBuffer {
     }
   }
 
-  private rejectTailAt(cutIndex: number): void {
+  /** Emits `lineBuffer.slice(0, cutIndex)`, clears tail state, and returns the rejected suffix. */
+  private rejectTailAt(cutIndex: number): string {
     const raw = this.lineBuffer
     this.lineBuffer = ''
     this.tailState = null
     const head = raw.slice(0, cutIndex)
     const rest = raw.slice(cutIndex)
     if (head) this.emitText(head)
-    if (rest) this.pushTextMode(rest)
+    return rest
   }
 
-  private advanceTail(): void {
+  /**
+   * Advances incremental tail parsing over `lineBuffer`. Returns a rejected suffix string for
+   * `pushTextMode` to process iteratively, or `null` when still holding/waiting for more input.
+   */
+  private advanceTail(): string | null {
     while (this.tailState !== null) {
       const state = this.tailState
       const buf = this.lineBuffer
@@ -376,25 +415,22 @@ export class PiModelStreamBuffer {
           if (firstInner !== -1) {
             const ch = buf[firstInner]
             if (active.kind === 'object' && ch !== '"' && ch !== '}') {
-              this.rejectTailAt(active.start + 1)
-              return
+              return this.rejectTailAt(active.start + 1)
             }
             if (active.kind === 'array' && ch !== '{') {
-              this.rejectTailAt(active.start + 1)
-              return
+              return this.rejectTailAt(active.start + 1)
             }
           }
 
           const end = advanceContainerScan(buf, active)
-          if (end === -1) return
+          if (end === -1) return null
 
           if (active.kind === 'object') {
             const parsed = parseJsonObject(buf.slice(active.start, end))
             const tool = parsed ? readToolEnvelope(parsed) : null
             const offered = tool !== null && (!this.toolNames || this.toolNames.has(tool.name))
             if (!offered) {
-              this.rejectTailAt(end)
-              return
+              return this.rejectTailAt(end)
             }
             state.acceptedCount += 1
             state.lastValidEnd = end
@@ -408,8 +444,7 @@ export class PiModelStreamBuffer {
             calls !== null &&
             (!this.toolNames || calls.every((call) => this.toolNames!.has(call.name)))
           if (!offered) {
-            this.rejectTailAt(end)
-            return
+            return this.rejectTailAt(end)
           }
           state.acceptedCount += calls.length
           state.lastValidEnd = end
@@ -420,61 +455,65 @@ export class PiModelStreamBuffer {
         }
 
         if (active.kind === 'fence-opener') {
-          const nl = buf.indexOf('\n', active.start)
+          const nl = buf.indexOf('\n', active.lineStart)
           if (nl === -1) {
-            if (!couldBeJsonToolFenceOpener(buf.slice(active.start))) {
-              this.rejectTailAt(buf.length)
+            if (!couldBeJsonToolFenceOpener(buf.slice(active.lineStart))) {
+              return this.rejectTailAt(buf.length)
             }
-            return
+            return null
           }
-          const fence = isJsonToolFenceOpener(buf.slice(active.start, nl))
+          const fence = isJsonToolFenceOpener(buf.slice(active.lineStart, nl))
           if (!fence) {
-            this.rejectTailAt(nl + 1)
-            return
+            return this.rejectTailAt(nl + 1)
           }
           state.active = {
             kind: 'fence-body',
             start: active.start,
             fence,
             bodyStart: nl + 1,
-            lineCursor: nl + 1
+            lineCursor: nl + 1,
+            searchCursor: nl + 1
           }
           continue
         }
 
         if (active.kind !== 'fence-body') {
-          return
+          return null
         }
         const firstBody = findFirstNonWs(buf, active.bodyStart)
         if (firstBody !== -1 && buf[firstBody] !== '{' && buf[firstBody] !== '[') {
-          this.rejectTailAt(active.bodyStart)
-          return
+          return this.rejectTailAt(active.bodyStart)
         }
 
-        let cursor = active.lineCursor
+        let lineCursor = active.lineCursor
+        let searchCursor = active.searchCursor
         let closeLineStart = -1
         let closeLineEnd = -1
-        while (cursor < buf.length) {
-          const nl = buf.indexOf('\n', cursor)
-          if (nl === -1) break
-          const line = buf.slice(cursor, nl)
+        while (searchCursor < buf.length) {
+          const nl = buf.indexOf('\n', searchCursor)
+          if (nl === -1) {
+            searchCursor = buf.length
+            break
+          }
+          const line = buf.slice(lineCursor, nl)
           if (isCodeFenceCloser(active.fence, line)) {
-            closeLineStart = cursor
+            closeLineStart = lineCursor
             closeLineEnd = nl
             break
           }
-          cursor = nl + 1
+          lineCursor = nl + 1
+          searchCursor = nl + 1
         }
-        active.lineCursor = cursor
-        if (closeLineEnd === -1) return
+        active.lineCursor = lineCursor
+        active.searchCursor = searchCursor
+        if (closeLineEnd === -1) return null
 
         const inner = buf.slice(active.bodyStart, closeLineStart)
         const calls = parsePureToolEnvelopes(inner, this.toolNames)
         if (!calls || calls.length === 0) {
           // Emit through the closing fence marker (before its newline) so `pushTextMode` closes
           // `fenceState` on that newline and immediately inspects the next line for trailing calls.
-          this.rejectTailAt(closeLineEnd)
-          return
+          return this.rejectTailAt(closeLineEnd)
         }
         state.acceptedCount += calls.length
         state.lastValidEnd = closeLineEnd
@@ -488,12 +527,11 @@ export class PiModelStreamBuffer {
       while (pos < buf.length && isWhitespaceChar(buf[pos])) pos += 1
       if (pos >= buf.length) {
         state.parseCursor = pos
-        return
+        return null
       }
 
       if (state.acceptedArray) {
-        this.rejectTailAt(state.lastValidEnd)
-        return
+        return this.rejectTailAt(state.lastValidEnd)
       }
 
       if (state.acceptedCount > 0 && (buf[pos] === ',' || buf[pos] === ';')) {
@@ -501,7 +539,7 @@ export class PiModelStreamBuffer {
         while (pos < buf.length && isWhitespaceChar(buf[pos])) pos += 1
         if (pos >= buf.length) {
           state.parseCursor = pos
-          return
+          return null
         }
       }
 
@@ -516,16 +554,19 @@ export class PiModelStreamBuffer {
         state.active = createContainerScan('array', pos)
         continue
       }
-      if ((ch === '`' || ch === '~') && isAtLineStart(buf, pos)) {
-        state.parseCursor = pos
-        state.active = { kind: 'fence-opener', start: pos }
-        continue
+      if (ch === '`' || ch === '~') {
+        const lineStart = findFenceLineStart(buf, pos)
+        if (lineStart !== -1) {
+          state.parseCursor = pos
+          state.active = { kind: 'fence-opener', start: pos, lineStart }
+          continue
+        }
       }
 
       const releaseUpTo = state.lastValidEnd > 0 ? state.lastValidEnd : pos
-      this.rejectTailAt(releaseUpTo)
-      return
+      return this.rejectTailAt(releaseUpTo)
     }
+    return null
   }
 
   private pushTextMode(input: string): void {
@@ -533,8 +574,10 @@ export class PiModelStreamBuffer {
     while (delta.length > 0) {
       if (this.tailState !== null) {
         this.lineBuffer += delta
-        this.advanceTail()
-        return
+        const rejectedSuffix = this.advanceTail()
+        if (!rejectedSuffix) return
+        delta = rejectedSuffix
+        continue
       }
 
       if (this.fenceState !== null) {
@@ -548,10 +591,15 @@ export class PiModelStreamBuffer {
         }
         // If this line closes the open markdown code fence, close the fence and hold the newline
         // so a standalone tool block on the very next line is recognized immediately.
-        if (this.emittedLineCanBeFence && isCodeFenceCloser(this.fenceState, this.emittedLine)) {
+        if (
+          this.emittedLineCanBeFence &&
+          this.emittedLineHasFenceChar &&
+          isCodeFenceCloser(this.fenceState, this.emittedLine)
+        ) {
           this.fenceState = null
           this.emittedLine = ''
           this.emittedLineCanBeFence = true
+          this.emittedLineHasFenceChar = false
           this.lineBuffer = '\n'
           this.tailState = createTailState()
           delta = delta.slice(nl + 1)
@@ -572,6 +620,7 @@ export class PiModelStreamBuffer {
       }
       if (
         this.emittedLineCanBeFence &&
+        this.emittedLineHasFenceChar &&
         advanceCodeFenceState(this.fenceState, this.emittedLine) !== null
       ) {
         this.emitText('\n')
@@ -648,9 +697,15 @@ export class PiModelStreamBuffer {
       const raw = this.lineBuffer
       this.lineBuffer = ''
       this.tailState = null
-      if (parsePureToolEnvelopes(raw, this.toolNames) === null) {
-        this.emitText(raw)
+      if (parsePureToolEnvelopes(raw, this.toolNames) !== null) {
+        return
       }
+      const trailing = extractTrailingToolEnvelopes(raw, this.toolNames)
+      if (trailing) {
+        if (trailing.preamble) this.emitText(trailing.preamble)
+        return
+      }
+      this.emitText(raw)
     }
   }
 }

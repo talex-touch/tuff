@@ -124,14 +124,30 @@ export interface CodeFenceState {
 }
 
 /**
- * Parses a CommonMark fenced-code opening line (without trailing newline): at least 3 backticks
- * (with no backticks in the info string) or at least 3 tildes.
+ * Strips up to three leading ASCII spaces per CommonMark §4.5 fenced code block rules.
+ * Returns `null` when indented by four or more spaces or a tab in the leading indentation.
+ */
+function stripCommonMarkFenceIndent(line: string): string | null {
+  const raw = line.replace(/\r$/, '')
+  let spaces = 0
+  while (spaces < raw.length && spaces < 3 && raw[spaces] === ' ') {
+    spaces += 1
+  }
+  if (spaces < raw.length && (raw[spaces] === ' ' || raw[spaces] === '\t')) {
+    return null
+  }
+  return raw.slice(spaces)
+}
+
+/**
+ * Parses a CommonMark fenced-code opening line (without trailing newline): at most 3 leading
+ * spaces, followed by at least 3 backticks (with no backticks in the info string) or 3+ tildes.
  */
 export function parseCodeFenceOpener(
   line: string
 ): (CodeFenceState & { readonly info: string }) | null {
-  const trimmed = line.replace(/\r$/, '').trimStart()
-  if (trimmed.length < 3) return null
+  const trimmed = stripCommonMarkFenceIndent(line)
+  if (trimmed === null || trimmed.length < 3) return null
   const first = trimmed[0]
   if (first !== '`' && first !== '~') return null
 
@@ -147,12 +163,12 @@ export function parseCodeFenceOpener(
 }
 
 /**
- * Checks whether `line` closes `fence` per CommonMark: same fence character, at least as long as
- * the opener, and only optional whitespace after the marker.
+ * Checks whether `line` closes `fence` per CommonMark: at most 3 leading spaces, same fence
+ * character, at least as long as the opener, and only optional whitespace after the marker.
  */
 export function isCodeFenceCloser(fence: CodeFenceState, line: string): boolean {
-  const trimmed = line.replace(/\r$/, '').trimStart()
-  if (trimmed.length < fence.length || trimmed[0] !== fence.char) return false
+  const trimmed = stripCommonMarkFenceIndent(line)
+  if (trimmed === null || trimmed.length < fence.length || trimmed[0] !== fence.char) return false
   let length = 0
   while (length < trimmed.length && trimmed[length] === fence.char) {
     length += 1
@@ -425,7 +441,7 @@ export function extractTrailingToolEnvelopes(
       lineStart > 0 &&
       (lineTrimmed.startsWith('{') ||
         lineTrimmed.startsWith('[') ||
-        isJsonToolFenceOpener(lineTrimmed) !== null)
+        isJsonToolFenceOpener(line) !== null)
     ) {
       const tail = trimmed.slice(lineStart).trim()
       const calls = parsePureToolEnvelopes(tail, toolNames)

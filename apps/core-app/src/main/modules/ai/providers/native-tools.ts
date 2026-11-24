@@ -177,6 +177,17 @@ export class ToolCallAssembler {
     if (rawIndex !== undefined) {
       const boundSlot = this.slotByRawIndex.get(rawIndex)
       if (boundSlot !== undefined) return boundSlot
+      // Some gateways omit `index` on the call's first fragment and include `index` on id-less
+      // continuation fragments; bind and attach to the active unindexed call instead of orphaning
+      // its arguments in a new slot.
+      if (this.lastSlot !== undefined) {
+        const lastCall = this.calls.get(this.lastSlot)
+        if (lastCall && lastCall.id && lastCall.sortKey === Number.POSITIVE_INFINITY) {
+          lastCall.sortKey = rawIndex
+          this.slotByRawIndex.set(rawIndex, this.lastSlot)
+          return this.lastSlot
+        }
+      }
       const slot = this.allocateSlot(rawIndex)
       this.slotByRawIndex.set(rawIndex, slot)
       return slot

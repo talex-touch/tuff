@@ -135,6 +135,17 @@ describe('ToolCallAssembler', () => {
       { kind: 'tool-input-end', callId: 'call_c', input: { path: 'a.txt' } }
     ])
   })
+
+  it('keeps fragments together when the first fragment omits index and a continuation supplies index 0 without id', () => {
+    const assembler = new ToolCallAssembler()
+    expect(
+      assembler.pushMessageChunk(chunk({ id: 'call_a', name: 'file__read', args: '{"path":' }))
+    ).toEqual([{ kind: 'tool-start', callId: 'call_a', name: 'file.read' }])
+    expect(assembler.pushMessageChunk(chunk({ index: 0, args: '"a.txt"}' }))).toEqual([])
+    expect(assembler.finish()).toEqual([
+      { kind: 'tool-input-end', callId: 'call_a', input: { path: 'a.txt' } }
+    ])
+  })
 })
 
 describe('parseToolArguments', () => {
