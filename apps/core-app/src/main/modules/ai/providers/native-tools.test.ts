@@ -111,6 +111,30 @@ describe('ToolCallAssembler', () => {
       }
     ])
   })
+
+  it('keeps synthetic fallback slots separate from later real stream indexes when args arrive before id', () => {
+    const assembler = new ToolCallAssembler()
+    // Reused index: 0 allocates a synthetic second slot for call_b.
+    assembler.pushMessageChunk(
+      chunk({ index: 0, id: 'call_a', name: 'browser__search', args: '{"query":"QUIC"}' })
+    )
+    assembler.pushMessageChunk(
+      chunk({ index: 0, id: 'call_b', name: 'browser__extract', args: '{"url":"https://b"}' })
+    )
+    // A later real index: 1 arrives with args before its id and name; it must NOT append to call_b.
+    expect(assembler.pushMessageChunk(chunk({ index: 1, args: '{"path":' }))).toEqual([])
+    expect(
+      assembler.pushMessageChunk(
+        chunk({ index: 1, id: 'call_c', name: 'file__read', args: '"a.txt"}' })
+      )
+    ).toEqual([{ kind: 'tool-start', callId: 'call_c', name: 'file.read' }])
+
+    expect(assembler.finish()).toEqual([
+      { kind: 'tool-input-end', callId: 'call_a', input: { query: 'QUIC' } },
+      { kind: 'tool-input-end', callId: 'call_b', input: { url: 'https://b' } },
+      { kind: 'tool-input-end', callId: 'call_c', input: { path: 'a.txt' } }
+    ])
+  })
 })
 
 describe('parseToolArguments', () => {

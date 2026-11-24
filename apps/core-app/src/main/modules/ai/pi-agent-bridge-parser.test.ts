@@ -330,10 +330,77 @@ print('writing file')
     ].join('\n')
     expect(parseBridgeResponse(answer, toolNames)).toEqual({ type: 'final', text: answer })
   })
+
+  it('keeps a leading mixed JSON fence intact as text without accepting partial calls or stripping its opener', () => {
+    const mixed = [
+      '```json',
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}',
+      '{"note":"ordinary"}',
+      '```'
+    ].join('\n')
+    expect(parseBridgeResponse(mixed, toolNames)).toEqual({ type: 'final', text: mixed })
+
+    const fencedThenProse = [
+      '```json',
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}',
+      '```',
+      '正在查询 QUIC 规范。'
+    ].join('\n')
+    expect(parseBridgeResponse(fencedThenProse, toolNames)).toEqual({
+      type: 'tool',
+      name: 'browser.search',
+      arguments: { query: 'QUIC' },
+      text: '正在查询 QUIC 规范。'
+    })
+  })
+
+  it('respects CommonMark fence lengths so a shorter inner fence never closes a 4-backtick block, while recognizing calls after a valid closer', () => {
+    const insideFourBackticks = [
+      '示例：',
+      '````markdown',
+      '```',
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}',
+      '````'
+    ].join('\n')
+    expect(parseBridgeResponse(insideFourBackticks, toolNames)).toEqual({
+      type: 'final',
+      text: insideFourBackticks
+    })
+
+    const afterValidCloser = [
+      '示例：',
+      '````markdown',
+      '```',
+      'nested',
+      '```',
+      '````',
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}'
+    ].join('\n')
+    expect(parseBridgeResponse(afterValidCloser, toolNames)).toEqual({
+      type: 'tool',
+      name: 'browser.search',
+      arguments: { query: 'QUIC' },
+      text: ['示例：', '````markdown', '```', 'nested', '```', '````'].join('\n')
+    })
+  })
 })
 
 describe('PiModelStreamBuffer UI leak prevention', () => {
   const toolNames = new Set(['system.exec', 'file.write', 'browser.search', 'browser.extract'])
+
+  function streamWith(
+    payload: string,
+    chunkSize: number,
+    options?: { toolNames?: ReadonlySet<string> }
+  ): string {
+    const deltas: string[] = []
+    const buffer = new PiModelStreamBuffer((d) => deltas.push(d), options)
+    for (let i = 0; i < payload.length; i += chunkSize) {
+      buffer.pushDelta(payload.slice(i, i + chunkSize))
+    }
+    buffer.complete()
+    return deltas.join('')
+  }
 
   it('suppresses tool call JSON tokens from streaming into user bubble', () => {
     const deltas: string[] = []
@@ -371,27 +438,160 @@ describe('PiModelStreamBuffer UI leak prevention', () => {
     altBuffer.pushDelta('{"name":"browser.search","type":"tool","arguments":{"query":"QUIC"}}')
     altBuffer.complete()
     expect(altDeltas).toEqual([])
+
+    const argsFirst = '{"arguments":{"query":"QUIC"},"type":"tool","name":"browser.search"}'
+    expect(streamWith(argsFirst, 1, { toolNames })).toBe('')
+    expect(parseBridgeResponse(argsFirst, toolNames)).toEqual({
+      type: 'tool',
+      name: 'browser.search',
+      arguments: { query: 'QUIC' }
+    })
   })
 
-  it('suppresses trailing tool directives after preamble prose across multi-chunk and single-chunk streams', () => {
+  it('suppresses trailing tool directives after preamble prose across multi-chunk and single-chunk streams with worker parity', () => {
     const payload =
       '我先查一下 QUIC 1-RTT 握手。\n\n' +
       '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}} ' +
       '{"type":"tool","name":"browser.extract","arguments":{"url":"https://www.rfc-editor.org/rfc/rfc9001.html"}}'
 
-    // Single chunk
-    const singleDeltas: string[] = []
-    const singleBuffer = new PiModelStreamBuffer((d) => singleDeltas.push(d), { toolNames })
-    singleBuffer.pushDelta(payload)
-    singleBuffer.complete()
-    expect(singleDeltas.join('')).toBe('我先查一下 QUIC 1-RTT 握手。')
+    const parsed = parseBridgeResponse(payload, toolNames)
+    expect(parsed).toEqual({
+      type: 'tool',
+      name: 'browser.search',
+      arguments: { query: 'QUIC' },
+      calls: [
+        { name: 'browser.search', arguments: { query: 'QUIC' } },
+        {
+          name: 'browser.extract',
+          arguments: { url: 'https://www.rfc-editor.org/rfc/rfc9001.html' }
+        }
+      ],
+      text: '我先查一下 QUIC 1-RTT 握手。'
+    })
 
-    // Character-by-character chunks
-    const charDeltas: string[] = []
-    const charBuffer = new PiModelStreamBuffer((d) => charDeltas.push(d), { toolNames })
-    for (const ch of payload) charBuffer.pushDelta(ch)
-    charBuffer.complete()
-    expect(charDeltas.join('')).toBe('我先查一下 QUIC 1-RTT 握手。')
+    // Single chunk and character-by-character chunks match parseBridgeResponse.text
+    expect(streamWith(payload, payload.length, { toolNames })).toBe('我先查一下 QUIC 1-RTT 握手。')
+    expect(streamWith(payload, 1, { toolNames })).toBe('我先查一下 QUIC 1-RTT 握手。')
+  })
+
+  it('retains an unoffered envelope as text while still suppressing a following offered trailing call', () => {
+    const bareReply = [
+      '说明如下：',
+      '{"type":"tool","name":"unoffered.demo","arguments":{"k":1}}',
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}'
+    ].join('\n')
+    const expectedText = [
+      '说明如下：',
+      '{"type":"tool","name":"unoffered.demo","arguments":{"k":1}}'
+    ].join('\n')
+    expect(parseBridgeResponse(bareReply, toolNames)).toEqual({
+      type: 'tool',
+      name: 'browser.search',
+      arguments: { query: 'QUIC' },
+      text: expectedText
+    })
+    expect(streamWith(bareReply, bareReply.length, { toolNames })).toBe(expectedText)
+    expect(streamWith(bareReply, 1, { toolNames })).toBe(expectedText)
+
+    const fencedReply = [
+      '说明如下：',
+      '```json',
+      '{"type":"tool","name":"unoffered.demo","arguments":{"k":1}}',
+      '```',
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}'
+    ].join('\n')
+    const expectedFencedText = [
+      '说明如下：',
+      '```json',
+      '{"type":"tool","name":"unoffered.demo","arguments":{"k":1}}',
+      '```'
+    ].join('\n')
+    expect(parseBridgeResponse(fencedReply, toolNames)).toEqual({
+      type: 'tool',
+      name: 'browser.search',
+      arguments: { query: 'QUIC' },
+      text: expectedFencedText
+    })
+    expect(streamWith(fencedReply, fencedReply.length, { toolNames })).toBe(expectedFencedText)
+    expect(streamWith(fencedReply, 1, { toolNames })).toBe(expectedFencedText)
+  })
+
+  it('holds key-reordered trailing tool envelopes while releasing ordinary JSON objects', () => {
+    const argsFirstTrailing = [
+      '正在检索：',
+      '{"arguments":{"query":"QUIC"},"type":"tool","name":"browser.search"}'
+    ].join('\n')
+    expect(parseBridgeResponse(argsFirstTrailing, toolNames)).toEqual({
+      type: 'tool',
+      name: 'browser.search',
+      arguments: { query: 'QUIC' },
+      text: '正在检索：'
+    })
+    expect(streamWith(argsFirstTrailing, argsFirstTrailing.length, { toolNames })).toBe(
+      '正在检索：'
+    )
+    expect(streamWith(argsFirstTrailing, 3, { toolNames })).toBe('正在检索：')
+
+    const ordinaryJson = [
+      '配置示例：',
+      '{"arguments":{"host":"localhost"},"port":3000}',
+      '结束。'
+    ].join('\n')
+    expect(parseBridgeResponse(ordinaryJson, toolNames)).toEqual({
+      type: 'final',
+      text: ordinaryJson
+    })
+    expect(streamWith(ordinaryJson, 5, { toolNames })).toBe(ordinaryJson)
+  })
+
+  it('matches CommonMark fence tracking in stream buffer for 4-backtick blocks and mixed fences', () => {
+    const insideFourBackticks = [
+      '示例：',
+      '````markdown',
+      '```',
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}',
+      '````'
+    ].join('\n')
+    expect(streamWith(insideFourBackticks, 4, { toolNames })).toBe(insideFourBackticks)
+
+    const afterValidCloser = [
+      '示例：',
+      '````markdown',
+      '```',
+      'nested',
+      '```',
+      '````',
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}'
+    ].join('\n')
+    const expectedPreamble = ['示例：', '````markdown', '```', 'nested', '```', '````'].join('\n')
+    expect(streamWith(afterValidCloser, afterValidCloser.length, { toolNames })).toBe(
+      expectedPreamble
+    )
+    expect(streamWith(afterValidCloser, 2, { toolNames })).toBe(expectedPreamble)
+
+    const leadingMixedFence = [
+      '```json',
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}',
+      '{"note":"ordinary"}',
+      '```'
+    ].join('\n')
+    expect(streamWith(leadingMixedFence, 5, { toolNames })).toBe(leadingMixedFence)
+  })
+
+  it('scans large trailing tool directives incrementally in linear time without leaking text', () => {
+    const largeContent = 'x'.repeat(50_000)
+    const payload = `准备写入文件。\n${JSON.stringify({
+      type: 'tool',
+      name: 'file.write',
+      arguments: { path: 'big.txt', content: largeContent }
+    })}`
+
+    const start = performance.now()
+    const streamed = streamWith(payload, 5, { toolNames })
+    const elapsedMs = performance.now() - start
+
+    expect(streamed).toBe('准备写入文件。')
+    expect(elapsedMs).toBeLessThan(2000)
   })
 
   it('flushes documentation answers that quote tool envelopes intact', () => {

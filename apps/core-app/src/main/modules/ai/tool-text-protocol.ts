@@ -118,16 +118,78 @@ export function leadingObjectEnd(text: string): number {
   return -1
 }
 
+export interface CodeFenceState {
+  readonly char: '`' | '~'
+  readonly length: number
+}
+
+/**
+ * Parses a CommonMark fenced-code opening line (without trailing newline): at least 3 backticks
+ * (with no backticks in the info string) or at least 3 tildes.
+ */
+export function parseCodeFenceOpener(
+  line: string
+): (CodeFenceState & { readonly info: string }) | null {
+  const trimmed = line.replace(/\r$/, '').trimStart()
+  if (trimmed.length < 3) return null
+  const first = trimmed[0]
+  if (first !== '`' && first !== '~') return null
+
+  let length = 0
+  while (length < trimmed.length && trimmed[length] === first) {
+    length += 1
+  }
+  if (length < 3) return null
+
+  const rest = trimmed.slice(length)
+  if (first === '`' && rest.includes('`')) return null
+  return { char: first, length, info: rest.trim() }
+}
+
+/**
+ * Checks whether `line` closes `fence` per CommonMark: same fence character, at least as long as
+ * the opener, and only optional whitespace after the marker.
+ */
+export function isCodeFenceCloser(fence: CodeFenceState, line: string): boolean {
+  const trimmed = line.replace(/\r$/, '').trimStart()
+  if (trimmed.length < fence.length || trimmed[0] !== fence.char) return false
+  let length = 0
+  while (length < trimmed.length && trimmed[length] === fence.char) {
+    length += 1
+  }
+  if (length < fence.length) return false
+  return trimmed.slice(length).trim().length === 0
+}
+
+/** Updates CommonMark fenced-code state after consuming one complete line (without newline). */
+export function advanceCodeFenceState(
+  current: CodeFenceState | null,
+  line: string
+): CodeFenceState | null {
+  if (current === null) {
+    const opened = parseCodeFenceOpener(line)
+    return opened ? { char: opened.char, length: opened.length } : null
+  }
+  return isCodeFenceCloser(current, line) ? null : current
+}
+
+/** Returns the fence state when `line` opens a bare or `json` fenced block. */
+export function isJsonToolFenceOpener(line: string): CodeFenceState | null {
+  const opened = parseCodeFenceOpener(line)
+  if (!opened) return null
+  const info = opened.info.toLowerCase()
+  return info === '' || info === 'json' ? { char: opened.char, length: opened.length } : null
+}
+
 export function stripTrailingCodeFence(text: string): string {
   const trimmed = text.trimEnd()
   return trimmed.endsWith('```') ? trimmed.slice(0, -3).trimEnd() : trimmed
 }
 
-export function parseToolEnvelopeArray(text: string): ParsedToolCall[] | null {
+function parseToolEnvelopeArrayRaw(text: string): ParsedToolCall[] | null {
   const trimmed = text.trim()
-  const withoutFence = stripTrailingCodeFence(trimmed.replace(/^```(?:json)?\s+/i, '')).trim()
-  if (!withoutFence.startsWith('[')) return null
-  const value = parseJsonValue(withoutFence)
+  if (!trimmed.startsWith('[')) return null
+  const value = parseJsonValue(trimmed)
   if (!Array.isArray(value) || value.length === 0) return null
   const calls: ParsedToolCall[] = []
   for (const item of value) {
@@ -139,6 +201,71 @@ export function parseToolEnvelopeArray(text: string): ParsedToolCall[] | null {
   return calls
 }
 
+interface SlicedJsonFence {
+  readonly inner: string
+  readonly closed: boolean
+  readonly restAfterClose: string
+}
+
+/**
+ * If `text` begins with a bare or `json` fenced block, splits out its inner contents up to the
+ * matching CommonMark closing fence (or EOF when unclosed). Returns `null` when `text` does not
+ * start with a JSON/bare fence opener.
+ */
+function sliceLeadingJsonFence(text: string): SlicedJsonFence | null {
+  const firstNl = text.indexOf('\n')
+  if (firstNl === -1) {
+    const inlineMatch = text.match(/^(`{3,}|~{3,})(?:json)?[ \t]+(.+)$/i)
+    if (!inlineMatch) return null
+    const marker = inlineMatch[1]
+    const body = inlineMatch[2].trimEnd()
+    if (body.endsWith(marker)) {
+      return {
+        inner: body.slice(0, -marker.length).trim(),
+        closed: true,
+        restAfterClose: ''
+      }
+    }
+    return { inner: body.trim(), closed: false, restAfterClose: '' }
+  }
+
+  const openerLine = text.slice(0, firstNl)
+  const fence = isJsonToolFenceOpener(openerLine)
+  if (!fence) return null
+
+  let lineStart = firstNl + 1
+  while (lineStart <= text.length) {
+    const nextNl = text.indexOf('\n', lineStart)
+    const lineEnd = nextNl === -1 ? text.length : nextNl
+    const line = text.slice(lineStart, lineEnd)
+    if (isCodeFenceCloser(fence, line)) {
+      const restStart = nextNl === -1 ? text.length : nextNl + 1
+      return {
+        inner: text.slice(firstNl + 1, lineStart),
+        closed: true,
+        restAfterClose: text.slice(restStart).trimStart()
+      }
+    }
+    if (nextNl === -1) break
+    lineStart = nextNl + 1
+  }
+
+  return {
+    inner: text.slice(firstNl + 1),
+    closed: false,
+    restAfterClose: ''
+  }
+}
+
+export function parseToolEnvelopeArray(text: string): ParsedToolCall[] | null {
+  const trimmed = text.trim()
+  if (!trimmed) return null
+  if (trimmed.startsWith('[')) return parseToolEnvelopeArrayRaw(trimmed)
+  const fenced = sliceLeadingJsonFence(trimmed)
+  if (!fenced || fenced.restAfterClose.length > 0) return null
+  return parseToolEnvelopeArrayRaw(fenced.inner)
+}
+
 export interface LeadingToolEnvelopeExtraction {
   calls: ParsedToolCall[]
   /** Remaining non-tool text after the last parsed tool envelope, trimmed. */
@@ -148,30 +275,21 @@ export interface LeadingToolEnvelopeExtraction {
    * valid JSON (truncated or malformed). Consumers must never leak this into user-visible text.
    */
   malformedTail?: string
+  /**
+   * True when the input began with a JSON/bare fenced block whose contents were mixed (not purely
+   * tool envelopes), so callers keep the entire fenced block intact as text.
+   */
+  rejectedFence?: boolean
 }
 
-/**
- * Extracts one or more consecutive leading `{"type":"tool",...}` JSON objects (separated by
- * whitespace, commas, semicolons, or markdown JSON code fences).
- */
-export function extractLeadingToolEnvelopes(input: string): LeadingToolEnvelopeExtraction {
+function extractPlainLeadingToolEnvelopes(input: string): LeadingToolEnvelopeExtraction {
   const calls: ParsedToolCall[] = []
   let cursor = input.trim()
-  let inFence = false
 
   while (cursor.length > 0) {
     let step = cursor
     if (calls.length > 0 && (step.startsWith(',') || step.startsWith(';'))) {
       step = step.slice(1).trimStart()
-    }
-
-    let openedThisStep = false
-    if (!inFence) {
-      const fenceOpen = step.match(/^```(?:json)?\s+/i)
-      if (fenceOpen) {
-        step = step.slice(fenceOpen[0].length).trimStart()
-        openedThisStep = true
-      }
     }
 
     if (!step.startsWith('{')) {
@@ -183,26 +301,83 @@ export function extractLeadingToolEnvelopes(input: string): LeadingToolEnvelopeE
     const tool = leading ? readToolEnvelope(leading) : null
     if (!tool) {
       if (isToolEnvelopeStart(step)) {
-        const malformed =
-          inFence || openedThisStep ? stripTrailingCodeFence(step).trim() : step.trim()
-        return { calls, rest: '', malformedTail: malformed }
+        return { calls, rest: '', malformedTail: step.trim() }
       }
       break
     }
 
     calls.push(tool)
-    if (openedThisStep) inFence = true
     cursor = step.slice(end).trimStart()
-    if (inFence) {
-      const fenceClose = cursor.match(/^```[ \t]*(?:\r?\n|$)/)
-      if (fenceClose) {
-        cursor = cursor.slice(fenceClose[0].length).trimStart()
-        inFence = false
-      }
-    }
   }
 
   return { calls, rest: cursor.trim() }
+}
+
+/**
+ * Extracts one or more consecutive leading `{"type":"tool",...}` JSON objects (separated by
+ * whitespace, commas, semicolons, or markdown JSON code fences). A fenced block is accepted only
+ * when its entire contents consist of tool envelopes, so mixed fences stay intact as text.
+ */
+export function extractLeadingToolEnvelopes(input: string): LeadingToolEnvelopeExtraction {
+  const calls: ParsedToolCall[] = []
+  let cursor = input.trim()
+  let rejectedFence = false
+
+  while (cursor.length > 0) {
+    let step = cursor
+    if (calls.length > 0 && (step.startsWith(',') || step.startsWith(';'))) {
+      step = step.slice(1).trimStart()
+    }
+
+    const fenced = sliceLeadingJsonFence(step)
+    if (fenced) {
+      const arrayCalls = parseToolEnvelopeArrayRaw(fenced.inner)
+      if (arrayCalls) {
+        calls.push(...arrayCalls)
+        cursor = fenced.restAfterClose
+        continue
+      }
+      const plain = extractPlainLeadingToolEnvelopes(fenced.inner)
+      if (plain.malformedTail) {
+        return {
+          calls: [...calls, ...plain.calls],
+          rest: '',
+          malformedTail: plain.malformedTail
+        }
+      }
+      if (plain.calls.length > 0 && plain.rest === '') {
+        calls.push(...plain.calls)
+        cursor = fenced.restAfterClose
+        continue
+      }
+      // Mixed or non-tool fenced block: do not accept partial calls or strip its opening fence.
+      if (calls.length === 0) rejectedFence = true
+      break
+    }
+
+    if (!step.startsWith('{')) {
+      break
+    }
+
+    const end = leadingObjectEnd(step)
+    const leading = end === -1 ? null : parseJsonObject(step.slice(0, end))
+    const tool = leading ? readToolEnvelope(leading) : null
+    if (!tool) {
+      if (isToolEnvelopeStart(step)) {
+        return { calls, rest: '', malformedTail: step.trim() }
+      }
+      break
+    }
+
+    calls.push(tool)
+    cursor = step.slice(end).trimStart()
+  }
+
+  return {
+    calls,
+    rest: cursor.trim(),
+    ...(rejectedFence ? { rejectedFence: true } : {})
+  }
 }
 
 /**
@@ -237,19 +412,20 @@ export function extractTrailingToolEnvelopes(
   const trimmed = text.trimEnd()
   if (!trimmed) return null
 
-  let inCodeFence = false
+  let fenceState: CodeFenceState | null = null
   let lineStart = 0
   while (lineStart < trimmed.length) {
     const newlineIndex = trimmed.indexOf('\n', lineStart)
     const lineEnd = newlineIndex === -1 ? trimmed.length : newlineIndex
-    const lineTrimmed = trimmed.slice(lineStart, lineEnd).trimStart()
+    const line = trimmed.slice(lineStart, lineEnd)
+    const lineTrimmed = line.trimStart()
 
     if (
-      !inCodeFence &&
+      fenceState === null &&
       lineStart > 0 &&
       (lineTrimmed.startsWith('{') ||
         lineTrimmed.startsWith('[') ||
-        /^```(?:json)?(?:\s|$)/i.test(lineTrimmed))
+        isJsonToolFenceOpener(lineTrimmed) !== null)
     ) {
       const tail = trimmed.slice(lineStart).trim()
       const calls = parsePureToolEnvelopes(tail, toolNames)
@@ -261,9 +437,7 @@ export function extractTrailingToolEnvelopes(
       }
     }
 
-    if (/^```/.test(lineTrimmed)) {
-      inCodeFence = !inCodeFence
-    }
+    fenceState = advanceCodeFenceState(fenceState, line)
 
     if (newlineIndex === -1) break
     lineStart = newlineIndex + 1

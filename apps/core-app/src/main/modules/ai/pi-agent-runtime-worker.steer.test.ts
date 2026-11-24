@@ -298,4 +298,62 @@ describe('pi-agent-runtime-worker mid-turn steer delivery', () => {
     if (completed.type !== 'run.completed') throw new Error('expected run.completed')
     expect(completed.payload.output).toBe('Added dark mode toggle.')
   })
+
+  it('completes without a second model request or consumption event when an empty sync cancels the queued steer', async () => {
+    const port = createFakeParentPort()
+    processWithPort.parentPort = port
+    vi.resetModules()
+    await import('./pi-agent-runtime-worker')
+
+    const payload = createStartPayload()
+    payload.run.id = 'run-steer-worker-3'
+    port.deliver({
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'run.start',
+      payload
+    })
+
+    const modelReq1 = await waitFor(
+      () => port.sent.find((msg) => msg.type === 'model.request' && msg.payload.step === 1),
+      () => JSON.stringify(port.sent.map((m) => m.type))
+    )
+    if (modelReq1.type !== 'model.request') throw new Error('expected step 1 model.request')
+
+    // Queue steer-a, then cancel it with an empty sync and no subsequent replacement.
+    port.deliver({
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'run.steer.sync',
+      runId: payload.run.id,
+      items: [{ id: 'steer-a', text: 'cancelled steer', createdAt: 300 }]
+    })
+    port.deliver({
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'run.steer.sync',
+      runId: payload.run.id,
+      items: []
+    })
+
+    port.deliver({
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'model.response',
+      payload: {
+        requestId: modelReq1.payload.requestId,
+        runId: payload.run.id,
+        text: 'Single-step final response.'
+      }
+    })
+
+    const completed = await waitFor(
+      () => port.sent.find((msg) => msg.type === 'run.completed'),
+      () => JSON.stringify(port.sent.map((m) => m.type))
+    )
+    if (completed.type !== 'run.completed') throw new Error('expected run.completed')
+    expect(completed.payload.output).toBe('Single-step final response.')
+    expect(
+      port.sent.filter((msg) => msg.type === 'model.request').map((msg) => msg.payload.step)
+    ).toEqual([1])
+    expect(
+      port.sent.find((msg) => msg.type === 'run.event' && msg.payload.type === 'steer_consumed')
+    ).toBeUndefined()
+  })
 })

@@ -723,7 +723,11 @@ export class PiAgentRuntimeHost {
     if (!context || context.controller.signal.aborted || !this.child) return false
     if (attachmentsById) {
       for (const [steerId, attachments] of attachmentsById) {
-        if (attachments.length > 0) context.steerAttachments.set(steerId, attachments)
+        if (attachments.length > 0) {
+          context.steerAttachments.set(steerId, attachments)
+        } else {
+          context.steerAttachments.delete(steerId)
+        }
       }
     }
     try {

@@ -321,17 +321,19 @@ export function parseBridgeResponse(text: string, toolNames: Set<string>): Bridg
     return buildToolBridgeResponse(calls, leading.rest || undefined)
   }
 
-  const candidateForRelaxed = leading.malformedTail ?? withoutFence
-  const relaxedTool = tryParseRelaxedTool(candidateForRelaxed, toolNames)
-  if (relaxedTool) {
-    return buildToolBridgeResponse([relaxedTool])
-  }
+  if (!leading.rejectedFence) {
+    const candidateForRelaxed = leading.malformedTail ?? withoutFence
+    const relaxedTool = tryParseRelaxedTool(candidateForRelaxed, toolNames)
+    if (relaxedTool) {
+      return buildToolBridgeResponse([relaxedTool])
+    }
 
-  if (isToolEnvelopeStart(candidateForRelaxed)) {
-    return {
-      type: 'invalid',
-      name: candidateForRelaxed.match(/"name"\s*:\s*"([^"]+)"/i)?.[1] ?? INVALID_CALL_NAME,
-      reason: invalidToolReason(trimmed)
+    if (isToolEnvelopeStart(candidateForRelaxed)) {
+      return {
+        type: 'invalid',
+        name: candidateForRelaxed.match(/"name"\s*:\s*"([^"]+)"/i)?.[1] ?? INVALID_CALL_NAME,
+        reason: invalidToolReason(trimmed)
+      }
     }
   }
 

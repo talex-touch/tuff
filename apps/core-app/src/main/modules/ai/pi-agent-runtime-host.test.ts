@@ -1974,4 +1974,92 @@ describe('piAgentRuntimeHost protocol boundary', () => {
 
     await completeRun(payload, execution)
   })
+
+  it('clears a steer attachment entry when an edit explicitly supplies an empty list while keeping unmentioned consumed steer attachments', async () => {
+    const host = new PiAgentRuntimeHost()
+    const payload = startPayload()
+    const consumedImage = {
+      type: 'image' as const,
+      dataUrl: 'data:image/png;base64,CCC',
+      name: 'consumed.png'
+    }
+    const editableImage = {
+      type: 'image' as const,
+      dataUrl: 'data:image/png;base64,DDD',
+      name: 'editable.png'
+    }
+
+    let capturedMessages: unknown[] = []
+    intelligenceMocks.stream.mockImplementationOnce(async function* (
+      _cap: string,
+      chatPayload: { messages: unknown[] }
+    ) {
+      capturedMessages = chatPayload.messages
+      yield { type: 'delta', delta: 'ok' }
+      yield { type: 'end' }
+    })
+
+    const execution = host.execute(payload, {
+      conversationId: 'conv-steer-clear',
+      turnId: 'turn-clear',
+      projectId: null,
+      history: [],
+      assertAuthority: async () => undefined
+    })
+    await settleAsyncWork()
+
+    host.syncSteers(
+      payload.run.id,
+      [
+        { id: 'steer-consumed', text: 'first steer', createdAt: 10 },
+        { id: 'steer-edited', text: 'second steer', createdAt: 20 }
+      ],
+      new Map([
+        ['steer-consumed', [consumedImage]],
+        ['steer-edited', [editableImage]]
+      ])
+    )
+    // Later edit clears steer-edited attachments with [] and omits already-consumed steer-consumed.
+    host.syncSteers(
+      payload.run.id,
+      [{ id: 'steer-edited', text: 'second steer without image', createdAt: 20 }],
+      new Map([['steer-edited', []]])
+    )
+
+    hostMocks.emit('message', {
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'model.request',
+      payload: {
+        requestId: 'req-steer-clear',
+        runId: payload.run.id,
+        step: 2,
+        systemPrompt: 'sys',
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: 'initial' }] },
+          {
+            role: 'user',
+            steerId: 'steer-consumed',
+            content: [{ type: 'text', text: 'first steer' }]
+          },
+          {
+            role: 'user',
+            steerId: 'steer-edited',
+            content: [{ type: 'text', text: 'second steer without image' }]
+          }
+        ],
+        tools: [],
+        modelPreference: []
+      }
+    })
+    await settleAsyncWork()
+
+    const userMessages = capturedMessages.filter(
+      (msg): msg is { role: string; content: string; attachments?: unknown[] } =>
+        Boolean(msg && typeof msg === 'object' && (msg as { role?: string }).role === 'user')
+    )
+    expect(userMessages[1]?.attachments).toEqual([consumedImage])
+    expect(userMessages[2]?.attachments).toBeUndefined()
+
+    await completeRun(payload, execution)
+  })
 })
