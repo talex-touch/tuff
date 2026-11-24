@@ -10,8 +10,10 @@ import install, {
   formatAiContextWindow,
   formatAiElapsed,
   formatMetricLatency,
+  metricModelTitle,
   normalizeComposerAttachments,
   parseToolResult,
+  splitTurnModelLabel,
   toMessageSegments,
   toolFaceOf,
   TxAiAssistantTurn,
@@ -58,7 +60,7 @@ describe('intelligence-uikit exports', () => {
   it('exports the documented helpers from the root and the side-effect-free utils entry', () => {
     for (const helper of [
       toMessageSegments, toolFaceOf, parseToolResult, describeToolCallError,
-      formatMetricLatency, calculateTokenSpeed, useThinkingTicker, useTurnFooterState,
+      formatMetricLatency, calculateTokenSpeed, metricModelTitle, splitTurnModelLabel, useThinkingTicker, useTurnFooterState,
       deriveAiSendState, deriveAiRunStep, formatAiElapsed, formatAiContextWindow,
       calculateAiContextPercent, normalizeComposerAttachments, buildMessageRailTurns,
     ]) expect(helper).toBeTypeOf('function')

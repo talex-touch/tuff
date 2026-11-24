@@ -463,7 +463,11 @@ const pageStyleBudgets = [
     // and `conversation-stream/style.css` (frosted pill, scroller clearance/gap vars, emptyAlign):
     // measured 194,383 B (189.8 KiB) across 28 sheets (gzip 29.0 KiB). Minimal headroom, growth
     // from here fails.
-    limit: 190.5 * 1024,
+    // 190.5 -> 192.5 on 2026-11-24 for runnable shell code blocks in `TxCodeBlock.vue`
+    // (`stream-markdown/style.css` +1,597 B for `.tx-code-block__run*` action button and ran state):
+    // measured 196,445 B (191.8 KiB) across the same 28 sheets (gzip 29.2 KiB, 0 repeated rules,
+    // no new style-deps). Actuals plus minimal headroom, growth from here fails.
+    limit: 192.5 * 1024,
   },
 ]
 

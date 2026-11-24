@@ -66,6 +66,10 @@ code: |
 | `codeFrameLabelFormatter` | `(lang: string) => string` | `` (lang) => `${lang} preview` `` | Builds the preview frame's accessible name from the fence language. |
 | `copyCodeText` | `string` | `'Copy'` | Text of a code block's copy button. |
 | `copiedCodeText` | `string` | `'Copied'` | Copy button text shown briefly after a successful copy. |
+| `runnableCode` | `boolean` | `false` | Offers a "Run" button to the left of the copy button on settled shell fences, emitting `code-run`. |
+| `runCodeText` | `string` | `'Run'` | Text of a shell code block's run button. |
+| `ranCodeText` | `string` | `'Ran'` | Run button text shown briefly after clicking it. |
+| `runCodeTitle` | `string` | — | Accessible name and tooltip of a shell code block's run button; falls back to `runCodeText`. |
 | `diagramZoomLabel` | `string` | `'Zoom diagram'` | Accessible name of a rendered diagram, which opens the preview. |
 | `diagramPreviewLabel` | `string` | `'Diagram preview'` | Accessible name of the fullscreen diagram preview and of the diagram's scrolling area in it. |
 | `diagramCloseLabel` | `string` | `'Close preview'` | Accessible name of the preview's close button. |
@@ -90,6 +94,10 @@ The built-in renderer for every language without one of its own, also exported f
 | `frameLabelFormatter` | `(lang: string) => string` | `` (lang) => `${lang} preview` `` | Builds the preview frame's accessible name from the fence language. |
 | `copyLabel` | `string` | `'Copy'` | Text of the copy button. |
 | `copiedLabel` | `string` | `'Copied'` | Copy button text shown briefly after a successful copy. |
+| `runnable` | `boolean` | `false` | Offers a "Run" button to the left of the copy button for settled shell fences. |
+| `runLabel` | `string` | `'Run'` | Text of the run button. |
+| `ranLabel` | `string` | `'Ran'` | Text shown briefly after clicking the run button. |
+| `runTitle` | `string` | — | Accessible name and tooltip of the run button; falls back to `runLabel`. |
 
 ### TxMermaidBlock Props
 
@@ -116,6 +124,8 @@ The built-in `mermaid` renderer, which also receives `StreamMarkdownBlockContext
 |------|--------|---------|-------------|
 | `code-preview` | `TxStreamMarkdown` | `StreamMarkdownCodePreview` | Fired by a code block's preview button when `inlineCodePreview` is `false`. |
 | `preview` | `TxCodeBlock` | `StreamMarkdownCodePreview` | Fired by the preview button when `inlinePreview` is `false`; `TxStreamMarkdown` re-emits it as `code-preview`. |
+| `code-run` | `TxStreamMarkdown` | `CodeRunPayload` | Fired by a shell code block's run button when `runnableCode` is `true`. |
+| `run` | `TxCodeBlock` | `CodeRunPayload` | Fired by a shell code block's run button when `runnable` is `true`; `TxStreamMarkdown` re-emits it as `code-run`. |
 
 The payload is `{ lang, code, srcdoc }`. Put `srcdoc` in an iframe whose `sandbox` omits `allow-scripts`, the same isolation the inline preview uses.
 

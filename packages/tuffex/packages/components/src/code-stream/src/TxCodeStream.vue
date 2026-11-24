@@ -3,12 +3,13 @@
 import type { ComponentPublicInstance } from 'vue'
 import type { FreshChunks } from '../../stream-markdown/src/use-fresh-chunks'
 import type { StreamState } from '../../stream-text/src/types'
-import type { CodeStreamProps } from './types'
+import type { CodeRunPayload, CodeStreamProps } from './types'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useSlots, watch } from 'vue'
 import { hasDocument, hasWindow } from '../../../../utils/env'
+import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 import TxCopyButton from '../../button/src/copy-button.vue'
 import TxEdgeFadeMask from '../../edge-fade-mask/src/TxEdgeFadeMask.vue'
-import { useReducedMotion } from '../../../../utils/use-reduced-motion'
+import { isRunnableShellLanguage } from '../../stream-markdown/src/runnable-languages'
 import { highlightToHtml } from '../../stream-markdown/src/shiki-runtime'
 import { useAutoTheme } from '../../stream-markdown/src/use-auto-theme'
 import { createFreshChunks } from '../../stream-markdown/src/use-fresh-chunks'
@@ -27,6 +28,10 @@ const props = withDefaults(defineProps<CodeStreamProps>(), {
   copyable: true,
   copyLabel: 'Copy',
   copiedLabel: 'Copied',
+  runnable: false,
+  runLabel: 'Run',
+  ranLabel: 'Ran',
+  runTitle: undefined,
   revealedLines: undefined,
   minHeight: undefined,
   diff: undefined,
@@ -47,6 +52,8 @@ const props = withDefaults(defineProps<CodeStreamProps>(), {
 
 const emit = defineEmits<{
   copy: [code: string]
+  /** Fires when the user activates the run button on a runnable shell code block. */
+  run: [payload: CodeRunPayload]
   /** Fires when the reveal reaches the last line (`revealedLines` mode). */
   complete: []
   /** Streaming mode: the stream moved to another state. */
@@ -589,8 +596,55 @@ const previewDocument = computed(() => {
   return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${previewPolicy()}"><style>html,body{margin:0;height:100%;background:var(--tx-bui-surface, #fff)}iframe{display:block;width:100%;height:100%;border:0}</style><iframe sandbox="${previewSandbox.value}" srcdoc="${escapeAttribute(inner)}"></iframe>`
 })
 
+// ---------------------------------------------------------------------------
+// Run shell command
+// ---------------------------------------------------------------------------
+
+const RUN_FEEDBACK_MS = 1400
+
+const canRun = computed(
+  () =>
+    props.runnable
+    && !isDiff.value
+    && props.streaming !== true
+    && !streamLive.value
+    && isRunnableShellLanguage(props.lang)
+    && !!props.code.trim(),
+)
+
+const ran = ref(false)
+let runResetTimer: ReturnType<typeof setTimeout> | undefined
+
+function clearRunResetTimer(): void {
+  if (runResetTimer !== undefined) {
+    clearTimeout(runResetTimer)
+    runResetTimer = undefined
+  }
+}
+
+watch([() => props.code, () => props.lang, canRun], () => {
+  clearRunResetTimer()
+  ran.value = false
+})
+
+onBeforeUnmount(clearRunResetTimer)
+
+function handleRun(): void {
+  if (!canRun.value)
+    return
+  emit('run', { lang: props.lang.trim().toLowerCase(), code: props.code })
+  ran.value = true
+  clearRunResetTimer()
+  if (hasWindow()) {
+    runResetTimer = setTimeout(() => {
+      runResetTimer = undefined
+      ran.value = false
+    }, RUN_FEEDBACK_MS)
+  }
+}
+
 const hasHeader = computed(
-  () => !!(props.filename || props.langLabel || props.copyable || isDiff.value || canPreview.value || slots.header || slots.actions),
+  () => !!(props.filename || props.langLabel || props.copyable || isDiff.value || canPreview.value || canRun.value || slots.header || slots.actions),
 )
 
 /**
@@ -644,6 +698,23 @@ const rootStyle = computed(() => (live.value ? { '--tx-stream-reveal-duration': 
           @click="showPreview = !showPreview"
         >
           {{ showPreview ? codeLabel : previewLabel }}
+        </button>
+        <button
+          v-if="canRun"
+          type="button"
+          class="tx-bui-code-stream__run"
+          :class="{ 'is-ran': ran }"
+          :title="runTitle || runLabel"
+          :aria-label="ran ? ranLabel : (runTitle || runLabel)"
+          @click="handleRun"
+        >
+          <span class="tx-bui-code-stream__run-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="10" height="10">
+              <path v-if="ran" d="M4 12l5 5L20 6" />
+              <polygon v-else points="6 4 20 12 6 20 6 4" />
+            </svg>
+          </span>
+          <span class="tx-bui-code-stream__run-label">{{ ran ? ranLabel : runLabel }}</span>
         </button>
         <TxCopyButton
           v-if="copyable"
@@ -941,6 +1012,60 @@ const rootStyle = computed(() => (live.value ? { '--tx-stream-reveal-duration': 
     transform: translateY(2px);
   }
 
+  // Matches the BUI chip geometry of `.tx-bui-code-stream__copy` right beside it.
+  // No colour in hover transition so pointer feedback answers on the first frame.
+  .tx-bui-code-stream__run {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: var(--tx-bui-radius-chip, 6px);
+    background: transparent;
+    color: var(--tx-bui-ink-3, #9a9da3);
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: var(--tx-font-weight-medium, 500);
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: var(--tx-bui-hover, #f4f5f6);
+      color: var(--tx-bui-ink, #1f2124);
+    }
+
+    &.is-ran:not(:disabled) {
+      background: transparent;
+      color: var(--tx-bui-green, #189a4d);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--tx-bui-ink-3, #9a9da3);
+      outline-offset: 1px;
+    }
+  }
+
+  .tx-bui-code-stream__run-icon,
+  .tx-bui-code-stream__run-label {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .tx-bui-code-stream__run-icon svg {
+    display: block;
+    width: 10px;
+    height: 10px;
+    overflow: visible;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
   // The copy control is TxCopyButton — clipboard write, execCommand fallback
   // and the polite live region all come with it — wearing BUI's chrome. The
   // three-class selector clears the child's own scoped rules.
@@ -1012,6 +1137,14 @@ const rootStyle = computed(() => (live.value ? { '--tx-stream-reveal-duration': 
     // for that window, so a hover repaints at once.
     .tx-bui-code-stream__copy.tx-copy-button.is-morphing {
       transition: background-color 0.1s ease, color 0.1s ease;
+    }
+
+    .tx-bui-code-stream__run {
+      transition: transform 0.12s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+
+      &:active:not(:disabled) {
+        transform: scale(0.97);
+      }
     }
   }
 }

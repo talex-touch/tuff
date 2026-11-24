@@ -29,6 +29,7 @@ const props = withDefaults(defineProps<TxAiMessageProps>(), {
   speakable: false,
   speakState: 'idle',
   showFooter: true,
+  latest: false,
   variant: 'hybrid',
   motion: 'fade',
   openui: true,
@@ -102,9 +103,9 @@ function clearFallbackFooterTimer() {
 }
 
 watch(
-  [() => props.message.id, () => props.message.role, isGenerating],
-  ([nextId, role, generating], [prevId, prevRole, wasGenerating]) => {
-    if (nextId !== prevId || role !== 'assistant') {
+  [() => props.message.id, () => props.message.role, isGenerating, () => props.latest],
+  ([nextId, role, generating, latest], [prevId, prevRole, wasGenerating]) => {
+    if (nextId !== prevId || role !== 'assistant' || latest) {
       clearFallbackFooterTimer()
       fallbackFooterRevealed.value = false
       return
@@ -140,7 +141,7 @@ const resolvedFooter = computed<TxAiTurnFooterProps | undefined>(() => {
     content: props.message.content,
     regenerable: props.regenerable,
     speakState: props.speakState,
-    resting: !fallbackFooterRevealed.value,
+    resting: !props.latest && !fallbackFooterRevealed.value,
     motion: props.motion,
     metrics: props.message.meta as TxAiTurnFooterProps['metrics'] | undefined,
   }

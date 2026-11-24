@@ -84,6 +84,25 @@ code: |
 ---
 :::
 
+### Runnable Commands
+Set `runnable` to show a "Run" button directly to the left of the copy button for settled shell snippets (`bash`, `sh`, `zsh`, `shell`, `powershell`, `cmd`, etc.); clicking it emits `run` so the host can execute the command in its terminal.
+:::TuffDemoWrapper{demo="CodeStreamRunDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCodeStream
+      code="open login.html"
+      lang="bash"
+      lang-label="bash"
+      runnable
+      run-label="Run"
+      ran-label="Ran"
+      @run="runInTerminal"
+    />
+  </template>
+---
+:::
+
 ### Unified Diff
 `diff` renders a unified diff; a removed row and the added row replacing it share a number, so numbers are given per row.
 :::TuffDemoWrapper{demo="CodeStreamDiffDemo" code-lang="vue"}
@@ -115,6 +134,7 @@ code: |
 - Use `TxCodeBlock` to match `TxStreamMarkdown` fences; use this component for a filename header, line numbers, and a line-by-line reveal.
 - A previewed page does not run scripts by default. Set `preview-scripts` only when the host trusts the page; even then the frame has no same-origin access and no network, so a script can draw but cannot reach the host.
 - Use `auto-preview` when the model was asked for a page; leave it off when the code is only a snippet on show, where the reader should see the source first.
+- Enable `runnable` only when the host wires a terminal executor: the component never runs commands itself and only emits `run`.
 
 ## API Reference
 
@@ -142,6 +162,10 @@ code: |
 | `copyable` | `boolean` | `true` | Renders the copy button. |
 | `copyLabel` | `string` | `'Copy'` | Copy button text; localize it together with `copiedLabel`. |
 | `copiedLabel` | `string` | `'Copied'` | Text shown after a successful copy. |
+| `runnable` | `boolean` | `false` | Offers a "Run" button to the left of the copy button for settled shell languages; never while streaming or in diff mode. |
+| `runLabel` | `string` | `'Run'` | Run button text; localize it together with `ranLabel`. |
+| `ranLabel` | `string` | `'Ran'` | Feedback text shown briefly after clicking the run button. |
+| `runTitle` | `string` | — | Accessible name and tooltip for the run button; falls back to `runLabel`. |
 | `previewable` | `boolean` | `true` | Offers a "Preview" toggle for `html`, `svg` and `xml` code once it stops arriving; never while streaming or in diff mode. |
 | `autoPreview` | `boolean` | `false` | Opens on the rendering as soon as the code settles; the reader can switch back to the source. |
 | `previewScripts` | `boolean` | `false` | Lets the previewed page run its own scripts; the frame stays an opaque-origin sandbox with no network. |
@@ -156,6 +180,7 @@ code: |
 | Event | Payload | Description |
 |------|------|------|
 | `copy` | `(code: string)` | Fires after a successful copy. |
+| `run` | `(payload: CodeRunPayload)` | Fires when the run button is clicked with `runnable` enabled. |
 | `complete` | — | Fires once when `revealedLines` reaches the last line; not when mounted complete, nor in streaming mode. |
 | `state-change` | `(state: StreamState)` | Streaming mode: fires when the state changes. |
 | `done` | — | Streaming mode: fires once per play-through. |
@@ -178,6 +203,13 @@ code: |
 
 ### Types
 
+#### CodeRunPayload
+
+| Field | Type | Description |
+|---|---|---|
+| `lang` | `string` | Normalized lowercase language identifier, e.g. `bash`, `sh`, `zsh`. |
+| `code` | `string` | Raw code text of the block. |
+
 #### CodeDiffRow
 
 | Field | Type | Description |
@@ -193,6 +225,7 @@ code: |
 - Removed rows take a hatched gutter marker and added rows a solid one, so the distinction never rests on red and green alone.
 - Only Shiki-generated markup reaches `v-html`, with the code text escaped; unhighlighted code is plain interpolation.
 - The preview frame is a `sandbox` `iframe` without `allow-same-origin`. Its document is written as an outer `srcdoc`: the policy `<meta>` sits in the outer document and the previewed code is embedded as an escaped inner `srcdoc`, so a `"` or a `<head>` inside the code cannot move the policy. The policy is `default-src 'none'` with only inline styles and `data:`/`blob:` images and media allowed; `script-src` is `'none'` unless `previewScripts` is set, which makes it `'unsafe-inline'`.
+- The `runnable` button appears only for non-empty, settled, non-diff shell languages (`bash`, `sh`, `shell`, `zsh`, `fish`, `console`, `terminal`, `shellsession`, `powershell`, `pwsh`, `cmd`, `bat`, etc.) directly to the left of the copy button; the component only emits `run` and leaves working-directory and terminal session handling to the host.
 - Under reduced motion no line or word entrance plays: `revealedLines` still reveals, streaming mode shows code as it arrives, and the caret rests.
 
 ## Technologies

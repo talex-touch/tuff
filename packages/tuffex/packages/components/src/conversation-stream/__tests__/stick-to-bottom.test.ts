@@ -362,4 +362,145 @@ describe('useStickToBottom tweenToBottom', () => {
     stick.handleScroll()
     expect(stick.following.value).toBe(false)
   })
+
+  it('stays strictly monotonic with zero oscillation at slow frame rates (20fps–30fps)', async () => {
+    for (const frameMs of [33, 40, 50]) {
+      const clock = makeClock()
+      const { el, stick } = setup({ scrollHeight: 1000, clientHeight: 400, scrollTop: 600 })
+      // Real browser clamps scrollTop to [0, scrollHeight - clientHeight].
+      let rawTop = 600
+      Object.defineProperty(el, 'scrollTop', {
+        get: () => rawTop,
+        set: (value: number) => {
+          rawTop = Math.max(0, Math.min(Math.max(0, el.scrollHeight - el.clientHeight), value))
+        },
+        configurable: true,
+      })
+
+      stick.handleScroll()
+      el.scrollHeight = 1400
+      stick.followIfSticking(220)
+      await clock.tick(0)
+
+      let previous = el.scrollTop
+      for (let frame = 0; frame < 40; frame++) {
+        if (frame < 15) {
+          el.scrollHeight += 30
+          stick.followIfSticking(220)
+        }
+        await clock.tick(frameMs)
+        // Must never reverse direction or bounce backward when frames run slow.
+        expect(el.scrollTop).toBeGreaterThanOrEqual(previous)
+        previous = el.scrollTop
+      }
+      expect(el.scrollTop).toBe(el.scrollHeight - el.clientHeight)
+      expect(stick.following.value).toBe(true)
+    }
+  })
+
+  it('stops the spring and clears programmatic guard when browser clamps fractional DPR max scrollTop', async () => {
+    const clock = makeClock()
+    let rawTop = 598
+    const el: FakeElement = {
+      get scrollTop() {
+        return rawTop
+      },
+      set scrollTop(value: number) {
+        // Simulate Chromium capping physical max scrollTop 1.2px below scrollHeight - clientHeight.
+        rawTop = Math.max(0, Math.min(el.scrollHeight - el.clientHeight - 1.2, value))
+      },
+      scrollHeight: 1000,
+      clientHeight: 400,
+      scrollTo(options) {
+        el.scrollTop = options.top
+      },
+    }
+    const stick = useStickToBottom(ref<HTMLElement | null>(el as unknown as HTMLElement), { threshold: 80 })
+    stick.handleScroll()
+    stick.followIfSticking(220)
+
+    for (let frame = 0; frame < 40; frame++)
+      await clock.tick(16)
+
+    expect(el.scrollTop).toBeCloseTo(598.8, 3)
+
+    // Guard must be clear so a subsequent upward drag disengages without wheel.
+    rawTop = 200
+    stick.handleScroll()
+    expect(stick.following.value).toBe(false)
+  })
+
+  it('disengages immediately when the user drags the scrollbar upward mid-spring', async () => {
+    const clock = makeClock()
+    const { el, stick } = setup({ scrollHeight: 1000, clientHeight: 400, scrollTop: 600 })
+    stick.handleScroll()
+    el.scrollHeight = 2000
+    stick.followIfSticking(220)
+
+    await clock.tick(0)
+    await clock.tick(16)
+    await clock.tick(16)
+    expect(el.scrollTop).toBeGreaterThan(600)
+
+    // Scrollbar thumb drag upward while springRaf is still active (no wheel event).
+    el.scrollTop = 300
+    stick.handleScroll()
+    expect(stick.following.value).toBe(false)
+
+    // Subsequent frames must not yank scrollTop back down.
+    await clock.tick(16)
+    await clock.tick(16)
+    expect(el.scrollTop).toBe(300)
+  })
+
+  it('keeps following off when an upward wheel scroll event still lands inside the bottom threshold', () => {
+    const { el, stick } = setup({ scrollHeight: 2000, clientHeight: 400, scrollTop: 1600 })
+    stick.handleScroll()
+    expect(stick.following.value).toBe(true)
+
+    // Small upward trackpad swipe (only 12px up — still well inside the 80px threshold).
+    stick.handleWheel({ deltaY: -12 } as WheelEvent)
+    el.scrollTop = 1588
+    stick.handleScroll()
+
+    expect(stick.atBottom.value).toBe(true)
+    expect(stick.following.value).toBe(false)
+
+    // Stream growth must not fight the user back down.
+    el.scrollHeight = 2400
+    stick.followIfSticking(220)
+    expect(el.scrollTop).toBe(1588)
+
+    // Explicitly scrolling downward back into the bottom zone re-engages following.
+    el.scrollTop = 1960
+    stick.handleScroll()
+    expect(stick.following.value).toBe(true)
+  })
+
+  it('preserves following when content shrinks and clamps scrollTop to the new bottom', () => {
+    const { el, stick } = setup({ scrollHeight: 2000, clientHeight: 400, scrollTop: 1600 })
+    stick.scrollToBottom()
+    el.scrollTop = 1600
+    stick.handleScroll()
+
+    // Thinking section collapses: scrollHeight drops and browser clamps scrollTop to new bottom.
+    el.scrollHeight = 1400
+    el.scrollTop = 1000
+    stick.handleScroll()
+    expect(stick.following.value).toBe(true)
+    expect(stick.atBottom.value).toBe(true)
+  })
+
+  it('syncPosition absorbs anchor compensation without re-engaging following', () => {
+    const { el, stick } = setup({ scrollHeight: 2000, clientHeight: 400, scrollTop: 1200 })
+    stick.handleScroll()
+    expect(stick.following.value).toBe(false)
+
+    // Host shifts scrollTop down to compensate for above-viewport growth.
+    el.scrollTop = 1550
+    stick.syncPosition()
+    // Browser fires the async scroll event for that shift.
+    stick.handleScroll()
+    expect(stick.following.value).toBe(false)
+  })
 })

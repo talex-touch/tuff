@@ -584,4 +584,78 @@ describe('txConversationStream', () => {
     wrapper.vm.scrollToIndex(3)
     expect((control.element as any).scrollTop).toBe(110 + 3 * 100)
   })
+
+  it('does not jump scrollTop when a row straddling the viewport top grows at its bottom', async () => {
+    const wrapper = mountStream({ items: makeMessages(0, 30), estimatedItemHeight: 400 })
+    const control = stubScroller(wrapper, { clientHeight: 600, scrollHeight: 30 * 400 })
+    fireResize(control.element, 600)
+    await nextTick()
+
+    // Park mid-way through row 5 (offset 2000..2400): scrollTop 2150 sits inside row 5.
+    ;(control.element as any).scrollTop = 2150
+    await wrapper.find('.tx-conversation-stream__scroller').trigger('scroll')
+    await nextTick()
+
+    const items = wrapper.findAll('.tx-conversation-stream__item')
+    const row5 = items.find(node => node.text() === 'Message 5')
+    expect(row5).toBeDefined()
+
+    // Row 5 expands by +40px (e.g. hover footer opens below the top edge).
+    fireResize(row5!.element, 440)
+    await nextTick()
+
+    // Visible content at scrollTop 2150 did not move — scrollTop must hold steady.
+    expect((control.element as any).scrollTop).toBe(2150)
+  })
+
+  it('compensates scrollTop post-flush for rows completely above the viewport without re-arming follow', async () => {
+    const wrapper = mountStream({ items: makeMessages(0, 30), estimatedItemHeight: 100 })
+    const control = stubScroller(wrapper, { clientHeight: 600, scrollHeight: 30 * 100 })
+    fireResize(control.element, 600)
+    await nextTick()
+
+    // Park at scrollTop 1000 (row 10 is at the top edge; row 8 spans 800..900 completely above).
+    ;(control.element as any).scrollTop = 1000
+    await wrapper.find('.tx-conversation-stream__scroller').trigger('scroll')
+    await nextTick()
+    expect(wrapper.vm.following).toBe(false)
+
+    const row8 = wrapper.findAll('.tx-conversation-stream__item').find(node => node.text() === 'Message 8')
+    expect(row8).toBeDefined()
+
+    control.setScrollHeight(30 * 100 + 250)
+    fireResize(row8!.element, 350)
+    await nextTick()
+
+    expect((control.element as any).scrollTop).toBe(1250)
+    // The async scroll event for that compensation shift must not re-enable following.
+    await wrapper.find('.tx-conversation-stream__scroller').trigger('scroll')
+    expect(wrapper.vm.following).toBe(false)
+  })
+
+  it('ignores zero-height resize entries when the scroller is hidden', async () => {
+    const wrapper = mountStream({ items: makeMessages(0, 10), estimatedItemHeight: 100 })
+    let clientHeight = 600
+    const element = wrapper.find('.tx-conversation-stream__scroller').element as HTMLElement
+    Object.defineProperty(element, 'clientHeight', { get: () => clientHeight, configurable: true })
+    Object.defineProperty(element, 'scrollHeight', { get: () => 2000, configurable: true })
+    Object.defineProperty(element, 'scrollTop', { value: 0, writable: true, configurable: true })
+    Object.defineProperty(element, 'scrollTo', { value: (o: { top: number }) => { (element as any).scrollTop = o.top }, configurable: true })
+
+    fireResize(element, 600)
+    await nextTick()
+
+    const row0 = wrapper.findAll('.tx-conversation-stream__item')[0]!
+    fireResize(row0.element, 300)
+    await nextTick()
+    const spacerBeforeHide = wrapper.find('.tx-conversation-stream__spacer').attributes('style')
+
+    // Tab switches away (`display: none`): scroller and rows report 0 height.
+    clientHeight = 0
+    fireResize(element, 0)
+    fireResize(row0.element, 0)
+    await nextTick()
+
+    expect(wrapper.find('.tx-conversation-stream__spacer').attributes('style')).toBe(spacerBeforeHide)
+  })
 })

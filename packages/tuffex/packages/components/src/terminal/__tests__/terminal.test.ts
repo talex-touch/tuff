@@ -10,9 +10,13 @@ interface Engine {
   disposed: boolean
   focusCount: number
   addonDisposed: boolean
+  addons: Array<{ dispose: () => void }>
+  options: Record<string, unknown>
 }
 const engine = vi.hoisted(() => ({
   failInitialization: false,
+  failImageAddon: false,
+  imageOptions: [] as Array<Record<string, unknown> | undefined>,
   instances: [] as Engine[],
   holdWrites: false,
   completions: [] as Array<() => void>,
@@ -32,7 +36,7 @@ vi.mock('@xterm/xterm', () => ({
     disposed = false
     focusCount = 0
     addonDisposed = false
-    addon: { dispose: () => void } | null = null
+    addons: Array<{ dispose: () => void }> = []
     input: (data: string) => void = () => undefined
     resized: (size: { cols: number; rows: number }) => void = () => undefined
     constructor(options: Record<string, unknown>) {
@@ -42,7 +46,7 @@ vi.mock('@xterm/xterm', () => ({
       this.rows = Number(options.rows)
       engine.instances.push(this)
     }
-    loadAddon(addon: { dispose: () => void }) { this.addon = addon }
+    loadAddon(addon: { dispose: () => void }) { this.addons.push(addon) }
     attachCustomKeyEventHandler() {}
     open(host: HTMLElement) {
       this.output = document.createElement('pre')
@@ -78,7 +82,7 @@ vi.mock('@xterm/xterm', () => ({
     emitInput(data: string) { this.input(data) }
     dispose() {
       this.disposed = true
-      this.addon?.dispose()
+      for (const addon of this.addons) addon.dispose()
       this.addonDisposed = true
     }
   }
@@ -96,10 +100,21 @@ vi.mock('@xterm/addon-webgl', () => ({
     dispose() {}
   }
 }))
+vi.mock('@xterm/addon-image', () => ({
+  ImageAddon: class {
+    constructor(options?: Record<string, unknown>) {
+      if (engine.failImageAddon) throw new Error('Image addon failed')
+      engine.imageOptions.push(options)
+    }
+    dispose() {}
+  }
+}))
 
 enableAutoUnmount(afterEach)
 beforeEach(() => {
   engine.failInitialization = false
+  engine.failImageAddon = false
+  engine.imageOptions.length = 0
   engine.instances.length = 0
   engine.completions.length = 0
   engine.observers.length = 0
@@ -254,5 +269,45 @@ describe('TxTerminal log viewport', () => {
     expect(output.scrollTop).toBe(output.textContent!.length)
     await (wrapper.vm as unknown as TerminalInstance).write('next log')
     expect(output.scrollTop).toBe(output.textContent!.length)
+  })
+})
+
+describe('TxTerminal inline image support and ANSI palette', () => {
+  it('loads ImageAddon with SIXEL, IIP and size reports enabled and tolerates addon failure', async () => {
+    const wrapper = mount(TxTerminal)
+    await settled()
+    expect(engine.imageOptions).toEqual([
+      expect.objectContaining({
+        enableSizeReports: true,
+        sixelSupport: true,
+        iipSupport: true,
+      }),
+    ])
+    expect(engine.instances[0].options.rescaleOverlappingGlyphs).toBe(true)
+    wrapper.unmount()
+
+    engine.failImageAddon = true
+    const fallback = mount(TxTerminal)
+    await settled()
+    await (fallback.vm as unknown as TerminalInstance).write('text still renders')
+    expect(fallback.find('[data-engine-output]').text()).toBe('text still renders')
+  })
+
+  it('derives distinct dark ANSI colors and resolves an opaque ancestor background when host is transparent', async () => {
+    const parent = document.createElement('div')
+    parent.style.backgroundColor = 'rgb(20, 20, 20)'
+    document.body.append(parent)
+    const wrapper = mount(TxTerminal, {
+      attachTo: parent,
+      attrs: { style: 'background-color: transparent; color: rgb(245, 245, 247);' },
+    })
+    await settled()
+    const theme = engine.instances[0].options.theme as Record<string, string>
+    expect(theme.background).toBe('rgb(20, 20, 20)')
+    expect(theme.black).not.toBe(theme.foreground)
+    expect(theme.magenta).not.toBe(theme.red)
+    expect(theme.cyan).not.toBe(theme.blue)
+    wrapper.unmount()
+    parent.remove()
   })
 })

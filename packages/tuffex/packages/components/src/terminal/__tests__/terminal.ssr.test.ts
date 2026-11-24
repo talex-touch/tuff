@@ -19,6 +19,11 @@ vi.mock('@xterm/addon-webgl', () => ({
     constructor() { throw new Error('A server renderer cannot create a WebGL context') }
   }
 }))
+vi.mock('@xterm/addon-image', () => ({
+  ImageAddon: class {
+    constructor() { throw new Error('A server renderer cannot initialize inline images') }
+  }
+}))
 
 describe('TxTerminal server rendering', () => {
   it('renders an accessible display region without browser globals or engine initialization', async () => {

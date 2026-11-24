@@ -89,8 +89,8 @@ code: |
 | `cols` | `number` | fit / initial `80` | Fixed column count; otherwise derived from the container. |
 | `rows` | `number` | fit / initial `24` | Fixed row count; otherwise derived from the container. |
 | `fontSize` | `number` | `13` | Font size in px; changes trigger a fit. |
-| `fontFamily` | `string` | `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace` | Font stack; changes trigger a fit. |
-| `theme` | `ITheme` | host tokens | Partial xterm theme; overrides only the colors you set. |
+| `fontFamily` | `string` | `ui-monospace` + Nerd Font fallback stack | Font stack (automatically appended with Nerd Font glyph fallbacks); changes trigger a fit. |
+| `theme` | `ITheme` | host tokens (light/dark 16-color ANSI) | Partial xterm theme; overrides only the colors you set. |
 | `screenReaderMode` | `boolean` | `true` | Mirrors the screen into a DOM tree for screen readers, which halves parse throughput; a host that can detect assistive technology should pass its state. |
 | `labels` | `Partial<TerminalLabels>` | `{ ariaLabel: 'Terminal' }` | Accessible name of the terminal region and its input textarea. |
 
@@ -189,7 +189,8 @@ onBeforeUnmount(stop)
 ## Overview
 
 - Display only: mounting never creates a shell, starts a process, or requests Electron privileges, and the component imports neither transport nor Electron.
-- xterm, the fit addon, and the WebGL addon load dynamically in `onMounted`; server rendering touches no browser globals.
+- xterm, the fit addon, the WebGL addon, and the image addon load dynamically in `onMounted`; server rendering touches no browser globals.
+- Supports SIXEL and iTerm2 IIP (`OSC 1337`) inline image protocols with pixel size reporting (`CSI 14t` / `16t` / `18t`) and DA1 Sixel advertisement so TUI image previews such as `yazi` render directly inside the terminal.
 - Output, `reset()`, and `clear()` share one ordered queue: output goes to xterm as it arrives and is parsed across frames, waiting in the queue once about 8 MB is pending; `reset()` and `clear()` run only after earlier output has been parsed. Binary data is decoded as UTF-8.
 - `lines` is watched deeply, so push, index assignment, replacement, and clearing all work; after mutating bytes inside a `Uint8Array`, trigger one reactive update.
 - Read-only mode blocks input at both xterm and the event boundary and stops the cursor blink; switching from interactive to read-only blurs the input.
@@ -197,8 +198,8 @@ onBeforeUnmount(stop)
 
 ## Technologies
 
-- Built on `@xterm/xterm ^6.0.0`, `@xterm/addon-fit ^0.11.0`, and `@xterm/addon-webgl ^0.19.0` (all MIT), with the stylesheet in `terminal/style.css`. Draws with WebGL2 by default and falls back to xterm's DOM renderer when WebGL2 is unavailable or fails to load; Alt + arrow keys send xterm 5's word-motion sequences.
-- Only a terminal on screen holds a WebGL context (Chromium allows about 16 per renderer process), so a hidden terminal releases its context and acquires a new one when shown again. A `ResizeObserver` coalesces fits into one frame; rows and columns follow the content box, so overriding `.tx-terminal`'s `padding` does not cut off the last row. Colors come from inherited TuffEx tokens.
+- Built on `@xterm/xterm ^6.0.0`, `@xterm/addon-fit ^0.11.0`, `@xterm/addon-webgl ^0.19.0`, and `@xterm/addon-image ^0.9.0` (all MIT), with the stylesheet in `terminal/style.css`. Draws with WebGL2 by default and falls back to xterm's DOM renderer when WebGL2 is unavailable or fails to load; inline images paint on a pointer-transparent overlay canvas and degrade cleanly to text if the image addon fails to load. Alt + arrow keys send xterm 5's word-motion sequences.
+- Only a terminal on screen holds a WebGL context (Chromium allows about 16 per renderer process), so a hidden terminal releases its context and acquires a new one when shown again. A `ResizeObserver` coalesces fits into one frame; rows and columns follow the content box, so overriding `.tx-terminal`'s `padding` does not cut off the last row. Colors adapt a distinct 16-color ANSI palette to the resolved opaque light or dark host surface, with overlapping wide glyphs rescaled to stay within cell bounds.
 - Source: `packages/tuffex/packages/components/src/terminal/`; process sessions live in `packages/utils/transport/sdk/domains/terminal.ts`.
 
 <TuffDocSourceLink />

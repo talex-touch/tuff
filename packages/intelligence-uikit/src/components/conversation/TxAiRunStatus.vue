@@ -19,6 +19,7 @@ const props = withDefaults(defineProps<TxAiRunStatusProps>(), {
   elapsedMs: 0,
   startedAt: undefined,
   mikoState: undefined,
+  hideMiko: false,
   lineLabel: undefined,
   tone: 'default',
   queuedCount: 0,
@@ -111,10 +112,11 @@ const liveAnnouncement = computed(() => {
   <div
     v-if="variant === 'line'"
     class="tx-ai-run-status-line"
+    :class="{ 'is-compact': hideMiko }"
     role="status"
     aria-live="off"
   >
-    <div class="tx-ai-run-status-line__mark-slot">
+    <div v-if="!hideMiko" class="tx-ai-run-status-line__mark-slot">
       <Transition name="tx-ai-run-miko-fade" mode="out-in">
         <TxMiko
           :key="resolvedMikoState"
@@ -125,6 +127,7 @@ const liveAnnouncement = computed(() => {
         />
       </Transition>
     </div>
+    <span v-else class="tx-ai-run-status-line__dot" :class="{ 'is-tool': tone === 'tool' }" aria-hidden="true" />
     <span v-if="lineElapsed" class="tx-ai-run-status-line__time">
       <TxTextMorph :text="lineElapsed" :duration-ms="420" />
     </span>
@@ -183,6 +186,25 @@ const liveAnnouncement = computed(() => {
   box-sizing: border-box;
   color: var(--tx-text-color-secondary, #64748b);
   font-size: var(--shell-fs-sm, 12px);
+
+  &.is-compact {
+    width: auto;
+    flex: 1 1 auto;
+    padding: 0;
+    gap: 6px;
+  }
+}
+
+.tx-ai-run-status-line__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--tx-text-color-secondary, #64748b);
+
+  &.is-tool {
+    background: var(--tx-color-primary, #3b82f6);
+  }
 }
 
 .tx-ai-run-status-line__mark-slot {
@@ -336,7 +358,8 @@ const liveAnnouncement = computed(() => {
       transform 0.2s ease;
   }
 
-  .tx-ai-run-status.is-running .tx-ai-run-status__dot {
+  .tx-ai-run-status.is-running .tx-ai-run-status__dot,
+  .tx-ai-run-status-line__dot {
     animation: tx-ai-status-pulse 1.5s ease-in-out infinite;
   }
 }

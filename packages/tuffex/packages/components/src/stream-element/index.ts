@@ -21,7 +21,7 @@ const StreamElement = withInstall(TxStreamElement)
 export { StreamElement, TxStreamElement }
 export { parseStreamMarkdown } from './src/parse'
 export type { ParseOptions as StreamElementParseOptions } from './src/parse'
-export type { StreamElementEmits, StreamElementProps, StreamListItem, StreamPart } from './src/types'
+export type { CodeRunPayload, StreamElementEmits, StreamElementProps, StreamListItem, StreamPart } from './src/types'
 export type TxStreamElementInstance = InstanceType<typeof TxStreamElement>
 
 export default StreamElement

@@ -1,5 +1,14 @@
+<script lang="ts">
+// Module-level cache so remounting a virtualized message row in TxConversationStream
+// renders synchronously on frame 0 instead of collapsing to 0px while awaiting
+// dynamic `import('dompurify')` again.
+let cachedSanitizer: ((html: string) => string) | null = null
+let sanitizerLoadPromise: Promise<((html: string) => string) | null> | null = null
+</script>
+
 <script setup lang="ts">
 import type {
+  CodeRunPayload,
   StreamBlock,
   StreamMarkdownBlockRenderer,
   StreamMarkdownCodePreview,
@@ -40,9 +49,13 @@ const props = withDefaults(defineProps<StreamMarkdownProps>(), {
   copyTableText: 'Copy CSV',
   copiedTableText: 'Copied',
   inlineCodePreview: true,
+  runnableCode: false,
 })
 
-const emit = defineEmits<{ 'code-preview': [preview: StreamMarkdownCodePreview] }>()
+const emit = defineEmits<{
+  'code-preview': [preview: StreamMarkdownCodePreview]
+  'code-run': [payload: CodeRunPayload]
+}>()
 
 // Per-component parser, same reasoning as TxMarkdownView: mutating the global
 // `marked` singleton would reconfigure every other consumer app-wide.
@@ -124,19 +137,35 @@ function onBodyClick(event: MouseEvent): void {
   else allowRemoteImageOnce(src)
 }
 
-const sanitizer = ref<null | ((html: string) => string)>(null)
-const sanitizerReady = ref(false)
+const sanitizer = ref<null | ((html: string) => string)>(cachedSanitizer)
+const sanitizerReady = ref(cachedSanitizer !== null)
 let sanitizerLoading = false
 
 async function ensureSanitizer(): Promise<void> {
   if (sanitizer.value || sanitizerLoading)
     return
 
+  if (cachedSanitizer) {
+    sanitizer.value = cachedSanitizer
+    sanitizerReady.value = true
+    return
+  }
+
   sanitizerLoading = true
   try {
-    const mod = await import('dompurify')
-    const dp = mod.default
-    sanitizer.value = (html: string) => dp.sanitize(html)
+    sanitizerLoadPromise ??= import('dompurify')
+      .then((mod) => {
+        const dp = mod.default
+        return (html: string) => dp.sanitize(html)
+      })
+      .catch(() => {
+        sanitizerLoadPromise = null
+        return null
+      })
+    const resolved = await sanitizerLoadPromise
+    if (resolved)
+      cachedSanitizer = resolved
+    sanitizer.value = resolved
   }
   catch {
     sanitizer.value = null
@@ -232,8 +261,13 @@ const builtInCopy = computed(() => new Map<StreamMarkdownBlockRenderer, Record<s
     frameLabelFormatter: props.codeFrameLabelFormatter,
     copyLabel: props.copyCodeText,
     copiedLabel: props.copiedCodeText,
+    runnable: props.runnableCode,
+    runLabel: props.runCodeText,
+    ranLabel: props.ranCodeText,
+    runTitle: props.runCodeTitle,
     inlinePreview: props.inlineCodePreview,
     onPreview: (preview: StreamMarkdownCodePreview) => emit('code-preview', preview),
+    onRun: (payload: CodeRunPayload) => emit('code-run', payload),
   }],
   [TxMermaidBlock, {
     zoomLabel: props.diagramZoomLabel,
@@ -307,7 +341,7 @@ watch(
     if (el)
       fresh.update(el, id)
   },
-  { flush: 'post' },
+  { flush: 'post', immediate: true },
 )
 
 /**
@@ -412,7 +446,7 @@ function schedulePlaceCaret(): void {
   caretFrame = requestAnimationFrame(placeCaret)
 }
 
-watch([blocks, showCaret, inlineCursor], schedulePlaceCaret, { flush: 'post' })
+watch([blocks, showCaret, inlineCursor], schedulePlaceCaret, { flush: 'post', immediate: true })
 
 // A reflow without a new delta (the container resized, a mermaid diagram laid
 // out) moves the write head too.
@@ -423,7 +457,7 @@ watch(showCaret, (visible) => {
     caretObserver = new ResizeObserver(schedulePlaceCaret)
     caretObserver.observe(rootRef.value)
   }
-}, { flush: 'post' })
+}, { flush: 'post', immediate: true })
 
 onBeforeUnmount(() => {
   caretObserver?.disconnect()

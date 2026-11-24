@@ -39,6 +39,11 @@ const emit = defineEmits<{ retry: []; action: [] }>()
   border-radius: var(--shell-radius-lg, 12px);
   background: var(--shell-danger-soft, var(--tx-color-danger-light-9));
   box-sizing: border-box;
+
+  @supports (corner-shape: superellipse(2)) {
+    border-radius: calc(var(--shell-radius-lg, 12px) * var(--tx-corner-smooth-scale, 1.6));
+    corner-shape: var(--tx-corner-smooth-shape, superellipse(1.777));
+  }
 }
 
 .tx-ai-error-block-Icon {
@@ -94,6 +99,11 @@ const emit = defineEmits<{ retry: []; action: [] }>()
   font-family: inherit;
   font-size: 12.5px;
   cursor: pointer;
+
+  @supports (corner-shape: superellipse(2)) {
+    border-radius: calc(13px * var(--tx-corner-smooth-scale, 1.6)) / 50%;
+    corner-shape: var(--tx-corner-smooth-shape, superellipse(1.777));
+  }
 
   // The block itself is already `danger-soft`, so the hover has to go a step deeper to register.
   &:hover {

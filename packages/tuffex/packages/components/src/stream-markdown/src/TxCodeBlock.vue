@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import type { StreamMarkdownCodePreview } from './types'
+import type { CodeRunPayload, StreamMarkdownCodePreview } from './types'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { hasWindow } from '../../../../utils/env'
 import TxCopyButton from '../../button/src/copy-button.vue'
 import TxEdgeFadeMask from '../../edge-fade-mask/src/TxEdgeFadeMask.vue'
+import { isRunnableShellLanguage } from './runnable-languages'
 import { highlightToHtml } from './shiki-runtime'
 
 defineOptions({ name: 'TxCodeBlock' })
@@ -25,6 +27,11 @@ const props = withDefaults(
     frameLabelFormatter?: (lang: string) => string
     copyLabel?: string
     copiedLabel?: string
+    /** Offers a run button to the left of the copy button for settled shell fences. */
+    runnable?: boolean
+    runLabel?: string
+    ranLabel?: string
+    runTitle?: string
   }>(),
   {
     lang: '',
@@ -39,10 +46,17 @@ const props = withDefaults(
     frameLabelFormatter: (lang: string) => `${lang} preview`,
     copyLabel: 'Copy',
     copiedLabel: 'Copied',
+    runnable: false,
+    runLabel: 'Run',
+    ranLabel: 'Ran',
+    runTitle: undefined,
   },
 )
 
-const emit = defineEmits<{ preview: [preview: StreamMarkdownCodePreview] }>()
+const emit = defineEmits<{
+  preview: [preview: StreamMarkdownCodePreview]
+  run: [payload: CodeRunPayload]
+}>()
 
 /**
  * Shiki output for the current (code, theme); null renders the escaped
@@ -211,6 +225,47 @@ function togglePreview(): void {
   }
   showPreview.value = !showPreview.value
 }
+
+// ---------------------------------------------------------------------------
+// Run shell command
+// ---------------------------------------------------------------------------
+
+const RUN_FEEDBACK_MS = 1400
+
+const canRun = computed(
+  () => props.runnable && props.closed && isRunnableShellLanguage(props.lang) && !!props.code.trim(),
+)
+
+const ran = ref(false)
+let runResetTimer: ReturnType<typeof setTimeout> | undefined
+
+function clearRunResetTimer(): void {
+  if (runResetTimer !== undefined) {
+    clearTimeout(runResetTimer)
+    runResetTimer = undefined
+  }
+}
+
+watch([() => props.code, () => props.lang, canRun], () => {
+  clearRunResetTimer()
+  ran.value = false
+})
+
+onBeforeUnmount(clearRunResetTimer)
+
+function handleRun(): void {
+  if (!canRun.value)
+    return
+  emit('run', { lang: props.lang.trim().toLowerCase(), code: props.code })
+  ran.value = true
+  clearRunResetTimer()
+  if (hasWindow()) {
+    runResetTimer = setTimeout(() => {
+      runResetTimer = undefined
+      ran.value = false
+    }, RUN_FEEDBACK_MS)
+  }
+}
 </script>
 
 <template>
@@ -226,6 +281,23 @@ function togglePreview(): void {
           @click="togglePreview"
         >
           {{ showPreview ? codeLabel : previewLabel }}
+        </button>
+        <button
+          v-if="canRun"
+          type="button"
+          class="tx-code-block__run"
+          :class="{ 'is-ran': ran }"
+          :title="runTitle || runLabel"
+          :aria-label="ran ? ranLabel : (runTitle || runLabel)"
+          @click="handleRun"
+        >
+          <span class="tx-code-block__run-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="12" height="12">
+              <path v-if="ran" d="M4 12l5 5L20 6" />
+              <polygon v-else points="6 4 20 12 6 20 6 4" />
+            </svg>
+          </span>
+          <span class="tx-code-block__run-label">{{ ran ? ranLabel : runLabel }}</span>
         </button>
         <TxCopyButton
           :text="code"
@@ -324,6 +396,68 @@ function togglePreview(): void {
       border-color: var(--tx-color-primary, #409eff);
       color: var(--tx-color-primary, #409eff);
     }
+  }
+
+  .tx-code-block__run {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 30px;
+    padding: 0 10px 0 9px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--tx-bg-color, #ffffff);
+    box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
+    color: var(--tx-text-color-regular, #606266);
+    font: inherit;
+    font-size: 13px;
+    font-weight: var(--tx-font-weight-medium, 500);
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: var(--tx-fill-color-light, #f5f7fa);
+      color: var(--tx-text-color-primary, #303133);
+    }
+
+    &.is-ran:not(:disabled) {
+      background: color-mix(in srgb, var(--tx-color-success, #67c23a) 12%, var(--tx-bg-color, #ffffff));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-success, #67c23a) 38%, transparent);
+      color: color-mix(in srgb, var(--tx-color-success, #67c23a) 45%, var(--tx-text-color-primary, #303133));
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--tx-color-primary-light-5, #a0cfff);
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      transition: transform 0.12s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+
+      &:active:not(:disabled) {
+        transform: scale(0.97);
+      }
+    }
+  }
+
+  .tx-code-block__run-icon,
+  .tx-code-block__run-label {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .tx-code-block__run-icon svg {
+    display: block;
+    width: 14px;
+    height: 14px;
+    overflow: visible;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   .tx-code-block__preview {

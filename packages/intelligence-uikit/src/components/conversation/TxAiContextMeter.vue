@@ -39,23 +39,31 @@ const tone = computed<'normal' | 'warning' | 'danger'>(() => {
   return 'normal'
 })
 
-const formattedDetail = computed(() => {
-  if (props.detail)
-    return props.detail
-  return `${formatAiContextWindow(props.usedTokens)} / ${formatAiContextWindow(props.maxTokens)}`
-})
-
 const resolvedWindowText = computed(() =>
   props.windowText !== undefined ? props.windowText : formatAiWindowText(props.maxTokens),
 )
+
+const formattedDetail = computed(() => {
+  if (props.detail)
+    return props.detail
+  if (props.percent !== undefined && props.maxTokens <= 0)
+    return resolvedWindowText.value
+  return `${formatAiContextWindow(props.usedTokens)} / ${formatAiContextWindow(props.maxTokens)}`
+})
 
 const fillWidth = computed(() => `${clampedPercent.value}%`)
 const labelLeft = computed(
   () => `clamp(2ch, ${fillWidth.value}, calc(100% - ${resolvedWindowText.value.length + 3}ch))`,
 )
 const barVisible = computed(() => props.percent !== undefined || props.maxTokens > 0)
+const pillVisible = computed(() => props.maxTokens > 0 || props.percent !== undefined)
+const pillAriaValuenow = computed(() => (props.percent !== undefined ? rawPercent.value : clampedPercent.value))
+const pillDisplayPercent = computed(() => (props.percent !== undefined ? rawPercent.value : clampedPercent.value))
 const barValueText = computed(() =>
   props.valueText || `${rawPercent.value}% / ${resolvedWindowText.value}`,
+)
+const pillValueText = computed(() =>
+  props.valueText || `${pillDisplayPercent.value}% (${formattedDetail.value})`,
 )
 
 const radius = 6.5
@@ -85,18 +93,18 @@ const dashOffset = computed(() => circumference * (1 - clampedPercent.value / 10
     </div>
   </div>
   <div
-    v-else-if="variant === 'pill' && maxTokens > 0"
+    v-else-if="variant === 'pill' && pillVisible"
     class="tx-ai-context-meter"
     :class="[`is-${tone}`, { 'is-compact': compact }]"
-    role="progressbar"
+    :role="percent !== undefined && maxTokens <= 0 ? 'meter' : 'progressbar'"
     :aria-label="label"
     aria-valuemin="0"
     aria-valuemax="100"
-    :aria-valuenow="clampedPercent"
-    :aria-valuetext="`${clampedPercent}% (${formattedDetail})`"
-    :title="`${label}: ${formattedDetail} (${clampedPercent}%)`"
+    :aria-valuenow="pillAriaValuenow"
+    :aria-valuetext="pillValueText"
+    :title="`${label}: ${formattedDetail} (${pillDisplayPercent}%)`"
   >
-    <svg class="tx-ai-context-meter__ring" width="16" height="16" viewBox="0 0 18 18" aria-hidden="true">
+    <svg class="tx-ai-context-meter__ring" width="14" height="14" viewBox="0 0 18 18" aria-hidden="true">
       <circle
         cx="9"
         cy="9"
@@ -119,8 +127,8 @@ const dashOffset = computed(() => circumference * (1 - clampedPercent.value / 10
         :stroke-dashoffset="dashOffset"
       />
     </svg>
-    <span class="tx-ai-context-meter__pct">{{ clampedPercent }}%</span>
-    <span v-if="!compact" class="tx-ai-context-meter__detail">{{ formattedDetail }}</span>
+    <span class="tx-ai-context-meter__pct">{{ pillDisplayPercent }}%</span>
+    <span v-if="!compact && formattedDetail" class="tx-ai-context-meter__detail">{{ formattedDetail }}</span>
   </div>
 </template>
 
