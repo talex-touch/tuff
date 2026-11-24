@@ -778,8 +778,10 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- Reasoning effort, pinned under the columns so it never scrolls away with a list. -->
+      <!-- Reasoning effort, pinned under the columns so it never scrolls away with a list. A caller
+           may lead it with its own rows (the composer's scheduler) through `foot-lead`. -->
       <div class="HomeModelMenu-Foot">
+        <slot name="foot-lead" />
         <div class="HomeModelMenu-Effort" :class="{ 'is-disabled': effortRow.disabled }">
           <span class="HomeModelMenu-EffortLabel" aria-hidden="true">
             {{ t('home.reasoning.label') }}

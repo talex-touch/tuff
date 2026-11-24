@@ -27,6 +27,8 @@ import { useComposerPress } from './useComposerPress'
 const props = withDefaults(
   defineProps<{
     label: string
+    /** Leads the chip, before the icon, in the lighter ink and closed by a `›` (the model pill's scheduler). */
+    prefix?: string
     suffix?: string
     danger?: boolean
     icon?: string
@@ -37,6 +39,7 @@ const props = withDefaults(
     open?: boolean
   }>(),
   {
+    prefix: '',
     suffix: '',
     danger: false,
     icon: '',
@@ -52,8 +55,9 @@ const rootRef = ref<HTMLButtonElement | null>(null)
 
 useComposerPress(rootRef, { disabled: () => props.disabled })
 
-/** The value's own parts: the icon and the text. The trailing chevron is not part of the value. */
-const FACE = ':scope > .ComposerChip-Icon, :scope > .ComposerChip-Text'
+/** The value's own parts: the prefix, the icon and the text. The trailing chevron is not part of the value. */
+const FACE =
+  ':scope > .ComposerChip-Prefix, :scope > .ComposerChip-Icon, :scope > .ComposerChip-Text'
 
 let morphs: Animation[] = []
 let ghost: HTMLElement | null = null
@@ -108,7 +112,7 @@ function copyFace(root: HTMLElement): HTMLElement | null {
  * the copy fades out where the old value stood, the new face fades in, and the width tweens.
  */
 watch(
-  () => [props.label, props.suffix, props.icon],
+  () => [props.label, props.prefix, props.suffix, props.icon],
   async () => {
     const root = rootRef.value
     if (!root || prefersReducedMotion()) {
@@ -186,12 +190,17 @@ function onClick(event: MouseEvent): void {
       'is-danger': danger,
       'is-open': open,
       'has-icon': !!icon || !!$slots.icon,
+      'has-prefix': !!prefix,
       'has-trailing': !!$slots.trailing,
       'is-collapsible': collapsible
     }"
     :aria-disabled="disabled || undefined"
     @click="onClick"
   >
+    <span v-if="prefix" class="ComposerChip-Prefix">
+      <span class="ComposerChip-PrefixText">{{ prefix }}</span>
+      <span class="ComposerChip-PrefixSep i-ri-arrow-right-s-line" aria-hidden="true" />
+    </span>
     <span v-if="icon || $slots.icon" class="ComposerChip-Icon" aria-hidden="true">
       <slot name="icon"><span :class="icon" /></slot>
     </span>
@@ -240,6 +249,11 @@ function onClick(event: MouseEvent): void {
   // The glyph carries its own side bearings, so the icon side sits tighter.
   &.has-icon {
     padding-left: 9px;
+  }
+
+  // Led by words, not a glyph: the text's own edge sets the padding again.
+  &.has-prefix {
+    padding-left: 11px;
   }
 
   &.has-trailing {
@@ -298,6 +312,28 @@ function onClick(event: MouseEvent): void {
   flex: none;
   color: color-mix(in srgb, var(--shell-text-secondary) 50%, var(--shell-text-regular));
   font-weight: 400;
+}
+
+/*
+ * 「Tuff Pi ›」: the scheduler in front of the model, in the suffix's lighter ink, never shrinking —
+ * the model name ellipsizes first. The `›` is a glyph in the secondary grey (3:1 suffices), pulled
+ * in so it reads as a joint, not a third item.
+ */
+.ComposerChip-Prefix {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 1px;
+  margin-right: -2px;
+  color: color-mix(in srgb, var(--shell-text-secondary) 50%, var(--shell-text-regular));
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.ComposerChip-PrefixSep {
+  width: 14px;
+  height: 14px;
+  color: var(--shell-text-secondary);
 }
 
 // The right panel or a narrow window reduces the composer itself, so the query is the toolbar's

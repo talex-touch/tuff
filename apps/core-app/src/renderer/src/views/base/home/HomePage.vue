@@ -41,6 +41,7 @@ import HomePet from './pet/HomePet.vue'
 import { petEnabled } from './pet/pet-settings'
 import HomeFilePreviewDrawer from './preview/HomeFilePreviewDrawer.vue'
 import TuffAIComposer from './TuffAIComposer.vue'
+import { selectedSchedulerName } from './workspace/scheduler'
 
 /**
  * The empty state and message stream share one composer node, preserving focus across the first
@@ -226,6 +227,20 @@ const {
 })
 
 const history = useConversationHistory()
+/** Which composer slot hosts the mode controls (see the `#[composerModeSlot]` template). */
+const composerModeSlot = computed(() => (props.browserLanding ? 'mode' : 'scheduler'))
+/** The model pill also names the scheduler: 「Tuff Pi › model · 档位」. */
+const composerPill = computed(() => ({
+  ...composerModel.value,
+  scheduler: props.browserLanding
+    ? undefined
+    : selectedSchedulerName(
+        workspace.settings.value.mode,
+        workspace.settings.value.profileId,
+        workspace.profiles.value,
+        t('home.workspace.mode.coordinator')
+      )
+}))
 const { generatedTitle, conversationTitle } = useConversationTitle({
   messages,
   conversationId,
@@ -511,7 +526,7 @@ useHomeCommands({
               :lifting="lifting"
               :beam-active="composerBeamActive"
               :dictation="dictation"
-              :model="composerModel"
+              :model="composerPill"
               :send-state="sendState"
               :send-queues="sendQueues"
               @input="autoGrow"
@@ -529,7 +544,9 @@ useHomeCommands({
               @mic="dictation.toggle()"
               @reset-approvals="resetRememberedApprovals"
             >
-              <template #mode>
+              <!-- Browser landing: Browse / Ask on the left. Home: the scheduler row, drawn inside the
+                   model pill's popover. -->
+              <template #[composerModeSlot]>
                 <HomeComposerModeSlot
                   v-model:browser-mode="browserMode"
                   :browser-landing="browserLanding"

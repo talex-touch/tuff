@@ -2307,6 +2307,7 @@
         "chat": "对话",
         "agent": "Agent",
         "coordinator": "Tuff 调度器",
+        "scheduler": "调度器",
         "cliSection": "外部扫描的 CLI",
         "chatDesc": "使用你的提供商或 CLI 回答，与之前一致。",
         "agentDesc": "用智能体及其允许的工具执行任务。",

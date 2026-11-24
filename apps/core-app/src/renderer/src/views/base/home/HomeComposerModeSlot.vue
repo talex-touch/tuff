@@ -3,11 +3,12 @@ import type { ConversationWorkspaceMode } from '@talex-touch/utils/transport/sdk
 import type { AiAgentProfile } from '@talex-touch/utils/types/ai-orchestrator'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { useI18n } from 'vue-i18n'
-import HomeWorkspaceModeMenu from './workspace/HomeWorkspaceModeMenu.vue'
+import HomeSchedulerRow from './workspace/HomeSchedulerRow.vue'
 
 /**
- * Leading mode controls injected into `TuffAIComposer`'s `#mode` slot: browser landing's Browse /
- * Ask toggle or Home's Chat / Agent profile menu.
+ * Mode controls injected into `TuffAIComposer`: browser landing's Browse / Ask toggle (its `#mode`
+ * slot, on the left) or Home's scheduler row (its `#scheduler` slot, drawn inside the model pill's
+ * popover above the reasoning effort). HomePage picks the slot.
  */
 defineProps<{
   browserLanding: boolean
@@ -58,7 +59,7 @@ const { t } = useI18n()
       >{{ t('browser.ask') }}</TxButton
     >
   </template>
-  <HomeWorkspaceModeMenu
+  <HomeSchedulerRow
     v-if="!browserLanding"
     :mode="workspaceMode"
     :profile-id="profileId"
@@ -68,7 +69,6 @@ const { t } = useI18n()
     :profiles-error="profilesError"
     :branch-on-change="branchOnChange"
     :locked="locked"
-    @select-chat="emit('select-chat')"
     @select-agent="emit('select-agent', $event)"
     @toggle-profile="(profile, enabled) => emit('toggle-profile', profile, enabled)"
     @load-profiles="emit('load-profiles')"
