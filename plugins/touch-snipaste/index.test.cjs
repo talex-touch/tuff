@@ -203,3 +203,37 @@ test('missing facade and forged item action fail closed without host work', asyn
   assert.equal(forgedResult.reason, 'invalid-action')
   assert.deepEqual(harness.state.calls, [])
 })
+
+test('ignores unrelated items with non-matching defaultAction', async () => {
+  const harness = createHarness()
+
+  assert.equal(
+    await harness.lifecycle.onItemAction({
+      meta: { defaultAction: 'other-plugin-action' },
+      actions: [{ id: 'run-action', payload: { actionId: 'snip' } }],
+    }),
+    undefined,
+  )
+  assert.equal(await harness.lifecycle.onItemAction({}), undefined)
+  assert.deepEqual(harness.state.calls, [])
+})
+
+test('maps permission request failures to canonical permission-check-failed', async () => {
+  const error = Object.assign(new Error('permission dialog error'), {
+    code: 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED',
+  })
+  const harness = createHarness({ error })
+  await harness.lifecycle.onFeatureTriggered('snipaste-quick', { text: '截图' })
+
+  const result = await harness.lifecycle.onItemAction(harness.state.items[0], {
+    actionId: 'run-action',
+  })
+
+  assert.deepEqual(plain(result), {
+    externalAction: true,
+    success: false,
+    status: 'blocked',
+    reason: 'permission-check-failed',
+    message: '权限校验请求失败',
+  })
+})

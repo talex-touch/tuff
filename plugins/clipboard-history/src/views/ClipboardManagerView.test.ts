@@ -834,4 +834,68 @@ describe('clipboardManagerView', () => {
 
     wrapper.unmount()
   })
+
+  it('distinguishes unavailable shell permission from denial and does not claim copied when clipboard fallback fails', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 105, type: 'text', content: 'see https://example.com/status' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    sdkMocks.system.openExternal.mockRejectedValueOnce(
+      Object.assign(new Error('unavailable'), { code: 'SYSTEM_SHELL_PERMISSION_UNAVAILABLE' }),
+    )
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.get('.error-banner').text()).toContain('打开链接权限服务暂不可用，已复制到剪贴板')
+    expect(wrapper.get('.error-banner').text()).not.toContain('未授予')
+
+    sdkMocks.system.openExternal.mockRejectedValueOnce(
+      Object.assign(new Error('denied'), { code: 'SYSTEM_SHELL_PERMISSION_DENIED' }),
+    )
+    sdkMocks.clipboard.write.mockRejectedValueOnce(new Error('clipboard write denied'))
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }))
+    await flushPromises()
+
+    expect(wrapper.get('.error-banner').text()).toContain('未授予打开链接的权限，且复制到剪贴板失败')
+    expect(wrapper.get('.error-banner').text()).toContain('clipboard write denied')
+    expect(wrapper.get('.error-banner').text()).not.toContain('已复制到剪贴板')
+
+    wrapper.unmount()
+  })
+
+  it('surfaces errors from copy, favorite toggle, and delete actions without unhandled rejections', async () => {
+    sdkMocks.clipboard.history.getHistory.mockResolvedValue({
+      history: [{ id: 106, type: 'text', content: 'plain record' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    })
+
+    const wrapper = mount(ClipboardManagerView, { attachTo: document.body })
+    await flushPromises()
+
+    sdkMocks.clipboard.write.mockRejectedValueOnce(new Error('copy boom'))
+    await wrapper.get('[data-testid="copy-button"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.error-banner').text()).toContain('copy boom')
+
+    sdkMocks.clipboard.history.setFavorite.mockRejectedValueOnce(new Error('favorite boom'))
+    await wrapper.get('[data-testid="favorite-button"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.error-banner').text()).toContain('favorite boom')
+
+    sdkMocks.clipboard.history.deleteItem.mockRejectedValueOnce(new Error('delete boom'))
+    await wrapper.get('[data-testid="delete-button"]').trigger('click')
+    await wrapper.get('[data-testid="delete-button"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.error-banner').text()).toContain('delete boom')
+
+    wrapper.unmount()
+  })
 })

@@ -202,3 +202,59 @@ test('onFeatureTriggered awaits clear and publishes hash results', async () => {
     globalThis.plugin.feature = originalFeature
   }
 })
+
+test('degrades hash rows only when crypto.digest throws or is unavailable instead of dropping all transforms', async () => {
+  let items = null
+  const originalFeature = globalThis.plugin.feature
+  const originalCrypto = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
+  globalThis.plugin.feature = {
+    async clearItems() {},
+    async pushItems(value) {
+      items = value
+    },
+  }
+  Object.defineProperty(globalThis, 'crypto', {
+    configurable: true,
+    value: {
+      async digest() {
+        throw new RangeError('payload exceeds 1MB limit')
+      },
+    },
+  })
+
+  try {
+    const freshPlugin = loadFreshPluginModule()
+    await freshPlugin.onFeatureTriggered('text-tools-convert', { text: 'Hello World' })
+    assert.ok(items.some(item => item.id.endsWith('-upper') && item.actions[0].payload.text === 'HELLO WORLD'))
+    assert.ok(items.some(item => item.id.endsWith('-b64-encode')))
+    assert.ok(items.some(item => item.id.endsWith('-hash-unavailable')))
+    assert.equal(items.some(item => item.id.endsWith('-error')), false)
+  }
+  finally {
+    globalThis.plugin.feature = originalFeature
+    if (originalCrypto)
+      Object.defineProperty(globalThis, 'crypto', originalCrypto)
+  }
+})
+
+test('onItemAction maps full canonical permission and capability errors', async () => {
+  const originalWriteText = globalThis.clipboard.writeText
+  try {
+    for (const [code, expectedReason] of [
+      ['PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE', 'permission-unavailable'],
+      ['PLUGIN_HOST_PERMISSION_REQUEST_FAILED', 'permission-check-failed'],
+      ['PLUGIN_HOST_CAPABILITY_UNAVAILABLE', 'capability-unavailable'],
+    ]) {
+      globalThis.clipboard.writeText = async () => {
+        throw Object.assign(new Error('/private/error'), { code })
+      }
+      const result = await pluginModule.onItemAction(copyItem('abc'))
+      assert.equal(result.status, 'blocked')
+      assert.equal(result.reason, expectedReason, code)
+      assert.doesNotMatch(JSON.stringify(result), /private/)
+    }
+  }
+  finally {
+    globalThis.clipboard.writeText = originalWriteText
+  }
+})

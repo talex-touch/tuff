@@ -1,0 +1,76 @@
+{
+  "author": "TalexTouch Team",
+  "dependencies": {},
+  "description": "Offline Dev Reference Atlas for Tuff: HTTP status codes, chmod calculator, IPv4 CIDR subnet calculator, MIME types, ASCII/ANSI, and Git/Docker/SQL/cURL/tmux cheatsheets",
+  "engines": {
+    "tuff": ">=261011"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./manifest.json": "./manifest.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "manifest.json",
+    "index.js",
+    "assets/",
+    "README.md"
+  ],
+  "keywords": [
+    "tuff-plugin",
+    "developer",
+    "reference",
+    "http",
+    "chmod",
+    "cidr",
+    "cheatsheet"
+  ],
+  "license": "MIT",
+  "main": "./index.js",
+  "name": "@talex-touch/touch-docs-atlas-plugin",
+  "packageManager": "pnpm@11.24.0",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node ../../packages/tuff-cli/bin/tuff.js builder",
+    "test": "node --test index.test.cjs"
+  },
+  "tuff": {
+    "category": "developer",
+    "displayName": {
+      "en": "Dev Docs Atlas",
+      "zh": "开发者参考手册"
+    },
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "id": "com.tuffex.touch-docs-atlas",
+    "manifest": "./manifest.json",
+    "name": "touch-docs-atlas",
+    "permissions": {
+      "optional": [
+        "clipboard.write"
+      ],
+      "required": [
+        "search.root-results"
+      ]
+    },
+    "platforms": {
+      "darwin": true,
+      "linux": true,
+      "win32": true
+    },
+    "schemaVersion": 1,
+    "sdkapi": 261011,
+    "surface": "prelude"
+  },
+  "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-docs-atlas"
+  }
+}

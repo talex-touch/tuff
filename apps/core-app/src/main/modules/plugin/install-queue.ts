@@ -1,4 +1,5 @@
 import type {
+  NpmPluginTrustTier,
   PluginInstallConfirmRequest,
   PluginInstallConfirmResponse,
   PluginInstallProgressEvent
@@ -8,12 +9,21 @@ import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { PluginInstaller, PreparedPluginInstall } from './plugin-installer'
 import type { ResolverInstallOptions } from './plugin-resolver'
 import crypto from 'node:crypto'
+import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { createLogger } from '../../utils/logger'
 import { checkPluginActiveUI } from './plugin-ui-utils'
 import { extractPluginTrustMetadata, verifyPluginPackageTrust } from './signature-verifier'
 
 const pluginInstallQueueLog = createLogger('PluginSystem').child('InstallQueue')
+
+function readNpmTrustTier(metadata?: Record<string, unknown>): NpmPluginTrustTier | undefined {
+  const tier = metadata?.trustTier
+  if (tier === 'nexus-attested' || tier === 'npm-verified' || tier === 'npm-community') {
+    return tier
+  }
+  return undefined
+}
 
 type PluginInstallQueueResult =
   | {
@@ -185,15 +195,22 @@ export class PluginInstallQueue {
       })
 
       task.prepared = prepared
-      task.officialActual = Boolean(prepared.providerResult.official)
+      const providerMetadata = prepared.providerResult.metadata
+      const isNpmProvider = prepared.providerResult.provider === PluginProviderType.NPM
+      const trustMetadata = extractPluginTrustMetadata(providerMetadata)
+      const npmTrustTier = isNpmProvider ? readNpmTrustTier(providerMetadata) : undefined
+
+      // Security invariant: npm packages without verified Nexus attestation are never official,
+      // regardless of `@talex-touch/` naming scope or caller metadata hints.
+      task.officialActual =
+        isNpmProvider && !trustMetadata ? false : Boolean(prepared.providerResult.official)
 
       if (prepared.providerResult.filePath) {
         this.emitProgress(task, 'verifying', { progress: 0 })
 
-        const providerMetadata = prepared.providerResult.metadata
-        const trustMetadata = extractPluginTrustMetadata(providerMetadata)
         const requiresRegistryTrust =
-          prepared.providerResult.official || providerMetadata?.sourceType === 'registry'
+          !isNpmProvider &&
+          (prepared.providerResult.official || providerMetadata?.sourceType === 'registry')
         if (requiresRegistryTrust && !trustMetadata)
           throw new Error('PLUGIN_TRUST_METADATA_REQUIRED')
 
@@ -203,6 +220,15 @@ export class PluginInstallQueue {
             trustMetadata
           )
           if (!trustResult.ok) throw new Error(trustResult.code)
+        } else if (isNpmProvider) {
+          task.officialActual = false
+          pluginInstallQueueLog.debug('Handled npm package trust gate without Nexus attestation', {
+            meta: {
+              taskId: task.id,
+              source: task.request.source,
+              trustTier: npmTrustTier ?? 'npm-community'
+            }
+          })
         }
 
         this.emitProgress(task, 'verifying', { progress: 100 })
@@ -219,7 +245,7 @@ export class PluginInstallQueue {
         await this.requestConfirmation(task, {
           taskId: task.id,
           kind: 'source',
-          official: Boolean(task.prepared.providerResult.official),
+          official: Boolean(task.officialActual),
           pluginId: extractClientString(task.clientMetadata, 'pluginId'),
           pluginName:
             extractClientString(task.clientMetadata, 'pluginName') || task.prepared.manifest?.name,
@@ -267,16 +293,21 @@ export class PluginInstallQueue {
         status: 'success',
         manifest: summary.manifest,
         provider: summary.providerResult.provider,
-        official: summary.providerResult.official ?? false
+        official: Boolean(task.officialActual)
       })
 
       const completionHandler = this.options?.onInstallCompleted
       if (completionHandler) {
         try {
+          const effectiveOfficial = Boolean(task.officialActual)
+          const effectiveProviderResult =
+            Boolean(summary.providerResult.official) === effectiveOfficial
+              ? summary.providerResult
+              : { ...summary.providerResult, official: effectiveOfficial }
           await completionHandler({
             request: task.request,
             manifest: summary.manifest,
-            providerResult: summary.providerResult
+            providerResult: effectiveProviderResult
           })
         } catch (error) {
           pluginInstallQueueLog.warn('Failed to persist plugin install metadata', {
@@ -333,6 +364,18 @@ export class PluginInstallQueue {
 
     if (task.autoReEnable) {
       options.autoReEnable = true
+      hasOptions = true
+    }
+
+    const providerResult = task.prepared?.providerResult
+    if (providerResult?.provider === PluginProviderType.NPM) {
+      options.enforceProdMode = true
+      options.archiveFormat = 'tgz'
+      options.stripRootDir = 'package'
+      const npmTrustTier = readNpmTrustTier(providerResult.metadata)
+      if (npmTrustTier === 'npm-community' && providerResult.metadata?.unstamped !== false) {
+        options.allowUnstampedNpm = true
+      }
       hasOptions = true
     }
 

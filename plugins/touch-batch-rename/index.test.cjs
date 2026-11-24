@@ -137,13 +137,17 @@ test.afterEach(() => {
   filesystemCalls.length = 0
   logCalls.length = 0
   storedUndo = null
-  globalThis.permission.check = async (permissionId) => {
-    permissionChecks.push(permissionId)
-    return true
+  globalThis.permission = {
+    async check(permissionId) {
+      permissionChecks.push(permissionId)
+      return true
+    },
   }
-  globalThis.filesystem.renameBatch = async (entries) => {
-    filesystemCalls.push(entries)
-    return entries.map((_, index) => ({ index, status: 'renamed' }))
+  globalThis.filesystem = {
+    async renameBatch(entries) {
+      filesystemCalls.push(entries)
+      return entries.map((_, index) => ({ index, status: 'renamed' }))
+    },
   }
 })
 
@@ -269,4 +273,116 @@ test('undo reads the journal, runs the same fixed transaction and clears it afte
     ['get', 'set'],
   )
   assert.deepEqual(storedUndo.items, [])
+})
+
+test('apply blocks no-op plans with no-changes and preserves existing undo history', async () => {
+  const existingUndo = {
+    items: [{ source: '/approved/old-renamed.txt', targetName: 'old.txt' }],
+    createdAt: 12345,
+  }
+  storedUndo = existingUndo
+  await lifecycle.onFeatureTriggered('batch-rename-noop', {
+    text: '',
+    inputs: [{ type: 'files', content: JSON.stringify(['/approved/alpha.txt']) }],
+  })
+  filesystemCalls.length = 0
+  storageCalls.length = 0
+
+  const result = await action('batch-rename-noop', 'apply')
+
+  assert.equal(result.externalAction, true)
+  assert.equal(result.success, false)
+  assert.equal(result.status, 'blocked')
+  assert.equal(result.reason, 'no-changes')
+  assert.equal(filesystemCalls.length, 0)
+  assert.equal(storageCalls.length, 0)
+  assert.deepEqual(storedUndo, existingUndo)
+})
+
+test('rejects path separators and control characters in target filenames before apply', async () => {
+  for (const rule of ['prefix:../escape/', 'suffix:\\nested', `prefix:bad${String.fromCharCode(7)}name`]) {
+    await lifecycle.onFeatureTriggered('batch-rename-invalid', {
+      text: rule,
+      inputs: [{ type: 'files', content: JSON.stringify(['/approved/alpha.txt']) }],
+    })
+    filesystemCalls.length = 0
+    storageCalls.length = 0
+
+    const result = await action('batch-rename-invalid', 'apply')
+    assert.equal(result.status, 'blocked', rule)
+    assert.equal(result.reason, 'invalid-target-name', rule)
+    assert.equal(filesystemCalls.length, 0, rule)
+    assert.equal(storageCalls.length, 0, rule)
+  }
+})
+
+test('detects duplicate targetPath collisions and blocks apply', async () => {
+  await lifecycle.onFeatureTriggered('batch-rename-collision', {
+    text: 'replace:/^(alpha|beta)$/->same',
+    inputs: [{ type: 'files', content: JSON.stringify(['/approved/alpha.txt', '/approved/beta.txt']) }],
+  })
+  const items = latestItems()
+  assert.equal(
+    items.some(item => item.render.basic.subtitle.includes('冲突')),
+    true,
+  )
+  filesystemCalls.length = 0
+  storageCalls.length = 0
+
+  const result = await action('batch-rename-collision', 'apply')
+
+  assert.equal(result.status, 'blocked')
+  assert.equal(result.reason, 'target-collision')
+  assert.equal(filesystemCalls.length, 0)
+  assert.equal(storageCalls.length, 0)
+})
+
+test('guards missing filesystem.renameBatch with capability-unavailable on apply and undo', async () => {
+  await preview('batch-rename-cap')
+  globalThis.filesystem = undefined
+
+  const applyResult = await action('batch-rename-cap', 'apply')
+  assert.equal(applyResult.status, 'blocked')
+  assert.equal(applyResult.reason, 'capability-unavailable')
+  assert.equal(storageCalls.length, 0)
+
+  storedUndo = { items: [{ source: '/approved/renamed-alpha.txt', targetName: 'alpha.txt' }] }
+  const undoResult = await action('batch-rename-cap', 'undo')
+  assert.equal(undoResult.status, 'blocked')
+  assert.equal(undoResult.reason, 'capability-unavailable')
+})
+
+test('drops stale async trigger results when superseded by a newer trigger', async () => {
+  let releaseFirst
+  let callIndex = 0
+  globalThis.permission.check = async (permissionId) => {
+    permissionChecks.push(permissionId)
+    callIndex += 1
+    if (callIndex === 1) {
+      return new Promise((resolve) => {
+        releaseFirst = resolve
+      })
+    }
+    return true
+  }
+
+  const first = lifecycle.onFeatureTriggered('batch-rename-race', {
+    text: 'prefix:stale-',
+    inputs: [{ type: 'files', content: JSON.stringify(['/approved/alpha.txt']) }],
+  })
+  const second = lifecycle.onFeatureTriggered('batch-rename-race', {
+    text: 'prefix:fresh-',
+    inputs: [{ type: 'files', content: JSON.stringify(['/approved/beta.txt']) }],
+  })
+  await second
+  releaseFirst(true)
+  await first
+
+  const items = latestItems()
+  assert.equal(items.some(item => item.render.basic.subtitle === 'fresh-beta.txt'), true)
+  assert.equal(items.some(item => item.render.basic.subtitle === 'stale-alpha.txt'), false)
+
+  const result = await action('batch-rename-race', 'apply')
+  assert.equal(result.status, 'completed')
+  assert.deepEqual(filesystemCalls, [[{ source: '/approved/beta.txt', targetName: 'fresh-beta.txt' }]])
 })

@@ -9,7 +9,6 @@ export default antfu(
       '**/node_modules/**',
       '**/*.old.*',
       '**/*.old.*.*',
-      'init.json',
     ],
   },
   {

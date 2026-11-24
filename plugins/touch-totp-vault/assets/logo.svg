@@ -1,0 +1,18 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="totpBg" x1="10" y1="8" x2="118" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#06281F"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="totpShield" x1="30" y1="20" x2="98" y2="108" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34D399"/>
+      <stop offset="100%" stop-color="#0EA5E9"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#totpBg)"/>
+  <path d="M64 18L102 33V61C102 85.5 86 104 64 111C42 104 26 85.5 26 61V33L64 18Z" fill="url(#totpShield)" fill-opacity="0.18" stroke="url(#totpShield)" stroke-width="4.5" stroke-linejoin="round"/>
+  <rect x="46" y="59" width="36" height="27" rx="7" fill="#0F172A" stroke="#34D399" stroke-width="3.5"/>
+  <path d="M54 59V50C54 44.477 58.477 40 64 40C69.523 40 74 44.477 74 50V59" stroke="#38BDF8" stroke-width="3.5" stroke-linecap="round"/>
+  <circle cx="64" cy="71" r="4" fill="#34D399"/>
+  <path d="M64 75V80" stroke="#34D399" stroke-width="3" stroke-linecap="round"/>
+</svg>

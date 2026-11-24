@@ -3,7 +3,7 @@
   "name": "touch-image",
   "version": "1.0.0",
   "author": "TalexTouch Team",
-  "sdkapi": 260817,
+  "sdkapi": 261011,
   "category": "utilities",
   "icon": {
     "type": "file",
@@ -45,8 +45,20 @@
   "features": [
     {
       "id": "image-tools",
-      "name": "图片转换与压缩",
-      "desc": "调整一张图片的分辨率、质量和输出格式",
+      "name": {
+        "default": "图片转换与压缩",
+        "locales": {
+          "zh-CN": "图片转换与压缩",
+          "en-US": "Convert & Compress Images"
+        }
+      },
+      "desc": {
+        "default": "调整一张图片的分辨率、质量和输出格式",
+        "locales": {
+          "zh-CN": "调整一张图片的分辨率、质量和输出格式",
+          "en-US": "Change an image's resolution, quality and output format"
+        }
+      },
       "icon": {
         "type": "file",
         "value": "assets/logo.svg"
@@ -106,11 +118,11 @@
     }
   ],
   "_files": {
-    "index.js": "sha256-274bc92109f8e6c1b64953a06234e237bcf5bd99be9c1615672877d1667b5f83",
+    "index.js": "sha256-7e351090022458aef7ac401facf794a8eebb65ad00819ac02c4923c87b73e5c9",
     "README.md": "sha256-111c796c6caf239b300a0c2a86b9c0442101775ff3d4dd69982e3a0d5f9870b8",
     "assets/logo.svg": "sha256-c1a41b114c25f6c8dce331961b5cc2761f7b8322629b5c6b866558a8441977e3"
   },
-  "_signature": "GGFwOv1tg2ErBSXs/YTrDbHnhTT7m2dNfJ7JXSKbPIU=",
+  "_signature": "iuKw9F8KE7TdeZh4lR9l/ZTNPlpOKGTQqDXBuNmiE3Y=",
   "dev": {
     "enable": false,
     "address": "",

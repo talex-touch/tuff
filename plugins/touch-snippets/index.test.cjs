@@ -303,3 +303,90 @@ test('feature publication awaits clear before push', async () => {
   assert.equal(await pending, true)
   assert.equal(pushed, true)
 })
+
+test('saving at the 256-snippet cap prepends the new snippet and evicts the oldest instead of dropping it', async () => {
+  const existing = Array.from({ length: 256 }, (_, index) => ({
+    id: `existing-${index}`,
+    type: 'text',
+    title: `Existing ${index}`,
+    content: `Body ${index}`,
+    tags: [],
+    createdAt: index,
+    updatedAt: index,
+    useCount: 0,
+  }))
+  const files = new Map([['snippets.json', { snippets: existing }]])
+  const { plugin, state } = loadPlugin({ files })
+
+  await plugin.onFeatureTriggered('snippets-save', { text: 'Brand new 257th snippet' })
+  const result = await plugin.onItemAction(actionItem(state.items, 'save'))
+
+  assert.deepEqual(result, { externalAction: true, status: 'started' })
+  const saved = state.files.get('snippets.json').snippets
+  assert.equal(saved.length, 256)
+  assert.equal(saved[0].content, 'Brand new 257th snippet')
+  assert.equal(saved.some(entry => entry.id === 'existing-255'), false)
+})
+
+test('showSave offers clipboard fallback, updates useCount/lastUsedAt on copy, and handles empty {} store', async () => {
+  const files = new Map([['snippets.json', {}]])
+  let readCalls = 0
+  const { plugin, state } = loadPlugin({
+    files,
+    clipboard: {
+      async readText() {
+        readCalls += 1
+        return 'Saved from clipboard'
+      },
+      async writeText(value) {
+        state.clipboardWrites.push(value)
+      },
+    },
+  })
+
+  await plugin.onInit()
+  assert.equal(Array.isArray(state.files.get('snippets.json').snippets), true)
+  assert.equal(state.files.get('snippets.json').snippets[0].id, 'welcome')
+
+  await plugin.onFeatureTriggered('snippets-save', { text: '' })
+  assert.equal(readCalls, 0)
+  const saveClipItem = actionItem(state.items, 'save-clipboard')
+  const saveResult = await plugin.onItemAction(saveClipItem)
+  assert.equal(readCalls, 1)
+  assert.deepEqual(saveResult, { externalAction: true, status: 'started' })
+
+  await plugin.onFeatureTriggered('snippets-search', { text: 'Saved from clipboard' })
+  const copyResult = await plugin.onItemAction(actionItem(state.items, 'copy'))
+  assert.deepEqual(copyResult, { externalAction: true, status: 'started' })
+  const stored = state.files.get('snippets.json').snippets.find(entry => entry.content === 'Saved from clipboard')
+  assert.equal(stored.useCount, 1)
+  assert.equal(typeof stored.lastUsedAt, 'number')
+})
+
+test('guards missing clipboard.writeText and maps canonical permission/capability errors', async () => {
+  const missing = loadPlugin({ clipboard: {} })
+  await missing.plugin.onInit()
+  await missing.plugin.onFeatureTriggered('snippets-search', { text: 'Welcome' })
+  const missingResult = await missing.plugin.onItemAction(actionItem(missing.state.items, 'copy'))
+  assert.equal(missingResult.status, 'blocked')
+  assert.equal(missingResult.reason, 'clipboard-unavailable')
+
+  for (const [code, expectedReason] of [
+    ['PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE', 'permission-unavailable'],
+    ['PLUGIN_HOST_PERMISSION_REQUEST_FAILED', 'permission-check-failed'],
+    ['PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE', 'capability-unavailable'],
+  ]) {
+    const harness = loadPlugin({
+      clipboard: {
+        async writeText() {
+          throw Object.assign(new Error('boom'), { code })
+        },
+      },
+    })
+    await harness.plugin.onInit()
+    await harness.plugin.onFeatureTriggered('snippets-search', { text: 'Welcome' })
+    const result = await harness.plugin.onItemAction(actionItem(harness.state.items, 'copy'))
+    assert.equal(result.status, 'blocked')
+    assert.equal(result.reason, expectedReason, code)
+  }
+})

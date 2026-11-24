@@ -2,9 +2,23 @@
   "name": "@talex-touch/touch-intelligence-plugin",
   "private": true,
   "version": "1.2.0",
-  "packageManager": "pnpm@10.34.4",
+  "description": "CoreBox 智能问答、内置 AI 命令与本地自定义命令注册表",
+  "license": "MIT",
+  "packageManager": "pnpm@11.24.0",
+  "keywords": [
+    "tuff-plugin",
+    "ai",
+    "intelligence",
+    "ask",
+    "commands"
+  ],
+  "main": "./index.js",
+  "engines": {
+    "tuff": ">=261011"
+  },
   "scripts": {
     "build": "pnpm -C ../../packages/tuff-intelligence run build && node ../../packages/tuff-cli/bin/tuff.js builder",
+    "test": "node --test index.test.cjs",
     "publish:nexus": "node ../../packages/tuff-cli/bin/tuff.js publish --channel RELEASE"
   },
   "dependencies": {
@@ -12,5 +26,43 @@
     "@talex-touch/tuffex": "workspace:^",
     "@talex-touch/utils": "workspace:^",
     "vue": "catalog:frontend"
+  },
+  "tuff": {
+    "schemaVersion": 1,
+    "id": "com.tuffex.intelligence",
+    "name": "touch-intelligence",
+    "displayName": {
+      "en": "Ask AI",
+      "zh": "智能问答"
+    },
+    "sdkapi": 261011,
+    "category": "ai",
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "permissions": {
+      "required": [
+        "intelligence.basic",
+        "intelligence.context",
+        "search.root-results",
+        "storage.plugin"
+      ],
+      "optional": [
+        "clipboard.write"
+      ]
+    },
+    "platforms": {
+      "win32": true,
+      "darwin": true,
+      "linux": true
+    },
+    "surface": "widget",
+    "manifest": "./manifest.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-intelligence"
   }
 }

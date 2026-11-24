@@ -1,0 +1,82 @@
+{
+  "name": "@talex-touch/touch-diagram-sketch-plugin",
+  "version": "1.0.0",
+  "private": false,
+  "description": "Mermaid & Unicode Box-Drawing ASCII Diagram Sketcher for Tuff: 16+ production templates, arrow shorthand compiler, and optional permission-gated AI generation.",
+  "author": "TalexTouch Team",
+  "license": "MIT",
+  "keywords": [
+    "tuff-plugin",
+    "creative",
+    "design",
+    "mermaid",
+    "diagram",
+    "ascii",
+    "flowchart",
+    "sequence",
+    "architecture"
+  ],
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./manifest.json": "./manifest.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "manifest.json",
+    "index.js",
+    "assets/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node ../../packages/tuff-cli/bin/tuff.js builder",
+    "test": "node --test index.test.cjs"
+  },
+  "dependencies": {},
+  "engines": {
+    "tuff": ">=261011"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "pnpm@11.24.0",
+  "tuff": {
+    "schemaVersion": 1,
+    "id": "com.tuffex.touch-diagram-sketch",
+    "name": "touch-diagram-sketch",
+    "displayName": {
+      "default": "Diagram Sketch",
+      "locales": {
+        "zh-CN": "架构简图工坊",
+        "en-US": "Diagram Sketch"
+      }
+    },
+    "sdkapi": 261011,
+    "category": "creative",
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "permissions": {
+      "required": [
+        "search.root-results"
+      ],
+      "optional": [
+        "clipboard.write",
+        "intelligence.basic"
+      ]
+    },
+    "platforms": {
+      "win32": true,
+      "darwin": true,
+      "linux": true
+    },
+    "surface": "prelude",
+    "manifest": "./manifest.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-diagram-sketch"
+  }
+}

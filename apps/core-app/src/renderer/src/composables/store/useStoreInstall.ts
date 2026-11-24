@@ -3,6 +3,7 @@ import type {
   PluginInstallSourceResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { StorePluginListItem } from './useStoreData'
+import { formatNpmPluginSource } from '@talex-touch/utils/plugin'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
@@ -109,6 +110,107 @@ export function useStoreInstall() {
     return url
   }
 
+  function readTrimmedString(value: unknown): string | undefined {
+    if (typeof value !== 'string') return undefined
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : undefined
+  }
+
+  function buildInstallPayload(
+    plugin: StorePluginListItem,
+    options?: InstallOptions
+  ): PluginInstallSourceRequest {
+    if (plugin.install?.type === 'npm') {
+      const npmInstall = plugin.install as {
+        type: 'npm'
+        packageName?: string
+        version?: string
+        registry?: string
+        distTag?: string
+      }
+      const packageName = readTrimmedString(npmInstall.packageName)
+      if (!packageName) {
+        throw new Error('STORE_INSTALL_NO_SOURCE')
+      }
+
+      const version = readTrimmedString(npmInstall.version) ?? readTrimmedString(plugin.version)
+      const distTag =
+        readTrimmedString(npmInstall.distTag) ?? readTrimmedString(plugin.metadata?.distTag)
+      const registry =
+        readTrimmedString(npmInstall.registry) ?? readTrimmedString(plugin.metadata?.registry)
+
+      let source: string
+      try {
+        source = formatNpmPluginSource(packageName, version ?? distTag)
+      } catch {
+        throw new Error('PLUGIN_SOURCE_INVALID')
+      }
+
+      return {
+        source,
+        hintType: PluginProviderType.NPM,
+        metadata: {
+          packageName,
+          ...(version ? { version } : {}),
+          ...(registry ? { registry } : {}),
+          ...(distTag ? { distTag } : {}),
+          ...(plugin.metadata?.officialScope !== undefined
+            ? { officialScope: Boolean(plugin.metadata.officialScope) }
+            : {}),
+          official: plugin.official === true,
+          pluginId: plugin.manifest?.id || plugin.id,
+          providerId: plugin.providerId,
+          providerName: plugin.providerName,
+          providerType: plugin.providerType || 'npmPackage',
+          // Upgrade options
+          forceUpdate: options?.isUpgrade ?? false,
+          autoReEnable: options?.autoReEnable ?? true
+        },
+        clientMetadata: {
+          pluginId: plugin.id,
+          pluginName: plugin.name,
+          providerId: plugin.providerId,
+          providerName: plugin.providerName,
+          packageName
+        }
+      }
+    }
+
+    const downloadUrl = resolveDownloadUrl(plugin)
+    if (!downloadUrl) {
+      throw new Error('STORE_INSTALL_NO_SOURCE')
+    }
+
+    const registrySource =
+      plugin.providerType === 'tpexApi' && plugin.id && plugin.version
+        ? `tpex:${plugin.id}@${plugin.version}`
+        : null
+
+    return {
+      source: registrySource ?? downloadUrl,
+      hintType: registrySource ? PluginProviderType.TPEX : undefined,
+      metadata: {
+        officialId: plugin.id,
+        officialVersion: plugin.version,
+        officialSource: 'talex-touch/tuff-official-plugins',
+        official: plugin.official === true,
+        channel: plugin.metadata?.channel,
+        providerId: plugin.providerId,
+        providerName: plugin.providerName,
+        providerType: plugin.providerType,
+        // Upgrade options
+        forceUpdate: options?.isUpgrade ?? false,
+        autoReEnable: options?.autoReEnable ?? true
+      },
+      clientMetadata: {
+        pluginId: plugin.id,
+        pluginName: plugin.name,
+        providerId: plugin.providerId,
+        providerName: plugin.providerName
+      }
+    }
+  }
+
   async function handleInstall(
     plugin: StorePluginListItem,
     options?: InstallOptions
@@ -127,39 +229,7 @@ export function useStoreInstall() {
         }
       }
 
-      const downloadUrl = resolveDownloadUrl(plugin)
-      if (!downloadUrl) {
-        throw new Error('STORE_INSTALL_NO_SOURCE')
-      }
-
-      const registrySource =
-        plugin.providerType === 'tpexApi' && plugin.id && plugin.version
-          ? `tpex:${plugin.id}@${plugin.version}`
-          : null
-
-      const payload: PluginInstallSourceRequest = {
-        source: registrySource ?? downloadUrl,
-        hintType: registrySource ? PluginProviderType.TPEX : undefined,
-        metadata: {
-          officialId: plugin.id,
-          officialVersion: plugin.version,
-          officialSource: 'talex-touch/tuff-official-plugins',
-          official: plugin.official === true,
-          channel: plugin.metadata?.channel,
-          providerId: plugin.providerId,
-          providerName: plugin.providerName,
-          providerType: plugin.providerType,
-          // Upgrade options
-          forceUpdate: options?.isUpgrade ?? false,
-          autoReEnable: options?.autoReEnable ?? true
-        },
-        clientMetadata: {
-          pluginId: plugin.id,
-          pluginName: plugin.name,
-          providerId: plugin.providerId,
-          providerName: plugin.providerName
-        }
-      }
+      const payload = buildInstallPayload(plugin, options)
 
       const result: PluginInstallSourceResponse = await pluginSdk.installFromSource(payload)
 

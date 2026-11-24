@@ -1,4 +1,5 @@
 import { useClipboard } from '@talex-touch/utils/plugin/sdk/clipboard'
+import { getCurrentScope, onScopeDispose, ref } from 'vue'
 import { stringify as yamlStringify } from 'yaml'
 import { evaluateObjectLiteral, evaluateQuery } from '~/utils/expression-eval'
 
@@ -7,8 +8,57 @@ export interface ParseResult {
   isJsObject: boolean
 }
 
+export type ClipboardErrorKind = 'denied' | 'unavailable' | 'other'
+
+export function classifyClipboardError(error: unknown): ClipboardErrorKind {
+  const code = typeof (error as { code?: unknown } | null)?.code === 'string'
+    ? String((error as { code?: string }).code).toUpperCase()
+    : ''
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error ?? '').toLowerCase()
+
+  if (
+    code.includes('PERMISSION_DENIED')
+    || message.includes('permission-denied')
+    || message.includes('permission denied')
+    || message.includes('not granted')
+  ) {
+    return 'denied'
+  }
+
+  if (
+    code.includes('PERMISSION_UNAVAILABLE')
+    || code.includes('PERMISSION_SDK_UNAVAILABLE')
+    || message.includes('permission-unavailable')
+    || message.includes('permission-sdk-unavailable')
+    || message.includes('permission service unavailable')
+    || message.includes('channel not available')
+    || message.includes('bridge unavailable')
+  ) {
+    return 'unavailable'
+  }
+
+  return 'other'
+}
+
+export function formatClipboardError(error: unknown, operation: 'read' | 'write'): string {
+  const kind = classifyClipboardError(error)
+  if (operation === 'read') {
+    if (kind === 'denied')
+      return '未授予读取剪贴板的权限，请在插件权限设置中开启 clipboard.read'
+    if (kind === 'unavailable')
+      return '剪贴板权限服务暂不可用，请稍后重试或使用 Ctrl/Cmd+V'
+    return '无法读取剪贴板，请使用 Ctrl/Cmd+V'
+  }
+
+  if (kind === 'denied')
+    return '未授予写入剪贴板的权限，请在插件权限设置中开启 clipboard.write'
+  if (kind === 'unavailable')
+    return '剪贴板权限服务暂不可用，无法复制结果'
+  return '复制失败，请稍后重试'
+}
+
 /**
- * Smart parse - tries JSON.parse first, then safely evaluates JS object literals
+ * Smart parse - tries JSON.parse first, then safely parses JS/JSON5 object literals without `eval`.
  */
 export function smartParse(text: string): ParseResult {
   // First try standard JSON
@@ -16,7 +66,7 @@ export function smartParse(text: string): ParseResult {
     return { data: JSON.parse(text), isJsObject: false }
   }
   catch {
-    // Try to parse as JS object literal (safer than eval)
+    // Try to parse as JS object literal using the safe recursive-descent parser
     try {
       let trimmed = text.trim()
 
@@ -45,8 +95,8 @@ export function smartParse(text: string): ParseResult {
         }
       }
 
-      // Convert undefined identifiers to strings
-      const reservedWords = ['true', 'false', 'null', 'undefined']
+      // Convert bare non-keyword identifiers in value position to strings
+      const reservedWords = ['true', 'false', 'null', 'undefined', 'nan', 'infinity']
       trimmed = trimmed.replace(
         /:\s*([A-Z_]\w*)\s*([,}\]])/gi,
         (match, identifier, ending) => {
@@ -82,17 +132,55 @@ export function smartParse(text: string): ParseResult {
 }
 
 /**
- * Convert JSON to XML
+ * Sanitizes an arbitrary JSON object key into a valid XML element tag name.
+ */
+export function sanitizeXmlTagName(rawName: string): string {
+  const trimmed = String(rawName ?? '').trim()
+  if (!trimmed)
+    return 'item'
+
+  let sanitized = trimmed.replace(/[^\w.-]/g, '_')
+  if (!/^[A-Z_]/i.test(sanitized)) {
+    sanitized = `_${sanitized}`
+  }
+  if (/^xml/i.test(sanitized)) {
+    sanitized = `_${sanitized}`
+  }
+  return sanitized
+}
+
+function escapeXmlText(value: unknown): string {
+  return String(value).replace(/[<>&'"]/g, c => ({
+    '<': '&lt;',
+    '>': '&gt;',
+    '&': '&amp;',
+    '\'': '&apos;',
+    '"': '&quot;',
+  })[c] || c)
+}
+
+/**
+ * Convert JSON to well-formed XML with sanitized tag names.
  */
 export function jsonToXml(obj: any, rootName = 'root'): string {
   function convert(data: any, name: string): string {
-    if (data === null)
-      return `<${name}/>`
+    const safeName = sanitizeXmlTagName(name)
+    if (data === null || data === undefined)
+      return `<${safeName}/>`
     if (typeof data !== 'object')
-      return `<${name}>${String(data).replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '\'': '&apos;', '"': '&quot;' })[c] || c)}</${name}>`
-    if (Array.isArray(data))
-      return data.map(item => convert(item, 'item')).join('\n')
-    return `<${name}>\n${Object.entries(data).map(([k, v]) => `  ${convert(v, k).split('\n').join('\n  ')}`).join('\n')}\n</${name}>`
+      return `<${safeName}>${escapeXmlText(data)}</${safeName}>`
+    if (Array.isArray(data)) {
+      if (data.length === 0)
+        return `<${safeName}/>`
+      const children = data
+        .map(item => `  ${convert(item, 'item').split('\n').join('\n  ')}`)
+        .join('\n')
+      return `<${safeName}>\n${children}\n</${safeName}>`
+    }
+    const entries = Object.entries(data)
+    if (entries.length === 0)
+      return `<${safeName}/>`
+    return `<${safeName}>\n${entries.map(([k, v]) => `  ${convert(v, k).split('\n').join('\n  ')}`).join('\n')}\n</${safeName}>`
   }
   return `<?xml version="1.0" encoding="UTF-8"?>\n${convert(obj, rootName)}`
 }
@@ -172,17 +260,46 @@ export function useJsonFormatter() {
   const showToast = ref(false)
   const toastMessage = ref('')
   const toastType = ref<'success' | 'error'>('success')
+  const isDiffMode = ref(false)
+
+  let toastTimer: ReturnType<typeof setTimeout> | null = null
+  let skipNextAutoExecute = false
+
+  function clearToastTimer() {
+    if (toastTimer !== null) {
+      clearTimeout(toastTimer)
+      toastTimer = null
+    }
+  }
+
+  function dispose() {
+    clearToastTimer()
+  }
+
+  if (getCurrentScope()) {
+    onScopeDispose(dispose)
+  }
+
+  function consumeSkipAutoExecute(): boolean {
+    if (!skipNextAutoExecute)
+      return false
+    skipNextAutoExecute = false
+    return true
+  }
 
   function showNotification(message: string, type: 'success' | 'error' = 'success') {
+    clearToastTimer()
     toastMessage.value = message
     toastType.value = type
     showToast.value = true
-    setTimeout(() => {
+    toastTimer = setTimeout(() => {
+      toastTimer = null
       showToast.value = false
     }, 3000)
   }
 
   function formatJson() {
+    isDiffMode.value = false
     try {
       const { data, isJsObject } = smartParse(inputJson.value)
       outputJson.value = JSON.stringify(data, null, 2)
@@ -200,6 +317,7 @@ export function useJsonFormatter() {
   }
 
   function minifyJson() {
+    isDiffMode.value = false
     try {
       const { data } = smartParse(inputJson.value)
       outputJson.value = JSON.stringify(data)
@@ -232,6 +350,7 @@ export function useJsonFormatter() {
       return
     }
 
+    isDiffMode.value = false
     try {
       const { data: parsed } = smartParse(inputJson.value)
       const result = evaluateQuery(queryExpression.value, parsed)
@@ -247,6 +366,7 @@ export function useJsonFormatter() {
   }
 
   function toYaml() {
+    isDiffMode.value = false
     try {
       const { data } = smartParse(inputJson.value)
       outputJson.value = yamlStringify(data)
@@ -262,6 +382,7 @@ export function useJsonFormatter() {
   }
 
   function toXml() {
+    isDiffMode.value = false
     try {
       const { data } = smartParse(inputJson.value)
       outputJson.value = jsonToXml(data)
@@ -277,6 +398,7 @@ export function useJsonFormatter() {
   }
 
   function sortKeys() {
+    isDiffMode.value = false
     try {
       const { data } = smartParse(inputJson.value)
       outputJson.value = JSON.stringify(sortObjectKeys(data), null, 2)
@@ -292,6 +414,7 @@ export function useJsonFormatter() {
   }
 
   function escapeJson() {
+    isDiffMode.value = false
     try {
       outputJson.value = JSON.stringify(inputJson.value)
       outputLanguage.value = 'json'
@@ -306,8 +429,13 @@ export function useJsonFormatter() {
   }
 
   function unescapeJson() {
+    isDiffMode.value = false
     try {
-      outputJson.value = JSON.parse(inputJson.value)
+      const parsed = JSON.parse(inputJson.value)
+      if (typeof parsed !== 'string') {
+        throw new TypeError('输入必须是 JSON 转义后的字符串')
+      }
+      outputJson.value = parsed
       outputLanguage.value = 'json'
       errorMessage.value = ''
       isValidJson.value = true
@@ -320,6 +448,7 @@ export function useJsonFormatter() {
   }
 
   function flattenJson() {
+    isDiffMode.value = false
     try {
       const { data } = smartParse(inputJson.value)
       outputJson.value = JSON.stringify(flattenObject(data), null, 2)
@@ -334,6 +463,13 @@ export function useJsonFormatter() {
     }
   }
 
+  function enterDiffMode() {
+    isDiffMode.value = true
+    outputLanguage.value = 'json'
+    errorMessage.value = ''
+    showNotification('对比模式已开启：请在右侧编辑或粘贴待对比的 JSON，再点击对比')
+  }
+
   function diffJson() {
     try {
       const { data: input } = smartParse(inputJson.value)
@@ -341,6 +477,10 @@ export function useJsonFormatter() {
       const diffs = diffObjects(input, output)
 
       if (diffs.length === 0) {
+        if (!isDiffMode.value) {
+          enterDiffMode()
+          return
+        }
         showNotification('两个 JSON 完全相同')
         return
       }
@@ -355,11 +495,16 @@ export function useJsonFormatter() {
 
       outputJson.value = `// 差异对比结果 (${diffs.length} 处不同)\n// + 新增  - 删除  ~ 修改\n\n${diffResult}`
       outputLanguage.value = 'json'
+      isDiffMode.value = false
       errorMessage.value = ''
       isValidJson.value = true
       showNotification(`发现 ${diffs.length} 处差异`)
     }
     catch (e: any) {
+      if (!isDiffMode.value && !outputJson.value.trim()) {
+        enterDiffMode()
+        return
+      }
       errorMessage.value = `对比失败: ${e.message}`
       isValidJson.value = false
     }
@@ -373,8 +518,8 @@ export function useJsonFormatter() {
         showNotification('已粘贴')
       }
     }
-    catch {
-      showNotification('无法读取剪贴板，请使用 Ctrl+V', 'error')
+    catch (error) {
+      showNotification(formatClipboardError(error, 'read'), 'error')
     }
   }
 
@@ -383,22 +528,28 @@ export function useJsonFormatter() {
       await clipboard.writeText(outputJson.value)
       showNotification('已复制到剪贴板')
     }
-    catch {
+    catch (error) {
       // No `document.execCommand` fallback: it would write to the clipboard without passing
       // the plugin's `clipboard.write` permission gate, which is exactly what the gate exists
-      // to prevent. A denied permission has to read as a failure, not as a silent success.
-      showNotification('复制失败，请检查剪贴板权限', 'error')
+      // to prevent. A denied or unavailable permission has to read as a failure.
+      showNotification(formatClipboardError(error, 'write'), 'error')
     }
   }
 
   function swapEditors() {
     const temp = inputJson.value
+    if (outputJson.value !== inputJson.value) {
+      skipNextAutoExecute = true
+    }
     inputJson.value = outputJson.value
     outputJson.value = temp
+    errorMessage.value = ''
     showNotification('已交换')
   }
 
   function clearAll() {
+    isDiffMode.value = false
+    skipNextAutoExecute = false
     inputJson.value = ''
     outputJson.value = ''
     queryExpression.value = ''
@@ -415,11 +566,14 @@ export function useJsonFormatter() {
     queryExpression,
     errorMessage,
     isValidJson,
+    isDiffMode,
     showToast,
     toastMessage,
     toastType,
 
     // Methods
+    consumeSkipAutoExecute,
+    dispose,
     showNotification,
     formatJson,
     minifyJson,
@@ -431,6 +585,7 @@ export function useJsonFormatter() {
     escapeJson,
     unescapeJson,
     flattenJson,
+    enterDiffMode,
     diffJson,
     pasteFromClipboard,
     copyOutput,

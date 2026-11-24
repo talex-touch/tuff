@@ -9,6 +9,7 @@ declare global {
   const EffectScope: typeof import('vue').EffectScope
   const asyncComputed: typeof import('@vueuse/core').asyncComputed
   const autoResetRef: typeof import('@vueuse/core').autoResetRef
+  const classifyClipboardError: typeof import('./composables/useJsonFormatter').classifyClipboardError
   const computed: typeof import('vue').computed
   const computedAsync: typeof import('@vueuse/core').computedAsync
   const computedEager: typeof import('@vueuse/core').computedEager
@@ -40,6 +41,7 @@ declare global {
   const extendRef: typeof import('@vueuse/core').extendRef
   const flattenObject: typeof import('./composables/useJsonFormatter').flattenObject
   const forceMaxCoreBox: typeof import('./composables/useCoreBoxInput').forceMaxCoreBox
+  const formatClipboardError: typeof import('./composables/useJsonFormatter').formatClipboardError
   const getActiveHead: typeof import('@unhead/vue')['getActiveHead']
   const getCurrentInstance: typeof import('vue').getCurrentInstance
   const getCurrentScope: typeof import('vue').getCurrentScope
@@ -102,6 +104,7 @@ declare global {
   const resolveComponent: typeof import('vue').resolveComponent
   const resolveRef: typeof import('@vueuse/core')['resolveRef']
   const resolveUnref: typeof import('@vueuse/core')['resolveUnref']
+  const sanitizeXmlTagName: typeof import('./composables/useJsonFormatter').sanitizeXmlTagName
   const shallowReactive: typeof import('vue').shallowReactive
   const shallowReadonly: typeof import('vue').shallowReadonly
   const shallowRef: typeof import('vue').shallowRef
@@ -329,7 +332,7 @@ declare global {
   export type { Component, Slot, Slots, ComponentPublicInstance, ComputedRef, DirectiveBinding, ExtractDefaultPropTypes, ExtractPropTypes, ExtractPublicPropTypes, InjectionKey, PropType, Ref, ShallowRef, MaybeRef, MaybeRefOrGetter, VNode, WritableComputedRef } from 'vue'
   import('vue')
   // @ts-ignore
-  export type { ParseResult } from './composables/useJsonFormatter'
+  export type { ParseResult, ClipboardErrorKind } from './composables/useJsonFormatter'
   import('./composables/useJsonFormatter')
 }
 
@@ -341,6 +344,7 @@ declare module 'vue' {
     readonly EffectScope: UnwrapRef<typeof import('vue')['EffectScope']>
     readonly asyncComputed: UnwrapRef<typeof import('@vueuse/core')['asyncComputed']>
     readonly autoResetRef: UnwrapRef<typeof import('@vueuse/core')['autoResetRef']>
+    readonly classifyClipboardError: UnwrapRef<typeof import('./composables/useJsonFormatter')['classifyClipboardError']>
     readonly computed: UnwrapRef<typeof import('vue')['computed']>
     readonly computedAsync: UnwrapRef<typeof import('@vueuse/core')['computedAsync']>
     readonly computedEager: UnwrapRef<typeof import('@vueuse/core')['computedEager']>
@@ -370,6 +374,7 @@ declare module 'vue' {
     readonly extendRef: UnwrapRef<typeof import('@vueuse/core')['extendRef']>
     readonly flattenObject: UnwrapRef<typeof import('./composables/useJsonFormatter')['flattenObject']>
     readonly forceMaxCoreBox: UnwrapRef<typeof import('./composables/useCoreBoxInput')['forceMaxCoreBox']>
+    readonly formatClipboardError: UnwrapRef<typeof import('./composables/useJsonFormatter')['formatClipboardError']>
     readonly getCurrentInstance: UnwrapRef<typeof import('vue')['getCurrentInstance']>
     readonly getCurrentScope: UnwrapRef<typeof import('vue')['getCurrentScope']>
     readonly getCurrentWatcher: UnwrapRef<typeof import('vue')['getCurrentWatcher']>
@@ -427,6 +432,7 @@ declare module 'vue' {
     readonly refThrottled: UnwrapRef<typeof import('@vueuse/core')['refThrottled']>
     readonly refWithControl: UnwrapRef<typeof import('@vueuse/core')['refWithControl']>
     readonly resolveComponent: UnwrapRef<typeof import('vue')['resolveComponent']>
+    readonly sanitizeXmlTagName: UnwrapRef<typeof import('./composables/useJsonFormatter')['sanitizeXmlTagName']>
     readonly shallowReactive: UnwrapRef<typeof import('vue')['shallowReactive']>
     readonly shallowReadonly: UnwrapRef<typeof import('vue')['shallowReadonly']>
     readonly shallowRef: UnwrapRef<typeof import('vue')['shallowRef']>

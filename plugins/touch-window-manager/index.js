@@ -18,28 +18,6 @@ const ACTION_LABELS = {
   'launch': '启动',
 }
 
-const PRESET_ICON = { type: 'class', value: 'i-ri-layout-column-line' }
-const PRESETS = [
-  {
-    id: 'preset-two-column',
-    title: '双列平铺（前两窗口）',
-    subtitle: '自动将前两窗口分到左右半屏',
-    keywords: ['split', 'tile', '双列', '平铺', '左右'],
-  },
-  {
-    id: 'preset-dev-split',
-    title: '开发工作台（终端+浏览器）',
-    subtitle: '终端贴左，浏览器贴右，适合开发调试',
-    keywords: ['dev', 'terminal', 'browser', '开发', '终端', '浏览器'],
-  },
-  {
-    id: 'preset-clear-topmost',
-    title: '取消全部置顶',
-    subtitle: '批量取消当前可见窗口的置顶状态',
-    keywords: ['topmost', 'cleanup', '置顶', '清理'],
-  },
-]
-const PRESET_IDS = new Set(PRESETS.map(p => p.id))
 function normalizeText(value) {
   return String(value ?? '').trim()
 }
@@ -123,6 +101,15 @@ function stableFailure(error) {
     return blocked('permission-denied', '缺少 system.shell 权限')
   if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
     return blocked('permission-unavailable', '权限系统不可用')
+  if (code === 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED')
+    return blocked('permission-check-failed', '权限请求失败')
+  if (
+    code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE'
+    || code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE'
+    || code === 'CAPABILITY_UNAVAILABLE'
+  ) {
+    return blocked('capability-unavailable', '窗口管理能力不可用')
+  }
   if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED')
     return blocked('cancelled', '窗口操作已取消', 'cancelled')
   if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT')
@@ -166,26 +153,6 @@ const pluginLifecycle = {
   async onInit() {},
 
   async onFeatureTriggered(featureId, query) {
-    if (featureId === 'window-presets') {
-      const keyword = normalizeText(getQueryText(query)).toLowerCase()
-      const matched = PRESETS.filter(
-        p => !keyword || [p.id, p.title, p.subtitle, ...p.keywords].join(' ').toLowerCase().includes(keyword),
-      )
-      const items = matched.map(p =>
-        new TuffItemBuilder(`window-preset-${p.id}`)
-          .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
-          .setTitle(p.title)
-          .setSubtitle(p.subtitle)
-          .setIcon(PRESET_ICON)
-          .setMeta({ pluginName: PLUGIN_NAME, featureId, defaultAction: 'run-preset', presetId: p.id })
-          .setActions([
-            { id: 'run-preset', label: '应用预设', icon: PRESET_ICON, payload: { presetId: p.id } },
-          ])
-          .build(),
-      )
-      await publishItems(items)
-      return true
-    }
     if (featureId !== FEATURE_ID)
       return false
 
@@ -296,25 +263,19 @@ const pluginLifecycle = {
   },
 
   async onItemAction(item, context = {}) {
+    if (item?.meta?.pluginName && item.meta.pluginName !== PLUGIN_NAME)
+      return
+
+    const candidateActionId = normalizeText(context?.actionId || item?.meta?.defaultAction)
+    if (!ACTIONS.has(candidateActionId))
+      return
+
     const selected = selectedAction(item, context)
     if (!selected)
       return blocked('invalid-action', '无效窗口动作')
     if (!plugin.windowManager || typeof plugin.windowManager.act !== 'function')
-      return blocked('window-manager-capability-unavailable', '窗口管理能力不可用')
+      return blocked('capability-unavailable', '窗口管理能力不可用')
 
-    if (item?.meta?.defaultAction === 'run-preset') {
-      const presetId = item.meta?.presetId
-      if (!PRESET_IDS.has(presetId))
-        return blocked('invalid-action', '无效窗口预设')
-      if (!plugin.windowPresets || typeof plugin.windowPresets.runAction !== 'function') {
-        return blocked('window-preset-capability-unavailable', '窗口预设能力不可用')
-      }
-      const result = await plugin.windowPresets.runAction(presetId)
-      if (result?.status === 'completed') {
-        return { externalAction: true, success: true, status: 'completed', message: `已处理 ${result.affectedWindows} 个窗口` }
-      }
-      return blocked('execution-failed', '窗口预设执行失败', 'failed')
-    }
     try {
       const result = await plugin.windowManager.act(selected.action, selected.token)
       if (result?.status === 'completed') {

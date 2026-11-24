@@ -1,0 +1,169 @@
+name: Plugin NPM Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      plugin_filter:
+        description: Comma-separated plugin directory names to pack/publish (leave empty for all package-backed plugins)
+        required: false
+        type: string
+        default: ""
+      dry_run:
+        description: Validate, pack, and run npm publish with --dry-run without publishing to the registry
+        required: false
+        type: boolean
+        default: true
+      dist_tag:
+        description: npm dist-tag to publish under (e.g. latest, beta, next)
+        required: false
+        type: string
+        default: latest
+      registry:
+        description: Target npm registry URL
+        required: false
+        type: string
+        default: https://registry.npmjs.org
+      provenance:
+        description: Attach npm OIDC provenance attestation on live publish
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  publish-plugins:
+    name: Pack and Publish Official Plugins to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Required for npm OIDC trusted publishing and --provenance attestations.
+      id-token: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          registry-url: ${{ inputs.registry }}
+
+      - name: Install Dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Plugin Toolchain
+        run: |
+          set -euo pipefail
+          pnpm -F @talex-touch/utils build
+          pnpm -F @talex-touch/tuff-cli-core build
+          pnpm -F @talex-touch/unplugin-export-plugin build
+          pnpm -F @talex-touch/tuff-cli build
+          pnpm -F @talex-touch/tuffex build
+
+      - name: Validate Official Plugins
+        run: |
+          set -euo pipefail
+          pnpm plugins:validate
+          pnpm check plugin-blocked-reasons
+          pnpm check plugin-lint-coverage
+
+      - name: Verify npm Auth Context
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "NPM_TOKEN is empty; relying on GitHub OIDC trusted publishing."
+          fi
+
+      - name: Stage, Validate, and Publish Selected Plugins
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          INPUT_PLUGIN_FILTER: ${{ inputs.plugin_filter }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_DIST_TAG: ${{ inputs.dist_tag }}
+          INPUT_REGISTRY: ${{ inputs.registry }}
+          INPUT_PROVENANCE: ${{ inputs.provenance }}
+        run: |
+          set -euo pipefail
+
+          PACK_ARGS=("--out" "dist/npm-plugins")
+          if [ -n "${INPUT_PLUGIN_FILTER}" ]; then
+            PACK_ARGS+=("--filter" "${INPUT_PLUGIN_FILTER}")
+          fi
+
+          # Always stage plugins/<dir>/dist/npm/ (and verify policy + security scan + .tgz)
+          # so the subsequent `tuff publish --target npm` step (including --dry-run) validates
+          # the exact staged package directory.
+          node scripts/pack-npm-plugins.mjs "${PACK_ARGS[@]}"
+
+          mapfile -t TARGET_ENTRIES < <(node -e '
+            const fs = require("node:fs")
+            const path = require("node:path")
+            const rawFilter = (process.env.INPUT_PLUGIN_FILTER || "").trim()
+            const filters = rawFilter
+              ? rawFilter.split(",").map(item => item.trim()).filter(Boolean)
+              : []
+            const pluginsRoot = path.resolve("plugins")
+            const dirs = fs.readdirSync(pluginsRoot, { withFileTypes: true })
+              .filter(entry => entry.isDirectory())
+              .map(entry => entry.name)
+              .sort()
+            for (const dir of dirs) {
+              const pluginDir = path.join(pluginsRoot, dir)
+              const pkgPath = path.join(pluginDir, "package.json")
+              const manifestPath = path.join(pluginDir, "manifest.json")
+              if (!fs.existsSync(pkgPath) || !fs.existsSync(manifestPath)) continue
+              const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"))
+              if (filters.length > 0 && !filters.includes(dir) && !filters.includes(pkg.name)) {
+                continue
+              }
+              console.log([dir, pkg.name, pkg.version].join("\t"))
+            }
+          ')
+
+          if [ "${#TARGET_ENTRIES[@]}" -eq 0 ]; then
+            echo "No publishable plugins matched filter '${INPUT_PLUGIN_FILTER}'."
+            exit 1
+          fi
+
+          CLI_BIN="${PWD}/packages/tuff-cli/bin/tuff.js"
+          for entry in "${TARGET_ENTRIES[@]}"; do
+            IFS=$'\t' read -r dir pkg_name pkg_version <<< "${entry}"
+            if [ "${INPUT_DRY_RUN}" != "true" ] && [ -z "${INPUT_PLUGIN_FILTER}" ]; then
+              if npm view "${pkg_name}@${pkg_version}" version --registry "${INPUT_REGISTRY}" >/dev/null 2>&1; then
+                echo "Skipping ${pkg_name}@${pkg_version} (already published on ${INPUT_REGISTRY})."
+                continue
+              fi
+            fi
+
+            echo "::group::Publish plugins/${dir} (${pkg_name}@${pkg_version}) to npm (dry_run=${INPUT_DRY_RUN})"
+            PUBLISH_ARGS=(
+              publish
+              --target npm
+              --non-interactive
+              --access public
+              --registry "${INPUT_REGISTRY}"
+              --tag "${INPUT_DIST_TAG}"
+            )
+            if [ "${INPUT_DRY_RUN}" = "true" ]; then
+              PUBLISH_ARGS+=(--dry-run)
+            elif [ "${INPUT_PROVENANCE}" = "true" ]; then
+              PUBLISH_ARGS+=(--provenance)
+            fi
+            (cd "plugins/${dir}" && node "${CLI_BIN}" "${PUBLISH_ARGS[@]}")
+            echo "::endgroup::"
+          done

@@ -179,6 +179,7 @@ const mocks = vi.hoisted(() => {
     handlers,
     healthMonitor,
     installQueue,
+    installQueueOptions: null as Record<string, unknown> | null,
     isSecureStoreAvailable: vi.fn(),
     keyResolveCurrentIdentity: vi.fn(),
     localProviderTrackFile: vi.fn(),
@@ -355,11 +356,19 @@ vi.mock('@talex-touch/utils/common/logger', () => ({
 }))
 
 vi.mock('../../core/eventbus/touch-event', () => ({
+  PluginInstallCompletedEvent: class {
+    constructor(
+      public pluginName: string,
+      public source: string,
+      public installedAt: number
+    ) {}
+  },
   TalexEvents: {
     PERMISSION_GRANTED: 'permission-granted',
-    PERMISSION_REVOKED: 'permission-revoked'
+    PERMISSION_REVOKED: 'permission-revoked',
+    PLUGIN_INSTALL_COMPLETED: 'plugin-install-completed'
   },
-  touchEventBus: { off: mocks.eventBusOff, on: mocks.eventBusOn }
+  touchEventBus: { emit: vi.fn(), off: mocks.eventBusOff, on: mocks.eventBusOn }
 }))
 
 vi.mock('../../core/runtime-accessor', () => ({
@@ -512,6 +521,15 @@ vi.mock('./host/plugin-runtime-service', () => ({
 vi.mock('./plugin-content-installer', () => ({ installPluginContentPackageToLocalPlugin: vi.fn() }))
 vi.mock('./install-queue', () => ({
   PluginInstallQueue: class {
+    constructor(
+      _installer: unknown,
+      _transport: unknown,
+      _windowId: unknown,
+      options?: Record<string, unknown>
+    ) {
+      mocks.installQueueOptions = options ?? null
+    }
+
     enqueue = vi.fn()
     handleConfirmResponse = vi.fn()
   }
@@ -2744,5 +2762,97 @@ describe('PluginModule facade', () => {
         })
       ])
     })
+  })
+
+  it('persists providerMetadata inside install_source and skips Nexus reportPluginUninstall for npm plugins', async () => {
+    const { manager } = await createActualManagerHarness()
+
+    const onInstallCompleted = mocks.installQueueOptions?.onInstallCompleted as
+      | ((payload: {
+          request: { source: string; hintType?: string; metadata?: Record<string, unknown> }
+          manifest?: { name: string }
+          providerResult: {
+            provider: string
+            official?: boolean
+            metadata?: Record<string, unknown>
+          }
+        }) => Promise<void>)
+      | undefined
+    expect(onInstallCompleted).toBeTypeOf('function')
+
+    await onInstallCompleted!({
+      request: {
+        source: 'npm:@talex-touch/calendar-plugin@1.2.0',
+        hintType: 'npm',
+        metadata: { registry: 'https://registry.npmjs.org' }
+      },
+      manifest: { name: 'calendar' },
+      providerResult: {
+        provider: 'npm',
+        official: false,
+        metadata: {
+          packageName: '@talex-touch/calendar-plugin',
+          resolvedVersion: '1.2.0',
+          distTag: 'latest',
+          registry: 'https://registry.npmjs.org',
+          integrity: 'sha512-abc',
+          trustTier: 'npm-verified',
+          officialScope: true
+        }
+      }
+    })
+
+    expect(mocks.dbUtils.setPluginData).toHaveBeenCalledWith(
+      'calendar',
+      'install_source',
+      expect.objectContaining({
+        source: 'npm:@talex-touch/calendar-plugin@1.2.0',
+        provider: 'npm',
+        official: false,
+        providerMetadata: expect.objectContaining({
+          packageName: '@talex-touch/calendar-plugin',
+          resolvedVersion: '1.2.0',
+          distTag: 'latest',
+          registry: 'https://registry.npmjs.org',
+          trustTier: 'npm-verified',
+          officialScope: true
+        })
+      })
+    )
+
+    // Verify uninstall skips Nexus reportPluginUninstall when install_source.provider === 'npm'
+    mocks.dbUtils.getPluginData.mockImplementation(async (pluginName: string, key: string) => {
+      if (pluginName === 'calendar' && key === 'install_source') {
+        return {
+          value: JSON.stringify({
+            source: 'npm:@talex-touch/calendar-plugin@1.2.0',
+            provider: 'npm',
+            official: false,
+            providerMetadata: { packageName: '@talex-touch/calendar-plugin' }
+          })
+        }
+      }
+      return undefined
+    })
+
+    const existing = new Set([
+      fixturePath('plugins', 'calendar'),
+      fixturePath('plugin-data', 'calendar')
+    ])
+    const resolveOwner = (target: string) => mocks.renamedPaths.get(target) ?? target
+    mocks.fsPathExists.mockImplementation(async (target: string) =>
+      existing.has(resolveOwner(target))
+    )
+    mocks.fsRemove.mockImplementation(async (target: string) => {
+      existing.delete(resolveOwner(target))
+    })
+
+    const result = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: { enabled: false }
+    })
+
+    expect(result).toMatchObject({ success: true })
+    expect(mocks.reportPluginUninstall).not.toHaveBeenCalled()
   })
 })

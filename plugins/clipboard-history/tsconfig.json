@@ -1,22 +1,22 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "jsx": "preserve",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "useDefineForClassFields": true,
+    "baseUrl": ".",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "useDefineForClassFields": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "baseUrl": ".",
     "paths": {
       "~/*": ["src/*"]
     },
-    "jsx": "preserve",
     "resolveJsonModule": true,
+    "types": ["vite/client"],
     "allowImportingTsExtensions": true,
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,
-    "skipLibCheck": true,
-    "types": ["vite/client"]
+    "skipLibCheck": true
   },
   "include": [
     "src/**/*.ts",

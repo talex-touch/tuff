@@ -1,0 +1,153 @@
+{
+  "id": "com.tuffex.touch-diagram-sketch",
+  "name": "touch-diagram-sketch",
+  "displayName": {
+    "default": "Diagram Sketch",
+    "locales": {
+      "zh-CN": "架构简图工坊",
+      "en-US": "Diagram Sketch"
+    }
+  },
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 261011,
+  "category": "creative",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": {
+    "default": "Mermaid 与 Unicode ASCII 架构简图工具：16+ 生产级模板、箭头速记编译、可选 AI 自然语言生成与一键复制",
+    "locales": {
+      "zh-CN": "Mermaid 与 Unicode ASCII 架构简图工具：16+ 生产级模板、箭头速记编译、可选 AI 自然语言生成与一键复制",
+      "en-US": "Mermaid & Unicode Box-Drawing ASCII Diagram Sketcher: 16+ production templates, arrow shorthand compiler, optional gated AI generation, one-click Mermaid/Markdown/ASCII copy"
+    }
+  },
+  "main": "index.js",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  },
+  "permissions": {
+    "required": [
+      "search.root-results"
+    ],
+    "optional": [
+      "clipboard.write",
+      "intelligence.basic"
+    ]
+  },
+  "permissionReasons": {
+    "clipboard.write": {
+      "default": "将生成的 Mermaid、Markdown 代码块或 Unicode ASCII 图形复制到剪贴板",
+      "locales": {
+        "zh-CN": "将生成的 Mermaid、Markdown 代码块或 Unicode ASCII 图形复制到剪贴板",
+        "en-US": "Copy generated Mermaid code, Markdown fenced blocks, or Unicode ASCII box diagrams to the clipboard"
+      }
+    },
+    "intelligence.basic": {
+      "default": "在用户显式触发时，将自然语言描述转换为 Mermaid 图表代码",
+      "locales": {
+        "zh-CN": "在用户显式触发时，将自然语言描述转换为 Mermaid 图表代码",
+        "en-US": "Convert natural-language descriptions into Mermaid diagrams only when explicitly triggered by the user"
+      }
+    },
+    "search.root-results": {
+      "default": "Push Diagram Sketch entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 架构简图工坊 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push Diagram Sketch entries into CoreBox root search results"
+      }
+    }
+  },
+  "searchProviders": [
+    {
+      "id": "touch-diagram-sketch.diagram-sketch",
+      "displayName": "Diagram Sketch",
+      "featureId": "diagram-sketch",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
+  "features": [
+    {
+      "id": "diagram-sketch",
+      "name": {
+        "default": "架构简图工坊",
+        "locales": {
+          "zh-CN": "架构简图工坊",
+          "en-US": "Diagram Sketch"
+        }
+      },
+      "desc": {
+        "default": "16+ Mermaid 生产模板、箭头速记转 Mermaid/ASCII 及可选 AI 生成",
+        "locales": {
+          "zh-CN": "16+ Mermaid 生产模板、箭头速记转 Mermaid/ASCII 及可选 AI 生成",
+          "en-US": "16+ production Mermaid templates, arrow shorthand to Mermaid/Unicode ASCII, and optional AI generation"
+        }
+      },
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": [
+        "diagram",
+        "mermaid",
+        "mmd",
+        "ascii",
+        "flowchart",
+        "sequence",
+        "er",
+        "erd",
+        "state",
+        "class",
+        "architecture",
+        "gitgraph",
+        "架构图",
+        "流程图",
+        "时序图",
+        "画图"
+      ],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": [
+        "text"
+      ],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": [
+            "diagram",
+            "mermaid",
+            "mmd",
+            "ascii-diagram",
+            "box-diagram",
+            "flowchart",
+            "sequence",
+            "er",
+            "erd",
+            "gitgraph",
+            "架构图",
+            "流程图",
+            "时序图",
+            "画图"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -3,7 +3,7 @@
   "name": "touch-ai-sessions",
   "version": "1.0.0",
   "author": "TalexTouch Team",
-  "sdkapi": 260817,
+  "sdkapi": 261011,
   "category": "utilities",
   "icon": {
     "type": "file",
@@ -48,8 +48,20 @@
   "features": [
     {
       "id": "ai-sessions",
-      "name": "AI Sessions",
-      "desc": "搜索允许的 AI 会话元数据并复制脱敏引用",
+      "name": {
+        "default": "AI 会话",
+        "locales": {
+          "zh-CN": "AI 会话",
+          "en-US": "AI Sessions"
+        }
+      },
+      "desc": {
+        "default": "搜索允许的 AI 会话元数据并复制脱敏引用",
+        "locales": {
+          "zh-CN": "搜索允许的 AI 会话元数据并复制脱敏引用",
+          "en-US": "Search allowed AI session metadata and copy redacted references"
+        }
+      },
       "icon": {
         "type": "file",
         "value": "assets/logo.svg"
@@ -86,10 +98,10 @@
     }
   ],
   "_files": {
-    "index.js": "sha256-b83078903ea159f2d4d5b25d58f91c3b30ac1d6038c103ada2c43fa4d190dcda",
+    "index.js": "sha256-0ae12b1007629e4ea7ce033543de458a12a5fe7089d1ef786b97f4de36d14668",
     "assets/logo.svg": "sha256-1b4a96dd5fde04f1c0379e20f574514db928678e183e564546757693cb9d622f"
   },
-  "_signature": "7X+JZBWzBFB8nAgNOiJ2i+to50MY/VYrtkLDxqTEMPI=",
+  "_signature": "8UjgOx4ahe7OVHHr7loYQ8jWvQGEJcIZ8dyG35lLUbg=",
   "dev": {
     "enable": false,
     "address": "",

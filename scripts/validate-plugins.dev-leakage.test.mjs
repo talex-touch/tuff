@@ -40,10 +40,18 @@ function runValidator(pluginsDir) {
 function makePlugin(root, name, { manifest, packageJson }) {
   const dir = path.join(root, name)
   fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(
-    path.join(dir, 'package.json'),
-    JSON.stringify({ name: `@talex-touch/${name}-plugin`, version: '1.0.0', ...packageJson }),
-  )
+  const basePackage = {
+    name: `@talex-touch/${name}-plugin`,
+    version: '1.0.0',
+    keywords: ['tuff-plugin'],
+    tuff: {
+      schemaVersion: 1,
+      id: manifest?.id ?? `com.tuff.${name}`,
+      name: manifest?.name ?? name,
+    },
+    ...packageJson,
+  }
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(basePackage))
   if (manifest)
     fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest))
   return dir

@@ -1,14 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
 import { loadPluginPrelude } from './plugin-host-child-runtime'
 
-function payload(scriptContent: string, pluginName = 'touch-browser-open', declared = true) {
+function payload(
+  scriptContent: string,
+  pluginName = 'touch-browser-open',
+  declared = true,
+  sdkapi?: number
+) {
   return {
     scriptContent,
     snapshot: {
       platform: 'darwin',
       arch: 'arm64',
       locale: 'zh-CN',
-      manifest: { name: pluginName }
+      manifest: { name: pluginName, ...(sdkapi === undefined ? {} : { sdkapi }) }
     },
     capabilityManifest: declared
       ? [{ id: 'system.browser-open', callbackLifetime: 'transient', callbackFields: [] }]
@@ -102,13 +107,20 @@ describe('plugin host child browser-open facade', () => {
     runtime.shutdown()
   })
 
-  it('does not project the facade for another plugin or without the declaration', async () => {
+  it('does not project the facade for another plugin (even at sdkapi 261011) or without the declaration', async () => {
     for (const input of [
       payload('module.exports={onInit(){return typeof plugin.browser}}', 'touch-browser-data'),
       payload(
         'module.exports={onInit(){return typeof plugin.browser}}',
+        'community-external-plugin',
+        true,
+        261011
+      ),
+      payload(
+        'module.exports={onInit(){return typeof plugin.browser}}',
         'touch-browser-open',
-        false
+        false,
+        261011
       )
     ]) {
       const runtime = loadPluginPrelude(input)

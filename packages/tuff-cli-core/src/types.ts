@@ -26,6 +26,10 @@ export interface VersionSyncOptions {
   auto?: boolean
 }
 
+export type BuildPackageFormat = 'tpex' | 'npm' | 'both'
+export type PublishTarget = 'nexus' | 'npm' | 'both'
+export type NpmPublishAccess = 'public' | 'restricted'
+
 export interface BuildConfig {
   /**
    * Output directory for build artifacts
@@ -56,6 +60,18 @@ export interface BuildConfig {
    * @default false
    */
   includeExperimentalWidgets?: boolean
+
+  /**
+   * Package output format(s): `.tpex`, npm package (`dist/npm` + `.tgz`), or both.
+   * @default 'tpex'
+   */
+  format?: BuildPackageFormat
+
+  /**
+   * Shorthand to also stage and pack the npm distribution (`dist/npm/` + `.tgz`).
+   * @default false
+   */
+  npm?: boolean
 }
 
 export interface DevConfig {
@@ -77,7 +93,13 @@ export interface DevConfig {
 
 export interface PublishConfig {
   /**
-   * Release tag
+   * Publish target registry: Nexus store (default), npm registry, or both.
+   * @default 'nexus'
+   */
+  target?: PublishTarget
+
+  /**
+   * Release tag (Nexus tag or npm dist-tag)
    */
   tag?: string
 
@@ -97,9 +119,25 @@ export interface PublishConfig {
   dryRun?: boolean
 
   /**
-   * Custom publish API URL
+   * Custom publish API URL (Nexus)
    */
   apiUrl?: string
+
+  /**
+   * Custom npm registry URL (for `--target npm` or `--target both`)
+   */
+  registry?: string
+
+  /**
+   * Publish npm package with OIDC provenance (`npm publish --provenance`)
+   */
+  provenance?: boolean
+
+  /**
+   * npm package visibility (`public` or `restricted`)
+   * @default 'public'
+   */
+  access?: NpmPublishAccess
 
   /**
    * Force non-interactive auth behavior.
@@ -215,6 +253,29 @@ export interface Options {
    * rules they name for the exact artifact hash they name; everything else still blocks.
    */
   securityWaivers?: string
+
+  /**
+   * Package output format(s): `'tpex'`, `'npm'`, or `'both'`.
+   * @default 'tpex'
+   */
+  format?: BuildPackageFormat
+
+  /**
+   * Shorthand to also stage and pack the npm distribution (`dist/npm/` + `.tgz`).
+   * @default false
+   */
+  npm?: boolean
+
+  /**
+   * Override npm package name when staging `dist/npm/package.json`.
+   */
+  npmPackageName?: string
+
+  /**
+   * npm publish access level for `dist/npm/package.json#publishConfig.access`.
+   * @default 'public'
+   */
+  npmAccess?: NpmPublishAccess
 
   /**
    * @deprecated Use `manifest` instead

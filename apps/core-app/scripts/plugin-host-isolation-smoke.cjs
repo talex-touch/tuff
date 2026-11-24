@@ -2605,17 +2605,12 @@ async function run() {
         }))
       )} responses=${JSON.stringify(firstTranslationCapabilityResults)}`
     )
-    assert(firstTranslationItem.render.custom.content === 'touch-translation::touch-translate')
-    assert(firstTranslationItem.render.custom.data.status === 'complete')
-    const firstTranslationProvider = firstTranslationItem.render.custom.data.providers.find(
-      (provider) => provider.id === 'fake-provider'
-    )
     assert(
-      firstTranslationProvider?.translatedText ===
+      firstTranslationItem.render.basic.title ===
         `fake-provider:hello translation:generation-${firstBatchTranslation.host.activation.activationGeneration}`
     )
-    assert(firstTranslationProvider?.provider === 'fake-provider')
-    assert(firstTranslationProvider?.model === 'fake-model')
+    assert(firstTranslationItem.render.basic.subtitle.includes('fake-provider'))
+    assert(firstTranslationItem.render.basic.subtitle.includes('fake-model'))
     assert(
       firstBatchTranslation.state.intelligenceCalls.some(
         (call) =>
@@ -2727,17 +2722,12 @@ async function run() {
       item.actions?.some((action) => action.id === 'copy-translation')
     )
     assert(secondTranslationItem)
-    assert(secondTranslationItem.render.custom.content === 'touch-translation::touch-translate')
-    assert(secondTranslationItem.render.custom.data.status === 'complete')
-    const secondTranslationProvider = secondTranslationItem.render.custom.data.providers.find(
-      (provider) => provider.id === 'fake-provider'
-    )
     assert(
-      secondTranslationProvider?.translatedText ===
+      secondTranslationItem.render.basic.title ===
         `fake-provider:hello translation:generation-${secondBatchTranslation.host.activation.activationGeneration}`
     )
-    assert(secondTranslationProvider?.provider === 'fake-provider')
-    assert(secondTranslationProvider?.model === 'fake-model')
+    assert(secondTranslationItem.render.basic.subtitle.includes('fake-provider'))
+    assert(secondTranslationItem.render.basic.subtitle.includes('fake-model'))
     assert(
       secondBatchTranslation.host.activation.activationGeneration !==
         firstBatchTranslation.host.activation.activationGeneration

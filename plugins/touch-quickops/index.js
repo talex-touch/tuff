@@ -2,7 +2,7 @@ const { plugin, logger, TuffItemBuilder, quickOps, flow } = globalThis
 
 const PLUGIN_NAME = 'touch-quickops'
 const SOURCE_ID = 'plugin-features'
-const ICON = { type: 'emoji', value: '⚡' }
+const ICON = { type: 'file', value: 'assets/logo.svg' }
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB']
 const FLOW_ACTION_ID = 'quickops-flow-action'
 const DEVELOPER_PREVIEW_SAVE_SVG_ACTION_ID = 'quickops-developer-preview-save-svg'
@@ -1878,6 +1878,23 @@ function projectItemsForHost(items) {
   })
 }
 
+function mapQuickOpsCapabilityReason(error, fallbackReason) {
+  const code = error && typeof error === 'object' && typeof error.code === 'string' ? error.code : ''
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED')
+    return 'permission-denied'
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
+    return 'permission-unavailable'
+  if (code === 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED')
+    return 'permission-check-failed'
+  if (code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE' || code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE')
+    return 'capability-unavailable'
+  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED')
+    return 'cancelled'
+  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT')
+    return 'timeout'
+  return fallbackReason
+}
+
 const pluginLifecycle = {
   async onFeatureTriggered(featureId, query) {
     try {
@@ -1920,21 +1937,34 @@ const pluginLifecycle = {
           externalAction: true,
           success: false,
           status: 'blocked',
-          reason: 'developer-preview-save-unavailable',
+          reason: 'capability-unavailable',
         }
       }
 
       const format = selectedActionId === DEVELOPER_PREVIEW_SAVE_PNG_ACTION_ID ? 'png' : 'svg'
-      const result = await quickOps.saveDeveloperPreview({
-        format,
-        payload: selectedAction?.payload?.developerPreviewPayload,
-      })
-      return {
-        externalAction: true,
-        success: result?.state === 'saved',
-        status: result?.state || 'unknown',
-        reason: result?.reason,
-        message: result?.path || result?.message,
+      try {
+        const result = await quickOps.saveDeveloperPreview({
+          format,
+          payload: selectedAction?.payload?.developerPreviewPayload,
+        })
+        return {
+          externalAction: true,
+          success: result?.state === 'saved',
+          status: result?.state || 'unknown',
+          reason: result?.reason,
+          message: result?.path || result?.message,
+        }
+      }
+      catch (error) {
+        logger?.error?.('[touch-quickops] Failed to save QuickOps developer preview')
+        const reason = mapQuickOpsCapabilityReason(error, 'developer-preview-save-failed')
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason,
+          message: reason === 'developer-preview-save-failed' ? 'Developer preview save failed' : undefined,
+        }
       }
     }
 
@@ -1973,21 +2003,16 @@ const pluginLifecycle = {
     }
     catch (error) {
       logger?.error?.('[touch-quickops] Failed to dispatch QuickOps Flow action')
-      const permissionDenied = error?.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
-      const unavailable = error?.code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE'
+      const reason = mapQuickOpsCapabilityReason(error, 'flow-dispatch-failed')
       return {
         externalAction: true,
         success: false,
         status: 'blocked',
         targetId: payload.targetId,
-        reason: permissionDenied
-          ? 'permission-denied'
-          : unavailable
-            ? 'host-unavailable'
-            : 'flow-dispatch-failed',
-        message: permissionDenied || unavailable
-          ? undefined
-          : 'Flow action failed',
+        reason,
+        message: reason === 'flow-dispatch-failed'
+          ? 'Flow action failed'
+          : undefined,
       }
     }
   },

@@ -2,9 +2,56 @@
   "name": "@talex-touch/touch-window-manager-plugin",
   "private": true,
   "version": "1.0.0",
-  "packageManager": "pnpm@10.34.4",
+  "description": "桌面窗口调度：激活、关闭、贴边、置顶、启动",
+  "license": "MIT",
+  "packageManager": "pnpm@11.24.0",
+  "keywords": [
+    "tuff-plugin",
+    "utilities",
+    "window-manager",
+    "windows",
+    "layout"
+  ],
+  "main": "./index.js",
+  "engines": {
+    "tuff": ">=261011"
+  },
   "scripts": {
     "test": "node --test index.test.cjs",
     "build": "node ../../packages/tuff-cli/bin/tuff.js builder"
+  },
+  "tuff": {
+    "schemaVersion": 1,
+    "id": "com.tuffex.window-manager",
+    "name": "touch-window-manager",
+    "displayName": {
+      "en": "Window Manager",
+      "zh": "窗口管理"
+    },
+    "sdkapi": 261011,
+    "category": "utilities",
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "permissions": {
+      "required": [
+        "system.shell",
+        "search.root-results"
+      ],
+      "optional": []
+    },
+    "platforms": {
+      "win32": true,
+      "darwin": true,
+      "linux": false
+    },
+    "surface": "prelude",
+    "manifest": "./manifest.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-window-manager"
   }
 }

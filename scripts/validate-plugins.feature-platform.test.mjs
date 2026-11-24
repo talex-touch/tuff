@@ -45,7 +45,16 @@ function makePlugin(root, platform) {
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(
     path.join(dir, 'package.json'),
-    JSON.stringify({ name: '@talex-touch/fixture-plugin', version: '1.0.0' }),
+    JSON.stringify({
+      name: '@talex-touch/fixture-plugin',
+      version: '1.0.0',
+      keywords: ['tuff-plugin'],
+      tuff: {
+        schemaVersion: 1,
+        id: 'com.tuff.fixture',
+        name: 'fixture',
+      },
+    }),
   )
   fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({
     id: 'com.tuff.fixture',

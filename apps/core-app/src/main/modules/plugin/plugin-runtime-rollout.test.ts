@@ -17,31 +17,44 @@ const COMPATIBLE_OFFICIAL_PRELUDES = Object.freeze([
   'clipboard-history',
   'json-formatter',
   'touch-ai-sessions',
+  'touch-api-lens',
   'touch-batch-rename',
   'touch-browser-bookmarks',
   'touch-browser-data',
   'touch-browser-open',
+  'touch-calc-pad',
   'touch-code-snippets',
+  'touch-color-studio',
+  'touch-cron-craft',
   'touch-dev-toolbox',
   'touch-dev-utils',
+  'touch-diagram-sketch',
   'touch-dictation',
+  'touch-docs-atlas',
   'touch-emoji-symbols',
   'touch-hosts',
   'touch-image',
   'touch-intelligence',
+  'touch-markdown-craft',
+  'touch-music',
   'touch-orca',
+  'touch-pomodoro-zen',
   'touch-quick-actions',
   'touch-quickops',
+  'touch-regex-lab',
   'touch-snipaste',
   'touch-snippets',
+  'touch-svg-craft',
   'touch-system-actions',
   'touch-text-snippets',
   'touch-text-tools',
+  'touch-totp-vault',
   'touch-translation',
   'touch-vscode-projects',
   'touch-window-manager',
   'touch-window-presets',
-  'touch-workspace-scripts'
+  'touch-workspace-scripts',
+  'touch-world-time'
 ] as const)
 
 const EXPECTED_UNMIGRATED = Object.freeze({})
@@ -72,12 +85,12 @@ function officialManifestNames(): string[] {
 }
 
 describe('plugin runtime production rollout gate', () => {
-  it('enables the production default only after all 28 manifested activations are compatible', () => {
+  it('enables the production default only after all 41 manifested activations are compatible', () => {
     const official = officialManifestNames()
     const compatible = new Set<string>(COMPATIBLE_OFFICIAL_PRELUDES)
     const unmigrated = official.filter((name) => !compatible.has(name))
 
-    expect(official).toHaveLength(28)
+    expect(official).toHaveLength(41)
     // The inventory used to be compared against a hardcoded copy of itself here, which was
     // already a tautology when both lived in production. Now that the list is this file's own
     // constant, the meaningful direction is the other one: every plugin on disk must be in it,
@@ -88,14 +101,19 @@ describe('plugin runtime production rollout gate', () => {
     expect(shouldInstallPluginRuntimeServiceByDefault()).toBe(true)
   })
 
-  it('excludes the two manifestless Surface directories from activation success', () => {
-    const official = new Set(officialManifestNames())
-    for (const name of ['touch-music']) {
-      expect(fs.existsSync(path.join(pluginsRoot, name))).toBe(true)
-      expect(fs.existsSync(path.join(pluginsRoot, name, 'manifest.json'))).toBe(false)
-      expect(official.has(name)).toBe(false)
-    }
-    expect(fs.existsSync(path.join(pluginsRoot, 'touch-music', 'preload.js'))).toBe(true)
+  it('requires every official plugin directory to ship a manifest and keeps touch-music off legacy preload.js', () => {
+    const directories = fs
+      .readdirSync(pluginsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()
+    const manifestless = directories.filter(
+      (name) => !fs.existsSync(path.join(pluginsRoot, name, 'manifest.json'))
+    )
+    expect(manifestless).toEqual([])
+    expect(fs.existsSync(path.join(pluginsRoot, 'touch-music', 'manifest.json'))).toBe(true)
+    expect(fs.existsSync(path.join(pluginsRoot, 'touch-music', 'index.js'))).toBe(true)
+    expect(fs.existsSync(path.join(pluginsRoot, 'touch-music', 'preload.js'))).toBe(false)
   })
 
   it('requires clipboard-history canonical build input and declared root scripts for Batch A', () => {

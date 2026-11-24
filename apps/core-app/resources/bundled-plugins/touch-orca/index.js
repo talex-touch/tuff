@@ -103,6 +103,22 @@ function messageItem(featureId, title, subtitle) {
   return item
 }
 
+function createActionToken() {
+  const cryptoApi = globalThis.crypto
+  if (!cryptoApi || typeof cryptoApi.randomUUID !== 'function') {
+    throw Object.assign(new Error('crypto.randomUUID unavailable'), {
+      code: 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE',
+    })
+  }
+  const token = cryptoApi.randomUUID()
+  if (typeof token !== 'string' || !token) {
+    throw Object.assign(new Error('crypto.randomUUID invalid'), {
+      code: 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE',
+    })
+  }
+  return token
+}
+
 function snapshotItem(featureId, snapshot, nextTokens) {
   const parts = [
     `workspaces ${snapshot.workspaces}`,
@@ -110,7 +126,7 @@ function snapshotItem(featureId, snapshot, nextTokens) {
     snapshot.tasksAvailable ? `tasks ${snapshot.tasks}` : 'tasks unavailable',
   ]
   const subtitle = snapshot.title ? `${parts.join(' · ')} · ${snapshot.title}` : parts.join(' · ')
-  const actionToken = crypto.randomUUID()
+  const actionToken = createActionToken()
   const item = new Builder(`${featureId}-snapshot`)
     .setSource('plugin', SOURCE_ID, 'Orca')
     .setTitle('Orca 状态')

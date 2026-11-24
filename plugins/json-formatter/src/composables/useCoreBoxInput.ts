@@ -1,30 +1,12 @@
-import { onCoreBoxInputChange, useBox } from '@talex-touch/utils/plugin/sdk'
+import { useBox, useFeature } from '@talex-touch/utils/plugin/sdk'
 import { onBeforeUnmount, onMounted } from 'vue'
-
-function extractText(data: any): string {
-  const payload = data?.data ?? data
-  if (typeof payload?.query?.text === 'string')
-    return payload.query.text
-  if (typeof payload?.input === 'string')
-    return payload.input
-
-  const inputs = Array.isArray(payload?.inputs)
-    ? payload.inputs
-    : Array.isArray(payload?.query?.inputs)
-      ? payload.query.inputs
-      : []
-
-  return inputs
-    .map((item: any) => (typeof item?.text === 'string' ? item.text : ''))
-    .filter(Boolean)
-    .join('\n')
-}
 
 /**
  * 订阅 CoreBox 输入并用 Bridge 缓存回放恢复激活前的完整查询。
  */
 export function useCoreBoxInput(onInput: (text: string) => void): void {
   const box = useBox()
+  const feature = useFeature()
   let active = true
   let bridgeInputSeen = false
   let inputGeneration = 0
@@ -34,11 +16,11 @@ export function useCoreBoxInput(onInput: (text: string) => void): void {
     onInput(text)
   }
 
-  onCoreBoxInputChange((data: any) => {
+  const unsubscribeInput = feature.onInputChange((input: string) => {
     if (!active)
       return
     bridgeInputSeen = true
-    applyInput(extractText(data))
+    applyInput(input)
   })
 
   onMounted(() => {
@@ -56,6 +38,8 @@ export function useCoreBoxInput(onInput: (text: string) => void): void {
 
   onBeforeUnmount(() => {
     active = false
+    unsubscribeInput()
+    feature.dispose()
   })
 }
 

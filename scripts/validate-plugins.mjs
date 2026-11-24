@@ -58,6 +58,8 @@ const KNOWN_PERMISSION_IDS = new Set([
   'account.read',
 ])
 
+const NPM_DISCOVERY_KEYWORDS = new Set(['tuff-plugin', 'talex-touch-plugin'])
+
 function resolveSearchProviderPermissionIds(scopes = []) {
   const permissionIds = scopes.flatMap((scope) => {
     switch (scope) {
@@ -203,23 +205,166 @@ function checkFeaturePlatformShape(pluginName, features) {
   return failed
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+/**
+ * Enforce official monorepo npm package naming (`@talex-touch/<dir>-plugin`).
+ *
+ * @returns true when the plugin should fail.
+ */
+export function checkPackageNaming(pluginName, packageManifest) {
+  if (!packageManifest)
+    return false
+  const expectedPackageName = `@talex-touch/${pluginName}-plugin`
+  if (packageManifest.name !== expectedPackageName) {
+    logError(
+      pluginName,
+      `package.json name must be "${expectedPackageName}" (received "${packageManifest.name || '<missing>'}")`,
+    )
+    return true
+  }
+  return false
+}
+
+/**
+ * Validate `package.json` <-> `manifest.json` parity for package-backed plugins:
+ * - exact version parity (`package.json.version === manifest.json.version`)
+ * - discovery `keywords` (`tuff-plugin` / legacy `talex-touch-plugin`)
+ * - canonical `tuff` metadata block parity (`schemaVersion`, `id`, `name`, `sdkapi`, `category`)
+ *
+ * Manifest-only plugins (including retired tombstones without `package.json`) pass cleanly.
+ *
+ * @returns true when the plugin should fail.
+ */
+export function checkPackageManifestParity(pluginName, packageManifest, manifest) {
+  if (!packageManifest || !manifest)
+    return false
+
+  let failed = false
+  const isPublishable = packageManifest.private !== true
+
+  // 1. Version parity (strict for every package-backed plugin with a manifest)
+  const pkgVersion = typeof packageManifest.version === 'string' ? packageManifest.version.trim() : ''
+  const manifestVersion = typeof manifest.version === 'string' ? manifest.version.trim() : ''
+  if (!pkgVersion) {
+    logError(pluginName, 'package.json is missing required field "version"')
+    failed = true
+  }
+  else if (manifestVersion && pkgVersion !== manifestVersion) {
+    logError(
+      pluginName,
+      `package.json version "${pkgVersion}" does not match manifest.json version "${manifestVersion}"`,
+    )
+    failed = true
+  }
+
+  // 2. Discovery keywords (`tuff-plugin`)
+  if (packageManifest.keywords !== undefined) {
+    if (
+      !Array.isArray(packageManifest.keywords)
+      || packageManifest.keywords.some(kw => typeof kw !== 'string' || !kw.trim())
+    ) {
+      logError(pluginName, 'package.json "keywords" must be an array of non-empty strings')
+      failed = true
+    }
+    else {
+      const hasDiscoveryKeyword = packageManifest.keywords.some(kw =>
+        NPM_DISCOVERY_KEYWORDS.has(kw.trim().toLowerCase()),
+      )
+      if (!hasDiscoveryKeyword) {
+        logError(pluginName, 'package.json "keywords" must include "tuff-plugin"')
+        failed = true
+      }
+    }
+  }
+  else if (isPublishable) {
+    logError(pluginName, 'publishable package.json must declare "keywords" including "tuff-plugin"')
+    failed = true
+  }
+
+  // 3. Canonical `tuff` block parity (with legacy `tuffPlugin` fallback warning)
+  const hasTuff = packageManifest.tuff !== undefined
+  const hasLegacyTuffPlugin = packageManifest.tuffPlugin !== undefined
+
+  if (hasLegacyTuffPlugin && !hasTuff) {
+    logWarn(pluginName, 'package.json uses legacy "tuffPlugin" block — migrate to canonical "tuff"')
+  }
+
+  const rawTuff = hasTuff ? packageManifest.tuff : packageManifest.tuffPlugin
+  const blockName = hasTuff ? 'tuff' : 'tuffPlugin'
+
+  if (rawTuff !== undefined) {
+    if (!isPlainObject(rawTuff)) {
+      logError(pluginName, `package.json "${blockName}" must be a plain object`)
+      failed = true
+    }
+    else {
+      if (rawTuff.schemaVersion !== undefined && rawTuff.schemaVersion !== 1) {
+        logError(
+          pluginName,
+          `package.json ${blockName}.schemaVersion must be 1 (received ${JSON.stringify(rawTuff.schemaVersion)})`,
+        )
+        failed = true
+      }
+      if (rawTuff.id !== undefined && manifest.id && rawTuff.id !== manifest.id) {
+        logError(
+          pluginName,
+          `package.json ${blockName}.id "${rawTuff.id}" does not match manifest.json id "${manifest.id}"`,
+        )
+        failed = true
+      }
+      if (rawTuff.name !== undefined && manifest.name && rawTuff.name !== manifest.name) {
+        logError(
+          pluginName,
+          `package.json ${blockName}.name "${rawTuff.name}" does not match manifest.json name "${manifest.name}"`,
+        )
+        failed = true
+      }
+      if (
+        rawTuff.sdkapi !== undefined
+        && manifest.sdkapi !== undefined
+        && Number(rawTuff.sdkapi) !== Number(manifest.sdkapi)
+      ) {
+        logError(
+          pluginName,
+          `package.json ${blockName}.sdkapi (${rawTuff.sdkapi}) does not match manifest.json sdkapi (${manifest.sdkapi})`,
+        )
+        failed = true
+      }
+      if (rawTuff.category !== undefined && manifest.category && rawTuff.category !== manifest.category) {
+        logError(
+          pluginName,
+          `package.json ${blockName}.category "${rawTuff.category}" does not match manifest.json category "${manifest.category}"`,
+        )
+        failed = true
+      }
+    }
+  }
+  else if (isPublishable) {
+    logError(pluginName, 'publishable package.json must declare a canonical "tuff" metadata block')
+    failed = true
+  }
+
+  return failed
+}
+
 for (const pluginName of pluginDirs) {
   totalPlugins++
   const pluginPath = path.join(pluginsDir, pluginName)
   const packageJsonPath = path.join(pluginPath, 'package.json')
   const manifestPath = path.join(pluginPath, 'manifest.json')
   const hasPackageJson = fs.existsSync(packageJsonPath)
+  let packageManifest = null
   let pluginHasError = false
 
   // 1. Package-backed plugins use the scoped runtime-id package convention.
   if (hasPackageJson) {
     try {
-      const packageManifest = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
-      const expectedPackageName = `@talex-touch/${pluginName}-plugin`
-      if (packageManifest.name !== expectedPackageName) {
-        logError(pluginName, `package.json name must be "${expectedPackageName}" (received "${packageManifest.name || '<missing>'}")`)
+      packageManifest = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
+      if (checkPackageNaming(pluginName, packageManifest))
         pluginHasError = true
-      }
       if (checkDevLeakage(pluginName, packageManifest?.['talex-touch']?.plugin?.dev, 'package.json'))
         pluginHasError = true
     }
@@ -248,6 +393,9 @@ for (const pluginName of pluginDirs) {
     pluginHasError = true
     continue
   }
+
+  if (checkPackageManifestParity(pluginName, packageManifest, manifest))
+    pluginHasError = true
 
   if (checkDevLeakage(pluginName, manifest?.dev, 'manifest.json'))
     pluginHasError = true
@@ -443,6 +591,80 @@ function selfTest() {
     {
       name: 'the manifest platform shape is accepted',
       run: () => checkFeaturePlatformShape('probe', [{ id: 'f', platform: { win32: true, darwin: false, linux: false } }]),
+      expect: false,
+    },
+    {
+      name: 'official package naming mismatch is rejected',
+      run: () => checkPackageNaming('touch-demo', { name: 'touch-demo' }),
+      expect: true,
+    },
+    {
+      name: 'official @talex-touch/<dir>-plugin package naming is accepted',
+      run: () => checkPackageNaming('touch-demo', { name: '@talex-touch/touch-demo-plugin' }),
+      expect: false,
+    },
+    {
+      name: 'package.json and manifest.json version mismatch is rejected',
+      run: () => checkPackageManifestParity(
+        'touch-demo',
+        { name: '@talex-touch/touch-demo-plugin', version: '1.0.0', private: true },
+        { id: 'com.tuffex.demo', name: 'touch-demo', version: '1.0.1', sdkapi: 261011, category: 'utilities' },
+      ),
+      expect: true,
+    },
+    {
+      name: 'declared keywords without tuff-plugin are rejected',
+      run: () => checkPackageManifestParity(
+        'touch-demo',
+        { name: '@talex-touch/touch-demo-plugin', version: '1.0.0', private: true, keywords: ['utilities'] },
+        { id: 'com.tuffex.demo', name: 'touch-demo', version: '1.0.0', sdkapi: 261011, category: 'utilities' },
+      ),
+      expect: true,
+    },
+    {
+      name: 'publishable package missing keywords and tuff block is rejected',
+      run: () => checkPackageManifestParity(
+        'touch-demo',
+        { name: '@talex-touch/touch-demo-plugin', version: '1.0.0', private: false },
+        { id: 'com.tuffex.demo', name: 'touch-demo', version: '1.0.0', sdkapi: 261011, category: 'utilities' },
+      ),
+      expect: true,
+    },
+    {
+      name: 'tuff metadata block id/sdkapi mismatch is rejected',
+      run: () => checkPackageManifestParity(
+        'touch-demo',
+        {
+          name: '@talex-touch/touch-demo-plugin',
+          version: '1.0.0',
+          keywords: ['tuff-plugin'],
+          tuff: { schemaVersion: 1, id: 'com.tuffex.other', name: 'touch-demo', sdkapi: 260428, category: 'utilities' },
+        },
+        { id: 'com.tuffex.demo', name: 'touch-demo', version: '1.0.0', sdkapi: 261011, category: 'utilities' },
+      ),
+      expect: true,
+    },
+    {
+      name: 'matching publishable package.json with tuff block and tuff-plugin keyword is accepted',
+      run: () => checkPackageManifestParity(
+        'touch-demo',
+        {
+          name: '@talex-touch/touch-demo-plugin',
+          version: '1.0.0',
+          keywords: ['tuff-plugin', 'utilities'],
+          tuff: { schemaVersion: 1, id: 'com.tuffex.demo', name: 'touch-demo', sdkapi: 261011, category: 'utilities' },
+        },
+        { id: 'com.tuffex.demo', name: 'touch-demo', version: '1.0.0', sdkapi: 261011, category: 'utilities' },
+      ),
+      expect: false,
+    },
+    {
+      name: 'manifest-only tombstone without package.json passes parity check',
+      run: () => checkPackageManifestParity(
+        'touch-code-snippets',
+        null,
+        { id: 'com.tuffex.code-snippets', name: 'touch-code-snippets', version: '1.0.1', sdkapi: 261011, category: 'utilities' },
+      ),
       expect: false,
     },
   ]

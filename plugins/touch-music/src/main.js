@@ -1,6 +1,8 @@
 import { TxInput } from '@talex-touch/tuffex/input'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { TxSlider } from '@talex-touch/tuffex/slider'
+import { initTuff } from '@talex-touch/utils/plugin/preload'
+import { initializePluginTheme } from '@talex-touch/utils/plugin/theme'
 import { createApp } from 'vue'
 import App from './App.vue'
 
@@ -14,9 +16,12 @@ import 'remixicon/fonts/remixicon.css'
 
 import './modules/api/index'
 
-window.app = createApp(App)
-window.app.component('TxScroll', TxScroll)
-window.app.component('TxSlider', TxSlider)
-window.app.component('TxInput', TxInput)
+initTuff(window)
+initializePluginTheme()
+
+const app = createApp(App)
+app.component('TxScroll', TxScroll)
+app.component('TxSlider', TxSlider)
+app.component('TxInput', TxInput)
 
 app.mount('#app')

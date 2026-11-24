@@ -4,8 +4,12 @@ import path from 'node:path'
 import process from 'node:process'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import {
+  buildNpmPackageJson,
   checkSdkCompatibility,
   CURRENT_SDK_VERSION,
+  formatOfficialNpmPackageName,
+  NPM_PLUGIN_CANONICAL_KEYWORD,
+  NPM_PLUGIN_PREFIX,
   resolveSdkApiVersion,
 } from '@talex-touch/utils/plugin'
 import { t } from '../i18n'
@@ -40,12 +44,28 @@ function shouldRewriteSdkapi(sdkapi: unknown): boolean {
 
 export interface CreateOptions {
   name?: string
+  packageName?: string
+  official?: boolean
   type?: 'basic' | 'ui' | 'service'
   language?: 'typescript' | 'javascript'
   uiFramework?: 'vue' | 'react' | 'none'
   template?: 'default' | 'translation' | 'image' | 'custom'
   outputDir?: string
   skipInstall?: boolean
+}
+
+const REVERSE_DOMAIN_ID_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?){2,}$/
+
+export function resolveScaffoldPackageName(
+  slug: string,
+  options?: { packageName?: string, official?: boolean },
+): string {
+  const custom = options?.packageName?.trim()
+  if (custom)
+    return custom
+  if (options?.official)
+    return formatOfficialNpmPackageName(slug)
+  return `${NPM_PLUGIN_PREFIX}${slug}`
 }
 
 /**
@@ -55,8 +75,8 @@ function validatePluginName(name: string): boolean | string {
   if (!name) {
     return t('create.invalidName')
   }
-  // Plugin name: lowercase letters, numbers, hyphens
-  if (!/^[a-z][a-z0-9-]*$/.test(name)) {
+  // Plugin slug: lowercase letters, numbers, hyphens; must start with letter and end with alphanumeric
+  if (!/^[a-z][a-z0-9-]*[a-z0-9]$/.test(name)) {
     return t('create.invalidName')
   }
   if (name.length < 2 || name.length > 50) {
@@ -202,10 +222,68 @@ export async function runSqliteExample() {
   fs.writeFileSync(examplePath, content)
 }
 
+function normalizeScaffoldFeature(feature: any, pluginName: string): Record<string, unknown> {
+  const rawName = typeof feature?.name === 'string' && feature.name.trim()
+    ? feature.name
+    : typeof feature?.title === 'string' && feature.title.trim()
+      ? feature.title
+      : pluginName
+  const rawDesc = typeof feature?.desc === 'string' && feature.desc.trim()
+    ? feature.desc
+    : typeof feature?.description === 'string' && feature.description.trim()
+      ? feature.description
+      : `Feature of ${pluginName}`
+
+  const existingPlatform = feature?.platform && typeof feature.platform === 'object' && !Array.isArray(feature.platform)
+    ? feature.platform
+    : null
+  const platform = existingPlatform
+    && typeof existingPlatform.win32 === 'boolean'
+    && typeof existingPlatform.darwin === 'boolean'
+    && typeof existingPlatform.linux === 'boolean'
+    ? {
+        win32: existingPlatform.win32,
+        darwin: existingPlatform.darwin,
+        linux: existingPlatform.linux,
+      }
+    : {
+        win32: true,
+        darwin: true,
+        linux: true,
+      }
+
+  const commands = Array.isArray(feature?.commands) && feature.commands.length > 0
+    ? feature.commands
+    : [
+        {
+          type: 'over',
+          value: [pluginName],
+        },
+      ]
+
+  const icon = feature?.icon && typeof feature.icon === 'object' && !Array.isArray(feature.icon)
+    ? feature.icon
+    : { type: 'class', value: 'i-ri-puzzle-line' }
+
+  const next: Record<string, unknown> = {
+    ...feature,
+    id: typeof feature?.id === 'string' && feature.id.trim() ? feature.id : 'main',
+    name: rawName.replace(/template/gi, pluginName),
+    desc: rawDesc.replace(/template/gi, pluginName),
+    icon,
+    push: typeof feature?.push === 'boolean' ? feature.push : false,
+    platform,
+    commands,
+  }
+  delete next.title
+  delete next.description
+  return next
+}
+
 /**
  * Configure manifest.json with user inputs
  */
-async function configureManifest(
+export async function configureManifest(
   targetDir: string,
   config: {
     name: string
@@ -215,10 +293,12 @@ async function configureManifest(
   },
 ): Promise<void> {
   const manifestPath = path.join(targetDir, 'manifest.json')
+  const canonicalId = `com.tuffex.${config.name}`
 
   if (!fs.existsSync(manifestPath)) {
-    // Create default manifest if not exists
+    // Create canonical default manifest when template omits one
     const manifest = {
+      id: canonicalId,
       name: config.name,
       version: '0.0.1',
       description: `${config.name} - A Tuff plugin`,
@@ -226,6 +306,15 @@ async function configureManifest(
       main: 'index.js',
       sdkapi: CURRENT_SDK_VERSION,
       category: 'utilities',
+      icon: {
+        type: 'class',
+        value: 'i-ri-puzzle-line',
+      },
+      dev: {
+        enable: false,
+        address: '',
+        source: false,
+      },
       permissions: {
         required: [SQLITE_PERMISSION_ID],
         optional: [],
@@ -236,59 +325,133 @@ async function configureManifest(
       features: [
         {
           id: 'main',
-          title: config.name,
-          description: `Main feature of ${config.name}`,
-          icon: 'puzzle',
-          keywords: [config.name],
+          name: config.name,
+          desc: `Main feature of ${config.name}`,
+          icon: {
+            type: 'class',
+            value: 'i-ri-puzzle-line',
+          },
+          push: false,
+          platform: {
+            win32: true,
+            darwin: true,
+            linux: true,
+          },
+          commands: [
+            {
+              type: 'over',
+              value: [config.name],
+            },
+          ],
         },
       ],
     }
-    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
+    fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
     return
   }
 
   // Update existing manifest
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+  if (
+    typeof manifest.id !== 'string'
+    || !REVERSE_DOMAIN_ID_RE.test(manifest.id)
+    || /template/i.test(manifest.id)
+  ) {
+    manifest.id = canonicalId
+  }
   manifest.name = config.name
+  manifest.version = '0.0.1'
   manifest.description = `${config.name} - A Tuff plugin`
+  if (typeof manifest.category !== 'string' || !manifest.category.trim()) {
+    manifest.category = 'utilities'
+  }
+  if (!manifest.icon || typeof manifest.icon !== 'object') {
+    manifest.icon = { type: 'class', value: 'i-ri-puzzle-line' }
+  }
+  manifest.dev = {
+    ...(manifest.dev && typeof manifest.dev === 'object' ? manifest.dev : {}),
+    enable: false,
+    address: '',
+    source: false,
+  }
   if (shouldRewriteSdkapi(manifest.sdkapi)) {
     manifest.sdkapi = CURRENT_SDK_VERSION
   }
   ensureSqliteManifestConfig(manifest)
 
-  // Update feature titles
+  // Normalize feature schema (`name`/`desc`, `platform`, `commands`)
   if (manifest.features && Array.isArray(manifest.features)) {
-    manifest.features = manifest.features.map((feature: any) => ({
-      ...feature,
-      title: feature.title?.replace(/template/gi, config.name) || config.name,
-      description: feature.description?.replace(/template/gi, config.name) || `Feature of ${config.name}`,
-    }))
+    manifest.features = manifest.features.map((feature: any) =>
+      normalizeScaffoldFeature(feature, config.name),
+    )
   }
 
-  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 }
 
 /**
- * Update package.json with plugin info
+ * Update package.json with plugin info and canonical npm/tuff metadata
  */
-async function configurePackageJson(
+export async function configurePackageJson(
   targetDir: string,
   config: {
     name: string
+    packageName?: string
+    official?: boolean
   },
 ): Promise<void> {
   const packagePath = path.join(targetDir, 'package.json')
+  const manifestPath = path.join(targetDir, 'manifest.json')
+  const manifest = fs.existsSync(manifestPath)
+    ? (JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as Record<string, unknown>)
+    : {
+        id: `com.tuffex.${config.name}`,
+        name: config.name,
+        version: '0.0.1',
+        sdkapi: CURRENT_SDK_VERSION,
+        category: 'utilities',
+        description: `${config.name} - A Tuff plugin`,
+        main: 'index.js',
+      }
 
-  if (!fs.existsSync(packagePath)) {
-    return
+  const pkg: Record<string, unknown> = fs.existsSync(packagePath)
+    ? (JSON.parse(fs.readFileSync(packagePath, 'utf-8')) as Record<string, unknown>)
+    : {}
+
+  const resolvedPackageName = resolveScaffoldPackageName(config.name, {
+    packageName: config.packageName,
+    official: config.official,
+  })
+  const resolvedVersion = typeof manifest.version === 'string' && manifest.version.trim()
+    ? manifest.version.trim()
+    : '0.0.1'
+
+  pkg.name = resolvedPackageName
+  pkg.version = resolvedVersion
+  pkg.description = typeof manifest.description === 'string' && manifest.description.trim()
+    ? manifest.description.trim()
+    : `${config.name} - A Tuff plugin`
+
+  const builtNpmMeta = buildNpmPackageJson({
+    manifest,
+    sourcePackageJson: pkg,
+    packageName: resolvedPackageName,
+  })
+
+  const keywordSet = new Set<string>([NPM_PLUGIN_CANONICAL_KEYWORD, ...builtNpmMeta.keywords])
+  pkg.keywords = [...keywordSet]
+  pkg.engines = {
+    ...(pkg.engines && typeof pkg.engines === 'object' && !Array.isArray(pkg.engines)
+      ? (pkg.engines as Record<string, unknown>)
+      : {}),
+    tuff: builtNpmMeta.engines.tuff,
+  }
+  pkg.tuff = builtNpmMeta.tuff
+  if (!pkg.publishConfig) {
+    pkg.publishConfig = { access: 'public' }
   }
 
-  const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf-8'))
-  pkg.name = config.name
-  pkg.version = '0.0.1'
-  pkg.description = `${config.name} - A Tuff plugin`
-
-  fs.writeFileSync(packagePath, JSON.stringify(pkg, null, 2))
+  fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`)
 }
 
 /**
@@ -436,7 +599,11 @@ export async function runCreate(options: CreateOptions = {}): Promise<void> {
         language: language || 'typescript',
         uiFramework: uiFramework || 'none',
       })
-      await configurePackageJson(targetDir, { name })
+      await configurePackageJson(targetDir, {
+        name,
+        packageName: options.packageName,
+        official: options.official,
+      })
       await createSqliteUsageExample(targetDir, (language || 'typescript') as 'typescript' | 'javascript')
     })
   }

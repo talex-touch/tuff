@@ -77,25 +77,23 @@ export const SYSTEM_ACTION_PLUGIN_NAMES: readonly string[] = Object.freeze([
   ...PRIVILEGED_PLUGIN_CAPABILITIES.systemActionsAdvanced
 ])
 
-export const HOST_CAPABILITY_OPEN_MIN_SDK = 261011
-
 /**
  * Whether a plugin name may hold a capability.
  *
  * Takes the name rather than the activation on purpose: callers hold it in three different shapes
  * — `activation.name`, `expectedActivation.name`, `snapshot.manifest.name` — and narrowing that
  * here would just move the coupling.
+ *
+ * Privileged host capabilities stay strictly name-gated regardless of `sdkapi` (8a367a5b0).
+ * Opening a host capability to external plugins happens by moving it out of this table behind a
+ * declared manifest permission (as `intelligence.context` did in 7279d20da).
  */
 export function isPrivilegedPluginFor(
   capability: PrivilegedPluginCapability,
-  pluginName: string | undefined,
-  sdkapi?: number
+  pluginName: string | undefined
 ): boolean {
   if (!pluginName) {
     return false
-  }
-  if (typeof sdkapi === 'number' && sdkapi >= HOST_CAPABILITY_OPEN_MIN_SDK) {
-    return true
   }
   return (PRIVILEGED_PLUGIN_CAPABILITIES[capability] as readonly string[]).includes(pluginName)
 }

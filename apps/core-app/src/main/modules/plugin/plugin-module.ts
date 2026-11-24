@@ -1,7 +1,6 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { FlowDispatchOptions, FlowPayload } from '@talex-touch/utils/types/flow'
 import type {
-  IManifest,
   IPluginManager,
   ITouchPlugin,
   PluginIssue,
@@ -38,6 +37,11 @@ import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { isLocalizedText, normalizeLocale, resolveLocalizedText } from '@talex-touch/utils/i18n'
 import { normalizePermissionId, parseManifestPermissions } from '@talex-touch/utils/permission'
 import { PluginStatus } from '@talex-touch/utils/plugin'
+import {
+  createUninstallInstallSourceTracker,
+  getPluginInstallSourceData,
+  persistPluginInstallSourceMetadata
+} from './plugin-install-source-tracker'
 import {
   CoreBoxEvents,
   PluginEvents,
@@ -960,35 +964,6 @@ function createPluginModuleInternal(
 
   const installer = new PluginInstaller()
 
-  const persistInstallSourceMetadata = async ({
-    request,
-    manifest,
-    providerResult
-  }: {
-    request: PluginInstallRequest
-    manifest?: IManifest
-    providerResult: PluginInstallSummary['providerResult']
-  }): Promise<void> => {
-    const pluginName = manifest?.name
-    if (!pluginName) {
-      logWarn('Failed to persist install metadata: missing plugin name')
-      return
-    }
-    try {
-      await dbUtils.setPluginData(pluginName, 'install_source', {
-        source: request.source,
-        hintType: request.hintType ?? null,
-        official: Boolean(providerResult.official),
-        provider: providerResult.provider,
-        installedAt: Date.now(),
-        metadata: request.metadata ?? null,
-        clientMetadata: request.clientMetadata ?? null
-      })
-    } catch (error) {
-      logWarn('Failed to save plugin source metadata', pluginTag(pluginName), error as Error)
-    }
-  }
-
   const installQueue = new PluginInstallQueue(installer, transport, mainWindowId, {
     assertInstallAdmission: () => {
       if (pluginDataDispositionCoordinator?.hasBlockedOperations()) {
@@ -996,7 +971,12 @@ function createPluginModuleInternal(
       }
     },
     onInstallCompleted: async ({ request, manifest, providerResult }) => {
-      await persistInstallSourceMetadata({ request, manifest, providerResult })
+      await persistPluginInstallSourceMetadata(
+        dbUtils,
+        { request, manifest, providerResult },
+        (message, name, error) =>
+          name ? logWarn(message, pluginTag(name), error) : logWarn(message)
+      )
       const pluginName = manifest?.name
       if (pluginName) {
         touchEventBus.emit(
@@ -1575,6 +1555,8 @@ function createPluginModuleInternal(
     })
   }
 
+  const uninstallSourceTracker = createUninstallInstallSourceTracker(dbUtils)
+
   pluginDataDispositionCoordinator = createProductionPluginDataDispositionCoordinator({
     secureStoreRootPath: secureStoreRootPath ?? '',
     dbUtils,
@@ -1667,6 +1649,7 @@ function createPluginModuleInternal(
       })
     },
     deletePluginRow: async (owner) => {
+      await uninstallSourceTracker.capture(owner)
       const nextEnabled = [...enabledPlugins].filter(
         (name) => name !== owner.folderName && name !== owner.pluginName
       )
@@ -1695,6 +1678,9 @@ function createPluginModuleInternal(
       return 'completed'
     },
     reportUninstall: async (owner) => {
+      if (uninstallSourceTracker.consumeShouldSkipRemoteReport(owner)) {
+        return 'completed'
+      }
       await reportPluginUninstall(owner.pluginName)
       return 'completed'
     },
@@ -1705,9 +1691,9 @@ function createPluginModuleInternal(
     input: PluginApiUninstallRequest
   ): Promise<PluginApiUninstallResponse> => {
     const request = normalizePluginUninstallRequest(input)
-    // By name, not sdkapi: sdkapi 261011 opened the host capabilities, not removal. The official
-    // seed force-replaces privileged plugins at every launch, so an uninstall would only come back.
-    // Same rule as the uninstall transport handler.
+    // By name, not sdkapi: privileged plugins remain name-gated for both host capabilities and
+    // removal protection. The official seed force-replaces privileged plugins at every launch, so
+    // an uninstall would only come back. Same rule as the uninstall transport handler.
     if (PRIVILEGED_PLUGIN_NAMES.includes(request.plugin.name)) {
       throw new Error('PRIVILEGED_PLUGIN_UNINSTALL_DENIED')
     }
@@ -3367,7 +3353,7 @@ export class PluginModule extends BaseModule {
       if (plugin.meta?.internal) continue
 
       try {
-        const sourceData = await manager.dbUtils.getPluginData(name, 'install_source')
+        const sourceData = await getPluginInstallSourceData(manager.dbUtils, plugin.name, name)
         result.push({
           name,
           version: plugin.version,

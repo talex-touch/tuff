@@ -6,17 +6,22 @@
   "sdkapi": 261011,
   "category": "utilities",
   "icon": {
-    "type": "emoji",
-    "value": "🙂"
+    "type": "file",
+    "value": "assets/logo.svg"
   },
-  "description": "Emoji 与符号选择器：搜索并复制常用表情、标点、货币与数学符号",
+  "description": "Emoji 与符号选择器：搜索并复制常用表情、颜文字、标点、货币与数学符号",
   "main": "index.js",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  },
   "permissions": {
     "required": ["clipboard.write", "search.root-results"],
     "optional": []
   },
   "permissionReasons": {
-    "clipboard.write": "将选中的 Emoji 或符号复制到剪贴板",
+    "clipboard.write": "将选中的 Emoji、颜文字或符号复制到剪贴板",
     "search.root-results": "将 Emoji 与符号入口推送到 CoreBox 根搜索结果"
   },
   "searchProviders": [
@@ -46,17 +51,17 @@
         }
       },
       "desc": {
-        "default": "搜索并复制常用 emoji、标点、货币与数学符号",
+        "default": "搜索并复制常用 emoji、颜文字、标点、货币与数学符号",
         "locales": {
-          "zh-CN": "搜索并复制常用 emoji、标点、货币与数学符号",
-          "en-US": "Search and copy common emoji, punctuation, currency and math symbols"
+          "zh-CN": "搜索并复制常用 emoji、颜文字、标点、货币与数学符号",
+          "en-US": "Search and copy common emoji, kaomoji, punctuation, currency and math symbols"
         }
       },
       "icon": {
-        "type": "emoji",
-        "value": "🙂"
+        "type": "file",
+        "value": "assets/logo.svg"
       },
-      "keywords": ["emoji", "symbol", "symbols", "表情", "符号", "颜文字", "特殊字符"],
+      "keywords": ["emoji", "symbol", "symbols", "kaomoji", "表情", "符号", "颜文字", "特殊字符"],
       "push": true,
       "priority": 6,
       "acceptedInputTypes": ["text"],
@@ -68,7 +73,7 @@
       "commands": [
         {
           "type": "over",
-          "value": ["emoji", "symbol", "symbols", "表情", "符号", "特殊字符"]
+          "value": ["emoji", "symbol", "symbols", "kaomoji", "表情", "符号", "颜文字", "特殊字符"]
         }
       ]
     }

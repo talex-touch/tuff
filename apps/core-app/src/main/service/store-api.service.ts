@@ -1,10 +1,23 @@
 import type { StoreProviderDefinition, StoreSourcesPayload } from '@talex-touch/utils/store'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import {
+  DEFAULT_NPM_REGISTRY_URL,
+  encodeNpmPackagePath,
+  formatNpmPluginSource,
+  isAllowedNpmRegistryUrl,
+  isValidNpmPackageName,
+  NPM_ABBREVIATED_PACKUMENT_ACCEPT,
+  parseNpmPluginSource,
+  resolveNpmRegistryUrl
+} from '@talex-touch/utils/plugin'
+import { createRequire } from 'node:module'
+import process from 'node:process'
+import {
   createDefaultStoreProviders,
   DEFAULT_STORE_PROVIDERS,
   STORE_SOURCES_STORAGE_KEY
 } from '@talex-touch/utils/store'
+import { compareUpdateVersions } from '../../shared/update/version'
 import { getRuntimeNexusBaseUrl } from '../modules/nexus/runtime-base'
 import { getMainConfig } from '../modules/storage'
 import { createLogger } from '../utils/logger'
@@ -12,6 +25,8 @@ import { appTaskGate } from './app-task-gate'
 import { performStoreHttpRequest } from './store-http.service'
 
 const log = createLogger('StoreApiService')
+
+export const NPM_UPDATE_CHECK_CONCURRENCY = 4
 
 function normalizeOfficialRuntimeSources(
   sources: StoreProviderDefinition[],
@@ -62,6 +77,15 @@ export function getEnabledApiSources(): StoreProviderDefinition[] {
 }
 
 /**
+ * Get enabled npmPackage sources sorted by priority descending
+ */
+export function getEnabledNpmSources(): StoreProviderDefinition[] {
+  return getStoreSources()
+    .filter((source) => source.enabled !== false && source.type === 'npmPackage')
+    .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+}
+
+/**
  * Get the primary store base URL from configured sources
  * Prioritizes enabled tpexApi sources by priority, falls back to defaults
  */
@@ -92,18 +116,37 @@ interface InstalledPluginInfo {
   version: string
 }
 
-interface PluginUpdateInfo {
+export interface PluginUpdateInfo {
   slug: string
   currentVersion: string
   latestVersion: string
   hasUpdate: boolean
   downloadUrl?: string
   changelog?: string
+  source?: 'official' | 'third-party' | 'npm'
+  packageName?: string
+  registry?: string
+  installSource?: string
 }
 
 interface UpdateCheckResponse {
   updates: PluginUpdateInfo[]
   checkedAt: string
+}
+
+export interface PluginInstallProviderMetadata {
+  packageName?: string
+  package?: string
+  resolvedVersion?: string
+  requestedSpec?: string
+  distTag?: string
+  registry?: string
+  integrity?: string
+  shasum?: string
+  tarballUrl?: string
+  trustTier?: string
+  officialScope?: boolean
+  [key: string]: unknown
 }
 
 export interface PluginInstallSource {
@@ -119,13 +162,205 @@ export interface PluginInstallSource {
     officialId?: string
     officialVersion?: string
     officialSource?: string
+    packageName?: string
+    registry?: string
+    distTag?: string
+    [key: string]: unknown
   } | null
+  providerMetadata?: PluginInstallProviderMetadata | null
 }
 
 export interface PluginWithSource {
   name: string
   version: string
   installSource?: PluginInstallSource | null
+}
+
+interface NpmAbbreviatedPackumentResponse {
+  'dist-tags'?: Record<string, string>
+  versions?: Record<
+    string,
+    {
+      dist?: {
+        tarball?: string
+      }
+    }
+  >
+}
+
+function readTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed || undefined
+}
+
+function isLocalHttpNpmRegistryAllowed(explicitOverride?: boolean): boolean {
+  if (typeof explicitOverride === 'boolean') return explicitOverride
+  if (!process.versions?.electron) return false
+  try {
+    const req = createRequire(import.meta.url)
+    const electron = req('electron') as { app?: { isPackaged?: boolean } }
+    return electron?.app?.isPackaged === false
+  } catch {
+    return false
+  }
+}
+
+function resolveNpmUpdateTarget(
+  plugin: PluginWithSource,
+  allowLocalHttp: boolean
+): { packageName: string; registry: string; distTag: string } | null {
+  const source = plugin.installSource
+  if (!source) return null
+
+  const providerMeta = source.providerMetadata
+  const requestMeta = source.metadata
+
+  const rawPackageName =
+    readTrimmedString(providerMeta?.packageName) ??
+    readTrimmedString(providerMeta?.package) ??
+    readTrimmedString(requestMeta?.packageName) ??
+    parseNpmPluginSource(source.source, { allowAnyBarePackageName: true })?.packageName
+
+  if (!rawPackageName || !isValidNpmPackageName(rawPackageName)) {
+    return null
+  }
+
+  const distTag =
+    readTrimmedString(providerMeta?.distTag) ?? readTrimmedString(requestMeta?.distTag) ?? 'latest'
+
+  const storedRegistry =
+    readTrimmedString(providerMeta?.registry) ?? readTrimmedString(requestMeta?.registry)
+
+  const candidates: string[] = []
+  if (storedRegistry) {
+    if (!isAllowedNpmRegistryUrl(storedRegistry, { allowLocalHttp })) {
+      log.warn('Skipping npm update check for plugin with disallowed registry URL', {
+        meta: { pluginName: plugin.name, packageName: rawPackageName }
+      })
+      return null
+    }
+    candidates.push(storedRegistry)
+  } else {
+    try {
+      for (const npmSource of getEnabledNpmSources()) {
+        const configRegistry = readTrimmedString(npmSource.config?.registryUrl)
+        if (configRegistry && isAllowedNpmRegistryUrl(configRegistry, { allowLocalHttp })) {
+          candidates.push(configRegistry)
+          continue
+        }
+        const sourceUrl = readTrimmedString(npmSource.url)
+        if (sourceUrl && isAllowedNpmRegistryUrl(sourceUrl, { allowLocalHttp })) {
+          candidates.push(sourceUrl)
+        }
+      }
+    } catch {
+      // Storage may not be ready; fall back to default registry
+    }
+  }
+
+  const registry = resolveNpmRegistryUrl([...candidates, DEFAULT_NPM_REGISTRY_URL], {
+    allowLocalHttp
+  })
+
+  return {
+    packageName: rawPackageName,
+    registry,
+    distTag
+  }
+}
+
+/**
+ * Check for updates of npm-installed plugins using abbreviated packuments with bounded concurrency.
+ */
+export async function checkNpmPluginUpdates(
+  plugins: PluginWithSource[],
+  options: { allowLocalHttp?: boolean; concurrency?: number } = {}
+): Promise<PluginUpdateInfo[]> {
+  if (!plugins.length) return []
+
+  const allowLocalHttp = isLocalHttpNpmRegistryAllowed(options.allowLocalHttp)
+  const concurrency = Math.max(
+    1,
+    Math.min(options.concurrency ?? NPM_UPDATE_CHECK_CONCURRENCY, NPM_UPDATE_CHECK_CONCURRENCY)
+  )
+  const workerCount = Math.min(concurrency, plugins.length)
+  const results: Array<PluginUpdateInfo | null> = new Array(plugins.length).fill(null)
+  let nextIndex = 0
+
+  const checkOne = async (plugin: PluginWithSource): Promise<PluginUpdateInfo | null> => {
+    const target = resolveNpmUpdateTarget(plugin, allowLocalHttp)
+    if (!target) return null
+
+    const { packageName, registry, distTag } = target
+    const url = `${registry}/${encodeNpmPackagePath(packageName)}`
+
+    try {
+      const response = await performStoreHttpRequest<NpmAbbreviatedPackumentResponse>({
+        url,
+        method: 'GET',
+        headers: {
+          Accept: NPM_ABBREVIATED_PACKUMENT_ACCEPT
+        },
+        responseType: 'json',
+        timeout: 15_000
+      })
+
+      if (response.status < 200 || response.status >= 300 || !response.data) {
+        return null
+      }
+
+      const rawDistTags = response.data['dist-tags']
+      const distTags = rawDistTags && typeof rawDistTags === 'object' ? rawDistTags : undefined
+      const readOwnTag = (tag: string): string | undefined => {
+        if (!distTags || !Object.prototype.hasOwnProperty.call(distTags, tag)) return undefined
+        return readTrimmedString(distTags[tag])
+      }
+      const latestVersion = readOwnTag(distTag) ?? readOwnTag('latest')
+      if (!latestVersion) return null
+
+      const hasUpdate = compareUpdateVersions(latestVersion, plugin.version) === 1
+      const versions = response.data.versions
+      const versionEntry =
+        versions &&
+        typeof versions === 'object' &&
+        Object.prototype.hasOwnProperty.call(versions, latestVersion)
+          ? versions[latestVersion]
+          : undefined
+      const tarballUrl = readTrimmedString(versionEntry?.dist?.tarball)
+      const installSource = formatNpmPluginSource(packageName, latestVersion)
+
+      return {
+        slug: plugin.name,
+        currentVersion: plugin.version,
+        latestVersion,
+        hasUpdate,
+        ...(tarballUrl ? { downloadUrl: tarballUrl } : {}),
+        source: 'npm',
+        packageName,
+        registry,
+        installSource
+      }
+    } catch (error) {
+      log.warn('Failed to check npm plugin update', {
+        meta: { pluginName: plugin.name, packageName, registry },
+        error
+      })
+      return null
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < plugins.length) {
+        const index = nextIndex
+        nextIndex += 1
+        results[index] = await checkOne(plugins[index]!)
+      }
+    })
+  )
+
+  return results.filter((entry): entry is PluginUpdateInfo => entry !== null)
 }
 
 /**
@@ -189,9 +424,10 @@ interface UpdateSchedulerOptions {
   checkIntervalMs?: number
   getPluginsWithSource: PluginSourceFetcher
   onUpdatesFound?: UpdateNotifier
+  allowLocalHttpNpmRegistry?: boolean
 }
 
-class PluginUpdateScheduler {
+export class PluginUpdateScheduler {
   private static readonly pollingService = PollingService.getInstance()
   private readonly pollingTaskId = 'plugin-update-scheduler.check'
   private readonly pollingJitterMs = 30_000
@@ -200,11 +436,13 @@ class PluginUpdateScheduler {
   private readonly checkIntervalMs: number
   private readonly getPluginsWithSource: PluginSourceFetcher
   private readonly onUpdatesFound?: UpdateNotifier
+  private readonly allowLocalHttpNpmRegistry?: boolean
 
   constructor(options: UpdateSchedulerOptions) {
     this.checkIntervalMs = options.checkIntervalMs ?? DEFAULT_CHECK_INTERVAL_MS
     this.getPluginsWithSource = options.getPluginsWithSource
     this.onUpdatesFound = options.onUpdatesFound
+    this.allowLocalHttpNpmRegistry = options.allowLocalHttpNpmRegistry
   }
 
   start(): void {
@@ -283,6 +521,12 @@ class PluginUpdateScheduler {
         allUpdates.push(...updates)
       }
 
+      // Check npm-installed plugins
+      if (grouped.npm.length > 0) {
+        const updates = await this.checkNpmUpdates(grouped.npm)
+        allUpdates.push(...updates)
+      }
+
       const withUpdates = allUpdates.filter((u) => u.hasUpdate)
       if (withUpdates.length > 0) {
         log.info('Updates available', { meta: { count: withUpdates.length } })
@@ -301,15 +545,23 @@ class PluginUpdateScheduler {
   private groupBySource(plugins: PluginWithSource[]): {
     official: PluginWithSource[]
     thirdParty: Map<string, PluginWithSource[]>
+    npm: PluginWithSource[]
   } {
     const official: PluginWithSource[] = []
     const thirdParty = new Map<string, PluginWithSource[]>()
+    const npm: PluginWithSource[] = []
 
     for (const plugin of plugins) {
       const source = plugin.installSource
 
       // No install source means local/dev plugin, skip
       if (!source) continue
+
+      // NPM-installed plugins query their configured npm registry packument
+      if (source.provider === 'npm') {
+        npm.push(plugin)
+        continue
+      }
 
       // Official plugins go to official store
       if (source.official) {
@@ -328,10 +580,10 @@ class PluginUpdateScheduler {
           thirdParty.set(baseUrl, list)
         }
       }
-      // Other provider types (npm, git, repository) don't support update check yet
+      // Other provider types (git, repository) don't support update check yet
     }
 
-    return { official, thirdParty }
+    return { official, thirdParty, npm }
   }
 
   private extractBaseUrl(source: string): string | null {
@@ -364,6 +616,12 @@ class PluginUpdateScheduler {
 
     const result = await checkPluginUpdates(input, baseUrl)
     return result?.updates ?? []
+  }
+
+  private async checkNpmUpdates(plugins: PluginWithSource[]): Promise<PluginUpdateInfo[]> {
+    return checkNpmPluginUpdates(plugins, {
+      allowLocalHttp: this.allowLocalHttpNpmRegistry
+    })
   }
 }
 

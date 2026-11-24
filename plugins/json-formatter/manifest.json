@@ -12,17 +12,17 @@
   "description": "一款全平台 JSON 工具，支持格式化、压缩、校验、转换与对比。",
   "dev": {
     "enable": false,
-    "address": "http://localhost:5555/#/",
-    "source": true
+    "address": "",
+    "source": false
   },
   "permissions": {
-    "required": ["clipboard.read", "network.internet"],
-    "optional": ["clipboard.write"]
+    "required": ["clipboard.read"],
+    "optional": ["clipboard.write", "network.internet"]
   },
   "permissionReasons": {
     "clipboard.read": "读取剪贴板中的 JSON 文本作为格式化输入",
     "clipboard.write": "将格式化后的结果复制回系统剪贴板",
-    "network.internet": "内置 Monaco 编辑器在解析 $schema 时会发起网络请求；插件自身逻辑不联网"
+    "network.internet": "可选：已禁用 Monaco 远端 $schema 请求，插件自身不联网；仅保留可选声明以兼容 Monaco JSON Worker 内置源码"
   },
   "features": [
     {

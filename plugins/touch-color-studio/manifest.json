@@ -1,0 +1,146 @@
+{
+  "id": "com.tuffex.touch-color-studio",
+  "name": "touch-color-studio",
+  "displayName": {
+    "default": "Color Studio",
+    "locales": {
+      "zh-CN": "色彩工坊",
+      "en-US": "Color Studio"
+    }
+  },
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 261011,
+  "category": "design",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": {
+    "default": "色彩实验室：HEX/RGB/HSL/OKLCH 转换、WCAG 2.1 对比度与无障碍配色建议、Tailwind v4 色板反查与渐变生成",
+    "locales": {
+      "zh-CN": "色彩实验室：HEX/RGB/HSL/OKLCH 转换、WCAG 2.1 对比度与无障碍配色建议、Tailwind v4 色板反查与渐变生成",
+      "en-US": "Color Lab: HEX/RGB/RGBA/HSL/OKLCH converter, WCAG 2.1 AA/AAA contrast calculator, Tailwind v4 token matcher, harmony palettes & CSS gradients"
+    }
+  },
+  "main": "index.js",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  },
+  "permissions": {
+    "required": [
+      "search.root-results"
+    ],
+    "optional": [
+      "clipboard.write"
+    ]
+  },
+  "permissionReasons": {
+    "clipboard.write": {
+      "default": "将颜色值、Tailwind Token、对比度报告或 CSS 渐变复制到剪贴板",
+      "locales": {
+        "zh-CN": "将颜色值、Tailwind Token、对比度报告或 CSS 渐变复制到剪贴板",
+        "en-US": "Copy converted color values, Tailwind tokens, WCAG contrast reports, or CSS gradients to the clipboard"
+      }
+    },
+    "search.root-results": {
+      "default": "Push Color Studio entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 色彩工坊 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push Color Studio entries into CoreBox root search results"
+      }
+    }
+  },
+  "searchProviders": [
+    {
+      "id": "touch-color-studio.color-studio",
+      "displayName": "Color Studio",
+      "featureId": "color-studio",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
+  "features": [
+    {
+      "id": "color-studio",
+      "name": {
+        "default": "色彩工坊",
+        "locales": {
+          "zh-CN": "色彩工坊",
+          "en-US": "Color Studio"
+        }
+      },
+      "desc": {
+        "default": "HEX/RGB/HSL/OKLCH 互转、WCAG 2.1 对比度、Tailwind v4 匹配与调色板生成",
+        "locales": {
+          "zh-CN": "HEX/RGB/HSL/OKLCH 互转、WCAG 2.1 对比度、Tailwind v4 匹配与调色板生成",
+          "en-US": "Convert HEX/RGB/HSL/OKLCH, check WCAG 2.1 contrast, match Tailwind v4 tokens, and build palettes & gradients"
+        }
+      },
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": [
+        "color",
+        "colour",
+        "hex",
+        "rgb",
+        "rgba",
+        "hsl",
+        "oklch",
+        "wcag",
+        "contrast",
+        "tailwind",
+        "palette",
+        "gradient",
+        "色彩",
+        "配色",
+        "对比度",
+        "调色板"
+      ],
+      "push": true,
+      "priority": 9,
+      "acceptedInputTypes": [
+        "text"
+      ],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": [
+            "color",
+            "colour",
+            "hex",
+            "rgb",
+            "hsl",
+            "oklch",
+            "contrast",
+            "wcag",
+            "palette",
+            "tailwind",
+            "tw",
+            "色彩",
+            "配色",
+            "对比度",
+            "调色板"
+          ]
+        }
+      ]
+    }
+  ]
+}

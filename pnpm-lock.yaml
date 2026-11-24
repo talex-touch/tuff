@@ -833,7 +833,7 @@ importers:
         version: 66.7.5(@unocss/webpack@66.7.5(webpack@5.108.4(cssnano@8.0.2(postcss@8.5.23))(csso@5.0.5)(esbuild@0.28.1)(postcss@8.5.23)))(vite@7.3.7(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
       vitepress:
         specifier: 'catalog:'
-        version: 2.0.0-alpha.18(@types/node@24.13.2)(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(change-case@5.4.4)(fuse.js@7.5.0)(jiti@2.7.0)(nprogress@0.2.0)(postcss@8.5.23)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0)
+        version: 2.0.0-alpha.18(@types/node@24.13.2)(change-case@5.4.4)(fuse.js@7.5.0)(jiti@2.7.0)(nprogress@0.2.0)(postcss@8.5.23)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0)
       vitest:
         specifier: ^3.2.7
         version: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.2)(jiti@2.7.0)(jsdom@26.1.0(bufferutil@4.1.0)(supports-color@10.2.2)(utf-8-validate@6.0.6))(sass@1.101.0)(supports-color@10.2.2)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
@@ -1495,15 +1495,15 @@ importers:
 
   plugins/clipboard-history:
     dependencies:
+      '@talex-touch/tuffex':
+        specifier: workspace:^
+        version: link:../../packages/tuffex
       '@talex-touch/utils':
         specifier: workspace:^
         version: link:../../packages/utils
       vue:
         specifier: catalog:frontend
         version: 3.5.45(typescript@5.9.3)
-      vue-router:
-        specifier: ^5.5.0
-        version: 5.5.1(@vue/compiler-sfc@3.5.45)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.45(typescript@5.9.3)))(vite@7.3.7(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))(vue@3.5.45(typescript@5.9.3))
     devDependencies:
       '@talex-touch/tuff-cli':
         specifier: workspace:^
@@ -1620,11 +1620,16 @@ importers:
       vite-plugin-vue-layouts:
         specifier: ^0.11.0
         version: 0.11.0(supports-color@10.2.2)(vite@7.3.7(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))(vue-router@5.5.1(@vue/compiler-sfc@3.5.45)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.45(typescript@5.9.3)))(vite@7.3.7(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))(vue@3.5.45(typescript@5.9.3)))(vue@3.5.45(typescript@5.9.3))
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.2)(jiti@2.7.0)(jsdom@26.1.0(bufferutil@4.1.0)(supports-color@10.2.2)(utf-8-validate@6.0.6))(sass@1.101.0)(supports-color@10.2.2)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
       vue-tsc:
         specifier: ^3.3.6
         version: 3.3.7(typescript@5.9.3)
 
   plugins/touch-ai-sessions: {}
+
+  plugins/touch-api-lens: {}
 
   plugins/touch-batch-rename: {}
 
@@ -1634,11 +1639,21 @@ importers:
 
   plugins/touch-browser-open: {}
 
+  plugins/touch-calc-pad: {}
+
+  plugins/touch-color-studio: {}
+
+  plugins/touch-cron-craft: {}
+
   plugins/touch-dev-toolbox: {}
 
   plugins/touch-dev-utils: {}
 
+  plugins/touch-diagram-sketch: {}
+
   plugins/touch-dictation: {}
+
+  plugins/touch-docs-atlas: {}
 
   plugins/touch-emoji-symbols: {}
 
@@ -1661,17 +1676,16 @@ importers:
         specifier: catalog:frontend
         version: 3.5.45(typescript@5.9.3)
 
+  plugins/touch-markdown-craft: {}
+
   plugins/touch-music:
     dependencies:
       '@talex-touch/tuffex':
         specifier: workspace:^
         version: link:../../packages/tuffex
-      '@types/howler':
-        specifier: ^2.2.13
-        version: 2.2.13
-      axios:
-        specifier: ^1.20.0
-        version: 1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
+      '@talex-touch/utils':
+        specifier: workspace:^
+        version: link:../../packages/utils
       gsap:
         specifier: 'catalog:'
         version: 3.15.0
@@ -1684,33 +1698,53 @@ importers:
       rgbaster:
         specifier: ^2.1.1
         version: 2.1.1
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
       vue:
         specifier: catalog:frontend
         version: 3.5.45(typescript@5.9.3)
     devDependencies:
+      '@types/howler':
+        specifier: ^2.2.13
+        version: 2.2.13
       '@vitejs/plugin-vue':
         specifier: ^6.0.7
         version: 6.0.8(vite@7.3.7(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))(vue@3.5.45(typescript@5.9.3))
+      '@vue/test-utils':
+        specifier: ^2.4.11
+        version: 2.4.11(@vue/compiler-dom@3.5.45)(@vue/server-renderer@3.5.45)(vue@3.5.45(typescript@5.9.3))
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0(bufferutil@4.1.0)(supports-color@10.2.2)(utf-8-validate@6.0.6)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
       vite:
         specifier: 7.3.7
         version: 7.3.7(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.2)(jiti@2.7.0)(jsdom@26.1.0(bufferutil@4.1.0)(supports-color@10.2.2)(utf-8-validate@6.0.6))(sass@1.101.0)(supports-color@10.2.2)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
 
   plugins/touch-orca: {}
+
+  plugins/touch-pomodoro-zen: {}
 
   plugins/touch-quick-actions: {}
 
   plugins/touch-quickops: {}
 
+  plugins/touch-regex-lab: {}
+
   plugins/touch-snipaste: {}
 
   plugins/touch-snippets: {}
 
+  plugins/touch-svg-craft: {}
+
   plugins/touch-system-actions: {}
 
   plugins/touch-text-tools: {}
+
+  plugins/touch-totp-vault: {}
 
   plugins/touch-translation:
     dependencies:
@@ -1801,6 +1835,8 @@ importers:
   plugins/touch-window-presets: {}
 
   plugins/touch-workspace-scripts: {}
+
+  plugins/touch-world-time: {}
 
 packages:
 
@@ -8051,9 +8087,6 @@ packages:
   aws4@1.13.2:
     resolution: {integrity: sha512-lHe62zvbTB5eEABUVi/AwVh0ZKY9rMMDhmm+eeyuuUQbQ3+J+fONVQOZyj+DdrvD4BY33uYniyRJ4UJIaSKAfw==}
 
-  axios@1.20.0:
-    resolution: {integrity: sha512-r8aOh8j9cGKpgQAqpzrUHnSIc6a59Y3Xf/cv8sy1DrHCkZHzQGEuoq1tARk6qSyDdtQGSDgpb9kFlruzPvrgwg==}
-
   axobject-query@4.1.0:
     resolution: {integrity: sha512-qIj0G9wZbMGNLjLmg1PT6v2mE9AH2zlnADJD/2tC6E00hgmhUOfEB6greHPAfLRSufHqROIUTkw6E+M3lH0PTQ==}
     engines: {node: '>= 0.4'}
@@ -9974,15 +10007,6 @@ packages:
 
   focus-trap@8.2.2:
     resolution: {integrity: sha512-qV0g8hRYBqgACcFOH3f9wXc4zPKhr/0z9RI2a6ZijZ72EeBi4g8oBy8zAWuUR1TsMpOzwpUMFvjdasrC41Joug==}
-
-  follow-redirects@1.16.2:
-    resolution: {integrity: sha512-/kVP2U8z596Ia0gwFrwyIeo74ta5aVmSeU1FfAUMAmcEP5EP7zydmag3SLiN64NaRKef3lxsq7i/g7ltJQDGow==}
-    engines: {node: '>=4.0'}
-    peerDependencies:
-      debug: '*'
-    peerDependenciesMeta:
-      debug:
-        optional: true
 
   fontace@0.4.1:
     resolution: {integrity: sha512-lDMvbAzSnHmbYMTEld5qdtvNH2/pWpICOqpean9IgC7vUbUJc3k+k5Dokp85CegamqQpFbXf0rAVkbzpyTA8aw==}
@@ -12766,10 +12790,6 @@ packages:
   proxy-from-env@1.1.0:
     resolution: {integrity: sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==}
 
-  proxy-from-env@2.1.0:
-    resolution: {integrity: sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA==}
-    engines: {node: '>=10'}
-
   pump@3.0.3:
     resolution: {integrity: sha512-todwxLMY7/heScKmntwQG8CXVkWUOdYxIvY2s0VWAAMh/nd8SoYiRaKjlr7+iCs984f2P8zvrfWcDDYVb73NfA==}
 
@@ -12848,10 +12868,6 @@ packages:
   readdirp@4.1.2:
     resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
     engines: {node: '>= 14.18.0'}
-
-  readdirp@5.0.0:
-    resolution: {integrity: sha512-9u/XQ1pvrQtYyMpZe7DXKv2p5CNvyVwzUB6uhLAnQwHMSgKMBR62lc7AHljaeteeHXn11XTAaLLUVZYVZyuRBQ==}
-    engines: {node: '>= 20.19.0'}
 
   readdirp@5.1.1:
     resolution: {integrity: sha512-Kko+Y5XQ6fM+Ce3dq3m9YGxnacYZYl9cA1wZjaF3Vbry2L3i1qVg8+CAgNPsXRArPMUMCaOR7oa9Nqntc43JKA==}
@@ -21395,7 +21411,7 @@ snapshots:
       pathe: 2.0.3
       tinyglobby: 0.2.17
       unplugin: 2.3.11
-      unplugin-utils: 0.3.1
+      unplugin-utils: 0.3.2
       webpack: 5.108.4(cssnano@8.0.2(postcss@8.5.23))(csso@5.0.5)(esbuild@0.28.1)(postcss@8.5.23)
       webpack-sources: 3.5.1
 
@@ -21900,6 +21916,15 @@ snapshots:
     optionalDependencies:
       '@vue/server-renderer': 3.5.45
 
+  '@vue/test-utils@2.4.11(@vue/compiler-dom@3.5.45)(@vue/server-renderer@3.5.45)(vue@3.5.45(typescript@5.9.3))':
+    dependencies:
+      '@vue/compiler-dom': 3.5.45
+      js-beautify: 1.15.4
+      vue: 3.5.45(typescript@5.9.3)
+      vue-component-type-helpers: 3.2.7
+    optionalDependencies:
+      '@vue/server-renderer': 3.5.45
+
   '@vueuse/core@14.3.0(vue@3.5.45(typescript@5.9.3))':
     dependencies:
       '@types/web-bluetooth': 0.0.21
@@ -21914,13 +21939,12 @@ snapshots:
       '@vueuse/shared': 14.4.0(vue@3.5.45(typescript@5.9.3))
       vue: 3.5.45(typescript@5.9.3)
 
-  '@vueuse/integrations@14.3.0(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(change-case@5.4.4)(focus-trap@8.2.2)(fuse.js@7.5.0)(nprogress@0.2.0)(vue@3.5.45(typescript@5.9.3))':
+  '@vueuse/integrations@14.3.0(change-case@5.4.4)(focus-trap@8.2.2)(fuse.js@7.5.0)(nprogress@0.2.0)(vue@3.5.45(typescript@5.9.3))':
     dependencies:
       '@vueuse/core': 14.3.0(vue@3.5.45(typescript@5.9.3))
       '@vueuse/shared': 14.3.0(vue@3.5.45(typescript@5.9.3))
       vue: 3.5.45(typescript@5.9.3)
     optionalDependencies:
-      axios: 1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
       change-case: 5.4.4
       focus-trap: 8.2.2
       fuse.js: 7.5.0
@@ -22418,16 +22442,6 @@ snapshots:
 
   aws4@1.13.2: {}
 
-  axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2):
-    dependencies:
-      follow-redirects: 1.16.2(debug@4.4.3(supports-color@10.2.2))
-      form-data: 4.0.6
-      https-proxy-agent: 5.0.1(supports-color@10.2.2)
-      proxy-from-env: 2.1.0
-    transitivePeerDependencies:
-      - debug
-      - supports-color
-
   axobject-query@4.1.0: {}
 
   b4a@1.7.3: {}
@@ -22816,7 +22830,7 @@ snapshots:
 
   chokidar@5.0.0:
     dependencies:
-      readdirp: 5.0.0
+      readdirp: 5.1.1
 
   chokidar@6.0.0:
     dependencies:
@@ -24553,10 +24567,6 @@ snapshots:
     dependencies:
       tabbable: 6.5.0
 
-  follow-redirects@1.16.2(debug@4.4.3(supports-color@10.2.2)):
-    optionalDependencies:
-      debug: 4.4.3(supports-color@10.2.2)
-
   fontace@0.4.1:
     dependencies:
       fontkitten: 1.0.3
@@ -25283,7 +25293,7 @@ snapshots:
       es-module-lexer: 2.1.0
       pathe: 2.0.3
       unplugin: 2.3.11
-      unplugin-utils: 0.3.1
+      unplugin-utils: 0.3.2
 
   imurmurhash@0.1.4: {}
 
@@ -27996,8 +28006,6 @@ snapshots:
 
   proxy-from-env@1.1.0: {}
 
-  proxy-from-env@2.1.0: {}
-
   pump@3.0.3:
     dependencies:
       end-of-stream: 1.4.5
@@ -28088,8 +28096,6 @@ snapshots:
       picomatch: 2.3.2
 
   readdirp@4.1.2: {}
-
-  readdirp@5.0.0: {}
 
   readdirp@5.1.1: {}
 
@@ -29704,7 +29710,7 @@ snapshots:
       strip-literal: 3.1.0
       tinyglobby: 0.2.17
       unplugin: 2.3.11
-      unplugin-utils: 0.3.1
+      unplugin-utils: 0.3.2
     optionalDependencies:
       oxc-parser: 0.133.0
       rolldown: 1.2.16
@@ -30238,7 +30244,7 @@ snapshots:
     optionalDependencies:
       vite: 7.3.7(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
 
-  vitepress@2.0.0-alpha.18(@types/node@24.13.2)(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(change-case@5.4.4)(fuse.js@7.5.0)(jiti@2.7.0)(nprogress@0.2.0)(postcss@8.5.23)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0):
+  vitepress@2.0.0-alpha.18(@types/node@24.13.2)(change-case@5.4.4)(fuse.js@7.5.0)(jiti@2.7.0)(nprogress@0.2.0)(postcss@8.5.23)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0):
     dependencies:
       '@docsearch/css': 4.6.3
       '@docsearch/js': 4.6.3
@@ -30252,7 +30258,7 @@ snapshots:
       '@vue/devtools-api': 8.1.5
       '@vue/shared': 3.5.39
       '@vueuse/core': 14.4.0(vue@3.5.45(typescript@5.9.3))
-      '@vueuse/integrations': 14.3.0(axios@1.20.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2))(change-case@5.4.4)(focus-trap@8.2.2)(fuse.js@7.5.0)(nprogress@0.2.0)(vue@3.5.45(typescript@5.9.3))
+      '@vueuse/integrations': 14.3.0(change-case@5.4.4)(focus-trap@8.2.2)(fuse.js@7.5.0)(nprogress@0.2.0)(vue@3.5.45(typescript@5.9.3))
       focus-trap: 8.2.2
       mark.js: 8.11.1
       minisearch: 7.2.0

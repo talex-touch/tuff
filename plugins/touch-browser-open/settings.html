@@ -13,8 +13,24 @@
         --muted: #6b7280;
         --accent: #3b6ef5;
         --danger: #d9463f;
+        --danger-bg: rgba(217, 70, 63, 0.08);
+        --danger-border: rgba(217, 70, 63, 0.35);
       }
-      html.dark {
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme="light"]) {
+          --bg: #16181d;
+          --panel: #1f2228;
+          --border: #2e323a;
+          --text: #e8eaee;
+          --muted: #9aa1ad;
+          --accent: #6f96ff;
+          --danger: #ef6b64;
+          --danger-bg: rgba(239, 107, 100, 0.12);
+          --danger-border: rgba(239, 107, 100, 0.4);
+        }
+      }
+      html.dark,
+      html[data-theme="dark"] {
         --bg: #16181d;
         --panel: #1f2228;
         --border: #2e323a;
@@ -22,6 +38,14 @@
         --muted: #9aa1ad;
         --accent: #6f96ff;
         --danger: #ef6b64;
+        --danger-bg: rgba(239, 107, 100, 0.12);
+        --danger-border: rgba(239, 107, 100, 0.4);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.01ms !important;
+          transition-duration: 0.01ms !important;
+        }
       }
       * { box-sizing: border-box; }
       body {
@@ -34,7 +58,20 @@
       h1 { font-size: 16px; margin: 0 0 2px; }
       h2 { font-size: 13px; margin: 20px 0 8px; color: var(--muted); }
       .hint { color: var(--muted); margin: 0 0 12px; }
+      .degraded-banner {
+        display: none;
+        margin: 0 0 14px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: var(--danger-bg);
+        border: 1px solid var(--danger-border);
+        color: var(--text);
+      }
+      .degraded-banner.visible { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+      .degraded-title { font-weight: 600; color: var(--danger); margin: 0 0 2px; }
+      .degraded-detail { margin: 0; color: var(--muted); font-size: 12px; }
       .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+      .panel.is-degraded { opacity: 0.6; pointer-events: none; }
       .grid { display: grid; grid-template-columns: 34px 1.1fr 1fr 2fr 46px 34px; gap: 8px; align-items: center; }
       .grid.hot { grid-template-columns: 34px 1fr 1fr 2fr 34px; }
       .grid.head { color: var(--muted); font-size: 12px; padding: 0 0 6px; }
@@ -44,6 +81,7 @@
       }
       input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
       input.invalid { border-color: var(--danger); }
+      input:disabled { opacity: 0.6; cursor: not-allowed; }
       label.radio { display: flex; justify-content: center; }
       .row { padding: 5px 0; border-top: 1px solid transparent; }
       button {
@@ -71,10 +109,18 @@
         这里配置的搜索引擎与热搜入口会立即出现在召唤框里：输入任意文字即可直达搜索，输入关键词即可打开热搜。
       </p>
 
+      <div id="degraded-banner" class="degraded-banner" role="alert" aria-live="assertive">
+        <div>
+          <p class="degraded-title">设置存储暂时不可用（已进入只读降级模式）</p>
+          <p id="degraded-detail" class="degraded-detail"></p>
+        </div>
+        <button id="retry-load" type="button">重新加载</button>
+      </div>
+
       <h2>搜索引擎</h2>
-      <div class="panel">
+      <div id="engines-panel" class="panel">
         <div class="grid head">
-          <span>启用</span><span>名称</span><span>关键词</span><span>搜索地址模板（必须包含 {query}）</span><span>默认</span><span></span>
+          <span>启用</span><span>名称</span><span>关键词</span><span>搜索地址模板（http/https 且含 {query}）</span><span>默认</span><span></span>
         </div>
         <div id="engines"></div>
         <div class="row" style="margin-top:8px">
@@ -83,9 +129,9 @@
       </div>
 
       <h2>热搜 / 快捷入口</h2>
-      <div class="panel">
+      <div id="hot-panel" class="panel">
         <div class="grid hot head">
-          <span>启用</span><span>名称</span><span>关键词</span><span>地址</span><span></span>
+          <span>启用</span><span>名称</span><span>关键词</span><span>地址（http/https）</span><span></span>
         </div>
         <div id="hot"></div>
         <div class="row" style="margin-top:8px">
@@ -95,13 +141,19 @@
     </div>
 
     <footer>
-      <span id="status"></span>
+      <span id="status" role="status" aria-live="polite"></span>
       <button id="reload" type="button">放弃修改</button>
       <button id="save" class="primary" type="button">保存</button>
     </footer>
 
     <script type="module">
-      import { usePluginStorage, communicateWithPlugin } from './settings-sdk.js'
+      import {
+        communicateWithPlugin,
+        initializePluginTheme,
+        initTuff,
+        usePluginStorage,
+      } from './settings-sdk.js'
+
       const ID_PATTERN = /^[a-z][a-z0-9-]{0,31}$/
       // The plugin re-adds its bundled engines on every sync, so they are marked here too: their
       // name is fixed and they cannot be deleted.
@@ -112,6 +164,15 @@
         { id: 'duckduckgo', name: 'DuckDuckGo', keyword: 'duckduckgo', urlTemplate: 'https://duckduckgo.com/?q={query}' },
         { id: 'baidu', name: '百度', keyword: '百度', urlTemplate: 'https://www.baidu.com/s?wd={query}' },
       ]
+      const DEFAULT_HOT_ENTRIES = [
+        {
+          id: 'weibo-hot',
+          name: '微博热搜',
+          keyword: '微博',
+          url: 'https://s.weibo.com/top/summary',
+          enabled: true,
+        },
+      ]
       const DEFAULT_SETTINGS = {
         version: 1,
         defaultEngine: 'google',
@@ -119,20 +180,88 @@
         hotEntries: [],
       }
 
-      const storage = usePluginStorage()
+      initializePluginTheme()
+
+      let initError = null
+      try {
+        initTuff(window)
+      }
+      catch (error) {
+        initError = error
+      }
+
       const enginesRoot = document.getElementById('engines')
       const hotRoot = document.getElementById('hot')
+      const enginesPanel = document.getElementById('engines-panel')
+      const hotPanel = document.getElementById('hot-panel')
+      const degradedBanner = document.getElementById('degraded-banner')
+      const degradedDetail = document.getElementById('degraded-detail')
+      const addEngineButton = document.getElementById('add-engine')
+      const addHotButton = document.getElementById('add-hot')
       const statusNode = document.getElementById('status')
       const saveButton = document.getElementById('save')
+      const reloadButton = document.getElementById('reload')
+      const retryLoadButton = document.getElementById('retry-load')
       let loaded = false
-
+      let degraded = false
+      let storageClient = null
       let settings = DEFAULT_SETTINGS
+
+      function getStorage() {
+        if (!storageClient)
+          storageClient = usePluginStorage()
+        return storageClient
+      }
 
       function setStatus(message, kind) {
         statusNode.textContent = message || ''
         statusNode.className = kind || ''
       }
 
+      function setDegraded(nextDegraded, detail) {
+        degraded = Boolean(nextDegraded)
+        degradedBanner.classList.toggle('visible', degraded)
+        degradedDetail.textContent = detail || ''
+        enginesPanel.classList.toggle('is-degraded', degraded)
+        hotPanel.classList.toggle('is-degraded', degraded)
+        addEngineButton.disabled = degraded
+        addHotButton.disabled = degraded
+        reloadButton.textContent = degraded ? '重试加载' : '放弃修改'
+      }
+
+      function containsControlCharacter(value) {
+        for (let index = 0; index < value.length; index += 1) {
+          const code = value.charCodeAt(index)
+          if (code <= 0x1F || code === 0x7F)
+            return true
+        }
+        return false
+      }
+
+      function isValidHttpUrl(raw) {
+        const trimmed = String(raw || '').trim()
+        if (!trimmed || containsControlCharacter(trimmed) || !/^https?:\/\//i.test(trimmed))
+          return false
+        try {
+          const parsed = new URL(trimmed)
+          return (
+            (parsed.protocol === 'http:' || parsed.protocol === 'https:')
+            && !parsed.username
+            && !parsed.password
+            && Boolean(parsed.hostname)
+          )
+        }
+        catch {
+          return false
+        }
+      }
+
+      function isValidHttpUrlTemplate(raw) {
+        const trimmed = String(raw || '').trim()
+        if (!trimmed || !trimmed.includes('{query}') || containsControlCharacter(trimmed))
+          return false
+        return isValidHttpUrl(trimmed.split('{query}').join('test'))
+      }
 
       function parseStored(raw) {
         if (!raw)
@@ -151,7 +280,7 @@
       function normalizeIncoming(raw) {
         const source = parseStored(raw) || {}
         const engines = Array.isArray(source.engines) ? source.engines : []
-        const hotEntries = Array.isArray(source.hotEntries) ? source.hotEntries : []
+        const hotEntries = Array.isArray(source.hotEntries) ? source.hotEntries : DEFAULT_HOT_ENTRIES
         const mergedEngines = engines.map(entry => ({
           id: String(entry && entry.id ? entry.id : ''),
           name: String(entry && entry.name ? entry.name : ''),
@@ -181,12 +310,15 @@
         }
       }
 
-      function textField(value, placeholder, onChange) {
+      function textField(value, placeholder, onChange, fieldKey) {
         const input = document.createElement('input')
         input.type = 'text'
         input.value = value
         input.placeholder = placeholder
+        input.disabled = degraded
         input.setAttribute('aria-label', placeholder)
+        if (fieldKey)
+          input.dataset.field = fieldKey
         input.addEventListener('input', () => {
           input.classList.remove('invalid')
           onChange(input.value)
@@ -198,6 +330,7 @@
         const input = document.createElement('input')
         input.type = 'checkbox'
         input.checked = checked
+        input.disabled = degraded
         input.setAttribute('aria-label', '启用入口')
         input.addEventListener('change', () => onChange(input.checked))
         return input
@@ -223,16 +356,16 @@
             renderEngines()
           }))
 
-          const name = textField(engine.name, 'Google', (value) => { engine.name = value })
+          const name = textField(engine.name, 'Google', (value) => { engine.name = value }, `engine-name-${engine.id}`)
           if (engine.builtin)
             name.readOnly = true
           row.appendChild(name)
 
-          row.appendChild(textField(engine.keyword, 'google', value => { engine.keyword = value }))
+          row.appendChild(textField(engine.keyword, 'google', value => { engine.keyword = value }, `engine-keyword-${engine.id}`))
           row.appendChild(
             textField(engine.urlTemplate, 'https://example.com/search?q={query}', (value) => {
               engine.urlTemplate = value
-            }),
+            }, `engine-template-${engine.id}`),
           )
 
           const defaultCell = document.createElement('label')
@@ -242,7 +375,7 @@
           radio.name = 'default-engine'
           radio.setAttribute('aria-label', `将 ${engine.name} 设为默认搜索引擎`)
           radio.checked = settings.defaultEngine === engine.id
-          radio.disabled = !engine.enabled
+          radio.disabled = degraded || !engine.enabled
           radio.addEventListener('change', () => {
             settings.defaultEngine = engine.id
             renderEngines()
@@ -256,7 +389,7 @@
           remove.title = '删除'
           remove.setAttribute('aria-label', `删除 ${engine.name}`)
           remove.textContent = '✕'
-          remove.disabled = Boolean(engine.builtin)
+          remove.disabled = degraded || Boolean(engine.builtin)
           remove.addEventListener('click', () => {
             settings.engines.splice(index, 1)
             if (settings.defaultEngine === engine.id)
@@ -283,9 +416,9 @@
           row.className = 'grid hot row'
 
           row.appendChild(checkboxField(entry.enabled, (value) => { entry.enabled = value }))
-          row.appendChild(textField(entry.name, '微博热搜', value => { entry.name = value }))
-          row.appendChild(textField(entry.keyword, 'weibo', value => { entry.keyword = value }))
-          row.appendChild(textField(entry.url, 'https://s.weibo.com/top/summary', value => { entry.url = value }))
+          row.appendChild(textField(entry.name, '微博热搜', value => { entry.name = value }, `hot-name-${entry.id}`))
+          row.appendChild(textField(entry.keyword, 'weibo', value => { entry.keyword = value }, `hot-keyword-${entry.id}`))
+          row.appendChild(textField(entry.url, 'https://s.weibo.com/top/summary', value => { entry.url = value }, `hot-url-${entry.id}`))
 
           const remove = document.createElement('button')
           remove.type = 'button'
@@ -293,6 +426,7 @@
           remove.title = '删除'
           remove.setAttribute('aria-label', `删除 ${entry.name}`)
           remove.textContent = '✕'
+          remove.disabled = degraded
           remove.addEventListener('click', () => {
             settings.hotEntries.splice(index, 1)
             renderHotEntries()
@@ -306,6 +440,18 @@
       function render() {
         renderEngines()
         renderHotEntries()
+      }
+
+      function markInvalidField(fieldKey) {
+        if (!fieldKey)
+          return
+        const input = document.querySelector(`input[data-field="${CSS.escape(fieldKey)}"]`)
+        if (input)
+          input.classList.add('invalid')
+      }
+
+      function clearInvalidFields() {
+        document.querySelectorAll('input.invalid').forEach(node => node.classList.remove('invalid'))
       }
 
       function makeId(prefix) {
@@ -322,6 +468,7 @@
       }
 
       function validate() {
+        clearInvalidFields()
         const problems = []
         const seenEngineIds = new Set()
         for (const engine of settings.engines) {
@@ -330,12 +477,23 @@
           else if (seenEngineIds.has(engine.id))
             problems.push(`搜索引擎 id 重复：${engine.id}`)
           seenEngineIds.add(engine.id)
-          if (!engine.name.trim())
+          if (!engine.name.trim()) {
+            markInvalidField(`engine-name-${engine.id}`)
             problems.push(`搜索引擎 ${engine.id} 缺少名称`)
-          if (!engine.keyword.trim())
+          }
+          if (!engine.keyword.trim()) {
+            markInvalidField(`engine-keyword-${engine.id}`)
             problems.push(`搜索引擎 ${engine.id} 缺少关键词`)
-          if (!engine.urlTemplate.includes('{query}'))
+          }
+          const trimmedTemplate = engine.urlTemplate.trim()
+          if (!trimmedTemplate.includes('{query}')) {
+            markInvalidField(`engine-template-${engine.id}`)
             problems.push(`搜索引擎 ${engine.id} 的模板必须包含 {query}`)
+          }
+          else if (!isValidHttpUrlTemplate(trimmedTemplate)) {
+            markInvalidField(`engine-template-${engine.id}`)
+            problems.push(`搜索引擎 ${engine.id} 的模板必须是合法的 http(s) 链接`)
+          }
         }
         if (!settings.engines.some(engine => engine.enabled))
           problems.push('至少要启用一个搜索引擎')
@@ -349,12 +507,18 @@
           else if (seenHotIds.has(entry.id))
             problems.push(`入口 id 重复：${entry.id}`)
           seenHotIds.add(entry.id)
-          if (!entry.name.trim())
+          if (!entry.name.trim()) {
+            markInvalidField(`hot-name-${entry.id}`)
             problems.push(`入口 ${entry.id} 缺少名称`)
-          if (!entry.keyword.trim())
+          }
+          if (!entry.keyword.trim()) {
+            markInvalidField(`hot-keyword-${entry.id}`)
             problems.push(`入口 ${entry.id} 缺少关键词`)
-          if (!/^https?:\/\/[^\s]+$/i.test(entry.url.trim()))
-            problems.push(`入口 ${entry.id} 的地址必须是 http(s) 链接`)
+          }
+          if (!isValidHttpUrl(entry.url)) {
+            markInvalidField(`hot-url-${entry.id}`)
+            problems.push(`入口 ${entry.id} 的地址必须是合法的 http(s) 链接`)
+          }
         }
         return problems
       }
@@ -385,9 +549,13 @@
         saveButton.disabled = true
         setStatus('正在读取设置…')
         try {
+          if (initError)
+            throw initError
+          const storage = getStorage()
           const raw = await storage.getFile('search-settings.json')
           if (raw && typeof raw === 'object' && raw.error)
             throw new Error(String(raw.error))
+          setDegraded(false, '')
           settings = normalizeIncoming(raw)
           render()
           loaded = true
@@ -395,14 +563,18 @@
           setStatus('')
         }
         catch (error) {
+          const detail = error && error.message ? error.message : String(error)
+          setDegraded(true, `无法读取 search-settings.json：${detail}。请确认插件 storage.plugin 权限后点击“重新加载”。`)
           settings = normalizeIncoming(null)
           render()
-          setStatus(`读取设置失败：${error && error.message ? error.message : error}`, 'error')
+          saveButton.disabled = true
+          setStatus(`读取设置失败：${detail}`, 'error')
         }
       }
 
       async function save() {
-        if (!loaded || saveButton.disabled) return
+        if (!loaded || degraded || saveButton.disabled)
+          return
         const problems = validate()
         if (problems.length) {
           setStatus(problems[0], 'error')
@@ -411,22 +583,26 @@
         setStatus('正在保存…')
         saveButton.disabled = true
         try {
+          const storage = getStorage()
           const result = await storage.setFile('search-settings.json', toPayload())
           if (result && typeof result === 'object' && result.success === false)
             throw new Error(String(result.error || '保存失败'))
           const synced = await communicateWithPlugin('browser-open:sync-settings')
-          if (synced?.error) throw new Error(String(synced.error))
+          if (synced?.error)
+            throw new Error(String(synced.error))
           setStatus('已保存，召唤框已同步', 'ok')
         }
         catch (error) {
           setStatus(`保存失败：${error && error.message ? error.message : error}`, 'error')
         }
         finally {
-          saveButton.disabled = !loaded
+          saveButton.disabled = !loaded || degraded
         }
       }
 
-      document.getElementById('add-engine').addEventListener('click', () => {
+      addEngineButton.addEventListener('click', () => {
+        if (degraded)
+          return
         settings.engines.push({
           id: makeId('engine'),
           name: '自定义搜索',
@@ -437,7 +613,9 @@
         renderEngines()
       })
 
-      document.getElementById('add-hot').addEventListener('click', () => {
+      addHotButton.addEventListener('click', () => {
+        if (degraded)
+          return
         settings.hotEntries.push({
           id: makeId('hot'),
           name: '新入口',
@@ -448,8 +626,9 @@
         renderHotEntries()
       })
 
-      document.getElementById('save').addEventListener('click', save)
-      document.getElementById('reload').addEventListener('click', load)
+      saveButton.addEventListener('click', save)
+      reloadButton.addEventListener('click', load)
+      retryLoadButton.addEventListener('click', load)
 
       load()
     </script>

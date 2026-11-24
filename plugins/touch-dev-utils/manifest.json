@@ -11,6 +11,11 @@
   },
   "description": "程序员工具：UUID、时间戳、JWT、命名转换、Query String 与字符串转义",
   "main": "index.js",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  },
   "permissions": {
     "required": ["clipboard.write", "search.root-results"],
     "optional": []

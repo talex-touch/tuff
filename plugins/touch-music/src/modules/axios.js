@@ -1,34 +1,93 @@
-// eslint-disable-next-line no-restricted-imports -- Central axios instance for this plugin.
-import _axios from 'axios'
+import { usePluginNetwork } from '@talex-touch/utils/plugin/sdk'
 
-export const axios = _axios.create({
-  baseURL: `https://netease-cloud-music-api-umber-theta.vercel.app/`,
-  timeout: 60000,
-  headers: {
-    'X-Requested-With': 'XMLHttpRequest',
-    'Content-Type': 'application/json',
-  },
-})
+const DEFAULT_API_BASE_URL = 'https://netease-cloud-music-api-umber-theta.vercel.app/'
+const DEFAULT_TIMEOUT_MS = 60_000
 
-axios.interceptors.response.use(async (res) => {
-  return res.data
-}, async (res) => {
-  /* if ( !res.response || res.code === "ERR_INTERNET_DISCONNECTED" ) {
-        return window.$tipper.tip( '请检查您的网络!', {
-          stay: 8200,
-          type: TipType.WARNING
-        } );
+let cachedClient = null
+
+function getPluginNetwork() {
+  if (!cachedClient) {
+    try {
+      cachedClient = usePluginNetwork()
+    }
+    catch (error) {
+      const unavailable = new Error(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Plugin network SDK unavailable (network.internet permission required)',
+      )
+      unavailable.code = 'NETWORK_INTERNET_PERMISSION_UNAVAILABLE'
+      throw unavailable
+    }
+  }
+  return cachedClient
+}
+
+export function resetPluginNetworkClient() {
+  cachedClient = null
+}
+
+export function buildRequestUrl(pathOrUrl, params) {
+  const base = DEFAULT_API_BASE_URL.endsWith('/') ? DEFAULT_API_BASE_URL : `${DEFAULT_API_BASE_URL}/`
+  const resolved = typeof pathOrUrl === 'string' && /^https?:\/\//i.test(pathOrUrl)
+    ? pathOrUrl
+    : new URL(String(pathOrUrl ?? '').replace(/^\/+/, ''), base).toString()
+
+  const url = new URL(resolved)
+  if (params && typeof params === 'object') {
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null) {
+        url.searchParams.set(key, String(value))
       }
+    }
+  }
+  return url.toString()
+}
 
-      // 判断请求超时
-      if ( res.code === "ERR_NETWORK" && (res.message.indexOf('timeout') !== -1 || res.message === 'Network Error') ) {
-        return window.$tipper.tip( '无法连接至远程服务器!', {
-          stay: 8200,
-          type: TipType.WARNING
-        } );
-      } */
+function isNetworkResponse(value) {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && 'status' in value
+    && 'data' in value
+    && 'ok' in value,
+  )
+}
 
-  console.log(res)
+async function sendRequest(method, url, config = {}) {
+  const client = getPluginNetwork()
+  const fullUrl = buildRequestUrl(url, config.params)
 
-  return res
-})
+  const response = await client.request({
+    method,
+    url: fullUrl,
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      'Content-Type': 'application/json',
+      ...(config.headers || {}),
+    },
+    body: config.data,
+    timeoutMs: config.timeout ?? DEFAULT_TIMEOUT_MS,
+    responseType: config.responseType ?? 'json',
+  })
+
+  if (isNetworkResponse(response)) {
+    if (!response.ok) {
+      const error = new Error(`Request failed with status ${response.status}`)
+      error.status = response.status
+      error.response = response
+      throw error
+    }
+    return response.data
+  }
+
+  return response
+}
+
+export const axios = {
+  request: (config = {}) => sendRequest(config.method || 'GET', config.url || '', config),
+  get: (url, config = {}) => sendRequest('GET', url, config),
+  post: (url, data, config = {}) => sendRequest('POST', url, { ...config, data }),
+  put: (url, data, config = {}) => sendRequest('PUT', url, { ...config, data }),
+  delete: (url, config = {}) => sendRequest('DELETE', url, config),
+}

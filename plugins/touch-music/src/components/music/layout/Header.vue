@@ -11,22 +11,35 @@ defineOptions({
 
 const searchState = ref('')
 const searchResults = ref()
+const searchError = ref('')
 
 async function searchQuery() {
   if (!searchState.value)
     return []
 
-  const res = await axios.get('/cloudsearch', {
-    params: { keywords: searchState.value },
-  })
-  if (res.code !== 200) {
-    return console.log('none')
+  searchError.value = ''
+  try {
+    const res = await axios.get('/cloudsearch', {
+      params: { keywords: searchState.value },
+    })
+    if (res?.code !== 200) {
+      searchError.value = '未找到匹配的音乐结果'
+      return []
+    }
+
+    searchResults.value = res.result
+    return res.result?.songs || []
   }
-
-  searchResults.value = res.result
-  const songs = res.result.songs
-
-  return songs
+  catch (error) {
+    const code = typeof error?.code === 'string' ? error.code : ''
+    if (code.includes('PERMISSION')) {
+      searchError.value = '缺少 network.internet 权限，无法搜索在线曲库'
+    }
+    else {
+      searchError.value = '音乐搜索失败，请检查网络权限与连接'
+    }
+    return []
+  }
 }
 
 function selectSong(song) {
@@ -46,6 +59,9 @@ function selectSong(song) {
   </div>
 
   <div class="Header-List">
+    <p v-if="searchError" class="Header-Error" role="status">
+      {{ searchError }}
+    </p>
     <SearchResults
       :res="searchResults"
       @select="selectSong"
@@ -65,6 +81,12 @@ function selectSong(song) {
 
   align-items: center;
   box-sizing: border-box;
+}
+
+.Header-Error {
+  margin: 8px 16px 0;
+  font-size: 12px;
+  color: var(--tx-color-danger, #f56c6c);
 }
 
 .Header-List {

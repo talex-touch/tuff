@@ -37,7 +37,13 @@
   "features": [
     {
       "id": "ai-sessions",
-      "name": "AI Sessions",
+      "name": {
+        "default": "AI 会话",
+        "locales": {
+          "zh-CN": "AI 会话",
+          "en-US": "AI Sessions"
+        }
+      },
       "desc": {
         "default": "搜索允许的 AI 会话元数据并复制脱敏引用",
         "locales": {

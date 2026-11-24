@@ -33,20 +33,6 @@
       "defaultState": "ask",
       "requiresUserConsent": true,
       "pushesToRootResults": true
-    },
-    {
-      "id": "touch-window-manager.window-presets",
-      "displayName": "窗口预设",
-      "featureId": "window-presets",
-      "kind": "system-action",
-      "owner": "official-plugin",
-      "mode": "push",
-      "priority": "fast",
-      "defaultOrder": 93,
-      "permissionScopes": ["root-results"],
-      "defaultState": "ask",
-      "requiresUserConsent": true,
-      "pushesToRootResults": true
     }
   ],
   "features": [
@@ -83,42 +69,6 @@
         {
           "type": "over",
           "value": ["window", "app", "应用", "窗口管理"]
-        }
-      ]
-    },
-    {
-      "id": "window-presets",
-      "name": {
-        "default": "窗口预设",
-        "locales": {
-          "zh-CN": "窗口预设",
-          "en-US": "Window Presets"
-        }
-      },
-      "desc": {
-        "default": "一键布局窗口组合",
-        "locales": {
-          "zh-CN": "一键布局窗口组合",
-          "en-US": "Arrange a set of windows in one step"
-        }
-      },
-      "icon": {
-        "type": "file",
-        "value": "assets/logo.svg"
-      },
-      "keywords": ["window", "preset", "layout", "分屏", "布局", "窗口预设"],
-      "push": true,
-      "priority": 7,
-      "acceptedInputTypes": ["text"],
-      "platform": {
-        "win32": true,
-        "darwin": false,
-        "linux": false
-      },
-      "commands": [
-        {
-          "type": "over",
-          "value": ["window", "preset", "layout", "分屏", "布局"]
         }
       ]
     }

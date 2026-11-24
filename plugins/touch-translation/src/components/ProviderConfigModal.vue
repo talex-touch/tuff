@@ -13,6 +13,7 @@ import { canPersistProviderSecrets, hasProviderSecretDefinition } from '../compo
 interface Props {
   show: boolean
   provider: TranslationProvider | null
+  saveHandler?: (providerId: string, config: Record<string, any>) => Promise<{ success: boolean, error?: string } | void> | { success: boolean, error?: string } | void
 }
 
 const props = defineProps<Props>()
@@ -170,6 +171,17 @@ async function saveConfig() {
   else if (props.provider.id === 'mymemory') {
     config.email = configForm.email
     config.apiUrl = configForm.apiUrl
+  }
+
+  if (props.saveHandler) {
+    const saveResult = await props.saveHandler(props.provider.id, config)
+    if (saveResult && !saveResult.success) {
+      testResult.value = {
+        success: false,
+        message: saveResult.error || '保存配置失败，请检查安全存储状态后重试。',
+      }
+      return
+    }
   }
 
   emit('save', props.provider.id, config)
