@@ -5,13 +5,15 @@ import type {
   WorkspaceMessageUpdate,
   WorkspaceRunDecisionRequest,
   WorkspaceSubmitRequest,
-  WorkspaceSubmitResult
+  WorkspaceSubmitResult,
+  WorkspaceUpdateQueuedRequest
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import type { FileReviewRollbackAuthority } from './file-review-service'
 import type { FileReviewRollbackResult } from '@talex-touch/utils/transport/sdk/domains/conversation-review'
 import type {
   IntelligenceChatPayload,
   IntelligenceInvokeOptions,
+  IntelligenceMessageAttachment,
   IntelligenceStreamEvent,
   IntelligenceUsageInfo
 } from '@talex-touch/utils/types/intelligence'
@@ -51,6 +53,72 @@ const log = getLogger('conversation-workspace')
 const PERSIST_INTERVAL_MS = 250
 const RECOVERY_CONTINUATION_BYTE_LIMIT = 8 * 1024
 const RECOVERY_TRUNCATION_NOTICE = '\n[truncated]'
+
+interface SteerHistoryEntry {
+  role: 'user' | 'assistant'
+  text: string
+  createdAt: number
+}
+
+/**
+ * Expands a completed assistant message that absorbed mid-turn steer parts into chronological
+ * assistant/user segments so subsequent turns keep full awareness of mid-turn user guidance.
+ */
+function expandMessageWithSteers(message: {
+  role: 'user' | 'assistant'
+  content: string
+  createdAt: number
+  meta?: Record<string, unknown>
+}): SteerHistoryEntry[] {
+  if (message.role !== 'assistant' || !Array.isArray(message.meta?.parts)) {
+    return [{ role: message.role, text: message.content, createdAt: message.createdAt }]
+  }
+  const parts = message.meta.parts
+  const hasSteer = parts.some(
+    (part) =>
+      part !== null &&
+      typeof part === 'object' &&
+      'type' in part &&
+      part.type === 'steer' &&
+      'text' in part &&
+      typeof part.text === 'string' &&
+      part.text.length > 0
+  )
+  if (!hasSteer) {
+    return [{ role: 'assistant', text: message.content, createdAt: message.createdAt }]
+  }
+  const expanded: SteerHistoryEntry[] = []
+  let buffer = ''
+  const flushAssistant = () => {
+    if (buffer.trim()) {
+      expanded.push({ role: 'assistant', text: buffer, createdAt: message.createdAt })
+    }
+    buffer = ''
+  }
+  for (const part of parts) {
+    if (!part || typeof part !== 'object' || !('type' in part)) continue
+    if (part.type === 'text' && 'text' in part && typeof part.text === 'string') {
+      buffer += part.text
+    } else if (
+      part.type === 'steer' &&
+      'text' in part &&
+      typeof part.text === 'string' &&
+      part.text.trim()
+    ) {
+      flushAssistant()
+      const createdAt =
+        'createdAt' in part && typeof part.createdAt === 'number'
+          ? part.createdAt
+          : message.createdAt
+      expanded.push({ role: 'user', text: part.text, createdAt })
+    }
+  }
+  flushAssistant()
+  return expanded.length > 0
+    ? expanded
+    : [{ role: 'assistant', text: message.content, createdAt: message.createdAt }]
+}
+
 const contextSummarySchema = z
   .object({
     tokenBudget: z.number().nonnegative(),
@@ -67,6 +135,7 @@ const providerResponseSchema = z
   .object({
     provider: z.string(),
     model: z.string(),
+    reasoningEffort: z.unknown().optional(),
     usageReported: z.boolean(),
     usage: z
       .object({
@@ -370,10 +439,73 @@ export class ConversationWorkspaceRunner {
     const result = await this.service.enqueue(request)
     if (result.disposition === 'duplicate') return result
     const started = await this.kick(request.conversationId)
+    if (started !== request.id) {
+      await this.syncActiveRunSteers(request.conversationId)
+    }
     return {
       disposition: started === request.id ? 'started' : 'queued',
       state: (await this.service.get(request.conversationId))!
     }
+  }
+
+  private async syncActiveRunSteers(conversationId: string): Promise<void> {
+    const slot = this.slots.get(conversationId)
+    if (!slot || slot.ended || slot.shuttingDown || !slot.runId) return
+    const state = await this.service.get(conversationId)
+    if (!state || state.queueHeld) {
+      aiCliOrchestrator.syncRunSteers?.(slot.runId, [])
+      return
+    }
+    const steerInputs = state.queue.filter((item) => item.deliveryMode === 'steer')
+    const attachmentsById = new Map<string, IntelligenceMessageAttachment[]>()
+    for (const item of steerInputs) {
+      if (item.attachments?.length) {
+        const resolved = await this.service.getModelAttachments(item).catch(() => [])
+        attachmentsById.set(item.id, resolved)
+      } else {
+        attachmentsById.set(item.id, [])
+      }
+    }
+    aiCliOrchestrator.syncRunSteers?.(
+      slot.runId,
+      steerInputs.map((item) => ({
+        id: item.id,
+        text: item.text,
+        createdAt: item.createdAt
+      })),
+      attachmentsById
+    )
+  }
+
+  async removeQueued(conversationId: string, queueId: string): Promise<ConversationWorkspaceState> {
+    const state = await this.service.removeQueued(conversationId, queueId)
+    await this.syncActiveRunSteers(conversationId)
+    return state
+  }
+
+  async reorderQueued(
+    conversationId: string,
+    queueId: string,
+    direction: 'up' | 'down'
+  ): Promise<ConversationWorkspaceState> {
+    const state = await this.service.reorderQueued(conversationId, queueId, direction)
+    await this.syncActiveRunSteers(conversationId)
+    return state
+  }
+
+  async promoteQueued(
+    conversationId: string,
+    queueId: string
+  ): Promise<ConversationWorkspaceState> {
+    const state = await this.service.promoteQueued(conversationId, queueId)
+    await this.syncActiveRunSteers(conversationId)
+    return state
+  }
+
+  async updateQueued(request: WorkspaceUpdateQueuedRequest): Promise<ConversationWorkspaceState> {
+    const state = await this.service.updateQueued(request)
+    await this.syncActiveRunSteers(request.conversationId)
+    return state
   }
 
   private async kick(conversationId: string): Promise<string | undefined> {
@@ -583,7 +715,12 @@ export class ConversationWorkspaceRunner {
     const lead = settled.slice(0, firstUser < 0 ? settled.length : firstUser)
     const messages: IntelligenceChatPayload['messages'] = settled
       .slice(firstUser < 0 ? settled.length : firstUser)
-      .map((message) => ({ role: message.role, content: message.content }))
+      .flatMap((message) =>
+        expandMessageWithSteers(message).map((entry) => ({
+          role: entry.role,
+          content: entry.text
+        }))
+      )
     if (lead.length) {
       const note = lead
         .map((message) =>
@@ -699,11 +836,7 @@ export class ConversationWorkspaceRunner {
     if (!(await stat(root)).isDirectory()) throw new Error('WORKSPACE_PROJECT_UNAVAILABLE')
     const history = conversation.messages
       .filter((message) => message.status === 'complete' && message.id !== turn.user.id)
-      .map((message) => ({
-        role: message.role,
-        text: message.content,
-        createdAt: message.createdAt
-      }))
+      .flatMap((message) => expandMessageWithSteers(message))
     const allowedToolIds = [...profile.allowedToolIds]
     const modelAttachments = await this.service.getModelAttachments(turn.input)
     const prepared = await this.prepareContext(
@@ -777,6 +910,10 @@ export class ConversationWorkspaceRunner {
             }
           }
         },
+        onRunActive: async (runId) => {
+          slot.runId = runId
+          await this.syncActiveRunSteers(slot.conversationId)
+        },
         onEvent: (event) => this.agentEvent(slot, event),
         onRunResult: async (run, failureDetail) => {
           if (slot.ended) return
@@ -829,7 +966,13 @@ export class ConversationWorkspaceRunner {
           type: 'start',
           capabilityId: 'text.chat',
           provider: response.data.provider,
-          model: response.data.model
+          model: response.data.model,
+          ...(response.data.reasoningEffort
+            ? {
+                reasoningEffort: response.data
+                  .reasoningEffort as IntelligenceStreamEvent<string>['reasoningEffort']
+              }
+            : {})
         })
         if (response.data.usageReported && response.data.usage)
           slot.assembler.recordUsage(response.data.usage as IntelligenceUsageInfo)
@@ -905,10 +1048,23 @@ export class ConversationWorkspaceRunner {
           isError: payload.isError === true
         })
       }
+    } else if (event.type === 'steer_consumed') {
+      const steerId = readString('steerId')
+      const text = readString('text')
+      const createdAt = typeof payload.createdAt === 'number' ? payload.createdAt : Date.now()
+      if (steerId && text) {
+        slot.assembler.part({ kind: 'steer-injected', steerId, text, createdAt })
+        await this.service.consumeSteer(slot.conversationId, slot.turn.input.id, steerId)
+      }
     }
     if (event.type !== 'message_update' && event.type !== 'text' && event.type !== 'reasoning')
       this.snapshot(slot)
-    await this.persist(slot, event.type === 'message_end' || event.type === 'tool_execution_end')
+    await this.persist(
+      slot,
+      event.type === 'message_end' ||
+        event.type === 'tool_execution_end' ||
+        event.type === 'steer_consumed'
+    )
   }
 
   private async complete(slot: ExecutionSlot): Promise<void> {
@@ -951,6 +1107,7 @@ export class ConversationWorkspaceRunner {
       slot.userPaused = true
       slot.shuttingDown = false
       const state = await this.service.pause(conversationId)
+      if (slot.runId) aiCliOrchestrator.syncRunSteers?.(slot.runId, [])
       slot.controller.abort()
       if (slot.runId) await aiCliOrchestrator.cancelPersistedRun(slot.runId)
       if (!slot.pendingApproval) await slot.task
@@ -1129,6 +1286,7 @@ export class ConversationWorkspaceRunner {
         slot.controller.abort()
         if (slot.runId) {
           try {
+            aiCliOrchestrator.syncRunSteers?.(slot.runId, [])
             aiCliOrchestrator.cancel?.(slot.runId)
           } catch {
             // Best-effort cancellation of live subprocess during graceful shutdown.

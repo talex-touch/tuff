@@ -3,7 +3,6 @@ import type {
   WorkspaceContextProjection,
   WorkspacePendingRun
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
-import type { CodePreviewTab } from '~/modules/conversation/useCodePreviewTabs'
 import type {
   ConversationMessage,
   ConversationTurnMeta
@@ -13,181 +12,503 @@ import type {
   ActivityTurn
 } from '~/modules/conversation/workspace-activity'
 import type { HomeModelLimits } from '~/modules/conversation/workspace-panel'
-import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
-import { computed } from 'vue'
+import type { SidePanelTab, SidePanelWorkspaceKind } from './composables/useHomeSidePanel'
+import { TxPopover } from '@talex-touch/tuffex/popover'
+import { isElectronRenderer } from '@talex-touch/utils/env'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { createBrowserSdk } from '@talex-touch/utils/transport/sdk/domains/browser'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import WorkspaceFileViewer from '~/components/preview/WorkspaceFileViewer.vue'
+import { SHELL_MENU_CARD } from '~/components/shell/shell-menu-panel'
 import { buildPreviewIndex } from '~/modules/conversation/preview-index'
 import { useConversationReview } from '~/modules/conversation/useConversationReview'
 import HomePreviewActivity from './preview/HomePreviewActivity.vue'
 import HomePreviewArtifacts from './preview/HomePreviewArtifacts.vue'
-import HomePreviewCode from './preview/HomePreviewCode.vue'
 import HomePreviewContext from './preview/HomePreviewContext.vue'
 import HomePreviewEmpty from './preview/HomePreviewEmpty.vue'
 import HomePreviewReview from './preview/HomePreviewReview.vue'
 import HomePreviewSources from './preview/HomePreviewSources.vue'
 import HomePreviewWidgets from './preview/HomePreviewWidgets.vue'
+import HomeSideBrowserPane from './preview/HomeSideBrowserPane.vue'
+import HomeSideGitPane from './preview/HomeSideGitPane.vue'
+import HomeSideLauncher from './preview/HomeSideLauncher.vue'
+import HomeSidePluginsPane from './preview/HomeSidePluginsPane.vue'
+import HomeSideTerminalPane from './preview/HomeSideTerminalPane.vue'
 
 /**
- * The right panel behind the top bar's `panel-right` toggle: a preview of what
- * the conversation produced, so nothing has to be found by scrolling back, plus
- * the workspace's context and file changes as Main reports them.
+ * The docked right-hand sidebar beside the conversation (never a modal drawer).
  *
- * It runs the full height of the page beside the conversation, and its tab row
- * is the header that sits level with the top bar.
- *
- * Scope is the whole conversation, not the last turn — "I don't want to scroll
- * back" is the entire point, and a per-turn index would not answer it.
- *
- * Every row is derived from a part that exists on a message or a fact Main
- * reported. A tab with nothing to derive says so; it does not fill itself with
- * plausible-looking rows.
+ * Hosts tabbed file previews (HTML, Markdown, Images, PDF, Code, Directories), an embedded
+ * WebContentsView browser, an embedded workspace terminal, and the conversation's review,
+ * artifacts, sources, activity, context, and plugins views behind a unified launcher.
  */
-const props = defineProps<{
-  messages: ConversationMessage[]
-  /** The thread on screen; file reviews are read for it while the panel is open. */
-  conversationId: string | null
-  context?: WorkspaceContextProjection
-  turn?: ConversationTurnMeta
-  limits?: HomeModelLimits
-  activityTurns: ActivityTurn[]
-  gateway: ActivityGatewayApproval[]
-  pendingRun?: WorkspacePendingRun
-  loading: boolean
-  codeTabs: CodePreviewTab[]
-  activeCodeTabId: string | null
-}>()
+const props = withDefaults(
+  defineProps<{
+    messages: ConversationMessage[]
+    conversationId: string | null
+    workspaceRoot?: string
+    context?: WorkspaceContextProjection
+    turn?: ConversationTurnMeta
+    limits?: HomeModelLimits
+    activityTurns: ActivityTurn[]
+    gateway: ActivityGatewayApproval[]
+    pendingRun?: WorkspacePendingRun
+    loading: boolean
+    tabs: SidePanelTab[]
+    activeTabId: string | null
+    panelActive?: boolean
+    dockedToShell?: boolean
+  }>(),
+  {
+    panelActive: true,
+    dockedToShell: false
+  }
+)
 
 const emit = defineEmits<{
   (event: 'locate', messageIndex: number): void
-  (event: 'select-code-tab', id: string): void
-  (event: 'close-code-tab', id: string): void
+  (event: 'select-tab', id: string | null): void
+  (event: 'close-tab', id: string): void
+  (event: 'close-other-tabs', id: string): void
+  (event: 'close-all-tabs'): void
+  (event: 'close-panel'): void
+  (event: 'open-launcher'): void
+  (event: 'open-tool', kind: SidePanelWorkspaceKind): void
+  (event: 'open-file-picker'): void
+  (event: 'open-file', payload: { path: string; displayPath: string; line?: number }): void
+  (event: 'open-web', url: string): void
+  (event: 'open-blank-browser'): void
+  (
+    event: 'update-web-tab',
+    id: string,
+    payload: { url: string; title: string; favicon: string | null }
+  ): void
+  (event: 'update-file-tab', id: string, payload: { path: string; displayPath: string }): void
+  (event: 'open-web-in-browser', url: string): void
+  (
+    event: 'open-file-in-browser',
+    payload: { path: string; displayPath: string; line?: number }
+  ): void
+  (event: 'open-web-external', url: string): void
 }>()
 
 const { t } = useI18n()
+const menuOpen = ref(false)
+const tabStripRef = ref<HTMLElement | null>(null)
+const sideTabElements = new Map<string, HTMLElement>()
+const canScrollLeft = ref(false)
+const canScrollRight = ref(false)
+let tabStripResizeObserver: ResizeObserver | null = null
+const transport = isElectronRenderer() ? useTuffTransport() : null
+const browserSdk = transport ? createBrowserSdk(transport) : null
 
-/**
- * The panel is only mounted while open (`v-if` on the slot), so this recompute
- * costs nothing while it is closed — which is most of the time, including the
- * whole of a streaming turn if the reader never opened it.
- */
 const index = computed(() => buildPreviewIndex(props.messages))
-
-/** Stable identity: the count lives in the `name` slot, never in the tab value. */
-const active = defineModel<string>('tab', { default: 'outputs' })
-
+const createdFiles = computed(() =>
+  index.value.artifacts.filter((item) => item.kind === 'created' && Boolean(item.path))
+)
 const counts = computed(() => ({
   outputs: index.value.artifacts.length + index.value.widgets.length,
   sources: index.value.sources.length,
   work: index.value.toolCalls.length
 }))
-
-/** Main is holding a tool request or an agent run for the user — marked on the work log tab. */
 const waiting = computed(() => props.gateway.length > 0 || Boolean(props.pendingRun))
-
-/** Host file-change records: read only while the panel is mounted, i.e. open. */
 const review = useConversationReview(() => props.conversationId)
 
-function locate(messageIndex: number): void {
-  emit('locate', messageIndex)
+const activeTab = computed(() => props.tabs.find((tab) => tab.id === props.activeTabId) ?? null)
+const activeWebTab = computed(() => (activeTab.value?.kind === 'web' ? activeTab.value : null))
+const hasAnyWebTab = computed(() => props.tabs.some((tab) => tab.kind === 'web'))
+const hasAnyTerminalTab = computed(() => props.tabs.some((tab) => tab.kind === 'terminal'))
+const hasAnyGitTab = computed(() => props.tabs.some((tab) => tab.kind === 'git'))
+
+watch(hasAnyWebTab, (exists) => {
+  if (!exists && browserSdk) {
+    void browserSdk.sideClose().catch(() => {})
+  }
+})
+
+function setSideTabEl(tabId: string, el: unknown): void {
+  if (el instanceof HTMLElement) {
+    sideTabElements.set(tabId, el)
+  } else {
+    sideTabElements.delete(tabId)
+  }
+}
+
+function syncTabStripScrollEdges(): void {
+  const el = tabStripRef.value
+  if (!el || el.scrollWidth <= el.clientWidth + 1) {
+    canScrollLeft.value = false
+    canScrollRight.value = false
+    return
+  }
+  canScrollLeft.value = el.scrollLeft > 2
+  canScrollRight.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 2
+}
+
+watch(
+  tabStripRef,
+  (el) => {
+    tabStripResizeObserver?.disconnect()
+    tabStripResizeObserver = null
+    if (el && typeof ResizeObserver !== 'undefined') {
+      tabStripResizeObserver = new ResizeObserver(syncTabStripScrollEdges)
+      tabStripResizeObserver.observe(el)
+    }
+    void nextTick(syncTabStripScrollEdges)
+  },
+  { flush: 'post' }
+)
+
+watch(
+  () => props.tabs.length,
+  () => {
+    void nextTick(syncTabStripScrollEdges)
+  }
+)
+
+watch(
+  () => props.activeTabId,
+  (id) => {
+    if (!id) return
+    void nextTick(() => {
+      sideTabElements.get(id)?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      syncTabStripScrollEdges()
+    })
+  }
+)
+
+onBeforeUnmount(() => {
+  tabStripResizeObserver?.disconnect()
+  tabStripResizeObserver = null
+  sideTabElements.clear()
+  if (browserSdk) {
+    void browserSdk.sideClose().catch(() => {})
+  }
+})
+
+function tabIconClass(tab: SidePanelTab): string {
+  switch (tab.kind) {
+    case 'file':
+      return 'i-ri-file-code-line'
+    case 'web':
+      return 'i-ri-global-line'
+    case 'code':
+      return 'i-ri-code-s-slash-line'
+    case 'git':
+      return 'i-ri-git-branch-line'
+    case 'review':
+      return 'i-ri-file-edit-line'
+    case 'terminal':
+      return 'i-ri-terminal-box-line'
+    case 'outputs':
+      return 'i-ri-stack-line'
+    case 'sources':
+      return 'i-ri-book-open-line'
+    case 'work':
+      return 'i-ri-pulse-line'
+    case 'context':
+      return 'i-ri-cpu-line'
+    case 'plugins':
+      return 'i-ri-puzzle-line'
+  }
+}
+
+function runMenuAction(action: () => void): void {
+  menuOpen.value = false
+  action()
+}
+
+function onTabBarWheel(event: WheelEvent): void {
+  const el = event.currentTarget
+  if (!(el instanceof HTMLElement) || el.scrollWidth <= el.clientWidth) return
+  if (Math.abs(event.deltaY) > Math.abs(event.deltaX) && event.deltaY !== 0) {
+    event.preventDefault()
+    el.scrollLeft += event.deltaY
+    syncTabStripScrollEdges()
+  }
 }
 </script>
 
 <template>
   <aside class="HomeSidePanel" :aria-label="t('home.panel.title')">
-    <TxTabs
-      v-model="active"
-      class="HomeSidePanel-Tabs"
-      placement="top"
-      borderless
-      content-scrollable
-      indicator-variant="pill"
-      :content-padding="0"
-      :animation="{ size: false, content: true }"
-    >
-      <!--
-        `size: false` on purpose: the slot around this panel animates its own
-        width open and closed, and a second size animation inside would fight it
-        for the same frames. The panel is full-height regardless.
-      -->
-      <!-- Files and widgets share one tab: both are things the conversation made, and as two tabs
-           each sat empty for most conversations. They stay in groups of their own inside it. -->
-      <TxTabItem name="outputs">
-        <template #name>
-          {{ t('home.preview.artifacts') }}
-          <span v-if="counts.outputs" class="HomeSidePanel-Count">{{ counts.outputs }}</span>
-        </template>
-        <HomePreviewEmpty
-          v-if="!counts.outputs"
-          icon="i-ri-file-text-line"
-          :text="t('home.preview.outputsEmpty')"
-        />
-        <div v-else class="HomeSidePanel-Outputs">
-          <HomePreviewArtifacts
-            v-if="index.artifacts.length"
-            :items="index.artifacts"
-            @locate="locate"
-          />
-          <HomePreviewWidgets v-if="index.widgets.length" :items="index.widgets" @locate="locate" />
+    <header class="HomeSidePanel-Header">
+      <div
+        v-if="tabs.length > 0"
+        ref="tabStripRef"
+        class="HomeSidePanel-TabStrip"
+        :class="{
+          'can-scroll-left': canScrollLeft,
+          'can-scroll-right': canScrollRight
+        }"
+        role="tablist"
+        :aria-label="t('home.sidePanel.tabs')"
+        @scroll.passive="syncTabStripScrollEdges"
+        @wheel="onTabBarWheel"
+      >
+        <div class="HomeSidePanel-TabTrack">
+          <div
+            v-for="tab in tabs"
+            :key="tab.id"
+            :ref="(el) => setSideTabEl(tab.id, el)"
+            class="HomeSidePanel-Tab"
+            :class="{ 'is-active': tab.id === activeTabId }"
+            @auxclick.middle.prevent="emit('close-tab', tab.id)"
+          >
+            <button
+              type="button"
+              role="tab"
+              class="HomeSidePanel-TabBtn"
+              :aria-selected="tab.id === activeTabId"
+              :title="
+                tab.kind === 'file'
+                  ? tab.path
+                  : tab.kind === 'web'
+                    ? tab.url || tab.title
+                    : tab.title
+              "
+              @click="emit('select-tab', tab.id)"
+            >
+              <span :class="tabIconClass(tab)" class="HomeSidePanel-TabIcon" aria-hidden="true" />
+              <span class="HomeSidePanel-TabTitle">{{ tab.title }}</span>
+            </button>
+            <button
+              type="button"
+              class="HomeSidePanel-TabClose"
+              :aria-label="t('home.preview.closeCode', { title: tab.title })"
+              :title="t('common.close')"
+              @click.stop="emit('close-tab', tab.id)"
+            >
+              <span class="i-ri-close-line" aria-hidden="true" />
+            </button>
+          </div>
         </div>
-      </TxTabItem>
+      </div>
 
-      <TxTabItem name="preview">
-        <template #name>
-          {{ t('home.preview.code') }}
-          <span v-if="codeTabs.length" class="HomeSidePanel-Count">{{ codeTabs.length }}</span>
-        </template>
-        <HomePreviewCode
-          :tabs="codeTabs"
-          :active-id="activeCodeTabId"
-          @select="emit('select-code-tab', $event)"
-          @close="emit('close-code-tab', $event)"
+      <div v-else class="HomeSidePanel-Brand">
+        <span class="HomeSidePanel-BrandLabel">{{ t('home.sidePanel.title') }}</span>
+      </div>
+
+      <div v-if="tabs.length > 0" class="HomeSidePanel-DragSpacer" aria-hidden="true" />
+
+      <div
+        class="HomeSidePanel-Controls"
+        :class="{ 'shell-chrome-safe-inline-end': dockedToShell }"
+      >
+        <button
+          type="button"
+          class="HomeSidePanel-IconBtn"
+          :class="{ 'is-active': activeTabId === null }"
+          :aria-pressed="activeTabId === null"
+          :title="t('home.sidePanel.newTab')"
+          :aria-label="t('home.sidePanel.newTab')"
+          @click="emit('open-launcher')"
+        >
+          <span class="i-ri-add-line" aria-hidden="true" />
+        </button>
+
+        <TxPopover
+          v-model="menuOpen"
+          trigger="click"
+          placement="bottom-end"
+          :offset="6"
+          :match-reference-width="false"
+          :min-width="200"
+          :panel-radius="12"
+          :panel-padding="6"
+          :panel-card="SHELL_MENU_CARD"
+        >
+          <template #reference>
+            <button
+              type="button"
+              class="HomeSidePanel-IconBtn"
+              aria-haspopup="menu"
+              :aria-expanded="menuOpen"
+              :title="t('home.moreActions')"
+              :aria-label="t('home.moreActions')"
+            >
+              <span class="i-ri-more-2-line" aria-hidden="true" />
+            </button>
+          </template>
+
+          <div class="HomeSidePanel-Menu" role="menu">
+            <button
+              type="button"
+              role="menuitem"
+              class="HomeSidePanel-MenuItem"
+              @click="runMenuAction(() => emit('open-tool', 'git'))"
+            >
+              <span class="i-ri-git-branch-line" aria-hidden="true" />
+              <span class="HomeSidePanel-MenuLabel">{{ t('home.git.title') }}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="HomeSidePanel-MenuItem"
+              @click="runMenuAction(() => emit('open-tool', 'review'))"
+            >
+              <span class="i-ri-file-edit-line" aria-hidden="true" />
+              <span class="HomeSidePanel-MenuLabel">{{ t('home.workspace.panel.review') }}</span>
+              <span v-if="review.records.value.length" class="HomeSidePanel-Count">
+                {{ review.records.value.length }}
+              </span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="HomeSidePanel-MenuItem"
+              @click="runMenuAction(() => emit('open-file-picker'))"
+            >
+              <span class="i-ri-file-line" aria-hidden="true" />
+              <span class="HomeSidePanel-MenuLabel">{{ t('home.sidePanel.openFile') }}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="HomeSidePanel-MenuItem"
+              @click="runMenuAction(() => emit('open-tool', 'terminal'))"
+            >
+              <span class="i-ri-terminal-box-line" aria-hidden="true" />
+              <span class="HomeSidePanel-MenuLabel">{{ t('terminal.title') }}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="HomeSidePanel-MenuItem"
+              @click="runMenuAction(() => emit('open-blank-browser'))"
+            >
+              <span class="i-ri-global-line" aria-hidden="true" />
+              <span class="HomeSidePanel-MenuLabel">{{ t('home.sidePanel.browser') }}</span>
+            </button>
+            <div class="HomeSidePanel-MenuDivider" role="separator" />
+            <button
+              type="button"
+              role="menuitem"
+              class="HomeSidePanel-MenuItem"
+              @click="runMenuAction(() => emit('open-tool', 'outputs'))"
+            >
+              <span class="i-ri-stack-line" aria-hidden="true" />
+              <span class="HomeSidePanel-MenuLabel">{{ t('home.preview.artifacts') }}</span>
+              <span v-if="counts.outputs" class="HomeSidePanel-Count">{{ counts.outputs }}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="HomeSidePanel-MenuItem"
+              @click="runMenuAction(() => emit('open-tool', 'work'))"
+            >
+              <span class="i-ri-pulse-line" aria-hidden="true" />
+              <span class="HomeSidePanel-MenuLabel">{{ t('home.preview.toolCalls') }}</span>
+              <span v-if="counts.work" class="HomeSidePanel-Count">{{ counts.work }}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="HomeSidePanel-MenuItem"
+              @click="runMenuAction(() => emit('open-tool', 'sources'))"
+            >
+              <span class="i-ri-book-open-line" aria-hidden="true" />
+              <span class="HomeSidePanel-MenuLabel">{{ t('home.preview.sources') }}</span>
+              <span v-if="counts.sources" class="HomeSidePanel-Count">{{ counts.sources }}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="HomeSidePanel-MenuItem"
+              @click="runMenuAction(() => emit('open-tool', 'context'))"
+            >
+              <span class="i-ri-cpu-line" aria-hidden="true" />
+              <span class="HomeSidePanel-MenuLabel">{{ t('home.workspace.panel.context') }}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="HomeSidePanel-MenuItem"
+              @click="runMenuAction(() => emit('open-tool', 'plugins'))"
+            >
+              <span class="i-ri-puzzle-line" aria-hidden="true" />
+              <span class="HomeSidePanel-MenuLabel">{{ t('home.sidePanel.plugins') }}</span>
+            </button>
+            <template v-if="tabs.length > 0">
+              <div class="HomeSidePanel-MenuDivider" role="separator" />
+              <button
+                v-if="activeTabId && tabs.length > 1"
+                type="button"
+                role="menuitem"
+                class="HomeSidePanel-MenuItem"
+                @click="runMenuAction(() => emit('close-other-tabs', activeTabId!))"
+              >
+                <span class="i-ri-close-circle-line" aria-hidden="true" />
+                <span class="HomeSidePanel-MenuLabel">{{ t('browser.tabMenu.closeOthers') }}</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                class="HomeSidePanel-MenuItem"
+                @click="runMenuAction(() => emit('close-all-tabs'))"
+              >
+                <span class="i-ri-delete-bin-6-line" aria-hidden="true" />
+                <span class="HomeSidePanel-MenuLabel">{{ t('home.sidePanel.closeAllTabs') }}</span>
+              </button>
+            </template>
+          </div>
+        </TxPopover>
+
+        <button
+          type="button"
+          class="HomeSidePanel-IconBtn"
+          :title="t('home.closePanel')"
+          :aria-label="t('home.closePanel')"
+          @click="emit('close-panel')"
+        >
+          <span class="i-ri-close-line" aria-hidden="true" />
+        </button>
+      </div>
+    </header>
+
+    <div class="HomeSidePanel-Stage">
+      <!-- Launcher / Hub view (shown when no tab is active) -->
+      <HomeSideLauncher
+        v-if="!activeTab"
+        :workspace-root="workspaceRoot"
+        :created-files="createdFiles"
+        :review-count="review.records.value.length"
+        :outputs-count="counts.outputs"
+        :sources-count="counts.sources"
+        :activity-count="counts.work"
+        :waiting="waiting"
+        @open-tool="emit('open-tool', $event)"
+        @open-file-picker="emit('open-file-picker')"
+        @open-file="emit('open-file', $event)"
+        @open-web="emit('open-web', $event)"
+        @open-blank-browser="emit('open-blank-browser')"
+      />
+
+      <!-- Local file & directory viewer -->
+      <WorkspaceFileViewer
+        v-else-if="activeTab.kind === 'file'"
+        :key="activeTab.id"
+        :file-path="activeTab.path"
+        :display-path="activeTab.displayPath"
+        :conversation-id="conversationId"
+        :line="activeTab.line"
+        :refresh-token="activeTab.refreshToken"
+        @navigate="emit('update-file-tab', activeTab.id, $event)"
+        @open-in-browser="emit('open-file-in-browser', $event)"
+      />
+
+      <!-- Sandboxed code-block HTML/SVG preview -->
+      <div v-else-if="activeTab.kind === 'code'" class="HomeSidePanel-CodeWrap">
+        <iframe
+          class="HomeSidePanel-CodeFrame"
+          sandbox=""
+          :title="t('home.code.frameLabel', { lang: activeTab.lang })"
+          :srcdoc="activeTab.srcdoc"
         />
-      </TxTabItem>
+      </div>
 
-      <TxTabItem name="sources">
-        <template #name>
-          {{ t('home.preview.sources') }}
-          <span v-if="counts.sources" class="HomeSidePanel-Count">{{ counts.sources }}</span>
-        </template>
-        <HomePreviewSources :items="index.sources" />
-      </TxTabItem>
-
-      <!-- The work log is the activity timeline: every call, grouped under the reply that made it,
-           below whatever Main is waiting on. A flat list of the same calls beside it said the same
-           thing twice. -->
-      <TxTabItem name="work">
-        <template #name>
-          {{ t('home.preview.toolCalls') }}
-          <span v-if="counts.work" class="HomeSidePanel-Count">{{ counts.work }}</span>
-          <span
-            v-if="waiting"
-            class="HomeSidePanel-Waiting"
-            role="img"
-            :aria-label="t('home.workspace.activity.waiting')"
-            :title="t('home.workspace.activity.waiting')"
-          />
-        </template>
-        <HomePreviewActivity
-          :turns="activityTurns"
-          :gateway="gateway"
-          :run="pendingRun"
-          :loading="loading"
-          @locate="locate"
-        />
-      </TxTabItem>
-
-      <TxTabItem name="context">
-        <template #name>{{ t('home.workspace.panel.context') }}</template>
-        <HomePreviewContext :context="context" :turn="turn" :limits="limits" :loading="loading" />
-      </TxTabItem>
-
-      <TxTabItem name="review">
-        <template #name>
-          {{ t('home.workspace.panel.review') }}
-          <span v-if="review.records.value.length" class="HomeSidePanel-Count">
-            {{ review.records.value.length }}
-          </span>
-        </template>
+      <!-- Review -->
+      <div v-else-if="activeTab.kind === 'review'" class="HomeSidePanel-ScrollPane">
         <HomePreviewReview
           :records="review.records.value"
           :loading="review.loading.value"
@@ -201,97 +522,351 @@ function locate(messageIndex: number): void {
           @rollback="review.rollback"
           @reload="review.reload"
         />
-      </TxTabItem>
-    </TxTabs>
+      </div>
+
+      <!-- Outputs / Artifacts -->
+      <div v-else-if="activeTab.kind === 'outputs'" class="HomeSidePanel-ScrollPane">
+        <HomePreviewEmpty
+          v-if="!counts.outputs"
+          icon="i-ri-file-text-line"
+          :text="t('home.preview.outputsEmpty')"
+        />
+        <div v-else class="HomeSidePanel-Outputs">
+          <HomePreviewArtifacts
+            v-if="index.artifacts.length"
+            :items="index.artifacts"
+            @locate="emit('locate', $event)"
+            @open-file="emit('open-file', $event)"
+          />
+          <HomePreviewWidgets
+            v-if="index.widgets.length"
+            :items="index.widgets"
+            @locate="emit('locate', $event)"
+          />
+        </div>
+      </div>
+
+      <!-- Sources -->
+      <div v-else-if="activeTab.kind === 'sources'" class="HomeSidePanel-ScrollPane">
+        <HomePreviewSources
+          :items="index.sources"
+          @open-file="emit('open-file', $event)"
+          @open-web="emit('open-web', $event)"
+        />
+      </div>
+
+      <!-- Work / Activity -->
+      <div v-else-if="activeTab.kind === 'work'" class="HomeSidePanel-ScrollPane">
+        <HomePreviewActivity
+          :turns="activityTurns"
+          :gateway="gateway"
+          :run="pendingRun"
+          :loading="loading"
+          @locate="emit('locate', $event)"
+        />
+      </div>
+
+      <!-- Context -->
+      <div v-else-if="activeTab.kind === 'context'" class="HomeSidePanel-ScrollPane">
+        <HomePreviewContext :context="context" :turn="turn" :limits="limits" :loading="loading" />
+      </div>
+
+      <!-- Plugins -->
+      <HomeSidePluginsPane v-else-if="activeTab.kind === 'plugins'" />
+
+      <!-- Persistent side-git host while any git tab exists (preserves commit draft & diff selection) -->
+      <HomeSideGitPane
+        v-if="hasAnyGitTab"
+        v-show="activeTab?.kind === 'git'"
+        :cwd="workspaceRoot"
+        :conversation-id="conversationId"
+        :active="panelActive && activeTab?.kind === 'git'"
+        @open-file="emit('open-file', $event)"
+      />
+
+      <!-- Persistent side-terminal host while any terminal tab exists -->
+      <HomeSideTerminalPane
+        v-if="hasAnyTerminalTab"
+        v-show="activeTab?.kind === 'terminal'"
+        :cwd="workspaceRoot"
+        :active="panelActive && activeTab?.kind === 'terminal'"
+      />
+
+      <!-- Persistent side-browser host while any web tab exists -->
+      <HomeSideBrowserPane
+        v-if="hasAnyWebTab"
+        v-show="activeTab?.kind === 'web'"
+        :url="activeWebTab?.url ?? ''"
+        :active="panelActive && activeTab?.kind === 'web'"
+        @meta-change="activeWebTab && emit('update-web-tab', activeWebTab.id, $event)"
+        @open-in-browser="emit('open-web-in-browser', $event)"
+        @open-external="emit('open-web-external', $event)"
+      />
+    </div>
   </aside>
 </template>
 
 <style lang="scss" scoped>
 .HomeSidePanel {
   display: flex;
-  flex: none;
+  flex: 1 1 auto;
   flex-direction: column;
-  /**
-   * Held at full width even while the slot that clips it animates to zero. A
-   * fluid width here would make every row re-wrap on each frame of the
-   * open/close transition.
-   */
-  width: var(--home-panel-width, 280px);
-  min-width: var(--home-panel-width, 280px);
+  width: 100%;
+  min-width: 0;
+  height: 100%;
   min-height: 0;
-  // The tab content owns the scroll; the panel itself must not scroll too.
   overflow: hidden;
-  // Only a left rule: the panel is part of the main pane, not a floating sheet over it.
   border-left: 1px solid var(--shell-border);
+  background: var(--shell-bg);
   box-sizing: border-box;
 }
 
-.HomeSidePanel-Tabs {
-  flex: 1;
-  min-height: 0;
+.HomeSidePanel-Header {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  align-items: center;
+  height: var(--shell-top-strip-height, 44px);
+  padding: 0 10px;
+  background: var(--shell-surface, var(--tx-fill-color-lighter));
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--shell-border, var(--tx-border-color-lighter)) 75%, transparent);
+  box-sizing: border-box;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.HomeSidePanel-TabStrip {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
   min-width: 0;
+  height: 100%;
+  padding: 4px 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-app-region: no-drag;
 
-  /**
-   * The header: as tall as the top bar beside it, so the two read as one strip across the
-   * window, and like the top bar it drags the window. No rule under it, as there is none under
-   * the top bar. Doubled class: TxTabs' own `--top` rules here carry the same weight.
-   */
-  &.tx-tabs :deep(.tx-tabs__nav) {
-    flex: none;
-    height: 52px;
-    border-bottom: 0;
-    -webkit-app-region: drag;
-    // Resting ink matches the top bar's chips.
-    --tx-text-color-regular: var(--shell-text-secondary);
-    // A flat fill under the active tab, like the model chip's: TxTabs' raised pill is a thumb
-    // for a track, and with no track it read as a floating button.
-    --tx-surface-raised: var(--shell-surface-2);
-    --tx-elevation-1: 0 0 0 0 transparent;
-    --tx-border-color-lighter: transparent;
+  &::-webkit-scrollbar {
+    display: none;
   }
 
-  // Five sections fit in Chinese; longer labels and counts scroll rather than wrap.
-  :deep(.tx-tabs__nav-bar),
-  :deep(.tx-tabs__nav-inner) {
-    min-width: 0;
+  &.can-scroll-left {
+    mask-image: linear-gradient(to right, transparent 0, #000 18px, #000 100%);
   }
 
-  &.tx-tabs :deep(.tx-tabs__nav-inner) {
-    gap: 2px;
-    padding: 0 12px;
+  &.can-scroll-right {
+    mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
   }
 
-  // The top bar's chip radius: the two headers sit level, so their pills should match.
-  :deep(.tx-tab-item) {
-    flex-shrink: 0;
-    margin: 0;
-    padding: 7px 10px;
-    border-radius: var(--shell-radius-sm);
-    white-space: nowrap;
-    -webkit-app-region: no-drag;
-    --fake-radius: var(--shell-radius-sm);
-  }
-
-  :deep(.tx-tab-item__name) {
-    font-size: var(--shell-fs-sm);
+  &.can-scroll-left.can-scroll-right {
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 18px,
+      #000 calc(100% - 18px),
+      transparent 100%
+    );
   }
 }
 
-.HomeSidePanel-Count {
-  margin-left: 5px;
+.HomeSidePanel-TabTrack {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  align-items: center;
+}
+
+.HomeSidePanel-DragSpacer {
+  flex: 1 1 12px;
+  min-width: 8px;
+  height: 100%;
+  -webkit-app-region: drag;
+}
+
+.HomeSidePanel-Tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-width: 88px;
+  max-width: 176px;
+  height: 32px;
+  padding-right: 6px;
+  border-radius: 999px;
+  color: var(--shell-text-secondary);
+  background: color-mix(in srgb, var(--tx-fill-color) 42%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--shell-border) 70%, transparent);
+
+  @supports (corner-shape: superellipse(2)) {
+    border-radius: calc(12px * var(--tx-corner-smooth-scale, 1.6)) / 50%;
+    corner-shape: var(--tx-corner-smooth-shape, superellipse(1.777));
+  }
+
+  &:not(.is-active):hover {
+    background: color-mix(in srgb, var(--tx-fill-color) 85%, transparent);
+    box-shadow: inset 0 0 0 1px var(--shell-border-strong, var(--shell-border));
+    color: var(--shell-text-primary);
+  }
+
+  &.is-active {
+    background: color-mix(in srgb, var(--tx-surface-raised, var(--shell-bg)) 58%, var(--shell-bg));
+    box-shadow:
+      inset 0 0 0 1px
+        color-mix(in srgb, var(--shell-border-strong, var(--shell-border)) 70%, transparent),
+      var(--tx-elevation-1);
+    color: var(--shell-text-primary);
+  }
+}
+
+.HomeSidePanel-TabBtn {
+  display: inline-flex;
+  flex: 1 1 auto;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px 0 11px;
+  border: none;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--shell-fs-body, 13px);
+  line-height: 1.25;
+  cursor: pointer;
+
+  .HomeSidePanel-Tab.is-active & {
+    font-weight: 500;
+  }
+}
+
+.HomeSidePanel-TabIcon {
+  flex: none;
+  font-size: 14px;
+  opacity: 0.82;
+
+  .HomeSidePanel-Tab.is-active & {
+    opacity: 1;
+  }
+}
+
+.HomeSidePanel-TabTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.HomeSidePanel-TabClose {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
   color: var(--shell-text-muted);
-  font-size: var(--shell-fs-caption);
-  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0.65;
+
+  .HomeSidePanel-Tab:hover &,
+  .HomeSidePanel-Tab:focus-within &,
+  .HomeSidePanel-Tab.is-active & {
+    opacity: 1;
+  }
+
+  &:hover {
+    background: color-mix(in srgb, var(--shell-text-primary) 10%, transparent);
+    color: var(--shell-text-primary);
+  }
 }
 
-.HomeSidePanel-Waiting {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-left: 5px;
-  border-radius: 50%;
-  background: var(--shell-primary);
-  vertical-align: middle;
+.HomeSidePanel-Brand {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  padding-left: 4px;
+}
+
+.HomeSidePanel-BrandLabel {
+  overflow: hidden;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-sm);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.HomeSidePanel-Controls {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+
+.HomeSidePanel-IconBtn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-muted);
+  font-size: 16px;
+  cursor: pointer;
+
+  &:hover,
+  &.is-active {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+}
+
+.HomeSidePanel-Stage {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.HomeSidePanel-ScrollPane {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 12px 20px;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+}
+
+.HomeSidePanel-CodeWrap {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.HomeSidePanel-CodeFrame {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-sm);
+  background: var(--tx-color-white, #fff);
 }
 
 .HomeSidePanel-Outputs {
@@ -300,11 +875,52 @@ function locate(messageIndex: number): void {
   gap: 16px;
 }
 
-/**
- * The tab bodies are separate components, so their shared text vocabulary
- * lives here rather than being copied into each of them. Each body is a
- * single-root component, which is what puts this scope id on it.
- */
+/* Teleported popover menu */
+.HomeSidePanel-Menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.HomeSidePanel-MenuItem {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-primary);
+  font: inherit;
+  font-size: var(--shell-fs-sm);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface-2);
+  }
+}
+
+.HomeSidePanel-MenuLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.HomeSidePanel-MenuDivider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--shell-border);
+}
+
+.HomeSidePanel-Count {
+  margin-left: 4px;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Shared vocabulary for embedded preview subcomponents */
 :deep(.HomePreview-Empty) {
   margin: 0;
   padding: 4px 8px;
@@ -331,11 +947,6 @@ function locate(messageIndex: number): void {
   font-size: var(--shell-fs-sm);
 }
 
-/**
- * Truncates at the end, not with the `direction: rtl` trick that shows a path's
- * tail — that reorders the neutral `/` characters and renders `/Users/me` as
- * `Users/me/`. The full string is on the row's `title` instead.
- */
 :deep(.HomePreview-Detail) {
   overflow: hidden;
   color: var(--shell-text-muted);
@@ -361,12 +972,5 @@ function locate(messageIndex: number): void {
     background: var(--shell-surface-2);
     color: var(--shell-text-primary);
   }
-}
-
-// No rule under the header, so the first row starts close under the tabs.
-:deep(.tx-tabs__content-scroll) {
-  padding: 4px 12px 16px;
-  overscroll-behavior: contain;
-  box-sizing: border-box;
 }
 </style>

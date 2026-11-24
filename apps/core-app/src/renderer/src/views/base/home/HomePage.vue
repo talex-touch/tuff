@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { WORKSPACE_QUEUE_LIMIT } from '~/modules/conversation/useAgentWorkspace'
 import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
+import { useShellRightSidebar } from '~/modules/layout/useShellRightSidebar'
 import { homeMessageContextKey } from './composables/home-message-context'
 import { useConversationRestore } from './composables/useConversationRestore'
 import { useConversationTitle } from './composables/useConversationTitle'
@@ -15,6 +16,7 @@ import { useHomeComposerLayout } from './composables/useHomeComposerLayout'
 import { useHomeDictation } from './composables/useHomeDictation'
 import { useHomeOpening } from './composables/useHomeOpening'
 import { useHomePreviewPanels } from './composables/useHomePreviewPanels'
+import { HOME_BODY_MIN_WIDTH, SIDE_PANEL_MIN_WIDTH } from './composables/useHomeSidePanel'
 import { useHomeRunTelemetry } from './composables/useHomeRunTelemetry'
 import { useHomeSendChoreography } from './composables/useHomeSendChoreography'
 import { useHomeSubmit } from './composables/useHomeSubmit'
@@ -39,7 +41,6 @@ import HomeStageBlurs from './HomeStageBlurs.vue'
 import HomeTopBar from './HomeTopBar.vue'
 import HomePet from './pet/HomePet.vue'
 import { petEnabled } from './pet/pet-settings'
-import HomeFilePreviewDrawer from './preview/HomeFilePreviewDrawer.vue'
 import TuffAIComposer from './TuffAIComposer.vue'
 import { selectedSchedulerName } from './workspace/scheduler'
 
@@ -123,20 +124,56 @@ watch([conversationId, isEmpty], () => {
   streamFollowing.value = true
 })
 
+const { dockHost: rightSidebarDockHost } = useShellRightSidebar()
+
+function resolveSidePanelAvailableWidth(): number | undefined {
+  if (!props.browserLanding && rightSidebarDockHost.value) {
+    const mainWidth = pageRef.value?.closest<HTMLElement>('.AppShell-Main')?.clientWidth ?? 0
+    const rightWidth = rightSidebarDockHost.value.clientWidth
+    const combined = mainWidth + rightWidth
+    if (combined > 0) return combined
+  }
+  const pageWidth = pageRef.value?.clientWidth
+  return pageWidth && pageWidth > 0 ? pageWidth : undefined
+}
+
+const workspaceRoot = computed(() => workspace.state.value?.workspaceRoot)
+
 const {
   panelOpen,
-  panelTab,
-  codeTabs,
-  activeCodeTabId,
-  selectCodeTab,
-  closeCodeTab,
+  panelWidth,
+  isResizing,
+  tabs: sidePanelTabs,
+  activeTabId: activeSidePanelTabId,
+  openLauncher,
+  openFileInSidebar,
+  openWebInSidebar,
+  openBlankWebTab,
+  openWorkspaceTool,
+  updateWebTab,
+  updateFileTab,
+  selectTab: selectSidePanelTab,
+  closeTab: closeSidePanelTab,
+  closeOtherTabs: closeOtherSidePanelTabs,
+  closeAllTabs: closeAllSidePanelTabs,
+  startResize: startSidePanelResize,
+  resetWidth: resetSidePanelWidth,
+  effectiveWorkspaceRoot,
   showCodePreview,
-  fileDrawerVisible,
-  previewFilePath,
-  previewDisplayPath,
+  openWebInBuiltInBrowser,
+  openFileInBuiltInBrowser,
+  openWebExternal,
+  pickAndOpenFileInSidebar,
   projectStore,
   currentProject
-} = useHomePreviewPanels({ conversationId, projectId, bodyRef })
+} = useHomePreviewPanels({
+  conversationId,
+  projectId,
+  workspaceRoot,
+  messages,
+  bodyRef,
+  getSidePanelAvailableWidth: resolveSidePanelAvailableWidth
+})
 
 const submitState = useSendState({ choreography: () => choreography })
 const { sending, lifting, openingHold } = submitState
@@ -401,8 +438,13 @@ useHomeCommands({
   <div
     ref="pageRef"
     class="HomePage"
-    :class="{ conversing: !isEmpty }"
-    :style="{ '--home-composer-height': composerClearance }"
+    :class="{ conversing: !isEmpty, 'is-resizing-panel': isResizing }"
+    :style="{
+      '--home-composer-height': composerClearance,
+      '--home-panel-width': `${panelWidth}px`,
+      '--home-panel-min-width': `${SIDE_PANEL_MIN_WIDTH}px`,
+      '--home-body-min-width': `${HOME_BODY_MIN_WIDTH}px`
+    }"
   >
     <HomeTopBar
       v-if="!browserLanding"
@@ -587,10 +629,14 @@ useHomeCommands({
       </div>
 
       <HomeSidePanelSlot
-        v-model:tab="panelTab"
         :open="panelOpen"
+        :resizing="isResizing"
+        :width="panelWidth"
+        :dock-to-shell="!browserLanding"
+        :active="isHomeRoute"
         :messages="messages"
         :conversation-id="conversationId"
+        :workspace-root="effectiveWorkspaceRoot"
         :context="workspace.state.value?.context"
         :turn="lastTurn"
         :activity-turns="activityTurns"
@@ -598,11 +644,39 @@ useHomeCommands({
         :gateway="gatewayApprovals"
         :pending-run="workspace.state.value?.pendingRun"
         :loading="workspace.loading.value"
-        :code-tabs="codeTabs"
-        :active-code-tab-id="activeCodeTabId"
+        :tabs="sidePanelTabs"
+        :active-tab-id="activeSidePanelTabId"
         @locate="streamRef?.scrollToIndex($event)"
-        @select-code-tab="selectCodeTab"
-        @close-code-tab="closeCodeTab"
+        @select-tab="selectSidePanelTab"
+        @close-tab="closeSidePanelTab"
+        @close-other-tabs="closeOtherSidePanelTabs"
+        @close-all-tabs="closeAllSidePanelTabs"
+        @close-panel="panelOpen = false"
+        @open-launcher="openLauncher"
+        @open-tool="openWorkspaceTool"
+        @open-file-picker="pickAndOpenFileInSidebar"
+        @open-file="
+          openFileInSidebar({
+            absolutePath: $event.path,
+            displayPath: $event.displayPath,
+            line: $event.line
+          })
+        "
+        @open-web="openWebInSidebar"
+        @open-blank-browser="openBlankWebTab(t('home.sidePanel.browser'))"
+        @update-web-tab="updateWebTab"
+        @update-file-tab="updateFileTab"
+        @open-web-in-browser="openWebInBuiltInBrowser"
+        @open-file-in-browser="
+          openFileInBuiltInBrowser({
+            absolutePath: $event.path,
+            displayPath: $event.displayPath,
+            line: $event.line
+          })
+        "
+        @open-web-external="openWebExternal"
+        @start-resize="startSidePanelResize"
+        @reset-width="resetSidePanelWidth"
       />
     </div>
 
@@ -618,20 +692,21 @@ useHomeCommands({
       hide-prompt
       @action="runPassageAction"
     />
-
-    <HomeFilePreviewDrawer
-      v-model:visible="fileDrawerVisible"
-      :file-path="previewFilePath"
-      :display-path="previewDisplayPath"
-    />
   </div>
 </template>
 
 <style lang="scss" scoped>
 .HomePage {
   position: relative;
-  --home-panel-width: 360px;
+  --home-panel-width: 460px;
+  --home-panel-min-width: 320px;
+  --home-body-min-width: 480px;
   --home-chat-lane-width: min(720px, calc(100% - 64px));
+
+  &.is-resizing-panel {
+    user-select: none;
+    cursor: col-resize;
+  }
 
   --home-z-leaving: 0;
   --home-z-flight: 1;
@@ -770,7 +845,8 @@ useHomeCommands({
   initial-value: 0;
 }
 
-:deep(.is-file-path) {
+:deep(.is-file-path),
+:deep(.is-web-link) {
   color: var(--shell-primary);
   text-decoration: underline dotted;
   text-decoration-thickness: 1px;

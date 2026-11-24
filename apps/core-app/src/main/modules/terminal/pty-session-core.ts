@@ -24,6 +24,53 @@ const FLOW_LOW_WATERMARK = 5_000
 // checks this often whether its child is still there to wait for.
 const FLOW_EXIT_POLL_MS = 50
 
+// Host terminal identity variables from whatever launcher started Electron must not leak into
+// embedded xterm.js PTYs; otherwise TUI apps such as yazi misdetect Kitty/Ghostty/Terminal.app
+// or tmux passthrough instead of probing xterm.js's real DA1/SIXEL capabilities.
+const INHERITED_TERMINAL_ENV_VARS = new Set([
+  'ELECTRON_RUN_AS_NODE',
+  'TERM_PROGRAM',
+  'TERM_PROGRAM_VERSION',
+  'LC_TERMINAL',
+  'LC_TERMINAL_VERSION',
+  'KITTY_WINDOW_ID',
+  'KITTY_PID',
+  'KITTY_PUBLIC_KEY',
+  'GHOSTTY_RESOURCES_DIR',
+  'GHOSTTY_BIN_DIR',
+  'WEZTERM_EXECUTABLE',
+  'WEZTERM_PANE',
+  'WEZTERM_UNIX_SOCKET',
+  'ITERM_SESSION_ID',
+  'ITERM_PROFILE',
+  'KONSOLE_VERSION',
+  'VTE_VERSION',
+  'WT_SESSION',
+  'TMUX',
+  'TMUX_PANE',
+  'STY',
+  'ZELLIJ',
+  'ZELLIJ_SESSION_NAME',
+  'TERMINOLOGY',
+  'WARP_IS_LOCAL_SHELL_SESSION',
+  'VSCODE_INJECTION',
+  'VSCODE_GIT_IPC_HANDLE',
+  'VSCODE_SHELL_INTEGRATION'
+])
+
+export function buildDefaultPtyEnv(
+  source: NodeJS.ProcessEnv = process.env
+): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const [key, value] of Object.entries(source)) {
+    if (typeof value === 'string' && !INHERITED_TERMINAL_ENV_VARS.has(key)) {
+      env[key] = value
+    }
+  }
+  env.COLORTERM = 'truecolor'
+  return env
+}
+
 export interface PtySessionOwner {
   readonly scope: string
   readonly sender: WebContents
@@ -294,14 +341,7 @@ export class PtySessionCore {
       this.assertLiveOwner(owner, watcher.signal)
       const pty = await this.loadPty()
       this.assertLiveOwner(owner, watcher.signal)
-      const env =
-        options.env ??
-        Object.fromEntries(
-          Object.entries(process.env).filter(
-            (entry): entry is [string, string] =>
-              typeof entry[1] === 'string' && entry[0] !== 'ELECTRON_RUN_AS_NODE'
-          )
-        )
+      const env = options.env ?? buildDefaultPtyEnv()
       options.validateOwner?.()
       let child: IPty
       try {

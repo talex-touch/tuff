@@ -186,7 +186,6 @@ vi.mock('./composer/ComposerToolbar.vue', () => ({ default: ToolbarPaint }))
 vi.mock('./HomeTopBar.vue', () => ({ default: Paint }))
 vi.mock('./HomeSidePanel.vue', () => ({ default: Paint }))
 vi.mock('./pet/HomePet.vue', () => ({ default: PetPaint }))
-vi.mock('./preview/HomeFilePreviewDrawer.vue', () => ({ default: Paint }))
 vi.mock('./workspace/HomeRunApproval.vue', () => ({ default: Paint }))
 vi.mock('./workspace/HomeSchedulerRow.vue', () => ({ default: Paint }))
 vi.mock('./workspace/HomeWorkspaceQueue.vue', () => ({ default: Paint }))
@@ -458,7 +457,6 @@ afterAll(() => {
     './HomeTopBar.vue',
     './HomeSidePanel.vue',
     './pet/HomePet.vue',
-    './preview/HomeFilePreviewDrawer.vue',
     './workspace/HomeRunApproval.vue',
     './workspace/HomeSchedulerRow.vue',
     './workspace/HomeWorkspaceQueue.vue'

@@ -168,6 +168,7 @@ vi.mock('../ai/intelligence-context-hygiene', () => ({
   contextHygieneService: { cleanupWorkspaceConversation: async () => {} }
 }))
 vi.mock('../local-ai-cli/workspace-root', () => ({
+  peekConversationWorkspaceRoot: async () => directory,
   resolveConversationWorkspaceRoot: async () => directory
 }))
 vi.mock('../ai/ai-cli-orchestrator', () => ({

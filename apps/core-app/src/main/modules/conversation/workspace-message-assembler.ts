@@ -35,6 +35,15 @@ function printableToolInput(value: unknown): string {
   return boundedPartText(typeof safe === 'string' ? safe : JSON.stringify(safe ?? null, null, 2))
 }
 
+export interface WorkspaceSteerPart {
+  type: 'steer'
+  id: string
+  text: string
+  createdAt?: number
+}
+
+export type WorkspaceMessagePart = AiMessagePart | WorkspaceSteerPart
+
 export interface WorkspaceMessageAssemblerOptions {
   preserveInitial?: boolean
 }
@@ -42,12 +51,12 @@ export interface WorkspaceMessageAssemblerOptions {
 function hydrateInitialParts(
   rawParts: unknown,
   tools: Map<string, AiToolCallPart>
-): AiMessagePart[] | undefined {
+): WorkspaceMessagePart[] | undefined {
   if (!Array.isArray(rawParts) || rawParts.length === 0) return undefined
-  const hydrated: AiMessagePart[] = []
+  const hydrated: WorkspaceMessagePart[] = []
   for (const raw of rawParts) {
     if (!raw || typeof raw !== 'object' || !('type' in raw)) continue
-    const part = raw as AiMessagePart
+    const part = raw as WorkspaceMessagePart
     if (part.type === 'text') {
       hydrated.push({ ...part, text: typeof part.text === 'string' ? part.text : '' })
     } else if (part.type === 'reasoning') {
@@ -66,6 +75,15 @@ function hydrateInitialParts(
         tools.set(cloned.id, cloned)
       }
       hydrated.push(cloned)
+    } else if (part.type === 'steer') {
+      if (typeof part.id === 'string' && typeof part.text === 'string') {
+        hydrated.push({
+          type: 'steer',
+          id: part.id,
+          text: part.text,
+          ...(typeof part.createdAt === 'number' ? { createdAt: part.createdAt } : {})
+        })
+      }
     } else {
       hydrated.push({ ...part })
     }
@@ -75,7 +93,7 @@ function hydrateInitialParts(
 
 /** Main's canonical turn projection. Commit/reset follows the existing Home contract. */
 export class WorkspaceMessageAssembler {
-  private parts: AiMessagePart[] | undefined
+  private parts: WorkspaceMessagePart[] | undefined
   private readonly tools = new Map<string, AiToolCallPart>()
   private readonly toolStartedAt = new Map<string, number>()
   private openReasoning: AiReasoningPart | undefined
@@ -194,7 +212,7 @@ export class WorkspaceMessageAssembler {
     if (event.type === 'part' && event.partEvent) this.part(event.partEvent)
   }
 
-  private ensureParts(): AiMessagePart[] {
+  private ensureParts(): WorkspaceMessagePart[] {
     if (!this.parts) {
       this.parts = this.content ? [{ type: 'text', text: this.content }] : []
       this.committed.partsLength = this.committed.contentLength > 0 ? 1 : 0
@@ -325,6 +343,19 @@ export class WorkspaceMessageAssembler {
           tool.output = text
           tool.error = undefined
         }
+        return
+      }
+      case 'steer-injected': {
+        this.closeReasoning()
+        const parts = this.ensureParts()
+        if (parts.some((part) => part.type === 'steer' && part.id === event.steerId)) return
+        parts.push({
+          type: 'steer',
+          id: event.steerId,
+          text: event.text,
+          ...(event.createdAt !== undefined ? { createdAt: event.createdAt } : {})
+        })
+        this.commit()
         return
       }
     }

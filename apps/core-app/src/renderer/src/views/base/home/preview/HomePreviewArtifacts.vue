@@ -14,7 +14,10 @@ import { toast } from 'vue-sonner'
  */
 const props = defineProps<{ items: PreviewArtifact[] }>()
 
-defineEmits<{ (event: 'locate', messageIndex: number): void }>()
+const emit = defineEmits<{
+  (event: 'locate', messageIndex: number): void
+  (event: 'open-file', payload: { path: string; displayPath: string }): void
+}>()
 
 const { t } = useI18n()
 const appSdk = useAppSdk()
@@ -43,21 +46,15 @@ const FENCE_LABEL: Record<FenceKind, string> = {
   diagram: 'home.preview.diagram'
 }
 
-async function open(item: PreviewArtifact): Promise<void> {
+function open(item: PreviewArtifact): void {
   if (!item.path) return
-  try {
-    await appSdk.openApp({ path: item.path })
-  } catch {
-    // A file can be moved or deleted between the write and the click; say so
-    // rather than leaving the click looking ignored.
-    toast.error(t('home.preview.openFailed'))
-  }
+  emit('open-file', { path: item.path, displayPath: item.path })
 }
 
 async function reveal(item: PreviewArtifact): Promise<void> {
   if (!item.path) return
   try {
-    await appSdk.showInFolder(item.path)
+    await appSdk.showInFolder(item.path, { reveal: true })
   } catch {
     toast.error(t('home.preview.openFailed'))
   }
