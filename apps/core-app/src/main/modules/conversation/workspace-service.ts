@@ -2036,23 +2036,30 @@ export class ConversationWorkspaceService {
 
   /**
    * Atomically persists the assistant snapshot carrying the injected steer part, removes the
-   * pending steer input from the queue, marks its receipt completed, and broadcasts updated state.
+   * pending steer input from the queue if its content still matches the consumed text, marks
+   * its receipt completed, and broadcasts updated state.
    */
   async consumeSteer(
     conversationId: string,
     turnId: string,
     steerId: string,
-    assistantSnapshot?: StoredConversationMessage
+    assistantSnapshot?: StoredConversationMessage,
+    consumedText?: string
   ): Promise<ConversationWorkspaceState | null> {
     return this.serial(conversationId, async () => {
       const row = await this.workspaceRow(conversationId)
       if (!row || row.activeTurnId !== turnId) return null
+      const conversation = assistantSnapshot ? await getConversation(conversationId) : null
       const queue = await this.queue(conversationId)
       const existing = queue.find(steerId)
-      if (!existing && !assistantSnapshot) return this.readState(conversationId)
+      const shouldConsumeQueueItem =
+        Boolean(existing) &&
+        (consumedText === undefined || inputSchema.parse(existing!.payload).text === consumedText)
+      if (!shouldConsumeQueueItem && !assistantSnapshot) return this.readState(conversationId)
 
       const now = Date.now()
       let stale = false
+      let removedQueueRow = false
       await scheduleDbWrite('conversation.workspace.consume-steer', () =>
         this.db().transaction(async (tx) => {
           const [current] = await tx
@@ -2082,25 +2089,52 @@ export class ConversationWorkspaceService {
               .update(conversations)
               .set({ updatedAt: now })
               .where(eq(conversations.id, conversationId))
+            if (conversation?.projectId === null) {
+              await tx
+                .insert(conversationSyncState)
+                .values({ conversationId, dirtyAt: now, deletedAt: null })
+                .onConflictDoUpdate({
+                  target: conversationSyncState.conversationId,
+                  set: { dirtyAt: now, deletedAt: null }
+                })
+            }
           }
-          if (existing) {
-            await tx
-              .delete(conversationQueuedInputs)
+          if (shouldConsumeQueueItem) {
+            const [currentRow] = await tx
+              .select()
+              .from(conversationQueuedInputs)
               .where(
                 and(
                   eq(conversationQueuedInputs.conversationId, conversationId),
                   eq(conversationQueuedInputs.id, steerId)
                 )
               )
-            await tx
-              .update(conversationWorkspaceReceipts)
-              .set({ status: 'completed', updatedAt: now })
-              .where(
-                and(
-                  eq(conversationWorkspaceReceipts.conversationId, conversationId),
-                  eq(conversationWorkspaceReceipts.id, steerId)
+            const storedMatches =
+              currentRow &&
+              (consumedText === undefined ||
+                inputSchema.parse(JSON.parse(currentRow.inputJson)).text === consumedText)
+            if (storedMatches) {
+              await tx
+                .delete(conversationQueuedInputs)
+                .where(
+                  and(
+                    eq(conversationQueuedInputs.conversationId, conversationId),
+                    eq(conversationQueuedInputs.id, steerId)
+                  )
                 )
-              )
+              await tx
+                .update(conversationWorkspaceReceipts)
+                .set({ status: 'completed', updatedAt: now })
+                .where(
+                  and(
+                    eq(conversationWorkspaceReceipts.conversationId, conversationId),
+                    eq(conversationWorkspaceReceipts.id, steerId)
+                  )
+                )
+              removedQueueRow = true
+            }
+          }
+          if (assistantSnapshot || removedQueueRow) {
             await tx
               .update(conversationWorkspaces)
               .set({
@@ -2112,10 +2146,12 @@ export class ConversationWorkspaceService {
         })
       )
       if (stale) return null
-      if (existing) {
+      if (removedQueueRow) {
         // Drop cached queue so readState reloads the exact post-transaction SQLite queue.
         this.queues.delete(conversationId)
-        return this.changed(conversationId)
+      }
+      if (assistantSnapshot || removedQueueRow) {
+        return this.changed(conversationId, Boolean(assistantSnapshot))
       }
       return this.readState(conversationId)
     })

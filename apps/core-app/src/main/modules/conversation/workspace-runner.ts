@@ -778,7 +778,8 @@ export class ConversationWorkspaceRunner {
     const relevant = conversation.messages.filter(
       (message) =>
         message.status === 'complete' ||
-        (message.status === 'failed' && message.role === 'assistant')
+        ((message.status === 'failed' || message.status === 'streaming') &&
+          message.role === 'assistant')
     )
     const firstUser = relevant.findIndex(
       (message) => message.status === 'complete' && message.role === 'user'
@@ -915,7 +916,8 @@ export class ConversationWorkspaceRunner {
         (message) =>
           message.id !== turn.user.id &&
           (message.status === 'complete' ||
-            (message.status === 'failed' && message.role === 'assistant'))
+            ((message.status === 'failed' || message.status === 'streaming') &&
+              message.role === 'assistant'))
       )
       .flatMap((message) =>
         message.status === 'complete'
@@ -1141,7 +1143,13 @@ export class ConversationWorkspaceRunner {
         slot.assembler.part({ kind: 'steer-injected', steerId, text, createdAt })
         await slot.pendingWrites
         const snapshot = slot.assembler.snapshot()
-        await this.service.consumeSteer(slot.conversationId, slot.turn.input.id, steerId, snapshot)
+        await this.service.consumeSteer(
+          slot.conversationId,
+          slot.turn.input.id,
+          steerId,
+          snapshot,
+          text
+        )
         slot.lastPersist = Date.now()
       }
       this.snapshot(slot)

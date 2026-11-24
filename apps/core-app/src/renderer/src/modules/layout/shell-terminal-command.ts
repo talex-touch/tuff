@@ -85,10 +85,18 @@ export function buildTerminalInput(options: BuildTerminalInputOptions): BuiltTer
   let input: string
   if (cdCommand) {
     if (normalized.includes('\n')) {
-      input =
-        platform === 'win32'
-          ? `${cdCommand} && (\r${ptyCommand}\r)\r`
-          : `${cdCommand} && {\r${ptyCommand}\r}\r`
+      if (platform === 'win32') {
+        // Gate each line on ERRORLEVEL rather than wrapping in `( ... )` so cmd.exe evaluates
+        // `%VAR%` assignments sequentially across lines while skipping everything if `cd /d` fails.
+        const guardedLines = normalized
+          .split('\n')
+          .map((line) => (line.trim() ? `if not errorlevel 1 ${line}` : ''))
+          .filter(Boolean)
+          .join('\r')
+        input = `${cdCommand}\r${guardedLines}\r`
+      } else {
+        input = `${cdCommand} && {\r${ptyCommand}\r}\r`
+      }
     } else {
       input = `${cdCommand} && ${ptyCommand}\r`
     }

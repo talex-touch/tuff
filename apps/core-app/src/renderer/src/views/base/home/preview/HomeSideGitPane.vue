@@ -241,22 +241,25 @@ async function loadDiff(filePath: string, staged: boolean, untracked: boolean): 
 }
 
 const targetKey = computed(() => `${props.cwd ?? ''}\0${props.conversationId ?? ''}`)
+let branchesRequestSeq = 0
+let logRequestSeq = 0
 
 async function refreshBranches(): Promise<void> {
   if (!gitSdk || !status.value?.isRepo) return
   const key = targetKey.value
+  const seq = ++branchesRequestSeq
   loadingBranches.value = true
   try {
     const next = await gitSdk.branches(target.value)
-    if (key !== targetKey.value) return
+    if (seq !== branchesRequestSeq || key !== targetKey.value) return
     branches.value = next.branches
     if (next.error) actionError.value = next.error
   } catch (error) {
-    if (key === targetKey.value) {
+    if (seq === branchesRequestSeq && key === targetKey.value) {
       actionError.value = error instanceof Error ? error.message : String(error)
     }
   } finally {
-    if (key === targetKey.value) {
+    if (seq === branchesRequestSeq && key === targetKey.value) {
       loadingBranches.value = false
     }
   }
@@ -265,18 +268,19 @@ async function refreshBranches(): Promise<void> {
 async function refreshLog(): Promise<void> {
   if (!gitSdk || !status.value?.isRepo) return
   const key = targetKey.value
+  const seq = ++logRequestSeq
   loadingLog.value = true
   try {
     const next = await gitSdk.log({ ...target.value, limit: 40 })
-    if (key !== targetKey.value) return
+    if (seq !== logRequestSeq || key !== targetKey.value) return
     commits.value = next.commits
     if (next.error) actionError.value = next.error
   } catch (error) {
-    if (key === targetKey.value) {
+    if (seq === logRequestSeq && key === targetKey.value) {
       actionError.value = error instanceof Error ? error.message : String(error)
     }
   } finally {
-    if (key === targetKey.value) {
+    if (seq === logRequestSeq && key === targetKey.value) {
       loadingLog.value = false
     }
   }
@@ -512,10 +516,11 @@ async function copyCommitHash(hash: string): Promise<void> {
 watch(
   [() => props.cwd, () => props.conversationId, () => props.active],
   ([, , active], previous) => {
-    if (!active) return
     const targetChanged =
       !previous || previous[0] !== props.cwd || previous[1] !== props.conversationId
     if (targetChanged) {
+      branchesRequestSeq += 1
+      logRequestSeq += 1
       status.value = null
       branches.value = []
       commits.value = []
@@ -527,6 +532,7 @@ watch(
       actionError.value = ''
       actionNotice.value = ''
     }
+    if (!active) return
     void refreshAll()
   },
   { immediate: true }

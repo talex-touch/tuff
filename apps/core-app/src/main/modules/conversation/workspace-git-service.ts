@@ -441,10 +441,8 @@ function summarizeDiff(rawDiff: string): {
 }
 
 function isPathContained(root: string, target: string): boolean {
-  const compRoot =
-    process.platform === 'darwin' || process.platform === 'win32' ? root.toLowerCase() : root
-  const compTarget =
-    process.platform === 'darwin' || process.platform === 'win32' ? target.toLowerCase() : target
+  const compRoot = process.platform === 'win32' ? root.toLowerCase() : root
+  const compTarget = process.platform === 'win32' ? target.toLowerCase() : target
   const rel = path.relative(compRoot, compTarget)
   return rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)
 }
@@ -984,8 +982,8 @@ export async function discardWorkspaceGitFile(
       }
     }
 
-    // Confirm exact untracked file entry, then let `git clean -f` (without -d/-x) verify
-    // Git's index atomically at removal time so a concurrently staged file or directory is never deleted.
+    // Confirm exact untracked file entry, re-verify it is still not a directory, then unlink
+    // non-recursively so a directory can never be deleted recursively.
     const verify = await runGit(
       ctx.repoRoot,
       ['ls-files', '--others', '--exclude-standard', '-z', '--', safePath],
@@ -997,26 +995,16 @@ export async function discardWorkspaceGitFile(
       return { ok: false, error: 'Refused to delete path that is not untracked by git' }
     }
 
-    const cleanRes = await runGit(
-      ctx.repoRoot,
-      ['clean', '-f', '--', safePath],
-      LOCAL_GIT_TIMEOUT_MS,
-      { literalPathspecs: true }
-    )
-    if (cleanRes.exitCode !== 0) {
-      return {
-        ok: false,
-        error: cleanRes.stderr.trim() || 'Failed to remove untracked file'
+    try {
+      const latestStat = await fs.lstat(targetAbs)
+      if (latestStat.isDirectory()) {
+        return { ok: false, error: 'Refused to recursively delete untracked directory' }
       }
-    }
-    const stillExists = await fs
-      .lstat(targetAbs)
-      .then(() => true)
-      .catch(() => false)
-    if (stillExists) {
+      await fs.unlink(targetAbs)
+    } catch (error) {
       return {
         ok: false,
-        error: 'Refused to delete path that is no longer an untracked file'
+        error: error instanceof Error ? error.message : 'Failed to remove untracked file'
       }
     }
   } else {

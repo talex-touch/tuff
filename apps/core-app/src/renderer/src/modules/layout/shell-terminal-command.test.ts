@@ -64,13 +64,14 @@ describe('shell-terminal-command', () => {
 
     expect(
       buildTerminalInput({
-        command: 'echo one\necho two',
+        command: 'set "REVIEW_VALUE=new"\necho %REVIEW_VALUE%',
         cwd: 'C:\\Users\\demo\\project',
         currentCwd: undefined,
         platform: 'win32'
       })
     ).toEqual({
-      input: 'cd /d "C:\\Users\\demo\\project" && (\recho one\recho two\r)\r',
+      input:
+        'cd /d "C:\\Users\\demo\\project"\rif not errorlevel 1 set "REVIEW_VALUE=new"\rif not errorlevel 1 echo %REVIEW_VALUE%\r',
       nextCwd: undefined
     })
   })

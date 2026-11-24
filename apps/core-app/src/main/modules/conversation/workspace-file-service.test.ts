@@ -78,7 +78,7 @@ describe('workspace-file-service', () => {
     ).rejects.toThrow('WORKSPACE_FILE_FORBIDDEN')
   })
 
-  it('enforces canonical path containment against ../ escapes and out-of-root symlinks, while allowing user-picked paths', async () => {
+  it('enforces canonical path containment against ../ escapes and external opens, while allowing user-picked paths', async () => {
     const workspaceRoot = await makeTempDir()
     const outsideDir = await makeTempDir()
     const outsideFile = path.join(outsideDir, 'secret.txt')
@@ -88,15 +88,6 @@ describe('workspace-file-service', () => {
     await expect(
       readWorkspaceFile(
         { path: relativeEscape, conversationId: 'conv-contained' },
-        { resolveConversationRoot: async () => workspaceRoot }
-      )
-    ).rejects.toThrow('WORKSPACE_FILE_FORBIDDEN')
-
-    const symlinkPath = path.join(workspaceRoot, 'escape-link.txt')
-    await fs.symlink(outsideFile, symlinkPath)
-    await expect(
-      readWorkspaceFile(
-        { path: 'escape-link.txt', conversationId: 'conv-contained' },
         { resolveConversationRoot: async () => workspaceRoot }
       )
     ).rejects.toThrow('WORKSPACE_FILE_FORBIDDEN')
@@ -119,11 +110,42 @@ describe('workspace-file-service', () => {
         openDialog: vi.fn(async () => ({ canceled: false, filePaths: [outsideFile] })) as never
       }
     )
-    expect(picked.path).toBe(path.resolve(outsideFile))
+    expect(picked.path).toBe(await fs.realpath(outsideFile))
 
     const readApproved = await readWorkspaceFile({ path: outsideFile })
     expect(readApproved.kind).toBe('text')
     expect(readApproved.text).toBe('outside-secret')
+  })
+
+  it('rejects symlinks or junctions pointing outside the workspace root', async () => {
+    const workspaceRoot = await makeTempDir()
+    const outsideDir = await makeTempDir()
+    const outsideFile = path.join(outsideDir, 'secret.txt')
+    await fs.writeFile(outsideFile, 'outside-secret', 'utf-8')
+
+    const linkTarget = path.join(workspaceRoot, 'escape-link')
+    try {
+      if (process.platform === 'win32') {
+        await fs.symlink(outsideDir, linkTarget, 'junction')
+      } else {
+        await fs.symlink(outsideFile, linkTarget)
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code
+      if (process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES')) {
+        return
+      }
+      throw error
+    }
+
+    const escapeRel =
+      process.platform === 'win32' ? path.join('escape-link', 'secret.txt') : 'escape-link'
+    await expect(
+      readWorkspaceFile(
+        { path: escapeRel, conversationId: 'conv-symlink' },
+        { resolveConversationRoot: async () => workspaceRoot }
+      )
+    ).rejects.toThrow('WORKSPACE_FILE_FORBIDDEN')
   })
 
   it('opens allowlisted viewer documents externally and reveals executables, .js scripts, and extensionless files', async () => {

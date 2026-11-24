@@ -7,6 +7,7 @@ import type {
   WorkspaceReadFileRequest,
   WorkspaceReadFileResult
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+import { constants as fsConstants } from 'node:fs'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -242,11 +243,9 @@ export interface WorkspaceFileServicePorts {
 function normalizeComparable(value: string): string {
   const resolved = path.resolve(value)
   if (process.platform === 'darwin' && resolved.startsWith('/private/')) {
-    return resolved.slice('/private'.length).toLowerCase()
+    return resolved.slice('/private'.length)
   }
-  return process.platform === 'darwin' || process.platform === 'win32'
-    ? resolved.toLowerCase()
-    : resolved
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved
 }
 
 function isWithinDir(target: string, root: string): boolean {
@@ -406,11 +405,15 @@ export async function readWorkspaceFile(
   const allowedRoots = await resolveAllowedRoots(request?.conversationId, ports)
   await assertWithinAllowedRoots(canonical, allowedRoots)
 
-  const stats = await fs.stat(canonical)
   const name = path.basename(canonical) || canonical
   const ext = fileExtensionOf(canonical)
 
-  if (stats.isDirectory()) {
+  const lstat = await fs.lstat(canonical)
+  if (lstat.isSymbolicLink()) {
+    throw new Error('WORKSPACE_FILE_FORBIDDEN')
+  }
+
+  if (lstat.isDirectory()) {
     const dirEntries = await fs.readdir(canonical, { withFileTypes: true })
     const filtered = dirEntries
       .filter((entry) => entry.name !== '.DS_Store')
@@ -420,9 +423,11 @@ export async function readWorkspaceFile(
       filtered.map(async (entry) => {
         const entryPath = path.join(canonical, entry.name)
         let size: number | undefined
-        if (!entry.isDirectory()) {
-          const entryStat = await fs.stat(entryPath).catch(() => null)
-          size = entryStat?.size
+        if (!entry.isDirectory() && !entry.isSymbolicLink()) {
+          const entryStat = await fs.lstat(entryPath).catch(() => null)
+          if (entryStat?.isFile()) {
+            size = entryStat.size
+          }
         }
         return {
           name: entry.name,
@@ -446,112 +451,133 @@ export async function readWorkspaceFile(
       mimeType: 'inode/directory',
       size: entries.length,
       truncated: dirEntries.length > DIRECTORY_ENTRY_LIMIT,
-      mtimeMs: stats.mtimeMs,
+      mtimeMs: lstat.mtimeMs,
       entries
     }
   }
 
-  if (!stats.isFile()) {
-    throw new Error('WORKSPACE_FILE_UNSUPPORTED')
+  // Bind type checks and content reads to one no-follow file descriptor so the object cannot
+  // be swapped via symlink between authorization and read.
+  const openFlags = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0)
+  let handle: fs.FileHandle
+  try {
+    handle = await fs.open(canonical, openFlags)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code
+    if (code === 'ELOOP') {
+      throw new Error('WORKSPACE_FILE_FORBIDDEN')
+    }
+    throw error
   }
 
-  // Images (non-SVG)
-  if (ext && Object.hasOwn(IMAGE_MIME_BY_EXT, ext)) {
-    if (stats.size > BINARY_PREVIEW_MAX_BYTES) {
+  try {
+    const stats = await handle.stat()
+    if (!stats.isFile()) {
+      throw new Error('WORKSPACE_FILE_UNSUPPORTED')
+    }
+
+    const readHandleBytes = async (maxLen: number): Promise<Buffer> => {
+      const targetLen = Math.min(stats.size, maxLen)
+      if (targetLen <= 0) return Buffer.alloc(0)
+      const buf = Buffer.alloc(targetLen)
+      let offset = 0
+      while (offset < targetLen) {
+        const { bytesRead } = await handle.read(buf, offset, targetLen - offset, offset)
+        if (bytesRead === 0) break
+        offset += bytesRead
+      }
+      return buf.subarray(0, offset)
+    }
+
+    // Images (non-SVG)
+    if (ext && Object.hasOwn(IMAGE_MIME_BY_EXT, ext)) {
+      if (stats.size > BINARY_PREVIEW_MAX_BYTES) {
+        return {
+          path: canonical,
+          name,
+          ext,
+          kind: 'binary',
+          mimeType: IMAGE_MIME_BY_EXT[ext]!,
+          size: stats.size,
+          truncated: true,
+          mtimeMs: stats.mtimeMs
+        }
+      }
+      const raw = await readHandleBytes(BINARY_PREVIEW_MAX_BYTES)
       return {
         path: canonical,
         name,
         ext,
-        kind: 'binary',
+        kind: 'image',
         mimeType: IMAGE_MIME_BY_EXT[ext]!,
         size: stats.size,
-        truncated: true,
-        mtimeMs: stats.mtimeMs
+        truncated: false,
+        mtimeMs: stats.mtimeMs,
+        base64: raw.toString('base64')
       }
     }
-    const raw = await fs.readFile(canonical)
-    return {
-      path: canonical,
-      name,
-      ext,
-      kind: 'image',
-      mimeType: IMAGE_MIME_BY_EXT[ext]!,
-      size: stats.size,
-      truncated: false,
-      mtimeMs: stats.mtimeMs,
-      base64: raw.toString('base64')
-    }
-  }
 
-  // PDF
-  if (ext === 'pdf') {
-    if (stats.size > BINARY_PREVIEW_MAX_BYTES) {
+    // PDF
+    if (ext === 'pdf') {
+      if (stats.size > BINARY_PREVIEW_MAX_BYTES) {
+        return {
+          path: canonical,
+          name,
+          ext,
+          kind: 'binary',
+          mimeType: 'application/pdf',
+          size: stats.size,
+          truncated: true,
+          mtimeMs: stats.mtimeMs
+        }
+      }
+      const raw = await readHandleBytes(BINARY_PREVIEW_MAX_BYTES)
+      return {
+        path: canonical,
+        name,
+        ext,
+        kind: 'pdf',
+        mimeType: 'application/pdf',
+        size: stats.size,
+        truncated: false,
+        mtimeMs: stats.mtimeMs,
+        base64: raw.toString('base64')
+      }
+    }
+
+    // Read bounded head for text/code or binary classification
+    const requestedMax =
+      typeof request?.maxBytes === 'number' && Number.isFinite(request.maxBytes)
+        ? Math.max(1024, Math.min(HARD_TEXT_MAX_BYTES, Math.trunc(request.maxBytes)))
+        : DEFAULT_TEXT_MAX_BYTES
+    const buffer = await readHandleBytes(requestedMax)
+
+    if (!KNOWN_TEXT_EXTS.has(ext) && hasBinaryNullByte(buffer)) {
       return {
         path: canonical,
         name,
         ext,
         kind: 'binary',
-        mimeType: 'application/pdf',
+        mimeType: 'application/octet-stream',
         size: stats.size,
-        truncated: true,
+        truncated: stats.size > buffer.length,
         mtimeMs: stats.mtimeMs
       }
     }
-    const raw = await fs.readFile(canonical)
+
     return {
       path: canonical,
       name,
       ext,
-      kind: 'pdf',
-      mimeType: 'application/pdf',
+      kind: 'text',
+      mimeType: TEXT_MIME_BY_EXT[ext] ?? 'text/plain',
       size: stats.size,
-      truncated: false,
+      truncated: stats.size > buffer.length,
       mtimeMs: stats.mtimeMs,
-      base64: raw.toString('base64')
-    }
-  }
-
-  // Read bounded head for text/code or binary classification
-  const requestedMax =
-    typeof request?.maxBytes === 'number' && Number.isFinite(request.maxBytes)
-      ? Math.max(1024, Math.min(HARD_TEXT_MAX_BYTES, Math.trunc(request.maxBytes)))
-      : DEFAULT_TEXT_MAX_BYTES
-  const readSize = Math.min(stats.size, requestedMax)
-  const handle = await fs.open(canonical, 'r')
-  let buffer: Buffer
-  try {
-    buffer = Buffer.alloc(readSize)
-    if (readSize > 0) {
-      const { bytesRead } = await handle.read(buffer, 0, readSize, 0)
-      buffer = buffer.subarray(0, bytesRead)
+      text: buffer.toString('utf-8')
     }
   } finally {
     await handle.close()
-  }
-
-  if (!KNOWN_TEXT_EXTS.has(ext) && hasBinaryNullByte(buffer)) {
-    return {
-      path: canonical,
-      name,
-      ext,
-      kind: 'binary',
-      mimeType: 'application/octet-stream',
-      size: stats.size,
-      truncated: stats.size > readSize,
-      mtimeMs: stats.mtimeMs
-    }
-  }
-
-  return {
-    path: canonical,
-    name,
-    ext,
-    kind: 'text',
-    mimeType: TEXT_MIME_BY_EXT[ext] ?? 'text/plain',
-    size: stats.size,
-    truncated: stats.size > readSize,
-    mtimeMs: stats.mtimeMs,
-    text: buffer.toString('utf-8')
   }
 }
 
@@ -587,13 +613,18 @@ export async function pickWorkspaceFile(
   }
 
   const picked = path.resolve(result.filePaths[0]!)
-  const realPicked = await fs.realpath(picked).catch(() => picked)
-  const homeDir = (ports.homedir ?? os.homedir)()
-  if (!isBlockedSensitivePath(picked, homeDir) && !isBlockedSensitivePath(realPicked, homeDir)) {
-    approvedPickedPaths.add(normalizeComparable(picked))
-    approvedPickedPaths.add(normalizeComparable(realPicked))
+  let realPicked: string
+  try {
+    realPicked = await fs.realpath(picked)
+  } catch {
+    return { path: null }
   }
-  return { path: picked }
+  const homeDir = (ports.homedir ?? os.homedir)()
+  if (isBlockedSensitivePath(picked, homeDir) || isBlockedSensitivePath(realPicked, homeDir)) {
+    return { path: null }
+  }
+  approvedPickedPaths.add(normalizeComparable(realPicked))
+  return { path: realPicked }
 }
 
 export async function openWorkspaceFileExternal(
@@ -630,9 +661,13 @@ export async function openWorkspaceFileExternal(
     throw new Error('WORKSPACE_FILE_UNSUPPORTED')
   }
 
-  // Only open regular non-bundle directories or allowlisted viewer document types via OS
-  // association; reveal scripts, binaries, extensionless files, and macOS bundles instead.
-  const isSafeDir = stats.isDirectory() && !isLaunchableBundleDir(canonical)
+  // Only open regular non-package directories or allowlisted viewer document types via OS
+  // association; reveal scripts, binaries, extensionless files, and macOS document packages/bundles instead.
+  const hasPackageExtension = process.platform === 'darwin' && path.extname(canonical) !== ''
+  const isSafeDir =
+    stats.isDirectory() &&
+    !isLaunchableBundleDir(canonical) &&
+    (!hasPackageExtension || isSafeExternalOpenPath(canonical))
   if (!isSafeDir && !isSafeExternalOpenPath(canonical)) {
     showItemInFolder(canonical)
     return { opened: false, revealed: true }

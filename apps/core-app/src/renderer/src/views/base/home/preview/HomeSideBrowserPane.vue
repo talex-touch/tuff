@@ -209,6 +209,7 @@ watch(
       hideViewport()
       return
     }
+    updateOverlays()
     if (!url) {
       address.value = ''
       hideViewport()
