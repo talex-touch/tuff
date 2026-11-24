@@ -12,12 +12,6 @@ const routes: RouteRecordRaw[] = [
     component: () => import('~/pages/multi-translate.vue'),
   },
   {
-    path: '/hi/:name',
-    name: 'hi-name',
-    component: () => import('~/pages/hi/[name].vue'),
-    props: true,
-  },
-  {
     path: '/:all(.*)*',
     name: 'all',
     component: () => import('~/pages/[...all].vue'),

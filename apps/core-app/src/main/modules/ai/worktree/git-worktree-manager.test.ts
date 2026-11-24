@@ -24,14 +24,30 @@ import {
 
 const execFileAsync = promisify(execFile)
 
+const GIT_REPO_OVERRIDE_ENV_VARS = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_COMMON_DIR',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_NAMESPACE',
+  'GIT_SUPER_PREFIX',
+  'GIT_PREFIX'
+] as const
+
 async function runGit(cwd: string, args: string[]): Promise<string> {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    GIT_TERMINAL_PROMPT: '0',
+    LC_ALL: 'C'
+  }
+  for (const key of GIT_REPO_OVERRIDE_ENV_VARS) {
+    delete env[key]
+  }
   const { stdout } = await execFileAsync('git', args, {
     cwd,
-    env: {
-      ...process.env,
-      GIT_TERMINAL_PROMPT: '0',
-      LC_ALL: 'C'
-    }
+    env
   })
   return stdout.trim()
 }
@@ -771,5 +787,171 @@ exec git "$@"
     // Restore clean metadata and release cleanly.
     await writeFile(metaPath, JSON.stringify(lease), 'utf8')
     await creator.releaseWorktree(lease.worktreeId, { force: true })
+  })
+
+  it('reattaches a persisted worktree for the matching runId and fails closed on mismatch or missing dir', async () => {
+    await initGitRepo(repoDir)
+    const creator = new GitWorktreeManager({ baseDir })
+    const lease = await creator.acquireWorktree({ runId: 'run-reattach-1', repoRoot: repoDir })
+    await writeFile(path.join(lease.worktreePath, 'partial.txt'), 'wip-content\n', 'utf8')
+
+    const restarted = new GitWorktreeManager({ baseDir })
+    expect(restarted.getLease(lease.worktreeId)).toBeUndefined()
+
+    await expectWorktreeError(
+      restarted.reattachWorktree(lease.worktreeId, 'wrong-run-id'),
+      'WORKTREE_PATH_ESCAPE'
+    )
+    expect(restarted.getLease(lease.worktreeId)).toBeUndefined()
+
+    const reattached = await restarted.reattachWorktree(lease.worktreeId, 'run-reattach-1')
+    expect(reattached.worktreeId).toBe(lease.worktreeId)
+    expect(reattached.effectiveCwd).toBe(lease.effectiveCwd)
+    expect(restarted.getLease(lease.worktreeId)?.runId).toBe('run-reattach-1')
+    expect(await readFile(path.join(reattached.worktreePath, 'partial.txt'), 'utf8')).toBe(
+      'wip-content\n'
+    )
+
+    // Remove directory on disk -> fail closed with WORKTREE_NOT_FOUND on next restart
+    await rm(lease.worktreePath, { recursive: true, force: true })
+    const thirdBoot = new GitWorktreeManager({ baseDir })
+    await expectWorktreeError(
+      thirdBoot.reattachWorktree(lease.worktreeId, 'run-reattach-1'),
+      'WORKTREE_NOT_FOUND'
+    )
+
+    // Replace with an ordinary non-git directory -> fail closed with WORKTREE_INVALID_REPO
+    await mkdir(lease.worktreePath, { recursive: true })
+    await writeFile(path.join(lease.worktreePath, 'plain.txt'), 'not a git worktree\n', 'utf8')
+    const fourthBoot = new GitWorktreeManager({ baseDir })
+    await expectWorktreeError(
+      fourthBoot.reattachWorktree(lease.worktreeId, 'run-reattach-1'),
+      'WORKTREE_INVALID_REPO'
+    )
+
+    // Replace with a worktree belonging to a DIFFERENT git repository -> fail closed
+    await rm(lease.worktreePath, { recursive: true, force: true })
+    const otherRepo = path.join(sandboxDir, 'other-repo')
+    await mkdir(otherRepo, { recursive: true })
+    await initGitRepo(otherRepo)
+    await runGit(otherRepo, ['worktree', 'add', '--detach', lease.worktreePath, 'HEAD'])
+    const fifthBoot = new GitWorktreeManager({ baseDir })
+    await expectWorktreeError(
+      fifthBoot.reattachWorktree(lease.worktreeId, 'run-reattach-1'),
+      'WORKTREE_INVALID_REPO'
+    )
+
+    await runGit(otherRepo, ['worktree', 'remove', '--force', lease.worktreePath]).catch(
+      () => undefined
+    )
+    await creator.releaseWorktree(lease.worktreeId, { force: true }).catch(() => undefined)
+  })
+
+  it('finds persisted leases by runId and fails closed if .meta contains corrupt records', async () => {
+    await initGitRepo(repoDir)
+    const creator = new GitWorktreeManager({ baseDir })
+    const lease = await creator.acquireWorktree({ runId: 'run-legacy-lookup', repoRoot: repoDir })
+
+    const restarted = new GitWorktreeManager({ baseDir })
+    const found = await restarted.findPersistedLeaseByRunId('run-legacy-lookup')
+    expect(found?.worktreeId).toBe(lease.worktreeId)
+    expect(await restarted.findPersistedLeaseByRunId('run-not-present')).toBeNull()
+
+    // Corrupt metadata file prevents proving an unknown run had no worktree -> fail closed
+    const canonicalBase = await realpath(baseDir)
+    const corruptMeta = path.join(canonicalBase, '.meta', 'wt-corrupt-lookup.json')
+    await writeFile(corruptMeta, '{not-json', 'utf8')
+    await expectWorktreeError(
+      restarted.findPersistedLeaseByRunId('run-not-present'),
+      'WORKTREE_PATH_ESCAPE'
+    )
+    await rm(corruptMeta, { force: true })
+
+    // Invalid worktree id containing ".." is treated as corrupt without aborting scan before valid lease
+    const badIdMeta = path.join(canonicalBase, '.meta', 'wt-00-bad..name.json')
+    await writeFile(badIdMeta, '{"runId":"other"}', 'utf8')
+    const foundPastBadId = await new GitWorktreeManager({ baseDir }).findPersistedLeaseByRunId(
+      'run-legacy-lookup'
+    )
+    expect(foundPastBadId?.worktreeId).toBe(lease.worktreeId)
+    await expectWorktreeError(
+      new GitWorktreeManager({ baseDir }).findPersistedLeaseByRunId('run-not-present'),
+      'WORKTREE_PATH_ESCAPE'
+    )
+    await rm(badIdMeta, { force: true })
+
+    // Non-regular .json entry (symlink) pointing to a complete valid lease is still classified as corrupt without following it
+    const symlinkTarget = path.join(sandboxDir, 'outside-lease.json')
+    const symlinkWorktreePath = path.join(canonicalBase, 'wt-symlink-lease')
+    await writeFile(
+      symlinkTarget,
+      JSON.stringify({
+        worktreeId: 'wt-symlink-lease',
+        runId: 'run-not-present',
+        repoRoot: lease.repoRoot,
+        worktreePath: symlinkWorktreePath,
+        effectiveCwd: symlinkWorktreePath,
+        branchName: 'tuff/wt/run-not-present',
+        baseRef: lease.baseRef,
+        baseCommit: lease.baseCommit,
+        createdAt: Date.now()
+      }),
+      'utf8'
+    )
+    const symlinkMeta = path.join(canonicalBase, '.meta', 'wt-symlink-lease.json')
+    await symlink(symlinkTarget, symlinkMeta)
+    await expectWorktreeError(
+      new GitWorktreeManager({ baseDir }).findPersistedLeaseByRunId('run-not-present'),
+      'WORKTREE_PATH_ESCAPE'
+    )
+    await rm(symlinkMeta, { force: true })
+
+    await creator.releaseWorktree(lease.worktreeId, { force: true })
+  })
+
+  it('reattaches cleanly despite inherited GIT_DIR/GIT_WORK_TREE overrides and newline-containing baseDir paths', async () => {
+    await initGitRepo(repoDir)
+    const otherRepo = path.join(sandboxDir, 'override-repo')
+    await initGitRepo(otherRepo)
+
+    const targetBaseDir =
+      process.platform === 'win32'
+        ? path.join(sandboxDir, 'managed-worktrees-env')
+        : path.join(sandboxDir, 'managed\nworktrees')
+    const creator = new GitWorktreeManager({ baseDir: targetBaseDir })
+    const lease = await creator.acquireWorktree({ runId: 'run-env-newline', repoRoot: repoDir })
+
+    const prevGitDir = process.env.GIT_DIR
+    const prevGitWorkTree = process.env.GIT_WORK_TREE
+    process.env.GIT_DIR = path.join(otherRepo, '.git')
+    process.env.GIT_WORK_TREE = otherRepo
+    try {
+      const restarted = new GitWorktreeManager({ baseDir: targetBaseDir })
+      const reattached = await restarted.reattachWorktree(lease.worktreeId, 'run-env-newline')
+      expect(reattached.worktreeId).toBe(lease.worktreeId)
+      expect(reattached.worktreePath).toBe(lease.worktreePath)
+    } finally {
+      if (prevGitDir === undefined) delete process.env.GIT_DIR
+      else process.env.GIT_DIR = prevGitDir
+      if (prevGitWorkTree === undefined) delete process.env.GIT_WORK_TREE
+      else process.env.GIT_WORK_TREE = prevGitWorkTree
+      await creator.releaseWorktree(lease.worktreeId, { force: true })
+    }
+  })
+
+  it('preserves leases in preserveRunIds during disposeAll while releasing others', async () => {
+    await initGitRepo(repoDir)
+    const manager = new GitWorktreeManager({ baseDir })
+    const preserved = await manager.acquireWorktree({ runId: 'run-keep-1', repoRoot: repoDir })
+    const disposable = await manager.acquireWorktree({ runId: 'run-drop-1', repoRoot: repoDir })
+
+    await manager.disposeAll({ force: false, preserveRunIds: ['run-keep-1'] })
+
+    expect(manager.getLease(preserved.worktreeId)).toBeDefined()
+    expect(await pathExists(preserved.worktreePath)).toBe(true)
+    expect(manager.getLease(disposable.worktreeId)).toBeUndefined()
+    expect(await pathExists(disposable.worktreePath)).toBe(false)
+
+    await manager.releaseWorktree(preserved.worktreeId, { force: true })
   })
 })

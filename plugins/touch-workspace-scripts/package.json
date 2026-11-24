@@ -2,9 +2,58 @@
   "name": "@talex-touch/touch-workspace-scripts-plugin",
   "private": true,
   "version": "1.0.0",
-  "packageManager": "pnpm@10.34.4",
+  "description": "工作区脚本：读取 package.json 脚本并一键执行",
+  "license": "MIT",
+  "packageManager": "pnpm@11.24.0",
+  "keywords": [
+    "tuff-plugin",
+    "utilities",
+    "workspace",
+    "scripts",
+    "npm",
+    "pnpm"
+  ],
+  "main": "./index.js",
+  "engines": {
+    "tuff": ">=261011"
+  },
   "scripts": {
     "test": "node --test index.test.cjs",
     "build": "node ../../packages/tuff-cli/bin/tuff.js builder"
+  },
+  "tuff": {
+    "schemaVersion": 1,
+    "id": "com.tuffex.workspace-scripts",
+    "name": "touch-workspace-scripts",
+    "displayName": {
+      "en": "Workspace Scripts",
+      "zh": "工作区脚本"
+    },
+    "sdkapi": 261011,
+    "category": "utilities",
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "permissions": {
+      "required": [
+        "system.shell",
+        "fs.read",
+        "search.root-results"
+      ],
+      "optional": []
+    },
+    "platforms": {
+      "win32": true,
+      "darwin": true,
+      "linux": true
+    },
+    "surface": "prelude",
+    "manifest": "./manifest.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-workspace-scripts"
   }
 }

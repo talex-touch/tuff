@@ -177,7 +177,7 @@ describe('touch-translation isolated Prelude', () => {
       'list-providers',
       'translate',
       'clear',
-      'widget-push',
+      'push',
     ])
     const translated = harness.calls.find(call => call.kind === 'translate')!
     expect(translated.payload).toEqual({ text: 'hello', targetLang: 'zh' })
@@ -195,8 +195,6 @@ describe('touch-translation isolated Prelude', () => {
     expect(item.meta).toEqual({
       pluginName: 'touch-translation',
       featureId: 'touch-translate',
-      status: 'complete',
-      keepCoreBoxOpen: true,
       defaultAction: 'copy-translation',
     })
     expect(item.actions[0].payload).toMatchObject({

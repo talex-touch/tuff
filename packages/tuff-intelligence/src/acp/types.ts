@@ -4,11 +4,109 @@ export interface AcpClientInfo {
   title?: string
 }
 
+export interface AcpClientFsCapabilities {
+  readTextFile?: boolean
+  writeTextFile?: boolean
+}
+
+export interface AcpClientCapabilities {
+  fs?: AcpClientFsCapabilities
+  terminal?: boolean
+}
+
 export interface AcpInitializeParams {
   clientInfo: AcpClientInfo
   protocolVersion?: number
-  clientCapabilities?: Record<string, unknown>
+  clientCapabilities?: AcpClientCapabilities
 }
+
+export type AcpClientCapabilityMethod
+  = | 'fs/read_text_file'
+    | 'fs/write_text_file'
+    | 'terminal/create'
+    | 'terminal/output'
+    | 'terminal/wait_for_exit'
+    | 'terminal/kill'
+    | 'terminal/release'
+
+export interface AcpFsReadTextFileParams {
+  sessionId: string
+  path: string
+  /** 1-based starting line number (optional). */
+  line?: number | null
+  /** Maximum number of lines to read (optional). */
+  limit?: number | null
+}
+
+export interface AcpFsReadTextFileResult {
+  content: string
+}
+
+export interface AcpFsWriteTextFileParams {
+  sessionId: string
+  path: string
+  content: string
+}
+
+export type AcpFsWriteTextFileResult = Record<string, never> | null
+
+export interface AcpTerminalEnvVar {
+  name: string
+  value: string
+}
+
+export interface AcpTerminalExitStatus {
+  exitCode?: number | null
+  signal?: string | number | null
+}
+
+export interface AcpTerminalCreateParams {
+  sessionId: string
+  command: string
+  args?: string[]
+  env?: AcpTerminalEnvVar[] | Record<string, string>
+  cwd?: string | null
+  outputByteLimit?: number | null
+}
+
+export interface AcpTerminalCreateResult {
+  terminalId: string
+}
+
+export interface AcpTerminalOutputParams {
+  sessionId: string
+  terminalId: string
+}
+
+export interface AcpTerminalOutputResult {
+  output: string
+  truncated: boolean
+  exitStatus?: AcpTerminalExitStatus | null
+}
+
+export interface AcpTerminalWaitForExitParams {
+  sessionId: string
+  terminalId: string
+}
+
+export interface AcpTerminalWaitForExitResult {
+  exitCode?: number | null
+  signal?: string | number | null
+}
+
+export interface AcpTerminalKillParams {
+  sessionId: string
+  terminalId: string
+}
+
+export type AcpTerminalKillResult = Record<string, never> | null
+
+export interface AcpTerminalReleaseParams {
+  sessionId: string
+  terminalId: string
+}
+
+export type AcpTerminalReleaseResult = Record<string, never> | null
 
 export interface AcpAgentInfo {
   name: string
@@ -326,7 +424,7 @@ export interface AcpSpawnOptions {
   env?: Record<string, string | undefined>
   clientInfo?: AcpClientInfo
   protocolVersion?: number
-  clientCapabilities?: Record<string, unknown>
+  clientCapabilities?: AcpClientCapabilities
   initTimeoutMs?: number
   onRequest?: AcpServerRequestHandler
   onPermission?: CliPermissionHandler

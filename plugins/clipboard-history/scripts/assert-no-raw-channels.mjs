@@ -1,4 +1,4 @@
-import { readdir, readFile } from 'node:fs/promises'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -7,8 +7,11 @@ const __dirname = path.dirname(__filename)
 const pluginRoot = path.resolve(__dirname, '..')
 const repoRoot = path.resolve(pluginRoot, '..', '..')
 
-const targets = [
+const requiredTargets = [
   path.join(pluginRoot, 'dist', 'build'),
+]
+
+const optionalTargets = [
   path.join(repoRoot, 'apps/core-app/tuff/modules/plugins/clipboard-history'),
 ]
 
@@ -17,6 +20,16 @@ const forbidden = [
   'clipboard:get-image-url',
   'system:get-active-app',
 ]
+
+async function exists(targetPath) {
+  try {
+    await stat(targetPath)
+    return true
+  }
+  catch {
+    return false
+  }
+}
 
 async function collectFiles(dir) {
   const entries = await readdir(dir, { withFileTypes: true })
@@ -35,6 +48,13 @@ async function collectFiles(dir) {
   }
 
   return files
+}
+
+const targets = [...requiredTargets]
+for (const optionalTarget of optionalTargets) {
+  if (await exists(optionalTarget)) {
+    targets.push(optionalTarget)
+  }
 }
 
 for (const target of targets) {

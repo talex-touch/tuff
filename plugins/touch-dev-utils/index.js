@@ -6,6 +6,13 @@ const ICON = { type: 'class', value: 'i-ri-code-line' }
 const COPY_ACTION_ID = 'copy'
 const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
+let triggerGeneration = 0
+let destroyed = false
+
+function isStaleGeneration(generation) {
+  return destroyed || generation !== triggerGeneration
+}
+
 function normalizeText(value) {
   return String(value ?? '').trim()
 }
@@ -146,7 +153,7 @@ function parseJwt(token) {
 
 function formatTimestampDetails(input) {
   const normalized = normalizeText(input)
-  if (!/^\d{10,13}$/.test(normalized)) {
+  if (!/^(?:\d{10}|\d{13})$/.test(normalized)) {
     throw new Error('时间戳格式无效')
   }
 
@@ -220,8 +227,32 @@ function escapeStringLiteral(value) {
   return JSON.stringify(String(value ?? '')).slice(1, -1)
 }
 
+function escapeUnescapedDoubleQuotes(input) {
+  let output = ''
+  let escaped = false
+  for (let index = 0; index < input.length; index += 1) {
+    const ch = input[index]
+    if (escaped) {
+      output += ch
+      escaped = false
+    }
+    else if (ch === '\\') {
+      output += ch
+      escaped = true
+    }
+    else if (ch === '"') {
+      output += '\\"'
+    }
+    else {
+      output += ch
+    }
+  }
+  return output
+}
+
 function unescapeStringLiteral(value) {
-  return JSON.parse(`"${String(value ?? '').replace(/"/g, '\\"')}"`)
+  const raw = String(value ?? '')
+  return JSON.parse(`"${escapeUnescapedDoubleQuotes(raw)}"`)
 }
 
 function isLikelyJwt(value) {
@@ -229,7 +260,7 @@ function isLikelyJwt(value) {
 }
 
 function isLikelyTimestamp(value) {
-  return /^\d{10,13}$/.test(normalizeText(value))
+  return /^(?:\d{10}|\d{13})$/.test(normalizeText(value))
 }
 
 function isLikelyQueryString(value) {
@@ -467,23 +498,65 @@ function addEscapeItems(items, seen, featureId, rawText) {
   }
 }
 
+function classifyClipboardError(error) {
+  const code = error && typeof error === 'object' && typeof error.code === 'string' ? error.code : ''
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED') {
+    return {
+      status: 'blocked',
+      reason: 'permission-denied',
+      message: '缺少 clipboard.write 权限',
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE') {
+    return {
+      status: 'blocked',
+      reason: 'permission-unavailable',
+      message: '权限系统暂时不可用',
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED') {
+    return {
+      status: 'cancelled',
+      reason: 'cancelled',
+      message: '已取消复制',
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT' || code === 'PLUGIN_HOST_REQUEST_TIMEOUT') {
+    return {
+      status: 'failed',
+      reason: 'timeout',
+      message: '复制超时，请重试',
+    }
+  }
+  return {
+    status: 'blocked',
+    reason: 'clipboard-write-failed',
+    message: '复制失败',
+  }
+}
+
 const pluginLifecycle = {
   async onFeatureTriggered(featureId, query) {
+    destroyed = false
+    const generation = ++triggerGeneration
     try {
       const rawText = normalizeText(getQueryText(query))
       const items = []
       const seen = new Set()
 
-      addNowItems(items, seen, featureId)
-
       if (!rawText) {
+        addNowItems(items, seen, featureId)
         items.push(buildInfoItem({
           id: `${featureId}-hint`,
           featureId,
           title: '输入文本开始解析',
           subtitle: '支持 JWT、时间戳、命名转换、Query String 和字符串转义',
         }))
+        if (isStaleGeneration(generation))
+          return true
         await plugin.feature.clearItems()
+        if (isStaleGeneration(generation))
+          return true
         await plugin.feature.pushItems(items)
         return true
       }
@@ -493,6 +566,7 @@ const pluginLifecycle = {
       addNamingItems(items, seen, featureId, rawText)
       addQueryStringItems(items, seen, featureId, rawText)
       addEscapeItems(items, seen, featureId, rawText)
+      addNowItems(items, seen, featureId)
 
       if (!items.length) {
         items.push(buildInfoItem({
@@ -503,12 +577,18 @@ const pluginLifecycle = {
         }))
       }
 
+      if (isStaleGeneration(generation))
+        return true
       await plugin.feature.clearItems()
+      if (isStaleGeneration(generation))
+        return true
       await plugin.feature.pushItems(items)
       return true
     }
     catch {
       logger?.error?.('[touch-dev-utils] Failed to handle feature')
+      if (isStaleGeneration(generation))
+        return true
       try {
         await plugin.feature.clearItems()
         await plugin.feature.pushItems([
@@ -528,15 +608,27 @@ const pluginLifecycle = {
     }
   },
 
-  async onItemAction(item) {
+  async onItemAction(item, context = {}) {
     try {
       if (item?.meta?.defaultAction !== COPY_ACTION_ID) {
         return
       }
 
-      const copyAction = Array.isArray(item.actions)
-        ? item.actions.find(action => action.id === COPY_ACTION_ID || action.type === COPY_ACTION_ID)
-        : null
+      const actions = Array.isArray(item.actions) ? item.actions : []
+      const requestedActionId = normalizeText(context?.actionId)
+      const copyAction = requestedActionId
+        ? actions.find(action => action?.id === requestedActionId) || null
+        : actions.find(action => action?.id === COPY_ACTION_ID || action?.type === COPY_ACTION_ID) || null
+
+      if (requestedActionId && !copyAction) {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: 'invalid-action',
+          message: '未找到可执行操作',
+        }
+      }
 
       if (copyAction?.payload) {
         const payloadText = typeof copyAction.payload === 'string' ? copyAction.payload : copyAction.payload.text
@@ -560,15 +652,20 @@ const pluginLifecycle = {
     }
     catch (error) {
       logger?.error?.('[touch-dev-utils] Action failed')
-      const permissionDenied = error?.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
+      const failure = classifyClipboardError(error)
       return {
         externalAction: true,
         success: false,
-        status: 'blocked',
-        reason: permissionDenied ? 'permission-denied' : 'clipboard-write-failed',
-        message: permissionDenied ? '缺少 clipboard.write 权限' : '复制失败',
+        status: failure.status,
+        reason: failure.reason,
+        message: failure.message,
       }
     }
+  },
+
+  async onDestroy() {
+    destroyed = true
+    triggerGeneration += 1
   },
 }
 

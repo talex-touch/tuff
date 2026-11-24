@@ -2,7 +2,7 @@ const { plugin, clipboard, logger, TuffItemBuilder, permission, openUrl } = glob
 
 const PLUGIN_NAME = 'touch-browser-data'
 const SOURCE_ID = 'plugin-features'
-const ICON = { type: 'emoji', value: '🌐' }
+const ICON = { type: 'class', value: 'i-ri-global-line' }
 const ACTION_ID = 'browser-data'
 const BOOKMARK_PROVIDER_ID = 'touch-browser-data.browser-bookmarks'
 const HISTORY_PROVIDER_ID = 'touch-browser-data.browser-history'
@@ -43,6 +43,13 @@ const PREFIXES = [
 const SUPPORTED_BROWSERS = ['chrome', 'edge', 'brave', 'arc']
 const MAX_BOOKMARK_RESULTS = 30
 const MAX_HISTORY_RESULTS = 20
+
+let triggerGeneration = 0
+let destroyed = false
+
+function isStaleGeneration(generation) {
+  return destroyed || generation !== triggerGeneration
+}
 
 function normalizeText(value) {
   return String(value ?? '').trim()
@@ -188,6 +195,72 @@ async function networkCapabilityState() {
   }
 }
 
+function formatNetworkCapabilitySuffix(state) {
+  if (state.status === 'available')
+    return ''
+  if (state.reason === 'permission-sdk-unavailable')
+    return ' · 权限 SDK 不可用（缺少 network.internet 权限）'
+  if (state.reason === 'permission-check-failed')
+    return ' · 权限检查失败（缺少 network.internet 权限）'
+  return ' · 缺少 network.internet 权限'
+}
+
+function formatReadPermissionNotice(reason) {
+  if (reason === 'permission-sdk-unavailable') {
+    return {
+      title: '权限 SDK 不可用',
+      subtitle: '当前运行时无法校验 fs.read 权限，已拒绝读取浏览器数据',
+    }
+  }
+  if (reason === 'permission-check-failed') {
+    return {
+      title: '权限状态检查失败',
+      subtitle: '校验 fs.read 权限时发生异常，请稍后重试',
+    }
+  }
+  return {
+    title: '缺少文件读取权限',
+    subtitle: '授权 fs.read 后才能读取浏览器数据',
+  }
+}
+
+function classifyHostCapabilityError(error, fallbackReason, fallbackMessage) {
+  const code = error && typeof error === 'object' && typeof error.code === 'string' ? error.code : ''
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED') {
+    return {
+      status: 'blocked',
+      reason: 'permission-denied',
+      message: '缺少所需权限',
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE') {
+    return {
+      status: 'blocked',
+      reason: 'permission-unavailable',
+      message: '权限系统暂时不可用',
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED') {
+    return {
+      status: 'cancelled',
+      reason: 'cancelled',
+      message: '操作已取消',
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT' || code === 'PLUGIN_HOST_REQUEST_TIMEOUT') {
+    return {
+      status: 'failed',
+      reason: 'timeout',
+      message: '操作超时，请稍后重试',
+    }
+  }
+  return {
+    status: 'blocked',
+    reason: fallbackReason,
+    message: fallbackMessage,
+  }
+}
+
 function buildInfoItem({ id, featureId, title, subtitle, sourceId }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
@@ -196,6 +269,56 @@ function buildInfoItem({ id, featureId, title, subtitle, sourceId }) {
     .setIcon(ICON)
     .setMeta({ pluginName: PLUGIN_NAME, featureId, ...sourceMeta(sourceId) })
     .build()
+}
+
+function buildDegradedSourceItem(featureId, degradedEntry) {
+  const source = BROWSER_DATA_SOURCES.find(candidate => candidate.id === degradedEntry.sourceId)
+  const label = source?.label || '浏览器数据'
+  const isHistory = source?.capabilityId === 'history'
+
+  let title = `${label}暂不可用`
+  let subtitle = '请检查浏览器数据权限与可用状态后重试'
+
+  if (degradedEntry.reason === 'permission-sdk-unavailable') {
+    title = `${label}权限校验不可用`
+    subtitle = `权限 SDK 不可用，无法校验 ${isHistory ? 'fs.index' : 'fs.read'} 权限`
+  }
+  else if (degradedEntry.reason === 'permission-check-failed') {
+    title = `${label}权限检查失败`
+    subtitle = `校验 ${isHistory ? 'fs.index' : 'fs.read'} 权限时异常，请稍后重试`
+  }
+  else if (degradedEntry.reason === 'permission-unavailable') {
+    title = `${label}权限系统不可用`
+    subtitle = '宿主权限系统暂时不可用，请稍后重试'
+  }
+  else if (degradedEntry.reason === 'permission-denied' || degradedEntry.status === 'permission-missing') {
+    title = `${label}缺少所需权限`
+    subtitle = isHistory ? '授权 fs.index 后才能扫描浏览器历史' : '授权 fs.read 后才能扫描浏览器书签'
+  }
+  else if (degradedEntry.reason === 'capability-unavailable') {
+    title = `${label}能力不可用`
+    subtitle = '当前运行时未提供浏览器数据扫描能力'
+  }
+  else if (degradedEntry.reason === 'timeout') {
+    title = `${label}扫描超时`
+    subtitle = '浏览器数据扫描超时，请稍后重试'
+  }
+  else if (degradedEntry.reason === 'cancelled') {
+    title = `${label}扫描已取消`
+    subtitle = '当前扫描被取消，可重新触发搜索'
+  }
+  else if (degradedEntry.code === 'BROWSER_DATA_SOURCE_DISABLED' || degradedEntry.status === 'blocked') {
+    title = `${label}暂未启用或已受限`
+    subtitle = '请在搜索源设置中启用并授权后再试'
+  }
+
+  return buildInfoItem({
+    id: `${featureId}-${degradedEntry.sourceId}-degraded`,
+    featureId,
+    sourceId: degradedEntry.sourceId,
+    title,
+    subtitle,
+  })
 }
 
 function urlHost(url) {
@@ -232,7 +355,7 @@ function buildRecordItem(featureId, record, index, state) {
   const sourceId = history ? HISTORY_SOURCE_ID : BOOKMARK_SOURCE_ID
   const sourceType = history ? 'browser-history' : 'browser-bookmark'
   const label = history ? `${record.browserName} · 历史 · ${record.title}` : `${record.browserName} · ${record.title}`
-  const suffix = state.status === 'available' ? '' : ' · 缺少 network.internet 权限'
+  const suffix = formatNetworkCapabilitySuffix(state)
   return new TuffItemBuilder(`${featureId}-${record.source}-${index}`)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(label)
@@ -346,18 +469,49 @@ function buildResultItems(featureId, query, scanResult, state) {
       }),
     )
   }
+  for (const degradedEntry of scanResult.degradedSources)
+    items.push(buildDegradedSourceItem(featureId, degradedEntry))
   items.push(...buildMaintenanceItems(featureId, query, scanResult.sourceIds))
   return items
 }
 
 async function scanSource(source, browser) {
-  const result = await plugin.browserData.scan([source.capabilityId], browser || undefined)
-  if (result?.status !== 'completed')
-    return null
-  return {
-    sourceId: source.id,
-    records: Array.isArray(result.records) ? result.records : [],
-    diagnostics: Array.isArray(result.diagnostics) ? result.diagnostics : [],
+  if (typeof plugin?.browserData?.scan !== 'function') {
+    return {
+      ok: false,
+      sourceId: source.id,
+      status: 'unavailable',
+      reason: 'capability-unavailable',
+      code: '',
+    }
+  }
+  try {
+    const result = await plugin.browserData.scan([source.capabilityId], browser || undefined)
+    if (result?.status !== 'completed') {
+      return {
+        ok: false,
+        sourceId: source.id,
+        status: normalizeText(result?.status) || 'blocked',
+        reason: normalizeText(result?.reason),
+        code: normalizeText(result?.code),
+      }
+    }
+    return {
+      ok: true,
+      sourceId: source.id,
+      records: Array.isArray(result.records) ? result.records : [],
+      diagnostics: Array.isArray(result.diagnostics) ? result.diagnostics : [],
+    }
+  }
+  catch (error) {
+    const classified = classifyHostCapabilityError(error, 'scan-failed', '浏览器数据扫描失败')
+    return {
+      ok: false,
+      sourceId: source.id,
+      status: classified.status,
+      reason: classified.reason,
+      code: error && typeof error === 'object' && typeof error.code === 'string' ? error.code : '',
+    }
   }
 }
 
@@ -367,20 +521,35 @@ async function scanBrowserData(query, sourceIds) {
   const records = []
   const diagnostics = []
   const completedSourceIds = []
+  const degradedSources = []
   for (const source of BROWSER_DATA_SOURCES.filter(candidate => requested.includes(candidate.id))) {
     if (source.capabilityId === 'history') {
       const indexPermission = await ensurePermission('fs.index')
-      if (!indexPermission.granted)
+      if (!indexPermission.granted) {
+        degradedSources.push({
+          sourceId: source.id,
+          status: 'permission-missing',
+          reason: indexPermission.reason,
+          code: '',
+        })
         continue
+      }
     }
     const result = await scanSource(source, parsed.browser)
-    if (!result)
+    if (!result.ok) {
+      degradedSources.push({
+        sourceId: result.sourceId,
+        status: result.status,
+        reason: result.reason,
+        code: result.code,
+      })
       continue
+    }
     completedSourceIds.push(result.sourceId)
     records.push(...result.records)
     diagnostics.push(...result.diagnostics)
   }
-  return { records, diagnostics, sourceIds: completedSourceIds }
+  return { records, diagnostics, sourceIds: completedSourceIds, degradedSources }
 }
 
 async function clearSourceResults(sourceIds) {
@@ -402,38 +571,63 @@ async function clearSourceResults(sourceIds) {
   return true
 }
 
-async function renderResults(featureId, query, sourceIds, replaceOnly = false) {
+async function renderResults(featureId, query, sourceIds, replaceOnly = false, generation = null) {
   const scanResult = await scanBrowserData(query, sourceIds)
+  if (generation !== null && isStaleGeneration(generation))
+    return scanResult
   const state = await networkCapabilityState()
+  if (generation !== null && isStaleGeneration(generation))
+    return scanResult
   if (replaceOnly)
     await clearSourceResults(sourceIds)
-  else await plugin.feature.clearItems()
-  if (scanResult.sourceIds.length)
-    await plugin.feature.pushItems(buildResultItems(featureId, query, scanResult, state))
+  else
+    await plugin.feature.clearItems()
+  if (generation !== null && isStaleGeneration(generation))
+    return scanResult
+  const items = buildResultItems(featureId, query, scanResult, state)
+  if (items.length)
+    await plugin.feature.pushItems(items)
   return scanResult
+}
+
+function resolveItemAction(item, context = {}) {
+  const actions = Array.isArray(item?.actions) ? item.actions : []
+  const requestedActionId = normalizeText(context?.actionId)
+  if (requestedActionId)
+    return actions.find(candidate => candidate?.id === requestedActionId) || null
+  return actions[0] || null
 }
 
 const pluginLifecycle = {
   async onFeatureTriggered(featureId, query) {
+    destroyed = false
+    const generation = ++triggerGeneration
     try {
       await plugin.feature.clearItems()
+      if (isStaleGeneration(generation))
+        return true
       const permissionResult = await ensurePermission('fs.read')
+      if (isStaleGeneration(generation))
+        return true
       if (!permissionResult.granted) {
+        const notice = formatReadPermissionNotice(permissionResult.reason)
         await plugin.feature.pushItems([
           buildInfoItem({
             id: `${featureId}-permission`,
             featureId,
-            title: '缺少文件读取权限',
-            subtitle: '授权 fs.read 后才能读取浏览器数据',
+            title: notice.title,
+            subtitle: notice.subtitle,
           }),
         ])
         return true
       }
-      await renderResults(featureId, query, [BOOKMARK_SOURCE_ID, HISTORY_SOURCE_ID])
+      await renderResults(featureId, query, [BOOKMARK_SOURCE_ID, HISTORY_SOURCE_ID], false, generation)
       return true
     }
     catch {
       logger?.error?.('[touch-browser-data] Browser data scan failed')
+      if (isStaleGeneration(generation))
+        return true
       await plugin.feature.clearItems()
       await plugin.feature.pushItems([
         buildInfoItem({
@@ -447,12 +641,21 @@ const pluginLifecycle = {
     }
   },
 
-  async onItemAction(item) {
+  async onItemAction(item, context = {}) {
     if (item?.meta?.defaultAction !== ACTION_ID)
       return
-    const action = Array.isArray(item.actions) ? item.actions[0] : null
-    const actionId = action?.id
-    const payload = action?.payload || {}
+    const action = resolveItemAction(item, context)
+    if (!action) {
+      return {
+        externalAction: true,
+        success: false,
+        status: 'blocked',
+        reason: 'invalid-action',
+        message: '未找到可执行操作',
+      }
+    }
+    const actionId = action.id
+    const payload = action.payload || {}
     const featureId = normalizeText(item.meta?.featureId) || 'browser-data'
     try {
       if (actionId === 'rebuild-browser-data') {
@@ -502,8 +705,20 @@ const pluginLifecycle = {
             message: '无法打开网址',
           }
         }
-        await openUrl(url)
-        return { externalAction: true, status: 'started' }
+        try {
+          await openUrl(url)
+          return { externalAction: true, status: 'started' }
+        }
+        catch (error) {
+          const failure = classifyHostCapabilityError(error, 'open-url-failed', '打开网址失败')
+          return {
+            externalAction: true,
+            success: false,
+            status: failure.status,
+            reason: failure.reason,
+            message: failure.message,
+          }
+        }
       }
 
       if (actionId === 'copy-url') {
@@ -517,14 +732,31 @@ const pluginLifecycle = {
             message: '无法复制网址',
           }
         }
-        await clipboard.writeText(url)
-        return { externalAction: true, status: 'completed' }
+        try {
+          await clipboard.writeText(url)
+          return { externalAction: true, status: 'completed' }
+        }
+        catch (error) {
+          const failure = classifyHostCapabilityError(error, 'clipboard-write-failed', '复制网址失败')
+          return {
+            externalAction: true,
+            success: false,
+            status: failure.status,
+            reason: failure.reason,
+            message: failure.message,
+          }
+        }
       }
     }
     catch {
       logger?.error?.('[touch-browser-data] Browser data action failed')
       return { externalAction: true, success: false, message: '执行失败' }
     }
+  },
+
+  async onDestroy() {
+    destroyed = true
+    triggerGeneration += 1
   },
 }
 

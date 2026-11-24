@@ -23,11 +23,25 @@ const DOWNLOAD_VALIDATE_STATUSES = [
 ]
 const MAX_DOWNLOAD_REDIRECTS = 5
 
-interface DownloadToTempFileOptions extends IDownloadOptions {
+export interface DownloadToTempFileOptions extends IDownloadOptions {
   resolveHeadersForUrl?: (
     url: URL,
     headers: Readonly<Record<string, string>>
   ) => Promise<Record<string, string>> | Record<string, string>
+  /**
+   * When provided, every request hop (initial URL and every 3xx redirect target) is passed to
+   * this validator using manual redirects so redirects cannot bypass host/protocol policies.
+   */
+  validateRedirectUrl?: (url: URL) => void
+  /**
+   * When true, always use `fallbackExt` for the temp file name instead of deriving the suffix
+   * from the remote URL's pathname (prevents archive polyglot extension spoofing).
+   */
+  forceExt?: boolean
+  /**
+   * Hard cap on downloaded bytes; aborts the stream and removes the temp file if exceeded.
+   */
+  maxBytes?: number
 }
 
 function normalizeDownloadError(error: unknown, timeoutMs: number): unknown {
@@ -89,7 +103,7 @@ async function requestDownloadStream(
   options?: DownloadToTempFileOptions
 ) {
   const networkService = getNetworkService()
-  if (!options?.resolveHeadersForUrl) {
+  if (!options?.resolveHeadersForUrl && !options?.validateRedirectUrl) {
     return await networkService.requestStream({
       method: 'GET',
       url,
@@ -104,9 +118,12 @@ async function requestDownloadStream(
   let redirectCount = 0
 
   while (true) {
-    currentHeaders = mergeHeadersCaseInsensitive(
-      await options.resolveHeadersForUrl(currentUrl, { ...currentHeaders })
-    )
+    options.validateRedirectUrl?.(currentUrl)
+    if (options.resolveHeadersForUrl) {
+      currentHeaders = mergeHeadersCaseInsensitive(
+        await options.resolveHeadersForUrl(currentUrl, { ...currentHeaders })
+      )
+    }
 
     const response = await networkService.requestStreamManualRedirect({
       method: 'GET',
@@ -148,15 +165,23 @@ export async function downloadToTempFile(
   options?: DownloadToTempFileOptions
 ): Promise<string> {
   const requestTimeout = options?.timeout ?? 30_000
-  const resolvedExt = (() => {
-    try {
-      const parsed = new URL(url)
-      const ext = path.extname(parsed.pathname)
-      return ext || fallbackExt
-    } catch {
-      return fallbackExt
-    }
-  })()
+  const maxBytes =
+    typeof options?.maxBytes === 'number' &&
+    Number.isFinite(options.maxBytes) &&
+    options.maxBytes > 0
+      ? options.maxBytes
+      : 0
+  const resolvedExt = options?.forceExt
+    ? fallbackExt
+    : (() => {
+        try {
+          const parsed = new URL(url)
+          const ext = path.extname(parsed.pathname)
+          return ext || fallbackExt
+        } catch {
+          return fallbackExt
+        }
+      })()
 
   const fileName = `talex-plugin-${Date.now()}-${crypto.randomBytes(6).toString('hex')}${resolvedExt}`
   const filePath = path.join(os.tmpdir(), fileName)
@@ -166,6 +191,12 @@ export async function downloadToTempFile(
   })
 
   const totalLength = Number(response.headers['content-length'] ?? 0)
+  if (maxBytes > 0 && Number.isFinite(totalLength) && totalLength > maxBytes) {
+    response.stream.destroy()
+    await finished(response.stream).catch(() => undefined)
+    throw new Error('PLUGIN_PACKAGE_ARCHIVE_TOO_LARGE')
+  }
+
   let downloaded = 0
 
   const writer = fse.createWriteStream(filePath)
@@ -186,6 +217,10 @@ export async function downloadToTempFile(
 
   const onData = (chunk: Buffer): void => {
     downloaded += chunk.length
+    if (maxBytes > 0 && downloaded > maxBytes) {
+      response.stream.destroy(new Error('PLUGIN_PACKAGE_ARCHIVE_TOO_LARGE'))
+      return
+    }
     if (totalLength > 0) {
       const progress = (downloaded / totalLength) * 100
       reportProgress(progress)

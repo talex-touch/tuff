@@ -51,6 +51,7 @@ const state = {
   items: [],
   calls: [],
   result: null,
+  actError: null,
 }
 
 function inventory() {
@@ -100,6 +101,8 @@ globalThis.plugin = {
     },
     async act(action, token) {
       state.calls.push({ operation: 'act', action, token })
+      if (state.actError)
+        throw state.actError
       return state.result || { operation: 'act', action, status: 'completed' }
     },
   },
@@ -120,6 +123,7 @@ test.beforeEach(() => {
   state.items = []
   state.calls = []
   state.result = null
+  state.actError = null
   globalThis.platform.platform = 'win32'
 })
 
@@ -199,6 +203,47 @@ test('keeps expired token, permission and unsupported outcomes stable and redact
     state.calls.map(call => call.operation),
     ['clear', 'push'],
   )
+})
+
+test('does not claim window-presets feature or invoke touch-window-presets host capability', async () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, 'manifest.json'), 'utf8'))
+  assert.equal(manifest.features.some(f => f.id === 'window-presets'), false)
+  assert.equal(manifest.searchProviders.some(p => p.featureId === 'window-presets'), false)
+  assert.equal(await pluginModule.onFeatureTriggered('window-presets', 'dev'), false)
+  assert.equal(state.items.length, 0)
+  assert.equal(state.calls.length, 0)
+  const source = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8')
+  assert.doesNotMatch(source, /\bwindowPresets\b/)
+})
+
+test('ignores unrelated items in onItemAction and maps permission failures canonically', async () => {
+  const unrelated = await pluginModule.onItemAction(
+    {
+      meta: { defaultAction: 'copy' },
+      actions: [{ id: 'copy', payload: { text: 'hello' } }],
+    },
+    { actionId: 'copy' },
+  )
+  assert.equal(unrelated, undefined)
+
+  const foreign = await pluginModule.onItemAction(
+    {
+      meta: { pluginName: 'other-plugin', defaultAction: 'activate' },
+      actions: [{ id: 'activate', payload: { action: 'activate', token: WINDOW_TOKEN } }],
+    },
+    { actionId: 'activate' },
+  )
+  assert.equal(foreign, undefined)
+  assert.equal(state.calls.length, 0)
+
+  await pluginModule.onFeatureTriggered('window-app', 'Terminal')
+  const item = state.items.find(entry => entry.title === 'Terminal')
+  state.actError = Object.assign(new Error('req failed'), {
+    code: 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED',
+  })
+  const permFailed = await pluginModule.onItemAction(item, { actionId: 'activate' })
+  assert.equal(permFailed.status, 'blocked')
+  assert.equal(permFailed.reason, 'permission-check-failed')
 })
 
 test('production Prelude contains no privileged, reflective or test-only surface', () => {

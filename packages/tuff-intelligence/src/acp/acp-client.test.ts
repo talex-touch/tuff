@@ -1,4 +1,4 @@
-import type { CliPermissionRequest, CliRuntimeStreamEvent } from './types'
+import type { AcpClientCapabilities, CliPermissionRequest, CliRuntimeStreamEvent } from './types'
 import { spawn } from 'node:child_process'
 import process from 'node:process'
 import { describe, expect, it } from 'vitest'
@@ -18,7 +18,7 @@ function spawnFakeAcpClient(
     initTimeoutMs?: number
     clientInfo?: { name: string, version: string }
     protocolVersion?: number
-    clientCapabilities?: Record<string, unknown>
+    clientCapabilities?: AcpClientCapabilities
     label?: string
   },
 ): Promise<AcpClient> {
@@ -411,6 +411,203 @@ ${STANDARD_FAKE_ACP_SERVER}
       const session = await client.createSession({ cwd: process.cwd() })
       expect(session).toBeInstanceOf(OmpAcpSession)
       expect(session).toBeInstanceOf(AcpSession)
+    }
+    finally {
+      await client.close()
+    }
+  })
+
+  it('sends clientCapabilities on initialize when provided and omits it when absent', async () => {
+    const caps: AcpClientCapabilities = {
+      fs: { readTextFile: true, writeTextFile: true },
+      terminal: true,
+    }
+
+    // 1. Direct initialize without capabilities omits clientCapabilities
+    const procDefault = spawn(process.execPath, ['-e', STANDARD_FAKE_ACP_SERVER], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    const defaultClient = new AcpClient(procDefault)
+    try {
+      const res = (await defaultClient.initialize({ name: 'tuff-default', version: '1.0.0' })) as unknown as {
+        echoInitParams: Record<string, unknown>
+      }
+      expect(res.echoInitParams).toEqual({
+        protocolVersion: 1,
+        clientInfo: { name: 'tuff-default', version: '1.0.0' },
+      })
+      expect('clientCapabilities' in res.echoInitParams).toBe(false)
+    }
+    finally {
+      await defaultClient.close()
+    }
+
+    // 2. Direct initialize with 3rd-argument clientCapabilities includes it
+    const procWithCaps = spawn(process.execPath, ['-e', STANDARD_FAKE_ACP_SERVER], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    const capsClient = new AcpClient(procWithCaps)
+    try {
+      const res = (await capsClient.initialize({ name: 'tuff-herdr', version: '1.0.0' }, 5_000, caps)) as unknown as {
+        echoInitParams: Record<string, unknown>
+      }
+      expect(res.echoInitParams).toEqual({
+        protocolVersion: 1,
+        clientInfo: { name: 'tuff-herdr', version: '1.0.0' },
+        clientCapabilities: caps,
+      })
+    }
+    finally {
+      await capsClient.close()
+    }
+
+    // 3. AcpClient.spawn forwards clientCapabilities when provided and omits when absent
+    const spawnedWithCaps = await spawnFakeAcpClient(STANDARD_FAKE_ACP_SERVER, {
+      clientCapabilities: caps,
+    })
+    const spawnedWithoutCaps = await spawnFakeAcpClient(STANDARD_FAKE_ACP_SERVER)
+    try {
+      const reinitWithCaps = (await spawnedWithCaps.initialize(
+        { clientInfo: { name: 'spawn-caps', version: '1.0.0' }, clientCapabilities: caps },
+      )) as unknown as { echoInitParams: Record<string, unknown> }
+      expect(reinitWithCaps.echoInitParams.clientCapabilities).toEqual(caps)
+
+      const reinitWithoutCaps = (await spawnedWithoutCaps.initialize(
+        { clientInfo: { name: 'spawn-none', version: '1.0.0' } },
+      )) as unknown as { echoInitParams: Record<string, unknown> }
+      expect('clientCapabilities' in reinitWithoutCaps.echoInitParams).toBe(false)
+    }
+    finally {
+      await spawnedWithCaps.close()
+      await spawnedWithoutCaps.close()
+    }
+  })
+
+  it('routes incoming fs/* and terminal/* JSON-RPC requests cleanly to requestHandler', async () => {
+    const capabilityBridgeServer = `
+const readline = require('node:readline');
+const rl = readline.createInterface({ input: process.stdin, terminal: false });
+let activePromptId = null;
+const pendingIds = [
+  { id: 'req-read', method: 'fs/read_text_file', params: { sessionId: 'sess-cap', path: '/repo/a.ts', line: 1, limit: 20 } },
+  { id: 'req-write', method: 'fs/write_text_file', params: { sessionId: 'sess-cap', path: '/repo/b.ts', content: 'export const x = 1\\n' } },
+  { id: 'req-create', method: 'terminal/create', params: { sessionId: 'sess-cap', command: 'echo', args: ['hi'], cwd: '/repo', outputByteLimit: 4096 } },
+  { id: 'req-output', method: 'terminal/output', params: { sessionId: 'sess-cap', terminalId: 'term-1' } },
+  { id: 'req-wait', method: 'terminal/wait_for_exit', params: { sessionId: 'sess-cap', terminalId: 'term-1' } },
+  { id: 'req-kill', method: 'terminal/kill', params: { sessionId: 'sess-cap', terminalId: 'term-1' } },
+  { id: 'req-release', method: 'terminal/release', params: { sessionId: 'sess-cap', terminalId: 'term-1' } },
+];
+const replies = {};
+
+function send(obj) {
+  process.stdout.write(JSON.stringify(obj) + '\\n');
+}
+
+function sendNext() {
+  const next = pendingIds.shift();
+  if (!next) {
+    send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'sess-cap',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: JSON.stringify(replies) },
+        },
+      },
+    });
+    const promptId = activePromptId;
+    activePromptId = null;
+    send({ jsonrpc: '2.0', id: promptId, result: { stopReason: 'end_turn' } });
+    return;
+  }
+  send({ jsonrpc: '2.0', id: next.id, method: next.method, params: next.params });
+}
+
+rl.on('line', (line) => {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+  const msg = JSON.parse(trimmed);
+  if (msg.id && !msg.method) {
+    replies[msg.id] = { hasResult: 'result' in msg, result: msg.result, error: msg.error };
+    sendNext();
+    return;
+  }
+  if (msg.method === 'initialize') {
+    send({ jsonrpc: '2.0', id: msg.id, result: { protocolVersion: 1, agentInfo: { name: 'cap-agent', version: '1.0.0' } } });
+    return;
+  }
+  if (msg.method === 'session/new') {
+    send({ jsonrpc: '2.0', id: msg.id, result: { sessionId: 'sess-cap', configOptions: [] } });
+    return;
+  }
+  if (msg.method === 'session/prompt') {
+    activePromptId = msg.id;
+    sendNext();
+    return;
+  }
+  if (msg.method === 'session/close') {
+    send({ jsonrpc: '2.0', id: msg.id, result: { closed: true } });
+  }
+});
+`
+
+    const handledMethods: string[] = []
+    const client = await spawnFakeAcpClient(capabilityBridgeServer, {
+      clientCapabilities: {
+        fs: { readTextFile: true, writeTextFile: true },
+        terminal: true,
+      },
+      onRequest: async (method, params) => {
+        handledMethods.push(method)
+        switch (method) {
+          case 'fs/read_text_file':
+            expect(params).toEqual({ sessionId: 'sess-cap', path: '/repo/a.ts', line: 1, limit: 20 })
+            return { content: 'line 1\n' }
+          case 'fs/write_text_file':
+            expect(params).toEqual({ sessionId: 'sess-cap', path: '/repo/b.ts', content: 'export const x = 1\n' })
+            return {}
+          case 'terminal/create':
+            expect(params).toMatchObject({ sessionId: 'sess-cap', command: 'echo', args: ['hi'] })
+            return { terminalId: 'term-1' }
+          case 'terminal/output':
+            return { output: 'hi\n', truncated: false, exitStatus: null }
+          case 'terminal/wait_for_exit':
+            return { exitCode: 0, signal: null }
+          case 'terminal/kill':
+            return undefined
+          case 'terminal/release':
+            return {}
+          default:
+            throw Object.assign(new Error(`Unsupported method: ${method}`), { code: -32601 })
+        }
+      },
+    })
+
+    try {
+      const session = await client.createSession({ cwd: process.cwd() })
+      const res = await session.prompt('run-capabilities')
+      const replies = JSON.parse(res.output) as Record<string, { hasResult: boolean, result: unknown, error?: unknown }>
+
+      expect(handledMethods).toEqual([
+        'fs/read_text_file',
+        'fs/write_text_file',
+        'terminal/create',
+        'terminal/output',
+        'terminal/wait_for_exit',
+        'terminal/kill',
+        'terminal/release',
+      ])
+      expect(replies['req-read']).toEqual({ hasResult: true, result: { content: 'line 1\n' } })
+      expect(replies['req-write']).toEqual({ hasResult: true, result: {} })
+      expect(replies['req-create']).toEqual({ hasResult: true, result: { terminalId: 'term-1' } })
+      expect(replies['req-output']).toEqual({ hasResult: true, result: { output: 'hi\n', truncated: false, exitStatus: null } })
+      expect(replies['req-wait']).toEqual({ hasResult: true, result: { exitCode: 0, signal: null } })
+      // undefined return is normalized to valid JSON-RPC 2.0 `result: null`
+      expect(replies['req-kill']).toEqual({ hasResult: true, result: null })
+      expect(replies['req-release']).toEqual({ hasResult: true, result: {} })
+      await session.close()
     }
     finally {
       await client.close()

@@ -1,12 +1,16 @@
 <script lang="ts" name="SettingIntelligencePage" setup>
+import {
+  appSettingOriginData,
+  normalizeAutoResumeOnStartup
+} from '@talex-touch/utils/common/storage/entity/app-settings'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import SettingChip from '~/components/settings/SettingChip.vue'
 import SettingRow from '~/components/settings/SettingRow.vue'
 import SettingsPage from '~/components/settings/SettingsPage.vue'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { settingCategoryChildren } from '~/modules/settings/categories'
 import { appSetting } from '~/modules/storage/app-storage'
 import SettingLocalAiCli from '../SettingLocalAiCli.vue'
@@ -21,15 +25,27 @@ const subPages = computed(() =>
   settingCategoryChildren('intelligence', developerMode.value).filter((subPage) => !subPage.navIcon)
 )
 
+function ensureConversationSettings(): NonNullable<typeof appSetting.conversation> {
+  if (!appSetting.conversation) {
+    appSetting.conversation = {
+      ...appSettingOriginData.conversation,
+      favoriteModels: [...appSettingOriginData.conversation.favoriteModels]
+    }
+  }
+  return appSetting.conversation
+}
+
 const showTurnMetrics = computed({
   get: () => appSetting.conversation?.showTurnMetrics !== false,
   set: (val: boolean) => {
-    if (!appSetting.conversation) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      appSetting.conversation = { showTurnMetrics: val } as any
-    } else {
-      appSetting.conversation.showTurnMetrics = val
-    }
+    ensureConversationSettings().showTurnMetrics = val
+  }
+})
+
+const autoResumeOnStartup = computed({
+  get: () => normalizeAutoResumeOnStartup(appSetting.conversation?.autoResumeOnStartup),
+  set: (val: boolean) => {
+    ensureConversationSettings().autoResumeOnStartup = val
   }
 })
 </script>
@@ -58,6 +74,17 @@ const showTurnMetrics = computed({
           <TuffBlockSwitch
             v-model="showTurnMetrics"
             :title="t('settingsConversation.showMetricsTitle')"
+          />
+        </template>
+      </SettingRow>
+      <SettingRow
+        :title="t('settingsConversation.autoResumeTitle')"
+        :description="t('settingsConversation.autoResumeDesc')"
+      >
+        <template #trailing>
+          <TuffBlockSwitch
+            v-model="autoResumeOnStartup"
+            :title="t('settingsConversation.autoResumeTitle')"
           />
         </template>
       </SettingRow>

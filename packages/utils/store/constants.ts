@@ -6,6 +6,10 @@ import type {
 } from './types'
 import { StorageList } from '../common/storage/constants'
 import { getTuffBaseUrl } from '../env'
+import {
+  DEFAULT_NPM_REGISTRY_URL,
+  NPM_PLUGIN_CANONICAL_KEYWORD,
+} from '../plugin/npm-contract'
 
 export const STORE_SOURCES_STORAGE_KEY = StorageList.STORE_SOURCES
 export const STORE_SOURCES_STORAGE_VERSION = 1
@@ -90,14 +94,15 @@ export function createDefaultStoreProviders(baseUrl = getTuffBaseUrl()): StorePr
       id: 'npm-scope',
       name: 'NPM 包',
       type: 'npmPackage',
+      url: DEFAULT_NPM_REGISTRY_URL,
       description: '基于 NPM 关键字或 scope 的插件发布渠道。',
       enabled: false,
       priority: 60,
       trustLevel: 'unverified',
       outdated: false,
       config: {
-        registryUrl: 'https://registry.npmjs.org',
-        keyword: 'talex-touch-plugin',
+        registryUrl: DEFAULT_NPM_REGISTRY_URL,
+        keyword: NPM_PLUGIN_CANONICAL_KEYWORD,
       },
     }),
   ]

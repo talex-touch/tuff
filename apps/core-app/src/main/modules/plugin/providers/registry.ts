@@ -46,9 +46,9 @@ export function registerProvider(provider: PluginProvider): void {
 }
 
 const DEFAULT_PROVIDER_FACTORIES: Array<() => PluginProvider> = [
+  () => new TpexPluginProvider(),
   () => new GithubPluginProvider(),
   () => new NpmPluginProvider(),
-  () => new TpexPluginProvider(),
   () => new FilePluginProvider()
 ]
 

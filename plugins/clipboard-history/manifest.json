@@ -28,12 +28,13 @@
   },
   "permissions": {
     "required": ["clipboard.read", "clipboard.write", "fs.tfile", "system.applications"],
-    "optional": ["system.shell"]
+    "optional": ["storage.plugin", "system.shell"]
   },
   "permissionReasons": {
     "clipboard.read": "读取剪贴板历史记录并展示详情",
     "clipboard.write": "将选中的剪贴记录重新写回系统剪贴板",
     "fs.tfile": "显示剪贴板图片原图和来源应用图标",
+    "storage.plugin": "保存界面展开状态与主机 IP 掩码等本地视图偏好",
     "system.applications": "按剪贴记录中的应用标识显示来源应用名称和图标",
     "system.shell": "用默认浏览器打开剪贴记录里的链接，以及在文件管理器中定位剪贴的文件"
   },

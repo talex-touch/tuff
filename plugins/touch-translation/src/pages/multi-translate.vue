@@ -108,8 +108,8 @@ function closeConfigModal() {
   currentConfigProvider.value = null
 }
 
-function saveProviderConfig(providerId: string, config: Record<string, any>) {
-  updateProviderConfig(providerId, config)
+async function saveProviderConfig(providerId: string, config: Record<string, any>) {
+  return updateProviderConfig(providerId, config)
 }
 
 const debouncedTranslate = useDebounceFn(() => {
@@ -380,8 +380,8 @@ function isProviderConfigured(provider: TranslationProvider): boolean {
     <ProviderConfigModal
       :show="showConfigModal"
       :provider="currentConfigProvider"
+      :save-handler="saveProviderConfig"
       @close="closeConfigModal"
-      @save="saveProviderConfig"
     />
   </div>
 </template>

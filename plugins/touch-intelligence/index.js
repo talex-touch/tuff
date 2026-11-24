@@ -1557,21 +1557,61 @@ function buildWidgetErrorState(normalizedError = {}) {
   }
 }
 
-async function ensurePermission(permissionId) {
-  if (!permission?.check)
-    return false
+async function checkPermission(permissionId) {
+  if (typeof permission?.check !== 'function') {
+    return { granted: false, reason: 'permission-sdk-unavailable' }
+  }
 
   try {
     return (await permission.check(permissionId)) === true
+      ? { granted: true }
+      : { granted: false, reason: 'permission-denied' }
   }
-  catch {
+  catch (error) {
     logger?.warn?.('[touch-intelligence] permission check failed')
-    return false
+    const code = normalizeText(error?.code || error?.result?.code)
+    if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE') {
+      return { granted: false, reason: 'permission-unavailable' }
+    }
+    if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED' || code === 'PERMISSION_DENIED') {
+      return { granted: false, reason: 'permission-denied' }
+    }
+    return { granted: false, reason: 'permission-check-failed' }
   }
 }
 
-async function ensureIntelligencePermissions() {
-  return (await ensurePermission('intelligence.basic')) && (await ensurePermission('intelligence.context'))
+async function checkIntelligencePermissions() {
+  const basic = await checkPermission('intelligence.basic')
+  if (!basic.granted)
+    return basic
+  return await checkPermission('intelligence.context')
+}
+
+function mapClipboardErrorReason(error, fallback = 'clipboard-write-failed') {
+  const code = normalizeText(error?.code || error?.result?.code)
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED' || code === 'PERMISSION_DENIED')
+    return 'permission-denied'
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
+    return 'permission-unavailable'
+  if (code === 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED')
+    return 'permission-check-failed'
+  if (code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE' || code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE' || code === 'SDK_UNAVAILABLE')
+    return 'capability-unavailable'
+  return fallback
+}
+
+function formatClipboardPermissionMessage(actionLabel, reason) {
+  if (reason === 'permission-sdk-unavailable')
+    return `${actionLabel}失败：权限系统未就绪`
+  if (reason === 'permission-unavailable')
+    return `${actionLabel}失败：权限系统暂不可用`
+  if (reason === 'permission-check-failed')
+    return `${actionLabel}失败：权限校验失败`
+  if (reason === 'capability-unavailable' || reason === 'clipboard-unavailable')
+    return `${actionLabel}失败：当前环境不支持剪贴板写入`
+  if (reason === 'clipboard-write-failed')
+    return `${actionLabel}失败：剪贴板写入失败`
+  return `${actionLabel}失败：缺少 clipboard.write 权限`
 }
 
 function buildIntelligenceMeta(details = {}) {
@@ -2495,31 +2535,54 @@ async function dispatchPrompt({
 }
 
 async function copyAnswer(answer) {
-  if (!clipboard?.writeText)
-    return false
+  if (typeof clipboard?.writeText !== 'function') {
+    return {
+      success: false,
+      reason: 'clipboard-unavailable',
+      message: formatClipboardPermissionMessage('复制', 'clipboard-unavailable'),
+      recovery: '请检查宿主剪贴板能力后重试。',
+    }
+  }
 
-  const canCopy = await ensurePermission('clipboard.write', '需要剪贴板权限以复制 AI 回答')
-  if (!canCopy)
-    return false
+  const permissionState = await checkPermission('clipboard.write')
+  if (!permissionState.granted) {
+    const blockedReason = permissionState.reason || 'permission-denied'
+    return {
+      success: false,
+      reason: blockedReason,
+      message: formatClipboardPermissionMessage('复制', blockedReason),
+      recovery: '请在插件权限中允许 clipboard.write 后重试。',
+    }
+  }
 
   try {
     await clipboard.writeText(answer)
-    return true
+    return { success: true }
   }
-  catch {
+  catch (error) {
     logger?.warn?.('[touch-intelligence] failed to copy answer')
-    return false
+    const blockedReason = mapClipboardErrorReason(error, 'clipboard-write-failed')
+    return {
+      success: false,
+      reason: blockedReason,
+      message: formatClipboardPermissionMessage('复制', blockedReason),
+      recovery: blockedReason === 'clipboard-write-failed'
+        ? '请稍后重试，或手动复制回答内容。'
+        : '请在插件权限中允许 clipboard.write 后重试。',
+    }
   }
 }
 
 function normalizeReplaceAnswerFailure(error) {
   const code = normalizeText(error?.code || error?.result?.code)
+  const explicitReason = normalizeText(error?.reason)
   const fallbackMessage = normalizeText(error?.message)
 
   if (code === 'MACOS_ACCESSIBILITY_PERMISSION_DENIED') {
     return {
       success: false,
       code,
+      reason: code,
       message: '替换失败：未授予 macOS 辅助功能权限',
       recovery: '请在系统设置 > 隐私与安全性 > 辅助功能中允许 Tuff 后重试。',
     }
@@ -2528,22 +2591,40 @@ function normalizeReplaceAnswerFailure(error) {
     return {
       success: false,
       code,
+      reason: code,
       message: '替换失败：未授予 macOS 自动化权限',
       recovery: '请在系统设置 > 隐私与安全性 > 自动化中允许 Talex Touch 控制当前应用后重试。',
     }
   }
-  if (code === 'PERMISSION_DENIED') {
+  if (
+    explicitReason === 'permission-sdk-unavailable'
+    || explicitReason === 'permission-unavailable'
+    || explicitReason === 'permission-check-failed'
+    || explicitReason === 'permission-denied'
+    || code === 'PERMISSION_DENIED'
+    || code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
+    || code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE'
+    || code === 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED'
+  ) {
+    const blockedReason = explicitReason || mapClipboardErrorReason(error, 'permission-denied')
     return {
       success: false,
-      code,
-      message: '替换失败：缺少 clipboard.write 权限',
+      code: code || 'PERMISSION_DENIED',
+      reason: blockedReason,
+      message: formatClipboardPermissionMessage('替换', blockedReason),
       recovery: '请在插件权限中允许 clipboard.write 后重试。',
     }
   }
-  if (code === 'SDK_UNAVAILABLE') {
+  if (
+    explicitReason === 'capability-unavailable'
+    || code === 'SDK_UNAVAILABLE'
+    || code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE'
+    || code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE'
+  ) {
     return {
       success: false,
-      code,
+      code: code || 'SDK_UNAVAILABLE',
+      reason: 'capability-unavailable',
       message: '替换失败：当前宿主不支持自动粘贴',
       recovery: '请升级 Talex Touch 后重试，或先使用“复制回答”。',
     }
@@ -2552,19 +2633,23 @@ function normalizeReplaceAnswerFailure(error) {
   return {
     success: false,
     code: code || 'AUTO_PASTE_FAILED',
+    reason: 'action-failed',
     message: fallbackMessage || '替换失败：无法将回答粘贴到当前应用',
     recovery: '请确认原应用仍可输入，并检查系统自动化权限后重试。',
   }
 }
 
 async function replaceAnswer(answer) {
-  if (!clipboard?.copyAndPaste) {
-    return normalizeReplaceAnswerFailure({ code: 'SDK_UNAVAILABLE' })
+  if (typeof clipboard?.copyAndPaste !== 'function') {
+    return normalizeReplaceAnswerFailure({ code: 'SDK_UNAVAILABLE', reason: 'capability-unavailable' })
   }
 
-  const canReplace = await ensurePermission('clipboard.write', '需要剪贴板权限以替换选中文本')
-  if (!canReplace) {
-    return normalizeReplaceAnswerFailure({ code: 'PERMISSION_DENIED' })
+  const permissionState = await checkPermission('clipboard.write')
+  if (!permissionState.granted) {
+    return normalizeReplaceAnswerFailure({
+      code: 'PERMISSION_DENIED',
+      reason: permissionState.reason || 'permission-denied',
+    })
   }
 
   try {
@@ -2650,8 +2735,9 @@ const pluginLifecycle = {
       if (!displayPrompt)
         return true
 
-      const hasPermission = await ensureIntelligencePermissions()
-      if (!hasPermission) {
+      const permissionState = await checkIntelligencePermissions()
+      if (!permissionState.granted) {
+        const blockedReason = permissionState.reason || 'permission-denied'
         const normalizedError = normalizeInvokeError(createPluginError('PERMISSION_DENIED'))
         await pushWidgetState(resolvedFeatureId, {
           ...draft,
@@ -2667,7 +2753,7 @@ const pluginLifecycle = {
           success: false,
           shouldActivate: true,
           status: 'blocked',
-          reason: 'permission-denied',
+          reason: blockedReason,
         }
       }
 
@@ -2815,8 +2901,8 @@ const pluginLifecycle = {
         if (!answer)
           return
 
-        const copied = await copyAnswer(answer)
-        if (!copied) {
+        const copyResult = await copyAnswer(answer)
+        if (!copyResult.success) {
           const failedItem = await pushWidgetState(featureId, {
             prompt,
             answer,
@@ -2830,8 +2916,8 @@ const pluginLifecycle = {
             stage: 'chat',
             capabilityId: 'text.chat',
             copyStatus: 'failed',
-            copyError: '复制失败：缺少 clipboard.write 权限',
-            copyRecovery: '请在插件权限中允许 clipboard.write 后重试。',
+            copyError: copyResult.message,
+            copyRecovery: copyResult.recovery,
             history: cloneHistory(session.history),
             modelOptions: session.modelOptions,
             selectedProviderId: payload.selectedProviderId,
@@ -2856,8 +2942,8 @@ const pluginLifecycle = {
                 }
               : undefined,
             status: 'blocked',
-            reason: 'permission-denied',
-            message: '复制失败：缺少 clipboard.write 权限',
+            reason: copyResult.reason,
+            message: copyResult.message,
           }
         }
 
@@ -2910,7 +2996,7 @@ const pluginLifecycle = {
                 }
               : undefined,
             status: 'blocked',
-            reason: replacement.code,
+            reason: replacement.reason,
             message: replacement.message,
           }
         }
@@ -3018,8 +3104,9 @@ const pluginLifecycle = {
           return
 
         await supersedeAllActiveRequests()
-        const hasPermission = await ensureIntelligencePermissions()
-        if (!hasPermission) {
+        const permissionState = await checkIntelligencePermissions()
+        if (!permissionState.granted) {
+          const blockedReason = permissionState.reason || 'permission-denied'
           const normalizedError = normalizeInvokeError(createPluginError('PERMISSION_DENIED'))
           await pushWidgetState(featureId, {
             prompt: displayPrompt,
@@ -3032,6 +3119,8 @@ const pluginLifecycle = {
           return {
             externalAction: true,
             success: false,
+            status: 'blocked',
+            reason: blockedReason,
             message: normalizedError.message,
           }
         }

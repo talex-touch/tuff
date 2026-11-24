@@ -3,7 +3,7 @@
   "name": "touch-hosts",
   "version": "0.1.0",
   "author": "TalexTouch Team",
-  "sdkapi": 260817,
+  "sdkapi": 261011,
   "category": "utilities",
   "icon": {
     "type": "file",
@@ -48,8 +48,20 @@
   "features": [
     {
       "id": "hosts",
-      "name": "Hosts 配置",
-      "desc": "预览并确认更新受限 Hosts 条目",
+      "name": {
+        "default": "Hosts 配置",
+        "locales": {
+          "zh-CN": "Hosts 配置",
+          "en-US": "Hosts"
+        }
+      },
+      "desc": {
+        "default": "预览并确认更新受限 Hosts 条目",
+        "locales": {
+          "zh-CN": "预览并确认更新受限 Hosts 条目",
+          "en-US": "Preview and confirm limited changes to hosts entries"
+        }
+      },
       "icon": {
         "type": "file",
         "value": "assets/logo.svg"
@@ -87,10 +99,10 @@
     }
   ],
   "_files": {
-    "index.js": "sha256-d29ccdf3ced315f88cec97c2db7ae4df7b93c324ec5784bdcc8997ece12caa53",
+    "index.js": "sha256-becb15c0a0e12e7d935ac270d91de48f2c1fc1b76ce1e2b04e378044a899ba88",
     "assets/logo.svg": "sha256-295727a4b0b87754ba780cf48c7cbf602f3ead4ef913eabda4e1f5fa0bb1283d"
   },
-  "_signature": "RZSoZ/j6y8Z4Ywax5eJ21v5sPGDm3znRHlncCHg6Hmg=",
+  "_signature": "5Pu0u3JHOMnlY5lXGKRkoLF50/yixZt+J5dz2JfZVgc=",
   "dev": {
     "enable": false,
     "address": "",

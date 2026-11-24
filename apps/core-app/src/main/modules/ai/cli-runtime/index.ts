@@ -23,6 +23,7 @@ export type {
   CliDriverCandidateSpec,
   CliDriverDescriptor,
   CliDriverResolution,
+  CliExecuteRuntimeOptions,
   CliPermissionDecision,
   CliPermissionRequest,
   CliPermissionRequestContext,

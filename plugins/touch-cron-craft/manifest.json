@@ -1,0 +1,125 @@
+{
+  "id": "com.tuffex.touch-cron-craft",
+  "name": "touch-cron-craft",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 261011,
+  "category": "developer",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": {
+    "default": "Cron Expression Humanizer & Scheduler: 5-field + @aliases, English/Chinese natural language generator, exact next 10 local/UTC runs, and curated presets",
+    "locales": {
+      "zh-CN": "Cron 表达式可视化解析与生成：支持 5 字段与 @alias、中英文自然语言反推、精确本地/UTC 未来 10 次运行时间及常用预设",
+      "en-US": "Cron Expression Humanizer & Scheduler: 5-field + @aliases, English/Chinese natural language generator, exact next 10 local/UTC runs, and curated presets"
+    }
+  },
+  "main": "index.js",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  },
+  "permissions": {
+    "required": [
+      "search.root-results"
+    ],
+    "optional": [
+      "clipboard.write"
+    ]
+  },
+  "permissionReasons": {
+    "clipboard.write": {
+      "default": "Copy cron expressions, human-readable descriptions, next run schedules, and GitHub Actions YAML to clipboard",
+      "locales": {
+        "zh-CN": "将 Cron 表达式、可读说明、计划执行时间及 GitHub Actions 配置复制到剪贴板",
+        "en-US": "Copy cron expressions, human-readable descriptions, next run schedules, and GitHub Actions YAML to clipboard"
+      }
+    },
+    "search.root-results": {
+      "default": "Push touch-cron-craft entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 touch-cron-craft 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push touch-cron-craft entries into CoreBox root search results"
+      }
+    }
+  },
+  "searchProviders": [
+    {
+      "id": "touch-cron-craft.cron-craft",
+      "displayName": "Cron Craft",
+      "featureId": "cron-craft",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 111,
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
+  "features": [
+    {
+      "id": "cron-craft",
+      "name": {
+        "default": "Cron Craft",
+        "locales": {
+          "zh-CN": "Cron 定时助手",
+          "en-US": "Cron Craft"
+        }
+      },
+      "desc": {
+        "default": "Humanize cron schedules, preview exact next 10 local/UTC runs, or generate cron from English/Chinese",
+        "locales": {
+          "zh-CN": "解析 Cron 定时表达式、推算未来 10 次本地/UTC 运行时间，或用中英文自然语言反向生成",
+          "en-US": "Humanize cron schedules, preview exact next 10 local/UTC runs, or generate cron from English/Chinese"
+        }
+      },
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": [
+        "cron",
+        "crontab",
+        "schedule",
+        "scheduler",
+        "interval",
+        "next-run",
+        "定时",
+        "定时任务",
+        "计划任务",
+        "周期"
+      ],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": [
+        "text"
+      ],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": [
+            "cron",
+            "crontab",
+            "cron-craft",
+            "定时任务",
+            "定时表达式",
+            "计划任务"
+          ]
+        }
+      ]
+    }
+  ]
+}

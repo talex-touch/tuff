@@ -111,7 +111,9 @@ vi.mock('./ai-automation-scheduler', () => ({
 import { AiCliOrchestrator } from './ai-cli-orchestrator'
 import { aiOrchestratorStore } from './ai-orchestrator-store'
 import { discardRunInput, loadRunInput, saveRunInput } from './ai-run-input-vault'
+import { setAutoResumeOnStartupReader } from './auto-resume-setting'
 import { buildObjectivePrompt } from './pi-agent-run-log'
+import { createRunInterruptedError } from './pi-agent-runtime-control-error'
 import { PiAgentRuntimeHost } from './pi-agent-runtime-host'
 import {
   closeUsageLimitRefusalDatabase,
@@ -184,6 +186,7 @@ beforeAll(async () => {
  * its `startRunThenStop` in place of its own.
  */
 beforeEach(async () => {
+  setAutoResumeOnStartupReader(null)
   await fixture!.client.execute(
     "UPDATE ai_orchestrator_runs SET status = 'interrupted' WHERE status IN ('queued', 'running')"
   )
@@ -191,6 +194,7 @@ beforeEach(async () => {
 })
 
 afterAll(async () => {
+  setAutoResumeOnStartupReader(null)
   hostExecute.mockRestore()
   await closeUsageLimitRefusalDatabase(fixture)
 }, 60_000)
@@ -411,5 +415,88 @@ describe('a run the app stopped under after it had logged messages', () => {
     expect(await eventTypes(runId)).not.toContain('run.resumed')
     // Its log goes with it.
     expect(await storedRows(runId)).toEqual([])
+  })
+
+  it('persists recoveryAttempts=1 across run.started and stops crash-resume loops on a second crash', async () => {
+    const runId = await startRunThenStop({ task: SECRET_TASK })
+
+    // 1st restart: resumes and crashes again before completing
+    const firstResumed = Promise.withResolvers<PiRuntimeStartPayload>()
+    hostExecute.mockImplementationOnce((payload: PiRuntimeStartPayload) => {
+      firstResumed.resolve(payload)
+      return new Promise<PiRuntimeRunResult>(() => undefined)
+    })
+    const secondBoot = new AiCliOrchestrator()
+    await secondBoot.initialize()
+    const payload = await firstResumed.promise
+    expect(payload.run.id).toBe(runId)
+    expect(payload.run.metadata?.recoveryAttempts).toBe(1)
+
+    // Verify SQLite kept recoveryAttempts=1 even after executePreparedRun wrote run.started
+    const midCrash = await aiOrchestratorStore.getOrchestratorRun(runId)
+    expect(midCrash?.status).toBe('running')
+    expect(midCrash?.metadata?.recoveryAttempts).toBe(1)
+
+    // 2nd restart: hits crash-loop cap (recoveryAttempts >= 1) and marks interrupted cleanly
+    const thirdBoot = new AiCliOrchestrator()
+    await thirdBoot.initialize()
+    await thirdBoot.shutdown()
+
+    const settled = await aiOrchestratorStore.getOrchestratorRun(runId)
+    expect(settled?.status).toBe('interrupted')
+    expect(hostExecute).toHaveBeenCalledTimes(2)
+  })
+
+  it('interrupts persisted running runs when autoResumeOnStartup is disabled', async () => {
+    const runId = await startRunThenStop({ task: SECRET_TASK })
+    setAutoResumeOnStartupReader(() => false)
+
+    const disabledBoot = new AiCliOrchestrator()
+    await disabledBoot.initialize()
+    await disabledBoot.shutdown()
+
+    const settled = await aiOrchestratorStore.getOrchestratorRun(runId)
+    expect(settled?.status).toBe('interrupted')
+    expect(await eventTypes(runId)).toContain('run.interrupted')
+    expect(await eventTypes(runId)).not.toContain('run.resumed')
+    expect(hostExecute).toHaveBeenCalledTimes(1)
+  })
+
+  it('suspends an active run on graceful shutdown and auto-resumes it to completion on next boot', async () => {
+    const started = Promise.withResolvers<string>()
+    let interruptRun!: () => void
+    hostExecute.mockImplementationOnce(
+      (payload: PiRuntimeStartPayload) =>
+        new Promise<PiRuntimeRunResult>((_resolve, reject) => {
+          started.resolve(payload.run.id)
+          interruptRun = () => reject(createRunInterruptedError())
+        })
+    )
+    const firstBoot = new AiCliOrchestrator()
+    await firstBoot.initialize()
+    const runPromise = firstBoot.execute({
+      objective: 'Gracefully restarted task.',
+      input: { task: SECRET_TASK }
+    })
+    const runId = await started.promise
+
+    const shutdownPromise = firstBoot.shutdown()
+    interruptRun()
+    await shutdownPromise
+    const callerResult = await runPromise
+
+    expect(callerResult.status).toBe('interrupted')
+    expect((await aiOrchestratorStore.getOrchestratorRun(runId))?.status).toBe('running')
+    expect(await eventTypes(runId)).toContain('run.suspended_for_restart')
+    await expect(loadRunInput(runId)).resolves.toEqual({ input: { task: SECRET_TASK } })
+
+    const { next, resumedWith } = await restart()
+    const resumedPayload = await resumedWith
+    expect(resumedPayload.run.id).toBe(runId)
+    expect(resumedPayload.request.input).toEqual({ task: SECRET_TASK })
+    await next.shutdown()
+
+    expect((await aiOrchestratorStore.getOrchestratorRun(runId))?.status).toBe('completed')
+    await expect(loadRunInput(runId)).resolves.toBeNull()
   })
 })

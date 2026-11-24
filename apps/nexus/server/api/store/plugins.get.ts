@@ -1,9 +1,10 @@
 import type { DashboardPlugin, DashboardPluginVersion } from '../../utils/pluginsStore'
 import type { PluginReleaseAudience } from '../../utils/pluginReleaseEligibility'
 import { openEdgeCache } from '../../utils/edgeCache'
+import { projectPublicPluginManifest } from '../../utils/pluginManifestProjection'
+import { resolveStorePluginNpmMetadata, resolveStoreVersionNpmMetadata } from '../../utils/pluginNpmMetadata'
 import { listStorePlugins } from '../../utils/pluginsStore'
 import { resolvePluginStoreAudience } from '../../utils/pluginStoreAccess'
-import { projectPublicPluginManifest } from '../../utils/pluginManifestProjection'
 
 /**
  * How long a copy of the public Store listing is served from the edge cache: review decisions, new
@@ -63,10 +64,11 @@ function readBoundedInteger(value: unknown, fallback: number, min: number, max: 
  * Remove redundant fields that should only exist at plugin level
  */
 function cleanVersionForStore(
-  slug: string,
+  plugin: DashboardPlugin,
   version: DashboardPluginVersion,
   options: { compact: boolean, audience: PluginReleaseAudience },
 ) {
+  const npm = resolveStoreVersionNpmMetadata(plugin, version)
   const base = {
     id: version.id,
     pluginId: version.pluginId,
@@ -75,12 +77,13 @@ function cleanVersionForStore(
     artifactSha256: version.artifactSha256,
     nexusAttestation: version.nexusAttestation,
     availability: 'available' as const,
-    packageUrl: buildStoreDownloadUrl(slug, version.version, options.audience),
+    packageUrl: buildStoreDownloadUrl(plugin.slug, version.version, options.audience),
     packageSize: version.packageSize,
     status: version.status,
     createdAt: version.createdAt,
     updatedAt: version.updatedAt,
     manifest: projectPublicPluginManifest(version.manifest),
+    ...(npm ? { npm } : {}),
   }
 
   if (options.compact) {
@@ -107,6 +110,7 @@ function cleanPluginForStore(
   if (!latest)
     return null
 
+  const npm = resolveStorePluginNpmMetadata(plugin, latest)
   const base = {
     id: plugin.id,
     slug: plugin.slug,
@@ -121,9 +125,10 @@ function cleanPluginForStore(
     iconUrl: plugin.iconUrl,
     createdAt: plugin.createdAt,
     updatedAt: plugin.updatedAt,
-    latestVersion: cleanVersionForStore(plugin.slug, latest, options),
+    latestVersion: cleanVersionForStore(plugin, latest, options),
     // Use relative path for readme URL
     readmeUrl: (plugin.hasReadme ?? Boolean(plugin.readmeMarkdown)) ? `/api/store/plugins/${plugin.slug}/readme` : null,
+    ...(npm ? { npm } : {}),
   }
 
   if (options.compact) {
@@ -132,7 +137,7 @@ function cleanPluginForStore(
 
   return {
     ...base,
-    versions: versions.map(version => cleanVersionForStore(plugin.slug, version, options)),
+    versions: versions.map(version => cleanVersionForStore(plugin, version, options)),
   }
 }
 

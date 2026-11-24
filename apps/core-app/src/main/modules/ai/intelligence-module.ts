@@ -48,7 +48,9 @@ import { t } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import { safeApiHandler } from '../../utils/safe-handler'
 import { BaseModule } from '../abstract-base-module'
+import { conversationModule } from '../conversation'
 import { withPermission } from '../permission/channel-guard'
+import { getMainConfig, isMainStorageReady } from '../storage'
 import {
   agentManager,
   registerAgentChannels,
@@ -77,6 +79,10 @@ import { applyHomeConversationInjection } from './home-conversation-injection'
 import { getIntelligenceLocalEnvironment } from './intelligence-local-environment'
 import { markHomeChatInvoke, resolveHomeChatOrigin } from './intelligence-invoke-purpose'
 import { aiCliOrchestrator } from './ai-cli-orchestrator'
+import {
+  createMainStorageAutoResumeReader,
+  setAutoResumeOnStartupReader
+} from './auto-resume-setting'
 import { projectAiImportError } from './ai-import-error-projection'
 import { localKnowledgeEngine } from './intelligence-local-knowledge-engine'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
@@ -788,6 +794,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     const runtime = resolveMainRuntime(ctx, 'IntelligenceModule.onInit')
     this.transport = runtime.transport
+    setAutoResumeOnStartupReader(
+      createMainStorageAutoResumeReader({ isMainStorageReady, getMainConfig })
+    )
 
     intelligenceLog.info('Initializing Intelligence module')
 
@@ -854,6 +863,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   }
 
   async onDestroy(): Promise<void> {
+    conversationModule.beginShutdown()
     getLocalEmbeddingRuntime().close()
     closeSystemTranslation()
     stopPricingCatalogSchedule()
@@ -921,6 +931,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     )
 
     await aiCliOrchestrator.initialize()
+    void conversationModule.recoverOnStartup().catch((error) => {
+      intelligenceLog.warn('Home conversation startup recovery failed', { error })
+    })
     await agentManager.init()
 
     await intelligenceWorkflowService.initialize()

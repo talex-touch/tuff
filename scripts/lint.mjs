@@ -45,18 +45,8 @@ const SCRIPT_LINT_EXTENSIONS = '**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}'
  * neither was the #562 drift this pair of passes exists to catch.
  */
 const EXPLICIT_PLUGIN_DIRS = [
-  'touch-window-manager',
-  'touch-window-presets',
-  'touch-dev-toolbox',
-  'touch-batch-rename',
-  'touch-browser-bookmarks',
-  'touch-browser-open',
-  'touch-system-actions',
-  'touch-text-snippets',
-  'touch-snipaste',
-  'touch-quick-actions',
   'touch-code-snippets',
-  'touch-dictation',
+  'touch-text-snippets',
 ]
 
 const argv = process.argv.slice(2).filter(arg => arg !== '--')

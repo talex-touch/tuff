@@ -1,4 +1,22 @@
-const { plugin, filesystem, logger, TuffItemBuilder, permission } = globalThis
+const {
+  plugin,
+  filesystem: initialFilesystem,
+  logger,
+  TuffItemBuilder,
+  permission: initialPermission,
+} = globalThis
+
+function resolvePermission() {
+  return Object.prototype.hasOwnProperty.call(globalThis, 'permission')
+    ? globalThis.permission
+    : initialPermission
+}
+
+function resolveFilesystem() {
+  return Object.prototype.hasOwnProperty.call(globalThis, 'filesystem')
+    ? globalThis.filesystem
+    : initialFilesystem
+}
 
 const PLUGIN_NAME = 'touch-batch-rename'
 const SOURCE_ID = 'plugin-features'
@@ -12,6 +30,26 @@ const MAX_QUERY_LENGTH = 4096
 const MAX_TARGET_NAME_LENGTH = 255
 
 const previewCacheByFeature = new Map()
+let triggerGeneration = 0
+
+function hasControlCharacter(value) {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code <= 0x1F || code === 0x7F)
+      return true
+  }
+  return false
+}
+
+function isValidTargetName(value) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > MAX_TARGET_NAME_LENGTH)
+    return false
+  if (value === '.' || value === '..')
+    return false
+  if (/[\\/]/.test(value) || hasControlCharacter(value))
+    return false
+  return true
+}
 
 function normalizeText(value, maximum = MAX_QUERY_LENGTH) {
   const text = String(value ?? '').trim()
@@ -176,15 +214,38 @@ function buildRenamePlan(paths, rules, now = new Date()) {
     const parsed = splitFilePath(source)
     const nextBase = applyRules(parsed.baseName, index, rules, now)
     const targetName = `${nextBase}${parsed.extension}`
+    const invalid = !isValidTargetName(targetName)
     return {
       source,
       sourceName: parsed.name,
       targetName,
       targetPath: `${parsed.directory}${targetName}`,
-      unchanged: parsed.name === targetName,
+      unchanged: !invalid && parsed.name === targetName,
+      invalid,
+      collision: false,
     }
   })
-  return { items }
+
+  const targetPathCounts = new Map()
+  items.forEach((entry) => {
+    if (entry.invalid)
+      return
+    targetPathCounts.set(entry.targetPath, (targetPathCounts.get(entry.targetPath) ?? 0) + 1)
+  })
+
+  const collisions = []
+  items.forEach((entry) => {
+    if (!entry.invalid && (targetPathCounts.get(entry.targetPath) ?? 0) > 1) {
+      entry.collision = true
+      collisions.push(entry.targetPath)
+    }
+  })
+
+  return {
+    items,
+    invalidItems: items.filter(entry => entry.invalid),
+    collisions: [...new Set(collisions)],
+  }
 }
 
 /**
@@ -194,10 +255,11 @@ function buildRenamePlan(paths, rules, now = new Date()) {
  * ensurePermission.
  */
 async function ensurePermission(permissionId) {
-  if (!permission || typeof permission.check !== 'function')
+  const permissionFacade = resolvePermission()
+  if (!permissionFacade || typeof permissionFacade.check !== 'function')
     return { granted: false, reason: 'permission-sdk-unavailable', message: '权限系统不可用' }
   try {
-    if ((await permission.check(permissionId)) === true)
+    if ((await permissionFacade.check(permissionId)) === true)
       return { granted: true, reason: '', message: '' }
     return { granted: false, reason: 'permission-denied', message: `缺少 ${permissionId} 权限` }
   }
@@ -228,9 +290,14 @@ function buildItem({ id, featureId, title, subtitle, actionId }) {
   return builder.build()
 }
 
-async function publishItems(items) {
+async function publishItems(items, generation) {
+  if (generation !== triggerGeneration)
+    return false
   await plugin.feature.clearItems()
+  if (generation !== triggerGeneration)
+    return false
   await plugin.feature.pushItems(items)
+  return generation === triggerGeneration
 }
 
 function summarizeRules(rules) {
@@ -268,9 +335,7 @@ function normalizeUndoEntries(payload) {
       typeof item.source !== 'string'
       || item.source.length === 0
       || item.source.length > MAX_PATH_LENGTH
-      || typeof item.targetName !== 'string'
-      || item.targetName.length === 0
-      || item.targetName.length > MAX_TARGET_NAME_LENGTH
+      || !isValidTargetName(item.targetName)
     ) {
       return []
     }
@@ -280,6 +345,8 @@ function normalizeUndoEntries(payload) {
 
 const pluginLifecycle = {
   async onFeatureTriggered(featureId, query) {
+    const generation = ++triggerGeneration
+    previewCacheByFeature.delete(featureId)
     try {
       const filePaths = extractFilesFromQuery(query)
       if (filePaths.length === 0) {
@@ -290,11 +357,13 @@ const pluginLifecycle = {
             title: '未选择文件',
             subtitle: '请从文件输入触发批量重命名',
           }),
-        ])
+        ], generation)
         return true
       }
 
       const readAccess = await ensurePermission('fs.read')
+      if (generation !== triggerGeneration)
+        return true
       if (!readAccess.granted) {
         // "请授予文件读取权限" is the wrong advice when the host is absent or the check threw --
         // there is nothing for the user to grant. Only the denial says that (#821).
@@ -307,13 +376,17 @@ const pluginLifecycle = {
               ? '请授予文件读取权限'
               : `无法确认文件读取权限 · ${readAccess.reason}`,
           }),
-        ])
+        ], generation)
         return true
       }
 
       const rules = parseRules(getQueryText(query))
       const plan = buildRenamePlan(filePaths, rules, new Date())
-      previewCacheByFeature.set(featureId, plan)
+      const applySubtitle = plan.invalidItems.length > 0
+        ? '目标文件名包含非法字符或路径分隔符，无法应用'
+        : plan.collisions.length > 0
+          ? '目标文件名存在冲突，请调整重命名规则'
+          : '执行受控批量重命名事务'
       const items = [
         buildItem({
           id: `${featureId}-rules`,
@@ -331,7 +404,7 @@ const pluginLifecycle = {
           id: `${featureId}-apply`,
           featureId,
           title: '应用重命名',
-          subtitle: '执行受控批量重命名事务',
+          subtitle: applySubtitle,
           actionId: 'apply',
         }),
         buildItem({
@@ -344,12 +417,19 @@ const pluginLifecycle = {
       ]
 
       plan.items.slice(0, PREVIEW_LIMIT).forEach((item, index) => {
+        const previewSubtitle = item.invalid
+          ? '目标文件名无效（不可含路径分隔符或控制字符）'
+          : item.collision
+            ? `${item.targetName} · 目标文件名冲突`
+            : item.unchanged
+              ? '名称未变化'
+              : item.targetName
         items.push(
           buildItem({
             id: `${featureId}-preview-${index}`,
             featureId,
             title: item.sourceName,
-            subtitle: item.unchanged ? '名称未变化' : item.targetName,
+            subtitle: previewSubtitle,
           }),
         )
       })
@@ -363,10 +443,15 @@ const pluginLifecycle = {
           }),
         )
       }
-      await publishItems(items)
+      const published = await publishItems(items, generation)
+      if (published)
+        previewCacheByFeature.set(featureId, plan)
       return true
     }
     catch (error) {
+      if (generation !== triggerGeneration)
+        return true
+      previewCacheByFeature.delete(featureId)
       const code = stableErrorCode(error, 'BATCH_RENAME_PREVIEW_FAILED')
       logger.error(`[touch-batch-rename] ${code}`)
       await publishItems([
@@ -376,7 +461,7 @@ const pluginLifecycle = {
           title: '加载失败',
           subtitle: code,
         }),
-      ])
+      ], generation)
       return true
     }
   },
@@ -393,14 +478,21 @@ const pluginLifecycle = {
       const plan = previewCacheByFeature.get(featureId)
       if (!plan)
         return blocked('preview-missing', '请先生成重命名预览')
+      if (plan.invalidItems.length > 0)
+        return blocked('invalid-target-name', '目标文件名不能包含路径分隔符或控制字符')
+      if (plan.collisions.length > 0)
+        return blocked('target-collision', '存在重复的目标文件名，已阻止重命名')
+      const pending = plan.items.filter(entry => !entry.unchanged)
+      if (pending.length === 0)
+        return blocked('no-changes', '没有需要重命名的文件')
       const writeAccess = await ensurePermission('fs.write')
       if (!writeAccess.granted)
         return blocked(writeAccess.reason, writeAccess.message)
+      const fsFacade = resolveFilesystem()
+      if (!fsFacade || typeof fsFacade.renameBatch !== 'function')
+        return blocked('capability-unavailable', '文件系统重命名能力不可用')
       try {
-        const pending = plan.items.filter(entry => !entry.unchanged)
-        if (pending.length > 0) {
-          await filesystem.renameBatch(pending.map(entry => ({ source: entry.source, targetName: entry.targetName })))
-        }
+        await fsFacade.renameBatch(pending.map(entry => ({ source: entry.source, targetName: entry.targetName })))
         await plugin.storage.setFile(LAST_RENAME_FILE, {
           items: pending.map(entry => ({
             source: entry.targetPath,
@@ -421,11 +513,14 @@ const pluginLifecycle = {
       const writeAccess = await ensurePermission('fs.write')
       if (!writeAccess.granted)
         return blocked(writeAccess.reason, writeAccess.message)
+      const fsFacade = resolveFilesystem()
+      if (!fsFacade || typeof fsFacade.renameBatch !== 'function')
+        return blocked('capability-unavailable', '文件系统重命名能力不可用')
       try {
         const entries = normalizeUndoEntries(await plugin.storage.getFile(LAST_RENAME_FILE))
         if (entries.length === 0)
           return blocked('undo-empty', '没有可撤销的重命名事务')
-        await filesystem.renameBatch(entries)
+        await fsFacade.renameBatch(entries)
         await plugin.storage.setFile(LAST_RENAME_FILE, { items: [], createdAt: Date.now() })
         return { externalAction: true, success: true, status: 'completed' }
       }
@@ -438,6 +533,7 @@ const pluginLifecycle = {
   },
 
   onDestroy() {
+    triggerGeneration += 1
     previewCacheByFeature.clear()
   },
 }

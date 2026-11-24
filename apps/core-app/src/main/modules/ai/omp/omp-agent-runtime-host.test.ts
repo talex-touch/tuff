@@ -3,10 +3,17 @@ import type {
   PiRuntimeRunRecord,
   PiRuntimeStartPayload
 } from '../pi-agent-runtime-protocol'
-import type { AcpPermissionRequestParams, OmpStreamEvent } from '@talex-touch/tuff-intelligence'
+import type {
+  AcpClientCapabilities,
+  AcpPermissionRequestParams,
+  OmpStreamEvent
+} from '@talex-touch/tuff-intelligence'
+import type { HerdrSessionView } from '@talex-touch/utils/transport/events/herdr'
 import type { Mock } from 'vitest'
+import type { HerdrRuntimePlane } from '../../herdr-core/runtime-plane'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OmpAcpClient } from '@talex-touch/tuff-intelligence'
+import { DefaultHerdrAcpCapabilityBridge } from '../../herdr-core/acp-capability-bridge'
 import {
   isRunCancelledControlError,
   isRunInterruptedControlError,
@@ -82,10 +89,12 @@ describe('ompAgentRuntimeHost', () => {
   }
 
   let capturedOnRequest: ((method: string, params: unknown) => Promise<unknown>) | undefined
+  let capturedClientCapabilities: AcpClientCapabilities | undefined
 
   beforeEach(() => {
     vi.mocked(resolveOmpExecutable).mockResolvedValue('/mock/bin/omp')
     capturedOnRequest = undefined
+    capturedClientCapabilities = undefined
     const closeListeners: Array<() => void> = []
 
     mockSession = {
@@ -121,6 +130,7 @@ describe('ompAgentRuntimeHost', () => {
       capturedOnRequest = options?.onRequest as
         | ((method: string, params: unknown) => Promise<unknown>)
         | undefined
+      capturedClientCapabilities = options?.clientCapabilities
       return mockClient as unknown as OmpAcpClient
     })
   })
@@ -408,5 +418,193 @@ describe('ompAgentRuntimeHost', () => {
     expect(host.isReady()).toBe(true)
     mockClient.emitClose()
     expect(host.isReady()).toBe(false)
+  })
+
+  it('wires Herdr ACP capability bridge with clientCapabilities, fail-closed permission gating, and run-end disposal', async () => {
+    const fileRead = vi.fn(async () => ({ text: 'alpha\n', first: 1, last: 1, lines: 1 }))
+    const fileWrite = vi.fn(async () => ({ path: '/tmp/out.txt', bytes: 2 }))
+    const termRun = vi.fn(
+      async () =>
+        ({
+          address: 't77',
+          machine: null,
+          name: null,
+          title: '',
+          argv: ['echo', 'hi'],
+          cwd: '/tmp',
+          foregroundName: 'echo',
+          foregroundCwd: '/tmp',
+          foregroundPid: 77,
+          state: 'live',
+          status: null,
+          statusMs: null,
+          reported: false,
+          turn: 0,
+          keep: false,
+          template: null,
+          parent: null,
+          labels: {},
+          cols: 80,
+          rows: 24,
+          pid: 77,
+          exitCode: null,
+          signal: null,
+          reason: null,
+          screen: 'exact',
+          createdMs: 1000,
+          finishedMs: null
+        }) satisfies HerdrSessionView
+    )
+
+    const fakePlane = {
+      files: { read: fileRead, write: fileWrite, edit: vi.fn() },
+      terminals: {
+        run: termRun,
+        read: vi.fn(async () => ({ text: 'hi\n', complete: true, how: 'screen', why: null })),
+        get: vi.fn(async () => ({ address: 't77', state: 'finished', exitCode: 0, signal: null })),
+        wait: vi.fn(async () => ({ ended: true, exit_code: 0 })),
+        kill: vi.fn(),
+        rm: vi.fn()
+      }
+    } as unknown as HerdrRuntimePlane
+
+    const bridge = new DefaultHerdrAcpCapabilityBridge({ plane: fakePlane, cwd: '/tmp' })
+
+    let releasePrompt: (() => void) | undefined
+    mockSession.promptStream.mockImplementationOnce(
+      async function* (): AsyncIterable<OmpStreamEvent> {
+        await new Promise<void>((resolve) => {
+          releasePrompt = resolve
+        })
+        yield { type: 'delta', text: 'bridged' }
+      }
+    )
+
+    let allowMutating = true
+    const onPermissionRequest = vi.fn(async () =>
+      allowMutating
+        ? { outcome: { outcome: 'selected' as const, optionId: 'allow_once' } }
+        : { outcome: { outcome: 'selected' as const, optionId: 'reject_once' } }
+    )
+
+    const host = new OmpAgentRuntimeHost({
+      onPermissionRequest,
+      resolveHerdrCapabilityBridge: () => bridge
+    })
+
+    const runPromise = host.execute(createPayload())
+    await new Promise((resolve) => setTimeout(resolve, 15))
+
+    expect(capturedClientCapabilities).toEqual({
+      fs: { readTextFile: true, writeTextFile: true },
+      terminal: true
+    })
+
+    // Read succeeds without prompting permission.
+    const readRes = await capturedOnRequest!('fs/read_text_file', {
+      sessionId: 'test-session-123',
+      path: '/tmp/in.txt'
+    })
+    expect(readRes).toEqual({ content: 'alpha\n' })
+    expect(onPermissionRequest).not.toHaveBeenCalled()
+
+    // Approved write & terminal/create succeed through bridge.
+    await capturedOnRequest!('fs/write_text_file', {
+      sessionId: 'test-session-123',
+      path: '/tmp/out.txt',
+      content: 'ok'
+    })
+    expect(fileWrite).toHaveBeenCalledTimes(1)
+
+    const created = await capturedOnRequest!('terminal/create', {
+      sessionId: 'test-session-123',
+      command: 'echo',
+      args: ['hi']
+    })
+    expect(created).toEqual({ terminalId: 't77' })
+    expect(onPermissionRequest).toHaveBeenCalledTimes(2)
+
+    // Denied write fails closed without calling plane.files.write again.
+    allowMutating = false
+    await expect(
+      capturedOnRequest!('fs/write_text_file', {
+        sessionId: 'test-session-123',
+        path: '/tmp/denied.txt',
+        content: 'no'
+      })
+    ).rejects.toThrow('HERDR_ACP_PERMISSION_DENIED')
+    expect(fileWrite).toHaveBeenCalledTimes(1)
+
+    // Foreign terminal fails closed without prompting for permission (including terminal/kill).
+    onPermissionRequest.mockClear()
+    await expect(
+      capturedOnRequest!('terminal/output', {
+        sessionId: 'test-session-123',
+        terminalId: 't-foreign'
+      })
+    ).rejects.toThrow('HERDR_ACP_TERMINAL_FORBIDDEN')
+    await expect(
+      capturedOnRequest!('terminal/kill', {
+        sessionId: 'test-session-123',
+        terminalId: 't-foreign'
+      })
+    ).rejects.toThrow('HERDR_ACP_TERMINAL_FORBIDDEN')
+    expect(onPermissionRequest).not.toHaveBeenCalled()
+
+    // Owned terminal/kill still routes through onPermissionRequest and fails closed when denied.
+    await expect(
+      capturedOnRequest!('terminal/kill', {
+        sessionId: 'test-session-123',
+        terminalId: 't77'
+      })
+    ).rejects.toThrow('HERDR_ACP_PERMISSION_DENIED')
+    expect(onPermissionRequest).toHaveBeenCalledTimes(1)
+
+    releasePrompt?.()
+    await expect(runPromise).resolves.toMatchObject({ output: 'bridged' })
+    expect(bridge.isDisposed).toBe(true)
+  })
+
+  it('fails closed on mutating Herdr ACP requests when onPermissionRequest is missing and omits clientCapabilities without a bridge', async () => {
+    const fileWrite = vi.fn()
+    const fakePlane = {
+      files: { read: vi.fn(), write: fileWrite, edit: vi.fn() },
+      terminals: { run: vi.fn() }
+    } as unknown as HerdrRuntimePlane
+    const bridge = new DefaultHerdrAcpCapabilityBridge({ plane: fakePlane })
+
+    let releasePrompt: (() => void) | undefined
+    mockSession.promptStream.mockImplementationOnce(
+      async function* (): AsyncIterable<OmpStreamEvent> {
+        await new Promise<void>((resolve) => {
+          releasePrompt = resolve
+        })
+        yield { type: 'delta', text: 'done' }
+      }
+    )
+
+    const host = new OmpAgentRuntimeHost({
+      resolveHerdrCapabilityBridge: () => bridge
+    })
+    const runPromise = host.execute(createPayload())
+    await new Promise((resolve) => setTimeout(resolve, 15))
+
+    await expect(
+      capturedOnRequest!('fs/write_text_file', {
+        sessionId: 'test-session-123',
+        path: '/tmp/no-handler.txt',
+        content: 'blocked'
+      })
+    ).rejects.toThrow('HERDR_ACP_PERMISSION_DENIED')
+    expect(fileWrite).not.toHaveBeenCalled()
+
+    releasePrompt?.()
+    await runPromise
+    expect(bridge.isDisposed).toBe(true)
+
+    // Without a bridge, clientCapabilities is omitted cleanly.
+    const plainHost = new OmpAgentRuntimeHost({ resolveHerdrCapabilityBridge: () => null })
+    await plainHost.execute(createPayload({ run: { ...createPayload().run, id: 'run-plain' } }))
+    expect(capturedClientCapabilities).toBeUndefined()
   })
 })

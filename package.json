@@ -17,6 +17,7 @@
     "sync:core-pkg": "node scripts/sync-core-package.mjs",
     "check": "node scripts/check.mjs",
     "plugins:validate": "tsx scripts/validate-plugin-package-policy.ts && node scripts/validate-plugins.mjs",
+    "plugins:pack:npm": "node scripts/pack-npm-plugins.mjs",
     "privacy:inventory:verify": "node scripts/verify-sensitive-data-inventory.mjs",
     "lint": "node scripts/lint.mjs",
     "lint:fix": "node scripts/lint.mjs --fix",

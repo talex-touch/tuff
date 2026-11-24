@@ -18,9 +18,19 @@ describe('privileged plugin capabilities', () => {
     expect(isPrivilegedPluginFor('browserOpen', 'touch-window-manager')).toBe(false)
   })
 
-  it('admits any valid plugin name when sdkapi >= HOST_CAPABILITY_OPEN_MIN_SDK (261011)', () => {
-    expect(isPrivilegedPluginFor('browserOpen', 'custom-external-plugin', 261011)).toBe(true)
-    expect(isPrivilegedPluginFor('browserOpen', 'custom-external-plugin', 261001)).toBe(false)
+  it('stays strictly name-gated even when a caller declares sdkapi 261011', () => {
+    const checkWithExtraArg = isPrivilegedPluginFor as (
+      capability: keyof typeof PRIVILEGED_PLUGIN_CAPABILITIES,
+      pluginName: string | undefined,
+      sdkapi?: number
+    ) => boolean
+    for (const capability of Object.keys(PRIVILEGED_PLUGIN_CAPABILITIES) as Array<
+      keyof typeof PRIVILEGED_PLUGIN_CAPABILITIES
+    >) {
+      expect(isPrivilegedPluginFor(capability, 'custom-external-plugin')).toBe(false)
+      expect(checkWithExtraArg(capability, 'custom-external-plugin', 261011)).toBe(false)
+      expect(checkWithExtraArg(capability, 'custom-external-plugin', 261001)).toBe(false)
+    }
   })
 
   // The failure mode worth guarding: a capability that admits a plugin it was never granted to.

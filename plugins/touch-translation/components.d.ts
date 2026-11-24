@@ -14,8 +14,6 @@ declare module 'vue' {
     ProviderConfigModal: typeof import('./src/components/ProviderConfigModal.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    TheCounter: typeof import('./src/components/TheCounter.vue')['default']
-    TheFooter: typeof import('./src/components/TheFooter.vue')['default']
     TranslationCard: typeof import('./src/components/TranslationCard.vue')['default']
   }
 }

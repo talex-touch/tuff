@@ -1,6 +1,7 @@
 import type { PluginReleaseAudience } from '../../../utils/pluginReleaseEligibility'
-import type { DashboardPluginVersion } from '../../../utils/pluginsStore'
+import type { DashboardPlugin, DashboardPluginVersion } from '../../../utils/pluginsStore'
 import { createError } from 'h3'
+import { resolveStorePluginNpmMetadata, resolveStoreVersionNpmMetadata } from '../../../utils/pluginNpmMetadata'
 import { getPluginBySlug } from '../../../utils/pluginsStore'
 import { resolvePluginStoreAudience } from '../../../utils/pluginStoreAccess'
 
@@ -12,7 +13,12 @@ function buildStoreDownloadUrl(slug: string, version: string, audience: PluginRe
 /**
  * Clean version object for store API response
  */
-function cleanVersionForStore(slug: string, version: DashboardPluginVersion, audience: PluginReleaseAudience) {
+function cleanVersionForStore(
+  plugin: DashboardPlugin,
+  version: DashboardPluginVersion,
+  audience: PluginReleaseAudience,
+) {
+  const npm = resolveStoreVersionNpmMetadata(plugin, version)
   return {
     id: version.id,
     pluginId: version.pluginId,
@@ -21,7 +27,7 @@ function cleanVersionForStore(slug: string, version: DashboardPluginVersion, aud
     artifactSha256: version.artifactSha256,
     nexusAttestation: version.nexusAttestation,
     availability: 'available' as const,
-    packageUrl: buildStoreDownloadUrl(slug, version.version, audience),
+    packageUrl: buildStoreDownloadUrl(plugin.slug, version.version, audience),
     packageSize: version.packageSize,
     readmeMarkdown: version.readmeMarkdown ?? null,
     manifest: version.manifest,
@@ -29,6 +35,7 @@ function cleanVersionForStore(slug: string, version: DashboardPluginVersion, aud
     status: version.status,
     createdAt: version.createdAt,
     updatedAt: version.updatedAt,
+    ...(npm ? { npm } : {}),
   }
 }
 
@@ -50,6 +57,7 @@ export default defineEventHandler(async (event) => {
 
   const versions = plugin.versions ?? []
   const latest = versions.find(v => v.id === plugin.latestVersionId) ?? versions[0]
+  const npm = resolveStorePluginNpmMetadata(plugin, latest)
 
   return {
     plugin: {
@@ -67,10 +75,11 @@ export default defineEventHandler(async (event) => {
       createdAt: plugin.createdAt,
       updatedAt: plugin.updatedAt,
       readmeMarkdown: plugin.readmeMarkdown ?? null,
-      latestVersion: latest ? cleanVersionForStore(plugin.slug, latest, audience) : null,
-      versions: versions.map(version => cleanVersionForStore(plugin.slug, version, audience)),
+      latestVersion: latest ? cleanVersionForStore(plugin, latest, audience) : null,
+      versions: versions.map(version => cleanVersionForStore(plugin, version, audience)),
       // Use relative path for readme URL
       readmeUrl: plugin.readmeMarkdown ? `/api/store/plugins/${plugin.slug}/readme` : null,
+      ...(npm ? { npm } : {}),
     },
   }
 })

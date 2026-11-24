@@ -1,10 +1,59 @@
 {
   "name": "@talex-touch/touch-system-actions-plugin",
   "private": true,
-  "version": "1.0.0",
-  "packageManager": "pnpm@10.34.4",
+  "version": "1.0.1",
+  "description": "系统高级控制：关机 / 重启 / 锁屏 / 音量 / 亮度",
+  "license": "MIT",
+  "packageManager": "pnpm@11.24.0",
+  "keywords": [
+    "tuff-plugin",
+    "utilities",
+    "system-actions",
+    "power",
+    "audio",
+    "display"
+  ],
+  "main": "./index.js",
+  "engines": {
+    "tuff": ">=261011"
+  },
   "scripts": {
     "test": "node --test index.test.cjs",
     "build": "node ../../packages/tuff-cli/bin/tuff.js builder"
+  },
+  "tuff": {
+    "schemaVersion": 1,
+    "id": "com.tuffex.system-actions",
+    "name": "touch-system-actions",
+    "displayName": {
+      "en": "System Actions",
+      "zh": "系统操作"
+    },
+    "sdkapi": 261011,
+    "category": "utilities",
+    "icon": {
+      "type": "file",
+      "value": "assets/logo.svg"
+    },
+    "permissions": {
+      "required": [
+        "search.root-results"
+      ],
+      "optional": [
+        "system.shell"
+      ]
+    },
+    "platforms": {
+      "win32": true,
+      "darwin": true,
+      "linux": false
+    },
+    "surface": "prelude",
+    "manifest": "./manifest.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "plugins/touch-system-actions"
   }
 }

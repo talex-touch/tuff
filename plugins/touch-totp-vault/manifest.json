@@ -1,0 +1,139 @@
+{
+  "id": "com.tuffex.touch-totp-vault",
+  "name": "touch-totp-vault",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 261011,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": {
+    "default": "本地 2FA 动态令牌库：遵循 RFC 6238 / RFC 4226 生成实时 TOTP 验证码，密钥仅存于宿主加密 Secret 存储",
+    "locales": {
+      "zh-CN": "本地 2FA 动态令牌库：遵循 RFC 6238 / RFC 4226 生成实时 TOTP 验证码，密钥仅存于宿主加密 Secret 存储",
+      "en-US": "Local RFC 6238 / RFC 4226 2FA TOTP Authenticator with fail-closed encrypted secret storage and gated clipboard copy"
+    }
+  },
+  "main": "index.js",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  },
+  "permissions": {
+    "required": [
+      "storage.plugin",
+      "search.root-results"
+    ],
+    "optional": [
+      "clipboard.write"
+    ]
+  },
+  "permissionReasons": {
+    "storage.plugin": {
+      "default": "通过宿主加密 Secret 存储保存 2FA 密钥，并在插件存储中保存脱敏后的账户名称与算法配置",
+      "locales": {
+        "zh-CN": "通过宿主加密 Secret 存储保存 2FA 密钥，并在插件存储中保存脱敏后的账户名称与算法配置",
+        "en-US": "Store 2FA seeds exclusively in the host encrypted secret store and save sanitized non-secret account metadata locally"
+      }
+    },
+    "clipboard.write": {
+      "default": "在用户触发复制动作时将当前 2FA 验证码写入剪贴板",
+      "locales": {
+        "zh-CN": "在用户触发复制动作时将当前 2FA 验证码写入剪贴板",
+        "en-US": "Copy the current 2FA TOTP code to your clipboard when requested"
+      }
+    },
+    "search.root-results": {
+      "default": "Push touch-totp-vault entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 touch-totp-vault 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push touch-totp-vault entries into CoreBox root search results"
+      }
+    }
+  },
+  "searchProviders": [
+    {
+      "id": "touch-totp-vault.totp-vault",
+      "displayName": "2FA 动态令牌库",
+      "featureId": "totp-vault",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 88,
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
+  "features": [
+    {
+      "id": "totp-vault",
+      "name": {
+        "default": "2FA 动态令牌库",
+        "locales": {
+          "zh-CN": "2FA 动态令牌库",
+          "en-US": "2FA TOTP Vault"
+        }
+      },
+      "desc": {
+        "default": "纯本地 RFC 6238 TOTP 动态验证码管理，支持 otpauth:// 导入与倒计时进度条",
+        "locales": {
+          "zh-CN": "纯本地 RFC 6238 TOTP 动态验证码管理，支持 otpauth:// 导入与倒计时进度条",
+          "en-US": "Local RFC 6238 TOTP authenticator with otpauth:// import, live countdown bar, and fail-closed secret storage"
+        }
+      },
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": [
+        "totp",
+        "2fa",
+        "otp",
+        "mfa",
+        "auth",
+        "authenticator",
+        "vault",
+        "security",
+        "otpauth",
+        "验证码",
+        "令牌",
+        "动态码",
+        "两步验证"
+      ],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": [
+        "text"
+      ],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": [
+            "totp",
+            "2fa",
+            "otp",
+            "mfa",
+            "auth",
+            "vault",
+            "验证码",
+            "令牌",
+            "动态码"
+          ]
+        }
+      ]
+    }
+  ]
+}

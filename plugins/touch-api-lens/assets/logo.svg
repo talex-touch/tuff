@@ -1,0 +1,19 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="api-lens-bg" x1="12" y1="8" x2="116" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#1E293B"/>
+    </linearGradient>
+    <linearGradient id="api-lens-ring" x1="28" y1="24" x2="96" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#818CF8"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#api-lens-bg)"/>
+  <circle cx="58" cy="58" r="30" stroke="url(#api-lens-ring)" stroke-width="8"/>
+  <path d="M80 80L102 102" stroke="#38BDF8" stroke-width="10" stroke-linecap="round"/>
+  <path d="M47 51L39 58L47 65" stroke="#34D399" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M69 51L77 58L69 65" stroke="#34D399" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M61 48L55 68" stroke="#F8FAFC" stroke-width="4.5" stroke-linecap="round"/>
+  <circle cx="96" cy="30" r="7" fill="#34D399"/>
+</svg>

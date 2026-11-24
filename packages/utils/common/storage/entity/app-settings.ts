@@ -67,6 +67,17 @@ export function normalizeCoreBoxQuickSelectAction(value: unknown): CoreBoxQuickS
   return value === 'execute' || value === 'locate' ? value : DEFAULT_CORE_BOX_QUICK_SELECT_ACTION
 }
 
+/**
+ * Whether interrupted conversations, background agent runs, automations, and crashed windows
+ * automatically recover on startup.
+ *
+ * Enabled by default so profiles saved before this key existed recover automatically; only an
+ * explicit `false` disables startup recovery.
+ */
+export function normalizeAutoResumeOnStartup(value: unknown): boolean {
+  return value !== false
+}
+
 /** Default layout atom for 'simple' preset */
 const defaultLayoutAtomSimple: LayoutAtomConfig = {
   preset: 'simple',
@@ -240,6 +251,7 @@ const _appSettingOriginData = {
     voiceQuickEdit: false,
     omniPanel: false,
     browserWorkspace: true,
+    herdrRuntime: true,
   },
   omniPanel: {
     enableShortcut: false,
@@ -265,6 +277,12 @@ const _appSettingOriginData = {
       'kiro': { enabled: false, executableOverride: '' },
       'cursor': { enabled: false, executableOverride: '' },
     },
+  },
+  herdrCore: {
+    autoStart: true,
+    socketPath: '',
+    session: 'default',
+    binaryPath: '',
   },
   voiceWake: {
     enabled: false,
@@ -429,6 +447,11 @@ const _appSettingOriginData = {
      * at the bottom of assistant message bubbles.
      */
     showTurnMetrics: true,
+    /**
+     * Whether interrupted conversations, background agent runs, automations, and crashed windows
+     * automatically recover on startup.
+     */
+    autoResumeOnStartup: true,
   },
   dashboard: {
     enable: false,
@@ -701,6 +724,39 @@ export function normalizeLocalAiCliSetting(
         ? source.terminalFontFamily
         : fallback.terminalFontFamily,
     providers,
+  }
+}
+
+export interface HerdrCoreSettings {
+  autoStart: boolean
+  socketPath: string
+  session: string
+  binaryPath: string
+}
+
+export const DEFAULT_HERDR_CORE_SETTINGS: Readonly<HerdrCoreSettings> = Object.freeze({
+  autoStart: true,
+  socketPath: '',
+  session: 'default',
+  binaryPath: '',
+})
+
+export function normalizeHerdrCoreSettings(value: unknown): HerdrCoreSettings {
+  const source = isSettingRecord(value) ? value : {}
+  const session = typeof source.session === 'string' && source.session.trim()
+    ? source.session.trim()
+    : DEFAULT_HERDR_CORE_SETTINGS.session
+  return {
+    autoStart: typeof source.autoStart === 'boolean'
+      ? source.autoStart
+      : DEFAULT_HERDR_CORE_SETTINGS.autoStart,
+    socketPath: typeof source.socketPath === 'string'
+      ? source.socketPath.trim()
+      : DEFAULT_HERDR_CORE_SETTINGS.socketPath,
+    session,
+    binaryPath: typeof source.binaryPath === 'string'
+      ? source.binaryPath.trim()
+      : DEFAULT_HERDR_CORE_SETTINGS.binaryPath,
   }
 }
 

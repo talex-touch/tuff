@@ -11,6 +11,11 @@
   },
   "description": "快速链接：手动收藏、置顶链接、最近使用与快速打开",
   "main": "index.js",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  },
   "permissions": {
     "required": ["search.root-results", "storage.plugin"],
     "optional": ["clipboard.write", "network.internet"]
@@ -25,6 +30,7 @@
     {
       "id": "touch-browser-bookmarks.quicklinks",
       "displayName": "手动快速链接",
+      "featureId": "browser-bookmarks",
       "kind": "quicklink",
       "owner": "official-plugin",
       "mode": "push",

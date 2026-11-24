@@ -141,17 +141,7 @@ export const COVERAGE = [
  * fails, so it cannot outlive the problem it describes -- an exemption list that can only be
  * appended to is how a gate becomes decoration.
  */
-export const KNOWN_ORPHANS = [
-  {
-    file: 'plugins/touch-music/src/components/music/word-lyric/WordLyricScroller.test.ts',
-    reason:
-      'The plugin declares no test script and the file cannot run: `Failed to resolve import '
-      + '"@vue/test-utils"`, which is not among its two devDependencies. Wiring it in means adding '
-      + 'a dependency and a script, which is a lockfile change and not this check\'s business. '
-      + 'Untouched since c6de5d63d (2026-07-12).',
-    issue: 330,
-  },
-]
+export const KNOWN_ORPHANS = []
 
 export function partitionKnown(orphans, known = KNOWN_ORPHANS) {
   const knownFiles = new Set(known.map(entry => entry.file))

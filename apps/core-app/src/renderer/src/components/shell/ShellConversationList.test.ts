@@ -102,7 +102,13 @@ vi.mock('@talex-touch/tuffex/skeleton', () => ({
     setup() {
       return () => h('div', { class: 'tx-skeleton' })
     }
-  })
+  }),
+  TxRowSkeleton: {
+    name: 'TxRowSkeleton',
+    render() {
+      return h('div', { class: 'tx-row-skeleton' })
+    }
+  }
 }))
 
 /**
@@ -278,6 +284,12 @@ vi.mock('./ShellSearchEntry.vue', () => ({
 }))
 vi.mock('./ShellNavGroup.vue', () => ({ default: defineComponent({ name: 'ShellNavGroup' }) }))
 vi.mock('./ShellBackRow.vue', () => ({ default: defineComponent({ name: 'ShellBackRow' }) }))
+vi.mock('./ShellSidebarHerdrSection.vue', () => ({
+  default: {
+    name: 'ShellSidebarHerdrSection',
+    render: () => null
+  }
+}))
 
 vi.mock('~/modules/layout/useShellSidebar', () => {
   sidebarHolder.collapsed = ref(false)

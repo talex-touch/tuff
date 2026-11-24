@@ -1,0 +1,136 @@
+{
+  "id": "com.tuffex.touch-svg-craft",
+  "name": "touch-svg-craft",
+  "displayName": {
+    "default": "SVG Craft",
+    "locales": {
+      "zh-CN": "SVG 矢量工坊",
+      "en-US": "SVG Craft"
+    }
+  },
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 261011,
+  "category": "design",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": {
+    "default": "SVG 矢量图标与优化工坊：内置 86 枚清晰矢量图标、SVG 压缩去冗余与规范化、一键转 Raw SVG / Vue 3 SFC / React JSX / CSS Data URI / Base64",
+    "locales": {
+      "zh-CN": "SVG 矢量图标与优化工坊：内置 86 枚清晰矢量图标、SVG 压缩去冗余与规范化、一键转 Raw SVG / Vue 3 SFC / React JSX / CSS Data URI / Base64",
+      "en-US": "Curated 86-icon crisp vector browser across UI/Dev/Media/Nav/Status, SVG optimizer & normalizer, and one-click Raw SVG / Vue 3 SFC / React JSX / CSS Data URI / Base64 converter"
+    }
+  },
+  "main": "index.js",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  },
+  "permissions": {
+    "required": [
+      "search.root-results"
+    ],
+    "optional": [
+      "clipboard.write"
+    ]
+  },
+  "permissionReasons": {
+    "clipboard.write": {
+      "default": "将 SVG 图标、优化后的 SVG、Vue 3 SFC、React JSX、CSS Data URI 或 Base64 复制到剪贴板",
+      "locales": {
+        "zh-CN": "将 SVG 图标、优化后的 SVG、Vue 3 SFC、React JSX、CSS Data URI 或 Base64 复制到剪贴板",
+        "en-US": "Copy vector icons, optimized SVG, Vue 3 SFC, React JSX, CSS Data URI, or Base64 output to the clipboard"
+      }
+    },
+    "search.root-results": {
+      "default": "Push SVG Craft entries into CoreBox root search results",
+      "locales": {
+        "zh-CN": "将 SVG 矢量工坊 结果推送到 CoreBox 根搜索结果",
+        "en-US": "Push SVG Craft entries into CoreBox root search results"
+      }
+    }
+  },
+  "searchProviders": [
+    {
+      "id": "touch-svg-craft.svg-craft",
+      "displayName": "SVG Craft",
+      "featureId": "svg-craft",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "permissionScopes": [
+        "root-results"
+      ],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
+  "features": [
+    {
+      "id": "svg-craft",
+      "name": {
+        "default": "SVG 矢量工坊",
+        "locales": {
+          "zh-CN": "SVG 矢量工坊",
+          "en-US": "SVG Craft"
+        }
+      },
+      "desc": {
+        "default": "86 枚内置矢量图标检索、SVG 压缩规范化与 Vue/React/Data URI/Base64 转换",
+        "locales": {
+          "zh-CN": "86 枚内置矢量图标检索、SVG 压缩规范化与 Vue/React/Data URI/Base64 转换",
+          "en-US": "Browse 86 crisp vector icons, optimize & normalize SVG, and convert to Raw SVG, Vue 3 SFC, React JSX, CSS Data URI, or Base64"
+        }
+      },
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": [
+        "svg",
+        "icon",
+        "icons",
+        "vector",
+        "svgo",
+        "jsx-svg",
+        "vue",
+        "react",
+        "data-uri",
+        "图标",
+        "矢量",
+        "svg优化"
+      ],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": [
+        "text"
+      ],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": [
+            "svg",
+            "icon",
+            "icons",
+            "vector",
+            "svgo",
+            "jsx-svg",
+            "图标",
+            "矢量",
+            "svg优化"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -23,6 +23,7 @@ import ShellConversationList from './ShellConversationList.vue'
 import ShellNavGroup from './ShellNavGroup.vue'
 import ShellNavItem from './ShellNavItem.vue'
 import ShellSearchEntry from './ShellSearchEntry.vue'
+import ShellSidebarHerdrSection from './ShellSidebarHerdrSection.vue'
 import ShellUpdateNotice from './ShellUpdateNotice.vue'
 /** How long the rail snap animates. Short enough to still feel like a latch, not a slide. */
 const SNAP_DURATION = 200
@@ -53,6 +54,7 @@ const contextTransition = computed(() =>
 )
 
 const browserEnabled = computed(() => isBetaFeatureEnabled(appSetting, 'browserWorkspace'))
+const herdrEnabled = computed(() => isBetaFeatureEnabled(appSetting, 'herdrRuntime'))
 const browserSdk = createBrowserSdk(transport)
 const browserState = shallowRef<BrowserWorkspaceState | null>(null)
 let unsubBrowser: (() => void) | undefined
@@ -284,6 +286,8 @@ onMounted(() => {
         </nav>
 
         <ShellConversationList />
+
+        <ShellSidebarHerdrSection v-if="herdrEnabled" />
 
         <div class="ShellSidebar-Spacer" />
 

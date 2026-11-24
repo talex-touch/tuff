@@ -84,6 +84,15 @@ export interface CliWorktreeRequestOptions {
   forceCleanup?: boolean
 }
 
+/**
+ * Host-internal execution options owned by Main (`AiCliOrchestrator`).
+ * Never parsed from untrusted renderer/plugin `request.metadata`.
+ */
+export interface CliExecuteRuntimeOptions {
+  reattachWorktreeId?: string
+  resumedFromInterruption?: boolean
+}
+
 export interface CliPermissionRequestContext {
   runId: string
   kind: CliRuntimeKind
@@ -96,6 +105,7 @@ export interface CliPermissionRequestContext {
 export interface CliAgentRuntimeHostOptions {
   onEvent?: (event: PiRuntimeRunEvent) => void | Promise<void>
   onRecord?: (runId: string, record: PiRuntimeRunRecord) => void | Promise<void>
+  onWorktreeBound?: (runId: string, lease: WorktreeLease) => void | Promise<void>
   resolveMcpServers?: (
     payload: PiRuntimeStartPayload,
     workspace?: PiWorkspaceAuthority

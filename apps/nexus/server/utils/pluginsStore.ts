@@ -20,6 +20,11 @@ import { readCloudflareBindings } from './cloudflare'
 import { deleteImage, uploadImageFromBuffer } from './imageStorage'
 import { recordPlatformGovernanceEvent } from './platformGovernanceStore'
 import { deletePluginPackage, uploadPluginPackage } from './pluginPackageStorage'
+import {
+  normalizeStoredOptionalText,
+  parsePluginNpmMetadata,
+  parsePluginVersionNpmMetadata,
+} from './pluginNpmMetadata'
 import { evaluatePluginReleaseEligibility } from './pluginReleaseEligibility'
 import { listActivePluginSecurityScanWaivers } from './pluginSecurityScanWaiverStore'
 import { createPluginAdmissionAttestation, verifyPluginPublisherSignature } from './pluginSigning'
@@ -234,6 +239,10 @@ export interface DashboardPluginVersion {
   securityRuleSetVersion?: string | null
   securityScanFindingCount?: number | null
   securityScanCompletedAt?: string | null
+  npmPackageName?: string | null
+  npmRegistry?: string | null
+  npmIntegrity?: string | null
+  npmTarballSha256?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -275,6 +284,8 @@ export interface DashboardPlugin {
   hasReadme?: boolean
   iconKey?: string | null
   iconUrl?: string | null
+  npmPackageName?: string | null
+  npmRegistry?: string | null
   createdAt: string
   updatedAt: string
   latestVersionId?: string | null
@@ -307,6 +318,8 @@ interface D1PluginRow {
   has_readme?: number | null
   icon_key: string | null
   icon_url: string | null
+  npm_package_name?: string | null
+  npm_registry?: string | null
   created_at: string
   updated_at: string
   latest_version_id: string | null
@@ -349,6 +362,10 @@ interface D1PluginVersionRow {
   security_rule_set_version?: string | null
   security_scan_finding_count?: number | null
   security_scan_completed_at?: string | null
+  npm_package_name?: string | null
+  npm_registry?: string | null
+  npm_integrity?: string | null
+  npm_tarball_sha256?: string | null
   created_at: string
   updated_at: string
 }
@@ -447,6 +464,8 @@ interface CreatePluginInput {
   readmeMarkdown?: string
   iconKey?: string | null
   iconUrl?: string | null
+  npmPackageName?: string | null
+  npmRegistry?: string | null
   status?: PluginStatus
 }
 
@@ -468,6 +487,10 @@ interface PublishVersionInput {
   canModerate?: boolean
   homepage?: string | null
   iconFile?: File
+  npmPackageName?: string | null
+  npmRegistry?: string | null
+  npmIntegrity?: string | null
+  npmTarballSha256?: string | null
 }
 
 interface ReeditVersionInput {
@@ -481,6 +504,10 @@ interface ReeditVersionInput {
   changelog: string
   updatedBy: string
   canModerate?: boolean
+  npmPackageName?: string | null
+  npmRegistry?: string | null
+  npmIntegrity?: string | null
+  npmTarballSha256?: string | null
 }
 
 function sanitizeSerializable(value: unknown): unknown {
@@ -527,6 +554,10 @@ function sanitizeVersion(version: DashboardPluginVersion): DashboardPluginVersio
   return {
     ...version,
     manifest: sanitizeManifest(version.manifest ?? undefined),
+    npmPackageName: normalizeStoredOptionalText(version.npmPackageName),
+    npmRegistry: normalizeStoredOptionalText(version.npmRegistry),
+    npmIntegrity: normalizeStoredOptionalText(version.npmIntegrity),
+    npmTarballSha256: normalizeStoredOptionalText(version.npmTarballSha256),
   }
 }
 
@@ -574,6 +605,8 @@ const PLUGIN_SCHEMA = defineD1Schema('plugins', {
         readme_markdown TEXT,
         icon_key TEXT,
         icon_url TEXT,
+        npm_package_name TEXT,
+        npm_registry TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         latest_version_id TEXT
@@ -615,6 +648,10 @@ const PLUGIN_SCHEMA = defineD1Schema('plugins', {
         security_rule_set_version TEXT,
         security_scan_finding_count INTEGER,
         security_scan_completed_at TEXT,
+        npm_package_name TEXT,
+        npm_registry TEXT,
+        npm_integrity TEXT,
+        npm_tarball_sha256 TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )`,
@@ -632,6 +669,7 @@ const PLUGIN_SCHEMA = defineD1Schema('plugins', {
         created_at TEXT NOT NULL
       )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_${PLUGINS_TABLE}_slug ON ${PLUGINS_TABLE}(slug)`,
+    `CREATE INDEX IF NOT EXISTS idx_${PLUGINS_TABLE}_npm_package_name ON ${PLUGINS_TABLE}(npm_package_name)`,
     `CREATE INDEX IF NOT EXISTS idx_${PLUGINS_TABLE}_store_status_created ON ${PLUGINS_TABLE}(status, created_at DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_${PLUGINS_TABLE}_store_status_category_created ON ${PLUGINS_TABLE}(status, category, created_at DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_${PLUGIN_VERSIONS_TABLE}_store_plugin_status_created ON ${PLUGIN_VERSIONS_TABLE}(plugin_id, status, created_at DESC)`,
@@ -666,6 +704,8 @@ const PLUGIN_SCHEMA = defineD1Schema('plugins', {
         { name: 'readme_markdown', ddl: 'readme_markdown TEXT' },
         { name: 'icon_key', ddl: 'icon_key TEXT' },
         { name: 'icon_url', ddl: 'icon_url TEXT' },
+        { name: 'npm_package_name', ddl: 'npm_package_name TEXT' },
+        { name: 'npm_registry', ddl: 'npm_registry TEXT' },
         { name: 'created_at', ddl: 'created_at TEXT' },
         { name: 'updated_at', ddl: 'updated_at TEXT' },
         { name: 'latest_version_id', ddl: 'latest_version_id TEXT' },
@@ -697,6 +737,10 @@ const PLUGIN_SCHEMA = defineD1Schema('plugins', {
         { name: 'security_rule_set_version', ddl: 'security_rule_set_version TEXT' },
         { name: 'security_scan_finding_count', ddl: 'security_scan_finding_count INTEGER' },
         { name: 'security_scan_completed_at', ddl: 'security_scan_completed_at TEXT' },
+        { name: 'npm_package_name', ddl: 'npm_package_name TEXT' },
+        { name: 'npm_registry', ddl: 'npm_registry TEXT' },
+        { name: 'npm_integrity', ddl: 'npm_integrity TEXT' },
+        { name: 'npm_tarball_sha256', ddl: 'npm_tarball_sha256 TEXT' },
       ],
     },
   ],
@@ -743,6 +787,10 @@ export const PLUGIN_VERSION_COLUMNS_WITHOUT_README = [
   'security_rule_set_version',
   'security_scan_finding_count',
   'security_scan_completed_at',
+  'npm_package_name',
+  'npm_registry',
+  'npm_integrity',
+  'npm_tarball_sha256',
   'created_at',
   'updated_at',
 ] as const
@@ -831,6 +879,8 @@ function mapPluginRow(row: D1PluginRow): DashboardPlugin {
     ...(row.has_readme == null ? {} : { hasReadme: Boolean(row.has_readme) }),
     iconKey: row.icon_key ?? row.icon ?? null,
     iconUrl: row.icon_url ?? row.image_url ?? null,
+    npmPackageName: normalizeStoredOptionalText(row.npm_package_name),
+    npmRegistry: normalizeStoredOptionalText(row.npm_registry),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     latestVersionId: row.latest_version_id,
@@ -882,6 +932,10 @@ function mapPluginVersionRow(row: D1PluginVersionRow): DashboardPluginVersion {
       ? null
       : Number(row.security_scan_finding_count),
     securityScanCompletedAt: row.security_scan_completed_at ?? null,
+    npmPackageName: normalizeStoredOptionalText(row.npm_package_name),
+    npmRegistry: normalizeStoredOptionalText(row.npm_registry),
+    npmIntegrity: normalizeStoredOptionalText(row.npm_integrity),
+    npmTarballSha256: normalizeStoredOptionalText(row.npm_tarball_sha256),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   })
@@ -957,6 +1011,12 @@ function validatePluginInput(input: CreatePluginInput, forUpdate = false) {
       throw createError({ statusCode: 400, statusMessage: 'Plugin homepage must be a valid URL.' })
     }
   }
+
+  const normalizedNpm = parsePluginNpmMetadata(input)
+  if (input.npmPackageName !== undefined)
+    input.npmPackageName = normalizedNpm.npmPackageName
+  if (input.npmRegistry !== undefined)
+    input.npmRegistry = normalizedNpm.npmRegistry
 }
 
 function validateChannel(channel: string): asserts channel is PluginChannel {
@@ -1421,6 +1481,8 @@ export async function listPlugins(event: H3Event | undefined, options: PluginVis
         icon_key,
         icon_url,
         image_url,
+        npm_package_name,
+        npm_registry,
         last_updated,
         version,
         created_at,
@@ -1488,6 +1550,8 @@ export async function listPlugins(event: H3Event | undefined, options: PluginVis
     slug: plugin.slug ?? plugin.id,
     artifactType: normalizeArtifactType(plugin.artifactType),
     status: (plugin.status ?? 'draft') as PluginStatus,
+    npmPackageName: normalizeStoredOptionalText(plugin.npmPackageName),
+    npmRegistry: normalizeStoredOptionalText(plugin.npmRegistry),
   }))
 
   const plugins = normalized
@@ -1555,6 +1619,7 @@ export async function searchStorePlugins(
         plugin.slug,
         plugin.summary,
         plugin.author?.name ?? '',
+        plugin.npmPackageName ?? '',
       ].join('\n').toLowerCase()
       return haystack.includes(keyword)
     })
@@ -1657,6 +1722,8 @@ export async function getPluginById(event: H3Event | undefined, id: string, opti
     artifactType: normalizeArtifactType(storedPlugin.artifactType),
     slug: storedPlugin.slug ?? storedPlugin.id,
     status: (storedPlugin.status ?? 'draft') as PluginStatus,
+    npmPackageName: normalizeStoredOptionalText(storedPlugin.npmPackageName),
+    npmRegistry: normalizeStoredOptionalText(storedPlugin.npmRegistry),
   }
   if (options.forStore && !pluginIsVisible(plugin, options))
     return null
@@ -1728,6 +1795,8 @@ export async function createPlugin(event: H3Event, input: CreatePluginInput & { 
     readmeMarkdown: input.readmeMarkdown ?? '',
     iconKey: input.iconKey ?? null,
     iconUrl: input.iconUrl ?? null,
+    npmPackageName: input.npmPackageName ?? null,
+    npmRegistry: input.npmRegistry ?? null,
     createdAt: now,
     updatedAt: now,
     latestVersionId: null,
@@ -1761,10 +1830,12 @@ export async function createPlugin(event: H3Event, input: CreatePluginInput & { 
         readme_markdown,
         icon_key,
         icon_url,
+        npm_package_name,
+        npm_registry,
         created_at,
         updated_at,
         latest_version_id
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?21, ?7, ?8, ?9, ?10, ?19, '', ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, NULL);
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?21, ?7, ?8, ?9, ?10, ?19, '', ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?22, ?23, ?19, ?20, NULL);
     `).bind(
       plugin.id,
       plugin.userId,
@@ -1787,6 +1858,8 @@ export async function createPlugin(event: H3Event, input: CreatePluginInput & { 
       plugin.createdAt,
       plugin.updatedAt,
       plugin.artifactType,
+      plugin.npmPackageName ?? null,
+      plugin.npmRegistry ?? null,
     ).run()
 
     await appendPluginTimelineEvent(event, {
@@ -1847,6 +1920,8 @@ export async function updatePlugin(event: H3Event, id: string, input: UpdatePlug
     readmeMarkdown: input.readmeMarkdown ?? existing.readmeMarkdown ?? '',
     iconKey: input.iconKey === undefined ? existing.iconKey ?? null : input.iconKey,
     iconUrl: input.iconUrl === undefined ? existing.iconUrl ?? null : input.iconUrl,
+    npmPackageName: input.npmPackageName === undefined ? existing.npmPackageName ?? null : input.npmPackageName,
+    npmRegistry: input.npmRegistry === undefined ? existing.npmRegistry ?? null : input.npmRegistry,
     status: input.status ?? existing.status,
   }
 
@@ -1859,6 +1934,8 @@ export async function updatePlugin(event: H3Event, id: string, input: UpdatePlug
     readmeMarkdown: merged.readmeMarkdown ?? '',
     iconKey: merged.iconKey ?? null,
     iconUrl: merged.iconUrl ?? null,
+    npmPackageName: merged.npmPackageName ?? null,
+    npmRegistry: merged.npmRegistry ?? null,
     status: merged.status ?? existing.status,
     updatedAt: new Date().toISOString(),
   }
@@ -1885,6 +1962,8 @@ export async function updatePlugin(event: H3Event, id: string, input: UpdatePlug
         image_url = ?12,
         icon_key = ?13,
         icon_url = ?14,
+        npm_package_name = ?18,
+        npm_registry = ?19,
         updated_at = ?15
       WHERE id = ?16;
     `).bind(
@@ -1905,6 +1984,8 @@ export async function updatePlugin(event: H3Event, id: string, input: UpdatePlug
       updated.updatedAt,
       updated.id,
       updated.artifactType,
+      updated.npmPackageName ?? null,
+      updated.npmRegistry ?? null,
     ).run()
 
     if (existing.iconKey && existing.iconKey !== updated.iconKey)
@@ -2614,6 +2695,8 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
   if (!input.changelog || !input.changelog.trim())
     throw createError({ statusCode: 400, statusMessage: 'Changelog is required.' })
 
+  const npmMetadata = parsePluginVersionNpmMetadata(input)
+
   const plugin = await getPluginById(event, input.pluginId)
 
   if (!plugin)
@@ -2846,6 +2929,10 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
     securityRuleSetVersion: metadata.securityScan.ruleSetVersion,
     securityScanFindingCount: metadata.securityScan.findings.length,
     securityScanCompletedAt: metadata.securityScan.completedAt,
+    npmPackageName: npmMetadata.npmPackageName,
+    npmRegistry: npmMetadata.npmRegistry,
+    npmIntegrity: npmMetadata.npmIntegrity,
+    npmTarballSha256: npmMetadata.npmTarballSha256,
     createdAt: now,
     updatedAt: now,
   }
@@ -2903,9 +2990,13 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
         security_rule_set_version,
         security_scan_finding_count,
         security_scan_completed_at,
+        npm_package_name,
+        npm_registry,
+        npm_integrity,
+        npm_tarball_sha256,
         created_at,
         updated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38);
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?39, ?40, ?41, ?42, ?37, ?38);
     `).bind(
       version.id,
       version.pluginId,
@@ -2945,6 +3036,10 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
       version.securityScanCompletedAt ?? null,
       version.createdAt,
       version.updatedAt,
+      version.npmPackageName ?? null,
+      version.npmRegistry ?? null,
+      version.npmIntegrity ?? null,
+      version.npmTarballSha256 ?? null,
     ).run()
 
     const latest = selectLatestVisibleVersion(
@@ -3057,6 +3152,13 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
   const nextChangelog = input.changelog.trim()
   if (!nextChangelog)
     throw createError({ statusCode: 400, statusMessage: 'Changelog is required.' })
+
+  const npmMetadata = parsePluginVersionNpmMetadata({
+    npmPackageName: input.npmPackageName === undefined ? targetVersion.npmPackageName ?? null : input.npmPackageName,
+    npmRegistry: input.npmRegistry === undefined ? targetVersion.npmRegistry ?? null : input.npmRegistry,
+    npmIntegrity: input.npmIntegrity === undefined ? targetVersion.npmIntegrity ?? null : input.npmIntegrity,
+    npmTarballSha256: input.npmTarballSha256 === undefined ? targetVersion.npmTarballSha256 ?? null : input.npmTarballSha256,
+  })
 
   const packageGovernanceResourceId = buildPluginPackageGovernanceResourceId({
     pluginId: plugin.id,
@@ -3232,6 +3334,10 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
     securityRuleSetVersion: metadata.securityScan.ruleSetVersion,
     securityScanFindingCount: metadata.securityScan.findings.length,
     securityScanCompletedAt: metadata.securityScan.completedAt,
+    npmPackageName: npmMetadata.npmPackageName,
+    npmRegistry: npmMetadata.npmRegistry,
+    npmIntegrity: npmMetadata.npmIntegrity,
+    npmTarballSha256: npmMetadata.npmTarballSha256,
     updatedAt: now,
   })
   updatedVersion.eligibilityReasons = [...getPluginVersionEligibility(plugin, updatedVersion, 'public').reasons]
@@ -3273,8 +3379,12 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
         security_rule_set_version = ?27,
         security_scan_finding_count = ?28,
         security_scan_completed_at = ?29,
+        npm_package_name = ?31,
+        npm_registry = ?32,
+        npm_integrity = ?33,
+        npm_tarball_sha256 = ?34,
         updated_at = ?30
-      WHERE id = ?31;
+      WHERE id = ?35;
     `).bind(
       updatedVersion.artifactSha256,
       updatedVersion.artifactSha256,
@@ -3306,6 +3416,10 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
       updatedVersion.securityScanFindingCount ?? null,
       updatedVersion.securityScanCompletedAt ?? null,
       updatedVersion.updatedAt,
+      updatedVersion.npmPackageName ?? null,
+      updatedVersion.npmRegistry ?? null,
+      updatedVersion.npmIntegrity ?? null,
+      updatedVersion.npmTarballSha256 ?? null,
       updatedVersion.id,
     ).run()
 

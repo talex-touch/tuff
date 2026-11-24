@@ -1,6 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import type { ProcessLifecycleController, StderrTailCollector } from './process-utils'
 import type {
+  AcpClientCapabilities,
   AcpClientInfo,
   AcpConfigOption,
   AcpInitializeParams,
@@ -81,7 +82,7 @@ export const DEFAULT_ACP_CLIENT_INFO: AcpClientInfo = {
   version: '1.0.0',
 }
 
-export const DEFAULT_ACP_CLIENT_CAPABILITIES: Record<string, unknown> = {
+export const DEFAULT_ACP_CLIENT_CAPABILITIES: AcpClientCapabilities = {
   fs: {
     readTextFile: false,
     writeTextFile: false,
@@ -735,7 +736,7 @@ export class AcpClient extends EventEmitter implements CliRuntimeClient {
       try {
         if (this.requestHandler) {
           const result = await this.requestHandler(method, params)
-          this.writeJsonRpcResponse({ jsonrpc: '2.0', id, result })
+          this.writeJsonRpcResponse({ jsonrpc: '2.0', id, result: result === undefined ? null : result })
           return
         }
         if (method === 'session/request_permission') {
@@ -783,10 +784,13 @@ export class AcpClient extends EventEmitter implements CliRuntimeClient {
           return
         }
         const message = err instanceof Error ? err.message : String(err)
+        const errorCode = typeof (err as { code?: unknown } | null)?.code === 'number'
+          ? (err as { code: number }).code
+          : -32603
         this.writeJsonRpcResponse({
           jsonrpc: '2.0',
           id,
-          error: { code: -32603, message },
+          error: { code: errorCode, message },
         })
       }
     })()
@@ -904,18 +908,24 @@ export class AcpClient extends EventEmitter implements CliRuntimeClient {
   async initialize(
     clientInfoOrParams?: AcpClientInfo | AcpInitializeParams,
     timeoutMs: number = DEFAULT_INIT_TIMEOUT_MS,
+    clientCapabilities?: AcpClientCapabilities,
   ): Promise<AcpInitializeResult> {
-    const initParams: AcpInitializeParams = isInitializeParams(clientInfoOrParams)
-      ? {
-          protocolVersion: clientInfoOrParams.protocolVersion ?? DEFAULT_ACP_PROTOCOL_VERSION,
-          clientCapabilities: clientInfoOrParams.clientCapabilities ?? DEFAULT_ACP_CLIENT_CAPABILITIES,
-          clientInfo: clientInfoOrParams.clientInfo,
-        }
-      : {
-          protocolVersion: DEFAULT_ACP_PROTOCOL_VERSION,
-          clientCapabilities: DEFAULT_ACP_CLIENT_CAPABILITIES,
-          clientInfo: clientInfoOrParams ?? DEFAULT_ACP_CLIENT_INFO,
-        }
+    let initParams: AcpInitializeParams
+    if (isInitializeParams(clientInfoOrParams)) {
+      const capabilities = clientCapabilities ?? clientInfoOrParams.clientCapabilities
+      initParams = {
+        protocolVersion: clientInfoOrParams.protocolVersion ?? DEFAULT_ACP_PROTOCOL_VERSION,
+        clientInfo: clientInfoOrParams.clientInfo,
+        ...(capabilities !== undefined ? { clientCapabilities: capabilities } : {}),
+      }
+    }
+    else {
+      initParams = {
+        protocolVersion: DEFAULT_ACP_PROTOCOL_VERSION,
+        clientInfo: clientInfoOrParams ?? DEFAULT_ACP_CLIENT_INFO,
+        ...(clientCapabilities !== undefined ? { clientCapabilities } : {}),
+      }
+    }
 
     const request = this.sendRequest<AcpInitializeResult>('initialize', initParams)
     const result = await withTimeout(
@@ -1045,7 +1055,9 @@ export class AcpClient extends EventEmitter implements CliRuntimeClient {
         {
           clientInfo: options.clientInfo ?? DEFAULT_ACP_CLIENT_INFO,
           protocolVersion: options.protocolVersion ?? DEFAULT_ACP_PROTOCOL_VERSION,
-          clientCapabilities: options.clientCapabilities ?? DEFAULT_ACP_CLIENT_CAPABILITIES,
+          ...(options.clientCapabilities !== undefined
+            ? { clientCapabilities: options.clientCapabilities }
+            : {}),
         },
         options.initTimeoutMs,
       )

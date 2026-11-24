@@ -783,7 +783,7 @@ describe('official simple Prelude isolation regression', () => {
     await expect(
       first.runtime.callLifecycle('onItemAction', [lockItem, { actionId: 'run-action' }]).promise
     ).resolves.toMatchObject({ status: 'started', success: true })
-    expect(first.state.systemActions).toEqual(['restart'])
+    expect(first.state.systemActions).toEqual(['lock-screen'])
     first.runtime.shutdown()
 
     const second = createHarness('touch-quick-actions', 2)

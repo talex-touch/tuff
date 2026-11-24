@@ -3,6 +3,7 @@ const { plugin, logger, TuffItemBuilder, clipboard, touchChannel } = globalThis
 const PLUGIN_NAME = 'touch-snippets'
 const SOURCE_ID = 'plugin-features'
 const STORE_FILE = 'snippets.json'
+const MAX_SNIPPETS = 256
 const ICON = { type: 'class', value: 'i-ri-file-copy-line' }
 const DEFAULT_SNIPPETS = [
   {
@@ -93,7 +94,7 @@ function parseStore(raw) {
   }
   const values = Array.isArray(raw?.snippets) ? raw.snippets : []
   const snippets = values
-    .slice(0, 256)
+    .slice(0, MAX_SNIPPETS)
     .map((entry, index) => normalizeSnippet(entry, `stored-${index}`))
     .filter(Boolean)
   return { snippets: snippets.length ? snippets : [...DEFAULT_SNIPPETS] }
@@ -101,7 +102,10 @@ function parseStore(raw) {
 
 async function ensureStore() {
   const existing = await plugin.storage.getFile(STORE_FILE)
-  if (!existing)
+  const hasStoredStore = typeof existing === 'string'
+    ? existing.trim().length > 0
+    : Boolean(existing && typeof existing === 'object' && !Array.isArray(existing) && Array.isArray(existing.snippets))
+  if (!hasStoredStore)
     await plugin.storage.setFile(STORE_FILE, { snippets: [...DEFAULT_SNIPPETS] })
 }
 
@@ -110,7 +114,43 @@ async function loadStore() {
 }
 
 async function saveStore(snippets) {
-  await plugin.storage.setFile(STORE_FILE, { snippets: snippets.slice(0, 256) })
+  await plugin.storage.setFile(STORE_FILE, { snippets: snippets.slice(0, MAX_SNIPPETS) })
+}
+
+async function saveNewSnippet(content) {
+  const { snippets } = await loadStore()
+  const id = nextId()
+  const created = normalizeSnippet({ id, type: 'text', title: content.slice(0, 48), content, tags: [] }, id)
+  const nextSnippets = [created, ...snippets].slice(0, MAX_SNIPPETS)
+  await saveStore(nextSnippets)
+  return created
+}
+
+async function recordSnippetUse(snippetId) {
+  const targetId = normalizeText(snippetId)
+  if (!targetId || typeof plugin?.storage?.getFile !== 'function' || typeof plugin?.storage?.setFile !== 'function')
+    return
+  try {
+    const { snippets } = await loadStore()
+    let updated = false
+    const now = Date.now()
+    const nextSnippets = snippets.map((snippet) => {
+      if (snippet.id !== targetId)
+        return snippet
+      updated = true
+      return {
+        ...snippet,
+        useCount: (Number.isSafeInteger(snippet.useCount) && snippet.useCount >= 0 ? snippet.useCount : 0) + 1,
+        lastUsedAt: now,
+        updatedAt: now,
+      }
+    })
+    if (updated)
+      await saveStore(nextSnippets)
+  }
+  catch {
+    logger?.warn?.('[touch-snippets] Failed to update snippet usage metadata')
+  }
 }
 
 function buildItem({ id, featureId, title, subtitle, actionId, payload, defaultAction }) {
@@ -131,18 +171,58 @@ function buildItem({ id, featureId, title, subtitle, actionId, payload, defaultA
 }
 
 function actionFailure(error, fallbackReason, fallbackMessage) {
-  const permissionDenied = error?.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
-  const unavailable = error?.code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE'
+  const code = error && typeof error === 'object' && typeof error.code === 'string' ? error.code : ''
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED') {
+    return {
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'permission-denied',
+      message: '缺少执行此操作所需的权限',
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE') {
+    return {
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'permission-unavailable',
+      message: '权限系统暂不可用',
+    }
+  }
+  if (code === 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED') {
+    return {
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'permission-check-failed',
+      message: '权限请求失败',
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE') {
+    return {
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'capability-unavailable',
+      message: '宿主能力暂不可用',
+    }
+  }
+  if (code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE') {
+    return {
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'host-unavailable',
+      message: '宿主服务暂不可用',
+    }
+  }
   return {
     externalAction: true,
     success: false,
     status: 'blocked',
-    reason: permissionDenied ? 'permission-denied' : unavailable ? 'host-unavailable' : fallbackReason,
-    message: permissionDenied
-      ? '缺少执行此操作所需的权限'
-      : unavailable
-        ? '宿主服务暂不可用'
-        : fallbackMessage,
+    reason: fallbackReason,
+    message: fallbackMessage,
   }
 }
 
@@ -181,7 +261,7 @@ async function showSearch(featureId, queryText) {
       title: snippet.title,
       subtitle: snippet.content,
       actionId: 'copy',
-      payload: { content: snippet.content },
+      payload: { snippetId: snippet.id, content: snippet.content },
       defaultAction: 'copy',
     }))
   if (!items.length) {
@@ -209,12 +289,12 @@ async function showSave(featureId, queryText) {
         payload: { content },
       })]
     : [buildItem({
-        id: `${featureId}-empty`,
+        id: `${featureId}-save-clipboard`,
         featureId,
-        title: '没有可保存的内容',
-        subtitle: '输入文本后再保存片段',
-        actionId: 'none',
-        defaultAction: 'none',
+        title: '保存剪贴板内容',
+        subtitle: '从当前剪贴板读取文本并保存为片段',
+        actionId: 'save-clipboard',
+        payload: { fromClipboard: true },
       })]
   await replaceItems(items)
 }
@@ -324,7 +404,8 @@ async function installCloudPackage(packageId) {
   const byId = new Map(snippets.map(entry => [entry.id, entry]))
   for (const entry of incoming)
     byId.set(entry.id, entry)
-  await saveStore([...byId.values()])
+  const merged = [...byId.values()]
+  await saveStore(merged.length > MAX_SNIPPETS ? merged.slice(-MAX_SNIPPETS) : merged)
   return response
 }
 
@@ -359,8 +440,42 @@ const pluginLifecycle = {
     const payload = item?.actions?.find(action => action?.id === actionId)?.payload || {}
     try {
       if (actionId === 'copy') {
+        if (typeof clipboard?.writeText !== 'function') {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'clipboard-unavailable',
+            message: '当前环境不支持写入剪贴板',
+          }
+        }
         const content = await resolveClipboardPlaceholders(normalizeText(payload.content))
         await clipboard.writeText(content)
+        if (payload.snippetId)
+          await recordSnippetUse(payload.snippetId)
+        return { externalAction: true, status: 'started' }
+      }
+      if (actionId === 'save-clipboard') {
+        if (typeof clipboard?.readText !== 'function') {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'clipboard-unavailable',
+            message: '当前环境不支持读取剪贴板',
+          }
+        }
+        const content = normalizeText(await clipboard.readText())
+        if (!content) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'empty-content',
+            message: '剪贴板为空，暂无可保存内容',
+          }
+        }
+        await saveNewSnippet(content)
         return { externalAction: true, status: 'started' }
       }
       if (actionId === 'add' || actionId === 'save') {
@@ -374,10 +489,7 @@ const pluginLifecycle = {
             message: '请输入要保存的内容',
           }
         }
-        const { snippets } = await loadStore()
-        const id = nextId()
-        snippets.push(normalizeSnippet({ id, type: 'text', title: content.slice(0, 48), content, tags: [] }, id))
-        await saveStore(snippets)
+        await saveNewSnippet(content)
         if (actionId === 'add')
           await showManager(featureId, '')
         return { externalAction: true, status: 'started' }

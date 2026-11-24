@@ -124,6 +124,10 @@ function stableFailure(error) {
     return { status: 'blocked', reason: 'permission-denied' }
   if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
     return { status: 'blocked', reason: 'permission-unavailable' }
+  if (code === 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED')
+    return { status: 'blocked', reason: 'permission-check-failed' }
+  if (code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE' || code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE')
+    return { status: 'blocked', reason: 'capability-unavailable' }
   if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED')
     return { status: 'cancelled', reason: 'cancelled' }
   if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT')
@@ -231,6 +235,11 @@ const pluginLifecycle = {
   },
 
   async onItemAction(item, context = {}) {
+    const candidateActionId = normalizeText(context?.actionId || item?.meta?.defaultAction)
+    if (!ACTIONS.has(candidateActionId))
+      return
+    if (item?.meta?.pluginName && item.meta.pluginName !== PLUGIN_NAME)
+      return
     const selected = selectedAction(item, context)
     if (!selected)
       return external({ status: 'blocked', reason: 'invalid-action' })

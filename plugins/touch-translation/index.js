@@ -75,6 +75,8 @@ function stableFailureCode(error) {
 
 function failureKind(error) {
   const code = stableFailureCode(error)
+  if (code.includes('PERMISSION_UNAVAILABLE'))
+    return { title: '翻译权限服务不可用', subtitle: '权限校验服务暂不可用，请稍后重试' }
   if (code.includes('PERMISSION'))
     return { title: '翻译权限未授予', subtitle: '请在插件权限设置中授予 intelligence.basic' }
   if (code.includes('CANCEL')) return { title: '翻译已取消', subtitle: '请求已安全停止' }
@@ -355,7 +357,7 @@ const lifecycle = {
         widgetError ||= failure.subtitle
         items.push(infoItem(`${featureId}-failed`, featureId, failure.title, failure.subtitle))
       }
-      const useWidget = featureId === 'touch-translate'
+      const useWidget = featureId === 'screenshot-translate'
       const published = await publish(
         featureId,
         requestId,
@@ -411,7 +413,16 @@ const lifecycle = {
       await clipboard.writeText(text)
       return { externalAction: true, status: 'started' }
     } catch (error) {
-      if (stableFailureCode(error).includes('PERMISSION')) {
+      const code = stableFailureCode(error)
+      if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE' || code.includes('PERMISSION_UNAVAILABLE')) {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: 'permission-unavailable',
+        }
+      }
+      if (code.includes('PERMISSION')) {
         return {
           externalAction: true,
           success: false,

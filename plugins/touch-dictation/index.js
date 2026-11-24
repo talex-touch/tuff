@@ -3,7 +3,7 @@
  *
  * All microphone, ASR and TTS work stays in the main-owned voice capability.
  */
-const { plugin, logger, clipboard, TuffItemBuilder } = globalThis
+const { plugin, logger, TuffItemBuilder } = globalThis
 
 const PLUGIN_NAME = 'touch-dictation'
 const SOURCE_ID = 'plugin-features'
@@ -11,12 +11,30 @@ const ICON = { type: 'class', value: 'i-ri-mic-line' }
 const FEATURE_DICTATE = 'dictate'
 const FEATURE_SPEAK = 'speak'
 const RECORDING_ITEM_ID = 'dictate-recording'
+const MAX_SPEAK_TEXT = 4000
+
+let destroyed = false
+let triggerGeneration = 0
+let dictationInFlight = false
+let activeStreamHandle = null
+let activeFinish = null
 
 function truncate(value, max = 80) {
   const text = String(value ?? '').trim()
   if (text.length <= max)
     return text
   return `${text.slice(0, max - 1)}…`
+}
+
+function extractSpeakQueryText(query) {
+  const raw = typeof query === 'string' ? query : (query?.text ?? query?.query ?? '')
+  const trimmed = String(raw ?? '').trim()
+  if (!trimmed)
+    return ''
+  const stripped = trimmed
+    .replace(/^(?:read\s+aloud|speak\s+aloud|tts|朗读|念)\s*[:：-]?\s*/i, '')
+    .trim()
+  return stripped ? stripped.slice(0, MAX_SPEAK_TEXT) : ''
 }
 
 function buildItem({ id, featureId, title, subtitle, actionId, payload }) {
@@ -41,12 +59,19 @@ function buildItem({ id, featureId, title, subtitle, actionId, payload }) {
   return builder.build()
 }
 
-async function publishItems(items) {
+async function publishItems(items, generation) {
+  if (destroyed || (generation !== undefined && generation !== triggerGeneration))
+    return false
   await plugin.feature.clearItems()
+  if (destroyed || (generation !== undefined && generation !== triggerGeneration))
+    return false
   await plugin.feature.pushItems(items)
+  return !destroyed && (generation === undefined || generation === triggerGeneration)
 }
 
-async function showRecording(title, subtitle) {
+async function showRecording(title, subtitle, generation) {
+  if (destroyed || (generation !== undefined && generation !== triggerGeneration))
+    return
   await publishItems([
     buildItem({
       id: RECORDING_ITEM_ID,
@@ -55,19 +80,89 @@ async function showRecording(title, subtitle) {
       subtitle,
       actionId: 'recording',
     }),
-  ])
+  ], generation)
+}
+
+async function safeShowRecording(title, subtitle, generation) {
+  try {
+    await showRecording(title, subtitle, generation)
+  }
+  catch {
+    logger?.warn?.('[touch-dictation] recording status update failed')
+  }
 }
 
 async function readClipboardText() {
+  const clipboardFacade = globalThis.clipboard
+  if (!clipboardFacade || typeof clipboardFacade.readText !== 'function')
+    return { ok: false, text: '', reason: 'clipboard-unavailable' }
   try {
-    return typeof clipboard?.readText === 'function'
-      ? String((await clipboard.readText()) ?? '').trim()
-      : ''
+    return {
+      ok: true,
+      text: String((await clipboardFacade.readText()) ?? '').trim(),
+      reason: '',
+    }
   }
-  catch {
-    logger?.warn?.('[touch-dictation] clipboard read failed')
-    return ''
+  catch (error) {
+    const code = error && typeof error === 'object' && typeof error.code === 'string' ? error.code : ''
+    const reason = code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
+      ? 'permission-denied'
+      : code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE'
+        ? 'permission-unavailable'
+        : code === 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED'
+          ? 'permission-check-failed'
+          : code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE' || code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE'
+            ? 'capability-unavailable'
+            : 'clipboard-read-failed'
+    logger?.warn?.(`[touch-dictation] ${reason}`)
+    return { ok: false, text: '', reason }
   }
+}
+
+function clipboardFailureItem(reason) {
+  if (reason === 'permission-denied') {
+    return buildItem({
+      id: 'speak-permission-denied',
+      featureId: FEATURE_SPEAK,
+      title: '缺少剪贴板读取权限',
+      subtitle: '请授予 clipboard.read 权限，或直接输入要朗读的文字 · permission-denied',
+      actionId: 'noop',
+    })
+  }
+  if (reason === 'permission-unavailable') {
+    return buildItem({
+      id: 'speak-permission-unavailable',
+      featureId: FEATURE_SPEAK,
+      title: '剪贴板权限不可用',
+      subtitle: '权限系统暂不可用 · permission-unavailable',
+      actionId: 'noop',
+    })
+  }
+  if (reason === 'permission-check-failed') {
+    return buildItem({
+      id: 'speak-permission-check-failed',
+      featureId: FEATURE_SPEAK,
+      title: '剪贴板权限校验失败',
+      subtitle: '无法确认剪贴板读取权限 · permission-check-failed',
+      actionId: 'noop',
+    })
+  }
+  if (reason === 'capability-unavailable' || reason === 'clipboard-unavailable') {
+    return buildItem({
+      id: 'speak-clipboard-unavailable',
+      featureId: FEATURE_SPEAK,
+      title: '剪贴板能力不可用',
+      subtitle: `当前环境未提供剪贴板读取能力 · ${reason}`,
+      actionId: 'noop',
+    })
+  }
+  return buildItem({
+    id: 'speak-clipboard-failed',
+    featureId: FEATURE_SPEAK,
+    title: '剪贴板读取失败',
+    subtitle: `无法读取剪贴板内容 · ${reason}`,
+    actionId: 'noop',
+  })
 }
 
 /**
@@ -81,12 +176,16 @@ async function readClipboardText() {
 function voiceFailure(error, fallbackReason, fallbackMessage) {
   const code = error && typeof error === 'object' && typeof error.code === 'string' ? error.code : ''
   if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED')
-    return failed('permission-denied', '缺少语音权限：请在系统设置中允许麦克风访问')
+    return failed('permission-denied', '缺少语音权限：请在系统设置中允许麦克风访问', 'blocked')
   if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
-    return failed('permission-unavailable', '权限系统不可用')
-  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED')
+    return failed('permission-unavailable', '权限系统不可用', 'blocked')
+  if (code === 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED')
+    return failed('permission-check-failed', '语音权限校验失败', 'blocked')
+  if (code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE' || code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE')
+    return failed('capability-unavailable', '语音能力不可用：当前环境未提供语音服务', 'blocked')
+  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED' || code === 'PLUGIN_HOST_REQUEST_CANCELLED')
     return failed('cancelled', '语音操作已取消', 'cancelled')
-  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT')
+  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT' || code === 'PLUGIN_HOST_REQUEST_TIMEOUT')
     return failed('timeout', '语音服务响应超时')
   return failed(fallbackReason, fallbackMessage)
 }
@@ -101,7 +200,7 @@ function failed(reason, message, status = 'failed') {
   }
 }
 
-async function dictate() {
+async function dictate(sessionGeneration) {
   if (!plugin.voice)
     throw Object.assign(new Error('voice capability unavailable'), { code: 'TUFF_VOICE_UNAVAILABLE' })
 
@@ -123,15 +222,21 @@ async function dictate() {
       if (settled)
         return
       settled = true
+      if (activeFinish === finish)
+        activeFinish = null
+      activeStreamHandle = null
       error ? reject(error) : resolve()
     }
+    activeFinish = finish
     Promise.resolve(
       plugin.voice.asrStream(
         { cleanup: true, delivery: 'active-app' },
         {
           onData: async (event) => {
+            if (destroyed || settled || sessionGeneration !== triggerGeneration)
+              return
             if (event?.type === 'partial' && event.text) {
-              await showRecording('🎙️ 识别中…', truncate(event.text, 120))
+              await safeShowRecording('🎙️ 识别中…', truncate(event.text, 120), sessionGeneration)
             }
             else if (event?.type === 'final') {
               finalText = String(event.text ?? '').trim()
@@ -142,16 +247,33 @@ async function dictate() {
           onEnd: () => finish(),
         },
       ),
-    ).catch(error => finish(error))
+    )
+      .then((handle) => {
+        if (destroyed && typeof handle?.cancel === 'function') {
+          Promise.resolve(handle.cancel()).catch(() => {})
+          return
+        }
+        if (!settled)
+          activeStreamHandle = handle
+      })
+      .catch(error => finish(error))
   })
   return { text: finalText, delivery }
 }
 
 async function onDictateAction() {
-  await showRecording('🎙️ 录音中…', '请说话，停顿后自动结束')
+  if (destroyed)
+    return failed('cancelled', '语音操作已取消', 'cancelled')
+  if (dictationInFlight)
+    return failed('dictation-in-progress', '正在录音中，请等待当前听写结束', 'blocked')
+  dictationInFlight = true
+  const sessionGeneration = triggerGeneration
   try {
-    const result = await dictate()
-    const text = truncate(result.text, 4000)
+    await safeShowRecording('🎙️ 录音中…', '请说话，停顿后自动结束', sessionGeneration)
+    const result = await dictate(sessionGeneration)
+    if (destroyed)
+      return failed('cancelled', '语音操作已取消', 'cancelled')
+    const text = truncate(result.text, MAX_SPEAK_TEXT)
     if (!text)
       return failed('no-speech-detected', '没有识别到语音，请靠近麦克风再试一次')
     if (!result.delivery || result.delivery.method === 'none')
@@ -171,9 +293,14 @@ async function onDictateAction() {
     logger?.error?.(`[touch-dictation] ${failure.reason}`)
     return failure
   }
+  finally {
+    dictationInFlight = false
+  }
 }
 
 async function onSpeakAction(text) {
+  if (destroyed)
+    return failed('cancelled', '语音操作已取消', 'cancelled')
   if (!text)
     return failed('no-text-to-speak', '没有可朗读的文字')
 
@@ -196,44 +323,89 @@ async function onSpeakAction(text) {
 }
 
 const lifecycle = {
-  async onFeatureTriggered(featureId, _query) {
-    if (featureId === FEATURE_DICTATE) {
-      await publishItems([
-        buildItem({
-          id: 'dictate-start',
-          featureId: FEATURE_DICTATE,
-          title: '语音听写',
-          subtitle: '按 Enter 开始说话 · 停顿后自动结束 · 润色后粘贴到当前应用',
-          actionId: 'start',
-        }),
-      ])
-      return true
-    }
+  async onFeatureTriggered(featureId, query) {
+    if (destroyed)
+      return false
+    if (featureId !== FEATURE_DICTATE && featureId !== FEATURE_SPEAK)
+      return false
+    const generation = ++triggerGeneration
+    try {
+      if (featureId === FEATURE_DICTATE) {
+        await publishItems([
+          buildItem({
+            id: 'dictate-start',
+            featureId: FEATURE_DICTATE,
+            title: '语音听写',
+            subtitle: '按 Enter 开始说话 · 停顿后自动结束 · 润色后粘贴到当前应用',
+            actionId: 'start',
+          }),
+        ], generation)
+        return true
+      }
 
-    if (featureId === FEATURE_SPEAK) {
-      const text = await readClipboardText()
+      const typedText = extractSpeakQueryText(query)
+      if (typedText) {
+        await publishItems([
+          buildItem({
+            id: 'speak-start',
+            featureId: FEATURE_SPEAK,
+            title: '🔊 朗读文本',
+            subtitle: truncate(typedText, 120),
+            actionId: 'speak',
+            payload: { text: typedText },
+          }),
+        ], generation)
+        return true
+      }
+
+      const clip = await readClipboardText()
+      if (destroyed || generation !== triggerGeneration)
+        return true
+      if (!clip.ok) {
+        await publishItems([clipboardFailureItem(clip.reason)], generation)
+        return true
+      }
       await publishItems([
-        text
+        clip.text
           ? buildItem({
               id: 'speak-start',
               featureId: FEATURE_SPEAK,
               title: '🔊 朗读剪贴板',
-              subtitle: truncate(text, 120),
+              subtitle: truncate(clip.text, 120),
               actionId: 'speak',
-              payload: { text },
+              payload: { text: clip.text },
             })
           : buildItem({
               id: 'speak-empty',
               featureId: FEATURE_SPEAK,
               title: '朗读剪贴板',
-              subtitle: '剪贴板为空 - 先复制一段文字再试',
+              subtitle: '剪贴板为空 - 先复制一段文字或直接输入文字再试',
               actionId: 'noop',
             }),
-      ])
+      ], generation)
       return true
     }
-
-    return false
+    catch (error) {
+      if (destroyed || generation !== triggerGeneration)
+        return true
+      const failure = voiceFailure(error, 'feature-trigger-failed', '功能加载失败，请重试')
+      logger?.error?.(`[touch-dictation] ${failure.reason}`)
+      try {
+        await publishItems([
+          buildItem({
+            id: `${featureId}-error`,
+            featureId,
+            title: featureId === FEATURE_SPEAK ? '朗读暂不可用' : '听写暂不可用',
+            subtitle: failure.message,
+            actionId: 'noop',
+          }),
+        ], generation)
+        return true
+      }
+      catch {
+        return false
+      }
+    }
   },
 
   async onItemAction(item, context = {}) {
@@ -246,6 +418,23 @@ const lifecycle = {
     }
     if (featureId === FEATURE_SPEAK && actionId === 'speak') {
       return onSpeakAction(action?.payload?.text ?? '')
+    }
+  },
+
+  onDestroy() {
+    destroyed = true
+    triggerGeneration += 1
+    const handle = activeStreamHandle
+    activeStreamHandle = null
+    const finish = activeFinish
+    activeFinish = null
+    if (typeof handle?.cancel === 'function') {
+      Promise.resolve(handle.cancel()).catch(() => {})
+    }
+    if (typeof finish === 'function') {
+      finish(Object.assign(new Error('VOICE_STREAM_CANCELLED'), {
+        code: 'PLUGIN_HOST_CAPABILITY_CANCELLED',
+      }))
     }
   },
 }

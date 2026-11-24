@@ -14,6 +14,7 @@ const builtInTargetDirs = [
   path.join(repoRoot, 'apps/core-app/tuff/modules/plugins/clipboard-history'),
   path.join(repoRoot, 'apps/core-app/resources/bundled-plugins/clipboard-history'),
 ]
+
 function uniq(values) {
   return [...new Set(values.filter(Boolean))]
 }
@@ -40,8 +41,23 @@ function getAppDataRoots() {
   return [process.env.XDG_CONFIG_HOME, path.join(os.homedir(), '.config')]
 }
 
-function getDevTargetCandidates() {
+function shouldSyncExternalTargets() {
+  return (
+    process.env.TUFF_CLIPBOARD_HISTORY_SYNC_EXTERNAL === '1'
+    || process.argv.includes('--external')
+    || Boolean(process.env.TUFF_CLIPBOARD_HISTORY_DEV_PLUGIN_DIR?.trim())
+  )
+}
+
+function getExternalTargetCandidates() {
   const explicitTarget = process.env.TUFF_CLIPBOARD_HISTORY_DEV_PLUGIN_DIR?.trim()
+  if (
+    process.env.TUFF_CLIPBOARD_HISTORY_SYNC_EXTERNAL !== '1'
+    && !process.argv.includes('--external')
+  ) {
+    return explicitTarget ? [explicitTarget] : []
+  }
+
   const appDataRoots = getAppDataRoots()
 
   return uniq([
@@ -102,12 +118,14 @@ for (const targetDir of builtInTargetDirs) {
   console.log(`[clipboard-history] synced built-in fallback -> ${targetDir}`)
 }
 
-for (const targetDir of getDevTargetCandidates()) {
-  const explicit = targetDir === process.env.TUFF_CLIPBOARD_HISTORY_DEV_PLUGIN_DIR?.trim()
-  if (!explicit && !(await exists(targetDir))) {
-    continue
-  }
+if (shouldSyncExternalTargets()) {
+  for (const targetDir of getExternalTargetCandidates()) {
+    const explicit = targetDir === process.env.TUFF_CLIPBOARD_HISTORY_DEV_PLUGIN_DIR?.trim()
+    if (!explicit && !(await exists(targetDir))) {
+      continue
+    }
 
-  await syncRuntimeTarget(targetDir)
-  console.log(`[clipboard-history] synced dev runtime plugin -> ${targetDir}`)
+    await syncRuntimeTarget(targetDir)
+    console.log(`[clipboard-history] synced dev runtime plugin -> ${targetDir}`)
+  }
 }

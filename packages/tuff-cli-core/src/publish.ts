@@ -1,19 +1,28 @@
 /* eslint-disable no-console */
 import type { NetworkResponse } from '@talex-touch/utils/network'
 import type { PluginPublisherSigningBundle } from './plugin-signer'
-import type { PublishConfig } from './types'
+import type { NpmPublishAccess, PublishConfig, PublishTarget } from './types'
 import { Buffer } from 'node:buffer'
+import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
 import { getTuffBaseUrl, NEXUS_BASE_URL, normalizeBaseUrl } from '@talex-touch/utils/env'
 import { networkClient } from '@talex-touch/utils/network'
+import {
+  classifyNpmVersionSpec,
+  DEFAULT_NPM_REGISTRY_URL,
+  isAllowedNpmRegistryUrl,
+  normalizeNpmRegistryUrl,
+} from '@talex-touch/utils/plugin'
 import fs from 'fs-extra'
 import { parsePublishArgs } from './args'
 import { clearAuthToken, getAuthToken, getAuthTokenPath, readAuthState, saveAuthToken } from './auth'
 import { resolvePublishConfig } from './config'
 import { ensureCliDeviceInfo } from './device'
+import { packNpmPlugin, validateStagedNpmPackage } from './npm-packager'
 import { createPluginPublisherSignature } from './plugin-signer'
+import { resolveSecurityScanWaivers } from './security-scan'
 
 const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
 const CLI_COMMAND_NAME = 'tuff'
@@ -89,9 +98,22 @@ interface PublisherAuthResponse {
   scopes?: string[]
 }
 
+export interface NpmPublishExecutionInput {
+  cwd: string
+  args: string[]
+  packageName: string
+  version: string
+  registry: string
+  access: NpmPublishAccess
+  tag?: string
+  provenance: boolean
+  dryRun: boolean
+}
+
 export interface PublishAuthRuntime {
-  refreshAppJwt: () => Promise<string | null>
+  refreshAppJwt?: () => Promise<string | null>
   onAuthRefreshFailure?: (reason: string) => Promise<void> | void
+  execNpmPublish?: (input: NpmPublishExecutionInput) => Promise<{ stdout: string, stderr: string }>
 }
 
 interface ResolvedPublishAuth {
@@ -255,7 +277,7 @@ async function resolvePublisherAccess(
   }
   catch (error) {
     const diagnostics = inspectAuthToken(token)
-    if (!runtime || options.nonInteractive || !isExpiredAppJwtDiagnostics(diagnostics))
+    if (!runtime?.refreshAppJwt || options.nonInteractive || !isExpiredAppJwtDiagnostics(diagnostics))
       throw error
 
     const refreshedToken = await runtime.refreshAppJwt()
@@ -566,34 +588,96 @@ export async function logout(): Promise<void> {
   }
 }
 
-export async function publish(options: PublishConfig = {}, runtime?: PublishAuthRuntime): Promise<void> {
-  console.log('\n📦 Tuff Plugin Publisher\n')
+function assertSafeCliArg(value: string, label: string): string {
+  if (/[\0\r\n]/.test(value))
+    throw new Error(`Invalid ${label}: contains control characters.`)
+  return value
+}
 
+async function execNpmPublishDefault(
+  input: NpmPublishExecutionInput,
+): Promise<{ stdout: string, stderr: string }> {
+  const safeArgs = input.args.map(arg => assertSafeCliArg(arg, 'npm argument'))
+  const command = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+
+  return await new Promise((resolve, reject) => {
+    execFile(
+      command,
+      safeArgs,
+      {
+        cwd: input.cwd,
+        shell: process.platform === 'win32',
+        maxBuffer: 10 * 1024 * 1024,
+      },
+      (error, stdout, stderr) => {
+        const out = String(stdout ?? '')
+        const err = String(stderr ?? '')
+        if (error) {
+          const detail = (err || out || error.message).trim()
+          reject(new Error(`npm publish failed: ${detail}`))
+          return
+        }
+        resolve({ stdout: out, stderr: err })
+      },
+    )
+  })
+}
+
+function resolveNpmDistTag(
+  rawTag: string | undefined,
+  target: PublishTarget,
+): string | undefined {
+  if (!rawTag)
+    return undefined
+  const trimmed = rawTag.trim()
+  if (!trimmed)
+    return undefined
+
+  const specKind = classifyNpmVersionSpec(trimmed)
+  if (specKind === 'dist-tag')
+    return trimmed
+
+  if (specKind === 'exact' && target === 'both') {
+    console.log(
+      `ℹ Skipping npm --tag for SemVer tag "${trimmed}" in --target both mode (npm uses default dist-tag).`,
+    )
+    return undefined
+  }
+
+  throw new Error(
+    `Invalid npm dist-tag "${trimmed}". npm --tag must be a dist-tag (e.g. "latest", "beta", "next"), not a SemVer version.`,
+  )
+}
+
+async function publishToNexus(
+  options: PublishConfig = {},
+  runtime?: PublishAuthRuntime,
+): Promise<boolean> {
   const token = await getAuthToken()
   if (!token) {
     console.error(`❌ Not authenticated. Run \`${CLI_COMMAND_NAME} login\` first.`)
     process.exitCode = 1
-    return
+    return false
   }
 
   const pkg = await readPackageJson()
   if (!pkg?.name || !pkg?.version) {
     console.error('❌ No package.json found in current directory')
     process.exitCode = 1
-    return
+    return false
   }
 
   const manifest = await readManifest()
   if (!manifest?.name || !manifest?.version) {
     console.error('❌ No manifest.json found in current directory')
     process.exitCode = 1
-    return
+    return false
   }
 
   if (manifest.version !== pkg.version) {
     console.error(`❌ Version mismatch: manifest.json=${manifest.version} package.json=${pkg.version}`)
     process.exitCode = 1
-    return
+    return false
   }
 
   const dashboardSlug = resolveDashboardSlug(manifest, pkg)
@@ -622,7 +706,7 @@ export async function publish(options: PublishConfig = {}, runtime?: PublishAuth
     console.error('❌ No .tpex package found in dist/build or dist/')
     console.log(`   Build your plugin first with \`${CLI_COMMAND_NAME} build\``)
     process.exitCode = 1
-    return
+    return false
   }
 
   const sorted = [...packages].sort((a, b) => b.mtimeMs - a.mtimeMs)
@@ -631,7 +715,7 @@ export async function publish(options: PublishConfig = {}, runtime?: PublishAuth
   if (!target) {
     console.error('❌ No .tpex package found in dist/build or dist/')
     process.exitCode = 1
-    return
+    return false
   }
 
   if (packages.length > 1) {
@@ -640,7 +724,7 @@ export async function publish(options: PublishConfig = {}, runtime?: PublishAuth
 
   const sizeMB = (target.size / 1024 / 1024).toFixed(2)
 
-  console.log('📋 Publish Summary:')
+  console.log('📋 Publish Summary (Nexus):')
   console.log('─'.repeat(50))
   console.log(`  Tag:      ${tag}`)
   console.log(`  Channel:  ${channel}`)
@@ -650,7 +734,7 @@ export async function publish(options: PublishConfig = {}, runtime?: PublishAuth
 
   if (options.dryRun) {
     console.log('\n🏃 Dry run mode - no changes will be made')
-    return
+    return true
   }
 
   let authToken = token
@@ -663,10 +747,10 @@ export async function publish(options: PublishConfig = {}, runtime?: PublishAuth
   catch (error) {
     console.error(`❌ ${error instanceof Error ? error.message : error}`)
     process.exitCode = 1
-    return
+    return false
   }
 
-  console.log('\n📤 Publishing plugin package...')
+  console.log('\n📤 Publishing plugin package to Nexus...')
 
   try {
     const publishUrl = options.apiUrl || (preflightPlugins
@@ -684,11 +768,194 @@ export async function publish(options: PublishConfig = {}, runtime?: PublishAuth
     if (version.channel)
       console.log(`   Channel: ${version.channel}`)
     console.log(`   Package: ${target.filename}`)
+    return true
   }
   catch (error) {
     console.error(`\n❌ Publish failed: ${error instanceof Error ? error.message : error}`)
     process.exitCode = 1
+    return false
   }
+}
+
+async function publishToNpm(
+  options: PublishConfig = {},
+  target: PublishTarget = 'npm',
+  runtime?: PublishAuthRuntime,
+): Promise<boolean> {
+  const cwd = process.cwd()
+  const manifest = await readManifest()
+  if (!manifest?.name || !manifest?.version) {
+    console.error('❌ No manifest.json found in current directory')
+    process.exitCode = 1
+    return false
+  }
+
+  const pkg = await readPackageJson()
+  if (pkg?.version && manifest.version !== pkg.version) {
+    console.error(`❌ Version mismatch: manifest.json=${manifest.version} package.json=${pkg.version}`)
+    process.exitCode = 1
+    return false
+  }
+
+  let registry = DEFAULT_NPM_REGISTRY_URL
+  if (options.registry) {
+    if (!isAllowedNpmRegistryUrl(options.registry, { allowLocalHttp: true })) {
+      console.error(
+        `❌ Disallowed npm registry URL: "${options.registry}". Use https:// (or http://localhost / http://127.0.0.1 for local testing).`,
+      )
+      process.exitCode = 1
+      return false
+    }
+    registry = normalizeNpmRegistryUrl(options.registry)
+  }
+
+  let npmDistTag: string | undefined
+  try {
+    npmDistTag = resolveNpmDistTag(options.tag, target)
+  }
+  catch (error) {
+    console.error(`❌ ${error instanceof Error ? error.message : error}`)
+    process.exitCode = 1
+    return false
+  }
+
+  const access: NpmPublishAccess = options.access ?? 'public'
+  const distPath = path.join(cwd, 'dist')
+  const buildDir = path.join(distPath, 'build')
+  const npmDir = path.join(distPath, 'npm')
+
+  let staged: {
+    packageName: string
+    version: string
+    npmDir: string
+    tarballFilename: string
+    tarballSize: number
+    artifactSha256: string
+    integrity: string
+  }
+
+  try {
+    if (await fs.pathExists(buildDir)) {
+      console.log('📦 Staging and validating npm package from dist/build/...')
+      const packed = await packNpmPlugin({
+        root: cwd,
+        access,
+        writeTarball: true,
+      })
+      staged = packed
+    }
+    else if (await fs.pathExists(npmDir)) {
+      console.log('🔍 Validating existing staged npm package in dist/npm/...')
+      const waivers = resolveSecurityScanWaivers({ root: cwd })
+      const validated = validateStagedNpmPackage({
+        npmDir,
+        waivers,
+      })
+      staged = validated
+    }
+    else {
+      console.error('❌ No built plugin found in dist/build/ or dist/npm/')
+      console.log(`   Build your plugin first with \`${CLI_COMMAND_NAME} build --npm\` or \`${CLI_COMMAND_NAME} builder --npm\``)
+      process.exitCode = 1
+      return false
+    }
+  }
+  catch (error) {
+    console.error(`❌ NPM staging/validation failed: ${error instanceof Error ? error.message : error}`)
+    process.exitCode = 1
+    return false
+  }
+
+  const npmArgs = ['publish', '--access', access]
+  if (options.registry) {
+    npmArgs.push('--registry', registry)
+  }
+  if (npmDistTag) {
+    npmArgs.push('--tag', npmDistTag)
+  }
+  if (options.provenance) {
+    npmArgs.push('--provenance')
+  }
+  if (options.dryRun) {
+    npmArgs.push('--dry-run')
+  }
+
+  const sizeKB = (staged.tarballSize / 1024).toFixed(1)
+  console.log('📋 Publish Summary (npm):')
+  console.log('─'.repeat(50))
+  console.log(`  Package:    ${staged.packageName}@${staged.version}`)
+  console.log(`  Registry:   ${registry}`)
+  console.log(`  Access:     ${access}`)
+  if (npmDistTag)
+    console.log(`  Dist-Tag:   ${npmDistTag}`)
+  if (options.provenance)
+    console.log('  Provenance: enabled')
+  console.log(`  Tarball:    ${staged.tarballFilename} (${sizeKB} KB)`)
+  console.log(`  Integrity:  ${staged.integrity}`)
+  console.log(`  Sha256:     ${staged.artifactSha256}`)
+  console.log(`  Command:    npm ${npmArgs.join(' ')}`)
+  console.log('─'.repeat(50))
+
+  if (options.dryRun) {
+    console.log('\n🏃 Dry run mode - invoking npm publish --dry-run')
+  }
+  else {
+    console.log('\n📤 Publishing plugin package to npm...')
+  }
+
+  const runner = runtime?.execNpmPublish ?? execNpmPublishDefault
+  try {
+    const result = await runner({
+      cwd: staged.npmDir,
+      args: npmArgs,
+      packageName: staged.packageName,
+      version: staged.version,
+      registry,
+      access,
+      tag: npmDistTag,
+      provenance: Boolean(options.provenance),
+      dryRun: Boolean(options.dryRun),
+    })
+    if (result.stdout.trim())
+      console.log(result.stdout.trim())
+    if (result.stderr.trim())
+      console.log(result.stderr.trim())
+
+    if (options.dryRun) {
+      console.log(`\n✅ Dry-run npm publish validated for ${staged.packageName}@${staged.version}.`)
+    }
+    else {
+      console.log(`\n✅ Published ${staged.packageName}@${staged.version} to ${registry}.`)
+    }
+    return true
+  }
+  catch (error) {
+    console.error(`\n❌ npm publish failed: ${error instanceof Error ? error.message : error}`)
+    process.exitCode = 1
+    return false
+  }
+}
+
+export async function publish(options: PublishConfig = {}, runtime?: PublishAuthRuntime): Promise<void> {
+  console.log('\n📦 Tuff Plugin Publisher\n')
+
+  const target: PublishTarget = options.target ?? 'nexus'
+
+  if (target === 'nexus') {
+    await publishToNexus(options, runtime)
+    return
+  }
+
+  if (target === 'npm') {
+    await publishToNpm(options, target, runtime)
+    return
+  }
+
+  const nexusOk = await publishToNexus(options, runtime)
+  if (!nexusOk)
+    return
+
+  await publishToNpm(options, target, runtime)
 }
 
 export async function runPublish(): Promise<void> {
@@ -703,13 +970,18 @@ export function printPublishHelp(): void {
   console.log(`Usage: ${CLI_COMMAND_NAME} publish [options]`)
   console.log('')
   console.log('Options:')
-  console.log('  --tag <tag>        Release tag (default: {package.version})')
-  console.log('  --channel <ch>     Channel: RELEASE, BETA, SNAPSHOT (auto-detected)')
+  console.log('  --target <target>  Publish target: nexus (default), npm, or both')
+  console.log('  --tag <tag>        Release tag (Nexus) or npm dist-tag (e.g. latest, beta)')
+  console.log('  --channel <ch>     Nexus channel: RELEASE, BETA, SNAPSHOT (auto-detected)')
   console.log('  --notes <text>     Changelog/notes (supports Markdown)')
-  console.log('  --dry-run          Preview without publishing')
-  console.log('  --api-url <url>    Custom publish API URL')
+  console.log('  --registry <url>   Custom npm registry URL (https:// or local http://)')
+  console.log('  --access <level>   npm publish access: public (default) or restricted')
+  console.log('  --provenance       Enable npm OIDC provenance attestation')
+  console.log('  --dry-run          Preview / validate without publishing')
+  console.log('  --api-url <url>    Custom Nexus publish API URL')
   console.log('')
-  console.log('Example:')
+  console.log('Examples:')
   console.log(`  ${CLI_COMMAND_NAME} publish --tag 1.2.0 --channel RELEASE`)
-  console.log(`  ${CLI_COMMAND_NAME} publish --dry-run`)
+  console.log(`  ${CLI_COMMAND_NAME} publish --target npm --tag beta --dry-run`)
+  console.log(`  ${CLI_COMMAND_NAME} publish --target both --provenance`)
 }

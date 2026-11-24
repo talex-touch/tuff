@@ -428,4 +428,174 @@ describe('WorkspaceMessageAssembler durable consumer output', () => {
       expect(Buffer.byteLength(value!)).toBeLessThanOrEqual(8192)
     }
   )
+
+  it('preserveInitial hydrates prior text, closes open reasoning and dangling tools, and protects pre-crash text from text-reset', () => {
+    const preCrash: StoredConversationMessage = {
+      id: 'assistant-rec',
+      role: 'assistant',
+      content: 'Pre-crash analysis.',
+      status: 'streaming',
+      seq: 2,
+      createdAt: 1,
+      meta: {
+        turnId: 'turn-rec',
+        recoveryAttempts: 1,
+        parts: [
+          { type: 'reasoning', text: 'Open reasoning', done: false },
+          { type: 'tool-call', id: 'done-tool', name: 'file.read', status: 'done', output: 'ok' },
+          { type: 'tool-call', id: 'dangling-tool', name: 'file.write', status: 'running' },
+          { type: 'text', text: 'Pre-crash analysis.' }
+        ]
+      }
+    }
+    const resumed = new WorkspaceMessageAssembler(preCrash, 'turn-rec', { preserveInitial: true })
+    resumed.delta(' provisional draft')
+    resumed.part({ kind: 'text-reset' })
+    resumed.delta(' Continued answer.')
+    resumed.complete()
+
+    const saved = JSON.parse(JSON.stringify(resumed.snapshot())) as StoredConversationMessage & {
+      meta: Record<string, unknown> & { parts: AiMessagePart[] }
+    }
+    expect(saved.content).toBe('Pre-crash analysis. Continued answer.')
+    expect(saved.status).toBe('complete')
+    expect(saved.meta.recoveryAttempts).toBe(1)
+    expect(saved.meta.parts).toEqual([
+      { type: 'reasoning', text: 'Open reasoning', done: true },
+      { type: 'tool-call', id: 'done-tool', name: 'file.read', status: 'done', output: 'ok' },
+      {
+        type: 'tool-call',
+        id: 'dangling-tool',
+        name: 'file.write',
+        status: 'error',
+        error: 'TOOL_EXECUTION_INTERRUPTED'
+      },
+      { type: 'text', text: 'Pre-crash analysis. Continued answer.' }
+    ])
+  })
+
+  it('preserveInitial keeps pre-crash text when complete(text) supplies continuation-only output (invoke fallback or agent run.output)', () => {
+    const preCrash: StoredConversationMessage = {
+      id: 'assistant-rec-fallback',
+      role: 'assistant',
+      content: 'First paragraph before crash.',
+      status: 'streaming',
+      seq: 2,
+      createdAt: 1,
+      meta: {
+        turnId: 'turn-rec-fallback',
+        parts: [
+          { type: 'text', text: 'First paragraph before crash.' },
+          { type: 'tool-call', id: 'tool-1', name: 'file.read', status: 'done', output: 'data' }
+        ]
+      }
+    }
+    const resumed = new WorkspaceMessageAssembler(preCrash, 'turn-rec-fallback', {
+      preserveInitial: true
+    })
+    resumed.delta('provisional discarded')
+    resumed.complete('Second paragraph after recovery.')
+
+    const saved = JSON.parse(JSON.stringify(resumed.snapshot())) as StoredConversationMessage & {
+      meta: Record<string, unknown> & { parts: AiMessagePart[] }
+    }
+    expect(saved.content).toBe('First paragraph before crash.\n\nSecond paragraph after recovery.')
+    expect(saved.status).toBe('complete')
+    expect(saved.meta.parts).toEqual([
+      { type: 'text', text: 'First paragraph before crash.' },
+      { type: 'tool-call', id: 'tool-1', name: 'file.read', status: 'done', output: 'data' },
+      { type: 'text', text: '\n\nSecond paragraph after recovery.' }
+    ])
+  })
+
+  it('preserveInitial preserves text-only pre-crash content without duplicate whitespace on continuation complete(text)', () => {
+    const preCrash: StoredConversationMessage = {
+      id: 'assistant-rec-plain',
+      role: 'assistant',
+      content: 'Partial answer\n',
+      status: 'streaming',
+      seq: 2,
+      createdAt: 1,
+      meta: { turnId: 'turn-rec-plain' }
+    }
+    const resumed = new WorkspaceMessageAssembler(preCrash, 'turn-rec-plain', {
+      preserveInitial: true
+    })
+    resumed.complete('Remaining answer.')
+    expect(resumed.snapshot().content).toBe('Partial answer\nRemaining answer.')
+    expect(resumed.snapshot().status).toBe('complete')
+  })
+
+  it('preserveInitial retains pre-crash prefix but fails with CONVERSATION_EMPTY_RESPONSE when recovered stream produces no new text', () => {
+    const preCrash: StoredConversationMessage = {
+      id: 'assistant-rec-empty',
+      role: 'assistant',
+      content: 'Pre-crash partial text',
+      status: 'streaming',
+      seq: 2,
+      createdAt: 1,
+      meta: { turnId: 'turn-rec-empty' }
+    }
+    const resumedNoArg = new WorkspaceMessageAssembler(preCrash, 'turn-rec-empty', {
+      preserveInitial: true
+    })
+    resumedNoArg.complete()
+    expect(resumedNoArg.snapshot().content).toBe('Pre-crash partial text')
+    expect(resumedNoArg.snapshot().status).toBe('failed')
+    expect(resumedNoArg.snapshot().meta).toMatchObject({
+      errorCode: 'CONVERSATION_EMPTY_RESPONSE',
+      outcome: 'failed'
+    })
+
+    const resumedEmptyStr = new WorkspaceMessageAssembler(preCrash, 'turn-rec-empty', {
+      preserveInitial: true
+    })
+    resumedEmptyStr.complete('   ')
+    expect(resumedEmptyStr.snapshot().content).toBe('Pre-crash partial text')
+    expect(resumedEmptyStr.snapshot().status).toBe('failed')
+    expect(resumedEmptyStr.snapshot().meta).toMatchObject({
+      errorCode: 'CONVERSATION_EMPTY_RESPONSE',
+      outcome: 'failed'
+    })
+  })
+
+  it('preserveInitial deduplicates continuation completion against newContent only while preserving whole-answer deduplication', () => {
+    const preCrash: StoredConversationMessage = {
+      id: 'assistant-rec-dedup',
+      role: 'assistant',
+      content: 'Plan: check',
+      status: 'streaming',
+      seq: 2,
+      createdAt: 1,
+      meta: { turnId: 'turn-rec-dedup' }
+    }
+    // Continuation-only completion whose suffix starts in hydrated text must still reconcile
+    const continuation = new WorkspaceMessageAssembler(preCrash, 'turn-rec-dedup', {
+      preserveInitial: true
+    })
+    continuation.delta(' done')
+    continuation.complete('check done')
+    expect(continuation.snapshot().content).toBe('Plan: check\n\ncheck done')
+    expect(continuation.snapshot().status).toBe('complete')
+
+    // Whole-answer completion matching full hydrated + new content must NOT be appended twice
+    const wholeAnswer = new WorkspaceMessageAssembler(preCrash, 'turn-rec-dedup', {
+      preserveInitial: true
+    })
+    wholeAnswer.delta(' done')
+    wholeAnswer.complete('Plan: check done')
+    expect(wholeAnswer.snapshot().content).toBe('Plan: check done')
+    expect(wholeAnswer.snapshot().status).toBe('complete')
+
+    // Whole-answer completion also normalizes leading whitespace on hydrated content
+    const leadingWhitespace = new WorkspaceMessageAssembler(
+      { ...preCrash, content: '\nPlan: check' },
+      'turn-rec-dedup',
+      { preserveInitial: true }
+    )
+    leadingWhitespace.delta(' done')
+    leadingWhitespace.complete('Plan: check done')
+    expect(leadingWhitespace.snapshot().content).toBe('\nPlan: check done')
+    expect(leadingWhitespace.snapshot().status).toBe('complete')
+  })
 })

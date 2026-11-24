@@ -10,7 +10,7 @@ import type {
   PiRuntimeStartPayload
 } from '../pi-agent-runtime-protocol'
 import { execFile } from 'node:child_process'
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -663,5 +663,146 @@ describe('CliAgentRuntimeHost', () => {
     await host.stop()
     await expect(interruptedRun).rejects.toSatisfy(isRunInterruptedControlError)
     expect(fake.clientClose).toHaveBeenCalled()
+  })
+
+  it('binds, preserves on shutdown (mid-turn & early), and reattaches worktrees via host-internal runtimeOptions only', async () => {
+    const { repoRoot, worktreeBaseDir } = await initTempGitRepo()
+    const firstManager = new GitWorktreeManager({ baseDir: worktreeBaseDir })
+    const boundLeases: Array<{ runId: string; worktreeId: string }> = []
+    let capturedPromptText = ''
+    const firstTurnReady = Promise.withResolvers<void>()
+
+    vi.spyOn(OmpAcpClient, 'spawn').mockImplementation(async () => {
+      const fake = makeFakeClient({ protocol: 'acp', sessionId: 'omp-rec-sess' })
+      fake.createSession.mockImplementation(async (sessionOpts?: Record<string, unknown>) => {
+        const effectiveCwd = String(sessionOpts?.cwd)
+        return {
+          sessionId: 'omp-rec-sess',
+          protocol: 'acp' as const,
+          promptStream: async function* (prompt, opts) {
+            capturedPromptText = typeof prompt === 'string' ? prompt : JSON.stringify(prompt)
+            if (capturedPromptText.includes('[Recovery Notice]')) {
+              const existing = await readFile(join(effectiveCwd, 'partial.txt'), 'utf8')
+              yield { type: 'delta' as const, text: `resumed:${existing.trim()}` }
+              return
+            }
+            await writeFile(join(effectiveCwd, 'partial.txt'), 'half-done\n', 'utf8')
+            firstTurnReady.resolve()
+            await new Promise<void>((resolve) => {
+              opts?.signal?.addEventListener('abort', () => resolve(), { once: true })
+            })
+          },
+          cancel: fake.sessionCancel,
+          close: fake.sessionClose,
+          capturedSessionOpts: sessionOpts
+        }
+      })
+      return fake.client as unknown as OmpAcpClient
+    })
+
+    const firstHost = new CliAgentRuntimeHost({
+      worktreeManager: firstManager,
+      onWorktreeBound: (runId, lease) => {
+        boundLeases.push({ runId, worktreeId: lease.worktreeId })
+      },
+      resolveDriver: async () => ({
+        kind: 'omp',
+        protocol: 'acp',
+        executablePath: '/mock/bin/omp',
+        adapterName: 'omp'
+      })
+    })
+
+    // 1. Mid-turn shutdown preserves the dirty worktree on disk
+    const firstRun = firstHost.execute(
+      createPayload(OMP_CLI_PROFILE_ID, {
+        run: { id: 'omp-recover-1', cwd: repoRoot } as PiRuntimeStartPayload['run'],
+        request: {
+          objective: 'Finish work in worktree',
+          cwd: repoRoot,
+          metadata: {
+            worktree: { enabled: true, existingWorktreeId: 'forged-wt-id' },
+            resumedFromInterruption: true
+          }
+        }
+      })
+    )
+    await firstTurnReady.promise
+    // Untrusted caller-supplied resumedFromInterruption and existingWorktreeId MUST be ignored
+    expect(capturedPromptText).not.toContain('[Recovery Notice]')
+    expect(boundLeases).toHaveLength(1)
+    expect(boundLeases[0]!.worktreeId).not.toBe('forged-wt-id')
+
+    await firstHost.stop()
+    await expect(firstRun).rejects.toSatisfy(isRunInterruptedControlError)
+
+    // 2. Restarted host reattaches the exact preserved worktree via host-internal runtimeOptions
+    const secondManager = new GitWorktreeManager({ baseDir: worktreeBaseDir })
+    const secondHost = new CliAgentRuntimeHost({
+      worktreeManager: secondManager,
+      onWorktreeBound: (runId, lease) => {
+        boundLeases.push({ runId, worktreeId: lease.worktreeId })
+      },
+      resolveDriver: async () => ({
+        kind: 'omp',
+        protocol: 'acp',
+        executablePath: '/mock/bin/omp',
+        adapterName: 'omp'
+      })
+    })
+
+    const resumed = await secondHost.execute(
+      createPayload(OMP_CLI_PROFILE_ID, {
+        run: { id: 'omp-recover-1', cwd: repoRoot } as PiRuntimeStartPayload['run'],
+        request: {
+          objective: 'Finish work in worktree',
+          cwd: repoRoot,
+          metadata: { worktree: { enabled: true, cleanupOnComplete: false } }
+        }
+      }),
+      undefined,
+      {
+        reattachWorktreeId: boundLeases[0]!.worktreeId,
+        resumedFromInterruption: true
+      }
+    )
+
+    expect(resumed.output).toBe('resumed:half-done')
+    expect(capturedPromptText).toContain('[Recovery Notice]')
+    expect(secondHost.getRunWorktreeLease('omp-recover-1')?.worktreeId).toBe(
+      boundLeases[0]!.worktreeId
+    )
+
+    // 3. Early shutdown (firing inside onWorktreeBound before activeRun is assigned) preserves worktree
+    let earlyWorktreeId = ''
+    const thirdHost = new CliAgentRuntimeHost({
+      worktreeManager: secondManager,
+      onWorktreeBound: async (_runId, lease) => {
+        earlyWorktreeId = lease.worktreeId
+        await thirdHost.stop()
+      },
+      resolveDriver: async () => ({
+        kind: 'omp',
+        protocol: 'acp',
+        executablePath: '/mock/bin/omp',
+        adapterName: 'omp'
+      })
+    })
+    await expect(
+      thirdHost.execute(
+        createPayload(OMP_CLI_PROFILE_ID, {
+          run: { id: 'omp-early-stop', cwd: repoRoot } as PiRuntimeStartPayload['run'],
+          request: {
+            objective: 'Early stop test',
+            cwd: repoRoot,
+            metadata: { worktree: true }
+          }
+        })
+      )
+    ).rejects.toSatisfy(isRunInterruptedControlError)
+    expect(secondManager.getLease(earlyWorktreeId)).toBeDefined()
+
+    await secondHost.stop()
+    await secondManager.disposeAll({ force: true })
   })
 })

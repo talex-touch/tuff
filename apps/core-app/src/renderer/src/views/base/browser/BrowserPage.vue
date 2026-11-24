@@ -27,6 +27,7 @@ import {
   useBrowserConnection
 } from '~/modules/browser-connection/useBrowserConnection'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import { themeStyle } from '~/modules/storage/theme-style'
 import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-window-shortcuts'
 import { commandModifierHeld } from '~/modules/shortcuts/shortcut-chord'
 import Store from '~/views/base/Store.vue'
@@ -82,6 +83,85 @@ const isSettingsTab = computed(
 )
 const isLandingTab = computed(() => Boolean(activeTab.value && !activeTab.value.url))
 const localPage = computed(() => isLandingTab.value || isStoreTab.value || isSettingsTab.value)
+const hasStoreTab = computed(
+  () => state.value?.tabs.some((tab) => tab.url.startsWith('tuff://store')) ?? false
+)
+const hasSettingsTab = computed(
+  () =>
+    state.value?.tabs.some(
+      (tab) => tab.url.startsWith('tuff://setting') || tab.url.startsWith('tuff://settings')
+    ) ?? false
+)
+const storeMounted = ref(false)
+const settingsMounted = ref(false)
+const tabDirection = ref<'forward' | 'backward'>('forward')
+const landingReplay = ref<{ style: 'forward' | 'back' | 'fade' | 'zoom'; phase: 'a' | 'b' } | null>(
+  null
+)
+let lastActiveTabIndex = -1
+let lastActiveTabWasLanding = false
+
+watch(
+  [isStoreTab, hasStoreTab],
+  ([active, exists]) => {
+    if (active) storeMounted.value = true
+    else if (!exists) storeMounted.value = false
+  },
+  { immediate: true }
+)
+watch(
+  [isSettingsTab, hasSettingsTab],
+  ([active, exists]) => {
+    if (active) settingsMounted.value = true
+    else if (!exists) settingsMounted.value = false
+  },
+  { immediate: true }
+)
+watch(
+  () => [state.value?.activeTabId, state.value?.tabs] as const,
+  ([id, tabs], previous) => {
+    const previousId = previous?.[0]
+    const nextIndex = id && tabs ? tabs.findIndex((tab) => tab.id === id) : -1
+    const nextTab = nextIndex >= 0 && tabs ? tabs[nextIndex] : undefined
+    const nextIsLanding = Boolean(nextTab && !nextTab.url)
+    if (previousId && id && id !== previousId) {
+      if (lastActiveTabIndex >= 0 && nextIndex >= 0 && nextIndex !== lastActiveTabIndex) {
+        tabDirection.value = nextIndex < lastActiveTabIndex ? 'backward' : 'forward'
+      }
+      if (lastActiveTabWasLanding && nextIsLanding && !panel.value) {
+        const routeStyle = themeStyle.value?.theme?.transition?.route ?? 'slide'
+        const style: 'forward' | 'back' | 'fade' | 'zoom' =
+          routeStyle === 'fade'
+            ? 'fade'
+            : routeStyle === 'zoom'
+              ? 'zoom'
+              : tabDirection.value === 'backward'
+                ? 'back'
+                : 'forward'
+        landingReplay.value = {
+          style,
+          phase: landingReplay.value?.phase === 'a' ? 'b' : 'a'
+        }
+      }
+    }
+    if (nextIndex >= 0) lastActiveTabIndex = nextIndex
+    lastActiveTabWasLanding = nextIsLanding
+  },
+  { immediate: true }
+)
+
+const tabTransitionName = computed(() => {
+  const style = themeStyle.value?.theme?.transition?.route ?? 'slide'
+  if (style === 'fade') return 'browser-tab-fade'
+  if (style === 'zoom') return 'browser-tab-zoom'
+  return tabDirection.value === 'backward' ? 'browser-tab-slide-back' : 'browser-tab-slide-forward'
+})
+
+const landingReplayClass = computed(() =>
+  landingReplay.value
+    ? `is-landing-replay-${landingReplay.value.style}-${landingReplay.value.phase}`
+    : ''
+)
 
 // Tuff's local bookmarks only; Chrome bookmarks are a separate library written back to Chrome.
 const bookmarked = computed(
@@ -812,211 +892,226 @@ onBeforeUnmount(() => {
         <TxSkeleton :width="280" :height="32" :radius="8" />
         <TxSkeleton width="100%" :height="130" :radius="16" />
       </div>
-      <HomePage
-        v-if="state"
-        v-show="isLandingTab && !panel"
-        browser-landing
-        :browser-active="onRoute && isLandingTab && !panel"
-        :browser-navigate="navigate"
-        style="--home-chat-lane-width: min(920px, calc(100% - 64px))"
-      >
-        <template #browser-footer>
-          <!-- Top Sites / 快捷常用站点 -->
-          <div
-            class="mt-6 flex flex-wrap items-center justify-center gap-6"
-            :aria-label="t('browser.shortcuts')"
+      <Transition :name="tabTransitionName">
+        <div
+          v-if="state"
+          v-show="isLandingTab && !panel"
+          class="BrowserPage-Surface BrowserPage-Surface--landing"
+          :class="landingReplayClass"
+        >
+          <HomePage
+            browser-landing
+            :browser-active="onRoute && isLandingTab && !panel"
+            :browser-navigate="navigate"
+            style="--home-chat-lane-width: min(920px, calc(100% - 64px))"
           >
-            <button
-              v-for="site in shortcuts"
-              :key="site.url"
-              type="button"
-              class="group flex flex-col items-center gap-2 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[var(--tx-color-primary)] rounded-xl"
-              @click="navigate(site.url).catch(() => {})"
-            >
+            <template #browser-footer>
+              <!-- Top Sites / 快捷常用站点 -->
               <div
-                class="flex h-13 w-13 items-center justify-center rounded-2xl border border-[var(--tx-border-color-light)] bg-[var(--tx-fill-color-light)] shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:border-[var(--tx-color-primary-light-5)] group-hover:bg-[var(--tx-fill-color)] group-hover:shadow-md"
+                class="mt-6 flex flex-wrap items-center justify-center gap-6"
+                :aria-label="t('browser.shortcuts')"
               >
-                <span
-                  class="inline-flex h-6 w-6 transition-transform group-hover:scale-110"
-                  :class="site.icon"
-                  :style="{ color: site.color !== 'currentColor' ? site.color : undefined }"
-                  aria-hidden="true"
-                />
+                <button
+                  v-for="site in shortcuts"
+                  :key="site.url"
+                  type="button"
+                  class="group flex flex-col items-center gap-2 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[var(--tx-color-primary)] rounded-xl"
+                  @click="navigate(site.url).catch(() => {})"
+                >
+                  <div
+                    class="flex h-13 w-13 items-center justify-center rounded-2xl border border-[var(--tx-border-color-light)] bg-[var(--tx-fill-color-light)] shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:border-[var(--tx-color-primary-light-5)] group-hover:bg-[var(--tx-fill-color)] group-hover:shadow-md"
+                  >
+                    <span
+                      class="inline-flex h-6 w-6 transition-transform group-hover:scale-110"
+                      :class="site.icon"
+                      :style="{ color: site.color !== 'currentColor' ? site.color : undefined }"
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <span
+                    class="text-xs font-medium text-[var(--tx-text-color-secondary)] transition-colors group-hover:text-[var(--tx-text-color-primary)]"
+                  >
+                    {{ site.title }}
+                  </span>
+                </button>
               </div>
-              <span
-                class="text-xs font-medium text-[var(--tx-text-color-secondary)] transition-colors group-hover:text-[var(--tx-text-color-primary)]"
-              >
-                {{ site.title }}
-              </span>
-            </button>
-          </div>
 
-          <!-- 继续上次工作现场 / 历史现场 -->
-          <section class="mt-9 w-full" :aria-label="t('browser.recent')">
-            <div class="mb-3 flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="i-ri-history-line text-sm text-[var(--tx-text-color-secondary)]" />
-                <h2 class="m-0 text-sm font-medium text-[var(--tx-text-color-primary)]">
-                  {{ t('browser.recentWorkspaces') || t('browser.recent') }}
-                </h2>
+              <!-- 继续上次工作现场 / 历史现场 -->
+              <section class="mt-9 w-full" :aria-label="t('browser.recent')">
+                <div class="mb-3 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="i-ri-history-line text-sm text-[var(--tx-text-color-secondary)]" />
+                    <h2 class="m-0 text-sm font-medium text-[var(--tx-text-color-primary)]">
+                      {{ t('browser.recentWorkspaces') || t('browser.recent') }}
+                    </h2>
+                  </div>
+                  <TxButton
+                    v-if="state.recent.length"
+                    variant="ghost"
+                    size="sm"
+                    @click="panel = 'history'"
+                    >{{ t('browser.showAll') }}</TxButton
+                  >
+                </div>
+                <div v-if="state.recent.length" class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <button
+                    v-for="page in state.recent.slice(0, 4)"
+                    :key="page.url"
+                    type="button"
+                    class="group flex min-w-0 items-center gap-3.5 rounded-xl border border-[var(--tx-border-color-light)] bg-[var(--tx-fill-color-light)]/50 p-3 text-left transition-all duration-150 hover:border-[var(--tx-border-color)] hover:bg-[var(--tx-fill-color-light)] hover:shadow-sm focus-visible:outline-2 focus-visible:outline-[var(--tx-color-primary)] cursor-pointer"
+                    :title="page.url"
+                    @click="openSaved(page)"
+                  >
+                    <span
+                      class="inline-flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-[var(--tx-border-color-light)] bg-[var(--tx-bg-color)] text-[var(--tx-color-primary)] shadow-2xs group-hover:scale-105 transition-transform"
+                    >
+                      <span
+                        class="inline-flex h-5 w-5"
+                        :class="localIcon(page.url)"
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <span class="min-w-0 flex-1">
+                      <span
+                        class="block truncate text-sm font-medium text-[var(--tx-text-color-primary)] group-hover:text-[var(--tx-color-primary)] transition-colors"
+                      >
+                        {{ page.title || page.url }}
+                      </span>
+                      <span
+                        class="mt-0.5 flex items-center gap-2 text-xs text-[var(--tx-text-color-regular)]"
+                      >
+                        <span class="truncate max-w-[180px]">{{ page.url }}</span>
+                        <span>·</span>
+                        <span class="shrink-0">{{ dateLabel(page) }}</span>
+                      </span>
+                    </span>
+                    <span
+                      class="i-ri-arrow-right-s-line flex-none text-lg text-[var(--tx-text-color-secondary)] opacity-40 transition-all group-hover:translate-x-0.5 group-hover:opacity-100"
+                    />
+                  </button>
+                </div>
+                <div
+                  v-else
+                  class="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--tx-border-color-light)] py-6 text-center text-xs text-[var(--tx-text-color-regular)]"
+                >
+                  <span
+                    class="i-ri-compass-3-line mb-1 text-xl text-[var(--tx-text-color-secondary)]/50"
+                  />
+                  <span>{{ t('browser.recentEmpty') }}</span>
+                </div>
+              </section>
+            </template>
+          </HomePage>
+        </div>
+      </Transition>
+
+      <!-- 插件商店 Tab -->
+      <Transition :name="tabTransitionName">
+        <div
+          v-if="state && storeMounted"
+          v-show="isStoreTab && !panel"
+          class="BrowserPage-Surface overflow-y-auto"
+        >
+          <Store />
+        </div>
+      </Transition>
+
+      <!-- 设置中心 Tab -->
+      <Transition :name="tabTransitionName">
+        <div
+          v-if="state && settingsMounted"
+          v-show="isSettingsTab && !panel"
+          class="BrowserPage-Surface overflow-hidden"
+        >
+          <BrowserSettingsTab />
+        </div>
+      </Transition>
+      <Transition name="browser-panel">
+        <section
+          v-if="panel"
+          class="BrowserPage-Panel absolute inset-0 z-10 overflow-y-auto bg-[var(--tx-bg-color)] px-6 py-5"
+          :aria-label="
+            t(
+              panel === 'history'
+                ? 'browser.history'
+                : panel === 'chrome'
+                  ? 'browser.chromeLibrary'
+                  : 'browser.bookmarks'
+            )
+          "
+        >
+          <div class="mx-auto max-w-3xl">
+            <div class="mb-5 flex items-center justify-between gap-3">
+              <div class="flex gap-2">
+                <TxButton
+                  :variant="panel === 'history' ? 'flat' : 'ghost'"
+                  :aria-pressed="panel === 'history'"
+                  icon="i-ri-history-line"
+                  @click="panel = 'history'"
+                  >{{ t('browser.history') }}</TxButton
+                >
+                <TxButton
+                  :variant="panel === 'bookmarks' ? 'flat' : 'ghost'"
+                  :aria-pressed="panel === 'bookmarks'"
+                  icon="i-ri-star-line"
+                  @click="panel = 'bookmarks'"
+                  >{{ t('browser.bookmarks') }}</TxButton
+                >
+                <TxButton
+                  :variant="panel === 'chrome' ? 'flat' : 'ghost'"
+                  :aria-pressed="panel === 'chrome'"
+                  icon="i-ri-chrome-line"
+                  @click="panel = 'chrome'"
+                  >{{ t('browser.chromeLibrary') }}</TxButton
+                >
               </div>
-              <TxButton
-                v-if="state.recent.length"
-                variant="ghost"
-                size="sm"
-                @click="panel = 'history'"
-                >{{ t('browser.showAll') }}</TxButton
-              >
+              <TxIconButton
+                icon="i-ri-close-line"
+                :label="t('browser.closeLibrary')"
+                @click="panel = null"
+              />
             </div>
-            <div v-if="state.recent.length" class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <ChromeLibraryPanel
+              v-if="panel === 'chrome'"
+              :active="onRoute"
+              :current-page="currentPage"
+              :open-in-tuff="openCopyInTuff"
+            />
+            <p
+              v-else-if="!savedPages.length"
+              class="py-8 text-center text-sm text-[var(--tx-text-color-regular)]"
+            >
+              {{ t(panel === 'bookmarks' ? 'browser.bookmarksEmpty' : 'browser.recentEmpty') }}
+            </p>
+            <template v-else>
               <button
-                v-for="page in state.recent.slice(0, 4)"
+                v-for="page in savedPages"
                 :key="page.url"
                 type="button"
-                class="group flex min-w-0 items-center gap-3.5 rounded-xl border border-[var(--tx-border-color-light)] bg-[var(--tx-fill-color-light)]/50 p-3 text-left transition-all duration-150 hover:border-[var(--tx-border-color)] hover:bg-[var(--tx-fill-color-light)] hover:shadow-sm focus-visible:outline-2 focus-visible:outline-[var(--tx-color-primary)] cursor-pointer"
-                :title="page.url"
+                class="mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-[var(--tx-fill-color-light)] focus-visible:outline-2 focus-visible:outline-[var(--tx-color-primary)]"
                 @click="openSaved(page)"
               >
                 <span
-                  class="inline-flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-[var(--tx-border-color-light)] bg-[var(--tx-bg-color)] text-[var(--tx-color-primary)] shadow-2xs group-hover:scale-105 transition-transform"
-                >
-                  <span
-                    class="inline-flex h-5 w-5"
-                    :class="localIcon(page.url)"
-                    aria-hidden="true"
-                  />
-                </span>
-                <span class="min-w-0 flex-1">
-                  <span
-                    class="block truncate text-sm font-medium text-[var(--tx-text-color-primary)] group-hover:text-[var(--tx-color-primary)] transition-colors"
-                  >
-                    {{ page.title || page.url }}
-                  </span>
-                  <span
-                    class="mt-0.5 flex items-center gap-2 text-xs text-[var(--tx-text-color-regular)]"
-                  >
-                    <span class="truncate max-w-[180px]">{{ page.url }}</span>
-                    <span>·</span>
-                    <span class="shrink-0">{{ dateLabel(page) }}</span>
-                  </span>
-                </span>
-                <span
-                  class="i-ri-arrow-right-s-line flex-none text-lg text-[var(--tx-text-color-secondary)] opacity-40 transition-all group-hover:translate-x-0.5 group-hover:opacity-100"
+                  class="inline-flex h-5 w-5 flex-none"
+                  :class="localIcon(page.url)"
+                  aria-hidden="true"
                 />
+                <span class="min-w-0 flex-1"
+                  ><span class="block truncate text-sm">{{ page.title || page.url }}</span
+                  ><span class="block truncate text-xs text-[var(--tx-text-color-regular)]">{{
+                    page.url
+                  }}</span></span
+                >
+                <span class="flex-none text-xs text-[var(--tx-text-color-regular)]">{{
+                  dateLabel(page)
+                }}</span>
               </button>
-            </div>
-            <div
-              v-else
-              class="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--tx-border-color-light)] py-6 text-center text-xs text-[var(--tx-text-color-regular)]"
-            >
-              <span
-                class="i-ri-compass-3-line mb-1 text-xl text-[var(--tx-text-color-secondary)]/50"
-              />
-              <span>{{ t('browser.recentEmpty') }}</span>
-            </div>
-          </section>
-        </template>
-      </HomePage>
-
-      <!-- 插件商店 Tab -->
-      <div
-        v-if="state && isStoreTab && !panel"
-        class="h-full w-full overflow-y-auto bg-[var(--tx-bg-color)]"
-      >
-        <Store />
-      </div>
-
-      <!-- 设置中心 Tab -->
-      <div
-        v-if="state && isSettingsTab && !panel"
-        class="h-full w-full overflow-hidden bg-[var(--tx-bg-color)]"
-      >
-        <BrowserSettingsTab />
-      </div>
-      <section
-        v-if="panel"
-        class="absolute inset-0 overflow-y-auto bg-[var(--tx-bg-color)] px-6 py-5"
-        :aria-label="
-          t(
-            panel === 'history'
-              ? 'browser.history'
-              : panel === 'chrome'
-                ? 'browser.chromeLibrary'
-                : 'browser.bookmarks'
-          )
-        "
-      >
-        <div class="mx-auto max-w-3xl">
-          <div class="mb-5 flex items-center justify-between gap-3">
-            <div class="flex gap-2">
-              <TxButton
-                :variant="panel === 'history' ? 'flat' : 'ghost'"
-                :aria-pressed="panel === 'history'"
-                icon="i-ri-history-line"
-                @click="panel = 'history'"
-                >{{ t('browser.history') }}</TxButton
-              >
-              <TxButton
-                :variant="panel === 'bookmarks' ? 'flat' : 'ghost'"
-                :aria-pressed="panel === 'bookmarks'"
-                icon="i-ri-star-line"
-                @click="panel = 'bookmarks'"
-                >{{ t('browser.bookmarks') }}</TxButton
-              >
-              <TxButton
-                :variant="panel === 'chrome' ? 'flat' : 'ghost'"
-                :aria-pressed="panel === 'chrome'"
-                icon="i-ri-chrome-line"
-                @click="panel = 'chrome'"
-                >{{ t('browser.chromeLibrary') }}</TxButton
-              >
-            </div>
-            <TxIconButton
-              icon="i-ri-close-line"
-              :label="t('browser.closeLibrary')"
-              @click="panel = null"
-            />
+            </template>
           </div>
-          <ChromeLibraryPanel
-            v-if="panel === 'chrome'"
-            :active="onRoute"
-            :current-page="currentPage"
-            :open-in-tuff="openCopyInTuff"
-          />
-          <p
-            v-else-if="!savedPages.length"
-            class="py-8 text-center text-sm text-[var(--tx-text-color-regular)]"
-          >
-            {{ t(panel === 'bookmarks' ? 'browser.bookmarksEmpty' : 'browser.recentEmpty') }}
-          </p>
-          <template v-else>
-            <button
-              v-for="page in savedPages"
-              :key="page.url"
-              type="button"
-              class="mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-[var(--tx-fill-color-light)] focus-visible:outline-2 focus-visible:outline-[var(--tx-color-primary)]"
-              @click="openSaved(page)"
-            >
-              <span
-                class="inline-flex h-5 w-5 flex-none"
-                :class="localIcon(page.url)"
-                aria-hidden="true"
-              />
-              <span class="min-w-0 flex-1"
-                ><span class="block truncate text-sm">{{ page.title || page.url }}</span
-                ><span class="block truncate text-xs text-[var(--tx-text-color-regular)]">{{
-                  page.url
-                }}</span></span
-              >
-              <span class="flex-none text-xs text-[var(--tx-text-color-regular)]">{{
-                dateLabel(page)
-              }}</span>
-            </button>
-          </template>
-        </div>
-      </section>
+        </section>
+      </Transition>
       <div
-        v-else-if="activeTab?.error"
+        v-if="!panel && activeTab?.error"
         role="alert"
         class="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[var(--tx-bg-color)] px-8 text-center"
       >
@@ -1030,7 +1125,7 @@ onBeforeUnmount(() => {
         }}</TxButton>
       </div>
       <div
-        v-else-if="activeTab?.loading && !localPage"
+        v-else-if="!panel && activeTab?.loading && !localPage"
         role="status"
         class="pointer-events-none absolute inset-x-0 top-0"
       >
@@ -1053,3 +1148,185 @@ onBeforeUnmount(() => {
     />
   </section>
 </template>
+
+<style lang="scss" scoped>
+.BrowserPage-Surface {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--tx-bg-color);
+}
+
+.BrowserPage-Surface--landing {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.browser-tab-slide-forward-enter-active,
+.browser-tab-slide-back-enter-active,
+.browser-tab-fade-enter-active,
+.browser-tab-zoom-enter-active {
+  z-index: 2;
+  transition:
+    opacity 200ms var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1)),
+    transform 230ms var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+  will-change: opacity, transform;
+}
+
+.browser-tab-slide-forward-leave-active,
+.browser-tab-slide-back-leave-active,
+.browser-tab-fade-leave-active,
+.browser-tab-zoom-leave-active {
+  z-index: 1;
+  pointer-events: none;
+  transition:
+    opacity 150ms ease,
+    transform 170ms ease;
+  will-change: opacity, transform;
+}
+
+.browser-tab-slide-forward-enter-from {
+  opacity: 0;
+  transform: translate3d(28px, 0, 0);
+}
+
+.browser-tab-slide-forward-leave-to {
+  opacity: 0;
+  transform: translate3d(-18px, 0, 0);
+}
+
+.browser-tab-slide-back-enter-from {
+  opacity: 0;
+  transform: translate3d(-28px, 0, 0);
+}
+
+.browser-tab-slide-back-leave-to {
+  opacity: 0;
+  transform: translate3d(18px, 0, 0);
+}
+
+.browser-tab-fade-enter-from,
+.browser-tab-fade-leave-to {
+  opacity: 0;
+}
+
+.browser-tab-zoom-enter-from {
+  opacity: 0;
+  transform: scale(0.985);
+}
+
+.browser-tab-zoom-leave-to {
+  opacity: 0;
+  transform: scale(1.012);
+}
+
+@each $phase in (a, b) {
+  @keyframes browser-landing-forward-#{$phase} {
+    from {
+      opacity: 0;
+      transform: translate3d(24px, 0, 0);
+    }
+
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes browser-landing-back-#{$phase} {
+    from {
+      opacity: 0;
+      transform: translate3d(-24px, 0, 0);
+    }
+
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes browser-landing-fade-#{$phase} {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes browser-landing-zoom-#{$phase} {
+    from {
+      opacity: 0;
+      transform: scale(0.988);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .is-landing-replay-forward-#{$phase} {
+    animation: browser-landing-forward-#{$phase}
+      210ms
+      var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+  }
+
+  .is-landing-replay-back-#{$phase} {
+    animation: browser-landing-back-#{$phase}
+      210ms
+      var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+  }
+
+  .is-landing-replay-fade-#{$phase} {
+    animation: browser-landing-fade-#{$phase} 180ms ease;
+  }
+
+  .is-landing-replay-zoom-#{$phase} {
+    animation: browser-landing-zoom-#{$phase}
+      200ms
+      var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+  }
+}
+
+.browser-panel-enter-active {
+  transition:
+    opacity 180ms var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1)),
+    transform 200ms var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.browser-panel-leave-active {
+  pointer-events: none;
+  transition:
+    opacity 140ms ease,
+    transform 150ms ease;
+}
+
+.browser-panel-enter-from,
+.browser-panel-leave-to {
+  opacity: 0;
+  transform: translate3d(0, 10px, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browser-tab-slide-forward-enter-active,
+  .browser-tab-slide-forward-leave-active,
+  .browser-tab-slide-back-enter-active,
+  .browser-tab-slide-back-leave-active,
+  .browser-tab-fade-enter-active,
+  .browser-tab-fade-leave-active,
+  .browser-tab-zoom-enter-active,
+  .browser-tab-zoom-leave-active,
+  .browser-panel-enter-active,
+  .browser-panel-leave-active {
+    transition: none;
+  }
+
+  .BrowserPage-Surface--landing {
+    animation: none !important;
+  }
+}
+</style>

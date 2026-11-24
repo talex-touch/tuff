@@ -50,6 +50,8 @@ describe('startup arrays', () => {
     // CoreBox creates its renderer during initialization, and that renderer starts the clipboard
     // change stream on mount. Register the main stream handler before the renderer can request it.
     expect(foreground.indexOf('clipboardModule')).toBeLessThan(foreground.indexOf('coreBoxModule'))
+    // HerdrCore registers its universal runtime plane right before the fallback PTY terminal module.
+    expect(foreground.indexOf('herdrCoreModule')).toBe(foreground.indexOf('terminalModule') - 1)
   })
 })
 

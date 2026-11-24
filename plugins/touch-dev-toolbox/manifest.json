@@ -11,6 +11,11 @@
   },
   "description": "开发工具箱：常用链接导航",
   "main": "index.js",
+  "dev": {
+    "enable": false,
+    "address": "",
+    "source": false
+  },
   "permissions": {
     "required": ["search.root-results", "storage.plugin"],
     "optional": ["network.internet"]

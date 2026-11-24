@@ -110,9 +110,13 @@ function stableFailure(error) {
     return blocked('permission-denied', '缺少 system.shell 权限')
   if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
     return blocked('permission-unavailable', '权限系统不可用')
-  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED')
+  if (code === 'PLUGIN_HOST_PERMISSION_REQUEST_FAILED')
+    return blocked('permission-check-failed', '权限校验请求失败')
+  if (code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE' || code === 'PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE')
+    return blocked('capability-unavailable', 'Snipaste 操作能力不可用')
+  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED' || code === 'PLUGIN_HOST_REQUEST_CANCELLED')
     return blocked('cancelled', 'Snipaste 操作已取消', 'cancelled')
-  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT')
+  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT' || code === 'PLUGIN_HOST_REQUEST_TIMEOUT')
     return blocked('timeout', 'Snipaste 启动超时', 'failed')
   return blocked('snipaste-action-failed', 'Snipaste 操作执行失败', 'failed')
 }
@@ -140,9 +144,13 @@ async function runAction(actionId) {
           ? '缺少 system.shell 权限'
           : reason === 'permission-unavailable'
             ? '权限系统不可用'
-            : reason === 'platform-unsupported'
-              ? '当前平台暂不支持 Snipaste 操作'
-              : 'Snipaste 操作不可用'
+            : reason === 'permission-check-failed'
+              ? '权限校验请求失败'
+              : reason === 'capability-unavailable'
+                ? 'Snipaste 操作能力不可用'
+                : reason === 'platform-unsupported'
+                  ? '当前平台暂不支持 Snipaste 操作'
+                  : 'Snipaste 操作不可用'
       return blocked(reason, message)
     }
     return blocked('spawn-failed', 'Snipaste 启动失败', 'failed')
@@ -204,6 +212,8 @@ const pluginLifecycle = {
   },
 
   async onItemAction(item, context = {}) {
+    if (!item?.meta || item.meta.defaultAction !== DEFAULT_ACTION)
+      return undefined
     const actionId = selectedActionId(item, context)
     if (!actionId)
       return blocked('invalid-action', '无效 Snipaste 操作')

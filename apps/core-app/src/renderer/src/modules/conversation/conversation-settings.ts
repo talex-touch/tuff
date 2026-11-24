@@ -30,6 +30,10 @@ export interface ConversationSettings {
    */
   showTurnMetrics?: boolean
   /**
+   * Optional here for the same reason as `reasoningEffort`: absent reads as enabled (`true`).
+   */
+  autoResumeOnStartup?: boolean
+  /**
    * Optional here although the defaults carry it: the same shallow merge leaves it out of every
    * block written before it existed, and absent reads as `auto`.
    */
@@ -98,7 +102,8 @@ export function writableConversationSettings(): ConversationSettings {
       favoriteModels: [],
       recentModels: [],
       reasoningEffort: DEFAULT_REASONING_EFFORT_SETTING,
-      showTurnMetrics: true
+      showTurnMetrics: true,
+      autoResumeOnStartup: true
     }
     appSetting.conversation = created
   }

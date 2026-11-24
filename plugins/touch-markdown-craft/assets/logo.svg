@@ -1,0 +1,16 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="md-craft-bg" x1="10" y1="10" x2="118" y2="118" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E1B4B"/>
+      <stop offset="100%" stop-color="#312E81"/>
+    </linearGradient>
+    <linearGradient id="md-craft-accent" x1="24" y1="30" x2="104" y2="98" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#A78BFA"/>
+      <stop offset="100%" stop-color="#38BDF8"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#md-craft-bg)"/>
+  <rect x="18" y="28" width="92" height="72" rx="14" stroke="url(#md-craft-accent)" stroke-width="6"/>
+  <path d="M32 82V46L48 66L64 46V82" stroke="#F8FAFC" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M88 46V78M88 78L76 66M88 78L100 66" stroke="#38BDF8" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

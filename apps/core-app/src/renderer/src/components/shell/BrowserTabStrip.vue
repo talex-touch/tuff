@@ -12,7 +12,7 @@ import {
   TxContextMenuItem
 } from '@talex-touch/tuffex/context-menu'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { APP_SURFACE_ROUTES } from '../../../../shared/app-surface-routes'
@@ -41,6 +41,12 @@ const {
   accountOpen
 } = useBrowserWorkspace()
 const tabMenu = ref<InstanceType<typeof TxContextMenu> | null>(null)
+const tablistRef = ref<HTMLElement | null>(null)
+const tabElements = new Map<string, HTMLElement>()
+const activePill = ref({ left: 0, top: 0, width: 0, height: 0, visible: false })
+const activePillAnimated = ref(false)
+let tablistResizeObserver: ResizeObserver | null = null
+let activePillRaf = 0
 const tabMenuTargetId = ref('')
 const draggedTabId = ref<string | null>(null)
 const tabDropTarget = ref<{ id: string | null; before: boolean } | null>(null)
@@ -211,6 +217,50 @@ function tabKeydown(event: KeyboardEvent, index: number): void {
   })
 }
 
+function setTabEl(tabId: string, el: unknown): void {
+  if (el instanceof HTMLElement) {
+    tabElements.set(tabId, el)
+  } else {
+    tabElements.delete(tabId)
+  }
+}
+
+function syncActivePill(animate = true): void {
+  const id = activeTabId.value
+  const activeEl = id ? tabElements.get(id) : undefined
+  if (!activeEl) {
+    activePill.value.visible = false
+    return
+  }
+  const width = activeEl.offsetWidth
+  const height = activeEl.offsetHeight
+  if (width <= 0 || height <= 0) {
+    activePill.value.visible = false
+    return
+  }
+  const wasVisible = activePill.value.visible
+  activePillAnimated.value = animate && wasVisible
+  activePill.value = {
+    left: activeEl.offsetLeft,
+    top: activeEl.offsetTop,
+    width,
+    height,
+    visible: true
+  }
+  if (!activePillAnimated.value && typeof requestAnimationFrame !== 'undefined') {
+    cancelAnimationFrame(activePillRaf)
+    activePillRaf = requestAnimationFrame(() => {
+      activePillAnimated.value = true
+    })
+  }
+}
+
+const activePillStyle = computed(() => ({
+  width: `${activePill.value.width}px`,
+  height: `${activePill.value.height}px`,
+  transform: `translate3d(${activePill.value.left}px, ${activePill.value.top}px, 0)`
+}))
+
 watch(
   () => state.value?.tabs,
   (tabs) => {
@@ -221,11 +271,13 @@ watch(
     if (draggedTabId.value && !ids.has(draggedTabId.value)) {
       resetTabDrag()
     }
+    void nextTick(() => syncActivePill(true))
   }
 )
 watch(activeTabId, (id, previousId) => {
   if (id === previousId) return
   void nextTick(() => {
+    syncActivePill(Boolean(previousId))
     document
       .getElementById(`browser-tab-${id}`)
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
@@ -239,14 +291,27 @@ watch(tabMenuOpen, (open) => {
     document.getElementById(`browser-tab-${tabId}`)?.focus()
   })
 })
+onMounted(() => {
+  void nextTick(() => syncActivePill(false))
+  if (typeof ResizeObserver !== 'undefined' && tablistRef.value) {
+    tablistResizeObserver = new ResizeObserver(() => {
+      syncActivePill(false)
+    })
+    tablistResizeObserver.observe(tablistRef.value)
+  }
+})
 onBeforeUnmount(() => {
+  cancelAnimationFrame(activePillRaf)
+  tablistResizeObserver?.disconnect()
+  tablistResizeObserver = null
+  tabElements.clear()
   resetTabDrag()
 })
 </script>
 
 <template>
   <div
-    class="BrowserTabStrip flex h-11 flex-none items-center gap-1 px-2 pt-1"
+    class="BrowserTabStrip flex h-11 flex-none items-center gap-1.5 px-2.5"
     :class="{ 'is-window-controls': !isMac }"
     :data-platform="platform"
     data-browser-tabbar
@@ -254,78 +319,103 @@ onBeforeUnmount(() => {
     @drop.self="dropTab($event, null)"
   >
     <div
-      class="BrowserTabStrip-TabList BrowserTabStrip-NoDrag flex min-w-0 shrink items-center gap-1 overflow-x-auto"
+      ref="tablistRef"
+      class="BrowserTabStrip-TabList BrowserTabStrip-NoDrag relative flex min-w-0 shrink items-center overflow-x-auto"
+      :class="{ 'has-active-pill': activePill.visible }"
       role="tablist"
       :aria-label="t('browser.tabs')"
       @wheel="onTablistWheel"
       @dragover.self="showTabDropTarget($event, null)"
       @drop.self="dropTab($event, null)"
     >
-      <div
-        v-for="(tab, index) in state?.tabs ?? []"
-        :key="tab.id"
-        class="BrowserTabStrip-Tab BrowserTabStrip-NoDrag relative flex min-w-32 max-w-56 items-center gap-0.5 rounded-t-lg pr-1.5"
-        :class="{
-          'opacity-50': draggedTabId === tab.id,
-          'is-active': tab.id === state?.activeTabId
-        }"
-        @contextmenu="openTabMenu(tab.id, $event)"
-        @auxclick.middle.prevent="command(() => sdk.closeTab(tab.id))"
-        @dragover="showTabDropTarget($event, tab.id)"
-        @drop="dropTab($event, tab.id)"
+      <span
+        v-if="activePill.visible"
+        aria-hidden="true"
+        class="BrowserTabStrip-ActivePill"
+        :class="{ 'is-animated': activePillAnimated }"
+        :style="activePillStyle"
+      />
+      <TransitionGroup
+        name="browser-tab"
+        tag="div"
+        class="BrowserTabStrip-TabTrack flex items-center gap-1.5"
+        @after-enter="syncActivePill(false)"
+        @after-leave="syncActivePill(true)"
       >
-        <button
-          :id="`browser-tab-${tab.id}`"
-          type="button"
-          role="tab"
-          :aria-selected="tab.id === state?.activeTabId"
-          :tabindex="tab.id === state?.activeTabId ? 0 : -1"
-          aria-controls="browser-viewport"
-          aria-haspopup="menu"
-          :aria-description="t('browser.reorderTabsHint')"
-          :aria-expanded="tabMenuOpen && tabMenuTargetId === tab.id"
-          class="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-t-lg pl-3 pr-1 text-sm outline-offset-[-3px]"
-          :title="tabTitle(tab)"
-          :draggable="!tabMovePending"
-          @dragstart="startTabDrag(tab.id, $event)"
-          @dragend="resetTabDrag"
-          @click="activateOrOpenTab(tab)"
-          @keydown="tabKeydown($event, index)"
+        <div
+          v-for="(tab, index) in state?.tabs ?? []"
+          :key="tab.id"
+          :ref="(el) => setTabEl(tab.id, el)"
+          class="BrowserTabStrip-Tab BrowserTabStrip-NoDrag relative flex h-8 min-w-28 max-w-52 items-center gap-1 pr-1.5"
+          :class="{
+            'opacity-50': draggedTabId === tab.id,
+            'is-active': tab.id === state?.activeTabId
+          }"
+          @contextmenu="openTabMenu(tab.id, $event)"
+          @auxclick.middle.prevent="command(() => sdk.closeTab(tab.id))"
+          @dragover="showTabDropTarget($event, tab.id)"
+          @drop="dropTab($event, tab.id)"
         >
-          <span class="inline-flex h-4 w-4 flex-none" :class="tabIcon(tab)" aria-hidden="true" />
-          <span class="truncate">{{ tabTitle(tab) }}</span>
-        </button>
-        <TxIconButton
-          icon="i-ri-close-line"
-          size="xs"
-          :label="t('browser.closeTab', { title: tabTitle(tab) })"
-          @click="command(() => sdk.closeTab(tab.id))"
-        />
-        <span
-          v-if="draggedTabId && tabDropTarget?.id === tab.id"
-          aria-hidden="true"
-          class="pointer-events-none absolute inset-y-1 w-0.5 bg-[var(--tx-color-primary)]"
-          :class="tabDropTarget.before ? 'left-0' : 'right-0'"
-        />
-      </div>
+          <button
+            :id="`browser-tab-${tab.id}`"
+            type="button"
+            role="tab"
+            :aria-selected="tab.id === state?.activeTabId"
+            :tabindex="tab.id === state?.activeTabId ? 0 : -1"
+            aria-controls="browser-viewport"
+            aria-haspopup="menu"
+            :aria-description="t('browser.reorderTabsHint')"
+            :aria-expanded="tabMenuOpen && tabMenuTargetId === tab.id"
+            class="BrowserTabStrip-TabButton flex h-full min-w-0 flex-1 items-center gap-2 pl-3 pr-1 outline-none"
+            :title="tabTitle(tab)"
+            :draggable="!tabMovePending"
+            @dragstart="startTabDrag(tab.id, $event)"
+            @dragend="resetTabDrag"
+            @click="activateOrOpenTab(tab)"
+            @keydown="tabKeydown($event, index)"
+          >
+            <span
+              class="BrowserTabStrip-TabIcon inline-flex h-4 w-4 flex-none items-center justify-center"
+              :class="tabIcon(tab)"
+              aria-hidden="true"
+            />
+            <span class="BrowserTabStrip-TabTitle truncate">{{ tabTitle(tab) }}</span>
+          </button>
+          <TxIconButton
+            icon="i-ri-close-line"
+            size="xs"
+            shape="circle"
+            class="BrowserTabStrip-CloseBtn flex-none"
+            :label="t('browser.closeTab', { title: tabTitle(tab) })"
+            @click="command(() => sdk.closeTab(tab.id))"
+          />
+          <span
+            v-if="draggedTabId && tabDropTarget?.id === tab.id"
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-y-1.5 w-0.5 rounded-full bg-[var(--tx-color-primary)]"
+            :class="tabDropTarget.before ? 'left-0' : 'right-0'"
+          />
+        </div>
+      </TransitionGroup>
     </div>
     <div
-      class="BrowserTabStrip-NoDrag relative flex flex-none items-center gap-1"
+      class="BrowserTabStrip-NoDrag relative flex flex-none items-center gap-1.5"
       @dragover="showTabDropTarget($event, null)"
       @drop="dropTab($event, null)"
     >
       <span
         v-if="draggedTabId && tabDropTarget?.id === null"
         aria-hidden="true"
-        class="pointer-events-none absolute inset-y-1 left-0 w-0.5 bg-[var(--tx-color-primary)]"
+        class="pointer-events-none absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-[var(--tx-color-primary)]"
       />
-      <TxSkeleton v-if="connecting && !state" :width="150" :height="30" :radius="8" />
+      <TxSkeleton v-if="connecting && !state" :width="132" :height="32" :radius="16" />
       <TxIconButton
         icon="i-ri-add-line"
         size="sm"
+        shape="circle"
         :label="t('browser.addTab')"
         :disabled="!state"
-        class="flex-none"
+        class="BrowserTabStrip-AddBtn flex-none"
         @click="runInBrowser(() => sdk.createTab())"
       />
     </div>
@@ -394,8 +484,27 @@ onBeforeUnmount(() => {
 </template>
 
 <style lang="scss" scoped>
+@mixin tab-capsule-g2 {
+  border-radius: 999px;
+
+  @supports (corner-shape: superellipse(2)) {
+    border-radius: calc(12px * var(--tx-corner-smooth-scale, 1.6)) / 50%;
+    corner-shape: var(--tx-corner-smooth-shape, superellipse(1.777));
+  }
+}
+
+@mixin pill-control-g2 {
+  border-radius: 999px;
+
+  @supports (corner-shape: superellipse(2)) {
+    corner-shape: var(--tx-corner-smooth-shape, superellipse(1.777));
+  }
+}
+
 .BrowserTabStrip {
-  background: var(--tx-fill-color-light);
+  background: var(--shell-surface, var(--tx-fill-color-lighter));
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--shell-border, var(--tx-border-color-lighter)) 75%, transparent);
   -webkit-app-region: drag;
   user-select: none;
 }
@@ -413,6 +522,7 @@ onBeforeUnmount(() => {
 }
 
 .BrowserTabStrip-TabList {
+  padding: 4px 2px;
   scrollbar-width: none;
 
   &::-webkit-scrollbar {
@@ -420,13 +530,174 @@ onBeforeUnmount(() => {
   }
 }
 
+.BrowserTabStrip-ActivePill {
+  @include tab-capsule-g2;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: color-mix(
+    in srgb,
+    var(--tx-surface-raised, var(--tx-bg-color)) 58%,
+    var(--tx-bg-color)
+  );
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color) 65%, transparent),
+    var(--tx-elevation-1);
+  will-change: transform, width;
+
+  &.is-animated {
+    transition:
+      transform 240ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
+      width 240ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &.is-animated {
+      transition: none;
+    }
+  }
+}
+
 .BrowserTabStrip-Tab {
+  @include tab-capsule-g2;
+  z-index: 1;
+  color: var(--tx-text-color-regular);
+  background: color-mix(in srgb, var(--tx-fill-color) 42%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color-lighter) 70%, transparent);
+
   &:not(.is-active):hover {
-    background: var(--tx-fill-color);
+    color: var(--tx-text-color-primary);
+    background: color-mix(in srgb, var(--tx-fill-color) 85%, transparent);
+    box-shadow: inset 0 0 0 1px var(--tx-border-color-light);
   }
 
   &.is-active {
-    background: var(--tx-bg-color);
+    color: var(--tx-text-color-primary);
+    background: color-mix(
+      in srgb,
+      var(--tx-surface-raised, var(--tx-bg-color)) 58%,
+      var(--tx-bg-color)
+    );
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color) 65%, transparent),
+      var(--tx-elevation-1);
+
+    .BrowserTabStrip-TabList.has-active-pill &:not(:has(.BrowserTabStrip-TabButton:focus-visible)) {
+      background: transparent;
+      box-shadow: none;
+    }
+  }
+
+  &:has(.BrowserTabStrip-TabButton:focus-visible) {
+    box-shadow: inset 0 0 0 1.5px var(--tx-color-primary);
+  }
+}
+
+.browser-tab-enter-active,
+.browser-tab-leave-active {
+  transition:
+    opacity 160ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
+    transform 180ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+}
+
+.browser-tab-enter-from {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+.browser-tab-leave-to {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+.browser-tab-move {
+  transition: transform 200ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browser-tab-enter-active,
+  .browser-tab-leave-active,
+  .browser-tab-move {
+    transition: none;
+  }
+}
+
+.BrowserTabStrip-TabButton {
+  border-radius: inherit;
+  corner-shape: inherit;
+  color: inherit;
+  font-size: var(--shell-fs-body, 13px);
+  line-height: 1.25;
+  cursor: pointer;
+
+  .BrowserTabStrip-Tab.is-active & {
+    font-weight: 500;
+  }
+}
+
+.BrowserTabStrip-TabIcon {
+  font-size: 15px;
+  opacity: 0.82;
+
+  .BrowserTabStrip-Tab.is-active & {
+    opacity: 1;
+  }
+}
+
+.BrowserTabStrip-CloseBtn {
+  @include pill-control-g2;
+  --tx-icon-button-size: 20px;
+  --tx-icon-button-radius: 999px;
+  --tx-icon-button-color: var(--tx-text-color-secondary);
+  --tx-icon-button-bg: transparent;
+  --tx-icon-button-bg-hover: color-mix(in srgb, var(--tx-text-color-primary) 10%, transparent);
+  opacity: 0.65;
+  transition:
+    opacity 120ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+
+  :deep(.tx-icon-button__icon) {
+    font-size: 0.875rem;
+  }
+
+  .BrowserTabStrip-Tab:hover &,
+  .BrowserTabStrip-Tab:focus-within &,
+  .BrowserTabStrip-Tab.is-active & {
+    opacity: 1;
+  }
+
+  &:hover:not(.is-disabled) {
+    --tx-icon-button-color: var(--tx-text-color-primary);
+  }
+}
+
+.BrowserTabStrip-AddBtn {
+  @include pill-control-g2;
+  --tx-icon-button-size: 32px;
+  --tx-icon-button-radius: 999px;
+  --tx-icon-button-color: var(--tx-text-color-regular);
+  --tx-icon-button-bg: color-mix(in srgb, var(--tx-fill-color) 42%, transparent);
+  --tx-icon-button-bg-hover: color-mix(in srgb, var(--tx-fill-color) 85%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color-lighter) 70%, transparent);
+
+  :deep(.tx-icon-button__icon) {
+    font-size: 1rem;
+  }
+
+  &:hover:not(.is-disabled) {
+    --tx-icon-button-color: var(--tx-text-color-primary);
+    box-shadow: inset 0 0 0 1px var(--tx-border-color-light);
+  }
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 1.5px var(--tx-color-primary);
   }
 }
 </style>

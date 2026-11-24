@@ -1,10 +1,13 @@
 import type {
+  AcpClientCapabilities,
   AcpMcpServerConfig,
+  AcpPermissionOption,
   AcpPermissionRequestParams,
   AcpPermissionRequestResult,
   AcpPromptContent,
   OmpAcpSession
 } from '@talex-touch/tuff-intelligence'
+import type { DefaultHerdrAcpCapabilityBridge } from '../../herdr-core/acp-capability-bridge'
 import type {
   PiRuntimeRunEvent,
   PiRuntimeRunRecord,
@@ -16,6 +19,12 @@ import type { PiWorkspaceAuthority } from '../pi-agent-runtime-host'
 import process from 'node:process'
 import { OmpAcpClient } from '@talex-touch/tuff-intelligence'
 import { createLogger } from '../../../utils/logger'
+import {
+  HERDR_ACP_CLIENT_CAPABILITIES,
+  isHerdrAcpCapabilityMethod,
+  isHerdrAcpMutatingMethod
+} from '../../herdr-core/acp-capability-bridge'
+import { herdrCoreModule } from '../../herdr-core'
 import { buildObjectivePrompt } from '../pi-agent-run-log'
 import {
   createRunCancelledError,
@@ -51,7 +60,27 @@ export interface OmpAgentRuntimeHostOptions {
     params: AcpPermissionRequestParams,
     context: OmpPermissionRequestContext
   ) => AcpPermissionRequestResult | Promise<AcpPermissionRequestResult>
+  resolveHerdrCapabilityBridge?: (
+    payload: PiRuntimeStartPayload,
+    workspace?: PiWorkspaceAuthority
+  ) => DefaultHerdrAcpCapabilityBridge | null | Promise<DefaultHerdrAcpCapabilityBridge | null>
   sanitizeToolOutput?: (value: unknown) => unknown
+}
+
+const CAPABILITY_PERMISSION_OPTIONS: readonly AcpPermissionOption[] = [
+  { optionId: 'allow_once', name: 'Allow once', kind: 'allow_once' },
+  { optionId: 'reject_once', name: 'Deny', kind: 'reject_once' }
+]
+
+function isPermissionApproved(
+  decision: AcpPermissionRequestResult | null | undefined,
+  options: readonly AcpPermissionOption[]
+): boolean {
+  if (!decision || decision.outcome?.outcome !== 'selected') return false
+  const selectedId = decision.outcome.optionId
+  const matched = options.find((opt) => opt.optionId === selectedId)
+  if (!matched) return false
+  return matched.kind === 'allow_once' || matched.kind === 'allow_always'
 }
 
 interface ActiveRun {
@@ -61,6 +90,7 @@ interface ActiveRun {
   controller: AbortController
   payload: PiRuntimeStartPayload
   workspace?: PiWorkspaceAuthority
+  herdrBridge: DefaultHerdrAcpCapabilityBridge | null
   cancelled: boolean
   interrupted: boolean
   timedOut: boolean
@@ -197,6 +227,7 @@ function buildOmpPromptContent(
 
 export class OmpAgentRuntimeHost {
   private client: OmpAcpClient | null = null
+  private clientCapabilitiesEnabled = false
   private startPromise: Promise<void> | null = null
   private generation = 0
   private readonly activeRuns = new Map<string, ActiveRun>()
@@ -205,6 +236,9 @@ export class OmpAgentRuntimeHost {
   private readonly onRecord?: OmpAgentRuntimeHostOptions['onRecord']
   private readonly resolveMcpServers?: OmpAgentRuntimeHostOptions['resolveMcpServers']
   private readonly onPermissionRequest?: OmpAgentRuntimeHostOptions['onPermissionRequest']
+  private readonly resolveHerdrCapabilityBridge: NonNullable<
+    OmpAgentRuntimeHostOptions['resolveHerdrCapabilityBridge']
+  >
   private readonly sanitizeToolOutput: (value: unknown) => unknown
 
   constructor(options: OmpAgentRuntimeHostOptions = {}) {
@@ -212,6 +246,9 @@ export class OmpAgentRuntimeHost {
     this.onRecord = options.onRecord
     this.resolveMcpServers = options.resolveMcpServers
     this.onPermissionRequest = options.onPermissionRequest
+    this.resolveHerdrCapabilityBridge =
+      options.resolveHerdrCapabilityBridge ??
+      ((payload) => herdrCoreModule.createAcpCapabilityBridge({ cwd: payload.run.cwd }))
     this.sanitizeToolOutput = options.sanitizeToolOutput ?? defaultSanitizeValue
   }
 
@@ -219,6 +256,7 @@ export class OmpAgentRuntimeHost {
     if (!this.client) return false
     if (typeof this.client.isClosed === 'function' && this.client.isClosed()) {
       this.client = null
+      this.clientCapabilitiesEnabled = false
       return false
     }
     return true
@@ -228,8 +266,17 @@ export class OmpAgentRuntimeHost {
     return this.activeRuns.has(runId)
   }
 
-  async start(): Promise<void> {
-    if (this.isReady()) return
+  async start(options?: { clientCapabilities?: AcpClientCapabilities }): Promise<void> {
+    const wantsCapabilities = Boolean(options?.clientCapabilities)
+    if (this.isReady()) {
+      if (this.clientCapabilitiesEnabled === wantsCapabilities || this.activeRuns.size > 0) {
+        return
+      }
+      const previous = this.client
+      this.client = null
+      this.clientCapabilitiesEnabled = false
+      await previous?.close().catch(() => undefined)
+    }
     if (this.startPromise) return this.startPromise
 
     const startGen = this.generation
@@ -243,7 +290,8 @@ export class OmpAgentRuntimeHost {
       const spawned = await OmpAcpClient.spawn({
         executablePath: ompExe,
         env: withExecutableDirOnPath(process.env, ompExe),
-        onRequest: (method, params) => this.handleServerRequest(method, params)
+        onRequest: (method, params) => this.handleServerRequest(method, params),
+        ...(options?.clientCapabilities ? { clientCapabilities: options.clientCapabilities } : {})
       })
 
       if (this.generation !== startGen) {
@@ -255,11 +303,13 @@ export class OmpAgentRuntimeHost {
         spawned.on('close', () => {
           if (this.client === spawned) {
             this.client = null
+            this.clientCapabilitiesEnabled = false
           }
         })
       }
 
       this.client = spawned
+      this.clientCapabilitiesEnabled = wantsCapabilities
       ompHostLog.success('OMP ACP client initialized', {
         meta: {
           agentName: spawned.agentInfo?.name,
@@ -280,6 +330,7 @@ export class OmpAgentRuntimeHost {
     for (const run of runs) {
       run.interrupted = true
       run.controller.abort()
+      run.herdrBridge?.dispose()
       void run.session.cancel().catch(() => undefined)
       void run.session.close().catch(() => undefined)
     }
@@ -289,6 +340,7 @@ export class OmpAgentRuntimeHost {
     if (this.client) {
       const clientToClose = this.client
       this.client = null
+      this.clientCapabilitiesEnabled = false
       await clientToClose.close().catch(() => undefined)
     }
 
@@ -297,12 +349,16 @@ export class OmpAgentRuntimeHost {
       const lateClient = this.client as OmpAcpClient | null
       if (lateClient) {
         this.client = null
+        this.clientCapabilitiesEnabled = false
         await lateClient.close().catch(() => undefined)
       }
     }
   }
 
   private async handleServerRequest(method: string, params: unknown): Promise<unknown> {
+    if (isHerdrAcpCapabilityMethod(method)) {
+      return await this.handleHerdrCapabilityRequest(method, params)
+    }
     if (method !== 'session/request_permission') {
       throw new Error(`Unsupported ACP client request: ${method}`)
     }
@@ -330,6 +386,65 @@ export class OmpAgentRuntimeHost {
     }
   }
 
+  private async handleHerdrCapabilityRequest(method: string, params: unknown): Promise<unknown> {
+    const record = params && typeof params === 'object' ? (params as Record<string, unknown>) : null
+    const sessionId = typeof record?.sessionId === 'string' ? record.sessionId : ''
+    const runId = sessionId ? this.sessionToRunId.get(sessionId) : undefined
+    const activeRun = runId ? this.activeRuns.get(runId) : undefined
+    if (!activeRun || activeRun.controller.signal.aborted || !activeRun.herdrBridge) {
+      throw new Error('HERDR_ACP_BRIDGE_UNAVAILABLE')
+    }
+
+    // Enforce terminal ownership BEFORE prompting for permission so foreign IDs fail immediately.
+    if (
+      method === 'terminal/output' ||
+      method === 'terminal/wait_for_exit' ||
+      method === 'terminal/kill' ||
+      method === 'terminal/release'
+    ) {
+      if (!activeRun.herdrBridge.hasOwnedTerminal(record?.terminalId)) {
+        throw new Error('HERDR_ACP_TERMINAL_FORBIDDEN')
+      }
+    }
+
+    if (isHerdrAcpMutatingMethod(method)) {
+      if (!this.onPermissionRequest) {
+        // Fail closed when no permission handler is wired for mutating/exec capability calls.
+        throw new Error('HERDR_ACP_PERMISSION_DENIED')
+      }
+      const options = [...CAPABILITY_PERMISSION_OPTIONS]
+      const permissionParams: AcpPermissionRequestParams = {
+        sessionId,
+        toolCall: {
+          toolCallId: `herdr-acp:${method}:${Date.now()}`,
+          title: method,
+          kind: method === 'fs/write_text_file' ? 'edit' : 'execute',
+          rawInput: params
+        },
+        options
+      }
+      let approved = false
+      try {
+        const decision = await this.onPermissionRequest(permissionParams, {
+          runId: activeRun.runId,
+          payload: activeRun.payload,
+          workspace: activeRun.workspace,
+          signal: activeRun.controller.signal
+        })
+        approved = isPermissionApproved(decision, options)
+      } catch {
+        approved = false
+      }
+      if (!approved || activeRun.controller.signal.aborted) {
+        throw new Error('HERDR_ACP_PERMISSION_DENIED')
+      }
+    }
+
+    return await activeRun.herdrBridge.handleServerRequest(method, params, {
+      signal: activeRun.controller.signal
+    })
+  }
+
   async execute(
     payload: PiRuntimeStartPayload,
     workspace?: PiWorkspaceAuthority
@@ -346,11 +461,15 @@ export class OmpAgentRuntimeHost {
 
     let session: OmpAcpSession | null = null
     let activeRun: ActiveRun | null = null
+    let herdrBridge: DefaultHerdrAcpCapabilityBridge | null = null
     let timeoutTimer: NodeJS.Timeout | undefined
 
     try {
       await workspace?.assertAuthority()
-      await this.start()
+      herdrBridge = (await this.resolveHerdrCapabilityBridge(payload, workspace)) ?? null
+      await this.start(
+        herdrBridge ? { clientCapabilities: HERDR_ACP_CLIENT_CAPABILITIES } : undefined
+      )
       if (!this.client) throw new Error('OMP ACP runtime is unavailable')
 
       const preferredModel = resolvePreferredOmpModel(payload, workspace)
@@ -370,6 +489,7 @@ export class OmpAgentRuntimeHost {
         controller,
         payload,
         workspace,
+        herdrBridge,
         cancelled: false,
         interrupted: false,
         timedOut: false,
@@ -533,6 +653,7 @@ export class OmpAgentRuntimeHost {
       throw createRunFailedError(projectRunFailureDetail(error) || 'OMP runtime execution failed')
     } finally {
       if (timeoutTimer) clearTimeout(timeoutTimer)
+      herdrBridge?.dispose()
       this.activeRuns.delete(runId)
       if (session?.sessionId && this.sessionToRunId.get(session.sessionId) === runId) {
         this.sessionToRunId.delete(session.sessionId)

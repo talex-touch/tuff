@@ -76,3 +76,15 @@ export function debounceRef(value: any, delay: number) {
 export async function sleep(time: number) {
   return new Promise(resolve => setTimeout(() => resolve(time), time))
 }
+
+export function formatDuration(milliseconds: number, includeMs = false): string {
+  const safeMs = Number.isFinite(milliseconds) && milliseconds > 0 ? Math.floor(milliseconds) : 0
+  const totalSeconds = Math.floor(safeMs / 1000)
+  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0')
+  const seconds = String(totalSeconds % 60).padStart(2, '0')
+  if (!includeMs) {
+    return `${minutes}:${seconds}`
+  }
+  const ms = String(safeMs % 1000).padStart(3, '0')
+  return `${minutes}:${seconds}:${ms}`
+}
