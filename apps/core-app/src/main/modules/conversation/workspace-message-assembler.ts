@@ -35,6 +35,44 @@ function printableToolInput(value: unknown): string {
   return boundedPartText(typeof safe === 'string' ? safe : JSON.stringify(safe ?? null, null, 2))
 }
 
+export interface WorkspaceMessageAssemblerOptions {
+  preserveInitial?: boolean
+}
+
+function hydrateInitialParts(
+  rawParts: unknown,
+  tools: Map<string, AiToolCallPart>
+): AiMessagePart[] | undefined {
+  if (!Array.isArray(rawParts) || rawParts.length === 0) return undefined
+  const hydrated: AiMessagePart[] = []
+  for (const raw of rawParts) {
+    if (!raw || typeof raw !== 'object' || !('type' in raw)) continue
+    const part = raw as AiMessagePart
+    if (part.type === 'text') {
+      hydrated.push({ ...part, text: typeof part.text === 'string' ? part.text : '' })
+    } else if (part.type === 'reasoning') {
+      hydrated.push({
+        ...part,
+        text: typeof part.text === 'string' ? part.text : '',
+        done: true
+      })
+    } else if (part.type === 'tool-call') {
+      const cloned: AiToolCallPart = { ...part }
+      if (cloned.status === 'running' || cloned.status === 'pending') {
+        cloned.status = 'error'
+        cloned.error = 'TOOL_EXECUTION_INTERRUPTED'
+      }
+      if (typeof cloned.id === 'string' && cloned.id.length > 0) {
+        tools.set(cloned.id, cloned)
+      }
+      hydrated.push(cloned)
+    } else {
+      hydrated.push({ ...part })
+    }
+  }
+  return hydrated.length > 0 ? hydrated : undefined
+}
+
 /** Main's canonical turn projection. Commit/reset follows the existing Home contract. */
 export class WorkspaceMessageAssembler {
   private parts: AiMessagePart[] | undefined
@@ -50,12 +88,28 @@ export class WorkspaceMessageAssembler {
   private status: StoredConversationMessage['status'] = 'streaming'
   private compacting = false
   private providerActivity = false
+  private readonly hydratedInitial: boolean
+  private readonly hydratedContentLength: number
+  private newContent = ''
 
   constructor(
     private readonly initial: StoredConversationMessage,
-    turnId: string
+    turnId: string,
+    options?: WorkspaceMessageAssemblerOptions
   ) {
     this.meta = { ...initial.meta, turnId }
+    if (options?.preserveInitial) {
+      delete this.meta.errorCode
+      delete this.meta.errorDetail
+      delete this.meta.outcome
+      this.content = typeof initial.content === 'string' ? initial.content : ''
+      this.parts = hydrateInitialParts(initial.meta?.parts, this.tools)
+      this.commit()
+    }
+    this.hydratedInitial =
+      options?.preserveInitial === true &&
+      (this.content.length > 0 || (this.parts?.length ?? 0) > 0)
+    this.hydratedContentLength = this.hydratedInitial ? this.content.length : 0
   }
 
   get hasProviderActivity(): boolean {
@@ -100,6 +154,7 @@ export class WorkspaceMessageAssembler {
     this.markFirstToken()
     this.providerActivity = true
     this.content += delta
+    this.newContent += delta
     if (this.parts) {
       const tail = this.parts[this.parts.length - 1]
       if (tail?.type === 'text') tail.text += delta
@@ -159,6 +214,7 @@ export class WorkspaceMessageAssembler {
 
   private resetToCommit(): void {
     this.content = this.content.slice(0, this.committed.contentLength)
+    this.newContent = this.content.slice(this.hydratedContentLength)
     if (this.parts) {
       this.parts.length = this.committed.partsLength
       const tail = this.parts[this.parts.length - 1]
@@ -278,8 +334,20 @@ export class WorkspaceMessageAssembler {
     // An agent run reports only its last assistant message, which the stream has already
     // assembled as the tail of everything it said. Replacing the content with it would erase the
     // earlier messages (and their text parts) around the tool calls.
-    const alreadyStreamed = typeof text === 'string' && this.content.trimEnd().endsWith(text.trim())
-    if (typeof text === 'string' && text !== this.content && !alreadyStreamed) {
+    const trimmedInput = typeof text === 'string' ? text.trim() : ''
+    const alreadyStreamed =
+      typeof text === 'string' &&
+      (this.hydratedInitial
+        ? trimmedInput.length > 0 &&
+          this.newContent.trim().length > 0 &&
+          (this.newContent.trimEnd().endsWith(trimmedInput) || this.content.trim() === trimmedInput)
+        : this.content.trimEnd().endsWith(trimmedInput))
+    if (
+      typeof text === 'string' &&
+      (!this.hydratedInitial || trimmedInput.length > 0) &&
+      text !== this.content &&
+      !alreadyStreamed
+    ) {
       // Invocation fallback can supply the whole answer, whereas streams already
       // assembled it. Do not append an entire final answer to its own deltas.
       if (!this.content) this.delta(text)
@@ -289,6 +357,7 @@ export class WorkspaceMessageAssembler {
         if (text.startsWith(committedPrefix)) {
           // A whole final answer replaces provisional text, not completed tools.
           this.content = committedPrefix
+          this.newContent = this.content.slice(this.hydratedContentLength)
           if (this.parts) {
             const tail = this.parts[this.committed.partsLength - 1]
             this.parts = this.parts.filter(
@@ -297,8 +366,22 @@ export class WorkspaceMessageAssembler {
             if (tail?.type === 'text') tail.text = tail.text.slice(0, this.committed.textLength)
           }
           this.delta(text.slice(committedPrefix.length))
+        } else if (this.hydratedInitial) {
+          // Continuation-only completion after recovery hydration must never wipe pre-crash text.
+          this.content = committedPrefix
+          this.newContent = this.content.slice(this.hydratedContentLength)
+          if (this.parts) {
+            const tail = this.parts[this.committed.partsLength - 1]
+            this.parts = this.parts.filter(
+              (part, index) => index < this.committed.partsLength || part.type !== 'text'
+            )
+            if (tail?.type === 'text') tail.text = tail.text.slice(0, this.committed.textLength)
+          }
+          const needsSep = this.content.length > 0 && !/\s$/.test(this.content) && !/^\s/.test(text)
+          this.delta((needsSep ? '\n\n' : '') + text)
         } else {
           this.content = text
+          this.newContent = text
           if (this.parts) {
             this.parts = this.parts.filter((part) => part.type !== 'text')
             this.parts.push({ type: 'text', text })
@@ -306,7 +389,8 @@ export class WorkspaceMessageAssembler {
         }
       }
     }
-    if (!this.content.trim()) {
+    const effectiveContent = this.hydratedInitial ? this.newContent : this.content
+    if (!effectiveContent.trim()) {
       this.fail('CONVERSATION_EMPTY_RESPONSE')
       return
     }

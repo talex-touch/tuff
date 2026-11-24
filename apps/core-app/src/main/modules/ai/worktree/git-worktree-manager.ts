@@ -76,12 +76,34 @@ interface BoundedDiffStreamResult {
   byteLength: number
 }
 
+const GIT_REPO_OVERRIDE_ENV_VARS = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_COMMON_DIR',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_NAMESPACE',
+  'GIT_SUPER_PREFIX',
+  'GIT_PREFIX'
+] as const
+
 function buildGitEnv(): NodeJS.ProcessEnv {
-  return {
+  const env: NodeJS.ProcessEnv = {
     ...process.env,
     GIT_TERMINAL_PROMPT: '0',
     LC_ALL: 'C'
   }
+  for (const key of GIT_REPO_OVERRIDE_ENV_VARS) {
+    delete env[key]
+  }
+  return env
+}
+
+function stripTrailingLineTerminator(value: string): string {
+  if (value.endsWith('\r\n')) return value.slice(0, -2)
+  if (value.endsWith('\n')) return value.slice(0, -1)
+  return value
 }
 
 function isExecTimeoutError(error: unknown): boolean {
@@ -530,6 +552,284 @@ export class GitWorktreeManager {
 
   listLeases(): WorktreeLease[] {
     return Array.from(this.leases.values(), cloneLease)
+  }
+
+  async reattachWorktree(worktreeId: string, expectedRunId: string): Promise<WorktreeLease> {
+    assertValidWorktreeId(worktreeId)
+    if (
+      typeof expectedRunId !== 'string' ||
+      expectedRunId.trim().length === 0 ||
+      hasControlChar(expectedRunId)
+    ) {
+      throw new GitWorktreeError('WORKTREE_PATH_ESCAPE', 'expectedRunId must be a non-empty string')
+    }
+
+    return await this.withWorktreeLock(worktreeId, async () => {
+      const canonicalBaseDir = await this.ensureBaseDir()
+      const lease = await this.resolveLeaseForId(worktreeId, canonicalBaseDir)
+      if (lease.runId !== expectedRunId) {
+        throw new GitWorktreeError(
+          'WORKTREE_PATH_ESCAPE',
+          `Worktree "${worktreeId}" does not belong to run "${expectedRunId}"`
+        )
+      }
+
+      const canonicalWorktreePath = await this.assertManagedWorktreePath(
+        lease.worktreePath,
+        canonicalBaseDir
+      )
+
+      if (!isPathSameOrInside(lease.effectiveCwd, canonicalWorktreePath)) {
+        throw new GitWorktreeError(
+          'WORKTREE_PATH_ESCAPE',
+          'Persisted effectiveCwd escapes managed worktree directory'
+        )
+      }
+      if (!(await this.isDirectoryPresent(lease.effectiveCwd))) {
+        throw new GitWorktreeError(
+          'WORKTREE_NOT_FOUND',
+          'Persisted worktree effectiveCwd does not exist'
+        )
+      }
+      const canonicalEffectiveCwd = await realpath(lease.effectiveCwd)
+      if (!isPathSameOrInside(canonicalEffectiveCwd, canonicalWorktreePath)) {
+        throw new GitWorktreeError(
+          'WORKTREE_PATH_ESCAPE',
+          'Canonical effectiveCwd escapes managed worktree directory'
+        )
+      }
+
+      if (!(await this.isDirectoryPresent(lease.repoRoot))) {
+        throw new GitWorktreeError(
+          'WORKTREE_NOT_FOUND',
+          'Persisted worktree repository root does not exist'
+        )
+      }
+      const canonicalRepoRoot = await realpath(lease.repoRoot)
+      await assertNoEnclosingRepoSymlinkEscape(lease.repoRoot, canonicalRepoRoot)
+      await this.assertRegisteredGitWorktree(canonicalWorktreePath, canonicalRepoRoot)
+
+      const reattached: WorktreeLease = {
+        ...lease,
+        repoRoot: canonicalRepoRoot,
+        worktreePath: canonicalWorktreePath,
+        effectiveCwd: canonicalEffectiveCwd
+      }
+      this.leases.set(reattached.worktreeId, reattached)
+      return cloneLease(reattached)
+    })
+  }
+
+  async findPersistedLeaseByRunId(runId: string): Promise<WorktreeLease | null> {
+    if (typeof runId !== 'string' || runId.trim().length === 0 || hasControlChar(runId)) {
+      return null
+    }
+    for (const lease of this.leases.values()) {
+      if (lease.runId === runId) {
+        return cloneLease(lease)
+      }
+    }
+
+    const canonicalBaseDir = await this.ensureBaseDir()
+    const metaDir = path.join(canonicalBaseDir, META_DIR_NAME)
+    let entries
+    try {
+      entries = await readdir(metaDir, { withFileTypes: true })
+    } catch (error) {
+      if (isEnoentError(error)) return null
+      throw new GitWorktreeError(
+        'WORKTREE_GIT_FAILED',
+        'Unable to read persisted worktree metadata directory',
+        { cause: error }
+      )
+    }
+
+    let sawCorrupt = false
+    for (const entry of entries) {
+      if (!entry.name.endsWith('.json')) continue
+      if (!entry.isFile()) {
+        sawCorrupt = true
+        continue
+      }
+      const id = entry.name.slice(0, -'.json'.length)
+      try {
+        assertValidWorktreeId(id)
+      } catch {
+        sawCorrupt = true
+        continue
+      }
+      const { lease, corrupt } = await this.tryReadLeaseMetadata(canonicalBaseDir, id)
+      if (corrupt) {
+        sawCorrupt = true
+        continue
+      }
+      if (lease && lease.runId === runId) {
+        return cloneLease(lease)
+      }
+    }
+
+    if (sawCorrupt) {
+      throw new GitWorktreeError(
+        'WORKTREE_PATH_ESCAPE',
+        'Corrupt persisted worktree metadata prevented safe run lease lookup'
+      )
+    }
+    return null
+  }
+
+  private async assertRegisteredGitWorktree(
+    canonicalWorktreePath: string,
+    canonicalRepoRoot: string
+  ): Promise<void> {
+    const gitFilePath = path.join(canonicalWorktreePath, '.git')
+    let isLinked = false
+    try {
+      const gitFileStat = await lstat(gitFilePath)
+      if (gitFileStat.isFile() && !gitFileStat.isSymbolicLink()) {
+        const content = await readFile(gitFilePath, 'utf8')
+        isLinked = isLinkedWorktreeGitFile(content)
+      }
+    } catch {
+      isLinked = false
+    }
+    if (!isLinked) {
+      throw new GitWorktreeError(
+        'WORKTREE_INVALID_REPO',
+        'Persisted worktree path is not a linked git worktree'
+      )
+    }
+
+    let wtTopLevel: string
+    let wtCommonDir: string
+    let wtInside: string
+    let repoCommonDir: string
+    let registeredPaths: string[]
+    try {
+      const [topLevelProbe, wtCommonProbe, insideProbe, repoCommonProbe, listedPaths] =
+        await Promise.all([
+          this.execGit(['-C', canonicalWorktreePath, 'rev-parse', '--show-toplevel'], {
+            cwd: canonicalWorktreePath
+          }),
+          this.execGit(
+            [
+              '-C',
+              canonicalWorktreePath,
+              'rev-parse',
+              '--path-format=absolute',
+              '--git-common-dir'
+            ],
+            { cwd: canonicalWorktreePath }
+          ),
+          this.execGit(['-C', canonicalWorktreePath, 'rev-parse', '--is-inside-work-tree'], {
+            cwd: canonicalWorktreePath
+          }),
+          this.execGit(
+            ['-C', canonicalRepoRoot, 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+            { cwd: canonicalRepoRoot }
+          ),
+          this.listRegisteredWorktreePaths(canonicalRepoRoot)
+        ])
+      wtTopLevel = stripTrailingLineTerminator(topLevelProbe.stdout)
+      wtCommonDir = stripTrailingLineTerminator(wtCommonProbe.stdout)
+      wtInside = insideProbe.stdout.trim()
+      repoCommonDir = stripTrailingLineTerminator(repoCommonProbe.stdout)
+      registeredPaths = listedPaths
+    } catch (error) {
+      if (error instanceof GitWorktreeError && error.code === 'WORKTREE_GIT_TIMEOUT') {
+        throw error
+      }
+      throw new GitWorktreeError(
+        'WORKTREE_INVALID_REPO',
+        'Persisted worktree failed git repository verification',
+        { cause: error }
+      )
+    }
+
+    if (!wtTopLevel || !wtCommonDir || wtInside !== 'true' || !repoCommonDir) {
+      throw new GitWorktreeError(
+        'WORKTREE_INVALID_REPO',
+        'Persisted worktree is not an active git working tree'
+      )
+    }
+
+    const [canonicalWtTopLevel, canonicalWtCommonDir, canonicalRepoCommonDir] = await Promise.all([
+      realpath(wtTopLevel).catch(() => ''),
+      realpath(wtCommonDir).catch(() => ''),
+      realpath(repoCommonDir).catch(() => '')
+    ])
+    if (
+      !canonicalWtTopLevel ||
+      normalizePathForCompare(canonicalWtTopLevel) !==
+        normalizePathForCompare(canonicalWorktreePath) ||
+      !canonicalWtCommonDir ||
+      !canonicalRepoCommonDir ||
+      normalizePathForCompare(canonicalWtCommonDir) !==
+        normalizePathForCompare(canonicalRepoCommonDir)
+    ) {
+      throw new GitWorktreeError(
+        'WORKTREE_INVALID_REPO',
+        'Persisted worktree does not belong to its recorded git repository'
+      )
+    }
+
+    let registeredMatch = false
+    for (const listedPath of registeredPaths) {
+      const canonicalListed = await realpath(listedPath).catch(() => '')
+      if (
+        canonicalListed &&
+        normalizePathForCompare(canonicalListed) === normalizePathForCompare(canonicalWorktreePath)
+      ) {
+        registeredMatch = true
+        break
+      }
+    }
+    if (!registeredMatch) {
+      throw new GitWorktreeError(
+        'WORKTREE_INVALID_REPO',
+        'Persisted worktree is not registered in its recorded git repository'
+      )
+    }
+  }
+
+  private async listRegisteredWorktreePaths(canonicalRepoRoot: string): Promise<string[]> {
+    try {
+      const zProbe = await this.execGit(
+        ['-C', canonicalRepoRoot, 'worktree', 'list', '--porcelain', '-z'],
+        { cwd: canonicalRepoRoot }
+      )
+      const paths: string[] = []
+      for (const record of zProbe.stdout.split('\0')) {
+        if (record.startsWith('worktree ')) {
+          const listedPath = record.slice('worktree '.length)
+          if (listedPath.length > 0) paths.push(listedPath)
+        }
+      }
+      return paths
+    } catch (error) {
+      if (error instanceof GitWorktreeError && error.code === 'WORKTREE_GIT_TIMEOUT') {
+        throw error
+      }
+      // Fallback for Git < 2.36 where `worktree list --porcelain -z` is unsupported.
+      const plainProbe = await this.execGit(
+        ['-C', canonicalRepoRoot, 'worktree', 'list', '--porcelain'],
+        { cwd: canonicalRepoRoot }
+      )
+      const paths: string[] = []
+      for (const rawStanza of plainProbe.stdout.split(/\r?\n\r?\n/)) {
+        const stanza = rawStanza.replace(/^(?:\r?\n)+/, '')
+        if (!stanza.startsWith('worktree ')) continue
+        const body = stanza.slice('worktree '.length)
+        const nextFieldMatch =
+          /\r?\n(?:HEAD [0-9a-f]{40,64}|bare|detached|branch |locked|prunable)(?:$|\r?\n)/.exec(
+            body
+          )
+        const listedPath = nextFieldMatch
+          ? body.slice(0, nextFieldMatch.index)
+          : stripTrailingLineTerminator(body)
+        if (listedPath.length > 0) paths.push(listedPath)
+      }
+      return paths
+    }
   }
 
   async acquireWorktree(options: AcquireWorktreeOptions): Promise<WorktreeLease> {
@@ -1024,6 +1324,7 @@ export class GitWorktreeManager {
 
   async disposeAll(options?: DisposeAllWorktreesOptions): Promise<void> {
     const force = options?.force === true
+    const preserveRunIds = options?.preserveRunIds ? new Set(options.preserveRunIds) : null
     const totalBudgetMs =
       typeof options?.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
         ? Math.max(200, Math.floor(options.timeoutMs))
@@ -1037,6 +1338,13 @@ export class GitWorktreeManager {
     if (!canonicalBaseDir) return
 
     for (const lease of snapshot) {
+      if (preserveRunIds?.has(lease.runId)) {
+        worktreeLog.info('Preserving managed worktree for startup recovery', {
+          meta: { worktreeId: lease.worktreeId }
+        })
+        continue
+      }
+
       const remainingMs = deadline - this.now()
       if (remainingMs <= 0) {
         worktreeLog.warn('Worktree disposeAll hit shutdown budget; stopping early', {
@@ -1048,6 +1356,7 @@ export class GitWorktreeManager {
       await this.withWorktreeLock(lease.worktreeId, async () => {
         const liveLease = this.leases.get(lease.worktreeId)
         if (!liveLease) return
+        if (preserveRunIds?.has(liveLease.runId)) return
         const perItemTimeoutMs = Math.max(100, Math.min(this.gitTimeoutMs, remainingMs))
         try {
           await this.releaseResolvedLease(liveLease, canonicalBaseDir, {

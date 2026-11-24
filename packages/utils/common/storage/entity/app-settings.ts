@@ -66,6 +66,17 @@ export function normalizeCoreBoxQuickSelectAction(value: unknown): CoreBoxQuickS
   return value === 'execute' || value === 'locate' ? value : DEFAULT_CORE_BOX_QUICK_SELECT_ACTION
 }
 
+/**
+ * Whether interrupted conversations, background agent runs, automations, and crashed windows
+ * automatically recover on startup.
+ *
+ * Enabled by default so profiles saved before this key existed recover automatically; only an
+ * explicit `false` disables startup recovery.
+ */
+export function normalizeAutoResumeOnStartup(value: unknown): boolean {
+  return value !== false
+}
+
 /** Default layout atom for 'simple' preset */
 const defaultLayoutAtomSimple: LayoutAtomConfig = {
   preset: 'simple',
@@ -423,6 +434,11 @@ const _appSettingOriginData = {
      * at the bottom of assistant message bubbles.
      */
     showTurnMetrics: true,
+    /**
+     * Whether interrupted conversations, background agent runs, automations, and crashed windows
+     * automatically recover on startup.
+     */
+    autoResumeOnStartup: true,
   },
   dashboard: {
     enable: false,

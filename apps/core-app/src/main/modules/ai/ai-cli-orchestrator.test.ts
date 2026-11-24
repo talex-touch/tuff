@@ -224,6 +224,7 @@ vi.mock('./pi-agent-runtime-host', async (importOriginal) => {
 })
 
 import { AiCliOrchestrator } from './ai-cli-orchestrator'
+import { setAutoResumeOnStartupReader } from './auto-resume-setting'
 import {
   createApprovalRequiredError,
   createInterruptedToolCallError,
@@ -669,8 +670,7 @@ describe('AiCliOrchestrator delegation boundary', () => {
       return orchestratorMocks.profiles.get(profileId) ?? null
     })
 
-    const originalUpdate = orchestratorMocks.updateOrchestratorRun.getMockImplementation()
-    if (!originalUpdate) throw new Error('Expected the store update mock implementation')
+    const originalAppendEvent = orchestratorMocks.appendOrchestratorEvent.getMockImplementation()
     let signalTerminalWrite!: () => void
     let releaseTerminalWrite!: () => void
     const terminalWriteStarted = new Promise<void>((resolve) => {
@@ -679,14 +679,15 @@ describe('AiCliOrchestrator delegation boundary', () => {
     const terminalWriteGate = new Promise<void>((resolve) => {
       releaseTerminalWrite = resolve
     })
-    orchestratorMocks.updateOrchestratorRun.mockImplementation(async (runId, update) => {
-      const result = await originalUpdate(runId, update)
-      if (update.status === 'interrupted') {
-        signalTerminalWrite()
-        await terminalWriteGate
+    orchestratorMocks.appendOrchestratorEvent.mockImplementation(
+      async (runId, type, payload, level) => {
+        if (type === 'run.suspended_for_restart') {
+          signalTerminalWrite()
+          await terminalWriteGate
+        }
+        return await originalAppendEvent?.(runId, type, payload, level)
       }
-      return result
-    })
+    )
 
     const execution = orchestrator.execute({
       objective: 'Drain this admitted run during shutdown.',
@@ -723,8 +724,48 @@ describe('AiCliOrchestrator delegation boundary', () => {
     } finally {
       releaseProfileLookup()
       releaseTerminalWrite()
-      orchestratorMocks.updateOrchestratorRun.mockImplementation(originalUpdate)
+      if (originalAppendEvent) {
+        orchestratorMocks.appendOrchestratorEvent.mockImplementation(originalAppendEvent)
+      } else {
+        orchestratorMocks.appendOrchestratorEvent.mockReset()
+      }
       await Promise.allSettled([execution, ...(shutdown ? [shutdown] : [])])
+    }
+  })
+
+  it('writes terminal interrupted status on shutdown when autoResumeOnStartup is disabled', async () => {
+    setAutoResumeOnStartupReader(() => false)
+    try {
+      orchestratorMocks.profiles.set('profile-autonomous', enabledProfile('profile-autonomous'))
+      let signalProfileLookup!: () => void
+      let releaseProfileLookup!: () => void
+      const profileLookupStarted = new Promise<void>((resolve) => {
+        signalProfileLookup = resolve
+      })
+      const profileLookupGate = new Promise<void>((resolve) => {
+        releaseProfileLookup = resolve
+      })
+      orchestratorMocks.getProfile.mockImplementationOnce(async (profileId) => {
+        signalProfileLookup()
+        await profileLookupGate
+        return orchestratorMocks.profiles.get(profileId) ?? null
+      })
+
+      const execution = orchestrator.execute({
+        objective: 'Interrupt when auto-resume is disabled.',
+        profileId: 'profile-autonomous'
+      })
+      await profileLookupStarted
+      const shutdown = orchestrator.shutdown()
+      await vi.waitFor(() => expect(orchestratorMocks.runtimeStop).toHaveBeenCalledOnce())
+      releaseProfileLookup()
+
+      const settled = await execution
+      await shutdown
+      expect(settled.status).toBe('interrupted')
+      expect(orchestratorMocks.runs.get(settled.id)?.status).toBe('interrupted')
+    } finally {
+      setAutoResumeOnStartupReader(null)
     }
   })
 

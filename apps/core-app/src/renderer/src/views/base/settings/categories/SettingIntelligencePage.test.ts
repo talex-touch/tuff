@@ -3,8 +3,8 @@
    the settings sections the page composes, not components this file owns. */
 
 import { mount } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
-import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key })
@@ -18,6 +18,13 @@ vi.mock('~/modules/settings/categories', () => ({
   settingCategoryChildren: () => []
 }))
 
+vi.mock('~/modules/storage/app-storage', async () => {
+  const { reactive } = await import('vue')
+  return {
+    appSetting: reactive({})
+  }
+})
+
 vi.mock('~/components/settings/SettingsPage.vue', () => ({
   default: defineComponent({
     name: 'SettingsPage',
@@ -30,8 +37,40 @@ vi.mock('~/components/settings/SettingsPage.vue', () => ({
 vi.mock('~/components/settings/SettingRow.vue', () => ({
   default: defineComponent({
     name: 'SettingRow',
-    setup() {
-      return () => null
+    props: {
+      title: { type: String, default: '' },
+      description: { type: String, default: '' }
+    },
+    setup(props, { slots }) {
+      return () =>
+        h('div', { class: 'setting-row-stub', 'data-title': props.title }, [
+          h('span', { class: 'setting-row-title' }, props.title),
+          props.description ? h('span', { class: 'setting-row-desc' }, props.description) : null,
+          slots.trailing?.()
+        ])
+    }
+  })
+}))
+
+vi.mock('~/components/tuff/TuffBlockSwitch.vue', () => ({
+  default: defineComponent({
+    name: 'TuffBlockSwitch',
+    props: {
+      modelValue: { type: Boolean, required: true },
+      title: { type: String, default: '' }
+    },
+    emits: ['update:modelValue'],
+    setup(props, { emit }) {
+      return () =>
+        h('input', {
+          type: 'checkbox',
+          class: 'tuff-block-switch-stub',
+          'data-switch-title': props.title,
+          checked: props.modelValue,
+          onChange: (event: Event) => {
+            emit('update:modelValue', (event.target as HTMLInputElement).checked)
+          }
+        })
     }
   })
 }))
@@ -54,9 +93,24 @@ vi.mock('../SettingLocalAiCli.vue', () => ({
   })
 }))
 
+import { appSetting } from '~/modules/storage/app-storage'
 import SettingIntelligencePage from './SettingIntelligencePage.vue'
 
+const mockAppSetting = appSetting as {
+  dev?: { developerMode?: boolean }
+  conversation?: {
+    showTurnMetrics?: boolean
+    autoResumeOnStartup?: boolean
+    [key: string]: unknown
+  }
+}
+
 describe('SettingIntelligencePage', () => {
+  beforeEach(() => {
+    delete mockAppSetting.dev
+    delete mockAppSetting.conversation
+  })
+
   it('mounts the Local AI CLI section as a resolved component', () => {
     const wrapper = mount(SettingIntelligencePage)
 
@@ -75,5 +129,57 @@ describe('SettingIntelligencePage', () => {
     expect(wrapper.find('settingassistant').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('settings.skillsMcp')
     expect(wrapper.find('settingskillsmcp').exists()).toBe(false)
+  })
+
+  it('defaults autoResumeOnStartup to true and renders its toggle row', () => {
+    const wrapper = mount(SettingIntelligencePage)
+
+    const row = wrapper.find('[data-title="settingsConversation.autoResumeTitle"]')
+    expect(row.exists()).toBe(true)
+    expect(row.find('.setting-row-desc').text()).toBe('settingsConversation.autoResumeDesc')
+
+    const toggle = wrapper.find<HTMLInputElement>(
+      'input[data-switch-title="settingsConversation.autoResumeTitle"]'
+    )
+    expect(toggle.exists()).toBe(true)
+    expect(toggle.element.checked).toBe(true)
+  })
+
+  it('toggles autoResumeOnStartup false and true without clobbering showTurnMetrics', async () => {
+    mockAppSetting.conversation = {
+      showTurnMetrics: false
+    }
+
+    const wrapper = mount(SettingIntelligencePage)
+    const autoResumeToggle = wrapper.find<HTMLInputElement>(
+      'input[data-switch-title="settingsConversation.autoResumeTitle"]'
+    )
+    const metricsToggle = wrapper.find<HTMLInputElement>(
+      'input[data-switch-title="settingsConversation.showMetricsTitle"]'
+    )
+
+    expect(autoResumeToggle.element.checked).toBe(true)
+    expect(metricsToggle.element.checked).toBe(false)
+
+    await autoResumeToggle.setValue(false)
+    expect(mockAppSetting.conversation?.autoResumeOnStartup).toBe(false)
+    expect(mockAppSetting.conversation?.showTurnMetrics).toBe(false)
+    expect(autoResumeToggle.element.checked).toBe(false)
+
+    await autoResumeToggle.setValue(true)
+    expect(mockAppSetting.conversation?.autoResumeOnStartup).toBe(true)
+    expect(mockAppSetting.conversation?.showTurnMetrics).toBe(false)
+    expect(autoResumeToggle.element.checked).toBe(true)
+  })
+
+  it('initializes conversation settings cleanly when absent without losing showTurnMetrics default', async () => {
+    const wrapper = mount(SettingIntelligencePage)
+    const autoResumeToggle = wrapper.find<HTMLInputElement>(
+      'input[data-switch-title="settingsConversation.autoResumeTitle"]'
+    )
+
+    await autoResumeToggle.setValue(false)
+    expect(mockAppSetting.conversation?.autoResumeOnStartup).toBe(false)
+    expect(mockAppSetting.conversation?.showTurnMetrics).toBe(true)
   })
 })

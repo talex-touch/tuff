@@ -18,7 +18,7 @@ import type {
 import type { PiRuntimeRunEvent } from '../ai/pi-agent-runtime-protocol'
 import type { MessageUpdateEvent } from '@talex-touch/pi-desktop-reuse/message-stream'
 import type { UiMessage } from '@talex-touch/pi-desktop-reuse/types/message-stream'
-import type { WorkspaceAdmittedTurn } from './workspace-service'
+import type { WorkspaceAdmittedTurn, WorkspaceTurnRecoveryContext } from './workspace-service'
 import { realpath, stat } from 'node:fs/promises'
 import { z } from 'zod'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -27,6 +27,7 @@ import {
   STREAM_COALESCE_INTERVAL_MS,
   toWireMessageUpdate
 } from '@talex-touch/pi-desktop-reuse/message-stream'
+import { isAutoResumeOnStartupEnabled } from '../ai/auto-resume-setting'
 import { ensureIntelligenceConfigLoaded } from '../ai/intelligence-config'
 import { getProviderModelOptions } from '../ai/intelligence-provider-model-options'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
@@ -36,6 +37,7 @@ import { contextHygieneService } from '../ai/intelligence-context-hygiene'
 import { markHomeChatInvoke } from '../ai/intelligence-invoke-purpose'
 import { aiCliOrchestrator } from '../ai/ai-cli-orchestrator'
 import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
+import { sanitizeToolOutputForRuntime } from '../ai/pi-agent-runtime-host'
 import { resolveConversationWorkspaceRoot } from '../local-ai-cli/workspace-root'
 import { getProject } from '../project/project-store'
 import { toolGatewayModule } from '../tool-gateway'
@@ -47,6 +49,8 @@ import { WorkspaceMessageAssembler } from './workspace-message-assembler'
 
 const log = getLogger('conversation-workspace')
 const PERSIST_INTERVAL_MS = 250
+const RECOVERY_CONTINUATION_BYTE_LIMIT = 8 * 1024
+const RECOVERY_TRUNCATION_NOTICE = '\n[truncated]'
 const contextSummarySchema = z
   .object({
     tokenBudget: z.number().nonnegative(),
@@ -78,6 +82,14 @@ const providerResponseSchema = z
 export interface WorkspaceRunnerOptions {
   onChanged: (state: ConversationWorkspaceState) => void
   onMessageUpdate: (update: WorkspaceMessageUpdate) => void
+  autoResumeOnStartup?: boolean | (() => boolean)
+}
+
+export interface WorkspaceStartupRecoveryResult {
+  enabled: boolean
+  resumedTurns: string[]
+  resumedQueues: string[]
+  interruptedTurns: string[]
 }
 
 interface ExecutionSlot {
@@ -89,6 +101,8 @@ interface ExecutionSlot {
   runId?: string
   pendingApproval: boolean
   ended: boolean
+  userPaused?: boolean
+  shuttingDown?: boolean
   seq: number
   queuedFrame?: MessageUpdateEvent
   frameTimer?: NodeJS.Timeout
@@ -104,6 +118,7 @@ export class ConversationWorkspaceRunner {
   private readonly deleting = new Set<string>()
   private readonly rollbacks = new Map<string, Set<Promise<FileReviewRollbackResult>>>()
   private closing = false
+  private recoveryPromise: Promise<WorkspaceStartupRecoveryResult> | undefined
 
   constructor(private readonly options: WorkspaceRunnerOptions) {
     this.service = new ConversationWorkspaceService({
@@ -122,13 +137,189 @@ export class ConversationWorkspaceRunner {
         }
       },
       onChanged: (state) => options.onChanged(state),
+      autoResumeOnStartup: options.autoResumeOnStartup ?? isAutoResumeOnStartupEnabled,
       resolveVoiceRecording: (recordingId) => voiceKeptRecordings.get(recordingId)?.path ?? null,
       releaseVoiceRecording: (recordingId) => voiceKeptRecordings.discard(recordingId)
     })
   }
 
+  private isAutoResumeEnabled(): boolean {
+    const opt = this.options.autoResumeOnStartup
+    if (typeof opt === 'function') {
+      try {
+        return Boolean(opt())
+      } catch {
+        return true
+      }
+    }
+    if (typeof opt === 'boolean') return opt
+    return isAutoResumeOnStartupEnabled()
+  }
+
+  private launchSlotExecution(slot: ExecutionSlot): void {
+    slot.task = this.execute(slot).catch(async (error) => {
+      if (slot.ended || slot.pendingApproval || slot.shuttingDown) return
+      const detail = error instanceof Error && error.message ? error.message : String(error)
+      log.error('Workspace execution failed', {
+        conversationId: slot.conversationId,
+        turnId: slot.turn?.input.id,
+        error: detail
+      })
+      await this.end(
+        slot,
+        slot.controller.signal.aborted ? 'WORKSPACE_TURN_CANCELLED' : 'WORKSPACE_EXECUTION_FAILED',
+        slot.controller.signal.aborted ? 'cancelled' : 'failed',
+        slot.controller.signal.aborted ? undefined : detail
+      )
+    })
+    // Keep a rejection observer even if durable storage itself fails during the
+    // error projection; it cannot become an unhandled background rejection.
+    void slot.task.catch(() => {
+      log.error('Workspace execution state could not be persisted')
+    })
+  }
+
+  private async ensureDisabledRecoveryFinalized(): Promise<void> {
+    if (this.isAutoResumeEnabled()) return
+    await this.service.initialize({ autoResumeOnStartup: false })
+    await this.service.finalizeDisabledRecovery()
+  }
+
+  async recoverOnStartup(): Promise<WorkspaceStartupRecoveryResult> {
+    if (this.recoveryPromise) return this.recoveryPromise
+    if (this.closing) {
+      return {
+        enabled: this.isAutoResumeEnabled(),
+        resumedTurns: [],
+        resumedQueues: [],
+        interruptedTurns: []
+      }
+    }
+    this.recoveryPromise = this.performStartupRecovery()
+    return this.recoveryPromise
+  }
+
+  private async performStartupRecovery(): Promise<WorkspaceStartupRecoveryResult> {
+    const enabled = this.isAutoResumeEnabled()
+    await this.service.initialize({ autoResumeOnStartup: enabled })
+    if (this.closing) {
+      return {
+        enabled,
+        resumedTurns: [],
+        resumedQueues: [],
+        interruptedTurns: this.service.listStartupInterruptedConversations()
+      }
+    }
+    if (!enabled) {
+      const interruptedTurns = await this.service.finalizeDisabledRecovery()
+      return {
+        enabled: false,
+        resumedTurns: [],
+        resumedQueues: [],
+        interruptedTurns
+      }
+    }
+
+    const { activeConversationIds, queuedConversationIds } =
+      await this.service.listRecoverableConversations()
+    const resumedTurns: string[] = []
+    const resumedQueues: string[] = []
+
+    for (const conversationId of activeConversationIds) {
+      if (this.closing || this.deleting.has(conversationId) || this.slots.has(conversationId))
+        continue
+      const slot: ExecutionSlot = {
+        conversationId,
+        controller: new AbortController(),
+        pendingApproval: false,
+        ended: false,
+        seq: 0,
+        lastPersist: 0,
+        pendingWrites: Promise.resolve(),
+        context: {}
+      }
+      this.slots.set(conversationId, slot)
+      let claimedTurn: WorkspaceAdmittedTurn | undefined
+      try {
+        const turn = await this.service.claimRecoverableTurn(conversationId, {
+          canCommit: () => !this.closing && !slot.shuttingDown && !slot.userPaused
+        })
+        if (!turn) {
+          if (this.slots.get(conversationId) === slot) this.slots.delete(conversationId)
+          if (slot.userPaused || slot.controller.signal.aborted) {
+            await this.service
+              .pause(conversationId, 'cancelled', { cancelUnclaimedActive: true })
+              .catch(() => undefined)
+          }
+          continue
+        }
+        claimedTurn = turn
+        if (slot.userPaused || slot.controller.signal.aborted) {
+          slot.ended = true
+          if (this.slots.get(conversationId) === slot) this.slots.delete(conversationId)
+          await this.service
+            .pause(conversationId, 'cancelled', { cancelUnclaimedActive: true })
+            .catch(() => undefined)
+          continue
+        }
+        if (this.closing || slot.shuttingDown) {
+          slot.ended = true
+          if (this.slots.get(conversationId) === slot) this.slots.delete(conversationId)
+          await this.service
+            .releaseUnstartedRecoveryClaim(
+              conversationId,
+              turn.input.id,
+              Math.max(0, (turn.recovery?.attempt ?? 1) - 1)
+            )
+            .catch(() => undefined)
+          continue
+        }
+        slot.turn = turn
+        slot.context = turn.context ?? {}
+        slot.assembler = new WorkspaceMessageAssembler(turn.assistant, turn.input.id, {
+          preserveInitial: true
+        })
+        this.snapshot(slot)
+        this.launchSlotExecution(slot)
+        resumedTurns.push(conversationId)
+      } catch (error) {
+        if (claimedTurn) {
+          await this.service
+            .interruptClaimedTurn(conversationId, claimedTurn.input.id)
+            .catch(() => undefined)
+        }
+        if (this.slots.get(conversationId) === slot) this.slots.delete(conversationId)
+        log.warn('Failed to resume interrupted workspace turn on startup', {
+          conversationId,
+          error
+        })
+      }
+    }
+
+    for (const conversationId of queuedConversationIds) {
+      if (this.closing || this.deleting.has(conversationId) || this.slots.has(conversationId))
+        continue
+      const started = await this.kick(conversationId).catch((error) => {
+        log.warn('Queued workspace input could not be resumed on startup', {
+          conversationId,
+          error
+        })
+        return undefined
+      })
+      if (started) resumedQueues.push(conversationId)
+    }
+
+    return {
+      enabled: true,
+      resumedTurns,
+      resumedQueues,
+      interruptedTurns: this.service.listStartupInterruptedConversations()
+    }
+  }
+
   async submit(request: WorkspaceSubmitRequest): Promise<WorkspaceSubmitResult> {
     if (this.closing || this.deleting.has(request.conversationId)) throw new Error('WORKSPACE_BUSY')
+    await this.ensureDisabledRecoveryFinalized()
     const canDirect =
       !this.slots.has(request.conversationId) &&
       (await this.service.canStartDirectly(request.conversationId))
@@ -151,28 +342,21 @@ export class ConversationWorkspaceRunner {
           this.slots.delete(request.conversationId)
           return result
         }
+        if (this.closing || slot.shuttingDown) {
+          slot.ended = true
+          if (this.slots.get(request.conversationId) === slot)
+            this.slots.delete(request.conversationId)
+          return {
+            disposition: 'started',
+            state: result.state
+          }
+        }
         const { turn } = result
         slot.turn = turn
         slot.context = turn.context ?? {}
         slot.assembler = new WorkspaceMessageAssembler(turn.assistant, turn.input.id)
         this.snapshot(slot)
-        slot.task = this.execute(slot).catch(async (error) => {
-          if (slot.ended || slot.pendingApproval) return
-          const detail = error instanceof Error && error.message ? error.message : String(error)
-          log.error('Workspace execution failed', {
-            conversationId: slot.conversationId,
-            turnId: slot.turn?.input.id,
-            error: detail
-          })
-          await this.end(
-            slot,
-            slot.controller.signal.aborted
-              ? 'WORKSPACE_TURN_CANCELLED'
-              : 'WORKSPACE_EXECUTION_FAILED',
-            slot.controller.signal.aborted ? 'cancelled' : 'failed',
-            slot.controller.signal.aborted ? undefined : detail
-          )
-        })
+        this.launchSlotExecution(slot)
         return {
           disposition: 'started',
           state: (await this.service.get(request.conversationId))!
@@ -195,6 +379,9 @@ export class ConversationWorkspaceRunner {
   private async kick(conversationId: string): Promise<string | undefined> {
     if (this.closing || this.deleting.has(conversationId) || this.slots.has(conversationId))
       return undefined
+    await this.ensureDisabledRecoveryFinalized()
+    if (this.closing || this.deleting.has(conversationId) || this.slots.has(conversationId))
+      return undefined
     const slot: ExecutionSlot = {
       conversationId,
       controller: new AbortController(),
@@ -212,32 +399,16 @@ export class ConversationWorkspaceRunner {
         this.slots.delete(conversationId)
         return undefined
       }
+      if (this.closing || slot.shuttingDown) {
+        slot.ended = true
+        if (this.slots.get(conversationId) === slot) this.slots.delete(conversationId)
+        return turn.input.id
+      }
       slot.turn = turn
       slot.context = turn.context ?? {}
       slot.assembler = new WorkspaceMessageAssembler(turn.assistant, turn.input.id)
       this.snapshot(slot)
-      slot.task = this.execute(slot).catch(async (error) => {
-        if (slot.ended || slot.pendingApproval) return
-        const detail = error instanceof Error && error.message ? error.message : String(error)
-        log.error('Workspace execution failed', {
-          conversationId: slot.conversationId,
-          turnId: slot.turn?.input.id,
-          error: detail
-        })
-        await this.end(
-          slot,
-          slot.controller.signal.aborted
-            ? 'WORKSPACE_TURN_CANCELLED'
-            : 'WORKSPACE_EXECUTION_FAILED',
-          slot.controller.signal.aborted ? 'cancelled' : 'failed',
-          slot.controller.signal.aborted ? undefined : detail
-        )
-      })
-      // Keep a rejection observer even if durable storage itself fails during the
-      // error projection; it cannot become an unhandled background rejection.
-      void slot.task.catch(() => {
-        log.error('Workspace execution state could not be persisted')
-      })
+      this.launchSlotExecution(slot)
       return turn.input.id
     } catch (error) {
       this.slots.delete(conversationId)
@@ -249,7 +420,7 @@ export class ConversationWorkspaceRunner {
   private async execute(slot: ExecutionSlot): Promise<void> {
     if (!slot.turn || !slot.assembler) throw new Error('WORKSPACE_STALE_TURN')
     if (slot.controller.signal.aborted) {
-      await this.end(slot, 'WORKSPACE_TURN_CANCELLED', 'cancelled')
+      if (!slot.shuttingDown) await this.end(slot, 'WORKSPACE_TURN_CANCELLED', 'cancelled')
       return
     }
     if (slot.turn.input.settings.mode === 'agent') await this.executeAgent(slot)
@@ -426,6 +597,16 @@ export class ConversationWorkspaceRunner {
     const attachments = await this.service.getModelAttachments(turn.input)
     const lastUser = messages.findLast((message) => message.role === 'user')
     if (lastUser && attachments.length) lastUser.attachments = attachments
+    const continuationNote = turn.recovery
+      ? buildRecoveryContinuationPrompt(turn.recovery, false)
+      : null
+    if (continuationNote) {
+      const insertAt = messages.findIndex((message) => message.role !== 'system')
+      messages.splice(insertAt < 0 ? messages.length : insertAt, 0, {
+        role: 'system',
+        content: continuationNote
+      })
+    }
     const options: IntelligenceInvokeOptions & { signal: AbortSignal } = markHomeChatInvoke(
       {
         ...(turn.input.settings.providerId
@@ -469,7 +650,7 @@ export class ConversationWorkspaceRunner {
       }
     } catch (error) {
       if (slot.controller.signal.aborted) {
-        await this.end(slot, 'WORKSPACE_TURN_CANCELLED', 'cancelled')
+        if (!slot.shuttingDown) await this.end(slot, 'WORKSPACE_TURN_CANCELLED', 'cancelled')
         return
       }
       // Preserve the existing no-activity fallback, never a second billable request
@@ -481,7 +662,7 @@ export class ConversationWorkspaceRunner {
         prepared.options
       )
       if (slot.controller.signal.aborted) {
-        await this.end(slot, 'WORKSPACE_TURN_CANCELLED', 'cancelled')
+        if (!slot.shuttingDown) await this.end(slot, 'WORKSPACE_TURN_CANCELLED', 'cancelled')
         return
       }
       slot.assembler!.applyStream({
@@ -494,9 +675,9 @@ export class ConversationWorkspaceRunner {
       if (result.usageReported && result.usage) slot.assembler!.recordUsage(result.usage)
       slot.assembler!.complete(result.result)
     }
-    if (slot.controller.signal.aborted)
-      await this.end(slot, 'WORKSPACE_TURN_CANCELLED', 'cancelled')
-    else {
+    if (slot.controller.signal.aborted) {
+      if (!slot.shuttingDown) await this.end(slot, 'WORKSPACE_TURN_CANCELLED', 'cancelled')
+    } else {
       slot.assembler!.complete()
       await this.complete(slot)
     }
@@ -532,9 +713,14 @@ export class ConversationWorkspaceRunner {
         signal: slot.controller.signal
       }
     )
+    const continuationBlock = turn.recovery
+      ? buildRecoveryContinuationPrompt(turn.recovery, true)
+      : null
+    const baseObjective = prepared.payload.messages.at(-1)!.content
+    const objective = continuationBlock ? `${baseObjective}\n\n${continuationBlock}` : baseObjective
     await aiCliOrchestrator.executeWorkspace(
       {
-        objective: prepared.payload.messages.at(-1)!.content,
+        objective,
         profileId: profile.id,
         sessionId: slot.conversationId,
         cwd: root,
@@ -579,7 +765,17 @@ export class ConversationWorkspaceRunner {
             runId: run.id,
             status: 'running'
           })
-          if (slot.controller.signal.aborted) await aiCliOrchestrator.cancelPersistedRun(run.id)
+          if (slot.controller.signal.aborted) {
+            if (slot.shuttingDown) {
+              try {
+                aiCliOrchestrator.cancel?.(run.id)
+              } catch {
+                // Best-effort cancellation during graceful shutdown.
+              }
+            } else {
+              await aiCliOrchestrator.cancelPersistedRun(run.id)
+            }
+          }
         },
         onEvent: (event) => this.agentEvent(slot, event),
         onRunResult: async (run, failureDetail) => {
@@ -597,22 +793,25 @@ export class ConversationWorkspaceRunner {
                 requestedAt: run.updatedAt
               }
             })
-          } else if (run.status === 'completed') {
+            return
+          }
+          if (run.status === 'completed') {
             slot.pendingApproval = false
             slot.assembler!.complete(run.output)
             await this.complete(slot)
-          } else {
-            await this.end(
-              slot,
-              run.error ?? 'WORKSPACE_EXECUTION_FAILED',
-              run.status === 'cancelled'
-                ? 'cancelled'
-                : run.status === 'interrupted'
-                  ? 'interrupted'
-                  : 'failed',
-              run.status === 'failed' ? failureDetail : undefined
-            )
+            return
           }
+          if (slot.shuttingDown) return
+          await this.end(
+            slot,
+            run.error ?? 'WORKSPACE_EXECUTION_FAILED',
+            run.status === 'cancelled'
+              ? 'cancelled'
+              : run.status === 'interrupted'
+                ? 'interrupted'
+                : 'failed',
+            run.status === 'failed' ? failureDetail : undefined
+          )
         }
       }
     )
@@ -714,7 +913,7 @@ export class ConversationWorkspaceRunner {
 
   private async complete(slot: ExecutionSlot): Promise<void> {
     if (slot.assembler!.snapshot().status === 'failed') {
-      await this.end(slot, 'CONVERSATION_EMPTY_RESPONSE')
+      await this.end(slot, 'CONVERSATION_EMPTY_RESPONSE', 'failed', undefined, true)
       return
     }
     await this.persist(slot, true)
@@ -722,18 +921,22 @@ export class ConversationWorkspaceRunner {
     await this.service.finishTurn(slot.conversationId, slot.turn!.input.id, 'idle')
     slot.ended = true
     this.slots.delete(slot.conversationId)
-    void this.kick(slot.conversationId).catch(() => {
-      log.warn('Next workspace input could not be admitted')
-    })
+    if (!this.closing && !slot.shuttingDown) {
+      void this.kick(slot.conversationId).catch(() => {
+        log.warn('Next workspace input could not be admitted')
+      })
+    }
   }
 
   private async end(
     slot: ExecutionSlot,
     code: string,
     outcome: 'failed' | 'cancelled' | 'interrupted' = 'failed',
-    detail?: string
+    detail?: string,
+    allowDuringShutdown = false
   ): Promise<void> {
-    if (slot.ended || !slot.assembler || !slot.turn) return
+    if (slot.ended || (!allowDuringShutdown && slot.shuttingDown) || !slot.assembler || !slot.turn)
+      return
     slot.assembler.fail(code, outcome, detail)
     await this.persist(slot, true)
     this.snapshot(slot)
@@ -743,17 +946,23 @@ export class ConversationWorkspaceRunner {
   }
 
   async pause(conversationId: string): Promise<ConversationWorkspaceState> {
-    const state = await this.service.pause(conversationId)
     const slot = this.slots.get(conversationId)
-    slot?.controller.abort()
-    if (slot?.runId) await aiCliOrchestrator.cancelPersistedRun(slot.runId)
-    if (slot && !slot.pendingApproval) await slot.task
-    if (slot && !slot.ended) await this.end(slot, 'WORKSPACE_TURN_CANCELLED', 'cancelled')
-    return (await this.service.get(conversationId)) ?? state
+    if (slot) {
+      slot.userPaused = true
+      slot.shuttingDown = false
+      const state = await this.service.pause(conversationId)
+      slot.controller.abort()
+      if (slot.runId) await aiCliOrchestrator.cancelPersistedRun(slot.runId)
+      if (!slot.pendingApproval) await slot.task
+      if (!slot.ended) await this.end(slot, 'WORKSPACE_TURN_CANCELLED', 'cancelled')
+      return (await this.service.get(conversationId)) ?? state
+    }
+    return this.service.pause(conversationId, 'cancelled', { cancelUnclaimedActive: true })
   }
 
   async resume(conversationId: string): Promise<ConversationWorkspaceState> {
     if (this.deleting.has(conversationId)) throw new Error('WORKSPACE_BUSY')
+    await this.ensureDisabledRecoveryFinalized()
     await this.service.resume(conversationId)
     await this.kick(conversationId)
     return (await this.service.get(conversationId))!
@@ -892,8 +1101,158 @@ export class ConversationWorkspaceRunner {
     }
   }
 
-  async close(): Promise<void> {
+  beginShutdown(): void {
     this.closing = true
-    await Promise.all([...this.slots.keys()].map((id) => this.pause(id)))
+    for (const slot of this.slots.values()) {
+      if (!slot.userPaused) {
+        slot.shuttingDown = true
+      }
+    }
   }
+
+  async close(): Promise<void> {
+    this.beginShutdown()
+    const entries = [...this.slots.entries()]
+    await Promise.all(
+      entries.map(async ([conversationId, slot]) => {
+        if (slot.userPaused) {
+          if (!slot.pendingApproval) await slot.task?.catch(() => undefined)
+          if (!slot.ended) {
+            await this.end(slot, 'WORKSPACE_TURN_CANCELLED', 'cancelled').catch(() => undefined)
+          }
+          return
+        }
+        slot.shuttingDown = true
+        clearTimeout(slot.frameTimer)
+        slot.frameTimer = undefined
+        await this.persist(slot, true).catch(() => undefined)
+        slot.controller.abort()
+        if (slot.runId) {
+          try {
+            aiCliOrchestrator.cancel?.(slot.runId)
+          } catch {
+            // Best-effort cancellation of live subprocess during graceful shutdown.
+          }
+        }
+        if (slot.task && !slot.pendingApproval) {
+          await slot.task.catch(() => undefined)
+        }
+        if (!slot.ended) {
+          await this.persist(slot, true).catch(() => undefined)
+          slot.ended = true
+        }
+        clearTimeout(slot.frameTimer)
+        slot.frameTimer = undefined
+        if (this.slots.get(conversationId) === slot) {
+          this.slots.delete(conversationId)
+        }
+      })
+    )
+  }
+}
+
+function boundedUtf8Text(value: string, maxBytes: number): string {
+  if (Buffer.byteLength(value, 'utf8') <= maxBytes) return value
+  const noticeBytes = Buffer.byteLength(RECOVERY_TRUNCATION_NOTICE, 'utf8')
+  const budget = Math.max(0, maxBytes - noticeBytes)
+  let end = 0
+  let bytes = 0
+  while (end < value.length) {
+    const point = value.codePointAt(end)!
+    const width = point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4
+    if (bytes + width > budget) break
+    bytes += width
+    end += point > 0xffff ? 2 : 1
+  }
+  return value.slice(0, end) + RECOVERY_TRUNCATION_NOTICE
+}
+
+function sanitizeRecoveryText(value: string, sanitize: boolean): string {
+  if (!sanitize) return value
+  const safe = sanitizeToolOutputForRuntime(value)
+  return typeof safe === 'string' ? safe : JSON.stringify(safe ?? '')
+}
+
+function summarizePriorToolCalls(priorParts: unknown[] | undefined, sanitize: boolean): string[] {
+  if (!Array.isArray(priorParts) || priorParts.length === 0) return []
+  const summaries: string[] = []
+  for (const part of priorParts) {
+    if (!part || typeof part !== 'object' || !('type' in part)) continue
+    const record = part as Record<string, unknown>
+    if (record.type !== 'tool-call') continue
+    const name = typeof record.name === 'string' ? record.name : 'unknown'
+    const rawStatus = typeof record.status === 'string' ? record.status : 'unknown'
+    const status = rawStatus === 'running' || rawStatus === 'pending' ? 'interrupted' : rawStatus
+    const detailSource =
+      typeof record.output === 'string' && record.output.trim()
+        ? record.output.trim()
+        : typeof record.error === 'string' && record.error.trim()
+          ? record.error.trim()
+          : ''
+    const detail = detailSource
+      ? `: ${boundedUtf8Text(sanitizeRecoveryText(detailSource, sanitize), 512)}`
+      : ''
+    summaries.push(`- ${name} (${status})${detail}`)
+  }
+  return summaries
+}
+
+const RECOVERY_TOOL_SUMMARY_BYTE_LIMIT = 2_048
+const RECOVERY_TAIL_TRUNCATION_PREFIX = '…[earlier output truncated]\n'
+
+function boundedUtf8Tail(value: string, maxBytes: number): string {
+  if (Buffer.byteLength(value, 'utf8') <= maxBytes) return value
+  const prefixBytes = Buffer.byteLength(RECOVERY_TAIL_TRUNCATION_PREFIX, 'utf8')
+  const budget = Math.max(0, maxBytes - prefixBytes)
+  if (budget === 0) return boundedUtf8Text(RECOVERY_TAIL_TRUNCATION_PREFIX, maxBytes)
+  const chars = Array.from(value)
+  let start = chars.length
+  let bytes = 0
+  while (start > 0) {
+    const ch = chars[start - 1]!
+    const width = Buffer.byteLength(ch, 'utf8')
+    if (bytes + width > budget) break
+    bytes += width
+    start -= 1
+  }
+  return RECOVERY_TAIL_TRUNCATION_PREFIX + chars.slice(start).join('')
+}
+
+function buildRecoveryContinuationPrompt(
+  recovery: WorkspaceTurnRecoveryContext,
+  sanitize: boolean
+): string | null {
+  const priorText = recovery.priorContent.trim()
+  const toolSummaries = summarizePriorToolCalls(recovery.priorParts, sanitize)
+  if (!priorText && toolSummaries.length === 0) return null
+
+  const header = [
+    '[Recovery Continuation]',
+    'This turn was interrupted by an application restart or crash before completion. Continue seamlessly from where the response stopped without repeating already-shown output or redoing completed side effects.'
+  ].join('\n\n')
+
+  const sections: string[] = [header]
+  if (toolSummaries.length > 0) {
+    const toolHeader = 'Prior tool calls:\n'
+    const toolBodyBudget = Math.max(
+      0,
+      RECOVERY_TOOL_SUMMARY_BYTE_LIMIT - Buffer.byteLength(toolHeader, 'utf8')
+    )
+    const boundedTools = boundedUtf8Tail(toolSummaries.join('\n'), toolBodyBudget)
+    sections.push(`${toolHeader}${boundedTools}`)
+  }
+  if (priorText) {
+    const textHeader = 'Already-shown partial assistant output:\n'
+    const usedBytes =
+      Buffer.byteLength(sections.join('\n\n'), 'utf8') +
+      Buffer.byteLength('\n\n', 'utf8') +
+      Buffer.byteLength(textHeader, 'utf8')
+    const remainingBudget = Math.max(0, RECOVERY_CONTINUATION_BYTE_LIMIT - usedBytes)
+    const sanitizedTail = boundedUtf8Tail(
+      sanitizeRecoveryText(priorText, sanitize),
+      remainingBudget
+    )
+    sections.push(`${textHeader}${sanitizedTail}`)
+  }
+  return boundedUtf8Text(sections.join('\n\n'), RECOVERY_CONTINUATION_BYTE_LIMIT)
 }

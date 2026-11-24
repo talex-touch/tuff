@@ -60,6 +60,33 @@ const mocks = vi.hoisted(() => {
       return lease
     }),
     worktreeGetLease: vi.fn((worktreeId: string) => worktreeLeases.get(worktreeId)),
+    worktreeReattach: vi.fn(async (worktreeId: string, expectedRunId: string) => {
+      const lease = worktreeLeases.get(worktreeId)
+      if (!lease) {
+        const err = new Error(`Worktree not found: ${worktreeId}`) as Error & { code?: string }
+        err.code = 'WORKTREE_NOT_FOUND'
+        throw err
+      }
+      if (lease.runId !== expectedRunId) {
+        const err = new Error(`Worktree mismatch: ${worktreeId}`) as Error & { code?: string }
+        err.code = 'WORKTREE_PATH_ESCAPE'
+        throw err
+      }
+      return lease
+    }),
+    worktreeFindByRunId: vi.fn(async (runId: string) => {
+      for (const lease of worktreeLeases.values()) {
+        if (lease.runId === runId) return lease
+      }
+      return null
+    }),
+    automationInitialize: vi.fn(async () => undefined),
+    worktreeReapOrphans: vi.fn(async (_opts?: { activeRunIds?: Iterable<string> }) => ({
+      reapedIds: [],
+      skippedActiveIds: [],
+      skippedDirtyIds: [],
+      failedIds: []
+    })),
     worktreeGetDiff: vi.fn(async (worktreeId: string) => ({
       worktreeId,
       status: {
@@ -81,7 +108,9 @@ const mocks = vi.hoisted(() => {
       return { worktreeId, removed: true, branchDeleted: true }
     }),
     worktreeDisposeAll: vi.fn(async () => undefined),
-    appendOrchestratorEvent: vi.fn(async () => undefined),
+    appendOrchestratorEvent: vi.fn(
+      async (_runId?: string, _eventType?: string, _payload?: unknown, _level?: string) => undefined
+    ),
     appendRunMessage: vi.fn(async (runId: string, envelope: string) => {
       const list = runMessages.get(runId) ?? []
       const seq = list.length + 1
@@ -180,17 +209,14 @@ vi.mock('../tool-gateway', () => ({
 vi.mock('./worktree', () => ({
   gitWorktreeManager: {
     acquireWorktree: mocks.worktreeAcquire,
+    reattachWorktree: mocks.worktreeReattach,
+    findPersistedLeaseByRunId: mocks.worktreeFindByRunId,
     getLease: mocks.worktreeGetLease,
     listLeases: vi.fn(() => Array.from(mocks.worktreeLeases.values())),
     inspectWorktree: vi.fn(),
     getWorktreeDiff: mocks.worktreeGetDiff,
     releaseWorktree: mocks.worktreeRelease,
-    reapOrphans: vi.fn(async () => ({
-      reapedIds: [],
-      skippedActiveIds: [],
-      skippedDirtyIds: [],
-      failedIds: []
-    })),
+    reapOrphans: mocks.worktreeReapOrphans,
     disposeAll: mocks.worktreeDisposeAll
   }
 }))
@@ -241,7 +267,8 @@ vi.mock('./ai-orchestrator-store', () => ({
 vi.mock('./ai-automation-scheduler', () => ({
   aiAutomationScheduler: {
     setExecutor: vi.fn(),
-    initialize: vi.fn(async () => undefined),
+    initialize: mocks.automationInitialize,
+    stopTriggers: vi.fn(),
     stop: vi.fn(async () => undefined)
   }
 }))
@@ -300,6 +327,7 @@ vi.mock('./pi-agent-runtime-host', async (importOriginal) => {
 })
 
 import { AiCliOrchestrator } from './ai-cli-orchestrator'
+import { setAutoResumeOnStartupReader } from './auto-resume-setting'
 import {
   CLAUDE_CLI_PROFILE_ID,
   CLAUDE_CLI_PROVIDER_ID,
@@ -392,6 +420,10 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
       usage: { promptTokens: 1, completionTokens: 2, totalTokens: 3 }
     }))
     mocks.worktreeAcquire.mockClear()
+    mocks.worktreeReattach.mockClear()
+    mocks.worktreeFindByRunId.mockClear()
+    mocks.worktreeReapOrphans.mockClear()
+    mocks.automationInitialize.mockReset().mockResolvedValue(undefined)
     mocks.worktreeGetDiff.mockClear()
     mocks.worktreeRelease.mockClear()
     mocks.worktreeDisposeAll.mockClear()
@@ -510,6 +542,7 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
   })
 
   afterEach(async () => {
+    setAutoResumeOnStartupReader(null)
     await orchestrator.shutdown().catch(() => undefined)
     vi.restoreAllMocks()
   })
@@ -751,58 +784,483 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
   })
 
   describe('restart recovery for Codex and Claude external CLI profiles', () => {
-    it('marks already-running Codex/Claude runs interrupted and resumes queued runs without Pi replay logs', async () => {
+    it('auto-resumes running Codex/Claude runs reusing preserved worktrees, reaps orphans, caps crash loops, and fails closed when worktree is missing', async () => {
       await orchestrator.shutdown()
 
-      const codexProfile = makeProfile(CODEX_CLI_PROFILE_ID)
-      const claudeProfile = makeProfile(CLAUDE_CLI_PROFILE_ID)
-      const metadataFor = (profile: AiAgentProfile) => ({
+      const codexProfile = mocks.profiles.get(CODEX_CLI_PROFILE_ID)!
+      const claudeProfile = mocks.profiles.get(CLAUDE_CLI_PROFILE_ID)!
+      const metadataFor = (profile: AiAgentProfile, extra?: Record<string, unknown>) => ({
         schemaVersion: 1,
         executionBudget: { maxSteps: 10, maxChildRuns: 0, maxConcurrency: 1 },
         allowedToolRefs: [opaqueRef('pi-tool', 'file.read')],
         requestInputPresent: false,
         profileAuthorityVersion: profile.updatedAt,
-        profileAuthorityDigest: profileAuthorityDigest(profile)
+        profileAuthorityDigest: profileAuthorityDigest(profile),
+        ...extra
       })
 
-      mocks.runs.set('codex-running', {
-        id: 'codex-running',
+      // Seed a preserved worktree lease for the interrupted running Claude run
+      mocks.worktreeLeases.set('wt-claude-running', {
+        worktreeId: 'wt-claude-running',
+        runId: 'claude-running',
+        repoRoot: '/tmp',
+        worktreePath: '/mock-userdata/ai-worktrees/wt-claude-running',
+        effectiveCwd: '/mock-userdata/ai-worktrees/wt-claude-running',
+        branchName: 'tuff/wt/claude-running',
+        baseRef: 'HEAD',
+        baseCommit: 'abc123',
+        createdAt: Date.now()
+      })
+
+      mocks.runs.set('claude-running', {
+        id: 'claude-running',
         sessionId: 's-1',
-        objective: 'Running codex',
-        profileId: CODEX_CLI_PROFILE_ID,
+        objective: 'Running claude with worktree',
+        profileId: CLAUDE_CLI_PROFILE_ID,
         runtimeProvider: 'pi-core',
         cwd: '/tmp',
         status: 'running',
+        metadata: metadataFor(claudeProfile, {
+          worktreeId: 'wt-claude-running',
+          worktreeOptions: { enabled: true, cleanupOnComplete: false }
+        }),
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      })
+      mocks.runs.set('codex-queued', {
+        id: 'codex-queued',
+        sessionId: 's-2',
+        objective: 'Queued codex',
+        profileId: CODEX_CLI_PROFILE_ID,
+        runtimeProvider: 'pi-core',
+        cwd: '/tmp',
+        status: 'queued',
         metadata: metadataFor(codexProfile),
         createdAt: Date.now(),
         updatedAt: Date.now()
       })
-      mocks.runs.set('claude-queued', {
-        id: 'claude-queued',
-        sessionId: 's-2',
-        objective: 'Queued claude',
+      mocks.runs.set('claude-missing-wt', {
+        id: 'claude-missing-wt',
+        sessionId: 's-3',
+        objective: 'Running claude whose worktree disappeared',
         profileId: CLAUDE_CLI_PROFILE_ID,
         runtimeProvider: 'pi-core',
         cwd: '/tmp',
-        status: 'queued',
-        metadata: metadataFor(claudeProfile),
+        status: 'running',
+        metadata: metadataFor(claudeProfile, { worktreeId: 'wt-does-not-exist' }),
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      })
+      mocks.runs.set('codex-capped', {
+        id: 'codex-capped',
+        sessionId: 's-4',
+        objective: 'Already recovered once',
+        profileId: CODEX_CLI_PROFILE_ID,
+        runtimeProvider: 'pi-core',
+        cwd: '/tmp',
+        status: 'running',
+        metadata: metadataFor(codexProfile, { recoveryAttempts: 1 }),
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      })
+      mocks.runs.set('codex-pending-approval', {
+        id: 'codex-pending-approval',
+        sessionId: 's-5',
+        objective: 'Waiting for user approval',
+        profileId: CODEX_CLI_PROFILE_ID,
+        runtimeProvider: 'pi-core',
+        cwd: '/tmp',
+        status: 'pending_approval',
+        metadata: metadataFor(codexProfile),
         createdAt: Date.now(),
         updatedAt: Date.now()
       })
 
+      mocks.worktreeReapOrphans.mockClear()
+      mocks.appendOrchestratorEvent.mockClear()
+
       const restarted = new AiCliOrchestrator()
       await restarted.initialize()
       for (let attempt = 0; attempt < 50; attempt += 1) {
-        if (mocks.runs.get('claude-queued')?.status === 'completed') break
+        if (
+          mocks.runs.get('claude-running')?.status === 'completed' &&
+          mocks.runs.get('codex-queued')?.status === 'completed'
+        ) {
+          break
+        }
         await new Promise((r) => setTimeout(r, 10))
       }
       await restarted.shutdown()
 
-      expect(mocks.runs.get('codex-running')?.status).toBe('interrupted')
-      expect(mocks.runs.get('claude-queued')?.status).toBe('completed')
-      expect(mocks.runs.get('claude-queued')?.output).toBe('claude-native-answer')
+      // Running Claude run reused preserved worktree without leaking raw path into SQLite events
+      expect(mocks.runs.get('claude-running')?.status).toBe('completed')
+      expect(mocks.runs.get('claude-running')?.output).toBe('claude-native-answer')
+      expect(mocks.runs.get('claude-running')?.metadata?.recoveryAttempts).toBe(1)
+      expect(mocks.worktreeReattach).toHaveBeenCalledWith('wt-claude-running', 'claude-running')
+      expect(claudeCwdCaptured).toBe('/mock-userdata/ai-worktrees/wt-claude-running')
+      expect(mocks.appendOrchestratorEvent).toHaveBeenCalledWith(
+        'claude-running',
+        'run.resumed',
+        expect.objectContaining({
+          reason: 'application_restart',
+          previousStatus: 'running',
+          recoveryAttempt: 1,
+          reusedWorktree: true,
+          worktreeId: 'wt-claude-running'
+        })
+      )
+      expect(JSON.stringify(mocks.appendOrchestratorEvent.mock.calls)).not.toContain('ai-worktrees')
+      expect(JSON.stringify(mocks.runs.get('claude-running'))).not.toContain('ai-worktrees')
+
+      // Queued Codex run resumed cleanly
+      expect(mocks.runs.get('codex-queued')?.status).toBe('completed')
+      expect(mocks.runs.get('codex-queued')?.output).toBe('codex-native-answer')
+      expect(mocks.runs.get('codex-queued')?.metadata?.recoveryAttempts).toBe(1)
+
+      // Missing worktree fails closed (interrupted, never mutates run.cwd)
+      expect(mocks.runs.get('claude-missing-wt')?.status).toBe('interrupted')
+      // Crash-loop cap blocks second recovery
+      expect(mocks.runs.get('codex-capped')?.status).toBe('interrupted')
+      // Orphan reaping protected active recovering + pending_approval runIds
+      expect(mocks.worktreeReapOrphans).toHaveBeenCalledTimes(1)
+      const reapArgs = mocks.worktreeReapOrphans.mock.calls[0]?.[0]
+      expect(Array.from(reapArgs?.activeRunIds ?? [])).toEqual(
+        expect.arrayContaining(['claude-running', 'codex-queued', 'codex-pending-approval'])
+      )
+
       expect(mocks.piExecute).not.toHaveBeenCalled()
       expect(mocks.listRunMessages).not.toHaveBeenCalled()
+    })
+
+    it('suspends active external CLI runs on graceful shutdown preserving worktrees, and respects autoResumeOnStartup=false', async () => {
+      let releaseClaude: (() => void) | undefined
+      const claudeStarted = Promise.withResolvers<void>()
+      claudeStreamImpl = async function* () {
+        claudeStarted.resolve()
+        await new Promise<void>((resolve) => {
+          releaseClaude = resolve
+        })
+        yield { type: 'delta', text: 'never-reached' }
+      }
+
+      const pending = orchestrator.execute({
+        objective: 'Graceful shutdown worktree run',
+        profileId: CLAUDE_CLI_PROFILE_ID,
+        cwd: '/tmp',
+        metadata: { worktree: { enabled: true } }
+      })
+      await claudeStarted.promise
+
+      const activeRun = Array.from(mocks.runs.values())[0]!
+      expect(activeRun.metadata?.worktreeId).toBe(`wt-${activeRun.id}`)
+
+      const shutdownPromise = orchestrator.shutdown()
+      releaseClaude?.()
+      await shutdownPromise
+      const callerResult = await pending
+
+      // Caller still receives interrupted status, while persisted row remains running for next startup
+      expect(callerResult.status).toBe('interrupted')
+      expect(mocks.runs.get(activeRun.id)?.status).toBe('running')
+      expect(mocks.appendOrchestratorEvent).toHaveBeenCalledWith(
+        activeRun.id,
+        'run.suspended_for_restart',
+        expect.objectContaining({
+          reason: 'application_restart',
+          previousStatus: 'running',
+          worktreeId: `wt-${activeRun.id}`
+        }),
+        'info'
+      )
+      expect(mocks.worktreeDisposeAll).toHaveBeenCalledWith({
+        force: false,
+        preserveRunIds: new Set([activeRun.id])
+      })
+
+      // Booting with autoResumeOnStartup=false interrupts the suspended run cleanly
+      setAutoResumeOnStartupReader(() => false)
+      const disabledRestart = new AiCliOrchestrator()
+      await disabledRestart.initialize()
+      await disabledRestart.shutdown()
+
+      expect(mocks.runs.get(activeRun.id)?.status).toBe('interrupted')
+      expect(mocks.appendOrchestratorEvent).toHaveBeenCalledWith(
+        activeRun.id,
+        'run.interrupted',
+        expect.objectContaining({ reason: 'auto_resume_disabled', previousStatus: 'running' })
+      )
+    })
+
+    it('reattaches legacy running CLI worktree via runId lookup and does not spend recoveryAttempts when scheduler init fails', async () => {
+      await orchestrator.shutdown()
+      const claudeProfile = mocks.profiles.get(CLAUDE_CLI_PROFILE_ID)!
+      mocks.worktreeLeases.set('wt-legacy-claude', {
+        worktreeId: 'wt-legacy-claude',
+        runId: 'legacy-claude-run',
+        repoRoot: '/tmp',
+        worktreePath: '/mock-userdata/ai-worktrees/wt-legacy-claude',
+        effectiveCwd: '/mock-userdata/ai-worktrees/wt-legacy-claude',
+        branchName: 'tuff/wt/legacy-claude-run',
+        baseRef: 'HEAD',
+        baseCommit: 'abc123',
+        createdAt: Date.now()
+      })
+      mocks.runs.set('legacy-claude-run', {
+        id: 'legacy-claude-run',
+        sessionId: 's-legacy',
+        objective: 'Legacy worktree run without worktreeId metadata',
+        profileId: CLAUDE_CLI_PROFILE_ID,
+        runtimeProvider: 'pi-core',
+        cwd: '/tmp',
+        status: 'running',
+        metadata: {
+          schemaVersion: 1,
+          executionBudget: { maxSteps: 10, maxChildRuns: 0, maxConcurrency: 1 },
+          allowedToolRefs: [opaqueRef('pi-tool', 'file.read')],
+          requestInputPresent: false,
+          profileAuthorityVersion: claudeProfile.updatedAt,
+          profileAuthorityDigest: profileAuthorityDigest(claudeProfile)
+        },
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      })
+
+      // 1. If aiAutomationScheduler.initialize() throws, recoveryAttempts must NOT be consumed
+      mocks.automationInitialize.mockRejectedValueOnce(new Error('scheduler init transient error'))
+      const failedBoot = new AiCliOrchestrator()
+      await expect(failedBoot.initialize()).rejects.toThrow('scheduler init transient error')
+      expect(mocks.runs.get('legacy-claude-run')?.metadata?.recoveryAttempts).toBeUndefined()
+
+      // 2. Subsequent successful boot resolves legacy worktree by runId and executes inside it
+      const recoveredBoot = new AiCliOrchestrator()
+      await recoveredBoot.initialize()
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        if (mocks.runs.get('legacy-claude-run')?.status === 'completed') break
+        await new Promise((r) => setTimeout(r, 10))
+      }
+      await recoveredBoot.shutdown()
+
+      expect(mocks.worktreeFindByRunId).toHaveBeenCalledWith('legacy-claude-run')
+      expect(mocks.worktreeReattach).toHaveBeenCalledWith('wt-legacy-claude', 'legacy-claude-run')
+      expect(claudeCwdCaptured).toBe('/mock-userdata/ai-worktrees/wt-legacy-claude')
+      expect(mocks.runs.get('legacy-claude-run')?.status).toBe('completed')
+      expect(mocks.runs.get('legacy-claude-run')?.metadata?.recoveryAttempts).toBe(1)
+    })
+
+    it('isolates per-run attempt write failures, honors cancelPersistedRun during run.resumed, and restores recoveryAttempts on shutdown race', async () => {
+      await orchestrator.shutdown()
+      const codexProfile = mocks.profiles.get(CODEX_CLI_PROFILE_ID)!
+      const makeQueuedRun = (id: string): AiOrchestratorRunRecord => ({
+        id,
+        sessionId: `s-${id}`,
+        objective: `Objective ${id}`,
+        profileId: CODEX_CLI_PROFILE_ID,
+        runtimeProvider: 'pi-core',
+        cwd: '/tmp',
+        status: 'queued',
+        metadata: {
+          schemaVersion: 1,
+          executionBudget: { maxSteps: 10, maxChildRuns: 0, maxConcurrency: 1 },
+          allowedToolRefs: [opaqueRef('pi-tool', 'file.read')],
+          requestInputPresent: false,
+          profileAuthorityVersion: codexProfile.updatedAt,
+          profileAuthorityDigest: profileAuthorityDigest(codexProfile)
+        },
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      })
+
+      // 1. Privacy fence on first candidate must not abort initialize() or skip sibling candidate
+      mocks.runs.set('run-fenced', makeQueuedRun('run-fenced'))
+      mocks.runs.set('run-sibling', makeQueuedRun('run-sibling'))
+      const boot1 = new AiCliOrchestrator()
+      const releaseFence = boot1.acquirePrivacyRunDeletionFence('run-fenced')
+      expect(releaseFence).not.toBeNull()
+      await boot1.initialize()
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        if (mocks.runs.get('run-sibling')?.status === 'completed') break
+        await new Promise((r) => setTimeout(r, 10))
+      }
+      releaseFence?.()
+      await boot1.shutdown()
+      expect(mocks.runs.get('run-sibling')?.status).toBe('completed')
+      expect(mocks.runs.get('run-fenced')?.status).toBe('queued')
+      expect(mocks.runs.get('run-fenced')?.metadata?.recoveryAttempts).toBeUndefined()
+
+      // 2. Cancelling a queued run while recovery waits on run.resumed keeps it cancelled and never spawns CLI
+      mocks.runs.clear()
+      codexSpawnSpy.mockClear()
+      mocks.runs.set('run-cancel-race', makeQueuedRun('run-cancel-race'))
+      let codexSpawnCount = 0
+      codexStreamImpl = async function* () {
+        codexSpawnCount += 1
+        yield { type: 'delta', text: 'should-not-spawn' }
+      }
+      const resumeEventEntered = Promise.withResolvers<void>()
+      const releaseResumeEvent = Promise.withResolvers<void>()
+      mocks.appendOrchestratorEvent.mockImplementation(
+        async (runId?: string, eventType?: string) => {
+          if (runId === 'run-cancel-race' && eventType === 'run.resumed') {
+            resumeEventEntered.resolve()
+            await releaseResumeEvent.promise
+          }
+          return undefined
+        }
+      )
+
+      const boot2 = new AiCliOrchestrator()
+      await boot2.initialize()
+      await resumeEventEntered.promise
+      const cancelPromise = boot2.cancelPersistedRun('run-cancel-race')
+      releaseResumeEvent.resolve()
+      await expect(cancelPromise).resolves.toBe(true)
+      await boot2.shutdown()
+      mocks.appendOrchestratorEvent.mockRestore()
+
+      expect(mocks.runs.get('run-cancel-race')?.status).toBe('cancelled')
+      expect(codexSpawnCount).toBe(0)
+      expect(codexSpawnSpy).not.toHaveBeenCalled()
+
+      // 3. Shutdown racing with recovery admission restores/preserves recoveryAttempts & worktree for next boot
+      mocks.runs.clear()
+      mocks.worktreeLeases.clear()
+      mocks.worktreeDisposeAll.mockClear()
+      codexSpawnSpy.mockClear()
+      mocks.worktreeLeases.set('wt-shutdown-race', {
+        worktreeId: 'wt-shutdown-race',
+        runId: 'run-shutdown-race',
+        repoRoot: '/tmp',
+        worktreePath: '/mock-userdata/ai-worktrees/wt-shutdown-race',
+        effectiveCwd: '/mock-userdata/ai-worktrees/wt-shutdown-race',
+        branchName: 'tuff/wt/run-shutdown-race',
+        baseRef: 'HEAD',
+        baseCommit: 'abc123',
+        createdAt: Date.now()
+      })
+      const shutdownRaceRun = makeQueuedRun('run-shutdown-race')
+      shutdownRaceRun.status = 'running'
+      shutdownRaceRun.metadata = {
+        ...shutdownRaceRun.metadata,
+        worktreeId: 'wt-shutdown-race',
+        worktreeOptions: { enabled: true }
+      }
+      mocks.runs.set('run-shutdown-race', shutdownRaceRun)
+      codexStreamImpl = async function* () {
+        codexSpawnCount += 1
+        yield { type: 'delta', text: 'recovered-after-shutdown-race' }
+      }
+      const { aiOrchestratorStore } = await import('./ai-orchestrator-store')
+      const updateSpy = vi.mocked(aiOrchestratorStore.updateOrchestratorRun)
+      const attemptWriteEntered = Promise.withResolvers<void>()
+      const releaseAttemptWrite = Promise.withResolvers<void>()
+      let interceptedAttemptWrite = false
+      updateSpy.mockImplementation(async (runId, update) => {
+        const current = mocks.runs.get(runId)
+        if (!current) throw new Error(`Unknown run ${runId}`)
+        const next = { ...current, ...update, updatedAt: Date.now() }
+        mocks.runs.set(runId, next)
+        if (
+          !interceptedAttemptWrite &&
+          runId === 'run-shutdown-race' &&
+          (update.metadata as Record<string, unknown> | undefined)?.recoveryAttempts === 1
+        ) {
+          interceptedAttemptWrite = true
+          attemptWriteEntered.resolve()
+          await releaseAttemptWrite.promise
+        }
+      })
+
+      const boot3 = new AiCliOrchestrator()
+      await boot3.initialize()
+      await attemptWriteEntered.promise
+      const shutdownPromise = boot3.shutdown()
+      releaseAttemptWrite.resolve()
+      await shutdownPromise
+      updateSpy.mockRestore()
+
+      expect(mocks.runs.get('run-shutdown-race')?.metadata?.recoveryAttempts).toBeUndefined()
+      expect(codexSpawnCount).toBe(0)
+      expect(codexSpawnSpy).not.toHaveBeenCalled()
+      expect(mocks.worktreeDisposeAll).toHaveBeenCalledWith({
+        force: false,
+        preserveRunIds: new Set(['run-shutdown-race'])
+      })
+
+      // Next boot still has its full recovery attempt budget and completes cleanly
+      const boot4 = new AiCliOrchestrator()
+      await boot4.initialize()
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        if (mocks.runs.get('run-shutdown-race')?.status === 'completed') break
+        await new Promise((r) => setTimeout(r, 10))
+      }
+      await boot4.shutdown()
+      expect(mocks.runs.get('run-shutdown-race')?.status).toBe('completed')
+      expect(mocks.runs.get('run-shutdown-race')?.output).toBe('recovered-after-shutdown-race')
+      expect(mocks.runs.get('run-shutdown-race')?.metadata?.recoveryAttempts).toBe(1)
+
+      // 4. Cancel + shutdown arriving together during attempt write persists cancellation and never preserves worktree,
+      // and failed run.resumed append rolls back recoveryAttempts so run stays retryable
+      mocks.runs.clear()
+      mocks.worktreeLeases.clear()
+      mocks.worktreeDisposeAll.mockClear()
+      mocks.deleteRunMessages.mockClear()
+      codexSpawnSpy.mockClear()
+      mocks.runs.set('run-cancel-during-shutdown', makeQueuedRun('run-cancel-during-shutdown'))
+      const attemptGate2 = Promise.withResolvers<void>()
+      const releaseAttempt2 = Promise.withResolvers<void>()
+      let intercepted2 = false
+      updateSpy.mockImplementation(async (runId, update) => {
+        const current = mocks.runs.get(runId)
+        if (!current) throw new Error(`Unknown run ${runId}`)
+        const next = { ...current, ...update, updatedAt: Date.now() }
+        mocks.runs.set(runId, next)
+        if (
+          !intercepted2 &&
+          runId === 'run-cancel-during-shutdown' &&
+          (update.metadata as Record<string, unknown> | undefined)?.recoveryAttempts === 1
+        ) {
+          intercepted2 = true
+          attemptGate2.resolve()
+          await releaseAttempt2.promise
+        }
+      })
+      mocks.appendOrchestratorEvent.mockImplementation(
+        async (runId?: string, eventType?: string) => {
+          if (runId === 'run-cancel-during-shutdown' && eventType === 'run.cancelled') {
+            throw new Error('simulated cancel event append error')
+          }
+          return undefined
+        }
+      )
+
+      const boot5 = new AiCliOrchestrator()
+      await boot5.initialize()
+      await attemptGate2.promise
+      expect(boot5.cancel('run-cancel-during-shutdown')).toBe(true)
+      const shutdown5 = boot5.shutdown()
+      releaseAttempt2.resolve()
+      await shutdown5
+      updateSpy.mockRestore()
+      mocks.appendOrchestratorEvent.mockRestore()
+
+      expect(mocks.runs.get('run-cancel-during-shutdown')?.status).toBe('cancelled')
+      expect(mocks.deleteRunMessages).toHaveBeenCalledWith('run-cancel-during-shutdown')
+      expect(codexSpawnSpy).not.toHaveBeenCalled()
+
+      // Failed run.resumed append rolls back recoveryAttempts
+      mocks.runs.clear()
+      mocks.runs.set('run-resume-append-fail', makeQueuedRun('run-resume-append-fail'))
+      mocks.appendOrchestratorEvent.mockImplementationOnce(async () => {
+        throw new Error('transient sqlite event error')
+      })
+      const boot6 = new AiCliOrchestrator()
+      await boot6.initialize()
+      await boot6.shutdown()
+      mocks.appendOrchestratorEvent.mockRestore()
+
+      expect(mocks.runs.get('run-resume-append-fail')?.status).toBe('queued')
+      expect(mocks.runs.get('run-resume-append-fail')?.metadata?.recoveryAttempts).toBeUndefined()
+      expect(codexSpawnSpy).not.toHaveBeenCalled()
     })
   })
 })

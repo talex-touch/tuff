@@ -16,6 +16,7 @@ export type {
   AcpPromptContent,
   CliAgentRuntimeHostOptions,
   CliDriverResolution,
+  CliExecuteRuntimeOptions,
   CliPermissionDecision,
   CliPermissionRequest,
   CliPermissionRequestContext,
