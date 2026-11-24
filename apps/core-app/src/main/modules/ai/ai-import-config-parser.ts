@@ -28,7 +28,7 @@ function splitTopLevel(value: string, separator = ','): string[] {
     const char = value[index]!
     if (quote) {
       if (escaped) escaped = false
-      else if (char === '\\') escaped = true
+      else if (quote === '"' && char === '\\') escaped = true
       else if (char === quote) quote = ''
       continue
     }
@@ -74,11 +74,10 @@ function unescapeBasicTomlString(value: string, allowLineContinuation = true): s
 
 function unquote(value: string): string {
   const trimmed = value.trim()
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  )
+  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"'))
     return unescapeBasicTomlString(trimmed.slice(1, -1), false)
+  if (trimmed.length >= 2 && trimmed.startsWith("'") && trimmed.endsWith("'"))
+    return trimmed.slice(1, -1)
   return trimmed
 }
 
@@ -109,7 +108,7 @@ function uncommentToml(line: string): string {
     const char = line[index]!
     if (quote) {
       if (escaped) escaped = false
-      else if (char === '\\') escaped = true
+      else if (quote === '"' && char === '\\') escaped = true
       else if (char === quote) quote = ''
       continue
     }

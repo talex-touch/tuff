@@ -43,6 +43,7 @@ vi.mock('./intelligence-mcp-registry', () => ({
   intelligenceMcpRegistry: { registerProfile: runtimeMocks.registerProfile }
 }))
 
+import { parseConfig, parseMcpProfiles } from './ai-import-config-parser'
 import { AiImportRuntimeService } from './ai-import-runtime'
 
 function fingerprint(content: string): string {
@@ -581,6 +582,25 @@ describe('AiImportRuntimeService MCP transport normalization', () => {
         [geminiSource]
       )
     ).rejects.toThrow('!{...}')
+  })
+
+  it('keeps single-quoted TOML strings literal while still unescaping double-quoted strings', () => {
+    const parsed = parseConfig(
+      [
+        '[mcp_servers.win]',
+        "command = 'C:\\tools\\node.exe' # literal backslashes",
+        "cwd = 'C:\\work\\' # trailing backslash before closing quote",
+        'args = ["C:\\\\tools\\\\server.js", \'C:\\new\\arg\']'
+      ].join('\n'),
+      '.toml'
+    )
+
+    expect(parsed).not.toBeNull()
+    const profiles = parseMcpProfiles(parsed!)
+    expect(profiles).toHaveLength(1)
+    expect(profiles[0]?.command).toBe('C:\\tools\\node.exe')
+    expect(profiles[0]?.cwd).toBe('C:\\work\\')
+    expect(profiles[0]?.args).toEqual(['C:\\tools\\server.js', 'C:\\new\\arg'])
   })
 })
 
