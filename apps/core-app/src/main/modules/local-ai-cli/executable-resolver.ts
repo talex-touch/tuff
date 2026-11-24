@@ -5,7 +5,6 @@ import type {
 } from '@talex-touch/utils/transport/events/local-ai-cli'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { CliExecutableLookup } from '../ai/providers/cli/cli-executable'
-import type { LocalAiCliProviderDefinition } from './provider-registry'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import {
@@ -14,9 +13,14 @@ import {
   withExecutableDirOnPath
 } from '../ai/providers/cli/cli-executable'
 import {
+  ANTIGRAVITY_CLI_LOOKUP,
   CLAUDE_CLI_LOOKUP,
   CODEX_CLI_LOOKUP,
+  CURSOR_CLI_LOOKUP,
+  GEMINI_CLI_LOOKUP,
+  KIRO_CLI_LOOKUP,
   OMP_CLI_LOOKUP,
+  OPENCODE_CLI_LOOKUP,
   PI_CLI_LOOKUP
 } from '../ai/providers/pi-cli-runtime'
 import { getMainConfig } from '../storage'
@@ -49,30 +53,18 @@ const PROBE_OUTPUT_LIMIT = 16_384
  */
 const PROBE_ENV = { MISE_AUTO_INSTALL: 'false', MISE_NOT_FOUND_AUTO_INSTALL: 'false' }
 
-/** Lookups shared directly with the chat providers in `pi-cli-runtime`. */
-const SHARED_CLI_LOOKUPS: Partial<Record<LocalAiCliProviderId, CliExecutableLookup>> = {
+/** One lookup per CLI, shared directly as a single source of truth with `pi-cli-runtime`. */
+const LOOKUPS: Readonly<Record<LocalAiCliProviderId, CliExecutableLookup>> = {
   pi: PI_CLI_LOOKUP,
   'oh-my-pi': OMP_CLI_LOOKUP,
   codex: CODEX_CLI_LOOKUP,
-  claude: CLAUDE_CLI_LOOKUP
+  claude: CLAUDE_CLI_LOOKUP,
+  antigravity: ANTIGRAVITY_CLI_LOOKUP,
+  opencode: OPENCODE_CLI_LOOKUP,
+  gemini: GEMINI_CLI_LOOKUP,
+  kiro: KIRO_CLI_LOOKUP,
+  cursor: CURSOR_CLI_LOOKUP
 }
-
-function createProviderLookup(definition: LocalAiCliProviderDefinition): CliExecutableLookup {
-  return (
-    SHARED_CLI_LOOKUPS[definition.id] ?? {
-      command: definition.command,
-      ...(definition.fallbackCommands?.length
-        ? { fallbackCommands: definition.fallbackCommands }
-        : {}),
-      envOverride: definition.envOverride
-    }
-  )
-}
-
-/** One lookup per CLI, reusing shared chat-provider lookups where defined and building the rest data-driven. */
-const LOOKUPS: Readonly<Record<LocalAiCliProviderId, CliExecutableLookup>> = Object.fromEntries(
-  LOCAL_AI_CLI_PROVIDERS.map((provider) => [provider.id, createProviderLookup(provider)])
-) as Record<LocalAiCliProviderId, CliExecutableLookup>
 
 function lookupCommands(lookup: CliExecutableLookup): string[] {
   return [lookup.command, ...(lookup.fallbackCommands ?? [])]

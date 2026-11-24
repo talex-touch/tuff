@@ -21,16 +21,20 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../storage', () => ({ getMainConfig: mocks.getMainConfig }))
 
-vi.mock('../ai/providers/pi-cli-runtime', () => ({
-  PI_CLI_LOOKUP: {
-    command: 'tuff-probe-pi',
-    fallbackCommands: ['tuff-probe-pie'],
-    envOverride: 'TUFF_PROBE_PI_PATH'
-  },
-  OMP_CLI_LOOKUP: { command: 'tuff-probe-omp', envOverride: 'TUFF_PROBE_OMP_PATH' },
-  CODEX_CLI_LOOKUP: { command: 'tuff-probe-codex', envOverride: 'TUFF_PROBE_CODEX_PATH' },
-  CLAUDE_CLI_LOOKUP: { command: 'tuff-probe-claude', envOverride: 'TUFF_PROBE_CLAUDE_PATH' }
-}))
+vi.mock('../ai/providers/pi-cli-runtime', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../ai/providers/pi-cli-runtime')>()
+  return {
+    ...actual,
+    PI_CLI_LOOKUP: {
+      command: 'tuff-probe-pi',
+      fallbackCommands: ['tuff-probe-pie'],
+      envOverride: 'TUFF_PROBE_PI_PATH'
+    },
+    OMP_CLI_LOOKUP: { command: 'tuff-probe-omp', envOverride: 'TUFF_PROBE_OMP_PATH' },
+    CODEX_CLI_LOOKUP: { command: 'tuff-probe-codex', envOverride: 'TUFF_PROBE_CODEX_PATH' },
+    CLAUDE_CLI_LOOKUP: { command: 'tuff-probe-claude', envOverride: 'TUFF_PROBE_CLAUDE_PATH' }
+  }
+})
 
 import {
   getResolvedCliExecutable,

@@ -1,3 +1,4 @@
+import type { AiCliProviderId } from '../../types/ai-orchestrator'
 import { defineEvent } from '../event/builder'
 
 export const LOCAL_AI_CLI_PROVIDER_IDS = [
@@ -10,9 +11,12 @@ export const LOCAL_AI_CLI_PROVIDER_IDS = [
   'gemini',
   'kiro',
   'cursor',
-] as const
+] as const satisfies readonly AiCliProviderId[]
 
-export type LocalAiCliProviderId = (typeof LOCAL_AI_CLI_PROVIDER_IDS)[number]
+export type LocalAiCliProviderId = Extract<
+  AiCliProviderId,
+  (typeof LOCAL_AI_CLI_PROVIDER_IDS)[number]
+>
 
 export type LocalAiCliMode = 'task' | 'terminal'
 export type LocalAiCliAccess = 'answer-only' | 'workspace-read' | 'workspace-write'

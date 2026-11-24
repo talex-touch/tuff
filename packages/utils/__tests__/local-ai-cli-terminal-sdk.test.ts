@@ -1,5 +1,6 @@
-import type { LocalAiCliTerminalCreateRequest } from '../transport/events/local-ai-cli'
+import type { LocalAiCliProviderId, LocalAiCliTerminalCreateRequest } from '../transport/events/local-ai-cli'
 import type { ITuffTransport } from '../transport/types'
+import type { AiCliProviderId } from '../types/ai-orchestrator'
 import { describe, expect, it } from 'vitest'
 import { normalizeLocalAiCliSetting } from '../common/storage/entity/app-settings'
 import {
@@ -228,5 +229,12 @@ describe('local AI CLI provider registry & settings normalization', () => {
     })
 
     expect(normalizeLocalAiCliSetting({ defaultProvider: 'invalid-cli' }).defaultProvider).toBeNull()
+  })
+
+  it('keeps LocalAiCliProviderId strictly identical to AiCliProviderId at compile time', () => {
+    type AssertExact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never
+    const parity: AssertExact<LocalAiCliProviderId, AiCliProviderId> = true
+    expect(parity).toBe(true)
+    expect(LOCAL_AI_CLI_PROVIDER_IDS).toHaveLength(9)
   })
 })
