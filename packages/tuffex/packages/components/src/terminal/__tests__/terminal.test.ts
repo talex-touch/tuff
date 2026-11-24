@@ -7,6 +7,7 @@ import TxTerminal from '../src/TxTerminal.vue'
 interface Engine {
   emitInput: (data: string) => void
   listeners: Set<unknown>
+  csiHandlers: Array<{ matcher: { prefix?: string, final: string }, disposed: boolean }>
   disposed: boolean
   focusCount: number
   addonDisposed: boolean
@@ -33,6 +34,18 @@ vi.mock('@xterm/xterm', () => ({
     output: HTMLPreElement | null = null
     get buffer() { return { active: { viewportY: this.output?.scrollTop ?? 0 } } }
     listeners = new Set<unknown>()
+    csiHandlers: Array<{ matcher: { prefix?: string, final: string }, disposed: boolean }> = []
+    parser = {
+      registerCsiHandler: (matcher: { prefix?: string, final: string }) => {
+        const record = { matcher, disposed: false }
+        this.csiHandlers.push(record)
+        return {
+          dispose: () => {
+            record.disposed = true
+          },
+        }
+      },
+    }
     disposed = false
     focusCount = 0
     addonDisposed = false
@@ -284,7 +297,13 @@ describe('TxTerminal inline image support and ANSI palette', () => {
       }),
     ])
     expect(engine.instances[0].options.rescaleOverlappingGlyphs).toBe(true)
+    expect(engine.instances[0].csiHandlers.map(handler => handler.matcher)).toEqual([
+      { final: 't' },
+      { prefix: '>', final: 'q' },
+    ])
+    const firstInstance = engine.instances[0]
     wrapper.unmount()
+    expect(firstInstance.csiHandlers.every(handler => handler.disposed)).toBe(true)
 
     engine.failImageAddon = true
     const fallback = mount(TxTerminal)
