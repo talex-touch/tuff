@@ -558,4 +558,33 @@ describe('WorkspaceMessageAssembler durable consumer output', () => {
       outcome: 'failed'
     })
   })
+
+  it('preserveInitial deduplicates continuation completion against newContent only while preserving whole-answer deduplication', () => {
+    const preCrash: StoredConversationMessage = {
+      id: 'assistant-rec-dedup',
+      role: 'assistant',
+      content: 'Plan: check',
+      status: 'streaming',
+      seq: 2,
+      createdAt: 1,
+      meta: { turnId: 'turn-rec-dedup' }
+    }
+    // Continuation-only completion whose suffix starts in hydrated text must still reconcile
+    const continuation = new WorkspaceMessageAssembler(preCrash, 'turn-rec-dedup', {
+      preserveInitial: true
+    })
+    continuation.delta(' done')
+    continuation.complete('check done')
+    expect(continuation.snapshot().content).toBe('Plan: check\n\ncheck done')
+    expect(continuation.snapshot().status).toBe('complete')
+
+    // Whole-answer completion matching full hydrated + new content must NOT be appended twice
+    const wholeAnswer = new WorkspaceMessageAssembler(preCrash, 'turn-rec-dedup', {
+      preserveInitial: true
+    })
+    wholeAnswer.delta(' done')
+    wholeAnswer.complete('Plan: check done')
+    expect(wholeAnswer.snapshot().content).toBe('Plan: check done')
+    expect(wholeAnswer.snapshot().status).toBe('complete')
+  })
 })

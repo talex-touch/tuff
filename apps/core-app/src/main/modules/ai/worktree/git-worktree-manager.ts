@@ -76,12 +76,34 @@ interface BoundedDiffStreamResult {
   byteLength: number
 }
 
+const GIT_REPO_OVERRIDE_ENV_VARS = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_COMMON_DIR',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_NAMESPACE',
+  'GIT_SUPER_PREFIX',
+  'GIT_PREFIX'
+] as const
+
 function buildGitEnv(): NodeJS.ProcessEnv {
-  return {
+  const env: NodeJS.ProcessEnv = {
     ...process.env,
     GIT_TERMINAL_PROMPT: '0',
     LC_ALL: 'C'
   }
+  for (const key of GIT_REPO_OVERRIDE_ENV_VARS) {
+    delete env[key]
+  }
+  return env
+}
+
+function stripTrailingLineTerminator(value: string): string {
+  if (value.endsWith('\r\n')) return value.slice(0, -2)
+  if (value.endsWith('\n')) return value.slice(0, -1)
+  return value
 }
 
 function isExecTimeoutError(error: unknown): boolean {
@@ -624,9 +646,15 @@ export class GitWorktreeManager {
 
     let sawCorrupt = false
     for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith('.json')) continue
+      if (!entry.name.endsWith('.json')) continue
+      if (!entry.isFile()) {
+        sawCorrupt = true
+        continue
+      }
       const id = entry.name.slice(0, -'.json'.length)
-      if (!SAFE_WORKTREE_ID_PATTERN.test(id)) {
+      try {
+        assertValidWorktreeId(id)
+      } catch {
         sawCorrupt = true
         continue
       }
@@ -671,36 +699,42 @@ export class GitWorktreeManager {
       )
     }
 
-    let wtLines: string[]
+    let wtTopLevel: string
+    let wtCommonDir: string
+    let wtInside: string
     let repoCommonDir: string
     let worktreeListStdout: string
     try {
-      const [wtProbe, repoProbe, listProbe] = await Promise.all([
-        this.execGit(
-          [
-            '-C',
-            canonicalWorktreePath,
-            'rev-parse',
-            '--show-toplevel',
-            '--path-format=absolute',
-            '--git-common-dir',
-            '--is-inside-work-tree'
-          ],
-          { cwd: canonicalWorktreePath }
-        ),
-        this.execGit(
-          ['-C', canonicalRepoRoot, 'rev-parse', '--path-format=absolute', '--git-common-dir'],
-          { cwd: canonicalRepoRoot }
-        ),
-        this.execGit(['-C', canonicalRepoRoot, 'worktree', 'list', '--porcelain'], {
-          cwd: canonicalRepoRoot
-        })
-      ])
-      wtLines = wtProbe.stdout
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-      repoCommonDir = repoProbe.stdout.trim()
+      const [topLevelProbe, wtCommonProbe, insideProbe, repoCommonProbe, listProbe] =
+        await Promise.all([
+          this.execGit(['-C', canonicalWorktreePath, 'rev-parse', '--show-toplevel'], {
+            cwd: canonicalWorktreePath
+          }),
+          this.execGit(
+            [
+              '-C',
+              canonicalWorktreePath,
+              'rev-parse',
+              '--path-format=absolute',
+              '--git-common-dir'
+            ],
+            { cwd: canonicalWorktreePath }
+          ),
+          this.execGit(['-C', canonicalWorktreePath, 'rev-parse', '--is-inside-work-tree'], {
+            cwd: canonicalWorktreePath
+          }),
+          this.execGit(
+            ['-C', canonicalRepoRoot, 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+            { cwd: canonicalRepoRoot }
+          ),
+          this.execGit(['-C', canonicalRepoRoot, 'worktree', 'list', '--porcelain', '-z'], {
+            cwd: canonicalRepoRoot
+          })
+        ])
+      wtTopLevel = stripTrailingLineTerminator(topLevelProbe.stdout)
+      wtCommonDir = stripTrailingLineTerminator(wtCommonProbe.stdout)
+      wtInside = insideProbe.stdout.trim()
+      repoCommonDir = stripTrailingLineTerminator(repoCommonProbe.stdout)
       worktreeListStdout = listProbe.stdout
     } catch (error) {
       if (error instanceof GitWorktreeError && error.code === 'WORKTREE_GIT_TIMEOUT') {
@@ -713,7 +747,6 @@ export class GitWorktreeManager {
       )
     }
 
-    const [wtTopLevel, wtCommonDir, wtInside] = wtLines
     if (!wtTopLevel || !wtCommonDir || wtInside !== 'true' || !repoCommonDir) {
       throw new GitWorktreeError(
         'WORKTREE_INVALID_REPO',
@@ -742,10 +775,10 @@ export class GitWorktreeManager {
     }
 
     const registeredPaths: string[] = []
-    for (const line of worktreeListStdout.split(/\r?\n/)) {
-      if (line.startsWith('worktree ')) {
-        const listedPath = line.slice('worktree '.length).trim()
-        if (listedPath) registeredPaths.push(listedPath)
+    for (const record of worktreeListStdout.split('\0')) {
+      if (record.startsWith('worktree ')) {
+        const listedPath = record.slice('worktree '.length)
+        if (listedPath.length > 0) registeredPaths.push(listedPath)
       }
     }
     let registeredMatch = false

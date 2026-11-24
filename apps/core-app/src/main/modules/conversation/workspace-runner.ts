@@ -795,23 +795,23 @@ export class ConversationWorkspaceRunner {
             })
             return
           }
-          if (slot.shuttingDown) return
           if (run.status === 'completed') {
             slot.pendingApproval = false
             slot.assembler!.complete(run.output)
             await this.complete(slot)
-          } else {
-            await this.end(
-              slot,
-              run.error ?? 'WORKSPACE_EXECUTION_FAILED',
-              run.status === 'cancelled'
-                ? 'cancelled'
-                : run.status === 'interrupted'
-                  ? 'interrupted'
-                  : 'failed',
-              run.status === 'failed' ? failureDetail : undefined
-            )
+            return
           }
+          if (slot.shuttingDown) return
+          await this.end(
+            slot,
+            run.error ?? 'WORKSPACE_EXECUTION_FAILED',
+            run.status === 'cancelled'
+              ? 'cancelled'
+              : run.status === 'interrupted'
+                ? 'interrupted'
+                : 'failed',
+            run.status === 'failed' ? failureDetail : undefined
+          )
         }
       }
     )
@@ -913,7 +913,7 @@ export class ConversationWorkspaceRunner {
 
   private async complete(slot: ExecutionSlot): Promise<void> {
     if (slot.assembler!.snapshot().status === 'failed') {
-      await this.end(slot, 'CONVERSATION_EMPTY_RESPONSE')
+      await this.end(slot, 'CONVERSATION_EMPTY_RESPONSE', 'failed', undefined, true)
       return
     }
     await this.persist(slot, true)
@@ -921,18 +921,22 @@ export class ConversationWorkspaceRunner {
     await this.service.finishTurn(slot.conversationId, slot.turn!.input.id, 'idle')
     slot.ended = true
     this.slots.delete(slot.conversationId)
-    void this.kick(slot.conversationId).catch(() => {
-      log.warn('Next workspace input could not be admitted')
-    })
+    if (!this.closing && !slot.shuttingDown) {
+      void this.kick(slot.conversationId).catch(() => {
+        log.warn('Next workspace input could not be admitted')
+      })
+    }
   }
 
   private async end(
     slot: ExecutionSlot,
     code: string,
     outcome: 'failed' | 'cancelled' | 'interrupted' = 'failed',
-    detail?: string
+    detail?: string,
+    allowDuringShutdown = false
   ): Promise<void> {
-    if (slot.ended || slot.shuttingDown || !slot.assembler || !slot.turn) return
+    if (slot.ended || (!allowDuringShutdown && slot.shuttingDown) || !slot.assembler || !slot.turn)
+      return
     slot.assembler.fail(code, outcome, detail)
     await this.persist(slot, true)
     this.snapshot(slot)

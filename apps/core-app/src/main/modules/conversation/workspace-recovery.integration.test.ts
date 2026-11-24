@@ -1221,5 +1221,63 @@ describe('Home Conversation durable startup auto-recovery', () => {
     const rec5 = await boot5.recoverOnStartup()
     expect(rec5.resumedTurns).not.toContain('conv-shutdown-approval')
     expect(rec5.interruptedTurns).toContain('conv-shutdown-approval')
+
+    // 6. completed agent run finishing after beginShutdown() settles receipt without kicking next queued turn
+    const completionGate = Promise.withResolvers<void>()
+    const completedObjectives: string[] = []
+    executeWorkspaceHandler = async (request, workspace) => {
+      completedObjectives.push(request.objective)
+      const run = {
+        id: `run-${completedObjectives.length}`,
+        profileId: request.profileId,
+        status: 'completed',
+        output: `Done: ${request.objective}`,
+        updatedAt: Date.now()
+      }
+      await workspace.onRunCreated(run)
+      if (completedObjectives.length === 1) {
+        await completionGate.promise
+      }
+      await workspace.onRunResult(run)
+    }
+    const boot6 = trackRunner(makeRunner())
+    await boot6.submit(
+      submitReq('conv-shutdown-complete', 't-shut-comp-1', 'First objective', {
+        mode: 'agent',
+        profileId: 'agent-profile-1'
+      })
+    )
+    await boot6.submit(
+      submitReq('conv-shutdown-complete', 't-shut-comp-2', 'Second queued objective', {
+        mode: 'agent',
+        profileId: 'agent-profile-1'
+      })
+    )
+    boot6.beginShutdown()
+    completionGate.resolve()
+    await boot6.close()
+
+    // First turn settled cleanly; second turn was NOT started during shutdown
+    expect(completedObjectives).toEqual(['First objective'])
+    const stateAfterClose = await boot6.service.get('conv-shutdown-complete')
+    expect(stateAfterClose?.status).toBe('idle')
+    expect(stateAfterClose?.queue.map((q) => q.id)).toEqual(['t-shut-comp-2'])
+    expect(
+      (await getConversation('conv-shutdown-complete'))?.messages.find(
+        (m) => m.id === 'assistant-t-shut-comp-1'
+      )
+    ).toMatchObject({ status: 'complete', content: 'Done: First objective' })
+
+    // Next boot executes ONLY the queued second objective (never replays the completed first objective)
+    const boot7 = trackRunner(makeRunner())
+    const rec7 = await boot7.recoverOnStartup()
+    expect(rec7.resumedTurns).not.toContain('conv-shutdown-complete')
+    expect(rec7.resumedQueues).toContain('conv-shutdown-complete')
+    await waitFor(
+      async () =>
+        (await boot7.service.get('conv-shutdown-complete'))?.status === 'idle' &&
+        (await boot7.service.get('conv-shutdown-complete'))?.queue.length === 0
+    )
+    expect(completedObjectives).toEqual(['First objective', 'Second queued objective'])
   })
 })

@@ -337,8 +337,12 @@ export class WorkspaceMessageAssembler {
     const trimmedInput = typeof text === 'string' ? text.trim() : ''
     const alreadyStreamed =
       typeof text === 'string' &&
-      (!this.hydratedInitial || (trimmedInput.length > 0 && this.newContent.trim().length > 0)) &&
-      this.content.trimEnd().endsWith(trimmedInput)
+      (this.hydratedInitial
+        ? trimmedInput.length > 0 &&
+          this.newContent.trim().length > 0 &&
+          (this.newContent.trimEnd().endsWith(trimmedInput) ||
+            this.content.trimEnd() === trimmedInput)
+        : this.content.trimEnd().endsWith(trimmedInput))
     if (
       typeof text === 'string' &&
       (!this.hydratedInitial || trimmedInput.length > 0) &&

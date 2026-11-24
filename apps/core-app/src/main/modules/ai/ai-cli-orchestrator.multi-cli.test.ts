@@ -108,7 +108,9 @@ const mocks = vi.hoisted(() => {
       return { worktreeId, removed: true, branchDeleted: true }
     }),
     worktreeDisposeAll: vi.fn(async () => undefined),
-    appendOrchestratorEvent: vi.fn(async () => undefined),
+    appendOrchestratorEvent: vi.fn(
+      async (_runId?: string, _eventType?: string, _payload?: unknown, _level?: string) => undefined
+    ),
     appendRunMessage: vi.fn(async (runId: string, envelope: string) => {
       const list = runMessages.get(runId) ?? []
       const seq = list.length + 1
@@ -785,8 +787,8 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
     it('auto-resumes running Codex/Claude runs reusing preserved worktrees, reaps orphans, caps crash loops, and fails closed when worktree is missing', async () => {
       await orchestrator.shutdown()
 
-      const codexProfile = makeProfile(CODEX_CLI_PROFILE_ID)
-      const claudeProfile = makeProfile(CLAUDE_CLI_PROFILE_ID)
+      const codexProfile = mocks.profiles.get(CODEX_CLI_PROFILE_ID)!
+      const claudeProfile = mocks.profiles.get(CLAUDE_CLI_PROFILE_ID)!
       const metadataFor = (profile: AiAgentProfile, extra?: Record<string, unknown>) => ({
         schemaVersion: 1,
         executionBudget: { maxSteps: 10, maxChildRuns: 0, maxConcurrency: 1 },
@@ -991,7 +993,7 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
 
     it('reattaches legacy running CLI worktree via runId lookup and does not spend recoveryAttempts when scheduler init fails', async () => {
       await orchestrator.shutdown()
-      const claudeProfile = makeProfile(CLAUDE_CLI_PROFILE_ID)
+      const claudeProfile = mocks.profiles.get(CLAUDE_CLI_PROFILE_ID)!
       mocks.worktreeLeases.set('wt-legacy-claude', {
         worktreeId: 'wt-legacy-claude',
         runId: 'legacy-claude-run',
@@ -1043,6 +1045,130 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
       expect(claudeCwdCaptured).toBe('/mock-userdata/ai-worktrees/wt-legacy-claude')
       expect(mocks.runs.get('legacy-claude-run')?.status).toBe('completed')
       expect(mocks.runs.get('legacy-claude-run')?.metadata?.recoveryAttempts).toBe(1)
+    })
+
+    it('isolates per-run attempt write failures, honors cancelPersistedRun during run.resumed, and restores recoveryAttempts on shutdown race', async () => {
+      await orchestrator.shutdown()
+      const codexProfile = mocks.profiles.get(CODEX_CLI_PROFILE_ID)!
+      const makeQueuedRun = (id: string): AiOrchestratorRunRecord => ({
+        id,
+        sessionId: `s-${id}`,
+        objective: `Objective ${id}`,
+        profileId: CODEX_CLI_PROFILE_ID,
+        runtimeProvider: 'pi-core',
+        cwd: '/tmp',
+        status: 'queued',
+        metadata: {
+          schemaVersion: 1,
+          executionBudget: { maxSteps: 10, maxChildRuns: 0, maxConcurrency: 1 },
+          allowedToolRefs: [opaqueRef('pi-tool', 'file.read')],
+          requestInputPresent: false,
+          profileAuthorityVersion: codexProfile.updatedAt,
+          profileAuthorityDigest: profileAuthorityDigest(codexProfile)
+        },
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      })
+
+      // 1. Privacy fence on first candidate must not abort initialize() or skip sibling candidate
+      mocks.runs.set('run-fenced', makeQueuedRun('run-fenced'))
+      mocks.runs.set('run-sibling', makeQueuedRun('run-sibling'))
+      const boot1 = new AiCliOrchestrator()
+      const releaseFence = boot1.acquirePrivacyRunDeletionFence('run-fenced')
+      expect(releaseFence).not.toBeNull()
+      await boot1.initialize()
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        if (mocks.runs.get('run-sibling')?.status === 'completed') break
+        await new Promise((r) => setTimeout(r, 10))
+      }
+      releaseFence?.()
+      await boot1.shutdown()
+      expect(mocks.runs.get('run-sibling')?.status).toBe('completed')
+      expect(mocks.runs.get('run-fenced')?.status).toBe('queued')
+      expect(mocks.runs.get('run-fenced')?.metadata?.recoveryAttempts).toBeUndefined()
+
+      // 2. Cancelling a queued run while recovery waits on run.resumed keeps it cancelled and never spawns CLI
+      mocks.runs.clear()
+      mocks.runs.set('run-cancel-race', makeQueuedRun('run-cancel-race'))
+      let codexSpawnCount = 0
+      codexStreamImpl = async function* () {
+        codexSpawnCount += 1
+        yield { type: 'delta', text: 'should-not-spawn' }
+      }
+      const resumeEventEntered = Promise.withResolvers<void>()
+      const releaseResumeEvent = Promise.withResolvers<void>()
+      mocks.appendOrchestratorEvent.mockImplementation(
+        async (runId?: string, eventType?: string) => {
+          if (runId === 'run-cancel-race' && eventType === 'run.resumed') {
+            resumeEventEntered.resolve()
+            await releaseResumeEvent.promise
+          }
+          return undefined
+        }
+      )
+
+      const boot2 = new AiCliOrchestrator()
+      await boot2.initialize()
+      await resumeEventEntered.promise
+      const cancelPromise = boot2.cancelPersistedRun('run-cancel-race')
+      releaseResumeEvent.resolve()
+      await expect(cancelPromise).resolves.toBe(true)
+      await boot2.shutdown()
+      mocks.appendOrchestratorEvent.mockRestore()
+
+      expect(mocks.runs.get('run-cancel-race')?.status).toBe('cancelled')
+      expect(codexSpawnCount).toBe(0)
+
+      // 3. Shutdown racing with recovery admission restores/preserves recoveryAttempts for next boot
+      mocks.runs.clear()
+      mocks.runs.set('run-shutdown-race', makeQueuedRun('run-shutdown-race'))
+      codexStreamImpl = async function* () {
+        codexSpawnCount += 1
+        yield { type: 'delta', text: 'recovered-after-shutdown-race' }
+      }
+      const { aiOrchestratorStore } = await import('./ai-orchestrator-store')
+      const updateSpy = vi.mocked(aiOrchestratorStore.updateOrchestratorRun)
+      const attemptWriteEntered = Promise.withResolvers<void>()
+      const releaseAttemptWrite = Promise.withResolvers<void>()
+      let interceptedAttemptWrite = false
+      updateSpy.mockImplementation(async (runId, update) => {
+        const current = mocks.runs.get(runId)
+        if (!current) throw new Error(`Unknown run ${runId}`)
+        const next = { ...current, ...update, updatedAt: Date.now() }
+        mocks.runs.set(runId, next)
+        if (
+          !interceptedAttemptWrite &&
+          runId === 'run-shutdown-race' &&
+          (update.metadata as Record<string, unknown> | undefined)?.recoveryAttempts === 1
+        ) {
+          interceptedAttemptWrite = true
+          attemptWriteEntered.resolve()
+          await releaseAttemptWrite.promise
+        }
+      })
+
+      const boot3 = new AiCliOrchestrator()
+      await boot3.initialize()
+      await attemptWriteEntered.promise
+      const shutdownPromise = boot3.shutdown()
+      releaseAttemptWrite.resolve()
+      await shutdownPromise
+      updateSpy.mockRestore()
+
+      expect(mocks.runs.get('run-shutdown-race')?.metadata?.recoveryAttempts).toBeUndefined()
+      expect(codexSpawnCount).toBe(0)
+
+      // Next boot still has its full recovery attempt budget and completes cleanly
+      const boot4 = new AiCliOrchestrator()
+      await boot4.initialize()
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        if (mocks.runs.get('run-shutdown-race')?.status === 'completed') break
+        await new Promise((r) => setTimeout(r, 10))
+      }
+      await boot4.shutdown()
+      expect(mocks.runs.get('run-shutdown-race')?.status).toBe('completed')
+      expect(mocks.runs.get('run-shutdown-race')?.output).toBe('recovered-after-shutdown-race')
+      expect(mocks.runs.get('run-shutdown-race')?.metadata?.recoveryAttempts).toBe(1)
     })
   })
 })

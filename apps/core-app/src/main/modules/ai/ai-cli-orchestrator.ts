@@ -91,6 +91,7 @@ import {
   AI_RUN_USAGE_LIMIT_REACHED,
   approvalRequirementFromControlError,
   createApprovalRequiredError,
+  createRunCancelledError,
   createRunInterruptedError,
   INTERRUPTED_TOOL_CALL_PREFIX,
   isInterruptedToolCallControlError,
@@ -593,6 +594,12 @@ export class AiCliOrchestrator {
   private readonly recoveryWorktreeIds = new Map<string, string>()
   /** Host-internal flag for external CLI runs resumed after interruption. */
   private readonly resumedExternalRunIds = new Set<string>()
+  /** Startup-recovered runs admitted by the orchestrator but not yet handed to a runtime host. */
+  private readonly admittedRecoveryRunIds = new Set<string>()
+  /** Admitted startup-recovered runs cancelled before host handoff. */
+  private readonly cancelledRecoveryRunIds = new Set<string>()
+  /** Per-run lock serializing recovery admission against persisted cancellation. */
+  private readonly runLifecycleLocks = new Map<string, Promise<void>>()
 
   /**
    * The scheduler decides the executor (`AGENTS.md`): ONLY `profile:cli:omp`, `profile:cli:codex`,
@@ -1065,6 +1072,25 @@ export class AiCliOrchestrator {
     }
   }
 
+  private async withRunLifecycleLock<T>(runId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.runLifecycleLocks.get(runId) ?? Promise.resolve()
+    let release!: () => void
+    const current = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const chain = previous.catch(() => undefined).then(() => current)
+    this.runLifecycleLocks.set(runId, chain)
+    await previous.catch(() => undefined)
+    try {
+      return await operation()
+    } finally {
+      release()
+      if (this.runLifecycleLocks.get(runId) === chain) {
+        this.runLifecycleLocks.delete(runId)
+      }
+    }
+  }
+
   async initialize(): Promise<void> {
     if (this.shutdownPromise) {
       await this.shutdownPromise
@@ -1105,24 +1131,11 @@ export class AiCliOrchestrator {
       throw error
     }
     // Only now: a resumed run is an execution, and the orchestrator admits none before it is up.
-    // Persist the incremented recoveryAttempts count ONLY after initialization succeeded so a
-    // failed startup never consumes a run's recovery budget, while still committing before spawn.
+    // Each candidate persists its recoveryAttempts increment inside its admitted execution under
+    // the per-run lifecycle lock so a failed per-run write cannot skip other candidates and
+    // shutdown/cancellation never consumes a recovery budget or launches a cancelled run.
     for (const item of resumable) {
       if (this.closing) break
-      const nextAttempt =
-        item.recoveryAttempt ?? readRecoveryAttempts(toRecord(item.run.metadata)) + 1
-      const updatedMetadata: Record<string, unknown> = {
-        ...projectPersistedRunMetadata(item.run.metadata),
-        recoveryAttempts: nextAttempt
-      }
-      await this.withRunWriteLease(item.run.id, async () => {
-        await aiOrchestratorStore.updateOrchestratorRun(item.run.id, {
-          metadata: updatedMetadata,
-          updatedAt: Date.now()
-        })
-      })
-      item.run = { ...item.run, metadata: updatedMetadata }
-      item.recoveryAttempt = nextAttempt
       this.resumeInBackground(item)
     }
   }
@@ -1310,6 +1323,7 @@ export class AiCliOrchestrator {
    * the caller that started the run is gone.
    */
   private resumeInBackground(resumable: ResumableRun): void {
+    if (this.closing || !this.initialized) return
     const {
       run,
       profile,
@@ -1319,9 +1333,10 @@ export class AiCliOrchestrator {
       resume,
       reattachWorktreeId,
       worktreeOptions,
-      resumedFromInterruption,
-      recoveryAttempt
+      resumedFromInterruption
     } = resumable
+    this.admittedRecoveryRunIds.add(run.id)
+    this.cancelledRecoveryRunIds.delete(run.id)
     if (resume) this.resumePlans.set(run.id, resume)
     if (reattachWorktreeId) this.recoveryWorktreeIds.set(run.id, reattachWorktreeId)
     if (resumedFromInterruption) this.resumedExternalRunIds.add(run.id)
@@ -1338,23 +1353,115 @@ export class AiCliOrchestrator {
             ...(effectiveWorktreeOptions ? { worktree: effectiveWorktreeOptions } : {})
           }
         : undefined
-    void this.trackExecution(async () => {
-      await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.resumed', {
-        reason: 'application_restart',
-        previousStatus: run.status,
-        recoveryAttempt: recoveryAttempt ?? readRecoveryAttempts(toRecord(run.metadata)),
-        ...(reattachWorktreeId ? { reusedWorktree: true, worktreeId: reattachWorktreeId } : {})
-      })
+    const execution = this.trackExecution(async () => {
+      const admittedRun = await this.withRunLifecycleLock(run.id, async () =>
+        this.withRunWriteLease(run.id, async () => {
+          if (this.closing) {
+            this.clearInMemoryRunState(run.id)
+            return null
+          }
+          const latest = await aiOrchestratorStore.getOrchestratorRun(run.id)
+          if (!latest || (latest.status !== 'queued' && latest.status !== 'running')) {
+            this.clearInMemoryRunState(run.id)
+            return null
+          }
+          const previousMetadata = projectPersistedRunMetadata(latest.metadata)
+          if (this.cancelledRecoveryRunIds.has(run.id)) {
+            const now = Date.now()
+            await aiOrchestratorStore.updateOrchestratorRun(run.id, {
+              status: 'cancelled',
+              error: AI_RUN_CANCELLED,
+              metadata: previousMetadata,
+              completedAt: now,
+              updatedAt: now
+            })
+            await aiOrchestratorStore.appendOrchestratorEvent(
+              run.id,
+              'run.cancelled',
+              { reason: 'Cancelled by user' },
+              'warn'
+            )
+            this.clearVolatileRunState(run.id)
+            return null
+          }
+          const currentAttempts = readRecoveryAttempts(toRecord(latest.metadata))
+          if (currentAttempts >= MAX_ORCHESTRATOR_RECOVERY_ATTEMPTS) {
+            this.clearInMemoryRunState(run.id)
+            return null
+          }
+          const nextAttempt = currentAttempts + 1
+          const updatedMetadata: Record<string, unknown> = {
+            ...previousMetadata,
+            recoveryAttempts: nextAttempt
+          }
+          await aiOrchestratorStore.updateOrchestratorRun(run.id, {
+            metadata: updatedMetadata,
+            updatedAt: Date.now()
+          })
+          if (this.closing) {
+            await aiOrchestratorStore.updateOrchestratorRun(run.id, {
+              metadata: previousMetadata,
+              updatedAt: Date.now()
+            })
+            this.clearInMemoryRunState(run.id)
+            return null
+          }
+          if (this.cancelledRecoveryRunIds.has(run.id)) {
+            const now = Date.now()
+            await aiOrchestratorStore.updateOrchestratorRun(run.id, {
+              status: 'cancelled',
+              error: AI_RUN_CANCELLED,
+              metadata: previousMetadata,
+              completedAt: now,
+              updatedAt: now
+            })
+            await aiOrchestratorStore.appendOrchestratorEvent(
+              run.id,
+              'run.cancelled',
+              { reason: 'Cancelled by user' },
+              'warn'
+            )
+            this.clearVolatileRunState(run.id)
+            return null
+          }
+          await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.resumed', {
+            reason: 'application_restart',
+            previousStatus: latest.status,
+            recoveryAttempt: nextAttempt,
+            ...(reattachWorktreeId ? { reusedWorktree: true, worktreeId: reattachWorktreeId } : {})
+          })
+          if (this.cancelledRecoveryRunIds.has(run.id)) {
+            const now = Date.now()
+            await aiOrchestratorStore.updateOrchestratorRun(run.id, {
+              status: 'cancelled',
+              error: AI_RUN_CANCELLED,
+              metadata: updatedMetadata,
+              completedAt: now,
+              updatedAt: now
+            })
+            await aiOrchestratorStore.appendOrchestratorEvent(
+              run.id,
+              'run.cancelled',
+              { reason: 'Cancelled by user' },
+              'warn'
+            )
+            this.clearVolatileRunState(run.id)
+            return null
+          }
+          return { ...latest, metadata: updatedMetadata }
+        })
+      )
+      if (!admittedRun) return null
       return await this.executePreparedRun(
-        run,
+        admittedRun,
         {
-          objective: run.objective,
+          objective: admittedRun.objective,
           input,
-          profileId: run.profileId,
-          cwd: run.cwd,
+          profileId: admittedRun.profileId,
+          cwd: admittedRun.cwd,
           approved: false,
           allowedToolIds,
-          sessionId: run.sessionId,
+          sessionId: admittedRun.sessionId,
           metadata: requestMetadata,
           budget
         },
@@ -1362,9 +1469,16 @@ export class AiCliOrchestrator {
         allowedToolIds,
         budget
       )
-    }).catch((error) => {
-      orchestratorLog.warn('A resumed run did not finish', { error })
     })
+    void execution
+      .catch((error) => {
+        this.clearInMemoryRunState(run.id)
+        orchestratorLog.warn('A resumed run did not finish', { error })
+      })
+      .finally(() => {
+        this.admittedRecoveryRunIds.delete(run.id)
+        this.cancelledRecoveryRunIds.delete(run.id)
+      })
   }
 
   shutdown(): Promise<void> {
@@ -1410,6 +1524,8 @@ export class AiCliOrchestrator {
     this.suspendedForRestartRunIds.clear()
     this.recoveryWorktreeIds.clear()
     this.resumedExternalRunIds.clear()
+    this.admittedRecoveryRunIds.clear()
+    this.cancelledRecoveryRunIds.clear()
     this.volatileRunInputs.clear()
     this.resumePlans.clear()
     this.runLogSeq.clear()
@@ -1866,6 +1982,7 @@ export class AiCliOrchestrator {
       const workspace = this.workspaceAuthorities.get(run.id)
       const startedAt = Date.now()
       try {
+        if (this.cancelledRecoveryRunIds.has(run.id)) throw createRunCancelledError()
         await aiOrchestratorStore.updateOrchestratorRun(run.id, {
           status: 'running',
           startedAt,
@@ -1895,6 +2012,8 @@ export class AiCliOrchestrator {
             .join('\n\n')
         }
         if (this.closing) throw createRunInterruptedError()
+        if (this.cancelledRecoveryRunIds.has(run.id)) throw createRunCancelledError()
+        this.admittedRecoveryRunIds.delete(run.id)
         const useExternalCliRuntime = this.resolveExternalCliKind(profile.id) !== null
         const resume = !useExternalCliRuntime ? this.resumePlans.get(run.id) : undefined
         this.resumePlans.delete(run.id)
@@ -2073,7 +2192,14 @@ export class AiCliOrchestrator {
     return results.filter(Boolean).length
   }
   cancel(runId: string): boolean {
-    return this.cliRuntimeHost.cancel(runId) || this.runtimeHost.cancel(runId)
+    if (this.cliRuntimeHost.cancel(runId) || this.runtimeHost.cancel(runId)) {
+      return true
+    }
+    if (this.admittedRecoveryRunIds.has(runId)) {
+      this.cancelledRecoveryRunIds.add(runId)
+      return true
+    }
+    return false
   }
 
   getRunWorktreeLease(runId: string): WorktreeLease | undefined {
@@ -2101,39 +2227,57 @@ export class AiCliOrchestrator {
   private async cancelPersistedRunTree(runId: string, visited: Set<string>): Promise<boolean> {
     if (visited.has(runId)) return false
     visited.add(runId)
-    const run = await aiOrchestratorStore.getOrchestratorRun(runId)
+    let cancelledAdmittedRecovery = this.admittedRecoveryRunIds.has(runId)
+    if (cancelledAdmittedRecovery) {
+      this.cancelledRecoveryRunIds.add(runId)
+    }
+    const initialRun = await aiOrchestratorStore.getOrchestratorRun(runId)
     const workspace = this.workspaceAuthorities.get(runId)
-    if (!run) return false
+    if (!initialRun) return false
     const descendants = (await this.listRuns({ limit: 200 })).filter(
       (candidate) => candidate.parentRunId === runId
     )
     await Promise.all(descendants.map((child) => this.cancelPersistedRunTree(child.id, visited)))
-    if (this.cancel(runId)) return true
-    if (run.status !== 'pending_approval' && run.status !== 'queued') return false
-    const now = Date.now()
-    await this.withRunWriteLease(runId, async () => {
-      await aiOrchestratorStore.updateOrchestratorRun(runId, {
+    if (this.cliRuntimeHost.cancel(runId) || this.runtimeHost.cancel(runId)) return true
+    if (this.admittedRecoveryRunIds.has(runId)) {
+      cancelledAdmittedRecovery = true
+      this.cancelledRecoveryRunIds.add(runId)
+    }
+    return await this.withRunLifecycleLock(runId, async () => {
+      if (this.cliRuntimeHost.cancel(runId) || this.runtimeHost.cancel(runId)) return true
+      const run = await aiOrchestratorStore.getOrchestratorRun(runId)
+      if (!run) return false
+      if (run.status !== 'pending_approval' && run.status !== 'queued') {
+        return (
+          cancelledAdmittedRecovery &&
+          (run.status === 'cancelled' || this.admittedRecoveryRunIds.has(runId))
+        )
+      }
+      const now = Date.now()
+      await this.withRunWriteLease(runId, async () => {
+        await aiOrchestratorStore.updateOrchestratorRun(runId, {
+          status: 'cancelled',
+          error: AI_RUN_CANCELLED,
+          metadata: projectPersistedRunMetadata(run.metadata),
+          completedAt: now,
+          updatedAt: now
+        })
+        await aiOrchestratorStore.appendOrchestratorEvent(
+          runId,
+          'run.cancelled',
+          { reason: 'Cancelled by user' },
+          'warn'
+        )
+      })
+      this.clearVolatileRunState(runId)
+      await workspace?.onRunResult?.({
+        ...run,
         status: 'cancelled',
-        error: AI_RUN_CANCELLED,
-        metadata: projectPersistedRunMetadata(run.metadata),
         completedAt: now,
         updatedAt: now
       })
-      await aiOrchestratorStore.appendOrchestratorEvent(
-        runId,
-        'run.cancelled',
-        { reason: 'Cancelled by user' },
-        'warn'
-      )
+      return true
     })
-    this.clearVolatileRunState(runId)
-    await workspace?.onRunResult?.({
-      ...run,
-      status: 'cancelled',
-      completedAt: now,
-      updatedAt: now
-    })
-    return true
   }
 
   async listRuns(options?: AiOrchestratorRunListRequest): Promise<AiOrchestratorRunRecord[]> {
