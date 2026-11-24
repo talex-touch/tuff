@@ -7571,6 +7571,28 @@
         "title": "Auto-start managed daemon",
         "desc": "Start and manage a background herdr-core daemon automatically when no external instance is found."
       },
+      "binary": {
+        "title": "Runtime binary",
+        "desc": "Detected herdr-core executable source and version.",
+        "platformDesc": "Platform {platform} / {arch}, powering persistent runtime terminals.",
+        "missingSummary": "herdr-core binary not found; local PTY fallback remains active.",
+        "missingHintTitle": "herdr-core binary is not installed",
+        "missingHintDesc": "Local PTY fallback stays active so your bottom terminal keeps working normally. Install herdr-core or set a custom binary path below to enable persistent sessions, task cards, and remote machines:",
+        "defaultInstallHint": "Install herdr-core onto PATH or ~/.local/bin/herdr-core, or configure a custom path below",
+        "source": {
+          "custom": "Custom",
+          "system": "System",
+          "bundle": "App Bundle",
+          "packagedResource": "Bundled",
+          "missing": "Not Installed",
+          "detecting": "Detecting"
+        }
+      },
+      "binaryPath": {
+        "title": "Custom binary path",
+        "desc": "Leave blank to auto-discover the system or bundled binary; clear to remove a custom override.",
+        "placeholder": "Auto-discover (system or bundled)"
+      },
       "socketPath": {
         "title": "Socket path",
         "desc": "Leave blank to auto-discover the default socket; set a path to connect directly to a specific Unix socket.",

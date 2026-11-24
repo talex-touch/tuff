@@ -6,6 +6,7 @@ import type {
   WidgetSpec
 } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { StableToolErrorCode } from '../ai/tool-error-projection'
+import type { HerdrRuntimePlane } from '../herdr-core/runtime-plane'
 import type { AgentContextSource, McpRiskLevel } from './agent-context-source'
 import type { PluginFeatureSource } from './plugin-feature-source'
 import { readFile, stat, writeFile } from 'node:fs/promises'
@@ -25,6 +26,7 @@ import {
   projectToolErrorCode
 } from '../ai/tool-error-projection'
 import { createLogger } from '../../utils/logger'
+import { createHerdrTools } from './herdr-tools'
 
 const registryLog = createLogger('agent-tools')
 
@@ -384,6 +386,8 @@ export interface ToolRegistryOptions {
   agentContext: AgentContextSource
   /** The features the user's installed plugins expose. */
   pluginFeatures: PluginFeatureSource
+  /** Optional universal herdr-core runtime plane getter (degrades gracefully when absent/offline). */
+  getHerdrPlane?: () => HerdrRuntimePlane | null
 }
 
 export function createToolRegistry(options: ToolRegistryOptions): Map<string, ToolDefinition> {
@@ -722,7 +726,11 @@ export function createToolRegistry(options: ToolRegistryOptions): Map<string, To
         if (typeof spec === 'string') return toolFailure('TOOL_INPUT_INVALID')
         return { output: `${WIDGET_RESULT_PREFIX}${JSON.stringify(spec)}`, isError: false }
       }
-    }
+    },
+    ...createHerdrTools({
+      getPlane: options.getHerdrPlane ?? (() => null),
+      truncate: truncateForModel
+    })
   ]
 
   return new Map(tools.map((tool) => [tool.name, tool]))

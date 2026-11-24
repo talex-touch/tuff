@@ -34,6 +34,7 @@ import { intelligenceMcpRegistry } from '../ai/intelligence-mcp-registry'
 import { setPiToolRuntimeResolver } from '../ai/providers/pi-cli-provider'
 import { readEnabledLocalSkill } from '../ai/skill-local-sources'
 import { coreBoxManager } from '../box-tool/core-box/manager'
+import { getRegisteredHerdrRuntimePlane } from '../herdr-core/runtime-plane'
 import { pluginModule } from '../plugin/plugin-module'
 import { createAgentContextSource } from './agent-context-source'
 import { startToolGateway } from './gateway-server'
@@ -42,6 +43,7 @@ import { createToolRegistry, type ToolDefinition } from './tool-registry'
 
 export * from './agent-context-source'
 export * from './gateway-server'
+export * from './herdr-tools'
 export * from './plugin-feature-source'
 export * from './tool-registry'
 
@@ -293,7 +295,8 @@ export class ToolGatewayModule extends BaseModule<TalexEvents> {
       },
       openPath: async (path: string) => shell.openPath(path),
       agentContext: this.agentContext,
-      pluginFeatures: this.pluginFeatures
+      pluginFeatures: this.pluginFeatures,
+      getHerdrPlane: () => getRegisteredHerdrRuntimePlane()
     }
   }
 

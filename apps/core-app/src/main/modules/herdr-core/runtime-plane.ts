@@ -710,3 +710,13 @@ export class HerdrRuntimePlane {
     return client
   }
 }
+
+let registeredHerdrRuntimePlane: HerdrRuntimePlane | null = null
+
+export function registerHerdrRuntimePlane(plane: HerdrRuntimePlane | null): void {
+  registeredHerdrRuntimePlane = plane
+}
+
+export function getRegisteredHerdrRuntimePlane(): HerdrRuntimePlane | null {
+  return registeredHerdrRuntimePlane
+}

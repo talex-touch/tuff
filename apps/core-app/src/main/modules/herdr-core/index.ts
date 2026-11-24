@@ -39,10 +39,15 @@ import { getMainConfig, subscribeMainConfig } from '../storage'
 import { watchPtyOwner } from '../terminal/pty-session-core'
 import { DefaultHerdrAcpCapabilityBridge } from './acp-capability-bridge'
 import { HerdrNativeSessionProjector } from './content-projector'
-import { HerdrRuntimePlane } from './runtime-plane'
+import {
+  getRegisteredHerdrRuntimePlane,
+  HerdrRuntimePlane,
+  registerHerdrRuntimePlane
+} from './runtime-plane'
 import { HerdrRuntimeStore } from './runtime-store'
 
 export * from './acp-capability-bridge'
+export * from './binary-manager'
 export * from './content-projector'
 export * from './frame-codec'
 export * from './framed-client'
@@ -157,6 +162,7 @@ export class HerdrCoreModule extends BaseModule {
         getSession: (address) => this.store.getSession(address)
       })
     this.plane.registerContentProjector(this.projector)
+    registerHerdrRuntimePlane(this.plane)
     this.readAppSettings =
       deps.readAppSettings ??
       (() => {
@@ -298,6 +304,9 @@ export class HerdrCoreModule extends BaseModule {
 
     this.plane.dispose()
     this.store.dispose()
+    if (getRegisteredHerdrRuntimePlane() === this.plane) {
+      registerHerdrRuntimePlane(null)
+    }
     this.transport = null
   }
 

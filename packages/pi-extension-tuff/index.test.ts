@@ -248,3 +248,61 @@ describe('plugin feature tools', () => {
     expect(invoke.description).toContain('opens_ui=yes')
   })
 })
+
+describe('herdr runtime tools', () => {
+  const HERDR_TOOL_CASES: Array<{
+    name: string
+    params: Record<string, unknown>
+    required?: string[]
+  }> = [
+    { name: 'tuff_herdr_list_sessions', params: { all: true } },
+    { name: 'tuff_herdr_read_screen', params: { terminal: 't1', lines: 100 }, required: ['terminal'] },
+    { name: 'tuff_herdr_file_read', params: { path: '/repo/a.ts', on: 'rohan', offset: 1, limit: 50 }, required: ['path'] },
+    { name: 'tuff_herdr_send_input', params: { terminal: 't1', text: 'pnpm test', force: false }, required: ['terminal', 'text'] },
+    { name: 'tuff_herdr_file_write', params: { path: '/repo/b.ts', content: 'export const x = 1\n', on: 'rohan' }, required: ['path', 'content'] },
+    { name: 'tuff_herdr_file_edit', params: { path: '/repo/b.ts', edits: [{ old: 'x = 1', new: 'x = 2' }] }, required: ['path', 'edits'] },
+    { name: 'tuff_herdr_run_terminal', params: { argv: ['zsh'], cwd: '/repo', on: 'rohan', keep: true } },
+    { name: 'tuff_herdr_exec', params: { line: 'git status', cwd: '/repo', timeout: 30 } },
+    { name: 'tuff_herdr_control_terminal', params: { terminal: 't1', action: 'interrupt', timeout: 5 }, required: ['terminal', 'action'] },
+  ]
+
+  it('registers all 9 tuff_herdr_* forwarder tools with expected schemas', async () => {
+    const tools = await loadTools()
+    const byName = new Map(tools.map(tool => [tool.name, tool]))
+
+    for (const entry of HERDR_TOOL_CASES) {
+      const spec = byName.get(entry.name)
+      expect(spec, `missing tool ${entry.name}`).toBeDefined()
+      expect(spec!.execute).toHaveLength(2)
+      if (entry.required) {
+        expect(spec!.parameters.required).toEqual(entry.required)
+      }
+    }
+  })
+
+  it.each(HERDR_TOOL_CASES)(
+    'forwards (toolCallId, params) verbatim to the gateway for $name',
+    async ({ name, params }) => {
+      const fetchMock = vi.fn(async () => gatewayResponse({ output: `ok:${name}`, isError: false }))
+      vi.stubGlobal('fetch', fetchMock)
+
+      const tool = (await loadTools()).find(entry => entry.name === name)!
+      const callId = `call-${name}`
+      const result = await tool.execute(callId, params) as ToolResultBlock
+
+      expect(result).toEqual({
+        content: [{ type: 'text', text: `ok:${name}` }],
+        isError: false,
+      })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+      expect(url).toBe('http://127.0.0.1:1/invoke')
+      expect(init.method).toBe('POST')
+      expect(JSON.parse(String(init.body))).toEqual({
+        tool: name,
+        callId,
+        args: params,
+      })
+    },
+  )
+})

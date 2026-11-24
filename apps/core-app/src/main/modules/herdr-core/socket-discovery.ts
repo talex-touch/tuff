@@ -75,6 +75,7 @@ export interface DiscoveredHerdrConnection {
   socketPath: string
   session: string
   binaryPath: string | null
+  binarySource?: HerdrBinarySource | null
   ownership: Exclude<HerdrOwnership, 'none'>
 }
 
@@ -180,7 +181,7 @@ export async function defaultIsExecutable(
  * 2. `PATH` entries
  * 3. `~/.local/bin/herdr-core`
  * 4. `~/.local/share/herdr-core/active/Herdr Core.app/Contents/MacOS/herdr-core`
- * 5. `process.resourcesPath/herdr-core`
+ * 5. `process.resourcesPath/herdr-core/herdr-core` or `process.resourcesPath/herdr-core`
  */
 export async function resolveHerdrBinaryPath(
   settings?: Partial<HerdrCoreSettings>,
@@ -236,7 +237,9 @@ export async function resolveHerdrBinaryPath(
   const resourcesPath =
     deps?.resourcesPath ?? (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
   if (resourcesPath?.trim()) {
-    pushCandidate(pathApi.join(resourcesPath.trim(), binaryName), 'resources')
+    const trimmedResources = resourcesPath.trim()
+    pushCandidate(pathApi.join(trimmedResources, 'herdr-core', binaryName), 'resources')
+    pushCandidate(pathApi.join(trimmedResources, binaryName), 'resources')
   }
 
   for (const entry of candidates) {
@@ -451,6 +454,7 @@ export async function discoverAndConnectHerdrSocket(
       socketPath: resolvedSocket.socketPath,
       session: resolvedSocket.session,
       binaryPath: resolvedBinary?.binaryPath ?? null,
+      binarySource: resolvedBinary?.source ?? null,
       ownership: 'external'
     }
   } catch (error) {
@@ -499,6 +503,7 @@ export async function discoverAndConnectHerdrSocket(
           socketPath: resolvedSocket.socketPath,
           session: resolvedSocket.session,
           binaryPath: resolvedBinary.binaryPath,
+          binarySource: resolvedBinary.source,
           ownership: 'managed'
         }
       } catch (retryError) {
