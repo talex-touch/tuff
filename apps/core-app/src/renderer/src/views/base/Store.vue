@@ -13,6 +13,7 @@ import { useStoreCategories } from '~/composables/store/useStoreCategories'
 import { useStoreData } from '~/composables/store/useStoreData'
 import { useStoreInstall } from '~/composables/store/useStoreInstall'
 import { usePluginVersionStatus } from '~/composables/store/usePluginVersionStatus'
+import { appSetting } from '~/modules/storage/app-storage'
 import { storeSourcesStorage } from '~/modules/storage/store-sources'
 import { createRendererLogger } from '~/utils/renderer-log'
 import PluginInstalled from '~/views/base/Plugin.vue'
@@ -90,8 +91,11 @@ const tabs = ref<StoreTab>(initialTab)
 const showCliTab = ref(false)
 const showPublisherTab = computed(() => isLoggedIn.value)
 const searchKey = ref('')
+const showAdvancedSettings = computed(() => appSetting.dev?.advancedSettings === true)
 const sourcesState = storeSourcesStorage.get()
-const sourcesCount = computed(() => sourcesState.sources.length)
+const sourcesCount = computed(
+  () => sourcesState.sources.filter((item) => showAdvancedSettings.value || !item.outdated).length
+)
 
 const StorePublisher = defineAsyncComponent(() => import('~/views/base/store/StorePublisher.vue'))
 
@@ -320,7 +324,12 @@ onMounted(() => {
       </Transition>
     </div>
 
-    <StoreSourceEditor v-model="sourceEditorShow" :source="sourceEditorSource" />
+    <StoreSourceEditor
+      v-model="sourceEditorShow"
+      :source="sourceEditorSource"
+      :advanced-mode="showAdvancedSettings"
+      :provider-details="providerStats"
+    />
 
     <FlipDialog
       v-model="detailVisible"

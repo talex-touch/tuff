@@ -9,10 +9,16 @@ import { getTuffBaseUrl } from '../env'
 import {
   DEFAULT_NPM_REGISTRY_URL,
   NPM_PLUGIN_CANONICAL_KEYWORD,
+  NPM_PLUGIN_DISCOVERY_KEYWORDS,
 } from '../plugin/npm-contract'
 
+export { DEFAULT_NPM_REGISTRY_URL }
+
 export const STORE_SOURCES_STORAGE_KEY = StorageList.STORE_SOURCES
-export const STORE_SOURCES_STORAGE_VERSION = 1
+export const STORE_SOURCES_STORAGE_VERSION = 2
+
+export const DEFAULT_GITHUB_STORE_URL = 'https://github.com/topics/tuff-plugin'
+export const DEFAULT_STORE_DISCOVERY_KEYWORDS = NPM_PLUGIN_DISCOVERY_KEYWORDS
 
 function defineProvider(
   provider: Omit<StoreProviderDefinition, 'trustLevel'> & {
@@ -45,64 +51,41 @@ export function createDefaultStoreProviders(baseUrl = getTuffBaseUrl()): StorePr
       },
     }),
     defineProvider({
-      id: 'talex-official',
-      name: 'Talex Official',
-      type: 'nexusStore',
-      url: 'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/plugins.json',
-      description: '官方插件市场，提供经过审核的核心插件。',
-      enabled: false,
-      priority: 100,
-      trustLevel: 'official',
-      isOfficial: true,
-      outdated: true,
-      readOnly: true,
-      config: {
-        manifestUrl:
-          'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/plugins.json',
-        baseUrl: 'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/',
-      },
-    }),
-    defineProvider({
       id: 'github-releases',
-      name: 'GitHub Releases',
+      name: 'GitHub',
       type: 'repository',
-      description: '从 GitHub 仓库 releases / manifest 中读取插件。',
+      url: DEFAULT_GITHUB_STORE_URL,
+      description: '从 GitHub 开源插件仓库与 Releases 发现插件。',
       enabled: false,
-      priority: 80,
+      priority: 90,
       trustLevel: 'unverified',
-      outdated: true,
+      isOfficial: false,
+      outdated: false,
+      readOnly: false,
       config: {
         platform: 'github',
         apiBase: 'https://api.github.com',
-      },
-    }),
-    defineProvider({
-      id: 'gitee-repos',
-      name: 'Gitee 仓库',
-      type: 'repository',
-      description: 'Gitee 平台插件仓库，适合国内网络。',
-      enabled: false,
-      priority: 70,
-      trustLevel: 'unverified',
-      outdated: true,
-      config: {
-        platform: 'gitee',
-        apiBase: 'https://gitee.com/api/v5',
+        mode: 'search',
+        topic: DEFAULT_STORE_DISCOVERY_KEYWORDS[0],
+        topics: [...DEFAULT_STORE_DISCOVERY_KEYWORDS],
       },
     }),
     defineProvider({
       id: 'npm-scope',
-      name: 'NPM 包',
+      name: 'NPM Registry',
       type: 'npmPackage',
       url: DEFAULT_NPM_REGISTRY_URL,
-      description: '基于 NPM 关键字或 scope 的插件发布渠道。',
+      description: '从 NPM 官方源发现带有 tuff-plugin 关键字的插件包。',
       enabled: false,
-      priority: 60,
+      priority: 80,
       trustLevel: 'unverified',
+      isOfficial: false,
       outdated: false,
+      readOnly: false,
       config: {
         registryUrl: DEFAULT_NPM_REGISTRY_URL,
         keyword: NPM_PLUGIN_CANONICAL_KEYWORD,
+        keywords: [...DEFAULT_STORE_DISCOVERY_KEYWORDS],
       },
     }),
   ]

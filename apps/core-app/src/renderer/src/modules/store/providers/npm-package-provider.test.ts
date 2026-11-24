@@ -457,4 +457,154 @@ describe('NpmPackageProvider', () => {
     await expect(provider.list()).rejects.toThrow(/Disallowed npm registry URL/i)
     expect(requestMock).not.toHaveBeenCalled()
   })
+
+  it('deduplicates multi-keyword hits from config.keywords, preserves @ in scoped mirror URLs, and caches until force=true', async () => {
+    const requestedUrls: string[] = []
+    const requestMock = vi.fn(
+      async <T = unknown>(options: StoreHttpRequestOptions): Promise<StoreHttpResponse<T>> => {
+        requestedUrls.push(options.url)
+        if (options.url.includes('/-/v1/search')) {
+          return createResponse(
+            {
+              total: 1,
+              objects: [
+                {
+                  package: {
+                    name: '@tuff/demo-plugin',
+                    version: '1.2.0',
+                    description: 'Demo plugin',
+                    links: { npm: 'https://www.npmjs.com/package/@tuff/demo-plugin' }
+                  }
+                }
+              ]
+            } as T,
+            options.url
+          )
+        }
+
+        return createResponse(
+          {
+            name: '@tuff/demo-plugin',
+            description: 'Demo plugin from metadata',
+            author: { name: 'Tuff Team' },
+            'dist-tags': { latest: '1.2.0' },
+            versions: {
+              '1.2.0': {
+                name: '@tuff/demo-plugin',
+                version: '1.2.0',
+                tuffPlugin: { category: 'development', tags: ['demo'] },
+                dist: {
+                  tarball:
+                    'https://registry.npmmirror.com/@tuff/demo-plugin/-/demo-plugin-1.2.0.tgz'
+                }
+              }
+            }
+          } as T,
+          options.url
+        )
+      }
+    )
+
+    const provider = createProvider(
+      <T = unknown>(options: StoreHttpRequestOptions) =>
+        requestMock(options) as Promise<StoreHttpResponse<T>>,
+      {
+        name: 'NPM Mirror',
+        url: undefined,
+        config: {
+          registryUrl: 'https://registry.npmmirror.com/',
+          keywords: ['tuff-plugin', 'talex-touch-plugin']
+        }
+      }
+    )
+
+    const plugins = await provider.list()
+
+    expect(plugins).toHaveLength(1)
+    expect(plugins[0]).toMatchObject({
+      id: 'npm:@tuff/demo-plugin',
+      name: 'demo',
+      version: '1.2.0',
+      category: 'development',
+      author: 'Tuff Team',
+      official: false,
+      install: {
+        type: 'npm',
+        packageName: '@tuff/demo-plugin',
+        version: '1.2.0',
+        registry: 'https://registry.npmmirror.com'
+      }
+    })
+    expect(requestedUrls).toContain('https://registry.npmmirror.com/@tuff%2Fdemo-plugin')
+    expect(requestMock).toHaveBeenCalledTimes(3)
+
+    // Second call uses cache unless force: true
+    await provider.list()
+    expect(requestMock).toHaveBeenCalledTimes(3)
+    await provider.list({ force: true })
+    expect(requestMock).toHaveBeenCalledTimes(6)
+  })
+
+  it('keeps results when one discovery keyword fails and propagates when all searches fail', async () => {
+    const partialRequest = vi.fn(
+      async <T = unknown>(options: StoreHttpRequestOptions): Promise<StoreHttpResponse<T>> => {
+        if (options.url.includes('talex-touch-plugin')) {
+          throw new Error('STORE_HTTP_STATUS_503')
+        }
+        if (options.url.includes('/-/v1/search')) {
+          return createResponse(
+            {
+              total: 1,
+              objects: [
+                {
+                  package: {
+                    name: 'tuff-plugin-partial',
+                    version: '1.0.0',
+                    keywords: ['tuff-plugin']
+                  }
+                }
+              ]
+            } as T,
+            options.url
+          )
+        }
+        return createResponse(
+          {
+            name: 'tuff-plugin-partial',
+            'dist-tags': { latest: '1.0.0' },
+            versions: {
+              '1.0.0': {
+                name: 'tuff-plugin-partial',
+                version: '1.0.0',
+                dist: {
+                  tarball: 'https://registry.npmjs.org/tuff-plugin-partial/-/partial-1.0.0.tgz'
+                }
+              }
+            }
+          } as T,
+          options.url
+        )
+      }
+    )
+
+    const partialProvider = createProvider(
+      <T = unknown>(options: StoreHttpRequestOptions) =>
+        partialRequest(options) as Promise<StoreHttpResponse<T>>,
+      {
+        config: {
+          keywords: ['tuff-plugin', 'talex-touch-plugin']
+        }
+      }
+    )
+
+    const partialPlugins = await partialProvider.list()
+    expect(partialPlugins).toHaveLength(1)
+    expect(partialPlugins[0]?.id).toBe('npm:tuff-plugin-partial')
+
+    const failingProvider = createProvider(async () => {
+      throw new Error('STORE_HTTP_STATUS_503')
+    })
+
+    await expect(failingProvider.list({ force: true })).rejects.toThrow('STORE_HTTP_STATUS_503')
+  })
 })

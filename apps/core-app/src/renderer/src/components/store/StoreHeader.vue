@@ -58,7 +58,8 @@ const SOURCE_FAILURE_KEYS: Record<string, string> = {
   STORE_NEXUS_INVALID_MANIFEST: 'unreadable',
   STORE_TPEX_API_INVALID_RESPONSE: 'unreadable',
   STORE_NEXUS_LEGACY_MANIFEST_UNSUPPORTED: 'legacyManifest',
-  STORE_NEXUS_PACKAGE_URL_REQUIRED: 'packageUrlMissing'
+  STORE_NEXUS_PACKAGE_URL_REQUIRED: 'packageUrlMissing',
+  STORE_GITHUB_RATE_LIMITED: 'rateLimited'
 }
 const SOURCE_FAILURE_CODE = /^STORE_[A-Z_]+/
 const REQUEST_FAILED_PREFIX = /^STORE_NEXUS_REQUEST_FAILED(?::\s*|$)/
@@ -176,7 +177,13 @@ function resolveProviderTypeLabel(type: StoreProviderType): string {
             </span>
           </TxButton>
         </div>
-        <TxButton variant="flat" size="sm" @click="openSourceEditor($event)">
+        <TxButton
+          variant="flat"
+          size="sm"
+          :title="t('store.sourceEditor.subtitle')"
+          :aria-label="t('store.sourceEditor.subtitle')"
+          @click="openSourceEditor($event)"
+        >
           <div class="i-carbon-list" />
         </TxButton>
       </div>
