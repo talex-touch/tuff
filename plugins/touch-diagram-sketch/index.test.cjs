@@ -147,7 +147,7 @@ test('compiles arrow shorthand "Client -> API -> DB" to Mermaid flowchart, seque
   assert.match(ascii, /└────────┘.*└─────┘.*└────┘/)
 
   assert.match(mdItem.actions[0].payload.text, /^```mermaid\nflowchart LR/)
-  assert.match(altItem.actions[0].payload.text, /^sequenceDiagram\n  participant N1 as Client/)
+  assert.match(altItem.actions[0].payload.text, /^sequenceDiagram\n {2}participant N1 as Client/)
 })
 
 test('compiles multi-branch arrows with labels, dashed/thick/bidirectional edges, and CJK alignment', async () => {

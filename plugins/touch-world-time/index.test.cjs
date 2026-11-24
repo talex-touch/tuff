@@ -275,7 +275,9 @@ test('clipboard copy fails closed on permission-denied, permission-sdk-unavailab
 
 test('trigger generation guard and onDestroy lifecycle prevent stale writes and post-destroy mutations', async () => {
   let releaseFirst
-  const firstRead = new Promise((resolve) => { releaseFirst = resolve })
+  const firstRead = new Promise((resolve) => {
+    releaseFirst = resolve
+  })
   let reads = 0
   const h = createHarness({
     storage: {

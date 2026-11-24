@@ -468,7 +468,9 @@ test('countdown bar reflects remaining seconds and onDestroy clears pending draf
 
 test('trigger generation guard prevents stale async secret lookup from overwriting newer results', async () => {
   let releaseFirst
-  const firstSecret = new Promise((resolve) => { releaseFirst = resolve })
+  const firstSecret = new Promise((resolve) => {
+    releaseFirst = resolve
+  })
   let reads = 0
   const h = createHarness({
     nowMs: 59 * 1000,

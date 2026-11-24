@@ -71,11 +71,12 @@ function loadPlugin(overrides = {}) {
       : {
           check: async (id) => {
             permissionCalls.check.push(id)
+            if (overrides.checkError)
+              throw overrides.checkError
             return overrides.checkResult ?? true
           },
           request: async (id, reason) => {
             permissionCalls.request.push({ id, reason })
-            if (overrides.requestError) throw overrides.requestError
             return overrides.requestResult ?? true
           },
         },
@@ -115,23 +116,25 @@ test('onFeatureTriggered fails closed and reports missing permission or missing 
   assert.match(noSdkRuntime.pushedItems[0].render.basic.subtitle, /权限 SDK 不可用/)
 })
 
-test('onItemAction enforces execution-time permission.request fail-closed', async () => {
-  const grantedRuntime = loadPlugin({ requestResult: true })
+test('onItemAction enforces execution-time permission.check fail-closed without calling permission.request', async () => {
+  const grantedRuntime = loadPlugin({ checkResult: true })
   await grantedRuntime.lifecycle.onFeatureTriggered('touch-music', 'piano')
   const grantedResult = await grantedRuntime.lifecycle.onItemAction(grantedRuntime.pushedItems[0])
   assert.equal(grantedResult.status, 'started')
   assert.equal(grantedResult.shouldActivate, true)
+  assert.deepEqual(grantedRuntime.permissionCalls.request, [])
 
-  const deniedRuntime = loadPlugin({ requestResult: false })
+  const deniedRuntime = loadPlugin({ checkResult: false })
   await deniedRuntime.lifecycle.onFeatureTriggered('touch-music', 'piano')
   const deniedResult = await deniedRuntime.lifecycle.onItemAction(deniedRuntime.pushedItems[0])
   assert.equal(deniedResult.status, 'blocked')
   assert.equal(deniedResult.reason, 'permission-denied')
+  assert.deepEqual(deniedRuntime.permissionCalls.request, [])
 
   const unavailableError = Object.assign(new Error('unavailable'), {
     code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE',
   })
-  const unavailableRuntime = loadPlugin({ requestError: unavailableError })
+  const unavailableRuntime = loadPlugin({ checkError: unavailableError })
   await unavailableRuntime.lifecycle.onFeatureTriggered('touch-music', 'piano')
   const unavailableResult = await unavailableRuntime.lifecycle.onItemAction(unavailableRuntime.pushedItems[0])
   assert.equal(unavailableResult.status, 'blocked')

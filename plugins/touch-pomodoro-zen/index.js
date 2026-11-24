@@ -417,7 +417,7 @@ function parseCustomSessionSpec(rawText) {
     return null
 
   // Ratio format: "25/5 Ship PR" or "50/10 Architecture"
-  const ratioMatch = cleaned.match(/^(\d{1,3})\s*\/\s*(\d{1,2})(?:\s+(.+))?$/)
+  const ratioMatch = cleaned.match(/^(\d{1,3})\s*\/\s*(\d{1,2})(?:\s+(\S.*))?$/)
   if (ratioMatch) {
     const focusMin = Number(ratioMatch[1])
     const breakMin = Number(ratioMatch[2])
@@ -432,7 +432,7 @@ function parseCustomSessionSpec(rawText) {
   }
 
   // Break shorthand: "break 5m" or "break 90s"
-  const breakDurMatch = cleaned.match(/^(?:break|rest)\s+(\d{1,3})\s*(s|sec|secs|m|min|mins|h|hr)?(?:\s+(.+))?$/i)
+  const breakDurMatch = cleaned.match(/^(?:break|rest)\s+(\d{1,3})(?:[ \t]*([smh]|sec|secs|min|mins|hr))?(?:\s+(\S.*))?$/i)
   if (breakDurMatch) {
     const amount = Number(breakDurMatch[1])
     const unit = (breakDurMatch[2] || 'm').toLowerCase()
@@ -448,7 +448,7 @@ function parseCustomSessionSpec(rawText) {
   }
 
   // Custom focus duration + label: "15m Deep Work", "45 Write RFC", "90s Quick Review", "1h System Design"
-  const durMatch = cleaned.match(/^(\d{1,3})\s*(s|sec|secs|m|min|mins|h|hr)?(?:\s+(.+))?$/i)
+  const durMatch = cleaned.match(/^(\d{1,3})(?:[ \t]*([smh]|sec|secs|min|mins|hr))?(?:\s+(\S.*))?$/i)
   if (durMatch) {
     const amount = Number(durMatch[1])
     const unit = (durMatch[2] || 'm').toLowerCase()
@@ -480,10 +480,10 @@ function parseQueryIntent(rawQuery) {
   if (custom)
     return { view: 'custom', keyword: cleaned, custom }
 
-  if (/^(?:break|breaks|rest|breathe|breathing|eye|hydrate|stretch|coach|微休息|休息)/.test(lower))
+  if (/^(?:break|rest|breathe|breathing|eye|hydrate|stretch|coach|微休息|休息)/.test(lower))
     return { view: 'breaks', keyword: lower, custom: null }
 
-  if (/^(?:stats|stat|streak|week|weekly|report|summary|统计|打卡)/.test(lower))
+  if (/^(?:stats|stat|streak|week|report|summary|统计|打卡)/.test(lower))
     return { view: 'stats', keyword: lower, custom: null }
 
   if (/^(?:pause|resume|reset|stop|complete|done|finish|alert|notify)/.test(lower))

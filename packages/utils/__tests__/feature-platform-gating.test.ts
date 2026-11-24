@@ -34,13 +34,10 @@ const LOADER = path.join(
 
 /** The features that this gate actually removes, and where. */
 const EXCLUDED = new Map([
-  ['touch-browser-open/browser-open', ['linux']],
   ['touch-quick-actions/quick-actions', ['linux']],
-  ['touch-system-actions/quick-actions', ['linux']],
   ['touch-system-actions/system-actions', ['linux']],
   ['touch-orca/orca', ['linux', 'win32']],
   ['touch-window-manager/window-app', ['linux']],
-  ['touch-window-manager/window-presets', ['darwin', 'linux']],
   ['touch-window-presets/window-presets', ['darwin', 'linux']],
 ])
 

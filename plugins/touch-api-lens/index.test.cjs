@@ -369,7 +369,7 @@ test('isolates Bearer tokens exclusively in secret store when saving and rehydra
   assert.doesNotMatch(JSON.stringify(persisted), new RegExp(rawToken))
   assert.deepEqual(persisted.presets[0].headers, { Accept: 'application/vnd.github+json' })
   assert.deepEqual(persisted.presets[0].secretHeaderNames, ['Authorization'])
-  assert.match(persisted.presets[0].secretKey, /^[a-z0-9._-]{1,48}$/i)
+  assert.match(persisted.presets[0].secretKey, /^[\w.-]{1,48}$/)
 
   // Verify secret store holds the exact auth header
   const storedSecret = JSON.parse(harness.secretStore.get(persisted.presets[0].secretKey))

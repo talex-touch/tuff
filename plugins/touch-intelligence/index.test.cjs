@@ -242,10 +242,9 @@ test('display-time trigger uses non-mutating checkPermission and fails closed wi
   assert.equal(failedResult.reason, 'permission-check-failed')
 })
 
-test('execute-time copy-answer requests clipboard.write when not pre-granted and copies on grant', async () => {
+test('execute-time copy-answer checks clipboard.write and copies on grant', async () => {
   const { pluginModule, state } = loadPlugin({
-    checkResult: () => false,
-    requestResult: () => true,
+    checkResult: () => true,
   })
 
   const result = await pluginModule.onItemAction(
@@ -260,8 +259,7 @@ test('execute-time copy-answer requests clipboard.write when not pre-granted and
   )
 
   assert.deepEqual(state.checks, ['clipboard.write'])
-  assert.equal(state.requests.length, 1)
-  assert.equal(state.requests[0].id, 'clipboard.write')
+  assert.deepEqual(state.requests, [])
   assert.deepEqual(state.clipboardWrites, ['copied answer'])
   assert.deepEqual(result, { externalAction: true, status: 'started' })
 })
@@ -269,7 +267,6 @@ test('execute-time copy-answer requests clipboard.write when not pre-granted and
 test('execute-time copy-answer preserves canonical blocked reasons on denial, missing SDK, or throw', async () => {
   const denied = loadPlugin({
     checkResult: () => false,
-    requestResult: () => false,
   })
   const deniedResult = await denied.pluginModule.onItemAction(
     {
@@ -281,7 +278,8 @@ test('execute-time copy-answer preserves canonical blocked reasons on denial, mi
     },
     { actionId: 'copy-answer' },
   )
-  assert.equal(denied.state.requests.length, 1)
+  assert.deepEqual(denied.state.checks, ['clipboard.write'])
+  assert.deepEqual(denied.state.requests, [])
   assert.equal(deniedResult.status, 'blocked')
   assert.equal(deniedResult.reason, 'permission-denied')
   assert.deepEqual(denied.state.clipboardWrites, [])
@@ -300,17 +298,14 @@ test('execute-time copy-answer preserves canonical blocked reasons on denial, mi
   assert.equal(noSdkResult.status, 'blocked')
   assert.equal(noSdkResult.reason, 'permission-sdk-unavailable')
 
-  const throwingRequest = loadPlugin({
+  const throwingCheck = loadPlugin({
     permission: {
       async check() {
-        return false
-      },
-      async request() {
-        throw new Error('request exploded')
+        throw new Error('check exploded')
       },
     },
   })
-  const threwResult = await throwingRequest.pluginModule.onItemAction(
+  const threwResult = await throwingCheck.pluginModule.onItemAction(
     {
       meta: {
         defaultAction: 'intelligence-action',
@@ -360,10 +355,9 @@ test('execute-time copy-answer preserves canonical blocked reasons on denial, mi
   assert.equal(unavailableResult.reason, 'permission-unavailable')
 })
 
-test('execute-time replace-answer requests permission and maps missing capability cleanly', async () => {
+test('execute-time replace-answer checks permission and maps missing capability cleanly', async () => {
   const granted = loadPlugin({
-    checkResult: () => false,
-    requestResult: () => true,
+    checkResult: () => true,
   })
   const okResult = await granted.pluginModule.onItemAction(
     {
@@ -375,8 +369,8 @@ test('execute-time replace-answer requests permission and maps missing capabilit
     },
     { actionId: 'replace-answer' },
   )
-  assert.equal(granted.state.requests.length, 1)
-  assert.equal(granted.state.requests[0].id, 'clipboard.write')
+  assert.deepEqual(granted.state.checks, ['clipboard.write'])
+  assert.deepEqual(granted.state.requests, [])
   assert.deepEqual(granted.state.replaceCalls, [{ text: 'replacement text', hideCoreBox: true }])
   assert.equal(okResult.status, 'started')
 
@@ -395,10 +389,9 @@ test('execute-time replace-answer requests permission and maps missing capabilit
   assert.equal(capResult.reason, 'capability-unavailable')
 })
 
-test('execute-time send requests intelligence permissions and ignores unrelated items', async () => {
+test('execute-time send checks intelligence permissions and ignores unrelated items', async () => {
   const { pluginModule, state } = loadPlugin({
-    checkResult: () => false,
-    requestResult: () => true,
+    checkResult: () => true,
   })
 
   const unrelated = await pluginModule.onItemAction(
@@ -421,9 +414,10 @@ test('execute-time send requests intelligence permissions and ignores unrelated 
   )
   assert.equal(sent.externalAction, true)
   assert.deepEqual(
-    state.requests.map(entry => entry.id),
+    state.checks,
     ['intelligence.basic', 'intelligence.context'],
   )
+  assert.deepEqual(state.requests, [])
   assert.equal(state.contextInvokes.length, 1)
   assert.equal(state.contextInvokes[0].context.mode, 'stateless')
 

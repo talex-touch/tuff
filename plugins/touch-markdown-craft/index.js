@@ -324,7 +324,7 @@ function parseBadgeSpec(rawSpec) {
       style = candidate
     return ''
   })
-  text = text.replace(/\blogo=([a-z0-9._-]+)\b/gi, (_, value) => {
+  text = text.replace(/\blogo=([\w.-]+)\b/gi, (_, value) => {
     logo = value.trim()
     return ''
   })
@@ -394,12 +394,12 @@ function extractMarkdownToc(markdownText) {
     if (activeFenceChar)
       continue
 
-    const headingMatch = rawLine.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/)
+    const headingMatch = rawLine.match(/^\s{0,3}(#{1,6})\s+(\S.*)$/)
     if (!headingMatch)
       continue
 
     const level = headingMatch[1].length
-    const text = headingMatch[2].trim()
+    const text = headingMatch[2].replace(/\s+#+\s*$/, '').trim()
     const baseSlug = githubAnchorSlug(text) || 'section'
     const count = slugCounts.get(baseSlug) ?? 0
     slugCounts.set(baseSlug, count + 1)
@@ -431,14 +431,14 @@ function analyzeTextStats(rawText) {
   const cjkCount = cjkMatches.length
 
   const textWithoutCjk = text.replace(/[\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/g, ' ')
-  const latinMatches = textWithoutCjk.match(/[A-Za-z0-9]+(?:['’-][A-Za-z0-9]+)*/g) || []
+  const latinMatches = textWithoutCjk.match(/[A-Z0-9]+(?:['’-][A-Z0-9]+)*/gi) || []
   const latinWordCount = latinMatches.length
   const totalWords = cjkCount + latinWordCount
 
   const charCount = Array.from(text).length
   const charsNoSpace = Array.from(text.replace(/\s/g, '')).length
   const lineCount = trimmed ? text.replace(/\r\n/g, '\n').split('\n').length : 0
-  const paragraphCount = trimmed ? trimmed.split(/\r?\n\s*\r?\n/).filter(Boolean).length : 0
+  const paragraphCount = trimmed ? trimmed.split(/\r?\n\s*\n/).filter(Boolean).length : 0
   const utf8Bytes = new TextEncoder().encode(text).length
 
   // Dual-script reading speed: ~300 CJK chars/min, ~220 Latin words/min
@@ -511,7 +511,7 @@ function detectCodeLanguage(code) {
     return 'bash'
   if (/^\s*<[a-z][\w-]*(?:\s[^>]*)?>[\s\S]*<\/[a-z][\w-]*>\s*$/i.test(sample))
     return 'html'
-  if (/^\s*[a-zA-Z0-9_-]+:\s+\S+/m.test(sample) && sample.includes('\n'))
+  if (/^\s*[\w-]+:\s+\S+/m.test(sample) && sample.includes('\n'))
     return 'yaml'
   return ''
 }
@@ -532,11 +532,44 @@ function wrapInCodeFence(code, explicitLang = '') {
   }
 }
 
+function isMarkdownTableSeparatorLine(line) {
+  const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '')
+  if (!trimmed.includes('|') && !/^:?-{2,}:?$/.test(trimmed))
+    return false
+  const cells = trimmed.split('|')
+  return cells.length >= 2 && cells.every(cell => /^:?-{2,}:?$/.test(cell.trim()))
+}
+
+function stripFencedCodeDelimiters(text) {
+  const lines = text.split('\n')
+  const out = []
+  let activeFence = null
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!activeFence) {
+      const open = /^(`{3,}|~{3,})/.exec(trimmed)
+      if (open) {
+        activeFence = { char: open[1][0], len: open[1].length }
+        continue
+      }
+    }
+    else {
+      const close = new RegExp(`^${activeFence.char}{${activeFence.len},}$`)
+      if (close.test(trimmed)) {
+        activeFence = null
+        continue
+      }
+    }
+    out.push(line)
+  }
+  return out.join('\n')
+}
+
 function stripMarkdownToPlainText(markdownText) {
   let text = String(markdownText ?? '').replace(/\r\n/g, '\n')
 
   // Remove fenced code delimiters while preserving inner code content
-  text = text.replace(/^[ \t]*(?:`{3,}|~{3,})[^\n]*\n([\s\S]*?)\n?[ \t]*(?:`{3,}|~{3,})[ \t]*$/gm, '$1')
+  text = stripFencedCodeDelimiters(text)
   // Images ![alt](url) -> alt
   text = text.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
   // Links [label](url) -> label
@@ -544,28 +577,32 @@ function stripMarkdownToPlainText(markdownText) {
   // Reference links [label][ref] -> label
   text = text.replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
   // Reference definitions [ref]: url
-  text = text.replace(/^\s*\[[^\]]+\]:\s+\S+.*$/gm, '')
+  text = text.replace(/^\s*\[[^\]]+\]:\s+\S.*$/gm, '')
   // Inline code `code` -> code
   text = text.replace(/`+([^`]+)`+/g, '$1')
   // ATX Headings
-  text = text.replace(/^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$/gm, '$1')
+  text = text.replace(/^\s{0,3}#{1,6}[ \t]+(\S.*)$/gm, (_, heading) =>
+    heading.replace(/[ \t]+#+[ \t]*$/, '').trim())
   // Setext heading underlines & horizontal rules
   text = text.replace(/^\s*(?:[-*_]\s*){3,}$/gm, '')
   // Blockquotes
   text = text.replace(/^\s{0,3}(?:>\s?)+/gm, '')
   // Task list checkboxes & unordered/ordered list markers
-  text = text.replace(/^\s*[-*+]\s+\[[ xX]\]\s+/gm, '')
+  text = text.replace(/^\s*[-*+]\s+\[[ x]\]\s+/gim, '')
   text = text.replace(/^\s*[-*+]\s+/gm, '')
   text = text.replace(/^\s*\d+\.\s+/gm, '')
   // Table separator rows and pipes
-  text = text.replace(/^\s*\|?(?:\s*:?-{2,}:?\s*\|)+\s*:?-{2,}:?\s*\|?\s*$/gm, '')
+  text = text
+    .split('\n')
+    .map(line => (isMarkdownTableSeparatorLine(line) ? '' : line))
+    .join('\n')
   text = text.replace(/^\s*\|(.+)\|\s*$/gm, (_, row) =>
     row.split('|').map(cell => cell.trim()).join('  '))
   // Bold / italic / strikethrough
   text = text.replace(/(\*\*|__)(.*?)\1/g, '$2')
   text = text.replace(/~~(.*?)~~/g, '$1')
-  text = text.replace(/(^|[^\w])\*([^*]+)\*(?!\w)/g, '$1$2')
-  text = text.replace(/(^|[^\w])_([^_]+)_(?!\w)/g, '$1$2')
+  text = text.replace(/(^|\W)\*([^*]+)\*\B/g, '$1$2')
+  text = text.replace(/(^|\W)_([^_]+)_\b/g, '$1$2')
   // Escaped punctuation
   text = text.replace(/\\([\\`*_{}[\]()#+\-.!|])/g, '$1')
   // Inline HTML tags
@@ -577,7 +614,7 @@ function stripMarkdownToPlainText(markdownText) {
 }
 
 function looksLikeMarkdown(text) {
-  return /(?:^\s*#{1,6}\s+|^\s*>\s+|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\)|!\[[^\]]*\]\([^)]+\)|`[^`]+`|^\s*[-*+]\s+\[[ xX]\])/m.test(text)
+  return /^\s*#{1,6}\s+|^\s*>\s+|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\)|!\[[^\]]*\]\([^)]+\)|`[^`]+`|^\s*[-*+]\s+\[[ x]\]/im.test(text)
 }
 
 function registerOutput(text) {
@@ -630,31 +667,31 @@ function parseIntent(rawQuery) {
     return { mode: 'home', payload: '' }
 
   const stripped = trimmed.replace(/^(?:mdcraft|markdown|mdtable|mdtoc|md)\s+/i, '')
-  const badgeMatch = stripped.match(/^badge(?:\s+([\s\S]*))?$/i)
+  const badgeMatch = stripped.match(/^badge(?:\s+(\S[\s\S]*))?$/i)
   if (badgeMatch)
     return { mode: 'badge', payload: (badgeMatch[1] || '').trim() }
 
-  const tableMatch = stripped.match(/^(?:table|csv|tsv)\s+([\s\S]+)$/i)
+  const tableMatch = stripped.match(/^(?:table|csv|tsv)\s+(\S[\s\S]*)$/i)
   if (tableMatch)
     return { mode: 'table', payload: tableMatch[1].trim() }
 
-  const tocMatch = stripped.match(/^(?:toc|slug|anchors)\s+([\s\S]+)$/i)
+  const tocMatch = stripped.match(/^(?:toc|slug|anchors)\s+(\S[\s\S]*)$/i)
   if (tocMatch)
     return { mode: 'toc', payload: tocMatch[1] }
 
-  const fenceMatch = stripped.match(/^(?:fence|code)\s+([a-z0-9+#.-]+)\s+([\s\S]+)$/i)
+  const fenceMatch = stripped.match(/^(?:fence|code)\s+([a-z0-9+#.-]+)\s+(\S[\s\S]*)$/i)
   if (fenceMatch)
     return { mode: 'fence', lang: fenceMatch[1], payload: fenceMatch[2] }
 
-  const fenceAutoMatch = stripped.match(/^(?:fence|code)\s+([\s\S]+)$/i)
+  const fenceAutoMatch = stripped.match(/^(?:fence|code)\s+(\S[\s\S]*)$/i)
   if (fenceAutoMatch)
     return { mode: 'fence', lang: '', payload: fenceAutoMatch[1] }
 
-  const stripMatch = stripped.match(/^(?:strip|plain|text)\s+([\s\S]+)$/i)
+  const stripMatch = stripped.match(/^(?:strip|plain|text)\s+(\S[\s\S]*)$/i)
   if (stripMatch)
     return { mode: 'strip', payload: stripMatch[1] }
 
-  const statsMatch = stripped.match(/^(?:stats|count|tokens)\s+([\s\S]+)$/i)
+  const statsMatch = stripped.match(/^(?:stats|count|tokens)\s+(\S[\s\S]*)$/i)
   if (statsMatch)
     return { mode: 'stats', payload: statsMatch[1] }
 

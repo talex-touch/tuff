@@ -1567,42 +1567,15 @@ async function checkPermission(permissionId) {
       ? { granted: true }
       : { granted: false, reason: 'permission-denied' }
   }
-  catch {
+  catch (error) {
     logger?.warn?.('[touch-intelligence] permission check failed')
-    return { granted: false, reason: 'permission-check-failed' }
-  }
-}
-
-async function requestPermission(permissionId, reason) {
-  const hasCheck = typeof permission?.check === 'function'
-  const hasRequest = typeof permission?.request === 'function'
-  if (!hasCheck && !hasRequest) {
-    return { granted: false, reason: 'permission-sdk-unavailable' }
-  }
-
-  if (hasCheck) {
-    try {
-      if ((await permission.check(permissionId)) === true) {
-        return { granted: true }
-      }
+    const code = normalizeText(error?.code || error?.result?.code)
+    if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE') {
+      return { granted: false, reason: 'permission-unavailable' }
     }
-    catch {
-      logger?.warn?.('[touch-intelligence] permission check failed')
-      return { granted: false, reason: 'permission-check-failed' }
+    if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED' || code === 'PERMISSION_DENIED') {
+      return { granted: false, reason: 'permission-denied' }
     }
-  }
-
-  if (!hasRequest) {
-    return { granted: false, reason: 'permission-denied' }
-  }
-
-  try {
-    return (await permission.request(permissionId, reason)) === true
-      ? { granted: true }
-      : { granted: false, reason: 'permission-denied' }
-  }
-  catch {
-    logger?.warn?.('[touch-intelligence] permission request failed')
     return { granted: false, reason: 'permission-check-failed' }
   }
 }
@@ -1612,13 +1585,6 @@ async function checkIntelligencePermissions() {
   if (!basic.granted)
     return basic
   return await checkPermission('intelligence.context')
-}
-
-async function requestIntelligencePermissions(reason = '需要智能能力权限以发送问答请求') {
-  const basic = await requestPermission('intelligence.basic', reason)
-  if (!basic.granted)
-    return basic
-  return await requestPermission('intelligence.context', reason)
 }
 
 function mapClipboardErrorReason(error, fallback = 'clipboard-write-failed') {
@@ -2578,7 +2544,7 @@ async function copyAnswer(answer) {
     }
   }
 
-  const permissionState = await requestPermission('clipboard.write', '需要剪贴板权限以复制 AI 回答')
+  const permissionState = await checkPermission('clipboard.write')
   if (!permissionState.granted) {
     const blockedReason = permissionState.reason || 'permission-denied'
     return {
@@ -2678,7 +2644,7 @@ async function replaceAnswer(answer) {
     return normalizeReplaceAnswerFailure({ code: 'SDK_UNAVAILABLE', reason: 'capability-unavailable' })
   }
 
-  const permissionState = await requestPermission('clipboard.write', '需要剪贴板权限以替换选中文本')
+  const permissionState = await checkPermission('clipboard.write')
   if (!permissionState.granted) {
     return normalizeReplaceAnswerFailure({
       code: 'PERMISSION_DENIED',
@@ -3138,7 +3104,7 @@ const pluginLifecycle = {
           return
 
         await supersedeAllActiveRequests()
-        const permissionState = await requestIntelligencePermissions('需要智能能力权限以发送问答请求')
+        const permissionState = await checkIntelligencePermissions()
         if (!permissionState.granted) {
           const blockedReason = permissionState.reason || 'permission-denied'
           const normalizedError = normalizeInvokeError(createPluginError('PERMISSION_DENIED'))

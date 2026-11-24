@@ -283,7 +283,7 @@ function parseOtpAuthUri(raw) {
 }
 
 function parseManualAdd(raw) {
-  const match = normalizeText(raw).match(/^(?:add|import|new|添加|新增)\s+(.+)$/i)
+  const match = normalizeText(raw).match(/^(?:add|import|new|添加|新增)\s+(\S.*)$/i)
   if (!match)
     return null
 
@@ -843,7 +843,7 @@ const pluginLifecycle = {
       }
 
       // 2. Delete mode (`delete <keyword>` / `remove <keyword>` / `删除 <keyword>`)
-      const delMatch = rawText.match(/^(?:delete|remove|rm|删除|移除)(?:\s+(.*))?$/i)
+      const delMatch = rawText.match(/^(?:delete|remove|rm|删除|移除)(?:\s+(\S.*))?$/i)
       if (delMatch) {
         const items = await renderVaultItems(featureId, delMatch[1] || '', true, isStale)
         await publishItems(items, isStale)

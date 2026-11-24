@@ -317,10 +317,10 @@ function tokenizeExpression(input) {
     }
 
     // Hex / Binary / Octal literals
-    if (ch === '0' && i + 1 < normalized.length && /[xXbBoO]/.test(normalized[i + 1])) {
+    if (ch === '0' && i + 1 < normalized.length && /[xbo]/i.test(normalized[i + 1])) {
       const prefix = normalized[i + 1].toLowerCase()
       const radix = prefix === 'x' ? 16 : prefix === 'b' ? 2 : 8
-      const digitRe = prefix === 'x' ? /[0-9a-fA-F_]/ : prefix === 'b' ? /[01_]/ : /[0-7_]/
+      const digitRe = prefix === 'x' ? /[0-9a-f_]/i : prefix === 'b' ? /[01_]/ : /[0-7_]/
       let j = i + 2
       while (j < normalized.length && digitRe.test(normalized[j]))
         j += 1
@@ -337,7 +337,7 @@ function tokenizeExpression(input) {
     }
 
     // Decimal / scientific literals (allows thousands comma when followed by 3 digits)
-    if (/[0-9]/.test(ch) || (ch === '.' && i + 1 < normalized.length && /[0-9]/.test(normalized[i + 1]))) {
+    if (/\d/.test(ch) || (ch === '.' && i + 1 < normalized.length && /\d/.test(normalized[i + 1]))) {
       let j = i
       let seenDot = false
       while (j < normalized.length) {
@@ -362,7 +362,7 @@ function tokenizeExpression(input) {
         if (expIdx < normalized.length && (normalized[expIdx] === '+' || normalized[expIdx] === '-'))
           expIdx += 1
         let expDigits = 0
-        while (expIdx < normalized.length && /[0-9]/.test(normalized[expIdx])) {
+        while (expIdx < normalized.length && /\d/.test(normalized[expIdx])) {
           expIdx += 1
           expDigits += 1
         }
@@ -381,7 +381,7 @@ function tokenizeExpression(input) {
     // Identifiers (constants, functions, keyword ops like mod/xor/and/or/shl/shr)
     if (/[a-zA-Zπ_]/.test(ch)) {
       let j = i + 1
-      while (j < normalized.length && /[a-zA-Z0-9_]/.test(normalized[j]))
+      while (j < normalized.length && /\w/.test(normalized[j]))
         j += 1
       const ident = normalized.slice(i, j).toLowerCase()
       if (ident === 'mod') {
@@ -432,7 +432,7 @@ function tokenizeExpression(input) {
     }
 
     // Single-char operators & punctuation
-    if ('+-*/%^&|~!' .includes(ch)) {
+    if ('+-*/%^&|~!'.includes(ch)) {
       if ('&|~'.includes(ch))
         hasBitwiseOp = true
       tokens.push({ type: 'op', value: ch })
@@ -507,13 +507,13 @@ function evaluateMathExpression(input) {
   }
 
   function parseBitXor() {
+    const isXorToken = () =>
+      peek()?.type === 'op' && (peek().value === 'xor' || (programmerMode && peek().value === '^'))
+
     enter()
     try {
       let left = parseBitAnd()
-      while (
-        peek()?.type === 'op'
-        && (peek().value === 'xor' || (programmerMode && peek().value === '^'))
-      ) {
+      while (isXorToken()) {
         consume()
         usedBitwise = true
         const right = parseBitAnd()
@@ -780,12 +780,23 @@ function evaluateMathExpression(input) {
 // 2. Natural-Language Percentages & Base Conversions
 // =============================================================================
 
+function splitByKeyword(raw, separatorRegex) {
+  const match = separatorRegex.exec(raw)
+  if (!match || match.index === 0)
+    return null
+  const left = raw.slice(0, match.index).trim()
+  const right = raw.slice(match.index + match[0].length).trim()
+  if (!left || !right)
+    return null
+  return [left, right]
+}
+
 function tryNaturalPercentage(raw) {
   // 1) "15% off 249" / "15% discount on 249"
-  let match = raw.match(/^(.+?)\s*%\s*(?:off|discount(?:\s+on)?)\s+(.+)$/i)
-  if (match) {
-    const pct = evaluateMathExpression(match[1]).value
-    const base = evaluateMathExpression(match[2]).value
+  let pair = splitByKeyword(raw, /\s*%\s*(?:off|discount(?:\s+on)?)\s+/i)
+  if (pair) {
+    const pct = evaluateMathExpression(pair[0]).value
+    const base = evaluateMathExpression(pair[1]).value
     const savings = cleanFloat(base * (pct / 100))
     const finalVal = cleanFloat(base - savings)
     return {
@@ -800,10 +811,10 @@ function tryNaturalPercentage(raw) {
   }
 
   // 2) "13% on 249" / "13% tax on 249" / "13% markup on 249"
-  match = raw.match(/^(.+?)\s*%\s*(?:on|markup(?:\s+on)?|tax(?:\s+on)?|added\s+to)\s+(.+)$/i)
-  if (match) {
-    const pct = evaluateMathExpression(match[1]).value
-    const base = evaluateMathExpression(match[2]).value
+  pair = splitByKeyword(raw, /\s*%\s*(?:on|markup(?:\s+on)?|tax(?:\s+on)?|added\s+to)\s+/i)
+  if (pair) {
+    const pct = evaluateMathExpression(pair[0]).value
+    const base = evaluateMathExpression(pair[1]).value
     const added = cleanFloat(base * (pct / 100))
     const finalVal = cleanFloat(base + added)
     return {
@@ -818,10 +829,10 @@ function tryNaturalPercentage(raw) {
   }
 
   // 3) "45 as % of 180" / "45 is what % of 180" (check before generic "% of")
-  match = raw.match(/^(.+?)\s+(?:as\s+(?:a\s+)?%|is\s+what\s+%)\s+of\s+(.+)$/i)
-  if (match) {
-    const part = evaluateMathExpression(match[1]).value
-    const whole = evaluateMathExpression(match[2]).value
+  pair = splitByKeyword(raw, /\s+(?:as\s+(?:a\s+)?%|is\s+what\s+%)\s+of\s+/i)
+  if (pair) {
+    const part = evaluateMathExpression(pair[0]).value
+    const whole = evaluateMathExpression(pair[1]).value
     if (whole === 0)
       throw new Error('Division by zero')
     const pct = cleanFloat((part / whole) * 100)
@@ -838,10 +849,10 @@ function tryNaturalPercentage(raw) {
   }
 
   // 4) "20% of 249"
-  match = raw.match(/^(.+?)\s*%\s*of\s+(.+)$/i)
-  if (match) {
-    const pct = evaluateMathExpression(match[1]).value
-    const base = evaluateMathExpression(match[2]).value
+  pair = splitByKeyword(raw, /\s*%\s*of\s+/i)
+  if (pair) {
+    const pct = evaluateMathExpression(pair[0]).value
+    const base = evaluateMathExpression(pair[1]).value
     const result = cleanFloat(base * (pct / 100))
     return {
       kind: 'percent-of',
@@ -855,24 +866,27 @@ function tryNaturalPercentage(raw) {
   }
 
   // 5) "% change from 80 to 100" / "change from 80 to 100"
-  match = raw.match(/^(?:%\s*)?change\s+from\s+(.+?)\s+to\s+(.+)$/i)
-  if (match) {
-    const fromVal = evaluateMathExpression(match[1]).value
-    const toVal = evaluateMathExpression(match[2]).value
-    if (fromVal === 0)
-      throw new Error('Cannot compute percentage change from 0')
-    const diff = cleanFloat(toVal - fromVal)
-    const pct = cleanFloat((diff / fromVal) * 100)
-    const sign = pct > 0 ? '+' : ''
-    return {
-      kind: 'percent-change',
-      primary: pct,
-      title: `${sign}${formatNumber(pct)}%`,
-      copyText: `${sign}${formatNumber(pct)}%`,
-      subtitle: `${formatNumber(fromVal)} → ${formatNumber(toVal)} (差值 ${diff >= 0 ? '+' : ''}${formatNumber(diff)})`,
-      extras: [
-        { label: '绝对差值', value: `${diff >= 0 ? '+' : ''}${formatNumber(diff)}`, subtitle: `${formatNumber(toVal)} - ${formatNumber(fromVal)}` },
-      ],
+  const changePrefix = /^(?:%\s*)?change\s+from\s+/i.exec(raw)
+  if (changePrefix) {
+    pair = splitByKeyword(raw.slice(changePrefix[0].length), /\s+to\s+/i)
+    if (pair) {
+      const fromVal = evaluateMathExpression(pair[0]).value
+      const toVal = evaluateMathExpression(pair[1]).value
+      if (fromVal === 0)
+        throw new Error('Cannot compute percentage change from 0')
+      const diff = cleanFloat(toVal - fromVal)
+      const pct = cleanFloat((diff / fromVal) * 100)
+      const sign = pct > 0 ? '+' : ''
+      return {
+        kind: 'percent-change',
+        primary: pct,
+        title: `${sign}${formatNumber(pct)}%`,
+        copyText: `${sign}${formatNumber(pct)}%`,
+        subtitle: `${formatNumber(fromVal)} → ${formatNumber(toVal)} (差值 ${diff >= 0 ? '+' : ''}${formatNumber(diff)})`,
+        extras: [
+          { label: '绝对差值', value: `${diff >= 0 ? '+' : ''}${formatNumber(diff)}`, subtitle: `${formatNumber(toVal)} - ${formatNumber(fromVal)}` },
+        ],
+      }
     }
   }
 
@@ -884,7 +898,7 @@ function formatBaseRepresentations(intValue) {
   const absVal = Math.abs(intValue)
   const hex = `${isNeg ? '-' : ''}0x${absVal.toString(16).toUpperCase()}`
   const binRaw = absVal.toString(2)
-  const binGrouped = binRaw.replace(/\B(?=(\d{4})+(?!\d))/g, '_')
+  const binGrouped = binRaw.replace(/\B(?=(?:\d{4})+(?!\d))/g, '_')
   const bin = `${isNeg ? '-' : ''}0b${binRaw}`
   const oct = `${isNeg ? '-' : ''}0o${absVal.toString(8)}`
   const out = [
@@ -906,11 +920,13 @@ function formatBaseRepresentations(intValue) {
 }
 
 function tryBaseConversion(raw) {
-  const match = raw.match(/^(.+?)\s+(?:to|in|->|=>)\s+(hex|hexadecimal|bin|binary|oct|octal|dec|decimal)$/i)
-  if (!match)
+  const suffix = /\s+(?:to|in|->|=>)\s+(hex|hexadecimal|bin|binary|oct|octal|dec|decimal)$/i.exec(raw)
+  if (!suffix || suffix.index === 0)
     return null
-  const expr = match[1].trim()
-  const target = match[2].toLowerCase().slice(0, 3)
+  const expr = raw.slice(0, suffix.index).trim()
+  if (!expr)
+    return null
+  const target = suffix[1].toLowerCase().slice(0, 3)
   const { value } = evaluateMathExpression(expr)
   if (!Number.isSafeInteger(value))
     throw new Error('Base conversion requires a safe integer')
@@ -1115,11 +1131,11 @@ const DATA_SIZE_CI_FALLBACK = Object.freeze({
 
 // Bandwidth units (in bits per second)
 const BANDWIDTH_UNITS = Object.freeze({
-  bps: { bps: 1, display: 'bps' },
-  kbps: { bps: 1e3, display: 'Kbps' },
-  mbps: { bps: 1e6, display: 'Mbps' },
-  gbps: { bps: 1e9, display: 'Gbps' },
-  tbps: { bps: 1e12, display: 'Tbps' },
+  'bps': { bps: 1, display: 'bps' },
+  'kbps': { bps: 1e3, display: 'Kbps' },
+  'mbps': { bps: 1e6, display: 'Mbps' },
+  'gbps': { bps: 1e9, display: 'Gbps' },
+  'tbps': { bps: 1e12, display: 'Tbps' },
   'b/s': { bps: 8, display: 'B/s' },
   'kb/s': { bps: 8e3, display: 'KB/s' },
   'mb/s': { bps: 8e6, display: 'MB/s' },
@@ -1192,7 +1208,7 @@ function formatDurationSeconds(totalSeconds) {
 }
 
 function tryTransferTime(raw) {
-  const match = raw.match(/^(?:(?:download|upload|transfer)\s+)?(-?\d+(?:[.,_]\d+)?)\s*([a-zA-Z]+)\s*(?:at|@|over|with)\s*(-?\d+(?:[.,_]\d+)?)\s*([a-zA-Z/]+)$/i)
+  const match = raw.match(/^(?:(?:download|upload|transfer)\s+)?(-?\d+(?:[.,_]\d+)?)\s*([a-z]+)\s*(?:at|@|over|with)\s*(-?\d+(?:[.,_]\d+)?)\s*([a-z/]+)$/i)
   if (!match)
     return null
   const sizeVal = Number(match[1].replace(/[,_]/g, ''))
@@ -1222,7 +1238,7 @@ function tryTransferTime(raw) {
 
 function tryUnitConversion(raw) {
   // Explicit `<val> <from> to|in|-> <to>`
-  const explicit = raw.match(/^(-?\d+(?:[.,_]\d+)?)\s*(°?[a-zA-Z][a-zA-Z0-9/]*)\s+(?:to|in|->|=>)\s+(°?[a-zA-Z][a-zA-Z0-9/]*)$/i)
+  const explicit = raw.match(/^(-?\d+(?:[.,_]\d+)?)\s*(°?[a-z][a-z0-9/]*)\s+(?:to|in|->|=>)\s+(°?[a-z][a-z0-9/]*)$/i)
   if (explicit) {
     const val = Number(explicit[1].replace(/[,_]/g, ''))
     const fromRaw = explicit[2]
@@ -1472,7 +1488,7 @@ function addBusinessDays(dt, count) {
 
 function tryDateArithmetic(raw, nowMs = Date.now()) {
   // 1) `today + 45 days` / `2026-01-15 - 2 weeks` / `today + 10 workdays`
-  const addMatch = raw.match(/^(today|tomorrow|yesterday|now|今天|明天|昨天|\d{4}-\d{2}-\d{2})\s*([+-])\s*(\d+)\s*(days?|d|weeks?|w|wks?|months?|mo|years?|y|yrs?|workdays?|business\s+days?|天|周|个月|月|年|工作日)$/i)
+  const addMatch = raw.match(/^(today|tomorrow|yesterday|now|今天|明天|昨天|\d{4}-\d{2}-\d{2})\s*([+-])\s*(\d+)\s*(days?|d|weeks?|w|wks?|months?|mo|years?|[y天周月年]|yrs?|workdays?|business\s+days?|个月|工作日)$/i)
   if (addMatch) {
     const anchor = resolveDateAnchor(addMatch[1], nowMs)
     if (!anchor)

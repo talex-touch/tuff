@@ -483,7 +483,7 @@ function formatPythonRegex(pattern, flags = '') {
 function convertReplacementToPython(replacement) {
   return String(replacement ?? '')
     .replace(/\$\$/g, '$')
-    .replace(/\$<([a-zA-Z_][a-zA-Z0-9_]*)>/g, '\\g<$1>')
+    .replace(/\$<([a-z_]\w*)>/gi, '\\g<$1>')
     .replace(/\$(\d{1,2})/g, '\\g<$1>')
     .replace(/\$&/g, '\\g<0>')
 }
@@ -597,9 +597,9 @@ function parseRegexQuery(rawText) {
         const pattern = input.slice(2, patternEnd)
         const replacement = unescapeSedSegment(input.slice(patternEnd + 1, replEnd))
         const tail = input.slice(replEnd + 1)
-        const flagMatch = /^([a-zA-Z]*)(.*)$/s.exec(tail)
-        const rawFlags = flagMatch ? flagMatch[1] : ''
-        const remainder = (flagMatch ? flagMatch[2] : '').trim()
+        const flagMatch = /^[a-z]*/i.exec(tail)
+        const rawFlags = flagMatch ? flagMatch[0] : ''
+        const remainder = tail.slice(rawFlags.length).trim()
 
         let sample = ''
         let hasSample = false
@@ -638,14 +638,14 @@ function parseRegexQuery(rawText) {
     if (patternEnd > 0) {
       const pattern = input.slice(1, patternEnd)
       const tail = input.slice(patternEnd + 1)
-      const flagMatch = /^([a-zA-Z]*)(.*)$/s.exec(tail)
-      const rawFlags = flagMatch ? flagMatch[1] : ''
-      const remainder = (flagMatch ? flagMatch[2] : '').trim()
+      const flagMatch = /^[a-z]*/i.exec(tail)
+      const rawFlags = flagMatch ? flagMatch[0] : ''
+      const remainder = tail.slice(rawFlags.length).trim()
 
       // Arrow replace: /pattern/flags => replacement :: sample
-      const arrowMatch = /^(?:=>|->)\s*(.*)$/s.exec(remainder)
+      const arrowMatch = /^(?:=>|->)/.exec(remainder)
       if (arrowMatch) {
-        const afterArrow = arrowMatch[1]
+        const afterArrow = remainder.slice(arrowMatch[0].length).trimStart()
         const sepIdx = afterArrow.indexOf('::')
         if (sepIdx >= 0) {
           return {
@@ -728,7 +728,7 @@ function readQuantifierAt(pattern, index) {
     }
   }
   if (ch === '{') {
-    const match = /^\{(\d+)(?:,(\d*))?\}(\?)?/.exec(pattern.slice(index))
+    const match = /^\{(\d+)(?:,(\d*))?\}\??/.exec(pattern.slice(index))
     if (match) {
       const min = Number.parseInt(match[1], 10)
       const hasComma = match[0].includes(',')
@@ -996,7 +996,7 @@ function explainPatternTokens(pattern, flags) {
   if (/\\b/.test(pattern)) {
     hints.push('\\b boundary')
   }
-  const namedMatches = pattern.match(/\(\?<[a-zA-Z_][a-zA-Z0-9_]*>/g)
+  const namedMatches = pattern.match(/\(\?<[a-z_]\w*>/gi)
   if (namedMatches && namedMatches.length > 0) {
     const names = namedMatches.map(m => m.slice(3, -1))
     hints.push(`named(${names.slice(0, 4).join(', ')})`)

@@ -266,7 +266,13 @@ test('fail-closed permission and capability guards emit canonical blocked reason
   await base.mod.onFeatureTriggered('cron-craft', { text: 'cron @daily', now: '2026-11-23T08:00:00Z' })
   const card = base.pushed.find(i => i.id === 'cron-craft-expression')
 
-  const denied = createHarness({ permission: { async check() { return false } } })
+  const denied = createHarness({
+    permission: {
+      async check() {
+        return false
+      },
+    },
+  })
   const r1 = await denied.mod.onItemAction(card, { actionId: 'copy-cron' })
   assert.equal(r1.status, 'blocked')
   assert.equal(r1.reason, 'permission-denied')

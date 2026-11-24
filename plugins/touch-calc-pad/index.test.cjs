@@ -297,7 +297,9 @@ test('clipboard copy fails closed on permission-denied, permission-sdk-unavailab
 
 test('trigger generation guard prevents stale async load from overwriting newer results', async () => {
   let releaseFirst
-  const firstRead = new Promise((resolve) => { releaseFirst = resolve })
+  const firstRead = new Promise((resolve) => {
+    releaseFirst = resolve
+  })
   let calls = 0
   const h = createHarness({
     storage: {

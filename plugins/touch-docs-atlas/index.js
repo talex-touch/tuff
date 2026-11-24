@@ -409,17 +409,23 @@ function triadToSymbolic(digit, specialBit, specialChar) {
 
 function triadToWords(digit) {
   const parts = []
-  if (digit & 4) parts.push('read')
-  if (digit & 2) parts.push('write')
-  if (digit & 1) parts.push('exec')
+  if (digit & 4)
+    parts.push('read')
+  if (digit & 2)
+    parts.push('write')
+  if (digit & 1)
+    parts.push('exec')
   return parts.length ? parts.join('+') : 'none'
 }
 
 function triadToClause(digit) {
   let s = ''
-  if (digit & 4) s += 'r'
-  if (digit & 2) s += 'w'
-  if (digit & 1) s += 'x'
+  if (digit & 4)
+    s += 'r'
+  if (digit & 2)
+    s += 'w'
+  if (digit & 1)
+    s += 'x'
   return s
 }
 
@@ -435,9 +441,12 @@ function describeChmodMode(special, u, g, o) {
   const clause = `u=${triadToClause(u)},g=${triadToClause(g)},o=${triadToClause(o)}`
 
   const specialLabels = []
-  if (special & 4) specialLabels.push('setuid (4000)')
-  if (special & 2) specialLabels.push('setgid (2000)')
-  if (special & 1) specialLabels.push('sticky (1000)')
+  if (special & 4)
+    specialLabels.push('setuid (4000)')
+  if (special & 2)
+    specialLabels.push('setgid (2000)')
+  if (special & 1)
+    specialLabels.push('sticky (1000)')
 
   const warnings = []
   if ((o & 2) !== 0 && (special & 1) === 0) {
@@ -492,8 +501,10 @@ function parseChmodInput(raw) {
     let special = 0
     const parseTriad = (triad, specialMask, sChar) => {
       let val = 0
-      if (triad[0] === 'r') val |= 4
-      if (triad[1] === 'w') val |= 2
+      if (triad[0] === 'r')
+        val |= 4
+      if (triad[1] === 'w')
+        val |= 2
       const xch = triad[2]
       if (xch === 'x' || xch === 'X') {
         val |= 1
@@ -514,7 +525,7 @@ function parseChmodInput(raw) {
   }
 
   // Symbolic clause form: u=rwx,g=rx,o=rx
-  if (/^[ugoa]+=[rwx]*([,\s]+[ugoa]+=[rwx]*)*$/i.test(text)) {
+  if (/^[ugoa]+=[rwx]*(?:[,\s]+[ugoa]+=[rwx]*)*$/i.test(text)) {
     let u = 0
     let g = 0
     let o = 0
@@ -522,12 +533,18 @@ function parseChmodInput(raw) {
     for (const part of clauses) {
       const [who, perms] = part.split('=')
       let bits = 0
-      if (perms.includes('r')) bits |= 4
-      if (perms.includes('w')) bits |= 2
-      if (perms.includes('x')) bits |= 1
-      if (who.includes('a') || who.includes('u')) u = bits
-      if (who.includes('a') || who.includes('g')) g = bits
-      if (who.includes('a') || who.includes('o')) o = bits
+      if (perms.includes('r'))
+        bits |= 4
+      if (perms.includes('w'))
+        bits |= 2
+      if (perms.includes('x'))
+        bits |= 1
+      if (who.includes('a') || who.includes('u'))
+        u = bits
+      if (who.includes('a') || who.includes('g'))
+        g = bits
+      if (who.includes('a') || who.includes('o'))
+        o = bits
     }
     return describeChmodMode(0, u, g, o)
   }
@@ -664,15 +681,24 @@ function maskIntToPrefix(maskInt) {
 function classifyIpv4(ipInt) {
   const a = (ipInt >>> 24) & 255
   const b = (ipInt >>> 16) & 255
-  if (a === 10) return 'Private (RFC 1918 · 10.0.0.0/8)'
-  if (a === 172 && b >= 16 && b <= 31) return 'Private (RFC 1918 · 172.16.0.0/12)'
-  if (a === 192 && b === 168) return 'Private (RFC 1918 · 192.168.0.0/16)'
-  if (a === 100 && b >= 64 && b <= 127) return 'CGNAT Shared (RFC 6598 · 100.64.0.0/10)'
-  if (a === 127) return 'Loopback (RFC 1122 · 127.0.0.0/8)'
-  if (a === 169 && b === 254) return 'Link-Local (RFC 3927 · 169.254.0.0/16)'
-  if (a >= 224 && a <= 239) return 'Multicast (RFC 5771 · 224.0.0.0/4)'
-  if (a === 0) return 'Current Network / Unspecified (0.0.0.0/8)'
-  if (a >= 240) return 'Reserved (240.0.0.0/4)'
+  if (a === 10)
+    return 'Private (RFC 1918 · 10.0.0.0/8)'
+  if (a === 172 && b >= 16 && b <= 31)
+    return 'Private (RFC 1918 · 172.16.0.0/12)'
+  if (a === 192 && b === 168)
+    return 'Private (RFC 1918 · 192.168.0.0/16)'
+  if (a === 100 && b >= 64 && b <= 127)
+    return 'CGNAT Shared (RFC 6598 · 100.64.0.0/10)'
+  if (a === 127)
+    return 'Loopback (RFC 1122 · 127.0.0.0/8)'
+  if (a === 169 && b === 254)
+    return 'Link-Local (RFC 3927 · 169.254.0.0/16)'
+  if (a >= 224 && a <= 239)
+    return 'Multicast (RFC 5771 · 224.0.0.0/4)'
+  if (a === 0)
+    return 'Current Network / Unspecified (0.0.0.0/8)'
+  if (a >= 240)
+    return 'Reserved (240.0.0.0/4)'
   return 'Public Routable IPv4'
 }
 
@@ -1057,12 +1083,14 @@ function buildAsciiItems(featureId, arg) {
   // Hex lookup: 0x41
   if (/^0x[0-9a-f]{1,2}$/i.test(q)) {
     const code = Number.parseInt(q.slice(2), 16)
-    if (code >= 0 && code <= 127) matchedCodes = [code]
+    if (code >= 0 && code <= 127)
+      matchedCodes = [code]
   }
   // Decimal lookup: 0..127
   else if (/^\d{1,3}$/.test(q)) {
     const code = Number.parseInt(q, 10)
-    if (code >= 0 && code <= 127) matchedCodes = [code]
+    if (code >= 0 && code <= 127)
+      matchedCodes = [code]
   }
   // Escape literal: \n, \r, \t, \0
   else if (q === '\\n') {
@@ -1265,7 +1293,7 @@ function buildUnifiedSearch(featureId, query) {
   // Auto-detect symbolic chmod or 4-digit octal chmod or 6xx/7xx 3-digit octal
   if (
     /^[-dlbcps]?[r-][w-][xXsS-][r-][w-][xXsS-][r-][w-][xXtT-]$/.test(q)
-    || /^[ugoa]+=[rwx]*([,\s]+[ugoa]+=[rwx]*)+$/i.test(q)
+    || /^[ugoa]+=[rwx]*(?:[,\s]+[ugoa]+=[rwx]*)+$/i.test(q)
     || /^[0-7]{4}$/.test(q)
     || /^[67][0-7]{2}$/.test(q)
   ) {

@@ -14,7 +14,8 @@ function normalizeText(value) {
 }
 
 function extractQueryText(query) {
-  if (typeof query === 'string') return normalizeText(query)
+  if (typeof query === 'string')
+    return normalizeText(query)
   if (query && typeof query === 'object' && typeof query.text === 'string') {
     return normalizeText(query.text)
   }
@@ -22,14 +23,15 @@ function extractQueryText(query) {
 }
 
 function stableErrorCode(error) {
-  if (!error || typeof error !== 'object') return ''
+  if (!error || typeof error !== 'object')
+    return ''
   const descriptor = Object.getOwnPropertyDescriptor(error, 'code')
   return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
     ? descriptor.value
     : ''
 }
 
-async function checkNetworkPermission() {
+async function checkNetworkPermission(deniedReason = 'network-internet-permission-required') {
   if (!permission || typeof permission.check !== 'function') {
     return { granted: false, reason: 'permission-sdk-unavailable' }
   }
@@ -38,30 +40,7 @@ async function checkNetworkPermission() {
     if (granted === true) {
       return { granted: true, reason: '' }
     }
-    return { granted: false, reason: 'network-internet-permission-required' }
-  }
-  catch (error) {
-    const code = stableErrorCode(error)
-    if (code.includes('PERMISSION_UNAVAILABLE')) {
-      return { granted: false, reason: 'permission-unavailable' }
-    }
-    return { granted: false, reason: 'permission-check-failed' }
-  }
-}
-
-async function requestNetworkPermission() {
-  if (!permission || typeof permission.request !== 'function') {
-    return { granted: false, reason: 'permission-sdk-unavailable' }
-  }
-  try {
-    const granted = await permission.request(
-      NETWORK_PERMISSION_ID,
-      '用于检索在线曲库、播放地址与歌词',
-    )
-    if (granted === true) {
-      return { granted: true, reason: '' }
-    }
-    return { granted: false, reason: 'permission-denied' }
+    return { granted: false, reason: deniedReason }
   }
   catch (error) {
     const code = stableErrorCode(error)
@@ -115,14 +94,17 @@ function buildMusicItem(queryText, permState) {
 
 const lifecycle = {
   async onFeatureTriggered(featureId, query, _feature, signal) {
-    if (featureId !== FEATURE_ID) return false
+    if (featureId !== FEATURE_ID)
+      return false
 
     const generation = ++runtimeGeneration
-    if (signal?.aborted) return true
+    if (signal?.aborted)
+      return true
 
     try {
       const permState = await checkNetworkPermission()
-      if (generation !== runtimeGeneration || signal?.aborted) return true
+      if (generation !== runtimeGeneration || signal?.aborted)
+        return true
 
       if (!plugin?.feature?.clearItems || !plugin?.feature?.pushItems) {
         return false
@@ -130,7 +112,8 @@ const lifecycle = {
 
       const item = buildMusicItem(extractQueryText(query), permState)
       await plugin.feature.clearItems()
-      if (generation !== runtimeGeneration || signal?.aborted) return true
+      if (generation !== runtimeGeneration || signal?.aborted)
+        return true
       await plugin.feature.pushItems([item])
       return true
     }
@@ -142,14 +125,16 @@ const lifecycle = {
 
   async onItemAction(item, context = {}) {
     const featureId = normalizeText(item?.meta?.featureId)
-    if (featureId !== FEATURE_ID) return
+    if (featureId !== FEATURE_ID)
+      return
 
     const actionId = normalizeText(
       context?.actionId || item?.meta?.actionId || item?.meta?.defaultAction || item?.actions?.[0]?.id,
     )
-    if (actionId !== ACTION_OPEN_MUSIC) return
+    if (actionId !== ACTION_OPEN_MUSIC)
+      return
 
-    const permState = await requestNetworkPermission()
+    const permState = await checkNetworkPermission('permission-denied')
     if (!permState.granted) {
       return {
         externalAction: true,

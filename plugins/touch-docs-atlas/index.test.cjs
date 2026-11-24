@@ -280,7 +280,13 @@ test('fail-closed permission and capability guards block clipboard write with ca
   await base.mod.onFeatureTriggered('docs-atlas', { text: 'http 404' })
   const card = base.pushed.find(i => i.id === 'docs-atlas-http-404')
 
-  const denied = createHarness({ permission: { async check() { return false } } })
+  const denied = createHarness({
+    permission: {
+      async check() {
+        return false
+      },
+    },
+  })
   const r1 = await denied.mod.onItemAction(card, { actionId: 'copy-primary' })
   assert.equal(r1.status, 'blocked')
   assert.equal(r1.reason, 'permission-denied')

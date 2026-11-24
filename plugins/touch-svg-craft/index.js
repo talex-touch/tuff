@@ -611,7 +611,7 @@ function toPascalCase(name) {
   if (!words.length)
     return 'SvgIcon'
   const pascal = words.map(w => `${w[0].toUpperCase()}${w.slice(1).toLowerCase()}`).join('')
-  return /^[0-9]/.test(pascal) ? `Icon${pascal}` : pascal
+  return /^\d/.test(pascal) ? `Icon${pascal}` : pascal
 }
 
 function renderCatalogIconSvg(icon, options = {}) {
@@ -680,7 +680,7 @@ function optimizeSvg(rawInput) {
   })
 
   // 7. Normalize trailing decimal zeros in numeric attribute values (e.g. "12.000" -> "12")
-  svg = svg.replace(/(\b(?:x|y|x1|y1|x2|y2|cx|cy|r|rx|ry|width|height|stroke-width|opacity|fill-opacity|stroke-opacity|viewBox)\s*=\s*")([^"]+)(")/gi, (_, pre, val, post) => {
+  svg = svg.replace(/(\b(?:[xyr]|x1|y1|x2|y2|cx|cy|rx|ry|width|height|stroke-width|opacity|fill-opacity|stroke-opacity|viewBox)\s*=\s*")([^"]+)(")/gi, (_, pre, val, post) => {
     const normalizedVal = val.replace(/-?\d+\.\d+/g, num => normalizeNumericToken(num))
     return `${pre}${normalizedVal}${post}`
   })
@@ -740,12 +740,18 @@ function convertStyleAttrToJsx(styleText) {
 
 function svgToReactJsx(svgString, componentName = 'SvgIcon') {
   const safeName = toPascalCase(componentName)
-  let jsx = svgString.replace(/<([a-z][\w:-]*)([^>]*?)(\/?)>/gi, (full, tag, attrs, selfClose) => {
+  const jsx = svgString.replace(/<([a-z][\w:-]*)(?:(\s[^>]*)|(\/))?>/gi, (full, tag, rawAttrs, bareSlash) => {
+    let attrs = rawAttrs || ''
+    let selfClose = bareSlash || ''
+    if (attrs.endsWith('/')) {
+      selfClose = '/'
+      attrs = attrs.slice(0, -1)
+    }
     if (!attrs)
       return full
     let nextAttrs = attrs
       .replace(/\s+style\s*=\s*"([^"]*)"/gi, (_, styleVal) => ` ${convertStyleAttrToJsx(styleVal)}`)
-      .replace(/\s+([a-zA-Z_:][\w:.-]*)\s*=\s*("[^"]*"|'[^']*')/g, (attrFull, attrName, attrVal) => {
+      .replace(/\s+([a-z_:][\w:.-]*)\s*=\s*("[^"]*"|'[^']*')/gi, (attrFull, attrName, attrVal) => {
         const lower = attrName.toLowerCase()
         if (lower.startsWith('data-') || lower.startsWith('aria-'))
           return ` ${lower}=${attrVal}`
@@ -845,7 +851,7 @@ function parseIconSearchOptions(rest) {
   const queryTerms = []
 
   for (const token of tokens) {
-    if (/^cat:(ui|dev|media|nav|status)$/i.test(token)) {
+    if (/^cat:(?:ui|dev|media|nav|status)$/i.test(token)) {
       categoryFilter = token.slice(4).toLowerCase()
       continue
     }

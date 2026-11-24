@@ -255,7 +255,7 @@ function parseCronField(rawField, { name, min, max, aliasMap = null, isDow = fal
         return { ok: false, error: `${name}: ${endParsed.error}` }
       }
 
-      let startVal = startParsed.value
+      const startVal = startParsed.value
       let endVal = endParsed.value
       // Allow FRI-SUN (5-0) or SAT-SUN (6-0) as 5-7 / 6-7
       if (isDow && endVal === 0 && startVal > 0 && startVal <= 6) {
@@ -740,7 +740,7 @@ function parseChineseNumeral(token) {
 
 function parseTimeOfDay(text) {
   // Explicit HH:mm (with optional am/pm), 12h am/pm, or "at H"
-  const explicitTime = /(?:(?:at\s+)?(\d{1,2}):(\d{2})\s*(am|pm)?\b|(?:at\s+)?(\d{1,2})\s*(am|pm)\b|\bat\s+(\d{1,2})\b)/i.exec(text)
+  const explicitTime = /(?:at\s+)?(\d{1,2}):(\d{2})\s*(am|pm)?\b|(?:at\s+)?(\d{1,2})\s*(am|pm)\b|\bat\s+(\d{1,2})\b/i.exec(text)
   if (explicitTime) {
     let hour
     let minute = 0
@@ -841,7 +841,7 @@ function parseNaturalLanguageToCron(rawInput) {
       }
     }
     // Check Chinese weekdays: 每周一、周三、周五 / 每周一三五 / 星期日
-    const zhDowBlock = /(?:每?(?:周|星期|礼拜))([一二三四五六日天、,，\s]+)/.exec(input)
+    const zhDowBlock = /每?(?:周|星期|礼拜)([一二三四五六日天、,，\s]+)/.exec(input)
     if (zhDowBlock) {
       const zhMap = { 日: 0, 天: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 }
       for (const ch of zhDowBlock[1]) {
@@ -858,7 +858,7 @@ function parseNaturalLanguageToCron(rawInput) {
   // Optional hour window: "between 9 and 18" / "9点到18点"
   let hourWindow = '*'
   const betweenEn = /between\s+(\d{1,2})\s+(?:and|to|-)\s+(\d{1,2})/i.exec(lower)
-  const betweenZh = /(\d{1,2})\s*[点时]?\s*(?:到|至|-)\s*(\d{1,2})\s*[点时]?/.exec(input)
+  const betweenZh = /(\d{1,2})\s*(?:[点时]\s*)?[到至\-]\s*(\d{1,2})\s*[点时]?/.exec(input)
   if (betweenEn) {
     const h1 = Number.parseInt(betweenEn[1], 10)
     const h2 = Number.parseInt(betweenEn[2], 10)
@@ -908,7 +908,7 @@ function parseNaturalLanguageToCron(rawInput) {
       return { expr: `0 */${n} * * ${dowExpr}`, source: 'natural-language' }
     }
   }
-  const hourlyAtMinZh = /每小时(?:第)?\s*([0-9零一二两三四五六七八九十]+)\s*分/.exec(input)
+  const hourlyAtMinZh = /每小时第?\s*([0-9零一二两三四五六七八九十]+)\s*分/.exec(input)
   if (hourlyAtMinZh) {
     const m = parseChineseNumeral(hourlyAtMinZh[1])
     if (!Number.isNaN(m) && m >= 0 && m <= 59) {
@@ -935,8 +935,8 @@ function parseNaturalLanguageToCron(rawInput) {
 
   // 4. Monthly
   if (/\b(?:monthly|every\s+month)\b|每月/.test(lower)) {
-    const dayEn = /(?:on\s+(?:the\s+|day\s+)?)(\d{1,2})(?:st|nd|rd|th)?\b/i.exec(lower)
-    const dayZh = /每月\s*(?:第)?\s*(\d{1,2})\s*[日号]?/.exec(input)
+    const dayEn = /on\s+(?:the\s+|day\s+)?(\d{1,2})(?:st|nd|rd|th)?\b/i.exec(lower)
+    const dayZh = /每月\s*(?:第\s*)?(\d{1,2})\s*[日号]?/.exec(input)
     const dom = dayEn
       ? Number.parseInt(dayEn[1], 10)
       : (dayZh ? Number.parseInt(dayZh[1], 10) : 1)

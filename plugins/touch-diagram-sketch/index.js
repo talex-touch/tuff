@@ -639,7 +639,7 @@ function parseArrowShorthand(raw) {
   let direction = 'LR'
   let preferredType = 'flowchart'
 
-  const hintMatch = /^(td|tb|lr|rl|bt|seq|sequence)\s*:\s*(.+)$/i.exec(input)
+  const hintMatch = /^(td|tb|lr|rl|bt|seq|sequence)\s*:\s*(\S.*)$/i.exec(input)
   if (hintMatch) {
     const hint = hintMatch[1].toLowerCase()
     input = hintMatch[2].trim()
@@ -782,7 +782,7 @@ function classifyArrow(raw) {
 }
 
 function escapeMermaidLabel(label) {
-  return String(label).replace(/"/g, "'")
+  return String(label).replace(/"/g, '\'')
 }
 
 function compileToMermaidFlowchart(graph) {
@@ -927,7 +927,7 @@ function extractMermaidFromAiResponse(rawResponse) {
   if (!cleaned)
     return ''
 
-  const fenced = /```(?:mermaid)?\s*\n([\s\S]*?)```/i.exec(cleaned)
+  const fenced = /```(?:mermaid)?[ \t]*\n([\s\S]*?)```/i.exec(cleaned)
   if (fenced && fenced[1].trim()) {
     return fenced[1].trim()
   }

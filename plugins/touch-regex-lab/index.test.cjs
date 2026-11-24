@@ -232,7 +232,13 @@ test('fail-closed permission and capability guards block clipboard write with ca
   const card = baseHarness.pushed.find(item => item.id === 'regex-lab-lib-email')
 
   // permission-denied
-  const denied = createHarness({ permission: { async check() { return false } } })
+  const denied = createHarness({
+    permission: {
+      async check() {
+        return false
+      },
+    },
+  })
   const r1 = await denied.mod.onItemAction(card, { actionId: 'copy-raw' })
   assert.equal(r1.status, 'blocked')
   assert.equal(r1.reason, 'permission-denied')

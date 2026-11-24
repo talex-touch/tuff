@@ -1,7 +1,6 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { FlowDispatchOptions, FlowPayload } from '@talex-touch/utils/types/flow'
 import type {
-  IManifest,
   IPluginManager,
   ITouchPlugin,
   PluginIssue,
@@ -38,7 +37,11 @@ import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { isLocalizedText, normalizeLocale, resolveLocalizedText } from '@talex-touch/utils/i18n'
 import { normalizePermissionId, parseManifestPermissions } from '@talex-touch/utils/permission'
 import { PluginStatus } from '@talex-touch/utils/plugin'
-import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
+import {
+  createUninstallInstallSourceTracker,
+  getPluginInstallSourceData,
+  persistPluginInstallSourceMetadata
+} from './plugin-install-source-tracker'
 import {
   CoreBoxEvents,
   PluginEvents,
@@ -961,41 +964,6 @@ function createPluginModuleInternal(
 
   const installer = new PluginInstaller()
 
-  const persistInstallSourceMetadata = async ({
-    request,
-    manifest,
-    providerResult
-  }: {
-    request: PluginInstallRequest
-    manifest?: IManifest
-    providerResult: PluginInstallSummary['providerResult']
-  }): Promise<void> => {
-    const pluginName = manifest?.name
-    if (!pluginName) {
-      logWarn('Failed to persist install metadata: missing plugin name')
-      return
-    }
-    try {
-      const providerMetadata =
-        providerResult.metadata && typeof providerResult.metadata === 'object'
-          ? { ...providerResult.metadata }
-          : null
-
-      await dbUtils.setPluginData(pluginName, 'install_source', {
-        source: request.source,
-        hintType: request.hintType ?? null,
-        official: Boolean(providerResult.official),
-        provider: providerResult.provider,
-        installedAt: Date.now(),
-        metadata: request.metadata ?? null,
-        providerMetadata,
-        clientMetadata: request.clientMetadata ?? null
-      })
-    } catch (error) {
-      logWarn('Failed to save plugin source metadata', pluginTag(pluginName), error as Error)
-    }
-  }
-
   const installQueue = new PluginInstallQueue(installer, transport, mainWindowId, {
     assertInstallAdmission: () => {
       if (pluginDataDispositionCoordinator?.hasBlockedOperations()) {
@@ -1003,7 +971,12 @@ function createPluginModuleInternal(
       }
     },
     onInstallCompleted: async ({ request, manifest, providerResult }) => {
-      await persistInstallSourceMetadata({ request, manifest, providerResult })
+      await persistPluginInstallSourceMetadata(
+        dbUtils,
+        { request, manifest, providerResult },
+        (message, name, error) =>
+          name ? logWarn(message, pluginTag(name), error) : logWarn(message)
+      )
       const pluginName = manifest?.name
       if (pluginName) {
         touchEventBus.emit(
@@ -1582,35 +1555,7 @@ function createPluginModuleInternal(
     })
   }
 
-  const pendingUninstallProviders = new Map<string, string | null>()
-  const getUninstallOwnerKey = (owner: {
-    pluginName: string
-    pluginInstanceId: string
-    activationGeneration: number
-  }): string => `${owner.pluginName}:${owner.pluginInstanceId}:${owner.activationGeneration}`
-
-  const captureUninstallInstallSourceProvider = async (owner: {
-    pluginName: string
-    pluginInstanceId: string
-    activationGeneration: number
-  }): Promise<void> => {
-    const ownerKey = getUninstallOwnerKey(owner)
-    if (pendingUninstallProviders.has(ownerKey)) return
-    try {
-      const sourceData = await dbUtils.getPluginData(owner.pluginName, 'install_source')
-      const raw = sourceData?.value
-      if (typeof raw === 'string' && raw.trim().length > 0) {
-        const parsed = JSON.parse(raw) as { provider?: unknown }
-        if (typeof parsed?.provider === 'string' && parsed.provider.trim().length > 0) {
-          pendingUninstallProviders.set(ownerKey, parsed.provider.trim().toLowerCase())
-          return
-        }
-      }
-      pendingUninstallProviders.set(ownerKey, null)
-    } catch {
-      pendingUninstallProviders.set(ownerKey, null)
-    }
-  }
+  const uninstallSourceTracker = createUninstallInstallSourceTracker(dbUtils)
 
   pluginDataDispositionCoordinator = createProductionPluginDataDispositionCoordinator({
     secureStoreRootPath: secureStoreRootPath ?? '',
@@ -1704,7 +1649,7 @@ function createPluginModuleInternal(
       })
     },
     deletePluginRow: async (owner) => {
-      await captureUninstallInstallSourceProvider(owner)
+      await uninstallSourceTracker.capture(owner)
       const nextEnabled = [...enabledPlugins].filter(
         (name) => name !== owner.folderName && name !== owner.pluginName
       )
@@ -1733,10 +1678,7 @@ function createPluginModuleInternal(
       return 'completed'
     },
     reportUninstall: async (owner) => {
-      const ownerKey = getUninstallOwnerKey(owner)
-      const provider = pendingUninstallProviders.get(ownerKey)
-      pendingUninstallProviders.delete(ownerKey)
-      if (provider === PluginProviderType.NPM) {
+      if (uninstallSourceTracker.consumeShouldSkipRemoteReport(owner)) {
         return 'completed'
       }
       await reportPluginUninstall(owner.pluginName)
@@ -3411,11 +3353,7 @@ export class PluginModule extends BaseModule {
       if (plugin.meta?.internal) continue
 
       try {
-        const sourceData =
-          (await manager.dbUtils.getPluginData(plugin.name, 'install_source')) ??
-          (plugin.name !== name
-            ? await manager.dbUtils.getPluginData(name, 'install_source')
-            : null)
+        const sourceData = await getPluginInstallSourceData(manager.dbUtils, plugin.name, name)
         result.push({
           name,
           version: plugin.version,

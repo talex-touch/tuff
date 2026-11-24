@@ -73,32 +73,32 @@ const CITIES = Object.freeze([
 
 // Explicit fixed-offset timezone abbreviations for deterministic time conversions
 const FIXED_ABBREVS = Object.freeze({
-  utc: { code: 'UTC', label: 'UTC', zh: '协调世界时', offsetMin: 0, iana: 'UTC', cityId: 'utc' },
-  gmt: { code: 'GMT', label: 'GMT / UTC', zh: '格林威治时间', offsetMin: 0, iana: 'UTC', cityId: 'utc' },
-  z: { code: 'UTC', label: 'UTC (Z)', zh: '协调世界时', offsetMin: 0, iana: 'UTC', cityId: 'utc' },
-  pst: { code: 'PST', label: 'PST (UTC-8)', zh: '太平洋标准时间', offsetMin: -480, iana: 'America/Los_Angeles', cityId: 'san-francisco' },
-  pdt: { code: 'PDT', label: 'PDT (UTC-7)', zh: '太平洋夏令时', offsetMin: -420, iana: 'America/Los_Angeles', cityId: 'san-francisco' },
-  mst: { code: 'MST', label: 'MST (UTC-7)', zh: '山地标准时间', offsetMin: -420, iana: 'America/Denver', cityId: 'denver' },
-  mdt: { code: 'MDT', label: 'MDT (UTC-6)', zh: '山地夏令时', offsetMin: -360, iana: 'America/Denver', cityId: 'denver' },
-  est: { code: 'EST', label: 'EST (UTC-5)', zh: '美东标准时间', offsetMin: -300, iana: 'America/New_York', cityId: 'new-york' },
-  edt: { code: 'EDT', label: 'EDT (UTC-4)', zh: '美东夏令时', offsetMin: -240, iana: 'America/New_York', cityId: 'new-york' },
-  cdt: { code: 'CDT', label: 'US CDT (UTC-5)', zh: '美中夏令时', offsetMin: -300, iana: 'America/Chicago', cityId: 'chicago' },
+  'utc': { code: 'UTC', label: 'UTC', zh: '协调世界时', offsetMin: 0, iana: 'UTC', cityId: 'utc' },
+  'gmt': { code: 'GMT', label: 'GMT / UTC', zh: '格林威治时间', offsetMin: 0, iana: 'UTC', cityId: 'utc' },
+  'z': { code: 'UTC', label: 'UTC (Z)', zh: '协调世界时', offsetMin: 0, iana: 'UTC', cityId: 'utc' },
+  'pst': { code: 'PST', label: 'PST (UTC-8)', zh: '太平洋标准时间', offsetMin: -480, iana: 'America/Los_Angeles', cityId: 'san-francisco' },
+  'pdt': { code: 'PDT', label: 'PDT (UTC-7)', zh: '太平洋夏令时', offsetMin: -420, iana: 'America/Los_Angeles', cityId: 'san-francisco' },
+  'mst': { code: 'MST', label: 'MST (UTC-7)', zh: '山地标准时间', offsetMin: -420, iana: 'America/Denver', cityId: 'denver' },
+  'mdt': { code: 'MDT', label: 'MDT (UTC-6)', zh: '山地夏令时', offsetMin: -360, iana: 'America/Denver', cityId: 'denver' },
+  'est': { code: 'EST', label: 'EST (UTC-5)', zh: '美东标准时间', offsetMin: -300, iana: 'America/New_York', cityId: 'new-york' },
+  'edt': { code: 'EDT', label: 'EDT (UTC-4)', zh: '美东夏令时', offsetMin: -240, iana: 'America/New_York', cityId: 'new-york' },
+  'cdt': { code: 'CDT', label: 'US CDT (UTC-5)', zh: '美中夏令时', offsetMin: -300, iana: 'America/Chicago', cityId: 'chicago' },
   'us-cst': { code: 'US CST', label: 'US Central (UTC-6)', zh: '美中标准时间', offsetMin: -360, iana: 'America/Chicago', cityId: 'chicago' },
-  cst: { code: 'CST', label: 'China CST (UTC+8)', zh: '中国标准时间', offsetMin: 480, iana: 'Asia/Shanghai', cityId: 'shanghai', ambiguousUsCstOffsetMin: -360 },
-  bst: { code: 'BST', label: 'BST (UTC+1)', zh: '英国夏令时', offsetMin: 60, iana: 'Europe/London', cityId: 'london' },
-  cet: { code: 'CET', label: 'CET (UTC+1)', zh: '中欧标准时间', offsetMin: 60, iana: 'Europe/Berlin', cityId: 'berlin' },
-  cest: { code: 'CEST', label: 'CEST (UTC+2)', zh: '中欧夏令时', offsetMin: 120, iana: 'Europe/Berlin', cityId: 'berlin' },
-  eet: { code: 'EET', label: 'EET (UTC+2)', zh: '东欧标准时间', offsetMin: 120, iana: 'Europe/Helsinki', cityId: 'helsinki' },
-  eest: { code: 'EEST', label: 'EEST (UTC+3)', zh: '东欧夏令时', offsetMin: 180, iana: 'Europe/Helsinki', cityId: 'helsinki' },
-  ist: { code: 'IST', label: 'IST (UTC+5:30)', zh: '印度标准时间', offsetMin: 330, iana: 'Asia/Kolkata', cityId: 'bengaluru' },
-  sgt: { code: 'SGT', label: 'SGT (UTC+8)', zh: '新加坡时间', offsetMin: 480, iana: 'Asia/Singapore', cityId: 'singapore' },
-  hkt: { code: 'HKT', label: 'HKT (UTC+8)', zh: '香港时间', offsetMin: 480, iana: 'Asia/Hong_Kong', cityId: 'hong-kong' },
-  jst: { code: 'JST', label: 'JST (UTC+9)', zh: '日本标准时间', offsetMin: 540, iana: 'Asia/Tokyo', cityId: 'tokyo' },
-  kst: { code: 'KST', label: 'KST (UTC+9)', zh: '韩国标准时间', offsetMin: 540, iana: 'Asia/Seoul', cityId: 'seoul' },
-  aest: { code: 'AEST', label: 'AEST (UTC+10)', zh: '澳东标准时间', offsetMin: 600, iana: 'Australia/Sydney', cityId: 'sydney' },
-  aedt: { code: 'AEDT', label: 'AEDT (UTC+11)', zh: '澳东夏令时', offsetMin: 660, iana: 'Australia/Sydney', cityId: 'sydney' },
-  nzst: { code: 'NZST', label: 'NZST (UTC+12)', zh: '新西兰标准时间', offsetMin: 720, iana: 'Pacific/Auckland', cityId: 'auckland' },
-  nzdt: { code: 'NZDT', label: 'NZDT (UTC+13)', zh: '新西兰夏令时', offsetMin: 780, iana: 'Pacific/Auckland', cityId: 'auckland' },
+  'cst': { code: 'CST', label: 'China CST (UTC+8)', zh: '中国标准时间', offsetMin: 480, iana: 'Asia/Shanghai', cityId: 'shanghai', ambiguousUsCstOffsetMin: -360 },
+  'bst': { code: 'BST', label: 'BST (UTC+1)', zh: '英国夏令时', offsetMin: 60, iana: 'Europe/London', cityId: 'london' },
+  'cet': { code: 'CET', label: 'CET (UTC+1)', zh: '中欧标准时间', offsetMin: 60, iana: 'Europe/Berlin', cityId: 'berlin' },
+  'cest': { code: 'CEST', label: 'CEST (UTC+2)', zh: '中欧夏令时', offsetMin: 120, iana: 'Europe/Berlin', cityId: 'berlin' },
+  'eet': { code: 'EET', label: 'EET (UTC+2)', zh: '东欧标准时间', offsetMin: 120, iana: 'Europe/Helsinki', cityId: 'helsinki' },
+  'eest': { code: 'EEST', label: 'EEST (UTC+3)', zh: '东欧夏令时', offsetMin: 180, iana: 'Europe/Helsinki', cityId: 'helsinki' },
+  'ist': { code: 'IST', label: 'IST (UTC+5:30)', zh: '印度标准时间', offsetMin: 330, iana: 'Asia/Kolkata', cityId: 'bengaluru' },
+  'sgt': { code: 'SGT', label: 'SGT (UTC+8)', zh: '新加坡时间', offsetMin: 480, iana: 'Asia/Singapore', cityId: 'singapore' },
+  'hkt': { code: 'HKT', label: 'HKT (UTC+8)', zh: '香港时间', offsetMin: 480, iana: 'Asia/Hong_Kong', cityId: 'hong-kong' },
+  'jst': { code: 'JST', label: 'JST (UTC+9)', zh: '日本标准时间', offsetMin: 540, iana: 'Asia/Tokyo', cityId: 'tokyo' },
+  'kst': { code: 'KST', label: 'KST (UTC+9)', zh: '韩国标准时间', offsetMin: 540, iana: 'Asia/Seoul', cityId: 'seoul' },
+  'aest': { code: 'AEST', label: 'AEST (UTC+10)', zh: '澳东标准时间', offsetMin: 600, iana: 'Australia/Sydney', cityId: 'sydney' },
+  'aedt': { code: 'AEDT', label: 'AEDT (UTC+11)', zh: '澳东夏令时', offsetMin: 660, iana: 'Australia/Sydney', cityId: 'sydney' },
+  'nzst': { code: 'NZST', label: 'NZST (UTC+12)', zh: '新西兰标准时间', offsetMin: 720, iana: 'Pacific/Auckland', cityId: 'auckland' },
+  'nzdt': { code: 'NZDT', label: 'NZDT (UTC+13)', zh: '新西兰夏令时', offsetMin: 780, iana: 'Pacific/Auckland', cityId: 'auckland' },
 })
 
 const CITY_BY_ID = new Map(CITIES.map(c => [c.id, c]))
@@ -293,7 +293,7 @@ function resolveZoneTarget(rawToken) {
   // 5. Direct valid IANA timezone (e.g. `America/Anchorage`, `Europe/Oslo`)
   if (cleaned.includes('/')) {
     try {
-      new Intl.DateTimeFormat('en-US', { timeZone: cleaned })
+      Intl.DateTimeFormat('en-US', { timeZone: cleaned }).resolvedOptions()
       const shortCity = cleaned.split('/').at(-1).replace(/_/g, ' ')
       return {
         kind: 'iana',
@@ -330,22 +330,27 @@ function searchCities(queryText) {
     if (scored.some(entry => entry.city.id === city.id))
       continue
     let score = 0
-    if (city.id === q || normalizeLookupKey(city.city) === compact || city.zh === queryText.trim())
+    if (city.id === q || normalizeLookupKey(city.city) === compact || city.zh === queryText.trim()) {
       score = 95
-    else if (city.aliases.some(a => normalizeLookupKey(a) === compact))
+    }
+    else if (city.aliases.some(a => normalizeLookupKey(a) === compact)) {
       score = 90
-    else if (normalizeLookupKey(city.city).startsWith(compact) || city.zh.startsWith(queryText.trim()))
+    }
+    else if (normalizeLookupKey(city.city).startsWith(compact) || city.zh.startsWith(queryText.trim())) {
       score = 75
-    else if (city.aliases.some(a => normalizeLookupKey(a).startsWith(compact)))
+    }
+    else if (city.aliases.some(a => normalizeLookupKey(a).startsWith(compact))) {
       score = 65
+    }
     else if (
       city.city.toLowerCase().includes(q)
       || city.zh.includes(queryText.trim())
       || city.country.toLowerCase().includes(q)
       || city.iana.toLowerCase().includes(q)
       || city.region.toLowerCase().includes(q)
-    )
+    ) {
       score = 40
+    }
 
     if (score > 0)
       scored.push({ city, score })
@@ -429,9 +434,17 @@ function parseClockTime(rawTime) {
 // - `14:00 PST` (defaults targets to pinned cities + UTC)
 function tryParseTimeConversion(raw, nowMs) {
   const text = normalizeText(raw)
-  const match = text.match(/^(?:(today|tomorrow|yesterday|\d{4}-\d{2}-\d{2})\s+)?(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s+([a-zA-Z\u4e00-\u9fa5][a-zA-Z0-9_\u4e00-\u9fa5/+\- ]*?)(?:\s+(?:to|in|->|=>)\s+(.+))?$/i)
-  if (!match)
+  const prefixMatch = text.match(/^(?:(today|tomorrow|yesterday|\d{4}-\d{2}-\d{2})\s+)?(\d{1,2}(?::\d{2})?(?:[ \t]*(?:am|pm))?)\s+(\S.*)$/i)
+  if (!prefixMatch)
     return null
+
+  const rest = prefixMatch[3].trim()
+  const sep = /\s+(?:to|in|->|=>)\s+/i.exec(rest)
+  const zonePart = (sep ? rest.slice(0, sep.index) : rest).trim()
+  const targetPart = sep ? rest.slice(sep.index + sep[0].length).trim() : undefined
+  if (!/^[a-z\u4E00-\u9FA5][\w\u4E00-\u9FA5/+\- ]*$/i.test(zonePart))
+    return null
+  const match = [prefixMatch[0], prefixMatch[1], prefixMatch[2], zonePart, targetPart]
 
   // Require either colon or am/pm so plain numbers like "2026" don't misparse as hours
   if (!match[2].includes(':') && !/[ap]m$/i.test(match[2].trim()))
@@ -476,7 +489,7 @@ function tryParseTimeConversion(raw, nowMs) {
   const epochMs = resolveInstantForWallClock(year, month, day, clock.hour, clock.minute, sourceZone)
   const sourceSnap = getZoneSnapshot(sourceZone, epochMs)
 
-  let targets = []
+  const targets = []
   if (match[4]) {
     const rawTargets = match[4]
       .split(/[,/，、|]+|\s+and\s+/i)
@@ -1012,7 +1025,7 @@ const pluginLifecycle = {
       }
 
       // 2. Pin / Unpin / Reset shortcuts
-      const pinMatch = rawText.match(/^(pin|unpin|置顶|取消置顶)\s+(.+)$/i)
+      const pinMatch = rawText.match(/^(pin|unpin|置顶|取消置顶)\s+(\S.*)$/i)
       if (pinMatch) {
         const isUnpin = /^(?:unpin|取消置顶)$/i.test(pinMatch[1])
         const matches = searchCities(pinMatch[2]).slice(0, 6)
@@ -1066,7 +1079,7 @@ const pluginLifecycle = {
       }
 
       // 3. Golden-hours team meeting overlap planner (`meet ...` / `overlap ...` / `会议 ...`)
-      const meetMatch = rawText.match(/^(?:meet|meeting|overlap|golden|会议|黄金时段)(?:\s+(.*))?$/i)
+      const meetMatch = rawText.match(/^(?:meet|meeting|overlap|golden|会议|黄金时段)(?:\s+(\S.*))?$/i)
       if (meetMatch) {
         const rest = normalizeText(meetMatch[1])
         const tokens = rest

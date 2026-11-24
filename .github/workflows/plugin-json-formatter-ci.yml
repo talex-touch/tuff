@@ -49,10 +49,13 @@ jobs:
       package-name: json-formatter
       package-path: plugins/json-formatter
       run-build: true
-      # `pnpm build` is `vite build && tuff builder`: vite.config.ts loads the export plugin and
-      # `tuff` runs from tuff-cli's dist, so the toolchain is built first, in its own order.
+      # `pnpm build` is `vite build && tuff builder`: vite.config.ts loads the export plugin,
+      # src/main.ts imports `@talex-touch/tuffex/base.css`, and `tuff` runs from tuff-cli's dist,
+      # so workspace dependencies and the toolchain are built first, in dependency order.
       build-command: |
+        pnpm --dir ../.. --filter "@talex-touch/utils" run build
         pnpm --dir ../.. --filter "@talex-touch/tuff-cli-core" run build
         pnpm --dir ../.. --filter "@talex-touch/unplugin-export-plugin" run build
         pnpm --dir ../.. --filter "@talex-touch/tuff-cli" run build
+        pnpm --dir ../.. --filter "@talex-touch/tuffex" run build
         pnpm build

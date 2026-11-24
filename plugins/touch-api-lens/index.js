@@ -35,8 +35,8 @@ const SENSITIVE_HEADER_NAMES = new Set([
   'x-csrf-token',
   'x-xsrf-token',
 ])
-const SENSITIVE_HEADER_PATTERN = /(?:token|secret|key|auth|cookie|password|credential|session)/i
-const SECRET_KEY_PATTERN = /^[a-z0-9._-]{1,48}$/i
+const SENSITIVE_HEADER_PATTERN = /token|secret|key|auth|cookie|password|credential|session/i
+const SECRET_KEY_PATTERN = /^[\w.-]{1,48}$/
 
 let triggerGeneration = 0
 let tokenCounter = 0
@@ -559,7 +559,7 @@ function parseShorthandRequest(rawInput) {
     return null
 
   // Match optional method + http(s) URL + optional trailing headers / body
-  const match = trimmed.match(/^(?:(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+)?(https?:\/\/\S+)(?:\s+([\s\S]+))?$/i)
+  const match = trimmed.match(/^(?:(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+)?(https?:\/\/\S+)(?:\s+(\S[\s\S]*))?$/i)
   if (!match)
     return null
 
@@ -623,7 +623,7 @@ function parseHttpRequestInput(rawInput) {
   if (!withoutPrefix)
     return null
 
-  if (/^curl(?:\s|$)/i.test(withoutPrefix) || /^-(?:X|H|d|u|G|I|-request|-header|-data|-json|-url)\b/.test(withoutPrefix))
+  if (/^curl(?:\s|$)/i.test(withoutPrefix) || /^-(?:[XHduGI]|-request|-header|-data|-json|-url)\b/.test(withoutPrefix))
     return parseCurlCommand(withoutPrefix)
 
   return parseShorthandRequest(withoutPrefix)
@@ -641,18 +641,18 @@ function parseQueryIntent(rawQuery) {
   if (/^(?:last|response|resp)$/i.test(stripped))
     return { kind: 'last' }
 
-  const saveMatch = stripped.match(/^save\s+(\S+)\s+([\s\S]+)$/i)
+  const saveMatch = stripped.match(/^save\s+(\S+)\s+(\S[\s\S]*)$/i)
   if (saveMatch) {
     const presetName = sanitizePresetName(saveMatch[1])
     const request = parseHttpRequestInput(saveMatch[2])
     return { kind: 'save', presetName, request, rawTarget: saveMatch[2] }
   }
 
-  const runMatch = stripped.match(/^(?:run|use)\s+(.+)$/i)
+  const runMatch = stripped.match(/^(?:run|use)\s+(\S.*)$/i)
   if (runMatch)
     return { kind: 'filter-presets', keyword: normalizeText(runMatch[1]), preferRun: true }
 
-  const deleteMatch = stripped.match(/^(?:delete|rm|remove)\s+(.+)$/i)
+  const deleteMatch = stripped.match(/^(?:delete|rm|remove)\s+(\S.*)$/i)
   if (deleteMatch)
     return { kind: 'delete-preset', keyword: normalizeText(deleteMatch[1]) }
 
