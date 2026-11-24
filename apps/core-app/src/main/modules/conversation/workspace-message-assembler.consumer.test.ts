@@ -586,5 +586,16 @@ describe('WorkspaceMessageAssembler durable consumer output', () => {
     wholeAnswer.complete('Plan: check done')
     expect(wholeAnswer.snapshot().content).toBe('Plan: check done')
     expect(wholeAnswer.snapshot().status).toBe('complete')
+
+    // Whole-answer completion also normalizes leading whitespace on hydrated content
+    const leadingWhitespace = new WorkspaceMessageAssembler(
+      { ...preCrash, content: '\nPlan: check' },
+      'turn-rec-dedup',
+      { preserveInitial: true }
+    )
+    leadingWhitespace.delta(' done')
+    leadingWhitespace.complete('Plan: check done')
+    expect(leadingWhitespace.snapshot().content).toBe('\nPlan: check done')
+    expect(leadingWhitespace.snapshot().status).toBe('complete')
   })
 })

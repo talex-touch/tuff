@@ -340,8 +340,7 @@ export class WorkspaceMessageAssembler {
       (this.hydratedInitial
         ? trimmedInput.length > 0 &&
           this.newContent.trim().length > 0 &&
-          (this.newContent.trimEnd().endsWith(trimmedInput) ||
-            this.content.trimEnd() === trimmedInput)
+          (this.newContent.trimEnd().endsWith(trimmedInput) || this.content.trim() === trimmedInput)
         : this.content.trimEnd().endsWith(trimmedInput))
     if (
       typeof text === 'string' &&

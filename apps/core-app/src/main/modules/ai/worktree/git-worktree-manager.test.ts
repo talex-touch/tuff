@@ -880,9 +880,24 @@ exec git "$@"
     )
     await rm(badIdMeta, { force: true })
 
-    // Non-regular .json entry (symlink) is classified as corrupt without following it
+    // Non-regular .json entry (symlink) pointing to a complete valid lease is still classified as corrupt without following it
     const symlinkTarget = path.join(sandboxDir, 'outside-lease.json')
-    await writeFile(symlinkTarget, JSON.stringify({ runId: 'run-not-present' }), 'utf8')
+    const symlinkWorktreePath = path.join(canonicalBase, 'wt-symlink-lease')
+    await writeFile(
+      symlinkTarget,
+      JSON.stringify({
+        worktreeId: 'wt-symlink-lease',
+        runId: 'run-not-present',
+        repoRoot: lease.repoRoot,
+        worktreePath: symlinkWorktreePath,
+        effectiveCwd: symlinkWorktreePath,
+        branchName: 'tuff/wt/run-not-present',
+        baseRef: lease.baseRef,
+        baseCommit: lease.baseCommit,
+        createdAt: Date.now()
+      }),
+      'utf8'
+    )
     const symlinkMeta = path.join(canonicalBase, '.meta', 'wt-symlink-lease.json')
     await symlink(symlinkTarget, symlinkMeta)
     await expectWorktreeError(

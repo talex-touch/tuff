@@ -1135,7 +1135,13 @@ export class AiCliOrchestrator {
     // the per-run lifecycle lock so a failed per-run write cannot skip other candidates and
     // shutdown/cancellation never consumes a recovery budget or launches a cancelled run.
     for (const item of resumable) {
-      if (this.closing) break
+      if (this.closing) {
+        if (item.reattachWorktreeId && !this.cancelledRecoveryRunIds.has(item.run.id)) {
+          this.suspendedForRestartRunIds.add(item.run.id)
+        }
+        this.clearInMemoryRunState(item.run.id)
+        continue
+      }
       this.resumeInBackground(item)
     }
   }
@@ -1356,10 +1362,52 @@ export class AiCliOrchestrator {
     const execution = this.trackExecution(async () => {
       const admittedRun = await this.withRunLifecycleLock(run.id, async () =>
         this.withRunWriteLease(run.id, async () => {
-          if (this.closing) {
+          const persistCancelled = async (metadata: Record<string, unknown>): Promise<null> => {
+            const now = Date.now()
+            await aiOrchestratorStore.updateOrchestratorRun(run.id, {
+              status: 'cancelled',
+              error: AI_RUN_CANCELLED,
+              metadata,
+              completedAt: now,
+              updatedAt: now
+            })
+            this.suspendedForRestartRunIds.delete(run.id)
+            try {
+              await aiOrchestratorStore.appendOrchestratorEvent(
+                run.id,
+                'run.cancelled',
+                { reason: 'Cancelled by user' },
+                'warn'
+              )
+            } finally {
+              this.clearVolatileRunState(run.id)
+            }
+            return null
+          }
+
+          const deferForShutdown = async (
+            previousMetadata: Record<string, unknown>,
+            restoreMetadata: boolean
+          ): Promise<null> => {
+            if (this.cancelledRecoveryRunIds.has(run.id)) {
+              return await persistCancelled(previousMetadata)
+            }
+            if (restoreMetadata) {
+              await aiOrchestratorStore.updateOrchestratorRun(run.id, {
+                metadata: previousMetadata,
+                updatedAt: Date.now()
+              })
+              if (this.cancelledRecoveryRunIds.has(run.id)) {
+                return await persistCancelled(previousMetadata)
+              }
+            }
+            if (reattachWorktreeId) {
+              this.suspendedForRestartRunIds.add(run.id)
+            }
             this.clearInMemoryRunState(run.id)
             return null
           }
+
           const latest = await aiOrchestratorStore.getOrchestratorRun(run.id)
           if (!latest || (latest.status !== 'queued' && latest.status !== 'running')) {
             this.clearInMemoryRunState(run.id)
@@ -1367,22 +1415,10 @@ export class AiCliOrchestrator {
           }
           const previousMetadata = projectPersistedRunMetadata(latest.metadata)
           if (this.cancelledRecoveryRunIds.has(run.id)) {
-            const now = Date.now()
-            await aiOrchestratorStore.updateOrchestratorRun(run.id, {
-              status: 'cancelled',
-              error: AI_RUN_CANCELLED,
-              metadata: previousMetadata,
-              completedAt: now,
-              updatedAt: now
-            })
-            await aiOrchestratorStore.appendOrchestratorEvent(
-              run.id,
-              'run.cancelled',
-              { reason: 'Cancelled by user' },
-              'warn'
-            )
-            this.clearVolatileRunState(run.id)
-            return null
+            return await persistCancelled(previousMetadata)
+          }
+          if (this.closing) {
+            return await deferForShutdown(previousMetadata, false)
           }
           const currentAttempts = readRecoveryAttempts(toRecord(latest.metadata))
           if (currentAttempts >= MAX_ORCHESTRATOR_RECOVERY_ATTEMPTS) {
@@ -1398,55 +1434,47 @@ export class AiCliOrchestrator {
             metadata: updatedMetadata,
             updatedAt: Date.now()
           })
+          if (this.cancelledRecoveryRunIds.has(run.id)) {
+            return await persistCancelled(previousMetadata)
+          }
           if (this.closing) {
-            await aiOrchestratorStore.updateOrchestratorRun(run.id, {
-              metadata: previousMetadata,
-              updatedAt: Date.now()
+            return await deferForShutdown(previousMetadata, true)
+          }
+          try {
+            await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.resumed', {
+              reason: 'application_restart',
+              previousStatus: latest.status,
+              recoveryAttempt: nextAttempt,
+              ...(reattachWorktreeId
+                ? { reusedWorktree: true, worktreeId: reattachWorktreeId }
+                : {})
             })
+          } catch (appendError) {
+            if (this.cancelledRecoveryRunIds.has(run.id)) {
+              await persistCancelled(previousMetadata).catch(() => undefined)
+              return null
+            }
+            await aiOrchestratorStore
+              .updateOrchestratorRun(run.id, {
+                metadata: previousMetadata,
+                updatedAt: Date.now()
+              })
+              .catch(() => undefined)
+            if (this.cancelledRecoveryRunIds.has(run.id)) {
+              await persistCancelled(previousMetadata).catch(() => undefined)
+              return null
+            }
+            if (this.closing && reattachWorktreeId) {
+              this.suspendedForRestartRunIds.add(run.id)
+            }
             this.clearInMemoryRunState(run.id)
-            return null
+            throw appendError
           }
           if (this.cancelledRecoveryRunIds.has(run.id)) {
-            const now = Date.now()
-            await aiOrchestratorStore.updateOrchestratorRun(run.id, {
-              status: 'cancelled',
-              error: AI_RUN_CANCELLED,
-              metadata: previousMetadata,
-              completedAt: now,
-              updatedAt: now
-            })
-            await aiOrchestratorStore.appendOrchestratorEvent(
-              run.id,
-              'run.cancelled',
-              { reason: 'Cancelled by user' },
-              'warn'
-            )
-            this.clearVolatileRunState(run.id)
-            return null
+            return await persistCancelled(updatedMetadata)
           }
-          await aiOrchestratorStore.appendOrchestratorEvent(run.id, 'run.resumed', {
-            reason: 'application_restart',
-            previousStatus: latest.status,
-            recoveryAttempt: nextAttempt,
-            ...(reattachWorktreeId ? { reusedWorktree: true, worktreeId: reattachWorktreeId } : {})
-          })
-          if (this.cancelledRecoveryRunIds.has(run.id)) {
-            const now = Date.now()
-            await aiOrchestratorStore.updateOrchestratorRun(run.id, {
-              status: 'cancelled',
-              error: AI_RUN_CANCELLED,
-              metadata: updatedMetadata,
-              completedAt: now,
-              updatedAt: now
-            })
-            await aiOrchestratorStore.appendOrchestratorEvent(
-              run.id,
-              'run.cancelled',
-              { reason: 'Cancelled by user' },
-              'warn'
-            )
-            this.clearVolatileRunState(run.id)
-            return null
+          if (this.closing) {
+            return await deferForShutdown(previousMetadata, true)
           }
           return { ...latest, metadata: updatedMetadata }
         })
@@ -1472,6 +1500,9 @@ export class AiCliOrchestrator {
     })
     void execution
       .catch((error) => {
+        if (this.closing && reattachWorktreeId && !this.cancelledRecoveryRunIds.has(run.id)) {
+          this.suspendedForRestartRunIds.add(run.id)
+        }
         this.clearInMemoryRunState(run.id)
         orchestratorLog.warn('A resumed run did not finish', { error })
       })

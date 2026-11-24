@@ -1089,6 +1089,7 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
 
       // 2. Cancelling a queued run while recovery waits on run.resumed keeps it cancelled and never spawns CLI
       mocks.runs.clear()
+      codexSpawnSpy.mockClear()
       mocks.runs.set('run-cancel-race', makeQueuedRun('run-cancel-race'))
       let codexSpawnCount = 0
       codexStreamImpl = async function* () {
@@ -1118,10 +1119,32 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
 
       expect(mocks.runs.get('run-cancel-race')?.status).toBe('cancelled')
       expect(codexSpawnCount).toBe(0)
+      expect(codexSpawnSpy).not.toHaveBeenCalled()
 
-      // 3. Shutdown racing with recovery admission restores/preserves recoveryAttempts for next boot
+      // 3. Shutdown racing with recovery admission restores/preserves recoveryAttempts & worktree for next boot
       mocks.runs.clear()
-      mocks.runs.set('run-shutdown-race', makeQueuedRun('run-shutdown-race'))
+      mocks.worktreeLeases.clear()
+      mocks.worktreeDisposeAll.mockClear()
+      codexSpawnSpy.mockClear()
+      mocks.worktreeLeases.set('wt-shutdown-race', {
+        worktreeId: 'wt-shutdown-race',
+        runId: 'run-shutdown-race',
+        repoRoot: '/tmp',
+        worktreePath: '/mock-userdata/ai-worktrees/wt-shutdown-race',
+        effectiveCwd: '/mock-userdata/ai-worktrees/wt-shutdown-race',
+        branchName: 'tuff/wt/run-shutdown-race',
+        baseRef: 'HEAD',
+        baseCommit: 'abc123',
+        createdAt: Date.now()
+      })
+      const shutdownRaceRun = makeQueuedRun('run-shutdown-race')
+      shutdownRaceRun.status = 'running'
+      shutdownRaceRun.metadata = {
+        ...shutdownRaceRun.metadata,
+        worktreeId: 'wt-shutdown-race',
+        worktreeOptions: { enabled: true }
+      }
+      mocks.runs.set('run-shutdown-race', shutdownRaceRun)
       codexStreamImpl = async function* () {
         codexSpawnCount += 1
         yield { type: 'delta', text: 'recovered-after-shutdown-race' }
@@ -1157,6 +1180,11 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
 
       expect(mocks.runs.get('run-shutdown-race')?.metadata?.recoveryAttempts).toBeUndefined()
       expect(codexSpawnCount).toBe(0)
+      expect(codexSpawnSpy).not.toHaveBeenCalled()
+      expect(mocks.worktreeDisposeAll).toHaveBeenCalledWith({
+        force: false,
+        preserveRunIds: new Set(['run-shutdown-race'])
+      })
 
       // Next boot still has its full recovery attempt budget and completes cleanly
       const boot4 = new AiCliOrchestrator()
@@ -1169,6 +1197,70 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
       expect(mocks.runs.get('run-shutdown-race')?.status).toBe('completed')
       expect(mocks.runs.get('run-shutdown-race')?.output).toBe('recovered-after-shutdown-race')
       expect(mocks.runs.get('run-shutdown-race')?.metadata?.recoveryAttempts).toBe(1)
+
+      // 4. Cancel + shutdown arriving together during attempt write persists cancellation and never preserves worktree,
+      // and failed run.resumed append rolls back recoveryAttempts so run stays retryable
+      mocks.runs.clear()
+      mocks.worktreeLeases.clear()
+      mocks.worktreeDisposeAll.mockClear()
+      mocks.deleteRunMessages.mockClear()
+      codexSpawnSpy.mockClear()
+      mocks.runs.set('run-cancel-during-shutdown', makeQueuedRun('run-cancel-during-shutdown'))
+      const attemptGate2 = Promise.withResolvers<void>()
+      const releaseAttempt2 = Promise.withResolvers<void>()
+      let intercepted2 = false
+      updateSpy.mockImplementation(async (runId, update) => {
+        const current = mocks.runs.get(runId)
+        if (!current) throw new Error(`Unknown run ${runId}`)
+        const next = { ...current, ...update, updatedAt: Date.now() }
+        mocks.runs.set(runId, next)
+        if (
+          !intercepted2 &&
+          runId === 'run-cancel-during-shutdown' &&
+          (update.metadata as Record<string, unknown> | undefined)?.recoveryAttempts === 1
+        ) {
+          intercepted2 = true
+          attemptGate2.resolve()
+          await releaseAttempt2.promise
+        }
+      })
+      mocks.appendOrchestratorEvent.mockImplementation(
+        async (runId?: string, eventType?: string) => {
+          if (runId === 'run-cancel-during-shutdown' && eventType === 'run.cancelled') {
+            throw new Error('simulated cancel event append error')
+          }
+          return undefined
+        }
+      )
+
+      const boot5 = new AiCliOrchestrator()
+      await boot5.initialize()
+      await attemptGate2.promise
+      expect(boot5.cancel('run-cancel-during-shutdown')).toBe(true)
+      const shutdown5 = boot5.shutdown()
+      releaseAttempt2.resolve()
+      await shutdown5
+      updateSpy.mockRestore()
+      mocks.appendOrchestratorEvent.mockRestore()
+
+      expect(mocks.runs.get('run-cancel-during-shutdown')?.status).toBe('cancelled')
+      expect(mocks.deleteRunMessages).toHaveBeenCalledWith('run-cancel-during-shutdown')
+      expect(codexSpawnSpy).not.toHaveBeenCalled()
+
+      // Failed run.resumed append rolls back recoveryAttempts
+      mocks.runs.clear()
+      mocks.runs.set('run-resume-append-fail', makeQueuedRun('run-resume-append-fail'))
+      mocks.appendOrchestratorEvent.mockImplementationOnce(async () => {
+        throw new Error('transient sqlite event error')
+      })
+      const boot6 = new AiCliOrchestrator()
+      await boot6.initialize()
+      await boot6.shutdown()
+      mocks.appendOrchestratorEvent.mockRestore()
+
+      expect(mocks.runs.get('run-resume-append-fail')?.status).toBe('queued')
+      expect(mocks.runs.get('run-resume-append-fail')?.metadata?.recoveryAttempts).toBeUndefined()
+      expect(codexSpawnSpy).not.toHaveBeenCalled()
     })
   })
 })

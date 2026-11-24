@@ -703,9 +703,9 @@ export class GitWorktreeManager {
     let wtCommonDir: string
     let wtInside: string
     let repoCommonDir: string
-    let worktreeListStdout: string
+    let registeredPaths: string[]
     try {
-      const [topLevelProbe, wtCommonProbe, insideProbe, repoCommonProbe, listProbe] =
+      const [topLevelProbe, wtCommonProbe, insideProbe, repoCommonProbe, listedPaths] =
         await Promise.all([
           this.execGit(['-C', canonicalWorktreePath, 'rev-parse', '--show-toplevel'], {
             cwd: canonicalWorktreePath
@@ -727,15 +727,13 @@ export class GitWorktreeManager {
             ['-C', canonicalRepoRoot, 'rev-parse', '--path-format=absolute', '--git-common-dir'],
             { cwd: canonicalRepoRoot }
           ),
-          this.execGit(['-C', canonicalRepoRoot, 'worktree', 'list', '--porcelain', '-z'], {
-            cwd: canonicalRepoRoot
-          })
+          this.listRegisteredWorktreePaths(canonicalRepoRoot)
         ])
       wtTopLevel = stripTrailingLineTerminator(topLevelProbe.stdout)
       wtCommonDir = stripTrailingLineTerminator(wtCommonProbe.stdout)
       wtInside = insideProbe.stdout.trim()
       repoCommonDir = stripTrailingLineTerminator(repoCommonProbe.stdout)
-      worktreeListStdout = listProbe.stdout
+      registeredPaths = listedPaths
     } catch (error) {
       if (error instanceof GitWorktreeError && error.code === 'WORKTREE_GIT_TIMEOUT') {
         throw error
@@ -774,13 +772,6 @@ export class GitWorktreeManager {
       )
     }
 
-    const registeredPaths: string[] = []
-    for (const record of worktreeListStdout.split('\0')) {
-      if (record.startsWith('worktree ')) {
-        const listedPath = record.slice('worktree '.length)
-        if (listedPath.length > 0) registeredPaths.push(listedPath)
-      }
-    }
     let registeredMatch = false
     for (const listedPath of registeredPaths) {
       const canonicalListed = await realpath(listedPath).catch(() => '')
@@ -797,6 +788,47 @@ export class GitWorktreeManager {
         'WORKTREE_INVALID_REPO',
         'Persisted worktree is not registered in its recorded git repository'
       )
+    }
+  }
+
+  private async listRegisteredWorktreePaths(canonicalRepoRoot: string): Promise<string[]> {
+    try {
+      const zProbe = await this.execGit(
+        ['-C', canonicalRepoRoot, 'worktree', 'list', '--porcelain', '-z'],
+        { cwd: canonicalRepoRoot }
+      )
+      const paths: string[] = []
+      for (const record of zProbe.stdout.split('\0')) {
+        if (record.startsWith('worktree ')) {
+          const listedPath = record.slice('worktree '.length)
+          if (listedPath.length > 0) paths.push(listedPath)
+        }
+      }
+      return paths
+    } catch (error) {
+      if (error instanceof GitWorktreeError && error.code === 'WORKTREE_GIT_TIMEOUT') {
+        throw error
+      }
+      // Fallback for Git < 2.36 where `worktree list --porcelain -z` is unsupported.
+      const plainProbe = await this.execGit(
+        ['-C', canonicalRepoRoot, 'worktree', 'list', '--porcelain'],
+        { cwd: canonicalRepoRoot }
+      )
+      const paths: string[] = []
+      for (const rawStanza of plainProbe.stdout.split(/\r?\n\r?\n/)) {
+        const stanza = rawStanza.replace(/^(?:\r?\n)+/, '')
+        if (!stanza.startsWith('worktree ')) continue
+        const body = stanza.slice('worktree '.length)
+        const nextFieldMatch =
+          /\r?\n(?:HEAD [0-9a-f]{40,64}|bare|detached|branch |locked|prunable)(?:$|\r?\n)/.exec(
+            body
+          )
+        const listedPath = nextFieldMatch
+          ? body.slice(0, nextFieldMatch.index)
+          : stripTrailingLineTerminator(body)
+        if (listedPath.length > 0) paths.push(listedPath)
+      }
+      return paths
     }
   }
 
