@@ -13,6 +13,7 @@ import {
   formatAiCompactElapsed,
   formatAiWindowText,
   isAiAwaitingFirstToken,
+  toMessageSegments,
 } from '../utils'
 
 afterEach(() => {
@@ -200,5 +201,57 @@ describe('intelligence-uikit stage 2 parity helpers & variants', () => {
 
     await buttons[1].trigger('click')
     expect(wrapper.emitted('navigate')).toEqual([[2]])
+  })
+
+  it('projects mid-turn steer parts into segments and thinking run steps, and supports hideMiko + percent pill meter', () => {
+    const segments = toMessageSegments(
+      [
+        { type: 'tool-call', id: 't1', name: 'file.read', status: 'done' },
+        { type: 'steer', id: 'steer-1', text: '做成一个单页面 html', createdAt: 1000 },
+        { type: 'text', text: 'Updated plan.' },
+      ],
+      false,
+    )
+    expect(segments.map(segment => segment.kind)).toEqual(['tool', 'steer', 'text'])
+    expect(segments[1]).toEqual({
+      kind: 'steer',
+      id: 'steer-1',
+      text: '做成一个单页面 html',
+      createdAt: 1000,
+    })
+    expect(
+      deriveAiRunStepFromParts([
+        { type: 'tool-call', id: 't1', name: 'file.read', status: 'done' },
+        { type: 'steer', id: 'steer-1', text: '改单页' },
+      ]),
+    ).toEqual({ kind: 'thinking' })
+
+    const compactStatus = mount(TxAiRunStatus, {
+      props: {
+        variant: 'line',
+        hideMiko: true,
+        lineLabel: 'Planning',
+      },
+      global: {
+        stubs: {
+          TxTextMorph: { props: ['text'], template: '<span>{{ text }}</span>' },
+        },
+      },
+    })
+    expect(compactStatus.find('.tx-ai-run-status-line__mark-slot').exists()).toBe(false)
+    expect(compactStatus.find('.tx-ai-run-status-line__dot').exists()).toBe(true)
+
+    const pillMeter = mount(TxAiContextMeter, {
+      props: {
+        variant: 'pill',
+        percent: 42,
+        windowText: '128k',
+        label: 'Context window',
+      },
+    })
+    expect(pillMeter.attributes('role')).toBe('meter')
+    expect(pillMeter.attributes('aria-valuenow')).toBe('42')
+    expect(pillMeter.get('.tx-ai-context-meter__pct').text()).toBe('42%')
+    expect(pillMeter.get('.tx-ai-context-meter__detail').text()).toBe('128k')
   })
 })

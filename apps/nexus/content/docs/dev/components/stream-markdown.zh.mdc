@@ -66,6 +66,10 @@ code: |
 | `codeFrameLabelFormatter` | `(lang: string) => string` | `` (lang) => `${lang} preview` `` | 由围栏语言生成预览框的可访问名称。 |
 | `copyCodeText` | `string` | `'Copy'` | 代码块复制按钮的文字。 |
 | `copiedCodeText` | `string` | `'Copied'` | 复制成功后按钮短暂显示的文字。 |
+| `runnableCode` | `boolean` | `false` | 为已闭合的 Shell 围栏在复制按钮左侧显示「执行」按钮，点击触发 `code-run`。 |
+| `runCodeText` | `string` | `'Run'` | Shell 代码块执行按钮的文字。 |
+| `ranCodeText` | `string` | `'Ran'` | 点击执行按钮后短暂显示的文字。 |
+| `runCodeTitle` | `string` | — | Shell 代码块执行按钮的无障碍名称与提示；缺省时回退到 `runCodeText`。 |
 | `diagramZoomLabel` | `string` | `'Zoom diagram'` | 渲染好的图表（点击打开预览）的可访问名称。 |
 | `diagramPreviewLabel` | `string` | `'Diagram preview'` | 图表全屏预览及其中图表滚动区的可访问名称。 |
 | `diagramCloseLabel` | `string` | `'Close preview'` | 预览关闭按钮的可访问名称。 |
@@ -90,6 +94,10 @@ code: |
 | `frameLabelFormatter` | `(lang: string) => string` | `` (lang) => `${lang} preview` `` | 由围栏语言生成预览框的可访问名称。 |
 | `copyLabel` | `string` | `'Copy'` | 复制按钮的文字。 |
 | `copiedLabel` | `string` | `'Copied'` | 复制成功后按钮短暂显示的文字。 |
+| `runnable` | `boolean` | `false` | 为已闭合的 Shell 围栏在复制按钮左侧提供「执行」按钮。 |
+| `runLabel` | `string` | `'Run'` | 执行按钮的文字。 |
+| `ranLabel` | `string` | `'Ran'` | 点击执行按钮后短暂显示的文字。 |
+| `runTitle` | `string` | — | 执行按钮的无障碍名称与提示；缺省时回退到 `runLabel`。 |
 
 ### TxMermaidBlock 属性
 
@@ -116,6 +124,8 @@ code: |
 |------|------|------|------|
 | `code-preview` | `TxStreamMarkdown` | `StreamMarkdownCodePreview` | `inlineCodePreview` 为 `false` 时，代码块的预览按钮触发。 |
 | `preview` | `TxCodeBlock` | `StreamMarkdownCodePreview` | `inlinePreview` 为 `false` 时，预览按钮触发；`TxStreamMarkdown` 把它转发为 `code-preview`。 |
+| `code-run` | `TxStreamMarkdown` | `CodeRunPayload` | `runnableCode` 为 `true` 时，Shell 代码块的执行按钮触发。 |
+| `run` | `TxCodeBlock` | `CodeRunPayload` | `runnable` 为 `true` 时，Shell 代码块的执行按钮触发；`TxStreamMarkdown` 把它转发为 `code-run`。 |
 
 载荷为 `{ lang, code, srcdoc }`。宿主应把 `srcdoc` 放进不带 `allow-scripts` 的 `sandbox` iframe，与内联预览的隔离方式一致。
 

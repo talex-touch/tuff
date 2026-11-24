@@ -37,20 +37,63 @@ export interface PacedText {
 }
 
 /** Where each unit ends, as an offset into the text: `ends[n - 1]` is the length of the first n units. */
-function unitEnds(text: string, locale: string): number[] {
-  const ends: number[] = []
-  let offset = 0
-  for (const unit of segmentWords(text, locale)) {
+function appendUnitEnds(ends: number[], slice: string, baseOffset: number, locale: string): void {
+  let offset = baseOffset
+  for (const unit of segmentWords(slice, locale)) {
     offset += unit.text.length + unit.ws.length
     ends.push(offset)
   }
-  return ends
 }
 
 export function usePacedText(options: PacedTextOptions): PacedText {
   const reduced = useReducedMotion()
   const locale = options.locale ?? 'zh'
-  const ends = computed(() => unitEnds(options.text(), locale))
+
+  // Incremental prefix cache: streaming appends to the tail, and Intl.Segmenter
+  // never merges words across a newline, so completed lines stay cached while
+  // only the active trailing line is re-segmented on each delta.
+  let prevText = ''
+  let prevEnds: number[] = []
+  let safeOffset = 0
+  let safeCount = 0
+
+  const ends = computed(() => {
+    const text = options.text()
+    let nextEnds: number[]
+    if (safeOffset > 0 && text.startsWith(prevText)) {
+      nextEnds = prevEnds.slice(0, safeCount)
+      appendUnitEnds(nextEnds, text.slice(safeOffset), safeOffset, locale)
+    }
+    else {
+      nextEnds = []
+      appendUnitEnds(nextEnds, text, 0, locale)
+    }
+
+    prevText = text
+    prevEnds = nextEnds
+    const lastNewline = text.lastIndexOf('\n')
+    if (lastNewline >= 0) {
+      const boundary = lastNewline + 1
+      // Binary search for the count of units ending at or before `boundary`.
+      let low = 0
+      let high = nextEnds.length
+      while (low < high) {
+        const mid = (low + high) >> 1
+        if (nextEnds[mid]! <= boundary)
+          low = mid + 1
+        else
+          high = mid
+      }
+      safeCount = low
+      safeOffset = low > 0 ? nextEnds[low - 1]! : 0
+    }
+    else {
+      safeOffset = 0
+      safeCount = 0
+    }
+
+    return nextEnds
+  })
 
   // Units can be rewritten when the text changes shape (a word grows, markdown re-segments), so
   // what is visible is derived from the unit count, never from a remembered string offset.

@@ -3,7 +3,7 @@ import type { FunctionalComponent, VNode, VNodeArrayChildren } from 'vue'
 import type { AiSourceItem } from '../../ai-elements/src/types'
 import type { StreamInline, StreamState } from '../../stream-text/src/types'
 import type { PlanCache, PlanNode } from './plan'
-import type { StreamElementEmits, StreamElementProps, StreamPart } from './types'
+import type { CodeRunPayload, StreamElementEmits, StreamElementProps, StreamPart } from './types'
 import { computed, h, nextTick, onMounted, shallowRef, toRaw, watch } from 'vue'
 import TxCodeStream from '../../code-stream/src/TxCodeStream.vue'
 import { useReducedMotion } from '../../../../utils/use-reduced-motion'
@@ -25,6 +25,7 @@ const props = withDefaults(defineProps<StreamElementProps>(), {
   reveal: 'aurora',
   caret: true,
   reserve: false,
+  runnable: false,
   previewable: true,
   autoPreview: false,
   previewScripts: false,
@@ -237,6 +238,11 @@ function renderLeaf(node: Exclude<PlanNode, { kind: 'list' | 'quote' }>, ctx: Re
         // Unset stays undefined, which leaves TxCodeStream on its own default.
         copyLabel: props.copyLabel,
         copiedLabel: props.copiedLabel,
+        runnable: props.runnable,
+        runLabel: props.runLabel,
+        ranLabel: props.ranLabel,
+        runTitle: props.runTitle,
+        onRun: (payload: CodeRunPayload) => emit('code-run', payload),
         previewable: props.previewable,
         autoPreview: props.autoPreview,
         previewScripts: props.previewScripts,

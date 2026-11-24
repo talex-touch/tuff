@@ -46,6 +46,8 @@ export function useStickToBottom(
   let springRaf = 0
   let springV = 0
   let springLast = 0
+  /** Floating-point scroll position carried across frames so sub-pixel steps advance on 1x displays. */
+  let springPos = 0
 
   function stopSpring(): void {
     if (springRaf && typeof cancelAnimationFrame === 'function')
@@ -63,27 +65,83 @@ export function useStickToBottom(
       springV = 0
       return
     }
-    // Clamped so a dropped frame integrates stably instead of exploding.
+    const target = Math.max(0, el.scrollHeight - el.clientHeight)
+    // User dragged the scrollbar or pressed PageUp before the async `scroll`
+    // event arrived — yield immediately instead of pulling them back down.
+    if (el.scrollTop < lastScrollTop - 2 && el.scrollTop < target - 2) {
+      programmatic = false
+      springV = 0
+      lastScrollTop = el.scrollTop
+      springPos = el.scrollTop
+      following.value = false
+      atBottom.value = measure()
+      return
+    }
+
+    // Clamped so a backgrounded tab resumes smoothly instead of teleporting.
     const dt = Math.min(0.05, Math.max(0.001, (now - springLast) / 1000))
     springLast = now
-    const target = Math.max(0, el.scrollHeight - el.clientHeight)
-    const error = target - el.scrollTop
+
+    // Keep sub-pixel remainder across frames, but resync if layout or external
+    // code moved scrollTop further than the fractional DPR rounding band.
+    if (Math.abs(el.scrollTop - springPos) > 2.5)
+      springPos = el.scrollTop
+
     const prevTop = el.scrollTop
-    // Semi-implicit Euler on a critically-damped spring.
-    springV += (FOLLOW_OMEGA * FOLLOW_OMEGA * error - 2 * FOLLOW_OMEGA * springV) * dt
+    const error = target - springPos
+    if (error <= 0) {
+      // Already at or past target (e.g. a thinking block collapsed): never step backwards.
+      springV = 0
+      springPos = el.scrollTop
+      lastScrollTop = el.scrollTop
+      atBottom.value = measure()
+      if (target - el.scrollTop <= 2)
+        programmatic = false
+      return
+    }
+
+    // Exact closed-form step of a critically-damped spring:
+    //   x(t) = T + exp(-ωt) * (A + B·t),  A = x0 - T = -error,  B = v0 - ω·error
+    // Unconditionally stable and monotonic for any dt — unlike semi-implicit
+    // Euler, which flips velocity sign past dt > 1/(2ω) (~22.7ms) and explodes
+    // into up/down oscillation when long streaming content drops below 30fps.
+    const v0 = Math.max(0, springV)
+    const decay = Math.exp(-FOLLOW_OMEGA * dt)
+    const c2 = v0 - FOLLOW_OMEGA * error
+    const nextPos = target + decay * (-error + c2 * dt)
+    const nextV = Math.max(0, decay * (v0 - FOLLOW_OMEGA * c2 * dt))
+
     programmatic = true
-    el.scrollTop += springV * dt
-    lastScrollTop = el.scrollTop
-    atBottom.value = measure()
-    if (Math.abs(target - el.scrollTop) < 0.5 && Math.abs(springV) < 20) {
-      const moved = Math.abs(target - el.scrollTop) > 0.25 || Math.abs(el.scrollTop - prevTop) > 0.25
+    if (nextPos >= target - 0.5) {
       el.scrollTop = target
+      springPos = el.scrollTop
       lastScrollTop = el.scrollTop
       springV = 0
+      atBottom.value = measure()
+      const moved = Math.abs(el.scrollTop - prevTop) > 0.25
       if (!moved)
         programmatic = false
       return
     }
+
+    springPos = Math.max(springPos, nextPos)
+    springV = nextV
+    el.scrollTop = springPos
+    lastScrollTop = el.scrollTop
+    atBottom.value = measure()
+
+    // Fractional DPR / sub-pixel layout heights can cap Chromium's actual max
+    // scrollTop 0.5–1.5px below `scrollHeight - clientHeight`. Once virtual
+    // progress clears a full pixel past the clamped scrollTop inside that 2px
+    // rounding band without moving it, we have hit the physical bottom — stop
+    // instead of spinning rAF and holding `programmatic` forever.
+    if (target - el.scrollTop <= 2 && springPos - el.scrollTop >= 1.05 && Math.abs(el.scrollTop - prevTop) <= 0.05) {
+      springV = 0
+      springPos = el.scrollTop
+      programmatic = false
+      return
+    }
+
     springRaf = requestAnimationFrame(springStep)
   }
 
@@ -92,6 +150,11 @@ export function useStickToBottom(
     // restarting here would zero the velocity and stutter.
     if (springRaf)
       return
+    const el = element.value
+    if (el) {
+      springPos = el.scrollTop
+      lastScrollTop = el.scrollTop
+    }
     springLast = typeof performance !== 'undefined' ? performance.now() : 0
     springRaf = requestAnimationFrame(springStep)
   }
@@ -107,12 +170,19 @@ export function useStickToBottom(
     const el = element.value
     atBottom.value = measure()
     if (programmatic) {
-      // A downward programmatic scroll never decreases scrollTop; an upward jump
-      // while settled/idle is a real user escape (scrollbar drag, PageUp, touch).
-      if (el && !tweening && !springRaf && el.scrollTop < lastScrollTop - 2) {
+      // A downward programmatic scroll never decreases scrollTop unless content
+      // shrank and clamped it to the new bottom. Any upward jump landing above
+      // the bottom is a real user escape (scrollbar drag, PageUp, touch) —
+      // including while a streaming spring is in flight. (An active fixed
+      // tween checks for upward escapes on its own rAF steps.)
+      if (el && !tweening && el.scrollTop < lastScrollTop - 2 && el.scrollTop < el.scrollHeight - el.clientHeight - 2) {
         programmatic = false
+        tweenSeq += 1
+        tweening = false
+        stopSpring()
         lastScrollTop = el.scrollTop
-        following.value = atBottom.value
+        springPos = el.scrollTop
+        following.value = false
         return
       }
       // Release only on arrival at the *live* bottom, not the recorded one:
@@ -120,14 +190,38 @@ export function useStickToBottom(
       // measured at issue time can be stale — releasing there lets the
       // browser's own scroll-anchoring adjustment read as a user scroll and
       // kill following. Allow a 2px tolerance for fractional DPR rounding.
-      if (!el || el.scrollTop >= el.scrollHeight - el.clientHeight - 2)
+      if (!el || el.scrollTop >= el.scrollHeight - el.clientHeight - 2) {
         programmatic = false
-      if (el)
+        if (el) {
+          lastScrollTop = el.scrollTop
+          springPos = el.scrollTop
+        }
+      }
+      else if (el) {
         lastScrollTop = Math.max(lastScrollTop, el.scrollTop)
+      }
       return
     }
-    if (el)
+    if (el) {
+      const movedUp = el.scrollTop < lastScrollTop - 0.5
+      const movedDown = el.scrollTop > lastScrollTop + 0.5
       lastScrollTop = el.scrollTop
+      springPos = el.scrollTop
+      if (movedUp && el.scrollTop < el.scrollHeight - el.clientHeight - 2) {
+        // An upward scroll (including the scroll event right after a small
+        // upward trackpad wheel delta still within `threshold`) must disengage
+        // rather than re-arming `following` and fighting the user back down.
+        following.value = false
+      }
+      else if (following.value) {
+        following.value = atBottom.value
+      }
+      else if (movedDown && atBottom.value) {
+        // Re-engage only when the reader actively scrolls down into the bottom zone.
+        following.value = true
+      }
+      return
+    }
     following.value = atBottom.value
   }
 
@@ -139,8 +233,24 @@ export function useStickToBottom(
     tweening = false
     stopSpring()
     following.value = false
-    if (element.value)
+    if (element.value) {
       lastScrollTop = element.value.scrollTop
+      springPos = element.value.scrollTop
+    }
+    atBottom.value = measure()
+  }
+
+  /**
+   * Records a host-driven anchor compensation (prepend or above-viewport row
+   * measurement) without changing `following` — otherwise the browser's async
+   * `scroll` event for that shift would read as a user scroll.
+   */
+  function syncPosition(): void {
+    const el = element.value
+    if (!el)
+      return
+    lastScrollTop = el.scrollTop
+    springPos = el.scrollTop
     atBottom.value = measure()
   }
 
@@ -160,6 +270,7 @@ export function useStickToBottom(
     else
       el.scrollTop = el.scrollHeight
     lastScrollTop = el.scrollTop
+    springPos = el.scrollTop
     atBottom.value = measure()
     // Arm the guard only when movement is actually pending — an instant
     // scroll that changed nothing emits no event, and a stale guard would
@@ -196,6 +307,8 @@ export function useStickToBottom(
     following.value = true
     programmatic = true
     const from = el.scrollTop
+    lastScrollTop = from
+    springPos = from
     const start = performance.now()
 
     return new Promise((resolve) => {
@@ -210,16 +323,26 @@ export function useStickToBottom(
           settle(false)
           return
         }
+        const target = Math.max(0, live.scrollHeight - live.clientHeight)
+        if (live.scrollTop < lastScrollTop - 2 && live.scrollTop < target - 2) {
+          programmatic = false
+          lastScrollTop = live.scrollTop
+          springPos = live.scrollTop
+          following.value = false
+          atBottom.value = measure()
+          settle(false)
+          return
+        }
         const t = Math.min(1, (now - start) / duration)
         // Ease-out cubic: a scroll should decelerate into place, not bounce.
         const eased = 1 - (1 - t) ** 3
-        const target = Math.max(0, live.scrollHeight - live.clientHeight)
         const prev = live.scrollTop
         live.scrollTop = from + (target - from) * eased
         lastScrollTop = live.scrollTop
+        springPos = live.scrollTop
         atBottom.value = measure()
         if (t >= 1) {
-          if (Math.abs(live.scrollTop - prev) < 0.25 && Math.abs(target - live.scrollTop) < 0.5)
+          if (Math.abs(live.scrollTop - prev) < 0.25 && target - live.scrollTop <= 2)
             programmatic = false
           settle(true)
           return
@@ -252,5 +375,5 @@ export function useStickToBottom(
     scrollToBottom('auto')
   }
 
-  return { atBottom, following, handleScroll, handleWheel, scrollToBottom, tweenToBottom, followIfSticking }
+  return { atBottom, following, handleScroll, handleWheel, syncPosition, scrollToBottom, tweenToBottom, followIfSticking }
 }

@@ -8,6 +8,7 @@
 // borrowed sheet styles this component's `.markdown-body` exactly as it did when copied.
 
 import type {
+  CodeRunPayload,
   StreamBlock,
   StreamMarkdownBlockContext,
   StreamMarkdownBlockRenderer,
@@ -39,9 +40,11 @@ export {
   resetRemoteImagePolicy,
 } from './src/remote-image-policy'
 export { completeInlineMarkup, completeTable } from './src/complete-inline-markup'
+export { isRunnableShellLanguage, RUNNABLE_SHELL_LANGUAGES } from './src/runnable-languages'
 export { createBlockStream } from './src/use-block-stream'
 export type { BlockStream, BlockStreamOptions } from './src/use-block-stream'
 export type {
+  CodeRunPayload,
   StreamBlock,
   StreamMarkdownBlockContext,
   StreamMarkdownBlockRenderer,

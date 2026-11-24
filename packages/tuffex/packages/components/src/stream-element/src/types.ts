@@ -1,7 +1,10 @@
 import type { Component } from 'vue'
 import type { AiSourceItem } from '../../ai-elements/src/types'
+import type { CodeRunPayload } from '../../stream-markdown/src/runnable-languages'
 import type { StreamMarkdownProps } from '../../stream-markdown/src/types'
 import type { StreamInline, StreamRevealPreset, StreamState } from '../../stream-text/src/types'
+
+export type { CodeRunPayload }
 
 /** One item of a list part. */
 export interface StreamListItem {
@@ -61,6 +64,17 @@ export interface StreamElementProps {
   /** @default 'Copied' */
   copiedLabel?: string
   /**
+   * Offers a run button to the left of the copy button on settled shell code parts, handed to
+   * `TxCodeStream`. Fences inside delegated parts follow `markdownProps`. @default false
+   */
+  runnable?: boolean
+  /** Run button wording of code parts. @default 'Run' */
+  runLabel?: string
+  /** Wording shown briefly after the run button is clicked. @default 'Ran' */
+  ranLabel?: string
+  /** Accessible name and tooltip for the run button. Defaults to `runLabel`. */
+  runTitle?: string
+  /**
    * Offers a rendered view on settled `html`, `svg` and `xml` code parts, handed to
    * `TxCodeStream`. Fences inside delegated parts follow `markdownProps`. @default true
    */
@@ -86,4 +100,6 @@ export interface StreamElementEmits {
   'done': []
   /** A citation chip was opened. */
   'cite': [source: AiSourceItem]
+  /** A runnable code part's run button was clicked. */
+  'code-run': [payload: CodeRunPayload]
 }

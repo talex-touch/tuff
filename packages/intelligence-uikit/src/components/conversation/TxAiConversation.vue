@@ -305,6 +305,7 @@ defineExpose({
         <TxAiMessage
           v-else
           :message="item.message"
+          :latest="item.messageIndex === messages.length - 1"
           :markdown="markdown"
           :variant="variant"
           :show-avatar="showAvatar"

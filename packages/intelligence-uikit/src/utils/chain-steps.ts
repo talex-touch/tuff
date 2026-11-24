@@ -163,7 +163,7 @@ function settledToolPart(
  * that order.
  */
 export function toMessageSegments(
-  parts: AiMessagePart[] | undefined,
+  parts: Array<AiMessagePart | { type: string; id?: string; text?: string; createdAt?: number }> | undefined,
   streaming: boolean,
   labels: SegmentLabels = {},
 ): TxAiSegment[] {
@@ -178,16 +178,30 @@ export function toMessageSegments(
       segments.push({
         kind: 'reasoning',
         id: `reasoning-${index}`,
-        step: toReasoningStep(part, index, streaming, labels),
+        step: toReasoningStep(part as AiReasoningPart, index, streaming, labels),
       })
       continue
     }
 
     if (part.type === 'tool-call') {
+      const toolPart = part as AiToolCallPart
       segments.push({
         kind: 'tool',
-        id: part.id,
-        part: settledToolPart(part, streaming, labels),
+        id: toolPart.id,
+        part: settledToolPart(toolPart, streaming, labels),
+      })
+      continue
+    }
+
+    if (part.type === 'steer') {
+      const steerPart = part as { type: 'steer'; id?: string; text?: string; createdAt?: number }
+      if (!steerPart.text)
+        continue
+      segments.push({
+        kind: 'steer',
+        id: steerPart.id || `steer-${index}`,
+        text: steerPart.text,
+        ...(typeof steerPart.createdAt === 'number' ? { createdAt: steerPart.createdAt } : {}),
       })
       continue
     }

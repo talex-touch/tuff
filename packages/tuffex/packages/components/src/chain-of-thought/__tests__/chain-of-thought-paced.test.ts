@@ -149,4 +149,24 @@ describe('txChainOfThought thinking body pacing', () => {
 
     expect(wrapper.find('.tx-chain-of-thought__raw').text()).toBe('line one\nline two')
   })
+
+  it('keeps settled thinking paragraphs mounted without recreating their DOM nodes as later paragraphs stream', async () => {
+    const first = 'First paragraph of reasoning stays stable.'
+    const wrapper = mountChain([step('')], true)
+    await wrapper.setProps({ steps: [step(`${first}\n\nSecond`)] })
+    vi.advanceTimersByTime(1000)
+    await nextTick()
+
+    const firstBlockEl = wrapper.findAll('.tx-chain-of-thought__block')[0]?.element
+    expect(firstBlockEl).toBeDefined()
+    expect(firstBlockEl?.textContent?.trim()).toBe(first)
+
+    await wrapper.setProps({ steps: [step(`${first}\n\nSecond paragraph keeps growing with more words.`)] })
+    vi.advanceTimersByTime(1000)
+    await nextTick()
+
+    // Exact same DOM element survives incremental tail updates.
+    expect(wrapper.findAll('.tx-chain-of-thought__block')[0]?.element).toBe(firstBlockEl)
+    expect(shown(wrapper)).toContain('Second paragraph keeps growing with more words.')
+  })
 })

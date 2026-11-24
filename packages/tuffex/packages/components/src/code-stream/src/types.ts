@@ -1,6 +1,9 @@
 // Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
+import type { CodeRunPayload } from '../../stream-markdown/src/runnable-languages'
 import type { StreamRevealPreset } from '../../stream-text/src/types'
+
+export type { CodeRunPayload }
 
 /**
  * How a diff row relates to the previous revision.
@@ -103,6 +106,19 @@ export interface CodeStreamProps {
   copyLabel?: string
   /** @default 'Copied' */
   copiedLabel?: string
+  /**
+   * Offers a run button to the left of the copy button for shell languages (`bash`, `sh`, `zsh`,
+   * `shell`, `powershell`, `cmd`, etc.) once the code stops arriving (never while streaming,
+   * never for a diff). Emits `run` for the host to execute.
+   * @default false
+   */
+  runnable?: boolean
+  /** @default 'Run' */
+  runLabel?: string
+  /** Text shown briefly after the run button is clicked. @default 'Ran' */
+  ranLabel?: string
+  /** Accessible name and tooltip for the run button. Defaults to `runLabel`. */
+  runTitle?: string
   /**
    * Offers a rendered view beside the copy button for `html`, `svg` and `xml` code, once the
    * code stops arriving (never while streaming, never for a diff).

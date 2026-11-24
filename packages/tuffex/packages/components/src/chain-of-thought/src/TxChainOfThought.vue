@@ -493,7 +493,8 @@ const showBullets = computed(
       padding-left: 1.3em;
     }
 
-    > :last-child {
+    > :last-child,
+    > .tx-chain-of-thought__block:last-child > :last-child {
       margin-bottom: 0;
     }
 

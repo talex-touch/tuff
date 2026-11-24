@@ -114,6 +114,10 @@ code: |
 | `renderers` | `Record<string, Component>` | — | Components for custom parts, by name; a `part-<name>` slot wins. |
 | `copyLabel` | `string` | `'Copy'` | Copy-button wording on code parts, passed to `TxCodeStream`; fences in delegated parts read `markdownProps.copyCodeText`. |
 | `copiedLabel` | `string` | `'Copied'` | Wording once copied; fences in delegated parts read `markdownProps.copiedCodeText`. |
+| `runnable` | `boolean` | `false` | Offers a "Run" button to the left of the copy button on settled shell code parts, handed to `TxCodeStream`; fences in delegated parts read `markdownProps.runnableCode`. |
+| `runLabel` | `string` | `'Run'` | Run button wording. |
+| `ranLabel` | `string` | `'Ran'` | Feedback wording shown briefly after clicking the run button. |
+| `runTitle` | `string` | — | Accessible name and tooltip for the run button; falls back to `runLabel`. |
 | `previewable` | `boolean` | `true` | Offers a "Preview" toggle on settled `html`, `svg` and `xml` code parts, handed to `TxCodeStream`; fences in delegated parts read `markdownProps`. |
 | `autoPreview` | `boolean` | `false` | Code parts show their rendering as soon as they settle; the reader can switch back to the source. |
 | `previewScripts` | `boolean` | `false` | Lets the previewed page run its own scripts; the frame always has an opaque origin and no network. |
@@ -130,6 +134,7 @@ code: |
 | `state-change` | `(state: StreamState)` | Fires when the stream changes state. |
 | `done` | — | Fires once per play-through, when the last word shows and the source has finished. |
 | `cite` | `(source: AiSourceItem)` | Fires when a citation chip opens; the chip never navigates. |
+| `code-run` | `(payload: CodeRunPayload)` | Fires when a settled shell code part's run button is clicked with `runnable` enabled. |
 
 ### Slots
 

@@ -393,4 +393,15 @@ describe('TxStreamMarkdown table copy', () => {
     expect(button.element.textContent).toBe('Copy CSV')
     wrapper.unmount()
   })
+
+  it('renders synchronously on remount once the sanitizer has loaded once', async () => {
+    const first = mount(TxStreamMarkdown, { props: { content: '# Warmup' } })
+    await flushSanitizer()
+    first.unmount()
+
+    // Virtualized conversation rows remounting must not flash 0px while re-importing dompurify.
+    const remounted = mount(TxStreamMarkdown, { props: { content: '| a |\n| --- |\n| 1 |' } })
+    expect(remounted.find('table').exists()).toBe(true)
+    remounted.unmount()
+  })
 })

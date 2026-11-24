@@ -89,8 +89,8 @@ code: |
 | `cols` | `number` | 自动适配；初始 `80` | 固定列数；缺省时按容器计算。 |
 | `rows` | `number` | 自动适配；初始 `24` | 固定行数；缺省时按容器计算。 |
 | `fontSize` | `number` | `13` | 字号（px），变化后重新适配。 |
-| `fontFamily` | `string` | `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace` | 字体栈，变化后重新适配。 |
-| `theme` | `ITheme` | 宿主令牌 | 部分 xterm 主题，只覆盖指定的颜色。 |
+| `fontFamily` | `string` | `ui-monospace` + Nerd Font 回退栈 | 字体栈（自动补齐 Nerd Font 图标回退），变化后重新适配。 |
+| `theme` | `ITheme` | 宿主令牌（明暗自适配 16 色 ANSI） | 部分 xterm 主题，只覆盖指定的颜色。 |
 | `screenReaderMode` | `boolean` | `true` | 为屏幕阅读器把屏幕内容镜像成 DOM 树，解析吞吐约减半；能检测辅助技术的宿主应传入其状态。 |
 | `labels` | `Partial<TerminalLabels>` | `{ ariaLabel: 'Terminal' }` | 终端区域与输入 textarea 的无障碍名称。 |
 
@@ -189,7 +189,8 @@ onBeforeUnmount(stop)
 ## 概述
 
 - 只负责显示：挂载不会创建 shell、启动进程或申请 Electron 权限，组件也不导入 transport 或 Electron。
-- xterm、fit addon 与 WebGL addon 只在 `onMounted` 中动态加载；服务端渲染不访问浏览器全局对象。
+- xterm、fit addon、WebGL addon 与 image addon 只在 `onMounted` 中动态加载；服务端渲染不访问浏览器全局对象。
+- 支持 SIXEL 与 iTerm2 IIP（`OSC 1337`）终端内联图片协议，并启用像素尺寸查询（`CSI 14t` / `16t` / `18t`）与 DA1 Sixel 能力通告，可直接显示 `yazi` 等 TUI 的图片预览。
 - 输出、`reset()` 与 `clear()` 共用一个有序队列：输出随到随交给 xterm 分帧解析，积压过多（约 8 MB）时在队列里等待；`reset()` 与 `clear()` 等之前的输出解析完才执行。二进制数据按 UTF-8 解码。
 - 深度监听 `lines`，支持 push、下标修改、替换与清空；原地改写 `Uint8Array` 字节后需触发一次响应式更新。
 - 只读模式在 xterm 与事件出口双重阻止输入并关闭光标闪烁；从交互切到只读时输入区失焦。
@@ -197,8 +198,8 @@ onBeforeUnmount(stop)
 
 ## 技术实现
 
-- 基于 `@xterm/xterm ^6.0.0`、`@xterm/addon-fit ^0.11.0` 与 `@xterm/addon-webgl ^0.19.0`（均为 MIT），样式已含在 `terminal/style.css`；默认用 WebGL2 绘制，不支持或加载失败时回退到 xterm 的 DOM 渲染器。Alt + 方向键按 xterm 5 的按词序列发送。
-- 显示中的终端才持有 WebGL 上下文（Chromium 每进程约 16 个），隐藏时释放、再次显示时重新申请。`ResizeObserver` 把适配合并到一帧；颜色取自继承的 TuffEx 令牌，行列按内容区计算，覆盖 `.tx-terminal` 的 `padding` 不会裁掉末行。
+- 基于 `@xterm/xterm ^6.0.0`、`@xterm/addon-fit ^0.11.0`、`@xterm/addon-webgl ^0.19.0` 与 `@xterm/addon-image ^0.9.0`（均为 MIT），样式已含在 `terminal/style.css`；默认用 WebGL2 绘制，不支持或加载失败时回退到 xterm 的 DOM 渲染器，内联图片通过独立叠加画布绘制（加载失败时仅降级为纯文本）。Alt + 方向键按 xterm 5 的按词序列发送。
+- 显示中的终端才持有 WebGL 上下文（Chromium 每进程约 16 个），隐藏时释放、再次显示时重新申请。`ResizeObserver` 把适配合并到一帧；颜色按宿主表面亮度自动适配明暗 16 色 ANSI 调色板并向上追溯非透明背景，开启宽图标防重叠缩放，行列按内容区计算，覆盖 `.tx-terminal` 的 `padding` 不会裁掉末行。
 - 源码：`packages/tuffex/packages/components/src/terminal/`；进程会话见 `packages/utils/transport/sdk/domains/terminal.ts`。
 
 <TuffDocSourceLink />

@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
 import type { TxAiTurnFooterProps } from '../../types'
-import { calculateTokenSpeed, formatMetricLatency, formatTokenCount, metricLatencyTitle, metricTokensTitle } from '../../utils/turn-metrics'
+import { calculateTokenSpeed, formatMetricLatency, formatTokenCount, metricLatencyTitle, metricModelTitle, metricTokensTitle, splitTurnModelLabel } from '../../utils/turn-metrics'
 
 defineOptions({ name: 'TxAiTurnFooter' })
 const props = withDefaults(defineProps<TxAiTurnFooterProps>(), {
@@ -14,9 +14,22 @@ const metricMessage = computed(() => ({ meta: props.metrics }))
 const footerLabels = computed<Record<string, string>>(() => ({
   copy: 'Copy', copied: 'Copied', regenerate: 'Regenerate', speak: 'Read aloud',
   speakStop: 'Stop reading', branch: 'Branch from here', model: 'Model',
+  provider: 'Provider', reasoning: 'Reasoning',
   coordinator: 'Coordinator', cacheTitle: 'Cached input tokens',
   ...props.labels,
 }))
+const modelDisplayParts = computed(() =>
+  splitTurnModelLabel(props.metrics?.modelLabel || props.metrics?.model || ''),
+)
+const hasMetrics = computed(() => Boolean(
+  props.metrics?.latencyMs
+  || props.metrics?.totalTokens
+  || props.metrics?.cacheReadTokens
+  || props.metrics?.model
+  || props.metrics?.modelLabel
+  || props.metrics?.coordinator
+  || footerLabels.value.coordinatorFallback,
+))
 </script>
 
 <template>
@@ -55,10 +68,7 @@ const footerLabels = computed<Record<string, string>>(() => ({
 
         <!-- 运行指标徽标栏：耗时、Tokens及生成速度、模型、调度器 -->
         <div
-          v-if="
-            showMetrics &&
-              (metrics?.latencyMs || metrics?.model || metrics?.totalTokens)
-          "
+          v-if="showMetrics && hasMetrics"
           class="tx-ai-turn-footer-Metrics"
         >
           <!-- 耗时 (Latency) -->
@@ -67,7 +77,7 @@ const footerLabels = computed<Record<string, string>>(() => ({
             class="tx-ai-turn-footer-Tag"
             :title="metricLatencyTitle(metricMessage, footerLabels)"
           >
-            <span class="i-ri-time-line" aria-hidden="true" />
+            <span class="tx-ai-turn-footer-Icon i-ri-time-line" aria-hidden="true" />
             <span>{{ formatMetricLatency(metrics.latencyMs) }}</span>
           </span>
 
@@ -77,7 +87,7 @@ const footerLabels = computed<Record<string, string>>(() => ({
             class="tx-ai-turn-footer-Tag"
             :title="metricTokensTitle(metricMessage, footerLabels)"
           >
-            <span class="i-ri-database-2-line" aria-hidden="true" />
+            <span class="tx-ai-turn-footer-Icon i-ri-database-2-line" aria-hidden="true" />
             <span>{{ metrics.totalTokens }} {{ footerLabels.tokensUnit || 'tokens' }}</span>
             <span v-if="calculateTokenSpeed(metricMessage)" class="tx-ai-turn-footer-Speed">({{ calculateTokenSpeed(metricMessage) }} {{ footerLabels.speedUnit || 't/s' }})</span>
           </span>
@@ -88,23 +98,25 @@ const footerLabels = computed<Record<string, string>>(() => ({
             class="tx-ai-turn-footer-Tag"
             :title="footerLabels.cacheTitle"
           >
-            <span class="i-ri-stack-line" aria-hidden="true" />
+            <span class="tx-ai-turn-footer-Icon i-ri-stack-line" aria-hidden="true" />
             <span>{{ footerLabels.cache ?? `${formatTokenCount(metrics?.cacheReadTokens ?? 0)} cached` }}</span>
           </span>
 
-          <!-- 模型 (Model) -->
+          <!-- 模型与推理强度 (Model & Reasoning) -->
           <span
-            v-if="metrics?.model"
-            class="tx-ai-turn-footer-Tag"
-            :title="footerLabels.model"
+            v-if="metrics?.model || metrics?.modelLabel"
+            class="tx-ai-turn-footer-Tag tx-ai-turn-footer-Tag--model"
+            :title="metricModelTitle(metricMessage, footerLabels)"
           >
-            <span class="i-ri-sparkling-line" aria-hidden="true" />
-            <span>{{ metrics.model }}</span>
+            <span class="tx-ai-turn-footer-Icon i-ri-sparkling-line" aria-hidden="true" />
+            <span class="tx-ai-turn-footer-ModelText">
+              <span v-if="modelDisplayParts.prefix" class="tx-ai-turn-footer-ModelPrefix">{{ modelDisplayParts.prefix }}</span><span>{{ modelDisplayParts.name }}</span><span v-if="metrics?.reasoning" class="tx-ai-turn-footer-Reasoning"> · {{ metrics.reasoning }}</span>
+            </span>
           </span>
 
           <!-- 调度器 (Coordinator) -->
           <span v-if="metrics?.coordinator || footerLabels.coordinatorFallback" class="tx-ai-turn-footer-Tag" :title="footerLabels.coordinator">
-            <span class="i-ri-robot-2-line" aria-hidden="true" />
+            <span class="tx-ai-turn-footer-Icon i-ri-robot-2-line" aria-hidden="true" />
             <span>{{ metrics?.coordinator || footerLabels.coordinatorFallback }}</span>
           </span>
         </div>
@@ -131,8 +143,8 @@ const footerLabels = computed<Record<string, string>>(() => ({
     opacity 0.2s ease;
 }
 
-// A turn that just finished stays open for a beat (`is-resting` is what the timer clears);
-// hovering or focusing the message opens it at any time. Keep the ancestor hover as a plain
+// The latest completed turn stays open by default (`resting: false`); earlier turns fold
+// cleanly and open on hover or keyboard focus. Keep the ancestor hover as a plain
 // descendant selector: `:global(…) .x` makes the scoped compiler drop `.x`, so hover never opens it.
 .tx-ai-turn-footer:not(.is-resting),
 .HomePage-Message:hover .tx-ai-turn-footer,
@@ -155,38 +167,73 @@ const footerLabels = computed<Record<string, string>>(() => ({
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 12px;
+  gap: 6px 12px;
   flex-wrap: wrap;
+  min-width: 0;
   padding-top: calc(var(--tx-ai-turn-gap, 0px) + 4px);
 }
 
 .tx-ai-turn-footer-Actions {
+  flex: none;
   margin-top: 0;
 }
 
 .tx-ai-turn-footer-Metrics {
-  display: inline-flex;
+  display: flex;
+  flex: 0 1 auto;
   align-items: center;
-  gap: 12px;
+  gap: 4px 12px;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .tx-ai-turn-footer-Tag {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+  max-width: 100%;
   padding: 0;
   border: none;
   background: transparent;
   color: var(--shell-text-muted, var(--tx-text-color-secondary));
   font-size: 11px;
   font-family: var(--shell-font-mono, monospace);
-  line-height: 1.2;
+  line-height: 1.35;
   user-select: none;
 
   &:hover {
     color: var(--shell-text, var(--tx-text-color-primary));
   }
+}
+
+.tx-ai-turn-footer-Icon {
+  flex: none;
+}
+
+.tx-ai-turn-footer-Tag--model {
+  align-items: flex-start;
+  user-select: text;
+
+  .tx-ai-turn-footer-Icon {
+    margin-top: 1px;
+  }
+}
+
+.tx-ai-turn-footer-ModelText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.tx-ai-turn-footer-ModelPrefix {
+  opacity: 0.72;
+}
+
+.tx-ai-turn-footer-Reasoning {
+  white-space: nowrap;
+  color: var(--shell-text-secondary, var(--tx-text-color-regular));
 }
 
 .tx-ai-turn-footer-Speed {

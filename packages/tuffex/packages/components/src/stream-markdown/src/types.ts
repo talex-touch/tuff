@@ -1,5 +1,8 @@
 import type { Component } from 'vue'
 import type { StreamRevealPreset } from '../../stream-text/src/types'
+import type { CodeRunPayload } from './runnable-languages'
+
+export type { CodeRunPayload }
 
 /**
  * A renderable block produced by the incremental stream lexer.
@@ -97,6 +100,18 @@ export interface StreamMarkdownProps {
   codeFrameLabelFormatter?: (lang: string) => string
   copyCodeText?: string
   copiedCodeText?: string
+  /**
+   * Offers a run button to the left of the copy button on settled shell fences,
+   * emitting `code-run` for the host to execute.
+   * @default false
+   */
+  runnableCode?: boolean
+  /** Text of a shell code block's run button. @default 'Run' */
+  runCodeText?: string
+  /** Text shown briefly after a shell code block's run button is clicked. @default 'Ran' */
+  ranCodeText?: string
+  /** Accessible name and tooltip of a shell code block's run button. Defaults to `runCodeText`. */
+  runCodeTitle?: string
   diagramZoomLabel?: string
   diagramPreviewLabel?: string
   diagramCloseLabel?: string

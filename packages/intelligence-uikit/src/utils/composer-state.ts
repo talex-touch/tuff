@@ -1,4 +1,4 @@
-import type { AiAttachment, AiMessagePart, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
+import type { AiAttachment, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
 import type { ChatComposerAttachment } from '@talex-touch/tuffex/chat'
 import type { TxAiAttachment, TxAiMessageModel, TxAiMessagePart, TxAiSegment } from '../types'
 
@@ -109,23 +109,28 @@ function extractFirstLineTitle(text: string): string {
  * Derive the current inline run-status step from the tail of streamed message parts.
  * Pending/running tools win over preceding parts; settled tools yield to thinking.
  */
-export function deriveAiRunStepFromParts(parts: readonly AiMessagePart[] | undefined): TxAiPartRunStep {
+export function deriveAiRunStepFromParts(
+  parts: readonly TxAiMessagePart[] | undefined,
+): TxAiPartRunStep {
   if (!parts)
     return { kind: 'waiting' }
   for (let index = parts.length - 1; index >= 0; index -= 1) {
     const part = parts[index]
     if (!part)
       continue
+    if (part.type === 'steer')
+      return { kind: 'thinking' }
     if (part.type === 'tool-call') {
-      if (part.status === 'pending' || part.status === 'running')
-        return { kind: 'tool', name: part.name, summary: part.summary }
+      const toolPart = part as AiToolCallPart
+      if (toolPart.status === 'pending' || toolPart.status === 'running')
+        return { kind: 'tool', name: toolPart.name, summary: toolPart.summary }
       return { kind: 'thinking' }
     }
     if (part.type === 'reasoning') {
-      const title = extractFirstLineTitle(part.text)
+      const title = extractFirstLineTitle((part as { text?: string }).text ?? '')
       return title ? { kind: 'thinking', title } : { kind: 'thinking' }
     }
-    if (part.type === 'text' && part.text)
+    if (part.type === 'text' && (part as { text?: string }).text)
       return { kind: 'writing' }
   }
   return { kind: 'waiting' }

@@ -371,5 +371,23 @@ describe('txAiConversation', () => {
 
     await vi.advanceTimersByTimeAsync(1)
     expect(live.get('.tx-ai-turn-footer').classes()).toContain('is-resting')
+
+    const latest = mount(TxAiMessage, {
+      props: {
+        message: { id: 'tail', role: 'assistant', status: 'done', content: 'Latest settled answer' },
+        latest: true,
+      },
+      global: {
+        stubs: {
+          TxStreamMarkdown: { props: ['content'], template: '<div>{{ content }}</div>' },
+        },
+      },
+    })
+    expect(latest.get('.tx-ai-turn-footer').classes()).not.toContain('is-resting')
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(latest.get('.tx-ai-turn-footer').classes()).not.toContain('is-resting')
+
+    await latest.setProps({ latest: false })
+    expect(latest.get('.tx-ai-turn-footer').classes()).toContain('is-resting')
   })
 })

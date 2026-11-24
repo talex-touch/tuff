@@ -212,6 +212,9 @@ const spacerHeight = computed(() => {
 const elementToKey = new Map<Element, ConversationStreamKey>()
 const keyToElement = new Map<ConversationStreamKey, Element>()
 let observer: ResizeObserver | null = null
+let pendingVirtualCompensation = 0
+let pendingFollow = false
+let flushScheduled = false
 
 function entryHeight(entry: ResizeObserverEntry): number {
   return entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height
@@ -219,87 +222,116 @@ function entryHeight(entry: ResizeObserverEntry): number {
 
 function handleResizeEntries(entries: ResizeObserverEntry[]): void {
   const scroller = scrollerRef.value
-  let compensation = 0
-  let grew = false
+  let domCompensation = 0
 
   for (const entry of entries) {
     const target = entry.target
+    const nextHeight = entryHeight(entry)
 
     if (target === scroller) {
-      viewportHeight.value = entryHeight(entry)
+      if (nextHeight <= 0)
+        continue
+      viewportHeight.value = nextHeight
       measureSpacerTop()
       // Late layout constraints shrink the viewport after items were already
       // measured (no item deltas left to fire) — a following reader must be
       // re-pinned or they strand at the top with `following` still true.
-      grew = true
+      pendingFollow = true
       continue
     }
 
     if (target === headerRef.value) {
-      const next = entryHeight(entry)
-      const delta = next - headerHeight.value
-      headerHeight.value = next
+      if (nextHeight <= 0 && (!scroller || scroller.clientHeight === 0))
+        continue
+      const delta = nextHeight - headerHeight.value
+      headerHeight.value = nextHeight
       measureSpacerTop()
       if (delta !== 0) {
         if (scrollTop.value > 0 && !stick.atBottom.value)
-          compensation += delta
+          domCompensation += delta
         else
-          grew = true
+          pendingFollow = true
       }
       continue
     }
 
     if (target === topZoneRef.value) {
-      const next = entryHeight(entry)
-      const delta = next - topZoneHeight.value
-      topZoneHeight.value = next
+      if (nextHeight <= 0 && (!scroller || scroller.clientHeight === 0))
+        continue
+      const delta = nextHeight - topZoneHeight.value
+      topZoneHeight.value = nextHeight
       measureSpacerTop()
       // The top zone collapsing (hasMore → false) must not slide the
       // transcript up under the reader.
       if (delta !== 0 && scrollTop.value > 0 && !stick.atBottom.value)
-        compensation += delta
+        domCompensation += delta
       continue
     }
 
     if (target === liveRef.value) {
+      if (nextHeight <= 0 && (!scroller || scroller.clientHeight === 0))
+        continue
       // Not part of the virtual layout, but remembered by key: when the next
       // message arrives this item joins the cache pre-measured.
       if (liveKey.value != null)
-        cache.setHeight(liveKey.value, entryHeight(entry))
-      grew = true
+        cache.setHeight(liveKey.value, nextHeight)
+      pendingFollow = true
       continue
     }
 
     const key = elementToKey.get(target)
     if (key === undefined)
       continue
-    const delta = cache.setHeight(key, entryHeight(entry))
+    if (nextHeight <= 0 && (!scroller || scroller.clientHeight === 0))
+      continue
+    const delta = cache.setHeight(key, nextHeight)
     if (delta === 0)
       continue
     layoutVersion.value += 1
     // Settled items can still grow after mount (async images, diagrams). A
-    // following reader stays pinned through that; a detached one gets the
-    // same-callback compensation below instead.
-    grew = true
-    // Corrections above the viewport shift everything below them; compensate
-    // in the same callback (post-layout, pre-paint) so the view holds still.
+    // following reader stays pinned through that; a detached one gets
+    // post-flush compensation below instead.
+    pendingFollow = true
+    // Only rows whose entire previous box sat above the viewport push visible
+    // content when they resize. A row straddling `scrollTop` growing at its
+    // bottom (e.g. hover footer or expanded thought) leaves the visible top
+    // intact — compensating it would jump the reader and can loop hover.
     const index = virtualKeys.value.indexOf(key)
-    if (index >= 0 && cache.offsetOf(index) + spacerTop.value < scrollTop.value && !stick.atBottom.value)
-      compensation += delta
+    const prevBottom = index >= 0 ? cache.offsetOf(index) + (nextHeight - delta) + spacerTop.value : Number.POSITIVE_INFINITY
+    if (index >= 0 && prevBottom <= scrollTop.value + pendingVirtualCompensation && !stick.atBottom.value)
+      pendingVirtualCompensation += delta
   }
 
-  if (compensation !== 0 && scroller) {
-    scroller.scrollTop += compensation
+  // Header and top-zone resizes already updated layout before RO fired.
+  if (domCompensation !== 0 && scroller) {
+    scroller.scrollTop += domCompensation
     scrollTop.value = scroller.scrollTop
+    stick.syncPosition()
   }
 
-  // After the reactive flush, not in the RO callback: item deltas change the
-  // spacer height through a Vue re-render, so scrolling now would target a
-  // stale scrollHeight — and the spacer applying later fires no resize of its
-  // own to correct it. While a response streams, the follow glides instead of
-  // snapping — per-token growth reads as one continuous slide.
-  if (grew)
-    void nextTick(() => stick.followIfSticking(props.streaming ? 220 : 0))
+  // Virtual item deltas change the spacer height and row offsets in the next
+  // Vue flush, so both virtual compensation and follow-to-bottom run after
+  // `nextTick` against the settled scrollHeight. While a response streams,
+  // the follow glides instead of snapping — per-token growth reads as one
+  // continuous slide.
+  if ((pendingVirtualCompensation !== 0 || pendingFollow) && !flushScheduled) {
+    flushScheduled = true
+    void nextTick(() => {
+      flushScheduled = false
+      const compensation = pendingVirtualCompensation
+      const shouldFollow = pendingFollow
+      pendingVirtualCompensation = 0
+      pendingFollow = false
+      const liveScroller = scrollerRef.value
+      if (compensation !== 0 && liveScroller && !stick.following.value) {
+        liveScroller.scrollTop += compensation
+        scrollTop.value = liveScroller.scrollTop
+        stick.syncPosition()
+      }
+      if (shouldFollow)
+        stick.followIfSticking(props.streaming ? 220 : 0)
+    })
+  }
 }
 
 function trackItem(el: unknown, key: ConversationStreamKey): void {
@@ -354,6 +386,7 @@ watch(
             return
           scroller.scrollTop += cache.prefixHeight(shifted)
           scrollTop.value = scroller.scrollTop
+          stick.syncPosition()
         })
         return
       }
@@ -569,6 +602,8 @@ onBeforeUnmount(() => {
   intersectionObserver = null
   elementToKey.clear()
   keyToElement.clear()
+  pendingVirtualCompensation = 0
+  pendingFollow = false
 })
 
 defineExpose({

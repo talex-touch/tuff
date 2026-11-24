@@ -28,6 +28,7 @@ const props = withDefaults(defineProps<TxAiAssistantTurnProps>(), {
   thinkingVerb: 'Thinking',
   thinkingLabel: 'Thinking…',
   compactingLabel: 'Compacting context…',
+  steerLabel: 'Steer',
   motion: 'fade',
   openui: true,
 })
@@ -104,6 +105,17 @@ const textParts = computed(() => new Map(props.segments.flatMap(segment =>
         :content="segment.text"
         :streaming="segment.streaming"
       />
+      <div
+        v-else-if="segment.kind === 'steer'"
+        class="tx-ai-turn__steer"
+        role="note"
+      >
+        <span class="tx-ai-turn__steer-badge">
+          <span class="i-ri-corner-down-right-line" aria-hidden="true" />
+          <span>{{ steerLabel }}</span>
+        </span>
+        <span class="tx-ai-turn__steer-text">{{ segment.text }}</span>
+      </div>
       <slot v-else-if="$slots.tool && (!hasToolFace || hasToolFace(segment.part))" name="tool" :segment="segment" />
       <div v-else-if="toolFaces.get(segment.id) && (toolFaces.get(segment.id)?.kind !== 'widget' || widgetSandbox)" class="tx-ai-turn__face">
         <TxAiToolChart
@@ -168,4 +180,7 @@ const textParts = computed(() => new Map(props.segments.flatMap(segment =>
 .tx-ai-turn__payload:focus-visible { outline: 2px solid var(--tx-color-primary); outline-offset: 2px; }
 .tx-ai-turn__thinking { display: inline-flex; align-items: center; gap: 10px; margin: 4px 0; color: var(--tx-text-color-secondary); font-style: italic; }
 .tx-ai-turn__compacting { display: inline-flex; gap: 6px; align-items: center; margin: 2px 0 0; color: var(--tx-text-color-secondary); font-size: 12px; }
+.tx-ai-turn__steer { display: flex; align-items: baseline; gap: 8px; padding: 7px 12px; border-radius: var(--tx-border-radius-base, 10px); background: color-mix(in srgb, var(--tx-color-primary, #3b82f6) 8%, var(--tx-fill-color-lighter, transparent)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #3b82f6) 24%, transparent); font-size: 13px; line-height: 1.5; }
+.tx-ai-turn__steer-badge { display: inline-flex; flex: none; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--tx-color-primary, #3b82f6) 14%, transparent); color: var(--tx-color-primary, #3b82f6); font-size: 11px; font-weight: 500; line-height: 1.4; }
+.tx-ai-turn__steer-text { min-width: 0; color: var(--tx-text-color-primary); white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>

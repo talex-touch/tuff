@@ -175,6 +175,8 @@ export interface TxAiMessageProps {
   speakable?: boolean;
   speakState?: TxAiSpeakState;
   showFooter?: boolean;
+  /** Latest message in the thread: keeps its turn footer expanded by default. */
+  latest?: boolean;
   variant?: 'hybrid' | 'bubble' | 'clean';
   motion?: TxAiMotionPreset;
   openui?: boolean;
@@ -286,6 +288,8 @@ export interface TxAiRunStatusProps {
   startedAt?: number;
   /** Explicit Miko animation state for `line` variant. */
   mikoState?: MikoState;
+  /** Hide the inline TxMiko mark in `line` variant (e.g. when a roaming pet represents live state). */
+  hideMiko?: boolean;
   /** Explicit single-line step label for `line` variant. */
   lineLabel?: string;
   /** Semantic tone for the step text in `line` variant (`tool` highlights in accent ink). */
@@ -513,6 +517,7 @@ export interface TxAiCitationProps {
 export type TxAiSegment =
   | { kind: "reasoning"; id: string; step: AiChainStep }
   | { kind: "tool"; id: string; part: AiToolCallPart }
+  | { kind: "steer"; id: string; text: string; createdAt?: number }
   | { kind: "text"; id: string; text: string; streaming: boolean };
 
 export interface TxAiToolChartSpec {
@@ -552,6 +557,14 @@ export interface TxAiTurnMetrics {
   totalTokens?: number
   cacheReadTokens?: number
   model?: string
+  /** Optional display label when distinct from the raw `model` id. */
+  modelLabel?: string
+  /** Answering provider or endpoint id for full diagnostic tooltips. */
+  provider?: string
+  /** Short localized reasoning level shown next to the model (e.g. "High" / "极高"). */
+  reasoning?: string
+  /** Detailed reasoning description for hover tooltip. */
+  reasoningTitle?: string
   coordinator?: string
 }
 
@@ -602,6 +615,8 @@ export interface TxAiAssistantTurnProps {
   thinkingLabel?: string
   compacting?: boolean
   compactingLabel?: string
+  /** Badge label shown next to inline mid-turn steer segments. */
+  steerLabel?: string
   footer?: TxAiTurnFooterProps
   error?: TxAiErrorBlockProps
   motion?: TxAiMotionPreset

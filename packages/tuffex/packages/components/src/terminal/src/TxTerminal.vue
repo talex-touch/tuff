@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FitAddon } from '@xterm/addon-fit'
+import type { ImageAddon } from '@xterm/addon-image'
 import type { WebglAddon } from '@xterm/addon-webgl'
 import type { IDisposable, ITheme, Terminal as XtermTerminal } from '@xterm/xterm'
 import type { TerminalData, TerminalEmits, TerminalInstance, TerminalProps, TerminalSize } from './types'
@@ -51,6 +52,7 @@ const ALT_ARROWS: Record<string, string> = {
 
 let terminal: XtermTerminal | null = null
 let fitAddon: FitAddon | null = null
+let imageAddon: ImageAddon | null = null
 // Null once the renderer chunk failed to load or WebGL2 proved unavailable.
 let Webgl: typeof WebglAddon | null = null
 let webglAddon: WebglAddon | null = null
@@ -227,39 +229,138 @@ function readColor(token: string): string | undefined {
   return style.color
 }
 
+function parseColorChannels(color: string): [number, number, number, number] | null {
+  const trimmed = color.trim()
+  if (!trimmed || trimmed === 'transparent')
+    return [0, 0, 0, 0]
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(trimmed)
+  if (hex) {
+    const raw = hex[1]!
+    if (raw.length === 3) {
+      return [
+        Number.parseInt(raw[0]! + raw[0]!, 16),
+        Number.parseInt(raw[1]! + raw[1]!, 16),
+        Number.parseInt(raw[2]! + raw[2]!, 16),
+        1,
+      ]
+    }
+    return [
+      Number.parseInt(raw.slice(0, 2), 16),
+      Number.parseInt(raw.slice(2, 4), 16),
+      Number.parseInt(raw.slice(4, 6), 16),
+      1,
+    ]
+  }
+  const rgb = /^rgba?\(\s*([\d.]+)\s*[,\s]\s*([\d.]+)\s*[,\s]\s*([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/i.exec(trimmed)
+  if (!rgb)
+    return null
+  const alphaRaw = rgb[4]
+  const alpha = alphaRaw === undefined
+    ? 1
+    : alphaRaw.endsWith('%')
+      ? Number.parseFloat(alphaRaw) / 100
+      : Number.parseFloat(alphaRaw)
+  return [
+    Number.parseFloat(rgb[1]!),
+    Number.parseFloat(rgb[2]!),
+    Number.parseFloat(rgb[3]!),
+    Number.isFinite(alpha) ? alpha : 1,
+  ]
+}
+
+function withAlpha(color: string, alpha: number): string {
+  const channels = parseColorChannels(color)
+  if (!channels)
+    return color
+  return `rgba(${Math.round(channels[0])}, ${Math.round(channels[1])}, ${Math.round(channels[2])}, ${alpha})`
+}
+
+function resolveOpaqueBackground(element: HTMLElement): string {
+  let current: HTMLElement | null = element
+  let fallback = ''
+  while (current) {
+    const bg = getComputedStyle(current).backgroundColor
+    if (!fallback && bg)
+      fallback = bg
+    const channels = parseColorChannels(bg)
+    if (channels && channels[3] > 0)
+      return bg
+    current = current.parentElement
+  }
+  return fallback
+}
+
+function isDarkSurface(background: string): boolean {
+  const channels = parseColorChannels(background)
+  if (!channels || channels[3] <= 0) {
+    return typeof document !== 'undefined'
+      && (document.documentElement.classList.contains('dark')
+        || document.documentElement.dataset.theme === 'dark')
+  }
+  const luminance = (0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]) / 255
+  return luminance < 0.5
+}
+
 function hostTheme(): ITheme {
   // The host stylesheet owns standalone defaults; do not clone its palette here.
-  const hostStyle = getComputedStyle(hostRef.value!)
+  const host = hostRef.value!
+  const hostStyle = getComputedStyle(host)
   const foreground = hostStyle.color
-  const background = hostStyle.backgroundColor
+  const background = resolveOpaqueBackground(host)
+  const dark = isDarkSurface(background)
   const primary = readColor('--tx-color-primary')
   const success = readColor('--tx-color-success')
   const warning = readColor('--tx-color-warning')
   const danger = readColor('--tx-color-danger')
   const muted = readColor('--tx-text-color-secondary')
+  const palette: ITheme = dark
+    ? {
+        black: '#27272a',
+        red: danger ?? '#f16c68',
+        green: success ?? '#4ec98b',
+        yellow: warning ?? '#e5b554',
+        blue: primary ?? '#5ca4f2',
+        magenta: '#c678dd',
+        cyan: '#4ec9d4',
+        white: '#d4d4d8',
+        brightBlack: muted ?? '#71717a',
+        brightRed: '#ff8a84',
+        brightGreen: '#6ee0a5',
+        brightYellow: '#f5cd73',
+        brightBlue: '#82bdff',
+        brightMagenta: '#dba0f0',
+        brightCyan: '#76dfe8',
+        brightWhite: foreground,
+      }
+    : {
+        black: '#1d1d1f',
+        red: danger ?? '#c4342b',
+        green: success ?? '#26794e',
+        yellow: warning ?? '#946210',
+        blue: primary ?? '#2b7fd9',
+        magenta: '#9b3fb5',
+        cyan: '#0f7b8a',
+        white: '#e4e4e7',
+        brightBlack: muted ?? '#6e6e73',
+        brightRed: '#e04c42',
+        brightGreen: '#349462',
+        brightYellow: '#b87a14',
+        brightBlue: '#4796eb',
+        brightMagenta: '#b459cf',
+        brightCyan: '#1796a8',
+        brightWhite: '#f5f5f7',
+      }
   return {
     foreground,
     background,
     cursor: foreground,
     cursorAccent: background,
     // xterm's default selection is translucent white, invisible on a light host.
-    selectionBackground: (primary ?? foreground).replace(/^rgb\((.+)\)$/, 'rgba($1, 0.3)'),
-    black: foreground,
-    red: danger,
-    green: success,
-    yellow: warning,
-    blue: primary,
-    magenta: danger,
-    cyan: primary,
-    white: muted,
-    brightBlack: muted,
-    brightRed: danger,
-    brightGreen: success,
-    brightYellow: warning,
-    brightBlue: primary,
-    brightMagenta: danger,
-    brightCyan: primary,
-    brightWhite: foreground,
+    selectionBackground: withAlpha(primary ?? foreground, dark ? 0.3 : 0.22),
+    scrollbarSliderBackground: withAlpha(foreground, 0.14),
+    scrollbarSliderHoverBackground: withAlpha(foreground, 0.28),
+    scrollbarSliderActiveBackground: withAlpha(foreground, 0.42),
+    ...palette,
     ...props.theme,
   }
 }
@@ -470,6 +571,7 @@ function releaseResources(): void {
   webglContext?.getExtension('WEBGL_lose_context')?.loseContext()
   terminal = null
   fitAddon = null
+  imageAddon = null
   webglAddon = null
   webglContext = null
   colorProbe?.remove()
@@ -478,11 +580,13 @@ function releaseResources(): void {
 
 onMounted(async () => {
   try {
-    const [{ Terminal }, { FitAddon: Addon }, webgl] = await Promise.all([
+    const [{ Terminal }, { FitAddon: Addon }, webgl, image] = await Promise.all([
       import('@xterm/xterm'),
       import('@xterm/addon-fit'),
       // A renderer chunk that fails to load leaves the DOM renderer drawing.
       import('@xterm/addon-webgl').catch(() => null),
+      // Inline image protocols (SIXEL + iTerm2 IIP); optional so load failure never blocks text.
+      import('@xterm/addon-image').catch(() => null),
     ])
     const host = hostRef.value
     const body = bodyRef.value
@@ -506,6 +610,7 @@ onMounted(async () => {
       cursorInactiveStyle: props.readOnly ? 'none' : 'outline',
       scrollOnUserInput: props.autoScroll,
       screenReaderMode: props.screenReaderMode,
+      rescaleOverlappingGlyphs: true,
       minimumContrastRatio: 4.5,
     })
     terminal.attachCustomKeyEventHandler(handleKey)
@@ -513,6 +618,24 @@ onMounted(async () => {
     terminal.loadAddon(fitAddon)
     terminal.open(body)
     paintBackground(theme)
+    if (image?.ImageAddon) {
+      try {
+        imageAddon = new image.ImageAddon({
+          enableSizeReports: true,
+          sixelSupport: true,
+          iipSupport: true,
+          sixelScrolling: true,
+          sixelPaletteLimit: 1024,
+          storageLimit: 64,
+          showPlaceholder: false,
+        })
+        terminal.loadAddon(imageAddon)
+      }
+      catch {
+        imageAddon?.dispose()
+        imageAddon = null
+      }
+    }
     host.addEventListener('webglcontextlost', handleContextLost, true)
     Webgl = webgl?.WebglAddon ?? null
     syncRenderer()
@@ -604,6 +727,19 @@ onBeforeUnmount(() => {
   // The .xterm element carries the theme background instead.
   :deep(.xterm-viewport) {
     background-color: transparent;
+  }
+
+  // Inline image overlay sits above the text/WebGL layer and must never trap pointer events.
+  :deep(.xterm-image-layer) {
+    pointer-events: none;
+  }
+
+  // Keep xterm 6's scrollbar hit target aligned with FitAddon while painting a slim pill thumb.
+  :deep(.xterm-scrollable-element > .scrollbar.vertical > .slider) {
+    left: auto !important;
+    right: 2px !important;
+    width: 6px !important;
+    border-radius: 999px;
   }
 }
 </style>
