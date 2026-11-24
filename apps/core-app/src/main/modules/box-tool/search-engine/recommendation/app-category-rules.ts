@@ -1,4 +1,12 @@
-import { matchesAppRule, type AppMatchRule } from './app-identity-match'
+import { extractAppNameFromPath, matchesAppRule, type AppMatchRule } from './app-identity-match'
+
+/**
+ * Short terminal names that would false-match unrelated apps under substring matching
+ * (e.g. `Cloudflare WARP`, `Angry Birds Rio`, `Mario`, `HyperX`, `mycmd`). Matched only
+ * when the entire identifier or extracted app basename equals the name exactly.
+ */
+const EXACT_TERMINAL_NAMES = new Set(['warp', 'hyper', 'rio', 'cmd', 'wt', 'kitty'])
+const EXACT_TERMINAL_EXE_REGEX = /(?:^|[\s\\/])(?:cmd|wt)\.exe(?:\s|$)/i
 
 /**
  * Category tables for context matching. `names` exist because candidate ids are
@@ -135,10 +143,67 @@ export const APP_MATCH_RULES = {
       'com.apple.Terminal',
       'com.googlecode.iterm2',
       'com.github.wez.wezterm',
+      'org.wezfurlong.wezterm',
       'io.alacritty',
-      'net.kovidgoyal.kitty'
+      'org.alacritty',
+      'net.kovidgoyal.kitty',
+      'com.mitchellh.ghostty',
+      'dev.warp.Warp',
+      'co.zeit.hyper',
+      'org.tabby',
+      'com.cmuxterm.app',
+      'com.raphaelamorim.rio',
+      'dev.waveterm.waveterm',
+      'dev.commandline.waveterm',
+      'kingtoolbox.windterm',
+      'org.electerm.electerm',
+      'Microsoft.WindowsTerminal',
+      'org.kde.konsole',
+      'org.gnome.Ptyxis',
+      'com.gexperts.Tilix',
+      'ghostty',
+      'wezterm',
+      'alacritty',
+      'tabby',
+      'cmux',
+      'waveterm',
+      'windterm',
+      'electerm',
+      'windows terminal',
+      'powershell',
+      'pwsh',
+      'git-bash',
+      'git bash',
+      'command prompt',
+      'konsole',
+      'ptyxis',
+      'tilix'
     ],
-    names: ['terminal', '终端', 'iterm', 'wezterm', 'alacritty', 'kitty', 'warp', 'ghostty']
+    names: [
+      'terminal',
+      '终端',
+      'iterm',
+      'wezterm',
+      'alacritty',
+      'ghostty',
+      'tabby',
+      'cmux',
+      'rio terminal',
+      'rioterm',
+      'waveterm',
+      'wave terminal',
+      'windterm',
+      'electerm',
+      'windows terminal',
+      'pwsh',
+      'powershell',
+      'command prompt',
+      'git bash',
+      'git-bash',
+      'konsole',
+      'ptyxis',
+      'tilix'
+    ]
   },
   apiClient: {
     bundleIds: ['postman', 'insomnia'],
@@ -238,7 +303,20 @@ export function isIDE(identifier: string): boolean {
 }
 
 export function isTerminalApp(identifier: string): boolean {
-  return matchesAppRule(identifier, APP_MATCH_RULES.terminal)
+  if (!identifier) return false
+  if (matchesAppRule(identifier, APP_MATCH_RULES.terminal)) {
+    return true
+  }
+  const normalized = identifier.trim().toLowerCase()
+  const stripped = normalized.replace(/\.(app|exe|lnk|desktop)$/i, '')
+  if (EXACT_TERMINAL_NAMES.has(stripped)) {
+    return true
+  }
+  if (EXACT_TERMINAL_EXE_REGEX.test(normalized)) {
+    return true
+  }
+  const name = extractAppNameFromPath(identifier)
+  return name !== null && EXACT_TERMINAL_NAMES.has(name)
 }
 
 export function isDeveloperTool(identifier: string): boolean {

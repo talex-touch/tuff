@@ -16,6 +16,7 @@ import type {
   AcpSessionCreateOptions,
   AcpSessionLoadParams,
   AcpSessionLoadResult,
+  AcpSessionModeState,
   AcpSessionNewResult,
   AcpSessionUpdateNotification,
   AcpSpawnOptions,
@@ -41,6 +42,7 @@ import {
   DEFAULT_INIT_TIMEOUT_MS,
   formatProcessExitError,
   inferPermissionRiskHint,
+  readFiniteNumber,
   readNonEmptyString,
   readRawNonEmptyString,
   terminateChildProcess,
@@ -188,6 +190,86 @@ export function mapDecisionToAcpPermissionResult(
   return FAIL_CLOSED_PERMISSION_RESULT
 }
 
+function extractUpdateText(update: Record<string, unknown>): string | undefined {
+  const content = update.content
+  if (Array.isArray(content)) {
+    const joined = content
+      .map((block) => {
+        const record = asRecord(block)
+        return record ? (readRawNonEmptyString(record.text) ?? '') : ''
+      })
+      .join('')
+    if (joined.length > 0)
+      return joined
+  }
+  const contentRecord = asRecord(content)
+  return readRawNonEmptyString(contentRecord?.text, update.text, update.delta)
+}
+
+function normalizeAcpUsage(value: unknown): AcpUsageUpdate | undefined {
+  const record = asRecord(value)
+  if (!record)
+    return undefined
+  const inputTokens = readFiniteNumber(record.inputTokens, record.input_tokens)
+  const outputTokens = readFiniteNumber(record.outputTokens, record.output_tokens)
+  const totalTokens = readFiniteNumber(record.totalTokens, record.total_tokens)
+  const cacheReadTokens = readFiniteNumber(
+    record.cacheReadTokens,
+    record.cache_read_tokens,
+    record.cached_read_tokens,
+  )
+  const cacheWriteTokens = readFiniteNumber(
+    record.cacheWriteTokens,
+    record.cache_write_tokens,
+    record.cached_write_tokens,
+  )
+  const costRecord = asRecord(record.cost)
+  const costInput = readFiniteNumber(costRecord?.input)
+  const costOutput = readFiniteNumber(costRecord?.output)
+  const costTotal = readFiniteNumber(costRecord?.total)
+  const cost
+    = costInput !== undefined || costOutput !== undefined || costTotal !== undefined
+      ? {
+          ...(costInput !== undefined ? { input: costInput } : {}),
+          ...(costOutput !== undefined ? { output: costOutput } : {}),
+          ...(costTotal !== undefined ? { total: costTotal } : {}),
+        }
+      : undefined
+
+  if (
+    inputTokens === undefined
+    && outputTokens === undefined
+    && totalTokens === undefined
+    && cacheReadTokens === undefined
+    && cacheWriteTokens === undefined
+    && !cost
+  ) {
+    return undefined
+  }
+
+  return {
+    ...(inputTokens !== undefined ? { inputTokens } : {}),
+    ...(outputTokens !== undefined ? { outputTokens } : {}),
+    ...(totalTokens !== undefined ? { totalTokens } : {}),
+    ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
+    ...(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
+    ...(cost ? { cost } : {}),
+  }
+}
+
+function createProtocolInvalidError(message: string): Error {
+  return Object.assign(new Error(message), { code: 'PROTOCOL_INVALID' as const })
+}
+
+function isJsonRpcMethodNotFoundError(error: unknown): boolean {
+  return Boolean(
+    error
+    && typeof error === 'object'
+    && 'code' in error
+    && (error as { code?: unknown }).code === -32601,
+  )
+}
+
 function findReasoningConfigOption(configOptions: AcpConfigOption[]): AcpConfigOption | undefined {
   return configOptions.find(opt =>
     opt.category === 'thought_level'
@@ -206,23 +288,54 @@ export interface AcpClientOptions {
 export class AcpSession implements CliRuntimeSession {
   readonly protocol = 'acp' as const
   private _currentModel?: string
+  private _lastStopReason?: string
+  public modes?: AcpSessionModeState
 
   get currentModel(): string | undefined {
     return this._currentModel
+  }
+
+  get lastStopReason(): string | undefined {
+    return this._lastStopReason
   }
 
   constructor(
     readonly sessionId: string,
     protected readonly client: AcpClient,
     public configOptions: AcpConfigOption[] = [],
-  ) {}
+    modes?: AcpSessionModeState,
+  ) {
+    this.modes = modes
+  }
+
+  async setMode(modeId: string): Promise<void> {
+    await this.client.sendRequest('session/set_mode', {
+      sessionId: this.sessionId,
+      modeId,
+    })
+    if (this.modes) {
+      this.modes = { ...this.modes, currentModeId: modeId }
+    }
+  }
 
   async setModel(model: string): Promise<void> {
-    await this.client.sendRequest('session/set_config_option', {
-      sessionId: this.sessionId,
-      configId: 'model',
-      value: model,
-    })
+    try {
+      await this.client.sendRequest('session/set_config_option', {
+        sessionId: this.sessionId,
+        configId: 'model',
+        value: model,
+      })
+    }
+    catch (error) {
+      if (!isJsonRpcMethodNotFoundError(error)) {
+        throw error
+      }
+      // Some ACP servers expose `session/set_model` rather than `session/set_config_option`.
+      await this.client.sendRequest('session/set_model', {
+        sessionId: this.sessionId,
+        modelId: model,
+      })
+    }
     this._currentModel = model
   }
 
@@ -238,7 +351,7 @@ export class AcpSession implements CliRuntimeSession {
     content: string | AcpPromptContent[],
     onEvent?: (event: CliRuntimeStreamEvent) => void,
     options?: AcpPromptStreamOptions,
-  ): Promise<{ output: string, usage?: AcpUsageUpdate }> {
+  ): Promise<{ output: string, usage?: AcpUsageUpdate, stopReason?: string }> {
     let output = ''
     let usage: AcpUsageUpdate | undefined
 
@@ -252,13 +365,14 @@ export class AcpSession implements CliRuntimeSession {
       onEvent?.(event)
     }
 
-    return { output, usage }
+    return { output, usage, ...(this._lastStopReason ? { stopReason: this._lastStopReason } : {}) }
   }
 
   async* promptStream(
     content: string | AcpPromptContent[],
     options: AcpPromptStreamOptions = {},
   ): AsyncIterable<CliRuntimeStreamEvent> {
+    this._lastStopReason = undefined
     const signal = options.signal
     if (signal?.aborted)
       return
@@ -299,7 +413,7 @@ export class AcpSession implements CliRuntimeSession {
       const updateType = update.sessionUpdate
 
       if (updateType === 'agent_thought_chunk') {
-        const text = readRawNonEmptyString(update.content?.text, update.text)
+        const text = extractUpdateText(update)
         if (text) {
           pushEvent({
             type: 'thinking',
@@ -309,7 +423,7 @@ export class AcpSession implements CliRuntimeSession {
         }
       }
       else if (updateType === 'agent_message_chunk') {
-        const text = readRawNonEmptyString(update.content?.text, update.text)
+        const text = extractUpdateText(update)
         if (text) {
           pushEvent({
             type: 'delta',
@@ -318,12 +432,15 @@ export class AcpSession implements CliRuntimeSession {
           })
         }
       }
-      else if (updateType === 'usage_update' && update.usage) {
-        pushEvent({
-          type: 'usage',
-          usage: update.usage,
-          raw: update,
-        })
+      else if (updateType === 'usage_update') {
+        const usage = normalizeAcpUsage(update.usage ?? update)
+        if (usage) {
+          pushEvent({
+            type: 'usage',
+            usage,
+            raw: update,
+          })
+        }
       }
       else if (updateType === 'config_option_update' && update.configOptions) {
         this.configOptions = update.configOptions
@@ -401,8 +518,20 @@ export class AcpSession implements CliRuntimeSession {
         prompt: formattedPrompt,
       })
       .then((res) => {
-        if (res?.usage) {
-          pushEvent({ type: 'usage', usage: res.usage, raw: res })
+        const record = asRecord(res)
+        const stopReason = readNonEmptyString(record?.stopReason)
+        if (!record || !stopReason) {
+          failure = createProtocolInvalidError(
+            `${this.client.protocol} session/prompt returned invalid result`,
+          )
+          state.finished = true
+          wake()
+          return
+        }
+        this._lastStopReason = stopReason
+        const usage = normalizeAcpUsage(record.usage)
+        if (usage) {
+          pushEvent({ type: 'usage', usage, raw: res })
         }
         state.finished = true
         wake()
@@ -677,16 +806,27 @@ export class AcpClient extends EventEmitter implements CliRuntimeClient {
       return
     }
 
-    if ('id' in msg && typeof msg.id === 'number') {
-      const res = msg as unknown as JsonRpcResponse
-      const pending = this.pendingRequests.get(msg.id)
-      if (pending) {
-        this.pendingRequests.delete(msg.id)
-        if (res.error) {
-          pending.reject(new Error(res.error.message || `JSON-RPC error ${res.error.code}`))
-        }
-        else {
-          pending.resolve(res.result)
+    if (hasId && !hasMethod) {
+      const responseId = typeof msg.id === 'number'
+        ? msg.id
+        : typeof msg.id === 'string' && /^\d+$/.test(msg.id)
+          ? Number(msg.id)
+          : null
+      if (responseId !== null) {
+        const res = msg as unknown as JsonRpcResponse
+        const pending = this.pendingRequests.get(responseId)
+        if (pending) {
+          this.pendingRequests.delete(responseId)
+          if (res.error) {
+            const rpcError = Object.assign(
+              new Error(res.error.message || `JSON-RPC error ${res.error.code}`),
+              { code: res.error.code, data: res.error.data },
+            )
+            pending.reject(rpcError)
+          }
+          else {
+            pending.resolve(res.result)
+          }
         }
       }
       return
@@ -793,6 +933,9 @@ export class AcpClient extends EventEmitter implements CliRuntimeClient {
       timeoutMs,
       `${this.label} initialize timed out after ${timeoutMs}ms`,
     )
+    if (!asRecord(result)) {
+      throw createProtocolInvalidError(`${this.label} initialize returned invalid result`)
+    }
     this.agentInfo = result.agentInfo
     this.capabilities = result.agentCapabilities
     return result
@@ -812,9 +955,16 @@ export class AcpClient extends EventEmitter implements CliRuntimeClient {
       sessionId: options.sessionId,
       cwd: options.cwd,
       mcpServers: options.mcpServers ?? [],
+      ...(options._meta ? { _meta: options._meta } : {}),
     })
-    const sessionId = readNonEmptyString(result?.sessionId) ?? options.sessionId
-    const session = this.createSessionInstance(sessionId, result?.configOptions ?? [])
+    if (!asRecord(result)) {
+      throw createProtocolInvalidError(`${this.label} session/load returned invalid result`)
+    }
+    const sessionId = readNonEmptyString(result.sessionId) ?? options.sessionId
+    const session = this.createSessionInstance(sessionId, result.configOptions ?? [])
+    if (result.modes && Array.isArray(result.modes.availableModes)) {
+      session.modes = result.modes
+    }
     if (options.model) {
       await session.setModel(options.model)
     }
@@ -834,6 +984,7 @@ export class AcpClient extends EventEmitter implements CliRuntimeClient {
         sessionId: options.resumeSessionId,
         cwd,
         mcpServers: options.mcpServers ?? [],
+        ...(options._meta ? { _meta: options._meta } : {}),
         ...(options.model ? { model: options.model } : {}),
         ...(options.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {}),
       })
@@ -842,9 +993,16 @@ export class AcpClient extends EventEmitter implements CliRuntimeClient {
     const result = await this.sendRequest<AcpSessionNewResult>('session/new', {
       cwd,
       mcpServers: options.mcpServers || [],
+      ...(options._meta ? { _meta: options._meta } : {}),
     })
+    if (!asRecord(result)) {
+      throw createProtocolInvalidError(`${this.label} session/new returned invalid result`)
+    }
 
     const session = this.createSessionInstance(result.sessionId, result.configOptions || [])
+    if (result.modes && Array.isArray(result.modes.availableModes)) {
+      session.modes = result.modes
+    }
     if (options.model) {
       await session.setModel(options.model)
     }
@@ -879,7 +1037,7 @@ export class AcpClient extends EventEmitter implements CliRuntimeClient {
 
   static async spawn(options: AcpSpawnOptions): Promise<AcpClient> {
     const executable = options.executablePath
-    const args = options.args ?? []
+    const args = options.args ? [...options.args] : []
     const proc = spawn(executable, args, {
       cwd: options.cwd || process.cwd(),
       env: buildSpawnEnv(options.env),

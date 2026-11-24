@@ -21,15 +21,28 @@ import type { ChildProcess } from 'node:child_process'
 import type { Mock } from 'vitest'
 import type { StoredLocalAiCliSession } from './session-store'
 import { EventEmitter } from 'node:events'
-import { appendFile, chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import {
+  appendFile,
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createClient } from '@libsql/client'
-import { LocalAiCliEvents } from '@talex-touch/utils/transport/events/local-ai-cli'
+import {
+  LOCAL_AI_CLI_PROVIDER_IDS,
+  LocalAiCliEvents
+} from '@talex-touch/utils/transport/events/local-ai-cli'
 import { drizzle } from 'drizzle-orm/libsql'
 import { migrate } from 'drizzle-orm/libsql/migrator'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { dialog } from 'electron'
 import { LocalAiCliModule } from './index'
 import * as piNativeSession from './pi-native-session'
 import { markLocalAiCliSessionState, upsertLocalAiCliSession } from './session-store'
@@ -236,24 +249,61 @@ function piEntryLine(entry: PiEntry): string {
   return `${JSON.stringify(entry)}\n`
 }
 
-function fakeStream(): EventEmitter & { setEncoding: (encoding: string) => void } {
-  const stream = new EventEmitter() as EventEmitter & { setEncoding: (encoding: string) => void }
+function fakeStream(): EventEmitter & {
+  setEncoding: (encoding: string) => void
+  pause: () => void
+  resume: () => void
+  destroy: () => void
+} {
+  const stream = new EventEmitter() as EventEmitter & {
+    setEncoding: (encoding: string) => void
+    pause: () => void
+    resume: () => void
+    destroy: () => void
+  }
   stream.setEncoding = () => undefined
+  stream.pause = () => undefined
+  stream.resume = () => undefined
+  stream.destroy = () => {
+    stream.emit('close')
+  }
   return stream
+}
+
+class FakeStdin extends EventEmitter {
+  writable = true
+  destroyed = false
+  writableEnded = false
+
+  constructor(private readonly writes: string[]) {
+    super()
+  }
+
+  write(
+    chunk: string,
+    encodingOrCb?: BufferEncoding | ((error?: Error | null) => void),
+    cb?: (error?: Error | null) => void
+  ): boolean {
+    this.writes.push(chunk)
+    const callback = typeof encodingOrCb === 'function' ? encodingOrCb : cb
+    callback?.(null)
+    return true
+  }
+
+  end(): void {
+    this.writable = false
+    this.writableEnded = true
+  }
 }
 
 class FakeChildProcess extends EventEmitter {
   readonly writes: string[] = []
   readonly stdout = fakeStream()
   readonly stderr = fakeStream()
-  readonly stdin = {
-    writable: true,
-    write: (chunk: string): boolean => {
-      this.writes.push(chunk)
-      return true
-    }
-  }
+  readonly stdin = new FakeStdin(this.writes)
 
+  exitCode: number | null = null
+  signalCode: NodeJS.Signals | null = null
   kills = 0
   private closed = false
 
@@ -266,7 +316,8 @@ class FakeChildProcess extends EventEmitter {
   close(code: number | null = 0): void {
     if (this.closed) return
     this.closed = true
-    queueMicrotask(() => this.emit('close', code))
+    this.exitCode = code
+    queueMicrotask(() => this.emit('close', code, null))
   }
 
   sendLine(value: string | Record<string, unknown>): void {
@@ -421,12 +472,12 @@ function appSettings(): Record<string, unknown> {
     localAiCli: {
       enabled: true,
       defaultProvider: 'pi',
-      providers: {
-        pi: { enabled: true, executableOverride: providerExecutable('pi') },
-        codex: { enabled: true, executableOverride: providerExecutable('codex') },
-        claude: { enabled: true, executableOverride: providerExecutable('claude') },
-        'oh-my-pi': { enabled: true, executableOverride: providerExecutable('oh-my-pi') }
-      }
+      providers: Object.fromEntries(
+        LOCAL_AI_CLI_PROVIDER_IDS.map((provider) => [
+          provider,
+          { enabled: true, executableOverride: providerExecutable(provider) }
+        ])
+      )
     }
   }
 }
@@ -692,7 +743,7 @@ beforeEach(async () => {
   moduleDir = join(tempRoot, 'module')
   await mkdir(projectRoot, { recursive: true })
   await mkdir(join(tempRoot, 'bin'))
-  for (const provider of ['pi', 'codex', 'claude', 'oh-my-pi'] as const) {
+  for (const provider of LOCAL_AI_CLI_PROVIDER_IDS) {
     await writeFile(providerExecutable(provider), '#!/bin/sh\nexit 0\n')
     await chmod(providerExecutable(provider), 0o700)
   }
@@ -726,7 +777,7 @@ beforeEach(async () => {
     providerStatus(provider)
   )
   resolveAllProviderStatusesMock.mockImplementation(async () =>
-    (['pi', 'codex', 'claude', 'oh-my-pi'] as const).map(providerStatus)
+    LOCAL_AI_CLI_PROVIDER_IDS.map(providerStatus)
   )
   spawnSafeMock.mockReset()
   // A gate test that reaches a spawn is a defect in the gate, so fail loudly instead of hanging.
@@ -1815,12 +1866,9 @@ describe('localAiCli platform gate and quick-open shortcut', () => {
     )) as LocalAiCliStatus
 
     expect(status).toMatchObject({ betaAvailable: false, enabled: false })
-    expect(status.providers.map((provider) => provider.issueCode)).toEqual([
-      'BETA_UNAVAILABLE',
-      'BETA_UNAVAILABLE',
-      'BETA_UNAVAILABLE',
-      'BETA_UNAVAILABLE'
-    ])
+    expect(status.providers.map((provider) => provider.issueCode)).toEqual(
+      LOCAL_AI_CLI_PROVIDER_IDS.map(() => 'BETA_UNAVAILABLE')
+    )
     expect(resolveAllProviderStatusesMock).not.toHaveBeenCalled()
     expect(refreshExecutablesMock).not.toHaveBeenCalled()
     // The master switch is on in these settings; off macOS that still registers no key.
@@ -1880,7 +1928,7 @@ describe('localAiCli platform gate and quick-open shortcut', () => {
     const status = await readStatus()
     expect(status).toMatchObject({ betaAvailable: true, enabled: false })
     expect(status.providers.map((provider) => [provider.installed, provider.issueCode])).toEqual(
-      Array.from({ length: 4 }).fill([false, 'NOT_PROBED'])
+      Array.from({ length: LOCAL_AI_CLI_PROVIDER_IDS.length }).fill([false, 'NOT_PROBED'])
     )
     expect(resolveAllProviderStatusesMock).not.toHaveBeenCalled()
 
@@ -2383,5 +2431,856 @@ describe('conversation session file reveal', () => {
         { plugin: null, sender: { id: 11 } }
       )
     ).resolves.toEqual({ revealed: false })
+  })
+})
+
+describe('localAiCli generic ACP providers', () => {
+  it.each([
+    {
+      provider: 'antigravity' as const,
+      expectedArgs: ['acp', '--sandbox'],
+      expectedEnv: undefined,
+      expectedMeta: undefined
+    },
+    {
+      provider: 'opencode' as const,
+      expectedArgs: ['acp'],
+      expectedEnv: {
+        OPENCODE_PERMISSION: JSON.stringify({
+          '*': 'deny',
+          read: 'allow',
+          glob: 'allow',
+          grep: 'allow',
+          list: 'allow'
+        })
+      },
+      expectedMeta: undefined
+    },
+    {
+      provider: 'gemini' as const,
+      expectedArgs: ['--experimental-acp', '--approval-mode', 'plan'],
+      expectedEnv: undefined,
+      expectedMeta: undefined
+    },
+    {
+      provider: 'kiro' as const,
+      expectedArgs: ['acp'],
+      expectedEnv: undefined,
+      expectedMeta: { kiro: { policyPreset: 'read-workspace' } }
+    },
+    {
+      provider: 'cursor' as const,
+      expectedArgs: ['--mode', 'plan', '--sandbox', 'enabled', 'acp'],
+      expectedEnv: undefined,
+      expectedMeta: undefined
+    }
+  ])(
+    'runs $provider via unified AcpClient with read-only enforcement ($expectedArgs) and streams deltas',
+    async ({ provider, expectedArgs, expectedEnv, expectedMeta }) => {
+      const { transport } = await initModule()
+      const child = expectSpawn()
+      const stream = taskStream()
+      const run = startTask(transport, taskPayload({ provider }), stream.context)
+
+      await waitFor(
+        () => child.framesOfMethod('initialize').length === 1,
+        `${provider} ACP initialize`
+      )
+      expect(spawnCall().command).toBe(providerExecutable(provider))
+      expect(spawnCall().args).toEqual(expectedArgs)
+      expectExecutableDirFirstOnPath(spawnCall().options.env, providerExecutable(provider))
+      if (expectedEnv) {
+        expect(spawnCall().options.env).toMatchObject(expectedEnv)
+      }
+
+      child.sendLine({
+        jsonrpc: '2.0',
+        id: 1,
+        result: { protocolVersion: 1, agentInfo: { name: provider, version: '1.0.0' } }
+      })
+      await waitFor(
+        () => child.framesOfMethod('session/new').length === 1,
+        `${provider} ACP session/new`
+      )
+      if (expectedMeta) {
+        expect(child.framesOfMethod('session/new')[0]?.params).toMatchObject({
+          _meta: expectedMeta
+        })
+      }
+      const nativeId = `${provider}-fresh-1`
+      child.sendLine({ jsonrpc: '2.0', id: 2, result: { sessionId: nativeId } })
+
+      await waitFor(
+        () => child.framesOfMethod('session/prompt').length === 1,
+        `${provider} ACP session/prompt`
+      )
+      child.sendLine({
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          sessionId: nativeId,
+          update: {
+            sessionUpdate: 'agent_message_chunk',
+            content: { type: 'text', text: `${provider} reply` }
+          }
+        }
+      })
+      child.sendLine({ jsonrpc: '2.0', id: 3, result: { stopReason: 'end_turn' } })
+      await run
+
+      expect(stream.chunks).toContainEqual({
+        type: 'text-delta',
+        callId: expect.any(String),
+        text: `${provider} reply`
+      })
+      expect(stream.chunks.at(-1)).toMatchObject({ type: 'complete', text: `${provider} reply` })
+      expectOpaqueTaskChunks(stream.chunks, [nativeId])
+    }
+  )
+
+  it('bridges session/request_permission to approval broker and fails closed on deny or missing allow_once', async () => {
+    const { transport } = await initModule()
+    const child = expectSpawn()
+    const stream = taskStream()
+    const run = startTask(
+      transport,
+      taskPayload({ provider: 'antigravity', access: 'workspace-write' }),
+      stream.context
+    )
+
+    await waitFor(() => child.framesOfMethod('initialize').length === 1, 'initialize')
+    child.sendLine({ jsonrpc: '2.0', id: 1, result: { protocolVersion: 1 } })
+    await waitFor(() => child.framesOfMethod('session/new').length === 1, 'session/new')
+    child.sendLine({ jsonrpc: '2.0', id: 2, result: { sessionId: 'agy-perm-1' } })
+    await waitFor(() => child.framesOfMethod('session/prompt').length === 1, 'session/prompt')
+
+    // 1. User approves allow-once with matching allow_once option.
+    child.sendLine({
+      jsonrpc: '2.0',
+      id: 'perm-allow',
+      method: 'session/request_permission',
+      params: {
+        sessionId: 'agy-perm-1',
+        toolCall: { title: 'edit_file', kind: 'edit' },
+        options: [
+          { optionId: 'opt-allow-once', name: 'Allow once', kind: 'allow_once' },
+          { optionId: 'opt-reject-once', name: 'Reject', kind: 'reject_once' }
+        ]
+      }
+    })
+    await waitFor(
+      () => stream.chunks.some((chunk) => chunk.type === 'approval'),
+      'first approval chunk'
+    )
+    const firstApproval = stream.chunks.find(
+      (chunk): chunk is Extract<LocalAiCliTaskChunk, { type: 'approval' }> =>
+        chunk.type === 'approval'
+    )!
+    await invokeHandler(
+      transport,
+      LocalAiCliEvents.task.approval.toEventName(),
+      { approvalId: firstApproval.approval.approvalId, decision: 'allow-once' },
+      { plugin: null, sender: { id: 11 } }
+    )
+    await waitFor(
+      () => child.frames().some((frame) => frame.id === 'perm-allow'),
+      'allow response frame'
+    )
+    expect(child.frames().find((frame) => frame.id === 'perm-allow')).toEqual({
+      jsonrpc: '2.0',
+      id: 'perm-allow',
+      result: { outcome: { outcome: 'selected', optionId: 'opt-allow-once' } }
+    })
+
+    // 2. Agent offers only allow_always (no allow_once): allow-once must fail closed instead of escalating.
+    child.sendLine({
+      jsonrpc: '2.0',
+      id: 'perm-escalate',
+      method: 'session/request_permission',
+      params: {
+        sessionId: 'agy-perm-1',
+        toolCall: { title: 'bash', kind: 'execute' },
+        options: [{ optionId: 'opt-always', name: 'Always allow', kind: 'allow_always' }]
+      }
+    })
+    await waitFor(
+      () => stream.chunks.filter((chunk) => chunk.type === 'approval').length === 2,
+      'second approval chunk'
+    )
+    const secondApproval = stream.chunks.filter(
+      (chunk): chunk is Extract<LocalAiCliTaskChunk, { type: 'approval' }> =>
+        chunk.type === 'approval'
+    )[1]!
+    await invokeHandler(
+      transport,
+      LocalAiCliEvents.task.approval.toEventName(),
+      { approvalId: secondApproval.approval.approvalId, decision: 'allow-once' },
+      { plugin: null, sender: { id: 11 } }
+    )
+    await waitFor(
+      () => child.frames().some((frame) => frame.id === 'perm-escalate'),
+      'escalate fail-closed response'
+    )
+    expect(child.frames().find((frame) => frame.id === 'perm-escalate')).toEqual({
+      jsonrpc: '2.0',
+      id: 'perm-escalate',
+      result: { outcome: { outcome: 'cancelled' } }
+    })
+
+    child.sendLine({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'agy-perm-1',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'approved run' }
+        }
+      }
+    })
+    child.sendLine({ jsonrpc: '2.0', id: 3, result: { stopReason: 'end_turn' } })
+    await run
+    expect(stream.chunks.at(-1)).toMatchObject({ type: 'complete', text: 'approved run' })
+  })
+
+  it('fails closed immediately on session/request_permission when access is not workspace-write', async () => {
+    const { transport } = await initModule()
+    const child = expectSpawn()
+    const stream = taskStream()
+    const run = startTask(
+      transport,
+      taskPayload({ provider: 'opencode', access: 'workspace-read' }),
+      stream.context
+    )
+
+    await waitFor(() => child.framesOfMethod('initialize').length === 1, 'initialize')
+    child.sendLine({ jsonrpc: '2.0', id: 1, result: { protocolVersion: 1 } })
+    await waitFor(() => child.framesOfMethod('session/new').length === 1, 'session/new')
+    child.sendLine({ jsonrpc: '2.0', id: 2, result: { sessionId: 'oc-ro-1' } })
+    await waitFor(() => child.framesOfMethod('session/prompt').length === 1, 'session/prompt')
+
+    child.sendLine({
+      jsonrpc: '2.0',
+      id: 'perm-ro',
+      method: 'session/request_permission',
+      params: {
+        sessionId: 'oc-ro-1',
+        toolCall: { title: 'write_file', kind: 'edit' },
+        options: [
+          { optionId: 'opt-allow', name: 'Allow', kind: 'allow_once' },
+          { optionId: 'opt-reject', name: 'Reject', kind: 'reject_once' }
+        ]
+      }
+    })
+    await waitFor(() => child.frames().some((frame) => frame.id === 'perm-ro'), 'ro deny frame')
+    expect(child.frames().find((frame) => frame.id === 'perm-ro')).toEqual({
+      jsonrpc: '2.0',
+      id: 'perm-ro',
+      result: { outcome: { outcome: 'selected', optionId: 'opt-reject' } }
+    })
+    expect(stream.chunks.some((chunk) => chunk.type === 'approval')).toBe(false)
+
+    child.sendLine({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'oc-ro-1',
+        update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'safe' } }
+      }
+    })
+    child.sendLine({ jsonrpc: '2.0', id: 3, result: { stopReason: 'end_turn' } })
+    await run
+    expect(stream.chunks.at(-1)).toMatchObject({ type: 'complete', text: 'safe' })
+  })
+
+  it('resumes via session/load when the ACP server advertises loadSession without session/resume', async () => {
+    const { transport } = await initModule()
+    const pointer = await seedPointer({
+      provider: 'cursor',
+      nativeSessionId: 'cursor-load-1',
+      expectedHeadId: null
+    })
+    const child = expectSpawn()
+    const stream = taskStream()
+    const run = startTask(
+      transport,
+      taskPayload({ provider: 'cursor', sessionRef: pointer.id }),
+      stream.context
+    )
+
+    await waitFor(() => child.framesOfMethod('initialize').length === 1, 'initialize')
+    child.sendLine({
+      jsonrpc: '2.0',
+      id: 1,
+      result: {
+        protocolVersion: 1,
+        agentCapabilities: { loadSession: true, sessionCapabilities: { list: {} } }
+      }
+    })
+    await waitFor(() => child.framesOfMethod('session/load').length === 1, 'session/load')
+    expect(child.framesOfMethod('session/resume')).toHaveLength(0)
+    expect(child.framesOfMethod('session/load')[0]?.params).toMatchObject({
+      sessionId: 'cursor-load-1',
+      cwd: projectRoot
+    })
+    child.sendLine({ jsonrpc: '2.0', id: 2, result: { sessionId: 'cursor-load-1' } })
+
+    await waitFor(() => child.framesOfMethod('session/prompt').length === 1, 'session/prompt')
+    child.sendLine({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'cursor-load-1',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'cursor resumed' }
+        }
+      }
+    })
+    child.sendLine({ jsonrpc: '2.0', id: 3, result: { stopReason: 'end_turn' } })
+    await run
+
+    expect(taskSessionChunk(stream.chunks).sessionRef).toBe(pointer.id)
+    expect(stream.chunks.at(-1)).toMatchObject({ type: 'complete', text: 'cursor resumed' })
+  })
+
+  it('fails with PROTOCOL_INVALID and releases the lease on malformed ACP stdout', async () => {
+    const { module, transport } = await initModule()
+    const pointer = await seedPointer({
+      provider: 'opencode',
+      nativeSessionId: 'oc-proto-1',
+      expectedHeadId: null
+    })
+    const child = expectSpawn()
+    const stream = taskStream()
+    const run = startTask(
+      transport,
+      taskPayload({ provider: 'opencode', sessionRef: pointer.id }),
+      stream.context
+    )
+
+    await waitFor(() => child.framesOfMethod('initialize').length === 1, 'initialize')
+    child.sendLine('{not valid json')
+    await run
+
+    expect(stream.chunks).toContainEqual({
+      type: 'failed',
+      callId: expect.any(String),
+      code: 'PROTOCOL_INVALID',
+      recoverable: true
+    })
+    const leases = module as unknown as {
+      nativeSessionLeases: { isLeased: (key: Record<string, string>) => boolean }
+    }
+    expect(
+      leases.nativeSessionLeases.isLeased({
+        provider: 'opencode',
+        projectRoot,
+        nativeSessionId: 'oc-proto-1'
+      })
+    ).toBe(false)
+  })
+
+  it('sends session/cancel and releases the lease when an ACP task is cancelled', async () => {
+    const { transport } = await initModule()
+    const pointer = await seedPointer({
+      provider: 'cursor',
+      nativeSessionId: 'cursor-cancel-1',
+      expectedHeadId: null
+    })
+    const child = expectSpawn()
+    const stream = taskStream()
+    const run = startTask(
+      transport,
+      taskPayload({ provider: 'cursor', sessionRef: pointer.id }),
+      stream.context
+    )
+
+    await waitFor(() => child.framesOfMethod('initialize').length === 1, 'initialize')
+    child.sendLine({
+      jsonrpc: '2.0',
+      id: 1,
+      result: { protocolVersion: 1, agentCapabilities: { loadSession: true } }
+    })
+    await waitFor(() => child.framesOfMethod('session/load').length === 1, 'session/load')
+    child.sendLine({ jsonrpc: '2.0', id: 2, result: { sessionId: 'cursor-cancel-1' } })
+    await waitFor(() => child.framesOfMethod('session/prompt').length === 1, 'session/prompt')
+
+    stream.controller.abort()
+    await run
+
+    expect(child.framesOfMethod('session/cancel').length).toBeGreaterThanOrEqual(1)
+    expect(stream.chunks).toContainEqual({ type: 'cancelled', callId: expect.any(String) })
+    await expectTupleFree(transport, pointer, createFakeSender())
+  })
+
+  it('handles legacy 4-provider settings safely in getStatus and locateProvider for new providers', async () => {
+    const legacySettings = {
+      localAiCli: {
+        enabled: false,
+        defaultProvider: null,
+        providers: {
+          pi: { enabled: false, executableOverride: '' },
+          codex: { enabled: false, executableOverride: '' },
+          claude: { enabled: false, executableOverride: '' },
+          'oh-my-pi': { enabled: false, executableOverride: '' }
+        }
+      }
+    }
+    getMainConfigMock.mockReturnValue(legacySettings)
+    vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({
+      canceled: false,
+      filePaths: ['/custom/bin/agy']
+    })
+    const { transport } = await initModule()
+
+    const status = (await invokeHandler(
+      transport,
+      LocalAiCliEvents.status.get.toEventName(),
+      undefined,
+      { plugin: null, sender: { id: 11 } }
+    )) as LocalAiCliStatus
+    expect(status.providers.map((provider) => provider.id)).toEqual([...LOCAL_AI_CLI_PROVIDER_IDS])
+
+    await invokeHandler(
+      transport,
+      LocalAiCliEvents.status.locate.toEventName(),
+      { provider: 'antigravity' },
+      { plugin: null, sender: { id: 11 } }
+    )
+    expect(saveMainConfigMock).toHaveBeenCalledTimes(1)
+    const saved = saveMainConfigMock.mock.calls[0]?.[1] as {
+      localAiCli: { providers: Record<string, { executableOverride: string }> }
+    }
+    expect(saved.localAiCli.providers.antigravity?.executableOverride).toBe('/custom/bin/agy')
+  })
+
+  it('passes read-only terminal flags for antigravity/cursor and rejects terminals when terminalRead is false', async () => {
+    const { transport } = await initModule()
+    await createTerminal(
+      transport,
+      { provider: 'antigravity', access: 'workspace-read', cols: 80, rows: 24 },
+      createFakeSender()
+    )
+    expect(ptySpawnMock.mock.calls[0]?.[1]).toEqual(['--mode', 'plan', '--sandbox'])
+
+    await createTerminal(
+      transport,
+      { provider: 'cursor', access: 'workspace-read', cols: 80, rows: 24 },
+      createFakeSender()
+    )
+    expect(ptySpawnMock.mock.calls[1]?.[1]).toEqual(['--mode', 'plan'])
+
+    statusOverrides = { capabilities: { terminalRead: false } }
+    await expect(
+      createTerminal(
+        transport,
+        { provider: 'opencode', access: 'workspace-read', cols: 80, rows: 24 },
+        createFakeSender()
+      )
+    ).rejects.toThrow('LOCAL_AI_CLI_TERMINAL_UNAVAILABLE')
+    expect(ptySpawnMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('switches advertised ACP session modes to read-only before prompting and enforces answer-only OpenCode/Cursor policies', async () => {
+    const { transport } = await initModule()
+    await seedProject('proj-1')
+
+    // 1. OpenCode answer-only denies all tools at launch via OPENCODE_PERMISSION and switches to plan mode.
+    const ocChild = expectSpawn()
+    const ocStream = taskStream()
+    const ocRun = startTask(
+      transport,
+      taskPayload({ provider: 'opencode', access: 'answer-only' }),
+      ocStream.context
+    )
+
+    await waitFor(() => ocChild.framesOfMethod('initialize').length === 1, 'opencode init')
+    expect(
+      (spawnCall().options.env as Record<string, string> | undefined)?.OPENCODE_PERMISSION
+    ).toBe(JSON.stringify({ '*': 'deny' }))
+    ocChild.sendLine({ jsonrpc: '2.0', id: 1, result: { protocolVersion: 1 } })
+    await waitFor(() => ocChild.framesOfMethod('session/new').length === 1, 'opencode session/new')
+    ocChild.sendLine({
+      jsonrpc: '2.0',
+      id: 2,
+      result: {
+        sessionId: 'oc-ro-1',
+        modes: { currentModeId: 'build', availableModes: [{ id: 'build' }, { id: 'plan' }] }
+      }
+    })
+    await waitFor(
+      () => ocChild.framesOfMethod('session/set_mode').length === 1,
+      'opencode session/set_mode'
+    )
+    expect(ocChild.framesOfMethod('session/prompt')).toHaveLength(0)
+    expect(ocChild.framesOfMethod('session/set_mode')[0]?.params).toEqual({
+      sessionId: 'oc-ro-1',
+      modeId: 'plan'
+    })
+    ocChild.sendLine({ jsonrpc: '2.0', id: 3, result: {} })
+    await waitFor(() => ocChild.framesOfMethod('session/prompt').length === 1, 'opencode prompt')
+    ocChild.sendLine({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'oc-ro-1',
+        update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'safe' } }
+      }
+    })
+    ocChild.sendLine({ jsonrpc: '2.0', id: 4, result: { stopReason: 'end_turn' } })
+    await ocRun
+    expect(ocStream.chunks.at(-1)).toMatchObject({ type: 'complete', text: 'safe' })
+
+    // 2. Cursor answer-only launches in an isolated empty workspace with .cursor/cli.json deny rules and --mode ask --sandbox enabled.
+    const cursorChild = expectSpawn()
+    const cursorStream = taskStream()
+    const cursorRun = startTask(
+      transport,
+      taskPayload({ provider: 'cursor', access: 'answer-only', projectId: 'proj-1' }),
+      cursorStream.context
+    )
+    await waitFor(() => cursorChild.framesOfMethod('initialize').length === 1, 'cursor init')
+    const cursorCwd = spawnCall(1).options.cwd as string
+    expect(cursorCwd).not.toBe(projectRoot)
+    expect(spawnCall(1).args).toEqual([
+      '--mode',
+      'ask',
+      '--sandbox',
+      'enabled',
+      '--workspace',
+      cursorCwd,
+      'acp'
+    ])
+    const cursorPolicy = JSON.parse(
+      await readFile(join(cursorCwd, '.cursor', 'cli.json'), 'utf8')
+    ) as { permissions: { deny: string[] } }
+    expect(cursorPolicy.permissions.deny).toEqual(
+      expect.arrayContaining(['Read(**)', 'Write(**)', 'Shell(*)'])
+    )
+    cursorChild.sendLine({ jsonrpc: '2.0', id: 1, result: { protocolVersion: 1 } })
+    await waitFor(
+      () => cursorChild.framesOfMethod('session/new').length === 1,
+      'cursor session/new'
+    )
+    expect(cursorChild.framesOfMethod('session/new')[0]?.params).toMatchObject({ cwd: cursorCwd })
+    cursorChild.sendLine({ jsonrpc: '2.0', id: 2, result: { sessionId: 'cur-ro-1' } })
+    await waitFor(() => cursorChild.framesOfMethod('session/prompt').length === 1, 'cursor prompt')
+    cursorChild.sendLine({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'cur-ro-1',
+        update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'answer' } }
+      }
+    })
+    cursorChild.sendLine({ jsonrpc: '2.0', id: 3, result: { stopReason: 'end_turn' } })
+    await cursorRun
+    expect(cursorStream.chunks.at(-1)).toMatchObject({ type: 'complete', text: 'answer' })
+
+    // 3. Kiro answer-only omits read-workspace policyPreset and runs in an isolated workspace with fs_read deny rules.
+    const kiroChild = expectSpawn()
+    const kiroStream = taskStream()
+    const kiroRun = startTask(
+      transport,
+      taskPayload({ provider: 'kiro', access: 'answer-only', projectId: 'proj-1' }),
+      kiroStream.context
+    )
+    await waitFor(() => kiroChild.framesOfMethod('initialize').length === 1, 'kiro init')
+    const kiroCwd = spawnCall(2).options.cwd as string
+    expect(kiroCwd).not.toBe(projectRoot)
+    const kiroPermissions = await readFile(
+      join(kiroCwd, '.kiro', 'settings', 'permissions.yaml'),
+      'utf8'
+    )
+    expect(kiroPermissions).toContain('capability: fs_read')
+    expect(kiroPermissions).toContain('effect: deny')
+    kiroChild.sendLine({ jsonrpc: '2.0', id: 1, result: { protocolVersion: 1 } })
+    await waitFor(() => kiroChild.framesOfMethod('session/new').length === 1, 'kiro session/new')
+    const kiroSessionParams = kiroChild.framesOfMethod('session/new')[0]?.params as Record<
+      string,
+      unknown
+    >
+    expect(kiroSessionParams.cwd).toBe(kiroCwd)
+    expect(kiroSessionParams._meta).toBeUndefined()
+    kiroChild.sendLine({ jsonrpc: '2.0', id: 2, result: { sessionId: 'kiro-ao-1' } })
+    await waitFor(() => kiroChild.framesOfMethod('session/prompt').length === 1, 'kiro prompt')
+    kiroChild.sendLine({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'kiro-ao-1',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'kiro-answer' }
+        }
+      }
+    })
+    kiroChild.sendLine({ jsonrpc: '2.0', id: 3, result: { stopReason: 'end_turn' } })
+    await kiroRun
+    expect(kiroStream.chunks.at(-1)).toMatchObject({ type: 'complete', text: 'kiro-answer' })
+  })
+
+  it('keeps saved sessions retryable when the ACP agent exits before replying to session/resume or session/load', async () => {
+    const { transport } = await initModule()
+
+    // 1. OMP exits mid session/resume -> recoverable PROCESS_EXITED, pointer stays active.
+    const ompPointer = await seedPointer({
+      provider: 'oh-my-pi',
+      nativeSessionId: 'omp-transient-1',
+      expectedHeadId: null
+    })
+    const ompChild = expectSpawn()
+    const ompStream = taskStream()
+    const ompRun = startTask(
+      transport,
+      taskPayload({ provider: 'oh-my-pi', sessionRef: ompPointer.id }),
+      ompStream.context
+    )
+    await waitFor(() => ompChild.framesOfMethod('initialize').length === 1, 'omp init')
+    ompChild.sendLine({ jsonrpc: '2.0', id: 1, result: { protocolVersion: 1 } })
+    await waitFor(() => ompChild.framesOfMethod('session/resume').length === 1, 'omp resume')
+    ompChild.close(1)
+    await ompRun
+
+    expect(ompStream.chunks).toContainEqual({
+      type: 'failed',
+      callId: expect.any(String),
+      code: 'PROCESS_EXITED',
+      recoverable: true
+    })
+    expect((await pointerRow(ompPointer.id))?.state).toBe('available')
+
+    // 2. ACP provider exits mid session/load -> recoverable PROCESS_EXITED, pointer stays available.
+    const agyPointer = await seedPointer({
+      provider: 'antigravity',
+      nativeSessionId: 'agy-transient-1',
+      expectedHeadId: null
+    })
+    const agyChild = expectSpawn()
+    const agyStream = taskStream()
+    const agyRun = startTask(
+      transport,
+      taskPayload({ provider: 'antigravity', sessionRef: agyPointer.id }),
+      agyStream.context
+    )
+    await waitFor(() => agyChild.framesOfMethod('initialize').length === 1, 'agy init')
+    agyChild.sendLine({
+      jsonrpc: '2.0',
+      id: 1,
+      result: { protocolVersion: 1, agentCapabilities: { loadSession: true } }
+    })
+    await waitFor(() => agyChild.framesOfMethod('session/load').length === 1, 'agy load')
+    agyChild.close(1)
+    await agyRun
+
+    expect(agyStream.chunks).toContainEqual({
+      type: 'failed',
+      callId: expect.any(String),
+      code: 'PROCESS_EXITED',
+      recoverable: true
+    })
+    expect((await pointerRow(agyPointer.id))?.state).toBe('available')
+
+    // 3. Explicit JSON-RPC session-not-found still marks the pointer missing.
+    const agyChild2 = expectSpawn()
+    const agyStream2 = taskStream()
+    const agyRun2 = startTask(
+      transport,
+      taskPayload({ provider: 'antigravity', sessionRef: agyPointer.id }),
+      agyStream2.context
+    )
+    await waitFor(() => agyChild2.framesOfMethod('initialize').length === 1, 'agy retry init')
+    agyChild2.sendLine({
+      jsonrpc: '2.0',
+      id: 1,
+      result: { protocolVersion: 1, agentCapabilities: { loadSession: true } }
+    })
+    await waitFor(() => agyChild2.framesOfMethod('session/load').length === 1, 'agy retry load')
+    agyChild2.sendLine({
+      jsonrpc: '2.0',
+      id: 2,
+      error: { code: -32002, message: 'Session not found' }
+    })
+    await agyRun2
+
+    expect(agyStream2.chunks).toContainEqual({
+      type: 'failed',
+      callId: expect.any(String),
+      code: 'NATIVE_SESSION_MISSING',
+      recoverable: false
+    })
+    expect((await pointerRow(agyPointer.id))?.state).toBe('missing')
+  })
+
+  it('continues immediately after a standard ACP session/resume returning {} without waiting for session/update', async () => {
+    const { transport } = await initModule()
+    const pointer = await seedPointer({
+      provider: 'antigravity',
+      nativeSessionId: 'agy-resume-empty',
+      expectedHeadId: null
+    })
+    const child = expectSpawn()
+    const stream = taskStream()
+    const run = startTask(
+      transport,
+      taskPayload({ provider: 'antigravity', sessionRef: pointer.id }),
+      stream.context
+    )
+
+    await waitFor(() => child.framesOfMethod('initialize').length === 1, 'init')
+    child.sendLine({
+      jsonrpc: '2.0',
+      id: 1,
+      result: { protocolVersion: 1, agentCapabilities: { sessionCapabilities: { resume: {} } } }
+    })
+    await waitFor(() => child.framesOfMethod('session/resume').length === 1, 'resume')
+    child.sendLine({ jsonrpc: '2.0', id: 2, result: {} })
+    await waitFor(() => child.framesOfMethod('session/prompt').length === 1, 'prompt')
+    child.sendLine({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'agy-resume-empty',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'resumed ok' }
+        }
+      }
+    })
+    child.sendLine({ jsonrpc: '2.0', id: 3, result: { stopReason: 'end_turn' } })
+    await run
+
+    expect(stream.chunks.at(-1)).toMatchObject({ type: 'complete', text: 'resumed ok' })
+  })
+
+  it('reports TOKEN_LIMIT_REACHED for max_tokens and PROTOCOL_INVALID for null prompt result instead of complete', async () => {
+    const { transport } = await initModule()
+
+    // 1. max_tokens preserves streamed partial text and reports TOKEN_LIMIT_REACHED.
+    const maxChild = expectSpawn()
+    const maxStream = taskStream()
+    const maxRun = startTask(transport, taskPayload({ provider: 'antigravity' }), maxStream.context)
+    await waitFor(() => maxChild.framesOfMethod('initialize').length === 1, 'max init')
+    maxChild.sendLine({ jsonrpc: '2.0', id: 1, result: { protocolVersion: 1 } })
+    await waitFor(() => maxChild.framesOfMethod('session/new').length === 1, 'max new')
+    maxChild.sendLine({ jsonrpc: '2.0', id: 2, result: { sessionId: 'agy-max-1' } })
+    await waitFor(() => maxChild.framesOfMethod('session/prompt').length === 1, 'max prompt')
+    maxChild.sendLine({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'agy-max-1',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'truncated text' }
+        }
+      }
+    })
+    maxChild.sendLine({ jsonrpc: '2.0', id: 3, result: { stopReason: 'max_tokens' } })
+    await maxRun
+
+    expect(maxStream.chunks).toContainEqual({
+      type: 'text-delta',
+      callId: expect.any(String),
+      text: 'truncated text'
+    })
+    expect(maxStream.chunks.some((c) => c.type === 'complete')).toBe(false)
+    expect(maxStream.chunks.at(-1)).toEqual({
+      type: 'failed',
+      callId: expect.any(String),
+      code: 'TOKEN_LIMIT_REACHED',
+      recoverable: true
+    })
+
+    // 2. result: null fails with PROTOCOL_INVALID instead of publishing partial text as complete.
+    const nullChild = expectSpawn()
+    const nullStream = taskStream()
+    const nullRun = startTask(
+      transport,
+      taskPayload({ provider: 'antigravity' }),
+      nullStream.context
+    )
+    await waitFor(() => nullChild.framesOfMethod('initialize').length === 1, 'null init')
+    nullChild.sendLine({ jsonrpc: '2.0', id: 1, result: { protocolVersion: 1 } })
+    await waitFor(() => nullChild.framesOfMethod('session/new').length === 1, 'null new')
+    nullChild.sendLine({ jsonrpc: '2.0', id: 2, result: { sessionId: 'agy-null-1' } })
+    await waitFor(() => nullChild.framesOfMethod('session/prompt').length === 1, 'null prompt')
+    nullChild.sendLine({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'agy-null-1',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'partial before null' }
+        }
+      }
+    })
+    nullChild.sendLine({ jsonrpc: '2.0', id: 3, result: null })
+    await nullRun
+
+    expect(nullStream.chunks.some((c) => c.type === 'complete')).toBe(false)
+    expect(nullStream.chunks.at(-1)).toEqual({
+      type: 'failed',
+      callId: expect.any(String),
+      code: 'PROTOCOL_INVALID',
+      recoverable: true
+    })
+  })
+
+  it('rechecks cancellation after touchNativeSession and emits cancelled instead of complete', async () => {
+    const { module, transport } = await initModule()
+    let releaseTouch!: () => void
+    const touchBlocked = new Promise<void>((resolve) => {
+      releaseTouch = resolve
+    })
+    let touchEntered!: () => void
+    const touchStarted = new Promise<void>((resolve) => {
+      touchEntered = resolve
+    })
+    const moduleAny = module as unknown as {
+      touchNativeSession: (...args: unknown[]) => Promise<void>
+    }
+    const originalTouch = moduleAny.touchNativeSession.bind(module)
+    let touchCount = 0
+    vi.spyOn(moduleAny, 'touchNativeSession').mockImplementation(async (...args: unknown[]) => {
+      touchCount += 1
+      await originalTouch(...args)
+      if (touchCount === 1) {
+        touchEntered()
+        await touchBlocked
+      }
+    })
+
+    const child = expectSpawn()
+    const stream = taskStream()
+    const run = startTask(transport, taskPayload({ provider: 'antigravity' }), stream.context)
+
+    await waitFor(() => child.framesOfMethod('initialize').length === 1, 'init')
+    child.sendLine({ jsonrpc: '2.0', id: 1, result: { protocolVersion: 1 } })
+    await waitFor(() => child.framesOfMethod('session/new').length === 1, 'new')
+    child.sendLine({ jsonrpc: '2.0', id: 2, result: { sessionId: 'agy-cancel-touch' } })
+    await waitFor(() => child.framesOfMethod('session/prompt').length === 1, 'prompt')
+    child.sendLine({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'agy-cancel-touch',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'finished before cancel' }
+        }
+      }
+    })
+    child.sendLine({ jsonrpc: '2.0', id: 3, result: { stopReason: 'end_turn' } })
+    await touchStarted
+
+    stream.controller.abort()
+    releaseTouch()
+    await run
+
+    expect(stream.chunks.some((c) => c.type === 'complete')).toBe(false)
+    expect(stream.chunks.at(-1)).toEqual({ type: 'cancelled', callId: expect.any(String) })
   })
 })

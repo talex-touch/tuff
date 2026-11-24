@@ -143,4 +143,105 @@ describe('recommendation semantic profile', () => {
 
     expect(getCandidateSemanticProfileCacheSize()).toBe(CANDIDATE_SEMANTIC_PROFILE_CACHE_MAX)
   })
+
+  it('tags common cross-platform terminals with app:terminal while rejecting ambiguous non-terminals', () => {
+    clearCandidateSemanticProfileCache()
+
+    const terminalCandidates = [
+      { itemId: '/Applications/Hyper.app', title: 'Hyper' },
+      { itemId: '/Applications/Tabby.app', title: 'Tabby' },
+      { itemId: '/Applications/cmux.app', title: 'cmux' },
+      { itemId: '/Applications/Ghostty.app', title: 'Ghostty' },
+      { itemId: 'dev.warp.Warp-Stable', title: 'Warp' },
+      { itemId: '/Applications/Warp.app', title: 'Warp' },
+      { itemId: 'com.github.wez.wezterm', title: 'WezTerm' },
+      { itemId: 'net.kovidgoyal.kitty', title: 'kitty' },
+      { itemId: 'org.alacritty', title: 'Alacritty' },
+      { itemId: 'com.raphaelamorim.rio', title: 'Rio' },
+      { itemId: '/Applications/Rio.app', title: 'Rio' },
+      { itemId: 'dev.waveterm.waveterm', title: 'Wave' },
+      { itemId: '/Applications/WaveTerm.app', title: 'WaveTerm' },
+      { itemId: '/Applications/WindTerm.app', title: 'WindTerm' },
+      { itemId: '/Applications/Electerm.app', title: 'Electerm' },
+      { itemId: 'Microsoft.WindowsTerminal_8wekyb3d8bbwe', title: 'Windows Terminal' },
+      { itemId: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe', title: 'PowerShell 7' },
+      {
+        itemId: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        title: 'Windows PowerShell'
+      },
+      { itemId: 'C:\\Windows\\System32\\cmd.exe', title: 'Command Prompt' },
+      { itemId: 'C:\\Program Files\\Git\\git-bash.exe', title: 'Git Bash' }
+    ]
+
+    for (const candidate of terminalCandidates) {
+      const profile = buildCandidateSemanticProfile({
+        sourceId: 'app-provider',
+        itemId: candidate.itemId,
+        sourceType: 'application',
+        title: candidate.title
+      })
+      expect(profile.tokens, `expected app:terminal for ${candidate.itemId}`).toContain(
+        'app:terminal'
+      )
+    }
+
+    const nonTerminalCandidates = [
+      { itemId: '/Applications/Cloudflare WARP.app', title: 'Cloudflare WARP' },
+      { itemId: 'com.cloudflare.1dot1dot1dot1.macos', title: 'Cloudflare WARP' },
+      { itemId: '/Applications/Angry Birds Rio.app', title: 'Angry Birds Rio' },
+      { itemId: 'com.example.rio', title: 'Rio' },
+      { itemId: 'com.waveapps.wave', title: 'Wave' },
+      { itemId: '/Applications/Sound Wave.app', title: 'Sound Wave' },
+      { itemId: '/Applications/HyperX NGENUITY.app', title: 'HyperX NGENUITY' },
+      { itemId: '/Applications/Hello Kitty.app', title: 'Hello Kitty' },
+      { itemId: 'com.example.shell', title: 'Shell' },
+      { itemId: 'C:\\Program Files\\Tool\\mycmd.exe', title: 'MyCmd' }
+    ]
+
+    for (const candidate of nonTerminalCandidates) {
+      const profile = buildCandidateSemanticProfile({
+        sourceId: 'app-provider',
+        itemId: candidate.itemId,
+        sourceType: 'application',
+        title: candidate.title
+      })
+      expect(profile.tokens, `expected non-terminal for ${candidate.itemId}`).not.toContain(
+        'app:terminal'
+      )
+    }
+
+    const shellForeground = buildRecommendationSemanticProfile({
+      ...devFocusContext,
+      clipboard: undefined,
+      systemState: undefined,
+      foregroundApp: {
+        bundleId: 'com.example.shell',
+        name: 'Shell'
+      }
+    })
+    expect(shellForeground.tokens).not.toContain('app:terminal')
+    expect(shellForeground.tokens).not.toContain('task:dev')
+
+    const warpForeground = buildRecommendationSemanticProfile({
+      ...devFocusContext,
+      clipboard: undefined,
+      systemState: undefined,
+      foregroundApp: {
+        bundleId: 'com.cloudflare.1dot1dot1dot1.macos',
+        name: 'Cloudflare WARP'
+      }
+    })
+    expect(warpForeground.tokens).not.toContain('app:terminal')
+
+    const rioForeground = buildRecommendationSemanticProfile({
+      ...devFocusContext,
+      clipboard: undefined,
+      systemState: undefined,
+      foregroundApp: {
+        bundleId: 'com.raphaelamorim.rio',
+        name: 'Rio'
+      }
+    })
+    expect(rioForeground.tokens).toContain('app:terminal')
+  })
 })

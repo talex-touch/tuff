@@ -43,6 +43,7 @@ vi.mock('./intelligence-mcp-registry', () => ({
   intelligenceMcpRegistry: { registerProfile: runtimeMocks.registerProfile }
 }))
 
+import { parseConfig, parseMcpProfiles } from './ai-import-config-parser'
 import { AiImportRuntimeService } from './ai-import-runtime'
 
 function fingerprint(content: string): string {
@@ -432,6 +433,174 @@ describe('AiImportRuntimeService MCP transport normalization', () => {
     ).rejects.toThrow('escapes its canonical source root')
 
     expect(runtimeMocks.writeContent).not.toHaveBeenCalled()
+  })
+
+  it('keeps MCP profile IDs distinct across two config files under one source while remaining stable across reimports', async () => {
+    const primaryDir = join(fixtureRoot, 'antigravity')
+    const cliDir = join(fixtureRoot, 'antigravity-cli')
+    await mkdir(primaryDir, { recursive: true })
+    await mkdir(cliDir, { recursive: true })
+    const primaryPath = join(primaryDir, 'mcp_config.json')
+    const cliPath = join(cliDir, 'settings.json')
+    const primaryContent = JSON.stringify({
+      mcpServers: {
+        docs: { command: 'node', args: ['primary-docs.js'] },
+        extra: { command: 'node', args: ['extra.js'] }
+      }
+    })
+    const cliContent = JSON.stringify({
+      mcpServers: {
+        docs: { command: 'node', args: ['cli-docs.js'] }
+      }
+    })
+    await writeFile(primaryPath, primaryContent, 'utf8')
+    await writeFile(cliPath, cliContent, 'utf8')
+
+    const agySource: AiImportSourceSnapshot = {
+      id: 'antigravity:user:shared-source',
+      provider: 'antigravity',
+      label: 'Antigravity User',
+      scope: 'user',
+      rootPath: primaryDir,
+      installed: true,
+      scannedAt: 0,
+      fingerprint: '',
+      warnings: []
+    }
+    const primaryCandidate: AiImportCandidate = {
+      ...candidate(primaryPath, primaryContent),
+      id: 'antigravity:user:shared-source:mcp:file-a',
+      sourceId: agySource.id,
+      provider: 'antigravity',
+      scope: 'user',
+      targetScope: 'global',
+      canonicalRootId: agySource.id,
+      serverNames: ['docs', 'extra'],
+      secretKeyPaths: []
+    }
+    const cliCandidate: AiImportCandidate = {
+      ...candidate(cliPath, cliContent),
+      id: 'antigravity:user:shared-source:config:file-b:mcp',
+      sourceId: agySource.id,
+      provider: 'antigravity',
+      scope: 'user',
+      targetScope: 'global',
+      canonicalRootId: agySource.id,
+      containedBy: cliDir,
+      serverNames: ['docs'],
+      secretKeyPaths: []
+    }
+
+    const first = await new AiImportRuntimeService().prepare(
+      fixtureRoot,
+      [primaryCandidate, cliCandidate],
+      { scanId: 'scan-agy-1', candidateIds: [primaryCandidate.id, cliCandidate.id] },
+      [agySource]
+    )
+    const second = await new AiImportRuntimeService().prepare(
+      fixtureRoot,
+      [primaryCandidate, cliCandidate],
+      { scanId: 'scan-agy-2', candidateIds: [primaryCandidate.id, cliCandidate.id] },
+      [agySource]
+    )
+
+    const primaryDocs = first.items[0]?.mcpProfiles.find((p) => p.name === 'docs')
+    const primaryExtra = first.items[0]?.mcpProfiles.find((p) => p.name === 'extra')
+    const cliDocs = first.items[1]?.mcpProfiles.find((p) => p.name === 'docs')
+    expect(primaryDocs?.id).toBeTruthy()
+    expect(cliDocs?.id).toBeTruthy()
+    expect(primaryDocs?.id).not.toBe(cliDocs?.id)
+    expect(primaryDocs?.id).not.toBe(primaryExtra?.id)
+    expect(second.items[0]?.mcpProfiles.find((p) => p.name === 'docs')?.id).toBe(primaryDocs?.id)
+    expect(second.items[1]?.mcpProfiles.find((p) => p.name === 'docs')?.id).toBe(cliDocs?.id)
+  })
+
+  it('normalizes Gemini TOML commands into prompt text with $ARGUMENTS while rejecting unsupported constructs and preserving Markdown commands', async () => {
+    const tomlContent =
+      'description = "Review \\u0041"\nprompt = """\nPath: C:\\\\\nNext line\\\n  joined with \\f and \\"quotes\\" {{args}}\n"""\n'
+    const tomlPath = join(fixtureRoot, 'review.toml')
+    const mdContent = '---\nname: md-review\n---\nReview $ARGUMENTS from markdown\n'
+    const mdPath = join(fixtureRoot, 'md-review.md')
+    const blockedContent = 'prompt = "Run !{git status}"\n'
+    const blockedPath = join(fixtureRoot, 'blocked.toml')
+    await writeFile(tomlPath, tomlContent, 'utf8')
+    await writeFile(mdPath, mdContent, 'utf8')
+    await writeFile(blockedPath, blockedContent, 'utf8')
+
+    const geminiSource: AiImportSourceSnapshot = {
+      id: 'gemini:user:root',
+      provider: 'gemini',
+      label: 'Gemini CLI User',
+      scope: 'user',
+      rootPath: fixtureRoot,
+      installed: true,
+      scannedAt: 0,
+      fingerprint: '',
+      warnings: []
+    }
+    const makeCommandCandidate = (id: string, name: string, path: string, raw: string) =>
+      ({
+        id,
+        sourceId: geminiSource.id,
+        provider: 'gemini',
+        scope: 'user',
+        targetScope: 'global',
+        canonicalRootId: geminiSource.id,
+        sourceKey: `command:${name}`,
+        kind: 'command',
+        name,
+        path,
+        fingerprint: fingerprint(raw),
+        state: 'added',
+        warnings: [],
+        ignoredFields: [],
+        blockingIssues: [],
+        description: ''
+      }) as AiImportCandidate
+
+    await new AiImportRuntimeService().prepare(
+      fixtureRoot,
+      [
+        makeCommandCandidate('cand-toml', 'review', tomlPath, tomlContent),
+        makeCommandCandidate('cand-md', 'md-review', mdPath, mdContent)
+      ],
+      { scanId: 'scan-gemini-cmd', candidateIds: ['cand-toml', 'cand-md'] },
+      [geminiSource]
+    )
+
+    expect(runtimeMocks.writeContent).toHaveBeenNthCalledWith(
+      1,
+      'Path: C:\\\nNext linejoined with \f and "quotes" $ARGUMENTS\n'
+    )
+    expect(runtimeMocks.writeContent).toHaveBeenNthCalledWith(2, mdContent)
+
+    await expect(
+      new AiImportRuntimeService().prepare(
+        fixtureRoot,
+        [makeCommandCandidate('cand-blocked', 'blocked', blockedPath, blockedContent)],
+        { scanId: 'scan-gemini-blocked', candidateIds: ['cand-blocked'] },
+        [geminiSource]
+      )
+    ).rejects.toThrow('!{...}')
+  })
+
+  it('keeps single-quoted TOML strings literal while still unescaping double-quoted strings', () => {
+    const parsed = parseConfig(
+      [
+        '[mcp_servers.win]',
+        "command = 'C:\\tools\\node.exe' # literal backslashes",
+        "cwd = 'C:\\work\\' # trailing backslash before closing quote",
+        'args = ["C:\\\\tools\\\\server.js", \'C:\\new\\arg\']'
+      ].join('\n'),
+      '.toml'
+    )
+
+    expect(parsed).not.toBeNull()
+    const profiles = parseMcpProfiles(parsed!)
+    expect(profiles).toHaveLength(1)
+    expect(profiles[0]?.command).toBe('C:\\tools\\node.exe')
+    expect(profiles[0]?.cwd).toBe('C:\\work\\')
+    expect(profiles[0]?.args).toEqual(['C:\\tools\\server.js', 'C:\\new\\arg'])
   })
 })
 

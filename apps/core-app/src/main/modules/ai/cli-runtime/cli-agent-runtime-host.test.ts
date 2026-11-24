@@ -27,9 +27,19 @@ import {
   readRunFailureDetail
 } from '../pi-agent-runtime-control-error'
 import {
+  ANTIGRAVITY_CLI_PROFILE_ID,
+  ANTIGRAVITY_CLI_PROVIDER_ID,
   CLAUDE_CLI_PROFILE_ID,
   CODEX_CLI_PROFILE_ID,
-  OMP_CLI_PROFILE_ID
+  CURSOR_CLI_PROFILE_ID,
+  CURSOR_CLI_PROVIDER_ID,
+  GEMINI_CLI_PROFILE_ID,
+  GEMINI_CLI_PROVIDER_ID,
+  KIRO_CLI_PROFILE_ID,
+  KIRO_CLI_PROVIDER_ID,
+  OMP_CLI_PROFILE_ID,
+  OPENCODE_CLI_PROFILE_ID,
+  OPENCODE_CLI_PROVIDER_ID
 } from '../providers/pi-cli-runtime'
 import { GitWorktreeManager } from '../worktree'
 import { CliAgentRuntimeHost } from './cli-agent-runtime-host'
@@ -332,6 +342,121 @@ describe('CliAgentRuntimeHost', () => {
     )
     expect(ompSpawnSpy).not.toHaveBeenCalled()
     expect(host.getRunProtocol('run-cli-1')).toBe('acp')
+
+    await host.stop()
+  })
+
+  it('passes per-driver ACP args to AcpClient.spawn, strips provider model sentinels, and recycles when args change', async () => {
+    const spawned: Array<{
+      args: readonly string[] | undefined
+      executablePath: string
+      label: string | undefined
+      fake: ReturnType<typeof makeFakeClient>
+    }> = []
+
+    const acpSpawnSpy = vi.spyOn(AcpClient, 'spawn').mockImplementation(async (opts) => {
+      const fake = makeFakeClient({
+        protocol: 'acp',
+        sessionId: `${opts.label ?? 'acp'}-sess`,
+        events: [{ type: 'delta', text: `answer:${opts.label}:${(opts.args ?? []).join(' ')}` }]
+      })
+      spawned.push({
+        args: opts.args,
+        executablePath: opts.executablePath,
+        label: opts.label,
+        fake
+      })
+      return fake.client as unknown as AcpClient
+    })
+
+    let geminiArgs: readonly string[] = ['--experimental-acp']
+    const host = new CliAgentRuntimeHost({
+      resolveDriver: async (kind) => {
+        if (kind === 'gemini') {
+          return {
+            kind: 'gemini',
+            protocol: 'acp',
+            executablePath: '/mock/bin/gemini',
+            args: geminiArgs,
+            adapterName: 'gemini-acp'
+          }
+        }
+        return {
+          kind,
+          protocol: 'acp',
+          executablePath: `/mock/bin/${kind}`,
+          args: ['acp'],
+          adapterName: `${kind}-acp`
+        }
+      }
+    })
+
+    const cases = [
+      {
+        profileId: ANTIGRAVITY_CLI_PROFILE_ID,
+        providerSentinel: ANTIGRAVITY_CLI_PROVIDER_ID,
+        expectedArgs: ['acp'],
+        expectedLabel: 'antigravity-acp'
+      },
+      {
+        profileId: OPENCODE_CLI_PROFILE_ID,
+        providerSentinel: OPENCODE_CLI_PROVIDER_ID,
+        expectedArgs: ['acp'],
+        expectedLabel: 'opencode-acp'
+      },
+      {
+        profileId: GEMINI_CLI_PROFILE_ID,
+        providerSentinel: GEMINI_CLI_PROVIDER_ID,
+        expectedArgs: ['--experimental-acp'],
+        expectedLabel: 'gemini-acp'
+      },
+      {
+        profileId: KIRO_CLI_PROFILE_ID,
+        providerSentinel: KIRO_CLI_PROVIDER_ID,
+        expectedArgs: ['acp'],
+        expectedLabel: 'kiro-acp'
+      },
+      {
+        profileId: CURSOR_CLI_PROFILE_ID,
+        providerSentinel: CURSOR_CLI_PROVIDER_ID,
+        expectedArgs: ['acp'],
+        expectedLabel: 'cursor-acp'
+      }
+    ] as const
+
+    for (const [index, entry] of cases.entries()) {
+      const res = await host.execute(
+        createPayload(entry.profileId, {
+          run: { id: `acp-new-${index}`, cwd: '/tmp' } as PiRuntimeStartPayload['run'],
+          profile: {
+            ...createPayload(entry.profileId).profile,
+            modelPreference: [entry.providerSentinel]
+          }
+        })
+      )
+      expect(res.output).toBe(`answer:${entry.expectedLabel}:${entry.expectedArgs.join(' ')}`)
+      const lastSpawn = spawned.at(-1)!
+      expect(lastSpawn.args).toEqual(entry.expectedArgs)
+      expect(lastSpawn.label).toBe(entry.expectedLabel)
+      // Provider sentinel IDs (e.g. "gemini-cli") must NOT be forwarded as model names
+      expect(lastSpawn.fake.createSession).toHaveBeenCalledWith({ cwd: '/tmp' })
+    }
+
+    expect(host.isReady()).toBe(true)
+    expect(host.isReady('gemini')).toBe(true)
+    expect(acpSpawnSpy).toHaveBeenCalledTimes(5)
+
+    // Changing gemini args recycles the persistent client rather than reusing stale spawn flags
+    const previousGeminiClient = spawned.find((s) => s.label === 'gemini-acp')!
+    geminiArgs = ['--acp']
+    const recycled = await host.execute(
+      createPayload(GEMINI_CLI_PROFILE_ID, {
+        run: { id: 'acp-gemini-recycled', cwd: '/tmp' } as PiRuntimeStartPayload['run']
+      })
+    )
+    expect(recycled.output).toBe('answer:gemini-acp:--acp')
+    expect(acpSpawnSpy).toHaveBeenCalledTimes(6)
+    expect(previousGeminiClient.fake.clientClose).toHaveBeenCalledTimes(1)
 
     await host.stop()
   })

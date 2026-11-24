@@ -1,5 +1,6 @@
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { LocalAiCliProviderId } from '@talex-touch/utils/transport/events/local-ai-cli'
+import { LOCAL_AI_CLI_PROVIDER_IDS } from '@talex-touch/utils/transport/events/local-ai-cli'
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,16 +21,20 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../storage', () => ({ getMainConfig: mocks.getMainConfig }))
 
-vi.mock('../ai/providers/pi-cli-runtime', () => ({
-  PI_CLI_LOOKUP: {
-    command: 'tuff-probe-pi',
-    fallbackCommands: ['tuff-probe-pie'],
-    envOverride: 'TUFF_PROBE_PI_PATH'
-  },
-  OMP_CLI_LOOKUP: { command: 'tuff-probe-omp', envOverride: 'TUFF_PROBE_OMP_PATH' },
-  CODEX_CLI_LOOKUP: { command: 'tuff-probe-codex', envOverride: 'TUFF_PROBE_CODEX_PATH' },
-  CLAUDE_CLI_LOOKUP: { command: 'tuff-probe-claude', envOverride: 'TUFF_PROBE_CLAUDE_PATH' }
-}))
+vi.mock('../ai/providers/pi-cli-runtime', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../ai/providers/pi-cli-runtime')>()
+  return {
+    ...actual,
+    PI_CLI_LOOKUP: {
+      command: 'tuff-probe-pi',
+      fallbackCommands: ['tuff-probe-pie'],
+      envOverride: 'TUFF_PROBE_PI_PATH'
+    },
+    OMP_CLI_LOOKUP: { command: 'tuff-probe-omp', envOverride: 'TUFF_PROBE_OMP_PATH' },
+    CODEX_CLI_LOOKUP: { command: 'tuff-probe-codex', envOverride: 'TUFF_PROBE_CODEX_PATH' },
+    CLAUDE_CLI_LOOKUP: { command: 'tuff-probe-claude', envOverride: 'TUFF_PROBE_CLAUDE_PATH' }
+  }
+})
 
 import {
   getResolvedCliExecutable,
@@ -37,6 +42,7 @@ import {
 } from '../ai/providers/cli/cli-executable'
 import {
   probeCliVersion,
+  readLocalAiCliExecutableOverride,
   refreshLocalAiCliExecutables,
   resolveLocalAiCliProviderStatus,
   stopLocalAiCliVersionProbes
@@ -48,7 +54,12 @@ const ENV_KEYS = [
   'USERPROFILE',
   'TUFF_PROBE_RUNS',
   'TUFF_PROBE_PID',
-  'TUFF_PROBE_MARKER'
+  'TUFF_PROBE_MARKER',
+  'TUFF_ANTIGRAVITY_CLI_PATH',
+  'TUFF_OPENCODE_CLI_PATH',
+  'TUFF_GEMINI_CLI_PATH',
+  'TUFF_KIRO_CLI_PATH',
+  'TUFF_CURSOR_CLI_PATH'
 ] as const
 
 let workDir: string
@@ -151,20 +162,19 @@ async function runCount(): Promise<number> {
 function settings(
   overrides: Partial<Record<LocalAiCliProviderId, string>> = {}
 ): AppSetting['localAiCli'] {
-  const provider = (id: LocalAiCliProviderId) => ({
-    enabled: true,
-    executableOverride: overrides[id] ?? ''
-  })
   return {
     enabled: true,
     defaultProvider: null,
     terminalFontFamily: '',
-    providers: {
-      pi: provider('pi'),
-      codex: provider('codex'),
-      claude: provider('claude'),
-      'oh-my-pi': provider('oh-my-pi')
-    }
+    providers: Object.fromEntries(
+      LOCAL_AI_CLI_PROVIDER_IDS.map((id) => [
+        id,
+        {
+          enabled: true,
+          executableOverride: overrides[id] ?? ''
+        }
+      ])
+    ) as AppSetting['localAiCli']['providers']
   }
 }
 
@@ -231,16 +241,30 @@ describe('local agent CLI status', () => {
       'mise',
       '2025.10.8 macos-arm64 (2025-10-13)'
     )
-    for (const provider of ['codex', 'claude', 'oh-my-pi'] as const) {
+    for (const provider of [
+      'codex',
+      'claude',
+      'oh-my-pi',
+      'antigravity',
+      'opencode',
+      'gemini',
+      'kiro',
+      'cursor'
+    ] as const) {
       await expect(probeCliVersion(provider, mise)).resolves.toBeUndefined()
     }
 
-    // What each CLI prints on this machine (2026-10-03) still reads, as the bare version.
+    // What each CLI prints on this machine still reads, as the bare version.
     const samples: Array<[LocalAiCliProviderId, string, string]> = [
       ['pi', '0.84.3', '0.84.3'],
       ['codex', 'codex-cli 0.158.0', '0.158.0'],
       ['claude', '2.1.280 (Claude Code)', '2.1.280'],
-      ['oh-my-pi', 'omp/18.4.4', '18.4.4']
+      ['oh-my-pi', 'omp/18.4.4', '18.4.4'],
+      ['antigravity', '1.5.15', '1.5.15'],
+      ['opencode', '1.18.30', '1.18.30'],
+      ['gemini', '0.1.22', '0.1.22'],
+      ['kiro', 'kiro-cli 1.9.0 (abc123)', '1.9.0'],
+      ['cursor', '2026.10.01-e373342', '2026.10.01-e373342']
     ]
     for (const [provider, output, version] of samples) {
       const program = await writeProgram(join(workDir, `sample-${provider}`), 'cli', output)
@@ -499,5 +523,95 @@ describe('local agent CLI status', () => {
       version: '18.4.4'
     })
     expect(await fileExists(marker)).toBe(false)
+  })
+
+  it('maps settings overrides by lookup command and fallbackCommands for all 9 providers', () => {
+    mocks.getMainConfig.mockReturnValue({
+      localAiCli: settings({
+        antigravity: '/custom/agy',
+        opencode: '/custom/opencode',
+        gemini: '/custom/gemini',
+        kiro: '/custom/kiro-cli',
+        cursor: '/custom/cursor-agent'
+      })
+    })
+
+    expect(
+      readLocalAiCliExecutableOverride({ command: 'agy', envOverride: 'TUFF_ANTIGRAVITY_CLI_PATH' })
+    ).toBe('/custom/agy')
+    expect(
+      readLocalAiCliExecutableOverride({
+        command: 'opencode',
+        envOverride: 'TUFF_OPENCODE_CLI_PATH'
+      })
+    ).toBe('/custom/opencode')
+    expect(
+      readLocalAiCliExecutableOverride({ command: 'gemini', envOverride: 'TUFF_GEMINI_CLI_PATH' })
+    ).toBe('/custom/gemini')
+    expect(
+      readLocalAiCliExecutableOverride({
+        command: 'kiro-cli',
+        fallbackCommands: ['kiro'],
+        envOverride: 'TUFF_KIRO_CLI_PATH'
+      })
+    ).toBe('/custom/kiro-cli')
+    expect(
+      readLocalAiCliExecutableOverride({ command: 'kiro', envOverride: 'TUFF_KIRO_CLI_PATH' })
+    ).toBe('/custom/kiro-cli')
+    expect(
+      readLocalAiCliExecutableOverride({
+        command: 'cursor-agent',
+        fallbackCommands: ['agent'],
+        envOverride: 'TUFF_CURSOR_CLI_PATH'
+      })
+    ).toBe('/custom/cursor-agent')
+    expect(
+      readLocalAiCliExecutableOverride({ command: 'agent', envOverride: 'TUFF_CURSOR_CLI_PATH' })
+    ).toBe('/custom/cursor-agent')
+    expect(
+      readLocalAiCliExecutableOverride({ command: 'codex-acp', envOverride: 'TUFF_CODEX_ACP_PATH' })
+    ).toBeUndefined()
+  })
+
+  it('resolves new ACP providers via envOverride, fallback commands, and legacy 4-key settings safely', async () => {
+    const customAgy = await writeProgram(join(workDir, 'env-bins'), 'agy', '1.5.15')
+    process.env.TUFF_ANTIGRAVITY_CLI_PATH = customAgy
+    const kiroFallback = await writeProgram(binDir, 'kiro', 'kiro 1.9.0')
+    const cursorFallback = await writeProgram(binDir, 'agent', '2026.10.01-e373342')
+
+    // Legacy 4-key settings missing the 5 new providers must never throw.
+    const legacySettings = {
+      enabled: true,
+      defaultProvider: null,
+      terminalFontFamily: '',
+      providers: {
+        pi: { enabled: true, executableOverride: '' },
+        codex: { enabled: false, executableOverride: '' },
+        claude: { enabled: false, executableOverride: '' },
+        'oh-my-pi': { enabled: false, executableOverride: '' }
+      }
+    } as unknown as AppSetting['localAiCli']
+
+    await expect(
+      resolveLocalAiCliProviderStatus('antigravity', legacySettings)
+    ).resolves.toMatchObject({
+      id: 'antigravity',
+      enabled: false,
+      installed: true,
+      executablePath: customAgy,
+      version: '1.5.15'
+    })
+    await expect(resolveLocalAiCliProviderStatus('kiro', settings())).resolves.toMatchObject({
+      id: 'kiro',
+      installed: true,
+      executablePath: kiroFallback,
+      version: '1.9.0'
+    })
+    await expect(resolveLocalAiCliProviderStatus('cursor', settings())).resolves.toMatchObject({
+      id: 'cursor',
+      installed: true,
+      executablePath: cursorFallback,
+      version: '2026.10.01-e373342'
+    })
   })
 })

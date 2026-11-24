@@ -143,6 +143,76 @@ describe('recommendation modular refactor & dual-layer bridge', () => {
       expect(isEntertainmentOrSocialApp('/Applications/微信.app')).toBe(true)
     })
 
+    it('classifies all common cross-platform terminals without false-matching unrelated apps', () => {
+      const terminalIdentities = [
+        'com.apple.Terminal',
+        'com.googlecode.iterm2',
+        'com.mitchellh.ghostty',
+        '/Applications/Ghostty.app',
+        'dev.warp.Warp-Stable',
+        '/Applications/Warp.app',
+        'co.zeit.hyper',
+        '/Applications/Hyper.app',
+        'org.tabby',
+        '/Applications/Tabby.app',
+        'C:\\Users\\x\\AppData\\Local\\Programs\\Tabby\\Tabby.exe',
+        'com.cmuxterm.app',
+        '/Applications/cmux.app',
+        'com.github.wez.wezterm',
+        'C:\\Program Files\\WezTerm\\wezterm-gui.exe',
+        'net.kovidgoyal.kitty',
+        '/Applications/kitty.app',
+        'org.alacritty',
+        'C:\\Program Files\\Alacritty\\alacritty.exe',
+        'com.raphaelamorim.rio',
+        '/Applications/Rio.app',
+        'dev.waveterm.waveterm',
+        'dev.commandline.waveterm',
+        '/Applications/WaveTerm.app',
+        'kingtoolbox.windterm',
+        '/Applications/WindTerm.app',
+        'org.electerm.electerm',
+        '/Applications/Electerm.app',
+        'Microsoft.WindowsTerminal_8wekyb3d8bbwe',
+        'C:\\Users\\x\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe',
+        'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+        'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        'C:\\Windows\\System32\\cmd.exe',
+        'C:\\Program Files\\Git\\git-bash.exe',
+        'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Git\\Git Bash.lnk'
+      ]
+
+      for (const id of terminalIdentities) {
+        expect(isTerminalApp(id), `expected terminal: ${id}`).toBe(true)
+        expect(isDeveloperTool(id), `expected developer tool: ${id}`).toBe(true)
+      }
+
+      const nonTerminals = [
+        '/Applications/Cloudflare WARP.app',
+        'com.cloudflare.1dot1dot1dot1.macos',
+        'com.cloudflare.1dot1dot1dot1.macos Cloudflare WARP',
+        '/Applications/Angry Birds Rio.app',
+        '/Applications/Mario.app',
+        '/Applications/Rio Studio.app',
+        'com.example.rio',
+        'com.example.rio Rio',
+        '/Applications/Sound Wave.app',
+        '/Applications/WaveLab.app',
+        'com.waveapps.wave',
+        'com.waveapps.wave Wave',
+        '/Applications/HyperX NGENUITY.app',
+        '/Applications/Hello Kitty.app',
+        'com.sanrio.hellokitty',
+        'C:\\Program Files\\Tool\\mycmd.exe',
+        'C:\\Program Files\\Tool\\newt.exe'
+      ]
+
+      for (const id of nonTerminals) {
+        expect(isTerminalApp(id), `expected non-terminal: ${id}`).toBe(false)
+        expect(isDeveloperTool(id), `expected non-dev-tool: ${id}`).toBe(false)
+      }
+    })
+
     it('preserves app scores while adding file-extension/project affinity and suppressing sensitive files', () => {
       const tsClipboard = {
         type: 'text',

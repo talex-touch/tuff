@@ -631,4 +631,61 @@ describe('localAiCliPanel terminal lifecycle', () => {
 
     expect(wrapper.find('.LocalAiCliPanel__approval').exists()).toBe(true)
   })
+
+  it('runs newly registered ACP providers and gates terminal affordance by terminalRead capability', async () => {
+    statusState.current = localAiStatus([
+      providerStatus('antigravity', {
+        label: 'Antigravity',
+        capabilities: {
+          taskRead: true,
+          taskWriteApproval: true,
+          terminalRead: true,
+          terminalWriteApproval: false,
+          taskResume: true,
+          terminalResume: false
+        }
+      }),
+      providerStatus('gemini', {
+        label: 'Gemini CLI',
+        capabilities: {
+          taskRead: true,
+          taskWriteApproval: true,
+          terminalRead: false,
+          terminalWriteApproval: false,
+          taskResume: false,
+          terminalResume: false
+        }
+      })
+    ])
+
+    const wrapper = await mountPanel()
+    await panelApi(wrapper).open({ prompt: '', projectId: 'p1', provider: 'gemini' })
+    await flushPromises()
+
+    expect(
+      wrapper
+        .find('select[aria-label="localAiCliPanel.provider"]')
+        .findAll('option')
+        .map((option) => option.attributes('value'))
+    ).toEqual(['antigravity', 'gemini'])
+
+    await startTask(wrapper, 'inspect workspace')
+    expect(streamState.requests[0]).toMatchObject({
+      provider: 'gemini',
+      prompt: 'inspect workspace',
+      persistent: false
+    })
+    streamState.callbacks?.onData({
+      type: 'session',
+      callId: 'call',
+      provider: 'gemini',
+      sessionRef: 'ref-gemini'
+    })
+    streamState.callbacks?.onData({ type: 'complete', callId: 'call', text: 'gemini ok' })
+    await flushPromises()
+
+    expect(wrapper.findAll('button').map((item) => item.text())).not.toContain(
+      'localAiCliPanel.continueInTerminal'
+    )
+  })
 })

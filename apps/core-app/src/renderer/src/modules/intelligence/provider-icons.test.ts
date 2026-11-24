@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { IntelligenceProviderType } from '@talex-touch/utils/types/intelligence'
 import { describe, expect, it } from 'vitest'
@@ -10,6 +11,15 @@ import {
   providerIconForChannel,
   providerIconForId
 } from './provider-icons'
+
+const nodeRequire = createRequire(import.meta.url)
+
+function installedSimpleIcons(): Set<string> {
+  const set = JSON.parse(
+    readFileSync(nodeRequire.resolve('@iconify-json/simple-icons/icons.json'), 'utf8')
+  ) as { icons: Record<string, unknown>; aliases?: Record<string, unknown> }
+  return new Set([...Object.keys(set.icons), ...Object.keys(set.aliases ?? {})])
+}
 
 describe('providerIconFor', () => {
   it.each([
@@ -74,6 +84,21 @@ describe('providerIconForId', () => {
       type: 'class',
       value: 'i-simple-icons-anthropic'
     })
+    expect(providerIconForId('opencode-cli', 'local')).toEqual({
+      type: 'class',
+      value: 'i-simple-icons-opencode'
+    })
+    expect(providerIconForId('gemini-cli', 'local')).toEqual({
+      type: 'class',
+      value: 'i-simple-icons-googlegemini'
+    })
+    expect(providerIconForId('cursor-cli', 'local')).toEqual({
+      type: 'class',
+      value: 'i-simple-icons-cursor'
+    })
+    // Antigravity and Kiro have no simple-icons glyph, so they fall back to the provider type's icon.
+    expect(providerIconForId('antigravity-cli', 'local')).toEqual(providerIconFor('local'))
+    expect(providerIconForId('kiro-cli', 'local')).toEqual(providerIconFor('local'))
     // Any other local provider — an Ollama, say — keeps the type's icon.
     expect(providerIconForId('ollama', 'local')).toEqual(providerIconFor('local'))
     expect(providerIconForId('openai-main', 'openai')).toEqual(providerIconFor('openai'))
@@ -83,8 +108,16 @@ describe('providerIconForId', () => {
     expect(PROVIDER_ID_ICON_CLASSES).toEqual([
       'i-simple-icons-pi',
       'i-simple-icons-openai',
-      'i-simple-icons-anthropic'
+      'i-simple-icons-anthropic',
+      'i-simple-icons-opencode',
+      'i-simple-icons-googlegemini',
+      'i-simple-icons-cursor'
     ])
+    const installed = installedSimpleIcons()
+    for (const className of PROVIDER_ID_ICON_CLASSES) {
+      expect(className.startsWith('i-simple-icons-')).toBe(true)
+      expect(installed.has(className.slice('i-simple-icons-'.length))).toBe(true)
+    }
     const unoConfig = readFileSync(path.resolve(__dirname, '../../../../../uno.config.ts'), 'utf8')
     expect(unoConfig).toMatch(/safelist: \[[^\]]*\.\.\.PROVIDER_ID_ICON_CLASSES/)
     expect(unoConfig).not.toContain("'i-simple-icons-pi'")

@@ -1210,6 +1210,7 @@
       "processStartFailed": "The agent's program couldn't be started.",
       "protocolInvalid": "The agent's reply couldn't be read.",
       "processExited": "The agent's program quit before it finished.",
+      "tokenLimitReached": "The agent reached its token limit before finishing.",
       "statusFailed": "Couldn't read the local agents' status."
     }
   },

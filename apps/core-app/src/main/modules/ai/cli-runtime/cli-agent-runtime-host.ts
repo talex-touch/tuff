@@ -43,15 +43,11 @@ import {
   isPiRuntimeControlError
 } from '../pi-agent-runtime-control-error'
 import { withExecutableDirOnPath } from '../providers/cli/cli-executable'
-import {
-  CLAUDE_CLI_PROVIDER_ID,
-  CODEX_CLI_PROVIDER_ID,
-  OMP_CLI_PROVIDER_ID,
-  PI_CLI_PROVIDER_ID
-} from '../providers/pi-cli-runtime'
+import { PI_CLI_PROVIDER_ID } from '../providers/pi-cli-runtime'
 import { projectRunFailureDetail } from '../run-failure-detail'
 import { gitWorktreeManager, isGitWorktreeError } from '../worktree'
 import {
+  CLI_DRIVER_REGISTRY,
   cliDefaultModelLabel,
   cliProviderIdForKind,
   parseWorktreeRequestOptions,
@@ -65,17 +61,16 @@ const cliHostLog = createLogger('Intelligence').child('CliAgentRuntimeHost')
 const DATA_URL_IMAGE_PATTERN = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/i
 const MAX_CLI_TOOL_OUTPUT_CHARS = 64 * 1024
 const MAX_TRACKED_RUN_PROTOCOLS = 256
-const PROVIDER_MODEL_SENTINELS = new Set([
-  OMP_CLI_PROVIDER_ID,
-  CODEX_CLI_PROVIDER_ID,
-  CLAUDE_CLI_PROVIDER_ID,
-  PI_CLI_PROVIDER_ID
+const PROVIDER_MODEL_SENTINELS = new Set<string>([
+  PI_CLI_PROVIDER_ID,
+  ...Object.values(CLI_DRIVER_REGISTRY).map((descriptor) => descriptor.providerId)
 ])
 
 interface PersistentClientEntry {
   kind: CliRuntimeKind
   protocol: CliRuntimeProtocol
   executablePath: string
+  argsKey: string
   mcpFingerprint: string
   client: CliRuntimeClient
 }
@@ -337,12 +332,10 @@ export class CliAgentRuntimeHost {
     if (kind) {
       return this.isPersistentEntryReady(kind) || this.readyKinds.has(kind)
     }
-    return (
-      this.isPersistentEntryReady('omp') ||
-      this.isPersistentEntryReady('codex') ||
-      this.isPersistentEntryReady('claude') ||
-      this.readyKinds.size > 0
-    )
+    for (const registeredKind of Array.from(this.persistentClients.keys())) {
+      if (this.isPersistentEntryReady(registeredKind)) return true
+    }
+    return this.readyKinds.size > 0
   }
 
   isRunActive(runId: string): boolean {
@@ -450,6 +443,8 @@ export class CliAgentRuntimeHost {
     driver: CliDriverResolution,
     options: { mcpServers: AcpMcpServerConfig[]; strictMcpServers: boolean }
   ): Promise<PersistentClientEntry> {
+    const driverArgs = driver.args ? [...driver.args] : []
+    const argsKey = JSON.stringify(driverArgs)
     const mcpFingerprint =
       driver.protocol === 'codex-app-server'
         ? computeMcpFingerprint(options.mcpServers, options.strictMcpServers)
@@ -461,12 +456,13 @@ export class CliAgentRuntimeHost {
       !(typeof existing.client.isClosed === 'function' && existing.client.isClosed()) &&
       existing.protocol === driver.protocol &&
       existing.executablePath === driver.executablePath &&
+      existing.argsKey === argsKey &&
       existing.mcpFingerprint === mcpFingerprint
     ) {
       return existing
     }
 
-    const flightKey = `${driver.kind}:${driver.protocol}:${driver.executablePath}:${mcpFingerprint}`
+    const flightKey = `${driver.kind}:${driver.protocol}:${driver.executablePath}:${argsKey}:${mcpFingerprint}`
     const inFlight = this.startPromises.get(flightKey)
     if (inFlight) return inFlight
 
@@ -479,13 +475,14 @@ export class CliAgentRuntimeHost {
       if (driver.kind === 'omp') {
         spawned = await OmpAcpClient.spawn({
           executablePath: driver.executablePath,
+          ...(driverArgs.length > 0 ? { args: driverArgs } : {}),
           env,
           onRequest: (method, params) => this.handleAcpServerRequest('omp', method, params)
         })
       } else if (driver.protocol === 'acp') {
         spawned = await AcpClient.spawn({
           executablePath: driver.executablePath,
-          args: [],
+          args: driverArgs,
           env,
           label: driver.adapterName,
           onRequest: (method, params) => this.handleAcpServerRequest(driver.kind, method, params)
@@ -510,6 +507,7 @@ export class CliAgentRuntimeHost {
         kind: driver.kind,
         protocol: driver.protocol,
         executablePath: driver.executablePath,
+        argsKey,
         mcpFingerprint,
         client: spawned
       }
@@ -846,6 +844,7 @@ export class CliAgentRuntimeHost {
           session = await entry.client.createSession({
             cwd: effectiveCwd,
             ...(preferredModel ? { model: preferredModel } : {}),
+            ...(reasoningEffort ? { reasoningEffort } : {}),
             ...(mcpServers.length > 0 ? { mcpServers } : {})
           })
         } else {

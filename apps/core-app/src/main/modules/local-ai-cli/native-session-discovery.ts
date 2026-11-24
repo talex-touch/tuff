@@ -574,6 +574,14 @@ export async function findNativeSessionFile(
   projectRoot: string,
   options: { roots?: NativeSessionDiscoveryRoots; signal?: AbortSignal } = {}
 ): Promise<string | null> {
+  if (
+    provider !== 'pi' &&
+    provider !== 'oh-my-pi' &&
+    provider !== 'claude' &&
+    provider !== 'codex'
+  ) {
+    return null
+  }
   if (!/^[A-Za-z0-9-]{1,128}$/u.test(nativeSessionId))
     throw new Error('LOCAL_AI_CLI_SESSION_INVALID')
   const canonicalProjectRoot = await canonicalDirectory(projectRoot)

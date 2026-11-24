@@ -169,26 +169,41 @@ export interface AcpMcpServerConfig {
   headers?: Record<string, string> | AcpKeyValueHeader[]
 }
 
+export interface AcpSessionMode {
+  id: string
+  name?: string
+  description?: string
+}
+
+export interface AcpSessionModeState {
+  currentModeId?: string
+  availableModes: AcpSessionMode[]
+}
+
 export interface AcpSessionNewParams {
   cwd: string
   mcpServers?: AcpMcpServerConfig[]
   sessionId?: string
+  _meta?: Record<string, unknown>
 }
 
 export interface AcpSessionNewResult {
   sessionId: string
   configOptions?: AcpConfigOption[]
+  modes?: AcpSessionModeState
 }
 
 export interface AcpSessionLoadParams {
   sessionId: string
   cwd: string
   mcpServers?: AcpMcpServerConfig[]
+  _meta?: Record<string, unknown>
 }
 
 export interface AcpSessionLoadResult {
   sessionId?: string
   configOptions?: AcpConfigOption[]
+  modes?: AcpSessionModeState
 }
 
 export interface AcpSetConfigOptionParams {
@@ -224,24 +239,34 @@ export interface AcpUsageUpdate {
 
 export type AcpSessionUpdateType
   = | 'available_commands_update'
+    | 'current_mode_update'
     | 'session_info_update'
     | 'config_option_update'
     | 'agent_thought_chunk'
     | 'agent_message_chunk'
+    | 'user_message_chunk'
+    | 'plan'
     | 'usage_update'
     | 'tool_call'
     | 'tool_call_update'
     | 'tool_result'
+    | (string & {})
 
 export interface AcpSessionUpdateNotification {
   sessionId: string
   update: {
     sessionUpdate: AcpSessionUpdateType
-    content?: {
-      type: string
-      text?: string
-      [key: string]: unknown
-    }
+    content?:
+      | {
+          type: string
+          text?: string
+          [key: string]: unknown
+        }
+      | Array<{
+          type?: string
+          text?: string
+          [key: string]: unknown
+        }>
     configOptions?: AcpConfigOption[]
     usage?: AcpUsageUpdate
     [key: string]: unknown
@@ -296,9 +321,21 @@ export interface AcpSessionCreateOptions {
   mcpServers?: AcpMcpServerConfig[]
   permissionMode?: 'review' | 'full'
   resumeSessionId?: string
+  _meta?: Record<string, unknown>
 }
 
-export type CliRuntimeKind = 'omp' | 'codex' | 'claude'
+export const CLI_RUNTIME_KINDS = [
+  'omp',
+  'codex',
+  'claude',
+  'antigravity',
+  'opencode',
+  'gemini',
+  'kiro',
+  'cursor',
+] as const
+
+export type CliRuntimeKind = (typeof CLI_RUNTIME_KINDS)[number]
 export type CliRuntimeProtocol = 'acp' | 'codex-app-server' | 'claude-stream-json'
 export type CliPermissionRiskKind = 'read' | 'write' | 'execute'
 
@@ -352,11 +389,14 @@ export interface CliRuntimeSessionOptions {
   mcpServers?: AcpMcpServerConfig[]
   permissionMode?: 'review' | 'full'
   resumeSessionId?: string
+  _meta?: Record<string, unknown>
 }
 
 export interface CliRuntimeSession {
   readonly sessionId: string
   readonly protocol: CliRuntimeProtocol
+  readonly lastStopReason?: string
+  readonly modes?: AcpSessionModeState
   promptStream(
     content: string | AcpPromptContent[],
     options?: AcpPromptStreamOptions,
@@ -379,7 +419,7 @@ export interface CliRuntimeClient {
 
 export interface AcpSpawnOptions {
   executablePath: string
-  args?: string[]
+  args?: readonly string[]
   cwd?: string
   env?: Record<string, string | undefined>
   clientInfo?: AcpClientInfo

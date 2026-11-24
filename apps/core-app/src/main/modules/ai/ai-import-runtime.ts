@@ -22,6 +22,7 @@ import {
 import { readBoundedImportFile } from './ai-import-bounded-file'
 import {
   parseConfig,
+  parseGeminiTomlCommand,
   parseMcpProfiles,
   parseModelProviders,
   type ParsedMcpProfile,
@@ -241,7 +242,7 @@ function normalizeMcpProfiles(
   if (!config || candidate.kind !== 'mcp') return []
   const profiles: IntelligenceMcpProfile[] = []
   for (const profile of parseMcpProfiles(config)) {
-    const id = `import.${candidate.provider}.${hash(`${candidate.sourceId}:${profile.name}`).slice(0, 20)}`
+    const id = `import.${candidate.provider}.${hash(`${candidate.id}:${profile.name}`).slice(0, 20)}`
     const enabled = !profile.requiresReauth && !switchedOff.has(profile.name)
     if (profile.type === 'stdio' && profile.command) {
       const env: Record<string, string> = {}
@@ -498,8 +499,22 @@ export class AiImportRuntimeService {
         if (hash(rawContent) !== candidate.fingerprint)
           throw new Error(`Import candidate ${candidate.id} changed after preview`)
 
-        const parsed = parseConfig(rawContent, extname(sourceFile.canonicalPath).toLowerCase())
+        const extension = extname(sourceFile.canonicalPath).toLowerCase()
+        const parsed = parseConfig(rawContent, extension)
         let sanitizedContent = rawContent
+        if (
+          candidate.kind === 'command' &&
+          candidate.provider === 'gemini' &&
+          extension === '.toml'
+        ) {
+          const parsedCommand = parseGeminiTomlCommand(rawContent)
+          if (parsedCommand.blockingIssues.length > 0 || !parsedCommand.prompt) {
+            throw new Error(
+              `Gemini TOML command ${candidate.id} cannot be imported: ${parsedCommand.blockingIssues.join('; ') || 'missing prompt'}`
+            )
+          }
+          sanitizedContent = parsedCommand.prompt
+        }
         let writes: SecretWrite[] = []
         let switchedOff: Set<string> | undefined
         if (candidate.kind === 'mcp') {

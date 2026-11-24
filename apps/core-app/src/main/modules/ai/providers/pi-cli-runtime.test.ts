@@ -1,11 +1,46 @@
-import { describe, expect, it } from 'vitest'
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
+  IntelligenceProviderType,
+  type IntelligenceProviderConfig
+} from '@talex-touch/tuff-intelligence'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import {
+  ANTIGRAVITY_CLI_ORIGIN,
+  ANTIGRAVITY_CLI_PROFILE_ID,
+  ANTIGRAVITY_CLI_PROVIDER_ID,
   buildPiArgs,
   buildPiPrompt,
+  CLAUDE_CLI_PROFILE_ID,
+  CLAUDE_CLI_PROVIDER_ID,
+  CLI_PROFILE_PROVIDER_MAP,
+  CODEX_CLI_PROFILE_ID,
+  CODEX_CLI_PROVIDER_ID,
+  CURSOR_CLI_ORIGIN,
+  CURSOR_CLI_PROFILE_ID,
+  CURSOR_CLI_PROVIDER_ID,
+  describeResolvedCliExecutables,
+  GEMINI_CLI_ORIGIN,
+  GEMINI_CLI_PROFILE_ID,
+  GEMINI_CLI_PROVIDER_ID,
+  isCliAgentProviderConfig,
+  KIRO_CLI_ORIGIN,
+  KIRO_CLI_PROFILE_ID,
+  KIRO_CLI_PROVIDER_ID,
+  LOCAL_CLI_PROFILE_SPECS,
+  OMP_CLI_PROFILE_ID,
+  OMP_CLI_PROVIDER_ID,
+  OPENCODE_CLI_ORIGIN,
+  OPENCODE_CLI_PROFILE_ID,
+  OPENCODE_CLI_PROVIDER_ID,
   parsePiCliLine,
   PI_CLI_DEFAULT_SYSTEM_PROMPT,
+  PI_CLI_PROVIDER_ID,
   PI_SESSION_PROTOCOL_VERSION,
+  probeAllCliExecutables,
   readPiSessionProtocolVersion,
+  resetAllCliExecutableCaches,
   PI_CLI_TRANSCRIPT_CHAR_BUDGET
 } from './pi-cli-runtime'
 
@@ -690,5 +725,142 @@ describe('buildPiPrompt native continuation', () => {
 
     expect(prompt.prompt).toBe(giant)
     expect(prompt.prompt).not.toContain('omitted')
+  })
+})
+
+describe('multi-CLI registry, provider detection, and executable probing', () => {
+  const envKeys = [
+    'TUFF_PI_CLI_PATH',
+    'TUFF_OMP_CLI_PATH',
+    'TUFF_CODEX_CLI_PATH',
+    'TUFF_CLAUDE_CLI_PATH',
+    'TUFF_ANTIGRAVITY_CLI_PATH',
+    'TUFF_OPENCODE_CLI_PATH',
+    'TUFF_GEMINI_CLI_PATH',
+    'TUFF_KIRO_CLI_PATH',
+    'TUFF_CURSOR_CLI_PATH',
+    'PATH'
+  ]
+  const savedEnv: Record<string, string | undefined> = {}
+  let tempDir: string | null = null
+
+  beforeEach(async () => {
+    for (const key of envKeys) savedEnv[key] = process.env[key]
+    tempDir = await mkdtemp(join(tmpdir(), 'tuff-pi-cli-runtime-'))
+    resetAllCliExecutableCaches()
+  })
+
+  afterEach(async () => {
+    for (const key of envKeys) {
+      if (savedEnv[key] === undefined) delete process.env[key]
+      else process.env[key] = savedEnv[key]
+    }
+    resetAllCliExecutableCaches()
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true }).catch(() => undefined)
+      tempDir = null
+    }
+  })
+
+  async function makeBin(name: string): Promise<string> {
+    const file = join(tempDir!, name)
+    await writeFile(file, '#!/bin/sh\nexit 0\n', 'utf8')
+    await chmod(file, 0o755)
+    return file
+  }
+
+  function makeConfig(id: string, origin?: string): IntelligenceProviderConfig {
+    return {
+      id,
+      type: IntelligenceProviderType.LOCAL,
+      name: id,
+      enabled: true,
+      priority: 1,
+      models: [],
+      timeout: 30_000,
+      capabilities: ['text.chat'],
+      ...(origin ? { metadata: { origin } } : {})
+    }
+  }
+
+  it('recognizes all 9 local CLI provider configs by id or metadata.origin and ignores non-CLI local providers', () => {
+    const cliPairs: Array<[string, string]> = [
+      [PI_CLI_PROVIDER_ID, 'pi-cli'],
+      [OMP_CLI_PROVIDER_ID, 'omp-cli'],
+      [CODEX_CLI_PROVIDER_ID, 'codex-cli'],
+      [CLAUDE_CLI_PROVIDER_ID, 'claude-cli'],
+      [ANTIGRAVITY_CLI_PROVIDER_ID, ANTIGRAVITY_CLI_ORIGIN],
+      [OPENCODE_CLI_PROVIDER_ID, OPENCODE_CLI_ORIGIN],
+      [GEMINI_CLI_PROVIDER_ID, GEMINI_CLI_ORIGIN],
+      [KIRO_CLI_PROVIDER_ID, KIRO_CLI_ORIGIN],
+      [CURSOR_CLI_PROVIDER_ID, CURSOR_CLI_ORIGIN]
+    ]
+
+    for (const [id, origin] of cliPairs) {
+      expect(isCliAgentProviderConfig(makeConfig(id))).toBe(true)
+      expect(isCliAgentProviderConfig(makeConfig('custom-local-id', origin))).toBe(true)
+    }
+    expect(isCliAgentProviderConfig(makeConfig('ollama-local'))).toBe(false)
+    expect(isCliAgentProviderConfig(makeConfig('lmstudio', 'lmstudio'))).toBe(false)
+  })
+
+  it('registers LOCAL_CLI_PROFILE_SPECS and CLI_PROFILE_PROVIDER_MAP for default-pi and all 8 external CLIs', () => {
+    expect(LOCAL_CLI_PROFILE_SPECS.map((spec) => spec.id)).toEqual([
+      'default-pi',
+      CLAUDE_CLI_PROFILE_ID,
+      CODEX_CLI_PROFILE_ID,
+      OMP_CLI_PROFILE_ID,
+      ANTIGRAVITY_CLI_PROFILE_ID,
+      OPENCODE_CLI_PROFILE_ID,
+      GEMINI_CLI_PROFILE_ID,
+      KIRO_CLI_PROFILE_ID,
+      CURSOR_CLI_PROFILE_ID
+    ])
+
+    expect(CLI_PROFILE_PROVIDER_MAP).toEqual({
+      'default-pi': PI_CLI_PROVIDER_ID,
+      [CLAUDE_CLI_PROFILE_ID]: CLAUDE_CLI_PROVIDER_ID,
+      [CODEX_CLI_PROFILE_ID]: CODEX_CLI_PROVIDER_ID,
+      [OMP_CLI_PROFILE_ID]: OMP_CLI_PROVIDER_ID,
+      [ANTIGRAVITY_CLI_PROFILE_ID]: ANTIGRAVITY_CLI_PROVIDER_ID,
+      [OPENCODE_CLI_PROFILE_ID]: OPENCODE_CLI_PROVIDER_ID,
+      [GEMINI_CLI_PROFILE_ID]: GEMINI_CLI_PROVIDER_ID,
+      [KIRO_CLI_PROFILE_ID]: KIRO_CLI_PROVIDER_ID,
+      [CURSOR_CLI_PROFILE_ID]: CURSOR_CLI_PROVIDER_ID
+    })
+  })
+
+  it('probes and summarizes all 9 CLI executables by command name without leaking paths', async () => {
+    const missing = join(tempDir!, 'does-not-exist')
+    process.env.TUFF_PI_CLI_PATH = missing
+    process.env.TUFF_OMP_CLI_PATH = missing
+    process.env.TUFF_CODEX_CLI_PATH = missing
+    process.env.TUFF_CLAUDE_CLI_PATH = missing
+    process.env.TUFF_ANTIGRAVITY_CLI_PATH = await makeBin('agy')
+    process.env.TUFF_OPENCODE_CLI_PATH = await makeBin('opencode')
+    process.env.TUFF_GEMINI_CLI_PATH = await makeBin('gemini')
+    process.env.TUFF_KIRO_CLI_PATH = await makeBin('kiro')
+    process.env.TUFF_CURSOR_CLI_PATH = await makeBin('agent')
+    resetAllCliExecutableCaches()
+
+    const summary = await probeAllCliExecutables()
+    expect(summary).toEqual({
+      pi: 'absent',
+      omp: 'absent',
+      codex: 'absent',
+      claude: 'absent',
+      antigravity: 'agy',
+      opencode: 'opencode',
+      gemini: 'gemini',
+      kiro: 'kiro',
+      cursor: 'agent'
+    })
+    expect(describeResolvedCliExecutables()).toEqual(summary)
+    expect(JSON.stringify(summary)).not.toContain(tempDir!)
+
+    // Resetting all caches drops the memoised entries cleanly
+    resetAllCliExecutableCaches()
+    expect(describeResolvedCliExecutables().antigravity).toBe('absent')
+    expect(describeResolvedCliExecutables().pi).toBe('unprobed')
   })
 })

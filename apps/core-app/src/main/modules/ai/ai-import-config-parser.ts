@@ -28,7 +28,7 @@ function splitTopLevel(value: string, separator = ','): string[] {
     const char = value[index]!
     if (quote) {
       if (escaped) escaped = false
-      else if (char === '\\') escaped = true
+      else if (quote === '"' && char === '\\') escaped = true
       else if (char === quote) quote = ''
       continue
     }
@@ -44,16 +44,40 @@ function splitTopLevel(value: string, separator = ','): string[] {
   return parts.filter(Boolean)
 }
 
+const BASIC_STRING_ESCAPES: Record<string, string> = {
+  b: '\b',
+  t: '\t',
+  n: '\n',
+  f: '\f',
+  r: '\r',
+  '"': '"',
+  "'": "'",
+  '\\': '\\'
+}
+
+function unescapeBasicTomlString(value: string, allowLineContinuation = true): string {
+  const pattern = allowLineContinuation
+    ? /\\(?:([btnfr"'\\])|u([0-9a-fA-F]{4})|U([0-9a-fA-F]{8})|([ \t]*\r?\n[ \t\r\n]*))/g
+    : /\\(?:([btnfr"'\\])|u([0-9a-fA-F]{4})|U([0-9a-fA-F]{8}))/g
+  return value.replace(pattern, (match, simple?: string, u4?: string, u8?: string) => {
+    if (simple) return BASIC_STRING_ESCAPES[simple]!
+    if (u4 || u8) {
+      try {
+        return String.fromCodePoint(Number.parseInt((u4 ?? u8)!, 16))
+      } catch {
+        return match
+      }
+    }
+    return ''
+  })
+}
+
 function unquote(value: string): string {
   const trimmed = value.trim()
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  )
-    return trimmed.slice(1, -1).replace(/\\(["'\\bnrt])/g, (_match, escaped: string) => {
-      const escapes: Record<string, string> = { b: '\b', n: '\n', r: '\r', t: '\t' }
-      return escapes[escaped] ?? escaped
-    })
+  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"'))
+    return unescapeBasicTomlString(trimmed.slice(1, -1), false)
+  if (trimmed.length >= 2 && trimmed.startsWith("'") && trimmed.endsWith("'"))
+    return trimmed.slice(1, -1)
   return trimmed
 }
 
@@ -84,7 +108,7 @@ function uncommentToml(line: string): string {
     const char = line[index]!
     if (quote) {
       if (escaped) escaped = false
-      else if (char === '\\') escaped = true
+      else if (quote === '"' && char === '\\') escaped = true
       else if (char === quote) quote = ''
       continue
     }
@@ -109,22 +133,82 @@ function setPath(root: Record<string, unknown>, path: string[], value: unknown):
   return true
 }
 
+function findClosingTripleQuote(line: string, delimiter: '"""' | "'''", fromIndex: number): number {
+  let escaped = false
+  for (let index = fromIndex; index < line.length; index += 1) {
+    const char = line[index]!
+    if (delimiter === '"""') {
+      if (escaped) {
+        escaped = false
+        continue
+      }
+      if (char === '\\') {
+        escaped = true
+        continue
+      }
+    }
+    if (line.startsWith(delimiter, index)) return index
+  }
+  return -1
+}
+
 function parseToml(content: string): Record<string, unknown> | null {
   const root: Record<string, unknown> = {}
   let section: string[] = []
-  for (const rawLine of content.split(/\r?\n/)) {
-    const line = uncommentToml(rawLine).trim()
-    if (!line) continue
-    const sectionMatch = /^\[([^\]]+)]$/.exec(line)
-    if (sectionMatch) {
+  const lines = content.split(/\r?\n/)
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const rawLine = lines[lineIndex]!
+    const trimmedStart = rawLine.trimStart()
+    if (!trimmedStart || trimmedStart.startsWith('#')) continue
+    const equals = rawLine.indexOf('=')
+    const firstNonSpace = trimmedStart[0]
+    if (firstNonSpace === '[') {
+      const line = uncommentToml(rawLine).trim()
+      const sectionMatch = /^\[([^\]]+)]$/.exec(line)
+      if (!sectionMatch) return null
       section = splitTopLevel(sectionMatch[1]!, '.').map(unquote)
       if (!setPath(root, section, {})) return null
       continue
     }
-    const equals = line.indexOf('=')
     if (equals <= 0) return null
-    const key = splitTopLevel(line.slice(0, equals), '.').map(unquote)
-    if (!setPath(root, [...section, ...key], parseScalar(line.slice(equals + 1)))) return null
+    const key = splitTopLevel(rawLine.slice(0, equals), '.').map(unquote)
+    const rawValue = rawLine.slice(equals + 1).trimStart()
+    if (rawValue.startsWith('"""') || rawValue.startsWith("'''")) {
+      const delimiter: '"""' | "'''" = rawValue.startsWith('"""') ? '"""' : "'''"
+      const rest = rawValue.slice(3)
+      const sameLineClose = findClosingTripleQuote(rest, delimiter, 0)
+      let body: string
+      let trailing: string
+      if (sameLineClose >= 0) {
+        body = rest.slice(0, sameLineClose)
+        trailing = rest.slice(sameLineClose + 3)
+      } else {
+        const chunks: string[] = rest ? [rest] : []
+        let closed = false
+        trailing = ''
+        while (++lineIndex < lines.length) {
+          const nextLine = lines[lineIndex]!
+          const closeIndex = findClosingTripleQuote(nextLine, delimiter, 0)
+          if (closeIndex >= 0) {
+            chunks.push(nextLine.slice(0, closeIndex))
+            trailing = nextLine.slice(closeIndex + 3)
+            closed = true
+            break
+          }
+          chunks.push(nextLine)
+        }
+        if (!closed) return null
+        body = chunks.join('\n')
+      }
+      if (uncommentToml(trailing).trim()) return null
+      const parsedValue = delimiter === '"""' ? unescapeBasicTomlString(body) : body
+      if (!setPath(root, [...section, ...key], parsedValue)) return null
+      continue
+    }
+    const line = uncommentToml(rawLine).trim()
+    const cleanEquals = line.indexOf('=')
+    if (cleanEquals <= 0) return null
+    if (!setPath(root, [...section, ...key], parseScalar(line.slice(cleanEquals + 1)))) return null
   }
   return root
 }
@@ -256,7 +340,15 @@ export function parseMcpProfiles(config: Record<string, unknown>): ParsedMcpProf
       typeof rawProfile.command === 'string' && rawProfile.command.trim()
         ? rawProfile.command.trim()
         : undefined
-    const url = isHttpUrl(rawProfile.url) ? rawProfile.url : undefined
+    // Gemini CLI uses `httpUrl` for streamable HTTP and Antigravity's `mcp_config.json` uses
+    // `serverUrl`; honor them only when `url` is absent so an invalid `url` never falls through.
+    const rawUrl =
+      rawProfile.url !== undefined
+        ? rawProfile.url
+        : rawProfile.httpUrl !== undefined
+          ? rawProfile.httpUrl
+          : rawProfile.serverUrl
+    const url = isHttpUrl(rawUrl) ? rawUrl : undefined
     if ((command ? 1 : 0) + (url ? 1 : 0) !== 1) continue
     const args = Array.isArray(rawProfile.args)
       ? rawProfile.args.filter((value): value is string => typeof value === 'string')
@@ -479,4 +571,71 @@ export function parseModelProviders(
   }
 
   return result
+}
+
+export interface ParsedGeminiTomlCommand {
+  description?: string
+  prompt?: string
+  ignoredFields: string[]
+  blockingIssues: string[]
+}
+
+const GEMINI_SHELL_INJECTION_REGEX = /!\{[\s\S]*?\}/
+const GEMINI_FILE_INJECTION_REGEX = /@\{[\s\S]*?\}/
+const GEMINI_TEMPLATE_PLACEHOLDER_REGEX = /\{\{([\s\S]*?)\}\}/g
+
+/**
+ * Parses and normalizes a Gemini CLI TOML custom command file.
+ *
+ * Gemini CLI commands store their template in `prompt` with `{{args}}` placeholders and optional
+ * `!{...}` shell / `@{...}` file injections. Tuff's command runtime expands `$ARGUMENTS` and
+ * positional placeholders only, so supported `{{args}}` placeholders are translated to
+ * `$ARGUMENTS` while unsupported constructs are blocked explicitly instead of being injected raw.
+ */
+export function parseGeminiTomlCommand(content: string): ParsedGeminiTomlCommand {
+  const parsed = parseConfig(content, '.toml')
+  if (!parsed) {
+    return {
+      ignoredFields: [],
+      blockingIssues: ['Gemini TOML command could not be parsed']
+    }
+  }
+  const ignoredFields = Object.keys(parsed)
+    .filter((key) => key !== 'prompt' && key !== 'description')
+    .sort()
+  const description = typeof parsed.description === 'string' ? parsed.description.trim() : undefined
+  const blockingIssues: string[] = []
+  if (typeof parsed.prompt !== 'string' || !parsed.prompt.trim()) {
+    blockingIssues.push('Gemini TOML command must define a non-empty string prompt')
+    return { description, ignoredFields, blockingIssues }
+  }
+  const rawPrompt = parsed.prompt
+  if (GEMINI_SHELL_INJECTION_REGEX.test(rawPrompt)) {
+    blockingIssues.push('Gemini TOML command uses unsupported !{...} shell injection')
+  }
+  if (GEMINI_FILE_INJECTION_REGEX.test(rawPrompt)) {
+    blockingIssues.push('Gemini TOML command uses unsupported @{...} file injection')
+  }
+  const unsupportedPlaceholders = new Set<string>()
+  for (const match of rawPrompt.matchAll(GEMINI_TEMPLATE_PLACEHOLDER_REGEX)) {
+    const inner = match[1]?.trim() ?? ''
+    if (inner !== 'args') {
+      unsupportedPlaceholders.add(match[0])
+    }
+  }
+  if (unsupportedPlaceholders.size > 0) {
+    blockingIssues.push(
+      `Gemini TOML command uses unsupported template placeholder(s): ${[...unsupportedPlaceholders].join(', ')}`
+    )
+  }
+  if (blockingIssues.length > 0) {
+    return { description, ignoredFields, blockingIssues }
+  }
+  const normalizedPrompt = rawPrompt.replace(/\{\{\s*args\s*\}\}/g, () => '$ARGUMENTS')
+  return {
+    description,
+    prompt: normalizedPrompt,
+    ignoredFields,
+    blockingIssues: []
+  }
 }

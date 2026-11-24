@@ -37,6 +37,11 @@ const mocks = vi.hoisted(() => {
     resolveCodexExecutable: vi.fn(async (): Promise<string | null> => '/mock/bin/codex'),
     resolveClaudeAcpExecutable: vi.fn(async (): Promise<string | null> => null),
     resolveClaudeExecutable: vi.fn(async (): Promise<string | null> => '/mock/bin/claude'),
+    resolveAntigravityExecutable: vi.fn(async (): Promise<string | null> => '/mock/bin/agy'),
+    resolveOpencodeExecutable: vi.fn(async (): Promise<string | null> => '/mock/bin/opencode'),
+    resolveGeminiExecutable: vi.fn(async (): Promise<string | null> => '/mock/bin/gemini'),
+    resolveKiroExecutable: vi.fn(async (): Promise<string | null> => '/mock/bin/kiro-cli'),
+    resolveCursorExecutable: vi.fn(async (): Promise<string | null> => '/mock/bin/cursor-agent'),
     activeMcpServer: null as { url: string; token: string } | null,
     gatewayMode: 'review' as 'review' | 'full',
     requestConfirmation: vi.fn(async () => ({ approved: true, remember: false })),
@@ -306,7 +311,12 @@ vi.mock('./providers/pi-cli-runtime', async (importOriginal) => {
     resolveCodexAcpExecutable: mocks.resolveCodexAcpExecutable,
     resolveCodexExecutable: mocks.resolveCodexExecutable,
     resolveClaudeAcpExecutable: mocks.resolveClaudeAcpExecutable,
-    resolveClaudeExecutable: mocks.resolveClaudeExecutable
+    resolveClaudeExecutable: mocks.resolveClaudeExecutable,
+    resolveAntigravityExecutable: mocks.resolveAntigravityExecutable,
+    resolveOpencodeExecutable: mocks.resolveOpencodeExecutable,
+    resolveGeminiExecutable: mocks.resolveGeminiExecutable,
+    resolveKiroExecutable: mocks.resolveKiroExecutable,
+    resolveCursorExecutable: mocks.resolveCursorExecutable
   }
 })
 
@@ -329,12 +339,22 @@ vi.mock('./pi-agent-runtime-host', async (importOriginal) => {
 import { AiCliOrchestrator } from './ai-cli-orchestrator'
 import { setAutoResumeOnStartupReader } from './auto-resume-setting'
 import {
+  ANTIGRAVITY_CLI_PROFILE_ID,
+  ANTIGRAVITY_CLI_PROVIDER_ID,
   CLAUDE_CLI_PROFILE_ID,
   CLAUDE_CLI_PROVIDER_ID,
   CODEX_CLI_PROFILE_ID,
   CODEX_CLI_PROVIDER_ID,
+  CURSOR_CLI_PROFILE_ID,
+  CURSOR_CLI_PROVIDER_ID,
+  GEMINI_CLI_PROFILE_ID,
+  GEMINI_CLI_PROVIDER_ID,
+  KIRO_CLI_PROFILE_ID,
+  KIRO_CLI_PROVIDER_ID,
   OMP_CLI_PROFILE_ID,
-  OMP_CLI_PROVIDER_ID
+  OMP_CLI_PROVIDER_ID,
+  OPENCODE_CLI_PROFILE_ID,
+  OPENCODE_CLI_PROVIDER_ID
 } from './providers/pi-cli-runtime'
 
 const AUTHORITY_VERSION = 1_700_000_000_000
@@ -413,6 +433,11 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
     mocks.resolveCodexExecutable.mockReset().mockResolvedValue('/mock/bin/codex')
     mocks.resolveClaudeAcpExecutable.mockReset().mockResolvedValue(null)
     mocks.resolveClaudeExecutable.mockReset().mockResolvedValue('/mock/bin/claude')
+    mocks.resolveAntigravityExecutable.mockReset().mockResolvedValue('/mock/bin/agy')
+    mocks.resolveOpencodeExecutable.mockReset().mockResolvedValue('/mock/bin/opencode')
+    mocks.resolveGeminiExecutable.mockReset().mockResolvedValue('/mock/bin/gemini')
+    mocks.resolveKiroExecutable.mockReset().mockResolvedValue('/mock/bin/kiro-cli')
+    mocks.resolveCursorExecutable.mockReset().mockResolvedValue('/mock/bin/cursor-agent')
     mocks.requestConfirmation.mockReset().mockResolvedValue({ approved: true, remember: false })
     mocks.piExecute.mockReset().mockImplementation(async (payload: PiRuntimeStartPayload) => ({
       runId: payload.run.id,
@@ -530,10 +555,24 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
     mocks.profiles.set(OMP_CLI_PROFILE_ID, makeProfile(OMP_CLI_PROFILE_ID))
     mocks.profiles.set(CODEX_CLI_PROFILE_ID, makeProfile(CODEX_CLI_PROFILE_ID))
     mocks.profiles.set(CLAUDE_CLI_PROFILE_ID, makeProfile(CLAUDE_CLI_PROFILE_ID))
+    mocks.profiles.set(ANTIGRAVITY_CLI_PROFILE_ID, makeProfile(ANTIGRAVITY_CLI_PROFILE_ID))
+    mocks.profiles.set(OPENCODE_CLI_PROFILE_ID, makeProfile(OPENCODE_CLI_PROFILE_ID))
+    mocks.profiles.set(GEMINI_CLI_PROFILE_ID, makeProfile(GEMINI_CLI_PROFILE_ID))
+    mocks.profiles.set(KIRO_CLI_PROFILE_ID, makeProfile(KIRO_CLI_PROFILE_ID))
+    mocks.profiles.set(CURSOR_CLI_PROFILE_ID, makeProfile(CURSOR_CLI_PROFILE_ID))
     mocks.profiles.set(
       'custom-codex-claude-profile',
       makeProfile('custom-codex-claude-profile', {
-        modelPreference: [CODEX_CLI_PROVIDER_ID, CLAUDE_CLI_PROVIDER_ID, OMP_CLI_PROVIDER_ID]
+        modelPreference: [
+          CODEX_CLI_PROVIDER_ID,
+          CLAUDE_CLI_PROVIDER_ID,
+          OMP_CLI_PROVIDER_ID,
+          ANTIGRAVITY_CLI_PROVIDER_ID,
+          OPENCODE_CLI_PROVIDER_ID,
+          GEMINI_CLI_PROVIDER_ID,
+          KIRO_CLI_PROVIDER_ID,
+          CURSOR_CLI_PROVIDER_ID
+        ]
       })
     )
 
@@ -603,9 +642,83 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
     })
 
     it.each([
+      [
+        'antigravity',
+        ANTIGRAVITY_CLI_PROFILE_ID,
+        '/mock/bin/agy',
+        ['acp', '--process-per-session'],
+        'antigravity-acp',
+        'tuff-antigravity-runtime'
+      ],
+      [
+        'opencode',
+        OPENCODE_CLI_PROFILE_ID,
+        '/mock/bin/opencode',
+        ['acp'],
+        'opencode-acp',
+        'tuff-opencode-runtime'
+      ],
+      [
+        'gemini',
+        GEMINI_CLI_PROFILE_ID,
+        '/mock/bin/gemini',
+        ['--experimental-acp'],
+        'gemini-acp',
+        'tuff-gemini-runtime'
+      ],
+      ['kiro', KIRO_CLI_PROFILE_ID, '/mock/bin/kiro-cli', ['acp'], 'kiro-acp', 'tuff-kiro-runtime'],
+      [
+        'cursor',
+        CURSOR_CLI_PROFILE_ID,
+        '/mock/bin/cursor-agent',
+        ['acp'],
+        'cursor-acp',
+        'tuff-cursor-runtime'
+      ]
+    ])(
+      'routes %s profile strictly 1:1 to AcpClient.spawn with its declarative binary and args',
+      async (_name, profileId, expectedExe, expectedArgs, expectedLabel, expectedProvider) => {
+        const res = await orchestrator.executeAgentCapability(
+          { task: `Run ${profileId}` },
+          { metadata: { profileId } }
+        )
+        expect(res.result.result).toBe(`${expectedLabel}-answer`)
+        expect(res.provider).toBe(expectedProvider)
+        expect(res.model).toBe(expectedLabel)
+        expect(acpSpawnSpy).toHaveBeenCalledTimes(1)
+        expect(acpSpawnSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            executablePath: expectedExe,
+            args: expectedArgs,
+            label: expectedLabel
+          })
+        )
+        expect(ompSpawnSpy).not.toHaveBeenCalled()
+        expect(codexSpawnSpy).not.toHaveBeenCalled()
+        expect(claudeSpawnSpy).not.toHaveBeenCalled()
+        expect(mocks.piExecute).not.toHaveBeenCalled()
+      }
+    )
+
+    it.each([
       ['default-pi', 'default-pi', CODEX_CLI_PROVIDER_ID, 'gpt-5.4'],
       ['unnamed profile', undefined, CLAUDE_CLI_PROVIDER_ID, 'claude-sonnet-4-6'],
-      ['custom profile', 'custom-codex-claude-profile', OMP_CLI_PROVIDER_ID, 'cpa/gemini-3.8-flash']
+      [
+        'custom profile',
+        'custom-codex-claude-profile',
+        OMP_CLI_PROVIDER_ID,
+        'cpa/gemini-3.8-flash'
+      ],
+      ['default-pi with antigravity model', 'default-pi', ANTIGRAVITY_CLI_PROVIDER_ID, 'agy-pro'],
+      ['unnamed profile with opencode model', undefined, OPENCODE_CLI_PROVIDER_ID, 'opencode/auto'],
+      ['default-pi with gemini model', 'default-pi', GEMINI_CLI_PROVIDER_ID, 'gemini-2.5-pro'],
+      [
+        'custom profile with kiro model',
+        'custom-codex-claude-profile',
+        KIRO_CLI_PROVIDER_ID,
+        'kiro-default'
+      ],
+      ['default-pi with cursor model', 'default-pi', CURSOR_CLI_PROVIDER_ID, 'cursor-auto']
     ])(
       'keeps %s strictly on PiAgentRuntimeHost even when handed %s model',
       async (_label, profileId, providerId, model) => {

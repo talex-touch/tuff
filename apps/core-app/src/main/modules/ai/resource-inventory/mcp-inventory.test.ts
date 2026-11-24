@@ -19,7 +19,12 @@ const secureStore = vi.hoisted(() => new Map<string, string | null>())
 
 // The inventory reads projections the way the runtime does; the runtime's own module would pull in
 // the database and the MCP client, neither of which a merge needs.
-vi.mock('../ai-orchestrator-store', () => ({ aiOrchestratorStore: {} }))
+vi.mock('../ai-orchestrator-store', () => ({
+  aiOrchestratorStore: {
+    listActiveImportCandidates: vi.fn(async () => []),
+    saveImportScan: vi.fn(async () => undefined)
+  }
+}))
 vi.mock('../intelligence-mcp-registry', () => ({ intelligenceMcpRegistry: {} }))
 // The real importer prepares the stored copies below, so the copies are exactly what an import
 // writes; only where it would write them is redirected.
@@ -42,6 +47,7 @@ vi.mock('../ai-import-content-store', () => ({
   }
 }))
 
+import { AiCliImportService } from '../ai-cli-import-service'
 import { AiImportRuntimeService } from '../ai-import-runtime'
 import { snapshotTree } from './fs-tree-snapshot'
 import {
@@ -623,5 +629,133 @@ describe('switching one server', () => {
     await setMcpServerEnabled(deps, { key, enabled: false })
 
     expect(calls).toEqual(['item manual:1 true', 'item manual:1 false'])
+  })
+})
+
+describe('MCP inventory end-to-end discovery for new CLI agents', () => {
+  it('loads and merges user MCP configs for Antigravity (including external CLI settings), Gemini CLI, Cursor, and Kiro', async () => {
+    const originalHome = process.env.HOME
+    const originalPath = process.env.PATH
+    process.env.HOME = home
+    process.env.PATH = join(sandbox, 'empty-bin')
+    try {
+      await mkdir(join(home, '.gemini', 'antigravity'), { recursive: true })
+      await mkdir(join(home, '.gemini', 'antigravity-cli'), { recursive: true })
+      await mkdir(join(home, '.cursor'), { recursive: true })
+      await mkdir(join(home, '.kiro', 'settings'), { recursive: true })
+
+      const sharedStdio = { command: 'npx', args: ['-y', '@upstash/context7-mcp'] }
+      await writeFile(
+        join(home, '.gemini', 'antigravity', 'mcp_config.json'),
+        JSON.stringify({
+          mcpServers: {
+            context7: sharedStdio,
+            agyRemote: {
+              serverUrl: 'https://agy-mcp.example.test/v1',
+              headers: { Authorization: 'Bearer agy-secret-canary' }
+            }
+          }
+        })
+      )
+      await writeFile(
+        join(home, '.gemini', 'antigravity-cli', 'settings.json'),
+        JSON.stringify({
+          mcpServers: {
+            agyCliServer: { command: 'node', args: ['agy-cli.js'] }
+          }
+        })
+      )
+      await writeFile(
+        join(home, '.gemini', 'settings.json'),
+        JSON.stringify({
+          mcpServers: {
+            context7: sharedStdio,
+            geminiHttp: { httpUrl: 'https://gemini-mcp.example.test/mcp' }
+          }
+        })
+      )
+      await writeFile(
+        join(home, '.cursor', 'mcp.json'),
+        JSON.stringify({
+          mcpServers: {
+            context7: sharedStdio
+          }
+        })
+      )
+      await writeFile(
+        join(home, '.kiro', 'settings', 'mcp.json'),
+        JSON.stringify({
+          mcpServers: {
+            context7: sharedStdio,
+            kiroDocs: { command: 'uvx', args: ['kiro-docs'] }
+          }
+        })
+      )
+
+      const scan = await new AiCliImportService().preview({
+        cwd: join(sandbox, 'project'),
+        providerIds: ['antigravity', 'gemini', 'cursor', 'kiro']
+      })
+      const discovery = await loadMcpDiscovery(scan)
+      const inventory = buildMcpServerInventory({ scanId: scan.scanId, discovery, items: [] })
+
+      expect(inventory.unreadableSources).toEqual([])
+      expect(JSON.stringify(inventory)).not.toContain('agy-secret-canary')
+
+      const context7 = inventory.rows.find((row) => row.name === 'context7')!
+      expect(context7.agents.map((agent) => agent.agentId)).toEqual([
+        'antigravity',
+        'cursor',
+        'gemini',
+        'kiro'
+      ])
+      expect(inventory.rows.map((row) => row.name)).toEqual([
+        'agyCliServer',
+        'agyRemote',
+        'context7',
+        'geminiHttp',
+        'kiroDocs'
+      ])
+      expect(inventory.rows.find((row) => row.name === 'agyRemote')).toMatchObject({
+        transport: 'http',
+        summary: 'https://agy-mcp.example.test/v1',
+        hasSecrets: true
+      })
+      expect(inventory.rows.find((row) => row.name === 'geminiHttp')).toMatchObject({
+        transport: 'http',
+        summary: 'https://gemini-mcp.example.test/mcp'
+      })
+      expect(inventory.agents).toEqual([
+        { agentId: 'antigravity', label: 'Antigravity', skillCount: null, mcpServerCount: 3 },
+        { agentId: 'gemini', label: 'Gemini CLI', skillCount: null, mcpServerCount: 2 },
+        { agentId: 'kiro', label: 'Kiro', skillCount: null, mcpServerCount: 2 },
+        { agentId: 'cursor', label: 'Cursor', skillCount: null, mcpServerCount: 1 }
+      ])
+
+      // Verify import preparation on the external `~/.gemini/antigravity-cli/settings.json` candidate
+      // passes containment checks cleanly via `candidate.containedBy`.
+      const externalCandidate = scan.candidates.find(
+        (candidate) =>
+          candidate.provider === 'antigravity' &&
+          candidate.kind === 'mcp' &&
+          candidate.path === join(home, '.gemini', 'antigravity-cli', 'settings.json')
+      )
+      expect(externalCandidate).toBeDefined()
+      const prepared = await new AiImportRuntimeService().prepare(
+        scan.cwd,
+        [externalCandidate!],
+        { scanId: scan.scanId, candidateIds: [externalCandidate!.id] },
+        scan.sources
+      )
+      expect(prepared.items).toHaveLength(1)
+      expect(prepared.items[0]!.mcpProfiles.map((profile) => profile.name)).toEqual([
+        'agyCliServer'
+      ])
+    } finally {
+      if (originalHome === undefined) delete process.env.HOME
+      else process.env.HOME = originalHome
+      if (originalPath === undefined) delete process.env.PATH
+      else process.env.PATH = originalPath
+    }
   })
 })

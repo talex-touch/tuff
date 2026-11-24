@@ -45,9 +45,13 @@ const AGENT_SKILL_ROOT_SPECS: readonly AgentSkillRootSpec[] = [
   { id: 'oh-my-pi', segments: ['.omp', 'agent', 'skills'] },
   { id: 'pi', segments: ['.pi', 'agent', 'skills'] },
   { id: 'opencode', segments: ['.config', 'opencode', 'skills'] },
+  // Antigravity stores user skills in both roots; its internal `builtin/skills` tree is omitted.
+  { id: 'antigravity', segments: ['.gemini', 'antigravity', 'skills'] },
+  { id: 'antigravity', segments: ['.gemini', 'config', 'skills'] },
   { id: 'cursor', segments: ['.cursor', 'skills'] },
   { id: 'gemini', segments: ['.gemini', 'skills'] },
   { id: 'kiro', segments: ['.kiro', 'skills'] },
+  { id: 'windsurf', segments: ['.codeium', 'windsurf', 'skills'] },
   { id: 'qoder', segments: ['.qoder', 'skills'] },
   { id: 'codebuddy', segments: ['.codebuddy', 'skills'] },
   { id: 'factory', segments: ['.factory', 'skills'] },
@@ -57,8 +61,9 @@ const AGENT_SKILL_ROOT_SPECS: readonly AgentSkillRootSpec[] = [
 ]
 
 /**
- * One root per agent, in table order. The `envVar` override replaces the agent's own home rather
- * than its skill directory, matching how those CLIs read the variable themselves.
+ * Roots in table order, deduplicated by resolved path (an agent may contribute more than one root,
+ * such as Antigravity's two user skill directories). The `envVar` override replaces the agent's own
+ * home rather than its skill directory, matching how those CLIs read the variable themselves.
  */
 export function agentSkillRoots(
   home: string = homedir(),

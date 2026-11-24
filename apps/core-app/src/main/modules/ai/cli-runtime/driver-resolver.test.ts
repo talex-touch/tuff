@@ -3,21 +3,33 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  ANTIGRAVITY_CLI_PROFILE_ID,
   CLAUDE_CLI_PROFILE_ID,
   CODEX_CLI_PROFILE_ID,
+  CURSOR_CLI_PROFILE_ID,
+  GEMINI_CLI_PROFILE_ID,
+  KIRO_CLI_PROFILE_ID,
   OMP_CLI_PROFILE_ID,
+  OPENCODE_CLI_PROFILE_ID,
   resetAllCliExecutableCaches,
   resolveClaudeAcpExecutable,
-  resolveCodexAcpExecutable
+  resolveCodexAcpExecutable,
+  resolveCursorExecutable,
+  resolveKiroExecutable
 } from '../providers/pi-cli-runtime'
 import {
+  CLI_DRIVER_REGISTRY,
   cliCapabilityProviderForKind,
   cliDefaultModelLabel,
+  cliDisplayNameForKind,
   cliProviderIdForKind,
+  DEFAULT_GEMINI_ACP_ARGS,
+  GEMINI_ACP_ARGS_ENV,
   parseWorktreeRequestOptions,
   resolveCliDriver,
   resolveCliPermissionRisk,
-  resolveCliProfileKind
+  resolveCliProfileKind,
+  resolveGeminiAcpArgs
 } from './driver-resolver'
 
 describe('driver-resolver', () => {
@@ -28,6 +40,16 @@ describe('driver-resolver', () => {
     'TUFF_CODEX_ACP_PATH',
     'TUFF_CLAUDE_CLI_PATH',
     'TUFF_CLAUDE_ACP_PATH',
+    'TUFF_ANTIGRAVITY_CLI_PATH',
+    'TUFF_OPENCODE_CLI_PATH',
+    'TUFF_GEMINI_CLI_PATH',
+    GEMINI_ACP_ARGS_ENV,
+    'TUFF_KIRO_CLI_PATH',
+    'TUFF_CURSOR_CLI_PATH',
+    'HOME',
+    'USERPROFILE',
+    'FNM_DIR',
+    'XDG_DATA_HOME',
     'PATH'
   ]
   let tempDir: string | null = null
@@ -37,6 +59,10 @@ describe('driver-resolver', () => {
       savedEnv[key] = process.env[key]
     }
     tempDir = await mkdtemp(join(tmpdir(), 'tuff-driver-resolver-'))
+    process.env.HOME = tempDir
+    process.env.USERPROFILE = tempDir
+    delete process.env.FNM_DIR
+    delete process.env.XDG_DATA_HOME
     resetAllCliExecutableCaches()
   })
 
@@ -60,10 +86,16 @@ describe('driver-resolver', () => {
   }
 
   describe('resolveCliProfileKind (scheduler-decides-executor invariant)', () => {
-    it('maps ONLY the three external CLI scheduler profile IDs', () => {
+    it('maps ONLY the eight registered external CLI scheduler profile IDs', () => {
       expect(resolveCliProfileKind(OMP_CLI_PROFILE_ID)).toBe('omp')
       expect(resolveCliProfileKind(CODEX_CLI_PROFILE_ID)).toBe('codex')
       expect(resolveCliProfileKind(CLAUDE_CLI_PROFILE_ID)).toBe('claude')
+      expect(resolveCliProfileKind(ANTIGRAVITY_CLI_PROFILE_ID)).toBe('antigravity')
+      expect(resolveCliProfileKind(OPENCODE_CLI_PROFILE_ID)).toBe('opencode')
+      expect(resolveCliProfileKind(GEMINI_CLI_PROFILE_ID)).toBe('gemini')
+      expect(resolveCliProfileKind(KIRO_CLI_PROFILE_ID)).toBe('kiro')
+      expect(resolveCliProfileKind(CURSOR_CLI_PROFILE_ID)).toBe('cursor')
+      expect(Object.keys(CLI_DRIVER_REGISTRY)).toHaveLength(8)
     })
 
     it('returns null for default-pi, unnamed runs, and arbitrary custom profiles', () => {
@@ -71,11 +103,29 @@ describe('driver-resolver', () => {
       expect(resolveCliProfileKind(undefined)).toBeNull()
       expect(resolveCliProfileKind('')).toBeNull()
       expect(resolveCliProfileKind('profile:cli:pi')).toBeNull()
+      expect(resolveCliProfileKind('profile:cli:unknown')).toBeNull()
       expect(resolveCliProfileKind('custom-codex-model-profile')).toBeNull()
+      expect(resolveCliProfileKind('custom-antigravity-profile')).toBeNull()
+      expect(resolveCliProfileKind('custom-gemini-profile')).toBeNull()
+      expect(resolveCliProfileKind('custom-cursor-profile')).toBeNull()
     })
   })
 
-  describe('ACP adapter executable discovery and driver selection', () => {
+  describe('ACP adapter executable discovery and declarative driver selection', () => {
+    it('resolves omp with explicit ["acp"] args', async () => {
+      const ompBin = await createExecutable('omp')
+      process.env.TUFF_OMP_CLI_PATH = ompBin
+      resetAllCliExecutableCaches()
+
+      await expect(resolveCliDriver('omp')).resolves.toEqual({
+        kind: 'omp',
+        protocol: 'acp',
+        executablePath: ompBin,
+        args: ['acp'],
+        adapterName: 'omp'
+      })
+    })
+
     it('resolves codex-acp via TUFF_CODEX_ACP_PATH and falls back to codex app-server when absent', async () => {
       const codexAcp = await createExecutable('codex-acp')
       const codexBin = await createExecutable('codex')
@@ -89,6 +139,7 @@ describe('driver-resolver', () => {
         kind: 'codex',
         protocol: 'acp',
         executablePath: codexAcp,
+        args: [],
         adapterName: 'codex-acp'
       })
 
@@ -119,6 +170,7 @@ describe('driver-resolver', () => {
         kind: 'claude',
         protocol: 'acp',
         executablePath: claudeCodeAcp,
+        args: [],
         adapterName: 'claude-acp'
       })
 
@@ -138,47 +190,183 @@ describe('driver-resolver', () => {
       })
     })
 
+    it('resolves antigravity (agy acp --process-per-session) and opencode (opencode acp) with per-driver args', async () => {
+      const agyBin = await createExecutable('agy')
+      const opencodeBin = await createExecutable('opencode')
+
+      process.env.TUFF_ANTIGRAVITY_CLI_PATH = agyBin
+      process.env.TUFF_OPENCODE_CLI_PATH = opencodeBin
+      resetAllCliExecutableCaches()
+
+      await expect(resolveCliDriver('antigravity')).resolves.toEqual({
+        kind: 'antigravity',
+        protocol: 'acp',
+        executablePath: agyBin,
+        args: ['acp', '--process-per-session'],
+        adapterName: 'antigravity-acp'
+      })
+      await expect(resolveCliDriver('opencode')).resolves.toEqual({
+        kind: 'opencode',
+        protocol: 'acp',
+        executablePath: opencodeBin,
+        args: ['acp'],
+        adapterName: 'opencode-acp'
+      })
+    })
+
+    it('resolves gemini with default ["--experimental-acp"] and honours TUFF_GEMINI_ACP_ARGS override', async () => {
+      const geminiBin = await createExecutable('gemini')
+      process.env.TUFF_GEMINI_CLI_PATH = geminiBin
+      delete process.env[GEMINI_ACP_ARGS_ENV]
+      resetAllCliExecutableCaches()
+
+      expect(resolveGeminiAcpArgs({})).toEqual(DEFAULT_GEMINI_ACP_ARGS)
+      await expect(resolveCliDriver('gemini')).resolves.toEqual({
+        kind: 'gemini',
+        protocol: 'acp',
+        executablePath: geminiBin,
+        args: ['--experimental-acp'],
+        adapterName: 'gemini-acp'
+      })
+
+      process.env[GEMINI_ACP_ARGS_ENV] = '  --acp   --debug '
+      await expect(resolveCliDriver('gemini')).resolves.toEqual({
+        kind: 'gemini',
+        protocol: 'acp',
+        executablePath: geminiBin,
+        args: ['--acp', '--debug'],
+        adapterName: 'gemini-acp'
+      })
+    })
+
+    it('resolves kiro primary (kiro-cli) and fallback (kiro), and cursor primary (cursor-agent) and fallback (agent)', async () => {
+      const kiroFallback = await createExecutable('kiro')
+      const agentFallback = await createExecutable('agent')
+
+      delete process.env.TUFF_KIRO_CLI_PATH
+      delete process.env.TUFF_CURSOR_CLI_PATH
+      process.env.PATH = tempDir!
+      resetAllCliExecutableCaches()
+
+      await expect(resolveKiroExecutable()).resolves.toBe(kiroFallback)
+      await expect(resolveCliDriver('kiro')).resolves.toEqual({
+        kind: 'kiro',
+        protocol: 'acp',
+        executablePath: kiroFallback,
+        args: ['acp'],
+        adapterName: 'kiro-acp'
+      })
+
+      await expect(resolveCursorExecutable()).resolves.toBe(agentFallback)
+      await expect(resolveCliDriver('cursor')).resolves.toEqual({
+        kind: 'cursor',
+        protocol: 'acp',
+        executablePath: agentFallback,
+        args: ['acp'],
+        adapterName: 'cursor-acp'
+      })
+
+      // Primary command names win when present alongside fallbacks
+      const kiroPrimary = await createExecutable('kiro-cli')
+      const cursorPrimary = await createExecutable('cursor-agent')
+      resetAllCliExecutableCaches()
+
+      await expect(resolveKiroExecutable()).resolves.toBe(kiroPrimary)
+      await expect(resolveCursorExecutable()).resolves.toBe(cursorPrimary)
+    })
+
     it('never falls back across CLIs when the requested CLI is missing', async () => {
       const ompBin = await createExecutable('omp')
       const codexBin = await createExecutable('codex')
       const claudeBin = await createExecutable('claude')
+      const agyBin = await createExecutable('agy')
+      const opencodeBin = await createExecutable('opencode')
+      const geminiBin = await createExecutable('gemini')
+      const kiroBin = await createExecutable('kiro-cli')
+      const cursorBin = await createExecutable('cursor-agent')
 
-      process.env.TUFF_OMP_CLI_PATH = join(tempDir!, 'missing-omp')
-      process.env.TUFF_CODEX_ACP_PATH = join(tempDir!, 'missing-codex-acp')
-      process.env.TUFF_CODEX_CLI_PATH = codexBin
-      process.env.TUFF_CLAUDE_ACP_PATH = join(tempDir!, 'missing-claude-acp')
-      process.env.TUFF_CLAUDE_CLI_PATH = claudeBin
-      resetAllCliExecutableCaches()
+      const resetAllPresent = () => {
+        process.env.TUFF_OMP_CLI_PATH = ompBin
+        process.env.TUFF_CODEX_ACP_PATH = join(tempDir!, 'missing-codex-acp')
+        process.env.TUFF_CODEX_CLI_PATH = codexBin
+        process.env.TUFF_CLAUDE_ACP_PATH = join(tempDir!, 'missing-claude-acp')
+        process.env.TUFF_CLAUDE_CLI_PATH = claudeBin
+        process.env.TUFF_ANTIGRAVITY_CLI_PATH = agyBin
+        process.env.TUFF_OPENCODE_CLI_PATH = opencodeBin
+        process.env.TUFF_GEMINI_CLI_PATH = geminiBin
+        process.env.TUFF_KIRO_CLI_PATH = kiroBin
+        process.env.TUFF_CURSOR_CLI_PATH = cursorBin
+        resetAllCliExecutableCaches()
+      }
 
-      await expect(resolveCliDriver('omp')).rejects.toThrow('OMP_CLI_NOT_FOUND')
+      const cases: Array<{
+        kind: keyof typeof CLI_DRIVER_REGISTRY
+        envKey: string
+        expectedCode: string
+      }> = [
+        { kind: 'omp', envKey: 'TUFF_OMP_CLI_PATH', expectedCode: 'OMP_CLI_NOT_FOUND' },
+        { kind: 'codex', envKey: 'TUFF_CODEX_CLI_PATH', expectedCode: 'CODEX_CLI_NOT_FOUND' },
+        { kind: 'claude', envKey: 'TUFF_CLAUDE_CLI_PATH', expectedCode: 'CLAUDE_CLI_NOT_FOUND' },
+        {
+          kind: 'antigravity',
+          envKey: 'TUFF_ANTIGRAVITY_CLI_PATH',
+          expectedCode: 'ANTIGRAVITY_CLI_NOT_FOUND'
+        },
+        {
+          kind: 'opencode',
+          envKey: 'TUFF_OPENCODE_CLI_PATH',
+          expectedCode: 'OPENCODE_CLI_NOT_FOUND'
+        },
+        { kind: 'gemini', envKey: 'TUFF_GEMINI_CLI_PATH', expectedCode: 'GEMINI_CLI_NOT_FOUND' },
+        { kind: 'kiro', envKey: 'TUFF_KIRO_CLI_PATH', expectedCode: 'KIRO_CLI_NOT_FOUND' },
+        { kind: 'cursor', envKey: 'TUFF_CURSOR_CLI_PATH', expectedCode: 'CURSOR_CLI_NOT_FOUND' }
+      ]
 
-      process.env.TUFF_OMP_CLI_PATH = ompBin
-      process.env.TUFF_CODEX_CLI_PATH = join(tempDir!, 'missing-codex')
-      resetAllCliExecutableCaches()
-      await expect(resolveCliDriver('codex')).rejects.toThrow('CODEX_CLI_NOT_FOUND')
-
-      process.env.TUFF_CODEX_CLI_PATH = codexBin
-      process.env.TUFF_CLAUDE_CLI_PATH = join(tempDir!, 'missing-claude')
-      resetAllCliExecutableCaches()
-      await expect(resolveCliDriver('claude')).rejects.toThrow('CLAUDE_CLI_NOT_FOUND')
+      for (const { kind, envKey, expectedCode } of cases) {
+        resetAllPresent()
+        process.env[envKey] = join(tempDir!, `missing-${kind}`)
+        resetAllCliExecutableCaches()
+        await expect(resolveCliDriver(kind)).rejects.toThrow(expectedCode)
+      }
     })
   })
 
   describe('metadata helpers', () => {
-    it('returns stable provider/model labels per CLI and protocol', () => {
+    it('returns stable provider, capability, display, and model labels per CLI and protocol', () => {
       expect(cliProviderIdForKind('omp')).toBe('omp-cli')
       expect(cliProviderIdForKind('codex')).toBe('codex-cli')
       expect(cliProviderIdForKind('claude')).toBe('claude-cli')
+      expect(cliProviderIdForKind('antigravity')).toBe('antigravity-cli')
+      expect(cliProviderIdForKind('opencode')).toBe('opencode-cli')
+      expect(cliProviderIdForKind('gemini')).toBe('gemini-cli')
+      expect(cliProviderIdForKind('kiro')).toBe('kiro-cli')
+      expect(cliProviderIdForKind('cursor')).toBe('cursor-cli')
 
       expect(cliCapabilityProviderForKind('omp')).toBe('tuff-omp-runtime')
       expect(cliCapabilityProviderForKind('codex')).toBe('tuff-codex-runtime')
       expect(cliCapabilityProviderForKind('claude')).toBe('tuff-claude-runtime')
+      expect(cliCapabilityProviderForKind('antigravity')).toBe('tuff-antigravity-runtime')
+      expect(cliCapabilityProviderForKind('opencode')).toBe('tuff-opencode-runtime')
+      expect(cliCapabilityProviderForKind('gemini')).toBe('tuff-gemini-runtime')
+      expect(cliCapabilityProviderForKind('kiro')).toBe('tuff-kiro-runtime')
+      expect(cliCapabilityProviderForKind('cursor')).toBe('tuff-cursor-runtime')
+
+      expect(cliDisplayNameForKind('antigravity')).toBe('Antigravity')
+      expect(cliDisplayNameForKind('opencode')).toBe('OpenCode')
+      expect(cliDisplayNameForKind('gemini')).toBe('Gemini CLI')
+      expect(cliDisplayNameForKind('kiro')).toBe('Kiro')
+      expect(cliDisplayNameForKind('cursor')).toBe('Cursor')
 
       expect(cliDefaultModelLabel('omp', 'acp')).toBe('omp-acp')
       expect(cliDefaultModelLabel('codex', 'acp')).toBe('codex-acp')
       expect(cliDefaultModelLabel('codex', 'codex-app-server')).toBe('codex-app-server')
       expect(cliDefaultModelLabel('claude', 'acp')).toBe('claude-acp')
       expect(cliDefaultModelLabel('claude', 'claude-stream-json')).toBe('claude-stream-json')
+      expect(cliDefaultModelLabel('antigravity', 'acp')).toBe('antigravity-acp')
+      expect(cliDefaultModelLabel('opencode', 'acp')).toBe('opencode-acp')
+      expect(cliDefaultModelLabel('gemini', 'acp')).toBe('gemini-acp')
+      expect(cliDefaultModelLabel('kiro', 'acp')).toBe('kiro-acp')
+      expect(cliDefaultModelLabel('cursor', 'acp')).toBe('cursor-acp')
     })
 
     it('classifies permission risk fail-closed to execute for unknown tools', () => {

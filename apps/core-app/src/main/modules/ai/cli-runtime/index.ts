@@ -1,12 +1,17 @@
 export { AcpAgentRuntimeHost, CliAgentRuntimeHost } from './cli-agent-runtime-host'
 export {
+  CLI_DRIVER_REGISTRY,
   cliCapabilityProviderForKind,
   cliDefaultModelLabel,
+  cliDisplayNameForKind,
   cliProviderIdForKind,
+  DEFAULT_GEMINI_ACP_ARGS,
+  GEMINI_ACP_ARGS_ENV,
   parseWorktreeRequestOptions,
   resolveCliDriver,
   resolveCliPermissionRisk,
-  resolveCliProfileKind
+  resolveCliProfileKind,
+  resolveGeminiAcpArgs
 } from './driver-resolver'
 export type {
   AcpMcpServerConfig,
@@ -15,6 +20,8 @@ export type {
   AcpPermissionRequestResult,
   AcpPromptContent,
   CliAgentRuntimeHostOptions,
+  CliDriverCandidateSpec,
+  CliDriverDescriptor,
   CliDriverResolution,
   CliExecuteRuntimeOptions,
   CliPermissionDecision,

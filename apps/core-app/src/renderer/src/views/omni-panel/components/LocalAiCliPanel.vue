@@ -299,6 +299,7 @@ const FAILURE_KEYS: Record<string, string> = {
   PROCESS_START_FAILED: 'processStartFailed',
   PROTOCOL_INVALID: 'protocolInvalid',
   PROCESS_EXITED: 'processExited',
+  TOKEN_LIMIT_REACHED: 'tokenLimitReached',
   LOCAL_AI_CLI_STATUS_FAILED: 'statusFailed'
 }
 

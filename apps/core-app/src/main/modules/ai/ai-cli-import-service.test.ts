@@ -733,4 +733,467 @@ describe('aiCliImportService canonical ingress', () => {
     expect(result).toBeDefined()
     expect(importRuntimeMocks.prepare).toHaveBeenCalled()
   })
+
+  it('discovers Antigravity, Gemini CLI, Cursor, and Kiro layouts across user and project scopes', async () => {
+    const workspace = join(fixtureRoot, 'workspace')
+    const home = join(fixtureRoot, 'home')
+    const secretValues = [
+      'agy-canary-token',
+      'gemini-canary-token',
+      'cursor-canary-token',
+      'kiro-canary-token'
+    ]
+
+    // Antigravity: user mcp_config.json (stdio + serverUrl), external CLI settings.json, user skills,
+    // and project .agent/{skills,rules,workflows}.
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/antigravity/mcp_config.json',
+      JSON.stringify({
+        mcpServers: {
+          local: {
+            command: 'npx',
+            args: ['-y', 'agy-mcp'],
+            env: { AGY_TOKEN: 'agy-canary-token' }
+          },
+          remote: { serverUrl: 'https://agy.example.test/mcp' }
+        }
+      })
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/antigravity-cli/settings.json',
+      JSON.stringify({
+        theme: 'dark',
+        mcpServers: {
+          cliTool: { command: 'node', args: ['cli-mcp.js'] }
+        }
+      })
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/antigravity/skills/review/SKILL.md',
+      '---\nname: agy-review\ndescription: Review with Antigravity\n---\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.agent/skills/deploy/SKILL.md',
+      '---\nname: deploy\ndescription: Deploy safely\n---\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.agent/rules/style.md',
+      '---\nname: style\nglobs: ["src/**/*.ts"]\n---\nKeep it clean.\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.agent/workflows/ship.md',
+      '---\nname: ship\ndescription: Ship workflow\n---\n'
+    )
+
+    // Gemini CLI: user + project settings.json (including mcpServers with httpUrl), GEMINI.md, skills, commands.
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/settings.json',
+      JSON.stringify({
+        mcpServers: {
+          docs: {
+            command: 'npx',
+            args: ['-y', 'docs-mcp'],
+            env: { GEMINI_KEY: 'gemini-canary-token' }
+          },
+          stream: { httpUrl: 'https://gemini.example.test/mcp' }
+        }
+      })
+    )
+    await writeFixture(fixtureRoot, 'home/.gemini/GEMINI.md', 'Global Gemini instructions.\n')
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/skills/summarize/SKILL.md',
+      '---\nname: summarize\ndescription: Summarize\n---\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/commands/audit.toml',
+      'description = "Audit repo"\nprompt = "Audit"\n'
+    )
+    await writeFixture(fixtureRoot, 'workspace/GEMINI.md', 'Project Gemini instructions.\n')
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.gemini/settings.json',
+      JSON.stringify({ mcpServers: { proj: { command: 'node', args: ['proj.js'] } } })
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.gemini/skills/check/SKILL.md',
+      '---\nname: check\ndescription: Check\n---\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.gemini/commands/lint.md',
+      '---\nname: lint\ndescription: Lint\n---\n'
+    )
+
+    // Cursor: user + project mcp.json, skills, .mdc rules, commands.
+    await writeFixture(
+      fixtureRoot,
+      'home/.cursor/mcp.json',
+      JSON.stringify({
+        mcpServers: {
+          ctx: { command: 'npx', args: ['ctx'], env: { CURSOR_SECRET: 'cursor-canary-token' } }
+        }
+      })
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.cursor/skills/refactor/SKILL.md',
+      '---\nname: refactor\ndescription: Refactor\n---\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.cursor/rules/ts.mdc',
+      '---\ndescription: TS rules\nglobs: ["**/*.ts"]\nalwaysApply: false\n---\nUse strict types.\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.cursor/commands/fix.md',
+      '---\nname: fix\ndescription: Fix issue\n---\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.cursor/mcp.json',
+      JSON.stringify({ mcpServers: { ws: { url: 'https://cursor.example.test/mcp' } } })
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.cursor/skills/test/SKILL.md',
+      '---\nname: test\ndescription: Run tests\n---\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.cursor/rules/vue.mdc',
+      '---\ndescription: Vue rules\nglobs: ["**/*.vue"]\n---\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.cursor/commands/review.md',
+      '---\nname: review\ndescription: Review\n---\n'
+    )
+
+    // Kiro: user + project settings/mcp.json, skills, steering rules.
+    await writeFixture(
+      fixtureRoot,
+      'home/.kiro/settings/mcp.json',
+      JSON.stringify({
+        mcpServers: {
+          aws: { command: 'uvx', args: ['aws-mcp'], env: { KIRO_TOKEN: 'kiro-canary-token' } }
+        }
+      })
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.kiro/skills/spec/SKILL.md',
+      '---\nname: spec\ndescription: Write spec\n---\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.kiro/steering/product.md',
+      '---\nname: product\n---\nProduct context.\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.kiro/settings/mcp.json',
+      JSON.stringify({ mcpServers: { kiroProj: { command: 'node', args: ['k.js'] } } })
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.kiro/skills/design/SKILL.md',
+      '---\nname: design\ndescription: Design\n---\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.kiro/steering/tech.md',
+      '---\nname: tech\n---\nTech stack.\n'
+    )
+
+    const scan = await new AiCliImportService().preview({
+      cwd: workspace,
+      providerIds: ['antigravity', 'gemini', 'cursor', 'kiro']
+    })
+
+    const serializedScan = JSON.stringify(scan)
+    for (const secret of secretValues) expect(serializedScan).not.toContain(secret)
+
+    // Antigravity MCP candidates: primary mcp_config.json (inside userRoot) and external CLI settings.json.
+    const agyMcp = scan.candidates.filter(
+      (item) => item.provider === 'antigravity' && item.kind === 'mcp'
+    )
+    expect(agyMcp).toEqual([
+      expect.objectContaining({
+        scope: 'user',
+        name: 'Antigravity MCP',
+        serverNames: ['local', 'remote'],
+        transportTypes: ['http', 'stdio'],
+        secretKeyPaths: ['mcpServers.local.env.AGY_TOKEN']
+      }),
+      expect.objectContaining({
+        scope: 'user',
+        name: 'Antigravity MCP · User settings.json',
+        containedBy: join(home, '.gemini', 'antigravity-cli'),
+        serverNames: ['cliTool'],
+        transportTypes: ['stdio']
+      })
+    ])
+    expect(agyMcp[0]?.containedBy).toBeUndefined()
+    expect(
+      scan.candidates
+        .filter((item) => item.provider === 'antigravity' && item.scope === 'project')
+        .map((item) => [item.kind, item.name])
+    ).toEqual([
+      ['command', 'ship'],
+      ['rule', 'style'],
+      ['skill', 'deploy']
+    ])
+
+    // Gemini CLI MCP extracted from settings.json at both user and project scopes.
+    const geminiMcp = scan.candidates.filter(
+      (item) => item.provider === 'gemini' && item.kind === 'mcp'
+    )
+    expect(geminiMcp).toEqual([
+      expect.objectContaining({
+        scope: 'user',
+        name: 'Gemini CLI MCP',
+        serverNames: ['docs', 'stream'],
+        transportTypes: ['http', 'stdio'],
+        secretKeyPaths: ['mcpServers.docs.env.GEMINI_KEY']
+      }),
+      expect.objectContaining({
+        scope: 'project',
+        name: `Gemini CLI MCP · Project ${join('.gemini', 'settings.json')}`,
+        serverNames: ['proj']
+      })
+    ])
+    expect(
+      scan.candidates
+        .filter((item) => item.provider === 'gemini')
+        .map((item) => `${item.scope}:${item.kind}`)
+    ).toEqual(
+      expect.arrayContaining([
+        'user:config',
+        'user:mcp',
+        'user:instruction',
+        'user:skill',
+        'user:command',
+        'project:instruction',
+        'project:config',
+        'project:mcp',
+        'project:skill',
+        'project:command'
+      ])
+    )
+
+    // Cursor supports .mdc rules with globs as well as MCP, skills, and commands.
+    const cursorRule = scan.candidates.find(
+      (item) => item.provider === 'cursor' && item.scope === 'user' && item.kind === 'rule'
+    )
+    expect(cursorRule).toMatchObject({
+      kind: 'rule',
+      name: 'ts',
+      globs: ['**/*.ts'],
+      alwaysApply: false
+    })
+    const cursorUserMcp = scan.candidates.find(
+      (item) => item.provider === 'cursor' && item.scope === 'user' && item.kind === 'mcp'
+    )
+    expect(cursorUserMcp).toMatchObject({
+      name: 'Cursor MCP',
+      serverNames: ['ctx']
+    })
+    expect(cursorUserMcp?.containedBy).toBeUndefined()
+
+    // Kiro reads nested settings/mcp.json inside ~/.kiro and steering rules.
+    const kiroUserMcp = scan.candidates.find(
+      (item) => item.provider === 'kiro' && item.scope === 'user' && item.kind === 'mcp'
+    )
+    expect(kiroUserMcp).toMatchObject({
+      name: 'Kiro MCP',
+      serverNames: ['aws']
+    })
+    expect(kiroUserMcp?.containedBy).toBeUndefined()
+    expect(
+      scan.candidates
+        .filter((item) => item.provider === 'kiro' && item.kind === 'rule')
+        .map((item) => [item.scope, item.name])
+    ).toEqual([
+      ['user', 'product'],
+      ['project', 'tech']
+    ])
+  })
+
+  it('enforces directory containment for external Antigravity CLI settings without requiring userRoot to exist', async () => {
+    const workspace = join(fixtureRoot, 'workspace')
+    const home = join(fixtureRoot, 'home')
+    await mkdir(workspace, { recursive: true })
+
+    // 1) Valid external settings.json works even when ~/.gemini/antigravity does not exist yet.
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/antigravity-cli/settings.json',
+      JSON.stringify({ mcpServers: { standalone: { command: 'node', args: ['s.js'] } } })
+    )
+    const validScan = await new AiCliImportService().preview({
+      cwd: workspace,
+      providerIds: ['antigravity']
+    })
+    const mcp = validScan.candidates.find((item) => item.kind === 'mcp')
+    expect(mcp).toMatchObject({
+      provider: 'antigravity',
+      scope: 'user',
+      name: 'Antigravity MCP',
+      containedBy: join(home, '.gemini', 'antigravity-cli'),
+      serverNames: ['standalone']
+    })
+
+    // 2) Symlink escaping ~/.gemini/antigravity-cli is rejected.
+    const escaped = join(fixtureRoot, 'outside-agy-settings.json')
+    await writeFile(escaped, JSON.stringify({ mcpServers: { evil: { command: 'node' } } }), 'utf8')
+    const settingsPath = join(home, '.gemini', 'antigravity-cli', 'settings.json')
+    await rm(settingsPath)
+    await symlink(escaped, settingsPath)
+
+    const escapedScan = await new AiCliImportService().preview({
+      cwd: workspace,
+      providerIds: ['antigravity']
+    })
+    expect(escapedScan.candidates).toEqual([])
+    expect(
+      escapedScan.sources.find((item) => item.provider === 'antigravity' && item.scope === 'user')
+        ?.warnings
+    ).toEqual(
+      expect.arrayContaining([expect.stringContaining('escapes its canonical source root')])
+    )
+  })
+
+  it('validates Gemini TOML command templates and blocks unsupported constructs while preserving Markdown commands', async () => {
+    const workspace = join(fixtureRoot, 'workspace')
+    await mkdir(workspace, { recursive: true })
+
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/commands/review.toml',
+      'description = "Review files"\nprompt = "Review {{args}}"\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/commands/multiline.toml',
+      'description = "Multiline"\nprompt = """\nInspect carefully:\n{{args}}\n"""\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/commands/shell-inject.toml',
+      'description = "Bad shell"\nprompt = "Summarize !{git diff}"\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/commands/file-inject.toml',
+      'description = "Bad file"\nprompt = "Check @{README.md}"\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/commands/unknown-var.toml',
+      'description = "Unknown var"\nprompt = "Use {{branch}}"\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.gemini/commands/md-cmd.md',
+      '---\nname: md-cmd\ndescription: Markdown command\n---\nCheck $ARGUMENTS\n'
+    )
+
+    const scan = await new AiCliImportService().preview({
+      cwd: workspace,
+      providerIds: ['gemini']
+    })
+    const commands = new Map(
+      scan.candidates
+        .filter((item) => item.provider === 'gemini' && item.kind === 'command')
+        .map((item) => [item.name, item])
+    )
+
+    expect(commands.get('review')).toMatchObject({
+      description: 'Review files',
+      blockingIssues: []
+    })
+    expect(commands.get('multiline')).toMatchObject({
+      description: 'Multiline',
+      blockingIssues: []
+    })
+    expect(commands.get('md-cmd')).toMatchObject({
+      description: 'Markdown command',
+      blockingIssues: []
+    })
+    expect(commands.get('shell-inject')?.blockingIssues).toEqual([
+      expect.stringContaining('!{...}')
+    ])
+    expect(commands.get('file-inject')?.blockingIssues).toEqual([expect.stringContaining('@{...}')])
+    expect(commands.get('unknown-var')?.blockingIssues).toEqual([
+      expect.stringContaining('{{branch}}')
+    ])
+  })
+
+  it('preserves Kiro steering inclusion modes and blocks unsupported ones instead of making them unconditional', async () => {
+    const workspace = join(fixtureRoot, 'workspace')
+    await mkdir(workspace, { recursive: true })
+
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.kiro/steering/always.md',
+      '---\ninclusion: always\ndescription: Always rule\n---\nAlways apply.\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.kiro/steering/server.md',
+      '---\ninclusion: fileMatch\nfileMatchPattern: "server/**"\ndescription: Server rule\n---\nServer guidance.\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.kiro/steering/missing-pattern.md',
+      '---\ninclusion: fileMatch\n---\nNo pattern.\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.kiro/steering/manual.md',
+      '---\ninclusion: manual\n---\nManual guidance.\n'
+    )
+
+    const scan = await new AiCliImportService().preview({
+      cwd: workspace,
+      providerIds: ['kiro']
+    })
+    const rules = new Map(
+      scan.candidates
+        .filter((item) => item.provider === 'kiro' && item.kind === 'rule')
+        .map((item) => [item.name, item])
+    )
+
+    expect(rules.get('always')).toMatchObject({
+      globs: [],
+      alwaysApply: true,
+      blockingIssues: [],
+      ignoredFields: []
+    })
+    expect(rules.get('server')).toMatchObject({
+      globs: ['server/**'],
+      alwaysApply: false,
+      blockingIssues: [],
+      ignoredFields: []
+    })
+    expect(rules.get('missing-pattern')).toMatchObject({
+      alwaysApply: false,
+      blockingIssues: [expect.stringContaining('fileMatchPattern')]
+    })
+    expect(rules.get('manual')).toMatchObject({
+      alwaysApply: false,
+      blockingIssues: [expect.stringContaining('manual')]
+    })
+  })
 })

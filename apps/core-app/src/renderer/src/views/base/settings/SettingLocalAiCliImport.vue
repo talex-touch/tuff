@@ -18,13 +18,27 @@ import { toast } from 'vue-sonner'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
 
-const LOCAL_CLI_PROVIDERS: AiCliProviderId[] = ['pi', 'oh-my-pi', 'codex', 'claude', 'opencode']
+const LOCAL_CLI_PROVIDERS: AiCliProviderId[] = [
+  'pi',
+  'oh-my-pi',
+  'codex',
+  'claude',
+  'opencode',
+  'antigravity',
+  'gemini',
+  'kiro',
+  'cursor'
+]
 const PROVIDER_LABELS: Record<AiCliProviderId, string> = {
   pi: 'Pi',
   'oh-my-pi': 'Oh My Pi',
   codex: 'Codex',
   claude: 'Claude Code',
-  opencode: 'OpenCode'
+  opencode: 'OpenCode',
+  antigravity: 'Antigravity',
+  gemini: 'Gemini CLI',
+  kiro: 'Kiro',
+  cursor: 'Cursor'
 }
 
 interface SecretConfirmRequest {

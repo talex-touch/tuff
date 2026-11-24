@@ -78,6 +78,9 @@ const emit = defineEmits<{
   forgetSession: [sessionRef: string]
 }>()
 
+/** For a CLI the main process lists before this table learns its mark, or without a simple-icons glyph. */
+const AGENT_FALLBACK_ICON = 'i-ri-terminal-box-line'
+
 /**
  * Brand marks for the agent submenu, keyed by the CLI's provider id. Written in this SFC rather
  * than in `local-ai-agents.ts`: UnoCSS generates the classes it finds in templates and SFCs, and a
@@ -88,10 +91,13 @@ const AGENT_ICONS = {
   pi: 'i-simple-icons-pi',
   'oh-my-pi': 'i-simple-icons-pi',
   codex: 'i-simple-icons-openai',
-  claude: 'i-simple-icons-claude'
+  claude: 'i-simple-icons-claude',
+  antigravity: AGENT_FALLBACK_ICON,
+  opencode: 'i-simple-icons-opencode',
+  gemini: 'i-simple-icons-googlegemini',
+  kiro: AGENT_FALLBACK_ICON,
+  cursor: 'i-simple-icons-cursor'
 } satisfies Record<LocalAiCliProviderId, string>
-/** For a CLI the main process lists before this table learns its mark. */
-const AGENT_FALLBACK_ICON = 'i-ri-terminal-box-line'
 
 /**
  * The project menu's panel: TuffEx's 流光底 (`TxFlowLight`, `corners`) over the shared shell card,

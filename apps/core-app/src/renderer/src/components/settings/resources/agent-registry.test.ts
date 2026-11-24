@@ -46,6 +46,7 @@ describe('agentBrand', () => {
     ['gemini', 'Gemini CLI', 'i-simple-icons-googlegemini'],
     ['cursor', 'Cursor', 'i-simple-icons-cursor'],
     ['opencode', 'OpenCode', 'i-simple-icons-opencode'],
+    ['windsurf', 'Windsurf', 'i-simple-icons-windsurf'],
     ['pi', 'Pi', 'i-simple-icons-pi'],
     ['oh-my-pi', 'Oh My Pi', 'i-simple-icons-pi']
   ])('draws %s with its brand glyph and name', (agentId, label, iconClass) => {
@@ -53,6 +54,7 @@ describe('agentBrand', () => {
   })
 
   it.each([
+    ['antigravity', 'A'],
     ['kiro', 'K'],
     ['qoder', 'Q'],
     ['codebuddy', 'C'],
@@ -67,10 +69,10 @@ describe('agentBrand', () => {
   })
 
   it('names an agent this build has never heard of by its id instead of dropping it', () => {
-    expect(agentBrand('windsurf')).toMatchObject({
-      label: 'windsurf',
+    expect(agentBrand('newcomer')).toMatchObject({
+      label: 'newcomer',
       iconClass: null,
-      monogram: 'W'
+      monogram: 'N'
     })
   })
 
@@ -114,13 +116,13 @@ describe('agentMonogram', () => {
 
 describe('agentMonogramTone', () => {
   it('gives one agent the same tint every time', () => {
-    for (const agentId of ['kiro', 'qoder', 'devin', 'windsurf']) {
+    for (const agentId of ['antigravity', 'kiro', 'qoder', 'devin', 'newcomer']) {
       expect(agentMonogramTone(agentId)).toBe(agentMonogramTone(agentId))
     }
   })
 
   it('never tints an agent as an error', () => {
-    for (const agentId of [...KNOWN_AI_AGENT_IDS, 'windsurf', 'x', '']) {
+    for (const agentId of [...KNOWN_AI_AGENT_IDS, 'newcomer', 'x', '']) {
       expect(['primary', 'success', 'warning', 'info']).toContain(agentMonogramTone(agentId))
     }
   })

@@ -34,6 +34,7 @@ import { aiOrchestratorStore } from './ai-orchestrator-store'
 import { readBoundedImportFile } from './ai-import-bounded-file'
 import {
   parseConfig,
+  parseGeminiTomlCommand,
   parseMcpProfiles,
   parseModelProviders,
   type ParsedModelProvider
@@ -47,7 +48,7 @@ interface SourceLayout {
   label: string
   command: string
   userRoot: string
-  userFiles: Array<{ path: string; kind: AiImportItemKind }>
+  userFiles: Array<{ path: string; kind: AiImportItemKind; name?: string }>
   userDirs: Array<{ path: string; kind: AiImportItemKind }>
   /**
    * Absolute MCP config files outside `userRoot`. They get their own reader: `.claude.json` is a
@@ -55,7 +56,13 @@ interface SourceLayout {
    * block.
    */
   userMcpFiles?: Array<{ path: string; name: string }>
-  projectFiles: Array<{ path: string; kind: AiImportItemKind }>
+  /**
+   * Absolute config/resource files kept beside `userRoot` (for example Antigravity CLI's
+   * `~/.gemini/antigravity-cli/settings.json` beside `~/.gemini/antigravity`). Each file is
+   * contained by its own directory so preview, discovery, and apply share one containment boundary.
+   */
+  userExternalFiles?: Array<{ path: string; kind: AiImportItemKind; name?: string }>
+  projectFiles: Array<{ path: string; kind: AiImportItemKind; name?: string }>
   projectDirs: Array<{ path: string; kind: AiImportItemKind }>
 }
 
@@ -70,12 +77,22 @@ interface CandidateMetadata {
   mode?: string
   globs?: string[]
   alwaysApply?: boolean
+  inclusion?: string
+  fileMatchPatterns?: string[]
   frontmatterKeys?: string[]
   modelProviders?: ParsedModelProvider[]
 }
 
 const SENSITIVE_KEY_PATTERN = /token|api.?key|secret|password|credential|authorization|authref/i
-const IMPORTABLE_FILE_EXTENSIONS = new Set(['.md', '.json', '.jsonc', '.toml', '.yaml', '.yml'])
+const IMPORTABLE_FILE_EXTENSIONS = new Set([
+  '.md',
+  '.mdc',
+  '.json',
+  '.jsonc',
+  '.toml',
+  '.yaml',
+  '.yml'
+])
 const MAX_SCAN_DEPTH = 4
 const MAX_SCAN_FILES_PER_SOURCE = 2_000
 const MAX_SCAN_ENTRIES_PER_SOURCE = 8_000
@@ -225,6 +242,81 @@ function layouts(home: string): SourceLayout[] {
         { path: '.opencode/agents', kind: 'agent' },
         { path: '.opencode/rules', kind: 'rule' }
       ]
+    },
+    {
+      provider: 'antigravity',
+      label: 'Antigravity',
+      command: 'agy',
+      userRoot: join(home, '.gemini', 'antigravity'),
+      userFiles: [{ path: 'mcp_config.json', kind: 'mcp', name: 'Antigravity MCP' }],
+      userDirs: [{ path: 'skills', kind: 'skill' }],
+      // Antigravity CLI keeps its settings (and optional `mcpServers`) in a sibling directory next
+      // to `~/.gemini/antigravity`, so read it contained by `~/.gemini/antigravity-cli`.
+      userExternalFiles: [
+        { path: join(home, '.gemini', 'antigravity-cli', 'settings.json'), kind: 'config' }
+      ],
+      projectFiles: [],
+      projectDirs: [
+        { path: '.agent/skills', kind: 'skill' },
+        { path: '.agent/rules', kind: 'rule' },
+        { path: '.agent/workflows', kind: 'command' }
+      ]
+    },
+    {
+      provider: 'gemini',
+      label: 'Gemini CLI',
+      command: 'gemini',
+      userRoot: join(home, '.gemini'),
+      userFiles: [
+        { path: 'settings.json', kind: 'config' },
+        { path: 'GEMINI.md', kind: 'instruction' }
+      ],
+      userDirs: [
+        { path: 'skills', kind: 'skill' },
+        { path: 'commands', kind: 'command' }
+      ],
+      projectFiles: [
+        { path: 'GEMINI.md', kind: 'instruction' },
+        { path: '.gemini/settings.json', kind: 'config' }
+      ],
+      projectDirs: [
+        { path: '.gemini/skills', kind: 'skill' },
+        { path: '.gemini/commands', kind: 'command' }
+      ]
+    },
+    {
+      provider: 'cursor',
+      label: 'Cursor',
+      command: 'cursor-agent',
+      userRoot: join(home, '.cursor'),
+      userFiles: [{ path: 'mcp.json', kind: 'mcp', name: 'Cursor MCP' }],
+      userDirs: [
+        { path: 'skills', kind: 'skill' },
+        { path: 'rules', kind: 'rule' },
+        { path: 'commands', kind: 'command' }
+      ],
+      projectFiles: [{ path: '.cursor/mcp.json', kind: 'mcp' }],
+      projectDirs: [
+        { path: '.cursor/skills', kind: 'skill' },
+        { path: '.cursor/rules', kind: 'rule' },
+        { path: '.cursor/commands', kind: 'command' }
+      ]
+    },
+    {
+      provider: 'kiro',
+      label: 'Kiro',
+      command: 'kiro-cli',
+      userRoot: join(home, '.kiro'),
+      userFiles: [{ path: 'settings/mcp.json', kind: 'mcp', name: 'Kiro MCP' }],
+      userDirs: [
+        { path: 'skills', kind: 'skill' },
+        { path: 'steering', kind: 'rule' }
+      ],
+      projectFiles: [{ path: '.kiro/settings/mcp.json', kind: 'mcp' }],
+      projectDirs: [
+        { path: '.kiro/skills', kind: 'skill' },
+        { path: '.kiro/steering', kind: 'rule' }
+      ]
     }
   ]
 }
@@ -267,6 +359,58 @@ async function findExecutable(command: string): Promise<string | undefined> {
  * as ">" — and is what an imported copy keeps as its description — and the lines indented under a
  * key are never reported as keys of their own.
  */
+function parseFrontmatterList(field: {
+  inline: string
+  continuation: readonly string[]
+}): string[] {
+  const entries: string[] = []
+  const trimmedInline = field.inline.trim()
+  if (trimmedInline) {
+    const isBracketed = trimmedInline.startsWith('[') && trimmedInline.endsWith(']')
+    const inner = isBracketed ? trimmedInline.slice(1, -1) : trimmedInline
+    const stripped = inner.replace(/^['"]|['"]$/g, '')
+    if (isBracketed || (!trimmedInline.startsWith('"') && !trimmedInline.startsWith("'"))) {
+      // Split comma-separated lists while preserving brace expressions such as `{ts,tsx}`.
+      let start = 0
+      let braceDepth = 0
+      let quote = ''
+      for (let i = 0; i < inner.length; i += 1) {
+        const ch = inner[i]!
+        if (quote) {
+          if (ch === quote) quote = ''
+          continue
+        }
+        if (ch === '"' || ch === "'") quote = ch
+        else if (ch === '{') braceDepth += 1
+        else if (ch === '}' && braceDepth > 0) braceDepth -= 1
+        else if (ch === ',' && braceDepth === 0) {
+          const part = inner
+            .slice(start, i)
+            .trim()
+            .replace(/^['"]|['"]$/g, '')
+          if (part) entries.push(part)
+          start = i + 1
+        }
+      }
+      const tail = inner
+        .slice(start)
+        .trim()
+        .replace(/^['"]|['"]$/g, '')
+      if (tail) entries.push(tail)
+    } else if (stripped) {
+      entries.push(stripped)
+    }
+  } else {
+    for (const line of field.continuation) {
+      if (!line.trim()) continue
+      const match = /^\s*-\s*(.+?)\s*$/.exec(line)
+      if (!match) break
+      entries.push(match[1]!.replace(/^['"]|['"]$/g, ''))
+    }
+  }
+  return entries
+}
+
 function parseFrontmatter(content: string): CandidateMetadata {
   if (!content.startsWith('---') || content.indexOf('\n---', 3) < 0) return {}
   const metadata: CandidateMetadata = { frontmatterKeys: [] }
@@ -277,28 +421,19 @@ function parseFrontmatter(content: string): CandidateMetadata {
     if (key === 'name') metadata.name = value
     if (key === 'description') metadata.description = value
     if (key === 'mode') metadata.mode = value
+    if (key === 'inclusion') metadata.inclusion = value
     if (key === 'always-apply' || key === 'alwaysapply') {
       metadata.alwaysApply = value.toLowerCase() === 'true'
     }
     if (key === 'paths' || key === 'path' || key === 'globs' || key === 'glob') {
-      const globs: string[] = []
-      const inline = field.inline.replace(/^['"]|['"]$/g, '').replace(/^\[|\]$/g, '')
-      if (inline) {
-        globs.push(
-          ...inline
-            .split(',')
-            .map((entry) => entry.trim().replace(/^['"]|['"]$/g, ''))
-            .filter(Boolean)
-        )
-      } else {
-        for (const line of field.continuation) {
-          if (!line.trim()) continue
-          const match = /^\s*-\s*(.+?)\s*$/.exec(line)
-          if (!match) break
-          globs.push(match[1]!.replace(/^['"]|['"]$/g, ''))
-        }
-      }
+      const globs = parseFrontmatterList(field)
       metadata.globs = [...new Set([...(metadata.globs ?? []), ...globs])]
+    }
+    if (key === 'filematchpattern' || key === 'file-match-pattern') {
+      const patterns = parseFrontmatterList(field)
+      metadata.fileMatchPatterns = [
+        ...new Set([...(metadata.fileMatchPatterns ?? []), ...patterns])
+      ]
     }
   }
   return metadata
@@ -534,7 +669,19 @@ async function buildCandidate(
           ignoredFields: ignoredFrontmatter(metadata, ['name', 'description', 'mode'])
         }
       ]
-    if (kind === 'command')
+    if (kind === 'command') {
+      if (source.provider === 'gemini' && extension === '.toml') {
+        const parsedCommand = parseGeminiTomlCommand(content)
+        return [
+          {
+            ...base,
+            kind,
+            description: parsedCommand.description || '',
+            ignoredFields: parsedCommand.ignoredFields,
+            blockingIssues: parsedCommand.blockingIssues
+          }
+        ]
+      }
       return [
         {
           ...base,
@@ -543,8 +690,30 @@ async function buildCandidate(
           ignoredFields: ignoredFrontmatter(metadata, ['name', 'description'])
         }
       ]
+    }
     if (kind === 'rule' || kind === 'instruction') {
-      const globs = kind === 'rule' ? (metadata.globs ?? []) : []
+      const kiroBlockingIssues: string[] = []
+      let globs = kind === 'rule' ? (metadata.globs ?? []) : []
+      let alwaysApply = kind === 'instruction' ? true : (metadata.alwaysApply ?? globs.length === 0)
+
+      if (kind === 'rule' && source.provider === 'kiro') {
+        const inclusion = metadata.inclusion?.trim().toLowerCase()
+        if (inclusion === 'filematch') {
+          globs = [...new Set([...globs, ...(metadata.fileMatchPatterns ?? [])])]
+          alwaysApply = false
+          if (globs.length === 0) {
+            kiroBlockingIssues.push(
+              'Kiro steering rule with inclusion: fileMatch must define fileMatchPattern'
+            )
+          }
+        } else if (inclusion && inclusion !== 'always') {
+          alwaysApply = false
+          kiroBlockingIssues.push(
+            `Kiro steering inclusion mode "${metadata.inclusion!.trim()}" is not supported`
+          )
+        }
+      }
+
       const invalidGlobs = globs.filter((glob) => {
         if (isAbsolute(glob) || glob === '..' || glob.startsWith('../')) return true
         try {
@@ -554,13 +723,19 @@ async function buildCandidate(
           return true
         }
       })
+      const blockingIssues = [
+        ...kiroBlockingIssues,
+        ...(invalidGlobs.length > 0
+          ? [`Rule contains invalid or out-of-workspace globs: ${invalidGlobs.join(', ')}`]
+          : [])
+      ]
       return [
         {
           ...base,
           kind,
           description: metadata.description || '',
           globs,
-          alwaysApply: kind === 'instruction' ? true : (metadata.alwaysApply ?? globs.length === 0),
+          alwaysApply,
           ignoredFields: ignoredFrontmatter(
             metadata,
             kind === 'rule'
@@ -572,14 +747,14 @@ async function buildCandidate(
                   'globs',
                   'glob',
                   'always-apply',
-                  'alwaysapply'
+                  'alwaysapply',
+                  ...(source.provider === 'kiro'
+                    ? ['inclusion', 'filematchpattern', 'file-match-pattern']
+                    : [])
                 ]
               : ['name', 'description']
           ),
-          blockingIssues:
-            invalidGlobs.length > 0
-              ? [`Rule contains invalid or out-of-workspace globs: ${invalidGlobs.join(', ')}`]
-              : []
+          blockingIssues
         }
       ]
     }
@@ -681,7 +856,8 @@ async function scanSource(
   fileSpecs: SourceLayout['userFiles'],
   dirSpecs: SourceLayout['userDirs'],
   scannedAt: number,
-  mcpFiles: NonNullable<SourceLayout['userMcpFiles']> = []
+  mcpFiles: NonNullable<SourceLayout['userMcpFiles']> = [],
+  externalFiles: NonNullable<SourceLayout['userExternalFiles']> = []
 ): Promise<{ source: AiImportSourceSnapshot; candidates: AiImportCandidate[] }> {
   let canonicalRoot = resolve(rootPath)
   try {
@@ -705,7 +881,8 @@ async function scanSource(
   for (const file of fileSpecs)
     candidates.push(
       ...(await buildCandidate(source, file.kind, join(canonicalRoot, file.path), {
-        agentLabel: layout.label
+        agentLabel: layout.label,
+        nameOverride: file.name
       }))
     )
 
@@ -714,6 +891,15 @@ async function scanSource(
     candidates.push(
       ...(await buildCandidate(source, 'mcp', file.path, {
         containedBy: dirname(file.path),
+        nameOverride: file.name
+      }))
+    )
+
+  for (const file of externalFiles)
+    candidates.push(
+      ...(await buildCandidate(source, file.kind, file.path, {
+        containedBy: dirname(file.path),
+        agentLabel: layout.label,
         nameOverride: file.name
       }))
     )
@@ -866,7 +1052,8 @@ export class AiCliImportService {
           layout.userFiles,
           layout.userDirs,
           scannedAt,
-          layout.userMcpFiles ?? []
+          layout.userMcpFiles ?? [],
+          layout.userExternalFiles ?? []
         ),
         scanSource(
           layout,

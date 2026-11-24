@@ -1,4 +1,5 @@
 import type {
+  CliRuntimeKind,
   IntelligenceChatPayload,
   IntelligenceEmbeddingPayload,
   IntelligenceInvokeOptions,
@@ -48,6 +49,9 @@ import { createClaudeLineParser } from './cli/claude-stream-json'
 import { createCodexLineParser } from './cli/codex-exec-json'
 import { createOmpIsolation, type OmpIsolation } from './cli/omp-isolation'
 import {
+  ANTIGRAVITY_CLI_ORIGIN,
+  ANTIGRAVITY_CLI_PROFILE_ID,
+  ANTIGRAVITY_CLI_PROVIDER_ID,
   buildOmpArgs,
   buildPiArgs,
   buildPiPrompt,
@@ -58,9 +62,21 @@ import {
   CODEX_CLI_ORIGIN,
   CODEX_CLI_PROFILE_ID,
   CODEX_CLI_PROVIDER_ID,
+  CURSOR_CLI_ORIGIN,
+  CURSOR_CLI_PROFILE_ID,
+  CURSOR_CLI_PROVIDER_ID,
+  GEMINI_CLI_ORIGIN,
+  GEMINI_CLI_PROFILE_ID,
+  GEMINI_CLI_PROVIDER_ID,
+  KIRO_CLI_ORIGIN,
+  KIRO_CLI_PROFILE_ID,
+  KIRO_CLI_PROVIDER_ID,
   OMP_CLI_ORIGIN,
   OMP_CLI_PROFILE_ID,
   OMP_CLI_PROVIDER_ID,
+  OPENCODE_CLI_ORIGIN,
+  OPENCODE_CLI_PROFILE_ID,
+  OPENCODE_CLI_PROVIDER_ID,
   PI_CLI_TERMINATION_FAILED,
   PI_SESSION_PROTOCOL_VERSION,
   parsePiCliLine,
@@ -231,35 +247,87 @@ function firstUserPrompt(payload: IntelligenceChatPayload): string {
  */
 /**
  * Each third-party CLI binary runs only under its own scheduler; the scheduler picks the executor,
- * not the model. Any other run that lands on that CLI's model reuses the endpoint its config describes.
+ * not the model (`AGENTS.md`). Any other run that lands on a third-party CLI provider reuses the
+ * HTTP endpoint its config describes (when supported) or fails closed — never spawning any binary.
  */
-const THIRD_PARTY_CLIS: ReadonlyArray<{
-  cli: ThirdPartyCli
-  providerId: string
-  origin: string
-  schedulerProfileId: string
-}> = [
+interface ThirdPartyCliEntry {
+  readonly cli: CliRuntimeKind
+  readonly codePrefix: string
+  readonly providerId: string
+  readonly origin: string
+  readonly schedulerProfileId: string
+  readonly configReuseCli?: ThirdPartyCli
+  readonly acpOnly?: boolean
+}
+
+const THIRD_PARTY_CLIS: ReadonlyArray<ThirdPartyCliEntry> = [
   {
     cli: 'codex',
+    codePrefix: 'CODEX',
     providerId: CODEX_CLI_PROVIDER_ID,
     origin: CODEX_CLI_ORIGIN,
-    schedulerProfileId: CODEX_CLI_PROFILE_ID
+    schedulerProfileId: CODEX_CLI_PROFILE_ID,
+    configReuseCli: 'codex'
   },
   {
     cli: 'claude',
+    codePrefix: 'CLAUDE',
     providerId: CLAUDE_CLI_PROVIDER_ID,
     origin: CLAUDE_CLI_ORIGIN,
-    schedulerProfileId: CLAUDE_CLI_PROFILE_ID
+    schedulerProfileId: CLAUDE_CLI_PROFILE_ID,
+    configReuseCli: 'claude'
   },
   {
     cli: 'omp',
+    codePrefix: 'OMP',
     providerId: OMP_CLI_PROVIDER_ID,
     origin: OMP_CLI_ORIGIN,
-    schedulerProfileId: OMP_CLI_PROFILE_ID
+    schedulerProfileId: OMP_CLI_PROFILE_ID,
+    configReuseCli: 'omp'
+  },
+  {
+    cli: 'antigravity',
+    codePrefix: 'ANTIGRAVITY',
+    providerId: ANTIGRAVITY_CLI_PROVIDER_ID,
+    origin: ANTIGRAVITY_CLI_ORIGIN,
+    schedulerProfileId: ANTIGRAVITY_CLI_PROFILE_ID,
+    acpOnly: true
+  },
+  {
+    cli: 'opencode',
+    codePrefix: 'OPENCODE',
+    providerId: OPENCODE_CLI_PROVIDER_ID,
+    origin: OPENCODE_CLI_ORIGIN,
+    schedulerProfileId: OPENCODE_CLI_PROFILE_ID,
+    acpOnly: true
+  },
+  {
+    cli: 'gemini',
+    codePrefix: 'GEMINI',
+    providerId: GEMINI_CLI_PROVIDER_ID,
+    origin: GEMINI_CLI_ORIGIN,
+    schedulerProfileId: GEMINI_CLI_PROFILE_ID,
+    acpOnly: true
+  },
+  {
+    cli: 'kiro',
+    codePrefix: 'KIRO',
+    providerId: KIRO_CLI_PROVIDER_ID,
+    origin: KIRO_CLI_ORIGIN,
+    schedulerProfileId: KIRO_CLI_PROFILE_ID,
+    acpOnly: true
+  },
+  {
+    cli: 'cursor',
+    codePrefix: 'CURSOR',
+    providerId: CURSOR_CLI_PROVIDER_ID,
+    origin: CURSOR_CLI_ORIGIN,
+    schedulerProfileId: CURSOR_CLI_PROFILE_ID,
+    acpOnly: true
   }
 ]
 
-function thirdPartyCliOf(config: IntelligenceProviderConfig) {
+function thirdPartyCliOf(config: IntelligenceProviderConfig): ThirdPartyCliEntry | null {
   return (
     THIRD_PARTY_CLIS.find(
       (entry) => config.id === entry.providerId || config.metadata?.origin === entry.origin
@@ -292,9 +360,12 @@ export class PiCliProvider extends IntelligenceProvider {
   ): AsyncGenerator<IntelligenceStreamChunk> {
     const external = thirdPartyCliOf(this.config)
     if (external && options.metadata?.profileId !== external.schedulerProfileId) {
+      if (!external.configReuseCli) {
+        throw new Error(`${external.codePrefix}_CONFIG_PROVIDER_UNAVAILABLE`)
+      }
       const { resolveCliConfigEndpoint } = await import('./cli-config-provider')
-      const endpoint = resolveCliConfigEndpoint(external.cli, this.resolveModel(options))
-      if (!endpoint) throw new Error(`${external.cli.toUpperCase()}_CONFIG_PROVIDER_UNAVAILABLE`)
+      const endpoint = resolveCliConfigEndpoint(external.configReuseCli, this.resolveModel(options))
+      if (!endpoint) throw new Error(`${external.codePrefix}_CONFIG_PROVIDER_UNAVAILABLE`)
       for await (const chunk of endpoint.provider.chatStream(payload, {
         ...options,
         modelPreference: [endpoint.modelId]
@@ -304,6 +375,11 @@ export class PiCliProvider extends IntelligenceProvider {
       return
     }
     if (!this.localCliEnabled()) throw new Error('LOCAL_AI_CLI_FEATURE_DISABLED')
+    if (external?.acpOnly) {
+      throw new Error(
+        `${external.codePrefix}_ACP_RUNTIME_REQUIRED: '${external.cli}' executes via CliAgentRuntimeHost (ACP), not single-shot CLI chat`
+      )
+    }
     const rawSignal = (options as PiCliRuntimeOptions).signal
     if (rawSignal?.aborted) return
 

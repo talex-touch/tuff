@@ -14,15 +14,30 @@ vi.mock('./cli-config-provider', () => ({ resolveCliConfigEndpoint }))
 
 import { PiCliProvider } from './pi-cli-provider'
 import {
+  ANTIGRAVITY_CLI_ORIGIN,
+  ANTIGRAVITY_CLI_PROFILE_ID,
+  ANTIGRAVITY_CLI_PROVIDER_ID,
   CLAUDE_CLI_ORIGIN,
   CLAUDE_CLI_PROFILE_ID,
   CLAUDE_CLI_PROVIDER_ID,
   CODEX_CLI_ORIGIN,
   CODEX_CLI_PROFILE_ID,
   CODEX_CLI_PROVIDER_ID,
+  CURSOR_CLI_ORIGIN,
+  CURSOR_CLI_PROFILE_ID,
+  CURSOR_CLI_PROVIDER_ID,
+  GEMINI_CLI_ORIGIN,
+  GEMINI_CLI_PROFILE_ID,
+  GEMINI_CLI_PROVIDER_ID,
+  KIRO_CLI_ORIGIN,
+  KIRO_CLI_PROFILE_ID,
+  KIRO_CLI_PROVIDER_ID,
   OMP_CLI_ORIGIN,
   OMP_CLI_PROFILE_ID,
-  OMP_CLI_PROVIDER_ID
+  OMP_CLI_PROVIDER_ID,
+  OPENCODE_CLI_ORIGIN,
+  OPENCODE_CLI_PROFILE_ID,
+  OPENCODE_CLI_PROVIDER_ID
 } from './pi-cli-runtime'
 
 const CLIS = [
@@ -43,6 +58,44 @@ const CLIS = [
     id: OMP_CLI_PROVIDER_ID,
     origin: OMP_CLI_ORIGIN,
     scheduler: OMP_CLI_PROFILE_ID
+  }
+] as const
+
+const ACP_ONLY_CLIS = [
+  {
+    cli: 'antigravity',
+    codePrefix: 'ANTIGRAVITY',
+    id: ANTIGRAVITY_CLI_PROVIDER_ID,
+    origin: ANTIGRAVITY_CLI_ORIGIN,
+    scheduler: ANTIGRAVITY_CLI_PROFILE_ID
+  },
+  {
+    cli: 'opencode',
+    codePrefix: 'OPENCODE',
+    id: OPENCODE_CLI_PROVIDER_ID,
+    origin: OPENCODE_CLI_ORIGIN,
+    scheduler: OPENCODE_CLI_PROFILE_ID
+  },
+  {
+    cli: 'gemini',
+    codePrefix: 'GEMINI',
+    id: GEMINI_CLI_PROVIDER_ID,
+    origin: GEMINI_CLI_ORIGIN,
+    scheduler: GEMINI_CLI_PROFILE_ID
+  },
+  {
+    cli: 'kiro',
+    codePrefix: 'KIRO',
+    id: KIRO_CLI_PROVIDER_ID,
+    origin: KIRO_CLI_ORIGIN,
+    scheduler: KIRO_CLI_PROFILE_ID
+  },
+  {
+    cli: 'cursor',
+    codePrefix: 'CURSOR',
+    id: CURSOR_CLI_PROVIDER_ID,
+    origin: CURSOR_CLI_ORIGIN,
+    scheduler: CURSOR_CLI_PROFILE_ID
   }
 ] as const
 
@@ -132,3 +185,65 @@ describe.each(CLIS)('PiCliProvider routing for $cli', ({ cli, id, origin, schedu
     )
   })
 })
+
+describe.each(ACP_ONLY_CLIS)(
+  'PiCliProvider fail-closed routing for ACP-only CLI $cli (scheduler-decides-executor invariant)',
+  ({ cli, codePrefix, id, origin, scheduler }) => {
+    beforeEach(() => {
+      resolveCliConfigEndpoint.mockReset()
+    })
+
+    it.each([
+      ['default-pi', { metadata: { profileId: 'default-pi' } }],
+      ['unnamed run', {}],
+      ['custom profile', { metadata: { profileId: `custom-${cli}-profile` } }],
+      ['mismatched CLI profile', { metadata: { profileId: CODEX_CLI_PROFILE_ID } }]
+    ])(
+      'fails closed without spawning or calling cli-config reuse under %s',
+      async (_label, rawOptions) => {
+        // Even with localCliEnabled=true, a non-matching scheduler MUST fail closed immediately.
+        const provider = new PiCliProvider(cliConfig(id, origin), () => true)
+        await expect(
+          collect(provider.chatStream(PAYLOAD, rawOptions as IntelligenceInvokeOptions))
+        ).rejects.toThrow(`${codePrefix}_CONFIG_PROVIDER_UNAVAILABLE`)
+        expect(resolveCliConfigEndpoint).not.toHaveBeenCalled()
+      }
+    )
+
+    it('also fails closed when matched by metadata.origin under an arbitrary config id', async () => {
+      const provider = new PiCliProvider(cliConfig('arbitrary-local-id', origin), () => true)
+      await expect(
+        collect(
+          provider.chatStream(PAYLOAD, {
+            metadata: { profileId: 'default-pi' }
+          } as IntelligenceInvokeOptions)
+        )
+      ).rejects.toThrow(`${codePrefix}_CONFIG_PROVIDER_UNAVAILABLE`)
+      expect(resolveCliConfigEndpoint).not.toHaveBeenCalled()
+    })
+
+    it('respects localCliEnabled=false under its matching scheduler profile', async () => {
+      const provider = new PiCliProvider(cliConfig(id, origin), () => false)
+      await expect(
+        collect(
+          provider.chatStream(PAYLOAD, {
+            metadata: { profileId: scheduler }
+          } as IntelligenceInvokeOptions)
+        )
+      ).rejects.toThrow('LOCAL_AI_CLI_FEATURE_DISABLED')
+      expect(resolveCliConfigEndpoint).not.toHaveBeenCalled()
+    })
+
+    it('requires ACP runtime host rather than falling through to pi when matched and enabled', async () => {
+      const provider = new PiCliProvider(cliConfig(id, origin), () => true)
+      await expect(
+        collect(
+          provider.chatStream(PAYLOAD, {
+            metadata: { profileId: scheduler }
+          } as IntelligenceInvokeOptions)
+        )
+      ).rejects.toThrow(`${codePrefix}_ACP_RUNTIME_REQUIRED`)
+      expect(resolveCliConfigEndpoint).not.toHaveBeenCalled()
+    })
+  }
+)

@@ -4,6 +4,7 @@ import process from 'node:process'
 import { describe, expect, it } from 'vitest'
 import { OmpAcpClient, OmpAcpSession } from '../omp/omp-acp-client'
 import { AcpClient, AcpSession, mapDecisionToAcpPermissionResult } from './acp-client'
+import { CLI_RUNTIME_KINDS } from './types'
 
 /**
  * Spawns a real Node child process running an inline script to test real OS stdio pipes,
@@ -607,6 +608,266 @@ rl.on('line', (line) => {
       expect(replies['req-kill']).toEqual({ hasResult: true, result: null })
       expect(replies['req-release']).toEqual({ hasResult: true, result: {} })
       await session.close()
+    }
+    finally {
+      await client.close()
+    }
+  })
+
+  it('forwards arbitrary ACP spawn args verbatim and handles set_model fallback, array content blocks, and snake_case usage', async () => {
+    expect(CLI_RUNTIME_KINDS).toEqual([
+      'omp',
+      'codex',
+      'claude',
+      'antigravity',
+      'opencode',
+      'gemini',
+      'kiro',
+      'cursor',
+    ])
+
+    const quirkyServer = `
+const readline = require('node:readline');
+const rl = readline.createInterface({ input: process.stdin, terminal: false });
+const cliArgs = process.argv.slice(1);
+let selectedModel = null;
+
+function send(obj) {
+  process.stdout.write(JSON.stringify(obj) + '\\n');
+}
+
+rl.on('line', (line) => {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+  const msg = JSON.parse(trimmed);
+
+  if (msg.method === 'initialize') {
+    send({
+      jsonrpc: '2.0',
+      id: String(msg.id),
+      result: {
+        protocolVersion: 1,
+        agentInfo: { name: 'quirky-acp', version: '1.2.3' },
+      },
+    });
+    return;
+  }
+
+  if (msg.method === 'session/new') {
+    send({ jsonrpc: '2.0', id: msg.id, result: { sessionId: 'q-1' } });
+    return;
+  }
+
+  if (msg.method === 'session/set_config_option') {
+    send({
+      jsonrpc: '2.0',
+      id: msg.id,
+      error: { code: -32601, message: 'Method not found: session/set_config_option' },
+    });
+    return;
+  }
+
+  if (msg.method === 'session/set_model') {
+    selectedModel = msg.params?.modelId ?? null;
+    send({ jsonrpc: '2.0', id: msg.id, result: { ok: true } });
+    return;
+  }
+
+  if (msg.method === 'session/prompt') {
+    send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: msg.params.sessionId,
+        update: {
+          sessionUpdate: 'agent_thought_chunk',
+          content: [{ type: 'text', text: 'plan:' }, { type: 'text', text: selectedModel || 'none' }],
+        },
+      },
+    });
+    send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: msg.params.sessionId,
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: [{ type: 'text', text: 'args=' + cliArgs.join(',') }],
+        },
+      },
+    });
+    send({
+      jsonrpc: '2.0',
+      id: msg.id,
+      result: {
+        stopReason: 'end_turn',
+        usage: { input_tokens: 7, output_tokens: 3, total_tokens: 10, cached_read_tokens: 2 },
+      },
+    });
+    return;
+  }
+
+  if (msg.method === 'session/close') {
+    send({ jsonrpc: '2.0', id: msg.id, result: { closed: true } });
+  }
+});
+`
+    const client = await AcpClient.spawn({
+      executablePath: process.execPath,
+      args: ['-e', quirkyServer, '--', '--experimental-acp', '--stdio'],
+      label: 'gemini-acp',
+    })
+    try {
+      expect(client.agentInfo).toEqual({ name: 'quirky-acp', version: '1.2.3' })
+      const session = await client.createSession({
+        cwd: process.cwd(),
+        model: 'gemini-2.5-pro',
+      })
+      expect(session.currentModel).toBe('gemini-2.5-pro')
+
+      const events: CliRuntimeStreamEvent[] = []
+      for await (const event of session.promptStream('hello')) {
+        events.push(event)
+      }
+      expect(events).toEqual([
+        expect.objectContaining({ type: 'thinking', text: 'plan:gemini-2.5-pro' }),
+        expect.objectContaining({ type: 'delta', text: 'args=--experimental-acp,--stdio' }),
+        expect.objectContaining({
+          type: 'usage',
+          usage: { inputTokens: 7, outputTokens: 3, totalTokens: 10, cacheReadTokens: 2 },
+        }),
+      ])
+      await session.close()
+    }
+    finally {
+      await client.close()
+    }
+  })
+
+  it('rejects null initialize results in AcpClient.spawn() and closes the child process', async () => {
+    const nullInitServer = `
+const readline = require('node:readline');
+const rl = readline.createInterface({ input: process.stdin, terminal: false });
+rl.on('line', (line) => {
+  const msg = JSON.parse(line.trim());
+  if (msg.method === 'initialize') {
+    process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: null }) + '\\n');
+  }
+});
+`
+    await expect(
+      AcpClient.spawn({
+        executablePath: process.execPath,
+        args: ['-e', nullInitServer],
+        label: 'null-init-acp',
+      }),
+    ).rejects.toMatchObject({
+      code: 'PROTOCOL_INVALID',
+      message: expect.stringContaining('initialize returned invalid result'),
+    })
+  })
+
+  it('validates prompt results, preserves stopReason, and rejects null or stopReason-less results before ending stream', async () => {
+    const edgePromptServer = `
+const readline = require('node:readline');
+const rl = readline.createInterface({ input: process.stdin, terminal: false });
+function send(obj) {
+  process.stdout.write(JSON.stringify(obj) + '\\n');
+}
+rl.on('line', (line) => {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+  const msg = JSON.parse(trimmed);
+  if (msg.method === 'initialize') {
+    send({ jsonrpc: '2.0', id: msg.id, result: { protocolVersion: 1 } });
+    return;
+  }
+  if (msg.method === 'session/new') {
+    send({
+      jsonrpc: '2.0',
+      id: msg.id,
+      result: {
+        sessionId: 'edge-1',
+        modes: { currentModeId: 'agent', availableModes: [{ id: 'agent' }, { id: 'plan' }] },
+      },
+    });
+    return;
+  }
+  if (msg.method === 'session/set_mode') {
+    send({ jsonrpc: '2.0', id: msg.id, result: {} });
+    return;
+  }
+  if (msg.method === 'session/prompt') {
+    const text = msg.params?.prompt?.[0]?.text || '';
+    send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: msg.params.sessionId,
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'partial-' + text },
+        },
+      },
+    });
+    if (text === 'null-result') {
+      send({ jsonrpc: '2.0', id: msg.id, result: null });
+    }
+    else if (text === 'missing-stop') {
+      send({ jsonrpc: '2.0', id: msg.id, result: {} });
+    }
+    else if (text === 'max-tokens') {
+      send({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'max_tokens' } });
+    }
+    else {
+      send({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'end_turn' } });
+    }
+  }
+});
+`
+    const client = await AcpClient.spawn({
+      executablePath: process.execPath,
+      args: ['-e', edgePromptServer],
+      label: 'edge-acp',
+    })
+    try {
+      expect(client.agentInfo).toBeUndefined()
+      const session = await client.createSession({ cwd: process.cwd() })
+      expect(session.modes?.currentModeId).toBe('agent')
+      await session.setMode('plan')
+      expect(session.modes?.currentModeId).toBe('plan')
+
+      // Valid end_turn without usage succeeds and preserves stopReason.
+      const okEvents: CliRuntimeStreamEvent[] = []
+      for await (const ev of session.promptStream('ok')) {
+        okEvents.push(ev)
+      }
+      expect(okEvents).toEqual([expect.objectContaining({ type: 'delta', text: 'partial-ok' })])
+      expect(session.lastStopReason).toBe('end_turn')
+
+      // max_tokens preserves stopReason across promptStream boundary.
+      const truncatedEvents: CliRuntimeStreamEvent[] = []
+      for await (const ev of session.promptStream('max-tokens')) {
+        truncatedEvents.push(ev)
+      }
+      expect(truncatedEvents).toEqual([
+        expect.objectContaining({ type: 'delta', text: 'partial-max-tokens' }),
+      ])
+      expect(session.lastStopReason).toBe('max_tokens')
+
+      // result: null rejects instead of ending normally.
+      await expect(async () => {
+        for await (const _ev of session.promptStream('null-result')) {
+          // consume
+        }
+      }).rejects.toMatchObject({ code: 'PROTOCOL_INVALID' })
+
+      // result without stopReason also rejects.
+      await expect(async () => {
+        for await (const _ev of session.promptStream('missing-stop')) {
+          // consume
+        }
+      }).rejects.toMatchObject({ code: 'PROTOCOL_INVALID' })
     }
     finally {
       await client.close()

@@ -67,6 +67,7 @@ export interface DirectoryTerminalDeps {
   spawnFile?: (file: string, args: readonly string[], options: { cwd: string }) => unknown
   appDirs?: readonly string[]
   pathEnv?: string
+  env?: Readonly<Record<string, string | undefined>>
 }
 
 const MAC_APP_DIRS = [
@@ -86,6 +87,10 @@ const MAC_TERMINAL_IDENTITIES = [
   { id: 'hyper', bundle: 'Hyper.app', name: 'Hyper' },
   { id: 'tabby', bundle: 'Tabby.app', name: 'Tabby' },
   { id: 'cmux', bundle: 'cmux.app', name: 'cmux' },
+  { id: 'rio', bundle: 'Rio.app', name: 'Rio' },
+  { id: 'wave', bundle: 'Wave.app', name: 'Wave' },
+  { id: 'windterm', bundle: 'WindTerm.app', name: 'WindTerm' },
+  { id: 'electerm', bundle: 'Electerm.app', name: 'Electerm' },
   { id: 'terminal', bundle: 'Terminal.app', name: 'Terminal' }
 ] as const
 
@@ -96,9 +101,15 @@ const LINUX_TERMINAL_CANDIDATES = [
   { id: 'gnome-terminal', name: 'GNOME Terminal', bin: 'gnome-terminal' },
   { id: 'konsole', name: 'Konsole', bin: 'konsole' },
   { id: 'xfce4-terminal', name: 'Xfce Terminal', bin: 'xfce4-terminal' },
+  { id: 'ptyxis', name: 'Ptyxis', bin: 'ptyxis' },
+  { id: 'ghostty', name: 'Ghostty', bin: 'ghostty' },
   { id: 'alacritty', name: 'Alacritty', bin: 'alacritty' },
   { id: 'kitty', name: 'kitty', bin: 'kitty' },
   { id: 'wezterm', name: 'WezTerm', bin: 'wezterm' },
+  { id: 'rio', name: 'Rio', bin: 'rio' },
+  { id: 'foot', name: 'Foot', bin: 'foot' },
+  { id: 'tilix', name: 'Tilix', bin: 'tilix' },
+  { id: 'terminator', name: 'Terminator', bin: 'terminator' },
   { id: 'x-terminal-emulator', name: 'Terminal', bin: 'x-terminal-emulator' }
 ] as const
 
@@ -240,58 +251,184 @@ async function discoverMacTerminals(deps: DirectoryTerminalDeps): Promise<Direct
   return found
 }
 
-async function discoverWindowsTerminals(deps: DirectoryTerminalDeps): Promise<DirectoryTerminal[]> {
-  const stat = deps.stat ?? fs.stat
-  const found: DirectoryTerminal[] = []
-  const windowsRoot = process.env.SystemRoot || 'C:\\Windows'
-  const roots = [
-    ...(process.env.LOCALAPPDATA
-      ? [path.win32.join(process.env.LOCALAPPDATA, 'Microsoft', 'WindowsApps')]
-      : []),
-    ...(deps.pathEnv ?? process.env.PATH ?? '').split(';').filter(path.win32.isAbsolute)
-  ]
-  for (const root of roots) {
-    const target = path.win32.join(root, 'wt.exe')
+function readWindowsEnv(
+  env: Readonly<Record<string, string | undefined>>,
+  ...names: string[]
+): string | undefined {
+  for (const name of names) {
+    const direct = env[name]
+    if (direct) return direct
+  }
+  const wanted = new Set(names.map((name) => name.toLowerCase()))
+  for (const [key, value] of Object.entries(env)) {
+    if (value && wanted.has(key.toLowerCase())) return value
+  }
+  return undefined
+}
+
+function dedupeWindowsPaths(candidates: readonly string[]): string[] {
+  const seen = new Set<string>()
+  const unique: string[] = []
+  for (const candidate of candidates) {
+    if (!candidate) continue
+    const key = candidate.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push(candidate)
+  }
+  return unique
+}
+
+async function resolveFirstExistingFile(
+  candidates: readonly string[],
+  stat: (target: string) => Promise<DirectoryTerminalStats>
+): Promise<string | null> {
+  for (const target of candidates) {
     try {
-      if (!(await stat(target)).isFile()) continue
-      found.push({
-        id: 'windows-terminal',
-        name: 'Windows Terminal',
-        target,
-        kind: 'win-exe',
-        source: 'installed'
-      })
-      break
+      if ((await stat(target)).isFile()) return target
     } catch {
       // Only an installed launcher is offered.
     }
   }
-  const commandPrompt = path.win32.join(windowsRoot, 'System32', 'cmd.exe')
-  try {
-    if ((await stat(commandPrompt)).isFile()) {
-      found.push({
-        id: 'cmd',
-        name: 'Command Prompt',
-        target: commandPrompt,
-        kind: 'win-exe',
-        source: 'system-default'
-      })
+  return null
+}
+
+interface WindowsTerminalCandidateSpec {
+  id: string
+  name: string
+  source: 'installed' | 'system-default'
+  candidates: readonly string[]
+}
+
+async function discoverWindowsTerminals(deps: DirectoryTerminalDeps): Promise<DirectoryTerminal[]> {
+  const stat = deps.stat ?? fs.stat
+  const env = deps.env ?? process.env
+  const windowsRoot = readWindowsEnv(env, 'SystemRoot') || 'C:\\Windows'
+  const localAppData = readWindowsEnv(env, 'LOCALAPPDATA', 'LocalAppData')
+  const programFiles = readWindowsEnv(env, 'ProgramFiles', 'PROGRAMFILES')
+  const programFilesX86 = readWindowsEnv(env, 'ProgramFiles(x86)', 'PROGRAMFILES(X86)')
+  const pathDirs = (deps.pathEnv ?? readWindowsEnv(env, 'PATH') ?? '')
+    .split(';')
+    .map((entry) => {
+      const trimmed = entry.trim()
+      return trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')
+        ? trimmed.slice(1, -1).trim()
+        : trimmed
+    })
+    .filter((entry) => Boolean(entry) && path.win32.isAbsolute(entry))
+
+  const fromPath = (exe: string): string[] => pathDirs.map((dir) => path.win32.join(dir, exe))
+  const windowsAppsDir = localAppData
+    ? path.win32.join(localAppData, 'Microsoft', 'WindowsApps')
+    : null
+
+  const specs: WindowsTerminalCandidateSpec[] = [
+    {
+      id: 'windows-terminal',
+      name: 'Windows Terminal',
+      source: 'installed',
+      candidates: dedupeWindowsPaths([
+        ...(windowsAppsDir ? [path.win32.join(windowsAppsDir, 'wt.exe')] : []),
+        ...fromPath('wt.exe')
+      ])
+    },
+    {
+      id: 'pwsh',
+      name: 'PowerShell 7',
+      source: 'installed',
+      candidates: dedupeWindowsPaths([
+        ...fromPath('pwsh.exe'),
+        ...(programFiles ? [path.win32.join(programFiles, 'PowerShell', '7', 'pwsh.exe')] : []),
+        ...(windowsAppsDir ? [path.win32.join(windowsAppsDir, 'pwsh.exe')] : [])
+      ])
+    },
+    {
+      id: 'powershell',
+      name: 'Windows PowerShell',
+      source: 'installed',
+      candidates: dedupeWindowsPaths([
+        path.win32.join(windowsRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+        ...fromPath('powershell.exe')
+      ])
+    },
+    {
+      id: 'git-bash',
+      name: 'Git Bash',
+      source: 'installed',
+      candidates: dedupeWindowsPaths([
+        ...fromPath('git-bash.exe'),
+        ...(programFiles ? [path.win32.join(programFiles, 'Git', 'git-bash.exe')] : []),
+        ...(programFilesX86 ? [path.win32.join(programFilesX86, 'Git', 'git-bash.exe')] : []),
+        ...(localAppData ? [path.win32.join(localAppData, 'Programs', 'Git', 'git-bash.exe')] : [])
+      ])
+    },
+    {
+      id: 'wezterm',
+      name: 'WezTerm',
+      source: 'installed',
+      candidates: dedupeWindowsPaths([
+        ...fromPath('wezterm-gui.exe'),
+        ...(programFiles ? [path.win32.join(programFiles, 'WezTerm', 'wezterm-gui.exe')] : []),
+        ...(localAppData
+          ? [path.win32.join(localAppData, 'Programs', 'WezTerm', 'wezterm-gui.exe')]
+          : [])
+      ])
+    },
+    {
+      id: 'alacritty',
+      name: 'Alacritty',
+      source: 'installed',
+      candidates: dedupeWindowsPaths([
+        ...fromPath('alacritty.exe'),
+        ...(programFiles ? [path.win32.join(programFiles, 'Alacritty', 'alacritty.exe')] : []),
+        ...(localAppData
+          ? [path.win32.join(localAppData, 'Programs', 'Alacritty', 'alacritty.exe')]
+          : [])
+      ])
+    },
+    {
+      id: 'tabby',
+      name: 'Tabby',
+      source: 'installed',
+      candidates: dedupeWindowsPaths([
+        ...fromPath('Tabby.exe'),
+        ...(localAppData ? [path.win32.join(localAppData, 'Programs', 'Tabby', 'Tabby.exe')] : []),
+        ...(programFiles ? [path.win32.join(programFiles, 'Tabby', 'Tabby.exe')] : [])
+      ])
+    },
+    {
+      id: 'cmd',
+      name: 'Command Prompt',
+      source: 'system-default',
+      candidates: [path.win32.join(windowsRoot, 'System32', 'cmd.exe')]
     }
-  } catch {
-    // A missing system executable is not a launchable terminal.
+  ]
+
+  const found: DirectoryTerminal[] = []
+  for (const spec of specs) {
+    const target = await resolveFirstExistingFile(spec.candidates, stat)
+    if (!target) continue
+    found.push({
+      id: spec.id,
+      name: spec.name,
+      target,
+      kind: 'win-exe',
+      source: spec.source
+    })
   }
   return found
 }
 
 async function discoverLinuxTerminals(deps: DirectoryTerminalDeps): Promise<DirectoryTerminal[]> {
   const stat = deps.stat ?? fs.stat
-  const dirs = (deps.pathEnv ?? process.env.PATH ?? '').split(path.delimiter).filter(Boolean)
+  const rawPath = deps.pathEnv ?? deps.env?.PATH ?? process.env.PATH ?? ''
+  const dirs = rawPath.split(path.posix.delimiter).filter(Boolean)
   const found: DirectoryTerminal[] = []
 
   for (const candidate of LINUX_TERMINAL_CANDIDATES) {
     let resolved: string | null = null
     for (const dir of dirs) {
-      const target = path.join(dir, candidate.bin)
+      const target = path.posix.join(dir, candidate.bin)
       try {
         if ((await stat(target)).isFile()) {
           resolved = target
@@ -397,6 +534,49 @@ export function resolvePreferredTerminal(
   return { terminal: inventory.default, configured: false }
 }
 
+function resolveWindowsTerminalArgs(terminal: DirectoryTerminal, dirPath: string): string[] {
+  const exe = path.win32.basename(terminal.target).toLowerCase()
+  if (terminal.id === 'windows-terminal' || exe === 'wt.exe') return ['-d', dirPath]
+  if (terminal.id === 'pwsh' || exe === 'pwsh.exe') {
+    return ['-NoExit', '-WorkingDirectory', dirPath]
+  }
+  if (terminal.id === 'powershell' || exe === 'powershell.exe') return ['-NoExit']
+  if (terminal.id === 'git-bash' || exe === 'git-bash.exe') return [`--cd=${dirPath}`]
+  if (terminal.id === 'wezterm' || exe === 'wezterm-gui.exe') return ['start', '--cwd', dirPath]
+  if (terminal.id === 'alacritty' || exe === 'alacritty.exe') {
+    return ['--working-directory', dirPath]
+  }
+  if (terminal.id === 'tabby' || exe === 'tabby.exe') return ['open', dirPath]
+  // `cmd.exe` has no working-directory flag; the child's cwd does the job.
+  return []
+}
+
+function resolveLinuxTerminalArgs(terminal: DirectoryTerminal, dirPath: string): string[] {
+  switch (terminal.id) {
+    case 'konsole':
+      return ['--workdir', dirPath]
+    case 'gnome-terminal':
+    case 'xfce4-terminal':
+    case 'ghostty':
+    case 'foot':
+    case 'tilix':
+    case 'terminator':
+      return [`--working-directory=${dirPath}`]
+    case 'ptyxis':
+      return ['--new-window', `--working-directory=${dirPath}`]
+    case 'rio':
+      return ['--working-dir', dirPath]
+    case 'alacritty':
+      return ['--working-directory', dirPath]
+    case 'kitty':
+      return ['--directory', dirPath]
+    case 'wezterm':
+      return ['start', '--cwd', dirPath]
+    default:
+      return []
+  }
+}
+
 /**
  * Opens `dirPath` as the working directory of `terminal`.
  *
@@ -433,27 +613,15 @@ export async function openDirectoryInTerminal(
     }
 
     if (terminal.kind === 'win-exe') {
-      if (terminal.target.toLowerCase().endsWith('wt.exe')) {
-        await spawnFile(terminal.target, ['-d', dirPath], { cwd: dirPath })
-        return true
-      }
-      // `cmd.exe` has no working-directory flag; the child's cwd does the job.
       if (!(await stat(terminal.target)).isFile()) return false
-      await spawnFile(terminal.target, [], { cwd: dirPath })
-      return true
-    }
-
-    if (terminal.id === 'konsole') {
-      await spawnFile(terminal.target, ['--workdir', dirPath], { cwd: dirPath })
-      return true
-    }
-    if (terminal.id === 'gnome-terminal' || terminal.id === 'xfce4-terminal') {
-      await spawnFile(terminal.target, [`--working-directory=${dirPath}`], { cwd: dirPath })
+      await spawnFile(terminal.target, resolveWindowsTerminalArgs(terminal, dirPath), {
+        cwd: dirPath
+      })
       return true
     }
 
     if (!(await stat(terminal.target)).isFile()) return false
-    await spawnFile(terminal.target, [], { cwd: dirPath })
+    await spawnFile(terminal.target, resolveLinuxTerminalArgs(terminal, dirPath), { cwd: dirPath })
     return true
   } catch (error) {
     log.warn('Failed to open directory in terminal', {

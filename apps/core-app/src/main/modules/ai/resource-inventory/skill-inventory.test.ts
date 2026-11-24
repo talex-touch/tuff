@@ -257,6 +257,61 @@ describe('agent presence from the skill rows', () => {
       { agentId: 'codex', label: 'Codex', skillCount: 1, mcpServerCount: null }
     ])
   })
+  it('supports multiple user roots for Antigravity, excludes builtin skills, and discovers Windsurf', async () => {
+    await writeSkill(
+      join(home, '.gemini', 'antigravity', 'skills', 'agy-primary'),
+      'agy-primary',
+      'Primary root'
+    )
+    await writeSkill(
+      join(home, '.gemini', 'config', 'skills', 'agy-config'),
+      'agy-config',
+      'Config root'
+    )
+    const shared = await writeSkill(
+      join(home, '.agents', 'skills', 'agy-shared'),
+      'agy-shared',
+      'Linked in both Antigravity roots'
+    )
+    await link(shared, join(home, '.gemini', 'antigravity', 'skills', 'agy-shared'))
+    await link(shared, join(home, '.gemini', 'config', 'skills', 'agy-shared'))
+    // Builtin skills directory must never be treated as a user skill root.
+    await writeSkill(
+      join(home, '.gemini', 'antigravity', 'builtin', 'skills', 'internal-builtin'),
+      'internal-builtin',
+      'Builtin only'
+    )
+    await writeSkill(
+      join(home, '.codeium', 'windsurf', 'skills', 'surf-helper'),
+      'surf-helper',
+      'Windsurf skill'
+    )
+
+    const { rows, agents } = buildSkillInventory({ ...(await scanMachine()), importedItems: [] })
+
+    expect(rows.map((row) => row.name)).toEqual([
+      'agy-config',
+      'agy-primary',
+      'agy-shared',
+      'surf-helper'
+    ])
+    expect(rows.find((row) => row.name === 'internal-builtin')).toBeUndefined()
+    expect(rows.find((row) => row.name === 'agy-shared')?.sources).toEqual([
+      {
+        agentId: 'antigravity',
+        entryPath: join(home, '.gemini', 'antigravity', 'skills', 'agy-shared')
+      },
+      {
+        agentId: 'antigravity',
+        entryPath: join(home, '.gemini', 'config', 'skills', 'agy-shared')
+      }
+    ])
+    // Three distinct rows for Antigravity (the shared row linked in both roots counts once).
+    expect(agents).toEqual([
+      { agentId: 'antigravity', label: 'Antigravity', skillCount: 3, mcpServerCount: null },
+      { agentId: 'windsurf', label: 'Windsurf', skillCount: 1, mcpServerCount: null }
+    ])
+  })
 })
 
 describe('root table pin', () => {

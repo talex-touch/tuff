@@ -3,7 +3,11 @@ export type AiCliProviderId =
   | "claude"
   | "pi"
   | "oh-my-pi"
-  | "opencode";
+  | "opencode"
+  | "antigravity"
+  | "gemini"
+  | "kiro"
+  | "cursor";
 
 /**
  * Where a stored item came from. Scans can only produce CLI providers, so the
@@ -23,9 +27,11 @@ export const KNOWN_AI_AGENT_IDS = [
   "pi",
   "oh-my-pi",
   "opencode",
+  "antigravity",
   "cursor",
   "gemini",
   "kiro",
+  "windsurf",
   "qoder",
   "codebuddy",
   "factory",
@@ -53,9 +59,11 @@ const AI_AGENT_LABELS: Readonly<Record<KnownAiAgentId, string>> = {
   pi: "Pi",
   "oh-my-pi": "Oh My Pi",
   opencode: "OpenCode",
+  antigravity: "Antigravity",
   cursor: "Cursor",
   gemini: "Gemini CLI",
   kiro: "Kiro",
+  windsurf: "Windsurf",
   qoder: "Qoder",
   codebuddy: "CodeBuddy",
   factory: "Factory",

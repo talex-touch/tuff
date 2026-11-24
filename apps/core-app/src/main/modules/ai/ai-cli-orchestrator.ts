@@ -76,6 +76,7 @@ import {
   CliAgentRuntimeHost,
   cliCapabilityProviderForKind,
   cliDefaultModelLabel,
+  cliDisplayNameForKind,
   parseWorktreeRequestOptions,
   resolveCliPermissionRisk,
   resolveCliProfileKind
@@ -602,10 +603,10 @@ export class AiCliOrchestrator {
   private readonly runLifecycleLocks = new Map<string, Promise<void>>()
 
   /**
-   * The scheduler decides the executor (`AGENTS.md`): ONLY `profile:cli:omp`, `profile:cli:codex`,
-   * and `profile:cli:claude` route to `CliAgentRuntimeHost`, and each profile is strictly scoped
-   * to its own CLI binary/adapter. Tuff's built-in scheduler (`default-pi`), unnamed runs, and
-   * custom profiles remain on `PiAgentRuntimeHost` regardless of model.
+   * The scheduler decides the executor (`AGENTS.md`): ONLY registered `profile:cli:<id>` external
+   * CLI profiles route to `CliAgentRuntimeHost`, and each profile is strictly scoped to its own
+   * CLI binary/adapter. Tuff's built-in scheduler (`default-pi`), unnamed runs, and custom
+   * profiles remain on `PiAgentRuntimeHost` regardless of model.
    */
   private resolveExternalCliKind(profileId: string | undefined): CliRuntimeKind | null {
     return resolveCliProfileKind(profileId)
@@ -625,15 +626,14 @@ export class AiCliOrchestrator {
     }
     const protocol = runId ? this.cliRuntimeHost.getRunProtocol(runId) : undefined
     const model = cliDefaultModelLabel(kind, protocol)
+    const displayName = cliDisplayNameForKind(kind)
     return {
       provider: cliCapabilityProviderForKind(kind),
       model,
       thought:
         kind === 'omp'
           ? 'Executed by OMP ACP runtime'
-          : kind === 'codex'
-            ? `Executed by Codex (${model}) runtime`
-            : `Executed by Claude (${model}) runtime`
+          : `Executed by ${displayName} (${model}) runtime`
     }
   }
 

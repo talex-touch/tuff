@@ -7,6 +7,7 @@ import type {
   LocalAiCliStatus
 } from '@talex-touch/utils/transport/events/local-ai-cli'
 import type { TerminalFontInfo } from '@talex-touch/utils/transport/events/terminal'
+import { normalizeLocalAiCliSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { createLocalAiCliSdk } from '@talex-touch/utils/transport/sdk/domains/local-ai-cli'
 import { createTerminalSdk } from '@talex-touch/utils/transport/sdk/domains/terminal'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -35,10 +36,13 @@ const saving = ref(false)
 
 const visible = computed(() => status.value?.betaAvailable === true)
 const providers = computed(() => status.value?.providers ?? [])
+function isProviderEnabled(providerId: LocalAiCliProviderId): boolean {
+  return appSetting.localAiCli?.providers?.[providerId]?.enabled === true
+}
 const enabledProviders = computed(() =>
-  providers.value.filter((provider) => appSetting.localAiCli.providers[provider.id].enabled)
+  providers.value.filter((provider) => isProviderEnabled(provider.id))
 )
-const defaultProviderModel = computed(() => appSetting.localAiCli.defaultProvider ?? '')
+const defaultProviderModel = computed(() => appSetting.localAiCli?.defaultProvider ?? '')
 
 function capabilityLabel(provider: LocalAiCliProviderStatus): string {
   const capabilities = provider.capabilities
@@ -78,18 +82,7 @@ function providerDescription(provider: LocalAiCliProviderStatus): string {
 }
 
 function cloneLocalAiSettings(): typeof appSetting.localAiCli {
-  const current = toRaw(appSetting.localAiCli)
-  return {
-    enabled: current.enabled,
-    defaultProvider: current.defaultProvider,
-    terminalFontFamily: current.terminalFontFamily || '',
-    providers: {
-      pi: { ...current.providers.pi },
-      codex: { ...current.providers.codex },
-      claude: { ...current.providers.claude },
-      'oh-my-pi': { ...current.providers['oh-my-pi'] }
-    }
-  }
+  return normalizeLocalAiCliSetting(toRaw(appSetting.localAiCli))
 }
 
 async function persistLocalAiSettings(next: typeof appSetting.localAiCli): Promise<boolean> {
@@ -217,7 +210,7 @@ onMounted(() => {
     </div>
 
     <TuffBlockSwitch
-      :model-value="appSetting.localAiCli.enabled"
+      :model-value="appSetting.localAiCli?.enabled === true"
       :disabled="saving"
       :title="t('settingLocalAiCli.enable')"
       :description="t('settingLocalAiCli.enableDesc')"
@@ -227,8 +220,8 @@ onMounted(() => {
     <TuffBlockSwitch
       v-for="provider in providers"
       :key="provider.id"
-      :model-value="appSetting.localAiCli.providers[provider.id].enabled"
-      :disabled="saving || !appSetting.localAiCli.enabled || !provider.installed"
+      :model-value="isProviderEnabled(provider.id)"
+      :disabled="saving || !appSetting.localAiCli?.enabled || !provider.installed"
       :title="provider.label"
       :description="providerDescription(provider)"
       @update:model-value="setProviderEnabled(provider.id, $event)"
@@ -248,7 +241,7 @@ onMounted(() => {
 
     <TuffBlockSelect
       :model-value="defaultProviderModel"
-      :disabled="saving || !appSetting.localAiCli.enabled || enabledProviders.length === 0"
+      :disabled="saving || !appSetting.localAiCli?.enabled || enabledProviders.length === 0"
       :title="t('settingLocalAiCli.defaultProvider')"
       :description="t('settingLocalAiCli.defaultProviderDesc')"
       @update:model-value="setDefaultProvider"
@@ -260,8 +253,8 @@ onMounted(() => {
     </TuffBlockSelect>
 
     <TuffBlockSelect
-      :model-value="appSetting.localAiCli.terminalFontFamily || ''"
-      :disabled="saving || !appSetting.localAiCli.enabled"
+      :model-value="appSetting.localAiCli?.terminalFontFamily || ''"
+      :disabled="saving || !appSetting.localAiCli?.enabled"
       :title="t('settingLocalAiCli.terminalFont')"
       :description="t('settingLocalAiCli.terminalFontDesc')"
       @update:model-value="setTerminalFontFamily"
