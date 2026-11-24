@@ -11,8 +11,28 @@ import type { WorkspaceStartupRecoveryResult } from './workspace-runner'
 import { ConversationEvents } from '@talex-touch/utils/transport/sdk/domains/conversation'
 import { AgentWorkspaceEvents } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import { ConversationReviewEvents } from '@talex-touch/utils/transport/sdk/domains/conversation-review'
+import { WorkspaceGitEvents } from '@talex-touch/utils/transport/sdk/domains/workspace-git'
 import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { fileReviewService, setFileReviewGatewayProvider } from './file-review-service'
+import {
+  openWorkspaceFileExternal,
+  pickWorkspaceFile,
+  readWorkspaceFile
+} from './workspace-file-service'
+import {
+  checkoutWorkspaceGitBranch,
+  commitWorkspaceGitChanges,
+  discardWorkspaceGitFile,
+  fetchWorkspaceGit,
+  listWorkspaceGitBranches,
+  pullWorkspaceGit,
+  pushWorkspaceGit,
+  readWorkspaceGitDiff,
+  readWorkspaceGitLog,
+  readWorkspaceGitStatus,
+  stageWorkspaceGitFiles,
+  unstageWorkspaceGitFiles
+} from './workspace-git-service'
 import { toolGatewayModule } from '../tool-gateway'
 import { ConversationWorkspaceRunner } from './workspace-runner'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -103,23 +123,19 @@ export class ConversationModule extends BaseModule<TalexEvents> {
       }),
       transport.on(AgentWorkspaceEvents.removeQueued, (payload, context) => {
         assertHostOwned(context)
-        return runner.service.removeQueued(payload.conversationId, payload.queueId)
+        return runner.removeQueued(payload.conversationId, payload.queueId)
       }),
       transport.on(AgentWorkspaceEvents.reorderQueued, (payload, context) => {
         assertHostOwned(context)
-        return runner.service.reorderQueued(
-          payload.conversationId,
-          payload.queueId,
-          payload.direction
-        )
+        return runner.reorderQueued(payload.conversationId, payload.queueId, payload.direction)
       }),
       transport.on(AgentWorkspaceEvents.promoteQueued, (payload, context) => {
         assertHostOwned(context)
-        return runner.service.promoteQueued(payload.conversationId, payload.queueId)
+        return runner.promoteQueued(payload.conversationId, payload.queueId)
       }),
       transport.on(AgentWorkspaceEvents.updateQueued, (payload, context) => {
         assertHostOwned(context)
-        return runner.service.updateQueued(payload)
+        return runner.updateQueued(payload)
       }),
       transport.on(AgentWorkspaceEvents.fork, (payload, context) => {
         assertHostOwned(context)
@@ -132,6 +148,66 @@ export class ConversationModule extends BaseModule<TalexEvents> {
       transport.on(AgentWorkspaceEvents.rejectRun, (payload, context) => {
         assertHostOwned(context)
         return runner.decideRun(payload, false)
+      }),
+      transport.on(AgentWorkspaceEvents.readFile, (payload, context) => {
+        assertHostOwned(context)
+        return readWorkspaceFile(payload)
+      }),
+      transport.on(AgentWorkspaceEvents.pickFile, (payload, context) => {
+        assertHostOwned(context)
+        return pickWorkspaceFile(payload)
+      }),
+      transport.on(AgentWorkspaceEvents.openFileExternal, (payload, context) => {
+        assertHostOwned(context)
+        return openWorkspaceFileExternal(payload)
+      }),
+      transport.on(WorkspaceGitEvents.status, (payload, context) => {
+        assertHostOwned(context)
+        return readWorkspaceGitStatus(payload)
+      }),
+      transport.on(WorkspaceGitEvents.diff, (payload, context) => {
+        assertHostOwned(context)
+        return readWorkspaceGitDiff(payload)
+      }),
+      transport.on(WorkspaceGitEvents.branches, (payload, context) => {
+        assertHostOwned(context)
+        return listWorkspaceGitBranches(payload)
+      }),
+      transport.on(WorkspaceGitEvents.log, (payload, context) => {
+        assertHostOwned(context)
+        return readWorkspaceGitLog(payload)
+      }),
+      transport.on(WorkspaceGitEvents.stage, (payload, context) => {
+        assertHostOwned(context)
+        return stageWorkspaceGitFiles(payload)
+      }),
+      transport.on(WorkspaceGitEvents.unstage, (payload, context) => {
+        assertHostOwned(context)
+        return unstageWorkspaceGitFiles(payload)
+      }),
+      transport.on(WorkspaceGitEvents.discard, (payload, context) => {
+        assertHostOwned(context)
+        return discardWorkspaceGitFile(payload)
+      }),
+      transport.on(WorkspaceGitEvents.commit, (payload, context) => {
+        assertHostOwned(context)
+        return commitWorkspaceGitChanges(payload)
+      }),
+      transport.on(WorkspaceGitEvents.checkout, (payload, context) => {
+        assertHostOwned(context)
+        return checkoutWorkspaceGitBranch(payload)
+      }),
+      transport.on(WorkspaceGitEvents.fetch, (payload, context) => {
+        assertHostOwned(context)
+        return fetchWorkspaceGit(payload)
+      }),
+      transport.on(WorkspaceGitEvents.pull, (payload, context) => {
+        assertHostOwned(context)
+        return pullWorkspaceGit(payload)
+      }),
+      transport.on(WorkspaceGitEvents.push, (payload, context) => {
+        assertHostOwned(context)
+        return pushWorkspaceGit(payload)
       }),
       transport.on(ConversationReviewEvents.list, (payload, context) => {
         assertHostOwned(context)

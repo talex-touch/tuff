@@ -4,7 +4,10 @@ import type {
   HerdrOscState,
   HerdrStreamClosedPayload
 } from '@talex-touch/utils/transport/sdk/domains/herdr'
-import type { TerminalSessionHandle } from '@talex-touch/utils/transport/sdk/domains/terminal'
+import type {
+  TerminalSessionHandle,
+  TerminalSessionHandlers
+} from '@talex-touch/utils/transport/sdk/domains/terminal'
 import type { HerdrDrawerTab, HerdrTabViewMode } from '~/modules/herdr/useHerdrRuntime'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TxKbd } from '@talex-touch/tuffex/kbd'
@@ -16,6 +19,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { isBetaFeatureEnabled } from '../../../../shared/beta-features'
 import { useHerdrRuntime } from '~/modules/herdr/useHerdrRuntime'
+import { buildTerminalInput } from '~/modules/layout/shell-terminal-command'
 import { useShellTerminal } from '~/modules/layout/useShellTerminal'
 import { useAccessibilitySupport } from '~/modules/platform/accessibility-support'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
@@ -31,11 +35,19 @@ interface LocalTabRuntime {
   generation: number
   running: boolean
   starting: boolean
+  sessionCwd?: string
+  shellPromptReady: boolean
+  flushingCommands: boolean
+  promptSettleTimer: ReturnType<typeof setTimeout> | null
+  promptFallbackTimer: ReturnType<typeof setTimeout> | null
 }
+
+const INITIAL_OUTPUT_SETTLE_MS = 80
+const INITIAL_PROMPT_FALLBACK_MS = 450
 
 const { t } = useI18n()
 const log = createRendererLogger('ShellTerminalPanel')
-const { isMac } = useRendererPlatform()
+const { isMac, isWindows } = useRendererPlatform()
 const transport = useTuffTransport()
 const localSdk = createTerminalSdk(transport)
 const screenReaderMode = useAccessibilitySupport()
@@ -47,6 +59,10 @@ const {
   terminalHeight,
   isResizingTerminal,
   activeTabId,
+  pendingCommands,
+  peekPendingCommand,
+  consumePendingCommand,
+  clearPendingCommands,
   startResize,
   closeTerminal
 } = shellTerminal
@@ -78,10 +94,88 @@ function ensureLocalRuntime(tabId: string): LocalTabRuntime {
       controller: null,
       generation: 0,
       running: false,
-      starting: false
+      starting: false,
+      sessionCwd: undefined,
+      shellPromptReady: false,
+      flushingCommands: false,
+      promptSettleTimer: null,
+      promptFallbackTimer: null
     }
   }
   return localRuntimes[tabId]!
+}
+
+function clearLocalPromptTimers(rt: LocalTabRuntime): void {
+  if (rt.promptSettleTimer !== null) {
+    clearTimeout(rt.promptSettleTimer)
+    rt.promptSettleTimer = null
+  }
+  if (rt.promptFallbackTimer !== null) {
+    clearTimeout(rt.promptFallbackTimer)
+    rt.promptFallbackTimer = null
+  }
+}
+
+function markLocalPromptReady(tabId: string, targetGeneration: number): void {
+  const rt = localRuntimes[tabId]
+  if (!rt || targetGeneration !== rt.generation || rt.shellPromptReady) return
+  clearLocalPromptTimers(rt)
+  rt.shellPromptReady = true
+  if (rt.running && rt.session) {
+    void flushPendingCommandsForTab(tabId)
+  }
+}
+
+function scheduleLocalPromptSettle(tabId: string, targetGeneration: number): void {
+  const rt = localRuntimes[tabId]
+  if (!rt || targetGeneration !== rt.generation || rt.shellPromptReady) return
+  if (rt.promptSettleTimer !== null) {
+    clearTimeout(rt.promptSettleTimer)
+  }
+  rt.promptSettleTimer = setTimeout(() => {
+    rt.promptSettleTimer = null
+    markLocalPromptReady(tabId, targetGeneration)
+  }, INITIAL_OUTPUT_SETTLE_MS)
+}
+
+async function flushPendingCommandsForTab(tabId: string): Promise<void> {
+  const rt = localRuntimes[tabId]
+  if (!rt || rt.flushingCommands || !rt.running || !rt.session || !rt.shellPromptReady) return
+  rt.flushingCommands = true
+  let dispatched = false
+
+  try {
+    while (rt.running && rt.session && rt.shellPromptReady) {
+      const next = peekPendingCommand()
+      if (!next) break
+      consumePendingCommand(next.id)
+
+      const built = buildTerminalInput({
+        command: next.command,
+        cwd: next.cwd,
+        lang: next.lang,
+        currentCwd: rt.sessionCwd,
+        platform: isWindows.value ? 'win32' : 'posix'
+      })
+      if (!built) continue
+
+      rt.sessionCwd = built.nextCwd
+      dispatched = true
+      try {
+        await rt.session.write(built.input)
+      } catch (error) {
+        log.error('Failed to send queued command to terminal session', { tabId, error })
+      }
+    }
+  } finally {
+    rt.flushingCommands = false
+  }
+
+  if (dispatched && activeTabId.value === tabId) {
+    await nextTick()
+    terminalInstances.get(tabId)?.fit()
+    terminalInstances.get(tabId)?.focus()
+  }
 }
 
 function getHerdrSession(tab: HerdrDrawerTab) {
@@ -154,39 +248,71 @@ function writeToTab(tabId: string, data: string): Promise<void> {
   })
 }
 
-async function startLocalSession(tabId: string): Promise<void> {
+async function startLocalSession(tabId: string, initialCwd?: string): Promise<void> {
   const rt = ensureLocalRuntime(tabId)
   if (rt.starting || rt.running) return
   const current = ++rt.generation
   rt.controller = new AbortController()
   rt.starting = true
+  rt.shellPromptReady = false
+  clearLocalPromptTimers(rt)
 
   const view = terminalInstances.get(tabId)
   const size = view?.getSize()
   const cols = size?.cols ?? 80
   const rows = size?.rows ?? 24
+  let effectiveCwd = initialCwd?.trim() || peekPendingCommand()?.cwd
+
+  const createOptions: TerminalSessionHandlers = {
+    signal: rt.controller.signal,
+    awaitDisplay: true,
+    onData: (data) => {
+      if (current === rt.generation) {
+        if (!rt.shellPromptReady) {
+          scheduleLocalPromptSettle(tabId, current)
+        }
+        return writeToTab(tabId, data)
+      }
+      return undefined
+    },
+    onExit: (exit) => {
+      if (current !== rt.generation) return
+      clearLocalPromptTimers(rt)
+      rt.shellPromptReady = false
+      rt.sessionCwd = undefined
+      rt.running = false
+      rt.session = null
+      const code = exit.exitCode ?? exit.signal ?? 0
+      void writeToTab(tabId, `\r\n\x1b[90m[${t('terminal.exit', { code })}]\x1b[0m\r\n`)
+    }
+  }
 
   try {
-    const handle = await localSdk.create(
-      { cols, rows },
-      {
-        signal: rt.controller.signal,
-        awaitDisplay: true,
-        onData: (data) => {
-          if (current === rt.generation) {
-            return writeToTab(tabId, data)
-          }
-          return undefined
+    let handle: TerminalSessionHandle
+    try {
+      handle = await localSdk.create(
+        {
+          cols,
+          rows,
+          ...(effectiveCwd ? { cwd: effectiveCwd } : {})
         },
-        onExit: (exit) => {
-          if (current !== rt.generation) return
-          rt.running = false
-          rt.session = null
-          const code = exit.exitCode ?? exit.signal ?? 0
-          void writeToTab(tabId, `\r\n\x1b[90m[${t('terminal.exit', { code })}]\x1b[0m\r\n`)
-        }
+        createOptions
+      )
+    } catch (error) {
+      // If a temporary space or removed project directory no longer exists on disk,
+      // fall back to spawning in the default home directory instead of leaving the
+      // bottom terminal broken.
+      if (
+        effectiveCwd &&
+        current === rt.generation &&
+        String(error).includes('TERMINAL_CWD_INVALID')
+      ) {
+        effectiveCwd = undefined
+        handle = await localSdk.create({ cols, rows }, createOptions)
+      } else {
+        throw error
       }
-    )
+    }
 
     if (current !== rt.generation) {
       await handle.close().catch(() => {})
@@ -194,14 +320,28 @@ async function startLocalSession(tabId: string): Promise<void> {
     }
 
     rt.session = handle
+    rt.sessionCwd = effectiveCwd
     rt.running = true
     await nextTick()
     if (activeTabId.value === tabId) {
       terminalInstances.get(tabId)?.fit()
       terminalInstances.get(tabId)?.focus()
     }
+
+    if (rt.shellPromptReady) {
+      void flushPendingCommandsForTab(tabId)
+    } else if (rt.promptFallbackTimer === null) {
+      rt.promptFallbackTimer = setTimeout(() => {
+        rt.promptFallbackTimer = null
+        markLocalPromptReady(tabId, current)
+      }, INITIAL_PROMPT_FALLBACK_MS)
+    }
   } catch (error) {
     if (current === rt.generation) {
+      clearLocalPromptTimers(rt)
+      rt.shellPromptReady = false
+      rt.sessionCwd = undefined
+      clearPendingCommands()
       log.error('Failed to spawn local PTY terminal process', { tabId, error })
       void writeToTab(tabId, `\r\n\x1b[31m${t('terminal.failed')}: ${String(error)}\x1b[0m\r\n`)
     }
@@ -216,6 +356,9 @@ async function stopLocalSession(tabId: string): Promise<void> {
   const rt = localRuntimes[tabId]
   if (!rt) return
   rt.generation += 1
+  clearLocalPromptTimers(rt)
+  rt.shellPromptReady = false
+  rt.sessionCwd = undefined
   rt.controller?.abort()
   rt.controller = null
   const current = rt.session
@@ -312,10 +455,13 @@ function handleTabTerminalReady(tab: HerdrDrawerTab, instance: TerminalInstance)
 
   const rt = ensureLocalRuntime(tab.id)
   if (!rt.session && !rt.starting) {
-    void startLocalSession(tab.id)
+    void startLocalSession(tab.id, peekPendingCommand()?.cwd)
   } else if (activeTabId.value === tab.id) {
     instance.fit()
     instance.focus()
+    if (pendingCommands.value.length > 0 && rt.running && rt.shellPromptReady) {
+      void flushPendingCommandsForTab(tab.id)
+    }
   }
 }
 
@@ -331,6 +477,9 @@ function handleTabInput(tab: HerdrDrawerTab, data: string): void {
 
   const rt = localRuntimes[tab.id]
   if (!rt?.session || !rt.running) return
+  if (data.includes('\r') || data.includes('\n')) {
+    rt.sessionCwd = undefined
+  }
   void rt.session.write(data).catch((error) => {
     log.error('Failed to send input to local terminal session', { tabId: tab.id, error })
   })
@@ -491,7 +640,9 @@ async function ensureInitialTab(): Promise<void> {
   if (bootstrappingTab.value || tabs.value.length > 0) return
   bootstrappingTab.value = true
   try {
-    if (herdrConnected.value) {
+    if (pendingCommands.value.length > 0) {
+      handleNewLocalFallbackShell()
+    } else if (herdrConnected.value) {
       await handleNewHerdrShell()
     } else if (shouldUseLocalFallback.value) {
       handleNewLocalFallbackShell()
@@ -547,6 +698,34 @@ watch(
     }
   },
   { deep: false }
+)
+
+function ensureLocalTabForPendingCommand(): string {
+  const current = activeTab.value
+  if (current?.kind === 'local') return current.id
+  const existingLocal = tabs.value.find((tab) => tab.kind === 'local')
+  if (existingLocal) {
+    selectTab(existingLocal.id)
+    return existingLocal.id
+  }
+  return shellTerminal.openLocalTab({}).id
+}
+
+watch(
+  () => pendingCommands.value.length,
+  (count) => {
+    if (count === 0) return
+    const targetTabId = ensureLocalTabForPendingCommand()
+    const rt = ensureLocalRuntime(targetTabId)
+    if (rt.running && rt.session && rt.shellPromptReady) {
+      void flushPendingCommandsForTab(targetTabId)
+      return
+    }
+    if (!rt.session && !rt.starting && terminalInstances.has(targetTabId)) {
+      void startLocalSession(targetTabId, peekPendingCommand()?.cwd)
+    }
+  },
+  { immediate: true }
 )
 
 onMounted(() => {

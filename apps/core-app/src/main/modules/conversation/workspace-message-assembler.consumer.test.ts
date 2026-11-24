@@ -598,4 +598,39 @@ describe('WorkspaceMessageAssembler durable consumer output', () => {
     expect(leadingWhitespace.snapshot().content).toBe('\nPlan: check done')
     expect(leadingWhitespace.snapshot().status).toBe('complete')
   })
+
+  it('records mid-turn steer-injected parts chronologically, deduplicates by steerId, and survives text-reset', () => {
+    assembler.part({ kind: 'reasoning-start' })
+    assembler.part({ kind: 'reasoning-delta', delta: 'initial reasoning' })
+    assembler.part({ kind: 'tool-start', callId: 'call-1', name: 'file.read' })
+    result('call-1', 'read file')
+    assembler.part({
+      kind: 'steer-injected',
+      steerId: 'steer-1',
+      text: '做成一个单页面 html',
+      createdAt: 42
+    })
+    // Duplicate steer-injected for the same steerId is ignored.
+    assembler.part({
+      kind: 'steer-injected',
+      steerId: 'steer-1',
+      text: '做成一个单页面 html',
+      createdAt: 42
+    })
+    assembler.delta('abandoned draft')
+    assembler.part({ kind: 'text-reset' })
+    assembler.delta('Here is your single-page HTML.')
+    assembler.complete('Here is your single-page HTML.')
+
+    const parts = persisted().meta.parts as unknown as Array<Record<string, unknown>>
+    expect(parts.map((part) => part.type)).toEqual(['reasoning', 'tool-call', 'steer', 'text'])
+    expect(parts[0]).toMatchObject({ type: 'reasoning', done: true })
+    expect(parts[2]).toEqual({
+      type: 'steer',
+      id: 'steer-1',
+      text: '做成一个单页面 html',
+      createdAt: 42
+    })
+    expect(parts[3]).toEqual({ type: 'text', text: 'Here is your single-page HTML.' })
+  })
 })

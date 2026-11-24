@@ -6,7 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PtySessionCore } from './pty-session-core'
+import { buildDefaultPtyEnv, PtySessionCore } from './pty-session-core'
 
 function sender(id = 7) {
   const value = new EventEmitter() as EventEmitter & { id: number; isDestroyed: () => boolean }
@@ -417,5 +417,35 @@ describe('pTY creation cancellation tokens', () => {
     expect(f.child.kills).toEqual(['SIGKILL'])
     expect(secondChild.kills).toEqual([])
     expect(secondChild.writes).toEqual(['still operational'])
+  })
+})
+
+describe('default PTY environment sanitization', () => {
+  it('strips inherited host terminal identity vars while enabling truecolor and preserving user env', () => {
+    const env = buildDefaultPtyEnv({
+      PATH: '/usr/bin:/opt/homebrew/bin',
+      HOME: '/Users/dev',
+      ELECTRON_RUN_AS_NODE: '1',
+      TERM_PROGRAM: 'Apple_Terminal',
+      TERM_PROGRAM_VERSION: '453',
+      KITTY_WINDOW_ID: '1',
+      GHOSTTY_RESOURCES_DIR: '/Applications/Ghostty.app/Contents/Resources/ghostty',
+      WEZTERM_EXECUTABLE: '/usr/bin/wezterm',
+      ITERM_SESSION_ID: 'w0t0p0',
+      TMUX: '/tmp/tmux-501/default,1234,0',
+      VSCODE_INJECTION: '1'
+    })
+    expect(env.PATH).toBe('/usr/bin:/opt/homebrew/bin')
+    expect(env.HOME).toBe('/Users/dev')
+    expect(env.COLORTERM).toBe('truecolor')
+    expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined()
+    expect(env.TERM_PROGRAM).toBeUndefined()
+    expect(env.TERM_PROGRAM_VERSION).toBeUndefined()
+    expect(env.KITTY_WINDOW_ID).toBeUndefined()
+    expect(env.GHOSTTY_RESOURCES_DIR).toBeUndefined()
+    expect(env.WEZTERM_EXECUTABLE).toBeUndefined()
+    expect(env.ITERM_SESSION_ID).toBeUndefined()
+    expect(env.TMUX).toBeUndefined()
+    expect(env.VSCODE_INJECTION).toBeUndefined()
   })
 })

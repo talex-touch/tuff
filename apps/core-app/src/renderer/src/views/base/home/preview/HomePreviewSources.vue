@@ -14,6 +14,11 @@ import HomePreviewEmpty from './HomePreviewEmpty.vue'
  */
 const props = defineProps<{ items: PreviewSource[] }>()
 
+const emit = defineEmits<{
+  (event: 'open-file', payload: { path: string; displayPath: string }): void
+  (event: 'open-web', url: string): void
+}>()
+
 const { t } = useI18n()
 
 const KIND_ORDER: PreviewSourceKind[] = ['file', 'search', 'mcp', 'web']
@@ -38,6 +43,24 @@ const groups = computed(() =>
     items: props.items.filter((item) => item.kind === kind)
   })).filter((group) => group.items.length > 0)
 )
+
+function isClickableSource(item: PreviewSource): boolean {
+  if (!item.detail) return false
+  if (item.kind === 'file' || item.kind === 'search') return true
+  if (item.kind === 'web' && /^https?:\/\//i.test(item.detail)) return true
+  return false
+}
+
+function openSource(item: PreviewSource): void {
+  if (!item.detail) return
+  if (item.kind === 'web' && /^https?:\/\//i.test(item.detail)) {
+    emit('open-web', item.detail)
+    return
+  }
+  if (item.kind === 'file' || item.kind === 'search') {
+    emit('open-file', { path: item.detail, displayPath: item.detail })
+  }
+}
 </script>
 
 <template>
@@ -50,15 +73,32 @@ const groups = computed(() =>
 
     <section v-for="group in groups" :key="group.kind" class="HomePreviewSources-Group">
       <h3 class="HomePreview-GroupLabel">{{ t(KIND_LABEL[group.kind]) }}</h3>
-      <div v-for="item in group.items" :key="item.id" class="HomePreviewSources-Row">
-        <span class="HomePreviewSources-Icon" :class="KIND_ICON[group.kind]" />
-        <span class="HomePreviewSources-Text">
-          <span class="HomePreview-Name">{{ item.label }}</span>
-          <span v-if="item.detail" class="HomePreview-Detail" :title="item.detail">
-            {{ item.detail }}
+      <template v-for="item in group.items" :key="item.id">
+        <button
+          v-if="isClickableSource(item)"
+          type="button"
+          class="HomePreviewSources-Row is-clickable"
+          :title="item.detail"
+          @click="openSource(item)"
+        >
+          <span class="HomePreviewSources-Icon" :class="KIND_ICON[group.kind]" />
+          <span class="HomePreviewSources-Text">
+            <span class="HomePreview-Name">{{ item.label }}</span>
+            <span v-if="item.detail" class="HomePreview-Detail">
+              {{ item.detail }}
+            </span>
           </span>
-        </span>
-      </div>
+        </button>
+        <div v-else class="HomePreviewSources-Row">
+          <span class="HomePreviewSources-Icon" :class="KIND_ICON[group.kind]" />
+          <span class="HomePreviewSources-Text">
+            <span class="HomePreview-Name">{{ item.label }}</span>
+            <span v-if="item.detail" class="HomePreview-Detail" :title="item.detail">
+              {{ item.detail }}
+            </span>
+          </span>
+        </div>
+      </template>
     </section>
   </div>
 </template>
@@ -80,8 +120,23 @@ const groups = computed(() =>
   display: flex;
   gap: 8px;
   align-items: flex-start;
+  width: 100%;
   min-width: 0;
-  padding: 4px 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+
+  &.is-clickable {
+    cursor: pointer;
+
+    &:hover {
+      background: var(--shell-surface-2);
+    }
+  }
 }
 
 .HomePreviewSources-Icon {

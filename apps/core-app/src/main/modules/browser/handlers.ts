@@ -1,5 +1,6 @@
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { BrowserWindow } from 'electron'
+import type { SideBrowserManager } from './side-browser-manager'
 import type { BrowserWorkspaceManager } from './workspace-manager'
 import { BrowserEvents } from '@talex-touch/utils/transport/sdk/domains/browser'
 import { assertBrowserOwner } from './policy'
@@ -8,7 +9,8 @@ import { assertBrowserOwner } from './policy'
 export function registerBrowserHandlers(
   transport: ITuffTransportMain,
   owner: BrowserWindow,
-  manager: BrowserWorkspaceManager
+  manager: BrowserWorkspaceManager,
+  sideManager?: SideBrowserManager
 ): () => void {
   const disposers = [
     transport.on(BrowserEvents.getState, (_payload, context) => {
@@ -65,6 +67,49 @@ export function registerBrowserHandlers(
       return manager.toggleBookmark(payload?.tabId)
     })
   ]
+
+  if (sideManager) {
+    disposers.push(
+      transport.on(BrowserEvents.sideGetState, (_payload, context) => {
+        assertBrowserOwner(context, owner)
+        return sideManager.getState()
+      }),
+      transport.on(BrowserEvents.sideNavigate, (payload, context) => {
+        assertBrowserOwner(context, owner)
+        return sideManager.navigate(payload?.input ?? '')
+      }),
+      transport.on(BrowserEvents.sideBack, (_payload, context) => {
+        assertBrowserOwner(context, owner)
+        return sideManager.back()
+      }),
+      transport.on(BrowserEvents.sideForward, (_payload, context) => {
+        assertBrowserOwner(context, owner)
+        return sideManager.forward()
+      }),
+      transport.on(BrowserEvents.sideReload, (_payload, context) => {
+        assertBrowserOwner(context, owner)
+        return sideManager.reload()
+      }),
+      transport.on(BrowserEvents.sideStop, (_payload, context) => {
+        assertBrowserOwner(context, owner)
+        return sideManager.stop()
+      }),
+      transport.on(BrowserEvents.sideSetViewport, (payload, context) => {
+        assertBrowserOwner(context, owner)
+        sideManager.setViewport(payload)
+      }),
+      transport.on(BrowserEvents.sideCaptureSnapshot, async (_payload, context) => {
+        assertBrowserOwner(context, owner)
+        const snapshot = await sideManager.captureSnapshot()
+        return { snapshot }
+      }),
+      transport.on(BrowserEvents.sideClose, (_payload, context) => {
+        assertBrowserOwner(context, owner)
+        return sideManager.close()
+      })
+    )
+  }
+
   return () => {
     for (const dispose of disposers) dispose()
   }

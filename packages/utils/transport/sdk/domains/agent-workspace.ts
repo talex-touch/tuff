@@ -6,6 +6,13 @@ import { defineEvent } from '../../event/builder'
 export type ConversationWorkspaceMode = 'chat' | 'agent'
 export type ConversationWorkspaceStatus = 'idle' | 'running' | 'pending_approval' | 'interrupted' | 'failed' | 'cancelled'
 export type WorkspaceSubmitDisposition = 'started' | 'queued' | 'duplicate'
+/**
+ * How a pending input enters an active conversation:
+ * - `'steer'`: inject into the running agent turn at the next tool/step boundary (falls back to
+ *   the front of the next-turn queue if the run ends or pauses before draining it).
+ * - `'queue'`: wait until the current turn finishes, then start as the next turn.
+ */
+export type WorkspaceQueueDeliveryMode = 'steer' | 'queue'
 
 export interface ConversationWorkspaceSettings {
   mode: ConversationWorkspaceMode
@@ -41,6 +48,8 @@ export interface WorkspaceQueuedInput {
   createdAt: number
   /** Projection only: ordering remains the upstream queue's Main-owned numeric priority. */
   priority?: 'promoted'
+  /** Delivery timing when a turn is already running (`'steer'` injects at next tool/step boundary). */
+  deliveryMode?: WorkspaceQueueDeliveryMode
   attachments?: WorkspaceAttachmentRef[]
   lead?: { text: string; note: string }
   retryOfMessageId?: string
@@ -92,6 +101,8 @@ export interface WorkspacePendingRun {
 export interface ConversationWorkspaceState {
   conversationId: string
   projectId: string | null
+  /** Authoritative working directory (project root or temporary space) for relative paths and tools. */
+  workspaceRoot?: string
   settings: ConversationWorkspaceSettings
   status: ConversationWorkspaceStatus
   activeTurnId?: string
@@ -129,6 +140,8 @@ export interface WorkspaceSubmitRequest {
   lead?: { text: string; note: string }
   retryOfMessageId?: string
   answersToolCallId?: string
+  /** Optional delivery timing when submitting while a turn is already running. */
+  deliveryMode?: WorkspaceQueueDeliveryMode
 }
 
 export interface WorkspaceSubmitResult {
@@ -152,7 +165,8 @@ export interface WorkspaceRunDecisionRequest {
 export interface WorkspaceUpdateQueuedRequest {
   conversationId: string
   queueId: string
-  text: string
+  text?: string
+  deliveryMode?: WorkspaceQueueDeliveryMode
   attachments?: IntelligenceMessageAttachment[]
   keptAttachmentIds?: string[]
 }
@@ -162,6 +176,52 @@ export interface WorkspaceMessageUpdate {
   turnId: string
   seq: number
   update: MessageUpdateEvent
+}
+
+export interface WorkspaceFileEntry {
+  name: string
+  path: string
+  isDirectory: boolean
+  size?: number
+}
+
+export interface WorkspaceReadFileRequest {
+  path: string
+  conversationId?: string | null
+  maxBytes?: number
+}
+
+export interface WorkspaceReadFileResult {
+  path: string
+  name: string
+  ext: string
+  kind: 'text' | 'image' | 'pdf' | 'directory' | 'binary'
+  mimeType: string
+  size: number
+  truncated: boolean
+  mtimeMs: number
+  text?: string
+  base64?: string
+  entries?: WorkspaceFileEntry[]
+}
+
+export interface WorkspacePickFileRequest {
+  conversationId?: string | null
+  defaultPath?: string
+}
+
+export interface WorkspacePickFileResult {
+  path: string | null
+}
+
+export interface WorkspaceOpenFileExternalRequest {
+  path: string
+  conversationId?: string | null
+}
+
+export interface WorkspaceOpenFileExternalResult {
+  opened: boolean
+  revealed?: boolean
 }
 
 export const AgentWorkspaceEvents = {
@@ -177,6 +237,9 @@ export const AgentWorkspaceEvents = {
   fork: defineEvent('agent-workspace').module('api').event('fork').define<WorkspaceForkRequest, ConversationWorkspaceState>(),
   approveRun: defineEvent('agent-workspace').module('api').event('run:approve').define<WorkspaceRunDecisionRequest, ConversationWorkspaceState>(),
   rejectRun: defineEvent('agent-workspace').module('api').event('run:reject').define<WorkspaceRunDecisionRequest, ConversationWorkspaceState>(),
+  readFile: defineEvent('agent-workspace').module('api').event('file:read').define<WorkspaceReadFileRequest, WorkspaceReadFileResult>(),
+  pickFile: defineEvent('agent-workspace').module('api').event('file:pick').define<WorkspacePickFileRequest, WorkspacePickFileResult>(),
+  openFileExternal: defineEvent('agent-workspace').module('api').event('file:open-external').define<WorkspaceOpenFileExternalRequest, WorkspaceOpenFileExternalResult>(),
   changed: defineEvent('agent-workspace').module('push').event('changed').define<ConversationWorkspaceState, void>(),
   messageUpdate: defineEvent('agent-workspace').module('push').event('message:update').define<WorkspaceMessageUpdate, void>()
 } as const
@@ -194,6 +257,9 @@ export interface AgentWorkspaceSdk {
   fork: (request: WorkspaceForkRequest) => Promise<ConversationWorkspaceState>
   approveRun: (request: WorkspaceRunDecisionRequest) => Promise<ConversationWorkspaceState>
   rejectRun: (request: WorkspaceRunDecisionRequest) => Promise<ConversationWorkspaceState>
+  readFile: (request: WorkspaceReadFileRequest) => Promise<WorkspaceReadFileResult>
+  pickFile: (request?: WorkspacePickFileRequest) => Promise<WorkspacePickFileResult>
+  openFileExternal: (request: WorkspaceOpenFileExternalRequest) => Promise<WorkspaceOpenFileExternalResult>
   onChanged: (listener: (state: ConversationWorkspaceState) => void) => () => void
   onMessageUpdate: (listener: (update: WorkspaceMessageUpdate) => void) => () => void
 }
@@ -212,6 +278,9 @@ export function createAgentWorkspaceSdk(transport: Pick<ITuffTransport, 'send' |
     fork: request => transport.send(AgentWorkspaceEvents.fork, request),
     approveRun: request => transport.send(AgentWorkspaceEvents.approveRun, request),
     rejectRun: request => transport.send(AgentWorkspaceEvents.rejectRun, request),
+    readFile: request => transport.send(AgentWorkspaceEvents.readFile, request),
+    pickFile: request => transport.send(AgentWorkspaceEvents.pickFile, request ?? {}),
+    openFileExternal: request => transport.send(AgentWorkspaceEvents.openFileExternal, request),
     onChanged: listener => transport.on(AgentWorkspaceEvents.changed, listener),
     onMessageUpdate: listener => transport.on(AgentWorkspaceEvents.messageUpdate, listener)
   }

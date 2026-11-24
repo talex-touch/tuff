@@ -11,6 +11,7 @@ import { resolveAppConfigBackend } from '../storage/app-config-repository'
 import { BROWSER_WORKSPACE_STORAGE_KEY } from '../storage/main-storage-registry'
 import { registerBrowserHandlers } from './handlers'
 import { isAllowedBrowserUrl } from './policy'
+import { SideBrowserManager } from './side-browser-manager'
 import { BrowserWorkspaceManager } from './workspace-manager'
 
 // Local-only: intentionally absent from sync's explicit SYNC_STORAGE_KEYS allowlist.
@@ -41,6 +42,7 @@ export function secureBrowserSession(browserSession: Session): () => void {
 export class BrowserModule extends BaseModule<TalexEvents> {
   static key = Symbol.for('Browser')
   private manager: BrowserWorkspaceManager | null = null
+  private sideManager: SideBrowserManager | null = null
   private disposers: Array<() => void> = []
 
   constructor() {
@@ -57,17 +59,18 @@ export class BrowserModule extends BaseModule<TalexEvents> {
     // web cookies and permissions stay in this partition and never enter the application session.
     const browserSession = session.fromPartition(TUFF_BROWSER_PARTITION)
     this.disposers.push(secureBrowserSession(browserSession))
+    const createView = () =>
+      new WebContentsView({
+        webPreferences: buildWindowWebPreferences('app', {
+          session: browserSession,
+          navigateOnDragDrop: false,
+          safeDialogs: true
+        })
+      })
     const manager = new BrowserWorkspaceManager(
       {
         owner,
-        createView: () =>
-          new WebContentsView({
-            webPreferences: buildWindowWebPreferences('app', {
-              session: browserSession,
-              navigateOnDragDrop: false,
-              safeDialogs: true
-            })
-          }),
+        createView,
         persist: async (state) => {
           const result = await storage.saveConfigDurable(BROWSER_WORKSPACE_STORAGE_KEY, state, {
             force: true
@@ -86,9 +89,21 @@ export class BrowserModule extends BaseModule<TalexEvents> {
       },
       storage.getConfig(BROWSER_WORKSPACE_STORAGE_KEY)
     )
+    const sideManager = new SideBrowserManager({
+      owner,
+      createView,
+      notify: (state) => {
+        runtime.transport.notifyTo(owner.webContents, BrowserEvents.sideChanged, state)
+      },
+      notifySnapshot: (snapshot) => {
+        runtime.transport.notifyTo(owner.webContents, BrowserEvents.sideSnapshot, { snapshot })
+      }
+    })
     this.manager = manager
-    this.disposers.push(registerBrowserHandlers(runtime.transport, owner, manager))
+    this.sideManager = sideManager
+    this.disposers.push(registerBrowserHandlers(runtime.transport, owner, manager, sideManager))
     const quit = () => {
+      sideManager.dispose()
       void manager.dispose()
     }
     app.on('before-quit', quit)
@@ -97,6 +112,8 @@ export class BrowserModule extends BaseModule<TalexEvents> {
 
   async onDestroy(): Promise<void> {
     for (const dispose of this.disposers.splice(0).reverse()) dispose()
+    this.sideManager?.dispose()
+    this.sideManager = null
     await this.manager?.dispose()
     this.manager = null
   }

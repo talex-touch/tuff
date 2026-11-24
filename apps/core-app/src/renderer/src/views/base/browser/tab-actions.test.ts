@@ -96,7 +96,18 @@ function createWorkspace(
     captureSnapshot: unsupported,
     toggleBookmark: unsupported,
     onSnapshot: unsupported,
-    onFocusAddress: unsupported
+    onFocusAddress: unsupported,
+    sideGetState: unsupported,
+    sideNavigate: unsupported,
+    sideBack: unsupported,
+    sideForward: unsupported,
+    sideReload: unsupported,
+    sideStop: unsupported,
+    sideSetViewport: unsupported,
+    sideCaptureSnapshot: unsupported,
+    sideClose: unsupported,
+    onSideChanged: unsupported,
+    onSideSnapshot: unsupported
   }
 }
 

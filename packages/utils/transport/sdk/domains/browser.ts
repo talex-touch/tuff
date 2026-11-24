@@ -35,7 +35,19 @@ export interface BrowserViewportRequest {
   visible: boolean
 }
 
+export interface BrowserSideState {
+  revision: number
+  url: string
+  title: string
+  favicon: string | null
+  loading: boolean
+  canGoBack: boolean
+  canGoForward: boolean
+  error: string | null
+}
+
 const api = defineEvent('browser').module('workspace')
+const sideApi = defineEvent('browser').module('side')
 
 export const BrowserEvents = {
   getState: api.event('get').define<void, BrowserWorkspaceState>(),
@@ -54,6 +66,17 @@ export const BrowserEvents = {
   changed: defineEvent('browser').module('push').event('changed').define<BrowserWorkspaceState, void>(),
   snapshot: defineEvent('browser').module('push').event('snapshot').define<{ tabId: string, snapshot: string }, void>(),
   focusAddress: defineEvent('browser').module('push').event('focus-address').define<void, void>(),
+  sideGetState: sideApi.event('get').define<void, BrowserSideState>(),
+  sideNavigate: sideApi.event('navigate').define<{ input: string }, BrowserSideState>(),
+  sideBack: sideApi.event('back').define<void, BrowserSideState>(),
+  sideForward: sideApi.event('forward').define<void, BrowserSideState>(),
+  sideReload: sideApi.event('reload').define<void, BrowserSideState>(),
+  sideStop: sideApi.event('stop').define<void, BrowserSideState>(),
+  sideSetViewport: sideApi.event('set-viewport').define<BrowserViewportRequest, void>(),
+  sideCaptureSnapshot: sideApi.event('capture-snapshot').define<void, { snapshot: string | null }>(),
+  sideClose: sideApi.event('close').define<void, BrowserSideState>(),
+  sideChanged: defineEvent('browser').module('push').event('side-changed').define<BrowserSideState, void>(),
+  sideSnapshot: defineEvent('browser').module('push').event('side-snapshot').define<{ snapshot: string }, void>(),
 } as const
 
 export interface BrowserSdk {
@@ -73,6 +96,17 @@ export interface BrowserSdk {
   onChanged: (listener: (state: BrowserWorkspaceState) => void) => () => void
   onSnapshot: (listener: (payload: { tabId: string, snapshot: string }) => void) => () => void
   onFocusAddress: (listener: () => void) => () => void
+  sideGetState: () => Promise<BrowserSideState>
+  sideNavigate: (input: string) => Promise<BrowserSideState>
+  sideBack: () => Promise<BrowserSideState>
+  sideForward: () => Promise<BrowserSideState>
+  sideReload: () => Promise<BrowserSideState>
+  sideStop: () => Promise<BrowserSideState>
+  sideSetViewport: (request: BrowserViewportRequest) => Promise<void>
+  sideCaptureSnapshot: () => Promise<{ snapshot: string | null }>
+  sideClose: () => Promise<BrowserSideState>
+  onSideChanged: (listener: (state: BrowserSideState) => void) => () => void
+  onSideSnapshot: (listener: (payload: { snapshot: string }) => void) => () => void
 }
 
 export function createBrowserSdk(transport: Pick<ITuffTransport, 'send' | 'on'>): BrowserSdk {
@@ -93,5 +127,16 @@ export function createBrowserSdk(transport: Pick<ITuffTransport, 'send' | 'on'>)
     onChanged: listener => transport.on(BrowserEvents.changed, listener),
     onSnapshot: listener => transport.on(BrowserEvents.snapshot, listener),
     onFocusAddress: listener => transport.on(BrowserEvents.focusAddress, listener),
+    sideGetState: () => transport.send(BrowserEvents.sideGetState),
+    sideNavigate: input => transport.send(BrowserEvents.sideNavigate, { input }),
+    sideBack: () => transport.send(BrowserEvents.sideBack),
+    sideForward: () => transport.send(BrowserEvents.sideForward),
+    sideReload: () => transport.send(BrowserEvents.sideReload),
+    sideStop: () => transport.send(BrowserEvents.sideStop),
+    sideSetViewport: request => transport.send(BrowserEvents.sideSetViewport, request),
+    sideCaptureSnapshot: () => transport.send(BrowserEvents.sideCaptureSnapshot),
+    sideClose: () => transport.send(BrowserEvents.sideClose),
+    onSideChanged: listener => transport.on(BrowserEvents.sideChanged, listener),
+    onSideSnapshot: listener => transport.on(BrowserEvents.sideSnapshot, listener),
   }
 }

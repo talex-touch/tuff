@@ -870,4 +870,46 @@ describe('ConversationWorkspaceService project vs. Home sync dirt boundaries', (
     // The sync dirt must vanish — the thread is now project-scoped.
     expect(await syncState('parent')).toBeNull()
   })
+
+  it('persists steer deliveryMode, auto-promotes ahead of ordinary queue items, toggles mode, and consumes mid-turn steers durably', async () => {
+    await service.enqueue(request('turn-1'))
+    await service.takeNext('parent')
+
+    // Enqueue an ordinary item first, then a mid-turn steer item: steer jumps ahead.
+    await service.enqueue({ ...request('q-normal'), deliveryMode: 'queue' })
+    await service.enqueue({ ...request('q-steer'), deliveryMode: 'steer' })
+
+    const afterEnqueue = (await service.get('parent'))!
+    expect(afterEnqueue.queue.map((item) => [item.id, item.deliveryMode, item.priority])).toEqual([
+      ['q-steer', 'steer', 'promoted'],
+      ['q-normal', 'queue', undefined]
+    ])
+
+    // Toggle q-normal -> steer without changing text, and verify revision bumps.
+    const beforeToggleRev = afterEnqueue.revision
+    const afterToggle = await service.updateQueued({
+      conversationId: 'parent',
+      queueId: 'q-normal',
+      deliveryMode: 'steer'
+    })
+    expect(afterToggle.revision).toBeGreaterThan(beforeToggleRev)
+    expect(afterToggle.queue.find((item) => item.id === 'q-normal')).toMatchObject({
+      text: 'input q-normal',
+      deliveryMode: 'steer',
+      priority: 'promoted'
+    })
+
+    // Mismatched turnId refuses to consume.
+    expect(await service.consumeSteer('parent', 'stale-turn', 'q-steer')).toBeNull()
+
+    // Active turn consumes q-steer: deleted from queue and receipt marked completed (idempotent).
+    const afterConsume = (await service.consumeSteer('parent', 'turn-1', 'q-steer'))!
+    expect(afterConsume.queue.map((item) => item.id)).toEqual(['q-normal'])
+    const receiptRows = await rows('conversation_workspace_receipts', 'id')
+    expect(receiptRows.find((r) => r.id === 'q-steer')?.status).toBe('completed')
+
+    // Second consume for already-consumed steerId is an idempotent no-op.
+    const secondConsume = (await service.consumeSteer('parent', 'turn-1', 'q-steer'))!
+    expect(secondConsume.queue.map((item) => item.id)).toEqual(['q-normal'])
+  })
 })

@@ -1,5 +1,5 @@
 <script lang="ts" name="AppShell" setup>
-import { computed, defineAsyncComponent, onMounted } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import MainWindowCommandPalette from '~/components/shell/MainWindowCommandPalette.vue'
 import ShellSidebar from '~/components/shell/ShellSidebar.vue'
@@ -7,6 +7,7 @@ import ShellWindowControls from '~/components/shell/ShellWindowControls.vue'
 import ShellTerminalPanel from '~/components/shell/ShellTerminalPanel.vue'
 import { useMainWindowCommands } from '~/composables/useMainWindowCommands'
 import { useKeepAliveHmrPrune } from '~/modules/layout/useKeepAliveHmrPrune'
+import { useShellRightSidebar } from '~/modules/layout/useShellRightSidebar'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
 import { useShellTerminal } from '~/modules/layout/useShellTerminal'
 import { useWallpaper } from '~/modules/layout/useWallpaper'
@@ -47,7 +48,20 @@ const routeTransitionName = computed(() => {
 const { wallpaperActive, wallpaperStyle } = useWallpaper()
 const { platform, isMac } = useRendererPlatform()
 const { width: sidebarWidth, isDragging: isResizingSidebar } = useShellSidebar()
+const {
+  registerHost: registerRightSidebarHost,
+  dockOpen: rightSidebarOpen,
+  dockResizing: isResizingRightSidebar
+} = useShellRightSidebar()
 const { terminalOpen, terminalMounted, isResizingTerminal } = useShellTerminal()
+
+function bindRightSidebarHost(el: unknown): void {
+  registerRightSidebarHost(el instanceof HTMLElement ? el : null)
+}
+
+onBeforeUnmount(() => {
+  registerRightSidebarHost(null)
+})
 const touchBlur = computed(
   () => isRefractionWindow.value || isFilterWindow.value || wallpaperActive.value
 )
@@ -81,7 +95,8 @@ const wrapperStyle = computed<Record<string, string | number>>(() => {
     // Written as a CSS variable rather than pushed onto the sidebar element so a resize is a
     // pure style recalculation — the main area is `flex: 1 1 auto` and reflows on its own,
     // without any component seeing a prop change.
-    '--shell-sidebar-width': `${sidebarWidth.value}px`
+    '--shell-sidebar-width': `${sidebarWidth.value}px`,
+    '--shell-top-strip-height': browserWorkspaceEnabled.value ? '44px' : '52px'
   }
   if (wallpaperActive.value) {
     style['--fake-index'] = -2
@@ -194,7 +209,9 @@ const { paletteOpen, commands, runCommand } = useMainWindowCommands()
         coloring,
         contrast,
         'touch-blur': touchBlur,
+        'has-right-sidebar': rightSidebarOpen,
         'is-resizing': isResizingSidebar,
+        'is-resizing-right-panel': isResizingRightSidebar,
         'is-resizing-terminal': isResizingTerminal
       }
     ]"
@@ -234,6 +251,9 @@ const { paletteOpen, commands, runCommand } = useMainWindowCommands()
       </div>
       <ShellTerminalPanel v-if="terminalMounted" v-show="terminalOpen" />
     </main>
+
+    <!-- Full-height right sidebar dock (top: 0 to bottom: 0), sibling of ShellSidebar & AppShell-Main. -->
+    <div :ref="bindRightSidebarHost" class="AppShell-RightSidebar" />
 
     <ShellWindowControls v-if="!isMac" />
 
@@ -368,15 +388,44 @@ const { paletteOpen, commands, runCommand } = useMainWindowCommands()
     .ShellSidebar,
     .ShellChromeBar,
     .BrowserTabStrip,
+    .HomeSidePanel-Header,
     [data-browser-window-drag] {
       -webkit-app-region: no-drag;
     }
+  }
+
+  &.is-resizing-right-panel {
+    user-select: none;
+    cursor: col-resize;
+
+    .ShellSidebar,
+    .ShellChromeBar,
+    .BrowserTabStrip,
+    .HomeSidePanel-Header,
+    [data-browser-window-drag] {
+      -webkit-app-region: no-drag;
+    }
+  }
+
+  // When the right sidebar spans to the window's top-right edge, Windows/Linux window buttons
+  // sit over the right sidebar header rather than over the middle browser tab strip.
+  &.has-right-sidebar .BrowserTabStrip-Actions.shell-chrome-safe-inline-end {
+    margin-right: 0;
   }
 
   &.is-resizing-terminal {
     user-select: none;
     cursor: row-resize;
   }
+}
+
+.AppShell-RightSidebar {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  height: 100%;
+  min-height: 0;
+  z-index: 2;
 }
 
 .AppShell-Main {

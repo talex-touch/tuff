@@ -40,7 +40,10 @@ import { aiOrchestratorStore } from '../ai/ai-orchestrator-store'
 import { isContextInputProviderSafe } from '../ai/intelligence-context-hygiene'
 import { getProject } from '../project/project-store'
 import { getLocalAiCliSessionForConversation } from '../local-ai-cli/session-store'
-import { resolveConversationWorkspaceRoot } from '../local-ai-cli/workspace-root'
+import {
+  peekConversationWorkspaceRoot,
+  resolveConversationWorkspaceRoot
+} from '../local-ai-cli/workspace-root'
 import type { PreparedPiNativeFork } from '../local-ai-cli/pi-native-fork'
 import { preparePiNativeFork } from '../local-ai-cli/pi-native-fork'
 import { emitConversationMutation, getConversation } from './conversation-store'
@@ -89,6 +92,7 @@ const inputSchema = z
     projectId: idSchema.nullable(),
     createdAt: z.number().int().nonnegative(),
     attachments: z.array(refSchema).max(16).optional(),
+    deliveryMode: z.enum(['steer', 'queue']).optional(),
     lead: z
       .object({ text: z.string().max(64 * 1024), note: z.string().max(128 * 1024) })
       .strict()
@@ -129,6 +133,7 @@ const submitSchema = z
       .optional(),
     retryOfMessageId: idSchema.optional(),
     answersToolCallId: idSchema.optional(),
+    deliveryMode: z.enum(['steer', 'queue']).optional(),
     voiceRecordingId: z.string().uuid().optional()
   })
   .strict()
@@ -1133,9 +1138,13 @@ export class ConversationWorkspaceService {
         .parse(record.payload)
         .attachments?.map((ref) => publicAssets.get(ref.id) ?? ref)
     }))
+    const workspaceRoot = conversation.projectId
+      ? ((await getProject(conversation.projectId).catch(() => null))?.rootPath ?? undefined)
+      : await peekConversationWorkspaceRoot(conversationId).catch(() => undefined)
     return {
       conversationId,
       projectId: conversation.projectId,
+      ...(workspaceRoot ? { workspaceRoot } : {}),
       settings: settingsSchema.parse(JSON.parse(row.settingsJson)),
       status: row.status as ConversationWorkspaceStatus,
       ...(row.activeTurnId ? { activeTurnId: row.activeTurnId } : {}),
@@ -1289,6 +1298,7 @@ export class ConversationWorkspaceService {
         settings,
         projectId,
         createdAt: Date.now(),
+        ...(request.deliveryMode ? { deliveryMode: request.deliveryMode } : {}),
         ...(refs.length ? { attachments: refs } : {}),
         ...(request.lead ? { lead: request.lead } : {}),
         ...(request.retryOfMessageId ? { retryOfMessageId: request.retryOfMessageId } : {}),
@@ -1307,6 +1317,9 @@ export class ConversationWorkspaceService {
           createdAt: input.createdAt,
           payload: input
         })
+        if (input.deliveryMode === 'steer') {
+          await queue.promote(request.conversationId, input.id)
+        }
       } catch (error) {
         await this.attachments.remove(stored)
         throw error
@@ -1439,6 +1452,7 @@ export class ConversationWorkspaceService {
         settings,
         projectId,
         createdAt: now,
+        ...(request.deliveryMode ? { deliveryMode: request.deliveryMode } : {}),
         ...(refs.length ? { attachments: refs } : {}),
         ...(request.lead ? { lead: request.lead } : {}),
         ...(request.retryOfMessageId ? { retryOfMessageId: request.retryOfMessageId } : {}),
@@ -1938,14 +1952,22 @@ export class ConversationWorkspaceService {
   }
 
   async updateQueued(request: WorkspaceUpdateQueuedRequest): Promise<ConversationWorkspaceState> {
-    const text = request.text.trim()
-    if (!text) throw new Error('WORKSPACE_INPUT_INVALID')
+    if (
+      request.deliveryMode !== undefined &&
+      request.deliveryMode !== 'steer' &&
+      request.deliveryMode !== 'queue'
+    ) {
+      throw new Error('WORKSPACE_INPUT_INVALID')
+    }
     return this.serial(request.conversationId, async () => {
       const queue = await this.queue(request.conversationId)
       const record = queue.find(request.queueId)
       if (!record || record.sessionId !== request.conversationId)
         throw new Error('WORKSPACE_NOT_FOUND')
       const input = inputSchema.parse(record.payload)
+      const text = request.text !== undefined ? request.text.trim() : input.text
+      if (!text) throw new Error('WORKSPACE_INPUT_INVALID')
+      if (!isContextInputProviderSafe(text)) throw new Error('WORKSPACE_INPUT_INVALID')
 
       const newStored = request.attachments?.length
         ? await this.attachments.persist(request.conversationId, request.attachments)
@@ -1960,18 +1982,23 @@ export class ConversationWorkspaceService {
       const newRefs = newStored.map((item) => ({
         id: item.id,
         kind: 'image' as const,
-        name: item.name,
         mimeType: item.mimeType,
-        size: item.size
+        size: item.size,
+        ...(item.name ? { name: item.name } : {})
       }))
 
       const combinedAttachments = [...keptRefs, ...newRefs]
+      const deliveryMode =
+        request.deliveryMode !== undefined ? request.deliveryMode : input.deliveryMode
 
-      const updatedInput = {
+      const updatedInput: WorkspaceQueuedInput = {
         ...input,
         text,
-        attachments: combinedAttachments.length ? combinedAttachments : undefined
+        ...(deliveryMode ? { deliveryMode } : {}),
+        ...(combinedAttachments.length ? { attachments: combinedAttachments } : {})
       }
+      if (!combinedAttachments.length) delete updatedInput.attachments
+      if (!deliveryMode) delete updatedInput.deliveryMode
 
       record.payload = updatedInput
       record.content = updatedInput.text
@@ -1979,21 +2006,154 @@ export class ConversationWorkspaceService {
       record.inputHash = digest
 
       await scheduleDbWrite('conversation.workspace.update-queued', () =>
-        this.db()
-          .update(conversationQueuedInputs)
-          .set({
-            inputJson: JSON.stringify(updatedInput),
-            inputHash: digest
-          })
-          .where(
-            and(
-              eq(conversationQueuedInputs.conversationId, request.conversationId),
-              eq(conversationQueuedInputs.id, request.queueId)
+        this.db().transaction(async (tx) => {
+          await tx
+            .update(conversationQueuedInputs)
+            .set({
+              inputJson: JSON.stringify(updatedInput),
+              inputHash: digest
+            })
+            .where(
+              and(
+                eq(conversationQueuedInputs.conversationId, request.conversationId),
+                eq(conversationQueuedInputs.id, request.queueId)
+              )
             )
-          )
+          await tx
+            .update(conversationWorkspaces)
+            .set({ revision: sql`${conversationWorkspaces.revision} + 1`, updatedAt: Date.now() })
+            .where(eq(conversationWorkspaces.conversationId, request.conversationId))
+        })
       )
 
+      if (deliveryMode === 'steer' && record.priority === undefined) {
+        await queue.promote(request.conversationId, request.queueId)
+      }
+
       return this.changed(request.conversationId)
+    })
+  }
+
+  /**
+   * Atomically persists the assistant snapshot carrying the injected steer part, removes the
+   * pending steer input from the queue if its content still matches the consumed text, marks
+   * its receipt completed, and broadcasts updated state.
+   */
+  async consumeSteer(
+    conversationId: string,
+    turnId: string,
+    steerId: string,
+    assistantSnapshot?: StoredConversationMessage,
+    consumedText?: string
+  ): Promise<ConversationWorkspaceState | null> {
+    return this.serial(conversationId, async () => {
+      const row = await this.workspaceRow(conversationId)
+      if (!row || row.activeTurnId !== turnId) return null
+      const conversation = assistantSnapshot ? await getConversation(conversationId) : null
+      const queue = await this.queue(conversationId)
+      const existing = queue.find(steerId)
+      const shouldConsumeQueueItem =
+        Boolean(existing) &&
+        (consumedText === undefined || inputSchema.parse(existing!.payload).text === consumedText)
+      if (!shouldConsumeQueueItem && !assistantSnapshot) return this.readState(conversationId)
+
+      const now = Date.now()
+      let stale = false
+      let removedQueueRow = false
+      await scheduleDbWrite('conversation.workspace.consume-steer', () =>
+        this.db().transaction(async (tx) => {
+          const [current] = await tx
+            .select()
+            .from(conversationWorkspaces)
+            .where(eq(conversationWorkspaces.conversationId, conversationId))
+          if (!current || current.activeTurnId !== turnId) {
+            stale = true
+            return
+          }
+          if (assistantSnapshot) {
+            const meta = assistantSnapshot.meta ? JSON.stringify(assistantSnapshot.meta) : null
+            await tx
+              .update(conversationMessages)
+              .set({
+                content: assistantSnapshot.content,
+                status: assistantSnapshot.status,
+                meta
+              })
+              .where(
+                and(
+                  eq(conversationMessages.conversationId, conversationId),
+                  eq(conversationMessages.id, assistantSnapshot.id)
+                )
+              )
+            await tx
+              .update(conversations)
+              .set({ updatedAt: now })
+              .where(eq(conversations.id, conversationId))
+            if (conversation?.projectId === null) {
+              await tx
+                .insert(conversationSyncState)
+                .values({ conversationId, dirtyAt: now, deletedAt: null })
+                .onConflictDoUpdate({
+                  target: conversationSyncState.conversationId,
+                  set: { dirtyAt: now, deletedAt: null }
+                })
+            }
+          }
+          if (shouldConsumeQueueItem) {
+            const [currentRow] = await tx
+              .select()
+              .from(conversationQueuedInputs)
+              .where(
+                and(
+                  eq(conversationQueuedInputs.conversationId, conversationId),
+                  eq(conversationQueuedInputs.id, steerId)
+                )
+              )
+            const storedMatches =
+              currentRow &&
+              (consumedText === undefined ||
+                inputSchema.parse(JSON.parse(currentRow.inputJson)).text === consumedText)
+            if (storedMatches) {
+              await tx
+                .delete(conversationQueuedInputs)
+                .where(
+                  and(
+                    eq(conversationQueuedInputs.conversationId, conversationId),
+                    eq(conversationQueuedInputs.id, steerId)
+                  )
+                )
+              await tx
+                .update(conversationWorkspaceReceipts)
+                .set({ status: 'completed', updatedAt: now })
+                .where(
+                  and(
+                    eq(conversationWorkspaceReceipts.conversationId, conversationId),
+                    eq(conversationWorkspaceReceipts.id, steerId)
+                  )
+                )
+              removedQueueRow = true
+            }
+          }
+          if (assistantSnapshot || removedQueueRow) {
+            await tx
+              .update(conversationWorkspaces)
+              .set({
+                revision: sql`${conversationWorkspaces.revision} + 1`,
+                updatedAt: now
+              })
+              .where(eq(conversationWorkspaces.conversationId, conversationId))
+          }
+        })
+      )
+      if (stale) return null
+      if (removedQueueRow) {
+        // Drop cached queue so readState reloads the exact post-transaction SQLite queue.
+        this.queues.delete(conversationId)
+      }
+      if (assistantSnapshot || removedQueueRow) {
+        return this.changed(conversationId, Boolean(assistantSnapshot))
+      }
+      return this.readState(conversationId)
     })
   }
 

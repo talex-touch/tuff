@@ -1,8 +1,15 @@
+import type { ShellTerminalCommandRequest } from './shell-terminal-command'
 import { computed, ref } from 'vue'
+import { normalizeShellCommand } from './shell-terminal-command'
 
 export const DEFAULT_TERMINAL_HEIGHT = 280
 export const MIN_TERMINAL_HEIGHT = 140
 export const MAX_TERMINAL_HEIGHT_RATIO = 0.8
+
+export interface RunShellTerminalCommandOptions {
+  cwd?: string
+  lang?: string
+}
 
 export type ShellTerminalTabKind = 'herdr' | 'local'
 
@@ -35,7 +42,9 @@ const terminalHeight = ref(DEFAULT_TERMINAL_HEIGHT)
 const isResizingTerminal = ref(false)
 const tabs = ref<ShellTerminalTab[]>([])
 const activeTabId = ref<string | null>(null)
+const pendingCommands = ref<ShellTerminalCommandRequest[]>([])
 let localTabSequence = 0
+let nextCommandId = 1
 
 function clampTerminalHeight(height: number): number {
   const max = Math.floor(window.innerHeight * MAX_TERMINAL_HEIGHT_RATIO)
@@ -45,7 +54,9 @@ function clampTerminalHeight(height: number): number {
 export function resetShellTerminalTabsForTesting(): void {
   tabs.value = []
   activeTabId.value = null
+  pendingCommands.value = []
   localTabSequence = 0
+  nextCommandId = 1
 }
 
 export function useShellTerminal() {
@@ -63,6 +74,35 @@ export function useShellTerminal() {
 
   function closeTerminal(): void {
     terminalOpen.value = false
+  }
+
+  function runCommand(command: string, options: RunShellTerminalCommandOptions = {}): boolean {
+    if (!normalizeShellCommand(command)) return false
+    openTerminal()
+    const cwd = options.cwd?.trim() || undefined
+    pendingCommands.value = [
+      ...pendingCommands.value,
+      {
+        id: nextCommandId++,
+        command,
+        ...(cwd ? { cwd } : {}),
+        ...(options.lang ? { lang: options.lang } : {})
+      }
+    ]
+    return true
+  }
+
+  function peekPendingCommand(): ShellTerminalCommandRequest | undefined {
+    return pendingCommands.value[0]
+  }
+
+  function consumePendingCommand(id: number): void {
+    if (!pendingCommands.value.some((item) => item.id === id)) return
+    pendingCommands.value = pendingCommands.value.filter((item) => item.id !== id)
+  }
+
+  function clearPendingCommands(): void {
+    pendingCommands.value = []
   }
 
   function findTabByAddress(address: string): ShellTerminalTab | undefined {
@@ -229,9 +269,14 @@ export function useShellTerminal() {
     tabs: computed(() => tabs.value),
     activeTabId: computed(() => activeTabId.value),
     activeTab,
+    pendingCommands: computed(() => pendingCommands.value),
     toggleTerminal,
     openTerminal,
     closeTerminal,
+    runCommand,
+    peekPendingCommand,
+    consumePendingCommand,
+    clearPendingCommands,
     openHerdrTab,
     openLocalTab,
     setActiveTab,

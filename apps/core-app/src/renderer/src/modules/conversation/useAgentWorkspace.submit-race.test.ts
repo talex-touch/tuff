@@ -137,6 +137,9 @@ function host(initial: ConversationWorkspaceState[]) {
     promoteQueued: unexpected,
     approveRun: unexpected,
     rejectRun: unexpected,
+    readFile: unexpected,
+    pickFile: unexpected,
+    openFileExternal: unexpected,
     onChanged: (listener) => {
       listeners.add(listener)
       return () => {
