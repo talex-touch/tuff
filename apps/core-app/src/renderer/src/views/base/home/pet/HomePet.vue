@@ -121,7 +121,10 @@ onMounted(() => {
   pet.mount()
 })
 
-defineExpose({ notifySend: (text: string) => pet.notifySend(text) })
+defineExpose({
+  notifySend: (text: string) => pet.notifySend(text),
+  syncSurface: () => pet.syncSurface()
+})
 </script>
 
 <template>

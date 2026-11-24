@@ -16,6 +16,7 @@ import { OMNI_PANEL_BUILTIN_ICON_CLASSES } from './src/shared/omni-panel-builtin
 import { MODEL_FAMILY_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-family-icons'
 import { MODEL_SOURCE_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-source-icons'
 import { AGENT_ICON_CLASSES } from './src/renderer/src/components/settings/resources/agent-icons'
+import { BROWSER_TAB_ICON_CLASSES } from './src/renderer/src/modules/browser-workspace/tab-presentation'
 import { MAIN_WINDOW_COMMAND_ICON_CLASSES } from './src/renderer/src/modules/shortcuts/main-window-command-catalog'
 import { HOME_PUSH_ICON_CLASSES } from './src/renderer/src/modules/home-push/icons'
 import {
@@ -89,6 +90,9 @@ const OMNI_PANEL_BUILTIN_ICONS_MODULE = fileURLToPath(
 const AGENT_ICONS_MODULE = fileURLToPath(
   new URL('./src/renderer/src/components/settings/resources/agent-icons.ts', import.meta.url)
 )
+const BROWSER_TAB_PRESENTATION_MODULE = fileURLToPath(
+  new URL('./src/renderer/src/modules/browser-workspace/tab-presentation.ts', import.meta.url)
+)
 
 export default defineConfig({
   // The dev server watches only the config file itself. Without this, a new icon in the table
@@ -102,7 +106,8 @@ export default defineConfig({
     HOME_PUSH_ICONS_MODULE,
     FLOW_TARGET_ICONS_MODULE,
     OMNI_PANEL_BUILTIN_ICONS_MODULE,
-    AGENT_ICONS_MODULE
+    AGENT_ICONS_MODULE,
+    BROWSER_TAB_PRESENTATION_MODULE
   ],
   safelist: [
     ...COREBOX_ACTION_ICONS,
@@ -143,7 +148,10 @@ export default defineConfig({
     // Agent brand marks on the skills and MCP pages
     // (`renderer/src/components/settings/resources/agent-icons.ts`): the agent bar, each row's
     // icon strip and the drawer draw them from inventory data, so no template names a class.
-    ...AGENT_ICON_CLASSES
+    ...AGENT_ICON_CLASSES,
+    // Browser workspace shortcuts, recent cards, and tab favicons
+    // (`renderer/src/modules/browser-workspace/tab-presentation.ts`).
+    ...BROWSER_TAB_ICON_CLASSES
   ],
   theme: {
     colors: {

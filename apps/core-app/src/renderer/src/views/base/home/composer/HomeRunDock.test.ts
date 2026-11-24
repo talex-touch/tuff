@@ -24,7 +24,7 @@ const STUBS = {
 }
 
 describe('HomeRunDock', () => {
-  it('renders clamped context meter bar via UIKit TxAiContextMeter and preserves meter semantics', () => {
+  it('renders clamped context meter pill via UIKit TxAiContextMeter and preserves meter semantics', () => {
     const wrapper = mount(HomeRunDock, {
       props: {
         streaming: false,
@@ -37,14 +37,12 @@ describe('HomeRunDock', () => {
 
     const meter = wrapper.get('[role="meter"]')
     expect(meter.attributes('aria-valuenow')).toBe('135')
-    expect(wrapper.get('.tx-ai-context-meter-bar__fill').attributes('style')).toContain(
-      'width: 100%'
-    )
-    expect(wrapper.get('.tx-ai-context-meter-bar__percent').text()).toBe('135%')
-    expect(wrapper.get('.tx-ai-context-meter-bar__window').text()).toBe('128k')
+    expect(wrapper.get('.tx-ai-context-meter__arc').attributes('stroke-dashoffset')).toBe('0')
+    expect(wrapper.get('.tx-ai-context-meter__pct').text()).toBe('135%')
+    expect(wrapper.get('.tx-ai-context-meter__detail').text()).toBe('128k')
   })
 
-  it('clamps negative context percentages to 0% on the fill track', () => {
+  it('clamps negative context percentages to 0% on the ring meter', () => {
     const wrapper = mount(HomeRunDock, {
       props: {
         streaming: false,
@@ -55,7 +53,24 @@ describe('HomeRunDock', () => {
       global: { stubs: STUBS }
     })
 
-    expect(wrapper.get('.tx-ai-context-meter-bar__fill').attributes('style')).toContain('width: 0%')
+    const arc = wrapper.get('.tx-ai-context-meter__arc')
+    expect(arc.attributes('stroke-dashoffset')).toBe(arc.attributes('stroke-dasharray'))
+  })
+
+  it('hides the inline Miko mark when hideMiko is true (roaming pet active)', () => {
+    const wrapper = mount(HomeRunDock, {
+      props: {
+        streaming: true,
+        step: { kind: 'thinking', title: 'Planning' },
+        contextShare: 20,
+        contextWindowText: '128k',
+        hideMiko: true
+      },
+      global: { stubs: STUBS }
+    })
+
+    expect(wrapper.find('.stub-miko').exists()).toBe(false)
+    expect(wrapper.find('.tx-ai-run-status-line__dot').exists()).toBe(true)
   })
 
   it('renders dynamic thinking verb in waiting and thinking steps and prefers title when present', () => {

@@ -95,6 +95,7 @@ const rules = [
   './ShellNavItem.vue',
   './ShellConversationList.vue',
   './ShellProjectFolder.vue',
+  './ShellTemporarySpace.vue',
   './ShellProjectRows.vue'
 ].flatMap((file) => parseRules(compileStyles(file)))
 
@@ -127,7 +128,12 @@ const SKELETON_ROW = 'ShellConversationList-SkeletonRow'
 const SKELETON_NAME = 'ShellConversationList-SkeletonName'
 
 /** The element holding each loaded row's line of text. */
-const LOADED_LABELS = ['ShellNavItem-Label', 'ShellProjectFolder-Name', 'ShellProjectRows-Open']
+const LOADED_LABELS = [
+  'ShellNavItem-Label',
+  'ShellProjectFolder-Name',
+  'ShellTemporarySpace-Name',
+  'ShellProjectRows-Open'
+]
 
 /**
  * Every element a line passes its line-height and font down through inside the sidebar, on either
@@ -148,6 +154,12 @@ const LINE_CHAIN = [
   'ShellProjectFolder-Row',
   'ShellProjectFolder-Name',
   'ShellProjectFolder-Children',
+  'ShellProjectFolder-ChildrenInner',
+  'ShellTemporarySpace',
+  'ShellTemporarySpace-Row',
+  'ShellTemporarySpace-Name',
+  'ShellTemporarySpace-Children',
+  'ShellTemporarySpace-ChildrenInner',
   'ShellProjectRows-Row',
   'ShellProjectRows-Open',
   'ShellProjectRows-Session'
@@ -212,6 +224,7 @@ describe('shell conversation list skeleton geometry', () => {
       SKELETON_ROW,
       'ShellNavItem',
       'ShellProjectFolder-Name',
+      'ShellTemporarySpace-Name',
       'ShellProjectRows-Open'
     ]
     for (const box of lineBoxes) {
@@ -219,7 +232,12 @@ describe('shell conversation list skeleton geometry', () => {
     }
 
     const border = declared(SKELETON_ROW, 'border')
-    for (const row of ['ShellNavItem', 'ShellProjectFolder-Row', 'ShellProjectRows-Row']) {
+    for (const row of [
+      'ShellNavItem',
+      'ShellProjectFolder-Row',
+      'ShellTemporarySpace-Row',
+      'ShellProjectRows-Row'
+    ]) {
       expect(declared(row, 'border'), row).toBe(border)
     }
   })
@@ -268,6 +286,119 @@ describe('shell list action styles', () => {
     expect(action?.declarations.get('height')).toBe('24px')
     expect(action?.declarations.get('width')).toBe('24px')
     expect(action?.declarations.get('opacity')).toBe('0')
+  })
+
+  it('reveals the temporary space add button on hover/focus and hides the read notice in muted ink until hovered', () => {
+    const css = compileStyles('./ShellTemporarySpace.vue')
+    const parsed = parseRules(css)
+
+    const add = parsed.find(({ selector }) => selector === '.ShellTemporarySpace-Add')
+    expect(add?.declarations.get('width')).toBe('24px')
+    expect(add?.declarations.get('height')).toBe('24px')
+    expect(add?.declarations.get('opacity')).toBe('0')
+
+    const addShownBy = parsed
+      .filter(
+        ({ selector, declarations }) =>
+          subjectClasses(selector).includes('ShellTemporarySpace-Add') &&
+          declarations.get('opacity') === '1'
+      )
+      .map(({ selector }) => selector)
+      .sort()
+    expect(addShownBy).toEqual(
+      [
+        '.ShellTemporarySpace-Row:has(:focus-visible) .ShellTemporarySpace-Add',
+        '.ShellTemporarySpace-Row:hover .ShellTemporarySpace-Add'
+      ].sort()
+    )
+
+    const notice = parsed.find(({ selector }) => selector === '.ShellTemporarySpace-Notice')
+    expect(notice?.declarations.get('width')).toBe('24px')
+    expect(notice?.declarations.get('height')).toBe('24px')
+    expect(notice?.declarations.get('color')).toBe('var(--shell-warning)')
+    expect(notice?.declarations.get('opacity')).toBeUndefined()
+
+    const readNotice = parsed.find(
+      ({ selector }) => selector === '.ShellTemporarySpace-Notice.is-read'
+    )
+    expect(readNotice?.declarations.get('color')).toBe('var(--shell-text-muted)')
+    expect(readNotice?.declarations.get('opacity')).toBe('0')
+
+    const readShownBy = parsed
+      .filter(
+        ({ selector, declarations }) =>
+          subjectClasses(selector).includes('ShellTemporarySpace-Notice') &&
+          subjectClasses(selector).includes('is-read') &&
+          declarations.get('opacity') === '1'
+      )
+      .map(({ selector }) => selector)
+      .sort()
+    expect(readShownBy).toEqual(
+      [
+        '.ShellTemporarySpace-Row:has(:focus-visible) .ShellTemporarySpace-Notice.is-read',
+        '.ShellTemporarySpace-Row:hover .ShellTemporarySpace-Notice.is-read',
+        '.is-notice-open .ShellTemporarySpace-Notice.is-read'
+      ].sort()
+    )
+
+    const readHover = parsed.find(
+      ({ selector }) => selector === '.ShellTemporarySpace-Notice.is-read:hover'
+    )
+    expect(readHover?.declarations.get('background')).toBe('var(--shell-info-soft)')
+  })
+
+  it('places a 24px hover-revealed add button before the project folder more menu', () => {
+    const css = compileStyles('./ShellProjectFolder.vue')
+    const parsed = parseRules(css)
+
+    const actions = parsed.find(({ selector }) => selector === '.ShellProjectFolder-Actions')
+    expect(actions?.declarations.get('gap')).toBe('2px')
+    expect(actions?.declarations.get('margin-right')).toBe('3px')
+
+    const add = parsed.find(({ selector }) => selector === '.ShellProjectFolder-Add')
+    expect(add?.declarations.get('width')).toBe('24px')
+    expect(add?.declarations.get('height')).toBe('24px')
+    expect(add?.declarations.get('opacity')).toBe('0')
+
+    const addShownBy = parsed
+      .filter(
+        ({ selector, declarations }) =>
+          subjectClasses(selector).includes('ShellProjectFolder-Add') &&
+          declarations.get('opacity') === '1'
+      )
+      .map(({ selector }) => selector)
+      .sort()
+    expect(addShownBy).toEqual(
+      [
+        '.ShellProjectFolder-Row:has(:focus-visible) .ShellProjectFolder-Add',
+        '.ShellProjectFolder-Row:hover .ShellProjectFolder-Add'
+      ].sort()
+    )
+  })
+
+  it('keeps folder expand clippers non-flex and rows non-shrinking so spacing never compresses mid-animation', () => {
+    for (const clipper of ['ShellProjectFolder-Children', 'ShellTemporarySpace-Children']) {
+      expect(values(clipper, 'overflow'), clipper).toEqual(['hidden'])
+      // Animating height on a flex column compresses flex-shrinkable rows and makes scrollHeight
+      // undershoot by 3.5px per row; flex layout belongs on the inner wrapper instead.
+      expect(values(clipper, 'display'), clipper).toEqual([])
+      expect(values(clipper, 'gap'), clipper).toEqual([])
+    }
+
+    for (const folder of ['ShellProjectFolder', 'ShellTemporarySpace']) {
+      // Gap between header row and children lives inside ChildrenInner padding-top so it never
+      // pops in/out before height starts or after height finishes collapsing.
+      expect(values(folder, 'gap'), folder).toEqual([])
+    }
+
+    for (const inner of ['ShellProjectFolder-ChildrenInner', 'ShellTemporarySpace-ChildrenInner']) {
+      expect(declared(inner, 'display'), inner).toBe('flex')
+      expect(declared(inner, 'flex-direction'), inner).toBe('column')
+      expect(declared(inner, 'gap'), inner).toBe('2px')
+      expect(declared(inner, 'padding-top'), inner).toBe('2px')
+    }
+
+    expect(declared('ShellProjectRows-Row', 'flex')).toBe('0 0 auto')
   })
 
   it('applies loading border glow animation only when row is both loading and active', () => {

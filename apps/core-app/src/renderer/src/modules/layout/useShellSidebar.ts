@@ -42,7 +42,8 @@ function persistState(state: SidebarLayoutState): void {
       sidebarWidth: SIDEBAR_EXPANDED_DEFAULT,
       sidebarCollapsed: false,
       expandedProjectIds: [],
-      browserPluginPins: null
+      browserPluginPins: null,
+      temporaryNoticeRead: false
     }
   }
 

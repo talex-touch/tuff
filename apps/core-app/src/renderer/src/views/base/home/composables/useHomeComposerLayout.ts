@@ -6,6 +6,7 @@ export const HOME_COMPOSER_MAX_INPUT_HEIGHT = 200
 
 export interface UseHomeComposerLayoutOptions {
   input: Ref<HTMLTextAreaElement | null>
+  composer?: Ref<HTMLElement | null>
   composerGroup: Ref<HTMLElement | null>
 }
 
@@ -38,7 +39,9 @@ export function useHomeComposerLayout(options: UseHomeComposerLayoutOptions) {
   }
 
   function bubbleMaxWidth(): number {
-    const lane = options.composerGroup.value?.querySelector<HTMLElement>('.HomePage-ComposerBeam')
+    const lane =
+      options.composer?.value ??
+      options.composerGroup.value?.querySelector<HTMLElement>('.TuffAIComposer')
     return (lane?.getBoundingClientRect().width ?? 0) * 0.78
   }
 

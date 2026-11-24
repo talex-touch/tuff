@@ -1,27 +1,18 @@
 <script lang="ts" name="HomeComposerStackHead" setup>
 import type { AgentToolConfirmRequest } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
-import type {
-  ConversationWorkspaceStatus,
-  WorkspacePendingRun,
-  WorkspaceQueuedInput
-} from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
-import type { IntelligenceMessageAttachment } from '@talex-touch/utils/types/intelligence'
-import type {
-  AgentWorkspaceError,
-  WorkspaceQueueAction
-} from '~/modules/conversation/useAgentWorkspace'
+import type { WorkspacePendingRun } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+import type { AgentWorkspaceError } from '~/modules/conversation/useAgentWorkspace'
 import type { DictationClip } from './composer/useComposerDictation'
 import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
 import { useI18n } from 'vue-i18n'
 import HomeVoiceDraft from './composer/HomeVoiceDraft.vue'
 import HomeRunApproval from './workspace/HomeRunApproval.vue'
-import HomeWorkspaceQueue from './workspace/HomeWorkspaceQueue.vue'
 
 /**
- * The interactive cards stacked immediately above the composer inside `.HomePage-ComposerGroup`:
- * load error banner, run approval gate, tool confirmation card, queued follow-up drawer, and
- * untouched-home voice draft clip. Rendered as a fragment so each card stays a direct flex item of
- * `.HomePage-ComposerGroup` and preserves `--home-group-gap` / `:has(.HomeWorkspaceQueue)` layout.
+ * The interactive cards stacked above the composer deck inside `.HomePage-ComposerGroup`:
+ * load error banner, run approval gate, tool confirmation card, and untouched-home voice draft
+ * clip. Rendered as a fragment so each card stays a direct flex item of `.HomePage-ComposerGroup`.
+ * (`HomeWorkspaceQueue` pairs directly with `TuffAIComposer` inside `.HomePage-ComposerDeck`.)
  */
 defineProps<{
   loadError: AgentWorkspaceError | null
@@ -31,12 +22,6 @@ defineProps<{
   runDecision: 'approve' | 'reject' | null
   pendingTool: AgentToolConfirmRequest | null
   pendingGatewayOrigin?: 'current' | 'other' | 'external'
-  workspaceStatus?: ConversationWorkspaceStatus
-  queue: WorkspaceQueuedInput[]
-  queueHeld: boolean
-  queueLimit: number
-  queuePending: { queueId: string; action: WorkspaceQueueAction } | null
-  resuming: boolean
   showEmptyVoiceDraft: boolean
   voiceClip: DictationClip | null
   dictating: boolean
@@ -49,15 +34,6 @@ const emit = defineEmits<{
   (event: 'reject-run'): void
   (event: 'approve-tool', remember: boolean): void
   (event: 'deny-tool', remember: boolean): void
-  (event: 'queue-action', queueId: string, action: WorkspaceQueueAction): void
-  (
-    event: 'queue-update',
-    queueId: string,
-    text: string,
-    attachments?: IntelligenceMessageAttachment[],
-    keptAttachmentIds?: string[]
-  ): void
-  (event: 'queue-resume'): void
   (event: 'voice-retry'): void
   (event: 'voice-send'): void
   (event: 'voice-dismiss'): void
@@ -112,24 +88,6 @@ const { t } = useI18n()
       @deny="emit('deny-tool', $event.remember)"
     />
   </div>
-
-  <Transition name="home-queue">
-    <HomeWorkspaceQueue
-      v-if="workspaceStatus && queue.length > 0"
-      :items="queue"
-      :status="workspaceStatus"
-      :held="queueHeld"
-      :limit="queueLimit"
-      :pending="queuePending"
-      :resuming="resuming"
-      @action="(queueId, action) => emit('queue-action', queueId, action)"
-      @update="
-        (queueId, text, attachments, keptAttachmentIds) =>
-          emit('queue-update', queueId, text, attachments, keptAttachmentIds)
-      "
-      @resume="emit('queue-resume')"
-    />
-  </Transition>
 
   <!-- An untouched Home has no stream for the voice clip to end: it waits here instead. -->
   <HomeVoiceDraft
@@ -212,33 +170,6 @@ const { t } = useI18n()
   min-width: 0;
   animation: home-msg-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   pointer-events: auto;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .home-queue-enter-active {
-    transition:
-      opacity 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-      transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .home-queue-leave-active {
-    transition:
-      opacity 0.2s cubic-bezier(0.4, 0, 1, 1),
-      transform 0.2s cubic-bezier(0.4, 0, 1, 1);
-  }
-}
-
-.home-queue-enter-from,
-.home-queue-leave-to {
-  opacity: 0;
-  transform: translateY(28px) scale(0.97);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .home-queue-enter-active,
-  .home-queue-leave-active {
-    transition: none;
-  }
 }
 
 @keyframes home-msg-pop {

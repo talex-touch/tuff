@@ -1978,7 +1978,9 @@
     "newChat": "New Chat",
     "spaces": {
       "title": "Spaces",
-      "temporaryNotice": "Files in temporary spaces are kept in the system temp folder and are deleted on restart. Conversations are kept."
+      "temporaryNotice": "Files in temporary spaces are kept in the system temp folder and are deleted on restart. Conversations are kept.",
+      "temporary": "Temporary Space",
+      "temporaryNoticeMarkRead": "Mark as read"
     },
     "browser": "Browser",
     "newProject": "New Project",
@@ -2331,7 +2333,7 @@
         "disable": "Turn off {name}"
       },
       "queue": {
-        "title": "Queued messages",
+        "title": "Steer & queued messages",
         "count": "{count} of {max} queued",
         "held": "Paused. Nothing runs until you continue.",
         "heldInterrupted": "Paused because the app closed during a reply. Nothing runs until you continue.",
@@ -2356,7 +2358,19 @@
         "editPlaceholder": "Type queued message content…",
         "addImage": "Add Image",
         "updated": "Queued message updated",
-        "updateFailed": "Failed to update queued message"
+        "updateFailed": "Failed to update queued message",
+        "queueMode": "Queue",
+        "queueTiming": "Runs after current turn finishes",
+        "recall": "Recall to composer",
+        "steerAdd": "Steer run",
+        "steerAddHint": "Injects into the running turn at the next tool or step boundary.",
+        "steerBadge": "Steer",
+        "steerCount": "{count} steering",
+        "steerInjected": "Steered",
+        "steerMode": "Steer",
+        "steerTiming": "Injects at next tool or step boundary",
+        "switchToQueue": "Switch to next-turn queue",
+        "switchToSteer": "Switch to mid-turn steer (next tool boundary)"
       },
       "run": {
         "title": "An agent run is waiting for approval",
@@ -2621,7 +2635,10 @@
     "code": {
       "preview": "Preview",
       "source": "Code",
-      "frameLabel": "{lang} preview"
+      "frameLabel": "{lang} preview",
+      "ran": "Ran",
+      "run": "Run",
+      "runInTerminal": "Run in bottom terminal"
     },
     "diagram": {
       "zoom": "Zoom diagram",
@@ -8023,7 +8040,13 @@
       "indexWriterBusy": "The search index is busy saving changes. Try again in a moment.",
       "timedOut": "The request timed out. Try again.",
       "coolingDown": "The last request failed moments ago. Try again in a few seconds.",
-      "httpStatus": "The server returned an error (HTTP {status})."
+      "httpStatus": "The server returned an error (HTTP {status}).",
+      "coolingDownSeconds": "The last request failed moments ago. Try again in {seconds}s.",
+      "emptyStreamBody": "The server returned an empty response stream. Try again.",
+      "networkAborted": "The network request was aborted.",
+      "networkTransportFailed": "The network connection failed or could not reach the server. Check your connection and try again.",
+      "responseTooLarge": "The server response exceeded the size limit.",
+      "timedOutAfter": "The request timed out after {seconds}s."
     }
   },
   "form": {
@@ -8398,7 +8421,9 @@
       "modelDetail": "Switch to a model that supports the requested capability and try again.",
       "networkTitle": "Network request failed",
       "networkDetail": "Check the network connection or provider endpoint, then retry.",
-      "unknownTitle": "AI request failed"
+      "unknownTitle": "AI request failed",
+      "networkTimeoutDetail": "The model or provider didn't respond in time. Check your network, proxy, or provider endpoint and try again.",
+      "networkTimeoutTitle": "Network request timed out"
     },
     "providers": "AI Providers",
     "addProvider": "Add Provider",

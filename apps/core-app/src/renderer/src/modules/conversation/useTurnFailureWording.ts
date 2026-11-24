@@ -1,11 +1,13 @@
 import type { ConversationError } from './conversation-error-display'
 import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import { useI18n } from 'vue-i18n'
+import { isTimeoutFailureMessage } from '~/utils/failure-text'
 import {
   aiRunFailureKey,
   resolveIntelligenceErrorRecovery
 } from '../intelligence/ai-error-recovery'
 import {
+  CONVERSATION_ERROR_AI_RUN_FAILED,
   CONVERSATION_ERROR_EMPTY_RESPONSE,
   CONVERSATION_ERROR_EXECUTION_FAILED,
   CONVERSATION_ERROR_PROVIDER_UNAVAILABLE
@@ -35,17 +37,20 @@ export function useTurnFailureWording() {
   const { t, locale } = useI18n()
 
   /**
-   * The kind of failure the intelligence layer named, or a provider described in the text main
-   * passed on as it was thrown (`WORKSPACE_EXECUTION_FAILED`). Null when its words name no kind.
+   * The kind of failure the intelligence layer named, or a provider/network cause main passed on
+   * under a generic run wrapper (`WORKSPACE_EXECUTION_FAILED` / `AI_RUN_FAILED`). Null when its
+   * words name no kind.
    */
   function classifyTurnFailure(error: ConversationError | undefined) {
     if (!error) return null
-    const caught = error.code === CONVERSATION_ERROR_EXECUTION_FAILED
+    const caught =
+      error.code === CONVERSATION_ERROR_EXECUTION_FAILED ||
+      error.code === CONVERSATION_ERROR_AI_RUN_FAILED
     if (!caught && !isIntelligenceErrorCode(error.code)) return null
     const recovery = resolveIntelligenceErrorRecovery(
       caught ? { error: error.detail } : { errorCode: error.code, error: error.detail },
       t,
-      locale.value
+      locale?.value ?? 'en-US'
     )
     return recovery.code === 'unknown' ? null : recovery
   }
@@ -61,6 +66,9 @@ export function useTurnFailureWording() {
     if (run && run !== 'failed') return t(`intelligence.runFailures.${run}`)
     const recovery = classifyTurnFailure(error)
     if (recovery?.code === 'provider') return t('home.error.noProvider')
+    if (recovery?.code === 'network' && isTimeoutFailureMessage(error?.detail)) {
+      return t('intelligence.errorRecovery.networkTimeoutTitle')
+    }
     return recovery?.title ?? null
   }
 

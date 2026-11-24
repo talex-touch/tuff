@@ -65,6 +65,12 @@ export function isGovernanceFailure(error: unknown): boolean {
 export const CONVERSATION_ERROR_EXECUTION_FAILED = 'WORKSPACE_EXECUTION_FAILED'
 
 /**
+ * Fixed public code an agent run records on failure; main passes the redacted cause in `detail`
+ * so the conversation can classify and localize what actually failed.
+ */
+export const CONVERSATION_ERROR_AI_RUN_FAILED = 'AI_RUN_FAILED'
+
+/**
  * A code, alone or as `<CODE>: <sentence>` — how an agent run records why it ended
  * (`AI_RUN_FAILED: AI run failed.`).
  */
@@ -72,27 +78,39 @@ const CODED = /^([A-Z][A-Z0-9_]*)(?::\s*([\s\S]*))?$/
 /** Codes main throws for its own failures, as opposed to text it passes on from elsewhere. */
 const OWN_CODE = /^(?:WORKSPACE|AI_RUN|CONVERSATION)_[A-Z0-9_]+$/
 
+function unwrapCaughtDetail(wrapperCode: string, detail: string): ConversationError {
+  if (NORMALIZED_PREFIX.test(detail)) return resolveConversationError(detail)
+  const thrown = CODED.exec(detail)?.[1] ?? ''
+  if (
+    thrown &&
+    thrown !== wrapperCode &&
+    (OWN_CODE.test(thrown) || thrown === CONVERSATION_ERROR_USAGE_LIMIT_REACHED)
+  ) {
+    return readTurnFailure({ code: detail, detail: '' })
+  }
+  return { code: wrapperCode, detail }
+}
+
 /**
  * A failed turn as main stored it on the message, in the shape the bubble reads. Main names most
  * endings itself (`WORKSPACE_TURN_CANCELLED`, `CONVERSATION_EMPTY_RESPONSE`). An agent run's ending
  * arrives as the run recorded it, a code and main's English for it, which the bubble words itself.
- * Anything else main caught is `WORKSPACE_EXECUTION_FAILED` with the thrown message as the detail:
- * a code of main's own (`WORKSPACE_PROFILE_UNAVAILABLE`), the `[CODE:capability] …` form, or text
- * from a provider or the system, which stays as it came.
+ * Anything else main caught is `WORKSPACE_EXECUTION_FAILED` (chat) or `AI_RUN_FAILED` (agent) with
+ * the thrown message as the detail: a code of main's own (`WORKSPACE_PROFILE_UNAVAILABLE`), the
+ * `[CODE:capability] …` form, or text from a provider or the system, which stays as it came.
  */
 export function readTurnFailure(error: { code: string; detail: string }): ConversationError {
   const code = error.code.trim()
   const detail = error.detail.trim()
   if (code === CONVERSATION_ERROR_EXECUTION_FAILED && detail) {
-    if (NORMALIZED_PREFIX.test(detail)) return resolveConversationError(detail)
-    const thrown = CODED.exec(detail)?.[1] ?? ''
-    if (OWN_CODE.test(thrown) || thrown === CONVERSATION_ERROR_USAGE_LIMIT_REACHED)
-      return readTurnFailure({ code: detail, detail: '' })
-    return { code, detail }
+    return unwrapCaughtDetail(code, detail)
   }
   const coded = CODED.exec(code)
   if (!coded) return { code, detail }
   const [, name = '', sentence = ''] = coded
+  if (name === CONVERSATION_ERROR_AI_RUN_FAILED && detail) {
+    return unwrapCaughtDetail(name, detail)
+  }
   // Main's sentence for a code the interface has its own words for says nothing more.
   const worded = name === CONVERSATION_ERROR_USAGE_LIMIT_REACHED || aiRunFailureKey(name) !== null
   return { code: name, detail: detail || (worded ? '' : sentence.trim()) }

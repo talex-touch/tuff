@@ -172,13 +172,42 @@ export function positionOf(x: number, y: number): string {
   return `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
 }
 
+export type ClimbWall = -1 | 1
+
 export interface PoseTransform {
+  /** Horizontal facing in screen space: `1` faces right, `-1` faces left. */
   facing: 1 | -1
   angle?: number
+  tx?: number
+  ty?: number
   sx?: number
   sy?: number
 }
 
+/**
+ * Pose transform for climbing a vertical wall upward (`-1` = left wall, `1` = right wall).
+ *
+ * TxMiko's SVG artwork natively faces left (`-1`) with paws `FOOT_PAD` above the bottom-centre
+ * transform origin `(PET_WIDTH / 2, PET_SIZE)`. Rotating `+90deg` before horizontal mirroring
+ * pitches the head upward and swings the paws onto the active wall; `tx` plants the paws flush on
+ * `bounds.left` / `bounds.right` and `ty` keeps the body vertically aligned with the hitbox.
+ */
+export function climbPoseOf(
+  wall: ClimbWall
+): Pick<PoseTransform, 'facing' | 'angle' | 'tx' | 'ty'> {
+  return {
+    facing: wall,
+    angle: 90,
+    tx: wall * (PET_WIDTH / 2 + FOOT_PAD),
+    ty: -FOOT_PAD
+  }
+}
+
 export function poseOf(t: PoseTransform): string {
-  return `scaleX(${(t.facing * (t.sx ?? 1)).toFixed(3)}) rotate(${(t.angle ?? 0).toFixed(1)}deg) scaleY(${(t.sy ?? 1).toFixed(3)})`
+  const tx = t.tx ?? 0
+  const ty = t.ty ?? 0
+  const translate = tx !== 0 || ty !== 0 ? `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px) ` : ''
+  // TxMiko's SVG sprites natively face left (-1), so facing right (+1) mirrors horizontally.
+  const flip = -t.facing
+  return `${translate}scaleX(${(flip * (t.sx ?? 1)).toFixed(3)}) rotate(${(t.angle ?? 0).toFixed(1)}deg) scaleY(${(t.sy ?? 1).toFixed(3)})`
 }

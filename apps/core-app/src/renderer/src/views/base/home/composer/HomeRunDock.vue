@@ -6,21 +6,23 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 /**
- * The combined live telemetry dock sitting immediately above the composer:
- * - `TxAiRunStatus` (`variant="line"`): breathing Miko mark, rolling elapsed clock, and current step
- * - `TxAiContextMeter` (`variant="bar"`): 2px context-window bar with rolling TxTextMorph percent
- *
- * Both primitives are owned by `@talex-touch/intelligence-uikit`; this adapter supplies CoreApp's
- * localized labels, step-to-Miko state mapping, and dock positioning above the composer box.
+ * The compact single-line live telemetry rail sitting cleanly underneath the composer:
+ * - Left: `TxAiRunStatus` (`variant="line"`): elapsed clock and current step (hides its inline
+ *   16px Miko mark when the roaming `HomePet` is already representing live state)
+ * - Right: `TxAiContextMeter` (`variant="pill"`): circular ring meter with `%` and window ceiling
  */
-const props = defineProps<{
-  streaming: boolean
-  startedAt?: number
-  step: RunStep
-  verb?: string
-  contextShare: number | null
-  contextWindowText: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    streaming: boolean
+    startedAt?: number
+    step: RunStep
+    verb?: string
+    contextShare: number | null
+    contextWindowText: string
+    hideMiko?: boolean
+  }>(),
+  { hideMiko: false }
+)
 
 const { t } = useI18n()
 
@@ -55,19 +57,21 @@ const meterPercent = computed(() => props.contextShare ?? 0)
 </script>
 
 <template>
-  <div class="HomePage-RunDock">
+  <div class="HomePage-RunDock" :class="{ 'is-streaming': streaming }">
     <TxAiRunStatus
       v-if="streaming"
+      class="HomePage-RunStatus"
       variant="line"
       :started-at="startedAt"
       :miko-state="mikoState"
+      :hide-miko="hideMiko"
       :line-label="stepLabel"
       :tone="step.kind === 'tool' ? 'tool' : 'default'"
     />
     <TxAiContextMeter
       v-if="contextShare !== null || streaming"
       class="HomePage-ContextMeter"
-      variant="bar"
+      variant="pill"
       :percent="meterPercent"
       :window-text="contextWindowText"
       :label="t('home.contextMeter.label')"
@@ -80,26 +84,37 @@ const meterPercent = computed(() => props.contextShare ?? 0)
 
 <style lang="scss" scoped>
 /**
- * The status line and the context meter, as one block above the composer. Its bottom edge is the
- * meter's track, and the margin cancels the group's gap except for 4px, so the track rides above the
- * box rather than over its border: the border, which turns blue on focus, stays whole, and the 3px
- * focus ring around it stays clear of the track. It paints over the beam wrapper (`z-index: 2`) so
- * the beam's bloom never dims it.
+ * Single-line telemetry rail tucked underneath the composer so it never collides with the
+ * stacked steer/queue back-card or the roaming Miko pet perched above the composer deck.
  */
 .HomePage-RunDock {
   position: relative;
-  z-index: 3;
+  z-index: 2;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
   width: var(--home-chat-lane-width);
   min-width: 0;
-  margin-bottom: calc(-1 * var(--home-group-gap) + 4px);
+  min-height: 22px;
+  padding: 0 12px;
+  box-sizing: border-box;
   pointer-events: none;
 }
 
+.HomePage-RunStatus {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+}
+
 .HomePage-ContextMeter {
-  padding-inline: 24px;
-  box-sizing: border-box;
+  flex: none;
+  height: 22px;
+  margin-left: auto;
+  padding: 0 8px;
+  background: color-mix(in srgb, var(--shell-surface) 78%, transparent);
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
 }
 </style>

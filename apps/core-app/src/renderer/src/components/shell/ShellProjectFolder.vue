@@ -16,6 +16,14 @@ import { storeToRefs } from 'pinia'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useProjectStore } from '~/stores/projects'
+import {
+  onFolderAfterEnter,
+  onFolderAfterLeave,
+  onFolderBeforeEnter,
+  onFolderBeforeLeave,
+  onFolderEnter,
+  onFolderLeave
+} from './shell-folder-transition'
 import { SHELL_MENU_CARD } from './shell-menu-panel'
 import ShellProjectRows from './ShellProjectRows.vue'
 
@@ -210,36 +218,6 @@ function onRenameKeydown(event: KeyboardEvent): void {
     emit('cancelRename')
   }
 }
-
-function onFolderEnter(el: Element): void {
-  const node = el as HTMLElement
-  node.style.height = '0px'
-  node.style.opacity = '0'
-  void node.offsetHeight
-  node.style.height = `${node.scrollHeight}px`
-  node.style.opacity = '1'
-}
-
-function onFolderAfterEnter(el: Element): void {
-  const node = el as HTMLElement
-  node.style.height = ''
-  node.style.opacity = ''
-}
-
-function onFolderLeave(el: Element): void {
-  const node = el as HTMLElement
-  node.style.height = `${node.scrollHeight}px`
-  node.style.opacity = '1'
-  void node.offsetHeight
-  node.style.height = '0px'
-  node.style.opacity = '0'
-}
-
-function onFolderAfterLeave(el: Element): void {
-  const node = el as HTMLElement
-  node.style.height = ''
-  node.style.opacity = ''
-}
 </script>
 
 <template>
@@ -313,181 +291,201 @@ function onFolderAfterLeave(el: Element): void {
         {{ project.name }}
       </button>
 
-      <TxDropdownMenu v-model="menuOpen" placement="bottom-end" :panel-card="PROJECT_MENU_CARD">
-        <template #trigger>
-          <button
-            class="ShellProjectFolder-More"
-            type="button"
-            :aria-label="t('shell.projects.projectActions')"
-          >
-            <span class="i-ri-more-2-fill" />
-          </button>
-        </template>
-        <TxDropdownItem v-if="archived" @select="emit('toggleArchived')">
-          <span class="ShellProjectFolder-MenuRow">
-            <span
-              class="i-ri-inbox-unarchive-line ShellProjectFolder-MenuIcon"
-              aria-hidden="true"
-            />
-            <span class="ShellProjectFolder-MenuText">{{ t('shell.projects.unarchive') }}</span>
-          </span>
-        </TxDropdownItem>
-        <!--
-          Three groups split by hairlines: what starts a conversation, what reaches for a local agent
-          CLI, and what changes the project itself. The groups carry no visible heading — each row
-          leads with its icon, as the composer's menus do, and a heading only repeated what its rows
-          already say. Each is still a `group` with a name, so a screen reader hears where it is; the
-          wrapper takes no focus, so arrow keys go item to item.
-        -->
-        <template v-else>
-          <div
-            class="ShellProjectFolder-MenuGroup"
-            role="group"
-            :aria-label="t('shell.projects.chats')"
-          >
-            <TxDropdownItem @select="emit('enter')">
-              <span class="ShellProjectFolder-MenuRow">
-                <span class="i-ri-chat-new-line ShellProjectFolder-MenuIcon" aria-hidden="true" />
-                <span class="ShellProjectFolder-MenuText">{{ t('shell.projects.newChat') }}</span>
-              </span>
-            </TxDropdownItem>
-          </div>
-          <!-- Local agents are a macOS Beta the user turns on in Settings: off macOS, or with the
-               master switch off, the whole group is left out rather than offering actions that
-               cannot run. Unknown (a read that failed) still shows it, with the submenu saying
-               why it has nothing. -->
-          <template v-if="localAiGroupVisible">
+      <div class="ShellProjectFolder-Actions">
+        <button
+          v-if="!archived && !renaming"
+          class="ShellProjectFolder-Add"
+          type="button"
+          :title="t('shell.projects.newChat')"
+          :aria-label="t('shell.projects.newChat')"
+          @click="emit('enter')"
+        >
+          <span class="ShellProjectFolder-ActionIcon i-ri-add-line" aria-hidden="true" />
+        </button>
+
+        <TxDropdownMenu v-model="menuOpen" placement="bottom-end" :panel-card="PROJECT_MENU_CARD">
+          <template #trigger>
+            <button
+              class="ShellProjectFolder-More"
+              type="button"
+              :aria-label="t('shell.projects.projectActions')"
+            >
+              <span class="i-ri-more-2-fill" />
+            </button>
+          </template>
+          <TxDropdownItem v-if="archived" @select="emit('toggleArchived')">
+            <span class="ShellProjectFolder-MenuRow">
+              <span
+                class="i-ri-inbox-unarchive-line ShellProjectFolder-MenuIcon"
+                aria-hidden="true"
+              />
+              <span class="ShellProjectFolder-MenuText">{{ t('shell.projects.unarchive') }}</span>
+            </span>
+          </TxDropdownItem>
+          <!--
+            Three groups split by hairlines: what starts a conversation, what reaches for a local agent
+            CLI, and what changes the project itself. The groups carry no visible heading — each row
+            leads with its icon, as the composer's menus do, and a heading only repeated what its rows
+            already say. Each is still a `group` with a name, so a screen reader hears where it is; the
+            wrapper takes no focus, so arrow keys go item to item.
+          -->
+          <template v-else>
+            <div
+              class="ShellProjectFolder-MenuGroup"
+              role="group"
+              :aria-label="t('shell.projects.chats')"
+            >
+              <TxDropdownItem @select="emit('enter')">
+                <span class="ShellProjectFolder-MenuRow">
+                  <span class="i-ri-chat-new-line ShellProjectFolder-MenuIcon" aria-hidden="true" />
+                  <span class="ShellProjectFolder-MenuText">{{ t('shell.projects.newChat') }}</span>
+                </span>
+              </TxDropdownItem>
+            </div>
+            <!-- Local agents are a macOS Beta the user turns on in Settings: off macOS, or with the
+                 master switch off, the whole group is left out rather than offering actions that
+                 cannot run. Unknown (a read that failed) still shows it, with the submenu saying
+                 why it has nothing. -->
+            <template v-if="localAiGroupVisible">
+              <div class="ShellProjectFolder-MenuDivider" role="separator" />
+              <div
+                class="ShellProjectFolder-MenuGroup"
+                role="group"
+                :aria-label="t('shell.projects.groupLocalAgents')"
+              >
+                <TxDropdownSubmenu :min-width="200">
+                  <span class="ShellProjectFolder-MenuRow">
+                    <span
+                      class="i-ri-terminal-box-line ShellProjectFolder-MenuIcon"
+                      aria-hidden="true"
+                    />
+                    <span class="ShellProjectFolder-MenuText">
+                      {{ t('shell.projects.openInLocalAgent') }}
+                    </span>
+                  </span>
+                  <template #menu>
+                    <template v-if="localAiAgentsPhase === 'ready'">
+                      <!-- Every CLI Tuff knows, in the main process's order; a blocked one says why. -->
+                      <!-- Launching the external agent is the visible confirmation, so do not hold it
+                           behind the menu's two-phase close feedback. -->
+                      <TxDropdownItem
+                        v-for="agent in localAiAgents"
+                        :key="agent.id"
+                        :disabled="agent.blocker !== null"
+                        :activation-feedback="false"
+                        @select="emit('runAgent', agent.id)"
+                      >
+                        <span class="ShellProjectFolder-Agent">
+                          <span
+                            class="ShellProjectFolder-AgentIcon"
+                            :class="agentIcon(agent.id)"
+                            aria-hidden="true"
+                          />
+                          {{ agent.label }}
+                        </span>
+                        <template v-if="agent.blocker" #right>
+                          <span class="ShellProjectFolder-AgentNote">
+                            {{ agentBlockerLabel(agent.blocker) }}
+                          </span>
+                        </template>
+                      </TxDropdownItem>
+                    </template>
+                    <div v-else class="ShellProjectFolder-MenuNote" role="none">
+                      {{ agentsNote }}
+                    </div>
+                  </template>
+                </TxDropdownSubmenu>
+                <!-- The hint sits on the row, not the item: TxDropdownItem's root is TxCardItem,
+                     which takes `title` as a prop, so on the item it would never reach the DOM. -->
+                <TxDropdownItem
+                  :disabled="discoveringProjectId !== null"
+                  @select="emit('discover')"
+                >
+                  <span
+                    class="ShellProjectFolder-MenuRow"
+                    :title="t('shell.projects.adoptSessionsHint')"
+                  >
+                    <span
+                      class="i-ri-download-2-line ShellProjectFolder-MenuIcon"
+                      aria-hidden="true"
+                    />
+                    <span class="ShellProjectFolder-MenuText">
+                      {{
+                        discoveringProjectId === project.id
+                          ? t('shell.projects.discoveringSessions')
+                          : t('shell.projects.adoptSessions')
+                      }}
+                    </span>
+                  </span>
+                </TxDropdownItem>
+              </div>
+            </template>
             <div class="ShellProjectFolder-MenuDivider" role="separator" />
             <div
               class="ShellProjectFolder-MenuGroup"
               role="group"
-              :aria-label="t('shell.projects.groupLocalAgents')"
+              :aria-label="t('shell.projects.groupProject')"
             >
-              <TxDropdownSubmenu :min-width="200">
+              <TxDropdownItem @select="emit('beginRename')">
+                <span class="ShellProjectFolder-MenuRow">
+                  <span class="i-ri-edit-line ShellProjectFolder-MenuIcon" aria-hidden="true" />
+                  <span class="ShellProjectFolder-MenuText">{{ t('shell.projects.rename') }}</span>
+                </span>
+              </TxDropdownItem>
+              <TxDropdownItem @select="emit('togglePinned')">
                 <span class="ShellProjectFolder-MenuRow">
                   <span
-                    class="i-ri-terminal-box-line ShellProjectFolder-MenuIcon"
+                    class="ShellProjectFolder-MenuIcon"
+                    :class="project.pinned ? 'i-ri-unpin-line' : 'i-ri-pushpin-line'"
                     aria-hidden="true"
                   />
                   <span class="ShellProjectFolder-MenuText">
-                    {{ t('shell.projects.openInLocalAgent') }}
+                    {{ project.pinned ? t('shell.projects.unpin') : t('shell.projects.pin') }}
                   </span>
                 </span>
-                <template #menu>
-                  <template v-if="localAiAgentsPhase === 'ready'">
-                    <!-- Every CLI Tuff knows, in the main process's order; a blocked one says why. -->
-                    <!-- Launching the external agent is the visible confirmation, so do not hold it
-                         behind the menu's two-phase close feedback. -->
-                    <TxDropdownItem
-                      v-for="agent in localAiAgents"
-                      :key="agent.id"
-                      :disabled="agent.blocker !== null"
-                      :activation-feedback="false"
-                      @select="emit('runAgent', agent.id)"
-                    >
-                      <span class="ShellProjectFolder-Agent">
-                        <span
-                          class="ShellProjectFolder-AgentIcon"
-                          :class="agentIcon(agent.id)"
-                          aria-hidden="true"
-                        />
-                        {{ agent.label }}
-                      </span>
-                      <template v-if="agent.blocker" #right>
-                        <span class="ShellProjectFolder-AgentNote">
-                          {{ agentBlockerLabel(agent.blocker) }}
-                        </span>
-                      </template>
-                    </TxDropdownItem>
-                  </template>
-                  <div v-else class="ShellProjectFolder-MenuNote" role="none">
-                    {{ agentsNote }}
-                  </div>
-                </template>
-              </TxDropdownSubmenu>
-              <!-- The hint sits on the row, not the item: TxDropdownItem's root is TxCardItem,
-                   which takes `title` as a prop, so on the item it would never reach the DOM. -->
-              <TxDropdownItem :disabled="discoveringProjectId !== null" @select="emit('discover')">
-                <span
-                  class="ShellProjectFolder-MenuRow"
-                  :title="t('shell.projects.adoptSessionsHint')"
-                >
-                  <span
-                    class="i-ri-download-2-line ShellProjectFolder-MenuIcon"
-                    aria-hidden="true"
-                  />
-                  <span class="ShellProjectFolder-MenuText">
-                    {{
-                      discoveringProjectId === project.id
-                        ? t('shell.projects.discoveringSessions')
-                        : t('shell.projects.adoptSessions')
-                    }}
-                  </span>
+              </TxDropdownItem>
+              <TxDropdownItem @select="emit('toggleArchived')">
+                <span class="ShellProjectFolder-MenuRow">
+                  <span class="i-ri-archive-line ShellProjectFolder-MenuIcon" aria-hidden="true" />
+                  <span class="ShellProjectFolder-MenuText">{{ t('shell.projects.archive') }}</span>
                 </span>
               </TxDropdownItem>
             </div>
           </template>
-          <div class="ShellProjectFolder-MenuDivider" role="separator" />
-          <div
-            class="ShellProjectFolder-MenuGroup"
-            role="group"
-            :aria-label="t('shell.projects.groupProject')"
-          >
-            <TxDropdownItem @select="emit('beginRename')">
-              <span class="ShellProjectFolder-MenuRow">
-                <span class="i-ri-edit-line ShellProjectFolder-MenuIcon" aria-hidden="true" />
-                <span class="ShellProjectFolder-MenuText">{{ t('shell.projects.rename') }}</span>
-              </span>
-            </TxDropdownItem>
-            <TxDropdownItem @select="emit('togglePinned')">
-              <span class="ShellProjectFolder-MenuRow">
-                <span
-                  class="ShellProjectFolder-MenuIcon"
-                  :class="project.pinned ? 'i-ri-unpin-line' : 'i-ri-pushpin-line'"
-                  aria-hidden="true"
-                />
-                <span class="ShellProjectFolder-MenuText">
-                  {{ project.pinned ? t('shell.projects.unpin') : t('shell.projects.pin') }}
-                </span>
-              </span>
-            </TxDropdownItem>
-            <TxDropdownItem @select="emit('toggleArchived')">
-              <span class="ShellProjectFolder-MenuRow">
-                <span class="i-ri-archive-line ShellProjectFolder-MenuIcon" aria-hidden="true" />
-                <span class="ShellProjectFolder-MenuText">{{ t('shell.projects.archive') }}</span>
-              </span>
-            </TxDropdownItem>
-          </div>
-        </template>
-      </TxDropdownMenu>
+        </TxDropdownMenu>
+      </div>
     </div>
 
     <!-- Archived: its rows or nothing — an empty box would still take a gap in the column. -->
     <Transition
       name="folder-expand"
+      @before-enter="onFolderBeforeEnter"
       @enter="onFolderEnter"
       @after-enter="onFolderAfterEnter"
+      @before-leave="onFolderBeforeLeave"
       @leave="onFolderLeave"
       @after-leave="onFolderAfterLeave"
     >
       <div v-if="archived ? rows.length > 0 : expanded" class="ShellProjectFolder-Children">
-        <ShellProjectRows
-          v-if="rows.length"
-          :rows="rows"
-          :active-id="activeId"
-          :dispatch-disabled="archived"
-          :project-names="projectNames"
-          @open-conversation="emit('openConversation', $event)"
-          @remove-conversation="emit('removeConversation', $event)"
-          @rename-conversation="emit('renameConversation', $event[0], $event[1])"
-          @copy-conversation="emit('copyConversation', $event)"
-          @open-conversation-file="emit('openConversationFile', $event)"
-          @continue-session="emit('continueSession', $event)"
-          @forget-session="emit('forgetSession', $event)"
-        />
-        <p v-else class="ShellProjectFolder-Empty">
-          {{ t('shell.projects.empty') }}
-        </p>
+        <div class="ShellProjectFolder-ChildrenInner">
+          <ShellProjectRows
+            v-if="rows.length"
+            :rows="rows"
+            :active-id="activeId"
+            :dispatch-disabled="archived"
+            :project-names="projectNames"
+            @open-conversation="emit('openConversation', $event)"
+            @remove-conversation="emit('removeConversation', $event)"
+            @rename-conversation="(id, title) => emit('renameConversation', id, title)"
+            @copy-conversation="emit('copyConversation', $event)"
+            @open-conversation-file="emit('openConversationFile', $event)"
+            @continue-session="emit('continueSession', $event)"
+            @forget-session="emit('forgetSession', $event)"
+          />
+          <p v-else class="ShellProjectFolder-Empty">
+            {{ t('shell.projects.empty') }}
+          </p>
+        </div>
       </div>
     </Transition>
   </div>
@@ -497,7 +495,6 @@ function onFolderAfterLeave(el: Element): void {
 .ShellProjectFolder {
   display: flex;
   flex-direction: column;
-  gap: 2px;
   min-width: 0;
 }
 
@@ -576,7 +573,7 @@ function onFolderAfterLeave(el: Element): void {
  */
 .ShellProjectFolder-Chevron {
   visibility: hidden;
-  transition: transform 0.22s cubic-bezier(0.2, 0, 0, 1);
+  transition: transform 0.26s var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
 
   &.is-expanded {
     transform: rotate(90deg);
@@ -638,18 +635,26 @@ function onFolderAfterLeave(el: Element): void {
 }
 
 /**
- * Hidden until it can be wanted: under the pointer, with keyboard focus anywhere in the row, while its
- * menu is open, and on the current project. It keeps its space while hidden, so a long name ellipsizes
- * short of it instead of running underneath.
+ * Trailing action buttons: right edge sits on the shared 24px action column (3px right margin,
+ * aligned column-for-column with ShellTemporarySpace-Actions). The + button reveals on hover/focus;
+ * the ⋯ menu also stays visible while open or on the current space. Both keep their boxes while
+ * hidden so a long name ellipsizes cleanly without jumping.
  */
-.ShellProjectFolder-More {
+.ShellProjectFolder-Actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  align-items: center;
+  margin-right: 3px;
+}
+
+.ShellProjectFolder-Add {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   width: 24px;
   height: 24px;
-  margin-right: 3px;
   padding: 0;
   border: none;
   border-radius: var(--shell-radius-sm);
@@ -660,8 +665,46 @@ function onFolderAfterLeave(el: Element): void {
   transition: opacity 0.15s ease;
   -webkit-app-region: no-drag;
 
-  &:hover {
+  &:hover,
+  &:focus-visible {
     color: var(--shell-text-regular);
+    background: var(--shell-info-soft);
+  }
+
+  .ShellProjectFolder-Row:hover &,
+  .ShellProjectFolder-Row:has(:focus-visible) & {
+    opacity: 1;
+  }
+}
+
+.ShellProjectFolder-ActionIcon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
+}
+
+.ShellProjectFolder-More {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  -webkit-app-region: no-drag;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--shell-text-regular);
+    background: var(--shell-info-soft);
   }
 
   .ShellProjectFolder-Row:hover &,
@@ -679,13 +722,59 @@ function onFolderAfterLeave(el: Element): void {
 .ShellProjectFolder-Children {
   --shell-rows-indent: calc(var(--shell-row-icon) + var(--shell-row-gap));
 
+  overflow: hidden;
+}
+
+.ShellProjectFolder-ChildrenInner {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  overflow: hidden;
-  transition:
-    height 0.26s cubic-bezier(0.2, 0, 0, 1),
-    opacity 0.22s cubic-bezier(0.2, 0, 0, 1);
+  padding-top: 2px;
+}
+
+.folder-expand-enter-active {
+  transition: height 0.28s var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+
+  .ShellProjectFolder-ChildrenInner {
+    transition:
+      opacity 0.22s ease-out,
+      transform 0.28s var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+  }
+}
+
+.folder-expand-leave-active {
+  transition: height 0.22s var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+
+  .ShellProjectFolder-ChildrenInner {
+    transition:
+      opacity 0.16s ease-out,
+      transform 0.22s var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+  }
+}
+
+.folder-expand-enter-from .ShellProjectFolder-ChildrenInner {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.folder-expand-leave-to .ShellProjectFolder-ChildrenInner {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ShellProjectFolder-Chevron,
+  .folder-expand-enter-active,
+  .folder-expand-leave-active,
+  .folder-expand-enter-active .ShellProjectFolder-ChildrenInner,
+  .folder-expand-leave-active .ShellProjectFolder-ChildrenInner {
+    transition-duration: 0.01ms;
+  }
+
+  .folder-expand-enter-from .ShellProjectFolder-ChildrenInner,
+  .folder-expand-leave-to .ShellProjectFolder-ChildrenInner {
+    transform: none;
+  }
 }
 
 .ShellProjectFolder-Empty {

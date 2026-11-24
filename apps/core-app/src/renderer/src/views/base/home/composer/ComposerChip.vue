@@ -304,6 +304,7 @@ function onClick(event: MouseEvent): void {
 }
 
 .ComposerChip-Label {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 18px;

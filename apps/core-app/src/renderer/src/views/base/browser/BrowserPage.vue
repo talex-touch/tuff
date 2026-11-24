@@ -20,8 +20,19 @@ import {
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { localIcon, shortcuts, tabIcon } from '~/modules/browser-workspace/tab-presentation'
+import {
+  formatSiteHost,
+  localIcon,
+  localIconColor,
+  shortcuts,
+  tabIcon
+} from '~/modules/browser-workspace/tab-presentation'
+import {
+  buildBrowserFilePreviewUrl,
+  parseBrowserFilePreviewUrl
+} from '~/modules/browser-workspace/preview-url'
 import { useBrowserWorkspace } from '~/modules/browser-workspace/useBrowserWorkspace'
+import WorkspaceFileViewer from '~/components/preview/WorkspaceFileViewer.vue'
 import {
   isOpenableBrowserUrl,
   useBrowserConnection
@@ -82,7 +93,11 @@ const isSettingsTab = computed(
     false
 )
 const isLandingTab = computed(() => Boolean(activeTab.value && !activeTab.value.url))
-const localPage = computed(() => isLandingTab.value || isStoreTab.value || isSettingsTab.value)
+const previewTarget = computed(() => parseBrowserFilePreviewUrl(activeTab.value?.url))
+const isPreviewTab = computed(() => Boolean(previewTarget.value))
+const localPage = computed(
+  () => isLandingTab.value || isStoreTab.value || isSettingsTab.value || isPreviewTab.value
+)
 const hasStoreTab = computed(
   () => state.value?.tabs.some((tab) => tab.url.startsWith('tuff://store')) ?? false
 )
@@ -371,7 +386,7 @@ function focusAddress(): void {
     return
   }
   void nextTick(() => {
-    if (!onRoute.value || isSettingsTab.value || isStoreTab.value) return
+    if (!onRoute.value || isSettingsTab.value || isStoreTab.value || isPreviewTab.value) return
     addressInput.value?.focus()
     addressInput.value?.select()
   })
@@ -399,6 +414,16 @@ function navigateAddress(event: KeyboardEvent): void {
     address.value = activeTab.value?.url ?? ''
     addressInput.value?.blur()
   }
+}
+
+function navigatePreviewFile(payload: { path: string; displayPath: string }): void {
+  const tab = activeTab.value
+  if (!tab) return
+  const nextUrl = buildBrowserFilePreviewUrl({
+    path: payload.path,
+    conversationId: previewTarget.value?.conversationId
+  })
+  void command(() => sdk.navigate(tab.id, nextUrl))
 }
 
 function dateLabel(page: BrowserSavedPage): string {
@@ -489,6 +514,7 @@ function measureViewport(): void {
   if (
     !onRoute.value ||
     document.hidden ||
+    localPage.value ||
     !activeTab.value?.url ||
     activeTab.value.error ||
     error.value ||
@@ -511,6 +537,7 @@ function scheduleViewport(): void {
   if (
     !onRoute.value ||
     document.hidden ||
+    localPage.value ||
     hasBlockingOverlay() ||
     panel.value ||
     !activeTab.value?.url ||
@@ -722,31 +749,41 @@ onBeforeUnmount(() => {
     style="-webkit-app-region: no-drag; background: var(--tx-bg-color)"
   >
     <div
-      v-if="!isSettingsTab && !isStoreTab"
-      class="flex h-14 flex-none items-center gap-1 border-b border-[var(--tx-border-color-light)] px-3"
+      v-if="!isSettingsTab && !isStoreTab && !isPreviewTab"
+      class="BrowserPage-Toolbar flex h-12 flex-none items-center gap-1 px-3"
     >
       <TxIconButton
         icon="i-ri-arrow-left-line"
+        size="sm"
+        shape="circle"
+        class="BrowserPage-ToolbarBtn"
         :label="t('browser.back')"
         :disabled="!activeTab?.canGoBack"
         @click="runActive('back')"
       />
       <TxIconButton
         icon="i-ri-arrow-right-line"
+        size="sm"
+        shape="circle"
+        class="BrowserPage-ToolbarBtn"
         :label="t('browser.forward')"
         :disabled="!activeTab?.canGoForward"
         @click="runActive('forward')"
       />
       <TxIconButton
         :icon="activeTab?.loading ? 'i-ri-close-line' : 'i-ri-refresh-line'"
+        size="sm"
+        shape="circle"
+        class="BrowserPage-ToolbarBtn"
         :label="t(activeTab?.loading ? 'browser.stop' : 'browser.reload')"
         :disabled="!activeTab?.url"
         @click="runActive('refresh')"
       />
       <label
-        class="mx-2 flex h-9.5 min-w-0 flex-1 items-center gap-2 rounded-xl border border-transparent bg-[var(--tx-fill-color-light)] px-3 transition-colors focus-within:border-[var(--tx-color-primary-light-5)] focus-within:bg-[var(--tx-bg-color)] focus-within:ring-2 focus-within:ring-[var(--tx-color-primary)]"
+        class="BrowserPage-AddressBox mx-1.5 flex h-8.5 min-w-0 flex-1 items-center gap-2 px-3.5"
       >
         <span
+          class="flex-none text-sm"
           :class="
             activeTab?.url?.startsWith('tuff://')
               ? `${tabIcon(activeTab)} text-[var(--tx-color-primary)]`
@@ -770,7 +807,7 @@ onBeforeUnmount(() => {
           :disabled="!activeTab"
           spellcheck="false"
           autocomplete="off"
-          class="h-full w-full min-w-0 border-0 bg-transparent text-sm text-[var(--tx-text-color-primary)] outline-none placeholder:text-[var(--tx-text-color-regular)]"
+          class="h-full w-full min-w-0 border-0 bg-transparent text-[13px] text-[var(--tx-text-color-primary)] outline-none placeholder:text-[var(--tx-text-color-secondary)]"
           @focus="onAddressFocus"
           @blur="addressFocused = false"
           @keydown="navigateAddress"
@@ -778,6 +815,9 @@ onBeforeUnmount(() => {
       </label>
       <TxIconButton
         :icon="bookmarked ? 'i-ri-star-fill' : 'i-ri-star-line'"
+        size="sm"
+        shape="circle"
+        class="BrowserPage-ToolbarBtn"
         :label="t(bookmarked ? 'browser.removeBookmark' : 'browser.addBookmark')"
         :pressed="bookmarked"
         :disabled="!activeTab?.url"
@@ -785,6 +825,9 @@ onBeforeUnmount(() => {
       />
       <TxIconButton
         icon="i-ri-chrome-line"
+        size="sm"
+        shape="circle"
+        class="BrowserPage-ToolbarBtn"
         :label="
           chromeProfile
             ? t('browser.saveToChrome', { profile: chromeProfile.label })
@@ -795,11 +838,13 @@ onBeforeUnmount(() => {
       />
       <div
         v-if="canSyncCookies"
-        class="flex items-center gap-0.5 rounded-lg bg-[var(--tx-fill-color-light)] px-1 py-0.5"
+        class="BrowserPage-CookiePill flex items-center gap-0.5 px-1 py-0.5"
       >
         <TxIconButton
           icon="i-ri-key-line"
           size="sm"
+          shape="circle"
+          class="BrowserPage-ToolbarBtn"
           :label="
             isChromeConnected
               ? t('browser.syncCookiesFromChrome', { profile: chromeProfile?.label })
@@ -810,7 +855,7 @@ onBeforeUnmount(() => {
         />
         <button
           type="button"
-          class="flex h-6 w-5 items-center justify-center rounded text-xs text-[var(--tx-text-color-secondary)] hover:text-[var(--tx-text-color-primary)] cursor-pointer"
+          class="flex h-6 w-5 items-center justify-center rounded-full text-xs text-[var(--tx-text-color-secondary)] hover:text-[var(--tx-text-color-primary)] cursor-pointer"
           :title="t('browser.cookies.modalTitle')"
           @click="cookieDialogOpen = true"
         >
@@ -818,7 +863,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
       <div
-        class="flex items-center gap-1 rounded-lg border border-[var(--tx-border-color-light)] bg-[var(--tx-fill-color-light)]/80 px-2 py-1 text-xs text-[var(--tx-text-color-regular)] select-none"
+        class="BrowserPage-EgoChip flex h-7.5 items-center gap-1.5 px-2.5 text-xs text-[var(--tx-text-color-regular)] select-none"
         :title="t('browser.egoIndicator') || 'Ego 自动化助手已就绪'"
       >
         <span class="i-ri-flashlight-line text-[var(--tx-color-primary)]" />
@@ -826,6 +871,9 @@ onBeforeUnmount(() => {
       </div>
       <TxIconButton
         icon="i-ri-layout-right-line"
+        size="sm"
+        shape="circle"
+        class="BrowserPage-ToolbarBtn"
         :label="t('browser.library')"
         :pressed="Boolean(panel)"
         @click="panel = panel ? null : 'history'"
@@ -903,103 +951,95 @@ onBeforeUnmount(() => {
             browser-landing
             :browser-active="onRoute && isLandingTab && !panel"
             :browser-navigate="navigate"
-            style="--home-chat-lane-width: min(920px, calc(100% - 64px))"
+            style="--home-chat-lane-width: min(760px, calc(100% - 64px))"
           >
             <template #browser-footer>
-              <!-- Top Sites / 快捷常用站点 -->
-              <div
-                class="mt-6 flex flex-wrap items-center justify-center gap-6"
-                :aria-label="t('browser.shortcuts')"
-              >
-                <button
-                  v-for="site in shortcuts"
-                  :key="site.url"
-                  type="button"
-                  class="group flex flex-col items-center gap-2 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[var(--tx-color-primary)] rounded-xl"
-                  @click="navigate(site.url).catch(() => {})"
-                >
-                  <div
-                    class="flex h-13 w-13 items-center justify-center rounded-2xl border border-[var(--tx-border-color-light)] bg-[var(--tx-fill-color-light)] shadow-xs transition-all duration-200 group-hover:scale-105 group-hover:border-[var(--tx-color-primary-light-5)] group-hover:bg-[var(--tx-fill-color)] group-hover:shadow-md"
-                  >
-                    <span
-                      class="inline-flex h-6 w-6 transition-transform group-hover:scale-110"
-                      :class="site.icon"
-                      :style="{ color: site.color !== 'currentColor' ? site.color : undefined }"
-                      aria-hidden="true"
-                    />
-                  </div>
-                  <span
-                    class="text-xs font-medium text-[var(--tx-text-color-secondary)] transition-colors group-hover:text-[var(--tx-text-color-primary)]"
-                  >
-                    {{ site.title }}
-                  </span>
-                </button>
-              </div>
-
-              <!-- 继续上次工作现场 / 历史现场 -->
-              <section class="mt-9 w-full" :aria-label="t('browser.recent')">
-                <div class="mb-3 flex items-center justify-between">
-                  <div class="flex items-center gap-2">
-                    <span class="i-ri-history-line text-sm text-[var(--tx-text-color-secondary)]" />
-                    <h2 class="m-0 text-sm font-medium text-[var(--tx-text-color-primary)]">
-                      {{ t('browser.recentWorkspaces') || t('browser.recent') }}
-                    </h2>
-                  </div>
-                  <TxButton
-                    v-if="state.recent.length"
-                    variant="ghost"
-                    size="sm"
-                    @click="panel = 'history'"
-                    >{{ t('browser.showAll') }}</TxButton
-                  >
-                </div>
-                <div v-if="state.recent.length" class="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div class="BrowserLanding-Footer">
+                <!-- Top Sites / 快捷常用站点 -->
+                <nav class="BrowserLanding-Shortcuts" :aria-label="t('browser.shortcuts')">
                   <button
-                    v-for="page in state.recent.slice(0, 4)"
-                    :key="page.url"
+                    v-for="site in shortcuts"
+                    :key="site.url"
                     type="button"
-                    class="group flex min-w-0 items-center gap-3.5 rounded-xl border border-[var(--tx-border-color-light)] bg-[var(--tx-fill-color-light)]/50 p-3 text-left transition-all duration-150 hover:border-[var(--tx-border-color)] hover:bg-[var(--tx-fill-color-light)] hover:shadow-sm focus-visible:outline-2 focus-visible:outline-[var(--tx-color-primary)] cursor-pointer"
-                    :title="page.url"
-                    @click="openSaved(page)"
+                    class="BrowserLanding-ShortcutItem group"
+                    :title="site.url"
+                    @click="navigate(site.url).catch(() => {})"
                   >
-                    <span
-                      class="inline-flex h-10 w-10 flex-none items-center justify-center rounded-lg border border-[var(--tx-border-color-light)] bg-[var(--tx-bg-color)] text-[var(--tx-color-primary)] shadow-2xs group-hover:scale-105 transition-transform"
-                    >
+                    <span class="BrowserLanding-ShortcutTile">
                       <span
-                        class="inline-flex h-5 w-5"
-                        :class="localIcon(page.url)"
+                        class="BrowserLanding-ShortcutIcon"
+                        :class="site.icon"
+                        :style="{ color: site.color !== 'currentColor' ? site.color : undefined }"
                         aria-hidden="true"
                       />
                     </span>
-                    <span class="min-w-0 flex-1">
-                      <span
-                        class="block truncate text-sm font-medium text-[var(--tx-text-color-primary)] group-hover:text-[var(--tx-color-primary)] transition-colors"
-                      >
-                        {{ page.title || page.url }}
-                      </span>
-                      <span
-                        class="mt-0.5 flex items-center gap-2 text-xs text-[var(--tx-text-color-regular)]"
-                      >
-                        <span class="truncate max-w-[180px]">{{ page.url }}</span>
-                        <span>·</span>
-                        <span class="shrink-0">{{ dateLabel(page) }}</span>
-                      </span>
+                    <span class="BrowserLanding-ShortcutLabel">
+                      {{ site.title }}
                     </span>
-                    <span
-                      class="i-ri-arrow-right-s-line flex-none text-lg text-[var(--tx-text-color-secondary)] opacity-40 transition-all group-hover:translate-x-0.5 group-hover:opacity-100"
-                    />
                   </button>
-                </div>
-                <div
-                  v-else
-                  class="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--tx-border-color-light)] py-6 text-center text-xs text-[var(--tx-text-color-regular)]"
-                >
-                  <span
-                    class="i-ri-compass-3-line mb-1 text-xl text-[var(--tx-text-color-secondary)]/50"
-                  />
-                  <span>{{ t('browser.recentEmpty') }}</span>
-                </div>
-              </section>
+                </nav>
+
+                <!-- 继续上次工作现场 / 历史现场 -->
+                <section class="BrowserLanding-Recent" :aria-label="t('browser.recent')">
+                  <div class="BrowserLanding-RecentHeader">
+                    <div class="BrowserLanding-RecentHeading">
+                      <span
+                        class="i-ri-history-line BrowserLanding-RecentHeadingIcon"
+                        aria-hidden="true"
+                      />
+                      <h2 class="BrowserLanding-RecentTitle">
+                        {{ t('browser.recentWorkspaces') || t('browser.recent') }}
+                      </h2>
+                    </div>
+                    <button
+                      v-if="state.recent.length"
+                      type="button"
+                      class="BrowserLanding-ShowAll"
+                      @click="panel = 'history'"
+                    >
+                      <span>{{ t('browser.showAll') }}</span>
+                      <span class="i-ri-arrow-right-s-line text-sm" aria-hidden="true" />
+                    </button>
+                  </div>
+                  <div v-if="state.recent.length" class="BrowserLanding-RecentGrid">
+                    <button
+                      v-for="page in state.recent.slice(0, 4)"
+                      :key="page.url"
+                      type="button"
+                      class="BrowserLanding-RecentCard group"
+                      :title="page.url"
+                      @click="openSaved(page)"
+                    >
+                      <span class="BrowserLanding-RecentIcon">
+                        <span
+                          class="BrowserLanding-RecentGlyph"
+                          :class="localIcon(page.url)"
+                          :style="{ color: localIconColor(page.url) }"
+                          aria-hidden="true"
+                        />
+                      </span>
+                      <span class="min-w-0 flex-1">
+                        <span class="BrowserLanding-RecentCardTitle">
+                          {{ page.title || formatSiteHost(page.url) }}
+                        </span>
+                        <span class="BrowserLanding-RecentCardMeta">
+                          <span class="truncate">{{ formatSiteHost(page.url) }}</span>
+                          <span aria-hidden="true">·</span>
+                          <span class="shrink-0">{{ dateLabel(page) }}</span>
+                        </span>
+                      </span>
+                      <span
+                        class="BrowserLanding-RecentChevron i-ri-arrow-right-s-line"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  </div>
+                  <div v-else class="BrowserLanding-RecentEmpty">
+                    <span class="i-ri-compass-3-line text-lg opacity-50" aria-hidden="true" />
+                    <span>{{ t('browser.recentEmpty') }}</span>
+                  </div>
+                </section>
+              </div>
             </template>
           </HomePage>
         </div>
@@ -1024,6 +1064,23 @@ onBeforeUnmount(() => {
           class="BrowserPage-Surface overflow-hidden"
         >
           <BrowserSettingsTab />
+        </div>
+      </Transition>
+
+      <!-- 本地文件预览 Tab (`tuff://preview`) -->
+      <Transition :name="tabTransitionName">
+        <div
+          v-if="state && isPreviewTab && previewTarget && !panel"
+          class="BrowserPage-Surface overflow-hidden"
+        >
+          <WorkspaceFileViewer
+            :file-path="previewTarget.path"
+            :display-path="previewTarget.path"
+            :conversation-id="previewTarget.conversationId ?? null"
+            :line="previewTarget.line"
+            :show-open-in-browser="false"
+            @navigate="navigatePreviewFile"
+          />
         </div>
       </Transition>
       <Transition name="browser-panel">
@@ -1094,6 +1151,7 @@ onBeforeUnmount(() => {
                 <span
                   class="inline-flex h-5 w-5 flex-none"
                   :class="localIcon(page.url)"
+                  :style="{ color: localIconColor(page.url) }"
                   aria-hidden="true"
                 />
                 <span class="min-w-0 flex-1"
@@ -1150,6 +1208,329 @@ onBeforeUnmount(() => {
 </template>
 
 <style lang="scss" scoped>
+@mixin browser-g2-capsule {
+  border-radius: 999px;
+
+  @supports (corner-shape: superellipse(2)) {
+    border-radius: calc(12px * var(--tx-corner-smooth-scale, 1.6)) / 50%;
+    corner-shape: var(--tx-corner-smooth-shape, superellipse(1.777));
+  }
+}
+
+@mixin browser-g2-squircle($radius) {
+  border-radius: $radius;
+
+  @supports (corner-shape: superellipse(2)) {
+    border-radius: calc(#{$radius} * var(--tx-corner-smooth-scale, 1.6));
+    corner-shape: var(--tx-corner-smooth-shape, superellipse(1.777));
+  }
+}
+
+.BrowserPage-Toolbar {
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--shell-border, var(--tx-border-color-light)) 65%, transparent);
+}
+
+.BrowserPage-ToolbarBtn {
+  --tx-icon-button-size: 32px;
+  --tx-icon-button-radius: 999px;
+
+  @supports (corner-shape: superellipse(2)) {
+    corner-shape: var(--tx-corner-smooth-shape, superellipse(1.777));
+  }
+
+  :deep(.tx-icon-button__icon) {
+    font-size: 1rem;
+  }
+}
+
+.BrowserPage-AddressBox {
+  @include browser-g2-capsule;
+  background: color-mix(in srgb, var(--tx-fill-color-light) 78%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color-lighter) 80%, transparent);
+
+  &:hover:not(:focus-within) {
+    background: var(--tx-fill-color-light);
+    box-shadow: inset 0 0 0 1px var(--tx-border-color-light);
+  }
+
+  &:focus-within {
+    background: var(--tx-bg-color);
+    box-shadow:
+      inset 0 0 0 1.5px var(--tx-color-primary),
+      0 0 0 3px color-mix(in srgb, var(--tx-color-primary) 16%, transparent);
+  }
+}
+
+.BrowserPage-CookiePill,
+.BrowserPage-EgoChip {
+  @include browser-g2-capsule;
+  background: color-mix(in srgb, var(--tx-fill-color-light) 78%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color-lighter) 80%, transparent);
+}
+
+.BrowserLanding-Footer {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: var(--home-chat-lane-width, min(760px, calc(100% - 64px)));
+  max-width: 100%;
+  margin: 12px auto 0;
+  padding-bottom: 24px;
+  box-sizing: border-box;
+}
+
+.BrowserLanding-Shortcuts {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+@media (max-width: 560px) {
+  .BrowserLanding-Shortcuts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.BrowserLanding-ShortcutItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--tx-text-color-regular);
+  cursor: pointer;
+  outline: none;
+
+  &:focus-visible .BrowserLanding-ShortcutTile {
+    box-shadow:
+      inset 0 0 0 1.5px var(--tx-color-primary),
+      0 0 0 2px color-mix(in srgb, var(--tx-color-primary) 18%, transparent);
+  }
+}
+
+.BrowserLanding-ShortcutTile {
+  @include browser-g2-squircle(14px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: color-mix(in srgb, var(--tx-fill-color-light) 78%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color-lighter) 85%, transparent);
+  transition: transform 160ms var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+
+  .BrowserLanding-ShortcutItem:hover & {
+    background: var(--tx-fill-color);
+    box-shadow:
+      inset 0 0 0 1px var(--tx-border-color-light),
+      var(--tx-elevation-1);
+    transform: translateY(-2px);
+  }
+
+  .BrowserLanding-ShortcutItem:active & {
+    transform: translateY(0) scale(0.97);
+  }
+}
+
+.BrowserLanding-ShortcutIcon {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  font-size: 22px;
+  color: var(--tx-text-color-primary);
+}
+
+.BrowserLanding-ShortcutLabel {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tx-text-color-regular);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+
+  .BrowserLanding-ShortcutItem:hover & {
+    color: var(--tx-text-color-primary);
+  }
+}
+
+.BrowserLanding-Recent {
+  width: 100%;
+  padding-top: 20px;
+  border-top: 1px solid
+    color-mix(in srgb, var(--shell-border, var(--tx-border-color-lighter)) 55%, transparent);
+}
+
+.BrowserLanding-RecentHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.BrowserLanding-RecentHeading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.BrowserLanding-RecentHeadingIcon {
+  flex: none;
+  font-size: 14px;
+  color: var(--tx-text-color-secondary);
+}
+
+.BrowserLanding-RecentTitle {
+  margin: 0;
+  color: var(--tx-text-color-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.BrowserLanding-ShowAll {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--tx-text-color-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  cursor: pointer;
+  outline: none;
+
+  &:hover {
+    background: color-mix(in srgb, var(--tx-fill-color) 70%, transparent);
+    color: var(--tx-text-color-primary);
+  }
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 1.5px var(--tx-color-primary);
+  }
+}
+
+.BrowserLanding-RecentGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 600px) {
+  .BrowserLanding-RecentGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.BrowserLanding-RecentCard {
+  @include browser-g2-squircle(14px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 0;
+  background: color-mix(in srgb, var(--tx-fill-color-light) 55%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color-lighter) 80%, transparent);
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+
+  &:hover {
+    background: var(--tx-fill-color-light);
+    box-shadow:
+      inset 0 0 0 1px var(--tx-border-color-light),
+      var(--tx-elevation-1);
+  }
+
+  &:focus-visible {
+    box-shadow:
+      inset 0 0 0 1.5px var(--tx-color-primary),
+      0 0 0 2px color-mix(in srgb, var(--tx-color-primary) 18%, transparent);
+  }
+}
+
+.BrowserLanding-RecentIcon {
+  @include browser-g2-squircle(9px);
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--tx-bg-color);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color-lighter) 85%, transparent);
+  color: var(--tx-text-color-primary);
+}
+
+.BrowserLanding-RecentGlyph {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+}
+
+.BrowserLanding-RecentCardTitle {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tx-text-color-primary);
+  font-size: var(--shell-fs-body, 13px);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.BrowserLanding-RecentCardMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  color: var(--tx-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.BrowserLanding-RecentChevron {
+  flex: none;
+  font-size: 16px;
+  color: var(--tx-text-color-secondary);
+  opacity: 0.35;
+  transition:
+    opacity 140ms ease,
+    transform 160ms var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+
+  .BrowserLanding-RecentCard:hover & {
+    opacity: 0.85;
+    transform: translateX(2px);
+  }
+}
+
+.BrowserLanding-RecentEmpty {
+  @include browser-g2-squircle(14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 16px;
+  color: var(--tx-text-color-secondary);
+  font-size: 12px;
+  background: color-mix(in srgb, var(--tx-fill-color-light) 35%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color-lighter) 75%, transparent);
+}
+
 .BrowserPage-Surface {
   position: absolute;
   inset: 0;
@@ -1325,7 +1706,10 @@ onBeforeUnmount(() => {
     transition: none;
   }
 
+  .BrowserLanding-ShortcutTile,
+  .BrowserLanding-RecentChevron,
   .BrowserPage-Surface--landing {
+    transition: none;
     animation: none !important;
   }
 }

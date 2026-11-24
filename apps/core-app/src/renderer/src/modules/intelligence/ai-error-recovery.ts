@@ -258,11 +258,26 @@ export function resolveIntelligenceErrorRecovery(
   if (
     includesAny(normalized, [
       'TIMEOUT',
+      'TIMED OUT',
       'ETIMEDOUT',
       'ECONNRESET',
       'ECONNREFUSED',
+      'ECONNABORTED',
+      'ENOTFOUND',
+      'EAI_AGAIN',
+      'EPIPE',
+      'SOCKET HANG UP',
+      'ERR_CONNECTION_',
+      'ERR_NAME_NOT_RESOLVED',
+      'ERR_INTERNET_DISCONNECTED',
+      'ERR_NETWORK_CHANGED',
+      'ERR_ADDRESS_UNREACHABLE',
+      'ERR_EMPTY_RESPONSE',
+      'ERR_SSL_PROTOCOL_ERROR',
+      'ERR_CERT_',
       'NETWORK',
-      'FETCH FAILED'
+      'FETCH FAILED',
+      'FAILED TO FETCH'
     ])
   ) {
     return {

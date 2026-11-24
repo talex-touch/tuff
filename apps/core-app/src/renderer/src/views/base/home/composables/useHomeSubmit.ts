@@ -1,6 +1,9 @@
 import type { AiAttachment } from '@talex-touch/tuffex/ai-elements'
 import type { TxConversationStreamInstance } from '@talex-touch/tuffex/conversation-stream'
-import type { WorkspaceSubmitDisposition } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+import type {
+  WorkspaceQueueDeliveryMode,
+  WorkspaceSubmitDisposition
+} from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import type { Ref } from 'vue'
 import { nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -54,6 +57,8 @@ export interface HomeSubmitOptions {
   canSend: Ref<boolean>
   voiceSendBlocked: Ref<boolean>
   sendQueues: Ref<boolean>
+  /** Delivery mode applied when enqueuing into a busy conversation (`'steer'` vs `'queue'`). */
+  deliveryMode?: () => WorkspaceQueueDeliveryMode
   /** Whether the routed model accepts images; `undefined` is auto routing, which accepts all. */
   imageInputAccepted: () => boolean | undefined
   homeRecommendationsEnabled: Ref<boolean>
@@ -164,13 +169,13 @@ export function useHomeSubmit(options: HomeSubmitOptions) {
     const draftAtSend = draft.value
     const draftAfterVoice = voice ? dictation.draftWithoutClip() : ''
     const clip = voice ? dictation.takeClip() : null
+    const deliveryMode = options.deliveryMode?.()
     sending.value = true
     try {
-      await workspace.submit(
-        text,
-        attachments,
-        voice ? { voiceRecordingId: voice.recordingId } : undefined
-      )
+      await workspace.submit(text, attachments, {
+        ...(voice ? { voiceRecordingId: voice.recordingId } : {}),
+        ...(deliveryMode ? { deliveryMode } : {})
+      })
     } catch (error) {
       if (clip) {
         dictation.restoreClip(clip)

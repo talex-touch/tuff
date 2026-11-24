@@ -617,6 +617,11 @@ const _appSettingOriginData = {
     expandedProjectIds: [] as string[],
     /** Browser-only plugin shortcuts. null uses first-use defaults; [] explicitly pins none. */
     browserPluginPins: null as string[] | null,
+    /**
+     * Whether the user has acknowledged the temporary-space restart-cleanup warning in the
+     * sidebar. Once true, the icon switches to muted info styling and stays hidden until hover.
+     */
+    temporaryNoticeRead: false,
   },
   setup: {
     fileAccess: false,

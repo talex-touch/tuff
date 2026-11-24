@@ -650,6 +650,11 @@ export function useSendChoreography(options: SendChoreographyOptions): SendChore
     const overlay = options.liftOverlay?.() ?? null
     const composer = options.composer()
     if (!overlay || !composer || !start.text.trim() || prefersReducedMotion()) return null
+    const maxWidth =
+      start.bubbleMaxWidth > 0
+        ? start.bubbleMaxWidth
+        : composer.getBoundingClientRect().width * 0.78
+    if (!(maxWidth > 0)) return null
     landActiveLift()
 
     // Laid out once, as the landed bubble will be: the same text, typography and widest width, so
@@ -658,7 +663,7 @@ export function useSendChoreography(options: SendChoreographyOptions): SendChore
     ghost.style.transform = 'none'
     fill.style.opacity = '0'
     text.textContent = start.text
-    text.style.maxWidth = `${start.bubbleMaxWidth.toFixed(2)}px`
+    text.style.maxWidth = `${maxWidth.toFixed(2)}px`
     const layer = ghost.getBoundingClientRect()
     const size = { width: layer.width, height: layer.height }
     const px = (value: string): number => Number.parseFloat(value) || 0

@@ -13,6 +13,7 @@ import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
 import type { Ref } from 'vue'
 import { LocalAiCliEvents } from '@talex-touch/utils/transport/events/local-ai-cli'
 import { ProjectEvents } from '@talex-touch/utils/transport/sdk/domains/project'
+import { TxPopover } from '@talex-touch/tuffex/popover'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -488,6 +489,22 @@ function nextFrame(): Promise<void> {
 }
 
 beforeEach(() => {
+  if (typeof window.matchMedia !== 'function') {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn()
+      }))
+    })
+  }
   routeState.path = '/home'
   routeState.params = {}
   pushMock.mockReset()
@@ -649,7 +666,7 @@ describe('shellConversationList project folders', () => {
     expect(store.activeProjectId).toBeNull()
   })
 
-  it('reaches toggle, name and actions in that order from the keyboard', async () => {
+  it('reaches toggle, name, add and more actions in that order from the keyboard', async () => {
     listState.projects = [project({ id: 'p1' })]
     const wrapper = await mountList()
 
@@ -657,17 +674,18 @@ describe('shellConversationList project folders', () => {
       .find('.ShellProjectFolder-Row')
       .findAll('button, input')
       .filter((item) => item.attributes('tabindex') !== '-1')
-      .slice(0, 3)
+      .slice(0, 4)
       .map((item) => item.classes()[0])
 
     expect(focusable).toEqual([
       'ShellProjectFolder-Toggle',
       'ShellProjectFolder-Name',
+      'ShellProjectFolder-Add',
       'ShellProjectFolder-More'
     ])
   })
 
-  it('keeps only the ⋯ menu on the folder row, with New Chat still inside it', async () => {
+  it('shows a + button before the ⋯ menu on the folder row and starts a new chat from either', async () => {
     listState.projects = [project({ id: 'p1' })]
     const wrapper = await mountList()
     const store = useProjectStore()
@@ -677,8 +695,27 @@ describe('shellConversationList project folders', () => {
       .findAll('button')
       .filter((item) => item.text() === '')
       .map((item) => item.classes()[0])
-    expect(iconButtons).toEqual(['ShellProjectFolder-Toggle', 'ShellProjectFolder-More'])
+    expect(iconButtons).toEqual([
+      'ShellProjectFolder-Toggle',
+      'ShellProjectFolder-Add',
+      'ShellProjectFolder-More'
+    ])
 
+    const add = row.find('.ShellProjectFolder-Add')
+    expect(add.attributes('type')).toBe('button')
+    expect(add.attributes('aria-label')).toBe('shell.projects.newChat')
+    expect(add.attributes('title')).toBe('shell.projects.newChat')
+    expect(add.find('.i-ri-add-line').exists()).toBe(true)
+
+    await add.trigger('click')
+    await flushPromises()
+
+    expect(store.pendingProjectId).toBe('p1')
+    expect(store.activeProjectId).toBe('p1')
+    expect(pushMock).toHaveBeenCalledWith('/home')
+
+    pushMock.mockClear()
+    store.setActiveProjectId(null)
     await menuItem(row, 'shell.projects.newChat').trigger('click')
     await flushPromises()
 
@@ -892,10 +929,11 @@ describe('shellConversationList sections', () => {
     ])
     const titles = wrapper.findAll('.ShellConversationList-SectionTitle').map((item) => item.text())
     expect(titles).toEqual(['shell.spaces.title'])
-    expect(wrapper.find('.ShellConversationList-Loose').text()).toContain('hi')
+    expect(wrapper.find('.ShellTemporarySpace-Name').text()).toBe('shell.spaces.temporary')
+    expect(wrapper.find('.ShellTemporarySpace-Children').text()).toContain('hi')
   })
 
-  it('keeps the Spaces title, its +, and a folder offer when there are no projects', async () => {
+  it('keeps the Spaces title, its actions, and a folder offer when there are no projects', async () => {
     listState.picked = project({ id: 'p1', name: 'Picked' })
     const wrapper = await mountList()
     const store = useProjectStore()
@@ -905,7 +943,7 @@ describe('shellConversationList sections', () => {
       'shell.spaces.title'
     )
     expect(spacesSection.find('.ShellConversationList-SectionAction').exists()).toBe(true)
-    expect(wrapper.find('.ShellConversationList-Loose').exists()).toBe(false)
+    expect(wrapper.find('.ShellTemporarySpace').exists()).toBe(false)
 
     const offer = spacesSection.find('.ShellConversationList-NewFromFolder')
     expect(offer.text()).toBe('shell.projects.newFromFolder')
@@ -994,6 +1032,7 @@ describe('shellConversationList archived projects', () => {
     const header = body.find('.ShellProjectFolder-Row')
     expect(header.find('.ShellProjectFolder-Toggle').element.tagName).toBe('SPAN')
     expect(header.find('.ShellProjectFolder-Name').element.tagName).toBe('SPAN')
+    expect(header.find('.ShellProjectFolder-Add').exists()).toBe(false)
     expect(header.findAll('.tx-dropdown-item').map((item) => item.text())).toEqual([
       'shell.projects.unarchive'
     ])
@@ -1041,7 +1080,17 @@ describe('shell sidebar single current row', () => {
     expect(currentRows(wrapper)).toEqual(['talex-touch'])
     expect(folder.classes()).toContain('is-current')
     expect(isExpanded(folder)).toBe(true)
-    expect(wrapper.find('.ShellConversationList-Loose').text()).toContain('hi')
+    expect(wrapper.find('.ShellTemporarySpace-Children').text()).toContain('hi')
+    expect(wrapper.find('.ShellTemporarySpace').classes()).not.toContain('is-current')
+  })
+
+  it('lights only the temporary space row on a blank conversation outside every project', async () => {
+    const wrapper = await mountSidebar({ withList: true, activeProjectId: null })
+    const temp = wrapper.find('.ShellTemporarySpace')
+
+    expect(currentRows(wrapper)).toEqual(['shell.spaces.temporary'])
+    expect(temp.classes()).toContain('is-current')
+    expect(folderNamed(wrapper, 'talex-touch').classes()).not.toContain('is-current')
   })
 
   it('leaves the project row alone on another page, where that page is current', async () => {
@@ -1394,7 +1443,7 @@ describe('shellConversationList open in local agent', () => {
 })
 
 describe('shellConversationList spaces header', () => {
-  it('puts a New Chat + beside the New Project + in the Spaces header', async () => {
+  it('uses + for New Chat and a folder icon for New Space in the Spaces header', async () => {
     listState.projects = [project({ id: 'p1' })]
     historyHolder.conversations!.value = [conversation({ id: 'hi' })]
     const wrapper = await mountList()
@@ -1412,11 +1461,13 @@ describe('shellConversationList spaces header', () => {
     expect(add.classes()).toContain('ShellConversationList-SectionAction--reveal')
     expect(add.find('.i-ri-add-line').exists()).toBe(true)
 
-    // The New Project + is the same control, left always visible.
+    // The New Project / Space button uses a folder-add icon and stays always visible.
     const projectsAdd = wrapper.find(
       '.ShellConversationList-SectionAction[aria-label="shell.newProject"]'
     )
     expect(projectsAdd.classes()).not.toContain('ShellConversationList-SectionAction--reveal')
+    expect(projectsAdd.find('.i-ri-folder-add-line').exists()).toBe(true)
+    expect(projectsAdd.find('.i-ri-add-line').exists()).toBe(false)
   })
 
   it('starts a blank conversation outside every project', async () => {
@@ -1437,6 +1488,142 @@ describe('shellConversationList spaces header', () => {
   })
 })
 
+describe('shellConversationList temporary space', () => {
+  it('groups temporary conversations under one collapsible space with a hover add button and notice popover', async () => {
+    historyHolder.conversations!.value = [
+      conversation({ id: 'hi-1', title: 'first temp', updatedAt: 2 }),
+      conversation({ id: 'hi-2', title: 'second temp', updatedAt: 1 })
+    ]
+    const wrapper = await mountList()
+    try {
+      const temp = wrapper.find('.ShellTemporarySpace')
+      expect(temp.exists()).toBe(true)
+      expect(temp.find('.ShellTemporarySpace-Name').text()).toBe('shell.spaces.temporary')
+      // The restart notice is kept behind the hover popover rather than printed inline.
+      expect(temp.text()).not.toContain('shell.spaces.temporaryNotice')
+      expect(temp.find('.ShellConversationList-LooseNotice').exists()).toBe(false)
+
+      const actions = temp.find('.ShellTemporarySpace-Actions')
+      const actionButtons = actions.findAll('button').map((btn) => btn.classes()[0])
+      expect(actionButtons).toEqual(['ShellTemporarySpace-Add', 'ShellTemporarySpace-Notice'])
+
+      const add = temp.find('.ShellTemporarySpace-Add')
+      expect(add.element.tagName).toBe('BUTTON')
+      expect(add.attributes('type')).toBe('button')
+      expect(add.attributes('aria-label')).toBe('shell.newChat')
+      expect(add.attributes('title')).toBe('shell.newChat')
+      expect(add.find('.i-ri-add-line').exists()).toBe(true)
+
+      const notice = temp.find('.ShellTemporarySpace-Notice')
+      expect(notice.element.tagName).toBe('BUTTON')
+      expect(notice.attributes('type')).toBe('button')
+      expect(notice.attributes('aria-label')).toBe('shell.spaces.temporaryNotice')
+      expect(notice.classes()).not.toContain('is-read')
+      expect(notice.find('.i-ri-error-warning-line').exists()).toBe(true)
+
+      const popover = temp.findComponent(TxPopover)
+      expect(popover.exists()).toBe(true)
+      expect(popover.props('trigger')).toBe('hover')
+      expect(popover.props('placement')).toBe('right')
+      expect(popover.props('matchReferenceWidth')).toBe(false)
+
+      // Expanded by default, collapsible via toggle without navigating.
+      const toggle = temp.find('.ShellTemporarySpace-Toggle')
+      expect(toggle.attributes('aria-expanded')).toBe('true')
+      expect(temp.find('.ShellTemporarySpace-Children').text()).toContain('first temp')
+      expect(temp.find('.ShellTemporarySpace-Children').text()).toContain('second temp')
+
+      await toggle.trigger('click')
+      expect(toggle.attributes('aria-expanded')).toBe('false')
+      expect(temp.find('.ShellTemporarySpace-Children').exists()).toBe(false)
+      expect(pushMock).not.toHaveBeenCalled()
+
+      // Clicking the hover add button starts a blank temporary chat and re-opens the folder.
+      const store = useProjectStore()
+      store.setActiveProjectId('p1')
+      await add.trigger('click')
+      await flushPromises()
+
+      expect(toggle.attributes('aria-expanded')).toBe('true')
+      expect(store.pendingProjectId).toBeNull()
+      expect(store.activeProjectId).toBeNull()
+      expect(pushMock).toHaveBeenCalledWith('/home')
+
+      // Clicking the space name starts a blank temporary chat and re-opens the folder too.
+      pushMock.mockClear()
+      await toggle.trigger('click')
+      store.setActiveProjectId('p1')
+      await temp.find('.ShellTemporarySpace-Name').trigger('click')
+      await flushPromises()
+
+      expect(toggle.attributes('aria-expanded')).toBe('true')
+      expect(store.pendingProjectId).toBeNull()
+      expect(store.activeProjectId).toBeNull()
+      expect(pushMock).toHaveBeenCalledWith('/home')
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it('marks the temporary notice read from its hover popover, switches to the muted info icon, and persists across remount', async () => {
+    listState.projects = [project({ id: 'p1' })]
+    historyHolder.conversations!.value = [conversation({ id: 'hi-1', title: 'first temp' })]
+    seedExpanded('p1')
+    const wrapper = await mountList()
+    try {
+      const temp = wrapper.find('.ShellTemporarySpace')
+      const popover = temp.findComponent(TxPopover)
+
+      popover.vm.$emit('update:modelValue', true)
+      await flushPromises()
+      expect(temp.classes()).toContain('is-notice-open')
+
+      const noticeText = document.body.querySelector('.ShellTemporarySpace-NoticeText')
+      expect(noticeText?.textContent?.trim()).toBe('shell.spaces.temporaryNotice')
+
+      const markRead = document.body.querySelector<HTMLButtonElement>(
+        '.ShellTemporarySpace-MarkRead'
+      )
+      expect(markRead).not.toBeNull()
+      expect(markRead?.textContent?.trim()).toBe('shell.spaces.temporaryNoticeMarkRead')
+
+      markRead?.click()
+      await flushPromises()
+
+      expect(temp.classes()).not.toContain('is-notice-open')
+      expect(popover.props('modelValue')).toBe(false)
+      expect(settings().shell).toMatchObject({
+        expandedProjectIds: ['p1'],
+        temporaryNoticeRead: true
+      })
+
+      const notice = temp.find('.ShellTemporarySpace-Notice')
+      expect(notice.classes()).toContain('is-read')
+      expect(notice.find('.i-ri-information-line').exists()).toBe(true)
+      expect(notice.find('.i-ri-error-warning-line').exists()).toBe(false)
+
+      // Hovering the muted info icon again still shows the notice text, without the read button.
+      popover.vm.$emit('update:modelValue', true)
+      await flushPromises()
+      expect(
+        document.body.querySelector('.ShellTemporarySpace-NoticeText')?.textContent?.trim()
+      ).toBe('shell.spaces.temporaryNotice')
+      expect(document.body.querySelector('.ShellTemporarySpace-MarkRead')).toBeNull()
+    } finally {
+      wrapper.unmount()
+    }
+
+    const remounted = await mountList()
+    try {
+      const notice = remounted.find('.ShellTemporarySpace-Notice')
+      expect(notice.classes()).toContain('is-read')
+      expect(notice.find('.i-ri-information-line').exists()).toBe(true)
+    } finally {
+      remounted.unmount()
+    }
+  })
+})
+
 describe('shellConversationList conversation delete', () => {
   it('requires secondary confirmation in a dialog before deleting a conversation', async () => {
     listState.projects = [project({ id: 'p1' })]
@@ -1449,7 +1636,7 @@ describe('shellConversationList conversation delete', () => {
 
     for (const [scope, id] of [
       ['.ShellProjectFolder-Children', 'filed'],
-      ['.ShellConversationList-Loose', 'loose']
+      ['.ShellTemporarySpace-Children', 'loose']
     ] as const) {
       const deleteItem = wrapper
         .find(scope)

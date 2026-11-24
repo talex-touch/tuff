@@ -546,4 +546,32 @@ describe('send lift', () => {
     expect(stage.lift()).toBeNull()
     expect(stage.overlay.ghost.classList.contains('is-active')).toBe(false)
   })
+
+  it('falls back to composer width instead of clamping max-width to 0px when bubbleMaxWidth is 0', () => {
+    const stage = buildLiftStage({ draft: 'hi' })
+    const lift = stage.choreography.liftDraft({
+      text: 'hi',
+      input: document.querySelector('textarea')!,
+      bubbleMaxWidth: 0
+    })
+    expect(lift).not.toBeNull()
+    expect(Number.parseFloat(stage.overlay.text.style.maxWidth)).toBeCloseTo(720 * 0.78, 2)
+  })
+
+  it('bails out instead of activating a 0px bubble when neither bubbleMaxWidth nor composer has width', () => {
+    const stage = buildLiftStage({ draft: 'hi' })
+    const input = document.querySelector('textarea')!
+    const composer = input.parentElement!
+    composer.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 }) as DOMRect
+
+    const lift = stage.choreography.liftDraft({
+      text: 'hi',
+      input,
+      bubbleMaxWidth: 0
+    })
+    expect(lift).toBeNull()
+    expect(stage.overlay.ghost.classList.contains('is-active')).toBe(false)
+    expect(stage.overlay.text.style.maxWidth).toBe('')
+  })
 })

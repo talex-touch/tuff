@@ -177,6 +177,9 @@ export function useMessageParts(options: MessagePartsOptions) {
     codeFrameLabelFormatter: (lang: string) => t('home.code.frameLabel', { lang }),
     copyCodeText: t('home.copy'),
     copiedCodeText: t('home.copied'),
+    runCodeText: t('home.code.run'),
+    ranCodeText: t('home.code.ran'),
+    runCodeTitle: t('home.code.runInTerminal'),
     diagramZoomLabel: t('home.diagram.zoom'),
     diagramPreviewLabel: t('home.diagram.preview'),
     diagramCloseLabel: t('home.diagram.close'),
@@ -194,7 +197,10 @@ export function useMessageParts(options: MessagePartsOptions) {
     autoPreview: true,
     previewLabel: t('home.code.preview'),
     codeLabel: t('home.code.source'),
-    codeFrameLabelFormatter: (lang: string) => t('home.code.frameLabel', { lang })
+    codeFrameLabelFormatter: (lang: string) => t('home.code.frameLabel', { lang }),
+    runLabel: t('home.code.run'),
+    ranLabel: t('home.code.ran'),
+    runTitle: t('home.code.runInTerminal')
   }))
 
   const chartProps = computed(() => ({
@@ -243,6 +249,8 @@ export function useMessageParts(options: MessagePartsOptions) {
     totalLatency: t('home.workspace.activity.metrics.totalLatency'),
     ttft: t('home.workspace.activity.metrics.ttft'),
     model: t('home.workspace.activity.metrics.model'),
+    provider: t('home.panel.provider'),
+    reasoning: t('home.reasoning.label'),
     coordinator: t('home.workspace.activity.metrics.coordinator')
   }))
 

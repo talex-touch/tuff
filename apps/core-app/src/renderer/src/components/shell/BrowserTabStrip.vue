@@ -16,6 +16,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { APP_SURFACE_ROUTES } from '../../../../shared/app-surface-routes'
+import { basenameOfPath, parseBrowserFilePreviewUrl } from '~/modules/browser-workspace/preview-url'
 import { useBrowserWorkspace } from '~/modules/browser-workspace/useBrowserWorkspace'
 import { tabIcon } from '~/modules/browser-workspace/tab-presentation'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
@@ -43,6 +44,8 @@ const {
 const tabMenu = ref<InstanceType<typeof TxContextMenu> | null>(null)
 const tablistRef = ref<HTMLElement | null>(null)
 const tabElements = new Map<string, HTMLElement>()
+const canScrollLeft = ref(false)
+const canScrollRight = ref(false)
 const activePill = ref({ left: 0, top: 0, width: 0, height: 0, visible: false })
 const activePillAnimated = ref(false)
 let tablistResizeObserver: ResizeObserver | null = null
@@ -75,14 +78,25 @@ function activateOrOpenTab(tab: BrowserTabState): void {
   void runInBrowser(() => sdk.activateTab(tab.id))
 }
 
+function syncScrollEdges(): void {
+  const list = tablistRef.value
+  if (!list || list.scrollWidth <= list.clientWidth + 1) {
+    canScrollLeft.value = false
+    canScrollRight.value = false
+    return
+  }
+  canScrollLeft.value = list.scrollLeft > 2
+  canScrollRight.value = list.scrollLeft + list.clientWidth < list.scrollWidth - 2
+}
+
 function onTablistWheel(event: WheelEvent): void {
   const list = event.currentTarget
   if (!(list instanceof HTMLElement)) return
   if (list.scrollWidth <= list.clientWidth) return
-  const delta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX
-  if (delta !== 0) {
+  if (Math.abs(event.deltaY) > Math.abs(event.deltaX) && event.deltaY !== 0) {
     event.preventDefault()
-    list.scrollLeft += delta
+    list.scrollLeft += event.deltaY
+    syncScrollEdges()
   }
 }
 
@@ -90,6 +104,8 @@ function tabTitle(tab: BrowserTabState): string {
   if (!tab.url) return t('browser.newTab')
   if (tab.url.startsWith('tuff://store')) return t('shell.store')
   if (tab.url.startsWith('tuff://setting')) return t('shell.setting')
+  const preview = parseBrowserFilePreviewUrl(tab.url)
+  if (preview) return basenameOfPath(preview.path)
   return tab.title || tab.url
 }
 
@@ -271,7 +287,10 @@ watch(
     if (draggedTabId.value && !ids.has(draggedTabId.value)) {
       resetTabDrag()
     }
-    void nextTick(() => syncActivePill(true))
+    void nextTick(() => {
+      syncActivePill(true)
+      syncScrollEdges()
+    })
   }
 )
 watch(activeTabId, (id, previousId) => {
@@ -281,6 +300,7 @@ watch(activeTabId, (id, previousId) => {
     document
       .getElementById(`browser-tab-${id}`)
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    syncScrollEdges()
   })
 })
 watch(tabMenuOpen, (open) => {
@@ -292,10 +312,14 @@ watch(tabMenuOpen, (open) => {
   })
 })
 onMounted(() => {
-  void nextTick(() => syncActivePill(false))
+  void nextTick(() => {
+    syncActivePill(false)
+    syncScrollEdges()
+  })
   if (typeof ResizeObserver !== 'undefined' && tablistRef.value) {
     tablistResizeObserver = new ResizeObserver(() => {
       syncActivePill(false)
+      syncScrollEdges()
     })
     tablistResizeObserver.observe(tablistRef.value)
   }
@@ -311,7 +335,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    class="BrowserTabStrip flex h-11 flex-none items-center gap-1.5 px-2.5"
+    class="BrowserTabStrip flex h-11 min-w-0 flex-none items-center gap-1.5 overflow-hidden px-2.5"
     :class="{ 'is-window-controls': !isMac }"
     :data-platform="platform"
     data-browser-tabbar
@@ -321,9 +345,14 @@ onBeforeUnmount(() => {
     <div
       ref="tablistRef"
       class="BrowserTabStrip-TabList BrowserTabStrip-NoDrag relative flex min-w-0 shrink items-center overflow-x-auto"
-      :class="{ 'has-active-pill': activePill.visible }"
+      :class="{
+        'has-active-pill': activePill.visible,
+        'can-scroll-left': canScrollLeft,
+        'can-scroll-right': canScrollRight
+      }"
       role="tablist"
       :aria-label="t('browser.tabs')"
+      @scroll.passive="syncScrollEdges"
       @wheel="onTablistWheel"
       @dragover.self="showTabDropTarget($event, null)"
       @drop.self="dropTab($event, null)"
@@ -338,7 +367,7 @@ onBeforeUnmount(() => {
       <TransitionGroup
         name="browser-tab"
         tag="div"
-        class="BrowserTabStrip-TabTrack flex items-center gap-1.5"
+        class="BrowserTabStrip-TabTrack flex flex-none items-center gap-1.5"
         @after-enter="syncActivePill(false)"
         @after-leave="syncActivePill(true)"
       >
@@ -346,7 +375,7 @@ onBeforeUnmount(() => {
           v-for="(tab, index) in state?.tabs ?? []"
           :key="tab.id"
           :ref="(el) => setTabEl(tab.id, el)"
-          class="BrowserTabStrip-Tab BrowserTabStrip-NoDrag relative flex h-8 min-w-28 max-w-52 items-center gap-1 pr-1.5"
+          class="BrowserTabStrip-Tab BrowserTabStrip-NoDrag relative flex h-8 min-w-28 max-w-52 flex-none items-center gap-1 pr-1.5"
           :class="{
             'opacity-50': draggedTabId === tab.id,
             'is-active': tab.id === state?.activeTabId
@@ -523,10 +552,29 @@ onBeforeUnmount(() => {
 
 .BrowserTabStrip-TabList {
   padding: 4px 2px;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
 
   &::-webkit-scrollbar {
     display: none;
+  }
+
+  &.can-scroll-left {
+    mask-image: linear-gradient(to right, transparent 0, #000 18px, #000 100%);
+  }
+
+  &.can-scroll-right {
+    mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 18px), transparent 100%);
+  }
+
+  &.can-scroll-left.can-scroll-right {
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 18px,
+      #000 calc(100% - 18px),
+      transparent 100%
+    );
   }
 }
 

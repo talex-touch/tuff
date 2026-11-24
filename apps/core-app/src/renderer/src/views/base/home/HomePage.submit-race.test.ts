@@ -109,7 +109,7 @@ const ToolbarPaint = {
 const PetPaint = {
   setup(_: Record<string, unknown>, { expose }: SetupContext) {
     expose({ notifySend: () => {} })
-    return () => h('div')
+    return () => h('div', { 'data-test': 'home-pet' })
   }
 }
 const TextPaint = {
@@ -576,6 +576,58 @@ describe('HomePage failed conversation report', () => {
     expect(report.find('img').exists()).toBe(false)
     expect(report.find('script').exists()).toBe(false)
   })
+
+  it('localizes AI_RUN_FAILED network timeouts with recovery guidance and formatted duration', async () => {
+    const id = 'ai-run-timeout'
+    const { view } = await page(
+      [
+        failedState(id, {
+          code: 'AI_RUN_FAILED: AI run failed.',
+          detail: 'NETWORK_TIMEOUT after 120000ms'
+        })
+      ],
+      `/home/c/${id}`
+    )
+
+    const card = view.get('.tx-ai-error-block')
+    const report = view.get('[data-testid="home-error-report"]')
+
+    // Both shipped catalogs must provide real copy for timeout recovery and formatted duration.
+    for (const key of [
+      'intelligence.errorRecovery.networkTimeoutTitle',
+      'intelligence.errorRecovery.networkTimeoutDetail',
+      'common.failures.timedOutAfter'
+    ]) {
+      expect(catalogText(enUS, key)).not.toBe(key)
+      expect(catalogText(zhCN, key)).not.toBe(key)
+    }
+
+    expect(card.get('.tx-ai-error-block-Title').text()).toBe(
+      catalogText(enUS, 'intelligence.errorRecovery.networkTimeoutTitle')
+    )
+    expect(card.get('.tx-ai-error-block-Detail').text()).toBe(
+      catalogText(enUS, 'intelligence.errorRecovery.networkTimeoutDetail')
+    )
+    expect(report.text()).toContain('AI_RUN_FAILED')
+    expect(report.text()).toContain('120s')
+    expect(report.text()).not.toContain('NETWORK_TIMEOUT after 120000ms')
+  })
+
+  it('does not show Nexus-credit advice for provider quota prose under AI_RUN_FAILED', async () => {
+    const id = 'ai-run-provider-quota'
+    const detail = 'You exceeded your current quota, please check your plan.'
+    const { view } = await page(
+      [failedState(id, { code: 'AI_RUN_FAILED: AI run failed.', detail })],
+      `/home/c/${id}`
+    )
+
+    const card = view.get('.tx-ai-error-block')
+    expect(card.get('.tx-ai-error-block-Title').text()).toBe(
+      catalogText(enUS, 'intelligence.errorRecovery.quotaTitle')
+    )
+    expect(card.find('.tx-ai-error-block-Detail').exists()).toBe(false)
+    expect(view.get('[data-testid="home-error-report"]').text()).toContain(detail)
+  })
 })
 
 describe('HomePage stream and rail integration', () => {
@@ -820,5 +872,22 @@ describe('HomePage submit owns the view in which it was pressed', () => {
       'right project question'
     )
     expect(draft(view)).toBe('right next draft')
+  })
+
+  it('shows the roaming HomePet only on blank Home and hides it in conversation view', async () => {
+    const { view, router } = await page([state('idle-chat', 'idle'), state('live-chat', 'running')])
+    expect(view.find('[data-test="home-pet"]').exists()).toBe(true)
+
+    await router.push('/home/c/live-chat')
+    await flushPromises()
+    expect(view.find('[data-test="home-pet"]').exists()).toBe(false)
+
+    await router.push('/home/c/idle-chat')
+    await flushPromises()
+    expect(view.find('[data-test="home-pet"]').exists()).toBe(false)
+
+    await router.push('/home')
+    await flushPromises()
+    expect(view.find('[data-test="home-pet"]').exists()).toBe(true)
   })
 })

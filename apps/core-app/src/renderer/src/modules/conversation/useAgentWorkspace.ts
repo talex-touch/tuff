@@ -7,6 +7,7 @@ import type {
   ConversationWorkspaceState,
   WorkspaceForkRequest,
   WorkspaceMessageUpdate,
+  WorkspaceQueueDeliveryMode,
   WorkspaceQueuedInput,
   WorkspaceSubmitDisposition
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
@@ -96,6 +97,8 @@ export interface WorkspaceSendOptions extends ConversationSendOptions {
   answersToolCallId?: string
   /** Sends this kept voice clip as the message's voice; the text is its transcript. */
   voiceRecordingId?: string
+  /** Delivery timing when submitting while a turn is running (`'steer'` injects at next tool boundary). */
+  deliveryMode?: WorkspaceQueueDeliveryMode
 }
 
 export interface UseAgentWorkspaceOptions {
@@ -154,6 +157,10 @@ export interface UseAgentWorkspaceReturn {
     text: string,
     attachments?: IntelligenceMessageAttachment[],
     keptAttachmentIds?: string[]
+  ) => Promise<void>
+  setQueuedDeliveryMode: (
+    queueId: string,
+    deliveryMode: WorkspaceQueueDeliveryMode
   ) => Promise<void>
   fork: (request: Omit<WorkspaceForkRequest, 'conversationId'>) => Promise<string>
   approveRun: () => Promise<void>
@@ -428,7 +435,8 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
         ...(sendOptions.answersToolCallId
           ? { answersToolCallId: sendOptions.answersToolCallId }
           : {}),
-        ...(sendOptions.voiceRecordingId ? { voiceRecordingId: sendOptions.voiceRecordingId } : {})
+        ...(sendOptions.voiceRecordingId ? { voiceRecordingId: sendOptions.voiceRecordingId } : {}),
+        ...(sendOptions.deliveryMode ? { deliveryMode: sendOptions.deliveryMode } : {})
       }
       const carried = attachments?.length ? await toModelAttachments(attachments) : []
       const result = await sdk.submit({
@@ -562,6 +570,19 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
     )
   }
 
+  async function setQueuedDeliveryMode(
+    queueId: string,
+    deliveryMode: WorkspaceQueueDeliveryMode
+  ): Promise<void> {
+    await mutate('queue.deliveryMode', (conversationId) =>
+      sdk.updateQueued({
+        conversationId,
+        queueId,
+        deliveryMode
+      })
+    )
+  }
+
   async function fork(request: Omit<WorkspaceForkRequest, 'conversationId'>): Promise<string> {
     const conversationId = currentId()
     if (!conversationId) throw new Error('CONVERSATION_WORKSPACE_UNAVAILABLE')
@@ -656,6 +677,7 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
     resume,
     queueAction,
     updateQueued,
+    setQueuedDeliveryMode,
     fork,
     approveRun: () => decideRun('approve'),
     rejectRun: () => decideRun('reject'),
