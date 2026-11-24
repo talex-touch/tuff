@@ -1,7 +1,7 @@
 import type { AddressInfo, Server, Socket } from 'node:net'
 import { Buffer } from 'node:buffer'
 import net from 'node:net'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   decodeCreditPayload,
   decodeFactsPayload,
@@ -48,12 +48,19 @@ async function createMockHerdrServer(
   return ctx
 }
 
-const serversToClose: Server[] = []
+const mocksToClose: MockServerContext[] = []
+const clientsToClose: HerdrFramedClient[] = []
 
 afterEach(async () => {
-  while (serversToClose.length > 0) {
-    const server = serversToClose.pop()!
-    await new Promise<void>((resolve) => server.close(() => resolve()))
+  while (clientsToClose.length > 0) {
+    clientsToClose.pop()!.close()
+  }
+  while (mocksToClose.length > 0) {
+    const ctx = mocksToClose.pop()!
+    for (const sock of ctx.sockets.splice(0)) {
+      sock.destroy()
+    }
+    await new Promise<void>((resolve) => ctx.server.close(() => resolve()))
   }
 })
 
@@ -168,11 +175,12 @@ describe('herdr-core framed-client', () => {
         }
       }
     })
-    serversToClose.push(mock.server)
+    mocksToClose.push(mock)
 
     const socket = net.createConnection({ port: mock.port, host: '127.0.0.1' })
     await new Promise<void>((resolve) => socket.once('connect', resolve))
     const client = new HerdrFramedClient({ socket })
+    clientsToClose.push(client)
 
     const hello = await client.handshake()
     expect(hello.generation).toBe(1)
@@ -238,13 +246,22 @@ describe('herdr-core framed-client', () => {
     client.sendFacts(a1.channel, { bg: '#101010' })
     client.detachChannel(a1.channel)
 
-    await new Promise((resolve) => setTimeout(resolve, 40))
+    // Verify server received event CREDIT + all 7 PTY frames on channel 2 without fixed sleeps.
+    await vi.waitFor(
+      () => {
+        const eventCredit = mock.receivedFrames.find(
+          (f) => f.channel === 1 && f.kind === HerdrFrameKind.CREDIT
+        )
+        const ch2Frames = mock.receivedFrames.filter((f) => f.channel === 2)
+        expect(eventCredit).toBeDefined()
+        expect(ch2Frames).toHaveLength(7)
+      },
+      { timeout: 2_000 }
+    )
 
-    // Verify server received event CREDIT + all PTY frames on channel 2.
     const eventCredit = mock.receivedFrames.find(
       (f) => f.channel === 1 && f.kind === HerdrFrameKind.CREDIT
     )
-    expect(eventCredit).toBeDefined()
     expect(decodeCreditPayload(eventCredit!.payload)).toBeGreaterThan(0)
 
     const ch2Frames = mock.receivedFrames.filter((f) => f.channel === 2)
@@ -277,11 +294,12 @@ describe('herdr-core framed-client', () => {
         )
       })
     })
-    serversToClose.push(mock.server)
+    mocksToClose.push(mock)
 
     const socket = net.createConnection({ port: mock.port, host: '127.0.0.1' })
     await new Promise<void>((resolve) => socket.once('connect', resolve))
     const client = new HerdrFramedClient({ socket })
+    clientsToClose.push(client)
 
     await expect(client.handshake()).rejects.toMatchObject({
       name: 'HerdrClientError',
@@ -316,11 +334,12 @@ describe('herdr-core framed-client', () => {
         void chunk
       })
     })
-    serversToClose.push(mock.server)
+    mocksToClose.push(mock)
 
     const socket = net.createConnection({ port: mock.port, host: '127.0.0.1' })
     await new Promise<void>((resolve) => socket.once('connect', resolve))
     const client = new HerdrFramedClient({ socket })
+    clientsToClose.push(client)
     await client.handshake()
 
     await expect(client.request('hang.timeout', {}, { timeoutMs: 30 })).rejects.toMatchObject({
@@ -335,8 +354,12 @@ describe('herdr-core framed-client', () => {
 
     const inflight = client.request('hang.disconnect', {}, { timeoutMs: 5_000 })
     mock.sockets[0]!.write(encodeCloseFrame(9))
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(closedReasons).toEqual([undefined])
+    await vi.waitFor(
+      () => {
+        expect(closedReasons).toEqual([undefined])
+      },
+      { timeout: 2_000 }
+    )
 
     mock.sockets[0]!.destroy()
     await expect(inflight).rejects.toBeInstanceOf(HerdrClientError)
