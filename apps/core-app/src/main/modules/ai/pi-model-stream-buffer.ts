@@ -533,7 +533,6 @@ export class PiModelStreamBuffer {
     while (delta.length > 0) {
       if (this.tailState !== null) {
         this.lineBuffer += delta
-        delta = ''
         this.advanceTail()
         return
       }
