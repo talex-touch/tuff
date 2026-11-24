@@ -6,26 +6,30 @@ import { useI18n } from 'vue-i18n'
 import ComposerChip from './ComposerChip.vue'
 
 /**
- * The model pill: which model the next send runs on, and at what reasoning effort. `effort` is the
- * reasoning level's short label, or nothing — on auto, or on a route that takes no effort, the pill
- * shows none (`useReasoningEffort().pillLevel`). Rendered inside `HomeModelMenu`'s trigger slot,
- * which owns the popover and hands `open` back.
+ * The model pill: which scheduler runs the next send, which model it runs on, and at what
+ * reasoning effort — 「Tuff Pi › ▣ model · 档位」. `scheduler` is the scheduler's short name, or
+ * nothing on surfaces without one. `effort` is the reasoning level's short label, or nothing — on
+ * auto, or on a route that takes no effort, the pill shows none (`useReasoningEffort().pillLevel`).
+ * Rendered inside `HomeModelMenu`'s trigger slot, which owns the popover and hands `open` back.
  */
 const props = withDefaults(
   defineProps<{
     label: string
     icon?: ITuffIcon
     effort?: string
+    scheduler?: string
     open?: boolean
   }>(),
-  { effort: '', open: false }
+  { effort: '', scheduler: '', open: false }
 )
 
 const { t } = useI18n()
 
-/** The name has to contain the visible words (WCAG label-in-name): model, then level. */
+/** The name has to contain the visible words (WCAG label-in-name): scheduler, model, then level. */
 const ariaLabel = computed(() =>
-  t('home.composer.modelPill', { current: [props.label, props.effort].filter(Boolean).join(' ') })
+  t('home.composer.modelPill', {
+    current: [props.scheduler, props.label, props.effort].filter(Boolean).join(' ')
+  })
 )
 </script>
 
@@ -33,6 +37,7 @@ const ariaLabel = computed(() =>
   <ComposerChip
     class="ComposerModelPill"
     :label="label"
+    :prefix="scheduler"
     :suffix="effort"
     :open="open"
     :aria-label="ariaLabel"

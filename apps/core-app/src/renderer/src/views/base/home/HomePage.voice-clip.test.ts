@@ -182,7 +182,7 @@ vi.mock('./HomeSidePanel.vue', () => ({ default: Paint }))
 vi.mock('./pet/HomePet.vue', () => ({ default: PetPaint }))
 vi.mock('./preview/HomeFilePreviewDrawer.vue', () => ({ default: Paint }))
 vi.mock('./workspace/HomeRunApproval.vue', () => ({ default: Paint }))
-vi.mock('./workspace/HomeWorkspaceModeMenu.vue', () => ({ default: Paint }))
+vi.mock('./workspace/HomeSchedulerRow.vue', () => ({ default: Paint }))
 vi.mock('./workspace/HomeWorkspaceQueue.vue', () => ({ default: Paint }))
 
 const RECORDING = { id: 'clip-1', url: 'tfile:///kept/clip-1.wav', durationMs: 2_400 }

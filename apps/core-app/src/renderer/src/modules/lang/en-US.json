@@ -2307,6 +2307,7 @@
         "chat": "Chat",
         "agent": "Agent",
         "coordinator": "Tuff Coordinator",
+        "scheduler": "Scheduler",
         "cliSection": "External Scanned CLIs",
         "chatDesc": "Answers with your provider or CLI, exactly as before.",
         "agentDesc": "Runs the task with an agent profile and the tools it is allowed.",

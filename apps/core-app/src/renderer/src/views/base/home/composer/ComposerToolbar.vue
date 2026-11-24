@@ -14,9 +14,9 @@ import ComposerSendIsland from './ComposerSendIsland.vue'
 import { isCapsuleSendState } from './send-state'
 
 /**
- * The composer's tool row (`home-composer` › 工具条与胶囊): attachments, permission and mode on the
- * left; model, microphone and send on the right. 32px controls, no strokes; the chips are one quiet
- * material.
+ * The composer's tool row (`home-composer` › 工具条与胶囊): attachments and permission on the left;
+ * the model pill (which also names the scheduler), microphone and send on the right. 32px
+ * controls, no strokes; the chips are one quiet material.
  *
  * The microphone and the send key live in fixed 32×32 slots, and the send key's stop capsule grows
  * left over the microphone's slot while a reply runs, so nothing in the row reflows. While a
@@ -28,7 +28,7 @@ import { isCapsuleSendState } from './send-state'
 const props = withDefaults(
   defineProps<{
     permissionMode: AgentToolsMode
-    model: { label: string; icon?: ITuffIcon; effort?: string }
+    model: { label: string; icon?: ITuffIcon; effort?: string; scheduler?: string }
     sendState: SendState
     sendQueues?: boolean
     micState: DictationState
@@ -134,8 +134,8 @@ defineExpose({ launch })
           @update:mode="emit('update:permissionMode', $event)"
           @reset="emit('reset-approvals')"
         />
-        <!-- The host's execution controls: Chat / Agent and its profile, and the queue key while Main
-             is busy. Left of the model so the row reads "how" before "with what". -->
+        <!-- Surface-specific mode controls (the browser landing's Browse / Ask). The scheduler is
+             not here: it lives in the model pill's popover. -->
         <slot name="mode" />
       </div>
     </div>
@@ -169,14 +169,20 @@ defineExpose({ launch })
         :inert="dictating || undefined"
         :aria-hidden="dictating || undefined"
       >
+        <!-- Scheduler and model are one control: the pill names both (「Tuff Pi › model · 档位」)
+             and its one popover carries the scheduler row above the reasoning effort. -->
         <HomeModelMenu placement="top-end">
           <template #trigger="{ open }">
             <ComposerModelPill
               :label="model.label"
               :icon="model.icon"
               :effort="model.effort"
+              :scheduler="$slots.scheduler ? model.scheduler : undefined"
               :open="open"
             />
+          </template>
+          <template v-if="$slots.scheduler" #foot-lead>
+            <slot name="scheduler" />
           </template>
         </HomeModelMenu>
       </div>

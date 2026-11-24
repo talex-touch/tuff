@@ -22,7 +22,10 @@ vi.mock('../HomeModelMenu.vue', async () => {
       setup:
         (_, { slots }) =>
         () =>
-          h('div', { class: 'model-menu-stub' }, slots.trigger?.({ open: false }))
+          h('div', { class: 'model-menu-stub' }, [
+            slots.trigger?.({ open: false }),
+            h('div', { class: 'model-menu-foot-stub' }, slots['foot-lead']?.())
+          ])
     })
   }
 })
@@ -221,6 +224,36 @@ describe('ComposerToolbar', () => {
     )
     await wrapper.setProps({ micState: 'idle' })
     expect(wrapper.get('button.ComposerSendIsland').attributes('aria-label')).toBe('home.send')
+    wrapper.unmount()
+  })
+
+  it('merges the scheduler into the model control: named on the pill, picked in its popover', () => {
+    const plain = mountToolbar({
+      model: { label: 'Claude Opus', effort: '高', scheduler: 'Tuff Pi' }
+    })
+    // No scheduler slot (the browser landing): the pill names the model alone.
+    expect(plain.find('.ComposerChip-Prefix').exists()).toBe(false)
+    expect(plain.get('.model-menu-foot-stub').element.children).toHaveLength(0)
+    plain.unmount()
+
+    const wrapper = mount(ComposerToolbar, {
+      props: {
+        permissionMode: 'review',
+        model: { label: 'Claude Opus', effort: '高', scheduler: 'Tuff Pi' },
+        sendState: 'ready',
+        micState: 'idle'
+      },
+      slots: { scheduler: '<div class="scheduler-stub">scheduler row</div>' },
+      attachTo: document.body
+    })
+    const pill = wrapper.get('.ComposerModelPill')
+    // One trigger: 「Tuff Pi › Claude Opus · 高」, the scheduler first.
+    expect(pill.get('.ComposerChip-Prefix').text()).toBe('Tuff Pi')
+    expect(pill.element.firstElementChild?.classList.contains('ComposerChip-Prefix')).toBe(true)
+    // The scheduler row rides in the model menu's popover, not in the toolbar row.
+    expect(wrapper.get('.model-menu-foot-stub').find('.scheduler-stub').exists()).toBe(true)
+    expect(wrapper.get('.ComposerToolbar-Left').find('.scheduler-stub').exists()).toBe(false)
+    expect(wrapper.findAll('.ComposerChip')).toHaveLength(1)
     wrapper.unmount()
   })
 

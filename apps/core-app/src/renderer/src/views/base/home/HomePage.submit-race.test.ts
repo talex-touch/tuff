@@ -188,7 +188,7 @@ vi.mock('./HomeSidePanel.vue', () => ({ default: Paint }))
 vi.mock('./pet/HomePet.vue', () => ({ default: PetPaint }))
 vi.mock('./preview/HomeFilePreviewDrawer.vue', () => ({ default: Paint }))
 vi.mock('./workspace/HomeRunApproval.vue', () => ({ default: Paint }))
-vi.mock('./workspace/HomeWorkspaceModeMenu.vue', () => ({ default: Paint }))
+vi.mock('./workspace/HomeSchedulerRow.vue', () => ({ default: Paint }))
 vi.mock('./workspace/HomeWorkspaceQueue.vue', () => ({ default: Paint }))
 
 function state(
@@ -460,7 +460,7 @@ afterAll(() => {
     './pet/HomePet.vue',
     './preview/HomeFilePreviewDrawer.vue',
     './workspace/HomeRunApproval.vue',
-    './workspace/HomeWorkspaceModeMenu.vue',
+    './workspace/HomeSchedulerRow.vue',
     './workspace/HomeWorkspaceQueue.vue'
   ])
     vi.doUnmock(path)

@@ -44,7 +44,7 @@ interface Props {
   /** The border beam runs (untouched Home only). */
   beamActive?: boolean
   dictation: ReturnType<typeof useComposerDictation>
-  model: { label: string; icon?: ITuffIcon; effort?: string }
+  model: { label: string; icon?: ITuffIcon; effort?: string; scheduler?: string }
   sendState: SendState
   sendQueues?: boolean
 }
@@ -216,8 +216,11 @@ defineExpose({ box: boxRef, input: inputEl, ghost: ghostEl, focus, launch })
         @mic="emit('mic')"
         @reset-approvals="emit('reset-approvals')"
       >
-        <template #mode>
+        <template v-if="$slots.mode" #mode>
           <slot name="mode" />
+        </template>
+        <template v-if="$slots.scheduler" #scheduler>
+          <slot name="scheduler" />
         </template>
       </ComposerToolbar>
 
@@ -251,6 +254,9 @@ defineExpose({ box: boxRef, input: inputEl, ghost: ghostEl, focus, launch })
   width: 100%;
   min-width: 0;
   padding: 16px 16px 12px;
+  // The composer deck around it passes the pointer through (`HomePage-ComposerDeck`); the box
+  // itself always takes it, on the landing page as well as while conversing.
+  pointer-events: auto;
   border: 1px solid var(--shell-border);
   border-radius: var(--shell-radius-2xl);
   background: var(--shell-bg);
