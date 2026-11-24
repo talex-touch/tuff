@@ -6,7 +6,7 @@ import type {
 } from './types'
 import { spawn } from 'node:child_process'
 import process from 'node:process'
-import { AcpClient, AcpSession } from '../acp/acp-client'
+import { AcpClient, AcpSession, DEFAULT_ACP_CLIENT_INFO } from '../acp/acp-client'
 import { buildSpawnEnv } from '../acp/process-utils'
 
 export class OmpAcpSession extends AcpSession {
@@ -51,7 +51,21 @@ export class OmpAcpClient extends AcpClient {
       client.setPermissionHandler(options.onPermission)
     }
     try {
-      await client.initialize(undefined, options.initTimeoutMs)
+      await client.initialize(
+        options.clientInfo || options.protocolVersion !== undefined
+          ? {
+              clientInfo: options.clientInfo ?? DEFAULT_ACP_CLIENT_INFO,
+              ...(options.protocolVersion !== undefined
+                ? { protocolVersion: options.protocolVersion }
+                : {}),
+              ...(options.clientCapabilities !== undefined
+                ? { clientCapabilities: options.clientCapabilities }
+                : {}),
+            }
+          : undefined,
+        options.initTimeoutMs,
+        options.clientCapabilities,
+      )
       return client
     }
     catch (error) {

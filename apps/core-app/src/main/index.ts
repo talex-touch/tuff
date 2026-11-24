@@ -42,6 +42,7 @@ import { extensionLoaderModule } from './modules/extension-loader'
 import { fileProtocolModule } from './modules/file-protocol'
 import { flowBusModule } from './modules/flow-bus'
 import { shortcutModule } from './modules/global-shortcon'
+import { herdrCoreModule } from './modules/herdr-core'
 import { localAiCliModule } from './modules/local-ai-cli'
 import { mcpHostModule } from './modules/mcp-host'
 import { nativeCapabilitiesModule } from './modules/native-capabilities'
@@ -261,6 +262,7 @@ const foregroundModulesToLoad = [
   privacyLifecycleModule,
   tuffDashboardModule,
   performanceReportModule,
+  herdrCoreModule,
   terminalModule,
   downloadCenterModule
 ]

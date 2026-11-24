@@ -82,6 +82,8 @@ export {
   createTuffRendererTransport,
   useTuffTransport,
 } from './sdk'
+export { createHerdrSdk } from './sdk/domains/herdr'
+export type { HerdrSdk, HerdrStreamHandle, HerdrStreamHandlers } from './sdk/domains/herdr'
 export { createTerminalSdk } from './sdk/domains/terminal'
 export type { TerminalSdk, TerminalSessionHandle, TerminalSessionHandlers } from './sdk/domains/terminal'
 

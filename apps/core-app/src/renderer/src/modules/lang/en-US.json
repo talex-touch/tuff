@@ -4920,7 +4920,98 @@
     "closed": "closed",
     "clear": "Clear",
     "restart": "Restart session",
-    "running": "Running"
+    "running": "Running",
+    "herdr": {
+      "newMenuTitle": "New or attach terminal",
+      "newLocalShell": "New local shell (hc)",
+      "newRemoteShell": "New shell on {machine}",
+      "newFallbackShell": "New local standalone shell (PTY)",
+      "unattachedSection": "Attach live terminals",
+      "detach": "Detach tab",
+      "detachTooltip": "Detach tab (keeps the terminal process running in background)",
+      "kill": "Kill process",
+      "killTooltip": "Terminate this terminal process permanently",
+      "interrupt": "Stop current turn",
+      "interruptTooltip": "Send interrupt signal to stop the current turn",
+      "badgeHc": "hc",
+      "badgeLocal": "local",
+      "restartedNotice": "Terminal restarted, reattaching...",
+      "lostNotice": "Terminal connection lost",
+      "disconnectedNotice": "Disconnected from herdr-core",
+      "connecting": "Connecting to herdr-core runtime...",
+      "viewModeLabel": "Switch view mode",
+      "modeCard": "Card",
+      "modeTerminal": "Terminal"
+    }
+  },
+  "herdr": {
+    "sidebar": {
+      "title": "Active tasks",
+      "empty": "No live terminal tasks",
+      "newSession": "New runtime terminal",
+      "fallbackHint": "herdr-core is unavailable; using local PTY fallback.",
+      "railTooltip": "{count} active tasks",
+      "railBlockedTooltip": "{count} active tasks (attention needed)"
+    },
+    "status": {
+      "idle": "Idle",
+      "working": "Working",
+      "blocked": "Blocked",
+      "done": "Done",
+      "error": "Error"
+    },
+    "blockedKind": {
+      "permission": "Permission",
+      "question": "Question",
+      "auth": "Auth"
+    },
+    "actions": {
+      "quickSend": "Quick send",
+      "sendPlaceholder": "Send input to this task...",
+      "sendSubmit": "Send",
+      "sendFailed": "Failed to send input",
+      "interrupt": "Stop current turn",
+      "interruptFailed": "Failed to interrupt task",
+      "openCardView": "Open structured card view",
+      "attach": "Open in bottom terminal",
+      "attached": "Attached in bottom terminal"
+    },
+    "conversation": {
+      "providerShell": "Shell",
+      "turnCount": "Turn {turn}",
+      "refresh": "Refresh conversation",
+      "takeOverTerminal": "Take Over in Terminal",
+      "openRawTerminal": "Open Raw Terminal",
+      "nonJsonlTitle": "Live runtime session",
+      "nonJsonlDesc": "No structured conversation log is available for this session (e.g. a plain shell or remote machine). You can still send input below or open the raw terminal.",
+      "metaProcess": "Process",
+      "metaState": "State",
+      "metaCwd": "Working directory",
+      "stateLive": "Live",
+      "stateFinished": "Finished",
+      "truncatedNotice": "Showing most recent history",
+      "noMessages": "No structured messages yet",
+      "reasoning": "Reasoning",
+      "toolArgs": "Arguments",
+      "toolOutput": "Output",
+      "blockedHint": {
+        "permission": "This task is waiting for permission approval. Take over in the terminal to respond.",
+        "question": "This task is waiting for your answer. Reply below or take over in the terminal.",
+        "auth": "This task requires authentication. Switch to the terminal to complete sign-in.",
+        "generic": "This task is waiting for interactive input. Take over in the terminal to continue."
+      },
+      "role": {
+        "user": "You",
+        "assistant": "Assistant",
+        "tool": "Tool",
+        "system": "System"
+      },
+      "toolStatus": {
+        "running": "Running",
+        "completed": "Completed",
+        "failed": "Failed"
+      }
+    }
   },
   "app": {
     "title": "Tuff",
@@ -7362,6 +7453,49 @@
       "browserWorkspace": {
         "title": "Modern Browser Workspace",
         "desc": "Enable the WebContentsView-based modern browser workspace with tabs, frameless viewport, and fast navigation. Turning it off keeps the classic launcher layout without a sidebar icon."
+      },
+      "herdrRuntime": {
+        "title": "herdr-core persistent terminal & task runtime",
+        "desc": "Enable GUI-first sidebar task cards and a multi-tab bottom terminal drawer powered by herdr-core with background persistence, detach/reattach, and remote machines. Falls back seamlessly to local PTY when unavailable."
+      }
+    },
+    "herdrCore": {
+      "title": "herdr-core runtime connection",
+      "desc": "Configure how Tuff connects to an external or managed herdr-core daemon for persistent sessions and remote terminals.",
+      "connection": {
+        "title": "Runtime status",
+        "desc": "Auto-discovers a running herdr-core daemon or starts a managed instance, falling back to local PTY when unavailable.",
+        "socketInfo": "Session {session} · {socketPath}",
+        "errorInfo": "Connection issue: {error}"
+      },
+      "status": {
+        "connectedExternal": "Connected (external)",
+        "connectedManaged": "Connected (managed)",
+        "connected": "Connected",
+        "connecting": "Connecting...",
+        "fallbackPty": "Fallback PTY",
+        "unavailable": "Unavailable",
+        "disconnected": "Disconnected"
+      },
+      "actions": {
+        "reconnect": "Reconnect",
+        "reconnecting": "Reconnecting...",
+        "ensureStarted": "Ensure started",
+        "starting": "Starting..."
+      },
+      "autoStart": {
+        "title": "Auto-start managed daemon",
+        "desc": "Start and manage a background herdr-core daemon automatically when no external instance is found."
+      },
+      "socketPath": {
+        "title": "Socket path",
+        "desc": "Leave blank to auto-discover the default socket; set a path to connect directly to a specific Unix socket.",
+        "placeholder": "Auto-discover (default path)"
+      },
+      "session": {
+        "title": "Session name",
+        "desc": "Session namespace used to locate or start herdr-core (defaults to default).",
+        "placeholder": "default"
       }
     }
   },

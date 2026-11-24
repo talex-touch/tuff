@@ -74,6 +74,48 @@ describe('ompAcpClient unit tests', () => {
     await client.close()
   })
 
+  it('omits clientCapabilities by default and forwards them when provided on initialize', async () => {
+    const { proc, stdin, stdout } = createMockChildProcess()
+    const client = new OmpAcpClient(proc)
+    const receivedParams: Array<Record<string, unknown>> = []
+
+    let buffer = ''
+    stdin.on('data', (chunk) => {
+      buffer += chunk.toString()
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+      for (const line of lines) {
+        if (!line.trim())
+          continue
+        const req = JSON.parse(line)
+        receivedParams.push(req.params as Record<string, unknown>)
+        stdout.write(
+          `${JSON.stringify({
+            jsonrpc: '2.0',
+            id: req.id,
+            result: {
+              protocolVersion: 1,
+              agentInfo: { name: 'omp', version: '18.14.2' },
+            },
+          })}\n`,
+        )
+      }
+    })
+
+    await client.initialize({ name: 'test', version: '1.0' })
+    await client.initialize({ name: 'test', version: '1.0' }, 5_000, {
+      fs: { readTextFile: true, writeTextFile: true },
+      terminal: true,
+    })
+
+    expect('clientCapabilities' in receivedParams[0]!).toBe(false)
+    expect(receivedParams[1]!.clientCapabilities).toEqual({
+      fs: { readTextFile: true, writeTextFile: true },
+      terminal: true,
+    })
+    await client.close()
+  })
+
   it('routes session/update notifications and streams message chunks', async () => {
     const { proc, stdin, stdout } = createMockChildProcess()
     const client = new OmpAcpClient(proc)

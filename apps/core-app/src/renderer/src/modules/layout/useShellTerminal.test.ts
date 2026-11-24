@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from 'vitest'
-import { DEFAULT_TERMINAL_HEIGHT, MIN_TERMINAL_HEIGHT, useShellTerminal } from './useShellTerminal'
+import { beforeEach, describe, expect, it } from 'vitest'
+import {
+  DEFAULT_TERMINAL_HEIGHT,
+  MIN_TERMINAL_HEIGHT,
+  resetShellTerminalTabsForTesting,
+  useShellTerminal
+} from './useShellTerminal'
 
 class FakePointerEvent extends MouseEvent {
   pointerId: number
@@ -13,7 +18,13 @@ class FakePointerEvent extends MouseEvent {
 if (typeof globalThis.PointerEvent === 'undefined') {
   globalThis.PointerEvent = FakePointerEvent as unknown as typeof PointerEvent
 }
+
 describe('useShellTerminal composable', () => {
+  beforeEach(() => {
+    resetShellTerminalTabsForTesting()
+    useShellTerminal().closeTerminal()
+  })
+
   it('toggles terminal state and lazily mounts', () => {
     const {
       terminalOpen,
@@ -26,27 +37,22 @@ describe('useShellTerminal composable', () => {
 
     expect(terminalHeight.value).toBe(DEFAULT_TERMINAL_HEIGHT)
 
-    // Initially closed
     if (terminalOpen.value) {
       closeTerminal()
     }
     expect(terminalOpen.value).toBe(false)
 
-    // Toggle on
     toggleTerminal()
     expect(terminalOpen.value).toBe(true)
     expect(terminalMounted.value).toBe(true)
 
-    // Toggle off
     toggleTerminal()
     expect(terminalOpen.value).toBe(false)
     expect(terminalMounted.value).toBe(true)
 
-    // Explicit open
     openTerminal()
     expect(terminalOpen.value).toBe(true)
 
-    // Explicit close
     closeTerminal()
     expect(terminalOpen.value).toBe(false)
   })
@@ -61,7 +67,6 @@ describe('useShellTerminal composable', () => {
     handle.dispatchEvent(downEvent)
     startResize(downEvent)
 
-    // Move pointer almost to bottom (innerHeight - 790 = 10, below MIN_TERMINAL_HEIGHT of 140)
     const moveEvent = new PointerEvent('pointermove', { clientY: 790, pointerId: 1 })
     window.dispatchEvent(moveEvent)
 
@@ -69,5 +74,39 @@ describe('useShellTerminal composable', () => {
     window.dispatchEvent(upEvent)
 
     expect(terminalHeight.value).toBe(MIN_TERMINAL_HEIGHT)
+  })
+
+  it('manages multi-tab herdr and local terminal lifecycle cleanly', () => {
+    const shell = useShellTerminal()
+
+    const t1 = shell.openHerdrTab('t7', { title: 'codex', machine: null })
+    expect(shell.terminalOpen.value).toBe(true)
+    expect(shell.tabs.value).toHaveLength(1)
+    expect(shell.activeTabId.value).toBe(t1.id)
+
+    // Opening the same address reuses the existing tab instead of duplicating.
+    const t1Again = shell.openHerdrTab('t7', { title: 'codex-updated' })
+    expect(t1Again.id).toBe(t1.id)
+    expect(shell.tabs.value).toHaveLength(1)
+    expect(shell.tabs.value[0]?.title).toBe('codex-updated')
+
+    const t2 = shell.openHerdrTab('prod/t2', { title: 'deploy', machine: 'prod' })
+    const localTab = shell.openLocalTab({ title: 'shell' })
+    expect(shell.tabs.value).toHaveLength(3)
+    expect(shell.activeTabId.value).toBe(localTab.id)
+
+    // Bump reattach increments nonce by id or address.
+    expect(shell.bumpTabReattach('prod/t2')).toBe(true)
+    expect(shell.findTabByAddress('prod/t2')?.reattachNonce).toBe(1)
+
+    // Closing active tab selects adjacent neighbor.
+    shell.removeTab(localTab.id)
+    expect(shell.tabs.value).toHaveLength(2)
+    expect(shell.activeTabId.value).toBe(t2.id)
+
+    shell.removeTab(t2.id)
+    shell.removeTab(t1.id)
+    expect(shell.tabs.value).toHaveLength(0)
+    expect(shell.activeTabId.value).toBeNull()
   })
 })
