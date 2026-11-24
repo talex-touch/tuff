@@ -131,7 +131,7 @@ jobs:
               if (filters.length > 0 && !filters.includes(dir) && !filters.includes(pkg.name)) {
                 continue
               }
-              console.log(`${dir}\t${pkg.name}\t${pkg.version}`)
+              console.log([dir, pkg.name, pkg.version].join("\t"))
             }
           ')
 

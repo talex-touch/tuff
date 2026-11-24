@@ -3436,7 +3436,7 @@ describe('intelligence plugin', () => {
     )
 
     expect(permission.check).toHaveBeenCalledWith('clipboard.write')
-    expect(permission.request).toHaveBeenCalledWith('clipboard.write', expect.any(String))
+    expect(permission.request).not.toHaveBeenCalled()
     expect(writeText).not.toHaveBeenCalled()
     expect(clearItems).toHaveBeenCalled()
     expect(pushItems).toHaveBeenCalledOnce()
@@ -3714,7 +3714,7 @@ describe('intelligence plugin', () => {
     )
 
     expect(permission.check).toHaveBeenCalledWith('clipboard.write')
-    expect(permission.request).toHaveBeenCalledWith('clipboard.write', expect.any(String))
+    expect(permission.request).not.toHaveBeenCalled()
     expect(copyAndPaste).not.toHaveBeenCalled()
     expect(pushItems.mock.calls[0][0][0].render.custom.data).toMatchObject({
       answer: 'replacement',
