@@ -472,6 +472,72 @@ describe('NpmPluginProvider', () => {
     expect(devResult.metadata?.registry).toBe('http://127.0.0.1:4873')
   })
 
+  it('honors custom HTTPS mirror registry metadata with trailing slash, preserves @ in scoped packument URLs, and rejects unsafe schemes fail-closed', async () => {
+    const dir = await fse.mkdtemp(path.join(os.tmpdir(), 'npm-provider-mirror-test-'))
+    tempDirs.push(dir)
+
+    const pkg = createSignedPluginTgz({
+      packageName: '@talex-touch/demo-plugin',
+      pluginId: 'com.talex.touch.demo',
+      pluginName: 'demo',
+      version: '1.0.0'
+    })
+    const tgzPath = path.join(dir, 'demo-1.0.0.tgz')
+    await fse.writeFile(tgzPath, pkg.tgz)
+
+    mocks.requestStreamManualRedirect.mockResolvedValueOnce(
+      jsonStreamResponse('https://registry.npmmirror.com/@talex-touch%2Fdemo-plugin', {
+        name: '@talex-touch/demo-plugin',
+        'dist-tags': { latest: '1.0.0' },
+        versions: {
+          '1.0.0': {
+            version: '1.0.0',
+            dist: {
+              tarball:
+                'https://registry.npmmirror.com/@talex-touch/demo-plugin/-/demo-plugin-1.0.0.tgz',
+              integrity: pkg.integrity,
+              shasum: pkg.shasum,
+              unpackedSize: 1024
+            }
+          }
+        }
+      })
+    )
+    mocks.downloadToTempFile.mockResolvedValueOnce(tgzPath)
+
+    const provider = new NpmPluginProvider()
+    const result = await provider.install({
+      source: 'npm:@talex-touch/demo-plugin@1.0.0',
+      hintType: PluginProviderType.NPM,
+      metadata: {
+        registry: 'https://registry.npmmirror.com/'
+      }
+    })
+
+    expect(mocks.requestStreamManualRedirect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'https://registry.npmmirror.com/@talex-touch%2Fdemo-plugin'
+      })
+    )
+    expect(mocks.downloadToTempFile).toHaveBeenCalledWith(
+      'https://registry.npmmirror.com/@talex-touch/demo-plugin/-/demo-plugin-1.0.0.tgz',
+      '.tgz',
+      expect.any(Object)
+    )
+    expect(result.official).toBe(false)
+    expect(result.filePath).toBe(tgzPath)
+    expect(result.metadata?.registry).toBe('https://registry.npmmirror.com')
+
+    await expect(
+      provider.install({
+        source: 'npm:tuff-plugin-foo',
+        metadata: {
+          registry: 'javascript:alert(1)'
+        }
+      })
+    ).rejects.toThrow('PLUGIN_NPM_REGISTRY_INVALID')
+  })
+
   it('cleans up downloaded temp tarball if pre-extraction inspection fails', async () => {
     const dir = await fse.mkdtemp(path.join(os.tmpdir(), 'npm-provider-cleanup-test-'))
     tempDirs.push(dir)

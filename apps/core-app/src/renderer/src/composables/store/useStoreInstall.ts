@@ -27,6 +27,103 @@ export interface InstallOptions {
   autoReEnable?: boolean
 }
 
+export interface ResolvedStoreInstallTarget {
+  source: string
+  hintType?: PluginProviderType
+  registry?: string
+}
+
+function readTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+function isGithubUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.hostname === 'github.com' || parsed.hostname === 'www.github.com'
+  } catch {
+    return false
+  }
+}
+
+export function resolveStoreInstallTarget(
+  plugin: StorePluginListItem,
+  authBaseUrl: string
+): ResolvedStoreInstallTarget | null {
+  if (plugin.providerType === 'tpexApi' && plugin.id && plugin.version) {
+    return {
+      source: `tpex:${plugin.id}@${plugin.version}`,
+      hintType: PluginProviderType.TPEX
+    }
+  }
+
+  if (plugin.install?.type === 'npm') {
+    const npmInstall = plugin.install as {
+      type: 'npm'
+      packageName?: string
+      version?: string
+      registry?: string
+      distTag?: string
+    }
+    const packageName = readTrimmedString(npmInstall.packageName)
+    if (!packageName) {
+      return null
+    }
+
+    const version = readTrimmedString(npmInstall.version) ?? readTrimmedString(plugin.version)
+    const distTag =
+      readTrimmedString(npmInstall.distTag) ?? readTrimmedString(plugin.metadata?.distTag)
+    const registry =
+      readTrimmedString(npmInstall.registry) ?? readTrimmedString(plugin.metadata?.registry)
+
+    let source: string
+    try {
+      source = formatNpmPluginSource(packageName, version ?? distTag)
+    } catch {
+      throw new Error('PLUGIN_SOURCE_INVALID')
+    }
+
+    return {
+      source,
+      hintType: PluginProviderType.NPM,
+      ...(registry ? { registry } : {})
+    }
+  }
+
+  let url: string | undefined
+  if (typeof plugin.downloadUrl === 'string' && plugin.downloadUrl.length > 0) {
+    url = plugin.downloadUrl
+  } else if (plugin.install?.type === 'url' && plugin.install.url) {
+    url = plugin.install.url
+  }
+
+  if (url) {
+    const resolvedUrl = url.startsWith('/api/') ? `${authBaseUrl}${url}` : url
+    return {
+      source: resolvedUrl,
+      hintType: isGithubUrl(resolvedUrl) ? PluginProviderType.GITHUB : undefined
+    }
+  }
+
+  if (plugin.install?.type === 'git' && plugin.install.repo) {
+    const repo = plugin.install.repo.replace(/\/+$/, '').replace(/\.git$/i, '')
+    const ref = plugin.install.ref?.trim()
+    if (isGithubUrl(repo)) {
+      return {
+        source: ref ? `${repo}/tree/${encodeURIComponent(ref)}` : repo,
+        hintType: PluginProviderType.GITHUB
+      }
+    }
+    return {
+      source: repo
+    }
+  }
+
+  return null
+}
+
 /**
  * Composable for managing plugin installation
  * Handles plugin installation flow and status tracking
@@ -91,31 +188,6 @@ export function useStoreInstall() {
     return confirmed
   }
 
-  function resolveDownloadUrl(plugin: StorePluginListItem): string | undefined {
-    let url: string | undefined
-
-    if (typeof plugin.downloadUrl === 'string' && plugin.downloadUrl.length > 0) {
-      url = plugin.downloadUrl
-    } else if (plugin.install?.type === 'url' && plugin.install.url) {
-      url = plugin.install.url
-    }
-
-    if (!url) return undefined
-
-    // If the URL is a relative path starting with /api/, prepend NEXUS_URL
-    if (url.startsWith('/api/')) {
-      return `${getAuthBaseUrl()}${url}`
-    }
-
-    return url
-  }
-
-  function readTrimmedString(value: unknown): string | undefined {
-    if (typeof value !== 'string') return undefined
-    const trimmed = value.trim()
-    return trimmed.length > 0 ? trimmed : undefined
-  }
-
   function buildInstallPayload(
     plugin: StorePluginListItem,
     options?: InstallOptions
@@ -128,31 +200,23 @@ export function useStoreInstall() {
         registry?: string
         distTag?: string
       }
+      const target = resolveStoreInstallTarget(plugin, getAuthBaseUrl())
       const packageName = readTrimmedString(npmInstall.packageName)
-      if (!packageName) {
+      if (!target || !packageName) {
         throw new Error('STORE_INSTALL_NO_SOURCE')
       }
 
       const version = readTrimmedString(npmInstall.version) ?? readTrimmedString(plugin.version)
       const distTag =
         readTrimmedString(npmInstall.distTag) ?? readTrimmedString(plugin.metadata?.distTag)
-      const registry =
-        readTrimmedString(npmInstall.registry) ?? readTrimmedString(plugin.metadata?.registry)
-
-      let source: string
-      try {
-        source = formatNpmPluginSource(packageName, version ?? distTag)
-      } catch {
-        throw new Error('PLUGIN_SOURCE_INVALID')
-      }
 
       return {
-        source,
+        source: target.source,
         hintType: PluginProviderType.NPM,
         metadata: {
           packageName,
           ...(version ? { version } : {}),
-          ...(registry ? { registry } : {}),
+          ...(target.registry ? { registry: target.registry } : {}),
           ...(distTag ? { distTag } : {}),
           ...(plugin.metadata?.officialScope !== undefined
             ? { officialScope: Boolean(plugin.metadata.officialScope) }
@@ -176,28 +240,24 @@ export function useStoreInstall() {
       }
     }
 
-    const downloadUrl = resolveDownloadUrl(plugin)
-    if (!downloadUrl) {
+    const target = resolveStoreInstallTarget(plugin, getAuthBaseUrl())
+    if (!target) {
       throw new Error('STORE_INSTALL_NO_SOURCE')
     }
 
-    const registrySource =
-      plugin.providerType === 'tpexApi' && plugin.id && plugin.version
-        ? `tpex:${plugin.id}@${plugin.version}`
-        : null
-
     return {
-      source: registrySource ?? downloadUrl,
-      hintType: registrySource ? PluginProviderType.TPEX : undefined,
+      source: target.source,
+      hintType: target.hintType,
       metadata: {
         officialId: plugin.id,
         officialVersion: plugin.version,
-        officialSource: 'talex-touch/tuff-official-plugins',
+        officialSource: plugin.official === true ? 'talex-touch/tuff-official-plugins' : undefined,
         official: plugin.official === true,
         channel: plugin.metadata?.channel,
         providerId: plugin.providerId,
         providerName: plugin.providerName,
         providerType: plugin.providerType,
+        ...(target.registry ? { registry: target.registry } : {}),
         // Upgrade options
         forceUpdate: options?.isUpgrade ?? false,
         autoReEnable: options?.autoReEnable ?? true

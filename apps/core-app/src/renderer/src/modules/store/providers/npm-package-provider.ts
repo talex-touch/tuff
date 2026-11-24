@@ -234,7 +234,7 @@ function resolveCacheTtlMs(definition: StoreProviderDefinition): number {
  * Configuration:
  * - config.registryUrl || url: NPM registry URL (default: https://registry.npmjs.org)
  * - config.scope: Optional npm scope to filter (e.g. `@talex-touch` or `talex-touch`)
- * - config.keyword: Discovery keyword (default: `tuff-plugin`)
+ * - config.keyword / config.keywords: Discovery keyword(s) (default: `tuff-plugin`)
  * - config.distTag: Preferred dist-tag (default: `latest`)
  * - config.cacheTtlMs: Optional TTL cache duration in ms (default: 300000)
  */
@@ -254,8 +254,28 @@ export class NpmPackageProvider extends BaseStoreProvider {
     return readTrimmedString(this.definition.config?.distTag) ?? 'latest'
   }
 
-  private resolveDiscoveryKeyword(): string {
-    return readTrimmedString(this.definition.config?.keyword) ?? NPM_PLUGIN_CANONICAL_KEYWORD
+  private resolveDiscoveryKeywords(): string[] {
+    const keywords: string[] = []
+    const configuredList = this.definition.config?.keywords
+    if (Array.isArray(configuredList)) {
+      for (const item of configuredList) {
+        const trimmed = readTrimmedString(item)
+        if (trimmed) {
+          keywords.push(trimmed)
+        }
+      }
+    }
+
+    const singleKeyword = readTrimmedString(this.definition.config?.keyword)
+    if (singleKeyword) {
+      keywords.push(singleKeyword)
+    }
+
+    if (keywords.length === 0) {
+      return [NPM_PLUGIN_CANONICAL_KEYWORD]
+    }
+
+    return Array.from(new Set(keywords))
   }
 
   private resolveScope(): string | undefined {
@@ -270,7 +290,7 @@ export class NpmPackageProvider extends BaseStoreProvider {
    */
   async list(options: StoreProviderListOptions = {}): Promise<StorePlugin[]> {
     const registry = this.resolveRegistryUrl()
-    const discoveryKeyword = this.resolveDiscoveryKeyword()
+    const discoveryKeywords = this.resolveDiscoveryKeywords()
     const queryKeyword = readTrimmedString(options.keyword)
     const scope = this.resolveScope()
     const distTag = this.resolveDistTag()
@@ -279,7 +299,7 @@ export class NpmPackageProvider extends BaseStoreProvider {
 
     const cacheKey = JSON.stringify({
       registry,
-      discoveryKeyword,
+      discoveryKeywords,
       queryKeyword: queryKeyword ?? '',
       scope: scope ?? '',
       distTag
@@ -293,14 +313,45 @@ export class NpmPackageProvider extends BaseStoreProvider {
       }
     }
 
-    const packages = await this.searchPackages({
-      registry,
-      discoveryKeyword,
-      queryKeyword,
-      scope
-    })
+    const searchKeywords =
+      queryKeyword && isTuffNpmDiscoveryKeyword(queryKeyword) ? [queryKeyword] : discoveryKeywords
+    const extraQuery =
+      queryKeyword && !isTuffNpmDiscoveryKeyword(queryKeyword) ? queryKeyword : undefined
 
-    const limitedPackages = packages.slice(0, MAX_SEARCH_PACKAGES)
+    const settledSearches = await Promise.allSettled(
+      searchKeywords.map((discoveryKeyword) =>
+        this.searchPackages({
+          registry,
+          discoveryKeyword,
+          extraQuery,
+          scope
+        })
+      )
+    )
+
+    const mergedPackages = new Map<string, NpmSearchPackage>()
+    let succeededCount = 0
+    let firstError: unknown = null
+
+    for (const result of settledSearches) {
+      if (result.status === 'fulfilled') {
+        succeededCount += 1
+        for (const pkg of result.value) {
+          if (!mergedPackages.has(pkg.name)) {
+            mergedPackages.set(pkg.name, pkg)
+          }
+        }
+      } else if (!firstError) {
+        firstError = result.reason
+      }
+    }
+
+    if (succeededCount === 0 && firstError) {
+      npmPackageProviderLog.error('Failed to search NPM packages:', firstError)
+      throw firstError
+    }
+
+    const limitedPackages = Array.from(mergedPackages.values()).slice(0, MAX_SEARCH_PACKAGES)
     const resolvedPlugins = await mapWithConcurrency(
       limitedPackages,
       MAX_PACKUMENT_CONCURRENCY,
@@ -335,18 +386,14 @@ export class NpmPackageProvider extends BaseStoreProvider {
   private async searchPackages(params: {
     registry: string
     discoveryKeyword: string
-    queryKeyword?: string
+    extraQuery?: string
     scope?: string
   }): Promise<NpmSearchPackage[]> {
-    const { registry, discoveryKeyword, queryKeyword, scope } = params
-    const effectiveDiscoveryKeyword =
-      queryKeyword && isTuffNpmDiscoveryKeyword(queryKeyword) ? queryKeyword : discoveryKeyword
-    const extraQuery =
-      queryKeyword && !isTuffNpmDiscoveryKeyword(queryKeyword) ? queryKeyword : undefined
+    const { registry, discoveryKeyword, extraQuery, scope } = params
 
     const searchTerms = [
       scope ? `scope:${scope}` : '',
-      `keywords:${effectiveDiscoveryKeyword}`,
+      `keywords:${discoveryKeyword}`,
       extraQuery ?? ''
     ]
       .filter(Boolean)
@@ -368,8 +415,8 @@ export class NpmPackageProvider extends BaseStoreProvider {
     }
 
     const objects = Array.isArray(response.data?.objects) ? response.data.objects : []
-    const isStandardDiscovery = isTuffNpmDiscoveryKeyword(effectiveDiscoveryKeyword)
-    const normalizedDiscoveryLower = effectiveDiscoveryKeyword.toLowerCase()
+    const isStandardDiscovery = isTuffNpmDiscoveryKeyword(discoveryKeyword)
+    const normalizedDiscoveryLower = discoveryKeyword.toLowerCase()
     const seen = new Set<string>()
     const packages: NpmSearchPackage[] = []
 

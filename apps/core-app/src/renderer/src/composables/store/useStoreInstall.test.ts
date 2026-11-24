@@ -267,4 +267,144 @@ describe('useStoreInstall', () => {
       expect.any(Array)
     )
   })
+
+  it('dispatches GitHub git-fallback plugins with GITHUB hintType via handleInstall', async () => {
+    const { useStoreInstall } = await import('./useStoreInstall')
+    const { handleInstall } = useStoreInstall()
+
+    await handleInstall({
+      id: 'github:alice/tuff-plugin-hello',
+      name: 'Hello',
+      version: '1.0.0',
+      install: {
+        type: 'git',
+        repo: 'https://github.com/alice/tuff-plugin-hello',
+        ref: 'v1.0.0'
+      },
+      providerId: 'github-releases',
+      providerName: 'GitHub',
+      providerType: 'repository',
+      providerTrustLevel: 'unverified',
+      trusted: false,
+      official: false
+    })
+
+    expect(mockState.installFromSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'https://github.com/alice/tuff-plugin-hello/tree/v1.0.0',
+        hintType: PluginProviderType.GITHUB,
+        metadata: expect.objectContaining({
+          official: false,
+          officialSource: undefined,
+          providerType: 'repository'
+        })
+      })
+    )
+  })
+})
+
+describe('resolveStoreInstallTarget', () => {
+  it('routes tpexApi plugins to tpex registry source', async () => {
+    const { resolveStoreInstallTarget } = await import('./useStoreInstall')
+    const target = resolveStoreInstallTarget(
+      {
+        id: 'clipboard-history',
+        name: 'Clipboard History',
+        version: '1.2.0',
+        downloadUrl: 'https://tuff.tagzxia.com/downloads/clipboard-history.tpex',
+        providerId: 'tuff-nexus',
+        providerName: 'Tuff Nexus',
+        providerType: 'tpexApi',
+        providerTrustLevel: 'official',
+        trusted: true
+      },
+      'https://tuff.tagzxia.com'
+    )
+
+    expect(target).toEqual({
+      source: 'tpex:clipboard-history@1.2.0',
+      hintType: PluginProviderType.TPEX
+    })
+  })
+
+  it('routes npmPackage plugins through NpmPluginProvider with optional custom registry', async () => {
+    const { resolveStoreInstallTarget } = await import('./useStoreInstall')
+    const target = resolveStoreInstallTarget(
+      {
+        id: 'npm:@tuff/demo',
+        name: '@tuff/demo',
+        version: '0.5.0',
+        downloadUrl: 'https://registry.npmmirror.com/@tuff/demo/-/demo-0.5.0.tgz',
+        install: {
+          type: 'npm',
+          packageName: '@tuff/demo',
+          version: '0.5.0',
+          registry: 'https://registry.npmmirror.com'
+        },
+        providerId: 'npm-scope',
+        providerName: 'NPM Mirror',
+        providerType: 'npmPackage',
+        providerTrustLevel: 'unverified',
+        trusted: false
+      },
+      'https://tuff.tagzxia.com'
+    )
+
+    expect(target).toEqual({
+      source: 'npm:@tuff/demo@0.5.0',
+      hintType: PluginProviderType.NPM,
+      registry: 'https://registry.npmmirror.com'
+    })
+  })
+
+  it('routes GitHub repository plugins with git fallback when no release asset exists', async () => {
+    const { resolveStoreInstallTarget } = await import('./useStoreInstall')
+    const target = resolveStoreInstallTarget(
+      {
+        id: 'github:alice/tuff-plugin-hello',
+        name: 'Hello',
+        version: '1.0.0',
+        install: {
+          type: 'git',
+          repo: 'https://github.com/alice/tuff-plugin-hello',
+          ref: 'v1.0.0'
+        },
+        providerId: 'github-releases',
+        providerName: 'GitHub',
+        providerType: 'repository',
+        providerTrustLevel: 'unverified',
+        trusted: false
+      },
+      'https://tuff.tagzxia.com'
+    )
+
+    expect(target).toEqual({
+      source: 'https://github.com/alice/tuff-plugin-hello/tree/v1.0.0',
+      hintType: PluginProviderType.GITHUB
+    })
+  })
+
+  it('routes GitHub release download URLs with GITHUB hintType', async () => {
+    const { resolveStoreInstallTarget } = await import('./useStoreInstall')
+    const target = resolveStoreInstallTarget(
+      {
+        id: 'github:alice/tuff-plugin-hello',
+        name: 'Hello',
+        version: '1.1.0',
+        downloadUrl:
+          'https://github.com/alice/tuff-plugin-hello/releases/download/v1.1.0/hello.tpex',
+        providerId: 'github-releases',
+        providerName: 'GitHub',
+        providerType: 'repository',
+        providerTrustLevel: 'unverified',
+        trusted: false
+      },
+      'https://tuff.tagzxia.com'
+    )
+
+    expect(target).toEqual({
+      source: 'https://github.com/alice/tuff-plugin-hello/releases/download/v1.1.0/hello.tpex',
+      hintType: PluginProviderType.GITHUB
+    })
+  })
 })

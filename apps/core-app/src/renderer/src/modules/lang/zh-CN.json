@@ -3428,18 +3428,68 @@
     "docsOpen": "打开 Nexus 文档",
     "sourceEditor": {
       "removeSource": "移除源 {name}",
+      "editSource": "编辑源 {name}",
+      "toggleSource": "切换源 {name}",
       "title": "来源",
-      "subtitle": "编辑插件市场来源",
+      "subtitle": "管理插件市场来源与拉取优先级",
+      "summary": "已启用 {enabled} / {total} 个来源",
+      "summaryHint": "拖拽可调整优先级，可随时开启 GitHub 或 NPM 社区渠道",
       "addSource": "新增来源",
+      "restoreDefaults": "恢复默认",
       "addDialogTitle": "新增来源",
+      "editDialogTitle": "编辑来源",
+      "presetsLabel": "快捷预设",
+      "presets": {
+        "githubTopics": "GitHub 社区",
+        "githubRepo": "GitHub 仓库",
+        "npmOfficial": "NPM 官方源",
+        "npmMirror": "NPM 国内镜像",
+        "tpexApi": "Tpex API"
+      },
       "cancel": "取消",
       "add": "新增",
-      "namePlaceholder": "来源名称",
-      "urlPlaceholder": "来源地址",
+      "save": "保存",
+      "edit": "编辑",
+      "remove": "移除",
+      "nameLabel": "来源名称",
+      "typeLabel": "来源类型",
+      "urlLabel": "来源地址",
+      "keywordLabel": "搜索关键词 / Topic",
+      "scopeLabel": "Scope（可选）",
+      "namePlaceholder": "例如：NPM 国内镜像",
+      "urlPlaceholder": "输入来源地址",
+      "urlPlaceholders": {
+        "tpexApi": "https://tuff.tagzxia.com",
+        "nexusStore": "https://example.com/api/store/plugins",
+        "repository": "https://github.com/owner/repo 或 https://github.com/topics/tuff-plugin",
+        "npmPackage": "https://registry.npmjs.org"
+      },
+      "keywordPlaceholder": "默认：tuff-plugin",
+      "scopePlaceholder": "例如：@tuff-plugins",
+      "urlHints": {
+        "tpexApi": "填写 Tpex/Nexus 站点根地址，客户端会自动请求 /api/store/plugins。",
+        "nexusStore": "填写兼容 Nexus Store 的插件目录接口地址。",
+        "repository": "支持单个仓库（owner/repo）、GitHub Topics 发现页或组织主页。",
+        "npmPackage": "填写 NPM Registry 地址（支持 npmmirror 等兼容镜像），按关键词发现插件包。"
+      },
+      "validation": {
+        "nameRequired": "请填写来源名称",
+        "urlRequired": "请填写来源地址",
+        "urlInvalid": "请输入有效的 http(s) 地址，仓库类型也可使用 owner/repo"
+      },
+      "noUrl": "未配置地址",
+      "dragToReorder": "拖拽调整优先级",
+      "readonlyTooltip": "官方只读来源不可移除",
       "outdatedSection": "过时来源",
       "outdatedHiddenHint": "已隐藏 {count} 个过时来源，启用高级设置后可查看",
+      "officialBadge": "官方",
+      "builtinBadge": "默认",
       "readonlyBadge": "只读",
       "outdatedBadge": "过时",
+      "statusFailed": "连接异常",
+      "keywordMeta": "关键词：{keyword}",
+      "topicMeta": "Topic：{topic}",
+      "scopeMeta": "Scope：{scope}",
       "providerTypes": {
         "tpexApi": "Tpex API",
         "nexusStore": "Nexus Store",
@@ -3725,7 +3775,8 @@
       "unreadable": "来源返回的数据无法识别。",
       "legacyManifest": "这个来源使用的旧版目录格式已不再支持。",
       "packageUrlMissing": "这个来源里有插件缺少下载地址。",
-      "unreachable": "无法连接这个来源，请检查网络后重试。"
+      "unreachable": "无法连接这个来源，请检查网络后重试。",
+      "rateLimited": "GitHub API 请求频率受限，请稍后重试。"
     }
   },
   "auth": {
