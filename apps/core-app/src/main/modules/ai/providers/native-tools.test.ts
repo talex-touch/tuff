@@ -74,6 +74,43 @@ describe('ToolCallAssembler', () => {
     expect(assembler.pushMessageChunk({ tool_call_chunks: 'not an array' })).toEqual([])
     expect(assembler.finish()).toEqual([])
   })
+
+  it('keeps parallel calls apart when a proxy omits index or reuses index 0 with distinct ids', () => {
+    const assembler = new ToolCallAssembler()
+    const startedA = assembler.pushMessageChunk(
+      chunk({ index: 0, id: 'call_1', name: 'browser__search', args: '{"query":' })
+    )
+    assembler.pushMessageChunk(chunk({ index: 0, args: '"QUIC"}' }))
+    const startedB = assembler.pushMessageChunk(
+      chunk({ index: 0, id: 'call_2', name: 'browser__extract', args: '{"url":' })
+    )
+    assembler.pushMessageChunk(
+      chunk({ index: 0, args: '"https://www.rfc-editor.org/rfc/rfc9001.html"}' })
+    )
+    const startedC = assembler.pushMessageChunk(
+      chunk({ id: 'call_3', name: 'browser__extract', args: '{"url":' })
+    )
+    assembler.pushMessageChunk(chunk({ args: '"https://www.rfc-editor.org/rfc/rfc9000.html"}' }))
+
+    expect([...startedA, ...startedB, ...startedC]).toEqual([
+      { kind: 'tool-start', callId: 'call_1', name: 'browser.search' },
+      { kind: 'tool-start', callId: 'call_2', name: 'browser.extract' },
+      { kind: 'tool-start', callId: 'call_3', name: 'browser.extract' }
+    ])
+    expect(assembler.finish()).toEqual([
+      { kind: 'tool-input-end', callId: 'call_1', input: { query: 'QUIC' } },
+      {
+        kind: 'tool-input-end',
+        callId: 'call_2',
+        input: { url: 'https://www.rfc-editor.org/rfc/rfc9001.html' }
+      },
+      {
+        kind: 'tool-input-end',
+        callId: 'call_3',
+        input: { url: 'https://www.rfc-editor.org/rfc/rfc9000.html' }
+      }
+    ])
+  })
 })
 
 describe('parseToolArguments', () => {

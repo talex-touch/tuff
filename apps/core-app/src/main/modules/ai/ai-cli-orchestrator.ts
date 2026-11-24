@@ -37,8 +37,10 @@ import type { PiWorkspaceAuthority } from './pi-agent-runtime-host'
 import type {
   PiRuntimeResume,
   PiRuntimeRunEvent,
-  PiRuntimeRunRecord
+  PiRuntimeRunRecord,
+  PiRuntimeSteerItem
 } from './pi-agent-runtime-protocol'
+import type { IntelligenceMessageAttachment } from '@talex-touch/utils/types/intelligence'
 import type {
   CliExecuteRuntimeOptions,
   CliPermissionDecision,
@@ -305,6 +307,8 @@ function projectPiEvent(
       return { updateType: 'thinking_delta' }
     case 'text':
       return { updateType: 'text_delta' }
+    case 'steer_consumed':
+      return { steerConsumed: true }
     case 'tool_execution_start':
     case 'tool_execution_update':
     case 'tool_execution_end': {
@@ -2231,6 +2235,15 @@ export class AiCliOrchestrator {
       return true
     }
     return false
+  }
+
+  /** Sync pending mid-turn steer items into an active Pi runtime run (next tool/step boundary). */
+  syncRunSteers(
+    runId: string,
+    items: PiRuntimeSteerItem[],
+    attachmentsById?: ReadonlyMap<string, IntelligenceMessageAttachment[]>
+  ): boolean {
+    return this.runtimeHost.syncSteers(runId, items, attachmentsById)
   }
 
   getRunWorktreeLease(runId: string): WorktreeLease | undefined {

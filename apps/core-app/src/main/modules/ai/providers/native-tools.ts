@@ -102,6 +102,46 @@ export function parseToolArguments(raw: string): Record<string, unknown> {
  */
 export class ToolCallAssembler {
   private readonly calls = new Map<number, { id: string; name: string; args: string }>()
+  private readonly reassignedIndex = new Map<number, number>()
+  private nextFallbackIndex = 0
+  private lastIndex = 0
+
+  private allocateFallbackIndex(): number {
+    while (this.calls.has(this.nextFallbackIndex)) {
+      this.nextFallbackIndex += 1
+    }
+    const assigned = this.nextFallbackIndex
+    this.nextFallbackIndex += 1
+    return assigned
+  }
+
+  private resolveSlotIndex(rawIndex: number | undefined, fragmentId: string): number {
+    if (rawIndex === undefined) {
+      if (!fragmentId) return this.lastIndex
+      for (const [slotIndex, existing] of this.calls.entries()) {
+        if (existing.id === fragmentId) return slotIndex
+      }
+      const existingAtZero = this.calls.get(0)
+      return !existingAtZero || !existingAtZero.id ? 0 : this.allocateFallbackIndex()
+    }
+
+    const mapped = this.reassignedIndex.get(rawIndex) ?? rawIndex
+    const existing = this.calls.get(mapped)
+    // Some OpenAI-compatible gateways omit `index` or reuse `index: 0` across parallel calls in
+    // one turn; a new distinct call id starts a new slot rather than clobbering the previous one.
+    if (existing && fragmentId && existing.id && existing.id !== fragmentId) {
+      for (const [slotIndex, candidate] of this.calls.entries()) {
+        if (candidate.id === fragmentId) {
+          this.reassignedIndex.set(rawIndex, slotIndex)
+          return slotIndex
+        }
+      }
+      const allocated = this.allocateFallbackIndex()
+      this.reassignedIndex.set(rawIndex, allocated)
+      return allocated
+    }
+    return mapped
+  }
 
   /** Feeds one streamed LangChain message chunk; a chunk with no tool-call fragments is ignored. */
   pushMessageChunk(chunk: unknown): IntelligencePartEvent[] {
@@ -112,15 +152,19 @@ export class ToolCallAssembler {
     const events: IntelligencePartEvent[] = []
     for (const fragment of fragments) {
       if (fragment === null || typeof fragment !== 'object') continue
-      const index = 'index' in fragment && typeof fragment.index === 'number' ? fragment.index : 0
+      const fragmentId = 'id' in fragment && typeof fragment.id === 'string' ? fragment.id : ''
+      const rawIndex =
+        'index' in fragment && typeof fragment.index === 'number' ? fragment.index : undefined
+      const index = this.resolveSlotIndex(rawIndex, fragmentId)
+      this.lastIndex = index
       let call = this.calls.get(index)
       if (!call) {
         call = { id: '', name: '', args: '' }
         this.calls.set(index, call)
       }
       const wasStarted = call.id !== '' && call.name !== ''
-      if ('id' in fragment && typeof fragment.id === 'string' && fragment.id) {
-        call.id = fragment.id
+      if (fragmentId) {
+        call.id = fragmentId
       }
       if ('name' in fragment && typeof fragment.name === 'string' && fragment.name) {
         call.name = fragment.name
@@ -142,6 +186,9 @@ export class ToolCallAssembler {
       events.push({ kind: 'tool-input-end', callId: call.id, input: parseToolArguments(call.args) })
     }
     this.calls.clear()
+    this.reassignedIndex.clear()
+    this.nextFallbackIndex = 0
+    this.lastIndex = 0
     return events
   }
 }

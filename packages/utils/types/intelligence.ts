@@ -721,6 +721,12 @@ export type IntelligencePartEvent =
       output: string
       isError: boolean
     }
+  | {
+      kind: 'steer-injected'
+      steerId: string
+      text: string
+      createdAt?: number
+    }
 
 export interface IntelligenceStreamChunk {
   /** Content delta. */
@@ -2749,6 +2755,13 @@ export interface IntelligenceProviderAdapter {
    * tools in the prompt instead.
    */
   readonly supportsNativeTools?: boolean
+  /**
+   * Per-call override for `supportsNativeTools`, for providers whose wire depends on how the turn
+   * is routed (for example, `PiCliProvider` reuses an HTTP API endpoint under non-CLI schedulers
+   * and only spawns a CLI binary under its own scheduler). When present, this takes precedence
+   * over `supportsNativeTools`.
+   */
+  supportsNativeToolsFor?: (options: IntelligenceInvokeOptions) => boolean
   /** Get provider configuration. */
   getConfig: () => IntelligenceProviderConfig
   /** Update provider configuration. */

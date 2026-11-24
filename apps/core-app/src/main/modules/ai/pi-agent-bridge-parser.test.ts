@@ -1,9 +1,16 @@
+import { createAssistantMessageEventStream } from '@earendil-works/pi-ai'
 import { describe, expect, it } from 'vitest'
 import { PiModelStreamBuffer } from './pi-model-stream-buffer'
-import { parseBridgeResponse } from './pi-agent-runtime-worker'
+import { emitModelResponse, parseBridgeResponse } from './pi-agent-runtime-worker'
 
 describe('pi-agent bridge response parsing and repairs', () => {
-  const toolNames = new Set(['system.exec', 'bash', 'file.write', 'browser.search'])
+  const toolNames = new Set([
+    'system.exec',
+    'bash',
+    'file.write',
+    'browser.search',
+    'browser.extract'
+  ])
 
   it('parses valid tool call JSON', () => {
     const input = JSON.stringify({
@@ -167,9 +174,167 @@ print('writing file')
       '示例:{"type":"tool","name":"system.exec","arguments":{"command":"ls"}} 这就是格式。'
     expect(parseBridgeResponse(prose, toolNames)).toEqual({ type: 'final', text: prose })
   })
+
+  it('parses multiple space-separated tool directives from the screenshot regression without leaking text', async () => {
+    const reply =
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC 1-RTT handshake server can send application data 0.5 RTT client Finished transport parameters Initial TLS 1.3 TCP three-way handshake TLS RTT comparison","provider":"google","open":false}} ' +
+      '{"type":"tool","name":"browser.extract","arguments":{"url":"https://www.rfc-editor.org/rfc/rfc9001.html"}} ' +
+      '{"type":"tool","name":"browser.extract","arguments":{"url":"https://www.rfc-editor.org/rfc/rfc9000.html"}}'
+
+    const parsed = parseBridgeResponse(reply, toolNames)
+    expect(parsed).toEqual({
+      type: 'tool',
+      name: 'browser.search',
+      arguments: {
+        query:
+          'QUIC 1-RTT handshake server can send application data 0.5 RTT client Finished transport parameters Initial TLS 1.3 TCP three-way handshake TLS RTT comparison',
+        provider: 'google',
+        open: false
+      },
+      calls: [
+        {
+          name: 'browser.search',
+          arguments: {
+            query:
+              'QUIC 1-RTT handshake server can send application data 0.5 RTT client Finished transport parameters Initial TLS 1.3 TCP three-way handshake TLS RTT comparison',
+            provider: 'google',
+            open: false
+          }
+        },
+        {
+          name: 'browser.extract',
+          arguments: { url: 'https://www.rfc-editor.org/rfc/rfc9001.html' }
+        },
+        {
+          name: 'browser.extract',
+          arguments: { url: 'https://www.rfc-editor.org/rfc/rfc9000.html' }
+        }
+      ]
+    })
+
+    const stream = createAssistantMessageEventStream()
+    emitModelResponse(
+      stream,
+      { requestId: 'r1', runId: 'run_1', text: reply },
+      toolNames,
+      'run_1',
+      1
+    )
+    const message = await stream.result()
+    expect(message.stopReason).toBe('toolUse')
+    expect(message.content.filter((b) => b.type === 'text')).toEqual([])
+    expect(
+      message.content.filter((b) => b.type === 'toolCall').map((b) => [b.name, b.arguments])
+    ).toEqual([
+      [
+        'browser.search',
+        {
+          query:
+            'QUIC 1-RTT handshake server can send application data 0.5 RTT client Finished transport parameters Initial TLS 1.3 TCP three-way handshake TLS RTT comparison',
+          provider: 'google',
+          open: false
+        }
+      ],
+      ['browser.extract', { url: 'https://www.rfc-editor.org/rfc/rfc9001.html' }],
+      ['browser.extract', { url: 'https://www.rfc-editor.org/rfc/rfc9000.html' }]
+    ])
+  })
+
+  it('parses multi-tool replies separated by newlines, commas, fences, or wrapped in a JSON array', () => {
+    const fenced = [
+      '```json',
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}',
+      '```',
+      '```json',
+      '{"type":"tool","name":"browser.extract","arguments":{"url":"https://www.rfc-editor.org/rfc/rfc9000.html"}}',
+      '```'
+    ].join('\n')
+    expect(parseBridgeResponse(fenced, toolNames)).toMatchObject({
+      type: 'tool',
+      calls: [
+        { name: 'browser.search', arguments: { query: 'QUIC' } },
+        {
+          name: 'browser.extract',
+          arguments: { url: 'https://www.rfc-editor.org/rfc/rfc9000.html' }
+        }
+      ]
+    })
+
+    const jsonArray = JSON.stringify([
+      { type: 'tool', name: 'browser.search', arguments: { query: 'QUIC' } },
+      { type: 'tool', name: 'browser.extract', arguments: { url: 'https://example.com' } }
+    ])
+    expect(parseBridgeResponse(jsonArray, toolNames)).toMatchObject({
+      type: 'tool',
+      calls: [
+        { name: 'browser.search', arguments: { query: 'QUIC' } },
+        { name: 'browser.extract', arguments: { url: 'https://example.com' } }
+      ]
+    })
+
+    const commaSeparated =
+      '{"type":"tool","name":"browser.search","arguments":{"query":"a"}}, {"type":"tool","name":"browser.extract","arguments":{"url":"https://b"}}'
+    expect(parseBridgeResponse(commaSeparated, toolNames)).toMatchObject({
+      type: 'tool',
+      calls: [
+        { name: 'browser.search', arguments: { query: 'a' } },
+        { name: 'browser.extract', arguments: { url: 'https://b' } }
+      ]
+    })
+  })
+
+  it('never leaks a corrupted follow-up tool directive into user text', () => {
+    const reply =
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}} ' +
+      '{"type":"tool","name":"browser.extract", broken json'
+    const parsed = parseBridgeResponse(reply, toolNames)
+    expect(parsed.type).toBe('tool')
+    if (parsed.type === 'tool') {
+      expect(parsed.text).toBeUndefined()
+      expect(parsed.calls).toHaveLength(2)
+      expect(parsed.calls?.[0]).toEqual({ name: 'browser.search', arguments: { query: 'QUIC' } })
+      expect(parsed.calls?.[1]?.name).toBe('browser.extract')
+      expect(typeof parsed.calls?.[1]?.arguments.__invalidToolCall).toBe('string')
+    }
+  })
+
+  it('extracts standalone trailing tool directives after preamble prose without leaking JSON', () => {
+    const reply = [
+      '我先查一下 QUIC 1-RTT 握手的相关规范。',
+      '',
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC 1-RTT"}} {"type":"tool","name":"browser.extract","arguments":{"url":"https://www.rfc-editor.org/rfc/rfc9001.html"}}'
+    ].join('\n')
+
+    expect(parseBridgeResponse(reply, toolNames)).toEqual({
+      type: 'tool',
+      name: 'browser.search',
+      arguments: { query: 'QUIC 1-RTT' },
+      calls: [
+        { name: 'browser.search', arguments: { query: 'QUIC 1-RTT' } },
+        {
+          name: 'browser.extract',
+          arguments: { url: 'https://www.rfc-editor.org/rfc/rfc9001.html' }
+        }
+      ],
+      text: '我先查一下 QUIC 1-RTT 握手的相关规范。'
+    })
+  })
+
+  it('does not treat tool JSON inside an open markdown code block as a trailing call', () => {
+    const answer = [
+      '示例：',
+      '```json',
+      '{"note": "demo"}',
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}',
+      '```'
+    ].join('\n')
+    expect(parseBridgeResponse(answer, toolNames)).toEqual({ type: 'final', text: answer })
+  })
 })
 
 describe('PiModelStreamBuffer UI leak prevention', () => {
+  const toolNames = new Set(['system.exec', 'file.write', 'browser.search', 'browser.extract'])
+
   it('suppresses tool call JSON tokens from streaming into user bubble', () => {
     const deltas: string[] = []
     const buffer = new PiModelStreamBuffer((d) => deltas.push(d))
@@ -192,6 +357,76 @@ describe('PiModelStreamBuffer UI leak prevention', () => {
     buffer.complete()
 
     expect(deltas).toEqual([])
+  })
+
+  it('suppresses JSON array and alternate-key-order tool calls at stream start', () => {
+    const arrayDeltas: string[] = []
+    const arrayBuffer = new PiModelStreamBuffer((d) => arrayDeltas.push(d), { toolNames })
+    arrayBuffer.pushDelta('[{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}]')
+    arrayBuffer.complete()
+    expect(arrayDeltas).toEqual([])
+
+    const altDeltas: string[] = []
+    const altBuffer = new PiModelStreamBuffer((d) => altDeltas.push(d), { toolNames })
+    altBuffer.pushDelta('{"name":"browser.search","type":"tool","arguments":{"query":"QUIC"}}')
+    altBuffer.complete()
+    expect(altDeltas).toEqual([])
+  })
+
+  it('suppresses trailing tool directives after preamble prose across multi-chunk and single-chunk streams', () => {
+    const payload =
+      '我先查一下 QUIC 1-RTT 握手。\n\n' +
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}} ' +
+      '{"type":"tool","name":"browser.extract","arguments":{"url":"https://www.rfc-editor.org/rfc/rfc9001.html"}}'
+
+    // Single chunk
+    const singleDeltas: string[] = []
+    const singleBuffer = new PiModelStreamBuffer((d) => singleDeltas.push(d), { toolNames })
+    singleBuffer.pushDelta(payload)
+    singleBuffer.complete()
+    expect(singleDeltas.join('')).toBe('我先查一下 QUIC 1-RTT 握手。')
+
+    // Character-by-character chunks
+    const charDeltas: string[] = []
+    const charBuffer = new PiModelStreamBuffer((d) => charDeltas.push(d), { toolNames })
+    for (const ch of payload) charBuffer.pushDelta(ch)
+    charBuffer.complete()
+    expect(charDeltas.join('')).toBe('我先查一下 QUIC 1-RTT 握手。')
+  })
+
+  it('flushes documentation answers that quote tool envelopes intact', () => {
+    const doc = [
+      '## 工具调用约定',
+      '需要工具时,只回复一个 JSON 对象:',
+      '```json',
+      '{"type":"tool","name":"tool.name","arguments":{}}',
+      '```',
+      '不需要工具时直接回复纯文本。'
+    ].join('\n')
+
+    const deltas: string[] = []
+    const buffer = new PiModelStreamBuffer((d) => deltas.push(d), { toolNames })
+    for (let i = 0; i < doc.length; i += 7) {
+      buffer.pushDelta(doc.slice(i, i + 7))
+    }
+    buffer.complete()
+
+    expect(deltas.join('')).toBe(doc)
+  })
+
+  it('preserves non-json code blocks containing tool JSON examples', () => {
+    const doc = [
+      '```text',
+      '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}}',
+      '```'
+    ].join('\n')
+
+    const deltas: string[] = []
+    const buffer = new PiModelStreamBuffer((d) => deltas.push(d), { toolNames })
+    buffer.pushDelta(doc)
+    buffer.complete()
+
+    expect(deltas.join('')).toBe(doc)
   })
 
   it('flushes and streams plain conversation text directly to user bubble', () => {

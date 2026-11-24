@@ -11,7 +11,8 @@ import type {
   IntelligenceMessage,
   IntelligenceMessageAttachment,
   IntelligenceMessageToolCall,
-  IntelligenceReasoningEffort
+  IntelligenceReasoningEffort,
+  IntelligenceReasoningEffortDecision
 } from '@talex-touch/utils/types/intelligence'
 
 import type { UtilityProcess } from 'electron'
@@ -24,6 +25,7 @@ import type {
   PiRuntimeRunEvent,
   PiRuntimeRunResult,
   PiRuntimeStartPayload,
+  PiRuntimeSteerItem,
   PiRuntimeToolRequest,
   PiRuntimeToolResponse
 } from './pi-agent-runtime-protocol'
@@ -71,6 +73,7 @@ export interface PiWorkspaceAuthority {
   readonly modelAttachments?: IntelligenceMessageAttachment[]
   readonly assertAuthority: () => Promise<void>
   readonly onRunCreated?: (run: AiOrchestratorRunRecord) => Promise<void>
+  readonly onRunActive?: (runId: string) => Promise<void> | void
   readonly onRunResult?: (run: AiOrchestratorRunRecord, failureDetail?: string) => Promise<void>
   readonly onEvent?: (event: PiRuntimeRunEvent) => Promise<void>
 }
@@ -111,6 +114,8 @@ interface ActiveRunContext {
    * too would append the answer twice. Reset by each model request, consumed by the first replay.
    */
   textStreamedByHost: boolean
+  /** Main-side attachments keyed by steer id; image bytes stay in Main and never cross worker IPC. */
+  steerAttachments: Map<string, IntelligenceMessageAttachment[]>
 }
 
 export interface PiAgentRuntimeHostOptions {
@@ -425,21 +430,37 @@ function toChatTools(tools: PiRuntimeModelRequest['tools']): IntelligenceChatToo
  */
 function normalizeModelMessages(
   request: PiRuntimeModelRequest,
-  modelAttachments?: IntelligenceMessageAttachment[]
+  modelAttachments?: IntelligenceMessageAttachment[],
+  steerAttachments?: ReadonlyMap<string, IntelligenceMessageAttachment[]>
 ): IntelligenceMessage[] {
   const messages: IntelligenceMessage[] = []
   if (request.systemPrompt.trim()) {
     messages.push({ role: 'system', content: request.systemPrompt.trim() })
   }
 
-  const lastUser = request.messages.findLastIndex(
-    (raw) => raw !== null && typeof raw === 'object' && 'role' in raw && raw.role === 'user'
+  // Bind the turn's own attachments to the last non-steer user prompt so mid-turn steer messages
+  // never hijack the initial turn's images. Steer messages carry their own attachments by steerId.
+  const lastPromptUser = request.messages.findLastIndex(
+    (raw) =>
+      raw !== null &&
+      typeof raw === 'object' &&
+      'role' in raw &&
+      raw.role === 'user' &&
+      !('steerId' in raw && typeof raw.steerId === 'string' && raw.steerId.length > 0)
   )
   for (const [index, raw] of request.messages.entries()) {
     if (raw === null || typeof raw !== 'object' || !('role' in raw)) continue
     const content = 'content' in raw ? raw.content : undefined
     if (raw.role === 'system' || raw.role === 'user') {
-      const attachments = index === lastUser ? modelAttachments : undefined
+      const steerId =
+        'steerId' in raw && typeof raw.steerId === 'string' && raw.steerId.length > 0
+          ? raw.steerId
+          : undefined
+      const attachments = steerId
+        ? steerAttachments?.get(steerId)
+        : index === lastPromptUser
+          ? modelAttachments
+          : undefined
       messages.push({
         role: raw.role,
         content: textFromContent(content),
@@ -657,7 +678,8 @@ export class PiAgentRuntimeHost {
         pendingEvents: Promise.resolve(),
         usageLimitRefused: false,
         modelFailureDetail: undefined,
-        textStreamedByHost: false
+        textStreamedByHost: false,
+        steerAttachments: new Map()
       })
       try {
         this.post({ type: 'run.start', payload })
@@ -670,6 +692,12 @@ export class PiAgentRuntimeHost {
         clearTimeout(timeout)
         this.activeRuns.delete(payload.run.id)
         reject(error instanceof Error ? error : new Error(String(error)))
+        return
+      }
+      if (workspace?.onRunActive) {
+        void Promise.resolve()
+          .then(() => workspace.onRunActive?.(payload.run.id))
+          .catch(() => undefined)
       }
     })
   }
@@ -680,6 +708,30 @@ export class PiAgentRuntimeHost {
     context.controller.abort()
     if (this.child) this.post({ type: 'run.cancel', runId })
     return true
+  }
+
+  /**
+   * Replace the active run's pending mid-turn steer queue in the worker. Pending items are drained
+   * by pi-agent-core at the next tool/step boundary (`agent-loop.js` `getSteeringMessages`).
+   */
+  syncSteers(
+    runId: string,
+    items: PiRuntimeSteerItem[],
+    attachmentsById?: ReadonlyMap<string, IntelligenceMessageAttachment[]>
+  ): boolean {
+    const context = this.activeRuns.get(runId)
+    if (!context || context.controller.signal.aborted || !this.child) return false
+    if (attachmentsById) {
+      for (const [steerId, attachments] of attachmentsById) {
+        if (attachments.length > 0) context.steerAttachments.set(steerId, attachments)
+      }
+    }
+    try {
+      this.post({ type: 'run.steer.sync', runId, items })
+      return true
+    } catch {
+      return false
+    }
   }
 
   async stop(): Promise<void> {
@@ -824,6 +876,8 @@ export class PiAgentRuntimeHost {
       let modelName = context.workspace?.model
       let reportedProvider: string | undefined
       let reportedModel: string | undefined
+      let reasoningEffort: IntelligenceReasoningEffortDecision | undefined
+      let reportedReasoning: IntelligenceReasoningEffortDecision | undefined
       let promptTokens = 0
       let completionTokens = 0
       let totalTokens = 0
@@ -833,22 +887,25 @@ export class PiAgentRuntimeHost {
         string,
         { id: string; name: string; arguments: Record<string, unknown> }
       >()
-      const streamBuffer = new PiModelStreamBuffer((deltaText) => {
-        if (!context.workspace) return
-        if (deltaText) context.textStreamedByHost = true
-        context.pendingEvents = context.pendingEvents.then(async () => {
-          await this.onEvent?.({
-            runId: request.runId,
-            type: 'message_update',
-            payload: {
-              assistantMessageEvent: {
-                type: 'text_delta',
-                delta: deltaText
+      const streamBuffer = new PiModelStreamBuffer(
+        (deltaText) => {
+          if (!context.workspace) return
+          if (deltaText) context.textStreamedByHost = true
+          context.pendingEvents = context.pendingEvents.then(async () => {
+            await this.onEvent?.({
+              runId: request.runId,
+              type: 'message_update',
+              payload: {
+                assistantMessageEvent: {
+                  type: 'text_delta',
+                  delta: deltaText
+                }
               }
-            }
+            })
           })
-        })
-      })
+        },
+        { toolNames: new Set(request.tools.map((tool) => tool.name)) }
+      )
       const streamOptions = {
         modelPreference: context.workspace?.model
           ? [context.workspace.model]
@@ -877,7 +934,11 @@ export class PiAgentRuntimeHost {
       for await (const event of tuffIntelligence.stream<string>(
         'text.chat',
         {
-          messages: normalizeModelMessages(request, context.workspace?.modelAttachments),
+          messages: normalizeModelMessages(
+            request,
+            context.workspace?.modelAttachments,
+            context.steerAttachments
+          ),
           ...(request.tools.length > 0 ? { tools: toChatTools(request.tools) } : {})
         },
         streamOptions
@@ -887,11 +948,14 @@ export class PiAgentRuntimeHost {
         if (event.type === 'start') {
           if (event.provider) providerName = event.provider
           if (event.model) modelName = event.model
+          if (event.reasoningEffort) reasoningEffort = event.reasoningEffort
           if (context.workspace) {
             const startProvider = providerName
             const startModel = modelName
+            const startReasoning = reasoningEffort
             reportedProvider = startProvider
             reportedModel = startModel
+            reportedReasoning = startReasoning
             context.pendingEvents = context.pendingEvents.then(async () => {
               await this.onEvent?.({
                 runId: request.runId,
@@ -899,6 +963,7 @@ export class PiAgentRuntimeHost {
                 payload: {
                   provider: startProvider,
                   model: startModel,
+                  ...(startReasoning ? { reasoningEffort: startReasoning } : {}),
                   usageReported: false
                 }
               })
@@ -941,6 +1006,7 @@ export class PiAgentRuntimeHost {
         } else if (event.type === 'end') {
           if (event.provider) providerName = event.provider
           if (event.model) modelName = event.model
+          if (event.reasoningEffort) reasoningEffort = event.reasoningEffort
         } else if (event.type === 'usage' && event.usage) {
           promptTokens = event.usage.promptTokens ?? promptTokens
           completionTokens = event.usage.completionTokens ?? completionTokens
@@ -951,8 +1017,14 @@ export class PiAgentRuntimeHost {
       }
 
       streamBuffer.complete()
-      const identityChanged = providerName !== reportedProvider || modelName !== reportedModel
+      const reasoningChanged =
+        reasoningEffort?.requested !== reportedReasoning?.requested ||
+        reasoningEffort?.applied !== reportedReasoning?.applied ||
+        reasoningEffort?.status !== reportedReasoning?.status
+      const identityChanged =
+        providerName !== reportedProvider || modelName !== reportedModel || reasoningChanged
       if (context.workspace && (totalTokens > 0 || identityChanged)) {
+        const finalReasoning = reasoningEffort
         context.pendingEvents = context.pendingEvents.then(async () => {
           await this.onEvent?.({
             runId: request.runId,
@@ -960,6 +1032,7 @@ export class PiAgentRuntimeHost {
             payload: {
               provider: providerName,
               model: modelName,
+              ...(finalReasoning ? { reasoningEffort: finalReasoning } : {}),
               usageReported: totalTokens > 0,
               ...(totalTokens > 0
                 ? {

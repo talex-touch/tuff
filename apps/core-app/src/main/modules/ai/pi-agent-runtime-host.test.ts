@@ -499,6 +499,61 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     await completeRun(payload, execution)
   })
 
+  it('forwards stream reasoningEffort decisions on provider_response events', async () => {
+    const payload = startPayload()
+    const onEvent = vi.fn()
+    const host = new PiAgentRuntimeHost({ onEvent })
+    const execution = host.execute(payload, {
+      conversationId: 'conversation-reasoning-1',
+      turnId: 'turn-reasoning-1',
+      projectId: null,
+      reasoningEffort: 'max',
+      history: [],
+      assertAuthority: async () => undefined
+    })
+    await settleAsyncWork()
+
+    intelligenceMocks.stream.mockImplementationOnce(async function* () {
+      yield {
+        type: 'start',
+        provider: 'omp-cli',
+        model: 'magpie/auto/hy4-preview-f',
+        reasoningEffort: { requested: 'max', applied: 'xhigh', status: 'applied' }
+      }
+      yield { type: 'delta', delta: 'pong' }
+      yield {
+        type: 'end',
+        provider: 'omp-config',
+        model: 'magpie/auto/hy4-preview-f',
+        reasoningEffort: { requested: 'max', applied: 'xhigh', status: 'applied' }
+      }
+    })
+    hostMocks.emit('message', {
+      type: 'model.request',
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      payload: {
+        requestId: 'model-request-reasoning-1',
+        runId: payload.run.id,
+        step: 1,
+        systemPrompt: 'Answer briefly.',
+        messages: [{ role: 'user', content: 'ping' }],
+        tools: [],
+        modelPreference: ['magpie/auto/hy4-preview-f']
+      }
+    })
+    await settleAsyncWork()
+
+    const answered = onEvent.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event.type === 'provider_response')
+    expect(answered.at(-1)?.payload).toMatchObject({
+      provider: 'omp-config',
+      model: 'magpie/auto/hy4-preview-f',
+      reasoningEffort: { requested: 'max', applied: 'xhigh', status: 'applied' }
+    })
+    await completeRun(payload, execution)
+  })
+
   it('preserves run and model request IDs while relaying host-owned model responses', async () => {
     const payload = startPayload()
     const host = new PiAgentRuntimeHost()
@@ -814,6 +869,63 @@ describe('piAgentRuntimeHost protocol boundary', () => {
         )
         .map((event) => event.payload.assistantMessageEvent.delta)
       expect(textDeltas).toEqual([replayText])
+      await completeRun(payload, execution)
+    })
+
+    it('suppresses trailing tool directives after preamble text while keeping the preamble', async () => {
+      const payload = startPayload()
+      const onEvent = vi.fn()
+      const host = new PiAgentRuntimeHost({ onEvent })
+      const execution = host.execute(payload, {
+        conversationId: 'conversation-trailing-tool',
+        turnId: 'turn-trailing-tool',
+        projectId: null,
+        history: [],
+        assertAuthority: async () => undefined
+      })
+      await settleAsyncWork()
+
+      intelligenceMocks.stream.mockImplementationOnce(async function* () {
+        yield { type: 'start', provider: 'omp-config', model: 'auto/test' }
+        yield { type: 'delta', delta: '我来查一下 QUIC 1-RTT 握手。\n\n' }
+        yield {
+          type: 'delta',
+          delta:
+            '{"type":"tool","name":"browser.search","arguments":{"query":"QUIC"}} ' +
+            '{"type":"tool","name":"browser.extract","arguments":{"url":"https://www.rfc-editor.org/rfc/rfc9001.html"}}'
+        }
+      })
+
+      hostMocks.emit('message', {
+        type: 'model.request',
+        protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+        payload: {
+          requestId: 'model-request-trailing-tool',
+          runId: payload.run.id,
+          step: 1,
+          systemPrompt: '',
+          messages: [{ role: 'user', content: 'Explain QUIC 1-RTT.' }],
+          tools: [
+            { name: 'browser.search', description: 'Search', parameters: { type: 'object' } },
+            { name: 'browser.extract', description: 'Extract', parameters: { type: 'object' } }
+          ],
+          modelPreference: ['auto/test']
+        }
+      })
+      await settleAsyncWork()
+
+      const streamedText = onEvent.mock.calls
+        .map(([event]) => event)
+        .filter(
+          (event) =>
+            event.type === 'message_update' &&
+            event.payload?.assistantMessageEvent?.type === 'text_delta'
+        )
+        .map((event) => event.payload.assistantMessageEvent.delta)
+        .join('')
+      expect(streamedText).toBe('我来查一下 QUIC 1-RTT 握手。')
+      expect(streamedText).not.toContain('browser.search')
+      expect(streamedText).not.toContain('browser.extract')
       await completeRun(payload, execution)
     })
   })
@@ -1767,5 +1879,99 @@ describe('piAgentRuntimeHost protocol boundary', () => {
     await vi.advanceTimersByTimeAsync(60_000)
 
     expect(hostMocks.child.kill).not.toHaveBeenCalled()
+  })
+
+  it('syncSteers posts run.steer.sync, triggers onRunActive after start, and isolates steer attachments from the initial user prompt', async () => {
+    const host = new PiAgentRuntimeHost()
+    const payload = startPayload()
+    const onRunActive = vi.fn()
+    const turnImage = {
+      type: 'image' as const,
+      dataUrl: 'data:image/png;base64,AAA',
+      name: 'a.png'
+    }
+    const steerImage = {
+      type: 'image' as const,
+      dataUrl: 'data:image/png;base64,BBB',
+      name: 'b.png'
+    }
+
+    let capturedMessages: unknown[] = []
+    intelligenceMocks.stream.mockImplementationOnce(async function* (
+      _cap: string,
+      chatPayload: { messages: unknown[] }
+    ) {
+      capturedMessages = chatPayload.messages
+      yield { type: 'delta', delta: 'updated answer' }
+      yield { type: 'end' }
+    })
+
+    const execution = host.execute(payload, {
+      conversationId: 'conv-steer',
+      turnId: 'turn-1',
+      projectId: null,
+      history: [],
+      modelAttachments: [turnImage],
+      assertAuthority: async () => undefined,
+      onRunActive
+    })
+    await settleAsyncWork()
+
+    expect(onRunActive).toHaveBeenCalledWith(payload.run.id)
+
+    const steerAttachments = new Map([['steer-1', [steerImage]]])
+    expect(
+      host.syncSteers(
+        payload.run.id,
+        [{ id: 'steer-1', text: 'make it single page html', createdAt: 100 }],
+        steerAttachments
+      )
+    ).toBe(true)
+    expect(host.syncSteers('missing-run', [])).toBe(false)
+
+    expect(hostMocks.child.postMessage).toHaveBeenCalledWith({
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'run.steer.sync',
+      runId: payload.run.id,
+      items: [{ id: 'steer-1', text: 'make it single page html', createdAt: 100 }]
+    })
+
+    // Simulate worker sending a model.request after injecting steer-1 at a tool boundary.
+    hostMocks.emit('message', {
+      protocolVersion: PI_RUNTIME_PROTOCOL_VERSION,
+      type: 'model.request',
+      payload: {
+        requestId: 'req-steer-1',
+        runId: payload.run.id,
+        step: 2,
+        systemPrompt: 'sys',
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: 'original prompt' }] },
+          { role: 'assistant', content: [{ type: 'text', text: 'working' }] },
+          {
+            role: 'user',
+            steerId: 'steer-1',
+            content: [{ type: 'text', text: 'make it single page html' }]
+          }
+        ],
+        tools: [],
+        modelPreference: []
+      }
+    })
+    await settleAsyncWork()
+
+    // Initial prompt retains turnImage; mid-turn steer message carries steerImage only.
+    const userMessages = capturedMessages.filter(
+      (msg): msg is { role: string; content: string; attachments?: unknown[] } =>
+        Boolean(msg && typeof msg === 'object' && (msg as { role?: string }).role === 'user')
+    )
+    expect(userMessages).toHaveLength(2)
+    expect(userMessages[0]).toMatchObject({ content: 'original prompt', attachments: [turnImage] })
+    expect(userMessages[1]).toMatchObject({
+      content: 'make it single page html',
+      attachments: [steerImage]
+    })
+
+    await completeRun(payload, execution)
   })
 })

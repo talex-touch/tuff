@@ -21,6 +21,7 @@ import type {
   PiRuntimeParentPayload,
   PiRuntimeRunResult,
   PiRuntimeStartPayload,
+  PiRuntimeSteerItem,
   PiRuntimeToolResponse,
   PiRuntimeUsage
 } from './pi-agent-runtime-protocol'
@@ -30,6 +31,19 @@ import { Agent } from '@earendil-works/pi-agent-core'
 import { createAssistantMessageEventStream, Type } from '@earendil-works/pi-ai'
 import { buildObjectivePrompt } from './pi-agent-run-log'
 import { PI_RUNTIME_PROTOCOL_VERSION } from './pi-agent-runtime-protocol'
+import {
+  extractLeadingToolEnvelopes,
+  extractTrailingToolEnvelopes,
+  isToolEnvelopeStart,
+  parseJsonObject,
+  parseToolEnvelopeArray,
+  readToolEnvelope,
+  repairJsonUnescapedNewlines,
+  stripTrailingCodeFence,
+  type ParsedToolCall
+} from './tool-text-protocol'
+
+export { repairJsonUnescapedNewlines }
 
 interface UtilityParentPort {
   on: (event: 'message', listener: (event: { data: unknown }) => void) => void
@@ -58,6 +72,15 @@ interface ActiveRun {
    * ones that continue, and the turn is neither asked for again nor charged for again.
    */
   replay?: AssistantMessage
+  /** Steer ids already drained into the agent loop; prevents a stale sync from re-injecting them. */
+  consumedSteerIds: Set<string>
+}
+
+interface SteerUserMessage {
+  role: 'user'
+  content: Array<{ type: 'text'; text: string }>
+  timestamp: number
+  steerId: string
 }
 
 const parentPort = (
@@ -177,41 +200,8 @@ function requestTool(
   })
 }
 
-export function repairJsonUnescapedNewlines(jsonStr: string): string {
-  let inString = false
-  let isEscaped = false
-  let result = ''
-  for (let i = 0; i < jsonStr.length; i++) {
-    const char = jsonStr[i]
-    if (char === '"' && !isEscaped) {
-      inString = !inString
-      result += char
-    } else if (char === '\\' && inString) {
-      isEscaped = !isEscaped
-      result += char
-    } else if ((char === '\n' || char === '\r') && inString) {
-      result += char === '\n' ? '\\n' : '\\r'
-    } else {
-      if (isEscaped) isEscaped = false
-      result += char
-    }
-  }
-  return result
-}
-
-/**
- * A tool directive is an envelope: the reply itself opens with `{"type":"tool"`. The same test
- * `PiModelStreamBuffer` applies while streaming, so what was held back from the bubble is exactly
- * what is read as a tool call here. A reply that merely *mentions* that shape - a quoted prompt, a
- * type definition, a JSON example - is an answer and is delivered as one.
- */
-const TOOL_ENVELOPE = /^\{\s*"type"\s*:\s*"tool"/i
-
-function tryParseRelaxedTool(
-  withoutFence: string,
-  toolNames: Set<string>
-): { name: string; arguments: Record<string, unknown> } | null {
-  if (!TOOL_ENVELOPE.test(withoutFence)) return null
+function tryParseRelaxedTool(withoutFence: string, toolNames: Set<string>): ParsedToolCall | null {
+  if (!isToolEnvelopeStart(withoutFence)) return null
 
   const nameMatch = withoutFence.match(/"name"\s*:\s*"([^"]+)"/i)
   const toolName = nameMatch ? nameMatch[1] : undefined
@@ -259,76 +249,44 @@ function tryParseRelaxedTool(
   return null
 }
 
-/** What one model reply turned out to be, under the text protocol: one tool call, or the answer. */
+/** What one model reply turned out to be, under the text protocol: one or more tool calls, or the answer. */
 export type BridgeResponse =
   | { type: 'final'; text: string }
-  | { type: 'tool'; name: string; arguments: Record<string, unknown>; text?: string }
+  | {
+      type: 'tool'
+      name: string
+      arguments: Record<string, unknown>
+      /** Present when a reply emits more than one tool directive in a single turn. */
+      calls?: ParsedToolCall[]
+      text?: string
+    }
   | { type: 'invalid'; name: string; reason: string }
 
 /** Carries a tool call that could not be read; the tool never runs with it, pi reports the reason back. */
 const INVALID_CALL_KEY = '__invalidToolCall'
 const INVALID_CALL_NAME = 'invalid_tool_call'
 
-function parseJsonObject(text: string): Record<string, unknown> | null {
-  for (const candidate of [text, repairJsonUnescapedNewlines(text)]) {
-    try {
-      const value: unknown = JSON.parse(candidate)
-      return typeof value === 'object' && value !== null && !Array.isArray(value)
-        ? (value as Record<string, unknown>)
-        : null
-    } catch {
-      // the repaired form is tried next
-    }
-  }
-  return null
-}
-
-function readToolEnvelope(
-  parsed: Record<string, unknown>
-): { name: string; arguments: Record<string, unknown> } | null {
-  const tool =
-    parsed.type === 'tool' && typeof parsed.name === 'string'
-      ? parsed
-      : parsed.type === 'tool' && parsed.tool && typeof parsed.tool === 'object'
-        ? (parsed.tool as Record<string, unknown>)
-        : null
-  if (!tool || typeof tool.name !== 'string') return null
+function buildToolBridgeResponse(
+  calls: ParsedToolCall[],
+  text?: string
+): Extract<BridgeResponse, { type: 'tool' }> {
+  const [first] = calls
   return {
-    name: tool.name,
-    arguments:
-      tool.arguments && typeof tool.arguments === 'object'
-        ? (tool.arguments as Record<string, unknown>)
-        : {}
+    type: 'tool',
+    name: first.name,
+    arguments: first.arguments,
+    ...(calls.length > 1 ? { calls } : {}),
+    ...(text ? { text } : {})
   }
 }
 
-/** Index just past the object that `text` opens with, or -1 when that object never closes. */
-function leadingObjectEnd(text: string): number {
-  let depth = 0
-  let inString = false
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i]
-    if (inString) {
-      if (char === '\\') i++
-      else if (char === '"') inString = false
-    } else if (char === '"') {
-      inString = true
-    } else if (char === '{') {
-      depth++
-    } else if (char === '}') {
-      depth--
-      if (depth === 0) return i + 1
-    }
-  }
-  return -1
+function invalidToolReason(raw: string): string {
+  return `The tool call could not be read: a tool call is one JSON object {"type":"tool","name":"<tool>","arguments":{...}} with nothing after it. Re-issue it in that form. The reply was:\n${raw.slice(0, 2000)}`
 }
 
 export function parseBridgeResponse(text: string, toolNames: Set<string>): BridgeResponse {
   const trimmed = text.trim()
-  const withoutFence = trimmed
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```$/, '')
-    .trim()
+  const withoutFence = stripTrailingCodeFence(trimmed.replace(/^```(?:json)?\s*/i, '')).trim()
   const parsed = parseJsonObject(withoutFence)
   if (parsed) {
     if (parsed.type === 'final' && typeof parsed.text === 'string') {
@@ -338,34 +296,48 @@ export function parseBridgeResponse(text: string, toolNames: Set<string>): Bridg
     // loop answers an unavailable tool with `Tool <name> not found`, which the model reads and
     // recovers from. Rejecting it here ended the whole run on a reply the loop already handles.
     const tool = readToolEnvelope(parsed)
-    if (tool) return { type: 'tool', ...tool }
+    if (tool) return buildToolBridgeResponse([tool])
   }
 
-  if (TOOL_ENVELOPE.test(withoutFence)) {
-    const end = leadingObjectEnd(withoutFence)
-    const leading = end === -1 ? null : parseJsonObject(withoutFence.slice(0, end))
-    const tool = leading ? readToolEnvelope(leading) : null
-    if (tool) {
-      const rest = withoutFence.slice(end).trim()
-      return { type: 'tool', ...tool, ...(rest ? { text: rest } : {}) }
+  const arrayCalls = parseToolEnvelopeArray(trimmed)
+  if (arrayCalls) {
+    return buildToolBridgeResponse(arrayCalls)
+  }
+
+  const leading = extractLeadingToolEnvelopes(trimmed)
+  if (leading.calls.length > 0) {
+    const calls = [...leading.calls]
+    if (leading.malformedTail) {
+      const recovered = tryParseRelaxedTool(leading.malformedTail, toolNames)
+      if (recovered) {
+        calls.push(recovered)
+      } else {
+        calls.push({
+          name: leading.malformedTail.match(/"name"\s*:\s*"([^"]+)"/i)?.[1] ?? INVALID_CALL_NAME,
+          arguments: { [INVALID_CALL_KEY]: invalidToolReason(leading.malformedTail) }
+        })
+      }
     }
+    return buildToolBridgeResponse(calls, leading.rest || undefined)
   }
 
-  const relaxedTool = tryParseRelaxedTool(withoutFence, toolNames)
+  const candidateForRelaxed = leading.malformedTail ?? withoutFence
+  const relaxedTool = tryParseRelaxedTool(candidateForRelaxed, toolNames)
   if (relaxedTool) {
-    return {
-      type: 'tool',
-      name: relaxedTool.name,
-      arguments: relaxedTool.arguments
-    }
+    return buildToolBridgeResponse([relaxedTool])
   }
 
-  if (TOOL_ENVELOPE.test(withoutFence)) {
+  if (isToolEnvelopeStart(candidateForRelaxed)) {
     return {
       type: 'invalid',
-      name: withoutFence.match(/"name"\s*:\s*"([^"]+)"/i)?.[1] ?? INVALID_CALL_NAME,
-      reason: `The tool call could not be read: a tool call is one JSON object {"type":"tool","name":"<tool>","arguments":{...}} with nothing after it. Re-issue it in that form. The reply was:\n${trimmed.slice(0, 2000)}`
+      name: candidateForRelaxed.match(/"name"\s*:\s*"([^"]+)"/i)?.[1] ?? INVALID_CALL_NAME,
+      reason: invalidToolReason(trimmed)
     }
+  }
+
+  const trailing = extractTrailingToolEnvelopes(trimmed, toolNames)
+  if (trailing) {
+    return buildToolBridgeResponse(trailing.calls, trailing.preamble || undefined)
   }
 
   return { type: 'final', text }
@@ -379,7 +351,7 @@ type BridgeDirective =
       text?: string
     }
 
-/** The text protocol names one call per reply; native tools can name several. */
+/** Converts a parsed text-protocol reply into one or more tool calls or a final answer. */
 function toDirective(parsed: BridgeResponse): BridgeDirective {
   if (parsed.type === 'invalid') {
     return {
@@ -390,7 +362,7 @@ function toDirective(parsed: BridgeResponse): BridgeDirective {
   if (parsed.type === 'tool') {
     return {
       type: 'tool',
-      calls: [{ name: parsed.name, arguments: parsed.arguments }],
+      calls: parsed.calls ?? [{ name: parsed.name, arguments: parsed.arguments }],
       ...(parsed.text ? { text: parsed.text } : {})
     }
   }
@@ -764,6 +736,20 @@ function isLoggedMessage(message: AgentMessage): boolean {
   )
 }
 
+function readSteerUserMessage(message: AgentMessage): SteerUserMessage | null {
+  if (message.role !== 'user') return null
+  const candidate = message as AgentMessage & { steerId?: unknown }
+  if (typeof candidate.steerId !== 'string' || !candidate.steerId) return null
+  return candidate as unknown as SteerUserMessage
+}
+
+function userMessageText(message: SteerUserMessage): string {
+  return message.content
+    .filter((content) => content.type === 'text')
+    .map((content) => content.text)
+    .join('\n')
+}
+
 async function startRun(payload: PiRuntimeStartPayload): Promise<void> {
   const runId = payload.run.id
   if (activeRuns.has(runId)) {
@@ -782,6 +768,7 @@ async function startRun(payload: PiRuntimeStartPayload): Promise<void> {
     },
     streamFn: createStreamFn(runId, payload.profile, payload.budget),
     sessionId: payload.run.sessionId,
+    steeringMode: 'all',
     toolExecution: 'parallel',
     beforeToolCall: async ({ toolCall }) => {
       const reason = toolCall.arguments[INVALID_CALL_KEY]
@@ -797,7 +784,8 @@ async function startRun(payload: PiRuntimeStartPayload): Promise<void> {
     toolCalls: resume?.counters.toolCalls ?? 0,
     costKnown: resume?.counters.costKnown ?? true,
     approvalRequired: undefined,
-    replay: resume?.replay as AssistantMessage | undefined
+    replay: resume?.replay as AssistantMessage | undefined,
+    consumedSteerIds: new Set()
   }
   activeRuns.set(runId, active)
 
@@ -813,6 +801,24 @@ async function startRun(payload: PiRuntimeStartPayload): Promise<void> {
         payload: serializeEvent(event)
       }
     })
+    if (event.type === 'message_end') {
+      const steer = readSteerUserMessage(event.message)
+      if (steer) {
+        active.consumedSteerIds.add(steer.steerId)
+        post({
+          type: 'run.event',
+          payload: {
+            runId,
+            type: 'steer_consumed',
+            payload: {
+              steerId: steer.steerId,
+              text: userMessageText(steer),
+              createdAt: steer.timestamp
+            }
+          }
+        })
+      }
+    }
     // Every message of the run is logged as it ends, with the counters as they stand once it has:
     // the main process keeps them, encrypted, so a run that is stopped can be picked up from the
     // last message instead of starting over.
@@ -882,6 +888,22 @@ function cancelRun(runId: string): void {
   active.agent.abort()
 }
 
+function syncRunSteers(runId: string, items: PiRuntimeSteerItem[]): void {
+  const active = activeRuns.get(runId)
+  if (!active || active.cancelled) return
+  active.agent.clearSteeringQueue()
+  for (const item of items) {
+    if (active.consumedSteerIds.has(item.id)) continue
+    const message: SteerUserMessage = {
+      role: 'user',
+      content: [{ type: 'text', text: item.text }],
+      timestamp: item.createdAt,
+      steerId: item.id
+    }
+    active.agent.steer(message as unknown as AgentMessage)
+  }
+}
+
 function settleResponse<T>(
   map: Map<string, PendingResponse<T>>,
   requestId: string,
@@ -906,6 +928,9 @@ async function handleMessage(message: PiRuntimeChildMessage): Promise<void> {
       return
     case 'run.cancel':
       cancelRun(message.runId)
+      return
+    case 'run.steer.sync':
+      syncRunSteers(message.runId, message.items)
       return
     case 'model.response':
       settleResponse(

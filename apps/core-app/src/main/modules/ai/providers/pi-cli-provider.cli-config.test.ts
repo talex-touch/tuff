@@ -184,6 +184,82 @@ describe.each(CLIS)('PiCliProvider routing for $cli', ({ cli, id, origin, schedu
       `${cli.toUpperCase()}_CONFIG_PROVIDER_UNAVAILABLE`
     )
   })
+
+  it('declares native tool support only when reusing the configured HTTP endpoint', () => {
+    const provider = new PiCliProvider(cliConfig(id, origin), () => false)
+    expect(provider.supportsNativeToolsFor({ metadata: { profileId: 'default-pi' } })).toBe(true)
+    expect(provider.supportsNativeToolsFor({})).toBe(true)
+    expect(provider.supportsNativeToolsFor({ metadata: { profileId: scheduler } })).toBe(false)
+  })
+
+  it('forwards native tools to a native-capable reused endpoint without folding into text protocol', async () => {
+    const seenPayloads: IntelligenceChatPayload[] = []
+    resolveCliConfigEndpoint.mockReturnValue({
+      providerId: 'reused-config',
+      modelId: 'upstream-model',
+      provider: {
+        supportsNativeTools: true,
+        chatStream: async function* (payload: IntelligenceChatPayload) {
+          seenPayloads.push(payload)
+          yield { delta: 'ok', done: false } as IntelligenceStreamChunk
+        }
+      } as unknown as IntelligenceProvider
+    })
+    const provider = new PiCliProvider(cliConfig(id, origin), () => false)
+    const payloadWithTools: IntelligenceChatPayload = {
+      messages: [{ role: 'user', content: 'search QUIC' }],
+      tools: [
+        {
+          name: 'browser.search',
+          description: 'Search the web',
+          parameters: { type: 'object', properties: { query: { type: 'string' } } }
+        }
+      ]
+    }
+    await collect(
+      provider.chatStream(payloadWithTools, {
+        metadata: { profileId: 'default-pi' },
+        modelPreference: ['requested-model']
+      } as IntelligenceInvokeOptions)
+    )
+    expect(seenPayloads[0]).toBe(payloadWithTools)
+    expect(seenPayloads[0].tools).toHaveLength(1)
+  })
+
+  it('folds tools into text protocol when a reused endpoint does not support native tools', async () => {
+    const seenPayloads: IntelligenceChatPayload[] = []
+    resolveCliConfigEndpoint.mockReturnValue({
+      providerId: 'reused-config',
+      modelId: 'upstream-model',
+      provider: {
+        supportsNativeTools: false,
+        chatStream: async function* (payload: IntelligenceChatPayload) {
+          seenPayloads.push(payload)
+          yield { delta: 'ok', done: false } as IntelligenceStreamChunk
+        }
+      } as unknown as IntelligenceProvider
+    })
+    const provider = new PiCliProvider(cliConfig(id, origin), () => false)
+    const payloadWithTools: IntelligenceChatPayload = {
+      messages: [{ role: 'user', content: 'search QUIC' }],
+      tools: [
+        {
+          name: 'browser.search',
+          description: 'Search the web',
+          parameters: { type: 'object', properties: { query: { type: 'string' } } }
+        }
+      ]
+    }
+    await collect(
+      provider.chatStream(payloadWithTools, {
+        metadata: { profileId: 'default-pi' },
+        modelPreference: ['requested-model']
+      } as IntelligenceInvokeOptions)
+    )
+    expect(seenPayloads[0].tools).toBeUndefined()
+    expect(seenPayloads[0].messages[0]?.role).toBe('system')
+    expect(seenPayloads[0].messages[0]?.content).toContain('"type":"tool"')
+  })
 })
 
 describe.each(ACP_ONLY_CLIS)(
@@ -245,5 +321,20 @@ describe.each(ACP_ONLY_CLIS)(
       ).rejects.toThrow(`${codePrefix}_ACP_RUNTIME_REQUIRED`)
       expect(resolveCliConfigEndpoint).not.toHaveBeenCalled()
     })
+
+    it('never declares native HTTP tool reuse for ACP-only CLIs', () => {
+      const provider = new PiCliProvider(cliConfig(id, origin), () => true)
+      expect(provider.supportsNativeToolsFor({ metadata: { profileId: 'default-pi' } })).toBe(false)
+      expect(provider.supportsNativeToolsFor({})).toBe(false)
+      expect(provider.supportsNativeToolsFor({ metadata: { profileId: scheduler } })).toBe(false)
+    })
   }
 )
+
+describe('PiCliProvider supportsNativeToolsFor for built-in pi-cli', () => {
+  it('stays false for the pi binary config regardless of scheduler', () => {
+    const provider = new PiCliProvider(cliConfig('pi-cli', 'pi-cli'), () => true)
+    expect(provider.supportsNativeToolsFor({ metadata: { profileId: 'default-pi' } })).toBe(false)
+    expect(provider.supportsNativeToolsFor({})).toBe(false)
+  })
+})
