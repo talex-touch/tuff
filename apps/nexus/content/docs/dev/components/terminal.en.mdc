@@ -190,7 +190,7 @@ onBeforeUnmount(stop)
 
 - Display only: mounting never creates a shell, starts a process, or requests Electron privileges, and the component imports neither transport nor Electron.
 - xterm, the fit addon, the WebGL addon, and the image addon load dynamically in `onMounted`; server rendering touches no browser globals.
-- Supports SIXEL and iTerm2 IIP (`OSC 1337`) inline image protocols with pixel size reporting (`CSI 14t` / `16t` / `18t`) and DA1 Sixel advertisement so TUI image previews such as `yazi` render directly inside the terminal.
+- Supports SIXEL and iTerm2 IIP (`OSC 1337`) inline image protocols, backing the image overlay canvas at physical device-pixel resolution on HiDPI / Retina displays with device-pixel size reports (`CSI 14t` / `16t` / `18t`) plus DA1 and `XTVERSION` (`CSI > q`) advertisement so TUI previewers such as `yazi` render crisp truecolor images.
 - Output, `reset()`, and `clear()` share one ordered queue: output goes to xterm as it arrives and is parsed across frames, waiting in the queue once about 8 MB is pending; `reset()` and `clear()` run only after earlier output has been parsed. Binary data is decoded as UTF-8.
 - `lines` is watched deeply, so push, index assignment, replacement, and clearing all work; after mutating bytes inside a `Uint8Array`, trigger one reactive update.
 - Read-only mode blocks input at both xterm and the event boundary and stops the cursor blink; switching from interactive to read-only blurs the input.

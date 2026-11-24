@@ -8,6 +8,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onThemeChange } from '../../stat-card/src/theme-change'
 import { TERMINAL_DEFAULT_LABELS } from './types'
 import { DEFAULT_TERMINAL_FONT_FAMILY, resolveTerminalFontFamily } from './font-fallback'
+import { configureHiDpiImageAddon } from './image-hidpi'
 
 defineOptions({ name: 'TxTerminal' })
 
@@ -630,6 +631,11 @@ onMounted(async () => {
           showPlaceholder: false,
         })
         terminal.loadAddon(imageAddon)
+        subscriptions.push(
+          configureHiDpiImageAddon(terminal, imageAddon, {
+            advertiseIip: true,
+          }),
+        )
       }
       catch {
         imageAddon?.dispose()

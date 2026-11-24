@@ -190,7 +190,7 @@ onBeforeUnmount(stop)
 
 - 只负责显示：挂载不会创建 shell、启动进程或申请 Electron 权限，组件也不导入 transport 或 Electron。
 - xterm、fit addon、WebGL addon 与 image addon 只在 `onMounted` 中动态加载；服务端渲染不访问浏览器全局对象。
-- 支持 SIXEL 与 iTerm2 IIP（`OSC 1337`）终端内联图片协议，并启用像素尺寸查询（`CSI 14t` / `16t` / `18t`）与 DA1 Sixel 能力通告，可直接显示 `yazi` 等 TUI 的图片预览。
+- 支持 SIXEL 与 iTerm2 IIP（`OSC 1337`）终端内联图片协议，在 HiDPI / Retina 屏上以物理设备像素渲染叠加画布并上报设备像素尺寸（`CSI 14t` / `16t` / `18t`），同时通过 DA1 与 `XTVERSION`（`CSI > q`）向 `yazi` 等 TUI 通告真彩 IIP 与 Sixel 能力。
 - 输出、`reset()` 与 `clear()` 共用一个有序队列：输出随到随交给 xterm 分帧解析，积压过多（约 8 MB）时在队列里等待；`reset()` 与 `clear()` 等之前的输出解析完才执行。二进制数据按 UTF-8 解码。
 - 深度监听 `lines`，支持 push、下标修改、替换与清空；原地改写 `Uint8Array` 字节后需触发一次响应式更新。
 - 只读模式在 xterm 与事件出口双重阻止输入并关闭光标闪烁；从交互切到只读时输入区失焦。
