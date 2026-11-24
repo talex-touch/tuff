@@ -155,6 +155,21 @@ describe('herdr-core socket-discovery', () => {
         {},
         {
           ...baseDeps,
+          isExecutable: async (p) =>
+            p === '/Applications/Tuff.app/Contents/Resources/herdr-core/herdr-core' ||
+            p === '/Applications/Tuff.app/Contents/Resources/herdr-core'
+        }
+      )
+    ).toEqual({
+      binaryPath: '/Applications/Tuff.app/Contents/Resources/herdr-core/herdr-core',
+      source: 'resources'
+    })
+
+    expect(
+      await resolveHerdrBinaryPath(
+        {},
+        {
+          ...baseDeps,
           isExecutable: async (p) => p === '/Applications/Tuff.app/Contents/Resources/herdr-core'
         }
       )

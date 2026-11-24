@@ -7489,6 +7489,28 @@
         "title": "自动启动托管实例",
         "desc": "未发现外部 herdr-core 时，自动启动并管理一个后台守护进程。"
       },
+      "binary": {
+        "title": "运行时二进制",
+        "desc": "检测可用的 herdr-core 可执行文件来源与版本。",
+        "platformDesc": "当前平台 {platform} / {arch}，用于托管持久终端运行时。",
+        "missingSummary": "未检测到 herdr-core 二进制，本地 PTY 回退模式保持可用。",
+        "missingHintTitle": "未安装 herdr-core 二进制",
+        "missingHintDesc": "无需担心，底部终端已自动回退到本地 PTY 并保持正常可用。如需启用持久化终端、后台任务卡片与远程机器，可按以下指引安装或在下方指定自定义路径：",
+        "defaultInstallHint": "将 herdr-core 安装至 PATH 或 ~/.local/bin/herdr-core，或在下方填写可执行文件路径",
+        "source": {
+          "custom": "自定义路径",
+          "system": "系统环境",
+          "bundle": "应用内置",
+          "packagedResource": "随包内置",
+          "missing": "未安装",
+          "detecting": "检测中"
+        }
+      },
+      "binaryPath": {
+        "title": "自定义二进制路径",
+        "desc": "留空则按标准顺序自动查找；填写后优先使用指定的 herdr-core 可执行文件，清空即可恢复自动发现。",
+        "placeholder": "自动发现（系统或随包内置）"
+      },
       "socketPath": {
         "title": "Socket 路径",
         "desc": "留空则按标准路径自动发现；填写后优先连接指定 Unix Socket。",

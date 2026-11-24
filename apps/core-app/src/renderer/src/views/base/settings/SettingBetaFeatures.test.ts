@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import type {
+  HerdrBinaryInfo,
   HerdrConnectionState,
   HerdrOwnership,
   HerdrRuntimeSnapshot
@@ -81,6 +82,26 @@ vi.mock('vue-sonner', () => ({
   }
 }))
 
+function makeSnapshotWithBinary(binary: HerdrBinaryInfo): HerdrRuntimeSnapshot {
+  return {
+    revision: 1,
+    seq: 1,
+    enabled: true,
+    connection: connectionRef.value,
+    ownership: ownershipRef.value,
+    socketPath: '/tmp/herdr.sock',
+    session: 'default',
+    binaryPath: binary.path,
+    binary,
+    error: null,
+    core: null,
+    sessions: [],
+    machines: [],
+    templates: [],
+    updatedAt: 1000
+  }
+}
+
 describe('SettingBetaFeatures', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -89,6 +110,7 @@ describe('SettingBetaFeatures', () => {
     appSettingMock.herdrCore.autoStart = true
     appSettingMock.herdrCore.socketPath = ''
     appSettingMock.herdrCore.session = 'default'
+    appSettingMock.herdrCore.binaryPath = ''
     connectionRef.value = 'connected'
     ownershipRef.value = 'external'
     snapshotRef.value = null
@@ -152,7 +174,67 @@ describe('SettingBetaFeatures', () => {
     )
   })
 
-  it('updates herdrCore autoStart, socketPath, session and triggers reconnect / ensureStarted', async () => {
+  it('renders binary runtime source badges, detected version, resolved path, and missing-binary install hint', async () => {
+    snapshotRef.value = makeSnapshotWithBinary({
+      source: 'system',
+      path: '/usr/local/bin/herdr-core',
+      version: '0.1.21',
+      platform: 'darwin',
+      arch: 'arm64',
+      supported: true,
+      installHint: null
+    })
+
+    const wrapper = mount(SettingBetaFeatures)
+    expect(wrapper.find('[data-testid="herdr-binary-source-badge"]').text()).toContain(
+      'settings.herdrCore.binary.source.system'
+    )
+    expect(wrapper.find('[data-testid="herdr-binary-version"]').text()).toBe('v0.1.21')
+    const pathEl = wrapper.find('[data-testid="herdr-binary-path"]')
+    expect(pathEl.text()).toBe('/usr/local/bin/herdr-core')
+    expect(pathEl.attributes('title')).toBe('/usr/local/bin/herdr-core')
+    expect(wrapper.find('[data-testid="herdr-binary-missing-hint"]').exists()).toBe(false)
+
+    // Bundled / packaged-resource binary state.
+    snapshotRef.value = makeSnapshotWithBinary({
+      source: 'packaged-resource',
+      path: '/Applications/Tuff.app/Contents/Resources/herdr-core/herdr-core',
+      version: 'v0.1.22',
+      platform: 'darwin',
+      arch: 'arm64',
+      supported: true,
+      installHint: null
+    })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="herdr-binary-source-badge"]').text()).toContain(
+      'settings.herdrCore.binary.source.packagedResource'
+    )
+    expect(wrapper.find('[data-testid="herdr-binary-version"]').text()).toBe('v0.1.22')
+    expect(wrapper.find('[data-testid="herdr-binary-missing-hint"]').exists()).toBe(false)
+
+    // Missing binary shows non-alarmist install hint and install command.
+    snapshotRef.value = makeSnapshotWithBinary({
+      source: 'missing',
+      path: null,
+      version: null,
+      platform: 'darwin',
+      arch: 'arm64',
+      supported: true,
+      installHint: 'brew install herdr-core'
+    })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="herdr-binary-source-badge"]').text()).toContain(
+      'settings.herdrCore.binary.source.missing'
+    )
+    expect(wrapper.find('[data-testid="herdr-binary-version"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="herdr-binary-path"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="herdr-binary-missing-hint"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="herdr-binary-install-cmd"]').text()).toBe(
+      'brew install herdr-core'
+    )
+  })
+
+  it('updates herdrCore autoStart, binaryPath, socketPath, session and forwards cleared overrides to ensureStarted', async () => {
     const wrapper = mount(SettingBetaFeatures)
 
     const autoStartSwitch = wrapper
@@ -164,18 +246,24 @@ describe('SettingBetaFeatures', () => {
     expect(appSettingMock.herdrCore.autoStart).toBe(false)
 
     const inputs = wrapper.findAllComponents({ name: 'TuffBlockInput' })
+    const binaryInput = inputs.find(
+      (comp) => comp.attributes('data-testid') === 'herdr-binary-path-input'
+    )
     const socketInput = inputs.find(
       (comp) => comp.attributes('data-testid') === 'herdr-socket-path-input'
     )
     const sessionInput = inputs.find(
       (comp) => comp.attributes('data-testid') === 'herdr-session-input'
     )
+    expect(binaryInput).toBeDefined()
     expect(socketInput).toBeDefined()
     expect(sessionInput).toBeDefined()
 
+    binaryInput!.vm.$emit('update:modelValue', '/opt/custom/herdr-core')
     socketInput!.vm.$emit('update:modelValue', '/tmp/custom-hc.sock')
     sessionInput!.vm.$emit('update:modelValue', 'work')
     await flushPromises()
+    expect(appSettingMock.herdrCore.binaryPath).toBe('/opt/custom/herdr-core')
     expect(appSettingMock.herdrCore.socketPath).toBe('/tmp/custom-hc.sock')
     expect(appSettingMock.herdrCore.session).toBe('work')
 
@@ -188,18 +276,24 @@ describe('SettingBetaFeatures', () => {
     expect(herdrMocks.ensureStarted).toHaveBeenCalledWith({
       forceBootstrap: true,
       socketPath: '/tmp/custom-hc.sock',
-      session: 'work'
+      session: 'work',
+      binaryPath: '/opt/custom/herdr-core'
     })
 
-    // Clearing socketPath must still forward socketPath: '' explicitly to clear stale overrides.
+    // Clearing socketPath & binaryPath forwards empty strings explicitly to clear stale overrides.
+    binaryInput!.vm.$emit('update:modelValue', '')
     socketInput!.vm.$emit('update:modelValue', '')
     await flushPromises()
+    expect(appSettingMock.herdrCore.binaryPath).toBe('')
+    expect(appSettingMock.herdrCore.socketPath).toBe('')
+
     await wrapper.find('[data-testid="herdr-ensure-started-btn"]').trigger('click')
     await flushPromises()
     expect(herdrMocks.ensureStarted).toHaveBeenLastCalledWith({
       forceBootstrap: true,
       socketPath: '',
-      session: 'work'
+      session: 'work',
+      binaryPath: ''
     })
   })
 })

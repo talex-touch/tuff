@@ -367,6 +367,277 @@ const TOOLS: Array<Omit<ToolSpec, 'execute'>> = [
       required: ['plugin', 'feature'],
     },
   },
+  {
+    name: 'tuff_herdr_list_sessions',
+    label: 'Tuff: list herdr sessions',
+    description:
+      'List live (or all) herdr-core terminal sessions and connected remote machines, including '
+      + 'address, machine, cwd, foreground process, and OSC 7501 status. Call this first before '
+      + 'reading screens, sending input, or targeting a remote machine.',
+    promptSnippet: 'Discover live herdr-core terminal sessions and remote machines',
+    parameters: {
+      type: 'object',
+      properties: {
+        all: {
+          type: 'boolean',
+          description: 'Include finished sessions in addition to live ones (default false)',
+        },
+        labels: {
+          type: 'object',
+          description: 'Optional key/value label filter',
+          additionalProperties: { type: 'string' },
+        },
+      },
+    },
+  },
+  {
+    name: 'tuff_herdr_read_screen',
+    label: 'Tuff: read herdr terminal screen',
+    description:
+      'Read the current screen text and optional scrollback history from a herdr-core terminal '
+      + 'session (local or remote). Output is truncated at 64 KiB.',
+    promptSnippet: 'Read screen/history output from a herdr-core terminal session',
+    parameters: {
+      type: 'object',
+      properties: {
+        terminal: {
+          type: 'string',
+          description: 'Terminal address from tuff_herdr_list_sessions (e.g. t1 or rohan/t7)',
+        },
+        lines: {
+          type: 'number',
+          description: 'Optional number of scrollback history lines to include',
+        },
+      },
+      required: ['terminal'],
+    },
+  },
+  {
+    name: 'tuff_herdr_file_read',
+    label: 'Tuff: read file via herdr',
+    description:
+      'Read a UTF-8 text file via herdr-core on the local machine or a connected remote machine '
+      + '(`on`). Output is truncated at 64 KiB.',
+    promptSnippet: 'Read a local or remote text file via herdr-core',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Absolute path, or path relative to cwd' },
+        on: {
+          type: 'string',
+          description: 'Optional connected remote machine name from tuff_herdr_list_sessions',
+        },
+        cwd: { type: 'string', description: 'Optional working directory for relative paths' },
+        offset: { type: 'number', description: 'Optional 1-based starting line number' },
+        limit: { type: 'number', description: 'Optional maximum number of lines to return' },
+      },
+      required: ['path'],
+    },
+  },
+  {
+    name: 'tuff_herdr_send_input',
+    label: 'Tuff: send input to herdr terminal',
+    description:
+      'Paste text and submit Enter in a live herdr-core terminal session. Always asks the user '
+      + 'every single time. Refuses a blocked terminal unless `force: true` is specified.',
+    promptSnippet: 'Send a prompt or command into a live herdr-core terminal',
+    parameters: {
+      type: 'object',
+      properties: {
+        terminal: {
+          type: 'string',
+          description: 'Terminal address from tuff_herdr_list_sessions (e.g. t1 or rohan/t7)',
+        },
+        text: { type: 'string', description: 'Text to paste and submit' },
+        force: {
+          type: 'boolean',
+          description: 'Force delivery even when the terminal is blocked (high risk)',
+        },
+        ifState: {
+          type: 'string',
+          enum: ['idle', 'working'],
+          description: 'Only send when the terminal is in this OSC 7501 state',
+        },
+        wait: {
+          type: 'boolean',
+          description: 'Wait for the triggered turn to settle before returning',
+        },
+        timeout: {
+          type: 'number',
+          description: 'Optional timeout in seconds when waiting',
+        },
+      },
+      required: ['terminal', 'text'],
+    },
+  },
+  {
+    name: 'tuff_herdr_file_write',
+    label: 'Tuff: write file via herdr',
+    description:
+      'Atomically write UTF-8 text content to a file via herdr-core on the local machine or a '
+      + 'connected remote machine (`on`), creating missing parent directories. Always asks the user '
+      + 'every single time.',
+    promptSnippet: 'Write a local or remote file atomically via herdr-core',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Absolute path, or path relative to cwd' },
+        content: { type: 'string', description: 'UTF-8 text content to write' },
+        on: {
+          type: 'string',
+          description: 'Optional connected remote machine name from tuff_herdr_list_sessions',
+        },
+        cwd: { type: 'string', description: 'Optional working directory for relative paths' },
+      },
+      required: ['path', 'content'],
+    },
+  },
+  {
+    name: 'tuff_herdr_file_edit',
+    label: 'Tuff: edit file via herdr',
+    description:
+      'Apply atomic exact-match search/replace edits to a UTF-8 text file via herdr-core on the '
+      + 'local machine or a connected remote machine (`on`). Each `old` string must match exactly '
+      + 'once; all edits apply or none do. Always asks the user every single time.',
+    promptSnippet: 'Apply atomic exact-match edits to a local or remote file via herdr-core',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Absolute path, or path relative to cwd' },
+        edits: {
+          type: 'array',
+          description: 'Non-overlapping exact search/replace pairs',
+          items: {
+            type: 'object',
+            properties: {
+              old: { type: 'string', description: 'Exact text to find (must match once)' },
+              new: { type: 'string', description: 'Replacement text' },
+            },
+            required: ['old', 'new'],
+          },
+        },
+        on: {
+          type: 'string',
+          description: 'Optional connected remote machine name from tuff_herdr_list_sessions',
+        },
+        cwd: { type: 'string', description: 'Optional working directory for relative paths' },
+      },
+      required: ['path', 'edits'],
+    },
+  },
+  {
+    name: 'tuff_herdr_run_terminal',
+    label: 'Tuff: start herdr terminal',
+    description:
+      'Launch a new persistent terminal or agent template via herdr-core locally or on a '
+      + 'connected remote machine (`on`). Always asks the user every single time.',
+    promptSnippet: 'Start a persistent local or remote terminal session via herdr-core',
+    parameters: {
+      type: 'object',
+      properties: {
+        argv: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Program and arguments, or [templateName, ...args]',
+        },
+        line: {
+          type: 'string',
+          description: 'Shell command line to run instead of argv',
+        },
+        cwd: { type: 'string', description: 'Working directory for the new terminal' },
+        on: {
+          type: 'string',
+          description: 'Optional connected remote machine name from tuff_herdr_list_sessions',
+        },
+        name: { type: 'string', description: 'Optional display name for the terminal' },
+        keep: {
+          type: 'boolean',
+          description: 'Restart with a recovery shell if the process is unexpectedly lost',
+        },
+        labels: {
+          type: 'object',
+          description: 'Optional key/value metadata labels',
+          additionalProperties: { type: 'string' },
+        },
+        cols: { type: 'number', description: 'Initial terminal width in columns' },
+        rows: { type: 'number', description: 'Initial terminal height in rows' },
+        env: {
+          type: 'object',
+          description: 'Optional environment variable overrides',
+          additionalProperties: { type: 'string' },
+        },
+      },
+    },
+  },
+  {
+    name: 'tuff_herdr_exec',
+    label: 'Tuff: run command via herdr',
+    description:
+      'Execute a non-interactive one-shot command via herdr-core (`machine.exec`) locally or on a '
+      + 'connected remote machine (`on`), returning exit code, stdout, and stderr (truncated at 64 KiB). '
+      + 'Always asks the user every single time.',
+    promptSnippet: 'Execute a one-shot local or remote command via herdr-core',
+    parameters: {
+      type: 'object',
+      properties: {
+        argv: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Program and arguments executed directly without a shell',
+        },
+        line: {
+          type: 'string',
+          description: 'Shell command line executed instead of argv',
+        },
+        cwd: { type: 'string', description: 'Working directory for execution' },
+        on: {
+          type: 'string',
+          description: 'Optional connected remote machine name from tuff_herdr_list_sessions',
+        },
+        env: {
+          type: 'object',
+          description: 'Optional environment variable overrides',
+          additionalProperties: { type: 'string' },
+        },
+        timeout: {
+          type: 'number',
+          description: 'Optional timeout in seconds (default 60, max 600)',
+        },
+        input: {
+          type: 'string',
+          description: 'Optional UTF-8 stdin text',
+        },
+      },
+    },
+  },
+  {
+    name: 'tuff_herdr_control_terminal',
+    label: 'Tuff: control herdr terminal',
+    description:
+      'Control a herdr-core terminal session: interrupt its current turn (`interrupt`), kill its '
+      + 'process (`kill`), remove a finished session (`rm`), or toggle keep-alive (`keep-on` / '
+      + '`keep-off`). Always asks the user every single time.',
+    promptSnippet: 'Interrupt, kill, remove, or toggle keep-alive on a herdr-core terminal',
+    parameters: {
+      type: 'object',
+      properties: {
+        terminal: {
+          type: 'string',
+          description: 'Terminal address from tuff_herdr_list_sessions (e.g. t1 or rohan/t7)',
+        },
+        action: {
+          type: 'string',
+          enum: ['interrupt', 'kill', 'rm', 'keep-on', 'keep-off'],
+          description: 'Control action to execute on the terminal',
+        },
+        timeout: {
+          type: 'number',
+          description: 'Optional timeout in seconds for the interrupt action',
+        },
+      },
+      required: ['terminal', 'action'],
+    },
+  },
 ]
 
 export default function tuffTools(pi: ExtensionApi): void {

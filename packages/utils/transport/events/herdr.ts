@@ -13,6 +13,23 @@ export type HerdrConnectionState
 
 export type HerdrOwnership = 'external' | 'managed' | 'none'
 
+export type HerdrBinarySource
+  = | 'custom'
+    | 'system'
+    | 'bundle'
+    | 'packaged-resource'
+    | 'missing'
+
+export interface HerdrBinaryInfo {
+  source: HerdrBinarySource
+  path: string | null
+  version: string | null
+  platform: string
+  arch: string
+  supported: boolean
+  installHint: string | null
+}
+
 export type HerdrOscState = 'idle' | 'working' | 'done' | 'blocked' | 'error'
 
 export type HerdrBlockedKind = 'permission' | 'question' | 'auth'
@@ -109,6 +126,7 @@ export interface HerdrRuntimeSnapshot {
   socketPath: string | null
   session: string
   binaryPath: string | null
+  binary?: HerdrBinaryInfo
   error: string | null
   core: HerdrCoreSummary | null
   sessions: HerdrSessionView[]

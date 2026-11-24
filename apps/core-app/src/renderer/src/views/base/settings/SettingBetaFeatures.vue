@@ -1,4 +1,8 @@
 <script setup lang="ts" name="SettingBetaFeatures">
+import type {
+  HerdrBinaryInfo,
+  HerdrBinarySource
+} from '@talex-touch/utils/transport/sdk/domains/herdr'
 import { TxButton } from '@talex-touch/tuffex/button'
 import {
   appSettingOriginData,
@@ -42,6 +46,12 @@ const herdrSession = computed(() =>
   typeof appSetting.herdrCore?.session === 'string'
     ? appSetting.herdrCore.session
     : DEFAULT_HERDR_CORE_SETTINGS.session
+)
+
+const herdrBinaryPath = computed(() =>
+  typeof appSetting.herdrCore?.binaryPath === 'string'
+    ? appSetting.herdrCore.binaryPath
+    : DEFAULT_HERDR_CORE_SETTINGS.binaryPath
 )
 
 type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'muted'
@@ -118,6 +128,80 @@ const connectionDescription = computed(() => {
   return t('settings.herdrCore.connection.desc')
 })
 
+const binaryInfo = computed<HerdrBinaryInfo | null>(() => herdr.snapshot.value?.binary ?? null)
+
+const binarySource = computed<HerdrBinarySource | null>(() => binaryInfo.value?.source ?? null)
+
+const binaryStatusMeta = computed<{ label: string; tone: StatusTone; icon: string }>(() => {
+  switch (binarySource.value) {
+    case 'custom':
+      return {
+        label: t('settings.herdrCore.binary.source.custom'),
+        tone: 'info',
+        icon: 'i-ri-settings-4-line'
+      }
+    case 'system':
+      return {
+        label: t('settings.herdrCore.binary.source.system'),
+        tone: 'success',
+        icon: 'i-ri-terminal-box-line'
+      }
+    case 'bundle':
+      return {
+        label: t('settings.herdrCore.binary.source.bundle'),
+        tone: 'success',
+        icon: 'i-ri-apps-2-line'
+      }
+    case 'packaged-resource':
+      return {
+        label: t('settings.herdrCore.binary.source.packagedResource'),
+        tone: 'success',
+        icon: 'i-ri-box-3-line'
+      }
+    case 'missing':
+      return {
+        label: t('settings.herdrCore.binary.source.missing'),
+        tone: 'warning',
+        icon: 'i-ri-information-line'
+      }
+    default:
+      return {
+        label: t('settings.herdrCore.binary.source.detecting'),
+        tone: 'muted',
+        icon: 'i-ri-search-line'
+      }
+  }
+})
+
+const binaryVersionLabel = computed(() => {
+  const raw = binaryInfo.value?.version?.trim()
+  if (!raw) return ''
+  return raw.startsWith('v') ? raw : `v${raw}`
+})
+
+const resolvedBinaryPath = computed(
+  () => binaryInfo.value?.path?.trim() || herdr.snapshot.value?.binaryPath?.trim() || ''
+)
+
+const isBinaryMissing = computed(() => binarySource.value === 'missing')
+
+const binaryDescription = computed(() => {
+  if (isBinaryMissing.value) {
+    return t('settings.herdrCore.binary.missingSummary')
+  }
+  if (binaryInfo.value?.platform && binaryInfo.value?.arch) {
+    return t('settings.herdrCore.binary.platformDesc', {
+      platform: binaryInfo.value.platform,
+      arch: binaryInfo.value.arch
+    })
+  }
+  return t('settings.herdrCore.binary.desc')
+})
+
+const missingBinaryCommand = computed(
+  () => binaryInfo.value?.installHint?.trim() || t('settings.herdrCore.binary.defaultInstallHint')
+)
+
 function ensureBetaFeaturesObject(): void {
   appSetting.betaFeatures ??= { ...appSettingOriginData.betaFeatures }
 }
@@ -162,6 +246,16 @@ function normalizeSessionOnBlur(): void {
   appSetting.herdrCore.session = trimmed || DEFAULT_HERDR_CORE_SETTINGS.session
 }
 
+function updateHerdrBinaryPath(value: string | number): void {
+  ensureHerdrCoreObject()
+  appSetting.herdrCore.binaryPath = String(value)
+}
+
+function normalizeBinaryPathOnBlur(): void {
+  ensureHerdrCoreObject()
+  appSetting.herdrCore.binaryPath = appSetting.herdrCore.binaryPath.trim()
+}
+
 async function handleReconnect(): Promise<void> {
   if (reconnecting.value || ensuringStarted.value) return
   reconnecting.value = true
@@ -182,7 +276,8 @@ async function handleEnsureStarted(): Promise<void> {
     await herdr.ensureStarted({
       forceBootstrap: true,
       socketPath: normalized.socketPath,
-      session: normalized.session
+      session: normalized.session,
+      binaryPath: normalized.binaryPath
     })
   } catch {
     toast.error(t('terminal.failed'))
@@ -285,6 +380,67 @@ async function handleEnsureStarted(): Promise<void> {
         </div>
       </TuffBlockSlot>
 
+      <TuffBlockSlot
+        data-testid="herdr-binary-status-row"
+        :title="t('settings.herdrCore.binary.title')"
+        :description="binaryDescription"
+        :disabled="!herdrRuntimeEnabled"
+      >
+        <template #tags>
+          <span
+            class="SettingHerdrCore-StatusPill"
+            :class="`is-${binaryStatusMeta.tone}`"
+            role="status"
+            data-testid="herdr-binary-source-badge"
+          >
+            <span
+              class="SettingHerdrCore-StatusIcon"
+              :class="binaryStatusMeta.icon"
+              aria-hidden="true"
+            />
+            <span>{{ binaryStatusMeta.label }}</span>
+          </span>
+
+          <span
+            v-if="binaryVersionLabel"
+            class="SettingHerdrCore-VersionChip"
+            data-testid="herdr-binary-version"
+          >
+            {{ binaryVersionLabel }}
+          </span>
+        </template>
+
+        <span
+          v-if="resolvedBinaryPath"
+          class="SettingHerdrCore-BinaryPath"
+          :title="resolvedBinaryPath"
+          data-testid="herdr-binary-path"
+        >
+          {{ resolvedBinaryPath }}
+        </span>
+      </TuffBlockSlot>
+
+      <div
+        v-if="isBinaryMissing && herdrRuntimeEnabled"
+        class="SettingHerdrCore-InstallHint"
+        role="status"
+        aria-live="polite"
+        data-testid="herdr-binary-missing-hint"
+      >
+        <span class="i-ri-information-line SettingHerdrCore-InstallHintIcon" aria-hidden="true" />
+        <div class="SettingHerdrCore-InstallHintBody">
+          <p class="SettingHerdrCore-InstallHintTitle">
+            {{ t('settings.herdrCore.binary.missingHintTitle') }}
+          </p>
+          <p class="SettingHerdrCore-InstallHintDesc">
+            {{ t('settings.herdrCore.binary.missingHintDesc') }}
+          </p>
+          <code class="SettingHerdrCore-InstallCode" data-testid="herdr-binary-install-cmd">{{
+            missingBinaryCommand
+          }}</code>
+        </div>
+      </div>
+
       <TuffBlockSwitch
         data-testid="herdr-autostart-switch"
         :model-value="herdrAutoStart"
@@ -292,6 +448,18 @@ async function handleEnsureStarted(): Promise<void> {
         :title="t('settings.herdrCore.autoStart.title')"
         :description="t('settings.herdrCore.autoStart.desc')"
         @update:model-value="updateHerdrAutoStart"
+      />
+
+      <TuffBlockInput
+        data-testid="herdr-binary-path-input"
+        :model-value="herdrBinaryPath"
+        :disabled="!herdrRuntimeEnabled"
+        :title="t('settings.herdrCore.binaryPath.title')"
+        :description="t('settings.herdrCore.binaryPath.desc')"
+        :placeholder="t('settings.herdrCore.binaryPath.placeholder')"
+        clearable
+        @update:model-value="updateHerdrBinaryPath"
+        @blur="normalizeBinaryPathOnBlur"
       />
 
       <TuffBlockInput
@@ -368,6 +536,89 @@ async function handleEnsureStarted(): Promise<void> {
   display: inline-flex;
   flex-shrink: 0;
   font-size: 13px;
+}
+
+.SettingHerdrCore-VersionChip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--tx-fill-color);
+  color: var(--tx-text-color-regular);
+  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.SettingHerdrCore-BinaryPath {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tx-text-color-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  user-select: text;
+}
+
+.SettingHerdrCore-InstallHint {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--tx-color-warning-light-9);
+  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter);
+  color: color-mix(in srgb, var(--tx-color-warning) 45%, var(--tx-text-color-primary));
+}
+
+.SettingHerdrCore-InstallHintIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 2px;
+  font-size: 15px;
+}
+
+.SettingHerdrCore-InstallHintBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.SettingHerdrCore-InstallHintTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.SettingHerdrCore-InstallHintDesc {
+  margin: 0;
+  color: var(--tx-text-color-regular);
+  font-size: 12px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.SettingHerdrCore-InstallCode {
+  display: inline-block;
+  align-self: flex-start;
+  max-width: 100%;
+  margin-top: 2px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--tx-bg-color);
+  color: var(--tx-text-color-primary);
+  box-shadow: inset 0 0 0 1px var(--tx-border-color);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  overflow-x: auto;
+  user-select: text;
 }
 
 .SettingHerdrCore-Actions {

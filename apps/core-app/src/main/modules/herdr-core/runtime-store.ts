@@ -1,5 +1,6 @@
 import type { HerdrCoreSettings } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type {
+  HerdrBinaryInfo,
   HerdrBlockedKind,
   HerdrConnectionState,
   HerdrCoreSummary,
@@ -19,12 +20,14 @@ import type { HerdrHelloResult, HerdrRpcNotification } from './framed-client'
 import type {
   DiscoverAndConnectOptions,
   DiscoveredHerdrConnection,
+  HerdrBinarySource as DiscoveryBinarySource,
   HerdrDiscoveryDeps
 } from './socket-discovery'
 import {
   DEFAULT_HERDR_CORE_SETTINGS,
   normalizeHerdrCoreSettings
 } from '@talex-touch/utils/common/storage/entity/app-settings'
+import { HerdrBinaryManager } from './binary-manager'
 import { HerdrClientError, HerdrFramedClient } from './framed-client'
 import {
   DEFAULT_HERDR_BOOTSTRAP_TIMEOUT_MS,
@@ -204,6 +207,20 @@ function cloneSession(session: HerdrSessionView): HerdrSessionView {
   }
 }
 
+function sameBinaryInfo(a: HerdrBinaryInfo | null, b: HerdrBinaryInfo | null): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  return (
+    a.source === b.source &&
+    a.path === b.path &&
+    a.version === b.version &&
+    a.platform === b.platform &&
+    a.arch === b.arch &&
+    a.supported === b.supported &&
+    a.installHint === b.installHint
+  )
+}
+
 export interface HerdrDocEvent {
   name: string
   version: number
@@ -225,6 +242,7 @@ export interface HerdrRuntimeStoreOptions {
   connectTimeoutMs?: number
   bootstrapTimeoutMs?: number
   discoveryDeps?: HerdrDiscoveryDeps
+  binaryManager?: HerdrBinaryManager
   discoverAndConnect?: (options: DiscoverAndConnectOptions) => Promise<DiscoveredHerdrConnection>
   createClient?: (connection: DiscoveredHerdrConnection) => HerdrFramedClient
   now?: () => number
@@ -262,6 +280,8 @@ export class HerdrRuntimeStore {
   private readonly connectTimeoutMs: number
   private readonly bootstrapTimeoutMs: number
   private readonly discoveryDeps?: HerdrDiscoveryDeps
+  private readonly binaryManager: HerdrBinaryManager
+  private readonly allowBackgroundBinaryScan: boolean
   private readonly discoverAndConnectFn: (
     options: DiscoverAndConnectOptions
   ) => Promise<DiscoveredHerdrConnection>
@@ -282,6 +302,8 @@ export class HerdrRuntimeStore {
   private socketPath: string | null = null
   private sessionName: string
   private binaryPath: string | null = null
+  private binary: HerdrBinaryInfo | null = null
+  private binaryInspectSeq = 0
   private error: string | null = null
   private core: HerdrCoreSummary | null = null
   private readonly sessions = new Map<string, HerdrSessionView>()
@@ -315,6 +337,10 @@ export class HerdrRuntimeStore {
     this.connectTimeoutMs = options.connectTimeoutMs ?? DEFAULT_HERDR_CONNECT_TIMEOUT_MS
     this.bootstrapTimeoutMs = options.bootstrapTimeoutMs ?? DEFAULT_HERDR_BOOTSTRAP_TIMEOUT_MS
     this.discoveryDeps = options.discoveryDeps
+    this.binaryManager =
+      options.binaryManager ??
+      new HerdrBinaryManager(this.discoveryDeps ? { discoveryDeps: this.discoveryDeps } : {})
+    this.allowBackgroundBinaryScan = !options.discoverAndConnect || Boolean(options.binaryManager)
     this.discoverAndConnectFn = options.discoverAndConnect ?? discoverAndConnectHerdrSocket
     this.createClientFn =
       options.createClient ?? ((conn) => new HerdrFramedClient({ socket: conn.socket }))
@@ -354,6 +380,7 @@ export class HerdrRuntimeStore {
       socketPath: this.socketPath,
       session: this.sessionName,
       binaryPath: this.binaryPath,
+      ...(this.binary ? { binary: { ...this.binary } } : {}),
       error: this.error,
       core: this.core ? { ...this.core, features: [...this.core.features] } : null,
       sessions,
@@ -417,14 +444,19 @@ export class HerdrRuntimeStore {
     this.settings = nextSettings
     this.sessionName = resolveHerdrSession(nextSettings, this.discoveryDeps)
 
+    const binaryPathChanged = prevSettings.binaryPath !== nextSettings.binaryPath
+
     if (!autoReconnect) {
+      if (this.allowBackgroundBinaryScan && (!this.binary || binaryPathChanged)) {
+        void this.refreshBinaryInfo(nextSettings).catch(() => undefined)
+      }
       return
     }
 
     const endpointChanged =
       prevSettings.socketPath !== nextSettings.socketPath ||
       prevSettings.session !== nextSettings.session ||
-      prevSettings.binaryPath !== nextSettings.binaryPath
+      binaryPathChanged
     const autoStartEnabled = !prevSettings.autoStart && nextSettings.autoStart
 
     if (!enabled) {
@@ -433,6 +465,9 @@ export class HerdrRuntimeStore {
         this.setConnectionState('disconnected', null, 'none')
       } else {
         this.emitSnapshot()
+      }
+      if (this.allowBackgroundBinaryScan && (!this.binary || binaryPathChanged)) {
+        void this.refreshBinaryInfo(nextSettings).catch(() => undefined)
       }
       return
     }
@@ -498,6 +533,12 @@ export class HerdrRuntimeStore {
         overrideSettings.session === this.settings.session &&
         overrideSettings.binaryPath === this.settings.binaryPath
       if (sameTarget) {
+        if (
+          this.allowBackgroundBinaryScan &&
+          (!this.binary || (this.binary.path && !this.binary.version))
+        ) {
+          void this.refreshBinaryInfo(overrideSettings).catch(() => undefined)
+        }
         return Promise.resolve(this.getSnapshot())
       }
     }
@@ -534,6 +575,27 @@ export class HerdrRuntimeStore {
   }
 
   /**
+   * Inspects the resolved `herdr-core` binary (source, path, version, platform support)
+   * without blocking startup and updates `snapshot.binary` if anything changed.
+   */
+  async refreshBinaryInfo(settings?: Partial<HerdrCoreSettings>): Promise<HerdrBinaryInfo> {
+    const inspectSeq = ++this.binaryInspectSeq
+    const info = await this.binaryManager.inspect(settings ?? this.settings)
+    if (this.disposed || inspectSeq !== this.binaryInspectSeq) {
+      return this.binary ? { ...this.binary } : info
+    }
+    const changed = !sameBinaryInfo(this.binary, info)
+    this.binary = info
+    if (this.connection !== 'connected' || !this.binaryPath) {
+      this.binaryPath = info.path
+    }
+    if (changed) {
+      this.emitSnapshot()
+    }
+    return { ...info }
+  }
+
+  /**
    * Upserts a session locally from an RPC return value (e.g. `terminal.run` / `terminal.kill`)
    * without advancing or clobbering `events.subscribe` sequence ordering.
    */
@@ -550,6 +612,7 @@ export class HerdrRuntimeStore {
     if (this.disposed) return
     this.disposed = true
     this.connectEpoch += 1
+    this.binaryInspectSeq += 1
     this.clearReconnectTimer()
     this.disconnectInternal('dispose')
     this.snapshotListeners.clear()
@@ -591,14 +654,25 @@ export class HerdrRuntimeStore {
         error instanceof HerdrDiscoveryError &&
         (error.code === 'BINARY_NOT_FOUND' || error.code === 'CORE_NOT_RUNNING')
       ) {
+        if (error.code === 'BINARY_NOT_FOUND') {
+          this.binaryInspectSeq += 1
+          this.binaryPath = null
+          this.binary = this.binaryManager.buildMissingInfo()
+        }
         this.log('info', 'herdr-core unavailable, downgrading to fallback-pty', {
           code: error.code,
           message
         })
         this.setConnectionState('fallback-pty', message, 'none')
+        if (error.code !== 'BINARY_NOT_FOUND' && this.allowBackgroundBinaryScan) {
+          void this.refreshBinaryInfo(effectiveSettings).catch(() => undefined)
+        }
       } else {
         this.log('warn', 'herdr-core discovery/bootstrap failed', { message })
         this.setConnectionState('unavailable', message, 'none')
+        if (this.allowBackgroundBinaryScan) {
+          void this.refreshBinaryInfo(effectiveSettings).catch(() => undefined)
+        }
       }
       return this.getSnapshot()
     }
@@ -612,6 +686,7 @@ export class HerdrRuntimeStore {
     this.sessionName = discovered.session
     this.binaryPath = discovered.binaryPath
     this.ownership = discovered.ownership
+    this.seedAndProbeDiscoveredBinary(discovered, effectiveSettings)
     this.setConnectionState('handshaking', null, discovered.ownership)
 
     const client = this.createClientFn(discovered)
@@ -725,6 +800,38 @@ export class HerdrRuntimeStore {
       }
       return this.getSnapshot()
     }
+  }
+
+  private seedAndProbeDiscoveredBinary(
+    discovered: DiscoveredHerdrConnection,
+    effectiveSettings: HerdrCoreSettings
+  ): void {
+    const inspectSeq = ++this.binaryInspectSeq
+    if (!discovered.binaryPath) {
+      this.binary = this.binaryManager.buildMissingInfo()
+      return
+    }
+    const discoverySource: DiscoveryBinarySource =
+      discovered.binarySource ?? (effectiveSettings.binaryPath.trim() ? 'settings' : 'path')
+    const initial = this.binaryManager.buildFromPath(discovered.binaryPath, discoverySource)
+    this.binary = initial
+
+    if (initial.version !== null) {
+      return
+    }
+
+    const targetPath = discovered.binaryPath
+    void this.binaryManager
+      .probeVersion(targetPath)
+      .then((version) => {
+        if (this.disposed || inspectSeq !== this.binaryInspectSeq) return
+        if (!this.binary || this.binary.path !== targetPath) return
+        if (version && this.binary.version !== version) {
+          this.binary = { ...this.binary, version }
+          this.emitSnapshot()
+        }
+      })
+      .catch(() => undefined)
   }
 
   private async hydrateMetadata(

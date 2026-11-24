@@ -2,6 +2,7 @@ import type { AddressInfo, Server, Socket } from 'node:net'
 import { Buffer } from 'node:buffer'
 import net from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { HerdrBinaryManager } from './binary-manager'
 import { encodeDataFrame, HerdrFrameDecoder, HerdrFrameKind } from './frame-codec'
 import { HerdrRuntimeStore } from './runtime-store'
 import { HerdrDiscoveryError } from './socket-discovery'
@@ -483,5 +484,135 @@ describe('herdr-core runtime-store', () => {
     expect(snap.connection).toBe('fallback-pty')
     expect(snap.ownership).toBe('none')
     expect(snap.error).toContain('binary missing')
+    expect(snap.binary).toMatchObject({
+      source: 'missing',
+      path: null,
+      version: null,
+      installHint: expect.any(String)
+    })
+  })
+
+  it('populates snapshot.binary with source and asynchronously probed version on connect', async () => {
+    const server = await startScriptedServer([])
+    cleanups.push(() => new Promise<void>((resolve) => server.server.close(() => resolve())))
+
+    const binaryManager = new HerdrBinaryManager({
+      platform: 'darwin',
+      arch: 'arm64',
+      statFile: async () => ({ mtimeMs: 123, size: 456 }),
+      execVersion: async () => 'hc 0.1.21\n'
+    })
+
+    const store = new HerdrRuntimeStore({
+      heartbeatTimeoutMs: 10_000,
+      binaryManager,
+      discoverAndConnect: async () => {
+        const socket = net.createConnection({ port: server.port, host: '127.0.0.1' })
+        await new Promise<void>((resolve) => socket.once('connect', resolve))
+        return {
+          socket,
+          socketPath: '/tmp/bin-probe.sock',
+          session: 'probe',
+          binaryPath: '/Applications/Tuff.app/Contents/Resources/herdr-core/herdr-core',
+          binarySource: 'resources',
+          ownership: 'external'
+        }
+      }
+    })
+    cleanups.push(() => store.dispose())
+
+    const snap = await store.connect()
+    expect(snap.binary).toMatchObject({
+      source: 'packaged-resource',
+      path: '/Applications/Tuff.app/Contents/Resources/herdr-core/herdr-core',
+      platform: 'darwin',
+      arch: 'arm64',
+      supported: true,
+      installHint: null
+    })
+
+    await vi.waitFor(() => {
+      expect(store.getSnapshot().binary?.version).toBe('0.1.21')
+    })
+  })
+
+  it('ignores stale in-flight refreshBinaryInfo after BINARY_NOT_FOUND or cached-version connect', async () => {
+    const server = await startScriptedServer([])
+    cleanups.push(() => new Promise<void>((resolve) => server.server.close(() => resolve())))
+
+    let resolveStaleInspect!: () => void
+    const staleInspectGate = new Promise<void>((resolve) => {
+      resolveStaleInspect = resolve
+    })
+
+    const binaryManager = new HerdrBinaryManager({
+      platform: 'darwin',
+      arch: 'arm64',
+      discoveryDeps: {
+        platform: 'darwin',
+        homedir: () => '/Users/tester',
+        env: { PATH: '/stale/bin' },
+        isExecutable: async (candidate) => {
+          await staleInspectGate
+          return candidate === '/stale/bin/herdr-core'
+        }
+      },
+      statFile: async () => ({ mtimeMs: 10, size: 20 }),
+      execVersion: async (binaryPath) =>
+        binaryPath.includes('cached') ? 'hc 0.2.0\n' : 'hc 0.1.0\n'
+    })
+
+    // Case 1: in-flight refreshBinaryInfo resolves AFTER BINARY_NOT_FOUND
+    const missingStore = new HerdrRuntimeStore({
+      binaryManager,
+      discoverAndConnect: async () => {
+        throw new HerdrDiscoveryError('BINARY_NOT_FOUND', 'missing now')
+      }
+    })
+    cleanups.push(() => missingStore.dispose())
+
+    const pendingMissingRefresh = missingStore.refreshBinaryInfo()
+    const missingSnap = await missingStore.connect()
+    expect(missingSnap.binary?.source).toBe('missing')
+
+    // Case 2: in-flight refreshBinaryInfo resolves AFTER connect hits a cached binary version
+    await binaryManager.probeVersion('/opt/cached/herdr-core')
+    const cachedStore = new HerdrRuntimeStore({
+      heartbeatTimeoutMs: 10_000,
+      binaryManager,
+      discoverAndConnect: async () => {
+        const socket = net.createConnection({ port: server.port, host: '127.0.0.1' })
+        await new Promise<void>((resolve) => socket.once('connect', resolve))
+        return {
+          socket,
+          socketPath: '/tmp/cached-bin.sock',
+          session: 'cached',
+          binaryPath: '/opt/cached/herdr-core',
+          binarySource: 'settings',
+          ownership: 'external'
+        }
+      }
+    })
+    cleanups.push(() => cachedStore.dispose())
+
+    const pendingCachedRefresh = cachedStore.refreshBinaryInfo()
+    const cachedSnap = await cachedStore.connect()
+    expect(cachedSnap.binary).toMatchObject({
+      source: 'custom',
+      path: '/opt/cached/herdr-core',
+      version: '0.2.0'
+    })
+
+    // Release both stale in-flight inspections and confirm neither overwrites newer state.
+    resolveStaleInspect()
+    await Promise.all([pendingMissingRefresh, pendingCachedRefresh])
+
+    expect(missingStore.getSnapshot().binary?.source).toBe('missing')
+    expect(missingStore.getSnapshot().binary?.path).toBeNull()
+    expect(cachedStore.getSnapshot().binary).toMatchObject({
+      source: 'custom',
+      path: '/opt/cached/herdr-core',
+      version: '0.2.0'
+    })
   })
 })

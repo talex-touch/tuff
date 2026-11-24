@@ -34,6 +34,7 @@ files:
   - resources/**
   - '!resources/licenses/**'
   - '!resources/browser-connector/**'
+  - '!resources/herdr-core/**'
   - package.json
   - '!resources/bundled-plugins/**'
   - node_modules/**
@@ -109,6 +110,10 @@ extraResources:
     filter:
       - '**/*'
       - '!.tuff-legal-owned'
+  # Optional herdr-core binary bundling (opt-in only; omitted from default builds):
+  # Stage with `TUFF_BUNDLE_HERDR_CORE=1 node scripts/stage-herdr-core-binary.mjs --from <bin> --sha256 <hex>`
+  # into `resources/herdr-core/` (binary + Apache-2.0 LICENSE/NOTICE + manifest.json) and pass
+  # `-c.extraResources` (or enable a `from: resources/herdr-core` -> `to: herdr-core` entry) for bundled builds.
 
 win:
   target:
