@@ -1978,7 +1978,9 @@
     "newChat": "新建对话",
     "spaces": {
       "title": "Spaces",
-      "temporaryNotice": "临时空间的文件保存在系统临时目录，重启后会被删除。对话记录会保留。"
+      "temporaryNotice": "临时空间的文件保存在系统临时目录，重启后会被删除。对话记录会保留。",
+      "temporary": "临时空间",
+      "temporaryNoticeMarkRead": "已读"
     },
     "browser": "浏览器",
     "newProject": "新建项目",
@@ -2331,7 +2333,7 @@
         "disable": "关闭 {name}"
       },
       "queue": {
-        "title": "排队消息",
+        "title": "排队与转向消息",
         "count": "已排队 {count} / {max}",
         "held": "已暂停，继续前不会执行任何内容。",
         "heldInterrupted": "回复期间应用已关闭，队列已暂停；继续前不会执行。",
@@ -2356,7 +2358,19 @@
         "editPlaceholder": "输入排队消息内容…",
         "addImage": "添加图片",
         "updated": "排队消息已更新",
-        "updateFailed": "更新排队消息失败"
+        "updateFailed": "更新排队消息失败",
+        "queueMode": "排队",
+        "queueTiming": "本轮完成后依次发送",
+        "recall": "拉回输入框编辑",
+        "steerAdd": "运行中转向",
+        "steerAddHint": "将在下次工具或步骤交互时传入当前执行轮次。",
+        "steerBadge": "转向",
+        "steerCount": "运行中转向 {count}",
+        "steerInjected": "运行中转向",
+        "steerMode": "转向",
+        "steerTiming": "将在下次工具交互时传入",
+        "switchToQueue": "改为本轮结束后排队",
+        "switchToSteer": "改为下次工具时传入（转向）"
       },
       "run": {
         "title": "Agent 运行等待你批准",
@@ -2621,7 +2635,10 @@
     "code": {
       "preview": "预览",
       "source": "代码",
-      "frameLabel": "{lang} 预览"
+      "frameLabel": "{lang} 预览",
+      "ran": "已执行",
+      "run": "执行",
+      "runInTerminal": "在底部终端执行"
     },
     "diagram": {
       "zoom": "放大图表",
@@ -8023,7 +8040,13 @@
       "indexWriterBusy": "搜索索引正在写入，请稍后重试。",
       "timedOut": "请求超时，请重试。",
       "coolingDown": "刚才的请求失败了，请过几秒再试。",
-      "httpStatus": "服务器返回了错误（HTTP {status}）。"
+      "httpStatus": "服务器返回了错误（HTTP {status}）。",
+      "coolingDownSeconds": "刚才的请求失败了，请 {seconds} 秒后再试。",
+      "emptyStreamBody": "服务器返回了空的响应流，请重试。",
+      "networkAborted": "网络请求已中止。",
+      "networkTransportFailed": "网络连接中断或无法连接到服务器，请检查网络后重试。",
+      "responseTooLarge": "服务器返回的内容超出允许的大小限制。",
+      "timedOutAfter": "请求在等待 {seconds} 秒后超时。"
     }
   },
   "form": {
@@ -8398,7 +8421,9 @@
       "modelDetail": "切换到支持该能力的模型后再重试。",
       "networkTitle": "网络请求失败",
       "networkDetail": "检查网络连接或提供商的 API 端点后再重试。",
-      "unknownTitle": "AI 请求失败"
+      "unknownTitle": "AI 请求失败",
+      "networkTimeoutDetail": "模型或提供商在规定时间内未响应，请检查网络连接、代理或提供商接口后再重试。",
+      "networkTimeoutTitle": "网络请求超时"
     },
     "providers": "AI 提供商",
     "addProvider": "添加提供商",

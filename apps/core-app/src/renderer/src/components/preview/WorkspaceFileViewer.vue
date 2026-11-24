@@ -19,6 +19,8 @@ const props = withDefaults(
     conversationId?: string | null
     line?: number
     refreshToken?: number
+    /** Show a local back button when the host maintains preview navigation history. */
+    canGoBack?: boolean
     /** Hide the "Open in Built-in Browser" button when already rendered inside BrowserPage. */
     showOpenInBrowser?: boolean
   }>(),
@@ -27,11 +29,13 @@ const props = withDefaults(
     conversationId: null,
     line: undefined,
     refreshToken: 0,
+    canGoBack: false,
     showOpenInBrowser: true
   }
 )
 
 const emit = defineEmits<{
+  (event: 'back'): void
   (event: 'navigate', payload: { path: string; displayPath: string }): void
   (event: 'open-in-browser', payload: { path: string; displayPath: string; line?: number }): void
 }>()
@@ -351,6 +355,17 @@ function adjustZoom(delta: number): void {
       </div>
 
       <div class="WorkspaceFileViewer-Toolbar">
+        <button
+          v-if="canGoBack"
+          type="button"
+          class="WorkspaceFileViewer-ToolBtn"
+          :title="t('browser.back')"
+          :aria-label="t('browser.back')"
+          @click="emit('back')"
+        >
+          <span class="i-ri-arrow-left-line" aria-hidden="true" />
+        </button>
+
         <div v-if="supportsPreviewToggle" class="WorkspaceFileViewer-Segment" role="group">
           <button
             type="button"

@@ -7,6 +7,7 @@ import type {
   ConversationWorkspaceState,
   WorkspaceForkRequest,
   WorkspaceMessageUpdate,
+  WorkspaceQueueDeliveryMode,
   WorkspaceQueuedInput,
   WorkspaceSubmitDisposition
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
@@ -96,6 +97,8 @@ export interface WorkspaceSendOptions extends ConversationSendOptions {
   answersToolCallId?: string
   /** Sends this kept voice clip as the message's voice; the text is its transcript. */
   voiceRecordingId?: string
+  /** Delivery timing when submitting while a turn is running (`'steer'` injects at next tool boundary). */
+  deliveryMode?: WorkspaceQueueDeliveryMode
 }
 
 export interface UseAgentWorkspaceOptions {
@@ -148,12 +151,16 @@ export interface UseAgentWorkspaceReturn {
   setDraftMode: (mode: ConversationWorkspaceMode) => void
   setDraftProfile: (profileId: string | undefined) => void
   resume: () => Promise<void>
-  queueAction: (queueId: string, action: WorkspaceQueueAction) => Promise<void>
+  queueAction: (queueId: string, action: WorkspaceQueueAction) => Promise<boolean>
   updateQueued: (
     queueId: string,
     text: string,
     attachments?: IntelligenceMessageAttachment[],
     keptAttachmentIds?: string[]
+  ) => Promise<void>
+  setQueuedDeliveryMode: (
+    queueId: string,
+    deliveryMode: WorkspaceQueueDeliveryMode
   ) => Promise<void>
   fork: (request: Omit<WorkspaceForkRequest, 'conversationId'>) => Promise<string>
   approveRun: () => Promise<void>
@@ -428,7 +435,8 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
         ...(sendOptions.answersToolCallId
           ? { answersToolCallId: sendOptions.answersToolCallId }
           : {}),
-        ...(sendOptions.voiceRecordingId ? { voiceRecordingId: sendOptions.voiceRecordingId } : {})
+        ...(sendOptions.voiceRecordingId ? { voiceRecordingId: sendOptions.voiceRecordingId } : {}),
+        ...(sendOptions.deliveryMode ? { deliveryMode: sendOptions.deliveryMode } : {})
       }
       const carried = attachments?.length ? await toModelAttachments(attachments) : []
       const result = await sdk.submit({
@@ -531,11 +539,11 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
     }
   }
 
-  async function queueAction(queueId: string, action: WorkspaceQueueAction): Promise<void> {
-    if (queuePending.value) return
+  async function queueAction(queueId: string, action: WorkspaceQueueAction): Promise<boolean> {
+    if (queuePending.value) return false
     queuePending.value = { queueId, action }
     try {
-      await mutate(`queue.${action}`, (conversationId) => {
+      return await mutate(`queue.${action}`, (conversationId) => {
         if (action === 'remove') return sdk.removeQueued(conversationId, queueId)
         if (action === 'promote') return sdk.promoteQueued(conversationId, queueId)
         return sdk.reorderQueued(conversationId, queueId, action)
@@ -558,6 +566,19 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
         text,
         ...(attachments?.length ? { attachments } : {}),
         ...(keptAttachmentIds ? { keptAttachmentIds } : {})
+      })
+    )
+  }
+
+  async function setQueuedDeliveryMode(
+    queueId: string,
+    deliveryMode: WorkspaceQueueDeliveryMode
+  ): Promise<void> {
+    await mutate('queue.deliveryMode', (conversationId) =>
+      sdk.updateQueued({
+        conversationId,
+        queueId,
+        deliveryMode
       })
     )
   }
@@ -656,6 +677,7 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
     resume,
     queueAction,
     updateQueued,
+    setQueuedDeliveryMode,
     fork,
     approveRun: () => decideRun('approve'),
     rejectRun: () => decideRun('reject'),

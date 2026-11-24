@@ -1,6 +1,6 @@
 import type { ConversationTurnMeta } from './useHomeConversation'
 import { describe, expect, it } from 'vitest'
-import { buildTurnInfoRows } from './turn-info-rows'
+import { buildTurnInfoRows, shortTurnReasoning } from './turn-info-rows'
 
 /** Keys through unchanged: these tests assert which rows appear, not their wording. */
 const t = (key: string): string => key
@@ -156,5 +156,27 @@ describe('buildTurnInfoRows reasoning', () => {
       { reasoningRequested: 'high', reasoningApplied: 'high', reasoningStatus: 'made-up' }
     ] as unknown as ConversationTurnMeta[]
     for (const turn of broken) expect(keys(turn)).not.toContain('reasoning')
+  })
+
+  it('produces compact inline reasoning badges for applied, clamped, and forwarded turns only', () => {
+    expect(
+      shortTurnReasoning(
+        { reasoningRequested: 'max', reasoningApplied: 'xhigh', reasoningStatus: 'applied' },
+        t
+      )
+    ).toBe('home.reasoning.level.xhigh')
+    expect(
+      shortTurnReasoning(
+        { reasoningRequested: 'low', reasoningApplied: 'high', reasoningStatus: 'clamped' },
+        t
+      )
+    ).toBe('home.reasoning.level.high')
+    expect(
+      shortTurnReasoning({ reasoningRequested: 'medium', reasoningStatus: 'forwarded' }, t)
+    ).toBe('home.reasoning.level.medium')
+    expect(
+      shortTurnReasoning({ reasoningRequested: 'high', reasoningStatus: 'unsupported-model' }, t)
+    ).toBeNull()
+    expect(shortTurnReasoning({}, t)).toBeNull()
   })
 })

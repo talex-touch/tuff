@@ -8,12 +8,14 @@ import type { ConversationRecord } from '@talex-touch/utils/transport/sdk/domain
 import { TxEdgeFadeMask } from '@talex-touch/tuffex/edge-fade-mask'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createAgentWorkspaceSdk } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import { createLocalAiCliSdk } from '@talex-touch/utils/transport/sdk/domains/local-ai-cli'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
+import { appSetting } from '~/modules/storage/app-storage'
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -27,7 +29,7 @@ import { blankConversationOwner, useProjectFolders } from '~/modules/layout/useP
 import { useProjectStore } from '~/stores/projects'
 import MetaHintBadge from './MetaHintBadge.vue'
 import ShellProjectFolder from './ShellProjectFolder.vue'
-import ShellProjectRows from './ShellProjectRows.vue'
+import ShellTemporarySpace from './ShellTemporarySpace.vue'
 
 const { t, locale } = useI18n()
 const { isConversationLoading } = useConversationLoading()
@@ -51,6 +53,7 @@ const folders = useProjectFolders({
 })
 const { collapsed } = useShellSidebar()
 const archivedOpen = ref(false)
+const temporaryExpanded = ref(true)
 const renamingProjectId = ref<string | null>(null)
 const discoveringProjectId = ref<string | null>(null)
 /**
@@ -68,9 +71,6 @@ onMounted(() => {
 const groups = computed(() =>
   projectConversationGroups(projects.value, history.conversations.value, localAiSessions.value)
 )
-const hasTemporarySpaces = computed(() =>
-  groups.value.home.rows.some((row) => row.kind === 'conversation')
-)
 /** Project names by id, so a row's info dialog can name its project instead of showing an id. */
 const projectNames = computed(() => {
   const names: Record<string, string> = {}
@@ -82,9 +82,39 @@ const activeId = computed(() => (typeof route.params.id === 'string' ? route.par
 const currentProjectId = computed(
   () => blankConversationOwner(route.path, activeProjectId.value) ?? null
 )
+const isTemporaryCurrent = computed(
+  () => blankConversationOwner(route.path, activeProjectId.value) === null
+)
+const temporaryNoticeRead = computed(
+  () =>
+    (appSetting.shell as { temporaryNoticeRead?: unknown } | undefined)?.temporaryNoticeRead ===
+    true
+)
 const showSkeleton = computed(
   () => !loaded.value && history.conversations.value.length === 0 && projects.value.length === 0
 )
+
+watch(activeId, (id) => {
+  if (!id) return
+  if (
+    groups.value.home.rows.some((row) => row.kind === 'conversation' && row.conversation.id === id)
+  ) {
+    temporaryExpanded.value = true
+  }
+})
+
+function enterTemporarySpace(): void {
+  temporaryExpanded.value = true
+  enterConversation(null)
+}
+
+function markTemporaryNoticeRead(): void {
+  if (!appSetting.shell || typeof appSetting.shell !== 'object') {
+    appSetting.shell = { ...appSettingOriginData.shell, temporaryNoticeRead: true }
+    return
+  }
+  appSetting.shell.temporaryNoticeRead = true
+}
 
 function openConversation(id: string): void {
   if (activeId.value === id) return
@@ -429,7 +459,7 @@ function onRailRowClick(row: RailConversationRow): void {
       </div>
 
       <template v-else>
-        <!-- Always present, even with no projects: the header's + is where new projects start. -->
+        <!-- Always present, even with no projects: + starts a chat, folder-add opens a space. -->
         <section class="ShellConversationList-Section ShellConversationList-Section--spaces">
           <div class="ShellConversationList-SectionHeader">
             <span class="ShellConversationList-SectionTitle">{{ t('shell.spaces.title') }}</span>
@@ -439,7 +469,7 @@ function onRailRowClick(row: RailConversationRow): void {
               type="button"
               :title="t('shell.newChat')"
               :aria-label="t('shell.newChat')"
-              @click="enterConversation(null)"
+              @click="enterTemporarySpace"
             >
               <span class="i-ri-add-line" />
             </button>
@@ -451,7 +481,7 @@ function onRailRowClick(row: RailConversationRow): void {
               :aria-label="t('shell.newProject')"
               @click="enterPickedProjectConversation"
             >
-              <span class="i-ri-add-line" />
+              <span class="i-ri-folder-add-line" />
             </button>
           </div>
 
@@ -497,24 +527,25 @@ function onRailRowClick(row: RailConversationRow): void {
               {{ t('shell.projects.newFromFolder') }}
             </span>
           </button>
-          <div v-if="groups.home.rows.length" class="ShellConversationList-Loose">
-            <ShellProjectRows
-              :rows="groups.home.rows"
-              :active-id="activeId"
-              :project-names="projectNames"
-              @open-conversation="openConversation"
-              @remove-conversation="removeConversation"
-              @rename-conversation="renameConversation"
-              @copy-conversation="copyConversation"
-              @open-conversation-file="openConversationFile"
-              @continue-session="continueSession"
-              @forget-session="forgetSession"
-            />
-            <p v-if="hasTemporarySpaces" class="ShellConversationList-LooseNotice">
-              <span class="i-ri-information-line" />
-              <span>{{ t('shell.spaces.temporaryNotice') }}</span>
-            </p>
-          </div>
+          <ShellTemporarySpace
+            v-if="groups.home.rows.length"
+            :rows="groups.home.rows"
+            :active-id="activeId"
+            :current="isTemporaryCurrent"
+            :expanded="temporaryExpanded"
+            :notice-read="temporaryNoticeRead"
+            :project-names="projectNames"
+            @toggle="temporaryExpanded = !temporaryExpanded"
+            @enter="enterTemporarySpace"
+            @mark-notice-read="markTemporaryNoticeRead"
+            @open-conversation="openConversation"
+            @remove-conversation="removeConversation"
+            @rename-conversation="renameConversation"
+            @copy-conversation="copyConversation"
+            @open-conversation-file="openConversationFile"
+            @continue-session="continueSession"
+            @forget-session="forgetSession"
+          />
         </section>
 
         <section v-if="groups.archived.length" class="ShellConversationList-Archived">
@@ -624,29 +655,6 @@ function onRailRowClick(row: RailConversationRow): void {
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-
-.ShellConversationList-Loose {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 6px;
-}
-
-.ShellConversationList-LooseNotice {
-  display: flex;
-  gap: 6px;
-  align-items: flex-start;
-  margin: 4px 0 0;
-  padding: 0 var(--shell-row-pad-x) 0 calc(var(--shell-row-pad-x) + 1px);
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-caption);
-  line-height: 1.5;
-
-  .i-ri-information-line {
-    flex: 0 0 auto;
-    margin-top: 2px;
-  }
 }
 
 /**

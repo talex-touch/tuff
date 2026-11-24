@@ -82,6 +82,16 @@ const sendMock = vi.fn(async (event: unknown, payload?: Record<string, unknown>)
   if (event === BrowserEvents.reload) {
     return structuredClone(workspaceState)
   }
+  if (event === BrowserEvents.navigate) {
+    const tabId = String(payload?.tabId)
+    const input = String(payload?.input ?? '')
+    workspaceState = {
+      ...workspaceState,
+      revision: workspaceState.revision + 1,
+      tabs: workspaceState.tabs.map((tab) => (tab.id === tabId ? { ...tab, url: input } : tab))
+    }
+    return structuredClone(workspaceState)
+  }
   if (event === BrowserEvents.setViewport || event === BrowserEvents.captureSnapshot) {
     return { snapshot: null }
   }
@@ -159,6 +169,14 @@ vi.mock('./ChromeCookieDialog.vue', () => ({
   default: {
     props: ['modelValue'],
     template: '<div data-testid="cookie-dialog" :data-open="String(modelValue)" />'
+  }
+}))
+vi.mock('~/components/preview/WorkspaceFileViewer.vue', () => ({
+  default: {
+    props: ['filePath', 'displayPath', 'conversationId', 'line', 'refreshToken', 'canGoBack'],
+    emits: ['back', 'navigate'],
+    template:
+      '<div data-testid="preview-viewer" :data-path="filePath" :data-refresh="String(refreshToken ?? 0)" :data-can-go-back="String(Boolean(canGoBack))"><button type="button" data-testid="preview-back" @click="$emit(\'back\')" /><button type="button" data-testid="preview-open-file" @click="$emit(\'navigate\', { path: \'/repo/src/index.ts\', displayPath: \'/repo/src/index.ts\' })" /></div>'
   }
 }))
 
@@ -354,5 +372,48 @@ describe('BrowserPage shortcuts & lifecycle hygiene', () => {
       })
     )
     expect(sendMock).not.toHaveBeenCalledWith(BrowserEvents.createTab, expect.anything())
+  })
+
+  it('refreshes WorkspaceFileViewer on Cmd/Ctrl+R and keeps local back history across preview navigation', async () => {
+    const dirUrl = 'tuff://preview?path=%2Frepo%2Fsrc&conversationId=conv-1'
+    workspaceState = makeState([{ id: 't1', url: dirUrl, title: 'src' }], 't1', 1)
+
+    const wrapper = mount(BrowserPage, { attachTo: document.body })
+    await flushPromises()
+    await nextTick()
+
+    const viewer = () => wrapper.get('[data-testid="preview-viewer"]')
+    expect(viewer().attributes('data-path')).toBe('/repo/src')
+    expect(viewer().attributes('data-refresh')).toBe('0')
+    expect(viewer().attributes('data-can-go-back')).toBe('false')
+
+    // Cmd+R increments the viewer's refreshToken instead of invoking guest sdk.reload.
+    sendMock.mockClear()
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'r',
+        code: 'KeyR',
+        metaKey: true,
+        cancelable: true
+      })
+    )
+    await flushPromises()
+    await nextTick()
+    expect(viewer().attributes('data-refresh')).toBe('1')
+    expect(sendMock).not.toHaveBeenCalledWith(BrowserEvents.reload, expect.anything())
+
+    // Navigating from a directory preview to a file enables local back navigation.
+    await wrapper.get('[data-testid="preview-open-file"]').trigger('click')
+    await flushPromises()
+    await nextTick()
+    expect(viewer().attributes('data-path')).toBe('/repo/src/index.ts')
+    expect(viewer().attributes('data-can-go-back')).toBe('true')
+
+    // Clicking back returns to the parent directory preview and clears the history stack.
+    await wrapper.get('[data-testid="preview-back"]').trigger('click')
+    await flushPromises()
+    await nextTick()
+    expect(viewer().attributes('data-path')).toBe('/repo/src')
+    expect(viewer().attributes('data-can-go-back')).toBe('false')
   })
 })

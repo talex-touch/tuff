@@ -10,9 +10,17 @@ import {
 import { isStoppedTurn, useTurnFailureWording } from '~/modules/conversation/useTurnFailureWording'
 import type { IntelligenceErrorRecovery } from '~/modules/intelligence/ai-error-recovery'
 import {
+  describeAiRunFailure,
   resolveIntelligenceErrorRecovery,
   USAGE_LIMITS_ROUTE
 } from '~/modules/intelligence/ai-error-recovery'
+import { describeFailure, isTimeoutFailureMessage } from '~/utils/failure-text'
+
+/**
+ * Recovery kinds whose guidance does not assume Tuff Nexus (unlike `auth` / `quota` / `permission`,
+ * which could misfire on a third-party provider's own text).
+ */
+const CAUGHT_ADVICE_CODES: ReadonlySet<string> = new Set(['network', 'credentials', 'model'])
 
 /**
  * How a failed turn reads and where it leads: the advice, the report line, the usage-limit
@@ -24,14 +32,21 @@ export function useTurnError() {
   const { classifyTurnFailure, resolveErrorTitle } = useTurnFailureWording()
 
   /**
-   * What to do about a failure the intelligence layer named. Not for a provider's own text, passed on
-   * as thrown or named `UNKNOWN`: it can say "quota" about the provider's plan, where the advice is
-   * about Nexus credits.
+   * What to do about a failure the intelligence layer named, or a provider/network failure whose
+   * guidance is provider-agnostic (`network`, `credentials`, `model`). Nexus-specific advice
+   * (`quota`, `auth`, `permission`) still requires an explicit intelligence error code so a
+   * third-party provider saying "quota" never points the user at Nexus credits.
    */
   function resolveErrorAdvice(error: ConversationError | undefined): string {
-    if (!error || !isIntelligenceErrorCode(error.code) || error.code === 'UNKNOWN') return ''
+    if (!error) return ''
     const recovery = classifyTurnFailure(error)
-    return recovery && recovery.code !== 'provider' ? recovery.detail : ''
+    if (!recovery || recovery.code === 'provider') return ''
+    const namedByIntelligence = isIntelligenceErrorCode(error.code) && error.code !== 'UNKNOWN'
+    if (!namedByIntelligence && !CAUGHT_ADVICE_CODES.has(recovery.code)) return ''
+    if (recovery.code === 'network' && isTimeoutFailureMessage(error.detail)) {
+      return t('intelligence.errorRecovery.networkTimeoutDetail')
+    }
+    return recovery.detail
   }
 
   function resolveErrorReportCode(error: { code?: string } | undefined): string {
@@ -41,7 +56,9 @@ export function useTurnError() {
 
   function resolveErrorReportDetail(error: { detail?: string } | undefined): string {
     const detail = error?.detail?.trim()
-    return detail || t('home.error.noDetail')
+    if (!detail) return t('home.error.noDetail')
+    const described = describeFailure(detail, t, detail)
+    return describeAiRunFailure(described, t)
   }
 
   /**

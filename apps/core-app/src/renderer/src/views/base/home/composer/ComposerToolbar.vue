@@ -1,5 +1,6 @@
 <script lang="ts" name="ComposerToolbar" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
+import type { WorkspaceQueueDeliveryMode } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
 import type { SendState } from './send-state'
 import type { DictationOutcome, DictationState } from './useComposerDictation'
@@ -31,17 +32,32 @@ const props = withDefaults(
     model: { label: string; icon?: ITuffIcon; effort?: string; scheduler?: string }
     sendState: SendState
     sendQueues?: boolean
+    /** A reply is currently streaming; keeps a compact Stop key reachable while drafting a steer/queue message. */
+    live?: boolean
+    /** Active Agent run supports mid-turn steer delivery at the next tool/step boundary. */
+    canSteer?: boolean
+    /** Selected mid-run delivery mode (`'steer'` vs `'queue'`). */
+    deliveryMode?: WorkspaceQueueDeliveryMode
     micState: DictationState
     /** This build cannot capture audio: the entry is withheld instead of failing on press. */
     micBlocked?: boolean
     micElapsedMs?: number
     micOutcome?: DictationOutcome | null
   }>(),
-  { sendQueues: false, micBlocked: false, micElapsedMs: 0, micOutcome: null }
+  {
+    sendQueues: false,
+    live: false,
+    canSteer: false,
+    deliveryMode: 'queue',
+    micBlocked: false,
+    micElapsedMs: 0,
+    micOutcome: null
+  }
 )
 
 const emit = defineEmits<{
   (event: 'update:permissionMode', mode: AgentToolsMode): void
+  (event: 'update:deliveryMode', mode: WorkspaceQueueDeliveryMode): void
   (event: 'files', files: File[]): void
   (event: 'send'): void
   (event: 'stop'): void
@@ -58,6 +74,20 @@ const islandRef = ref<InstanceType<typeof ComposerSendIsland> | null>(null)
 const micYielded = ref(isCapsuleSendState(props.sendState))
 
 const dictating = computed(() => props.micState !== 'idle')
+const steerActive = computed(
+  () => props.sendQueues && props.canSteer && props.deliveryMode === 'steer'
+)
+/** While streaming with a draft in the field, keep a compact 32px Stop button in the mic slot. */
+const showCompactStop = computed(
+  () => props.live && !isCapsuleSendState(props.sendState) && !dictating.value
+)
+const showSteerToggle = computed(
+  () => props.canSteer && props.sendQueues && props.sendState === 'ready' && !dictating.value
+)
+
+function toggleDeliveryMode(): void {
+  emit('update:deliveryMode', props.deliveryMode === 'steer' ? 'queue' : 'steer')
+}
 
 const timerText = computed(() => {
   const seconds = Math.max(0, Math.floor(props.micElapsedMs / 1000))
@@ -65,16 +95,19 @@ const timerText = computed(() => {
 })
 
 const sendLabel = computed(() => {
+  if (steerActive.value) return t('home.workspace.queue.steerAdd')
   if (props.sendQueues) return t('home.workspace.queue.add')
   return props.micState === 'idle' ? t('home.send') : t('home.composer.finishAndSend')
 })
 
 const sendTitle = computed(() => {
+  if (steerActive.value) return t('home.workspace.queue.steerAddHint')
   if (props.sendQueues) return t('home.workspace.queue.addHint')
   return undefined
 })
 
 const sendIcon = computed(() => {
+  if (steerActive.value) return 'i-ri-corner-down-right-line'
   if (props.sendQueues) return 'i-ri-play-list-add-line'
   return 'i-ri-arrow-up-line'
 })
@@ -186,13 +219,49 @@ defineExpose({ launch })
           </template>
         </HomeModelMenu>
       </div>
+      <button
+        v-if="showSteerToggle"
+        type="button"
+        class="ComposerToolbar-SteerToggle"
+        :class="{ 'is-steer': steerActive }"
+        :aria-pressed="steerActive"
+        :title="
+          steerActive
+            ? t('home.workspace.queue.switchToQueue')
+            : t('home.workspace.queue.switchToSteer')
+        "
+        @click="toggleDeliveryMode"
+      >
+        <span
+          :class="steerActive ? 'i-ri-corner-down-right-line' : 'i-ri-play-list-2-line'"
+          aria-hidden="true"
+        />
+        <span>{{
+          steerActive ? t('home.workspace.queue.steerMode') : t('home.workspace.queue.queueMode')
+        }}</span>
+      </button>
       <!--
         Withheld, not disabled, when this build has no audio component: the slot is removed so the
-        send key takes its place. A disabled button would pose a question the app already knows the
-        answer to, and the status read that decided this is the same one a session would fail on.
+        send key takes its place. While a reply streams and the user types a steer/queue draft,
+        this fixed 32×32 slot hosts the compact Stop button so stopping stays one click away.
       -->
-      <div v-if="!micBlocked" class="ComposerToolbar-MicSlot">
-        <ComposerMic :state="micState" :yielded="micYielded" @toggle="emit('mic')" />
+      <div v-if="!micBlocked || showCompactStop" class="ComposerToolbar-MicSlot">
+        <ComposerMic
+          v-if="!micBlocked"
+          :state="micState"
+          :yielded="micYielded || showCompactStop"
+          @toggle="emit('mic')"
+        />
+        <button
+          v-if="showCompactStop"
+          type="button"
+          class="ComposerToolbar-StopKey"
+          :aria-label="t('home.stop')"
+          :title="t('home.stop')"
+          @click="emit('stop')"
+        >
+          <span class="ComposerToolbar-StopSquare" aria-hidden="true" />
+        </button>
       </div>
       <div class="ComposerToolbar-SendSlot">
         <ComposerSendIsland
@@ -219,6 +288,7 @@ defineExpose({ launch })
   container: home-composer-tools / inline-size;
   position: relative;
   display: flex;
+  gap: 8px;
   align-items: center;
   justify-content: space-between;
   // The composer pads 16 / 16 / 12 inside a 1px border; pulling the row out 9px sideways and 5px
@@ -262,6 +332,8 @@ defineExpose({ launch })
 
 .ComposerToolbar-Right {
   position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 // The picker is reached through `+`; the input itself never shows.
@@ -278,6 +350,7 @@ defineExpose({ launch })
 }
 
 .ComposerToolbar-Left {
+  flex: none;
   transform-origin: left center;
 }
 
@@ -285,8 +358,19 @@ defineExpose({ launch })
   display: flex;
   align-items: center;
   height: 32px;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   transform-origin: right center;
+
+  // Let the popover reference wrappers shrink with the slot so a long model name ellipsizes
+  // instead of pushing the microphone and send keys past the composer's right edge.
+  :deep(.tx-base-anchor__reference),
+  :deep(.tx-tooltip__reference),
+  :deep(.tx-popover__reference) {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
 }
 
 .ComposerToolbar-Status {
@@ -362,6 +446,80 @@ defineExpose({ launch })
 
 .ComposerToolbar-SendSlot {
   z-index: 2;
+}
+
+.ComposerToolbar-SteerToggle {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+  height: 28px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--shell-surface-2);
+  color: var(--shell-text-secondary);
+  font: inherit;
+  font-size: var(--shell-fs-caption);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  appearance: none;
+
+  &:hover {
+    background: var(--shell-surface);
+    color: var(--shell-text-primary);
+  }
+
+  &.is-steer {
+    background: var(--shell-primary-soft);
+    color: var(--shell-primary);
+  }
+
+  &.is-steer:hover {
+    background: color-mix(in srgb, var(--shell-primary) 18%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: 2px;
+  }
+}
+
+.ComposerToolbar-StopKey {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  background: var(--shell-text-primary);
+  color: var(--shell-bg);
+  cursor: pointer;
+  appearance: none;
+
+  &:hover {
+    background: color-mix(in srgb, var(--shell-text-primary) 86%, var(--shell-bg));
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: 2px;
+  }
+}
+
+.ComposerToolbar-StopSquare {
+  width: 10px;
+  height: 10px;
+  border-radius: 2.5px;
+  background: currentColor;
 }
 
 @media (prefers-reduced-motion: no-preference) {

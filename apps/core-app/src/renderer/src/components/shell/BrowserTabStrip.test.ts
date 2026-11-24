@@ -307,6 +307,16 @@ describe('BrowserTabStrip layout, drag regions & tab actions', () => {
 
     await wrapper.find('[role="tablist"]').trigger('wheel', { deltaY: 45, deltaX: 0 })
     expect(tablist.scrollLeft).toBe(65)
+    expect(wrapper.find('[role="tablist"]').classes()).toContain('can-scroll-left')
+    expect(wrapper.find('[role="tablist"]').classes()).toContain('can-scroll-right')
+
+    const horizontalWheel = new WheelEvent('wheel', {
+      deltaX: 24,
+      deltaY: 0,
+      cancelable: true
+    })
+    tablist.dispatchEvent(horizontalWheel)
+    expect(horizontalWheel.defaultPrevented).toBe(false)
   })
 
   it('closes an open tab context menu if its target tab disappears', async () => {

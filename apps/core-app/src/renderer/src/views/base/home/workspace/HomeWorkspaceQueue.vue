@@ -1,6 +1,7 @@
 <script lang="ts" name="HomeWorkspaceQueue" setup>
 import type {
   ConversationWorkspaceStatus,
+  WorkspaceQueueDeliveryMode,
   WorkspaceQueuedInput
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import type { IntelligenceMessageAttachment } from '@talex-touch/utils/types/intelligence'
@@ -14,24 +15,29 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 
 /**
- * Main's pending inputs for this conversation, above the composer.
+ * Main's pending steer & follow-up inputs for this conversation, stacked as a narrower card
+ * tucked cleanly behind the composer.
  *
- * The list is Main's queue as broadcast — a row exists only once Main persisted it, and each control
- * is one request Main applies with the upstream TurnQueue rules: promoted rows run before ordinary
- * ones in the order they were promoted, ordinary rows keep arrival order and never move across the
- * promoted head. Promoting decides what runs after the current turn; it never interrupts it.
- *
- * A held queue (after Stop, a failure or a restart) stays visible with its reason and runs again
- * only on an explicit Continue (A7).
+ * - `deliveryMode === 'steer'` items are synced into the active agent run and injected at the next
+ *   tool/step boundary (falling back to the front of the next-turn queue if the run ends or pauses).
+ * - Ordinary queued items follow TurnQueue rules: promoted rows run before ordinary rows in
+ *   promotion order, ordinary rows keep arrival order.
+ * - A held queue (after Stop, failure or restart) stays visible with its reason and resumes only
+ *   on explicit Continue.
  */
-const props = defineProps<{
-  items: WorkspaceQueuedInput[]
-  status: ConversationWorkspaceStatus
-  held: boolean
-  limit: number
-  pending: { queueId: string; action: WorkspaceQueueAction } | null
-  resuming: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    items: WorkspaceQueuedInput[]
+    status: ConversationWorkspaceStatus
+    held: boolean
+    limit: number
+    pending: { queueId: string; action: WorkspaceQueueAction } | null
+    resuming: boolean
+    /** Active Agent run can accept mid-turn steer delivery at the next tool/step boundary. */
+    canSteer?: boolean
+  }>(),
+  { canSteer: false }
+)
 
 const emit = defineEmits<{
   (event: 'action', queueId: string, action: WorkspaceQueueAction): void
@@ -42,16 +48,35 @@ const emit = defineEmits<{
     attachments?: IntelligenceMessageAttachment[],
     keptAttachmentIds?: string[]
   ): void
+  (event: 'mode', queueId: string, deliveryMode: WorkspaceQueueDeliveryMode): void
+  (event: 'recall', item: WorkspaceQueuedInput): void
   (event: 'resume'): void
 }>()
 
 const { t } = useI18n()
 
+const rootRef = ref<HTMLElement | null>(null)
 const listRef = ref<HTMLElement | null>(null)
+
+const steerCount = computed(
+  () => props.items.filter((item) => item.deliveryMode === 'steer').length
+)
 
 const promotedCount = computed(
   () => props.items.filter((item) => item.priority === 'promoted').length
 )
+
+const deliveryTimingHint = computed(() => {
+  if (heldReason.value) return null
+  if (props.canSteer && steerCount.value > 0) return t('home.workspace.queue.steerTiming')
+  return t('home.workspace.queue.queueTiming')
+})
+
+function isSteer(item: WorkspaceQueuedInput): boolean {
+  return item.deliveryMode === 'steer'
+}
+
+defineExpose({ el: rootRef })
 
 watch(
   () => props.items.length,
@@ -211,20 +236,35 @@ async function saveEdit(): Promise<void> {
 
 <template>
   <section
+    ref="rootRef"
     class="HomeWorkspaceQueue"
-    :class="{ 'is-held': held }"
+    :class="{ 'is-held': held, 'has-steer': canSteer && steerCount > 0 }"
     :aria-label="t('home.workspace.queue.title')"
   >
     <header class="HomeWorkspaceQueue-Head">
       <span class="HomeWorkspaceQueue-Title">
         <span
-          :class="held ? 'i-ri-pause-circle-line' : 'i-ri-play-list-2-line'"
+          :class="
+            held
+              ? 'i-ri-pause-circle-line'
+              : canSteer && steerCount > 0
+                ? 'i-ri-corner-down-right-line'
+                : 'i-ri-play-list-2-line'
+          "
           class="HomeWorkspaceQueue-HeadIcon"
           aria-hidden="true"
         />
-        <span>{{ t('home.workspace.queue.count', { count: items.length, max: limit }) }}</span>
+        <span v-if="canSteer && steerCount > 0" class="HomeWorkspaceQueue-SteerSummary">
+          {{ t('home.workspace.queue.steerCount', { count: steerCount }) }}
+        </span>
+        <span class="HomeWorkspaceQueue-Count">
+          {{ t('home.workspace.queue.count', { count: items.length, max: limit }) }}
+        </span>
       </span>
       <span v-if="heldReason" class="HomeWorkspaceQueue-Held" role="status">{{ heldReason }}</span>
+      <span v-else-if="deliveryTimingHint" class="HomeWorkspaceQueue-Timing">
+        {{ deliveryTimingHint }}
+      </span>
       <button
         v-if="canResume"
         class="HomeWorkspaceQueue-Resume"
@@ -249,14 +289,17 @@ async function saveEdit(): Promise<void> {
         v-for="(item, index) in items"
         :key="item.id"
         class="HomeWorkspaceQueue-Row"
-        :class="{ 'is-pending': isPending(item) }"
+        :class="{ 'is-pending': isPending(item), 'is-steer': isSteer(item) }"
         tabindex="0"
         :aria-label="t('home.workspace.queue.rowLabel', { position: index + 1, text: item.text })"
         :aria-keyshortcuts="'Alt+ArrowUp Alt+ArrowDown Delete'"
         @keydown="onRowKeydown($event, item)"
       >
         <span class="HomeWorkspaceQueue-Position" aria-hidden="true">
-          <span v-if="isPromoted(item)" class="HomeWorkspaceQueue-Next">
+          <span v-if="isSteer(item)" class="HomeWorkspaceQueue-Steer">
+            {{ t('home.workspace.queue.steerBadge') }}
+          </span>
+          <span v-else-if="isPromoted(item)" class="HomeWorkspaceQueue-Next">
             {{ t('home.workspace.queue.next') }}
           </span>
           <span v-else>{{ index + 1 }}</span>
@@ -285,6 +328,39 @@ async function saveEdit(): Promise<void> {
         </span>
         <span class="HomeWorkspaceQueue-Actions">
           <button
+            v-if="canSteer"
+            class="HomeWorkspaceQueue-Btn"
+            :class="{ 'is-steer-active': isSteer(item) }"
+            type="button"
+            :aria-label="
+              isSteer(item)
+                ? t('home.workspace.queue.switchToQueue')
+                : t('home.workspace.queue.switchToSteer')
+            "
+            :title="
+              isSteer(item)
+                ? t('home.workspace.queue.switchToQueue')
+                : t('home.workspace.queue.switchToSteer')
+            "
+            :disabled="pending !== null"
+            @click.stop="emit('mode', item.id, isSteer(item) ? 'queue' : 'steer')"
+          >
+            <span
+              :class="isSteer(item) ? 'i-ri-play-list-2-line' : 'i-ri-corner-down-right-line'"
+            />
+          </button>
+          <button
+            v-if="!item.attachments?.length"
+            class="HomeWorkspaceQueue-Btn"
+            type="button"
+            :aria-label="t('home.workspace.queue.recall')"
+            :title="t('home.workspace.queue.recall')"
+            :disabled="pending !== null"
+            @click.stop="emit('recall', item)"
+          >
+            <span class="i-ri-arrow-go-back-line" />
+          </button>
+          <button
             class="HomeWorkspaceQueue-Btn"
             type="button"
             :aria-label="t('home.workspace.queue.edit')"
@@ -295,6 +371,7 @@ async function saveEdit(): Promise<void> {
             <span class="i-ri-edit-line" />
           </button>
           <button
+            v-if="items.length > 1 && !isSteer(item)"
             class="HomeWorkspaceQueue-Btn"
             type="button"
             :aria-label="t('home.workspace.queue.promote')"
@@ -305,6 +382,7 @@ async function saveEdit(): Promise<void> {
             <span class="i-ri-skip-up-line" />
           </button>
           <button
+            v-if="items.length > 1 && !isPromoted(item)"
             class="HomeWorkspaceQueue-Btn"
             type="button"
             tabindex="-1"
@@ -316,6 +394,7 @@ async function saveEdit(): Promise<void> {
             <span class="i-ri-arrow-up-s-line" />
           </button>
           <button
+            v-if="items.length > 1 && !isPromoted(item)"
             class="HomeWorkspaceQueue-Btn"
             type="button"
             tabindex="-1"
@@ -456,20 +535,27 @@ async function saveEdit(): Promise<void> {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  width: calc(var(--home-chat-lane-width) - 48px);
+  gap: 5px;
+  // Slightly narrower than the composer in front so it reads as a layered card tucked behind it.
+  width: calc(var(--home-chat-lane-width) - 44px);
   min-width: 0;
-  margin: 0 auto -20px auto;
-  padding: 6px 12px 22px 12px;
-  border: 1px solid var(--shell-border);
+  margin: 0 auto -16px auto;
+  padding: 8px 12px 22px 12px;
+  border: 1px solid color-mix(in srgb, var(--shell-border) 90%, transparent);
   border-bottom: none;
-  border-radius: var(--shell-radius-xl) var(--shell-radius-xl) 0 0;
-  background: var(--shell-surface);
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.04);
+  border-radius: 18px 18px 0 0;
+  background: color-mix(in srgb, var(--shell-surface) 90%, var(--shell-bg));
+  box-shadow:
+    0 -2px 12px color-mix(in srgb, var(--shell-shadow) 45%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
   box-sizing: border-box;
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   pointer-events: auto;
+
+  &.has-steer {
+    border-color: color-mix(in srgb, var(--shell-primary) 34%, var(--shell-border));
+  }
 
   &.is-held {
     border-color: var(--shell-warning-border);
@@ -486,7 +572,7 @@ async function saveEdit(): Promise<void> {
 
 .HomeWorkspaceQueue-Title {
   display: inline-flex;
-  gap: 5px;
+  gap: 6px;
   align-items: center;
   color: var(--shell-text-primary);
   font-size: var(--shell-fs-caption);
@@ -500,8 +586,35 @@ async function saveEdit(): Promise<void> {
   color: var(--shell-text-secondary);
 }
 
+.has-steer .HomeWorkspaceQueue-HeadIcon {
+  color: var(--shell-primary);
+}
+
 .is-held .HomeWorkspaceQueue-HeadIcon {
   color: var(--shell-warning);
+}
+
+.HomeWorkspaceQueue-SteerSummary {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--shell-radius-full);
+  background: var(--shell-primary-soft);
+  color: var(--shell-primary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.HomeWorkspaceQueue-Count {
+  color: var(--shell-text-secondary);
+}
+
+.HomeWorkspaceQueue-Timing {
+  margin-left: auto;
+  color: var(--shell-text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
 }
 
 .HomeWorkspaceQueue-Held {
@@ -640,13 +753,24 @@ async function saveEdit(): Promise<void> {
 
 .HomeWorkspaceQueue-Position {
   flex: none;
-  min-width: 14px;
+  min-width: 16px;
   margin-top: 1px;
   color: var(--shell-text-muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   text-align: center;
   line-height: 1.35;
+}
+
+.HomeWorkspaceQueue-Steer {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: var(--shell-radius-full);
+  background: var(--shell-primary);
+  color: var(--shell-on-primary, #fff);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .HomeWorkspaceQueue-Next {
@@ -718,6 +842,10 @@ async function saveEdit(): Promise<void> {
   &:hover:not(:disabled) {
     background: var(--shell-surface);
     color: var(--shell-text-primary);
+  }
+
+  &.is-steer-active {
+    color: var(--shell-primary);
   }
 
   &.is-danger:hover:not(:disabled) {

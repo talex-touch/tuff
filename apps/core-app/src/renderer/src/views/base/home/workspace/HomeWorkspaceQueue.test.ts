@@ -171,4 +171,29 @@ describe('HomeWorkspaceQueue', () => {
     expect(rows.length).toBe(5)
     expect(queue.find('.HomeWorkspaceQueue-More').exists()).toBe(false)
   })
+
+  it('shows steer badge, timing hint, mode toggle, and recall action when canSteer is true', async () => {
+    const steerItem = queued('q-steer', 'turn into single page html', {
+      deliveryMode: 'steer',
+      priority: 'promoted'
+    })
+    const queue = mountQueue({ items: [steerItem], canSteer: true })
+
+    expect(queue.classes()).toContain('has-steer')
+    expect(queue.find('.HomeWorkspaceQueue-Steer').text()).toBe('home.workspace.queue.steerBadge')
+    expect(queue.find('.HomeWorkspaceQueue-Timing').text()).toBe('home.workspace.queue.steerTiming')
+    // Single-item queue omits disabled reorder clutter.
+    expect(queue.find('[title="home.workspace.queue.up"]').exists()).toBe(false)
+    expect(queue.find('[title="home.workspace.queue.down"]').exists()).toBe(false)
+
+    // Toggle steer -> queue
+    const modeBtn = queue.get('[title="home.workspace.queue.switchToQueue"]')
+    await modeBtn.trigger('click')
+    expect(queue.emitted('mode')).toEqual([['q-steer', 'queue']])
+
+    // Recall plain text back to composer
+    const recallBtn = queue.get('[title="home.workspace.queue.recall"]')
+    await recallBtn.trigger('click')
+    expect(queue.emitted('recall')?.[0]?.[0]).toMatchObject({ id: 'q-steer' })
+  })
 })

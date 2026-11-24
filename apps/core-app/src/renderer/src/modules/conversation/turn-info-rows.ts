@@ -25,10 +25,39 @@ export interface TurnInfoRowsInput {
 }
 
 /**
+ * Short inline label of the reasoning effort a turn actually ran at, for the turn footer beside
+ * the model name. Omitted when the turn had no reasoning request or the route did not support it.
+ */
+export function shortTurnReasoning(
+  turn: ConversationTurnMeta,
+  t: TurnInfoRowsInput['t']
+): string | null {
+  const requested = normalizeReasoningEffort(turn.reasoningRequested)
+  const status = turn.reasoningStatus
+  if (!requested || !isReasoningEffortStatus(status)) return null
+  const applied = isReasoningLevel(turn.reasoningApplied) ? turn.reasoningApplied : undefined
+
+  switch (status) {
+    case 'applied':
+      return applied ? t(reasoningLevelLabelKey(applied)) : null
+    case 'clamped':
+      return applied ? t(reasoningLevelLabelKey(applied)) : null
+    case 'forwarded':
+      return t(reasoningLevelLabelKey(requested))
+    case 'unsupported-model':
+    case 'unsupported-provider':
+      return null
+  }
+}
+
+/**
  * What the turn asked for and what it ran at, in words. Read off stored meta, so every field is
  * checked again here: a record that does not add up says nothing rather than something wrong.
  */
-function describeReasoning(turn: ConversationTurnMeta, t: TurnInfoRowsInput['t']): string | null {
+export function describeTurnReasoning(
+  turn: ConversationTurnMeta,
+  t: TurnInfoRowsInput['t']
+): string | null {
   const requested = normalizeReasoningEffort(turn.reasoningRequested)
   const status = turn.reasoningStatus
   if (!requested || !isReasoningEffortStatus(status)) return null
@@ -82,7 +111,7 @@ export function buildTurnInfoRows(input: TurnInfoRowsInput): TurnInfoRow[] {
     rows.push({ key: 'model', label: t('home.panel.model'), value: turn.model })
   }
   // Only when the turn asked for one: on auto nothing was sent, and there is nothing to report.
-  const reasoning = turn ? describeReasoning(turn, t) : null
+  const reasoning = turn ? describeTurnReasoning(turn, t) : null
   if (reasoning) {
     rows.push({ key: 'reasoning', label: t('home.reasoning.label'), value: reasoning })
   }

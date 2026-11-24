@@ -1,6 +1,6 @@
 import type { PetEggEvent, PetEggs } from './pet-eggs'
 import type { BreakoutState, Brick, JuggleState, PetGame } from './pet-games'
-import type { PetAction, PetPose, PlayField } from './pet-motion'
+import type { ClimbWall, PetAction, PetPose, PlayField } from './pet-motion'
 import type { PetSurface } from './pet-physics'
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { computed, onScopeDispose, reactive, ref, shallowRef } from 'vue'
@@ -19,7 +19,14 @@ import {
   stepJuggle
 } from './pet-games'
 import { matchPetKeywords } from './pet-keywords'
-import { buildField, pickAction, poseOf, positionOf, weightActions } from './pet-motion'
+import {
+  buildField,
+  climbPoseOf,
+  pickAction,
+  poseOf,
+  positionOf,
+  weightActions
+} from './pet-motion'
 import {
   centreX,
   classifyFall,
@@ -44,6 +51,8 @@ interface ReactionStage {
   flat?: boolean
 }
 
+export type PetLiveActivity = 'idle' | 'thinking' | 'writing' | 'running'
+
 export interface PetHost {
   stage: () => HTMLElement | null
   body: () => HTMLElement | null
@@ -51,6 +60,8 @@ export interface PetHost {
   input: () => HTMLTextAreaElement | null
   empty: () => boolean
   head: () => HTMLElement | null
+  /** Live assistant turn activity so the pet reflects work instead of napping while streaming. */
+  activity?: () => PetLiveActivity
 }
 
 const STEP = 1 / 60
@@ -160,7 +171,7 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
   let y = 0
   let vx = 0
   let vy = 0
-  let facing: 1 | -1 = 1
+  let facing: 1 | -1 = -1
   let angle = 0
   let squashX = 1
   let squashY = 1
@@ -182,6 +193,7 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
   let swimUntil = 0
   let clicks: number[] = []
   let wallUp = false
+  let climbWall: ClimbWall = 1
   let recovering = false
   let climbTarget: number | null = null
   let ledgeDir: 1 | -1 = 1
@@ -219,6 +231,8 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
   let overworkDone = false
   let sessionStart = Date.now()
   const observers: ResizeObserver[] = []
+  let boxObserver: ResizeObserver | null = null
+  let observedBox: HTMLElement | null = null
   const storage = hasWindow() ? window.localStorage : null
 
   function persist(): void {
@@ -269,9 +283,15 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
   }
 
   function readRects(): void {
+    const currentBox = host.box()
+    if (boxObserver && currentBox !== observedBox) {
+      if (observedBox) boxObserver.unobserve(observedBox)
+      if (currentBox) boxObserver.observe(currentBox)
+      observedBox = currentBox
+    }
     rects.stage = host.stage()?.getBoundingClientRect() ?? null
     rects.body = host.body()?.getBoundingClientRect() ?? null
-    rects.box = host.box()?.getBoundingClientRect() ?? null
+    rects.box = currentBox?.getBoundingClientRect() ?? null
     const stage = rects.stage
     const body = rects.body
     field =
@@ -350,6 +370,30 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
     if (poseUntil > 0 && perf >= poseUntil && game.value === null && perf >= reactionUntil) {
       poseUntil = 0
       setPose('sit')
+    }
+    const activity = host.activity?.() ?? 'idle'
+    if (
+      mode === 'stand' &&
+      !game.value &&
+      !dragging.value &&
+      reactionStages.length === 0 &&
+      perf >= reactionUntil &&
+      poseUntil === 0
+    ) {
+      if (activity !== 'idle') {
+        const targetPose: PetPose = activity === 'writing' ? 'writing' : 'thinking'
+        if (
+          pose.value === 'sit' ||
+          pose.value === 'idle' ||
+          pose.value === 'sleep' ||
+          pose.value === 'thinking' ||
+          pose.value === 'writing'
+        ) {
+          if (pose.value !== targetPose) setPose(targetPose)
+        }
+      } else if (pose.value === 'thinking' || pose.value === 'writing') {
+        setPose('sit')
+      }
     }
   }
 
@@ -530,11 +574,12 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
   function startWallClimb(): void {
     const composer = field?.composer
     if (!field || !composer) return
-    const toLeft = walkDir === -1
+    const wall: ClimbWall = walkDir === -1 ? -1 : 1
     wallUp = false
+    climbWall = wall
+    facing = wall
     setMode('climb')
-    x = toLeft ? field.bounds.left : field.bounds.right - PET_WIDTH
-    facing = toLeft ? 1 : -1
+    x = wall === -1 ? field.bounds.left : field.bounds.right - PET_WIDTH
     climbTarget = standTop(composer)
     climbUntil = performance.now() + 9000
     setPose('climb')
@@ -587,13 +632,16 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
         vx = 0
         vy = 0
         peakTop = y
+        setPose('fall')
         return
       }
+      x = climbWall === -1 ? field.bounds.left : field.bounds.right - PET_WIDTH
       if (climbTarget !== null && y <= climbTarget) {
         const composer = field.composer
         const centre = composer ? (composer.x0 + composer.x1) / 2 : 0
         setMode('ledge')
         ledgeDir = centreX(x) < centre ? 1 : -1
+        facing = ledgeDir
         ledgeUntil = perf + 9000
         y = climbTarget
         climbTarget = null
@@ -606,6 +654,7 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
         vx = 0
         vy = 0
         peakTop = y
+        setPose('fall')
         return
       }
       y -= CLIMB_SPEED * dt
@@ -653,6 +702,7 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
         } else {
           if (pose.value !== 'walk') setPose('walk')
           const gap = target - cx
+          if (gap !== 0) facing = gap > 0 ? 1 : -1
           const step = REANCHOR_SPEED * dt
           x = (Math.abs(gap) <= step ? target : cx + Math.sign(gap) * step) - PET_WIDTH / 2
         }
@@ -751,6 +801,7 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
     if (jump) {
       vx = jump.vx
       vy = jump.vy
+      if (jump.vx !== 0) facing = jump.vx > 0 ? 1 : -1
       setMode('air')
       voluntary = true
       peakTop = y
@@ -805,6 +856,9 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
       friday: new Date(tNow).getDay() === 5
     })
     if (belly) options = options.filter(([a]) => STILL_ACTIONS.has(a))
+    if ((host.activity?.() ?? 'idle') !== 'idle') {
+      options = options.filter(([a]) => a !== 'sleep')
+    }
     if (!onComposer && !laneUsable) {
       options = options.filter(([a]) => a === 'jump-up' || a === 'wall-up')
       if (options.length === 0) return
@@ -859,6 +913,7 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
       if (plan) {
         vx = plan.vx
         vy = plan.vy
+        if (plan.vx !== 0) facing = plan.vx > 0 ? 1 : -1
         setMode('air')
         voluntary = true
         peakTop = y
@@ -953,15 +1008,21 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
     const node = el.value
     if (!node || !field) return
     stepBelly()
-    const climbing = mode === 'climb' ? 90 * facing : 0
+    const climbing = mode === 'climb'
     const position = positionOf(x, y)
     if (position !== lastTransform) {
       node.style.transform = position
       lastTransform = position
     }
+    const climbPose = climbing ? climbPoseOf(climbWall) : null
     const poseCss = poseOf({
-      facing,
-      angle: game.value === 'breakout' ? angle : climbing + bellyAngle,
+      facing: climbPose ? climbPose.facing : facing,
+      angle:
+        game.value === 'breakout'
+          ? -facing * angle
+          : (climbPose ? (climbPose.angle ?? 0) : 0) + bellyAngle,
+      tx: climbPose?.tx,
+      ty: climbPose?.ty,
       sx: squashX,
       sy: squashY
     })
@@ -972,15 +1033,27 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
     squashX += (1 - squashX) * 0.2
     squashY += (1 - squashY) * 0.2
     const shadowNode = shadow.value
-    if (shadowNode && surface) {
-      const feet = y + PET_SIZE - FOOT_PAD
-      const height = Math.max(0, surface.y - feet)
-      const scale = Math.max(0.35, 1 - height / 240)
-      const shadowStyle = `translate3d(${(centreX(x) - 22).toFixed(1)}px, ${(surface.y - 3).toFixed(1)}px, 0) scale(${scale.toFixed(3)})`
-      if (shadowStyle !== lastShadow) {
-        shadowNode.style.transform = shadowStyle
-        shadowNode.style.opacity = String(0.3 * scale)
-        lastShadow = shadowStyle
+    if (shadowNode) {
+      if (climbing) {
+        if (lastShadow !== 'none') {
+          shadowNode.style.opacity = '0'
+          lastShadow = 'none'
+        }
+      } else if (surface) {
+        const cx = centreX(x)
+        const shadowSurface =
+          surface.id === 'composer' && (cx < surface.x0 || cx > surface.x1)
+            ? (field.surfaces.find((s) => s.id === 'floor') ?? surface)
+            : surface
+        const feet = y + PET_SIZE - FOOT_PAD
+        const height = Math.max(0, shadowSurface.y - feet)
+        const scale = Math.max(0.35, 1 - height / 240)
+        const shadowStyle = `translate3d(${(cx - 22).toFixed(1)}px, ${(shadowSurface.y - 3).toFixed(1)}px, 0) scale(${scale.toFixed(3)})`
+        if (shadowStyle !== lastShadow) {
+          shadowNode.style.transform = shadowStyle
+          shadowNode.style.opacity = String(0.3 * scale)
+          lastShadow = shadowStyle
+        }
       }
     }
   }
@@ -1152,10 +1225,13 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
     samples = []
     peakTop = y
     const bounds = field.bounds
-    const nearLeft = x - bounds.left < WALL_SNAP
-    const nearRight = bounds.right - (x + PET_WIDTH) < WALL_SNAP
-    if ((nearLeft || nearRight) && y > bounds.top + 40) {
-      x = nearLeft ? bounds.left : bounds.right - PET_WIDTH
+    const distLeft = x - bounds.left
+    const distRight = bounds.right - (x + PET_WIDTH)
+    if ((distLeft < WALL_SNAP || distRight < WALL_SNAP) && y > bounds.top + 40) {
+      const wall: ClimbWall = distLeft <= distRight ? -1 : 1
+      climbWall = wall
+      facing = wall
+      x = wall === -1 ? bounds.left : bounds.right - PET_WIDTH
       setMode('climb')
       climbUntil = performance.now() + CLIMB_MS
       climbTarget = null
@@ -1340,6 +1416,10 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
     persist()
   }
 
+  function syncSurface(): void {
+    needRead = true
+  }
+
   function bindPet(node: HTMLElement | null): void {
     el.value = node
   }
@@ -1360,7 +1440,11 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
       const body = host.body()
       const box = host.box()
       if (body) ro.observe(body)
-      if (box) ro.observe(box)
+      if (box) {
+        ro.observe(box)
+        observedBox = box
+      }
+      boxObserver = ro
       observers.push(ro)
     }
     if (typeof MutationObserver !== 'undefined' && document.documentElement) {
@@ -1414,6 +1498,8 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
     input?.removeEventListener('input', onComposerInput)
     input?.removeEventListener('keydown', onComposerKeyDown)
     for (const ro of observers) ro.disconnect()
+    boxObserver = null
+    observedBox = null
   }
 
   onScopeDispose(dispose)
@@ -1440,6 +1526,7 @@ export function usePetController(host: PetHost, t: Translate, reduced: () => boo
     onClick,
     onPointerDown,
     notifySend,
+    syncSurface,
     prints,
     fishCount,
     tanPercent,

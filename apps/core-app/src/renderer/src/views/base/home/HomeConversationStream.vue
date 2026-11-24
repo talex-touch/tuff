@@ -1,7 +1,7 @@
 <script lang="ts" name="HomeConversationStream" setup>
 import type { TxAiSpeakState } from '@talex-touch/intelligence-uikit'
 import type { TxConversationStreamInstance } from '@talex-touch/tuffex/conversation-stream'
-import type { StreamMarkdownCodePreview } from '@talex-touch/tuffex/stream-markdown'
+import type { CodeRunPayload, StreamMarkdownCodePreview } from '@talex-touch/tuffex/stream-markdown'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import type { DictationClip } from './composer/useComposerDictation'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
@@ -48,6 +48,7 @@ const emit = defineEmits<{
   (event: 'speak', message: ConversationMessage): void
   (event: 'branch', messageId: string): void
   (event: 'code-preview', preview: StreamMarkdownCodePreview): void
+  (event: 'code-run', payload: CodeRunPayload): void
 }>()
 
 const streamRef = ref<TxConversationStreamInstance | null>(null)
@@ -103,6 +104,7 @@ defineExpose({ stream: streamRef })
             @speak="emit('speak', message)"
             @branch="emit('branch', message.id)"
             @code-preview="emit('code-preview', $event)"
+            @code-run="emit('code-run', $event)"
           />
         </div>
       </template>

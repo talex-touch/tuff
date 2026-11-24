@@ -292,4 +292,31 @@ describe('ComposerToolbar', () => {
     expect(island.props('sendTitle')).toBe('home.workspace.queue.addHint')
     wrapper.unmount()
   })
+
+  it('keeps a compact Stop key reachable and exposes the Steer/Queue toggle while streaming with draft text', async () => {
+    const wrapper = mountToolbar({
+      live: true,
+      sendQueues: true,
+      canSteer: true,
+      deliveryMode: 'steer',
+      sendState: 'ready'
+    })
+
+    const island = wrapper.getComponent(ComposerSendIsland)
+    expect(island.props('sendIcon')).toBe('i-ri-corner-down-right-line')
+    expect(island.props('sendLabel')).toBe('home.workspace.queue.steerAdd')
+
+    // Compact Stop key occupies the mic slot while typing during a live turn.
+    const compactStop = wrapper.get('button.ComposerToolbar-StopKey')
+    expect(wrapper.get('button.ComposerMic').attributes('inert')).toBeDefined()
+    await compactStop.trigger('click')
+    expect(wrapper.emitted('stop')).toHaveLength(1)
+
+    // Steer/Queue toggle switches delivery mode cleanly.
+    const toggle = wrapper.get('button.ComposerToolbar-SteerToggle')
+    expect(toggle.classes()).toContain('is-steer')
+    await toggle.trigger('click')
+    expect(wrapper.emitted('update:deliveryMode')).toEqual([['queue']])
+    wrapper.unmount()
+  })
 })

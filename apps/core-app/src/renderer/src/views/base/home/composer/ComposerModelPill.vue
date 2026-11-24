@@ -58,8 +58,10 @@ const ariaLabel = computed(() =>
 </template>
 
 <style lang="scss" scoped>
-.ComposerModelPill {
-  max-width: min(360px, 45vw);
+.ComposerChip.ComposerModelPill {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(360px, 100%);
 }
 
 .ComposerModelPill-Icon {

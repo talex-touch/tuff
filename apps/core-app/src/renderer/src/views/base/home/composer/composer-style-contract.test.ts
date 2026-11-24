@@ -208,6 +208,34 @@ describe('composer toolbar style contract', () => {
     }
   })
 
+  it('lets the model slot and pill shrink instead of pushing the send key past the composer edge', () => {
+    const right = styleRules.find(
+      (rule) =>
+        rule.file === 'ComposerToolbar.vue' &&
+        rule.selectors.length === 1 &&
+        rule.selectors[0] === '.ComposerToolbar-Right'
+    )
+    expect(right?.declarations.get('min-width')).toBe('0')
+
+    const modelSlot = styleRules.find(
+      (rule) =>
+        rule.file === 'ComposerToolbar.vue' &&
+        rule.selectors.includes('.ComposerToolbar-ModelSlot') &&
+        rule.declarations.has('flex')
+    )
+    expect(modelSlot?.declarations.get('flex')).toBe('0 1 auto')
+    expect(modelSlot?.declarations.get('min-width')).toBe('0')
+
+    const modelPill = styleRules.find(
+      (rule) =>
+        rule.file === 'ComposerModelPill.vue' &&
+        rule.selectors.some((selector) => selector.includes('.ComposerModelPill'))
+    )
+    expect(modelPill?.declarations.get('flex')).toBe('0 1 auto')
+    expect(modelPill?.declarations.get('min-width')).toBe('0')
+    expect(modelPill?.declarations.get('max-width')).toBe('min(360px, 100%)')
+  })
+
   it('casts every shadow from the one top-left light source (x:y = 1:2)', () => {
     for (const rule of styleRules) {
       for (const [name, value] of rule.declarations) {

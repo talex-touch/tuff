@@ -38,6 +38,7 @@ declare module 'vue' {
     BoxItem: typeof import('./src/components/render/BoxItem.vue')['default']
     BrickTemplate: typeof import('./src/components/base/template/BrickTemplate.vue')['default']
     BrowserConnectionPanel: typeof import('./src/components/shell/BrowserConnectionPanel.vue')['default']
+    BrowserTabStrip: typeof import('./src/components/shell/BrowserTabStrip.vue')['default']
     BuildSecurityBanner: typeof import('./src/components/base/BuildSecurityBanner.vue')['default']
     CapabilityHeader: typeof import('./src/components/intelligence/capabilities/CapabilityHeader.vue')['default']
     CapabilityModelTransfer: typeof import('./src/components/intelligence/capabilities/CapabilityModelTransfer.vue')['default']
@@ -167,6 +168,7 @@ declare module 'vue' {
     ShellProjectRows: typeof import('./src/components/shell/ShellProjectRows.vue')['default']
     ShellSearchEntry: typeof import('./src/components/shell/ShellSearchEntry.vue')['default']
     ShellSidebar: typeof import('./src/components/shell/ShellSidebar.vue')['default']
+    ShellTemporarySpace: typeof import('./src/components/shell/ShellTemporarySpace.vue')['default']
     ShellTerminalPanel: typeof import('./src/components/shell/ShellTerminalPanel.vue')['default']
     ShellUpdateNotice: typeof import('./src/components/shell/ShellUpdateNotice.vue')['default']
     ShellWindowControls: typeof import('./src/components/shell/ShellWindowControls.vue')['default']
@@ -227,6 +229,7 @@ declare module 'vue' {
     VoiceRecordDetails: typeof import('./src/components/intelligence/voice/VoiceRecordDetails.vue')['default']
     WhatsChangedDialog: typeof import('./src/components/update/WhatsChangedDialog.vue')['default']
     WidgetFrame: typeof import('./src/components/render/WidgetFrame.vue')['default']
+    WorkspaceFileViewer: typeof import('./src/components/preview/WorkspaceFileViewer.vue')['default']
   }
 }
 
@@ -258,6 +261,7 @@ declare global {
   const BoxItem: typeof import('./src/components/render/BoxItem.vue')['default']
   const BrickTemplate: typeof import('./src/components/base/template/BrickTemplate.vue')['default']
   const BrowserConnectionPanel: typeof import('./src/components/shell/BrowserConnectionPanel.vue')['default']
+  const BrowserTabStrip: typeof import('./src/components/shell/BrowserTabStrip.vue')['default']
   const BuildSecurityBanner: typeof import('./src/components/base/BuildSecurityBanner.vue')['default']
   const CapabilityHeader: typeof import('./src/components/intelligence/capabilities/CapabilityHeader.vue')['default']
   const CapabilityModelTransfer: typeof import('./src/components/intelligence/capabilities/CapabilityModelTransfer.vue')['default']
@@ -387,6 +391,7 @@ declare global {
   const ShellProjectRows: typeof import('./src/components/shell/ShellProjectRows.vue')['default']
   const ShellSearchEntry: typeof import('./src/components/shell/ShellSearchEntry.vue')['default']
   const ShellSidebar: typeof import('./src/components/shell/ShellSidebar.vue')['default']
+  const ShellTemporarySpace: typeof import('./src/components/shell/ShellTemporarySpace.vue')['default']
   const ShellTerminalPanel: typeof import('./src/components/shell/ShellTerminalPanel.vue')['default']
   const ShellUpdateNotice: typeof import('./src/components/shell/ShellUpdateNotice.vue')['default']
   const ShellWindowControls: typeof import('./src/components/shell/ShellWindowControls.vue')['default']
@@ -447,4 +452,5 @@ declare global {
   const VoiceRecordDetails: typeof import('./src/components/intelligence/voice/VoiceRecordDetails.vue')['default']
   const WhatsChangedDialog: typeof import('./src/components/update/WhatsChangedDialog.vue')['default']
   const WidgetFrame: typeof import('./src/components/render/WidgetFrame.vue')['default']
+  const WorkspaceFileViewer: typeof import('./src/components/preview/WorkspaceFileViewer.vue')['default']
 }

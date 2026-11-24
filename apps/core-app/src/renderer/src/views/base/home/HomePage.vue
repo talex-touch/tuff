@@ -1,12 +1,18 @@
 <script lang="ts" name="HomePage" setup>
+import type { CodeRunPayload } from '@talex-touch/tuffex/code-stream'
+import type {
+  WorkspaceQueueDeliveryMode,
+  WorkspaceQueuedInput
+} from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import { TxSelectionActions } from '@talex-touch/tuffex/selection-actions'
-import { useAppSdk, useIntelligenceSdk } from '@talex-touch/utils/renderer'
-import { computed, provide, ref, watch } from 'vue'
+import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
+import { computed, nextTick, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { WORKSPACE_QUEUE_LIMIT } from '~/modules/conversation/useAgentWorkspace'
 import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
 import { useShellRightSidebar } from '~/modules/layout/useShellRightSidebar'
+import { useShellTerminal } from '~/modules/layout/useShellTerminal'
 import { homeMessageContextKey } from './composables/home-message-context'
 import { useConversationRestore } from './composables/useConversationRestore'
 import { useConversationTitle } from './composables/useConversationTitle'
@@ -42,6 +48,7 @@ import HomeTopBar from './HomeTopBar.vue'
 import HomePet from './pet/HomePet.vue'
 import { petEnabled } from './pet/pet-settings'
 import TuffAIComposer from './TuffAIComposer.vue'
+import HomeWorkspaceQueue from './workspace/HomeWorkspaceQueue.vue'
 import { selectedSchedulerName } from './workspace/scheduler'
 
 /**
@@ -69,6 +76,7 @@ const streamEl = ref<InstanceType<typeof HomeConversationStream> | null>(null)
 const streamRef = computed(() => streamEl.value?.stream ?? null)
 const streamFollowing = ref(true)
 const composerEl = ref<InstanceType<typeof TuffAIComposer> | null>(null)
+const queueEl = ref<InstanceType<typeof HomeWorkspaceQueue> | null>(null)
 const inputRef = computed(() => composerEl.value?.input ?? null)
 const composerRef = computed(() => composerEl.value?.box ?? null)
 const draftGhostRef = computed(() => composerEl.value?.ghost ?? null)
@@ -81,16 +89,23 @@ const petOn = computed(() => petEnabled.value)
 const petHost = {
   stage: () => pageRef.value,
   body: () => bodyRef.value,
-  box: () => composerEl.value?.box ?? null,
+  box: () => queueEl.value?.el ?? composerEl.value?.box ?? null,
   input: () => composerEl.value?.input ?? null,
   empty: () => isEmpty.value,
-  head: () => headRef.value
+  head: () => headRef.value,
+  activity: () => {
+    if (!isStreaming.value) return 'idle' as const
+    if (runStep.value.kind === 'writing') return 'writing' as const
+    if (runStep.value.kind === 'tool') return 'running' as const
+    return 'thinking' as const
+  }
 }
 const liftOverlayEl = ref<InstanceType<typeof HomeSendLiftOverlay> | null>(null)
 const router = useRouter()
 
 const { composerClearance, autoGrow, collapseDraft, bubbleMaxWidth } = useHomeComposerLayout({
   input: inputRef,
+  composer: composerRef,
   composerGroup: composerGroupRef
 })
 
@@ -120,6 +135,9 @@ const {
 })
 
 const { isCompacting, isEmpty, isStreaming, lastTurn, messages } = conversation
+// Conversation view already shows the compact status Miko and context meter in HomeRunDock
+// along the composer's top edge, so the roaming HomePet only lives on the empty Home stage.
+const petVisible = computed(() => petOn.value && isEmpty.value)
 watch([conversationId, isEmpty], () => {
   streamFollowing.value = true
 })
@@ -221,11 +239,20 @@ const {
 
 const intelligenceSdk = useIntelligenceSdk()
 const { toggleSpeak, speakStateOf } = useReadAloud()
-const appSdk = useAppSdk()
+const { runCommand: runTerminalCommand } = useShellTerminal()
+
+function runCodeInTerminal(payload: CodeRunPayload): void {
+  runTerminalCommand(payload.code, {
+    cwd: effectiveWorkspaceRoot.value,
+    lang: payload.lang
+  })
+}
 
 const messageParts = useMessageParts({
   submit: (text, attachments, options) => workspace.submit(text, attachments, options),
-  openExternal: (url) => appSdk.openExternal(url),
+  openExternal: async (url) => {
+    openWebInSidebar(url)
+  },
   clearDraft: () => {
     draft.value = ''
   },
@@ -342,6 +369,38 @@ const {
   submit: () => submit()
 })
 
+const steerDeliveryMode = ref<WorkspaceQueueDeliveryMode>('steer')
+const canSteer = computed(
+  () =>
+    workspace.settings.value.mode === 'agent' &&
+    isStreaming.value &&
+    !(workspace.state.value?.queueHeld ?? false)
+)
+watch(isStreaming, (live) => {
+  if (live) steerDeliveryMode.value = 'steer'
+})
+watch(
+  () => workspace.queue.value.length,
+  () => {
+    void nextTick(() => petEl.value?.syncSurface())
+  }
+)
+
+async function recallQueuedItem(item: WorkspaceQueuedInput): Promise<void> {
+  const ownerId = conversationId.value
+  const removed = await workspace.queueAction(item.id, 'remove')
+  if (!removed || conversationId.value !== ownerId) return
+  const existing = draft.value.trim()
+  draft.value = existing ? `${item.text}\n${draft.value}` : item.text
+  if (canSteer.value) {
+    steerDeliveryMode.value = item.deliveryMode ?? 'queue'
+  }
+  void nextTick(() => {
+    autoGrow()
+    composerEl.value?.focus()
+  })
+}
+
 const { submit, pressSend, sendVoiceDraft, handleKeydown, handleComposerKeydown } = useHomeSubmit({
   onSent: (text) => petEl.value?.notifySend(text),
   submitState,
@@ -358,6 +417,7 @@ const { submit, pressSend, sendVoiceDraft, handleKeydown, handleComposerKeydown 
   canSend,
   voiceSendBlocked,
   sendQueues,
+  deliveryMode: () => (canSteer.value ? steerDeliveryMode.value : 'queue'),
   imageInputAccepted: () => modelScope.resolvedChoice.value?.binding.imageInput.accepted,
   homeRecommendationsEnabled,
   opening: openingSnapshot,
@@ -463,7 +523,10 @@ useHomeCommands({
     <div class="HomePage-Split">
       <div ref="bodyRef" class="HomePage-Body">
         <HomeStageBlurs :visible="!isEmpty" />
-        <div class="HomePage-Center">
+        <div
+          class="HomePage-Center"
+          :class="{ 'is-compact-head': isEmpty && !homeRecommendationsEnabled }"
+        >
           <Transition name="home-head">
             <HomeEmptyHead
               v-if="isEmpty"
@@ -506,6 +569,7 @@ useHomeCommands({
             @speak="toggleSpeak"
             @branch="branchTo({ messageId: $event })"
             @code-preview="showCodePreview"
+            @code-run="runCodeInTerminal"
           />
 
           <HomePayloadModal />
@@ -521,12 +585,6 @@ useHomeCommands({
               :run-decision="workspace.runDecision.value"
               :pending-tool="agentTools.pending.value"
               :pending-gateway-origin="pendingGatewayOrigin"
-              :workspace-status="workspace.state.value?.status"
-              :queue="workspace.queue.value"
-              :queue-held="workspace.state.value?.queueHeld ?? false"
-              :queue-limit="WORKSPACE_QUEUE_LIMIT"
-              :queue-pending="workspace.queuePending.value"
-              :resuming="workspace.resuming.value"
               :show-empty-voice-draft="isEmpty"
               :voice-clip="dictation.clip.value"
               :dictating="dictation.active.value"
@@ -536,13 +594,96 @@ useHomeCommands({
               @reject-run="workspace.rejectRun()"
               @approve-tool="agentTools.approve($event)"
               @deny-tool="agentTools.deny($event)"
-              @queue-action="workspace.queueAction"
-              @queue-update="workspace.updateQueued"
-              @queue-resume="workspace.resume()"
               @voice-retry="dictation.recognizeClip()"
               @voice-send="sendVoiceDraft()"
               @voice-dismiss="dictation.dismissClip()"
             />
+
+            <div class="HomePage-ComposerDeck">
+              <Transition
+                name="home-queue"
+                @after-enter="petEl?.syncSurface()"
+                @after-leave="petEl?.syncSurface()"
+              >
+                <HomeWorkspaceQueue
+                  v-if="workspace.state.value?.status && workspace.queue.value.length > 0"
+                  ref="queueEl"
+                  :items="workspace.queue.value"
+                  :status="workspace.state.value.status"
+                  :held="workspace.state.value.queueHeld ?? false"
+                  :limit="WORKSPACE_QUEUE_LIMIT"
+                  :pending="workspace.queuePending.value"
+                  :resuming="workspace.resuming.value"
+                  :can-steer="canSteer"
+                  @action="workspace.queueAction"
+                  @update="workspace.updateQueued"
+                  @mode="workspace.setQueuedDeliveryMode"
+                  @recall="recallQueuedItem"
+                  @resume="workspace.resume()"
+                />
+              </Transition>
+
+              <TuffAIComposer
+                ref="composerEl"
+                v-model:draft="draft"
+                v-model:permission-mode="agentToolsMode"
+                :placeholder="
+                  t(browserLanding ? 'browser.composerPlaceholder' : 'home.placeholder')
+                "
+                :attachments="pendingAttachments"
+                :attach-open-label="attachOpenLabel"
+                :attach-preview-props="attachPreviewProps"
+                :input-disabled="browserNavigating"
+                :dragover="isDragover"
+                :live="isStreaming"
+                :lifting="lifting"
+                :beam-active="composerBeamActive"
+                :dictation="dictation"
+                :model="composerPill"
+                :send-state="sendState"
+                :send-queues="sendQueues"
+                :can-steer="canSteer"
+                :delivery-mode="canSteer ? steerDeliveryMode : 'queue'"
+                @update:delivery-mode="steerDeliveryMode = $event"
+                @input="autoGrow"
+                @input-keydown="handleKeydown"
+                @box-keydown="handleComposerKeydown"
+                @paste="onPaste"
+                @dragenter="onDragEnter"
+                @dragover="onDragOver"
+                @dragleave="onDragLeave"
+                @drop="onDrop"
+                @remove="removeAttachment"
+                @files="addFiles"
+                @send="pressSend"
+                @stop="conversation.stop()"
+                @mic="dictation.toggle()"
+                @reset-approvals="resetRememberedApprovals"
+              >
+                <!-- Browser landing: Browse / Ask on the left. Home: the scheduler joins the model
+                     pill in the toolbar's engine capsule. -->
+                <template #[composerModeSlot]>
+                  <HomeComposerModeSlot
+                    v-model:browser-mode="browserMode"
+                    :browser-landing="browserLanding"
+                    :browser-navigating="browserNavigating"
+                    :has-attachments="pendingAttachments.length > 0"
+                    :workspace-mode="workspace.settings.value.mode"
+                    :profile-id="workspace.settings.value.profileId"
+                    :profiles="workspace.profiles.value"
+                    :profiles-loading="workspace.profilesLoading.value"
+                    :profile-saving="workspace.profileSaving.value"
+                    :profiles-error="workspace.profilesError.value"
+                    :branch-on-change="hasHistory"
+                    :locked="workspace.busy.value || branching"
+                    @select-chat="selectMode('chat')"
+                    @select-agent="selectAgentProfile"
+                    @toggle-profile="workspace.setProfileEnabled"
+                    @load-profiles="workspace.loadProfiles()"
+                  />
+                </template>
+              </TuffAIComposer>
+            </div>
 
             <HomeRunDock
               v-if="!isEmpty && (isStreaming || contextShare !== null)"
@@ -552,63 +693,8 @@ useHomeCommands({
               :verb="thinkingTicker.activeLabel.value"
               :context-share="contextShare"
               :context-window-text="contextWindowText"
+              :hide-miko="petVisible"
             />
-
-            <TuffAIComposer
-              ref="composerEl"
-              v-model:draft="draft"
-              v-model:permission-mode="agentToolsMode"
-              :placeholder="t(browserLanding ? 'browser.composerPlaceholder' : 'home.placeholder')"
-              :attachments="pendingAttachments"
-              :attach-open-label="attachOpenLabel"
-              :attach-preview-props="attachPreviewProps"
-              :input-disabled="browserNavigating"
-              :dragover="isDragover"
-              :live="isStreaming"
-              :lifting="lifting"
-              :beam-active="composerBeamActive"
-              :dictation="dictation"
-              :model="composerPill"
-              :send-state="sendState"
-              :send-queues="sendQueues"
-              @input="autoGrow"
-              @input-keydown="handleKeydown"
-              @box-keydown="handleComposerKeydown"
-              @paste="onPaste"
-              @dragenter="onDragEnter"
-              @dragover="onDragOver"
-              @dragleave="onDragLeave"
-              @drop="onDrop"
-              @remove="removeAttachment"
-              @files="addFiles"
-              @send="pressSend"
-              @stop="conversation.stop()"
-              @mic="dictation.toggle()"
-              @reset-approvals="resetRememberedApprovals"
-            >
-              <!-- Browser landing: Browse / Ask on the left. Home: the scheduler row, drawn inside the
-                   model pill's popover. -->
-              <template #[composerModeSlot]>
-                <HomeComposerModeSlot
-                  v-model:browser-mode="browserMode"
-                  :browser-landing="browserLanding"
-                  :browser-navigating="browserNavigating"
-                  :has-attachments="pendingAttachments.length > 0"
-                  :workspace-mode="workspace.settings.value.mode"
-                  :profile-id="workspace.settings.value.profileId"
-                  :profiles="workspace.profiles.value"
-                  :profiles-loading="workspace.profilesLoading.value"
-                  :profile-saving="workspace.profileSaving.value"
-                  :profiles-error="workspace.profilesError.value"
-                  :branch-on-change="hasHistory"
-                  :locked="workspace.busy.value || branching"
-                  @select-chat="selectMode('chat')"
-                  @select-agent="selectAgentProfile"
-                  @toggle-profile="workspace.setProfileEnabled"
-                  @load-profiles="workspace.loadProfiles()"
-                />
-              </template>
-            </TuffAIComposer>
 
             <HomePushCardSlot
               v-model:step="pushStep"
@@ -680,7 +766,9 @@ useHomeCommands({
       />
     </div>
 
-    <HomePet v-if="petOn" ref="petEl" :host="petHost" />
+    <Transition name="home-pet">
+      <HomePet v-if="petVisible" ref="petEl" :host="petHost" />
+    </Transition>
     <HomeSendLiftOverlay ref="liftOverlayEl" />
 
     <TxSelectionActions
@@ -701,7 +789,7 @@ useHomeCommands({
   --home-panel-width: 460px;
   --home-panel-min-width: 320px;
   --home-body-min-width: 480px;
-  --home-chat-lane-width: min(720px, calc(100% - 64px));
+  --home-chat-lane-width: min(720px, calc(100% - clamp(40px, 8%, 64px)));
 
   &.is-resizing-panel {
     user-select: none;
@@ -778,6 +866,12 @@ useHomeCommands({
   padding-bottom: 16px;
   position: relative;
 
+  // Without the three-line opening block (Browser Start Page, or Home with recommendations off),
+  // give the greeting a bit more breathing room above the composer so the perched pet clears it.
+  &.is-compact-head {
+    gap: 36px;
+  }
+
   .HomePage.conversing & {
     gap: 16px;
     justify-content: flex-start;
@@ -803,16 +897,42 @@ useHomeCommands({
   .HomePage.conversing & {
     position: absolute;
     right: 0;
-    bottom: 20px;
+    bottom: 12px;
     left: 0;
-    --home-group-gap: 18px;
+    --home-group-gap: 8px;
     gap: var(--home-group-gap);
     pointer-events: none;
-
-    &:has(.HomeWorkspaceQueue) {
-      --home-group-gap: 0px;
-    }
   }
+}
+
+.HomePage-ComposerDeck {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-queue-enter-active {
+    transition:
+      opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .home-queue-leave-active {
+    transition:
+      opacity 0.18s cubic-bezier(0.4, 0, 1, 1),
+      transform 0.18s cubic-bezier(0.4, 0, 1, 1);
+  }
+}
+
+.home-queue-enter-from,
+.home-queue-leave-to {
+  opacity: 0;
+  transform: translateY(20px) scale(0.98);
 }
 
 .home-head-leave-active {
@@ -837,6 +957,18 @@ useHomeCommands({
   opacity: 0;
   transform: translateY(10px) scale(0.985);
   filter: blur(8px);
+}
+
+.home-pet-enter-active {
+  transition: opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1) 0.42s;
+
+  :deep(.HomePet-Button) {
+    pointer-events: none;
+  }
+}
+
+.home-pet-enter-from {
+  opacity: 0;
 }
 
 @property --home-glow-on {
@@ -867,7 +999,10 @@ useHomeCommands({
 
 @media (prefers-reduced-motion: reduce) {
   .home-head-leave-active,
-  .home-head-enter-active {
+  .home-head-enter-active,
+  .home-pet-enter-active,
+  .home-queue-enter-active,
+  .home-queue-leave-active {
     transition: none;
   }
 }

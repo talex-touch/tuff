@@ -4,6 +4,7 @@ import type { PropType, SetupContext } from 'vue'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import type {
   ConversationWorkspaceState,
+  WorkspaceQueuedInput,
   WorkspaceSubmitRequest,
   WorkspaceSubmitResult
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
@@ -37,6 +38,7 @@ interface MainHost {
     reply: PromiseWithResolvers<WorkspaceSubmitResult>
   }>
   reads: Map<string, PromiseWithResolvers<ConversationDetail | null>>
+  failRemoveQueued: boolean
   detail: (id: string) => ConversationDetail | null
   accept: (
     index: number,
@@ -108,8 +110,32 @@ const ToolbarPaint = {
 }
 const PetPaint = {
   setup(_: Record<string, unknown>, { expose }: SetupContext) {
-    expose({ notifySend: () => {} })
-    return () => h('div')
+    expose({ notifySend: () => {}, syncSurface: () => {} })
+    return () => h('div', { 'data-test': 'home-pet' })
+  }
+}
+const QueuePaint = {
+  props: {
+    items: { type: Array as PropType<WorkspaceQueuedInput[]>, default: () => [] }
+  },
+  emits: ['recall'],
+  setup(props: { items: WorkspaceQueuedInput[] }, { emit }: SetupContext) {
+    return () =>
+      h(
+        'div',
+        { 'data-test': 'home-queue' },
+        props.items.map((item) =>
+          h(
+            'button',
+            {
+              type: 'button',
+              'data-test': `recall-${item.id}`,
+              onClick: () => emit('recall', item)
+            },
+            item.text
+          )
+        )
+      )
   }
 }
 const TextPaint = {
@@ -188,7 +214,7 @@ vi.mock('./HomeSidePanel.vue', () => ({ default: Paint }))
 vi.mock('./pet/HomePet.vue', () => ({ default: PetPaint }))
 vi.mock('./workspace/HomeRunApproval.vue', () => ({ default: Paint }))
 vi.mock('./workspace/HomeSchedulerRow.vue', () => ({ default: Paint }))
-vi.mock('./workspace/HomeWorkspaceQueue.vue', () => ({ default: Paint }))
+vi.mock('./workspace/HomeWorkspaceQueue.vue', () => ({ default: QueuePaint }))
 
 function state(
   id: string,
@@ -276,6 +302,7 @@ function host(initial: ConversationWorkspaceState[] = []): MainHost {
   const pending: MainHost['pending'] = []
   const listeners = new Map<unknown, Set<(payload: unknown) => void>>()
   const reads: MainHost['reads'] = new Map()
+  const hostState = { failRemoveQueued: false }
   function detail(id: string): ConversationDetail | null {
     return records.get(id) ?? null
   }
@@ -314,6 +341,19 @@ function host(initial: ConversationWorkspaceState[] = []): MainHost {
         const reply = Promise.withResolvers<WorkspaceSubmitResult>()
         pending.push({ request, reply })
         return reply.promise
+      }
+      if (name === String(AgentWorkspaceEvents.removeQueued)) {
+        if (hostState.failRemoveQueued) throw new Error('WORKSPACE_BUSY')
+        const { conversationId, queueId } = payload as { conversationId: string; queueId: string }
+        const current = states.get(conversationId)
+        if (!current) throw new Error('WORKSPACE_NOT_FOUND')
+        const updated: ConversationWorkspaceState = {
+          ...current,
+          revision: current.revision + 1,
+          queue: current.queue.filter((entry) => entry.id !== queueId)
+        }
+        states.set(conversationId, updated)
+        return updated
       }
       if (name === String(AgentToolEvents.setConfirmationSurface)) return payload
       if (name === String(voiceApiEvents.getRecognitionStatus))
@@ -383,7 +423,21 @@ function host(initial: ConversationWorkspaceState[] = []): MainHost {
     reply.resolve({ disposition, state: accepted })
     return accepted
   }
-  return { transport, states, records, pending, reads, detail, accept }
+  return {
+    transport,
+    states,
+    records,
+    pending,
+    reads,
+    get failRemoveQueued() {
+      return hostState.failRemoveQueued
+    },
+    set failRemoveQueued(value: boolean) {
+      hostState.failRemoveQueued = value
+    },
+    detail,
+    accept
+  }
 }
 
 let wrapper: VueWrapper | null = null
@@ -575,6 +629,58 @@ describe('HomePage failed conversation report', () => {
     expect(report.text()).toContain(detail)
     expect(report.find('img').exists()).toBe(false)
     expect(report.find('script').exists()).toBe(false)
+  })
+
+  it('localizes AI_RUN_FAILED network timeouts with recovery guidance and formatted duration', async () => {
+    const id = 'ai-run-timeout'
+    const { view } = await page(
+      [
+        failedState(id, {
+          code: 'AI_RUN_FAILED: AI run failed.',
+          detail: 'NETWORK_TIMEOUT after 120000ms'
+        })
+      ],
+      `/home/c/${id}`
+    )
+
+    const card = view.get('.tx-ai-error-block')
+    const report = view.get('[data-testid="home-error-report"]')
+
+    // Both shipped catalogs must provide real copy for timeout recovery and formatted duration.
+    for (const key of [
+      'intelligence.errorRecovery.networkTimeoutTitle',
+      'intelligence.errorRecovery.networkTimeoutDetail',
+      'common.failures.timedOutAfter'
+    ]) {
+      expect(catalogText(enUS, key)).not.toBe(key)
+      expect(catalogText(zhCN, key)).not.toBe(key)
+    }
+
+    expect(card.get('.tx-ai-error-block-Title').text()).toBe(
+      catalogText(enUS, 'intelligence.errorRecovery.networkTimeoutTitle')
+    )
+    expect(card.get('.tx-ai-error-block-Detail').text()).toBe(
+      catalogText(enUS, 'intelligence.errorRecovery.networkTimeoutDetail')
+    )
+    expect(report.text()).toContain('AI_RUN_FAILED')
+    expect(report.text()).toContain('120s')
+    expect(report.text()).not.toContain('NETWORK_TIMEOUT after 120000ms')
+  })
+
+  it('does not show Nexus-credit advice for provider quota prose under AI_RUN_FAILED', async () => {
+    const id = 'ai-run-provider-quota'
+    const detail = 'You exceeded your current quota, please check your plan.'
+    const { view } = await page(
+      [failedState(id, { code: 'AI_RUN_FAILED: AI run failed.', detail })],
+      `/home/c/${id}`
+    )
+
+    const card = view.get('.tx-ai-error-block')
+    expect(card.get('.tx-ai-error-block-Title').text()).toBe(
+      catalogText(enUS, 'intelligence.errorRecovery.quotaTitle')
+    )
+    expect(card.find('.tx-ai-error-block-Detail').exists()).toBe(false)
+    expect(view.get('[data-testid="home-error-report"]').text()).toContain(detail)
   })
 })
 
@@ -820,5 +926,57 @@ describe('HomePage submit owns the view in which it was pressed', () => {
       'right project question'
     )
     expect(draft(view)).toBe('right next draft')
+  })
+
+  it('shows the roaming HomePet only on blank Home and hides it in conversation view', async () => {
+    const { view, router } = await page([state('idle-chat', 'idle'), state('live-chat', 'running')])
+    expect(view.find('[data-test="home-pet"]').exists()).toBe(true)
+
+    await router.push('/home/c/live-chat')
+    await flushPromises()
+    expect(view.find('[data-test="home-pet"]').exists()).toBe(false)
+
+    await router.push('/home/c/idle-chat')
+    await flushPromises()
+    expect(view.find('[data-test="home-pet"]').exists()).toBe(false)
+
+    await router.push('/home')
+    await flushPromises()
+    expect(view.find('[data-test="home-pet"]').exists()).toBe(true)
+  })
+
+  it('recalls a queued item into the draft only after queue removal succeeds', async () => {
+    const id = 'recall-chat'
+    const queuedItem: WorkspaceQueuedInput = {
+      id: 'q1',
+      conversationId: id,
+      text: 'follow-up instruction',
+      settings: { mode: 'agent', reasoningEffort: 'low', autoContext: false },
+      projectId: `project-${id}`,
+      deliveryMode: 'steer',
+      createdAt: 2
+    }
+    const base = state(id, 'running')
+    const initial: ConversationWorkspaceState = {
+      ...base,
+      settings: { mode: 'agent', reasoningEffort: 'low', autoContext: false },
+      queue: [queuedItem]
+    }
+    const { view } = await page([initial], `/home/c/${id}`)
+
+    // Keep the draft untouched when removeQueued fails so text is never duplicated.
+    await view.get('textarea').setValue('existing draft')
+    main.failRemoveQueued = true
+    await view.get('[data-test="recall-q1"]').trigger('click')
+    await flushPromises()
+    expect(draft(view)).toBe('existing draft')
+    expect(view.find('[data-test="recall-q1"]').exists()).toBe(true)
+
+    // Once removal succeeds, transfer the recalled text ahead of the existing draft.
+    main.failRemoveQueued = false
+    await view.get('[data-test="recall-q1"]').trigger('click')
+    await flushPromises()
+    expect(draft(view)).toBe('follow-up instruction\nexisting draft')
+    expect(view.find('[data-test="recall-q1"]').exists()).toBe(false)
   })
 })

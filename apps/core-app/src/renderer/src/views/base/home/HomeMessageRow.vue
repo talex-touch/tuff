@@ -1,7 +1,7 @@
 <script lang="ts" name="HomeMessageRow" setup>
 import { TxAiAssistantTurn, formatTokenCount } from '@talex-touch/intelligence-uikit'
 import type { TxAiSpeakState } from '@talex-touch/intelligence-uikit'
-import type { StreamMarkdownCodePreview } from '@talex-touch/tuffex/stream-markdown'
+import type { CodeRunPayload, StreamMarkdownCodePreview } from '@talex-touch/tuffex/stream-markdown'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
 import { TxVoiceClip } from '@talex-touch/tuffex/voice-clip'
@@ -9,6 +9,7 @@ import { computed, inject, unref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useWidgetSandbox } from '~/modules/widget-sandbox/use-widget-sandbox'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
+import { describeTurnReasoning, shortTurnReasoning } from '~/modules/conversation/turn-info-rows'
 import { isAwaitingFirstToken } from './composer/send-state'
 import { homeMessageContextKey } from './composables/home-message-context'
 import { useTurnError } from './composables/useTurnError'
@@ -45,6 +46,7 @@ const emit = defineEmits<{
   (event: 'speak'): void
   (event: 'branch'): void
   (event: 'code-preview', preview: StreamMarkdownCodePreview): void
+  (event: 'code-run', payload: CodeRunPayload): void
 }>()
 
 const { t, locale } = useI18n()
@@ -73,15 +75,28 @@ const {
 const codePreviewLabels = computed(() => ({
   ...unref(markdownLabels),
   inlineCodePreview: false,
-  onCodePreview: (preview: StreamMarkdownCodePreview) => emit('code-preview', preview)
+  runnableCode: true,
+  onCodePreview: (preview: StreamMarkdownCodePreview) => emit('code-preview', preview),
+  onCodeRun: (payload: CodeRunPayload) => emit('code-run', payload)
 }))
 
 const { errorDisplay, activateErrorAction } = useTurnError()
+const turnFooterMetrics = computed(() => {
+  const meta = props.message.meta
+  if (!meta) return undefined
+  const reasoning = shortTurnReasoning(meta, t) ?? undefined
+  const reasoningTitle = describeTurnReasoning(meta, t) ?? undefined
+  return {
+    ...meta,
+    ...(reasoning ? { reasoning } : {}),
+    ...(reasoningTitle ? { reasoningTitle } : {})
+  }
+})
 const turnFooter = computed(() =>
   props.message.status === 'complete'
     ? {
         content: props.message.content,
-        metrics: props.message.meta,
+        metrics: turnFooterMetrics.value,
         resting: props.resting,
         regenerable: props.latest && !props.streaming,
         speakState: props.speakState,
@@ -168,6 +183,8 @@ function copyReply(text: string): void {
           locale,
           copyLabel: t('home.copy'),
           copiedLabel: t('home.copied'),
+          runnable: true,
+          onCodeRun: (payload: CodeRunPayload) => emit('code-run', payload),
           markdownProps: codePreviewLabels,
           ...codePartProps
         }"
@@ -185,6 +202,7 @@ function copyReply(text: string): void {
         :thinking-label="thinkingLabel"
         :compacting="compacting"
         :compacting-label="t('home.compacting')"
+        :steer-label="t('home.workspace.queue.steerInjected')"
         :footer="turnFooter"
         :error="message.status === 'failed' ? errorDisplay(message.error, latest) : undefined"
         @form-submit="submitForm"

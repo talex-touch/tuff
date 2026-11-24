@@ -1,6 +1,7 @@
 <script lang="ts" name="TuffAIComposer" setup>
 import type { AiAttachment } from '@talex-touch/tuffex/ai-elements'
 import type { ITuffIcon } from '@talex-touch/utils'
+import type { WorkspaceQueueDeliveryMode } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
 import type { SendState } from './composer/send-state'
 import type { useComposerDictation } from './composer/useComposerDictation'
@@ -47,6 +48,8 @@ interface Props {
   model: { label: string; icon?: ITuffIcon; effort?: string; scheduler?: string }
   sendState: SendState
   sendQueues?: boolean
+  canSteer?: boolean
+  deliveryMode?: WorkspaceQueueDeliveryMode
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -55,13 +58,16 @@ const props = withDefaults(defineProps<Props>(), {
   live: false,
   lifting: false,
   beamActive: false,
-  sendQueues: false
+  sendQueues: false,
+  canSteer: false,
+  deliveryMode: 'queue'
 })
 
 const draft = defineModel<string>('draft', { required: true })
 const permissionMode = defineModel<AgentToolsMode>('permissionMode', { required: true })
 
 const emit = defineEmits<{
+  (event: 'update:deliveryMode', mode: WorkspaceQueueDeliveryMode): void
   (event: 'input'): void
   (event: 'input-keydown', e: KeyboardEvent): void
   (event: 'box-keydown', e: KeyboardEvent): void
@@ -206,10 +212,14 @@ defineExpose({ box: boxRef, input: inputEl, ghost: ghostEl, focus, launch })
         :model="model"
         :send-state="sendState"
         :send-queues="sendQueues"
+        :live="live"
+        :can-steer="canSteer"
+        :delivery-mode="deliveryMode"
         :mic-state="dictation.state.value"
         :mic-blocked="dictation.captureBlocked.value"
         :mic-elapsed-ms="dictation.elapsedMs.value"
         :mic-outcome="dictation.outcome.value"
+        @update:delivery-mode="emit('update:deliveryMode', $event)"
         @files="emit('files', $event)"
         @send="emit('send')"
         @stop="emit('stop')"

@@ -353,6 +353,7 @@ const infoRows = computed(() => {
 .ShellProjectRows-Row {
   position: relative;
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   box-sizing: border-box;
   width: 100%;

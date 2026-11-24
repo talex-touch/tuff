@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { ComposerTranslation } from 'vue-i18n'
 import { resolveIntelligenceErrorRecovery } from '../intelligence/ai-error-recovery'
 import {
+  CONVERSATION_ERROR_AI_RUN_FAILED,
   CONVERSATION_ERROR_USAGE_LIMIT_REACHED,
+  readTurnFailure,
   resolveConversationError
 } from './conversation-error-display'
 
@@ -50,6 +52,55 @@ describe('resolveConversationError', () => {
       code: 'usage-limit',
       title: 'AI usage limit reached',
       action: { path: '/setting/intelligence/audit' }
+    })
+  })
+})
+
+describe('readTurnFailure', () => {
+  it('keeps AI_RUN_FAILED code with its redacted network detail for downstream localization', () => {
+    expect(
+      readTurnFailure({
+        code: 'AI_RUN_FAILED: AI run failed.',
+        detail: 'NETWORK_TIMEOUT after 120000ms'
+      })
+    ).toEqual({
+      code: CONVERSATION_ERROR_AI_RUN_FAILED,
+      detail: 'NETWORK_TIMEOUT after 120000ms'
+    })
+  })
+
+  it('unwraps normalized intelligence codes carried inside AI_RUN_FAILED details', () => {
+    expect(
+      readTurnFailure({
+        code: 'AI_RUN_FAILED: AI run failed.',
+        detail: `[USAGE_LIMIT_REACHED:text.chat] ${sentence}`
+      })
+    ).toEqual({
+      code: CONVERSATION_ERROR_USAGE_LIMIT_REACHED,
+      detail: sentence,
+      resetsAt
+    })
+
+    expect(
+      readTurnFailure({
+        code: 'AI_RUN_FAILED: AI run failed.',
+        detail: '[PROVIDER_UNAVAILABLE:text.chat] No enabled providers'
+      })
+    ).toEqual({
+      code: 'PROVIDER_UNAVAILABLE',
+      detail: 'No enabled providers'
+    })
+  })
+
+  it('does not recurse infinitely when a wrapper repeats its own code as detail', () => {
+    expect(
+      readTurnFailure({
+        code: 'AI_RUN_FAILED',
+        detail: 'AI_RUN_FAILED'
+      })
+    ).toEqual({
+      code: CONVERSATION_ERROR_AI_RUN_FAILED,
+      detail: 'AI_RUN_FAILED'
     })
   })
 })
