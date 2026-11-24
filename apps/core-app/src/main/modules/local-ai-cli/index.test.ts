@@ -21,7 +21,16 @@ import type { ChildProcess } from 'node:child_process'
 import type { Mock } from 'vitest'
 import type { StoredLocalAiCliSession } from './session-store'
 import { EventEmitter } from 'node:events'
-import { appendFile, chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import {
+  appendFile,
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -2875,6 +2884,7 @@ describe('localAiCli generic ACP providers', () => {
 
   it('switches advertised ACP session modes to read-only before prompting and enforces answer-only OpenCode/Cursor policies', async () => {
     const { transport } = await initModule()
+    await seedProject('proj-1')
 
     // 1. OpenCode answer-only denies all tools at launch via OPENCODE_PERMISSION and switches to plan mode.
     const ocChild = expectSpawn()
@@ -2922,21 +2932,38 @@ describe('localAiCli generic ACP providers', () => {
     await ocRun
     expect(ocStream.chunks.at(-1)).toMatchObject({ type: 'complete', text: 'safe' })
 
-    // 2. Cursor answer-only launches with --mode ask --sandbox enabled.
+    // 2. Cursor answer-only launches in an isolated empty workspace with .cursor/cli.json deny rules and --mode ask --sandbox enabled.
     const cursorChild = expectSpawn()
     const cursorStream = taskStream()
     const cursorRun = startTask(
       transport,
-      taskPayload({ provider: 'cursor', access: 'answer-only' }),
+      taskPayload({ provider: 'cursor', access: 'answer-only', projectId: 'proj-1' }),
       cursorStream.context
     )
     await waitFor(() => cursorChild.framesOfMethod('initialize').length === 1, 'cursor init')
-    expect(spawnCall(1).args).toEqual(['--mode', 'ask', '--sandbox', 'enabled', 'acp'])
+    const cursorCwd = spawnCall(1).options.cwd as string
+    expect(cursorCwd).not.toBe(projectRoot)
+    expect(spawnCall(1).args).toEqual([
+      '--mode',
+      'ask',
+      '--sandbox',
+      'enabled',
+      '--workspace',
+      cursorCwd,
+      'acp'
+    ])
+    const cursorPolicy = JSON.parse(
+      await readFile(join(cursorCwd, '.cursor', 'cli.json'), 'utf8')
+    ) as { permissions: { deny: string[] } }
+    expect(cursorPolicy.permissions.deny).toEqual(
+      expect.arrayContaining(['Read(**)', 'Write(**)', 'Shell(*)'])
+    )
     cursorChild.sendLine({ jsonrpc: '2.0', id: 1, result: { protocolVersion: 1 } })
     await waitFor(
       () => cursorChild.framesOfMethod('session/new').length === 1,
       'cursor session/new'
     )
+    expect(cursorChild.framesOfMethod('session/new')[0]?.params).toMatchObject({ cwd: cursorCwd })
     cursorChild.sendLine({ jsonrpc: '2.0', id: 2, result: { sessionId: 'cur-ro-1' } })
     await waitFor(() => cursorChild.framesOfMethod('session/prompt').length === 1, 'cursor prompt')
     cursorChild.sendLine({
@@ -2950,6 +2977,48 @@ describe('localAiCli generic ACP providers', () => {
     cursorChild.sendLine({ jsonrpc: '2.0', id: 3, result: { stopReason: 'end_turn' } })
     await cursorRun
     expect(cursorStream.chunks.at(-1)).toMatchObject({ type: 'complete', text: 'answer' })
+
+    // 3. Kiro answer-only omits read-workspace policyPreset and runs in an isolated workspace with fs_read deny rules.
+    const kiroChild = expectSpawn()
+    const kiroStream = taskStream()
+    const kiroRun = startTask(
+      transport,
+      taskPayload({ provider: 'kiro', access: 'answer-only', projectId: 'proj-1' }),
+      kiroStream.context
+    )
+    await waitFor(() => kiroChild.framesOfMethod('initialize').length === 1, 'kiro init')
+    const kiroCwd = spawnCall(2).options.cwd as string
+    expect(kiroCwd).not.toBe(projectRoot)
+    const kiroPermissions = await readFile(
+      join(kiroCwd, '.kiro', 'settings', 'permissions.yaml'),
+      'utf8'
+    )
+    expect(kiroPermissions).toContain('capability: fs_read')
+    expect(kiroPermissions).toContain('effect: deny')
+    kiroChild.sendLine({ jsonrpc: '2.0', id: 1, result: { protocolVersion: 1 } })
+    await waitFor(() => kiroChild.framesOfMethod('session/new').length === 1, 'kiro session/new')
+    const kiroSessionParams = kiroChild.framesOfMethod('session/new')[0]?.params as Record<
+      string,
+      unknown
+    >
+    expect(kiroSessionParams.cwd).toBe(kiroCwd)
+    expect(kiroSessionParams._meta).toBeUndefined()
+    kiroChild.sendLine({ jsonrpc: '2.0', id: 2, result: { sessionId: 'kiro-ao-1' } })
+    await waitFor(() => kiroChild.framesOfMethod('session/prompt').length === 1, 'kiro prompt')
+    kiroChild.sendLine({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'kiro-ao-1',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'kiro-answer' }
+        }
+      }
+    })
+    kiroChild.sendLine({ jsonrpc: '2.0', id: 3, result: { stopReason: 'end_turn' } })
+    await kiroRun
+    expect(kiroStream.chunks.at(-1)).toMatchObject({ type: 'complete', text: 'kiro-answer' })
   })
 
   it('keeps saved sessions retryable when the ACP agent exits before replying to session/resume or session/load', async () => {

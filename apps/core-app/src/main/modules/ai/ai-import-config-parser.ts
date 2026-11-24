@@ -44,16 +44,41 @@ function splitTopLevel(value: string, separator = ','): string[] {
   return parts.filter(Boolean)
 }
 
+const BASIC_STRING_ESCAPES: Record<string, string> = {
+  b: '\b',
+  t: '\t',
+  n: '\n',
+  f: '\f',
+  r: '\r',
+  '"': '"',
+  "'": "'",
+  '\\': '\\'
+}
+
+function unescapeBasicTomlString(value: string, allowLineContinuation = true): string {
+  const pattern = allowLineContinuation
+    ? /\\(?:([btnfr"'\\])|u([0-9a-fA-F]{4})|U([0-9a-fA-F]{8})|([ \t]*\r?\n[ \t\r\n]*))/g
+    : /\\(?:([btnfr"'\\])|u([0-9a-fA-F]{4})|U([0-9a-fA-F]{8}))/g
+  return value.replace(pattern, (match, simple?: string, u4?: string, u8?: string) => {
+    if (simple) return BASIC_STRING_ESCAPES[simple]!
+    if (u4 || u8) {
+      try {
+        return String.fromCodePoint(Number.parseInt((u4 ?? u8)!, 16))
+      } catch {
+        return match
+      }
+    }
+    return ''
+  })
+}
+
 function unquote(value: string): string {
   const trimmed = value.trim()
   if (
     (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
     (trimmed.startsWith("'") && trimmed.endsWith("'"))
   )
-    return trimmed.slice(1, -1).replace(/\\(["'\\bnrt])/g, (_match, escaped: string) => {
-      const escapes: Record<string, string> = { b: '\b', n: '\n', r: '\r', t: '\t' }
-      return escapes[escaped] ?? escaped
-    })
+    return unescapeBasicTomlString(trimmed.slice(1, -1), false)
   return trimmed
 }
 
@@ -107,15 +132,6 @@ function setPath(root: Record<string, unknown>, path: string[], value: unknown):
   if (current[last] !== undefined) return false
   current[last] = value
   return true
-}
-
-function unescapeBasicTomlString(value: string): string {
-  return value
-    .replace(/\\\r?\n[ \t\r\n]*/g, '')
-    .replace(/\\(["'\\bnrt])/g, (_match, escaped: string) => {
-      const escapes: Record<string, string> = { b: '\b', n: '\n', r: '\r', t: '\t' }
-      return escapes[escaped] ?? escaped
-    })
 }
 
 function findClosingTripleQuote(line: string, delimiter: '"""' | "'''", fromIndex: number): number {

@@ -28,7 +28,7 @@ import type { LocalAiCliTaskSpec } from './provider-registry'
 import type { StoredLocalAiCliSession } from './session-store'
 import type { PtySessionOwner } from '../terminal/pty-session-core'
 import { randomUUID } from 'node:crypto'
-import { mkdir, realpath, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   AcpClient,
@@ -350,6 +350,78 @@ function isAcpResumeSessionMissingError(error: unknown): boolean {
   if (isNativeSessionMissingError(error)) return true
   const message = error instanceof Error ? error.message : String(error)
   return /\bno such session\b|\bsession\b.*\bmissing\b/i.test(message)
+}
+
+async function prepareAnswerOnlySandbox(
+  workspaceRoot: string,
+  kind: NonNullable<LocalAiCliTaskSpec['answerOnlyIsolation']>
+): Promise<{ cwd: string; cleanup: () => Promise<void> }> {
+  await mkdir(workspaceRoot, { recursive: true })
+  const dir = await realpath(await mkdtemp(join(workspaceRoot, 'answer-only-')))
+  try {
+    if (kind === 'kiro') {
+      const settingsDir = join(dir, '.kiro', 'settings')
+      await mkdir(settingsDir, { recursive: true })
+      await writeFile(
+        join(settingsDir, 'permissions.yaml'),
+        [
+          'rules:',
+          '  - capability: filesystem',
+          '    effect: deny',
+          '    match:',
+          '      - "**"',
+          '  - capability: fs_read',
+          '    effect: deny',
+          '    match:',
+          '      - "**"',
+          '  - capability: fs_write',
+          '    effect: deny',
+          '    match:',
+          '      - "**"',
+          '  - capability: shell',
+          '    effect: deny',
+          '    match:',
+          '      - "**"',
+          '  - capability: web_fetch',
+          '    effect: deny',
+          '    match:',
+          '      - "**"',
+          '  - capability: web_search',
+          '    effect: deny',
+          '    match:',
+          '      - "**"',
+          ''
+        ].join('\n'),
+        'utf8'
+      )
+    } else if (kind === 'cursor') {
+      const cursorDir = join(dir, '.cursor')
+      await mkdir(cursorDir, { recursive: true })
+      await writeFile(
+        join(cursorDir, 'cli.json'),
+        JSON.stringify(
+          {
+            version: 1,
+            permissions: {
+              deny: ['Read(**)', 'Write(**)', 'Shell(*)', 'WebFetch(*)']
+            }
+          },
+          null,
+          2
+        ),
+        'utf8'
+      )
+    }
+  } catch (error) {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+    throw error
+  }
+  return {
+    cwd: dir,
+    cleanup: async () => {
+      await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+    }
+  }
 }
 
 async function applyPreferredAcpReadOnlyMode(
@@ -1263,10 +1335,34 @@ export class LocalAiCliModule extends BaseModule {
   ): Promise<void> {
     let pointer = execution.pointer
     let releaseLease = pointer ? this.acquirePointerLease(pointer) : undefined
+    let acpCwd = execution.cwd
+    let launchArgs = [...spec.args]
+    let cleanupSandbox: (() => Promise<void>) | undefined
+    if (spec.answerOnlyIsolation) {
+      try {
+        const sandbox = await prepareAnswerOnlySandbox(this.workspacePath, spec.answerOnlyIsolation)
+        acpCwd = sandbox.cwd
+        cleanupSandbox = sandbox.cleanup
+        if (spec.answerOnlyIsolation === 'cursor') {
+          const acpIndex = launchArgs.lastIndexOf('acp')
+          if (acpIndex >= 0) {
+            launchArgs.splice(acpIndex, 0, '--workspace', sandbox.cwd)
+          } else {
+            launchArgs = ['--workspace', sandbox.cwd, ...launchArgs]
+          }
+        }
+      } catch {
+        releaseLease?.()
+        context.emit({ type: 'failed', callId, code: 'PROCESS_START_FAILED', recoverable: true })
+        context.end()
+        return
+      }
+    }
+
     let child: ChildProcess
     try {
-      child = spawnSafe(executablePath, spec.args, {
-        cwd: execution.cwd,
+      child = spawnSafe(executablePath, launchArgs, {
+        cwd: acpCwd,
         env: {
           ...withExecutableDirOnPath(sanitizedChildEnv(), executablePath),
           ...(spec.env ?? {})
@@ -1274,6 +1370,7 @@ export class LocalAiCliModule extends BaseModule {
         stdio: ['pipe', 'pipe', 'pipe']
       })
     } catch {
+      await cleanupSandbox?.()
       releaseLease?.()
       context.emit({ type: 'failed', callId, code: 'PROCESS_START_FAILED', recoverable: true })
       context.end()
@@ -1438,7 +1535,7 @@ export class LocalAiCliModule extends BaseModule {
             try {
               rawResult = await client.sendRequest<unknown>('session/resume', {
                 sessionId: pointer.nativeSessionId,
-                cwd: execution.cwd,
+                cwd: acpCwd,
                 mcpServers: [],
                 ...(spec.acpSessionMeta ? { _meta: spec.acpSessionMeta } : {})
               })
@@ -1549,7 +1646,7 @@ export class LocalAiCliModule extends BaseModule {
           try {
             loaded = await client.loadSession({
               sessionId: pointer.nativeSessionId,
-              cwd: execution.cwd,
+              cwd: acpCwd,
               mcpServers: [],
               ...(spec.acpSessionMeta ? { _meta: spec.acpSessionMeta } : {})
             })
@@ -1584,7 +1681,7 @@ export class LocalAiCliModule extends BaseModule {
         }
       } else {
         const created = await client.createSession({
-          cwd: execution.cwd,
+          cwd: acpCwd,
           mcpServers: [],
           ...(spec.acpSessionMeta ? { _meta: spec.acpSessionMeta } : {})
         })
@@ -1686,6 +1783,7 @@ export class LocalAiCliModule extends BaseModule {
       abortController.signal.removeEventListener('abort', onAbort)
       this.approvals.cancelCall(callId)
       await client.close().catch(() => undefined)
+      await cleanupSandbox?.()
       this.taskProcesses.delete(callId)
       releaseLease?.()
       context.end()

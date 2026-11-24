@@ -613,7 +613,7 @@ describe('AiCliOrchestrator multi-CLI runtime wiring & invariants', () => {
         'antigravity',
         ANTIGRAVITY_CLI_PROFILE_ID,
         '/mock/bin/agy',
-        ['acp'],
+        ['acp', '--process-per-session'],
         'antigravity-acp',
         'tuff-antigravity-runtime'
       ],

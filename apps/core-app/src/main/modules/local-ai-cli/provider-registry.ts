@@ -35,6 +35,12 @@ export interface LocalAiCliTaskSpec {
   acpSessionMeta?: Record<string, unknown>
   /** Preferred read-only ACP mode IDs to apply when the agent advertises session modes. */
   acpModePreference?: readonly string[]
+  /**
+   * Ephemeral directory isolation for `answer-only` ACP runs on CLIs without a native `--no-tools`
+   * flag: spawns and opens the ACP session inside a temporary empty workspace (with provider-native
+   * deny rules written inside it for Kiro and Cursor) so user workspace files cannot be read.
+   */
+  answerOnlyIsolation?: 'kiro' | 'cursor' | 'empty-cwd'
 }
 
 export interface LocalAiCliDecodedEvent {
@@ -258,7 +264,8 @@ export function createLocalAiCliTaskSpec(
         protocol: 'acp',
         prompt,
         terminateOnComplete: true,
-        ...(access !== 'workspace-write' ? { acpModePreference: ['plan'] } : {})
+        ...(access !== 'workspace-write' ? { acpModePreference: ['plan'] } : {}),
+        ...(access === 'answer-only' ? { answerOnlyIsolation: 'empty-cwd' as const } : {})
       }
     }
     case 'opencode': {
@@ -289,7 +296,8 @@ export function createLocalAiCliTaskSpec(
         protocol: 'acp',
         prompt,
         terminateOnComplete: true,
-        ...(access !== 'workspace-write' ? { acpModePreference: ['plan'] } : {})
+        ...(access !== 'workspace-write' ? { acpModePreference: ['plan'] } : {}),
+        ...(access === 'answer-only' ? { answerOnlyIsolation: 'empty-cwd' as const } : {})
       }
     }
     case 'kiro': {
@@ -300,12 +308,17 @@ export function createLocalAiCliTaskSpec(
         protocol: 'acp',
         prompt,
         terminateOnComplete: true,
-        ...(access !== 'workspace-write'
+        ...(access === 'workspace-read'
           ? {
               acpSessionMeta: { kiro: { policyPreset: 'read-workspace' } },
               acpModePreference: ['plan', 'ask', 'read-only']
             }
-          : {})
+          : access === 'answer-only'
+            ? {
+                acpModePreference: ['ask', 'plan', 'read-only'],
+                answerOnlyIsolation: 'kiro' as const
+              }
+            : {})
       }
     }
     case 'cursor': {
@@ -327,7 +340,8 @@ export function createLocalAiCliTaskSpec(
         terminateOnComplete: true,
         ...(access !== 'workspace-write'
           ? { acpModePreference: access === 'answer-only' ? ['ask', 'plan'] : ['plan', 'ask'] }
-          : {})
+          : {}),
+        ...(access === 'answer-only' ? { answerOnlyIsolation: 'cursor' as const } : {})
       }
     }
     case 'codex':

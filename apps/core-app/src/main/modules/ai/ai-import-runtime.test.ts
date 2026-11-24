@@ -515,7 +515,8 @@ describe('AiImportRuntimeService MCP transport normalization', () => {
   })
 
   it('normalizes Gemini TOML commands into prompt text with $ARGUMENTS while rejecting unsupported constructs and preserving Markdown commands', async () => {
-    const tomlContent = 'description = "Review"\nprompt = "Review {{args}} carefully"\n'
+    const tomlContent =
+      'description = "Review \\u0041"\nprompt = """\nPath: C:\\\\\nNext line\\\n  joined with \\f and \\"quotes\\" {{args}}\n"""\n'
     const tomlPath = join(fixtureRoot, 'review.toml')
     const mdContent = '---\nname: md-review\n---\nReview $ARGUMENTS from markdown\n'
     const mdPath = join(fixtureRoot, 'md-review.md')
@@ -566,7 +567,10 @@ describe('AiImportRuntimeService MCP transport normalization', () => {
       [geminiSource]
     )
 
-    expect(runtimeMocks.writeContent).toHaveBeenNthCalledWith(1, 'Review $ARGUMENTS carefully')
+    expect(runtimeMocks.writeContent).toHaveBeenNthCalledWith(
+      1,
+      'Path: C:\\\nNext linejoined with \f and "quotes" $ARGUMENTS\n'
+    )
     expect(runtimeMocks.writeContent).toHaveBeenNthCalledWith(2, mdContent)
 
     await expect(
