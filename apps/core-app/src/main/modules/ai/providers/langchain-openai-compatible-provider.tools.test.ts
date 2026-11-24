@@ -182,4 +182,97 @@ describe('OpenAI-compatible native tools over HTTP', () => {
       await server.close()
     }
   })
+
+  it('streams native tool calls through the OpenAI Responses transport', async () => {
+    const responsesServer = await startLoopback([
+      {
+        type: 'response.created',
+        response: {
+          id: 'resp_1',
+          object: 'response',
+          status: 'in_progress',
+          model: 'tools-test',
+          output: []
+        }
+      },
+      {
+        type: 'response.output_item.added',
+        output_index: 0,
+        item: {
+          id: 'fc_1',
+          type: 'function_call',
+          status: 'in_progress',
+          call_id: 'call_resp_1',
+          name: 'file__read',
+          arguments: ''
+        }
+      },
+      {
+        type: 'response.function_call_arguments.delta',
+        item_id: 'fc_1',
+        output_index: 0,
+        delta: '{"path":"a.txt"}'
+      },
+      {
+        type: 'response.output_item.done',
+        output_index: 0,
+        item: {
+          id: 'fc_1',
+          type: 'function_call',
+          status: 'completed',
+          call_id: 'call_resp_1',
+          name: 'file__read',
+          arguments: '{"path":"a.txt"}'
+        }
+      },
+      {
+        type: 'response.completed',
+        response: {
+          id: 'resp_1',
+          object: 'response',
+          status: 'completed',
+          model: 'tools-test',
+          output: [
+            {
+              id: 'fc_1',
+              type: 'function_call',
+              status: 'completed',
+              call_id: 'call_resp_1',
+              name: 'file__read',
+              arguments: '{"path":"a.txt"}'
+            }
+          ],
+          usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 }
+        }
+      }
+    ])
+    try {
+      const provider = new CustomProvider({
+        id: 'loopback-responses-tools',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Loopback Responses Tools',
+        enabled: true,
+        apiKey: 'test-only-key',
+        baseUrl: responsesServer.baseUrl,
+        defaultModel: 'tools-test',
+        models: [{ id: 'tools-test' }],
+        capabilities: ['text.chat'],
+        priority: 1,
+        metadata: { transport: 'responses' }
+      })
+      const { text, parts } = await collect(
+        provider.chatStream(
+          { messages: [{ role: 'user', content: 'read a.txt' }], tools: [READ_FILE] },
+          {}
+        )
+      )
+      expect(text).toBe('')
+      expect(parts).toEqual([
+        { kind: 'tool-start', callId: 'call_resp_1', name: 'file.read' },
+        { kind: 'tool-input-end', callId: 'call_resp_1', input: { path: 'a.txt' } }
+      ])
+    } finally {
+      await responsesServer.close()
+    }
+  })
 })

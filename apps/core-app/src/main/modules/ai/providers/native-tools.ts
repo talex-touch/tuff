@@ -100,8 +100,102 @@ export function parseToolArguments(raw: string): Record<string, unknown> {
  * named itself; `tool-input-end` only from `finish()`, once its arguments are whole - never from a
  * partial fragment.
  */
+interface AssembledToolCall {
+  id: string
+  name: string
+  args: string
+  sortKey: number
+  seq: number
+}
+
 export class ToolCallAssembler {
-  private readonly calls = new Map<number, { id: string; name: string; args: string }>()
+  /** Calls stored in internal slot ids, kept strictly separate from raw stream `index` values. */
+  private readonly calls = new Map<number, AssembledToolCall>()
+  /** Maps raw stream `index` -> currently bound internal slot id. */
+  private readonly slotByRawIndex = new Map<number, number>()
+  /** Maps tool call `id` -> internal slot id. */
+  private readonly slotByCallId = new Map<string, number>()
+  private nextSlot = 0
+  private lastSlot: number | undefined
+
+  private allocateSlot(rawIndex: number | undefined): number {
+    const slot = this.nextSlot
+    this.nextSlot += 1
+    this.calls.set(slot, {
+      id: '',
+      name: '',
+      args: '',
+      sortKey: rawIndex ?? Number.POSITIVE_INFINITY,
+      seq: slot
+    })
+    return slot
+  }
+
+  private resolveSlot(rawIndex: number | undefined, fragmentId: string): number {
+    if (fragmentId) {
+      const existingById = this.slotByCallId.get(fragmentId)
+      if (existingById !== undefined) {
+        if (rawIndex !== undefined) {
+          this.slotByRawIndex.set(rawIndex, existingById)
+          const existingCall = this.calls.get(existingById)
+          if (existingCall && existingCall.sortKey === Number.POSITIVE_INFINITY) {
+            existingCall.sortKey = rawIndex
+          }
+        }
+        return existingById
+      }
+
+      if (rawIndex !== undefined) {
+        const boundSlot = this.slotByRawIndex.get(rawIndex)
+        const boundCall = boundSlot !== undefined ? this.calls.get(boundSlot) : undefined
+        // Attach to an id-less slot already bound to this raw index (e.g. args arrived before id).
+        // Otherwise allocate a fresh slot so a reused raw index (such as index: 0 across parallel
+        // calls) never clobbers a prior call or collides with a future raw index.
+        if (boundSlot !== undefined && boundCall && !boundCall.id) {
+          this.slotByCallId.set(fragmentId, boundSlot)
+          return boundSlot
+        }
+        const slot = this.allocateSlot(rawIndex)
+        this.slotByRawIndex.set(rawIndex, slot)
+        this.slotByCallId.set(fragmentId, slot)
+        return slot
+      }
+
+      // No raw index: attach to an earlier id-less unindexed slot if present; else allocate.
+      if (this.lastSlot !== undefined) {
+        const lastCall = this.calls.get(this.lastSlot)
+        if (lastCall && !lastCall.id && lastCall.sortKey === Number.POSITIVE_INFINITY) {
+          this.slotByCallId.set(fragmentId, this.lastSlot)
+          return this.lastSlot
+        }
+      }
+      const slot = this.allocateSlot(undefined)
+      this.slotByCallId.set(fragmentId, slot)
+      return slot
+    }
+
+    if (rawIndex !== undefined) {
+      const boundSlot = this.slotByRawIndex.get(rawIndex)
+      if (boundSlot !== undefined) return boundSlot
+      // Some gateways omit `index` on the call's first fragment and include `index` on id-less
+      // continuation fragments; bind and attach to the active unindexed call instead of orphaning
+      // its arguments in a new slot.
+      if (this.lastSlot !== undefined) {
+        const lastCall = this.calls.get(this.lastSlot)
+        if (lastCall && lastCall.id && lastCall.sortKey === Number.POSITIVE_INFINITY) {
+          lastCall.sortKey = rawIndex
+          this.slotByRawIndex.set(rawIndex, this.lastSlot)
+          return this.lastSlot
+        }
+      }
+      const slot = this.allocateSlot(rawIndex)
+      this.slotByRawIndex.set(rawIndex, slot)
+      return slot
+    }
+
+    if (this.lastSlot !== undefined) return this.lastSlot
+    return this.allocateSlot(undefined)
+  }
 
   /** Feeds one streamed LangChain message chunk; a chunk with no tool-call fragments is ignored. */
   pushMessageChunk(chunk: unknown): IntelligencePartEvent[] {
@@ -112,15 +206,15 @@ export class ToolCallAssembler {
     const events: IntelligencePartEvent[] = []
     for (const fragment of fragments) {
       if (fragment === null || typeof fragment !== 'object') continue
-      const index = 'index' in fragment && typeof fragment.index === 'number' ? fragment.index : 0
-      let call = this.calls.get(index)
-      if (!call) {
-        call = { id: '', name: '', args: '' }
-        this.calls.set(index, call)
-      }
+      const fragmentId = 'id' in fragment && typeof fragment.id === 'string' ? fragment.id : ''
+      const rawIndex =
+        'index' in fragment && typeof fragment.index === 'number' ? fragment.index : undefined
+      const slot = this.resolveSlot(rawIndex, fragmentId)
+      this.lastSlot = slot
+      const call = this.calls.get(slot)!
       const wasStarted = call.id !== '' && call.name !== ''
-      if ('id' in fragment && typeof fragment.id === 'string' && fragment.id) {
-        call.id = fragment.id
+      if (fragmentId) {
+        call.id = fragmentId
       }
       if ('name' in fragment && typeof fragment.name === 'string' && fragment.name) {
         call.name = fragment.name
@@ -136,12 +230,18 @@ export class ToolCallAssembler {
   /** `tool-input-end` for every call, in stream order. A call that never named itself is dropped. */
   finish(): IntelligencePartEvent[] {
     const events: IntelligencePartEvent[] = []
-    const ordered = [...this.calls.entries()].sort(([left], [right]) => left - right)
-    for (const [, call] of ordered) {
+    const ordered = [...this.calls.values()].sort(
+      (left, right) => left.sortKey - right.sortKey || left.seq - right.seq
+    )
+    for (const call of ordered) {
       if (!call.id || !call.name) continue
       events.push({ kind: 'tool-input-end', callId: call.id, input: parseToolArguments(call.args) })
     }
     this.calls.clear()
+    this.slotByRawIndex.clear()
+    this.slotByCallId.clear()
+    this.nextSlot = 0
+    this.lastSlot = undefined
     return events
   }
 }

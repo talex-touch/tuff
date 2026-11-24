@@ -42,6 +42,7 @@ import { getProject } from '../../project/project-store'
 import { readHostInvokePurpose } from '../intelligence-invoke-purpose'
 import { readReasoningPlan } from '../reasoning-effort-runtime'
 import { IntelligenceProvider } from '../runtime/base-provider'
+import { foldToolsIntoPrompt } from '../tool-text-protocol'
 import { collectMessageAttachments } from './attachment-spill'
 import type { ThirdPartyCli } from './cli-config-provider'
 import { runCliChat } from './cli/cli-process-runtime'
@@ -350,6 +351,20 @@ export class PiCliProvider extends IntelligenceProvider {
     super(config)
   }
 
+  /**
+   * Third-party CLIs that support config reuse forward to their configured HTTP API endpoint
+   * (OpenAI-compatible or Anthropic, both supporting native function tools) under any scheduler
+   * other than their own. CLI binary spawns and ACP-only CLIs never reuse HTTP endpoints for
+   * native function tools here.
+   */
+  supportsNativeToolsFor(options: IntelligenceInvokeOptions): boolean {
+    const external = thirdPartyCliOf(this.config)
+    return (
+      Boolean(external?.configReuseCli) &&
+      options.metadata?.profileId !== external?.schedulerProfileId
+    )
+  }
+
   private resolveModel(options: IntelligenceInvokeOptions): string | undefined {
     return options.modelPreference?.[0] || this.config.defaultModel || undefined
   }
@@ -366,7 +381,10 @@ export class PiCliProvider extends IntelligenceProvider {
       const { resolveCliConfigEndpoint } = await import('./cli-config-provider')
       const endpoint = resolveCliConfigEndpoint(external.configReuseCli, this.resolveModel(options))
       if (!endpoint) throw new Error(`${external.codePrefix}_CONFIG_PROVIDER_UNAVAILABLE`)
-      for await (const chunk of endpoint.provider.chatStream(payload, {
+      const endpointPayload = endpoint.provider.supportsNativeTools
+        ? payload
+        : foldToolsIntoPrompt(payload)
+      for await (const chunk of endpoint.provider.chatStream(endpointPayload, {
         ...options,
         modelPreference: [endpoint.modelId]
       })) {

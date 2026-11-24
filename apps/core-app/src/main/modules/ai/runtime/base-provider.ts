@@ -175,6 +175,7 @@ function normalizeImageAnalyzeRecord(
 }
 export abstract class IntelligenceProvider implements IntelligenceProviderAdapter {
   abstract readonly type: IntelligenceProviderType
+  declare readonly supportsNativeTools?: boolean
   protected config: IntelligenceProviderConfig
 
   constructor(config: IntelligenceProviderConfig) {

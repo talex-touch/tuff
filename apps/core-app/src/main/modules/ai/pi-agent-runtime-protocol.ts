@@ -134,9 +134,16 @@ export type PiRuntimeParentMessage = PiRuntimeParentPayload & {
   protocolVersion: typeof PI_RUNTIME_PROTOCOL_VERSION
 }
 
+export interface PiRuntimeSteerItem {
+  id: string
+  text: string
+  createdAt: number
+}
+
 export type PiRuntimeChildPayload =
   | { type: 'run.start'; payload: PiRuntimeStartPayload }
   | { type: 'run.cancel'; runId: string }
+  | { type: 'run.steer.sync'; runId: string; items: PiRuntimeSteerItem[] }
   | { type: 'model.response'; payload: PiRuntimeModelResponse }
   | { type: 'tool.response'; payload: PiRuntimeToolResponse }
   | { type: 'runtime.shutdown' }

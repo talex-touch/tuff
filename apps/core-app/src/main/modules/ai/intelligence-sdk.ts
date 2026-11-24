@@ -1252,7 +1252,11 @@ export class TuffIntelligenceSDK {
         )
         // A provider that sends tools on its own wire gets them as structured fields; every other
         // one gets the same tools and tool turns as the text protocol, and never sees the fields.
-        const nextPayload = provider.supportsNativeTools
+        const usesNativeTools =
+          typeof provider.supportsNativeToolsFor === 'function'
+            ? provider.supportsNativeToolsFor(providerRuntimeOptions)
+            : Boolean(provider.supportsNativeTools)
+        const nextPayload = usesNativeTools
           ? plannedChat.payload
           : foldToolsIntoPrompt(plannedChat.payload)
         const startTime = Date.now()

@@ -3467,6 +3467,82 @@ describe('tuffIntelligenceSDK invoke', () => {
     })
   })
 
+  it('uses supportsNativeToolsFor per-call to keep native tools or fold into text protocol', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test chat capability',
+      supportedProviders: [IntelligenceProviderType.LOCAL]
+    })
+
+    const receivedPayloads: Array<{
+      tools?: unknown[]
+      messages: Array<{ role: string; content: string }>
+    }> = []
+    const provider = createProvider(
+      {
+        id: 'omp-cli',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'OMP CLI',
+        enabled: true,
+        priority: 1,
+        models: [{ id: 'auto/test' }],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    provider.supportsNativeToolsFor = (options) => options.metadata?.profileId !== 'profile:cli:omp'
+    provider.chatStream = vi.fn(async function* (payload) {
+      receivedPayloads.push(payload)
+      yield { delta: 'ok', done: false }
+      yield { delta: '', done: true }
+    })
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false,
+      capabilities: {
+        'text.chat': {
+          providers: [{ providerId: 'omp-cli', priority: 1 }]
+        }
+      }
+    })
+
+    const payload = {
+      messages: [{ role: 'user' as const, content: 'search QUIC' }],
+      tools: [
+        {
+          name: 'browser.search',
+          description: 'Search',
+          parameters: { type: 'object', properties: { query: { type: 'string' } } }
+        }
+      ]
+    }
+
+    for await (const _event of sdk.stream<string>('text.chat', payload, {
+      preferredProviderId: 'omp-cli',
+      metadata: { profileId: 'default-pi' }
+    })) {
+      // drain
+    }
+    for await (const _event of sdk.stream<string>('text.chat', payload, {
+      preferredProviderId: 'omp-cli',
+      metadata: { profileId: 'profile:cli:omp' }
+    })) {
+      // drain
+    }
+
+    expect(receivedPayloads).toHaveLength(2)
+    expect(receivedPayloads[0]?.tools).toHaveLength(1)
+    expect(receivedPayloads[0]?.messages.every((m) => m.role !== 'system')).toBe(true)
+    expect(receivedPayloads[1]?.tools).toBeUndefined()
+    expect(receivedPayloads[1]?.messages[0]?.role).toBe('system')
+    expect(receivedPayloads[1]?.messages[0]?.content).toContain('"type":"tool"')
+  })
+
   it('rolls the streamed result back to the last commit when a provider withdraws an attempt', async () => {
     // A provider whose agent retries a message (the pi CLI) streams the abandoned attempt before
     // it knows it will be abandoned. `end.result` is what the non-streaming consumers and the

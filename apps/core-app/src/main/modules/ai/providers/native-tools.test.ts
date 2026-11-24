@@ -74,6 +74,78 @@ describe('ToolCallAssembler', () => {
     expect(assembler.pushMessageChunk({ tool_call_chunks: 'not an array' })).toEqual([])
     expect(assembler.finish()).toEqual([])
   })
+
+  it('keeps parallel calls apart when a proxy omits index or reuses index 0 with distinct ids', () => {
+    const assembler = new ToolCallAssembler()
+    const startedA = assembler.pushMessageChunk(
+      chunk({ index: 0, id: 'call_1', name: 'browser__search', args: '{"query":' })
+    )
+    assembler.pushMessageChunk(chunk({ index: 0, args: '"QUIC"}' }))
+    const startedB = assembler.pushMessageChunk(
+      chunk({ index: 0, id: 'call_2', name: 'browser__extract', args: '{"url":' })
+    )
+    assembler.pushMessageChunk(
+      chunk({ index: 0, args: '"https://www.rfc-editor.org/rfc/rfc9001.html"}' })
+    )
+    const startedC = assembler.pushMessageChunk(
+      chunk({ id: 'call_3', name: 'browser__extract', args: '{"url":' })
+    )
+    assembler.pushMessageChunk(chunk({ args: '"https://www.rfc-editor.org/rfc/rfc9000.html"}' }))
+
+    expect([...startedA, ...startedB, ...startedC]).toEqual([
+      { kind: 'tool-start', callId: 'call_1', name: 'browser.search' },
+      { kind: 'tool-start', callId: 'call_2', name: 'browser.extract' },
+      { kind: 'tool-start', callId: 'call_3', name: 'browser.extract' }
+    ])
+    expect(assembler.finish()).toEqual([
+      { kind: 'tool-input-end', callId: 'call_1', input: { query: 'QUIC' } },
+      {
+        kind: 'tool-input-end',
+        callId: 'call_2',
+        input: { url: 'https://www.rfc-editor.org/rfc/rfc9001.html' }
+      },
+      {
+        kind: 'tool-input-end',
+        callId: 'call_3',
+        input: { url: 'https://www.rfc-editor.org/rfc/rfc9000.html' }
+      }
+    ])
+  })
+
+  it('keeps synthetic fallback slots separate from later real stream indexes when args arrive before id', () => {
+    const assembler = new ToolCallAssembler()
+    // Reused index: 0 allocates a synthetic second slot for call_b.
+    assembler.pushMessageChunk(
+      chunk({ index: 0, id: 'call_a', name: 'browser__search', args: '{"query":"QUIC"}' })
+    )
+    assembler.pushMessageChunk(
+      chunk({ index: 0, id: 'call_b', name: 'browser__extract', args: '{"url":"https://b"}' })
+    )
+    // A later real index: 1 arrives with args before its id and name; it must NOT append to call_b.
+    expect(assembler.pushMessageChunk(chunk({ index: 1, args: '{"path":' }))).toEqual([])
+    expect(
+      assembler.pushMessageChunk(
+        chunk({ index: 1, id: 'call_c', name: 'file__read', args: '"a.txt"}' })
+      )
+    ).toEqual([{ kind: 'tool-start', callId: 'call_c', name: 'file.read' }])
+
+    expect(assembler.finish()).toEqual([
+      { kind: 'tool-input-end', callId: 'call_a', input: { query: 'QUIC' } },
+      { kind: 'tool-input-end', callId: 'call_b', input: { url: 'https://b' } },
+      { kind: 'tool-input-end', callId: 'call_c', input: { path: 'a.txt' } }
+    ])
+  })
+
+  it('keeps fragments together when the first fragment omits index and a continuation supplies index 0 without id', () => {
+    const assembler = new ToolCallAssembler()
+    expect(
+      assembler.pushMessageChunk(chunk({ id: 'call_a', name: 'file__read', args: '{"path":' }))
+    ).toEqual([{ kind: 'tool-start', callId: 'call_a', name: 'file.read' }])
+    expect(assembler.pushMessageChunk(chunk({ index: 0, args: '"a.txt"}' }))).toEqual([])
+    expect(assembler.finish()).toEqual([
+      { kind: 'tool-input-end', callId: 'call_a', input: { path: 'a.txt' } }
+    ])
+  })
 })
 
 describe('parseToolArguments', () => {
