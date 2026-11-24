@@ -2035,32 +2035,89 @@ export class ConversationWorkspaceService {
   }
 
   /**
-   * Marks a pending steer input as consumed by the active agent turn at a tool/step boundary:
-   * removes it from the pending queue, marks its receipt completed, and broadcasts updated state.
+   * Atomically persists the assistant snapshot carrying the injected steer part, removes the
+   * pending steer input from the queue, marks its receipt completed, and broadcasts updated state.
    */
   async consumeSteer(
     conversationId: string,
     turnId: string,
-    steerId: string
+    steerId: string,
+    assistantSnapshot?: StoredConversationMessage
   ): Promise<ConversationWorkspaceState | null> {
     return this.serial(conversationId, async () => {
       const row = await this.workspaceRow(conversationId)
       if (!row || row.activeTurnId !== turnId) return null
       const queue = await this.queue(conversationId)
-      const removed = await queue.remove(conversationId, steerId)
-      if (!removed) return this.readState(conversationId)
+      const existing = queue.find(steerId)
+      if (!existing && !assistantSnapshot) return this.readState(conversationId)
+
+      const now = Date.now()
+      let stale = false
       await scheduleDbWrite('conversation.workspace.consume-steer', () =>
-        this.db()
-          .update(conversationWorkspaceReceipts)
-          .set({ status: 'completed', updatedAt: Date.now() })
-          .where(
-            and(
-              eq(conversationWorkspaceReceipts.conversationId, conversationId),
-              eq(conversationWorkspaceReceipts.id, steerId)
-            )
-          )
+        this.db().transaction(async (tx) => {
+          const [current] = await tx
+            .select()
+            .from(conversationWorkspaces)
+            .where(eq(conversationWorkspaces.conversationId, conversationId))
+          if (!current || current.activeTurnId !== turnId) {
+            stale = true
+            return
+          }
+          if (assistantSnapshot) {
+            const meta = assistantSnapshot.meta ? JSON.stringify(assistantSnapshot.meta) : null
+            await tx
+              .update(conversationMessages)
+              .set({
+                content: assistantSnapshot.content,
+                status: assistantSnapshot.status,
+                meta
+              })
+              .where(
+                and(
+                  eq(conversationMessages.conversationId, conversationId),
+                  eq(conversationMessages.id, assistantSnapshot.id)
+                )
+              )
+            await tx
+              .update(conversations)
+              .set({ updatedAt: now })
+              .where(eq(conversations.id, conversationId))
+          }
+          if (existing) {
+            await tx
+              .delete(conversationQueuedInputs)
+              .where(
+                and(
+                  eq(conversationQueuedInputs.conversationId, conversationId),
+                  eq(conversationQueuedInputs.id, steerId)
+                )
+              )
+            await tx
+              .update(conversationWorkspaceReceipts)
+              .set({ status: 'completed', updatedAt: now })
+              .where(
+                and(
+                  eq(conversationWorkspaceReceipts.conversationId, conversationId),
+                  eq(conversationWorkspaceReceipts.id, steerId)
+                )
+              )
+            await tx
+              .update(conversationWorkspaces)
+              .set({
+                revision: sql`${conversationWorkspaces.revision} + 1`,
+                updatedAt: now
+              })
+              .where(eq(conversationWorkspaces.conversationId, conversationId))
+          }
+        })
       )
-      return this.changed(conversationId)
+      if (stale) return null
+      if (existing) {
+        // Drop cached queue so readState reloads the exact post-transaction SQLite queue.
+        this.queues.delete(conversationId)
+        return this.changed(conversationId)
+      }
+      return this.readState(conversationId)
     })
   }
 

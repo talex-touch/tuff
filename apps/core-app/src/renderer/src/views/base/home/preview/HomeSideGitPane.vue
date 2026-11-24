@@ -240,31 +240,45 @@ async function loadDiff(filePath: string, staged: boolean, untracked: boolean): 
   }
 }
 
+const targetKey = computed(() => `${props.cwd ?? ''}\0${props.conversationId ?? ''}`)
+
 async function refreshBranches(): Promise<void> {
   if (!gitSdk || !status.value?.isRepo) return
+  const key = targetKey.value
   loadingBranches.value = true
   try {
     const next = await gitSdk.branches(target.value)
+    if (key !== targetKey.value) return
     branches.value = next.branches
     if (next.error) actionError.value = next.error
   } catch (error) {
-    actionError.value = error instanceof Error ? error.message : String(error)
+    if (key === targetKey.value) {
+      actionError.value = error instanceof Error ? error.message : String(error)
+    }
   } finally {
-    loadingBranches.value = false
+    if (key === targetKey.value) {
+      loadingBranches.value = false
+    }
   }
 }
 
 async function refreshLog(): Promise<void> {
   if (!gitSdk || !status.value?.isRepo) return
+  const key = targetKey.value
   loadingLog.value = true
   try {
     const next = await gitSdk.log({ ...target.value, limit: 40 })
+    if (key !== targetKey.value) return
     commits.value = next.commits
     if (next.error) actionError.value = next.error
   } catch (error) {
-    actionError.value = error instanceof Error ? error.message : String(error)
+    if (key === targetKey.value) {
+      actionError.value = error instanceof Error ? error.message : String(error)
+    }
   } finally {
-    loadingLog.value = false
+    if (key === targetKey.value) {
+      loadingLog.value = false
+    }
   }
 }
 
@@ -321,11 +335,13 @@ async function runMutation(
   successMessage?: string
 ): Promise<boolean> {
   if (mutating.value) return false
+  const key = targetKey.value
   mutating.value = true
   actionError.value = ''
   actionNotice.value = ''
   try {
     const result = await action()
+    if (key !== targetKey.value) return false
     if (!result.ok) {
       actionError.value = result.error || t('home.git.actionFailed')
       return false
@@ -338,7 +354,9 @@ async function runMutation(
     }
     return true
   } catch (error) {
-    actionError.value = error instanceof Error ? error.message : String(error)
+    if (key === targetKey.value) {
+      actionError.value = error instanceof Error ? error.message : String(error)
+    }
     return false
   } finally {
     mutating.value = false
@@ -498,6 +516,11 @@ watch(
     const targetChanged =
       !previous || previous[0] !== props.cwd || previous[1] !== props.conversationId
     if (targetChanged) {
+      status.value = null
+      branches.value = []
+      commits.value = []
+      loadingBranches.value = false
+      loadingLog.value = false
       selectedFile.value = null
       diffResult.value = null
       pendingConfirm.value = null

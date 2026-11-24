@@ -158,6 +158,67 @@ const EXECUTABLE_EXTENSIONS = new Set([
   'hta'
 ])
 
+/** Safe viewer/document/media extensions permitted for direct OS `shell.openPath`. */
+const SAFE_EXTERNAL_OPEN_EXTENSIONS = new Set([
+  ...Object.keys(IMAGE_MIME_BY_EXT),
+  'svg',
+  'pdf',
+  'html',
+  'htm',
+  'md',
+  'markdown',
+  'mdx',
+  'mdc',
+  'txt',
+  'log',
+  'json',
+  'csv',
+  'yaml',
+  'yml',
+  'xml',
+  'css',
+  'scss',
+  'less',
+  'sass',
+  'ts',
+  'tsx',
+  'vue',
+  'toml',
+  'ini',
+  'diff',
+  'patch',
+  'rtf',
+  'doc',
+  'docx',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'epub',
+  'mp3',
+  'wav',
+  'ogg',
+  'flac',
+  'mp4',
+  'mov',
+  'webm',
+  'mkv',
+  'avi'
+])
+
+/** Directory bundle suffixes that macOS treats as launchable packages rather than folders. */
+const LAUNCHABLE_BUNDLE_EXTENSIONS = new Set([
+  'app',
+  'workflow',
+  'action',
+  'pkg',
+  'mpkg',
+  'scptd',
+  'prefpane',
+  'bundle',
+  'plugin'
+])
+
 const BLOCKED_HOME_SUBPATHS = [
   '.ssh',
   '.aws',
@@ -171,6 +232,7 @@ const approvedPickedPaths = new Set<string>()
 
 export interface WorkspaceFileServicePorts {
   resolveConversationRoot?: (conversationId: string) => Promise<string | null>
+  allowedRoots?: string[]
   openDialog?: typeof dialog.showOpenDialog
   openPath?: (target: string) => Promise<string>
   showItemInFolder?: (target: string) => void
@@ -217,6 +279,46 @@ export function isExecutableFilePath(targetPath: string): boolean {
   return Boolean(ext && EXECUTABLE_EXTENSIONS.has(ext))
 }
 
+export function isSafeExternalOpenPath(targetPath: string): boolean {
+  const ext = path.extname(targetPath).replace(/^\./, '').toLowerCase()
+  return Boolean(ext && SAFE_EXTERNAL_OPEN_EXTENSIONS.has(ext))
+}
+
+function isLaunchableBundleDir(targetPath: string): boolean {
+  const ext = path.extname(targetPath).replace(/^\./, '').toLowerCase()
+  return Boolean(ext && LAUNCHABLE_BUNDLE_EXTENSIONS.has(ext))
+}
+
+async function resolveAllowedRoots(
+  conversationId: string | null | undefined,
+  ports: WorkspaceFileServicePorts
+): Promise<string[]> {
+  const roots: string[] = []
+  if (ports.allowedRoots?.length) {
+    roots.push(...ports.allowedRoots)
+  }
+  if (conversationId) {
+    const rootResolver = ports.resolveConversationRoot ?? defaultResolveConversationRoot
+    const root = await rootResolver(conversationId)
+    if (root) roots.push(root)
+  }
+  return roots
+}
+
+async function assertWithinAllowedRoots(canonical: string, roots: string[]): Promise<void> {
+  const compCanonical = normalizeComparable(canonical)
+  for (const root of roots) {
+    const realRoot = await fs.realpath(root).catch(() => null)
+    if (!realRoot) continue
+    const compRoot = normalizeComparable(realRoot)
+    const rel = path.relative(compRoot, compCanonical)
+    const escapes = rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)
+    if (!escapes) return
+  }
+  if (isApprovedPickedWorkspacePath(canonical)) return
+  throw new Error('WORKSPACE_FILE_FORBIDDEN')
+}
+
 function normalizeInputPath(raw: string): string {
   const trimmed = raw.trim()
   if (!trimmed || trimmed.includes('\0')) {
@@ -257,7 +359,10 @@ async function resolveTargetPath(
       return path.resolve(root, normalized)
     }
   }
-  return path.resolve(process.cwd(), normalized)
+  if (ports.allowedRoots?.length) {
+    return path.resolve(ports.allowedRoots[0]!, normalized)
+  }
+  throw new Error('WORKSPACE_FILE_FORBIDDEN')
 }
 
 function hasBinaryNullByte(buffer: Uint8Array): boolean {
@@ -297,6 +402,9 @@ export async function readWorkspaceFile(
   if (isBlockedSensitivePath(canonical, homeDir) || isBlockedSensitivePath(candidate, homeDir)) {
     throw new Error('WORKSPACE_FILE_FORBIDDEN')
   }
+
+  const allowedRoots = await resolveAllowedRoots(request?.conversationId, ports)
+  await assertWithinAllowedRoots(canonical, allowedRoots)
 
   const stats = await fs.stat(canonical)
   const name = path.basename(canonical) || canonical
@@ -465,7 +573,7 @@ export async function pickWorkspaceFile(
   }
 
   const openDialog = ports.openDialog ?? dialog.showOpenDialog.bind(dialog)
-  const focused = BrowserWindow.getFocusedWindow()
+  const focused = BrowserWindow?.getFocusedWindow?.() ?? null
   const dialogOptions = {
     ...(defaultPath ? { defaultPath } : {}),
     properties: ['openFile' as const]
@@ -479,7 +587,12 @@ export async function pickWorkspaceFile(
   }
 
   const picked = path.resolve(result.filePaths[0]!)
-  approvedPickedPaths.add(normalizeComparable(picked))
+  const realPicked = await fs.realpath(picked).catch(() => picked)
+  const homeDir = (ports.homedir ?? os.homedir)()
+  if (!isBlockedSensitivePath(picked, homeDir) && !isBlockedSensitivePath(realPicked, homeDir)) {
+    approvedPickedPaths.add(normalizeComparable(picked))
+    approvedPickedPaths.add(normalizeComparable(realPicked))
+  }
   return { path: picked }
 }
 
@@ -505,22 +618,24 @@ export async function openWorkspaceFileExternal(
     throw new Error('WORKSPACE_FILE_FORBIDDEN')
   }
 
+  const allowedRoots = await resolveAllowedRoots(request?.conversationId, ports)
+  await assertWithinAllowedRoots(canonical, allowedRoots)
+
   const stats = await fs.stat(canonical)
   const showItemInFolder =
     ports.showItemInFolder ?? ((target: string) => shell.showItemInFolder(target))
   const openPath = ports.openPath ?? ((target: string) => shell.openPath(target))
 
-  // Never execute bundles, shell scripts, or binaries via OS association; reveal them instead.
-  if (
-    isExecutableFilePath(canonical) ||
-    (process.platform === 'darwin' && canonical.toLowerCase().endsWith('.app'))
-  ) {
-    showItemInFolder(canonical)
-    return { opened: false, revealed: true }
-  }
-
   if (!stats.isFile() && !stats.isDirectory()) {
     throw new Error('WORKSPACE_FILE_UNSUPPORTED')
+  }
+
+  // Only open regular non-bundle directories or allowlisted viewer document types via OS
+  // association; reveal scripts, binaries, extensionless files, and macOS bundles instead.
+  const isSafeDir = stats.isDirectory() && !isLaunchableBundleDir(canonical)
+  if (!isSafeDir && !isSafeExternalOpenPath(canonical)) {
+    showItemInFolder(canonical)
+    return { opened: false, revealed: true }
   }
 
   const errorMessage = await openPath(canonical)

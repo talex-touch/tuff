@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   isBlockedSensitivePath,
   isExecutableFilePath,
+  isSafeExternalOpenPath,
   openWorkspaceFileExternal,
+  pickWorkspaceFile,
   readWorkspaceFile
 } from './workspace-file-service'
 
@@ -45,7 +47,7 @@ describe('workspace-file-service', () => {
     await fs.writeFile(path.join(dir, 'b.txt'), 'hello', 'utf-8')
     await fs.writeFile(path.join(dir, 'a.html'), '<p>hi</p>', 'utf-8')
 
-    const result = await readWorkspaceFile({ path: dir })
+    const result = await readWorkspaceFile({ path: dir }, { allowedRoots: [dir] })
 
     expect(result.kind).toBe('directory')
     expect(result.entries?.map((e) => e.name)).toEqual(['sub', 'a.html', 'b.txt'])
@@ -57,7 +59,7 @@ describe('workspace-file-service', () => {
     const binPath = path.join(dir, 'archive.dat')
     await fs.writeFile(binPath, Buffer.from([0x89, 0x50, 0x00, 0x47, 0x00, 0x0a]))
 
-    const result = await readWorkspaceFile({ path: binPath })
+    const result = await readWorkspaceFile({ path: binPath }, { allowedRoots: [dir] })
 
     expect(result.kind).toBe('binary')
     expect(result.text).toBeUndefined()
@@ -71,37 +73,94 @@ describe('workspace-file-service', () => {
     await fs.writeFile(keyPath, 'PRIVATE', 'utf-8')
 
     expect(isBlockedSensitivePath(keyPath, fakeHome)).toBe(true)
-    await expect(readWorkspaceFile({ path: keyPath }, { homedir: () => fakeHome })).rejects.toThrow(
-      'WORKSPACE_FILE_FORBIDDEN'
-    )
+    await expect(
+      readWorkspaceFile({ path: keyPath }, { homedir: () => fakeHome, allowedRoots: [fakeHome] })
+    ).rejects.toThrow('WORKSPACE_FILE_FORBIDDEN')
   })
 
-  it('opens safe documents externally via openPath and reveals executables instead of executing them', async () => {
+  it('enforces canonical path containment against ../ escapes and out-of-root symlinks, while allowing user-picked paths', async () => {
+    const workspaceRoot = await makeTempDir()
+    const outsideDir = await makeTempDir()
+    const outsideFile = path.join(outsideDir, 'secret.txt')
+    await fs.writeFile(outsideFile, 'outside-secret', 'utf-8')
+
+    const relativeEscape = path.relative(workspaceRoot, outsideFile)
+    await expect(
+      readWorkspaceFile(
+        { path: relativeEscape, conversationId: 'conv-contained' },
+        { resolveConversationRoot: async () => workspaceRoot }
+      )
+    ).rejects.toThrow('WORKSPACE_FILE_FORBIDDEN')
+
+    const symlinkPath = path.join(workspaceRoot, 'escape-link.txt')
+    await fs.symlink(outsideFile, symlinkPath)
+    await expect(
+      readWorkspaceFile(
+        { path: 'escape-link.txt', conversationId: 'conv-contained' },
+        { resolveConversationRoot: async () => workspaceRoot }
+      )
+    ).rejects.toThrow('WORKSPACE_FILE_FORBIDDEN')
+
+    await expect(
+      openWorkspaceFileExternal(
+        { path: outsideFile, conversationId: 'conv-contained' },
+        {
+          resolveConversationRoot: async () => workspaceRoot,
+          openPath: vi.fn(async () => ''),
+          showItemInFolder: vi.fn()
+        }
+      )
+    ).rejects.toThrow('WORKSPACE_FILE_FORBIDDEN')
+
+    // Explicitly picking the outside file via dialog approves it for reading & safe external open.
+    const picked = await pickWorkspaceFile(
+      {},
+      {
+        openDialog: vi.fn(async () => ({ canceled: false, filePaths: [outsideFile] })) as never
+      }
+    )
+    expect(picked.path).toBe(path.resolve(outsideFile))
+
+    const readApproved = await readWorkspaceFile({ path: outsideFile })
+    expect(readApproved.kind).toBe('text')
+    expect(readApproved.text).toBe('outside-secret')
+  })
+
+  it('opens allowlisted viewer documents externally and reveals executables, .js scripts, and extensionless files', async () => {
     const dir = await makeTempDir()
     const htmlPath = path.join(dir, 'login.html')
     const scriptPath = path.join(dir, 'run.command')
+    const jsPath = path.join(dir, 'payload.js')
+    const noExtPath = path.join(dir, 'unix-binary')
     await fs.writeFile(htmlPath, '<h1>ok</h1>', 'utf-8')
     await fs.writeFile(scriptPath, '#!/bin/sh\necho hi\n', 'utf-8')
+    await fs.writeFile(jsPath, 'console.log("hi")', 'utf-8')
+    await fs.writeFile(noExtPath, '#!/bin/sh\necho hi\n', 'utf-8')
 
     const openPath = vi.fn(async () => '')
     const showItemInFolder = vi.fn()
 
+    expect(isSafeExternalOpenPath(htmlPath)).toBe(true)
     const docRes = await openWorkspaceFileExternal(
       { path: htmlPath },
-      { openPath, showItemInFolder }
+      { allowedRoots: [dir], openPath, showItemInFolder }
     )
     expect(docRes).toEqual({ opened: true })
     expect(openPath).toHaveBeenCalledOnce()
     expect(showItemInFolder).not.toHaveBeenCalled()
 
-    openPath.mockClear()
+    for (const candidate of [scriptPath, jsPath, noExtPath]) {
+      openPath.mockClear()
+      showItemInFolder.mockClear()
+      expect(isSafeExternalOpenPath(candidate)).toBe(false)
+      const res = await openWorkspaceFileExternal(
+        { path: candidate },
+        { allowedRoots: [dir], openPath, showItemInFolder }
+      )
+      expect(res).toEqual({ opened: false, revealed: true })
+      expect(openPath).not.toHaveBeenCalled()
+      expect(showItemInFolder).toHaveBeenCalledOnce()
+    }
     expect(isExecutableFilePath(scriptPath)).toBe(true)
-    const execRes = await openWorkspaceFileExternal(
-      { path: scriptPath },
-      { openPath, showItemInFolder }
-    )
-    expect(execRes).toEqual({ opened: false, revealed: true })
-    expect(openPath).not.toHaveBeenCalled()
-    expect(showItemInFolder).toHaveBeenCalledOnce()
   })
 })

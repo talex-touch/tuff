@@ -28,36 +28,37 @@ export interface UseHomePreviewPanelsOptions {
   getSidePanelAvailableWidth?: () => number | undefined
 }
 
+const URL_TOKEN_PATTERN = /[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s"'`<>|]+/g
 const ABS_PATH_PATTERN = /(?:\/[A-Za-z0-9._@+\-/]+|[A-Za-z]:\\[^\s"'`<>|]+)/g
 
 function collectMentionedAbsolutePaths(messages: ConversationMessage[]): string[] {
   const found: string[] = []
   const seen = new Set<string>()
-  const push = (candidate: string) => {
-    const cleaned = candidate.replace(/[.,;:!?)'"`\]}>]+$/, '')
-    if (!cleaned || seen.has(cleaned)) return
-    seen.add(cleaned)
-    found.push(cleaned)
+  const scan = (source: string) => {
+    // Strip scheme URLs (e.g. https://example.com/login.html) before scanning so `//host/path`
+    // is never misclassified as a local absolute filesystem path.
+    const withoutUrls = source.replace(URL_TOKEN_PATTERN, ' ')
+    for (const match of withoutUrls.matchAll(ABS_PATH_PATTERN)) {
+      const candidate = match[0]
+      if (!candidate || candidate.startsWith('//')) continue
+      const cleaned = candidate.replace(/[.,;:!?)'"`\]}>]+$/, '')
+      if (!cleaned || seen.has(cleaned)) continue
+      seen.add(cleaned)
+      found.push(cleaned)
+    }
   }
 
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i]!
     for (const part of message.parts ?? []) {
       if (part.type === 'tool-call') {
-        const text = `${part.input ?? ''}\n${part.output ?? ''}`
-        for (const match of text.matchAll(ABS_PATH_PATTERN)) {
-          if (match[0]) push(match[0])
-        }
+        scan(`${part.input ?? ''}\n${part.output ?? ''}`)
       } else if (part.type === 'text') {
-        for (const match of part.text.matchAll(ABS_PATH_PATTERN)) {
-          if (match[0]) push(match[0])
-        }
+        scan(part.text)
       }
     }
     if (message.content) {
-      for (const match of message.content.matchAll(ABS_PATH_PATTERN)) {
-        if (match[0]) push(match[0])
-      }
+      scan(message.content)
     }
   }
   return found

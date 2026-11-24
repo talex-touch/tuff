@@ -84,15 +84,20 @@ export function buildTerminalInput(options: BuildTerminalInputOptions): BuiltTer
 
   let input: string
   if (cdCommand) {
-    input = normalized.includes('\n')
-      ? `${cdCommand}\r${ptyCommand}\r`
-      : `${cdCommand} && ${ptyCommand}\r`
+    if (normalized.includes('\n')) {
+      input =
+        platform === 'win32'
+          ? `${cdCommand} && (\r${ptyCommand}\r)\r`
+          : `${cdCommand} && {\r${ptyCommand}\r}\r`
+    } else {
+      input = `${cdCommand} && ${ptyCommand}\r`
+    }
   } else {
     input = `${ptyCommand}\r`
   }
 
   return {
     input,
-    nextCwd: cdCommand ? targetCwd : currentCwd
+    nextCwd: undefined
   }
 }

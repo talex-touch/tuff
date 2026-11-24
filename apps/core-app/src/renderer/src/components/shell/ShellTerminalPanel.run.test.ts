@@ -207,17 +207,20 @@ describe('ShellTerminalPanel queued command execution', () => {
     expect(mocks.write).toHaveBeenCalledTimes(1)
     expect(mocks.write).toHaveBeenCalledWith('open login.html\r')
 
-    // Second command in the same cwd skips redundant cd.
+    // Subsequent queued commands always re-establish cwd because the prior command could have changed directories.
     terminal.runCommand('ls -la', { cwd: '/private/tmp/tuff-spaces/abc', lang: 'bash' })
     await flushPromises()
-    expect(mocks.write).toHaveBeenNthCalledWith(2, 'ls -la\r')
+    expect(mocks.write).toHaveBeenNthCalledWith(
+      2,
+      "cd -- '/private/tmp/tuff-spaces/abc' && ls -la\r"
+    )
 
     // Switching to another cwd prefixes a safe cd before running.
     terminal.runCommand('pwd', { cwd: '/Users/demo/project', lang: 'bash' })
     await flushPromises()
     expect(mocks.write).toHaveBeenNthCalledWith(3, "cd -- '/Users/demo/project' && pwd\r")
 
-    // Manual Enter in the terminal invalidates cached cwd so the next run restores it.
+    // Manual Enter in the terminal also keeps subsequent runs guarded with cd.
     mocks.terminalEmitData?.('cd ~\r')
     await nextTick()
     terminal.runCommand('open login.html', { cwd: '/Users/demo/project', lang: 'bash' })

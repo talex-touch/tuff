@@ -28,7 +28,7 @@ describe('shell-terminal-command', () => {
     expect(formatCdCommand('C:\\bad"dir', 'win32')).toBeNull()
   })
 
-  it('builds PTY input with conditional cd for single-line and multi-line commands', () => {
+  it('builds PTY input with guarded cd for single-line and multi-line commands', () => {
     expect(
       buildTerminalInput({
         command: 'open login.html',
@@ -37,7 +37,7 @@ describe('shell-terminal-command', () => {
       })
     ).toEqual({
       input: 'open login.html\r',
-      nextCwd: '/private/tmp/tuff-spaces/abc'
+      nextCwd: undefined
     })
 
     expect(
@@ -48,7 +48,7 @@ describe('shell-terminal-command', () => {
       })
     ).toEqual({
       input: "cd -- '/private/tmp/tuff-spaces/abc' && open login.html\r",
-      nextCwd: '/private/tmp/tuff-spaces/abc'
+      nextCwd: undefined
     })
 
     expect(
@@ -58,8 +58,20 @@ describe('shell-terminal-command', () => {
         currentCwd: '/other'
       })
     ).toEqual({
-      input: "cd -- '/private/tmp/tuff-spaces/abc'\recho one\recho two\r",
-      nextCwd: '/private/tmp/tuff-spaces/abc'
+      input: "cd -- '/private/tmp/tuff-spaces/abc' && {\recho one\recho two\r}\r",
+      nextCwd: undefined
+    })
+
+    expect(
+      buildTerminalInput({
+        command: 'echo one\necho two',
+        cwd: 'C:\\Users\\demo\\project',
+        currentCwd: undefined,
+        platform: 'win32'
+      })
+    ).toEqual({
+      input: 'cd /d "C:\\Users\\demo\\project" && (\recho one\recho two\r)\r',
+      nextCwd: undefined
     })
   })
 })

@@ -75,6 +75,8 @@ describe('workspace-git-service', () => {
 
   it('validates repo-relative paths and branch names against injection and traversal', () => {
     expect(assertSafeRepoRelativePath('/repo', 'src/index.ts')).toBe('src/index.ts')
+    expect(assertSafeRepoRelativePath('/repo', ' notes.txt')).toBe(' notes.txt')
+    expect(assertSafeRepoRelativePath('/repo', '..notes.txt')).toBe('..notes.txt')
     expect(() => assertSafeRepoRelativePath('/repo', '../secret.txt')).toThrow(
       'GIT_PATH_OUTSIDE_REPO'
     )
@@ -216,5 +218,78 @@ describe('workspace-git-service', () => {
     expect(pulledA.ok).toBe(true)
     expect(pulledA.status?.behind).toBe(0)
     expect(await fs.readFile(path.join(repoA, 'notes.txt'), 'utf8')).toBe('from remote\n')
+  })
+
+  it('handles unborn edited unstage, literal pathspecs, nonrecursive directory guard, symlink diff containment, missing branch checkout, and pushRemote', async () => {
+    const repo = await makeTempDir('tuff-git-hardened-')
+    const outside = await makeTempDir('tuff-git-outside-')
+    const barePrimary = await makeTempDir('tuff-git-remote-a-')
+    const bareSecondary = await makeTempDir('tuff-git-remote-b-')
+    await initTempRepo(repo)
+    await git(barePrimary, ['init', '--bare', '-b', 'main'])
+    await git(bareSecondary, ['init', '--bare', '-b', 'main'])
+
+    // Stage a new file, edit it before the first commit, then unstage without losing edits.
+    await fs.writeFile(path.join(repo, 'first.txt'), 'v1\n', 'utf8')
+    await stageWorkspaceGitFiles({ cwd: repo, paths: ['first.txt'] })
+    await fs.writeFile(path.join(repo, 'first.txt'), 'v2-edited\n', 'utf8')
+    const unstagedEdited = await unstageWorkspaceGitFiles({ cwd: repo, paths: ['first.txt'] })
+    expect(unstagedEdited.ok).toBe(true)
+    expect(await fs.readFile(path.join(repo, 'first.txt'), 'utf8')).toBe('v2-edited\n')
+
+    // Commit files including glob-like filename `draft[1].txt` and `draft1.txt`.
+    await fs.writeFile(path.join(repo, 'draft[1].txt'), 'bracket\n', 'utf8')
+    await fs.writeFile(path.join(repo, 'draft1.txt'), 'plain\n', 'utf8')
+    await fs.writeFile(path.join(repo, '.gitignore'), 'scratch/keep.db\n', 'utf8')
+    await stageWorkspaceGitFiles({ cwd: repo, all: true })
+    await commitWorkspaceGitChanges({ cwd: repo, message: 'Seed' })
+
+    // Literal pathspec discard on `draft[1].txt` must not touch `draft1.txt`.
+    await fs.writeFile(path.join(repo, 'draft[1].txt'), 'bracket-mod\n', 'utf8')
+    await fs.writeFile(path.join(repo, 'draft1.txt'), 'plain-mod\n', 'utf8')
+    const discardBracket = await discardWorkspaceGitFile({ cwd: repo, path: 'draft[1].txt' })
+    expect(discardBracket.ok).toBe(true)
+    expect(await fs.readFile(path.join(repo, 'draft[1].txt'), 'utf8')).toBe('bracket\n')
+    expect(await fs.readFile(path.join(repo, 'draft1.txt'), 'utf8')).toBe('plain-mod\n')
+
+    // Never recursively delete an untracked directory (preserving ignored files inside).
+    await fs.mkdir(path.join(repo, 'scratch'))
+    await fs.writeFile(path.join(repo, 'scratch', 'draft.txt'), 'tmp', 'utf8')
+    await fs.writeFile(path.join(repo, 'scratch', 'keep.db'), 'db', 'utf8')
+    const dirDiscard = await discardWorkspaceGitFile({
+      cwd: repo,
+      path: 'scratch',
+      untracked: true
+    })
+    expect(dirDiscard.ok).toBe(false)
+    expect(await fs.readFile(path.join(repo, 'scratch', 'keep.db'), 'utf8')).toBe('db')
+
+    // Untracked symlink preview must render link target, never outside file contents.
+    const secretFile = path.join(outside, 'secret.txt')
+    await fs.writeFile(secretFile, 'TOP-SECRET-CONTENT', 'utf8')
+    await fs.symlink(secretFile, path.join(repo, 'escape-link'))
+    const linkDiff = await readWorkspaceGitDiff({
+      cwd: repo,
+      path: 'escape-link',
+      untracked: true
+    })
+    expect(linkDiff.diff).toContain('120000')
+    expect(linkDiff.diff).not.toContain('TOP-SECRET-CONTENT')
+
+    // Missing branch matching tracked file name must fail closed without restoring edits.
+    const missingBranch = await checkoutWorkspaceGitBranch({ cwd: repo, branch: 'draft1.txt' })
+    expect(missingBranch.ok).toBe(false)
+    expect(await fs.readFile(path.join(repo, 'draft1.txt'), 'utf8')).toBe('plain-mod\n')
+
+    // Multiple remotes fail closed unless branch pushRemote or remote.pushDefault is set.
+    await git(repo, ['remote', 'add', 'alpha', barePrimary])
+    await git(repo, ['remote', 'add', 'beta', bareSecondary])
+    const ambiguousPush = await pushWorkspaceGit({ cwd: repo, setUpstream: true })
+    expect(ambiguousPush.ok).toBe(false)
+
+    await git(repo, ['config', 'branch.main.pushRemote', 'beta'])
+    const configuredPush = await pushWorkspaceGit({ cwd: repo, setUpstream: true })
+    expect(configuredPush.ok).toBe(true)
+    expect(configuredPush.status?.upstream).toBe('beta/main')
   })
 })

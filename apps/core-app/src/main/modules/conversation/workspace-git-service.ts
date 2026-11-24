@@ -54,10 +54,14 @@ function buildGitEnv(): NodeJS.ProcessEnv {
 async function runGit(
   cwd: string,
   args: string[],
-  timeoutMs = LOCAL_GIT_TIMEOUT_MS
+  timeoutMs = LOCAL_GIT_TIMEOUT_MS,
+  options: { literalPathspecs?: boolean } = {}
 ): Promise<GitExecResult> {
+  const prefix = options.literalPathspecs
+    ? ['--literal-pathspecs', '-c', 'core.quotepath=false']
+    : ['-c', 'core.quotepath=false']
   try {
-    const { stdout, stderr } = await execFileAsync('git', ['-c', 'core.quotepath=false', ...args], {
+    const { stdout, stderr } = await execFileAsync('git', [...prefix, ...args], {
       cwd,
       env: buildGitEnv(),
       timeout: timeoutMs,
@@ -349,20 +353,24 @@ export function parsePorcelainV2Status(output: string): {
 }
 
 export function assertSafeRepoRelativePath(repoRoot: string, rawPath: string): string {
-  const normalized = rawPath.replace(/\\/g, '/').trim()
-  if (!normalized || normalized.includes('\0')) {
+  if (!rawPath || rawPath.includes('\0')) {
     throw new Error('GIT_PATH_INVALID')
   }
-  if (path.isAbsolute(normalized) || /^[a-zA-Z]:/.test(normalized)) {
+  const normalized = process.platform === 'win32' ? rawPath.replace(/\\/g, '/') : rawPath
+  if (path.isAbsolute(normalized) || normalized.startsWith('/') || /^[a-zA-Z]:/.test(normalized)) {
+    throw new Error('GIT_PATH_OUTSIDE_REPO')
+  }
+  const segments = normalized.split('/')
+  if (segments.some((seg) => seg === '..' || seg === '.')) {
     throw new Error('GIT_PATH_OUTSIDE_REPO')
   }
   const resolvedRoot = path.resolve(repoRoot)
   const resolvedTarget = path.resolve(resolvedRoot, normalized)
   const rel = path.relative(resolvedRoot, resolvedTarget)
-  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
+  if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
     throw new Error('GIT_PATH_OUTSIDE_REPO')
   }
-  return rel.replace(/\\/g, '/')
+  return normalized
 }
 
 function hasControlChar(value: string): boolean {
@@ -432,14 +440,51 @@ function summarizeDiff(rawDiff: string): {
   }
 }
 
+function isPathContained(root: string, target: string): boolean {
+  const compRoot =
+    process.platform === 'darwin' || process.platform === 'win32' ? root.toLowerCase() : root
+  const compTarget =
+    process.platform === 'darwin' || process.platform === 'win32' ? target.toLowerCase() : target
+  const rel = path.relative(compRoot, compTarget)
+  return rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)
+}
+
 async function buildUntrackedFileDiff(
   repoRoot: string,
   safeRelPath: string
 ): Promise<WorkspaceGitDiffResult> {
   const absPath = path.resolve(repoRoot, safeRelPath)
   try {
-    const stat = await fs.stat(absPath)
-    if (!stat.isFile()) {
+    const realRepo = await fs.realpath(repoRoot)
+    const realParent = await fs.realpath(path.dirname(absPath))
+    if (!isPathContained(realRepo, realParent)) {
+      throw new Error('GIT_PATH_OUTSIDE_REPO')
+    }
+
+    const lstat = await fs.lstat(absPath)
+    if (lstat.isSymbolicLink()) {
+      const linkTarget = await fs.readlink(absPath)
+      const diff = [
+        `diff --git a/${safeRelPath} b/${safeRelPath}`,
+        'new file mode 120000',
+        '--- /dev/null',
+        `+++ b/${safeRelPath}`,
+        '@@ -0,0 +1 @@',
+        `+${linkTarget}`
+      ].join('\n')
+      return {
+        path: safeRelPath,
+        staged: false,
+        diff,
+        additions: 1,
+        deletions: 0,
+        binary: false,
+        truncated: false,
+        empty: false
+      }
+    }
+
+    if (!lstat.isFile()) {
       return {
         path: safeRelPath,
         staged: false,
@@ -452,9 +497,14 @@ async function buildUntrackedFileDiff(
       }
     }
 
-    const handle = await fs.open(absPath, 'r')
+    const realTarget = await fs.realpath(absPath)
+    if (!isPathContained(realRepo, realTarget)) {
+      throw new Error('GIT_PATH_OUTSIDE_REPO')
+    }
+
+    const handle = await fs.open(realTarget, 'r')
     try {
-      const readLen = Math.min(stat.size, DIFF_MAX_BYTES + 1)
+      const readLen = Math.min(lstat.size, DIFF_MAX_BYTES + 1)
       const buffer = Buffer.alloc(readLen)
       const { bytesRead } = await handle.read(buffer, 0, readLen, 0)
       const slice = buffer.subarray(0, bytesRead)
@@ -474,7 +524,7 @@ async function buildUntrackedFileDiff(
         }
       }
 
-      const truncated = stat.size > DIFF_MAX_BYTES
+      const truncated = lstat.size > DIFF_MAX_BYTES
       const text = slice
         .subarray(0, Math.min(bytesRead, DIFF_MAX_BYTES))
         .toString('utf8')
@@ -536,29 +586,10 @@ async function hasHeadCommit(repoRoot: string): Promise<boolean> {
   return res.exitCode === 0
 }
 
-export async function readWorkspaceGitStatus(
-  target: WorkspaceGitTarget
-): Promise<WorkspaceGitStatusResult> {
-  const ctx = await resolveRepoContext(target)
-  if (!ctx.ok) {
-    return {
-      available: ctx.available,
-      isRepo: ctx.isRepo,
-      cwd: ctx.cwd,
-      branch: '',
-      detached: false,
-      ahead: 0,
-      behind: 0,
-      hasRemote: false,
-      files: [],
-      stagedCount: 0,
-      unstagedCount: 0,
-      untrackedCount: 0,
-      conflictedCount: 0,
-      ...(ctx.error ? { error: ctx.error } : {})
-    }
-  }
-
+async function readStatusForRepo(ctx: {
+  cwd: string
+  repoRoot: string
+}): Promise<WorkspaceGitStatusResult> {
   const [statusRes, remotesRes] = await Promise.all([
     runGit(ctx.repoRoot, ['status', '--porcelain=v2', '--branch', '-z']),
     runGit(ctx.repoRoot, ['remote'])
@@ -618,6 +649,31 @@ export async function readWorkspaceGitStatus(
   }
 }
 
+export async function readWorkspaceGitStatus(
+  target: WorkspaceGitTarget
+): Promise<WorkspaceGitStatusResult> {
+  const ctx = await resolveRepoContext(target)
+  if (!ctx.ok) {
+    return {
+      available: ctx.available,
+      isRepo: ctx.isRepo,
+      cwd: ctx.cwd,
+      branch: '',
+      detached: false,
+      ahead: 0,
+      behind: 0,
+      hasRemote: false,
+      files: [],
+      stagedCount: 0,
+      unstagedCount: 0,
+      untrackedCount: 0,
+      conflictedCount: 0,
+      ...(ctx.error ? { error: ctx.error } : {})
+    }
+  }
+  return readStatusForRepo(ctx)
+}
+
 export async function readWorkspaceGitDiff(
   request: WorkspaceGitDiffRequest
 ): Promise<WorkspaceGitDiffResult> {
@@ -661,7 +717,7 @@ export async function readWorkspaceGitDiff(
   const args = staged
     ? ['diff', '--cached', '--no-color', '--', safePath]
     : ['diff', '--no-color', '--', safePath]
-  const res = await runGit(ctx.repoRoot, args)
+  const res = await runGit(ctx.repoRoot, args, LOCAL_GIT_TIMEOUT_MS, { literalPathspecs: true })
   if (res.exitCode !== 0) {
     return {
       path: safePath,
@@ -698,7 +754,7 @@ export async function listWorkspaceGitBranches(
   }
 
   const [status, refsRes] = await Promise.all([
-    readWorkspaceGitStatus(target),
+    readStatusForRepo(ctx),
     runGit(ctx.repoRoot, [
       'for-each-ref',
       '--sort=-committerdate',
@@ -707,6 +763,15 @@ export async function listWorkspaceGitBranches(
       'refs/remotes'
     ])
   ])
+
+  if (status.error) {
+    return {
+      current: '',
+      detached: false,
+      branches: [],
+      error: status.error
+    }
+  }
 
   if (refsRes.exitCode !== 0) {
     return {
@@ -820,6 +885,7 @@ export async function stageWorkspaceGitFiles(
   }
 
   let args: string[]
+  let literalPathspecs = false
   if (request.all) {
     args = ['add', '-A']
   } else {
@@ -834,14 +900,15 @@ export async function stageWorkspaceGitFiles(
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
     args = ['add', '-A', '--', ...safePaths]
+    literalPathspecs = true
   }
 
-  const res = await runGit(ctx.repoRoot, args)
+  const res = await runGit(ctx.repoRoot, args, LOCAL_GIT_TIMEOUT_MS, { literalPathspecs })
   if (res.exitCode !== 0) {
     return { ok: false, error: res.stderr.trim() || 'Failed to stage changes' }
   }
 
-  const status = await readWorkspaceGitStatus(request)
+  const status = await readStatusForRepo(ctx)
   return { ok: true, status }
 }
 
@@ -855,9 +922,10 @@ export async function unstageWorkspaceGitFiles(
 
   const hasHead = await hasHeadCommit(ctx.repoRoot)
   let args: string[]
+  let literalPathspecs = false
 
   if (request.all) {
-    args = hasHead ? ['reset', '-q', 'HEAD', '--'] : ['rm', '--cached', '-r', '-q', '.']
+    args = hasHead ? ['reset', '-q', 'HEAD', '--'] : ['rm', '--cached', '-r', '-f', '-q', '.']
   } else {
     const rawPaths = request.paths ?? []
     if (rawPaths.length === 0) {
@@ -871,15 +939,16 @@ export async function unstageWorkspaceGitFiles(
     }
     args = hasHead
       ? ['restore', '--staged', '--', ...safePaths]
-      : ['rm', '--cached', '-r', '-q', '--', ...safePaths]
+      : ['rm', '--cached', '-r', '-f', '-q', '--', ...safePaths]
+    literalPathspecs = true
   }
 
-  const res = await runGit(ctx.repoRoot, args)
+  const res = await runGit(ctx.repoRoot, args, LOCAL_GIT_TIMEOUT_MS, { literalPathspecs })
   if (res.exitCode !== 0) {
     return { ok: false, error: res.stderr.trim() || 'Failed to unstage changes' }
   }
 
-  const status = await readWorkspaceGitStatus(request)
+  const status = await readStatusForRepo(ctx)
   return { ok: true, status }
 }
 
@@ -899,34 +968,70 @@ export async function discardWorkspaceGitFile(
   }
 
   if (request.untracked) {
-    // Double-check git confirms this path is truly untracked before removing it from disk.
-    const verify = await runGit(ctx.repoRoot, [
-      'ls-files',
-      '--others',
-      '--exclude-standard',
-      '--',
-      safePath
-    ])
-    if (verify.exitCode !== 0 || !verify.stdout.trim()) {
-      return { ok: false, error: 'Refused to delete path that is not untracked by git' }
+    if (safePath.endsWith('/')) {
+      return { ok: false, error: 'Refused to recursively delete untracked directory' }
     }
     const targetAbs = path.resolve(ctx.repoRoot, safePath)
     try {
-      await fs.rm(targetAbs, { recursive: true, force: false })
+      const lstat = await fs.lstat(targetAbs)
+      if (lstat.isDirectory()) {
+        return { ok: false, error: 'Refused to recursively delete untracked directory' }
+      }
     } catch (error) {
       return {
         ok: false,
-        error: error instanceof Error ? error.message : 'Failed to remove untracked file'
+        error: error instanceof Error ? error.message : 'Untracked file not found'
+      }
+    }
+
+    // Confirm exact untracked file entry, then let `git clean -f` (without -d/-x) verify
+    // Git's index atomically at removal time so a concurrently staged file or directory is never deleted.
+    const verify = await runGit(
+      ctx.repoRoot,
+      ['ls-files', '--others', '--exclude-standard', '-z', '--', safePath],
+      LOCAL_GIT_TIMEOUT_MS,
+      { literalPathspecs: true }
+    )
+    const exactMatches = verify.stdout.split('\0').filter(Boolean)
+    if (verify.exitCode !== 0 || !exactMatches.includes(safePath)) {
+      return { ok: false, error: 'Refused to delete path that is not untracked by git' }
+    }
+
+    const cleanRes = await runGit(
+      ctx.repoRoot,
+      ['clean', '-f', '--', safePath],
+      LOCAL_GIT_TIMEOUT_MS,
+      { literalPathspecs: true }
+    )
+    if (cleanRes.exitCode !== 0) {
+      return {
+        ok: false,
+        error: cleanRes.stderr.trim() || 'Failed to remove untracked file'
+      }
+    }
+    const stillExists = await fs
+      .lstat(targetAbs)
+      .then(() => true)
+      .catch(() => false)
+    if (stillExists) {
+      return {
+        ok: false,
+        error: 'Refused to delete path that is no longer an untracked file'
       }
     }
   } else {
-    const res = await runGit(ctx.repoRoot, ['restore', '--worktree', '--', safePath])
+    const res = await runGit(
+      ctx.repoRoot,
+      ['restore', '--worktree', '--', safePath],
+      LOCAL_GIT_TIMEOUT_MS,
+      { literalPathspecs: true }
+    )
     if (res.exitCode !== 0) {
       return { ok: false, error: res.stderr.trim() || 'Failed to discard file changes' }
     }
   }
 
-  const status = await readWorkspaceGitStatus(request)
+  const status = await readStatusForRepo(ctx)
   return { ok: true, status }
 }
 
@@ -952,7 +1057,7 @@ export async function commitWorkspaceGitChanges(
   }
 
   const summary = res.stdout.split('\n')[0]?.trim() || 'Committed'
-  const status = await readWorkspaceGitStatus(request)
+  const status = await readStatusForRepo(ctx)
   return { ok: true, summary, status }
 }
 
@@ -975,9 +1080,10 @@ export async function checkoutWorkspaceGitBranch(
     if (startPoint && !isValidBranchName(startPoint)) {
       return { ok: false, error: 'Invalid start point branch name' }
     }
-    args = startPoint ? ['checkout', '-b', branch, startPoint] : ['checkout', '-b', branch]
+    args = startPoint ? ['switch', '-c', branch, startPoint] : ['switch', '-c', branch]
   } else {
-    // Check whether the requested name is a remote-tracking ref (e.g. `origin/feature`).
+    // Check whether the requested name is a local or remote-tracking branch; never fall back to
+    // `git checkout <name>` which could overwrite a tracked file matching the missing branch name.
     const localExists = await runGit(ctx.repoRoot, [
       'show-ref',
       '--verify',
@@ -985,7 +1091,7 @@ export async function checkoutWorkspaceGitBranch(
       `refs/heads/${branch}`
     ])
     if (localExists.exitCode === 0) {
-      args = ['checkout', branch]
+      args = ['switch', branch]
     } else {
       const remoteExists = await runGit(ctx.repoRoot, [
         'show-ref',
@@ -993,7 +1099,10 @@ export async function checkoutWorkspaceGitBranch(
         '--quiet',
         `refs/remotes/${branch}`
       ])
-      args = remoteExists.exitCode === 0 ? ['checkout', '--track', branch] : ['checkout', branch]
+      if (remoteExists.exitCode !== 0) {
+        return { ok: false, error: `Branch not found: ${branch}` }
+      }
+      args = ['switch', '--track', branch]
     }
   }
 
@@ -1002,7 +1111,7 @@ export async function checkoutWorkspaceGitBranch(
     return { ok: false, error: res.stderr.trim() || 'Failed to switch branch' }
   }
 
-  const status = await readWorkspaceGitStatus(request)
+  const status = await readStatusForRepo(ctx)
   return { ok: true, summary: branch, status }
 }
 
@@ -1019,7 +1128,7 @@ export async function fetchWorkspaceGit(
     return { ok: false, error: res.stderr.trim() || 'Git fetch failed' }
   }
 
-  const status = await readWorkspaceGitStatus(target)
+  const status = await readStatusForRepo(ctx)
   return { ok: true, summary: res.stderr.trim() || res.stdout.trim() || 'Fetched', status }
 }
 
@@ -1036,8 +1145,42 @@ export async function pullWorkspaceGit(
     return { ok: false, error: res.stderr.trim() || res.stdout.trim() || 'Git pull failed' }
   }
 
-  const status = await readWorkspaceGitStatus(target)
+  const status = await readStatusForRepo(ctx)
   return { ok: true, summary: res.stdout.trim() || 'Pulled', status }
+}
+
+async function resolvePushRemote(
+  repoRoot: string,
+  branch: string
+): Promise<{ ok: true; remote: string } | { ok: false; error: string }> {
+  if (branch && !branch.startsWith('(')) {
+    const branchRemote = await runGit(repoRoot, ['config', '--get', `branch.${branch}.pushRemote`])
+    const configuredBranchRemote = branchRemote.exitCode === 0 ? branchRemote.stdout.trim() : ''
+    if (configuredBranchRemote) {
+      return { ok: true, remote: configuredBranchRemote }
+    }
+  }
+  const defaultPushRemote = await runGit(repoRoot, ['config', '--get', 'remote.pushDefault'])
+  const configuredDefault = defaultPushRemote.exitCode === 0 ? defaultPushRemote.stdout.trim() : ''
+  if (configuredDefault) {
+    return { ok: true, remote: configuredDefault }
+  }
+
+  const remotesRes = await runGit(repoRoot, ['remote'])
+  const remotes = remotesRes.stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  if (remotes.length === 0) {
+    return { ok: false, error: 'No Git remote configured' }
+  }
+  if (remotes.length > 1) {
+    return {
+      ok: false,
+      error: 'Multiple Git remotes configured; configure branch pushRemote or remote.pushDefault'
+    }
+  }
+  return { ok: true, remote: remotes[0]! }
 }
 
 export async function pushWorkspaceGit(
@@ -1048,7 +1191,10 @@ export async function pushWorkspaceGit(
     return { ok: false, error: ctx.error || 'Not a git repository' }
   }
 
-  const before = await readWorkspaceGitStatus(request)
+  const before = await readStatusForRepo(ctx)
+  if (before.error) {
+    return { ok: false, error: before.error }
+  }
   if (before.detached) {
     return { ok: false, error: 'Cannot push from a detached HEAD' }
   }
@@ -1058,15 +1204,11 @@ export async function pushWorkspaceGit(
     if (request.setUpstream === false) {
       return { ok: false, error: 'Current branch has no upstream branch' }
     }
-    const remotesRes = await runGit(ctx.repoRoot, ['remote'])
-    const firstRemote = remotesRes.stdout
-      .split('\n')
-      .map((line) => line.trim())
-      .find(Boolean)
-    if (!firstRemote) {
-      return { ok: false, error: 'No Git remote configured' }
+    const targetRemote = await resolvePushRemote(ctx.repoRoot, before.branch)
+    if (!targetRemote.ok) {
+      return { ok: false, error: targetRemote.error }
     }
-    args = ['push', '-u', firstRemote, 'HEAD']
+    args = ['push', '-u', targetRemote.remote, 'HEAD']
   }
 
   const res = await runGit(ctx.repoRoot, args, REMOTE_GIT_TIMEOUT_MS)
@@ -1074,6 +1216,6 @@ export async function pushWorkspaceGit(
     return { ok: false, error: res.stderr.trim() || res.stdout.trim() || 'Git push failed' }
   }
 
-  const status = await readWorkspaceGitStatus(request)
+  const status = await readStatusForRepo(ctx)
   return { ok: true, summary: res.stderr.trim() || res.stdout.trim() || 'Pushed', status }
 }

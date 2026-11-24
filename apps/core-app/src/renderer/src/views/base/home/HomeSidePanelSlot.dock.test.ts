@@ -128,8 +128,41 @@ describe('HomeSidePanelSlot shell dock & tab strip scrolling', () => {
     expect(hostEl.querySelector('[data-testid="side-terminal"]')).not.toBeNull()
     expect(slotEl!.style.display).toBe('none')
 
+    // Closing the panel also hides via v-show so running terminal tabs stay alive across close/reopen.
+    await wrapper.setProps({ active: true, open: false })
+    expect(shell.dockOpen.value).toBe(false)
+    expect(hostEl.querySelector('[data-testid="side-terminal"]')).not.toBeNull()
+    expect(slotEl!.style.display).toBe('none')
+
+    await wrapper.setProps({ open: true })
+    expect(shell.dockOpen.value).toBe(true)
+    expect(slotEl!.style.display).toBe('')
+
     wrapper.unmount()
     expect(shell.dockOpen.value).toBe(false)
+  })
+
+  it('defers mounting panel panes until first opened', async () => {
+    const shell = useShellRightSidebar()
+    shell.registerHost(hostEl)
+
+    const wrapper = mount(HomeSidePanelSlot, {
+      props: {
+        ...basePanelProps(),
+        open: false,
+        resizing: false,
+        dockToShell: true,
+        active: true
+      }
+    })
+    await nextTick()
+    expect(hostEl.querySelector('[data-testid="side-terminal"]')).toBeNull()
+
+    await wrapper.setProps({ open: true })
+    await nextTick()
+    expect(hostEl.querySelector('[data-testid="side-terminal"]')).not.toBeNull()
+
+    wrapper.unmount()
   })
 
   it('renders inline when no shell dock host is registered', async () => {

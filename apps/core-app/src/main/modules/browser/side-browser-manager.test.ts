@@ -108,4 +108,42 @@ describe('SideBrowserManager', () => {
 
     manager.dispose()
   })
+
+  it('invalidates stored viewport on host navigation and renderer loss so resize cannot reattach stale bounds', () => {
+    const { manager, owner, createdViews, childViews } = createHarness()
+
+    manager.navigate('https://example.com/docs')
+    manager.setViewport({
+      visible: true,
+      bounds: { x: 800, y: 52, width: 480, height: 748 }
+    })
+    expect(createdViews).toHaveLength(1)
+    expect(childViews.size).toBe(1)
+
+    // Main-frame navigation replaces host document: destroys guest and invalidates viewport.
+    owner.webContents.emit('did-start-navigation', {}, 'https://new-doc', false, true)
+    expect(childViews.size).toBe(0)
+
+    // Subsequent owner resize must NOT recreate/attach a guest using stale bounds.
+    owner.emit('resize')
+    expect(createdViews).toHaveLength(1)
+    expect(childViews.size).toBe(0)
+
+    // Submitting a fresh visible viewport from the new document re-creates and attaches the guest.
+    manager.setViewport({
+      visible: true,
+      bounds: { x: 700, y: 52, width: 500, height: 700 }
+    })
+    expect(createdViews).toHaveLength(2)
+    expect(childViews.size).toBe(1)
+
+    // Host render-process-gone also invalidates viewport so resize cannot reattach.
+    owner.webContents.emit('render-process-gone')
+    expect(childViews.size).toBe(0)
+    owner.emit('resize')
+    expect(createdViews).toHaveLength(2)
+    expect(childViews.size).toBe(0)
+
+    manager.dispose()
+  })
 })

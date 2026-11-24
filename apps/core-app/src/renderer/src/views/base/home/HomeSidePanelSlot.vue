@@ -84,10 +84,18 @@ const { t } = useI18n()
 const { dockHost, syncDockState, resetDockState } = useShellRightSidebar()
 
 const keepAliveActive = ref(true)
+const hasBeenOpened = ref(props.open)
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) hasBeenOpened.value = true
+  }
+)
 const panelActive = computed(() => keepAliveActive.value && props.active)
+const visible = computed(() => props.open && panelActive.value)
 const shouldTeleport = computed(() => Boolean(props.dockToShell && dockHost.value))
 const teleportTarget = computed<HTMLElement | string>(() => dockHost.value ?? 'body')
-const dockedVisible = computed(() => shouldTeleport.value && props.open && panelActive.value)
+const dockedVisible = computed(() => shouldTeleport.value && visible.value)
 const slotStyle = computed(() => ({
   '--home-panel-width': `${props.width}px`,
   '--home-panel-min-width': `${SIDE_PANEL_MIN_WIDTH}px`,
@@ -122,8 +130,8 @@ onBeforeUnmount(() => {
   <Teleport :to="teleportTarget" :disabled="!shouldTeleport">
     <Transition name="home-panel">
       <div
-        v-if="open"
-        v-show="panelActive"
+        v-if="hasBeenOpened"
+        v-show="visible"
         class="HomePage-PanelSlot"
         :class="{ 'is-resizing': resizing, 'is-shell-docked': shouldTeleport }"
         :style="slotStyle"
@@ -152,7 +160,7 @@ onBeforeUnmount(() => {
           :loading="loading"
           :tabs="tabs"
           :active-tab-id="activeTabId"
-          :panel-active="panelActive"
+          :panel-active="visible"
           :docked-to-shell="shouldTeleport"
           @locate="emit('locate', $event)"
           @select-tab="emit('select-tab', $event)"

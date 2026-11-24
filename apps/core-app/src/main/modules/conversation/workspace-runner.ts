@@ -116,7 +116,38 @@ function expandMessageWithSteers(message: {
   flushAssistant()
   return expanded.length > 0
     ? expanded
-    : [{ role: 'assistant', text: message.content, createdAt: message.createdAt }]
+    : [{ role: message.role, text: message.content, createdAt: message.createdAt }]
+}
+
+/**
+ * Extracts only user steer entries that were already consumed during a failed or cancelled
+ * assistant turn, so subsequent turns preserve that guidance without replaying failed output.
+ */
+function extractConsumedSteerEntries(message: {
+  role: 'user' | 'assistant'
+  createdAt: number
+  meta?: Record<string, unknown>
+}): SteerHistoryEntry[] {
+  if (message.role !== 'assistant' || !Array.isArray(message.meta?.parts)) return []
+  const entries: SteerHistoryEntry[] = []
+  for (const part of message.meta.parts) {
+    if (
+      part &&
+      typeof part === 'object' &&
+      'type' in part &&
+      part.type === 'steer' &&
+      'text' in part &&
+      typeof part.text === 'string' &&
+      part.text.trim()
+    ) {
+      const createdAt =
+        'createdAt' in part && typeof part.createdAt === 'number'
+          ? part.createdAt
+          : message.createdAt
+      entries.push({ role: 'user', text: part.text, createdAt })
+    }
+  }
+  return entries
 }
 
 const contextSummarySchema = z
@@ -177,6 +208,7 @@ interface ExecutionSlot {
   frameTimer?: NodeJS.Timeout
   lastPersist: number
   pendingWrites: Promise<void>
+  steerSyncGeneration?: number
   context: WorkspaceContextProjection
 }
 
@@ -451,30 +483,63 @@ export class ConversationWorkspaceRunner {
   private async syncActiveRunSteers(conversationId: string): Promise<void> {
     const slot = this.slots.get(conversationId)
     if (!slot || slot.ended || slot.shuttingDown || !slot.runId) return
+    const runId = slot.runId
+    const syncGen = (slot.steerSyncGeneration ?? 0) + 1
+    slot.steerSyncGeneration = syncGen
+
     const state = await this.service.get(conversationId)
+    if (
+      this.slots.get(conversationId) !== slot ||
+      slot.ended ||
+      slot.shuttingDown ||
+      slot.runId !== runId ||
+      slot.steerSyncGeneration !== syncGen
+    ) {
+      return
+    }
     if (!state || state.queueHeld) {
-      aiCliOrchestrator.syncRunSteers?.(slot.runId, [])
+      aiCliOrchestrator.syncRunSteers?.(runId, [])
       return
     }
     const steerInputs = state.queue.filter((item) => item.deliveryMode === 'steer')
+    const readySteers: Array<{ id: string; text: string; createdAt: number }> = []
     const attachmentsById = new Map<string, IntelligenceMessageAttachment[]>()
     for (const item of steerInputs) {
       if (item.attachments?.length) {
-        const resolved = await this.service.getModelAttachments(item).catch(() => [])
-        attachmentsById.set(item.id, resolved)
+        try {
+          const resolved = await this.service.getModelAttachments(item)
+          attachmentsById.set(item.id, resolved)
+        } catch (error) {
+          // Do not publish an attachment-bearing steer as text-only if its images fail to load;
+          // retain it in the queue so it is never silently consumed without its attachments.
+          log.warn('Skipping mid-turn steer with unresolved attachments', {
+            meta: {
+              conversationId,
+              steerId: item.id,
+              reason: error instanceof Error ? error.message : String(error)
+            }
+          })
+          continue
+        }
       } else {
         attachmentsById.set(item.id, [])
       }
-    }
-    aiCliOrchestrator.syncRunSteers?.(
-      slot.runId,
-      steerInputs.map((item) => ({
+      readySteers.push({
         id: item.id,
         text: item.text,
         createdAt: item.createdAt
-      })),
-      attachmentsById
-    )
+      })
+    }
+    if (
+      this.slots.get(conversationId) !== slot ||
+      slot.ended ||
+      slot.shuttingDown ||
+      slot.runId !== runId ||
+      slot.steerSyncGeneration !== syncGen
+    ) {
+      return
+    }
+    aiCliOrchestrator.syncRunSteers?.(runId, readySteers, attachmentsById)
   }
 
   async removeQueued(conversationId: string, queueId: string): Promise<ConversationWorkspaceState> {
@@ -710,13 +775,24 @@ export class ConversationWorkspaceRunner {
     const conversation = await getConversation(slot.conversationId)
     if (!conversation || conversation.projectId !== turn.input.projectId)
       throw new Error('WORKSPACE_PROJECT_UNAVAILABLE')
-    const settled = conversation.messages.filter((message) => message.status === 'complete')
-    const firstUser = settled.findIndex((message) => message.role === 'user')
-    const lead = settled.slice(0, firstUser < 0 ? settled.length : firstUser)
-    const messages: IntelligenceChatPayload['messages'] = settled
-      .slice(firstUser < 0 ? settled.length : firstUser)
+    const relevant = conversation.messages.filter(
+      (message) =>
+        message.status === 'complete' ||
+        (message.status === 'failed' && message.role === 'assistant')
+    )
+    const firstUser = relevant.findIndex(
+      (message) => message.status === 'complete' && message.role === 'user'
+    )
+    const lead = relevant
+      .slice(0, firstUser < 0 ? relevant.length : firstUser)
+      .filter((message) => message.status === 'complete')
+    const messages: IntelligenceChatPayload['messages'] = relevant
+      .slice(firstUser < 0 ? relevant.length : firstUser)
       .flatMap((message) =>
-        expandMessageWithSteers(message).map((entry) => ({
+        (message.status === 'complete'
+          ? expandMessageWithSteers(message)
+          : extractConsumedSteerEntries(message)
+        ).map((entry) => ({
           role: entry.role,
           content: entry.text
         }))
@@ -835,8 +911,17 @@ export class ConversationWorkspaceRunner {
     const root = await realpath(defaultRoot)
     if (!(await stat(root)).isDirectory()) throw new Error('WORKSPACE_PROJECT_UNAVAILABLE')
     const history = conversation.messages
-      .filter((message) => message.status === 'complete' && message.id !== turn.user.id)
-      .flatMap((message) => expandMessageWithSteers(message))
+      .filter(
+        (message) =>
+          message.id !== turn.user.id &&
+          (message.status === 'complete' ||
+            (message.status === 'failed' && message.role === 'assistant'))
+      )
+      .flatMap((message) =>
+        message.status === 'complete'
+          ? expandMessageWithSteers(message)
+          : extractConsumedSteerEntries(message)
+      )
     const allowedToolIds = [...profile.allowedToolIds]
     const modelAttachments = await this.service.getModelAttachments(turn.input)
     const prepared = await this.prepareContext(
@@ -1054,17 +1139,17 @@ export class ConversationWorkspaceRunner {
       const createdAt = typeof payload.createdAt === 'number' ? payload.createdAt : Date.now()
       if (steerId && text) {
         slot.assembler.part({ kind: 'steer-injected', steerId, text, createdAt })
-        await this.service.consumeSteer(slot.conversationId, slot.turn.input.id, steerId)
+        await slot.pendingWrites
+        const snapshot = slot.assembler.snapshot()
+        await this.service.consumeSteer(slot.conversationId, slot.turn.input.id, steerId, snapshot)
+        slot.lastPersist = Date.now()
       }
+      this.snapshot(slot)
+      return
     }
     if (event.type !== 'message_update' && event.type !== 'text' && event.type !== 'reasoning')
       this.snapshot(slot)
-    await this.persist(
-      slot,
-      event.type === 'message_end' ||
-        event.type === 'tool_execution_end' ||
-        event.type === 'steer_consumed'
-    )
+    await this.persist(slot, event.type === 'message_end' || event.type === 'tool_execution_end')
   }
 
   private async complete(slot: ExecutionSlot): Promise<void> {

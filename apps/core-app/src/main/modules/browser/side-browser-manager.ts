@@ -49,9 +49,12 @@ export class SideBrowserManager {
 
   constructor(private readonly deps: SideBrowserDependencies) {
     const resize = () => this.refreshViewport()
-    const reset = () => this.destroyGuest()
+    const reset = () => {
+      this.viewport = { visible: false, bounds: { x: 0, y: 0, width: 0, height: 0 } }
+      this.destroyGuest()
+    }
     const navigation = (_event: unknown, _url: string, isInPlace: boolean, mainFrame: boolean) => {
-      if (mainFrame && !isInPlace) this.destroyGuest()
+      if (mainFrame && !isInPlace) reset()
     }
     const destroy = () => {
       this.dispose()
