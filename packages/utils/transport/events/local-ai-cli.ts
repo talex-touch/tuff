@@ -65,6 +65,7 @@ export type LocalAiCliErrorCode
     | 'PROCESS_START_FAILED'
     | 'PROTOCOL_INVALID'
     | 'PROCESS_EXITED'
+    | 'TOKEN_LIMIT_REACHED'
     | 'CANCELLED'
     | 'INTERNAL_ERROR'
 

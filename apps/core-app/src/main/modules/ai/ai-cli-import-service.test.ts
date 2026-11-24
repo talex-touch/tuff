@@ -1073,4 +1073,127 @@ describe('aiCliImportService canonical ingress', () => {
       expect.arrayContaining([expect.stringContaining('escapes its canonical source root')])
     )
   })
+
+  it('validates Gemini TOML command templates and blocks unsupported constructs while preserving Markdown commands', async () => {
+    const workspace = join(fixtureRoot, 'workspace')
+    await mkdir(workspace, { recursive: true })
+
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/commands/review.toml',
+      'description = "Review files"\nprompt = "Review {{args}}"\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/commands/multiline.toml',
+      'description = "Multiline"\nprompt = """\nInspect carefully:\n{{args}}\n"""\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/commands/shell-inject.toml',
+      'description = "Bad shell"\nprompt = "Summarize !{git diff}"\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/commands/file-inject.toml',
+      'description = "Bad file"\nprompt = "Check @{README.md}"\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.gemini/commands/unknown-var.toml',
+      'description = "Unknown var"\nprompt = "Use {{branch}}"\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.gemini/commands/md-cmd.md',
+      '---\nname: md-cmd\ndescription: Markdown command\n---\nCheck $ARGUMENTS\n'
+    )
+
+    const scan = await new AiCliImportService().preview({
+      cwd: workspace,
+      providerIds: ['gemini']
+    })
+    const commands = new Map(
+      scan.candidates
+        .filter((item) => item.provider === 'gemini' && item.kind === 'command')
+        .map((item) => [item.name, item])
+    )
+
+    expect(commands.get('review')).toMatchObject({
+      description: 'Review files',
+      blockingIssues: []
+    })
+    expect(commands.get('multiline')).toMatchObject({
+      description: 'Multiline',
+      blockingIssues: []
+    })
+    expect(commands.get('md-cmd')).toMatchObject({
+      description: 'Markdown command',
+      blockingIssues: []
+    })
+    expect(commands.get('shell-inject')?.blockingIssues).toEqual([
+      expect.stringContaining('!{...}')
+    ])
+    expect(commands.get('file-inject')?.blockingIssues).toEqual([expect.stringContaining('@{...}')])
+    expect(commands.get('unknown-var')?.blockingIssues).toEqual([
+      expect.stringContaining('{{branch}}')
+    ])
+  })
+
+  it('preserves Kiro steering inclusion modes and blocks unsupported ones instead of making them unconditional', async () => {
+    const workspace = join(fixtureRoot, 'workspace')
+    await mkdir(workspace, { recursive: true })
+
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.kiro/steering/always.md',
+      '---\ninclusion: always\ndescription: Always rule\n---\nAlways apply.\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.kiro/steering/server.md',
+      '---\ninclusion: fileMatch\nfileMatchPattern: "server/**"\ndescription: Server rule\n---\nServer guidance.\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.kiro/steering/missing-pattern.md',
+      '---\ninclusion: fileMatch\n---\nNo pattern.\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.kiro/steering/manual.md',
+      '---\ninclusion: manual\n---\nManual guidance.\n'
+    )
+
+    const scan = await new AiCliImportService().preview({
+      cwd: workspace,
+      providerIds: ['kiro']
+    })
+    const rules = new Map(
+      scan.candidates
+        .filter((item) => item.provider === 'kiro' && item.kind === 'rule')
+        .map((item) => [item.name, item])
+    )
+
+    expect(rules.get('always')).toMatchObject({
+      globs: [],
+      alwaysApply: true,
+      blockingIssues: [],
+      ignoredFields: []
+    })
+    expect(rules.get('server')).toMatchObject({
+      globs: ['server/**'],
+      alwaysApply: false,
+      blockingIssues: [],
+      ignoredFields: []
+    })
+    expect(rules.get('missing-pattern')).toMatchObject({
+      alwaysApply: false,
+      blockingIssues: [expect.stringContaining('fileMatchPattern')]
+    })
+    expect(rules.get('manual')).toMatchObject({
+      alwaysApply: false,
+      blockingIssues: [expect.stringContaining('manual')]
+    })
+  })
 })

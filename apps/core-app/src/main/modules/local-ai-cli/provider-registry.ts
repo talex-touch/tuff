@@ -29,6 +29,12 @@ export interface LocalAiCliTaskSpec {
   protocol?: 'pi-rpc' | 'codex-app-server' | 'acp'
   prompt?: string
   terminateOnComplete?: boolean
+  /** Process environment overrides required to enforce the requested access policy at launch. */
+  env?: Record<string, string>
+  /** Optional ACP v1 `_meta` payload sent on `session/new`, `session/load`, and `session/resume`. */
+  acpSessionMeta?: Record<string, unknown>
+  /** Preferred read-only ACP mode IDs to apply when the agent advertises session modes. */
+  acpModePreference?: readonly string[]
 }
 
 export interface LocalAiCliDecodedEvent {
@@ -244,18 +250,84 @@ export function createLocalAiCliTaskSpec(
         prompt,
         terminateOnComplete: true
       }
-    case 'antigravity':
-    case 'opencode':
-    case 'gemini':
-    case 'kiro':
-    case 'cursor': {
-      const definition = getLocalAiCliProviderDefinition(provider)
+    case 'antigravity': {
+      const baseArgs = [...(getLocalAiCliProviderDefinition('antigravity').acpArgs ?? ['acp'])]
       return {
-        args: [...(definition.acpArgs ?? ['acp'])],
+        args: access === 'workspace-write' ? baseArgs : [...baseArgs, '--sandbox'],
         stdin: '',
         protocol: 'acp',
         prompt,
-        terminateOnComplete: true
+        terminateOnComplete: true,
+        ...(access !== 'workspace-write' ? { acpModePreference: ['plan'] } : {})
+      }
+    }
+    case 'opencode': {
+      const baseArgs = [...(getLocalAiCliProviderDefinition('opencode').acpArgs ?? ['acp'])]
+      const permissionPolicy =
+        access === 'answer-only'
+          ? { '*': 'deny' }
+          : access === 'workspace-read'
+            ? { '*': 'deny', read: 'allow', glob: 'allow', grep: 'allow', list: 'allow' }
+            : { edit: 'ask', write: 'ask', bash: 'ask', patch: 'ask' }
+      return {
+        args: baseArgs,
+        stdin: '',
+        protocol: 'acp',
+        prompt,
+        terminateOnComplete: true,
+        env: { OPENCODE_PERMISSION: JSON.stringify(permissionPolicy) },
+        ...(access !== 'workspace-write' ? { acpModePreference: ['plan'] } : {})
+      }
+    }
+    case 'gemini': {
+      const baseArgs = [
+        ...(getLocalAiCliProviderDefinition('gemini').acpArgs ?? ['--experimental-acp'])
+      ]
+      return {
+        args: [...baseArgs, '--approval-mode', access === 'workspace-write' ? 'default' : 'plan'],
+        stdin: '',
+        protocol: 'acp',
+        prompt,
+        terminateOnComplete: true,
+        ...(access !== 'workspace-write' ? { acpModePreference: ['plan'] } : {})
+      }
+    }
+    case 'kiro': {
+      const baseArgs = [...(getLocalAiCliProviderDefinition('kiro').acpArgs ?? ['acp'])]
+      return {
+        args: baseArgs,
+        stdin: '',
+        protocol: 'acp',
+        prompt,
+        terminateOnComplete: true,
+        ...(access !== 'workspace-write'
+          ? {
+              acpSessionMeta: { kiro: { policyPreset: 'read-workspace' } },
+              acpModePreference: ['plan', 'ask', 'read-only']
+            }
+          : {})
+      }
+    }
+    case 'cursor': {
+      const baseArgs = [...(getLocalAiCliProviderDefinition('cursor').acpArgs ?? ['acp'])]
+      return {
+        args:
+          access === 'workspace-write'
+            ? baseArgs
+            : [
+                '--mode',
+                access === 'answer-only' ? 'ask' : 'plan',
+                '--sandbox',
+                'enabled',
+                ...baseArgs
+              ],
+        stdin: '',
+        protocol: 'acp',
+        prompt,
+        terminateOnComplete: true,
+        ...(access !== 'workspace-write'
+          ? { acpModePreference: access === 'answer-only' ? ['ask', 'plan'] : ['plan', 'ask'] }
+          : {})
       }
     }
     case 'codex':

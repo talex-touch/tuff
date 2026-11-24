@@ -190,7 +190,7 @@ describe('driver-resolver', () => {
       })
     })
 
-    it('resolves antigravity (agy acp) and opencode (opencode acp) with per-driver args', async () => {
+    it('resolves antigravity (agy acp --process-per-session) and opencode (opencode acp) with per-driver args', async () => {
       const agyBin = await createExecutable('agy')
       const opencodeBin = await createExecutable('opencode')
 
@@ -202,7 +202,7 @@ describe('driver-resolver', () => {
         kind: 'antigravity',
         protocol: 'acp',
         executablePath: agyBin,
-        args: ['acp'],
+        args: ['acp', '--process-per-session'],
         adapterName: 'antigravity-acp'
       })
       await expect(resolveCliDriver('opencode')).resolves.toEqual({

@@ -358,9 +358,9 @@ const APP_SEMANTIC_CATALOG: readonly AppSemanticCatalogEntry[] = [
   {
     // `dev.warp.warp` rather than a bare `warp`: the bare token also matches "Cloudflare WARP",
     // which then answered searches for 终端 / terminal.
-    // Likewise `rio` and `wave` stay qualified (`com.raphaelamorim.rio`, `rio terminal`,
-    // `rioterm`, `waveterm`, `dev.waveterm.waveterm`) so unrelated apps carrying "Rio" or
-    // "Wave" never inherit terminal aliases.
+    // Likewise `rio`, `wave`, and `kitty` stay qualified (`com.raphaelamorim.rio`, `rio terminal`,
+    // `rioterm`, `waveterm`, `dev.waveterm.waveterm`, `net.kovidgoyal.kitty`, `kitty terminal`)
+    // so unrelated apps carrying "Rio", "Wave", or "Kitty" never inherit terminal aliases.
     match: [
       'terminal',
       'iterm',
@@ -371,7 +371,8 @@ const APP_SEMANTIC_CATALOG: readonly AppSemanticCatalogEntry[] = [
       'ghostty',
       'cmux',
       'wezterm',
-      'kitty',
+      'net.kovidgoyal.kitty',
+      'kitty terminal',
       'alacritty',
       'com.raphaelamorim.rio',
       'rio terminal',

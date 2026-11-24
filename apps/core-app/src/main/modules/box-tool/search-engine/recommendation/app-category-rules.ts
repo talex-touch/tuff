@@ -185,7 +185,6 @@ export const APP_MATCH_RULES = {
       'iterm',
       'wezterm',
       'alacritty',
-      'kitty',
       'ghostty',
       'tabby',
       'cmux',

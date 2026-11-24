@@ -203,7 +203,11 @@ describe('openDirectoryInTerminal', () => {
         bin: 'xfce4-terminal',
         expectedArgs: [`--working-directory=${dirPath}`]
       },
-      { id: 'ptyxis', bin: 'ptyxis', expectedArgs: [`--working-directory=${dirPath}`] },
+      {
+        id: 'ptyxis',
+        bin: 'ptyxis',
+        expectedArgs: ['--new-window', `--working-directory=${dirPath}`]
+      },
       { id: 'ghostty', bin: 'ghostty', expectedArgs: [`--working-directory=${dirPath}`] },
       { id: 'foot', bin: 'foot', expectedArgs: [`--working-directory=${dirPath}`] },
       { id: 'tilix', bin: 'tilix', expectedArgs: [`--working-directory=${dirPath}`] },
@@ -545,6 +549,31 @@ describe('getDirectoryTerminals', () => {
     expect(inventory.installed[0]).toMatchObject({
       id: 'git-bash',
       target: 'C:\\Program Files\\Git\\git-bash.exe'
+    })
+  })
+
+  it('strips paired enclosing quotes from Windows PATH entries during discovery', async () => {
+    const existingFiles = new Set([
+      'D:\\Terminal Tools\\alacritty.exe',
+      'C:\\Windows\\System32\\cmd.exe'
+    ])
+
+    const inventory = await getDirectoryTerminals({
+      platform: 'win32',
+      pathEnv: '"D:\\Terminal Tools";C:\\NonExistent',
+      env: {
+        SystemRoot: 'C:\\Windows'
+      },
+      stat: async (target) => {
+        if (existingFiles.has(target)) return fileStats()
+        throw new Error(`ENOENT: ${target}`)
+      }
+    })
+
+    expect(inventory.all.map((terminal) => terminal.id)).toEqual(['alacritty', 'cmd'])
+    expect(inventory.installed[0]).toMatchObject({
+      id: 'alacritty',
+      target: 'D:\\Terminal Tools\\alacritty.exe'
     })
   })
 })

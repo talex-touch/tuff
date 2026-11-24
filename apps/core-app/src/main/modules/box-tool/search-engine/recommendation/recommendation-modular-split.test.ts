@@ -201,12 +201,15 @@ describe('recommendation modular refactor & dual-layer bridge', () => {
         'com.waveapps.wave',
         'com.waveapps.wave Wave',
         '/Applications/HyperX NGENUITY.app',
+        '/Applications/Hello Kitty.app',
+        'com.sanrio.hellokitty',
         'C:\\Program Files\\Tool\\mycmd.exe',
         'C:\\Program Files\\Tool\\newt.exe'
       ]
 
       for (const id of nonTerminals) {
         expect(isTerminalApp(id), `expected non-terminal: ${id}`).toBe(false)
+        expect(isDeveloperTool(id), `expected non-dev-tool: ${id}`).toBe(false)
       }
     })
 

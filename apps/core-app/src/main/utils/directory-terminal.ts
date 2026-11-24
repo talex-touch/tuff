@@ -309,7 +309,12 @@ async function discoverWindowsTerminals(deps: DirectoryTerminalDeps): Promise<Di
   const programFilesX86 = readWindowsEnv(env, 'ProgramFiles(x86)', 'PROGRAMFILES(X86)')
   const pathDirs = (deps.pathEnv ?? readWindowsEnv(env, 'PATH') ?? '')
     .split(';')
-    .map((entry) => entry.trim())
+    .map((entry) => {
+      const trimmed = entry.trim()
+      return trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')
+        ? trimmed.slice(1, -1).trim()
+        : trimmed
+    })
     .filter((entry) => Boolean(entry) && path.win32.isAbsolute(entry))
 
   const fromPath = (exe: string): string[] => pathDirs.map((dir) => path.win32.join(dir, exe))
@@ -556,8 +561,9 @@ function resolveLinuxTerminalArgs(terminal: DirectoryTerminal, dirPath: string):
     case 'foot':
     case 'tilix':
     case 'terminator':
-    case 'ptyxis':
       return [`--working-directory=${dirPath}`]
+    case 'ptyxis':
+      return ['--new-window', `--working-directory=${dirPath}`]
     case 'rio':
       return ['--working-dir', dirPath]
     case 'alacritty':

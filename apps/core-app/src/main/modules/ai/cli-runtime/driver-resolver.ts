@@ -36,6 +36,7 @@ import {
 } from '../providers/pi-cli-runtime'
 
 const ACP_SUBCOMMAND_ARGS: readonly string[] = Object.freeze(['acp'])
+const ANTIGRAVITY_ACP_ARGS: readonly string[] = Object.freeze(['acp', '--process-per-session'])
 const EMPTY_ARGS: readonly string[] = Object.freeze([])
 
 /**
@@ -151,7 +152,7 @@ export const CLI_DRIVER_REGISTRY: Readonly<Record<CliRuntimeKind, CliDriverDescr
         {
           protocol: 'acp',
           resolveExecutable: resolveAntigravityExecutable,
-          resolveArgs: () => ACP_SUBCOMMAND_ARGS,
+          resolveArgs: () => ANTIGRAVITY_ACP_ARGS,
           adapterName: 'antigravity-acp'
         }
       ]

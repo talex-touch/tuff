@@ -1210,6 +1210,7 @@
       "processStartFailed": "无法启动代理程序。",
       "protocolInvalid": "无法识别代理返回的内容。",
       "processExited": "代理程序在完成前退出了。",
+      "tokenLimitReached": "代理在完成前达到了 Token 上限。",
       "statusFailed": "无法读取本机代理的状态。"
     }
   },

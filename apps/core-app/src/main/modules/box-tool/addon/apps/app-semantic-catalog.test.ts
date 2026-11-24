@@ -175,6 +175,19 @@ describe('app semantic alias catalog', () => {
         path: '/Applications/Sound Wave.app'
       })
     ).not.toContain('terminal')
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Hello Kitty',
+        bundleId: 'com.sanrio.hellokitty',
+        path: '/Applications/Hello Kitty.app'
+      })
+    ).not.toContain('terminal')
+    expect(
+      resolveAppSemanticAliases({
+        name: 'Kitty Terminal',
+        path: '/Applications/Kitty Terminal.app'
+      })
+    ).toEqual(expect.arrayContaining(['terminal', 'shell']))
   })
 
   it('resolves database, API and DevOps aliases without assigning git to IDEs', () => {

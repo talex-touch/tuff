@@ -193,6 +193,8 @@ describe('recommendation semantic profile', () => {
       { itemId: 'com.waveapps.wave', title: 'Wave' },
       { itemId: '/Applications/Sound Wave.app', title: 'Sound Wave' },
       { itemId: '/Applications/HyperX NGENUITY.app', title: 'HyperX NGENUITY' },
+      { itemId: '/Applications/Hello Kitty.app', title: 'Hello Kitty' },
+      { itemId: 'com.example.shell', title: 'Shell' },
       { itemId: 'C:\\Program Files\\Tool\\mycmd.exe', title: 'MyCmd' }
     ]
 
@@ -207,6 +209,18 @@ describe('recommendation semantic profile', () => {
         'app:terminal'
       )
     }
+
+    const shellForeground = buildRecommendationSemanticProfile({
+      ...devFocusContext,
+      clipboard: undefined,
+      systemState: undefined,
+      foregroundApp: {
+        bundleId: 'com.example.shell',
+        name: 'Shell'
+      }
+    })
+    expect(shellForeground.tokens).not.toContain('app:terminal')
+    expect(shellForeground.tokens).not.toContain('task:dev')
 
     const warpForeground = buildRecommendationSemanticProfile({
       ...devFocusContext,

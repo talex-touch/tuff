@@ -546,4 +546,134 @@ rl.on('line', (line) => {
       await client.close()
     }
   })
+
+  it('rejects null initialize results in AcpClient.spawn() and closes the child process', async () => {
+    const nullInitServer = `
+const readline = require('node:readline');
+const rl = readline.createInterface({ input: process.stdin, terminal: false });
+rl.on('line', (line) => {
+  const msg = JSON.parse(line.trim());
+  if (msg.method === 'initialize') {
+    process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: null }) + '\\n');
+  }
+});
+`
+    await expect(
+      AcpClient.spawn({
+        executablePath: process.execPath,
+        args: ['-e', nullInitServer],
+        label: 'null-init-acp',
+      }),
+    ).rejects.toMatchObject({
+      code: 'PROTOCOL_INVALID',
+      message: expect.stringContaining('initialize returned invalid result'),
+    })
+  })
+
+  it('validates prompt results, preserves stopReason, and rejects null or stopReason-less results before ending stream', async () => {
+    const edgePromptServer = `
+const readline = require('node:readline');
+const rl = readline.createInterface({ input: process.stdin, terminal: false });
+function send(obj) {
+  process.stdout.write(JSON.stringify(obj) + '\\n');
+}
+rl.on('line', (line) => {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+  const msg = JSON.parse(trimmed);
+  if (msg.method === 'initialize') {
+    send({ jsonrpc: '2.0', id: msg.id, result: { protocolVersion: 1 } });
+    return;
+  }
+  if (msg.method === 'session/new') {
+    send({
+      jsonrpc: '2.0',
+      id: msg.id,
+      result: {
+        sessionId: 'edge-1',
+        modes: { currentModeId: 'agent', availableModes: [{ id: 'agent' }, { id: 'plan' }] },
+      },
+    });
+    return;
+  }
+  if (msg.method === 'session/set_mode') {
+    send({ jsonrpc: '2.0', id: msg.id, result: {} });
+    return;
+  }
+  if (msg.method === 'session/prompt') {
+    const text = msg.params?.prompt?.[0]?.text || '';
+    send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: msg.params.sessionId,
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'partial-' + text },
+        },
+      },
+    });
+    if (text === 'null-result') {
+      send({ jsonrpc: '2.0', id: msg.id, result: null });
+    }
+    else if (text === 'missing-stop') {
+      send({ jsonrpc: '2.0', id: msg.id, result: {} });
+    }
+    else if (text === 'max-tokens') {
+      send({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'max_tokens' } });
+    }
+    else {
+      send({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'end_turn' } });
+    }
+  }
+});
+`
+    const client = await AcpClient.spawn({
+      executablePath: process.execPath,
+      args: ['-e', edgePromptServer],
+      label: 'edge-acp',
+    })
+    try {
+      expect(client.agentInfo).toBeUndefined()
+      const session = await client.createSession({ cwd: process.cwd() })
+      expect(session.modes?.currentModeId).toBe('agent')
+      await session.setMode('plan')
+      expect(session.modes?.currentModeId).toBe('plan')
+
+      // Valid end_turn without usage succeeds and preserves stopReason.
+      const okEvents: CliRuntimeStreamEvent[] = []
+      for await (const ev of session.promptStream('ok')) {
+        okEvents.push(ev)
+      }
+      expect(okEvents).toEqual([expect.objectContaining({ type: 'delta', text: 'partial-ok' })])
+      expect(session.lastStopReason).toBe('end_turn')
+
+      // max_tokens preserves stopReason across promptStream boundary.
+      const truncatedEvents: CliRuntimeStreamEvent[] = []
+      for await (const ev of session.promptStream('max-tokens')) {
+        truncatedEvents.push(ev)
+      }
+      expect(truncatedEvents).toEqual([
+        expect.objectContaining({ type: 'delta', text: 'partial-max-tokens' }),
+      ])
+      expect(session.lastStopReason).toBe('max_tokens')
+
+      // result: null rejects instead of ending normally.
+      await expect(async () => {
+        for await (const _ev of session.promptStream('null-result')) {
+          // consume
+        }
+      }).rejects.toMatchObject({ code: 'PROTOCOL_INVALID' })
+
+      // result without stopReason also rejects.
+      await expect(async () => {
+        for await (const _ev of session.promptStream('missing-stop')) {
+          // consume
+        }
+      }).rejects.toMatchObject({ code: 'PROTOCOL_INVALID' })
+    }
+    finally {
+      await client.close()
+    }
+  })
 })

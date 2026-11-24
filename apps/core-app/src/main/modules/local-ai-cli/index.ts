@@ -30,7 +30,12 @@ import type { PtySessionOwner } from '../terminal/pty-session-core'
 import { randomUUID } from 'node:crypto'
 import { mkdir, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { AcpClient, AcpSession } from '@talex-touch/tuff-intelligence'
+import {
+  AcpClient,
+  AcpSession,
+  type AcpConfigOption,
+  type AcpSessionModeState
+} from '@talex-touch/tuff-intelligence'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { normalizeLocalAiCliSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
@@ -111,6 +116,8 @@ const DEFAULT_COLS = 100
 const DEFAULT_ROWS = 30
 /** Idle time after which a persistent pi child is closed; the next turn starts it again. */
 const PERSISTENT_PI_IDLE_MS = 10 * 60 * 1000
+/** Bounded wait for legacy OMP versions whose `session/resume` confirms the ID via `session/update`. */
+const OMP_RESUME_CONFIRM_TIMEOUT_MS = 10_000
 const LOCAL_AI_CLI_SHORTCUT_ID = 'local-ai-cli.quick-open'
 const LOCAL_AI_CLI_SHORTCUT_OWNER = 'core-app:local-ai-cli'
 
@@ -309,14 +316,86 @@ function toSessionSummary(session: StoredLocalAiCliSession): LocalAiCliSessionSu
   }
 }
 
+function isProtocolInvalidError(error: unknown): boolean {
+  return Boolean(
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'PROTOCOL_INVALID'
+  )
+}
+
+function isJsonRpcMethodNotFoundError(error: unknown): boolean {
+  return Boolean(
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === -32601
+  )
+}
+
+/**
+ * Only an explicit JSON-RPC error reporting that the session does not exist should mark a saved
+ * session pointer `missing`. Process exits, stdout EOF, and transient internal errors have no
+ * session-missing error semantics and must leave the pointer retryable.
+ */
+function isAcpResumeSessionMissingError(error: unknown): boolean {
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? (error as { code?: unknown }).code
+      : undefined
+  if (typeof code !== 'number') return false
+  if (code === -32601) return false
+  if (code === -32002) return true
+  if (isNativeSessionMissingError(error)) return true
+  const message = error instanceof Error ? error.message : String(error)
+  return /\bno such session\b|\bsession\b.*\bmissing\b/i.test(message)
+}
+
+async function applyPreferredAcpReadOnlyMode(
+  session: AcpSession,
+  preferredModes: readonly string[] | undefined
+): Promise<void> {
+  if (!preferredModes || preferredModes.length === 0) return
+  if (session.modes && Array.isArray(session.modes.availableModes)) {
+    for (const target of preferredModes) {
+      const matched = session.modes.availableModes.find(
+        (mode) => mode.id.toLowerCase() === target.toLowerCase()
+      )
+      if (!matched) continue
+      if (session.modes.currentModeId?.toLowerCase() !== matched.id.toLowerCase()) {
+        await session.setMode(matched.id)
+      }
+      return
+    }
+  }
+  const modeConfig = session.configOptions.find(
+    (opt) => opt.category === 'mode' || opt.id === 'mode'
+  )
+  if (modeConfig && Array.isArray(modeConfig.options)) {
+    for (const target of preferredModes) {
+      const matched = modeConfig.options.find(
+        (opt) => opt.value.toLowerCase() === target.toLowerCase()
+      )
+      if (!matched) continue
+      if (String(modeConfig.currentValue).toLowerCase() !== matched.value.toLowerCase()) {
+        await session.setConfig(modeConfig.id, matched.value)
+      }
+      return
+    }
+  }
+}
+
 function taskFailureCode(error: unknown): LocalAiCliErrorCode {
+  if (isProtocolInvalidError(error)) return 'PROTOCOL_INVALID'
   const message = error instanceof Error ? error.message : ''
   if (
     message === 'PROVIDER_RESUME_UNSUPPORTED' ||
     message === 'NATIVE_SESSION_BUSY' ||
     message === 'NATIVE_SESSION_MISSING' ||
     message === 'NATIVE_SESSION_CONFLICT' ||
-    message === 'WORKSPACE_INVALID'
+    message === 'WORKSPACE_INVALID' ||
+    message === 'TOKEN_LIMIT_REACHED'
   ) {
     return message
   }
@@ -1188,7 +1267,10 @@ export class LocalAiCliModule extends BaseModule {
     try {
       child = spawnSafe(executablePath, spec.args, {
         cwd: execution.cwd,
-        env: withExecutableDirOnPath(sanitizedChildEnv(), executablePath),
+        env: {
+          ...withExecutableDirOnPath(sanitizedChildEnv(), executablePath),
+          ...(spec.env ?? {})
+        },
         stdio: ['pipe', 'pipe', 'pipe']
       })
     } catch {
@@ -1308,9 +1390,10 @@ export class LocalAiCliModule extends BaseModule {
       context.emit({ type: 'status', callId, status: 'running' })
 
       if (pointer) {
-        const supportsSessionResume =
-          request.provider === 'oh-my-pi' ||
-          Boolean(initResult.agentCapabilities?.sessionCapabilities?.resume)
+        const advertisesSessionResume = Boolean(
+          initResult.agentCapabilities?.sessionCapabilities?.resume
+        )
+        const supportsSessionResume = request.provider === 'oh-my-pi' || advertisesSessionResume
         const supportsLoadSession = initResult.agentCapabilities?.loadSession === true
 
         if (supportsSessionResume) {
@@ -1349,22 +1432,33 @@ export class LocalAiCliModule extends BaseModule {
           client.on('notification', onNotification)
           client.once('close', onCloseDuringResume)
           abortController.signal.addEventListener('abort', onAbortDuringResume, { once: true })
+          let resumeResult: Record<string, unknown> | null = null
           try {
             let rawResult: unknown
             try {
               rawResult = await client.sendRequest<unknown>('session/resume', {
                 sessionId: pointer.nativeSessionId,
                 cwd: execution.cwd,
-                mcpServers: []
+                mcpServers: [],
+                ...(spec.acpSessionMeta ? { _meta: spec.acpSessionMeta } : {})
               })
             } catch (error) {
               if (sawProtocolError || sawSpawnError || abortController.signal.aborted) throw error
-              await markLocalAiCliSessionState(pointer.id, 'missing')
-              throw new Error('NATIVE_SESSION_MISSING')
+              if (isJsonRpcMethodNotFoundError(error)) {
+                throw new Error('PROVIDER_RESUME_UNSUPPORTED')
+              }
+              if (isAcpResumeSessionMissingError(error)) {
+                await markLocalAiCliSessionState(pointer.id, 'missing')
+                throw new Error('NATIVE_SESSION_MISSING')
+              }
+              throw error
             }
-            const resumeResult = asObject(rawResult)
+            resumeResult = asObject(rawResult)
+            if (!resumeResult) {
+              throw new Error('PROTOCOL_INVALID')
+            }
             const returnedSessionId =
-              typeof resumeResult?.sessionId === 'string' && resumeResult.sessionId
+              typeof resumeResult.sessionId === 'string' && resumeResult.sessionId
                 ? resumeResult.sessionId
                 : undefined
             if (returnedSessionId) {
@@ -1372,9 +1466,23 @@ export class LocalAiCliModule extends BaseModule {
                 await markLocalAiCliSessionState(pointer.id, 'missing')
                 throw new Error('NATIVE_SESSION_MISSING')
               }
+            } else if (advertisesSessionResume) {
+              // ACP v1 allows `session/resume` to return `{}` without replaying history.
+              // Reject only an explicit session ID mismatch if an update already arrived.
+              const mismatched = updateQueue.find(
+                (entry) =>
+                  typeof entry.sessionId === 'string' &&
+                  entry.sessionId.length > 0 &&
+                  entry.sessionId !== pointer!.nativeSessionId
+              )
+              if (mismatched) {
+                await markLocalAiCliSessionState(pointer.id, 'missing')
+                throw new Error('NATIVE_SESSION_MISSING')
+              }
             } else {
-              // ACP ResumeSessionResponse may omit sessionId (e.g. OMP): wait for the first
-              // authoritative session/update before delivering any prompt.
+              // Legacy OMP builds omit `sessionId` and do not advertise standard ACP resume;
+              // wait with a bounded deadline for the confirming `session/update` before prompting.
+              let confirmTimer: ReturnType<typeof setTimeout> | undefined
               const confirming =
                 updateQueue.shift() ??
                 (await new Promise<Record<string, unknown>>((resolve, reject) => {
@@ -1386,8 +1494,23 @@ export class LocalAiCliModule extends BaseModule {
                     reject(new Error('CANCELLED'))
                     return
                   }
-                  resolveNextUpdate = resolve
-                  rejectNextUpdate = reject
+                  confirmTimer = setTimeout(() => {
+                    if (rejectNextUpdate) {
+                      resolveNextUpdate = null
+                      rejectNextUpdate = null
+                      reject(new Error('PROCESS_EXITED'))
+                    }
+                  }, OMP_RESUME_CONFIRM_TIMEOUT_MS)
+                  resolveNextUpdate = (params) => {
+                    if (confirmTimer) clearTimeout(confirmTimer)
+                    resolve(params)
+                  }
+                  rejectNextUpdate = (err) => {
+                    if (confirmTimer) clearTimeout(confirmTimer)
+                    reject(err)
+                  }
+                }).finally(() => {
+                  if (confirmTimer) clearTimeout(confirmTimer)
                 }))
               const confirmedId =
                 typeof confirming.sessionId === 'string' ? confirming.sessionId : ''
@@ -1401,7 +1524,19 @@ export class LocalAiCliModule extends BaseModule {
             client.removeListener('close', onCloseDuringResume)
             abortController.signal.removeEventListener('abort', onAbortDuringResume)
           }
-          activeSession = new AcpSession(pointer.nativeSessionId, client)
+          const resumeConfigOptions = Array.isArray(resumeResult?.configOptions)
+            ? (resumeResult.configOptions as AcpConfigOption[])
+            : []
+          const resumeModes = asObject(resumeResult?.modes) as AcpSessionModeState | null
+          activeSession = new AcpSession(
+            pointer.nativeSessionId,
+            client,
+            resumeConfigOptions,
+            resumeModes && Array.isArray(resumeModes.availableModes) ? resumeModes : undefined
+          )
+          if (request.access !== 'workspace-write') {
+            await applyPreferredAcpReadOnlyMode(activeSession, spec.acpModePreference)
+          }
           await this.touchNativeSession(pointer)
           context.emit({
             type: 'session',
@@ -1415,18 +1550,28 @@ export class LocalAiCliModule extends BaseModule {
             loaded = await client.loadSession({
               sessionId: pointer.nativeSessionId,
               cwd: execution.cwd,
-              mcpServers: []
+              mcpServers: [],
+              ...(spec.acpSessionMeta ? { _meta: spec.acpSessionMeta } : {})
             })
           } catch (error) {
             if (sawProtocolError || sawSpawnError || abortController.signal.aborted) throw error
-            await markLocalAiCliSessionState(pointer.id, 'missing')
-            throw new Error('NATIVE_SESSION_MISSING')
+            if (isJsonRpcMethodNotFoundError(error)) {
+              throw new Error('PROVIDER_RESUME_UNSUPPORTED')
+            }
+            if (isAcpResumeSessionMissingError(error)) {
+              await markLocalAiCliSessionState(pointer.id, 'missing')
+              throw new Error('NATIVE_SESSION_MISSING')
+            }
+            throw error
           }
           if (loaded.sessionId !== pointer.nativeSessionId) {
             await markLocalAiCliSessionState(pointer.id, 'missing')
             throw new Error('NATIVE_SESSION_MISSING')
           }
           activeSession = loaded
+          if (request.access !== 'workspace-write') {
+            await applyPreferredAcpReadOnlyMode(activeSession, spec.acpModePreference)
+          }
           await this.touchNativeSession(pointer)
           context.emit({
             type: 'session',
@@ -1440,12 +1585,16 @@ export class LocalAiCliModule extends BaseModule {
       } else {
         const created = await client.createSession({
           cwd: execution.cwd,
-          mcpServers: []
+          mcpServers: [],
+          ...(spec.acpSessionMeta ? { _meta: spec.acpSessionMeta } : {})
         })
         if (typeof created.sessionId !== 'string' || !created.sessionId.trim()) {
           throw new Error('PROTOCOL_INVALID')
         }
         activeSession = created
+        if (request.access !== 'workspace-write') {
+          await applyPreferredAcpReadOnlyMode(activeSession, spec.acpModePreference)
+        }
         const registered = await this.registerFreshNativeSession(
           execution,
           request.provider,
@@ -1473,13 +1622,27 @@ export class LocalAiCliModule extends BaseModule {
         }
       }
 
-      if (context.isCancelled() || abortController.signal.aborted) {
+      const stopReason = activeSession.lastStopReason
+      if (context.isCancelled() || abortController.signal.aborted || stopReason === 'cancelled') {
         context.emit({ type: 'cancelled', callId })
       } else if (sawProtocolError) {
         context.emit({ type: 'failed', callId, code: 'PROTOCOL_INVALID', recoverable: true })
-      } else if (pointer && completeText.trim()) {
+      } else if (stopReason === 'max_tokens') {
+        if (pointer) {
+          await this.touchNativeSession(pointer)
+        }
+        if (context.isCancelled() || abortController.signal.aborted) {
+          context.emit({ type: 'cancelled', callId })
+        } else {
+          context.emit({ type: 'failed', callId, code: 'TOKEN_LIMIT_REACHED', recoverable: true })
+        }
+      } else if (pointer && completeText.trim() && stopReason === 'end_turn') {
         await this.touchNativeSession(pointer)
-        context.emit({ type: 'complete', callId, text: completeText.trim() })
+        if (context.isCancelled() || abortController.signal.aborted) {
+          context.emit({ type: 'cancelled', callId })
+        } else {
+          context.emit({ type: 'complete', callId, text: completeText.trim() })
+        }
       } else {
         context.emit({ type: 'failed', callId, code: 'PROCESS_EXITED', recoverable: true })
       }
@@ -1490,9 +1653,9 @@ export class LocalAiCliModule extends BaseModule {
         let failure: unknown = error
         if (sawSpawnError) {
           failure = new Error('PROCESS_START_FAILED')
-        } else if (sawProtocolError) {
+        } else if (sawProtocolError || isProtocolInvalidError(error)) {
           failure = new Error('PROTOCOL_INVALID')
-        } else if (pointer && isNativeSessionMissingError(error)) {
+        } else if (pointer && isAcpResumeSessionMissingError(error)) {
           await markLocalAiCliSessionState(pointer.id, 'missing').catch(() => undefined)
           failure = new Error('NATIVE_SESSION_MISSING')
         } else if (
@@ -1504,7 +1667,8 @@ export class LocalAiCliModule extends BaseModule {
               error.message === 'NATIVE_SESSION_BUSY' ||
               error.message === 'PROVIDER_RESUME_UNSUPPORTED' ||
               error.message === 'WORKSPACE_INVALID' ||
-              error.message === 'PROTOCOL_INVALID')
+              error.message === 'PROTOCOL_INVALID' ||
+              error.message === 'TOKEN_LIMIT_REACHED')
           )
         ) {
           failure = new Error('PROCESS_EXITED')

@@ -34,6 +34,7 @@ import { aiOrchestratorStore } from './ai-orchestrator-store'
 import { readBoundedImportFile } from './ai-import-bounded-file'
 import {
   parseConfig,
+  parseGeminiTomlCommand,
   parseMcpProfiles,
   parseModelProviders,
   type ParsedModelProvider
@@ -76,6 +77,8 @@ interface CandidateMetadata {
   mode?: string
   globs?: string[]
   alwaysApply?: boolean
+  inclusion?: string
+  fileMatchPatterns?: string[]
   frontmatterKeys?: string[]
   modelProviders?: ParsedModelProvider[]
 }
@@ -356,6 +359,58 @@ async function findExecutable(command: string): Promise<string | undefined> {
  * as ">" — and is what an imported copy keeps as its description — and the lines indented under a
  * key are never reported as keys of their own.
  */
+function parseFrontmatterList(field: {
+  inline: string
+  continuation: readonly string[]
+}): string[] {
+  const entries: string[] = []
+  const trimmedInline = field.inline.trim()
+  if (trimmedInline) {
+    const isBracketed = trimmedInline.startsWith('[') && trimmedInline.endsWith(']')
+    const inner = isBracketed ? trimmedInline.slice(1, -1) : trimmedInline
+    const stripped = inner.replace(/^['"]|['"]$/g, '')
+    if (isBracketed || (!trimmedInline.startsWith('"') && !trimmedInline.startsWith("'"))) {
+      // Split comma-separated lists while preserving brace expressions such as `{ts,tsx}`.
+      let start = 0
+      let braceDepth = 0
+      let quote = ''
+      for (let i = 0; i < inner.length; i += 1) {
+        const ch = inner[i]!
+        if (quote) {
+          if (ch === quote) quote = ''
+          continue
+        }
+        if (ch === '"' || ch === "'") quote = ch
+        else if (ch === '{') braceDepth += 1
+        else if (ch === '}' && braceDepth > 0) braceDepth -= 1
+        else if (ch === ',' && braceDepth === 0) {
+          const part = inner
+            .slice(start, i)
+            .trim()
+            .replace(/^['"]|['"]$/g, '')
+          if (part) entries.push(part)
+          start = i + 1
+        }
+      }
+      const tail = inner
+        .slice(start)
+        .trim()
+        .replace(/^['"]|['"]$/g, '')
+      if (tail) entries.push(tail)
+    } else if (stripped) {
+      entries.push(stripped)
+    }
+  } else {
+    for (const line of field.continuation) {
+      if (!line.trim()) continue
+      const match = /^\s*-\s*(.+?)\s*$/.exec(line)
+      if (!match) break
+      entries.push(match[1]!.replace(/^['"]|['"]$/g, ''))
+    }
+  }
+  return entries
+}
+
 function parseFrontmatter(content: string): CandidateMetadata {
   if (!content.startsWith('---') || content.indexOf('\n---', 3) < 0) return {}
   const metadata: CandidateMetadata = { frontmatterKeys: [] }
@@ -366,28 +421,19 @@ function parseFrontmatter(content: string): CandidateMetadata {
     if (key === 'name') metadata.name = value
     if (key === 'description') metadata.description = value
     if (key === 'mode') metadata.mode = value
+    if (key === 'inclusion') metadata.inclusion = value
     if (key === 'always-apply' || key === 'alwaysapply') {
       metadata.alwaysApply = value.toLowerCase() === 'true'
     }
     if (key === 'paths' || key === 'path' || key === 'globs' || key === 'glob') {
-      const globs: string[] = []
-      const inline = field.inline.replace(/^['"]|['"]$/g, '').replace(/^\[|\]$/g, '')
-      if (inline) {
-        globs.push(
-          ...inline
-            .split(',')
-            .map((entry) => entry.trim().replace(/^['"]|['"]$/g, ''))
-            .filter(Boolean)
-        )
-      } else {
-        for (const line of field.continuation) {
-          if (!line.trim()) continue
-          const match = /^\s*-\s*(.+?)\s*$/.exec(line)
-          if (!match) break
-          globs.push(match[1]!.replace(/^['"]|['"]$/g, ''))
-        }
-      }
+      const globs = parseFrontmatterList(field)
       metadata.globs = [...new Set([...(metadata.globs ?? []), ...globs])]
+    }
+    if (key === 'filematchpattern' || key === 'file-match-pattern') {
+      const patterns = parseFrontmatterList(field)
+      metadata.fileMatchPatterns = [
+        ...new Set([...(metadata.fileMatchPatterns ?? []), ...patterns])
+      ]
     }
   }
   return metadata
@@ -623,7 +669,19 @@ async function buildCandidate(
           ignoredFields: ignoredFrontmatter(metadata, ['name', 'description', 'mode'])
         }
       ]
-    if (kind === 'command')
+    if (kind === 'command') {
+      if (source.provider === 'gemini' && extension === '.toml') {
+        const parsedCommand = parseGeminiTomlCommand(content)
+        return [
+          {
+            ...base,
+            kind,
+            description: parsedCommand.description || '',
+            ignoredFields: parsedCommand.ignoredFields,
+            blockingIssues: parsedCommand.blockingIssues
+          }
+        ]
+      }
       return [
         {
           ...base,
@@ -632,8 +690,30 @@ async function buildCandidate(
           ignoredFields: ignoredFrontmatter(metadata, ['name', 'description'])
         }
       ]
+    }
     if (kind === 'rule' || kind === 'instruction') {
-      const globs = kind === 'rule' ? (metadata.globs ?? []) : []
+      const kiroBlockingIssues: string[] = []
+      let globs = kind === 'rule' ? (metadata.globs ?? []) : []
+      let alwaysApply = kind === 'instruction' ? true : (metadata.alwaysApply ?? globs.length === 0)
+
+      if (kind === 'rule' && source.provider === 'kiro') {
+        const inclusion = metadata.inclusion?.trim().toLowerCase()
+        if (inclusion === 'filematch') {
+          globs = [...new Set([...globs, ...(metadata.fileMatchPatterns ?? [])])]
+          alwaysApply = false
+          if (globs.length === 0) {
+            kiroBlockingIssues.push(
+              'Kiro steering rule with inclusion: fileMatch must define fileMatchPattern'
+            )
+          }
+        } else if (inclusion && inclusion !== 'always') {
+          alwaysApply = false
+          kiroBlockingIssues.push(
+            `Kiro steering inclusion mode "${metadata.inclusion!.trim()}" is not supported`
+          )
+        }
+      }
+
       const invalidGlobs = globs.filter((glob) => {
         if (isAbsolute(glob) || glob === '..' || glob.startsWith('../')) return true
         try {
@@ -643,13 +723,19 @@ async function buildCandidate(
           return true
         }
       })
+      const blockingIssues = [
+        ...kiroBlockingIssues,
+        ...(invalidGlobs.length > 0
+          ? [`Rule contains invalid or out-of-workspace globs: ${invalidGlobs.join(', ')}`]
+          : [])
+      ]
       return [
         {
           ...base,
           kind,
           description: metadata.description || '',
           globs,
-          alwaysApply: kind === 'instruction' ? true : (metadata.alwaysApply ?? globs.length === 0),
+          alwaysApply,
           ignoredFields: ignoredFrontmatter(
             metadata,
             kind === 'rule'
@@ -661,14 +747,14 @@ async function buildCandidate(
                   'globs',
                   'glob',
                   'always-apply',
-                  'alwaysapply'
+                  'alwaysapply',
+                  ...(source.provider === 'kiro'
+                    ? ['inclusion', 'filematchpattern', 'file-match-pattern']
+                    : [])
                 ]
               : ['name', 'description']
           ),
-          blockingIssues:
-            invalidGlobs.length > 0
-              ? [`Rule contains invalid or out-of-workspace globs: ${invalidGlobs.join(', ')}`]
-              : []
+          blockingIssues
         }
       ]
     }

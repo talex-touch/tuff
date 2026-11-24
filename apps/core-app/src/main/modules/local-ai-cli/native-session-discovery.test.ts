@@ -19,7 +19,7 @@ import type { NativeSessionDiscoveryRoots } from './native-session-discovery'
 import { mkdir, mkdtemp, realpath, rm, symlink, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { scanNativeSessionsForProject } from './native-session-discovery'
 
 /** Mirrors the scanner budget; a file one byte past it must be ignored, not parsed. */
@@ -337,7 +337,7 @@ describe('findNativeSessionFile', () => {
     }
   })
 
-  it('answers null for ACP providers without a file-backed native archive instead of searching codex', async () => {
+  it('answers null for ACP providers without accessing the codex archive or rejecting underscore ACP session IDs', async () => {
     await writeJsonl(join(roots.codex, 'shared-1.jsonl'), [
       {
         type: 'session_meta',
@@ -345,9 +345,25 @@ describe('findNativeSessionFile', () => {
       }
     ])
 
+    const codexGetter = vi.fn(() => roots.codex)
+    const guardedRoots = {
+      pi: roots.pi,
+      'oh-my-pi': roots['oh-my-pi'],
+      claude: roots.claude,
+      get codex() {
+        return codexGetter()
+      }
+    }
+
     const { findNativeSessionFile } = await import('./native-session-discovery')
     for (const provider of ['antigravity', 'opencode', 'gemini', 'kiro', 'cursor'] as const) {
-      expect(await findNativeSessionFile(provider, 'shared-1', projectRoot, { roots })).toBeNull()
+      expect(
+        await findNativeSessionFile(provider, 'shared-1', projectRoot, { roots: guardedRoots })
+      ).toBeNull()
+      expect(
+        await findNativeSessionFile(provider, 'sess_789xyz', projectRoot, { roots: guardedRoots })
+      ).toBeNull()
     }
+    expect(codexGetter).not.toHaveBeenCalled()
   })
 })

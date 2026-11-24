@@ -71,26 +71,41 @@ export interface AcpMcpServerConfig {
   headers?: Record<string, string> | AcpKeyValueHeader[]
 }
 
+export interface AcpSessionMode {
+  id: string
+  name?: string
+  description?: string
+}
+
+export interface AcpSessionModeState {
+  currentModeId?: string
+  availableModes: AcpSessionMode[]
+}
+
 export interface AcpSessionNewParams {
   cwd: string
   mcpServers?: AcpMcpServerConfig[]
   sessionId?: string
+  _meta?: Record<string, unknown>
 }
 
 export interface AcpSessionNewResult {
   sessionId: string
   configOptions?: AcpConfigOption[]
+  modes?: AcpSessionModeState
 }
 
 export interface AcpSessionLoadParams {
   sessionId: string
   cwd: string
   mcpServers?: AcpMcpServerConfig[]
+  _meta?: Record<string, unknown>
 }
 
 export interface AcpSessionLoadResult {
   sessionId?: string
   configOptions?: AcpConfigOption[]
+  modes?: AcpSessionModeState
 }
 
 export interface AcpSetConfigOptionParams {
@@ -208,6 +223,7 @@ export interface AcpSessionCreateOptions {
   mcpServers?: AcpMcpServerConfig[]
   permissionMode?: 'review' | 'full'
   resumeSessionId?: string
+  _meta?: Record<string, unknown>
 }
 
 export const CLI_RUNTIME_KINDS = [
@@ -275,11 +291,14 @@ export interface CliRuntimeSessionOptions {
   mcpServers?: AcpMcpServerConfig[]
   permissionMode?: 'review' | 'full'
   resumeSessionId?: string
+  _meta?: Record<string, unknown>
 }
 
 export interface CliRuntimeSession {
   readonly sessionId: string
   readonly protocol: CliRuntimeProtocol
+  readonly lastStopReason?: string
+  readonly modes?: AcpSessionModeState
   promptStream(
     content: string | AcpPromptContent[],
     options?: AcpPromptStreamOptions,
