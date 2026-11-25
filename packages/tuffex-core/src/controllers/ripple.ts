@@ -75,6 +75,7 @@ export function createRippleEffect(initialOptions: RippleOptions = {}): RippleEf
     const doc = host.ownerDocument ?? document
     const container = doc.createElement('span')
     container.className = 'tx-ripple-container'
+    container.setAttribute('data-v-wave-container-internal', '')
     container.setAttribute('aria-hidden', 'true')
     Object.assign(container.style, {
       position: 'absolute',

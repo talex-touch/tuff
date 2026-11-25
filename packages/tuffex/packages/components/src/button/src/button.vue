@@ -41,6 +41,7 @@ const rippleInstances = new WeakMap<HTMLElement, RippleEffect>()
 
 const vWave: ObjectDirective<HTMLElement> = {
   mounted(el) {
+    el.setAttribute('data-v-wave-boundary', 'true')
     const ripple = createRippleEffect({
       initialOpacity: 0.22,
       finalOpacity: 0.08,
@@ -52,6 +53,7 @@ const vWave: ObjectDirective<HTMLElement> = {
   beforeUnmount(el) {
     rippleInstances.get(el)?.destroy()
     rippleInstances.delete(el)
+    el.removeAttribute('data-v-wave-boundary')
   },
 }
 

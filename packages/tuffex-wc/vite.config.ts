@@ -65,6 +65,77 @@ export default defineConfig({
           return false
         return externalDeps.some(dep => id === dep || id.startsWith(`${dep}/`))
       },
+      output: {
+        chunkFileNames: 'chunks/[name].js',
+        manualChunks(id) {
+          const normalized = id.replace(/\\/g, '/')
+          if (normalized.includes('/src/runtime/'))
+            return 'wc-runtime'
+          if (normalized.includes('/src/elements/tier-a'))
+            return 'tier-a'
+          if (normalized.includes('/src/elements/tier-b'))
+            return 'tier-b'
+          if (normalized.includes('/src/elements/tier-c'))
+            return 'tier-c'
+          if (normalized.includes('/packages/tuffex/packages/utils/'))
+            return 'tuffex-shared'
+          const tuffexMatch = normalized.match(/\/packages\/tuffex\/packages\/components\/src\/([^/]+)\//)
+          if (tuffexMatch) {
+            const comp = tuffexMatch[1]!
+            if ([
+              'markdown-view',
+              'stream-text',
+              'thinking-indicator',
+              'typing-indicator',
+            ].includes(comp)) {
+              return 'tier-c'
+            }
+            if ([
+              'base-anchor',
+              'card-item',
+              'checkbox',
+              'collapse',
+              'copy-button',
+              'dialog',
+              'drawer',
+              'input',
+              'modal',
+              'popover',
+              'progress-bar',
+              'radio',
+              'search-input',
+              'select',
+              'slider',
+              'tabs',
+              'textarea',
+              'tooltip',
+            ].includes(comp)) {
+              return 'tier-b'
+            }
+            if ([
+              'alert',
+              'avatar',
+              'badge',
+              'dot-indicator',
+              'empty',
+              'empty-state',
+              'kbd',
+              'no-data',
+              'progress',
+              'skeleton',
+              'stat-card',
+              'status-badge',
+              'status-hint',
+              'switch',
+              'tag',
+            ].includes(comp)) {
+              return 'tier-a'
+            }
+            return 'tuffex-shared'
+          }
+          return undefined
+        },
+      },
     },
   },
 })
