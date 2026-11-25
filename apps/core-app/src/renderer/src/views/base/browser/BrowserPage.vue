@@ -34,6 +34,7 @@ import {
 import { useBrowserWorkspace } from '~/modules/browser-workspace/useBrowserWorkspace'
 import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
 import {
+  getSpaceTabs,
   projectSpaceKey,
   removeSpaceTab,
   resolveBrowserTabSpaceKey,
@@ -644,9 +645,20 @@ function onKeydown(event: KeyboardEvent): void {
     panel.value = null
     const closingTab = activeTab.value
     const boundSpace = resolveBrowserTabSpaceKey(closingTab, resolveConversationSpace)
+    const spaceTabs = boundSpace ? getSpaceTabs(boundSpace) : []
+    const closingIndex = spaceTabs.findIndex((tab) => tab.id === spaceBrowserTabId(closingTab.id))
+    const fallbackTab =
+      closingIndex < 0 ? null : (spaceTabs[closingIndex + 1] ?? spaceTabs[closingIndex - 1] ?? null)
     void command(() => sdk.closeTab(closingTab.id)).then((accepted) => {
       if (!accepted || !boundSpace) return
-      const { nextTab } = removeSpaceTab(boundSpace, spaceBrowserTabId(closingTab.id))
+      const { nextTab: removedNextTab } = removeSpaceTab(
+        boundSpace,
+        spaceBrowserTabId(closingTab.id)
+      )
+      const remaining = getSpaceTabs(boundSpace)
+      const nextTab =
+        removedNextTab ??
+        (fallbackTab && remaining.some((tab) => tab.id === fallbackTab.id) ? fallbackTab : null)
       if (nextTab?.kind === 'browser') {
         void command(() => sdk.activateTab(nextTab.browserTabId))
         return

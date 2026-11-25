@@ -94,6 +94,7 @@ const activePillAnimated = ref(false)
 let tablistResizeObserver: ResizeObserver | null = null
 let activePillRaf = 0
 let lastObservedRoutePath = ''
+let userSelectionSeq = 0
 const tabMenuTargetId = ref('')
 const draggedTabId = ref<string | null>(null)
 const tabDropTarget = ref<{ id: string | null; before: boolean } | null>(null)
@@ -396,6 +397,7 @@ function activateSpaceEntry(entry: SpaceWorkspaceTab): void {
 }
 
 function activateOrOpenTab(tab: StripTab): void {
+  userSelectionSeq += 1
   if (tab.kind === 'conversation' && tab.conversationId) {
     if (tab.spaceKey) setLastWorkspaceScope(tab.spaceKey)
     if (route.path === `/home/c/${tab.conversationId}`) return
@@ -553,6 +555,7 @@ async function selectTabMenuAction(action: BrowserTabMenuAction): Promise<void> 
   }
 
   const startRoutePath = route.path
+  const startSelectionSeq = userSelectionSeq
   const wasActiveRemoved =
     activeStripTabId.value !== null &&
     ((action === 'close-others' && activeStripTabId.value !== target.id) ||
@@ -563,6 +566,12 @@ async function selectTabMenuAction(action: BrowserTabMenuAction): Promise<void> 
         displayedTabs.value.findIndex((item) => item.id === activeStripTabId.value) >
           tabMenuIndex.value))
 
+  const shouldActivateTarget = (): boolean =>
+    wasActiveRemoved &&
+    route.path === startRoutePath &&
+    userSelectionSeq === startSelectionSeq &&
+    getSpaceTabs(scope).some((item) => item.id === target.id)
+
   const hasBrowserTabsToClose = displayedTabs.value.some((item, idx) => {
     if (item.kind !== 'browser') return false
     return action === 'close-others'
@@ -572,7 +581,6 @@ async function selectTabMenuAction(action: BrowserTabMenuAction): Promise<void> 
         : idx > tabMenuIndex.value
   })
 
-  let batchSucceeded = true
   if (hasBrowserTabsToClose) {
     const runSpaceBulkClose = async (): Promise<BrowserWorkspaceState> => {
       const currentList = getSpaceTabs(scope)
@@ -595,15 +603,26 @@ async function selectTabMenuAction(action: BrowserTabMenuAction): Promise<void> 
         }
         removeSpaceTab(scope, entry.id)
       }
+
+      if (shouldActivateTarget()) {
+        if (target.kind === 'browser' && target.browserTab) {
+          setLastWorkspaceScope(scope)
+          latestState = await sdk.activateTab(target.browserTab.id)
+          if (!onBrowserRoute.value) {
+            void router.push(APP_SURFACE_ROUTES.browser)
+          }
+        } else {
+          activateOrOpenTab(target)
+        }
+      }
       return latestState ?? (await sdk.getState())
     }
-    batchSucceeded = await command(runSpaceBulkClose)
+    await command(runSpaceBulkClose)
   } else {
     closeSpaceTabsBulk(scope, target.id, action)
-  }
-
-  if (batchSucceeded && wasActiveRemoved && route.path === startRoutePath) {
-    activateOrOpenTab(target)
+    if (shouldActivateTarget()) {
+      activateOrOpenTab(target)
+    }
   }
 }
 
