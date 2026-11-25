@@ -105,6 +105,8 @@ describe('compat-registry Single Source of Truth', () => {
       expect(entry?.wcTag).toBe(`tx-${id}`)
       expect(entry?.reactExports?.length).toBeGreaterThan(0)
     }
+
+    expect(getCompatEntry('stream-text')?.reactExports).toEqual(['TxStreamText', 'TxStreamCaret'])
   })
 
   it('marks Tier D scoped-slot/provide-inject modules as react:planned and wc:unsupported with reasons', () => {

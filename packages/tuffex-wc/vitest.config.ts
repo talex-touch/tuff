@@ -4,6 +4,7 @@ import { defineConfig } from 'vitest/config'
 
 const tuffexSrcDir = fileURLToPath(new URL('../tuffex/packages/components/src', import.meta.url))
 const tuffexStyleDir = fileURLToPath(new URL('../tuffex/packages/components/style', import.meta.url))
+const tuffexCoreEntry = fileURLToPath(new URL('../tuffex-core/src/index.ts', import.meta.url))
 const utilsDir = fileURLToPath(new URL('../utils', import.meta.url))
 const localNodeModulesDir = fileURLToPath(new URL('./node_modules', import.meta.url))
 
@@ -12,13 +13,13 @@ export default defineConfig({
     alias: [
       { find: '@tuffex-src', replacement: tuffexSrcDir },
       { find: '@tuffex-style', replacement: tuffexStyleDir },
+      { find: /^@talex-touch\/tuffex-core$/, replacement: tuffexCoreEntry },
       { find: '@talex-touch/utils', replacement: utilsDir },
       { find: 'vue', replacement: `${localNodeModulesDir}/vue` },
       { find: '@floating-ui/vue', replacement: `${localNodeModulesDir}/@floating-ui/vue` },
       { find: 'dompurify', replacement: `${localNodeModulesDir}/dompurify` },
       { find: 'gsap', replacement: `${localNodeModulesDir}/gsap` },
       { find: 'marked', replacement: `${localNodeModulesDir}/marked` },
-      { find: 'v-wave', replacement: `${localNodeModulesDir}/v-wave` },
     ],
   },
   plugins: [vue()],

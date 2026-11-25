@@ -53,11 +53,11 @@
   "dependencies": {
     "@floating-ui/vue": "catalog:",
     "@talex-touch/tuffex": "workspace:^",
+    "@talex-touch/tuffex-core": "workspace:^",
     "@talex-touch/utils": "workspace:^",
     "dompurify": "^3.4.17",
     "gsap": "catalog:",
-    "marked": "catalog:",
-    "v-wave": "^3.1.1"
+    "marked": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:dev",

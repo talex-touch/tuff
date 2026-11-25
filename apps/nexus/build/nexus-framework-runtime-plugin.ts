@@ -1,7 +1,7 @@
 import type { Plugin } from 'vite'
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 
 export const VIRTUAL_TUFFEX_WC_RUNTIME_ID = 'virtual:tuffex-wc-runtime'
 export const VIRTUAL_TUFFEX_REACT_RUNTIME_ID = 'virtual:tuffex-react-runtime'
@@ -73,23 +73,44 @@ function resolveWorkspacePackageEntries(pkgDir: string): { entry: string | null,
   }
 }
 
+function tryResolveLinkedPackage(
+  req: NodeRequire,
+  packageName: string,
+): { entry: string | null, style: string | null } {
+  const pkgJsonPath = tryResolve(req, `${packageName}/package.json`)
+  if (!pkgJsonPath)
+    return { entry: null, style: null }
+
+  const resolved = resolveWorkspacePackageEntries(dirname(pkgJsonPath))
+  return {
+    entry: resolved.entry ? packageName : null,
+    style: resolved.style ? `${packageName}/style.css` : null,
+  }
+}
+
 export function probeFrameworkRuntimes(nexusRoot: string): FrameworkRuntimeProbe {
   const workspaceRoot = resolve(nexusRoot, '../..')
   const nexusReq = createRequire(resolve(nexusRoot, 'package.json'))
 
   const wcDir = resolve(workspaceRoot, 'packages/tuffex-wc')
+  const wcLinked = tryResolveLinkedPackage(nexusReq, '@talex-touch/tuffex-wc')
   const wcWorkspace = resolveWorkspacePackageEntries(wcDir)
-  const wcEntry = tryResolve(nexusReq, '@talex-touch/tuffex-wc') ? '@talex-touch/tuffex-wc' : wcWorkspace.entry
-  const wcStyleEntry = tryResolve(nexusReq, '@talex-touch/tuffex-wc/style.css')
-    ? '@talex-touch/tuffex-wc/style.css'
-    : wcWorkspace.style
+  const wcEntry = wcLinked.entry
+    ?? (tryResolve(nexusReq, '@talex-touch/tuffex-wc') ? '@talex-touch/tuffex-wc' : wcWorkspace.entry)
+  const wcStyleEntry = wcLinked.style
+    ?? (tryResolve(nexusReq, '@talex-touch/tuffex-wc/style.css')
+      ? '@talex-touch/tuffex-wc/style.css'
+      : wcWorkspace.style)
 
   const reactDir = resolve(workspaceRoot, 'packages/tuffex-react')
+  const reactLinked = tryResolveLinkedPackage(nexusReq, '@talex-touch/tuffex-react')
   const reactWorkspace = resolveWorkspacePackageEntries(reactDir)
-  const reactEntry = tryResolve(nexusReq, '@talex-touch/tuffex-react') ? '@talex-touch/tuffex-react' : reactWorkspace.entry
-  const reactStyleEntry = tryResolve(nexusReq, '@talex-touch/tuffex-react/style.css')
-    ? '@talex-touch/tuffex-react/style.css'
-    : reactWorkspace.style
+  const reactEntry = reactLinked.entry
+    ?? (tryResolve(nexusReq, '@talex-touch/tuffex-react') ? '@talex-touch/tuffex-react' : reactWorkspace.entry)
+  const reactStyleEntry = reactLinked.style
+    ?? (tryResolve(nexusReq, '@talex-touch/tuffex-react/style.css')
+      ? '@talex-touch/tuffex-react/style.css'
+      : reactWorkspace.style)
 
   const reactPkgReq = existsSync(resolve(reactDir, 'package.json'))
     ? createRequire(resolve(reactDir, 'package.json'))

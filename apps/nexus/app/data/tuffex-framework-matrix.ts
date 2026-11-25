@@ -1,10 +1,17 @@
+import type {
+  CompatCategory,
+  CompatEntry,
+  CompatSupportStatus,
+  CompatTier,
+} from '@talex-touch/tuffex-core/compat'
+import { COMPAT_REGISTRY } from '@talex-touch/tuffex-core/compat'
 import type { PackageManager } from '~/utils/docs-install-command'
 import { formatInstallCommand } from '~/utils/docs-install-command'
 
 export type DocsFramework = 'vue' | 'react' | 'wc'
-export type FrameworkSupportStatus = 'ready' | 'experimental' | 'planned' | 'unsupported'
-export type ComponentTier = 'A' | 'B' | 'C' | 'D'
-export type ComponentCategory = 'base' | 'pro' | 'ai'
+export type FrameworkSupportStatus = CompatSupportStatus
+export type ComponentTier = CompatTier
+export type ComponentCategory = CompatCategory
 
 export interface DocsFrameworkMeta {
   id: DocsFramework
@@ -82,394 +89,80 @@ export const DOCS_FRAMEWORK_META: Readonly<Record<DocsFramework, DocsFrameworkMe
 }
 
 /**
- * Locked Phase-1 32 components adapted across Vue, React, and Web Components.
- * Designed to stay 1:1 with `@talex-touch/tuffex-core/compat`, `@talex-touch/tuffex-react`,
- * and `@talex-touch/tuffex-wc`.
+ * Locked Phase-1 32 component IDs adapted across Vue, React, and Web Components.
+ * Derived directly from `@talex-touch/tuffex-core/compat` (Single Source of Truth).
  */
-export const PHASE_1_TIER_A_IDS = [
-  'button',
-  'badge',
-  'tag',
-  'avatar',
-  'spinner',
-  'divider',
-  'alert',
-  'card',
-  'kbd',
-  'progress',
-  'progress-bar',
-  'skeleton',
-  'switch',
-  'status-badge',
-  'status-hint',
-  'dot-indicator',
-  'empty',
-  'stat-card',
-] as const
+export type Phase1ReadyComponentId
+  // Tier A (18)
+  = | 'button'
+    | 'badge'
+    | 'tag'
+    | 'avatar'
+    | 'spinner'
+    | 'divider'
+    | 'alert'
+    | 'card'
+    | 'kbd'
+    | 'progress'
+    | 'progress-bar'
+    | 'skeleton'
+    | 'switch'
+    | 'status-badge'
+    | 'status-hint'
+    | 'dot-indicator'
+    | 'empty'
+    | 'stat-card'
+    // Tier B (12)
+    | 'input'
+    | 'textarea'
+    | 'checkbox'
+    | 'radio'
+    | 'slider'
+    | 'tabs'
+    | 'collapse'
+    | 'tooltip'
+    | 'popover'
+    | 'dialog'
+    | 'drawer'
+    | 'select'
+    // Tier C (2)
+    | 'stream-text'
+    | 'markdown-view'
 
-export const PHASE_1_TIER_B_IDS = [
-  'input',
-  'textarea',
-  'checkbox',
-  'radio',
-  'slider',
-  'tabs',
-  'collapse',
-  'tooltip',
-  'popover',
-  'dialog',
-  'drawer',
-  'select',
-] as const
+export const PHASE_1_TIER_A_IDS: readonly Phase1ReadyComponentId[] = Object.freeze(
+  COMPAT_REGISTRY
+    .filter(entry => entry.react === 'ready' && entry.wc === 'ready' && entry.tier === 'A')
+    .map(entry => entry.id as Phase1ReadyComponentId),
+)
 
-export const PHASE_1_TIER_C_IDS = [
-  'stream-text',
-  'markdown-view',
-] as const
+export const PHASE_1_TIER_B_IDS: readonly Phase1ReadyComponentId[] = Object.freeze(
+  COMPAT_REGISTRY
+    .filter(entry => entry.react === 'ready' && entry.wc === 'ready' && entry.tier === 'B')
+    .map(entry => entry.id as Phase1ReadyComponentId),
+)
 
-export const PHASE_1_READY_IDS = [
+export const PHASE_1_TIER_C_IDS: readonly Phase1ReadyComponentId[] = Object.freeze(
+  COMPAT_REGISTRY
+    .filter(entry => entry.react === 'ready' && entry.wc === 'ready' && entry.tier === 'C')
+    .map(entry => entry.id as Phase1ReadyComponentId),
+)
+
+export const PHASE_1_READY_IDS: readonly Phase1ReadyComponentId[] = Object.freeze([
   ...PHASE_1_TIER_A_IDS,
   ...PHASE_1_TIER_B_IDS,
   ...PHASE_1_TIER_C_IDS,
-] as const
-
-export type Phase1ReadyComponentId = typeof PHASE_1_READY_IDS[number]
-
-const PHASE_1_TIER_A_SET = new Set<string>(PHASE_1_TIER_A_IDS)
-const PHASE_1_TIER_B_SET = new Set<string>(PHASE_1_TIER_B_IDS)
-const PHASE_1_TIER_C_SET = new Set<string>(PHASE_1_TIER_C_IDS)
-const PHASE_1_READY_SET = new Set<string>(PHASE_1_READY_IDS)
+])
 
 /**
  * Tier D components rely on deep scoped slots, heavy imperative runtimes,
  * Vue transition primitives, or provide/inject form contexts and are intentionally
- * scoped to Vue & React (matching `@talex-touch/tuffex-core/compat`).
+ * scoped to Vue & React (derived from `@talex-touch/tuffex-core/compat`).
  */
-export const TIER_D_UNSUPPORTED_WC_IDS = [
-  'agent-screen',
-  'agent-trace',
-  'agents',
-  'ai-elements',
-  'auto-sizer',
-  'base-anchor',
-  'cascader',
-  'charts',
-  'chat',
-  'code-editor',
-  'command-palette',
-  'context-menu',
-  'conversation-stream',
-  'data-table',
-  'diff-table',
-  'drawer-form',
-  'dropdown-menu',
-  'flat-dropdown',
-  'flip-overlay',
-  'floating',
-  'flowchart',
-  'form',
-  'grid-layout',
-  'image-gallery',
-  'image-preview',
-  'markdown-editor',
-  'modal-form',
-  'morph',
-  'motion',
-  'motion-form',
-  'motion-transition',
-  'physics-motion',
-  'resize-box',
-  'scroll',
-  'search-panel',
-  'selection-actions',
-  'sortable-list',
-  'splitter',
-  'stagger',
-  'steps-form',
-  'stream-element',
-  'stream-markdown',
-  'terminal',
-  'transfer',
-  'transition',
-  'tree',
-  'tree-select',
-  'virtual-list',
-] as const
-
-const TIER_D_SET = new Set<string>(TIER_D_UNSUPPORTED_WC_IDS)
-
-/**
- * Complete 193-module barrel membership mirroring
- * `packages/tuffex/packages/components/src/{base,pro,ai}/index.ts`.
- */
-const BASE_COMPONENT_IDS: readonly string[] = [
-  'alert',
-  'avatar',
-  'badge',
-  'blank-slate',
-  'breadcrumb',
-  'button',
-  'card-item',
-  'card',
-  'cascader',
-  'cell-link',
-  'checkbox',
-  'collapse',
-  'container',
-  'context-menu',
-  'data-table',
-  'date-picker',
-  'descriptions',
-  'dialog',
-  'divider',
-  'dot-indicator',
-  'drawer',
-  'drawer-form',
-  'dropdown-menu',
-  'empty-state',
-  'empty',
-  'error-state',
-  'file-uploader',
-  'filter-chips',
-  'flat-dropdown',
-  'flat-radio',
-  'flat-select',
-  'flex',
-  'form',
-  'grid-layout',
-  'grid',
-  'group-block',
-  'guide-state',
-  'icon-chip',
-  'icon-picker',
-  'icon',
-  'image-gallery',
-  'image-preview',
-  'image-uploader',
-  'input',
-  'kbd',
-  'layout-skeleton',
-  'loading-overlay',
-  'loading-state',
-  'markdown-view',
-  'modal',
-  'modal-form',
-  'nav-bar',
-  'no-data',
-  'no-selection',
-  'number-input',
-  'offline-state',
-  'pagination',
-  'permission-state',
-  'picker',
-  'popover',
-  'progress-bar',
-  'progress',
-  'radio',
-  'rating',
-  'scroll',
-  'scrub-field',
-  'search-empty',
-  'search-input',
-  'search-select',
-  'segmented-slider',
-  'select',
-  'selection-actions',
-  'sensitive-input',
-  'sidebar-nav',
-  'skeleton',
-  'slider',
-  'sortable-list',
-  'spinner',
-  'splitter',
-  'stack',
-  'stat-card',
-  'status-badge',
-  'status-hint',
-  'steps',
-  'steps-form',
-  'switch',
-  'tab-bar',
-  'tabs',
-  'tag-input',
-  'tag',
-  'text',
-  'textarea',
-  'timeline',
-  'toast',
-  'toast-panel',
-  'tooltip',
-  'transfer',
-  'tree-select',
-  'tree',
-]
-
-const PRO_COMPONENT_IDS: readonly string[] = [
-  'allocation-bar',
-  'auto-sizer',
-  'base-anchor',
-  'base-surface',
-  'border-beam',
-  'card-spread',
-  'carousel-3d',
-  'charts',
-  'code-editor',
-  'command-palette',
-  'corner-overlay',
-  'diff-table',
-  'edge-fade-mask',
-  'flip-book',
-  'flip-overlay',
-  'fold-page',
-  'floating',
-  'flow-light',
-  'fusion',
-  'fusion-surface',
-  'glass-surface',
-  'glow-text',
-  'gradient-border',
-  'gradual-blur',
-  'icon-morph',
-  'image-generation',
-  'keyframe-stroke-text',
-  'liquid',
-  'markdown-editor',
-  'metal-fx',
-  'morph',
-  'motion',
-  'motion-button',
-  'motion-control',
-  'motion-dock',
-  'motion-form',
-  'motion-loader',
-  'motion-metric',
-  'motion-text',
-  'motion-toggle',
-  'motion-transition',
-  'outline-border',
-  'physics-motion',
-  'prism-glow',
-  'resize-box',
-  'search-panel',
-  'signal-meter',
-  'spark-chart',
-  'stagger',
-  'terminal',
-  'text-morph',
-  'text-transformer',
-  'touch-surface',
-  'transition',
-  'tuff-logo-stroke',
-  'version-capsule',
-  'virtual-list',
-  'voice-beam',
-]
-
-const AI_COMPONENT_IDS: readonly string[] = [
-  'agent-screen',
-  'agent-trace',
-  'agents',
-  'ai-elements',
-  'approval-card',
-  'attachment-tray',
-  'bot-avatar',
-  'chain-of-thought',
-  'chat',
-  'choice-card',
-  'code-stream',
-  'context-cards',
-  'context-indicator',
-  'conversation-stream',
-  'fine-tune-card',
-  'flowchart',
-  'inline-citation',
-  'insight-cards',
-  'message-actions',
-  'miko',
-  'mode-chip',
-  'prompt-bar',
-  'reasoning-disclosure',
-  'recommendation-card',
-  'sources',
-  'stream-element',
-  'stream-markdown',
-  'stream-text',
-  'suggestion-chips',
-  'task-rows',
-  'thinking-orb',
-  'tool-call-card',
-  'tool-chips',
-  'tool-confirmation',
-  'voice-clip',
-  'working-indicator',
-]
-
-const PLANNED_TIER_A_IDS = new Set<string>([
-  'blank-slate',
-  'card-item',
-  'cell-link',
-  'container',
-  'empty-state',
-  'error-state',
-  'flex',
-  'grid',
-  'grid-layout',
-  'group-block',
-  'guide-state',
-  'icon',
-  'icon-chip',
-  'layout-skeleton',
-  'loading-overlay',
-  'loading-state',
-  'no-data',
-  'no-selection',
-  'offline-state',
-  'permission-state',
-  'search-empty',
-  'stack',
-  'text',
-  'version-capsule',
-])
-
-const PLANNED_TIER_B_IDS = new Set<string>([
-  'breadcrumb',
-  'context-menu',
-  'date-picker',
-  'descriptions',
-  'dropdown-menu',
-  'file-uploader',
-  'filter-chips',
-  'flat-dropdown',
-  'flat-radio',
-  'flat-select',
-  'icon-picker',
-  'image-gallery',
-  'image-preview',
-  'image-uploader',
-  'modal',
-  'nav-bar',
-  'number-input',
-  'pagination',
-  'picker',
-  'rating',
-  'scroll',
-  'scrub-field',
-  'search-input',
-  'search-panel',
-  'search-select',
-  'segmented-slider',
-  'selection-actions',
-  'sensitive-input',
-  'sidebar-nav',
-  'sortable-list',
-  'splitter',
-  'steps',
-  'tab-bar',
-  'tag-input',
-  'timeline',
-  'toast',
-  'toast-panel',
-])
+export const TIER_D_UNSUPPORTED_WC_IDS: readonly string[] = Object.freeze(
+  COMPAT_REGISTRY
+    .filter(entry => entry.tier === 'D' && entry.wc === 'unsupported')
+    .map(entry => entry.id),
+)
 
 const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
   'ai-elements': 'AiElements',
@@ -480,52 +173,43 @@ const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
 
 const COMPOUND_EXPORTS_OVERRIDES: Record<string, {
   vueExports?: readonly string[]
-  reactExports: readonly string[]
-  wcTags: readonly string[]
+  reactExports?: readonly string[]
+  wcTags?: readonly string[]
 }> = {
   avatar: {
     vueExports: ['TxAvatar', 'TxAvatarGroup'],
-    reactExports: ['TxAvatar'],
     wcTags: ['tx-avatar'],
   },
   button: {
     vueExports: ['TxButton', 'TxIconButton', 'TxCopyButton', 'TxSplitButton'],
-    reactExports: ['TxButton'],
     wcTags: ['tx-button'],
   },
   collapse: {
     vueExports: ['TxCollapse', 'TxCollapseItem'],
-    reactExports: ['TxCollapse', 'TxCollapseItem'],
     wcTags: ['tx-collapse', 'tx-collapse-item'],
   },
   dialog: {
     vueExports: ['TxBlowDialog', 'TxPopperDialog', 'TxBottomDialog', 'TxTouchTip'],
-    reactExports: ['TxDialog'],
     wcTags: ['tx-dialog'],
   },
   progress: {
     vueExports: ['TuffProgress'],
-    reactExports: ['TxProgress'],
     wcTags: ['tx-progress'],
   },
   radio: {
     vueExports: ['TxRadio', 'TxRadioGroup'],
-    reactExports: ['TxRadio', 'TxRadioGroup'],
     wcTags: ['tx-radio', 'tx-radio-group'],
   },
   select: {
     vueExports: ['TxSelect', 'TxSelectItem'],
-    reactExports: ['TxSelect', 'TxSelectItem'],
     wcTags: ['tx-select', 'tx-select-item'],
   },
   'stream-text': {
     vueExports: ['TxStreamText', 'TxStreamCaret'],
-    reactExports: ['TxStreamText', 'TxStreamCaret'],
     wcTags: ['tx-stream-text'],
   },
   tabs: {
     vueExports: ['TxTabs', 'TxTabItem'],
-    reactExports: ['TxTabs', 'TxTabItem'],
     wcTags: ['tx-tabs', 'tx-tab-item'],
   },
 }
@@ -534,6 +218,18 @@ const TIER_D_NOTES = {
   en: 'Relies on scoped slots or provide/inject form context; available in Vue and planned for React (not planned for Web Components).',
   zh: '依赖复杂作用域插槽或 Provide/Inject 表单上下文，仅面向 Vue 与 React 适配（暂不适配 Web Components）。',
 } as const
+
+function resolveTierDNotesZh(notesEn?: string): string {
+  if (!notesEn)
+    return TIER_D_NOTES.zh
+  if (notesEn.includes('editor/terminal/chart'))
+    return '重度命令式编辑器 / 终端 / 图表运行时，仅面向 Vue 与 React 原生绑定适配（暂不适配 Web Components）。'
+  if (notesEn.includes('transition/slot orchestration'))
+    return '强依赖 Vue 过渡与插槽编排原语，仅面向 Vue 与 React 适配（暂不适配 Web Components）。'
+  if (notesEn.includes('AI orchestration'))
+    return '多插槽 AI 编排界面且深度依赖 Provide/Inject 状态，仅面向 Vue 与 React 适配（暂不适配 Web Components）。'
+  return TIER_D_NOTES.zh
+}
 
 function toPascalCase(slug: string): string {
   if (DISPLAY_NAME_OVERRIDES[slug])
@@ -545,61 +241,47 @@ function toPascalCase(slug: string): string {
     .join('')
 }
 
-function resolveTier(id: string, category: ComponentCategory): ComponentTier {
-  if (PHASE_1_TIER_A_SET.has(id))
-    return 'A'
-  if (PHASE_1_TIER_B_SET.has(id))
-    return 'B'
-  if (PHASE_1_TIER_C_SET.has(id))
-    return 'C'
-  if (TIER_D_SET.has(id))
-    return 'D'
-  if (PLANNED_TIER_A_IDS.has(id))
-    return 'A'
-  if (PLANNED_TIER_B_IDS.has(id))
-    return 'B'
-  return category === 'base' ? 'B' : 'C'
-}
-
-function buildEntry(id: string, category: ComponentCategory): FrameworkCompatEntry {
-  const name = toPascalCase(id)
-  const tier = resolveTier(id, category)
-  const isReady = PHASE_1_READY_SET.has(id)
-  const isTierD = TIER_D_SET.has(id)
-  const override = COMPOUND_EXPORTS_OVERRIDES[id]
+function buildEntryFromCompat(coreEntry: CompatEntry): FrameworkCompatEntry {
+  const name = toPascalCase(coreEntry.id)
+  const override = COMPOUND_EXPORTS_OVERRIDES[coreEntry.id]
   const defaultSymbol = `Tx${name}`
-  const defaultWcTag = `tx-${id}`
+  const isWcUnsupported = coreEntry.wc === 'unsupported'
 
-  const reactExports = override?.reactExports ?? [defaultSymbol]
+  const reactExports = coreEntry.reactExports?.length
+    ? coreEntry.reactExports
+    : (override?.reactExports ?? [defaultSymbol])
   const vueExports = override?.vueExports ?? [defaultSymbol]
-  const wcTags = isTierD ? undefined : (override?.wcTags ?? [defaultWcTag])
+  const wcTags = isWcUnsupported
+    ? undefined
+    : (override?.wcTags ?? (coreEntry.wcTag ? [coreEntry.wcTag] : [`tx-${coreEntry.id}`]))
+  const wcTag = isWcUnsupported ? undefined : (coreEntry.wcTag ?? wcTags?.[0])
 
   return {
-    id,
+    id: coreEntry.id,
     name,
-    category,
-    tier,
-    vue: 'ready',
-    react: isReady ? 'ready' : 'planned',
-    wc: isReady ? 'ready' : (isTierD ? 'unsupported' : 'planned'),
+    category: coreEntry.category,
+    tier: coreEntry.tier,
+    vue: coreEntry.vue,
+    react: coreEntry.react,
+    wc: coreEntry.wc,
     vueExports,
     reactExports,
-    wcTag: isTierD ? undefined : (wcTags?.[0] ?? defaultWcTag),
+    wcTag,
     wcTags,
-    ...(isTierD
+    ...(isWcUnsupported || coreEntry.notes
       ? {
-          notes: TIER_D_NOTES.en,
-          notesZh: TIER_D_NOTES.zh,
+          notes: coreEntry.notes ?? TIER_D_NOTES.en,
+          ...(isWcUnsupported ? { notesZh: resolveTierDNotesZh(coreEntry.notes) } : {}),
         }
       : {}),
   }
 }
 
-export const TUFFEX_FRAMEWORK_MATRIX: readonly FrameworkCompatEntry[] = [
-  ...BASE_COMPONENT_IDS.map(id => buildEntry(id, 'base')),
-  ...PRO_COMPONENT_IDS.map(id => buildEntry(id, 'pro')),
-  ...AI_COMPONENT_IDS.map(id => buildEntry(id, 'ai')),
-].sort((a, b) => a.id.localeCompare(b.id))
+export const TUFFEX_FRAMEWORK_MATRIX: readonly FrameworkCompatEntry[] = Object.freeze(
+  COMPAT_REGISTRY
+    .map(buildEntryFromCompat)
+    .sort((a, b) => a.id.localeCompare(b.id)),
+)
 
 export const TUFFEX_FRAMEWORK_MAP: ReadonlyMap<string, FrameworkCompatEntry> = new Map(
   TUFFEX_FRAMEWORK_MATRIX.map(entry => [entry.id, entry]),

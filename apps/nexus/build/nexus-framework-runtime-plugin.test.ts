@@ -3,6 +3,7 @@ import {
   buildReactRuntimeVirtualModule,
   buildWcRuntimeVirtualModule,
   nexusFrameworkRuntimePlugin,
+  probeFrameworkRuntimes,
   VIRTUAL_TUFFEX_REACT_RUNTIME_ID,
   VIRTUAL_TUFFEX_WC_RUNTIME_ID,
 } from './nexus-framework-runtime-plugin'
@@ -59,5 +60,17 @@ describe('nexus-framework-runtime-plugin', () => {
     expect(resolveId(VIRTUAL_TUFFEX_WC_RUNTIME_ID)).toBe(`\0${VIRTUAL_TUFFEX_WC_RUNTIME_ID}`)
     expect(resolveId(VIRTUAL_TUFFEX_REACT_RUNTIME_ID)).toBe(`\0${VIRTUAL_TUFFEX_REACT_RUNTIME_ID}`)
     expect(resolveId('some-other-module')).toBeNull()
+  })
+
+  it('probes linked workspace packages when installed and built in apps/nexus', () => {
+    const probe = probeFrameworkRuntimes(process.cwd())
+    expect(probe.wcAvailable).toBe(true)
+    expect(probe.wcEntry).toBe('@talex-touch/tuffex-wc')
+    expect(probe.wcStyleEntry).toBe('@talex-touch/tuffex-wc/style.css')
+    expect(probe.reactAvailable).toBe(true)
+    expect(probe.reactEntry).toBe('@talex-touch/tuffex-react')
+    expect(probe.reactStyleEntry).toBe('@talex-touch/tuffex-react/style.css')
+    expect(probe.reactLibEntry).toBe('react')
+    expect(probe.reactDomClientEntry).toBe('react-dom/client')
   })
 })

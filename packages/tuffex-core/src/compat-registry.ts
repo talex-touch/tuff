@@ -251,7 +251,7 @@ export const COMPAT_REGISTRY: readonly CompatEntry[] = Object.freeze([
   tierD('steps-form', 'base', REASON_SCOPED_SLOTS),
   tierD('stream-element', 'ai', REASON_AI_COMPOSITE),
   tierD('stream-markdown', 'ai', REASON_AI_COMPOSITE),
-  ready('stream-text', 'ai', 'C', ['TxStreamText']),
+  ready('stream-text', 'ai', 'C', ['TxStreamText', 'TxStreamCaret']),
   planned('suggestion-chips', 'ai', 'B'),
   ready('switch', 'base', 'A', ['TxSwitch']),
   planned('tab-bar', 'base', 'B'),

@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "@floating-ui/dom": "^1.7.6",
+    "@talex-touch/tuffex-core": "workspace:^",
     "@vue/reactivity": "^3.5.27",
     "dompurify": "^3.4.17",
     "marked": "catalog:"

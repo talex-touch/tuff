@@ -14,11 +14,11 @@ const externalDeps = [
   '@vue/runtime-dom',
   '@vue/shared',
   '@floating-ui/vue',
+  '@talex-touch/tuffex-core',
   '@talex-touch/utils',
   'dompurify',
   'gsap',
   'marked',
-  'v-wave',
 ]
 
 export default defineConfig({

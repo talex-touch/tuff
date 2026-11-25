@@ -36,6 +36,7 @@ export default defineConfig({
         'react/jsx-runtime',
         'react/jsx-dev-runtime',
         '@floating-ui/dom',
+        '@talex-touch/tuffex-core',
         '@vue/reactivity',
         'dompurify',
         'marked',

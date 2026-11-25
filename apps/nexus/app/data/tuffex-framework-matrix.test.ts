@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { COMPAT_REGISTRY } from '@talex-touch/tuffex-core/compat'
 import { describe, expect, it } from 'vitest'
 import {
   buildFrameworkImportSnippet,
@@ -167,6 +168,23 @@ describe('tuffex-framework-matrix', () => {
     expect(normalizeDocsFramework('web-components')).toBe('wc')
     expect(normalizeDocsFramework('tsx')).toBe('react')
     expect(normalizeDocsFramework('unknown')).toBe('vue')
+  })
+
+  it('derives all 193 entries directly from @talex-touch/tuffex-core/compat Single Source of Truth', () => {
+    expect(TUFFEX_FRAMEWORK_MATRIX).toHaveLength(COMPAT_REGISTRY.length)
+    for (const coreEntry of COMPAT_REGISTRY) {
+      const nexusEntry = getComponentFrameworkEntry(coreEntry.id)
+      expect(nexusEntry, `missing ${coreEntry.id}`).toBeTruthy()
+      expect(nexusEntry!.category).toBe(coreEntry.category)
+      expect(nexusEntry!.tier).toBe(coreEntry.tier)
+      expect(nexusEntry!.vue).toBe(coreEntry.vue)
+      expect(nexusEntry!.react).toBe(coreEntry.react)
+      expect(nexusEntry!.wc).toBe(coreEntry.wc)
+      expect(nexusEntry!.wcTag).toBe(coreEntry.wcTag)
+      if (coreEntry.reactExports)
+        expect(nexusEntry!.reactExports).toEqual(coreEntry.reactExports)
+    }
+    expect(getComponentFrameworkEntry('stream-text')?.reactExports).toEqual(['TxStreamText', 'TxStreamCaret'])
   })
 
   it('keeps docs.framework i18n keys synchronized between en and zh locales', () => {
