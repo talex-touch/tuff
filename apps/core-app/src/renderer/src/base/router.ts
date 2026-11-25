@@ -424,22 +424,6 @@ const router = createRouter({
  * per-category routes. Those links are still emitted by notifications and other modules.
  */
 router.beforeEach((to, _from, next) => {
-  if (isBetaFeatureEnabled(appSetting, 'browserWorkspace')) {
-    if (to.path.startsWith('/setting')) {
-      const rawCategory = to.path.replace(/^\/setting\/?/, '')
-      const category = rawCategory.replace(/\//g, '-') || 'overview'
-      next({ path: '/browser', query: { ...to.query, category }, replace: true })
-      return
-    }
-    if (to.path.startsWith('/store')) {
-      next({ path: '/browser', query: { ...to.query, tab: 'store' }, replace: true })
-      return
-    }
-  }
-  next()
-})
-
-router.beforeEach((to, _from, next) => {
   const section = typeof to.query.section === 'string' ? to.query.section : ''
   if (!section || !to.path.startsWith('/setting')) {
     next()

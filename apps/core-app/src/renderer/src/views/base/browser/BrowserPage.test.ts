@@ -102,13 +102,24 @@ vi.mock('vue-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key, locale: ref('en-US') })
 }))
 vi.mock('vue-router', () => ({
-  useRoute: () => route
+  useRoute: () => route,
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() })
 }))
 vi.mock('vue-sonner', () => ({
   toast: { success: vi.fn(), info: vi.fn(), warning: vi.fn(), error: vi.fn() }
 }))
 vi.mock('~/modules/platform/renderer-platform', () => ({
   useRendererPlatform: () => platformState
+}))
+vi.mock('~/modules/conversation/useConversationHistory', () => ({
+  useConversationHistory: () => ({
+    conversations: ref([]),
+    loading: ref(false),
+    refresh: vi.fn(async () => undefined),
+    load: vi.fn(async () => null),
+    rename: vi.fn(async () => undefined),
+    remove: vi.fn(async () => undefined)
+  })
 }))
 vi.mock('~/modules/browser-connection/useBrowserConnection', () => ({
   isOpenableBrowserUrl: (url?: string) => Boolean(url && url.startsWith('http')),

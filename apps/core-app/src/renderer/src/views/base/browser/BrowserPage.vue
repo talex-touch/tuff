@@ -19,7 +19,7 @@ import {
 } from 'vue'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   formatSiteHost,
   localIcon,
@@ -32,6 +32,15 @@ import {
   parseBrowserFilePreviewUrl
 } from '~/modules/browser-workspace/preview-url'
 import { useBrowserWorkspace } from '~/modules/browser-workspace/useBrowserWorkspace'
+import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
+import {
+  getSpaceTabs,
+  projectSpaceKey,
+  removeSpaceTab,
+  resolveBrowserTabSpaceKey,
+  spaceBrowserTabId
+} from '~/modules/layout/useShellWorkspaceTabs'
+import { SETTING_CATEGORIES } from '~/modules/settings/categories'
 import WorkspaceFileViewer from '~/components/preview/WorkspaceFileViewer.vue'
 import {
   isOpenableBrowserUrl,
@@ -51,8 +60,14 @@ import { describeBrowserError } from './browser-errors'
 
 const { t, locale } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const { isMac } = useRendererPlatform()
 const sdk = createBrowserSdk(useTuffTransport())
+const history = useConversationHistory()
+function resolveConversationSpace(conversationId: string): string | null {
+  const record = history.conversations.value.find((item) => item.id === conversationId)
+  return record ? projectSpaceKey(record.projectId) : null
+}
 const {
   state,
   connecting,
@@ -314,30 +329,31 @@ watch(
   }
 )
 
+function resolveLegacySettingRedirectPath(rawCategory: unknown): string {
+  const candidate = Array.isArray(rawCategory) ? rawCategory[0] : rawCategory
+  if (typeof candidate !== 'string') return '/setting'
+  const normalized = candidate.trim().toLowerCase()
+  if (!normalized) return '/setting'
+
+  for (const cat of SETTING_CATEGORIES) {
+    if (cat.key === normalized) return cat.path
+    for (const child of cat.children ?? []) {
+      if (normalized === `${cat.key}-${child.key}` || normalized === `${cat.key}/${child.key}`) {
+        return child.path
+      }
+    }
+  }
+  return '/setting'
+}
+
 watch(
   () => [route.query.category, route.query.tab] as const,
   async ([category, tab]) => {
     if (route.path !== '/browser') return
     if (category) {
-      const s = state.value ?? (await sdk.getState().catch(() => null))
-      if (s) {
-        const existing = s.tabs.find((t) => t.url.startsWith('tuff://setting'))
-        if (existing) {
-          if (existing.id !== s.activeTabId) await sdk.activateTab(existing.id)
-        } else {
-          await sdk.createTab('tuff://settings')
-        }
-      }
+      await router.replace(resolveLegacySettingRedirectPath(category))
     } else if (tab === 'store') {
-      const s = state.value ?? (await sdk.getState().catch(() => null))
-      if (s) {
-        const existing = s.tabs.find((t) => t.url.startsWith('tuff://store'))
-        if (existing) {
-          if (existing.id !== s.activeTabId) await sdk.activateTab(existing.id)
-        } else {
-          await sdk.createTab('tuff://store')
-        }
-      }
+      await router.replace('/store')
     }
   },
   { immediate: true }
@@ -627,7 +643,33 @@ function onKeydown(event: KeyboardEvent): void {
   ) {
     event.preventDefault()
     panel.value = null
-    void command(() => sdk.closeTab(activeTab.value!.id))
+    const closingTab = activeTab.value
+    const boundSpace = resolveBrowserTabSpaceKey(closingTab, resolveConversationSpace)
+    const spaceTabs = boundSpace ? getSpaceTabs(boundSpace) : []
+    const closingIndex = spaceTabs.findIndex((tab) => tab.id === spaceBrowserTabId(closingTab.id))
+    const fallbackTab =
+      closingIndex < 0 ? null : (spaceTabs[closingIndex + 1] ?? spaceTabs[closingIndex - 1] ?? null)
+    void command(() => sdk.closeTab(closingTab.id)).then((accepted) => {
+      if (!accepted || !boundSpace) return
+      const { nextTab: removedNextTab } = removeSpaceTab(
+        boundSpace,
+        spaceBrowserTabId(closingTab.id)
+      )
+      const remaining = getSpaceTabs(boundSpace)
+      const nextTab =
+        removedNextTab ??
+        (fallbackTab && remaining.some((tab) => tab.id === fallbackTab.id) ? fallbackTab : null)
+      if (nextTab?.kind === 'browser') {
+        void command(() => sdk.activateTab(nextTab.browserTabId))
+        return
+      }
+      if (route.path !== '/browser') return
+      if (nextTab?.kind === 'conversation') {
+        void router.push(`/home/c/${nextTab.conversationId}`)
+      } else {
+        void router.push('/home')
+      }
+    })
   } else if (modifier && (event.code === 'KeyR' || key === 'r') && activeTab.value?.url) {
     event.preventDefault()
     if (isPreviewTab.value) {

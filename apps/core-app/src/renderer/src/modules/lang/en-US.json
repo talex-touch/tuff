@@ -1650,8 +1650,10 @@
   "browser": {
     "label": "Browser",
     "tabs": "Browser tabs",
+    "spaceTabs": "Space tabs",
     "newTab": "Start page",
     "addTab": "New tab",
+    "addSpaceWebTab": "New web tab",
     "addTabMenu": "New tab options",
     "addTabQuickOpen": "Bookmarks & recent",
     "closeTab": "Close tab: {title}",

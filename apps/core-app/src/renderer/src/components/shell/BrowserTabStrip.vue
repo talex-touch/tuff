@@ -14,6 +14,7 @@ import {
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TxKbd } from '@talex-touch/tuffex/kbd'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { getActivePinia } from 'pinia'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -21,7 +22,31 @@ import { APP_SURFACE_ROUTES } from '../../../../shared/app-surface-routes'
 import { basenameOfPath, parseBrowserFilePreviewUrl } from '~/modules/browser-workspace/preview-url'
 import { useBrowserWorkspace } from '~/modules/browser-workspace/useBrowserWorkspace'
 import { tabIcon } from '~/modules/browser-workspace/tab-presentation'
+import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
+import {
+  attachBrowserTabToSpace,
+  BROWSER_SCOPE_KEY,
+  closeSpaceTabsBulk,
+  conversationTabId,
+  draftTabId,
+  ensureConversationTab,
+  ensureDraftTab,
+  getSpaceTabs,
+  isDeprecatedInternalBrowserUrl,
+  isSpaceScopeKey,
+  projectIdFromSpaceKey,
+  projectSpaceKey,
+  removeSpaceTab,
+  reorderSpaceTab,
+  resolveBrowserTabSpaceKey,
+  setLastWorkspaceScope,
+  spaceBrowserTabId,
+  syncBrowserTabsWithSpaces,
+  useShellWorkspaceTabs,
+  type SpaceWorkspaceTab
+} from '~/modules/layout/useShellWorkspaceTabs'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import { useProjectStore } from '~/stores/projects'
 import BrowserPluginToolbar from '~/views/base/browser/BrowserPluginToolbar.vue'
 import type { BrowserTabMenuAction } from '~/views/base/browser/tab-actions'
 import { describeBrowserError } from '~/views/base/browser/browser-errors'
@@ -29,11 +54,24 @@ import { runBrowserTabAction } from '~/views/base/browser/tab-actions'
 import { SHELL_MENU_CARD } from './shell-menu-panel'
 import ShellAccountAvatar from './ShellAccountAvatar.vue'
 
+interface StripTab {
+  id: string
+  kind: 'browser' | 'conversation' | 'draft'
+  title: string
+  icon: string
+  browserTab?: BrowserTabState
+  conversationId?: string
+  spaceKey?: string
+}
+
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const { isMac, platform } = useRendererPlatform()
 const sdk = createBrowserSdk(useTuffTransport())
+const history = useConversationHistory()
+const projectStore = getActivePinia() ? useProjectStore() : null
+const workspaceTabs = useShellWorkspaceTabs()
 const {
   state,
   connecting,
@@ -48,21 +86,182 @@ const {
 const tabMenu = ref<InstanceType<typeof TxContextMenu> | null>(null)
 const tablistRef = ref<HTMLElement | null>(null)
 const tabElements = new Map<string, HTMLElement>()
+const closingDeprecatedIds = new Set<string>()
 const canScrollLeft = ref(false)
 const canScrollRight = ref(false)
 const activePill = ref({ left: 0, top: 0, width: 0, height: 0, visible: false })
 const activePillAnimated = ref(false)
 let tablistResizeObserver: ResizeObserver | null = null
 let activePillRaf = 0
+let lastObservedRoutePath = ''
+let userSelectionSeq = 0
 const tabMenuTargetId = ref('')
 const draggedTabId = ref<string | null>(null)
 const tabDropTarget = ref<{ id: string | null; before: boolean } | null>(null)
 const tabMovePending = ref(false)
+
 const onBrowserRoute = computed(() => route.path === APP_SURFACE_ROUTES.browser)
-const activeTabId = computed(() => state.value?.activeTabId)
-const activeTab = computed(
-  () => state.value?.tabs.find((tab) => tab.id === activeTabId.value) ?? null
+const onHomeConversationRoute = computed(() => route.path.startsWith('/home/c/'))
+const onHomeBlankRoute = computed(() => route.path === APP_SURFACE_ROUTES.home)
+const onUnfocusedShellRoute = computed(
+  () => route.path === '/store' || route.path.startsWith('/setting')
 )
+
+const routeConversationId = computed<string | null>(() => {
+  if (!onHomeConversationRoute.value) return null
+  const params = route.params as Record<string, unknown> | undefined
+  const paramId = typeof params?.id === 'string' ? params.id.trim() : ''
+  if (paramId) return paramId
+  const tail = route.path.slice('/home/c/'.length).split('/')[0]?.trim() ?? ''
+  return tail || null
+})
+
+function resolveConversationRecord(conversationId: string) {
+  return history.conversations.value.find((item) => item.id === conversationId) ?? null
+}
+
+function resolveConversationSpace(conversationId: string): string | null {
+  const record = resolveConversationRecord(conversationId)
+  if (!record) return null
+  return projectSpaceKey(record.projectId)
+}
+
+const activeBrowserTab = computed(() => {
+  const current = state.value?.tabs.find((tab) => tab.id === state.value?.activeTabId) ?? null
+  if (!current || isDeprecatedInternalBrowserUrl(current.url)) return null
+  return current
+})
+
+const currentLiveScope = computed<string | null>(() => {
+  if (onUnfocusedShellRoute.value) return null
+  if (onHomeConversationRoute.value && routeConversationId.value) {
+    return (
+      resolveConversationSpace(routeConversationId.value) ??
+      projectSpaceKey(projectStore?.activeProjectId ?? null)
+    )
+  }
+  if (onHomeBlankRoute.value) {
+    return projectSpaceKey(projectStore?.activeProjectId ?? null)
+  }
+  if (onBrowserRoute.value) {
+    const tab = activeBrowserTab.value
+    if (tab) {
+      const boundSpace = resolveBrowserTabSpaceKey(tab, resolveConversationSpace)
+      if (boundSpace) return boundSpace
+    }
+    return BROWSER_SCOPE_KEY
+  }
+  return null
+})
+
+const displayedScopeKey = computed<string>(
+  () => currentLiveScope.value ?? workspaceTabs.lastWorkspaceScope.value ?? BROWSER_SCOPE_KEY
+)
+const isSpaceScope = computed(() => isSpaceScopeKey(displayedScopeKey.value))
+
+function browserTabTitle(tab: BrowserTabState): string {
+  if (!tab.url) return t('browser.newTab')
+  const preview = parseBrowserFilePreviewUrl(tab.url)
+  if (preview) return basenameOfPath(preview.path)
+  return tab.title || tab.url
+}
+
+function isStandaloneBrowserTab(tab: BrowserTabState): boolean {
+  return (
+    !isDeprecatedInternalBrowserUrl(tab.url) &&
+    !resolveBrowserTabSpaceKey(tab, resolveConversationSpace)
+  )
+}
+
+const displayedTabs = computed<StripTab[]>(() => {
+  const allBrowserTabs = state.value?.tabs ?? []
+
+  if (!isSpaceScope.value) {
+    return allBrowserTabs.filter(isStandaloneBrowserTab).map((tab) => ({
+      id: tab.id,
+      kind: 'browser' as const,
+      title: browserTabTitle(tab),
+      icon: tabIcon(tab),
+      browserTab: tab
+    }))
+  }
+
+  const scope = displayedScopeKey.value
+  const spaceTabs = workspaceTabs.spaceTabsMap.value[scope] ?? []
+  const browserById = new Map<string, BrowserTabState>()
+  for (const tab of allBrowserTabs) {
+    if (!isDeprecatedInternalBrowserUrl(tab.url)) {
+      browserById.set(tab.id, tab)
+    }
+  }
+
+  const result: StripTab[] = []
+  for (const entry of spaceTabs) {
+    if (entry.kind === 'conversation') {
+      const record = resolveConversationRecord(entry.conversationId)
+      result.push({
+        id: entry.id,
+        kind: 'conversation',
+        title: record?.title?.trim() || t('shell.history.untitled'),
+        icon: 'i-ri-chat-3-line',
+        conversationId: entry.conversationId,
+        spaceKey: scope
+      })
+    } else if (entry.kind === 'draft') {
+      result.push({
+        id: entry.id,
+        kind: 'draft',
+        title: t('shell.newChat'),
+        icon: 'i-ri-chat-3-line',
+        spaceKey: scope
+      })
+    } else {
+      const liveBrowserTab = browserById.get(entry.browserTabId)
+      if (!liveBrowserTab) continue
+      result.push({
+        id: entry.id,
+        kind: 'browser',
+        title: browserTabTitle(liveBrowserTab),
+        icon: tabIcon(liveBrowserTab),
+        browserTab: liveBrowserTab,
+        conversationId: entry.conversationId,
+        spaceKey: scope
+      })
+    }
+  }
+  return result
+})
+
+const activeStripTabId = computed<string | null>(() => {
+  if (onUnfocusedShellRoute.value || !currentLiveScope.value) {
+    return null
+  }
+  if (!isSpaceScope.value) {
+    if (!onBrowserRoute.value) return null
+    const current = activeBrowserTab.value
+    if (!current) return null
+    return displayedTabs.value.some((tab) => tab.id === current.id) ? current.id : null
+  }
+  if (onHomeConversationRoute.value && routeConversationId.value) {
+    const id = conversationTabId(routeConversationId.value)
+    return displayedTabs.value.some((tab) => tab.id === id) ? id : null
+  }
+  if (onHomeBlankRoute.value) {
+    const id = draftTabId(displayedScopeKey.value)
+    return displayedTabs.value.some((tab) => tab.id === id) ? id : null
+  }
+  if (onBrowserRoute.value && activeBrowserTab.value) {
+    const id = spaceBrowserTabId(activeBrowserTab.value.id)
+    return displayedTabs.value.some((tab) => tab.id === id) ? id : null
+  }
+  return null
+})
+
+const activeStripTab = computed<StripTab | null>(
+  () => displayedTabs.value.find((tab) => tab.id === activeStripTabId.value) ?? null
+)
+const addControlsDisabled = computed(() => !isSpaceScope.value && !state.value)
+
 const tabMenuOpenModel = computed({
   get: () => tabMenuOpen.value,
   set: (open: boolean) => {
@@ -75,17 +274,17 @@ const addTabMenuOpenModel = computed({
     addTabMenuOpen.value = open
   }
 })
-const tabMenuIndex = computed(
-  () => state.value?.tabs.findIndex((tab) => tab.id === tabMenuTargetId.value) ?? -1
+const tabMenuIndex = computed(() =>
+  displayedTabs.value.findIndex((tab) => tab.id === tabMenuTargetId.value)
 )
-const tabMenuTarget = computed(() => state.value?.tabs[tabMenuIndex.value])
+const tabMenuTarget = computed<StripTab | undefined>(() => displayedTabs.value[tabMenuIndex.value])
 const leftTabsCount = computed(() => (tabMenuIndex.value > 0 ? tabMenuIndex.value : 0))
 const rightTabsCount = computed(() => {
-  const total = state.value?.tabs.length ?? 0
+  const total = displayedTabs.value.length
   return tabMenuIndex.value >= 0 ? Math.max(0, total - tabMenuIndex.value - 1) : 0
 })
 const otherTabsCount = computed(() => {
-  const total = state.value?.tabs.length ?? 0
+  const total = displayedTabs.value.length
   return tabMenuIndex.value >= 0 ? Math.max(0, total - 1) : 0
 })
 const quickSavedPages = computed(() => {
@@ -112,45 +311,173 @@ function shortcutKeys(key: string): string[] {
 }
 
 function openAddTabMenu(): void {
-  if (!state.value) return
+  if (addControlsDisabled.value) return
   addTabMenuOpen.value = true
+}
+
+async function openSpaceConversationDraft(spaceKey: string): Promise<void> {
+  addTabMenuOpen.value = false
+  setLastWorkspaceScope(spaceKey)
+  ensureDraftTab(spaceKey)
+  projectStore?.beginConversation(projectIdFromSpaceKey(spaceKey))
+  await router.push(APP_SURFACE_ROUTES.home)
+}
+
+async function openSpaceWebTab(spaceKey: string, url?: string): Promise<void> {
+  addTabMenuOpen.value = false
+  if (!state.value) return
+  await runInBrowser(async () => {
+    const next = await sdk.createTab(url)
+    const createdTabId = next.createdTabId || next.activeTabId
+    if (createdTabId) {
+      attachBrowserTabToSpace(createdTabId, spaceKey)
+      setLastWorkspaceScope(spaceKey)
+    }
+    return next
+  })
+}
+
+function handlePrimaryAddClick(): void {
+  addTabMenuOpen.value = false
+  if (isSpaceScope.value) {
+    void openSpaceConversationDraft(displayedScopeKey.value)
+    return
+  }
+  void runInBrowser(() => sdk.createTab())
 }
 
 function openNewTab(): void {
   addTabMenuOpen.value = false
+  if (isSpaceScope.value) {
+    void openSpaceWebTab(displayedScopeKey.value)
+    return
+  }
   void runInBrowser(() => sdk.createTab())
 }
 
 function duplicateActiveTab(): void {
-  const current = activeTab.value
+  const current = activeStripTab.value?.browserTab ?? activeBrowserTab.value
   addTabMenuOpen.value = false
   if (!current) return
+  if (isSpaceScope.value) {
+    void openSpaceWebTab(displayedScopeKey.value, current.url)
+    return
+  }
   void runInBrowser(() => sdk.createTab(current.url))
-}
-
-function openInternalSurface(matchPrefix: string, targetUrl: string): void {
-  addTabMenuOpen.value = false
-  void runInBrowser(async () => {
-    const existing = state.value?.tabs.find((tab) => tab.url.startsWith(matchPrefix))
-    if (existing) return sdk.activateTab(existing.id)
-    return sdk.createTab(targetUrl)
-  })
 }
 
 function openSavedPage(url: string): void {
   addTabMenuOpen.value = false
+  if (isSpaceScope.value) {
+    void openSpaceWebTab(displayedScopeKey.value, url)
+    return
+  }
   void runInBrowser(() => sdk.createTab(url))
 }
 
-// Activating or creating a tab lands on the Browser page; close and reorder stay in place.
+// Activating or creating a browser tab lands on the Browser page; close and reorder stay in place.
 async function runInBrowser(action: () => Promise<BrowserWorkspaceState>): Promise<boolean> {
   if (!onBrowserRoute.value) await router.push(APP_SURFACE_ROUTES.browser)
   return command(action)
 }
 
-function activateOrOpenTab(tab: BrowserTabState): void {
-  if (onBrowserRoute.value && tab.id === activeTabId.value && !tab.error) return
-  void runInBrowser(() => sdk.activateTab(tab.id))
+function activateSpaceEntry(entry: SpaceWorkspaceTab): void {
+  setLastWorkspaceScope(entry.spaceKey)
+  if (entry.kind === 'conversation') {
+    if (route.path !== `/home/c/${entry.conversationId}`) {
+      void router.push(`/home/c/${entry.conversationId}`)
+    }
+    return
+  }
+  if (entry.kind === 'draft') {
+    void openSpaceConversationDraft(entry.spaceKey)
+    return
+  }
+  void runInBrowser(() => sdk.activateTab(entry.browserTabId))
+}
+
+function activateOrOpenTab(tab: StripTab): void {
+  userSelectionSeq += 1
+  if (tab.kind === 'conversation' && tab.conversationId) {
+    if (tab.spaceKey) setLastWorkspaceScope(tab.spaceKey)
+    if (route.path === `/home/c/${tab.conversationId}`) return
+    void router.push(`/home/c/${tab.conversationId}`)
+    return
+  }
+  if (tab.kind === 'draft') {
+    const scope = tab.spaceKey ?? displayedScopeKey.value
+    if (
+      onHomeBlankRoute.value &&
+      projectSpaceKey(projectStore?.activeProjectId ?? null) === scope
+    ) {
+      return
+    }
+    void openSpaceConversationDraft(scope)
+    return
+  }
+  const browserTab = tab.browserTab
+  if (!browserTab) return
+  setLastWorkspaceScope(tab.spaceKey ?? BROWSER_SCOPE_KEY)
+  if (onBrowserRoute.value && browserTab.id === state.value?.activeTabId && !browserTab.error) {
+    return
+  }
+  void runInBrowser(() => sdk.activateTab(browserTab.id))
+}
+
+async function closeStripTab(tab: StripTab): Promise<void> {
+  if (!isSpaceScope.value) {
+    if (tab.browserTab) {
+      void command(() => sdk.closeTab(tab.browserTab!.id))
+    }
+    return
+  }
+
+  const scope = displayedScopeKey.value
+  const wasActive = activeStripTabId.value === tab.id
+
+  if (tab.kind === 'browser' && tab.browserTab) {
+    const startRoutePath = route.path
+    const browserTabId = tab.browserTab.id
+    const currentList = getSpaceTabs(scope)
+    const closingIndex = currentList.findIndex((item) => item.id === tab.id)
+    const fallbackNext =
+      closingIndex >= 0
+        ? (currentList[closingIndex + 1] ?? currentList[closingIndex - 1] ?? null)
+        : null
+
+    const accepted = await command(() => sdk.closeTab(browserTabId))
+    if (!accepted) return
+
+    const { nextTab } = removeSpaceTab(scope, tab.id)
+    if (!wasActive || route.path !== startRoutePath) return
+
+    const remaining = getSpaceTabs(scope)
+    const resolvedNext =
+      nextTab ??
+      (fallbackNext && remaining.some((item) => item.id === fallbackNext.id)
+        ? fallbackNext
+        : (remaining[0] ?? null))
+    if (resolvedNext) {
+      activateSpaceEntry(resolvedNext)
+      return
+    }
+    void openSpaceConversationDraft(scope)
+    return
+  }
+
+  const { removed, nextTab } = removeSpaceTab(scope, tab.id)
+  if (!wasActive) return
+
+  if (nextTab) {
+    activateSpaceEntry(nextTab)
+    return
+  }
+  if (removed?.kind === 'draft') {
+    setLastWorkspaceScope(BROWSER_SCOPE_KEY)
+    void router.push(APP_SURFACE_ROUTES.browser)
+    return
+  }
+  void openSpaceConversationDraft(scope)
 }
 
 function syncScrollEdges(): void {
@@ -175,15 +502,6 @@ function onTablistWheel(event: WheelEvent): void {
   }
 }
 
-function tabTitle(tab: BrowserTabState): string {
-  if (!tab.url) return t('browser.newTab')
-  if (tab.url.startsWith('tuff://store')) return t('shell.store')
-  if (tab.url.startsWith('tuff://setting')) return t('shell.setting')
-  const preview = parseBrowserFilePreviewUrl(tab.url)
-  if (preview) return basenameOfPath(preview.path)
-  return tab.title || tab.url
-}
-
 function onPluginToolbarOverlay(open: boolean): void {
   pluginToolbarOpen.value = open
 }
@@ -203,12 +521,109 @@ function openTabMenu(tabId: string, event: MouseEvent | KeyboardEvent): void {
   }
 }
 
-function selectTabMenuAction(action: BrowserTabMenuAction): void {
+async function selectTabMenuAction(action: BrowserTabMenuAction): Promise<void> {
   if (!tabMenuOpen.value) return
-  const tabId = tabMenuTargetId.value
+  const target = tabMenuTarget.value
   tabMenuOpen.value = false
-  const run = () => runBrowserTabAction(sdk, action, tabId)
-  void (action === 'duplicate' ? runInBrowser(run) : command(run))
+  if (!target) return
+
+  if (!isSpaceScope.value) {
+    if (!target.browserTab) return
+    const browserTabId = target.browserTab.id
+    const run = (): Promise<BrowserWorkspaceState> =>
+      runBrowserTabAction(sdk, action, browserTabId, { filter: isStandaloneBrowserTab })
+    void (action === 'duplicate' ? runInBrowser(run) : command(run))
+    return
+  }
+
+  const scope = displayedScopeKey.value
+  if (action === 'reload') {
+    if (target.browserTab?.url) {
+      void command(() => sdk.reload(target.browserTab!.id))
+    }
+    return
+  }
+  if (action === 'duplicate') {
+    if (target.browserTab) {
+      void openSpaceWebTab(scope, target.browserTab.url)
+    }
+    return
+  }
+  if (action === 'close') {
+    void closeStripTab(target)
+    return
+  }
+
+  const startRoutePath = route.path
+  const startSelectionSeq = userSelectionSeq
+  const wasActiveRemoved =
+    activeStripTabId.value !== null &&
+    ((action === 'close-others' && activeStripTabId.value !== target.id) ||
+      (action === 'close-left' &&
+        displayedTabs.value.findIndex((item) => item.id === activeStripTabId.value) <
+          tabMenuIndex.value) ||
+      (action === 'close-right' &&
+        displayedTabs.value.findIndex((item) => item.id === activeStripTabId.value) >
+          tabMenuIndex.value))
+
+  const shouldActivateTarget = (): boolean =>
+    wasActiveRemoved &&
+    route.path === startRoutePath &&
+    userSelectionSeq === startSelectionSeq &&
+    getSpaceTabs(scope).some((item) => item.id === target.id)
+
+  const hasBrowserTabsToClose = displayedTabs.value.some((item, idx) => {
+    if (item.kind !== 'browser') return false
+    return action === 'close-others'
+      ? idx !== tabMenuIndex.value
+      : action === 'close-left'
+        ? idx < tabMenuIndex.value
+        : idx > tabMenuIndex.value
+  })
+
+  if (hasBrowserTabsToClose) {
+    const runSpaceBulkClose = async (): Promise<BrowserWorkspaceState> => {
+      const currentList = getSpaceTabs(scope)
+      const targetIndex = currentList.findIndex((item) => item.id === target.id)
+      if (targetIndex < 0) {
+        return state.value ?? (await sdk.getState())
+      }
+      const toRemove = currentList.filter((_item, idx) =>
+        action === 'close-others'
+          ? idx !== targetIndex
+          : action === 'close-left'
+            ? idx < targetIndex
+            : idx > targetIndex
+      )
+
+      let latestState = state.value
+      for (const entry of toRemove) {
+        if (entry.kind === 'browser') {
+          latestState = await sdk.closeTab(entry.browserTabId)
+        }
+        removeSpaceTab(scope, entry.id)
+      }
+
+      if (shouldActivateTarget()) {
+        if (target.kind === 'browser' && target.browserTab) {
+          setLastWorkspaceScope(scope)
+          latestState = await sdk.activateTab(target.browserTab.id)
+          if (!onBrowserRoute.value) {
+            void router.push(APP_SURFACE_ROUTES.browser)
+          }
+        } else {
+          activateOrOpenTab(target)
+        }
+      }
+      return latestState ?? (await sdk.getState())
+    }
+    await command(runSpaceBulkClose)
+  } else {
+    closeSpaceTabsBulk(scope, target.id, action)
+    if (shouldActivateTarget()) {
+      activateOrOpenTab(target)
+    }
+  }
 }
 
 function resetTabDrag(): void {
@@ -218,6 +633,17 @@ function resetTabDrag(): void {
 
 async function moveTab(tabId: string, beforeTabId: string | null): Promise<void> {
   if (tabMovePending.value) return
+  if (isSpaceScope.value) {
+    if (reorderSpaceTab(displayedScopeKey.value, tabId, beforeTabId)) {
+      await nextTick()
+      syncActivePill(true)
+      const element = document.getElementById(`browser-tab-${tabId}`)
+      element?.focus({ preventScroll: true })
+      element?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    }
+    return
+  }
+
   tabMovePending.value = true
   try {
     if (await command(() => sdk.moveTab(tabId, beforeTabId))) {
@@ -266,7 +692,7 @@ function dropTab(event: DragEvent, targetId: string | null): void {
   event.stopPropagation()
   const tabId = draggedTabId.value
   if (!tabId || tabMovePending.value) return
-  const tabs = state.value?.tabs ?? []
+  const tabs = displayedTabs.value
   let beforeTabId = targetId
   if (targetId !== null) {
     const index = tabs.findIndex((tab) => tab.id === targetId)
@@ -282,7 +708,7 @@ function dropTab(event: DragEvent, targetId: string | null): void {
 }
 
 function tabKeydown(event: KeyboardEvent, index: number): void {
-  const tabs = state.value?.tabs ?? []
+  const tabs = displayedTabs.value
   if (!tabs.length) return
   if (event.altKey && event.shiftKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
     event.preventDefault()
@@ -309,7 +735,8 @@ function tabKeydown(event: KeyboardEvent, index: number): void {
   event.preventDefault()
   const tab = tabs[target]
   if (!tab) return
-  void runInBrowser(() => sdk.activateTab(tab.id)).then(() => {
+  activateOrOpenTab(tab)
+  void nextTick(() => {
     document.getElementById(`browser-tab-${tab.id}`)?.focus()
   })
 }
@@ -323,7 +750,7 @@ function setTabEl(tabId: string, el: unknown): void {
 }
 
 function syncActivePill(animate = true): void {
-  const id = activeTabId.value
+  const id = activeStripTabId.value
   const activeEl = id ? tabElements.get(id) : undefined
   if (!activeEl) {
     activePill.value.visible = false
@@ -358,10 +785,65 @@ const activePillStyle = computed(() => ({
   transform: `translate3d(${activePill.value.left}px, ${activePill.value.top}px, 0)`
 }))
 
+// Automatically clean up legacy persisted `tuff://store` and `tuff://settings` tabs
+// and keep space-scoped browser tabs synchronized with live BrowserWorkspaceState.
 watch(
-  () => state.value?.tabs,
-  (tabs) => {
-    const ids = new Set((tabs ?? []).map((tab) => tab.id))
+  () => [state.value?.tabs, history.conversations.value] as const,
+  ([tabs]) => {
+    if (!tabs) return
+    syncBrowserTabsWithSpaces(tabs, resolveConversationSpace)
+    for (const tab of tabs) {
+      if (!isDeprecatedInternalBrowserUrl(tab.url)) continue
+      if (closingDeprecatedIds.has(tab.id)) continue
+      closingDeprecatedIds.add(tab.id)
+      void command(() => sdk.closeTab(tab.id)).finally(() => {
+        closingDeprecatedIds.delete(tab.id)
+      })
+    }
+  },
+  { immediate: true }
+)
+
+// Track route & Space / conversation focus so clicking any Space conversation adds/activates
+// its tab in that Space's strip while /store and /setting preserve the last strip unselected.
+watch(
+  () =>
+    [
+      route.path,
+      routeConversationId.value,
+      projectStore?.activeProjectId ?? null,
+      history.conversations.value,
+      currentLiveScope.value
+    ] as const,
+  ([path, convId, activeProjectId, _convs, liveScope]) => {
+    const previousPath = lastObservedRoutePath
+    lastObservedRoutePath = path
+
+    if (onHomeConversationRoute.value && convId) {
+      const spaceKey = resolveConversationSpace(convId) ?? projectSpaceKey(activeProjectId)
+      setLastWorkspaceScope(spaceKey)
+      ensureConversationTab(spaceKey, convId, {
+        promoteDraft: previousPath === APP_SURFACE_ROUTES.home
+      })
+      return
+    }
+    if (onHomeBlankRoute.value) {
+      const spaceKey = projectSpaceKey(activeProjectId)
+      setLastWorkspaceScope(spaceKey)
+      ensureDraftTab(spaceKey)
+      return
+    }
+    if (liveScope) {
+      setLastWorkspaceScope(liveScope)
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => displayedTabs.value.map((tab) => tab.id),
+  (tabIds) => {
+    const ids = new Set(tabIds)
     if (tabMenuOpen.value && tabMenuTargetId.value && !ids.has(tabMenuTargetId.value)) {
       tabMenuOpen.value = false
     }
@@ -374,24 +856,39 @@ watch(
     })
   }
 )
-watch(activeTabId, (id, previousId) => {
-  if (id === previousId) return
+
+watch(displayedScopeKey, () => {
+  tabMenuOpen.value = false
+  addTabMenuOpen.value = false
+  resetTabDrag()
   void nextTick(() => {
-    syncActivePill(Boolean(previousId))
-    document
-      .getElementById(`browser-tab-${id}`)
-      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    syncActivePill(false)
     syncScrollEdges()
   })
 })
+
+watch(activeStripTabId, (id, previousId) => {
+  if (id === previousId) return
+  void nextTick(() => {
+    syncActivePill(Boolean(previousId && id))
+    if (id) {
+      document
+        .getElementById(`browser-tab-${id}`)
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    }
+    syncScrollEdges()
+  })
+})
+
 watch(tabMenuOpen, (open) => {
   if (open) return
   void nextTick(() => {
-    if (!onBrowserRoute.value) return
-    const tabId = tabMenuTarget.value?.id ?? activeTabId.value
-    document.getElementById(`browser-tab-${tabId}`)?.focus()
+    if (onUnfocusedShellRoute.value) return
+    const tabId = tabMenuTarget.value?.id ?? activeStripTabId.value
+    if (tabId) document.getElementById(`browser-tab-${tabId}`)?.focus()
   })
 })
+
 onMounted(() => {
   void nextTick(() => {
     syncActivePill(false)
@@ -410,6 +907,7 @@ onBeforeUnmount(() => {
   tablistResizeObserver?.disconnect()
   tablistResizeObserver = null
   tabElements.clear()
+  closingDeprecatedIds.clear()
   resetTabDrag()
 })
 </script>
@@ -419,6 +917,7 @@ onBeforeUnmount(() => {
     class="BrowserTabStrip flex h-11 min-w-0 flex-none items-center gap-1.5 overflow-hidden px-2.5"
     :class="{ 'is-window-controls': !isMac }"
     :data-platform="platform"
+    :data-tab-scope="displayedScopeKey"
     data-browser-tabbar
     @dragover.self="showTabDropTarget($event, null)"
     @drop.self="dropTab($event, null)"
@@ -432,7 +931,7 @@ onBeforeUnmount(() => {
         'can-scroll-right': canScrollRight
       }"
       role="tablist"
-      :aria-label="t('browser.tabs')"
+      :aria-label="isSpaceScope ? t('browser.spaceTabs') : t('browser.tabs')"
       @scroll.passive="syncScrollEdges"
       @wheel="onTablistWheel"
       @dragover.self="showTabDropTarget($event, null)"
@@ -453,16 +952,17 @@ onBeforeUnmount(() => {
         @after-leave="syncActivePill(true)"
       >
         <div
-          v-for="(tab, index) in state?.tabs ?? []"
+          v-for="(tab, index) in displayedTabs"
           :key="tab.id"
           :ref="(el) => setTabEl(tab.id, el)"
           class="BrowserTabStrip-Tab BrowserTabStrip-NoDrag relative flex h-8 min-w-28 max-w-52 flex-none items-center gap-1 pr-1.5"
           :class="{
             'opacity-50': draggedTabId === tab.id,
-            'is-active': tab.id === state?.activeTabId
+            'is-active': tab.id === activeStripTabId
           }"
+          :data-tab-kind="tab.kind"
           @contextmenu="openTabMenu(tab.id, $event)"
-          @auxclick.middle.prevent="command(() => sdk.closeTab(tab.id))"
+          @auxclick.middle.prevent="closeStripTab(tab)"
           @dragover="showTabDropTarget($event, tab.id)"
           @drop="dropTab($event, tab.id)"
         >
@@ -470,14 +970,14 @@ onBeforeUnmount(() => {
             :id="`browser-tab-${tab.id}`"
             type="button"
             role="tab"
-            :aria-selected="tab.id === state?.activeTabId"
-            :tabindex="tab.id === state?.activeTabId ? 0 : -1"
+            :aria-selected="tab.id === activeStripTabId"
+            :tabindex="tab.id === activeStripTabId || (!activeStripTabId && index === 0) ? 0 : -1"
             aria-controls="browser-viewport"
             aria-haspopup="menu"
             :aria-description="t('browser.reorderTabsHint')"
             :aria-expanded="tabMenuOpen && tabMenuTargetId === tab.id"
             class="BrowserTabStrip-TabButton flex h-full min-w-0 flex-1 items-center gap-2 pl-3 pr-1 outline-none"
-            :title="tabTitle(tab)"
+            :title="tab.title"
             :draggable="!tabMovePending"
             @dragstart="startTabDrag(tab.id, $event)"
             @dragend="resetTabDrag"
@@ -486,18 +986,18 @@ onBeforeUnmount(() => {
           >
             <span
               class="BrowserTabStrip-TabIcon inline-flex h-4 w-4 flex-none items-center justify-center"
-              :class="tabIcon(tab)"
+              :class="tab.icon"
               aria-hidden="true"
             />
-            <span class="BrowserTabStrip-TabTitle truncate">{{ tabTitle(tab) }}</span>
+            <span class="BrowserTabStrip-TabTitle truncate">{{ tab.title }}</span>
           </button>
           <TxIconButton
             icon="i-ri-close-line"
             size="xs"
             shape="circle"
             class="BrowserTabStrip-CloseBtn flex-none"
-            :label="t('browser.closeTab', { title: tabTitle(tab) })"
-            @click="command(() => sdk.closeTab(tab.id))"
+            :label="t('browser.closeTab', { title: tab.title })"
+            @click="closeStripTab(tab)"
           />
           <span
             v-if="draggedTabId && tabDropTarget?.id === tab.id"
@@ -518,16 +1018,21 @@ onBeforeUnmount(() => {
         aria-hidden="true"
         class="pointer-events-none absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-[var(--tx-color-primary)]"
       />
-      <TxSkeleton v-if="connecting && !state" :width="132" :height="32" :radius="16" />
+      <TxSkeleton
+        v-if="!isSpaceScope && connecting && !state"
+        :width="132"
+        :height="32"
+        :radius="16"
+      />
       <div class="BrowserTabStrip-AddGroup" :class="{ 'is-open': addTabMenuOpen }">
         <TxIconButton
           icon="i-ri-add-line"
           size="sm"
           shape="circle"
-          :label="t('browser.addTab')"
-          :disabled="!state"
+          :label="isSpaceScope ? t('shell.newChat') : t('browser.addTab')"
+          :disabled="addControlsDisabled"
           class="BrowserTabStrip-AddBtn flex-none"
-          @click="runInBrowser(() => sdk.createTab())"
+          @click="handlePrimaryAddClick"
           @contextmenu.prevent="openAddTabMenu"
         />
         <span class="BrowserTabStrip-AddDivider" aria-hidden="true" />
@@ -537,14 +1042,14 @@ onBeforeUnmount(() => {
           :min-width="232"
           :panel-card="SHELL_MENU_CARD"
           panel-background="refraction"
-          :disabled="!state"
+          :disabled="addControlsDisabled"
         >
           <template #trigger>
             <button
               type="button"
               class="BrowserTabStrip-AddMenuBtn"
               :class="{ 'is-open': addTabMenuOpen }"
-              :disabled="!state"
+              :disabled="addControlsDisabled"
               :title="t('browser.addTabMenu')"
               :aria-label="t('browser.addTabMenu')"
               data-testid="browser-add-tab-menu-trigger"
@@ -556,54 +1061,57 @@ onBeforeUnmount(() => {
             </button>
           </template>
 
-          <TxDropdownItem data-testid="browser-add-menu-new-tab" @select="openNewTab">
-            <span class="BrowserTabStrip-AddMenuItem">
-              <span class="i-ri-global-line BrowserTabStrip-AddMenuIcon" aria-hidden="true" />
-              <span>{{ t('browser.newTab') }}</span>
-            </span>
-            <template #right>
-              <span class="BrowserTabStrip-MenuRight">
-                <TxKbd v-for="key in shortcutKeys('T')" :key="key" class="BrowserTabStrip-MenuKbd">
-                  {{ key }}
-                </TxKbd>
+          <template v-if="isSpaceScope">
+            <TxDropdownItem
+              data-testid="space-add-menu-new-chat"
+              @select="openSpaceConversationDraft(displayedScopeKey)"
+            >
+              <span class="BrowserTabStrip-AddMenuItem">
+                <span class="i-ri-chat-3-line BrowserTabStrip-AddMenuIcon" aria-hidden="true" />
+                <span>{{ t('shell.newChat') }}</span>
               </span>
-            </template>
-          </TxDropdownItem>
+            </TxDropdownItem>
 
-          <TxDropdownItem
-            v-if="activeTab"
-            data-testid="browser-add-menu-duplicate"
-            @select="duplicateActiveTab"
-          >
-            <span class="BrowserTabStrip-AddMenuItem">
-              <span class="i-ri-file-copy-line BrowserTabStrip-AddMenuIcon" aria-hidden="true" />
-              <span>{{ t('browser.tabMenu.duplicate') }}</span>
-            </span>
-          </TxDropdownItem>
+            <TxDropdownItem v-if="state" data-testid="space-add-menu-new-web" @select="openNewTab">
+              <span class="BrowserTabStrip-AddMenuItem">
+                <span class="i-ri-global-line BrowserTabStrip-AddMenuIcon" aria-hidden="true" />
+                <span>{{ t('browser.addSpaceWebTab') }}</span>
+              </span>
+            </TxDropdownItem>
+          </template>
 
-          <div class="BrowserTabStrip-AddMenuDivider" role="separator" />
+          <template v-else>
+            <TxDropdownItem data-testid="browser-add-menu-new-tab" @select="openNewTab">
+              <span class="BrowserTabStrip-AddMenuItem">
+                <span class="i-ri-global-line BrowserTabStrip-AddMenuIcon" aria-hidden="true" />
+                <span>{{ t('browser.newTab') }}</span>
+              </span>
+              <template #right>
+                <span class="BrowserTabStrip-MenuRight">
+                  <TxKbd
+                    v-for="key in shortcutKeys('T')"
+                    :key="key"
+                    class="BrowserTabStrip-MenuKbd"
+                  >
+                    {{ key }}
+                  </TxKbd>
+                </span>
+              </template>
+            </TxDropdownItem>
 
-          <TxDropdownItem
-            data-testid="browser-add-menu-store"
-            @select="openInternalSurface('tuff://store', 'tuff://store')"
-          >
-            <span class="BrowserTabStrip-AddMenuItem">
-              <span class="i-ri-store-2-line BrowserTabStrip-AddMenuIcon" aria-hidden="true" />
-              <span>{{ t('shell.store') }}</span>
-            </span>
-          </TxDropdownItem>
+            <TxDropdownItem
+              v-if="activeBrowserTab"
+              data-testid="browser-add-menu-duplicate"
+              @select="duplicateActiveTab"
+            >
+              <span class="BrowserTabStrip-AddMenuItem">
+                <span class="i-ri-file-copy-line BrowserTabStrip-AddMenuIcon" aria-hidden="true" />
+                <span>{{ t('browser.tabMenu.duplicate') }}</span>
+              </span>
+            </TxDropdownItem>
+          </template>
 
-          <TxDropdownItem
-            data-testid="browser-add-menu-setting"
-            @select="openInternalSurface('tuff://setting', 'tuff://settings')"
-          >
-            <span class="BrowserTabStrip-AddMenuItem">
-              <span class="i-ri-settings-3-line BrowserTabStrip-AddMenuIcon" aria-hidden="true" />
-              <span>{{ t('shell.setting') }}</span>
-            </span>
-          </TxDropdownItem>
-
-          <template v-if="quickSavedPages.length > 0">
+          <template v-if="quickSavedPages.length > 0 && state">
             <div class="BrowserTabStrip-AddMenuDivider" role="separator" />
             <div class="BrowserTabStrip-AddMenuSection">
               {{ t('browser.addTabQuickOpen') }}
@@ -663,7 +1171,10 @@ onBeforeUnmount(() => {
     :activation-feedback="false"
   >
     <template #menu>
-      <TxContextMenuItem :disabled="!tabMenuTarget?.url" @select="selectTabMenuAction('reload')">
+      <TxContextMenuItem
+        :disabled="tabMenuTarget?.kind !== 'browser' || !tabMenuTarget.browserTab?.url"
+        @select="selectTabMenuAction('reload')"
+      >
         {{ t('browser.tabMenu.reload') }}
         <template #right>
           <span class="BrowserTabStrip-MenuRight">
@@ -674,7 +1185,10 @@ onBeforeUnmount(() => {
           </span>
         </template>
       </TxContextMenuItem>
-      <TxContextMenuItem :disabled="!tabMenuTarget" @select="selectTabMenuAction('duplicate')">
+      <TxContextMenuItem
+        :disabled="tabMenuTarget?.kind !== 'browser'"
+        @select="selectTabMenuAction('duplicate')"
+      >
         {{ t('browser.tabMenu.duplicate') }}
         <template #right>
           <span class="BrowserTabStrip-MenuRight">
@@ -695,7 +1209,7 @@ onBeforeUnmount(() => {
         </template>
       </TxContextMenuItem>
       <TxContextMenuItem
-        :disabled="!tabMenuTarget || (state?.tabs.length ?? 0) < 2"
+        :disabled="!tabMenuTarget || displayedTabs.length < 2"
         @select="selectTabMenuAction('close-others')"
       >
         {{ t('browser.tabMenu.closeOthers') }}
@@ -720,7 +1234,7 @@ onBeforeUnmount(() => {
         </template>
       </TxContextMenuItem>
       <TxContextMenuItem
-        :disabled="!tabMenuTarget || tabMenuIndex >= (state?.tabs.length ?? 0) - 1"
+        :disabled="!tabMenuTarget || tabMenuIndex >= displayedTabs.length - 1"
         @select="selectTabMenuAction('close-right')"
       >
         {{ t('browser.tabMenu.closeRight') }}

@@ -14,6 +14,11 @@ import { toast } from 'vue-sonner'
 import { APP_SURFACE_ROUTES } from '../../../../../../shared/app-surface-routes'
 import { isBetaFeatureEnabled } from '../../../../../../shared/beta-features'
 import { buildBrowserFilePreviewUrl } from '~/modules/browser-workspace/preview-url'
+import {
+  attachBrowserTabToSpace,
+  projectSpaceKey,
+  setLastWorkspaceScope
+} from '~/modules/layout/useShellWorkspaceTabs'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useProjectStore } from '~/stores/projects'
 import { useFileLinkClick } from './useFileLinkClick'
@@ -134,7 +139,14 @@ export function useHomePreviewPanels(options: UseHomePreviewPanelsOptions) {
   async function openWebInBuiltInBrowser(url: string): Promise<void> {
     if (browserSdk && isBetaFeatureEnabled(appSetting, 'browserWorkspace')) {
       try {
-        await browserSdk.createTab(url)
+        const spaceKey = projectSpaceKey(options.projectId.value)
+        const conversationId = options.conversationId.value
+        const created = await browserSdk.createTab(url)
+        const createdTabId = created.createdTabId || created.activeTabId
+        if (createdTabId) {
+          attachBrowserTabToSpace(createdTabId, spaceKey, conversationId)
+          setLastWorkspaceScope(spaceKey)
+        }
         await router.push(APP_SURFACE_ROUTES.browser)
         return
       } catch {
@@ -155,12 +167,19 @@ export function useHomePreviewPanels(options: UseHomePreviewPanelsOptions) {
   }): Promise<void> {
     if (browserSdk && isBetaFeatureEnabled(appSetting, 'browserWorkspace')) {
       try {
+        const spaceKey = projectSpaceKey(options.projectId.value)
+        const conversationId = options.conversationId.value
         const previewUrl = buildBrowserFilePreviewUrl({
           path: payload.absolutePath,
-          conversationId: options.conversationId.value ?? undefined,
+          conversationId: conversationId ?? undefined,
           line: payload.line
         })
-        await browserSdk.createTab(previewUrl)
+        const created = await browserSdk.createTab(previewUrl)
+        const createdTabId = created.createdTabId || created.activeTabId
+        if (createdTabId) {
+          attachBrowserTabToSpace(createdTabId, spaceKey, conversationId)
+          setLastWorkspaceScope(spaceKey)
+        }
         await router.push(APP_SURFACE_ROUTES.browser)
         return
       } catch {

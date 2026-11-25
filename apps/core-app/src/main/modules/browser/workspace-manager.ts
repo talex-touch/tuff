@@ -1,4 +1,5 @@
 import type {
+  BrowserCreateTabResult,
   BrowserSavedPage,
   BrowserTabState,
   BrowserViewportRequest,
@@ -326,7 +327,7 @@ export class BrowserWorkspaceManager {
     })
   }
 
-  async createTab(input = ''): Promise<BrowserWorkspaceState> {
+  async createTab(input = ''): Promise<BrowserCreateTabResult> {
     if (this.disposed) throw new Error('BROWSER_DISPOSED')
     if (this.tabs.length >= MAX_BROWSER_TABS) throw new Error('BROWSER_TAB_LIMIT')
     const url = normalizeBrowserInput(input)
@@ -336,7 +337,10 @@ export class BrowserWorkspaceManager {
     this.refreshViewport()
     this.changed()
     await this.persist()
-    return this.getState()
+    return {
+      ...this.getState(),
+      createdTabId: tab.id
+    }
   }
 
   async activateTab(id: string): Promise<BrowserWorkspaceState> {

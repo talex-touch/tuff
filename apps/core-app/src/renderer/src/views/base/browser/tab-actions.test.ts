@@ -292,4 +292,16 @@ describe('browser tab context actions', () => {
     expect(result.activeTabId).toBe('anchor')
     expect(await sdk.getState()).toEqual(result)
   })
+
+  it('respects options.filter so standalone bulk actions never close Space-bound tabs', async () => {
+    const sdk = createWorkspace(['standalone-a', 'space-w', 'standalone-b'], 'standalone-a')
+    const standaloneFilter = (tab: BrowserTabState): boolean => tab.id !== 'space-w'
+
+    const result = await runBrowserTabAction(sdk, 'close-right', 'standalone-a', {
+      filter: standaloneFilter
+    })
+
+    expect(result.tabs.map((tab) => tab.id)).toEqual(['standalone-a', 'space-w'])
+    expect(result.activeTabId).toBe('standalone-a')
+  })
 })

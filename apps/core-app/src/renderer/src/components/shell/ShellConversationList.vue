@@ -27,6 +27,7 @@ import { useConversationEntry } from '~/modules/conversation/useConversationEntr
 import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
 import { useConversationLoading } from '~/modules/conversation/useConversationLoading'
 import { blankConversationOwner, useProjectFolders } from '~/modules/layout/useProjectFolders'
+import { closeConversationTabEverywhere } from '~/modules/layout/useShellWorkspaceTabs'
 import { useProjectStore } from '~/stores/projects'
 import MetaHintBadge from './MetaHintBadge.vue'
 import ShellHerdrSpace from './ShellHerdrSpace.vue'
@@ -131,6 +132,7 @@ async function removeConversation(id: string): Promise<void> {
   } catch {
     return
   }
+  closeConversationTabEverywhere(id)
   if (wasActive) await router.push('/home')
 }
 
