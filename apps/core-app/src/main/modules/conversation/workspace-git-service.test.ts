@@ -21,15 +21,23 @@ import {
   assertSafeRepoRelativePath,
   checkoutWorkspaceGitBranch,
   commitWorkspaceGitChanges,
+  deleteWorkspaceGitBranch,
   discardWorkspaceGitFile,
   fetchWorkspaceGit,
   isValidBranchName,
+  isValidRemoteName,
   listWorkspaceGitBranches,
+  parseGitRemoteUrl,
   pullWorkspaceGit,
   pushWorkspaceGit,
   readWorkspaceGitDiff,
   readWorkspaceGitLog,
   readWorkspaceGitStatus,
+  removeWorkspaceGitRemote,
+  renameWorkspaceGitBranch,
+  resolveCommitAuthorAvatarUrl,
+  saveWorkspaceGitRemote,
+  setWorkspaceGitBranchUpstream,
   stageWorkspaceGitFiles,
   unstageWorkspaceGitFiles
 } from './workspace-git-service'
@@ -133,6 +141,22 @@ describe('workspace-git-service', () => {
     const logAfter = await readWorkspaceGitLog({ cwd: repo })
     expect(logAfter.commits).toHaveLength(1)
     expect(logAfter.commits[0]!.subject).toBe('Initial commit')
+    expect(logAfter.commits[0]!.authorEmail).toBe('test@example.com')
+    expect(logAfter.commits[0]!.avatarUrl).toMatch(
+      /^https:\/\/www\.gravatar\.com\/avatar\/[a-f0-9]{64}\?s=64&d=404$/
+    )
+
+    // Standard-protocol avatar URL resolution: Gravatar SHA-256 + GitHub noreply addresses.
+    expect(resolveCommitAuthorAvatarUrl('  Test@Example.com ')).toBe(
+      resolveCommitAuthorAvatarUrl('test@example.com')
+    )
+    expect(resolveCommitAuthorAvatarUrl('424242+TalexDreamSoul@users.noreply.github.com')).toBe(
+      'https://avatars.githubusercontent.com/u/424242?s=64'
+    )
+    expect(resolveCommitAuthorAvatarUrl('octocat@users.noreply.github.com')).toBe(
+      'https://github.com/octocat.png?size=64'
+    )
+    expect(resolveCommitAuthorAvatarUrl('not-an-email')).toBeUndefined()
 
     // Modify tracked file -> inspect diff -> discard restores original content.
     await fs.writeFile(path.join(repo, 'hello.txt'), 'line 1\nchanged\n', 'utf8')
@@ -180,7 +204,21 @@ describe('workspace-git-service', () => {
     const switchedBack = await checkoutWorkspaceGitBranch({ cwd: repo, branch: 'main' })
     expect(switchedBack.ok).toBe(true)
     expect(switchedBack.status?.branch).toBe('main')
-  })
+
+    // Preview commits on another branch via `ref` without switching HEAD, and reject invalid refs.
+    await checkoutWorkspaceGitBranch({ cwd: repo, branch: 'feat/sidebar-git' })
+    await fs.writeFile(path.join(repo, 'feature.txt'), 'feat\n', 'utf8')
+    await stageWorkspaceGitFiles({ cwd: repo, all: true })
+    await commitWorkspaceGitChanges({ cwd: repo, message: 'Feature-only commit' })
+    await checkoutWorkspaceGitBranch({ cwd: repo, branch: 'main' })
+
+    const previewLog = await readWorkspaceGitLog({ cwd: repo, ref: 'feat/sidebar-git', limit: 5 })
+    expect(previewLog.commits[0]!.subject).toBe('Feature-only commit')
+
+    const badRefLog = await readWorkspaceGitLog({ cwd: repo, ref: '--exec=evil' })
+    expect(badRefLog.commits).toEqual([])
+    expect(badRefLog.error).toBeTruthy()
+  }, 15_000)
 
   it('supports push, fetch, and pull against a bare remote repository', async () => {
     const bare = await makeTempDir('tuff-git-bare-')
@@ -218,7 +256,7 @@ describe('workspace-git-service', () => {
     expect(pulledA.ok).toBe(true)
     expect(pulledA.status?.behind).toBe(0)
     expect(await fs.readFile(path.join(repoA, 'notes.txt'), 'utf8')).toBe('from remote\n')
-  })
+  }, 15_000)
 
   it('handles unborn edited unstage, literal pathspecs, nonrecursive directory guard, symlink diff containment, missing branch checkout, and pushRemote', async () => {
     const repo = await makeTempDir('tuff-git-hardened-')
@@ -291,5 +329,130 @@ describe('workspace-git-service', () => {
     const configuredPush = await pushWorkspaceGit({ cwd: repo, setUpstream: true })
     expect(configuredPush.ok).toBe(true)
     expect(configuredPush.status?.upstream).toBe('beta/main')
-  })
+  }, 15_000)
+
+  it('parses remote provider/domain URLs safely and supports editing branches and remotes', async () => {
+    expect(isValidRemoteName('origin')).toBe(true)
+    expect(isValidRemoteName('fork-crosery')).toBe(true)
+    expect(isValidRemoteName('-bad')).toBe(false)
+    expect(isValidRemoteName('a/b')).toBe(false)
+
+    expect(parseGitRemoteUrl('git@github.com:talex-touch/tuff.git')).toMatchObject({
+      provider: 'github',
+      host: 'github.com',
+      displayLabel: 'GitHub',
+      webUrl: 'https://github.com/talex-touch/tuff',
+      hasCredentials: false
+    })
+    expect(parseGitRemoteUrl('https://user:secret@github.com/talex-touch/tuff.git')).toMatchObject({
+      provider: 'github',
+      displayLabel: 'GitHub',
+      safeUrl: 'https://github.com/talex-touch/tuff.git',
+      webUrl: 'https://github.com/talex-touch/tuff',
+      hasCredentials: true
+    })
+    expect(parseGitRemoteUrl('git@g.ktvsky.com:team/tuff.git')).toMatchObject({
+      provider: 'custom',
+      host: 'g.ktvsky.com',
+      displayLabel: 'g.ktvsky.com',
+      webUrl: 'https://g.ktvsky.com/team/tuff'
+    })
+    expect(parseGitRemoteUrl('ssh://git@g.ktvsky.com:2222/team/tuff.git')).toMatchObject({
+      provider: 'custom',
+      host: 'g.ktvsky.com',
+      displayLabel: 'g.ktvsky.com',
+      webUrl: 'https://g.ktvsky.com/team/tuff'
+    })
+    const workmacParsed = parseGitRemoteUrl('workmac:/Users/dev/repo')
+    expect(workmacParsed).toMatchObject({
+      provider: 'custom',
+      host: 'workmac',
+      displayLabel: 'workmac'
+    })
+    expect(workmacParsed.webUrl).toBeUndefined()
+
+    const localParsed = parseGitRemoteUrl('/tmp/bare-repo.git')
+    expect(localParsed).toMatchObject({
+      provider: 'local',
+      displayLabel: 'Local'
+    })
+    expect(localParsed.webUrl).toBeUndefined()
+
+    const bare = await makeTempDir('tuff-git-edit-bare-')
+    const repo = await makeTempDir('tuff-git-edit-repo-')
+    await git(bare, ['init', '--bare', '-b', 'main'])
+    await initTempRepo(repo)
+    await fs.writeFile(path.join(repo, 'app.txt'), 'init\n', 'utf8')
+    await stageWorkspaceGitFiles({ cwd: repo, all: true })
+    await commitWorkspaceGitChanges({ cwd: repo, message: 'Init' })
+
+    // Add remote, fetch/push, inspect remotes list, rename/edit remote, remove remote.
+    const addedRemote = await saveWorkspaceGitRemote({
+      cwd: repo,
+      mode: 'add',
+      name: 'upstream',
+      fetchUrl: bare
+    })
+    expect(addedRemote.ok).toBe(true)
+
+    const pushed = await pushWorkspaceGit({ cwd: repo, setUpstream: true })
+    expect(pushed.ok).toBe(true)
+
+    const fetchedOne = await fetchWorkspaceGit({ cwd: repo, remote: 'upstream' })
+    expect(fetchedOne.ok).toBe(true)
+
+    const editedRemote = await saveWorkspaceGitRemote({
+      cwd: repo,
+      mode: 'edit',
+      originalName: 'upstream',
+      name: 'origin',
+      fetchUrl: bare
+    })
+    expect(editedRemote.ok).toBe(true)
+
+    const listed = await listWorkspaceGitBranches({ cwd: repo })
+    expect(listed.remotes?.some((r) => r.name === 'origin' && r.provider === 'local')).toBe(true)
+
+    // Create, rename, set/unset upstream, and delete local branch (refusing current branch).
+    await checkoutWorkspaceGitBranch({ cwd: repo, branch: 'feat/old', create: true })
+    await checkoutWorkspaceGitBranch({ cwd: repo, branch: 'main' })
+
+    const renamed = await renameWorkspaceGitBranch({
+      cwd: repo,
+      oldName: 'feat/old',
+      newName: 'feat/renamed'
+    })
+    expect(renamed.ok).toBe(true)
+
+    const setUp = await setWorkspaceGitBranchUpstream({
+      cwd: repo,
+      branch: 'feat/renamed',
+      upstream: 'origin/main'
+    })
+    expect(setUp.ok).toBe(true)
+
+    const unsetUp = await setWorkspaceGitBranchUpstream({
+      cwd: repo,
+      branch: 'feat/renamed',
+      upstream: null
+    })
+    expect(unsetUp.ok).toBe(true)
+
+    const deleteCurrent = await deleteWorkspaceGitBranch({ cwd: repo, branch: 'main' })
+    expect(deleteCurrent.ok).toBe(false)
+
+    const deleted = await deleteWorkspaceGitBranch({ cwd: repo, branch: 'feat/renamed' })
+    expect(deleted.ok).toBe(true)
+
+    const removedRemote = await removeWorkspaceGitRemote({ cwd: repo, name: 'origin' })
+    expect(removedRemote.ok).toBe(true)
+
+    // Also cleans up stale remote-tracking refs when `.git/config` has no matching remote entry.
+    const headOid = (await git(repo, ['rev-parse', 'HEAD'])).trim()
+    await git(repo, ['update-ref', 'refs/remotes/workmac/agent', headOid])
+    const prunedStale = await removeWorkspaceGitRemote({ cwd: repo, name: 'workmac' })
+    expect(prunedStale.ok).toBe(true)
+    const afterPrune = await listWorkspaceGitBranches({ cwd: repo })
+    expect(afterPrune.branches.some((b) => b.name === 'workmac/agent')).toBe(false)
+  }, 15_000)
 })

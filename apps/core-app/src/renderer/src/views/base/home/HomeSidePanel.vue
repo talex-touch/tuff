@@ -12,7 +12,11 @@ import type {
   ActivityTurn
 } from '~/modules/conversation/workspace-activity'
 import type { HomeModelLimits } from '~/modules/conversation/workspace-panel'
-import type { SidePanelTab, SidePanelWorkspaceKind } from './composables/useHomeSidePanel'
+import type {
+  SidePanelRecentItem,
+  SidePanelTab,
+  SidePanelWorkspaceKind
+} from './composables/useHomeSidePanel'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { isElectronRenderer } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -57,10 +61,12 @@ const props = withDefaults(
     loading: boolean
     tabs: SidePanelTab[]
     activeTabId: string | null
+    recentItems?: SidePanelRecentItem[]
     panelActive?: boolean
     dockedToShell?: boolean
   }>(),
   {
+    recentItems: () => [],
     panelActive: true,
     dockedToShell: false
   }
@@ -91,6 +97,8 @@ const emit = defineEmits<{
     payload: { path: string; displayPath: string; line?: number }
   ): void
   (event: 'open-web-external', url: string): void
+  (event: 'remove-recent', id: string): void
+  (event: 'clear-recents'): void
 }>()
 
 const { t } = useI18n()
@@ -472,6 +480,7 @@ function onTabBarWheel(event: WheelEvent): void {
         v-if="!activeTab"
         :workspace-root="workspaceRoot"
         :created-files="createdFiles"
+        :recent-items="recentItems"
         :review-count="review.records.value.length"
         :outputs-count="counts.outputs"
         :sources-count="counts.sources"
@@ -482,6 +491,8 @@ function onTabBarWheel(event: WheelEvent): void {
         @open-file="emit('open-file', $event)"
         @open-web="emit('open-web', $event)"
         @open-blank-browser="emit('open-blank-browser')"
+        @remove-recent="emit('remove-recent', $event)"
+        @clear-recents="emit('clear-recents')"
       />
 
       <!-- Local file & directory viewer -->
@@ -582,6 +593,7 @@ function onTabBarWheel(event: WheelEvent): void {
         :conversation-id="conversationId"
         :active="panelActive && activeTab?.kind === 'git'"
         @open-file="emit('open-file', $event)"
+        @open-web="emit('open-web', $event)"
       />
 
       <!-- Persistent side-terminal host while any terminal tab exists -->

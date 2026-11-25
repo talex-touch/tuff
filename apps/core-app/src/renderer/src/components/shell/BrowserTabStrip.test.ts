@@ -155,8 +155,25 @@ vi.mock('@talex-touch/tuffex/context-menu', () => ({
   TxContextMenuItem: {
     props: ['disabled'],
     template:
-      '<button type="button" :disabled="disabled" @click="$emit(\'select\')"><slot /></button>'
+      '<button type="button" :disabled="disabled" @click="$emit(\'select\')"><slot /><slot name="right" /></button>'
   }
+}))
+vi.mock('@talex-touch/tuffex/dropdown-menu', () => ({
+  TxDropdownMenu: {
+    props: ['modelValue', 'disabled'],
+    emits: ['update:modelValue'],
+    template:
+      '<div data-testid="add-tab-dropdown" :data-open="String(modelValue)"><div @click="!disabled && $emit(\'update:modelValue\', !modelValue)"><slot name="trigger" /></div><div v-if="modelValue" data-testid="add-tab-dropdown-menu"><slot /></div></div>'
+  },
+  TxDropdownItem: {
+    props: ['disabled'],
+    emits: ['select'],
+    template:
+      '<button type="button" :disabled="disabled" @click="$emit(\'select\')"><slot /><slot name="right" /></button>'
+  }
+}))
+vi.mock('@talex-touch/tuffex/kbd', () => ({
+  TxKbd: { template: '<kbd class="tx-kbd-stub"><slot /></kbd>' }
 }))
 vi.mock('@talex-touch/tuffex/skeleton', () => ({
   TxSkeleton: { template: '<div data-testid="tab-skeleton" />' }
@@ -332,5 +349,43 @@ describe('BrowserTabStrip layout, drag regions & tab actions', () => {
     await nextTick()
 
     expect(wrapper.find('[data-testid="tab-context-menu"]').attributes('data-open')).toBe('false')
+  })
+
+  it('renders right-side shortcut keycaps and hint icons in tab context menu and supports add-tab dropdown actions', async () => {
+    workspaceState = makeState(
+      [
+        { id: 't1', url: 'https://one.example/', title: 'One' },
+        { id: 't2', url: 'https://two.example/', title: 'Two' },
+        { id: 't3', url: 'https://three.example/', title: 'Three' }
+      ],
+      't2',
+      15
+    )
+
+    const wrapper = mount(BrowserTabStrip)
+    await flushPromises()
+
+    // Open context menu on middle tab (1 tab left, 1 tab right, 2 other tabs).
+    await wrapper.findAll('.BrowserTabStrip-Tab')[1]!.trigger('contextmenu')
+    await nextTick()
+    const menu = wrapper.find('[data-testid="tab-context-menu"]')
+    expect(menu.findAll('.tx-kbd-stub').map((node) => node.text())).toEqual(['⌘', 'R', '⌘', 'W'])
+    expect(menu.find('.i-ri-skip-left-line').exists()).toBe(true)
+    expect(menu.find('.i-ri-skip-right-line').exists()).toBe(true)
+    expect(menu.find('.i-ri-close-circle-line').exists()).toBe(true)
+    expect(menu.findAll('.BrowserTabStrip-MenuCount').map((node) => node.text())).toEqual([
+      '2',
+      '1',
+      '1'
+    ])
+
+    // Open + add-tab dropdown and choose Settings (`tuff://settings`).
+    await wrapper.find('[data-testid="browser-add-tab-menu-trigger"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-testid="add-tab-dropdown-menu"]').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="browser-add-menu-setting"]').trigger('click')
+    await flushPromises()
+    expect(sendMock).toHaveBeenCalledWith(BrowserEvents.createTab, { input: 'tuff://settings' })
   })
 })

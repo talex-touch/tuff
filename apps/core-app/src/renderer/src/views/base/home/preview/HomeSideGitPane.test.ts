@@ -13,9 +13,19 @@ const gitMocks = vi.hoisted(() => ({
   discard: vi.fn(),
   commit: vi.fn(),
   checkout: vi.fn(),
+  renameBranch: vi.fn(),
+  deleteBranch: vi.fn(),
+  setUpstream: vi.fn(),
+  saveRemote: vi.fn(),
+  removeRemote: vi.fn(),
   fetch: vi.fn(),
   pull: vi.fn(),
   push: vi.fn()
+}))
+
+const toastMocks = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn()
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -23,11 +33,32 @@ vi.mock('vue-i18n', () => ({
 }))
 
 vi.mock('vue-sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn() }
+  toast: toastMocks
 }))
 
 vi.mock('@talex-touch/tuffex/skeleton', () => ({
   TxSkeleton: { template: '<div class="skeleton-stub" />' }
+}))
+
+vi.mock('@talex-touch/tuffex/context-menu', () => ({
+  TxContextMenu: {
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+    methods: {
+      openAt(this: { $emit: (event: string, value: boolean) => void }) {
+        this.$emit('update:modelValue', true)
+      }
+    },
+    template:
+      '<div data-testid="git-branch-context-menu" :data-open="String(modelValue)"><slot name="menu" /></div>'
+  },
+  TxContextMenuDivider: { template: '<hr />' },
+  TxContextMenuItem: {
+    props: ['disabled'],
+    emits: ['select'],
+    template:
+      '<button type="button" :disabled="disabled" @click="$emit(\'select\')"><slot /><slot name="right" /></button>'
+  }
 }))
 
 vi.mock('@talex-touch/utils/env', async (importOriginal) => {
@@ -94,6 +125,7 @@ function sampleStatus(overrides: Partial<WorkspaceGitStatusResult> = {}): Worksp
 describe('HomeSideGitPane', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.localStorage.clear()
     gitMocks.status.mockResolvedValue(sampleStatus())
     gitMocks.diff.mockResolvedValue({
       path: 'src/dirty.ts',
@@ -109,8 +141,62 @@ describe('HomeSideGitPane', () => {
       current: 'task/feat/git',
       detached: false,
       branches: [
-        { name: 'task/feat/git', current: true, isRemote: false, shortOid: 'abc1234' },
-        { name: 'main', current: false, isRemote: false, shortOid: 'def5678' }
+        {
+          name: 'task/feat/git',
+          current: true,
+          isRemote: false,
+          shortOid: 'abc1234',
+          subject: 'Add git sidebar panel'
+        },
+        {
+          name: 'task/fix/icons',
+          current: false,
+          isRemote: false,
+          shortOid: 'eee1111',
+          subject: 'Fix missing icons'
+        },
+        { name: 'main', current: false, isRemote: false, shortOid: 'def5678', subject: 'Main tip' },
+        {
+          name: 'origin/dependabot/cargo/packages/tuff-native/napi-3.16.2',
+          current: false,
+          isRemote: true,
+          shortOid: 'b68942f',
+          subject: 'chore(deps): bump napi'
+        },
+        {
+          name: 'origin/master',
+          current: false,
+          isRemote: true,
+          shortOid: '1d8834c',
+          subject: 'Remote master'
+        },
+        {
+          name: 'workmac/agent',
+          current: false,
+          isRemote: true,
+          shortOid: '2a3b4c5',
+          subject: 'Agent work'
+        }
+      ],
+      remotes: [
+        {
+          name: 'origin',
+          fetchUrl: 'git@github.com:talex-touch/tuff.git',
+          pushUrl: 'git@github.com:talex-touch/tuff.git',
+          host: 'github.com',
+          provider: 'github',
+          displayLabel: 'GitHub',
+          webUrl: 'https://github.com/talex-touch/tuff'
+        },
+        {
+          name: 'workmac',
+          fetchUrl: 'git@g.ktvsky.com:talex/tuff.git',
+          pushUrl: 'git@g.ktvsky.com:talex/tuff.git',
+          host: 'g.ktvsky.com',
+          provider: 'custom',
+          displayLabel: 'g.ktvsky.com',
+          webUrl: 'https://g.ktvsky.com/talex/tuff'
+        }
       ]
     })
     gitMocks.log.mockResolvedValue({
@@ -119,7 +205,9 @@ describe('HomeSideGitPane', () => {
           hash: 'abc1234567890',
           shortHash: 'abc1234',
           subject: 'Add git sidebar panel',
-          author: 'Alice',
+          author: 'TalexDreamSoul',
+          authorEmail: '12345+TalexDreamSoul@users.noreply.github.com',
+          avatarUrl: 'https://avatars.githubusercontent.com/u/12345?s=64',
           relativeDate: '2 minutes ago',
           authoredAt: Date.now(),
           refs: ['HEAD -> task/feat/git']
@@ -142,12 +230,29 @@ describe('HomeSideGitPane', () => {
       summary: 'main',
       status: sampleStatus({ branch: 'main' })
     })
+    gitMocks.renameBranch.mockResolvedValue({
+      ok: true,
+      summary: 'main-v2',
+      status: sampleStatus()
+    })
+    gitMocks.deleteBranch.mockResolvedValue({ ok: true, summary: 'main', status: sampleStatus() })
+    gitMocks.setUpstream.mockResolvedValue({
+      ok: true,
+      summary: 'origin/master',
+      status: sampleStatus()
+    })
+    gitMocks.saveRemote.mockResolvedValue({ ok: true, summary: 'origin', status: sampleStatus() })
+    gitMocks.removeRemote.mockResolvedValue({
+      ok: true,
+      summary: 'workmac',
+      status: sampleStatus()
+    })
     gitMocks.fetch.mockResolvedValue({ ok: true, status: sampleStatus() })
     gitMocks.pull.mockResolvedValue({ ok: true, status: sampleStatus({ behind: 0 }) })
     gitMocks.push.mockResolvedValue({ ok: true, status: sampleStatus({ ahead: 0 }) })
   })
 
-  it('loads status, renders unified diff on file click, and commits staged changes', async () => {
+  it('loads status, renders unified diff on file click, and commits staged changes with toast feedback', async () => {
     const wrapper = mount(HomeSideGitPane, {
       props: { cwd: '/repo', conversationId: 'c-1', active: true }
     })
@@ -180,6 +285,7 @@ describe('HomeSideGitPane', () => {
       conversationId: 'c-1',
       message: 'feat: ship git panel'
     })
+    expect(toastMocks.success).toHaveBeenCalledWith('home.git.committed')
   })
 
   it('requires secondary confirmation before discard, pull, and push', async () => {
@@ -188,7 +294,6 @@ describe('HomeSideGitPane', () => {
     })
     await flushPromises()
 
-    // Discard opens confirmation bar instead of immediately calling sdk.discard.
     await wrapper.find('button[aria-label="home.git.discard"]').trigger('click')
     expect(gitMocks.discard).not.toHaveBeenCalled()
     expect(wrapper.find('.HomeSideGit-ConfirmBar.is-danger').exists()).toBe(true)
@@ -202,7 +307,6 @@ describe('HomeSideGitPane', () => {
       untracked: false
     })
 
-    // Push requires explicit confirmation too; cancel must not call push.
     await wrapper.find('button[aria-label="home.git.push"]').trigger('click')
     expect(gitMocks.push).not.toHaveBeenCalled()
     const cancelBtn = wrapper.findAll('.HomeSideGit-ConfirmBtn')[1]!
@@ -219,13 +323,12 @@ describe('HomeSideGitPane', () => {
       setUpstream: true
     })
 
-    // Fetch is read-only and executes directly.
     await wrapper.find('button[aria-label="home.git.fetch"]').trigger('click')
     await flushPromises()
     expect(gitMocks.fetch).toHaveBeenCalledTimes(1)
   })
 
-  it('loads branches and commit history tabs and switches branches cleanly', async () => {
+  it('builds slash branch trees, previews on single click, switches on double-click or context menu with toast, and merges search/create input', async () => {
     const wrapper = mount(HomeSideGitPane, {
       props: { cwd: '/repo', conversationId: 'c-1', active: true }
     })
@@ -235,22 +338,199 @@ describe('HomeSideGitPane', () => {
     await tabs[1]!.trigger('click')
     await flushPromises()
     expect(gitMocks.branches).toHaveBeenCalledTimes(1)
-    expect(wrapper.findAll('.HomeSideGit-BranchRow')).toHaveLength(2)
 
-    // Switch to `main`.
-    await wrapper.findAll('.HomeSideGit-BranchRow')[1]!.trigger('click')
+    // Only one merged input exists for filtering & creating branches.
+    expect(wrapper.findAll('.HomeSideGit-ComboInput')).toHaveLength(1)
+
+    // Local & remote branches are grouped into slash tree folders.
+    const folderLabels = wrapper.findAll('.HomeSideGit-FolderLabel').map((node) => node.text())
+    expect(folderLabels).toContain('task')
+    expect(folderLabels).toContain('feat')
+    expect(folderLabels).toContain('fix')
+    expect(folderLabels).toContain('origin')
+
+    // Single-click previews branch without immediately calling checkout.
+    const mainRow = wrapper
+      .findAll('.HomeSideGit-BranchRow')
+      .find((row) => row.find('.HomeSideGit-BranchRowName').text() === 'main')
+    expect(mainRow).toBeTruthy()
+    await mainRow!.trigger('click')
+    await flushPromises()
+
+    expect(gitMocks.checkout).not.toHaveBeenCalled()
+    expect(gitMocks.log).toHaveBeenCalledWith({
+      cwd: '/repo',
+      conversationId: 'c-1',
+      ref: 'main',
+      limit: 8
+    })
+    expect(wrapper.find('[data-testid="git-branch-preview"]').exists()).toBe(true)
+
+    // Double-click switches to the branch and pops a toast notification.
+    await mainRow!.trigger('dblclick')
     await flushPromises()
     expect(gitMocks.checkout).toHaveBeenCalledWith({
       cwd: '/repo',
       conversationId: 'c-1',
       branch: 'main'
     })
+    expect(toastMocks.success).toHaveBeenCalledWith('home.git.switchedBranch')
 
-    // Open History tab.
+    // Filtering auto-expands compacted remote folders (dependabot/cargo/packages/tuff-native).
+    await wrapper.find('.HomeSideGit-ComboInput').setValue('napi')
+    await flushPromises()
+    expect(wrapper.findAll('.HomeSideGit-BranchRowName').map((n) => n.text())).toContain(
+      'napi-3.16.2'
+    )
+
+    // Typing a new branch name enables creating & switching from the same merged bar.
+    await wrapper.find('.HomeSideGit-ComboInput').setValue('feat/new-tree')
+    await wrapper.find('.HomeSideGit-BranchCombo').trigger('submit')
+    await flushPromises()
+    expect(gitMocks.checkout).toHaveBeenCalledWith({
+      cwd: '/repo',
+      conversationId: 'c-1',
+      branch: 'feat/new-tree',
+      create: true
+    })
+    expect(toastMocks.success).toHaveBeenCalledWith('home.git.createdBranch')
+  })
+
+  it('renders commit history with standard-protocol author avatars and initials fallback', async () => {
+    const wrapper = mount(HomeSideGitPane, {
+      props: { cwd: '/repo', conversationId: 'c-1', active: true }
+    })
+    await flushPromises()
+
+    const tabs = wrapper.findAll('[role="tab"]')
     await tabs[2]!.trigger('click')
     await flushPromises()
-    expect(gitMocks.log).toHaveBeenCalledTimes(1)
+
+    expect(gitMocks.log).toHaveBeenCalledWith({ cwd: '/repo', conversationId: 'c-1', limit: 40 })
     expect(wrapper.find('.HomeSideGit-LogSubject').text()).toBe('Add git sidebar panel')
+    const avatarImg = wrapper.find('.HomeSideGit-AvatarImg')
+    expect(avatarImg.exists()).toBe(true)
+    expect(avatarImg.attributes('src')).toBe('https://avatars.githubusercontent.com/u/12345?s=64')
+    expect(wrapper.find('.HomeSideGit-AvatarInitials').text()).toBe('TD')
+
+    // When image fails to load, fallback initials stay cleanly rendered without broken <img>.
+    await avatarImg.trigger('error')
+    expect(wrapper.find('.HomeSideGit-AvatarImg').exists()).toBe(false)
+    expect(wrapper.find('.HomeSideGit-AvatarInitials').text()).toBe('TD')
+  })
+
+  it('renders GitHub and custom domain badges on remotes and supports right-click editing of branches and remotes', async () => {
+    const wrapper = mount(HomeSideGitPane, {
+      props: { cwd: '/repo', conversationId: 'c-1', active: true }
+    })
+    await flushPromises()
+
+    await wrapper.findAll('[role="tab"]')[1]!.trigger('click')
+    await flushPromises()
+
+    // Provider/domain badges sit directly on remote root folders.
+    const originRoot = wrapper.find('[data-remote-root="origin"]')
+    const workmacRoot = wrapper.find('[data-remote-root="workmac"]')
+    expect(originRoot.find('.HomeSideGit-RemoteBadge').text()).toBe('GitHub')
+    expect(originRoot.find('.i-ri-github-fill').exists()).toBe(true)
+    expect(workmacRoot.find('.HomeSideGit-RemoteBadge').text()).toBe('g.ktvsky.com')
+
+    // Right-click remote root -> edit remote URL and save.
+    await workmacRoot.trigger('contextmenu')
+    await wrapper.find('[data-testid="git-ctx-edit-remote"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="git-remote-editor"]').exists()).toBe(true)
+
+    await wrapper
+      .find('[data-testid="git-edit-remote-fetch-url"]')
+      .setValue('https://g.ktvsky.com/team/tuff.git')
+    await wrapper.find('[data-testid="git-remote-editor"] form').trigger('submit')
+    await flushPromises()
+    expect(gitMocks.saveRemote).toHaveBeenCalledWith({
+      cwd: '/repo',
+      conversationId: 'c-1',
+      mode: 'edit',
+      name: 'workmac',
+      originalName: 'workmac',
+      fetchUrl: 'https://g.ktvsky.com/team/tuff.git',
+      pushUrl: ''
+    })
+
+    // Right-click remote root -> remove remote requires secondary confirmation.
+    await workmacRoot.trigger('contextmenu')
+    await wrapper.find('[data-testid="git-ctx-remove-remote"]').trigger('click')
+    expect(gitMocks.removeRemote).not.toHaveBeenCalled()
+    await wrapper.find('.HomeSideGit-ConfirmBtn.is-danger').trigger('click')
+    await flushPromises()
+    expect(gitMocks.removeRemote).toHaveBeenCalledWith({
+      cwd: '/repo',
+      conversationId: 'c-1',
+      name: 'workmac'
+    })
+
+    // Right-click local branch `main` -> edit rename + upstream.
+    const mainRow = wrapper
+      .findAll('.HomeSideGit-BranchRow')
+      .find((row) => row.find('.HomeSideGit-BranchRowName').text() === 'main')
+    await mainRow!.trigger('contextmenu')
+    await wrapper.find('[data-testid="git-ctx-edit-branch"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="git-branch-editor"]').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="git-edit-branch-name"]').setValue('main-v2')
+    await wrapper.find('[data-testid="git-edit-branch-upstream"]').setValue('origin/master')
+    await wrapper.find('[data-testid="git-branch-editor"] form').trigger('submit')
+    await flushPromises()
+    expect(gitMocks.renameBranch).toHaveBeenCalledWith({
+      cwd: '/repo',
+      conversationId: 'c-1',
+      oldName: 'main',
+      newName: 'main-v2'
+    })
+    expect(gitMocks.setUpstream).toHaveBeenCalledWith({
+      cwd: '/repo',
+      conversationId: 'c-1',
+      branch: 'main-v2',
+      upstream: 'origin/master'
+    })
+  })
+
+  it('opens remote context menu even when remote metadata is missing and remembers the active sub-tab', async () => {
+    gitMocks.branches.mockResolvedValue({
+      current: 'task/feat/git',
+      detached: false,
+      branches: [
+        { name: 'task/feat/git', current: true, isRemote: false, shortOid: 'abc1234' },
+        { name: 'workmac/agent', current: false, isRemote: true, shortOid: '2a3b4c5' }
+      ]
+    })
+
+    const wrapper = mount(HomeSideGitPane, {
+      props: { cwd: '/repo', conversationId: 'c-1', active: true }
+    })
+    await flushPromises()
+
+    await wrapper.findAll('[role="tab"]')[1]!.trigger('click')
+    await flushPromises()
+    expect(window.localStorage.getItem('tuff.home.gitSubTab')).toBe('branches')
+
+    const workmacRoot = wrapper.find('[data-remote-root="workmac"]')
+    await workmacRoot.trigger('contextmenu')
+    await wrapper.find('[data-testid="git-ctx-edit-remote"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="git-remote-editor"]').exists()).toBe(true)
+    expect(
+      (wrapper.find('[data-testid="git-edit-remote-name"]').element as HTMLInputElement).value
+    ).toBe('workmac')
+
+    // Remount restores persisted `branches` sub-tab automatically.
+    wrapper.unmount()
+    const remounted = mount(HomeSideGitPane, {
+      props: { cwd: '/repo', conversationId: 'c-1', active: true }
+    })
+    await flushPromises()
+    expect(remounted.findAll('[role="tab"]')[1]!.attributes('aria-selected')).toBe('true')
   })
 
   it('renders non-repository empty state gracefully', async () => {

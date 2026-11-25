@@ -71,6 +71,7 @@ describe('useBrowserWorkspace lifecycle & stale state hygiene', () => {
     expect(listeners.size).toBe(1)
 
     first.vm.tabMenuOpen = true
+    first.vm.addTabMenuOpen = true
     first.vm.pluginToolbarOpen = true
     first.vm.accountOpen = true
     first.vm.error = 'stale error'
@@ -78,10 +79,12 @@ describe('useBrowserWorkspace lifecycle & stale state hygiene', () => {
     first.unmount()
     expect(listeners.size).toBe(1)
     expect(second.vm.tabMenuOpen).toBe(true)
+    expect(second.vm.addTabMenuOpen).toBe(true)
 
     second.unmount()
     expect(listeners.size).toBe(0)
     expect(second.vm.tabMenuOpen).toBe(false)
+    expect(second.vm.addTabMenuOpen).toBe(false)
     expect(second.vm.pluginToolbarOpen).toBe(false)
     expect(second.vm.accountOpen).toBe(false)
     expect(second.vm.error).toBe('')

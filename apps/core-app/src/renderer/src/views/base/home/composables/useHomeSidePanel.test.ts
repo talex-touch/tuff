@@ -124,4 +124,40 @@ describe('useHomeSidePanel', () => {
     expect(panel.tabs.value).toEqual([])
     expect(panel.activeTabId.value).toBeNull()
   })
+
+  it('persists panel open state, tabs, active launcher state, and recent items across reloads', async () => {
+    const firstConv = ref<string | null>('conv-1')
+    const first = useHomeSidePanel(firstConv)
+    first.openWorkspaceTab('git', 'Git')
+    first.openFileTab({ path: '/repo/README.md', displayPath: 'README.md' })
+    first.openWebTab({ url: 'https://github.com/talex-touch/tuff', title: 'Tuff Repo' })
+    first.openLauncher()
+
+    expect(first.panelOpen.value).toBe(true)
+    expect(first.activeTabId.value).toBeNull()
+    expect(first.recentItems.value.map((item) => item.kind)).toEqual(['web', 'file'])
+
+    // Simulate reload starting with conversationId = null before hydration to conv-1.
+    const reloadedConv = ref<string | null>(null)
+    const restored = useHomeSidePanel(reloadedConv)
+    expect(restored.panelOpen.value).toBe(true)
+    expect(restored.activeTabId.value).toBeNull()
+    expect(restored.tabs.value.map((tab) => tab.kind)).toEqual(['git', 'file', 'web'])
+    expect(restored.recentItems.value).toHaveLength(2)
+
+    // Initial hydration from null -> conv-1 preserves restored tabs (including file + git).
+    reloadedConv.value = 'conv-1'
+    await Promise.resolve()
+    expect(restored.tabs.value.map((tab) => tab.kind)).toEqual(['git', 'file', 'web'])
+
+    // Switching to another conversation keeps workspace tools (`git`) and `web`.
+    reloadedConv.value = 'conv-2'
+    await Promise.resolve()
+    expect(restored.tabs.value.map((tab) => tab.kind)).toEqual(['git', 'web'])
+
+    restored.removeRecentItem('file:/repo/README.md')
+    expect(restored.recentItems.value).toHaveLength(1)
+    restored.clearRecentItems()
+    expect(restored.recentItems.value).toEqual([])
+  })
 })
