@@ -51,10 +51,12 @@ import {
   type TdsCanvasLabels,
   type TdsCanvasLintCount,
   type TdsCanvasNote,
+  type TdsCanvasPattern,
   type TdsCanvasSendNotesPayload,
   type TdsCanvasTool,
   type TdsCanvasViewport
 } from './types'
+import TdsMockupExportDialog from './TdsMockupExportDialog.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -65,6 +67,8 @@ const props = withDefaults(
     aiActionsEnabled?: boolean
     lintCounts?: Record<string, TdsCanvasLintCount>
     initialHistory?: TdsCanvasHistoryState | null
+    themeCss?: string
+    canvasPattern?: TdsCanvasPattern
   }>(),
   {
     notes: () => [],
@@ -72,7 +76,9 @@ const props = withDefaults(
     labels: undefined,
     aiActionsEnabled: false,
     lintCounts: () => ({}),
-    initialHistory: null
+    initialHistory: null,
+    themeCss: '',
+    canvasPattern: 'dots'
   }
 )
 
@@ -199,6 +205,12 @@ const deviceQuery = ref('')
 const askFrameMenuOpen = ref(false)
 const askFramePrompt = ref('')
 const askFrameInputRef = ref<HTMLTextAreaElement | null>(null)
+const mockupExportOpen = ref(false)
+
+const VALID_CANVAS_PATTERNS: readonly TdsCanvasPattern[] = ['none', 'dots', 'grid', 'paper-grain']
+const normalizedCanvasPattern = computed<TdsCanvasPattern>(() =>
+  VALID_CANVAS_PATTERNS.includes(props.canvasPattern) ? props.canvasPattern : 'dots'
+)
 
 const filteredAddPresets = computed(() => searchDevicePresets(addFrameQuery.value, 'all'))
 const filteredDevicePresets = computed(() => searchDevicePresets(deviceQuery.value, 'all'))
@@ -904,7 +916,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 function onKeyDown(event: KeyboardEvent): void {
-  if (isEditableTarget(event.target)) return
+  if (mockupExportOpen.value || isEditableTarget(event.target)) return
 
   if (event.code === 'Space') {
     if (!spaceHeld.value) {
@@ -1269,6 +1281,21 @@ onBeforeUnmount(() => {
             <span class="i-ri-split-cells-horizontal" />
           </span>
           <span>{{ labels.compareToggle }}</span>
+        </button>
+
+        <button
+          type="button"
+          class="TdsDesignCanvas-PillBtn"
+          :class="{ 'is-active': mockupExportOpen }"
+          :disabled="frames.length === 0"
+          :title="labels.mockupExport"
+          data-testid="tds-canvas-export-mockup"
+          @click="mockupExportOpen = true"
+        >
+          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+            <span class="i-ri-download-2-line" />
+          </span>
+          <span>{{ labels.mockupExport }}</span>
         </button>
       </div>
     </header>
@@ -1635,7 +1662,11 @@ onBeforeUnmount(() => {
                 :sandbox="getFrameIframeSandbox(compareBeforeFrame.kind)"
                 :title="`${compareBeforeFrame.title} (${labels.compareBefore})`"
                 :srcdoc="
-                  buildSandboxedFrameSrcdoc(compareBeforeFrame.source, compareBeforeFrame.kind)
+                  buildSandboxedFrameSrcdoc(
+                    compareBeforeFrame.source,
+                    compareBeforeFrame.kind,
+                    props.themeCss
+                  )
                 "
                 data-testid="tds-canvas-compare-before-iframe"
               />
@@ -1662,7 +1693,11 @@ onBeforeUnmount(() => {
                 :sandbox="getFrameIframeSandbox(compareTargetFrame.kind)"
                 :title="`${compareTargetFrame.title} (${labels.compareAfter})`"
                 :srcdoc="
-                  buildSandboxedFrameSrcdoc(compareTargetFrame.source, compareTargetFrame.kind)
+                  buildSandboxedFrameSrcdoc(
+                    compareTargetFrame.source,
+                    compareTargetFrame.kind,
+                    props.themeCss
+                  )
                 "
                 data-testid="tds-canvas-compare-after-iframe"
               />
@@ -1703,7 +1738,8 @@ onBeforeUnmount(() => {
       v-else
       ref="viewportRef"
       class="TdsDesignCanvas-Stage"
-      :class="{ 'is-interacting': isInteracting }"
+      :class="[`is-pattern-${normalizedCanvasPattern}`, { 'is-interacting': isInteracting }]"
+      :data-pattern="normalizedCanvasPattern"
       data-testid="tds-canvas-stage"
       @wheel.prevent="onViewportWheel"
       @pointerdown="onViewportPointerDown"
@@ -1855,7 +1891,7 @@ onBeforeUnmount(() => {
                 :class="{ 'is-blocked': iframesBlocked }"
                 :sandbox="getFrameIframeSandbox(frame.kind)"
                 :title="frame.title"
-                :srcdoc="buildSandboxedFrameSrcdoc(frame.source, frame.kind)"
+                :srcdoc="buildSandboxedFrameSrcdoc(frame.source, frame.kind, props.themeCss)"
                 :data-testid="`tds-canvas-frame-iframe-${frame.id}`"
               />
             </TdsDeviceFrame>
@@ -1987,6 +2023,13 @@ onBeforeUnmount(() => {
         />
       </div>
     </div>
+
+    <TdsMockupExportDialog
+      v-model="mockupExportOpen"
+      :frames="frames"
+      :labels="labels"
+      :theme-css="props.themeCss"
+    />
   </section>
 </template>
 
@@ -2465,6 +2508,49 @@ onBeforeUnmount(() => {
   background-size: 20px 20px;
   touch-action: none;
   user-select: none;
+
+  &.is-pattern-none {
+    background-image: none;
+  }
+
+  &.is-pattern-dots {
+    background-image: radial-gradient(circle, var(--shell-border) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  &.is-pattern-grid {
+    background-image:
+      linear-gradient(to right, var(--shell-border) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--shell-border) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  &.is-pattern-paper-grain {
+    background-image:
+      radial-gradient(
+        circle,
+        color-mix(in srgb, var(--shell-border-strong) 42%, transparent) 0.75px,
+        transparent 0.75px
+      ),
+      radial-gradient(
+        circle,
+        color-mix(in srgb, var(--shell-border) 55%, transparent) 0.75px,
+        transparent 0.75px
+      ),
+      repeating-linear-gradient(
+        45deg,
+        color-mix(in srgb, var(--shell-border) 18%, transparent) 0 1px,
+        transparent 1px 7px
+      );
+    background-size:
+      13px 13px,
+      19px 19px,
+      14px 14px;
+    background-position:
+      0 0,
+      5px 7px,
+      0 0;
+  }
 
   .TdsDesignCanvas.is-hand-mode & {
     cursor: grab;

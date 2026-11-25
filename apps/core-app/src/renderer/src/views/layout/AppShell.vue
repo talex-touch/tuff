@@ -18,6 +18,7 @@ import {
   installLiveAnimationClock,
   type LiveAnimationClockController
 } from '~/modules/style/live-animation-clock'
+import { clearTdsThemePack, hydrateTdsThemePack } from '~/modules/tds-theme'
 import { isBetaFeatureEnabled } from '../../../../shared/beta-features'
 import {
   normalizeWindowPreference,
@@ -68,6 +69,7 @@ function bindRightSidebarHost(el: unknown): void {
 onBeforeUnmount(() => {
   liveAnimationClock?.dispose()
   liveAnimationClock = null
+  clearTdsThemePack()
   registerRightSidebarHost(null)
 })
 const touchBlur = computed(
@@ -188,6 +190,7 @@ function onRouteEnterEnd(fullPath: string): void {
 
 onMounted(() => {
   liveAnimationClock = installLiveAnimationClock()
+  hydrateTdsThemePack()
   triggerThemeTransition(
     [innerWidth / 2, innerHeight / 2],
     themeStyle.value.theme.style.auto

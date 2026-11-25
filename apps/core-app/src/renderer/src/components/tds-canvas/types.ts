@@ -4,6 +4,8 @@ export type TdsCanvasFrameKind = 'html' | 'svg'
 
 export type TdsCanvasTool = 'select' | 'hand' | 'note'
 
+export type TdsCanvasPattern = 'none' | 'dots' | 'grid' | 'paper-grain'
+
 export interface TdsCanvasFrame {
   id: string
   title: string
@@ -198,6 +200,33 @@ export interface TdsCanvasLabels {
   emptyDescription: string
   emptyAddPhone: string
   emptyAddDesktop: string
+  mockupExport: string
+  mockupDialogTitle: string
+  mockupClose: string
+  mockupFramesSection: string
+  mockupSelectAll: string
+  mockupSelectNone: string
+  mockupBackdropSection: string
+  mockupBackdropObsidian: string
+  mockupBackdropStudio: string
+  mockupBackdropSlate: string
+  mockupBackdropTransparent: string
+  mockupLayoutSection: string
+  mockupPerPage: string
+  mockupScale: string
+  mockupBezelWidth: string
+  mockupCornerRadius: string
+  mockupShadow: string
+  mockupBrand: string
+  mockupShowTitles: string
+  mockupPage: string
+  mockupPrevPage: string
+  mockupNextPage: string
+  mockupEmptySelection: string
+  mockupExportSvg: string
+  mockupExportPng: string
+  mockupExportPrintHtml: string
+  mockupExporting: string
 }
 
 export const DEFAULT_TDS_CANVAS_LABELS: Readonly<TdsCanvasLabels> = {
@@ -248,7 +277,42 @@ export const DEFAULT_TDS_CANVAS_LABELS: Readonly<TdsCanvasLabels> = {
   emptyDescription:
     'Add a device frame or let AI generate HTML/SVG screens to inspect side by side.',
   emptyAddPhone: 'Add iPhone 17 Pro',
-  emptyAddDesktop: 'Add Desktop HD'
+  emptyAddDesktop: 'Add Desktop HD',
+  mockupExport: 'Export mockup',
+  mockupDialogTitle: 'Export mockup showcase',
+  mockupClose: 'Close',
+  mockupFramesSection: 'Frames',
+  mockupSelectAll: 'Select all',
+  mockupSelectNone: 'Clear',
+  mockupBackdropSection: 'Backdrop',
+  mockupBackdropObsidian: 'Dark Obsidian',
+  mockupBackdropStudio: 'Studio Light',
+  mockupBackdropSlate: 'Neutral Slate',
+  mockupBackdropTransparent: 'Transparent',
+  mockupLayoutSection: 'Layout',
+  mockupPerPage: 'Per board',
+  mockupScale: 'Scale',
+  mockupBezelWidth: 'Bezel',
+  mockupCornerRadius: 'Radius',
+  mockupShadow: 'Drop shadow',
+  mockupBrand: 'TDS watermark',
+  mockupShowTitles: 'Frame titles',
+  mockupPage: 'Board',
+  mockupPrevPage: 'Previous board',
+  mockupNextPage: 'Next board',
+  mockupEmptySelection: 'Select at least one frame to preview and export.',
+  mockupExportSvg: 'Export SVG',
+  mockupExportPng: 'Export PNG',
+  mockupExportPrintHtml: 'Print / Save PDF',
+  mockupExporting: 'Exporting…'
+}
+
+export type TdsMockupExportFormat = 'svg' | 'png' | 'print-html'
+
+export interface TdsMockupExportEventPayload {
+  format: TdsMockupExportFormat
+  pageCount: number
+  frameIds: string[]
 }
 
 export interface TdsDesignCanvasProps {
@@ -259,4 +323,8 @@ export interface TdsDesignCanvasProps {
   aiActionsEnabled?: boolean
   lintCounts?: Record<string, TdsCanvasLintCount>
   initialHistory?: TdsCanvasHistoryState | null
+  /** Optional sanitized CSS (e.g. TDS Theme Pack tokens) injected into every sandboxed frame. */
+  themeCss?: string
+  /** Pure CSS background pattern rendered on the infinite canvas stage. */
+  canvasPattern?: TdsCanvasPattern
 }

@@ -54,7 +54,9 @@ const TdsDesignCanvasStub = vi.hoisted(() => ({
     labels: { type: Object, default: () => ({}) },
     aiActionsEnabled: { type: Boolean, default: true },
     lintCounts: { type: Object, default: () => ({}) },
-    initialHistory: { type: Object, default: null }
+    initialHistory: { type: Object, default: null },
+    themeCss: { type: String, default: '' },
+    canvasPattern: { type: String, default: 'dots' }
   },
   emits: [
     'update:frames',
@@ -68,7 +70,11 @@ const TdsDesignCanvasStub = vi.hoisted(() => ({
     'ask-frame-ai'
   ],
   template: `
-    <div data-testid="tds-design-canvas-stub" :data-frame-count="frames.length">
+    <div
+      data-testid="tds-design-canvas-stub"
+      :data-frame-count="frames.length"
+      :data-canvas-pattern="canvasPattern"
+    >
       <div
         v-for="frame in frames"
         :key="frame.id"
@@ -84,10 +90,35 @@ const TdsDesignCanvasStub = vi.hoisted(() => ({
   `
 }))
 
+const selectPackSpy = vi.hoisted(() => vi.fn())
+
 vi.mock('~/components/tds-canvas/TdsDesignCanvas.vue', () => ({
   default: TdsDesignCanvasStub
 }))
 
+vi.mock('~/modules/tds-theme', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('~/modules/tds-theme')>()
+  return {
+    ...actual,
+    useTdsThemePack: () => {
+      const api = actual.useTdsThemePack()
+      return {
+        ...api,
+        selectPack: (id: string, options?: Parameters<typeof api.selectPack>[1]) => {
+          selectPackSpy(id, options)
+          return api.selectPack(id, options)
+        }
+      }
+    }
+  }
+})
+
+import {
+  exportThemePackAsCss,
+  TDS_OBSIDIAN_COBALT_PACK,
+  TDS_PAPER_INK_PACK,
+  useTdsThemePack
+} from '~/modules/tds-theme'
 import HomeSideCanvasPane from './HomeSideCanvasPane.vue'
 
 function makeAssistantMessage(
@@ -107,11 +138,15 @@ function makeAssistantMessage(
 describe('HomeSideCanvasPane', () => {
   beforeEach(() => {
     window.sessionStorage.clear()
+    window.localStorage.clear()
+    useTdsThemePack().resetPack()
     vi.clearAllMocks()
   })
 
   afterEach(() => {
     window.sessionStorage.clear()
+    window.localStorage.clear()
+    useTdsThemePack().resetPack()
   })
 
   it('auto-collects closed HTML and SVG fences from assistant messages into laid-out frames', async () => {
@@ -452,5 +487,78 @@ describe('HomeSideCanvasPane', () => {
     expect(payload.prompt).toContain('Align CTA button to bottom safe area')
     expect(payload.prompt).toContain('Checkout')
     expect((canvas.props('notes') as TdsCanvasNote[])[0]!.resolved).toBe(true)
+  })
+
+  it('switches canvas style packs, passes themeCss and canvasPattern, persists per conversation, and applies to app', async () => {
+    const wrapper = mount(HomeSideCanvasPane, {
+      props: {
+        messages: [],
+        conversationId: 'conv-theme-1'
+      }
+    })
+    await flushPromises()
+
+    const canvas = wrapper.findComponent(TdsDesignCanvasStub)
+    expect(canvas.props('canvasPattern')).toBe('dots')
+    expect(canvas.props('themeCss')).toContain('tds-apple-neutral')
+
+    // Mockup export labels are localized and passed down to TdsDesignCanvas.
+    const labels = canvas.props('labels') as Record<string, string>
+    expect(labels.mockupExport).toBe('home.sidePanel.canvasMockupExport')
+    expect(labels.mockupDialogTitle).toBe('home.sidePanel.canvasMockupDialogTitle')
+    expect(labels.mockupExportPrintHtml).toBe('home.sidePanel.canvasMockupExportPrintHtml')
+
+    // Open Style Pack popover and preview Obsidian Studio on the canvas only.
+    await wrapper.get('[data-testid="canvas-theme-pack-trigger"]').trigger('click')
+    await flushPromises()
+
+    await wrapper
+      .get('[data-testid="canvas-theme-pack-option-tds-obsidian-cobalt"]')
+      .trigger('click')
+    await flushPromises()
+
+    expect(canvas.props('themeCss')).toBe(exportThemePackAsCss(TDS_OBSIDIAN_COBALT_PACK))
+    expect(canvas.props('canvasPattern')).toBe('grid')
+    // Previewing on canvas must NOT change the desktop app theme pack until explicitly applied.
+    expect(selectPackSpy).not.toHaveBeenCalled()
+    expect(useTdsThemePack().activePackId.value).toBe('tds-apple-neutral')
+
+    // Switch preview to Editorial Paper and verify sessionStorage persists across remount.
+    await wrapper.get('[data-testid="canvas-theme-pack-option-tds-paper-ink"]').trigger('click')
+    await flushPromises()
+    expect(canvas.props('themeCss')).toBe(exportThemePackAsCss(TDS_PAPER_INK_PACK))
+    expect(canvas.props('canvasPattern')).toBe('paper-grain')
+
+    wrapper.unmount()
+
+    const remounted = mount(HomeSideCanvasPane, {
+      props: {
+        messages: [],
+        conversationId: 'conv-theme-1'
+      }
+    })
+    await flushPromises()
+
+    const restoredCanvas = remounted.findComponent(TdsDesignCanvasStub)
+    expect(restoredCanvas.props('themeCss')).toBe(exportThemePackAsCss(TDS_PAPER_INK_PACK))
+    expect(restoredCanvas.props('canvasPattern')).toBe('paper-grain')
+
+    // Switching conversation isolates canvasThemePackId cleanly.
+    await remounted.setProps({ conversationId: 'conv-theme-2' })
+    await flushPromises()
+    expect(remounted.findComponent(TdsDesignCanvasStub).props('canvasPattern')).toBe('dots')
+
+    // Switch back and click "Apply to App" to apply Editorial Paper to CoreApp desktop shell.
+    await remounted.setProps({ conversationId: 'conv-theme-1' })
+    await flushPromises()
+    await remounted.get('[data-testid="canvas-theme-pack-trigger"]').trigger('click')
+    await flushPromises()
+    await remounted.get('[data-testid="canvas-theme-apply-to-app"]').trigger('click')
+    await flushPromises()
+
+    expect(selectPackSpy).toHaveBeenCalledTimes(1)
+    expect(selectPackSpy).toHaveBeenCalledWith('tds-paper-ink', undefined)
+    expect(useTdsThemePack().activePackId.value).toBe('tds-paper-ink')
+    expect(toastMocks.success).toHaveBeenCalledTimes(1)
   })
 })

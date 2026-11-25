@@ -10,10 +10,12 @@ import type {
   TdsCanvasLabels,
   TdsCanvasLintCount,
   TdsCanvasNote,
+  TdsCanvasPattern,
   TdsCanvasSendNotesPayload
 } from '~/components/tds-canvas/types'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import type { TdsLintIssue, TdsLintReport } from '~/modules/tds-lint'
+import type { TdsThemePack } from '~/modules/tds-theme'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, ref, watch } from 'vue'
@@ -38,6 +40,7 @@ import { createCanvasHistoryState } from '~/components/tds-canvas/canvas-history
 import TdsDesignCanvas from '~/components/tds-canvas/TdsDesignCanvas.vue'
 import { buildPreviewIndex } from '~/modules/conversation/preview-index'
 import { runStaticTdsLint, summarizeLintIssues } from '~/modules/tds-lint'
+import { exportThemePackAsCss, TDS_DEFAULT_THEME_PACK, useTdsThemePack } from '~/modules/tds-theme'
 
 const props = withDefaults(
   defineProps<{
@@ -84,6 +87,7 @@ interface PersistedCanvasSession {
   history: TdsCanvasHistoryState
   deletedAutoFrameIds: string[]
   antiSlop: boolean
+  canvasThemePackId?: string | null
 }
 
 function escapeHtmlText(value: string): string {
@@ -451,6 +455,10 @@ function readCanvasSession(conversationId: string | null): PersistedCanvasSessio
     const deletedAutoFrameIds = Array.isArray(parsed.deletedAutoFrameIds)
       ? parsed.deletedAutoFrameIds.filter((id): id is string => typeof id === 'string')
       : []
+    const canvasThemePackId =
+      typeof parsed.canvasThemePackId === 'string' && parsed.canvasThemePackId.trim()
+        ? parsed.canvasThemePackId.trim()
+        : null
     return {
       version: 1,
       frames,
@@ -458,7 +466,8 @@ function readCanvasSession(conversationId: string | null): PersistedCanvasSessio
       selectedFrameId,
       history: sanitizeStoredHistory(parsed.history),
       deletedAutoFrameIds,
-      antiSlop: parsed.antiSlop !== false
+      antiSlop: parsed.antiSlop !== false,
+      canvasThemePackId
     }
   } catch {
     return null
@@ -474,14 +483,23 @@ function writeCanvasSession(conversationId: string | null, session: PersistedCan
   }
 }
 
+const {
+  activePackId: appActiveThemePackId,
+  activePack: appActiveThemePack,
+  allPacks: themePacks,
+  selectPack: selectAppThemePack
+} = useTdsThemePack()
+
 const frames = ref<TdsCanvasFrame[]>([])
 const notes = ref<TdsCanvasNote[]>([])
 const selectedFrameId = ref<string | null>(null)
 const historyState = ref<TdsCanvasHistoryState>(createCanvasHistoryState())
 const deletedAutoFrameIds = ref<string[]>([])
 const antiSlopEnabled = ref(true)
+const canvasThemePackId = ref<string | null>(null)
 const lintOpen = ref(false)
 const addMenuOpen = ref(false)
+const themeMenuOpen = ref(false)
 const presetQuery = ref('')
 const presetCategory = ref<DeviceCategory | 'all'>('all')
 const sendingAiAction = ref(false)
@@ -588,7 +606,8 @@ function persistCurrentSession(): void {
     selectedFrameId: selectedFrameId.value,
     history: historyState.value,
     deletedAutoFrameIds: deletedAutoFrameIds.value,
-    antiSlop: antiSlopEnabled.value
+    antiSlop: antiSlopEnabled.value,
+    canvasThemePackId: canvasThemePackId.value
   })
 }
 
@@ -603,6 +622,7 @@ function hydrateSessionForConversation(convId: string | null): void {
       historyState.value = stored.history
       deletedAutoFrameIds.value = stored.deletedAutoFrameIds
       antiSlopEnabled.value = stored.antiSlop
+      canvasThemePackId.value = stored.canvasThemePackId ?? null
     } else {
       frames.value = []
       notes.value = []
@@ -610,8 +630,10 @@ function hydrateSessionForConversation(convId: string | null): void {
       historyState.value = createCanvasHistoryState()
       deletedAutoFrameIds.value = []
       antiSlopEnabled.value = true
+      canvasThemePackId.value = null
     }
     lintOpen.value = false
+    themeMenuOpen.value = false
     reconcileConversationFrames(props.messages)
   } finally {
     isHydrating = false
@@ -639,7 +661,15 @@ watch(
 )
 
 watch(
-  [frames, notes, selectedFrameId, historyState, deletedAutoFrameIds, antiSlopEnabled],
+  [
+    frames,
+    notes,
+    selectedFrameId,
+    historyState,
+    deletedAutoFrameIds,
+    antiSlopEnabled,
+    canvasThemePackId
+  ],
   () => {
     persistCurrentSession()
   },
@@ -709,6 +739,81 @@ const presetCategories = computed<Array<{ id: DeviceCategory | 'all'; label: str
 
 const filteredPresets = computed(() => searchDevicePresets(presetQuery.value, presetCategory.value))
 
+const selectedCanvasPack = computed<TdsThemePack>(() => {
+  if (canvasThemePackId.value) {
+    const matched = themePacks.value.find((pack) => pack.meta.id === canvasThemePackId.value)
+    if (matched) return matched
+  }
+  return appActiveThemePack.value ?? TDS_DEFAULT_THEME_PACK
+})
+
+const canvasThemeCss = computed<string>(() => exportThemePackAsCss(selectedCanvasPack.value))
+
+const canvasPattern = computed<TdsCanvasPattern>(
+  () => selectedCanvasPack.value.surface?.canvasPattern ?? 'dots'
+)
+
+const isCanvasPackDifferentFromApp = computed(
+  () => selectedCanvasPack.value.meta.id !== appActiveThemePackId.value
+)
+
+function resolvePackDisplayName(pack: TdsThemePack): string {
+  switch (pack.meta.id) {
+    case 'tds-apple-neutral':
+      return t('themeStyle.tdsPack.pack.appleNeutralName')
+    case 'tds-obsidian-cobalt':
+      return t('themeStyle.tdsPack.pack.obsidianCobaltName')
+    case 'tds-paper-ink':
+      return t('themeStyle.tdsPack.pack.paperInkName')
+    case 'tds-graphite-emerald':
+      return t('themeStyle.tdsPack.pack.graphiteEmeraldName')
+    default:
+      return pack.meta.name
+  }
+}
+
+function resolvePatternLabel(pattern: TdsCanvasPattern | undefined): string {
+  switch (pattern) {
+    case 'none':
+      return t('themeStyle.tdsPack.patternNone')
+    case 'grid':
+      return t('themeStyle.tdsPack.patternGrid')
+    case 'paper-grain':
+      return t('themeStyle.tdsPack.patternPaperGrain')
+    case 'dots':
+    default:
+      return t('themeStyle.tdsPack.patternDots')
+  }
+}
+
+function getPackSwatchColors(pack: TdsThemePack): [string, string, string] {
+  return [
+    pack.tokens.light.bg ?? TDS_DEFAULT_THEME_PACK.tokens.light.bg!,
+    pack.tokens.dark.bg ?? TDS_DEFAULT_THEME_PACK.tokens.dark.bg!,
+    pack.tokens.light.primary ?? TDS_DEFAULT_THEME_PACK.tokens.light.primary!
+  ]
+}
+
+function handleSelectCanvasPack(pack: TdsThemePack): void {
+  canvasThemePackId.value = pack.meta.id
+}
+
+function handleFollowAppThemePack(): void {
+  canvasThemePackId.value = null
+}
+
+function handleApplyPackToApp(pack: TdsThemePack): void {
+  const applied = selectAppThemePack(pack.meta.id)
+  if (applied) {
+    canvasThemePackId.value = pack.meta.id
+    toast.success(
+      t('home.sidePanel.canvasThemeAppliedToApp', {
+        name: resolvePackDisplayName(pack)
+      })
+    )
+  }
+}
+
 const canvasLabels = computed<Partial<TdsCanvasLabels>>(() => ({
   selectTool: t('home.sidePanel.canvasSelectTool'),
   handTool: t('home.sidePanel.canvasHandTool'),
@@ -756,7 +861,34 @@ const canvasLabels = computed<Partial<TdsCanvasLabels>>(() => ({
   emptyTitle: t('home.sidePanel.canvasEmptyTitle'),
   emptyDescription: t('home.sidePanel.canvasEmptyDescription'),
   emptyAddPhone: t('home.sidePanel.canvasEmptyAddPhone'),
-  emptyAddDesktop: t('home.sidePanel.canvasEmptyAddDesktop')
+  emptyAddDesktop: t('home.sidePanel.canvasEmptyAddDesktop'),
+  mockupExport: t('home.sidePanel.canvasMockupExport'),
+  mockupDialogTitle: t('home.sidePanel.canvasMockupDialogTitle'),
+  mockupClose: t('home.sidePanel.canvasMockupClose'),
+  mockupFramesSection: t('home.sidePanel.canvasMockupFramesSection'),
+  mockupSelectAll: t('home.sidePanel.canvasMockupSelectAll'),
+  mockupSelectNone: t('home.sidePanel.canvasMockupSelectNone'),
+  mockupBackdropSection: t('home.sidePanel.canvasMockupBackdropSection'),
+  mockupBackdropObsidian: t('home.sidePanel.canvasMockupBackdropObsidian'),
+  mockupBackdropStudio: t('home.sidePanel.canvasMockupBackdropStudio'),
+  mockupBackdropSlate: t('home.sidePanel.canvasMockupBackdropSlate'),
+  mockupBackdropTransparent: t('home.sidePanel.canvasMockupBackdropTransparent'),
+  mockupLayoutSection: t('home.sidePanel.canvasMockupLayoutSection'),
+  mockupPerPage: t('home.sidePanel.canvasMockupPerPage'),
+  mockupScale: t('home.sidePanel.canvasMockupScale'),
+  mockupBezelWidth: t('home.sidePanel.canvasMockupBezelWidth'),
+  mockupCornerRadius: t('home.sidePanel.canvasMockupCornerRadius'),
+  mockupShadow: t('home.sidePanel.canvasMockupShadow'),
+  mockupBrand: t('home.sidePanel.canvasMockupBrand'),
+  mockupShowTitles: t('home.sidePanel.canvasMockupShowTitles'),
+  mockupPage: t('home.sidePanel.canvasMockupPage'),
+  mockupPrevPage: t('home.sidePanel.canvasMockupPrevPage'),
+  mockupNextPage: t('home.sidePanel.canvasMockupNextPage'),
+  mockupEmptySelection: t('home.sidePanel.canvasMockupEmptySelection'),
+  mockupExportSvg: t('home.sidePanel.canvasMockupExportSvg'),
+  mockupExportPng: t('home.sidePanel.canvasMockupExportPng'),
+  mockupExportPrintHtml: t('home.sidePanel.canvasMockupExportPrintHtml'),
+  mockupExporting: t('home.sidePanel.canvasMockupExporting')
 }))
 
 function formatPresetOptionLabel(preset: DevicePreset): string {
@@ -1077,6 +1209,130 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
           <span class="HomeSideCanvasPane-Badge">{{ pendingNotes.length }}</span>
         </button>
 
+        <TxPopover
+          v-model="themeMenuOpen"
+          trigger="click"
+          placement="bottom-end"
+          :offset="6"
+          :match-reference-width="false"
+          :min-width="268"
+          :panel-radius="12"
+          :panel-padding="8"
+          :panel-card="SHELL_MENU_CARD"
+          panel-background="refraction"
+        >
+          <template #reference>
+            <button
+              type="button"
+              class="HomeSideCanvasPane-ActionBtn HomeSideCanvasPane-ThemeTrigger"
+              :aria-expanded="themeMenuOpen"
+              :aria-label="t('home.sidePanel.canvasThemeTitle')"
+              :title="t('home.sidePanel.canvasThemeTitle')"
+              data-testid="canvas-theme-pack-trigger"
+            >
+              <span
+                class="HomeSideCanvasPane-ThemeTriggerDot"
+                :style="{ backgroundColor: selectedCanvasPack.tokens.light.primary }"
+                aria-hidden="true"
+              />
+              <span class="i-ri-palette-line" aria-hidden="true" />
+              <span class="HomeSideCanvasPane-ThemeTriggerLabel">
+                {{ resolvePackDisplayName(selectedCanvasPack) }}
+              </span>
+            </button>
+          </template>
+
+          <div class="HomeSideCanvasPane-ThemeMenu" data-testid="canvas-theme-pack-popover">
+            <div class="HomeSideCanvasPane-ThemeHeader">
+              <div class="HomeSideCanvasPane-ThemeHeaderRow">
+                <span class="HomeSideCanvasPane-ThemeTitle">
+                  {{ t('home.sidePanel.canvasThemeTitle') }}
+                </span>
+                <span class="HomeSideCanvasPane-ThemeScopeTag">
+                  {{
+                    canvasThemePackId
+                      ? t('home.sidePanel.canvasThemePreviewing')
+                      : t('home.sidePanel.canvasThemeFollowApp')
+                  }}
+                </span>
+              </div>
+              <p class="HomeSideCanvasPane-ThemeHint">
+                {{ t('home.sidePanel.canvasThemeHint') }}
+              </p>
+            </div>
+
+            <div
+              class="HomeSideCanvasPane-ThemeList"
+              role="listbox"
+              :aria-label="t('home.sidePanel.canvasThemeLabel')"
+            >
+              <button
+                v-for="pack in themePacks"
+                :key="pack.meta.id"
+                type="button"
+                role="option"
+                class="HomeSideCanvasPane-ThemeOption"
+                :class="{ 'is-selected': selectedCanvasPack.meta.id === pack.meta.id }"
+                :aria-selected="selectedCanvasPack.meta.id === pack.meta.id"
+                :data-testid="`canvas-theme-pack-option-${pack.meta.id}`"
+                @click="handleSelectCanvasPack(pack)"
+              >
+                <span class="HomeSideCanvasPane-ThemeSwatches" aria-hidden="true">
+                  <span
+                    v-for="(color, idx) in getPackSwatchColors(pack)"
+                    :key="idx"
+                    class="HomeSideCanvasPane-ThemeSwatchDot"
+                    :style="{ backgroundColor: color }"
+                  />
+                </span>
+                <span class="HomeSideCanvasPane-ThemeMeta">
+                  <span class="HomeSideCanvasPane-ThemeNameRow">
+                    <span class="HomeSideCanvasPane-ThemeName">
+                      {{ resolvePackDisplayName(pack) }}
+                    </span>
+                    <span
+                      v-if="appActiveThemePackId === pack.meta.id"
+                      class="HomeSideCanvasPane-ThemeAppTag"
+                    >
+                      {{ t('home.sidePanel.canvasThemeAppActive') }}
+                    </span>
+                  </span>
+                  <span class="HomeSideCanvasPane-ThemePattern">
+                    {{ resolvePatternLabel(pack.surface?.canvasPattern) }}
+                  </span>
+                </span>
+                <span
+                  v-if="selectedCanvasPack.meta.id === pack.meta.id"
+                  class="i-ri-check-line HomeSideCanvasPane-ThemeCheck"
+                  aria-hidden="true"
+                />
+              </button>
+            </div>
+
+            <div class="HomeSideCanvasPane-ThemeFooter">
+              <button
+                v-if="canvasThemePackId !== null"
+                type="button"
+                class="HomeSideCanvasPane-ThemeFooterGhost"
+                data-testid="canvas-theme-follow-app"
+                @click="handleFollowAppThemePack"
+              >
+                {{ t('home.sidePanel.canvasThemeFollowApp') }}
+              </button>
+              <button
+                type="button"
+                class="HomeSideCanvasPane-ActionBtn HomeSideCanvasPane-ThemeApplyBtn"
+                :disabled="!isCanvasPackDifferentFromApp"
+                data-testid="canvas-theme-apply-to-app"
+                @click="handleApplyPackToApp(selectedCanvasPack)"
+              >
+                <span class="i-ri-window-line" aria-hidden="true" />
+                <span>{{ t('home.sidePanel.canvasThemeApplyToApp') }}</span>
+              </button>
+            </div>
+          </div>
+        </TxPopover>
+
         <TdsLintPopover
           v-if="inspectedFrame"
           v-model:open="lintOpen"
@@ -1101,6 +1357,8 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
         :ai-actions-enabled="aiActionsEnabled"
         :lint-counts="lintCounts"
         :initial-history="historyState"
+        :theme-css="canvasThemeCss"
+        :canvas-pattern="canvasPattern"
         @update:frames="handleUpdateFrames"
         @update:notes="handleUpdateNotes"
         @update:history="handleUpdateHistory"
@@ -1387,5 +1645,202 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
   color: var(--shell-text-muted);
   font-size: var(--shell-fs-sm);
   text-align: center;
+}
+
+.HomeSideCanvasPane-ThemeTrigger {
+  max-width: 148px;
+}
+
+.HomeSideCanvasPane-ThemeTriggerDot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--shell-radius-full);
+  box-shadow: inset 0 0 0 1px var(--shell-border-strong);
+}
+
+.HomeSideCanvasPane-ThemeTriggerLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.HomeSideCanvasPane-ThemeMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 268px;
+  color: var(--shell-text-primary);
+}
+
+.HomeSideCanvasPane-ThemeHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 2px 4px 0;
+}
+
+.HomeSideCanvasPane-ThemeHeaderRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.HomeSideCanvasPane-ThemeTitle {
+  color: var(--shell-text-primary);
+  font-size: var(--shell-fs-sm);
+  font-weight: var(--shell-font-weight-semibold);
+}
+
+.HomeSideCanvasPane-ThemeScopeTag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--shell-radius-full);
+  background: var(--shell-surface-2);
+  color: var(--shell-text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.HomeSideCanvasPane-ThemeHint {
+  margin: 0;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
+  line-height: 1.4;
+}
+
+.HomeSideCanvasPane-ThemeList {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.HomeSideCanvasPane-ThemeOption {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-primary);
+  font: inherit;
+  font-size: var(--shell-fs-sm);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface-2);
+  }
+
+  &.is-selected {
+    background: var(--shell-primary-soft);
+    box-shadow: inset 0 0 0 1px var(--shell-primary-border);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-focus-ring);
+    outline-offset: -1px;
+  }
+}
+
+.HomeSideCanvasPane-ThemeSwatches {
+  display: inline-flex;
+  flex: none;
+  gap: 3px;
+  align-items: center;
+}
+
+.HomeSideCanvasPane-ThemeSwatchDot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--shell-radius-full);
+  box-shadow: inset 0 0 0 1px var(--shell-border-strong);
+}
+
+.HomeSideCanvasPane-ThemeMeta {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.HomeSideCanvasPane-ThemeNameRow {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  min-width: 0;
+}
+
+.HomeSideCanvasPane-ThemeName {
+  overflow: hidden;
+  color: var(--shell-text-primary);
+  font-size: var(--shell-fs-sm);
+  font-weight: var(--shell-font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.HomeSideCanvasPane-ThemeAppTag {
+  flex: none;
+  padding: 0 5px;
+  border-radius: var(--shell-radius-full);
+  background: var(--shell-surface-2);
+  color: var(--shell-text-regular);
+  font-size: 11px;
+  line-height: 1.45;
+  box-shadow: inset 0 0 0 1px var(--shell-border);
+}
+
+.HomeSideCanvasPane-ThemePattern {
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
+  line-height: 1.3;
+}
+
+.HomeSideCanvasPane-ThemeCheck {
+  flex: none;
+  color: var(--shell-primary);
+  font-size: 14px;
+}
+
+.HomeSideCanvasPane-ThemeFooter {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  padding-top: 6px;
+  border-top: 1px solid var(--shell-border);
+}
+
+.HomeSideCanvasPane-ThemeFooterGhost {
+  margin-right: auto;
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-regular);
+  font: inherit;
+  font-size: var(--shell-fs-caption);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-focus-ring);
+    outline-offset: 1px;
+  }
+}
+
+.HomeSideCanvasPane-ThemeApplyBtn {
+  flex: none;
 }
 </style>

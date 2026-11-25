@@ -449,6 +449,35 @@ function escapeHtmlAttribute(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
 }
 
+/**
+ * Sanitizes an embedded CSS string before placing it inside a `<style>` tag so
+ * untrusted/theme CSS can never close the `<style>` element or open HTML comments/tags.
+ */
+export function sanitizeEmbeddedStyleCss(css: string): string {
+  if (!css || typeof css !== 'string') return ''
+  const trimmed = css.trim()
+  if (!trimmed) return ''
+  return trimmed
+    .replace(/<\/(\s*style)/gi, '<\\/$1')
+    .replace(/<!--/g, '<\\!--')
+    .replace(/-->/g, '--\\>')
+    .replace(/<(\s*script)/gi, '<\\$1')
+}
+
+function injectStyleBlockIntoHtml(source: string, styleBlock: string): string {
+  if (!styleBlock) return source
+  if (/<\/head>/i.test(source)) {
+    return source.replace(/<\/head>/i, (match) => `${styleBlock}${match}`)
+  }
+  if (/<head\b[^>]*>/i.test(source)) {
+    return source.replace(/<head\b[^>]*>/i, (match) => `${match}${styleBlock}`)
+  }
+  if (/<!doctype[^>]*>/i.test(source)) {
+    return source.replace(/<!doctype[^>]*>/i, (match) => `${match}${styleBlock}`)
+  }
+  return `${styleBlock}${source}`
+}
+
 export function getFrameIframeSandbox(kind: TdsCanvasFrameKind): string {
   return kind === 'html' ? 'allow-scripts allow-forms allow-modals' : ''
 }
@@ -456,13 +485,21 @@ export function getFrameIframeSandbox(kind: TdsCanvasFrameKind): string {
 /**
  * Outer-CSP double-sandboxed `srcdoc` builder mirroring `WorkspaceFileViewer`:
  * enforces `default-src 'none'` with zero network exfiltration and opaque origin.
+ * Optionally injects a sanitized `<style data-tds-theme-pack>` block inside the
+ * sandboxed frame so TDS Theme Pack tokens cascade into HTML and SVG screens.
  */
-export function buildSandboxedFrameSrcdoc(source: string, kind: TdsCanvasFrameKind): string {
+export function buildSandboxedFrameSrcdoc(
+  source: string,
+  kind: TdsCanvasFrameKind,
+  extraStyleCss?: string
+): string {
   if (!source) return ''
+  const safeCss = extraStyleCss ? sanitizeEmbeddedStyleCss(extraStyleCss) : ''
+  const styleBlock = safeCss ? `<style data-tds-theme-pack>${safeCss}</style>` : ''
   const inner =
     kind === 'svg'
-      ? `<!doctype html><meta charset="utf-8"><body style="margin:0;width:100%;height:100%;display:grid;place-items:center;background:white">${source}</body>`
-      : source
+      ? `<!doctype html><meta charset="utf-8">${styleBlock}<body style="margin:0;width:100%;height:100%;display:grid;place-items:center;background:white">${source}</body>`
+      : injectStyleBlockIntoHtml(source, styleBlock)
   const innerSandbox = getFrameIframeSandbox(kind)
   return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${TDS_CANVAS_FRAME_CSP}"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:white}iframe{display:block;width:100%;height:100%;border:0}</style><iframe sandbox="${innerSandbox}" srcdoc="${escapeHtmlAttribute(inner)}"></iframe>`
 }
