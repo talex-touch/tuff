@@ -5,8 +5,83 @@ const FORBIDDEN_SVG_PAIRED_ELEMENTS_RE =
   /<\s*(script|foreignObject|iframe|object|embed)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi
 const FORBIDDEN_SVG_ELEMENTS_RE =
   /<\s*\/?\s*(?:script|foreignObject|iframe|object|embed|meta|link)\b[^>]*>/gi
-const FORBIDDEN_SVG_ATTRS_RE =
-  /\s+(?:on[a-z]+|(?:xlink:)?href)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>/]+)/gi
+const FORBIDDEN_SVG_EVENT_ATTRS_RE = /\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>/]+)/gi
+const SVG_HREF_ATTRS_RE = /\s+(?:xlink:)?href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>/]+))/gi
+const SAFE_SVG_FRAGMENT_RE = /^#[A-Za-z_][\w:.-]*$/
+
+const XML_COMMENT_OR_DECL_RE = /<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<!\[CDATA\[[\s\S]*?\]\]>/g
+const XML_TAG_RE = /<(\/?)([A-Za-z_][\w:.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/?)>/g
+
+function isWellFormedSvgXml(svg: string): boolean {
+  if (typeof DOMParser === 'function') {
+    try {
+      const doc = new DOMParser().parseFromString(svg, 'image/svg+xml')
+      if (
+        doc.getElementsByTagName('parsererror').length > 0 ||
+        doc.documentElement?.localName?.toLowerCase() !== 'svg'
+      ) {
+        return false
+      }
+    } catch {
+      return false
+    }
+  }
+
+  const stripped = svg.replace(XML_COMMENT_OR_DECL_RE, '').trim()
+  const stack: string[] = []
+  let rootClosed = false
+  let lastIndex = 0
+  let matchedAny = false
+
+  for (const match of stripped.matchAll(XML_TAG_RE)) {
+    const index = match.index ?? 0
+    const between = stripped.slice(lastIndex, index)
+    if (between.includes('<') || between.includes('>')) {
+      return false
+    }
+    if (rootClosed && between.trim().length > 0) {
+      return false
+    }
+    lastIndex = index + match[0].length
+    matchedAny = true
+
+    const isClosing = match[1] === '/'
+    const tagName = match[2] ?? ''
+    const isSelfClosing = match[4] === '/'
+
+    if (rootClosed) {
+      return false
+    }
+
+    if (isClosing) {
+      if (isSelfClosing || stack.length === 0 || stack[stack.length - 1] !== tagName) {
+        return false
+      }
+      stack.pop()
+      if (stack.length === 0) {
+        rootClosed = true
+      }
+      continue
+    }
+
+    if (stack.length === 0 && tagName.toLowerCase() !== 'svg') {
+      return false
+    }
+
+    if (!isSelfClosing) {
+      stack.push(tagName)
+    } else if (stack.length === 0) {
+      rootClosed = true
+    }
+  }
+
+  const trailing = stripped.slice(lastIndex)
+  if (trailing.includes('<') || trailing.includes('>') || trailing.trim().length > 0) {
+    return false
+  }
+
+  return matchedAny && rootClosed && stack.length === 0
+}
 
 const inflightDataUrlCache = new Map<string, Promise<string>>()
 const resolvedDataUrlCache = new Map<string, string>()
@@ -42,10 +117,22 @@ export function sanitizeStoreSvg(raw: string): string {
   const cleaned = slice
     .replace(FORBIDDEN_SVG_PAIRED_ELEMENTS_RE, '')
     .replace(FORBIDDEN_SVG_ELEMENTS_RE, '')
-    .replace(FORBIDDEN_SVG_ATTRS_RE, '')
+    .replace(FORBIDDEN_SVG_EVENT_ATTRS_RE, '')
+    .replace(
+      SVG_HREF_ATTRS_RE,
+      (match, doubleQuoted?: string, singleQuoted?: string, unquoted?: string) => {
+        const value = (doubleQuoted ?? singleQuoted ?? unquoted ?? '').trim()
+        return SAFE_SVG_FRAGMENT_RE.test(value) ? match : ''
+      }
+    )
     .replace(/javascript\s*:/gi, '')
+    .trim()
 
-  return /^<svg[\s>]/i.test(cleaned) && /<\/svg\s*>/i.test(cleaned) ? cleaned : ''
+  if (!/^<svg[\s>]/i.test(cleaned) || !/<\/svg\s*>$/i.test(cleaned)) {
+    return ''
+  }
+
+  return isWellFormedSvgXml(cleaned) ? cleaned : ''
 }
 
 export function encodeStoreSvgDataUrl(svg: string): string {

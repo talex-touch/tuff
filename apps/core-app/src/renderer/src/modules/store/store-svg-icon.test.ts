@@ -57,7 +57,24 @@ describe('store-svg-icon', () => {
     expect(malicious).not.toContain('xlink:href')
     expect(malicious).toContain('<path')
 
+    const withFragmentRef = sanitizeStoreSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><defs><path id="p" d="M0 0h24v24H0z"/></defs><use href="#p"/><use xlink:href="#p"/></svg>'
+    )
+    expect(withFragmentRef).toContain('href="#p"')
+    expect(withFragmentRef).toContain('xlink:href="#p"')
+
+    expect(sanitizeStoreSvg('<svg xmlns="http://www.w3.org/2000/svg"><path></svg>')).toBe('')
     expect(sanitizeStoreSvg('<html><body>not svg</body></html>')).toBe('')
+  })
+
+  it('rejects malformed XML SVGs without caching a blank data URL', async () => {
+    const url = 'https://tuff.tagzxia.com/api/images/broken.svg'
+    mocks.fetchCoreAppSvgContent.mockResolvedValueOnce(
+      '<svg xmlns="http://www.w3.org/2000/svg"><path></svg>'
+    )
+
+    expect(await fetchStoreSvgDataUrl(url)).toBe('')
+    expect(getCachedStoreSvgDataUrl(url)).toBeUndefined()
   })
 
   it('falls back to storeHttpRequest when primary SVG fetch fails and caches sanitized data URL', async () => {
