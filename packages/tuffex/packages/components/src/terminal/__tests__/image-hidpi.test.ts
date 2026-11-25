@@ -1,7 +1,7 @@
 import type { ImageAddon } from '@xterm/addon-image'
 import type { IDisposable, Terminal as XtermTerminal } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
-import { configureHiDpiImageAddon, XTVERSION_IIP_IDENTITY } from '../src/image-hidpi'
+import { configureHiDpiImageAddon, getDeviceCellSizePixels, XTVERSION_IIP_IDENTITY } from '../src/image-hidpi'
 
 interface RegisteredHandler {
   matcher: { prefix?: string, final: string }
@@ -215,5 +215,16 @@ describe('configureHiDpiImageAddon', () => {
       { advertiseIip: true },
     )
     expect(() => handle.dispose()).not.toThrow()
+    expect(getDeviceCellSizePixels({} as unknown as XtermTerminal)).toBeNull()
+  })
+
+  it('reports floor-rounded physical device cell pixels via getDeviceCellSizePixels', () => {
+    const fixture = createTerminalFixture({
+      deviceCell: { width: 16.8, height: 32.9 },
+    })
+    expect(getDeviceCellSizePixels(fixture.terminal as unknown as XtermTerminal)).toEqual({
+      width: 16,
+      height: 32,
+    })
   })
 })

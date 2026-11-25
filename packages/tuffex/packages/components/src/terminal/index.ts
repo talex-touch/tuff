@@ -22,6 +22,7 @@ export type {
   TerminalEmits,
   TerminalInstance,
   TerminalLabels,
+  TerminalPixelSize,
   TerminalProps,
   TerminalSize,
 } from './src/types'
