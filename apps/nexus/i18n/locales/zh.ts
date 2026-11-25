@@ -653,7 +653,7 @@ export default {
       codeTabActive: '{framework} 代码',
       codeTabVue: 'Vue 源码',
       matrixTitle: '多框架适配覆盖矩阵',
-      matrixSearchPlaceholder: '按组件名、标签 (<tx-*>) 或导出符号 (Tx*) 搜索…',
+      matrixSearchPlaceholder: '按组件名、标签 (tx-*) 或导出符号 (Tx*) 搜索…',
       matrixFilterAll: '全部',
       matrixFilterReactReady: 'React 已适配',
       matrixFilterWcReady: 'WC 已适配',

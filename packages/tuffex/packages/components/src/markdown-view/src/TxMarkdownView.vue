@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { MarkdownViewProps } from './types'
+import { hasDocument } from '@talex-touch/tuffex-core'
 import { Marked } from 'marked'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { hasDocument } from '@talex-touch/utils/env'
 
 defineOptions({
   name: 'TxMarkdownView',

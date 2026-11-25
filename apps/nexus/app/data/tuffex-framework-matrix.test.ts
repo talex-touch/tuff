@@ -200,5 +200,16 @@ describe('tuffex-framework-matrix', () => {
     const zhKeys = flattenKeys((zhLocale as any).docs.framework).sort()
     expect(enKeys.length).toBeGreaterThan(20)
     expect(zhKeys).toEqual(enKeys)
+
+    const flattenValues = (obj: Record<string, unknown>): string[] =>
+      Object.values(obj).flatMap(value =>
+        value && typeof value === 'object' && !Array.isArray(value)
+          ? flattenValues(value as Record<string, unknown>)
+          : [String(value)],
+      )
+
+    for (const msg of [...flattenValues((enLocale as any).docs.framework), ...flattenValues((zhLocale as any).docs.framework)]) {
+      expect(msg, `HTML angle bracket in vue-i18n message: ${msg}`).not.toMatch(/[<>]/)
+    }
   })
 })

@@ -654,7 +654,7 @@ export default {
       codeTabActive: '{framework} code',
       codeTabVue: 'Vue source',
       matrixTitle: 'Multi-framework adaptation matrix',
-      matrixSearchPlaceholder: 'Filter by component, tag (<tx-*>), or export (Tx*)…',
+      matrixSearchPlaceholder: 'Filter by component, tag (tx-*), or export (Tx*)…',
       matrixFilterAll: 'All',
       matrixFilterReactReady: 'React ready',
       matrixFilterWcReady: 'WC ready',
