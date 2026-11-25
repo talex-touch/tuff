@@ -1,0 +1,113 @@
+// TuffEx Web Components unified stylesheet:
+// 1) Base design tokens (--tx-*), dark & high-contrast themes, and core utilities
+@use '@tuffex-style/index.scss';
+
+// 2) Zero-specificity default host layout for custom element tags (Light DOM friendly)
+:where(
+  tx-button,
+  tx-badge,
+  tx-tag,
+  tx-avatar,
+  tx-spinner,
+  tx-kbd,
+  tx-switch,
+  tx-status-badge,
+  tx-status-hint,
+  tx-dot-indicator,
+  tx-checkbox,
+  tx-radio,
+  tx-radio-group,
+  tx-tooltip,
+  tx-popover,
+  tx-stream-text
+) {
+  display: inline-block;
+  box-sizing: border-box;
+}
+
+:where(
+  tx-divider,
+  tx-alert,
+  tx-card,
+  tx-progress,
+  tx-progress-bar,
+  tx-skeleton,
+  tx-empty,
+  tx-stat-card,
+  tx-input,
+  tx-textarea,
+  tx-slider,
+  tx-tabs,
+  tx-collapse,
+  tx-collapse-item,
+  tx-select,
+  tx-markdown-view
+) {
+  display: block;
+  box-sizing: border-box;
+}
+
+:where(tx-dialog, tx-drawer) {
+  display: contents;
+}
+
+:where(tx-tab-item, tx-select-item) {
+  display: inline-block;
+  box-sizing: border-box;
+}
+
+:where(
+  tx-button,
+  tx-badge,
+  tx-tag,
+  tx-avatar,
+  tx-spinner,
+  tx-divider,
+  tx-alert,
+  tx-card,
+  tx-kbd,
+  tx-progress,
+  tx-progress-bar,
+  tx-skeleton,
+  tx-switch,
+  tx-status-badge,
+  tx-status-hint,
+  tx-dot-indicator,
+  tx-empty,
+  tx-stat-card,
+  tx-input,
+  tx-textarea,
+  tx-checkbox,
+  tx-radio,
+  tx-radio-group,
+  tx-slider,
+  tx-tabs,
+  tx-tab-item,
+  tx-collapse,
+  tx-collapse-item,
+  tx-tooltip,
+  tx-popover,
+  tx-dialog,
+  tx-drawer,
+  tx-select,
+  tx-select-item,
+  tx-stream-text,
+  tx-markdown-view
+)[hidden] {
+  display: none !important;
+}
+
+// Preserve sibling hairline between light-DOM <tx-collapse-item> hosts
+:where(tx-collapse-item + tx-collapse-item) .tx-collapse-item {
+  border-top: 1px solid var(--tx-collapse-border, color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 55%, transparent));
+}
+
+:where(tx-collapse-item:first-child) .tx-collapse-item__header {
+  border-top-left-radius: calc(var(--tx-collapse-radius, 10px) - 1px);
+  border-top-right-radius: calc(var(--tx-collapse-radius, 10px) - 1px);
+}
+
+:where(tx-collapse-item:last-child) .tx-collapse-item__header:not(.tx-collapse-item__header--active) {
+  border-bottom-left-radius: calc(var(--tx-collapse-radius, 10px) - 1px);
+  border-bottom-right-radius: calc(var(--tx-collapse-radius, 10px) - 1px);
+}
