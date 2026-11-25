@@ -20,6 +20,7 @@ import {
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import { herdrConversationRoute } from '../../../../../shared/app-surface-routes'
 import {
   formatSiteHost,
   localIcon,
@@ -666,6 +667,8 @@ function onKeydown(event: KeyboardEvent): void {
       if (route.path !== '/browser') return
       if (nextTab?.kind === 'conversation') {
         void router.push(`/home/c/${nextTab.conversationId}`)
+      } else if (nextTab?.kind === 'herdr') {
+        void router.push(herdrConversationRoute(nextTab.address))
       } else {
         void router.push('/home')
       }

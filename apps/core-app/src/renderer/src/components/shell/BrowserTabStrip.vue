@@ -18,11 +18,21 @@ import { getActivePinia } from 'pinia'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { APP_SURFACE_ROUTES } from '../../../../shared/app-surface-routes'
+import { toast } from 'vue-sonner'
+import { APP_SURFACE_ROUTES, herdrConversationRoute } from '../../../../shared/app-surface-routes'
 import { basenameOfPath, parseBrowserFilePreviewUrl } from '~/modules/browser-workspace/preview-url'
 import { useBrowserWorkspace } from '~/modules/browser-workspace/useBrowserWorkspace'
 import { tabIcon } from '~/modules/browser-workspace/tab-presentation'
 import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
+import {
+  buildHerdrProjectTabTitles,
+  buildNewTerminalRequestForGroup,
+  groupHerdrSessions,
+  type HerdrProjectGroup
+} from '~/modules/herdr/herdr-project-groups'
+import { type HerdrProjectedSession, useHerdrRuntime } from '~/modules/herdr/useHerdrRuntime'
+import { type HerdrStageViewMode, useHerdrStageControl } from '~/modules/herdr/useHerdrStageControl'
+import { useShellTerminal } from '~/modules/layout/useShellTerminal'
 import {
   attachBrowserTabToSpace,
   BROWSER_SCOPE_KEY,
@@ -31,17 +41,25 @@ import {
   draftTabId,
   ensureConversationTab,
   ensureDraftTab,
+  ensureHerdrTab,
   getSpaceTabs,
+  HERDR_SPACE_KEY,
+  herdrGroupKeyFromSpaceKey,
+  herdrProjectSpaceKey,
+  herdrTabId,
   isDeprecatedInternalBrowserUrl,
+  isHerdrSpaceKey,
   isSpaceScopeKey,
   projectIdFromSpaceKey,
   projectSpaceKey,
   removeSpaceTab,
   reorderSpaceTab,
   resolveBrowserTabSpaceKey,
+  setLastHerdrAddressForGroup,
   setLastWorkspaceScope,
   spaceBrowserTabId,
   syncBrowserTabsWithSpaces,
+  syncHerdrProjectTabs,
   useShellWorkspaceTabs,
   type SpaceWorkspaceTab
 } from '~/modules/layout/useShellWorkspaceTabs'
@@ -56,12 +74,42 @@ import ShellAccountAvatar from './ShellAccountAvatar.vue'
 
 interface StripTab {
   id: string
-  kind: 'browser' | 'conversation' | 'draft'
+  kind: 'browser' | 'conversation' | 'draft' | 'herdr'
   title: string
   icon: string
   browserTab?: BrowserTabState
   conversationId?: string
+  herdrAddress?: string
   spaceKey?: string
+}
+
+const HERDR_TAB_ICON_MAP: Record<string, string> = {
+  claude: 'i-simple-icons-claude',
+  codex: 'i-simple-icons-openai',
+  pi: 'i-simple-icons-pi',
+  omp: 'i-simple-icons-pi',
+  'oh-my-pi': 'i-simple-icons-pi',
+  gemini: 'i-simple-icons-googlegemini',
+  opencode: 'i-simple-icons-opencode',
+  cursor: 'i-simple-icons-cursor',
+  ssh: 'i-ri-server-line'
+}
+
+function resolveHerdrTabIcon(session?: HerdrProjectedSession | null): string {
+  if (!session) return 'i-ri-terminal-box-line'
+  const candidates = [session.appName, session.status?.app, session.foregroundName, session.argv[0]]
+  for (const raw of candidates) {
+    if (!raw) continue
+    const token = raw.trim().toLowerCase().split('/').pop() ?? ''
+    if (Object.hasOwn(HERDR_TAB_ICON_MAP, token)) {
+      return HERDR_TAB_ICON_MAP[token]!
+    }
+    for (const [key, icon] of Object.entries(HERDR_TAB_ICON_MAP)) {
+      if (token.includes(key)) return icon
+    }
+  }
+  if (session.machine !== null) return 'i-ri-server-line'
+  return 'i-ri-terminal-box-line'
 }
 
 const { t } = useI18n()
@@ -70,8 +118,12 @@ const router = useRouter()
 const { isMac, platform } = useRendererPlatform()
 const sdk = createBrowserSdk(useTuffTransport())
 const history = useConversationHistory()
+const herdr = useHerdrRuntime({ subscribe: false })
+const herdrStageControl = useHerdrStageControl()
+const { toggleTerminal } = useShellTerminal()
 const projectStore = getActivePinia() ? useProjectStore() : null
 const workspaceTabs = useShellWorkspaceTabs()
+const creatingHerdrSession = ref(false)
 const {
   state,
   connecting,
@@ -102,6 +154,7 @@ const tabMovePending = ref(false)
 
 const onBrowserRoute = computed(() => route.path === APP_SURFACE_ROUTES.browser)
 const onHomeConversationRoute = computed(() => route.path.startsWith('/home/c/'))
+const onHerdrRoute = computed(() => route.path.startsWith('/home/herdr/'))
 const onHomeBlankRoute = computed(() => route.path === APP_SURFACE_ROUTES.home)
 const onUnfocusedShellRoute = computed(
   () => route.path === '/store' || route.path.startsWith('/setting')
@@ -116,11 +169,57 @@ const routeConversationId = computed<string | null>(() => {
   return tail || null
 })
 
+const routeHerdrAddress = computed<string | null>(() => {
+  if (!onHerdrRoute.value) return null
+  const params = route.params as Record<string, unknown> | undefined
+  const paramAddress = typeof params?.address === 'string' ? params.address : ''
+  const raw = paramAddress || route.path.slice('/home/herdr/'.length)
+  if (!raw) return null
+  try {
+    return decodeURIComponent(raw).trim() || null
+  } catch {
+    return raw.trim() || null
+  }
+})
+
+const herdrProjectGroups = computed<HerdrProjectGroup[]>(() => {
+  if (herdr.projectGroups?.value) return herdr.projectGroups.value
+  const live = herdr.liveSessions?.value ?? [...herdr.sessionByAddress.value.values()]
+  return groupHerdrSessions(live.filter((session) => session.state === 'live'))
+})
+
+const herdrProjectGroupByKey = computed(() => {
+  if (herdr.projectGroupByKey?.value) return herdr.projectGroupByKey.value
+  const map = new Map<string, HerdrProjectGroup>()
+  for (const group of herdrProjectGroups.value) map.set(group.key, group)
+  return map
+})
+
+const herdrProjectGroupByAddress = computed(() => {
+  if (herdr.projectGroupByAddress?.value) return herdr.projectGroupByAddress.value
+  const map = new Map<string, HerdrProjectGroup>()
+  for (const group of herdrProjectGroups.value) {
+    for (const session of group.sessions) map.set(session.address, group)
+  }
+  return map
+})
+
+const activeRouteHerdrGroup = computed<HerdrProjectGroup | null>(() =>
+  routeHerdrAddress.value
+    ? (herdrProjectGroupByAddress.value.get(routeHerdrAddress.value) ?? null)
+    : null
+)
+
 function resolveConversationRecord(conversationId: string) {
   return history.conversations.value.find((item) => item.id === conversationId) ?? null
 }
 
 function resolveConversationSpace(conversationId: string): string | null {
+  if (conversationId.startsWith('herdr:')) {
+    const addr = conversationId.slice('herdr:'.length)
+    const group = herdrProjectGroupByAddress.value.get(addr)
+    return group ? herdrProjectSpaceKey(group.key) : HERDR_SPACE_KEY
+  }
   const record = resolveConversationRecord(conversationId)
   if (!record) return null
   return projectSpaceKey(record.projectId)
@@ -134,6 +233,11 @@ const activeBrowserTab = computed(() => {
 
 const currentLiveScope = computed<string | null>(() => {
   if (onUnfocusedShellRoute.value) return null
+  if (onHerdrRoute.value && routeHerdrAddress.value) {
+    return activeRouteHerdrGroup.value
+      ? herdrProjectSpaceKey(activeRouteHerdrGroup.value.key)
+      : HERDR_SPACE_KEY
+  }
   if (onHomeConversationRoute.value && routeConversationId.value) {
     return (
       resolveConversationSpace(routeConversationId.value) ??
@@ -158,6 +262,15 @@ const displayedScopeKey = computed<string>(
   () => currentLiveScope.value ?? workspaceTabs.lastWorkspaceScope.value ?? BROWSER_SCOPE_KEY
 )
 const isSpaceScope = computed(() => isSpaceScopeKey(displayedScopeKey.value))
+const isHerdrScope = computed(() => isHerdrSpaceKey(displayedScopeKey.value))
+const displayedHerdrGroup = computed<HerdrProjectGroup | null>(() => {
+  const groupKey = herdrGroupKeyFromSpaceKey(displayedScopeKey.value)
+  if (!groupKey) return activeRouteHerdrGroup.value
+  return herdrProjectGroupByKey.value.get(groupKey) ?? null
+})
+const displayedHerdrTabTitles = computed<Map<string, string> | null>(() =>
+  displayedHerdrGroup.value ? buildHerdrProjectTabTitles(displayedHerdrGroup.value) : null
+)
 
 function browserTabTitle(tab: BrowserTabState): string {
   if (!tab.url) return t('browser.newTab')
@@ -207,6 +320,19 @@ const displayedTabs = computed<StripTab[]>(() => {
         conversationId: entry.conversationId,
         spaceKey: scope
       })
+    } else if (entry.kind === 'herdr') {
+      const session = herdr.sessionByAddress.value.get(entry.address)
+      result.push({
+        id: entry.id,
+        kind: 'herdr',
+        title:
+          displayedHerdrTabTitles.value?.get(entry.address) ||
+          session?.displayTitle ||
+          entry.address,
+        icon: resolveHerdrTabIcon(session),
+        herdrAddress: entry.address,
+        spaceKey: scope
+      })
     } else if (entry.kind === 'draft') {
       result.push({
         id: entry.id,
@@ -242,6 +368,10 @@ const activeStripTabId = computed<string | null>(() => {
     if (!current) return null
     return displayedTabs.value.some((tab) => tab.id === current.id) ? current.id : null
   }
+  if (onHerdrRoute.value && routeHerdrAddress.value) {
+    const id = herdrTabId(routeHerdrAddress.value)
+    return displayedTabs.value.some((tab) => tab.id === id) ? id : null
+  }
   if (onHomeConversationRoute.value && routeConversationId.value) {
     const id = conversationTabId(routeConversationId.value)
     return displayedTabs.value.some((tab) => tab.id === id) ? id : null
@@ -261,6 +391,31 @@ const activeStripTab = computed<StripTab | null>(
   () => displayedTabs.value.find((tab) => tab.id === activeStripTabId.value) ?? null
 )
 const addControlsDisabled = computed(() => !isSpaceScope.value && !state.value)
+const primaryAddDisabled = computed(
+  () =>
+    addControlsDisabled.value ||
+    (isHerdrScope.value && (creatingHerdrSession.value || !herdr.isConnected.value))
+)
+const primaryAddLabel = computed(() => {
+  if (isHerdrScope.value) return t('herdr.sidebar.newSession')
+  if (isSpaceScope.value) return t('shell.newChat')
+  return t('browser.addTab')
+})
+const hiddenHerdrSessions = computed<Array<{ address: string; title: string; icon: string }>>(
+  () => {
+    const group = displayedHerdrGroup.value
+    if (!group) return []
+    const visibleIds = new Set(displayedTabs.value.map((tab) => tab.id))
+    const titles = displayedHerdrTabTitles.value
+    return group.sessions
+      .filter((session) => !visibleIds.has(herdrTabId(session.address)))
+      .map((session) => ({
+        address: session.address,
+        title: titles?.get(session.address) || session.displayTitle || session.address,
+        icon: resolveHerdrTabIcon(session)
+      }))
+  }
+)
 
 const tabMenuOpenModel = computed({
   get: () => tabMenuOpen.value,
@@ -278,6 +433,30 @@ const tabMenuIndex = computed(() =>
   displayedTabs.value.findIndex((tab) => tab.id === tabMenuTargetId.value)
 )
 const tabMenuTarget = computed<StripTab | undefined>(() => displayedTabs.value[tabMenuIndex.value])
+const tabMenuHerdrAddress = computed(() =>
+  tabMenuTarget.value?.kind === 'herdr' ? (tabMenuTarget.value.herdrAddress ?? '') : ''
+)
+const tabMenuHerdrSession = computed(() =>
+  tabMenuHerdrAddress.value
+    ? (herdr.sessionByAddress.value.get(tabMenuHerdrAddress.value) ?? null)
+    : null
+)
+const tabMenuHerdrLive = computed(() => tabMenuHerdrSession.value?.state === 'live')
+const tabMenuHerdrViewMode = computed<HerdrStageViewMode>(() => {
+  const addr = tabMenuHerdrAddress.value
+  if (!addr) return 'chat'
+  const active = herdrStageControl.activeHandle.value
+  if (active && active.address === addr) return active.getViewMode()
+  const selected = herdrStageControl.getSelectedMode(addr)
+  if (selected) return selected
+  const projection = herdr.projectionsByAddress?.[addr]
+  return projection && !projection.available ? 'terminal' : 'chat'
+})
+const tabMenuHerdrPanelOpen = computed(() => {
+  const addr = tabMenuHerdrAddress.value
+  const active = herdrStageControl.activeHandle.value
+  return Boolean(addr && active && active.address === addr && active.isPanelOpen())
+})
 const leftTabsCount = computed(() => (tabMenuIndex.value > 0 ? tabMenuIndex.value : 0))
 const rightTabsCount = computed(() => {
   const total = displayedTabs.value.length
@@ -337,8 +516,46 @@ async function openSpaceWebTab(spaceKey: string, url?: string): Promise<void> {
   })
 }
 
+async function openNewHerdrSession(): Promise<void> {
+  addTabMenuOpen.value = false
+  if (creatingHerdrSession.value || !herdr.isConnected.value) return
+  creatingHerdrSession.value = true
+  try {
+    const targetGroup = displayedHerdrGroup.value
+    const request = targetGroup ? buildNewTerminalRequestForGroup(targetGroup) : {}
+    const session = await herdr.startSession(request)
+    const targetScope = targetGroup ? herdrProjectSpaceKey(targetGroup.key) : HERDR_SPACE_KEY
+    setLastWorkspaceScope(targetScope)
+    if (targetGroup) {
+      setLastHerdrAddressForGroup(targetGroup.key, session.address)
+    }
+    ensureHerdrTab(session.address, targetScope)
+    await router.push(herdrConversationRoute(session.address))
+  } catch {
+    toast.error(t('terminal.failed'))
+  } finally {
+    creatingHerdrSession.value = false
+  }
+}
+
+async function reopenHerdrSession(address: string): Promise<void> {
+  addTabMenuOpen.value = false
+  const targetGroup = displayedHerdrGroup.value
+  const targetScope = targetGroup ? herdrProjectSpaceKey(targetGroup.key) : displayedScopeKey.value
+  setLastWorkspaceScope(targetScope)
+  if (targetGroup) {
+    setLastHerdrAddressForGroup(targetGroup.key, address)
+  }
+  ensureHerdrTab(address, targetScope)
+  await router.push(herdrConversationRoute(address))
+}
+
 function handlePrimaryAddClick(): void {
   addTabMenuOpen.value = false
+  if (isHerdrScope.value) {
+    void openNewHerdrSession()
+    return
+  }
   if (isSpaceScope.value) {
     void openSpaceConversationDraft(displayedScopeKey.value)
     return
@@ -389,6 +606,13 @@ function activateSpaceEntry(entry: SpaceWorkspaceTab): void {
     }
     return
   }
+  if (entry.kind === 'herdr') {
+    const targetPath = herdrConversationRoute(entry.address)
+    if (route.path !== targetPath) {
+      void router.push(targetPath)
+    }
+    return
+  }
   if (entry.kind === 'draft') {
     void openSpaceConversationDraft(entry.spaceKey)
     return
@@ -402,6 +626,13 @@ function activateOrOpenTab(tab: StripTab): void {
     if (tab.spaceKey) setLastWorkspaceScope(tab.spaceKey)
     if (route.path === `/home/c/${tab.conversationId}`) return
     void router.push(`/home/c/${tab.conversationId}`)
+    return
+  }
+  if (tab.kind === 'herdr' && tab.herdrAddress) {
+    setLastWorkspaceScope(tab.spaceKey ?? HERDR_SPACE_KEY)
+    const targetPath = herdrConversationRoute(tab.herdrAddress)
+    if (route.path === targetPath) return
+    void router.push(targetPath)
     return
   }
   if (tab.kind === 'draft') {
@@ -461,6 +692,11 @@ async function closeStripTab(tab: StripTab): Promise<void> {
       activateSpaceEntry(resolvedNext)
       return
     }
+    if (isHerdrSpaceKey(scope)) {
+      setLastWorkspaceScope(BROWSER_SCOPE_KEY)
+      void router.push(APP_SURFACE_ROUTES.browser)
+      return
+    }
     void openSpaceConversationDraft(scope)
     return
   }
@@ -472,7 +708,7 @@ async function closeStripTab(tab: StripTab): Promise<void> {
     activateSpaceEntry(nextTab)
     return
   }
-  if (removed?.kind === 'draft') {
+  if (removed?.kind === 'draft' || isHerdrSpaceKey(scope)) {
     setLastWorkspaceScope(BROWSER_SCOPE_KEY)
     void router.push(APP_SURFACE_ROUTES.browser)
     return
@@ -519,6 +755,78 @@ function openTabMenu(tabId: string, event: MouseEvent | KeyboardEvent): void {
   } else {
     tabMenu.value?.openAt(event)
   }
+}
+
+async function selectHerdrTabViewMode(mode: HerdrStageViewMode): Promise<void> {
+  const target = tabMenuTarget.value
+  const addr = tabMenuHerdrAddress.value
+  tabMenuOpen.value = false
+  if (!target || !addr) return
+  herdrStageControl.setSelectedMode(addr, mode)
+  if (routeHerdrAddress.value !== addr) {
+    activateOrOpenTab(target)
+  }
+}
+
+async function runHerdrTabRefresh(): Promise<void> {
+  const addr = tabMenuHerdrAddress.value
+  tabMenuOpen.value = false
+  if (!addr) return
+  const active = herdrStageControl.activeHandle.value
+  if (active && active.address === addr) {
+    await active.refreshProjection()
+    return
+  }
+  await herdr.refreshProjection?.(addr)
+}
+
+async function runHerdrTabInterrupt(): Promise<void> {
+  const addr = tabMenuHerdrAddress.value
+  tabMenuOpen.value = false
+  if (!addr) return
+  const active = herdrStageControl.activeHandle.value
+  if (active && active.address === addr) {
+    await active.interrupt()
+    return
+  }
+  try {
+    await herdr.interrupt?.(addr)
+  } catch {
+    toast.error(t('herdr.actions.interruptFailed'))
+  }
+}
+
+async function runHerdrTabKill(): Promise<void> {
+  const addr = tabMenuHerdrAddress.value
+  tabMenuOpen.value = false
+  if (!addr) return
+  const active = herdrStageControl.activeHandle.value
+  if (active && active.address === addr) {
+    await active.kill()
+    return
+  }
+  try {
+    await herdr.kill?.(addr)
+  } catch {
+    toast.error(t('herdr.stage.killConfirmFailed'))
+  }
+}
+
+async function runHerdrTabTogglePanel(): Promise<void> {
+  const target = tabMenuTarget.value
+  const addr = tabMenuHerdrAddress.value
+  tabMenuOpen.value = false
+  if (!target || !addr) return
+  if (herdrStageControl.activeHandle.value?.address !== addr) {
+    activateOrOpenTab(target)
+    await nextTick()
+  }
+  herdrStageControl.activeHandle.value?.togglePanel()
+}
+
+function runHerdrTabToggleTerminal(): void {
+  tabMenuOpen.value = false
+  toggleTerminal()
 }
 
 async function selectTabMenuAction(action: BrowserTabMenuAction): Promise<void> {
@@ -811,14 +1119,42 @@ watch(
     [
       route.path,
       routeConversationId.value,
+      routeHerdrAddress.value,
+      activeRouteHerdrGroup.value,
+      displayedHerdrGroup.value,
       projectStore?.activeProjectId ?? null,
       history.conversations.value,
       currentLiveScope.value
     ] as const,
-  ([path, convId, activeProjectId, _convs, liveScope]) => {
+  ([
+    path,
+    convId,
+    herdrAddress,
+    routeGroup,
+    displayedGroup,
+    activeProjectId,
+    _convs,
+    liveScope
+  ]) => {
     const previousPath = lastObservedRoutePath
     lastObservedRoutePath = path
 
+    if (onHerdrRoute.value && herdrAddress) {
+      if (routeGroup) {
+        const spaceKey = herdrProjectSpaceKey(routeGroup.key)
+        setLastWorkspaceScope(spaceKey)
+        setLastHerdrAddressForGroup(routeGroup.key, herdrAddress)
+        syncHerdrProjectTabs(
+          spaceKey,
+          routeGroup.sessions.map((session) => session.address),
+          { activeAddress: herdrAddress }
+        )
+      } else {
+        setLastWorkspaceScope(HERDR_SPACE_KEY)
+        ensureHerdrTab(herdrAddress, HERDR_SPACE_KEY)
+      }
+      return
+    }
     if (onHomeConversationRoute.value && convId) {
       const spaceKey = resolveConversationSpace(convId) ?? projectSpaceKey(activeProjectId)
       setLastWorkspaceScope(spaceKey)
@@ -835,6 +1171,12 @@ watch(
     }
     if (liveScope) {
       setLastWorkspaceScope(liveScope)
+    }
+    if (displayedGroup && isHerdrSpaceKey(displayedScopeKey.value)) {
+      syncHerdrProjectTabs(
+        herdrProjectSpaceKey(displayedGroup.key),
+        displayedGroup.sessions.map((session) => session.address)
+      )
     }
   },
   { immediate: true }
@@ -1029,8 +1371,8 @@ onBeforeUnmount(() => {
           icon="i-ri-add-line"
           size="sm"
           shape="circle"
-          :label="isSpaceScope ? t('shell.newChat') : t('browser.addTab')"
-          :disabled="addControlsDisabled"
+          :label="primaryAddLabel"
+          :disabled="primaryAddDisabled"
           class="BrowserTabStrip-AddBtn flex-none"
           @click="handlePrimaryAddClick"
           @contextmenu.prevent="openAddTabMenu"
@@ -1061,7 +1403,48 @@ onBeforeUnmount(() => {
             </button>
           </template>
 
-          <template v-if="isSpaceScope">
+          <template v-if="isHerdrScope">
+            <TxDropdownItem
+              data-testid="herdr-add-menu-new-session"
+              :disabled="creatingHerdrSession || !herdr.isConnected.value"
+              @select="openNewHerdrSession"
+            >
+              <span class="BrowserTabStrip-AddMenuItem">
+                <span
+                  class="i-ri-terminal-box-line BrowserTabStrip-AddMenuIcon"
+                  aria-hidden="true"
+                />
+                <span>{{ t('herdr.sidebar.newSession') }}</span>
+              </span>
+            </TxDropdownItem>
+
+            <TxDropdownItem v-if="state" data-testid="space-add-menu-new-web" @select="openNewTab">
+              <span class="BrowserTabStrip-AddMenuItem">
+                <span class="i-ri-global-line BrowserTabStrip-AddMenuIcon" aria-hidden="true" />
+                <span>{{ t('browser.addSpaceWebTab') }}</span>
+              </span>
+            </TxDropdownItem>
+
+            <template v-if="hiddenHerdrSessions.length > 0">
+              <div class="BrowserTabStrip-AddMenuDivider" role="separator" />
+              <div class="BrowserTabStrip-AddMenuSection">
+                {{ t('herdr.space.reopenTerminals') }}
+              </div>
+              <TxDropdownItem
+                v-for="item in hiddenHerdrSessions"
+                :key="item.address"
+                data-testid="herdr-add-menu-reopen"
+                @select="reopenHerdrSession(item.address)"
+              >
+                <span class="BrowserTabStrip-AddMenuItem">
+                  <span :class="item.icon" class="BrowserTabStrip-AddMenuIcon" aria-hidden="true" />
+                  <span class="BrowserTabStrip-AddMenuLabel">{{ item.title }}</span>
+                </span>
+              </TxDropdownItem>
+            </template>
+          </template>
+
+          <template v-else-if="isSpaceScope">
             <TxDropdownItem
               data-testid="space-add-menu-new-chat"
               @select="openSpaceConversationDraft(displayedScopeKey)"
@@ -1171,32 +1554,133 @@ onBeforeUnmount(() => {
     :activation-feedback="false"
   >
     <template #menu>
-      <TxContextMenuItem
-        :disabled="tabMenuTarget?.kind !== 'browser' || !tabMenuTarget.browserTab?.url"
-        @select="selectTabMenuAction('reload')"
-      >
-        {{ t('browser.tabMenu.reload') }}
-        <template #right>
-          <span class="BrowserTabStrip-MenuRight">
-            <TxKbd v-for="key in shortcutKeys('R')" :key="key" class="BrowserTabStrip-MenuKbd">
-              {{ key }}
-            </TxKbd>
-            <span class="BrowserTabStrip-MenuHintIcon i-ri-refresh-line" aria-hidden="true" />
-          </span>
+      <template v-if="tabMenuTarget?.kind === 'herdr'">
+        <TxContextMenuItem
+          data-testid="herdr-tab-menu-mode-chat"
+          @select="selectHerdrTabViewMode('chat')"
+        >
+          {{ t('herdr.stage.modeChat') }}
+          <template #right>
+            <span class="BrowserTabStrip-MenuRight">
+              <span
+                v-if="tabMenuHerdrViewMode === 'chat'"
+                class="BrowserTabStrip-MenuHintIcon i-ri-check-line text-[var(--shell-primary)]"
+                aria-hidden="true"
+              />
+              <span class="BrowserTabStrip-MenuHintIcon i-ri-chat-3-line" aria-hidden="true" />
+            </span>
+          </template>
+        </TxContextMenuItem>
+        <TxContextMenuItem
+          data-testid="herdr-tab-menu-mode-terminal"
+          @select="selectHerdrTabViewMode('terminal')"
+        >
+          {{ t('herdr.stage.modeTerminal') }}
+          <template #right>
+            <span class="BrowserTabStrip-MenuRight">
+              <span
+                v-if="tabMenuHerdrViewMode === 'terminal'"
+                class="BrowserTabStrip-MenuHintIcon i-ri-check-line text-[var(--shell-primary)]"
+                aria-hidden="true"
+              />
+              <span
+                class="BrowserTabStrip-MenuHintIcon i-ri-terminal-box-line"
+                aria-hidden="true"
+              />
+            </span>
+          </template>
+        </TxContextMenuItem>
+        <TxContextMenuDivider />
+        <TxContextMenuItem data-testid="herdr-tab-menu-refresh" @select="runHerdrTabRefresh">
+          {{ t('herdr.conversation.refresh') }}
+          <template #right>
+            <span class="BrowserTabStrip-MenuRight">
+              <span class="BrowserTabStrip-MenuHintIcon i-ri-refresh-line" aria-hidden="true" />
+            </span>
+          </template>
+        </TxContextMenuItem>
+        <TxContextMenuItem
+          v-if="tabMenuHerdrLive"
+          data-testid="herdr-tab-menu-interrupt"
+          @select="runHerdrTabInterrupt"
+        >
+          {{ t('herdr.actions.interrupt') }}
+          <template #right>
+            <span class="BrowserTabStrip-MenuRight">
+              <span class="BrowserTabStrip-MenuHintIcon i-ri-stop-circle-line" aria-hidden="true" />
+            </span>
+          </template>
+        </TxContextMenuItem>
+        <TxContextMenuItem
+          data-testid="herdr-tab-menu-toggle-panel"
+          @select="runHerdrTabTogglePanel"
+        >
+          {{ tabMenuHerdrPanelOpen ? t('home.closePanel') : t('home.openPanel') }}
+          <template #right>
+            <span class="BrowserTabStrip-MenuRight">
+              <span
+                class="BrowserTabStrip-MenuHintIcon i-ri-layout-right-line"
+                aria-hidden="true"
+              />
+            </span>
+          </template>
+        </TxContextMenuItem>
+        <TxContextMenuItem
+          data-testid="herdr-tab-menu-toggle-terminal"
+          @select="runHerdrTabToggleTerminal"
+        >
+          {{ t('shortcuts.commands.toggleTerminal') }}
+          <template #right>
+            <span class="BrowserTabStrip-MenuRight">
+              <span
+                class="BrowserTabStrip-MenuHintIcon i-ri-terminal-window-line"
+                aria-hidden="true"
+              />
+            </span>
+          </template>
+        </TxContextMenuItem>
+        <template v-if="tabMenuHerdrLive">
+          <TxContextMenuDivider />
+          <TxContextMenuItem danger data-testid="herdr-tab-menu-kill" @select="runHerdrTabKill">
+            {{ t('terminal.herdr.kill') }}
+            <template #right>
+              <span class="BrowserTabStrip-MenuRight">
+                <span class="BrowserTabStrip-MenuHintIcon i-ri-shut-down-line" aria-hidden="true" />
+              </span>
+            </template>
+          </TxContextMenuItem>
         </template>
-      </TxContextMenuItem>
-      <TxContextMenuItem
-        :disabled="tabMenuTarget?.kind !== 'browser'"
-        @select="selectTabMenuAction('duplicate')"
-      >
-        {{ t('browser.tabMenu.duplicate') }}
-        <template #right>
-          <span class="BrowserTabStrip-MenuRight">
-            <span class="BrowserTabStrip-MenuHintIcon i-ri-file-copy-line" aria-hidden="true" />
-          </span>
-        </template>
-      </TxContextMenuItem>
-      <TxContextMenuDivider />
+        <TxContextMenuDivider />
+      </template>
+
+      <template v-else>
+        <TxContextMenuItem
+          :disabled="tabMenuTarget?.kind !== 'browser' || !tabMenuTarget.browserTab?.url"
+          @select="selectTabMenuAction('reload')"
+        >
+          {{ t('browser.tabMenu.reload') }}
+          <template #right>
+            <span class="BrowserTabStrip-MenuRight">
+              <TxKbd v-for="key in shortcutKeys('R')" :key="key" class="BrowserTabStrip-MenuKbd">
+                {{ key }}
+              </TxKbd>
+              <span class="BrowserTabStrip-MenuHintIcon i-ri-refresh-line" aria-hidden="true" />
+            </span>
+          </template>
+        </TxContextMenuItem>
+        <TxContextMenuItem
+          :disabled="tabMenuTarget?.kind !== 'browser'"
+          @select="selectTabMenuAction('duplicate')"
+        >
+          {{ t('browser.tabMenu.duplicate') }}
+          <template #right>
+            <span class="BrowserTabStrip-MenuRight">
+              <span class="BrowserTabStrip-MenuHintIcon i-ri-file-copy-line" aria-hidden="true" />
+            </span>
+          </template>
+        </TxContextMenuItem>
+        <TxContextMenuDivider />
+      </template>
       <TxContextMenuItem :disabled="!tabMenuTarget" @select="selectTabMenuAction('close')">
         {{ t('browser.tabMenu.close') }}
         <template #right>

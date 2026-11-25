@@ -1,21 +1,40 @@
 <script lang="ts" name="WorkspaceFileViewer" setup>
+import type { SelectionActionItem, SelectionPayload } from '@talex-touch/tuffex/selection-actions'
 import type { WorkspaceReadFileResult } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TxMarkdownView } from '@talex-touch/tuffex/markdown-view'
+import { TxPopover } from '@talex-touch/tuffex/popover'
+import { TxSelectionActions, useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
-import { isElectronRenderer } from '@talex-touch/utils/env'
+import { hasWindow, isElectronRenderer } from '@talex-touch/utils/env'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AgentWorkspaceEvents } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { SHELL_MENU_CARD } from '~/components/shell/shell-menu-panel'
 import { basenameOfPath } from '~/modules/browser-workspace/preview-url'
+import {
+  buildPathBreadcrumbs,
+  extractMarkdownHeadings,
+  formatBatchCommentsPrompt,
+  formatCompactFileSize,
+  formatSingleSelectionPrompt,
+  resolveFileIconClass,
+  type MarkdownReviewComment,
+  type WorkspaceFileAiActionPayload
+} from './workspace-file-tree'
+
+const COMMENTS_STORAGE_PREFIX = 'tuff.fileViewer.comments.v1:'
+const MAX_STORED_COMMENTS = 30
 
 const props = withDefaults(
   defineProps<{
     filePath: string
     displayPath?: string
+    workspaceRoot?: string
     conversationId?: string | null
     line?: number
     refreshToken?: number
@@ -23,21 +42,30 @@ const props = withDefaults(
     canGoBack?: boolean
     /** Hide the "Open in Built-in Browser" button when already rendered inside BrowserPage. */
     showOpenInBrowser?: boolean
+    /** Enable Markdown text selection AI actions & review comments when hosted beside an AI chat. */
+    aiActionsEnabled?: boolean
+    /** When true, clicking a parent folder breadcrumb asks the host to reveal it in the file tree. */
+    preferTreeForBreadcrumbs?: boolean
   }>(),
   {
     displayPath: '',
+    workspaceRoot: '',
     conversationId: null,
     line: undefined,
     refreshToken: 0,
     canGoBack: false,
-    showOpenInBrowser: true
+    showOpenInBrowser: true,
+    aiActionsEnabled: false,
+    preferTreeForBreadcrumbs: false
   }
 )
 
 const emit = defineEmits<{
   (event: 'back'): void
   (event: 'navigate', payload: { path: string; displayPath: string }): void
+  (event: 'reveal-dir', dirPath: string): void
   (event: 'open-in-browser', payload: { path: string; displayPath: string; line?: number }): void
+  (event: 'ai-action', payload: WorkspaceFileAiActionPayload): void
 }>()
 
 const { t } = useI18n()
@@ -51,6 +79,15 @@ function resolveAppSdk() {
   }
 }
 
+function extractDomNode(value: unknown): Node | null {
+  if (value instanceof Node) return value
+  if (value && typeof value === 'object') {
+    if ('$el' in value && value.$el instanceof Node) return value.$el
+    if ('el' in value && value.el instanceof Node) return value.el
+  }
+  return null
+}
+
 const loading = ref(false)
 const error = ref('')
 const data = ref<WorkspaceReadFileResult | null>(null)
@@ -58,7 +95,21 @@ const viewMode = ref<'preview' | 'source'>('preview')
 const wrapLines = ref(true)
 const imageZoom = ref(1)
 const pdfBlobUrl = ref('')
+const moreMenuOpen = ref(false)
+const outlineOpen = ref(false)
+
 const codeContainerRef = ref<HTMLElement | null>(null)
+const markdownContainerRef = ref<HTMLElement | null>(null)
+const selectionBarRef = ref<{ updatePosition?: () => void; el?: HTMLElement | null } | null>(null)
+const selectionPrompt = ref('')
+const commentInputRef = ref<HTMLTextAreaElement | null>(null)
+
+const commentComposerOpen = ref(false)
+const commentDraftQuote = ref('')
+const commentDraftText = ref('')
+const commentsExpanded = ref(false)
+const comments = ref<MarkdownReviewComment[]>([])
+
 let loadGeneration = 0
 
 function revokePdfUrl(): void {
@@ -91,15 +142,28 @@ const supportsPreviewToggle = computed(
   () => isHtml.value || isSvg.value || isMarkdown.value || isJson.value
 )
 
-const fileIcon = computed(() => {
-  if (data.value?.kind === 'directory') return 'i-ri-folder-3-line'
-  if (isHtml.value) return 'i-ri-html5-line'
-  if (isMarkdown.value) return 'i-ri-markdown-line'
-  if (isJson.value) return 'i-ri-braces-line'
-  if (data.value?.kind === 'image' || isSvg.value) return 'i-ri-image-2-line'
-  if (data.value?.kind === 'pdf') return 'i-ri-file-pdf-2-line'
-  return 'i-ri-file-code-line'
+const fileIcon = computed(() =>
+  resolveFileIconClass(fileName.value, data.value?.kind === 'directory')
+)
+
+const breadcrumbs = computed(() =>
+  buildPathBreadcrumbs(resolvedPath.value, props.workspaceRoot || undefined)
+)
+
+const displayPathForAi = computed(() => {
+  const root = props.workspaceRoot?.trim().replace(/\\/g, '/').replace(/\/+$/, '')
+  const norm = resolvedPath.value.replace(/\\/g, '/')
+  if (root && norm.startsWith(`${root}/`)) {
+    return norm.slice(root.length + 1)
+  }
+  return props.displayPath || resolvedPath.value
 })
+
+const markdownHeadings = computed(() =>
+  isMarkdown.value && viewMode.value === 'preview'
+    ? extractMarkdownHeadings(data.value?.text ?? '')
+    : []
+)
 
 const imageDataUrl = computed(() => {
   if (data.value?.kind === 'image' && data.value.base64) {
@@ -154,11 +218,288 @@ const parentDirectoryPath = computed(() => {
   return current.slice(0, cut)
 })
 
-function formatFileSize(bytes?: number): string {
-  if (bytes === undefined || !Number.isFinite(bytes)) return ''
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+// ── Markdown Selection Quick AI Actions & Comments ──────────────────────────────────
+const markdownSelectionActive = computed(() =>
+  Boolean(props.aiActionsEnabled && isMarkdown.value && viewMode.value === 'preview')
+)
+
+const { selection: mdSelection, clear: clearMdSelection } = useSelectionAnchor({
+  root: markdownContainerRef,
+  disabled: () => !markdownSelectionActive.value,
+  ignore: () => {
+    const node = extractDomNode(selectionBarRef.value)
+    return node instanceof Element ? [node] : []
+  },
+  minLength: 2
+})
+
+const mdSelectionActions = computed<SelectionActionItem[]>(() => [
+  { id: 'comment', label: t('home.sidePanel.selectionComment') },
+  { id: 'explain', label: t('home.sidePanel.selectionExplain') },
+  { id: 'improve', label: t('home.sidePanel.selectionImprove') },
+  { id: 'quote', label: t('home.sidePanel.selectionQuote'), more: true },
+  { id: 'translate', label: t('home.sidePanel.selectionTranslate'), more: true },
+  { id: 'copy', label: t('home.copy'), more: true }
+])
+
+function dismissMdSelection(): void {
+  clearMdSelection()
+  selectionPrompt.value = ''
+  window.getSelection()?.removeAllRanges()
+}
+
+function readStoredComments(targetPath: string): MarkdownReviewComment[] {
+  if (!hasWindow() || !targetPath) return []
+  try {
+    const raw = window.sessionStorage.getItem(`${COMMENTS_STORAGE_PREFIX}${targetPath}`)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter(
+        (item): item is MarkdownReviewComment =>
+          Boolean(item) &&
+          typeof item.id === 'string' &&
+          typeof item.quote === 'string' &&
+          typeof item.comment === 'string'
+      )
+      .slice(0, MAX_STORED_COMMENTS)
+  } catch {
+    return []
+  }
+}
+
+function writeStoredComments(targetPath: string, list: MarkdownReviewComment[]): void {
+  if (!hasWindow() || !targetPath) return
+  try {
+    const key = `${COMMENTS_STORAGE_PREFIX}${targetPath}`
+    if (list.length === 0) {
+      window.sessionStorage.removeItem(key)
+    } else {
+      window.sessionStorage.setItem(key, JSON.stringify(list.slice(0, MAX_STORED_COMMENTS)))
+    }
+  } catch {
+    // ignore storage quota failures
+  }
+}
+
+watch(
+  resolvedPath,
+  (nextPath) => {
+    comments.value = readStoredComments(nextPath)
+    commentComposerOpen.value = false
+    commentDraftQuote.value = ''
+    commentDraftText.value = ''
+    commentsExpanded.value = false
+    clearMdSelection()
+    selectionPrompt.value = ''
+  },
+  { immediate: true }
+)
+
+watch(viewMode, () => {
+  clearMdSelection()
+  selectionPrompt.value = ''
+  outlineOpen.value = false
+})
+
+function emitAiSelection(mode: 'send' | 'quote', selectedText: string, prompt: string): void {
+  emit('ai-action', {
+    mode,
+    filePath: resolvedPath.value,
+    displayPath: displayPathForAi.value,
+    selectedText,
+    prompt
+  })
+}
+
+async function handleMdSelectionAction(payload: {
+  id: string
+  selection: SelectionPayload
+}): Promise<void> {
+  const selectedText = payload.selection.text.trim()
+  if (!selectedText) {
+    dismissMdSelection()
+    return
+  }
+
+  if (payload.id === 'copy') {
+    try {
+      await navigator.clipboard.writeText(selectedText)
+      toast.success(t('home.copied'))
+    } catch {
+      // ignore clipboard errors
+    }
+    dismissMdSelection()
+    return
+  }
+
+  if (payload.id === 'comment') {
+    commentDraftQuote.value = selectedText
+    commentDraftText.value = ''
+    commentComposerOpen.value = true
+    dismissMdSelection()
+    await nextTick()
+    commentInputRef.value?.focus()
+    return
+  }
+
+  if (payload.id === 'quote') {
+    const formatted = formatSingleSelectionPrompt({
+      displayPath: displayPathForAi.value,
+      selectedText,
+      instruction: ''
+    })
+    emitAiSelection('quote', selectedText, formatted)
+    dismissMdSelection()
+    return
+  }
+
+  const instructionMap: Record<string, string> = {
+    explain: t('home.sidePanel.selectionPromptExplain'),
+    improve: t('home.sidePanel.selectionPromptImprove'),
+    translate: t('home.sidePanel.selectionPromptTranslate')
+  }
+  const instruction = instructionMap[payload.id] ?? ''
+  if (instruction) {
+    const formatted = formatSingleSelectionPrompt({
+      displayPath: displayPathForAi.value,
+      selectedText,
+      instruction
+    })
+    emitAiSelection('send', selectedText, formatted)
+  }
+  dismissMdSelection()
+}
+
+function handleMdSelectionSubmit(payload: { prompt: string; selection: SelectionPayload }): void {
+  const selectedText = payload.selection.text.trim()
+  const instruction = payload.prompt.trim()
+  if (!selectedText || !instruction) return
+  const formatted = formatSingleSelectionPrompt({
+    displayPath: displayPathForAi.value,
+    selectedText,
+    instruction
+  })
+  emitAiSelection('send', selectedText, formatted)
+  dismissMdSelection()
+}
+
+function saveDraftComment(): void {
+  const text = commentDraftText.value.trim()
+  const quote = commentDraftQuote.value.trim()
+  if (!text || !quote) return
+  const next: MarkdownReviewComment[] = [
+    ...comments.value,
+    {
+      id: `comment-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      quote,
+      comment: text,
+      createdAt: Date.now()
+    }
+  ]
+  comments.value = next
+  writeStoredComments(resolvedPath.value, next)
+  commentDraftQuote.value = ''
+  commentDraftText.value = ''
+  commentComposerOpen.value = false
+  commentsExpanded.value = true
+}
+
+function sendDraftCommentNow(): void {
+  const text = commentDraftText.value.trim()
+  const quote = commentDraftQuote.value.trim()
+  if (!text || !quote) return
+  const formatted = formatSingleSelectionPrompt({
+    displayPath: displayPathForAi.value,
+    selectedText: quote,
+    instruction: text
+  })
+  emitAiSelection('send', quote, formatted)
+  commentDraftQuote.value = ''
+  commentDraftText.value = ''
+  commentComposerOpen.value = false
+}
+
+function removeComment(id: string): void {
+  const next = comments.value.filter((item) => item.id !== id)
+  comments.value = next
+  writeStoredComments(resolvedPath.value, next)
+  if (next.length === 0) commentsExpanded.value = false
+}
+
+function clearAllComments(): void {
+  comments.value = []
+  writeStoredComments(resolvedPath.value, [])
+  commentsExpanded.value = false
+}
+
+function sendSingleComment(item: MarkdownReviewComment): void {
+  const formatted = formatSingleSelectionPrompt({
+    displayPath: displayPathForAi.value,
+    selectedText: item.quote,
+    instruction: item.comment
+  })
+  emitAiSelection('send', item.quote, formatted)
+  removeComment(item.id)
+}
+
+function sendAllCommentsToAi(): void {
+  if (comments.value.length === 0) return
+  const formatted = formatBatchCommentsPrompt({
+    displayPath: displayPathForAi.value,
+    comments: comments.value,
+    intro: t('home.sidePanel.commentsSendIntro')
+  })
+  emitAiSelection('send', comments.value.map((item) => item.quote).join('\n'), formatted)
+  clearAllComments()
+}
+
+function onCommentKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    commentComposerOpen.value = false
+    return
+  }
+  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+    event.preventDefault()
+    saveDraftComment()
+  }
+}
+
+function onDocumentPointerDown(event: PointerEvent): void {
+  if (!mdSelection.value) return
+  const target = event.target
+  if (!(target instanceof Node)) return
+  const barNode = extractDomNode(selectionBarRef.value)
+  if (barNode?.contains(target)) return
+  dismissMdSelection()
+}
+
+function onDocumentKeyDown(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && mdSelection.value) {
+    dismissMdSelection()
+  }
+}
+
+function onBodyScroll(): void {
+  if (mdSelection.value) {
+    selectionBarRef.value?.updatePosition?.()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', onDocumentPointerDown, true)
+  document.addEventListener('keydown', onDocumentKeyDown)
+})
+
+function scrollToMarkdownHeading(headingIndex: number): void {
+  outlineOpen.value = false
+  const container = markdownContainerRef.value
+  if (!container) return
+  const headingEls = container.querySelectorAll<HTMLElement>('h1, h2, h3, h4')
+  const target = headingEls[headingIndex]
+  target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 async function scrollToTargetLine(): Promise<void> {
@@ -252,7 +593,14 @@ watch(
 onBeforeUnmount(() => {
   loadGeneration += 1
   revokePdfUrl()
+  document.removeEventListener('pointerdown', onDocumentPointerDown, true)
+  document.removeEventListener('keydown', onDocumentKeyDown)
 })
+
+function runMoreAction(action: () => void): void {
+  moreMenuOpen.value = false
+  action()
+}
 
 async function copyPath(): Promise<void> {
   const target = resolvedPath.value
@@ -326,35 +674,28 @@ function openEntry(entryPath: string): void {
   emit('navigate', { path: entryPath, displayPath: entryPath })
 }
 
+function handleBreadcrumbClick(segment: { path: string; isLast: boolean }): void {
+  if (segment.isLast) {
+    void copyPath()
+    return
+  }
+  if (props.preferTreeForBreadcrumbs) {
+    emit('reveal-dir', segment.path)
+    return
+  }
+  openEntry(segment.path)
+}
+
 function adjustZoom(delta: number): void {
   imageZoom.value = Math.max(0.25, Math.min(4, Math.round((imageZoom.value + delta) * 100) / 100))
 }
 </script>
 
 <template>
-  <div class="WorkspaceFileViewer">
-    <header class="WorkspaceFileViewer-Header">
-      <div class="WorkspaceFileViewer-Meta">
-        <div class="WorkspaceFileViewer-TitleRow">
-          <span :class="fileIcon" class="WorkspaceFileViewer-Icon" aria-hidden="true" />
-          <span class="WorkspaceFileViewer-Name" :title="fileName">{{ fileName }}</span>
-          <span v-if="fileExt" class="WorkspaceFileViewer-Badge">{{ fileExt.toUpperCase() }}</span>
-          <span v-if="data && data.kind !== 'directory'" class="WorkspaceFileViewer-Size">
-            {{ formatFileSize(data.size) }}
-          </span>
-        </div>
-        <button
-          type="button"
-          class="WorkspaceFileViewer-PathBtn"
-          :title="`${t('home.fileLink.clickToCopyPath')}: ${resolvedPath}`"
-          @click="copyPath"
-        >
-          <span class="WorkspaceFileViewer-PathText">{{ resolvedPath }}</span>
-          <span class="i-ri-file-copy-line WorkspaceFileViewer-CopyIcon" aria-hidden="true" />
-        </button>
-      </div>
-
-      <div class="WorkspaceFileViewer-Toolbar">
+  <div class="WorkspaceFileViewer" data-testid="workspace-file-viewer">
+    <!-- Slim single-row action bar: view switch on left; ⋮ / ↻ / ≡ on right -->
+    <header class="WorkspaceFileViewer-Header" data-testid="file-viewer-header">
+      <div class="WorkspaceFileViewer-HeaderLead">
         <button
           v-if="canGoBack"
           type="button"
@@ -372,6 +713,7 @@ function adjustZoom(delta: number): void {
             class="WorkspaceFileViewer-SegBtn"
             :class="{ 'is-active': viewMode === 'preview' }"
             :aria-pressed="viewMode === 'preview'"
+            data-testid="file-viewer-mode-preview"
             @click="viewMode = 'preview'"
           >
             {{ isJson ? t('home.sidePanel.formatted') : t('home.code.preview') }}
@@ -381,80 +723,174 @@ function adjustZoom(delta: number): void {
             class="WorkspaceFileViewer-SegBtn"
             :class="{ 'is-active': viewMode === 'source' }"
             :aria-pressed="viewMode === 'source'"
+            data-testid="file-viewer-mode-source"
             @click="viewMode = 'source'"
           >
             {{ isJson ? t('home.sidePanel.raw') : t('home.code.source') }}
           </button>
         </div>
 
-        <button
-          v-if="data?.kind === 'text' && (!supportsPreviewToggle || viewMode === 'source')"
-          type="button"
-          class="WorkspaceFileViewer-ToolBtn"
-          :class="{ 'is-active': wrapLines }"
-          :aria-pressed="wrapLines"
-          :title="t('home.sidePanel.toggleWrap')"
-          :aria-label="t('home.sidePanel.toggleWrap')"
-          @click="wrapLines = !wrapLines"
-        >
-          <span class="i-ri-text-wrap" aria-hidden="true" />
-        </button>
+        <div v-else-if="data?.kind === 'image'" class="WorkspaceFileViewer-ZoomInline">
+          <button
+            type="button"
+            class="WorkspaceFileViewer-ToolBtn"
+            :aria-label="t('home.attachViewer.zoomOut')"
+            @click="adjustZoom(-0.25)"
+          >
+            <span class="i-ri-zoom-out-line" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            class="WorkspaceFileViewer-ZoomLabel"
+            :title="t('home.attachViewer.reset')"
+            @click="imageZoom = 1"
+          >
+            {{ Math.round(imageZoom * 100) }}%
+          </button>
+          <button
+            type="button"
+            class="WorkspaceFileViewer-ToolBtn"
+            :aria-label="t('home.attachViewer.zoomIn')"
+            @click="adjustZoom(0.25)"
+          >
+            <span class="i-ri-zoom-in-line" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
 
-        <button
-          v-if="data?.kind === 'text'"
-          type="button"
-          class="WorkspaceFileViewer-ToolBtn"
-          :title="t('home.sidePanel.copyContent')"
-          :aria-label="t('home.sidePanel.copyContent')"
-          @click="copyContent"
+      <div class="WorkspaceFileViewer-Toolbar">
+        <TxDropdownMenu
+          v-model="moreMenuOpen"
+          placement="bottom-end"
+          :min-width="200"
+          :panel-card="SHELL_MENU_CARD"
+          panel-background="refraction"
         >
-          <span class="i-ri-clipboard-line" aria-hidden="true" />
-        </button>
+          <template #trigger>
+            <button
+              type="button"
+              class="WorkspaceFileViewer-ToolBtn"
+              :class="{ 'is-active': moreMenuOpen }"
+              aria-haspopup="menu"
+              :aria-expanded="moreMenuOpen"
+              :title="t('home.moreActions')"
+              :aria-label="t('home.moreActions')"
+              data-testid="file-viewer-more"
+            >
+              <span class="i-ri-more-2-line" aria-hidden="true" />
+            </button>
+          </template>
+
+          <TxDropdownItem @select="runMoreAction(() => void copyPath())">
+            <span class="WorkspaceFileViewer-MenuItem">
+              <span class="i-ri-links-line" aria-hidden="true" />
+              <span>{{ t('home.sidePanel.copyFullPath') }}</span>
+            </span>
+          </TxDropdownItem>
+
+          <TxDropdownItem
+            v-if="data?.kind === 'text'"
+            @select="runMoreAction(() => void copyContent())"
+          >
+            <span class="WorkspaceFileViewer-MenuItem">
+              <span class="i-ri-clipboard-line" aria-hidden="true" />
+              <span>{{ t('home.sidePanel.copyContent') }}</span>
+            </span>
+          </TxDropdownItem>
+
+          <TxDropdownItem
+            v-if="data?.kind === 'text' && (!supportsPreviewToggle || viewMode === 'source')"
+            @select="runMoreAction(() => (wrapLines = !wrapLines))"
+          >
+            <span class="WorkspaceFileViewer-MenuItem">
+              <span class="i-ri-text-wrap" aria-hidden="true" />
+              <span>{{ t('home.sidePanel.toggleWrap') }}</span>
+            </span>
+            <template v-if="wrapLines" #right>
+              <span class="i-ri-check-line WorkspaceFileViewer-MenuCheck" aria-hidden="true" />
+            </template>
+          </TxDropdownItem>
+
+          <div class="WorkspaceFileViewer-MenuDivider" role="separator" />
+
+          <TxDropdownItem v-if="showOpenInBrowser" @select="runMoreAction(openInBuiltInBrowser)">
+            <span class="WorkspaceFileViewer-MenuItem">
+              <span class="i-ri-window-line" aria-hidden="true" />
+              <span>{{ t('home.fileLink.openInBuiltInBrowser') }}</span>
+            </span>
+          </TxDropdownItem>
+
+          <TxDropdownItem @select="runMoreAction(() => void openWithSystem())">
+            <span class="WorkspaceFileViewer-MenuItem">
+              <span class="i-ri-external-link-line" aria-hidden="true" />
+              <span>{{ t('home.fileLink.openWithSystem') }}</span>
+            </span>
+          </TxDropdownItem>
+
+          <TxDropdownItem @select="runMoreAction(() => void revealInFolder())">
+            <span class="WorkspaceFileViewer-MenuItem">
+              <span class="i-ri-folder-open-line" aria-hidden="true" />
+              <span>{{ t('home.fileLink.revealInFinder') }}</span>
+            </span>
+          </TxDropdownItem>
+        </TxDropdownMenu>
 
         <button
           type="button"
           class="WorkspaceFileViewer-ToolBtn"
           :title="t('home.sidePanel.reload')"
           :aria-label="t('home.sidePanel.reload')"
+          data-testid="file-viewer-refresh"
           @click="loadFile"
         >
           <span class="i-ri-refresh-line" aria-hidden="true" />
         </button>
 
-        <button
-          v-if="showOpenInBrowser"
-          type="button"
-          class="WorkspaceFileViewer-ToolBtn"
-          :title="t('home.fileLink.openInBuiltInBrowser')"
-          :aria-label="t('home.fileLink.openInBuiltInBrowser')"
-          @click="openInBuiltInBrowser"
+        <TxPopover
+          v-if="markdownHeadings.length > 0"
+          v-model="outlineOpen"
+          trigger="click"
+          placement="bottom-end"
+          :offset="6"
+          :match-reference-width="false"
+          :min-width="220"
+          :panel-radius="12"
+          :panel-padding="6"
+          :panel-card="SHELL_MENU_CARD"
+          panel-background="refraction"
         >
-          <span class="i-ri-window-line" aria-hidden="true" />
-        </button>
+          <template #reference>
+            <button
+              type="button"
+              class="WorkspaceFileViewer-ToolBtn"
+              :class="{ 'is-active': outlineOpen }"
+              :aria-expanded="outlineOpen"
+              :title="t('home.sidePanel.outline')"
+              :aria-label="t('home.sidePanel.outline')"
+              data-testid="file-viewer-outline-btn"
+            >
+              <span class="i-ri-list-unordered" aria-hidden="true" />
+            </button>
+          </template>
 
-        <button
-          type="button"
-          class="WorkspaceFileViewer-ToolBtn"
-          :title="t('home.fileLink.openSystemAppTitle')"
-          :aria-label="t('home.fileLink.openWithSystem')"
-          @click="openWithSystem"
-        >
-          <span class="i-ri-external-link-line" aria-hidden="true" />
-        </button>
-
-        <button
-          type="button"
-          class="WorkspaceFileViewer-ToolBtn"
-          :title="t('home.preview.reveal')"
-          :aria-label="t('home.fileLink.revealInFinder')"
-          @click="revealInFolder"
-        >
-          <span class="i-ri-folder-open-line" aria-hidden="true" />
-        </button>
+          <nav class="WorkspaceFileViewer-Outline" :aria-label="t('home.sidePanel.outline')">
+            <div class="WorkspaceFileViewer-OutlineTitle">{{ t('home.sidePanel.outline') }}</div>
+            <button
+              v-for="heading in markdownHeadings"
+              :key="heading.id"
+              type="button"
+              class="WorkspaceFileViewer-OutlineItem"
+              :style="{ paddingLeft: `${8 + (heading.level - 1) * 12}px` }"
+              @click="scrollToMarkdownHeading(heading.index)"
+            >
+              {{ heading.text }}
+            </button>
+          </nav>
+        </TxPopover>
       </div>
     </header>
 
-    <div class="WorkspaceFileViewer-Body">
+    <div class="WorkspaceFileViewer-Body" @scroll.passive="onBodyScroll">
       <div v-if="loading" class="WorkspaceFileViewer-Loading" aria-hidden="true">
         <TxSkeleton :rows="8" animated />
       </div>
@@ -496,7 +932,7 @@ function adjustZoom(delta: number): void {
             @click="openEntry(entry.path)"
           >
             <span
-              :class="entry.isDirectory ? 'i-ri-folder-3-line' : 'i-ri-file-text-line'"
+              :class="resolveFileIconClass(entry.name, entry.isDirectory)"
               class="WorkspaceFileViewer-DirIcon"
               aria-hidden="true"
             />
@@ -505,7 +941,7 @@ function adjustZoom(delta: number): void {
               v-if="!entry.isDirectory && entry.size !== undefined"
               class="WorkspaceFileViewer-DirSize"
             >
-              {{ formatFileSize(entry.size) }}
+              {{ formatCompactFileSize(entry.size) }}
             </span>
           </button>
         </div>
@@ -524,38 +960,17 @@ function adjustZoom(delta: number): void {
         </div>
 
         <!-- Rendered Markdown -->
-        <div v-else-if="isMarkdown && viewMode === 'preview'" class="WorkspaceFileViewer-Markdown">
+        <div
+          v-else-if="isMarkdown && viewMode === 'preview'"
+          ref="markdownContainerRef"
+          class="WorkspaceFileViewer-Markdown"
+          data-testid="file-viewer-markdown"
+        >
           <TxMarkdownView :content="data.text ?? ''" theme="auto" />
         </div>
 
         <!-- Zoomable Image -->
         <div v-else-if="data.kind === 'image'" class="WorkspaceFileViewer-ImageWrap">
-          <div class="WorkspaceFileViewer-ZoomBar">
-            <button
-              type="button"
-              class="WorkspaceFileViewer-ToolBtn"
-              :aria-label="t('home.attachViewer.zoomOut')"
-              @click="adjustZoom(-0.25)"
-            >
-              <span class="i-ri-zoom-out-line" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              class="WorkspaceFileViewer-ZoomLabel"
-              :title="t('home.attachViewer.reset')"
-              @click="imageZoom = 1"
-            >
-              {{ Math.round(imageZoom * 100) }}%
-            </button>
-            <button
-              type="button"
-              class="WorkspaceFileViewer-ToolBtn"
-              :aria-label="t('home.attachViewer.zoomIn')"
-              @click="adjustZoom(0.25)"
-            >
-              <span class="i-ri-zoom-in-line" aria-hidden="true" />
-            </button>
-          </div>
           <div class="WorkspaceFileViewer-ImageStage">
             <img
               :src="imageDataUrl"
@@ -576,7 +991,7 @@ function adjustZoom(delta: number): void {
           <span class="i-ri-file-zip-line WorkspaceFileViewer-StateIcon" aria-hidden="true" />
           <p class="WorkspaceFileViewer-StateTitle">{{ t('home.sidePanel.binaryUnsupported') }}</p>
           <p class="WorkspaceFileViewer-StatePath">
-            {{ data.mimeType }} · {{ formatFileSize(data.size) }}
+            {{ data.mimeType }} · {{ formatCompactFileSize(data.size) }}
           </p>
           <div class="WorkspaceFileViewer-StateActions">
             <TxButton size="sm" variant="secondary" @click="openWithSystem">
@@ -596,7 +1011,7 @@ function adjustZoom(delta: number): void {
           :class="{ 'is-wrap': wrapLines }"
         >
           <div v-if="data.truncated" class="WorkspaceFileViewer-Truncated">
-            {{ t('home.sidePanel.fileTruncated', { size: formatFileSize(data.size) }) }}
+            {{ t('home.sidePanel.fileTruncated', { size: formatCompactFileSize(data.size) }) }}
           </div>
           <div class="WorkspaceFileViewer-CodeLines" role="region" :aria-label="fileName">
             <div
@@ -613,6 +1028,253 @@ function adjustZoom(delta: number): void {
         </div>
       </template>
     </div>
+
+    <!-- Inline Markdown Review Comment Composer (shown only when adding a comment) -->
+    <section
+      v-if="commentComposerOpen"
+      class="WorkspaceFileViewer-CommentComposer"
+      :aria-label="t('home.sidePanel.selectionComment')"
+      data-testid="file-viewer-comment-composer"
+    >
+      <div class="WorkspaceFileViewer-CommentQuoteRow">
+        <blockquote class="WorkspaceFileViewer-CommentQuote">{{ commentDraftQuote }}</blockquote>
+        <button
+          type="button"
+          class="WorkspaceFileViewer-CommentClose"
+          :aria-label="t('common.close')"
+          @click="commentComposerOpen = false"
+        >
+          <span class="i-ri-close-line" aria-hidden="true" />
+        </button>
+      </div>
+      <textarea
+        ref="commentInputRef"
+        v-model="commentDraftText"
+        rows="2"
+        class="WorkspaceFileViewer-CommentInput"
+        :placeholder="t('home.sidePanel.commentInputPlaceholder')"
+        data-testid="file-viewer-comment-input"
+        @keydown="onCommentKeydown"
+      />
+      <div class="WorkspaceFileViewer-CommentComposerFooter">
+        <span class="WorkspaceFileViewer-CommentHint">
+          {{ t('home.sidePanel.commentSubmitShortcut') }}
+        </span>
+        <div class="WorkspaceFileViewer-CommentComposerBtns">
+          <button
+            type="button"
+            class="WorkspaceFileViewer-CommentBtn"
+            :disabled="!commentDraftText.trim()"
+            data-testid="file-viewer-comment-save"
+            @click="saveDraftComment"
+          >
+            {{ t('home.sidePanel.commentAddToQueue') }}
+          </button>
+          <button
+            type="button"
+            class="WorkspaceFileViewer-CommentBtn is-primary"
+            :disabled="!commentDraftText.trim()"
+            data-testid="file-viewer-comment-send-now"
+            @click="sendDraftCommentNow"
+          >
+            {{ t('home.sidePanel.commentSendNow') }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pending Markdown Review Comments Dock (shown only when comments exist) -->
+    <section
+      v-if="comments.length > 0"
+      class="WorkspaceFileViewer-CommentsDock"
+      :aria-label="t('home.sidePanel.commentsListLabel')"
+      data-testid="file-viewer-comments-dock"
+    >
+      <div class="WorkspaceFileViewer-CommentsBar">
+        <button
+          type="button"
+          class="WorkspaceFileViewer-CommentsToggle"
+          :aria-expanded="commentsExpanded"
+          data-testid="file-viewer-comments-toggle"
+          @click="commentsExpanded = !commentsExpanded"
+        >
+          <span class="i-ri-chat-quote-line" aria-hidden="true" />
+          <span>{{ t('home.sidePanel.commentsCount', { count: comments.length }) }}</span>
+          <span
+            :class="commentsExpanded ? 'i-ri-arrow-down-s-line' : 'i-ri-arrow-up-s-line'"
+            aria-hidden="true"
+          />
+        </button>
+
+        <div class="WorkspaceFileViewer-CommentsBarActions">
+          <button
+            type="button"
+            class="WorkspaceFileViewer-CommentBtn is-primary"
+            data-testid="file-viewer-comments-send-all"
+            @click="sendAllCommentsToAi"
+          >
+            <span class="i-ri-send-plane-2-line" aria-hidden="true" />
+            <span>{{ t('home.sidePanel.sendCommentsToAi') }}</span>
+          </button>
+          <button
+            type="button"
+            class="WorkspaceFileViewer-CommentClose"
+            :title="t('common.clear')"
+            :aria-label="t('common.clear')"
+            @click="clearAllComments"
+          >
+            <span class="i-ri-delete-bin-6-line" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+
+      <div v-if="commentsExpanded" class="WorkspaceFileViewer-CommentsList">
+        <article
+          v-for="item in comments"
+          :key="item.id"
+          class="WorkspaceFileViewer-CommentItem"
+          data-testid="file-viewer-comment-item"
+        >
+          <blockquote class="WorkspaceFileViewer-CommentItemQuote">{{ item.quote }}</blockquote>
+          <p class="WorkspaceFileViewer-CommentItemText">{{ item.comment }}</p>
+          <div class="WorkspaceFileViewer-CommentItemActions">
+            <button
+              type="button"
+              class="WorkspaceFileViewer-CommentTinyBtn"
+              @click="sendSingleComment(item)"
+            >
+              {{ t('home.sidePanel.commentSendNow') }}
+            </button>
+            <button
+              type="button"
+              class="WorkspaceFileViewer-CommentTinyBtn is-danger"
+              @click="removeComment(item.id)"
+            >
+              {{ t('common.delete') }}
+            </button>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Bottom StatusBar: interactive breadcrumb path on left; type / size / lines on right -->
+    <footer
+      class="WorkspaceFileViewer-StatusBar"
+      role="contentinfo"
+      data-testid="file-viewer-statusbar"
+    >
+      <div class="WorkspaceFileViewer-StatusLeft">
+        <nav
+          v-if="breadcrumbs.length > 0"
+          class="WorkspaceFileViewer-Breadcrumbs"
+          :aria-label="t('home.sidePanel.filePathBreadcrumbs')"
+          data-testid="file-viewer-breadcrumbs"
+        >
+          <template v-for="(seg, idx) in breadcrumbs" :key="`${seg.path}:${idx}`">
+            <span
+              v-if="idx > 0"
+              class="i-ri-arrow-right-s-line WorkspaceFileViewer-CrumbSep"
+              aria-hidden="true"
+            />
+            <button
+              type="button"
+              class="WorkspaceFileViewer-CrumbBtn"
+              :class="{ 'is-last': seg.isLast }"
+              :title="
+                seg.isLast ? `${t('home.fileLink.clickToCopyPath')}: ${resolvedPath}` : seg.path
+              "
+              @click="handleBreadcrumbClick(seg)"
+            >
+              <span
+                v-if="seg.isLast"
+                :class="fileIcon"
+                class="WorkspaceFileViewer-CrumbIcon"
+                aria-hidden="true"
+              />
+              <span class="WorkspaceFileViewer-CrumbLabel">{{ seg.label }}</span>
+            </button>
+          </template>
+        </nav>
+
+        <button
+          v-if="resolvedPath"
+          type="button"
+          class="WorkspaceFileViewer-StatusCopy"
+          :title="`${t('home.fileLink.clickToCopyPath')}: ${resolvedPath}`"
+          :aria-label="t('home.sidePanel.copyFullPath')"
+          data-testid="file-viewer-copy-path"
+          @click="copyPath"
+        >
+          <span class="i-ri-file-copy-line" aria-hidden="true" />
+        </button>
+      </div>
+
+      <div class="WorkspaceFileViewer-StatusMeta" data-testid="file-viewer-status-meta">
+        <span v-if="fileExt" class="WorkspaceFileViewer-StatusExt">{{
+          fileExt.toUpperCase()
+        }}</span>
+        <span
+          v-if="data && data.kind !== 'directory'"
+          class="WorkspaceFileViewer-StatusItem"
+          data-testid="file-viewer-status-size"
+        >
+          {{ formatCompactFileSize(data.size) }}
+        </span>
+        <span v-if="data?.kind === 'text'" class="WorkspaceFileViewer-StatusItem">
+          {{ t('home.sidePanel.lineCount', { count: codeLines.length }) }}
+        </span>
+        <span v-else-if="data?.kind === 'directory'" class="WorkspaceFileViewer-StatusItem">
+          {{ t('home.sidePanel.entryCount', { count: data.entries?.length ?? 0 }) }}
+        </span>
+      </div>
+    </footer>
+
+    <!-- Floating Markdown Selection AI Actions Pill -->
+    <TxSelectionActions
+      v-if="markdownSelectionActive && mdSelection"
+      ref="selectionBarRef"
+      v-model:prompt="selectionPrompt"
+      :selection="mdSelection"
+      :actions="mdSelectionActions"
+      :placeholder="t('home.sidePanel.selectionPromptPlaceholder')"
+      :aria-label="t('home.selectionActions')"
+      :send-label="t('home.sidePanel.selectionSend')"
+      @action="handleMdSelectionAction"
+      @submit="handleMdSelectionSubmit"
+    >
+      <template #action-icon="{ action }">
+        <span
+          v-if="action.id === 'comment'"
+          class="i-ri-chat-new-line WorkspaceFileViewer-SelIcon"
+          aria-hidden="true"
+        />
+        <span
+          v-else-if="action.id === 'explain'"
+          class="i-ri-question-line WorkspaceFileViewer-SelIcon"
+          aria-hidden="true"
+        />
+        <span
+          v-else-if="action.id === 'improve'"
+          class="i-ri-sparkling-line WorkspaceFileViewer-SelIcon"
+          aria-hidden="true"
+        />
+        <span
+          v-else-if="action.id === 'quote'"
+          class="i-ri-double-quotes-l WorkspaceFileViewer-SelIcon"
+          aria-hidden="true"
+        />
+        <span
+          v-else-if="action.id === 'translate'"
+          class="i-ri-translate-2 WorkspaceFileViewer-SelIcon"
+          aria-hidden="true"
+        />
+        <span
+          v-else-if="action.id === 'copy'"
+          class="i-ri-file-copy-line WorkspaceFileViewer-SelIcon"
+          aria-hidden="true"
+        />
+      </template>
+    </TxSelectionActions>
   </div>
 </template>
 
@@ -631,98 +1293,28 @@ function adjustZoom(delta: number): void {
 .WorkspaceFileViewer-Header {
   display: flex;
   flex: none;
-  flex-wrap: wrap;
-  gap: 8px 10px;
+  gap: 8px;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  height: 36px;
+  padding: 0 10px;
   border-bottom: 1px solid var(--shell-border);
   background: var(--shell-surface);
+  box-sizing: border-box;
 }
 
-.WorkspaceFileViewer-Meta {
+.WorkspaceFileViewer-HeaderLead {
   display: flex;
-  flex: 1 1 180px;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.WorkspaceFileViewer-TitleRow {
-  display: flex;
+  flex: 1 1 auto;
   gap: 6px;
   align-items: center;
   min-width: 0;
 }
 
-.WorkspaceFileViewer-Icon {
-  flex: none;
-  color: var(--shell-primary);
-  font-size: 15px;
-}
-
-.WorkspaceFileViewer-Name {
-  overflow: hidden;
-  color: var(--shell-text-primary);
-  font-size: var(--shell-fs-body);
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.WorkspaceFileViewer-Badge {
-  flex: none;
-  padding: 1px 5px;
-  border-radius: var(--shell-radius-xs, 4px);
-  background: var(--shell-surface-2);
-  color: var(--shell-text-secondary);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-.WorkspaceFileViewer-Size {
-  flex: none;
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-caption);
-  font-variant-numeric: tabular-nums;
-}
-
-.WorkspaceFileViewer-PathBtn {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  max-width: 100%;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--shell-text-muted);
-  font: inherit;
-  font-size: var(--shell-fs-caption);
-  text-align: left;
-  cursor: pointer;
-
-  &:hover {
-    color: var(--shell-primary);
-  }
-}
-
-.WorkspaceFileViewer-PathText {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.WorkspaceFileViewer-CopyIcon {
-  flex: none;
-  font-size: 12px;
-  opacity: 0.7;
-}
-
 .WorkspaceFileViewer-Toolbar {
   display: flex;
   flex: none;
-  gap: 4px;
+  gap: 2px;
   align-items: center;
 }
 
@@ -756,6 +1348,12 @@ function adjustZoom(delta: number): void {
   }
 }
 
+.WorkspaceFileViewer-ZoomInline {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+
 .WorkspaceFileViewer-ToolBtn {
   display: inline-flex;
   flex: none;
@@ -775,6 +1373,64 @@ function adjustZoom(delta: number): void {
   &.is-active {
     background: var(--shell-surface-2);
     color: var(--shell-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: 1px;
+  }
+}
+
+.WorkspaceFileViewer-MenuItem {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.WorkspaceFileViewer-MenuCheck {
+  color: var(--shell-primary);
+  font-size: 14px;
+}
+
+.WorkspaceFileViewer-MenuDivider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--shell-border);
+}
+
+.WorkspaceFileViewer-Outline {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.WorkspaceFileViewer-OutlineTitle {
+  padding: 4px 8px 6px;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+  font-weight: 500;
+}
+
+.WorkspaceFileViewer-OutlineItem {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-primary);
+  font: inherit;
+  font-size: var(--shell-fs-sm);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface-2);
   }
 }
 
@@ -862,18 +1518,8 @@ function adjustZoom(delta: number): void {
   min-height: 0;
 }
 
-.WorkspaceFileViewer-ZoomBar {
-  display: flex;
-  flex: none;
-  gap: 4px;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--shell-border);
-}
-
 .WorkspaceFileViewer-ZoomLabel {
-  min-width: 48px;
+  min-width: 44px;
   padding: 2px 6px;
   border: none;
   border-radius: var(--shell-radius-sm);
@@ -1013,5 +1659,374 @@ function adjustZoom(delta: number): void {
     white-space: pre-wrap;
     word-break: break-word;
   }
+}
+
+/* ── Inline Markdown Comment Composer & Queue Dock ── */
+.WorkspaceFileViewer-CommentComposer {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--shell-border);
+  background: var(--shell-surface);
+}
+
+.WorkspaceFileViewer-CommentQuoteRow {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.WorkspaceFileViewer-CommentQuote {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 2px 0 2px 8px;
+  border-left: 2px solid var(--shell-primary);
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.WorkspaceFileViewer-CommentInput {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--shell-border-strong);
+  border-radius: var(--shell-radius-sm);
+  background: var(--shell-bg);
+  color: var(--shell-text-primary);
+  font: inherit;
+  font-size: var(--shell-fs-sm);
+  line-height: 1.45;
+  resize: none;
+  box-sizing: border-box;
+  outline: none;
+
+  &:focus {
+    border-color: var(--shell-primary);
+  }
+}
+
+.WorkspaceFileViewer-CommentComposerFooter {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.WorkspaceFileViewer-CommentHint {
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+}
+
+.WorkspaceFileViewer-CommentComposerBtns {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.WorkspaceFileViewer-CommentBtn {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: var(--shell-surface-2);
+  color: var(--shell-text-primary);
+  font: inherit;
+  font-size: var(--shell-fs-caption);
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--shell-text-primary) 12%, var(--shell-surface-2));
+  }
+
+  &.is-primary {
+    background: var(--shell-primary);
+    color: var(--shell-on-primary);
+
+    &:hover:not(:disabled) {
+      filter: brightness(1.06);
+    }
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.WorkspaceFileViewer-CommentClose {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+}
+
+.WorkspaceFileViewer-CommentsDock {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  border-top: 1px solid var(--shell-border);
+  background: var(--shell-surface);
+}
+
+.WorkspaceFileViewer-CommentsBar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  padding: 0 10px;
+}
+
+.WorkspaceFileViewer-CommentsToggle {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-primary);
+  font: inherit;
+  font-size: var(--shell-fs-caption);
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface-2);
+  }
+}
+
+.WorkspaceFileViewer-CommentsBarActions {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.WorkspaceFileViewer-CommentsList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  padding: 4px 10px 10px;
+  overflow-y: auto;
+  border-top: 1px solid color-mix(in srgb, var(--shell-border) 65%, transparent);
+}
+
+.WorkspaceFileViewer-CommentItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 9px;
+  border-radius: var(--shell-radius-sm);
+  background: var(--shell-bg);
+  box-shadow: inset 0 0 0 1px var(--shell-border);
+}
+
+.WorkspaceFileViewer-CommentItemQuote {
+  margin: 0;
+  padding-left: 7px;
+  border-left: 2px solid var(--shell-primary);
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.WorkspaceFileViewer-CommentItemText {
+  margin: 0;
+  color: var(--shell-text-primary);
+  font-size: var(--shell-fs-sm);
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.WorkspaceFileViewer-CommentItemActions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.WorkspaceFileViewer-CommentTinyBtn {
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-secondary);
+  font: inherit;
+  font-size: var(--shell-fs-caption);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+
+  &.is-danger:hover {
+    background: var(--shell-danger-soft);
+    color: var(--shell-danger);
+  }
+}
+
+/* ── Bottom StatusBar (Breadcrumb path + Type / Size / Lines) ── */
+.WorkspaceFileViewer-StatusBar {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  height: 22px;
+  padding: 0 8px;
+  border-top: 1px solid var(--shell-border);
+  background: var(--shell-surface);
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.WorkspaceFileViewer-StatusLeft {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+}
+
+.WorkspaceFileViewer-Breadcrumbs {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.WorkspaceFileViewer-CrumbSep {
+  display: inline-flex;
+  flex: none;
+  font-size: 12px;
+  color: var(--shell-text-muted);
+  opacity: 0.7;
+}
+
+.WorkspaceFileViewer-CrumbBtn {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+  padding: 1px 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-text-muted);
+  font: inherit;
+  font-size: var(--shell-fs-caption);
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+
+  &.is-last {
+    color: var(--shell-text-primary);
+    font-weight: 500;
+  }
+}
+
+.WorkspaceFileViewer-CrumbIcon {
+  display: inline-flex;
+  flex: none;
+  font-size: 12px;
+  color: var(--shell-primary);
+}
+
+.WorkspaceFileViewer-CrumbLabel {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.WorkspaceFileViewer-StatusCopy {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.75;
+
+  &:hover {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+    opacity: 1;
+  }
+}
+
+.WorkspaceFileViewer-StatusMeta {
+  display: inline-flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.WorkspaceFileViewer-StatusExt {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--shell-surface-2);
+  color: var(--shell-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.WorkspaceFileViewer-StatusItem {
+  color: var(--shell-text-muted);
+}
+
+.WorkspaceFileViewer-SelIcon {
+  display: inline-flex;
+  font-size: 14px;
 }
 </style>

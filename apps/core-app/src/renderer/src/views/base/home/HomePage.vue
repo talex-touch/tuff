@@ -4,6 +4,7 @@ import type {
   WorkspaceQueueDeliveryMode,
   WorkspaceQueuedInput
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+import type { WorkspaceFileAiActionPayload } from '~/components/preview/workspace-file-tree'
 import { TxSelectionActions } from '@talex-touch/tuffex/selection-actions'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, nextTick, provide, ref, watch } from 'vue'
@@ -179,6 +180,7 @@ const {
   closeAllTabs: closeAllSidePanelTabs,
   startResize: startSidePanelResize,
   resetWidth: resetSidePanelWidth,
+  gitAvailable,
   effectiveWorkspaceRoot,
   showCodePreview,
   openWebInBuiltInBrowser,
@@ -249,6 +251,45 @@ function runCodeInTerminal(payload: CodeRunPayload): void {
     cwd: effectiveWorkspaceRoot.value,
     lang: payload.lang
   })
+}
+
+async function handleFileAiAction(payload: WorkspaceFileAiActionPayload): Promise<void> {
+  const prompt = payload.prompt.trim()
+  if (!prompt) return
+
+  if (payload.mode === 'quote') {
+    const existing = draft.value.replace(/\s+$/, '')
+    draft.value = existing ? `${existing}\n\n${payload.prompt}` : payload.prompt
+    await nextTick()
+    const input = inputRef.value
+    if (input) {
+      input.focus()
+      input.selectionStart = input.value.length
+      input.selectionEnd = input.value.length
+      autoGrow()
+    }
+    return
+  }
+
+  if (!draft.value.trim()) {
+    draft.value = prompt
+    await nextTick()
+    void submit()
+    return
+  }
+
+  if (conversationId.value) {
+    try {
+      await workspace.submit(prompt)
+    } catch (error) {
+      reportSubmitError(error)
+    }
+    return
+  }
+
+  draft.value = `${draft.value.replace(/\s+$/, '')}\n\n${prompt}`
+  await nextTick()
+  void submit()
 }
 
 const messageParts = useMessageParts({
@@ -726,6 +767,7 @@ useHomeCommands({
         :messages="messages"
         :conversation-id="conversationId"
         :workspace-root="effectiveWorkspaceRoot"
+        :git-available="gitAvailable"
         :context="workspace.state.value?.context"
         :turn="lastTurn"
         :activity-turns="activityTurns"
@@ -769,6 +811,7 @@ useHomeCommands({
         @reset-width="resetSidePanelWidth"
         @remove-recent="removeSidePanelRecent"
         @clear-recents="clearSidePanelRecents"
+        @ai-action="handleFileAiAction"
       />
     </div>
 

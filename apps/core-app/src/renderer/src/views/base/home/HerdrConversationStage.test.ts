@@ -193,6 +193,19 @@ vi.mock('@talex-touch/tuffex/button', () => ({
   }
 }))
 
+vi.mock('@talex-touch/tuffex/status-hint', () => ({
+  TxStatusHint: {
+    name: 'TxStatusHint',
+    props: ['text', 'tone', 'size', 'pulseKey'],
+    template:
+      '<div class="tx-status-hint-stub" :data-tone="tone" :data-size="size"><slot name="icon" /><span>{{ text }}</span></div>'
+  }
+}))
+
+import {
+  __resetHerdrStageControlForTesting,
+  useHerdrStageControl
+} from '~/modules/herdr/useHerdrStageControl'
 import HerdrConversationStage from './HerdrConversationStage.vue'
 
 function makeSession(overrides: Partial<HerdrProjectedSession> = {}): HerdrProjectedSession {
@@ -294,6 +307,7 @@ const COMPONENT_STUBS = {
 describe('HerdrConversationStage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    __resetHerdrStageControlForTesting()
     routeState.path = '/home/herdr/t1'
     routeState.params.address = 't1'
     loadingRef.value = false
@@ -375,7 +389,8 @@ describe('HerdrConversationStage', () => {
     expect(wrapper.find('[data-testid="home-conversation-stream"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="herdr-stage-terminal-pane"]').exists()).toBe(false)
 
-    await wrapper.get('[data-testid="herdr-stage-mode-terminal"]').trigger('click')
+    const stageControl = useHerdrStageControl()
+    stageControl.setSelectedMode('t1', 'terminal')
     await flushPromises()
 
     expect(wrapper.find('[data-testid="herdr-stage-terminal-pane"]').exists()).toBe(true)
@@ -385,7 +400,7 @@ describe('HerdrConversationStage', () => {
     )
 
     // Switching back to AI Chat detaches stage stream without killing the background process.
-    await wrapper.get('[data-testid="herdr-stage-mode-chat"]').trigger('click')
+    stageControl.setSelectedMode('t1', 'chat')
     await flushPromises()
     expect(mocks.detachHandle).toHaveBeenCalledTimes(1)
     expect(mocks.kill).not.toHaveBeenCalled()
@@ -449,5 +464,49 @@ describe('HerdrConversationStage', () => {
     await wrapper.get('[data-testid="herdr-stage-blocked-takeover"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-testid="herdr-stage-terminal-pane"]').exists()).toBe(true)
+  })
+
+  it('places TxStatusHint at the far left of the compact bottom statusbar and omits the redundant topbar', async () => {
+    sessionsRef.value = [
+      makeSession({
+        address: 't1',
+        displayTitle: 'zsh',
+        appName: 'zsh',
+        status: { state: 'done', app: 'zsh' }
+      })
+    ]
+    projectionsMap.t1 = {
+      address: 't1',
+      provider: null,
+      nativeSessionId: null,
+      filePath: null,
+      available: false,
+      truncated: false,
+      updatedAt: 1_700_000_005_000,
+      messages: []
+    }
+
+    const wrapper = mount(HerdrConversationStage, {
+      global: { stubs: COMPONENT_STUBS }
+    })
+    await flushPromises()
+
+    // Redundant HomeTopBar is removed; controls live in the BrowserTabStrip tab context menu.
+    expect(wrapper.find('[data-testid="home-top-bar"]').exists()).toBe(false)
+
+    const statusBar = wrapper.get('[data-testid="herdr-stage-statusbar"]')
+    const leftGroup = statusBar.get('.HerdrStage-StatusBarGroup')
+    const firstChild = leftGroup.element.firstElementChild as HTMLElement | null
+    expect(firstChild?.getAttribute('data-testid')).toBe('herdr-stage-status')
+    expect(firstChild?.getAttribute('data-tone')).toBe('success')
+    expect(statusBar.get('[data-testid="herdr-stage-title"]').text()).toContain('zsh')
+    expect(statusBar.find('[data-testid="herdr-stage-auto-hint"]').exists()).toBe(true)
+
+    // Active stage handle is registered for BrowserTabStrip's right-click menu actions.
+    const handle = useHerdrStageControl().activeHandle.value
+    expect(handle?.address).toBe('t1')
+    expect(handle?.getViewMode()).toBe('terminal')
+    await handle?.interrupt()
+    expect(mocks.interrupt).toHaveBeenCalledWith('t1')
   })
 })

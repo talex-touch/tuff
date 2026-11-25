@@ -55,6 +55,9 @@ vi.mock('~/modules/conversation/useConversationReview', () => ({
 vi.mock('~/components/preview/WorkspaceFileViewer.vue', () => ({
   default: { template: '<div data-testid="file-viewer" />' }
 }))
+vi.mock('~/components/preview/WorkspaceFileTree.vue', () => ({
+  default: { template: '<div data-testid="workspace-file-tree" />' }
+}))
 vi.mock('./preview/HomeSideLauncher.vue', () => ({
   default: { template: '<div data-testid="side-launcher" />' }
 }))
@@ -243,6 +246,18 @@ describe('HomeSidePanelSlot shell dock & tab strip scrolling', () => {
     expect(wrapper.find('[data-testid="side-panel-add-dropdown-menu"]').exists()).toBe(true)
     await wrapper.find('[data-testid="side-panel-add-menu-git"]').trigger('click')
     expect(wrapper.emitted('open-tool')).toEqual([['git']])
+
+    // When a Space has no Git repository (`gitAvailable: false`), Git actions are hidden.
+    await wrapper.setProps({ gitAvailable: false })
+    await wrapper.find('[data-testid="side-panel-add-menu-trigger"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-testid="side-panel-add-menu-git"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="side-panel-more-menu-git"]').exists()).toBe(false)
+
+    // File tree is a first-class sidebar tab kind (in + menu), with no extra standalone header icon.
+    expect(wrapper.find('[data-testid="side-panel-file-tree-toggle"]').exists()).toBe(false)
+    await wrapper.find('[data-testid="side-panel-add-menu-files"]').trigger('click')
+    expect(wrapper.emitted('open-tool')).toEqual([['git'], ['files']])
 
     wrapper.unmount()
   })

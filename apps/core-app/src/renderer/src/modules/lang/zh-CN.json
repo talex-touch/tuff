@@ -3102,7 +3102,41 @@
       "fileForbidden": "出于安全策略，无法读取该敏感路径下的文件",
       "binaryUnsupported": "暂不支持直接预览此二进制文件",
       "fileTruncated": "文件较大（{size}），当前仅预览前段内容。",
-      "revealedExecutable": "可执行文件已在文件夹中定位，未直接运行"
+      "revealedExecutable": "可执行文件已在文件夹中定位，未直接运行",
+      "files": "文件树",
+      "toggleFileTree": "展开 / 收起文件树",
+      "toggleHiddenFiles": "显示 / 隐藏点文件与依赖目录",
+      "collapseAllFolders": "折叠全部文件夹",
+      "filterFilesPlaceholder": "筛选文件…",
+      "noWorkspaceRoot": "当前会话未关联本地工作目录",
+      "filesEmpty": "目录为空",
+      "filesFilterEmpty": "没有匹配的文件",
+      "openInSidePanel": "在侧边栏打开",
+      "copyRelativePath": "复制相对路径",
+      "copyFullPath": "复制完整路径",
+      "outline": "文档大纲",
+      "filePathBreadcrumbs": "文件路径导航",
+      "lineCount": "{count} 行",
+      "entryCount": "{count} 项",
+      "selectionPromptPlaceholder": "输入评论或向 AI 提问…",
+      "selectionSend": "发送给 AI",
+      "selectionComment": "评论",
+      "selectionExplain": "解释",
+      "selectionImprove": "优化",
+      "selectionQuote": "引用到对话",
+      "selectionTranslate": "翻译",
+      "selectionPromptExplain": "请解释上面选中的这段内容。",
+      "selectionPromptImprove": "请帮我优化润色上面选中的这段内容，给出修改建议。",
+      "selectionPromptTranslate": "请将上面选中的这段内容准确翻译为中英文对照。",
+      "commentInputPlaceholder": "写下对这段内容的评论或修改意见…",
+      "commentSubmitShortcut": "⌘/Ctrl + Enter 加入列表",
+      "commentAddToQueue": "加入评论",
+      "commentSendNow": "直接发给 AI",
+      "commentsListLabel": "文档评论列表",
+      "commentsCount": "{count} 条评论",
+      "sendCommentsToAi": "发给 AI",
+      "commentsSendIntro": "请根据以下对文档的评论逐条处理或给出修改建议",
+      "sentToAi": "已发送到当前对话"
     }
   },
   "settingsNav": {
@@ -5159,6 +5193,9 @@
       "metaMachines": "远程机器",
       "metaSession": "核心会话",
       "railMore": "另有 {count} 个运行中任务",
+      "ungrouped": "其他终端",
+      "reopenTerminals": "项目中的其他终端",
+      "terminalCount": "{count} 个终端",
       "connection": {
         "connected": "已连接",
         "connecting": "连接中",
@@ -5177,7 +5214,7 @@
       "attachment": "终端状态",
       "attachmentAttached": "已附加到底部终端",
       "attachmentBackground": "后台持久运行中",
-      "actionHint": "点击以结构化卡片视图打开 · 右上角可快速发送、停止轮次或附加终端"
+      "actionHint": "点击切换该项目，顶部标签展示该项目下的全部终端 · 右侧更多菜单可管理终端"
     },
     "sidebar": {
       "title": "Herdr Space",
@@ -5208,7 +5245,13 @@
       "interruptFailed": "中断任务失败",
       "openCardView": "以结构化卡片视图打开",
       "attach": "在底部终端中打开",
-      "attached": "已附加到底部终端"
+      "attached": "已附加到底部终端",
+      "newProjectTerminal": "在该项目新建终端",
+      "switchTerminal": "切换项目终端",
+      "projectInfo": "项目信息",
+      "info": "会话信息",
+      "killConfirmTitle": "终止会话",
+      "killConfirmLabel": "确定要终止「{title}」吗？该终端进程将被彻底停止且无法恢复。"
     },
     "conversation": {
       "providerShell": "终端会话",
@@ -5265,6 +5308,10 @@
       "killConfirmFailed": "终止会话失败",
       "terminalTakeover": "切到原始终端接管",
       "autoTerminalHint": "当前会话无结构化日志，已为你打开原始终端视图。",
+      "autoTerminalShort": "无结构化日志",
+      "stopShort": "停止",
+      "sessionMenu": "会话操作",
+      "sessionMenuShort": "会话",
       "waitingFirstMessage": "已连接 {target}，在下方输入消息即可开始对话。"
     }
   },

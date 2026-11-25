@@ -3102,7 +3102,41 @@
       "fileForbidden": "Reading this sensitive path is blocked by security policy",
       "binaryUnsupported": "Binary file preview is not supported",
       "fileTruncated": "Large file ({size}) — showing the leading slice only.",
-      "revealedExecutable": "Executable file was revealed in folder rather than launched"
+      "revealedExecutable": "Executable file was revealed in folder rather than launched",
+      "files": "Files",
+      "toggleFileTree": "Toggle file tree",
+      "toggleHiddenFiles": "Show / hide dotfiles & build folders",
+      "collapseAllFolders": "Collapse all folders",
+      "filterFilesPlaceholder": "Filter files...",
+      "noWorkspaceRoot": "No local workspace directory for this session",
+      "filesEmpty": "Directory is empty",
+      "filesFilterEmpty": "No matching files",
+      "openInSidePanel": "Open in sidebar",
+      "copyRelativePath": "Copy relative path",
+      "copyFullPath": "Copy full path",
+      "outline": "Outline",
+      "filePathBreadcrumbs": "File path breadcrumbs",
+      "lineCount": "{count} lines",
+      "entryCount": "{count} items",
+      "selectionPromptPlaceholder": "Add comment or ask AI...",
+      "selectionSend": "Send to AI",
+      "selectionComment": "Comment",
+      "selectionExplain": "Explain",
+      "selectionImprove": "Improve",
+      "selectionQuote": "Quote to chat",
+      "selectionTranslate": "Translate",
+      "selectionPromptExplain": "Please explain the selected passage above.",
+      "selectionPromptImprove": "Please review and improve the selected passage above.",
+      "selectionPromptTranslate": "Please translate the selected passage above clearly.",
+      "commentInputPlaceholder": "Write a comment or revision note for this selection...",
+      "commentSubmitShortcut": "⌘/Ctrl + Enter to add",
+      "commentAddToQueue": "Add comment",
+      "commentSendNow": "Send to AI",
+      "commentsListLabel": "Document review comments",
+      "commentsCount": "{count} comments",
+      "sendCommentsToAi": "Send to AI",
+      "commentsSendIntro": "Please address the following review comments on",
+      "sentToAi": "Sent to active conversation"
     }
   },
   "settingsNav": {
@@ -5159,6 +5193,9 @@
       "metaMachines": "Machines",
       "metaSession": "Core session",
       "railMore": "+{count} more active tasks",
+      "ungrouped": "Other terminals",
+      "reopenTerminals": "Other project terminals",
+      "terminalCount": "{count} terminals",
       "connection": {
         "connected": "Connected",
         "connecting": "Connecting",
@@ -5177,7 +5214,7 @@
       "attachment": "Terminal",
       "attachmentAttached": "Attached in bottom terminal",
       "attachmentBackground": "Running in background",
-      "actionHint": "Click to open structured card view · Use top-right icons to send, stop, or attach terminal"
+      "actionHint": "Click to open this project; its terminals appear as top tabs · Use more menu to manage"
     },
     "sidebar": {
       "title": "Herdr Space",
@@ -5208,7 +5245,13 @@
       "interruptFailed": "Failed to interrupt task",
       "openCardView": "Open structured card view",
       "attach": "Open in bottom terminal",
-      "attached": "Attached in bottom terminal"
+      "attached": "Attached in bottom terminal",
+      "newProjectTerminal": "New terminal in project",
+      "switchTerminal": "Switch terminal",
+      "projectInfo": "Project info",
+      "info": "Session info",
+      "killConfirmTitle": "Terminate session",
+      "killConfirmLabel": "Terminate \"{title}\"? This terminal process will stop permanently."
     },
     "conversation": {
       "providerShell": "Shell",
@@ -5265,6 +5308,10 @@
       "killConfirmFailed": "Failed to terminate session",
       "terminalTakeover": "Take over in terminal",
       "autoTerminalHint": "Structured logs are unavailable for this session; opened in raw terminal view.",
+      "autoTerminalShort": "Raw terminal",
+      "stopShort": "Stop",
+      "sessionMenu": "Session actions",
+      "sessionMenuShort": "Session",
       "waitingFirstMessage": "Connected to {target}. Send a message below to start."
     }
   },

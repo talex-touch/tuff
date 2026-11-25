@@ -23,6 +23,7 @@ export interface LauncherQuickAction {
 const props = withDefaults(
   defineProps<{
     workspaceRoot?: string
+    gitAvailable?: boolean
     createdFiles: PreviewArtifact[]
     recentItems?: SidePanelRecentItem[]
     reviewCount: number
@@ -32,6 +33,7 @@ const props = withDefaults(
     waiting: boolean
   }>(),
   {
+    gitAvailable: true,
     recentItems: () => []
   }
 )
@@ -53,11 +55,21 @@ const highlightedIndex = ref(0)
 
 const allActions = computed<LauncherQuickAction[]>(() => [
   {
-    id: 'git',
-    label: t('home.git.title'),
-    icon: 'i-ri-git-branch-line',
-    run: () => emit('open-tool', 'git')
+    id: 'files',
+    label: t('home.sidePanel.files'),
+    icon: 'i-ri-folder-3-line',
+    run: () => emit('open-tool', 'files')
   },
+  ...(props.gitAvailable
+    ? [
+        {
+          id: 'git',
+          label: t('home.git.title'),
+          icon: 'i-ri-git-branch-line',
+          run: () => emit('open-tool', 'git')
+        }
+      ]
+    : []),
   {
     id: 'review',
     label: t('home.workspace.panel.review'),
