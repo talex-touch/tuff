@@ -56,6 +56,10 @@ export interface WorkspaceGitDiffRequest extends WorkspaceGitTarget {
   path: string
   staged?: boolean
   untracked?: boolean
+  /** Optional commit hash to inspect the file diff introduced by that commit. */
+  commitHash?: string
+  /** Optional previous path for renamed/copied files in commit diffs. */
+  oldPath?: string
 }
 
 export interface WorkspaceGitDiffResult {
@@ -70,6 +74,12 @@ export interface WorkspaceGitDiffResult {
   error?: string
 }
 
+export interface WorkspaceGitAuthorAvatar {
+  name: string
+  email?: string
+  avatarUrl?: string
+}
+
 export interface WorkspaceGitBranchEntry {
   name: string
   /** Canonical Git ref name (e.g. `refs/heads/main`, `refs/remotes/origin/main`). */
@@ -82,6 +92,9 @@ export interface WorkspaceGitBranchEntry {
   shortOid?: string
   subject?: string
   author?: string
+  authorEmail?: string
+  /** Recent unique commit authors on this branch (newest first) for avatar stack rendering. */
+  authors?: WorkspaceGitAuthorAvatar[]
   relativeDate?: string
 }
 
@@ -135,6 +148,27 @@ export interface WorkspaceGitCommitEntry {
 
 export interface WorkspaceGitLogResult {
   commits: WorkspaceGitCommitEntry[]
+  error?: string
+}
+
+export interface WorkspaceGitCommitFilesRequest extends WorkspaceGitTarget {
+  hash: string
+}
+
+export interface WorkspaceGitCommitFileEntry {
+  path: string
+  oldPath?: string
+  status: WorkspaceGitFileStatus
+  additions: number
+  deletions: number
+  binary: boolean
+}
+
+export interface WorkspaceGitCommitFilesResult {
+  hash: string
+  files: WorkspaceGitCommitFileEntry[]
+  totalAdditions: number
+  totalDeletions: number
   error?: string
 }
 
@@ -218,6 +252,10 @@ export const WorkspaceGitEvents = {
     .module('api')
     .event('log')
     .define<WorkspaceGitLogRequest, WorkspaceGitLogResult>(),
+  commitFiles: defineEvent('workspace-git')
+    .module('api')
+    .event('commit-files')
+    .define<WorkspaceGitCommitFilesRequest, WorkspaceGitCommitFilesResult>(),
   stage: defineEvent('workspace-git')
     .module('api')
     .event('stage')
@@ -277,6 +315,7 @@ export interface WorkspaceGitSdk {
   diff: (request: WorkspaceGitDiffRequest) => Promise<WorkspaceGitDiffResult>
   branches: (target: WorkspaceGitTarget) => Promise<WorkspaceGitBranchesResult>
   log: (request: WorkspaceGitLogRequest) => Promise<WorkspaceGitLogResult>
+  commitFiles: (request: WorkspaceGitCommitFilesRequest) => Promise<WorkspaceGitCommitFilesResult>
   stage: (request: WorkspaceGitStageRequest) => Promise<WorkspaceGitMutationResult>
   unstage: (request: WorkspaceGitStageRequest) => Promise<WorkspaceGitMutationResult>
   discard: (request: WorkspaceGitDiscardRequest) => Promise<WorkspaceGitMutationResult>
@@ -298,6 +337,7 @@ export function createWorkspaceGitSdk(transport: ITuffTransport): WorkspaceGitSd
     diff: (request) => transport.send(WorkspaceGitEvents.diff, request),
     branches: (target) => transport.send(WorkspaceGitEvents.branches, target),
     log: (request) => transport.send(WorkspaceGitEvents.log, request),
+    commitFiles: (request) => transport.send(WorkspaceGitEvents.commitFiles, request),
     stage: (request) => transport.send(WorkspaceGitEvents.stage, request),
     unstage: (request) => transport.send(WorkspaceGitEvents.unstage, request),
     discard: (request) => transport.send(WorkspaceGitEvents.discard, request),

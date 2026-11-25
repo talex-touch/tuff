@@ -3068,6 +3068,10 @@
       "remoteBranches": "远程分支",
       "noCommits": "当前仓库尚无提交记录。",
       "copyHash": "点击复制完整提交哈希",
+      "loadingCommitFiles": "正在加载变更文件…",
+      "commitChangedFiles": "{count} 个变更文件",
+      "commitNoFiles": "该提交暂无文件变更。",
+      "binaryFile": "二进制",
       "notRepo": "当前工作目录不是 Git 仓库",
       "unavailable": "当前环境不可用或未安装 Git",
       "actionFailed": "Git 操作失败"

@@ -3068,6 +3068,10 @@
       "remoteBranches": "Remote branches",
       "noCommits": "No commits in this repository yet.",
       "copyHash": "Click to copy full commit hash",
+      "loadingCommitFiles": "Loading changed files…",
+      "commitChangedFiles": "{count} changed file(s)",
+      "commitNoFiles": "No file changes in this commit.",
+      "binaryFile": "BIN",
       "notRepo": "Current workspace directory is not a Git repository",
       "unavailable": "Git is unavailable in this environment",
       "actionFailed": "Git action failed"

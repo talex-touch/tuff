@@ -31,6 +31,7 @@ import {
   parseRemotesOutput,
   pullWorkspaceGit,
   pushWorkspaceGit,
+  readWorkspaceGitCommitFiles,
   readWorkspaceGitDiff,
   readWorkspaceGitLog,
   readWorkspaceGitStatus,
@@ -143,17 +144,20 @@ describe('workspace-git-service', () => {
     expect(logAfter.commits).toHaveLength(1)
     expect(logAfter.commits[0]!.subject).toBe('Initial commit')
     expect(logAfter.commits[0]!.authorEmail).toBe('test@example.com')
-    // Personal emails never hit Gravatar by default; clients render initials fallback.
-    expect(logAfter.commits[0]!.avatarUrl).toBeUndefined()
-
-    // Privacy-safe avatar resolution: GitHub noreply works by default; Gravatar requires explicit opt-in.
-    expect(resolveCommitAuthorAvatarUrl('test@example.com')).toBeUndefined()
-    expect(resolveCommitAuthorAvatarUrl('  Test@Example.com ', { allowGravatar: true })).toBe(
-      resolveCommitAuthorAvatarUrl('test@example.com', { allowGravatar: true })
-    )
-    expect(resolveCommitAuthorAvatarUrl('test@example.com', { allowGravatar: true })).toMatch(
+    // Gravatar SHA-256 is enabled by default for standard emails (with explicit opt-out supported).
+    expect(logAfter.commits[0]!.avatarUrl).toMatch(
       /^https:\/\/www\.gravatar\.com\/avatar\/[a-f0-9]{64}\?s=64&d=404$/
     )
+
+    expect(resolveCommitAuthorAvatarUrl('  Test@Example.com ')).toBe(
+      resolveCommitAuthorAvatarUrl('test@example.com')
+    )
+    expect(resolveCommitAuthorAvatarUrl('test@example.com')).toMatch(
+      /^https:\/\/www\.gravatar\.com\/avatar\/[a-f0-9]{64}\?s=64&d=404$/
+    )
+    expect(
+      resolveCommitAuthorAvatarUrl('test@example.com', { allowGravatar: false })
+    ).toBeUndefined()
     expect(resolveCommitAuthorAvatarUrl('424242+TalexDreamSoul@users.noreply.github.com')).toBe(
       'https://avatars.githubusercontent.com/u/424242?s=64'
     )
@@ -548,5 +552,94 @@ describe('workspace-git-service', () => {
       await git(repo, ['show-ref', '--verify', 'refs/remotes/foo/bar/main'])
     ).trim()
     expect(protectedRef).toContain('refs/remotes/foo/bar/main')
+  }, 15_000)
+
+  it('collects stacked branch commit authors and reads per-commit file trees and file diffs', async () => {
+    const repo = await makeTempDir('tuff-git-commit-tree-')
+    await initTempRepo(repo)
+
+    await fs.mkdir(path.join(repo, 'src', 'ui'), { recursive: true })
+    await fs.writeFile(path.join(repo, 'src', 'ui', 'panel.ts'), 'export const a = 1\n', 'utf8')
+    await fs.writeFile(path.join(repo, 'README.md'), '# Hello\n', 'utf8')
+    await stageWorkspaceGitFiles({ cwd: repo, all: true })
+    await commitWorkspaceGitChanges({ cwd: repo, message: 'Initial files' })
+
+    // Second commit by a different author modifies one file and adds another.
+    await fs.writeFile(
+      path.join(repo, 'src', 'ui', 'panel.ts'),
+      'export const a = 2\nexport const b = 3\n',
+      'utf8'
+    )
+    await fs.writeFile(path.join(repo, 'src', 'ui', 'footer.ts'), 'export const f = true\n', 'utf8')
+    await stageWorkspaceGitFiles({ cwd: repo, all: true })
+    await execFileAsync('git', ['commit', '-m', 'Add footer and update panel'], {
+      cwd: repo,
+      env: {
+        ...process.env,
+        LC_ALL: 'C',
+        GIT_AUTHOR_NAME: 'Alice Dev',
+        GIT_AUTHOR_EMAIL: '4242+alice@users.noreply.github.com',
+        GIT_COMMITTER_NAME: 'Alice Dev',
+        GIT_COMMITTER_EMAIL: '4242+alice@users.noreply.github.com'
+      }
+    })
+
+    const listed = await listWorkspaceGitBranches({ cwd: repo })
+    const mainBranch = listed.branches.find((b) => !b.isRemote && b.name === 'main')
+    expect(mainBranch?.authors?.map((a) => a.name)).toEqual(['Alice Dev', 'Test Author'])
+    expect(mainBranch?.authors?.[0]?.avatarUrl).toBe(
+      'https://avatars.githubusercontent.com/u/4242?s=64'
+    )
+    expect(mainBranch?.authors?.[1]?.avatarUrl).toMatch(
+      /^https:\/\/www\.gravatar\.com\/avatar\/[a-f0-9]{64}\?s=64&d=404$/
+    )
+
+    const log = await readWorkspaceGitLog({ cwd: repo, limit: 5 })
+    const headHash = log.commits[0]!.hash
+    const rootHash = log.commits[1]!.hash
+
+    // Commit file tree for HEAD commit includes both modified and added files with line stats.
+    const commitFiles = await readWorkspaceGitCommitFiles({ cwd: repo, hash: headHash })
+    expect(commitFiles.error).toBeUndefined()
+    expect(commitFiles.files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'src/ui/panel.ts',
+          status: 'modified',
+          additions: 2,
+          deletions: 1,
+          binary: false
+        }),
+        expect.objectContaining({
+          path: 'src/ui/footer.ts',
+          status: 'added',
+          additions: 1,
+          deletions: 0,
+          binary: false
+        })
+      ])
+    )
+    expect(commitFiles.totalAdditions).toBe(3)
+    expect(commitFiles.totalDeletions).toBe(1)
+
+    // Root commit is also supported cleanly (`--root`).
+    const rootFiles = await readWorkspaceGitCommitFiles({ cwd: repo, hash: rootHash })
+    expect(rootFiles.files.map((f) => f.path).sort()).toEqual(['README.md', 'src/ui/panel.ts'])
+
+    // Per-file diff for a commit returns the exact unified diff hunk.
+    const commitDiff = await readWorkspaceGitDiff({
+      cwd: repo,
+      commitHash: headHash,
+      path: 'src/ui/panel.ts'
+    })
+    expect(commitDiff.error).toBeUndefined()
+    expect(commitDiff.diff).toContain('+export const b = 3')
+    expect(commitDiff.additions).toBe(2)
+    expect(commitDiff.deletions).toBe(1)
+
+    // Rejects invalid commit hashes safely.
+    const badHash = await readWorkspaceGitCommitFiles({ cwd: repo, hash: '--bad-flag' })
+    expect(badHash.files).toEqual([])
+    expect(badHash.error).toBeTruthy()
   }, 15_000)
 })

@@ -1,9 +1,13 @@
 <script lang="ts" name="HomeSideGitPane" setup>
 import type {
+  WorkspaceGitAuthorAvatar,
   WorkspaceGitBranchEntry,
   WorkspaceGitCommitEntry,
+  WorkspaceGitCommitFileEntry,
+  WorkspaceGitCommitFilesResult,
   WorkspaceGitDiffResult,
   WorkspaceGitFileEntry,
+  WorkspaceGitFileStatus,
   WorkspaceGitRemoteEntry,
   WorkspaceGitRemoteProvider,
   WorkspaceGitStatusResult
@@ -23,8 +27,11 @@ import { toast } from 'vue-sonner'
 import { SHELL_MENU_CARD } from '~/components/shell/shell-menu-panel'
 import {
   buildBranchTree,
+  buildCommitFileTree,
+  collectAllCommitFileFolderIds,
   collectDefaultExpandedFolders,
   flattenBranchTree,
+  flattenCommitFileTree,
   resolveAuthorAvatarTone,
   resolveAuthorInitials,
   resolveRemoteNameForBranch
@@ -128,11 +135,24 @@ const remoteMenuTarget = ref<WorkspaceGitRemoteEntry | null>(null)
 
 const avatarLoadState = reactive<Record<string, 'loaded' | 'error'>>({})
 
+const expandedCommitHashes = ref<Set<string>>(new Set())
+const commitFilesCache = reactive<Record<string, WorkspaceGitCommitFilesResult>>({})
+const commitFilesLoading = reactive<Record<string, boolean>>({})
+const expandedCommitFolderIds = ref<Set<string>>(new Set())
+const selectedCommitFile = ref<{
+  commitHash: string
+  shortHash: string
+  file: WorkspaceGitCommitFileEntry
+} | null>(null)
+const commitFileDiff = ref<WorkspaceGitDiffResult | null>(null)
+const loadingCommitFileDiff = ref(false)
+
 let statusRequestSeq = 0
 let diffRequestSeq = 0
 let branchesRequestSeq = 0
 let logRequestSeq = 0
 let branchPreviewSeq = 0
+let commitFileDiffSeq = 0
 
 const target = computed(() => ({
   ...(props.cwd ? { cwd: props.cwd } : {}),
@@ -225,8 +245,7 @@ const diffTransitionKey = computed(() =>
   selectedFile.value ? `${selectedFile.value.path}:${selectedFile.value.staged}` : 'none'
 )
 
-const parsedDiffLines = computed<DiffLine[]>(() => {
-  const raw = diffResult.value?.diff ?? ''
+function parseUnifiedDiffLines(raw: string): DiffLine[] {
   if (!raw) return []
   return raw.split('\n').map((text) => {
     if (
@@ -244,7 +263,190 @@ const parsedDiffLines = computed<DiffLine[]>(() => {
     if (text.startsWith('-')) return { type: 'del', text }
     return { type: 'context', text }
   })
-})
+}
+
+const parsedDiffLines = computed<DiffLine[]>(() =>
+  parseUnifiedDiffLines(diffResult.value?.diff ?? '')
+)
+
+const commitDiffTransitionKey = computed(() =>
+  selectedCommitFile.value
+    ? `${selectedCommitFile.value.commitHash}:${selectedCommitFile.value.file.path}`
+    : 'none'
+)
+
+const parsedCommitDiffLines = computed<DiffLine[]>(() =>
+  parseUnifiedDiffLines(commitFileDiff.value?.diff ?? '')
+)
+
+function branchAuthors(branch: WorkspaceGitBranchEntry): WorkspaceGitAuthorAvatar[] {
+  if (branch.authors && branch.authors.length > 0) {
+    return branch.authors
+  }
+  if (branch.author) {
+    return [
+      {
+        name: branch.author,
+        ...(branch.authorEmail ? { email: branch.authorEmail } : {})
+      }
+    ]
+  }
+  return []
+}
+
+function commitFileStatusCode(fileStatus: WorkspaceGitFileStatus): string {
+  switch (fileStatus) {
+    case 'added':
+      return 'A'
+    case 'deleted':
+      return 'D'
+    case 'renamed':
+      return 'R'
+    case 'copied':
+      return 'C'
+    case 'typechange':
+      return 'T'
+    case 'unmerged':
+      return 'U'
+    default:
+      return 'M'
+  }
+}
+
+function getCommitFileRows(commitHash: string) {
+  const entry = commitFilesCache[commitHash]
+  if (!entry || entry.files.length === 0) return []
+  const nodes = buildCommitFileTree(commitHash, entry.files)
+  return flattenCommitFileTree(nodes, expandedCommitFolderIds.value)
+}
+
+function toggleCommitFileFolder(folderId: string): void {
+  const next = new Set(expandedCommitFolderIds.value)
+  if (next.has(folderId)) {
+    next.delete(folderId)
+  } else {
+    next.add(folderId)
+  }
+  expandedCommitFolderIds.value = next
+}
+
+async function toggleCommitDetails(commit: WorkspaceGitCommitEntry): Promise<void> {
+  const next = new Set(expandedCommitHashes.value)
+  if (next.has(commit.hash)) {
+    next.delete(commit.hash)
+    expandedCommitHashes.value = next
+    if (selectedCommitFile.value?.commitHash === commit.hash) {
+      closeCommitFileDiff()
+    }
+    return
+  }
+
+  next.add(commit.hash)
+  expandedCommitHashes.value = next
+
+  const existing = commitFilesCache[commit.hash]
+  if (existing && !existing.error) {
+    const folderIds = collectAllCommitFileFolderIds(
+      buildCommitFileTree(commit.hash, existing.files)
+    )
+    if (folderIds.length > 0) {
+      const merged = new Set(expandedCommitFolderIds.value)
+      for (const id of folderIds) merged.add(id)
+      expandedCommitFolderIds.value = merged
+    }
+    return
+  }
+
+  if (!gitSdk || commitFilesLoading[commit.hash]) return
+  const key = targetKey.value
+  commitFilesLoading[commit.hash] = true
+  try {
+    const result = await gitSdk.commitFiles({ ...target.value, hash: commit.hash })
+    if (key !== targetKey.value) return
+    commitFilesCache[commit.hash] = result
+    if (!result.error && result.files.length > 0) {
+      const folderIds = collectAllCommitFileFolderIds(
+        buildCommitFileTree(commit.hash, result.files)
+      )
+      if (folderIds.length > 0) {
+        const merged = new Set(expandedCommitFolderIds.value)
+        for (const id of folderIds) merged.add(id)
+        expandedCommitFolderIds.value = merged
+      }
+    }
+  } catch (error) {
+    if (key === targetKey.value) {
+      commitFilesCache[commit.hash] = {
+        hash: commit.hash,
+        files: [],
+        totalAdditions: 0,
+        totalDeletions: 0,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    }
+  } finally {
+    if (key === targetKey.value) {
+      commitFilesLoading[commit.hash] = false
+    }
+  }
+}
+
+function closeCommitFileDiff(): void {
+  commitFileDiffSeq += 1
+  selectedCommitFile.value = null
+  commitFileDiff.value = null
+  loadingCommitFileDiff.value = false
+}
+
+async function loadCommitFileDiff(
+  commit: WorkspaceGitCommitEntry,
+  file: WorkspaceGitCommitFileEntry
+): Promise<void> {
+  if (!gitSdk) return
+  const key = targetKey.value
+  const seq = ++commitFileDiffSeq
+  selectedCommitFile.value = {
+    commitHash: commit.hash,
+    shortHash: commit.shortHash,
+    file
+  }
+  loadingCommitFileDiff.value = true
+  try {
+    const next = await gitSdk.diff({
+      ...target.value,
+      commitHash: commit.hash,
+      path: file.path,
+      ...(file.oldPath ? { oldPath: file.oldPath } : {})
+    })
+    if (seq !== commitFileDiffSeq || key !== targetKey.value) return
+    commitFileDiff.value = next
+  } catch (error) {
+    if (seq === commitFileDiffSeq && key === targetKey.value) {
+      commitFileDiff.value = {
+        path: file.path,
+        staged: false,
+        diff: '',
+        additions: 0,
+        deletions: 0,
+        binary: false,
+        truncated: false,
+        empty: true,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    }
+  } finally {
+    if (seq === commitFileDiffSeq && key === targetKey.value) {
+      loadingCommitFileDiff.value = false
+    }
+  }
+}
+
+function openCommitFile(file: WorkspaceGitCommitFileEntry): void {
+  emit('open-file', {
+    path: resolveRepoFilePath(file.path),
+    displayPath: file.path
+  })
+}
 
 function splitFilePath(relPath: string): { name: string; dir: string } {
   const slash = relPath.lastIndexOf('/')
@@ -1102,6 +1304,15 @@ watch(
       branchMenuTarget.value = null
       remoteMenuOpen.value = false
       remoteMenuTarget.value = null
+      expandedCommitHashes.value = new Set()
+      expandedCommitFolderIds.value = new Set()
+      for (const cachedHash of Object.keys(commitFilesCache)) {
+        delete commitFilesCache[cachedHash]
+      }
+      for (const loadingHash of Object.keys(commitFilesLoading)) {
+        delete commitFilesLoading[loadingHash]
+      }
+      closeCommitFileDiff()
     }
     if (!active) return
     void refreshAll()
@@ -1112,86 +1323,6 @@ watch(
 
 <template>
   <section class="HomeSideGit" :aria-label="t('home.git.title')">
-    <!-- Top bar: branch badge + remote operations + refresh -->
-    <header class="HomeSideGit-TopBar">
-      <button
-        type="button"
-        class="HomeSideGit-BranchBtn"
-        :disabled="!status?.isRepo"
-        :title="status?.upstream ? `${status.branch} → ${status.upstream}` : status?.branch"
-        @click="selectSubTab(subTab === 'branches' ? 'changes' : 'branches')"
-      >
-        <span class="i-ri-git-branch-line HomeSideGit-BranchIcon" aria-hidden="true" />
-        <span class="HomeSideGit-BranchName">
-          {{ status?.isRepo ? status.branch : t('home.git.title') }}
-        </span>
-        <span
-          v-if="status?.isRepo && (status.ahead > 0 || status.behind > 0)"
-          class="HomeSideGit-SyncCounts"
-        >
-          <span v-if="status.ahead > 0" class="HomeSideGit-Ahead">↑{{ status.ahead }}</span>
-          <span v-if="status.behind > 0" class="HomeSideGit-Behind">↓{{ status.behind }}</span>
-        </span>
-      </button>
-
-      <div class="HomeSideGit-RemoteActions">
-        <button
-          v-if="status?.isRepo"
-          type="button"
-          class="HomeSideGit-ActionBtn"
-          :disabled="!status.hasRemote || mutating"
-          :title="status.hasRemote ? t('home.git.fetch') : t('home.git.noRemote')"
-          :aria-label="t('home.git.fetch')"
-          @click="handleFetch"
-        >
-          <span class="i-ri-download-cloud-2-line" aria-hidden="true" />
-        </button>
-
-        <button
-          v-if="status?.isRepo"
-          type="button"
-          class="HomeSideGit-ActionBtn"
-          :class="{ 'is-highlighted-behind': status.behind > 0 }"
-          :disabled="!status.hasRemote || mutating"
-          :title="status.hasRemote ? t('home.git.pull') : t('home.git.noRemote')"
-          :aria-label="t('home.git.pull')"
-          @click="requestPull"
-        >
-          <span class="i-ri-arrow-down-line" aria-hidden="true" />
-          <span v-if="status.behind > 0" class="HomeSideGit-BtnBadge">{{ status.behind }}</span>
-        </button>
-
-        <button
-          v-if="status?.isRepo"
-          type="button"
-          class="HomeSideGit-ActionBtn"
-          :class="{ 'is-highlighted-ahead': status.ahead > 0 }"
-          :disabled="!status.hasRemote || status.detached || mutating"
-          :title="status.hasRemote ? t('home.git.push') : t('home.git.noRemote')"
-          :aria-label="t('home.git.push')"
-          @click="requestPush"
-        >
-          <span class="i-ri-arrow-up-line" aria-hidden="true" />
-          <span v-if="status.ahead > 0" class="HomeSideGit-BtnBadge">{{ status.ahead }}</span>
-        </button>
-
-        <button
-          type="button"
-          class="HomeSideGit-ActionBtn"
-          :disabled="loadingStatus || mutating"
-          :title="t('home.git.refresh')"
-          :aria-label="t('home.git.refresh')"
-          @click="refreshAll"
-        >
-          <span
-            class="i-ri-refresh-line"
-            :class="{ 'is-spin': loadingStatus || mutating }"
-            aria-hidden="true"
-          />
-        </button>
-      </div>
-    </header>
-
     <!-- Inline secondary confirmation bar for high-risk actions -->
     <Transition name="git-slide-down">
       <div
@@ -1730,8 +1861,55 @@ watch(
                     />
                     <span class="HomeSideGit-BranchRowMain">
                       <span class="HomeSideGit-BranchRowName">{{ row.label }}</span>
-                      <span v-if="row.branch.subject" class="HomeSideGit-BranchRowSubject">
-                        {{ row.branch.subject }}
+                      <span
+                        v-if="branchAuthors(row.branch).length > 0 || row.branch.subject"
+                        class="HomeSideGit-BranchRowSub"
+                      >
+                        <span
+                          v-if="branchAuthors(row.branch).length > 0"
+                          class="HomeSideGit-AvatarStack"
+                          :title="
+                            branchAuthors(row.branch)
+                              .map((item) => item.name)
+                              .join(', ')
+                          "
+                        >
+                          <span
+                            v-for="(authorItem, idx) in branchAuthors(row.branch)"
+                            :key="`${authorItem.email || authorItem.name}-${idx}`"
+                            class="HomeSideGit-Avatar is-xs"
+                            :class="`is-tone-${resolveAuthorAvatarTone(authorItem.email || authorItem.name)}`"
+                            :style="{ zIndex: branchAuthors(row.branch).length - idx }"
+                            :title="
+                              authorItem.email
+                                ? `${authorItem.name} <${authorItem.email}>`
+                                : authorItem.name
+                            "
+                          >
+                            <span class="HomeSideGit-AvatarInitials" aria-hidden="true">
+                              {{ resolveAuthorInitials(authorItem.name) }}
+                            </span>
+                            <img
+                              v-if="
+                                authorItem.avatarUrl &&
+                                avatarLoadState[authorItem.avatarUrl] !== 'error'
+                              "
+                              :src="authorItem.avatarUrl"
+                              class="HomeSideGit-AvatarImg"
+                              :class="{
+                                'is-loaded': avatarLoadState[authorItem.avatarUrl] === 'loaded'
+                              }"
+                              loading="lazy"
+                              referrerpolicy="no-referrer"
+                              alt=""
+                              @load="onAvatarLoad(authorItem.avatarUrl)"
+                              @error="onAvatarError(authorItem.avatarUrl)"
+                            />
+                          </span>
+                        </span>
+                        <span v-if="row.branch.subject" class="HomeSideGit-BranchRowSubject">
+                          {{ row.branch.subject }}
+                        </span>
                       </span>
                     </span>
                     <span
@@ -1879,8 +2057,55 @@ watch(
                     <span class="i-ri-cloud-line HomeSideGit-BranchRowIcon" aria-hidden="true" />
                     <span class="HomeSideGit-BranchRowMain">
                       <span class="HomeSideGit-BranchRowName">{{ row.label }}</span>
-                      <span v-if="row.branch.subject" class="HomeSideGit-BranchRowSubject">
-                        {{ row.branch.subject }}
+                      <span
+                        v-if="branchAuthors(row.branch).length > 0 || row.branch.subject"
+                        class="HomeSideGit-BranchRowSub"
+                      >
+                        <span
+                          v-if="branchAuthors(row.branch).length > 0"
+                          class="HomeSideGit-AvatarStack"
+                          :title="
+                            branchAuthors(row.branch)
+                              .map((item) => item.name)
+                              .join(', ')
+                          "
+                        >
+                          <span
+                            v-for="(authorItem, idx) in branchAuthors(row.branch)"
+                            :key="`${authorItem.email || authorItem.name}-${idx}`"
+                            class="HomeSideGit-Avatar is-xs"
+                            :class="`is-tone-${resolveAuthorAvatarTone(authorItem.email || authorItem.name)}`"
+                            :style="{ zIndex: branchAuthors(row.branch).length - idx }"
+                            :title="
+                              authorItem.email
+                                ? `${authorItem.name} <${authorItem.email}>`
+                                : authorItem.name
+                            "
+                          >
+                            <span class="HomeSideGit-AvatarInitials" aria-hidden="true">
+                              {{ resolveAuthorInitials(authorItem.name) }}
+                            </span>
+                            <img
+                              v-if="
+                                authorItem.avatarUrl &&
+                                avatarLoadState[authorItem.avatarUrl] !== 'error'
+                              "
+                              :src="authorItem.avatarUrl"
+                              class="HomeSideGit-AvatarImg"
+                              :class="{
+                                'is-loaded': avatarLoadState[authorItem.avatarUrl] === 'loaded'
+                              }"
+                              loading="lazy"
+                              referrerpolicy="no-referrer"
+                              alt=""
+                              @load="onAvatarLoad(authorItem.avatarUrl)"
+                              @error="onAvatarError(authorItem.avatarUrl)"
+                            />
+                          </span>
+                        </span>
+                        <span v-if="row.branch.subject" class="HomeSideGit-BranchRowSubject">
+                          {{ row.branch.subject }}
+                        </span>
                       </span>
                     </span>
                     <span v-if="row.branch.shortOid" class="HomeSideGit-HashPill">
@@ -2296,68 +2521,348 @@ watch(
       </div>
 
       <!-- HISTORY / LOG VIEW -->
-      <div v-else class="HomeSideGit-ScrollView">
-        <div v-if="loadingLog && commits.length === 0" class="HomeSideGit-Skeleton">
-          <TxSkeleton :height="36" :radius="6" />
-          <TxSkeleton :height="36" :radius="6" />
-          <TxSkeleton :height="36" :radius="6" />
+      <div v-else class="HomeSideGit-Body">
+        <div class="HomeSideGit-ScrollView">
+          <div v-if="loadingLog && commits.length === 0" class="HomeSideGit-Skeleton">
+            <TxSkeleton :height="36" :radius="6" />
+            <TxSkeleton :height="36" :radius="6" />
+            <TxSkeleton :height="36" :radius="6" />
+          </div>
+
+          <div v-else-if="commits.length === 0" class="HomeSideGit-CleanState">
+            <span class="i-ri-history-line HomeSideGit-CleanIcon" aria-hidden="true" />
+            <span>{{ t('home.git.noCommits') }}</span>
+          </div>
+
+          <ol v-else class="HomeSideGit-LogList">
+            <li
+              v-for="commit in commits"
+              :key="commit.hash"
+              class="HomeSideGit-LogItem"
+              :class="{ 'is-expanded': expandedCommitHashes.has(commit.hash) }"
+            >
+              <div class="HomeSideGit-LogRowWrap">
+                <button
+                  type="button"
+                  class="HomeSideGit-LogRowBtn"
+                  :aria-expanded="expandedCommitHashes.has(commit.hash)"
+                  :data-commit-hash="commit.hash"
+                  @click="toggleCommitDetails(commit)"
+                >
+                  <div class="HomeSideGit-LogHead">
+                    <span
+                      class="i-ri-arrow-right-s-line HomeSideGit-LogChevron"
+                      :class="{ 'is-expanded': expandedCommitHashes.has(commit.hash) }"
+                      aria-hidden="true"
+                    />
+                    <span class="HomeSideGit-LogSubject" :title="commit.subject">
+                      {{ commit.subject }}
+                    </span>
+                  </div>
+                  <div v-if="commit.refs.length > 0" class="HomeSideGit-LogRefs">
+                    <span
+                      v-for="refLabel in commit.refs"
+                      :key="refLabel"
+                      class="HomeSideGit-RefPill"
+                    >
+                      {{ refLabel }}
+                    </span>
+                  </div>
+                  <div class="HomeSideGit-LogMeta">
+                    <span
+                      class="HomeSideGit-Avatar"
+                      :class="`is-tone-${resolveAuthorAvatarTone(commit.authorEmail || commit.author)}`"
+                      :title="
+                        commit.authorEmail
+                          ? `${commit.author} <${commit.authorEmail}>`
+                          : commit.author
+                      "
+                    >
+                      <span class="HomeSideGit-AvatarInitials" aria-hidden="true">
+                        {{ resolveAuthorInitials(commit.author) }}
+                      </span>
+                      <img
+                        v-if="commit.avatarUrl && avatarLoadState[commit.avatarUrl] !== 'error'"
+                        :src="commit.avatarUrl"
+                        class="HomeSideGit-AvatarImg"
+                        :class="{ 'is-loaded': avatarLoadState[commit.avatarUrl] === 'loaded' }"
+                        loading="lazy"
+                        referrerpolicy="no-referrer"
+                        alt=""
+                        @load="onAvatarLoad(commit.avatarUrl)"
+                        @error="onAvatarError(commit.avatarUrl)"
+                      />
+                    </span>
+                    <span class="HomeSideGit-LogAuthor">{{ commit.author }}</span>
+                    <span>·</span>
+                    <span>{{ commit.relativeDate }}</span>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  class="HomeSideGit-HashPill is-copyable HomeSideGit-LogHashBtn"
+                  :title="t('home.git.copyHash')"
+                  @click.stop="copyText(commit.hash)"
+                >
+                  {{ commit.shortHash }}
+                </button>
+              </div>
+
+              <!-- Expandable Commit File Diff Tree -->
+              <Transition name="git-slide-down">
+                <div
+                  v-if="expandedCommitHashes.has(commit.hash)"
+                  class="HomeSideGit-CommitTreeWrap"
+                  :data-testid="`git-commit-tree-${commit.shortHash}`"
+                >
+                  <div v-if="commitFilesLoading[commit.hash]" class="HomeSideGit-CommitTreeLoading">
+                    <TxSkeleton :height="20" :radius="4" />
+                    <TxSkeleton :height="20" :radius="4" />
+                  </div>
+                  <div
+                    v-else-if="commitFilesCache[commit.hash]?.error"
+                    class="HomeSideGit-CommitTreeNotice is-error"
+                  >
+                    {{ commitFilesCache[commit.hash]!.error }}
+                  </div>
+                  <div
+                    v-else-if="(commitFilesCache[commit.hash]?.files.length ?? 0) === 0"
+                    class="HomeSideGit-CommitTreeNotice"
+                  >
+                    {{ t('home.git.commitNoFiles') }}
+                  </div>
+                  <template v-else>
+                    <div class="HomeSideGit-CommitTreeSummary">
+                      <span>
+                        {{
+                          t('home.git.commitChangedFiles', {
+                            count: commitFilesCache[commit.hash]!.files.length
+                          })
+                        }}
+                      </span>
+                      <span class="HomeSideGit-DiffStats">
+                        <span class="is-add">
+                          +{{ commitFilesCache[commit.hash]!.totalAdditions }}
+                        </span>
+                        <span class="is-del">
+                          -{{ commitFilesCache[commit.hash]!.totalDeletions }}
+                        </span>
+                      </span>
+                    </div>
+                    <ul class="HomeSideGit-CommitTreeList">
+                      <li v-for="row in getCommitFileRows(commit.hash)" :key="row.id">
+                        <button
+                          v-if="row.kind === 'folder'"
+                          type="button"
+                          :aria-expanded="row.expanded"
+                          class="HomeSideGit-CommitTreeFolder"
+                          :style="treeIndentStyle(row.depth)"
+                          :title="row.fullPath"
+                          @click="toggleCommitFileFolder(row.id)"
+                        >
+                          <span
+                            class="i-ri-arrow-right-s-line HomeSideGit-TreeChevron"
+                            :class="{ 'is-expanded': row.expanded }"
+                            aria-hidden="true"
+                          />
+                          <span
+                            :class="row.expanded ? 'i-ri-folder-open-line' : 'i-ri-folder-3-line'"
+                            class="HomeSideGit-CommitFolderIcon"
+                            aria-hidden="true"
+                          />
+                          <span class="HomeSideGit-FolderLabel">{{ row.label }}</span>
+                          <span class="HomeSideGit-FolderCount">{{ row.fileCount }}</span>
+                        </button>
+
+                        <button
+                          v-else
+                          type="button"
+                          class="HomeSideGit-CommitTreeFile"
+                          :class="{
+                            'is-selected':
+                              selectedCommitFile?.commitHash === commit.hash &&
+                              selectedCommitFile?.file.path === row.file.path
+                          }"
+                          :style="treeIndentStyle(row.depth)"
+                          :title="
+                            row.file.oldPath
+                              ? `${row.file.oldPath} → ${row.file.path}`
+                              : row.file.path
+                          "
+                          :data-commit-file="row.file.path"
+                          @click="loadCommitFileDiff(commit, row.file)"
+                        >
+                          <span
+                            class="HomeSideGit-StatusCode"
+                            :class="statusBadgeTone(commitFileStatusCode(row.file.status))"
+                          >
+                            {{ commitFileStatusCode(row.file.status) }}
+                          </span>
+                          <span class="HomeSideGit-CommitFileName">{{ row.label }}</span>
+                          <span v-if="row.file.binary" class="HomeSideGit-CommitFileBin">
+                            {{ t('home.git.binaryFile') }}
+                          </span>
+                          <span v-else class="HomeSideGit-CommitFileStats">
+                            <span v-if="row.file.additions > 0" class="is-add">
+                              +{{ row.file.additions }}
+                            </span>
+                            <span v-if="row.file.deletions > 0" class="is-del">
+                              -{{ row.file.deletions }}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    </ul>
+                  </template>
+                </div>
+              </Transition>
+            </li>
+          </ol>
         </div>
 
-        <div v-else-if="commits.length === 0" class="HomeSideGit-CleanState">
-          <span class="i-ri-history-line HomeSideGit-CleanIcon" aria-hidden="true" />
-          <span>{{ t('home.git.noCommits') }}</span>
-        </div>
-
-        <ol v-else class="HomeSideGit-LogList">
-          <li v-for="commit in commits" :key="commit.hash" class="HomeSideGit-LogItem">
-            <div class="HomeSideGit-LogHead">
-              <span class="HomeSideGit-LogSubject" :title="commit.subject">
-                {{ commit.subject }}
-              </span>
-              <button
-                type="button"
-                class="HomeSideGit-HashPill is-copyable"
-                :title="t('home.git.copyHash')"
-                @click="copyText(commit.hash)"
-              >
-                {{ commit.shortHash }}
-              </button>
-            </div>
-            <div v-if="commit.refs.length > 0" class="HomeSideGit-LogRefs">
-              <span v-for="refLabel in commit.refs" :key="refLabel" class="HomeSideGit-RefPill">
-                {{ refLabel }}
-              </span>
-            </div>
-            <div class="HomeSideGit-LogMeta">
-              <span
-                class="HomeSideGit-Avatar"
-                :class="`is-tone-${resolveAuthorAvatarTone(commit.authorEmail || commit.author)}`"
-                :title="
-                  commit.authorEmail ? `${commit.author} <${commit.authorEmail}>` : commit.author
-                "
-              >
-                <span class="HomeSideGit-AvatarInitials" aria-hidden="true">
-                  {{ resolveAuthorInitials(commit.author) }}
+        <!-- Animated Commit File Unified Diff Drawer -->
+        <Transition name="git-drawer">
+          <div
+            v-if="selectedCommitFile"
+            class="HomeSideGit-DiffPane"
+            data-testid="git-commit-diff-pane"
+          >
+            <div class="HomeSideGit-DiffHeader">
+              <div class="HomeSideGit-DiffMeta">
+                <span class="HomeSideGit-DiffScope is-commit">
+                  {{ selectedCommitFile.shortHash }}
                 </span>
-                <img
-                  v-if="commit.avatarUrl && avatarLoadState[commit.avatarUrl] !== 'error'"
-                  :src="commit.avatarUrl"
-                  class="HomeSideGit-AvatarImg"
-                  :class="{ 'is-loaded': avatarLoadState[commit.avatarUrl] === 'loaded' }"
-                  loading="lazy"
-                  referrerpolicy="no-referrer"
-                  alt=""
-                  @load="onAvatarLoad(commit.avatarUrl)"
-                  @error="onAvatarError(commit.avatarUrl)"
-                />
-              </span>
-              <span class="HomeSideGit-LogAuthor">{{ commit.author }}</span>
-              <span>·</span>
-              <span>{{ commit.relativeDate }}</span>
+                <span class="HomeSideGit-DiffPath" :title="selectedCommitFile.file.path">
+                  {{ selectedCommitFile.file.path }}
+                </span>
+              </div>
+              <div class="HomeSideGit-DiffHeaderRight">
+                <span v-if="commitFileDiff && !commitFileDiff.binary" class="HomeSideGit-DiffStats">
+                  <span class="is-add">+{{ commitFileDiff.additions }}</span>
+                  <span class="is-del">-{{ commitFileDiff.deletions }}</span>
+                </span>
+                <button
+                  v-if="selectedCommitFile.file.status !== 'deleted'"
+                  type="button"
+                  class="HomeSideGit-RowIconBtn"
+                  :title="t('home.sidePanel.openFile')"
+                  :aria-label="t('home.sidePanel.openFile')"
+                  @click="openCommitFile(selectedCommitFile.file)"
+                >
+                  <span class="i-ri-file-text-line" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  class="HomeSideGit-RowIconBtn"
+                  :title="t('common.close')"
+                  :aria-label="t('common.close')"
+                  @click="closeCommitFileDiff"
+                >
+                  <span class="i-ri-close-line" aria-hidden="true" />
+                </button>
+              </div>
             </div>
-          </li>
-        </ol>
+
+            <Transition name="git-fade" mode="out-in">
+              <div :key="commitDiffTransitionKey" class="HomeSideGit-DiffContentWrap">
+                <div v-if="loadingCommitFileDiff" class="HomeSideGit-DiffNotice">
+                  {{ t('home.workspace.review.loadingDiff') }}
+                </div>
+                <div v-else-if="commitFileDiff?.error" class="HomeSideGit-DiffNotice is-error">
+                  {{ commitFileDiff.error }}
+                </div>
+                <div v-else-if="commitFileDiff?.binary" class="HomeSideGit-DiffNotice">
+                  {{ t('home.workspace.review.reason.binary') }}
+                </div>
+                <div
+                  v-else-if="!commitFileDiff || commitFileDiff.empty"
+                  class="HomeSideGit-DiffNotice"
+                >
+                  {{ t('home.git.emptyDiff') }}
+                </div>
+                <div v-else class="HomeSideGit-DiffScroll">
+                  <pre class="HomeSideGit-DiffCode"><code
+                    v-for="(line, idx) in parsedCommitDiffLines"
+                    :key="idx"
+                    class="HomeSideGit-DiffLine"
+                    :class="`is-${line.type}`"
+                  >{{ line.text }}</code></pre>
+                  <p v-if="commitFileDiff.truncated" class="HomeSideGit-DiffTruncated">
+                    {{ t('home.workspace.review.reason.diff_limit') }}
+                  </p>
+                </div>
+              </div>
+            </Transition>
+          </div>
+        </Transition>
       </div>
+
+      <!-- Bottom status bar: current branch + fetch/pull/push sync counts + refresh -->
+      <footer class="HomeSideGit-Footer" data-testid="git-footer-bar">
+        <button
+          type="button"
+          class="HomeSideGit-FooterBranch"
+          :title="status.upstream ? `${status.branch} → ${status.upstream}` : status.branch"
+          @click="selectSubTab(subTab === 'branches' ? 'changes' : 'branches')"
+        >
+          <span class="i-ri-git-branch-line HomeSideGit-BranchIcon" aria-hidden="true" />
+          <span class="HomeSideGit-BranchName">{{ status.branch }}</span>
+        </button>
+
+        <div class="HomeSideGit-FooterActions">
+          <button
+            type="button"
+            class="HomeSideGit-FooterBtn"
+            :disabled="!status.hasRemote || mutating"
+            :title="status.hasRemote ? t('home.git.fetch') : t('home.git.noRemote')"
+            :aria-label="t('home.git.fetch')"
+            @click="handleFetch"
+          >
+            <span class="i-ri-download-cloud-2-line" aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            class="HomeSideGit-FooterBtn"
+            :class="{ 'is-highlighted-behind': status.behind > 0 }"
+            :disabled="!status.hasRemote || mutating"
+            :title="status.hasRemote ? t('home.git.pull') : t('home.git.noRemote')"
+            :aria-label="t('home.git.pull')"
+            @click="requestPull"
+          >
+            <span class="i-ri-arrow-down-line" aria-hidden="true" />
+            <span class="HomeSideGit-FooterCount HomeSideGit-Behind">{{ status.behind }}</span>
+          </button>
+
+          <button
+            type="button"
+            class="HomeSideGit-FooterBtn"
+            :class="{ 'is-highlighted-ahead': status.ahead > 0 }"
+            :disabled="!status.hasRemote || status.detached || mutating"
+            :title="status.hasRemote ? t('home.git.push') : t('home.git.noRemote')"
+            :aria-label="t('home.git.push')"
+            @click="requestPush"
+          >
+            <span class="i-ri-arrow-up-line" aria-hidden="true" />
+            <span class="HomeSideGit-FooterCount HomeSideGit-Ahead">{{ status.ahead }}</span>
+          </button>
+
+          <button
+            type="button"
+            class="HomeSideGit-FooterBtn"
+            :disabled="loadingStatus || mutating"
+            :title="t('home.git.refresh')"
+            :aria-label="t('home.git.refresh')"
+            @click="refreshAll"
+          >
+            <span
+              class="i-ri-refresh-line"
+              :class="{ 'is-spin': loadingStatus || mutating }"
+              aria-hidden="true"
+            />
+          </button>
+        </div>
+      </footer>
     </template>
 
     <!-- Branch context menu (Right-click to preview / switch / edit / delete / copy) -->
@@ -2520,49 +3025,46 @@ watch(
   background: var(--shell-bg);
 }
 
-.HomeSideGit-TopBar {
+/* Bottom IDE-style status bar */
+.HomeSideGit-Footer {
   display: flex;
   flex: none;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--shell-border);
+  height: 30px;
+  padding: 0 8px;
+  border-top: 1px solid var(--shell-border);
   background: var(--shell-surface);
 }
 
-.HomeSideGit-BranchBtn {
+.HomeSideGit-FooterBranch {
   display: inline-flex;
   flex: 0 1 auto;
-  gap: 6px;
+  gap: 5px;
   align-items: center;
   min-width: 0;
-  height: 28px;
-  padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--shell-primary) 24%, var(--shell-border));
+  height: 22px;
+  padding: 0 6px;
+  border: none;
   border-radius: var(--shell-radius-sm);
-  background: color-mix(in srgb, var(--shell-primary) 6%, var(--shell-bg));
-  color: var(--shell-text-primary);
+  background: transparent;
+  color: var(--shell-text-secondary);
   font: inherit;
-  font-size: var(--shell-fs-sm);
+  font-size: var(--shell-fs-caption);
   font-weight: 500;
   cursor: pointer;
 
-  &:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--shell-primary) 42%, var(--shell-border));
-    background: color-mix(in srgb, var(--shell-primary) 11%, var(--shell-bg));
-  }
-
-  &:disabled {
-    cursor: default;
-    opacity: 0.7;
+  &:hover {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
   }
 }
 
 .HomeSideGit-BranchIcon {
   flex: none;
   color: var(--shell-primary);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .HomeSideGit-BranchName {
@@ -2571,50 +3073,27 @@ watch(
   white-space: nowrap;
 }
 
-.HomeSideGit-SyncCounts {
-  display: inline-flex;
-  flex: none;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.HomeSideGit-Ahead {
-  padding: 0 4px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--tx-color-success) 14%, transparent);
-  color: var(--tx-color-success);
-}
-
-.HomeSideGit-Behind {
-  padding: 0 4px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--tx-color-warning) 16%, transparent);
-  color: var(--tx-color-warning);
-}
-
-.HomeSideGit-RemoteActions {
+.HomeSideGit-FooterActions {
   display: flex;
   flex: none;
   gap: 2px;
   align-items: center;
 }
 
-.HomeSideGit-ActionBtn {
+.HomeSideGit-FooterBtn {
   display: inline-flex;
-  gap: 3px;
+  gap: 2px;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 6px;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 5px;
   border: none;
   border-radius: var(--shell-radius-sm);
   background: transparent;
-  color: var(--shell-text-secondary);
+  color: var(--shell-text-muted);
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
 
   &:hover:not(:disabled) {
@@ -2623,10 +3102,12 @@ watch(
   }
 
   &.is-highlighted-ahead {
+    background: color-mix(in srgb, var(--tx-color-success) 12%, transparent);
     color: var(--tx-color-success);
   }
 
   &.is-highlighted-behind {
+    background: color-mix(in srgb, var(--tx-color-warning) 14%, transparent);
     color: var(--tx-color-warning);
   }
 
@@ -2644,10 +3125,11 @@ watch(
   }
 }
 
-.HomeSideGit-BtnBadge {
+.HomeSideGit-FooterCount {
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .HomeSideGit-ConfirmBar {
@@ -3203,6 +3685,12 @@ watch(
     background: color-mix(in srgb, var(--tx-color-success) 14%, transparent);
     color: var(--tx-color-success);
   }
+
+  &.is-commit {
+    background: color-mix(in srgb, var(--shell-primary) 12%, transparent);
+    color: var(--shell-primary);
+    font-family: var(--tx-bui-font-mono, ui-monospace, monospace);
+  }
 }
 
 .HomeSideGit-PreviewScope {
@@ -3580,7 +4068,38 @@ watch(
   }
 }
 
+.HomeSideGit-BranchRowSub {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  min-width: 0;
+  margin-top: 1px;
+}
+
+.HomeSideGit-AvatarStack {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+
+  .HomeSideGit-Avatar + .HomeSideGit-Avatar {
+    margin-left: -5px;
+    transition: margin-left 140ms ease;
+  }
+
+  .HomeSideGit-BranchRow:hover & .HomeSideGit-Avatar + .HomeSideGit-Avatar {
+    margin-left: -2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .HomeSideGit-Avatar + .HomeSideGit-Avatar {
+      transition: none;
+    }
+  }
+}
+
 .HomeSideGit-BranchRowSubject {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   color: var(--shell-text-muted);
   font-size: var(--shell-fs-caption);
@@ -3682,20 +4201,70 @@ watch(
   white-space: nowrap;
 }
 
-/* Commit History & Standard-Protocol Author Avatar */
+/* Commit History, Expandable File Diff Tree & Standard-Protocol Author Avatar */
 .HomeSideGit-LogItem {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 8px;
   border-bottom: 1px solid color-mix(in srgb, var(--shell-border) 60%, transparent);
+
+  &.is-expanded {
+    background: color-mix(in srgb, var(--shell-surface) 55%, transparent);
+  }
+}
+
+.HomeSideGit-LogRowWrap {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 6px 8px;
+
+  &:hover {
+    background: var(--shell-surface);
+  }
+}
+
+.HomeSideGit-LogRowBtn {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .HomeSideGit-LogHead {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   align-items: flex-start;
-  justify-content: space-between;
+  min-width: 0;
+}
+
+.HomeSideGit-LogChevron {
+  flex: none;
+  margin-top: 2px;
+  color: var(--shell-text-muted);
+  font-size: 14px;
+  transition: transform 160ms var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+
+  &.is-expanded {
+    transform: rotate(90deg);
+    color: var(--shell-primary);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+.HomeSideGit-LogHashBtn {
+  flex: none;
+  margin-top: 1px;
 }
 
 .HomeSideGit-LogSubject {
@@ -3712,6 +4281,7 @@ watch(
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  padding-left: 18px;
 }
 
 .HomeSideGit-RefPill {
@@ -3727,6 +4297,7 @@ watch(
   display: flex;
   gap: 6px;
   align-items: center;
+  padding-left: 18px;
   color: var(--shell-text-muted);
   font-size: var(--shell-fs-caption);
 }
@@ -3734,6 +4305,125 @@ watch(
 .HomeSideGit-LogAuthor {
   color: var(--shell-text-secondary);
   font-weight: 500;
+}
+
+.HomeSideGit-CommitTreeWrap {
+  margin: 0 8px 8px 24px;
+  padding: 6px 6px 4px;
+  border: 1px solid color-mix(in srgb, var(--shell-border) 75%, transparent);
+  border-radius: var(--shell-radius-sm);
+  background: var(--shell-bg);
+}
+
+.HomeSideGit-CommitTreeLoading {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 2px;
+}
+
+.HomeSideGit-CommitTreeNotice {
+  padding: 4px 6px;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+
+  &.is-error {
+    color: var(--shell-danger);
+  }
+}
+
+.HomeSideGit-CommitTreeSummary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 5px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--shell-border) 60%, transparent);
+  color: var(--shell-text-muted);
+  font-size: 11px;
+}
+
+.HomeSideGit-CommitTreeList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.HomeSideGit-CommitTreeFolder,
+.HomeSideGit-CommitTreeFile {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  width: 100%;
+  height: 24px;
+  padding: 0 6px 0 calc(4px + var(--git-tree-depth, 0) * 12px);
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--shell-text-secondary);
+  font: inherit;
+  font-size: var(--shell-fs-caption);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface);
+    color: var(--shell-text-primary);
+  }
+}
+
+.HomeSideGit-CommitTreeFile {
+  color: var(--shell-text-primary);
+
+  &.is-selected {
+    background: color-mix(in srgb, var(--shell-primary) 10%, var(--shell-surface));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--shell-primary) 34%, transparent);
+  }
+}
+
+.HomeSideGit-CommitFolderIcon {
+  flex: none;
+  color: color-mix(in srgb, var(--tx-color-warning) 78%, var(--shell-text-muted));
+  font-size: 13px;
+}
+
+.HomeSideGit-CommitFileName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.HomeSideGit-CommitFileBin {
+  flex: none;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--shell-surface);
+  color: var(--shell-text-muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.HomeSideGit-CommitFileStats {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+  font-family: var(--tx-bui-font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+
+  .is-add {
+    color: var(--tx-color-success);
+  }
+
+  .is-del {
+    color: var(--tx-color-danger);
+  }
 }
 
 .HomeSideGit-Avatar {
@@ -3756,6 +4446,15 @@ watch(
     width: 18px;
     height: 18px;
     font-size: 9.5px;
+  }
+
+  &.is-xs {
+    width: 16px;
+    height: 16px;
+    font-size: 8px;
+    box-shadow:
+      0 0 0 1.5px var(--shell-bg),
+      inset 0 0 0 1px color-mix(in srgb, currentColor 24%, transparent);
   }
 
   &.is-tone-primary {

@@ -8,6 +8,7 @@ const gitMocks = vi.hoisted(() => ({
   diff: vi.fn(),
   branches: vi.fn(),
   log: vi.fn(),
+  commitFiles: vi.fn(),
   stage: vi.fn(),
   unstage: vi.fn(),
   discard: vi.fn(),
@@ -147,7 +148,20 @@ describe('HomeSideGitPane', () => {
           current: true,
           isRemote: false,
           shortOid: 'abc1234',
-          subject: 'Add git sidebar panel'
+          subject: 'Add git sidebar panel',
+          author: 'TalexDreamSoul',
+          authors: [
+            {
+              name: 'TalexDreamSoul',
+              email: '12345+TalexDreamSoul@users.noreply.github.com',
+              avatarUrl: 'https://avatars.githubusercontent.com/u/12345?s=64'
+            },
+            {
+              name: 'Alice Dev',
+              email: 'alice@example.com',
+              avatarUrl: 'https://www.gravatar.com/avatar/abcdef?s=64&d=404'
+            }
+          ]
         },
         {
           name: 'task/fix/icons',
@@ -215,6 +229,27 @@ describe('HomeSideGitPane', () => {
         }
       ]
     })
+    gitMocks.commitFiles.mockResolvedValue({
+      hash: 'abc1234567890',
+      totalAdditions: 12,
+      totalDeletions: 3,
+      files: [
+        {
+          path: 'apps/core-app/src/main/git.ts',
+          status: 'modified',
+          additions: 10,
+          deletions: 3,
+          binary: false
+        },
+        {
+          path: 'apps/core-app/src/main/new.ts',
+          status: 'added',
+          additions: 2,
+          deletions: 0,
+          binary: false
+        }
+      ]
+    })
     gitMocks.stage.mockResolvedValue({ ok: true, status: sampleStatus() })
     gitMocks.unstage.mockResolvedValue({ ok: true, status: sampleStatus() })
     gitMocks.discard.mockResolvedValue({
@@ -259,9 +294,13 @@ describe('HomeSideGitPane', () => {
     })
     await flushPromises()
 
-    expect(wrapper.find('.HomeSideGit-BranchName').text()).toBe('task/feat/git')
-    expect(wrapper.find('.HomeSideGit-Ahead').text()).toBe('↑1')
-    expect(wrapper.find('.HomeSideGit-Behind').text()).toBe('↓2')
+    // Top header bar is removed; branch info & sync counters live in the compact bottom footer bar.
+    expect(wrapper.find('.HomeSideGit-TopBar').exists()).toBe(false)
+    const footer = wrapper.find('[data-testid="git-footer-bar"]')
+    expect(footer.exists()).toBe(true)
+    expect(footer.find('.HomeSideGit-BranchName').text()).toBe('task/feat/git')
+    expect(footer.find('.HomeSideGit-Ahead').text()).toBe('1')
+    expect(footer.find('.HomeSideGit-Behind').text()).toBe('2')
 
     const fileButtons = wrapper.findAll('.HomeSideGit-FileMain')
     expect(fileButtons).toHaveLength(2)
@@ -343,12 +382,16 @@ describe('HomeSideGitPane', () => {
     // Only one merged input exists for filtering & creating branches.
     expect(wrapper.findAll('.HomeSideGit-ComboInput')).toHaveLength(1)
 
-    // Local & remote branches are grouped into slash tree folders.
+    // Local & remote branches are grouped into slash tree folders and render author avatar stacks.
     const folderLabels = wrapper.findAll('.HomeSideGit-FolderLabel').map((node) => node.text())
     expect(folderLabels).toContain('task')
     expect(folderLabels).toContain('feat')
     expect(folderLabels).toContain('fix')
     expect(folderLabels).toContain('origin')
+
+    const currentBranchRow = wrapper.find('.HomeSideGit-BranchRow.is-current')
+    const stackAvatars = currentBranchRow.findAll('.HomeSideGit-AvatarStack .HomeSideGit-Avatar')
+    expect(stackAvatars).toHaveLength(2)
 
     // Single-click previews branch without immediately calling checkout.
     const mainRow = wrapper
@@ -418,6 +461,32 @@ describe('HomeSideGitPane', () => {
     await avatarImg.trigger('error')
     expect(wrapper.find('.HomeSideGit-AvatarImg').exists()).toBe(false)
     expect(wrapper.find('.HomeSideGit-AvatarInitials').text()).toBe('TD')
+
+    // Clicking a commit row expands its collapsible file diff tree and opens per-file unified diff on click.
+    await wrapper.find('[data-commit-hash="abc1234567890"]').trigger('click')
+    await flushPromises()
+    expect(gitMocks.commitFiles).toHaveBeenCalledWith({
+      cwd: '/repo',
+      conversationId: 'c-1',
+      hash: 'abc1234567890'
+    })
+    const commitTree = wrapper.find('[data-testid="git-commit-tree-abc1234"]')
+    expect(commitTree.exists()).toBe(true)
+    expect(commitTree.find('.HomeSideGit-CommitTreeFolder').text()).toContain(
+      'apps/core-app/src/main'
+    )
+
+    const fileBtn = commitTree.find('[data-commit-file="apps/core-app/src/main/git.ts"]')
+    expect(fileBtn.exists()).toBe(true)
+    await fileBtn.trigger('click')
+    await flushPromises()
+    expect(gitMocks.diff).toHaveBeenCalledWith({
+      cwd: '/repo',
+      conversationId: 'c-1',
+      commitHash: 'abc1234567890',
+      path: 'apps/core-app/src/main/git.ts'
+    })
+    expect(wrapper.find('[data-testid="git-commit-diff-pane"]').exists()).toBe(true)
   })
 
   it('renders GitHub and custom domain badges on remotes and supports right-click editing of branches and remotes', async () => {
