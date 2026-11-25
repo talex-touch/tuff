@@ -111,6 +111,16 @@ vi.mock('vue-sonner', () => ({
 vi.mock('~/modules/platform/renderer-platform', () => ({
   useRendererPlatform: () => platformState
 }))
+vi.mock('~/modules/conversation/useConversationHistory', () => ({
+  useConversationHistory: () => ({
+    conversations: ref([]),
+    loading: ref(false),
+    refresh: vi.fn(async () => undefined),
+    load: vi.fn(async () => null),
+    rename: vi.fn(async () => undefined),
+    remove: vi.fn(async () => undefined)
+  })
+}))
 vi.mock('~/modules/browser-connection/useBrowserConnection', () => ({
   isOpenableBrowserUrl: (url?: string) => Boolean(url && url.startsWith('http')),
   useBrowserConnection: () => ({

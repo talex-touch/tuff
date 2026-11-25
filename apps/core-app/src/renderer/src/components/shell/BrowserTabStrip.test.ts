@@ -200,7 +200,12 @@ vi.mock('@talex-touch/tuffex/skeleton', () => ({
   TxSkeleton: { template: '<div data-testid="tab-skeleton" />' }
 }))
 
-import { resetShellWorkspaceTabsForTests } from '~/modules/layout/useShellWorkspaceTabs'
+import {
+  attachBrowserTabToSpace,
+  getSpaceTabs,
+  projectSpaceKey,
+  resetShellWorkspaceTabsForTests
+} from '~/modules/layout/useShellWorkspaceTabs'
 import BrowserTabStrip from './BrowserTabStrip.vue'
 
 const DIR = dirname(fileURLToPath(import.meta.url))
@@ -497,5 +502,57 @@ describe('BrowserTabStrip layout, drag regions & tab actions', () => {
     await wrapper.find('[data-testid="browser-add-menu-new-tab"]').trigger('click')
     await flushPromises()
     expect(sendMock).toHaveBeenCalledWith(BrowserEvents.createTab, {})
+  })
+
+  it('protects Space-bound tabs from standalone bulk close and keeps Space entries intact on close failure', async () => {
+    const spaceKey = projectSpaceKey('proj-safe')
+    mockConversations.value = [
+      { id: 'c-1', title: 'Main Chat', projectId: 'proj-safe', updatedAt: 10 }
+    ]
+    attachBrowserTabToSpace('space-w', spaceKey, 'c-1')
+    workspaceState = makeState(
+      [
+        { id: 'standalone-a', url: 'https://a.example/', title: 'A' },
+        { id: 'space-w', url: 'https://space.example/', title: 'Space Web' },
+        { id: 'standalone-b', url: 'https://b.example/', title: 'B' }
+      ],
+      'standalone-a',
+      20
+    )
+
+    const wrapper = mount(BrowserTabStrip)
+    await flushPromises()
+
+    // Standalone strip shows [A, B], hiding Space W.
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual(['A', 'B'])
+
+    // Open context menu on A and invoke "close right" -> closes ONLY standalone-b, never space-w.
+    await wrapper.findAll('.BrowserTabStrip-Tab')[0]!.trigger('contextmenu')
+    await nextTick()
+    const menuButtons = wrapper.findAll('[data-testid="tab-context-menu"] button')
+    const closeRightBtn = menuButtons.find((btn) =>
+      btn.text().includes('browser.tabMenu.closeRight')
+    )
+    expect(closeRightBtn).toBeTruthy()
+    await closeRightBtn!.trigger('click')
+    await flushPromises()
+
+    expect(sendMock).toHaveBeenCalledWith(BrowserEvents.closeTab, { tabId: 'standalone-b' })
+    expect(sendMock).not.toHaveBeenCalledWith(BrowserEvents.closeTab, { tabId: 'space-w' })
+    expect(getSpaceTabs(spaceKey).map((tab) => tab.id)).toContain('browser:space-w')
+
+    // Switch into proj-safe Space and fail sdk.closeTab on space-w -> space-w stays in Space.
+    route.path = '/home/c/c-1'
+    route.params = { id: 'c-1' }
+    await nextTick()
+    sendMock.mockImplementationOnce(async () => {
+      throw new Error('CLOSE_FAILED')
+    })
+    const closeSpaceWebBtn = wrapper.find('button[aria-label="browser.closeTab:Space Web"]')
+    expect(closeSpaceWebBtn.exists()).toBe(true)
+    await closeSpaceWebBtn.trigger('click')
+    await flushPromises()
+
+    expect(getSpaceTabs(spaceKey).map((tab) => tab.id)).toContain('browser:space-w')
   })
 })

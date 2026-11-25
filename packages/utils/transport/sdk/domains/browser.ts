@@ -29,6 +29,11 @@ export interface BrowserWorkspaceState {
   bookmarks: BrowserSavedPage[]
 }
 
+export interface BrowserCreateTabResult extends BrowserWorkspaceState {
+  /** ID of the tab created by this call, independent of concurrent activeTabId changes. */
+  createdTabId?: string
+}
+
 export interface BrowserViewportRequest {
   /** Main-window content coordinates, in device-independent pixels. */
   bounds: { x: number, y: number, width: number, height: number }
@@ -51,7 +56,7 @@ const sideApi = defineEvent('browser').module('side')
 
 export const BrowserEvents = {
   getState: api.event('get').define<void, BrowserWorkspaceState>(),
-  createTab: api.event('create-tab').define<{ input?: string }, BrowserWorkspaceState>(),
+  createTab: api.event('create-tab').define<{ input?: string }, BrowserCreateTabResult>(),
   activateTab: api.event('activate-tab').define<{ tabId: string }, BrowserWorkspaceState>(),
   closeTab: api.event('close-tab').define<{ tabId: string }, BrowserWorkspaceState>(),
   moveTab: api.event('move-tab').define<{ tabId: string, beforeTabId: string | null }, BrowserWorkspaceState>(),
@@ -81,7 +86,7 @@ export const BrowserEvents = {
 
 export interface BrowserSdk {
   getState: () => Promise<BrowserWorkspaceState>
-  createTab: (input?: string) => Promise<BrowserWorkspaceState>
+  createTab: (input?: string) => Promise<BrowserCreateTabResult>
   activateTab: (tabId: string) => Promise<BrowserWorkspaceState>
   closeTab: (tabId: string) => Promise<BrowserWorkspaceState>
   moveTab: (tabId: string, beforeTabId: string | null) => Promise<BrowserWorkspaceState>

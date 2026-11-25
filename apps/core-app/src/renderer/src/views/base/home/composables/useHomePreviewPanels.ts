@@ -139,10 +139,12 @@ export function useHomePreviewPanels(options: UseHomePreviewPanelsOptions) {
   async function openWebInBuiltInBrowser(url: string): Promise<void> {
     if (browserSdk && isBetaFeatureEnabled(appSetting, 'browserWorkspace')) {
       try {
-        const created = await browserSdk.createTab(url)
         const spaceKey = projectSpaceKey(options.projectId.value)
-        if (created.activeTabId) {
-          attachBrowserTabToSpace(created.activeTabId, spaceKey, options.conversationId.value)
+        const conversationId = options.conversationId.value
+        const created = await browserSdk.createTab(url)
+        const createdTabId = created.createdTabId || created.activeTabId
+        if (createdTabId) {
+          attachBrowserTabToSpace(createdTabId, spaceKey, conversationId)
           setLastWorkspaceScope(spaceKey)
         }
         await router.push(APP_SURFACE_ROUTES.browser)
@@ -165,15 +167,17 @@ export function useHomePreviewPanels(options: UseHomePreviewPanelsOptions) {
   }): Promise<void> {
     if (browserSdk && isBetaFeatureEnabled(appSetting, 'browserWorkspace')) {
       try {
+        const spaceKey = projectSpaceKey(options.projectId.value)
+        const conversationId = options.conversationId.value
         const previewUrl = buildBrowserFilePreviewUrl({
           path: payload.absolutePath,
-          conversationId: options.conversationId.value ?? undefined,
+          conversationId: conversationId ?? undefined,
           line: payload.line
         })
         const created = await browserSdk.createTab(previewUrl)
-        const spaceKey = projectSpaceKey(options.projectId.value)
-        if (created.activeTabId) {
-          attachBrowserTabToSpace(created.activeTabId, spaceKey, options.conversationId.value)
+        const createdTabId = created.createdTabId || created.activeTabId
+        if (createdTabId) {
+          attachBrowserTabToSpace(createdTabId, spaceKey, conversationId)
           setLastWorkspaceScope(spaceKey)
         }
         await router.push(APP_SURFACE_ROUTES.browser)

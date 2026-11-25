@@ -9,10 +9,12 @@ import {
   type BrowserWorkspaceState
 } from '@talex-touch/utils/transport/sdk/domains/browser'
 import { useConversationEntry } from '~/modules/conversation/useConversationEntry'
+import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
 import {
   BROWSER_SCOPE_KEY,
   isDeprecatedInternalBrowserUrl,
+  projectSpaceKey,
   resolveBrowserTabSpaceKey,
   setLastWorkspaceScope
 } from '~/modules/layout/useShellWorkspaceTabs'
@@ -99,9 +101,14 @@ const appVersion = computed(() =>
   packageJson.value?.version ? `v${packageJson.value.version}` : ''
 )
 
+const history = useConversationHistory()
 const activeBrowserTab = computed(() =>
   browserState.value?.tabs.find((tab) => tab.id === browserState.value?.activeTabId)
 )
+function resolveConversationSpace(conversationId: string): string | null {
+  const record = history.conversations.value.find((item) => item.id === conversationId)
+  return record ? projectSpaceKey(record.projectId) : null
+}
 const isStoreActive = computed(() => route.path === '/store')
 const isSettingsActive = computed(() => route.path.startsWith('/setting'))
 const isBrowserActive = computed(() => {
@@ -109,11 +116,14 @@ const isBrowserActive = computed(() => {
   const active = activeBrowserTab.value
   if (!active) return true
   if (isDeprecatedInternalBrowserUrl(active.url)) return false
-  return !resolveBrowserTabSpaceKey(active)
+  return !resolveBrowserTabSpaceKey(active, resolveConversationSpace)
 })
 
 function isStandaloneBrowserTab(tab: { id: string; url: string }): boolean {
-  return !isDeprecatedInternalBrowserUrl(tab.url) && !resolveBrowserTabSpaceKey(tab)
+  return (
+    !isDeprecatedInternalBrowserUrl(tab.url) &&
+    !resolveBrowserTabSpaceKey(tab, resolveConversationSpace)
+  )
 }
 
 async function openBrowserWorkspace(): Promise<void> {

@@ -31,6 +31,7 @@ import {
   draftTabId,
   ensureConversationTab,
   ensureDraftTab,
+  getSpaceTabs,
   isDeprecatedInternalBrowserUrl,
   isSpaceScopeKey,
   projectIdFromSpaceKey,
@@ -164,23 +165,24 @@ function browserTabTitle(tab: BrowserTabState): string {
   return tab.title || tab.url
 }
 
+function isStandaloneBrowserTab(tab: BrowserTabState): boolean {
+  return (
+    !isDeprecatedInternalBrowserUrl(tab.url) &&
+    !resolveBrowserTabSpaceKey(tab, resolveConversationSpace)
+  )
+}
+
 const displayedTabs = computed<StripTab[]>(() => {
   const allBrowserTabs = state.value?.tabs ?? []
 
   if (!isSpaceScope.value) {
-    return allBrowserTabs
-      .filter(
-        (tab) =>
-          !isDeprecatedInternalBrowserUrl(tab.url) &&
-          !resolveBrowserTabSpaceKey(tab, resolveConversationSpace)
-      )
-      .map((tab) => ({
-        id: tab.id,
-        kind: 'browser' as const,
-        title: browserTabTitle(tab),
-        icon: tabIcon(tab),
-        browserTab: tab
-      }))
+    return allBrowserTabs.filter(isStandaloneBrowserTab).map((tab) => ({
+      id: tab.id,
+      kind: 'browser' as const,
+      title: browserTabTitle(tab),
+      icon: tabIcon(tab),
+      browserTab: tab
+    }))
   }
 
   const scope = displayedScopeKey.value
@@ -323,16 +325,15 @@ async function openSpaceConversationDraft(spaceKey: string): Promise<void> {
 async function openSpaceWebTab(spaceKey: string, url?: string): Promise<void> {
   addTabMenuOpen.value = false
   if (!state.value) return
-  let createdTabId = ''
-  const ok = await runInBrowser(async () => {
+  await runInBrowser(async () => {
     const next = await sdk.createTab(url)
-    createdTabId = next.activeTabId
+    const createdTabId = next.createdTabId || next.activeTabId
+    if (createdTabId) {
+      attachBrowserTabToSpace(createdTabId, spaceKey)
+      setLastWorkspaceScope(spaceKey)
+    }
     return next
   })
-  if (ok && createdTabId) {
-    attachBrowserTabToSpace(createdTabId, spaceKey)
-    setLastWorkspaceScope(spaceKey)
-  }
 }
 
 function handlePrimaryAddClick(): void {
@@ -421,7 +422,7 @@ function activateOrOpenTab(tab: StripTab): void {
   void runInBrowser(() => sdk.activateTab(browserTab.id))
 }
 
-function closeStripTab(tab: StripTab): void {
+async function closeStripTab(tab: StripTab): Promise<void> {
   if (!isSpaceScope.value) {
     if (tab.browserTab) {
       void command(() => sdk.closeTab(tab.browserTab!.id))
@@ -431,10 +432,38 @@ function closeStripTab(tab: StripTab): void {
 
   const scope = displayedScopeKey.value
   const wasActive = activeStripTabId.value === tab.id
-  const { removed, nextTab } = removeSpaceTab(scope, tab.id)
-  if (removed?.kind === 'browser') {
-    void command(() => sdk.closeTab(removed.browserTabId))
+
+  if (tab.kind === 'browser' && tab.browserTab) {
+    const startRoutePath = route.path
+    const browserTabId = tab.browserTab.id
+    const currentList = getSpaceTabs(scope)
+    const closingIndex = currentList.findIndex((item) => item.id === tab.id)
+    const fallbackNext =
+      closingIndex >= 0
+        ? (currentList[closingIndex + 1] ?? currentList[closingIndex - 1] ?? null)
+        : null
+
+    const accepted = await command(() => sdk.closeTab(browserTabId))
+    if (!accepted) return
+
+    const { nextTab } = removeSpaceTab(scope, tab.id)
+    if (!wasActive || route.path !== startRoutePath) return
+
+    const remaining = getSpaceTabs(scope)
+    const resolvedNext =
+      nextTab ??
+      (fallbackNext && remaining.some((item) => item.id === fallbackNext.id)
+        ? fallbackNext
+        : (remaining[0] ?? null))
+    if (resolvedNext) {
+      activateSpaceEntry(resolvedNext)
+      return
+    }
+    void openSpaceConversationDraft(scope)
+    return
   }
+
+  const { removed, nextTab } = removeSpaceTab(scope, tab.id)
   if (!wasActive) return
 
   if (nextTab) {
@@ -499,7 +528,8 @@ async function selectTabMenuAction(action: BrowserTabMenuAction): Promise<void> 
   if (!isSpaceScope.value) {
     if (!target.browserTab) return
     const browserTabId = target.browserTab.id
-    const run = () => runBrowserTabAction(sdk, action, browserTabId)
+    const run = (): Promise<BrowserWorkspaceState> =>
+      runBrowserTabAction(sdk, action, browserTabId, { filter: isStandaloneBrowserTab })
     void (action === 'duplicate' ? runInBrowser(run) : command(run))
     return
   }
@@ -518,10 +548,11 @@ async function selectTabMenuAction(action: BrowserTabMenuAction): Promise<void> 
     return
   }
   if (action === 'close') {
-    closeStripTab(target)
+    void closeStripTab(target)
     return
   }
 
+  const startRoutePath = route.path
   const wasActiveRemoved =
     activeStripTabId.value !== null &&
     ((action === 'close-others' && activeStripTabId.value !== target.id) ||
@@ -532,11 +563,46 @@ async function selectTabMenuAction(action: BrowserTabMenuAction): Promise<void> 
         displayedTabs.value.findIndex((item) => item.id === activeStripTabId.value) >
           tabMenuIndex.value))
 
-  const { removedBrowserTabIds } = closeSpaceTabsBulk(scope, target.id, action)
-  for (const browserTabId of removedBrowserTabIds) {
-    await command(() => sdk.closeTab(browserTabId))
+  const hasBrowserTabsToClose = displayedTabs.value.some((item, idx) => {
+    if (item.kind !== 'browser') return false
+    return action === 'close-others'
+      ? idx !== tabMenuIndex.value
+      : action === 'close-left'
+        ? idx < tabMenuIndex.value
+        : idx > tabMenuIndex.value
+  })
+
+  let batchSucceeded = true
+  if (hasBrowserTabsToClose) {
+    const runSpaceBulkClose = async (): Promise<BrowserWorkspaceState> => {
+      const currentList = getSpaceTabs(scope)
+      const targetIndex = currentList.findIndex((item) => item.id === target.id)
+      if (targetIndex < 0) {
+        return state.value ?? (await sdk.getState())
+      }
+      const toRemove = currentList.filter((_item, idx) =>
+        action === 'close-others'
+          ? idx !== targetIndex
+          : action === 'close-left'
+            ? idx < targetIndex
+            : idx > targetIndex
+      )
+
+      let latestState = state.value
+      for (const entry of toRemove) {
+        if (entry.kind === 'browser') {
+          latestState = await sdk.closeTab(entry.browserTabId)
+        }
+        removeSpaceTab(scope, entry.id)
+      }
+      return latestState ?? (await sdk.getState())
+    }
+    batchSucceeded = await command(runSpaceBulkClose)
+  } else {
+    closeSpaceTabsBulk(scope, target.id, action)
   }
-  if (wasActiveRemoved) {
+
+  if (batchSucceeded && wasActiveRemoved && route.path === startRoutePath) {
     activateOrOpenTab(target)
   }
 }

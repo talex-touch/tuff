@@ -37,6 +37,16 @@ vi.mock('~/modules/conversation/useConversationEntry', () => ({
     enterPickedProjectConversation: vi.fn()
   })
 }))
+vi.mock('~/modules/conversation/useConversationHistory', () => ({
+  useConversationHistory: () => ({
+    conversations: ref([]),
+    loading: ref(false),
+    refresh: vi.fn(async () => undefined),
+    load: vi.fn(async () => null),
+    rename: vi.fn(async () => undefined),
+    remove: vi.fn(async () => undefined)
+  })
+}))
 vi.mock('~/modules/layout/useProjectFolders', () => ({
   blankConversationOwner: () => null
 }))

@@ -32,7 +32,9 @@ import {
   parseBrowserFilePreviewUrl
 } from '~/modules/browser-workspace/preview-url'
 import { useBrowserWorkspace } from '~/modules/browser-workspace/useBrowserWorkspace'
+import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
 import {
+  projectSpaceKey,
   removeSpaceTab,
   resolveBrowserTabSpaceKey,
   spaceBrowserTabId
@@ -60,6 +62,11 @@ const route = useRoute()
 const router = useRouter()
 const { isMac } = useRendererPlatform()
 const sdk = createBrowserSdk(useTuffTransport())
+const history = useConversationHistory()
+function resolveConversationSpace(conversationId: string): string | null {
+  const record = history.conversations.value.find((item) => item.id === conversationId)
+  return record ? projectSpaceKey(record.projectId) : null
+}
 const {
   state,
   connecting,
@@ -636,16 +643,17 @@ function onKeydown(event: KeyboardEvent): void {
     event.preventDefault()
     panel.value = null
     const closingTab = activeTab.value
-    const boundSpace = resolveBrowserTabSpaceKey(closingTab)
+    const boundSpace = resolveBrowserTabSpaceKey(closingTab, resolveConversationSpace)
     void command(() => sdk.closeTab(closingTab.id)).then((accepted) => {
       if (!accepted || !boundSpace) return
       const { nextTab } = removeSpaceTab(boundSpace, spaceBrowserTabId(closingTab.id))
+      if (nextTab?.kind === 'browser') {
+        void command(() => sdk.activateTab(nextTab.browserTabId))
+        return
+      }
+      if (route.path !== '/browser') return
       if (nextTab?.kind === 'conversation') {
         void router.push(`/home/c/${nextTab.conversationId}`)
-      } else if (nextTab?.kind === 'draft') {
-        void router.push('/home')
-      } else if (nextTab?.kind === 'browser') {
-        void command(() => sdk.activateTab(nextTab.browserTabId))
       } else {
         void router.push('/home')
       }
