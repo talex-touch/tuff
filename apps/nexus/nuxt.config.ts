@@ -20,6 +20,7 @@ import { createNexusPrerenderRoutes } from './build/nexus-prerender-routes'
 import { contentApiRouteExcludes, createStaticCacheRouteRules } from './build/nexus-static-routes.mjs'
 import { tuffexOnDemandStylePlugin } from '../../packages/tuffex/packages/script/build/on-demand-style-plugin'
 import { nexusDemoLoadersPlugin } from './build/nexus-demo-loaders'
+import { nexusFrameworkRuntimePlugin } from './build/nexus-framework-runtime-plugin'
 import { resolveNexusManualChunk } from './build/nexus-manual-chunks'
 
 loadEnv({ path: '.env' })
@@ -662,6 +663,7 @@ export default defineNuxtConfig({
     plugins: [
       nexusPageMetaFastPathPlugin(resolve(currentDir, 'app/pages')),
       nexusDemoLoadersPlugin(currentDir, nexusDemoLoaderBase),
+      nexusFrameworkRuntimePlugin(currentDir),
       tuffexOnDemandStylePlugin({
         enabled: tuffexDevMode === 'dist',
         componentDistRoot: tuffexDevMode === 'dist' ? tuffexDistRoot : undefined,

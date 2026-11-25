@@ -65,9 +65,9 @@ code: |
 - Design loading, empty and error states together: `TxLoadingState`, `TxEmptyState`, `TxErrorState`.
 - Compose dashboards from `TxDataTable`, `TxStatusBadge`, `TxProgressBar` and charts, not one-off SVG or status UI; settings pages use `TxTabs` for sections and `TxDrawer` for dense configuration.
 
-## Migration Dashboard
+## Multi-Framework Adaptation & Sync Matrix
 
-`Verified`: manually reviewed; `Migrated`: AI-migrated, worth checking against source; `In progress` / `Not migrated`: demos and API may still change. The sidebar flags only pages that still need attention.
+Inspect live coverage for every TuffEx component across **Vue 3**, **React**, and **Web Components**, along with its tier (A–D), React exports, and custom element tags. Switch frameworks on any component page to preview and copy matching snippets.
 
 ::DocsComponentSyncTable
 ::
