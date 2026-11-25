@@ -8,6 +8,11 @@ export interface TerminalSize {
   rows: number
 }
 
+export interface TerminalPixelSize {
+  width: number
+  height: number
+}
+
 export interface TerminalLabels {
   ariaLabel: string
 }
@@ -26,6 +31,8 @@ export interface TerminalInstance {
   focus: () => void
   fit: () => TerminalSize | null
   getSize: () => TerminalSize | null
+  /** Physical device-pixel cell dimensions for HiDPI image negotiation (e.g. herdr-core `display.cell`). */
+  getCellSizePixels?: () => TerminalPixelSize | null
 }
 
 export interface TerminalProps {

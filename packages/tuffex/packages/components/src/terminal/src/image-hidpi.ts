@@ -68,6 +68,22 @@ function resolveRawDimensions(
   return renderer?._renderService?.dimensions ?? terminal._core?._renderService?.dimensions
 }
 
+/**
+ * Returns the floor-rounded physical device-pixel cell size reported to TUIs via
+ * `CSI 16 t`, or falls back to CSS cell size when device metrics are unavailable.
+ */
+export function getDeviceCellSizePixels(
+  terminal: XtermTerminal,
+): { width: number, height: number } | null {
+  const raw = (terminal as InternalXtermTerminal)._core?._renderService?.dimensions
+  const cell = raw?.device?.cell ?? raw?.css?.cell
+  if (!isPositiveFinite(cell?.width) || !isPositiveFinite(cell?.height))
+    return null
+  const width = Math.floor(cell.width)
+  const height = Math.floor(cell.height)
+  return width > 0 && height > 0 ? { width, height } : null
+}
+
 function projectDeviceDimensions(raw: XtermRenderDimensions | undefined): XtermRenderDimensions | undefined {
   const deviceCanvas = raw?.device?.canvas
   const deviceCell = raw?.device?.cell

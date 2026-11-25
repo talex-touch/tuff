@@ -113,10 +113,11 @@ code: |
 | `focus()` | `() => void` | Focuses a ready interactive terminal. |
 | `fit()` | `() => TerminalSize \| null` | Fits unpinned axes and returns the size; hidden containers keep their last size; null when unavailable. |
 | `getSize()` | `() => TerminalSize \| null` | Current columns and rows; null before initialization or after disposal. |
+| `getCellSizePixels()` | `() => TerminalPixelSize \| null` | Floor-rounded physical device-pixel cell size for HiDPI image negotiation (such as `herdr-core` `display.cell`); null when unavailable. |
 
 ### Types
 
-`/terminal` exports `TerminalProps`, `TerminalEmits`, `TerminalInstance`, `TerminalSize`, `TerminalData`, `TerminalLabels`, `TxTerminalInstance`, and `TERMINAL_DEFAULT_LABELS`. The component is also exported from `/pro` and the root; `Terminal` is the installable wrapper.
+`/terminal` exports `TerminalProps`, `TerminalEmits`, `TerminalInstance`, `TerminalSize`, `TerminalPixelSize`, `TerminalData`, `TerminalLabels`, `TxTerminalInstance`, and `TERMINAL_DEFAULT_LABELS`. The component is also exported from `/pro` and the root; `Terminal` is the installable wrapper.
 
 ## Electron PTY Integration
 
@@ -190,7 +191,7 @@ onBeforeUnmount(stop)
 
 - Display only: mounting never creates a shell, starts a process, or requests Electron privileges, and the component imports neither transport nor Electron.
 - xterm, the fit addon, the WebGL addon, and the image addon load dynamically in `onMounted`; server rendering touches no browser globals.
-- Supports SIXEL and iTerm2 IIP (`OSC 1337`) inline image protocols, backing the image overlay canvas at physical device-pixel resolution on HiDPI / Retina displays with device-pixel size reports (`CSI 14t` / `16t` / `18t`) plus DA1 and `XTVERSION` (`CSI > q`) advertisement so TUI previewers such as `yazi` render crisp truecolor images.
+- Supports SIXEL, iTerm2 IIP (`OSC 1337`), and passive Kitty Graphics Protocol (`APC _G` and `U+10EEEE` Unicode placeholders) inline image protocols, backing the image overlay canvas at physical device-pixel resolution on HiDPI / Retina displays with device-pixel size reports (`CSI 14t` / `16t` / `18t`) plus DA1 and `XTVERSION` (`CSI > q`) advertisement so TUI previewers such as `yazi` render crisp truecolor images while stale `U+10EEEE` cells degrade cleanly to blank space instead of missing-glyph tofu boxes.
 - Output, `reset()`, and `clear()` share one ordered queue: output goes to xterm as it arrives and is parsed across frames, waiting in the queue once about 8 MB is pending; `reset()` and `clear()` run only after earlier output has been parsed. Binary data is decoded as UTF-8.
 - `lines` is watched deeply, so push, index assignment, replacement, and clearing all work; after mutating bytes inside a `Uint8Array`, trigger one reactive update.
 - Read-only mode blocks input at both xterm and the event boundary and stops the cursor blink; switching from interactive to read-only blurs the input.

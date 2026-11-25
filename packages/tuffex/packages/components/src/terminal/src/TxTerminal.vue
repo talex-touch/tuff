@@ -3,12 +3,14 @@ import type { FitAddon } from '@xterm/addon-fit'
 import type { ImageAddon } from '@xterm/addon-image'
 import type { WebglAddon } from '@xterm/addon-webgl'
 import type { IDisposable, ITheme, Terminal as XtermTerminal } from '@xterm/xterm'
-import type { TerminalData, TerminalEmits, TerminalInstance, TerminalProps, TerminalSize } from './types'
+import type { KittyGraphicsAdapter } from './kitty-graphics'
+import type { TerminalData, TerminalEmits, TerminalInstance, TerminalPixelSize, TerminalProps, TerminalSize } from './types'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onThemeChange } from '../../stat-card/src/theme-change'
 import { TERMINAL_DEFAULT_LABELS } from './types'
 import { DEFAULT_TERMINAL_FONT_FAMILY, resolveTerminalFontFamily } from './font-fallback'
-import { configureHiDpiImageAddon } from './image-hidpi'
+import { configureHiDpiImageAddon, getDeviceCellSizePixels } from './image-hidpi'
+import { createKittyGraphicsAdapter } from './kitty-graphics'
 
 defineOptions({ name: 'TxTerminal' })
 
@@ -54,6 +56,7 @@ const ALT_ARROWS: Record<string, string> = {
 let terminal: XtermTerminal | null = null
 let fitAddon: FitAddon | null = null
 let imageAddon: ImageAddon | null = null
+let kittyGraphics: KittyGraphicsAdapter | null = null
 // Null once the renderer chunk failed to load or WebGL2 proved unavailable.
 let Webgl: typeof WebglAddon | null = null
 let webglAddon: WebglAddon | null = null
@@ -92,7 +95,8 @@ function settlePending(error: Error): void {
 }
 
 function submit(target: XtermTerminal, operation: WriteOperation): void {
-  const length = (typeof operation.data === 'string' ? operation.data.length : operation.data.byteLength)
+  const payload = kittyGraphics ? kittyGraphics.transform(operation.data) : operation.data
+  const length = (typeof payload === 'string' ? payload.length : payload.byteLength)
     + (operation.newline ? 2 : 0)
   const viewport = target.buffer.active.viewportY
   const complete = () => {
@@ -101,6 +105,7 @@ function submit(target: XtermTerminal, operation: WriteOperation): void {
     parsing--
     parsingLength -= length
     try {
+      kittyGraphics?.flush()
       if (props.autoScroll)
         target.scrollToBottom()
       else
@@ -121,9 +126,9 @@ function submit(target: XtermTerminal, operation: WriteOperation): void {
   parsing++
   parsingLength += length
   if (operation.newline)
-    target.writeln(operation.data, complete)
+    target.writeln(payload, complete)
   else
-    target.write(operation.data, complete)
+    target.write(payload, complete)
 }
 
 // Writes go to xterm as they arrive, so its write buffer batches the parse
@@ -144,10 +149,13 @@ function pump(): void {
       queueOffset = 0
     }
     try {
-      if (operation.kind === 'write')
+      if (operation.kind === 'write') {
         submit(target, operation)
-      else
+      }
+      else {
+        kittyGraphics?.reset()
         target[operation.kind]()
+      }
     }
     catch (reason) {
       failure = errorFrom(reason)
@@ -178,6 +186,10 @@ function enqueueControl(kind: 'clear' | 'reset'): void {
 
 function getSize(): TerminalSize | null {
   return terminal && !disposed && !failure ? { cols: terminal.cols, rows: terminal.rows } : null
+}
+
+function getCellSizePixels(): TerminalPixelSize | null {
+  return terminal && !disposed && !failure ? getDeviceCellSizePixels(terminal) : null
 }
 
 function emitSize(size: TerminalSize): void {
@@ -445,6 +457,7 @@ const instance: TerminalInstance = {
   focus,
   fit,
   getSize,
+  getCellSizePixels,
 }
 defineExpose(instance)
 
@@ -573,6 +586,7 @@ function releaseResources(): void {
   terminal = null
   fitAddon = null
   imageAddon = null
+  kittyGraphics = null
   webglAddon = null
   webglContext = null
   colorProbe?.remove()
@@ -642,6 +656,8 @@ onMounted(async () => {
         imageAddon = null
       }
     }
+    kittyGraphics = createKittyGraphicsAdapter(terminal, imageAddon)
+    subscriptions.push(kittyGraphics)
     host.addEventListener('webglcontextlost', handleContextLost, true)
     Webgl = webgl?.WebglAddon ?? null
     syncRenderer()
