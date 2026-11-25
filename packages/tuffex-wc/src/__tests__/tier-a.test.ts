@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { registerTuffexElements } from '../index'
+import { ALL_TUFFEX_ELEMENT_BUNDLES, registerTuffexElements, TxButtonElement } from '../index'
 
 beforeAll(() => {
   registerTuffexElements()
@@ -10,7 +10,7 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-describe('Tier A custom elements (18 components)', () => {
+describe('tier A custom elements (18 components)', () => {
   it('renders tx-button with slot projection, boolean border="false", and single bubbling composed click', async () => {
     const wrapper = document.createElement('div')
     wrapper.innerHTML = `<tx-button variant="primary" border="false">Run Build</tx-button>`
@@ -35,6 +35,65 @@ describe('Tier A custom elements (18 components)', () => {
     expect(evt).toBeInstanceOf(CustomEvent)
     expect(evt.bubbles).toBe(true)
     expect(evt.composed).toBe(true)
+  })
+
+  it('mounts tx-button without Vue dev autofocus prop-override warnings and forwards autofocus via native attr observation', async () => {
+    const buttonDefProps = (TxButtonElement.def?.props ?? {}) as Record<string, unknown>
+    expect(buttonDefProps).not.toHaveProperty('autofocus')
+
+    // jsdom omits HTMLOrForeignElement.autofocus from HTMLElement.prototype, unlike Chromium/Firefox/Safari.
+    // Define it temporarily so Vue 3.5's `_resolveProps` conflict check executes as in real browsers.
+    const originalDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'autofocus')
+    if (!originalDescriptor) {
+      Object.defineProperty(HTMLElement.prototype, 'autofocus', {
+        configurable: true,
+        get() {
+          return this.hasAttribute('autofocus')
+        },
+        set(val: boolean) {
+          if (val)
+            this.setAttribute('autofocus', '')
+          else
+            this.removeAttribute('autofocus')
+        },
+      })
+    }
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const container = document.createElement('div')
+      container.innerHTML = `
+        <tx-button variant="primary">Default Button</tx-button>
+        <tx-button autofocus>Focused Button</tx-button>
+      `
+      document.body.appendChild(container)
+      await nextTick()
+      await nextTick()
+
+      const warnings = warnSpy.mock.calls.map(args => args.map(String).join(' '))
+      expect(warnings.filter(msg => /autofocus|conflicts with an existing property/i.test(msg))).toEqual([])
+      expect(warnings).toEqual([])
+
+      const buttons = container.querySelectorAll('tx-button button.tx-button')
+      expect(buttons).toHaveLength(2)
+      expect(document.activeElement).toBe(buttons[1])
+
+      // Guard every registered WC bundle against overriding standard HTMLElement properties.
+      for (const bundle of ALL_TUFFEX_ELEMENT_BUNDLES) {
+        const rawProps = Object.keys((bundle.ElementClass.def?.props ?? {}) as Record<string, unknown>)
+        for (const propKey of rawProps) {
+          expect(
+            propKey in HTMLElement.prototype,
+            `${bundle.tag} prop "${propKey}" collides with HTMLElement.prototype`,
+          ).toBe(false)
+        }
+      }
+    }
+    finally {
+      warnSpy.mockRestore()
+      if (!originalDescriptor)
+        delete (HTMLElement.prototype as unknown as Record<string, unknown>).autofocus
+    }
   })
 
   it('renders tx-badge, tx-tag (with close event), tx-avatar, tx-spinner, tx-divider, and tx-kbd', async () => {

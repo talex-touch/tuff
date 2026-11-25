@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { existsSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, resolve } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
 import {
   buildReactRuntimeVirtualModule,
   buildWcRuntimeVirtualModule,
@@ -72,5 +75,28 @@ describe('nexus-framework-runtime-plugin', () => {
     expect(probe.reactStyleEntry).toBe('@talex-touch/tuffex-react/style.css')
     expect(probe.reactLibEntry).toBe('react')
     expect(probe.reactDomClientEntry).toBe('react-dom/client')
+  })
+
+  it('pre-bundles @floating-ui/dom via a pnpm-resolvable optimizeDeps entry in nuxt.config.ts', async () => {
+    vi.stubGlobal('defineNuxtConfig', (config: unknown) => config)
+    try {
+      const mod = await import('../nuxt.config')
+      const config = mod.default as { vite?: { optimizeDeps?: { include?: string[] } } }
+      const include = config.vite?.optimizeDeps?.include ?? []
+
+      const floatingDomEntry = include.find(entry => entry === '@floating-ui/dom' || entry.endsWith('> @floating-ui/dom'))
+      expect(floatingDomEntry).toBe('@talex-touch/tuffex-core > @floating-ui/dom')
+
+      const nexusRoot = resolve(import.meta.dirname, '..')
+      const nexusReq = createRequire(resolve(nexusRoot, 'package.json'))
+      const corePkgJson = nexusReq.resolve('@talex-touch/tuffex-core/package.json')
+      const coreReq = createRequire(corePkgJson)
+      const floatingDomEntryPath = coreReq.resolve('@floating-ui/dom')
+      expect(existsSync(floatingDomEntryPath)).toBe(true)
+      expect(dirname(floatingDomEntryPath)).toContain('@floating-ui')
+    }
+    finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

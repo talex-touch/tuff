@@ -1,4 +1,5 @@
 import type { Component, ComponentInternalInstance, ComponentOptions, VNode } from 'vue'
+import type { PropCoerceKind, PropSchema } from './coerce'
 import {
   computed,
   defineComponent,
@@ -10,8 +11,7 @@ import {
   useHost,
   watch,
 } from 'vue'
-import type { PropCoerceKind, PropSchema } from './coerce'
-import { coercePropValue, coercePropsBySchema } from './coerce'
+import { coercePropsBySchema, coercePropValue } from './coerce'
 import { dispatchHostEvent, toVueListenerProp } from './events'
 import { getTuffexShadowStyles } from './styles'
 
@@ -182,6 +182,7 @@ const NATIVE_ELEMENT_PROP_KEYS = new Set([
   'click',
   'hidden',
   'draggable',
+  'autofocus',
   'slot',
   'id',
   'dir',
@@ -232,8 +233,8 @@ export function createSlotVNode(
 
 /**
  * Observe HTML attributes for schema keys that collide with built-in HTMLElement properties
- * (e.g. `title`, `ariaLabel`, `role`, `blur`) so Vue CE does not overwrite native properties
- * or emit dev warnings while attributes remain fully reactive.
+ * (e.g. `title`, `ariaLabel`, `role`, `blur`, `autofocus`) so Vue CE does not overwrite native
+ * properties or emit dev warnings while attributes remain fully reactive.
  */
 export function useNativeAttrProps(
   host: HTMLElement | null,

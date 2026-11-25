@@ -642,6 +642,9 @@ export default defineNuxtConfig({
         '@talex-touch/tuffex > @better-scroll/pull-up',
         '@talex-touch/tuffex > dompurify',
         '@floating-ui/vue',
+        // Nested specifier so pnpm strict layout resolves @floating-ui/dom cleanly
+        // and Vite's tryOptimizedResolve satisfies tuffex-core / tuffex-react overlays without a cold reload.
+        '@talex-touch/tuffex-core > @floating-ui/dom',
         'react',
         'react-dom',
         'react-dom/client',
