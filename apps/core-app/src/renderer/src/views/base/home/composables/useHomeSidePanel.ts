@@ -443,7 +443,6 @@ export function useHomeSidePanel(
   const codeNumbering = new Map<string, number>()
   let sequence = computeInitialSequence(initialState.tabs)
   let isSwitchingSpace = false
-  let lastConversationSpaceKey = initialSpace
 
   const activeTab = computed(() => tabs.value.find((tab) => tab.id === activeTabId.value) ?? null)
 
@@ -866,12 +865,8 @@ export function useHomeSidePanel(
     { flush: 'sync' }
   )
 
-  watch(conversationId, (next, previous) => {
-    const currentSpace = activeSpaceKey.value
-    if (currentSpace !== lastConversationSpaceKey) {
-      lastConversationSpaceKey = currentSpace
-      return
-    }
+  watch([activeSpaceKey, conversationId], ([nextSpace, next], [prevSpace, previous]) => {
+    if (nextSpace !== prevSpace) return
     if (next === previous) return
     // Initial hydration (null -> first active conversation) preserves persisted tabs.
     if (previous === null) return

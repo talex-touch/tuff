@@ -22,7 +22,8 @@ const mocks = vi.hoisted(() => ({
   resizeHandle: vi.fn(async () => {}),
   focusHandle: vi.fn(async () => {}),
   routerPush: vi.fn(async () => {}),
-  runTerminalCommand: vi.fn()
+  runTerminalCommand: vi.fn(),
+  lastSpaceKeyRef: null as null | { value: string }
 }))
 
 const routeState = reactive({
@@ -56,27 +57,41 @@ vi.mock('vue-sonner', () => ({
   }
 }))
 
+import { groupHerdrSessions } from '~/modules/herdr/herdr-project-groups'
+
 vi.mock('~/modules/herdr/useHerdrRuntime', () => ({
-  useHerdrRuntime: () => ({
-    loading: loadingRef,
-    sessionByAddress: computed(() => {
-      const map = new Map<string, HerdrProjectedSession>()
-      for (const s of sessionsRef.value) map.set(s.address, s)
-      return map
-    }),
-    projectionsByAddress: projectionsMap,
-    projectionLoadingByAddress: projectionLoadingMap,
-    projectionErrorByAddress: projectionErrorMap,
-    drawerTabs: drawerTabsRef,
-    watchProjection: mocks.watchProjection,
-    unwatchProjection: mocks.unwatchProjection,
-    refreshProjection: mocks.refreshProjection,
-    send: mocks.send,
-    put: mocks.put,
-    interrupt: mocks.interrupt,
-    kill: mocks.kill,
-    attach: mocks.attach
-  })
+  useHerdrRuntime: () => {
+    const liveGroups = computed(() =>
+      groupHerdrSessions(sessionsRef.value.filter((s) => s.state === 'live'))
+    )
+    return {
+      loading: loadingRef,
+      sessionByAddress: computed(() => {
+        const map = new Map<string, HerdrProjectedSession>()
+        for (const s of sessionsRef.value) map.set(s.address, s)
+        return map
+      }),
+      projectGroupByAddress: computed(() => {
+        const map = new Map()
+        for (const group of liveGroups.value) {
+          for (const s of group.sessions) map.set(s.address, group)
+        }
+        return map
+      }),
+      projectionsByAddress: projectionsMap,
+      projectionLoadingByAddress: projectionLoadingMap,
+      projectionErrorByAddress: projectionErrorMap,
+      drawerTabs: drawerTabsRef,
+      watchProjection: mocks.watchProjection,
+      unwatchProjection: mocks.unwatchProjection,
+      refreshProjection: mocks.refreshProjection,
+      send: mocks.send,
+      put: mocks.put,
+      interrupt: mocks.interrupt,
+      kill: mocks.kill,
+      attach: mocks.attach
+    }
+  }
 }))
 
 vi.mock('~/modules/layout/useShellTerminal', () => ({
@@ -108,32 +123,35 @@ vi.mock('~/modules/storage/app-storage', () => ({
 }))
 
 vi.mock('./composables/useHomePreviewPanels', () => ({
-  useHomePreviewPanels: () => ({
-    panelOpen: ref(false),
-    panelWidth: ref(460),
-    isResizing: ref(false),
-    tabs: ref([]),
-    activeTabId: ref(null),
-    openLauncher: vi.fn(),
-    openFileInSidebar: vi.fn(),
-    openWebInSidebar: vi.fn(),
-    openBlankWebTab: vi.fn(),
-    openWorkspaceTool: vi.fn(),
-    updateWebTab: vi.fn(),
-    updateFileTab: vi.fn(),
-    selectTab: vi.fn(),
-    closeTab: vi.fn(),
-    closeOtherTabs: vi.fn(),
-    closeAllTabs: vi.fn(),
-    startResize: vi.fn(),
-    resetWidth: vi.fn(),
-    effectiveWorkspaceRoot: ref('/tmp/workspace'),
-    showCodePreview: vi.fn(),
-    openWebInBuiltInBrowser: vi.fn(),
-    openFileInBuiltInBrowser: vi.fn(),
-    openWebExternal: vi.fn(),
-    pickAndOpenFileInSidebar: vi.fn()
-  })
+  useHomePreviewPanels: (options?: { spaceKey?: { value: string } }) => {
+    mocks.lastSpaceKeyRef = options?.spaceKey ?? null
+    return {
+      panelOpen: ref(false),
+      panelWidth: ref(460),
+      isResizing: ref(false),
+      tabs: ref([]),
+      activeTabId: ref(null),
+      openLauncher: vi.fn(),
+      openFileInSidebar: vi.fn(),
+      openWebInSidebar: vi.fn(),
+      openBlankWebTab: vi.fn(),
+      openWorkspaceTool: vi.fn(),
+      updateWebTab: vi.fn(),
+      updateFileTab: vi.fn(),
+      selectTab: vi.fn(),
+      closeTab: vi.fn(),
+      closeOtherTabs: vi.fn(),
+      closeAllTabs: vi.fn(),
+      startResize: vi.fn(),
+      resetWidth: vi.fn(),
+      effectiveWorkspaceRoot: ref('/tmp/workspace'),
+      showCodePreview: vi.fn(),
+      openWebInBuiltInBrowser: vi.fn(),
+      openFileInBuiltInBrowser: vi.fn(),
+      openWebExternal: vi.fn(),
+      pickAndOpenFileInSidebar: vi.fn()
+    }
+  }
 }))
 
 vi.mock('./composables/useHomeDictation', () => ({
@@ -508,5 +526,67 @@ describe('HerdrConversationStage', () => {
     expect(handle?.getViewMode()).toBe('terminal')
     await handle?.interrupt()
     expect(mocks.interrupt).toHaveBeenCalledWith('t1')
+  })
+
+  it('retains a session project Space after finishing and scopes composer draft per session address', async () => {
+    sessionsRef.value = [
+      makeSession({
+        address: 't1',
+        labels: { 'herdr.space': 'sp-alpha', where: 'alpha / 1' }
+      }),
+      makeSession({
+        address: 't2',
+        labels: { 'herdr.space': 'sp-alpha', where: 'alpha / 2' }
+      })
+    ]
+    projectionsMap.t1 = {
+      address: 't1',
+      provider: 'claude',
+      nativeSessionId: 'c1',
+      filePath: '/tmp/c1.jsonl',
+      available: true,
+      truncated: false,
+      updatedAt: 1_700_000_005_000,
+      messages: [{ id: 'u1', role: 'user', text: 'Hi', timestamp: 1_700_000_001_000 }]
+    }
+    projectionsMap.t2 = {
+      ...projectionsMap.t1,
+      address: 't2'
+    }
+
+    const wrapper = mount(HerdrConversationStage, {
+      global: { stubs: COMPONENT_STUBS }
+    })
+    await flushPromises()
+
+    // Live session resolves to its project Space key.
+    expect(mocks.lastSpaceKeyRef?.value).toBe('space:herdr:hs:sp-alpha')
+
+    // Draft typed on t1 never leaks when switching to t2, and is restored upon returning to t1.
+    await wrapper.get('[data-testid="composer-input"]').setValue('Draft only for t1')
+    routeState.path = '/home/herdr/t2'
+    routeState.params.address = 't2'
+    await flushPromises()
+    expect(
+      (wrapper.get('[data-testid="composer-input"]').element as HTMLTextAreaElement).value
+    ).toBe('')
+
+    routeState.path = '/home/herdr/t1'
+    routeState.params.address = 't1'
+    await flushPromises()
+    expect(
+      (wrapper.get('[data-testid="composer-input"]').element as HTMLTextAreaElement).value
+    ).toBe('Draft only for t1')
+
+    // When t1 finishes and leaves live project groups, its open stage keeps its project Space.
+    sessionsRef.value = [
+      makeSession({
+        address: 't1',
+        state: 'finished',
+        labels: { 'herdr.space': 'sp-alpha', where: 'alpha / 1' }
+      })
+    ]
+    await flushPromises()
+    expect(mocks.lastSpaceKeyRef?.value).toBe('space:herdr:hs:sp-alpha')
   })
 })

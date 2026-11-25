@@ -24,6 +24,7 @@ import {
   onBeforeUnmount,
   onDeactivated,
   provide,
+  reactive,
   ref,
   watch
 } from 'vue'
@@ -38,6 +39,7 @@ import {
   herdrProjectionToConversationMessages,
   resolveHerdrRunStep
 } from '~/modules/herdr/herdr-conversation-adapter'
+import { groupHerdrSessions } from '~/modules/herdr/herdr-project-groups'
 import { useHerdrAttachments } from '~/modules/herdr/useHerdrAttachments'
 import { useHerdrRuntime } from '~/modules/herdr/useHerdrRuntime'
 import { type HerdrStageViewMode, useHerdrStageControl } from '~/modules/herdr/useHerdrStageControl'
@@ -84,10 +86,20 @@ const inputRef = computed(() => composerEl.value?.input ?? null)
 const composerRef = computed(() => composerEl.value?.box ?? null)
 
 const draft = ref('')
+const draftByAddress = new Map<string, string>()
 const sending = ref(false)
 const interrupting = ref(false)
 const killing = ref(false)
 const keepAliveActive = ref(true)
+
+function persistDraftForAddress(targetAddress: string, value: string): void {
+  if (!targetAddress) return
+  if (value) {
+    draftByAddress.set(targetAddress, value)
+  } else {
+    draftByAddress.delete(targetAddress)
+  }
+}
 
 const address = computed(() => {
   const raw = route.params.address
@@ -201,11 +213,33 @@ function resolveSidePanelAvailableWidth(): number | undefined {
   return pageWidth && pageWidth > 0 ? pageWidth : undefined
 }
 
+const rememberedSpaceKeyByAddress = reactive<Record<string, string>>({})
+
+watch(
+  [
+    address,
+    () => (address.value ? (herdr.projectGroupByAddress?.value?.get(address.value) ?? null) : null)
+  ],
+  ([addr, group]) => {
+    if (addr && group) {
+      rememberedSpaceKeyByAddress[addr] = herdrProjectSpaceKey(group.key)
+    }
+  },
+  { immediate: true }
+)
+
 const herdrSpaceKey = computed(() => {
-  const group = address.value
-    ? (herdr.projectGroupByAddress?.value?.get(address.value) ?? null)
-    : null
-  return group ? herdrProjectSpaceKey(group.key) : HERDR_SPACE_KEY
+  const addr = address.value
+  if (!addr) return HERDR_SPACE_KEY
+  const liveGroup = herdr.projectGroupByAddress?.value?.get(addr)
+  if (liveGroup) return herdrProjectSpaceKey(liveGroup.key)
+  const remembered = rememberedSpaceKeyByAddress[addr]
+  if (remembered) return remembered
+  if (session.value) {
+    const derived = groupHerdrSessions([session.value])[0]
+    if (derived) return herdrProjectSpaceKey(derived.key)
+  }
+  return HERDR_SPACE_KEY
 })
 
 const {
@@ -293,6 +327,7 @@ const messageParts = useMessageParts({
   },
   clearDraft: () => {
     draft.value = ''
+    if (address.value) draftByAddress.delete(address.value)
     collapseDraft(false)
   },
   onSubmitError: (error) => {
@@ -545,6 +580,19 @@ function releaseWatchedProjection(targetAddress: string | null): void {
   }
 }
 
+watch(address, (nextAddress, prevAddress) => {
+  if (!prevAddress || prevAddress === nextAddress) return
+  persistDraftForAddress(prevAddress, draft.value)
+  draft.value = nextAddress ? (draftByAddress.get(nextAddress) ?? '') : ''
+  void nextTick(() => {
+    if (draft.value) {
+      autoGrow()
+    } else {
+      collapseDraft(false)
+    }
+  })
+})
+
 watch(
   [address, isStageActive],
   ([nextAddress, active], [prevAddress]) => {
@@ -629,6 +677,7 @@ async function pressSend(): Promise<void> {
     if (address.value === addr) {
       if (draft.value === submittedRawDraft) {
         draft.value = ''
+        draftByAddress.delete(addr)
         collapseDraft(false)
       }
       for (const id of staged.ids) {
@@ -638,6 +687,8 @@ async function pressSend(): Promise<void> {
       void nextTick(() => {
         streamRef.value?.scrollToBottom()
       })
+    } else if (draftByAddress.get(addr) === submittedRawDraft) {
+      draftByAddress.delete(addr)
     }
     void herdr.refreshProjection(addr)
   } catch {
@@ -767,9 +818,9 @@ function navigateHome(): void {
   void router.push(APP_SURFACE_ROUTES.home)
 }
 
-async function handleFileAiAction(payload: WorkspaceFileAiActionPayload): Promise<void> {
+async function runFileAiAction(payload: WorkspaceFileAiActionPayload): Promise<boolean> {
   const prompt = payload.prompt.trim()
-  if (!prompt) return
+  if (!prompt) return false
 
   if (payload.mode === 'quote') {
     if (viewMode.value !== 'chat') {
@@ -785,18 +836,29 @@ async function handleFileAiAction(payload: WorkspaceFileAiActionPayload): Promis
       input.selectionEnd = input.value.length
       autoGrow()
     }
-    return
+    return true
   }
 
-  if (!isLive.value) {
+  if (!isLive.value || !address.value) {
     toast.error(t('herdr.stage.composerFinishedPlaceholder'))
-    return
+    return false
   }
   try {
     await sendPlainText(prompt)
     toast.success(t('home.sidePanel.sentToAi'))
+    return true
   } catch {
     toast.error(t('herdr.actions.sendFailed'))
+    return false
+  }
+}
+
+function handleFileAiAction(payload: WorkspaceFileAiActionPayload): void {
+  const result = runFileAiAction(payload)
+  if (payload.settle) {
+    payload.settle(result)
+  } else {
+    void result
   }
 }
 </script>

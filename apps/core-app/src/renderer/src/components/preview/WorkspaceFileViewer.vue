@@ -7,7 +7,7 @@ import { TxMarkdownView } from '@talex-touch/tuffex/markdown-view'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { TxSelectionActions, useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
-import { hasWindow, isElectronRenderer } from '@talex-touch/utils/env'
+import { isElectronRenderer } from '@talex-touch/utils/env'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AgentWorkspaceEvents } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
@@ -22,13 +22,12 @@ import {
   formatBatchCommentsPrompt,
   formatCompactFileSize,
   formatSingleSelectionPrompt,
+  readSessionReviewComments,
   resolveFileIconClass,
+  writeSessionReviewComments,
   type MarkdownReviewComment,
   type WorkspaceFileAiActionPayload
 } from './workspace-file-tree'
-
-const COMMENTS_STORAGE_PREFIX = 'tuff.fileViewer.comments.v1:'
-const MAX_STORED_COMMENTS = 30
 
 const props = withDefaults(
   defineProps<{
@@ -82,8 +81,8 @@ function resolveAppSdk() {
 function extractDomNode(value: unknown): Node | null {
   if (value instanceof Node) return value
   if (value && typeof value === 'object') {
-    if ('$el' in value && value.$el instanceof Node) return value.$el
     if ('el' in value && value.el instanceof Node) return value.el
+    if ('$el' in value && value.$el instanceof Node) return value.$el
   }
   return null
 }
@@ -109,6 +108,7 @@ const commentDraftQuote = ref('')
 const commentDraftText = ref('')
 const commentsExpanded = ref(false)
 const comments = ref<MarkdownReviewComment[]>([])
+const sendingAiAction = ref(false)
 
 let loadGeneration = 0
 
@@ -248,45 +248,10 @@ function dismissMdSelection(): void {
   window.getSelection()?.removeAllRanges()
 }
 
-function readStoredComments(targetPath: string): MarkdownReviewComment[] {
-  if (!hasWindow() || !targetPath) return []
-  try {
-    const raw = window.sessionStorage.getItem(`${COMMENTS_STORAGE_PREFIX}${targetPath}`)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed
-      .filter(
-        (item): item is MarkdownReviewComment =>
-          Boolean(item) &&
-          typeof item.id === 'string' &&
-          typeof item.quote === 'string' &&
-          typeof item.comment === 'string'
-      )
-      .slice(0, MAX_STORED_COMMENTS)
-  } catch {
-    return []
-  }
-}
-
-function writeStoredComments(targetPath: string, list: MarkdownReviewComment[]): void {
-  if (!hasWindow() || !targetPath) return
-  try {
-    const key = `${COMMENTS_STORAGE_PREFIX}${targetPath}`
-    if (list.length === 0) {
-      window.sessionStorage.removeItem(key)
-    } else {
-      window.sessionStorage.setItem(key, JSON.stringify(list.slice(0, MAX_STORED_COMMENTS)))
-    }
-  } catch {
-    // ignore storage quota failures
-  }
-}
-
 watch(
   resolvedPath,
   (nextPath) => {
-    comments.value = readStoredComments(nextPath)
+    comments.value = readSessionReviewComments(nextPath)
     commentComposerOpen.value = false
     commentDraftQuote.value = ''
     commentDraftText.value = ''
@@ -303,14 +268,28 @@ watch(viewMode, () => {
   outlineOpen.value = false
 })
 
-function emitAiSelection(mode: 'send' | 'quote', selectedText: string, prompt: string): void {
+async function dispatchAiAction(
+  mode: 'send' | 'quote',
+  selectedText: string,
+  prompt: string
+): Promise<boolean> {
+  let settled: Promise<boolean> | null = null
   emit('ai-action', {
     mode,
     filePath: resolvedPath.value,
     displayPath: displayPathForAi.value,
     selectedText,
-    prompt
+    prompt,
+    settle: (result) => {
+      settled = Promise.resolve(result)
+    }
   })
+  if (!settled) return true
+  try {
+    return await settled
+  } catch {
+    return false
+  }
 }
 
 async function handleMdSelectionAction(payload: {
@@ -350,8 +329,8 @@ async function handleMdSelectionAction(payload: {
       selectedText,
       instruction: ''
     })
-    emitAiSelection('quote', selectedText, formatted)
-    dismissMdSelection()
+    const accepted = await dispatchAiAction('quote', selectedText, formatted)
+    if (accepted) dismissMdSelection()
     return
   }
 
@@ -367,12 +346,16 @@ async function handleMdSelectionAction(payload: {
       selectedText,
       instruction
     })
-    emitAiSelection('send', selectedText, formatted)
+    const accepted = await dispatchAiAction('send', selectedText, formatted)
+    if (!accepted) return
   }
   dismissMdSelection()
 }
 
-function handleMdSelectionSubmit(payload: { prompt: string; selection: SelectionPayload }): void {
+async function handleMdSelectionSubmit(payload: {
+  prompt: string
+  selection: SelectionPayload
+}): Promise<void> {
   const selectedText = payload.selection.text.trim()
   const instruction = payload.prompt.trim()
   if (!selectedText || !instruction) return
@@ -381,8 +364,8 @@ function handleMdSelectionSubmit(payload: { prompt: string; selection: Selection
     selectedText,
     instruction
   })
-  emitAiSelection('send', selectedText, formatted)
-  dismissMdSelection()
+  const accepted = await dispatchAiAction('send', selectedText, formatted)
+  if (accepted) dismissMdSelection()
 }
 
 function saveDraftComment(): void {
@@ -399,60 +382,103 @@ function saveDraftComment(): void {
     }
   ]
   comments.value = next
-  writeStoredComments(resolvedPath.value, next)
+  writeSessionReviewComments(resolvedPath.value, next)
   commentDraftQuote.value = ''
   commentDraftText.value = ''
   commentComposerOpen.value = false
   commentsExpanded.value = true
 }
 
-function sendDraftCommentNow(): void {
+function removeCommentsForPath(targetPath: string, idsToRemove: ReadonlySet<string>): void {
+  const currentStored =
+    resolvedPath.value === targetPath ? comments.value : readSessionReviewComments(targetPath)
+  const next = currentStored.filter((item) => !idsToRemove.has(item.id))
+  writeSessionReviewComments(targetPath, next)
+  if (resolvedPath.value === targetPath) {
+    comments.value = next
+    if (next.length === 0) commentsExpanded.value = false
+  }
+}
+
+async function sendDraftCommentNow(): Promise<void> {
+  if (sendingAiAction.value) return
   const text = commentDraftText.value.trim()
   const quote = commentDraftQuote.value.trim()
   if (!text || !quote) return
+  const targetPath = resolvedPath.value
   const formatted = formatSingleSelectionPrompt({
     displayPath: displayPathForAi.value,
     selectedText: quote,
     instruction: text
   })
-  emitAiSelection('send', quote, formatted)
-  commentDraftQuote.value = ''
-  commentDraftText.value = ''
-  commentComposerOpen.value = false
+  sendingAiAction.value = true
+  try {
+    const accepted = await dispatchAiAction('send', quote, formatted)
+    if (!accepted) return
+    if (
+      resolvedPath.value === targetPath &&
+      commentDraftQuote.value.trim() === quote &&
+      commentDraftText.value.trim() === text
+    ) {
+      commentDraftQuote.value = ''
+      commentDraftText.value = ''
+      commentComposerOpen.value = false
+    }
+  } finally {
+    sendingAiAction.value = false
+  }
 }
 
 function removeComment(id: string): void {
-  const next = comments.value.filter((item) => item.id !== id)
-  comments.value = next
-  writeStoredComments(resolvedPath.value, next)
-  if (next.length === 0) commentsExpanded.value = false
+  removeCommentsForPath(resolvedPath.value, new Set([id]))
 }
 
 function clearAllComments(): void {
   comments.value = []
-  writeStoredComments(resolvedPath.value, [])
+  writeSessionReviewComments(resolvedPath.value, [])
   commentsExpanded.value = false
 }
 
-function sendSingleComment(item: MarkdownReviewComment): void {
+async function sendSingleComment(item: MarkdownReviewComment): Promise<void> {
+  if (sendingAiAction.value) return
+  const targetPath = resolvedPath.value
   const formatted = formatSingleSelectionPrompt({
     displayPath: displayPathForAi.value,
     selectedText: item.quote,
     instruction: item.comment
   })
-  emitAiSelection('send', item.quote, formatted)
-  removeComment(item.id)
+  sendingAiAction.value = true
+  try {
+    const accepted = await dispatchAiAction('send', item.quote, formatted)
+    if (!accepted) return
+    removeCommentsForPath(targetPath, new Set([item.id]))
+  } finally {
+    sendingAiAction.value = false
+  }
 }
 
-function sendAllCommentsToAi(): void {
-  if (comments.value.length === 0) return
+async function sendAllCommentsToAi(): Promise<void> {
+  if (sendingAiAction.value || comments.value.length === 0) return
+  const targetPath = resolvedPath.value
+  const snapshot = [...comments.value]
+  const sentIds = new Set(snapshot.map((item) => item.id))
   const formatted = formatBatchCommentsPrompt({
     displayPath: displayPathForAi.value,
-    comments: comments.value,
+    comments: snapshot,
     intro: t('home.sidePanel.commentsSendIntro')
   })
-  emitAiSelection('send', comments.value.map((item) => item.quote).join('\n'), formatted)
-  clearAllComments()
+  sendingAiAction.value = true
+  try {
+    const accepted = await dispatchAiAction(
+      'send',
+      snapshot.map((item) => item.quote).join('\n'),
+      formatted
+    )
+    if (!accepted) return
+    removeCommentsForPath(targetPath, sentIds)
+  } finally {
+    sendingAiAction.value = false
+  }
 }
 
 function onCommentKeydown(event: KeyboardEvent): void {
@@ -1073,7 +1099,7 @@ function adjustZoom(delta: number): void {
           <button
             type="button"
             class="WorkspaceFileViewer-CommentBtn is-primary"
-            :disabled="!commentDraftText.trim()"
+            :disabled="sendingAiAction || !commentDraftText.trim()"
             data-testid="file-viewer-comment-send-now"
             @click="sendDraftCommentNow"
           >
@@ -1110,6 +1136,7 @@ function adjustZoom(delta: number): void {
           <button
             type="button"
             class="WorkspaceFileViewer-CommentBtn is-primary"
+            :disabled="sendingAiAction"
             data-testid="file-viewer-comments-send-all"
             @click="sendAllCommentsToAi"
           >
@@ -1141,6 +1168,8 @@ function adjustZoom(delta: number): void {
             <button
               type="button"
               class="WorkspaceFileViewer-CommentTinyBtn"
+              :disabled="sendingAiAction"
+              data-testid="file-viewer-comment-send-single"
               @click="sendSingleComment(item)"
             >
               {{ t('home.sidePanel.commentSendNow') }}

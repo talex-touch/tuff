@@ -238,4 +238,23 @@ describe('useHomeSidePanel', () => {
     panel.closeTabsByKind('git')
     expect(panel.tabs.value.map((t) => t.kind)).toEqual(['file'])
   })
+
+  it('clears thread-bound tabs on a conversation change even after a Space-only switch', async () => {
+    const conv = ref<string | null>('conv-1')
+    const spaceKey = ref('space:project:alpha')
+    const panel = useHomeSidePanel(conv, { spaceKey })
+
+    // Switch Space without changing conversationId.
+    spaceKey.value = 'space:project:beta'
+    await Promise.resolve()
+
+    panel.openWorkspaceTab('files', 'Files')
+    panel.openFileTab({ path: '/beta/README.md', displayPath: 'README.md' })
+    expect(panel.tabs.value.map((t) => t.kind)).toEqual(['files', 'file'])
+
+    // Later changing conversationId inside Space beta must still clear thread-bound file tabs.
+    conv.value = 'conv-2'
+    await Promise.resolve()
+    expect(panel.tabs.value.map((t) => t.kind)).toEqual(['files'])
+  })
 })

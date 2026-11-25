@@ -562,4 +562,41 @@ describe('ShellHerdrSpace', () => {
     await railBtn.trigger('click')
     expect(mocks.routerPush).toHaveBeenCalledWith('/home/herdr/t5')
   })
+
+  it('prefers the active working terminal for interrupt and exposes an explicit picker when multiple non-active terminals are working', async () => {
+    liveSessionsRef.value = [
+      makeProjectedSession({
+        address: 't1',
+        displayTitle: 'codex · api / 1',
+        labels: { 'herdr.space': 'sp-api', where: 'api / 1' },
+        status: { state: 'working', app: 'codex' },
+        createdMs: 100
+      }),
+      makeProjectedSession({
+        address: 't2',
+        displayTitle: 'claude · api / 2',
+        labels: { 'herdr.space': 'sp-api', where: 'api / 2' },
+        status: { state: 'working', app: 'claude' },
+        createdMs: 200
+      })
+    ]
+
+    const wrapper = mount(ShellHerdrSpace)
+    const projectRow = wrapper.find('[data-testid="herdr-project-row"]')
+
+    // Neither working terminal is active -> shows explicit submenu instead of guessing t1.
+    expect(projectRow.find('[data-testid="herdr-menu-interrupt"]').exists()).toBe(false)
+    const interruptItems = projectRow.findAll('[data-testid="herdr-menu-interrupt-item"]')
+    expect(interruptItems).toHaveLength(2)
+    await interruptItems[1]!.trigger('click')
+    expect(mocks.interrupt).toHaveBeenCalledWith('t2')
+
+    // When t2 is the active route terminal, direct interrupt targets t2 unambiguously.
+    mocks.interrupt.mockClear()
+    routePathRef.value = '/home/herdr/t2'
+    await flushPromises()
+    expect(projectRow.find('[data-testid="herdr-menu-interrupt-submenu"]').exists()).toBe(false)
+    await projectRow.find('[data-testid="herdr-menu-interrupt"]').trigger('click')
+    expect(mocks.interrupt).toHaveBeenCalledWith('t2')
+  })
 })

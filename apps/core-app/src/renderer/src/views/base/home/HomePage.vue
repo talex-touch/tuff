@@ -253,9 +253,9 @@ function runCodeInTerminal(payload: CodeRunPayload): void {
   })
 }
 
-async function handleFileAiAction(payload: WorkspaceFileAiActionPayload): Promise<void> {
+async function runFileAiAction(payload: WorkspaceFileAiActionPayload): Promise<boolean> {
   const prompt = payload.prompt.trim()
-  if (!prompt) return
+  if (!prompt) return false
 
   if (payload.mode === 'quote') {
     const existing = draft.value.replace(/\s+$/, '')
@@ -268,28 +268,42 @@ async function handleFileAiAction(payload: WorkspaceFileAiActionPayload): Promis
       input.selectionEnd = input.value.length
       autoGrow()
     }
-    return
+    return true
   }
 
-  if (!draft.value.trim()) {
-    draft.value = prompt
-    await nextTick()
-    void submit()
-    return
-  }
-
-  if (conversationId.value) {
+  if (conversationId.value && draft.value.trim()) {
     try {
       await workspace.submit(prompt)
+      return true
     } catch (error) {
       reportSubmitError(error)
+      return false
     }
-    return
   }
 
-  draft.value = `${draft.value.replace(/\s+$/, '')}\n\n${prompt}`
+  const prevDraft = draft.value
+  const nextDraft = prevDraft.trim() ? `${prevDraft.replace(/\s+$/, '')}\n\n${prompt}` : prompt
+  draft.value = nextDraft
   await nextTick()
-  void submit()
+  if (!canSend.value) {
+    draft.value = prevDraft
+    return false
+  }
+  await submit()
+  if (draft.value === nextDraft) {
+    draft.value = prevDraft
+    return false
+  }
+  return true
+}
+
+function handleFileAiAction(payload: WorkspaceFileAiActionPayload): void {
+  const result = runFileAiAction(payload)
+  if (payload.settle) {
+    payload.settle(result)
+  } else {
+    void result
+  }
 }
 
 const messageParts = useMessageParts({

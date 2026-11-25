@@ -31,6 +31,12 @@ export interface WorkspaceFileAiActionPayload {
   displayPath: string
   selectedText: string
   prompt: string
+  /**
+   * Optional host acknowledgement callback. Hosts pass a boolean or Promise<boolean>
+   * indicating whether the action was accepted (true) or rejected/failed (false) so the
+   * viewer preserves unsent drafts and queued review comments on failure.
+   */
+  settle?: (result: boolean | Promise<boolean>) => void
 }
 
 export interface MarkdownReviewComment {
@@ -38,6 +44,48 @@ export interface MarkdownReviewComment {
   quote: string
   comment: string
   createdAt: number
+}
+
+const MAX_STORED_COMMENTS_PER_FILE = 30
+const MAX_STORED_COMMENT_FILES = 64
+const sessionReviewCommentsByPath = new Map<string, MarkdownReviewComment[]>()
+
+/**
+ * Reads in-memory Markdown review comments for `targetPath`.
+ * Kept strictly in renderer memory (never sessionStorage/localStorage) so file paths,
+ * excerpts, and AI review instructions are never persisted in browser Web Storage.
+ */
+export function readSessionReviewComments(targetPath: string): MarkdownReviewComment[] {
+  const key = targetPath.trim()
+  if (!key) return []
+  const stored = sessionReviewCommentsByPath.get(key)
+  if (!stored) return []
+  return stored.map((item) => ({ ...item }))
+}
+
+export function writeSessionReviewComments(
+  targetPath: string,
+  list: readonly MarkdownReviewComment[]
+): void {
+  const key = targetPath.trim()
+  if (!key) return
+  if (list.length === 0) {
+    sessionReviewCommentsByPath.delete(key)
+    return
+  }
+  const cloned = list.slice(0, MAX_STORED_COMMENTS_PER_FILE).map((item) => ({ ...item }))
+  // Refresh LRU insertion order and evict oldest entry if cap exceeded.
+  sessionReviewCommentsByPath.delete(key)
+  sessionReviewCommentsByPath.set(key, cloned)
+  while (sessionReviewCommentsByPath.size > MAX_STORED_COMMENT_FILES) {
+    const oldestKey = sessionReviewCommentsByPath.keys().next().value
+    if (oldestKey === undefined) break
+    sessionReviewCommentsByPath.delete(oldestKey)
+  }
+}
+
+export function resetSessionReviewCommentsForTests(): void {
+  sessionReviewCommentsByPath.clear()
 }
 
 const DEFAULT_HIDDEN_NAMES = new Set([

@@ -117,12 +117,14 @@ vi.mock('@talex-touch/tuffex/selection-actions', () => ({
   }
 }))
 
+import { resetSessionReviewCommentsForTests } from './workspace-file-tree'
 import WorkspaceFileViewer from './WorkspaceFileViewer.vue'
 
 describe('WorkspaceFileViewer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     window.sessionStorage.clear()
+    resetSessionReviewCommentsForTests()
     mocks.send.mockResolvedValue({
       path: '/repo/docs/plan-prd/TODO-AI.md',
       name: 'TODO-AI.md',
@@ -210,6 +212,8 @@ describe('WorkspaceFileViewer', () => {
     await wrapper.get('[data-testid="file-viewer-comment-save"]').trigger('click')
     await flushPromises()
 
+    // Review comments remain strictly in memory and never touch sessionStorage.
+    expect(window.sessionStorage.length).toBe(0)
     expect(wrapper.find('[data-testid="file-viewer-comments-dock"]').exists()).toBe(true)
     expect(wrapper.findAll('[data-testid="file-viewer-comment-item"]')).toHaveLength(1)
 
@@ -220,5 +224,55 @@ describe('WorkspaceFileViewer', () => {
     expect(batchEmit.mode).toBe('send')
     expect(batchEmit.prompt).toContain('这里口径需要补充 OCR 边界')
     expect(wrapper.find('[data-testid="file-viewer-comments-dock"]').exists()).toBe(false)
+  })
+
+  it('preserves unsent draft and queued review comments when host rejects the ai-action', async () => {
+    let shouldAccept = false
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/repo/docs/plan-prd/TODO-AI.md',
+        displayPath: 'docs/plan-prd/TODO-AI.md',
+        workspaceRoot: '/repo',
+        aiActionsEnabled: true,
+        onAiAction: (payload: { settle?: (result: boolean | Promise<boolean>) => void }) => {
+          payload.settle?.(Promise.resolve(shouldAccept))
+        }
+      }
+    })
+    await flushPromises()
+
+    // 1. Draft "send now" stays open and preserves text when host rejects.
+    mocks.selection!.value = {
+      text: 'Stable 只覆盖 CoreBox text.chat。',
+      rects: [{ left: 10, right: 120, top: 20, bottom: 40, width: 110, height: 20 } as DOMRect]
+    }
+    await flushPromises()
+    await wrapper.get('[data-testid="sel-action-comment"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="file-viewer-comment-input"]').setValue('请先补单测')
+    await wrapper.get('[data-testid="file-viewer-comment-send-now"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="file-viewer-comment-composer"]').exists()).toBe(true)
+    expect(
+      (wrapper.get('[data-testid="file-viewer-comment-input"]').element as HTMLTextAreaElement)
+        .value
+    ).toBe('请先补单测')
+
+    // 2. Save to queue, then reject batch send -> queued comment stays intact.
+    await wrapper.get('[data-testid="file-viewer-comment-save"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="file-viewer-comment-item"]')).toHaveLength(1)
+
+    await wrapper.get('[data-testid="file-viewer-comments-send-all"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="file-viewer-comment-item"]')).toHaveLength(1)
+
+    // 3. Once host accepts, queued comments clear cleanly.
+    shouldAccept = true
+    await wrapper.get('[data-testid="file-viewer-comments-send-all"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="file-viewer-comments-dock"]').exists()).toBe(false)
+    expect(window.sessionStorage.length).toBe(0)
   })
 })

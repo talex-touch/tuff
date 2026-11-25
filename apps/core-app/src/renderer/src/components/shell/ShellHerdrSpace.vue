@@ -352,11 +352,25 @@ async function submitQuickSend(): Promise<void> {
   }
 }
 
-async function handleInterruptGroup(group: HerdrProjectGroup): Promise<void> {
+function workingSessionsInGroup(group: HerdrProjectGroup): HerdrProjectedSession[] {
+  return group.sessions.filter((s) => resolveOscState(s) === 'working')
+}
+
+function resolveDirectInterruptSession(group: HerdrProjectGroup): HerdrProjectedSession | null {
+  const working = workingSessionsInGroup(group)
+  if (working.length === 1) return working[0]!
+  if (working.length > 1) {
+    if (activeRouteAddress.value) {
+      const activeWorking = working.find((s) => s.address === activeRouteAddress.value)
+      if (activeWorking) return activeWorking
+    }
+    return null
+  }
+  return resolveTargetSession(group)
+}
+
+async function handleInterruptSession(target: HerdrProjectedSession): Promise<void> {
   openMenuProjectKey.value = null
-  const target =
-    group.sessions.find((s) => resolveOscState(s) === 'working') ?? resolveTargetSession(group)
-  if (!target) return
   const addr = target.address
   if (interruptingByAddress[addr]) return
   interruptingByAddress[addr] = true
@@ -367,6 +381,12 @@ async function handleInterruptGroup(group: HerdrProjectGroup): Promise<void> {
   } finally {
     delete interruptingByAddress[addr]
   }
+}
+
+async function handleInterruptGroup(group: HerdrProjectGroup): Promise<void> {
+  const target = resolveDirectInterruptSession(group)
+  if (!target) return
+  await handleInterruptSession(target)
 }
 
 function openInfoModal(group: HerdrProjectGroup): void {
@@ -893,12 +913,45 @@ const infoRows = computed(() => {
                 </TxDropdownItem>
 
                 <TxDropdownItem
+                  v-if="resolveDirectInterruptSession(group)"
                   data-testid="herdr-menu-interrupt"
                   @select="handleInterruptGroup(group)"
                 >
                   <span class="i-ri-stop-circle-line mr-1.5" aria-hidden="true" />
                   {{ t('herdr.actions.interrupt') }}
                 </TxDropdownItem>
+
+                <TxDropdownSubmenu
+                  v-else-if="workingSessionsInGroup(group).length > 1"
+                  :min-width="210"
+                  data-testid="herdr-menu-interrupt-submenu"
+                >
+                  <span class="ShellHerdrSpace-SubmenuRow">
+                    <span class="i-ri-stop-circle-line mr-1.5" aria-hidden="true" />
+                    <span>{{ t('herdr.actions.interrupt') }}</span>
+                  </span>
+                  <template #menu>
+                    <TxDropdownItem
+                      v-for="session in workingSessionsInGroup(group)"
+                      :key="session.address"
+                      data-testid="herdr-menu-interrupt-item"
+                      @select="handleInterruptSession(session)"
+                    >
+                      <span class="ShellHerdrSpace-SubmenuItem">
+                        <span
+                          class="ShellHerdrSpace-ItemIcon"
+                          :class="resolveSessionIcon(session)"
+                          aria-hidden="true"
+                        />
+                        <span class="ShellHerdrSpace-SubmenuTitle">
+                          {{
+                            projectSessionTitles(group).get(session.address) || session.displayTitle
+                          }}
+                        </span>
+                      </span>
+                    </TxDropdownItem>
+                  </template>
+                </TxDropdownSubmenu>
 
                 <TxDropdownItem data-testid="herdr-menu-info" @select="openInfoModal(group)">
                   <span class="i-ri-information-line mr-1.5" aria-hidden="true" />
