@@ -3,6 +3,11 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import { computed, ref, watch } from 'vue'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { normalizeStoreIcon } from '~/modules/store/providers/store-icon-normalizer'
+import {
+  fetchStoreSvgDataUrl,
+  getCachedStoreSvgDataUrl,
+  isRemoteSvgIconUrl
+} from '~/modules/store/store-svg-icon'
 
 interface StoreIconProps {
   item?: {
@@ -16,9 +21,11 @@ interface StoreIconProps {
 
 const props = defineProps<StoreIconProps>()
 const failedIconUrl = ref('')
+const hydratedSvgDataUrl = ref('')
+const hydratingSvgUrl = ref('')
 
-// Icon URL is already fully constructed at source (nexus-store-provider)
-const iconUrl = computed(() => {
+// Icon URL is already fully constructed at source (nexus-store-provider / tpex-api-provider)
+const rawIconUrl = computed(() => {
   if (!props.item) return null
   const fromProp = typeof props.item.iconUrl === 'string' ? props.item.iconUrl.trim() : ''
   if (fromProp && fromProp !== failedIconUrl.value) return fromProp
@@ -29,6 +36,18 @@ const iconUrl = computed(() => {
   }
 
   return null
+})
+
+const iconUrl = computed(() => {
+  const url = rawIconUrl.value
+  if (!url) return null
+  if (!isRemoteSvgIconUrl(url)) return url
+  return hydratedSvgDataUrl.value || getCachedStoreSvgDataUrl(url) || null
+})
+
+const isHydratingSvg = computed(() => {
+  const url = rawIconUrl.value
+  return Boolean(url && isRemoteSvgIconUrl(url) && !iconUrl.value && hydratingSvgUrl.value === url)
 })
 
 const iconClass = computed(() => {
@@ -50,7 +69,7 @@ const iconClass = computed(() => {
 })
 
 const tuffIcon = computed<ITuffIcon>(() => {
-  // Priority: iconUrl > iconClass > default
+  // Priority: iconUrl > hydrating skeleton > iconClass > default
   if (iconUrl.value) {
     return {
       type: 'url',
@@ -60,6 +79,14 @@ const tuffIcon = computed<ITuffIcon>(() => {
   }
 
   const icon = iconClass.value || 'i-ri-puzzle-line'
+  if (isHydratingSvg.value) {
+    return {
+      type: 'class',
+      value: icon,
+      status: 'loading'
+    }
+  }
+
   return {
     type: 'class',
     value: icon,
@@ -76,6 +103,37 @@ const shouldPreserveIconColor = computed(() => {
   return !path.endsWith('.svg')
 })
 
+async function hydrateRemoteSvg(url: string | null): Promise<void> {
+  if (!url || !isRemoteSvgIconUrl(url)) {
+    hydratedSvgDataUrl.value = ''
+    hydratingSvgUrl.value = ''
+    return
+  }
+
+  const cached = getCachedStoreSvgDataUrl(url)
+  if (cached) {
+    hydratedSvgDataUrl.value = cached
+    hydratingSvgUrl.value = ''
+    return
+  }
+
+  hydratedSvgDataUrl.value = ''
+  hydratingSvgUrl.value = url
+
+  const dataUrl = await fetchStoreSvgDataUrl(url)
+  if (rawIconUrl.value !== url) {
+    return
+  }
+
+  hydratingSvgUrl.value = ''
+  if (dataUrl) {
+    hydratedSvgDataUrl.value = dataUrl
+    return
+  }
+
+  failedIconUrl.value = url
+}
+
 watch(
   () => [props.item?.iconUrl, props.item?.icon] as const,
   () => {
@@ -83,9 +141,17 @@ watch(
   }
 )
 
+watch(
+  rawIconUrl,
+  (url) => {
+    void hydrateRemoteSvg(url)
+  },
+  { immediate: true }
+)
+
 function handleIconError(): void {
-  if (iconUrl.value) {
-    failedIconUrl.value = iconUrl.value
+  if (rawIconUrl.value) {
+    failedIconUrl.value = rawIconUrl.value
   }
 }
 </script>
