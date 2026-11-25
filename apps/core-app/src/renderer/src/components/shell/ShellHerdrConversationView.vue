@@ -28,6 +28,28 @@ const route = useRoute()
 const router = useRouter()
 const herdr = useHerdrRuntime()
 
+const markdownLabels = computed(() => ({
+  blockedImageText: t('home.image.blocked'),
+  loadImageOnceText: t('home.image.loadOnce'),
+  allowSessionImagesText: t('home.image.allowSession'),
+  copyTableText: t('home.table.copyTable'),
+  copiedTableText: t('home.table.copiedTable'),
+  codePreviewText: t('home.code.preview'),
+  codeSourceText: t('home.code.source'),
+  codeFrameLabelFormatter: (lang: string) => t('home.code.frameLabel', { lang }),
+  copyCodeText: t('home.copy'),
+  copiedCodeText: t('home.copied'),
+  runCodeText: t('home.code.run'),
+  ranCodeText: t('home.code.ran'),
+  runCodeTitle: t('home.code.runInTerminal'),
+  diagramZoomLabel: t('home.diagram.zoom'),
+  diagramPreviewLabel: t('home.diagram.preview'),
+  diagramCloseLabel: t('home.diagram.close'),
+  diagramDownloadLabel: t('home.diagram.download'),
+  diagramCopyFailedText: t('home.diagram.copyFailed'),
+  diagramErrorText: t('home.diagram.failed')
+}))
+
 function handleOpenInMainStage(): void {
   if (!props.address) return
   void router.push(herdrConversationRoute(props.address))
@@ -506,6 +528,7 @@ onBeforeUnmount(() => {
             class="ShellHerdrConv-MessageMarkdown"
             :content="msg.text"
             :streaming="false"
+            v-bind="markdownLabels"
           />
           <p v-else-if="msg.text" class="ShellHerdrConv-MessageText">{{ msg.text }}</p>
 

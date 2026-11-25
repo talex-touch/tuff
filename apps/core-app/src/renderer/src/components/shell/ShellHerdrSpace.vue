@@ -40,8 +40,8 @@ const infoOpen = ref(false)
 const hoverPopoverOpen = reactive<Record<string, boolean>>({})
 const sendPopoverOpen = reactive<Record<string, boolean>>({})
 const sendDrafts = reactive<Record<string, string>>({})
-const sendingAddress = ref<string | null>(null)
-const interruptingAddress = ref<string | null>(null)
+const sendingByAddress = reactive<Record<string, boolean>>({})
+const interruptingByAddress = reactive<Record<string, boolean>>({})
 const creatingSession = ref(false)
 
 /**
@@ -220,29 +220,34 @@ async function handleStartNewSession(): Promise<void> {
 }
 
 async function submitQuickSend(session: HerdrProjectedSession): Promise<void> {
-  const text = (sendDrafts[session.address] ?? '').trim()
-  if (!text || sendingAddress.value === session.address) return
-  sendingAddress.value = session.address
+  const addr = session.address
+  const rawDraft = sendDrafts[addr] ?? ''
+  const text = rawDraft.trim()
+  if (!text || sendingByAddress[addr]) return
+  sendingByAddress[addr] = true
   try {
-    await herdr.send(session.address, text)
-    sendDrafts[session.address] = ''
-    sendPopoverOpen[session.address] = false
+    await herdr.send(addr, text)
+    if (sendDrafts[addr] === rawDraft) {
+      sendDrafts[addr] = ''
+      sendPopoverOpen[addr] = false
+    }
   } catch {
     toast.error(t('herdr.actions.sendFailed'))
   } finally {
-    sendingAddress.value = null
+    delete sendingByAddress[addr]
   }
 }
 
 async function handleInterrupt(session: HerdrProjectedSession): Promise<void> {
-  if (interruptingAddress.value === session.address) return
-  interruptingAddress.value = session.address
+  const addr = session.address
+  if (interruptingByAddress[addr]) return
+  interruptingByAddress[addr] = true
   try {
-    await herdr.interrupt(session.address)
+    await herdr.interrupt(addr)
   } catch {
     toast.error(t('herdr.actions.interruptFailed'))
   } finally {
-    interruptingAddress.value = null
+    delete interruptingByAddress[addr]
   }
 }
 </script>
@@ -766,7 +771,7 @@ async function handleInterrupt(session: HerdrProjectedSession): Promise<void> {
                       native-type="submit"
                       size="sm"
                       variant="primary"
-                      :loading="sendingAddress === session.address"
+                      :loading="Boolean(sendingByAddress[session.address])"
                       :disabled="!(sendDrafts[session.address] ?? '').trim()"
                       data-testid="herdr-card-send-submit"
                     >
@@ -780,7 +785,7 @@ async function handleInterrupt(session: HerdrProjectedSession): Promise<void> {
                     type="button"
                     class="ShellHerdrSpace-ActionBtn"
                     data-testid="herdr-card-interrupt"
-                    :disabled="interruptingAddress === session.address"
+                    :disabled="Boolean(interruptingByAddress[session.address])"
                     :aria-label="t('herdr.actions.interrupt')"
                     @click="handleInterrupt(session)"
                   >

@@ -236,7 +236,6 @@ const {
   attachOpenLabel,
   addFiles,
   removeAttachment,
-  clearAttachments,
   resolveStagedPaths,
   isDragover,
   onPaste,
@@ -584,20 +583,28 @@ async function pressSend(): Promise<void> {
 
   sending.value = true
   composerEl.value?.launch()
+  const submittedRawDraft = draft.value
   try {
-    const stagedPaths = await resolveStagedPaths()
-    const outgoing = composeHerdrMessageWithAttachments(draft.value, stagedPaths)
+    const staged = await resolveStagedPaths()
+    if (staged.failed || address.value !== addr) return
+    const outgoing = composeHerdrMessageWithAttachments(submittedRawDraft, staged.paths)
     if (!outgoing) return
 
     await herdr.send(addr, outgoing)
-    draft.value = ''
-    collapseDraft(false)
-    clearAttachments()
-    streamFollowing.value = true
+    if (address.value === addr) {
+      if (draft.value === submittedRawDraft) {
+        draft.value = ''
+        collapseDraft(false)
+      }
+      for (const id of staged.ids) {
+        removeAttachment(id)
+      }
+      streamFollowing.value = true
+      void nextTick(() => {
+        streamRef.value?.scrollToBottom()
+      })
+    }
     void herdr.refreshProjection(addr)
-    void nextTick(() => {
-      streamRef.value?.scrollToBottom()
-    })
   } catch {
     toast.error(t('herdr.actions.sendFailed'))
   } finally {

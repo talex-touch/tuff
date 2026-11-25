@@ -250,14 +250,13 @@ function appendProjectedPart(
   part: HerdrProjectedMessagePart
 ): void {
   if (part.type === 'text' || part.type === 'reasoning') {
-    const normalized = part.text.trim()
-    if (!normalized) return
+    if (!part.text.trim()) return
     const prev = parts[parts.length - 1]
     if (prev && prev.type === part.type) {
-      prev.text = `${prev.text}\n${normalized}`
+      prev.text = `${prev.text}\n${part.text}`
       return
     }
-    parts.push({ type: part.type, text: normalized })
+    parts.push({ type: part.type, text: part.text })
     return
   }
   parts.push(part)

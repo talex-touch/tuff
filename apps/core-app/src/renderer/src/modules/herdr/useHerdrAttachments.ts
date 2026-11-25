@@ -18,10 +18,21 @@ export interface UseHerdrAttachmentsOptions {
   focusInput: () => void
 }
 
+type StagedUploadOutcome =
+  | { status: 'ready'; path: string }
+  | { status: 'cancelled' }
+  | { status: 'failed' }
+
 interface StagedHerdrUpload {
   id: string
   path: string | null
-  promise: Promise<string | null>
+  promise: Promise<StagedUploadOutcome>
+}
+
+export interface ResolvedHerdrAttachments {
+  paths: string[]
+  ids: string[]
+  failed: boolean
 }
 
 /**
@@ -96,21 +107,21 @@ export function useHerdrAttachments(options: UseHerdrAttachmentsOptions) {
       const entry: StagedHerdrUpload = {
         id,
         path: null,
-        promise: Promise.resolve(null)
+        promise: Promise.resolve({ status: 'cancelled' })
       }
       uploadsById.set(id, entry)
-      entry.promise = (async () => {
+      entry.promise = (async (): Promise<StagedUploadOutcome> => {
         try {
           const base64 = await fileToHerdrBase64(file)
           const result = await options.putFile(targetAddress, safeName, base64)
           if (activeGen !== generation || !uploadsById.has(id)) {
-            return null
+            return { status: 'cancelled' }
           }
           entry.path = result.path
           pendingAttachments.value = pendingAttachments.value.map((item) =>
             item.id === id ? { ...item, uploading: false } : item
           )
-          return result.path
+          return { status: 'ready', path: result.path }
         } catch (error) {
           if (activeGen === generation && uploadsById.has(id)) {
             removeAttachment(id)
@@ -121,24 +132,45 @@ export function useHerdrAttachments(options: UseHerdrAttachmentsOptions) {
               const detail = error instanceof Error ? error.message : String(error)
               toast.error(t('herdr.stage.attachFailed', { name: file.name, error: detail }))
             }
+            return { status: 'failed' }
           }
-          return null
+          return { status: 'cancelled' }
         }
       })()
     }
   }
 
-  async function resolveStagedPaths(): Promise<string[]> {
-    const orderedIds = pendingAttachments.value.map((item) => item.id)
-    const results = await Promise.all(
-      orderedIds.map(async (id) => {
-        const entry = uploadsById.get(id)
-        if (!entry) return null
-        if (entry.path) return entry.path
-        return entry.promise
-      })
+  async function resolveStagedPaths(): Promise<ResolvedHerdrAttachments> {
+    const activeGen = generation
+    const snapshotEntries = pendingAttachments.value
+      .map((item) => uploadsById.get(item.id))
+      .filter((entry): entry is StagedHerdrUpload => Boolean(entry))
+
+    const outcomes = await Promise.all(
+      snapshotEntries.map(async (entry) => ({
+        entry,
+        outcome: entry.path ? ({ status: 'ready', path: entry.path } as const) : await entry.promise
+      }))
     )
-    return results.filter((value): value is string => Boolean(value))
+
+    if (activeGen !== generation) {
+      return { paths: [], ids: [], failed: true }
+    }
+
+    if (outcomes.some((item) => item.outcome.status === 'failed')) {
+      return { paths: [], ids: [], failed: true }
+    }
+
+    const paths: string[] = []
+    const ids: string[] = []
+    for (const { entry, outcome } of outcomes) {
+      // Re-check membership after all awaits so items removed during wait are excluded.
+      if (outcome.status === 'ready' && uploadsById.get(entry.id) === entry) {
+        paths.push(outcome.path)
+        ids.push(entry.id)
+      }
+    }
+    return { paths, ids, failed: false }
   }
 
   const attachPreviewProps = computed(() => ({
