@@ -69,7 +69,7 @@ const meterPercent = computed(() => props.contextShare ?? 0)
       :tone="step.kind === 'tool' ? 'tool' : 'default'"
     />
     <TxAiContextMeter
-      v-if="contextShare !== null || streaming"
+      v-if="contextShare !== null || (streaming && Boolean(contextWindowText))"
       class="HomePage-ContextMeter"
       variant="pill"
       :percent="meterPercent"

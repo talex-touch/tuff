@@ -14,7 +14,32 @@ const mocks = vi.hoisted(() => ({
   refreshProjection: vi.fn(async () => null),
   send: vi.fn(async () => ({ turn: 1, status: 'working', started: true })),
   interrupt: vi.fn(async () => ({ terminal: 't1', action: 'interrupt', outcome: 'stopped' })),
-  isWatchingProjection: vi.fn(() => false)
+  isWatchingProjection: vi.fn(() => false),
+  routerPush: vi.fn(async () => {})
+}))
+
+const routePathRef = ref('/home')
+
+vi.mock('vue-router', () => ({
+  useRoute: () => ({
+    get path() {
+      return routePathRef.value
+    }
+  }),
+  useRouter: () => ({
+    push: mocks.routerPush
+  })
+}))
+
+vi.mock('@talex-touch/tuffex/stream-markdown', () => ({
+  TxStreamMarkdown: {
+    name: 'TxStreamMarkdown',
+    props: {
+      content: { type: String, default: '' },
+      streaming: { type: Boolean, default: false }
+    },
+    template: '<div class="tx-stream-markdown-stub">{{ content }}</div>'
+  }
 }))
 
 const sessionsRef = ref<HerdrProjectedSession[]>([])
@@ -198,6 +223,9 @@ describe('ShellHerdrConversationView', () => {
 
     await wrapper.find('[data-testid="herdr-conv-stop-btn"]').trigger('click')
     expect(mocks.interrupt).toHaveBeenCalledWith('t1')
+
+    await wrapper.find('[data-testid="herdr-conv-open-stage"]').trigger('click')
+    expect(mocks.routerPush).toHaveBeenCalledWith('/home/herdr/t1')
   })
 
   it('shows prominent Blocked Action Banner with one-click Take Over in Terminal button', async () => {

@@ -411,12 +411,23 @@ export interface HerdrProjectedToolCall {
   isError?: boolean
 }
 
+export type HerdrProjectedMessagePart
+  = | { type: 'text', text: string }
+    | { type: 'reasoning', text: string }
+    | { type: 'tool-call', toolCallId: string }
+
 export interface HerdrProjectedMessage {
   id: string
   role: HerdrProjectedRole
   text: string
   reasoning?: string
   toolCalls?: HerdrProjectedToolCall[]
+  /**
+   * Chronological interleaved blocks for assistant/tool turns.
+   * Optional for backward compatibility with older emitters; consumers should fall back
+   * to `reasoning` -> `text` -> `toolCalls` when omitted.
+   */
+  parts?: HerdrProjectedMessagePart[]
   timestamp: number | null
 }
 

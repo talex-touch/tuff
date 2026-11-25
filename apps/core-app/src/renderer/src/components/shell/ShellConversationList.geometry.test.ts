@@ -96,6 +96,7 @@ const rules = [
   './ShellConversationList.vue',
   './ShellProjectFolder.vue',
   './ShellTemporarySpace.vue',
+  './ShellHerdrSpace.vue',
   './ShellProjectRows.vue'
 ].flatMap((file) => parseRules(compileStyles(file)))
 
@@ -132,6 +133,7 @@ const LOADED_LABELS = [
   'ShellNavItem-Label',
   'ShellProjectFolder-Name',
   'ShellTemporarySpace-Name',
+  'ShellHerdrSpace-Name',
   'ShellProjectRows-Open'
 ]
 
@@ -160,6 +162,11 @@ const LINE_CHAIN = [
   'ShellTemporarySpace-Name',
   'ShellTemporarySpace-Children',
   'ShellTemporarySpace-ChildrenInner',
+  'ShellHerdrSpace',
+  'ShellHerdrSpace-Row',
+  'ShellHerdrSpace-Name',
+  'ShellHerdrSpace-Children',
+  'ShellHerdrSpace-ChildrenInner',
   'ShellProjectRows-Row',
   'ShellProjectRows-Open',
   'ShellProjectRows-Session'
@@ -225,6 +232,7 @@ describe('shell conversation list skeleton geometry', () => {
       'ShellNavItem',
       'ShellProjectFolder-Name',
       'ShellTemporarySpace-Name',
+      'ShellHerdrSpace-Name',
       'ShellProjectRows-Open'
     ]
     for (const box of lineBoxes) {
@@ -236,6 +244,7 @@ describe('shell conversation list skeleton geometry', () => {
       'ShellNavItem',
       'ShellProjectFolder-Row',
       'ShellTemporarySpace-Row',
+      'ShellHerdrSpace-Row',
       'ShellProjectRows-Row'
     ]) {
       expect(declared(row, 'border'), row).toBe(border)
@@ -377,7 +386,11 @@ describe('shell list action styles', () => {
   })
 
   it('keeps folder expand clippers non-flex and rows non-shrinking so spacing never compresses mid-animation', () => {
-    for (const clipper of ['ShellProjectFolder-Children', 'ShellTemporarySpace-Children']) {
+    for (const clipper of [
+      'ShellProjectFolder-Children',
+      'ShellTemporarySpace-Children',
+      'ShellHerdrSpace-Children'
+    ]) {
       expect(values(clipper, 'overflow'), clipper).toEqual(['hidden'])
       // Animating height on a flex column compresses flex-shrinkable rows and makes scrollHeight
       // undershoot by 3.5px per row; flex layout belongs on the inner wrapper instead.
@@ -385,13 +398,17 @@ describe('shell list action styles', () => {
       expect(values(clipper, 'gap'), clipper).toEqual([])
     }
 
-    for (const folder of ['ShellProjectFolder', 'ShellTemporarySpace']) {
+    for (const folder of ['ShellProjectFolder', 'ShellTemporarySpace', 'ShellHerdrSpace']) {
       // Gap between header row and children lives inside ChildrenInner padding-top so it never
       // pops in/out before height starts or after height finishes collapsing.
       expect(values(folder, 'gap'), folder).toEqual([])
     }
 
-    for (const inner of ['ShellProjectFolder-ChildrenInner', 'ShellTemporarySpace-ChildrenInner']) {
+    for (const inner of [
+      'ShellProjectFolder-ChildrenInner',
+      'ShellTemporarySpace-ChildrenInner',
+      'ShellHerdrSpace-ChildrenInner'
+    ]) {
       expect(declared(inner, 'display'), inner).toBe('flex')
       expect(declared(inner, 'flex-direction'), inner).toBe('column')
       expect(declared(inner, 'gap'), inner).toBe('2px')

@@ -36,6 +36,7 @@ const ROUTE_COMPONENT_LOAD_WARN_MS = 150
 const STORE_ROUTE_CACHE_KEY = 'store-shell'
 /** `/home` and `/home/c/:id` are one surface, so they share a cache entry. */
 const HOME_ROUTE_CACHE_KEY = 'home-shell'
+const HERDR_CONVERSATION_CACHE_KEY = 'herdr-conversation-shell'
 
 function resolveRoutePattern(route: RouteLocationNormalizedLoaded): string {
   const last = Array.isArray(route?.matched) ? route.matched[route.matched.length - 1] : null
@@ -247,6 +248,20 @@ const routes: RouteRecordRaw[] = [
       index: 0,
       keepAlive: true,
       keepAliveKey: HOME_ROUTE_CACHE_KEY
+    }
+  },
+  {
+    path: APP_SURFACE_ROUTES.herdrConversation,
+    name: '$I18n:router.herdrConversation',
+    component: withRouteComponentPerf(
+      '/home/herdr',
+      () => import('../views/base/home/HerdrConversationStage.vue')
+    ),
+    meta: {
+      index: 0,
+      keepAlive: true,
+      keepAliveKey: HERDR_CONVERSATION_CACHE_KEY,
+      betaFeature: 'herdrRuntime'
     }
   },
   {

@@ -7,9 +7,12 @@ import type {
 } from '@talex-touch/utils/transport/sdk/domains/herdr'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxRowSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
+import { herdrConversationRoute } from '../../../../shared/app-surface-routes'
 import { useHerdrRuntime } from '~/modules/herdr/useHerdrRuntime'
 
 const props = defineProps<{
@@ -21,7 +24,36 @@ const emit = defineEmits<{
 }>()
 
 const { t, locale } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const herdr = useHerdrRuntime()
+
+const markdownLabels = computed(() => ({
+  blockedImageText: t('home.image.blocked'),
+  loadImageOnceText: t('home.image.loadOnce'),
+  allowSessionImagesText: t('home.image.allowSession'),
+  copyTableText: t('home.table.copyTable'),
+  copiedTableText: t('home.table.copiedTable'),
+  codePreviewText: t('home.code.preview'),
+  codeSourceText: t('home.code.source'),
+  codeFrameLabelFormatter: (lang: string) => t('home.code.frameLabel', { lang }),
+  copyCodeText: t('home.copy'),
+  copiedCodeText: t('home.copied'),
+  runCodeText: t('home.code.run'),
+  ranCodeText: t('home.code.ran'),
+  runCodeTitle: t('home.code.runInTerminal'),
+  diagramZoomLabel: t('home.diagram.zoom'),
+  diagramPreviewLabel: t('home.diagram.preview'),
+  diagramCloseLabel: t('home.diagram.close'),
+  diagramDownloadLabel: t('home.diagram.download'),
+  diagramCopyFailedText: t('home.diagram.copyFailed'),
+  diagramErrorText: t('home.diagram.failed')
+}))
+
+function handleOpenInMainStage(): void {
+  if (!props.address) return
+  void router.push(herdrConversationRoute(props.address))
+}
 
 const timelineRef = ref<HTMLDivElement | null>(null)
 const draft = ref('')
@@ -122,7 +154,12 @@ const blockedDescription = computed(() => {
 const effectiveCwd = computed(() => session.value?.foregroundCwd || session.value?.cwd || '')
 
 const effectiveProcess = computed(
-  () => session.value?.foregroundName || session.value?.argv?.[0] || props.address
+  () =>
+    session.value?.appName ||
+    session.value?.status?.app ||
+    session.value?.foregroundName ||
+    session.value?.argv?.[0] ||
+    props.address
 )
 
 function toolStatusIcon(status: HerdrProjectedToolCall['status']): string {
@@ -239,7 +276,8 @@ onBeforeUnmount(() => {
   const stillOpenInDrawer = herdr.drawerTabs.value.some(
     (tab) => tab.kind === 'herdr' && tab.address === props.address
   )
-  if (!stillOpenInDrawer) {
+  const openInMainStage = route.path === herdrConversationRoute(props.address)
+  if (!stillOpenInDrawer && !openInMainStage) {
     void herdr.unwatchProjection(props.address)
   }
 })
@@ -294,6 +332,17 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="ShellHerdrConv-HeaderActions">
+        <button
+          type="button"
+          class="ShellHerdrConv-IconBtn"
+          :title="t('herdr.stage.openInMainStage')"
+          :aria-label="t('herdr.stage.openInMainStage')"
+          data-testid="herdr-conv-open-stage"
+          @click="handleOpenInMainStage"
+        >
+          <span class="i-ri-external-link-line" aria-hidden="true" />
+        </button>
+
         <button
           type="button"
           class="ShellHerdrConv-IconBtn"
@@ -474,7 +523,14 @@ onBeforeUnmount(() => {
             >
           </div>
 
-          <p v-if="msg.text" class="ShellHerdrConv-MessageText">{{ msg.text }}</p>
+          <TxStreamMarkdown
+            v-if="msg.text && msg.role === 'assistant'"
+            class="ShellHerdrConv-MessageMarkdown"
+            :content="msg.text"
+            :streaming="false"
+            v-bind="markdownLabels"
+          />
+          <p v-else-if="msg.text" class="ShellHerdrConv-MessageText">{{ msg.text }}</p>
 
           <div v-if="msg.toolCalls && msg.toolCalls.length > 0" class="ShellHerdrConv-Tools">
             <div

@@ -13,6 +13,8 @@ export const APP_SURFACE_ROUTES = Object.freeze({
   browser: '/browser',
   /** The parameterised pattern, exactly as the router registers it under `/home`. */
   conversation: '/home/c/:id',
+  /** Main-stage AI chat & in-place terminal view for a `herdr-core` session address. */
+  herdrConversation: '/home/herdr/:address',
   store: '/store',
   storeInstalled: '/store/installed',
   downloads: '/downloads',
@@ -31,6 +33,14 @@ export const APP_SURFACE_ROUTES = Object.freeze({
  */
 export function conversationRoute(id: string): string {
   return `/home/c/${encodeURIComponent(id)}`
+}
+
+/**
+ * Main-stage route for a single `herdr-core` session (`t7`, `machine/t7`, etc.).
+ * Percent-encoded because remote addresses contain `/`.
+ */
+export function herdrConversationRoute(address: string): string {
+  return `/home/herdr/${encodeURIComponent(address)}`
 }
 
 /** The query parameter the applications page reads the entry it must select from. */

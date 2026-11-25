@@ -4,6 +4,7 @@ import type { WorkspaceQueueDeliveryMode } from '@talex-touch/utils/transport/sd
 import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
 import type { SendState } from './send-state'
 import type { DictationOutcome, DictationState } from './useComposerDictation'
+import { TxIcon } from '@talex-touch/tuffex/icon'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import HomeModelMenu from '../HomeModelMenu.vue'
@@ -43,6 +44,10 @@ const props = withDefaults(
     micBlocked?: boolean
     micElapsedMs?: number
     micOutcome?: DictationOutcome | null
+    /** Hide Tuff's local tool-permission menu for external hosts (e.g. Herdr CLI sessions). */
+    hidePermissionMenu?: boolean
+    /** Show the model/provider pill as a non-interactive read-only badge (no model picker popover). */
+    readonlyModel?: boolean
   }>(),
   {
     sendQueues: false,
@@ -51,7 +56,9 @@ const props = withDefaults(
     deliveryMode: 'queue',
     micBlocked: false,
     micElapsedMs: 0,
-    micOutcome: null
+    micOutcome: null,
+    hidePermissionMenu: false,
+    readonlyModel: false
   }
 )
 
@@ -161,8 +168,9 @@ defineExpose({ launch })
       <ComposerControl :label="t('home.attach')" @click="fileInputRef?.click()">
         <span class="i-ri-add-line" />
       </ComposerControl>
-      <div class="ComposerToolbar-Badges">
+      <div v-if="!hidePermissionMenu || $slots.mode" class="ComposerToolbar-Badges">
         <HomePermissionMenu
+          v-if="!hidePermissionMenu"
           :mode="permissionMode"
           @update:mode="emit('update:permissionMode', $event)"
           @reset="emit('reset-approvals')"
@@ -203,8 +211,30 @@ defineExpose({ launch })
         :aria-hidden="dictating || undefined"
       >
         <!-- Scheduler and model are one control: the pill names both (「Tuff Pi › model · 档位」)
-             and its one popover carries the scheduler row above the reasoning effort. -->
-        <HomeModelMenu placement="top-end">
+             and its one popover carries the scheduler row above the reasoning effort. External
+             runtimes (e.g. Herdr sessions) pass `readonlyModel` to show host identity without
+             offering a misleading local model picker. -->
+        <span
+          v-if="readonlyModel"
+          class="ComposerToolbar-ReadonlyModel"
+          data-testid="composer-readonly-model"
+        >
+          <span v-if="model.scheduler" class="ComposerToolbar-ReadonlyPrefix">
+            <span>{{ model.scheduler }}</span>
+            <span class="ComposerToolbar-ReadonlySep i-ri-arrow-right-s-line" aria-hidden="true" />
+          </span>
+          <TxIcon
+            v-if="model.icon"
+            class="ComposerToolbar-ReadonlyIcon"
+            :icon="model.icon"
+            :size="14"
+          />
+          <span class="ComposerToolbar-ReadonlyLabel">{{ model.label }}</span>
+          <span v-if="model.effort" class="ComposerToolbar-ReadonlySuffix"
+            >· {{ model.effort }}</span
+          >
+        </span>
+        <HomeModelMenu v-else placement="top-end">
           <template #trigger="{ open }">
             <ComposerModelPill
               :label="model.label"
@@ -371,6 +401,55 @@ defineExpose({ launch })
     min-width: 0;
     max-width: 100%;
   }
+}
+
+.ComposerToolbar-ReadonlyModel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: min(320px, 100%);
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--shell-radius-full);
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-body);
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.ComposerToolbar-ReadonlyPrefix {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 1px;
+  margin-right: -2px;
+  color: var(--shell-text-muted);
+  font-weight: 400;
+}
+
+.ComposerToolbar-ReadonlySep {
+  width: 14px;
+  height: 14px;
+  color: var(--shell-text-muted);
+}
+
+.ComposerToolbar-ReadonlyIcon {
+  flex: none;
+}
+
+.ComposerToolbar-ReadonlyLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--shell-text-regular);
+}
+
+.ComposerToolbar-ReadonlySuffix {
+  flex: none;
+  color: var(--shell-text-muted);
+  font-weight: 400;
 }
 
 .ComposerToolbar-Status {

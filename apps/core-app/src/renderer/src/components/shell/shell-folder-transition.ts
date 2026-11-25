@@ -1,6 +1,6 @@
 /**
- * Shared height-disclosure transition hooks for sidebar folder containers (`ShellProjectFolder` and
- * `ShellTemporarySpace`).
+ * Shared height-disclosure transition hooks for sidebar folder containers (`ShellProjectFolder`,
+ * `ShellTemporarySpace`, and `ShellHerdrSpace`).
  *
  * The animated element MUST be a block clipping wrapper around an inner layout wrapper: measuring
  * the inner wrapper's layout height instead of a flex column's `scrollHeight` prevents `flex-shrink`

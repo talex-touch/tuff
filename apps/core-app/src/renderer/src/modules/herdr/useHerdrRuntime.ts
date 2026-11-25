@@ -18,6 +18,9 @@ import type {
   HerdrStreamHandlers,
   HerdrTemplateView,
   HerdrTerminalControlResult,
+  HerdrTerminalDisplay,
+  HerdrTerminalKeysResult,
+  HerdrTerminalPutResult,
   HerdrTerminalRunRequest,
   HerdrTerminalSendRequest
 } from '@talex-touch/utils/transport/sdk/domains/herdr'
@@ -37,6 +40,12 @@ export interface HerdrProjectedSession extends HerdrSessionView {
   projectId: string | null
   projectName: string | null
   displayTitle: string
+  /** Normalized app or process label (never a bare binary version like `18.16.0`). */
+  appName?: string
+  /** Human-readable context location (`projectName`, `labels.where`, or cwd basename). */
+  locationLabel?: string | null
+  /** Effective working directory (`foregroundCwd || cwd`). */
+  effectiveCwd?: string
 }
 
 export type HerdrTabViewMode = 'structured' | 'terminal'
@@ -54,8 +63,20 @@ export interface HerdrAttachOptions {
   observe?: boolean
   resumed?: boolean
   resizeNotifications?: boolean
+  display?: HerdrTerminalDisplay | null
   handlers?: HerdrStreamHandlers
 }
+
+/**
+ * Default terminal identity for Tuff-spawned `herdr-core` sessions.
+ *
+ * `herdr-core` defaults to `TERM_PROGRAM=ghostty` and answers `XTVERSION` (`CSI > q`)
+ * itself, which causes previewers like `yazi` to pick Kitty Graphics Protocol with
+ * `U+10EEEE` placeholders (1+ MB raw RGB per frame) instead of compact truecolor IIP
+ * (`OSC 1337`). Requesting `Bobcat` makes `herdr-core` advertise an IIP-capable
+ * identity matching `TxTerminal`'s `XTVERSION_IIP_IDENTITY`.
+ */
+export const HERDR_IIP_TERM_PROGRAM = 'Bobcat'
 
 const STATUS_SORT_WEIGHT: Record<HerdrOscState, number> = {
   blocked: 0,
@@ -74,14 +95,117 @@ function normalizePathForMatch(rawPath: string | null | undefined): string {
   return normalized
 }
 
+const BARE_VERSION_RE = /^v?\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/i
+const SHELL_HOST_TITLE_RE = /^[^\s@]+@[^\s:]+:\s*\S+/
+const CLI_CONVERSATION_FLAG_RE = /^[\w.-]+\s+--(?:conversation|resume|session)(?:=|\s|$)/i
+const LEADING_TITLE_PREFIX_RE = /^(?:[π❯›>$#]\s*(?:>\s*)?)+/u
+// Nerd Font / Private Use Area glyphs emitted inside CLI terminal titles.
+const PUA_GLYPH_RE = /[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu
+
+function pathBasename(rawPath: string | null | undefined): string {
+  const normalized = normalizePathForMatch(rawPath)
+  if (!normalized || normalized === '/') return ''
+  const idx = normalized.lastIndexOf('/')
+  return idx >= 0 ? normalized.slice(idx + 1) : normalized
+}
+
+export function isBareVersionToken(value: string | null | undefined): boolean {
+  if (!value) return false
+  return BARE_VERSION_RE.test(value.trim())
+}
+
+export function resolveHerdrSessionApp(
+  session: Partial<Pick<HerdrSessionView, 'status' | 'foregroundName' | 'argv'>> &
+    Pick<HerdrSessionView, 'address'>
+): string {
+  const statusApp = session.status?.app?.trim()
+  if (statusApp && !isBareVersionToken(statusApp)) return statusApp
+
+  const fg = session.foregroundName?.trim()
+  if (fg && !isBareVersionToken(fg)) return fg
+
+  const argv0 = session.argv?.[0]?.trim()
+  if (argv0) {
+    const base = pathBasename(argv0) || argv0
+    if (base && !isBareVersionToken(base)) return base
+  }
+
+  return fg || statusApp || session.address
+}
+
+export function resolveHerdrSessionLocation(
+  session: Partial<Pick<HerdrSessionView, 'labels' | 'foregroundCwd' | 'cwd'>>,
+  projectName?: string | null
+): string | null {
+  const project = projectName?.trim()
+  if (project) return project
+
+  const where = session.labels?.where?.trim()
+  if (where) return where
+
+  const dirName = pathBasename(session.foregroundCwd || session.cwd)
+  return dirName || null
+}
+
+function cleanReadableTerminalTitle(
+  rawTitle: string | null | undefined,
+  appName: string,
+  foregroundName: string | null | undefined
+): string | null {
+  if (!rawTitle) return null
+  const trimmed = rawTitle.trim()
+  if (!trimmed) return null
+  if (SHELL_HOST_TITLE_RE.test(trimmed)) return null
+  if (CLI_CONVERSATION_FLAG_RE.test(trimmed)) return null
+
+  const cleaned = trimmed
+    .replace(PUA_GLYPH_RE, ' ')
+    .trim()
+    .replace(LEADING_TITLE_PREFIX_RE, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!cleaned || isBareVersionToken(cleaned)) return null
+
+  const lower = cleaned.toLowerCase()
+  if (
+    lower === appName.toLowerCase() ||
+    (foregroundName && lower === foregroundName.trim().toLowerCase())
+  ) {
+    return null
+  }
+  return cleaned
+}
+
 export function resolveHerdrSessionTitle(
-  session: Pick<HerdrSessionView, 'name' | 'foregroundName' | 'address'>
+  session: Partial<
+    Pick<
+      HerdrSessionView,
+      'name' | 'title' | 'status' | 'foregroundName' | 'argv' | 'labels' | 'foregroundCwd' | 'cwd'
+    >
+  > &
+    Pick<HerdrSessionView, 'address'>,
+  projectName?: string | null
 ): string {
   const name = session.name?.trim()
   if (name) return name
-  const fg = session.foregroundName?.trim()
-  if (fg) return fg
-  return session.address
+
+  const statusTitle = session.status?.title?.trim()
+  if (statusTitle && !isBareVersionToken(statusTitle)) return statusTitle
+
+  const appName = resolveHerdrSessionApp(session)
+  const cleanedTitle = cleanReadableTerminalTitle(session.title, appName, session.foregroundName)
+  if (cleanedTitle) return cleanedTitle
+
+  const location = resolveHerdrSessionLocation(session, projectName)
+  if (appName && appName !== session.address) {
+    if (location && location.toLowerCase() !== appName.toLowerCase()) {
+      return `${appName} · ${location}`
+    }
+    return appName
+  }
+
+  return location || session.address
 }
 
 export function matchSessionProject(
@@ -226,13 +350,15 @@ async function unwatchProjectionInternal(address: string): Promise<void> {
 function syncOpenTabsFromSessions(sessions: readonly HerdrSessionView[]): void {
   const shellTerminal = useShellTerminal()
   if (shellTerminal.tabs.value.length === 0) return
+  const projects = readProjectsSafe()
   const byAddress = new Map(sessions.map((item) => [item.address, item]))
   for (const tab of shellTerminal.tabs.value) {
     if (tab.kind !== 'herdr' || !tab.address) continue
     const session = byAddress.get(tab.address)
     if (!session) continue
+    const matched = matchSessionProject(session, projects)
     shellTerminal.updateTabMeta(tab.id, {
-      title: resolveHerdrSessionTitle(session),
+      title: resolveHerdrSessionTitle(session, matched.projectName),
       machine: session.machine
     })
   }
@@ -620,7 +746,8 @@ async function attach(
     history: options.history ?? 2000,
     resizeNotifications: options.resizeNotifications ?? true,
     ...(options.observe !== undefined ? { observe: options.observe } : {}),
-    ...(options.resumed !== undefined ? { resumed: options.resumed } : {})
+    ...(options.resumed !== undefined ? { resumed: options.resumed } : {}),
+    ...(options.display !== undefined ? { display: options.display } : {})
   }
 
   try {
@@ -753,11 +880,17 @@ export function useHerdrRuntime() {
     const projects = readProjectsSafe()
     return rawSessions.map((session) => {
       const matched = matchSessionProject(session, projects)
+      const appName = resolveHerdrSessionApp(session)
+      const locationLabel = resolveHerdrSessionLocation(session, matched.projectName)
+      const effectiveCwd = session.foregroundCwd || session.cwd || ''
       return {
         ...session,
         projectId: matched.projectId,
         projectName: matched.projectName,
-        displayTitle: resolveHerdrSessionTitle(session)
+        displayTitle: resolveHerdrSessionTitle(session, matched.projectName),
+        appName,
+        locationLabel,
+        effectiveCwd
       }
     })
   })
@@ -833,6 +966,18 @@ export function useHerdrRuntime() {
     options: Omit<HerdrTerminalSendRequest, 'terminal' | 'text'> = {}
   ): Promise<HerdrSendResult> {
     return getSdk().send({ terminal, text, ...options })
+  }
+
+  async function keys(terminal: string, sequence: string[]): Promise<HerdrTerminalKeysResult> {
+    return getSdk().keys({ terminal, keys: sequence })
+  }
+
+  async function put(
+    terminal: string,
+    name: string,
+    dataBase64: string
+  ): Promise<HerdrTerminalPutResult> {
+    return getSdk().put({ terminal, name, data: dataBase64 })
   }
 
   async function interrupt(
@@ -923,7 +1068,10 @@ export function useHerdrRuntime() {
   }
 
   async function openNewHerdrTab(request: HerdrTerminalRunRequest = {}): Promise<HerdrDrawerTab> {
-    const session = await run(request)
+    const env = request.env?.TERM_PROGRAM
+      ? request.env
+      : { ...request.env, TERM_PROGRAM: HERDR_IIP_TERM_PROGRAM }
+    const session = await run({ ...request, env })
     return openTerminalTab(session.address, { openDrawer: true })
   }
 
@@ -988,6 +1136,8 @@ export function useHerdrRuntime() {
     reconnect,
     run,
     send,
+    keys,
+    put,
     interrupt,
     kill,
     rm,

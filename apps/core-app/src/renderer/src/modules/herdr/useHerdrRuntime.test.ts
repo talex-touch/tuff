@@ -107,7 +107,12 @@ vi.mock('~/modules/storage/app-storage', () => ({
 
 import {
   __resetHerdrRuntimeForTesting,
+  HERDR_IIP_TERM_PROGRAM,
+  isBareVersionToken,
   matchSessionProject,
+  resolveHerdrSessionApp,
+  resolveHerdrSessionLocation,
+  resolveHerdrSessionTitle,
   useHerdrRuntime
 } from './useHerdrRuntime'
 
@@ -274,6 +279,81 @@ describe('useHerdrRuntime', () => {
       projectsRef.value
     )
     expect(remote).toEqual({ projectId: null, projectName: null })
+  })
+
+  it('resolves readable session titles and app labels without exposing bare binary version strings', () => {
+    expect(isBareVersionToken('18.16.0')).toBe(true)
+    expect(isBareVersionToken('v2.1.45-beta.1')).toBe(true)
+    expect(isBareVersionToken('omp')).toBe(false)
+
+    // OMP session whose macOS process comm is its version binary ("18.16.0") with OSC window title.
+    const ompSession = makeSession({
+      address: 't94',
+      name: null,
+      title: 'π > \u{F036C} SING: 梳理妙唱真人评分对照',
+      foregroundName: '18.16.0',
+      foregroundCwd: '/private/tmp/thunder-sing-damaged',
+      labels: { where: 'thunder-sing-damaged / 2' },
+      status: { app: 'omp', state: 'done' }
+    })
+    expect(resolveHerdrSessionApp(ompSession)).toBe('omp')
+    expect(resolveHerdrSessionLocation(ompSession, null)).toBe('thunder-sing-damaged / 2')
+    expect(resolveHerdrSessionTitle(ompSession, null)).toBe('SING: 梳理妙唱真人评分对照')
+
+    // Bare version binary with no terminal title falls back to app + location, never "18.16.0".
+    const untitledOmp = makeSession({
+      address: 't95',
+      name: null,
+      title: '',
+      foregroundName: '18.16.0',
+      labels: { where: 'tmp / 1' },
+      status: { app: 'omp', state: 'idle' }
+    })
+    expect(resolveHerdrSessionTitle(untitledOmp, null)).toBe('omp · tmp / 1')
+
+    // CLI invocation with --conversation=<uuid> falls back to app + herdr location.
+    const agySession = makeSession({
+      address: 't73',
+      name: null,
+      title: 'agy --conversation=16184f3d-2bd1-488e-8b9e-c3cd94ada439',
+      foregroundName: 'agy',
+      labels: { where: 'thunder-vap / 1' },
+      status: { app: 'antigravity', state: 'done' }
+    })
+    expect(resolveHerdrSessionTitle(agySession, null)).toBe('antigravity · thunder-vap / 1')
+
+    // Standard user@host:path shell title resolves to shell + herdr location.
+    const zshSession = makeSession({
+      address: 't7w',
+      name: null,
+      title: 'talexdreamsoul@Tag--Redmi-Book-Pro-16:~/Workspace/Work',
+      foregroundName: 'zsh',
+      labels: { where: 'Work / 2' },
+      status: null
+    })
+    expect(resolveHerdrSessionTitle(zshSession, null)).toBe('zsh · Work / 2')
+
+    // Explicit name and OSC 7501 status.title always take precedence.
+    expect(
+      resolveHerdrSessionTitle(
+        makeSession({
+          address: 't1',
+          name: 'custom-task',
+          title: 'ignored title',
+          status: { state: 'working', title: 'osc title' }
+        })
+      )
+    ).toBe('custom-task')
+    expect(
+      resolveHerdrSessionTitle(
+        makeSession({
+          address: 't2',
+          name: null,
+          title: 'terminal title',
+          status: { state: 'working', title: 'OSC Task Title' }
+        })
+      )
+    ).toBe('OSC Task Title')
   })
 
   it('subscribes to snapshotChanged & sessionUpsert, sorts sessions, and projects projects', async () => {
@@ -448,6 +528,36 @@ describe('useHerdrRuntime', () => {
     expect(reconnected.revision).toBe(5)
   })
 
+  it('negotiates Bobcat IIP identity on openNewHerdrTab and forwards display.cell on attach', async () => {
+    const runtime = useHerdrRuntime()
+    await Promise.resolve()
+
+    mocks.sdk.run.mockResolvedValueOnce(makeSession({ address: 't42', name: 'yazi-shell' }))
+    await runtime.openNewHerdrTab({ display: { cell: [16, 32] } })
+    expect(mocks.sdk.run).toHaveBeenLastCalledWith({
+      display: { cell: [16, 32] },
+      env: { TERM_PROGRAM: HERDR_IIP_TERM_PROGRAM }
+    })
+
+    // Preserves caller's explicit TERM_PROGRAM override when supplied.
+    mocks.sdk.run.mockResolvedValueOnce(makeSession({ address: 't43' }))
+    await runtime.openNewHerdrTab({ env: { TERM_PROGRAM: 'custom-term', FOO: '1' } })
+    expect(mocks.sdk.run).toHaveBeenLastCalledWith({
+      env: { TERM_PROGRAM: 'custom-term', FOO: '1' }
+    })
+
+    await runtime.attach('t42', { cols: 100, rows: 30, display: { cell: [16, 32] } })
+    expect(mocks.sdk.attachStream).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        terminal: 't42',
+        cols: 100,
+        rows: 30,
+        display: { cell: [16, 32] }
+      }),
+      expect.any(Object)
+    )
+  })
+
   it('defaults tab close to detach (without kill) and auto-reattaches on restarted status', async () => {
     const runtime = useHerdrRuntime()
     await Promise.resolve()
@@ -561,5 +671,30 @@ describe('useHerdrRuntime', () => {
     expect(runtime.isWatchingProjection('t13')).toBe(true)
     scope.stop()
     expect(mocks.sdk.projection.unwatch).toHaveBeenCalledWith({ address: 't13' })
+  })
+
+  it('delegates put() and keys() cleanly to HerdrSdk', async () => {
+    const scope = effectScope()
+    const runtime = scope.run(() => useHerdrRuntime())!
+    await Promise.resolve()
+
+    mocks.sdk.put.mockResolvedValueOnce({ path: '/tmp/herdr/notes.md', bytes: 12 })
+    const putResult = await runtime.put('t1', 'notes.md', 'aGVsbG8=')
+    expect(mocks.sdk.put).toHaveBeenCalledWith({
+      terminal: 't1',
+      name: 'notes.md',
+      data: 'aGVsbG8='
+    })
+    expect(putResult).toEqual({ path: '/tmp/herdr/notes.md', bytes: 12 })
+
+    mocks.sdk.keys.mockResolvedValueOnce({ turn: 4, status: 'working' })
+    const keysResult = await runtime.keys('t1', ['Enter'])
+    expect(mocks.sdk.keys).toHaveBeenCalledWith({
+      terminal: 't1',
+      keys: ['Enter']
+    })
+    expect(keysResult).toEqual({ turn: 4, status: 'working' })
+
+    scope.stop()
   })
 })
