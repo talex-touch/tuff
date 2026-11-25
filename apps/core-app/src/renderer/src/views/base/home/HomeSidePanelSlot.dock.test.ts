@@ -22,6 +22,20 @@ vi.mock('@talex-touch/tuffex/popover', () => ({
   }
 }))
 
+vi.mock('@talex-touch/tuffex/dropdown-menu', () => ({
+  TxDropdownMenu: {
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+    template:
+      '<div data-testid="side-panel-add-dropdown" :data-open="String(modelValue)"><div @click="$emit(\'update:modelValue\', !modelValue)"><slot name="trigger" /></div><div v-if="modelValue" data-testid="side-panel-add-dropdown-menu"><slot /></div></div>'
+  },
+  TxDropdownItem: {
+    emits: ['select'],
+    template:
+      '<button type="button" @click="$emit(\'select\')"><slot /><slot name="right" /></button>'
+  }
+}))
+
 vi.mock('~/modules/conversation/useConversationReview', () => ({
   useConversationReview: () => ({
     records: { value: [] },
@@ -222,6 +236,13 @@ describe('HomeSidePanelSlot shell dock & tab strip scrolling', () => {
     expect(wrapper.find('.HomeSidePanel-Controls').classes()).toContain(
       'shell-chrome-safe-inline-end'
     )
+
+    // Clicking the + dropdown chevron opens quick tab options and emits open-tool.
+    await wrapper.find('[data-testid="side-panel-add-menu-trigger"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-testid="side-panel-add-dropdown-menu"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="side-panel-add-menu-git"]').trigger('click')
+    expect(wrapper.emitted('open-tool')).toEqual([['git']])
 
     wrapper.unmount()
   })
