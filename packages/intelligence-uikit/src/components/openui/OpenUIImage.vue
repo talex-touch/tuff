@@ -7,29 +7,53 @@ const ctx = inject(OPENUI_CONTEXT)!
 const resolved = ref<string | null>(null)
 const failed = ref(false)
 const pending = ref(false)
+
+const radiusTokens: Record<string, string> = {
+  sm: 'var(--openui-radius-sm)',
+  md: 'var(--openui-radius-md)',
+  lg: 'var(--openui-radius-lg)',
+  xl: 'var(--openui-radius-xl)',
+  full: 'var(--openui-radius-full)',
+}
+
+const resolvedRadius = computed(() =>
+  typeof props.radius === 'number'
+    ? `${props.radius}px`
+    : radiusTokens[props.radius ?? 'lg'] ?? props.radius,
+)
+
 const safeSource = computed(() => {
   const url = props.search ? resolved.value : props.src
   return typeof url === 'string' && /^https?:\/\//i.test(url) && !failed.value ? url : undefined
 })
+
 watch(() => [props.query, props.src, ctx.streaming.value] as const, async (_, __, onCleanup) => {
   let active = true
   onCleanup(() => { active = false })
   failed.value = false
   resolved.value = null
   pending.value = false
-  if (!props.search || !props.query || ctx.streaming.value) return
+  if (!props.search || !props.query || ctx.streaming.value)
+    return
   pending.value = true
   try {
     const source = await ctx.resolveImage?.(props.query)
-    if (active) resolved.value = source ?? null
+    if (active)
+      resolved.value = source ?? null
   }
-  catch { if (active) failed.value = true }
-  finally { if (active) pending.value = false }
+  catch {
+    if (active)
+      failed.value = true
+  }
+  finally {
+    if (active)
+      pending.value = false
+  }
 }, { immediate: true })
 </script>
 
 <template>
-  <figure class="tx-ai-openui__image" :aria-busy="pending" :style="{ aspectRatio: Math.min(5, Math.max(0.2, aspectRatio ?? 1.5)), borderRadius: typeof radius === 'number' ? `${radius}px` : ({ sm: '4px', md: '8px', lg: '12px', xl: '20px', full: '999px' } as Record<string, string>)[radius ?? 'lg'] }">
+  <figure class="tx-ai-openui__image" :aria-busy="pending" :style="{ aspectRatio: Math.min(5, Math.max(0.2, aspectRatio ?? 1.5)), borderRadius: resolvedRadius }">
     <img v-if="safeSource" :src="safeSource" :alt="alt ?? query ?? ''" loading="lazy" referrerpolicy="no-referrer" :style="{ objectFit: fit === 'contain' ? 'contain' : 'cover' }" @error="failed = true">
     <span v-else class="tx-ai-openui__image-caption" role="img" :aria-label="alt ?? query ?? ctx.labels.value.imageUnavailable ?? 'Image unavailable'">{{ pending ? (ctx.labels.value.imageLoading ?? 'Loading image…') : (alt ?? query ?? ctx.labels.value.imageUnavailable ?? 'Image unavailable') }}</span>
   </figure>

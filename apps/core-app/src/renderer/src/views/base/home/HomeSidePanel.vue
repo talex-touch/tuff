@@ -38,6 +38,7 @@ import HomePreviewReview from './preview/HomePreviewReview.vue'
 import HomePreviewSources from './preview/HomePreviewSources.vue'
 import HomePreviewWidgets from './preview/HomePreviewWidgets.vue'
 import HomeSideBrowserPane from './preview/HomeSideBrowserPane.vue'
+import HomeSideCanvasPane from './preview/HomeSideCanvasPane.vue'
 import HomeSideGitPane from './preview/HomeSideGitPane.vue'
 import HomeSideLauncher from './preview/HomeSideLauncher.vue'
 import HomeSidePluginsPane from './preview/HomeSidePluginsPane.vue'
@@ -140,6 +141,7 @@ const activeFilePath = computed(() =>
 const hasAnyWebTab = computed(() => props.tabs.some((tab) => tab.kind === 'web'))
 const hasAnyTerminalTab = computed(() => props.tabs.some((tab) => tab.kind === 'terminal'))
 const hasAnyGitTab = computed(() => props.tabs.some((tab) => tab.kind === 'git'))
+const hasAnyCanvasTab = computed(() => props.tabs.some((tab) => tab.kind === 'canvas'))
 
 watch(hasAnyWebTab, (exists) => {
   if (!exists && browserSdk) {
@@ -219,6 +221,8 @@ function tabIconClass(tab: SidePanelTab): string {
       return 'i-ri-code-s-slash-line'
     case 'git':
       return 'i-ri-git-branch-line'
+    case 'canvas':
+      return 'i-ri-artboard-2-line'
     case 'review':
       return 'i-ri-file-edit-line'
     case 'terminal':
@@ -404,6 +408,16 @@ function onTabBarWheel(event: WheelEvent): void {
               </span>
             </TxDropdownItem>
 
+            <TxDropdownItem
+              data-testid="side-panel-add-menu-canvas"
+              @select="runMenuAction(() => emit('open-tool', 'canvas'))"
+            >
+              <span class="HomeSidePanel-DropdownItem">
+                <span class="i-ri-artboard-2-line HomeSidePanel-DropdownIcon" aria-hidden="true" />
+                <span>{{ t('home.sidePanel.canvas') }}</span>
+              </span>
+            </TxDropdownItem>
+
             <TxDropdownItem @select="runMenuAction(() => emit('open-tool', 'review'))">
               <span class="HomeSidePanel-DropdownItem">
                 <span class="i-ri-file-edit-line HomeSidePanel-DropdownIcon" aria-hidden="true" />
@@ -552,6 +566,16 @@ function onTabBarWheel(event: WheelEvent): void {
             >
               <span class="i-ri-git-branch-line" aria-hidden="true" />
               <span class="HomeSidePanel-MenuLabel">{{ t('home.git.title') }}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="HomeSidePanel-MenuItem"
+              data-testid="side-panel-more-menu-canvas"
+              @click="runMenuAction(() => emit('open-tool', 'canvas'))"
+            >
+              <span class="i-ri-artboard-2-line" aria-hidden="true" />
+              <span class="HomeSidePanel-MenuLabel">{{ t('home.sidePanel.canvas') }}</span>
             </button>
             <button
               type="button"
@@ -815,6 +839,18 @@ function onTabBarWheel(event: WheelEvent): void {
         :active="panelActive && activeTab?.kind === 'git'"
         @open-file="emit('open-file', $event)"
         @open-web="emit('open-web', $event)"
+      />
+
+      <!-- Persistent side-canvas host while any canvas tab exists (preserves pan/zoom, notes & history) -->
+      <HomeSideCanvasPane
+        v-if="hasAnyCanvasTab"
+        v-show="activeTab?.kind === 'canvas'"
+        :messages="messages"
+        :conversation-id="conversationId"
+        :workspace-root="workspaceRoot"
+        :active="panelActive && activeTab?.kind === 'canvas'"
+        :ai-actions-enabled="true"
+        @ai-action="emit('ai-action', $event)"
       />
 
       <!-- Persistent side-terminal host while any terminal tab exists -->

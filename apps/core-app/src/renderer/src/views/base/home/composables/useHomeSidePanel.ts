@@ -7,6 +7,7 @@ import { basenameOfPath } from '~/modules/browser-workspace/preview-url'
 export type SidePanelWorkspaceKind =
   | 'files'
   | 'git'
+  | 'canvas'
   | 'review'
   | 'terminal'
   | 'outputs'
@@ -84,6 +85,7 @@ const SENSITIVE_URL_PARAM_RE =
 const WORKSPACE_KINDS = new Set<SidePanelWorkspaceKind>([
   'files',
   'git',
+  'canvas',
   'review',
   'terminal',
   'outputs',
@@ -92,6 +94,24 @@ const WORKSPACE_KINDS = new Set<SidePanelWorkspaceKind>([
   'context',
   'plugins'
 ])
+
+const DEFAULT_WORKSPACE_TITLES: Record<SidePanelWorkspaceKind, string> = {
+  files: 'Files',
+  git: 'Git',
+  canvas: 'Canvas',
+  review: 'Review',
+  terminal: 'Terminal',
+  outputs: 'Outputs',
+  sources: 'Sources',
+  work: 'Activity',
+  context: 'Context',
+  plugins: 'Plugins'
+}
+
+export function resolveWorkspaceTabTitle(kind: SidePanelWorkspaceKind, title?: string): string {
+  const normalized = typeof title === 'string' ? title.trim() : ''
+  return normalized || DEFAULT_WORKSPACE_TITLES[kind]
+}
 
 function isWorkspaceKind(value: unknown): value is SidePanelWorkspaceKind {
   return typeof value === 'string' && WORKSPACE_KINDS.has(value as SidePanelWorkspaceKind)
@@ -651,15 +671,21 @@ export function useHomeSidePanel(
     return id
   }
 
-  function openWorkspaceTab(kind: SidePanelWorkspaceKind, title: string): string {
+  function openWorkspaceTab(kind: SidePanelWorkspaceKind, title?: string): string {
+    const resolvedTitle = resolveWorkspaceTabTitle(kind, title)
     const existing = tabs.value.find((tab) => tab.kind === kind)
     if (existing) {
+      if (title && title.trim() && existing.title !== resolvedTitle) {
+        tabs.value = tabs.value.map((tab) =>
+          tab.id === existing.id && tab.kind === kind ? { ...tab, title: resolvedTitle } : tab
+        )
+      }
       activeTabId.value = existing.id
       panelOpen.value = true
       return existing.id
     }
     const id = `side-${kind}`
-    tabs.value = [...tabs.value, { id, kind, title }]
+    tabs.value = [...tabs.value, { id, kind, title: resolvedTitle }]
     activeTabId.value = id
     panelOpen.value = true
     return id
@@ -878,6 +904,7 @@ export function useHomeSidePanel(
         tab.kind === 'plugins' ||
         tab.kind === 'files' ||
         tab.kind === 'git' ||
+        tab.kind === 'canvas' ||
         tab.kind === 'terminal'
     )
     if (activeTabId.value && !tabs.value.some((tab) => tab.id === activeTabId.value)) {

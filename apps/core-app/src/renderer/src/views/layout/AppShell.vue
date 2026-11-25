@@ -14,6 +14,10 @@ import { useWallpaper } from '~/modules/layout/useWallpaper'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { appSetting } from '~/modules/storage/app-storage'
+import {
+  installLiveAnimationClock,
+  type LiveAnimationClockController
+} from '~/modules/style/live-animation-clock'
 import { isBetaFeatureEnabled } from '../../../../shared/beta-features'
 import {
   normalizeWindowPreference,
@@ -55,11 +59,15 @@ const {
 } = useShellRightSidebar()
 const { terminalOpen, terminalMounted, isResizingTerminal } = useShellTerminal()
 
+let liveAnimationClock: LiveAnimationClockController | null = null
+
 function bindRightSidebarHost(el: unknown): void {
   registerRightSidebarHost(el instanceof HTMLElement ? el : null)
 }
 
 onBeforeUnmount(() => {
+  liveAnimationClock?.dispose()
+  liveAnimationClock = null
   registerRightSidebarHost(null)
 })
 const touchBlur = computed(
@@ -179,6 +187,7 @@ function onRouteEnterEnd(fullPath: string): void {
 }
 
 onMounted(() => {
+  liveAnimationClock = installLiveAnimationClock()
   triggerThemeTransition(
     [innerWidth / 2, innerHeight / 2],
     themeStyle.value.theme.style.auto

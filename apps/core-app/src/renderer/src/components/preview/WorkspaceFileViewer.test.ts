@@ -79,7 +79,8 @@ vi.mock('@talex-touch/tuffex/popover', () => ({
   TxPopover: {
     props: ['modelValue'],
     emits: ['update:modelValue'],
-    template: '<div><slot name="reference" /><div v-if="modelValue"><slot /></div></div>'
+    template:
+      '<div><div @click="$emit(\'update:modelValue\', !modelValue)"><slot name="reference" /></div><div v-if="modelValue"><slot /></div></div>'
   }
 }))
 
@@ -274,5 +275,204 @@ describe('WorkspaceFileViewer', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="file-viewer-comments-dock"]').exists()).toBe(false)
     expect(window.sessionStorage.length).toBe(0)
+  })
+
+  it('keeps Responsive HTML preview full-bleed by default and supports device frame switcher, rotation, and shell toggle', async () => {
+    mocks.send.mockResolvedValue({
+      path: '/repo/demo/landing.html',
+      name: 'landing.html',
+      ext: 'html',
+      kind: 'text',
+      mimeType: 'text/html',
+      size: 128,
+      truncated: false,
+      mtimeMs: Date.now(),
+      text: '<!doctype html><html><body><h1>Hello Device</h1></body></html>'
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/repo/demo/landing.html',
+        displayPath: 'demo/landing.html',
+        workspaceRoot: '/repo'
+      }
+    })
+    await flushPromises()
+
+    // Responsive is the default: full-bleed iframe directly without TdsDeviceFrame, strict CSP intact
+    expect(wrapper.find('[data-testid="file-viewer-viewport-controls"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="file-viewer-device-frame"]').exists()).toBe(false)
+    const defaultIframe = wrapper.get('iframe.WorkspaceFileViewer-Frame')
+    expect(defaultIframe.attributes('sandbox')).toBe('allow-scripts allow-forms allow-modals')
+    expect(defaultIframe.attributes('srcdoc')).toContain('Content-Security-Policy')
+    expect(defaultIframe.attributes('srcdoc')).toContain("default-src 'none'")
+
+    // Open viewport picker, search with Chinese keyword, pick iPhone 17 Pro
+    await wrapper.get('[data-testid="file-viewer-viewport-trigger"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="file-viewer-viewport-search"]').setValue('手机')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="file-viewer-viewport-option-iphone-17-pro"]').exists()).toBe(
+      true
+    )
+    expect(wrapper.find('[data-testid="file-viewer-viewport-option-desktop-hd"]').exists()).toBe(
+      false
+    )
+
+    await wrapper.get('[data-testid="file-viewer-viewport-option-iphone-17-pro"]').trigger('click')
+    await flushPromises()
+
+    // Sandboxed iframe is now wrapped inside TdsDeviceFrame with strict CSP preserved
+    const frame = wrapper.get('[data-testid="file-viewer-device-frame"]')
+    expect(frame.attributes('data-preset-id')).toBe('iphone-17-pro')
+    expect(frame.attributes('data-orientation')).toBe('portrait')
+    expect(frame.attributes('data-show-shell')).toBe('true')
+    const framedIframe = frame.get('iframe.WorkspaceFileViewer-Frame')
+    expect(framedIframe.attributes('sandbox')).toBe('allow-scripts allow-forms allow-modals')
+    expect(framedIframe.attributes('srcdoc')).toContain("default-src 'none'")
+
+    // Flip portrait -> landscape
+    await wrapper.get('[data-testid="file-viewer-viewport-rotate"]').trigger('click')
+    await flushPromises()
+    expect(
+      wrapper.get('[data-testid="file-viewer-device-frame"]').attributes('data-orientation')
+    ).toBe('landscape')
+
+    // Toggle device shell off and back on
+    await wrapper.get('[data-testid="file-viewer-viewport-shell"]').trigger('click')
+    await flushPromises()
+    expect(
+      wrapper.get('[data-testid="file-viewer-device-frame"]').attributes('data-show-shell')
+    ).toBe('false')
+
+    // Switching back to Responsive removes TdsDeviceFrame and restores full-bleed iframe
+    await wrapper.get('[data-testid="file-viewer-viewport-trigger"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="file-viewer-viewport-option-responsive"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="file-viewer-device-frame"]').exists()).toBe(false)
+    expect(wrapper.find('iframe.WorkspaceFileViewer-Frame').exists()).toBe(true)
+
+    // Switching to source mode hides device viewport controls
+    await wrapper.get('[data-testid="file-viewer-mode-source"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="file-viewer-viewport-controls"]').exists()).toBe(false)
+  })
+
+  it('enables device viewport switcher for SVG preview while preserving empty iframe sandbox', async () => {
+    mocks.send.mockResolvedValue({
+      path: '/repo/demo/icon.svg',
+      name: 'icon.svg',
+      ext: 'svg',
+      kind: 'text',
+      mimeType: 'image/svg+xml',
+      size: 64,
+      truncated: false,
+      mtimeMs: Date.now(),
+      text: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>'
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/repo/demo/icon.svg',
+        displayPath: 'demo/icon.svg',
+        workspaceRoot: '/repo'
+      }
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="file-viewer-viewport-controls"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="file-viewer-viewport-trigger"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="file-viewer-viewport-option-apple-watch-46"]').trigger('click')
+    await flushPromises()
+
+    const frame = wrapper.get('[data-testid="file-viewer-device-frame"]')
+    expect(frame.attributes('data-preset-id')).toBe('apple-watch-46')
+    // Watch is non-orientable so rotate button is hidden
+    expect(wrapper.find('[data-testid="file-viewer-viewport-rotate"]').exists()).toBe(false)
+    // SVG sandbox remains strictly empty
+    expect(frame.get('iframe.WorkspaceFileViewer-Frame').attributes('sandbox')).toBe('')
+  })
+
+  it('runs live TDS static lint in HTML preview, toggles anti-slop rules, and sends structured fix prompts to AI', async () => {
+    mocks.send.mockResolvedValue({
+      path: '/repo/demo/sloppy.html',
+      name: 'sloppy.html',
+      ext: 'html',
+      kind: 'text',
+      mimeType: 'text/html',
+      size: 320,
+      truncated: false,
+      mtimeMs: Date.now(),
+      text: [
+        '<!doctype html>',
+        '<html><head><style>',
+        '  body { min-height: 100vh; color: var(--shell-primry); }',
+        '  h1 { background-clip: text; }',
+        '</style></head>',
+        '<body><img src="https://cdn.example.com/hero.png" /><h1>Hello</h1></body></html>'
+      ].join('\n')
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/repo/demo/sloppy.html',
+        displayPath: 'demo/sloppy.html',
+        workspaceRoot: '/repo',
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    // Lint trigger pill reports live count (remote-asset-url + undefined-tds-token + viewport-unit-canvas + thick-border-or-glow = 4)
+    expect(wrapper.get('[data-testid="tds-lint-count"]').text()).toBe('4')
+    expect(wrapper.get('[data-testid="tds-lint-trigger"]').classes()).toContain('is-error')
+
+    // Open popover and verify issues + rule ids
+    await wrapper.get('[data-testid="tds-lint-trigger"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="tds-lint-popover"]').exists()).toBe(true)
+    const ruleIdsBefore = wrapper
+      .findAll('[data-testid="tds-lint-issue"]')
+      .map((node) => node.attributes('data-rule-id'))
+    expect(ruleIdsBefore).toEqual([
+      'remote-asset-url',
+      'undefined-tds-token',
+      'viewport-unit-canvas',
+      'thick-border-or-glow'
+    ])
+
+    // Toggling anti-slop off drops thick-border-or-glow immediately
+    await wrapper.get('[data-testid="tds-lint-antislop-toggle"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="tds-lint-count"]').text()).toBe('3')
+    const ruleIdsAfter = wrapper
+      .findAll('[data-testid="tds-lint-issue"]')
+      .map((node) => node.attributes('data-rule-id'))
+    expect(ruleIdsAfter).toEqual([
+      'remote-asset-url',
+      'undefined-tds-token',
+      'viewport-unit-canvas'
+    ])
+
+    // Clicking "Send to AI to fix" reuses dispatchAiAction('send', ...) with formatted fix prompt
+    await wrapper.get('[data-testid="tds-lint-send-ai"]').trigger('click')
+    await flushPromises()
+    const aiAction = wrapper.emitted('ai-action')?.[0]?.[0] as {
+      mode: string
+      displayPath: string
+      prompt: string
+    }
+    expect(aiAction.mode).toBe('send')
+    expect(aiAction.displayPath).toBe('demo/sloppy.html')
+    expect(aiAction.prompt).toContain('remote-asset-url')
+    expect(aiAction.prompt).toContain('undefined-tds-token')
+    expect(aiAction.prompt).toContain('viewport-unit-canvas')
+
+    // Strict CSP sandbox remains untouched
+    const iframe = wrapper.get('iframe.WorkspaceFileViewer-Frame')
+    expect(iframe.attributes('sandbox')).toBe('allow-scripts allow-forms allow-modals')
+    expect(iframe.attributes('srcdoc')).toContain("default-src 'none'")
   })
 })
