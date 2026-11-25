@@ -14,6 +14,11 @@ import { toast } from 'vue-sonner'
 import { APP_SURFACE_ROUTES } from '../../../../../../shared/app-surface-routes'
 import { isBetaFeatureEnabled } from '../../../../../../shared/beta-features'
 import { buildBrowserFilePreviewUrl } from '~/modules/browser-workspace/preview-url'
+import {
+  attachBrowserTabToSpace,
+  projectSpaceKey,
+  setLastWorkspaceScope
+} from '~/modules/layout/useShellWorkspaceTabs'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useProjectStore } from '~/stores/projects'
 import { useFileLinkClick } from './useFileLinkClick'
@@ -134,7 +139,12 @@ export function useHomePreviewPanels(options: UseHomePreviewPanelsOptions) {
   async function openWebInBuiltInBrowser(url: string): Promise<void> {
     if (browserSdk && isBetaFeatureEnabled(appSetting, 'browserWorkspace')) {
       try {
-        await browserSdk.createTab(url)
+        const created = await browserSdk.createTab(url)
+        const spaceKey = projectSpaceKey(options.projectId.value)
+        if (created.activeTabId) {
+          attachBrowserTabToSpace(created.activeTabId, spaceKey, options.conversationId.value)
+          setLastWorkspaceScope(spaceKey)
+        }
         await router.push(APP_SURFACE_ROUTES.browser)
         return
       } catch {
@@ -160,7 +170,12 @@ export function useHomePreviewPanels(options: UseHomePreviewPanelsOptions) {
           conversationId: options.conversationId.value ?? undefined,
           line: payload.line
         })
-        await browserSdk.createTab(previewUrl)
+        const created = await browserSdk.createTab(previewUrl)
+        const spaceKey = projectSpaceKey(options.projectId.value)
+        if (created.activeTabId) {
+          attachBrowserTabToSpace(created.activeTabId, spaceKey, options.conversationId.value)
+          setLastWorkspaceScope(spaceKey)
+        }
         await router.push(APP_SURFACE_ROUTES.browser)
         return
       } catch {

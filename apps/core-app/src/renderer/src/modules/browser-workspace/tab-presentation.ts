@@ -72,7 +72,8 @@ const FALLBACK_TAB_ICONS = [
   'i-ri-global-line',
   'i-ri-store-2-line',
   'i-ri-settings-3-line',
-  'i-ri-file-code-line'
+  'i-ri-file-code-line',
+  'i-ri-chat-3-line'
 ] as const
 
 /**

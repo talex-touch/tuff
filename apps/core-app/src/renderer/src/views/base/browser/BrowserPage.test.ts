@@ -102,7 +102,8 @@ vi.mock('vue-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key, locale: ref('en-US') })
 }))
 vi.mock('vue-router', () => ({
-  useRoute: () => route
+  useRoute: () => route,
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() })
 }))
 vi.mock('vue-sonner', () => ({
   toast: { success: vi.fn(), info: vi.fn(), warning: vi.fn(), error: vi.fn() }

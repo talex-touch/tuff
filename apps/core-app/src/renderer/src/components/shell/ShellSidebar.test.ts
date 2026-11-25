@@ -132,12 +132,13 @@ describe('ShellSidebar settings context', () => {
     route.path = '/home'
   })
 
-  it('renders direct /setting link when browserWorkspace is off', async () => {
+  it('renders direct /store and /setting links even when browserWorkspace is on', async () => {
     route.path = '/home'
-    appSettingMock.betaFeatures.browserWorkspace = false
+    appSettingMock.betaFeatures.browserWorkspace = true
     const wrapper = mount(ShellSidebar)
     await nextTick()
 
+    expect(wrapper.find('[data-to="/store"]').exists()).toBe(true)
     expect(wrapper.find('[data-to="/setting"]').exists()).toBe(true)
   })
 })

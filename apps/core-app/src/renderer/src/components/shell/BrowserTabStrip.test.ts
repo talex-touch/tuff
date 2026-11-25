@@ -12,14 +12,25 @@ import { nextTick, reactive, ref } from 'vue'
 
 enableAutoUnmount(afterEach)
 
-const route = reactive({ path: '/browser' })
+const route = reactive<{ path: string; params?: Record<string, string> }>({
+  path: '/browser',
+  params: {}
+})
 const routerPush = vi.fn(async (to: string) => {
   route.path = to
+  if (to.startsWith('/home/c/')) {
+    route.params = { id: to.slice('/home/c/'.length) }
+  } else {
+    route.params = {}
+  }
 })
 const platformState = {
   isMac: ref(true),
   platform: ref('darwin')
 }
+const mockConversations = ref<
+  Array<{ id: string; title: string; projectId: string | null; updatedAt: number }>
+>([])
 
 let workspaceState: BrowserWorkspaceState
 const changedListeners = new Set<(state: BrowserWorkspaceState) => void>()
@@ -109,6 +120,16 @@ vi.mock('vue-router', () => ({
 vi.mock('~/modules/platform/renderer-platform', () => ({
   useRendererPlatform: () => platformState
 }))
+vi.mock('~/modules/conversation/useConversationHistory', () => ({
+  useConversationHistory: () => ({
+    conversations: mockConversations,
+    loading: ref(false),
+    refresh: vi.fn(async () => undefined),
+    load: vi.fn(async () => null),
+    rename: vi.fn(async () => undefined),
+    remove: vi.fn(async () => undefined)
+  })
+}))
 vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({
     send: sendMock,
@@ -179,6 +200,7 @@ vi.mock('@talex-touch/tuffex/skeleton', () => ({
   TxSkeleton: { template: '<div data-testid="tab-skeleton" />' }
 }))
 
+import { resetShellWorkspaceTabsForTests } from '~/modules/layout/useShellWorkspaceTabs'
 import BrowserTabStrip from './BrowserTabStrip.vue'
 
 const DIR = dirname(fileURLToPath(import.meta.url))
@@ -192,7 +214,10 @@ function extractSfcCss(relativeFile: string): string {
 
 describe('BrowserTabStrip layout, drag regions & tab actions', () => {
   beforeEach(() => {
+    resetShellWorkspaceTabsForTests()
     route.path = '/browser'
+    route.params = {}
+    mockConversations.value = []
     platformState.isMac.value = true
     platformState.platform.value = 'darwin'
     sendMock.mockClear()
@@ -288,18 +313,23 @@ describe('BrowserTabStrip layout, drag regions & tab actions', () => {
     )
   })
 
-  it('navigates to /browser before activating or creating tabs from other routes, and closes tabs in place', async () => {
-    route.path = '/home'
+  it('keeps browser tabs visible yet unselected on /store and /setting, closing in place and jumping back on click', async () => {
+    route.path = '/store'
     const wrapper = mount(BrowserTabStrip)
     await flushPromises()
 
-    // Middle-click closes background tab without leaving /home.
-    await wrapper.findAll('.BrowserTabStrip-Tab')[1]!.trigger('auxclick', { button: 1 })
+    // On /store, browser tabs remain visible but none is active.
+    const tabs = wrapper.findAll('.BrowserTabStrip-Tab')
+    expect(tabs).toHaveLength(2)
+    expect(wrapper.findAll('.BrowserTabStrip-Tab.is-active')).toHaveLength(0)
+
+    // Middle-click closes background tab without leaving /store.
+    await tabs[1]!.trigger('auxclick', { button: 1 })
     await flushPromises()
     expect(sendMock).toHaveBeenCalledWith(BrowserEvents.closeTab, { tabId: 't2' })
-    expect(route.path).toBe('/home')
+    expect(route.path).toBe('/store')
 
-    // Clicking + from /home switches to /browser and creates a tab.
+    // Clicking + from /store switches to /browser and creates a tab.
     await wrapper.find('button[aria-label="browser.addTab"]').trigger('click')
     await flushPromises()
     expect(routerPush).toHaveBeenCalledWith('/browser')
@@ -311,6 +341,84 @@ describe('BrowserTabStrip layout, drag regions & tab actions', () => {
     await activeTabButton.trigger('click')
     await flushPromises()
     expect(sendMock).not.toHaveBeenCalledWith(BrowserEvents.activateTab, expect.anything())
+  })
+
+  it('scopes top tabs by Space and conversation, isolates Spaces from Browser, and clears active state on /setting', async () => {
+    mockConversations.value = [
+      { id: 'c-todo', title: '你能看到目前 todo 吗', projectId: 'proj-talex', updatedAt: 10 },
+      { id: 'c-hello', title: '问候与待命', projectId: 'proj-talex', updatedAt: 9 },
+      { id: 'c-calc', title: '极简计算器', projectId: null, updatedAt: 8 }
+    ]
+    workspaceState = makeState(
+      [
+        { id: 't1', url: 'https://one.example/', title: 'One' },
+        {
+          id: 't-prev',
+          url: 'tuff://preview?path=%2Frepo%2FTODO.md&conversationId=c-todo',
+          title: ''
+        },
+        { id: 't-store', url: 'tuff://store', title: 'Store' },
+        { id: 't-settings', url: 'tuff://settings', title: 'Settings' }
+      ],
+      't1',
+      10
+    )
+
+    const wrapper = mount(BrowserTabStrip)
+    await flushPromises()
+
+    // Deprecated tuff://store and tuff://settings tabs are hidden and auto-closed;
+    // the preview tab belongs to proj-talex, so Browser scope only shows 'One'.
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual(['One'])
+    expect(sendMock).toHaveBeenCalledWith(BrowserEvents.closeTab, { tabId: 't-store' })
+    expect(sendMock).toHaveBeenCalledWith(BrowserEvents.closeTab, { tabId: 't-settings' })
+
+    // Opening a conversation in proj-talex switches the top strip to proj-talex tabs
+    // (showing its file preview + the opened conversation).
+    route.path = '/home/c/c-todo'
+    route.params = { id: 'c-todo' }
+    await nextTick()
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      'TODO.md',
+      '你能看到目前 todo 吗'
+    ])
+    expect(wrapper.find('.BrowserTabStrip-Tab.is-active .BrowserTabStrip-TabTitle').text()).toBe(
+      '你能看到目前 todo 吗'
+    )
+
+    // Opening a second conversation in the same Space appends its tab alongside.
+    route.path = '/home/c/c-hello'
+    route.params = { id: 'c-hello' }
+    await nextTick()
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      'TODO.md',
+      '你能看到目前 todo 吗',
+      '问候与待命'
+    ])
+
+    // Navigating to /setting preserves proj-talex tabs with NO tab highlighted.
+    route.path = '/setting'
+    route.params = {}
+    await nextTick()
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      'TODO.md',
+      '你能看到目前 todo 吗',
+      '问候与待命'
+    ])
+    expect(wrapper.findAll('.BrowserTabStrip-Tab.is-active')).toHaveLength(0)
+
+    // Clicking a conversation tab from /setting jumps straight back to that conversation.
+    await wrapper.find('[id="browser-tab-conv:c-todo"]').trigger('click')
+    await flushPromises()
+    expect(routerPush).toHaveBeenCalledWith('/home/c/c-todo')
+
+    // Switching to temporary space replaces the strip with temporary space's tabs.
+    route.path = '/home/c/c-calc'
+    route.params = { id: 'c-calc' }
+    await nextTick()
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      '极简计算器'
+    ])
   })
 
   it('converts vertical wheel deltas into horizontal tablist scroll when overflowing', async () => {
@@ -379,13 +487,15 @@ describe('BrowserTabStrip layout, drag regions & tab actions', () => {
       '1'
     ])
 
-    // Open + add-tab dropdown and choose Settings (`tuff://settings`).
+    // Open + add-tab dropdown: store/settings are gone; New Tab works cleanly.
     await wrapper.find('[data-testid="browser-add-tab-menu-trigger"]').trigger('click')
     await nextTick()
     expect(wrapper.find('[data-testid="add-tab-dropdown-menu"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="browser-add-menu-store"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="browser-add-menu-setting"]').exists()).toBe(false)
 
-    await wrapper.find('[data-testid="browser-add-menu-setting"]').trigger('click')
+    await wrapper.find('[data-testid="browser-add-menu-new-tab"]').trigger('click')
     await flushPromises()
-    expect(sendMock).toHaveBeenCalledWith(BrowserEvents.createTab, { input: 'tuff://settings' })
+    expect(sendMock).toHaveBeenCalledWith(BrowserEvents.createTab, {})
   })
 })

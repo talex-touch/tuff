@@ -1650,8 +1650,10 @@
   "browser": {
     "label": "浏览器",
     "tabs": "网页标签",
+    "spaceTabs": "空间标签",
     "newTab": "起始页",
     "addTab": "新建标签页",
+    "addSpaceWebTab": "新建网页标签页",
     "addTabMenu": "新建标签页选项",
     "addTabQuickOpen": "收藏与最近访问",
     "closeTab": "关闭标签页：{title}",

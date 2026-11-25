@@ -19,7 +19,7 @@ import {
 } from 'vue'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   formatSiteHost,
   localIcon,
@@ -32,6 +32,12 @@ import {
   parseBrowserFilePreviewUrl
 } from '~/modules/browser-workspace/preview-url'
 import { useBrowserWorkspace } from '~/modules/browser-workspace/useBrowserWorkspace'
+import {
+  removeSpaceTab,
+  resolveBrowserTabSpaceKey,
+  spaceBrowserTabId
+} from '~/modules/layout/useShellWorkspaceTabs'
+import { SETTING_CATEGORIES } from '~/modules/settings/categories'
 import WorkspaceFileViewer from '~/components/preview/WorkspaceFileViewer.vue'
 import {
   isOpenableBrowserUrl,
@@ -51,6 +57,7 @@ import { describeBrowserError } from './browser-errors'
 
 const { t, locale } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const { isMac } = useRendererPlatform()
 const sdk = createBrowserSdk(useTuffTransport())
 const {
@@ -314,30 +321,31 @@ watch(
   }
 )
 
+function resolveLegacySettingRedirectPath(rawCategory: unknown): string {
+  const candidate = Array.isArray(rawCategory) ? rawCategory[0] : rawCategory
+  if (typeof candidate !== 'string') return '/setting'
+  const normalized = candidate.trim().toLowerCase()
+  if (!normalized) return '/setting'
+
+  for (const cat of SETTING_CATEGORIES) {
+    if (cat.key === normalized) return cat.path
+    for (const child of cat.children ?? []) {
+      if (normalized === `${cat.key}-${child.key}` || normalized === `${cat.key}/${child.key}`) {
+        return child.path
+      }
+    }
+  }
+  return '/setting'
+}
+
 watch(
   () => [route.query.category, route.query.tab] as const,
   async ([category, tab]) => {
     if (route.path !== '/browser') return
     if (category) {
-      const s = state.value ?? (await sdk.getState().catch(() => null))
-      if (s) {
-        const existing = s.tabs.find((t) => t.url.startsWith('tuff://setting'))
-        if (existing) {
-          if (existing.id !== s.activeTabId) await sdk.activateTab(existing.id)
-        } else {
-          await sdk.createTab('tuff://settings')
-        }
-      }
+      await router.replace(resolveLegacySettingRedirectPath(category))
     } else if (tab === 'store') {
-      const s = state.value ?? (await sdk.getState().catch(() => null))
-      if (s) {
-        const existing = s.tabs.find((t) => t.url.startsWith('tuff://store'))
-        if (existing) {
-          if (existing.id !== s.activeTabId) await sdk.activateTab(existing.id)
-        } else {
-          await sdk.createTab('tuff://store')
-        }
-      }
+      await router.replace('/store')
     }
   },
   { immediate: true }
@@ -627,7 +635,21 @@ function onKeydown(event: KeyboardEvent): void {
   ) {
     event.preventDefault()
     panel.value = null
-    void command(() => sdk.closeTab(activeTab.value!.id))
+    const closingTab = activeTab.value
+    const boundSpace = resolveBrowserTabSpaceKey(closingTab)
+    void command(() => sdk.closeTab(closingTab.id)).then((accepted) => {
+      if (!accepted || !boundSpace) return
+      const { nextTab } = removeSpaceTab(boundSpace, spaceBrowserTabId(closingTab.id))
+      if (nextTab?.kind === 'conversation') {
+        void router.push(`/home/c/${nextTab.conversationId}`)
+      } else if (nextTab?.kind === 'draft') {
+        void router.push('/home')
+      } else if (nextTab?.kind === 'browser') {
+        void command(() => sdk.activateTab(nextTab.browserTabId))
+      } else {
+        void router.push('/home')
+      }
+    })
   } else if (modifier && (event.code === 'KeyR' || key === 'r') && activeTab.value?.url) {
     event.preventDefault()
     if (isPreviewTab.value) {
