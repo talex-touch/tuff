@@ -77,6 +77,7 @@ vi.mock('@talex-touch/utils/transport/sdk/domains/workspace-git', () => ({
   createWorkspaceGitSdk: () => gitMocks
 }))
 
+import { buildBranchTree } from './git-branch-tree'
 import HomeSideGitPane from './HomeSideGitPane.vue'
 
 function sampleStatus(overrides: Partial<WorkspaceGitStatusResult> = {}): WorkspaceGitStatusResult {
@@ -542,5 +543,176 @@ describe('HomeSideGitPane', () => {
     })
     await flushPromises()
     expect(wrapper.find('.HomeSideGit-EmptyTitle').text()).toBe('home.git.notRepo')
+  })
+
+  it('groups slash-containing remote names cleanly, passes fullRef on preview, refreshes preview commits when shortOid changes, and preserves editors on partial failures', async () => {
+    const slashTree = buildBranchTree(
+      [
+        {
+          name: 'team/upstream/feat/demo',
+          fullRef: 'refs/remotes/team/upstream/feat/demo',
+          remoteName: 'team/upstream',
+          current: false,
+          isRemote: true,
+          shortOid: '111aaaa'
+        }
+      ],
+      'remote',
+      undefined,
+      ['team/upstream'],
+      ['team/upstream']
+    )
+    expect(slashTree).toHaveLength(1)
+    expect(slashTree[0]).toMatchObject({
+      kind: 'folder',
+      label: 'team/upstream',
+      remoteName: 'team/upstream',
+      depth: 0
+    })
+
+    gitMocks.branches
+      .mockResolvedValueOnce({
+        current: 'task/feat/git',
+        detached: false,
+        branches: [
+          {
+            name: 'task/feat/git',
+            fullRef: 'refs/heads/task/feat/git',
+            current: true,
+            isRemote: false,
+            shortOid: 'abc1234'
+          },
+          {
+            name: 'main',
+            fullRef: 'refs/heads/main',
+            current: false,
+            isRemote: false,
+            shortOid: 'def5678'
+          }
+        ],
+        remotes: [
+          {
+            name: 'empty-remote',
+            fetchUrl: 'https://github.com/org/empty.git',
+            pushUrl: 'https://github.com/org/empty.git',
+            host: 'github.com',
+            provider: 'github',
+            displayLabel: 'GitHub'
+          }
+        ]
+      })
+      .mockResolvedValueOnce({
+        current: 'task/feat/git',
+        detached: false,
+        branches: [
+          {
+            name: 'task/feat/git',
+            fullRef: 'refs/heads/task/feat/git',
+            current: true,
+            isRemote: false,
+            shortOid: 'abc1234'
+          },
+          {
+            name: 'main',
+            fullRef: 'refs/heads/main',
+            current: false,
+            isRemote: false,
+            shortOid: '999ffff'
+          }
+        ],
+        remotesError: 'git remote failed'
+      })
+
+    const wrapper = mount(HomeSideGitPane, {
+      props: { cwd: '/repo', conversationId: 'c-1', active: true }
+    })
+    await flushPromises()
+
+    await wrapper.findAll('[role="tab"]')[1]!.trigger('click')
+    await flushPromises()
+
+    // Branch trees use semantic lists rather than incomplete role="tree" widgets.
+    expect(wrapper.find('[role="tree"]').exists()).toBe(false)
+    expect(wrapper.find('[role="treeitem"]').exists()).toBe(false)
+
+    // Keyboard-accessible remote actions button works even on a remote with 0 branches.
+    const emptyActionsBtn = wrapper.find('[data-testid="git-remote-actions-empty-remote"]')
+    expect(emptyActionsBtn.exists()).toBe(true)
+    await emptyActionsBtn.trigger('click')
+    await wrapper.find('[data-testid="git-ctx-edit-remote"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="git-remote-editor"]').exists()).toBe(true)
+
+    // Previewing `main` passes canonical `fullRef` (`refs/heads/main`), and a refresh that
+    // updates `shortOid` reloads commits while a remotesError keeps the remote list intact.
+    const mainRow = wrapper
+      .findAll('.HomeSideGit-BranchRow')
+      .find((row) => row.find('.HomeSideGit-BranchRowName').text() === 'main')
+    await mainRow!.trigger('click')
+    await flushPromises()
+    expect(gitMocks.log).toHaveBeenCalledWith({
+      cwd: '/repo',
+      conversationId: 'c-1',
+      ref: 'refs/heads/main',
+      limit: 8
+    })
+
+    // Refresh branches -> `shortOid` changed from def5678 to 999ffff -> triggers second log call.
+    const refreshBtn = wrapper.find('button[aria-label="home.git.refresh"]')
+    await refreshBtn.trigger('click')
+    await flushPromises()
+    expect(gitMocks.log).toHaveBeenCalledTimes(2)
+    // Existing remote `empty-remote` is preserved despite `remotesError`.
+    expect(wrapper.find('[data-remote-root="empty-remote"]').exists()).toBe(true)
+
+    // When rename succeeds but setUpstream fails, branch editor stays open on the renamed branch.
+    gitMocks.setUpstream.mockResolvedValueOnce({ ok: false, error: 'Upstream missing' })
+    gitMocks.branches.mockResolvedValueOnce({
+      current: 'task/feat/git',
+      detached: false,
+      branches: [
+        {
+          name: 'task/feat/git',
+          fullRef: 'refs/heads/task/feat/git',
+          current: true,
+          isRemote: false,
+          shortOid: 'abc1234'
+        },
+        {
+          name: 'main-renamed',
+          fullRef: 'refs/heads/main-renamed',
+          current: false,
+          isRemote: false,
+          shortOid: '999ffff'
+        },
+        {
+          name: 'origin/main',
+          fullRef: 'refs/remotes/origin/main',
+          current: false,
+          isRemote: true,
+          shortOid: '999ffff'
+        }
+      ],
+      remotes: []
+    })
+    await mainRow!.trigger('contextmenu')
+    await wrapper.find('[data-testid="git-ctx-edit-branch"]').trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-testid="git-edit-branch-name"]').setValue('main-renamed')
+    // Manually include option in upstream select or use existing option after next branch load;
+    // set value via input dispatch to simulate selecting an upstream before submit.
+    const selectEl = wrapper.find('[data-testid="git-edit-branch-upstream"]')
+    const option = document.createElement('option')
+    option.value = 'origin/main'
+    option.text = 'origin/main'
+    selectEl.element.appendChild(option)
+    await selectEl.setValue('origin/main')
+    await wrapper.find('[data-testid="git-branch-editor"] form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="git-branch-editor"]').exists()).toBe(true)
+    expect(
+      (wrapper.find('[data-testid="git-edit-branch-upstream"]').element as HTMLSelectElement).value
+    ).toBe('origin/main')
   })
 })

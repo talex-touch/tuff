@@ -16,6 +16,7 @@ export interface GitBranchFolderNode {
   id: string
   label: string
   fullPath: string
+  remoteName?: string
   depth: number
   branchCount: number
   hasCurrent: boolean
@@ -41,6 +42,7 @@ export type GitBranchVisibleRow =
       id: string
       label: string
       fullPath: string
+      remoteName?: string
       depth: number
       branchCount: number
       hasCurrent: boolean
@@ -55,13 +57,44 @@ const FIX_SEGMENTS = new Set(['fix', 'hotfix', 'bugfix', 'patch'])
 const RELEASE_SEGMENTS = new Set(['release', 'releases', 'rel'])
 const CHORE_SEGMENTS = new Set(['dependabot', 'chore', 'docs', 'ci', 'build', 'refactor', 'test'])
 
-export function classifyPathTone(pathText: string, isRemote = false): BranchSemanticTone {
-  const rawSegments = pathText
+export function resolveRemoteNameForBranch(
+  branch: WorkspaceGitBranchEntry,
+  knownRemoteNames: readonly string[] = []
+): string | undefined {
+  if (!branch.isRemote) return undefined
+  const explicit = branch.remoteName?.trim()
+  if (explicit && (branch.name === explicit || branch.name.startsWith(`${explicit}/`))) {
+    return explicit
+  }
+  const sorted = [...knownRemoteNames]
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+  for (const remote of sorted) {
+    if (branch.name.startsWith(`${remote}/`)) {
+      return remote
+    }
+  }
+  const slash = branch.name.indexOf('/')
+  return slash > 0 ? branch.name.slice(0, slash) : undefined
+}
+
+export function classifyPathTone(
+  pathText: string,
+  isRemote = false,
+  remotePrefix?: string
+): BranchSemanticTone {
+  const effectivePath =
+    isRemote && remotePrefix && pathText.startsWith(`${remotePrefix}/`)
+      ? pathText.slice(remotePrefix.length + 1)
+      : pathText
+  const rawSegments = effectivePath
     .toLowerCase()
     .split('/')
     .map((segment) => segment.trim())
     .filter(Boolean)
-  const segments = isRemote && rawSegments.length > 1 ? rawSegments.slice(1) : rawSegments
+  const segments =
+    isRemote && !remotePrefix && rawSegments.length > 1 ? rawSegments.slice(1) : rawSegments
   const leaf = segments[segments.length - 1] ?? ''
 
   if (MAIN_BRANCH_NAMES.has(leaf)) return 'main'
@@ -76,24 +109,31 @@ export function classifyPathTone(pathText: string, isRemote = false): BranchSema
 
 export function classifyBranchTone(branch: WorkspaceGitBranchEntry): BranchSemanticTone {
   if (branch.current) return 'current'
-  return classifyPathTone(branch.name, branch.isRemote)
+  return classifyPathTone(branch.name, branch.isRemote, branch.remoteName)
 }
 
 interface MutableFolder {
   id: string
   label: string
   fullPath: string
+  remoteName?: string
   folders: Map<string, MutableFolder>
   leaves: WorkspaceGitBranchEntry[]
   hasCurrent: boolean
   branchCount: number
 }
 
-function createMutableFolder(scope: string, label: string, fullPath: string): MutableFolder {
+function createMutableFolder(
+  scope: string,
+  label: string,
+  fullPath: string,
+  remoteName?: string
+): MutableFolder {
   return {
     id: `${scope}:${fullPath}`,
     label,
     fullPath,
+    ...(remoteName ? { remoteName } : {}),
     folders: new Map(),
     leaves: [],
     hasCurrent: false,
@@ -151,10 +191,13 @@ function finalizeFolder(
     id: `${scope}:folder:${fullPath}`,
     label,
     fullPath,
+    ...(target.remoteName ? { remoteName: target.remoteName } : {}),
     depth,
     branchCount: target.branchCount,
     hasCurrent: target.hasCurrent,
-    tone: target.hasCurrent ? 'current' : classifyPathTone(fullPath, scope === 'remote'),
+    tone: target.hasCurrent
+      ? 'current'
+      : classifyPathTone(fullPath, scope === 'remote', target.remoteName),
     children
   }
 }
@@ -163,26 +206,81 @@ export function buildBranchTree(
   branches: WorkspaceGitBranchEntry[],
   scope: 'local' | 'remote',
   currentUpstream?: string,
-  extraRemoteNames: string[] = []
+  extraRemoteNames: string[] = [],
+  allRemoteNames: readonly string[] = extraRemoteNames
 ): GitBranchTreeNode[] {
   const rootFolders = new Map<string, MutableFolder>()
   const rootLeaves: WorkspaceGitBranchEntry[] = []
+  const knownRemoteNames =
+    scope === 'remote'
+      ? Array.from(
+          new Set(
+            [...extraRemoteNames, ...allRemoteNames].map((name) => name.trim()).filter(Boolean)
+          )
+        )
+      : []
 
   if (scope === 'remote') {
     for (const remoteName of extraRemoteNames) {
       const clean = remoteName.trim()
       if (clean && !rootFolders.has(clean)) {
-        rootFolders.set(clean, createMutableFolder(scope, clean, clean))
+        rootFolders.set(clean, createMutableFolder(scope, clean, clean, clean))
       }
     }
   }
 
   for (const branch of branches) {
-    const segments = branch.name.split('/').filter(Boolean)
     const matchesCurrent =
       branch.current ||
       (scope === 'remote' && Boolean(currentUpstream && branch.name === currentUpstream))
 
+    if (scope === 'remote') {
+      const remoteRoot = resolveRemoteNameForBranch(branch, knownRemoteNames)
+      if (!remoteRoot || branch.name === remoteRoot || !branch.name.startsWith(`${remoteRoot}/`)) {
+        rootLeaves.push(branch)
+        continue
+      }
+
+      const subSegments = branch.name
+        .slice(remoteRoot.length + 1)
+        .split('/')
+        .filter(Boolean)
+      if (subSegments.length === 0) {
+        rootLeaves.push(branch)
+        continue
+      }
+
+      let rootFolder = rootFolders.get(remoteRoot)
+      if (!rootFolder) {
+        rootFolder = createMutableFolder(scope, remoteRoot, remoteRoot, remoteRoot)
+        rootFolders.set(remoteRoot, rootFolder)
+      }
+      rootFolder.branchCount += 1
+      if (matchesCurrent) rootFolder.hasCurrent = true
+
+      let currentMap = rootFolder.folders
+      let pathAcc = remoteRoot
+      let parentFolder: MutableFolder = rootFolder
+
+      for (let i = 0; i < subSegments.length - 1; i += 1) {
+        const seg = subSegments[i]!
+        pathAcc = `${pathAcc}/${seg}`
+        let folder = currentMap.get(seg)
+        if (!folder) {
+          folder = createMutableFolder(scope, seg, pathAcc, remoteRoot)
+          currentMap.set(seg, folder)
+        }
+        folder.branchCount += 1
+        if (matchesCurrent) folder.hasCurrent = true
+        parentFolder = folder
+        currentMap = folder.folders
+      }
+
+      parentFolder.leaves.push(branch)
+      continue
+    }
+
+    const segments = branch.name.split('/').filter(Boolean)
     if (segments.length <= 1) {
       rootLeaves.push(branch)
       continue
@@ -291,6 +389,7 @@ export function flattenBranchTree(
           id: item.id,
           label: item.label,
           fullPath: item.fullPath,
+          ...(item.remoteName ? { remoteName: item.remoteName } : {}),
           depth: item.depth,
           branchCount: item.branchCount,
           hasCurrent: item.hasCurrent,

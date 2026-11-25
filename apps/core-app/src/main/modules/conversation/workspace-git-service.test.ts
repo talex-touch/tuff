@@ -28,6 +28,7 @@ import {
   isValidRemoteName,
   listWorkspaceGitBranches,
   parseGitRemoteUrl,
+  parseRemotesOutput,
   pullWorkspaceGit,
   pushWorkspaceGit,
   readWorkspaceGitDiff,
@@ -142,13 +143,16 @@ describe('workspace-git-service', () => {
     expect(logAfter.commits).toHaveLength(1)
     expect(logAfter.commits[0]!.subject).toBe('Initial commit')
     expect(logAfter.commits[0]!.authorEmail).toBe('test@example.com')
-    expect(logAfter.commits[0]!.avatarUrl).toMatch(
-      /^https:\/\/www\.gravatar\.com\/avatar\/[a-f0-9]{64}\?s=64&d=404$/
-    )
+    // Personal emails never hit Gravatar by default; clients render initials fallback.
+    expect(logAfter.commits[0]!.avatarUrl).toBeUndefined()
 
-    // Standard-protocol avatar URL resolution: Gravatar SHA-256 + GitHub noreply addresses.
-    expect(resolveCommitAuthorAvatarUrl('  Test@Example.com ')).toBe(
-      resolveCommitAuthorAvatarUrl('test@example.com')
+    // Privacy-safe avatar resolution: GitHub noreply works by default; Gravatar requires explicit opt-in.
+    expect(resolveCommitAuthorAvatarUrl('test@example.com')).toBeUndefined()
+    expect(resolveCommitAuthorAvatarUrl('  Test@Example.com ', { allowGravatar: true })).toBe(
+      resolveCommitAuthorAvatarUrl('test@example.com', { allowGravatar: true })
+    )
+    expect(resolveCommitAuthorAvatarUrl('test@example.com', { allowGravatar: true })).toMatch(
+      /^https:\/\/www\.gravatar\.com\/avatar\/[a-f0-9]{64}\?s=64&d=404$/
     )
     expect(resolveCommitAuthorAvatarUrl('424242+TalexDreamSoul@users.noreply.github.com')).toBe(
       'https://avatars.githubusercontent.com/u/424242?s=64'
@@ -454,5 +458,95 @@ describe('workspace-git-service', () => {
     expect(prunedStale.ok).toBe(true)
     const afterPrune = await listWorkspaceGitBranches({ cwd: repo })
     expect(afterPrune.branches.some((b) => b.name === 'workmac/agent')).toBe(false)
+  }, 15_000)
+
+  it('redacts non-HTTP credentials, handles partial-clone remotes, tag/branch collisions, pushurl unset, and safe stale ref pruning', async () => {
+    // Redact passwords across FTP/SSH/SCP protocols while leaving username-only SSH usable.
+    expect(parseGitRemoteUrl('ftp://alice:s3cr3t@files.example.com/repo.git')).toMatchObject({
+      safeUrl: 'ftp://files.example.com/repo.git',
+      hasCredentials: true
+    })
+    expect(parseGitRemoteUrl('ssh://git:s3cr3t@g.ktvsky.com:2222/team/tuff.git')).toMatchObject({
+      safeUrl: 'ssh://git@g.ktvsky.com:2222/team/tuff.git',
+      hasCredentials: true
+    })
+    expect(parseGitRemoteUrl('ssh://git@g.ktvsky.com:2222/team/tuff.git')).toMatchObject({
+      safeUrl: 'ssh://git@g.ktvsky.com:2222/team/tuff.git',
+      hasCredentials: false
+    })
+    expect(parseGitRemoteUrl('git:s3cr3t@github.com:talex-touch/tuff.git')).toMatchObject({
+      safeUrl: 'git@github.com:talex-touch/tuff.git',
+      hasCredentials: true
+    })
+
+    // Partial-clone filter suffix in `git remote -v` must not corrupt fetchUrl.
+    const parsedPartial = parseRemotesOutput(
+      [
+        'origin\thttps://github.com/talex-touch/tuff.git (fetch) [blob:none]',
+        'origin\thttps://github.com/talex-touch/tuff.git (push)'
+      ].join('\n')
+    )
+    expect(parsedPartial).toHaveLength(1)
+    expect(parsedPartial[0]!.fetchUrl).toBe('https://github.com/talex-touch/tuff.git')
+    expect(parsedPartial[0]!.pushUrl).toBe('https://github.com/talex-touch/tuff.git')
+
+    const bare = await makeTempDir('tuff-git-edge-bare-')
+    const barePush = await makeTempDir('tuff-git-edge-push-')
+    const repo = await makeTempDir('tuff-git-edge-repo-')
+    await git(bare, ['init', '--bare', '-b', 'main'])
+    await git(barePush, ['init', '--bare', '-b', 'main'])
+    await initTempRepo(repo)
+    await fs.writeFile(path.join(repo, 'index.txt'), 'init\n', 'utf8')
+    await stageWorkspaceGitFiles({ cwd: repo, all: true })
+    await commitWorkspaceGitChanges({ cwd: repo, message: 'Initial' })
+
+    // Create a tag with the exact same name as local branch `main`; listWorkspaceGitBranches
+    // must still emit canonical name `main` + `fullRef: 'refs/heads/main'` (never `heads/main`).
+    await git(repo, ['tag', 'main'])
+    const branchList = await listWorkspaceGitBranches({ cwd: repo })
+    const mainEntry = branchList.branches.find(
+      (b) => !b.isRemote && b.fullRef === 'refs/heads/main'
+    )
+    expect(mainEntry?.name).toBe('main')
+    expect(mainEntry?.fullRef).toBe('refs/heads/main')
+
+    // Clearing pushUrl with `""` removes `remote.<name>.pushurl` rather than writing fetchUrl.
+    await saveWorkspaceGitRemote({
+      cwd: repo,
+      mode: 'add',
+      name: 'origin',
+      fetchUrl: bare,
+      pushUrl: barePush
+    })
+    const beforeUnset = (await git(repo, ['config', '--get', 'remote.origin.pushurl'])).trim()
+    expect(beforeUnset).toBe(barePush)
+    const clearedPush = await saveWorkspaceGitRemote({
+      cwd: repo,
+      mode: 'edit',
+      originalName: 'origin',
+      name: 'origin',
+      fetchUrl: bare,
+      pushUrl: ''
+    })
+    expect(clearedPush.ok).toBe(true)
+    await expect(git(repo, ['config', '--get', 'remote.origin.pushurl'])).rejects.toThrow()
+
+    // Deleting a stale symbolic ref must NOT follow the symref and delete the local target branch.
+    await git(repo, ['symbolic-ref', 'refs/remotes/ghost/HEAD', 'refs/heads/main'])
+    const prunedSymref = await removeWorkspaceGitRemote({ cwd: repo, name: 'ghost' })
+    expect(prunedSymref.ok).toBe(true)
+    const mainStillExists = (await git(repo, ['show-ref', '--verify', 'refs/heads/main'])).trim()
+    expect(mainStillExists).toContain('refs/heads/main')
+
+    // Stale-ref pruning must NOT delete refs belonging to a configured remote sharing a prefix (`foo/bar`).
+    const headOid = (await git(repo, ['rev-parse', 'HEAD'])).trim()
+    await git(repo, ['remote', 'add', 'foo/bar', bare])
+    await git(repo, ['update-ref', 'refs/remotes/foo/bar/main', headOid])
+    const removePrefix = await removeWorkspaceGitRemote({ cwd: repo, name: 'foo' })
+    expect(removePrefix.ok).toBe(false)
+    const protectedRef = (
+      await git(repo, ['show-ref', '--verify', 'refs/remotes/foo/bar/main'])
+    ).trim()
+    expect(protectedRef).toContain('refs/remotes/foo/bar/main')
   }, 15_000)
 })

@@ -72,6 +72,10 @@ export interface WorkspaceGitDiffResult {
 
 export interface WorkspaceGitBranchEntry {
   name: string
+  /** Canonical Git ref name (e.g. `refs/heads/main`, `refs/remotes/origin/main`). */
+  fullRef?: string
+  /** Matched configured remote name for remote-tracking branches (supports remotes containing `/`). */
+  remoteName?: string
   current: boolean
   isRemote: boolean
   upstream?: string
@@ -106,6 +110,8 @@ export interface WorkspaceGitBranchesResult {
   detached: boolean
   branches: WorkspaceGitBranchEntry[]
   remotes?: WorkspaceGitRemoteEntry[]
+  /** Present when remote enumeration failed so callers preserve existing remote state. */
+  remotesError?: string
   error?: string
 }
 

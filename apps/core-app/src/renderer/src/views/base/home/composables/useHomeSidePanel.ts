@@ -91,6 +91,17 @@ function isWorkspaceKind(value: unknown): value is SidePanelWorkspaceKind {
   return typeof value === 'string' && WORKSPACE_KINDS.has(value as SidePanelWorkspaceKind)
 }
 
+function hasUrlCredentials(rawUrl: string): boolean {
+  const trimmed = rawUrl.trim()
+  if (!trimmed) return false
+  try {
+    const parsed = new URL(trimmed)
+    return Boolean(parsed.username || parsed.password)
+  } catch {
+    return false
+  }
+}
+
 interface StoredSidePanelState {
   panelOpen: boolean
   activeTabId: string | null
@@ -126,6 +137,7 @@ function sanitizeStoredTab(raw: unknown): SidePanelTab | null {
 
   if (kind === 'web') {
     const url = typeof item.url === 'string' ? item.url.trim() : ''
+    if (url && hasUrlCredentials(url)) return null
     const favicon = typeof item.favicon === 'string' ? item.favicon : null
     return {
       id,
@@ -183,7 +195,7 @@ function writeStoredPanelState(state: StoredSidePanelState): void {
   if (!hasWindow()) return
   try {
     const serializableTabs = state.tabs
-      .filter((tab) => tab.kind !== 'code')
+      .filter((tab) => tab.kind !== 'code' && !(tab.kind === 'web' && hasUrlCredentials(tab.url)))
       .slice(0, MAX_PERSISTED_TABS)
     const activeTabId =
       state.activeTabId && serializableTabs.some((tab) => tab.id === state.activeTabId)
@@ -233,7 +245,7 @@ function readStoredRecents(): SidePanelRecentItem[] {
         recents.push({ id: key, kind: 'file', title, path: filePath, displayPath, updatedAt })
       } else if (item.kind === 'web') {
         const url = typeof item.url === 'string' ? item.url.trim() : ''
-        if (!url) continue
+        if (!url || hasUrlCredentials(url)) continue
         const key = `web:${url}`
         if (seen.has(key)) continue
         seen.add(key)
@@ -254,10 +266,10 @@ function readStoredRecents(): SidePanelRecentItem[] {
 function writeStoredRecents(items: SidePanelRecentItem[]): void {
   if (!hasWindow()) return
   try {
-    window.localStorage.setItem(
-      RECENTS_STORAGE_KEY,
-      JSON.stringify(items.slice(0, MAX_RECENT_ITEMS))
-    )
+    const safeItems = items
+      .filter((item) => !(item.kind === 'web' && hasUrlCredentials(item.url)))
+      .slice(0, MAX_RECENT_ITEMS)
+    window.localStorage.setItem(RECENTS_STORAGE_KEY, JSON.stringify(safeItems))
   } catch {
     // ignore storage failures
   }
@@ -371,7 +383,7 @@ export function useHomeSidePanel(
 
   function recordRecentWeb(url: string, title?: string): void {
     const cleanUrl = url.trim()
-    if (!cleanUrl) return
+    if (!cleanUrl || hasUrlCredentials(cleanUrl)) return
     const entry: SidePanelRecentItem = {
       id: `web:${cleanUrl}`,
       kind: 'web',

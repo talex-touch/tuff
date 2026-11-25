@@ -525,13 +525,16 @@ export function parseGitRemoteUrl(rawUrl: string): {
     try {
       const parsed = new URL(trimmed)
       const protocol = parsed.protocol.toLowerCase()
-      const hasCredentials =
-        (protocol === 'http:' || protocol === 'https:') &&
-        Boolean(parsed.username || parsed.password)
+      const isUserInfoSensitiveScheme =
+        protocol === 'http:' || protocol === 'https:' || protocol === 'ftp:' || protocol === 'ftps:'
+      const hasPassword = Boolean(parsed.password)
+      const hasCredentials = hasPassword || (isUserInfoSensitiveScheme && Boolean(parsed.username))
       let safeUrl = trimmed
       if (hasCredentials) {
         const sanitized = new URL(trimmed)
-        sanitized.username = ''
+        if (isUserInfoSensitiveScheme) {
+          sanitized.username = ''
+        }
         sanitized.password = ''
         safeUrl = sanitized.toString()
       }
@@ -558,21 +561,28 @@ export function parseGitRemoteUrl(rawUrl: string): {
   // SCP-like SSH remote: `[user@]host:path/to/repo.git`
   const scpMatch = /^(?:([^@/\s]+)@)?([^:/\s]+):(.+)$/.exec(trimmed)
   if (scpMatch?.[2] && scpMatch[3]) {
+    const rawUser = scpMatch[1] ?? ''
+    const colonIdx = rawUser.indexOf(':')
+    const hasCredentials = colonIdx >= 0
+    const safeUser = hasCredentials ? rawUser.slice(0, colonIdx) : rawUser
+    const safeUrl = hasCredentials
+      ? `${safeUser ? `${safeUser}@` : ''}${scpMatch[2]}:${scpMatch[3]}`
+      : trimmed
     const meta = classifyRemoteHost(scpMatch[2], scpMatch[3])
     return {
-      safeUrl: trimmed,
+      safeUrl,
       host: meta.host,
       provider: meta.provider,
       displayLabel: meta.displayLabel,
       ...(meta.webUrl ? { webUrl: meta.webUrl } : {}),
-      hasCredentials: false
+      hasCredentials
     }
   }
 
   return { safeUrl: trimmed, provider: 'custom', hasCredentials: false }
 }
 
-function parseRemotesOutput(stdout: string): WorkspaceGitRemoteEntry[] {
+export function parseRemotesOutput(stdout: string): WorkspaceGitRemoteEntry[] {
   const map = new Map<string, { fetchUrl: string; pushUrl: string }>()
   for (const line of stdout.split('\n')) {
     const trimmed = line.trim()
@@ -583,13 +593,15 @@ function parseRemotesOutput(stdout: string): WorkspaceGitRemoteEntry[] {
     const rest = trimmed.slice(tabIdx + 1).trim()
     if (!name || !rest) continue
 
-    let url = rest
+    // Strip trailing partial-clone filter annotations (e.g. ` (fetch) [blob:none]`).
+    const withoutFilter = rest.replace(/\s+\[[^\]]+\]$/, '').trim()
+    let url = withoutFilter
     let kind: 'fetch' | 'push' | 'unknown' = 'unknown'
-    if (rest.endsWith(' (fetch)')) {
-      url = rest.slice(0, -' (fetch)'.length).trim()
+    if (withoutFilter.endsWith(' (fetch)')) {
+      url = withoutFilter.slice(0, -' (fetch)'.length).trim()
       kind = 'fetch'
-    } else if (rest.endsWith(' (push)')) {
-      url = rest.slice(0, -' (push)'.length).trim()
+    } else if (withoutFilter.endsWith(' (push)')) {
+      url = withoutFilter.slice(0, -' (push)'.length).trim()
       kind = 'push'
     }
 
@@ -625,11 +637,14 @@ function parseRemotesOutput(stdout: string): WorkspaceGitRemoteEntry[] {
 }
 
 /**
- * Resolve a commit author's avatar URL using standard protocols:
- * - GitHub noreply addresses -> GitHub avatar CDN
- * - Standard emails -> Gravatar SHA-256 (`d=404` so clients fall back cleanly to initials)
+ * Resolve a commit author's avatar URL without leaking personal emails by default:
+ * - GitHub noreply addresses -> GitHub avatar CDN (already public anonymous IDs)
+ * - Standard emails -> `undefined` by default (initials fallback); Gravatar SHA-256 requires explicit opt-in
  */
-export function resolveCommitAuthorAvatarUrl(email?: string): string | undefined {
+export function resolveCommitAuthorAvatarUrl(
+  email?: string,
+  options: { allowGravatar?: boolean } = {}
+): string | undefined {
   const normalized = (email ?? '').trim().toLowerCase()
   if (!normalized || !normalized.includes('@')) return undefined
 
@@ -643,6 +658,10 @@ export function resolveCommitAuthorAvatarUrl(email?: string): string | undefined
   )
   if (ghUserMatch?.[1]) {
     return `https://github.com/${ghUserMatch[1]}.png?size=64`
+  }
+
+  if (!options.allowGravatar) {
+    return undefined
   }
 
   const sha256 = createHash('sha256').update(normalized).digest('hex')
@@ -1014,7 +1033,7 @@ export async function listWorkspaceGitBranches(
     runGit(ctx.repoRoot, [
       'for-each-ref',
       '--sort=-committerdate',
-      '--format=%(HEAD)%1f%(refname:short)%1f%(refname)%1f%(upstream:short)%1f%(objectname:short)%1f%(contents:subject)%1f%(authorname)%1f%(committerdate:relative)',
+      '--format=%(HEAD)%1f%(refname)%1f%(upstream)%1f%(objectname:short)%1f%(contents:subject)%1f%(authorname)%1f%(committerdate:relative)',
       'refs/heads',
       'refs/remotes'
     ]),
@@ -1041,19 +1060,52 @@ export async function listWorkspaceGitBranches(
     }
   }
 
+  const remotesLoaded = remotesRes.exitCode === 0
+  const remotes = remotesLoaded ? parseRemotesOutput(remotesRes.stdout) : undefined
+  const remotesError = remotesLoaded
+    ? undefined
+    : remotesRes.stderr.trim() || 'Failed to list remotes'
+  const sortedRemoteNames = [...(remotes ?? []).map((item) => item.name)].sort(
+    (a, b) => b.length - a.length
+  )
+
   const localBranches: WorkspaceGitBranchEntry[] = []
   const remoteBranches: WorkspaceGitBranchEntry[] = []
 
   for (const line of refsRes.stdout.split('\n')) {
     if (!line.trim()) continue
-    const [headMark, shortName, fullRef, upstream, shortOid, subject, author, relativeDate] =
+    const [headMark, fullRef, rawUpstream, shortOid, subject, author, relativeDate] =
       line.split('\x1f')
-    if (!shortName || !fullRef) continue
-    if (fullRef.startsWith('refs/remotes/') && fullRef.endsWith('/HEAD')) continue
+    if (!fullRef) continue
 
-    const isRemote = fullRef.startsWith('refs/remotes/')
+    let isRemote = false
+    let name = ''
+    if (fullRef.startsWith('refs/heads/')) {
+      name = fullRef.slice('refs/heads/'.length)
+    } else if (fullRef.startsWith('refs/remotes/')) {
+      if (fullRef.endsWith('/HEAD')) continue
+      isRemote = true
+      name = fullRef.slice('refs/remotes/'.length)
+    } else {
+      continue
+    }
+    if (!name) continue
+
+    const upstream = rawUpstream
+      ? rawUpstream.startsWith('refs/remotes/')
+        ? rawUpstream.slice('refs/remotes/'.length)
+        : rawUpstream.startsWith('refs/heads/')
+          ? rawUpstream.slice('refs/heads/'.length)
+          : rawUpstream
+      : undefined
+    const matchedRemoteName = isRemote
+      ? sortedRemoteNames.find((remote) => name.startsWith(`${remote}/`))
+      : undefined
+
     const entry: WorkspaceGitBranchEntry = {
-      name: shortName,
+      name,
+      fullRef,
+      ...(matchedRemoteName ? { remoteName: matchedRemoteName } : {}),
       current: headMark === '*',
       isRemote,
       ...(upstream ? { upstream } : {}),
@@ -1072,13 +1124,12 @@ export async function listWorkspaceGitBranches(
     }
   }
 
-  const remotes = remotesRes.exitCode === 0 ? parseRemotesOutput(remotesRes.stdout) : []
-
   return {
     current: status.branch,
     detached: status.detached,
     branches: [...localBranches, ...remoteBranches],
-    remotes
+    ...(remotes ? { remotes } : {}),
+    ...(remotesError ? { remotesError } : {})
   }
 }
 
@@ -1559,6 +1610,7 @@ export async function saveWorkspaceGitRemote(
         rawPushUrl
       ])
       if (pushRes.exitCode !== 0) {
+        await runGit(ctx.repoRoot, ['remote', 'remove', '--', name])
         return { ok: false, error: pushRes.stderr.trim() || 'Failed to set remote push URL' }
       }
     }
@@ -1571,58 +1623,141 @@ export async function saveWorkspaceGitRemote(
     return { ok: false, error: 'Invalid original remote name' }
   }
 
-  // Read existing URLs before mutating so renaming a credentialed remote does not drop credentials
-  // if the user left the redacted URL untouched.
-  const existingFetchRes = await runGit(ctx.repoRoot, ['remote', 'get-url', '--', originalName])
-  if (existingFetchRes.exitCode !== 0) {
+  // Read both raw configured URLs (preserving insteadOf aliases) and resolved URLs before mutating
+  // so renaming or unrelated edits do not drop aliases or embedded credentials.
+  const [
+    existingFetchConfigRes,
+    existingFetchGetUrlRes,
+    existingPushConfigRes,
+    existingPushGetUrlRes
+  ] = await Promise.all([
+    runGit(ctx.repoRoot, ['config', '--get', `remote.${originalName}.url`]),
+    runGit(ctx.repoRoot, ['remote', 'get-url', '--', originalName]),
+    runGit(ctx.repoRoot, ['config', '--get-all', `remote.${originalName}.pushurl`]),
+    runGit(ctx.repoRoot, ['remote', 'get-url', '--push', '--', originalName])
+  ])
+
+  if (existingFetchGetUrlRes.exitCode !== 0 && existingFetchConfigRes.exitCode !== 0) {
     return {
       ok: false,
-      error: existingFetchRes.stderr.trim() || `Remote not found: ${originalName}`
+      error: existingFetchGetUrlRes.stderr.trim() || `Remote not found: ${originalName}`
     }
   }
-  const existingPushRes = await runGit(ctx.repoRoot, [
-    'remote',
-    'get-url',
-    '--push',
-    '--',
-    originalName
-  ])
-  const parsedExistingFetch = parseGitRemoteUrl(existingFetchRes.stdout.trim())
-  const parsedExistingPush = parseGitRemoteUrl(
-    existingPushRes.exitCode === 0 ? existingPushRes.stdout.trim() : existingFetchRes.stdout.trim()
-  )
+
+  const existingFetchRaw =
+    existingFetchConfigRes.exitCode === 0 && existingFetchConfigRes.stdout.trim()
+      ? existingFetchConfigRes.stdout.trim()
+      : existingFetchGetUrlRes.stdout.trim()
+  const existingFetchResolved =
+    existingFetchGetUrlRes.exitCode === 0 && existingFetchGetUrlRes.stdout.trim()
+      ? existingFetchGetUrlRes.stdout.trim()
+      : existingFetchRaw
+
+  const existingPushConfiguredValues =
+    existingPushConfigRes.exitCode === 0
+      ? existingPushConfigRes.stdout
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+      : []
+  const existingPushRaw = existingPushConfiguredValues[0] ?? ''
+  const existingPushResolved =
+    existingPushGetUrlRes.exitCode === 0 && existingPushGetUrlRes.stdout.trim()
+      ? existingPushGetUrlRes.stdout.trim()
+      : existingPushRaw || existingFetchResolved
+
+  const parsedExistingFetchRaw = parseGitRemoteUrl(existingFetchRaw)
+  const parsedExistingFetchResolved = parseGitRemoteUrl(existingFetchResolved)
+  const parsedExistingPushRaw = existingPushRaw ? parseGitRemoteUrl(existingPushRaw) : null
+  const parsedExistingPushResolved = parseGitRemoteUrl(existingPushResolved)
+
+  let renamed = false
+  let fetchUpdated = false
+  const rollback = async (): Promise<void> => {
+    if (fetchUpdated) {
+      await runGit(ctx.repoRoot, ['remote', 'set-url', '--', name, existingFetchRaw])
+    }
+    if (renamed) {
+      await runGit(ctx.repoRoot, ['remote', 'rename', '--', name, originalName])
+    }
+  }
 
   if (originalName !== name) {
     const renameRes = await runGit(ctx.repoRoot, ['remote', 'rename', '--', originalName, name])
     if (renameRes.exitCode !== 0) {
       return { ok: false, error: renameRes.stderr.trim() || 'Failed to rename remote' }
     }
+    renamed = true
   }
 
-  const preserveCredentialedFetch =
-    parsedExistingFetch.hasCredentials && fetchUrl === parsedExistingFetch.safeUrl
-  if (!preserveCredentialedFetch) {
+  const fetchUnchanged =
+    fetchUrl === existingFetchRaw ||
+    fetchUrl === parsedExistingFetchRaw.safeUrl ||
+    fetchUrl === existingFetchResolved ||
+    fetchUrl === parsedExistingFetchResolved.safeUrl
+  if (!fetchUnchanged) {
     const setFetchRes = await runGit(ctx.repoRoot, ['remote', 'set-url', '--', name, fetchUrl])
     if (setFetchRes.exitCode !== 0) {
+      await rollback()
       return { ok: false, error: setFetchRes.stderr.trim() || 'Failed to update remote URL' }
     }
+    fetchUpdated = true
   }
 
   if (request.pushUrl !== undefined) {
-    const targetPushUrl = rawPushUrl || fetchUrl
-    const preserveCredentialedPush =
-      parsedExistingPush.hasCredentials && targetPushUrl === parsedExistingPush.safeUrl
-    if (!preserveCredentialedPush) {
-      const setPushRes = await runGit(ctx.repoRoot, [
-        'remote',
-        'set-url',
-        '--push',
-        '--',
-        name,
-        targetPushUrl
-      ])
-      if (setPushRes.exitCode !== 0) {
-        return { ok: false, error: setPushRes.stderr.trim() || 'Failed to update remote push URL' }
+    if (!rawPushUrl) {
+      // Clearing pushUrl removes explicit `remote.<name>.pushurl` overrides so Git inherits fetchUrl,
+      // while avoiding accidental removal of a credentialed pushurl whose redacted URL matched fetchUrl.
+      const preserveCredentialedPushMatchingFetch =
+        Boolean(parsedExistingPushRaw?.hasCredentials) &&
+        fetchUnchanged &&
+        (parsedExistingPushRaw!.safeUrl === parsedExistingFetchRaw.safeUrl ||
+          parsedExistingPushResolved.safeUrl === parsedExistingFetchResolved.safeUrl)
+      if (existingPushConfiguredValues.length > 0 && !preserveCredentialedPushMatchingFetch) {
+        const unsetRes = await runGit(ctx.repoRoot, [
+          'config',
+          '--unset-all',
+          `remote.${name}.pushurl`
+        ])
+        if (unsetRes.exitCode !== 0 && unsetRes.exitCode !== 5) {
+          await rollback()
+          return {
+            ok: false,
+            error: unsetRes.stderr.trim() || 'Failed to clear remote push URL'
+          }
+        }
+      }
+    } else {
+      const pushMatchesFetch =
+        rawPushUrl === fetchUrl ||
+        (fetchUnchanged &&
+          (rawPushUrl === existingFetchRaw ||
+            rawPushUrl === parsedExistingFetchRaw.safeUrl ||
+            rawPushUrl === existingFetchResolved ||
+            rawPushUrl === parsedExistingFetchResolved.safeUrl))
+      const pushUnchanged =
+        Boolean(existingPushRaw) &&
+        (rawPushUrl === existingPushRaw ||
+          rawPushUrl === parsedExistingPushRaw?.safeUrl ||
+          rawPushUrl === existingPushResolved ||
+          rawPushUrl === parsedExistingPushResolved.safeUrl)
+
+      if (!(pushMatchesFetch && existingPushConfiguredValues.length === 0) && !pushUnchanged) {
+        const setPushRes = await runGit(ctx.repoRoot, [
+          'remote',
+          'set-url',
+          '--push',
+          '--',
+          name,
+          rawPushUrl
+        ])
+        if (setPushRes.exitCode !== 0) {
+          await rollback()
+          return {
+            ok: false,
+            error: setPushRes.stderr.trim() || 'Failed to update remote push URL'
+          }
+        }
       }
     }
   }
@@ -1647,20 +1782,37 @@ export async function removeWorkspaceGitRemote(
   const res = await runGit(ctx.repoRoot, ['remote', 'remove', '--', name])
   if (res.exitCode !== 0) {
     // Also support cleaning up stale remote-tracking refs (`refs/remotes/<name>/*`) whose
-    // remote config entry was already removed from `.git/config`.
+    // remote config entry was already removed from `.git/config`, while protecting any refs
+    // owned by another configured remote (e.g. `foo/bar`).
     if (/no such remote/i.test(res.stderr)) {
+      const remotesRes = await runGit(ctx.repoRoot, ['remote'])
+      if (remotesRes.exitCode !== 0) {
+        return { ok: false, error: res.stderr.trim() || 'Failed to remove remote' }
+      }
+      const configuredRemotes = remotesRes.stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+
       const staleRefsRes = await runGit(ctx.repoRoot, [
         'for-each-ref',
         '--format=%(refname)',
         `refs/remotes/${name}`
       ])
+      const prefix = `refs/remotes/${name}/`
       const staleRefs = staleRefsRes.stdout
         .split('\n')
         .map((line) => line.trim())
-        .filter((ref) => ref.startsWith(`refs/remotes/${name}/`))
+        .filter((ref) => {
+          if (!ref.startsWith(prefix)) return false
+          return !configuredRemotes.some(
+            (configured) =>
+              ref === `refs/remotes/${configured}` || ref.startsWith(`refs/remotes/${configured}/`)
+          )
+        })
       if (staleRefsRes.exitCode === 0 && staleRefs.length > 0) {
         for (const ref of staleRefs) {
-          const delRes = await runGit(ctx.repoRoot, ['update-ref', '-d', ref])
+          const delRes = await runGit(ctx.repoRoot, ['update-ref', '--no-deref', '-d', ref])
           if (delRes.exitCode !== 0) {
             return { ok: false, error: delRes.stderr.trim() || `Failed to prune ${ref}` }
           }

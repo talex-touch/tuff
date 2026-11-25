@@ -160,4 +160,41 @@ describe('useHomeSidePanel', () => {
     restored.clearRecentItems()
     expect(restored.recentItems.value).toEqual([])
   })
+
+  it('never persists credential-bearing web URLs to localStorage tabs or recents', () => {
+    const conv = ref<string | null>('conv-1')
+    const panel = useHomeSidePanel(conv)
+
+    panel.openWebTab({ url: 'https://alice:secret@example.com/private', title: 'Private' })
+    panel.openWebTab({ url: 'https://example.com/public', title: 'Public' })
+
+    // Credentialed tab stays usable in memory during the current session,
+    // but is omitted from recents and never written to localStorage.
+    expect(panel.tabs.value).toHaveLength(2)
+    expect(panel.recentItems.value).toHaveLength(1)
+    expect(panel.recentItems.value[0]).toMatchObject({ url: 'https://example.com/public' })
+
+    const rawState = window.localStorage.getItem('tuff.home.sidePanelState.v1') ?? ''
+    const rawRecents = window.localStorage.getItem('tuff.home.sidePanelRecents.v1') ?? ''
+    expect(rawState).not.toContain('secret')
+    expect(rawRecents).not.toContain('secret')
+
+    // Pre-existing credentialed entries in storage are dropped on reload.
+    window.localStorage.setItem(
+      'tuff.home.sidePanelRecents.v1',
+      JSON.stringify([
+        {
+          id: 'web:https://bob:pw@example.com/admin',
+          kind: 'web',
+          title: 'Admin',
+          url: 'https://bob:pw@example.com/admin',
+          updatedAt: Date.now()
+        }
+      ])
+    )
+    const reloaded = useHomeSidePanel(ref<string | null>('conv-1'))
+    expect(reloaded.tabs.value).toHaveLength(1)
+    expect(reloaded.tabs.value[0]).toMatchObject({ url: 'https://example.com/public' })
+    expect(reloaded.recentItems.value).toEqual([])
+  })
 })

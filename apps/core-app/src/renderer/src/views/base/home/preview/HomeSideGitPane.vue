@@ -26,7 +26,8 @@ import {
   collectDefaultExpandedFolders,
   flattenBranchTree,
   resolveAuthorAvatarTone,
-  resolveAuthorInitials
+  resolveAuthorInitials,
+  resolveRemoteNameForBranch
 } from './git-branch-tree'
 
 type GitSubTab = 'changes' | 'branches' | 'log'
@@ -184,7 +185,13 @@ const localBranchTree = computed(() =>
 )
 
 const remoteBranchTree = computed(() =>
-  buildBranchTree(remoteBranches.value, 'remote', status.value?.upstream, matchingRemoteNames.value)
+  buildBranchTree(
+    remoteBranches.value,
+    'remote',
+    status.value?.upstream,
+    matchingRemoteNames.value,
+    remotes.value.map((item) => item.name)
+  )
 )
 
 const isBranchFiltering = computed(() => normalizedBranchQuery.value.length > 0)
@@ -325,9 +332,11 @@ function remoteProviderIcon(provider: WorkspaceGitRemoteProvider): string {
 
 function remoteForBranch(branch: WorkspaceGitBranchEntry): WorkspaceGitRemoteEntry | undefined {
   if (!branch.isRemote) return undefined
-  const slash = branch.name.indexOf('/')
-  if (slash <= 0) return undefined
-  return remoteByName.value.get(branch.name.slice(0, slash))
+  const remoteName = resolveRemoteNameForBranch(
+    branch,
+    remotes.value.map((item) => item.name)
+  )
+  return remoteName ? remoteByName.value.get(remoteName) : undefined
 }
 
 function closeBranchEditor(): void {
@@ -475,10 +484,18 @@ async function refreshBranches(): Promise<void> {
     const next = await gitSdk.branches(target.value)
     if (seq !== branchesRequestSeq || key !== targetKey.value) return
     branches.value = next.branches
-    remotes.value = next.remotes ?? []
-    if (next.error) actionError.value = next.error
+    const remotesLoaded = !next.remotesError && Array.isArray(next.remotes)
+    if (remotesLoaded) {
+      remotes.value = next.remotes!
+    }
+    if (next.error) {
+      actionError.value = next.error
+    } else if (next.remotesError) {
+      actionError.value = next.remotesError
+    }
 
     if (!treeExpansionInitialized.value) {
+      const remoteNames = remotes.value.map((item) => item.name)
       const localNodes = buildBranchTree(
         next.branches.filter((branch) => !branch.isRemote),
         'local',
@@ -488,7 +505,8 @@ async function refreshBranches(): Promise<void> {
         next.branches.filter((branch) => branch.isRemote),
         'remote',
         status.value?.upstream,
-        (next.remotes ?? []).map((item) => item.name)
+        remoteNames,
+        remoteNames
       )
       expandedFolderIds.value = new Set([
         ...collectDefaultExpandedFolders(localNodes, 'local'),
@@ -498,6 +516,8 @@ async function refreshBranches(): Promise<void> {
     }
 
     if (previewedBranch.value) {
+      const prevShortOid = previewedBranch.value.shortOid
+      const prevFullRef = previewedBranch.value.fullRef
       const updated = next.branches.find(
         (item) =>
           item.name === previewedBranch.value?.name &&
@@ -505,6 +525,9 @@ async function refreshBranches(): Promise<void> {
       )
       if (updated) {
         previewedBranch.value = updated
+        if (updated.shortOid !== prevShortOid || updated.fullRef !== prevFullRef) {
+          void loadBranchPreviewCommits(updated)
+        }
       } else {
         closeBranchPreview()
       }
@@ -521,10 +544,8 @@ async function refreshBranches(): Promise<void> {
       }
     }
 
-    if (remoteEditMode.value === 'edit' && remoteEditOriginalName.value) {
-      const stillExists = (next.remotes ?? []).some(
-        (item) => item.name === remoteEditOriginalName.value
-      )
+    if (remotesLoaded && remoteEditMode.value === 'edit' && remoteEditOriginalName.value) {
+      const stillExists = remotes.value.some((item) => item.name === remoteEditOriginalName.value)
       if (!stillExists) {
         closeRemoteEditor()
       }
@@ -540,17 +561,18 @@ async function refreshBranches(): Promise<void> {
   }
 }
 
-async function previewBranch(branch: WorkspaceGitBranchEntry): Promise<void> {
-  closeBranchEditor()
-  closeRemoteEditor()
-  previewedBranch.value = branch
-  branchPreviewError.value = ''
+async function loadBranchPreviewCommits(branch: WorkspaceGitBranchEntry): Promise<void> {
   if (!gitSdk) return
+  branchPreviewError.value = ''
   const key = targetKey.value
   const seq = ++branchPreviewSeq
   loadingBranchPreview.value = true
   try {
-    const next = await gitSdk.log({ ...target.value, ref: branch.name, limit: 8 })
+    const next = await gitSdk.log({
+      ...target.value,
+      ref: branch.fullRef || branch.name,
+      limit: 8
+    })
     if (seq !== branchPreviewSeq || key !== targetKey.value) return
     previewCommits.value = next.commits
     if (next.error) branchPreviewError.value = next.error
@@ -564,6 +586,13 @@ async function previewBranch(branch: WorkspaceGitBranchEntry): Promise<void> {
       loadingBranchPreview.value = false
     }
   }
+}
+
+async function previewBranch(branch: WorkspaceGitBranchEntry): Promise<void> {
+  closeBranchEditor()
+  closeRemoteEditor()
+  previewedBranch.value = branch
+  await loadBranchPreviewCommits(branch)
 }
 
 function handleBranchDoubleClick(branch: WorkspaceGitBranchEntry): void {
@@ -594,10 +623,11 @@ function openRemoteMenu(remoteName: string, event: MouseEvent): void {
 }
 
 function openRemoteFolderMenu(
-  row: { depth: number; label: string; fullPath: string },
+  row: { depth: number; label: string; fullPath: string; remoteName?: string },
   event: MouseEvent
 ): void {
-  const remoteName = row.depth === 0 ? row.label : (row.fullPath.split('/')[0] ?? '')
+  const remoteName =
+    row.remoteName || (row.depth === 0 ? row.label : (row.fullPath.split('/')[0] ?? ''))
   openRemoteMenu(remoteName, event)
 }
 
@@ -915,6 +945,11 @@ async function saveBranchEdit(): Promise<void> {
     if (!renamed) return
     activeName = nextName
     changed = true
+    branchEditTarget.value = {
+      ...original,
+      name: activeName,
+      fullRef: `refs/heads/${activeName}`
+    }
   }
 
   if (nextUpstream !== prevUpstream) {
@@ -1644,16 +1679,11 @@ watch(
                   <span class="HomeSideGit-GroupCount is-local">{{ localBranches.length }}</span>
                 </span>
               </div>
-              <ul
-                class="HomeSideGit-BranchTree"
-                role="tree"
-                :aria-label="t('home.git.localBranches')"
-              >
-                <li v-for="row in localBranchRows" :key="row.id" role="none">
+              <ul class="HomeSideGit-BranchTree" :aria-label="t('home.git.localBranches')">
+                <li v-for="row in localBranchRows" :key="row.id">
                   <button
                     v-if="row.kind === 'folder'"
                     type="button"
-                    role="treeitem"
                     :aria-expanded="row.expanded"
                     class="HomeSideGit-TreeFolder"
                     :class="[`is-tone-${row.tone}`, { 'has-current': row.hasCurrent }]"
@@ -1678,7 +1708,6 @@ watch(
                   <button
                     v-else
                     type="button"
-                    role="treeitem"
                     class="HomeSideGit-BranchRow"
                     :class="[
                       `is-tone-${row.tone}`,
@@ -1739,34 +1768,80 @@ watch(
               <ul
                 v-if="remoteBranchRows.length > 0"
                 class="HomeSideGit-BranchTree"
-                role="tree"
                 :aria-label="t('home.git.remoteBranches')"
               >
-                <li v-for="row in remoteBranchRows" :key="row.id" role="none">
+                <li v-for="row in remoteBranchRows" :key="row.id">
+                  <div
+                    v-if="row.kind === 'folder' && row.depth === 0"
+                    class="HomeSideGit-RemoteRootRow"
+                    :class="{
+                      'is-editing':
+                        remoteEditMode === 'edit' && remoteEditOriginalName === row.label
+                    }"
+                    :data-remote-root="row.label"
+                    @contextmenu="openRemoteFolderMenu(row, $event)"
+                  >
+                    <button
+                      type="button"
+                      :aria-expanded="row.expanded"
+                      class="HomeSideGit-TreeFolder is-remote-node is-remote-root"
+                      :class="[
+                        `is-tone-${row.tone}`,
+                        {
+                          'has-current': row.hasCurrent
+                        }
+                      ]"
+                      :style="treeIndentStyle(row.depth)"
+                      :title="
+                        remoteByName.get(row.label)?.fetchUrl
+                          ? `${row.label} · ${remoteByName.get(row.label)!.fetchUrl}`
+                          : row.fullPath
+                      "
+                      @click="toggleFolder(row.id)"
+                    >
+                      <span
+                        class="i-ri-arrow-right-s-line HomeSideGit-TreeChevron"
+                        :class="{ 'is-expanded': row.expanded }"
+                        aria-hidden="true"
+                      />
+                      <span class="i-ri-cloud-line HomeSideGit-FolderIcon" aria-hidden="true" />
+                      <span class="HomeSideGit-FolderLabel">{{ row.label }}</span>
+                      <span
+                        v-if="remoteByName.get(row.label)?.displayLabel"
+                        class="HomeSideGit-RemoteBadge"
+                        :class="`is-${remoteByName.get(row.label)!.provider}`"
+                        :title="remoteByName.get(row.label)!.fetchUrl"
+                      >
+                        <span
+                          :class="remoteProviderIcon(remoteByName.get(row.label)!.provider)"
+                          aria-hidden="true"
+                        />
+                        <span class="HomeSideGit-RemoteBadgeText">
+                          {{ remoteByName.get(row.label)!.displayLabel }}
+                        </span>
+                      </span>
+                      <span class="HomeSideGit-FolderCount">{{ row.branchCount }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="HomeSideGit-RowIconBtn HomeSideGit-RemoteMoreBtn"
+                      :title="t('home.git.editRemote')"
+                      :aria-label="`${t('home.git.editRemote')}: ${row.label}`"
+                      :data-testid="`git-remote-actions-${row.label}`"
+                      @click.stop="openRemoteMenu(row.remoteName || row.label, $event)"
+                    >
+                      <span class="i-ri-more-2-line" aria-hidden="true" />
+                    </button>
+                  </div>
+
                   <button
-                    v-if="row.kind === 'folder'"
+                    v-else-if="row.kind === 'folder'"
                     type="button"
-                    role="treeitem"
                     :aria-expanded="row.expanded"
                     class="HomeSideGit-TreeFolder is-remote-node"
-                    :class="[
-                      `is-tone-${row.tone}`,
-                      {
-                        'has-current': row.hasCurrent,
-                        'is-remote-root': row.depth === 0,
-                        'is-editing':
-                          row.depth === 0 &&
-                          remoteEditMode === 'edit' &&
-                          remoteEditOriginalName === row.label
-                      }
-                    ]"
+                    :class="[`is-tone-${row.tone}`, { 'has-current': row.hasCurrent }]"
                     :style="treeIndentStyle(row.depth)"
-                    :title="
-                      row.depth === 0 && remoteByName.get(row.label)?.fetchUrl
-                        ? `${row.label} · ${remoteByName.get(row.label)!.fetchUrl}`
-                        : row.fullPath
-                    "
-                    :data-remote-root="row.depth === 0 ? row.label : undefined"
+                    :title="row.fullPath"
                     @click="toggleFolder(row.id)"
                     @contextmenu="openRemoteFolderMenu(row, $event)"
                   >
@@ -1776,38 +1851,17 @@ watch(
                       aria-hidden="true"
                     />
                     <span
-                      :class="
-                        row.depth === 0
-                          ? 'i-ri-cloud-line'
-                          : row.expanded
-                            ? 'i-ri-folder-open-line'
-                            : 'i-ri-folder-3-line'
-                      "
+                      :class="row.expanded ? 'i-ri-folder-open-line' : 'i-ri-folder-3-line'"
                       class="HomeSideGit-FolderIcon"
                       aria-hidden="true"
                     />
                     <span class="HomeSideGit-FolderLabel">{{ row.label }}</span>
-                    <span
-                      v-if="row.depth === 0 && remoteByName.get(row.label)?.displayLabel"
-                      class="HomeSideGit-RemoteBadge"
-                      :class="`is-${remoteByName.get(row.label)!.provider}`"
-                      :title="remoteByName.get(row.label)!.fetchUrl"
-                    >
-                      <span
-                        :class="remoteProviderIcon(remoteByName.get(row.label)!.provider)"
-                        aria-hidden="true"
-                      />
-                      <span class="HomeSideGit-RemoteBadgeText">
-                        {{ remoteByName.get(row.label)!.displayLabel }}
-                      </span>
-                    </span>
                     <span class="HomeSideGit-FolderCount">{{ row.branchCount }}</span>
                   </button>
 
                   <button
                     v-else
                     type="button"
-                    role="treeitem"
                     class="HomeSideGit-BranchRow is-remote-node"
                     :class="[
                       `is-tone-${row.tone}`,
@@ -3768,6 +3822,39 @@ watch(
   color: var(--shell-text-secondary);
   font-size: var(--shell-fs-caption);
   cursor: pointer;
+}
+
+.HomeSideGit-RemoteRootRow {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  border-radius: var(--shell-radius-sm);
+
+  .HomeSideGit-TreeFolder {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    padding-right: 4px;
+  }
+
+  &:hover {
+    background: var(--shell-surface);
+  }
+
+  &.is-editing {
+    background: color-mix(in srgb, var(--shell-primary) 10%, var(--shell-surface));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--shell-primary) 34%, transparent);
+  }
+}
+
+.HomeSideGit-RemoteMoreBtn {
+  margin-right: 4px;
+  opacity: 0.65;
+
+  .HomeSideGit-RemoteRootRow:hover &,
+  &:focus-visible {
+    opacity: 1;
+  }
 }
 
 .HomeSideGit-TreeFolder.is-editing {
