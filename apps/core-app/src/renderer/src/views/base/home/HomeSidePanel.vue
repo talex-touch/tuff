@@ -12,6 +12,7 @@ import type {
   ActivityTurn
 } from '~/modules/conversation/workspace-activity'
 import type { HomeModelLimits } from '~/modules/conversation/workspace-panel'
+import type { WorkspaceFileAiActionPayload } from '~/components/preview/workspace-file-tree'
 import type {
   SidePanelRecentItem,
   SidePanelTab,
@@ -24,6 +25,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createBrowserSdk } from '@talex-touch/utils/transport/sdk/domains/browser'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import WorkspaceFileTree from '~/components/preview/WorkspaceFileTree.vue'
 import WorkspaceFileViewer from '~/components/preview/WorkspaceFileViewer.vue'
 import { SHELL_MENU_CARD } from '~/components/shell/shell-menu-panel'
 import { buildPreviewIndex } from '~/modules/conversation/preview-index'
@@ -53,6 +55,7 @@ const props = withDefaults(
     messages: ConversationMessage[]
     conversationId: string | null
     workspaceRoot?: string
+    gitAvailable?: boolean
     context?: WorkspaceContextProjection
     turn?: ConversationTurnMeta
     limits?: HomeModelLimits
@@ -67,6 +70,7 @@ const props = withDefaults(
     dockedToShell?: boolean
   }>(),
   {
+    gitAvailable: true,
     recentItems: () => [],
     panelActive: true,
     dockedToShell: false
@@ -100,11 +104,14 @@ const emit = defineEmits<{
   (event: 'open-web-external', url: string): void
   (event: 'remove-recent', id: string): void
   (event: 'clear-recents'): void
+  (event: 'ai-action', payload: WorkspaceFileAiActionPayload): void
 }>()
 
 const { t } = useI18n()
 const menuOpen = ref(false)
 const addMenuOpen = ref(false)
+const fileTreeRevealDir = ref('')
+const fileTreeRevealNonce = ref(0)
 const tabStripRef = ref<HTMLElement | null>(null)
 const sideTabElements = new Map<string, HTMLElement>()
 const canScrollLeft = ref(false)
@@ -127,6 +134,9 @@ const review = useConversationReview(() => props.conversationId)
 
 const activeTab = computed(() => props.tabs.find((tab) => tab.id === props.activeTabId) ?? null)
 const activeWebTab = computed(() => (activeTab.value?.kind === 'web' ? activeTab.value : null))
+const activeFilePath = computed(() =>
+  activeTab.value?.kind === 'file' ? activeTab.value.path : ''
+)
 const hasAnyWebTab = computed(() => props.tabs.some((tab) => tab.kind === 'web'))
 const hasAnyTerminalTab = computed(() => props.tabs.some((tab) => tab.kind === 'terminal'))
 const hasAnyGitTab = computed(() => props.tabs.some((tab) => tab.kind === 'git'))
@@ -201,6 +211,8 @@ function tabIconClass(tab: SidePanelTab): string {
   switch (tab.kind) {
     case 'file':
       return 'i-ri-file-code-line'
+    case 'files':
+      return 'i-ri-folder-3-line'
     case 'web':
       return 'i-ri-global-line'
     case 'code':
@@ -237,6 +249,13 @@ function openRecentEntry(item: SidePanelRecentItem): void {
   } else {
     emit('open-web', item.url)
   }
+}
+
+function revealDirInTree(dirPath: string): void {
+  if (!props.workspaceRoot || !dirPath) return
+  fileTreeRevealDir.value = dirPath
+  fileTreeRevealNonce.value += 1
+  emit('open-tool', 'files')
 }
 
 function onTabBarWheel(event: WheelEvent): void {
@@ -365,6 +384,17 @@ function onTabBarWheel(event: WheelEvent): void {
             <div class="HomeSidePanel-MenuDivider" role="separator" />
 
             <TxDropdownItem
+              data-testid="side-panel-add-menu-files"
+              @select="runMenuAction(() => emit('open-tool', 'files'))"
+            >
+              <span class="HomeSidePanel-DropdownItem">
+                <span class="i-ri-folder-3-line HomeSidePanel-DropdownIcon" aria-hidden="true" />
+                <span>{{ t('home.sidePanel.files') }}</span>
+              </span>
+            </TxDropdownItem>
+
+            <TxDropdownItem
+              v-if="gitAvailable"
               data-testid="side-panel-add-menu-git"
               @select="runMenuAction(() => emit('open-tool', 'git'))"
             >
@@ -506,6 +536,18 @@ function onTabBarWheel(event: WheelEvent): void {
               type="button"
               role="menuitem"
               class="HomeSidePanel-MenuItem"
+              data-testid="side-panel-more-menu-files"
+              @click="runMenuAction(() => emit('open-tool', 'files'))"
+            >
+              <span class="i-ri-folder-3-line" aria-hidden="true" />
+              <span class="HomeSidePanel-MenuLabel">{{ t('home.sidePanel.files') }}</span>
+            </button>
+            <button
+              v-if="gitAvailable"
+              type="button"
+              role="menuitem"
+              class="HomeSidePanel-MenuItem"
+              data-testid="side-panel-more-menu-git"
               @click="runMenuAction(() => emit('open-tool', 'git'))"
             >
               <span class="i-ri-git-branch-line" aria-hidden="true" />
@@ -641,6 +683,7 @@ function onTabBarWheel(event: WheelEvent): void {
       <HomeSideLauncher
         v-if="!activeTab"
         :workspace-root="workspaceRoot"
+        :git-available="gitAvailable"
         :created-files="createdFiles"
         :recent-items="recentItems"
         :review-count="review.records.value.length"
@@ -657,17 +700,33 @@ function onTabBarWheel(event: WheelEvent): void {
         @clear-recents="emit('clear-recents')"
       />
 
+      <!-- Workspace File Tree tab -->
+      <WorkspaceFileTree
+        v-else-if="activeTab.kind === 'files'"
+        :root-path="workspaceRoot"
+        :conversation-id="conversationId"
+        :active-path="activeFilePath"
+        :reveal-dir-path="fileTreeRevealDir"
+        :reveal-nonce="fileTreeRevealNonce"
+        @open-file="emit('open-file', $event)"
+      />
+
       <!-- Local file & directory viewer -->
       <WorkspaceFileViewer
         v-else-if="activeTab.kind === 'file'"
         :key="activeTab.id"
         :file-path="activeTab.path"
         :display-path="activeTab.displayPath"
+        :workspace-root="workspaceRoot"
         :conversation-id="conversationId"
         :line="activeTab.line"
         :refresh-token="activeTab.refreshToken"
+        :ai-actions-enabled="true"
+        :prefer-tree-for-breadcrumbs="Boolean(workspaceRoot)"
         @navigate="emit('update-file-tab', activeTab.id, $event)"
+        @reveal-dir="revealDirInTree"
         @open-in-browser="emit('open-file-in-browser', $event)"
+        @ai-action="emit('ai-action', $event)"
       />
 
       <!-- Sandboxed code-block HTML/SVG preview -->

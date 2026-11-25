@@ -5,21 +5,32 @@ import {
   attachBrowserTabToSpace,
   BROWSER_SCOPE_KEY,
   closeConversationTabEverywhere,
+  closeHerdrTabEverywhere,
   closeSpaceTabsBulk,
   conversationTabId,
   draftTabId,
   ensureConversationTab,
   ensureDraftTab,
+  ensureHerdrTab,
+  getLastHerdrAddressForGroup,
   getSpaceTabs,
+  HERDR_SPACE_KEY,
+  herdrGroupKeyFromSpaceKey,
+  herdrProjectSpaceKey,
+  herdrTabId,
   isDeprecatedInternalBrowserUrl,
+  isHerdrSpaceKey,
+  isSpaceScopeKey,
   projectIdFromSpaceKey,
   projectSpaceKey,
   removeSpaceTab,
   reorderSpaceTab,
   resetShellWorkspaceTabsForTests,
   resolveBrowserTabSpaceKey,
+  setLastHerdrAddressForGroup,
   spaceBrowserTabId,
   syncBrowserTabsWithSpaces,
+  syncHerdrProjectTabs,
   TEMPORARY_SPACE_KEY
 } from './useShellWorkspaceTabs'
 
@@ -150,5 +161,46 @@ describe('useShellWorkspaceTabs', () => {
     expect(tabs).toHaveLength(24)
     expect(tabs[0]?.id).toBe(conversationTabId('c-2'))
     expect(tabs[tabs.length - 1]?.id).toBe(conversationTabId('c-25'))
+  })
+
+  it('tracks per-project Herdr Space tabs, respects dismissed tabs, and remembers active terminal per group', () => {
+    const singSpace = herdrProjectSpaceKey('hs:sp-sing')
+    const workSpace = herdrProjectSpaceKey('hs:sp-work')
+    expect(isSpaceScopeKey(singSpace)).toBe(true)
+    expect(isHerdrSpaceKey(singSpace)).toBe(true)
+    expect(isHerdrSpaceKey(HERDR_SPACE_KEY)).toBe(true)
+    expect(isHerdrSpaceKey(TEMPORARY_SPACE_KEY)).toBe(false)
+    expect(herdrGroupKeyFromSpaceKey(singSpace)).toBe('hs:sp-sing')
+    expect(projectIdFromSpaceKey(singSpace)).toBeNull()
+
+    syncHerdrProjectTabs(singSpace, ['t85', 't87', 't96'], { activeAddress: 't96' })
+    syncHerdrProjectTabs(workSpace, ['t7v', 't7w'], { activeAddress: 't7v' })
+
+    expect(getSpaceTabs(singSpace).map((t) => t.id)).toEqual([
+      herdrTabId('t85'),
+      herdrTabId('t87'),
+      herdrTabId('t96')
+    ])
+    expect(getSpaceTabs(workSpace).map((t) => t.id)).toEqual([herdrTabId('t7v'), herdrTabId('t7w')])
+
+    // Closing a Herdr tab hides it from future syncs without killing other project tabs.
+    removeSpaceTab(singSpace, herdrTabId('t87'))
+    syncHerdrProjectTabs(singSpace, ['t85', 't87', 't96'], { activeAddress: 't96' })
+    expect(getSpaceTabs(singSpace).map((t) => t.id)).toEqual([herdrTabId('t85'), herdrTabId('t96')])
+
+    // Reopening explicitly or syncing with restoreDismissed brings it back.
+    ensureHerdrTab('t87', singSpace)
+    expect(getSpaceTabs(singSpace).map((t) => t.id)).toEqual([
+      herdrTabId('t85'),
+      herdrTabId('t96'),
+      herdrTabId('t87')
+    ])
+
+    // Last active terminal memory per project group.
+    setLastHerdrAddressForGroup('hs:sp-sing', 't96')
+    expect(getLastHerdrAddressForGroup('hs:sp-sing')).toBe('t96')
+
+    closeHerdrTabEverywhere('t87')
+    expect(getSpaceTabs(singSpace).map((t) => t.id)).toEqual([herdrTabId('t85'), herdrTabId('t96')])
   })
 })

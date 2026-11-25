@@ -7,7 +7,8 @@ import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AgentWorkspaceEvents } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import { createBrowserSdk } from '@talex-touch/utils/transport/sdk/domains/browser'
-import { computed } from 'vue'
+import { createWorkspaceGitSdk } from '@talex-touch/utils/transport/sdk/domains/workspace-git'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -16,6 +17,7 @@ import { isBetaFeatureEnabled } from '../../../../../../shared/beta-features'
 import { buildBrowserFilePreviewUrl } from '~/modules/browser-workspace/preview-url'
 import {
   attachBrowserTabToSpace,
+  HERDR_SPACE_KEY,
   projectSpaceKey,
   setLastWorkspaceScope
 } from '~/modules/layout/useShellWorkspaceTabs'
@@ -27,6 +29,7 @@ import { useHomeSidePanel } from './useHomeSidePanel'
 export interface UseHomePreviewPanelsOptions {
   conversationId: Ref<string | null>
   projectId: Ref<string | null>
+  spaceKey?: Ref<string | null>
   workspaceRoot: Ref<string | undefined>
   messages: Ref<ConversationMessage[]>
   bodyRef: Ref<HTMLElement | null>
@@ -78,6 +81,7 @@ export function useHomePreviewPanels(options: UseHomePreviewPanelsOptions) {
   const router = useRouter()
   const transport = isElectronRenderer() ? useTuffTransport() : null
   const browserSdk = transport ? createBrowserSdk(transport) : null
+  const gitSdk = transport ? createWorkspaceGitSdk(transport) : null
   const appSdk = (() => {
     try {
       return typeof useAppSdk === 'function' ? useAppSdk() : null
@@ -86,7 +90,14 @@ export function useHomePreviewPanels(options: UseHomePreviewPanelsOptions) {
     }
   })()
 
+  const activeSpaceKey = computed(() => {
+    if (options.spaceKey?.value) return options.spaceKey.value
+    if (options.conversationId.value?.startsWith('herdr:')) return HERDR_SPACE_KEY
+    return projectSpaceKey(options.projectId.value)
+  })
+
   const sidePanel = useHomeSidePanel(options.conversationId, {
+    spaceKey: activeSpaceKey,
     getAvailableWidth: options.getSidePanelAvailableWidth
   })
 
@@ -99,6 +110,51 @@ export function useHomePreviewPanels(options: UseHomePreviewPanelsOptions) {
 
   const effectiveWorkspaceRoot = computed(
     () => options.workspaceRoot.value || currentProject.value?.rootPath
+  )
+
+  const gitAvailabilityCache = new Map<string, boolean>()
+  const gitAvailable = ref(false)
+  let gitProbeSeq = 0
+
+  watch(
+    [activeSpaceKey, effectiveWorkspaceRoot, options.conversationId],
+    ([space, cwd, convId]) => {
+      const seq = ++gitProbeSeq
+      if (!gitSdk) {
+        gitAvailable.value = false
+        return
+      }
+      const cleanCwd = cwd?.trim() || ''
+      const cleanConvId = convId?.trim() || ''
+      if (!cleanCwd && !cleanConvId) {
+        gitAvailable.value = false
+        sidePanel.closeTabsByKind('git')
+        return
+      }
+      const cacheKey = cleanCwd ? `cwd:${cleanCwd}` : `space:${space}:conv:${cleanConvId}`
+      gitAvailable.value = gitAvailabilityCache.get(cacheKey) ?? false
+
+      void gitSdk
+        .status({
+          ...(cleanCwd ? { cwd: cleanCwd } : {}),
+          ...(cleanConvId ? { conversationId: cleanConvId } : {})
+        })
+        .then((res) => {
+          if (seq !== gitProbeSeq) return
+          const isRepo = Boolean(res?.available && res?.isRepo)
+          gitAvailabilityCache.set(cacheKey, isRepo)
+          gitAvailable.value = isRepo
+          if (!isRepo) {
+            sidePanel.closeTabsByKind('git')
+          }
+        })
+        .catch(() => {
+          if (seq !== gitProbeSeq) return
+          gitAvailable.value = false
+          sidePanel.closeTabsByKind('git')
+        })
+    },
+    { immediate: true }
   )
 
   const mentionedAbsolutePaths = computed(() =>
@@ -136,10 +192,14 @@ export function useHomePreviewPanels(options: UseHomePreviewPanelsOptions) {
     sidePanel.openWebTab({ url, title })
   }
 
+  function resolveOwningSpaceKey(): string {
+    return activeSpaceKey.value
+  }
+
   async function openWebInBuiltInBrowser(url: string): Promise<void> {
     if (browserSdk && isBetaFeatureEnabled(appSetting, 'browserWorkspace')) {
       try {
-        const spaceKey = projectSpaceKey(options.projectId.value)
+        const spaceKey = resolveOwningSpaceKey()
         const conversationId = options.conversationId.value
         const created = await browserSdk.createTab(url)
         const createdTabId = created.createdTabId || created.activeTabId
@@ -167,7 +227,7 @@ export function useHomePreviewPanels(options: UseHomePreviewPanelsOptions) {
   }): Promise<void> {
     if (browserSdk && isBetaFeatureEnabled(appSetting, 'browserWorkspace')) {
       try {
-        const spaceKey = projectSpaceKey(options.projectId.value)
+        const spaceKey = resolveOwningSpaceKey()
         const conversationId = options.conversationId.value
         const previewUrl = buildBrowserFilePreviewUrl({
           path: payload.absolutePath,
@@ -234,6 +294,8 @@ export function useHomePreviewPanels(options: UseHomePreviewPanelsOptions) {
 
   function workspaceTabLabel(kind: SidePanelWorkspaceKind): string {
     switch (kind) {
+      case 'files':
+        return t('home.sidePanel.files')
       case 'git':
         return t('home.git.title')
       case 'review':
@@ -254,6 +316,7 @@ export function useHomePreviewPanels(options: UseHomePreviewPanelsOptions) {
   }
 
   function openWorkspaceTool(kind: SidePanelWorkspaceKind): void {
+    if (kind === 'git' && !gitAvailable.value) return
     sidePanel.openWorkspaceTab(kind, workspaceTabLabel(kind))
   }
 
@@ -280,6 +343,8 @@ export function useHomePreviewPanels(options: UseHomePreviewPanelsOptions) {
 
   return {
     ...sidePanel,
+    activeSpaceKey,
+    gitAvailable,
     effectiveWorkspaceRoot,
     showCodePreview,
     openFileInSidebar,

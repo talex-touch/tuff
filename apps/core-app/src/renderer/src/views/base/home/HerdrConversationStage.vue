@@ -1,4 +1,5 @@
 <script lang="ts" name="HerdrConversationStage" setup>
+import type { StatusTone } from '@talex-touch/tuffex/status-badge'
 import type { CodeRunPayload } from '@talex-touch/tuffex/stream-markdown'
 import type { TerminalInstance, TerminalSize } from '@talex-touch/tuffex/terminal'
 import type {
@@ -11,8 +12,10 @@ import type {
   ConversationMessage,
   ConversationTurnMeta
 } from '~/modules/conversation/useHomeConversation'
+import type { WorkspaceFileAiActionPayload } from '~/components/preview/workspace-file-tree'
 import { useThinkingTicker } from '@talex-touch/intelligence-uikit/utils'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxStatusHint } from '@talex-touch/tuffex/status-hint'
 import { TxTerminal } from '@talex-touch/tuffex/terminal'
 import {
   computed,
@@ -21,6 +24,7 @@ import {
   onBeforeUnmount,
   onDeactivated,
   provide,
+  reactive,
   ref,
   watch
 } from 'vue'
@@ -35,10 +39,13 @@ import {
   herdrProjectionToConversationMessages,
   resolveHerdrRunStep
 } from '~/modules/herdr/herdr-conversation-adapter'
+import { groupHerdrSessions } from '~/modules/herdr/herdr-project-groups'
 import { useHerdrAttachments } from '~/modules/herdr/useHerdrAttachments'
 import { useHerdrRuntime } from '~/modules/herdr/useHerdrRuntime'
+import { type HerdrStageViewMode, useHerdrStageControl } from '~/modules/herdr/useHerdrStageControl'
 import { useShellRightSidebar } from '~/modules/layout/useShellRightSidebar'
 import { useShellTerminal } from '~/modules/layout/useShellTerminal'
+import { HERDR_SPACE_KEY, herdrProjectSpaceKey } from '~/modules/layout/useShellWorkspaceTabs'
 import { useAccessibilitySupport } from '~/modules/platform/accessibility-support'
 import { appSetting } from '~/modules/storage/app-storage'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -56,16 +63,14 @@ import HomeConversationStream from './HomeConversationStream.vue'
 import HomePayloadModal from './HomePayloadModal.vue'
 import HomeSidePanelSlot from './HomeSidePanelSlot.vue'
 import HomeStageBlurs from './HomeStageBlurs.vue'
-import HomeTopBar from './HomeTopBar.vue'
 import TuffAIComposer from './TuffAIComposer.vue'
-
-type StageViewMode = 'chat' | 'terminal'
 
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const log = createRendererLogger('HerdrConversationStage')
 const herdr = useHerdrRuntime()
+const herdrStageControl = useHerdrStageControl()
 const screenReaderMode = useAccessibilitySupport()
 const { runCommand: runTerminalCommand } = useShellTerminal()
 const { dockHost: rightSidebarDockHost } = useShellRightSidebar()
@@ -81,11 +86,20 @@ const inputRef = computed(() => composerEl.value?.input ?? null)
 const composerRef = computed(() => composerEl.value?.box ?? null)
 
 const draft = ref('')
+const draftByAddress = new Map<string, string>()
 const sending = ref(false)
 const interrupting = ref(false)
 const killing = ref(false)
-const userSelectedMode = ref<StageViewMode | null>(null)
 const keepAliveActive = ref(true)
+
+function persistDraftForAddress(targetAddress: string, value: string): void {
+  if (!targetAddress) return
+  if (value) {
+    draftByAddress.set(targetAddress, value)
+  } else {
+    draftByAddress.delete(targetAddress)
+  }
+}
 
 const address = computed(() => {
   const raw = route.params.address
@@ -129,7 +143,11 @@ const autoFallbackToTerminal = computed(
     !projection.value.available
 )
 
-const viewMode = computed<StageViewMode>(() => {
+const userSelectedMode = computed<HerdrStageViewMode | null>(() =>
+  herdrStageControl.getSelectedMode(address.value)
+)
+
+const viewMode = computed<HerdrStageViewMode>(() => {
   if (userSelectedMode.value) return userSelectedMode.value
   if (autoFallbackToTerminal.value) return 'terminal'
   return 'chat'
@@ -195,6 +213,35 @@ function resolveSidePanelAvailableWidth(): number | undefined {
   return pageWidth && pageWidth > 0 ? pageWidth : undefined
 }
 
+const rememberedSpaceKeyByAddress = reactive<Record<string, string>>({})
+
+watch(
+  [
+    address,
+    () => (address.value ? (herdr.projectGroupByAddress?.value?.get(address.value) ?? null) : null)
+  ],
+  ([addr, group]) => {
+    if (addr && group) {
+      rememberedSpaceKeyByAddress[addr] = herdrProjectSpaceKey(group.key)
+    }
+  },
+  { immediate: true }
+)
+
+const herdrSpaceKey = computed(() => {
+  const addr = address.value
+  if (!addr) return HERDR_SPACE_KEY
+  const liveGroup = herdr.projectGroupByAddress?.value?.get(addr)
+  if (liveGroup) return herdrProjectSpaceKey(liveGroup.key)
+  const remembered = rememberedSpaceKeyByAddress[addr]
+  if (remembered) return remembered
+  if (session.value) {
+    const derived = groupHerdrSessions([session.value])[0]
+    if (derived) return herdrProjectSpaceKey(derived.key)
+  }
+  return HERDR_SPACE_KEY
+})
+
 const {
   panelOpen,
   panelWidth,
@@ -214,6 +261,7 @@ const {
   closeAllTabs: closeAllSidePanelTabs,
   startResize: startSidePanelResize,
   resetWidth: resetSidePanelWidth,
+  gitAvailable,
   effectiveWorkspaceRoot,
   showCodePreview,
   openWebInBuiltInBrowser,
@@ -223,6 +271,7 @@ const {
 } = useHomePreviewPanels({
   conversationId,
   projectId,
+  spaceKey: herdrSpaceKey,
   workspaceRoot: effectiveWorkspaceRootSource,
   messages,
   bodyRef,
@@ -278,6 +327,7 @@ const messageParts = useMessageParts({
   },
   clearDraft: () => {
     draft.value = ''
+    if (address.value) draftByAddress.delete(address.value)
     collapseDraft(false)
   },
   onSubmitError: (error) => {
@@ -354,6 +404,25 @@ const statusIconClass = computed(() => {
       return 'i-ri-checkbox-blank-circle-fill is-idle-dot'
   }
 })
+
+const statusHintTone = computed<StatusTone>(() => {
+  switch (oscState.value) {
+    case 'done':
+      return 'success'
+    case 'working':
+      return 'info'
+    case 'blocked':
+      return 'warning'
+    case 'error':
+      return 'danger'
+    default:
+      return 'muted'
+  }
+})
+
+const statusPulseKey = computed(
+  () => `${address.value}:${oscState.value}:${session.value?.statusMs ?? 0}`
+)
 
 // ── Inline TxTerminal lifecycle for `'terminal'` view mode ──────────────────────────
 const terminalFontFamily = computed(() => appSetting.localAiCli?.terminalFontFamily || undefined)
@@ -481,8 +550,10 @@ function handleStageTerminalFocus(focused: boolean): void {
   void stageStreamHandle.focus(focused).catch(() => {})
 }
 
-function setViewMode(mode: StageViewMode): void {
-  userSelectedMode.value = mode
+function setViewMode(mode: HerdrStageViewMode): void {
+  if (address.value) {
+    herdrStageControl.selectedModeByAddress[address.value] = mode
+  }
   if (mode === 'chat') {
     void detachStageTerminal()
     void nextTick(() => {
@@ -509,11 +580,23 @@ function releaseWatchedProjection(targetAddress: string | null): void {
   }
 }
 
+watch(address, (nextAddress, prevAddress) => {
+  if (!prevAddress || prevAddress === nextAddress) return
+  persistDraftForAddress(prevAddress, draft.value)
+  draft.value = nextAddress ? (draftByAddress.get(nextAddress) ?? '') : ''
+  void nextTick(() => {
+    if (draft.value) {
+      autoGrow()
+    } else {
+      collapseDraft(false)
+    }
+  })
+})
+
 watch(
   [address, isStageActive],
   ([nextAddress, active], [prevAddress]) => {
     if (prevAddress && prevAddress !== nextAddress) {
-      userSelectedMode.value = null
       streamFollowing.value = true
       void detachStageTerminal()
       releaseWatchedProjection(prevAddress)
@@ -594,6 +677,7 @@ async function pressSend(): Promise<void> {
     if (address.value === addr) {
       if (draft.value === submittedRawDraft) {
         draft.value = ''
+        draftByAddress.delete(addr)
         collapseDraft(false)
       }
       for (const id of staged.ids) {
@@ -603,6 +687,8 @@ async function pressSend(): Promise<void> {
       void nextTick(() => {
         streamRef.value?.scrollToBottom()
       })
+    } else if (draftByAddress.get(addr) === submittedRawDraft) {
+      draftByAddress.delete(addr)
     }
     void herdr.refreshProjection(addr)
   } catch {
@@ -680,8 +766,100 @@ function runCodeInTerminal(payload: CodeRunPayload): void {
   })
 }
 
+let unregisterStageControl: (() => void) | null = null
+
+watch(
+  [address, isStageActive],
+  ([nextAddress, active]) => {
+    unregisterStageControl?.()
+    unregisterStageControl = null
+    if (!active || !nextAddress) return
+    unregisterStageControl = herdrStageControl.registerActiveStage({
+      address: nextAddress,
+      getViewMode: () => viewMode.value,
+      setViewMode,
+      isPanelOpen: () => panelOpen.value,
+      togglePanel: () => {
+        panelOpen.value = !panelOpen.value
+      },
+      refreshProjection: handleRefreshProjection,
+      interrupt: handleInterrupt,
+      kill: handleKillSession
+    })
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  unregisterStageControl?.()
+  unregisterStageControl = null
+})
+
+async function copySessionCwd(): Promise<void> {
+  const cwd = effectiveWorkspaceRoot.value
+  if (!cwd) return
+  try {
+    await navigator.clipboard.writeText(cwd)
+    toast.success(t('home.copied'))
+  } catch {
+    // ignore clipboard errors
+  }
+}
+
+const compactSessionCwd = computed(() => {
+  const cwd = effectiveWorkspaceRoot.value
+  if (!cwd) return ''
+  const parts = cwd.replace(/\\/g, '/').split('/').filter(Boolean)
+  if (parts.length <= 2) return cwd
+  return `…/${parts.slice(-2).join('/')}`
+})
+
 function navigateHome(): void {
   void router.push(APP_SURFACE_ROUTES.home)
+}
+
+async function runFileAiAction(payload: WorkspaceFileAiActionPayload): Promise<boolean> {
+  const prompt = payload.prompt.trim()
+  if (!prompt) return false
+
+  if (payload.mode === 'quote') {
+    if (viewMode.value !== 'chat') {
+      setViewMode('chat')
+    }
+    const existing = draft.value.replace(/\s+$/, '')
+    draft.value = existing ? `${existing}\n\n${payload.prompt}` : payload.prompt
+    await nextTick()
+    const input = inputRef.value
+    if (input) {
+      input.focus()
+      input.selectionStart = input.value.length
+      input.selectionEnd = input.value.length
+      autoGrow()
+    }
+    return true
+  }
+
+  if (!isLive.value || !address.value) {
+    toast.error(t('herdr.stage.composerFinishedPlaceholder'))
+    return false
+  }
+  try {
+    await sendPlainText(prompt)
+    toast.success(t('home.sidePanel.sentToAi'))
+    return true
+  } catch {
+    toast.error(t('herdr.actions.sendFailed'))
+    return false
+  }
+}
+
+function handleFileAiAction(payload: WorkspaceFileAiActionPayload): void {
+  const result = runFileAiAction(payload)
+  if (payload.settle) {
+    payload.settle(result)
+  } else {
+    void result
+  }
 }
 </script>
 
@@ -701,113 +879,6 @@ function navigateHome(): void {
     }"
     data-testid="herdr-conversation-stage"
   >
-    <HomeTopBar
-      :title="stageTitle"
-      :panel-open="panelOpen"
-      :turn="lastTurn"
-      :message-count="messages.length"
-      :project-name="session?.projectName ?? session?.locationLabel ?? undefined"
-      :project-path="effectiveWorkspaceRoot"
-      @toggle-panel="panelOpen = !panelOpen"
-    >
-      <template #left-extra>
-        <span
-          v-if="session"
-          class="HerdrStage-StatusPill"
-          :class="`is-${oscState}`"
-          role="status"
-          data-testid="herdr-stage-status"
-        >
-          <span class="HerdrStage-StatusIcon" :class="statusIconClass" aria-hidden="true" />
-          <span>{{ statusLabel }}</span>
-        </span>
-        <span
-          v-if="session?.machine"
-          class="HerdrStage-MachinePill"
-          data-testid="herdr-stage-machine"
-        >
-          <span class="i-ri-server-line" aria-hidden="true" />
-          <span>{{ session.machine }}</span>
-        </span>
-      </template>
-
-      <template #actions-lead>
-        <div
-          v-if="session"
-          class="HerdrStage-ModeSwitch"
-          role="group"
-          :aria-label="t('herdr.stage.viewModeLabel')"
-          data-testid="herdr-stage-mode-switch"
-        >
-          <button
-            type="button"
-            class="HerdrStage-ModeBtn"
-            :class="{ 'is-active': viewMode === 'chat' }"
-            :aria-pressed="viewMode === 'chat'"
-            data-testid="herdr-stage-mode-chat"
-            @click="setViewMode('chat')"
-          >
-            <span class="i-ri-chat-3-line" aria-hidden="true" />
-            <span>{{ t('herdr.stage.modeChat') }}</span>
-          </button>
-          <button
-            type="button"
-            class="HerdrStage-ModeBtn"
-            :class="{ 'is-active': viewMode === 'terminal' }"
-            :aria-pressed="viewMode === 'terminal'"
-            data-testid="herdr-stage-mode-terminal"
-            @click="setViewMode('terminal')"
-          >
-            <span class="i-ri-terminal-box-line" aria-hidden="true" />
-            <span>{{ t('herdr.stage.modeTerminal') }}</span>
-          </button>
-        </div>
-
-        <button
-          v-if="session && viewMode === 'chat'"
-          type="button"
-          class="HerdrStage-TopAction"
-          :disabled="projectionLoading"
-          :title="t('herdr.conversation.refresh')"
-          :aria-label="t('herdr.conversation.refresh')"
-          data-testid="herdr-stage-refresh"
-          @click="handleRefreshProjection"
-        >
-          <span
-            class="i-ri-refresh-line"
-            :class="{ 'is-spin': projectionLoading }"
-            aria-hidden="true"
-          />
-        </button>
-
-        <button
-          v-if="isLive"
-          type="button"
-          class="HerdrStage-TopAction"
-          :disabled="interrupting"
-          :title="t('herdr.actions.interrupt')"
-          :aria-label="t('herdr.actions.interrupt')"
-          data-testid="herdr-stage-interrupt"
-          @click="handleInterrupt"
-        >
-          <span class="i-ri-stop-circle-line" aria-hidden="true" />
-        </button>
-
-        <button
-          v-if="isLive"
-          type="button"
-          class="HerdrStage-TopAction is-danger"
-          :disabled="killing"
-          :title="t('terminal.herdr.killTooltip')"
-          :aria-label="t('terminal.herdr.kill')"
-          data-testid="herdr-stage-kill"
-          @click="handleKillSession"
-        >
-          <span class="i-ri-shut-down-line" aria-hidden="true" />
-        </button>
-      </template>
-    </HomeTopBar>
-
     <div class="HomePage-Split">
       <div ref="bodyRef" class="HomePage-Body">
         <!-- Session missing / ended and removed -->
@@ -834,14 +905,6 @@ function navigateHome(): void {
           @focusin="handleStageTerminalFocus(true)"
           @focusout="handleStageTerminalFocus(false)"
         >
-          <div
-            v-if="autoFallbackToTerminal && userSelectedMode === null"
-            class="HerdrStage-AutoTerminalBanner"
-            role="status"
-          >
-            <span class="i-ri-information-line" aria-hidden="true" />
-            <span>{{ t('herdr.stage.autoTerminalHint') }}</span>
-          </div>
           <TxTerminal
             :key="address"
             class="HerdrStage-Terminal"
@@ -1013,6 +1076,7 @@ function navigateHome(): void {
         :messages="messages"
         :conversation-id="conversationId"
         :workspace-root="effectiveWorkspaceRoot"
+        :git-available="gitAvailable"
         :turn="lastTurn"
         :activity-turns="activityTurns"
         :gateway="[]"
@@ -1050,8 +1114,80 @@ function navigateHome(): void {
         @open-web-external="openWebExternal"
         @start-resize="startSidePanelResize"
         @reset-width="resetSidePanelWidth"
+        @ai-action="handleFileAiAction"
       />
     </div>
+
+    <footer
+      v-if="session"
+      class="HerdrStage-StatusBar"
+      role="contentinfo"
+      data-testid="herdr-stage-statusbar"
+    >
+      <div class="HerdrStage-StatusBarGroup">
+        <TxStatusHint
+          class="HerdrStage-StatusHintChip"
+          :text="statusLabel"
+          :tone="statusHintTone"
+          size="sm"
+          :pulse-key="statusPulseKey"
+          data-testid="herdr-stage-status"
+        >
+          <template #icon>
+            <span class="HerdrStage-StatusIcon" :class="statusIconClass" aria-hidden="true" />
+          </template>
+        </TxStatusHint>
+
+        <span class="HerdrStage-StatusTitle" :title="stageTitle" data-testid="herdr-stage-title">
+          <span
+            :class="viewMode === 'terminal' ? 'i-ri-terminal-line' : 'i-ri-chat-3-line'"
+            class="HerdrStage-StatusTitleIcon"
+            aria-hidden="true"
+          />
+          <span class="HerdrStage-StatusTitleText">{{ stageTitle }}</span>
+        </span>
+
+        <span
+          v-if="session.machine"
+          class="HerdrStage-MachinePill"
+          data-testid="herdr-stage-machine"
+        >
+          <span class="i-ri-server-line" aria-hidden="true" />
+          <span>{{ session.machine }}</span>
+        </span>
+
+        <button
+          v-if="compactSessionCwd"
+          type="button"
+          class="HerdrStage-StatusPath"
+          :title="`${t('home.fileLink.clickToCopyPath')}: ${effectiveWorkspaceRoot}`"
+          data-testid="herdr-stage-cwd"
+          @click="copySessionCwd"
+        >
+          <span class="i-ri-folder-2-line" aria-hidden="true" />
+          <span class="HerdrStage-StatusPathText">{{ compactSessionCwd }}</span>
+        </button>
+      </div>
+
+      <div class="HerdrStage-StatusBarGroup is-end">
+        <span
+          v-if="viewMode === 'terminal' && autoFallbackToTerminal && userSelectedMode === null"
+          class="HerdrStage-StatusHint"
+          :title="t('herdr.stage.autoTerminalHint')"
+          data-testid="herdr-stage-auto-hint"
+        >
+          <span class="i-ri-information-line" aria-hidden="true" />
+          <span>{{ t('herdr.stage.autoTerminalShort') }}</span>
+        </span>
+
+        <span class="HerdrStage-StatusMeta">
+          {{ providerLabel }}
+          <template v-if="session.turn > 0">
+            · {{ t('herdr.conversation.turnCount', { turn: session.turn }) }}
+          </template>
+        </span>
+      </div>
+    </footer>
   </div>
 </template>
 
@@ -1072,7 +1208,8 @@ function navigateHome(): void {
 
   --tx-color-primary: var(--shell-primary);
   --tx-color-danger: var(--shell-danger);
-  --tx-color-success: var(--shell-primary);
+  --tx-color-success: var(--shell-success);
+  --tx-color-warning: var(--shell-warning);
   --tx-text-color-primary: var(--shell-text-primary);
   --tx-text-color-secondary: var(--shell-text-muted);
   --tx-text-color-placeholder: var(--shell-text-muted);
@@ -1088,7 +1225,7 @@ function navigateHome(): void {
 
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   width: 100%;
   height: 100%;
   container-type: inline-size;
@@ -1100,28 +1237,17 @@ function navigateHome(): void {
   }
 }
 
-:deep(.HomeTopBar) {
-  grid-column: 1;
-  grid-row: 1;
-  position: relative;
-  z-index: var(--home-z-topbar);
-}
-
 .HomePage-Split {
   display: contents;
 }
 
 .HomePage-Body {
   grid-column: 1;
-  grid-row: 2;
+  grid-row: 1;
   min-width: 0;
   min-height: 0;
   position: relative;
   overflow: hidden;
-
-  .HomePage.conversing & {
-    grid-row: 1 / -1;
-  }
 }
 
 .HomePage-Center {
@@ -1160,13 +1286,118 @@ function navigateHome(): void {
   pointer-events: none;
 }
 
-.HerdrStage-StatusPill,
-.HerdrStage-MachinePill {
+.HerdrStage-StatusBar {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 22px;
+  padding: 0 8px 0 0;
+  border-top: 1px solid var(--shell-border);
+  background: var(--shell-surface);
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
+  box-sizing: border-box;
+  min-width: 0;
+  z-index: var(--home-z-topbar);
+}
+
+.HerdrStage-StatusBarGroup {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 100%;
+  min-width: 0;
+
+  &.is-end {
+    flex: none;
+  }
+}
+
+.HerdrStage-StatusHintChip {
+  --tx-status-hint-radius: 0;
+  --tx-status-hint-pad-x: 8px;
+  --tx-status-hint-pad-y: 0px;
+  --tx-status-hint-icon-size: 12px;
+
+  flex: none;
+  height: 100%;
+  font-size: var(--shell-fs-caption);
+  line-height: 1;
+}
+
+.HerdrStage-StatusTitle {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 22px;
-  padding: 0 8px;
+  gap: 4px;
+  min-width: 0;
+  max-width: 220px;
+  color: var(--shell-text-primary);
+  font-weight: 500;
+}
+
+.HerdrStage-StatusTitleIcon {
+  display: inline-flex;
+  flex: none;
+  font-size: 12px;
+  color: var(--shell-text-muted);
+}
+
+.HerdrStage-StatusTitleText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.HerdrStage-StatusPath {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 220px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-text-muted);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+}
+
+.HerdrStage-StatusPathText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.HerdrStage-StatusHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--shell-text-muted);
+  white-space: nowrap;
+}
+
+.HerdrStage-StatusMeta {
+  color: var(--shell-text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.HerdrStage-MachinePill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+  padding: 0 6px;
   border-radius: var(--shell-radius-full);
   background: var(--shell-surface-2);
   color: var(--shell-text-secondary);
@@ -1175,113 +1406,13 @@ function navigateHome(): void {
   white-space: nowrap;
 }
 
-.HerdrStage-StatusPill {
-  &.is-working {
-    color: var(--shell-primary);
-    background: color-mix(in srgb, var(--shell-primary) 12%, transparent);
-  }
-
-  &.is-blocked {
-    color: #d97706;
-    background: color-mix(in srgb, #f59e0b 14%, transparent);
-  }
-
-  &.is-error {
-    color: var(--shell-danger);
-    background: color-mix(in srgb, var(--shell-danger) 12%, transparent);
-  }
-
-  &.is-done {
-    color: var(--tx-color-success, #16a34a);
-    background: color-mix(in srgb, var(--tx-color-success, #16a34a) 12%, transparent);
-  }
-}
-
 .HerdrStage-StatusIcon {
-  font-size: 12px;
+  display: inline-flex;
+  font-size: 11px;
 
   &.is-idle-dot {
-    font-size: 7px;
-    opacity: 0.65;
-  }
-}
-
-.HerdrStage-ModeSwitch {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border-radius: var(--shell-radius-md);
-  background: var(--shell-surface-2);
-  border: 1px solid var(--shell-border);
-}
-
-.HerdrStage-ModeBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 24px;
-  padding: 0 9px;
-  border: 0;
-  border-radius: calc(var(--shell-radius-md) - 2px);
-  background: transparent;
-  color: var(--shell-text-secondary);
-  font: inherit;
-  font-size: var(--shell-fs-caption);
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  appearance: none;
-
-  &:hover:not(.is-active) {
-    color: var(--shell-text-primary);
-  }
-
-  &.is-active {
-    background: var(--shell-bg);
-    color: var(--shell-text-primary);
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--shell-shadow) 80%, transparent);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--shell-primary);
-    outline-offset: 1px;
-  }
-}
-
-.HerdrStage-TopAction {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--shell-radius-sm);
-  background: transparent;
-  color: var(--shell-text-muted);
-  font-size: 16px;
-  cursor: pointer;
-  appearance: none;
-
-  &:hover:not(:disabled) {
-    background: var(--shell-surface-2);
-    color: var(--shell-text-primary);
-  }
-
-  &.is-danger:hover:not(:disabled) {
-    color: var(--shell-danger);
-    background: color-mix(in srgb, var(--shell-danger) 12%, transparent);
-  }
-
-  &:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--shell-primary);
-    outline-offset: 2px;
+    font-size: 6px;
+    opacity: 0.7;
   }
 }
 
@@ -1292,8 +1423,8 @@ function navigateHome(): void {
   width: var(--home-chat-lane-width);
   padding: 10px 14px;
   border-radius: var(--shell-radius-xl);
-  border: 1px solid color-mix(in srgb, #f59e0b 38%, var(--shell-border));
-  background: color-mix(in srgb, #f59e0b 10%, var(--shell-bg));
+  border: 1px solid var(--shell-warning-border);
+  background: color-mix(in srgb, var(--shell-warning-soft) 90%, var(--shell-bg));
   backdrop-filter: blur(16px);
   box-shadow: 0 6px 20px var(--shell-shadow);
   box-sizing: border-box;
@@ -1303,7 +1434,7 @@ function navigateHome(): void {
 .HerdrStage-BlockedIcon {
   flex: none;
   font-size: 18px;
-  color: #d97706;
+  color: var(--shell-warning);
 }
 
 .HerdrStage-BlockedBody {
@@ -1373,25 +1504,19 @@ function navigateHome(): void {
   width: 100%;
   height: 100%;
   min-height: 0;
-  border-top: 1px solid var(--shell-border);
   background: var(--tx-bg-color);
-}
-
-.HerdrStage-AutoTerminalBanner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 16px;
-  border-bottom: 1px solid var(--shell-border);
-  background: var(--shell-surface);
-  color: var(--shell-text-secondary);
-  font-size: var(--shell-fs-caption);
 }
 
 .HerdrStage-Terminal {
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
+  border-radius: 0;
+  box-shadow: none;
+
+  :deep(.xterm) {
+    border-radius: 0;
+  }
 }
 
 .is-spin {

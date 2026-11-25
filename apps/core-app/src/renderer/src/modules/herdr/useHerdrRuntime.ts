@@ -33,8 +33,10 @@ import {
   resetShellTerminalTabsForTesting,
   useShellTerminal
 } from '~/modules/layout/useShellTerminal'
+import { closeHerdrTabEverywhere } from '~/modules/layout/useShellWorkspaceTabs'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useProjectStore } from '~/stores/projects'
+import { groupHerdrSessions, type HerdrProjectGroup } from './herdr-project-groups'
 
 export interface HerdrProjectedSession extends HerdrSessionView {
   projectId: string | null
@@ -843,17 +845,19 @@ export function __resetHerdrRuntimeForTesting(): void {
   resetShellTerminalTabsForTesting()
 }
 
-export function useHerdrRuntime() {
-  ensureSubscribed()
+export function useHerdrRuntime(options: { subscribe?: boolean } = {}) {
+  if (options.subscribe !== false) {
+    ensureSubscribed()
 
-  if (getCurrentScope()) {
-    scopeConsumers += 1
-    onScopeDispose(() => {
-      scopeConsumers = Math.max(0, scopeConsumers - 1)
-      if (scopeConsumers === 0) {
-        teardownSubscriptions()
-      }
-    })
+    if (getCurrentScope()) {
+      scopeConsumers += 1
+      onScopeDispose(() => {
+        scopeConsumers = Math.max(0, scopeConsumers - 1)
+        if (scopeConsumers === 0) {
+          teardownSubscriptions()
+        }
+      })
+    }
   }
 
   const shellTerminal = useShellTerminal()
@@ -918,6 +922,26 @@ export function useHerdrRuntime() {
     const map = new Map<string, HerdrProjectedSession>()
     for (const session of projectedSessions.value) {
       map.set(session.address, session)
+    }
+    return map
+  })
+
+  const projectGroups = computed<HerdrProjectGroup[]>(() => groupHerdrSessions(liveSessions.value))
+
+  const projectGroupByKey = computed(() => {
+    const map = new Map<string, HerdrProjectGroup>()
+    for (const group of projectGroups.value) {
+      map.set(group.key, group)
+    }
+    return map
+  })
+
+  const projectGroupByAddress = computed(() => {
+    const map = new Map<string, HerdrProjectGroup>()
+    for (const group of projectGroups.value) {
+      for (const session of group.sessions) {
+        map.set(session.address, group)
+      }
     }
     return map
   })
@@ -998,6 +1022,7 @@ export function useHerdrRuntime() {
 
   async function rm(terminal: string): Promise<HerdrTerminalControlResult> {
     await detach(terminal, { closeTab: true })
+    closeHerdrTabEverywhere(terminal)
     const result = await getSdk().rm(terminal)
     if (snapshot.value) {
       applySessionUpsert({
@@ -1067,11 +1092,15 @@ export function useHerdrRuntime() {
     return enrichDrawerTab(tab)
   }
 
-  async function openNewHerdrTab(request: HerdrTerminalRunRequest = {}): Promise<HerdrDrawerTab> {
+  async function startSession(request: HerdrTerminalRunRequest = {}): Promise<HerdrSessionView> {
     const env = request.env?.TERM_PROGRAM
       ? request.env
       : { ...request.env, TERM_PROGRAM: HERDR_IIP_TERM_PROGRAM }
-    const session = await run({ ...request, env })
+    return run({ ...request, env })
+  }
+
+  async function openNewHerdrTab(request: HerdrTerminalRunRequest = {}): Promise<HerdrDrawerTab> {
+    const session = await startSession(request)
     return openTerminalTab(session.address, { openDrawer: true })
   }
 
@@ -1123,6 +1152,9 @@ export function useHerdrRuntime() {
     blockedCount,
     hasBlockedSession,
     sessionByAddress,
+    projectGroups,
+    projectGroupByKey,
+    projectGroupByAddress,
     unattachedLiveSessions,
     drawerTabs,
     activeTabId: shellTerminal.activeTabId,
@@ -1150,6 +1182,7 @@ export function useHerdrRuntime() {
     setTabViewMode,
     openSessionStructured,
     openTerminalTab,
+    startSession,
     openNewHerdrTab,
     setActiveTab: shellTerminal.setActiveTab,
     attach,

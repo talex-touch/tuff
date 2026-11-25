@@ -9,6 +9,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import * as sass from 'sass'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, reactive, ref } from 'vue'
+import type { HerdrProjectedSession } from '~/modules/herdr/useHerdrRuntime'
 
 enableAutoUnmount(afterEach)
 
@@ -20,6 +21,8 @@ const routerPush = vi.fn(async (to: string) => {
   route.path = to
   if (to.startsWith('/home/c/')) {
     route.params = { id: to.slice('/home/c/'.length) }
+  } else if (to.startsWith('/home/herdr/')) {
+    route.params = { address: decodeURIComponent(to.slice('/home/herdr/'.length)) }
   } else {
     route.params = {}
   }
@@ -31,6 +34,9 @@ const platformState = {
 const mockConversations = ref<
   Array<{ id: string; title: string; projectId: string | null; updatedAt: number }>
 >([])
+const mockHerdrSessions = ref<HerdrProjectedSession[]>([])
+const mockHerdrConnected = ref(true)
+const mockHerdrStartSession = vi.fn(async () => ({ address: 't99' }))
 
 let workspaceState: BrowserWorkspaceState
 const changedListeners = new Set<(state: BrowserWorkspaceState) => void>()
@@ -130,6 +136,26 @@ vi.mock('~/modules/conversation/useConversationHistory', () => ({
     remove: vi.fn(async () => undefined)
   })
 }))
+vi.mock('~/modules/herdr/useHerdrRuntime', () => ({
+  useHerdrRuntime: () => ({
+    isConnected: mockHerdrConnected,
+    sessionByAddress: {
+      get value() {
+        const map = new Map<string, HerdrProjectedSession>()
+        for (const item of mockHerdrSessions.value) map.set(item.address, item)
+        return map
+      }
+    },
+    startSession: mockHerdrStartSession
+  })
+}))
+vi.mock('vue-sonner', () => ({
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
+    info: vi.fn()
+  }
+}))
 vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({
     send: sendMock,
@@ -223,6 +249,9 @@ describe('BrowserTabStrip layout, drag regions & tab actions', () => {
     route.path = '/browser'
     route.params = {}
     mockConversations.value = []
+    mockHerdrSessions.value = []
+    mockHerdrConnected.value = true
+    mockHerdrStartSession.mockClear()
     platformState.isMac.value = true
     platformState.platform.value = 'darwin'
     sendMock.mockClear()
@@ -554,5 +583,282 @@ describe('BrowserTabStrip layout, drag regions & tab actions', () => {
     await flushPromises()
 
     expect(getSpaceTabs(spaceKey).map((tab) => tab.id)).toContain('browser:space-w')
+  })
+
+  it('gives each Herdr project its own top tab strip populated with all of that project terminals', async () => {
+    mockConversations.value = [
+      { id: 'c-todo', title: '你能看到目前 todo 吗', projectId: 'proj-talex', updatedAt: 10 }
+    ]
+    mockHerdrSessions.value = [
+      {
+        address: 't85',
+        machine: null,
+        name: null,
+        title: '',
+        argv: ['zsh'],
+        cwd: '/private/tmp/thunder-sing-damaged',
+        foregroundName: 'zsh',
+        foregroundCwd: '/private/tmp/thunder-sing-damaged',
+        foregroundPid: 11,
+        state: 'live',
+        status: null,
+        statusMs: 900,
+        reported: true,
+        turn: 0,
+        keep: true,
+        template: null,
+        parent: null,
+        labels: { 'herdr.space': 'sp-sing', where: 'thunder-sing-damaged / 1' },
+        cols: 80,
+        rows: 24,
+        pid: 11,
+        exitCode: null,
+        signal: null,
+        reason: null,
+        screen: 'exact',
+        createdMs: 800,
+        finishedMs: null,
+        projectId: null,
+        projectName: null,
+        displayTitle: 'zsh · thunder-sing-damaged / 1',
+        appName: 'zsh',
+        effectiveCwd: '/private/tmp/thunder-sing-damaged'
+      },
+      {
+        address: 't7',
+        machine: null,
+        name: null,
+        title: '',
+        argv: ['omp'],
+        cwd: '/private/tmp/thunder-sing-damaged',
+        foregroundName: 'omp',
+        foregroundCwd: '/private/tmp/thunder-sing-damaged',
+        foregroundPid: 10,
+        state: 'live',
+        status: { state: 'done', app: 'omp' },
+        statusMs: 1000,
+        reported: true,
+        turn: 1,
+        keep: true,
+        template: null,
+        parent: null,
+        labels: { 'herdr.space': 'sp-sing', where: 'thunder-sing-damaged / 2' },
+        cols: 80,
+        rows: 24,
+        pid: 10,
+        exitCode: null,
+        signal: null,
+        reason: null,
+        screen: 'exact',
+        createdMs: 900,
+        finishedMs: null,
+        projectId: null,
+        projectName: null,
+        displayTitle: 'KSING: 部署 VOD 打分结算服务',
+        appName: 'omp',
+        effectiveCwd: '/private/tmp/thunder-sing-damaged'
+      },
+      {
+        address: 'prod/t2',
+        machine: 'prod',
+        name: null,
+        title: '',
+        argv: ['zsh'],
+        cwd: '/srv/work',
+        foregroundName: 'zsh',
+        foregroundCwd: '/srv/work',
+        foregroundPid: 20,
+        state: 'live',
+        status: { state: 'idle' },
+        statusMs: 1000,
+        reported: true,
+        turn: 0,
+        keep: true,
+        template: null,
+        parent: null,
+        labels: { 'herdr.space': 'sp-work', where: 'Work / 1' },
+        cols: 80,
+        rows: 24,
+        pid: 20,
+        exitCode: null,
+        signal: null,
+        reason: null,
+        screen: 'exact',
+        createdMs: 900,
+        finishedMs: null,
+        projectId: null,
+        projectName: null,
+        displayTitle: 'antigravity · Work / 1',
+        appName: 'zsh',
+        effectiveCwd: '/srv/work'
+      }
+    ]
+
+    const wrapper = mount(BrowserTabStrip)
+    await flushPromises()
+
+    // Start inside a normal project Space.
+    route.path = '/home/c/c-todo'
+    route.params = { id: 'c-todo' }
+    await nextTick()
+    expect(wrapper.find('[data-browser-tabbar]').attributes('data-tab-scope')).toBe(
+      'space:project:proj-talex'
+    )
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      '你能看到目前 todo 吗'
+    ])
+
+    // Opening one terminal of thunder-sing-damaged switches top tabs to ALL terminals of that project!
+    route.path = '/home/herdr/t7'
+    route.params = { address: 't7' }
+    await nextTick()
+    expect(wrapper.find('[data-browser-tabbar]').attributes('data-tab-scope')).toBe(
+      'space:herdr:hs:sp-sing'
+    )
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      'zsh · 1',
+      'KSING: 部署 VOD 打分结算服务'
+    ])
+    expect(wrapper.find('.BrowserTabStrip-Tab.is-active .BrowserTabStrip-TabTitle').text()).toBe(
+      'KSING: 部署 VOD 打分结算服务'
+    )
+
+    // Primary + spawns a new terminal INSIDE the active Herdr project (cwd + herdr.space labels).
+    await wrapper.find('button[aria-label="herdr.sidebar.newSession"]').trigger('click')
+    await flushPromises()
+    expect(mockHerdrStartSession).toHaveBeenCalledWith({
+      cwd: '/private/tmp/thunder-sing-damaged',
+      labels: {
+        'herdr.space': 'sp-sing',
+        where: 'thunder-sing-damaged / 3'
+      }
+    })
+    expect(routerPush).toHaveBeenCalledWith('/home/herdr/t99')
+
+    // Switching to another Herdr project replaces the top strip with that project's terminals.
+    route.path = '/home/herdr/prod%2Ft2'
+    route.params = { address: 'prod/t2' }
+    await nextTick()
+    expect(wrapper.find('[data-browser-tabbar]').attributes('data-tab-scope')).toBe(
+      'space:herdr:hs:m:prod:sp-work'
+    )
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      'antigravity · 1'
+    ])
+    expect(wrapper.find('.BrowserTabStrip-Tab.is-active .BrowserTabStrip-TabTitle').text()).toBe(
+      'antigravity · 1'
+    )
+
+    // Navigating to /setting preserves that Herdr project's tabs unselected; clicking a tab jumps back.
+    route.path = '/setting'
+    route.params = {}
+    await nextTick()
+    expect(wrapper.findAll('.BrowserTabStrip-Tab.is-active')).toHaveLength(0)
+    await wrapper.find('[id="browser-tab-herdr:prod/t2"]').trigger('click')
+    await flushPromises()
+    expect(routerPush).toHaveBeenCalledWith('/home/herdr/prod%2Ft2')
+
+    // Switching back to the normal project Space restores its own tab list untouched.
+    route.path = '/home/c/c-todo'
+    route.params = { id: 'c-todo' }
+    await nextTick()
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      '你能看到目前 todo 吗'
+    ])
+  })
+
+  it('exposes Herdr view mode, session actions, and right-sidebar toggle in the Herdr tab context menu', async () => {
+    const { __resetHerdrStageControlForTesting, useHerdrStageControl } =
+      await import('~/modules/herdr/useHerdrStageControl')
+    __resetHerdrStageControlForTesting()
+
+    const setViewMode = vi.fn()
+    const togglePanel = vi.fn()
+    const refreshProjection = vi.fn(async () => {})
+    const interrupt = vi.fn(async () => {})
+    const kill = vi.fn(async () => {})
+    let currentMode: 'chat' | 'terminal' = 'terminal'
+
+    useHerdrStageControl().registerActiveStage({
+      address: 't7',
+      getViewMode: () => currentMode,
+      setViewMode: (mode) => {
+        currentMode = mode
+        setViewMode(mode)
+      },
+      isPanelOpen: () => false,
+      togglePanel,
+      refreshProjection,
+      interrupt,
+      kill
+    })
+
+    mockHerdrSessions.value = [
+      {
+        address: 't7',
+        machine: null,
+        name: null,
+        title: 'antigravity · 1',
+        argv: ['zsh'],
+        cwd: '/repo',
+        foregroundName: 'antigravity',
+        foregroundCwd: '/repo',
+        foregroundPid: 7,
+        state: 'live',
+        status: { state: 'done', app: 'antigravity' },
+        statusMs: 1000,
+        reported: true,
+        turn: 12,
+        keep: false,
+        template: null,
+        parent: null,
+        labels: { 'herdr.space': 'sp-demo', where: 'demo / 1' },
+        cols: 120,
+        rows: 30,
+        pid: 7,
+        exitCode: null,
+        signal: null,
+        reason: null,
+        screen: 'exact',
+        createdMs: 900,
+        finishedMs: null,
+        projectId: null,
+        projectName: null,
+        displayTitle: 'antigravity · demo / 1',
+        appName: 'antigravity',
+        effectiveCwd: '/repo'
+      }
+    ]
+
+    route.path = '/home/herdr/t7'
+    route.params = { address: 't7' }
+    const wrapper = mount(BrowserTabStrip)
+    await flushPromises()
+
+    // Right-click the Herdr tab to open the context menu.
+    await wrapper.get('.BrowserTabStrip-Tab[data-tab-kind="herdr"]').trigger('contextmenu')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="herdr-tab-menu-mode-chat"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="herdr-tab-menu-mode-terminal"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="herdr-tab-menu-refresh"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="herdr-tab-menu-interrupt"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="herdr-tab-menu-toggle-panel"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="herdr-tab-menu-kill"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="herdr-tab-menu-mode-chat"]').trigger('click')
+    expect(setViewMode).toHaveBeenCalledWith('chat')
+
+    await wrapper.get('.BrowserTabStrip-Tab[data-tab-kind="herdr"]').trigger('contextmenu')
+    await flushPromises()
+    await wrapper.get('[data-testid="herdr-tab-menu-toggle-panel"]').trigger('click')
+    expect(togglePanel).toHaveBeenCalledTimes(1)
+
+    await wrapper.get('.BrowserTabStrip-Tab[data-tab-kind="herdr"]').trigger('contextmenu')
+    await flushPromises()
+    await wrapper.get('[data-testid="herdr-tab-menu-interrupt"]').trigger('click')
+    expect(interrupt).toHaveBeenCalledTimes(1)
+
+    __resetHerdrStageControlForTesting()
   })
 })

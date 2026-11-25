@@ -12,6 +12,7 @@ import type {
   ActivityTurn
 } from '~/modules/conversation/workspace-activity'
 import type { HomeModelLimits } from '~/modules/conversation/workspace-panel'
+import type { WorkspaceFileAiActionPayload } from '~/components/preview/workspace-file-tree'
 import type {
   SidePanelRecentItem,
   SidePanelTab,
@@ -38,6 +39,7 @@ const props = withDefaults(
     messages: ConversationMessage[]
     conversationId: string | null
     workspaceRoot?: string
+    gitAvailable?: boolean
     context?: WorkspaceContextProjection
     turn?: ConversationTurnMeta
     activityTurns: ActivityTurn[]
@@ -53,6 +55,7 @@ const props = withDefaults(
     width: 460,
     dockToShell: false,
     active: true,
+    gitAvailable: true,
     recentItems: () => []
   }
 )
@@ -86,6 +89,7 @@ const emit = defineEmits<{
   (event: 'reset-width'): void
   (event: 'remove-recent', id: string): void
   (event: 'clear-recents'): void
+  (event: 'ai-action', payload: WorkspaceFileAiActionPayload): void
 }>()
 
 const { t } = useI18n()
@@ -159,6 +163,7 @@ onBeforeUnmount(() => {
           :messages="messages"
           :conversation-id="conversationId"
           :workspace-root="workspaceRoot"
+          :git-available="gitAvailable"
           :context="context"
           :turn="turn"
           :activity-turns="activityTurns"
@@ -190,6 +195,7 @@ onBeforeUnmount(() => {
           @open-web-external="emit('open-web-external', $event)"
           @remove-recent="emit('remove-recent', $event)"
           @clear-recents="emit('clear-recents')"
+          @ai-action="emit('ai-action', $event)"
         />
       </div>
     </Transition>

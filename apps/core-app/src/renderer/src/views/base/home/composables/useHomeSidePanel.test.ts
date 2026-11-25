@@ -174,27 +174,87 @@ describe('useHomeSidePanel', () => {
     expect(panel.recentItems.value).toHaveLength(1)
     expect(panel.recentItems.value[0]).toMatchObject({ url: 'https://example.com/public' })
 
-    const rawState = window.localStorage.getItem('tuff.home.sidePanelState.v1') ?? ''
-    const rawRecents = window.localStorage.getItem('tuff.home.sidePanelRecents.v1') ?? ''
+    const rawState = window.localStorage.getItem('tuff.home.sidePanelStateBySpace.v1') ?? ''
+    const rawRecents = window.localStorage.getItem('tuff.home.sidePanelRecentsBySpace.v1') ?? ''
     expect(rawState).not.toContain('secret')
     expect(rawRecents).not.toContain('secret')
 
     // Pre-existing credentialed entries in storage are dropped on reload.
     window.localStorage.setItem(
-      'tuff.home.sidePanelRecents.v1',
-      JSON.stringify([
-        {
-          id: 'web:https://bob:pw@example.com/admin',
-          kind: 'web',
-          title: 'Admin',
-          url: 'https://bob:pw@example.com/admin',
-          updatedAt: Date.now()
-        }
-      ])
+      'tuff.home.sidePanelRecentsBySpace.v1',
+      JSON.stringify({
+        'space:default': [
+          {
+            id: 'web:https://bob:pw@example.com/admin',
+            kind: 'web',
+            title: 'Admin',
+            url: 'https://bob:pw@example.com/admin',
+            updatedAt: Date.now()
+          }
+        ]
+      })
     )
     const reloaded = useHomeSidePanel(ref<string | null>('conv-1'))
     expect(reloaded.tabs.value).toHaveLength(1)
     expect(reloaded.tabs.value[0]).toMatchObject({ url: 'https://example.com/public' })
     expect(reloaded.recentItems.value).toEqual([])
+  })
+
+  it('isolates panel open state, tabs, active tab, and recent items per Space and supports pruning by kind', async () => {
+    const conv = ref<string | null>('conv-proj')
+    const spaceKey = ref('space:project:talex-touch')
+    const panel = useHomeSidePanel(conv, { spaceKey })
+
+    panel.openWorkspaceTab('git', 'Git')
+    panel.openFileTab({ path: '/repo/TODO-AI.md', displayPath: 'docs/plan-prd/TODO-AI.md' })
+    expect(panel.panelOpen.value).toBe(true)
+    expect(panel.tabs.value.map((t) => t.kind)).toEqual(['git', 'file'])
+    expect(panel.recentItems.value).toHaveLength(1)
+
+    // Switch to Temporary Space: sidebar resets to Temporary Space's own empty/closed state.
+    spaceKey.value = 'space:temporary'
+    conv.value = 'conv-temp'
+    await Promise.resolve()
+    expect(panel.panelOpen.value).toBe(false)
+    expect(panel.tabs.value).toEqual([])
+    expect(panel.activeTabId.value).toBeNull()
+    expect(panel.recentItems.value).toEqual([])
+
+    // Opening a tab inside Temporary Space stays isolated from the project Space.
+    panel.openWebTab({ url: 'https://example.com/temp', title: 'Temp Page' })
+    expect(panel.panelOpen.value).toBe(true)
+    expect(panel.tabs.value.map((t) => t.kind)).toEqual(['web'])
+    expect(panel.recentItems.value.map((r) => r.title)).toEqual(['Temp Page'])
+
+    // Switch back to project Space: restores its own Git + file tabs and recents without leakage.
+    spaceKey.value = 'space:project:talex-touch'
+    conv.value = 'conv-proj'
+    await Promise.resolve()
+    expect(panel.panelOpen.value).toBe(true)
+    expect(panel.tabs.value.map((t) => t.kind)).toEqual(['git', 'file'])
+    expect(panel.recentItems.value.map((r) => r.title)).toEqual(['TODO-AI.md'])
+
+    // Pruning git tabs removes git while keeping other tabs intact.
+    panel.closeTabsByKind('git')
+    expect(panel.tabs.value.map((t) => t.kind)).toEqual(['file'])
+  })
+
+  it('clears thread-bound tabs on a conversation change even after a Space-only switch', async () => {
+    const conv = ref<string | null>('conv-1')
+    const spaceKey = ref('space:project:alpha')
+    const panel = useHomeSidePanel(conv, { spaceKey })
+
+    // Switch Space without changing conversationId.
+    spaceKey.value = 'space:project:beta'
+    await Promise.resolve()
+
+    panel.openWorkspaceTab('files', 'Files')
+    panel.openFileTab({ path: '/beta/README.md', displayPath: 'README.md' })
+    expect(panel.tabs.value.map((t) => t.kind)).toEqual(['files', 'file'])
+
+    // Later changing conversationId inside Space beta must still clear thread-bound file tabs.
+    conv.value = 'conv-2'
+    await Promise.resolve()
+    expect(panel.tabs.value.map((t) => t.kind)).toEqual(['files'])
   })
 })

@@ -4,6 +4,8 @@ import { parseBrowserFilePreviewUrl } from '~/modules/browser-workspace/preview-
 
 export const BROWSER_SCOPE_KEY = 'browser'
 export const TEMPORARY_SPACE_KEY = 'space:temporary'
+export const HERDR_SPACE_KEY = 'space:herdr'
+export const HERDR_SPACE_PREFIX = 'space:herdr:'
 
 const STORAGE_KEY = 'tuff:shell-workspace-tabs:v1'
 const MAX_TABS_PER_SPACE = 24
@@ -13,6 +15,12 @@ export type SpaceWorkspaceTab =
       id: string
       kind: 'conversation'
       conversationId: string
+      spaceKey: string
+    }
+  | {
+      id: string
+      kind: 'herdr'
+      address: string
       spaceKey: string
     }
   | {
@@ -54,6 +62,21 @@ export function isSpaceScopeKey(scopeKey: string): boolean {
   return scopeKey.startsWith('space:')
 }
 
+export function herdrProjectSpaceKey(groupKey: string): string {
+  const trimmed = groupKey.trim()
+  return trimmed ? `${HERDR_SPACE_PREFIX}${trimmed}` : HERDR_SPACE_KEY
+}
+
+export function isHerdrSpaceKey(scopeKey: string): boolean {
+  return scopeKey === HERDR_SPACE_KEY || scopeKey.startsWith(HERDR_SPACE_PREFIX)
+}
+
+export function herdrGroupKeyFromSpaceKey(scopeKey: string): string | null {
+  if (!scopeKey.startsWith(HERDR_SPACE_PREFIX)) return null
+  const key = scopeKey.slice(HERDR_SPACE_PREFIX.length).trim()
+  return key || null
+}
+
 export function projectIdFromSpaceKey(scopeKey: string): string | null {
   if (!scopeKey.startsWith('space:project:')) return null
   const id = scopeKey.slice('space:project:'.length).trim()
@@ -62,6 +85,10 @@ export function projectIdFromSpaceKey(scopeKey: string): string | null {
 
 export function conversationTabId(conversationId: string): string {
   return `conv:${conversationId}`
+}
+
+export function herdrTabId(address: string): string {
+  return `herdr:${address}`
 }
 
 export function draftTabId(spaceKey: string): string {
@@ -76,6 +103,9 @@ function isValidPersistedTab(candidate: unknown, spaceKey: string): candidate is
   if (!candidate || typeof candidate !== 'object') return false
   const tab = candidate as Record<string, unknown>
   if (tab.kind === 'conversation' && typeof tab.conversationId === 'string' && tab.conversationId) {
+    return true
+  }
+  if (tab.kind === 'herdr' && typeof tab.address === 'string' && tab.address) {
     return true
   }
   if (tab.kind === 'draft') {
@@ -118,21 +148,28 @@ function loadPersistedState(): {
                   conversationId: item.conversationId,
                   spaceKey
                 }
-              : item.kind === 'draft'
+              : item.kind === 'herdr'
                 ? {
-                    id: draftTabId(spaceKey),
-                    kind: 'draft',
+                    id: herdrTabId(item.address),
+                    kind: 'herdr',
+                    address: item.address,
                     spaceKey
                   }
-                : {
-                    id: spaceBrowserTabId(item.browserTabId),
-                    kind: 'browser',
-                    browserTabId: item.browserTabId,
-                    spaceKey,
-                    ...(typeof item.conversationId === 'string' && item.conversationId
-                      ? { conversationId: item.conversationId }
-                      : {})
-                  }
+                : item.kind === 'draft'
+                  ? {
+                      id: draftTabId(spaceKey),
+                      kind: 'draft',
+                      spaceKey
+                    }
+                  : {
+                      id: spaceBrowserTabId(item.browserTabId),
+                      kind: 'browser',
+                      browserTabId: item.browserTabId,
+                      spaceKey,
+                      ...(typeof item.conversationId === 'string' && item.conversationId
+                        ? { conversationId: item.conversationId }
+                        : {})
+                    }
           if (seen.has(normalized.id)) continue
           seen.add(normalized.id)
           clean.push(normalized)
@@ -177,6 +214,10 @@ const initial = loadPersistedState()
 const lastWorkspaceScope = ref<string>(initial.lastScope)
 const spaceTabsMap = ref<Record<string, SpaceWorkspaceTab[]>>(initial.spaceTabs)
 const browserTabBindings = ref<Record<string, BrowserTabScopeBinding>>(initial.browserTabBindings)
+/** In-memory per-project memory of dismissed Herdr tabs so closing a tab hides it without killing the terminal. */
+const dismissedHerdrTabsByScope = ref<Record<string, string[]>>({})
+/** In-memory memory of the last opened terminal address per Herdr project key. */
+const lastHerdrAddressByGroup = ref<Record<string, string>>({})
 
 function persistState(): void {
   if (typeof localStorage === 'undefined') return
@@ -276,6 +317,168 @@ export function ensureConversationTab(
 
   setSpaceList(spaceKey, [...currentList, created])
   return created
+}
+
+export function ensureHerdrTab(
+  address: string,
+  spaceKey: string = HERDR_SPACE_KEY
+): SpaceWorkspaceTab {
+  const normalizedAddress = address.trim()
+  const id = herdrTabId(normalizedAddress)
+
+  // Clear dismissed state when explicitly opening this terminal.
+  const dismissed = dismissedHerdrTabsByScope.value[spaceKey]
+  if (dismissed?.includes(normalizedAddress)) {
+    const remainingDismissed = dismissed.filter((item) => item !== normalizedAddress)
+    const nextDismissed = { ...dismissedHerdrTabsByScope.value }
+    if (remainingDismissed.length === 0) delete nextDismissed[spaceKey]
+    else nextDismissed[spaceKey] = remainingDismissed
+    dismissedHerdrTabsByScope.value = nextDismissed
+  }
+
+  // If this terminal previously lived under a different Herdr scope (e.g. fallback `space:herdr`),
+  // move it cleanly into its authoritative project scope so it never duplicates.
+  let migrated = false
+  const nextMap: Record<string, SpaceWorkspaceTab[]> = { ...spaceTabsMap.value }
+  for (const [otherSpace, list] of Object.entries(nextMap)) {
+    if (otherSpace === spaceKey) continue
+    const filtered = list.filter(
+      (tab) => !(tab.kind === 'herdr' && tab.address === normalizedAddress)
+    )
+    if (filtered.length !== list.length) {
+      migrated = true
+      if (filtered.length === 0) delete nextMap[otherSpace]
+      else nextMap[otherSpace] = filtered
+    }
+  }
+  if (migrated) {
+    spaceTabsMap.value = nextMap
+  }
+
+  const currentList = getSpaceTabs(spaceKey)
+  const existing = currentList.find((tab) => tab.id === id)
+  if (existing) {
+    if (migrated) persistState()
+    return existing
+  }
+
+  const created: SpaceWorkspaceTab = {
+    id,
+    kind: 'herdr',
+    address: normalizedAddress,
+    spaceKey
+  }
+  setSpaceList(spaceKey, [...currentList, created])
+  return created
+}
+
+/**
+ * Synchronizes a Herdr project's top tab strip with its live terminals:
+ * keeps existing tab order (preserving drag-and-drop and interleaved browser tabs), appends newly
+ * discovered terminals that weren't explicitly closed, and prunes addresses that left the project.
+ */
+export function syncHerdrProjectTabs(
+  spaceKey: string,
+  liveAddresses: readonly string[],
+  options: { activeAddress?: string | null; restoreDismissed?: boolean } = {}
+): void {
+  const normalizedLive = liveAddresses.map((addr) => addr.trim()).filter(Boolean)
+  const liveSet = new Set(normalizedLive)
+  const activeAddress = options.activeAddress?.trim() || null
+
+  if (options.restoreDismissed && dismissedHerdrTabsByScope.value[spaceKey]) {
+    const nextDismissed = { ...dismissedHerdrTabsByScope.value }
+    delete nextDismissed[spaceKey]
+    dismissedHerdrTabsByScope.value = nextDismissed
+  }
+
+  // Prune dismissed entries that are no longer live, or restore the active address if targeted.
+  const rawDismissed = dismissedHerdrTabsByScope.value[spaceKey] ?? []
+  const cleanedDismissed = rawDismissed.filter(
+    (addr) => liveSet.has(addr) && addr !== activeAddress
+  )
+  if (cleanedDismissed.length !== rawDismissed.length) {
+    const nextDismissed = { ...dismissedHerdrTabsByScope.value }
+    if (cleanedDismissed.length === 0) delete nextDismissed[spaceKey]
+    else nextDismissed[spaceKey] = cleanedDismissed
+    dismissedHerdrTabsByScope.value = nextDismissed
+  }
+  const dismissedSet = new Set(cleanedDismissed)
+
+  const currentList = getSpaceTabs(spaceKey)
+  const kept: SpaceWorkspaceTab[] = []
+  const seenHerdr = new Set<string>()
+
+  for (const tab of currentList) {
+    if (tab.kind !== 'herdr') {
+      kept.push(tab)
+      continue
+    }
+    if (liveSet.has(tab.address) && !dismissedSet.has(tab.address)) {
+      kept.push(tab)
+      seenHerdr.add(tab.address)
+    } else if (tab.address === activeAddress) {
+      kept.push(tab)
+      seenHerdr.add(tab.address)
+    }
+  }
+
+  for (const addr of normalizedLive) {
+    if (seenHerdr.has(addr) || dismissedSet.has(addr)) continue
+    kept.push({
+      id: herdrTabId(addr),
+      kind: 'herdr',
+      address: addr,
+      spaceKey
+    })
+    seenHerdr.add(addr)
+  }
+
+  if (activeAddress && !seenHerdr.has(activeAddress)) {
+    kept.push({
+      id: herdrTabId(activeAddress),
+      kind: 'herdr',
+      address: activeAddress,
+      spaceKey
+    })
+  }
+
+  const unchanged =
+    kept.length === currentList.length && kept.every((tab, idx) => tab.id === currentList[idx]?.id)
+  if (!unchanged) {
+    setSpaceList(spaceKey, kept)
+  }
+}
+
+export function setLastHerdrAddressForGroup(groupKey: string, address: string): void {
+  const key = groupKey.trim()
+  const addr = address.trim()
+  if (!key || !addr) return
+  if (lastHerdrAddressByGroup.value[key] === addr) return
+  lastHerdrAddressByGroup.value = {
+    ...lastHerdrAddressByGroup.value,
+    [key]: addr
+  }
+}
+
+export function getLastHerdrAddressForGroup(groupKey: string): string | null {
+  return lastHerdrAddressByGroup.value[groupKey.trim()] ?? null
+}
+
+export function closeHerdrTabEverywhere(address: string): void {
+  const normalizedAddress = address.trim()
+  const targetId = herdrTabId(normalizedAddress)
+  let changed = false
+  const nextMap: Record<string, SpaceWorkspaceTab[]> = {}
+  for (const [spaceKey, list] of Object.entries(spaceTabsMap.value)) {
+    const filtered = list.filter((tab) => tab.id !== targetId)
+    if (filtered.length !== list.length) changed = true
+    if (filtered.length > 0) nextMap[spaceKey] = filtered
+  }
+  if (changed) {
+    spaceTabsMap.value = nextMap
+    persistState()
+  }
 }
 
 export function attachBrowserTabToSpace(
@@ -429,6 +632,16 @@ export function removeSpaceTab(
   const remaining = list.filter((tab) => tab.id !== tabId)
   setSpaceList(spaceKey, remaining)
 
+  if (removed.kind === 'herdr' && isHerdrSpaceKey(spaceKey)) {
+    const existing = dismissedHerdrTabsByScope.value[spaceKey] ?? []
+    if (!existing.includes(removed.address)) {
+      dismissedHerdrTabsByScope.value = {
+        ...dismissedHerdrTabsByScope.value,
+        [spaceKey]: [...existing, removed.address]
+      }
+    }
+  }
+
   if (removed.kind === 'browser' && browserTabBindings.value[removed.browserTabId]) {
     const nextBindings = { ...browserTabBindings.value }
     delete nextBindings[removed.browserTabId]
@@ -466,6 +679,7 @@ export function closeSpaceTabsBulk(
 
   const keptTabs: SpaceWorkspaceTab[] = []
   const removedBrowserTabIds: string[] = []
+  const removedHerdrAddresses: string[] = []
 
   list.forEach((tab, currentIndex) => {
     const remove =
@@ -476,6 +690,7 @@ export function closeSpaceTabsBulk(
           : currentIndex > index
     if (remove) {
       if (tab.kind === 'browser') removedBrowserTabIds.push(tab.browserTabId)
+      if (tab.kind === 'herdr') removedHerdrAddresses.push(tab.address)
     } else {
       keptTabs.push(tab)
     }
@@ -483,6 +698,14 @@ export function closeSpaceTabsBulk(
 
   if (keptTabs.length !== list.length) {
     setSpaceList(spaceKey, keptTabs)
+    if (removedHerdrAddresses.length > 0 && isHerdrSpaceKey(spaceKey)) {
+      const existing = new Set(dismissedHerdrTabsByScope.value[spaceKey] ?? [])
+      for (const addr of removedHerdrAddresses) existing.add(addr)
+      dismissedHerdrTabsByScope.value = {
+        ...dismissedHerdrTabsByScope.value,
+        [spaceKey]: [...existing]
+      }
+    }
     if (removedBrowserTabIds.length > 0) {
       const nextBindings = { ...browserTabBindings.value }
       for (const id of removedBrowserTabIds) delete nextBindings[id]
@@ -524,6 +747,8 @@ export function resetShellWorkspaceTabsForTests(): void {
   lastWorkspaceScope.value = BROWSER_SCOPE_KEY
   spaceTabsMap.value = {}
   browserTabBindings.value = {}
+  dismissedHerdrTabsByScope.value = {}
+  lastHerdrAddressByGroup.value = {}
   if (typeof localStorage !== 'undefined') {
     try {
       localStorage.removeItem(STORAGE_KEY)
@@ -542,11 +767,16 @@ export function useShellWorkspaceTabs() {
     getSpaceTabs,
     ensureDraftTab,
     ensureConversationTab,
+    ensureHerdrTab,
+    syncHerdrProjectTabs,
+    setLastHerdrAddressForGroup,
+    getLastHerdrAddressForGroup,
     attachBrowserTabToSpace,
     resolveBrowserTabSpaceKey,
     syncBrowserTabsWithSpaces,
     removeSpaceTab,
     closeConversationTabEverywhere,
+    closeHerdrTabEverywhere,
     closeSpaceTabsBulk,
     reorderSpaceTab
   }
