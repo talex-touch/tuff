@@ -1,14 +1,15 @@
 /**
- * Shell design tokens.
+ * Shell design tokens — TDS (Tuff Design System) CoreApp CSS bridge.
  *
- * Values come from `docs/design/corebox/v2.5.0.pen` (themes axis `mode: light|dark`).
- * They intentionally diverge from the Element-derived `--tx-*` palette: the shell uses an
- * Apple-leaning neutral ramp (`#1D1D1F` / `#2B7FD9`) rather than `#303133` / `#409eff`.
- * Aliasing `--tx-*` here would silently render the wrong colors.
+ * Single-source catalog: `docs/design/tds/tokens.json` (index: `docs/design/tds/README.md`).
+ * Synchronized and WCAG 2.1 AA contrast-verified by `shell-tokens.contract.test.ts`.
  *
- * High-contrast mode is the exception: `html.contrast` is a user-toggleable accessibility
- * addon (`themeStyle.theme.addon.contrast`), so the shell re-points to the purpose-built
- * `--tx-*` contrast ramp instead of keeping the design values.
+ * Visual values originate from `docs/design/corebox/v2.5.0.pen` (themes axis `mode: light|dark`).
+ * Light/dark shell palette intentionally diverges from the Element-derived `--tx-*` palette: the
+ * shell uses an Apple-leaning neutral ramp (`#1D1D1F` / `#2B7FD9`, dark `#141414` / `#4E9AE6`)
+ * rather than `#303133` / `#409eff`. Aliasing `--tx-*` colors directly here would silently render
+ * the wrong colors. Shared typography, dark-weight compensation, motion easing, and high-contrast
+ * ramps (`html.contrast` / `html.dark.contrast`) bridge cleanly to `--tx-*`.
  */
 
 :root {
@@ -70,6 +71,7 @@
    * those blocks only re-point ink, borders and semantic hues.
    */
   --shell-scrim: #00000040;
+  --shell-focus-ring: var(--tx-focus-ring-color, var(--shell-primary));
 
   --shell-radius-sm: 6px;
   --shell-radius-md: 10px;
@@ -94,6 +96,17 @@
   --shell-fs-title: 22px;
   --shell-fs-h1: 26px;
   --shell-fs-display: 30px;
+
+  // TDS typography & motion bridges to `--tx-*` (inherits dark-mode optical weight compensation).
+  --shell-font-sans: var(--tx-font-family, "Inter", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+  --shell-font-mono: var(--tx-font-mono, "JetBrains Mono", ui-monospace, "SF Mono", "Menlo", monospace);
+  --shell-font-weight-regular: 400;
+  --shell-font-weight-medium: var(--tx-font-weight-medium, 500);
+  --shell-font-weight-semibold: var(--tx-font-weight-semibold, 600);
+
+  --shell-ease-out: var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+  --shell-duration-fast: 150ms;
+  --shell-duration-normal: 240ms;
 
   // Starting width only. `AppShell` overrides this per render from the persisted sidebar width,
   // so the sidebar still has a sane width during the first frames, before storage has loaded.
@@ -218,7 +231,10 @@ html.dark.contrast {
   --shell-text-muted: var(--tx-text-color-placeholder);
 
   --shell-primary: var(--tx-color-primary);
-  --shell-primary-soft: var(--tx-color-primary-dark-2);
+  // In `tx-high-contrast-dark`, `-light-9` is the deep tint (`#102536`, 8.36:1 under `#7cc4ff` and
+  // 15.67:1 under `#ffffff`), matching the other four semantic `-light-9` soft surfaces below.
+  // (`-dark-2` is `#b8ddff`, a light hover tint that would drop contrast to 1.32:1.)
+  --shell-primary-soft: var(--tx-color-primary-light-9);
   --shell-primary-border: var(--tx-color-primary);
   // `--shell-on-primary` deliberately falls through from `.dark`: the contrast ramp's
   // `#7cc4ff` is lighter still, so the same dark ink reads at 8.28:1 here.
