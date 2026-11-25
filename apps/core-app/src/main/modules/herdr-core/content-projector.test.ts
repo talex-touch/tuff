@@ -9,7 +9,11 @@ import { appendFile, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/pro
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { detectProjectedProvider, HerdrNativeSessionProjector } from './content-projector'
+import {
+  detectProjectedProvider,
+  HerdrNativeSessionProjector,
+  parseNativeSessionJsonlLines
+} from './content-projector'
 
 let tempDir: string
 let projectRoot: string
@@ -354,5 +358,105 @@ describe('HerdrNativeSessionProjector', () => {
     projector.unwatchOwner(77)
     expect(closeSpy).toHaveBeenCalledTimes(1)
     expect(projector.watchedAddressCount).toBe(0)
+  })
+
+  it('preserves chronological interleaved parts across Claude, Codex, and Pi turns without breaking legacy fields', () => {
+    const claudeResult = parseNativeSessionJsonlLines('claude', [
+      JSON.stringify({
+        type: 'assistant',
+        uuid: 'a-interleaved',
+        timestamp: '2026-03-01T10:00:02.000Z',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', thinking: 'Step 1 thought' },
+            { type: 'text', text: 'Inspecting file' },
+            { type: 'tool_use', id: 'tu-1', name: 'Read', input: { path: 'a.ts' } },
+            { type: 'text', text: 'Running tests now' },
+            { type: 'tool_use', id: 'tu-2', name: 'Bash', input: { cmd: 'pnpm test' } }
+          ]
+        }
+      }),
+      JSON.stringify({
+        type: 'user',
+        uuid: 'u-results',
+        timestamp: '2026-03-01T10:00:03.000Z',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 'tu-1', content: 'x'.repeat(1000) },
+            { type: 'tool_result', tool_use_id: 'tu-2', content: 'PASS' }
+          ]
+        }
+      })
+    ])
+
+    expect(claudeResult.messages).toHaveLength(1)
+    expect(claudeResult.messages[0]).toMatchObject({
+      role: 'assistant',
+      text: 'Inspecting file\nRunning tests now',
+      reasoning: 'Step 1 thought',
+      parts: [
+        { type: 'reasoning', text: 'Step 1 thought' },
+        { type: 'text', text: 'Inspecting file' },
+        { type: 'tool-call', toolCallId: 'tu-1' },
+        { type: 'text', text: 'Running tests now' },
+        { type: 'tool-call', toolCallId: 'tu-2' }
+      ]
+    })
+    // Wider preview keeps 1000-char tool output untruncated.
+    expect(claudeResult.messages[0]?.toolCalls?.[0]?.outputPreview).toBe('x'.repeat(1000))
+
+    const codexResult = parseNativeSessionJsonlLines('codex', [
+      JSON.stringify({
+        type: 'response_item',
+        timestamp: '2026-03-01T10:00:01.000Z',
+        payload: { type: 'reasoning', summary: [{ text: 'Think 1' }] }
+      }),
+      JSON.stringify({
+        type: 'response_item',
+        timestamp: '2026-03-01T10:00:02.000Z',
+        payload: { type: 'function_call', call_id: 'fc-1', name: 'read', arguments: '{"p":1}' }
+      }),
+      JSON.stringify({
+        type: 'response_item',
+        timestamp: '2026-03-01T10:00:03.000Z',
+        payload: { type: 'reasoning', summary: [{ text: 'Think 2' }] }
+      }),
+      JSON.stringify({
+        type: 'response_item',
+        timestamp: '2026-03-01T10:00:04.000Z',
+        payload: { type: 'function_call', call_id: 'fc-2', name: 'edit', arguments: '{"p":2}' }
+      })
+    ])
+
+    expect(codexResult.messages).toHaveLength(1)
+    expect(codexResult.messages[0]?.parts).toEqual([
+      { type: 'reasoning', text: 'Think 1' },
+      { type: 'tool-call', toolCallId: 'fc-1' },
+      { type: 'reasoning', text: 'Think 2' },
+      { type: 'tool-call', toolCallId: 'fc-2' }
+    ])
+
+    const piResult = parseNativeSessionJsonlLines('oh-my-pi', [
+      JSON.stringify({
+        type: 'message',
+        id: 'omp-1',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', thinking: 'Plan' },
+            { type: 'toolCall', id: 'tc-1', name: 'grep', arguments: { q: 'herdr' } },
+            { type: 'text', text: 'Found 3 matches.' }
+          ]
+        }
+      })
+    ])
+
+    expect(piResult.messages[0]?.parts).toEqual([
+      { type: 'reasoning', text: 'Plan' },
+      { type: 'tool-call', toolCallId: 'tc-1' },
+      { type: 'text', text: 'Found 3 matches.' }
+    ])
   })
 })

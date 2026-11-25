@@ -5097,13 +5097,42 @@
     }
   },
   "herdr": {
+    "space": {
+      "name": "Herdr Space",
+      "infoLabel": "关于 Herdr Space",
+      "rowTooltip": "Herdr Space：由 herdr-core 托管的持久终端与外部 Agent 任务，点击展开或收起",
+      "description": "集中管理由 herdr-core 托管的持久终端与外部 Agent 运行时会话；关闭底部标签页不会终止后台任务。",
+      "metaLive": "运行中",
+      "metaMachines": "远程机器",
+      "metaSession": "核心会话",
+      "railMore": "另有 {count} 个运行中任务",
+      "connection": {
+        "connected": "已连接",
+        "connecting": "连接中",
+        "fallback": "本地回退",
+        "disconnected": "未连接"
+      }
+    },
+    "hover": {
+      "app": "应用 / 进程",
+      "address": "会话地址",
+      "machine": "远程机器",
+      "project": "所属项目",
+      "where": "Herdr 位置",
+      "cwd": "工作目录",
+      "command": "启动命令",
+      "attachment": "终端状态",
+      "attachmentAttached": "已附加到底部终端",
+      "attachmentBackground": "后台持久运行中",
+      "actionHint": "点击以结构化卡片视图打开 · 右上角可快速发送、停止轮次或附加终端"
+    },
     "sidebar": {
-      "title": "运行中任务",
-      "empty": "暂无运行中的终端任务",
-      "newSession": "新建运行时终端",
+      "title": "Herdr Space",
+      "empty": "暂无运行中的 Herdr 终端任务",
+      "newSession": "新建 Herdr 终端",
       "fallbackHint": "herdr-core 未就绪，终端将使用本地 PTY 模式。",
-      "railTooltip": "{count} 个运行中任务",
-      "railBlockedTooltip": "{count} 个运行中任务（有任务等待处理）"
+      "railTooltip": "Herdr Space：{count} 个运行中任务",
+      "railBlockedTooltip": "Herdr Space：{count} 个运行中任务（有任务等待处理）"
     },
     "status": {
       "idle": "空闲",
@@ -5163,6 +5192,24 @@
         "completed": "已完成",
         "failed": "失败"
       }
+    },
+    "stage": {
+      "modeChat": "AI 对话",
+      "modeTerminal": "原始终端",
+      "viewModeLabel": "切换 Herdr 视图模式",
+      "openInMainStage": "在主舞台打开",
+      "sessionNotFoundTitle": "未找到该 Herdr 会话",
+      "sessionNotFoundDesc": "会话 {address} 已结束或尚未同步，可返回首页或选择其他任务。",
+      "backToHome": "返回首页",
+      "attachSessionOffline": "会话未运行，无法上传附件",
+      "attachTooLarge": "附件 {name} 超过 8 MiB 限制",
+      "attachFailed": "上传附件 {name} 失败：{error}",
+      "composerPlaceholder": "继续向 {target} 发送指令，支持粘贴或拖拽文件…",
+      "composerFinishedPlaceholder": "该会话已结束，无法继续发送",
+      "killConfirmFailed": "终止会话失败",
+      "terminalTakeover": "切到原始终端接管",
+      "autoTerminalHint": "当前会话无结构化日志，已为你打开原始终端视图。",
+      "waitingFirstMessage": "已连接 {target}，在下方输入消息即可开始对话。"
     }
   },
   "app": {
@@ -5198,6 +5245,7 @@
     "home": "首页",
     "browser": "浏览器",
     "homeConversation": "对话",
+    "herdrConversation": "Herdr 对话",
     "login": "请先登录!",
     "permission": "您没有权限!",
     "voiceInsights": "语音输入",

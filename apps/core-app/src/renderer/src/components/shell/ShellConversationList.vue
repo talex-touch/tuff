@@ -19,6 +19,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
+import { isBetaFeatureEnabled } from '../../../../shared/beta-features'
 import { omniPanelShowEvent } from '../../../../shared/events/omni-panel'
 import { projectConversationGroups } from '~/modules/conversation/conversation-project-groups'
 import { continueLocalAiSession } from '~/modules/conversation/local-ai-session-entry'
@@ -28,6 +29,7 @@ import { useConversationLoading } from '~/modules/conversation/useConversationLo
 import { blankConversationOwner, useProjectFolders } from '~/modules/layout/useProjectFolders'
 import { useProjectStore } from '~/stores/projects'
 import MetaHintBadge from './MetaHintBadge.vue'
+import ShellHerdrSpace from './ShellHerdrSpace.vue'
 import ShellProjectFolder from './ShellProjectFolder.vue'
 import ShellTemporarySpace from './ShellTemporarySpace.vue'
 
@@ -90,6 +92,7 @@ const temporaryNoticeRead = computed(
     (appSetting.shell as { temporaryNoticeRead?: unknown } | undefined)?.temporaryNoticeRead ===
     true
 )
+const herdrEnabled = computed(() => isBetaFeatureEnabled(appSetting, 'herdrRuntime'))
 const showSkeleton = computed(
   () => !loaded.value && history.conversations.value.length === 0 && projects.value.length === 0
 )
@@ -456,6 +459,7 @@ function onRailRowClick(row: RailConversationRow): void {
             </div>
           </div>
         </TxPopover>
+        <ShellHerdrSpace v-if="herdrEnabled" />
       </div>
 
       <template v-else>
@@ -546,6 +550,7 @@ function onRailRowClick(row: RailConversationRow): void {
             @continue-session="continueSession"
             @forget-session="forgetSession"
           />
+          <ShellHerdrSpace v-if="herdrEnabled" />
         </section>
 
         <section v-if="groups.archived.length" class="ShellConversationList-Archived">

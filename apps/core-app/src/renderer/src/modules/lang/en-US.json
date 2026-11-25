@@ -5097,13 +5097,42 @@
     }
   },
   "herdr": {
+    "space": {
+      "name": "Herdr Space",
+      "infoLabel": "About Herdr Space",
+      "rowTooltip": "Herdr Space: persistent terminals and external agent sessions managed by herdr-core. Click to toggle.",
+      "description": "Groups persistent terminals and external agent runtime sessions managed by herdr-core. Closing a bottom tab detaches without stopping the process.",
+      "metaLive": "Live",
+      "metaMachines": "Machines",
+      "metaSession": "Core session",
+      "railMore": "+{count} more active tasks",
+      "connection": {
+        "connected": "Connected",
+        "connecting": "Connecting",
+        "fallback": "Local PTY",
+        "disconnected": "Disconnected"
+      }
+    },
+    "hover": {
+      "app": "App / Process",
+      "address": "Address",
+      "machine": "Machine",
+      "project": "Project",
+      "where": "Herdr slot",
+      "cwd": "Directory",
+      "command": "Command",
+      "attachment": "Terminal",
+      "attachmentAttached": "Attached in bottom terminal",
+      "attachmentBackground": "Running in background",
+      "actionHint": "Click to open structured card view · Use top-right icons to send, stop, or attach terminal"
+    },
     "sidebar": {
-      "title": "Active tasks",
-      "empty": "No live terminal tasks",
-      "newSession": "New runtime terminal",
+      "title": "Herdr Space",
+      "empty": "No live Herdr terminal tasks",
+      "newSession": "New Herdr terminal",
       "fallbackHint": "herdr-core is unavailable; using local PTY fallback.",
-      "railTooltip": "{count} active tasks",
-      "railBlockedTooltip": "{count} active tasks (attention needed)"
+      "railTooltip": "Herdr Space: {count} active tasks",
+      "railBlockedTooltip": "Herdr Space: {count} active tasks (attention needed)"
     },
     "status": {
       "idle": "Idle",
@@ -5163,6 +5192,24 @@
         "completed": "Completed",
         "failed": "Failed"
       }
+    },
+    "stage": {
+      "modeChat": "AI Chat",
+      "modeTerminal": "Raw Terminal",
+      "viewModeLabel": "Switch Herdr view mode",
+      "openInMainStage": "Open in main stage",
+      "sessionNotFoundTitle": "Herdr session not found",
+      "sessionNotFoundDesc": "Session {address} has ended or is not synced yet. Return home or pick another task.",
+      "backToHome": "Back to Home",
+      "attachSessionOffline": "Session is not running; cannot upload attachments",
+      "attachTooLarge": "Attachment {name} exceeds the 8 MiB limit",
+      "attachFailed": "Failed to upload {name}: {error}",
+      "composerPlaceholder": "Continue messaging {target}; paste or drop files to upload...",
+      "composerFinishedPlaceholder": "This session has finished",
+      "killConfirmFailed": "Failed to terminate session",
+      "terminalTakeover": "Take over in terminal",
+      "autoTerminalHint": "Structured logs are unavailable for this session; opened in raw terminal view.",
+      "waitingFirstMessage": "Connected to {target}. Send a message below to start."
     }
   },
   "app": {
@@ -5198,6 +5245,7 @@
     "home": "Home",
     "browser": "Browser",
     "homeConversation": "Conversation",
+    "herdrConversation": "Herdr Conversation",
     "login": "Please login first!",
     "permission": "You don't have permission!",
     "voiceInsights": "Voice Input",

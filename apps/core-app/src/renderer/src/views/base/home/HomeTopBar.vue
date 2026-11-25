@@ -52,9 +52,15 @@ const { terminalOpen, toggleTerminal } = useShellTerminal()
       <h1 v-if="props.title" class="HomeTopBar-Title" :title="props.title">
         {{ props.title }}
       </h1>
+      <div v-if="$slots['left-extra']" class="HomeTopBar-LeftExtra">
+        <slot name="left-extra" />
+      </div>
     </div>
 
     <div class="HomeTopBar-Actions">
+      <div v-if="$slots['actions-lead']" class="HomeTopBar-ActionsLead">
+        <slot name="actions-lead" />
+      </div>
       <!-- Branches the whole thread into a new conversation (Main's fork); shown only when there
            is a settled history to branch. -->
       <button
@@ -157,7 +163,12 @@ const { terminalOpen, toggleTerminal } = useShellTerminal()
   font-weight: 500;
 }
 
-.HomeTopBar-ProjectSlot {
+.HomeTopBar-ProjectSlot,
+.HomeTopBar-LeftExtra,
+.HomeTopBar-ActionsLead {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex: none;
   -webkit-app-region: no-drag;
 }

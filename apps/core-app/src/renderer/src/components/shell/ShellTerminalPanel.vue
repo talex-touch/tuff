@@ -2,7 +2,8 @@
 import type { TerminalInstance, TerminalSize } from '@talex-touch/tuffex/terminal'
 import type {
   HerdrOscState,
-  HerdrStreamClosedPayload
+  HerdrStreamClosedPayload,
+  HerdrTerminalDisplay
 } from '@talex-touch/utils/transport/sdk/domains/herdr'
 import type {
   TerminalSessionHandle,
@@ -389,6 +390,13 @@ function handleHerdrStreamClosed(tabId: string, payload: HerdrStreamClosedPayloa
   }
 }
 
+function resolveHerdrDisplay(tabId?: string): HerdrTerminalDisplay | undefined {
+  const view = tabId ? terminalInstances.get(tabId) : undefined
+  const cell = view?.getCellSizePixels?.()
+  if (!cell || cell.width <= 0 || cell.height <= 0) return undefined
+  return { cell: [cell.width, cell.height] }
+}
+
 async function attachHerdrTab(tabId: string, options: { resumed?: boolean } = {}): Promise<void> {
   const tab = tabs.value.find((item) => item.id === tabId)
   if (!tab || tab.kind !== 'herdr' || !tab.address) return
@@ -400,6 +408,7 @@ async function attachHerdrTab(tabId: string, options: { resumed?: boolean } = {}
   const size = view?.getSize()
   const cols = size?.cols ?? 80
   const rows = size?.rows ?? 24
+  const display = resolveHerdrDisplay(tabId)
 
   try {
     const handle = await herdr.attach(tabId, {
@@ -408,6 +417,7 @@ async function attachHerdrTab(tabId: string, options: { resumed?: boolean } = {}
       history: 2000,
       resumed: options.resumed,
       resizeNotifications: true,
+      ...(display ? { display } : {}),
       handlers: {
         awaitDisplay: true,
         onData: (data) => {
@@ -601,7 +611,11 @@ async function handleInterruptActiveHerdrTab(): Promise<void> {
 
 async function handleNewHerdrShell(machine?: string): Promise<void> {
   try {
-    await herdr.openNewHerdrTab(machine ? { on: machine } : {})
+    const display = resolveHerdrDisplay(activeTabId.value ?? undefined)
+    await herdr.openNewHerdrTab({
+      ...(machine ? { on: machine } : {}),
+      ...(display ? { display } : {})
+    })
   } catch (error) {
     log.error('Failed to create herdr shell; falling back if local', { machine, error })
     if (!machine) {
