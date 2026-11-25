@@ -1,4 +1,5 @@
-import { shallowRef, toValue, type MaybeRefOrGetter, type ShallowRef } from '@vue/reactivity'
+import type { MaybeRefOrGetter, ShallowRef } from '@vue/reactivity'
+import { shallowRef, toValue } from '@vue/reactivity'
 
 export type FlipMode = 'transform' | 'size'
 

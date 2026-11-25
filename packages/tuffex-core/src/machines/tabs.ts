@@ -1,4 +1,5 @@
-import { computed, shallowRef, type ComputedRef, type Ref } from '@vue/reactivity'
+import type { ComputedRef, Ref } from '@vue/reactivity'
+import { computed, shallowRef } from '@vue/reactivity'
 
 export type TabsOrientation = 'horizontal' | 'vertical'
 export type TabsActivationMode = 'automatic' | 'manual'
@@ -162,10 +163,10 @@ export function createTabsMachine<T extends string | number = string>(
   function getTabProps(value: T, disabled = false): Record<string, string | number | boolean | undefined> {
     const selected = isSelected(value)
     return {
-      role: 'tab',
+      'role': 'tab',
       'aria-selected': selected,
       'aria-disabled': disabled || undefined,
-      tabindex: selected ? 0 : -1,
+      'tabindex': selected ? 0 : -1,
       'data-state': selected ? 'active' : 'inactive',
     }
   }

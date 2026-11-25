@@ -1,12 +1,13 @@
+import type { StreamState } from '../src/controllers/stream-pacer'
 import { describe, expect, it } from 'vitest'
-import { shallowRef } from '../src/reactivity'
 import {
   buildStreamModel,
   createStreamPacer,
   segmentWords,
   sliceStreamContent,
-  type StreamState,
+
 } from '../src/controllers/stream-pacer'
+import { shallowRef } from '../src/reactivity'
 
 function createFakeClock() {
   let time = 0

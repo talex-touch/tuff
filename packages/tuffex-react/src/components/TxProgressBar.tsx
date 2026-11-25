@@ -40,13 +40,13 @@ export interface TxProgressBarProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 function heightToPx(height: string): number | null {
-  const match = /^(\d*\.?\d+)(px|r?em)?$/.exec(height.trim())
+  const match = /^(\d+(?:\.\d+)?|\.\d+)(px|r?em)?$/.exec(height.trim())
   if (!match)
     return null
   return Number(match[1]) * (match[2]?.endsWith('em') ? 16 : 1)
 }
 
-export const TxProgressBar = forwardRef<HTMLSpanElement, TxProgressBarProps>(function TxProgressBar(
+export const TxProgressBar = forwardRef<HTMLSpanElement, TxProgressBarProps>((
   {
     loading = false,
     indeterminate = false,
@@ -76,7 +76,7 @@ export const TxProgressBar = forwardRef<HTMLSpanElement, TxProgressBarProps>(fun
     ...rest
   },
   ref,
-) {
+) => {
   const segmentsSum = (segments ?? []).reduce(
     (acc, s) => acc + (Number.isFinite(s.value) ? Math.max(0, s.value) : 0),
     0,

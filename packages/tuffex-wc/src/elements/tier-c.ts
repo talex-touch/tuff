@@ -1,8 +1,7 @@
-import '@tuffex-src/markdown-view/src/github-markdown.css'
+import type { PropSchema } from '../runtime/coerce'
 import TxMarkdownView from '@tuffex-src/markdown-view/src/TxMarkdownView.vue'
 import TxStreamText from '@tuffex-src/stream-text/src/TxStreamText.vue'
 import { computed, defineComponent, h, useHost } from 'vue'
-import type { PropSchema } from '../runtime/coerce'
 import { coercePropsBySchema } from '../runtime/coerce'
 import {
   buildRawVueProps,
@@ -10,6 +9,7 @@ import {
   createTxCustomElementFromComponent,
   getHostSlotNodes,
 } from '../runtime/factory'
+import '@tuffex-src/markdown-view/src/github-markdown.css'
 
 // 31. tx-stream-text (stream-text)
 export const streamTextBundle = createTxCustomElement({

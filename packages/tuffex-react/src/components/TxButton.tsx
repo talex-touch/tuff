@@ -50,7 +50,7 @@ function resolveVariant(variant?: TxButtonVariant, type?: TxButtonType): TxButto
   }
 }
 
-export const TxButton = forwardRef<HTMLButtonElement, TxButtonProps>(function TxButton(
+export const TxButton = forwardRef<HTMLButtonElement, TxButtonProps>((
   {
     variant,
     size = 'md',
@@ -77,7 +77,7 @@ export const TxButton = forwardRef<HTMLButtonElement, TxButtonProps>(function Tx
     ...rest
   },
   ref,
-) {
+) => {
   const normalizedVariant = resolveVariant(variant, type)
   const normalizedSize: TxButtonSize = size === 'sm' || size === 'lg' ? size : 'md'
   const spinnerSize = normalizedSize === 'sm' ? 14 : normalizedSize === 'lg' ? 18 : 16

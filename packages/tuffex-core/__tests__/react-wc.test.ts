@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useComputed, useReactiveScope, useSignal } from '../src/react'
 import { createSignal, ref } from '../src/reactivity'
 import { createTextSelectionTracker } from '../src/utils/selection'
 import {
@@ -34,8 +35,6 @@ vi.mock('react', () => ({
     return getSnapshot()
   },
 }))
-
-import { useComputed, useReactiveScope, useSignal } from '../src/react'
 
 afterEach(() => {
   while (cleanups.length > 0)

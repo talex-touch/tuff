@@ -40,7 +40,7 @@ export interface TxInputProps extends Omit<
   wrapperStyle?: CSSProperties
 }
 
-export const TxInput = forwardRef<HTMLInputElement | HTMLTextAreaElement, TxInputProps>(function TxInput(
+export const TxInput = forwardRef<HTMLInputElement | HTMLTextAreaElement, TxInputProps>((
   {
     value,
     defaultValue = '',
@@ -69,7 +69,7 @@ export const TxInput = forwardRef<HTMLInputElement | HTMLTextAreaElement, TxInpu
     ...rest
   },
   ref,
-) {
+) => {
   const [currentValue, setCurrentValue] = useControllableState<string | number>({
     value,
     defaultValue,

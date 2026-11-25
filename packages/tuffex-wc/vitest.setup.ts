@@ -1,4 +1,6 @@
-if (typeof window !== 'undefined' && !window.matchMedia) {
+import { hasWindow } from '@talex-touch/tuffex-core'
+
+if (hasWindow() && !window.matchMedia) {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: (query: string) => ({
@@ -29,7 +31,7 @@ if (typeof Range !== 'undefined') {
     Range.prototype.getClientRects = () => ({
       length: 0,
       item: () => null,
-      *[Symbol.iterator]() {},
+      * [Symbol.iterator]() {},
     }) as DOMRectList
   }
   if (!Range.prototype.getBoundingClientRect) {

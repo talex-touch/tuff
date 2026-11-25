@@ -1,4 +1,5 @@
 import type { HTMLAttributes } from 'react'
+import { hasDocument, hasWindow } from '@talex-touch/tuffex-core'
 import DOMPurify from 'dompurify'
 import { Marked } from 'marked'
 import { forwardRef, useEffect, useMemo, useState } from 'react'
@@ -13,7 +14,7 @@ export interface TxMarkdownViewProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 function resolveAutoTheme(): 'light' | 'dark' {
-  if (typeof document === 'undefined')
+  if (!hasDocument())
     return 'light'
   const root = document.documentElement
   const body = document.body
@@ -27,7 +28,7 @@ function resolveAutoTheme(): 'light' | 'dark' {
   return 'light'
 }
 
-export const TxMarkdownView = forwardRef<HTMLDivElement, TxMarkdownViewProps>(function TxMarkdownView(
+export const TxMarkdownView = forwardRef<HTMLDivElement, TxMarkdownViewProps>((
   {
     content,
     sanitize = true,
@@ -36,12 +37,12 @@ export const TxMarkdownView = forwardRef<HTMLDivElement, TxMarkdownViewProps>(fu
     ...rest
   },
   ref,
-) {
+) => {
   const markedInstance = useMemo(() => new Marked({ gfm: true, breaks: true }), [])
   const [autoTheme, setAutoTheme] = useState<'light' | 'dark'>(() => resolveAutoTheme())
 
   useEffect(() => {
-    if (theme !== 'auto' || typeof document === 'undefined' || typeof MutationObserver === 'undefined')
+    if (theme !== 'auto' || !hasDocument() || typeof MutationObserver === 'undefined')
       return
 
     setAutoTheme(resolveAutoTheme())
@@ -60,9 +61,9 @@ export const TxMarkdownView = forwardRef<HTMLDivElement, TxMarkdownViewProps>(fu
     const raw = markedInstance.parse(content ?? '') as string
     if (!sanitize)
       return raw
-    if (typeof window !== 'undefined' && typeof DOMPurify?.sanitize === 'function')
+    if (hasWindow() && typeof DOMPurify?.sanitize === 'function')
       return DOMPurify.sanitize(raw)
-    return raw.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    return raw.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
   }, [markedInstance, content, sanitize])
 
   const resolvedTheme: 'light' | 'dark' = theme === 'auto' ? autoTheme : theme === 'dark' ? 'dark' : 'light'

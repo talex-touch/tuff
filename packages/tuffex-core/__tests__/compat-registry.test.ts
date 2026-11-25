@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest'
 import {
   COMPAT_MAP,
   COMPAT_REGISTRY,
-  PHASE_1_READY_IDS,
   getCompatEntry,
   getCompatSummary,
+  PHASE_1_READY_IDS,
 } from '../src/compat-registry'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -20,18 +20,44 @@ function extractExportedModules(filePath: string, prefix: string): string[] {
 }
 
 const EXPECTED_PHASE_1_TIER_A = [
-  'button', 'badge', 'tag', 'avatar', 'spinner', 'divider', 'alert', 'card',
-  'kbd', 'progress', 'progress-bar', 'skeleton', 'switch', 'status-badge',
-  'status-hint', 'dot-indicator', 'empty', 'stat-card',
+  'button',
+  'badge',
+  'tag',
+  'avatar',
+  'spinner',
+  'divider',
+  'alert',
+  'card',
+  'kbd',
+  'progress',
+  'progress-bar',
+  'skeleton',
+  'switch',
+  'status-badge',
+  'status-hint',
+  'dot-indicator',
+  'empty',
+  'stat-card',
 ] as const
 
 const EXPECTED_PHASE_1_TIER_B = [
-  'input', 'textarea', 'checkbox', 'radio', 'slider', 'tabs', 'collapse',
-  'tooltip', 'popover', 'dialog', 'drawer', 'select',
+  'input',
+  'textarea',
+  'checkbox',
+  'radio',
+  'slider',
+  'tabs',
+  'collapse',
+  'tooltip',
+  'popover',
+  'dialog',
+  'drawer',
+  'select',
 ] as const
 
 const EXPECTED_PHASE_1_TIER_C = [
-  'stream-text', 'markdown-view',
+  'stream-text',
+  'markdown-view',
 ] as const
 
 const EXPECTED_PHASE_1 = [

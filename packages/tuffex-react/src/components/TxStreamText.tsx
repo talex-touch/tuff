@@ -1,7 +1,4 @@
 import type { CSSProperties, ElementType, HTMLAttributes, ReactNode } from 'react'
-import { Fragment, forwardRef, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from 'react'
-import { useSignal } from '../hooks/useReactivity'
-import { cn } from '../utils/cn'
 import type {
   StreamAtom,
   StreamModel,
@@ -11,6 +8,10 @@ import type {
   TxStreamSourceItem,
   TxStreamState,
 } from './stream-pacer'
+import { hasWindow } from '@talex-touch/tuffex-core'
+import { forwardRef, Fragment, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import { useSignal } from '../hooks/useReactivity'
+import { cn } from '../utils/cn'
 import {
   buildStreamModel,
   createReactiveStreamPacer,
@@ -213,7 +214,7 @@ function renderGroups(
   })
 }
 
-export const TxStreamText = forwardRef<TxStreamTextHandle, TxStreamTextProps>(function TxStreamText(
+export const TxStreamText = forwardRef<TxStreamTextHandle, TxStreamTextProps>((
   {
     content,
     streaming = false,
@@ -239,13 +240,13 @@ export const TxStreamText = forwardRef<TxStreamTextHandle, TxStreamTextProps>(fu
     ...rest
   },
   ref,
-) {
+) => {
   const model = useMemo(() => buildStreamModel(content, locale), [content, locale])
   const [quietTail, setQuietTail] = useState(false)
 
   useEffect(() => {
     setQuietTail(false)
-    if (!streaming || typeof window === 'undefined')
+    if (!streaming || !hasWindow())
       return
     const timer = setTimeout(() => setQuietTail(true), TAIL_GRACE_MS)
     return () => clearTimeout(timer)
@@ -260,7 +261,7 @@ export const TxStreamText = forwardRef<TxStreamTextHandle, TxStreamTextProps>(fu
     return open ? units.length - 1 : units.length
   }, [model, streaming, quietTail])
 
-  const reduced = typeof window !== 'undefined'
+  const reduced = hasWindow()
     && typeof window.matchMedia === 'function'
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 

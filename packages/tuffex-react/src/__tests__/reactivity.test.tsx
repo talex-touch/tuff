@@ -11,14 +11,40 @@ afterEach(() => {
 
 const LOCKED_32_IDS = [
   // Tier A (18)
-  'button', 'badge', 'tag', 'avatar', 'spinner', 'divider', 'alert', 'card', 'kbd',
-  'progress', 'progress-bar', 'skeleton', 'switch', 'status-badge', 'status-hint',
-  'dot-indicator', 'empty', 'stat-card',
+  'button',
+  'badge',
+  'tag',
+  'avatar',
+  'spinner',
+  'divider',
+  'alert',
+  'card',
+  'kbd',
+  'progress',
+  'progress-bar',
+  'skeleton',
+  'switch',
+  'status-badge',
+  'status-hint',
+  'dot-indicator',
+  'empty',
+  'stat-card',
   // Tier B (12)
-  'input', 'textarea', 'checkbox', 'radio', 'slider', 'tabs', 'collapse',
-  'tooltip', 'popover', 'dialog', 'drawer', 'select',
+  'input',
+  'textarea',
+  'checkbox',
+  'radio',
+  'slider',
+  'tabs',
+  'collapse',
+  'tooltip',
+  'popover',
+  'dialog',
+  'drawer',
+  'select',
   // Tier C (2)
-  'stream-text', 'markdown-view',
+  'stream-text',
+  'markdown-view',
 ] as const
 
 describe('reactivity hooks & manifest contract', () => {

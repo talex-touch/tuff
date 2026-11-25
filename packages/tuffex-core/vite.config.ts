@@ -14,9 +14,9 @@ export default defineConfig({
     sourcemap: false,
     lib: {
       entry: {
-        index: resolve(rootDir, 'src/index.ts'),
-        react: resolve(rootDir, 'src/react.ts'),
-        wc: resolve(rootDir, 'src/wc.ts'),
+        'index': resolve(rootDir, 'src/index.ts'),
+        'react': resolve(rootDir, 'src/react.ts'),
+        'wc': resolve(rootDir, 'src/wc.ts'),
         'compat-registry': resolve(rootDir, 'src/compat-registry.ts'),
       },
       formats: ['es'],

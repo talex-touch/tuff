@@ -12,7 +12,7 @@ export interface TxBadgeProps extends HTMLAttributes<HTMLSpanElement> {
   open?: boolean
 }
 
-export const TxBadge = forwardRef<HTMLSpanElement, TxBadgeProps>(function TxBadge(
+export const TxBadge = forwardRef<HTMLSpanElement, TxBadgeProps>((
   {
     variant = 'default',
     value = 0,
@@ -25,7 +25,7 @@ export const TxBadge = forwardRef<HTMLSpanElement, TxBadgeProps>(function TxBadg
     ...rest
   },
   ref,
-) {
+) => {
   const initialOpenRef = useRef(open)
   const [hasToggled, setHasToggled] = useState(false)
 

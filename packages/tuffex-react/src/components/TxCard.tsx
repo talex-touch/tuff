@@ -25,7 +25,7 @@ export interface TxCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onCli
   onClick?: (event: MouseEvent<HTMLDivElement>) => void
 }
 
-export const TxCard = forwardRef<HTMLDivElement, TxCardProps>(function TxCard(
+export const TxCard = forwardRef<HTMLDivElement, TxCardProps>((
   {
     variant = 'solid',
     background = 'refraction',
@@ -48,7 +48,7 @@ export const TxCard = forwardRef<HTMLDivElement, TxCardProps>(function TxCard(
     ...rest
   },
   ref,
-) {
+) => {
   const resolvedRadius = typeof radius === 'number' ? radius : 18
   const resolvedPadding = typeof padding === 'number'
     ? padding

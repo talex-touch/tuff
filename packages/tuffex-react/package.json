@@ -1,17 +1,14 @@
 {
   "name": "@talex-touch/tuffex-react",
+  "type": "module",
   "version": "0.1.0",
   "description": "First-class native React 18/19 components for TuffEx sharing --tx-* design tokens and .tx-* styles.",
   "author": "TalexDreamSoul <TalexDreamSoul@gmail.com>",
   "license": "MPL-2.0",
-  "type": "module",
   "sideEffects": [
     "**/*.css",
     "**/*.scss"
   ],
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -24,12 +21,16 @@
     },
     "./package.json": "./package.json"
   },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "files": [
     "dist"
   ],
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch",
+    "lint": "eslint --cache --max-warnings=0 --no-warn-ignored .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },

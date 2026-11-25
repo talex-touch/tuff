@@ -1,4 +1,5 @@
 import type { CSSProperties, HTMLAttributes, KeyboardEvent, ReactElement, ReactNode } from 'react'
+import { hasDocument } from '@talex-touch/tuffex-core'
 import { Children, createContext, forwardRef, isValidElement, useCallback, useContext, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useControllableState } from '../hooks/useControllableState'
@@ -76,7 +77,7 @@ export interface TxSelectItemProps extends HTMLAttributes<HTMLDivElement> {
   children?: ReactNode
 }
 
-export const TxSelectItem = forwardRef<HTMLDivElement, TxSelectItemProps>(function TxSelectItem(
+export const TxSelectItem = forwardRef<HTMLDivElement, TxSelectItemProps>((
   {
     value,
     label,
@@ -89,7 +90,7 @@ export const TxSelectItem = forwardRef<HTMLDivElement, TxSelectItemProps>(functi
     ...rest
   },
   ref,
-) {
+) => {
   const ctx = useContext(SelectContext)
   const resolvedLabel = label ?? (typeof children === 'string' || typeof children === 'number' ? String(children) : String(value))
   const isSelected = ctx?.isValueSelected(value) ?? false
@@ -178,7 +179,7 @@ function extractChildOptions(children: ReactNode): TxSelectOption[] {
   return result
 }
 
-export const TxSelect = forwardRef<HTMLDivElement, TxSelectProps>(function TxSelect(
+export const TxSelect = forwardRef<HTMLDivElement, TxSelectProps>((
   {
     value,
     defaultValue,
@@ -212,7 +213,7 @@ export const TxSelect = forwardRef<HTMLDivElement, TxSelectProps>(function TxSel
     ...rest
   },
   ref,
-) {
+) => {
   const [currentValue, setCurrentValue] = useControllableState<TxSelectModelValue>({
     value,
     defaultValue: defaultValue ?? (multiple ? [] : ''),
@@ -392,7 +393,7 @@ export const TxSelect = forwardRef<HTMLDivElement, TxSelectProps>(function TxSel
     [isValueSelected, selectOption, searchQuery],
   )
 
-  const panel = isOpen && typeof document !== 'undefined'
+  const panel = isOpen && hasDocument()
     ? createPortal(
         <div
           ref={panelRef}
@@ -529,7 +530,12 @@ export const TxSelect = forwardRef<HTMLDivElement, TxSelectProps>(function TxSel
                             </span>
                           ))}
                           {hiddenCount > 0 && (
-                            <span className="tuff-select__tag tuff-select__tag--summary">+ {hiddenCount} ...</span>
+                            <span className="tuff-select__tag tuff-select__tag--summary">
+                              +
+                              {hiddenCount}
+                              {' '}
+                              ...
+                            </span>
                           )}
                         </div>
                       )

@@ -11,7 +11,7 @@ export interface TxDividerProps extends HTMLAttributes<HTMLDivElement> {
   gradient?: TxDividerGradient
 }
 
-export const TxDivider = forwardRef<HTMLDivElement, TxDividerProps>(function TxDivider(
+export const TxDivider = forwardRef<HTMLDivElement, TxDividerProps>((
   {
     direction = 'horizontal',
     dashed = false,
@@ -22,7 +22,7 @@ export const TxDivider = forwardRef<HTMLDivElement, TxDividerProps>(function TxD
     ...rest
   },
   ref,
-) {
+) => {
   const gradientMode = gradient === true
     ? 'both'
     : (gradient === 'start' || gradient === 'end' || gradient === 'both')

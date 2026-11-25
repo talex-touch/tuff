@@ -1,3 +1,4 @@
+import type { TxStreamTextHandle } from '../index'
 import { act, createRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -12,7 +13,6 @@ import {
   TxStreamText,
   TxTooltip,
 } from '../index'
-import type { TxStreamTextHandle } from '../index'
 import { cleanupAll, mount } from './render-helper'
 
 afterEach(() => {
@@ -21,8 +21,8 @@ afterEach(() => {
   document.documentElement.removeAttribute('data-theme')
 })
 
-describe('Tier B portal overlays (TxTooltip, TxPopover, TxDialog, TxDrawer, TxSelect)', () => {
-  it('TxTooltip portals content, sets aria-describedby, and closes on Escape', () => {
+describe('tier B portal overlays (TxTooltip, TxPopover, TxDialog, TxDrawer, TxSelect)', () => {
+  it('txTooltip portals content, sets aria-describedby, and closes on Escape', () => {
     const { container } = mount(
       <TxTooltip content="Shortcut ⌘K" trigger="click">
         <TxButton>Trigger</TxButton>
@@ -45,7 +45,7 @@ describe('Tier B portal overlays (TxTooltip, TxPopover, TxDialog, TxDrawer, TxSe
     expect(document.body.querySelector('[role="tooltip"]')).toBeNull()
   })
 
-  it('TxPopover opens in portal and dismisses on outside click and Escape', () => {
+  it('txPopover opens in portal and dismisses on outside click and Escape', () => {
     const onOpenChange = vi.fn()
     const { container } = mount(
       <TxPopover content={<div>Popover Body</div>} onOpenChange={onOpenChange}>
@@ -66,7 +66,7 @@ describe('Tier B portal overlays (TxTooltip, TxPopover, TxDialog, TxDrawer, TxSe
     expect(onOpenChange).toHaveBeenLastCalledWith(false)
   })
 
-  it('TxDialog portals modal dialog with ARIA roles and closes via Escape and close button', () => {
+  it('txDialog portals modal dialog with ARIA roles and closes via Escape and close button', () => {
     const onClose = vi.fn()
     mount(
       <TxDialog defaultOpen title="Delete item" description="This cannot be undone." onClose={onClose}>
@@ -88,7 +88,7 @@ describe('Tier B portal overlays (TxTooltip, TxPopover, TxDialog, TxDrawer, TxSe
     expect(document.body.querySelector('[role="dialog"]')).toBeNull()
   })
 
-  it('TxDrawer portals directional drawer and closes on mask click and Escape', () => {
+  it('txDrawer portals directional drawer and closes on mask click and Escape', () => {
     const onClose = vi.fn()
     mount(
       <TxDrawer defaultOpen title="Settings" direction="left" size={320} onClose={onClose}>
@@ -107,7 +107,7 @@ describe('Tier B portal overlays (TxTooltip, TxPopover, TxDialog, TxDrawer, TxSe
     expect(drawer.className).not.toContain('tx-drawer--visible')
   })
 
-  it('TxSelect + TxSelectItem support single, multiple, and options-driven selection in portal', () => {
+  it('txSelect + TxSelectItem support single, multiple, and options-driven selection in portal', () => {
     const onChange = vi.fn()
     const { container } = mount(
       <TxSelect defaultValue="vue" onChange={onChange}>
@@ -157,8 +157,8 @@ describe('Tier B portal overlays (TxTooltip, TxPopover, TxDialog, TxDrawer, TxSe
   })
 })
 
-describe('Tier C components (TxStreamText & TxMarkdownView)', () => {
-  it('TxStreamText renders text, inline marks, safe links, caret while streaming, and imperative skip/replay', () => {
+describe('tier C components (TxStreamText & TxMarkdownView)', () => {
+  it('txStreamText renders text, inline marks, safe links, caret while streaming, and imperative skip/replay', () => {
     const ref = createRef<TxStreamTextHandle>()
     const onCite = vi.fn()
     const tree = mount(
@@ -205,7 +205,7 @@ describe('Tier C components (TxStreamText & TxMarkdownView)', () => {
     expect(tree.container.textContent).toContain('Complete answer.')
   })
 
-  it('TxMarkdownView renders GFM markdown, sanitizes XSS with dompurify, and tracks auto theme', () => {
+  it('txMarkdownView renders GFM markdown, sanitizes XSS with dompurify, and tracks auto theme', () => {
     document.documentElement.classList.add('dark')
     const { container } = mount(
       <TxMarkdownView
@@ -225,7 +225,7 @@ describe('Tier C components (TxStreamText & TxMarkdownView)', () => {
   it('createReactiveStreamPacer paces units frame-by-frame and transitions streaming -> draining -> done', () => {
     let clock = 0
     let pendingFrame: ((time: number) => void) | null = null
-    let totalUnits = 4
+    const totalUnits = 4
     let isStreaming = true
     const states: string[] = []
 
@@ -269,7 +269,7 @@ describe('Tier C components (TxStreamText & TxMarkdownView)', () => {
     pacer.stop()
   })
 
-  it('TxSelect supports searchable filtering and allowCreate in children mode, and TxDialog supports controlled open', () => {
+  it('txSelect supports searchable filtering and allowCreate in children mode, and TxDialog supports controlled open', () => {
     const onCreate = vi.fn()
     const { container } = mount(
       <TxSelect searchable allowCreate createText="Create item" onCreate={onCreate}>

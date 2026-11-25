@@ -1,4 +1,5 @@
 import type { CSSProperties, HTMLAttributes, KeyboardEvent, ReactNode } from 'react'
+import { hasDocument } from '@talex-touch/tuffex-core'
 import { forwardRef, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useControllableState } from '../hooks/useControllableState'
@@ -44,7 +45,7 @@ function normalizeDrawerSize(size: TxDrawerSize | undefined): string {
   return normalized.toLowerCase() === 'full' ? '100%' : normalized
 }
 
-export const TxDrawer = forwardRef<HTMLDivElement, TxDrawerProps>(function TxDrawer(
+export const TxDrawer = forwardRef<HTMLDivElement, TxDrawerProps>((
   {
     open,
     defaultOpen = false,
@@ -74,7 +75,7 @@ export const TxDrawer = forwardRef<HTMLDivElement, TxDrawerProps>(function TxDra
     ...rest
   },
   ref,
-) {
+) => {
   const controlledOpen = open ?? visible
   const [isOpen, setIsOpen] = useControllableState({
     value: controlledOpen,
@@ -103,7 +104,7 @@ export const TxDrawer = forwardRef<HTMLDivElement, TxDrawerProps>(function TxDra
   useFocusReturn(isOpen, drawerRef)
 
   useEffect(() => {
-    if (!isOpen || !closeOnPressEscape || typeof document === 'undefined')
+    if (!isOpen || !closeOnPressEscape || !hasDocument())
       return
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.defaultPrevented || event.key !== 'Escape')
@@ -115,7 +116,7 @@ export const TxDrawer = forwardRef<HTMLDivElement, TxDrawerProps>(function TxDra
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, closeOnPressEscape, setIsOpen])
 
-  if (typeof document === 'undefined')
+  if (!hasDocument())
     return null
 
   const shouldRenderContent = !lazy || hasEverOpened

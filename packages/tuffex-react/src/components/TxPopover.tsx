@@ -1,9 +1,10 @@
 import type { CSSProperties, HTMLAttributes, ReactNode } from 'react'
+import type { FloatingPlacement } from '../hooks/useFloating'
+import { hasDocument } from '@talex-touch/tuffex-core'
 import { forwardRef, useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useControllableState } from '../hooks/useControllableState'
 import { allocateZIndex, useDismissableLayer } from '../hooks/useDismissableLayer'
-import type { FloatingPlacement } from '../hooks/useFloating'
 import { useFloatingPosition } from '../hooks/useFloating'
 import { cn, mergeRefs } from '../utils/cn'
 
@@ -37,7 +38,7 @@ export interface TxPopoverProps extends Omit<HTMLAttributes<HTMLDivElement>, 'co
   onClose?: () => void
 }
 
-export const TxPopover = forwardRef<HTMLDivElement, TxPopoverProps>(function TxPopover(
+export const TxPopover = forwardRef<HTMLDivElement, TxPopoverProps>((
   {
     open,
     defaultOpen = false,
@@ -68,7 +69,7 @@ export const TxPopover = forwardRef<HTMLDivElement, TxPopoverProps>(function TxP
     ...rest
   },
   ref,
-) {
+) => {
   const [isOpen, setIsOpen] = useControllableState({
     value: disabled ? false : open,
     defaultValue: disabled ? false : defaultOpen,
@@ -142,20 +143,20 @@ export const TxPopover = forwardRef<HTMLDivElement, TxPopoverProps>(function TxP
   const bodyNode = reference !== undefined ? children : content
 
   const panelStyle = {
-    position: floating.strategy,
-    left: `${floating.x}px`,
-    top: `${floating.y}px`,
-    zIndex: zIndexRef.current,
-    width: width > 0 ? `${width}px` : undefined,
-    minWidth: minWidth > 0 ? `${minWidth}px` : undefined,
-    maxWidth: maxWidth > 0 ? `${maxWidth}px` : undefined,
-    maxHeight: maxHeight > 0 ? `${maxHeight}px` : undefined,
-    overflowY: maxHeight > 0 ? 'auto' : undefined,
+    'position': floating.strategy,
+    'left': `${floating.x}px`,
+    'top': `${floating.y}px`,
+    'zIndex': zIndexRef.current,
+    'width': width > 0 ? `${width}px` : undefined,
+    'minWidth': minWidth > 0 ? `${minWidth}px` : undefined,
+    'maxWidth': maxWidth > 0 ? `${maxWidth}px` : undefined,
+    'maxHeight': maxHeight > 0 ? `${maxHeight}px` : undefined,
+    'overflowY': maxHeight > 0 ? 'auto' : undefined,
     '--tx-floating-radius': `${panelRadius}px`,
     '--tx-floating-padding': `${panelPadding}px`,
   } as CSSProperties
 
-  const panel = isOpen && typeof document !== 'undefined'
+  const panel = isOpen && hasDocument()
     ? createPortal(
         <div
           ref={floatingRef}

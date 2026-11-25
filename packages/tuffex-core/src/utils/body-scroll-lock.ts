@@ -1,3 +1,5 @@
+import { hasDocument, hasWindow } from './env'
+
 // The page behind an overlay holds still: the body stops scrolling, and keeps the width the
 // scrollbar took. Counted, so the page scrolls again only once the last overlay lets go. The count
 // keeps the name its first owner, TxFlipOverlay, gave it: two copies of the library on one page,
@@ -7,7 +9,7 @@ const BODY_LOCK_OVERFLOW_KEY = 'txFlipOverlayLockOverflow'
 const BODY_LOCK_PADDING_KEY = 'txFlipOverlayLockPaddingRight'
 
 function canUseDom(): boolean {
-  return typeof window !== 'undefined' && typeof document !== 'undefined'
+  return hasWindow() && hasDocument()
 }
 
 export function lockBodyScroll(): void {

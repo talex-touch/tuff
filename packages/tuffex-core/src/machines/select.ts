@@ -1,4 +1,5 @@
-import { computed, readonly, shallowRef, type ComputedRef, type Ref } from '@vue/reactivity'
+import type { ComputedRef, Ref } from '@vue/reactivity'
+import { computed, readonly, shallowRef } from '@vue/reactivity'
 
 export type SelectPrimitiveValue = string | number
 

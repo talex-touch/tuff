@@ -22,7 +22,7 @@ export interface TxTextareaProps extends Omit<
   onChange?: (value: string) => void
 }
 
-export const TxTextarea = forwardRef<HTMLTextAreaElement, TxTextareaProps>(function TxTextarea(
+export const TxTextarea = forwardRef<HTMLTextAreaElement, TxTextareaProps>((
   {
     value,
     defaultValue = '',
@@ -42,7 +42,7 @@ export const TxTextarea = forwardRef<HTMLTextAreaElement, TxTextareaProps>(funct
     ...rest
   },
   ref,
-) {
+) => {
   const [currentValue, setCurrentValue] = useControllableState<string>({
     value,
     defaultValue,

@@ -1,4 +1,5 @@
 import type { CSSProperties, HTMLAttributes, KeyboardEvent, ReactNode } from 'react'
+import { hasDocument } from '@talex-touch/tuffex-core'
 import { forwardRef, useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useControllableState } from '../hooks/useControllableState'
@@ -25,7 +26,7 @@ export interface TxDialogProps extends Omit<HTMLAttributes<HTMLDivElement>, 'tit
   onClose?: () => void
 }
 
-export const TxDialog = forwardRef<HTMLDivElement, TxDialogProps>(function TxDialog(
+export const TxDialog = forwardRef<HTMLDivElement, TxDialogProps>((
   {
     open,
     defaultOpen = false,
@@ -50,7 +51,7 @@ export const TxDialog = forwardRef<HTMLDivElement, TxDialogProps>(function TxDia
     ...rest
   },
   ref,
-) {
+) => {
   const controlledOpen = open ?? visible
   const [isOpen, setIsOpen] = useControllableState({
     value: controlledOpen,
@@ -79,7 +80,7 @@ export const TxDialog = forwardRef<HTMLDivElement, TxDialogProps>(function TxDia
   }
 
   useEffect(() => {
-    if (!isOpen || !closeOnPressEscape || typeof document === 'undefined')
+    if (!isOpen || !closeOnPressEscape || !hasDocument())
       return
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.defaultPrevented || event.key !== 'Escape')
@@ -91,7 +92,7 @@ export const TxDialog = forwardRef<HTMLDivElement, TxDialogProps>(function TxDia
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, closeOnPressEscape, setIsOpen])
 
-  if (!isOpen || typeof document === 'undefined')
+  if (!isOpen || !hasDocument())
     return null
 
   const bodyDescription = description ?? message

@@ -5,8 +5,8 @@ Pragmatic Web Components wrapper for TuffEx powered by Vue 3.5 `defineCustomElem
 ## Usage
 
 ```ts
-import '@talex-touch/tuffex-wc/style.css'
 import { registerTuffexElements } from '@talex-touch/tuffex-wc'
+import '@talex-touch/tuffex-wc/style.css'
 
 registerTuffexElements()
 ```
@@ -23,8 +23,8 @@ registerTuffexElements()
 ### Tree-shakeable single-element registration
 
 ```ts
-import '@talex-touch/tuffex-wc/style.css'
 import { defineTxButton, defineTxDialog } from '@talex-touch/tuffex-wc'
+import '@talex-touch/tuffex-wc/style.css'
 
 defineTxButton()
 defineTxDialog()
@@ -43,4 +43,6 @@ defineTxButton({ tagName: 'tx-shadow-button', shadowRoot: true })
 
 ```ts
 import { WC_ELEMENTS_MANIFEST } from '@talex-touch/tuffex-wc/manifest'
+
+export const buttonTag = WC_ELEMENTS_MANIFEST.button.tag
 ```

@@ -1,4 +1,5 @@
-import { shallowRef, type ShallowRef } from '@vue/reactivity'
+import type { ShallowRef } from '@vue/reactivity'
+import { shallowRef } from '@vue/reactivity'
 import { hasDocument, hasWindow } from './env'
 
 export interface TextSelectionTracker {

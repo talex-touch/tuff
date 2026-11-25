@@ -43,7 +43,7 @@ function resolveTone(status?: TxStatusTone, statusKey?: TxStatusKey): TxStatusTo
   }
 }
 
-export const TxStatusBadge = forwardRef<HTMLDivElement, TxStatusBadgeProps>(function TxStatusBadge(
+export const TxStatusBadge = forwardRef<HTMLDivElement, TxStatusBadgeProps>((
   {
     text = '',
     icon = '',
@@ -60,7 +60,7 @@ export const TxStatusBadge = forwardRef<HTMLDivElement, TxStatusBadgeProps>(func
     ...rest
   },
   ref,
-) {
+) => {
   const tone = resolveTone(status, statusKey)
   const meta = TONE_MAP[tone]
   const iconClass = icon || meta.icon

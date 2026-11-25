@@ -1,8 +1,10 @@
-import { computed, readonly, shallowRef, type ComputedRef, type Ref } from '@vue/reactivity'
+import type { ComputedRef, Ref } from '@vue/reactivity'
+import type { TxZIndexAllocator } from '../utils/z-index-manager'
+import { computed, readonly, shallowRef } from '@vue/reactivity'
 import { lockBodyScroll, unlockBodyScroll } from '../utils/body-scroll-lock'
 import { isFormFieldTarget } from '../utils/escape-key'
 import { createFocusReturn, trapTab } from '../utils/focus-trap'
-import { getDefaultZIndexAllocator, type TxZIndexAllocator } from '../utils/z-index-manager'
+import { getDefaultZIndexAllocator } from '../utils/z-index-manager'
 
 export interface DialogMachineOptions {
   defaultOpen?: boolean

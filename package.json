@@ -24,7 +24,7 @@
     "lint:changed": "node scripts/run-eslint-changed.mjs",
     "lint:staged": "lint-staged",
     "typecheck": "pnpm -F @talex-touch/core-app run typecheck",
-    "typecheck:all": "pnpm -F @talex-touch/unplugin-export-plugin run build && pnpm -F @talex-touch/tuffex run build && pnpm -r --if-present --filter '!@talex-touch/tuffex' run typecheck",
+    "typecheck:all": "pnpm -F @talex-touch/unplugin-export-plugin run build && pnpm -F @talex-touch/tuffex-core run build && pnpm -F @talex-touch/tuffex run build && pnpm -F @talex-touch/tuffex-wc run build && pnpm -F @talex-touch/tuffex-react run build && pnpm -r --if-present --filter '!@talex-touch/tuffex' run typecheck",
     "test:plugins": "node scripts/test-plugins.mjs",
     "test:scripts": "vitest run --config vitest.workspace-scripts.config.mjs",
     "test:release-acceptance": "vitest run --config vitest.release-acceptance.config.mjs",
@@ -118,6 +118,15 @@
     ],
     "packages/tuffex/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"packages/tuffex\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuffex-core/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuffex-core\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuffex-react/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuffex-react\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuffex-wc/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuffex-wc\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "packages/unplugin-export-plugin/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -w exec eslint --cache --fix --max-warnings=0 --no-warn-ignored --config \"packages/unplugin-export-plugin/eslint.config.js\""

@@ -22,11 +22,11 @@ export interface TxZIndexSeedSource {
   subscribe?: (listener: () => void) => () => void
 }
 
-export type TxZIndexEvent =
-  | { type: 'next'; seed: number; current: number; prev: number }
-  | { type: 'refresh'; seed: number; current: number; prev: number; reason?: string }
-  | { type: 'reset'; seed: number; current: number; prev: number; reason?: string }
-  | { type: 'configure'; seed: number; current: number; prev: number }
+export type TxZIndexEvent
+  = | { type: 'next', seed: number, current: number, prev: number }
+    | { type: 'refresh', seed: number, current: number, prev: number, reason?: string }
+    | { type: 'reset', seed: number, current: number, prev: number, reason?: string }
+    | { type: 'configure', seed: number, current: number, prev: number }
 
 export const DEFAULT_Z_INDEX_SEED = 2000
 
@@ -102,8 +102,9 @@ export function isTopmostModalDialog(dialog: HTMLElement | null): boolean {
     const candidateZIndex = candidatePath[at]?.[1] ?? 0
     const currentZIndex = dialogPath[at]?.[1] ?? 0
     if (candidateZIndex > currentZIndex
-      || (candidateZIndex === currentZIndex && (dialog.compareDocumentPosition(candidate) & Node.DOCUMENT_POSITION_FOLLOWING)))
+      || (candidateZIndex === currentZIndex && (dialog.compareDocumentPosition(candidate) & Node.DOCUMENT_POSITION_FOLLOWING))) {
       return false
+    }
   }
   return true
 }

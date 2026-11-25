@@ -25,8 +25,8 @@ function setInputValue(el: HTMLInputElement | HTMLTextAreaElement, value: string
   el.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-describe('Tier B form controls and compound context components', () => {
-  it('TxInput supports controlled/uncontrolled value, clearable button, and number normalization', () => {
+describe('tier B form controls and compound context components', () => {
+  it('txInput supports controlled/uncontrolled value, clearable button, and number normalization', () => {
     const onClear = vi.fn()
     const onChange = vi.fn()
     const { container } = mount(<TxInput defaultValue="hello" clearable onChange={onChange} onClear={onClear} />)
@@ -47,7 +47,7 @@ describe('Tier B form controls and compound context components', () => {
     expect(onClear).toHaveBeenCalledTimes(1)
   })
 
-  it('TxTextarea renders counter, status classes, and updates value', () => {
+  it('txTextarea renders counter, status classes, and updates value', () => {
     const onChange = vi.fn()
     const { container } = mount(<TxTextarea defaultValue="abc" maxLength={50} showCount status="error" onChange={onChange} />)
     const field = container.querySelector<HTMLTextAreaElement>('textarea.tx-textarea__field')!
@@ -61,7 +61,7 @@ describe('Tier B form controls and compound context components', () => {
     expect(onChange).toHaveBeenCalledWith('abcdef')
   })
 
-  it('TxCheckbox supports controlled, uncontrolled, and indeterminate mixed ARIA state', () => {
+  it('txCheckbox supports controlled, uncontrolled, and indeterminate mixed ARIA state', () => {
     const onChange = vi.fn()
     const tree = mount(<TxCheckbox indeterminate label="Select all" onChange={onChange} />)
     const cb = tree.container.querySelector<HTMLButtonElement>('[role="checkbox"]')!
@@ -76,7 +76,7 @@ describe('Tier B form controls and compound context components', () => {
     expect(cb.getAttribute('aria-checked')).toBe('true')
   })
 
-  it('TxRadioGroup + TxRadio coordinate via React context and support arrow-key navigation', () => {
+  it('txRadioGroup + TxRadio coordinate via React context and support arrow-key navigation', () => {
     const onChange = vi.fn()
     const { container } = mount(
       <TxRadioGroup defaultValue="vue" type="standard" onChange={onChange}>
@@ -107,7 +107,7 @@ describe('Tier B form controls and compound context components', () => {
     expect(onChange).toHaveBeenLastCalledWith('wc')
   })
 
-  it('TxSlider renders range input, updates value, and displays formatted value + tooltip', () => {
+  it('txSlider renders range input, updates value, and displays formatted value + tooltip', () => {
     const onChange = vi.fn()
     const { container } = mount(
       <TxSlider
@@ -134,7 +134,7 @@ describe('Tier B form controls and compound context components', () => {
     expect(container.querySelector('.tx-slider__value')?.textContent).toBe('70%')
   })
 
-  it('TxTabs + TxTabItem switch panels via context, controlled state, and keyboard navigation', () => {
+  it('txTabs + TxTabItem switch panels via context, controlled state, and keyboard navigation', () => {
     function ControlledTabs() {
       const [tab, setTab] = useState('general')
       return (
@@ -165,7 +165,7 @@ describe('Tier B form controls and compound context components', () => {
     expect(container.querySelector('[role="tabpanel"]')?.textContent).toBe('General settings')
   })
 
-  it('TxCollapse + TxCollapseItem toggle in multi-open and accordion modes', () => {
+  it('txCollapse + TxCollapseItem toggle in multi-open and accordion modes', () => {
     const onChange = vi.fn()
     const multi = mount(
       <TxCollapse defaultValue={['a']} onChange={onChange}>

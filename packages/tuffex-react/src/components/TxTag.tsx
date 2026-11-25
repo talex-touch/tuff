@@ -29,7 +29,7 @@ const VARIANT_MIX = {
   plain: { bg: 0, border: 0, text: 100 },
 } as const
 
-export const TxTag = forwardRef<HTMLSpanElement, TxTagProps>(function TxTag(
+export const TxTag = forwardRef<HTMLSpanElement, TxTagProps>((
   {
     label = '',
     icon = '',
@@ -54,7 +54,7 @@ export const TxTag = forwardRef<HTMLSpanElement, TxTagProps>(function TxTag(
     ...rest
   },
   ref,
-) {
+) => {
   const safeColor = color || 'var(--tx-color-primary)'
   const mix = VARIANT_MIX[variant]
 

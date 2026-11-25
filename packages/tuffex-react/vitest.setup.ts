@@ -1,6 +1,10 @@
-;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
+import { hasWindow } from '@talex-touch/tuffex-core'
 
-if (typeof window !== 'undefined' && !window.matchMedia) {
+;
+
+(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
+
+if (hasWindow() && !window.matchMedia) {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: (query: string) => ({

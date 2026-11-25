@@ -17,7 +17,7 @@ export interface TxSwitchProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
   onChange?: (checked: boolean) => void
 }
 
-export const TxSwitch = forwardRef<HTMLButtonElement, TxSwitchProps>(function TxSwitch(
+export const TxSwitch = forwardRef<HTMLButtonElement, TxSwitchProps>((
   {
     checked,
     defaultChecked = false,
@@ -36,7 +36,7 @@ export const TxSwitch = forwardRef<HTMLButtonElement, TxSwitchProps>(function Tx
     ...rest
   },
   ref,
-) {
+) => {
   const [isActive, setIsActive] = useControllableState({
     value: checked,
     defaultValue: defaultChecked,

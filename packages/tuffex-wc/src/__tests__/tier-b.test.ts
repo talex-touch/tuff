@@ -10,7 +10,7 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-describe('Tier B custom elements (12 modules / 16 tags)', () => {
+describe('tier B custom elements (12 modules / 16 tags)', () => {
   it('handles tx-input and tx-textarea controlled/uncontrolled input events cleanly', async () => {
     const container = document.createElement('div')
     container.innerHTML = `

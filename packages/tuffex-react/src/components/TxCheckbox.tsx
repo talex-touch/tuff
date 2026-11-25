@@ -17,7 +17,7 @@ export interface TxCheckboxProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
   onChange?: (checked: boolean) => void
 }
 
-export const TxCheckbox = forwardRef<HTMLButtonElement, TxCheckboxProps>(function TxCheckbox(
+export const TxCheckbox = forwardRef<HTMLButtonElement, TxCheckboxProps>((
   {
     checked,
     defaultChecked = false,
@@ -36,7 +36,7 @@ export const TxCheckbox = forwardRef<HTMLButtonElement, TxCheckboxProps>(functio
     ...rest
   },
   ref,
-) {
+) => {
   const [isChecked, setIsChecked] = useControllableState({
     value: checked,
     defaultValue: defaultChecked,

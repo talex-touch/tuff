@@ -28,7 +28,7 @@ export interface TxRadioGroupProps extends Omit<HTMLAttributes<HTMLDivElement>, 
   onChange?: (value: TxRadioValue) => void
 }
 
-export const TxRadioGroup = forwardRef<HTMLDivElement, TxRadioGroupProps>(function TxRadioGroup(
+export const TxRadioGroup = forwardRef<HTMLDivElement, TxRadioGroupProps>((
   {
     value,
     defaultValue,
@@ -44,7 +44,7 @@ export const TxRadioGroup = forwardRef<HTMLDivElement, TxRadioGroupProps>(functi
     ...rest
   },
   ref,
-) {
+) => {
   const [selectedValue, setSelectedValue] = useControllableState<TxRadioValue | undefined>({
     value,
     defaultValue,
@@ -143,7 +143,7 @@ export interface TxRadioProps extends Omit<ButtonHTMLAttributes<HTMLButtonElemen
   onSelectValue?: (value: TxRadioValue) => void
 }
 
-export const TxRadio = forwardRef<HTMLButtonElement, TxRadioProps>(function TxRadio(
+export const TxRadio = forwardRef<HTMLButtonElement, TxRadioProps>((
   {
     value,
     disabled = false,
@@ -159,7 +159,7 @@ export const TxRadio = forwardRef<HTMLButtonElement, TxRadioProps>(function TxRa
     ...rest
   },
   ref,
-) {
+) => {
   const group = useContext(RadioGroupContext)
   const [standaloneChecked, setStandaloneChecked] = useControllableState({
     value: checked,

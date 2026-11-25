@@ -1,3 +1,4 @@
+import { hasDocument } from '@talex-touch/tuffex-core'
 import { useEffect, useRef } from 'react'
 
 let globalZIndex = 2000
@@ -69,7 +70,7 @@ export function useDismissableLayer({
   containersRef.current = containerRefs
 
   useEffect(() => {
-    if (!open || typeof document === 'undefined')
+    if (!open || !hasDocument())
       return
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -106,7 +107,7 @@ export function useFocusReturn(open: boolean, containerRef: React.RefObject<HTML
   const previousFocusRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
-    if (typeof document === 'undefined')
+    if (!hasDocument())
       return
 
     if (open) {

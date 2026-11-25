@@ -91,7 +91,7 @@ export interface WcElementManifestEntry {
 
 export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry> = {
   // --- Tier A (18) ---
-  button: {
+  'button': {
     id: 'button',
     tag: 'tx-button',
     status: 'ready',
@@ -103,7 +103,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['default'],
     sampleHtml: `<tx-button variant="primary">Launch Action</tx-button>`,
   },
-  badge: {
+  'badge': {
     id: 'badge',
     tag: 'tx-badge',
     status: 'ready',
@@ -115,7 +115,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['default'],
     sampleHtml: `<tx-badge variant="primary" value="12"></tx-badge>`,
   },
-  tag: {
+  'tag': {
     id: 'tag',
     tag: 'tx-tag',
     status: 'ready',
@@ -127,7 +127,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['default'],
     sampleHtml: `<tx-tag label="Web Components" variant="soft" closable></tx-tag>`,
   },
-  avatar: {
+  'avatar': {
     id: 'avatar',
     tag: 'tx-avatar',
     status: 'ready',
@@ -139,7 +139,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['default'],
     sampleHtml: `<tx-avatar name="Talex Touch" status="online" size="medium"></tx-avatar>`,
   },
-  spinner: {
+  'spinner': {
     id: 'spinner',
     tag: 'tx-spinner',
     status: 'ready',
@@ -151,7 +151,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: [],
     sampleHtml: `<tx-spinner size="20" label="Loading"></tx-spinner>`,
   },
-  divider: {
+  'divider': {
     id: 'divider',
     tag: 'tx-divider',
     status: 'ready',
@@ -163,7 +163,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['default'],
     sampleHtml: `<tx-divider text-placement="center">Section</tx-divider>`,
   },
-  alert: {
+  'alert': {
     id: 'alert',
     tag: 'tx-alert',
     status: 'ready',
@@ -175,7 +175,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['title', 'default'],
     sampleHtml: `<tx-alert type="info" title="Heads up" message="TuffEx works natively as Web Components."></tx-alert>`,
   },
-  card: {
+  'card': {
     id: 'card',
     tag: 'tx-card',
     status: 'ready',
@@ -187,7 +187,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['cover', 'header', 'default', 'footer'],
     sampleHtml: `<tx-card shadow="soft" size="medium"><div slot="header">TuffEx Card</div><p>Light DOM theming with --tx-* tokens.</p></tx-card>`,
   },
-  kbd: {
+  'kbd': {
     id: 'kbd',
     tag: 'tx-kbd',
     status: 'ready',
@@ -199,7 +199,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['default'],
     sampleHtml: `<tx-kbd tone="primary">⌘K</tx-kbd>`,
   },
-  progress: {
+  'progress': {
     id: 'progress',
     tag: 'tx-progress',
     status: 'ready',
@@ -223,7 +223,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: [],
     sampleHtml: `<tx-progress-bar percentage="72" message="Syncing workspace" show-text text-placement="top"></tx-progress-bar>`,
   },
-  skeleton: {
+  'skeleton': {
     id: 'skeleton',
     tag: 'tx-skeleton',
     status: 'ready',
@@ -235,7 +235,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['default'],
     sampleHtml: `<tx-skeleton lines="3" width="100%" height="12"></tx-skeleton>`,
   },
-  switch: {
+  'switch': {
     id: 'switch',
     tag: 'tx-switch',
     status: 'ready',
@@ -283,7 +283,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['default'],
     sampleHtml: `<tx-dot-indicator color="var(--tx-color-success)" label="Connected"></tx-dot-indicator>`,
   },
-  empty: {
+  'empty': {
     id: 'empty',
     tag: 'tx-empty',
     status: 'ready',
@@ -309,7 +309,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
   },
 
   // --- Tier B (12) ---
-  input: {
+  'input': {
     id: 'input',
     tag: 'tx-input',
     status: 'ready',
@@ -321,7 +321,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['prefix', 'suffix'],
     sampleHtml: `<tx-input placeholder="Search workspace..." clearable></tx-input>`,
   },
-  textarea: {
+  'textarea': {
     id: 'textarea',
     tag: 'tx-textarea',
     status: 'ready',
@@ -333,7 +333,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: [],
     sampleHtml: `<tx-textarea placeholder="Write release notes..." rows="3" show-count max-length="240"></tx-textarea>`,
   },
-  checkbox: {
+  'checkbox': {
     id: 'checkbox',
     tag: 'tx-checkbox',
     status: 'ready',
@@ -345,7 +345,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['default'],
     sampleHtml: `<tx-checkbox label="Remember workspace" model-value></tx-checkbox>`,
   },
-  radio: {
+  'radio': {
     id: 'radio',
     tag: 'tx-radio-group',
     relatedTags: ['tx-radio'],
@@ -358,7 +358,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['default'],
     sampleHtml: `<tx-radio-group model-value="vue" type="button"><tx-radio value="vue">Vue</tx-radio><tx-radio value="react">React</tx-radio><tx-radio value="wc">WC</tx-radio></tx-radio-group>`,
   },
-  slider: {
+  'slider': {
     id: 'slider',
     tag: 'tx-slider',
     status: 'ready',
@@ -370,7 +370,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: [],
     sampleHtml: `<tx-slider model-value="40" min="0" max="100" show-value></tx-slider>`,
   },
-  tabs: {
+  'tabs': {
     id: 'tabs',
     tag: 'tx-tabs',
     relatedTags: ['tx-tab-item'],
@@ -383,7 +383,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['default'],
     sampleHtml: `<tx-tabs model-value="overview" placement="top"><tx-tab-item name="overview" label="Overview"><p>Overview panel</p></tx-tab-item><tx-tab-item name="api" label="API"><p>API details</p></tx-tab-item></tx-tabs>`,
   },
-  collapse: {
+  'collapse': {
     id: 'collapse',
     tag: 'tx-collapse',
     relatedTags: ['tx-collapse-item'],
@@ -396,7 +396,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['default'],
     sampleHtml: `<tx-collapse accordion model-value="1"><tx-collapse-item name="1" title="What is TuffEx WC?">Light DOM Web Components built on Vue 3.5.</tx-collapse-item><tx-collapse-item name="2" title="Theme Support">Inherits global --tx-* design tokens.</tx-collapse-item></tx-collapse>`,
   },
-  tooltip: {
+  'tooltip': {
     id: 'tooltip',
     tag: 'tx-tooltip',
     status: 'ready',
@@ -408,7 +408,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['default', 'content'],
     sampleHtml: `<tx-tooltip content="Quick command palette"><tx-button>Hover me</tx-button></tx-tooltip>`,
   },
-  popover: {
+  'popover': {
     id: 'popover',
     tag: 'tx-popover',
     status: 'ready',
@@ -420,7 +420,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['reference', 'default'],
     sampleHtml: `<tx-popover placement="bottom-start"><tx-button slot="reference">Open Popover</tx-button><div>Popover panel content</div></tx-popover>`,
   },
-  dialog: {
+  'dialog': {
     id: 'dialog',
     tag: 'tx-dialog',
     status: 'ready',
@@ -432,7 +432,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['header', 'default', 'footer'],
     sampleHtml: `<tx-dialog title="Confirm Action" message="Proceed with this deployment?"></tx-dialog>`,
   },
-  drawer: {
+  'drawer': {
     id: 'drawer',
     tag: 'tx-drawer',
     status: 'ready',
@@ -444,7 +444,7 @@ export const WC_ELEMENTS_MANIFEST: Record<WcComponentId, WcElementManifestEntry>
     slots: ['header', 'default', 'footer'],
     sampleHtml: `<tx-drawer title="Inspector" direction="right" size="420px"><p>Drawer content</p></tx-drawer>`,
   },
-  select: {
+  'select': {
     id: 'select',
     tag: 'tx-select',
     relatedTags: ['tx-select-item'],

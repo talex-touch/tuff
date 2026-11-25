@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { shallowRef } from '../src/reactivity'
 import { createFloatingController } from '../src/controllers/floating'
+import { shallowRef } from '../src/reactivity'
 
 afterEach(() => {
   document.body.innerHTML = ''

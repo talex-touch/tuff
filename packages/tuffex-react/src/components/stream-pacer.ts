@@ -1,4 +1,5 @@
 import type { ShallowRef } from '@vue/reactivity'
+import { hasWindow } from '@talex-touch/tuffex-core'
 import { shallowRef } from '@vue/reactivity'
 
 export type TxStreamRevealPreset = 'aurora' | 'hue' | 'blur' | 'languid' | 'none'
@@ -204,7 +205,7 @@ export function createReactiveStreamPacer(options: ReactiveStreamPacerOptions): 
   const now = options.now ?? (() => (typeof performance === 'undefined' ? Date.now() : performance.now()))
   const requestFrame = options.requestFrame !== undefined
     ? options.requestFrame
-    : typeof window !== 'undefined' && typeof requestAnimationFrame === 'function'
+    : hasWindow() && typeof requestAnimationFrame === 'function'
       ? (cb: (time: number) => void) => requestAnimationFrame(cb)
       : null
   const cancelFrame = options.cancelFrame ?? ((id: number) => cancelAnimationFrame(id))

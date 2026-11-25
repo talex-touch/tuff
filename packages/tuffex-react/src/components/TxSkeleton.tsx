@@ -14,7 +14,7 @@ export interface TxSkeletonProps extends HTMLAttributes<HTMLDivElement> {
   gap?: string | number
 }
 
-export const TxSkeleton = forwardRef<HTMLDivElement, TxSkeletonProps>(function TxSkeleton(
+export const TxSkeleton = forwardRef<HTMLDivElement, TxSkeletonProps>((
   {
     loading = true,
     variant = 'text',
@@ -29,7 +29,7 @@ export const TxSkeleton = forwardRef<HTMLDivElement, TxSkeletonProps>(function T
     ...rest
   },
   ref,
-) {
+) => {
   if (!loading)
     return <>{children}</>
 

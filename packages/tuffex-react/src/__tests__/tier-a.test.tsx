@@ -26,8 +26,8 @@ afterEach(() => {
   cleanupAll()
 })
 
-describe('Tier A components (18 modules)', () => {
-  it('TxButton renders variants, loading, progress, status, forwardRef, and blocks click while busy', () => {
+describe('tier A components (18 modules)', () => {
+  it('txButton renders variants, loading, progress, status, forwardRef, and blocks click while busy', () => {
     const onClick = vi.fn()
     const ref = createRef<HTMLButtonElement>()
     const tree = mount(
@@ -62,7 +62,7 @@ describe('Tier A components (18 modules)', () => {
     expect(onClick).toHaveBeenCalledTimes(1)
   })
 
-  it('TxBadge renders variants, numeric values, dot mode, and open toggle', () => {
+  it('txBadge renders variants, numeric values, dot mode, and open toggle', () => {
     const tree = mount(<TxBadge variant="success" value={9} />)
     const badge = tree.container.querySelector('.tx-badge')!
     expect(badge.className).toContain('tx-badge--success')
@@ -74,7 +74,7 @@ describe('Tier A components (18 modules)', () => {
     expect(badge.className).toContain('is-closed')
   })
 
-  it('TxTag supports variants, dot, count, clickable role, and closable callback', () => {
+  it('txTag supports variants, dot, count, clickable role, and closable callback', () => {
     const onClose = vi.fn()
     const onClick = vi.fn()
     const { container } = mount(
@@ -92,7 +92,7 @@ describe('Tier A components (18 modules)', () => {
     expect(onClick).not.toHaveBeenCalled()
   })
 
-  it('TxAvatar renders initials fallback, image error fallback, and status dot', () => {
+  it('txAvatar renders initials fallback, image error fallback, and status dot', () => {
     const { container } = mount(<TxAvatar name="Talex Dream" status="online" size={48} clickable />)
     const avatar = container.querySelector('.tx-avatar')!
     expect(avatar.getAttribute('role')).toBe('button')
@@ -100,7 +100,7 @@ describe('Tier A components (18 modules)', () => {
     expect(container.querySelector('.tx-avatar__status--online')).toBeTruthy()
   })
 
-  it('TxSpinner renders status ARIA attributes and fallback SVG mode', () => {
+  it('txSpinner renders status ARIA attributes and fallback SVG mode', () => {
     const tree = mount(<TxSpinner size={24} label="Fetching" fallback />)
     const spinner = tree.container.querySelector('.tx-spinner')!
     expect(spinner.getAttribute('role')).toBe('status')
@@ -111,7 +111,7 @@ describe('Tier A components (18 modules)', () => {
     expect(tree.container.querySelector('.tx-spinner')).toBeNull()
   })
 
-  it('TxDivider renders separator role, orientation, dashed, and centered text', () => {
+  it('txDivider renders separator role, orientation, dashed, and centered text', () => {
     const tree = mount(<TxDivider dashed>OR</TxDivider>)
     const sep = tree.container.querySelector('[role="separator"]')!
     expect(sep.getAttribute('aria-orientation')).toBe('horizontal')
@@ -122,7 +122,7 @@ describe('Tier A components (18 modules)', () => {
     expect(tree.container.querySelector('[role="separator"]')?.getAttribute('aria-orientation')).toBe('vertical')
   })
 
-  it('TxAlert renders alert role and dismisses in uncontrolled mode', () => {
+  it('txAlert renders alert role and dismisses in uncontrolled mode', () => {
     const onClose = vi.fn()
     const { container } = mount(<TxAlert type="warning" title="Heads up" message="Low disk" onClose={onClose} />)
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('Low disk')
@@ -134,7 +134,7 @@ describe('Tier A components (18 modules)', () => {
     expect(container.querySelector('[role="alert"]')).toBeNull()
   })
 
-  it('TxCard renders slots (header/footer/cover), loading overlay, and clickable behavior', () => {
+  it('txCard renders slots (header/footer/cover), loading overlay, and clickable behavior', () => {
     const onClick = vi.fn()
     const { container } = mount(
       <TxCard header="Header" footer="Footer" shadow="soft" clickable loading onClick={onClick}>
@@ -153,7 +153,7 @@ describe('Tier A components (18 modules)', () => {
     expect(onClick).toHaveBeenCalledTimes(1)
   })
 
-  it('TxKbd renders semantic kbd element with size and tone classes', () => {
+  it('txKbd renders semantic kbd element with size and tone classes', () => {
     const { container } = mount(<TxKbd size="md" tone="primary">⌘K</TxKbd>)
     const kbd = container.querySelector('kbd.tx-kbd')!
     expect(kbd.className).toContain('tx-kbd--md')
@@ -161,7 +161,7 @@ describe('Tier A components (18 modules)', () => {
     expect(kbd.textContent).toBe('⌘K')
   })
 
-  it('TxProgress and TxProgressBar expose progressbar ARIA and fire onComplete at 100%', () => {
+  it('txProgress and TxProgressBar expose progressbar ARIA and fire onComplete at 100%', () => {
     const onComplete = vi.fn()
     const { container } = mount(<TxProgress percentage={100} onComplete={onComplete} />)
     const bar = container.querySelector('[role="progressbar"]')!
@@ -181,7 +181,7 @@ describe('Tier A components (18 modules)', () => {
     expect(segTree.container.querySelector('.tx-progress-bar__head-detail')?.textContent).toBe('80 / 100')
   })
 
-  it('TxSkeleton renders line placeholders when loading and children when loaded', () => {
+  it('txSkeleton renders line placeholders when loading and children when loaded', () => {
     const tree = mount(<TxSkeleton loading lines={3} variant="text">Loaded Content</TxSkeleton>)
     expect(tree.container.querySelectorAll('.tx-skeleton__item')).toHaveLength(3)
 
@@ -190,7 +190,7 @@ describe('Tier A components (18 modules)', () => {
     expect(tree.container.textContent).toBe('Loaded Content')
   })
 
-  it('TxSwitch works both uncontrolled and controlled with ARIA switch semantics', () => {
+  it('txSwitch works both uncontrolled and controlled with ARIA switch semantics', () => {
     const onChange = vi.fn()
     const { container } = mount(<TxSwitch defaultChecked={false} label="Dark mode" onChange={onChange} />)
     const sw = container.querySelector<HTMLButtonElement>('[role="switch"]')!
@@ -203,7 +203,7 @@ describe('Tier A components (18 modules)', () => {
     expect(onChange).toHaveBeenCalledWith(true)
   })
 
-  it('TxStatusBadge, TxStatusHint, TxDotIndicator, TxEmpty, and TxStatCard render accurately', () => {
+  it('txStatusBadge, TxStatusHint, TxDotIndicator, TxEmpty, and TxStatCard render accurately', () => {
     const badgeTree = mount(<TxStatusBadge text="Granted" statusKey="granted" os="macos" />)
     expect(badgeTree.container.querySelector('[role="status"]')?.textContent).toBe('Granted')
     expect(badgeTree.container.querySelector('.tx-os-icon')).toBeTruthy()

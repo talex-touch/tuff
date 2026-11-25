@@ -26,7 +26,7 @@ const ICON_MAP: Record<TxAlertType, string> = {
   info: 'info',
 }
 
-export const TxAlert = forwardRef<HTMLDivElement, TxAlertProps>(function TxAlert(
+export const TxAlert = forwardRef<HTMLDivElement, TxAlertProps>((
   {
     type = 'info',
     title,
@@ -43,7 +43,7 @@ export const TxAlert = forwardRef<HTMLDivElement, TxAlertProps>(function TxAlert
     ...rest
   },
   ref,
-) {
+) => {
   const [visible, setVisible] = useControllableState({
     value: open,
     defaultValue: defaultOpen,

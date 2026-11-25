@@ -7,10 +7,10 @@ export interface TxKbdProps extends HTMLAttributes<HTMLElement> {
   tone?: 'default' | 'primary'
 }
 
-export const TxKbd = forwardRef<HTMLElement, TxKbdProps>(function TxKbd(
+export const TxKbd = forwardRef<HTMLElement, TxKbdProps>((
   { size = 'sm', tone = 'default', className, children, ...rest },
   ref,
-) {
+) => {
   return (
     <kbd
       ref={ref}

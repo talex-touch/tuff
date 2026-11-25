@@ -1,15 +1,16 @@
 {
   "name": "@talex-touch/tuffex-wc",
+  "type": "module",
   "version": "0.1.0",
   "description": "TuffEx Web Components powered by Vue 3.5 defineCustomElement with Light DOM theming and optional Shadow DOM support.",
   "author": "TalexDreamSoul <TalexDreamSoul@gmail.com>",
   "license": "(MIT AND Apache-2.0 AND ISC)",
+  "homepage": "https://tuff.tagzxia.com",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/talex-touch/tuff.git",
     "directory": "packages/tuffex-wc"
   },
-  "homepage": "https://tuff.tagzxia.com",
   "keywords": [
     "tuff",
     "tuffex",
@@ -18,14 +19,10 @@
     "vue3",
     "ui-library"
   ],
-  "type": "module",
   "sideEffects": [
     "**/*.css",
     "**/*.scss"
   ],
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -38,12 +35,16 @@
     "./style.css": "./dist/style.css",
     "./package.json": "./package.json"
   },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "files": [
-    "dist",
-    "README.md"
+    "README.md",
+    "dist"
   ],
   "scripts": {
     "build": "vite build",
+    "lint": "eslint --cache --max-warnings=0 --no-warn-ignored .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },

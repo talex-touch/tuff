@@ -1,9 +1,10 @@
 import type { CSSProperties, HTMLAttributes, ReactNode } from 'react'
+import type { FloatingPlacement } from '../hooks/useFloating'
+import { hasDocument } from '@talex-touch/tuffex-core'
 import { forwardRef, useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useControllableState } from '../hooks/useControllableState'
 import { allocateZIndex, useDismissableLayer } from '../hooks/useDismissableLayer'
-import type { FloatingPlacement } from '../hooks/useFloating'
 import { useFloatingPosition } from '../hooks/useFloating'
 import { cn, mergeRefs } from '../utils/cn'
 
@@ -29,7 +30,7 @@ export interface TxTooltipProps extends Omit<HTMLAttributes<HTMLSpanElement>, 'c
   onClose?: () => void
 }
 
-export const TxTooltip = forwardRef<HTMLSpanElement, TxTooltipProps>(function TxTooltip(
+export const TxTooltip = forwardRef<HTMLSpanElement, TxTooltipProps>((
   {
     open,
     defaultOpen = false,
@@ -56,7 +57,7 @@ export const TxTooltip = forwardRef<HTMLSpanElement, TxTooltipProps>(function Tx
     ...rest
   },
   ref,
-) {
+) => {
   const [isOpen, setIsOpen] = useControllableState({
     value: disabled ? false : open,
     defaultValue: disabled ? false : defaultOpen,
@@ -130,7 +131,7 @@ export const TxTooltip = forwardRef<HTMLSpanElement, TxTooltipProps>(function Tx
 
   const isTooltipRole = role === 'tooltip'
 
-  const panelNode = isOpen && typeof document !== 'undefined'
+  const panelNode = isOpen && hasDocument()
     ? createPortal(
         <div
           ref={floatingRef}

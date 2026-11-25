@@ -10,7 +10,7 @@ export interface TxSpinnerProps extends HTMLAttributes<HTMLSpanElement> {
   label?: string
 }
 
-export const TxSpinner = forwardRef<HTMLSpanElement, TxSpinnerProps>(function TxSpinner(
+export const TxSpinner = forwardRef<HTMLSpanElement, TxSpinnerProps>((
   {
     size = 16,
     strokeWidth = 2,
@@ -22,7 +22,7 @@ export const TxSpinner = forwardRef<HTMLSpanElement, TxSpinnerProps>(function Tx
     ...rest
   },
   ref,
-) {
+) => {
   if (!visible)
     return null
 

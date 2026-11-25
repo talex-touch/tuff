@@ -56,7 +56,7 @@ function getInitials(name?: string): string {
   return `${first}${last}`
 }
 
-export const TxAvatar = forwardRef<HTMLDivElement, TxAvatarProps>(function TxAvatar(
+export const TxAvatar = forwardRef<HTMLDivElement, TxAvatarProps>((
   {
     src,
     alt = '',
@@ -76,7 +76,7 @@ export const TxAvatar = forwardRef<HTMLDivElement, TxAvatarProps>(function TxAva
     ...rest
   },
   ref,
-) {
+) => {
   const [imageError, setImageError] = useState(false)
 
   useEffect(() => {

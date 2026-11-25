@@ -43,7 +43,7 @@ function formatNumber(val: number): string {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 20 }).format(val)
 }
 
-export const TxStatCard = forwardRef<HTMLDivElement, TxStatCardProps>(function TxStatCard(
+export const TxStatCard = forwardRef<HTMLDivElement, TxStatCardProps>((
   {
     value,
     label,
@@ -58,7 +58,7 @@ export const TxStatCard = forwardRef<HTMLDivElement, TxStatCardProps>(function T
     ...rest
   },
   ref,
-) {
+) => {
   const labelId = useId()
   const isProgressVariant = variant === 'progress' || typeof progress === 'number'
   const numericValue = typeof value === 'number'

@@ -10,7 +10,7 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-describe('Tier C custom elements (tx-stream-text, tx-markdown-view)', () => {
+describe('tier C custom elements (tx-stream-text, tx-markdown-view)', () => {
   it('renders tx-stream-text with plain text, inline JSON runs, reveal preset, and exposed skip/replay methods', async () => {
     const container = document.createElement('div')
     container.innerHTML = `

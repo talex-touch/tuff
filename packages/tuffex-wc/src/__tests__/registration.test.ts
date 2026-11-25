@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   ALL_TUFFEX_ELEMENT_BUNDLES,
-  WC_ELEMENTS_MANIFEST,
-  WC_ELEMENT_TAGS,
-  WC_READY_COMPONENT_IDS,
   defineTxButton,
   registerTuffexElements,
+  WC_ELEMENT_TAGS,
+  WC_ELEMENTS_MANIFEST,
+  WC_READY_COMPONENT_IDS,
 } from '../index'
 
 const LOCKED_32_IDS = [

@@ -1,15 +1,15 @@
+import type { EffectScope, Ref, ShallowRef } from '@vue/reactivity'
+import type { Signal } from './reactivity'
 import {
   computed,
   effect,
   effectScope,
+
   isRef,
+
   stop,
-  type EffectScope,
-  type Ref,
-  type ShallowRef,
 } from '@vue/reactivity'
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-import type { Signal } from './reactivity'
 
 export type ReactiveSource<T> = Ref<T> | ShallowRef<T> | Signal<T> | (() => T)
 

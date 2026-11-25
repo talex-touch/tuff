@@ -2,7 +2,6 @@ import TxAlert from '@tuffex-src/alert/src/TxAlert.vue'
 import TxAvatar from '@tuffex-src/avatar/src/TxAvatar.vue'
 import TxBadge from '@tuffex-src/badge/src/TxBadge.vue'
 import TxButton from '@tuffex-src/button/src/button.vue'
-import '@tuffex-src/button/src/style/index.scss'
 import TxCard from '@tuffex-src/card/src/TxCard.vue'
 import TxDivider from '@tuffex-src/divider/src/TxDivider.vue'
 import TxDotIndicator from '@tuffex-src/dot-indicator/src/TxDotIndicator.vue'
@@ -16,9 +15,10 @@ import TxStatCard from '@tuffex-src/stat-card/src/TxStatCard.vue'
 import TxStatusBadge from '@tuffex-src/status-badge/src/TxStatusBadge.vue'
 import TxStatusHint from '@tuffex-src/status-hint/src/TxStatusHint.vue'
 import TxSwitch from '@tuffex-src/switch/src/TxSwitch.vue'
-import '@tuffex-src/switch/style/index.scss'
 import TxTag from '@tuffex-src/tag/src/TxTag.vue'
 import { createTxCustomElement } from '../runtime/factory'
+import '@tuffex-src/button/src/style/index.scss'
+import '@tuffex-src/switch/style/index.scss'
 
 // 1. tx-button (button)
 export const buttonBundle = createTxCustomElement({
@@ -308,7 +308,7 @@ export const statusBadgeBundle = createTxCustomElement({
     os: 'string',
     osOnly: 'boolean',
   },
-  transformProps: (coerced) => ({
+  transformProps: coerced => ({
     text: '',
     ...coerced,
   }),
@@ -327,7 +327,7 @@ export const statusHintBundle = createTxCustomElement({
     animated: 'boolean',
     live: 'boolean',
   },
-  transformProps: (coerced) => ({
+  transformProps: coerced => ({
     text: '',
     ...coerced,
   }),
@@ -375,7 +375,7 @@ export const statCardBundle = createTxCustomElement({
     meta: 'string',
     ariaLabel: 'string',
   },
-  transformProps: (coerced) => ({
+  transformProps: coerced => ({
     value: 0,
     label: '',
     ...coerced,

@@ -13,7 +13,7 @@ export interface TxProgressProps extends HTMLAttributes<HTMLSpanElement> {
   onComplete?: () => void
 }
 
-export const TxProgress = forwardRef<HTMLSpanElement, TxProgressProps>(function TxProgress(
+export const TxProgress = forwardRef<HTMLSpanElement, TxProgressProps>((
   {
     percentage = 0,
     status = '',
@@ -26,7 +26,7 @@ export const TxProgress = forwardRef<HTMLSpanElement, TxProgressProps>(function 
     ...rest
   },
   ref,
-) {
+) => {
   return (
     <TxProgressBar
       ref={ref}

@@ -27,7 +27,7 @@ function normalizeNames(value: string | string[] | undefined): string[] {
   return value === '' ? [] : [value]
 }
 
-export const TxCollapse = forwardRef<HTMLDivElement, TxCollapseProps>(function TxCollapse(
+export const TxCollapse = forwardRef<HTMLDivElement, TxCollapseProps>((
   {
     accordion = false,
     value,
@@ -38,7 +38,7 @@ export const TxCollapse = forwardRef<HTMLDivElement, TxCollapseProps>(function T
     ...rest
   },
   ref,
-) {
+) => {
   const [rawValue, setRawValue] = useControllableState<string | string[]>({
     value,
     defaultValue: defaultValue ?? (accordion ? '' : []),
@@ -83,7 +83,7 @@ export interface TxCollapseItemProps extends Omit<HTMLAttributes<HTMLDivElement>
   arrowIcon?: string
 }
 
-export const TxCollapseItem = forwardRef<HTMLDivElement, TxCollapseItemProps>(function TxCollapseItem(
+export const TxCollapseItem = forwardRef<HTMLDivElement, TxCollapseItemProps>((
   {
     title,
     name,
@@ -94,7 +94,7 @@ export const TxCollapseItem = forwardRef<HTMLDivElement, TxCollapseItemProps>(fu
     ...rest
   },
   ref,
-) {
+) => {
   const collapse = useContext(CollapseContext)
   const contentId = useId()
   const itemName = name ?? (typeof title === 'string' ? title : contentId)

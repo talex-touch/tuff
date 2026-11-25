@@ -1,4 +1,5 @@
-import { computed, shallowRef, type ComputedRef } from '@vue/reactivity'
+import type { ComputedRef } from '@vue/reactivity'
+import { computed, shallowRef } from '@vue/reactivity'
 
 export interface SwitchMachineOptions {
   defaultChecked?: boolean
@@ -54,7 +55,7 @@ export function createSwitchMachine(options: SwitchMachineOptions = {}): SwitchM
 
   function getAriaProps(): Record<string, string | boolean | undefined> {
     return {
-      role: 'switch',
+      'role': 'switch',
       'aria-checked': checked.value,
       'aria-disabled': isInteractiveDisabled() || undefined,
       'aria-busy': options.loading?.() || undefined,

@@ -50,7 +50,7 @@ describe('attribute/property coercion helpers', () => {
   })
 })
 
-describe('Light DOM default & optional Shadow DOM mode', () => {
+describe('light DOM default & optional Shadow DOM mode', () => {
   it('renders in Light DOM by default (shadowRoot: false) and supports shadowRoot: true with style injection', async () => {
     defineTxButton()
     const lightEl = document.createElement('tx-button')

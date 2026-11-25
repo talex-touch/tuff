@@ -1,27 +1,27 @@
 {
   "compilerOptions": {
     "target": "ES2020",
+    "jsx": "preserve",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "baseUrl": ".",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "noUncheckedIndexedAccess": true,
-    "skipLibCheck": true,
-    "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    "jsx": "preserve",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "types": ["vite/client", "node"],
-    "baseUrl": ".",
     "paths": {
       "@tuffex-src/*": ["../tuffex/packages/components/src/*"],
       "@tuffex-style/*": ["../tuffex/packages/components/style/*"],
       "@talex-touch/utils/*": ["../utils/*"],
       "@talex-touch/utils": ["../utils/index.ts"]
-    }
+    },
+    "resolveJsonModule": true,
+    "types": ["vite/client", "node"],
+    "strict": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "skipLibCheck": true
   },
   "include": [
     "src/**/*.ts",

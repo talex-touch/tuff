@@ -1,4 +1,5 @@
-import { computed, shallowRef, type ComputedRef } from '@vue/reactivity'
+import type { ComputedRef } from '@vue/reactivity'
+import { computed, shallowRef } from '@vue/reactivity'
 
 export type CollapseKey = string | number
 

@@ -24,7 +24,7 @@ export interface TxSliderProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onC
   onChangeCommit?: (value: number) => void
 }
 
-export const TxSlider = forwardRef<HTMLDivElement, TxSliderProps>(function TxSlider(
+export const TxSlider = forwardRef<HTMLDivElement, TxSliderProps>((
   {
     value,
     defaultValue = 0,
@@ -48,7 +48,7 @@ export const TxSlider = forwardRef<HTMLDivElement, TxSliderProps>(function TxSli
     ...rest
   },
   ref,
-) {
+) => {
   const clamp = (v: number) => Math.min(max, Math.max(min, Number.isFinite(v) ? v : min))
 
   const [currentValue, setCurrentValue] = useControllableState<number>({

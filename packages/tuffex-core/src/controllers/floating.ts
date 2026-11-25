@@ -1,28 +1,28 @@
+import type { AutoUpdateOptions, ComputePositionReturn, Middleware, MiddlewareData, Placement, ReferenceElement, Strategy } from '@floating-ui/dom'
+import type { ComputedRef, MaybeRefOrGetter, Ref } from '@vue/reactivity'
 import {
   arrow,
   autoUpdate,
+
   computePosition,
+
   flip,
+
   offset,
+
   shift,
   size,
-  type AutoUpdateOptions,
-  type ComputePositionReturn,
-  type Middleware,
-  type MiddlewareData,
-  type Placement,
-  type ReferenceElement,
-  type Strategy,
+
 } from '@floating-ui/dom'
 import {
   computed,
+
   effectScope,
+
   readonly,
+
   shallowRef,
   toValue,
-  type ComputedRef,
-  type MaybeRefOrGetter,
-  type Ref,
 } from '@vue/reactivity'
 import { watchSignal } from '../reactivity'
 

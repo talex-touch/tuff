@@ -24,7 +24,7 @@ export interface TxTabItemProps extends Omit<ButtonHTMLAttributes<HTMLButtonElem
   children?: ReactNode
 }
 
-export const TxTabItem = forwardRef<HTMLButtonElement, TxTabItemProps>(function TxTabItem(
+export const TxTabItem = forwardRef<HTMLButtonElement, TxTabItemProps>((
   {
     name,
     label,
@@ -34,11 +34,11 @@ export const TxTabItem = forwardRef<HTMLButtonElement, TxTabItemProps>(function 
     active: activeProp = false,
     onClick,
     className,
-    children,
+    children: _children,
     ...rest
   },
   ref,
-) {
+) => {
   const ctx = useContext(TabsContext)
   const isActive = ctx ? ctx.activeName === name : activeProp
 
@@ -101,7 +101,7 @@ function collectTabItems(children: ReactNode): Array<ReactElement<TxTabItemProps
   return items
 }
 
-export const TxTabs = forwardRef<HTMLDivElement, TxTabsProps>(function TxTabs(
+export const TxTabs = forwardRef<HTMLDivElement, TxTabsProps>((
   {
     value,
     defaultValue,
@@ -119,7 +119,7 @@ export const TxTabs = forwardRef<HTMLDivElement, TxTabsProps>(function TxTabs(
     ...rest
   },
   ref,
-) {
+) => {
   const tabElements = collectTabItems(children)
   const firstEnabledName = tabElements.find(el => !el.props.disabled)?.props.name ?? tabElements[0]?.props.name ?? ''
 

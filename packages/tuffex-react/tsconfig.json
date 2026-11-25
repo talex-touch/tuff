@@ -1,22 +1,22 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "types": ["node"],
     "strict": true,
     "noImplicitAny": true,
     "noUncheckedIndexedAccess": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-    "isolatedModules": true,
-    "resolveJsonModule": true,
     "declaration": true,
     "declarationMap": false,
     "noEmit": true,
-    "types": ["node"]
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "skipLibCheck": true
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["dist", "node_modules", "src/**/__tests__/**"]

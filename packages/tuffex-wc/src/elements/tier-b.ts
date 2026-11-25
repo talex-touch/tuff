@@ -1,4 +1,6 @@
 import type { VNode } from 'vue'
+import type { PropSchema } from '../runtime/coerce'
+import type { TxBaseSurfaceMode, TxDialogButtonWc, TxSelectOptionGroupWc, TxSelectOptionWc } from '../types'
 import TxCheckbox from '@tuffex-src/checkbox/src/TxCheckbox.vue'
 import TxCollapse from '@tuffex-src/collapse/src/TxCollapse.vue'
 import TxCollapseItem from '@tuffex-src/collapse/src/TxCollapseItem.vue'
@@ -20,8 +22,6 @@ import TxTabs from '@tuffex-src/tabs/src/TxTabs.vue'
 import TxTextarea from '@tuffex-src/textarea/src/TxTextarea.vue'
 import TxTooltip from '@tuffex-src/tooltip/src/TxTooltip.vue'
 import { computed, defineComponent, getCurrentInstance, h, onBeforeUnmount, ref, useHost, watch } from 'vue'
-import type { PropSchema } from '../runtime/coerce'
-import type { TxBaseSurfaceMode, TxDialogButtonWc, TxSelectOptionGroupWc, TxSelectOptionWc } from '../types'
 import { coerceBoolean, coercePropsBySchema } from '../runtime/coerce'
 import { dispatchHostEvent } from '../runtime/events'
 import {
@@ -122,7 +122,7 @@ export const radioBundle = createTxCustomElement({
     type: 'string',
     modelValue: 'boolean',
   },
-  transformProps: (coerced) => ({
+  transformProps: coerced => ({
     value: '',
     ...coerced,
   }),
@@ -657,15 +657,15 @@ const TxDialogWcWrapper = defineComponent({
           modalSlots.footer = () => createSlotVNode(host, 'footer', true)
 
         return h(TxModal, {
-          modelValue: isOpen.value,
-          title: (p.title as string | undefined) ?? '',
-          width: (p.width as string | undefined) ?? '480px',
-          fullscreen: Boolean(p.fullscreen),
-          closeLabel: (p.closeLabel as string | undefined) ?? 'Close',
-          surface: surfaceMode,
-          surfaceColor: (p.surfaceColor as string | undefined) ?? '',
-          surfaceOpacity: p.surfaceOpacity as number | undefined,
-          beforeClose: p.beforeClose as any,
+          'modelValue': isOpen.value,
+          'title': (p.title as string | undefined) ?? '',
+          'width': (p.width as string | undefined) ?? '480px',
+          'fullscreen': Boolean(p.fullscreen),
+          'closeLabel': (p.closeLabel as string | undefined) ?? 'Close',
+          'surface': surfaceMode,
+          'surfaceColor': (p.surfaceColor as string | undefined) ?? '',
+          'surfaceOpacity': p.surfaceOpacity as number | undefined,
+          'beforeClose': p.beforeClose as any,
           'onUpdate:modelValue': (next: boolean) => {
             if (!next)
               emitClosed()
@@ -800,7 +800,7 @@ export const selectItemBundle = createTxCustomElement({
     icon: 'string',
     description: 'string',
   },
-  transformProps: (coerced) => ({
+  transformProps: coerced => ({
     value: '',
     ...coerced,
   }),
@@ -932,8 +932,8 @@ const TxSelectWcWrapper = defineComponent({
       const { value: _value, options: _options, ...rest } = coercedProps.value
       const forwarded: Record<string, unknown> = {
         ...rest,
-        options: resolvedOptions.value,
-        ref: innerRef,
+        'options': resolvedOptions.value,
+        'ref': innerRef,
         'onUpdate:modelValue': (next: unknown) => {
           hasLocalModel.value = true
           localModel.value = next
@@ -947,8 +947,8 @@ const TxSelectWcWrapper = defineComponent({
         'onChange': (next: unknown) => dispatchHostEvent(host, 'change', next),
         'onSearch': (query: string) => dispatchHostEvent(host, 'search', query),
         'onCreate': (option: TxSelectOptionWc) => dispatchHostEvent(host, 'create', option),
-        onVnodeBeforeMount: (vnode: VNode) => promoteChildProvides(wrapperInstance, vnode.component),
-        onVnodeMounted: (vnode: VNode) => promoteChildProvides(wrapperInstance, vnode.component),
+        'onVnodeBeforeMount': (vnode: VNode) => promoteChildProvides(wrapperInstance, vnode.component),
+        'onVnodeMounted': (vnode: VNode) => promoteChildProvides(wrapperInstance, vnode.component),
       }
       if (hasLocalModel.value)
         forwarded.modelValue = localModel.value

@@ -1,8 +1,8 @@
 import type { HTMLAttributes, ReactNode } from 'react'
+import type { TxStatusTone } from './TxStatusBadge'
 import { forwardRef, useEffect, useRef, useState } from 'react'
 import { cn } from '../utils/cn'
 import { BuiltinIcon } from '../utils/icons'
-import type { TxStatusTone } from './TxStatusBadge'
 
 export type TxStatusHintSize = 'sm' | 'md'
 
@@ -23,7 +23,7 @@ const GLYPHS: Partial<Record<TxStatusTone, string>> = {
   info: 'info',
 }
 
-export const TxStatusHint = forwardRef<HTMLDivElement, TxStatusHintProps>(function TxStatusHint(
+export const TxStatusHint = forwardRef<HTMLDivElement, TxStatusHintProps>((
   {
     text = '',
     tone = 'success',
@@ -37,7 +37,7 @@ export const TxStatusHint = forwardRef<HTMLDivElement, TxStatusHintProps>(functi
     ...rest
   },
   ref,
-) {
+) => {
   const [pulse, setPulse] = useState<0 | 1 | 2>(0)
   const mountedRef = useRef(false)
 

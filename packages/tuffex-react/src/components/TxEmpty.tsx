@@ -11,7 +11,7 @@ export interface TxEmptyProps extends Omit<HTMLAttributes<HTMLDivElement>, 'titl
   compact?: boolean
 }
 
-export const TxEmpty = forwardRef<HTMLDivElement, TxEmptyProps>(function TxEmpty(
+export const TxEmpty = forwardRef<HTMLDivElement, TxEmptyProps>((
   {
     title = 'Nothing here',
     description = '',
@@ -24,9 +24,9 @@ export const TxEmpty = forwardRef<HTMLDivElement, TxEmptyProps>(function TxEmpty
     ...rest
   },
   ref,
-) {
+) => {
   const size = compact ? 'small' : 'medium'
-  const showActions = action !== undefined && action !== null || (children !== undefined && children !== null)
+  const showActions = (action !== undefined && action !== null) || (children !== undefined && children !== null)
 
   return (
     <div

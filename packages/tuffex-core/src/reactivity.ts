@@ -1,3 +1,15 @@
+import type {
+  ComputedGetter,
+  ComputedRef,
+  EffectScope,
+  MaybeRef,
+  MaybeRefOrGetter,
+  ReactiveEffectRunner,
+  Ref,
+  ShallowRef,
+  WritableComputedOptions,
+  WritableComputedRef,
+} from '@vue/reactivity'
 import {
   computed,
   effect,
@@ -20,18 +32,6 @@ import {
   toValue,
   triggerRef,
   unref,
-} from '@vue/reactivity'
-import type {
-  ComputedGetter,
-  ComputedRef,
-  EffectScope,
-  MaybeRef,
-  MaybeRefOrGetter,
-  ReactiveEffectRunner,
-  Ref,
-  ShallowRef,
-  WritableComputedOptions,
-  WritableComputedRef,
 } from '@vue/reactivity'
 
 export {

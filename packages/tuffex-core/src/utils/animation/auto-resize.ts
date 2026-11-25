@@ -1,4 +1,5 @@
-import { shallowRef, toValue, type MaybeRefOrGetter, type ShallowRef } from '@vue/reactivity'
+import type { MaybeRefOrGetter, ShallowRef } from '@vue/reactivity'
+import { shallowRef, toValue } from '@vue/reactivity'
 
 export interface AutoResizeSize {
   width: number
@@ -67,6 +68,8 @@ export function createAutoResizeController(
   let enabled = true
   let ro: ResizeObserver | null = null
   let activeCleanup: (() => void) | null = null
+  let startImpl: () => void = () => {}
+  const start = () => startImpl()
 
   const round = (v: number) => {
     switch (opt.rounding) {
@@ -222,15 +225,17 @@ export function createAutoResizeController(
     opt.onAfterApply(event)
   }
 
-  const start = () => {
+  startImpl = () => {
     if (ro || typeof ResizeObserver === 'undefined')
       return
     const { outer, inner } = getTargets()
     const targets: HTMLElement[] = []
-    if (opt.observeTarget === 'inner' && inner)
+    if (opt.observeTarget === 'inner' && inner) {
       targets.push(inner)
-    else if (opt.observeTarget === 'outer' && outer)
+    }
+    else if (opt.observeTarget === 'outer' && outer) {
       targets.push(outer)
+    }
     else {
       if (inner)
         targets.push(inner)

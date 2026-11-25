@@ -1,4 +1,5 @@
-import { effectScope, readonly, shallowRef, type Ref } from '@vue/reactivity'
+import type { Ref } from '@vue/reactivity'
+import { effectScope, readonly, shallowRef } from '@vue/reactivity'
 import { watchSignal } from '../reactivity'
 import { hasWindow } from '../utils/env'
 
@@ -13,8 +14,8 @@ export interface StreamCitationSource {
   [key: string]: unknown
 }
 
-export type StreamInline =
-  | {
+export type StreamInline
+  = | {
     type: 'text'
     text: string
     marks?: StreamMark[]

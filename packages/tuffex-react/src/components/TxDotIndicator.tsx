@@ -9,7 +9,7 @@ export interface TxDotIndicatorProps extends HTMLAttributes<HTMLSpanElement> {
   ariaLabel?: string
 }
 
-export const TxDotIndicator = forwardRef<HTMLSpanElement, TxDotIndicatorProps>(function TxDotIndicator(
+export const TxDotIndicator = forwardRef<HTMLSpanElement, TxDotIndicatorProps>((
   {
     color = 'currentColor',
     label,
@@ -21,7 +21,7 @@ export const TxDotIndicator = forwardRef<HTMLSpanElement, TxDotIndicatorProps>(f
     ...rest
   },
   ref,
-) {
+) => {
   const hasLabel = Boolean(label) || (children !== undefined && children !== null && children !== '')
 
   const dotStyle = {
