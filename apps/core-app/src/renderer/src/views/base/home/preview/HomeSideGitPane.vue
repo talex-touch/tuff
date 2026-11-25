@@ -138,6 +138,7 @@ const avatarLoadState = reactive<Record<string, 'loaded' | 'error'>>({})
 const expandedCommitHashes = ref<Set<string>>(new Set())
 const commitFilesCache = reactive<Record<string, WorkspaceGitCommitFilesResult>>({})
 const commitFilesLoading = reactive<Record<string, boolean>>({})
+const commitFilesRequestIds: Record<string, number> = {}
 const expandedCommitFolderIds = ref<Set<string>>(new Set())
 const selectedCommitFile = ref<{
   commitHash: string
@@ -153,6 +154,7 @@ let branchesRequestSeq = 0
 let logRequestSeq = 0
 let branchPreviewSeq = 0
 let commitFileDiffSeq = 0
+let commitFilesRequestSeq = 0
 
 const target = computed(() => ({
   ...(props.cwd ? { cwd: props.cwd } : {}),
@@ -359,10 +361,14 @@ async function toggleCommitDetails(commit: WorkspaceGitCommitEntry): Promise<voi
 
   if (!gitSdk || commitFilesLoading[commit.hash]) return
   const key = targetKey.value
+  const requestId = ++commitFilesRequestSeq
+  commitFilesRequestIds[commit.hash] = requestId
+  const isCurrentRequest = (): boolean =>
+    commitFilesRequestIds[commit.hash] === requestId && key === targetKey.value
   commitFilesLoading[commit.hash] = true
   try {
     const result = await gitSdk.commitFiles({ ...target.value, hash: commit.hash })
-    if (key !== targetKey.value) return
+    if (!isCurrentRequest()) return
     commitFilesCache[commit.hash] = result
     if (!result.error && result.files.length > 0) {
       const folderIds = collectAllCommitFileFolderIds(
@@ -375,7 +381,7 @@ async function toggleCommitDetails(commit: WorkspaceGitCommitEntry): Promise<voi
       }
     }
   } catch (error) {
-    if (key === targetKey.value) {
+    if (isCurrentRequest()) {
       commitFilesCache[commit.hash] = {
         hash: commit.hash,
         files: [],
@@ -385,7 +391,7 @@ async function toggleCommitDetails(commit: WorkspaceGitCommitEntry): Promise<voi
       }
     }
   } finally {
-    if (key === targetKey.value) {
+    if (isCurrentRequest()) {
       commitFilesLoading[commit.hash] = false
     }
   }
@@ -1311,6 +1317,9 @@ watch(
       }
       for (const loadingHash of Object.keys(commitFilesLoading)) {
         delete commitFilesLoading[loadingHash]
+      }
+      for (const reqHash of Object.keys(commitFilesRequestIds)) {
+        delete commitFilesRequestIds[reqHash]
       }
       closeCommitFileDiff()
     }

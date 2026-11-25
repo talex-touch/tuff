@@ -1234,8 +1234,8 @@ export async function readWorkspaceGitDiff(
   let safeOldPath: string | undefined
   try {
     safePath = assertSafeRepoRelativePath(ctx.repoRoot, request.path)
-    if (request.oldPath?.trim()) {
-      safeOldPath = assertSafeRepoRelativePath(ctx.repoRoot, request.oldPath.trim())
+    if (typeof request.oldPath === 'string' && request.oldPath.length > 0) {
+      safeOldPath = assertSafeRepoRelativePath(ctx.repoRoot, request.oldPath)
     }
   } catch (error) {
     return {
