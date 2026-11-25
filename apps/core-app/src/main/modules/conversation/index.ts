@@ -28,6 +28,7 @@ import {
   listWorkspaceGitBranches,
   pullWorkspaceGit,
   pushWorkspaceGit,
+  readWorkspaceGitCommitFiles,
   readWorkspaceGitDiff,
   readWorkspaceGitLog,
   readWorkspaceGitStatus,
@@ -181,6 +182,10 @@ export class ConversationModule extends BaseModule<TalexEvents> {
       transport.on(WorkspaceGitEvents.log, (payload, context) => {
         assertHostOwned(context)
         return readWorkspaceGitLog(payload)
+      }),
+      transport.on(WorkspaceGitEvents.commitFiles, (payload, context) => {
+        assertHostOwned(context)
+        return readWorkspaceGitCommitFiles(payload)
       }),
       transport.on(WorkspaceGitEvents.stage, (payload, context) => {
         assertHostOwned(context)

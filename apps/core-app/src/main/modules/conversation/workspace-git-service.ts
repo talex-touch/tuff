@@ -1,8 +1,12 @@
 import type {
+  WorkspaceGitAuthorAvatar,
   WorkspaceGitBranchEntry,
   WorkspaceGitBranchesResult,
   WorkspaceGitCheckoutRequest,
   WorkspaceGitCommitEntry,
+  WorkspaceGitCommitFileEntry,
+  WorkspaceGitCommitFilesRequest,
+  WorkspaceGitCommitFilesResult,
   WorkspaceGitCommitRequest,
   WorkspaceGitDeleteBranchRequest,
   WorkspaceGitDiffRequest,
@@ -637,9 +641,10 @@ export function parseRemotesOutput(stdout: string): WorkspaceGitRemoteEntry[] {
 }
 
 /**
- * Resolve a commit author's avatar URL without leaking personal emails by default:
- * - GitHub noreply addresses -> GitHub avatar CDN (already public anonymous IDs)
- * - Standard emails -> `undefined` by default (initials fallback); Gravatar SHA-256 requires explicit opt-in
+ * Resolve a commit author's avatar URL using standard protocols:
+ * - GitHub noreply addresses -> GitHub avatar CDN
+ * - Standard emails -> Gravatar SHA-256 (`d=404` so clients fall back cleanly to initials);
+ *   pass `{ allowGravatar: false }` to suppress Gravatar lookups explicitly
  */
 export function resolveCommitAuthorAvatarUrl(
   email?: string,
@@ -660,7 +665,7 @@ export function resolveCommitAuthorAvatarUrl(
     return `https://github.com/${ghUserMatch[1]}.png?size=64`
   }
 
-  if (!options.allowGravatar) {
+  if (options.allowGravatar === false) {
     return undefined
   }
 
@@ -949,6 +954,263 @@ export async function readWorkspaceGitStatus(
   return readStatusForRepo(ctx)
 }
 
+function isValidCommitHash(hash: string): boolean {
+  return /^[0-9a-f]{4,40}$/i.test(hash.trim())
+}
+
+function normalizeGitEmail(raw?: string): string | undefined {
+  const clean = raw?.trim().replace(/^<|>$/g, '').trim()
+  return clean || undefined
+}
+
+interface RecentCommitAuthorNode {
+  parents: string[]
+  author: string
+  email?: string
+}
+
+function parseRecentCommitGraph(stdout: string): Map<string, RecentCommitAuthorNode> {
+  const graph = new Map<string, RecentCommitAuthorNode>()
+  for (const line of stdout.split('\n')) {
+    if (!line.trim()) continue
+    const [hash, rawParents, author, rawEmail] = line.split('\x1f')
+    if (!hash) continue
+    const parents = rawParents ? rawParents.split(' ').filter(Boolean) : []
+    const email = normalizeGitEmail(rawEmail)
+    graph.set(hash, {
+      parents,
+      author: author?.trim() || '',
+      ...(email ? { email } : {})
+    })
+  }
+  return graph
+}
+
+function collectBranchAuthors(
+  tipOid: string | undefined,
+  tipAuthor: string | undefined,
+  tipEmail: string | undefined,
+  graph: Map<string, RecentCommitAuthorNode>,
+  maxAuthors = 3,
+  maxCommits = 12
+): WorkspaceGitAuthorAvatar[] {
+  const authors: WorkspaceGitAuthorAvatar[] = []
+  const seenKeys = new Set<string>()
+
+  const pushAuthor = (name?: string, email?: string) => {
+    const cleanName = name?.trim() || ''
+    const cleanEmail = normalizeGitEmail(email)
+    if (!cleanName && !cleanEmail) return
+    const dedupKey = (cleanEmail || cleanName).toLowerCase()
+    if (seenKeys.has(dedupKey)) return
+    seenKeys.add(dedupKey)
+    const avatarUrl = resolveCommitAuthorAvatarUrl(cleanEmail)
+    authors.push({
+      name: cleanName || cleanEmail || 'Unknown',
+      ...(cleanEmail ? { email: cleanEmail } : {}),
+      ...(avatarUrl ? { avatarUrl } : {})
+    })
+  }
+
+  pushAuthor(tipAuthor, tipEmail)
+
+  if (tipOid && graph.size > 0 && authors.length < maxAuthors) {
+    const visited = new Set<string>()
+    const queue: string[] = [tipOid]
+    let walked = 0
+
+    while (queue.length > 0 && authors.length < maxAuthors && walked < maxCommits) {
+      const oid = queue.shift()!
+      if (visited.has(oid)) continue
+      visited.add(oid)
+      walked += 1
+
+      const node = graph.get(oid)
+      if (!node) continue
+      pushAuthor(node.author, node.email)
+      if (authors.length >= maxAuthors) break
+      for (const parent of node.parents) {
+        if (!visited.has(parent) && graph.has(parent)) {
+          queue.push(parent)
+        }
+      }
+    }
+  }
+
+  return authors
+}
+
+function classifyCommitFileStatus(rawCode: string): WorkspaceGitFileStatus {
+  const code = rawCode.trim().toUpperCase()
+  if (code.startsWith('A')) return 'added'
+  if (code.startsWith('D')) return 'deleted'
+  if (code.startsWith('R')) return 'renamed'
+  if (code.startsWith('C')) return 'copied'
+  if (code.startsWith('T')) return 'typechange'
+  if (code.startsWith('U')) return 'unmerged'
+  return 'modified'
+}
+
+export function parseCommitFilesOutput(
+  nameStatusStdout: string,
+  numstatStdout: string
+): WorkspaceGitCommitFileEntry[] {
+  const statusMap = new Map<string, { status: WorkspaceGitFileStatus; oldPath?: string }>()
+  const statusOrder: string[] = []
+
+  const statusTokens = nameStatusStdout.split('\0')
+  for (let i = 0; i < statusTokens.length; i += 1) {
+    const rawCode = statusTokens[i]
+    if (!rawCode) continue
+    const status = classifyCommitFileStatus(rawCode)
+    if (status === 'renamed' || status === 'copied') {
+      const oldPath = statusTokens[i + 1]
+      const newPath = statusTokens[i + 2]
+      i += 2
+      if (!newPath) continue
+      statusMap.set(newPath, { status, ...(oldPath ? { oldPath } : {}) })
+      statusOrder.push(newPath)
+    } else {
+      const filePath = statusTokens[i + 1]
+      i += 1
+      if (!filePath) continue
+      statusMap.set(filePath, { status })
+      statusOrder.push(filePath)
+    }
+  }
+
+  const statMap = new Map<
+    string,
+    { additions: number; deletions: number; binary: boolean; oldPath?: string }
+  >()
+  const statTokens = numstatStdout.split('\0')
+  for (let i = 0; i < statTokens.length; i += 1) {
+    const token = statTokens[i]
+    if (!token) continue
+    const tab1 = token.indexOf('\t')
+    const tab2 = tab1 >= 0 ? token.indexOf('\t', tab1 + 1) : -1
+    if (tab1 < 0 || tab2 < 0) continue
+
+    const rawAdd = token.slice(0, tab1)
+    const rawDel = token.slice(tab1 + 1, tab2)
+    const trailingPath = token.slice(tab2 + 1)
+    const binary = rawAdd === '-' || rawDel === '-'
+    const additions = binary ? 0 : Math.max(0, Number.parseInt(rawAdd, 10) || 0)
+    const deletions = binary ? 0 : Math.max(0, Number.parseInt(rawDel, 10) || 0)
+
+    if (!trailingPath) {
+      // Rename/copy under `git show --numstat -z`: `<add>\t<del>\t\0<oldPath>\0<newPath>\0`
+      const oldPath = statTokens[i + 1]
+      const newPath = statTokens[i + 2]
+      i += 2
+      if (!newPath) continue
+      statMap.set(newPath, { additions, deletions, binary, ...(oldPath ? { oldPath } : {}) })
+      if (!statusMap.has(newPath)) statusOrder.push(newPath)
+    } else {
+      statMap.set(trailingPath, { additions, deletions, binary })
+      if (!statusMap.has(trailingPath)) statusOrder.push(trailingPath)
+    }
+  }
+
+  const files: WorkspaceGitCommitFileEntry[] = []
+  const seen = new Set<string>()
+  for (const filePath of statusOrder) {
+    if (seen.has(filePath)) continue
+    seen.add(filePath)
+    const statusInfo = statusMap.get(filePath)
+    const statInfo = statMap.get(filePath)
+    const oldPath = statusInfo?.oldPath ?? statInfo?.oldPath
+    files.push({
+      path: filePath,
+      ...(oldPath && oldPath !== filePath ? { oldPath } : {}),
+      status: statusInfo?.status ?? 'modified',
+      additions: statInfo?.additions ?? 0,
+      deletions: statInfo?.deletions ?? 0,
+      binary: statInfo?.binary ?? false
+    })
+  }
+  return files
+}
+
+export async function readWorkspaceGitCommitFiles(
+  request: WorkspaceGitCommitFilesRequest
+): Promise<WorkspaceGitCommitFilesResult> {
+  const rawHash = request.hash?.trim() ?? ''
+  const ctx = await resolveRepoContext(request)
+  if (!ctx.ok) {
+    return {
+      hash: rawHash,
+      files: [],
+      totalAdditions: 0,
+      totalDeletions: 0,
+      error: ctx.error || 'Not a git repository'
+    }
+  }
+
+  if (!rawHash || !isValidCommitHash(rawHash)) {
+    return {
+      hash: rawHash,
+      files: [],
+      totalAdditions: 0,
+      totalDeletions: 0,
+      error: 'Invalid commit hash'
+    }
+  }
+
+  const [nameStatusRes, numstatRes] = await Promise.all([
+    runGit(ctx.repoRoot, [
+      'show',
+      '--first-parent',
+      '--root',
+      '--format=',
+      '--name-status',
+      '-M',
+      '-z',
+      rawHash,
+      '--'
+    ]),
+    runGit(ctx.repoRoot, [
+      'show',
+      '--first-parent',
+      '--root',
+      '--format=',
+      '--numstat',
+      '-M',
+      '-z',
+      rawHash,
+      '--'
+    ])
+  ])
+
+  if (nameStatusRes.exitCode !== 0) {
+    return {
+      hash: rawHash,
+      files: [],
+      totalAdditions: 0,
+      totalDeletions: 0,
+      error: nameStatusRes.stderr.trim() || 'Failed to read commit files'
+    }
+  }
+
+  const files = parseCommitFilesOutput(
+    nameStatusRes.stdout,
+    numstatRes.exitCode === 0 ? numstatRes.stdout : ''
+  )
+  let totalAdditions = 0
+  let totalDeletions = 0
+  for (const file of files) {
+    totalAdditions += file.additions
+    totalDeletions += file.deletions
+  }
+
+  return {
+    hash: rawHash,
+    files,
+    totalAdditions,
+    totalDeletions
+  }
+}
+
 export async function readWorkspaceGitDiff(
   request: WorkspaceGitDiffRequest
 ): Promise<WorkspaceGitDiffResult> {
@@ -969,8 +1231,12 @@ export async function readWorkspaceGitDiff(
   }
 
   let safePath: string
+  let safeOldPath: string | undefined
   try {
     safePath = assertSafeRepoRelativePath(ctx.repoRoot, request.path)
+    if (typeof request.oldPath === 'string' && request.oldPath.length > 0) {
+      safeOldPath = assertSafeRepoRelativePath(ctx.repoRoot, request.oldPath)
+    }
   } catch (error) {
     return {
       path: request.path,
@@ -982,6 +1248,59 @@ export async function readWorkspaceGitDiff(
       truncated: false,
       empty: true,
       error: error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  const commitHash = request.commitHash?.trim()
+  if (commitHash) {
+    if (!isValidCommitHash(commitHash)) {
+      return {
+        path: safePath,
+        staged: false,
+        diff: '',
+        additions: 0,
+        deletions: 0,
+        binary: false,
+        truncated: false,
+        empty: true,
+        error: 'Invalid commit hash'
+      }
+    }
+    const pathArgs = safeOldPath && safeOldPath !== safePath ? [safeOldPath, safePath] : [safePath]
+    const res = await runGit(
+      ctx.repoRoot,
+      [
+        'show',
+        '--first-parent',
+        '--root',
+        '--format=',
+        '--no-color',
+        '-M',
+        commitHash,
+        '--',
+        ...pathArgs
+      ],
+      LOCAL_GIT_TIMEOUT_MS,
+      { literalPathspecs: true }
+    )
+    if (res.exitCode !== 0) {
+      return {
+        path: safePath,
+        staged: false,
+        diff: '',
+        additions: 0,
+        deletions: 0,
+        binary: false,
+        truncated: false,
+        empty: true,
+        error: res.stderr.trim() || 'Failed to read commit file diff'
+      }
+    }
+    const summary = summarizeDiff(res.stdout)
+    return {
+      path: safePath,
+      staged: false,
+      ...summary
     }
   }
 
@@ -1028,16 +1347,24 @@ export async function listWorkspaceGitBranches(
     }
   }
 
-  const [status, refsRes, remotesRes] = await Promise.all([
+  const [status, refsRes, remotesRes, recentLogRes] = await Promise.all([
     readStatusForRepo(ctx),
     runGit(ctx.repoRoot, [
       'for-each-ref',
       '--sort=-committerdate',
-      '--format=%(HEAD)%1f%(refname)%1f%(upstream)%1f%(objectname:short)%1f%(contents:subject)%1f%(authorname)%1f%(committerdate:relative)',
+      '--format=%(HEAD)%1f%(refname)%1f%(upstream)%1f%(objectname)%1f%(objectname:short)%1f%(contents:subject)%1f%(authorname)%1f%(authoremail)%1f%(committerdate:relative)',
       'refs/heads',
       'refs/remotes'
     ]),
-    runGit(ctx.repoRoot, ['remote', '-v'])
+    runGit(ctx.repoRoot, ['remote', '-v']),
+    runGit(ctx.repoRoot, [
+      'log',
+      '--branches',
+      '--remotes',
+      '-n',
+      '300',
+      '--format=%H%x1f%P%x1f%an%x1f%ae'
+    ])
   ])
 
   if (status.error) {
@@ -1068,14 +1395,25 @@ export async function listWorkspaceGitBranches(
   const sortedRemoteNames = [...(remotes ?? []).map((item) => item.name)].sort(
     (a, b) => b.length - a.length
   )
+  const commitGraph =
+    recentLogRes.exitCode === 0 ? parseRecentCommitGraph(recentLogRes.stdout) : new Map()
 
   const localBranches: WorkspaceGitBranchEntry[] = []
   const remoteBranches: WorkspaceGitBranchEntry[] = []
 
   for (const line of refsRes.stdout.split('\n')) {
     if (!line.trim()) continue
-    const [headMark, fullRef, rawUpstream, shortOid, subject, author, relativeDate] =
-      line.split('\x1f')
+    const [
+      headMark,
+      fullRef,
+      rawUpstream,
+      fullOid,
+      shortOid,
+      subject,
+      author,
+      rawAuthorEmail,
+      relativeDate
+    ] = line.split('\x1f')
     if (!fullRef) continue
 
     let isRemote = false
@@ -1101,6 +1439,8 @@ export async function listWorkspaceGitBranches(
     const matchedRemoteName = isRemote
       ? sortedRemoteNames.find((remote) => name.startsWith(`${remote}/`))
       : undefined
+    const authorEmail = normalizeGitEmail(rawAuthorEmail)
+    const authors = collectBranchAuthors(fullOid, author, authorEmail, commitGraph)
 
     const entry: WorkspaceGitBranchEntry = {
       name,
@@ -1112,6 +1452,8 @@ export async function listWorkspaceGitBranches(
       ...(shortOid ? { shortOid } : {}),
       ...(subject ? { subject } : {}),
       ...(author ? { author } : {}),
+      ...(authorEmail ? { authorEmail } : {}),
+      ...(authors.length > 0 ? { authors } : {}),
       ...(relativeDate ? { relativeDate } : {})
     }
 

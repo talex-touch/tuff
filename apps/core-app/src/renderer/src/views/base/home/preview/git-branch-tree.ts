@@ -1,4 +1,7 @@
-import type { WorkspaceGitBranchEntry } from '@talex-touch/utils/transport/sdk/domains/workspace-git'
+import type {
+  WorkspaceGitBranchEntry,
+  WorkspaceGitCommitFileEntry
+} from '@talex-touch/utils/transport/sdk/domains/workspace-git'
 
 export type BranchSemanticTone =
   | 'current'
@@ -432,4 +435,216 @@ export function resolveAuthorInitials(author: string): string {
     return `${camelCaps[0]}${camelCaps[1]}`
   }
   return Array.from(trimmed)[0]?.toUpperCase() ?? '?'
+}
+
+export interface GitCommitFileFolderNode {
+  kind: 'folder'
+  id: string
+  label: string
+  fullPath: string
+  depth: number
+  fileCount: number
+  additions: number
+  deletions: number
+  children: GitCommitFileTreeNode[]
+}
+
+export interface GitCommitFileLeafNode {
+  kind: 'file'
+  id: string
+  label: string
+  depth: number
+  file: WorkspaceGitCommitFileEntry
+}
+
+export type GitCommitFileTreeNode = GitCommitFileFolderNode | GitCommitFileLeafNode
+
+export type GitCommitFileVisibleRow =
+  | {
+      kind: 'folder'
+      id: string
+      label: string
+      fullPath: string
+      depth: number
+      fileCount: number
+      additions: number
+      deletions: number
+      expanded: boolean
+    }
+  | GitCommitFileLeafNode
+
+interface MutableCommitFileFolder {
+  label: string
+  fullPath: string
+  folders: Map<string, MutableCommitFileFolder>
+  leaves: WorkspaceGitCommitFileEntry[]
+  fileCount: number
+  additions: number
+  deletions: number
+}
+
+function createMutableCommitFileFolder(label: string, fullPath: string): MutableCommitFileFolder {
+  return {
+    label,
+    fullPath,
+    folders: new Map(),
+    leaves: [],
+    fileCount: 0,
+    additions: 0,
+    deletions: 0
+  }
+}
+
+function finalizeCommitFileFolder(
+  commitHash: string,
+  folder: MutableCommitFileFolder,
+  depth: number
+): GitCommitFileFolderNode {
+  let target = folder
+  let label = folder.label
+  let fullPath = folder.fullPath
+
+  while (target.leaves.length === 0 && target.folders.size === 1) {
+    const onlyChild = target.folders.values().next().value
+    if (!onlyChild) break
+    target = onlyChild
+    label = `${label}/${onlyChild.label}`
+    fullPath = onlyChild.fullPath
+  }
+
+  const children: GitCommitFileTreeNode[] = []
+  const sortedFolders = Array.from(target.folders.values()).sort((a, b) =>
+    a.label.localeCompare(b.label)
+  )
+  for (const sub of sortedFolders) {
+    children.push(finalizeCommitFileFolder(commitHash, sub, depth + 1))
+  }
+
+  const sortedLeaves = [...target.leaves].sort((a, b) => a.path.localeCompare(b.path))
+  for (const file of sortedLeaves) {
+    const segments = file.path.split('/').filter(Boolean)
+    const leafLabel = segments[segments.length - 1] ?? file.path
+    children.push({
+      kind: 'file',
+      id: `commit:${commitHash}:file:${file.path}`,
+      label: leafLabel,
+      depth: depth + 1,
+      file
+    })
+  }
+
+  return {
+    kind: 'folder',
+    id: `commit:${commitHash}:folder:${fullPath}`,
+    label,
+    fullPath,
+    depth,
+    fileCount: target.fileCount,
+    additions: target.additions,
+    deletions: target.deletions,
+    children
+  }
+}
+
+export function buildCommitFileTree(
+  commitHash: string,
+  files: WorkspaceGitCommitFileEntry[]
+): GitCommitFileTreeNode[] {
+  const rootFolders = new Map<string, MutableCommitFileFolder>()
+  const rootLeaves: WorkspaceGitCommitFileEntry[] = []
+
+  for (const file of files) {
+    const segments = file.path.split('/').filter(Boolean)
+    if (segments.length <= 1) {
+      rootLeaves.push(file)
+      continue
+    }
+
+    let currentMap = rootFolders
+    let pathAcc = ''
+    let parentFolder: MutableCommitFileFolder | null = null
+
+    for (let i = 0; i < segments.length - 1; i += 1) {
+      const seg = segments[i]!
+      pathAcc = pathAcc ? `${pathAcc}/${seg}` : seg
+      let folder = currentMap.get(seg)
+      if (!folder) {
+        folder = createMutableCommitFileFolder(seg, pathAcc)
+        currentMap.set(seg, folder)
+      }
+      folder.fileCount += 1
+      folder.additions += file.additions
+      folder.deletions += file.deletions
+      parentFolder = folder
+      currentMap = folder.folders
+    }
+
+    parentFolder?.leaves.push(file)
+  }
+
+  const nodes: GitCommitFileTreeNode[] = []
+  const sortedRootFolders = Array.from(rootFolders.values()).sort((a, b) =>
+    a.label.localeCompare(b.label)
+  )
+  for (const folder of sortedRootFolders) {
+    nodes.push(finalizeCommitFileFolder(commitHash, folder, 0))
+  }
+
+  const sortedRootLeaves = [...rootLeaves].sort((a, b) => a.path.localeCompare(b.path))
+  for (const file of sortedRootLeaves) {
+    nodes.push({
+      kind: 'file',
+      id: `commit:${commitHash}:file:${file.path}`,
+      label: file.path,
+      depth: 0,
+      file
+    })
+  }
+
+  return nodes
+}
+
+export function collectAllCommitFileFolderIds(nodes: GitCommitFileTreeNode[]): string[] {
+  const ids: string[] = []
+  const visit = (items: GitCommitFileTreeNode[]) => {
+    for (const item of items) {
+      if (item.kind !== 'folder') continue
+      ids.push(item.id)
+      visit(item.children)
+    }
+  }
+  visit(nodes)
+  return ids
+}
+
+export function flattenCommitFileTree(
+  nodes: GitCommitFileTreeNode[],
+  expandedIds: ReadonlySet<string>
+): GitCommitFileVisibleRow[] {
+  const rows: GitCommitFileVisibleRow[] = []
+  const visit = (items: GitCommitFileTreeNode[]) => {
+    for (const item of items) {
+      if (item.kind === 'folder') {
+        const expanded = expandedIds.has(item.id)
+        rows.push({
+          kind: 'folder',
+          id: item.id,
+          label: item.label,
+          fullPath: item.fullPath,
+          depth: item.depth,
+          fileCount: item.fileCount,
+          additions: item.additions,
+          deletions: item.deletions,
+          expanded
+        })
+        if (expanded) {
+          visit(item.children)
+        }
+      } else {
+        rows.push(item)
+      }
+    }
+  }
+  visit(nodes)
+  return rows
 }
