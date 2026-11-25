@@ -38,6 +38,7 @@
     "./package.json": "./package.json",
     "./style.css": "./dist/es/components.css",
     "./base.css": "./dist/es/base.css",
+    "./tokens.css": "./dist/es/tokens.css",
     "./utils": {
       "types": "./dist/es/utils/index.d.ts",
       "import": "./dist/es/utils/index.js",
@@ -127,10 +128,10 @@
     "@floating-ui/vue": "^1.1.11",
     "@lezer/highlight": "^1.2.3",
     "@shikijs/engine-javascript": "^4.4.2",
+    "@talex-touch/tuffex-core": "workspace:^",
     "@talex-touch/utils": "workspace:^",
     "@types/three": "^0.186.0",
     "@vue/reactivity": "^3.5.27",
-    "@vueuse/core": "^14.4.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-image": "^0.9.0",
     "@xterm/addon-webgl": "^0.19.0",
@@ -146,7 +147,6 @@
     "marked": "catalog:",
     "mermaid": "catalog:",
     "shiki": "^4.4.2",
-    "v-wave": "^3.1.1",
     "yaml": "^2.9.0"
   },
   "devDependencies": {

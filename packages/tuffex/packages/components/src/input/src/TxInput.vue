@@ -213,7 +213,7 @@ defineExpose({
   border: 0;
   border-radius: 12px;
   background-color: var(--tx-bg-color, #fff);
-  box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
+  box-shadow: inset 0 0 0 1px var(--tx-coloring-field-border-color, var(--tx-border-color, #dcdfe6));
 
   /* The fake background sits inside the 1px ring so the ring is not covered. */
   &::before {
