@@ -12,7 +12,12 @@ import type {
   ActivityTurn
 } from '~/modules/conversation/workspace-activity'
 import type { HomeModelLimits } from '~/modules/conversation/workspace-panel'
-import type { SidePanelTab, SidePanelWorkspaceKind } from './composables/useHomeSidePanel'
+import type {
+  SidePanelRecentItem,
+  SidePanelTab,
+  SidePanelWorkspaceKind
+} from './composables/useHomeSidePanel'
+import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { isElectronRenderer } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -57,10 +62,12 @@ const props = withDefaults(
     loading: boolean
     tabs: SidePanelTab[]
     activeTabId: string | null
+    recentItems?: SidePanelRecentItem[]
     panelActive?: boolean
     dockedToShell?: boolean
   }>(),
   {
+    recentItems: () => [],
     panelActive: true,
     dockedToShell: false
   }
@@ -91,10 +98,13 @@ const emit = defineEmits<{
     payload: { path: string; displayPath: string; line?: number }
   ): void
   (event: 'open-web-external', url: string): void
+  (event: 'remove-recent', id: string): void
+  (event: 'clear-recents'): void
 }>()
 
 const { t } = useI18n()
 const menuOpen = ref(false)
+const addMenuOpen = ref(false)
 const tabStripRef = ref<HTMLElement | null>(null)
 const sideTabElements = new Map<string, HTMLElement>()
 const canScrollLeft = ref(false)
@@ -216,7 +226,17 @@ function tabIconClass(tab: SidePanelTab): string {
 
 function runMenuAction(action: () => void): void {
   menuOpen.value = false
+  addMenuOpen.value = false
   action()
+}
+
+function openRecentEntry(item: SidePanelRecentItem): void {
+  addMenuOpen.value = false
+  if (item.kind === 'file') {
+    emit('open-file', { path: item.path, displayPath: item.displayPath })
+  } else {
+    emit('open-web', item.url)
+  }
 }
 
 function onTabBarWheel(event: WheelEvent): void {
@@ -295,17 +315,167 @@ function onTabBarWheel(event: WheelEvent): void {
         class="HomeSidePanel-Controls"
         :class="{ 'shell-chrome-safe-inline-end': dockedToShell }"
       >
-        <button
-          type="button"
-          class="HomeSidePanel-IconBtn"
-          :class="{ 'is-active': activeTabId === null }"
-          :aria-pressed="activeTabId === null"
-          :title="t('home.sidePanel.newTab')"
-          :aria-label="t('home.sidePanel.newTab')"
-          @click="emit('open-launcher')"
-        >
-          <span class="i-ri-add-line" aria-hidden="true" />
-        </button>
+        <div class="HomeSidePanel-AddGroup" :class="{ 'is-open': addMenuOpen }">
+          <button
+            type="button"
+            class="HomeSidePanel-IconBtn HomeSidePanel-AddBtn"
+            :class="{ 'is-active': activeTabId === null }"
+            :aria-pressed="activeTabId === null"
+            :title="t('home.sidePanel.newTab')"
+            :aria-label="t('home.sidePanel.newTab')"
+            @click="emit('open-launcher')"
+            @contextmenu.prevent="addMenuOpen = true"
+          >
+            <span class="i-ri-add-line" aria-hidden="true" />
+          </button>
+          <span class="HomeSidePanel-AddDivider" aria-hidden="true" />
+          <TxDropdownMenu
+            v-model="addMenuOpen"
+            placement="bottom-end"
+            :min-width="224"
+            :panel-card="SHELL_MENU_CARD"
+            panel-background="refraction"
+          >
+            <template #trigger>
+              <button
+                type="button"
+                class="HomeSidePanel-AddMenuBtn"
+                :class="{ 'is-open': addMenuOpen }"
+                :title="t('home.sidePanel.newTabMenu')"
+                :aria-label="t('home.sidePanel.newTabMenu')"
+                data-testid="side-panel-add-menu-trigger"
+              >
+                <span
+                  class="i-ri-arrow-down-s-line HomeSidePanel-AddMenuChevron"
+                  aria-hidden="true"
+                />
+              </button>
+            </template>
+
+            <TxDropdownItem
+              data-testid="side-panel-add-menu-launcher"
+              @select="runMenuAction(() => emit('open-launcher'))"
+            >
+              <span class="HomeSidePanel-DropdownItem">
+                <span class="i-ri-search-line HomeSidePanel-DropdownIcon" aria-hidden="true" />
+                <span>{{ t('home.sidePanel.newTab') }}</span>
+              </span>
+            </TxDropdownItem>
+
+            <div class="HomeSidePanel-MenuDivider" role="separator" />
+
+            <TxDropdownItem
+              data-testid="side-panel-add-menu-git"
+              @select="runMenuAction(() => emit('open-tool', 'git'))"
+            >
+              <span class="HomeSidePanel-DropdownItem">
+                <span class="i-ri-git-branch-line HomeSidePanel-DropdownIcon" aria-hidden="true" />
+                <span>{{ t('home.git.title') }}</span>
+              </span>
+            </TxDropdownItem>
+
+            <TxDropdownItem @select="runMenuAction(() => emit('open-tool', 'review'))">
+              <span class="HomeSidePanel-DropdownItem">
+                <span class="i-ri-file-edit-line HomeSidePanel-DropdownIcon" aria-hidden="true" />
+                <span>{{ t('home.workspace.panel.review') }}</span>
+              </span>
+              <template v-if="review.records.value.length" #right>
+                <span class="HomeSidePanel-Count">{{ review.records.value.length }}</span>
+              </template>
+            </TxDropdownItem>
+
+            <TxDropdownItem @select="runMenuAction(() => emit('open-file-picker'))">
+              <span class="HomeSidePanel-DropdownItem">
+                <span class="i-ri-file-line HomeSidePanel-DropdownIcon" aria-hidden="true" />
+                <span>{{ t('home.sidePanel.openFile') }}</span>
+              </span>
+            </TxDropdownItem>
+
+            <TxDropdownItem @select="runMenuAction(() => emit('open-tool', 'terminal'))">
+              <span class="HomeSidePanel-DropdownItem">
+                <span
+                  class="i-ri-terminal-box-line HomeSidePanel-DropdownIcon"
+                  aria-hidden="true"
+                />
+                <span>{{ t('terminal.title') }}</span>
+              </span>
+            </TxDropdownItem>
+
+            <TxDropdownItem @select="runMenuAction(() => emit('open-blank-browser'))">
+              <span class="HomeSidePanel-DropdownItem">
+                <span class="i-ri-global-line HomeSidePanel-DropdownIcon" aria-hidden="true" />
+                <span>{{ t('home.sidePanel.browser') }}</span>
+              </span>
+            </TxDropdownItem>
+
+            <div class="HomeSidePanel-MenuDivider" role="separator" />
+
+            <TxDropdownItem @select="runMenuAction(() => emit('open-tool', 'outputs'))">
+              <span class="HomeSidePanel-DropdownItem">
+                <span class="i-ri-stack-line HomeSidePanel-DropdownIcon" aria-hidden="true" />
+                <span>{{ t('home.preview.artifacts') }}</span>
+              </span>
+              <template v-if="counts.outputs" #right>
+                <span class="HomeSidePanel-Count">{{ counts.outputs }}</span>
+              </template>
+            </TxDropdownItem>
+
+            <TxDropdownItem @select="runMenuAction(() => emit('open-tool', 'work'))">
+              <span class="HomeSidePanel-DropdownItem">
+                <span class="i-ri-pulse-line HomeSidePanel-DropdownIcon" aria-hidden="true" />
+                <span>{{ t('home.preview.toolCalls') }}</span>
+              </span>
+              <template v-if="counts.work" #right>
+                <span class="HomeSidePanel-Count">{{ counts.work }}</span>
+              </template>
+            </TxDropdownItem>
+
+            <TxDropdownItem @select="runMenuAction(() => emit('open-tool', 'sources'))">
+              <span class="HomeSidePanel-DropdownItem">
+                <span class="i-ri-book-open-line HomeSidePanel-DropdownIcon" aria-hidden="true" />
+                <span>{{ t('home.preview.sources') }}</span>
+              </span>
+              <template v-if="counts.sources" #right>
+                <span class="HomeSidePanel-Count">{{ counts.sources }}</span>
+              </template>
+            </TxDropdownItem>
+
+            <TxDropdownItem @select="runMenuAction(() => emit('open-tool', 'context'))">
+              <span class="HomeSidePanel-DropdownItem">
+                <span class="i-ri-cpu-line HomeSidePanel-DropdownIcon" aria-hidden="true" />
+                <span>{{ t('home.workspace.panel.context') }}</span>
+              </span>
+            </TxDropdownItem>
+
+            <TxDropdownItem @select="runMenuAction(() => emit('open-tool', 'plugins'))">
+              <span class="HomeSidePanel-DropdownItem">
+                <span class="i-ri-puzzle-line HomeSidePanel-DropdownIcon" aria-hidden="true" />
+                <span>{{ t('home.sidePanel.plugins') }}</span>
+              </span>
+            </TxDropdownItem>
+
+            <template v-if="recentItems.length > 0">
+              <div class="HomeSidePanel-MenuDivider" role="separator" />
+              <div class="HomeSidePanel-DropdownSection">
+                {{ t('home.sidePanel.recentOpened') }}
+              </div>
+              <TxDropdownItem
+                v-for="item in recentItems.slice(0, 3)"
+                :key="item.id"
+                @select="openRecentEntry(item)"
+              >
+                <span class="HomeSidePanel-DropdownItem">
+                  <span
+                    :class="item.kind === 'file' ? 'i-ri-file-text-line' : 'i-ri-global-line'"
+                    class="HomeSidePanel-DropdownIcon"
+                    aria-hidden="true"
+                  />
+                  <span class="HomeSidePanel-DropdownLabel">{{ item.title }}</span>
+                </span>
+              </TxDropdownItem>
+            </template>
+          </TxDropdownMenu>
+        </div>
 
         <TxPopover
           v-model="menuOpen"
@@ -472,6 +642,7 @@ function onTabBarWheel(event: WheelEvent): void {
         v-if="!activeTab"
         :workspace-root="workspaceRoot"
         :created-files="createdFiles"
+        :recent-items="recentItems"
         :review-count="review.records.value.length"
         :outputs-count="counts.outputs"
         :sources-count="counts.sources"
@@ -482,6 +653,8 @@ function onTabBarWheel(event: WheelEvent): void {
         @open-file="emit('open-file', $event)"
         @open-web="emit('open-web', $event)"
         @open-blank-browser="emit('open-blank-browser')"
+        @remove-recent="emit('remove-recent', $event)"
+        @clear-recents="emit('clear-recents')"
       />
 
       <!-- Local file & directory viewer -->
@@ -582,6 +755,7 @@ function onTabBarWheel(event: WheelEvent): void {
         :conversation-id="conversationId"
         :active="panelActive && activeTab?.kind === 'git'"
         @open-file="emit('open-file', $event)"
+        @open-web="emit('open-web', $event)"
       />
 
       <!-- Persistent side-terminal host while any terminal tab exists -->
@@ -830,6 +1004,99 @@ function onTabBarWheel(event: WheelEvent): void {
     background: var(--shell-surface-2);
     color: var(--shell-text-primary);
   }
+}
+
+.HomeSidePanel-AddGroup {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 28px;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+
+  &:hover,
+  &.is-open {
+    background: color-mix(in srgb, var(--shell-surface-2) 65%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--shell-border) 80%, transparent);
+  }
+}
+
+.HomeSidePanel-AddBtn {
+  width: 26px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.HomeSidePanel-AddDivider {
+  width: 1px;
+  height: 12px;
+  background: color-mix(in srgb, var(--shell-border) 75%, transparent);
+  opacity: 0;
+
+  .HomeSidePanel-AddGroup:hover &,
+  .HomeSidePanel-AddGroup.is-open & {
+    opacity: 1;
+  }
+}
+
+.HomeSidePanel-AddMenuBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 0 var(--shell-radius-sm) var(--shell-radius-sm) 0;
+  background: transparent;
+  color: var(--shell-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+
+  &:hover,
+  &.is-open {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+}
+
+.HomeSidePanel-AddMenuChevron {
+  transition: transform 160ms var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+
+  .HomeSidePanel-AddMenuBtn.is-open & {
+    transform: rotate(180deg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+.HomeSidePanel-DropdownItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.HomeSidePanel-DropdownIcon {
+  flex: none;
+  font-size: 14px;
+  color: var(--shell-text-muted);
+}
+
+.HomeSidePanel-DropdownLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.HomeSidePanel-DropdownSection {
+  padding: 4px 10px 2px;
+  color: var(--shell-text-muted);
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .HomeSidePanel-Stage {

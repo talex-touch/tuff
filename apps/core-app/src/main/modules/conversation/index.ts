@@ -22,6 +22,7 @@ import {
 import {
   checkoutWorkspaceGitBranch,
   commitWorkspaceGitChanges,
+  deleteWorkspaceGitBranch,
   discardWorkspaceGitFile,
   fetchWorkspaceGit,
   listWorkspaceGitBranches,
@@ -30,6 +31,10 @@ import {
   readWorkspaceGitDiff,
   readWorkspaceGitLog,
   readWorkspaceGitStatus,
+  removeWorkspaceGitRemote,
+  renameWorkspaceGitBranch,
+  saveWorkspaceGitRemote,
+  setWorkspaceGitBranchUpstream,
   stageWorkspaceGitFiles,
   unstageWorkspaceGitFiles
 } from './workspace-git-service'
@@ -196,6 +201,26 @@ export class ConversationModule extends BaseModule<TalexEvents> {
       transport.on(WorkspaceGitEvents.checkout, (payload, context) => {
         assertHostOwned(context)
         return checkoutWorkspaceGitBranch(payload)
+      }),
+      transport.on(WorkspaceGitEvents.renameBranch, (payload, context) => {
+        assertHostOwned(context)
+        return renameWorkspaceGitBranch(payload)
+      }),
+      transport.on(WorkspaceGitEvents.deleteBranch, (payload, context) => {
+        assertHostOwned(context)
+        return deleteWorkspaceGitBranch(payload)
+      }),
+      transport.on(WorkspaceGitEvents.setUpstream, (payload, context) => {
+        assertHostOwned(context)
+        return setWorkspaceGitBranchUpstream(payload)
+      }),
+      transport.on(WorkspaceGitEvents.saveRemote, (payload, context) => {
+        assertHostOwned(context)
+        return saveWorkspaceGitRemote(payload)
+      }),
+      transport.on(WorkspaceGitEvents.removeRemote, (payload, context) => {
+        assertHostOwned(context)
+        return removeWorkspaceGitRemote(payload)
       }),
       transport.on(WorkspaceGitEvents.fetch, (payload, context) => {
         assertHostOwned(context)

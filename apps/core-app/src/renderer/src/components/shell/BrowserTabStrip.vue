@@ -11,6 +11,8 @@ import {
   TxContextMenuDivider,
   TxContextMenuItem
 } from '@talex-touch/tuffex/context-menu'
+import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
+import { TxKbd } from '@talex-touch/tuffex/kbd'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -24,6 +26,7 @@ import BrowserPluginToolbar from '~/views/base/browser/BrowserPluginToolbar.vue'
 import type { BrowserTabMenuAction } from '~/views/base/browser/tab-actions'
 import { describeBrowserError } from '~/views/base/browser/browser-errors'
 import { runBrowserTabAction } from '~/views/base/browser/tab-actions'
+import { SHELL_MENU_CARD } from './shell-menu-panel'
 import ShellAccountAvatar from './ShellAccountAvatar.vue'
 
 const { t } = useI18n()
@@ -38,6 +41,7 @@ const {
   command,
   retryWorkspace,
   tabMenuOpen,
+  addTabMenuOpen,
   pluginToolbarOpen,
   accountOpen
 } = useBrowserWorkspace()
@@ -56,16 +60,87 @@ const tabDropTarget = ref<{ id: string | null; before: boolean } | null>(null)
 const tabMovePending = ref(false)
 const onBrowserRoute = computed(() => route.path === APP_SURFACE_ROUTES.browser)
 const activeTabId = computed(() => state.value?.activeTabId)
+const activeTab = computed(
+  () => state.value?.tabs.find((tab) => tab.id === activeTabId.value) ?? null
+)
 const tabMenuOpenModel = computed({
   get: () => tabMenuOpen.value,
   set: (open: boolean) => {
     tabMenuOpen.value = open
   }
 })
+const addTabMenuOpenModel = computed({
+  get: () => addTabMenuOpen.value,
+  set: (open: boolean) => {
+    addTabMenuOpen.value = open
+  }
+})
 const tabMenuIndex = computed(
   () => state.value?.tabs.findIndex((tab) => tab.id === tabMenuTargetId.value) ?? -1
 )
 const tabMenuTarget = computed(() => state.value?.tabs[tabMenuIndex.value])
+const leftTabsCount = computed(() => (tabMenuIndex.value > 0 ? tabMenuIndex.value : 0))
+const rightTabsCount = computed(() => {
+  const total = state.value?.tabs.length ?? 0
+  return tabMenuIndex.value >= 0 ? Math.max(0, total - tabMenuIndex.value - 1) : 0
+})
+const otherTabsCount = computed(() => {
+  const total = state.value?.tabs.length ?? 0
+  return tabMenuIndex.value >= 0 ? Math.max(0, total - 1) : 0
+})
+const quickSavedPages = computed(() => {
+  const seen = new Set<string>()
+  const result: Array<{ url: string; title: string; favicon: string | null; bookmarked: boolean }> =
+    []
+  for (const item of state.value?.bookmarks ?? []) {
+    if (!item.url || item.url.startsWith('tuff://') || seen.has(item.url)) continue
+    seen.add(item.url)
+    result.push({ ...item, bookmarked: true })
+    if (result.length >= 4) return result
+  }
+  for (const item of state.value?.recent ?? []) {
+    if (!item.url || item.url.startsWith('tuff://') || seen.has(item.url)) continue
+    seen.add(item.url)
+    result.push({ ...item, bookmarked: false })
+    if (result.length >= 4) return result
+  }
+  return result
+})
+
+function shortcutKeys(key: string): string[] {
+  return isMac.value ? ['⌘', key] : ['Ctrl', key]
+}
+
+function openAddTabMenu(): void {
+  if (!state.value) return
+  addTabMenuOpen.value = true
+}
+
+function openNewTab(): void {
+  addTabMenuOpen.value = false
+  void runInBrowser(() => sdk.createTab())
+}
+
+function duplicateActiveTab(): void {
+  const current = activeTab.value
+  addTabMenuOpen.value = false
+  if (!current) return
+  void runInBrowser(() => sdk.createTab(current.url))
+}
+
+function openInternalSurface(matchPrefix: string, targetUrl: string): void {
+  addTabMenuOpen.value = false
+  void runInBrowser(async () => {
+    const existing = state.value?.tabs.find((tab) => tab.url.startsWith(matchPrefix))
+    if (existing) return sdk.activateTab(existing.id)
+    return sdk.createTab(targetUrl)
+  })
+}
+
+function openSavedPage(url: string): void {
+  addTabMenuOpen.value = false
+  void runInBrowser(() => sdk.createTab(url))
+}
 
 // Activating or creating a tab lands on the Browser page; close and reorder stay in place.
 async function runInBrowser(action: () => Promise<BrowserWorkspaceState>): Promise<boolean> {
@@ -159,7 +234,13 @@ async function moveTab(tabId: string, beforeTabId: string | null): Promise<void>
 }
 
 function startTabDrag(tabId: string, event: DragEvent): void {
-  if (tabMovePending.value || tabMenuOpen.value || pluginToolbarOpen.value || !event.dataTransfer) {
+  if (
+    tabMovePending.value ||
+    tabMenuOpen.value ||
+    addTabMenuOpen.value ||
+    pluginToolbarOpen.value ||
+    !event.dataTransfer
+  ) {
     event.preventDefault()
     return
   }
@@ -438,15 +519,112 @@ onBeforeUnmount(() => {
         class="pointer-events-none absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-[var(--tx-color-primary)]"
       />
       <TxSkeleton v-if="connecting && !state" :width="132" :height="32" :radius="16" />
-      <TxIconButton
-        icon="i-ri-add-line"
-        size="sm"
-        shape="circle"
-        :label="t('browser.addTab')"
-        :disabled="!state"
-        class="BrowserTabStrip-AddBtn flex-none"
-        @click="runInBrowser(() => sdk.createTab())"
-      />
+      <div class="BrowserTabStrip-AddGroup" :class="{ 'is-open': addTabMenuOpen }">
+        <TxIconButton
+          icon="i-ri-add-line"
+          size="sm"
+          shape="circle"
+          :label="t('browser.addTab')"
+          :disabled="!state"
+          class="BrowserTabStrip-AddBtn flex-none"
+          @click="runInBrowser(() => sdk.createTab())"
+          @contextmenu.prevent="openAddTabMenu"
+        />
+        <span class="BrowserTabStrip-AddDivider" aria-hidden="true" />
+        <TxDropdownMenu
+          v-model="addTabMenuOpenModel"
+          placement="bottom-start"
+          :min-width="232"
+          :panel-card="SHELL_MENU_CARD"
+          panel-background="refraction"
+          :disabled="!state"
+        >
+          <template #trigger>
+            <button
+              type="button"
+              class="BrowserTabStrip-AddMenuBtn"
+              :class="{ 'is-open': addTabMenuOpen }"
+              :disabled="!state"
+              :title="t('browser.addTabMenu')"
+              :aria-label="t('browser.addTabMenu')"
+              data-testid="browser-add-tab-menu-trigger"
+            >
+              <span
+                class="i-ri-arrow-down-s-line BrowserTabStrip-AddMenuChevron"
+                aria-hidden="true"
+              />
+            </button>
+          </template>
+
+          <TxDropdownItem data-testid="browser-add-menu-new-tab" @select="openNewTab">
+            <span class="BrowserTabStrip-AddMenuItem">
+              <span class="i-ri-global-line BrowserTabStrip-AddMenuIcon" aria-hidden="true" />
+              <span>{{ t('browser.newTab') }}</span>
+            </span>
+            <template #right>
+              <span class="BrowserTabStrip-MenuRight">
+                <TxKbd v-for="key in shortcutKeys('T')" :key="key" class="BrowserTabStrip-MenuKbd">
+                  {{ key }}
+                </TxKbd>
+              </span>
+            </template>
+          </TxDropdownItem>
+
+          <TxDropdownItem
+            v-if="activeTab"
+            data-testid="browser-add-menu-duplicate"
+            @select="duplicateActiveTab"
+          >
+            <span class="BrowserTabStrip-AddMenuItem">
+              <span class="i-ri-file-copy-line BrowserTabStrip-AddMenuIcon" aria-hidden="true" />
+              <span>{{ t('browser.tabMenu.duplicate') }}</span>
+            </span>
+          </TxDropdownItem>
+
+          <div class="BrowserTabStrip-AddMenuDivider" role="separator" />
+
+          <TxDropdownItem
+            data-testid="browser-add-menu-store"
+            @select="openInternalSurface('tuff://store', 'tuff://store')"
+          >
+            <span class="BrowserTabStrip-AddMenuItem">
+              <span class="i-ri-store-2-line BrowserTabStrip-AddMenuIcon" aria-hidden="true" />
+              <span>{{ t('shell.store') }}</span>
+            </span>
+          </TxDropdownItem>
+
+          <TxDropdownItem
+            data-testid="browser-add-menu-setting"
+            @select="openInternalSurface('tuff://setting', 'tuff://settings')"
+          >
+            <span class="BrowserTabStrip-AddMenuItem">
+              <span class="i-ri-settings-3-line BrowserTabStrip-AddMenuIcon" aria-hidden="true" />
+              <span>{{ t('shell.setting') }}</span>
+            </span>
+          </TxDropdownItem>
+
+          <template v-if="quickSavedPages.length > 0">
+            <div class="BrowserTabStrip-AddMenuDivider" role="separator" />
+            <div class="BrowserTabStrip-AddMenuSection">
+              {{ t('browser.addTabQuickOpen') }}
+            </div>
+            <TxDropdownItem
+              v-for="page in quickSavedPages"
+              :key="page.url"
+              @select="openSavedPage(page.url)"
+            >
+              <span class="BrowserTabStrip-AddMenuItem">
+                <span
+                  :class="page.bookmarked ? 'i-ri-bookmark-line' : 'i-ri-history-line'"
+                  class="BrowserTabStrip-AddMenuIcon"
+                  aria-hidden="true"
+                />
+                <span class="BrowserTabStrip-AddMenuLabel">{{ page.title || page.url }}</span>
+              </span>
+            </TxDropdownItem>
+          </template>
+        </TxDropdownMenu>
+      </div>
     </div>
     <div
       data-browser-window-drag
@@ -480,33 +658,80 @@ onBeforeUnmount(() => {
     ref="tabMenu"
     v-model="tabMenuOpenModel"
     trigger="manual"
+    :width="248"
+    :panel-card="SHELL_MENU_CARD"
     :activation-feedback="false"
   >
     <template #menu>
       <TxContextMenuItem :disabled="!tabMenuTarget?.url" @select="selectTabMenuAction('reload')">
         {{ t('browser.tabMenu.reload') }}
+        <template #right>
+          <span class="BrowserTabStrip-MenuRight">
+            <TxKbd v-for="key in shortcutKeys('R')" :key="key" class="BrowserTabStrip-MenuKbd">
+              {{ key }}
+            </TxKbd>
+            <span class="BrowserTabStrip-MenuHintIcon i-ri-refresh-line" aria-hidden="true" />
+          </span>
+        </template>
       </TxContextMenuItem>
       <TxContextMenuItem :disabled="!tabMenuTarget" @select="selectTabMenuAction('duplicate')">
         {{ t('browser.tabMenu.duplicate') }}
+        <template #right>
+          <span class="BrowserTabStrip-MenuRight">
+            <span class="BrowserTabStrip-MenuHintIcon i-ri-file-copy-line" aria-hidden="true" />
+          </span>
+        </template>
       </TxContextMenuItem>
       <TxContextMenuDivider />
       <TxContextMenuItem :disabled="!tabMenuTarget" @select="selectTabMenuAction('close')">
         {{ t('browser.tabMenu.close') }}
+        <template #right>
+          <span class="BrowserTabStrip-MenuRight">
+            <TxKbd v-for="key in shortcutKeys('W')" :key="key" class="BrowserTabStrip-MenuKbd">
+              {{ key }}
+            </TxKbd>
+            <span class="BrowserTabStrip-MenuHintIcon i-ri-close-line" aria-hidden="true" />
+          </span>
+        </template>
       </TxContextMenuItem>
       <TxContextMenuItem
         :disabled="!tabMenuTarget || (state?.tabs.length ?? 0) < 2"
         @select="selectTabMenuAction('close-others')"
       >
         {{ t('browser.tabMenu.closeOthers') }}
+        <template #right>
+          <span class="BrowserTabStrip-MenuRight">
+            <span v-if="otherTabsCount > 0" class="BrowserTabStrip-MenuCount">
+              {{ otherTabsCount }}
+            </span>
+            <span class="BrowserTabStrip-MenuHintIcon i-ri-close-circle-line" aria-hidden="true" />
+          </span>
+        </template>
       </TxContextMenuItem>
       <TxContextMenuItem :disabled="tabMenuIndex <= 0" @select="selectTabMenuAction('close-left')">
         {{ t('browser.tabMenu.closeLeft') }}
+        <template #right>
+          <span class="BrowserTabStrip-MenuRight">
+            <span v-if="leftTabsCount > 0" class="BrowserTabStrip-MenuCount">
+              {{ leftTabsCount }}
+            </span>
+            <span class="BrowserTabStrip-MenuHintIcon i-ri-skip-left-line" aria-hidden="true" />
+          </span>
+        </template>
       </TxContextMenuItem>
       <TxContextMenuItem
         :disabled="!tabMenuTarget || tabMenuIndex >= (state?.tabs.length ?? 0) - 1"
         @select="selectTabMenuAction('close-right')"
       >
         {{ t('browser.tabMenu.closeRight') }}
+        <template #right>
+          <span class="BrowserTabStrip-MenuRight">
+            <span v-if="rightTabsCount > 0" class="BrowserTabStrip-MenuCount">
+              {{ rightTabsCount }}
+            </span>
+            <span class="BrowserTabStrip-MenuHintIcon i-ri-skip-right-line" aria-hidden="true" />
+          </span>
+        </template>
       </TxContextMenuItem>
     </template>
   </TxContextMenu>
@@ -726,14 +951,28 @@ onBeforeUnmount(() => {
   }
 }
 
+.BrowserTabStrip-AddGroup {
+  @include tab-capsule-g2;
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 2px;
+  background: color-mix(in srgb, var(--tx-fill-color) 42%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color-lighter) 70%, transparent);
+
+  &:hover,
+  &.is-open {
+    box-shadow: inset 0 0 0 1px var(--tx-border-color-light);
+  }
+}
+
 .BrowserTabStrip-AddBtn {
   @include pill-control-g2;
-  --tx-icon-button-size: 32px;
+  --tx-icon-button-size: 28px;
   --tx-icon-button-radius: 999px;
   --tx-icon-button-color: var(--tx-text-color-regular);
-  --tx-icon-button-bg: color-mix(in srgb, var(--tx-fill-color) 42%, transparent);
-  --tx-icon-button-bg-hover: color-mix(in srgb, var(--tx-fill-color) 85%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color-lighter) 70%, transparent);
+  --tx-icon-button-bg: transparent;
+  --tx-icon-button-bg-hover: color-mix(in srgb, var(--tx-fill-color) 90%, transparent);
 
   :deep(.tx-icon-button__icon) {
     font-size: 1rem;
@@ -741,11 +980,125 @@ onBeforeUnmount(() => {
 
   &:hover:not(.is-disabled) {
     --tx-icon-button-color: var(--tx-text-color-primary);
-    box-shadow: inset 0 0 0 1px var(--tx-border-color-light);
   }
 
   &:focus-visible {
     box-shadow: inset 0 0 0 1.5px var(--tx-color-primary);
   }
+}
+
+.BrowserTabStrip-AddDivider {
+  width: 1px;
+  height: 14px;
+  background: color-mix(in srgb, var(--tx-border-color) 65%, transparent);
+}
+
+.BrowserTabStrip-AddMenuBtn {
+  @include pill-control-g2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--tx-text-color-secondary);
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &.is-open {
+    background: color-mix(in srgb, var(--tx-fill-color) 90%, transparent);
+    color: var(--tx-text-color-primary);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1.5px var(--tx-color-primary);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.BrowserTabStrip-AddMenuChevron {
+  font-size: 14px;
+  transition: transform 160ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+
+  .BrowserTabStrip-AddMenuBtn.is-open & {
+    transform: rotate(180deg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+.BrowserTabStrip-AddMenuItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.BrowserTabStrip-AddMenuIcon {
+  flex: none;
+  font-size: 14px;
+  color: var(--tx-text-color-secondary);
+}
+
+.BrowserTabStrip-AddMenuLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.BrowserTabStrip-AddMenuDivider {
+  height: 1px;
+  margin: 4px 6px;
+  background: color-mix(in srgb, var(--tx-border-color-lighter) 80%, transparent);
+}
+
+.BrowserTabStrip-AddMenuSection {
+  padding: 4px 10px 2px;
+  color: var(--tx-text-color-placeholder);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.BrowserTabStrip-MenuRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--tx-text-color-secondary);
+}
+
+.BrowserTabStrip-MenuKbd {
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  font-size: 11px;
+}
+
+.BrowserTabStrip-MenuHintIcon {
+  font-size: 14px;
+  opacity: 0.72;
+}
+
+.BrowserTabStrip-MenuCount {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tx-fill-color) 85%, transparent);
+  color: var(--tx-text-color-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  text-align: center;
 }
 </style>

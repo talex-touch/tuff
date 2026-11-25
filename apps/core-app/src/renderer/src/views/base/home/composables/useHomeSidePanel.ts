@@ -44,6 +44,23 @@ export type SidePanelTab =
       title: string
     }
 
+export type SidePanelRecentItem =
+  | {
+      id: string
+      kind: 'file'
+      title: string
+      path: string
+      displayPath: string
+      updatedAt: number
+    }
+  | {
+      id: string
+      kind: 'web'
+      title: string
+      url: string
+      updatedAt: number
+    }
+
 export const SIDE_PANEL_DEFAULT_WIDTH = 460
 export const SIDE_PANEL_MIN_WIDTH = 320
 export const SIDE_PANEL_MAX_WIDTH = 840
@@ -53,7 +70,222 @@ export const SIDE_PANEL_MAX_WIDTH = 840
  */
 export const HOME_BODY_MIN_WIDTH = 480
 const WIDTH_STORAGE_KEY = 'tuff.home.sidePanelWidth'
+const STATE_STORAGE_KEY = 'tuff.home.sidePanelState.v1'
+const RECENTS_STORAGE_KEY = 'tuff.home.sidePanelRecents.v1'
+const MAX_PERSISTED_TABS = 20
+const MAX_RECENT_ITEMS = 8
 const TITLE_PATTERN = /<title[^>]*>([^<]*)<\/title>/i
+
+const WORKSPACE_KINDS = new Set<SidePanelWorkspaceKind>([
+  'git',
+  'review',
+  'terminal',
+  'outputs',
+  'sources',
+  'work',
+  'context',
+  'plugins'
+])
+
+function isWorkspaceKind(value: unknown): value is SidePanelWorkspaceKind {
+  return typeof value === 'string' && WORKSPACE_KINDS.has(value as SidePanelWorkspaceKind)
+}
+
+function hasUrlCredentials(rawUrl: string): boolean {
+  const trimmed = rawUrl.trim()
+  if (!trimmed) return false
+  try {
+    const parsed = new URL(trimmed)
+    return Boolean(parsed.username || parsed.password)
+  } catch {
+    return false
+  }
+}
+
+interface StoredSidePanelState {
+  panelOpen: boolean
+  activeTabId: string | null
+  tabs: SidePanelTab[]
+}
+
+function sanitizeStoredTab(raw: unknown): SidePanelTab | null {
+  if (!raw || typeof raw !== 'object') return null
+  const item = raw as Record<string, unknown>
+  const id = typeof item.id === 'string' ? item.id.trim() : ''
+  const title = typeof item.title === 'string' ? item.title.trim() : ''
+  const kind = item.kind
+  if (!id || !title || typeof kind !== 'string') return null
+
+  if (kind === 'file') {
+    const filePath = typeof item.path === 'string' ? item.path.trim() : ''
+    if (!filePath) return null
+    const displayPath =
+      typeof item.displayPath === 'string' && item.displayPath.trim()
+        ? item.displayPath.trim()
+        : filePath
+    const line = typeof item.line === 'number' && Number.isFinite(item.line) ? item.line : undefined
+    return {
+      id,
+      kind: 'file',
+      title,
+      path: filePath,
+      displayPath,
+      ...(line !== undefined ? { line } : {}),
+      refreshToken: 0
+    }
+  }
+
+  if (kind === 'web') {
+    const url = typeof item.url === 'string' ? item.url.trim() : ''
+    if (url && hasUrlCredentials(url)) return null
+    const favicon = typeof item.favicon === 'string' ? item.favicon : null
+    return {
+      id,
+      kind: 'web',
+      title,
+      url,
+      favicon
+    }
+  }
+
+  if (isWorkspaceKind(kind)) {
+    return {
+      id,
+      kind,
+      title
+    }
+  }
+
+  return null
+}
+
+function readStoredPanelState(): StoredSidePanelState {
+  if (!hasWindow()) return { panelOpen: false, activeTabId: null, tabs: [] }
+  try {
+    const raw = window.localStorage.getItem(STATE_STORAGE_KEY)
+    if (!raw) return { panelOpen: false, activeTabId: null, tabs: [] }
+    const parsed = JSON.parse(raw) as Partial<StoredSidePanelState> | null
+    if (!parsed || typeof parsed !== 'object') {
+      return { panelOpen: false, activeTabId: null, tabs: [] }
+    }
+
+    const seenIds = new Set<string>()
+    const tabs: SidePanelTab[] = []
+    if (Array.isArray(parsed.tabs)) {
+      for (const candidate of parsed.tabs) {
+        const clean = sanitizeStoredTab(candidate)
+        if (!clean || seenIds.has(clean.id)) continue
+        seenIds.add(clean.id)
+        tabs.push(clean)
+        if (tabs.length >= MAX_PERSISTED_TABS) break
+      }
+    }
+
+    const rawActiveId = typeof parsed.activeTabId === 'string' ? parsed.activeTabId : null
+    const activeTabId = rawActiveId && seenIds.has(rawActiveId) ? rawActiveId : null
+    const panelOpen = parsed.panelOpen === true
+
+    return { panelOpen, activeTabId, tabs }
+  } catch {
+    return { panelOpen: false, activeTabId: null, tabs: [] }
+  }
+}
+
+function writeStoredPanelState(state: StoredSidePanelState): void {
+  if (!hasWindow()) return
+  try {
+    const serializableTabs = state.tabs
+      .filter((tab) => tab.kind !== 'code' && !(tab.kind === 'web' && hasUrlCredentials(tab.url)))
+      .slice(0, MAX_PERSISTED_TABS)
+    const activeTabId =
+      state.activeTabId && serializableTabs.some((tab) => tab.id === state.activeTabId)
+        ? state.activeTabId
+        : null
+    window.localStorage.setItem(
+      STATE_STORAGE_KEY,
+      JSON.stringify({
+        panelOpen: state.panelOpen,
+        activeTabId,
+        tabs: serializableTabs
+      })
+    )
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function readStoredRecents(): SidePanelRecentItem[] {
+  if (!hasWindow()) return []
+  try {
+    const raw = window.localStorage.getItem(RECENTS_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    const seen = new Set<string>()
+    const recents: SidePanelRecentItem[] = []
+    for (const entry of parsed) {
+      if (!entry || typeof entry !== 'object') continue
+      const item = entry as Record<string, unknown>
+      const updatedAt =
+        typeof item.updatedAt === 'number' && Number.isFinite(item.updatedAt) ? item.updatedAt : 0
+      if (item.kind === 'file') {
+        const filePath = typeof item.path === 'string' ? item.path.trim() : ''
+        if (!filePath) continue
+        const key = `file:${filePath}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        const displayPath =
+          typeof item.displayPath === 'string' && item.displayPath.trim()
+            ? item.displayPath.trim()
+            : filePath
+        const title =
+          typeof item.title === 'string' && item.title.trim()
+            ? item.title.trim()
+            : basenameOfPath(displayPath)
+        recents.push({ id: key, kind: 'file', title, path: filePath, displayPath, updatedAt })
+      } else if (item.kind === 'web') {
+        const url = typeof item.url === 'string' ? item.url.trim() : ''
+        if (!url || hasUrlCredentials(url)) continue
+        const key = `web:${url}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        const title =
+          typeof item.title === 'string' && item.title.trim()
+            ? item.title.trim()
+            : formatHostTitle(url)
+        recents.push({ id: key, kind: 'web', title, url, updatedAt })
+      }
+      if (recents.length >= MAX_RECENT_ITEMS) break
+    }
+    return recents
+  } catch {
+    return []
+  }
+}
+
+function writeStoredRecents(items: SidePanelRecentItem[]): void {
+  if (!hasWindow()) return
+  try {
+    const safeItems = items
+      .filter((item) => !(item.kind === 'web' && hasUrlCredentials(item.url)))
+      .slice(0, MAX_RECENT_ITEMS)
+    window.localStorage.setItem(RECENTS_STORAGE_KEY, JSON.stringify(safeItems))
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function computeInitialSequence(tabs: SidePanelTab[]): number {
+  let maxSeq = 0
+  for (const tab of tabs) {
+    const match = /^side-(?:file|web|code)-(\d+)$/.exec(tab.id)
+    if (match?.[1]) {
+      const value = Number(match[1])
+      if (Number.isFinite(value) && value > maxSeq) maxSeq = value
+    }
+  }
+  return maxSeq
+}
 
 export function clampSidePanelWidth(value: number, containerWidth?: number): number {
   const hasContainer =
@@ -116,17 +348,65 @@ export function useHomeSidePanel(
   conversationId: Ref<string | null>,
   options: UseHomeSidePanelOptions = {}
 ) {
-  const panelOpen = ref(false)
+  const initialState = readStoredPanelState()
+  const panelOpen = ref(initialState.panelOpen)
   const panelWidth = ref<number>(readStoredWidth())
   const isResizing = ref(false)
-  const tabs = ref<SidePanelTab[]>([])
+  const tabs = ref<SidePanelTab[]>(initialState.tabs)
   /** `null` displays the Launcher / New Tab hub inside the docked right sidebar. */
-  const activeTabId = ref<string | null>(null)
+  const activeTabId = ref<string | null>(initialState.activeTabId)
+  const recentItems = ref<SidePanelRecentItem[]>(readStoredRecents())
 
   const codeNumbering = new Map<string, number>()
-  let sequence = 0
+  let sequence = computeInitialSequence(initialState.tabs)
 
   const activeTab = computed(() => tabs.value.find((tab) => tab.id === activeTabId.value) ?? null)
+
+  function recordRecentFile(path: string, displayPath: string): void {
+    const cleanPath = path.trim()
+    if (!cleanPath) return
+    const cleanDisplay = displayPath.trim() || cleanPath
+    const entry: SidePanelRecentItem = {
+      id: `file:${cleanPath}`,
+      kind: 'file',
+      title: basenameOfPath(cleanDisplay),
+      path: cleanPath,
+      displayPath: cleanDisplay,
+      updatedAt: Date.now()
+    }
+    recentItems.value = [entry, ...recentItems.value.filter((item) => item.id !== entry.id)].slice(
+      0,
+      MAX_RECENT_ITEMS
+    )
+    writeStoredRecents(recentItems.value)
+  }
+
+  function recordRecentWeb(url: string, title?: string): void {
+    const cleanUrl = url.trim()
+    if (!cleanUrl || hasUrlCredentials(cleanUrl)) return
+    const entry: SidePanelRecentItem = {
+      id: `web:${cleanUrl}`,
+      kind: 'web',
+      title: title?.trim() || formatHostTitle(cleanUrl),
+      url: cleanUrl,
+      updatedAt: Date.now()
+    }
+    recentItems.value = [entry, ...recentItems.value.filter((item) => item.id !== entry.id)].slice(
+      0,
+      MAX_RECENT_ITEMS
+    )
+    writeStoredRecents(recentItems.value)
+  }
+
+  function removeRecentItem(id: string): void {
+    recentItems.value = recentItems.value.filter((item) => item.id !== id)
+    writeStoredRecents(recentItems.value)
+  }
+
+  function clearRecentItems(): void {
+    recentItems.value = []
+    writeStoredRecents([])
+  }
 
   function resolveContainerWidth(): number | undefined {
     const width = options.getAvailableWidth?.()
@@ -145,6 +425,7 @@ export function useHomeSidePanel(
     const normalizedPath = payload.path.trim()
     if (!normalizedPath) return ''
     const displayPath = payload.displayPath?.trim() || normalizedPath
+    recordRecentFile(normalizedPath, displayPath)
     const existing = tabs.value.find(
       (tab): tab is Extract<SidePanelTab, { kind: 'file' }> =>
         tab.kind === 'file' && tab.path === normalizedPath
@@ -186,6 +467,7 @@ export function useHomeSidePanel(
   function openWebTab(payload: { url: string; title?: string }): string {
     const url = payload.url.trim()
     if (!url) return ''
+    recordRecentWeb(url, payload.title)
     const existing = tabs.value.find(
       (tab): tab is Extract<SidePanelTab, { kind: 'web' }> => tab.kind === 'web' && tab.url === url
     )
@@ -286,6 +568,8 @@ export function useHomeSidePanel(
     id: string,
     patch: { url?: string; title?: string; favicon?: string | null }
   ): void {
+    let recordedUrl = ''
+    let recordedTitle = ''
     tabs.value = tabs.value.map((tab) => {
       if (tab.id !== id || tab.kind !== 'web') return tab
       const nextUrl = patch.url !== undefined ? patch.url : tab.url
@@ -295,6 +579,10 @@ export function useHomeSidePanel(
           : nextUrl
             ? formatHostTitle(nextUrl)
             : tab.title
+      if (nextUrl.trim()) {
+        recordedUrl = nextUrl
+        recordedTitle = nextTitle
+      }
       return {
         ...tab,
         url: nextUrl,
@@ -302,12 +590,16 @@ export function useHomeSidePanel(
         favicon: patch.favicon !== undefined ? patch.favicon : tab.favicon
       }
     })
+    if (recordedUrl) {
+      recordRecentWeb(recordedUrl, recordedTitle)
+    }
   }
 
   function updateFileTab(id: string, patch: { path: string; displayPath?: string }): void {
     const nextPath = patch.path.trim()
     if (!nextPath) return
     const displayPath = patch.displayPath?.trim() || nextPath
+    recordRecentFile(nextPath, displayPath)
     tabs.value = tabs.value.map((tab) => {
       if (tab.id !== id || tab.kind !== 'file') return tab
       return {
@@ -410,10 +702,31 @@ export function useHomeSidePanel(
     window.addEventListener('pointercancel', onEnd)
   }
 
+  watch(
+    [panelOpen, activeTabId, tabs],
+    ([open, activeId, currentTabs]) => {
+      writeStoredPanelState({
+        panelOpen: open,
+        activeTabId: activeId,
+        tabs: currentTabs
+      })
+    },
+    { flush: 'sync' }
+  )
+
   watch(conversationId, (next, previous) => {
     if (next === previous) return
-    // Conversation switch clears thread-bound preview tabs while keeping the sidebar width.
-    tabs.value = tabs.value.filter((tab) => tab.kind === 'web' || tab.kind === 'plugins')
+    // Initial hydration (null -> first active conversation) preserves persisted tabs.
+    if (previous === null) return
+    // Switching conversations clears thread-bound preview tabs while preserving workspace tools,
+    // web tabs, plugins, and sidebar layout.
+    tabs.value = tabs.value.filter(
+      (tab) =>
+        tab.kind === 'web' ||
+        tab.kind === 'plugins' ||
+        tab.kind === 'git' ||
+        tab.kind === 'terminal'
+    )
     if (activeTabId.value && !tabs.value.some((tab) => tab.id === activeTabId.value)) {
       activeTabId.value = tabs.value[0]?.id ?? null
     }
@@ -427,6 +740,9 @@ export function useHomeSidePanel(
     tabs,
     activeTabId,
     activeTab,
+    recentItems,
+    removeRecentItem,
+    clearRecentItems,
     openLauncher,
     openFileTab,
     openWebTab,

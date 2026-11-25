@@ -13,6 +13,7 @@ const state = shallowRef<BrowserWorkspaceState | null>(null)
 const connecting = ref(true)
 const error = ref('')
 const tabMenuOpen = ref(false)
+const addTabMenuOpen = ref(false)
 const pluginToolbarOpen = ref(false)
 const accountOpen = ref(false)
 let retryAction: (() => Promise<BrowserWorkspaceState>) | null = null
@@ -81,6 +82,7 @@ export function useBrowserWorkspace() {
     connecting.value = true
     error.value = ''
     tabMenuOpen.value = false
+    addTabMenuOpen.value = false
     pluginToolbarOpen.value = false
     accountOpen.value = false
   })
@@ -90,6 +92,7 @@ export function useBrowserWorkspace() {
     connecting,
     error,
     tabMenuOpen,
+    addTabMenuOpen,
     pluginToolbarOpen,
     accountOpen,
     command,

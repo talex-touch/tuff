@@ -72,22 +72,53 @@ export interface WorkspaceGitDiffResult {
 
 export interface WorkspaceGitBranchEntry {
   name: string
+  /** Canonical Git ref name (e.g. `refs/heads/main`, `refs/remotes/origin/main`). */
+  fullRef?: string
+  /** Matched configured remote name for remote-tracking branches (supports remotes containing `/`). */
+  remoteName?: string
   current: boolean
   isRemote: boolean
   upstream?: string
   shortOid?: string
   subject?: string
+  author?: string
+  relativeDate?: string
+}
+
+export type WorkspaceGitRemoteProvider =
+  | 'github'
+  | 'gitlab'
+  | 'bitbucket'
+  | 'gitee'
+  | 'codeberg'
+  | 'local'
+  | 'custom'
+
+export interface WorkspaceGitRemoteEntry {
+  name: string
+  fetchUrl: string
+  pushUrl: string
+  host?: string
+  provider: WorkspaceGitRemoteProvider
+  displayLabel?: string
+  webUrl?: string
+  hasCredentials?: boolean
 }
 
 export interface WorkspaceGitBranchesResult {
   current: string
   detached: boolean
   branches: WorkspaceGitBranchEntry[]
+  remotes?: WorkspaceGitRemoteEntry[]
+  /** Present when remote enumeration failed so callers preserve existing remote state. */
+  remotesError?: string
   error?: string
 }
 
 export interface WorkspaceGitLogRequest extends WorkspaceGitTarget {
   limit?: number
+  /** Optional branch or ref name to inspect commits for (defaults to HEAD). */
+  ref?: string
 }
 
 export interface WorkspaceGitCommitEntry {
@@ -95,6 +126,8 @@ export interface WorkspaceGitCommitEntry {
   shortHash: string
   subject: string
   author: string
+  authorEmail?: string
+  avatarUrl?: string
   relativeDate: string
   authoredAt: number
   refs: string[]
@@ -123,6 +156,38 @@ export interface WorkspaceGitCheckoutRequest extends WorkspaceGitTarget {
   branch: string
   create?: boolean
   startPoint?: string
+}
+
+export interface WorkspaceGitRenameBranchRequest extends WorkspaceGitTarget {
+  oldName: string
+  newName: string
+}
+
+export interface WorkspaceGitDeleteBranchRequest extends WorkspaceGitTarget {
+  branch: string
+  force?: boolean
+}
+
+export interface WorkspaceGitSetUpstreamRequest extends WorkspaceGitTarget {
+  branch: string
+  /** Remote-tracking ref (e.g. `origin/main`), or null/empty to unset upstream. */
+  upstream?: string | null
+}
+
+export interface WorkspaceGitSaveRemoteRequest extends WorkspaceGitTarget {
+  mode: 'add' | 'edit'
+  name: string
+  originalName?: string
+  fetchUrl: string
+  pushUrl?: string
+}
+
+export interface WorkspaceGitRemoveRemoteRequest extends WorkspaceGitTarget {
+  name: string
+}
+
+export interface WorkspaceGitFetchRequest extends WorkspaceGitTarget {
+  remote?: string
 }
 
 export interface WorkspaceGitPushRequest extends WorkspaceGitTarget {
@@ -173,10 +238,30 @@ export const WorkspaceGitEvents = {
     .module('api')
     .event('checkout')
     .define<WorkspaceGitCheckoutRequest, WorkspaceGitMutationResult>(),
+  renameBranch: defineEvent('workspace-git')
+    .module('api')
+    .event('rename-branch')
+    .define<WorkspaceGitRenameBranchRequest, WorkspaceGitMutationResult>(),
+  deleteBranch: defineEvent('workspace-git')
+    .module('api')
+    .event('delete-branch')
+    .define<WorkspaceGitDeleteBranchRequest, WorkspaceGitMutationResult>(),
+  setUpstream: defineEvent('workspace-git')
+    .module('api')
+    .event('set-upstream')
+    .define<WorkspaceGitSetUpstreamRequest, WorkspaceGitMutationResult>(),
+  saveRemote: defineEvent('workspace-git')
+    .module('api')
+    .event('save-remote')
+    .define<WorkspaceGitSaveRemoteRequest, WorkspaceGitMutationResult>(),
+  removeRemote: defineEvent('workspace-git')
+    .module('api')
+    .event('remove-remote')
+    .define<WorkspaceGitRemoveRemoteRequest, WorkspaceGitMutationResult>(),
   fetch: defineEvent('workspace-git')
     .module('api')
     .event('fetch')
-    .define<WorkspaceGitTarget, WorkspaceGitMutationResult>(),
+    .define<WorkspaceGitFetchRequest, WorkspaceGitMutationResult>(),
   pull: defineEvent('workspace-git')
     .module('api')
     .event('pull')
@@ -197,7 +282,12 @@ export interface WorkspaceGitSdk {
   discard: (request: WorkspaceGitDiscardRequest) => Promise<WorkspaceGitMutationResult>
   commit: (request: WorkspaceGitCommitRequest) => Promise<WorkspaceGitMutationResult>
   checkout: (request: WorkspaceGitCheckoutRequest) => Promise<WorkspaceGitMutationResult>
-  fetch: (target: WorkspaceGitTarget) => Promise<WorkspaceGitMutationResult>
+  renameBranch: (request: WorkspaceGitRenameBranchRequest) => Promise<WorkspaceGitMutationResult>
+  deleteBranch: (request: WorkspaceGitDeleteBranchRequest) => Promise<WorkspaceGitMutationResult>
+  setUpstream: (request: WorkspaceGitSetUpstreamRequest) => Promise<WorkspaceGitMutationResult>
+  saveRemote: (request: WorkspaceGitSaveRemoteRequest) => Promise<WorkspaceGitMutationResult>
+  removeRemote: (request: WorkspaceGitRemoveRemoteRequest) => Promise<WorkspaceGitMutationResult>
+  fetch: (request: WorkspaceGitFetchRequest) => Promise<WorkspaceGitMutationResult>
   pull: (target: WorkspaceGitTarget) => Promise<WorkspaceGitMutationResult>
   push: (request: WorkspaceGitPushRequest) => Promise<WorkspaceGitMutationResult>
 }
@@ -213,7 +303,12 @@ export function createWorkspaceGitSdk(transport: ITuffTransport): WorkspaceGitSd
     discard: (request) => transport.send(WorkspaceGitEvents.discard, request),
     commit: (request) => transport.send(WorkspaceGitEvents.commit, request),
     checkout: (request) => transport.send(WorkspaceGitEvents.checkout, request),
-    fetch: (target) => transport.send(WorkspaceGitEvents.fetch, target),
+    renameBranch: (request) => transport.send(WorkspaceGitEvents.renameBranch, request),
+    deleteBranch: (request) => transport.send(WorkspaceGitEvents.deleteBranch, request),
+    setUpstream: (request) => transport.send(WorkspaceGitEvents.setUpstream, request),
+    saveRemote: (request) => transport.send(WorkspaceGitEvents.saveRemote, request),
+    removeRemote: (request) => transport.send(WorkspaceGitEvents.removeRemote, request),
+    fetch: (request) => transport.send(WorkspaceGitEvents.fetch, request),
     pull: (target) => transport.send(WorkspaceGitEvents.pull, target),
     push: (request) => transport.send(WorkspaceGitEvents.push, request)
   }

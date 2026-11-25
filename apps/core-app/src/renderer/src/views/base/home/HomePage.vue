@@ -163,6 +163,9 @@ const {
   isResizing,
   tabs: sidePanelTabs,
   activeTabId: activeSidePanelTabId,
+  recentItems: sidePanelRecentItems,
+  removeRecentItem: removeSidePanelRecent,
+  clearRecentItems: clearSidePanelRecents,
   openLauncher,
   openFileInSidebar,
   openWebInSidebar,
@@ -732,6 +735,7 @@ useHomeCommands({
         :loading="workspace.loading.value"
         :tabs="sidePanelTabs"
         :active-tab-id="activeSidePanelTabId"
+        :recent-items="sidePanelRecentItems"
         @locate="streamRef?.scrollToIndex($event)"
         @select-tab="selectSidePanelTab"
         @close-tab="closeSidePanelTab"
@@ -763,6 +767,8 @@ useHomeCommands({
         @open-web-external="openWebExternal"
         @start-resize="startSidePanelResize"
         @reset-width="resetSidePanelWidth"
+        @remove-recent="removeSidePanelRecent"
+        @clear-recents="clearSidePanelRecents"
       />
     </div>
 

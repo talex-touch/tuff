@@ -58,6 +58,7 @@ const {
   connecting,
   error,
   tabMenuOpen,
+  addTabMenuOpen,
   pluginToolbarOpen,
   accountOpen,
   command,
@@ -352,6 +353,7 @@ const isSuspended = computed(() => {
     document.hidden ||
     overlayOpen.value ||
     tabMenuOpen.value ||
+    addTabMenuOpen.value ||
     pluginToolbarOpen.value ||
     accountOpen.value ||
     chromeSaveOpen.value ||
@@ -547,6 +549,7 @@ function hasBlockingOverlay(): boolean {
   return Boolean(
     overlayOpen.value ||
     tabMenuOpen.value ||
+    addTabMenuOpen.value ||
     pluginToolbarOpen.value ||
     accountOpen.value ||
     chromeSaveOpen.value ||
@@ -673,6 +676,7 @@ watch(
     panel,
     overlayOpen,
     tabMenuOpen,
+    addTabMenuOpen,
     pluginToolbarOpen,
     accountOpen,
     chromeSaveOpen,
@@ -694,6 +698,7 @@ watch(
     !panel.value &&
     !overlayOpen.value &&
     !tabMenuOpen.value &&
+    !addTabMenuOpen.value &&
     !pluginToolbarOpen.value &&
     !accountOpen.value &&
     !chromeSaveOpen.value &&
@@ -790,6 +795,7 @@ onActivated(() => {
 onDeactivated(() => {
   surfaceActive.value = false
   tabMenuOpen.value = false
+  addTabMenuOpen.value = false
   pluginToolbarOpen.value = false
   chromeSaveOpen.value = false
   cookieDialogOpen.value = false

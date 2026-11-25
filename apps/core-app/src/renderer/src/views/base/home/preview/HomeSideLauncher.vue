@@ -1,6 +1,6 @@
 <script lang="ts" name="HomeSideLauncher" setup>
 import type { PreviewArtifact } from '~/modules/conversation/preview-index'
-import type { SidePanelWorkspaceKind } from '../composables/useHomeSidePanel'
+import type { SidePanelRecentItem, SidePanelWorkspaceKind } from '../composables/useHomeSidePanel'
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -20,15 +20,21 @@ export interface LauncherQuickAction {
   run: () => void
 }
 
-const props = defineProps<{
-  workspaceRoot?: string
-  createdFiles: PreviewArtifact[]
-  reviewCount: number
-  outputsCount: number
-  sourcesCount: number
-  activityCount: number
-  waiting: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    workspaceRoot?: string
+    createdFiles: PreviewArtifact[]
+    recentItems?: SidePanelRecentItem[]
+    reviewCount: number
+    outputsCount: number
+    sourcesCount: number
+    activityCount: number
+    waiting: boolean
+  }>(),
+  {
+    recentItems: () => []
+  }
+)
 
 const emit = defineEmits<{
   (event: 'open-tool', kind: SidePanelWorkspaceKind): void
@@ -36,6 +42,8 @@ const emit = defineEmits<{
   (event: 'open-file', payload: { path: string; displayPath: string }): void
   (event: 'open-web', url: string): void
   (event: 'open-blank-browser'): void
+  (event: 'remove-recent', id: string): void
+  (event: 'clear-recents'): void
 }>()
 
 const { t } = useI18n()
@@ -130,6 +138,24 @@ const filteredFiles = computed(() => {
     )
     .slice(0, 8)
 })
+
+const filteredRecents = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  const items = props.recentItems ?? []
+  if (!q) return items.slice(0, 6)
+  return items.filter((item) => {
+    const detail = item.kind === 'file' ? item.displayPath : item.url
+    return item.title.toLowerCase().includes(q) || detail.toLowerCase().includes(q)
+  })
+})
+
+function openRecentItem(item: SidePanelRecentItem): void {
+  if (item.kind === 'file') {
+    emit('open-file', { path: item.path, displayPath: item.displayPath })
+  } else {
+    emit('open-web', item.url)
+  }
+}
 
 function looksLikeDomain(value: string): boolean {
   return /^(?:localhost|\[[\da-f:]+\]|(?:[\p{L}\d-]+\.)+[\p{L}\d-]+)(?::\d{1,5})?(?:[/?#]|$)/iu.test(
@@ -254,6 +280,48 @@ onMounted(() => {
           aria-hidden="true"
         />
       </button>
+
+      <section v-if="filteredRecents.length" class="HomeSideLauncher-Section">
+        <div class="HomeSideLauncher-SectionHead">
+          <h3 class="HomePreview-GroupLabel">{{ t('home.sidePanel.recentOpened') }}</h3>
+          <button
+            type="button"
+            class="HomeSideLauncher-ClearRecents"
+            @click="emit('clear-recents')"
+          >
+            {{ t('home.sidePanel.clearRecents') }}
+          </button>
+        </div>
+        <div v-for="item in filteredRecents" :key="item.id" class="HomeSideLauncher-RecentRow">
+          <button
+            type="button"
+            class="HomeSideLauncher-Row HomeSideLauncher-RecentMain"
+            :title="item.kind === 'file' ? item.displayPath : item.url"
+            @click="openRecentItem(item)"
+          >
+            <span
+              :class="item.kind === 'file' ? 'i-ri-file-text-line' : 'i-ri-global-line'"
+              class="HomeSideLauncher-RowIcon"
+              aria-hidden="true"
+            />
+            <span class="HomeSideLauncher-FileText">
+              <span class="HomeSideLauncher-RowLabel">{{ item.title }}</span>
+              <span class="HomePreview-Detail">
+                {{ item.kind === 'file' ? item.displayPath : item.url }}
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            class="HomeSideLauncher-RecentRemove"
+            :title="t('home.sidePanel.removeRecent')"
+            :aria-label="t('home.sidePanel.removeRecent')"
+            @click="emit('remove-recent', item.id)"
+          >
+            <span class="i-ri-close-line" aria-hidden="true" />
+          </button>
+        </div>
+      </section>
 
       <section v-if="filteredFiles.length" class="HomeSideLauncher-Section">
         <h3 class="HomePreview-GroupLabel">{{ t('home.preview.artifactsCreated') }}</h3>
@@ -442,5 +510,72 @@ onMounted(() => {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--shell-border);
+}
+
+.HomeSideLauncher-SectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.HomeSideLauncher-ClearRecents {
+  padding: 2px 6px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--shell-text-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface);
+    color: var(--shell-text-primary);
+  }
+}
+
+.HomeSideLauncher-RecentRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.HomeSideLauncher-RecentMain {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.HomeSideLauncher-RecentRemove {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--shell-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+
+  .HomeSideLauncher-RecentRow:hover &,
+  .HomeSideLauncher-RecentRow:focus-within & {
+    opacity: 1;
+  }
+
+  &:hover {
+    background: var(--shell-surface);
+    color: var(--shell-text-primary);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 }
 </style>
