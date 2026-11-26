@@ -1169,14 +1169,13 @@ function exportCanvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob | null> 
 }
 
 /**
- * Composites a showcase page directly into a crisp 1x/2x PNG `Blob`.
+ * Composites a showcase page directly into a crisp 1x/2x PNG `Blob` on a native 2D `<canvas>`.
  *
- * When real captured bitmaps are available in `extras.frameBitmaps`, composites
- * backdrop + drop shadow + rounded device bezel + real frame bitmaps directly on
- * a native 2D `<canvas>` via `ctx.drawImage` — zero `foreignObject` Canvas tainting.
- * Falls back cleanly to `rasterizeSvgToPngBlob` when no bitmaps exist, returning
- * `null` on rasterization failure so callers fail explicitly instead of silently
- * downloading a blank image.
+ * Always renders backdrop + drop shadow + concentric rounded device bezels + either real
+ * captured bitmaps (`ctx.drawImage`) or native Canvas wireframes (`drawCanvasWireframeFallback`),
+ * completely avoiding `<foreignObject>` SVG-to-Canvas tainting (`SecurityError`) even when a
+ * board has zero bitmaps. Returns `null` on unsupported/failed Canvas encoding so callers fail
+ * explicitly instead of downloading a silent blank image.
  */
 export async function renderMockupPagePngBlob(
   page: TdsMockupPage,
@@ -1187,15 +1186,7 @@ export async function renderMockupPagePngBlob(
   const options = normalizeMockupOptions(rawOptions)
   const layout = computeMockupPageLayout(page, options)
 
-  const hasValidBitmap = layout.slots.some((slot) =>
-    isValidFrameBitmapDataUrl(extras.frameBitmaps?.[slot.frame.id])
-  )
-  if (!hasValidBitmap) {
-    const svg = renderMockupPageSvg(page, options, extras)
-    return rasterizeSvgToPngBlob(svg, layout.width, layout.height, options.scale, opts)
-  }
-
-  if (!hasDocument() || typeof Image === 'undefined') {
+  if (!hasDocument()) {
     return null
   }
 
@@ -1235,6 +1226,7 @@ export async function renderMockupPagePngBlob(
     layout.slots.map(async (slot) => {
       const candidate = extras.frameBitmaps?.[slot.frame.id]
       if (!isValidFrameBitmapDataUrl(candidate)) return null
+      if (typeof Image === 'undefined') return null
       return loadBitmapImage(candidate.trim(), timeoutMs)
     })
   )

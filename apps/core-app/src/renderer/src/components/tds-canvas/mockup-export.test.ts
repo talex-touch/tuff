@@ -415,10 +415,9 @@ describe('mockup-renderer pagination, layout math, SVG XML safety, printable HTM
     // 3. Mocked browser Canvas + Image onload resolves to the rasterized PNG Blob
     const validPngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01])
     const originalImage = globalThis.Image
-    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-      clearRect: vi.fn(),
-      drawImage: vi.fn()
-    } as unknown as CanvasRenderingContext2D)
+    const getContextSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue(createMock2dContext())
     const toBlobSpy = vi
       .spyOn(HTMLCanvasElement.prototype, 'toBlob')
       .mockImplementation((callback) => {
@@ -509,6 +508,7 @@ describe('mockup-renderer pagination, layout math, SVG XML safety, printable HTM
     // 2. With bitmaps + mocked Canvas 2D & Image decode -> composites directly with ctx.drawImage
     const drawImageSpy = vi.fn()
     const fillRectSpy = vi.fn()
+    const fillTextSpy = vi.fn()
     const clipSpy = vi.fn()
     const scaleSpy = vi.fn()
     const mockCtx = {
@@ -526,7 +526,7 @@ describe('mockup-renderer pagination, layout math, SVG XML safety, printable HTM
       fill: vi.fn(),
       stroke: vi.fn(),
       clip: clipSpy,
-      fillText: vi.fn(),
+      fillText: fillTextSpy,
       drawImage: drawImageSpy,
       fillStyle: '',
       strokeStyle: '',
@@ -553,6 +553,7 @@ describe('mockup-renderer pagination, layout math, SVG XML safety, printable HTM
     })
 
     const OriginalImage = globalThis.Image
+    let imageCtorCount = 0
     class MockBitmapImage {
       decoding = 'async'
       naturalWidth = 402
@@ -561,6 +562,9 @@ describe('mockup-renderer pagination, layout math, SVG XML safety, printable HTM
       height = 874
       onload: (() => void) | null = null
       onerror: (() => void) | null = null
+      constructor() {
+        imageCtorCount += 1
+      }
       set src(_value: string) {
         queueMicrotask(() => {
           this.onload?.()
@@ -570,6 +574,21 @@ describe('mockup-renderer pagination, layout math, SVG XML safety, printable HTM
     vi.stubGlobal('Image', MockBitmapImage)
 
     try {
+      // 2a. Board WITHOUT bitmaps renders directly via native Canvas compositor (zero Image / foreignObject SVG taint)
+      const wireframeBlob = await renderMockupPagePngBlob(
+        page,
+        { ...DEFAULT_MOCKUP_OPTIONS, scale: 2, shadow: true, brand: true, showTitles: true },
+        {},
+        { timeoutMs: 200 }
+      )
+      expect(wireframeBlob).toBeInstanceOf(Blob)
+      expect(wireframeBlob!.type).toBe('image/png')
+      expect(imageCtorCount).toBe(0)
+      expect(drawImageSpy).not.toHaveBeenCalled()
+      expect(fillTextSpy).toHaveBeenCalled()
+      expect(clipSpy).toHaveBeenCalled()
+
+      // 2b. Board WITH bitmaps composites via ctx.drawImage
       const pngBlob = await renderMockupPagePngBlob(
         page,
         { ...DEFAULT_MOCKUP_OPTIONS, scale: 2, shadow: true, brand: true, showTitles: true },
@@ -588,6 +607,38 @@ describe('mockup-renderer pagination, layout math, SVG XML safety, printable HTM
     }
   })
 })
+
+function createMock2dContext(): CanvasRenderingContext2D {
+  return {
+    save: vi.fn(),
+    restore: vi.fn(),
+    clearRect: vi.fn(),
+    scale: vi.fn(),
+    fillRect: vi.fn(),
+    beginPath: vi.fn(),
+    rect: vi.fn(),
+    moveTo: vi.fn(),
+    arcTo: vi.fn(),
+    arc: vi.fn(),
+    closePath: vi.fn(),
+    fill: vi.fn(),
+    stroke: vi.fn(),
+    clip: vi.fn(),
+    fillText: vi.fn(),
+    drawImage: vi.fn(),
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    font: '',
+    textAlign: 'left',
+    textBaseline: 'alphabetic',
+    shadowColor: '',
+    shadowBlur: 0,
+    shadowOffsetX: 0,
+    shadowOffsetY: 0,
+    globalAlpha: 1
+  } as unknown as CanvasRenderingContext2D
+}
 
 describe('TdsMockupExportDialog & TdsDesignCanvas themeCss / canvasPattern / export integration', () => {
   beforeEach(() => {
@@ -614,10 +665,9 @@ describe('TdsMockupExportDialog & TdsDesignCanvas themeCss / canvasPattern / exp
     const anchorClickSpy = vi
       .spyOn(HTMLAnchorElement.prototype, 'click')
       .mockImplementation(() => {})
-    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-      clearRect: vi.fn(),
-      drawImage: vi.fn()
-    } as unknown as CanvasRenderingContext2D)
+    const getContextSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue(createMock2dContext())
     const toBlobSpy = vi
       .spyOn(HTMLCanvasElement.prototype, 'toBlob')
       .mockImplementation((callback) => {
@@ -795,32 +845,25 @@ describe('TdsMockupExportDialog & TdsDesignCanvas themeCss / canvasPattern / exp
       }
       // 3. Snapshots options, pages, and selection before awaiting async PNG rasterization
       createObjectUrlSpy.mockImplementation(() => 'blob:mock-tds-snapshot')
-      const originalImage = globalThis.Image
-      const pendingImages: Array<() => void> = []
+      const pendingBlobs: Array<() => void> = []
       const downloadFilenames: string[] = []
       anchorClickSpy.mockImplementation(function (this: HTMLAnchorElement) {
         downloadFilenames.push(this.download)
       })
-      const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-        clearRect: vi.fn(),
-        drawImage: vi.fn()
-      } as unknown as CanvasRenderingContext2D)
+      const getContextSpy = vi
+        .spyOn(HTMLCanvasElement.prototype, 'getContext')
+        .mockReturnValue(createMock2dContext())
       const toBlobSpy = vi
         .spyOn(HTMLCanvasElement.prototype, 'toBlob')
         .mockImplementation((callback) => {
-          callback(
-            new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a])], { type: 'image/png' })
-          )
+          pendingBlobs.push(() => {
+            callback(
+              new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a])], {
+                type: 'image/png'
+              })
+            )
+          })
         })
-      class DeferredImage {
-        decoding = ''
-        onload: (() => void) | null = null
-        onerror: (() => void) | null = null
-        set src(_value: string) {
-          pendingImages.push(() => this.onload?.())
-        }
-      }
-      globalThis.Image = DeferredImage as unknown as typeof Image
 
       try {
         // Start PNG export while scale is 2x and both frames are selected
@@ -829,14 +872,14 @@ describe('TdsMockupExportDialog & TdsDesignCanvas themeCss / canvasPattern / exp
         const exportPromise = wrapper.get('[data-testid="tds-mockup-export-png"]').trigger('click')
         await nextTick()
 
-        // Mutate scale to 1x and clear selection while rasterization is still in flight
+        // Mutate scale to 1x and clear selection while Canvas PNG encoding is still in flight
         await wrapper.get('[data-testid="tds-mockup-scale-1"]').trigger('click')
         await wrapper.get('[data-testid="tds-mockup-select-none"]').trigger('click')
         await nextTick()
 
-        // Resolve deferred image decodes
-        while (pendingImages.length > 0) {
-          pendingImages.shift()?.()
+        // Resolve deferred toBlob calls
+        while (pendingBlobs.length > 0) {
+          pendingBlobs.shift()?.()
           await flushPromises()
         }
         await exportPromise
@@ -847,7 +890,6 @@ describe('TdsMockupExportDialog & TdsDesignCanvas themeCss / canvasPattern / exp
           [{ format: 'png', pageCount: 1, frameIds: ['e1', 'e2'] }]
         ])
       } finally {
-        globalThis.Image = originalImage
         getContextSpy.mockRestore()
         toBlobSpy.mockRestore()
       }

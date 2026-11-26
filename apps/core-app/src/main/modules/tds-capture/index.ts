@@ -99,6 +99,7 @@ export {
   DEFAULT_SETTLE_MS,
   DEFAULT_TIMEOUT_MS,
   IDLE_TTL_MS,
+  injectCaptureCsp,
   isAllowedTdsCaptureUrl,
   MAX_CONCURRENT_SLOTS,
   MAX_DIMENSION,
@@ -108,6 +109,7 @@ export {
   MAX_SETTLE_MS,
   MAX_SRCDOC_BYTES,
   MAX_TIMEOUT_MS,
+  MAX_WAIT_QUEUE_LENGTH,
   MIN_DIMENSION,
   MIN_JPEG_QUALITY,
   MIN_PIXEL_RATIO,
@@ -115,6 +117,7 @@ export {
   MIN_TIMEOUT_MS,
   normalizeTdsCaptureRequest,
   secureTdsCaptureSession,
+  TDS_CAPTURE_CSP,
   TDS_CAPTURE_PARTITION,
   TdsOffscreenCaptureRenderer
 } from './offscreen-renderer'

@@ -239,7 +239,40 @@ let pendingShieldDrag: {
   startClientY: number
   originX: number
   originY: number
+  hadPrimaryButtonMask: boolean
 } | null = null
+let pendingShieldReleaseAttached = false
+
+function detachPendingShieldReleaseListeners(): void {
+  if (!pendingShieldReleaseAttached || !hasWindow()) return
+  pendingShieldReleaseAttached = false
+  window.removeEventListener('pointerup', onWindowPendingShieldRelease, true)
+  window.removeEventListener('pointercancel', onWindowPendingShieldRelease, true)
+  window.removeEventListener('blur', onWindowPendingShieldBlur)
+}
+
+function clearPendingShieldDrag(): void {
+  pendingShieldDrag = null
+  detachPendingShieldReleaseListeners()
+}
+
+function onWindowPendingShieldRelease(event: PointerEvent): void {
+  if (!pendingShieldDrag || event.pointerId === pendingShieldDrag.pointerId) {
+    clearPendingShieldDrag()
+  }
+}
+
+function onWindowPendingShieldBlur(): void {
+  clearPendingShieldDrag()
+}
+
+function attachPendingShieldReleaseListeners(): void {
+  if (pendingShieldReleaseAttached || !hasWindow()) return
+  pendingShieldReleaseAttached = true
+  window.addEventListener('pointerup', onWindowPendingShieldRelease, true)
+  window.addEventListener('pointercancel', onWindowPendingShieldRelease, true)
+  window.addEventListener('blur', onWindowPendingShieldBlur)
+}
 
 const isInteracting = computed(
   () => isPanning.value || isWheelInteracting.value || draggingFrameId.value !== null
@@ -709,6 +742,12 @@ function onViewportPointerMove(event: PointerEvent): void {
   }
 
   if (pendingShieldDrag && event.pointerId === pendingShieldDrag.pointerId) {
+    const primaryReleased =
+      (pendingShieldDrag.hadPrimaryButtonMask || event.isTrusted) && (event.buttons & 1) === 0
+    if (primaryReleased) {
+      clearPendingShieldDrag()
+      return
+    }
     const dist = Math.hypot(
       event.clientX - pendingShieldDrag.startClientX,
       event.clientY - pendingShieldDrag.startClientY
@@ -716,8 +755,15 @@ function onViewportPointerMove(event: PointerEvent): void {
     if (dist < SHIELD_DRAG_THRESHOLD_PX) {
       return
     }
-    frameDragOrigin = { ...pendingShieldDrag }
-    pendingShieldDrag = null
+    frameDragOrigin = {
+      pointerId: pendingShieldDrag.pointerId,
+      frameId: pendingShieldDrag.frameId,
+      startClientX: pendingShieldDrag.startClientX,
+      startClientY: pendingShieldDrag.startClientY,
+      originX: pendingShieldDrag.originX,
+      originY: pendingShieldDrag.originY
+    }
+    clearPendingShieldDrag()
     draggingFrameId.value = frameDragOrigin.frameId
     dragPreviewPos.value = {
       id: frameDragOrigin.frameId,
@@ -759,7 +805,7 @@ function onViewportPointerMove(event: PointerEvent): void {
 
 function finishPointerInteraction(event: PointerEvent): void {
   if (pendingShieldDrag && event.pointerId === pendingShieldDrag.pointerId) {
-    pendingShieldDrag = null
+    clearPendingShieldDrag()
   }
 
   if (panDragOrigin && event.pointerId === panDragOrigin.pointerId) {
@@ -820,8 +866,10 @@ function onFrameShieldPointerDown(frame: TdsCanvasFrame, event: PointerEvent): v
     startClientX: event.clientX,
     startClientY: event.clientY,
     originX: frame.x,
-    originY: frame.y
+    originY: frame.y,
+    hadPrimaryButtonMask: (event.buttons & 1) !== 0
   }
+  attachPendingShieldReleaseListeners()
 }
 
 // ── Frame Actions (Add, Switch Device, Rotate, Shell, Ask AI) ─────────────────────────
@@ -1274,6 +1322,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  clearPendingShieldDrag()
   cancelViewportSpring()
   if (wheelIdleTimer !== null) {
     clearTimeout(wheelIdleTimer)

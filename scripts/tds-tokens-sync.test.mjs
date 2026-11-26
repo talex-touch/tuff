@@ -7,8 +7,11 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  compositeOver,
+  contrastRatioRgb,
   formatMarkdownReport,
   RELATIVE_PATHS,
+  resolveColorExpression,
   verifyTdsTokensSync,
 } from './tds-tokens-sync.mjs'
 
@@ -123,7 +126,7 @@ describe('scripts/tds-tokens-sync.mjs', () => {
     expect(result.errors.some(err => err.scope === 'core-primitives' && err.module === 'removed-table')).toBe(true)
   })
 
-  it('catches WCAG AA contrast regression in built-in theme packs', () => {
+  it('catches WCAG AA contrast regression and invisible alpha text in built-in theme packs', () => {
     const presetsSource = readFileSync(path.join(REPO_ROOT, RELATIVE_PATHS.themePresetsTs), 'utf8')
     const lowContrastPresets = presetsSource.replace('textRegular: \'#334155\'', 'textRegular: \'#cbd5e1\'')
 
@@ -136,6 +139,36 @@ describe('scripts/tds-tokens-sync.mjs', () => {
     expect(
       result.errors.some(err => err.scope === 'theme-pack-contrast' && err.packId === 'tds-obsidian-cobalt'),
     ).toBe(true)
+
+    // Translucent zero-alpha text (#33415500) must composite to 1:1 contrast and fail WCAG AA
+    const invisibleTextPresets = presetsSource.replace('textRegular: \'#334155\'', 'textRegular: \'#33415500\'')
+    const invisibleResult = verifyTdsTokensSync({
+      rootDir: REPO_ROOT,
+      overrides: { themePresetsTs: invisibleTextPresets },
+    })
+    expect(invisibleResult.ok).toBe(false)
+    expect(
+      invisibleResult.errors.some(
+        err =>
+          err.scope === 'theme-pack-contrast'
+          && err.packId === 'tds-obsidian-cobalt'
+          && err.pair === 'textRegular/bg'
+          && err.actual === 1,
+      ),
+    ).toBe(true)
+  })
+
+  it('premultiplies alpha per CSS Color 5 when resolving color-mix(in srgb, ...)', () => {
+    const mixed = resolveColorExpression('color-mix(in srgb, #00000000 50%, #ffffff)', {})
+    expect(mixed[0]).toBeCloseTo(255, 4)
+    expect(mixed[1]).toBeCloseTo(255, 4)
+    expect(mixed[2]).toBeCloseTo(255, 4)
+    expect(mixed[3]).toBeCloseTo(0.5, 4)
+
+    const overBlack = compositeOver(mixed, [0, 0, 0])
+    const whiteContrast = contrastRatioRgb([255, 255, 255], overBlack)
+    expect(whiteContrast).toBeCloseTo(3.98, 2)
+    expect(whiteContrast).toBeLessThan(4.5)
   })
 
   it('exits 0 on clean CLI --check / --report and exits 1 with per-token diff on drifted fixture', () => {

@@ -127,7 +127,7 @@ export function parseHexColor(hex) {
 }
 
 export function compositeOver(fg, bg, alphaOverride) {
-  const alpha = alphaOverride ?? fg[3]
+  const alpha = alphaOverride !== undefined ? fg[3] * alphaOverride : fg[3]
   return [
     fg[0] * alpha + bg[0] * (1 - alpha),
     fg[1] * alpha + bg[1] * (1 - alpha),
@@ -199,11 +199,17 @@ export function resolveColorExpression(expr, tokens, depth = 0) {
           const c1 = resolveColorExpression(c1Expr, tokens, depth + 1)
           const pct = Number.parseFloat(pctMatch[1]) / 100
           const c2 = resolveColorExpression(right, tokens, depth + 1)
+          // CSS Color 5 sRGB color-mix interpolates in premultiplied alpha space
+          const w1 = pct
+          const w2 = 1 - pct
+          const outAlpha = c1[3] * w1 + c2[3] * w2
+          if (outAlpha <= 0)
+            return [0, 0, 0, 0]
           return [
-            c1[0] * pct + c2[0] * (1 - pct),
-            c1[1] * pct + c2[1] * (1 - pct),
-            c1[2] * pct + c2[2] * (1 - pct),
-            c1[3] * pct + c2[3] * (1 - pct),
+            (c1[0] * c1[3] * w1 + c2[0] * c2[3] * w2) / outAlpha,
+            (c1[1] * c1[3] * w1 + c2[1] * c2[3] * w2) / outAlpha,
+            (c1[2] * c1[3] * w1 + c2[2] * c2[3] * w2) / outAlpha,
+            outAlpha,
           ]
         }
       }
@@ -371,22 +377,30 @@ function evaluateThemePackContrast(packs) {
       const primaryRgba = parseHexColor(ramp.primary)
       const onPrimaryRgba = parseHexColor(ramp.onPrimary)
 
-      const bgRgb = bgRgba.slice(0, 3)
-      const surfaceRgb = surfaceRgba.slice(0, 3)
+      const bgRgb = bgRgba[3] < 1 ? compositeOver(bgRgba, backdropRgb) : bgRgba.slice(0, 3)
+      const surfaceRgb = surfaceRgba[3] < 1 ? compositeOver(surfaceRgba, backdropRgb) : surfaceRgba.slice(0, 3)
+      const primaryRgb = primaryRgba[3] < 1 ? compositeOver(primaryRgba, bgRgb) : primaryRgba.slice(0, 3)
       const refractBgRgb = compositeOver(bgRgba, backdropRgb, REFRACTION_SURFACE_OPACITY)
       const refractSurfaceRgb = compositeOver(surfaceRgba, backdropRgb, REFRACTION_SURFACE_OPACITY)
 
+      const alphaContrast = (fgRgba, targetBgRgb) => {
+        const effectiveFg = fgRgba[3] < 1
+          ? compositeOver(fgRgba, targetBgRgb)
+          : [fgRgba[0], fgRgba[1], fgRgba[2]]
+        return contrastRatioRgb(effectiveFg, targetBgRgb)
+      }
+
       const checks = [
-        { id: 'textPrimary/bg', ratio: contrastRatioRgb(tpRgba.slice(0, 3), bgRgb), min: WCAG_AA_TEXT_RATIO },
-        { id: 'textPrimary/surface', ratio: contrastRatioRgb(tpRgba.slice(0, 3), surfaceRgb), min: WCAG_AA_TEXT_RATIO },
-        { id: 'textRegular/bg', ratio: contrastRatioRgb(trRgba.slice(0, 3), bgRgb), min: WCAG_AA_TEXT_RATIO },
-        { id: 'textRegular/surface', ratio: contrastRatioRgb(trRgba.slice(0, 3), surfaceRgb), min: WCAG_AA_TEXT_RATIO },
-        { id: 'onPrimary/primary', ratio: contrastRatioRgb(onPrimaryRgba.slice(0, 3), primaryRgba.slice(0, 3)), min: WCAG_AA_TEXT_RATIO },
-        { id: 'primary/bg', ratio: contrastRatioRgb(primaryRgba.slice(0, 3), bgRgb), min: WCAG_AA_UI_RATIO },
-        { id: 'refraction(0.85) textPrimary/bg', ratio: contrastRatioRgb(tpRgba.slice(0, 3), refractBgRgb), min: WCAG_AA_TEXT_RATIO },
-        { id: 'refraction(0.85) textRegular/bg', ratio: contrastRatioRgb(trRgba.slice(0, 3), refractBgRgb), min: WCAG_AA_TEXT_RATIO },
-        { id: 'refraction(0.85) textRegular/surface', ratio: contrastRatioRgb(trRgba.slice(0, 3), refractSurfaceRgb), min: WCAG_AA_TEXT_RATIO },
-        { id: 'refraction(0.85) textSecondary/surface', ratio: contrastRatioRgb(tsRgba.slice(0, 3), refractSurfaceRgb), min: WCAG_AA_TEXT_RATIO },
+        { id: 'textPrimary/bg', ratio: alphaContrast(tpRgba, bgRgb), min: WCAG_AA_TEXT_RATIO },
+        { id: 'textPrimary/surface', ratio: alphaContrast(tpRgba, surfaceRgb), min: WCAG_AA_TEXT_RATIO },
+        { id: 'textRegular/bg', ratio: alphaContrast(trRgba, bgRgb), min: WCAG_AA_TEXT_RATIO },
+        { id: 'textRegular/surface', ratio: alphaContrast(trRgba, surfaceRgb), min: WCAG_AA_TEXT_RATIO },
+        { id: 'onPrimary/primary', ratio: alphaContrast(onPrimaryRgba, primaryRgb), min: WCAG_AA_TEXT_RATIO },
+        { id: 'primary/bg', ratio: alphaContrast(primaryRgba, bgRgb), min: WCAG_AA_UI_RATIO },
+        { id: 'refraction(0.85) textPrimary/bg', ratio: alphaContrast(tpRgba, refractBgRgb), min: WCAG_AA_TEXT_RATIO },
+        { id: 'refraction(0.85) textRegular/bg', ratio: alphaContrast(trRgba, refractBgRgb), min: WCAG_AA_TEXT_RATIO },
+        { id: 'refraction(0.85) textRegular/surface', ratio: alphaContrast(trRgba, refractSurfaceRgb), min: WCAG_AA_TEXT_RATIO },
+        { id: 'refraction(0.85) textSecondary/surface', ratio: alphaContrast(tsRgba, refractSurfaceRgb), min: WCAG_AA_TEXT_RATIO },
       ]
 
       const minOpaque = Math.min(...checks.slice(0, 6).map(c => c.ratio))

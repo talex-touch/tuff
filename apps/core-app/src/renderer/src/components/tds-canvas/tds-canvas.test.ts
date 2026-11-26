@@ -973,4 +973,147 @@ describe('TdsDesignCanvas component interactions', () => {
       expect(tag).toContain('panel-background="refraction"')
     }
   })
+
+  it('cancels pending shield drag when pointer is released outside stage or moves without primary button held', async () => {
+    const createPointerLikeEvent = (
+      type: string,
+      init: {
+        pointerId: number
+        button?: number
+        buttons?: number
+        clientX?: number
+        clientY?: number
+        bubbles?: boolean
+      }
+    ): MouseEvent => {
+      const ev = new MouseEvent(type, {
+        button: init.button ?? 0,
+        buttons: init.buttons ?? 0,
+        clientX: init.clientX ?? 0,
+        clientY: init.clientY ?? 0,
+        bubbles: init.bubbles ?? false,
+        cancelable: true
+      })
+      Object.defineProperty(ev, 'pointerId', { value: init.pointerId })
+      return ev
+    }
+
+    const wrapper = mount(TdsDesignCanvas, {
+      props: {
+        frames: [makeFrame({ id: 'f1', title: 'Shielded Frame', x: 100, y: 120 })]
+      }
+    })
+    await flushPromises()
+
+    const shield = wrapper.get('[data-testid="tds-canvas-frame-shield-f1"]').element
+    const stage = wrapper.get('[data-testid="tds-canvas-stage"]').element
+
+    // Case 1: pointerdown on shield -> pointerup on window (e.g. toolbar outside stage) -> returning move must NOT drag
+    shield.dispatchEvent(
+      createPointerLikeEvent('pointerdown', {
+        pointerId: 7,
+        button: 0,
+        buttons: 1,
+        clientX: 50,
+        clientY: 50,
+        bubbles: true
+      })
+    )
+    window.dispatchEvent(
+      createPointerLikeEvent('pointerup', {
+        pointerId: 7,
+        button: 0,
+        buttons: 0,
+        clientX: 52,
+        clientY: 10
+      })
+    )
+    stage.dispatchEvent(
+      createPointerLikeEvent('pointermove', {
+        pointerId: 7,
+        buttons: 0,
+        clientX: 160,
+        clientY: 180,
+        bubbles: true
+      })
+    )
+    stage.dispatchEvent(
+      createPointerLikeEvent('pointerup', {
+        pointerId: 7,
+        button: 0,
+        buttons: 0,
+        clientX: 160,
+        clientY: 180,
+        bubbles: true
+      })
+    )
+    await nextTick()
+    expect(wrapper.emitted('update:frames')).toBeUndefined()
+
+    // Case 2: even if window pointerup was missed, pointermove with buttons=0 cancels pending drag
+    shield.dispatchEvent(
+      createPointerLikeEvent('pointerdown', {
+        pointerId: 8,
+        button: 0,
+        buttons: 1,
+        clientX: 50,
+        clientY: 50,
+        bubbles: true
+      })
+    )
+    stage.dispatchEvent(
+      createPointerLikeEvent('pointermove', {
+        pointerId: 8,
+        buttons: 0,
+        clientX: 140,
+        clientY: 160,
+        bubbles: true
+      })
+    )
+    stage.dispatchEvent(
+      createPointerLikeEvent('pointerup', {
+        pointerId: 8,
+        button: 0,
+        buttons: 0,
+        clientX: 140,
+        clientY: 160,
+        bubbles: true
+      })
+    )
+    await nextTick()
+    expect(wrapper.emitted('update:frames')).toBeUndefined()
+
+    // Case 3: normal drag with primary button held (>4px) moves frame cleanly
+    shield.dispatchEvent(
+      createPointerLikeEvent('pointerdown', {
+        pointerId: 9,
+        button: 0,
+        buttons: 1,
+        clientX: 50,
+        clientY: 50,
+        bubbles: true
+      })
+    )
+    stage.dispatchEvent(
+      createPointerLikeEvent('pointermove', {
+        pointerId: 9,
+        buttons: 1,
+        clientX: 150,
+        clientY: 150,
+        bubbles: true
+      })
+    )
+    stage.dispatchEvent(
+      createPointerLikeEvent('pointerup', {
+        pointerId: 9,
+        button: 0,
+        buttons: 0,
+        clientX: 150,
+        clientY: 150,
+        bubbles: true
+      })
+    )
+    await nextTick()
+    expect(wrapper.emitted('update:frames')).toBeTruthy()
+  })
 })

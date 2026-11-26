@@ -365,4 +365,65 @@ describe('live-capture-client', () => {
     expect(merged[0]).toMatchObject({ ruleId: 'remote-asset-url', phase: 'static', line: 5 })
     expect(merged[1]).toMatchObject({ ruleId: 'contrast-fail', phase: 'dom', selector: 'p.muted' })
   })
+
+  it('preserves captured bitmap and reports probeError without caching when DOM_PROBE_FAILED occurs, while still caching clean empty probes', async () => {
+    const validPng =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+
+    // 1. Main returns bitmap + DOM_PROBE_FAILED -> bitmap preserved, probeError reported, NOT cached
+    mocks.send.mockResolvedValueOnce({
+      ok: true,
+      bitmapDataUrl: validPng,
+      width: 390,
+      height: 844,
+      error: 'DOM_PROBE_FAILED:Script threw TypeError',
+      durationMs: 18
+    })
+
+    const first = await captureFrameAndProbe({
+      srcdoc: '<main>Probe error test</main>',
+      width: 390,
+      height: 844,
+      domProbeScript: '(() => { throw new TypeError("boom") })()'
+    })
+    expect(first.ok).toBe(true)
+    expect(first.bitmapDataUrl).toBe(validPng)
+    expect(first.domIssues).toEqual([])
+    expect(first.probeError).toBe('DOM_PROBE_FAILED:Script threw TypeError')
+    expect(first.error).toBe('DOM_PROBE_FAILED:Script threw TypeError')
+    expect(getCaptureCacheStats().entries).toBe(0)
+
+    // 2. Retry succeeds with clean empty [] probe -> cached cleanly
+    mocks.send.mockResolvedValueOnce({
+      ok: true,
+      bitmapDataUrl: validPng,
+      width: 390,
+      height: 844,
+      domProbeResult: [],
+      durationMs: 12
+    })
+
+    const second = await captureFrameAndProbe({
+      srcdoc: '<main>Probe error test</main>',
+      width: 390,
+      height: 844,
+      domProbeScript: '(() => { throw new TypeError("boom") })()'
+    })
+    expect(second.ok).toBe(true)
+    expect(second.probeError).toBeUndefined()
+    expect(second.domIssues).toEqual([])
+    expect(second.fromCache).toBe(false)
+    expect(getCaptureCacheStats().entries).toBe(1)
+
+    // 3. Third call hits cache for the clean empty probe
+    const third = await captureFrameAndProbe({
+      srcdoc: '<main>Probe error test</main>',
+      width: 390,
+      height: 844,
+      domProbeScript: '(() => { throw new TypeError("boom") })()'
+    })
+    expect(third.ok).toBe(true)
+    expect(third.fromCache).toBe(true)
+    expect(mocks.send).toHaveBeenCalledTimes(2)
+  })
 })

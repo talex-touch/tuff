@@ -817,13 +817,16 @@ function scheduleCanvasFrameCaptures(): void {
         sessionKey
       }).then((result) => {
         if (generation !== captureGeneration || !result.ok) return
-        capturedFrameSignatures.set(frame.id, signature)
         if (result.bitmapDataUrl) {
           frameBitmaps.value = {
             ...frameBitmaps.value,
             [frame.id]: result.bitmapDataUrl
           }
         }
+        if (result.probeError) {
+          return
+        }
+        capturedFrameSignatures.set(frame.id, signature)
         domIssuesByFrameId.value = {
           ...domIssuesByFrameId.value,
           [frame.id]: result.domIssues

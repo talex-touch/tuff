@@ -76,13 +76,16 @@ vi.mock('../../core/runtime-accessor', () => ({
 
 import {
   IDLE_TTL_MS,
+  injectCaptureCsp,
   isAllowedTdsCaptureUrl,
   MAX_CONCURRENT_SLOTS,
   MAX_DIMENSION,
   MAX_SRCDOC_BYTES,
+  MAX_WAIT_QUEUE_LENGTH,
   MIN_DIMENSION,
   normalizeTdsCaptureRequest,
   secureTdsCaptureSession,
+  TDS_CAPTURE_CSP,
   TDS_CAPTURE_PARTITION,
   TdsCaptureModule,
   TdsOffscreenCaptureRenderer,
@@ -163,6 +166,10 @@ async function flushMicrotasks(turns = 4): Promise<void> {
 interface FakeSessionHarness {
   session: TdsCaptureSessionLike
   checkRequest: (url: string) => { cancel?: boolean }
+  checkResponseHeaders: (
+    url: string,
+    responseHeaders?: Record<string, string[]>
+  ) => Record<string, string[]> | undefined
   isListenerAttached: () => boolean
   emitDownload: () => { prevented: boolean }
   permissionRequestsDenied: () => boolean
@@ -173,6 +180,12 @@ interface FakeSessionHarness {
 function createFakeSession(): FakeSessionHarness {
   let beforeRequestListener:
     | ((details: { url: string }, callback: (response: { cancel?: boolean }) => void) => void)
+    | null = null
+  let headersReceivedListener:
+    | ((
+        details: { url: string; responseHeaders?: Record<string, string[]> },
+        callback: (response: { responseHeaders?: Record<string, string[]> }) => void
+      ) => void)
     | null = null
   let permissionRequestHandler:
     | ((wc: unknown, perm: string, cb: (granted: boolean) => void) => void)
@@ -185,6 +198,9 @@ function createFakeSession(): FakeSessionHarness {
     webRequest: {
       onBeforeRequest: (listener) => {
         beforeRequestListener = listener
+      },
+      onHeadersReceived: (listener) => {
+        headersReceivedListener = listener
       }
     },
     setPermissionRequestHandler: (handler) => {
@@ -214,6 +230,16 @@ function createFakeSession(): FakeSessionHarness {
       let result: { cancel?: boolean } = {}
       beforeRequestListener({ url }, (response) => {
         result = response
+      })
+      return result
+    },
+    checkResponseHeaders: (url: string, responseHeaders?: Record<string, string[]>) => {
+      if (!headersReceivedListener) {
+        throw new Error('onHeadersReceived listener not installed')
+      }
+      let result: Record<string, string[]> | undefined
+      headersReceivedListener({ url, responseHeaders }, (response) => {
+        result = response.responseHeaders
       })
       return result
     },
@@ -247,6 +273,7 @@ interface FakeWindowBehavior {
   onExecuteJs?: (code: string, userGesture?: boolean) => Promise<unknown> | unknown
   jpegBytes?: Buffer
   pngBytes?: Buffer
+  supportsDeviceEmulation?: boolean
 }
 
 interface FakeWindowHarness {
@@ -259,6 +286,13 @@ interface FakeWindowHarness {
   capturedRects: Array<{ x: number; y: number; width: number; height: number } | undefined>
   jpegQualities: number[]
   contentSizes: Array<{ width: number; height: number }>
+  webRtcPolicies: string[]
+  emulationCalls: Array<{
+    screenPosition: string
+    deviceScaleFactor: number
+    screenSize: { width: number; height: number }
+    viewSize: { width: number; height: number }
+  }>
   windowOpenHandler: ((details: { url: string }) => { action: 'deny' }) | null
   destroyCount: number
   isDestroyed: () => boolean
@@ -278,6 +312,8 @@ function createFakeWindow(
     []
   const jpegQualities: number[] = []
   const contentSizes: Array<{ width: number; height: number }> = []
+  const webRtcPolicies: string[] = []
+  const emulationCalls: FakeWindowHarness['emulationCalls'] = []
 
   const harness: FakeWindowHarness = {
     id,
@@ -288,6 +324,8 @@ function createFakeWindow(
     capturedRects,
     jpegQualities,
     contentSizes,
+    webRtcPolicies,
+    emulationCalls,
     windowOpenHandler: null,
     destroyCount: 0,
     isDestroyed: () => destroyed,
@@ -305,6 +343,21 @@ function createFakeWindow(
     setWindowOpenHandler: (handler) => {
       harness.windowOpenHandler = handler
     },
+    setWebRTCIPHandlingPolicy: (policy) => {
+      webRtcPolicies.push(policy)
+    },
+    ...(behavior.supportsDeviceEmulation !== false
+      ? {
+          enableDeviceEmulation: (params) => {
+            emulationCalls.push({
+              screenPosition: params.screenPosition,
+              deviceScaleFactor: params.deviceScaleFactor,
+              screenSize: params.screenSize,
+              viewSize: params.viewSize
+            })
+          }
+        }
+      : {}),
     loadURL: async (url: string) => {
       loadedUrls.push(url)
       if (behavior.onLoad) {
@@ -656,7 +709,8 @@ describe('TdsOffscreenCaptureRenderer pool lifecycle', () => {
     const startOrder: string[] = []
     const renderer = createRenderer(() => ({
       onLoad: (url, emitter) => {
-        const label = decodeURIComponent(url.replace('data:text/html;charset=utf-8,', ''))
+        const decoded = decodeURIComponent(url.replace('data:text/html;charset=utf-8,', ''))
+        const label = /req-\d+/.exec(decoded)?.[0] ?? decoded
         startOrder.push(label)
         return new Promise<void>((resolve) => {
           loadResolvers.push({
@@ -941,5 +995,267 @@ describe('TdsCaptureModule & createTdsCaptureSdk integration', () => {
     expect(clock.pendingCount()).toBe(0)
 
     mod.onDestroy({} as ModuleDestroyContext<TalexEvents>)
+  })
+
+  it('enforces WebRTC egress policy + strict CSP headers & document meta in capture partition', async () => {
+    const clock = new FakeClock()
+    const fakeSession = createFakeSession()
+    const windows: FakeWindowHarness[] = []
+
+    const renderer = new TdsOffscreenCaptureRenderer({
+      timers: clock.timers,
+      now: clock.now,
+      sessionFactory: () => fakeSession.session,
+      windowFactory: (options) => {
+        const harness = createFakeWindow(windows.length + 1, options)
+        windows.push(harness)
+        return harness.window
+      }
+    })
+
+    const res = await renderer.renderFrame({
+      srcdoc: '<!doctype html><html><head><title>x</title></head><body>Hi</body></html>',
+      width: 400,
+      height: 600,
+      settleMs: 0
+    })
+    expect(res.ok).toBe(true)
+    expect(windows[0]!.webRtcPolicies).toEqual(['disable_non_proxied_udp'])
+
+    const headers = fakeSession.checkResponseHeaders('data:text/html;charset=utf-8,x', {
+      'Content-Security-Policy': ['default-src *']
+    })
+    expect(headers?.['Content-Security-Policy']).toEqual([TDS_CAPTURE_CSP])
+    expect(TDS_CAPTURE_CSP).toContain("connect-src 'none'")
+    expect(TDS_CAPTURE_CSP).toContain("form-action 'none'")
+
+    const decodedLoaded = decodeURIComponent(windows[0]!.loadedUrls[0]!)
+    expect(decodedLoaded).toContain(TDS_CAPTURE_CSP)
+    expect(injectCaptureCsp('<p>bare</p>')).toContain(TDS_CAPTURE_CSP)
+
+    renderer.disposeAll()
+  })
+
+  it('applies requested DPR on cold capture & slot reuse, and replaces slot when emulation is unavailable', async () => {
+    const clock = new FakeClock()
+    const fakeSession = createFakeSession()
+    const windows: FakeWindowHarness[] = []
+
+    const renderer = new TdsOffscreenCaptureRenderer({
+      timers: clock.timers,
+      now: clock.now,
+      sessionFactory: () => fakeSession.session,
+      windowFactory: (options) => {
+        const harness = createFakeWindow(windows.length + 1, options)
+        windows.push(harness)
+        return harness.window
+      }
+    })
+
+    const cold = await renderer.renderFrame({
+      srcdoc: '<p>dpr2</p>',
+      width: 390,
+      height: 844,
+      pixelRatio: 2,
+      sessionKey: 's-dpr',
+      settleMs: 0
+    })
+    expect(cold.ok).toBe(true)
+    expect(windows).toHaveLength(1)
+    expect(windows[0]!.emulationCalls).toHaveLength(1)
+    expect(windows[0]!.emulationCalls[0]!.deviceScaleFactor).toBe(2)
+
+    // Reusing the same slot with DPR 1 reconfigures device emulation without recreating the window
+    const reused = await renderer.renderFrame({
+      srcdoc: '<p>dpr1</p>',
+      width: 390,
+      height: 844,
+      pixelRatio: 1,
+      sessionKey: 's-dpr',
+      settleMs: 0
+    })
+    expect(reused.ok).toBe(true)
+    expect(windows).toHaveLength(1)
+    expect(windows[0]!.emulationCalls).toHaveLength(2)
+    expect(windows[0]!.emulationCalls[1]!.deviceScaleFactor).toBe(1)
+    renderer.disposeAll()
+
+    // Without enableDeviceEmulation, DPR change replaces the window cleanly
+    const legacyWindows: FakeWindowHarness[] = []
+    const legacyRenderer = new TdsOffscreenCaptureRenderer({
+      timers: clock.timers,
+      now: clock.now,
+      sessionFactory: () => createFakeSession().session,
+      windowFactory: (options) => {
+        const harness = createFakeWindow(legacyWindows.length + 1, options, {
+          supportsDeviceEmulation: false
+        })
+        legacyWindows.push(harness)
+        return harness.window
+      }
+    })
+    await legacyRenderer.renderFrame({
+      srcdoc: '<p>a</p>',
+      width: 320,
+      height: 480,
+      pixelRatio: 1,
+      sessionKey: 's-legacy',
+      settleMs: 0
+    })
+    await legacyRenderer.renderFrame({
+      srcdoc: '<p>b</p>',
+      width: 320,
+      height: 480,
+      pixelRatio: 2,
+      sessionKey: 's-legacy',
+      settleMs: 0
+    })
+    expect(legacyWindows).toHaveLength(2)
+    expect(legacyWindows[0]!.isDestroyed()).toBe(true)
+    expect(legacyWindows[1]!.options.pixelRatio).toBe(2)
+    legacyRenderer.disposeAll()
+  })
+
+  it('rejects queued waiters for a released session while keeping other sessions queued', async () => {
+    const clock = new FakeClock()
+    const fakeSession = createFakeSession()
+    const pendingLoads: Array<() => void> = []
+
+    const renderer = new TdsOffscreenCaptureRenderer({
+      maxConcurrentSlots: 1,
+      timers: clock.timers,
+      now: clock.now,
+      sessionFactory: () => fakeSession.session,
+      windowFactory: (options) =>
+        createFakeWindow(pendingLoads.length + 1, options, {
+          onLoad: (_url, emitter) => {
+            pendingLoads.push(() => emitter.emit('did-finish-load'))
+          }
+        }).window
+    })
+
+    const active = renderer.renderFrame({
+      srcdoc: '<p>active</p>',
+      width: 320,
+      height: 240,
+      sessionKey: 'session-a',
+      settleMs: 0
+    })
+    await flushMicrotasks()
+
+    const queuedA = renderer.renderFrame({
+      srcdoc: '<p>queued-a</p>',
+      width: 320,
+      height: 240,
+      sessionKey: 'session-a',
+      settleMs: 0
+    })
+    const queuedB = renderer.renderFrame({
+      srcdoc: '<p>queued-b</p>',
+      width: 320,
+      height: 240,
+      sessionKey: 'session-b',
+      settleMs: 0
+    })
+    await flushMicrotasks()
+    expect(renderer.getQueueLength()).toBe(2)
+
+    const releaseRes = renderer.releaseSession('session-a')
+    expect(releaseRes).toEqual({ released: true })
+    expect(renderer.getQueueLength()).toBe(1)
+
+    const queuedARes = await queuedA
+    expect(queuedARes.ok).toBe(false)
+    expect(queuedARes.error).toBe('TDS_CAPTURE_SESSION_RELEASED')
+
+    // Finish active load -> session-b waiter gets served normally
+    pendingLoads.shift()!()
+    await flushMicrotasks(12)
+    pendingLoads.shift()!()
+    await flushMicrotasks(12)
+
+    const [activeRes, queuedBRes] = await Promise.all([active, queuedB])
+    expect(activeRes.ok).toBe(true)
+    expect(queuedBRes.ok).toBe(true)
+
+    renderer.disposeAll()
+  })
+
+  it('enforces bounded waitQueue capacity and expires queued requests past admission deadline', async () => {
+    const clock = new FakeClock()
+    const fakeSession = createFakeSession()
+    const pendingLoads: Array<() => void> = []
+
+    const renderer = new TdsOffscreenCaptureRenderer({
+      maxConcurrentSlots: 1,
+      maxWaitQueueLength: 2,
+      timers: clock.timers,
+      now: clock.now,
+      sessionFactory: () => fakeSession.session,
+      windowFactory: (options) =>
+        createFakeWindow(pendingLoads.length + 1, options, {
+          onLoad: (_url, emitter) => {
+            pendingLoads.push(() => emitter.emit('did-finish-load'))
+          }
+        }).window
+    })
+
+    expect(MAX_WAIT_QUEUE_LENGTH).toBe(16)
+
+    const active = renderer.renderFrame({
+      srcdoc: '<p>slot-busy</p>',
+      width: 320,
+      height: 240,
+      timeoutMs: 10_000,
+      settleMs: 0
+    })
+    await flushMicrotasks()
+
+    const q1 = renderer.renderFrame({
+      srcdoc: '<p>q1-expires</p>',
+      width: 320,
+      height: 240,
+      timeoutMs: 1_500,
+      settleMs: 0
+    })
+    const q2 = renderer.renderFrame({
+      srcdoc: '<p>q2-survives</p>',
+      width: 320,
+      height: 240,
+      timeoutMs: 8_000,
+      settleMs: 0
+    })
+    await flushMicrotasks()
+    expect(renderer.getQueueLength()).toBe(2)
+
+    // Third queued request exceeds maxWaitQueueLength=2 -> immediate distinct overflow error
+    const overflow = await renderer.renderFrame({
+      srcdoc: '<p>overflow</p>',
+      width: 320,
+      height: 240,
+      timeoutMs: 5_000,
+      settleMs: 0
+    })
+    expect(overflow.ok).toBe(false)
+    expect(overflow.error).toBe('TDS_CAPTURE_QUEUE_OVERFLOW:2')
+
+    // Advance past q1's 1500ms admission deadline while slot is still busy -> q1 expires & leaves queue
+    await clock.advanceBy(1_600)
+    const q1Res = await q1
+    expect(q1Res.ok).toBe(false)
+    expect(q1Res.error).toBe('TDS_CAPTURE_QUEUE_TIMEOUT:1500ms')
+    expect(renderer.getQueueLength()).toBe(1)
+
+    // Release active slot -> q2 runs and completes cleanly
+    pendingLoads.shift()!()
+    await flushMicrotasks(12)
+    pendingLoads.shift()!()
+    await flushMicrotasks(12)
+
+    const [activeRes, q2Res] = await Promise.all([active, q2])
+    expect(activeRes.ok).toBe(true)
+    expect(q2Res.ok).toBe(true)
+
+    renderer.disposeAll()
   })
 })

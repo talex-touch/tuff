@@ -59,6 +59,7 @@ export interface TdsLiveCaptureResult {
   width?: number
   height?: number
   durationMs?: number
+  probeError?: string
   error?: string
 }
 
@@ -81,8 +82,13 @@ interface CacheEntry {
   byteSize: number
 }
 
+interface InFlightCaptureEntry {
+  token: symbol
+  promise: Promise<TdsLiveCaptureResult>
+}
+
 const captureCache = new Map<string, CacheEntry>()
-const inFlightRequests = new Map<string, Promise<TdsLiveCaptureResult>>()
+const inFlightRequests = new Map<string, InFlightCaptureEntry>()
 const pendingQueue: Array<() => void> = []
 
 let cachedTotalBytes = 0
@@ -331,7 +337,7 @@ export async function captureFrameAndProbe(
 
   const existingInFlight = inFlightRequests.get(cacheKey)
   if (existingInFlight) {
-    const shared = await existingInFlight
+    const shared = await existingInFlight.promise
     return {
       ...shared,
       domIssues: cloneDomIssues(shared.domIssues)
@@ -386,7 +392,12 @@ export async function captureFrameAndProbe(
       }
 
       const bitmapDataUrl = sanitizeBitmapDataUrl(rawResponse.bitmapDataUrl)
-      const domIssues = sanitizeDomProbeResult(rawResponse.domProbeResult)
+      const rawError =
+        typeof rawResponse.error === 'string' && rawResponse.error.trim().length > 0
+          ? rawResponse.error.trim()
+          : undefined
+      const probeFailed = Boolean(rawError && rawError.startsWith('DOM_PROBE_FAILED'))
+      const domIssues = probeFailed ? [] : sanitizeDomProbeResult(rawResponse.domProbeResult)
       const resolvedWidth =
         typeof rawResponse.width === 'number' && Number.isFinite(rawResponse.width)
           ? rawResponse.width
@@ -396,13 +407,15 @@ export async function captureFrameAndProbe(
           ? rawResponse.height
           : height
 
-      writeToCache(cacheKey, {
-        ...(bitmapDataUrl ? { bitmapDataUrl } : {}),
-        domIssues: cloneDomIssues(domIssues),
-        width: resolvedWidth,
-        height: resolvedHeight,
-        byteSize: estimateEntryBytes(bitmapDataUrl, domIssues)
-      })
+      if (!probeFailed) {
+        writeToCache(cacheKey, {
+          ...(bitmapDataUrl ? { bitmapDataUrl } : {}),
+          domIssues: cloneDomIssues(domIssues),
+          width: resolvedWidth,
+          height: resolvedHeight,
+          byteSize: estimateEntryBytes(bitmapDataUrl, domIssues)
+        })
+      }
 
       return {
         ok: true,
@@ -413,7 +426,8 @@ export async function captureFrameAndProbe(
         height: resolvedHeight,
         ...(typeof rawResponse.durationMs === 'number'
           ? { durationMs: rawResponse.durationMs }
-          : {})
+          : {}),
+        ...(probeFailed && rawError ? { probeError: rawError, error: rawError } : {})
       }
     } catch (err) {
       return {
@@ -427,7 +441,8 @@ export async function captureFrameAndProbe(
     }
   })()
 
-  inFlightRequests.set(cacheKey, taskPromise)
+  const requestToken = Symbol('tds-capture-in-flight')
+  inFlightRequests.set(cacheKey, { token: requestToken, promise: taskPromise })
   try {
     const settled = await taskPromise
     return {
@@ -435,7 +450,7 @@ export async function captureFrameAndProbe(
       domIssues: cloneDomIssues(settled.domIssues)
     }
   } finally {
-    if (inFlightRequests.get(cacheKey) === taskPromise) {
+    if (inFlightRequests.get(cacheKey)?.token === requestToken) {
       inFlightRequests.delete(cacheKey)
     }
   }

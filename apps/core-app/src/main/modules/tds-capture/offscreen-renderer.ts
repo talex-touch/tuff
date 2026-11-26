@@ -13,7 +13,10 @@ import { createLogger } from '../../utils/logger'
 const captureLog = createLogger('TdsCapture')
 
 export const TDS_CAPTURE_PARTITION = 'tds-capture-isolated'
+export const TDS_CAPTURE_CSP =
+  "default-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src about:; img-src data: blob:; media-src data: blob:; font-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
 export const MAX_CONCURRENT_SLOTS = 2
+export const MAX_WAIT_QUEUE_LENGTH = 16
 export const IDLE_TTL_MS = 30_000
 export const MAX_DIMENSION = 2560
 export const MIN_DIMENSION = 64
@@ -86,6 +89,22 @@ export interface TdsCaptureWebContentsLike {
     listener: (event: unknown, details?: { reason?: string }) => void
   ): unknown
   setWindowOpenHandler?: (handler: (details: { url: string }) => { action: 'deny' }) => void
+  setWebRTCIPHandlingPolicy?: (
+    policy:
+      | 'default'
+      | 'default_public_interface_only'
+      | 'default_public_and_private_interfaces'
+      | 'disable_non_proxied_udp'
+  ) => void
+  enableDeviceEmulation?: (parameters: {
+    screenPosition: 'desktop' | 'mobile'
+    screenSize: { width: number; height: number }
+    viewPosition: { x: number; y: number }
+    deviceScaleFactor: number
+    viewSize: { width: number; height: number }
+    scale: number
+  }) => void
+  disableDeviceEmulation?: () => void
   loadURL: (url: string) => Promise<void>
   executeJavaScript: (code: string, userGesture?: boolean) => Promise<unknown>
   capturePage: (rect?: {
@@ -112,6 +131,14 @@ export interface TdsCaptureSessionLike {
     onBeforeRequest: (
       listener:
         | ((details: { url: string }, callback: (response: { cancel?: boolean }) => void) => void)
+        | null
+    ) => void
+    onHeadersReceived?: (
+      listener:
+        | ((
+            details: { url: string; responseHeaders?: Record<string, string[]> },
+            callback: (response: { responseHeaders?: Record<string, string[]> }) => void
+          ) => void)
         | null
     ) => void
   }
@@ -145,6 +172,7 @@ export interface TdsCaptureWindowFactoryOptions {
 
 export interface TdsOffscreenCaptureOptions {
   maxConcurrentSlots?: number
+  maxWaitQueueLength?: number
   idleTtlMs?: number
   sessionFactory?: (partition: string, options: { cache: boolean }) => TdsCaptureSessionLike
   windowFactory?: (options: TdsCaptureWindowFactoryOptions) => TdsCaptureWindowLike
@@ -172,6 +200,7 @@ interface PoolSlot {
   sessionKey: string | null
   width: number
   height: number
+  pixelRatio: number
   idleTimer: TdsCaptureTimerHandle | null
   destroyAfterRun: boolean
   abortActive: ((reason: string) => void) | null
@@ -182,6 +211,9 @@ interface QueueWaiter {
   height: number
   pixelRatio: number
   sessionKey: string | null
+  enqueuedAt: number
+  timeoutMs: number
+  queueTimer: TdsCaptureTimerHandle | null
   resolve: (slot: PoolSlot) => void
   reject: (error: Error) => void
 }
@@ -239,9 +271,23 @@ export function isAllowedTdsCaptureUrl(rawUrl: unknown): boolean {
   return false
 }
 
+export function injectCaptureCsp(srcdoc: string): string {
+  const cspMeta = `<meta http-equiv="Content-Security-Policy" content="${TDS_CAPTURE_CSP}">`
+  if (/<head\b[^>]*>/i.test(srcdoc)) {
+    return srcdoc.replace(/<head\b[^>]*>/i, (match) => `${match}${cspMeta}`)
+  }
+  if (/<html\b[^>]*>/i.test(srcdoc)) {
+    return srcdoc.replace(/<html\b[^>]*>/i, (match) => `${match}<head>${cspMeta}</head>`)
+  }
+  if (/<!doctype[^>]*>/i.test(srcdoc)) {
+    return srcdoc.replace(/<!doctype[^>]*>/i, (match) => `${match}<head>${cspMeta}</head>`)
+  }
+  return `<!doctype html><html><head>${cspMeta}</head><body>${srcdoc}</body></html>`
+}
+
 /**
  * Locks down the isolated offscreen capture partition so untrusted HTML cannot perform
- * any network requests, downloads, or permission escalations.
+ * any network requests, WebRTC egress, downloads, or permission escalations.
  */
 export function secureTdsCaptureSession(targetSession: TdsCaptureSessionLike): () => void {
   targetSession.setPermissionRequestHandler?.((_webContents, _permission, callback) => {
@@ -255,6 +301,17 @@ export function secureTdsCaptureSession(targetSession: TdsCaptureSessionLike): (
   targetSession.webRequest.onBeforeRequest((details, callback) => {
     callback({ cancel: !isAllowedTdsCaptureUrl(details.url) })
   })
+  targetSession.webRequest.onHeadersReceived?.((details, callback) => {
+    const nextHeaders: Record<string, string[]> = {}
+    if (details.responseHeaders) {
+      for (const [key, value] of Object.entries(details.responseHeaders)) {
+        if (key.toLowerCase() === 'content-security-policy') continue
+        nextHeaders[key] = value
+      }
+    }
+    nextHeaders['Content-Security-Policy'] = [TDS_CAPTURE_CSP]
+    callback({ responseHeaders: nextHeaders })
+  })
   const handleDownload = (event: { preventDefault: () => void }) => {
     event.preventDefault()
   }
@@ -263,6 +320,7 @@ export function secureTdsCaptureSession(targetSession: TdsCaptureSessionLike): (
   return () => {
     targetSession.removeListener?.('will-download', handleDownload)
     targetSession.webRequest.onBeforeRequest(null)
+    targetSession.webRequest.onHeadersReceived?.(null)
   }
 }
 
@@ -331,8 +389,28 @@ export function normalizeTdsCaptureRequest(
   }
 }
 
+function applyWebContentsDeviceScale(
+  webContents: TdsCaptureWebContentsLike,
+  width: number,
+  height: number,
+  pixelRatio: number
+): boolean {
+  if (typeof webContents.enableDeviceEmulation !== 'function') {
+    return false
+  }
+  webContents.enableDeviceEmulation({
+    screenPosition: 'desktop',
+    screenSize: { width, height },
+    viewPosition: { x: 0, y: 0 },
+    deviceScaleFactor: pixelRatio,
+    viewSize: { width, height },
+    scale: 1
+  })
+  return true
+}
+
 function createDefaultCaptureWindow(options: TdsCaptureWindowFactoryOptions): TdsCaptureWindowLike {
-  return new BrowserWindow({
+  const win = new BrowserWindow({
     width: options.width,
     height: options.height,
     show: false,
@@ -343,6 +421,9 @@ function createDefaultCaptureWindow(options: TdsCaptureWindowFactoryOptions): Td
     enableLargerThanScreen: true,
     webPreferences: options.webPreferences
   })
+  win.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp')
+  applyWebContentsDeviceScale(win.webContents, options.width, options.height, options.pixelRatio)
+  return win
 }
 
 const defaultTimers: TdsCaptureTimers = {
@@ -352,6 +433,7 @@ const defaultTimers: TdsCaptureTimers = {
 
 export class TdsOffscreenCaptureRenderer {
   private readonly maxConcurrentSlots: number
+  private readonly maxWaitQueueLength: number
   private readonly idleTtlMs: number
   private readonly sessionFactory: (
     partition: string,
@@ -372,6 +454,10 @@ export class TdsOffscreenCaptureRenderer {
     this.maxConcurrentSlots = Math.max(
       1,
       Math.floor(options.maxConcurrentSlots ?? MAX_CONCURRENT_SLOTS)
+    )
+    this.maxWaitQueueLength = Math.max(
+      0,
+      Math.floor(options.maxWaitQueueLength ?? MAX_WAIT_QUEUE_LENGTH)
     )
     this.idleTtlMs = Math.max(100, Math.floor(options.idleTtlMs ?? IDLE_TTL_MS))
     this.sessionFactory =
@@ -470,6 +556,14 @@ export class TdsOffscreenCaptureRenderer {
         this.destroySlot(slot)
       }
     }
+    for (let index = this.waitQueue.length - 1; index >= 0; index -= 1) {
+      const waiter = this.waitQueue[index]
+      if (!waiter || waiter.sessionKey !== key) continue
+      released = true
+      this.waitQueue.splice(index, 1)
+      this.clearWaiterTimer(waiter)
+      waiter.reject(new Error('TDS_CAPTURE_SESSION_RELEASED'))
+    }
     if (released) {
       this.drainWaitQueue()
     }
@@ -482,6 +576,7 @@ export class TdsOffscreenCaptureRenderer {
 
     const waiters = this.waitQueue.splice(0)
     for (const waiter of waiters) {
+      this.clearWaiterTimer(waiter)
       waiter.reject(new Error('TDS_CAPTURE_DISPOSED'))
     }
 
@@ -493,6 +588,13 @@ export class TdsOffscreenCaptureRenderer {
     this.sessionDisposer?.()
     this.sessionDisposer = null
     this.isolatedSession = null
+  }
+
+  private clearWaiterTimer(waiter: QueueWaiter): void {
+    if (waiter.queueTimer !== null) {
+      this.timers.clearTimeout(waiter.queueTimer)
+      waiter.queueTimer = null
+    }
   }
 
   private ensureIsolatedSession(): TdsCaptureSessionLike {
@@ -517,19 +619,54 @@ export class TdsOffscreenCaptureRenderer {
     }
   }
 
-  private findIdleSlot(sessionKey: string | null): PoolSlot | null {
+  private findIdleSlot(sessionKey: string | null, pixelRatio: number): PoolSlot | null {
     this.pruneDestroyedSlots()
+    const isEligible = (slot: PoolSlot): boolean => !slot.busy && !slot.destroyAfterRun
     if (sessionKey) {
-      const matching = this.slots.find(
-        (slot) => !slot.busy && !slot.destroyAfterRun && slot.sessionKey === sessionKey
+      const exactMatch = this.slots.find(
+        (slot) =>
+          isEligible(slot) && slot.sessionKey === sessionKey && slot.pixelRatio === pixelRatio
       )
-      if (matching) return matching
+      if (exactMatch) return exactMatch
+      const matchingSession = this.slots.find(
+        (slot) => isEligible(slot) && slot.sessionKey === sessionKey
+      )
+      if (matchingSession) return matchingSession
     }
-    const unpinned = this.slots.find(
-      (slot) => !slot.busy && !slot.destroyAfterRun && slot.sessionKey === null
+    const unpinnedExact = this.slots.find(
+      (slot) => isEligible(slot) && slot.sessionKey === null && slot.pixelRatio === pixelRatio
     )
+    if (unpinnedExact) return unpinnedExact
+    const unpinned = this.slots.find((slot) => isEligible(slot) && slot.sessionKey === null)
     if (unpinned) return unpinned
-    return this.slots.find((slot) => !slot.busy && !slot.destroyAfterRun) ?? null
+    const sameDpr = this.slots.find((slot) => isEligible(slot) && slot.pixelRatio === pixelRatio)
+    if (sameDpr) return sameDpr
+    return this.slots.find((slot) => isEligible(slot)) ?? null
+  }
+
+  private prepareSlotForSpec(
+    slot: PoolSlot,
+    spec: {
+      width: number
+      height: number
+      pixelRatio: number
+      sessionKey: string | null
+    }
+  ): PoolSlot {
+    const wc = slot.window.webContents
+    const dprChanged = slot.pixelRatio !== spec.pixelRatio
+    const canReconfigureDpr = typeof wc.enableDeviceEmulation === 'function'
+    if (dprChanged && !canReconfigureDpr) {
+      this.destroySlot(slot)
+      const replacement = this.createSlot(spec)
+      replacement.window.webContents.startPainting?.()
+      return replacement
+    }
+
+    slot.busy = true
+    slot.sessionKey = spec.sessionKey
+    slot.window.webContents.startPainting?.()
+    return slot
   }
 
   private createSlot(spec: {
@@ -554,6 +691,8 @@ export class TdsOffscreenCaptureRenderer {
       webPreferences
     })
 
+    window.webContents.setWebRTCIPHandlingPolicy?.('disable_non_proxied_udp')
+    applyWebContentsDeviceScale(window.webContents, spec.width, spec.height, spec.pixelRatio)
     window.webContents.setWindowOpenHandler?.(() => ({ action: 'deny' }))
     const guardNavigation = (event: { preventDefault: () => void }, url: string) => {
       if (!isAllowedTdsCaptureUrl(url)) {
@@ -570,6 +709,7 @@ export class TdsOffscreenCaptureRenderer {
       sessionKey: spec.sessionKey,
       width: spec.width,
       height: spec.height,
+      pixelRatio: spec.pixelRatio,
       idleTimer: null,
       destroyAfterRun: false,
       abortActive: null
@@ -583,17 +723,15 @@ export class TdsOffscreenCaptureRenderer {
     height: number
     pixelRatio: number
     sessionKey: string | null
+    timeoutMs: number
   }): Promise<PoolSlot> {
-    const idle = this.findIdleSlot(spec.sessionKey)
+    const idle = this.findIdleSlot(spec.sessionKey, spec.pixelRatio)
     if (idle) {
       if (idle.idleTimer) {
         this.timers.clearTimeout(idle.idleTimer)
         idle.idleTimer = null
       }
-      idle.busy = true
-      idle.sessionKey = spec.sessionKey
-      idle.window.webContents.startPainting?.()
-      return Promise.resolve(idle)
+      return Promise.resolve(this.prepareSlotForSpec(idle, spec))
     }
 
     if (this.slots.length < this.maxConcurrentSlots) {
@@ -602,15 +740,31 @@ export class TdsOffscreenCaptureRenderer {
       return Promise.resolve(slot)
     }
 
+    if (this.waitQueue.length >= this.maxWaitQueueLength) {
+      return Promise.reject(new Error(`TDS_CAPTURE_QUEUE_OVERFLOW:${this.maxWaitQueueLength}`))
+    }
+
     return new Promise<PoolSlot>((resolve, reject) => {
-      this.waitQueue.push({
+      const waiter: QueueWaiter = {
         width: spec.width,
         height: spec.height,
         pixelRatio: spec.pixelRatio,
         sessionKey: spec.sessionKey,
+        enqueuedAt: this.now(),
+        timeoutMs: spec.timeoutMs,
+        queueTimer: null,
         resolve,
         reject
-      })
+      }
+      waiter.queueTimer = this.timers.setTimeout(() => {
+        waiter.queueTimer = null
+        const idx = this.waitQueue.indexOf(waiter)
+        if (idx >= 0) {
+          this.waitQueue.splice(idx, 1)
+          waiter.reject(new Error(`TDS_CAPTURE_QUEUE_TIMEOUT:${spec.timeoutMs}ms`))
+        }
+      }, spec.timeoutMs)
+      this.waitQueue.push(waiter)
     })
   }
 
@@ -623,10 +777,14 @@ export class TdsOffscreenCaptureRenderer {
 
     const nextWaiter = this.waitQueue.shift()
     if (nextWaiter) {
-      slot.busy = true
-      slot.sessionKey = nextWaiter.sessionKey
-      slot.window.webContents.startPainting?.()
-      nextWaiter.resolve(slot)
+      this.clearWaiterTimer(nextWaiter)
+      try {
+        const readySlot = this.prepareSlotForSpec(slot, nextWaiter)
+        nextWaiter.resolve(readySlot)
+      } catch (error) {
+        nextWaiter.reject(error instanceof Error ? error : new Error(String(error)))
+        this.drainWaitQueue()
+      }
       return
     }
 
@@ -650,22 +808,26 @@ export class TdsOffscreenCaptureRenderer {
       const next = this.waitQueue[0]
       if (!next) break
 
-      const idle = this.findIdleSlot(next.sessionKey)
+      const idle = this.findIdleSlot(next.sessionKey, next.pixelRatio)
       if (idle) {
         this.waitQueue.shift()
+        this.clearWaiterTimer(next)
         if (idle.idleTimer) {
           this.timers.clearTimeout(idle.idleTimer)
           idle.idleTimer = null
         }
-        idle.busy = true
-        idle.sessionKey = next.sessionKey
-        idle.window.webContents.startPainting?.()
-        next.resolve(idle)
+        try {
+          const readySlot = this.prepareSlotForSpec(idle, next)
+          next.resolve(readySlot)
+        } catch (error) {
+          next.reject(error instanceof Error ? error : new Error(String(error)))
+        }
         continue
       }
 
       if (this.slots.length < this.maxConcurrentSlots) {
         this.waitQueue.shift()
+        this.clearWaiterTimer(next)
         try {
           const created = this.createSlot(next)
           created.window.webContents.startPainting?.()
@@ -721,10 +883,18 @@ export class TdsOffscreenCaptureRenderer {
       }
     }
 
-    if (slot.width !== spec.width || slot.height !== spec.height) {
-      slot.window.setContentSize(spec.width, spec.height)
-      slot.width = spec.width
-      slot.height = spec.height
+    if (
+      slot.width !== spec.width ||
+      slot.height !== spec.height ||
+      slot.pixelRatio !== spec.pixelRatio
+    ) {
+      if (slot.width !== spec.width || slot.height !== spec.height) {
+        slot.window.setContentSize(spec.width, spec.height)
+        slot.width = spec.width
+        slot.height = spec.height
+      }
+      applyWebContentsDeviceScale(wc, spec.width, spec.height, spec.pixelRatio)
+      slot.pixelRatio = spec.pixelRatio
     }
 
     let aborted = false
@@ -753,7 +923,8 @@ export class TdsOffscreenCaptureRenderer {
     slot.abortActive = triggerAbort
 
     const runPipeline = async (): Promise<TdsCaptureRenderResponse> => {
-      const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(spec.srcdoc)}`
+      const guardedHtml = injectCaptureCsp(spec.srcdoc)
+      const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(guardedHtml)}`
       await new Promise<void>((resolve, reject) => {
         if (aborted) {
           reject(new Error(abortReason || 'TDS_CAPTURE_ABORTED'))
