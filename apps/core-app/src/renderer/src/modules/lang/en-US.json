@@ -3284,7 +3284,9 @@
       "canvasMockupExportSvg": "Export SVG",
       "canvasMockupExportPng": "Export PNG",
       "canvasMockupExportPrintHtml": "Print / Save PDF",
-      "canvasMockupExporting": "Exporting…"
+      "canvasMockupExporting": "Exporting…",
+      "canvasMockupExportFailed": "Export failed. Please try again.",
+      "canvasMockupExportPngFailed": "PNG export failed: could not rasterize board image."
     },
     "tdsLint": {
       "title": "TDS Visual Lint",

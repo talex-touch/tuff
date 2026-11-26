@@ -211,7 +211,7 @@ export function extractTdsTokenReferences(source: string): TdsTokenReferences {
 
 function collectDeclaredCustomProps(masked: string, prefix: '--tds-' | '--shell-'): Set<string> {
   const declared = new Set<string>()
-  const pattern = new RegExp(`(?:^|[;{\\s])(${prefix}[A-Za-z0-9-]+)\\s*:`, 'g')
+  const pattern = new RegExp(`(?:^|[;{\\s])(${prefix}[A-Za-z0-9-]+)\\s*:`, 'gi')
   for (const match of masked.matchAll(pattern)) {
     declared.add(match[1]!)
   }

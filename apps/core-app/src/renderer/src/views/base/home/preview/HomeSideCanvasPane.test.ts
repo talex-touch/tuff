@@ -710,4 +710,19 @@ describe('HomeSideCanvasPane', () => {
     const dotStyle = wrapper.get('.HomeSideCanvasPane-ThemeTriggerDot').attributes('style') ?? ''
     expect(dotStyle).toMatch(/background-color:\s*(?:#879dff|rgb\(135,\s*157,\s*255\))/i)
   })
+
+  it('forwards localized mockup export error labels through canvasLabels', async () => {
+    const wrapper = mount(HomeSideCanvasPane, {
+      props: {
+        messages: [],
+        conversationId: 'conv-export-labels'
+      }
+    })
+    await flushPromises()
+
+    const canvas = wrapper.findComponent(TdsDesignCanvasStub)
+    const labels = canvas.props('labels') as Record<string, string>
+    expect(labels.mockupExportFailed).toBe('home.sidePanel.canvasMockupExportFailed')
+    expect(labels.mockupExportPngFailed).toBe('home.sidePanel.canvasMockupExportPngFailed')
+  })
 })

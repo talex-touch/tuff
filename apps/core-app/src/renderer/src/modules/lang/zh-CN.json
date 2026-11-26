@@ -3284,7 +3284,9 @@
       "canvasMockupExportSvg": "导出 SVG",
       "canvasMockupExportPng": "导出 PNG",
       "canvasMockupExportPrintHtml": "打印 / 保存 PDF",
-      "canvasMockupExporting": "导出中…"
+      "canvasMockupExporting": "导出中…",
+      "canvasMockupExportFailed": "导出失败，请重试。",
+      "canvasMockupExportPngFailed": "PNG 导出失败：无法栅格化画板图像。"
     },
     "tdsLint": {
       "title": "TDS 视觉检查",

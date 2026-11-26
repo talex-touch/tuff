@@ -254,6 +254,19 @@ describe('Phase 1: Static TDS lint rules', () => {
     expect(casedIssues[0]?.snippet).toBe('var(--shell-Primary)')
     expect(casedIssues[0]?.fixHint).toContain('--shell-primary')
 
+    // 1b. Mixed-case local --TDS-* declarations are discovered case-insensitively while preserving exact-case matching
+    const matchingMixedCase =
+      '<style>:root { --TDS-pad: 12px; } .card { padding: var(--TDS-pad); }</style>'
+    expect(runStaticTdsLint(matchingMixedCase, { antiSlop: false })).toEqual([])
+
+    const mismatchedMixedCase =
+      '<style>:root { --TDS-pad: 12px; } .card { padding: var(--tds-pad); }</style>'
+    const mismatchedIssues = runStaticTdsLint(mismatchedMixedCase, { antiSlop: false })
+    expect(mismatchedIssues).toHaveLength(1)
+    expect(mismatchedIssues[0]?.ruleId).toBe('undefined-tds-token')
+    expect(mismatchedIssues[0]?.snippet).toBe('var(--tds-pad)')
+    expect(mismatchedIssues[0]?.fixHint).toContain('--TDS-pad')
+
     // 2. max-h-screen suggests max-h-full instead of h-full
     const maxHeightIssues = runStaticTdsLint('<div class="max-h-screen">Panel</div>', {
       antiSlop: false

@@ -998,7 +998,9 @@ const canvasLabels = computed<Partial<TdsCanvasLabels>>(() => ({
   mockupExportSvg: t('home.sidePanel.canvasMockupExportSvg'),
   mockupExportPng: t('home.sidePanel.canvasMockupExportPng'),
   mockupExportPrintHtml: t('home.sidePanel.canvasMockupExportPrintHtml'),
-  mockupExporting: t('home.sidePanel.canvasMockupExporting')
+  mockupExporting: t('home.sidePanel.canvasMockupExporting'),
+  mockupExportFailed: t('home.sidePanel.canvasMockupExportFailed'),
+  mockupExportPngFailed: t('home.sidePanel.canvasMockupExportPngFailed')
 }))
 
 function formatPresetOptionLabel(preset: DevicePreset): string {
