@@ -24,7 +24,7 @@ import {
   computeMockupPageLayout,
   exportPrintableMockupHtml,
   paginateMockupFrames,
-  rasterizeSvgToPngBlob,
+  renderMockupPagePngBlob,
   renderMockupPageSvg,
   triggerBlobDownload
 } from './mockup-renderer'
@@ -41,12 +41,14 @@ const props = withDefaults(
     frames: TdsCanvasFrame[]
     labels?: Partial<TdsCanvasLabels>
     themeCss?: string
+    frameBitmaps?: Record<string, string>
     storageKey?: string
     defaultTitle?: string
   }>(),
   {
     labels: undefined,
     themeCss: '',
+    frameBitmaps: () => ({}),
     storageKey: TDS_MOCKUP_OPTIONS_STORAGE_KEY,
     defaultTitle: 'TDS Mockup Showcase'
   }
@@ -131,7 +133,8 @@ const activePageSvg = computed(() => {
   if (!activePage.value) return ''
   return renderMockupPageSvg(activePage.value, options.value, {
     themeCss: props.themeCss,
-    title: props.defaultTitle
+    title: props.defaultTitle,
+    frameBitmaps: props.frameBitmaps
   })
 })
 
@@ -219,7 +222,8 @@ function handleExportSvg(): void {
   pages.value.forEach((page) => {
     const svg = renderMockupPageSvg(page, options.value, {
       themeCss: props.themeCss,
-      title: props.defaultTitle
+      title: props.defaultTitle,
+      frameBitmaps: props.frameBitmaps
     })
     const suffix = pages.value.length > 1 ? `-board-${page.pageIndex + 1}` : ''
     triggerBlobDownload(
@@ -242,17 +246,11 @@ async function handleExportPng(): Promise<void> {
   try {
     const slug = sanitizeFileSlug(props.defaultTitle)
     for (const page of pages.value) {
-      const layout = computeMockupPageLayout(page, options.value)
-      const svg = renderMockupPageSvg(page, options.value, {
+      const blob = await renderMockupPagePngBlob(page, options.value, {
         themeCss: props.themeCss,
-        title: props.defaultTitle
+        title: props.defaultTitle,
+        frameBitmaps: props.frameBitmaps
       })
-      const blob = await rasterizeSvgToPngBlob(
-        svg,
-        layout.width,
-        layout.height,
-        options.value.scale
-      )
       const suffix = pages.value.length > 1 ? `-board-${page.pageIndex + 1}` : ''
       triggerBlobDownload(blob, `${slug}${suffix}-${options.value.scale}x.png`)
     }

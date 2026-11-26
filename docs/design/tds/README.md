@@ -1,18 +1,23 @@
 # TDS（Tuff Design System）架构与收敛索引
 
-> 更新时间：2026-11-25
-> 定位：Tuff 桌面端（CoreApp）、Nexus 站点、TuffEx 组件库、AIUI（OpenUI）与设计画布共享的视觉体系、设计令牌、审查探针与主题包总索引（M0–M3 已收口）。
+> 更新时间：2026-11-26
+> 定位：Tuff 桌面端（CoreApp）、Nexus 站点、TuffEx 组件库、AIUI（OpenUI）与设计画布共享的视觉体系、设计令牌、审查探针、主题包与自动化漂移门禁总索引（M0–M4）。
 
 ---
 
-## 1. M0–M3 架构全景
+## 1. M0–M4 架构全景
 
 ```mermaid
 flowchart TD
     SoT["M0: docs/design/tds/tokens.json（单一真相源）"]
     Core36["M0: docs/design/tds/core-primitives.md（36 正交原语）"]
+    SyncCli["M4: scripts/tds-tokens-sync.mjs（--check / --report 漂移门禁）"]
     SoT --> ShellCss["CoreApp 壳层令牌（shell-tokens.scss）"]
     SoT --> TuffEx["TuffEx 组件层（--tx-* / --tx-bui-*）"]
+    SoT -.-> SyncCli
+    ShellCss -.-> SyncCli
+    TuffEx -.-> SyncCli
+    Core36 -.-> SyncCli
     Core36 --> OpenUI["M1: AIUI OpenUI（reactive-runtime + 缓存 prompt）"]
     TuffEx --> OpenUI
     SoT --> Devices["M1: 多设备视口目录（tds-devices.ts · 15 预设）"]
@@ -20,7 +25,8 @@ flowchart TD
     SoT --> Lint["M2: 双阶段视觉审查（tds-lint · 静态 4 + DOM 9 规则）"]
     Devices --> Canvas["M2/M3: 多画板设计画布（TdsDesignCanvas + 样机导出）"]
     Lint --> Canvas
-    SoT --> ThemePack["M3: 三层声明式主题包（modules/tds-theme · 4 内置包）"]
+    SoT --> ThemePack["M3/M4: 三层声明式主题包（modules/tds-theme · Refraction 0.85 AA 校验）"]
+    ThemePack -.-> SyncCli
     ThemePack -->|"桌面壳层热注入（:not(.contrast)）"| ShellCss
     ThemePack -->|"exportThemePackAsCss + canvasPattern"| Canvas
     Canvas --> HostPane["HomeSideCanvasPane.vue（对话采集 · 一包双用桥接）"]
@@ -70,6 +76,15 @@ flowchart TD
 | `apps/core-app/src/renderer/src/modules/tds-theme/{types,presets,validator,runtime,index}.ts` | 三层纯数据主题包协议（`tokens` 白名单 + `material` + `surface`）、4 套 WCAG AA 内置预置、CSS 注入拦截与对比度校验器、`:root:not(.contrast)` / `.dark:not(.contrast)` CSS 导出器及 `useTdsThemePack()` 响应式状态 | `tds-theme-pack.test.ts` |
 | `apps/core-app/src/renderer/src/views/base/styles/TdsThemePackSection.vue` | 外观设置页主题包选择器（接入 `ThemeStyle.vue`，`AppShell.vue` 启动自动恢复），支持预设切换、JSON 导入校验、导出与重置 | `TdsThemePackSection.test.ts` |
 | `apps/core-app/src/renderer/src/views/base/home/preview/HomeSideCanvasPane.vue` | 侧栏画布宿主：自动采集对话 HTML/SVG 产物、按会话 `sessionStorage` 持久化、提供**风格包切换浮层**（一包双用：即时预览到画布沙箱与底纹，并支持一键“应用到全局”） | `HomeSideCanvasPane.test.ts`、`translation-coverage.test.ts` |
+
+### 2.5 M4：单一真相源漂移门禁与 Refraction 可读性加固
+
+| 文件 | 角色 | 机器校验 |
+| --- | --- | --- |
+| `scripts/tds-tokens-sync.mjs` | 零依赖 Node ESM CLI：`--check` 校验 `tokens.json` ↔ `shell-tokens.scss` 四套主题块、`variables.scss` / `bui-tokens.scss` 收敛映射、36 Core 原语目录与文档、4 套主题色阶与 4 套内置主题包（不透明 + `window-refraction` `0.85` 合成）WCAG 2.1 AA 对比度；`--report` 输出紧凑 Markdown 对齐表 | `scripts/tds-tokens-sync.test.mjs` |
+| `scripts/tds-tokens-sync.test.mjs` | 工作区脚本单测（接入 `vitest.workspace-scripts.config.mjs`）：验证当前仓库 `--check` 通过，并在注入色值漂移、缺失映射、缺模块或低对比度夹具时确定性退出码 `1` | `vitest --config vitest.workspace-scripts.config.mjs` |
+| `apps/core-app/src/renderer/src/modules/tds-theme/{presets,runtime,tds-theme-pack.test}.ts` | 主题包焦点环同步（`--shell-focus-ring`）、亮色语义芯片在 `0.85` Refraction 玻璃上的 AA 校准与跨背景合成对比度回归测试 | `tds-theme-pack.test.ts` |
+| `apps/core-app/src/renderer/src/views/base/styles/TdsThemePackSection.vue` | 主题包卡片在 `window-refraction` / `window-filter` 半透明窗体下的高不透明度表面、色块胶囊底衬、无回流选中环与主色焦点环加固 | `TdsThemePackSection.test.ts` |
 
 设计哲学与上游工程规范：
 - [TuffEx 设计规则](../../engineering/specs/frontend/tuffex-design-rules.md)
@@ -139,15 +154,20 @@ flowchart TD
 
 ---
 
-## 6. M0–M3 验证命令
+## 6. M0–M4 验证命令
 
 ```bash
-# 1. AIUI OpenUI 细粒度响应 + 类型 + Lint（M1）
+# 1. 单一真相源漂移门禁与对比度报告（M4）
+nice -n 10 node scripts/tds-tokens-sync.mjs --check
+nice -n 10 node scripts/tds-tokens-sync.mjs --report
+nice -n 10 pnpm exec vitest run --config vitest.workspace-scripts.config.mjs scripts/tds-tokens-sync.test.mjs
+
+# 2. AIUI OpenUI 细粒度响应 + 类型 + Lint（M1）
 nice -n 10 pnpm -C packages/intelligence-uikit run test \
   && nice -n 10 pnpm -C packages/intelligence-uikit run typecheck \
   && nice -n 10 pnpm -C packages/intelligence-uikit run lint
 
-# 2. CoreApp M0–M3 全量单测（令牌契约、设备预设、低频时钟、双阶段审查、设计画布、样机导出、主题包与多语言覆盖）
+# 3. CoreApp M0–M4 渲染层单测（令牌契约、设备预设、低频时钟、双阶段审查、设计画布、样机导出、主题包与多语言覆盖）
 nice -n 10 pnpm -C apps/core-app exec vitest run \
   src/renderer/src/styles/shell-tokens.contract.test.ts \
   src/renderer/src/components/preview/tds-devices.test.ts \
@@ -163,7 +183,32 @@ nice -n 10 pnpm -C apps/core-app exec vitest run \
   src/renderer/src/views/base/styles/TdsThemePackSection.test.ts \
   src/renderer/src/modules/lang/translation-coverage.test.ts
 
-# 3. TuffEx 令牌只读基线审计（M0）
+# 4. TuffEx 令牌只读基线审计（M0）
 nice -n 10 pnpm -C packages/tuffex run audit:colors
 nice -n 10 pnpm -C packages/tuffex vitest run packages/components/src/__tests__/dark-fill-tints.test.ts
 ```
+
+---
+
+## 7. M0–M4 真机 Electron 视觉验收清单
+
+发版或合并前，在本地交互式 CoreApp（`pnpm core:dev`）中按以下 5 组清单完成真机核对：
+
+1. **令牌与高对比度（M0）**
+   - 切换浅色 / 深色模式，核对主区背景（`#ffffff` / `#141414`）与侧栏层次分明、无纯黑 `#000000` 死黑区。
+   - 在设置 → 外观开启「高对比度」（`html.contrast` / `html.dark.contrast`），核对语义标签、边框与主色按钮文字清晰可读；此时切换自定义主题包不得覆盖高对比度色板。
+2. **Refraction 玻璃可读性与主题包（M3 / M4）**
+   - 窗口材质分别切至 `pure`、`refraction`、`filter`，把窗口拖到纯亮色与纯暗色桌面壁纸上方，核对主区正文、侧栏文字与设置页卡片无发灰糊底。
+   - 依次切换 4 套内置主题包（`Apple Neutral`、`Obsidian Studio`、`Editorial Paper`、`Precision Terminal`），核对色块胶囊、选中双环、键盘 Tab 焦点环与语义徽章清晰可辨；点「重置」后 DevTools 中 `<style id="tds-theme-pack-style">` 应被移除。
+   - 导入一份含非法 CSS（如 `url(...)`）或低对比度色值的 JSON，确认行内报错且当前主题未被篡改。
+   - 快速拖动/缩放透明窗口，确认 Refraction 材质立即退让、松手约 `140ms` 后平滑恢复，无明显掉帧。
+3. **OpenUI 与低频锁相动画（M1）**
+   - 在对话流触发 OpenUI 卡片流式输出，确认增量字段更新无整卡闪烁。
+   - 系统开启「减少动态效果」或将窗口切到后台时，核对低频指示动效按门控暂停。
+4. **多设备视口与双阶段视觉审查（M1 / M2 / M4）**
+   - 在工作区文件预览与侧栏面板切换手机 / 平板 / 桌面 / A4 设备预设及横竖屏，核对窄屏（320px–460px）自动缩放不裁切，安全区与挖孔比例正常。
+   - 打开审查浮层（`TdsLintPopover`），确认静态规则与渲染态 DOM 探针都能检出问题并生成可回填对话的修复提示词。
+5. **多画板设计画布与离线样机导出（M2 / M3 / M4）**
+   - 对话生成 HTML/SVG 产物后打开侧栏画布：滚轮平移、⌘/Ctrl+滚轮以指针为锚点缩放、拖拽对齐参考线、切图钉批注与历史快照回溯。
+   - 切换画布风格包预览并测试「应用到全局」；确认沙箱帧内网络请求全部被 CSP 拦截（零外链请求）。
+   - 打开样机导出弹窗，依次导出 SVG、PNG（1x/2x）与多页离线 HTML，核对生成文件在断网浏览器中可完整打开、无空白或画布污染。

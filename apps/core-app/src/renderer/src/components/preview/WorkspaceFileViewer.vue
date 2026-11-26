@@ -16,7 +16,12 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { SHELL_MENU_CARD } from '~/components/shell/shell-menu-panel'
 import { basenameOfPath } from '~/modules/browser-workspace/preview-url'
-import { runStaticTdsLint, type TdsLintIssue } from '~/modules/tds-lint'
+import { buildTdsDomProbeScript, runStaticTdsLint, type TdsLintIssue } from '~/modules/tds-lint'
+import {
+  captureFrameAndProbe,
+  mergeLintIssues,
+  releaseCaptureSession
+} from '~/modules/tds-lint/live-capture-client'
 import {
   getDeviceCategoryIcon,
   getDevicePresetById,
@@ -176,6 +181,23 @@ const staticLintIssues = computed<TdsLintIssue[]>(() => {
     sourceKind: isSvg.value ? 'svg' : 'html'
   })
 })
+const domLintIssues = ref<TdsLintIssue[]>([])
+const mergedLintIssues = computed<TdsLintIssue[]>(() =>
+  mergeLintIssues(staticLintIssues.value, domLintIssues.value)
+)
+
+const LIVE_DOM_PROBE_DEBOUNCE_MS = 300
+let domProbeTimer: ReturnType<typeof setTimeout> | null = null
+let domProbeGeneration = 0
+let activeDomProbeSessionKey = ''
+
+function cancelPendingDomProbe(): void {
+  domProbeGeneration += 1
+  if (domProbeTimer !== null) {
+    clearTimeout(domProbeTimer)
+    domProbeTimer = null
+  }
+}
 const activeDevicePreset = computed(() => getDevicePresetById(viewportPresetId.value))
 const isDevicePresetActive = computed(() => !isResponsivePreset(activeDevicePreset.value))
 const activeDeviceDimensions = computed(() =>
@@ -725,8 +747,58 @@ watch(
   }
 )
 
+watch(
+  () =>
+    [
+      isHtml.value,
+      viewMode.value,
+      data.value?.text ?? '',
+      resolvedPath.value,
+      lintAntiSlop.value,
+      isDevicePresetActive.value ? activeDeviceDimensions.value.width : 1024,
+      isDevicePresetActive.value ? activeDeviceDimensions.value.height : 720
+    ] as const,
+  ([htmlMode, mode, source, path, antiSlop, width, height]) => {
+    cancelPendingDomProbe()
+    if (!htmlMode || mode !== 'preview' || !source.trim() || !isElectronRenderer()) {
+      domLintIssues.value = []
+      return
+    }
+
+    const generation = domProbeGeneration
+    const nextSessionKey = `file-viewer:${path}`
+    if (activeDomProbeSessionKey && activeDomProbeSessionKey !== nextSessionKey) {
+      void releaseCaptureSession(activeDomProbeSessionKey)
+    }
+    activeDomProbeSessionKey = nextSessionKey
+
+    domProbeTimer = setTimeout(() => {
+      domProbeTimer = null
+      if (generation !== domProbeGeneration) return
+      void captureFrameAndProbe({
+        srcdoc: source,
+        width,
+        height,
+        format: 'none',
+        pixelRatio: 1,
+        domProbeScript: buildTdsDomProbeScript({ antiSlop }),
+        sessionKey: nextSessionKey
+      }).then((result) => {
+        if (generation !== domProbeGeneration) return
+        domLintIssues.value = result.ok ? result.domIssues : []
+      })
+    }, LIVE_DOM_PROBE_DEBOUNCE_MS)
+  },
+  { immediate: true }
+)
+
 onBeforeUnmount(() => {
   loadGeneration += 1
+  cancelPendingDomProbe()
+  if (activeDomProbeSessionKey) {
+    void releaseCaptureSession(activeDomProbeSessionKey)
+    activeDomProbeSessionKey = ''
+  }
   revokePdfUrl()
   document.removeEventListener('pointerdown', onDocumentPointerDown, true)
   document.removeEventListener('keydown', onDocumentKeyDown)
@@ -1051,7 +1123,7 @@ function adjustZoom(delta: number): void {
           v-if="showDeviceViewportControls"
           v-model:open="lintPopoverOpen"
           v-model:anti-slop="lintAntiSlop"
-          :issues="staticLintIssues"
+          :issues="mergedLintIssues"
           :display-path="displayPathForAi"
           :ai-actions-enabled="aiActionsEnabled"
           :sending="sendingAiAction"

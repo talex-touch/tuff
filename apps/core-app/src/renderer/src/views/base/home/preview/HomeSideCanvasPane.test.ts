@@ -20,6 +20,31 @@ const toastMocks = vi.hoisted(() => ({
   info: vi.fn()
 }))
 
+const captureMocks = vi.hoisted(() => ({
+  isElectron: false,
+  captureFrameAndProbe: vi.fn(),
+  releaseCaptureSession: vi.fn(async (_sessionKey: string) => true)
+}))
+
+vi.mock('@talex-touch/utils/env', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@talex-touch/utils/env')>()
+  return {
+    ...actual,
+    isElectronRenderer: () => captureMocks.isElectron
+  }
+})
+
+vi.mock('~/modules/tds-lint/live-capture-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('~/modules/tds-lint/live-capture-client')>()
+  return {
+    ...actual,
+    captureFrameAndProbe: (...args: Parameters<typeof actual.captureFrameAndProbe>) =>
+      captureMocks.captureFrameAndProbe(...args),
+    releaseCaptureSession: (...args: Parameters<typeof actual.releaseCaptureSession>) =>
+      captureMocks.releaseCaptureSession(...args)
+  }
+})
+
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
     t: (key: string, paramsOrFallback?: Record<string, unknown> | string) => {
@@ -56,7 +81,8 @@ const TdsDesignCanvasStub = vi.hoisted(() => ({
     lintCounts: { type: Object, default: () => ({}) },
     initialHistory: { type: Object, default: null },
     themeCss: { type: String, default: '' },
-    canvasPattern: { type: String, default: 'dots' }
+    canvasPattern: { type: String, default: 'dots' },
+    frameBitmaps: { type: Object, default: () => ({}) }
   },
   emits: [
     'update:frames',
@@ -137,6 +163,9 @@ function makeAssistantMessage(
 
 describe('HomeSideCanvasPane', () => {
   beforeEach(() => {
+    captureMocks.isElectron = false
+    captureMocks.captureFrameAndProbe.mockReset()
+    captureMocks.releaseCaptureSession.mockClear()
     window.sessionStorage.clear()
     window.localStorage.clear()
     useTdsThemePack().resetPack()
@@ -560,5 +589,114 @@ describe('HomeSideCanvasPane', () => {
     expect(selectPackSpy).toHaveBeenCalledWith('tds-paper-ink', undefined)
     expect(useTdsThemePack().activePackId.value).toBe('tds-paper-ink')
     expect(toastMocks.success).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs bounded background capture + live DOM probe in Electron, forwards frameBitmaps, and merges DOM lint issues', async () => {
+    vi.useFakeTimers()
+    const sampleBitmap =
+      'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q=='
+    try {
+      captureMocks.isElectron = true
+      captureMocks.captureFrameAndProbe.mockResolvedValue({
+        ok: true,
+        bitmapDataUrl: sampleBitmap,
+        domIssues: [
+          {
+            ruleId: 'contrast-fail',
+            phase: 'dom',
+            severity: 'error',
+            category: 'contrast',
+            message: 'Text in `p.hint` has WCAG 2.1 contrast 2.10:1',
+            fixHint: 'Use --shell-text-primary',
+            selector: 'p.hint'
+          }
+        ],
+        fromCache: false
+      })
+
+      const wrapper = mount(HomeSideCanvasPane, {
+        props: {
+          messages: [
+            makeAssistantMessage(
+              'asst-live',
+              '```html\n<!doctype html><html><head><title>Live Screen</title></head><body><p class="hint">Low contrast</p></body></html>\n```'
+            )
+          ],
+          conversationId: 'conv-live-1',
+          active: true
+        }
+      })
+
+      await vi.advanceTimersByTimeAsync(300)
+      await flushPromises()
+
+      const canvas = wrapper.findComponent(TdsDesignCanvasStub)
+      const frames = canvas.props('frames') as TdsCanvasFrame[]
+      const frameId = frames[0]!.id
+
+      expect(captureMocks.captureFrameAndProbe).toHaveBeenCalledTimes(1)
+      expect((canvas.props('frameBitmaps') as Record<string, string>)[frameId]).toBe(sampleBitmap)
+
+      const counts = canvas.props('lintCounts') as Record<string, TdsCanvasLintCount>
+      expect(counts[frameId]?.errors).toBe(1)
+
+      // Opening lint popover surfaces the live DOM issue
+      canvas.vm.$emit('open-lint', frameId)
+      await flushPromises()
+      const issues = wrapper.findAll('[data-testid="tds-lint-issue"]')
+      expect(issues.some((node) => node.attributes('data-rule-id') === 'contrast-fail')).toBe(true)
+
+      wrapper.unmount()
+      expect(captureMocks.releaseCaptureSession).toHaveBeenCalledWith('canvas:conv-live-1')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('safely falls back trigger swatch dot to dark.primary when a custom pack omits light.primary', async () => {
+    const themeApi = useTdsThemePack()
+    const imported = themeApi.importPackJson(
+      JSON.stringify({
+        schemaVersion: 1,
+        meta: {
+          id: 'custom-dark-accent',
+          name: 'Custom Dark Accent',
+          description: 'Partial custom pack omitting light.primary',
+          version: '1.0.0',
+          author: 'Test'
+        },
+        tokens: {
+          light: {
+            bg: '#ffffff',
+            textPrimary: '#1d1d1f'
+          },
+          dark: {
+            bg: '#111113',
+            textPrimary: '#f5f5f7',
+            primary: '#879dff',
+            onPrimary: '#0c1438'
+          }
+        }
+      })
+    )
+    expect(imported.valid).toBe(true)
+
+    const wrapper = mount(HomeSideCanvasPane, {
+      props: {
+        messages: [],
+        conversationId: 'conv-custom-dot'
+      }
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="canvas-theme-pack-trigger"]').trigger('click')
+    await flushPromises()
+    await wrapper
+      .get('[data-testid="canvas-theme-pack-option-custom-dark-accent"]')
+      .trigger('click')
+    await flushPromises()
+
+    const dotStyle = wrapper.get('.HomeSideCanvasPane-ThemeTriggerDot').attributes('style') ?? ''
+    expect(dotStyle).toMatch(/background-color:\s*(?:#879dff|rgb\(135,\s*157,\s*255\))/i)
   })
 })

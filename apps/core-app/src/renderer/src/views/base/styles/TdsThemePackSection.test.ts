@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -259,5 +262,43 @@ describe('TdsThemePackSection.vue', () => {
     expect(wrapper.find('[data-testid="tds-theme-pack-card-custom-low-contrast"]').exists()).toBe(
       false
     )
+  })
+
+  it('enforces token-only refraction card surfaces, crisp focus/active rings, and zero hover transitions', async () => {
+    const sfcPath = resolve(dirname(fileURLToPath(import.meta.url)), 'TdsThemePackSection.vue')
+    const sfcSource = readFileSync(sfcPath, 'utf8')
+    const styleMatch = /<style[^>]*>([\s\S]*?)<\/style>/.exec(sfcSource)
+    expect(styleMatch).not.toBeNull()
+    const styleBlock = styleMatch![1]!
+
+    // Zero raw hex or rgb/rgba color literals in component CSS
+    expect(styleBlock).not.toMatch(/#[0-9a-f]{3,8}\b/i)
+    expect(styleBlock).not.toMatch(/\brgba?\s*\(/i)
+    // Zero hover color transitions (TDS 0ms immediate hover rule)
+    expect(styleBlock).not.toMatch(/\btransition\s*:/i)
+
+    // Explicit refraction/filter glass legibility surfaces + inset active ring + primary focus ring
+    expect(styleBlock).toContain(':global(.window-refraction) .TdsThemePack-Card')
+    expect(styleBlock).toContain(':global(.window-filter) .TdsThemePack-Card')
+    expect(styleBlock).toContain('inset 0 0 0 1px var(--shell-primary)')
+    expect(styleBlock).toContain('outline: 2px solid var(--shell-primary)')
+    // Footer uses AA-safe --shell-text-secondary rather than low-contrast --shell-text-muted
+    expect(styleBlock).not.toContain('--shell-text-muted')
+
+    // Mount inside a dark refraction shell host and verify swatch dots & active indicator render
+    const host = document.createElement('div')
+    host.className = 'AppShell window-refraction dark'
+    document.body.appendChild(host)
+    try {
+      const wrapper = mount(TdsThemePackSection, { attachTo: host })
+      await flushPromises()
+
+      const activeCard = wrapper.get('[data-testid="tds-theme-pack-card-tds-apple-neutral"]')
+      expect(activeCard.classes()).toContain('is-active')
+      expect(activeCard.find('.TdsThemePack-ActiveMark').exists()).toBe(true)
+      expect(activeCard.findAll('.TdsThemePack-SwatchDot')).toHaveLength(6)
+    } finally {
+      host.remove()
+    }
   })
 })

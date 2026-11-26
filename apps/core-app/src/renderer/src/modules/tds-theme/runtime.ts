@@ -97,6 +97,10 @@ function buildTokenDeclarations(
     lines.push(`  ${cssVar}: ${value};`)
   }
 
+  if (overrides.primary) {
+    lines.push(`  --shell-focus-ring: ${overrides.primary};`)
+  }
+
   for (const semanticKey of SEMANTIC_DERIVED_KEYS) {
     const baseHex = overrides[semanticKey]
     if (baseHex && SIX_DIGIT_HEX_PATTERN.test(baseHex)) {

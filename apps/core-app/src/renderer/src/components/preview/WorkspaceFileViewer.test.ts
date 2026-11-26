@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 
 import type { SelectionPayload } from '@talex-touch/tuffex/selection-actions'
+import { AgentWorkspaceEvents } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+import { TdsCaptureEvents } from '@talex-touch/utils/transport/sdk/domains/tds-capture'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
+import { clearCaptureCache } from '~/modules/tds-lint/live-capture-client'
 
 enableAutoUnmount(afterEach)
 
@@ -124,6 +127,7 @@ import WorkspaceFileViewer from './WorkspaceFileViewer.vue'
 describe('WorkspaceFileViewer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearCaptureCache()
     window.sessionStorage.clear()
     resetSessionReviewCommentsForTests()
     mocks.send.mockResolvedValue({
@@ -474,5 +478,167 @@ describe('WorkspaceFileViewer', () => {
     const iframe = wrapper.get('iframe.WorkspaceFileViewer-Frame')
     expect(iframe.attributes('sandbox')).toBe('allow-scripts allow-forms allow-modals')
     expect(iframe.attributes('srcdoc')).toContain("default-src 'none'")
+  })
+
+  it('runs debounced 300ms live DOM probe in Electron HTML preview, cancels on rapid file switch, and merges DOM + static issues', async () => {
+    vi.useFakeTimers()
+    try {
+      mocks.send.mockImplementation(async (event: unknown, payload: Record<string, unknown>) => {
+        if (event === AgentWorkspaceEvents.readFile) {
+          if (payload.path === '/repo/demo/first.html') {
+            return {
+              path: '/repo/demo/first.html',
+              name: 'first.html',
+              ext: 'html',
+              kind: 'text',
+              mimeType: 'text/html',
+              size: 120,
+              truncated: false,
+              mtimeMs: 1000,
+              text: '<!doctype html><body><p>First page</p></body>'
+            }
+          }
+          return {
+            path: '/repo/demo/second.html',
+            name: 'second.html',
+            ext: 'html',
+            kind: 'text',
+            mimeType: 'text/html',
+            size: 160,
+            truncated: false,
+            mtimeMs: 2000,
+            text: '<!doctype html><body><img src="https://cdn.example.com/a.png" /><p class="muted">Low contrast</p></body>'
+          }
+        }
+        if (event === TdsCaptureEvents.renderFrame) {
+          return {
+            ok: true,
+            width: payload.width,
+            height: payload.height,
+            domProbeResult: [
+              {
+                ruleId: 'contrast-fail',
+                phase: 'dom',
+                severity: 'error',
+                category: 'contrast',
+                message: 'Text in `p.muted` has WCAG 2.1 contrast 2.20:1 (requires >= 4.5:1).',
+                fixHint: 'Use --shell-text-primary',
+                selector: 'p.muted'
+              }
+            ],
+            durationMs: 14
+          }
+        }
+        return null
+      })
+
+      const wrapper = mount(WorkspaceFileViewer, {
+        props: {
+          filePath: '/repo/demo/first.html',
+          displayPath: 'demo/first.html',
+          workspaceRoot: '/repo',
+          aiActionsEnabled: true
+        }
+      })
+      await flushPromises()
+
+      // Before 300ms debounce elapses, switch to second.html -> first probe must be canceled!
+      await vi.advanceTimersByTimeAsync(150)
+      await wrapper.setProps({
+        filePath: '/repo/demo/second.html',
+        displayPath: 'demo/second.html'
+      })
+      await flushPromises()
+
+      // Immediately has 1 static issue (remote-asset-url), no live DOM probe sent yet
+      expect(wrapper.get('[data-testid="tds-lint-count"]').text()).toBe('1')
+      const captureCallsBefore = mocks.send.mock.calls.filter(
+        ([evt]) => evt === TdsCaptureEvents.renderFrame
+      )
+      expect(captureCallsBefore).toHaveLength(0)
+
+      // After 300ms debounce, single DOM probe runs for second.html and merges contrast-fail!
+      await vi.advanceTimersByTimeAsync(320)
+      await flushPromises()
+
+      const captureCallsAfter = mocks.send.mock.calls.filter(
+        ([evt]) => evt === TdsCaptureEvents.renderFrame
+      )
+      expect(captureCallsAfter).toHaveLength(1)
+      expect(captureCallsAfter[0]?.[1]?.srcdoc).toContain('Low contrast')
+      expect(captureCallsAfter[0]?.[1]?.format).toBe('none')
+
+      expect(wrapper.get('[data-testid="tds-lint-count"]').text()).toBe('2')
+      await wrapper.get('[data-testid="tds-lint-trigger"]').trigger('click')
+      await flushPromises()
+      const ruleIds = wrapper
+        .findAll('[data-testid="tds-lint-issue"]')
+        .map((node) => node.attributes('data-rule-id'))
+      expect(ruleIds).toEqual(['remote-asset-url', 'contrast-fail'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('scales TdsDeviceFrame cleanly inside 320px-460px narrow side-panel containers without clipping', async () => {
+    const observerState: { callback: ResizeObserverCallback | null } = { callback: null }
+    const originalRO = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class MockResizeObserver {
+      constructor(cb: ResizeObserverCallback) {
+        observerState.callback = cb
+      }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+
+    try {
+      mocks.send.mockResolvedValue({
+        path: '/repo/demo/mobile.html',
+        name: 'mobile.html',
+        ext: 'html',
+        kind: 'text',
+        mimeType: 'text/html',
+        size: 100,
+        truncated: false,
+        mtimeMs: Date.now(),
+        text: '<!doctype html><body><main style="height:2400px">Long mobile page</main></body>'
+      })
+
+      const wrapper = mount(WorkspaceFileViewer, {
+        props: {
+          filePath: '/repo/demo/mobile.html',
+          displayPath: 'demo/mobile.html',
+          workspaceRoot: '/repo'
+        }
+      })
+      await flushPromises()
+
+      await wrapper.get('[data-testid="file-viewer-viewport-trigger"]').trigger('click')
+      await flushPromises()
+      await wrapper
+        .get('[data-testid="file-viewer-viewport-option-iphone-17-pro"]')
+        .trigger('click')
+      await flushPromises()
+
+      // Simulate narrow docked HomeSidePanel width (340px x 600px)
+      observerState.callback?.(
+        [{ contentRect: { width: 340, height: 600 } } as ResizeObserverEntry],
+        {} as ResizeObserver
+      )
+      await nextTick()
+
+      const frame = wrapper.get('[data-testid="file-viewer-device-frame"]')
+      expect(frame.attributes('data-narrow')).toBe('true')
+      const scale = Number(frame.attributes('data-scale'))
+      expect(scale).toBeGreaterThan(0.1)
+      expect(scale).toBeLessThan(1)
+      // Scaled outer width (422 * scale) + padding must stay strictly within 340px container width
+      expect(422 * scale).toBeLessThanOrEqual(340)
+      // Scaled outer height (894 * scale) + meta bar (34px) must stay strictly within 600px container height
+      expect(894 * scale + 34).toBeLessThanOrEqual(600)
+    } finally {
+      globalThis.ResizeObserver = originalRO
+    }
   })
 })

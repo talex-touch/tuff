@@ -67,24 +67,43 @@ const outerRadius = computed(() => {
 const outerWidth = computed(() => resolved.value.width + effectiveBezel.value * 2)
 const outerHeight = computed(() => resolved.value.height + effectiveBezel.value * 2)
 
-const META_BAR_RESERVE = 28
+const META_BAR_RESERVE = 34
+const NARROW_STAGE_BREAKPOINT = 460
+
+const isNarrowStage = computed(
+  () => containerWidth.value > 0 && containerWidth.value <= NARROW_STAGE_BREAKPOINT
+)
+
+const effectiveStagePadding = computed(() => {
+  if (props.stagePadding <= 0) return 0
+  if (isNarrowStage.value) {
+    return Math.min(props.stagePadding, 12)
+  }
+  return props.stagePadding
+})
+
+const hardwareEdgeAllowance = computed(() => {
+  if (!showSideHardwareButtons.value || props.stagePadding <= 0) return 0
+  return props.preset.category === 'watch' ? 6 : 4
+})
 
 const fitScale = computed(() => {
   if (isResponsive.value) return 1
   if (containerWidth.value <= 0 || containerHeight.value <= 0) return 1
+  const availableWidth = Math.max(1, containerWidth.value - hardwareEdgeAllowance.value * 2)
   const availableHeight = props.showMeta
     ? Math.max(1, containerHeight.value - META_BAR_RESERVE)
     : containerHeight.value
   return computeStageFitScale(
     { width: outerWidth.value, height: outerHeight.value },
-    { width: containerWidth.value, height: availableHeight },
-    props.stagePadding
+    { width: availableWidth, height: availableHeight },
+    effectiveStagePadding.value
   )
 })
 
 const scaledSlotStyle = computed(() => ({
-  width: `${Math.round(outerWidth.value * fitScale.value)}px`,
-  height: `${Math.round(outerHeight.value * fitScale.value)}px`
+  width: `${Math.max(1, Math.floor(outerWidth.value * fitScale.value))}px`,
+  height: `${Math.max(1, Math.floor(outerHeight.value * fitScale.value))}px`
 }))
 
 const frameStyle = computed(() => ({
@@ -205,11 +224,13 @@ onBeforeUnmount(() => {
     v-else
     ref="stageRef"
     class="TdsDeviceFrame TdsDeviceFrame--stage"
+    :class="{ 'is-narrow': isNarrowStage }"
     :data-preset-id="preset.id"
     :data-category="preset.category"
     :data-orientation="resolved.orientation"
     :data-show-shell="String(showShell)"
     :data-scale="fitScale"
+    :data-narrow="String(isNarrowStage)"
     data-testid="tds-device-frame"
   >
     <div class="TdsDeviceFrame-Scaler" :style="scaledSlotStyle">
@@ -259,7 +280,7 @@ onBeforeUnmount(() => {
             :viewBox="`0 0 ${resolved.width} ${statusBarHeight}`"
             :width="resolved.width"
             :height="statusBarHeight"
-            preserveAspectRatio="none"
+            preserveAspectRatio="xMidYMid meet"
             aria-hidden="true"
             data-testid="tds-device-statusbar"
           >
@@ -511,6 +532,8 @@ onBeforeUnmount(() => {
 .TdsDeviceFrame-Scaler {
   position: relative;
   flex: none;
+  max-width: 100%;
+  max-height: 100%;
   min-width: 0;
   min-height: 0;
 }
@@ -583,6 +606,8 @@ onBeforeUnmount(() => {
 .TdsDeviceFrame-Screen {
   position: relative;
   overflow: hidden;
+  isolation: isolate;
+  clip-path: inset(0 round var(--tds-screen-radius, 0px));
   background: var(--tx-color-white, #ffffff);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--shell-border) 50%, transparent);
 
@@ -595,11 +620,26 @@ onBeforeUnmount(() => {
 }
 
 .TdsDeviceFrame-Content {
+  position: relative;
+  z-index: 1;
   display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  border-radius: inherit;
+
+  :deep(> iframe) {
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+  }
 }
 
 .TdsDeviceFrame-StatusSvg {
@@ -610,6 +650,8 @@ onBeforeUnmount(() => {
   display: block;
   width: 100%;
   color: var(--tds-device-status-ink);
+  text-rendering: geometricPrecision;
+  shape-rendering: geometricPrecision;
   pointer-events: none;
   user-select: none;
 }
@@ -620,6 +662,8 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  -webkit-font-smoothing: antialiased;
 
   &--watch {
     font-size: 11px;
@@ -659,8 +703,11 @@ onBeforeUnmount(() => {
   flex: none;
   gap: 6px;
   align-items: center;
+  max-width: calc(100% - 16px);
+  min-width: 0;
   height: 20px;
   padding: 0 8px;
+  overflow: hidden;
   border-radius: var(--shell-radius-full);
   background: var(--shell-surface-2);
   color: var(--shell-text-secondary);
@@ -668,22 +715,34 @@ onBeforeUnmount(() => {
   font-variant-numeric: tabular-nums;
   line-height: 1;
   user-select: none;
+  box-sizing: border-box;
 }
 
 .TdsDeviceFrame-MetaName {
+  overflow: hidden;
   color: var(--shell-text-primary);
   font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .TdsDeviceFrame-MetaSep {
+  flex: none;
   color: var(--shell-text-muted);
 }
 
+.TdsDeviceFrame-MetaDim {
+  flex: none;
+  white-space: nowrap;
+}
+
 .TdsDeviceFrame-MetaScale {
+  flex: none;
   padding: 1px 5px;
   border-radius: var(--shell-radius-full);
   background: var(--shell-bg);
   color: var(--shell-text-muted);
+  white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {

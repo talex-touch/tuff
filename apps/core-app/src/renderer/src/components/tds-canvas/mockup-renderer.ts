@@ -78,6 +78,15 @@ export interface TdsMockupRenderExtras {
   themeCss?: string
   /** Optional showcase title displayed in printable HTML and SVG metadata. */
   title?: string
+  /** Optional map of `frame.id -> data:image/(png|jpeg|webp);base64,...` real-pixel bitmaps. */
+  frameBitmaps?: Record<string, string>
+}
+
+const VALID_FRAME_BITMAP_DATA_URL_RE = /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=\s]+$/i
+
+/** Returns true when `value` is a safe raster image data URL suitable for SVG `<image>` / Canvas compositing. */
+export function isValidFrameBitmapDataUrl(value: unknown): value is string {
+  return typeof value === 'string' && VALID_FRAME_BITMAP_DATA_URL_RE.test(value.trim())
 }
 
 export interface RasterizeSvgOptions {
@@ -540,10 +549,16 @@ export function renderMockupPageSvg(
           ? `<rect class="tds-mockup-bezel" x="${slot.x}" y="${slot.y}" width="${slot.width}" height="${slot.height}" rx="${slot.outerRadius}" ry="${slot.outerRadius}" fill="${escapeXml(options.bezelColor)}" stroke="${shellBorderStroke}" stroke-opacity="${shellBorderOpacity}" stroke-width="1"${filterAttr} />`
           : `<rect class="tds-mockup-bezel" x="${slot.x}" y="${slot.y}" width="${slot.width}" height="${slot.height}" rx="${slot.outerRadius}" ry="${slot.outerRadius}" fill="${preview.bg}" stroke="${shellBorderStroke}" stroke-opacity="${shellBorderOpacity}" stroke-width="1"${filterAttr} />`
 
+      const rawBitmap = extras.frameBitmaps?.[slot.frame.id]
+      const validBitmap = isValidFrameBitmapDataUrl(rawBitmap) ? rawBitmap.trim() : null
+      const screenContent = validBitmap
+        ? `<image class="tds-mockup-bitmap" href="${escapeXml(validBitmap)}" x="${slot.screenX}" y="${slot.screenY}" width="${slot.screenWidth}" height="${slot.screenHeight}" preserveAspectRatio="xMidYMid slice" clip-path="url(#tds-mockup-clip-${idx})" />`
+        : renderSlotForeignObjectPreview(slot, preview)
+
       const screenGroup = [
         `<g clip-path="url(#tds-mockup-clip-${idx})">`,
         `<rect x="${slot.screenX}" y="${slot.screenY}" width="${slot.screenWidth}" height="${slot.screenHeight}" fill="${preview.bg}" />`,
-        renderSlotForeignObjectPreview(slot, preview),
+        screenContent,
         renderStatusBarAndCutoutSvg(slot, escapeXml(options.bezelColor), screenInk),
         `</g>`
       ].join('')
@@ -848,6 +863,460 @@ export async function rasterizeSvgToPngBlob(
     }
     img.src = src
   })
+}
+
+function drawRoundedRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+): void {
+  const r = Math.max(0, Math.min(radius, width / 2, height / 2))
+  ctx.beginPath()
+  if (r <= 0) {
+    ctx.rect(x, y, width, height)
+    ctx.closePath()
+    return
+  }
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + width, y, x + width, y + height, r)
+  ctx.arcTo(x + width, y + height, x, y + height, r)
+  ctx.arcTo(x, y + height, x, y, r)
+  ctx.arcTo(x, y, x + width, y, r)
+  ctx.closePath()
+}
+
+function loadBitmapImage(dataUrl: string, timeoutMs: number): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (img: HTMLImageElement | null): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(img)
+    }
+
+    const timer = setTimeout(() => finish(null), timeoutMs)
+    try {
+      const img = new Image()
+      img.decoding = 'async'
+      img.onload = () => finish(img)
+      img.onerror = () => finish(null)
+      img.src = dataUrl
+    } catch {
+      finish(null)
+    }
+  })
+}
+
+function drawImageSliceCover(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  dx: number,
+  dy: number,
+  dw: number,
+  dh: number
+): void {
+  const iw = img.naturalWidth || img.width || 0
+  const ih = img.naturalHeight || img.height || 0
+  if (iw <= 0 || ih <= 0 || dw <= 0 || dh <= 0) {
+    ctx.drawImage(img, dx, dy, dw, dh)
+    return
+  }
+  const targetRatio = dw / dh
+  const sourceRatio = iw / ih
+  if (Math.abs(targetRatio - sourceRatio) < 1e-3) {
+    ctx.drawImage(img, dx, dy, dw, dh)
+    return
+  }
+  if (sourceRatio > targetRatio) {
+    const sw = ih * targetRatio
+    const sx = (iw - sw) / 2
+    ctx.drawImage(img, sx, 0, sw, ih, dx, dy, dw, dh)
+  } else {
+    const sh = iw / targetRatio
+    const sy = (ih - sh) / 2
+    ctx.drawImage(img, 0, sy, iw, sh, dx, dy, dw, dh)
+  }
+}
+
+function drawCanvasWireframeFallback(
+  ctx: CanvasRenderingContext2D,
+  slot: TdsMockupSlotLayout,
+  preview: ExtractedScreenPreview
+): void {
+  const topInset =
+    slot.bezelWidth > 0 && (slot.category === 'phone' || slot.category === 'tablet')
+      ? Math.max(24, Math.min(slot.safeAreaTop, 56)) + 20
+      : 30
+  const padX = slot.screenWidth < 300 ? 14 : 24
+  const contentX = slot.screenX + padX
+  const contentW = Math.max(40, slot.screenWidth - padX * 2)
+  let cursorY = slot.screenY + topInset
+
+  // Kind + device chip
+  ctx.fillStyle = preview.surface
+  drawRoundedRectPath(ctx, contentX, cursorY, Math.min(contentW, 180), 22, 11)
+  ctx.fill()
+  ctx.fillStyle = preview.accent
+  ctx.beginPath()
+  ctx.arc(contentX + 12, cursorY + 11, 3, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = preview.textSecondary
+  ctx.font = "500 11px -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif"
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(
+    `${slot.frame.kind.toUpperCase()} · ${slot.screenWidth}×${slot.screenHeight}`,
+    contentX + 22,
+    cursorY + 11,
+    Math.max(20, Math.min(contentW, 180) - 30)
+  )
+  cursorY += 36
+
+  // Heading
+  const headingSize = slot.screenWidth < 300 ? 15 : slot.screenWidth >= 900 ? 28 : 20
+  ctx.fillStyle = preview.textPrimary
+  ctx.font = `600 ${headingSize}px -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif`
+  ctx.textBaseline = 'top'
+  ctx.fillText(preview.heading, contentX, cursorY, contentW)
+  cursorY += headingSize + 18
+
+  // Preview lines
+  const lines = preview.lines.slice(0, 4)
+  ctx.font = "400 13px -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif"
+  for (const line of lines) {
+    if (cursorY + 34 > slot.screenY + slot.screenHeight - 20) break
+    ctx.fillStyle = preview.surface
+    drawRoundedRectPath(ctx, contentX, cursorY, contentW, 32, 8)
+    ctx.fill()
+    ctx.strokeStyle = preview.border
+    ctx.lineWidth = 1
+    ctx.stroke()
+    ctx.fillStyle = preview.textSecondary
+    ctx.textBaseline = 'middle'
+    ctx.fillText(line, contentX + 10, cursorY + 16, Math.max(20, contentW - 20))
+    cursorY += 40
+  }
+}
+
+function drawCanvasStatusBarAndCutout(
+  ctx: CanvasRenderingContext2D,
+  slot: TdsMockupSlotLayout,
+  bezelColor: string,
+  screenInk: string
+): void {
+  if (slot.bezelWidth <= 0) return
+  const isMobile = slot.category === 'phone' || slot.category === 'tablet'
+  if (!isMobile || slot.safeAreaTop <= 0) return
+
+  const statusH = Math.max(24, Math.min(slot.safeAreaTop, 54))
+  const sx = slot.screenX
+  const sy = slot.screenY
+  const sw = slot.screenWidth
+  const clockX =
+    slot.category === 'tablet'
+      ? sx + 22
+      : sx + Math.max(24, Math.min(36, Math.round(slot.innerRadius * 0.56)))
+  const clockY = sy + Math.round(statusH * 0.58)
+  const iconRightOffset =
+    slot.category === 'tablet' ? 76 : Math.max(76, Math.round(slot.innerRadius * 0.52) + 56)
+  const iconX = sx + sw - iconRightOffset
+  const iconY = clockY - 6
+
+  // Clock
+  ctx.fillStyle = screenInk
+  ctx.font = "600 13px -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif"
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('9:41', clockX, clockY)
+
+  // Signal bars & battery
+  ctx.fillStyle = screenInk
+  drawRoundedRectPath(ctx, iconX, iconY + 7, 2.6, 4, 0.8)
+  ctx.fill()
+  drawRoundedRectPath(ctx, iconX + 4, iconY + 5, 2.6, 6, 0.8)
+  ctx.fill()
+  drawRoundedRectPath(ctx, iconX + 8, iconY + 3, 2.6, 8, 0.8)
+  ctx.fill()
+  ctx.save()
+  ctx.globalAlpha = 0.35
+  drawRoundedRectPath(ctx, iconX + 12, iconY + 1, 2.6, 10, 0.8)
+  ctx.fill()
+  ctx.restore()
+
+  ctx.save()
+  ctx.globalAlpha = 0.7
+  ctx.strokeStyle = screenInk
+  ctx.lineWidth = 1.2
+  drawRoundedRectPath(ctx, iconX + 33, iconY + 1.5, 21, 9.5, 2.6)
+  ctx.stroke()
+  ctx.restore()
+  ctx.fillStyle = screenInk
+  drawRoundedRectPath(ctx, iconX + 35, iconY + 3.5, 15, 5.5, 1.2)
+  ctx.fill()
+
+  // Portrait cutout
+  if (slot.orientation === 'portrait' && slot.cutout !== 'none') {
+    ctx.fillStyle = bezelColor
+    if (slot.cutout === 'island') {
+      const ix = sx + Math.round((sw - 108) / 2)
+      drawRoundedRectPath(ctx, ix, sy + 11, 108, 30, 15)
+      ctx.fill()
+      ctx.fillStyle = '#2c2c2e'
+      ctx.beginPath()
+      ctx.arc(ix + 86, sy + 26, 4.5, 0, Math.PI * 2)
+      ctx.fill()
+    } else if (slot.cutout === 'notch') {
+      const nx = sx + Math.round((sw - 152) / 2)
+      drawRoundedRectPath(ctx, nx, sy - 6, 152, 34, 14)
+      ctx.fill()
+      ctx.fillStyle = '#2c2c2e'
+      drawRoundedRectPath(ctx, sx + Math.round((sw - 44) / 2), sy + 8, 44, 4, 2)
+      ctx.fill()
+    } else if (slot.cutout === 'punch') {
+      ctx.beginPath()
+      ctx.arc(sx + Math.round(sw / 2), sy + 18, 6.5, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.fillStyle = '#2c2c2e'
+      ctx.beginPath()
+      ctx.arc(sx + Math.round(sw / 2), sy + 18, 2.4, 0, Math.PI * 2)
+      ctx.fill()
+    } else if (slot.cutout === 'pill') {
+      const px = sx + Math.round((sw - 78) / 2)
+      drawRoundedRectPath(ctx, px, sy + 11, 78, 20, 10)
+      ctx.fill()
+      ctx.fillStyle = '#2c2c2e'
+      ctx.beginPath()
+      ctx.arc(px + 18, sy + 21, 3.2, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(px + 60, sy + 21, 3.2, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+
+  // Gesture home indicator
+  if (slot.safeAreaBottom >= 20) {
+    const barW = Math.min(134, Math.max(64, Math.round(sw * 0.34)))
+    ctx.save()
+    ctx.globalAlpha = 0.32
+    ctx.fillStyle = screenInk
+    drawRoundedRectPath(
+      ctx,
+      sx + Math.round((sw - barW) / 2),
+      sy + slot.screenHeight - 11,
+      barW,
+      4,
+      2
+    )
+    ctx.fill()
+    ctx.restore()
+  }
+}
+
+function exportCanvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise<Blob>((resolve) => {
+    try {
+      if (typeof canvas.toBlob === 'function') {
+        canvas.toBlob((blob) => {
+          if (blob && blob.size > 0) {
+            resolve(blob)
+            return
+          }
+          const fallback =
+            typeof canvas.toDataURL === 'function'
+              ? dataUrlToBlob(canvas.toDataURL('image/png'))
+              : null
+          resolve(fallback ?? createFallbackPngBlob())
+        }, 'image/png')
+        return
+      }
+      const fallback =
+        typeof canvas.toDataURL === 'function' ? dataUrlToBlob(canvas.toDataURL('image/png')) : null
+      resolve(fallback ?? createFallbackPngBlob())
+    } catch {
+      resolve(createFallbackPngBlob())
+    }
+  })
+}
+
+/**
+ * Composites a showcase page directly into a crisp 1x/2x PNG `Blob`.
+ *
+ * When real captured bitmaps are available in `extras.frameBitmaps`, composites
+ * backdrop + drop shadow + rounded device bezel + real frame bitmaps directly on
+ * a native 2D `<canvas>` via `ctx.drawImage` — zero `foreignObject` Canvas tainting.
+ * Falls back cleanly to `rasterizeSvgToPngBlob` when no bitmaps exist.
+ */
+export async function renderMockupPagePngBlob(
+  page: TdsMockupPage,
+  rawOptions: TdsMockupOptions = DEFAULT_MOCKUP_OPTIONS,
+  extras: TdsMockupRenderExtras = {},
+  opts: RasterizeSvgOptions = {}
+): Promise<Blob> {
+  const options = normalizeMockupOptions(rawOptions)
+  const layout = computeMockupPageLayout(page, options)
+
+  const hasValidBitmap = layout.slots.some((slot) =>
+    isValidFrameBitmapDataUrl(extras.frameBitmaps?.[slot.frame.id])
+  )
+  if (!hasValidBitmap) {
+    const svg = renderMockupPageSvg(page, options, extras)
+    return rasterizeSvgToPngBlob(svg, layout.width, layout.height, options.scale, opts)
+  }
+
+  if (!hasDocument() || typeof Image === 'undefined') {
+    return createFallbackPngBlob()
+  }
+
+  const safeScale: TdsMockupScale = options.scale === 1 ? 1 : 2
+  const pixelWidth = Math.max(1, Math.round(layout.width * safeScale))
+  const pixelHeight = Math.max(1, Math.round(layout.height * safeScale))
+
+  let canvas: HTMLCanvasElement
+  let ctx: CanvasRenderingContext2D | null = null
+  try {
+    canvas = document.createElement('canvas')
+    canvas.width = pixelWidth
+    canvas.height = pixelHeight
+    const getContextFn = canvas.getContext as ((...args: unknown[]) => unknown) & {
+      mock?: unknown
+    }
+    const lacksBrowserBitmapDecoding =
+      typeof createImageBitmap === 'undefined' && !getContextFn.mock
+    if (lacksBrowserBitmapDecoding) {
+      return createFallbackPngBlob()
+    }
+    ctx = canvas.getContext('2d')
+  } catch {
+    return createFallbackPngBlob()
+  }
+
+  if (!ctx) {
+    return createFallbackPngBlob()
+  }
+
+  const timeoutMs =
+    typeof opts.timeoutMs === 'number' && Number.isFinite(opts.timeoutMs) && opts.timeoutMs > 0
+      ? opts.timeoutMs
+      : 2500
+
+  const decodedBitmaps = await Promise.all(
+    layout.slots.map(async (slot) => {
+      const candidate = extras.frameBitmaps?.[slot.frame.id]
+      if (!isValidFrameBitmapDataUrl(candidate)) return null
+      return loadBitmapImage(candidate.trim(), timeoutMs)
+    })
+  )
+
+  const lightBackdrop = !options.transparent && isLightHexColor(options.background)
+  const captionInk = options.transparent ? '#52525b' : lightBackdrop ? '#1d1d1f' : '#f5f5f7'
+  const captionSubInk = options.transparent ? '#71717a' : lightBackdrop ? '#6e6e73' : '#a1a1aa'
+  const shellBorderStroke = lightBackdrop ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.14)'
+
+  try {
+    ctx.save()
+    ctx.clearRect(0, 0, pixelWidth, pixelHeight)
+    ctx.scale(safeScale, safeScale)
+
+    // 1. Backdrop
+    if (!options.transparent) {
+      ctx.fillStyle = options.background
+      ctx.fillRect(0, 0, layout.width, layout.height)
+    }
+
+    // 2. Per-slot titles, drop shadow, rounded bezel, clipped screen bitmap, status chrome
+    layout.slots.forEach((slot, idx) => {
+      const preview = extractScreenPreview(slot.frame, extras.themeCss)
+      const screenInk = isLightHexColor(preview.bg) ? '#1d1d1f' : '#f5f5f7'
+
+      if (options.showTitles) {
+        ctx!.textAlign = 'center'
+        ctx!.textBaseline = 'alphabetic'
+        ctx!.fillStyle = captionInk
+        ctx!.font = "600 16px -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif"
+        ctx!.fillText(slot.frame.title, slot.titleX, slot.titleY)
+        ctx!.fillStyle = captionSubInk
+        ctx!.font = "500 11px -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif"
+        ctx!.fillText(`${slot.screenWidth}×${slot.screenHeight}`, slot.titleX, slot.titleY + 16)
+      }
+
+      // Bezel + drop shadow
+      ctx!.save()
+      if (options.shadow) {
+        ctx!.shadowColor = lightBackdrop ? 'rgba(0, 0, 0, 0.16)' : 'rgba(0, 0, 0, 0.36)'
+        ctx!.shadowBlur = 40 * safeScale
+        ctx!.shadowOffsetX = 0
+        ctx!.shadowOffsetY = 18 * safeScale
+      }
+      drawRoundedRectPath(ctx!, slot.x, slot.y, slot.width, slot.height, slot.outerRadius)
+      ctx!.fillStyle = slot.bezelWidth > 0 ? options.bezelColor : preview.bg
+      ctx!.fill()
+      ctx!.restore()
+
+      // Outer hairline border
+      ctx!.save()
+      drawRoundedRectPath(ctx!, slot.x, slot.y, slot.width, slot.height, slot.outerRadius)
+      ctx!.strokeStyle = shellBorderStroke
+      ctx!.lineWidth = 1
+      ctx!.stroke()
+      ctx!.restore()
+
+      // Clipped rounded screen viewport
+      ctx!.save()
+      drawRoundedRectPath(
+        ctx!,
+        slot.screenX,
+        slot.screenY,
+        slot.screenWidth,
+        slot.screenHeight,
+        slot.innerRadius
+      )
+      ctx!.clip()
+
+      ctx!.fillStyle = preview.bg
+      ctx!.fillRect(slot.screenX, slot.screenY, slot.screenWidth, slot.screenHeight)
+
+      const decoded = decodedBitmaps[idx]
+      if (decoded) {
+        drawImageSliceCover(
+          ctx!,
+          decoded,
+          slot.screenX,
+          slot.screenY,
+          slot.screenWidth,
+          slot.screenHeight
+        )
+      } else {
+        drawCanvasWireframeFallback(ctx!, slot, preview)
+      }
+
+      drawCanvasStatusBarAndCutout(ctx!, slot, options.bezelColor, screenInk)
+      ctx!.restore()
+    })
+
+    // 3. Brand watermark
+    if (options.brand) {
+      const brandText =
+        layout.totalPages > 1
+          ? `Tuff Design System · Board ${layout.pageIndex + 1} / ${layout.totalPages}`
+          : 'Tuff Design System'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'alphabetic'
+      ctx.fillStyle = captionSubInk
+      ctx.font = "500 12px -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif"
+      ctx.fillText(brandText, Math.round(layout.width / 2), layout.brandY)
+    }
+
+    ctx.restore()
+  } catch {
+    return createFallbackPngBlob()
+  }
+
+  return exportCanvasToPngBlob(canvas)
 }
 
 /**

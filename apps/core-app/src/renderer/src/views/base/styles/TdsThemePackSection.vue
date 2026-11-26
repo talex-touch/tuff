@@ -442,6 +442,11 @@ function handleRemoveCustom(id: string): void {
   border-bottom: 1px solid var(--shell-border);
 }
 
+:global(.window-refraction) .TdsThemePack-Body,
+:global(.window-filter) .TdsThemePack-Body {
+  background: color-mix(in srgb, var(--shell-bg) 86%, transparent);
+}
+
 .TdsThemePack-Grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -473,14 +478,36 @@ function handleRemoveCustom(id: string): void {
   }
 
   &:focus-visible {
-    outline: 2px solid var(--shell-focus-ring);
+    outline: 2px solid var(--shell-primary);
     outline-offset: 2px;
+    box-shadow: 0 0 0 4px var(--shell-primary-soft);
   }
 
   &.is-active {
     border-color: var(--shell-primary);
     background: var(--shell-bg);
-    box-shadow: 0 0 0 2px var(--shell-primary-soft);
+    box-shadow:
+      inset 0 0 0 1px var(--shell-primary),
+      0 0 0 3px var(--shell-primary-soft);
+  }
+}
+
+:global(.window-refraction) .TdsThemePack-Card,
+:global(.window-filter) .TdsThemePack-Card {
+  background: color-mix(in srgb, var(--shell-surface) 94%, var(--shell-bg));
+  border-color: var(--shell-border-strong);
+  box-shadow: 0 1px 2px var(--shell-shadow);
+
+  &:hover {
+    background: var(--shell-surface-2);
+  }
+
+  &.is-active {
+    border-color: var(--shell-primary);
+    background: var(--shell-bg);
+    box-shadow:
+      inset 0 0 0 1px var(--shell-primary),
+      0 0 0 3px var(--shell-primary-soft);
   }
 }
 
@@ -508,7 +535,7 @@ function handleRemoveCustom(id: string): void {
   }
 
   &:focus-visible {
-    outline: 2px solid var(--shell-focus-ring);
+    outline: 2px solid var(--shell-primary);
     outline-offset: 1px;
   }
 }
@@ -524,13 +551,17 @@ function handleRemoveCustom(id: string): void {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  padding: 3px 6px;
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-full);
+  background: var(--shell-bg);
 }
 
 .TdsThemePack-SwatchDot {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   border-radius: var(--shell-radius-full);
-  border: 1px solid var(--shell-border-strong);
+  box-shadow: inset 0 0 0 1px var(--shell-border-strong);
   box-sizing: border-box;
   flex-shrink: 0;
 }
@@ -611,7 +642,7 @@ function handleRemoveCustom(id: string): void {
   gap: 5px;
   margin-top: auto;
   padding-top: 2px;
-  color: var(--shell-text-muted);
+  color: var(--shell-text-secondary);
   font-size: var(--shell-fs-caption);
   line-height: 1.2;
 }
@@ -642,6 +673,11 @@ function handleRemoveCustom(id: string): void {
     background: var(--shell-surface);
   }
 
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: 2px;
+  }
+
   &:disabled {
     opacity: 0.45;
     cursor: not-allowed;
@@ -669,6 +705,12 @@ function handleRemoveCustom(id: string): void {
   border: 1px solid var(--shell-border);
   border-radius: var(--shell-radius-md);
   background: var(--shell-surface);
+}
+
+:global(.window-refraction) .TdsThemePack-Drawer,
+:global(.window-filter) .TdsThemePack-Drawer {
+  border-color: var(--shell-border-strong);
+  box-shadow: 0 2px 8px var(--shell-shadow);
 }
 
 .TdsThemePack-DrawerHead {
@@ -702,6 +744,11 @@ function handleRemoveCustom(id: string): void {
     border-color: var(--shell-border);
     color: var(--shell-text-primary);
   }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: 1px;
+  }
 }
 
 .TdsThemePack-JsonArea {
@@ -719,7 +766,7 @@ function handleRemoveCustom(id: string): void {
   resize: vertical;
 
   &:focus {
-    outline: 2px solid var(--shell-focus-ring);
+    outline: 2px solid var(--shell-primary);
     outline-offset: 1px;
   }
 }

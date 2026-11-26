@@ -17,8 +17,8 @@ import type { ConversationMessage } from '~/modules/conversation/useHomeConversa
 import type { TdsLintIssue, TdsLintReport } from '~/modules/tds-lint'
 import type { TdsThemePack } from '~/modules/tds-theme'
 import { TxPopover } from '@talex-touch/tuffex/popover'
-import { hasWindow } from '@talex-touch/utils/env'
-import { computed, ref, watch } from 'vue'
+import { hasWindow, isElectronRenderer } from '@talex-touch/utils/env'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import {
@@ -34,12 +34,20 @@ import {
   arrangeFramesGrid,
   DEFAULT_GRID_GAP_X,
   formatNotesForAiPrompt,
-  resolveFrameOuterSize
+  resolveFrameLogicalSize,
+  resolveFrameOuterSize,
+  sanitizeEmbeddedStyleCss
 } from '~/components/tds-canvas/canvas-geometry'
 import { createCanvasHistoryState } from '~/components/tds-canvas/canvas-history'
 import TdsDesignCanvas from '~/components/tds-canvas/TdsDesignCanvas.vue'
 import { buildPreviewIndex } from '~/modules/conversation/preview-index'
-import { runStaticTdsLint, summarizeLintIssues } from '~/modules/tds-lint'
+import { buildTdsDomProbeScript, runStaticTdsLint, summarizeLintIssues } from '~/modules/tds-lint'
+import {
+  buildCaptureCacheKey,
+  captureFrameAndProbe,
+  mergeLintIssues,
+  releaseCaptureSession
+} from '~/modules/tds-lint/live-capture-client'
 import { exportThemePackAsCss, TDS_DEFAULT_THEME_PACK, useTdsThemePack } from '~/modules/tds-theme'
 
 const props = withDefaults(
@@ -503,11 +511,47 @@ const themeMenuOpen = ref(false)
 const presetQuery = ref('')
 const presetCategory = ref<DeviceCategory | 'all'>('all')
 const sendingAiAction = ref(false)
+const frameBitmaps = ref<Record<string, string>>({})
+const domIssuesByFrameId = ref<Record<string, TdsLintIssue[]>>({})
+
+const CANVAS_CAPTURE_DEBOUNCE_MS = 240
+const capturedFrameSignatures = new Map<string, string>()
+let captureTimer: ReturnType<typeof setTimeout> | null = null
+let captureGeneration = 0
+let activeCaptureSessionKey = ''
 
 let manualFrameSeq = 0
 let isHydrating = false
 
 const canvasSessionKey = computed(() => props.conversationId?.trim() || 'default')
+
+function cancelPendingCanvasCapture(): void {
+  captureGeneration += 1
+  if (captureTimer !== null) {
+    clearTimeout(captureTimer)
+    captureTimer = null
+  }
+}
+
+function buildCaptureDocumentForFrame(frame: TdsCanvasFrame, themeCss: string): string {
+  if (!frame.source) return ''
+  const safeCss = themeCss ? sanitizeEmbeddedStyleCss(themeCss) : ''
+  const styleBlock = safeCss ? `<style data-tds-theme-pack>${safeCss}</style>` : ''
+  if (frame.kind === 'svg') {
+    return `<!doctype html><meta charset="utf-8">${styleBlock}<body style="margin:0;width:100%;height:100%;display:grid;place-items:center;background:#ffffff">${frame.source}</body>`
+  }
+  if (!styleBlock) return frame.source
+  if (/<\/head>/i.test(frame.source)) {
+    return frame.source.replace(/<\/head>/i, (match) => `${styleBlock}${match}`)
+  }
+  if (/<head\b[^>]*>/i.test(frame.source)) {
+    return frame.source.replace(/<head\b[^>]*>/i, (match) => `${match}${styleBlock}`)
+  }
+  if (/<!doctype[^>]*>/i.test(frame.source)) {
+    return frame.source.replace(/<!doctype[^>]*>/i, (match) => `${match}${styleBlock}`)
+  }
+  return `${styleBlock}${frame.source}`
+}
 
 function computeNextFramePosition(existing: readonly TdsCanvasFrame[]): { x: number; y: number } {
   if (existing.length === 0) return { x: 0, y: 0 }
@@ -612,6 +656,16 @@ function persistCurrentSession(): void {
 }
 
 function hydrateSessionForConversation(convId: string | null): void {
+  cancelPendingCanvasCapture()
+  const nextSessionKey = `canvas:${convId?.trim() || 'default'}`
+  if (activeCaptureSessionKey && activeCaptureSessionKey !== nextSessionKey) {
+    void releaseCaptureSession(activeCaptureSessionKey)
+  }
+  activeCaptureSessionKey = nextSessionKey
+  frameBitmaps.value = {}
+  domIssuesByFrameId.value = {}
+  capturedFrameSignatures.clear()
+
   isHydrating = true
   try {
     const stored = readCanvasSession(convId)
@@ -686,11 +740,13 @@ watch(addMenuOpen, (open) => {
 const lintReportsByFrameId = computed<Record<string, TdsLintReport>>(() => {
   const reports: Record<string, TdsLintReport> = {}
   for (const frame of frames.value) {
-    const issues = runStaticTdsLint(frame.source, {
+    const staticIssues = runStaticTdsLint(frame.source, {
       sourceKind: frame.kind,
       fixedFrame: frame.kind !== 'svg',
       antiSlop: antiSlopEnabled.value
     })
+    const domIssues = domIssuesByFrameId.value[frame.id] ?? []
+    const issues = mergeLintIssues(staticIssues, domIssues)
     reports[frame.id] = {
       issues,
       counts: summarizeLintIssues(issues)
@@ -749,9 +805,143 @@ const selectedCanvasPack = computed<TdsThemePack>(() => {
 
 const canvasThemeCss = computed<string>(() => exportThemePackAsCss(selectedCanvasPack.value))
 
+const selectedCanvasPackAccentColor = computed<string>(
+  () =>
+    selectedCanvasPack.value.tokens.light.primary ??
+    selectedCanvasPack.value.tokens.dark.primary ??
+    TDS_DEFAULT_THEME_PACK.tokens.light.primary!
+)
+
 const canvasPattern = computed<TdsCanvasPattern>(
   () => selectedCanvasPack.value.surface?.canvasPattern ?? 'dots'
 )
+
+function scheduleCanvasFrameCaptures(): void {
+  cancelPendingCanvasCapture()
+
+  const validIds = new Set(frames.value.map((frame) => frame.id))
+  let prunedBitmaps = false
+  const nextBitmaps: Record<string, string> = {}
+  for (const [id, bitmap] of Object.entries(frameBitmaps.value)) {
+    if (validIds.has(id)) {
+      nextBitmaps[id] = bitmap
+    } else {
+      prunedBitmaps = true
+    }
+  }
+  if (prunedBitmaps) {
+    frameBitmaps.value = nextBitmaps
+  }
+
+  let prunedDom = false
+  const nextDomIssues: Record<string, TdsLintIssue[]> = {}
+  for (const [id, list] of Object.entries(domIssuesByFrameId.value)) {
+    if (validIds.has(id)) {
+      nextDomIssues[id] = list
+    } else {
+      prunedDom = true
+    }
+  }
+  if (prunedDom) {
+    domIssuesByFrameId.value = nextDomIssues
+  }
+  for (const key of Array.from(capturedFrameSignatures.keys())) {
+    if (!validIds.has(key)) {
+      capturedFrameSignatures.delete(key)
+    }
+  }
+
+  if (!props.active || frames.value.length === 0 || !isElectronRenderer()) {
+    return
+  }
+
+  const generation = captureGeneration
+  const sessionKey = `canvas:${canvasSessionKey.value}`
+  activeCaptureSessionKey = sessionKey
+
+  // Prioritize the currently selected frame so its bitmap and DOM probe land first.
+  const orderedFrames = [...frames.value].sort((a, b) => {
+    if (a.id === selectedFrameId.value) return -1
+    if (b.id === selectedFrameId.value) return 1
+    return 0
+  })
+
+  const themeCssSnapshot = canvasThemeCss.value
+  const antiSlopSnapshot = antiSlopEnabled.value
+  const probeScript = buildTdsDomProbeScript({ antiSlop: antiSlopSnapshot })
+
+  captureTimer = setTimeout(() => {
+    captureTimer = null
+    if (generation !== captureGeneration) return
+
+    for (const frame of orderedFrames) {
+      const srcdoc = buildCaptureDocumentForFrame(frame, themeCssSnapshot)
+      if (!srcdoc.trim()) continue
+      const logical = resolveFrameLogicalSize(frame)
+      const domProbeScript = frame.kind === 'html' ? probeScript : undefined
+      const signature = buildCaptureCacheKey({
+        srcdoc,
+        width: logical.width,
+        height: logical.height,
+        format: 'jpeg',
+        pixelRatio: 1,
+        domProbeScript
+      })
+      if (capturedFrameSignatures.get(frame.id) === signature) {
+        continue
+      }
+
+      void captureFrameAndProbe({
+        srcdoc,
+        width: logical.width,
+        height: logical.height,
+        format: 'jpeg',
+        quality: 85,
+        pixelRatio: 1,
+        domProbeScript,
+        sessionKey
+      }).then((result) => {
+        if (generation !== captureGeneration || !result.ok) return
+        capturedFrameSignatures.set(frame.id, signature)
+        if (result.bitmapDataUrl) {
+          frameBitmaps.value = {
+            ...frameBitmaps.value,
+            [frame.id]: result.bitmapDataUrl
+          }
+        }
+        domIssuesByFrameId.value = {
+          ...domIssuesByFrameId.value,
+          [frame.id]: result.domIssues
+        }
+      })
+    }
+  }, CANVAS_CAPTURE_DEBOUNCE_MS)
+}
+
+watch(
+  [
+    () =>
+      frames.value.map(
+        (f) =>
+          `${f.id}:${f.kind}:${f.deviceId}:${f.orientation ?? ''}:${f.width ?? ''}:${f.height ?? ''}:${f.source.length}:${f.source}`
+      ),
+    canvasThemeCss,
+    antiSlopEnabled,
+    () => props.active
+  ],
+  () => {
+    scheduleCanvasFrameCaptures()
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  cancelPendingCanvasCapture()
+  if (activeCaptureSessionKey) {
+    void releaseCaptureSession(activeCaptureSessionKey)
+    activeCaptureSessionKey = ''
+  }
+})
 
 const isCanvasPackDifferentFromApp = computed(
   () => selectedCanvasPack.value.meta.id !== appActiveThemePackId.value
@@ -790,7 +980,9 @@ function getPackSwatchColors(pack: TdsThemePack): [string, string, string] {
   return [
     pack.tokens.light.bg ?? TDS_DEFAULT_THEME_PACK.tokens.light.bg!,
     pack.tokens.dark.bg ?? TDS_DEFAULT_THEME_PACK.tokens.dark.bg!,
-    pack.tokens.light.primary ?? TDS_DEFAULT_THEME_PACK.tokens.light.primary!
+    pack.tokens.light.primary ??
+      pack.tokens.dark.primary ??
+      TDS_DEFAULT_THEME_PACK.tokens.light.primary!
   ]
 }
 
@@ -1232,7 +1424,7 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
             >
               <span
                 class="HomeSideCanvasPane-ThemeTriggerDot"
-                :style="{ backgroundColor: selectedCanvasPack.tokens.light.primary }"
+                :style="{ backgroundColor: selectedCanvasPackAccentColor }"
                 aria-hidden="true"
               />
               <span class="i-ri-palette-line" aria-hidden="true" />
@@ -1359,6 +1551,7 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
         :initial-history="historyState"
         :theme-css="canvasThemeCss"
         :canvas-pattern="canvasPattern"
+        :frame-bitmaps="frameBitmaps"
         @update:frames="handleUpdateFrames"
         @update:notes="handleUpdateNotes"
         @update:history="handleUpdateHistory"

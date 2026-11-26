@@ -665,6 +665,140 @@ describe('TdsDesignCanvas component interactions', () => {
     expect(wrapper.findAll('[data-testid^="tds-canvas-history-entry-"]')).toHaveLength(3)
   })
 
+  it('prevents iframe wheel/drag swallowing via pointer-capture shield and toggles explicit interactive mode', async () => {
+    const frames = [
+      makeFrame({ id: 'f1', title: 'Frame One', x: 0, y: 0 }),
+      makeFrame({ id: 'f2', title: 'Frame Two', x: 520, y: 0 })
+    ]
+    const wrapper = mount(TdsDesignCanvas, {
+      props: { frames }
+    })
+    await flushPromises()
+
+    // Both frames start shielded and iframes blocked against swallowing wheel/drag
+    expect(wrapper.find('[data-testid="tds-canvas-frame-shield-f1"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="tds-canvas-frame-shield-f2"]').exists()).toBe(true)
+    const shield1 = wrapper.get('[data-testid="tds-canvas-frame-shield-f1"]')
+    expect(wrapper.get('[data-testid="tds-canvas-frame-iframe-f1"]').classes()).toContain(
+      'is-blocked'
+    )
+
+    // Wheel zoom directly on the frame shield bubbles to the canvas stage and zooms cleanly
+    const zoomBefore = wrapper.get('[data-testid="tds-canvas-zoom-readout"]').text()
+    shield1.element.dispatchEvent(
+      new WheelEvent('wheel', {
+        ctrlKey: true,
+        deltaY: -100,
+        clientX: 180,
+        clientY: 140,
+        bubbles: true,
+        cancelable: true
+      })
+    )
+    await nextTick()
+    expect(wrapper.get('[data-testid="tds-canvas-zoom-readout"]').text()).not.toBe(zoomBefore)
+
+    // Wait for wheel idle clear or click Interact toggle on frame 2 -> activates live passthrough for f2 only
+    vi.useFakeTimers()
+    try {
+      shield1.element.dispatchEvent(
+        new WheelEvent('wheel', { deltaY: 10, bubbles: true, cancelable: true })
+      )
+      vi.advanceTimersByTime(200)
+      await nextTick()
+    } finally {
+      vi.useRealTimers()
+    }
+
+    await wrapper.get('[data-testid="tds-canvas-frame-shield-f2"]').trigger('dblclick')
+    await nextTick()
+    expect(wrapper.get('[data-testid="tds-canvas-frame-f2"]').attributes('data-interactive')).toBe(
+      'true'
+    )
+    expect(wrapper.find('[data-testid="tds-canvas-frame-shield-f2"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="tds-canvas-frame-iframe-f2"]').classes()).not.toContain(
+      'is-blocked'
+    )
+    // Frame 1 remains shielded
+    expect(wrapper.find('[data-testid="tds-canvas-frame-shield-f1"]').exists()).toBe(true)
+
+    // Pressing Escape automatically disengages interactive mode and restores the shield
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(wrapper.get('[data-testid="tds-canvas-frame-f2"]').attributes('data-interactive')).toBe(
+      'false'
+    )
+    expect(wrapper.find('[data-testid="tds-canvas-frame-shield-f2"]').exists()).toBe(true)
+
+    // Dedicated Interact toggle in inspector engages interactive mode and wheeling disengages it
+    await wrapper.get('[data-testid="tds-canvas-interact-toggle"]').trigger('click')
+    await nextTick()
+    expect(wrapper.get('[data-testid="tds-canvas-frame-f2"]').attributes('data-interactive')).toBe(
+      'true'
+    )
+    wrapper
+      .get('[data-testid="tds-canvas-stage"]')
+      .element.dispatchEvent(
+        new WheelEvent('wheel', { deltaY: 40, bubbles: true, cancelable: true })
+      )
+    await nextTick()
+    expect(wrapper.get('[data-testid="tds-canvas-frame-f2"]').attributes('data-interactive')).toBe(
+      'false'
+    )
+  })
+
+  it('caps live iframes to MAX_LIVE_IFRAMES=2 when frameBitmaps exist and rasterizes all frames while interacting', async () => {
+    const sampleBitmap =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    const frames = Array.from({ length: 6 }, (_, idx) =>
+      makeFrame({
+        id: `f${idx + 1}`,
+        title: `Board ${idx + 1}`,
+        x: idx * 460,
+        y: 0
+      })
+    )
+    const frameBitmaps: Record<string, string> = {}
+    for (const frame of frames) {
+      frameBitmaps[frame.id] = sampleBitmap
+    }
+
+    const wrapper = mount(TdsDesignCanvas, {
+      props: {
+        frames,
+        selectedFrameId: 'f1',
+        frameBitmaps
+      }
+    })
+    await flushPromises()
+
+    // At rest: at most 2 live iframes mounted; remaining 4 render crisp raster images
+    expect(wrapper.findAll('[data-testid^="tds-canvas-frame-iframe-"]')).toHaveLength(2)
+    expect(wrapper.findAll('[data-testid^="tds-canvas-frame-raster-"]')).toHaveLength(4)
+    expect(wrapper.find('[data-testid="tds-canvas-frame-iframe-f1"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="tds-canvas-frame-raster-f5"]').exists()).toBe(true)
+
+    // Interacting with a previously rasterized frame (#5) upgrades it to a live iframe while keeping total <= 2
+    await wrapper.get('[data-testid="tds-canvas-frame-interact-f5"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-testid="tds-canvas-frame-iframe-f5"]').exists()).toBe(true)
+    expect(wrapper.findAll('[data-testid^="tds-canvas-frame-iframe-"]')).toHaveLength(2)
+    expect(wrapper.findAll('[data-testid^="tds-canvas-frame-raster-"]')).toHaveLength(4)
+
+    // During active pan/zoom (wheel), ALL 6 frames swap to GPU-scaled raster images (0 live iframes)
+    wrapper.get('[data-testid="tds-canvas-stage"]').element.dispatchEvent(
+      new WheelEvent('wheel', {
+        ctrlKey: true,
+        deltaY: -80,
+        bubbles: true,
+        cancelable: true
+      })
+    )
+    await nextTick()
+    expect(wrapper.findAll('[data-testid^="tds-canvas-frame-iframe-"]')).toHaveLength(0)
+    expect(wrapper.findAll('[data-testid^="tds-canvas-frame-raster-"]')).toHaveLength(6)
+  })
+
   it('satisfies TDS design discipline: zero raw hex/rgba literals, zero hover color transitions, refraction popovers, and reduced-motion guard', () => {
     const dir = path.dirname(fileURLToPath(import.meta.url))
     const sfcSource = readFileSync(path.join(dir, 'TdsDesignCanvas.vue'), 'utf8')

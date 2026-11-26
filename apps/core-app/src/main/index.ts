@@ -63,6 +63,7 @@ import { systemUpdateModule } from './modules/system-update'
 import { platformPermissionModule } from './modules/system/platform-permission-service'
 import { performanceReportModule } from './modules/system/performance-report'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
+import { tdsCaptureModule } from './modules/tds-capture'
 import { terminalModule } from './modules/terminal'
 import { toolGatewayModule } from './modules/tool-gateway'
 import { trayManagerModule } from './modules/tray/tray-manager'
@@ -238,6 +239,7 @@ const foregroundModulesToLoad = [
   platformPermissionModule,
   permissionModule, // Plugin permission management - before plugin module
   screenshotSessionModule,
+  tdsCaptureModule,
   notificationModule,
   quickOpsModule,
   sentryModule,

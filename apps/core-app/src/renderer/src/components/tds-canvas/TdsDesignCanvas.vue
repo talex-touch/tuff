@@ -69,6 +69,7 @@ const props = withDefaults(
     initialHistory?: TdsCanvasHistoryState | null
     themeCss?: string
     canvasPattern?: TdsCanvasPattern
+    frameBitmaps?: Record<string, string>
   }>(),
   {
     notes: () => [],
@@ -78,7 +79,8 @@ const props = withDefaults(
     lintCounts: () => ({}),
     initialHistory: null,
     themeCss: '',
-    canvasPattern: 'dots'
+    canvasPattern: 'dots',
+    frameBitmaps: () => ({})
   }
 )
 
@@ -124,14 +126,31 @@ let panDragOrigin: {
   ty: number
 } | null = null
 
-// ── Frame Selection & Drag Snapping ───────────────────────────────────────────────────
+// ── Frame Selection, Interactive Passthrough, Idle Rasterization & Drag Snapping ──────
+const MAX_LIVE_IFRAMES = 2
+const SHIELD_DRAG_THRESHOLD_PX = 4
+const VALID_RASTER_BITMAP_RE = /^data:image\/(?:png|jpeg|webp);base64,/i
+
 const internalSelectedId = ref<string | null>(props.selectedFrameId ?? props.frames[0]?.id ?? null)
+const interactiveFrameId = ref<string | null>(null)
+const recentActiveFrameIds = ref<string[]>(
+  internalSelectedId.value ? [internalSelectedId.value] : []
+)
+
+function recordRecentActiveFrame(frameId: string | null): void {
+  if (!frameId) return
+  recentActiveFrameIds.value = [
+    frameId,
+    ...recentActiveFrameIds.value.filter((id) => id !== frameId)
+  ].slice(0, 8)
+}
 
 watch(
   () => props.selectedFrameId,
   (next) => {
     if (next !== undefined) {
       internalSelectedId.value = next
+      recordRecentActiveFrame(next)
     }
   }
 )
@@ -139,20 +158,29 @@ watch(
 watch(
   () => props.frames,
   (nextFrames) => {
+    const validIds = new Set(nextFrames.map((frame) => frame.id))
+    recentActiveFrameIds.value = recentActiveFrameIds.value.filter((id) => validIds.has(id))
+    if (interactiveFrameId.value && !validIds.has(interactiveFrameId.value)) {
+      interactiveFrameId.value = null
+    }
     if (nextFrames.length === 0) {
       if (internalSelectedId.value !== null) {
         internalSelectedId.value = null
       }
       return
     }
-    if (
-      !internalSelectedId.value ||
-      !nextFrames.some((frame) => frame.id === internalSelectedId.value)
-    ) {
+    if (!internalSelectedId.value || !validIds.has(internalSelectedId.value)) {
       internalSelectedId.value = nextFrames[0]!.id
+      recordRecentActiveFrame(internalSelectedId.value)
     }
   }
 )
+
+watch(activeTool, (tool) => {
+  if (tool !== 'select') {
+    interactiveFrameId.value = null
+  }
+})
 
 const activeFrameId = computed(() =>
   props.selectedFrameId !== undefined ? props.selectedFrameId : internalSelectedId.value
@@ -160,7 +188,34 @@ const activeFrameId = computed(() =>
 
 function selectFrame(frameId: string | null): void {
   internalSelectedId.value = frameId
+  recordRecentActiveFrame(frameId)
+  if (interactiveFrameId.value && interactiveFrameId.value !== frameId) {
+    interactiveFrameId.value = null
+  }
   emit('select-frame', frameId)
+}
+
+function disengageInteractiveFrame(): void {
+  if (interactiveFrameId.value !== null) {
+    interactiveFrameId.value = null
+  }
+}
+
+function enterInteractiveMode(frameId: string): void {
+  if (isPeeking.value || effectiveHandMode.value || activeTool.value !== 'select') return
+  selectFrame(frameId)
+  interactiveFrameId.value = frameId
+  recordRecentActiveFrame(frameId)
+  statusAnnouncement.value = 'Interactive frame mode enabled'
+}
+
+function toggleInteractiveFrame(frameId: string): void {
+  if (interactiveFrameId.value === frameId) {
+    interactiveFrameId.value = null
+    statusAnnouncement.value = 'Interactive frame mode disabled'
+    return
+  }
+  enterInteractiveMode(frameId)
 }
 
 const draggingFrameId = ref<string | null>(null)
@@ -176,9 +231,24 @@ let frameDragOrigin: {
   originY: number
 } | null = null
 
+let pendingShieldDrag: {
+  pointerId: number
+  frameId: string
+  startClientX: number
+  startClientY: number
+  originX: number
+  originY: number
+} | null = null
+
 const isInteracting = computed(
   () => isPanning.value || isWheelInteracting.value || draggingFrameId.value !== null
 )
+
+watch(isInteracting, (interacting) => {
+  if (interacting) {
+    disengageInteractiveFrame()
+  }
+})
 
 const iframesBlocked = computed(
   () =>
@@ -187,6 +257,26 @@ const iframesBlocked = computed(
     activeTool.value === 'hand' ||
     activeTool.value === 'note'
 )
+
+function isFrameInteractive(frameId: string): boolean {
+  return (
+    interactiveFrameId.value === frameId &&
+    !iframesBlocked.value &&
+    !isPeeking.value &&
+    activeTool.value === 'select'
+  )
+}
+
+function isFrameIframeBlocked(frameId: string): boolean {
+  return iframesBlocked.value || !isFrameInteractive(frameId)
+}
+
+function getFrameBitmap(frameId: string): string {
+  const raw = props.frameBitmaps?.[frameId]
+  if (typeof raw !== 'string') return ''
+  const trimmed = raw.trim()
+  return VALID_RASTER_BITMAP_RE.test(trimmed) ? trimmed : ''
+}
 
 const effectiveHandMode = computed(() => activeTool.value === 'hand' || spaceHeld.value)
 const labelScale = computed(() => inverseLabelScale(viewport.value.k))
@@ -341,6 +431,35 @@ const displayedFrames = computed<TdsCanvasFrame[]>(() => {
   return props.frames
 })
 
+const liveIframeIds = computed<Set<string>>(() => {
+  const live = new Set<string>()
+  if (isInteracting.value) return live
+  const visibleIds = new Set(displayedFrames.value.map((frame) => frame.id))
+  const addIfVisible = (id: string | null | undefined): void => {
+    if (!id || live.size >= MAX_LIVE_IFRAMES || !visibleIds.has(id)) return
+    live.add(id)
+  }
+
+  addIfVisible(interactiveFrameId.value)
+  addIfVisible(activeFrameId.value)
+  for (const id of recentActiveFrameIds.value) {
+    addIfVisible(id)
+  }
+  for (const frame of displayedFrames.value) {
+    addIfVisible(frame.id)
+  }
+  return live
+})
+
+function shouldRenderRasterImage(frame: TdsCanvasFrame): boolean {
+  if (isPeeking.value) return false
+  const bitmap = getFrameBitmap(frame.id)
+  if (!bitmap) return false
+  if (interactiveFrameId.value === frame.id && !isInteracting.value) return false
+  if (isInteracting.value) return true
+  return !liveIframeIds.value.has(frame.id)
+}
+
 const selectedFrame = computed<TdsCanvasFrame | null>(() => {
   if (!activeFrameId.value) return null
   return displayedFrames.value.find((frame) => frame.id === activeFrameId.value) ?? null
@@ -454,6 +573,7 @@ function getEffectiveContainerSize(): { width: number; height: number } {
 }
 
 function fitToScreen(): void {
+  disengageInteractiveFrame()
   const size = getEffectiveContainerSize()
   const target = computeViewportFit(displayedFrames.value, size, 48)
   animateViewportTo(target)
@@ -461,6 +581,7 @@ function fitToScreen(): void {
 }
 
 function zoomByFactor(factor: number): void {
+  disengageInteractiveFrame()
   const size = getEffectiveContainerSize()
   const center = { x: size.width / 2, y: size.height / 2 }
   const nextK = clampCanvasZoom(viewport.value.k * factor)
@@ -470,6 +591,7 @@ function zoomByFactor(factor: number): void {
 }
 
 function resetZoom(): void {
+  disengageInteractiveFrame()
   const size = getEffectiveContainerSize()
   const center = { x: size.width / 2, y: size.height / 2 }
   const target = scaleAbout(viewport.value, 1, center)
@@ -479,6 +601,7 @@ function resetZoom(): void {
 
 function handleAutoArrange(): void {
   if (isPeeking.value || props.frames.length === 0) return
+  disengageInteractiveFrame()
   const arranged = arrangeFramesGrid(props.frames)
   emit('update:frames', arranged)
   pushHistorySnapshot('Auto-arrange', arranged)
@@ -498,6 +621,7 @@ function scheduleWheelIdleClear(): void {
 }
 
 function onViewportWheel(event: WheelEvent): void {
+  disengageInteractiveFrame()
   cancelViewportSpring()
   isWheelInteracting.value = true
   scheduleWheelIdleClear()
@@ -532,6 +656,7 @@ function onViewportPointerDown(event: PointerEvent): void {
 
   if (!shouldPan) return
 
+  disengageInteractiveFrame()
   if (clickedBackdrop && event.button === 0 && !effectiveHandMode.value) {
     activeNoteId.value = null
   }
@@ -555,6 +680,17 @@ function onViewportPointerDown(event: PointerEvent): void {
   }
 }
 
+function captureViewportPointer(pointerId: number): void {
+  const el = viewportRef.value
+  if (el && typeof el.setPointerCapture === 'function') {
+    try {
+      el.setPointerCapture(pointerId)
+    } catch {
+      // Ignore synthetic pointer ids
+    }
+  }
+}
+
 function onViewportPointerMove(event: PointerEvent): void {
   if (panDragOrigin && event.pointerId === panDragOrigin.pointerId) {
     viewport.value = {
@@ -563,6 +699,26 @@ function onViewportPointerMove(event: PointerEvent): void {
       ty: panDragOrigin.ty + (event.clientY - panDragOrigin.clientY)
     }
     return
+  }
+
+  if (pendingShieldDrag && event.pointerId === pendingShieldDrag.pointerId) {
+    const dist = Math.hypot(
+      event.clientX - pendingShieldDrag.startClientX,
+      event.clientY - pendingShieldDrag.startClientY
+    )
+    if (dist < SHIELD_DRAG_THRESHOLD_PX) {
+      return
+    }
+    frameDragOrigin = { ...pendingShieldDrag }
+    pendingShieldDrag = null
+    draggingFrameId.value = frameDragOrigin.frameId
+    dragPreviewPos.value = {
+      id: frameDragOrigin.frameId,
+      x: frameDragOrigin.originX,
+      y: frameDragOrigin.originY
+    }
+    activeSnapGuides.value = []
+    captureViewportPointer(event.pointerId)
   }
 
   if (frameDragOrigin && event.pointerId === frameDragOrigin.pointerId) {
@@ -595,6 +751,10 @@ function onViewportPointerMove(event: PointerEvent): void {
 }
 
 function finishPointerInteraction(event: PointerEvent): void {
+  if (pendingShieldDrag && event.pointerId === pendingShieldDrag.pointerId) {
+    pendingShieldDrag = null
+  }
+
   if (panDragOrigin && event.pointerId === panDragOrigin.pointerId) {
     isPanning.value = false
     panDragOrigin = null
@@ -623,6 +783,7 @@ function finishPointerInteraction(event: PointerEvent): void {
 function onFrameDragPointerDown(frame: TdsCanvasFrame, event: PointerEvent): void {
   if (event.button !== 0 || effectiveHandMode.value || isPeeking.value) return
   event.stopPropagation()
+  disengageInteractiveFrame()
   selectFrame(frame.id)
   cancelViewportSpring()
   draggingFrameId.value = frame.id
@@ -636,14 +797,22 @@ function onFrameDragPointerDown(frame: TdsCanvasFrame, event: PointerEvent): voi
   }
   dragPreviewPos.value = { id: frame.id, x: frame.x, y: frame.y }
   activeSnapGuides.value = []
+  captureViewportPointer(event.pointerId)
+}
 
-  const el = viewportRef.value
-  if (el && typeof el.setPointerCapture === 'function') {
-    try {
-      el.setPointerCapture(event.pointerId)
-    } catch {
-      // Ignore synthetic pointer ids
-    }
+function onFrameShieldPointerDown(frame: TdsCanvasFrame, event: PointerEvent): void {
+  if (event.button !== 0 || effectiveHandMode.value) return
+  event.stopPropagation()
+  selectFrame(frame.id)
+  if (isPeeking.value || activeTool.value !== 'select') return
+  cancelViewportSpring()
+  pendingShieldDrag = {
+    pointerId: event.pointerId,
+    frameId: frame.id,
+    startClientX: event.clientX,
+    startClientY: event.clientY,
+    originX: frame.x,
+    originY: frame.y
   }
 }
 
@@ -806,6 +975,7 @@ function handleHistoryRedo(): void {
 }
 
 function handleTogglePeek(snapshotId: string): void {
+  disengageInteractiveFrame()
   peekingSnapshotId.value = peekingSnapshotId.value === snapshotId ? null : snapshotId
 }
 
@@ -919,6 +1089,7 @@ function onKeyDown(event: KeyboardEvent): void {
   if (mockupExportOpen.value || isEditableTarget(event.target)) return
 
   if (event.code === 'Space') {
+    disengageInteractiveFrame()
     if (!spaceHeld.value) {
       spaceHeld.value = true
     }
@@ -926,6 +1097,11 @@ function onKeyDown(event: KeyboardEvent): void {
   }
 
   if (event.key === 'Escape') {
+    if (interactiveFrameId.value) {
+      disengageInteractiveFrame()
+      statusAnnouncement.value = 'Interactive frame mode disabled'
+      return
+    }
     if (noteDraft.value) {
       noteDraft.value = null
       return
@@ -1408,6 +1584,26 @@ onBeforeUnmount(() => {
         </span>
       </button>
 
+      <button
+        type="button"
+        class="TdsDesignCanvas-PillBtn"
+        :class="{ 'is-active': interactiveFrameId === selectedFrame.id }"
+        :aria-pressed="interactiveFrameId === selectedFrame.id"
+        :disabled="isPeeking"
+        title="Interact inside frame (Esc to exit)"
+        data-testid="tds-canvas-interact-toggle"
+        @click="toggleInteractiveFrame(selectedFrame.id)"
+      >
+        <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+          <span
+            :class="
+              interactiveFrameId === selectedFrame.id ? 'i-ri-cursor-fill' : 'i-ri-focus-3-line'
+            "
+          />
+        </span>
+        <span>{{ interactiveFrameId === selectedFrame.id ? 'Interacting' : 'Interact' }}</span>
+      </button>
+
       <div class="TdsDesignCanvas-InspectorEnd">
         <TxPopover
           v-if="aiActionsEnabled"
@@ -1793,10 +1989,12 @@ onBeforeUnmount(() => {
           class="TdsDesignCanvas-Frame"
           :class="{
             'is-selected': activeFrameId === frame.id,
-            'is-dragging': draggingFrameId === frame.id
+            'is-dragging': draggingFrameId === frame.id,
+            'is-interactive': isFrameInteractive(frame.id)
           }"
           :style="getFramePositionStyle(frame)"
           :data-frame-id="frame.id"
+          :data-interactive="String(isFrameInteractive(frame.id))"
           :data-testid="`tds-canvas-frame-${frame.id}`"
         >
           <!-- Inverse-scaled frame title bar -->
@@ -1861,6 +2059,32 @@ onBeforeUnmount(() => {
             <button
               v-if="!isPeeking"
               type="button"
+              class="TdsDesignCanvas-FrameInteract"
+              :class="{ 'is-active': interactiveFrameId === frame.id }"
+              :aria-pressed="interactiveFrameId === frame.id"
+              :title="
+                interactiveFrameId === frame.id
+                  ? 'Exit interact mode (Esc)'
+                  : 'Interact inside frame (double-click)'
+              "
+              :aria-label="
+                interactiveFrameId === frame.id ? 'Exit interact mode' : 'Interact inside frame'
+              "
+              :data-testid="`tds-canvas-frame-interact-${frame.id}`"
+              @click.stop="toggleInteractiveFrame(frame.id)"
+            >
+              <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+                <span
+                  :class="
+                    interactiveFrameId === frame.id ? 'i-ri-cursor-fill' : 'i-ri-focus-3-line'
+                  "
+                />
+              </span>
+            </button>
+
+            <button
+              v-if="!isPeeking"
+              type="button"
               class="TdsDesignCanvas-FrameDelete"
               :title="labels.deleteFrame"
               :aria-label="labels.deleteFrame"
@@ -1886,15 +2110,33 @@ onBeforeUnmount(() => {
               :stage-padding="0"
               :show-meta="false"
             >
+              <img
+                v-if="shouldRenderRasterImage(frame)"
+                :src="getFrameBitmap(frame.id)"
+                :alt="frame.title"
+                class="TdsDesignCanvas-RasterImg"
+                draggable="false"
+                :data-testid="`tds-canvas-frame-raster-${frame.id}`"
+              />
               <iframe
+                v-else
                 class="TdsDesignCanvas-Iframe"
-                :class="{ 'is-blocked': iframesBlocked }"
+                :class="{ 'is-blocked': isFrameIframeBlocked(frame.id) }"
                 :sandbox="getFrameIframeSandbox(frame.kind)"
                 :title="frame.title"
                 :srcdoc="buildSandboxedFrameSrcdoc(frame.source, frame.kind, props.themeCss)"
                 :data-testid="`tds-canvas-frame-iframe-${frame.id}`"
               />
             </TdsDeviceFrame>
+
+            <!-- Transparent pointer-capture shield prevents real-Chromium opaque iframes from swallowing wheel/drag -->
+            <div
+              v-if="!isFrameInteractive(frame.id) && !(activeTool === 'note' && !isPeeking)"
+              class="TdsDesignCanvas-PointerShield"
+              :data-testid="`tds-canvas-frame-shield-${frame.id}`"
+              @pointerdown="onFrameShieldPointerDown(frame, $event)"
+              @dblclick.stop="enterInteractiveMode(frame.id)"
+            />
 
             <!-- Note drop capture surface active when Pin Note tool (`C`) is selected -->
             <button
@@ -2029,6 +2271,7 @@ onBeforeUnmount(() => {
       :frames="frames"
       :labels="labels"
       :theme-css="props.themeCss"
+      :frame-bitmaps="props.frameBitmaps"
     />
   </section>
 </template>
@@ -2669,6 +2912,37 @@ onBeforeUnmount(() => {
   }
 }
 
+.TdsDesignCanvas-FrameInteract {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--shell-radius-sm);
+  background: var(--shell-bg);
+  color: var(--shell-text-secondary);
+  box-shadow: inset 0 0 0 1px var(--shell-border);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+
+  &.is-active {
+    background: var(--shell-primary-soft);
+    color: var(--shell-primary);
+    box-shadow: inset 0 0 0 1px var(--shell-primary-border);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--shell-focus-ring);
+  }
+}
+
 .TdsDesignCanvas-FrameDelete {
   display: inline-flex;
   align-items: center;
@@ -2697,6 +2971,10 @@ onBeforeUnmount(() => {
   .TdsDesignCanvas-Frame.is-selected & {
     box-shadow: 0 0 0 calc(2px * var(--tds-canvas-lscale, 1)) var(--shell-primary);
   }
+
+  .TdsDesignCanvas-Frame.is-interactive & {
+    box-shadow: 0 0 0 calc(2px * var(--tds-canvas-lscale, 1)) var(--shell-success);
+  }
 }
 
 .TdsDesignCanvas-Iframe {
@@ -2709,6 +2987,36 @@ onBeforeUnmount(() => {
   &.is-blocked,
   .TdsDesignCanvas.is-interacting & {
     pointer-events: none;
+  }
+}
+
+.TdsDesignCanvas-RasterImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  background: var(--shell-bg);
+  pointer-events: none;
+  user-select: none;
+}
+
+.TdsDesignCanvas-PointerShield {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  cursor: default;
+
+  .TdsDesignCanvas.is-hand-mode & {
+    cursor: grab;
+  }
+
+  .TdsDesignCanvas.is-hand-mode .TdsDesignCanvas-Stage.is-interacting &,
+  .TdsDesignCanvas-Frame.is-dragging & {
+    cursor: grabbing;
   }
 }
 

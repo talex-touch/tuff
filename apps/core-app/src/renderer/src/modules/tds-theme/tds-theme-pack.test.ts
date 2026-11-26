@@ -4,10 +4,13 @@ import {
   applyPackWindowPreference,
   applyTdsThemePack,
   clearTdsThemePack,
+  compositeRgbaOverRgb,
   computeContrastRatio,
   exportThemePackAsCss,
   hydrateTdsThemePack,
   isSupportedTokenKey,
+  parseHexColor,
+  relativeLuminanceRgb,
   TDS_APPLE_NEUTRAL_PACK,
   TDS_DEFAULT_THEME_PACK_ID,
   TDS_OBSIDIAN_COBALT_PACK,
@@ -18,8 +21,50 @@ import {
   TDS_THEME_PACKS,
   useTdsThemePack,
   validateTdsThemePack,
+  type RgbTuple,
   type TdsThemePack
 } from './index'
+
+function computeRefractionContrast(
+  fgHex: string,
+  surfaceHex: string,
+  backdropHex: string,
+  surfaceOpacity: number
+): number {
+  const fg = parseHexColor(fgHex)!
+  const surface = parseHexColor(surfaceHex)!
+  const backdrop = parseHexColor(backdropHex)!
+  const compositedSurface = compositeRgbaOverRgb(
+    [surface[0], surface[1], surface[2], surfaceOpacity],
+    [backdrop[0], backdrop[1], backdrop[2]]
+  )
+  const effectiveFg: RgbTuple =
+    fg[3] < 1 ? compositeRgbaOverRgb(fg, compositedSurface) : [fg[0], fg[1], fg[2]]
+  const la = relativeLuminanceRgb(effectiveFg)
+  const lb = relativeLuminanceRgb(compositedSurface)
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
+
+function computeRefractionSoftChipContrast(
+  fgHex: string,
+  softAlphaHex: string,
+  bgHex: string,
+  backdropHex: string,
+  surfaceOpacity: number
+): number {
+  const fg = parseHexColor(fgHex)!
+  const bg = parseHexColor(bgHex)!
+  const backdrop = parseHexColor(backdropHex)!
+  const compositedBg = compositeRgbaOverRgb(
+    [bg[0], bg[1], bg[2], surfaceOpacity],
+    [backdrop[0], backdrop[1], backdrop[2]]
+  )
+  const softFill = parseHexColor(`${fgHex}${softAlphaHex}`)!
+  const effectiveChipBg = compositeRgbaOverRgb(softFill, compositedBg)
+  const la = relativeLuminanceRgb([fg[0], fg[1], fg[2]])
+  const lb = relativeLuminanceRgb(effectiveChipBg)
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
 
 function makeCustomValidPack(overrides?: Partial<TdsThemePack>): TdsThemePack {
   return {
@@ -155,6 +200,89 @@ describe('TDS Theme Pack protocol, WCAG 2.1 AA validator & runtime', () => {
         }
       }
     })
+
+    it('keeps all 4 built-in packs WCAG AA legible under window-refraction (0.85 & 0.94) translucency', () => {
+      const DARK_DESKTOP_BACKDROP = '#0b0b0d'
+      const LIGHT_DESKTOP_BACKDROP = '#e8e8ec'
+
+      for (const preset of TDS_THEME_PACKS) {
+        for (const mode of ['light', 'dark'] as const) {
+          const ramp = preset.tokens[mode]
+          const matchedBackdrop = mode === 'light' ? LIGHT_DESKTOP_BACKDROP : DARK_DESKTOP_BACKDROP
+          const crossBackdrop = mode === 'light' ? DARK_DESKTOP_BACKDROP : LIGHT_DESKTOP_BACKDROP
+          const softAlpha = mode === 'light' ? '14' : '26'
+
+          // AppShell-View refraction translucency (0.85) over matched desktop backdrop
+          for (const opacity of [0.85, 0.94]) {
+            expect(
+              computeRefractionContrast(ramp.textPrimary!, ramp.bg!, matchedBackdrop, opacity),
+              `${preset.meta.id}.${mode} textPrimary/bg @${opacity}`
+            ).toBeGreaterThanOrEqual(4.5)
+            expect(
+              computeRefractionContrast(ramp.textPrimary!, ramp.surface!, matchedBackdrop, opacity),
+              `${preset.meta.id}.${mode} textPrimary/surface @${opacity}`
+            ).toBeGreaterThanOrEqual(4.5)
+            expect(
+              computeRefractionContrast(ramp.textRegular!, ramp.bg!, matchedBackdrop, opacity),
+              `${preset.meta.id}.${mode} textRegular/bg @${opacity}`
+            ).toBeGreaterThanOrEqual(4.5)
+            expect(
+              computeRefractionContrast(ramp.textRegular!, ramp.surface!, matchedBackdrop, opacity),
+              `${preset.meta.id}.${mode} textRegular/surface @${opacity}`
+            ).toBeGreaterThanOrEqual(4.5)
+            expect(
+              computeRefractionContrast(ramp.textSecondary!, ramp.bg!, matchedBackdrop, opacity),
+              `${preset.meta.id}.${mode} textSecondary/bg @${opacity}`
+            ).toBeGreaterThanOrEqual(4.5)
+            expect(
+              computeRefractionContrast(
+                ramp.textSecondary!,
+                ramp.surface!,
+                matchedBackdrop,
+                opacity
+              ),
+              `${preset.meta.id}.${mode} textSecondary/surface @${opacity}`
+            ).toBeGreaterThanOrEqual(4.5)
+            expect(
+              computeRefractionContrast(ramp.primary!, ramp.bg!, matchedBackdrop, opacity),
+              `${preset.meta.id}.${mode} primary/bg UI @${opacity}`
+            ).toBeGreaterThanOrEqual(3.0)
+
+            // Semantic chip labels over translucent refraction bg
+            for (const semanticKey of ['success', 'warning', 'danger'] as const) {
+              expect(
+                computeRefractionSoftChipContrast(
+                  ramp[semanticKey]!,
+                  softAlpha,
+                  ramp.bg!,
+                  matchedBackdrop,
+                  opacity
+                ),
+                `${preset.meta.id}.${mode} ${semanticKey}/soft @${opacity}`
+              ).toBeGreaterThanOrEqual(4.5)
+            }
+
+            // Worst-case opposing desktop backdrop (light window over dark desktop & vice versa)
+            expect(
+              computeRefractionContrast(ramp.textPrimary!, ramp.bg!, crossBackdrop, opacity),
+              `${preset.meta.id}.${mode} textPrimary/bg cross-backdrop @${opacity}`
+            ).toBeGreaterThanOrEqual(4.5)
+            expect(
+              computeRefractionContrast(ramp.textRegular!, ramp.bg!, crossBackdrop, opacity),
+              `${preset.meta.id}.${mode} textRegular/bg cross-backdrop @${opacity}`
+            ).toBeGreaterThanOrEqual(4.5)
+            expect(
+              computeRefractionContrast(ramp.textRegular!, ramp.surface!, crossBackdrop, opacity),
+              `${preset.meta.id}.${mode} textRegular/surface cross-backdrop @${opacity}`
+            ).toBeGreaterThanOrEqual(4.5)
+            expect(
+              computeRefractionContrast(ramp.primary!, ramp.bg!, crossBackdrop, opacity),
+              `${preset.meta.id}.${mode} primary/bg cross-backdrop UI @${opacity}`
+            ).toBeGreaterThanOrEqual(3.0)
+          }
+        }
+      }
+    })
   })
 
   describe('security & WCAG AA validation', () => {
@@ -270,7 +398,9 @@ describe('TDS Theme Pack protocol, WCAG 2.1 AA validator & runtime', () => {
       expect(css).toContain('--shell-bg: #f8fafc;')
       expect(css).toContain('--shell-bg: #12141a;')
       expect(css).toContain('--shell-primary: #2452d6;')
+      expect(css).toContain('--shell-focus-ring: #2452d6;')
       expect(css).toContain('--shell-primary: #6ea2ff;')
+      expect(css).toContain('--shell-focus-ring: #6ea2ff;')
 
       // Invalid pack produces empty CSS string (defense-in-depth)
       const invalidPack = makeCustomValidPack()

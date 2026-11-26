@@ -28,8 +28,10 @@ import {
   buildPrintableMockupHtml,
   computeMockupPageLayout,
   escapeXml,
+  isValidFrameBitmapDataUrl,
   paginateMockupFrames,
   rasterizeSvgToPngBlob,
+  renderMockupPagePngBlob,
   renderMockupPageSvg
 } from './mockup-renderer'
 import type { TdsCanvasFrame, TdsMockupExportEventPayload } from './types'
@@ -370,6 +372,137 @@ describe('mockup-renderer pagination, layout math, SVG XML safety, printable HTM
     // PNG magic signature: 89 50 4E 47
     expect(Array.from(bytes.slice(0, 4))).toEqual([0x89, 0x50, 0x4e, 0x47])
   })
+
+  it('renders real-pixel <image> with zero <foreignObject> when valid frameBitmaps are supplied and falls back otherwise', () => {
+    const validPng =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    expect(isValidFrameBitmapDataUrl(validPng)).toBe(true)
+    expect(isValidFrameBitmapDataUrl('https://evil.example/a.png')).toBe(false)
+    expect(isValidFrameBitmapDataUrl('data:image/svg+xml;base64,PHN2Zy8+')).toBe(false)
+    expect(isValidFrameBitmapDataUrl('javascript:alert(1)')).toBe(false)
+
+    const f1 = makeFrame({ id: 'real-1', title: 'Real Pixel Screen' })
+    const f2 = makeFrame({ id: 'wire-2', title: 'Wireframe Fallback' })
+    const singlePage = paginateMockupFrames([f1], 1)[0]!
+
+    const realSvg = renderMockupPageSvg(singlePage, DEFAULT_MOCKUP_OPTIONS, {
+      frameBitmaps: { 'real-1': validPng }
+    })
+    expect(realSvg).toContain('<image class="tds-mockup-bitmap"')
+    expect(realSvg).toContain(`href="${validPng}"`)
+    expect(realSvg).toContain('preserveAspectRatio="xMidYMid slice"')
+    expect(realSvg).toContain('clip-path="url(#tds-mockup-clip-0)"')
+    expect(realSvg).not.toContain('<foreignObject')
+
+    // Mixed board: valid bitmap gets <image>, invalid/missing falls back cleanly to <foreignObject>
+    const mixedPage = paginateMockupFrames([f1, f2], 2)[0]!
+    const mixedSvg = renderMockupPageSvg(mixedPage, DEFAULT_MOCKUP_OPTIONS, {
+      frameBitmaps: {
+        'real-1': validPng,
+        'wire-2': 'https://blocked.example/remote.png'
+      }
+    })
+    expect(mixedSvg).toContain(`href="${validPng}"`)
+    expect(mixedSvg).not.toContain('https://blocked.example/remote.png')
+    expect(mixedSvg).toContain('<foreignObject')
+  })
+
+  it('composites real frame bitmaps directly onto native Canvas via ctx.drawImage in renderMockupPagePngBlob', async () => {
+    const validPng =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    const page = paginateMockupFrames([makeFrame({ id: 'px-1', title: 'Retina Board' })], 1)[0]!
+
+    // 1. Without bitmaps -> cleanly falls back to rasterizeSvgToPngBlob PNG Blob
+    const fallbackBlob = await renderMockupPagePngBlob(
+      page,
+      DEFAULT_MOCKUP_OPTIONS,
+      {},
+      { timeoutMs: 25 }
+    )
+    expect(fallbackBlob).toBeInstanceOf(Blob)
+    expect(fallbackBlob.type).toBe('image/png')
+
+    // 2. With bitmaps + mocked Canvas 2D & Image decode -> composites directly with ctx.drawImage
+    const drawImageSpy = vi.fn()
+    const fillRectSpy = vi.fn()
+    const clipSpy = vi.fn()
+    const scaleSpy = vi.fn()
+    const mockCtx = {
+      save: vi.fn(),
+      restore: vi.fn(),
+      clearRect: vi.fn(),
+      scale: scaleSpy,
+      fillRect: fillRectSpy,
+      beginPath: vi.fn(),
+      rect: vi.fn(),
+      moveTo: vi.fn(),
+      arcTo: vi.fn(),
+      arc: vi.fn(),
+      closePath: vi.fn(),
+      fill: vi.fn(),
+      stroke: vi.fn(),
+      clip: clipSpy,
+      fillText: vi.fn(),
+      drawImage: drawImageSpy,
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 1,
+      font: '',
+      textAlign: 'left',
+      textBaseline: 'alphabetic',
+      shadowColor: '',
+      shadowBlur: 0,
+      shadowOffsetX: 0,
+      shadowOffsetY: 0,
+      globalAlpha: 1
+    } as unknown as CanvasRenderingContext2D
+
+    const getContextSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue(mockCtx)
+    const toBlobSpy = vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((cb) => {
+      cb(
+        new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01])], {
+          type: 'image/png'
+        })
+      )
+    })
+
+    const OriginalImage = globalThis.Image
+    class MockBitmapImage {
+      decoding = 'async'
+      naturalWidth = 402
+      naturalHeight = 874
+      width = 402
+      height = 874
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+      set src(_value: string) {
+        queueMicrotask(() => {
+          this.onload?.()
+        })
+      }
+    }
+    vi.stubGlobal('Image', MockBitmapImage)
+
+    try {
+      const pngBlob = await renderMockupPagePngBlob(
+        page,
+        { ...DEFAULT_MOCKUP_OPTIONS, scale: 2, shadow: true, brand: true, showTitles: true },
+        { frameBitmaps: { 'px-1': validPng } },
+        { timeoutMs: 200 }
+      )
+      expect(pngBlob).toBeInstanceOf(Blob)
+      expect(pngBlob.type).toBe('image/png')
+      expect(scaleSpy).toHaveBeenCalledWith(2, 2)
+      expect(clipSpy).toHaveBeenCalled()
+      expect(drawImageSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.stubGlobal('Image', OriginalImage)
+      getContextSpy.mockRestore()
+      toBlobSpy.mockRestore()
+    }
+  })
 })
 
 describe('TdsMockupExportDialog & TdsDesignCanvas themeCss / canvasPattern / export integration', () => {
@@ -532,6 +665,17 @@ describe('TdsMockupExportDialog & TdsDesignCanvas themeCss / canvasPattern / exp
     await wrapper.get('[data-testid="tds-canvas-export-mockup"]').trigger('click')
     await nextTick()
     expect(wrapper.find('[data-testid="tds-mockup-export-dialog"]').exists()).toBe(true)
+
+    // With frameBitmaps forwarded through TdsDesignCanvas -> TdsMockupExportDialog, preview SVG embeds real <image>
+    const validPng =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    await wrapper.setProps({ frameBitmaps: { m1: validPng } })
+    await nextTick()
+    const previewSrc = decodeURIComponent(
+      wrapper.get('[data-testid="tds-mockup-preview-img"]').attributes('src') ?? ''
+    )
+    expect(previewSrc).toContain('<image class="tds-mockup-bitmap"')
+    expect(previewSrc).not.toContain('<foreignObject')
   })
 
   it('satisfies TDS design discipline in TdsMockupExportDialog.vue (tokens-only, refraction surface, zero hover color transition, reduced motion)', () => {
