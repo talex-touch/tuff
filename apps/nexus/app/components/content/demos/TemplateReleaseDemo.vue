@@ -95,11 +95,11 @@ const STEP_TOOK: Partial<Record<StepKey, string>> = { build: '4m 12s', sign: '38
 // Named as apps/core-app/electron-builder.yml names real artifacts, with the
 // demo version in place of a real one.
 const ARTIFACTS: ArtifactSeed[] = [
-  { id: 'mac-arm64', icon: 'i-cib-apple', name: { zh: 'macOS · Apple 芯片', en: 'macOS · Apple silicon' }, file: 'tuff-2.5.0-demo.4-macos-arm64.dmg', ext: '.dmg', size: '126.4 MB', signer: 'Developer ID', notarize: true },
-  { id: 'mac-x64', icon: 'i-cib-apple', name: { zh: 'macOS · Intel', en: 'macOS · Intel' }, file: 'tuff-2.5.0-demo.4-macos-x64.dmg', ext: '.dmg', size: '131.2 MB', signer: 'Developer ID', notarize: true },
-  { id: 'win-x64', icon: 'i-cib-windows', name: { zh: 'Windows · x64', en: 'Windows · x64' }, file: 'tuff-2.5.0-demo.4-setup.exe', ext: '.exe', size: '118.7 MB', signer: 'Authenticode', notarize: false },
-  { id: 'linux-appimage', icon: 'i-cib-linux', name: { zh: 'Linux · AppImage', en: 'Linux · AppImage' }, file: 'tuff-2.5.0-demo.4.AppImage', ext: '.AppImage', size: '140.3 MB', signer: null, notarize: false },
-  { id: 'linux-deb', icon: 'i-cib-debian', name: { zh: 'Linux · deb', en: 'Linux · deb' }, file: 'tuff-2.5.0-demo.4.deb', ext: '.deb', size: '96.5 MB', signer: null, notarize: false },
+  { id: 'mac-arm64', icon: 'i-carbon-apple', name: { zh: 'macOS · Apple 芯片', en: 'macOS · Apple silicon' }, file: 'tuff-2.5.0-demo.4-macos-arm64.dmg', ext: '.dmg', size: '126.4 MB', signer: 'Developer ID', notarize: true },
+  { id: 'mac-x64', icon: 'i-carbon-apple', name: { zh: 'macOS · Intel', en: 'macOS · Intel' }, file: 'tuff-2.5.0-demo.4-macos-x64.dmg', ext: '.dmg', size: '131.2 MB', signer: 'Developer ID', notarize: true },
+  { id: 'win-x64', icon: 'i-carbon-grid', name: { zh: 'Windows · x64', en: 'Windows · x64' }, file: 'tuff-2.5.0-demo.4-setup.exe', ext: '.exe', size: '118.7 MB', signer: 'Authenticode', notarize: false },
+  { id: 'linux-appimage', icon: 'i-carbon-linux-alt', name: { zh: 'Linux · AppImage', en: 'Linux · AppImage' }, file: 'tuff-2.5.0-demo.4.AppImage', ext: '.AppImage', size: '140.3 MB', signer: null, notarize: false },
+  { id: 'linux-deb', icon: 'i-carbon-package', name: { zh: 'Linux · deb', en: 'Linux · deb' }, file: 'tuff-2.5.0-demo.4.deb', ext: '.deb', size: '96.5 MB', signer: null, notarize: false },
 ]
 
 const LOG_HEAD = [

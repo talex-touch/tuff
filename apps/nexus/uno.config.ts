@@ -1,3 +1,5 @@
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   defineConfig,
@@ -14,11 +16,59 @@ const markdownEditorToolbarIcons = fileURLToPath(
   new URL('../../packages/tuffex/packages/components/src/markdown-editor/src/toolbar-icons.ts', import.meta.url),
 )
 
+const appRootDir = fileURLToPath(new URL('./app', import.meta.url))
+const ICON_TOKEN_RE = /\bi-(?:carbon|logos)-[a-z0-9-]+\b/g
+const UNO_PIPELINE_FILE_RE = /\.(?:vue|svelte|[jt]sx|vine\.ts|mdx?|astro|elm|php|phtml|marko|html)$/
+const UNO_DATA_MODULE_RE = /(?:^|\/)(?:data|composables|utils)\/.*\.ts$/
+
+/**
+ * Classifies icon tokens that appear exclusively inside `app/components/content/demos/*`.
+ * Those icons move into their own UnoCSS layer (`demo-icons`, imported lazily by
+ * `app/plugins/unocss-icons.client.ts` only on `/docs/dev/*`), keeping ~100 KB of demo-only
+ * SVG masks out of the global `__uno_icons.css` sheet downloaded by public landing/store/guide pages.
+ */
+function collectDemoOnlyIconClasses(): Set<string> {
+  if (!existsSync(appRootDir))
+    return new Set()
+
+  const demoIcons = new Set<string>()
+  const appIcons = new Set<string>(MARKDOWN_EDITOR_ICON_CLASSES)
+
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir)) {
+      if (entry === 'node_modules' || entry.startsWith('.'))
+        continue
+      const fullPath = path.join(dir, entry)
+      const stats = statSync(fullPath)
+      if (stats.isDirectory()) {
+        walk(fullPath)
+        continue
+      }
+      const rel = path.relative(appRootDir, fullPath).replace(/\\/g, '/')
+      if (!UNO_PIPELINE_FILE_RE.test(rel) && !UNO_DATA_MODULE_RE.test(rel))
+        continue
+      const source = readFileSync(fullPath, 'utf8')
+      const target = rel.startsWith('components/content/demos/') ? demoIcons : appIcons
+      for (const match of source.matchAll(ICON_TOKEN_RE))
+        target.add(match[0])
+    }
+  }
+
+  walk(appRootDir)
+  for (const token of appIcons)
+    demoIcons.delete(token)
+  return demoIcons
+}
+
+const demoOnlyIconClasses = collectDemoOnlyIconClasses()
+
 const useWebFonts = process.env.NUXT_DISABLE_WEB_FONTS !== 'true'
   && process.env.UNOCSS_WEBFONTS === 'true'
 
 export default defineConfig({
-  blocklist: [/^m\[pascalCase\(component\)\]$/],
+  // Block `i-cib-*` so the retired `cib` brand collection can never emit CSS back into the
+  // global icons stylesheet even before `@iconify-json/cib` is uninstalled at integration.
+  blocklist: [/^m\[pascalCase\(component\)\]$/, /^i-cib-/],
   content: {
     pipeline: {
       // Uno's default pipeline only scans template-ish files, so icon classes
@@ -107,20 +157,26 @@ export default defineConfig({
     },
   ],
   /*
-   * Icon rules carry no specificity. The icons layer ships as its own stylesheet, appended to
-   * `<head>` once the app has mounted, so in the cascade it comes after every other sheet. At
+   * Icon rules carry no specificity. The icons layers ship as their own stylesheets, appended to
+   * `<head>` once the app has resolved, so in the cascade they come after every other sheet. At
    * class specificity that let an icon rule's `color:inherit` and `width:1.2em` beat the
    * `text-amber-600` or `w-4` on the same element — utilities the single-sheet order used to
    * let win, because `icons` sorts before `default`. `:where()` settles it for good: any classed
    * rule on the host wins, whichever sheet arrives last. Both output modes are covered: mask
    * icons carry `--un-icon`, multi-colour ones (`i-logos-*`) an SVG `background`.
+   *
+   * Demo-only icons are routed into `demo-icons` so non-docs pages never download them.
    */
   postprocess: [
     (util) => {
       const isIcon = util.entries.some(([property, value]) => property === '--un-icon'
         || (property === 'background' && typeof value === 'string' && value.startsWith('url("data:image/svg+xml')))
-      if (isIcon)
+      if (isIcon) {
+        const bareSelector = util.selector.startsWith('.') ? util.selector.slice(1) : util.selector
+        if (demoOnlyIconClasses.has(bareSelector))
+          util.layer = 'demo-icons'
         util.selector = `:where(${util.selector})`
+      }
     },
   ],
   presets: [
@@ -128,6 +184,10 @@ export default defineConfig({
     presetAttributify({ prefixedOnly: true }),
     presetIcons({
       scale: 1.2,
+      collections: {
+        carbon: () => import('@iconify-json/carbon/icons.json', { with: { type: 'json' } }).then(m => m.default),
+        logos: () => import('@iconify-json/logos/icons.json', { with: { type: 'json' } }).then(m => m.default),
+      },
     }),
     presetWebFonts({
       provider: useWebFonts ? 'google' : 'none',

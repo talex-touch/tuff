@@ -11,6 +11,7 @@ import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TemplateFrame from './TemplateFrame.vue'
+import TemplateLauncherBrandLogo, { type LauncherBrandName } from './TemplateLauncherBrandLogo.vue'
 
 type Kind = 'app' | 'plugin' | 'file' | 'clipboard' | 'ai' | 'system'
 type Scope = 'all' | Kind
@@ -21,6 +22,7 @@ interface CatalogEntry {
   id: string
   kind: Kind
   icon: string
+  brand?: LauncherBrandName
   tone: IconChipTone
   /** Multi-colour logos sit on a neutral plate instead of a tinted one. */
   logo?: boolean
@@ -37,6 +39,7 @@ interface Result {
   id: string
   kind: ResultKind
   icon: string
+  brand?: LauncherBrandName
   tone: IconChipTone
   logo?: boolean
   title: string
@@ -48,9 +51,9 @@ interface Result {
 const KIND_ORDER: Kind[] = ['app', 'plugin', 'file', 'clipboard', 'ai', 'system']
 
 const CATALOG: CatalogEntry[] = [
-  { id: 'app-vscode', kind: 'app', icon: 'i-logos-visual-studio-code', tone: 'neutral', logo: true, keywords: ['vscode', 'code', 'editor'] },
-  { id: 'app-figma', kind: 'app', icon: 'i-logos-figma', tone: 'neutral', logo: true, keywords: ['figma', 'design'] },
-  { id: 'app-obsidian', kind: 'app', icon: 'i-logos-obsidian-icon', tone: 'neutral', logo: true, keywords: ['obsidian', 'notes', 'markdown', 'web clipper'] },
+  { id: 'app-vscode', kind: 'app', icon: '', brand: 'vscode', tone: 'neutral', logo: true, keywords: ['vscode', 'code', 'editor'] },
+  { id: 'app-figma', kind: 'app', icon: '', brand: 'figma', tone: 'neutral', logo: true, keywords: ['figma', 'design'] },
+  { id: 'app-obsidian', kind: 'app', icon: '', brand: 'obsidian', tone: 'neutral', logo: true, keywords: ['obsidian', 'notes', 'markdown', 'web clipper'] },
   { id: 'app-terminal', kind: 'app', icon: 'i-carbon-terminal', tone: 'ink', keywords: ['terminal', 'shell', 'zsh', 'cli'] },
   { id: 'plugin-clipboard', kind: 'plugin', icon: 'i-carbon-paste', tone: 'accent', keywords: ['clipboard-history', 'clipboard', 'paste', 'history', '剪贴板'] },
   { id: 'plugin-snippets', kind: 'plugin', icon: 'i-carbon-code', tone: 'neutral', keywords: ['touch-snippets', 'snippet', 'template', 'clipboard templates', '片段'] },
@@ -205,13 +208,13 @@ const entryText = computed<Record<string, EntryText>>(() => zh.value
       'sys-lock': { title: 'Lock screen', subtitle: 'System · ⌃⌘Q', preview: 'Locks the screen straight away. Downloads in progress keep going.' },
     })
 
-const DOCK = [
-  { id: 'vscode', icon: 'i-logos-visual-studio-code' },
-  { id: 'figma', icon: 'i-logos-figma' },
-  { id: 'obsidian', icon: 'i-logos-obsidian-icon' },
-  { id: 'chrome', icon: 'i-logos-chrome' },
-  { id: 'slack', icon: 'i-logos-slack-icon' },
-  { id: 'notion', icon: 'i-logos-notion-icon' },
+const DOCK: Array<{ id: string, brand: LauncherBrandName }> = [
+  { id: 'vscode', brand: 'vscode' },
+  { id: 'figma', brand: 'figma' },
+  { id: 'obsidian', brand: 'obsidian' },
+  { id: 'chrome', brand: 'chrome' },
+  { id: 'slack', brand: 'slack' },
+  { id: 'notion', brand: 'notion' },
 ]
 
 const uid = useId()
@@ -677,7 +680,8 @@ defineExpose({ resetDemo })
                       @click="activate(result)"
                     >
                       <TxIconChip :size="30" :radius="9" :tone="result.tone" variant="soft" class="launcher__glyph" :class="{ 'is-logo': result.logo }">
-                        <i :class="result.icon" />
+                        <TemplateLauncherBrandLogo v-if="result.brand" :name="result.brand" />
+                        <i v-else :class="result.icon" />
                       </TxIconChip>
                       <span class="launcher__option-text">
                         <span class="launcher__option-title">
@@ -712,7 +716,8 @@ defineExpose({ resetDemo })
                 <aside class="launcher__preview" :aria-label="active?.title">
                   <div v-if="active" class="launcher__preview-head">
                     <TxIconChip :size="44" :radius="12" :tone="active.tone" variant="soft" class="launcher__glyph launcher__glyph--lg" :class="{ 'is-logo': active.logo }">
-                      <i :class="active.icon" />
+                      <TemplateLauncherBrandLogo v-if="active.brand" :name="active.brand" />
+                      <i v-else :class="active.icon" />
                     </TxIconChip>
                     <div class="launcher__preview-title">
                       <strong>{{ active.title }}</strong>
@@ -755,7 +760,7 @@ defineExpose({ resetDemo })
 
       <div class="launcher__dock" aria-hidden="true">
         <TxIconChip v-for="app in DOCK" :key="app.id" :size="40" :radius="11" tone="neutral" class="launcher__dock-app">
-          <i :class="app.icon" />
+          <TemplateLauncherBrandLogo :name="app.brand" />
         </TxIconChip>
         <span class="launcher__dock-divider" />
         <TxIconChip :size="40" :radius="11" tone="ink" :font-size="17" class="launcher__dock-app">
