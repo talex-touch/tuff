@@ -208,6 +208,7 @@ describe('canvas-geometry physics, layout, snapping, and strict CSP sandbox', ()
     expect(htmlDoc).toContain('Content-Security-Policy')
     expect(htmlDoc).toContain(TDS_CANVAS_FRAME_CSP)
     expect(htmlDoc).toContain("default-src 'none'")
+    expect(htmlDoc).toContain("form-action 'none'")
     expect(htmlDoc).toContain('sandbox="allow-scripts allow-forms allow-modals"')
     expect(htmlDoc).not.toContain('allow-same-origin')
     expect(htmlDoc).toContain('&quot;ok&quot;')
@@ -722,8 +723,10 @@ describe('TdsDesignCanvas component interactions', () => {
     // Frame 1 remains shielded
     expect(wrapper.find('[data-testid="tds-canvas-frame-shield-f1"]').exists()).toBe(true)
 
-    // Pressing Escape automatically disengages interactive mode and restores the shield
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    // Pressing Escape inside the canvas automatically disengages interactive mode and restores the shield
+    wrapper
+      .get('[data-testid="tds-design-canvas"]')
+      .element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await nextTick()
     expect(wrapper.get('[data-testid="tds-canvas-frame-f2"]').attributes('data-interactive')).toBe(
       'false'
@@ -797,6 +800,154 @@ describe('TdsDesignCanvas component interactions', () => {
     await nextTick()
     expect(wrapper.findAll('[data-testid^="tds-canvas-frame-iframe-"]')).toHaveLength(0)
     expect(wrapper.findAll('[data-testid^="tds-canvas-frame-raster-"]')).toHaveLength(6)
+  })
+
+  it('scopes keyboard shortcuts to focused canvas root and clears held Space on blur or visibility loss', async () => {
+    const outsideBtn = document.createElement('button')
+    outsideBtn.textContent = 'Outside'
+    document.body.appendChild(outsideBtn)
+
+    const frames = [makeFrame({ id: 'f1', title: 'Primary' })]
+    const wrapper = mount(TdsDesignCanvas, {
+      attachTo: document.body,
+      props: { frames }
+    })
+    await flushPromises()
+
+    try {
+      const root = wrapper.get('[data-testid="tds-design-canvas"]')
+      expect(root.attributes('tabindex')).toBe('-1')
+
+      // Focusing an external control outside the canvas must NOT trigger canvas shortcuts
+      outsideBtn.focus()
+      const outsideH = new KeyboardEvent('keydown', { key: 'h', bubbles: true, cancelable: true })
+      outsideBtn.dispatchEvent(outsideH)
+      const outsideSpace = new KeyboardEvent('keydown', {
+        code: 'Space',
+        key: ' ',
+        bubbles: true,
+        cancelable: true
+      })
+      outsideBtn.dispatchEvent(outsideSpace)
+      const outsideZoom = new KeyboardEvent('keydown', {
+        key: '=',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true
+      })
+      outsideBtn.dispatchEvent(outsideZoom)
+      const outsideUndo = new KeyboardEvent('keydown', {
+        key: 'z',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true
+      })
+      outsideBtn.dispatchEvent(outsideUndo)
+      await nextTick()
+
+      expect(root.classes()).not.toContain('is-hand-mode')
+      expect(outsideSpace.defaultPrevented).toBe(false)
+      expect(outsideZoom.defaultPrevented).toBe(false)
+      expect(outsideUndo.defaultPrevented).toBe(false)
+
+      // Focusing inside the canvas enables shortcuts and Space hand-pan
+      ;(root.element as HTMLElement).focus()
+      const canvasH = new KeyboardEvent('keydown', { key: 'h', bubbles: true, cancelable: true })
+      root.element.dispatchEvent(canvasH)
+      await nextTick()
+      expect(root.classes()).toContain('is-hand-mode')
+
+      const canvasV = new KeyboardEvent('keydown', { key: 'v', bubbles: true, cancelable: true })
+      root.element.dispatchEvent(canvasV)
+      await nextTick()
+      expect(root.classes()).not.toContain('is-hand-mode')
+
+      // Holding Space enables hand mode, and window blur clears it so Space never sticks
+      const canvasSpace = new KeyboardEvent('keydown', {
+        code: 'Space',
+        key: ' ',
+        bubbles: true,
+        cancelable: true
+      })
+      root.element.dispatchEvent(canvasSpace)
+      await nextTick()
+      expect(canvasSpace.defaultPrevented).toBe(true)
+      expect(root.classes()).toContain('is-hand-mode')
+
+      window.dispatchEvent(new Event('blur'))
+      await nextTick()
+      expect(root.classes()).not.toContain('is-hand-mode')
+
+      // Holding Space again and hiding the document also clears spaceHeld
+      root.element.dispatchEvent(
+        new KeyboardEvent('keydown', { code: 'Space', key: ' ', bubbles: true, cancelable: true })
+      )
+      await nextTick()
+      expect(root.classes()).toContain('is-hand-mode')
+
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+      await nextTick()
+      expect(root.classes()).not.toContain('is-hand-mode')
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false })
+    } finally {
+      outsideBtn.remove()
+    }
+  })
+
+  it('re-attaches viewport ResizeObserver when exiting Compare mode', async () => {
+    const observedStages: Element[] = []
+    let stageDisconnectedCount = 0
+    const originalRO = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class MockResizeObserver {
+      private observingStage = false
+      observe(el: Element): void {
+        if (el.getAttribute('data-testid') === 'tds-canvas-stage') {
+          this.observingStage = true
+          observedStages.push(el)
+        }
+      }
+      unobserve(): void {}
+      disconnect(): void {
+        if (this.observingStage) {
+          stageDisconnectedCount += 1
+          this.observingStage = false
+        }
+      }
+    }
+
+    try {
+      const wrapper = mount(TdsDesignCanvas, {
+        props: {
+          frames: [makeFrame({ id: 'f1', source: '<h1>v1</h1>' })]
+        }
+      })
+      await flushPromises()
+      expect(observedStages).toHaveLength(1)
+      const initialStageEl = observedStages[0]
+
+      // Create second snapshot so Compare mode is enabled
+      await wrapper.get('[data-testid="tds-canvas-history-toggle"]').trigger('click')
+      await wrapper.setProps({
+        frames: [makeFrame({ id: 'f1', source: '<h1>v2</h1>' })]
+      })
+      await wrapper.get('[data-testid="tds-canvas-history-save"]').trigger('click')
+      await nextTick()
+
+      // Enter Compare mode -> stage unmounts and ResizeObserver disconnects
+      await wrapper.get('[data-testid="tds-canvas-compare-toggle"]').trigger('click')
+      await nextTick()
+      expect(stageDisconnectedCount).toBe(1)
+
+      // Exit Compare mode -> remounted stage element is observed again
+      await wrapper.get('[data-testid="tds-canvas-compare-exit"]').trigger('click')
+      await nextTick()
+      expect(observedStages).toHaveLength(2)
+      expect(observedStages[1]).toBe(wrapper.get('[data-testid="tds-canvas-stage"]').element)
+      expect(observedStages[1]).not.toBe(initialStageEl)
+    } finally {
+      globalThis.ResizeObserver = originalRO
+    }
   })
 
   it('satisfies TDS design discipline: zero raw hex/rgba literals, zero hover color transitions, refraction popovers, and reduced-motion guard', () => {

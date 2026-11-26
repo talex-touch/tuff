@@ -242,6 +242,28 @@ describe('Phase 1: Static TDS lint rules', () => {
     expect(report.issues).toEqual([])
     expect(report.counts).toEqual({ total: 0, errors: 0, warnings: 0, infos: 0 })
   })
+
+  it('preserves CSS custom property case, suggests max-h-full for max-h-screen, and guards negative maxRawHexColors', () => {
+    // 1. Mixed-case CSS custom properties are distinct in CSS and must be flagged
+    const casedSource = '<style>.btn { color: var(--shell-Primary); }</style>'
+    const refs = extractTdsTokenReferences(casedSource)
+    expect(refs.shell.map((r) => r.name)).toEqual(['--shell-Primary'])
+    const casedIssues = runStaticTdsLint(casedSource, { antiSlop: false })
+    expect(casedIssues).toHaveLength(1)
+    expect(casedIssues[0]?.ruleId).toBe('undefined-tds-token')
+    expect(casedIssues[0]?.snippet).toBe('var(--shell-Primary)')
+    expect(casedIssues[0]?.fixHint).toContain('--shell-primary')
+
+    // 2. max-h-screen suggests max-h-full instead of h-full
+    const maxHeightIssues = runStaticTdsLint('<div class="max-h-screen">Panel</div>', {
+      antiSlop: false
+    })
+    expect(maxHeightIssues).toHaveLength(1)
+    expect(maxHeightIssues[0]?.fixHint).toContain('max-h-full')
+
+    // 3. Negative maxRawHexColors with 0 hex matches never crashes
+    expect(runStaticTdsLint('<div>No raw hex colors</div>', { maxRawHexColors: -1 })).toEqual([])
+  })
 })
 
 describe('Phase 2: WCAG 2.1 contrast math and DOM probe', () => {

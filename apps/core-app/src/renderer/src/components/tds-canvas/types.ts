@@ -227,6 +227,8 @@ export interface TdsCanvasLabels {
   mockupExportPng: string
   mockupExportPrintHtml: string
   mockupExporting: string
+  mockupExportFailed: string
+  mockupExportPngFailed: string
 }
 
 export const DEFAULT_TDS_CANVAS_LABELS: Readonly<TdsCanvasLabels> = {
@@ -304,7 +306,9 @@ export const DEFAULT_TDS_CANVAS_LABELS: Readonly<TdsCanvasLabels> = {
   mockupExportSvg: 'Export SVG',
   mockupExportPng: 'Export PNG',
   mockupExportPrintHtml: 'Print / Save PDF',
-  mockupExporting: 'Exporting…'
+  mockupExporting: 'Exporting…',
+  mockupExportFailed: 'Export failed. Please try again.',
+  mockupExportPngFailed: 'PNG export failed: could not rasterize board image.'
 }
 
 export type TdsMockupExportFormat = 'svg' | 'png' | 'print-html'

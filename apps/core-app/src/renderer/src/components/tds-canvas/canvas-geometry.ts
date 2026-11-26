@@ -38,7 +38,7 @@ export const DEFAULT_RESPONSIVE_FRAME_SIZE: Readonly<TdsCanvasSize> = {
  * external fetches, remote fonts, or data exfiltration from rendered frames.
  */
 export const TDS_CANVAS_FRAME_CSP =
-  "default-src 'none'; frame-src about:; img-src data: blob:; media-src data: blob:; font-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+  "default-src 'none'; form-action 'none'; frame-src about:; img-src data: blob:; media-src data: blob:; font-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
 
 /**
  * Critically-damped viewport spring (`response = 0.28s`, `dampingRatio = 1`)

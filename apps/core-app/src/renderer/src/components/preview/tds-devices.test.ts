@@ -257,4 +257,46 @@ describe('TdsDeviceFrame', () => {
       globalThis.ResizeObserver = originalRO
     }
   })
+
+  it('attaches ResizeObserver when switching from responsive to a fixed device preset after mount', async () => {
+    const observerState: { callback: ResizeObserverCallback | null; observed: Element[] } = {
+      callback: null,
+      observed: []
+    }
+    const originalRO = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class MockResizeObserver {
+      constructor(cb: ResizeObserverCallback) {
+        observerState.callback = cb
+      }
+      observe(el: Element): void {
+        observerState.observed.push(el)
+      }
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+
+    try {
+      const wrapper = mount(TdsDeviceFrame, {
+        props: { preset: getDevicePresetById('responsive') }
+      })
+      expect(observerState.observed).toHaveLength(0)
+
+      await wrapper.setProps({ preset: getDevicePresetById('iphone-17-pro') })
+      await nextTick()
+      expect(observerState.observed).toHaveLength(1)
+
+      observerState.callback?.(
+        [{ contentRect: { width: 320, height: 480 } } as ResizeObserverEntry],
+        {} as ResizeObserver
+      )
+      await nextTick()
+      const scaleAttr = Number(
+        wrapper.get('[data-testid="tds-device-frame"]').attributes('data-scale')
+      )
+      expect(scaleAttr).toBeGreaterThan(0.1)
+      expect(scaleAttr).toBeLessThan(1)
+    } finally {
+      globalThis.ResizeObserver = originalRO
+    }
+  })
 })

@@ -568,6 +568,43 @@ describe('tx-ai-openui actions, widgets, and error handling', () => {
     expect(wrapper.find('.tx-ai-openui__image img').attributes('src')).toBe('https://cdn.example.com/mountain.png')
     expect(wrapper.find('.tx-ai-openui__chart').attributes('role')).toBe('img')
   })
+
+  it('scopes radio group names per instance so duplicate OpenUI messages never collide', async () => {
+    const program = [
+      'root = Col([seg])',
+      '$range = "day"',
+      'seg = SegmentedControl($range, ["day", "week"], "Range")',
+    ].join('\n')
+
+    const wrapper = mount({
+      components: { TxAiOpenUI },
+      data: () => ({ program }),
+      template: '<div><div data-msg="1"><TxAiOpenUI :content="program" :streaming="false" /></div><div data-msg="2"><TxAiOpenUI :content="program" :streaming="false" /></div></div>',
+    }, {
+      attachTo: document.body,
+    })
+
+    try {
+      const firstDay = wrapper.find('[data-msg="1"] input[type="radio"][value="day"]')
+      const secondWeek = wrapper.find('[data-msg="2"] input[type="radio"][value="week"]')
+
+      expect(firstDay.attributes('name')).toBeTruthy()
+      expect(secondWeek.attributes('name')).toBeTruthy()
+      expect(firstDay.attributes('name')).not.toBe('seg')
+      expect(firstDay.attributes('name')).not.toBe(secondWeek.attributes('name'))
+      expect((firstDay.element as HTMLInputElement).checked).toBe(true)
+
+      await secondWeek.setValue(true)
+      await nextTick()
+
+      // Selecting an option in message 2 must NOT uncheck message 1's radio
+      expect((secondWeek.element as HTMLInputElement).checked).toBe(true)
+      expect((firstDay.element as HTMLInputElement).checked).toBe(true)
+    }
+    finally {
+      wrapper.unmount()
+    }
+  })
 })
 
 describe('openui.css TDS style and token contract', () => {

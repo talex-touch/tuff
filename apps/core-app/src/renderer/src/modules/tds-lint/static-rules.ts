@@ -190,17 +190,18 @@ export function extractTdsTokenReferences(source: string): TdsTokenReferences {
   if (!source) return result
   const masked = maskCommentsPreservingLines(source)
   const lineIndex = buildLineIndex(masked)
-  const varPattern = /var\(\s*(--(?:shell|tx|tds)-[a-z0-9-]+)\b/gi
+  const varPattern = /var\(\s*(--(?:shell|tx|tds)-[A-Za-z0-9-]+)\b/gi
 
   for (const match of masked.matchAll(varPattern)) {
-    const token = match[1]!.toLowerCase()
-    const offset = (match.index ?? 0) + match[0].indexOf(match[1]!)
+    const token = match[1]!
+    const tokenLower = token.toLowerCase()
+    const offset = (match.index ?? 0) + match[0].indexOf(token)
     const pos = offsetToLineCol(lineIndex, offset)
-    if (token.startsWith('--shell-')) {
+    if (tokenLower.startsWith('--shell-')) {
       result.shell.push({ name: token, ...pos })
-    } else if (token.startsWith('--tx-')) {
+    } else if (tokenLower.startsWith('--tx-')) {
       result.tx.push({ name: token, ...pos })
-    } else if (token.startsWith('--tds-')) {
+    } else if (tokenLower.startsWith('--tds-')) {
       result.tds.push({ name: token, ...pos })
     }
   }
@@ -210,9 +211,9 @@ export function extractTdsTokenReferences(source: string): TdsTokenReferences {
 
 function collectDeclaredCustomProps(masked: string, prefix: '--tds-' | '--shell-'): Set<string> {
   const declared = new Set<string>()
-  const pattern = new RegExp(`(?:^|[;{\\s])(${prefix}[a-z0-9-]+)\\s*:`, 'gi')
+  const pattern = new RegExp(`(?:^|[;{\\s])(${prefix}[A-Za-z0-9-]+)\\s*:`, 'g')
   for (const match of masked.matchAll(pattern)) {
-    declared.add(match[1]!.toLowerCase())
+    declared.add(match[1]!)
   }
   return declared
 }
@@ -294,7 +295,7 @@ function checkUndefinedTdsTokens(
   issues: TdsLintIssue[]
 ): void {
   const refs = extractTdsTokenReferences(source)
-  const extraAllowed = new Set((options.extraAllowedTokens ?? []).map((t) => t.toLowerCase()))
+  const extraAllowed = new Set(options.extraAllowedTokens ?? [])
   const localTdsDeclared = collectDeclaredCustomProps(masked, '--tds-')
 
   for (const ref of refs.shell) {
@@ -378,13 +379,18 @@ function checkViewportUnitCanvas(
       const token = uMatch[1]!
       const offset = attrValStart + (uMatch.index ?? 0)
       const { line, column } = offsetToLineCol(lineIndex, offset)
+      const replacement = token.startsWith('min-')
+        ? 'min-h-full'
+        : token.startsWith('max-')
+          ? 'max-h-full'
+          : 'h-full'
       issues.push({
         ruleId: 'viewport-unit-canvas',
         phase: 'static',
         severity: 'warning',
         category: 'layout',
         message: `Utility class \`${token}\` relies on viewport height instead of frame height.`,
-        fixHint: `Replace \`${token}\` with \`${token.startsWith('min-') ? 'min-h-full' : 'h-full'}\` so it adapts to device and canvas frames.`,
+        fixHint: `Replace \`${token}\` with \`${replacement}\` so it adapts to device and canvas frames.`,
         line,
         column,
         snippet: token
@@ -597,7 +603,10 @@ function checkAntiSlopStatic(
   }
 
   // 5. Excessive raw hex color literals outside CSS custom property definitions & `var(--*, #fallback)`
-  const maxRawHex = options.maxRawHexColors ?? 4
+  const maxRawHex =
+    typeof options.maxRawHexColors === 'number' && Number.isFinite(options.maxRawHexColors)
+      ? Math.max(0, Math.floor(options.maxRawHexColors))
+      : 4
   const scrubbed = masked
     // Mask CSS custom property declarations (`--foo: #123456;`)
     .replace(/(?:^|[;{\s])--[a-z0-9-]+\s*:[^;{}]+/gi, (m) => m.replace(/[^\n]/g, ' '))
@@ -613,8 +622,8 @@ function checkAntiSlopStatic(
     rawHexMatches.push({ hex: match[0].toLowerCase(), offset: match.index ?? 0 })
   }
 
-  if (rawHexMatches.length > maxRawHex) {
-    const first = rawHexMatches[0]!
+  if (rawHexMatches.length > maxRawHex && rawHexMatches[0]) {
+    const first = rawHexMatches[0]
     const { line, column } = offsetToLineCol(lineIndex, first.offset)
     const uniqueSamples = [...new Set(rawHexMatches.map((m) => m.hex))].slice(0, 5)
     issues.push({

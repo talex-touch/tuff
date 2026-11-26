@@ -1,3 +1,54 @@
+<script lang="ts">
+import type {
+  TdsCanvasFrame as ModuleCanvasFrame,
+  TdsCanvasHistoryState as ModuleCanvasHistoryState,
+  TdsCanvasNote as ModuleCanvasNote
+} from '~/components/tds-canvas/types'
+
+interface InMemoryCanvasSession {
+  version: 1
+  frames: ModuleCanvasFrame[]
+  notes: ModuleCanvasNote[]
+  selectedFrameId: string | null
+  history: ModuleCanvasHistoryState
+  deletedAutoFrameIds: string[]
+  antiSlop: boolean
+  canvasThemePackId?: string | null
+}
+
+const MAX_IN_MEMORY_CANVAS_SESSIONS = 32
+/**
+ * Process-local in-memory session cache per conversation.
+ * Assistant HTML/SVG frame bodies, snapshot history blobs, and pin notes MUST NEVER
+ * be persisted to browser `sessionStorage` / `localStorage`.
+ */
+const inMemoryCanvasSessions = new Map<string, InMemoryCanvasSession>()
+
+function cloneInMemoryCanvasSession(session: InMemoryCanvasSession): InMemoryCanvasSession {
+  return {
+    version: 1,
+    frames: session.frames.map((frame) => ({ ...frame })),
+    notes: session.notes.map((note) => ({ ...note })),
+    selectedFrameId: session.selectedFrameId,
+    history: {
+      blobs: { ...session.history.blobs },
+      entries: session.history.entries.map((entry) => ({
+        ...entry,
+        frameSnapshots: entry.frameSnapshots.map((snapshot) => ({ ...snapshot }))
+      })),
+      cursor: session.history.cursor
+    },
+    deletedAutoFrameIds: [...session.deletedAutoFrameIds],
+    antiSlop: session.antiSlop,
+    canvasThemePackId: session.canvasThemePackId ?? null
+  }
+}
+
+export function __resetHomeSideCanvasSessionsForTesting(): void {
+  inMemoryCanvasSessions.clear()
+}
+</script>
+
 <script lang="ts" name="HomeSideCanvasPane" setup>
 import type { DeviceCategory, DevicePreset } from '~/components/preview/tds-devices'
 import type { WorkspaceFileAiActionPayload } from '~/components/preview/workspace-file-tree'
@@ -17,7 +68,7 @@ import type { ConversationMessage } from '~/modules/conversation/useHomeConversa
 import type { TdsLintIssue, TdsLintReport } from '~/modules/tds-lint'
 import type { TdsThemePack } from '~/modules/tds-theme'
 import { TxPopover } from '@talex-touch/tuffex/popover'
-import { hasWindow, isElectronRenderer } from '@talex-touch/utils/env'
+import { isElectronRenderer } from '@talex-touch/utils/env'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -71,7 +122,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const STORAGE_KEY_PREFIX = 'tuff.home.tdsCanvas.v1:'
 const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})\s*([\w+-]*)/
 const QUICK_PRESET_IDS = ['iphone-17-pro', 'ipad-pro-11', 'desktop-hd'] as const
 
@@ -85,17 +135,6 @@ interface ExtractedFenceFrame {
   width?: number
   height?: number
   sourceRef: string
-}
-
-interface PersistedCanvasSession {
-  version: 1
-  frames: TdsCanvasFrame[]
-  notes: TdsCanvasNote[]
-  selectedFrameId: string | null
-  history: TdsCanvasHistoryState
-  deletedAutoFrameIds: string[]
-  antiSlop: boolean
-  canvasThemePackId?: string | null
 }
 
 function escapeHtmlText(value: string): string {
@@ -342,152 +381,28 @@ function buildStarterFrameSource(
   ].join('\n')
 }
 
-function getStorageKey(conversationId: string | null): string {
-  const normalized = conversationId?.trim() || 'default'
-  return `${STORAGE_KEY_PREFIX}${normalized}`
+function getSessionMapKey(conversationId: string | null): string {
+  return conversationId?.trim() || 'default'
 }
 
-function sanitizeStoredFrames(raw: unknown): TdsCanvasFrame[] {
-  if (!Array.isArray(raw)) return []
-  const result: TdsCanvasFrame[] = []
-  const seen = new Set<string>()
-  for (const candidate of raw) {
-    if (!candidate || typeof candidate !== 'object') continue
-    const item = candidate as Record<string, unknown>
-    const id = typeof item.id === 'string' ? item.id.trim() : ''
-    const title = typeof item.title === 'string' ? item.title.trim() : ''
-    const kind = item.kind === 'svg' ? 'svg' : item.kind === 'html' ? 'html' : null
-    const source = typeof item.source === 'string' ? item.source : ''
-    const deviceId =
-      typeof item.deviceId === 'string' && item.deviceId.trim()
-        ? item.deviceId.trim()
-        : 'desktop-hd'
-    if (!id || !kind || seen.has(id)) continue
-    seen.add(id)
-    const frame: TdsCanvasFrame = {
-      id,
-      title: title || id,
-      kind,
-      source,
-      deviceId,
-      x: typeof item.x === 'number' && Number.isFinite(item.x) ? item.x : 0,
-      y: typeof item.y === 'number' && Number.isFinite(item.y) ? item.y : 0
-    }
-    if (item.orientation === 'portrait' || item.orientation === 'landscape') {
-      frame.orientation = item.orientation
-    }
-    if (typeof item.showShell === 'boolean') frame.showShell = item.showShell
-    if (typeof item.width === 'number' && Number.isFinite(item.width) && item.width > 0) {
-      frame.width = item.width
-    }
-    if (typeof item.height === 'number' && Number.isFinite(item.height) && item.height > 0) {
-      frame.height = item.height
-    }
-    if (typeof item.sourceRef === 'string' && item.sourceRef.trim()) {
-      frame.sourceRef = item.sourceRef.trim()
-    }
-    result.push(frame)
-  }
-  return result
+function readCanvasSession(conversationId: string | null): InMemoryCanvasSession | null {
+  const key = getSessionMapKey(conversationId)
+  const stored = inMemoryCanvasSessions.get(key)
+  if (!stored) return null
+  // Refresh LRU recency
+  inMemoryCanvasSessions.delete(key)
+  inMemoryCanvasSessions.set(key, stored)
+  return cloneInMemoryCanvasSession(stored)
 }
 
-function sanitizeStoredNotes(raw: unknown): TdsCanvasNote[] {
-  if (!Array.isArray(raw)) return []
-  const result: TdsCanvasNote[] = []
-  const seen = new Set<string>()
-  for (const candidate of raw) {
-    if (!candidate || typeof candidate !== 'object') continue
-    const item = candidate as Record<string, unknown>
-    const id = typeof item.id === 'string' ? item.id.trim() : ''
-    const frameId = typeof item.frameId === 'string' ? item.frameId.trim() : ''
-    const text = typeof item.text === 'string' ? item.text : ''
-    if (!id || !frameId || seen.has(id)) continue
-    seen.add(id)
-    result.push({
-      id,
-      frameId,
-      xRatio:
-        typeof item.xRatio === 'number' && Number.isFinite(item.xRatio)
-          ? Math.max(0, Math.min(1, item.xRatio))
-          : 0.5,
-      yRatio:
-        typeof item.yRatio === 'number' && Number.isFinite(item.yRatio)
-          ? Math.max(0, Math.min(1, item.yRatio))
-          : 0.5,
-      text,
-      resolved: item.resolved === true,
-      createdAt:
-        typeof item.createdAt === 'number' && Number.isFinite(item.createdAt)
-          ? item.createdAt
-          : Date.now()
-    })
-  }
-  return result
-}
-
-function sanitizeStoredHistory(raw: unknown): TdsCanvasHistoryState {
-  if (!raw || typeof raw !== 'object') return createCanvasHistoryState()
-  const obj = raw as Record<string, unknown>
-  const blobs: Record<string, string> = {}
-  if (obj.blobs && typeof obj.blobs === 'object' && !Array.isArray(obj.blobs)) {
-    for (const [k, v] of Object.entries(obj.blobs as Record<string, unknown>)) {
-      if (typeof v === 'string') blobs[k] = v
-    }
-  }
-  const entries = Array.isArray(obj.entries) ? obj.entries : []
-  const cursor =
-    typeof obj.cursor === 'number' && Number.isFinite(obj.cursor)
-      ? Math.max(-1, Math.min(entries.length - 1, Math.floor(obj.cursor)))
-      : entries.length - 1
-  return {
-    blobs,
-    entries: entries as TdsCanvasHistoryState['entries'],
-    cursor
-  }
-}
-
-function readCanvasSession(conversationId: string | null): PersistedCanvasSession | null {
-  if (!hasWindow() || !window.sessionStorage) return null
-  try {
-    const raw = window.sessionStorage.getItem(getStorageKey(conversationId))
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<PersistedCanvasSession> | null
-    if (!parsed || typeof parsed !== 'object') return null
-    const frames = sanitizeStoredFrames(parsed.frames)
-    const notes = sanitizeStoredNotes(parsed.notes)
-    const selectedFrameId =
-      typeof parsed.selectedFrameId === 'string' &&
-      frames.some((frame) => frame.id === parsed.selectedFrameId)
-        ? parsed.selectedFrameId
-        : (frames[0]?.id ?? null)
-    const deletedAutoFrameIds = Array.isArray(parsed.deletedAutoFrameIds)
-      ? parsed.deletedAutoFrameIds.filter((id): id is string => typeof id === 'string')
-      : []
-    const canvasThemePackId =
-      typeof parsed.canvasThemePackId === 'string' && parsed.canvasThemePackId.trim()
-        ? parsed.canvasThemePackId.trim()
-        : null
-    return {
-      version: 1,
-      frames,
-      notes,
-      selectedFrameId,
-      history: sanitizeStoredHistory(parsed.history),
-      deletedAutoFrameIds,
-      antiSlop: parsed.antiSlop !== false,
-      canvasThemePackId
-    }
-  } catch {
-    return null
-  }
-}
-
-function writeCanvasSession(conversationId: string | null, session: PersistedCanvasSession): void {
-  if (!hasWindow() || !window.sessionStorage) return
-  try {
-    window.sessionStorage.setItem(getStorageKey(conversationId), JSON.stringify(session))
-  } catch {
-    // ignore storage quota or restricted context errors
+function writeCanvasSession(conversationId: string | null, session: InMemoryCanvasSession): void {
+  const key = getSessionMapKey(conversationId)
+  inMemoryCanvasSessions.delete(key)
+  inMemoryCanvasSessions.set(key, cloneInMemoryCanvasSession(session))
+  while (inMemoryCanvasSessions.size > MAX_IN_MEMORY_CANVAS_SESSIONS) {
+    const oldestKey = inMemoryCanvasSessions.keys().next().value
+    if (oldestKey === undefined) break
+    inMemoryCanvasSessions.delete(oldestKey)
   }
 }
 

@@ -71,6 +71,12 @@ const selectedIds = ref<string[]>(props.frames.map((frame) => frame.id))
 const currentPageIndex = ref(0)
 const isExporting = ref(false)
 const statusAnnouncement = ref('')
+const exportError = ref('')
+
+function reportExportFailure(message: string): void {
+  exportError.value = message
+  statusAnnouncement.value = message
+}
 
 function syncSelectedIds(frames: readonly TdsCanvasFrame[], resetAll = false): void {
   const validIds = new Set(frames.map((frame) => frame.id))
@@ -90,6 +96,7 @@ watch(
       syncSelectedIds(props.frames, selectedIds.value.length === 0)
       currentPageIndex.value = 0
       statusAnnouncement.value = ''
+      exportError.value = ''
     }
   }
 )
@@ -218,23 +225,31 @@ function sanitizeFileSlug(title: string): string {
 
 function handleExportSvg(): void {
   if (!canExport.value || pages.value.length === 0) return
+  exportError.value = ''
+  const snapshotOptions: TdsMockupOptions = { ...options.value }
+  const snapshotPages = pages.value.map((page) => ({ ...page, frames: [...page.frames] }))
+  const snapshotFrameIds = selectedFrames.value.map((frame) => frame.id)
   const slug = sanitizeFileSlug(props.defaultTitle)
-  pages.value.forEach((page) => {
-    const svg = renderMockupPageSvg(page, options.value, {
+  for (const page of snapshotPages) {
+    const svg = renderMockupPageSvg(page, snapshotOptions, {
       themeCss: props.themeCss,
       title: props.defaultTitle,
       frameBitmaps: props.frameBitmaps
     })
-    const suffix = pages.value.length > 1 ? `-board-${page.pageIndex + 1}` : ''
-    triggerBlobDownload(
+    const suffix = snapshotPages.length > 1 ? `-board-${page.pageIndex + 1}` : ''
+    const downloaded = triggerBlobDownload(
       new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }),
       `${slug}${suffix}.svg`
     )
-  })
+    if (!downloaded) {
+      reportExportFailure(labels.value.mockupExportFailed)
+      return
+    }
+  }
   const payload: TdsMockupExportEventPayload = {
     format: 'svg',
-    pageCount: pages.value.length,
-    frameIds: selectedFrames.value.map((frame) => frame.id)
+    pageCount: snapshotPages.length,
+    frameIds: snapshotFrameIds
   }
   statusAnnouncement.value = `${labels.value.mockupExportSvg} (${payload.pageCount})`
   emit('export', payload)
@@ -242,22 +257,44 @@ function handleExportSvg(): void {
 
 async function handleExportPng(): Promise<void> {
   if (!canExport.value || pages.value.length === 0) return
+  exportError.value = ''
+  const snapshotOptions: TdsMockupOptions = { ...options.value }
+  const snapshotPages = pages.value.map((page) => ({ ...page, frames: [...page.frames] }))
+  const snapshotFrameIds = selectedFrames.value.map((frame) => frame.id)
+  const snapshotTitle = props.defaultTitle
+  const snapshotThemeCss = props.themeCss
+  const snapshotFrameBitmaps: Record<string, string> = { ...(props.frameBitmaps ?? {}) }
+  const slug = sanitizeFileSlug(snapshotTitle)
+
   isExporting.value = true
   try {
-    const slug = sanitizeFileSlug(props.defaultTitle)
-    for (const page of pages.value) {
-      const blob = await renderMockupPagePngBlob(page, options.value, {
-        themeCss: props.themeCss,
-        title: props.defaultTitle,
-        frameBitmaps: props.frameBitmaps
+    const renderedBlobs: Array<{ blob: Blob; filename: string }> = []
+    for (const page of snapshotPages) {
+      const blob = await renderMockupPagePngBlob(page, snapshotOptions, {
+        themeCss: snapshotThemeCss,
+        title: snapshotTitle,
+        frameBitmaps: snapshotFrameBitmaps
       })
-      const suffix = pages.value.length > 1 ? `-board-${page.pageIndex + 1}` : ''
-      triggerBlobDownload(blob, `${slug}${suffix}-${options.value.scale}x.png`)
+      if (!blob) {
+        reportExportFailure(labels.value.mockupExportPngFailed)
+        return
+      }
+      const suffix = snapshotPages.length > 1 ? `-board-${page.pageIndex + 1}` : ''
+      renderedBlobs.push({
+        blob,
+        filename: `${slug}${suffix}-${snapshotOptions.scale}x.png`
+      })
+    }
+    for (const item of renderedBlobs) {
+      if (!triggerBlobDownload(item.blob, item.filename)) {
+        reportExportFailure(labels.value.mockupExportFailed)
+        return
+      }
     }
     const payload: TdsMockupExportEventPayload = {
       format: 'png',
-      pageCount: pages.value.length,
-      frameIds: selectedFrames.value.map((frame) => frame.id)
+      pageCount: snapshotPages.length,
+      frameIds: snapshotFrameIds
     }
     statusAnnouncement.value = `${labels.value.mockupExportPng} (${payload.pageCount})`
     emit('export', payload)
@@ -268,15 +305,22 @@ async function handleExportPng(): Promise<void> {
 
 function handleExportPrintHtml(): void {
   if (!canExport.value || pages.value.length === 0) return
+  exportError.value = ''
+  const snapshotOptions: TdsMockupOptions = { ...options.value }
+  const snapshotPages = pages.value.map((page) => ({ ...page, frames: [...page.frames] }))
+  const snapshotFrameIds = selectedFrames.value.map((frame) => frame.id)
   const slug = sanitizeFileSlug(props.defaultTitle)
-  const html = buildPrintableMockupHtml(pages.value, options.value, props.defaultTitle, {
+  const html = buildPrintableMockupHtml(snapshotPages, snapshotOptions, props.defaultTitle, {
     themeCss: props.themeCss
   })
-  exportPrintableMockupHtml(html, `${slug}-print.html`)
+  if (!exportPrintableMockupHtml(html, `${slug}-print.html`)) {
+    reportExportFailure(labels.value.mockupExportFailed)
+    return
+  }
   const payload: TdsMockupExportEventPayload = {
     format: 'print-html',
-    pageCount: pages.value.length,
-    frameIds: selectedFrames.value.map((frame) => frame.id)
+    pageCount: snapshotPages.length,
+    frameIds: snapshotFrameIds
   }
   statusAnnouncement.value = `${labels.value.mockupExportPrintHtml} (${payload.pageCount})`
   emit('export', payload)
@@ -546,45 +590,59 @@ function handleExportPrintHtml(): void {
     </div>
 
     <template #footer>
-      <div class="TdsMockupExport-Actions">
-        <button
-          type="button"
-          class="TdsMockupExport-ActionBtn"
-          :disabled="!canExport"
-          data-testid="tds-mockup-export-print"
-          @click="handleExportPrintHtml"
+      <div class="TdsMockupExport-Footer">
+        <p
+          v-if="exportError"
+          class="TdsMockupExport-Error"
+          role="alert"
+          data-testid="tds-mockup-export-error"
         >
           <span class="TdsMockupExport-Icon" aria-hidden="true">
-            <span class="i-ri-printer-line" />
+            <span class="i-ri-error-warning-line" />
           </span>
-          <span>{{ labels.mockupExportPrintHtml }}</span>
-        </button>
+          <span>{{ exportError }}</span>
+        </p>
 
-        <button
-          type="button"
-          class="TdsMockupExport-ActionBtn"
-          :disabled="!canExport"
-          data-testid="tds-mockup-export-svg"
-          @click="handleExportSvg"
-        >
-          <span class="TdsMockupExport-Icon" aria-hidden="true">
-            <span class="i-ri-file-code-line" />
-          </span>
-          <span>{{ labels.mockupExportSvg }}</span>
-        </button>
+        <div class="TdsMockupExport-Actions">
+          <button
+            type="button"
+            class="TdsMockupExport-ActionBtn"
+            :disabled="!canExport"
+            data-testid="tds-mockup-export-print"
+            @click="handleExportPrintHtml"
+          >
+            <span class="TdsMockupExport-Icon" aria-hidden="true">
+              <span class="i-ri-printer-line" />
+            </span>
+            <span>{{ labels.mockupExportPrintHtml }}</span>
+          </button>
 
-        <button
-          type="button"
-          class="TdsMockupExport-ActionBtn is-primary"
-          :disabled="!canExport"
-          data-testid="tds-mockup-export-png"
-          @click="handleExportPng"
-        >
-          <span class="TdsMockupExport-Icon" aria-hidden="true">
-            <span class="i-ri-image-line" />
-          </span>
-          <span>{{ isExporting ? labels.mockupExporting : labels.mockupExportPng }}</span>
-        </button>
+          <button
+            type="button"
+            class="TdsMockupExport-ActionBtn"
+            :disabled="!canExport"
+            data-testid="tds-mockup-export-svg"
+            @click="handleExportSvg"
+          >
+            <span class="TdsMockupExport-Icon" aria-hidden="true">
+              <span class="i-ri-file-code-line" />
+            </span>
+            <span>{{ labels.mockupExportSvg }}</span>
+          </button>
+
+          <button
+            type="button"
+            class="TdsMockupExport-ActionBtn is-primary"
+            :disabled="!canExport"
+            data-testid="tds-mockup-export-png"
+            @click="handleExportPng"
+          >
+            <span class="TdsMockupExport-Icon" aria-hidden="true">
+              <span class="i-ri-image-line" />
+            </span>
+            <span>{{ isExporting ? labels.mockupExporting : labels.mockupExportPng }}</span>
+          </button>
+        </div>
       </div>
     </template>
   </TxModal>
@@ -1003,6 +1061,27 @@ function handleExportPrintHtml(): void {
   &:hover {
     color: var(--shell-text-primary);
   }
+}
+
+.TdsMockupExport-Footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--shell-space-2);
+  width: 100%;
+}
+
+.TdsMockupExport-Error {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--shell-radius-sm);
+  background: color-mix(in srgb, var(--shell-danger) 12%, transparent);
+  color: var(--shell-danger);
+  font-size: var(--shell-fs-sm);
+  line-height: 1.4;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--shell-danger) 32%, transparent);
 }
 
 .TdsMockupExport-Actions {

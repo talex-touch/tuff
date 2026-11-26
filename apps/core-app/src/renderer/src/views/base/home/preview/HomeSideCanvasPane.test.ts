@@ -145,7 +145,9 @@ import {
   TDS_PAPER_INK_PACK,
   useTdsThemePack
 } from '~/modules/tds-theme'
-import HomeSideCanvasPane from './HomeSideCanvasPane.vue'
+import HomeSideCanvasPane, {
+  __resetHomeSideCanvasSessionsForTesting
+} from './HomeSideCanvasPane.vue'
 
 function makeAssistantMessage(
   id: string,
@@ -166,6 +168,7 @@ describe('HomeSideCanvasPane', () => {
     captureMocks.isElectron = false
     captureMocks.captureFrameAndProbe.mockReset()
     captureMocks.releaseCaptureSession.mockClear()
+    __resetHomeSideCanvasSessionsForTesting()
     window.sessionStorage.clear()
     window.localStorage.clear()
     useTdsThemePack().resetPack()
@@ -173,6 +176,7 @@ describe('HomeSideCanvasPane', () => {
   })
 
   afterEach(() => {
+    __resetHomeSideCanvasSessionsForTesting()
     window.sessionStorage.clear()
     window.localStorage.clear()
     useTdsThemePack().resetPack()
@@ -406,10 +410,17 @@ describe('HomeSideCanvasPane', () => {
       'Switch to two-column pricing layout'
     )
 
-    // Reposition frame and verify sessionStorage persists per conversation across remount.
+    // Reposition frame and verify in-memory session cache persists per conversation across remount
+    // without writing assistant HTML/SVG source, history blobs, or pin notes to browser storage.
     const movedFrames: TdsCanvasFrame[] = [{ ...frames[0]!, x: 240, y: 120 }]
     canvas.vm.$emit('update:frames', movedFrames)
     await flushPromises()
+
+    expect(window.sessionStorage.length).toBe(0)
+    const serializedLocalStorage = JSON.stringify(window.localStorage)
+    expect(serializedLocalStorage).not.toContain('tuff.home.tdsCanvas')
+    expect(serializedLocalStorage).not.toContain('<h1>Plans</h1>')
+    expect(serializedLocalStorage).not.toContain('Increase heading contrast')
 
     wrapper.unmount()
 

@@ -1,6 +1,6 @@
 <script lang="ts" name="TdsDeviceFrame" setup>
 import type { DeviceOrientation, DevicePreset } from './tds-devices'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { computeStageFitScale, isResponsivePreset, resolveDeviceDimensions } from './tds-devices'
 
 const props = withDefaults(
@@ -188,9 +188,16 @@ function measureStage(): void {
   }
 }
 
-onMounted(() => {
+let observedStageEl: HTMLElement | null = null
+
+function syncStageResizeObserver(el: HTMLElement | null): void {
+  if (el === observedStageEl && (el === null || resizeObserver !== null)) return
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  observedStageEl = el
+  if (!el) return
   measureStage()
-  if (typeof ResizeObserver !== 'undefined' && stageRef.value) {
+  if (typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0]
       if (!entry) return
@@ -200,13 +207,26 @@ onMounted(() => {
         containerHeight.value = height
       }
     })
-    resizeObserver.observe(stageRef.value)
+    resizeObserver.observe(el)
   }
+}
+
+onMounted(() => {
+  syncStageResizeObserver(stageRef.value)
 })
+
+watch(
+  stageRef,
+  (el) => {
+    syncStageResizeObserver(el)
+  },
+  { flush: 'post' }
+)
 
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   resizeObserver = null
+  observedStageEl = null
 })
 </script>
 

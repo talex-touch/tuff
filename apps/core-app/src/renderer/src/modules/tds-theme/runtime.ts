@@ -448,11 +448,26 @@ export function useTdsThemePack(): UseTdsThemePackReturn {
       nextCustom[existingIndex] = storedPack
       customPacksRef.value = nextCustom
     } else {
-      customPacksRef.value = [...customPacksRef.value, storedPack].slice(-MAX_CUSTOM_THEME_PACKS)
+      const nextCustom = [...customPacksRef.value, storedPack]
+      const protectedId = options?.select !== false ? storedPack.meta.id : activePackIdRef.value
+      while (nextCustom.length > MAX_CUSTOM_THEME_PACKS) {
+        const evictIndex = nextCustom.findIndex(
+          (item) => item.meta.id !== protectedId && item.meta.id !== storedPack.meta.id
+        )
+        if (evictIndex >= 0) {
+          nextCustom.splice(evictIndex, 1)
+          continue
+        }
+        nextCustom.shift()
+      }
+      customPacksRef.value = nextCustom
     }
 
+    const shouldApply = options?.select !== false || activePackIdRef.value === storedPack.meta.id
     if (options?.select !== false) {
       activePackIdRef.value = storedPack.meta.id
+    }
+    if (shouldApply) {
       applyTdsThemePack(storedPack, options?.doc)
       if (options?.onWindowPreference) {
         applyPackWindowPreference(storedPack, options.onWindowPreference)

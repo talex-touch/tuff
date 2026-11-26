@@ -90,21 +90,20 @@ export function isValidFrameBitmapDataUrl(value: unknown): value is string {
 }
 
 export interface RasterizeSvgOptions {
-  /** Maximum time in ms to wait for browser `Image` decode before falling back. */
+  /** Maximum time in ms to wait for browser `Image` decode before aborting. */
   timeoutMs?: number
 }
 
 /**
- * Valid 1x1 transparent PNG byte sequence used as a deterministic non-throwing
- * fallback when running in jsdom / environments without full canvas image decoding.
+ * Conservative landscape printable safe area (px at 96dpi) fitting inside both
+ * Letter (279.4×215.9mm) and A4 (297×210mm) with 12mm page margins.
  */
-const FALLBACK_TRANSPARENT_PNG_BYTES = new Uint8Array([
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
-  0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-  0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
-  0x42, 0x60, 0x82
-])
+const PRINT_SAFE_WIDTH_PX = 940
+const PRINT_SAFE_HEIGHT_PX = 660
+const PRINT_ROW_GAP_PX = 40
+const PRINT_CAPTION_ALLOWANCE_PX = 52
+const PRINT_BRAND_ALLOWANCE_PX = 48
+const PRINT_MIN_SCALE = 0.15
 
 export function escapeXml(value: string): string {
   return value
@@ -667,10 +666,36 @@ export function buildPrintableMockupHtml(
         ? `<footer class="tds-print-brand">Tuff Design System · Board ${page.pageIndex + 1} / ${page.totalPages}</footer>`
         : ''
 
+      const rowNaturalWidth =
+        layout.slots.reduce((sum, slot) => sum + slot.screenWidth + slot.bezelWidth * 2, 0) +
+        PRINT_ROW_GAP_PX * Math.max(0, layout.slots.length - 1)
+      const rowNaturalHeight = layout.slots.reduce((maxH, slot) => {
+        const slotHeight =
+          slot.screenHeight +
+          slot.bezelWidth * 2 +
+          (options.showTitles ? PRINT_CAPTION_ALLOWANCE_PX : 0)
+        return Math.max(maxH, slotHeight)
+      }, 0)
+      const boardContentWidth = Math.max(1, Math.ceil(rowNaturalWidth))
+      const boardContentHeight = Math.max(
+        1,
+        Math.ceil(rowNaturalHeight + (options.brand ? PRINT_BRAND_ALLOWANCE_PX : 0))
+      )
+      const rawPrintScale = Math.min(
+        1,
+        PRINT_SAFE_WIDTH_PX / boardContentWidth,
+        PRINT_SAFE_HEIGHT_PX / boardContentHeight
+      )
+      const printScale = Math.max(PRINT_MIN_SCALE, Math.floor(rawPrintScale * 1000) / 1000)
+
       return [
-        `<section class="tds-print-board" data-page="${page.pageIndex + 1}">`,
+        `<section class="tds-print-board" data-page="${page.pageIndex + 1}" data-print-scale="${printScale}" style="--tds-board-w:${boardContentWidth}px;--tds-board-h:${boardContentHeight}px;--tds-print-scale:${printScale};">`,
+        `<div class="tds-print-stage">`,
+        `<div class="tds-print-scale-inner">`,
         `<div class="tds-print-row">${slotsMarkup}</div>`,
         footer,
+        `</div>`,
+        `</div>`,
         `</section>`
       ].join('')
     })
@@ -688,10 +713,12 @@ export function buildPrintableMockupHtml(
     `@page { size: landscape; margin: 12mm; }`,
     `* { box-sizing: border-box; }`,
     `html, body { margin: 0; padding: 0; background: ${pageBg}; color: ${inkPrimary}; font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", system-ui, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }`,
-    `.tds-print-board { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 48px 36px; background: ${pageBg}; page-break-after: always; break-after: page; }`,
+    `.tds-print-board { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 36px; background: ${pageBg}; page-break-after: always; break-after: page; }`,
     `.tds-print-board:last-child { page-break-after: auto; break-after: auto; }`,
-    `.tds-print-row { display: flex; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 40px; max-width: 100%; }`,
-    `.tds-print-slot { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 14px; }`,
+    `.tds-print-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; }`,
+    `.tds-print-scale-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; }`,
+    `.tds-print-row { display: flex; flex-wrap: nowrap; align-items: center; justify-content: center; gap: ${PRINT_ROW_GAP_PX}px; }`,
+    `.tds-print-slot { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 14px; flex: none; }`,
     `.tds-print-caption { text-align: center; }`,
     `.tds-print-caption-title { font-size: 14px; font-weight: 600; color: ${inkPrimary}; line-height: 1.3; }`,
     `.tds-print-caption-dim { margin-top: 2px; font-size: 11px; color: ${inkSecondary}; font-variant-numeric: tabular-nums; }`,
@@ -704,7 +731,7 @@ export function buildPrintableMockupHtml(
     `.tds-print-cutout--punch { top: 12px; width: 13px; height: 13px; border-radius: 999px; }`,
     `.tds-print-cutout--pill { top: 11px; width: 78px; height: 20px; border-radius: 10px; }`,
     `.tds-print-brand { font-size: 12px; font-weight: 500; color: ${inkSecondary}; }`,
-    `@media print { .tds-print-board { min-height: auto; padding: 12mm 8mm; } }`,
+    `@media print { .tds-print-board { min-height: auto; height: 100vh; max-height: 100vh; padding: 0; overflow: hidden; break-inside: avoid; page-break-inside: avoid; } .tds-print-stage { position: relative; flex: none; width: calc(var(--tds-board-w) * var(--tds-print-scale)); height: calc(var(--tds-board-h) * var(--tds-print-scale)); overflow: hidden; } .tds-print-scale-inner { width: var(--tds-board-w); height: var(--tds-board-h); transform: scale(var(--tds-print-scale)); transform-origin: top left; } }`,
     `</style>`,
     `</head>`,
     `<body>`,
@@ -712,10 +739,6 @@ export function buildPrintableMockupHtml(
     `</body>`,
     `</html>`
   ].join('\n')
-}
-
-function createFallbackPngBlob(): Blob {
-  return new Blob([FALLBACK_TRANSPARENT_PNG_BYTES], { type: 'image/png' })
 }
 
 function dataUrlToBlob(dataUrl: string): Blob | null {
@@ -738,8 +761,10 @@ function dataUrlToBlob(dataUrl: string): Blob | null {
 }
 
 /**
- * Browser-safe SVG-to-PNG Canvas rasterizer at `1x` or `2x` pixel scale, with a clean
- * non-throwing fallback PNG Blob in jsdom or environments without full Canvas decoding.
+ * Browser-safe SVG-to-PNG Canvas rasterizer at `1x` or `2x` pixel scale.
+ * Returns `null` when rasterization cannot complete (e.g. missing browser Canvas/Image
+ * decoding, decode error, or timeout) so callers fail explicitly instead of silently
+ * downloading a blank placeholder image.
  */
 export async function rasterizeSvgToPngBlob(
   svgMarkup: string,
@@ -747,7 +772,7 @@ export async function rasterizeSvgToPngBlob(
   height: number,
   scale: TdsMockupScale = 2,
   opts: RasterizeSvgOptions = {}
-): Promise<Blob> {
+): Promise<Blob | null> {
   if (
     !svgMarkup ||
     !hasDocument() ||
@@ -757,7 +782,7 @@ export async function rasterizeSvgToPngBlob(
     width <= 0 ||
     height <= 0
   ) {
-    return createFallbackPngBlob()
+    return null
   }
 
   const safeScale: TdsMockupScale = scale === 1 ? 1 : 2
@@ -776,15 +801,15 @@ export async function rasterizeSvgToPngBlob(
     const lacksBrowserBitmapDecoding =
       typeof createImageBitmap === 'undefined' && !getContextFn.mock
     if (lacksBrowserBitmapDecoding) {
-      return createFallbackPngBlob()
+      return null
     }
     ctx = canvas.getContext('2d')
   } catch {
-    return createFallbackPngBlob()
+    return null
   }
 
   if (!ctx) {
-    return createFallbackPngBlob()
+    return null
   }
 
   const timeoutMs =
@@ -815,9 +840,9 @@ export async function rasterizeSvgToPngBlob(
     }
   }
 
-  return new Promise<Blob>((resolve) => {
+  return new Promise<Blob | null>((resolve) => {
     let settled = false
-    const finish = (blob: Blob): void => {
+    const finish = (blob: Blob | null): void => {
       if (settled) return
       settled = true
       clearTimeout(timer)
@@ -826,7 +851,7 @@ export async function rasterizeSvgToPngBlob(
     }
 
     const timer = setTimeout(() => {
-      finish(createFallbackPngBlob())
+      finish(null)
     }, timeoutMs)
 
     const img = new Image()
@@ -845,7 +870,7 @@ export async function rasterizeSvgToPngBlob(
               typeof canvas.toDataURL === 'function'
                 ? dataUrlToBlob(canvas.toDataURL('image/png'))
                 : null
-            finish(fallback ?? createFallbackPngBlob())
+            finish(fallback)
           }, 'image/png')
           return
         }
@@ -853,13 +878,13 @@ export async function rasterizeSvgToPngBlob(
           typeof canvas.toDataURL === 'function'
             ? dataUrlToBlob(canvas.toDataURL('image/png'))
             : null
-        finish(fallback ?? createFallbackPngBlob())
+        finish(fallback)
       } catch {
-        finish(createFallbackPngBlob())
+        finish(null)
       }
     }
     img.onerror = () => {
-      finish(createFallbackPngBlob())
+      finish(null)
     }
     img.src = src
   })
@@ -1117,8 +1142,8 @@ function drawCanvasStatusBarAndCutout(
   }
 }
 
-function exportCanvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
-  return new Promise<Blob>((resolve) => {
+function exportCanvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
+  return new Promise<Blob | null>((resolve) => {
     try {
       if (typeof canvas.toBlob === 'function') {
         canvas.toBlob((blob) => {
@@ -1130,15 +1155,15 @@ function exportCanvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
             typeof canvas.toDataURL === 'function'
               ? dataUrlToBlob(canvas.toDataURL('image/png'))
               : null
-          resolve(fallback ?? createFallbackPngBlob())
+          resolve(fallback)
         }, 'image/png')
         return
       }
       const fallback =
         typeof canvas.toDataURL === 'function' ? dataUrlToBlob(canvas.toDataURL('image/png')) : null
-      resolve(fallback ?? createFallbackPngBlob())
+      resolve(fallback)
     } catch {
-      resolve(createFallbackPngBlob())
+      resolve(null)
     }
   })
 }
@@ -1149,14 +1174,16 @@ function exportCanvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
  * When real captured bitmaps are available in `extras.frameBitmaps`, composites
  * backdrop + drop shadow + rounded device bezel + real frame bitmaps directly on
  * a native 2D `<canvas>` via `ctx.drawImage` — zero `foreignObject` Canvas tainting.
- * Falls back cleanly to `rasterizeSvgToPngBlob` when no bitmaps exist.
+ * Falls back cleanly to `rasterizeSvgToPngBlob` when no bitmaps exist, returning
+ * `null` on rasterization failure so callers fail explicitly instead of silently
+ * downloading a blank image.
  */
 export async function renderMockupPagePngBlob(
   page: TdsMockupPage,
   rawOptions: TdsMockupOptions = DEFAULT_MOCKUP_OPTIONS,
   extras: TdsMockupRenderExtras = {},
   opts: RasterizeSvgOptions = {}
-): Promise<Blob> {
+): Promise<Blob | null> {
   const options = normalizeMockupOptions(rawOptions)
   const layout = computeMockupPageLayout(page, options)
 
@@ -1169,7 +1196,7 @@ export async function renderMockupPagePngBlob(
   }
 
   if (!hasDocument() || typeof Image === 'undefined') {
-    return createFallbackPngBlob()
+    return null
   }
 
   const safeScale: TdsMockupScale = options.scale === 1 ? 1 : 2
@@ -1188,15 +1215,15 @@ export async function renderMockupPagePngBlob(
     const lacksBrowserBitmapDecoding =
       typeof createImageBitmap === 'undefined' && !getContextFn.mock
     if (lacksBrowserBitmapDecoding) {
-      return createFallbackPngBlob()
+      return null
     }
     ctx = canvas.getContext('2d')
   } catch {
-    return createFallbackPngBlob()
+    return null
   }
 
   if (!ctx) {
-    return createFallbackPngBlob()
+    return null
   }
 
   const timeoutMs =
@@ -1313,7 +1340,7 @@ export async function renderMockupPagePngBlob(
 
     ctx.restore()
   } catch {
-    return createFallbackPngBlob()
+    return null
   }
 
   return exportCanvasToPngBlob(canvas)

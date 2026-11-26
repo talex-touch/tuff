@@ -104,6 +104,7 @@ const labels = computed<TdsCanvasLabels>(() => ({
 }))
 
 // ── Viewport Pan / Zoom Physics ───────────────────────────────────────────────────────
+const canvasRootRef = ref<HTMLElement | null>(null)
 const viewportRef = ref<HTMLElement | null>(null)
 const containerWidth = ref(0)
 const containerHeight = ref(0)
@@ -645,7 +646,13 @@ function onViewportWheel(event: WheelEvent): void {
   }
 }
 
+function focusCanvasRoot(target: EventTarget | null): void {
+  if (isEditableTarget(target) || isInteractiveControl(target)) return
+  canvasRootRef.value?.focus({ preventScroll: true })
+}
+
 function onViewportPointerDown(event: PointerEvent): void {
+  focusCanvasRoot(event.target)
   const isMiddleButton = event.button === 1
   const target = event.target as HTMLElement | null
   const clickedBackdrop = Boolean(
@@ -781,6 +788,7 @@ function finishPointerInteraction(event: PointerEvent): void {
 }
 
 function onFrameDragPointerDown(frame: TdsCanvasFrame, event: PointerEvent): void {
+  focusCanvasRoot(event.target)
   if (event.button !== 0 || effectiveHandMode.value || isPeeking.value) return
   event.stopPropagation()
   disengageInteractiveFrame()
@@ -1085,10 +1093,57 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
 }
 
+function isInteractiveControl(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  return Boolean(
+    target.closest(
+      'button, a[href], summary, input, textarea, select, [role="button"], [role="slider"], [role="menuitem"], [contenteditable="true"]'
+    )
+  )
+}
+
+function isWithinCanvasScope(target: EventTarget | null): boolean {
+  const root = canvasRootRef.value
+  if (!root) return false
+  if (target instanceof Node && root.contains(target)) return true
+  if (hasDocument()) {
+    const active = document.activeElement
+    if (active && active !== document.body && root.contains(active)) return true
+  }
+  return false
+}
+
+function clearHeldSpace(): void {
+  if (spaceHeld.value) {
+    spaceHeld.value = false
+  }
+}
+
+function onCanvasFocusOut(event: FocusEvent): void {
+  const root = canvasRootRef.value
+  if (!root) {
+    clearHeldSpace()
+    return
+  }
+  const nextFocus = event.relatedTarget
+  if (!(nextFocus instanceof Node) || !root.contains(nextFocus)) {
+    clearHeldSpace()
+  }
+}
+
+function onVisibilityChange(): void {
+  if (hasDocument() && document.hidden) {
+    clearHeldSpace()
+  }
+}
+
 function onKeyDown(event: KeyboardEvent): void {
   if (mockupExportOpen.value || isEditableTarget(event.target)) return
+  if (!isWithinCanvasScope(event.target)) return
 
   if (event.code === 'Space') {
+    if (isInteractiveControl(event.target)) return
+    event.preventDefault()
     disengageInteractiveFrame()
     if (!spaceHeld.value) {
       spaceHeld.value = true
@@ -1154,7 +1209,7 @@ function onKeyDown(event: KeyboardEvent): void {
 
 function onKeyUp(event: KeyboardEvent): void {
   if (event.code === 'Space') {
-    spaceHeld.value = false
+    clearHeldSpace()
   }
 }
 
@@ -1170,9 +1225,16 @@ function measureViewport(): void {
   }
 }
 
-onMounted(() => {
+let observedViewportEl: HTMLElement | null = null
+
+function syncViewportResizeObserver(el: HTMLElement | null): void {
+  if (el === observedViewportEl && (el === null || resizeObserver !== null)) return
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  observedViewportEl = el
+  if (!el) return
   measureViewport()
-  if (typeof ResizeObserver !== 'undefined' && viewportRef.value) {
+  if (typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0]
       if (!entry) return
@@ -1182,11 +1244,26 @@ onMounted(() => {
         containerHeight.value = height
       }
     })
-    resizeObserver.observe(viewportRef.value)
+    resizeObserver.observe(el)
   }
+}
+
+watch(
+  viewportRef,
+  (el) => {
+    syncViewportResizeObserver(el)
+  },
+  { flush: 'post' }
+)
+
+onMounted(() => {
+  syncViewportResizeObserver(viewportRef.value)
   if (hasWindow()) {
-    window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', clearHeldSpace)
+  }
+  if (hasDocument()) {
+    document.addEventListener('visibilitychange', onVisibilityChange)
   }
   if (props.frames.length > 0 && containerWidth.value > 0 && containerHeight.value > 0) {
     viewport.value = computeViewportFit(props.frames, {
@@ -1204,11 +1281,13 @@ onBeforeUnmount(() => {
   }
   resizeObserver?.disconnect()
   resizeObserver = null
+  observedViewportEl = null
   if (hasWindow()) {
-    window.removeEventListener('keydown', onKeyDown)
     window.removeEventListener('keyup', onKeyUp)
+    window.removeEventListener('blur', clearHeldSpace)
   }
   if (hasDocument()) {
+    document.removeEventListener('visibilitychange', onVisibilityChange)
     spaceHeld.value = false
   }
 })
@@ -1216,6 +1295,8 @@ onBeforeUnmount(() => {
 
 <template>
   <section
+    ref="canvasRootRef"
+    tabindex="-1"
     class="TdsDesignCanvas"
     :class="{
       'is-interacting': isInteracting,
@@ -1223,6 +1304,9 @@ onBeforeUnmount(() => {
       'is-note-mode': activeTool === 'note'
     }"
     data-testid="tds-design-canvas"
+    @keydown="onKeyDown"
+    @keyup="onKeyUp"
+    @focusout="onCanvasFocusOut"
   >
     <!-- Live status announcements for screen readers (clip pattern, never display:none) -->
     <div class="TdsDesignCanvas-SrOnly" role="status" aria-live="polite">

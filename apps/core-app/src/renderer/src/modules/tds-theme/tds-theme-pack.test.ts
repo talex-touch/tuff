@@ -551,5 +551,55 @@ describe('TDS Theme Pack protocol, WCAG 2.1 AA validator & runtime', () => {
       expect(useTdsThemePack().customPacks.value).toHaveLength(0)
       expect(document.getElementById(TDS_THEME_PACK_STYLE_ID)).toBeNull()
     })
+
+    it('preserves the active custom pack on cap eviction and reapplies tokens when updating the active pack with select: false', () => {
+      const store = useTdsThemePack()
+
+      // Import pack #1 as active, then fill up to the 24-pack cap with select: false
+      const firstPack = makeCustomValidPack({
+        meta: {
+          id: 'custom-pack-0',
+          name: 'Custom Pack 0',
+          description: 'Active custom pack.',
+          version: '1.0.0',
+          author: 'QA'
+        }
+      })
+      expect(store.importPackJson(JSON.stringify(firstPack), { doc: document }).valid).toBe(true)
+      expect(store.activePackId.value).toBe('custom-pack-0')
+
+      for (let i = 1; i <= 24; i += 1) {
+        const extra = makeCustomValidPack({
+          meta: {
+            id: `custom-pack-${i}`,
+            name: `Custom Pack ${i}`,
+            description: 'Additional custom pack.',
+            version: '1.0.0',
+            author: 'QA'
+          }
+        })
+        expect(
+          store.importPackJson(JSON.stringify(extra), { select: false, doc: document }).valid
+        ).toBe(true)
+      }
+
+      // Active pack #0 must survive cap eviction; oldest inactive pack #1 is evicted instead
+      expect(store.customPacks.value).toHaveLength(24)
+      expect(store.activePackId.value).toBe('custom-pack-0')
+      expect(store.customPacks.value.some((pack) => pack.meta.id === 'custom-pack-0')).toBe(true)
+      expect(store.customPacks.value.some((pack) => pack.meta.id === 'custom-pack-1')).toBe(false)
+      expect(store.customPacks.value.some((pack) => pack.meta.id === 'custom-pack-24')).toBe(true)
+
+      // Updating the currently active pack with select: false still reapplies updated tokens to DOM
+      const updatedActive = makeCustomValidPack({
+        meta: { ...firstPack.meta, version: '1.1.0' }
+      })
+      updatedActive.tokens.light.primary = '#1e5b3f'
+      expect(
+        store.importPackJson(JSON.stringify(updatedActive), { select: false, doc: document }).valid
+      ).toBe(true)
+      expect(store.activePackId.value).toBe('custom-pack-0')
+      expect(document.getElementById(TDS_THEME_PACK_STYLE_ID)?.textContent).toContain('#1e5b3f')
+    })
   })
 })

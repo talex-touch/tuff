@@ -479,7 +479,7 @@ export default defineComponent({
           }, [
             h('input', {
               type: 'radio',
-              name: view.statementId ?? fieldUid,
+              name: fieldUid,
               value: choice.value,
               checked: value === choice.value,
               disabled,

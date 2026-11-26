@@ -87,6 +87,7 @@ describe('buildSandboxedFrameSrcdoc extraStyleCss theme pack injection & sanitiz
     expect(htmlDoc).toContain('Content-Security-Policy')
     expect(htmlDoc).toContain(TDS_CANVAS_FRAME_CSP)
     expect(htmlDoc).toContain("default-src 'none'")
+    expect(htmlDoc).toContain("form-action 'none'")
     expect(htmlDoc).toContain('sandbox="allow-scripts allow-forms allow-modals"')
     expect(htmlDoc).not.toContain('allow-same-origin')
     expect(htmlDoc).toContain('<style data-tds-theme-pack>')
@@ -339,8 +340,10 @@ describe('mockup-renderer pagination, layout math, SVG XML safety, printable HTM
 
     expect(html).toContain('@page { size: landscape;')
     expect(html).toContain('break-after: page')
+    expect(html).toContain('break-inside: avoid')
     expect(html).toContain('print-color-adjust: exact')
     expect(html).toContain(`content="${TDS_CANVAS_FRAME_CSP}"`)
+    expect(html).toContain("form-action 'none'")
     expect(html).toContain('data-page="1"')
     expect(html).toContain('data-page="2"')
     // Strict sandbox per frame kind, never allow-same-origin
@@ -354,23 +357,105 @@ describe('mockup-renderer pagination, layout math, SVG XML safety, printable HTM
     expect(html).toContain('&lt;/title&gt;&lt;script&gt;boom()&lt;/script&gt;')
   })
 
-  it('rasterizeSvgToPngBlob resolves cleanly with a valid PNG Blob fallback in jsdom', async () => {
+  it('scales wide and tall boards inside @media print to fit page bounds without clipping while keeping small boards at 1:1', () => {
+    const frames = [
+      makeFrame({
+        id: 'wide-1920',
+        title: 'Desktop 1920',
+        deviceId: 'responsive',
+        width: 1920,
+        height: 1080
+      }),
+      makeFrame({
+        id: 'small-watch',
+        title: 'Watch Face',
+        deviceId: 'apple-watch-46'
+      })
+    ]
+    const pages = paginateMockupFrames(frames, 1)
+    const html = buildPrintableMockupHtml(pages, DEFAULT_MOCKUP_OPTIONS, 'Print Scaling')
+
+    expect(html).toContain('transform: scale(var(--tds-print-scale))')
+    expect(html).toContain('width: calc(var(--tds-board-w) * var(--tds-print-scale))')
+    expect(html).toContain('height: calc(var(--tds-board-h) * var(--tds-print-scale))')
+
+    // Board 1 (1920x1080) must be scaled down below 1 to fit printable landscape bounds
+    const board1Match =
+      /data-page="1"[^>]*style="--tds-board-w:(\d+)px;--tds-board-h:(\d+)px;--tds-print-scale:([0-9.]+);"/i.exec(
+        html
+      )
+    expect(board1Match).not.toBeNull()
+    const b1W = Number(board1Match![1])
+    const b1H = Number(board1Match![2])
+    const b1Scale = Number(board1Match![3])
+    expect(b1W).toBeGreaterThanOrEqual(1920)
+    expect(b1Scale).toBeLessThan(1)
+    expect(b1Scale).toBeGreaterThanOrEqual(0.15)
+    expect(b1W * b1Scale).toBeLessThanOrEqual(940.5)
+    expect(b1H * b1Scale).toBeLessThanOrEqual(660.5)
+
+    // Board 2 (Apple Watch) fits natively at 1:1 without upscaling
+    const board2Match = /data-page="2"[^>]*data-print-scale="([0-9.]+)"/i.exec(html)
+    expect(board2Match).not.toBeNull()
+    expect(Number(board2Match![1])).toBe(1)
+  })
+
+  it('rasterizeSvgToPngBlob returns null on raster failure/unsupported canvas instead of a silent blank PNG, and returns a real PNG Blob when Canvas succeeds', async () => {
     const page = paginateMockupFrames([makeFrame()], 1)[0]!
     const svg = renderMockupPageSvg(page, DEFAULT_MOCKUP_OPTIONS)
-    const blob = await rasterizeSvgToPngBlob(svg, 480, 640, 2, { timeoutMs: 30 })
 
-    expect(blob).toBeInstanceOf(Blob)
-    expect(blob.type).toBe('image/png')
-    expect(blob.size).toBeGreaterThan(8)
-    const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as ArrayBuffer)
-      reader.onerror = () => reject(reader.error)
-      reader.readAsArrayBuffer(blob)
-    })
-    const bytes = new Uint8Array(buffer)
-    // PNG magic signature: 89 50 4E 47
-    expect(Array.from(bytes.slice(0, 4))).toEqual([0x89, 0x50, 0x4e, 0x47])
+    // 1. Default jsdom (no createImageBitmap / canvas decoding) fails explicitly with null
+    const failed = await rasterizeSvgToPngBlob(svg, 480, 640, 2, { timeoutMs: 30 })
+    expect(failed).toBeNull()
+
+    // 2. Empty markup or invalid dimensions return null
+    expect(await rasterizeSvgToPngBlob('', 480, 640, 2)).toBeNull()
+    expect(await rasterizeSvgToPngBlob(svg, 0, 640, 2)).toBeNull()
+
+    // 3. Mocked browser Canvas + Image onload resolves to the rasterized PNG Blob
+    const validPngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01])
+    const originalImage = globalThis.Image
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      clearRect: vi.fn(),
+      drawImage: vi.fn()
+    } as unknown as CanvasRenderingContext2D)
+    const toBlobSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation((callback) => {
+        callback(new Blob([validPngBytes], { type: 'image/png' }))
+      })
+    class MockImage {
+      decoding = ''
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+      set src(_value: string) {
+        queueMicrotask(() => this.onload?.())
+      }
+    }
+    globalThis.Image = MockImage as unknown as typeof Image
+
+    try {
+      const blob = await rasterizeSvgToPngBlob(svg, 480, 640, 2, { timeoutMs: 200 })
+      expect(blob).toBeInstanceOf(Blob)
+      expect(blob!.type).toBe('image/png')
+      expect(blob!.size).toBe(validPngBytes.length)
+
+      // 4. Image decode failure (onerror) returns null instead of blank PNG
+      class FailingImage {
+        decoding = ''
+        onload: (() => void) | null = null
+        onerror: (() => void) | null = null
+        set src(_value: string) {
+          queueMicrotask(() => this.onerror?.())
+        }
+      }
+      globalThis.Image = FailingImage as unknown as typeof Image
+      expect(await rasterizeSvgToPngBlob(svg, 480, 640, 2, { timeoutMs: 200 })).toBeNull()
+    } finally {
+      globalThis.Image = originalImage
+      getContextSpy.mockRestore()
+      toBlobSpy.mockRestore()
+    }
   })
 
   it('renders real-pixel <image> with zero <foreignObject> when valid frameBitmaps are supplied and falls back otherwise', () => {
@@ -412,15 +497,14 @@ describe('mockup-renderer pagination, layout math, SVG XML safety, printable HTM
       'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
     const page = paginateMockupFrames([makeFrame({ id: 'px-1', title: 'Retina Board' })], 1)[0]!
 
-    // 1. Without bitmaps -> cleanly falls back to rasterizeSvgToPngBlob PNG Blob
+    // 1. Without bitmaps in jsdom (no browser canvas decoding) -> fails explicitly with null
     const fallbackBlob = await renderMockupPagePngBlob(
       page,
       DEFAULT_MOCKUP_OPTIONS,
       {},
       { timeoutMs: 25 }
     )
-    expect(fallbackBlob).toBeInstanceOf(Blob)
-    expect(fallbackBlob.type).toBe('image/png')
+    expect(fallbackBlob).toBeNull()
 
     // 2. With bitmaps + mocked Canvas 2D & Image decode -> composites directly with ctx.drawImage
     const drawImageSpy = vi.fn()
@@ -493,7 +577,7 @@ describe('mockup-renderer pagination, layout math, SVG XML safety, printable HTM
         { timeoutMs: 200 }
       )
       expect(pngBlob).toBeInstanceOf(Blob)
-      expect(pngBlob.type).toBe('image/png')
+      expect(pngBlob!.type).toBe('image/png')
       expect(scaleSpy).toHaveBeenCalledWith(2, 2)
       expect(clipSpy).toHaveBeenCalled()
       expect(drawImageSpy).toHaveBeenCalledTimes(1)
@@ -513,6 +597,7 @@ describe('TdsMockupExportDialog & TdsDesignCanvas themeCss / canvasPattern / exp
   it('mounts TdsMockupExportDialog, previews boards, toggles options, and triggers SVG/PNG/Print exports', async () => {
     const originalCreateObjectUrl = URL.createObjectURL
     const originalRevokeObjectUrl = URL.revokeObjectURL
+    const originalImage = globalThis.Image
     const createObjectUrlSpy = vi.fn(() => 'blob:mock-tds-export')
     const revokeObjectUrlSpy = vi.fn()
     Object.defineProperty(URL, 'createObjectURL', {
@@ -529,6 +614,26 @@ describe('TdsMockupExportDialog & TdsDesignCanvas themeCss / canvasPattern / exp
     const anchorClickSpy = vi
       .spyOn(HTMLAnchorElement.prototype, 'click')
       .mockImplementation(() => {})
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      clearRect: vi.fn(),
+      drawImage: vi.fn()
+    } as unknown as CanvasRenderingContext2D)
+    const toBlobSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation((callback) => {
+        callback(
+          new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a])], { type: 'image/png' })
+        )
+      })
+    class MockExportImage {
+      decoding = ''
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+      set src(_value: string) {
+        queueMicrotask(() => this.onload?.())
+      }
+    }
+    globalThis.Image = MockExportImage as unknown as typeof Image
 
     try {
       const frames = [
@@ -607,10 +712,146 @@ describe('TdsMockupExportDialog & TdsDesignCanvas themeCss / canvasPattern / exp
         { format: 'print-html', pageCount: 3, frameIds: ['p1', 'p2', 'p3'] },
         { format: 'png', pageCount: 3, frameIds: ['p1', 'p2', 'p3'] }
       ])
+      expect(wrapper.find('[data-testid="tds-mockup-export-error"]').exists()).toBe(false)
       expect(createObjectUrlSpy).toHaveBeenCalled()
       expect(anchorClickSpy).toHaveBeenCalled()
     } finally {
+      globalThis.Image = originalImage
+      getContextSpy.mockRestore()
+      toBlobSpy.mockRestore()
       openSpy.mockRestore()
+      anchorClickSpy.mockRestore()
+      Object.defineProperty(URL, 'createObjectURL', {
+        value: originalCreateObjectUrl,
+        configurable: true,
+        writable: true
+      })
+      Object.defineProperty(URL, 'revokeObjectURL', {
+        value: originalRevokeObjectUrl,
+        configurable: true,
+        writable: true
+      })
+    }
+  })
+
+  it('aborts download and surfaces an alert error when PNG rasterization or file download fails, and snapshots options before await', async () => {
+    const originalCreateObjectUrl = URL.createObjectURL
+    const originalRevokeObjectUrl = URL.revokeObjectURL
+    const createObjectUrlSpy = vi.fn(() => 'blob:mock-tds-export')
+    const revokeObjectUrlSpy = vi.fn()
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: createObjectUrlSpy,
+      configurable: true,
+      writable: true
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: revokeObjectUrlSpy,
+      configurable: true,
+      writable: true
+    })
+    const anchorClickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {})
+
+    try {
+      const wrapper = mount(TdsMockupExportDialog, {
+        props: {
+          modelValue: true,
+          frames: [
+            makeFrame({ id: 'e1', title: 'Screen 1' }),
+            makeFrame({ id: 'e2', title: 'Screen 2' })
+          ],
+          storageKey: 'tds.dialog.fail.v1'
+        }
+      })
+      await flushPromises()
+
+      // 1. PNG rasterization fails in jsdom -> no download triggered, no export emitted, error alert shown
+      await wrapper.get('[data-testid="tds-mockup-export-png"]').trigger('click')
+      await flushPromises()
+      expect(wrapper.emitted('export')).toBeUndefined()
+      expect(anchorClickSpy).not.toHaveBeenCalled()
+      expect(wrapper.get('[data-testid="tds-mockup-export-error"]').attributes('role')).toBe(
+        'alert'
+      )
+
+      // 2. Failing SVG/Print download (createObjectURL throws & window.open returns null) surfaces error without emitting success
+      createObjectUrlSpy.mockImplementation(() => {
+        throw new Error('blocked')
+      })
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(null)
+      try {
+        await wrapper.get('[data-testid="tds-mockup-export-svg"]').trigger('click')
+        await nextTick()
+        expect(wrapper.emitted('export')).toBeUndefined()
+        expect(wrapper.find('[data-testid="tds-mockup-export-error"]').exists()).toBe(true)
+
+        await wrapper.get('[data-testid="tds-mockup-export-print"]').trigger('click')
+        await nextTick()
+        expect(wrapper.emitted('export')).toBeUndefined()
+        expect(wrapper.find('[data-testid="tds-mockup-export-error"]').exists()).toBe(true)
+      } finally {
+        openSpy.mockRestore()
+      }
+      // 3. Snapshots options, pages, and selection before awaiting async PNG rasterization
+      createObjectUrlSpy.mockImplementation(() => 'blob:mock-tds-snapshot')
+      const originalImage = globalThis.Image
+      const pendingImages: Array<() => void> = []
+      const downloadFilenames: string[] = []
+      anchorClickSpy.mockImplementation(function (this: HTMLAnchorElement) {
+        downloadFilenames.push(this.download)
+      })
+      const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+        clearRect: vi.fn(),
+        drawImage: vi.fn()
+      } as unknown as CanvasRenderingContext2D)
+      const toBlobSpy = vi
+        .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+        .mockImplementation((callback) => {
+          callback(
+            new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a])], { type: 'image/png' })
+          )
+        })
+      class DeferredImage {
+        decoding = ''
+        onload: (() => void) | null = null
+        onerror: (() => void) | null = null
+        set src(_value: string) {
+          pendingImages.push(() => this.onload?.())
+        }
+      }
+      globalThis.Image = DeferredImage as unknown as typeof Image
+
+      try {
+        // Start PNG export while scale is 2x and both frames are selected
+        await wrapper.get('[data-testid="tds-mockup-scale-2"]').trigger('click')
+        await nextTick()
+        const exportPromise = wrapper.get('[data-testid="tds-mockup-export-png"]').trigger('click')
+        await nextTick()
+
+        // Mutate scale to 1x and clear selection while rasterization is still in flight
+        await wrapper.get('[data-testid="tds-mockup-scale-1"]').trigger('click')
+        await wrapper.get('[data-testid="tds-mockup-select-none"]').trigger('click')
+        await nextTick()
+
+        // Resolve deferred image decodes
+        while (pendingImages.length > 0) {
+          pendingImages.shift()?.()
+          await flushPromises()
+        }
+        await exportPromise
+        await flushPromises()
+
+        expect(downloadFilenames).toEqual(['tds-mockup-showcase-2x.png'])
+        expect(wrapper.emitted('export')).toEqual([
+          [{ format: 'png', pageCount: 1, frameIds: ['e1', 'e2'] }]
+        ])
+      } finally {
+        globalThis.Image = originalImage
+        getContextSpy.mockRestore()
+        toBlobSpy.mockRestore()
+      }
+    } finally {
       anchorClickSpy.mockRestore()
       Object.defineProperty(URL, 'createObjectURL', {
         value: originalCreateObjectUrl,
