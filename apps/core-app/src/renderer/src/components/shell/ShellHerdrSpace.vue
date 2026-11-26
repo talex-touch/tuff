@@ -32,6 +32,7 @@ import {
   useHerdrRuntime
 } from '~/modules/herdr/useHerdrRuntime'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
+import { vTdsLiveAnimation } from '~/modules/style/live-animation-clock'
 import {
   ensureHerdrTab,
   getLastHerdrAddressForGroup,
@@ -826,6 +827,9 @@ const infoRows = computed(() => {
                         data-testid="herdr-status-pill"
                       >
                         <span
+                          v-tds-live-animation="
+                            resolveOscState(session) === 'working' ? 'spin' : false
+                          "
                           class="ShellHerdrSpace-StatusIcon"
                           :class="statusIconClass(session)"
                           aria-hidden="true"
@@ -1892,12 +1896,23 @@ const infoRows = computed(() => {
   }
 
   &.is-spin {
-    animation: herdr-space-spin 1.1s linear infinite;
+    animation: herdr-space-spin 1080ms steps(12, end) infinite;
 
     @media (prefers-reduced-motion: reduce) {
       animation: none;
     }
   }
+}
+
+html[data-live-anim-clock='active'] .ShellHerdrSpace-StatusIcon.is-spin,
+html.tds-reduced-motion .ShellHerdrSpace-StatusIcon.is-spin,
+html[data-live-anim-state='suppressed'] .ShellHerdrSpace-StatusIcon.is-spin {
+  animation: none;
+}
+
+html.is-window-moving .ShellHerdrSpace-StatusIcon.is-spin,
+html[data-live-anim-state='paused'] .ShellHerdrSpace-StatusIcon.is-spin {
+  animation-play-state: paused;
 }
 
 .ShellHerdrSpace-StatusText {
@@ -2017,8 +2032,11 @@ const infoRows = computed(() => {
 }
 
 @keyframes herdr-space-spin {
+  from {
+    rotate: 0deg;
+  }
   to {
-    transform: rotate(360deg);
+    rotate: 360deg;
   }
 }
 </style>

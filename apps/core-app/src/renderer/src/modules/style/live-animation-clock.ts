@@ -1,5 +1,12 @@
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
-import { onScopeDispose, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue'
+import {
+  onScopeDispose,
+  toValue,
+  watch,
+  type MaybeRefOrGetter,
+  type ObjectDirective,
+  type Ref
+} from 'vue'
 
 /**
  * Phase-locked, low-FPS Web Animations API clock for persistent indicators over
@@ -11,16 +18,23 @@ import { onScopeDispose, toValue, watch, type MaybeRefOrGetter, type Ref } from 
  * ~11.1fps tick grid) anchored to `startTime = 0` (`document.timeline` origin)
  * collapses every concurrent indicator onto the exact same low-frequency ticks,
  * and automatically halts under `prefers-reduced-motion: reduce`, hidden tabs,
- * or Tuff's low-battery motion gate (`html[data-low-battery-motion="1"]`).
+ * active window moves (`html.is-window-moving`), TDS reduced-motion tier
+ * (`html.tds-reduced-motion`), or Tuff's low-battery motion gate
+ * (`html[data-low-battery-motion="1"]`).
  */
 
 export const LIVE_ANIM_CLOCK_ATTR = 'data-live-anim-clock'
+export const LIVE_ANIM_STATE_ATTR = 'data-live-anim-state'
 export const LIVE_ANIM_ATTR = 'data-live-anim'
 export const LIVE_ANIM_STEPS_ATTR = 'data-live-anim-steps'
 export const LIVE_ANIM_DURATION_ATTR = 'data-live-anim-duration'
 export const LIVE_ANIM_STAGGER_ATTR = 'data-live-anim-stagger'
 export const LIVE_ANIM_PAUSED_ATTR = 'data-live-anim-paused'
 export const LOW_BATTERY_MOTION_ATTR = 'data-low-battery-motion'
+export const WINDOW_MOVING_CLASS = 'is-window-moving'
+export const TDS_REDUCED_MOTION_CLASS = 'tds-reduced-motion'
+
+export type LiveAnimationClockState = 'running' | 'paused' | 'suppressed'
 
 /** Shared step interval (90ms ≈ 11.11fps) so all presets align onto one phase grid. */
 export const LIVE_ANIM_DEFAULT_TICK_MS = 90
@@ -108,10 +122,12 @@ export interface LiveAnimationClockController {
   refresh: () => void
   /** Cancel all managed animations, disconnect observers, and remove listeners. */
   dispose: () => void
-  /** Whether animations are currently paused (hidden document or manual pause). */
+  /** Whether animations are currently paused (hidden document, window moving, or manual pause). */
   isPaused: () => boolean
-  /** Whether motion is suppressed (`prefers-reduced-motion: reduce` or low-battery mode). */
+  /** Whether motion is suppressed (`prefers-reduced-motion: reduce`, `html.tds-reduced-motion`, or low-battery mode). */
   isSuppressed: () => boolean
+  /** Current projected clock state (`'running'`, `'paused'`, or `'suppressed'`). */
+  getState: () => LiveAnimationClockState
   /** Current number of live WAAPI animations owned by this controller. */
   activeCount: () => number
 }
@@ -193,6 +209,22 @@ function readReducedMotion(win: Window | null): MediaQueryList | null {
 function isLowBatteryMotionActive(doc: Document | null | undefined): boolean {
   return doc?.documentElement?.getAttribute(LOW_BATTERY_MOTION_ATTR) === '1'
 }
+
+function isWindowMovingActive(doc: Document | null | undefined): boolean {
+  return Boolean(doc?.documentElement?.classList.contains(WINDOW_MOVING_CLASS))
+}
+
+function isTdsReducedMotionActive(doc: Document | null | undefined): boolean {
+  return Boolean(doc?.documentElement?.classList.contains(TDS_REDUCED_MOTION_CLASS))
+}
+
+/**
+ * Tracks standalone per-element clocks created before an ancestor host clock
+ * mounts (e.g. child `mounted` firing before `AppShell.onMounted`). When a host
+ * clock scans the element it releases the temporary local clock first so there
+ * is never a duplicate WAAPI animation or leaked observer.
+ */
+const standaloneClockReleasers = new WeakMap<HTMLElement, () => void>()
 
 function canAnimateElement(el: HTMLElement): boolean {
   return typeof el.animate === 'function'
@@ -317,6 +349,7 @@ function createNoopController(): LiveAnimationClockController {
     dispose: () => {},
     isPaused: () => true,
     isSuppressed: () => true,
+    getState: () => 'suppressed',
     activeCount: () => 0
   }
 }
@@ -353,11 +386,25 @@ export function installLiveAnimationClock(
   let disposed = false
   let manualPaused = false
   let reducedMotion = Boolean(mediaQuery?.matches)
+  let tdsReducedMotion = isTdsReducedMotionActive(doc)
   let lowBattery = isLowBatteryMotionActive(doc)
+  let windowMoving = isWindowMovingActive(doc)
   let documentHidden = Boolean(doc?.hidden)
 
-  const isSuppressed = (): boolean => reducedMotion || lowBattery
-  const isPaused = (): boolean => manualPaused || documentHidden
+  const isSuppressed = (): boolean => reducedMotion || tdsReducedMotion || lowBattery
+  const isPaused = (): boolean => manualPaused || documentHidden || windowMoving
+  const getState = (): LiveAnimationClockState => {
+    if (isSuppressed()) return 'suppressed'
+    if (isPaused()) return 'paused'
+    return 'running'
+  }
+
+  function syncRootStateAttr(): void {
+    const nextState = getState()
+    if (rootEl.getAttribute(LIVE_ANIM_STATE_ATTR) !== nextState) {
+      rootEl.setAttribute(LIVE_ANIM_STATE_ATTR, nextState)
+    }
+  }
 
   function detachElement(el: HTMLElement): void {
     const entry = tracked.get(el)
@@ -384,6 +431,13 @@ export function installLiveAnimationClock(
 
   function syncElement(el: HTMLElement): void {
     if (disposed) return
+
+    if (el !== rootEl) {
+      const releaseStandalone = standaloneClockReleasers.get(el)
+      if (releaseStandalone) {
+        releaseStandalone()
+      }
+    }
 
     if (!el.isConnected || isSuppressed()) {
       detachElement(el)
@@ -446,6 +500,7 @@ export function installLiveAnimationClock(
 
   function reconcileAll(): void {
     if (disposed) return
+    syncRootStateAttr()
     if (isSuppressed()) {
       cancelAll()
       return
@@ -464,6 +519,7 @@ export function installLiveAnimationClock(
   // runtime lacks `Element.prototype.animate`, mark `unsupported` so CSS fallbacks
   // remain legible instead of disappearing.
   const previousClockAttr = rootEl.getAttribute(LIVE_ANIM_CLOCK_ATTR)
+  const previousStateAttr = rootEl.getAttribute(LIVE_ANIM_STATE_ATTR)
   rootEl.setAttribute(LIVE_ANIM_CLOCK_ATTR, canAnimateElement(rootEl) ? 'active' : 'unsupported')
 
   // Initial scan
@@ -502,20 +558,30 @@ export function installLiveAnimationClock(
     })
   }
 
-  // Observe Tuff's global low-battery motion gate on `<html>`.
-  let batteryObserver: MutationObserver | null = null
+  // Observe Tuff's global motion gates on `<html>` (low-battery, TDS reduced-motion, window-moving).
+  let htmlStateObserver: MutationObserver | null = null
   const htmlEl = doc?.documentElement ?? null
   if (htmlEl && typeof MutationObserver !== 'undefined') {
-    batteryObserver = new MutationObserver(() => {
+    htmlStateObserver = new MutationObserver(() => {
       if (disposed) return
-      const next = isLowBatteryMotionActive(doc)
-      if (next === lowBattery) return
-      lowBattery = next
+      const nextLowBattery = isLowBatteryMotionActive(doc)
+      const nextTdsReduced = isTdsReducedMotionActive(doc)
+      const nextWindowMoving = isWindowMovingActive(doc)
+      if (
+        nextLowBattery === lowBattery &&
+        nextTdsReduced === tdsReducedMotion &&
+        nextWindowMoving === windowMoving
+      ) {
+        return
+      }
+      lowBattery = nextLowBattery
+      tdsReducedMotion = nextTdsReduced
+      windowMoving = nextWindowMoving
       reconcileAll()
     })
-    batteryObserver.observe(htmlEl, {
+    htmlStateObserver.observe(htmlEl, {
       attributes: true,
-      attributeFilter: [LOW_BATTERY_MOTION_ATTR]
+      attributeFilter: [LOW_BATTERY_MOTION_ATTR, 'class']
     })
   }
 
@@ -543,6 +609,7 @@ export function installLiveAnimationClock(
     pause() {
       if (disposed || manualPaused) return
       manualPaused = true
+      syncRootStateAttr()
       pauseAll()
     },
     resume() {
@@ -560,8 +627,8 @@ export function installLiveAnimationClock(
       cancelAll()
       domObserver?.disconnect()
       domObserver = null
-      batteryObserver?.disconnect()
-      batteryObserver = null
+      htmlStateObserver?.disconnect()
+      htmlStateObserver = null
 
       doc?.removeEventListener('visibilitychange', handleVisibilityChange)
       if (mediaQuery) {
@@ -577,10 +644,199 @@ export function installLiveAnimationClock(
       } else {
         rootEl.setAttribute(LIVE_ANIM_CLOCK_ATTR, previousClockAttr)
       }
+
+      if (previousStateAttr === null) {
+        rootEl.removeAttribute(LIVE_ANIM_STATE_ATTR)
+      } else {
+        rootEl.setAttribute(LIVE_ANIM_STATE_ATTR, previousStateAttr)
+      }
     },
     isPaused,
     isSuppressed,
+    getState,
     activeCount: () => tracked.size
+  }
+}
+
+export interface LiveAnimationBindingConfig {
+  preset: LiveAnimationPresetName | 'none'
+  active?: boolean
+  steps?: number
+  duration?: number
+  stagger?: number
+}
+
+export type LiveAnimationDirectiveValue =
+  | LiveAnimationPresetName
+  | 'none'
+  | false
+  | null
+  | undefined
+  | LiveAnimationBindingConfig
+
+interface NormalizedBinding {
+  preset: LiveAnimationPresetName | 'none'
+  active: boolean
+  steps?: number
+  duration?: number
+  stagger?: number
+}
+
+function normalizeLiveAnimationBinding(value: LiveAnimationDirectiveValue): NormalizedBinding {
+  if (!value || value === 'none') {
+    return { preset: 'none', active: false }
+  }
+  if (typeof value === 'string') {
+    return { preset: value, active: true }
+  }
+  return {
+    preset: value.preset,
+    active: value.active ?? true,
+    steps: value.steps,
+    duration: value.duration,
+    stagger: value.stagger
+  }
+}
+
+function clearLiveAnimationAttrs(el: HTMLElement): void {
+  el.removeAttribute(LIVE_ANIM_ATTR)
+  el.removeAttribute(LIVE_ANIM_STEPS_ATTR)
+  el.removeAttribute(LIVE_ANIM_DURATION_ATTR)
+  el.removeAttribute(LIVE_ANIM_STAGGER_ATTR)
+  el.removeAttribute(LIVE_ANIM_PAUSED_ATTR)
+}
+
+function applyLiveAnimationAttrs(el: HTMLElement, binding: NormalizedBinding): void {
+  el.setAttribute(LIVE_ANIM_ATTR, binding.preset)
+  if (isPositiveFinite(binding.steps)) {
+    el.setAttribute(LIVE_ANIM_STEPS_ATTR, String(Math.round(binding.steps)))
+  } else {
+    el.removeAttribute(LIVE_ANIM_STEPS_ATTR)
+  }
+  if (isPositiveFinite(binding.duration)) {
+    el.setAttribute(LIVE_ANIM_DURATION_ATTR, String(Math.round(binding.duration)))
+  } else {
+    el.removeAttribute(LIVE_ANIM_DURATION_ATTR)
+  }
+  if (
+    typeof binding.stagger === 'number' &&
+    Number.isFinite(binding.stagger) &&
+    binding.stagger > 0
+  ) {
+    el.setAttribute(LIVE_ANIM_STAGGER_ATTR, String(binding.stagger))
+  } else {
+    el.removeAttribute(LIVE_ANIM_STAGGER_ATTR)
+  }
+}
+
+function isManagedByHostClock(el: HTMLElement): boolean {
+  return Boolean(el.parentElement?.closest(`[${LIVE_ANIM_CLOCK_ATTR}="active"]`))
+}
+
+interface StandaloneClockEntry {
+  clock: LiveAnimationClockController
+  release: () => void
+}
+
+function createStandaloneClock(el: HTMLElement, onRelease: () => void): StandaloneClockEntry {
+  const clock = installLiveAnimationClock(el)
+  let released = false
+  const release = (): void => {
+    if (released) return
+    released = true
+    if (standaloneClockReleasers.get(el) === release) {
+      standaloneClockReleasers.delete(el)
+    }
+    clock.dispose()
+    onRelease()
+  }
+  standaloneClockReleasers.set(el, release)
+  return { clock, release }
+}
+
+/**
+ * Imperatively attaches a DOM element onto the phase-locked live animation clock.
+ * Delegates purely via `data-live-anim*` attributes when inside an active host clock
+ * (`installLiveAnimationClock`), or installs a self-cleaning standalone clock otherwise.
+ * Returns a cleanup callback that clears attributes and stops any standalone clock.
+ */
+export function attachLiveAnimation(
+  el: HTMLElement,
+  binding: LiveAnimationDirectiveValue
+): () => void {
+  const normalized = normalizeLiveAnimationBinding(binding)
+  let standalone: StandaloneClockEntry | null = null
+
+  if (!normalized.active || normalized.preset === 'none') {
+    clearLiveAnimationAttrs(el)
+    return () => {
+      clearLiveAnimationAttrs(el)
+    }
+  }
+
+  applyLiveAnimationAttrs(el, normalized)
+  if (!isManagedByHostClock(el)) {
+    standalone = createStandaloneClock(el, () => {
+      standalone = null
+    })
+  }
+
+  return () => {
+    clearLiveAnimationAttrs(el)
+    standalone?.release()
+    standalone = null
+  }
+}
+
+const directiveEntries = new WeakMap<HTMLElement, StandaloneClockEntry>()
+
+function syncDirectiveElement(el: HTMLElement, value: LiveAnimationDirectiveValue): void {
+  const normalized = normalizeLiveAnimationBinding(value)
+  const existing = directiveEntries.get(el)
+
+  if (!normalized.active || normalized.preset === 'none') {
+    clearLiveAnimationAttrs(el)
+    existing?.release()
+    return
+  }
+
+  applyLiveAnimationAttrs(el, normalized)
+  if (isManagedByHostClock(el)) {
+    existing?.release()
+    return
+  }
+
+  if (existing) {
+    existing.clock.refresh()
+    return
+  }
+
+  const entry = createStandaloneClock(el, () => {
+    if (directiveEntries.get(el) === entry) {
+      directiveEntries.delete(el)
+    }
+  })
+  directiveEntries.set(el, entry)
+}
+
+/**
+ * Lightweight Vue 3 directive (`v-tds-live-animation`) that binds an element onto
+ * CoreApp's 90ms phase-locked live animation clock.
+ *
+ * Accepts a preset name (`'spin'`, `'pulse'`, `'breathe'`, `'dot'`, `'bar'`, `'shimmer'`),
+ * `'none' | false | null | undefined` to stop, or a `{ preset, active?, steps?, duration?, stagger? }`
+ * configuration object.
+ */
+export const vTdsLiveAnimation: ObjectDirective<HTMLElement, LiveAnimationDirectiveValue> = {
+  mounted(el, binding) {
+    syncDirectiveElement(el, binding.value)
+  },
+  updated(el, binding) {
+    syncDirectiveElement(el, binding.value)
+  },
+  beforeUnmount(el) {
+    clearLiveAnimationAttrs(el)
+    directiveEntries.get(el)?.release()
   }
 }
 
@@ -603,20 +859,12 @@ export function useLiveAnimation(
   target: Ref<HTMLElement | null | undefined>,
   options: UseLiveAnimationOptions
 ): { stop: () => void } {
-  let localClock: LiveAnimationClockController | null = null
+  let localEntry: StandaloneClockEntry | null = null
   let localEl: HTMLElement | null = null
 
-  function clearAttrs(el: HTMLElement): void {
-    el.removeAttribute(LIVE_ANIM_ATTR)
-    el.removeAttribute(LIVE_ANIM_STEPS_ATTR)
-    el.removeAttribute(LIVE_ANIM_DURATION_ATTR)
-    el.removeAttribute(LIVE_ANIM_STAGGER_ATTR)
-    el.removeAttribute(LIVE_ANIM_PAUSED_ATTR)
-  }
-
   function disposeLocal(): void {
-    localClock?.dispose()
-    localClock = null
+    localEntry?.release()
+    localEntry = null
     localEl = null
   }
 
@@ -627,47 +875,36 @@ export function useLiveAnimation(
       return
     }
 
-    const active = options.active === undefined ? true : Boolean(toValue(options.active))
-    const preset = toValue(options.preset)
-    const steps = toValue(options.steps)
-    const duration = toValue(options.duration)
-    const stagger = toValue(options.stagger)
+    const normalized: NormalizedBinding = {
+      active: options.active === undefined ? true : Boolean(toValue(options.active)),
+      preset: toValue(options.preset),
+      steps: toValue(options.steps),
+      duration: toValue(options.duration),
+      stagger: toValue(options.stagger)
+    }
 
-    if (!active || preset === 'none') {
-      clearAttrs(el)
+    if (!normalized.active || normalized.preset === 'none') {
+      clearLiveAnimationAttrs(el)
       disposeLocal()
       return
     }
 
-    el.setAttribute(LIVE_ANIM_ATTR, preset)
-    if (isPositiveFinite(steps)) {
-      el.setAttribute(LIVE_ANIM_STEPS_ATTR, String(Math.round(steps)))
-    } else {
-      el.removeAttribute(LIVE_ANIM_STEPS_ATTR)
-    }
-    if (isPositiveFinite(duration)) {
-      el.setAttribute(LIVE_ANIM_DURATION_ATTR, String(Math.round(duration)))
-    } else {
-      el.removeAttribute(LIVE_ANIM_DURATION_ATTR)
-    }
-    if (typeof stagger === 'number' && Number.isFinite(stagger) && stagger > 0) {
-      el.setAttribute(LIVE_ANIM_STAGGER_ATTR, String(stagger))
-    } else {
-      el.removeAttribute(LIVE_ANIM_STAGGER_ATTR)
-    }
+    applyLiveAnimationAttrs(el, normalized)
 
-    const managedByHost = Boolean(el.parentElement?.closest(`[${LIVE_ANIM_CLOCK_ATTR}="active"]`))
-    if (managedByHost) {
+    if (isManagedByHostClock(el)) {
       disposeLocal()
       return
     }
 
-    if (localEl !== el) {
+    if (localEl !== el || !localEntry) {
       disposeLocal()
       localEl = el
-      localClock = installLiveAnimationClock(el)
+      localEntry = createStandaloneClock(el, () => {
+        localEntry = null
+        localEl = null
+      })
     } else {
-      localClock?.refresh()
+      localEntry.clock.refresh()
     }
   }
 
@@ -688,7 +925,7 @@ export function useLiveAnimation(
     stopWatch()
     const el = target.value
     if (el) {
-      clearAttrs(el)
+      clearLiveAnimationAttrs(el)
     }
     disposeLocal()
   }

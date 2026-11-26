@@ -2,6 +2,7 @@
 import type { DictationState } from './useComposerDictation'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { vTdsLiveAnimation } from '~/modules/style/live-animation-clock'
 import {
   animateElement,
   COMPOSER_MOTION,
@@ -123,7 +124,12 @@ onBeforeUnmount(cancelYield)
     :inert="yielded || undefined"
     @click="onClick"
   >
-    <span v-if="busy" class="ComposerMic-Spinner i-ri-loader-4-line" aria-hidden="true" />
+    <span
+      v-if="busy"
+      v-tds-live-animation="'spin'"
+      class="ComposerMic-Spinner i-ri-loader-4-line"
+      aria-hidden="true"
+    />
     <span v-else-if="live" class="ComposerMic-Stop" aria-hidden="true" />
     <span v-else class="ComposerMic-Glyph i-ri-mic-line" aria-hidden="true" />
   </button>
@@ -220,7 +226,18 @@ onBeforeUnmount(cancelYield)
 
 @media (prefers-reduced-motion: no-preference) {
   .ComposerMic-Spinner {
-    animation: composer-mic-spin 0.9s linear infinite;
+    animation: composer-mic-spin 1080ms steps(12, end) infinite;
+  }
+
+  html[data-live-anim-clock='active'] .ComposerMic-Spinner,
+  html.tds-reduced-motion .ComposerMic-Spinner,
+  html[data-live-anim-state='suppressed'] .ComposerMic-Spinner {
+    animation: none;
+  }
+
+  html.is-window-moving .ComposerMic-Spinner,
+  html[data-live-anim-state='paused'] .ComposerMic-Spinner {
+    animation-play-state: paused;
   }
 }
 

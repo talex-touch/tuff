@@ -408,7 +408,8 @@ html.fullscreen .Blur-Container {
 }
 
 /* Low Battery Mode - Reduce Motion */
-html[data-low-battery-motion='1'] {
+html[data-low-battery-motion='1'],
+html.tds-reduced-motion {
   *,
   *::before,
   *::after {
@@ -420,6 +421,24 @@ html[data-low-battery-motion='1'] {
   ::view-transition-group(*),
   ::view-transition-old(*),
   ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* Pause CSS keyframe animations while window is moving or the live clock is paused */
+html.is-window-moving,
+html[data-live-anim-state='paused'] {
+  *,
+  *::before,
+  *::after {
+    animation-play-state: paused !important;
+  }
+}
+
+html[data-live-anim-state='suppressed'] {
+  *,
+  *::before,
+  *::after {
     animation: none !important;
   }
 }

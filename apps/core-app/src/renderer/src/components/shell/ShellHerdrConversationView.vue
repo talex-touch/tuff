@@ -14,6 +14,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { herdrConversationRoute } from '../../../../shared/app-surface-routes'
 import { useHerdrRuntime } from '~/modules/herdr/useHerdrRuntime'
+import { vTdsLiveAnimation } from '~/modules/style/live-animation-clock'
 
 const props = defineProps<{
   address: string
@@ -300,7 +301,12 @@ onBeforeUnmount(() => {
           aria-live="polite"
           data-testid="herdr-conv-status-pill"
         >
-          <span class="ShellHerdrConv-StatusIcon" :class="statusIcon" aria-hidden="true" />
+          <span
+            v-tds-live-animation="oscState === 'working' ? 'spin' : false"
+            class="ShellHerdrConv-StatusIcon"
+            :class="statusIcon"
+            aria-hidden="true"
+          />
           <span>{{ statusLabel }}</span>
         </span>
 
@@ -352,7 +358,12 @@ onBeforeUnmount(() => {
           data-testid="herdr-conv-refresh"
           @click="handleRefresh"
         >
-          <span class="i-ri-refresh-line" :class="{ 'is-spin': refreshing }" aria-hidden="true" />
+          <span
+            v-tds-live-animation="refreshing ? 'spin' : false"
+            class="i-ri-refresh-line"
+            :class="{ 'is-spin': refreshing }"
+            aria-hidden="true"
+          />
         </button>
       </div>
     </header>
@@ -549,6 +560,7 @@ onBeforeUnmount(() => {
                 @click="hasToolDetails(tool) && toggleTool(tool.id)"
               >
                 <span
+                  v-tds-live-animation="tool.status === 'running' ? 'spin' : false"
                   class="ShellHerdrConv-ToolIcon"
                   :class="toolStatusIcon(tool.status)"
                   aria-hidden="true"
@@ -1211,8 +1223,19 @@ onBeforeUnmount(() => {
 
 .is-spin {
   @media (prefers-reduced-motion: no-preference) {
-    animation: herdr-conv-spin 1s linear infinite;
+    animation: herdr-conv-spin 1080ms steps(12, end) infinite;
   }
+}
+
+html[data-live-anim-clock='active'] .is-spin,
+html.tds-reduced-motion .is-spin,
+html[data-live-anim-state='suppressed'] .is-spin {
+  animation: none;
+}
+
+html.is-window-moving .is-spin,
+html[data-live-anim-state='paused'] .is-spin {
+  animation-play-state: paused;
 }
 
 @keyframes herdr-conv-spin {

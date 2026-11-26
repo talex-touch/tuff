@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
+/* eslint-disable vue/one-component-per-file -- test harness components */
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, nextTick, ref } from 'vue'
+import { defineComponent, nextTick, ref, type PropType } from 'vue'
 import {
+  attachLiveAnimation,
   installLiveAnimationClock,
   LIVE_ANIM_ATTR,
   LIVE_ANIM_CLOCK_ATTR,
@@ -11,9 +13,14 @@ import {
   LIVE_ANIM_DURATION_ATTR,
   LIVE_ANIM_PAUSED_ATTR,
   LIVE_ANIM_STAGGER_ATTR,
+  LIVE_ANIM_STATE_ATTR,
   LIVE_ANIM_STEPS_ATTR,
   LOW_BATTERY_MOTION_ATTR,
-  useLiveAnimation
+  TDS_REDUCED_MOTION_CLASS,
+  useLiveAnimation,
+  vTdsLiveAnimation,
+  WINDOW_MOVING_CLASS,
+  type LiveAnimationDirectiveValue
 } from './live-animation-clock'
 
 interface MockAnimation {
@@ -131,6 +138,8 @@ describe('live-animation-clock', () => {
     document.body.innerHTML = ''
     document.documentElement.removeAttribute(LOW_BATTERY_MOTION_ATTR)
     document.documentElement.removeAttribute(LIVE_ANIM_CLOCK_ATTR)
+    document.documentElement.removeAttribute(LIVE_ANIM_STATE_ATTR)
+    document.documentElement.classList.remove(WINDOW_MOVING_CLASS, TDS_REDUCED_MOTION_CLASS)
     setDocumentHidden(false)
     matchMediaMock = installMatchMediaMock(false)
     animateMock = installElementAnimateMock()
@@ -142,6 +151,8 @@ describe('live-animation-clock', () => {
     document.body.innerHTML = ''
     document.documentElement.removeAttribute(LOW_BATTERY_MOTION_ATTR)
     document.documentElement.removeAttribute(LIVE_ANIM_CLOCK_ATTR)
+    document.documentElement.removeAttribute(LIVE_ANIM_STATE_ATTR)
+    document.documentElement.classList.remove(WINDOW_MOVING_CLASS, TDS_REDUCED_MOTION_CLASS)
     setDocumentHidden(false)
   })
 
@@ -507,5 +518,179 @@ describe('live-animation-clock', () => {
     await flushMutations()
     expect(clock.activeCount()).toBe(0)
     clock.dispose()
+  })
+
+  it('pauses immediately on html.is-window-moving, defers new animations, and resumes phase-locked', async () => {
+    const container = document.createElement('div')
+    const spinner = document.createElement('span')
+    spinner.setAttribute(LIVE_ANIM_ATTR, 'spin')
+    container.appendChild(spinner)
+    document.body.appendChild(container)
+
+    const clock = installLiveAnimationClock(container)
+    expect(clock.getState()).toBe('running')
+    expect(container.getAttribute(LIVE_ANIM_STATE_ATTR)).toBe('running')
+    expect(clock.activeCount()).toBe(1)
+    const firstAnim = animateMock.created[0].animation
+
+    // Unrelated class toggles (e.g. dark mode) must not disturb running animations.
+    document.documentElement.classList.add('dark')
+    await flushMutations()
+    expect(clock.isPaused()).toBe(false)
+    expect(clock.getState()).toBe('running')
+    expect(firstAnim.pause).not.toHaveBeenCalled()
+    expect(firstAnim.cancel).not.toHaveBeenCalled()
+    document.documentElement.classList.remove('dark')
+
+    // Window begins moving -> 0ms pause on existing animation + state attr projection.
+    document.documentElement.classList.add(WINDOW_MOVING_CLASS)
+    await flushMutations()
+    expect(clock.isPaused()).toBe(true)
+    expect(clock.getState()).toBe('paused')
+    expect(container.getAttribute(LIVE_ANIM_STATE_ATTR)).toBe('paused')
+    expect(firstAnim.pause).toHaveBeenCalledTimes(1)
+
+    // Newly mounted indicator while moving must not allocate a WAAPI animation yet.
+    const lateDot = document.createElement('span')
+    lateDot.setAttribute(LIVE_ANIM_ATTR, 'pulse')
+    container.appendChild(lateDot)
+    await flushMutations()
+    expect(animateMock.created).toHaveLength(1)
+
+    // Window stops moving -> existing animation re-locks to startTime = 0 and late indicator starts.
+    firstAnim.startTime = 77777
+    document.documentElement.classList.remove(WINDOW_MOVING_CLASS)
+    await flushMutations()
+    expect(clock.isPaused()).toBe(false)
+    expect(clock.getState()).toBe('running')
+    expect(container.getAttribute(LIVE_ANIM_STATE_ATTR)).toBe('running')
+    expect(firstAnim.play).toHaveBeenCalledTimes(1)
+    expect(firstAnim.startTime).toBe(0)
+    expect(clock.activeCount()).toBe(2)
+    expect(animateMock.created).toHaveLength(2)
+    expect(animateMock.created[1].animation.startTime).toBe(0)
+
+    clock.dispose()
+    expect(container.hasAttribute(LIVE_ANIM_STATE_ATTR)).toBe(false)
+  })
+
+  it('suppresses animations on html.tds-reduced-motion and preserves precedence with window-moving and hidden tab', async () => {
+    const container = document.createElement('div')
+    const el = document.createElement('span')
+    el.setAttribute(LIVE_ANIM_ATTR, 'breathe')
+    container.appendChild(el)
+    document.body.appendChild(container)
+
+    const clock = installLiveAnimationClock(container)
+    expect(clock.activeCount()).toBe(1)
+    expect(container.getAttribute(LIVE_ANIM_STATE_ATTR)).toBe('running')
+
+    // Enable both window-moving and TDS reduced-motion -> suppressed takes precedence over paused.
+    document.documentElement.classList.add(WINDOW_MOVING_CLASS, TDS_REDUCED_MOTION_CLASS)
+    await flushMutations()
+    expect(clock.isSuppressed()).toBe(true)
+    expect(clock.isPaused()).toBe(true)
+    expect(clock.getState()).toBe('suppressed')
+    expect(container.getAttribute(LIVE_ANIM_STATE_ATTR)).toBe('suppressed')
+    expect(clock.activeCount()).toBe(0)
+    expect(animateMock.created[0].animation.cancel).toHaveBeenCalledTimes(1)
+
+    // Clearing TDS reduced-motion while still moving transitions cleanly to paused without allocating.
+    document.documentElement.classList.remove(TDS_REDUCED_MOTION_CLASS)
+    await flushMutations()
+    expect(clock.isSuppressed()).toBe(false)
+    expect(clock.isPaused()).toBe(true)
+    expect(clock.getState()).toBe('paused')
+    expect(container.getAttribute(LIVE_ANIM_STATE_ATTR)).toBe('paused')
+    expect(animateMock.created).toHaveLength(1)
+
+    // Clearing window-moving while document is still hidden remains paused until tab is visible.
+    setDocumentHidden(true)
+    document.documentElement.classList.remove(WINDOW_MOVING_CLASS)
+    await flushMutations()
+    expect(clock.getState()).toBe('paused')
+    expect(container.getAttribute(LIVE_ANIM_STATE_ATTR)).toBe('paused')
+    expect(animateMock.created).toHaveLength(1)
+
+    // Becoming visible restores phase-locked animation.
+    setDocumentHidden(false)
+    expect(clock.getState()).toBe('running')
+    expect(container.getAttribute(LIVE_ANIM_STATE_ATTR)).toBe('running')
+    expect(clock.activeCount()).toBe(1)
+    expect(animateMock.created[1].animation.startTime).toBe(0)
+
+    clock.dispose()
+  })
+
+  it('supports vTdsLiveAnimation directive and attachLiveAnimation standalone, hosted, and on child-before-host mount', async () => {
+    const DirectiveHost = defineComponent({
+      directives: { tdsLiveAnimation: vTdsLiveAnimation },
+      props: {
+        preset: {
+          type: [String, Boolean, Object] as PropType<LiveAnimationDirectiveValue>,
+          default: 'spin'
+        }
+      },
+      template: '<span v-tds-live-animation="preset" class="dir-spin" />'
+    })
+
+    // 1. Standalone directive drives stepped WAAPI clock and reacts to window-moving & reduced-motion
+    const standalone = mount(DirectiveHost, {
+      props: { preset: { preset: 'pulse', active: true, steps: 8, duration: 720 } },
+      attachTo: document.body
+    })
+    expect(standalone.element.getAttribute(LIVE_ANIM_ATTR)).toBe('pulse')
+    expect(standalone.element.getAttribute(LIVE_ANIM_STEPS_ATTR)).toBe('8')
+    expect(standalone.element.getAttribute(LIVE_ANIM_DURATION_ATTR)).toBe('720')
+    expect(animateMock.created).toHaveLength(1)
+    expect((animateMock.created[0].animation.options as KeyframeAnimationOptions).easing).toBe(
+      'steps(8)'
+    )
+
+    document.documentElement.classList.add(WINDOW_MOVING_CLASS)
+    await flushMutations()
+    expect(animateMock.created[0].animation.pause).toHaveBeenCalledTimes(1)
+    document.documentElement.classList.remove(WINDOW_MOVING_CLASS)
+    await flushMutations()
+    expect(animateMock.created[0].animation.play).toHaveBeenCalledTimes(1)
+
+    await standalone.setProps({ preset: false })
+    await nextTick()
+    expect(standalone.element.hasAttribute(LIVE_ANIM_ATTR)).toBe(false)
+    expect(animateMock.created[0].animation.cancel).toHaveBeenCalledTimes(1)
+    standalone.unmount()
+
+    // 2. Child mounted BEFORE ancestor host clock is adopted cleanly without duplicate animations
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const beforeAdopt = animateMock.created.length
+    const earlyChild = mount(DirectiveHost, {
+      props: { preset: 'spin' },
+      attachTo: host
+    })
+    expect(animateMock.created.length - beforeAdopt).toBe(1)
+    const tempStandaloneAnim = animateMock.created.at(-1)!.animation
+
+    const hostClock = installLiveAnimationClock(host)
+    expect(tempStandaloneAnim.cancel).toHaveBeenCalledTimes(1)
+    expect(hostClock.activeCount()).toBe(1)
+
+    // 3. Imperative attachLiveAnimation inside an active host clock delegates without extra local clock
+    const target = document.createElement('span')
+    host.appendChild(target)
+    const detach = attachLiveAnimation(target, 'breathe')
+    await flushMutations()
+    expect(target.getAttribute(LIVE_ANIM_ATTR)).toBe('breathe')
+    expect(hostClock.activeCount()).toBe(2)
+
+    detach()
+    await flushMutations()
+    expect(target.hasAttribute(LIVE_ANIM_ATTR)).toBe(false)
+    expect(hostClock.activeCount()).toBe(1)
+
+    earlyChild.unmount()
+    await flushMutations()
+    expect(hostClock.activeCount()).toBe(0)
+    hostClock.dispose()
   })
 })

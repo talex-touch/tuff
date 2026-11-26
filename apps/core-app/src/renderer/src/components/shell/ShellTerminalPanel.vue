@@ -26,6 +26,7 @@ import { useAccessibilitySupport } from '~/modules/platform/accessibility-suppor
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { mainWindowCommandChordLabel } from '~/modules/shortcuts/main-window-command-catalog'
 import { appSetting } from '~/modules/storage/app-storage'
+import { vTdsLiveAnimation } from '~/modules/style/live-animation-clock'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { SHELL_MENU_CARD } from './shell-menu-panel'
 import ShellHerdrConversationView from './ShellHerdrConversationView.vue'
@@ -1017,6 +1018,7 @@ onBeforeUnmount(() => {
           @click="restartActiveLocalSession"
         >
           <span
+            v-tds-live-animation="localRuntimes[activeTab.id]?.starting ? 'spin' : false"
             class="i-ri-refresh-line"
             :class="{ 'is-spin': Boolean(localRuntimes[activeTab.id]?.starting) }"
             aria-hidden="true"
@@ -1458,9 +1460,20 @@ onBeforeUnmount(() => {
 
   .is-spin {
     @media (prefers-reduced-motion: no-preference) {
-      animation: terminal-spin 1s linear infinite;
+      animation: terminal-spin 1080ms steps(12, end) infinite;
     }
   }
+}
+
+html[data-live-anim-clock='active'] .ShellTerminalPanel-ActionBtn .is-spin,
+html.tds-reduced-motion .ShellTerminalPanel-ActionBtn .is-spin,
+html[data-live-anim-state='suppressed'] .ShellTerminalPanel-ActionBtn .is-spin {
+  animation: none;
+}
+
+html.is-window-moving .ShellTerminalPanel-ActionBtn .is-spin,
+html[data-live-anim-state='paused'] .ShellTerminalPanel-ActionBtn .is-spin {
+  animation-play-state: paused;
 }
 
 .ShellTerminalPanel-KillBtn {

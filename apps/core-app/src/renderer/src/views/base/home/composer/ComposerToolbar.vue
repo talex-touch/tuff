@@ -7,6 +7,7 @@ import type { DictationOutcome, DictationState } from './useComposerDictation'
 import { TxIcon } from '@talex-touch/tuffex/icon'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { vTdsLiveAnimation } from '~/modules/style/live-animation-clock'
 import HomeModelMenu from '../HomeModelMenu.vue'
 import HomePermissionMenu from '../HomePermissionMenu.vue'
 import ComposerControl from './ComposerControl.vue'
@@ -185,13 +186,13 @@ defineExpose({ launch })
          every second, so the screen reader gets the state alone, below. -->
     <div class="ComposerToolbar-Status" :data-state="micState" aria-hidden="true">
       <template v-if="micState === 'listening'">
-        <span class="ComposerToolbar-RecDot" />
+        <span v-tds-live-animation="'pulse'" class="ComposerToolbar-RecDot" />
         <span>{{ t('home.composer.dictationListening') }}</span>
         <span class="ComposerToolbar-Timer">{{ timerText }}</span>
         <span class="ComposerToolbar-EscHint">· {{ t('home.composer.dictationEscHint') }}</span>
       </template>
       <template v-else-if="dictating">
-        <span class="ComposerToolbar-Spinner i-ri-loader-4-line" />
+        <span v-tds-live-animation="'spin'" class="ComposerToolbar-Spinner i-ri-loader-4-line" />
         <span>{{
           micState === 'finishing'
             ? t('home.composer.dictationFinishing')
@@ -614,11 +615,27 @@ defineExpose({ launch })
   }
 
   .ComposerToolbar-RecDot {
-    animation: composer-rec-breathe 1.4s ease-in-out infinite;
+    animation: composer-rec-breathe 1440ms steps(16, end) infinite;
   }
 
   .ComposerToolbar-Spinner {
-    animation: composer-status-spin 0.9s linear infinite;
+    animation: composer-status-spin 1080ms steps(12, end) infinite;
+  }
+
+  html[data-live-anim-clock='active'] .ComposerToolbar-RecDot,
+  html[data-live-anim-clock='active'] .ComposerToolbar-Spinner,
+  html.tds-reduced-motion .ComposerToolbar-RecDot,
+  html.tds-reduced-motion .ComposerToolbar-Spinner,
+  html[data-live-anim-state='suppressed'] .ComposerToolbar-RecDot,
+  html[data-live-anim-state='suppressed'] .ComposerToolbar-Spinner {
+    animation: none;
+  }
+
+  html.is-window-moving .ComposerToolbar-RecDot,
+  html.is-window-moving .ComposerToolbar-Spinner,
+  html[data-live-anim-state='paused'] .ComposerToolbar-RecDot,
+  html[data-live-anim-state='paused'] .ComposerToolbar-Spinner {
+    animation-play-state: paused;
   }
 }
 
