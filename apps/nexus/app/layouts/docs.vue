@@ -3,9 +3,9 @@ import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch 
 import DocsOutline from '~/components/DocsOutline.vue'
 import DocsAsideCardsShell from '~/components/docs/DocsAsideCardsShell.vue'
 import DocsCopyPromptButton from '~/components/docs/DocsCopyPromptButton.vue'
-import DocsFrameworkSwitcher from '~/components/docs/DocsFrameworkSwitcher.vue'
-import { resolveComponentSlugFromPath } from '~/data/tuffex-framework-matrix'
+import { resolveComponentSlugFromPath } from '~/utils/tuffex-component-slug'
 
+const DocsFrameworkSwitcher = defineAsyncComponent(() => import('~/components/docs/DocsFrameworkSwitcher.vue'))
 const DocsDrawer = defineAsyncComponent(() => import('~/components/ui/Drawer.vue'))
 const LazyBackToTop = defineAsyncComponent(() => import('~/components/ui/BackToTop.vue'))
 const LazyTuffFooter = defineAsyncComponent(() => import('~/components/TuffFooter.vue'))
@@ -335,20 +335,20 @@ onBeforeUnmount(() => {
                   <span class="i-carbon-list text-base" />
                   {{ t('docs.outlineLabel') }}
                 </button>
-                <DocsFrameworkSwitcher
-                  v-if="isTuffexDocs"
-                  class="ml-auto"
-                  size="sm"
-                  :component-slug="activeComponentSlug"
-                  :show-status-dots="Boolean(activeComponentSlug)"
-                />
+                <div v-if="isTuffexDocs" class="ml-auto min-h-[28px] min-w-[168px] flex items-center justify-end">
+                  <DocsFrameworkSwitcher
+                    size="sm"
+                    :component-slug="activeComponentSlug"
+                    :show-status-dots="Boolean(activeComponentSlug)"
+                  />
+                </div>
               </div>
               <slot />
             </div>
           </main>
           <aside class="hidden w-[240px] shrink-0 lg:block">
             <div class="sticky top-24 flex flex-col gap-6">
-              <div v-if="isTuffexDocs" class="relative z-30">
+              <div v-if="isTuffexDocs" class="relative z-30 min-h-[28px]">
                 <DocsFrameworkSwitcher
                   block
                   size="sm"

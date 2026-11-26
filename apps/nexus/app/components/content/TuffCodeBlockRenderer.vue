@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { PackageManager } from '~/utils/docs-install-command'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { formatInstallCommand, PACKAGE_MANAGERS, parseInstallCommand } from '~/utils/docs-install-command'
+import { highlightCodeToHtml } from '~/utils/highlight'
 
 const props = withDefaults(defineProps<{
   code: string
@@ -19,9 +20,7 @@ const copied = ref(false)
 const copiedInstall = ref(false)
 let copiedTimer: ReturnType<typeof setTimeout> | null = null
 let copiedInstallTimer: ReturnType<typeof setTimeout> | null = null
-const codeRef = ref<HTMLElement | null>(null)
 const mermaidRef = ref<HTMLElement | null>(null)
-const highlightKey = ref('')
 
 const canCopy = computed(() => Boolean(props.code?.trim()))
 const resolvedTitle = computed(() => {
@@ -39,6 +38,7 @@ const copyLabel = computed(() => {
 
 const showHeader = computed(() => !props.embedded)
 const isMermaid = computed(() => (props.lang || '').toLowerCase() === 'mermaid')
+const highlightedCodeHtml = computed(() => (isMermaid.value ? '' : highlightCodeToHtml(props.code ?? '', props.lang)))
 
 /*
  * A one-line `pnpm add` / `pnpm dlx` block is an install command: it renders as
@@ -56,38 +56,6 @@ const installCommand = computed(() => (install.value ? formatInstallCommand(inst
 const installLabels = computed(() => (locale.value === 'zh'
   ? { copy: '复制命令', copied: '已复制', failed: '复制失败', manager: '包管理器' }
   : { copy: 'Copy command', copied: 'Copied', failed: 'Copy failed', manager: 'Package manager' }))
-
-async function highlightCode() {
-  if (!import.meta.client || isMermaid.value)
-    return
-
-  const source = props.code?.trim() ?? ''
-  if (!source)
-    return
-
-  const key = `${props.lang ?? ''}:${source}`
-  if (highlightKey.value === key)
-    return
-
-  await nextTick()
-  const node = codeRef.value
-  if (!node)
-    return
-
-  const { resolveHighlightApi } = await import('~/utils/highlight')
-  const api = await resolveHighlightApi()
-  if (!api)
-    return
-
-  try {
-    api.highlightElement(node)
-    node.dataset.highlighted = 'true'
-    highlightKey.value = key
-  }
-  catch {
-    // ignore highlight errors
-  }
-}
 
 async function renderMermaidCode() {
   if (!import.meta.client || !isMermaid.value)
@@ -108,17 +76,26 @@ async function renderMermaidCode() {
 }
 
 onMounted(() => {
-  void highlightCode()
   void renderMermaidCode()
 })
 
 watch(
   () => [props.code, props.lang, isMermaid.value],
   () => {
-    void highlightCode()
     void renderMermaidCode()
   },
 )
+
+onBeforeUnmount(() => {
+  if (copiedTimer) {
+    clearTimeout(copiedTimer)
+    copiedTimer = null
+  }
+  if (copiedInstallTimer) {
+    clearTimeout(copiedInstallTimer)
+    copiedInstallTimer = null
+  }
+})
 
 async function copyWithFeedback(text: string, flag: typeof copied, timerRef: { current: ReturnType<typeof setTimeout> | null }) {
   if (!import.meta.client || !text.trim())
@@ -207,9 +184,9 @@ async function handleCopyInstall() {
       />
       <code
         v-else
-        ref="codeRef"
         :class="['tuff-code-block__code', 'hljs', `language-${props.lang}`]"
-        v-text="props.code"
+        data-highlighted="true"
+        v-html="highlightedCodeHtml"
       />
     </component>
   </div>
@@ -528,9 +505,8 @@ async function handleCopyInstall() {
 }
 
 /*
- * hljs colours tokens from whichever stylesheet the page has loaded, and the one
- * CodeRenderer brings is github-dark. The block names its own palette instead,
- * so tokens stay legible on the light surface as well as the dark one.
+ * Token classes from the local highlighter follow the block's own theme variables
+ * so code remains legible on both light and dark surfaces without any external stylesheet.
  */
 .tuff-code-block .tuff-code-block__pre :is(.hljs-keyword, .hljs-doctag, .hljs-template-tag, .hljs-template-variable, .hljs-type, .hljs-variable.language_) {
   color: var(--tuff-code-keyword);

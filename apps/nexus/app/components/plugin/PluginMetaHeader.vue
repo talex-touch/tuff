@@ -67,7 +67,7 @@ function channelTone(channel: PluginChannel) {
 
 function resolveArtifactTypeLabel(type?: DashboardArtifactType | null) {
   const artifactType = type ?? 'plugin'
-  return t(`dashboard.sections.plugins.form.artifactTypes.${artifactType}`, artifactType)
+  return t(`plugins.artifactTypes.${artifactType}`, artifactType)
 }
 
 const updatedLabel = computed(() => (isZh.value ? '更新于' : 'Updated'))
@@ -132,13 +132,13 @@ const metaItems = computed(() => {
       <span
         v-if="plugin.isOfficial"
         class="i-carbon-certificate PluginMetaHeader-OfficialMark"
-        :title="t('dashboard.sections.plugins.officialBadge')"
+        :title="t('plugins.officialBadge')"
       />
     </template>
     <template #badges>
       <TxStatusBadge
         v-if="plugin.status"
-        :text="t(`dashboard.sections.plugins.statuses.${plugin.status}`)"
+        :text="t(`plugins.statuses.${plugin.status}`)"
         :status="statusTone(plugin.status as PluginStatus)"
         size="sm"
       />

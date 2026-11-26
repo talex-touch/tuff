@@ -1,11 +1,11 @@
 import { computed, onMounted, watch } from 'vue'
-import type { DocsFramework } from '~/data/tuffex-framework-matrix'
+import type { DocsFramework } from '~/utils/tuffex-component-slug'
 import {
   DOCS_FRAMEWORK_META,
   DOCS_FRAMEWORKS,
   isDocsFramework,
   normalizeDocsFramework,
-} from '~/data/tuffex-framework-matrix'
+} from '~/utils/tuffex-component-slug'
 
 export const DOCS_FRAMEWORK_STORAGE_KEY = 'nexus.docs.framework'
 export const DOCS_FRAMEWORK_QUERY_KEY = 'framework'

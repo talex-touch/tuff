@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { LogoItem } from './LogoLoop.vue'
 import { hasNavigator } from '@talex-touch/utils/env'
-import { onBeforeUnmount, onMounted } from 'vue'
-import DarkVeil from '~/components/tuff/background/DarkVeil.vue'
+import { defineAsyncComponent, onBeforeUnmount, onMounted } from 'vue'
 import TuffLandingLineShadowText from '~/components/tuff/landing/TuffLandingLineShadowText.vue'
 import { useLandingRevealState } from '~/composables/useLandingRevealState'
 import LogoLoop from './LogoLoop.vue'
+
+const DarkVeil = defineAsyncComponent(() => import('~/components/tuff/background/DarkVeil.vue'))
 
 type HeroPlatform = 'darwin' | 'win32' | 'linux'
 

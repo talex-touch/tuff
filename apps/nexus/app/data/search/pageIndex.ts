@@ -25,7 +25,7 @@ export const pageSearchItems: PageSearchItem[] = [
   {
     id: 'page-store',
     titleKey: 'nav.store',
-    descriptionKey: 'store.hero.subtitle',
+    descriptionKey: 'plugins.storeSubtitle',
     path: '/store',
     icon: 'i-carbon-store',
     searchTokens: ['store', 'plugin', '插件', 'plugin-store'],

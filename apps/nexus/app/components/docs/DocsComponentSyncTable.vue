@@ -17,12 +17,41 @@ import { useDocsFramework } from '~/composables/useDocsFramework'
 type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
 type MatrixFilterKey = 'all' | 'react-ready' | 'wc-ready' | 'tier-A' | 'tier-B' | 'tier-C' | 'tier-D'
 
-interface ComponentSyncRow {
+interface ComponentNavMeta {
   title: string
-  path: string
-  syncStatus: SyncStatusKey
-  verified: boolean
-  locale: 'en' | 'zh'
+  syncStatus: SyncStatusKey | null
+}
+
+interface ComponentNavNode {
+  title?: unknown
+  path?: unknown
+  syncStatus?: unknown
+  children?: unknown
+}
+
+const VALID_SYNC_STATUSES = new Set<SyncStatusKey>(['not_started', 'in_progress', 'migrated', 'verified'])
+
+function collectComponentNavMeta(items: unknown, map: Map<string, ComponentNavMeta>) {
+  if (!Array.isArray(items))
+    return
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object')
+      continue
+    const node = item as ComponentNavNode
+    if (typeof node.path === 'string') {
+      const slug = resolveComponentSlugFromPath(node.path)
+      if (slug) {
+        const rawStatus = typeof node.syncStatus === 'string' ? node.syncStatus.trim() as SyncStatusKey : null
+        map.set(slug, {
+          title: typeof node.title === 'string' ? node.title.trim() : '',
+          syncStatus: rawStatus && VALID_SYNC_STATUSES.has(rawStatus) ? rawStatus : null,
+        })
+      }
+    }
+    if (Array.isArray(node.children))
+      collectComponentNavMeta(node.children, map)
+  }
 }
 
 interface MatrixDisplayRow {
@@ -44,14 +73,23 @@ interface MatrixDisplayRow {
 const { locale, t } = useI18n()
 const { framework, setFramework } = useDocsFramework()
 
-const { data: componentDocsPayload } = await useTypedFetch<unknown>(
-  '/api/docs/component-sync',
-  { key: 'docs-components-sync', responseType: 'json' },
-)
-
 const localeKey = computed<'zh' | 'en'>(() => (locale.value === 'zh' ? 'zh' : 'en'))
 const activeFilter = ref<MatrixFilterKey>('all')
 const searchQuery = ref('')
+
+// Reuse the locale-scoped components navigation payload already fetched by DocsSidebar & docs/[...slug]
+// instead of issuing a separate 79.5 KB double-locale `/api/docs/component-sync` SSR request.
+const { data: componentNavPayload } = await useTypedFetch<unknown>(
+  () => `/api/docs/navigation/${localeKey.value}/components`,
+  {
+    key: computed(() => `docs-navigation:${localeKey.value}:components`),
+    server: false,
+    lazy: true,
+    dedupe: 'defer',
+    responseType: 'json',
+    default: () => [],
+  },
+)
 
 const coverage = computed(() => getFrameworkCoverageSummary())
 
@@ -102,15 +140,8 @@ const filterOptions = computed<Array<{ key: MatrixFilterKey, label: string, coun
 })
 
 const syncMetaBySlug = computed(() => {
-  const targetLocale = localeKey.value
-  const map = new Map<string, ComponentSyncRow>()
-  for (const item of coerceJsonArray<ComponentSyncRow>(componentDocsPayload.value)) {
-    if (item.locale !== targetLocale)
-      continue
-    const slug = resolveComponentSlugFromPath(item.path)
-    if (slug)
-      map.set(slug, item)
-  }
+  const map = new Map<string, ComponentNavMeta>()
+  collectComponentNavMeta(coerceJsonArray<ComponentNavNode>(componentNavPayload.value), map)
   return map
 })
 

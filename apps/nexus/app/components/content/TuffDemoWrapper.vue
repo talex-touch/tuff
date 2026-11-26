@@ -1,16 +1,13 @@
 <script setup lang="ts">
-import { type ComponentPublicInstance, computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { type ComponentPublicInstance, computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import TuffDemoClientRenderer from './TuffDemoClientRenderer.client.vue'
 import { queueDemoActivation, queueDemoPrefetch, shouldActivateDemo } from './demo-lazy'
 import { loadDemoComponent } from './demo-component-loader'
 import { useDocsFramework } from '~/composables/useDocsFramework'
 import {
   DOCS_FRAMEWORK_META,
-  formatTierDescription,
-  getComponentFrameworkEntry,
   resolveComponentSlugFromPath,
-} from '~/data/tuffex-framework-matrix'
-import { getFrameworkShowcase } from '~/data/tuffex-framework-showcases'
+} from '~/utils/tuffex-component-slug'
 
 interface DemoWrapperProps {
   demo: string
@@ -47,6 +44,29 @@ const route = useRoute()
 const { framework } = useDocsFramework()
 
 const localeKey = computed<'zh' | 'en'>(() => (locale.value === 'zh' ? 'zh' : 'en'))
+const frameworkModules = shallowRef<LoadedFrameworkModules | null>(getCachedFrameworkModules())
+const frameworkModulesFailed = ref(false)
+let unmounted = false
+
+watch(
+  framework,
+  (activeFramework) => {
+    if (activeFramework === 'vue' || frameworkModules.value)
+      return
+
+    frameworkModulesFailed.value = false
+    void loadFrameworkModules()
+      .then((modules) => {
+        if (!unmounted)
+          frameworkModules.value = modules
+      })
+      .catch(() => {
+        if (!unmounted)
+          frameworkModulesFailed.value = true
+      })
+  },
+  { immediate: true },
+)
 
 const resolvedComponentSlug = computed(() => {
   if (props.component?.trim())
@@ -54,10 +74,16 @@ const resolvedComponentSlug = computed(() => {
   return resolveComponentSlugFromPath(route.path)
 })
 
-const compatEntry = computed(() => getComponentFrameworkEntry(resolvedComponentSlug.value))
+const compatEntry = computed(() => {
+  if (framework.value === 'vue' || !frameworkModules.value)
+    return null
+  return frameworkModules.value.matrix.getComponentFrameworkEntry(resolvedComponentSlug.value)
+})
 
 const activeFrameworkStatus = computed(() => {
   if (framework.value === 'vue')
+    return 'ready' as const
+  if (!frameworkModules.value)
     return 'ready' as const
   if (!compatEntry.value)
     return 'planned' as const
@@ -65,9 +91,9 @@ const activeFrameworkStatus = computed(() => {
 })
 
 const activeShowcase = computed(() => {
-  if (framework.value === 'vue' || activeFrameworkStatus.value !== 'ready')
+  if (framework.value === 'vue' || !frameworkModules.value || activeFrameworkStatus.value !== 'ready')
     return null
-  return getFrameworkShowcase(resolvedComponentSlug.value)
+  return frameworkModules.value.showcases.getFrameworkShowcase(resolvedComponentSlug.value)
 })
 
 const shouldMountFrameworkStage = computed(() =>
@@ -80,10 +106,15 @@ const frameworkStageState = ref<'idle' | 'loading' | 'live' | 'unlinked' | 'erro
 const codeViewMode = ref<'active' | 'vue'>('active')
 
 watch(
-  () => [framework.value, resolvedComponentSlug.value] as const,
-  () => {
-    frameworkStageState.value = shouldMountFrameworkStage.value ? 'loading' : 'idle'
-    codeViewMode.value = 'active'
+  () => [framework.value, resolvedComponentSlug.value, shouldMountFrameworkStage.value] as const,
+  ([nextFramework, nextSlug, nextShouldMount], [prevFramework, prevSlug]) => {
+    if (nextFramework !== prevFramework || nextSlug !== prevSlug) {
+      frameworkStageState.value = nextShouldMount ? 'loading' : 'idle'
+      codeViewMode.value = 'active'
+      return
+    }
+    if (nextShouldMount && frameworkStageState.value === 'idle')
+      frameworkStageState.value = 'loading'
   },
 )
 
@@ -102,8 +133,22 @@ const frameworkBanner = computed<{ tone: 'info' | 'warning', text: string, tier?
   if (framework.value === 'vue')
     return null
 
+  const modules = frameworkModules.value
+  if (!modules) {
+    if (!frameworkModulesFailed.value)
+      return null
+    const meta = DOCS_FRAMEWORK_META[framework.value]
+    return {
+      tone: 'info',
+      text: t('docs.framework.runtimeUnlinked', {
+        pkg: meta.packageName,
+        framework: meta.shortLabel,
+      }),
+    }
+  }
+
   const tierText = compatEntry.value
-    ? formatTierDescription(compatEntry.value.tier, localeKey.value)
+    ? modules.matrix.formatTierDescription(compatEntry.value.tier, localeKey.value)
     : undefined
 
   if (activeFrameworkStatus.value !== 'ready') {
@@ -324,6 +369,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  unmounted = true
   if (demoVisibilityObserver) {
     demoVisibilityObserver.disconnect()
     demoVisibilityObserver = null
@@ -333,6 +379,43 @@ onBeforeUnmount(() => {
   cancelQueuedActivation?.()
   cancelQueuedActivation = null
 })
+</script>
+
+<script lang="ts">
+type FrameworkMatrixModule = typeof import('~/data/tuffex-framework-matrix')
+type FrameworkShowcasesModule = typeof import('~/data/tuffex-framework-showcases')
+
+interface LoadedFrameworkModules {
+  matrix: FrameworkMatrixModule
+  showcases: FrameworkShowcasesModule
+}
+
+let cachedFrameworkModules: LoadedFrameworkModules | null = null
+let pendingFrameworkModules: Promise<LoadedFrameworkModules> | null = null
+
+function getCachedFrameworkModules() {
+  return cachedFrameworkModules
+}
+
+function loadFrameworkModules(): Promise<LoadedFrameworkModules> {
+  if (cachedFrameworkModules)
+    return Promise.resolve(cachedFrameworkModules)
+  if (!pendingFrameworkModules) {
+    pendingFrameworkModules = Promise.all([
+      import('~/data/tuffex-framework-matrix'),
+      import('~/data/tuffex-framework-showcases'),
+    ])
+      .then(([matrix, showcases]) => {
+        cachedFrameworkModules = { matrix, showcases }
+        return cachedFrameworkModules
+      })
+      .catch((error) => {
+        pendingFrameworkModules = null
+        throw error
+      })
+  }
+  return pendingFrameworkModules
+}
 </script>
 
 <template>

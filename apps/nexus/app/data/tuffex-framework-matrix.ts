@@ -7,22 +7,20 @@ import type {
 import { COMPAT_REGISTRY } from '@talex-touch/tuffex-core/compat'
 import type { PackageManager } from '~/utils/docs-install-command'
 import { formatInstallCommand } from '~/utils/docs-install-command'
+import type { DocsFramework, DocsFrameworkMeta } from '~/utils/tuffex-component-slug'
+import {
+  DOCS_FRAMEWORK_META,
+  DOCS_FRAMEWORKS,
+  extractComponentDocSlugCandidate,
+  isDocsFramework,
+  normalizeDocsFramework,
+} from '~/utils/tuffex-component-slug'
 
-export type DocsFramework = 'vue' | 'react' | 'wc'
+export type { DocsFramework, DocsFrameworkMeta }
+export { DOCS_FRAMEWORK_META, DOCS_FRAMEWORKS, isDocsFramework, normalizeDocsFramework }
 export type FrameworkSupportStatus = CompatSupportStatus
 export type ComponentTier = CompatTier
 export type ComponentCategory = CompatCategory
-
-export interface DocsFrameworkMeta {
-  id: DocsFramework
-  label: string
-  shortLabel: string
-  packageName: string
-  styleImport: string
-  baseStyleImport?: string
-  icon: string
-  codeLang: 'vue' | 'tsx' | 'html'
-}
 
 export interface FrameworkCompatEntry {
   id: string
@@ -54,38 +52,6 @@ export interface FrameworkCoverageSummary {
   react: FrameworkCoverageBucket
   wc: FrameworkCoverageBucket
   byTier: Record<ComponentTier, { total: number, reactReady: number, wcReady: number }>
-}
-
-export const DOCS_FRAMEWORKS: readonly DocsFramework[] = ['vue', 'react', 'wc'] as const
-
-export const DOCS_FRAMEWORK_META: Readonly<Record<DocsFramework, DocsFrameworkMeta>> = {
-  vue: {
-    id: 'vue',
-    label: 'Vue 3',
-    shortLabel: 'Vue',
-    packageName: '@talex-touch/tuffex',
-    styleImport: '@talex-touch/tuffex/base.css',
-    icon: 'i-logos-vue',
-    codeLang: 'vue',
-  },
-  react: {
-    id: 'react',
-    label: 'React',
-    shortLabel: 'React',
-    packageName: '@talex-touch/tuffex-react',
-    styleImport: '@talex-touch/tuffex-react/style.css',
-    icon: 'i-logos-react',
-    codeLang: 'tsx',
-  },
-  wc: {
-    id: 'wc',
-    label: 'Web Components',
-    shortLabel: 'WC',
-    packageName: '@talex-touch/tuffex-wc',
-    styleImport: '@talex-touch/tuffex-wc/style.css',
-    icon: 'i-logos-webcomponents',
-    codeLang: 'html',
-  },
 }
 
 /**
@@ -287,23 +253,6 @@ export const TUFFEX_FRAMEWORK_MAP: ReadonlyMap<string, FrameworkCompatEntry> = n
   TUFFEX_FRAMEWORK_MATRIX.map(entry => [entry.id, entry]),
 )
 
-export function isDocsFramework(value: unknown): value is DocsFramework {
-  return value === 'vue' || value === 'react' || value === 'wc'
-}
-
-export function normalizeDocsFramework(value: unknown, fallback: DocsFramework = 'vue'): DocsFramework {
-  if (typeof value !== 'string')
-    return fallback
-  const normalized = value.trim().toLowerCase()
-  if (normalized === 'vue' || normalized === 'vue3')
-    return 'vue'
-  if (normalized === 'react' || normalized === 'tsx')
-    return 'react'
-  if (normalized === 'wc' || normalized === 'web-components' || normalized === 'webcomponents')
-    return 'wc'
-  return fallback
-}
-
 export function getComponentFrameworkEntry(slug: string | null | undefined): FrameworkCompatEntry | null {
   if (!slug)
     return null
@@ -316,19 +265,9 @@ export function getComponentFrameworkEntry(slug: string | null | undefined): Fra
  * Returns `null` for overview/concept/template pages that are not component modules.
  */
 export function resolveComponentSlugFromPath(path: string | null | undefined): string | null {
-  if (!path)
+  const candidate = extractComponentDocSlugCandidate(path)
+  if (!candidate)
     return null
-  const clean = path
-    .split(/[?#]/, 1)[0]!
-    .replace(/^\/(en|zh)(?=\/|$)/i, '')
-    .replace(/\.(en|zh)(\.mdc?)?$/i, '')
-    .replace(/\/+$/, '')
-
-  const match = clean.match(/^\/docs\/dev\/components\/([a-z0-9-]+)$/i)
-  if (!match)
-    return null
-
-  const candidate = match[1]!.toLowerCase()
   return TUFFEX_FRAMEWORK_MAP.has(candidate) ? candidate : null
 }
 

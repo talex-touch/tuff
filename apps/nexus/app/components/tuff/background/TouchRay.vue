@@ -73,6 +73,12 @@ const props = withDefaults(defineProps<LightRaysProps>(), {
   className: '',
 })
 
+const MAX_DPR = 1.25
+const TARGET_FPS = 28
+const FRAME_INTERVAL_MS = 1000 / TARGET_FPS
+const IDLE_INIT_TIMEOUT_MS = 1200
+const IDLE_INIT_FALLBACK_MS = 150
+
 const containerRef = useTemplateRef<HTMLDivElement>('containerRef')
 
 const uniformsRef = ref<WebGLUniforms | null>(null)
@@ -83,16 +89,27 @@ const animationIdRef = ref<number | null>(null)
 const meshRef = ref<Mesh | null>(null)
 const cleanupFunctionRef = ref<(() => void) | null>(null)
 const isVisible = ref<boolean>(false)
+const isDocumentHidden = ref<boolean>(false)
+const reducedMotion = ref<boolean>(false)
 const observerRef = ref<IntersectionObserver | null>(null)
 const resizeTimeoutRef = ref<number | null>(null)
+
+let startLoopFn: (() => void) | null = null
+let stopLoopFn: (() => void) | null = null
+let idleInitId: number | null = null
+let idleInitTimer: number | null = null
+let motionMediaQuery: MediaQueryList | null = null
+let initializing = false
+let disposed = false
 
 const rgbColor = computed<[number, number, number]>(() => hexToRgb(props.raysColor))
 const pulsatingValue = computed<number>(() => props.pulsating ? 1.0 : 0.0)
 const devicePixelRatio = computed<number>(() => {
   if (!hasWindow())
     return 1
-  return Math.min(window.devicePixelRatio || 1, 2)
+  return Math.min(window.devicePixelRatio || 1, MAX_DPR)
 })
+const shouldRun = computed<boolean>(() => isVisible.value && !isDocumentHidden.value && !reducedMotion.value)
 
 function hexToRgb(hex: string): [number, number, number] {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
@@ -127,24 +144,33 @@ function getAnchorAndDir(origin: RaysOrigin, w: number, h: number): AnchorAndDir
   }
 }
 
-const debouncedUpdatePlacement = (() => {
-  let timeoutId: number | null = null
-
-  return (updateFn: () => void): void => {
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId)
-    }
-    if (!hasWindow()) {
-      updateFn()
-      timeoutId = null
-      return
-    }
-    timeoutId = window.setTimeout(() => {
-      updateFn()
-      timeoutId = null
-    }, 16)
+function scheduleDebouncedPlacement(updateFn: () => void): void {
+  if (resizeTimeoutRef.value !== null) {
+    clearTimeout(resizeTimeoutRef.value)
+    resizeTimeoutRef.value = null
   }
-})()
+  if (!hasWindow()) {
+    updateFn()
+    return
+  }
+  resizeTimeoutRef.value = window.setTimeout(() => {
+    resizeTimeoutRef.value = null
+    updateFn()
+  }, 64)
+}
+
+function clearIdleInit(): void {
+  if (!hasWindow())
+    return
+  if (idleInitId !== null && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(idleInitId)
+    idleInitId = null
+  }
+  if (idleInitTimer !== null) {
+    window.clearTimeout(idleInitTimer)
+    idleInitTimer = null
+  }
+}
 
 const vertexShader: string = `
 attribute vec2 position;
@@ -249,20 +275,21 @@ void main() {
 }`
 
 async function initializeWebGL(): Promise<void> {
-  if (!containerRef.value)
+  if (disposed || initializing || rendererRef.value || !containerRef.value || !shouldRun.value)
     return
 
-  await nextTick()
-
-  if (!containerRef.value)
-    return
-
+  initializing = true
   try {
+    await nextTick()
+
+    if (disposed || rendererRef.value || !containerRef.value || !shouldRun.value)
+      return
+
     const renderer = new Renderer({
       dpr: devicePixelRatio.value,
       alpha: true,
       antialias: false,
-      powerPreference: 'high-performance',
+      powerPreference: 'low-power',
     })
     rendererRef.value = renderer
 
@@ -310,6 +337,8 @@ async function initializeWebGL(): Promise<void> {
       renderer.dpr = devicePixelRatio.value
 
       const { clientWidth: wCSS, clientHeight: hCSS } = containerRef.value
+      if (wCSS <= 0 || hCSS <= 0)
+        return
       renderer.setSize(wCSS, hCSS)
 
       const dpr = renderer.dpr
@@ -323,10 +352,25 @@ async function initializeWebGL(): Promise<void> {
       uniforms.rayDir.value = dir
     }
 
+    let lastFrameTime = 0
+    const stopLoop = (): void => {
+      if (animationIdRef.value !== null) {
+        cancelAnimationFrame(animationIdRef.value)
+        animationIdRef.value = null
+      }
+    }
+
     const loop = (t: number): void => {
-      if (!rendererRef.value || !uniformsRef.value || !meshRef.value || !isVisible.value) {
+      animationIdRef.value = null
+      if (!rendererRef.value || !uniformsRef.value || !meshRef.value || !shouldRun.value) {
         return
       }
+
+      if (lastFrameTime > 0 && t - lastFrameTime < FRAME_INTERVAL_MS) {
+        animationIdRef.value = requestAnimationFrame(loop)
+        return
+      }
+      lastFrameTime = t
 
       uniforms.iTime.value = t * 0.001
 
@@ -355,23 +399,34 @@ async function initializeWebGL(): Promise<void> {
       }
     }
 
+    const startLoop = (): void => {
+      if (!rendererRef.value || !uniformsRef.value || !meshRef.value || !shouldRun.value)
+        return
+      if (animationIdRef.value !== null)
+        return
+      lastFrameTime = 0
+      animationIdRef.value = requestAnimationFrame(loop)
+    }
+
+    startLoopFn = startLoop
+    stopLoopFn = stopLoop
+
     const handleResize = (): void => {
-      debouncedUpdatePlacement(updatePlacement)
+      scheduleDebouncedPlacement(updatePlacement)
     }
 
     window.addEventListener('resize', handleResize, { passive: true })
     updatePlacement()
-    animationIdRef.value = requestAnimationFrame(loop)
+    startLoop()
 
     cleanupFunctionRef.value = (): void => {
-      if (animationIdRef.value) {
-        cancelAnimationFrame(animationIdRef.value)
-        animationIdRef.value = null
-      }
+      stopLoop()
+      startLoopFn = null
+      stopLoopFn = null
 
       window.removeEventListener('resize', handleResize)
 
-      if (resizeTimeoutRef.value) {
+      if (resizeTimeoutRef.value !== null) {
         clearTimeout(resizeTimeoutRef.value)
         resizeTimeoutRef.value = null
       }
@@ -402,11 +457,40 @@ async function initializeWebGL(): Promise<void> {
   catch (error) {
     console.error('Failed to initialize WebGL:', error)
   }
+  finally {
+    initializing = false
+  }
+}
+
+function scheduleWebGLInit(): void {
+  if (disposed || rendererRef.value || initializing || !containerRef.value || !shouldRun.value || !hasWindow())
+    return
+
+  clearIdleInit()
+  const runInit = () => {
+    idleInitId = null
+    idleInitTimer = null
+    void initializeWebGL()
+  }
+
+  if (typeof window.requestIdleCallback === 'function') {
+    idleInitId = window.requestIdleCallback(runInit, { timeout: IDLE_INIT_TIMEOUT_MS })
+    return
+  }
+  idleInitTimer = window.setTimeout(runInit, IDLE_INIT_FALLBACK_MS)
+}
+
+function handleVisibilityChange(): void {
+  isDocumentHidden.value = document.hidden
+}
+
+function handleReducedMotionChange(event: MediaQueryListEvent): void {
+  reducedMotion.value = event.matches
 }
 
 let mouseThrottleId: number | null = null
 function handleMouseMove(e: MouseEvent): void {
-  if (!containerRef.value || !rendererRef.value)
+  if (!containerRef.value || !rendererRef.value || !shouldRun.value)
     return
 
   if (mouseThrottleId)
@@ -425,37 +509,46 @@ function handleMouseMove(e: MouseEvent): void {
 }
 
 onMounted((): void => {
-  if (!containerRef.value)
+  if (!containerRef.value || !hasWindow())
     return
 
-  observerRef.value = new IntersectionObserver(
-    (entries: IntersectionObserverEntry[]): void => {
-      const entry = entries[0]
-      isVisible.value = entry!.isIntersecting
-    },
-    {
-      threshold: 0.1,
-      rootMargin: '50px',
-    },
-  )
+  motionMediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  reducedMotion.value = motionMediaQuery.matches
+  motionMediaQuery.addEventListener('change', handleReducedMotionChange)
+  isDocumentHidden.value = document.hidden
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 
-  observerRef.value.observe(containerRef.value)
+  if (typeof IntersectionObserver !== 'undefined') {
+    observerRef.value = new IntersectionObserver(
+      (entries: IntersectionObserverEntry[]): void => {
+        const entry = entries[0]
+        isVisible.value = Boolean(entry?.isIntersecting)
+      },
+      {
+        threshold: 0.05,
+        rootMargin: '50px',
+      },
+    )
+
+    observerRef.value.observe(containerRef.value)
+  }
+  else {
+    isVisible.value = true
+  }
 })
 
-watch(isVisible, (newVisible: boolean): void => {
-  if (newVisible && containerRef.value) {
-    if (cleanupFunctionRef.value) {
-      cleanupFunctionRef.value()
-      cleanupFunctionRef.value = null
+watch(shouldRun, (active: boolean): void => {
+  if (active && containerRef.value) {
+    if (rendererRef.value) {
+      startLoopFn?.()
+      return
     }
-    initializeWebGL()
+    scheduleWebGLInit()
+    return
   }
-  else if (!newVisible && cleanupFunctionRef.value) {
-    if (animationIdRef.value) {
-      cancelAnimationFrame(animationIdRef.value)
-      animationIdRef.value = null
-    }
-  }
+
+  clearIdleInit()
+  stopLoopFn?.()
 })
 
 watch(
@@ -520,6 +613,19 @@ watch(
 )
 
 onUnmounted((): void => {
+  disposed = true
+  clearIdleInit()
+
+  if (motionMediaQuery) {
+    motionMediaQuery.removeEventListener('change', handleReducedMotionChange)
+    motionMediaQuery = null
+  }
+
+  if (hasWindow()) {
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+    window.removeEventListener('mousemove', handleMouseMove)
+  }
+
   if (observerRef.value) {
     observerRef.value.disconnect()
     observerRef.value = null
@@ -533,10 +639,6 @@ onUnmounted((): void => {
   if (mouseThrottleId) {
     cancelAnimationFrame(mouseThrottleId)
     mouseThrottleId = null
-  }
-
-  if (hasWindow()) {
-    window.removeEventListener('mousemove', handleMouseMove)
   }
 })
 </script>

@@ -48,6 +48,10 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
   let smoothScrollTween: GsapTween | null = null
   let smoothScrollActive = false
   let smoothScrollPluginsRegistered = false
+  let gsapRuntime: typeof import('gsap')['gsap'] | null = null
+  let gsapLoadPromise: Promise<typeof import('gsap')['gsap'] | null> | null = null
+  let gsapIdleId: number | null = null
+  let gsapIdleTimer: ReturnType<typeof setTimeout> | null = null
   let currentSectionIndex = -1
   let sectionElements: HTMLElement[] = []
   let sectionHashes: string[] = []
@@ -70,6 +74,48 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
       clearTimeout(snapTimer)
       snapTimer = null
     }
+  }
+
+  function clearGsapIdleSchedule() {
+    if (gsapIdleId !== null && hasWindow() && 'cancelIdleCallback' in window) {
+      window.cancelIdleCallback(gsapIdleId)
+      gsapIdleId = null
+    }
+    if (gsapIdleTimer !== null) {
+      clearTimeout(gsapIdleTimer)
+      gsapIdleTimer = null
+    }
+  }
+
+  function ensureGsapScrollTo(): Promise<typeof import('gsap')['gsap'] | null> {
+    if (disposed)
+      return Promise.resolve(null)
+    if (gsapRuntime)
+      return Promise.resolve(gsapRuntime)
+    if (gsapLoadPromise)
+      return gsapLoadPromise
+
+    clearGsapIdleSchedule()
+    gsapLoadPromise = Promise.all([
+      import('gsap'),
+      import('gsap/ScrollToPlugin'),
+    ])
+      .then(([{ gsap }, { ScrollToPlugin }]) => {
+        if (disposed)
+          return null
+        if (!smoothScrollPluginsRegistered) {
+          gsap.registerPlugin(ScrollToPlugin)
+          smoothScrollPluginsRegistered = true
+        }
+        gsapRuntime = gsap
+        return gsap
+      })
+      .catch(() => {
+        gsapLoadPromise = null
+        return null
+      })
+
+    return gsapLoadPromise
   }
 
   function collectSectionElements() {
@@ -191,25 +237,12 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
     if (!container)
       return
 
-    const [{ gsap }, { ScrollToPlugin }] = await Promise.all([
-      import('gsap'),
-      import('gsap/ScrollToPlugin'),
-    ])
-
-    if (disposed)
-      return
-
-    if (!smoothScrollPluginsRegistered) {
-      gsap.registerPlugin(ScrollToPlugin)
-      smoothScrollPluginsRegistered = true
-    }
-
     const releaseScrollTween = () => {
       smoothScrollActive = false
       smoothScrollTween = null
     }
 
-    const snapToClosest = () => {
+    const snapToClosest = async () => {
       collectSectionElements()
 
       if (!sectionElements.length)
@@ -231,6 +264,10 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
           updateSectionHash(hash)
         return
       }
+
+      const gsap = gsapRuntime ?? await ensureGsapScrollTo()
+      if (disposed || !gsap || userScrolling || !isInsideContainer())
+        return
 
       // Dynamic duration based on travel distance
       const distance = Math.abs(rect.top)
@@ -265,13 +302,14 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
       cancelSnap()
       snapTimer = setTimeout(() => {
         snapTimer = null
-        snapToClosest()
+        void snapToClosest()
       }, SNAP_DELAY)
     }
 
     // User-initiated scroll: cancel any active snap animation and reschedule
     wheelListener = () => {
       userScrolling = true
+      void ensureGsapScrollTo()
       if (smoothScrollActive) {
         smoothScrollTween?.kill()
         releaseScrollTween()
@@ -286,6 +324,8 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
 
       // Only schedule snap when NOT animating — GSAP scroll events must not retrigger
       if (!smoothScrollActive && isInsideContainer()) {
+        userScrolling = false
+        void ensureGsapScrollTo()
         scheduleSnap()
       }
     }
@@ -303,10 +343,25 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
     window.addEventListener('resize', resizeListener)
 
     refreshCurrentSectionIndex()
+
+    // Warm GSAP + ScrollToPlugin off the initial hydration critical path.
+    if (typeof window.requestIdleCallback === 'function') {
+      gsapIdleId = window.requestIdleCallback(() => {
+        gsapIdleId = null
+        void ensureGsapScrollTo()
+      }, { timeout: 2400 })
+    }
+    else {
+      gsapIdleTimer = setTimeout(() => {
+        gsapIdleTimer = null
+        void ensureGsapScrollTo()
+      }, 600)
+    }
   })
 
   onBeforeUnmount(() => {
     disposed = true
+    clearGsapIdleSchedule()
     if (wheelListener)
       window.removeEventListener('wheel', wheelListener)
     if (touchStartListener)
