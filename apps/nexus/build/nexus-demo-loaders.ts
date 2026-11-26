@@ -39,14 +39,53 @@ export function nexusDemoLoadersPlugin(nexusRoot: string, loaderBase: string): P
       const baseManualChunks = typeof options.manualChunks === 'function'
         ? options.manualChunks
         : undefined
+      const resolveChunkName = (id: string, meta?: Parameters<NonNullable<typeof baseManualChunks>>[1]) => {
+        const cleanId = id.split('?')[0] ?? id
+        return demoChunks[cleanId] ?? (meta ? baseManualChunks?.(id, meta) : undefined)
+      }
+      // Vite 8 uses Rolldown, which ignores Rollup's `onlyExplicitManualChunks` and pulls
+      // transitive dependencies into `manualChunks` by default — causing shared UI modules to
+      // land inside `demo-*` chunks and pull demo CSS/JS into startup pages. Use Rolldown's
+      // `codeSplitting` with `includeDependenciesRecursively: false` instead.
+      const isRolldown = Boolean((this.meta as { rolldownVersion?: string } | undefined)?.rolldownVersion)
+      if (isRolldown) {
+        const nextOptions = { ...options } as Record<string, unknown>
+        delete nextOptions.manualChunks
+        delete nextOptions.onlyExplicitManualChunks
+        const existingCodeSplitting = (
+          typeof nextOptions.codeSplitting === 'object' && nextOptions.codeSplitting !== null
+            ? nextOptions.codeSplitting
+            : {}
+        ) as Record<string, unknown>
+        const existingGroups = Array.isArray(existingCodeSplitting.groups)
+          ? existingCodeSplitting.groups
+          : []
+        nextOptions.codeSplitting = {
+          ...existingCodeSplitting,
+          includeDependenciesRecursively: false,
+          groups: [
+            {
+              debugName: 'nexus-manual-chunks',
+              name: (id: string, ctx: unknown) => {
+                const cleanId = id.split('?')[0] ?? id
+                return demoChunks[cleanId]
+                  ?? baseManualChunks?.(id, ctx as Parameters<NonNullable<typeof baseManualChunks>>[1])
+                  ?? null
+              },
+              includeDependenciesRecursively: false,
+            },
+            ...existingGroups,
+          ],
+        }
+        return nextOptions as typeof options
+      }
       return {
         ...options,
         onlyExplicitManualChunks: true,
         manualChunks(id, meta) {
           // Keep Demo implementations out of shared dependency chunks, even when
           // Rollup merges small automatic chunks into frequently used components.
-          const cleanId = id.split('?')[0] ?? id
-          return demoChunks[cleanId] ?? baseManualChunks?.(id, meta)
+          return resolveChunkName(id, meta)
         },
       }
     },
