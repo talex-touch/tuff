@@ -15,9 +15,11 @@ const root = path.resolve(__dirname, '..')
 const source = path.join(root, 'native-translation', 'TranslationHelper.swift')
 const output = path.join(root, 'build', 'Release', 'tuff-native-translation')
 const architectures = universal ? ['arm64', 'x86_64'] : [process.arch === 'x64' ? 'x86_64' : 'arm64']
-if (fs.existsSync(output) && fs.statSync(output).mtimeMs >= fs.statSync(source).mtimeMs) {
+const newestInput = Math.max(fs.statSync(source).mtimeMs, fs.statSync(__filename).mtimeMs)
+if (fs.existsSync(output) && fs.lstatSync(output).isFile() && fs.statSync(output).mtimeMs >= newestInput) {
   try {
-    execFileSync('lipo', ['-verify_arch', ...architectures, output], { stdio: 'pipe' })
+    execFileSync('lipo', [output, '-verify_arch', ...architectures], { stdio: 'pipe' })
+    execFileSync('codesign', ['--verify', '--strict', output], { stdio: 'pipe' })
     fs.accessSync(output, fs.constants.X_OK)
     console.log(`[build-translation] Reusing ${architectures.join('+')} helper`)
     process.exit(0)

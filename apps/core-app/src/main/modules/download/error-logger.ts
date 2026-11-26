@@ -6,7 +6,6 @@
 import type { DownloadError } from './error-types'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { DownloadErrorType, ErrorSeverity } from './error-types'
 import { downloadErrorLog } from './logger'
 
@@ -38,8 +37,9 @@ export class ErrorLogger {
   private maxLogSize: number = 10 * 1024 * 1024 // 10MB
   private maxLogFiles: number = 5
   private logBuffer: LogEntry[] = []
-  private readonly pollingService = PollingService.getInstance()
-  private readonly flushTaskId = 'download.error-logger.flush'
+  private flushTimer: NodeJS.Timeout | null = null
+  private flushInFlight: Promise<void> | null = null
+  private readonly flushDelayMs = 5_000
   private isInitialized: boolean = false
 
   constructor(logDir: string) {
@@ -59,24 +59,32 @@ export class ErrorLogger {
       const logDir = path.dirname(this.logFilePath)
       await fs.mkdir(logDir, { recursive: true })
 
-      // 启动定时刷新
-      if (this.pollingService.isRegistered(this.flushTaskId)) {
-        this.pollingService.unregister(this.flushTaskId)
-      }
-      this.pollingService.register(
-        this.flushTaskId,
-        () =>
-          this.flush().catch((error) => {
-            downloadErrorLog.error('Failed to flush log buffer', { error })
-          }),
-        { interval: 5, unit: 'seconds' }
-      )
-      this.pollingService.start()
-
       this.isInitialized = true
+      if (this.logBuffer.length > 0) {
+        this.scheduleFlush()
+      }
     } catch (error) {
       downloadErrorLog.error('Failed to initialize error logger', { error })
     }
+  }
+
+  private scheduleFlush(): void {
+    if (!this.isInitialized || this.flushTimer || this.logBuffer.length === 0) {
+      return
+    }
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null
+      void this.flush().catch((error) => {
+        downloadErrorLog.error('Failed to flush log buffer', { error })
+      })
+    }, this.flushDelayMs)
+    this.flushTimer.unref?.()
+  }
+
+  private clearFlushTimer(): void {
+    if (!this.flushTimer) return
+    clearTimeout(this.flushTimer)
+    this.flushTimer = null
   }
 
   /**
@@ -96,7 +104,9 @@ export class ErrorLogger {
     // 如果是严重错误，立即刷新
     if (error.severity === ErrorSeverity.CRITICAL || error.severity === ErrorSeverity.HIGH) {
       await this.flush()
+      return
     }
+    this.scheduleFlush()
   }
 
   /**
@@ -111,6 +121,7 @@ export class ErrorLogger {
     }
 
     this.logBuffer.push(entry)
+    this.scheduleFlush()
   }
 
   /**
@@ -125,6 +136,7 @@ export class ErrorLogger {
     }
 
     this.logBuffer.push(entry)
+    this.scheduleFlush()
   }
 
   /**
@@ -139,12 +151,17 @@ export class ErrorLogger {
     }
 
     this.logBuffer.push(entry)
+    this.scheduleFlush()
   }
 
   /**
    * 刷新日志缓冲区
    */
   private async flush(): Promise<void> {
+    this.clearFlushTimer()
+    if (this.flushInFlight) {
+      await this.flushInFlight
+    }
     if (this.logBuffer.length === 0) {
       return
     }
@@ -152,23 +169,32 @@ export class ErrorLogger {
     const entries = [...this.logBuffer]
     this.logBuffer = []
 
-    try {
-      // 检查日志文件大小
-      await this.rotateLogIfNeeded()
+    const run = (async () => {
+      try {
+        // 检查日志文件大小
+        await this.rotateLogIfNeeded()
 
-      // 格式化日志条目
-      const logLines = `${entries.map((entry) => this.formatLogEntry(entry)).join('\n')}\n`
+        // 格式化日志条目
+        const logLines = `${entries.map((entry) => this.formatLogEntry(entry)).join('\n')}\n`
 
-      // 追加到日志文件
-      await fs.appendFile(this.logFilePath, logLines, 'utf-8')
-    } catch (error) {
-      downloadErrorLog.error('Failed to write log entries', {
-        error,
-        meta: { entryCount: entries.length }
-      })
-      // 将条目放回缓冲区
-      this.logBuffer.unshift(...entries)
-    }
+        // 追加到日志文件
+        await fs.appendFile(this.logFilePath, logLines, 'utf-8')
+      } catch (error) {
+        downloadErrorLog.error('Failed to write log entries', {
+          error,
+          meta: { entryCount: entries.length }
+        })
+        // 将条目放回缓冲区
+        this.logBuffer.unshift(...entries)
+      }
+    })().finally(() => {
+      if (this.flushInFlight === run) {
+        this.flushInFlight = null
+      }
+    })
+
+    this.flushInFlight = run
+    await run
   }
 
   /**
@@ -351,7 +377,7 @@ export class ErrorLogger {
    * 销毁日志记录器
    */
   async destroy(): Promise<void> {
-    this.pollingService.unregister(this.flushTaskId)
+    this.clearFlushTimer()
 
     // 刷新剩余的日志
     await this.flush()

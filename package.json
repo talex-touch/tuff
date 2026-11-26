@@ -24,11 +24,11 @@
     "lint:changed": "node scripts/run-eslint-changed.mjs",
     "lint:staged": "lint-staged",
     "typecheck": "pnpm -F @talex-touch/core-app run typecheck",
-    "typecheck:all": "pnpm -F @talex-touch/unplugin-export-plugin run build && pnpm -F @talex-touch/tuffex run build && pnpm -r --if-present --filter '!@talex-touch/tuffex' run typecheck",
+    "typecheck:all": "pnpm -F @talex-touch/unplugin-export-plugin run build && pnpm -F @talex-touch/tuffex-core run build && pnpm -F @talex-touch/tuffex run build && pnpm -F @talex-touch/tuffex-wc run build && pnpm -F @talex-touch/tuffex-react run build && pnpm -r --if-present --filter '!@talex-touch/tuffex' run typecheck",
     "test:plugins": "node scripts/test-plugins.mjs",
     "test:scripts": "vitest run --config vitest.workspace-scripts.config.mjs",
     "test:release-acceptance": "vitest run --config vitest.release-acceptance.config.mjs",
-    "test:targeted": "pnpm -C \"packages/utils\" exec vitest run \"__tests__/plugin-sdk-lifecycle.test.ts\" \"__tests__/transport-domain-sdks.test.ts\" \"__tests__/transport/port-policy.test.ts\" && pnpm test:gateway && pnpm -C \"apps/core-app\" exec vitest run \"src/renderer/src/modules/auth/sync-preferences.test.ts\" \"src/main/modules/plugin/plugin-loaders.test.ts\" \"src/main/channel/common.test.ts\" && pnpm -C \"apps/nexus\" exec vitest run \"test/api/sync/sync-routes-410.test.ts\"",
+    "test:targeted": "pnpm -F @talex-touch/tuffex-core run build && pnpm -C \"packages/utils\" exec vitest run \"__tests__/plugin-sdk-lifecycle.test.ts\" \"__tests__/transport-domain-sdks.test.ts\" \"__tests__/transport/port-policy.test.ts\" && pnpm test:gateway && pnpm -C \"apps/core-app\" exec vitest run \"src/renderer/src/modules/auth/sync-preferences.test.ts\" \"src/main/modules/plugin/plugin-loaders.test.ts\" \"src/main/channel/common.test.ts\" && pnpm -C \"apps/nexus\" exec vitest run \"test/api/sync/sync-routes-410.test.ts\"",
     "test:gateway": "pnpm -C \"apps/core-app\" exec vitest run \"src/main/modules/tool-gateway/gateway-server.test.ts\" \"src/main/modules/tool-gateway/gateway-server.workspace-scope.test.ts\" \"src/main/modules/tool-gateway/index.test.ts\" \"src/main/modules/tool-gateway/tool-registry.mcp.test.ts\" \"src/main/modules/tool-gateway/tool-registry.remember-scope.test.ts\" \"src/main/modules/mcp-host/mcp-host-lifecycle.test.ts\" \"src/main/modules/mcp-host/mcp-host-server.test.ts\" \"src/main/modules/mcp-host/mcp-host-protocol.test.ts\" \"src/main/modules/mcp-host/mcp-host-settings.test.ts\" \"src/main/modules/mcp-host/mcp-host-tools.test.ts\" \"src/renderer/src/modules/conversation/useAgentTools.test.ts\" \"src/renderer/src/views/base/settings/SettingMcpHost.test.ts\" && pnpm -C \"packages/pi-extension-tuff\" test",
     "quality:pr": "pnpm release:notes verify && pnpm lint:changed && pnpm test:targeted && pnpm -C \"apps/core-app\" run typecheck",
     "quality:release": "pnpm lint && pnpm typecheck:all && pnpm test:targeted && pnpm -C apps/core-app exec electron-builder --version && pnpm -F @talex-touch/core-app run build",
@@ -118,6 +118,15 @@
     ],
     "packages/tuffex/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -C \"packages/tuffex\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuffex-core/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuffex-core\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuffex-react/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuffex-react\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
+    ],
+    "packages/tuffex-wc/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuffex-wc\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "packages/unplugin-export-plugin/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
       "pnpm -w exec eslint --cache --fix --max-warnings=0 --no-warn-ignored --config \"packages/unplugin-export-plugin/eslint.config.js\""

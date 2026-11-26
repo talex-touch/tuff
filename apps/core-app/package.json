@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:core-main": "vitest run \"src/main/core\" \"src/main/channel\" \"src/main/modules/tray\"",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
-    "typecheck:web": "pnpm -F @talex-touch/tuffex run build && vue-tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck:web": "node scripts/ensure-tuffex-build.cjs && vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "scan:memory:benchmark": "pnpm exec tsx scripts/file-scan-memory-benchmark.mjs",
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",
     "test:omnipanel": "vitest run src/main/modules/omni-panel/index.test.ts src/renderer/src/views/omni-panel/filter-features.test.ts src/renderer/src/views/omni-panel/interaction.test.ts",

@@ -14,6 +14,7 @@ import { BaseModule } from '../abstract-base-module'
 import { getNetworkService } from './network-service'
 import type { HandlerContext, PluginActivationIdentity } from '@talex-touch/utils/transport/main'
 import { withPermission } from '../permission/channel-guard'
+import { idleBudgetCoordinator, isStatePausedFor } from '../../service/idle-budget-coordinator'
 import { classifyNetworkTarget } from '../../utils/network-target-policy'
 
 const NETWORK_STATUS_POLL_INTERVAL_MS = 5000
@@ -195,15 +196,42 @@ export class NetworkModule extends BaseModule {
       })
     )
 
-    this.statusPollTimer = setInterval(() => {
-      probeStatus('probe')
-    }, NETWORK_STATUS_POLL_INTERVAL_MS)
-    this.statusPollTimer.unref?.()
-    this.disposers.push(() => {
-      if (this.statusPollTimer) {
-        clearInterval(this.statusPollTimer)
-        this.statusPollTimer = null
+    let destroyed = false
+    const startStatusPolling = () => {
+      if (destroyed || this.statusPollTimer) {
+        return
       }
+      this.statusPollTimer = setInterval(() => {
+        probeStatus('probe')
+      }, NETWORK_STATUS_POLL_INTERVAL_MS)
+      this.statusPollTimer.unref?.()
+    }
+    const stopStatusPolling = () => {
+      if (!this.statusPollTimer) {
+        return
+      }
+      clearInterval(this.statusPollTimer)
+      this.statusPollTimer = null
+    }
+
+    const unsubscribeIdle = idleBudgetCoordinator.subscribe((snapshot) => {
+      if (destroyed) return
+      if (isStatePausedFor(snapshot.state, 'background-hidden')) {
+        stopStatusPolling()
+        return
+      }
+      startStatusPolling()
+      probeStatus(snapshot.previousState === 'system-suspended' ? 'resume' : 'probe')
+    })
+
+    if (!idleBudgetCoordinator.isPausedFor('background-hidden')) {
+      startStatusPolling()
+    }
+
+    this.disposers.push(() => {
+      destroyed = true
+      unsubscribeIdle()
+      stopStatusPolling()
     })
 
     if (typeof powerMonitor?.on === 'function') {

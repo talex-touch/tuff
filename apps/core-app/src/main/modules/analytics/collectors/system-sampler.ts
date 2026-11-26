@@ -21,6 +21,7 @@ export class SystemSampler {
   private readonly pollingService = PollingService.getInstance()
   private readonly taskId = `system-sampler.${SystemSampler.instanceCounter++}`
   private isRunning = false
+  private isPaused = false
 
   constructor(
     private handler: SampleHandler,
@@ -31,21 +32,44 @@ export class SystemSampler {
   start(options?: { initialDelayMs?: number }): void {
     if (this.isRunning) return
     this.isRunning = true
+    this.isPaused = false
     // 不再立即调用 this.collect()，避免在启动期触发 DB 写入
     // 首次采样由 pollingService 的 initialDelayMs 控制
     const initialDelayMs = options?.initialDelayMs ?? this.intervalMs
-    this.pollingService.register(this.taskId, () => this.collect(), {
-      interval: this.intervalMs,
-      unit: 'milliseconds',
-      initialDelayMs
-    })
-    this.pollingService.start()
+    this.registerTask(initialDelayMs)
+  }
+
+  pause(): void {
+    if (!this.isRunning || this.isPaused) return
+    this.isPaused = true
+    this.pollingService.unregister(this.taskId)
+  }
+
+  resume(): void {
+    if (!this.isRunning || !this.isPaused) return
+    this.isPaused = false
+    this.registerTask(this.intervalMs)
   }
 
   stop(): void {
     if (!this.isRunning) return
     this.pollingService.unregister(this.taskId)
     this.isRunning = false
+    this.isPaused = false
+  }
+
+  private registerTask(initialDelayMs: number): void {
+    if (this.pollingService.isRegistered(this.taskId)) return
+    this.pollingService.register(this.taskId, () => this.collect(), {
+      interval: this.intervalMs,
+      unit: 'milliseconds',
+      initialDelayMs,
+      lane: 'maintenance',
+      backpressure: 'latest_wins',
+      dedupeKey: this.taskId,
+      maxInFlight: 1
+    })
+    this.pollingService.start()
   }
 
   private collect(): void {

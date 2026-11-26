@@ -189,6 +189,7 @@
   --tx-stream-reveal-3: var(--tx-text-color-primary);
 }
 
+:host,
 :root {
   // Primary Colors
   --tx-color-primary: #409eff;
@@ -414,6 +415,10 @@
   --tx-coloring-border-color-hover: color-mix(in srgb, var(--tx-color-primary) 46%, var(--tx-border-color));
   --tx-coloring-border-shadow: inset 0 0 0 1px var(--tx-coloring-border-color);
   --tx-coloring-border-shadow-hover: inset 0 0 0 1px var(--tx-coloring-border-color-hover);
+  --tx-coloring-surface-content: none;
+  --tx-coloring-surface-shadow: none;
+  --tx-coloring-surface-shadow-hover: none;
+  --tx-coloring-field-border-color: var(--tx-border-color);
 
   // Streamed text (TxStreamText and its family). A word sweeps these three
   // stops, blue → violet → pink, as it arrives and settles on the ink; the
@@ -427,6 +432,8 @@
 }
 
 // Dark theme
+:host([data-theme='dark']),
+:host(.dark),
 [data-theme='dark'],
 .dark {
   // Light text on a dark ground reads heavier; fonts with a weight axis draw these thinner, static
@@ -604,15 +611,34 @@
 }
 
 html[data-tx-contrast='high'],
-html.contrast {
+html.contrast,
+:host([data-tx-contrast='high']),
+:host(.contrast) {
   @include tx-high-contrast-light;
 }
 
 html[data-theme='dark'][data-tx-contrast='high'],
 html[data-theme='dark'].contrast,
 html.dark[data-tx-contrast='high'],
-html.dark.contrast {
+html.dark.contrast,
+:host([data-theme='dark'][data-tx-contrast='high']),
+:host([data-theme='dark'].contrast),
+:host(.dark[data-tx-contrast='high']),
+:host(.dark.contrast) {
   @include tx-high-contrast-dark;
+}
+
+html[data-tx-coloring='true'],
+html.coloring,
+[data-tx-coloring='true'],
+.coloring,
+:host([data-tx-coloring='true']),
+:host(.coloring) {
+  --tx-coloring-surface-content: '';
+  --tx-coloring-surface-shadow: var(--tx-coloring-border-shadow);
+  --tx-coloring-surface-shadow-hover: var(--tx-coloring-border-shadow-hover);
+  --tx-coloring-field-border-color: var(--tx-coloring-border-color);
+  --tx-coloring-button-border-color: var(--tx-coloring-border-color);
 }
 
 @media (prefers-contrast: more) {

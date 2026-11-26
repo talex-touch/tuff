@@ -50,6 +50,9 @@ jobs:
             nexus:
               - 'apps/nexus/**'
               - 'packages/tuffex/**'
+              - 'packages/tuffex-core/**'
+              - 'packages/tuffex-react/**'
+              - 'packages/tuffex-wc/**'
               - '.github/workflows/ci.yml'
 
       # A contribution policy, so it only makes sense on the incoming change, not on the branch.
@@ -515,6 +518,10 @@ jobs:
       - name: Build tuffex
         if: ${{ matrix.app == 'nexus' || matrix.app == 'core-app' }}
         run: pnpm -C packages/tuffex build
+
+      - name: Build tuffex multi-framework packages
+        if: ${{ matrix.app == 'nexus' }}
+        run: pnpm -C packages/tuffex-wc build && pnpm -C packages/tuffex-react build
 
       # The plugin SQLite sandbox tests need out/main/plugin-sqlite-worker.js, and only
       # electron-vite build produces it: the worker is a rollup input in the main-process build

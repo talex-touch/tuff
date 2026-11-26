@@ -104,26 +104,17 @@ registerLifecycleEvents()
 reportContentSecurityPolicyViolations()
 
 /**
- * Logs violations of the report-only CSP that main attaches as a response header (#689).
+ * Forwards Content-Security-Policy violations to the main-process log (#689).
  *
- * `default-src` and `connect-src` are still wildcards because narrowing them needs to know what the
- * renderer actually reaches, and a static reading cannot produce that — a dependency can ask for
- * something at runtime that no literal in the tree mentions. The report-only policy names the
- * candidate, blocks nothing, and this turns each would-be block into a line naming the directive
- * and the origin.
- *
- * When this stays quiet in real use, the candidate becomes the enforcing policy and the wildcards
- * go. Until then it is the only honest way to get from here to there — and "quiet" only counts
- * against a launch where main logged the header as attached, since the policy spent its first
- * months in a `<meta>` element that Chromium ignored (see main/core/report-only-csp.ts).
+ * The hardened policy is enforced both via `main/core/renderer-csp.ts` response headers and the
+ * fallback `<meta>` in `renderer/index.html`. Forwarding violation events ensures any unexpected
+ * block in real use reaches the persistent main log rather than disappearing into a closed
+ * DevTools console.
  */
 function reportContentSecurityPolicyViolations(): void {
   document.addEventListener('securitypolicyviolation', (event) => {
-    // The enforcing policy blocks nothing here, so anything reaching this listener is a request
-    // the narrow candidate would have refused — a finding, not an error.
     // Forwarded to main rather than logged here: createRendererLogger writes to the renderer
-    // console and nowhere else, so the inventory this policy exists to produce only existed in
-    // a devtools panel nobody has open during real use (#689).
+    // console and nowhere else, so violations would otherwise go unnoticed during real use (#689).
     transport
       .send(AppEvents.security.reportCspViolation, {
         effectiveDirective: event.effectiveDirective,

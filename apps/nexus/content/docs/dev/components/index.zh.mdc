@@ -65,9 +65,9 @@ code: |
 - 数据区同时设计加载、空态与错误：`TxLoadingState`、`TxEmptyState`、`TxErrorState`。
 - 后台页组合 `TxDataTable`、`TxStatusBadge`、`TxProgressBar` 与图表，不手写一次性 SVG 或状态 UI；设置页用 `TxTabs` 分区、`TxDrawer` 承载高密度配置。
 
-## 迁移状态看板
+## 多框架适配与迁移看板
 
-`已确认`：人工审阅完成；`已迁移`：AI 迁移，建议对照源码；`迁移中` / `未迁移`：示例与 API 仍可能调整。侧边栏只标出仍需关注的页面。
+实时查看全部 TuffEx 组件在 **Vue 3**、**React** 与 **Web Components** 的适配覆盖率、层级（Tier A–D）及对应导出符号 / 自定义元素标签；在任意组件页切换框架可实时预览与复制对应代码。
 
 ::DocsComponentSyncTable
 ::

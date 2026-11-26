@@ -32,6 +32,7 @@ import {
 } from '~/modules/herdr/herdr-project-groups'
 import { type HerdrProjectedSession, useHerdrRuntime } from '~/modules/herdr/useHerdrRuntime'
 import { type HerdrStageViewMode, useHerdrStageControl } from '~/modules/herdr/useHerdrStageControl'
+import { useShellStageActions } from '~/modules/layout/useShellStageActions'
 import { useShellTerminal } from '~/modules/layout/useShellTerminal'
 import {
   attachBrowserTabToSpace,
@@ -69,6 +70,8 @@ import BrowserPluginToolbar from '~/views/base/browser/BrowserPluginToolbar.vue'
 import type { BrowserTabMenuAction } from '~/views/base/browser/tab-actions'
 import { describeBrowserError } from '~/views/base/browser/browser-errors'
 import { runBrowserTabAction } from '~/views/base/browser/tab-actions'
+import HomeTurnInfoMenu from '~/views/base/home/HomeTurnInfoMenu.vue'
+import MetaHintBadge from './MetaHintBadge.vue'
 import { SHELL_MENU_CARD } from './shell-menu-panel'
 import ShellAccountAvatar from './ShellAccountAvatar.vue'
 
@@ -120,6 +123,7 @@ const sdk = createBrowserSdk(useTuffTransport())
 const history = useConversationHistory()
 const herdr = useHerdrRuntime({ subscribe: false })
 const herdrStageControl = useHerdrStageControl()
+const shellStageActions = useShellStageActions()
 const { toggleTerminal } = useShellTerminal()
 const projectStore = getActivePinia() ? useProjectStore() : null
 const workspaceTabs = useShellWorkspaceTabs()
@@ -156,9 +160,25 @@ const onBrowserRoute = computed(() => route.path === APP_SURFACE_ROUTES.browser)
 const onHomeConversationRoute = computed(() => route.path.startsWith('/home/c/'))
 const onHerdrRoute = computed(() => route.path.startsWith('/home/herdr/'))
 const onHomeBlankRoute = computed(() => route.path === APP_SURFACE_ROUTES.home)
+const onHomeRoute = computed(() => onHomeBlankRoute.value || onHomeConversationRoute.value)
 const onUnfocusedShellRoute = computed(
   () => route.path === '/store' || route.path.startsWith('/setting')
 )
+
+const activeStageActions = computed(() => {
+  const handle = shellStageActions.activeHandle.value
+  if (!handle) return null
+  if (handle.surface === 'home' && onHomeRoute.value) return handle
+  if (handle.surface === 'herdr' && onHerdrRoute.value) return handle
+  return null
+})
+const hasTrailingActions = computed(() => onBrowserRoute.value || Boolean(activeStageActions.value))
+const stagePanelOpen = computed(() => Boolean(activeStageActions.value?.isPanelOpen()))
+const stageShowTurnInfo = computed(() => Boolean(activeStageActions.value?.showTurnInfo?.()))
+const stageTurn = computed(() => activeStageActions.value?.getTurn?.())
+const stageMessageCount = computed(() => activeStageActions.value?.getMessageCount?.() ?? 0)
+const stageCanBranch = computed(() => Boolean(activeStageActions.value?.canBranch?.()))
+const stageBranching = computed(() => Boolean(activeStageActions.value?.isBranching?.()))
 
 const routeConversationId = computed<string | null>(() => {
   if (!onHomeConversationRoute.value) return null
@@ -1256,7 +1276,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    class="BrowserTabStrip flex h-11 min-w-0 flex-none items-center gap-1.5 overflow-hidden px-2.5"
+    class="BrowserTabStrip flex h-11 min-w-0 flex-none items-center gap-1.5 px-2.5"
     :class="{ 'is-window-controls': !isMac }"
     :data-platform="platform"
     :data-tab-scope="displayedScopeKey"
@@ -1527,11 +1547,61 @@ onBeforeUnmount(() => {
     />
     <div
       class="BrowserTabStrip-Actions shell-chrome-safe-inline-end flex flex-none items-center gap-0.5"
-      :class="{ 'BrowserTabStrip-NoDrag': onBrowserRoute }"
+      :class="{ 'BrowserTabStrip-NoDrag': hasTrailingActions }"
     >
       <template v-if="onBrowserRoute">
         <BrowserPluginToolbar active @overlay-change="onPluginToolbarOverlay" />
-        <ShellAccountAvatar @overlay-change="onAccountOverlay" />
+        <ShellAccountAvatar key="browser-avatar" @overlay-change="onAccountOverlay" />
+      </template>
+      <template v-else-if="activeStageActions">
+        <button
+          v-if="stageCanBranch || stageBranching"
+          class="BrowserTabStrip-ActionBtn"
+          type="button"
+          :disabled="stageBranching || undefined"
+          :aria-busy="stageBranching || undefined"
+          :aria-label="t('home.workspace.fork.conversation')"
+          :title="t('home.workspace.fork.conversation')"
+          data-testid="tabstrip-branch-btn"
+          @click="activeStageActions.branch?.()"
+        >
+          <span
+            :class="
+              stageBranching ? 'i-ri-loader-4-line BrowserTabStrip-Spin' : 'i-ri-git-branch-line'
+            "
+          />
+        </button>
+        <div v-if="stageShowTurnInfo" class="BrowserTabStrip-MenuSlot">
+          <HomeTurnInfoMenu :turn="stageTurn" :message-count="stageMessageCount">
+            <template #trigger="{ open }">
+              <button
+                class="BrowserTabStrip-ActionBtn"
+                type="button"
+                aria-haspopup="menu"
+                :aria-expanded="open"
+                :aria-label="t('home.moreActions')"
+                :title="t('home.moreActions')"
+                data-testid="tabstrip-more-btn"
+              >
+                <span class="i-ri-more-line" />
+              </button>
+            </template>
+          </HomeTurnInfoMenu>
+        </div>
+        <ShellAccountAvatar v-if="onHomeRoute" key="home-avatar" />
+        <button
+          class="BrowserTabStrip-ActionBtn"
+          :class="{ 'is-active': stagePanelOpen }"
+          type="button"
+          :aria-pressed="stagePanelOpen"
+          :aria-label="stagePanelOpen ? t('home.closePanel') : t('home.openPanel')"
+          :title="stagePanelOpen ? t('home.closePanel') : t('home.openPanel')"
+          data-testid="tabstrip-panel-toggle"
+          @click="activeStageActions.togglePanel()"
+        >
+          <span class="i-ri-layout-right-line" />
+          <MetaHintBadge v-if="onHomeRoute" command="toggle-panel" placement="below" />
+        </button>
       </template>
     </div>
   </div>
@@ -1754,11 +1824,66 @@ onBeforeUnmount(() => {
 }
 
 .BrowserTabStrip {
+  position: relative;
+  z-index: 2;
   background: var(--shell-surface, var(--tx-fill-color-lighter));
   border-bottom: 1px solid
     color-mix(in srgb, var(--shell-border, var(--tx-border-color-lighter)) 75%, transparent);
   -webkit-app-region: drag;
   user-select: none;
+}
+
+.BrowserTabStrip-MenuSlot {
+  display: inline-flex;
+  flex: none;
+}
+
+.BrowserTabStrip-ActionBtn {
+  display: inline-flex;
+  position: relative;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-muted);
+  font-size: 16px;
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &.is-active {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1.5px var(--tx-color-primary);
+  }
+
+  &:disabled {
+    cursor: progress;
+  }
+}
+
+.BrowserTabStrip-Spin {
+  animation: browser-tabstrip-spin 0.9s linear infinite;
+}
+
+@keyframes browser-tabstrip-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .BrowserTabStrip-Spin {
+    animation: none;
+  }
 }
 
 .BrowserTabStrip-DragRegion {

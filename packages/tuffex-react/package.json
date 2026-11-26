@@ -1,0 +1,61 @@
+{
+  "name": "@talex-touch/tuffex-react",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "First-class native React 18/19 components for TuffEx sharing --tx-* design tokens and .tx-* styles.",
+  "author": "TalexDreamSoul <TalexDreamSoul@gmail.com>",
+  "license": "MPL-2.0",
+  "sideEffects": [
+    "**/*.css",
+    "**/*.scss"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./style.css": "./dist/style.css",
+    "./manifest": {
+      "types": "./dist/manifest.d.ts",
+      "import": "./dist/manifest.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "lint": "eslint --cache --max-warnings=0 --no-warn-ignored .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0 || ^19.0.0",
+    "react-dom": "^18.3.0 || ^19.0.0"
+  },
+  "dependencies": {
+    "@floating-ui/dom": "^1.7.6",
+    "@talex-touch/tuffex-core": "workspace:^",
+    "@vue/reactivity": "^3.5.27",
+    "dompurify": "^3.4.17",
+    "marked": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:dev",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "jsdom": "^26.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sass": "catalog:",
+    "typescript": "catalog:dev",
+    "vite": "catalog:build",
+    "vite-plugin-dts": "^4.5.4",
+    "vitest": "catalog:"
+  }
+}

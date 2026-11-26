@@ -3,6 +3,8 @@ import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch 
 import DocsOutline from '~/components/DocsOutline.vue'
 import DocsAsideCardsShell from '~/components/docs/DocsAsideCardsShell.vue'
 import DocsCopyPromptButton from '~/components/docs/DocsCopyPromptButton.vue'
+import DocsFrameworkSwitcher from '~/components/docs/DocsFrameworkSwitcher.vue'
+import { resolveComponentSlugFromPath } from '~/data/tuffex-framework-matrix'
 
 const DocsDrawer = defineAsyncComponent(() => import('~/components/ui/Drawer.vue'))
 const LazyBackToTop = defineAsyncComponent(() => import('~/components/ui/BackToTop.vue'))
@@ -71,6 +73,8 @@ const isTuffexDocs = computed(() => {
   const path = normalizedDocsPath.value
   return path.startsWith('/docs/dev/components') || path.startsWith('/docs/dev/tools/tuffex')
 })
+
+const activeComponentSlug = computed(() => resolveComponentSlugFromPath(normalizedDocsPath.value))
 
 const isTutorialDocs = computed(() => {
   const path = normalizedDocsPath.value
@@ -322,7 +326,7 @@ onBeforeUnmount(() => {
           </aside>
           <main class="min-w-0 flex-1">
             <div class="docs-content-column mx-auto min-w-0 w-full space-y-10">
-              <div class="flex items-center gap-2 xl:hidden">
+              <div class="flex flex-wrap items-center gap-2 xl:hidden">
                 <button type="button" class="docs-mobile-action" @click="openSidebarDrawer">
                   <span class="i-carbon-menu text-base" />
                   {{ t('docs.sidebarLabel') }}
@@ -331,12 +335,27 @@ onBeforeUnmount(() => {
                   <span class="i-carbon-list text-base" />
                   {{ t('docs.outlineLabel') }}
                 </button>
+                <DocsFrameworkSwitcher
+                  v-if="isTuffexDocs"
+                  class="ml-auto"
+                  size="sm"
+                  :component-slug="activeComponentSlug"
+                  :show-status-dots="Boolean(activeComponentSlug)"
+                />
               </div>
               <slot />
             </div>
           </main>
           <aside class="hidden w-[240px] shrink-0 lg:block">
             <div class="sticky top-24 flex flex-col gap-6">
+              <div v-if="isTuffexDocs" class="relative z-30">
+                <DocsFrameworkSwitcher
+                  block
+                  size="sm"
+                  :component-slug="activeComponentSlug"
+                  :show-status-dots="Boolean(activeComponentSlug)"
+                />
+              </div>
               <div id="docs-outline-tools" class="docs-outline-tools-anchor relative z-30" />
               <ClientOnly>
                 <div v-show="shouldShowAsideOutline" class="docs-outline-panel max-h-[calc(100vh-12rem)] overflow-y-auto pr-2 relative z-30">

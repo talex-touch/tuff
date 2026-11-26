@@ -29,6 +29,7 @@ import tuffexPkg from '../../../../../packages/tuffex/package.json'
 // admits it, and the specimen wrapper adds the reset button that remounts it so
 // its entrance can be watched again.
 import ClientOnly from './gallery/GallerySpecimenGate.vue'
+import DocsGalleryFrameworkBar from './DocsGalleryFrameworkBar.vue'
 import { galleryText } from './gallery/gallery-text'
 import { createSpecimenQueue, SPECIMEN_QUEUE_KEY } from './gallery/specimen-queue'
 import { tileImage } from './gallery/tile-image'
@@ -836,23 +837,6 @@ const citeSources = [
   { id: 'repo', url: 'https://github.com/talex-touch/talex-touch' },
   { id: 'npm', url: 'https://www.npmjs.com/package/@talex-touch/tuffex' },
 ]
-
-const INSTALL_CMD = 'pnpm add @talex-touch/tuffex'
-const copied = ref(false)
-let copyTimer: ReturnType<typeof setTimeout> | null = null
-
-async function copyInstall() {
-  try {
-    await navigator.clipboard.writeText(INSTALL_CMD)
-  }
-  catch {
-    return
-  }
-  copied.value = true
-  if (copyTimer)
-    clearTimeout(copyTimer)
-  copyTimer = setTimeout(() => (copied.value = false), 1600)
-}
 // `height` is the specimen's tallest height in px, given only where it outgrows
 // the default stage, and `narrowHeight` its height in the narrowest two-column
 // cells where that is taller still: the stage reserves both
@@ -883,19 +867,7 @@ function specimenStyle(item: { readonly doc?: string, readonly name?: string, re
 
 <template>
   <div class="docs-gallery">
-    <div class="docs-gallery__bar">
-      <button
-        type="button"
-        class="docs-gallery__install"
-        :aria-label="text.copyCommand(INSTALL_CMD)"
-        @click="copyInstall"
-      >
-        <span class="docs-gallery__install-prompt" aria-hidden="true">$</span>
-        <span>{{ INSTALL_CMD }}</span>
-        <span class="docs-gallery__install-icon" :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" aria-hidden="true" />
-      </button>
-      <span class="docs-gallery__version">v{{ tuffexPkg.version }}</span>
-    </div>
+    <DocsGalleryFrameworkBar :suite="props.suite" :version="tuffexPkg.version" />
 
     <div v-if="props.suite === 'base'" class="docs-gallery__grid">
       <section class="docs-gallery__cell">

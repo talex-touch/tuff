@@ -37,56 +37,58 @@
   }
 }
 
-html[data-tx-coloring='true'],
-html.coloring {
-  .fake-background:not(.tx-button.borderless):not(.tx-button.variant-bare):not(.tx-input)::after,
-  .tx-base-surface::after,
-  .tx-card:not(.is-plain)::after,
-  .tx-modal__content::after,
-  .tx-command-palette__panel::after,
-  .tx-drawer__panel::after,
-  .tx-data-table::after,
-  .tx-code-editor::after,
-  .tx-markdown-editor::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: var(--tx-coloring-border-z-index, 6);
-    border-radius: inherit;
-    corner-shape: inherit;
-    box-shadow: var(--tx-coloring-border-shadow);
-    pointer-events: none;
-  }
+// Coloring mode surfaces & borders: driven by inherited `--tx-coloring-*` CSS custom
+// properties (defined in variables.scss) so theme toggles work identically across
+// Light DOM and Shadow DOM without ancestor-element selectors.
+.fake-background:not(.tx-button.borderless):not(.tx-button.variant-bare):not(.tx-input)::after,
+.tx-base-surface::after,
+.tx-card:not(.is-plain)::after,
+.tx-modal__content::after,
+.tx-command-palette__panel::after,
+.tx-drawer__panel::after,
+.tx-data-table::after,
+.tx-code-editor::after,
+.tx-markdown-editor::after {
+  content: var(--tx-coloring-surface-content, none);
+  position: absolute;
+  inset: 0;
+  z-index: var(--tx-coloring-border-z-index, 6);
+  border-radius: inherit;
+  corner-shape: inherit;
+  box-shadow: var(--tx-coloring-surface-shadow, none);
+  pointer-events: none;
+}
 
-  .tx-base-surface,
-  .tx-card:not(.is-plain),
-  .tx-modal__content,
-  .tx-command-palette__panel,
-  .tx-drawer__panel,
-  .tx-data-table,
-  .tx-code-editor,
-  .tx-markdown-editor {
-    position: relative;
-  }
+.tx-base-surface,
+.tx-card:not(.is-plain),
+.tx-modal__content,
+.tx-command-palette__panel,
+.tx-data-table,
+.tx-code-editor,
+.tx-markdown-editor {
+  position: relative;
+}
 
-  .tx-input,
-  .tx-textarea,
+.tx-card:not(.is-plain):hover::after,
+.tx-base-surface:hover::after,
+.fake-background:not(.tx-button.borderless):not(.tx-button.variant-bare):hover::after {
+  box-shadow: var(--tx-coloring-surface-shadow-hover, none);
+}
+
+.tx-button:is(.borderless, .variant-bare, .variant-ghost, .tone-text) {
+  --tx-coloring-button-border-color: var(--tx-button-border-color);
+}
+
+[data-tx-coloring='true'],
+.coloring,
+:host([data-tx-coloring='true']),
+:host(.coloring) {
   .tx-number-input,
   .tx-tag-input,
   .tx-date-picker-field,
   .tx-cascader,
   .tx-tree-select {
     box-shadow: inset 0 0 0 1px var(--tx-coloring-border-color);
-  }
-
-  .tx-button:not(.borderless):not(.variant-bare):not(.variant-ghost):not(.tone-text) {
-    --tx-button-border-color: var(--tx-coloring-border-color);
-  }
-
-  .tx-card:not(.is-plain):hover::after,
-  .tx-base-surface:hover::after,
-  .fake-background:not(.tx-button.borderless):not(.tx-button.variant-bare):hover::after {
-    box-shadow: var(--tx-coloring-border-shadow-hover);
   }
 }
 

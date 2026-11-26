@@ -7,11 +7,16 @@ const tuffexSourceUtilsRoot = fileURLToPath(new URL('../../packages/tuffex/packa
 const tuffexUtilsSubpathReplacement = existsSync(`${tuffexDistUtilsInternal}/form-host.js`)
   ? `${tuffexDistUtilsInternal}/$1.js`
   : `${tuffexSourceUtilsRoot}/$1.ts`
+const tuffexCoreCompatDist = fileURLToPath(new URL('../../packages/tuffex-core/dist/compat-registry.js', import.meta.url))
+const tuffexCoreCompatSource = fileURLToPath(new URL('../../packages/tuffex-core/src/compat-registry.ts', import.meta.url))
 
 export default defineConfig({
   resolve: {
     alias: [
       { find: /^@talex-touch\/tuffex\/utils\/(.+)$/, replacement: tuffexUtilsSubpathReplacement },
+      ...(!existsSync(tuffexCoreCompatDist)
+        ? [{ find: /^@talex-touch\/tuffex-core\/compat$/, replacement: tuffexCoreCompatSource }]
+        : []),
       { find: '#imports', replacement: fileURLToPath(new URL('./test/mocks/nuxt-imports.ts', import.meta.url)) },
       { find: '#shared', replacement: fileURLToPath(new URL('./shared', import.meta.url)) },
       { find: '~', replacement: fileURLToPath(new URL('./app', import.meta.url)) },
