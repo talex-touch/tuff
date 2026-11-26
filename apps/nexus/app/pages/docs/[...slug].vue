@@ -11,6 +11,7 @@ import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
 import { cacheDocsFullBody, hasCachedDocsFullBody, isDocsPageRecordForRoute, readCachedDocsFullBody, requestDocsPage, resolveDocsFullBodyCacheKey } from '~/utils/docs-page-client-cache'
 import { buildDocOutlineFromBody, buildDocOutlineTree, type DocTocEntry } from '~/utils/docs-outline'
 import { buildDocsSeoHead, normalizeDocsSeoCanonicalPath } from '~/utils/docs-seo'
+import { createDocsPrimaryDemoTracker, DOCS_PRIMARY_DEMO_KEY } from '~/utils/docs-primary-demo'
 import { DOCS_SOURCE_PATH_KEY } from '~/utils/docs-source-path'
 import { useTypedFetch } from '~/utils/request'
 import { CONCEPTS_MANUAL_PATH, CONCEPTS_MANUAL_READING_ORDER, isConceptsManualPath } from '~/utils/docs-concepts-manual'
@@ -217,6 +218,11 @@ provide(DOCS_SOURCE_PATH_KEY, computed(() => {
   const path = renderDoc.value?.path ?? doc.value?.path
   return typeof path === 'string' ? path : null
 }))
+
+// Coordinates multi-demo component pages so only the first TuffDemoWrapper mounts the
+// shared React/WC interactive showcase while subsequent variant demos keep their distinct Vue previews.
+const primaryDemoTracker = createDocsPrimaryDemoTracker()
+provide(DOCS_PRIMARY_DEMO_KEY, primaryDemoTracker)
 
 // The loading skeleton reuses TxSkeleton without joining the first-paint TuffEx
 // import graph (docs-page-performance.test.ts guards this): async chunk only.
@@ -1135,6 +1141,9 @@ const currentDocRenderKey = computed(() => {
   const source = renderDoc.value ?? doc.value
   const path = typeof source?.path === 'string' ? source.path : docPath.value
   return `${path}:${docsLocale.value}:${source?.body ? 'body' : 'meta'}`
+})
+watch(currentDocRenderKey, () => {
+  primaryDemoTracker.reset()
 })
 const isDocsContentReady = computed(() => viewState.value === 'content' && Boolean(doc.value))
 const shouldShowDocBodySkeleton = computed(() =>
@@ -2105,6 +2114,7 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 2.75rem;
+  min-width: 0;
   background: transparent;
   isolation: isolate;
 }
@@ -2113,6 +2123,7 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
 }
 
 .docs-surface--hero .docs-hero-block {
@@ -2120,7 +2131,8 @@ watch(
 }
 
 .docs-fw-status-slot {
-  min-height: 152px;
+  min-height: 46px;
+  min-width: 0;
 }
 
 .docs-sync-banner {
@@ -2359,6 +2371,7 @@ a.docs-hero-crumb:hover {
   --tw-prose-pre-bg: var(--docs-code-bg);
   --tw-prose-th-borders: var(--docs-border);
   --tw-prose-td-borders: var(--docs-border);
+  min-width: 0;
   color: var(--docs-ink);
 }
 

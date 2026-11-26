@@ -12,7 +12,6 @@ import {
   getComponentFrameworkEntry,
 } from '~/data/tuffex-framework-matrix'
 import { useDocsFramework } from '~/composables/useDocsFramework'
-import DocsFrameworkSwitcher from './DocsFrameworkSwitcher.vue'
 
 const props = defineProps<{
   slug: string
@@ -118,9 +117,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section v-if="entry" class="docs-fw-strip not-prose" aria-label="Framework adaptation status">
+  <section v-if="entry" class="docs-fw-strip not-prose" :aria-label="t('docs.framework.switcherLabel')">
     <div class="docs-fw-strip__top">
-      <div class="docs-fw-strip__pills">
+      <div class="docs-fw-strip__pills" role="group" :aria-label="t('docs.framework.switcherLabel')">
         <span class="docs-fw-strip__tier" :data-tier="entry.tier" :title="tierTooltip">
           Tier {{ entry.tier }}
         </span>
@@ -141,7 +140,6 @@ onBeforeUnmount(() => {
           <span class="docs-fw-strip__pill-state">{{ pill.statusText }}</span>
         </button>
       </div>
-      <DocsFrameworkSwitcher size="sm" :component-slug="entry.id" show-status-dots />
     </div>
 
     <p v-if="statusNote" class="docs-fw-strip__note">
@@ -149,7 +147,7 @@ onBeforeUnmount(() => {
       <span>{{ statusNote }}</span>
     </p>
 
-    <div v-else class="docs-fw-strip__snippets">
+    <div v-else-if="framework !== 'vue'" class="docs-fw-strip__snippets">
       <div class="docs-fw-strip__snippet-row">
         <span class="docs-fw-strip__snippet-label">{{ t('docs.framework.installLabel') }}</span>
         <code class="docs-fw-strip__code">{{ installSnippet }}</code>
@@ -188,7 +186,10 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px 14px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
   border-radius: 14px;
   background: var(--tx-fill-color-light, #f5f7fa);
   box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #ebeef5);
@@ -272,8 +273,14 @@ onBeforeUnmount(() => {
   color: var(--tx-text-color-regular, #606266);
 }
 
+.docs-fw-strip__pill:hover {
+  box-shadow: inset 0 0 0 1px var(--tx-color-primary, #409eff);
+}
+
 .docs-fw-strip__pill.is-selected {
-  box-shadow: inset 0 0 0 1.5px var(--tx-color-primary, #409eff);
+  box-shadow:
+    inset 0 0 0 1.5px var(--tx-color-primary, #409eff),
+    0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
 }
 
 .docs-fw-strip__pill:focus-visible {
@@ -324,12 +331,17 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .docs-fw-strip__snippet-row {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 6px 8px 6px 10px;
   border-radius: 9px;
   background: var(--tx-bg-color, #ffffff);
@@ -360,12 +372,18 @@ onBeforeUnmount(() => {
 .docs-fw-strip__pre {
   flex: 1;
   min-width: 0;
+  max-width: 100%;
   margin: 0;
   overflow-x: auto;
+  scrollbar-width: thin;
   color: var(--tx-text-color-primary, #303133);
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   line-height: 1.55;
+}
+
+.docs-fw-strip__code {
+  white-space: nowrap;
 }
 
 .docs-fw-strip__pre {

@@ -1,25 +1,34 @@
 import { hasWindow } from '@talex-touch/utils/env'
 
-const INITIAL_IDLE_TIMEOUT_MS = 1200
-const NAV_IDLE_TIMEOUT_MS = 500
-const FALLBACK_DELAY_MS = 200
+const DEMO_INITIAL_IDLE_TIMEOUT_MS = 250
+const NAV_IDLE_TIMEOUT_MS = 200
+const FALLBACK_DELAY_MS = 32
 const DEMO_DOCS_ROUTE_RE = /(?:^|\/)docs\/dev(?:\/|$)/
 
 /**
- * Loads the UnoCSS icon layers after the first render without competing with hydration or
- * initial Hero paint.
+ * Loads the UnoCSS icon layers after Suspense resolves without entering the render-blocking
+ * `entry.css` sheet or competing with initial hydration.
  *
  * Importing `uno:icons.css` and `uno:demo-icons.css` dynamically keeps both layers out of
- * the render-blocking `entry.css` sheet. `uno:icons.css` loads in an idle slot after
- * `app:suspense:resolve` (never on `app:mounted`, which fires before Suspense resolves and
- * used to compete with initial hydration). `uno:demo-icons.css` holds icons referenced only
- * by `app/components/content/demos/*` and loads only when visiting `/docs/dev/*` routes.
+ * `entry.css`. `uno:icons.css` starts promptly in a microtask as soon as `app:suspense:resolve`
+ * fires (never on `app:mounted`, and without a 1.2s idle delay that left header/sidebar buttons
+ * blank). `uno:demo-icons.css` holds icons referenced only by `app/components/content/demos/*`
+ * and stays lazy in an idle slot only when visiting `/docs/dev/*` routes.
  */
 export default defineNuxtPlugin({
   name: 'nexus:unocss-icons',
   setup(nuxtApp) {
     let baseScheduled = false
     let demoScheduled = false
+
+    const schedulePrompt = (task: () => void) => {
+      if (!hasWindow())
+        return
+      if (typeof queueMicrotask === 'function')
+        queueMicrotask(task)
+      else
+        window.setTimeout(task, 0)
+    }
 
     const scheduleIdle = (task: () => void, timeoutMs: number) => {
       if (!hasWindow())
@@ -49,11 +58,11 @@ export default defineNuxtPlugin({
       if (baseScheduled)
         return
       baseScheduled = true
-      scheduleIdle(loadBaseIcons, INITIAL_IDLE_TIMEOUT_MS)
+      schedulePrompt(loadBaseIcons)
 
       const router = nuxtApp.$router as { currentRoute?: { value?: { path?: string } } } | undefined
       const currentPath = router?.currentRoute?.value?.path ?? (hasWindow() ? window.location.pathname : '')
-      scheduleDemoIconsForPath(currentPath, INITIAL_IDLE_TIMEOUT_MS)
+      scheduleDemoIconsForPath(currentPath, DEMO_INITIAL_IDLE_TIMEOUT_MS)
     }
 
     nuxtApp.hook('app:suspense:resolve', scheduleIcons)

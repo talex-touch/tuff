@@ -1284,7 +1284,7 @@ function componentFrameworkIndicator(item: any) {
   const matrix = frameworkMatrixModule.value
   if (!matrix)
     return null
-  const slug = resolveComponentSlugFromPath(item?.normalizedPath ?? item?.path ?? linkTarget(item))
+  const slug = resolveComponentSlugFromPath(item?.normalizedPath ?? item?.path ?? item?.familyKey ?? linkTarget(item))
   if (!slug)
     return null
   const entry = matrix.getComponentFrameworkEntry(slug)
@@ -1937,11 +1937,20 @@ onBeforeUnmount(() => {
                 <span class="truncate" :title="itemTitle(child.title, child.familyKey)">
                   {{ itemTitle(child.title, child.familyKey) }}
                 </span>
-                <span
-                  class="docs-nav-family-indicator i-carbon-chevron-down"
-                  :class="isFamilyExpanded(child) ? 'is-open' : ''"
-                  aria-hidden="true"
-                />
+                <span class="docs-nav-family-trailing">
+                  <span
+                    v-if="componentFrameworkIndicator(child)"
+                    class="docs-nav-fw-dot"
+                    :data-status="componentFrameworkIndicator(child)?.status"
+                    :title="componentFrameworkIndicator(child)?.title"
+                    :aria-label="componentFrameworkIndicator(child)?.title"
+                  />
+                  <span
+                    class="docs-nav-family-indicator i-carbon-chevron-down"
+                    :class="isFamilyExpanded(child) ? 'is-open' : ''"
+                    aria-hidden="true"
+                  />
+                </span>
               </button>
               <div
                 class="docs-nav-family-body"
@@ -2416,9 +2425,21 @@ onBeforeUnmount(() => {
   content: none;
 }
 
-:deep(.docs-nav-family-indicator) {
+:deep(.docs-nav-family-trailing) {
   flex: none;
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+:deep(.docs-nav-family-trailing .docs-nav-fw-dot) {
+  margin-left: 0;
+}
+
+:deep(.docs-nav-family-indicator) {
+  flex: none;
+  margin-left: 0;
   font-size: 12px;
   opacity: 0.45;
   transform: rotate(-90deg);

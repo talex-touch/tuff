@@ -171,11 +171,11 @@ async function handleCopyInstall() {
         {{ copyLabel }}
       </button>
     </div>
-    <component :is="isMermaid ? 'div' : 'pre'" class="tuff-code-block__pre">
-      <button v-if="props.embedded && canCopy" type="button" class="tuff-code-block__copy tuff-code-block__copy--floating" @click="handleCopy">
-        <span :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" />
-        {{ copyLabel }}
-      </button>
+    <button v-if="props.embedded && canCopy" type="button" class="tuff-code-block__copy tuff-code-block__copy--floating" @click="handleCopy">
+      <span :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" />
+      {{ copyLabel }}
+    </button>
+    <component :is="isMermaid ? 'div' : 'pre'" class="tuff-code-block__pre" :class="{ 'tuff-code-block__pre--mermaid': isMermaid }">
       <div
         v-if="isMermaid"
         ref="mermaidRef"
@@ -224,6 +224,11 @@ async function handleCopyInstall() {
   --tuff-code-comment: #6a737d;
   --tuff-code-tag: #22863a;
 
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   border-radius: 18px;
   overflow: hidden;
   border: 1px solid var(--tuff-code-border);
@@ -318,27 +323,46 @@ async function handleCopyInstall() {
 }
 
 .tuff-code-block__pre {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   margin: 0;
-  padding: 20px 22px 22px;
+  padding: 0;
   background: transparent;
   color: var(--tuff-code-ink);
   overflow-x: auto;
+  overflow-y: hidden;
   position: relative;
+  scrollbar-width: thin;
+}
+
+.tuff-code-block__pre--mermaid {
+  padding: 20px 22px 22px;
 }
 
 /* The class puts this ahead of the docs page's inline `code` rule; at equal
    specificity its font and size won or lost on stylesheet order. */
 .tuff-code-block__pre code.tuff-code-block__code {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
   background: transparent !important;
   border: none !important;
-  padding: 0 !important;
+  padding: 18px 22px 20px !important;
   color: var(--tuff-code-ink) !important;
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.92rem;
-  line-height: 1.7;
+  font-size: 0.85rem;
+  line-height: 1.65;
   white-space: pre;
   tab-size: 2;
   -webkit-font-smoothing: antialiased;
+}
+
+.tuff-code-block--embedded .tuff-code-block__pre code.tuff-code-block__code {
+  padding-right: 88px !important;
 }
 
 .tuff-code-block__pre code .line {
@@ -377,12 +401,16 @@ async function handleCopyInstall() {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 16px 22px 18px;
   overflow-x: auto;
+  scrollbar-width: thin;
   color: var(--tuff-code-ink);
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.92rem;
-  line-height: 1.7;
+  font-size: 0.85rem;
+  line-height: 1.65;
   white-space: nowrap;
   -webkit-font-smoothing: antialiased;
 }
@@ -441,6 +469,10 @@ async function handleCopyInstall() {
   border-top: 1px solid var(--tuff-code-hairline);
   border-top-left-radius: 0;
   border-top-right-radius: 0;
+}
+
+.tuff-code-block--install + .tuff-code-block .tuff-code-block__pre code.tuff-code-block__code {
+  padding-right: 52px !important;
 }
 
 /*
