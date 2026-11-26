@@ -298,6 +298,8 @@ export function useHomePreviewPanels(options: UseHomePreviewPanelsOptions) {
         return t('home.sidePanel.files')
       case 'git':
         return t('home.git.title')
+      case 'canvas':
+        return t('home.sidePanel.canvas')
       case 'review':
         return t('home.workspace.panel.review')
       case 'terminal':
