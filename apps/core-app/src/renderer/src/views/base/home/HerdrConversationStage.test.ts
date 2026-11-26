@@ -520,12 +520,21 @@ describe('HerdrConversationStage', () => {
     expect(statusBar.get('[data-testid="herdr-stage-title"]').text()).toContain('zsh')
     expect(statusBar.find('[data-testid="herdr-stage-auto-hint"]').exists()).toBe(true)
 
-    // Active stage handle is registered for BrowserTabStrip's right-click menu actions.
+    // Active stage handle is registered for BrowserTabStrip's right-click menu actions
+    // and top-right sidebar toggle.
     const handle = useHerdrStageControl().activeHandle.value
     expect(handle?.address).toBe('t1')
     expect(handle?.getViewMode()).toBe('terminal')
     await handle?.interrupt()
     expect(mocks.interrupt).toHaveBeenCalledWith('t1')
+
+    const { useShellStageActions } = await import('~/modules/layout/useShellStageActions')
+    const stageActions = useShellStageActions().activeHandle.value
+    expect(stageActions?.surface).toBe('herdr')
+    expect(stageActions?.showTurnInfo?.()).toBe(false)
+    expect(stageActions?.isPanelOpen()).toBe(false)
+    stageActions?.togglePanel()
+    expect(stageActions?.isPanelOpen()).toBe(true)
   })
 
   it('retains a session project Space after finishing and scopes composer draft per session address', async () => {

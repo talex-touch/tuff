@@ -7,13 +7,25 @@ import type {
 import type { WorkspaceFileAiActionPayload } from '~/components/preview/workspace-file-tree'
 import { TxSelectionActions } from '@talex-touch/tuffex/selection-actions'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
-import { computed, nextTick, provide, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  provide,
+  ref,
+  watch
+} from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { isBetaFeatureEnabled } from '../../../../../shared/beta-features'
 import { WORKSPACE_QUEUE_LIMIT } from '~/modules/conversation/useAgentWorkspace'
 import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
 import { useShellRightSidebar } from '~/modules/layout/useShellRightSidebar'
+import { useShellStageActions } from '~/modules/layout/useShellStageActions'
 import { useShellTerminal } from '~/modules/layout/useShellTerminal'
+import { appSetting } from '~/modules/storage/app-storage'
 import { homeMessageContextKey } from './composables/home-message-context'
 import { useConversationRestore } from './composables/useConversationRestore'
 import { useConversationTitle } from './composables/useConversationTitle'
@@ -540,6 +552,47 @@ provide(homeMessageContextKey, {
 
 const { showTurnMetrics, isTurnFooterResting } = useTurnMetrics(messages)
 
+const browserWorkspaceEnabled = computed(() => isBetaFeatureEnabled(appSetting, 'browserWorkspace'))
+const showHomeTopBar = computed(() => !props.browserLanding && !browserWorkspaceEnabled.value)
+const keepAliveActive = ref(true)
+onActivated(() => {
+  keepAliveActive.value = true
+})
+onDeactivated(() => {
+  keepAliveActive.value = false
+})
+
+const shellStageActions = useShellStageActions()
+let unregisterStageActions: (() => void) | null = null
+watch(
+  () => !props.browserLanding && isHomeRoute.value && keepAliveActive.value,
+  (active) => {
+    unregisterStageActions?.()
+    unregisterStageActions = null
+    if (!active) return
+    unregisterStageActions = shellStageActions.register({
+      surface: 'home',
+      isPanelOpen: () => panelOpen.value,
+      togglePanel: () => {
+        panelOpen.value = !panelOpen.value
+      },
+      showTurnInfo: () => true,
+      getTurn: () => lastTurn.value,
+      getMessageCount: () => messages.value.length,
+      canBranch: () => hasHistory.value && !workspace.busy.value && !branching.value,
+      isBranching: () => branching.value,
+      branch: () => {
+        void branchTo({})
+      }
+    })
+  },
+  { immediate: true }
+)
+onBeforeUnmount(() => {
+  unregisterStageActions?.()
+  unregisterStageActions = null
+})
+
 useHomeCommands({
   isHomeRoute,
   browserLanding: () => props.browserLanding,
@@ -565,7 +618,7 @@ useHomeCommands({
     }"
   >
     <HomeTopBar
-      v-if="!browserLanding"
+      v-if="showHomeTopBar"
       :title="conversationTitle"
       :panel-open="panelOpen"
       :turn="lastTurn"

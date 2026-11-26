@@ -44,6 +44,7 @@ import { useHerdrAttachments } from '~/modules/herdr/useHerdrAttachments'
 import { useHerdrRuntime } from '~/modules/herdr/useHerdrRuntime'
 import { type HerdrStageViewMode, useHerdrStageControl } from '~/modules/herdr/useHerdrStageControl'
 import { useShellRightSidebar } from '~/modules/layout/useShellRightSidebar'
+import { useShellStageActions } from '~/modules/layout/useShellStageActions'
 import { useShellTerminal } from '~/modules/layout/useShellTerminal'
 import { HERDR_SPACE_KEY, herdrProjectSpaceKey } from '~/modules/layout/useShellWorkspaceTabs'
 import { useAccessibilitySupport } from '~/modules/platform/accessibility-support'
@@ -71,6 +72,7 @@ const router = useRouter()
 const log = createRendererLogger('HerdrConversationStage')
 const herdr = useHerdrRuntime()
 const herdrStageControl = useHerdrStageControl()
+const shellStageActions = useShellStageActions()
 const screenReaderMode = useAccessibilitySupport()
 const { runCommand: runTerminalCommand } = useShellTerminal()
 const { dockHost: rightSidebarDockHost } = useShellRightSidebar()
@@ -767,24 +769,36 @@ function runCodeInTerminal(payload: CodeRunPayload): void {
 }
 
 let unregisterStageControl: (() => void) | null = null
+let unregisterStageActions: (() => void) | null = null
 
 watch(
   [address, isStageActive],
   ([nextAddress, active]) => {
     unregisterStageControl?.()
     unregisterStageControl = null
+    unregisterStageActions?.()
+    unregisterStageActions = null
     if (!active || !nextAddress) return
+    const togglePanel = (): void => {
+      panelOpen.value = !panelOpen.value
+    }
     unregisterStageControl = herdrStageControl.registerActiveStage({
       address: nextAddress,
       getViewMode: () => viewMode.value,
       setViewMode,
       isPanelOpen: () => panelOpen.value,
-      togglePanel: () => {
-        panelOpen.value = !panelOpen.value
-      },
+      togglePanel,
       refreshProjection: handleRefreshProjection,
       interrupt: handleInterrupt,
       kill: handleKillSession
+    })
+    unregisterStageActions = shellStageActions.register({
+      surface: 'herdr',
+      isPanelOpen: () => panelOpen.value,
+      togglePanel,
+      showTurnInfo: () => viewMode.value === 'chat',
+      getTurn: () => lastTurn.value,
+      getMessageCount: () => messages.value.length
     })
   },
   { immediate: true }
@@ -793,6 +807,8 @@ watch(
 onBeforeUnmount(() => {
   unregisterStageControl?.()
   unregisterStageControl = null
+  unregisterStageActions?.()
+  unregisterStageActions = null
 })
 
 async function copySessionCwd(): Promise<void> {
