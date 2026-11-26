@@ -16,15 +16,23 @@ function walkFiles(dir: string): string[] {
     return []
 
   const files: string[] = []
-  for (const entry of readdirSync(dir)) {
-    const fullPath = join(dir, entry)
-    const stats = statSync(fullPath)
-    if (stats.isDirectory()) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name)
+    if (entry.isDirectory()) {
       files.push(...walkFiles(fullPath))
       continue
     }
-    if (stats.isFile())
+    if (entry.isFile()) {
       files.push(fullPath)
+      continue
+    }
+    if (entry.isSymbolicLink()) {
+      const stats = statSync(fullPath)
+      if (stats.isDirectory())
+        files.push(...walkFiles(fullPath))
+      else if (stats.isFile())
+        files.push(fullPath)
+    }
   }
   return files
 }
@@ -71,10 +79,11 @@ export function createDocsPrerenderRoutes(nexusRoot: string) {
  * directory route ("Developer", "Concepts Overview") rendered "Document not found" after a
  * client-side navigation. The resolver maps `/docs/dev` to its index document.
  */
-export function createDocsPageApiPrerenderRoutes(nexusRoot: string) {
+export function createDocsPageApiPrerenderRoutes(nexusRoot: string, precomputedDocsRoutes?: readonly string[]) {
   const routes = new Set<string>()
+  const docsRoutes = precomputedDocsRoutes ?? createDocsPrerenderRoutes(nexusRoot)
 
-  for (const route of createDocsPrerenderRoutes(nexusRoot)) {
+  for (const route of docsRoutes) {
     const normalized = normalizeDocsPagePath(route)
     for (const jsonRoute of toStaticDocsPageJsonPaths(normalized))
       routes.add(jsonRoute)
@@ -103,10 +112,11 @@ export function createDocsPageApiPrerenderRoutes(nexusRoot: string) {
  * URL, and without it that URL would reach the Worker and 404 — the rendered pages solve the
  * same mismatch with a post-build alias copy (`materialize-docs-index-aliases.mjs`).
  */
-export function createDocsMarkdownPrerenderRoutes(nexusRoot: string) {
+export function createDocsMarkdownPrerenderRoutes(nexusRoot: string, precomputedDocsRoutes?: readonly string[]) {
   const routes = new Set<string>()
+  const docsRoutes = precomputedDocsRoutes ?? createDocsPrerenderRoutes(nexusRoot)
 
-  for (const route of createDocsPrerenderRoutes(nexusRoot)) {
+  for (const route of docsRoutes) {
     const normalized = normalizeDocsPagePath(route)
     for (const markdownRoute of toDocsMarkdownPaths(normalized))
       routes.add(markdownRoute)

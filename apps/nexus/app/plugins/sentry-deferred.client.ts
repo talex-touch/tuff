@@ -23,6 +23,9 @@ const SENTRY_DEFERRED_IDLE_TIMEOUT_MS = 6000
 export default defineNuxtPlugin({
   name: 'nexus:sentry-deferred',
   setup(nuxtApp) {
+    if (import.meta.dev)
+      return
+
     const config = useRuntimeConfig().public
     if (!config.sentryClientEnabled)
       return
@@ -58,7 +61,7 @@ export default defineNuxtPlugin({
     })
 
     const loadSentry = async () => {
-      if (loading)
+      if (import.meta.dev || loading)
         return loading
 
       loading = (async () => {

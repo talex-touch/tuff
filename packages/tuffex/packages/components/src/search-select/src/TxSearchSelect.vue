@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TxSearchSelectEmits, TxSearchSelectOption, TxSearchSelectProps } from './types'
-import { computed, getCurrentInstance, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import TuffInput from '../../input/src/TxInput.vue'
 import TxPopover from '../../popover/src/TxPopover.vue'
@@ -139,7 +139,7 @@ function onPick(opt: TxSearchSelectOption) {
 }
 
 // --- Combobox keyboard navigation & ARIA ---
-const uid = getCurrentInstance()?.uid ?? 0
+const uid = useId()
 const listboxId = `tx-search-select-${uid}-listbox`
 function optionId(index: number): string {
   return `tx-search-select-${uid}-option-${index}`

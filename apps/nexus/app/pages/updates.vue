@@ -176,7 +176,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
   <main v-else class="updates-page" aria-labelledby="updates-page-title">
     <img
       class="updates-page__background"
-      src="/assets/updates/download-bg.png"
+      src="/assets/updates/download-bg.webp"
       alt=""
       aria-hidden="true"
     >
