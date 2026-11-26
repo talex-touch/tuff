@@ -12,6 +12,26 @@ export const DOCS_FRAMEWORK_QUERY_KEY = 'framework'
 export const DOCS_FRAMEWORK_STATE_KEY = 'docs-framework'
 
 let clientHydratedFlag = false
+let pendingHydrationResolveHook = false
+
+export interface DocsFrameworkHydrationContext {
+  isHydrating?: boolean
+  hooks?: {
+    hookOnce?: (name: 'app:suspense:resolve', fn: () => void) => unknown
+  }
+}
+
+export function scheduleAfterHydration(
+  nuxtApp: DocsFrameworkHydrationContext | null | undefined,
+  task: () => void,
+): boolean {
+  if (nuxtApp?.isHydrating && typeof nuxtApp.hooks?.hookOnce === 'function') {
+    nuxtApp.hooks.hookOnce('app:suspense:resolve', task)
+    return true
+  }
+  task()
+  return false
+}
 
 export function readFrameworkFromQuery(query: Record<string, unknown> | undefined): DocsFramework | null {
   if (!query)
@@ -88,6 +108,7 @@ export function useDocsFramework() {
   const framework = useState<DocsFramework>(DOCS_FRAMEWORK_STATE_KEY, () => 'vue')
   const route = useRoute()
   const router = useRouter()
+  const nuxtApp = useNuxtApp()
 
   const activeMeta = computed(() => DOCS_FRAMEWORK_META[framework.value])
 
@@ -116,7 +137,7 @@ export function useDocsFramework() {
   }
 
   if (import.meta.client) {
-    onMounted(() => {
+    const applyInitialClientFramework = () => {
       if (!clientHydratedFlag) {
         clientHydratedFlag = true
         const resolved = resolveInitialClientFramework({
@@ -126,19 +147,36 @@ export function useDocsFramework() {
         })
         framework.value = resolved
         writeFrameworkToStorage(resolved, window.localStorage)
+        return
       }
-      else {
-        const fromQuery = readFrameworkFromQuery(route.query as Record<string, unknown>)
-        if (fromQuery && fromQuery !== framework.value) {
-          framework.value = fromQuery
-          writeFrameworkToStorage(fromQuery, window.localStorage)
+      const fromQuery = readFrameworkFromQuery(route.query as Record<string, unknown>)
+      if (fromQuery && fromQuery !== framework.value) {
+        framework.value = fromQuery
+        writeFrameworkToStorage(fromQuery, window.localStorage)
+      }
+    }
+
+    onMounted(() => {
+      // Wait for initial hydration (including async MDC children like DocsComponentsGallery)
+      // to finish on `'vue'` before restoring a saved `'react'` / `'wc'` preference.
+      if (nuxtApp.isHydrating) {
+        if (!pendingHydrationResolveHook) {
+          pendingHydrationResolveHook = true
+          scheduleAfterHydration(nuxtApp, () => {
+            pendingHydrationResolveHook = false
+            applyInitialClientFramework()
+          })
         }
+        return
       }
+      applyInitialClientFramework()
     })
 
     watch(
       () => route.query[DOCS_FRAMEWORK_QUERY_KEY],
       () => {
+        if (nuxtApp.isHydrating)
+          return
         const fromQuery = readFrameworkFromQuery(route.query as Record<string, unknown>)
         if (fromQuery && fromQuery !== framework.value) {
           framework.value = fromQuery

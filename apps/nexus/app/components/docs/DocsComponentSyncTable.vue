@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 import { coerceJsonArray } from '~/utils/docs-api'
 import { useTypedFetch } from '~/utils/request'
@@ -76,20 +76,38 @@ const { framework, setFramework } = useDocsFramework()
 const localeKey = computed<'zh' | 'en'>(() => (locale.value === 'zh' ? 'zh' : 'en'))
 const activeFilter = ref<MatrixFilterKey>('all')
 const searchQuery = ref('')
+const hydrated = ref(false)
 
 // Reuse the locale-scoped components navigation payload already fetched by DocsSidebar & docs/[...slug]
 // instead of issuing a separate 79.5 KB double-locale `/api/docs/component-sync` SSR request.
-const { data: componentNavPayload } = await useTypedFetch<unknown>(
+// Keep `immediate: false` so mounting this async MDC component after DocsSidebar's request completes
+// never triggers a duplicate `/api/docs/navigation/{locale}/components` fetch.
+const {
+  data: componentNavPayload,
+  status: componentNavStatus,
+  refresh: refreshComponentNav,
+} = useTypedFetch<unknown>(
   () => `/api/docs/navigation/${localeKey.value}/components`,
   {
     key: computed(() => `docs-navigation:${localeKey.value}:components`),
     server: false,
     lazy: true,
+    immediate: false,
     dedupe: 'defer',
     responseType: 'json',
     default: () => [],
   },
 )
+
+onMounted(() => {
+  hydrated.value = true
+  if (
+    componentNavStatus.value === 'idle'
+    && coerceJsonArray<ComponentNavNode>(componentNavPayload.value).length === 0
+  ) {
+    void refreshComponentNav()
+  }
+})
 
 const coverage = computed(() => getFrameworkCoverageSummary())
 
@@ -141,6 +159,11 @@ const filterOptions = computed<Array<{ key: MatrixFilterKey, label: string, coun
 
 const syncMetaBySlug = computed(() => {
   const map = new Map<string, ComponentNavMeta>()
+  // Gate client nav metadata behind post-mount hydration so SSR and initial client VDOM
+  // both render the static English fallback titles without mismatching if DocsSidebar already
+  // populated the shared `docs-navigation:{locale}:components` payload before this component hydrated.
+  if (!hydrated.value)
+    return map
   collectComponentNavMeta(coerceJsonArray<ComponentNavNode>(componentNavPayload.value), map)
   return map
 })

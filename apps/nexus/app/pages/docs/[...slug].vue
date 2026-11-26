@@ -48,6 +48,7 @@ definePageMeta({
   key: route => route.path,
 })
 
+const nuxtApp = useNuxtApp()
 const route = useRoute()
 const router = useRouter()
 const requestUrl = useRequestURL()
@@ -569,6 +570,24 @@ const shouldMountDocEngagementPanels = ref(false)
 // the skeleton holds space until Suspense resolves. A body already present at setup
 // was rendered on the server, and hydration must agree with that.
 const primaryDocBodyResolved = ref(Boolean(renderDoc.value?.body))
+// Keep `nuxtApp.isHydrating` true until the inner `<Suspense>` around `<ContentRenderer>`
+// resolves its async MDC components (e.g. `DocsComponentsGallery`), matching `NuxtLayout`.
+let finishDocBodyHydration: (() => void) | null = null
+if (import.meta.client && nuxtApp.isHydrating && viewState.value === 'content' && Boolean(renderDoc.value?.body)) {
+  const done = nuxtApp.deferHydration()
+  const releaseDocBodyHydration = () => {
+    if (!finishDocBodyHydration)
+      return
+    finishDocBodyHydration = null
+    done()
+  }
+  finishDocBodyHydration = releaseDocBodyHydration
+  const removeErrorHook = nuxtApp.hooks.hookOnce('app:error', releaseDocBodyHydration)
+  onBeforeUnmount(() => {
+    removeErrorHook()
+    releaseDocBodyHydration()
+  })
+}
 // The heading the URL points at until hydration finishes and can scroll into view.
 let pendingDocHash = ''
 const docEngagementAnchorRef = ref<HTMLElement | null>(null)
@@ -1434,6 +1453,10 @@ function handlePrimaryDocBodyPending() {
 
 function handlePrimaryDocBodyResolve() {
   primaryDocBodyResolved.value = true
+  if (finishDocBodyHydration) {
+    const release = finishDocBodyHydration
+    void nextTick(release)
+  }
   void scheduleCodeEnhance(0)
   void scheduleOutlineSync(0)
   // The body may arrive after SPA navigation, so retry scrolling to the active hash target.
