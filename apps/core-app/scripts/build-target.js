@@ -585,7 +585,10 @@ function build() {
         BUILD_TYPE: buildType,
         BUILD_TARGET: normalizedTarget,
         BUILD_ARCH: effectiveArch,
-        APP_VERSION: runtimeVersion
+        APP_VERSION: runtimeVersion,
+        ...(officialPluginBuildOrder.includes('@talex-touch/tuffex')
+          ? { TUFF_SKIP_TUFFEX_BUILD: '1' }
+          : {})
       }
       ensureBuildNodeOptions(buildEnv)
       execSync(buildCmd, {
