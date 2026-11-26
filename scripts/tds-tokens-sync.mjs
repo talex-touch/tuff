@@ -34,7 +34,10 @@ export const RELATIVE_PATHS = Object.freeze({
   buiTokensScss: 'packages/tuffex/packages/components/style/bui-tokens.scss',
   baseSurfaceVue: 'packages/tuffex/packages/components/src/base-surface/src/TxBaseSurface.vue',
   tuffexComponentsSrc: 'packages/tuffex/packages/components/src',
-  themePresetsTs: 'apps/core-app/src/renderer/src/modules/tds-theme/presets.ts',
+  themePresetsTs: 'packages/utils/tds-theme/presets.ts',
+  rendererThemePresetsTs: 'apps/core-app/src/renderer/src/modules/tds-theme/presets.ts',
+  tuffexReactStylesScss: 'packages/tuffex-react/src/styles/index.scss',
+  tuffexWcStylesScss: 'packages/tuffex-wc/src/styles/index.scss',
 })
 
 /**
@@ -468,6 +471,9 @@ export function verifyTdsTokensSync(options = {}) {
   const baseSurfaceSource = readText('baseSurfaceVue')
   const corePrimitivesDoc = readText('corePrimitivesMd')
   const presetsSource = readText('themePresetsTs')
+  const rendererPresetsSource = readText('rendererThemePresetsTs')
+  const tuffexReactStyles = stripCssComments(readText('tuffexReactStylesScss'))
+  const tuffexWcStyles = stripCssComments(readText('tuffexWcStylesScss'))
 
   // 1. Parse shell-tokens.scss blocks
   const shellRoot = parseCustomProperties(extractBlock(shellSource, /(?:^|\n):root\s*\{/, 'shell :root'))
@@ -773,6 +779,64 @@ export function verifyTdsTokensSync(options = {}) {
   const themePackCheck = evaluateThemePackContrast(builtInPacks)
   errors.push(...themePackCheck.errors)
 
+  // Verify CoreApp renderer presets.ts delegates cleanly to @talex-touch/utils (no duplicate source of truth)
+  const delegatesToUtils = /from\s+['"]@talex-touch\/utils(?:\/tds-theme)?['"]/.test(rendererPresetsSource)
+  const duplicatedPacks = parseBuiltInThemePacks(rendererPresetsSource)
+  if (!delegatesToUtils || duplicatedPacks.length > 0) {
+    errors.push({
+      scope: 'theme-pack-delegation',
+      message: `${RELATIVE_PATHS.rendererThemePresetsTs} must re-export built-in packs from @talex-touch/utils/tds-theme without duplicating pack definitions`,
+    })
+  }
+
+  // 6. Verify TuffEx multi-framework packages (React + Web Components) consume canonical TuffEx tokens
+  const multiFrameworkParity = []
+  const reactUsesCanonical = /@use\s+['"][^'"]*tuffex\/packages\/components\/style\/index\.scss['"]/.test(tuffexReactStyles)
+  const reactRedefinesTokenRoot = /(?:^|\n)(?::root|\.dark)\s*\{[^}]*--tx-bg-color\s*:/m.test(tuffexReactStyles)
+  if (!reactUsesCanonical) {
+    errors.push({
+      scope: 'multi-framework-tokens',
+      package: 'tuffex-react',
+      message: `${RELATIVE_PATHS.tuffexReactStylesScss} must @use canonical tuffex/packages/components/style/index.scss`,
+    })
+  }
+  if (reactRedefinesTokenRoot) {
+    errors.push({
+      scope: 'multi-framework-tokens',
+      package: 'tuffex-react',
+      message: `${RELATIVE_PATHS.tuffexReactStylesScss} must not redefine --tx-bg-color root blocks outside canonical variables.scss`,
+    })
+  }
+  multiFrameworkParity.push({
+    package: '@talex-touch/tuffex-react',
+    canonicalImport: reactUsesCanonical,
+    noRootOverride: !reactRedefinesTokenRoot,
+    passed: reactUsesCanonical && !reactRedefinesTokenRoot,
+  })
+
+  const wcUsesCanonical = /@use\s+['"]@tuffex-style\/index\.scss['"]/.test(tuffexWcStyles)
+  const wcRedefinesTokenRoot = /(?:^|\n)(?::root|\.dark)\s*\{[^}]*--tx-bg-color\s*:/m.test(tuffexWcStyles)
+  if (!wcUsesCanonical) {
+    errors.push({
+      scope: 'multi-framework-tokens',
+      package: 'tuffex-wc',
+      message: `${RELATIVE_PATHS.tuffexWcStylesScss} must @use canonical @tuffex-style/index.scss`,
+    })
+  }
+  if (wcRedefinesTokenRoot) {
+    errors.push({
+      scope: 'multi-framework-tokens',
+      package: 'tuffex-wc',
+      message: `${RELATIVE_PATHS.tuffexWcStylesScss} must not redefine --tx-bg-color root blocks outside canonical variables.scss`,
+    })
+  }
+  multiFrameworkParity.push({
+    package: '@talex-touch/tuffex-wc',
+    canonicalImport: wcUsesCanonical,
+    noRootOverride: !wcRedefinesTokenRoot,
+    passed: wcUsesCanonical && !wcRedefinesTokenRoot,
+  })
+
   return {
     ok: errors.length === 0,
     errors,
@@ -790,6 +854,7 @@ export function verifyTdsTokensSync(options = {}) {
       wcagRamps: wcagRampSummary,
       totalContrastPairs,
       themePacks: themePackCheck.rows,
+      multiFrameworkParity,
     },
     convergenceRows,
   }

@@ -1,20 +1,20 @@
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
-import { computed, readonly, ref, type ComputedRef, type Ref } from 'vue'
 import {
+  cloneThemePack,
+  exportThemePackAsCss,
   getBuiltInThemePack,
+  parsePluginThemePackManifest,
   TDS_DEFAULT_THEME_PACK,
   TDS_DEFAULT_THEME_PACK_ID,
-  TDS_THEME_PACKS
-} from './presets'
-import {
-  TDS_THEME_TOKEN_CSS_VAR_MAP,
-  TDS_THEME_TOKEN_KEYS,
+  TDS_THEME_PACKS,
+  validateTdsThemePack,
   type TdsThemePack,
-  type TdsThemeTokenOverrides,
   type TdsThemeValidationResult,
   type TdsThemeWindowPreference
-} from './types'
-import { createEmptyContrastReport, validateTdsThemePack } from './validator'
+} from '@talex-touch/utils/tds-theme'
+import { computed, readonly, ref, type ComputedRef, type Ref } from 'vue'
+
+export { exportThemePackAsCss }
 
 export const TDS_THEME_PACK_STYLE_ID = 'tds-theme-pack-style'
 export const TDS_THEME_PACK_STORAGE_KEY = 'tuff.tds.themePack.v1'
@@ -23,9 +23,6 @@ export const TDS_THEME_MOTION_ATTR = 'data-tds-motion-preset'
 export const TDS_THEME_PATTERN_ATTR = 'data-tds-canvas-pattern'
 
 const MAX_CUSTOM_THEME_PACKS = 24
-const SIX_DIGIT_HEX_PATTERN = /^#[0-9a-f]{6}$/i
-
-const SEMANTIC_DERIVED_KEYS = ['success', 'warning', 'danger', 'info'] as const
 
 interface PersistedTdsThemePackState {
   version: 1
@@ -67,92 +64,6 @@ function resolveDocument(doc?: Document | null): Document | null {
     return doc
   }
   return hasDocument() ? document : null
-}
-
-function cloneThemePack(pack: TdsThemePack): TdsThemePack {
-  return {
-    schemaVersion: pack.schemaVersion,
-    meta: { ...pack.meta },
-    tokens: {
-      light: { ...pack.tokens.light },
-      dark: { ...pack.tokens.dark }
-    },
-    ...(pack.material ? { material: { ...pack.material } } : {}),
-    ...(pack.surface ? { surface: { ...pack.surface } } : {})
-  }
-}
-
-function buildTokenDeclarations(
-  overrides: TdsThemeTokenOverrides,
-  mode: 'light' | 'dark'
-): string[] {
-  const lines: string[] = []
-  const softAlpha = mode === 'light' ? '14' : '26'
-  const borderAlpha = mode === 'light' ? '3d' : '4d'
-
-  for (const key of TDS_THEME_TOKEN_KEYS) {
-    const value = overrides[key]
-    if (!value) continue
-    const cssVar = TDS_THEME_TOKEN_CSS_VAR_MAP[key]
-    lines.push(`  ${cssVar}: ${value};`)
-  }
-
-  if (overrides.primary) {
-    lines.push(`  --shell-focus-ring: ${overrides.primary};`)
-  }
-
-  for (const semanticKey of SEMANTIC_DERIVED_KEYS) {
-    const baseHex = overrides[semanticKey]
-    if (baseHex && SIX_DIGIT_HEX_PATTERN.test(baseHex)) {
-      lines.push(`  --shell-${semanticKey}-soft: ${baseHex}${softAlpha};`)
-      lines.push(`  --shell-${semanticKey}-border: ${baseHex}${borderAlpha};`)
-    }
-  }
-
-  return lines
-}
-
-/**
- * Exports a validated TDS Theme Pack into a safe, deterministic CSS block.
- *
- * Uses `:root:not(.contrast)` and `.dark:not(.contrast)` so accessibility
- * high-contrast modes (`html.contrast` and `html.dark.contrast`) always win.
- */
-export function exportThemePackAsCss(pack: TdsThemePack): string {
-  const validation = validateTdsThemePack(pack)
-  if (!validation.valid || !validation.pack) {
-    return ''
-  }
-
-  const safePack = validation.pack
-  const effectiveDark: TdsThemeTokenOverrides = { ...safePack.tokens.dark }
-  for (const key of TDS_THEME_TOKEN_KEYS) {
-    if (safePack.tokens.light[key] && !effectiveDark[key]) {
-      const darkFallback = TDS_DEFAULT_THEME_PACK.tokens.dark[key]
-      if (darkFallback) {
-        effectiveDark[key] = darkFallback
-      }
-    }
-  }
-
-  const lightLines = buildTokenDeclarations(safePack.tokens.light, 'light')
-  const darkLines = buildTokenDeclarations(effectiveDark, 'dark')
-
-  if (typeof safePack.surface?.accentTintOpacity === 'number') {
-    lightLines.push(`  --tds-accent-tint-opacity: ${safePack.surface.accentTintOpacity};`)
-  }
-
-  const blocks: string[] = [`/* TDS Theme Pack: ${safePack.meta.id} */`]
-
-  if (lightLines.length > 0) {
-    blocks.push(`:root:not(.contrast) {\n${lightLines.join('\n')}\n}`)
-  }
-
-  if (darkLines.length > 0) {
-    blocks.push(`.dark:not(.contrast) {\n${darkLines.join('\n')}\n}`)
-  }
-
-  return blocks.join('\n\n')
 }
 
 /**
@@ -405,37 +316,19 @@ export function useTdsThemePack(): UseTdsThemePackReturn {
     jsonText: string,
     options?: ImportTdsThemePackOptions
   ): TdsThemeValidationResult {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(jsonText)
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : 'Unexpected token'
+    const parsed = parsePluginThemePackManifest(jsonText)
+    if (!parsed.valid || !parsed.pack) {
       return {
         valid: false,
-        errors: [`Invalid JSON syntax: ${reason}`],
-        contrastReport: createEmptyContrastReport()
-      }
-    }
-
-    const validation = validateTdsThemePack(parsed)
-    if (!validation.valid || !validation.pack) {
-      return validation
-    }
-
-    if (getBuiltInThemePack(validation.pack.meta.id)) {
-      return {
-        valid: false,
-        errors: [
-          `Cannot overwrite built-in theme pack "${validation.pack.meta.id}". Choose a unique meta.id.`
-        ],
-        contrastReport: validation.contrastReport
+        errors: parsed.errors,
+        contrastReport: parsed.contrastReport
       }
     }
 
     const storedPack: TdsThemePack = {
-      ...cloneThemePack(validation.pack),
+      ...cloneThemePack(parsed.pack),
       meta: {
-        ...validation.pack.meta,
+        ...parsed.pack.meta,
         builtIn: false
       }
     }
@@ -479,7 +372,7 @@ export function useTdsThemePack(): UseTdsThemePackReturn {
     return {
       valid: true,
       errors: [],
-      contrastReport: validation.contrastReport,
+      contrastReport: parsed.contrastReport,
       pack: storedPack
     }
   }

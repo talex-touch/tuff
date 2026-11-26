@@ -1,10 +1,16 @@
 import { Buffer } from 'node:buffer'
 import { EventEmitter } from 'node:events'
+import { mkdtemp, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import type { ModuleDestroyContext, ModuleInitContext } from '@talex-touch/utils'
 import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import {
+  createTdsCanvasSessionSdk,
   createTdsCaptureSdk,
-  TdsCaptureEvents
+  TdsCanvasSessionEvents,
+  TdsCaptureEvents,
+  type TdsCanvasSessionData
 } from '@talex-touch/utils/transport/sdk/domains/tds-capture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
@@ -75,18 +81,23 @@ vi.mock('../../core/runtime-accessor', () => ({
 }))
 
 import {
+  hashCanvasConversationId,
   IDLE_TTL_MS,
   injectCaptureCsp,
   isAllowedTdsCaptureUrl,
+  MAX_CANVAS_SESSION_BYTES,
+  MAX_CANVAS_SESSIONS,
   MAX_CONCURRENT_SLOTS,
   MAX_DIMENSION,
   MAX_SRCDOC_BYTES,
   MAX_WAIT_QUEUE_LENGTH,
   MIN_DIMENSION,
   normalizeTdsCaptureRequest,
+  sanitizeCanvasSessionData,
   secureTdsCaptureSession,
   TDS_CAPTURE_CSP,
   TDS_CAPTURE_PARTITION,
+  TdsCanvasSessionStore,
   TdsCaptureModule,
   TdsOffscreenCaptureRenderer,
   type TdsCaptureSessionLike,
@@ -1257,5 +1268,288 @@ describe('TdsCaptureModule & createTdsCaptureSdk integration', () => {
     expect(q2Res.ok).toBe(true)
 
     renderer.disposeAll()
+  })
+})
+
+function makeSampleCanvasSession(
+  overrides: Partial<TdsCanvasSessionData> = {}
+): TdsCanvasSessionData {
+  return {
+    version: 1,
+    frames: [
+      {
+        id: 'frame-1',
+        title: 'Dashboard',
+        kind: 'html',
+        source: '<!doctype html><html><body><h1>Dashboard</h1></body></html>',
+        deviceId: 'desktop-hd',
+        showShell: true,
+        x: 180,
+        y: 96,
+        sourceRef: 'message:asst-1'
+      }
+    ],
+    notes: [
+      {
+        id: 'note-1',
+        frameId: 'frame-1',
+        xRatio: 0.45,
+        yRatio: 0.3,
+        text: 'Tighten card padding',
+        resolved: false,
+        createdAt: 1700000000100
+      }
+    ],
+    selectedFrameId: 'frame-1',
+    history: {
+      blobs: {
+        h1: '<!doctype html><html><body><h1>Snapshot 1</h1></body></html>'
+      },
+      entries: [
+        {
+          id: 'hist-1',
+          label: 'Initial layout',
+          createdAt: 1700000000050,
+          frameSnapshots: [
+            {
+              id: 'frame-1',
+              title: 'Dashboard',
+              kind: 'html',
+              deviceId: 'desktop-hd',
+              showShell: true,
+              x: 0,
+              y: 0,
+              sourceHash: 'h1'
+            }
+          ]
+        }
+      ],
+      cursor: 0
+    },
+    deletedAutoFrameIds: ['asst-0:fence:0'],
+    antiSlop: false,
+    canvasThemePackId: 'tds-paper-ink',
+    ...overrides
+  }
+}
+
+describe('TdsCanvasSessionStore & host-only persistence IPC', () => {
+  const tempDirs: string[] = []
+
+  async function createTempDir(): Promise<string> {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'tds-canvas-store-test-'))
+    tempDirs.push(dir)
+    return dir
+  }
+
+  afterEach(async () => {
+    mockTransportHandlers.clear()
+    mockApp.removeAllListeners('before-quit')
+    while (tempDirs.length > 0) {
+      const dir = tempDirs.pop()!
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('persists and reloads full canvas sessions across store restarts using hashed owner-only files', async () => {
+    const storageDir = await createTempDir()
+    let nowMs = 10_000
+    const storeA = new TdsCanvasSessionStore({
+      storageDir,
+      now: () => nowMs
+    })
+
+    const conversationId = '../conv/secret:id?v=1'
+    const sample = makeSampleCanvasSession()
+    const saveRes = await storeA.save(conversationId, sample)
+    expect(saveRes.ok).toBe(true)
+    expect(saveRes.bytes).toBeGreaterThan(0)
+
+    const files = await readdir(storageDir)
+    const expectedHash = hashCanvasConversationId(conversationId)!
+    expect(files).toEqual([`${expectedHash}.json`])
+    expect(files[0]).not.toContain('secret')
+
+    const fileStats = await stat(path.join(storageDir, files[0]!))
+    expect(fileStats.mode & 0o777).toBe(0o600)
+
+    // Re-instantiate store to simulate a full process restart
+    const storeB = new TdsCanvasSessionStore({
+      storageDir,
+      now: () => (nowMs += 100)
+    })
+    const loaded = await storeB.load(conversationId)
+    expect(loaded.ok).toBe(true)
+    expect(loaded.session).toEqual(sample)
+
+    const deleted = await storeB.delete(conversationId)
+    expect(deleted).toEqual({ ok: true, deleted: true })
+    expect(await storeB.load(conversationId)).toEqual({ ok: true, session: null })
+  })
+
+  it('sanitizes untrusted session payloads, strips prototype-polluting keys, and tolerates corrupt disk files', async () => {
+    const storageDir = await createTempDir()
+    const polluted = JSON.parse(
+      JSON.stringify({
+        ...makeSampleCanvasSession(),
+        extraField: 'should-be-stripped',
+        notes: [
+          {
+            id: 'n1',
+            frameId: 'frame-1',
+            xRatio: 2.5,
+            yRatio: -0.4,
+            text: 'Clamped coords',
+            resolved: 'yes',
+            createdAt: Number.NaN
+          }
+        ],
+        history: {
+          blobs: {
+            good: '<p>ok</p>',
+            __proto__: 'evil',
+            constructor: 'evil',
+            prototype: 'evil'
+          },
+          entries: [],
+          cursor: 99
+        }
+      })
+    ) as unknown
+
+    const sanitized = sanitizeCanvasSessionData(polluted)
+    expect(sanitized.ok).toBe(true)
+    if (sanitized.ok) {
+      expect('extraField' in sanitized.session).toBe(false)
+      expect(sanitized.session.notes[0]).toEqual({
+        id: 'n1',
+        frameId: 'frame-1',
+        xRatio: 1,
+        yRatio: 0,
+        text: 'Clamped coords',
+        resolved: false,
+        createdAt: 0
+      })
+      expect(Object.keys(sanitized.session.history.blobs)).toEqual(['good'])
+      expect(sanitized.session.history.cursor).toBe(-1)
+    }
+
+    // Corrupt file on disk returns null cleanly instead of throwing
+    const store = new TdsCanvasSessionStore({ storageDir })
+    const hash = hashCanvasConversationId('conv-corrupt')!
+    await writeFile(path.join(storageDir, `${hash}.json`), '{broken-json', 'utf8')
+    expect(await store.load('conv-corrupt')).toEqual({ ok: true, session: null })
+  })
+
+  it('enforces payload byte bounds without clobbering existing sessions and evicts oldest LRU sessions beyond cap', async () => {
+    expect(MAX_CANVAS_SESSIONS).toBe(20)
+    expect(MAX_CANVAS_SESSION_BYTES).toBe(4 * 1024 * 1024)
+
+    const storageDir = await createTempDir()
+    let clockMs = 1_000
+    const store = new TdsCanvasSessionStore({
+      storageDir,
+      maxSessions: 2,
+      maxSessionBytes: 4 * 1024,
+      now: () => (clockMs += 100)
+    })
+
+    const initial = makeSampleCanvasSession()
+    expect((await store.save('conv-1', initial)).ok).toBe(true)
+
+    // Oversized session (> 4 KiB cap) must fail cleanly AND preserve conv-1 on disk
+    const oversized = makeSampleCanvasSession({
+      frames: [
+        {
+          ...initial.frames[0]!,
+          source: `<p>${'x'.repeat(5_000)}</p>`
+        }
+      ]
+    })
+    const oversizedRes = await store.save('conv-1', oversized)
+    expect(oversizedRes.ok).toBe(false)
+    expect(oversizedRes.error).toContain('CANVAS_SESSION_TOO_LARGE')
+    expect((await store.load('conv-1')).session).toEqual(initial)
+
+    // Save conv-2, then touch conv-1 via load() so conv-2 becomes oldest LRU
+    expect(
+      (
+        await store.save(
+          'conv-2',
+          makeSampleCanvasSession({ canvasThemePackId: 'tds-obsidian-cobalt' })
+        )
+      ).ok
+    ).toBe(true)
+    expect((await store.load('conv-1')).session?.canvasThemePackId).toBe('tds-paper-ink')
+
+    // Saving conv-3 exceeds maxSessions=2 -> evicts conv-2, keeps conv-1 and conv-3
+    expect(
+      (
+        await store.save(
+          'conv-3',
+          makeSampleCanvasSession({ canvasThemePackId: 'tds-graphite-emerald' })
+        )
+      ).ok
+    ).toBe(true)
+    expect(await store.getStoredSessionCount()).toBe(2)
+    expect((await store.load('conv-2')).session).toBeNull()
+    expect((await store.load('conv-1')).session?.canvasThemePackId).toBe('tds-paper-ink')
+    expect((await store.load('conv-3')).session?.canvasThemePackId).toBe('tds-graphite-emerald')
+  })
+
+  it('refuses symlink targets and enforces host-only IPC on all canvas session transport handlers', async () => {
+    const storageDir = await createTempDir()
+    const targetOutside = path.join(storageDir, 'outside.txt')
+    await writeFile(targetOutside, 'secret', 'utf8')
+    const symlinkHash = hashCanvasConversationId('conv-symlink')!
+    await symlink(targetOutside, path.join(storageDir, `${symlinkHash}.json`))
+
+    const store = new TdsCanvasSessionStore({ storageDir })
+    const loadSymlink = await store.load('conv-symlink')
+    expect(loadSymlink.ok).toBe(false)
+    expect(loadSymlink.error).toBe('CANVAS_SESSION_UNSAFE_TARGET')
+
+    const saveSymlink = await store.save('conv-symlink', makeSampleCanvasSession())
+    expect(saveSymlink.ok).toBe(false)
+    expect(saveSymlink.error).toBe('CANVAS_SESSION_UNSAFE_TARGET')
+
+    // Module IPC integration + host-only enforcement
+    const mod = new TdsCaptureModule({
+      canvasSessionStore: { storageDir }
+    })
+    mod.onInit({} as ModuleInitContext<TalexEvents>)
+
+    const appContext = { sender: { id: 1 } } as unknown as HandlerContext
+    const pluginContext = {
+      sender: { id: 2 },
+      plugin: { name: 'untrusted-plugin' }
+    } as unknown as HandlerContext
+
+    const sdk = createTdsCanvasSessionSdk({
+      send: (async (event: { toEventName: () => string }, payload?: unknown) => {
+        const handler = mockTransportHandlers.get(event.toEventName())
+        if (!handler) throw new Error(`No handler for ${event.toEventName()}`)
+        return await handler(payload, appContext)
+      }) as Parameters<typeof createTdsCanvasSessionSdk>[0]['send']
+    })
+
+    const sample = makeSampleCanvasSession()
+    expect((await sdk.save('conv-ipc', sample)).ok).toBe(true)
+    expect((await sdk.load('conv-ipc')).session).toEqual(sample)
+    expect(await sdk.delete('conv-ipc')).toEqual({ ok: true, deleted: true })
+
+    for (const event of [
+      TdsCanvasSessionEvents.load,
+      TdsCanvasSessionEvents.save,
+      TdsCanvasSessionEvents.delete
+    ]) {
+      const handler = mockTransportHandlers.get(event.toEventName())!
+      await expect(
+        handler({ conversationId: 'conv-ipc', session: sample }, pluginContext)
+      ).rejects.toThrow('TDS_CAPTURE_HOST_ONLY')
+    }
+
+    mod.onDestroy({} as ModuleDestroyContext<TalexEvents>)
+    expect(mockTransportHandlers.size).toBe(0)
   })
 })

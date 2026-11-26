@@ -27,12 +27,17 @@ export {
 } from './runtime'
 
 export {
+  TDS_PLUGIN_THEME_PACK_MANIFEST_KIND,
+  TDS_PLUGIN_THEME_PACK_MANIFEST_VERSION,
   TDS_THEME_COLOR_TOKEN_KEYS,
   TDS_THEME_PACK_SCHEMA_VERSION,
   TDS_THEME_RADIUS_TOKEN_KEYS,
   TDS_THEME_TOKEN_CSS_VAR_MAP,
   TDS_THEME_TOKEN_KEYS,
+  type ParsePluginThemePackManifestOptions,
   type TdsContrastCheckResult,
+  type TdsPluginThemePackManifestEnvelope,
+  type TdsPluginThemePackManifestResult,
   type TdsThemeCanvasPattern,
   type TdsThemeColorTokenKey,
   type TdsThemeContrastReport,
@@ -44,6 +49,7 @@ export {
   type TdsThemeRadiusTokenKey,
   type TdsThemeTokenKey,
   type TdsThemeTokenOverrides,
+  type TdsThemeValidationOptions,
   type TdsThemeValidationResult,
   type TdsThemeWindowPreference
 } from './types'
@@ -51,10 +57,16 @@ export {
 export {
   compositeRgbaOverRgb,
   computeContrastRatio,
+  computeRefractionContrastRatio,
   createEmptyContrastReport,
   isSupportedTokenKey,
+  MAX_PLUGIN_THEME_PACK_MANIFEST_BYTES,
   parseHexColor,
+  parsePluginThemePackManifest,
   relativeLuminanceRgb,
+  TDS_REFRACTION_DARK_BACKDROP,
+  TDS_REFRACTION_LIGHT_BACKDROP,
+  TDS_REFRACTION_SURFACE_OPACITY,
   validateTdsThemePack,
   type RgbaTuple,
   type RgbTuple

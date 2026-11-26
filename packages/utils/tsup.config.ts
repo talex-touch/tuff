@@ -45,6 +45,7 @@ export default defineConfig({
     'service/index.ts',
     'service/protocol/index.ts',
     'store/index.ts',
+    'tds-theme/index.ts',
     'transport/events/herdr.ts',
     'transport/events/types/index.ts',
     'transport/index.ts',

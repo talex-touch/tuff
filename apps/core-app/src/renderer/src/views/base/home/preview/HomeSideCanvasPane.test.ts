@@ -26,6 +26,24 @@ const captureMocks = vi.hoisted(() => ({
   releaseCaptureSession: vi.fn(async (_sessionKey: string) => true)
 }))
 
+const sessionStoreMocks = vi.hoisted(() => {
+  const remoteSessions = new Map<string, unknown>()
+  return {
+    remoteSessions,
+    loadPersistedCanvasSession: vi.fn(async (conversationId: string) => {
+      const stored = remoteSessions.get(conversationId)
+      return stored ? JSON.parse(JSON.stringify(stored)) : null
+    }),
+    savePersistedCanvasSession: vi.fn(async (conversationId: string, session: unknown) => {
+      remoteSessions.set(conversationId, JSON.parse(JSON.stringify(session)))
+      return true
+    }),
+    deletePersistedCanvasSession: vi.fn(async (conversationId: string) => {
+      return remoteSessions.delete(conversationId)
+    })
+  }
+})
+
 vi.mock('@talex-touch/utils/env', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@talex-touch/utils/env')>()
   return {
@@ -33,6 +51,15 @@ vi.mock('@talex-touch/utils/env', async (importOriginal) => {
     isElectronRenderer: () => captureMocks.isElectron
   }
 })
+
+vi.mock('~/components/tds-canvas/canvas-session-client', () => ({
+  loadPersistedCanvasSession: (conversationId: string) =>
+    sessionStoreMocks.loadPersistedCanvasSession(conversationId),
+  savePersistedCanvasSession: (conversationId: string, session: unknown) =>
+    sessionStoreMocks.savePersistedCanvasSession(conversationId, session),
+  deletePersistedCanvasSession: (conversationId: string) =>
+    sessionStoreMocks.deletePersistedCanvasSession(conversationId)
+}))
 
 vi.mock('~/modules/tds-lint/live-capture-client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('~/modules/tds-lint/live-capture-client')>()
@@ -168,6 +195,22 @@ describe('HomeSideCanvasPane', () => {
     captureMocks.isElectron = false
     captureMocks.captureFrameAndProbe.mockReset()
     captureMocks.releaseCaptureSession.mockClear()
+    sessionStoreMocks.remoteSessions.clear()
+    sessionStoreMocks.loadPersistedCanvasSession.mockReset()
+    sessionStoreMocks.loadPersistedCanvasSession.mockImplementation(
+      async (conversationId: string) => {
+        const stored = sessionStoreMocks.remoteSessions.get(conversationId)
+        return stored ? JSON.parse(JSON.stringify(stored)) : null
+      }
+    )
+    sessionStoreMocks.savePersistedCanvasSession.mockReset()
+    sessionStoreMocks.savePersistedCanvasSession.mockImplementation(
+      async (conversationId: string, session: unknown) => {
+        sessionStoreMocks.remoteSessions.set(conversationId, JSON.parse(JSON.stringify(session)))
+        return true
+      }
+    )
+    sessionStoreMocks.deletePersistedCanvasSession.mockReset()
     __resetHomeSideCanvasSessionsForTesting()
     window.sessionStorage.clear()
     window.localStorage.clear()
@@ -724,5 +767,180 @@ describe('HomeSideCanvasPane', () => {
     const labels = canvas.props('labels') as Record<string, string>
     expect(labels.mockupExportFailed).toBe('home.sidePanel.canvasMockupExportFailed')
     expect(labels.mockupExportPngFailed).toBe('home.sidePanel.canvasMockupExportPngFailed')
+  })
+
+  it('persists canvas session to main-process store in Electron and hydrates after simulated app restart without Web Storage', async () => {
+    vi.useFakeTimers()
+    try {
+      captureMocks.isElectron = true
+      const messages = [
+        makeAssistantMessage(
+          'asst-persist',
+          '```html\n<title>Studio</title><main><h1>Persisted Board</h1></main>\n```'
+        )
+      ]
+
+      const wrapper = mount(HomeSideCanvasPane, {
+        props: {
+          messages,
+          conversationId: 'conv-restart-1',
+          active: false
+        }
+      })
+      await flushPromises()
+
+      const canvas = wrapper.findComponent(TdsDesignCanvasStub)
+      const initialFrames = canvas.props('frames') as TdsCanvasFrame[]
+      expect(initialFrames).toHaveLength(1)
+      const frameId = initialFrames[0]!.id
+
+      // Move frame, add pin note, record history snapshot, and pick Editorial Paper theme pack
+      canvas.vm.$emit('update:frames', [{ ...initialFrames[0]!, x: 320, y: 160 }])
+      canvas.vm.$emit('update:notes', [
+        {
+          id: 'note-restart-1',
+          frameId,
+          xRatio: 0.25,
+          yRatio: 0.75,
+          text: 'Keep generous margin around hero',
+          resolved: false,
+          createdAt: 1700000000500
+        }
+      ])
+      canvas.vm.$emit('update:history', {
+        blobs: { snapHash1: '<main>v1</main>' },
+        entries: [
+          {
+            id: 'entry-1',
+            label: 'Checkpoint 1',
+            createdAt: 1700000000501,
+            frameSnapshots: [
+              {
+                id: frameId,
+                title: 'Studio',
+                kind: 'html',
+                deviceId: initialFrames[0]!.deviceId,
+                showShell: true,
+                x: 0,
+                y: 0,
+                sourceHash: 'snapHash1'
+              }
+            ]
+          }
+        ],
+        cursor: 0
+      })
+      await wrapper.get('[data-testid="canvas-theme-pack-trigger"]').trigger('click')
+      await flushPromises()
+      await wrapper.get('[data-testid="canvas-theme-pack-option-tds-paper-ink"]').trigger('click')
+      await flushPromises()
+
+      // Debounced persistence fires after 350ms
+      await vi.advanceTimersByTimeAsync(400)
+      await flushPromises()
+
+      expect(sessionStoreMocks.savePersistedCanvasSession).toHaveBeenCalled()
+      expect(sessionStoreMocks.remoteSessions.has('conv-restart-1')).toBe(true)
+
+      // Zero plaintext Web Storage writes for canvas sessions
+      expect(window.sessionStorage.length).toBe(0)
+      const serializedLocalStorage = JSON.stringify(window.localStorage)
+      expect(serializedLocalStorage).not.toContain('Persisted Board')
+      expect(serializedLocalStorage).not.toContain('Keep generous margin around hero')
+
+      // Simulate full Electron app restart: unmount AND clear process-local in-memory session cache
+      wrapper.unmount()
+      __resetHomeSideCanvasSessionsForTesting()
+
+      const remounted = mount(HomeSideCanvasPane, {
+        props: {
+          messages,
+          conversationId: 'conv-restart-1',
+          active: false
+        }
+      })
+      await flushPromises()
+
+      expect(sessionStoreMocks.loadPersistedCanvasSession).toHaveBeenCalledWith('conv-restart-1')
+      const restoredCanvas = remounted.findComponent(TdsDesignCanvasStub)
+      const restoredFrames = restoredCanvas.props('frames') as TdsCanvasFrame[]
+      expect(restoredFrames[0]).toMatchObject({ id: frameId, x: 320, y: 160 })
+      expect((restoredCanvas.props('notes') as TdsCanvasNote[])[0]!.text).toBe(
+        'Keep generous margin around hero'
+      )
+      expect(restoredCanvas.props('initialHistory')).toMatchObject({
+        cursor: 0,
+        blobs: { snapHash1: '<main>v1</main>' }
+      })
+      expect(restoredCanvas.props('canvasPattern')).toBe('paper-grain')
+      expect(restoredCanvas.props('themeCss')).toBe(exportThemePackAsCss(TDS_PAPER_INK_PACK))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('falls back cleanly to in-memory Map outside Electron and drops stale async hydrations on conversation switch', async () => {
+    // 1. Non-Electron mode never calls main-process IPC
+    captureMocks.isElectron = false
+    const webWrapper = mount(HomeSideCanvasPane, {
+      props: {
+        messages: [
+          makeAssistantMessage('asst-web', '```html\n<title>WebOnly</title><p>Hi</p>\n```')
+        ],
+        conversationId: 'conv-web-only'
+      }
+    })
+    await flushPromises()
+    expect(sessionStoreMocks.loadPersistedCanvasSession).not.toHaveBeenCalled()
+    expect(sessionStoreMocks.savePersistedCanvasSession).not.toHaveBeenCalled()
+    webWrapper.unmount()
+
+    // 2. Rapid switch in Electron ignores slow stale load response from previous conversation
+    captureMocks.isElectron = true
+    let resolveSlow!: (value: unknown) => void
+    sessionStoreMocks.loadPersistedCanvasSession.mockImplementation((convId: string) => {
+      if (convId === 'conv-slow') {
+        return new Promise((resolve) => {
+          resolveSlow = resolve
+        })
+      }
+      return Promise.resolve({
+        version: 1,
+        frames: [],
+        notes: [],
+        selectedFrameId: null,
+        history: { blobs: {}, entries: [], cursor: -1 },
+        deletedAutoFrameIds: [],
+        antiSlop: true,
+        canvasThemePackId: 'tds-obsidian-cobalt'
+      })
+    })
+
+    const raceWrapper = mount(HomeSideCanvasPane, {
+      props: {
+        messages: [],
+        conversationId: 'conv-slow',
+        active: false
+      }
+    })
+    await flushPromises()
+
+    await raceWrapper.setProps({ conversationId: 'conv-fast' })
+    await flushPromises()
+    expect(raceWrapper.findComponent(TdsDesignCanvasStub).props('canvasPattern')).toBe('grid')
+
+    // Now resolve slow conv-slow response — must be discarded so conv-fast stays intact
+    resolveSlow({
+      version: 1,
+      frames: [],
+      notes: [],
+      selectedFrameId: null,
+      history: { blobs: {}, entries: [], cursor: -1 },
+      deletedAutoFrameIds: [],
+      antiSlop: true,
+      canvasThemePackId: 'tds-paper-ink'
+    })
+    await flushPromises()
+    expect(raceWrapper.findComponent(TdsDesignCanvasStub).props('canvasPattern')).toBe('grid')
   })
 })

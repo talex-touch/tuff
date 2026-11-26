@@ -46,6 +46,7 @@
     "search",
     "service",
     "store",
+    "tds-theme",
     "transport",
     "tsconfig.build.json",
     "tsup.config.ts",
@@ -258,6 +259,11 @@
         "types": "./dist/store/index.d.mts",
         "import": "./dist/store/index.mjs",
         "default": "./dist/store/index.mjs"
+      },
+      "./tds-theme": {
+        "types": "./dist/tds-theme/index.d.mts",
+        "import": "./dist/tds-theme/index.mjs",
+        "default": "./dist/tds-theme/index.mjs"
       },
       "./transport": {
         "types": "./dist/transport/index.d.mts",

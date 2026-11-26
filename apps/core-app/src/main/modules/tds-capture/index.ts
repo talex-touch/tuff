@@ -1,11 +1,15 @@
 import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
-import { TdsCaptureEvents } from '@talex-touch/utils/transport/sdk/domains/tds-capture'
+import {
+  TdsCanvasSessionEvents,
+  TdsCaptureEvents
+} from '@talex-touch/utils/transport/sdk/domains/tds-capture'
 import { app } from 'electron'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
+import { TdsCanvasSessionStore, type TdsCanvasSessionStoreOptions } from './canvas-session-store'
 import { TdsOffscreenCaptureRenderer, type TdsOffscreenCaptureOptions } from './offscreen-renderer'
 
 const tdsCaptureLog = createLogger('TdsCapture')
@@ -16,24 +20,30 @@ function assertAppRendererCaller(context: HandlerContext): void {
   }
 }
 
+export interface TdsCaptureModuleOptions extends TdsOffscreenCaptureOptions {
+  canvasSessionStore?: TdsCanvasSessionStoreOptions
+}
+
 export class TdsCaptureModule extends BaseModule<TalexEvents> {
   static key: ModuleKey = Symbol.for('TdsCaptureModule')
   name: ModuleKey = TdsCaptureModule.key
 
   private transport: ITuffTransportMain | null = null
   private renderer: TdsOffscreenCaptureRenderer | null = null
+  private canvasSessionStore: TdsCanvasSessionStore | null = null
   private readonly disposers: Array<() => void> = []
-  private readonly rendererOptions: TdsOffscreenCaptureOptions
+  private readonly moduleOptions: TdsCaptureModuleOptions
 
-  constructor(options: TdsOffscreenCaptureOptions = {}) {
+  constructor(options: TdsCaptureModuleOptions = {}) {
     super(TdsCaptureModule.key, { create: false })
-    this.rendererOptions = options
+    this.moduleOptions = options
   }
 
   onInit(ctx: ModuleInitContext<TalexEvents>): void {
     const runtime = resolveMainRuntime(ctx, 'TdsCaptureModule.onInit')
     this.transport = runtime.transport
-    this.renderer = new TdsOffscreenCaptureRenderer(this.rendererOptions)
+    this.renderer = new TdsOffscreenCaptureRenderer(this.moduleOptions)
+    this.canvasSessionStore = new TdsCanvasSessionStore(this.moduleOptions.canvasSessionStore)
     this.registerTransportHandlers()
 
     const handleBeforeQuit = () => {
@@ -51,11 +61,16 @@ export class TdsCaptureModule extends BaseModule<TalexEvents> {
     }
     this.renderer?.disposeAll()
     this.renderer = null
+    this.canvasSessionStore = null
     this.transport = null
   }
 
   getRenderer(): TdsOffscreenCaptureRenderer | null {
     return this.renderer
+  }
+
+  getCanvasSessionStore(): TdsCanvasSessionStore | null {
+    return this.canvasSessionStore
   }
 
   private registerTransportHandlers(): void {
@@ -84,12 +99,54 @@ export class TdsCaptureModule extends BaseModule<TalexEvents> {
           return { released: false }
         }
         return renderer.releaseSession(payload?.sessionKey ?? '')
+      }),
+      transport.on(TdsCanvasSessionEvents.load, async (payload, context) => {
+        assertAppRendererCaller(context)
+        const store = this.canvasSessionStore
+        if (!store) {
+          return { ok: false, session: null, error: 'TDS_CANVAS_STORE_UNAVAILABLE' }
+        }
+        return await store.load(payload?.conversationId ?? '')
+      }),
+      transport.on(TdsCanvasSessionEvents.save, async (payload, context) => {
+        assertAppRendererCaller(context)
+        const store = this.canvasSessionStore
+        if (!store) {
+          return { ok: false, error: 'TDS_CANVAS_STORE_UNAVAILABLE' }
+        }
+        return await store.save(payload?.conversationId ?? '', payload?.session)
+      }),
+      transport.on(TdsCanvasSessionEvents.delete, async (payload, context) => {
+        assertAppRendererCaller(context)
+        const store = this.canvasSessionStore
+        if (!store) {
+          return { ok: false, deleted: false, error: 'TDS_CANVAS_STORE_UNAVAILABLE' }
+        }
+        return await store.delete(payload?.conversationId ?? '')
       })
     )
   }
 }
 
 export const tdsCaptureModule = new TdsCaptureModule()
+
+export {
+  hashCanvasConversationId,
+  MAX_CANVAS_CONVERSATION_ID_LENGTH,
+  MAX_CANVAS_DELETED_IDS,
+  MAX_CANVAS_FRAME_SOURCE_BYTES,
+  MAX_CANVAS_FRAMES,
+  MAX_CANVAS_HISTORY_BLOBS,
+  MAX_CANVAS_HISTORY_ENTRIES,
+  MAX_CANVAS_NOTE_TEXT_LENGTH,
+  MAX_CANVAS_NOTES,
+  MAX_CANVAS_SESSION_BYTES,
+  MAX_CANVAS_SESSIONS,
+  sanitizeCanvasSessionData,
+  TDS_CANVAS_SESSIONS_DIR_NAME,
+  TdsCanvasSessionStore
+} from './canvas-session-store'
+export type { TdsCanvasSessionStoreOptions } from './canvas-session-store'
 
 export {
   DEFAULT_DIMENSION_HEIGHT,

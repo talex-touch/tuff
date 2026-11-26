@@ -90,6 +90,10 @@ import {
   sanitizeEmbeddedStyleCss
 } from '~/components/tds-canvas/canvas-geometry'
 import { createCanvasHistoryState } from '~/components/tds-canvas/canvas-history'
+import {
+  loadPersistedCanvasSession,
+  savePersistedCanvasSession
+} from '~/components/tds-canvas/canvas-session-client'
 import TdsDesignCanvas from '~/components/tds-canvas/TdsDesignCanvas.vue'
 import { buildPreviewIndex } from '~/modules/conversation/preview-index'
 import { buildTdsDomProbeScript, runStaticTdsLint, summarizeLintIssues } from '~/modules/tds-lint'
@@ -430,6 +434,7 @@ const frameBitmaps = ref<Record<string, string>>({})
 const domIssuesByFrameId = ref<Record<string, TdsLintIssue[]>>({})
 
 const CANVAS_CAPTURE_DEBOUNCE_MS = 240
+const CANVAS_SESSION_PERSIST_DEBOUNCE_MS = 350
 const capturedFrameSignatures = new Map<string, string>()
 let captureTimer: ReturnType<typeof setTimeout> | null = null
 let captureGeneration = 0
@@ -437,6 +442,11 @@ let activeCaptureSessionKey = ''
 
 let manualFrameSeq = 0
 let isHydrating = false
+let hydrateGeneration = 0
+let sessionMutationVersion = 0
+let awaitingRemoteHydration = false
+let persistTimer: ReturnType<typeof setTimeout> | null = null
+let pendingRemotePersist: { key: string; session: InMemoryCanvasSession } | null = null
 
 const canvasSessionKey = computed(() => props.conversationId?.trim() || 'default')
 
@@ -556,9 +566,8 @@ function reconcileConversationFrames(
   return addedCount
 }
 
-function persistCurrentSession(): void {
-  if (isHydrating) return
-  writeCanvasSession(props.conversationId, {
+function buildSessionSnapshot(): InMemoryCanvasSession {
+  return {
     version: 1,
     frames: frames.value,
     notes: notes.value,
@@ -567,12 +576,94 @@ function persistCurrentSession(): void {
     deletedAutoFrameIds: deletedAutoFrameIds.value,
     antiSlop: antiSlopEnabled.value,
     canvasThemePackId: canvasThemePackId.value
-  })
+  }
+}
+
+function hasPersistableSessionContent(session: InMemoryCanvasSession): boolean {
+  return (
+    session.frames.length > 0 ||
+    session.notes.length > 0 ||
+    session.history.entries.length > 0 ||
+    session.deletedAutoFrameIds.length > 0 ||
+    session.antiSlop === false ||
+    Boolean(session.canvasThemePackId)
+  )
+}
+
+function flushPendingRemotePersist(): void {
+  if (persistTimer !== null) {
+    clearTimeout(persistTimer)
+    persistTimer = null
+  }
+  const pending = pendingRemotePersist
+  pendingRemotePersist = null
+  if (pending && isElectronRenderer()) {
+    void savePersistedCanvasSession(pending.key, pending.session)
+  }
+}
+
+function scheduleRemotePersist(key: string, session: InMemoryCanvasSession): void {
+  if (!isElectronRenderer()) return
+  pendingRemotePersist = {
+    key,
+    session: cloneInMemoryCanvasSession(session)
+  }
+  if (persistTimer !== null) {
+    clearTimeout(persistTimer)
+  }
+  persistTimer = setTimeout(() => {
+    persistTimer = null
+    const pending = pendingRemotePersist
+    pendingRemotePersist = null
+    if (pending && isElectronRenderer()) {
+      void savePersistedCanvasSession(pending.key, pending.session)
+    }
+  }, CANVAS_SESSION_PERSIST_DEBOUNCE_MS)
+}
+
+function applySessionSnapshot(snapshot: InMemoryCanvasSession | null): void {
+  if (snapshot) {
+    frames.value = snapshot.frames.map((frame) => ({ ...frame }))
+    notes.value = snapshot.notes.map((note) => ({ ...note }))
+    selectedFrameId.value = snapshot.selectedFrameId
+    historyState.value = {
+      blobs: { ...snapshot.history.blobs },
+      entries: snapshot.history.entries.map((entry) => ({
+        ...entry,
+        frameSnapshots: entry.frameSnapshots.map((item) => ({ ...item }))
+      })),
+      cursor: snapshot.history.cursor
+    }
+    deletedAutoFrameIds.value = [...snapshot.deletedAutoFrameIds]
+    antiSlopEnabled.value = snapshot.antiSlop
+    canvasThemePackId.value = snapshot.canvasThemePackId ?? null
+    return
+  }
+  frames.value = []
+  notes.value = []
+  selectedFrameId.value = null
+  historyState.value = createCanvasHistoryState()
+  deletedAutoFrameIds.value = []
+  antiSlopEnabled.value = true
+  canvasThemePackId.value = null
+}
+
+function persistCurrentSession(options: { remote?: boolean } = {}): void {
+  if (isHydrating) return
+  const snapshot = buildSessionSnapshot()
+  writeCanvasSession(props.conversationId, snapshot)
+  if (options.remote !== false && !awaitingRemoteHydration && isElectronRenderer()) {
+    scheduleRemotePersist(getSessionMapKey(props.conversationId), snapshot)
+  }
 }
 
 function hydrateSessionForConversation(convId: string | null): void {
+  flushPendingRemotePersist()
   cancelPendingCanvasCapture()
-  const nextSessionKey = `canvas:${convId?.trim() || 'default'}`
+  hydrateGeneration += 1
+  const generation = hydrateGeneration
+  const targetKey = getSessionMapKey(convId)
+  const nextSessionKey = `canvas:${targetKey}`
   if (activeCaptureSessionKey && activeCaptureSessionKey !== nextSessionKey) {
     void releaseCaptureSession(activeCaptureSessionKey)
   }
@@ -581,33 +672,59 @@ function hydrateSessionForConversation(convId: string | null): void {
   domIssuesByFrameId.value = {}
   capturedFrameSignatures.clear()
 
+  awaitingRemoteHydration = false
+  let stored: InMemoryCanvasSession | null = null
+  let reconciledAdded = 0
   isHydrating = true
   try {
-    const stored = readCanvasSession(convId)
-    if (stored) {
-      frames.value = stored.frames
-      notes.value = stored.notes
-      selectedFrameId.value = stored.selectedFrameId
-      historyState.value = stored.history
-      deletedAutoFrameIds.value = stored.deletedAutoFrameIds
-      antiSlopEnabled.value = stored.antiSlop
-      canvasThemePackId.value = stored.canvasThemePackId ?? null
-    } else {
-      frames.value = []
-      notes.value = []
-      selectedFrameId.value = null
-      historyState.value = createCanvasHistoryState()
-      deletedAutoFrameIds.value = []
-      antiSlopEnabled.value = true
-      canvasThemePackId.value = null
-    }
+    stored = readCanvasSession(convId)
+    applySessionSnapshot(stored)
     lintOpen.value = false
     themeMenuOpen.value = false
-    reconcileConversationFrames(props.messages)
+    reconciledAdded = reconcileConversationFrames(props.messages)
   } finally {
     isHydrating = false
   }
-  persistCurrentSession()
+
+  if (!stored && isElectronRenderer()) {
+    awaitingRemoteHydration = true
+    const mutationBeforeLoad = sessionMutationVersion
+    void loadPersistedCanvasSession(targetKey).then((persisted) => {
+      if (generation !== hydrateGeneration) return
+      awaitingRemoteHydration = false
+
+      if (sessionMutationVersion !== mutationBeforeLoad) {
+        persistCurrentSession({ remote: true })
+        return
+      }
+
+      if (persisted) {
+        let addedAfterHydrate = 0
+        isHydrating = true
+        try {
+          applySessionSnapshot(persisted)
+          addedAfterHydrate = reconcileConversationFrames(props.messages)
+        } finally {
+          isHydrating = false
+        }
+        const hydratedSnapshot = buildSessionSnapshot()
+        writeCanvasSession(convId, hydratedSnapshot)
+        if (addedAfterHydrate > 0) {
+          scheduleRemotePersist(targetKey, hydratedSnapshot)
+        }
+        return
+      }
+
+      const initialSnapshot = buildSessionSnapshot()
+      writeCanvasSession(convId, initialSnapshot)
+      if (hasPersistableSessionContent(initialSnapshot)) {
+        scheduleRemotePersist(targetKey, initialSnapshot)
+      }
+    })
+    return
+  }
+
+  persistCurrentSession({ remote: reconciledAdded > 0 })
 }
 
 watch(
@@ -621,6 +738,15 @@ watch(
 watch(
   () => props.messages,
   (nextMessages) => {
+    if (awaitingRemoteHydration) {
+      isHydrating = true
+      try {
+        reconcileConversationFrames(nextMessages)
+      } finally {
+        isHydrating = false
+      }
+      return
+    }
     const added = reconcileConversationFrames(nextMessages)
     if (added > 0) {
       persistCurrentSession()
@@ -640,9 +766,12 @@ watch(
     canvasThemePackId
   ],
   () => {
+    if (isHydrating) return
+    sessionMutationVersion += 1
+    awaitingRemoteHydration = false
     persistCurrentSession()
   },
-  { deep: true }
+  { deep: true, flush: 'sync' }
 )
 
 watch(addMenuOpen, (open) => {
@@ -854,6 +983,8 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  hydrateGeneration += 1
+  flushPendingRemotePersist()
   cancelPendingCanvasCapture()
   if (activeCaptureSessionKey) {
     void releaseCaptureSession(activeCaptureSessionKey)
