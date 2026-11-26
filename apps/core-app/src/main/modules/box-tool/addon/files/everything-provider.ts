@@ -1344,27 +1344,76 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       const supportsSearch = typeof addon.search === 'function' || typeof addon.query === 'function'
       if (!supportsSearch) {
-        this.diagnosticsTracker.record({
-          stage: 'sdk-load',
-          status: 'failed',
-          backend: 'sdk-napi',
-          startedAt,
-          target: candidate,
-          error: 'Everything SDK loaded but search method is missing',
-          attempts: candidates.length
-        })
-        this.logWarn('Everything SDK loaded but search method is missing', undefined, {
+        const message = 'Everything SDK loaded but search method is missing'
+        this.lastBackendError = message
+        this.lastBackendErrorCode = 'ERR_EVERYTHING_SDK_UNAVAILABLE'
+        this.backendAttemptErrors[candidate] = message
+        this.logWarn(message, undefined, {
           candidate
         })
         continue
+      }
+
+      // `packages/tuff-native/everything.js` unconditionally exports `{ search, query, getVersion }`
+      // even when `Everything64.dll` fails to load or `Everything.exe` is stopped. Probe the SDK
+      // directly through `backendService.searchSdk` (never `searchEverythingWithSdk`, so the
+      // `sdk-query` diagnostic stage stays reserved for real user queries) and verify `getVersion`
+      // before declaring `sdk-napi` available.
+      try {
+        await this.backendService.searchSdk(addon, EVERYTHING_TEST_QUERY, 1)
+      } catch (error) {
+        const message = getErrorMessage(error)
+        const errorCode = getErrorCode(error) ?? null
+        this.lastBackendError = message
+        this.lastBackendErrorCode = errorCode
+        this.backendAttemptErrors[candidate] = message
+        this.logWarn('Everything SDK runtime probe failed', error, {
+          candidate,
+          errorCode
+        })
+        continue
+      }
+
+      let version: string | null = null
+      if (typeof addon.getVersion === 'function') {
+        try {
+          const rawVersion = addon.getVersion()
+          const normalizedVersion = typeof rawVersion === 'string' ? rawVersion.trim() : ''
+          if (!normalizedVersion || normalizedVersion === '0.0.0.0') {
+            const message =
+              normalizedVersion === '0.0.0.0'
+                ? 'Everything SDK returned inactive runtime version 0.0.0.0'
+                : 'Everything SDK version probe returned no active runtime'
+            this.lastBackendError = message
+            this.lastBackendErrorCode = 'ERR_EVERYTHING_SDK_UNAVAILABLE'
+            this.backendAttemptErrors[candidate] = message
+            this.logWarn(message, undefined, {
+              candidate
+            })
+            continue
+          }
+          version = normalizedVersion
+        } catch (error) {
+          const message = getErrorMessage(error)
+          const errorCode = getErrorCode(error) ?? 'ERR_EVERYTHING_SDK_UNAVAILABLE'
+          this.lastBackendError = message
+          this.lastBackendErrorCode = errorCode
+          this.backendAttemptErrors[candidate] = message
+          this.logWarn('Everything SDK version probe failed', error, {
+            candidate,
+            errorCode
+          })
+          continue
+        }
       }
 
       this.sdkAddon = addon
       this.backend = 'sdk-napi'
       this.isAvailable = true
       this.esPath = candidate
-      this.everythingVersion =
-        typeof addon.getVersion === 'function' ? addon.getVersion() : this.everythingVersion
+      this.everythingVersion = version
+      this.lastBackendError = null
+      this.lastBackendErrorCode = null
       this.diagnosticsTracker.record({
         stage: 'sdk-load',
         status: 'success',

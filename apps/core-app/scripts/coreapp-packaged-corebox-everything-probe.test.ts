@@ -1,4 +1,8 @@
 // @vitest-environment jsdom
+import { existsSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
   EverythingDiagnosticStage,
@@ -9,7 +13,9 @@ import type { EverythingCoreBoxSearchModeId } from '../src/main/modules/platform
 import {
   buildDomSummaryExpression,
   buildScreenshotClipExpression,
-  checkEverythingModeBackendUsage
+  checkEverythingModeBackendUsage,
+  prepareIsolatedProbeEnvironment,
+  shouldSeedProbeMarker
 } from './coreapp-packaged-corebox-everything-probe'
 
 /**
@@ -515,5 +521,40 @@ describe('checkEverythingModeBackendUsage', () => {
       after: null
     })
     expect(failures).toEqual([])
+  })
+})
+
+describe('prepareIsolatedProbeEnvironment', () => {
+  it('skips seeding the probe marker in the unavailable degraded phase and seeds it for active backends', async () => {
+    expect(shouldSeedProbeMarker('unavailable')).toBe(false)
+    expect(shouldSeedProbeMarker('sdk-napi')).toBe(true)
+    expect(shouldSeedProbeMarker('cli')).toBe(true)
+
+    const marker = 'tuff-everything-ci-marker.txt'
+    const degradedDir = await mkdtemp(path.join(os.tmpdir(), 'tuff-probe-degraded-'))
+    const sdkDir = await mkdtemp(path.join(os.tmpdir(), 'tuff-probe-sdk-'))
+    try {
+      const degraded = await prepareIsolatedProbeEnvironment({
+        userDataDir: degradedDir,
+        expectBackend: 'unavailable',
+        marker
+      })
+      expect(degraded.markerSeeded).toBe(false)
+      expect(existsSync(path.join(degraded.fixtureRoot, marker))).toBe(false)
+      expect(
+        existsSync(path.join(degraded.profile, 'tuff', 'modules', 'config', 'app-setting.ini'))
+      ).toBe(true)
+
+      const sdk = await prepareIsolatedProbeEnvironment({
+        userDataDir: sdkDir,
+        expectBackend: 'sdk-napi',
+        marker
+      })
+      expect(sdk.markerSeeded).toBe(true)
+      expect(existsSync(path.join(sdk.fixtureRoot, marker))).toBe(true)
+    } finally {
+      await rm(degradedDir, { recursive: true, force: true })
+      await rm(sdkDir, { recursive: true, force: true })
+    }
   })
 })
