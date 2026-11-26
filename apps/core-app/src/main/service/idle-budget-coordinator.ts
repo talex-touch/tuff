@@ -580,19 +580,21 @@ export class IdleBudgetCoordinator {
     }
 
     if (state === 'background-hidden') {
-      polling.clearGlobalPressure?.(IDLE_BUDGET_SUSPENDED_PRESSURE_REASON)
+      // Apply the new pressure before clearing the previous one so shared paused lanes
+      // (e.g. `maintenance`) never transiently unpause or pump queued work.
       polling.setGlobalPressure?.({
         reason: IDLE_BUDGET_HIDDEN_PRESSURE_REASON,
         pausedLanes: BACKGROUND_HIDDEN_PAUSED_LANES
       })
+      polling.clearGlobalPressure?.(IDLE_BUDGET_SUSPENDED_PRESSURE_REASON)
       return
     }
 
-    polling.clearGlobalPressure?.(IDLE_BUDGET_HIDDEN_PRESSURE_REASON)
     polling.setGlobalPressure?.({
       reason: IDLE_BUDGET_SUSPENDED_PRESSURE_REASON,
       pausedLanes: SYSTEM_SUSPENDED_PAUSED_LANES
     })
+    polling.clearGlobalPressure?.(IDLE_BUDGET_HIDDEN_PRESSURE_REASON)
   }
 
   private clearPollingPressures(): void {

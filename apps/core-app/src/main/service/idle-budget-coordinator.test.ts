@@ -510,4 +510,84 @@ describe('Idle budget consumer integrations (fake timers, zero timer leaks)', ()
       await fs.rm(tmpDir, { recursive: true, force: true })
     }
   })
+
+  it('keeps queued and due maintenance polling tasks continuously paused across background-hidden <-> system-suspended transitions', async () => {
+    const pm = new EventEmitter()
+    const appEmitter = new EventEmitter()
+    const bus = new FakeEventBus()
+    const mainWin = new FakeWindow(true)
+    const polling = PollingService.getInstance()
+
+    const coordinator = new IdleBudgetCoordinator({
+      hiddenGraceMs: 1_000,
+      powerMonitor: pm,
+      app: appEmitter,
+      getAllWindows: () => [mainWin],
+      eventBus: bus,
+      pollingService: polling
+    })
+
+    let runs = 0
+    const firstRunDeferred = Promise.withResolvers<void>()
+    polling.register(
+      'test.idle.maintenance.queued',
+      async () => {
+        runs += 1
+        if (runs === 1) {
+          await firstRunDeferred.promise
+        }
+      },
+      {
+        interval: 100,
+        unit: 'milliseconds',
+        runImmediately: true,
+        lane: 'maintenance',
+        backpressure: 'coalesce',
+        maxInFlight: 1
+      }
+    )
+
+    coordinator.start()
+    polling.start()
+
+    // First run starts immediately and holds the slot; advancing 150ms queues a second run behind it.
+    await vi.advanceTimersByTimeAsync(150)
+    expect(runs).toBe(1)
+    expect(polling.getDiagnostics().queueDepthByLane.maintenance.queued).toBe(1)
+
+    // Hide window and enter background-hidden -> maintenance lane is paused.
+    mainWin.hide()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(coordinator.getState()).toBe('background-hidden')
+
+    // Complete the first in-flight run while paused; queued run must NOT be pumped.
+    firstRunDeferred.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(runs).toBe(1)
+    expect(polling.getDiagnostics().queueDepthByLane.maintenance.queued).toBe(1)
+
+    // background-hidden -> system-suspended must keep maintenance continuously paused (0 executions).
+    pm.emit('suspend')
+    expect(coordinator.getState()).toBe('system-suspended')
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(runs).toBe(1)
+
+    // system-suspended -> background-hidden (window still hidden) must keep maintenance paused (0 executions).
+    pm.emit('resume')
+    expect(coordinator.getState()).toBe('background-hidden')
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(runs).toBe(1)
+
+    // Returning to active unpauses maintenance and drains the queued task cleanly.
+    mainWin.show()
+    expect(coordinator.getState()).toBe('active')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(runs).toBe(2)
+
+    coordinator.destroy()
+    polling.unregister('test.idle.maintenance.queued')
+    polling.stop('test done')
+  })
 })
