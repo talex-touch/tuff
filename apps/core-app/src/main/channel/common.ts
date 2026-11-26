@@ -1636,12 +1636,10 @@ export class CommonChannelModule extends BaseModule {
         this.assertHostOnly(context, 'security.reportCspViolation')
         if (!payload || typeof payload !== 'object') return
 
-        // The enforcing policy blocks nothing the report-only one names, so every line here is
-        // a finding rather than an error: it is what narrowing default-src and connect-src for
-        // real would have refused (#689). Collected in the main log because the renderer logger
-        // only reaches a devtools console nobody has open during real use.
+        // Persists enforcing CSP violations in the main log because the renderer logger only
+        // writes to a DevTools console that is closed during normal use (#689).
         log.warn(
-          `[csp-report-only] ${payload.effectiveDirective} would block ${payload.blockedURI || '<inline>'}`,
+          `[csp-violation] ${payload.effectiveDirective} blocked ${payload.blockedURI || '<inline>'}`,
           {
             meta: {
               documentURI: payload.documentURI,
