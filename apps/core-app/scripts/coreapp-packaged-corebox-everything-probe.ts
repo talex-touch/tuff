@@ -481,18 +481,24 @@ async function evaluate<T>(send: CdpSend, expression: string, timeoutMs = 30_000
 
 export function buildScreenshotClipExpression(): string {
   return `(() => {
-    const surface =
-      document.querySelector('.CoreBoxRes-Main') ||
-      document.querySelector('.CoreBoxRes') ||
-      document.querySelector('.CoreBox')
-    if (!surface) return null
-    const rect = surface.getBoundingClientRect()
-    const x = Math.max(0, Math.floor(rect.left))
-    const y = Math.max(0, Math.floor(rect.top))
-    const width = Math.min(Math.ceil(rect.width), window.innerWidth - x)
-    const height = Math.min(Math.ceil(rect.height), window.innerHeight - y)
-    if (width < 80 || height < 80) return null
-    return { x, y, width, height, scale: 1 }
+    const candidates = [
+      { selector: '.CoreBoxRes-Main', minHeight: 80 },
+      { selector: '.CoreBoxRes.CoreBoxRes--visible', minHeight: 80 },
+      { selector: '.CoreBox', minHeight: 40 }
+    ]
+    for (const { selector, minHeight } of candidates) {
+      const surface = document.querySelector(selector)
+      if (!surface) continue
+      const rect = surface.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) continue
+      const x = Math.max(0, Math.floor(rect.left))
+      const y = Math.max(0, Math.floor(rect.top))
+      const width = Math.min(Math.ceil(rect.width), window.innerWidth - x)
+      const height = Math.min(Math.ceil(rect.height), window.innerHeight - y)
+      if (width < 80 || height < minHeight) continue
+      return { x, y, width, height, scale: 1 }
+    }
+    return null
   })()`
 }
 
