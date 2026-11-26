@@ -132,6 +132,7 @@ import { buildSearchProviderRegistrySnapshot } from '../modules/box-tool/search-
 import { buildVerificationModule } from '../modules/build-verification'
 import { databaseModule } from '../modules/database'
 import { operationalErrorService } from '../modules/observability'
+import { idleBudgetCoordinator, isStatePausedFor } from '../service/idle-budget-coordinator'
 import { pluginModule } from '../modules/plugin/plugin-module'
 import { resolvePluginTempNamespace } from '../modules/plugin/plugin-temp-namespace'
 import { createDbUtils } from '../db/utils'
@@ -946,12 +947,19 @@ export class CommonChannelModule extends BaseModule {
     }
 
     const startPolling = () => {
+      if (idleBudgetCoordinator.isPausedFor('background-hidden')) {
+        return
+      }
       if (pollingService.isRegistered(BATTERY_POLL_TASK_ID)) {
         return
       }
       pollingService.register(BATTERY_POLL_TASK_ID, () => broadcastBatteryStatus(), {
         interval: 120_000,
-        unit: 'milliseconds'
+        unit: 'milliseconds',
+        lane: 'maintenance',
+        backpressure: 'latest_wins',
+        dedupeKey: BATTERY_POLL_TASK_ID,
+        maxInFlight: 1
       })
       pollingService.start()
     }
@@ -974,8 +982,21 @@ export class CommonChannelModule extends BaseModule {
 
       const handleOnBattery = (): void => {
         startPolling()
-        void broadcastBatteryStatus()
+        if (!idleBudgetCoordinator.isPausedFor('background-hidden')) {
+          void broadcastBatteryStatus()
+        }
       }
+
+      const unsubscribeIdle = idleBudgetCoordinator.subscribe((snapshot) => {
+        if (isStatePausedFor(snapshot.state, 'background-hidden')) {
+          stopPolling()
+          return
+        }
+        if (safeIsOnBatteryPower()) {
+          startPolling()
+        }
+        void broadcastBatteryStatus()
+      })
 
       powerMonitor.on('on-ac', handleOnAc)
       powerMonitor.on('on-battery', handleOnBattery)
@@ -983,6 +1004,7 @@ export class CommonChannelModule extends BaseModule {
       // Listeners first, then the poll task: dropping the listeners before unregistering means
       // an 'on-battery' arriving mid-teardown cannot re-arm what was just released.
       this.batteryDisposers.push(
+        () => unsubscribeIdle(),
         () => powerMonitor.off('on-ac', handleOnAc),
         () => powerMonitor.off('on-battery', handleOnBattery),
         () => stopPolling()

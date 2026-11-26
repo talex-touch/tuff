@@ -38,6 +38,7 @@ import { windowManager } from '../box-tool/core-box/window'
 import { detectClipboardTags, getClipboardTagSearchTerms } from '../clipboard-tagging'
 import { databaseModule } from '../database'
 import { notificationModule } from '../notification'
+import { idleBudgetCoordinator, isStatePausedFor } from '../../service/idle-budget-coordinator'
 import {
   computeOcrConfigPersistSignature,
   getOcrConfigWriteLabel,
@@ -230,15 +231,10 @@ class OcrService {
 
   private channelRegistered = false
   private transportChannel: unknown = null
+  private idleBudgetUnsubscribe: (() => void) | null = null
 
-  private ensureInitialized(): void {
-    if (this.initialized) return
-
-    this.db = databaseModule.getAuxDb()
-
-    this.registerChannels()
-    ensureIntelligenceConfigLoaded()
-
+  private registerDispatcherTask(): void {
+    if (pollingService.isRegistered(this.pollTaskId)) return
     pollingService.register(this.pollTaskId, () => this.processQueue().catch(() => {}), {
       interval: PROCESS_INTERVAL_SECONDS,
       unit: 'seconds',
@@ -250,8 +246,43 @@ class OcrService {
       timeoutMs: 8_000,
       jitterMs: 250
     })
+  }
+
+  private unregisterDispatcherTask(): void {
+    pollingService.unregister(this.pollTaskId)
+  }
+
+  private ensureInitialized(): void {
+    if (this.initialized) return
+
+    this.db = databaseModule.getAuxDb()
+
+    this.registerChannels()
+    ensureIntelligenceConfigLoaded()
+
+    if (!this.idleBudgetUnsubscribe) {
+      this.idleBudgetUnsubscribe = idleBudgetCoordinator.subscribe((snapshot) => {
+        if (!this.initialized) return
+        if (isStatePausedFor(snapshot.state, 'background-hidden')) {
+          this.unregisterDispatcherTask()
+          return
+        }
+        this.registerDispatcherTask()
+      })
+    }
+
+    if (!idleBudgetCoordinator.isPausedFor('background-hidden')) {
+      this.registerDispatcherTask()
+    }
 
     this.initialized = true
+  }
+
+  public stop(): void {
+    this.initialized = false
+    this.idleBudgetUnsubscribe?.()
+    this.idleBudgetUnsubscribe = null
+    this.unregisterDispatcherTask()
   }
 
   /**
