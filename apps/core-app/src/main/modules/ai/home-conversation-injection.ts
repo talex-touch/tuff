@@ -11,12 +11,41 @@ import type {
   IntelligenceInvokeOptions
 } from '@talex-touch/utils/types/intelligence'
 import { INTELLIGENCE_HOME_SURFACE } from '@talex-touch/utils/types/intelligence'
-import { openUIPrompt } from '@talex-touch/intelligence-uikit/openui-prompt'
+import {
+  openUIPrompt,
+  shouldInjectTdsDesignPrompt,
+  tdsDesignArtifactPrompt
+} from '@talex-touch/intelligence-uikit/openui-prompt'
 import { createLogger } from '../../utils/logger'
 import { aiImportedConfigRuntime } from './ai-imported-config-runtime'
 
 const HOME_OPENUI_PROMPT = openUIPrompt()
+const HOME_TDS_DESIGN_PROMPT = tdsDesignArtifactPrompt
 const homeInjectionLog = createLogger('Intelligence').child('HomeInjection')
+
+function extractMessageText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content
+    .map((part) => {
+      if (typeof part === 'string') return part
+      if (part && typeof part === 'object' && 'text' in part && typeof part.text === 'string') {
+        return part.text
+      }
+      return ''
+    })
+    .filter(Boolean)
+    .join('\n')
+}
+
+function extractLatestUserText(messages: IntelligenceChatPayload['messages']): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message?.role !== 'user') continue
+    return extractMessageText(message.content)
+  }
+  return ''
+}
 
 function isChatPayload(payload: unknown): payload is IntelligenceChatPayload {
   return (
@@ -67,12 +96,19 @@ export async function applyHomeConversationInjection(
   if (!wantsHomeInjection(options, isPluginCaller) || !isChatPayload(payload)) return payload
 
   const skillsInjection = await aiImportedConfigRuntime.buildHomeInjection()
-  const injection = skillsInjection
-    ? `${skillsInjection}\n\n${HOME_OPENUI_PROMPT}`
-    : HOME_OPENUI_PROMPT
+  const includeTdsDesignPrompt = shouldInjectTdsDesignPrompt(
+    extractLatestUserText(payload.messages)
+  )
+  const injection = [
+    skillsInjection,
+    HOME_OPENUI_PROMPT,
+    includeTdsDesignPrompt ? HOME_TDS_DESIGN_PROMPT : ''
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 
   homeInjectionLog.info(
-    `Injected ${injection.length} chars of Home skills/rules and OpenUI context (${HOME_OPENUI_PROMPT.length} OpenUI chars)`
+    `Injected ${injection.length} chars of Home skills/rules and OpenUI context (${HOME_OPENUI_PROMPT.length} OpenUI chars${includeTdsDesignPrompt ? `, ${HOME_TDS_DESIGN_PROMPT.length} TDS design chars` : ''})`
   )
   // Leading, so a system part the caller supplied itself still reads as the more specific
   // instruction. Providers that take a single system prompt (the pi CLI) concatenate the system

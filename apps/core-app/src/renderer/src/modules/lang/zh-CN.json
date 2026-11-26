@@ -3300,7 +3300,9 @@
       "severityError": "错误",
       "severityWarning": "警告",
       "severityInfo": "提示",
-      "sendToAi": "发送给 AI 修复"
+      "sendToAi": "发送给 AI 修复",
+      "autoFixToggle": "出错自动修复（单轮）",
+      "autoFixHint": "仅在出现错误时对每版画板自动发起一次修复"
     }
   },
   "settingsNav": {

@@ -118,4 +118,68 @@ describe('applyHomeConversationInjection', () => {
     )
     expect(injectionMocks.buildHomeInjection).toHaveBeenCalledTimes(1)
   })
+
+  it('appends the compact TDS visual artifact prompt only when the latest user turn asks for UI/HTML/SVG design output', async () => {
+    const enDesignPayload: IntelligenceChatPayload = {
+      messages: [
+        { role: 'system', content: 'OPENING NOTE' },
+        { role: 'user', content: 'Build a standalone HTML dashboard mockup with dark mode' }
+      ]
+    }
+    const enResult = await applyHomeConversationInjection(enDesignPayload, homeOptions(true), false)
+    const enSystem = enResult.messages[0]?.content ?? ''
+    expect(enSystem).toContain('[TDS Visual Artifact Contract]')
+    expect(enSystem).toContain('#141414')
+    expect(enSystem.indexOf('SKILLS AND RULES')).toBeLessThan(
+      enSystem.indexOf('exact opening line is ```openui')
+    )
+    expect(enSystem.indexOf('exact opening line is ```openui')).toBeLessThan(
+      enSystem.indexOf('[TDS Visual Artifact Contract]')
+    )
+    expect(enSystem.indexOf('[TDS Visual Artifact Contract]')).toBeLessThan(
+      enSystem.indexOf('OPENING NOTE')
+    )
+
+    const zhDesignPayload: IntelligenceChatPayload = {
+      messages: [{ role: 'user', content: '帮我画一个 SVG 架构图和产品落地页原型' }]
+    }
+    injectionMocks.buildHomeInjection.mockResolvedValue(null)
+    const zhResult = await applyHomeConversationInjection(zhDesignPayload, homeOptions(true), false)
+    expect(zhResult.messages[0]?.content).toContain('[TDS Visual Artifact Contract]')
+    expect(zhResult.messages[0]?.content).not.toContain('SKILLS AND RULES')
+  })
+
+  it('omits the TDS visual artifact prompt on normal prompts and non-design follow-up turns', async () => {
+    const normalPayload: IntelligenceChatPayload = {
+      messages: [{ role: 'user', content: 'How do I rebase a git branch onto origin/master?' }]
+    }
+    const normalResult = await applyHomeConversationInjection(
+      normalPayload,
+      homeOptions(true),
+      false
+    )
+    expect(normalResult.messages[0]?.content).not.toContain('[TDS Visual Artifact Contract]')
+
+    const followUpPayload: IntelligenceChatPayload = {
+      messages: [
+        { role: 'user', content: 'Create an HTML landing page prototype' },
+        { role: 'assistant', content: '```html\n<main>Landing</main>\n```' },
+        { role: 'user', content: 'Thanks! Now explain how HTTP/2 multiplexing works.' }
+      ]
+    }
+    const followUpResult = await applyHomeConversationInjection(
+      followUpPayload,
+      homeOptions(true),
+      false
+    )
+    expect(followUpResult.messages[0]?.content).not.toContain('[TDS Visual Artifact Contract]')
+
+    // Plugin callers still stay blocked even when user text matches design intent.
+    const forgedPayload: IntelligenceChatPayload = {
+      messages: [{ role: 'user', content: 'Build an HTML landing page mockup' }]
+    }
+    await expect(
+      applyHomeConversationInjection(forgedPayload, homeOptions(true), true)
+    ).resolves.toBe(forgedPayload)
+  })
 })

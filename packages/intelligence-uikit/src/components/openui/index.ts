@@ -3,3 +3,9 @@ export { OPENUI_FENCE_LANG, splitOpenUIFences } from './fences'
 export type { OpenUIFenceSegment } from './fences'
 export type { OpenUIAction } from './context'
 export { openUIPrompt } from './prompt'
+export {
+  buildTdsDesignArtifactPrompt,
+  shouldInjectTdsDesignPrompt,
+  TDS_DESIGN_PROMPT_MAX_BYTES,
+  tdsDesignArtifactPrompt,
+} from './tds-design-prompt'

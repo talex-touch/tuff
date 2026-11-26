@@ -4,20 +4,26 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  buildTdsAutoFixTracker,
   buildTdsDomProbeScript,
   compositeRgbaOverRgb,
+  computeTdsContentDigest,
   contrastRatioRgb,
   extractTdsTokenReferences,
+  formatAutoFixRepairPrompt,
   formatLintIssuesForAi,
+  mergeTdsLintIssues,
   parseCssColor,
   relativeLuminance,
   runDomTdsProbe,
   runStaticTdsLint,
   runTdsStaticReport,
+  shouldTriggerAutoLintFix,
   summarizeLintIssues,
   TDS_CANONICAL_SHELL_TOKENS,
   TDS_DOM_PROBE_SCRIPT
 } from './index'
+import type { TdsLintIssue } from './index'
 
 const DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(DIR, '../../../../../../..')
@@ -467,5 +473,249 @@ describe('AI fix formatter and summary helpers', () => {
     expect(prompt).toContain('`undefined-tds-token`')
     expect(prompt).toContain('`viewport-unit-canvas`')
     expect(prompt).toContain('Fix:')
+  })
+})
+
+describe('Bounded 1-pass auto-fix loop breaker', () => {
+  const staticErrorIssue: TdsLintIssue = {
+    ruleId: 'remote-asset-url',
+    phase: 'static',
+    severity: 'error',
+    category: 'sandbox',
+    message: 'External remote asset URL will fail offline.',
+    fixHint: 'Inline SVG or use system fonts.',
+    line: 4,
+    column: 12,
+    snippet: 'https://cdn.example.com/hero.png'
+  }
+
+  const staticWarningIssue: TdsLintIssue = {
+    ruleId: 'viewport-unit-canvas',
+    phase: 'static',
+    severity: 'warning',
+    category: 'layout',
+    message: 'Viewport unit 100vh overflows fixed frames.',
+    fixHint: 'Replace 100vh with 100%.',
+    line: 8,
+    column: 5,
+    snippet: 'height: 100vh'
+  }
+
+  const domErrorIssue: TdsLintIssue = {
+    ruleId: 'contrast-fail',
+    phase: 'dom',
+    severity: 'error',
+    category: 'contrast',
+    message: 'Text contrast 2.41:1 falls below WCAG AA 4.5:1.',
+    fixHint: 'Use --shell-text-primary or --shell-text-regular.',
+    selector: 'p#subtitle',
+    snippet: 'contrast=2.41:1'
+  }
+
+  const domWarningIssue: TdsLintIssue = {
+    ruleId: 'tell-small-text',
+    phase: 'dom',
+    severity: 'warning',
+    category: 'anti-slop',
+    message: 'Text size 9px is below readable 11px floor.',
+    fixHint: 'Increase font size to >= 11px.',
+    selector: 'span#fine-print'
+  }
+
+  it('computes deterministic content digests and returns empty digest for blank sources', () => {
+    expect(computeTdsContentDigest('')).toBe('')
+    expect(computeTdsContentDigest('   \n\t  ')).toBe('')
+
+    const d1 = computeTdsContentDigest('<main><h1>Pricing</h1></main>')
+    const d2 = computeTdsContentDigest('<main><h1>Pricing</h1></main>')
+    const d3 = computeTdsContentDigest('<main><h1>Billing</h1></main>')
+
+    expect(d1).toMatch(/^[0-9a-f]{16}$/)
+    expect(d1).toBe(d2)
+    expect(d1).not.toBe(d3)
+  })
+
+  it('triggers at most once per unique content digest and never re-triggers on identical content', () => {
+    const tracker = buildTdsAutoFixTracker()
+    const digestV1 = computeTdsContentDigest('<img src="https://cdn.example.com/a.png" />')
+
+    // Pure evaluate does not mutate tracker state
+    const preview = tracker.evaluate({
+      enabled: true,
+      contentDigest: digestV1,
+      issues: [staticErrorIssue],
+      domIssues: [domErrorIssue],
+      displayPath: 'Landing'
+    })
+    expect(preview.shouldTrigger).toBe(true)
+    expect(preview.reason).toBe('trigger')
+    expect(tracker.hasRepaired(digestV1)).toBe(false)
+
+    // First consume triggers and records the digest
+    const first = tracker.consume({
+      enabled: true,
+      contentDigest: digestV1,
+      issues: [staticErrorIssue, staticWarningIssue],
+      domIssues: [domErrorIssue, domWarningIssue],
+      displayPath: 'Landing'
+    })
+    expect(first.shouldTrigger).toBe(true)
+    expect(first.reason).toBe('trigger')
+    expect(first.errorIssues).toHaveLength(2)
+    expect(first.mergedIssues).toHaveLength(4)
+    expect(tracker.hasRepaired(digestV1)).toBe(true)
+    expect(tracker.size()).toBe(1)
+
+    // Second consume on identical digest is strictly blocked by loop breaker
+    const duplicate = tracker.consume({
+      enabled: true,
+      contentDigest: digestV1,
+      issues: [staticErrorIssue],
+      domIssues: [domErrorIssue],
+      displayPath: 'Landing'
+    })
+    expect(duplicate.shouldTrigger).toBe(false)
+    expect(duplicate.reason).toBe('already-repaired')
+    expect(duplicate.prompt).toBe('')
+
+    // Distinct content digest is allowed its own 1 pass
+    const digestV2 = computeTdsContentDigest('<p style="color:#aaa">Updated draft</p>')
+    const nextRevision = tracker.consume({
+      enabled: true,
+      contentDigest: digestV2,
+      issues: [],
+      domIssues: [domErrorIssue],
+      displayPath: 'Landing'
+    })
+    expect(nextRevision.shouldTrigger).toBe(true)
+    expect(nextRevision.reason).toBe('trigger')
+    expect(nextRevision.errorIssues).toEqual([domErrorIssue])
+    expect(tracker.size()).toBe(2)
+
+    // Identical V2 again is blocked
+    expect(
+      tracker.consume({
+        enabled: true,
+        contentDigest: digestV2,
+        issues: [],
+        domIssues: [domErrorIssue]
+      }).reason
+    ).toBe('already-repaired')
+  })
+
+  it('never fires when disabled, in-flight, empty-digest, or warning/info-only', () => {
+    const tracker = buildTdsAutoFixTracker()
+    const digest = computeTdsContentDigest('<div style="height: 100vh">Warn only</div>')
+
+    expect(
+      shouldTriggerAutoLintFix(
+        { enabled: false, contentDigest: digest, issues: [staticErrorIssue] },
+        tracker
+      )
+    ).toMatchObject({ shouldTrigger: false, reason: 'disabled', prompt: '' })
+
+    expect(
+      shouldTriggerAutoLintFix(
+        { enabled: true, inFlight: true, contentDigest: digest, issues: [staticErrorIssue] },
+        tracker
+      )
+    ).toMatchObject({ shouldTrigger: false, reason: 'in-flight', prompt: '' })
+
+    expect(
+      shouldTriggerAutoLintFix(
+        { enabled: true, contentDigest: '   ', issues: [staticErrorIssue] },
+        tracker
+      )
+    ).toMatchObject({ shouldTrigger: false, reason: 'empty-digest', prompt: '' })
+
+    // Warning-only findings across static + DOM must NEVER fire auto-fix
+    const warnOnly = tracker.consume({
+      enabled: true,
+      contentDigest: digest,
+      issues: [staticWarningIssue],
+      domIssues: [domWarningIssue]
+    })
+    expect(warnOnly).toMatchObject({
+      shouldTrigger: false,
+      reason: 'no-errors',
+      errorIssues: [],
+      prompt: ''
+    })
+    expect(tracker.hasRepaired(digest)).toBe(false)
+    expect(formatAutoFixRepairPrompt([staticWarningIssue, domWarningIssue], 'Card')).toBe('')
+
+    // Pure Set-backed deduplication also works without a tracker instance
+    const seen = new Set<string>([digest])
+    expect(
+      shouldTriggerAutoLintFix(
+        { enabled: true, contentDigest: digest, issues: [staticErrorIssue] },
+        seen
+      )
+    ).toMatchObject({ shouldTrigger: false, reason: 'already-repaired', prompt: '' })
+  })
+
+  it('enforces optional per-frame budget, FIFO digest bound, and structured merged static+DOM repair prompts', () => {
+    const frameCapped = buildTdsAutoFixTracker({ maxTrackedDigests: 2, maxRoundsPerFrame: 1 })
+    const d1 = computeTdsContentDigest('v1')
+    const d2 = computeTdsContentDigest('v2')
+    const d3 = computeTdsContentDigest('v3')
+
+    const first = frameCapped.consume({
+      enabled: true,
+      frameId: 'frame-hero',
+      contentDigest: d1,
+      issues: [staticErrorIssue, staticErrorIssue, staticWarningIssue],
+      domIssues: [domErrorIssue, domWarningIssue],
+      displayPath: 'Hero Preview'
+    })
+    expect(first.shouldTrigger).toBe(true)
+    expect(frameCapped.getFrameRounds('frame-hero')).toBe(1)
+
+    // Deduplicated static + DOM prompt includes phase markers, locations, hints, and warning context
+    expect(first.prompt).toContain('`Hero Preview`')
+    expect(first.prompt).toContain('2 errors, 2 warnings')
+    expect(first.prompt).toContain('Blocking errors (must fix):')
+    expect(first.prompt).toContain('[STATIC][ERROR] `remote-asset-url` (L4:12)')
+    expect(first.prompt).toContain('[DOM][ERROR] `contrast-fail` (p#subtitle)')
+    expect(first.prompt).toContain('Related warnings (fix if safe):')
+    expect(first.prompt).toContain('[STATIC][WARNING] `viewport-unit-canvas` (L8:5)')
+    expect(first.prompt).toContain('[DOM][WARNING] `tell-small-text` (span#fine-print)')
+    expect(first.prompt).toContain('single pass')
+
+    // Second distinct digest on same frame hits per-frame cap until resetFrame
+    expect(
+      frameCapped.consume({
+        enabled: true,
+        frameId: 'frame-hero',
+        contentDigest: d2,
+        issues: [staticErrorIssue]
+      })
+    ).toMatchObject({ shouldTrigger: false, reason: 'frame-budget-exhausted' })
+
+    frameCapped.resetFrame('frame-hero')
+    expect(frameCapped.getFrameRounds('frame-hero')).toBe(0)
+    expect(
+      frameCapped.consume({
+        enabled: true,
+        frameId: 'frame-hero',
+        contentDigest: d2,
+        issues: [staticErrorIssue]
+      }).shouldTrigger
+    ).toBe(true)
+
+    // Bounded FIFO digest cache evicts oldest entry (`d1`) when maxTrackedDigests (2) is exceeded
+    frameCapped.markRepaired(d3)
+    expect(frameCapped.size()).toBe(2)
+    expect(frameCapped.hasRepaired(d1)).toBe(false)
+    expect(frameCapped.hasRepaired(d2)).toBe(true)
+    expect(frameCapped.hasRepaired(d3)).toBe(true)
+
+    // Merging preserves distinct phases and deduplicates identical entries
+    const merged = mergeTdsLintIssues([staticErrorIssue, staticErrorIssue], [domErrorIssue])
+    expect(merged).toHaveLength(2)
+    expect(merged.map((i) => i.phase)).toEqual(['static', 'dom'])
+
+    frameCapped.clear()
+    expect(frameCapped.size()).toBe(0)
   })
 })

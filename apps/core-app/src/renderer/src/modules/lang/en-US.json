@@ -3300,7 +3300,9 @@
       "severityError": "Error",
       "severityWarning": "Warning",
       "severityInfo": "Info",
-      "sendToAi": "Send to AI to fix"
+      "sendToAi": "Send to AI to fix",
+      "autoFixToggle": "Auto-fix errors (1-pass)",
+      "autoFixHint": "Automatically sends one repair pass per frame change when errors appear"
     }
   },
   "settingsNav": {

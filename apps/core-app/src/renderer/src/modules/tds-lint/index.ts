@@ -2,6 +2,21 @@ import type { TdsLintCounts, TdsLintIssue, TdsLintReport, TdsStaticLintOptions }
 import { runStaticTdsLint } from './static-rules'
 
 export {
+  buildTdsAutoFixTracker,
+  computeTdsContentDigest,
+  formatAutoFixRepairPrompt,
+  MAX_AUTO_FIX_TRACKED_DIGESTS,
+  mergeTdsLintIssues,
+  shouldTriggerAutoLintFix,
+  type TdsAutoFixCheckInput,
+  type TdsAutoFixDecision,
+  type TdsAutoFixSkipReason,
+  type TdsAutoFixTracker,
+  type TdsAutoFixTrackerOptions,
+  type TdsAutoFixTrackerReadonly
+} from './auto-fix'
+
+export {
   buildTdsDomProbeScript,
   compositeRgbaOverRgb,
   contrastRatioRgb,
