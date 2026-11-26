@@ -6,6 +6,7 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { BROWSER_CONNECTION_EVENT_PREFIX } from '@talex-touch/utils/transport/sdk/domains/browser-connection'
 import { ipcMain, powerMonitor } from 'electron'
 import { getSentryService } from '../modules/sentry/sentry-service'
+import { idleBudgetCoordinator, isStatePausedFor } from '../service/idle-budget-coordinator'
 import { createLogger, formatDuration } from './logger'
 import {
   buildTopEvents,
@@ -337,6 +338,8 @@ export class PerfMonitor {
   private severeLagBurstListeners = new Set<SevereLagBurstListener>()
   private loopMonitorTimer: NodeJS.Timeout | null = null
   private monitorStartedAt = 0
+  private started = false
+  private idleBudgetUnsubscribe: (() => void) | null = null
 
   /** Timestamp (Date.now) of the most recent system resume, or 0 if none. */
   private systemResumedAt = 0
@@ -365,9 +368,8 @@ export class PerfMonitor {
     return { ...this.lastEventLoopLag }
   }
 
-  start(): void {
-    this.registerPowerMonitorListeners()
-    this.monitorStartedAt = Date.now()
+  private startActiveTimers(): void {
+    if (!this.started) return
 
     if (!this.loopMonitorTimer) {
       this.lastLoopTick = performance.now()
@@ -406,6 +408,7 @@ export class PerfMonitor {
           this.recordEventLoopLag(lag, severity)
         }
       }, 100)
+      this.loopMonitorTimer.unref?.()
     }
 
     if (!pollingService.isRegistered(PERF_SUMMARY_TASK_ID)) {
@@ -451,14 +454,45 @@ export class PerfMonitor {
     pollingService.start()
   }
 
-  stop(): void {
-    pollingService.unregister(PERF_LOOP_TASK_ID)
+  private pauseActiveTimers(): void {
     pollingService.unregister(PERF_SUMMARY_TASK_ID)
     pollingService.unregister(PERF_HEAP_TASK_ID)
     if (this.loopMonitorTimer) {
       clearInterval(this.loopMonitorTimer)
       this.loopMonitorTimer = null
     }
+  }
+
+  start(): void {
+    this.started = true
+    this.registerPowerMonitorListeners()
+    this.monitorStartedAt = Date.now()
+
+    if (!this.idleBudgetUnsubscribe) {
+      this.idleBudgetUnsubscribe = idleBudgetCoordinator.subscribe((snapshot) => {
+        if (!this.started) return
+        if (isStatePausedFor(snapshot.state, 'background-hidden')) {
+          this.pauseActiveTimers()
+          return
+        }
+        if (snapshot.previousState === 'system-suspended') {
+          this.systemResumedAt = Date.now()
+        }
+        this.startActiveTimers()
+      })
+    }
+
+    if (!idleBudgetCoordinator.isPausedFor('background-hidden')) {
+      this.startActiveTimers()
+    }
+  }
+
+  stop(): void {
+    this.started = false
+    this.idleBudgetUnsubscribe?.()
+    this.idleBudgetUnsubscribe = null
+    pollingService.unregister(PERF_LOOP_TASK_ID)
+    this.pauseActiveTimers()
     for (const dispose of this.powerListeners) dispose()
     this.powerListeners = []
     this.severeLagWindowHits = []

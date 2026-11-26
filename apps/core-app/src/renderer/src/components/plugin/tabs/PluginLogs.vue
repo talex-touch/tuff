@@ -300,22 +300,41 @@ watch(
   }
 )
 
-onMounted(() => {
-  scheduleLiveIndicatorCollapse()
+function startLiveClock(): void {
+  if (liveClockTimer || document.hidden) return
+  liveClock.value = Date.now()
   liveClockTimer = window.setInterval(() => {
     liveClock.value = Date.now()
   }, 1000)
+}
+
+function stopLiveClock(): void {
+  if (!liveClockTimer) return
+  window.clearInterval(liveClockTimer)
+  liveClockTimer = null
+}
+
+function handleVisibilityChange(): void {
+  if (document.hidden) {
+    stopLiveClock()
+    return
+  }
+  startLiveClock()
+}
+
+onMounted(() => {
+  scheduleLiveIndicatorCollapse()
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  startLiveClock()
 })
 
 onUnmounted(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   if (liveIndicatorTimer) {
     window.clearTimeout(liveIndicatorTimer)
     liveIndicatorTimer = null
   }
-  if (liveClockTimer) {
-    window.clearInterval(liveClockTimer)
-    liveClockTimer = null
-  }
+  stopLiveClock()
   cleanup()
 })
 

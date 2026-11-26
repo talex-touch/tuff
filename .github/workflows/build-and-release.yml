@@ -100,8 +100,6 @@ jobs:
     env:
       ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
       ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
-      ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
-      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/../electron-builder-cache
       BUILD_PUBLISH: never
 
     strategy:
@@ -120,6 +118,9 @@ jobs:
             image: windows-2022
             timeout: 60
           - os: macos-latest
+            # Keep macos-26: packages/tuff-native/scripts/build-translation.js compiles
+            # TranslationHelper.swift against -target *-apple-macos26.0 (TranslationSession
+            # installedSource:/isReady APIs) and fails if xcrun --show-sdk-version < 26.
             image: macos-26
             timeout: 90
           - os: ubuntu-latest
@@ -132,6 +133,25 @@ jobs:
         with:
           ref: ${{ needs.release-quality.outputs.sha }}
           persist-credentials: false
+
+      - name: Configure Electron Cache Paths
+        shell: bash
+        run: |
+          mkdir -p "${RUNNER_TEMP}/tuff-cache/electron" "${RUNNER_TEMP}/tuff-cache/electron-builder"
+          {
+            echo "ELECTRON_CACHE=${RUNNER_TEMP}/tuff-cache/electron"
+            echo "ELECTRON_BUILDER_CACHE=${RUNNER_TEMP}/tuff-cache/electron-builder"
+          } >> "${GITHUB_ENV}"
+
+      - name: Cache Electron and electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ runner.temp }}/tuff-cache/electron
+            ${{ runner.temp }}/tuff-cache/electron-builder
+          key: electron-cache-${{ matrix.os }}-${{ runner.arch }}-${{ hashFiles('apps/core-app/package.json', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-cache-${{ matrix.os }}-${{ runner.arch }}-
 
       - name: Setup Python (for native dependencies)
         uses: actions/setup-python@v7
@@ -256,8 +276,8 @@ jobs:
           mkdir -p apps/core-app/dist/__appImage-x64
           mkdir -p apps/core-app/dist/__deb-x64
           mkdir -p apps/core-app/dist/@talex-touch
-          mkdir -p "${GITHUB_WORKSPACE}/.cache/electron"
-          mkdir -p "${GITHUB_WORKSPACE}/.cache/electron-builder"
+          mkdir -p "${ELECTRON_CACHE}"
+          mkdir -p "${ELECTRON_BUILDER_CACHE}"
           # 设置正确的权限
           chmod -R 755 apps/core-app/dist
           echo "Build directories prepared"
@@ -273,21 +293,20 @@ jobs:
         shell: bash
         run: |
           echo "Cleaning previous build artifacts..."
-          # 清理可能存在的构建产物
+          # 清理可能存在的构建产物（保留 actions/cache 恢复的 ELECTRON_CACHE / ELECTRON_BUILDER_CACHE）
           rm -rf apps/core-app/dist/__*
           rm -rf apps/core-app/dist/@talex-touch
           rm -rf apps/core-app/out
-          # 清理 electron 下载/构建缓存
-          rm -rf "${GITHUB_WORKSPACE}/.cache/electron"
-          rm -rf "${GITHUB_WORKSPACE}/.cache/electron-builder"
           # 清理 node_modules 中的缓存
           rm -rf node_modules/.cache
           rm -rf apps/core-app/node_modules/.cache
-          # 清理 electron-builder 和 Wine 缓存
+          # 清理历史遗留的仓库内/默认位置缓存目录
+          rm -rf "${GITHUB_WORKSPACE}/.cache/electron"
+          rm -rf "${GITHUB_WORKSPACE}/.cache/electron-builder"
           rm -rf apps/core-app/.electron-builder-cache
           rm -rf ~/.cache/electron-builder
           rm -rf ~/.electron-builder-cache
-          echo "Build artifacts and caches cleaned"
+          echo "Build artifacts cleaned"
 
       - name: Clean Windows Build Artifacts
         if: runner.os == 'Windows'
@@ -495,8 +514,11 @@ jobs:
       # distinguish the reason the *native module* reports (no-input-device,
       # display-server-unavailable) from the reason the JS wrapper reports when the binding is
       # missing, and only the latter fails. That is what makes this step safe in a headless CI job.
+      # Pinned to match native-protocol.yml and windows-everything-production.yml (#1794).
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable branch
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
+        with:
+          toolchain: '1.100.0'
 
       - name: Prepare universal Chrome bridge targets
         if: matrix.os == 'macos-latest'

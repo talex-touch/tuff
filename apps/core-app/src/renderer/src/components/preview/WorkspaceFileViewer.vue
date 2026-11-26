@@ -16,6 +16,25 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { SHELL_MENU_CARD } from '~/components/shell/shell-menu-panel'
 import { basenameOfPath } from '~/modules/browser-workspace/preview-url'
+import { buildTdsDomProbeScript, runStaticTdsLint, type TdsLintIssue } from '~/modules/tds-lint'
+import {
+  captureFrameAndProbe,
+  mergeLintIssues,
+  releaseCaptureSession
+} from '~/modules/tds-lint/live-capture-client'
+import {
+  getDeviceCategoryIcon,
+  getDevicePresetById,
+  isResponsivePreset,
+  resolveDeviceDimensions,
+  RESPONSIVE_PRESET_ID,
+  searchDevicePresets,
+  type DeviceCategory,
+  type DeviceOrientation,
+  type DevicePreset
+} from './tds-devices'
+import TdsDeviceFrame from './TdsDeviceFrame.vue'
+import TdsLintPopover from './TdsLintPopover.vue'
 import {
   buildPathBreadcrumbs,
   extractMarkdownHeadings,
@@ -96,6 +115,14 @@ const imageZoom = ref(1)
 const pdfBlobUrl = ref('')
 const moreMenuOpen = ref(false)
 const outlineOpen = ref(false)
+const viewportMenuOpen = ref(false)
+const lintPopoverOpen = ref(false)
+const lintAntiSlop = ref(true)
+const viewportPresetId = ref<string>(RESPONSIVE_PRESET_ID)
+const viewportOrientation = ref<DeviceOrientation>('portrait')
+const showDeviceShell = ref(true)
+const viewportQuery = ref('')
+const viewportCategory = ref<DeviceCategory | 'all'>('all')
 
 const codeContainerRef = ref<HTMLElement | null>(null)
 const markdownContainerRef = ref<HTMLElement | null>(null)
@@ -141,6 +168,74 @@ const isJson = computed(() => data.value?.kind === 'text' && fileExt.value === '
 const supportsPreviewToggle = computed(
   () => isHtml.value || isSvg.value || isMarkdown.value || isJson.value
 )
+
+const showDeviceViewportControls = computed(
+  () => (isHtml.value || isSvg.value) && viewMode.value === 'preview'
+)
+const staticLintIssues = computed<TdsLintIssue[]>(() => {
+  if (!showDeviceViewportControls.value) return []
+  const source = data.value?.text ?? ''
+  if (!source) return []
+  return runStaticTdsLint(source, {
+    antiSlop: lintAntiSlop.value,
+    sourceKind: isSvg.value ? 'svg' : 'html'
+  })
+})
+const domLintIssues = ref<TdsLintIssue[]>([])
+const mergedLintIssues = computed<TdsLintIssue[]>(() =>
+  mergeLintIssues(staticLintIssues.value, domLintIssues.value)
+)
+
+const LIVE_DOM_PROBE_DEBOUNCE_MS = 300
+let domProbeTimer: ReturnType<typeof setTimeout> | null = null
+let domProbeGeneration = 0
+let activeDomProbeSessionKey = ''
+
+function cancelPendingDomProbe(): void {
+  domProbeGeneration += 1
+  if (domProbeTimer !== null) {
+    clearTimeout(domProbeTimer)
+    domProbeTimer = null
+  }
+}
+const activeDevicePreset = computed(() => getDevicePresetById(viewportPresetId.value))
+const isDevicePresetActive = computed(() => !isResponsivePreset(activeDevicePreset.value))
+const activeDeviceDimensions = computed(() =>
+  resolveDeviceDimensions(activeDevicePreset.value, viewportOrientation.value)
+)
+const canFlipOrientation = computed(
+  () => isDevicePresetActive.value && Boolean(activeDevicePreset.value.orientable)
+)
+const viewportFilterCategories = computed<Array<{ id: DeviceCategory | 'all'; label: string }>>(
+  () => [
+    { id: 'all', label: t('home.sidePanel.deviceCategoryAll') },
+    { id: 'phone', label: t('home.sidePanel.deviceCategoryPhone') },
+    { id: 'tablet', label: t('home.sidePanel.deviceCategoryTablet') },
+    { id: 'watch', label: t('home.sidePanel.deviceCategoryWatch') },
+    { id: 'desktop', label: t('home.sidePanel.deviceCategoryDesktop') },
+    { id: 'paper', label: t('home.sidePanel.deviceCategoryPaper') }
+  ]
+)
+const filteredViewportPresets = computed(() =>
+  searchDevicePresets(viewportQuery.value, viewportCategory.value)
+)
+
+function selectViewportPreset(preset: DevicePreset): void {
+  viewportPresetId.value = preset.id
+  if (!preset.orientable) {
+    viewportOrientation.value = 'portrait'
+  }
+  viewportMenuOpen.value = false
+}
+
+function toggleViewportOrientation(): void {
+  if (!canFlipOrientation.value) return
+  viewportOrientation.value = viewportOrientation.value === 'portrait' ? 'landscape' : 'portrait'
+}
+
+function formatViewportPresetLabel(preset: DevicePreset): string {
+  return preset.id === RESPONSIVE_PRESET_ID ? t('home.sidePanel.deviceResponsive') : preset.name
+}
 
 const fileIcon = computed(() =>
   resolveFileIconClass(fileName.value, data.value?.kind === 'directory')
@@ -266,7 +361,43 @@ watch(viewMode, () => {
   clearMdSelection()
   selectionPrompt.value = ''
   outlineOpen.value = false
+  viewportMenuOpen.value = false
+  lintPopoverOpen.value = false
 })
+
+watch(viewportMenuOpen, (open) => {
+  if (!open) {
+    viewportQuery.value = ''
+  }
+})
+
+async function handleLintSendToAi(payload: {
+  prompt: string
+  issues: TdsLintIssue[]
+}): Promise<void> {
+  if (sendingAiAction.value || !payload.prompt.trim()) return
+  const summary = payload.issues
+    .map((issue) => `${issue.ruleId}${issue.line !== undefined ? `:L${issue.line}` : ''}`)
+    .join(', ')
+  sendingAiAction.value = true
+  try {
+    const accepted = await dispatchAiAction('send', summary, payload.prompt)
+    if (accepted) {
+      lintPopoverOpen.value = false
+    }
+  } finally {
+    sendingAiAction.value = false
+  }
+}
+
+async function handleLintSelectIssue(issue: TdsLintIssue): Promise<void> {
+  if (!issue.line || issue.line <= 0) return
+  lintPopoverOpen.value = false
+  viewMode.value = 'source'
+  await nextTick()
+  const row = codeContainerRef.value?.querySelector<HTMLElement>(`[data-line="${issue.line}"]`)
+  row?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
 
 async function dispatchAiAction(
   mode: 'send' | 'quote',
@@ -616,8 +747,58 @@ watch(
   }
 )
 
+watch(
+  () =>
+    [
+      isHtml.value,
+      viewMode.value,
+      data.value?.text ?? '',
+      resolvedPath.value,
+      lintAntiSlop.value,
+      isDevicePresetActive.value ? activeDeviceDimensions.value.width : 1024,
+      isDevicePresetActive.value ? activeDeviceDimensions.value.height : 720
+    ] as const,
+  ([htmlMode, mode, source, path, antiSlop, width, height]) => {
+    cancelPendingDomProbe()
+    if (!htmlMode || mode !== 'preview' || !source.trim() || !isElectronRenderer()) {
+      domLintIssues.value = []
+      return
+    }
+
+    const generation = domProbeGeneration
+    const nextSessionKey = `file-viewer:${path}`
+    if (activeDomProbeSessionKey && activeDomProbeSessionKey !== nextSessionKey) {
+      void releaseCaptureSession(activeDomProbeSessionKey)
+    }
+    activeDomProbeSessionKey = nextSessionKey
+
+    domProbeTimer = setTimeout(() => {
+      domProbeTimer = null
+      if (generation !== domProbeGeneration) return
+      void captureFrameAndProbe({
+        srcdoc: source,
+        width,
+        height,
+        format: 'none',
+        pixelRatio: 1,
+        domProbeScript: buildTdsDomProbeScript({ antiSlop }),
+        sessionKey: nextSessionKey
+      }).then((result) => {
+        if (generation !== domProbeGeneration) return
+        domLintIssues.value = result.ok ? result.domIssues : []
+      })
+    }, LIVE_DOM_PROBE_DEBOUNCE_MS)
+  },
+  { immediate: true }
+)
+
 onBeforeUnmount(() => {
   loadGeneration += 1
+  cancelPendingDomProbe()
+  if (activeDomProbeSessionKey) {
+    void releaseCaptureSession(activeDomProbeSessionKey)
+    activeDomProbeSessionKey = ''
+  }
   revokePdfUrl()
   document.removeEventListener('pointerdown', onDocumentPointerDown, true)
   document.removeEventListener('keydown', onDocumentKeyDown)
@@ -756,6 +937,159 @@ function adjustZoom(delta: number): void {
           </button>
         </div>
 
+        <div
+          v-if="showDeviceViewportControls"
+          class="WorkspaceFileViewer-ViewportBar"
+          data-testid="file-viewer-viewport-controls"
+        >
+          <TxPopover
+            v-model="viewportMenuOpen"
+            trigger="click"
+            placement="bottom-start"
+            :offset="6"
+            :match-reference-width="false"
+            :min-width="268"
+            :panel-radius="12"
+            :panel-padding="8"
+            :panel-card="SHELL_MENU_CARD"
+            panel-background="refraction"
+          >
+            <template #reference>
+              <button
+                type="button"
+                class="WorkspaceFileViewer-ViewportTrigger"
+                :class="{ 'is-active': isDevicePresetActive || viewportMenuOpen }"
+                :aria-expanded="viewportMenuOpen"
+                :title="t('home.sidePanel.deviceViewport')"
+                :aria-label="t('home.sidePanel.deviceViewport')"
+                data-testid="file-viewer-viewport-trigger"
+              >
+                <span class="WorkspaceFileViewer-ViewportIcon" aria-hidden="true">
+                  <span :class="getDeviceCategoryIcon(activeDevicePreset.category)" />
+                </span>
+                <span class="WorkspaceFileViewer-ViewportLabel">
+                  {{
+                    isDevicePresetActive
+                      ? activeDevicePreset.shortName || activeDevicePreset.name
+                      : t('home.sidePanel.deviceResponsive')
+                  }}
+                </span>
+                <span v-if="isDevicePresetActive" class="WorkspaceFileViewer-ViewportDim">
+                  {{ activeDeviceDimensions.width }}×{{ activeDeviceDimensions.height }}
+                </span>
+                <span class="WorkspaceFileViewer-ViewportChevron" aria-hidden="true">
+                  <span class="i-ri-arrow-down-s-line" />
+                </span>
+              </button>
+            </template>
+
+            <div class="WorkspaceFileViewer-ViewportPopover">
+              <label class="WorkspaceFileViewer-ViewportSearch">
+                <span class="WorkspaceFileViewer-ViewportSearchIcon" aria-hidden="true">
+                  <span class="i-ri-search-line" />
+                </span>
+                <input
+                  v-model="viewportQuery"
+                  type="search"
+                  class="WorkspaceFileViewer-ViewportSearchInput"
+                  :placeholder="t('home.sidePanel.deviceSearchPlaceholder')"
+                  :aria-label="t('home.sidePanel.deviceSearchPlaceholder')"
+                  data-testid="file-viewer-viewport-search"
+                />
+              </label>
+
+              <div class="WorkspaceFileViewer-ViewportCats" role="group">
+                <button
+                  v-for="cat in viewportFilterCategories"
+                  :key="cat.id"
+                  type="button"
+                  class="WorkspaceFileViewer-ViewportCatBtn"
+                  :class="{ 'is-active': viewportCategory === cat.id }"
+                  :aria-pressed="viewportCategory === cat.id"
+                  :data-testid="`file-viewer-viewport-cat-${cat.id}`"
+                  @click="viewportCategory = cat.id"
+                >
+                  {{ cat.label }}
+                </button>
+              </div>
+
+              <div
+                class="WorkspaceFileViewer-ViewportList"
+                role="listbox"
+                :aria-label="t('home.sidePanel.deviceViewport')"
+              >
+                <button
+                  v-for="preset in filteredViewportPresets"
+                  :key="preset.id"
+                  type="button"
+                  role="option"
+                  class="WorkspaceFileViewer-ViewportOption"
+                  :class="{ 'is-active': preset.id === viewportPresetId }"
+                  :aria-selected="preset.id === viewportPresetId"
+                  :data-testid="`file-viewer-viewport-option-${preset.id}`"
+                  @click="selectViewportPreset(preset)"
+                >
+                  <span class="WorkspaceFileViewer-ViewportOptionLead">
+                    <span class="WorkspaceFileViewer-ViewportOptionIcon" aria-hidden="true">
+                      <span :class="getDeviceCategoryIcon(preset.category)" />
+                    </span>
+                    <span class="WorkspaceFileViewer-ViewportOptionName">
+                      {{ formatViewportPresetLabel(preset) }}
+                    </span>
+                  </span>
+                  <span class="WorkspaceFileViewer-ViewportOptionMeta">
+                    <span v-if="preset.width > 0" class="WorkspaceFileViewer-ViewportOptionDim">
+                      {{ preset.width }}×{{ preset.height }}
+                    </span>
+                    <span
+                      v-if="preset.id === viewportPresetId"
+                      class="WorkspaceFileViewer-ViewportOptionCheck"
+                      aria-hidden="true"
+                    >
+                      <span class="i-ri-check-line" />
+                    </span>
+                  </span>
+                </button>
+
+                <div
+                  v-if="filteredViewportPresets.length === 0"
+                  class="WorkspaceFileViewer-ViewportEmpty"
+                >
+                  {{ t('home.sidePanel.deviceEmpty') }}
+                </div>
+              </div>
+            </div>
+          </TxPopover>
+
+          <button
+            v-if="canFlipOrientation"
+            type="button"
+            class="WorkspaceFileViewer-ToolBtn"
+            :class="{ 'is-active': viewportOrientation === 'landscape' }"
+            :aria-pressed="viewportOrientation === 'landscape'"
+            :title="t('home.sidePanel.deviceRotate')"
+            :aria-label="t('home.sidePanel.deviceRotate')"
+            data-testid="file-viewer-viewport-rotate"
+            @click="toggleViewportOrientation"
+          >
+            <span class="i-ri-clockwise-line" aria-hidden="true" />
+          </button>
+
+          <button
+            v-if="isDevicePresetActive"
+            type="button"
+            class="WorkspaceFileViewer-ToolBtn"
+            :class="{ 'is-active': showDeviceShell }"
+            :aria-pressed="showDeviceShell"
+            :title="t('home.sidePanel.deviceToggleShell')"
+            :aria-label="t('home.sidePanel.deviceToggleShell')"
+            data-testid="file-viewer-viewport-shell"
+            @click="showDeviceShell = !showDeviceShell"
+          >
+            <span class="i-ri-device-line" aria-hidden="true" />
+          </button>
+        </div>
+
         <div v-else-if="data?.kind === 'image'" class="WorkspaceFileViewer-ZoomInline">
           <button
             type="button"
@@ -785,6 +1119,19 @@ function adjustZoom(delta: number): void {
       </div>
 
       <div class="WorkspaceFileViewer-Toolbar">
+        <TdsLintPopover
+          v-if="showDeviceViewportControls"
+          v-model:open="lintPopoverOpen"
+          v-model:anti-slop="lintAntiSlop"
+          :issues="mergedLintIssues"
+          :display-path="displayPathForAi"
+          :ai-actions-enabled="aiActionsEnabled"
+          :sending="sendingAiAction"
+          placement="bottom-end"
+          @send-to-ai="handleLintSendToAi"
+          @select-issue="handleLintSelectIssue"
+        />
+
         <TxDropdownMenu
           v-model="moreMenuOpen"
           placement="bottom-end"
@@ -976,8 +1323,25 @@ function adjustZoom(delta: number): void {
         <div
           v-else-if="(isHtml || isSvg) && viewMode === 'preview'"
           class="WorkspaceFileViewer-FrameWrap"
+          :class="{ 'is-device-preview': isDevicePresetActive }"
+          data-testid="file-viewer-preview-stage"
         >
+          <TdsDeviceFrame
+            v-if="isDevicePresetActive"
+            :preset="activeDevicePreset"
+            :orientation="viewportOrientation"
+            :show-shell="showDeviceShell"
+            data-testid="file-viewer-device-frame"
+          >
+            <iframe
+              class="WorkspaceFileViewer-Frame"
+              :sandbox="isHtml ? 'allow-scripts allow-forms allow-modals' : ''"
+              :title="fileName"
+              :srcdoc="sandboxedHtmlSrcdoc"
+            />
+          </TdsDeviceFrame>
           <iframe
+            v-else
             class="WorkspaceFileViewer-Frame"
             :sandbox="isHtml ? 'allow-scripts allow-forms allow-modals' : ''"
             :title="fileName"
@@ -1381,6 +1745,217 @@ function adjustZoom(delta: number): void {
   display: inline-flex;
   gap: 2px;
   align-items: center;
+}
+
+.WorkspaceFileViewer-ViewportBar {
+  display: inline-flex;
+  flex: 0 1 auto;
+  gap: 2px;
+  align-items: center;
+  min-width: 0;
+}
+
+.WorkspaceFileViewer-ViewportTrigger {
+  display: inline-flex;
+  flex: 0 1 auto;
+  gap: 5px;
+  align-items: center;
+  height: 26px;
+  max-width: 210px;
+  padding: 0 7px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-regular);
+  font: inherit;
+  font-size: var(--shell-fs-caption);
+  font-weight: 500;
+  cursor: pointer;
+  min-width: 0;
+
+  &:hover,
+  &.is-active {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: 1px;
+  }
+}
+
+.WorkspaceFileViewer-ViewportIcon,
+.WorkspaceFileViewer-ViewportChevron,
+.WorkspaceFileViewer-ViewportSearchIcon,
+.WorkspaceFileViewer-ViewportOptionIcon,
+.WorkspaceFileViewer-ViewportOptionCheck {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.WorkspaceFileViewer-ViewportLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.WorkspaceFileViewer-ViewportDim {
+  flex: none;
+  color: var(--shell-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.WorkspaceFileViewer-ViewportPopover {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 268px;
+}
+
+.WorkspaceFileViewer-ViewportSearch {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--shell-radius-sm);
+  background: var(--shell-bg);
+  color: var(--shell-text-muted);
+  box-shadow: inset 0 0 0 1px var(--shell-border);
+
+  &:focus-within {
+    box-shadow: inset 0 0 0 1.5px var(--shell-primary);
+  }
+}
+
+.WorkspaceFileViewer-ViewportSearchInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--shell-text-primary);
+  font: inherit;
+  font-size: var(--shell-fs-sm);
+  outline: none;
+
+  &::placeholder {
+    color: var(--shell-text-muted);
+  }
+}
+
+.WorkspaceFileViewer-ViewportCats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.WorkspaceFileViewer-ViewportCatBtn {
+  padding: 2px 7px;
+  border: none;
+  border-radius: var(--shell-radius-full);
+  background: transparent;
+  color: var(--shell-text-regular);
+  font: inherit;
+  font-size: var(--shell-fs-caption);
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+
+  &.is-active {
+    background: var(--shell-primary-soft);
+    color: var(--shell-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: 1px;
+  }
+}
+
+.WorkspaceFileViewer-ViewportList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 256px;
+  overflow-y: auto;
+}
+
+.WorkspaceFileViewer-ViewportOption {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-primary);
+  font: inherit;
+  font-size: var(--shell-fs-sm);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface-2);
+  }
+
+  &.is-active {
+    background: var(--shell-primary-soft);
+    color: var(--shell-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: -1px;
+  }
+}
+
+.WorkspaceFileViewer-ViewportOptionLead {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+}
+
+.WorkspaceFileViewer-ViewportOptionName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.WorkspaceFileViewer-ViewportOptionMeta {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+  align-items: center;
+}
+
+.WorkspaceFileViewer-ViewportOptionDim {
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.WorkspaceFileViewer-ViewportOptionCheck {
+  color: var(--shell-primary);
+}
+
+.WorkspaceFileViewer-ViewportEmpty {
+  padding: 14px 8px;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-sm);
+  text-align: center;
 }
 
 .WorkspaceFileViewer-ToolBtn {

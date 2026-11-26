@@ -35,8 +35,10 @@ describe('renderer content security policy', () => {
     expect(directive('script-src')).not.toContain("'unsafe-inline'")
   })
 
-  it('does not allow script from an arbitrary origin', () => {
-    expect(directive('script-src').split(' ')).not.toContain('*')
+  it('does not allow script from an arbitrary origin or data: URI', () => {
+    const tokens = directive('script-src').split(' ')
+    expect(tokens).not.toContain('*')
+    expect(tokens).not.toContain('data:')
   })
 
   it('restricts script to the app itself', () => {
@@ -48,6 +50,24 @@ describe('renderer content security policy', () => {
     // dropping this removes plugin widgets rather than hardening anything. Asserted so the
     // decision is visible rather than looking like an unfinished job.
     expect(directive('script-src')).toContain("'unsafe-eval'")
+  })
+
+  it('removes wildcards from default-src, connect-src, img-src, font-src, style-src, and media-src (#689)', () => {
+    for (const name of [
+      'default-src',
+      'connect-src',
+      'img-src',
+      'font-src',
+      'style-src',
+      'style-src-elem',
+      'media-src'
+    ]) {
+      expect(directive(name).split(' '), name).not.toContain('*')
+    }
+    expect(directive('connect-src').split(' ')).not.toContain('ws:')
+    expect(directive('connect-src').split(' ')).not.toContain('wss:')
+    expect(directive('base-uri')).toBe("'self'")
+    expect(directive('form-action')).toBe("'self'")
   })
 
   it('keeps inline style, which Vue style bindings need', () => {
@@ -63,7 +83,7 @@ describe('renderer content security policy', () => {
   })
 })
 
-describe('report-only CSP violations reach somewhere they can be read (#689)', () => {
+describe('CSP violations reach the main-process log (#689)', () => {
   const entry = readFileSync(fileURLToPath(new URL('./src/main.ts', import.meta.url)), 'utf8')
   /**
    * Bounded to the listener itself. The first version of this sliced to end-of-file, so the

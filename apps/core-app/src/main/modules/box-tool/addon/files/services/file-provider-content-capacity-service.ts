@@ -16,6 +16,10 @@ import {
   resolveSqliteErrorIdentity
 } from '../../../../../db/sqlite-retry'
 import { FILE_INDEX_STORAGE_FULL } from './file-provider-run-failure'
+import {
+  idleBudgetCoordinator,
+  isStatePausedFor
+} from '../../../../../service/idle-budget-coordinator'
 
 const SEARCH_INDEX_PAGE_SIZE_BYTES = 4096
 const INDEX_FULL_CODE_PATTERN = new RegExp(
@@ -156,6 +160,8 @@ export class FileProviderContentCapacityService {
   private checkedDirectory: string | null = null
   private checkPromise: Promise<boolean> | null = null
   private timer: ReturnType<typeof setInterval> | null = null
+  private started = false
+  private idleBudgetUnsubscribe: (() => void) | null = null
   private checkTimer: ReturnType<typeof setTimeout> | null = null
   private cancelCheck: (() => void) | null = null
   private readonly now: () => number
@@ -184,12 +190,35 @@ export class FileProviderContentCapacityService {
     }
   }
 
-  start(): void {
-    if (this.timer || this.disposed) return
+  private armInterval(): void {
+    if (this.timer || this.disposed || !this.started) return
     this.timer = setInterval(() => {
       void this.check(true)
     }, this.intervalMs)
     this.timer.unref?.()
+  }
+
+  private clearPollingInterval(): void {
+    clearInterval(this.timer ?? undefined)
+    this.timer = null
+  }
+
+  start(): void {
+    if (this.started || this.disposed) return
+    this.started = true
+    if (!this.idleBudgetUnsubscribe) {
+      this.idleBudgetUnsubscribe = idleBudgetCoordinator.subscribe((snapshot) => {
+        if (!this.started || this.disposed) return
+        if (isStatePausedFor(snapshot.state, 'background-hidden')) {
+          this.clearPollingInterval()
+          return
+        }
+        this.armInterval()
+      })
+    }
+    if (!idleBudgetCoordinator.isPausedFor('background-hidden')) {
+      this.armInterval()
+    }
   }
 
   check(force = false): Promise<boolean> {
@@ -288,8 +317,10 @@ export class FileProviderContentCapacityService {
   }
 
   stop(): void {
-    clearInterval(this.timer ?? undefined)
-    this.timer = null
+    this.started = false
+    this.idleBudgetUnsubscribe?.()
+    this.idleBudgetUnsubscribe = null
+    this.clearPollingInterval()
   }
 
   dispose(): void {

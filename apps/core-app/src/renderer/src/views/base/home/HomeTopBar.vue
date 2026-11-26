@@ -3,7 +3,6 @@ import type { ConversationTurnMeta } from '~/modules/conversation/useHomeConvers
 import { useI18n } from 'vue-i18n'
 import MetaHintBadge from '~/components/shell/MetaHintBadge.vue'
 import ShellAccountAvatar from '~/components/shell/ShellAccountAvatar.vue'
-import { useShellTerminal } from '~/modules/layout/useShellTerminal'
 import HomeTurnInfoMenu from './HomeTurnInfoMenu.vue'
 
 /**
@@ -33,7 +32,6 @@ defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { terminalOpen, toggleTerminal } = useShellTerminal()
 </script>
 
 <template>
@@ -96,17 +94,6 @@ const { terminalOpen, toggleTerminal } = useShellTerminal()
       </div>
       <!-- The unified Tuff account / Chrome profiles entry. It closes itself when Home deactivates. -->
       <ShellAccountAvatar />
-      <button
-        class="HomeTopBar-IconBtn"
-        type="button"
-        :aria-pressed="Boolean(terminalOpen)"
-        :aria-label="t('shortcuts.commands.toggleTerminal')"
-        :title="t('shortcuts.commands.toggleTerminal')"
-        @click="toggleTerminal"
-      >
-        <span class="i-ri-terminal-box-line" />
-        <MetaHintBadge command="toggle-terminal" placement="below" />
-      </button>
       <!-- Last, so it sits against the panel it opens: the panel runs the full height beside this
            bar, and its tabs start just past the toggle. -->
       <button

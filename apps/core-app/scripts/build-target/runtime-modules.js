@@ -855,7 +855,8 @@ function copyRuntimeModuleToNodeModules(moduleEntry, options = {}) {
 
   fs.cpSync(sourceDir, targetDir, {
     recursive: true,
-    dereference: true
+    dereference: true,
+    preserveTimestamps: true
   })
 
   return {

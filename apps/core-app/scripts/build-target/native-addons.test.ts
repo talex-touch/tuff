@@ -1,5 +1,7 @@
+import { execFileSync } from 'node:child_process'
 import {
   chmodSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -7,6 +9,7 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -31,9 +34,14 @@ const { nativeAddonReleaseDir, preserveRequiredNativeAddons, restorePreservedNat
       preserved: PreservedAddons
     }) => string[]
   }
-const { requiredNativeAddonNames } = require('./runtime-modules.js') as {
-  requiredNativeAddonNames: (target: string) => string[]
-}
+const { copyRuntimeModuleToNodeModules, requiredNativeAddonNames } =
+  require('./runtime-modules.js') as {
+    copyRuntimeModuleToNodeModules: (
+      moduleEntry: { name: string; sourceDir: string },
+      options?: Record<string, unknown>
+    ) => { copied: boolean; targetDir: string }
+    requiredNativeAddonNames: (target: string) => string[]
+  }
 
 const WINDOWS_ADDONS = requiredNativeAddonNames('win')
 /** The two addons binding.gyp itself builds; everything else in build/Release came from Cargo. */
@@ -382,4 +390,97 @@ describe('a run that never produced the Cargo addons', () => {
     )
     expect(readdirSync(fixture.releaseDir)).toEqual([])
   })
+})
+
+describe('macOS native helper reuse guards', () => {
+  const workspaceRoot = path.resolve(__dirname, '..', '..', '..', '..')
+  const tuffNativeRoot = path.join(workspaceRoot, 'packages', 'tuff-native')
+
+  it('passes <input_file> before -verify_arch to lipo in both macOS helper build scripts', () => {
+    for (const scriptName of ['build-translation.js', 'build-update.js']) {
+      const content = readFileSync(path.join(tuffNativeRoot, 'scripts', scriptName), 'utf8')
+      expect(content).toContain("execFileSync('lipo', [output, '-verify_arch', ...architectures]")
+      expect(content).not.toContain(
+        "execFileSync('lipo', ['-verify_arch', ...architectures, output]"
+      )
+    }
+  })
+
+  it('preserves file timestamps when copying @talex-touch/tuff-native into app node_modules', () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), 'tuff-runtime-copy-ts-'))
+    fixtureRoots.push(tempRoot)
+
+    const sourceDir = path.join(tempRoot, 'packages', 'tuff-native')
+    const targetNodeModules = path.join(tempRoot, 'apps', 'core-app', 'node_modules')
+    mkdirSync(path.join(sourceDir, 'build', 'Release'), { recursive: true })
+    mkdirSync(path.join(sourceDir, 'native-update'), { recursive: true })
+    mkdirSync(path.join(sourceDir, 'scripts'), { recursive: true })
+
+    const srcFile = path.join(sourceDir, 'native-update', 'update.c')
+    const scriptFile = path.join(sourceDir, 'scripts', 'build-update.js')
+    const outFile = path.join(sourceDir, 'build', 'Release', 'tuff-native-update')
+    writeFileSync(srcFile, 'int main(void) { return 0; }\n')
+    writeFileSync(scriptFile, '// script\n')
+    writeFileSync(outFile, 'binary')
+
+    const older = new Date('2026-01-01T00:00:00Z')
+    const newer = new Date('2026-06-01T00:00:00Z')
+    utimesSync(srcFile, older, older)
+    utimesSync(scriptFile, older, older)
+    utimesSync(outFile, newer, newer)
+
+    const result = copyRuntimeModuleToNodeModules(
+      { name: '@talex-touch/tuff-native', sourceDir },
+      {
+        projectRoot: path.join(tempRoot, 'apps', 'core-app'),
+        workspaceRoot: tempRoot,
+        targetNodeModules,
+        overwrite: true,
+        preserveSourceNodeModulesPath: false
+      }
+    )
+
+    expect(result.copied).toBe(true)
+    const copiedOutputMtime = statSync(
+      path.join(result.targetDir, 'build', 'Release', 'tuff-native-update')
+    ).mtimeMs
+    const copiedSourceMtime = statSync(
+      path.join(result.targetDir, 'native-update', 'update.c')
+    ).mtimeMs
+    const copiedScriptMtime = statSync(
+      path.join(result.targetDir, 'scripts', 'build-update.js')
+    ).mtimeMs
+    expect(copiedOutputMtime).toBeGreaterThanOrEqual(copiedSourceMtime)
+    expect(copiedOutputMtime).toBeGreaterThanOrEqual(copiedScriptMtime)
+  })
+
+  it.skipIf(process.platform !== 'darwin')(
+    'reuses the universal macOS atomic update helper on a second invocation',
+    () => {
+      const tempRoot = mkdtempSync(path.join(tmpdir(), 'tuff-build-update-reuse-'))
+      fixtureRoots.push(tempRoot)
+
+      mkdirSync(path.join(tempRoot, 'scripts'), { recursive: true })
+      mkdirSync(path.join(tempRoot, 'native-update'), { recursive: true })
+      cpSync(
+        path.join(tuffNativeRoot, 'scripts', 'build-update.js'),
+        path.join(tempRoot, 'scripts', 'build-update.js')
+      )
+      cpSync(
+        path.join(tuffNativeRoot, 'native-update', 'update.c'),
+        path.join(tempRoot, 'native-update', 'update.c')
+      )
+
+      const scriptPath = path.join(tempRoot, 'scripts', 'build-update.js')
+      const firstOutput = execFileSync(process.execPath, [scriptPath, '--universal'], {
+        encoding: 'utf8'
+      })
+      expect(firstOutput).toContain('[build-update] Built arm64+x86_64 helper:')
+
+      const secondOutput = execFileSync(process.execPath, [scriptPath, '--universal'], {
+        encoding: 'utf8'
+      })
+      expect(secondOutput).toContain('[build-update] Reusing arm64+x86_64 helper')
+    }
+  )
 })

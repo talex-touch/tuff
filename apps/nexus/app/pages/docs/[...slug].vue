@@ -1067,7 +1067,7 @@ useHead(() => ({
     // How an agent discovers the raw source without having to guess the `.md` convention.
     ...(docSeoHead.value.markdownSourceUrl
       ? [{
-          rel: 'alternate',
+          rel: 'alternate' as const,
           type: 'text/markdown',
           href: docSeoHead.value.markdownSourceUrl,
         }]

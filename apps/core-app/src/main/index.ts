@@ -63,11 +63,13 @@ import { systemUpdateModule } from './modules/system-update'
 import { platformPermissionModule } from './modules/system/platform-permission-service'
 import { performanceReportModule } from './modules/system/performance-report'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
+import { tdsCaptureModule } from './modules/tds-capture'
 import { terminalModule } from './modules/terminal'
 import { toolGatewayModule } from './modules/tool-gateway'
 import { trayManagerModule } from './modules/tray/tray-manager'
 import { updateServiceModule } from './modules/update/UpdateService'
 import { voiceModule } from './modules/voice/voice-module'
+import { idleBudgetCoordinator } from './service/idle-budget-coordinator'
 import { pluginLogModule } from './service/plugin-log.service'
 import { adoptPersistedLocale } from './utils/i18n-helper'
 import { formatDuration, loggerManager, mainLog } from './utils/logger'
@@ -238,6 +240,7 @@ const foregroundModulesToLoad = [
   platformPermissionModule,
   permissionModule, // Plugin permission management - before plugin module
   screenshotSessionModule,
+  tdsCaptureModule,
   notificationModule,
   quickOpsModule,
   sentryModule,
@@ -472,6 +475,10 @@ app.whenReady().then(async () => {
 
       // Start the global polling service after all modules are loaded or deferred loading has failed.
       pollingService.start()
+      idleBudgetCoordinator.start()
+      touchEventBus.once(TalexEvents.WILL_QUIT, () => {
+        idleBudgetCoordinator.destroy()
+      })
 
       if (startupBenchmarkEnabled) {
         mainLog.info('Startup benchmark mode: scheduling app quit after deferred modules settled', {

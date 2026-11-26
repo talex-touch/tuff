@@ -324,3 +324,106 @@ describe('polling task default timeout', () => {
     expect(getService().taskStats.get('test.timeout.blocker')?.timeoutCount).toBe(1)
   })
 })
+
+describe('PollingService pausedLanes idle budget', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    resetServiceState()
+  })
+
+  afterEach(() => {
+    resetServiceState()
+    vi.useRealTimers()
+  })
+
+  it('pauses only specified lanes while leaving unpaused lanes active, and drops to 0 armed timers when all lanes are paused', async () => {
+    const service = PollingService.getInstance()
+    let maintenanceRuns = 0
+    let realtimeRuns = 0
+
+    service.register('test.idle.maintenance', () => {
+      maintenanceRuns += 1
+    }, {
+      interval: 100,
+      unit: 'milliseconds',
+      lane: 'maintenance',
+    })
+
+    service.register('test.idle.realtime', () => {
+      realtimeRuns += 1
+    }, {
+      interval: 100,
+      unit: 'milliseconds',
+      lane: 'realtime',
+    })
+
+    service.start()
+    await vi.advanceTimersByTimeAsync(250)
+    expect(maintenanceRuns).toBe(2)
+    expect(realtimeRuns).toBe(2)
+
+    // Background-hidden pauses maintenance lane only.
+    service.setGlobalPressure({
+      reason: 'idle-budget:background-hidden',
+      pausedLanes: ['maintenance'],
+    })
+
+    await vi.advanceTimersByTimeAsync(500)
+    expect(maintenanceRuns).toBe(2)
+    expect(realtimeRuns).toBe(7)
+
+    // System-suspended pauses all non-critical lanes -> 0 armed timers.
+    service.setGlobalPressure({
+      reason: 'idle-budget:system-suspended',
+      pausedLanes: ['realtime', 'io', 'maintenance', 'serial'],
+    })
+    expect(vi.getTimerCount()).toBe(0)
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(maintenanceRuns).toBe(2)
+    expect(realtimeRuns).toBe(7)
+
+    // Clearing only system-suspended resumes realtime without burst while keeping maintenance paused.
+    service.clearGlobalPressure('idle-budget:system-suspended')
+    expect(realtimeRuns).toBe(7)
+    expect(maintenanceRuns).toBe(2)
+
+    await vi.advanceTimersByTimeAsync(250)
+    expect(realtimeRuns).toBe(9)
+    expect(maintenanceRuns).toBe(2)
+
+    // Clearing background-hidden resumes maintenance smoothly without a catch-up burst.
+    service.clearGlobalPressure('idle-budget:background-hidden')
+    expect(maintenanceRuns).toBe(2)
+
+    await vi.advanceTimersByTimeAsync(150)
+    expect(maintenanceRuns).toBe(3)
+    expect(service.getDiagnostics().pressures).toEqual([])
+  })
+
+  it('automatically resumes paused lanes when a timed pressure expires', async () => {
+    const service = PollingService.getInstance()
+    let runs = 0
+
+    service.register('test.idle.timed', () => {
+      runs += 1
+    }, {
+      interval: 100,
+      unit: 'milliseconds',
+      lane: 'maintenance',
+    })
+
+    service.start()
+    service.setGlobalPressure({
+      reason: 'idle-budget:timed',
+      until: Date.now() + 500,
+      pausedLanes: ['maintenance'],
+    })
+
+    await vi.advanceTimersByTimeAsync(450)
+    expect(runs).toBe(0)
+
+    await vi.advanceTimersByTimeAsync(200)
+    expect(runs).toBe(1)
+  })
+})

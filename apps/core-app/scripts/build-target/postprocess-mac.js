@@ -1,4 +1,4 @@
-const { execSync, spawnSync } = require('child_process')
+const { execFileSync, execSync, spawnSync } = require('child_process')
 const fs = require('fs')
 const path = require('path')
 
@@ -92,7 +92,7 @@ function findAppDirs(dir) {
       }
     }
   }
-  return appDirs
+  return appDirs.sort()
 }
 
 function fixFrameworkExecutablePermissions(appDirs) {
@@ -229,46 +229,141 @@ function verifyOfficialSignedApps(appDirs) {
   })
 }
 
-function zipApps(appDirs, distDir, version, arch, officialReleaseBuild = false) {
-  console.log('\n=== Creating zip file ===')
-  appDirs.forEach((appPath) => {
+function resolveMacAppBundleArch(appPath, fallbackArch = 'arm64') {
+  const parentName = path.basename(path.dirname(appPath)).toLowerCase()
+  if (parentName === 'mac-arm64' || parentName === 'mac-aarch64') {
+    return 'arm64'
+  }
+  if (parentName === 'mac-x64' || parentName === 'mac-amd64' || parentName === 'mac') {
+    // electron-builder omits the suffix for its default macOS arch (Arch.x64 -> dist/mac/*.app)
+    // and appends -arm64 / -universal for non-default architectures.
+    return 'x64'
+  }
+  if (parentName === 'mac-universal') {
+    return 'universal'
+  }
+  return fallbackArch || 'arm64'
+}
+
+function findExistingElectronBuilderZip(distDir, appStem, version, bundleArch) {
+  const candidate = path.join(distDir, `${appStem}-${version}-macos-${bundleArch}.zip`)
+  try {
+    const stats = fs.statSync(candidate)
+    if (stats.isFile() && stats.size > 0) {
+      return candidate
+    }
+  } catch {
+    // No pre-existing electron-builder zip archive for this architecture.
+  }
+  return null
+}
+
+function planMacAppZipArchives(
+  appDirs,
+  distDir,
+  version,
+  fallbackArch,
+  officialReleaseBuild = false
+) {
+  const plans = []
+  const plannedOutputs = new Map()
+
+  for (const appPath of [...appDirs].sort()) {
     const appName = path.basename(appPath)
     const appParent = path.dirname(appPath)
     const appStem = appName.endsWith('.app') ? appName.slice(0, -4) : appName
-    const zipPath = path.join(distDir, `${appStem}-${version}-${arch}.app.zip`)
-    try {
-      if (fs.existsSync(zipPath)) {
-        fs.unlinkSync(zipPath)
-      }
-      const absZipPath = path.resolve(zipPath)
-      if (officialReleaseBuild) {
-        execSync(`/usr/bin/ditto -c -k --sequesterRsrc --keepParent "${appPath}" "${absZipPath}"`, {
-          stdio: 'inherit'
-        })
-      } else {
-        execSync(`cd "${appParent}" && zip -r "${absZipPath}" "${appName}"`, {
-          stdio: 'inherit'
-        })
-      }
-      console.log(`  ✓ Created zip: ${absZipPath}`)
+    const bundleArch = resolveMacAppBundleArch(appPath, fallbackArch)
+    const existingZipPath = findExistingElectronBuilderZip(distDir, appStem, version, bundleArch)
 
-      if (!fs.existsSync(zipPath)) {
-        throw new Error(`Zip archive not found after creation: ${zipPath}`)
+    if (officialReleaseBuild && existingZipPath) {
+      plans.push({
+        action: 'skip',
+        appName,
+        appParent,
+        appPath,
+        bundleArch,
+        existingZipPath
+      })
+      continue
+    }
+
+    const zipPath = path.join(distDir, `${appStem}-${version}-${bundleArch}.app.zip`)
+    const absZipPath = path.resolve(zipPath)
+    const previousAppPath = plannedOutputs.get(absZipPath)
+    if (previousAppPath) {
+      throw new Error(
+        `Refusing to overwrite macOS zip archive ${absZipPath}: both ${previousAppPath} and ${appPath} resolved to arch "${bundleArch}"`
+      )
+    }
+    plannedOutputs.set(absZipPath, appPath)
+
+    plans.push({
+      action: 'create',
+      appName,
+      appParent,
+      appPath,
+      bundleArch,
+      zipPath,
+      absZipPath
+    })
+  }
+
+  return plans
+}
+
+function zipApps(appDirs, distDir, version, arch, officialReleaseBuild = false, options = {}) {
+  console.log('\n=== Creating zip file ===')
+  const runFile = options.execFileSync || execFileSync
+  const plans = planMacAppZipArchives(appDirs, distDir, version, arch, officialReleaseBuild)
+
+  for (const plan of plans) {
+    if (plan.action === 'skip') {
+      console.log(
+        `  ✓ Skipping redundant .app.zip for ${plan.bundleArch}; electron-builder archive already exists: ${plan.existingZipPath}`
+      )
+      continue
+    }
+
+    try {
+      if (fs.existsSync(plan.zipPath)) {
+        fs.unlinkSync(plan.zipPath)
       }
-      const stats = fs.statSync(zipPath)
+      if (officialReleaseBuild) {
+        runFile(
+          '/usr/bin/ditto',
+          ['-c', '-k', '--sequesterRsrc', '--keepParent', plan.appPath, plan.absZipPath],
+          { stdio: 'inherit' }
+        )
+      } else {
+        runFile('zip', ['-r', plan.absZipPath, plan.appName], {
+          cwd: plan.appParent,
+          stdio: 'inherit'
+        })
+      }
+      console.log(`  ✓ Created zip: ${plan.absZipPath}`)
+
+      if (!fs.existsSync(plan.zipPath)) {
+        throw new Error(`Zip archive not found after creation: ${plan.zipPath}`)
+      }
+      const stats = fs.statSync(plan.zipPath)
       const sizeMB = (stats.size / (1024 * 1024)).toFixed(2)
       console.log(`  ✓ Zip file verified: ${sizeMB} MB`)
     } catch (err) {
       if (officialReleaseBuild) {
         throw err
       }
-      console.warn(`  Warning: Failed to create zip ${zipPath}: ${err.message}`)
+      console.warn(`  Warning: Failed to create zip ${plan.zipPath}: ${err.message}`)
     }
-  })
+  }
+
+  return plans
 }
 
-function postProcessMacArtifacts(distDir, version, arch) {
-  const officialReleaseBuild = isOfficialReleaseBuild()
+function postProcessMacArtifacts(distDir, version, arch, options = {}) {
+  const officialReleaseBuild =
+    typeof options.officialReleaseBuild === 'boolean'
+      ? options.officialReleaseBuild
+      : isOfficialReleaseBuild()
   console.log(`\n=== macOS postprocess (${officialReleaseBuild ? 'official' : 'local'}) ===`)
   try {
     const appDirs = findAppDirs(distDir)
@@ -277,11 +372,11 @@ function postProcessMacArtifacts(distDir, version, arch) {
         throw new Error('Official macOS build produced no .app bundle')
       }
       console.log('  No .app bundles found to fix')
-      return
+      return []
     }
 
     if (officialReleaseBuild) {
-      verifyOfficialSignedApps(appDirs)
+      ;(options.verifyOfficialSignedApps || verifyOfficialSignedApps)(appDirs)
     } else {
       appDirs.forEach((appPath) => {
         fixAppPermissions(appPath)
@@ -292,15 +387,21 @@ function postProcessMacArtifacts(distDir, version, arch) {
       adHocSignApps(appDirs)
     }
 
-    zipApps(appDirs, distDir, version, arch, officialReleaseBuild)
+    return zipApps(appDirs, distDir, version, arch, officialReleaseBuild, options)
   } catch (err) {
     if (officialReleaseBuild) {
       throw err
     }
     console.warn(`  Warning: Failed to postprocess macOS artifacts: ${err.message}`)
+    return []
   }
 }
 
 module.exports = {
-  postProcessMacArtifacts
+  findAppDirs,
+  findExistingElectronBuilderZip,
+  planMacAppZipArchives,
+  postProcessMacArtifacts,
+  resolveMacAppBundleArch,
+  zipApps
 }

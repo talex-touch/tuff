@@ -210,7 +210,7 @@ vi.mock('@talex-touch/tuffex/dropdown-menu', () => ({
     props: ['modelValue', 'disabled'],
     emits: ['update:modelValue'],
     template:
-      '<div data-testid="add-tab-dropdown" :data-open="String(modelValue)"><div @click="!disabled && $emit(\'update:modelValue\', !modelValue)"><slot name="trigger" /></div><div v-if="modelValue" data-testid="add-tab-dropdown-menu"><slot /></div></div>'
+      '<div data-testid="add-tab-dropdown" :data-open="String(modelValue)"><div @click="!disabled && $emit(\'update:modelValue\', !modelValue)"><slot name="trigger" :open="Boolean(modelValue)" /></div><div v-if="modelValue" data-testid="add-tab-dropdown-menu"><slot /></div></div>'
   },
   TxDropdownItem: {
     props: ['disabled'],
@@ -226,6 +226,10 @@ vi.mock('@talex-touch/tuffex/skeleton', () => ({
   TxSkeleton: { template: '<div data-testid="tab-skeleton" />' }
 }))
 
+import {
+  __resetShellStageActionsForTesting,
+  useShellStageActions
+} from '~/modules/layout/useShellStageActions'
 import {
   attachBrowserTabToSpace,
   getSpaceTabs,
@@ -246,6 +250,7 @@ function extractSfcCss(relativeFile: string): string {
 describe('BrowserTabStrip layout, drag regions & tab actions', () => {
   beforeEach(() => {
     resetShellWorkspaceTabsForTests()
+    __resetShellStageActionsForTesting()
     route.path = '/browser'
     route.params = {}
     mockConversations.value = []
@@ -860,5 +865,100 @@ describe('BrowserTabStrip layout, drag regions & tab actions', () => {
     expect(interrupt).toHaveBeenCalledTimes(1)
 
     __resetHerdrStageControlForTesting()
+  })
+
+  it('renders moved Home stage actions (more, sidebar toggle, optional branch) in the top tab strip without a terminal toggle', async () => {
+    const panelOpen = ref(false)
+    const canBranch = ref(false)
+    const branch = vi.fn()
+    const dispose = useShellStageActions().register({
+      surface: 'home',
+      isPanelOpen: () => panelOpen.value,
+      togglePanel: () => {
+        panelOpen.value = !panelOpen.value
+      },
+      showTurnInfo: () => true,
+      getTurn: () => undefined,
+      getMessageCount: () => 2,
+      canBranch: () => canBranch.value,
+      isBranching: () => false,
+      branch
+    })
+
+    route.path = '/home'
+    const wrapper = mount(BrowserTabStrip)
+    await flushPromises()
+
+    const actions = wrapper.get('.BrowserTabStrip-Actions')
+    expect(actions.classes()).toContain('BrowserTabStrip-NoDrag')
+    expect(actions.find('[data-testid="tabstrip-more-btn"]').exists()).toBe(true)
+    expect(actions.find('[data-testid="tabstrip-panel-toggle"]').exists()).toBe(true)
+    expect(actions.find('[data-testid="account-avatar"]').exists()).toBe(true)
+    expect(actions.find('[data-testid="tabstrip-branch-btn"]').exists()).toBe(false)
+    expect(actions.find('.i-ri-terminal-box-line').exists()).toBe(false)
+
+    // Sidebar toggle toggles panelOpen and reflects pressed/active state.
+    const panelToggle = actions.get('[data-testid="tabstrip-panel-toggle"]')
+    expect(panelToggle.attributes('aria-pressed')).toBe('false')
+    await panelToggle.trigger('click')
+    await nextTick()
+    expect(panelOpen.value).toBe(true)
+    expect(panelToggle.attributes('aria-pressed')).toBe('true')
+    expect(panelToggle.classes()).toContain('is-active')
+
+    // Three-dots menu opens HomeTurnInfoMenu.
+    await actions.get('[data-testid="tabstrip-more-btn"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('.HomeTurnInfoMenu').exists()).toBe(true)
+
+    // Branch button appears once conversation has settled history.
+    canBranch.value = true
+    await nextTick()
+    await actions.get('[data-testid="tabstrip-branch-btn"]').trigger('click')
+    expect(branch).toHaveBeenCalledTimes(1)
+
+    // Unfocused routes never inherit Home trailing actions or no-drag hit box.
+    route.path = '/setting'
+    await nextTick()
+    expect(actions.classes()).not.toContain('BrowserTabStrip-NoDrag')
+    expect(actions.find('[data-testid="tabstrip-panel-toggle"]').exists()).toBe(false)
+    expect(actions.find('[data-testid="tabstrip-more-btn"]').exists()).toBe(false)
+
+    dispose()
+  })
+
+  it('renders right-sidebar toggle for active Herdr stage and gates turn-info menu on showTurnInfo', async () => {
+    const panelOpen = ref(false)
+    const showTurnInfo = ref(false)
+    const dispose = useShellStageActions().register({
+      surface: 'herdr',
+      isPanelOpen: () => panelOpen.value,
+      togglePanel: () => {
+        panelOpen.value = !panelOpen.value
+      },
+      showTurnInfo: () => showTurnInfo.value,
+      getTurn: () => undefined,
+      getMessageCount: () => 0
+    })
+
+    route.path = '/home/herdr/t7'
+    route.params = { address: 't7' }
+    const wrapper = mount(BrowserTabStrip)
+    await flushPromises()
+
+    const actions = wrapper.get('.BrowserTabStrip-Actions')
+    expect(actions.classes()).toContain('BrowserTabStrip-NoDrag')
+    expect(actions.find('[data-testid="tabstrip-panel-toggle"]').exists()).toBe(true)
+    expect(actions.find('[data-testid="tabstrip-more-btn"]').exists()).toBe(false)
+    expect(actions.find('.i-ri-terminal-box-line').exists()).toBe(false)
+
+    showTurnInfo.value = true
+    await nextTick()
+    expect(actions.find('[data-testid="tabstrip-more-btn"]').exists()).toBe(true)
+
+    await actions.get('[data-testid="tabstrip-panel-toggle"]').trigger('click')
+    expect(panelOpen.value).toBe(true)
+
+    dispose()
   })
 })

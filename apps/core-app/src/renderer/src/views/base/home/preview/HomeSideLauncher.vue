@@ -71,6 +71,12 @@ const allActions = computed<LauncherQuickAction[]>(() => [
       ]
     : []),
   {
+    id: 'canvas',
+    label: t('home.sidePanel.canvas'),
+    icon: 'i-ri-artboard-2-line',
+    run: () => emit('open-tool', 'canvas')
+  },
+  {
     id: 'review',
     label: t('home.workspace.panel.review'),
     icon: 'i-ri-file-edit-line',

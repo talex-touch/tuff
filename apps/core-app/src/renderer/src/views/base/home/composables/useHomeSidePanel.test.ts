@@ -4,6 +4,7 @@ import { ref } from 'vue'
 import {
   clampSidePanelWidth,
   HOME_BODY_MIN_WIDTH,
+  resolveWorkspaceTabTitle,
   SIDE_PANEL_DEFAULT_WIDTH,
   SIDE_PANEL_MAX_WIDTH,
   SIDE_PANEL_MIN_WIDTH,
@@ -256,5 +257,48 @@ describe('useHomeSidePanel', () => {
     conv.value = 'conv-2'
     await Promise.resolve()
     expect(panel.tabs.value.map((t) => t.kind)).toEqual(['files'])
+  })
+
+  it('opens, titles, persists, and restores the canvas workspace tool cleanly', async () => {
+    expect(resolveWorkspaceTabTitle('canvas', '')).toBe('Canvas')
+    expect(resolveWorkspaceTabTitle('canvas', '  Design Canvas  ')).toBe('Design Canvas')
+
+    const conv = ref<string | null>('conv-canvas-1')
+    const panel = useHomeSidePanel(conv)
+
+    // Empty title falls back to default workspace title; subsequent localized call updates it.
+    const canvasId = panel.openWorkspaceTab('canvas', '')
+    expect(canvasId).toBe('side-canvas')
+    expect(panel.panelOpen.value).toBe(true)
+    expect(panel.activeTabId.value).toBe('side-canvas')
+    expect(panel.activeTab.value).toMatchObject({
+      id: 'side-canvas',
+      kind: 'canvas',
+      title: 'Canvas'
+    })
+
+    const dedupId = panel.openWorkspaceTab('canvas', 'Design Canvas')
+    expect(dedupId).toBe(canvasId)
+    expect(panel.tabs.value).toHaveLength(1)
+    expect(panel.activeTab.value).toMatchObject({
+      id: 'side-canvas',
+      kind: 'canvas',
+      title: 'Design Canvas'
+    })
+
+    // Persists and restores cleanly across reload.
+    const restored = useHomeSidePanel(ref<string | null>('conv-canvas-1'))
+    expect(restored.panelOpen.value).toBe(true)
+    expect(restored.activeTabId.value).toBe('side-canvas')
+    expect(restored.tabs.value).toEqual([
+      { id: 'side-canvas', kind: 'canvas', title: 'Design Canvas' }
+    ])
+
+    // Switching conversations inside the same Space keeps the canvas tab open so
+    // HomeSideCanvasPane can swap to the new conversation's session canvas state.
+    conv.value = 'conv-canvas-2'
+    await Promise.resolve()
+    expect(panel.tabs.value.map((t) => t.kind)).toEqual(['canvas'])
+    expect(panel.activeTabId.value).toBe('side-canvas')
   })
 })
