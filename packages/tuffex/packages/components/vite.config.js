@@ -45,8 +45,33 @@ const componentEntries = Object.fromEntries(
 )
 
 // Shared utilities live outside preserveModulesRoot. Keep their module paths
-// package-relative instead of shipping the absolute build-worktree directory.
+// package-relative instead of shipping the absolute build-worktree directory,
+// and list them as explicit Rollup inputs so pure re-exports from external
+// `@talex-touch/tuffex-core` are never elided from `dist/es/utils/internal/*`.
 const utilsSourceRoot = realpathSync(fileURLToPath(new URL('../utils/', import.meta.url))).replaceAll('\\', '/')
+function collectUtilEntries(dirUrl, prefix = '') {
+  const entries = {}
+  for (const dirent of readdirSync(dirUrl, { withFileTypes: true })) {
+    if (dirent.isDirectory()) {
+      if (dirent.name === '__tests__')
+        continue
+      Object.assign(
+        entries,
+        collectUtilEntries(new URL(`${dirent.name}/`, dirUrl), `${prefix}${dirent.name}/`),
+      )
+      continue
+    }
+    if (!dirent.name.endsWith('.ts') || dirent.name.endsWith('.d.ts'))
+      continue
+    const rel = `${prefix}${dirent.name}`
+    if (rel === 'index.ts')
+      continue
+    const key = `utils/internal/${rel.replace(/\.ts$/, '')}`
+    entries[key] = fileURLToPath(new URL(dirent.name, dirUrl))
+  }
+  return entries
+}
+const utilInternalEntries = collectUtilEntries(new URL('../utils/', import.meta.url))
 function componentModuleFileName(chunk) {
   const id = chunk.facadeModuleId?.replaceAll('\\', '/')
   if (id?.startsWith(`${utilsSourceRoot}/`)) {
@@ -84,6 +109,7 @@ export default defineConfig({
       input: {
         index: './src/index.ts',
         'utils/index': './src/utils/index.ts',
+        ...utilInternalEntries,
         ...componentEntries,
       },
       output: [

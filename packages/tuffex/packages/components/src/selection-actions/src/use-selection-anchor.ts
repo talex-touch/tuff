@@ -6,7 +6,7 @@
 // can feed the bar its own payload instead.
 import type { MaybeRefOrGetter, Ref } from 'vue'
 import type { SelectionPayload } from './types'
-import { useTextSelection } from '@vueuse/core'
+import { createTextSelectionTracker } from '@talex-touch/tuffex-core'
 import { onBeforeUnmount, ref, toValue, watch } from 'vue'
 
 export interface ResolveSelectionInput {
@@ -75,7 +75,8 @@ export interface UseSelectionAnchorReturn {
 }
 
 export function useSelectionAnchor(options: UseSelectionAnchorOptions = {}): UseSelectionAnchorReturn {
-  const { text, ranges } = useTextSelection()
+  const tracker = createTextSelectionTracker()
+  const { text, ranges } = tracker
   const selection = ref<SelectionPayload | null>(null)
 
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -139,7 +140,10 @@ export function useSelectionAnchor(options: UseSelectionAnchorOptions = {}): Use
     timer = setTimeout(resolve, options.debounce ?? 120)
   })
 
-  onBeforeUnmount(cancel)
+  onBeforeUnmount(() => {
+    cancel()
+    tracker.destroy()
+  })
 
   return {
     selection,

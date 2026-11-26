@@ -22,6 +22,7 @@
       "@talex-touch/tuffex": ["./packages/components/src/index.ts"],
       "@talex-touch/tuffex/style.css": ["./packages/components/style/index.scss"],
       "@talex-touch/tuffex/base.css": ["./packages/components/style/index.scss"],
+      "@talex-touch/tuffex/tokens.css": ["./packages/components/style/tokens.scss"],
       "@talex-touch/tuffex/*/style.css": ["./packages/components/src/*/style/index.scss"],
       "@talex-touch/tuffex/utils": ["./packages/utils/index.ts"],
       "@talex-touch/tuffex/*": ["./packages/components/src/*/index.ts"]

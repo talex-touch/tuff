@@ -1,0 +1,274 @@
+import { hasDocument, hasWindow } from './env'
+
+export interface TxZIndexContext {
+  seed: number
+  current: number
+}
+
+export interface TxZIndexOverrides {
+  /** Override next allocation logic. */
+  next?: (ctx: TxZIndexContext) => number
+  /** Override get logic for full external integration. */
+  get?: (ctx: TxZIndexContext) => number
+}
+
+export interface TxZIndexSeedSource {
+  /** Returns latest seed from external system (store/host/CSS var, etc.). */
+  getSeed: () => number | undefined | null
+  /**
+   * Subscribe seed changes.
+   * Return unsubscribe function.
+   */
+  subscribe?: (listener: () => void) => () => void
+}
+
+export type TxZIndexEvent
+  = | { type: 'next', seed: number, current: number, prev: number }
+    | { type: 'refresh', seed: number, current: number, prev: number, reason?: string }
+    | { type: 'reset', seed: number, current: number, prev: number, reason?: string }
+    | { type: 'configure', seed: number, current: number, prev: number }
+
+export const DEFAULT_Z_INDEX_SEED = 2000
+
+export type ZIndexListener = (e: TxZIndexEvent) => void
+
+interface ZIndexState {
+  seed: number
+  current: number
+  overrides: TxZIndexOverrides | null
+  seedSource: TxZIndexSeedSource | null
+  seedSourceUnsubscribe: (() => void) | null
+  listeners: Set<ZIndexListener>
+}
+
+export interface TxZIndexAllocator {
+  configure: (options: {
+    seed?: number
+    overrides?: TxZIndexOverrides
+    seedSource?: TxZIndexSeedSource | null
+  }) => void
+  onEvent: (listener: ZIndexListener) => () => void
+  get: () => number
+  next: () => number
+  refresh: (seed?: number, reason?: string) => number
+  reset: (seed?: number, reason?: string) => number
+}
+
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v)
+}
+
+function parseCssZIndex(value: string): number | null {
+  const raw = value.trim()
+  if (!raw)
+    return null
+  const n = Number.parseFloat(raw)
+  if (!Number.isFinite(n))
+    return null
+  return n
+}
+
+function zIndexPath(el: Element): Array<[Element, number]> {
+  const path: Array<[Element, number]> = []
+  for (let node: Element | null = el; node; node = node.parentElement) {
+    const zIndex = parseCssZIndex(getComputedStyle(node).zIndex)
+    if (zIndex != null)
+      path.unshift([node, zIndex])
+  }
+  return path
+}
+
+/** Resolve keyboard ownership from live dialog semantics, including across source/dist instances. */
+export function isTopmostModalDialog(dialog: HTMLElement | null): boolean {
+  if (!dialog?.isConnected)
+    return false
+
+  const dialogPath = zIndexPath(dialog)
+  const dialogs = dialog.ownerDocument.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]:not([aria-hidden="true"]):not([inert])')
+  for (const candidate of dialogs) {
+    if (candidate === dialog)
+      continue
+    if (candidate.closest('[aria-hidden="true"], [inert]'))
+      continue
+    if (candidate.classList.contains('tx-drawer') && !candidate.classList.contains('tx-drawer--visible'))
+      continue
+    const style = getComputedStyle(candidate)
+    if (style.display === 'none' || style.visibility === 'hidden')
+      continue
+    const candidatePath = zIndexPath(candidate)
+    let at = 0
+    while (at < candidatePath.length && at < dialogPath.length && candidatePath[at]![0] === dialogPath[at]![0])
+      at++
+    const candidateZIndex = candidatePath[at]?.[1] ?? 0
+    const currentZIndex = dialogPath[at]?.[1] ?? 0
+    if (candidateZIndex > currentZIndex
+      || (candidateZIndex === currentZIndex && (dialog.compareDocumentPosition(candidate) & Node.DOCUMENT_POSITION_FOLLOWING))) {
+      return false
+    }
+  }
+  return true
+}
+
+function resolveSeedFromCssVar(): number | null {
+  if (!hasWindow() || !hasDocument())
+    return null
+  if (typeof getComputedStyle !== 'function')
+    return null
+
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--tx-index-popper')
+  const n = parseCssZIndex(raw)
+  if (n == null)
+    return null
+  return Math.max(DEFAULT_Z_INDEX_SEED, n)
+}
+
+export function createZIndexAllocator(): TxZIndexAllocator {
+  const state: ZIndexState = {
+    seed: DEFAULT_Z_INDEX_SEED,
+    current: DEFAULT_Z_INDEX_SEED,
+    overrides: null,
+    seedSource: null,
+    seedSourceUnsubscribe: null,
+    listeners: new Set(),
+  }
+
+  function emitEvent(e: TxZIndexEvent): void {
+    state.listeners.forEach((listener) => {
+      try {
+        listener(e)
+      }
+      catch {
+        // ignore listener errors
+      }
+    })
+  }
+
+  function resolveSeed(inputSeed?: number): number {
+    if (isFiniteNumber(inputSeed))
+      return inputSeed
+
+    const fromSource = state.seedSource?.getSeed?.()
+    if (isFiniteNumber(fromSource))
+      return fromSource
+
+    return resolveSeedFromCssVar() ?? DEFAULT_Z_INDEX_SEED
+  }
+
+  function refresh(seed?: number, reason?: string): number {
+    const prev = state.current
+    const resolvedSeed = resolveSeed(seed)
+
+    state.seed = resolvedSeed
+    state.current = Math.max(state.current, resolvedSeed)
+
+    emitEvent({ type: 'refresh', seed: state.seed, current: state.current, prev, reason })
+    return state.current
+  }
+
+  function reset(seed?: number, reason?: string): number {
+    const prev = state.current
+    const resolvedSeed = resolveSeed(seed)
+
+    state.seed = resolvedSeed
+    state.current = resolvedSeed
+
+    emitEvent({ type: 'reset', seed: state.seed, current: state.current, prev, reason })
+    return state.current
+  }
+
+  function configure(options: {
+    seed?: number
+    overrides?: TxZIndexOverrides
+    seedSource?: TxZIndexSeedSource | null
+  }): void {
+    const prev = state.current
+
+    const hasOverrides = Object.prototype.hasOwnProperty.call(options, 'overrides')
+    const hasSeedSource = Object.prototype.hasOwnProperty.call(options, 'seedSource')
+    const hasSeed = Object.prototype.hasOwnProperty.call(options, 'seed')
+
+    if (hasOverrides)
+      state.overrides = options.overrides ?? null
+
+    if (hasSeedSource) {
+      state.seedSourceUnsubscribe?.()
+      state.seedSourceUnsubscribe = null
+      state.seedSource = options.seedSource ?? null
+
+      const src = state.seedSource
+      if (src?.subscribe) {
+        state.seedSourceUnsubscribe = src.subscribe(() => {
+          refresh(undefined, 'seedSource')
+        })
+      }
+    }
+
+    if (hasSeed)
+      refresh(options.seed, 'configure')
+    else if (hasSeedSource && state.seedSource)
+      refresh(undefined, 'configure')
+
+    emitEvent({ type: 'configure', seed: state.seed, current: state.current, prev })
+  }
+
+  function onEvent(listener: ZIndexListener): () => void {
+    state.listeners.add(listener)
+    return () => state.listeners.delete(listener)
+  }
+
+  function get(): number {
+    const ctx: TxZIndexContext = { seed: state.seed, current: state.current }
+    const overridden = state.overrides?.get?.(ctx)
+    if (isFiniteNumber(overridden))
+      return overridden
+    return state.current
+  }
+
+  function next(): number {
+    const prev = state.current
+    const ctx: TxZIndexContext = { seed: state.seed, current: state.current }
+    const overridden = state.overrides?.next?.(ctx)
+
+    const value = isFiniteNumber(overridden) ? overridden : state.current + 1
+    state.current = value
+
+    emitEvent({ type: 'next', seed: state.seed, current: state.current, prev })
+    return state.current
+  }
+
+  return { configure, onEvent, get, next, refresh, reset }
+}
+
+const defaultZIndexAllocator = createZIndexAllocator()
+
+export function getDefaultZIndexAllocator(): TxZIndexAllocator {
+  return defaultZIndexAllocator
+}
+
+export function configureZIndex(options: {
+  seed?: number
+  overrides?: TxZIndexOverrides
+  seedSource?: TxZIndexSeedSource | null
+}): void {
+  defaultZIndexAllocator.configure(options)
+}
+
+export function onZIndexEvent(listener: ZIndexListener): () => void {
+  return defaultZIndexAllocator.onEvent(listener)
+}
+
+export function getZIndex(): number {
+  return defaultZIndexAllocator.get()
+}
+
+export function nextZIndex(): number {
+  return defaultZIndexAllocator.next()
+}
+
+export function refreshZIndex(seed?: number, reason?: string): number {
+  return defaultZIndexAllocator.refresh(seed, reason)
+}
+
+export function resetZIndex(seed?: number, reason?: string): number {
+  return defaultZIndexAllocator.reset(seed, reason)
+}

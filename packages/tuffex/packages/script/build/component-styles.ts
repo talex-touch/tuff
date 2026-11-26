@@ -275,7 +275,8 @@ export async function buildComponentStyles() {
       cssCodeSplit: true,
       write: false,
       rollupOptions: {
-        external: externalDeps,
+        external: id => !/\.css(?:\?|$)/.test(id)
+          && externalDeps.some(dep => id === dep || id.startsWith(`${dep}/`)),
         input: entries,
         // Without this, Rollup applies `preserveEntrySignatures: 'exports-only'`
         // and an entry whose only statement is `export * from './src'` re-exports

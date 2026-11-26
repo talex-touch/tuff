@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - "packages/tuffex/**"
+      - "packages/tuffex-core/**"
+      - "packages/tuffex-react/**"
+      - "packages/tuffex-wc/**"
       - "packages/utils/**"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -15,6 +18,9 @@ on:
       - main
     paths:
       - "packages/tuffex/**"
+      - "packages/tuffex-core/**"
+      - "packages/tuffex-react/**"
+      - "packages/tuffex-wc/**"
       - "packages/utils/**"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -25,7 +31,19 @@ permissions:
   contents: read
 
 jobs:
+  core:
+    uses: ./.github/workflows/package-ci.yml
+    with:
+      package-name: tuffex-core
+      package-path: packages/tuffex-core
+      run-typecheck: true
+      run-lint: true
+      run-test: true
+      run-build: true
+      build-command: pnpm build
+
   ci:
+    needs: core
     uses: ./.github/workflows/package-ci.yml
     with:
       package-name: tuffex
@@ -41,3 +59,37 @@ jobs:
       # 2026-08-20 audit:types passes and audit:size is green again (border-beam's
       # measured outlier is recorded as a per-file exception in the audit script).
       post-build-command: pnpm audit:exports && pnpm audit:exports:self-test && pnpm audit:readme && pnpm audit:readme:self-test && pnpm audit:types && pnpm audit:types:self-test && pnpm audit:size && pnpm audit:size:self-test && pnpm audit:changelog && pnpm audit:changelog:self-test && pnpm audit:colors && pnpm audit:colors:self-test
+
+  react:
+    needs: core
+    uses: ./.github/workflows/package-ci.yml
+    with:
+      package-name: tuffex-react
+      package-path: packages/tuffex-react
+      run-typecheck: true
+      typecheck-command: |
+        pnpm --dir ../.. --filter "@talex-touch/tuffex-core" run build
+        pnpm typecheck
+      run-lint: true
+      run-test: true
+      run-build: true
+      build-command: |
+        pnpm --dir ../.. --filter "@talex-touch/tuffex-core" run build
+        pnpm build
+
+  wc:
+    needs: core
+    uses: ./.github/workflows/package-ci.yml
+    with:
+      package-name: tuffex-wc
+      package-path: packages/tuffex-wc
+      run-typecheck: true
+      typecheck-command: |
+        pnpm --dir ../.. --filter "@talex-touch/tuffex-core" run build
+        pnpm typecheck
+      run-lint: true
+      run-test: true
+      run-build: true
+      build-command: |
+        pnpm --dir ../.. --filter "@talex-touch/tuffex-core" run build
+        pnpm build

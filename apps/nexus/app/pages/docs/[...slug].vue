@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { defineAsyncComponent, h, type FunctionalComponent } from 'vue'
 import DocHero from '~/components/docs/DocHero.vue'
+import DocsFrameworkStatusBar from '~/components/docs/DocsFrameworkStatusBar.vue'
 import ProseA from '~/components/content/ProseA.vue'
 import DocsProseHeading from '~/components/docs/DocsProseHeading.vue'
+import { resolveComponentSlugFromPath } from '~/data/tuffex-framework-matrix'
 import { appDescription, appName } from '~/constants'
 import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
 import { cacheDocsFullBody, hasCachedDocsFullBody, isDocsPageRecordForRoute, readCachedDocsFullBody, requestDocsPage, resolveDocsFullBodyCacheKey } from '~/utils/docs-page-client-cache'
@@ -769,6 +771,7 @@ function matchesLocale(target: any) {
 }
 
 const normalizedDocPath = computed(() => normalizeContentPath(doc.value?.path ?? docPath.value))
+const activeComponentSlug = computed(() => resolveComponentSlugFromPath(normalizedDocPath.value ?? docPath.value))
 
 function itemTitle(title?: string, path?: string) {
   const fallback = fallbackTitleFromPath(path)
@@ -1738,6 +1741,10 @@ watch(
               :read-time-label="heroReadTimeLabel"
               :updated-label="heroUpdatedLabel"
               :verified-label="heroVerifiedLabel"
+            />
+            <DocsFrameworkStatusBar
+              v-if="activeComponentSlug"
+              :slug="activeComponentSlug"
             />
           </div>
           <div

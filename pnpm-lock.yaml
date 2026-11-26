@@ -88,6 +88,9 @@ catalogs:
     vitepress:
       specifier: 2.0.0-alpha.18
       version: 2.0.0-alpha.18
+    vitest:
+      specifier: ^3.2.7
+      version: 3.2.7
   dev:
     '@antfu/eslint-config':
       specifier: ^5.4.1
@@ -344,7 +347,7 @@ importers:
         version: 1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       '@langchain/langgraph':
         specifier: 'catalog:'
-        version: 1.6.0(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(zod@4.6.6)
+        version: 1.6.0(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(zod@4.6.6)
       '@langchain/openai':
         specifier: 'catalog:'
         version: 1.8.0(@aws-sdk/credential-provider-node@3.972.70)(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(@smithy/signature-v4@5.6.6)(google-auth-library@10.9.0(supports-color@10.2.2))(undici@6.29.1)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
@@ -676,7 +679,7 @@ importers:
         version: 10.65.0(@cloudflare/workers-types@4.20260702.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.220.0(@opentelemetry/api@1.9.1)(supports-color@10.2.2))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(encoding@0.1.13)(magicast@0.5.5)(nuxt@4.4.8(56bf0989da64e29b4b6abf25642e58fe))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.45(typescript@5.9.3)))(rollup@2.80.0)(supports-color@10.2.2)(vue@3.5.45(typescript@5.9.3))(webpack@5.108.4(cssnano@8.0.2(postcss@8.5.23))(csso@5.0.5)(esbuild@0.28.1)(postcss@8.5.23))
       '@sidebase/nuxt-auth':
         specifier: ^1.4.0
-        version: 1.4.0(@libsql/client@0.18.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(better-sqlite3@12.11.1)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260702.1)(@libsql/client@0.18.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(better-sqlite3@12.11.1))(encoding@0.1.13)(magicast@0.5.5)(next-auth@4.24.15)(oxc-parser@0.133.0)(rolldown@1.2.16)(supports-color@10.2.2)
+        version: 1.4.0(@libsql/client@0.18.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(better-sqlite3@12.11.1)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260702.1)(@libsql/client@0.18.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(better-sqlite3@12.11.1))(encoding@0.1.13)(magicast@0.5.5)(next-auth@4.24.15(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(oxc-parser@0.133.0)(rolldown@1.2.16)(supports-color@10.2.2)
       '@talex-touch/tuff-business':
         specifier: workspace:*
         version: link:../../packages/tuff-business
@@ -686,6 +689,15 @@ importers:
       '@talex-touch/tuffex':
         specifier: workspace:*
         version: link:../../packages/tuffex
+      '@talex-touch/tuffex-core':
+        specifier: workspace:*
+        version: link:../../packages/tuffex-core
+      '@talex-touch/tuffex-react':
+        specifier: workspace:*
+        version: link:../../packages/tuffex-react
+      '@talex-touch/tuffex-wc':
+        specifier: workspace:*
+        version: link:../../packages/tuffex-wc
       '@talex-touch/utils':
         specifier: workspace:*
         version: link:../../packages/utils
@@ -719,6 +731,12 @@ importers:
       ogl:
         specifier: 'catalog:'
         version: 1.0.11
+      react:
+        specifier: ^19.0.0
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.3.1(react@19.3.1)
       simplex-noise:
         specifier: 'catalog:'
         version: 4.0.3
@@ -809,7 +827,7 @@ importers:
         version: 1.5.0(eslint@9.39.4(jiti@2.7.0)(supports-color@10.2.2))
       next-auth:
         specifier: ~4.24.15
-        version: 4.24.15
+        version: 4.24.15(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       nitro-cloudflare-dev:
         specifier: catalog:dev
         version: 0.2.2(patch_hash=c47392fbb49830b9eb6094045394a3e5cc9b54f556f303919d7acaf55e95cbf2)
@@ -1119,7 +1137,7 @@ importers:
         version: 1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@7.47.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(google-auth-library@10.9.0(supports-color@10.2.2))(undici@6.29.1)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       '@langchain/langgraph':
         specifier: 'catalog:'
-        version: 1.6.0(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@7.47.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(google-auth-library@10.9.0(supports-color@10.2.2))(undici@6.29.1)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(zod@4.6.6)
+        version: 1.6.0(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@7.47.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(google-auth-library@10.9.0(supports-color@10.2.2))(undici@6.29.1)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(zod@4.6.6)
       '@talex-touch/utils':
         specifier: workspace:*
         version: link:../utils
@@ -1231,6 +1249,9 @@ importers:
       '@shikijs/engine-javascript':
         specifier: ^4.4.2
         version: 4.4.2
+      '@talex-touch/tuffex-core':
+        specifier: workspace:^
+        version: link:../tuffex-core
       '@talex-touch/utils':
         specifier: workspace:^
         version: link:../utils
@@ -1240,9 +1261,6 @@ importers:
       '@vue/reactivity':
         specifier: ^3.5.27
         version: 3.5.39
-      '@vueuse/core':
-        specifier: ^14.4.0
-        version: 14.4.0(vue@3.5.45(typescript@5.9.3))
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -1288,9 +1306,6 @@ importers:
       shiki:
         specifier: ^4.4.2
         version: 4.4.2
-      v-wave:
-        specifier: ^3.1.1
-        version: 3.1.1(magicast@0.5.5)(vue@3.5.45(typescript@5.9.3))
       yaml:
         specifier: 2.9.0
         version: 2.9.0
@@ -1383,11 +1398,139 @@ importers:
         specifier: ^3.3.6
         version: 3.3.7(typescript@5.9.3)
 
-  packages/tuffex/packages/components:
+  packages/tuffex-core:
     dependencies:
-      v-wave:
-        specifier: ^3.1.1
-        version: 3.1.1(magicast@0.5.5)(vue@3.5.45(typescript@5.9.3))
+      '@floating-ui/dom':
+        specifier: ^1.7.6
+        version: 1.7.6
+      '@vue/reactivity':
+        specifier: ^3.5.27
+        version: 3.5.45
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.2
+        version: 24.13.2
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0(bufferutil@4.1.0)(supports-color@10.2.2)(utf-8-validate@6.0.6)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: 7.3.7
+        version: 7.3.7(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
+      vite-plugin-dts:
+        specifier: ^4.5.4
+        version: 4.5.4(@types/node@24.13.2)(rollup@2.80.0)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.7(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.2)(jiti@2.7.0)(jsdom@26.1.0(bufferutil@4.1.0)(supports-color@10.2.2)(utf-8-validate@6.0.6))(sass@1.101.0)(supports-color@10.2.2)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
+
+  packages/tuffex-react:
+    dependencies:
+      '@floating-ui/dom':
+        specifier: ^1.7.6
+        version: 1.7.6
+      '@talex-touch/tuffex-core':
+        specifier: workspace:^
+        version: link:../tuffex-core
+      '@vue/reactivity':
+        specifier: ^3.5.27
+        version: 3.5.45
+      dompurify:
+        specifier: 3.4.17
+        version: 3.4.17
+      marked:
+        specifier: 'catalog:'
+        version: 17.0.6
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.2
+        version: 24.13.2
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.3.0(@types/react@19.3.0)
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0(bufferutil@4.1.0)(supports-color@10.2.2)(utf-8-validate@6.0.6)
+      react:
+        specifier: ^19.0.0
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.3.1(react@19.3.1)
+      sass:
+        specifier: 'catalog:'
+        version: 1.101.0
+      typescript:
+        specifier: catalog:dev
+        version: 5.9.3
+      vite:
+        specifier: 7.3.7
+        version: 7.3.7(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
+      vite-plugin-dts:
+        specifier: ^4.5.4
+        version: 4.5.4(@types/node@24.13.2)(rollup@2.80.0)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.7(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.2)(jiti@2.7.0)(jsdom@26.1.0(bufferutil@4.1.0)(supports-color@10.2.2)(utf-8-validate@6.0.6))(sass@1.101.0)(supports-color@10.2.2)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
+
+  packages/tuffex-wc:
+    dependencies:
+      '@floating-ui/vue':
+        specifier: 'catalog:'
+        version: 1.1.11(vue@3.5.45(typescript@5.9.3))
+      '@talex-touch/tuffex':
+        specifier: workspace:^
+        version: link:../tuffex
+      '@talex-touch/tuffex-core':
+        specifier: workspace:^
+        version: link:../tuffex-core
+      '@talex-touch/utils':
+        specifier: workspace:^
+        version: link:../utils
+      dompurify:
+        specifier: 3.4.17
+        version: 3.4.17
+      gsap:
+        specifier: 'catalog:'
+        version: 3.15.0
+      marked:
+        specifier: 'catalog:'
+        version: 17.0.6
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.2
+        version: 24.13.2
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.7
+        version: 6.0.8(vite@7.3.7(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))(vue@3.5.45(typescript@5.9.3))
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0(bufferutil@4.1.0)(supports-color@10.2.2)(utf-8-validate@6.0.6)
+      sass:
+        specifier: 'catalog:'
+        version: 1.101.0
+      typescript:
+        specifier: catalog:dev
+        version: 5.9.3
+      vite:
+        specifier: 7.3.7
+        version: 7.3.7(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
+      vite-plugin-dts:
+        specifier: ^4.5.4
+        version: 4.5.4(@types/node@24.13.2)(rollup@2.80.0)(supports-color@10.2.2)(typescript@5.9.3)(vite@7.3.7(@types/node@24.13.2)(jiti@2.7.0)(sass@1.101.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0))
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.2)(jiti@2.7.0)(jsdom@26.1.0(bufferutil@4.1.0)(supports-color@10.2.2)(utf-8-validate@6.0.6))(sass@1.101.0)(supports-color@10.2.2)(terser@5.46.2)(tsx@4.21.0)(yaml@2.9.0)
+      vue:
+        specifier: catalog:frontend
+        version: 3.5.45(typescript@5.9.3)
+
+  packages/tuffex/packages/components:
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^6.0.7
@@ -7009,6 +7152,14 @@ packages:
 
   '@types/plist@3.0.5':
     resolution: {integrity: sha512-E6OCaRmAe4WDmWNsL/9RMqdkkzDCY1etutkflWk4c+AcjDU07Pcz1fQwTX0TQz+Pxqn9i4L1TU3UFpjnrcDgxA==}
+
+  '@types/react-dom@19.3.0':
+    resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
+    peerDependencies:
+      '@types/react': ^19.3.0
+
+  '@types/react@19.3.0':
+    resolution: {integrity: sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==}
 
   '@types/resolve@1.20.2':
     resolution: {integrity: sha512-60BCwRFOZCQhDncwQdxxeOEEkbc5dIMccYLwbxsS4TUNeVECQ/pBJ0j09mrHOl/JJvpRPGwO9SvE4nR2Nb/a4Q==}
@@ -12849,6 +13000,15 @@ packages:
     resolution: {integrity: sha512-y3bGgqKj3QBdxLbLkomlohkvsA8gdAiUQlSBJnBhfn+BPxg4bc62d8TcBW15wavDfgexCgccckhcZvywyQYPOw==}
     hasBin: true
 
+  react-dom@19.3.1:
+    resolution: {integrity: sha512-Y0bARz53lhEC1NMCASs0/j+faB/zqt3R8hpvg1e8+61ZVJ4UL0UdC4cBbXfZMcIuhrfgeILTLe+ZeBCavQPtKQ==}
+    peerDependencies:
+      react: ^19.3.1
+
+  react@19.3.1:
+    resolution: {integrity: sha512-QNhWdt7nrgVWWQG58QuGsAR3jv3Hbe4mb4vz7w2csnHavciZJgda1CPNaldF6eVxv90ud3jUXpKlHL69gO38yw==}
+    engines: {node: '>=0.10.0'}
+
   read-binary-file-arch@1.0.6:
     resolution: {integrity: sha512-BNg9EN3DD3GsDXX7Aa8O4p92sryjkmzYYgmgTAc6CA4uGLEDzFfxOxugu21akOxpcXHiEgsYkC6nPsQvLLLmEg==}
     hasBin: true
@@ -13198,6 +13358,9 @@ packages:
   saxes@6.0.0:
     resolution: {integrity: sha512-xAg7SOnEhrm5zI3puOOKyy1OMcMlIJZYNJY7xLBwSze0UjhPLnWfj2GF2EpT0jmzaJKIWKHLsaSSajf35bcYnA==}
     engines: {node: '>=v12.22.7'}
+
+  scheduler@0.28.0:
+    resolution: {integrity: sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==}
 
   schema-utils@4.3.3:
     resolution: {integrity: sha512-eflK8wEtyOE6+hsaRVPxvUKYCpRgzLqDTb8krvAsRIwOGlHoSgYLgBXoubGgLd2fT41/OUYdb48v4k4WWHQurA==}
@@ -18056,27 +18219,33 @@ snapshots:
     dependencies:
       '@langchain/core': 1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@7.47.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(google-auth-library@10.9.0(supports-color@10.2.2))(undici@6.29.1)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
 
-  '@langchain/langgraph-sdk@1.12.9(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))':
+  '@langchain/langgraph-sdk@1.12.9(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
       '@langchain/core': 1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       '@langchain/protocol': 0.0.20
       '@types/json-schema': 7.0.15
       p-queue: 9.3.2
       p-retry: 7.1.1
+    optionalDependencies:
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
 
-  '@langchain/langgraph-sdk@1.12.9(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@7.47.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(google-auth-library@10.9.0(supports-color@10.2.2))(undici@6.29.1)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))':
+  '@langchain/langgraph-sdk@1.12.9(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@7.47.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(google-auth-library@10.9.0(supports-color@10.2.2))(undici@6.29.1)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
       '@langchain/core': 1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@7.47.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(google-auth-library@10.9.0(supports-color@10.2.2))(undici@6.29.1)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       '@langchain/protocol': 0.0.20
       '@types/json-schema': 7.0.15
       p-queue: 9.3.2
       p-retry: 7.1.1
+    optionalDependencies:
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
 
-  '@langchain/langgraph@1.6.0(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(zod@4.6.6)':
+  '@langchain/langgraph@1.6.0(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(zod@4.6.6)':
     dependencies:
       '@langchain/core': 1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       '@langchain/langgraph-checkpoint': 1.2.2(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))
-      '@langchain/langgraph-sdk': 1.12.9(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))
+      '@langchain/langgraph-sdk': 1.12.9(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@6.26.0(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@langchain/protocol': 0.0.20
       '@standard-schema/spec': 1.1.0
       zod: 4.6.6
@@ -18084,11 +18253,11 @@ snapshots:
       - react
       - react-dom
 
-  '@langchain/langgraph@1.6.0(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@7.47.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(google-auth-library@10.9.0(supports-color@10.2.2))(undici@6.29.1)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(zod@4.6.6)':
+  '@langchain/langgraph@1.6.0(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@7.47.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(google-auth-library@10.9.0(supports-color@10.2.2))(undici@6.29.1)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(zod@4.6.6)':
     dependencies:
       '@langchain/core': 1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@7.47.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(google-auth-library@10.9.0(supports-color@10.2.2))(undici@6.29.1)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       '@langchain/langgraph-checkpoint': 1.2.2(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@7.47.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(google-auth-library@10.9.0(supports-color@10.2.2))(undici@6.29.1)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))
-      '@langchain/langgraph-sdk': 1.12.9(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@7.47.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(google-auth-library@10.9.0(supports-color@10.2.2))(undici@6.29.1)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))
+      '@langchain/langgraph-sdk': 1.12.9(@langchain/core@1.3.2(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.1))(openai@7.47.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(google-auth-library@10.9.0(supports-color@10.2.2))(undici@6.29.1)(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.6.6))(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@langchain/protocol': 0.0.20
       '@standard-schema/spec': 1.1.0
       zod: 4.6.6
@@ -20504,7 +20673,7 @@ snapshots:
 
   '@shikijs/vscode-textmate@10.0.2': {}
 
-  '@sidebase/nuxt-auth@1.4.0(@libsql/client@0.18.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(better-sqlite3@12.11.1)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260702.1)(@libsql/client@0.18.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(better-sqlite3@12.11.1))(encoding@0.1.13)(magicast@0.5.5)(next-auth@4.24.15)(oxc-parser@0.133.0)(rolldown@1.2.16)(supports-color@10.2.2)':
+  '@sidebase/nuxt-auth@1.4.0(@libsql/client@0.18.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(better-sqlite3@12.11.1)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260702.1)(@libsql/client@0.18.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(better-sqlite3@12.11.1))(encoding@0.1.13)(magicast@0.5.5)(next-auth@4.24.15(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(oxc-parser@0.133.0)(rolldown@1.2.16)(supports-color@10.2.2)':
     dependencies:
       '@nuxt/kit': 4.4.8(magicast@0.5.5)
       defu: 6.1.7
@@ -20515,7 +20684,7 @@ snapshots:
       scule: 1.3.0
       ufo: 1.6.4
     optionalDependencies:
-      next-auth: 4.24.15
+      next-auth: 4.24.15(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -20926,6 +21095,14 @@ snapshots:
     dependencies:
       '@types/node': 24.13.2
       xmlbuilder: 15.1.1
+
+  '@types/react-dom@19.3.0(@types/react@19.3.0)':
+    dependencies:
+      '@types/react': 19.3.0
+
+  '@types/react@19.3.0':
+    dependencies:
+      csstype: 3.2.3
 
   '@types/resolve@1.20.2': {}
 
@@ -21696,7 +21873,7 @@ snapshots:
       '@babel/types': 7.29.8
       '@vue/babel-helper-vue-transform-on': 1.5.0
       '@vue/babel-plugin-resolve-type': 1.5.0(@babel/core@7.29.6(supports-color@10.2.2))(supports-color@10.2.2)
-      '@vue/shared': 3.5.41
+      '@vue/shared': 3.5.45
     optionalDependencies:
       '@babel/core': 7.29.6(supports-color@10.2.2)
     transitivePeerDependencies:
@@ -21853,7 +22030,7 @@ snapshots:
       '@volar/language-core': 2.4.28
       '@vue/compiler-dom': 3.5.41
       '@vue/compiler-vue2': 2.7.16
-      '@vue/shared': 3.5.41
+      '@vue/shared': 3.5.45
       alien-signals: 0.4.14
       minimatch: 9.0.9
       muggle-string: 0.4.1
@@ -21865,7 +22042,7 @@ snapshots:
     dependencies:
       '@volar/language-core': 2.4.28
       '@vue/compiler-dom': 3.5.41
-      '@vue/shared': 3.5.41
+      '@vue/shared': 3.5.45
       alien-signals: 3.2.1
       muggle-string: 0.4.1
       path-browserify: 1.0.1
@@ -26691,7 +26868,7 @@ snapshots:
 
   neotraverse@1.0.1: {}
 
-  next-auth@4.24.15:
+  next-auth@4.24.15(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
       '@babel/runtime': 7.29.2
       '@panva/hkdf': 1.2.1
@@ -26701,6 +26878,8 @@ snapshots:
       openid-client: 5.7.1
       preact: 10.29.6
       preact-render-to-string: 5.2.3(preact@10.29.6)
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
       uuid: 14.0.1
 
   nitro-cloudflare-dev@0.2.2(patch_hash=c47392fbb49830b9eb6094045394a3e5cc9b54f556f303919d7acaf55e95cbf2):
@@ -28065,6 +28244,13 @@ snapshots:
       minimist: 1.2.8
       strip-json-comments: 2.0.1
 
+  react-dom@19.3.1(react@19.3.1):
+    dependencies:
+      react: 19.3.1
+      scheduler: 0.28.0
+
+  react@19.3.1: {}
+
   read-binary-file-arch@1.0.6(supports-color@10.2.2):
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
@@ -28575,6 +28761,8 @@ snapshots:
   saxes@6.0.0:
     dependencies:
       xmlchars: 2.2.0
+
+  scheduler@0.28.0: {}
 
   schema-utils@4.3.3:
     dependencies:

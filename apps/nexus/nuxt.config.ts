@@ -20,6 +20,7 @@ import { createNexusPrerenderRoutes } from './build/nexus-prerender-routes'
 import { contentApiRouteExcludes, createStaticCacheRouteRules } from './build/nexus-static-routes.mjs'
 import { tuffexOnDemandStylePlugin } from '../../packages/tuffex/packages/script/build/on-demand-style-plugin'
 import { nexusDemoLoadersPlugin } from './build/nexus-demo-loaders'
+import { nexusFrameworkRuntimePlugin } from './build/nexus-framework-runtime-plugin'
 import { resolveNexusManualChunk } from './build/nexus-manual-chunks'
 
 loadEnv({ path: '.env' })
@@ -473,6 +474,7 @@ export default defineNuxtConfig({
       '@talex-touch/tuff-business',
       '@talex-touch/utils',
       '@talex-touch/tuffex',
+      '@talex-touch/tuffex-core',
     ],
   },
 
@@ -640,7 +642,13 @@ export default defineNuxtConfig({
         '@talex-touch/tuffex > @better-scroll/pull-up',
         '@talex-touch/tuffex > dompurify',
         '@floating-ui/vue',
-        '@talex-touch/tuffex > v-wave',
+        // Nested specifier so pnpm strict layout resolves @floating-ui/dom cleanly
+        // and Vite's tryOptimizedResolve satisfies tuffex-core / tuffex-react overlays without a cold reload.
+        '@talex-touch/tuffex-core > @floating-ui/dom',
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'react/jsx-runtime',
         'ogl',
       ],
     },
@@ -662,6 +670,7 @@ export default defineNuxtConfig({
     plugins: [
       nexusPageMetaFastPathPlugin(resolve(currentDir, 'app/pages')),
       nexusDemoLoadersPlugin(currentDir, nexusDemoLoaderBase),
+      nexusFrameworkRuntimePlugin(currentDir),
       tuffexOnDemandStylePlugin({
         enabled: tuffexDevMode === 'dist',
         componentDistRoot: tuffexDevMode === 'dist' ? tuffexDistRoot : undefined,
