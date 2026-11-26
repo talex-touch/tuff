@@ -50,6 +50,7 @@ vi.mock('./workflow-debug', () => ({
 }))
 
 import { inferEventLoopLagCause, perfMonitor, selectPrimaryPerfContext } from './perf-monitor'
+import { idleBudgetCoordinator } from '../service/idle-budget-coordinator'
 
 type PerfMonitorTestAccess = {
   severeLagWindowHits: number[]
@@ -202,5 +203,65 @@ describe('inferEventLoopLagCause attribution', () => {
         { label: 'DownloadCenter.cleanupTempFiles', durationMs: 349, mode: 'duration' }
       ])?.label
     ).toBe('Intelligence.invoke')
+  })
+})
+
+describe('perf-monitor idle budget gating', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-26T10:00:00.000Z'))
+    pollingServiceMock.isRegistered.mockReturnValue(false)
+    pollingServiceMock.register.mockClear()
+    pollingServiceMock.unregister.mockClear()
+    pollingServiceMock.start.mockClear()
+    perfMonitor.stop()
+    idleBudgetCoordinator.destroy()
+  })
+
+  afterEach(() => {
+    perfMonitor.stop()
+    idleBudgetCoordinator.destroy()
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  it('pauses the 100ms event-loop interval and polling tasks in background-hidden/system-suspended and resumes without duplicates', () => {
+    const coordinatorInternal = idleBudgetCoordinator as unknown as {
+      transitionTo: (
+        state: 'active' | 'background-hidden' | 'system-suspended',
+        reason: string
+      ) => void
+    }
+
+    perfMonitor.start()
+    expect(vi.getTimerCount()).toBe(1)
+    expect(pollingServiceMock.register).toHaveBeenCalledTimes(2)
+
+    // Calling start() again does not duplicate the 100ms timer.
+    perfMonitor.start()
+    expect(vi.getTimerCount()).toBe(1)
+
+    // Entering background-hidden clears the 100ms interval and unregisters summary/heap tasks.
+    coordinatorInternal.transitionTo('background-hidden', 'window-hidden-grace-elapsed')
+    expect(vi.getTimerCount()).toBe(0)
+    expect(pollingServiceMock.unregister).toHaveBeenCalledWith('perf-monitor.summary')
+    expect(pollingServiceMock.unregister).toHaveBeenCalledWith('perf-monitor.heap')
+
+    // Entering system-suspended keeps timer count at 0.
+    coordinatorInternal.transitionTo('system-suspended', 'power-suspend')
+    expect(vi.getTimerCount()).toBe(0)
+
+    // Returning to active restores exactly one 100ms timer and re-registers polling tasks.
+    pollingServiceMock.register.mockClear()
+    coordinatorInternal.transitionTo('active', 'power-resume')
+    expect(vi.getTimerCount()).toBe(1)
+    expect(pollingServiceMock.register).toHaveBeenCalledTimes(2)
+
+    // Stopping cleans up the interval and unsubscribes so subsequent active transitions do not revive timers.
+    perfMonitor.stop()
+    expect(vi.getTimerCount()).toBe(0)
+    coordinatorInternal.transitionTo('background-hidden', 'window-hidden-grace-elapsed')
+    coordinatorInternal.transitionTo('active', 'window-visible')
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

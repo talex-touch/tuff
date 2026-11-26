@@ -23,6 +23,7 @@ import { evaluateDownloadTarget } from '../../utils/download-target-policy'
 import { downloadChunks, downloadHistory, downloadTasks } from '../../db/schema'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
+import { idleBudgetCoordinator, isStatePausedFor } from '../../service/idle-budget-coordinator'
 import { enterPerfContext } from '../../utils/perf-context'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
@@ -93,6 +94,11 @@ export class DownloadCenterModule extends BaseModule {
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private transportDisposers: Array<() => void> = []
   private startupBackgroundTimer: NodeJS.Timeout | null = null
+  private cleanupStartupTimer: NodeJS.Timeout | null = null
+  private schedulerTimer: NodeJS.Timeout | null = null
+  private schedulerTickInFlight = false
+  private idlePaused = false
+  private idleBudgetUnsubscribe: (() => void) | null = null
   private errorLoggerInitInFlight: Promise<void> | null = null
 
   // Performance optimizations
@@ -165,10 +171,13 @@ export class DownloadCenterModule extends BaseModule {
 
     // Don't await cleanupTempFiles during init — defer to avoid blocking
     // module loading pipeline. Temp cleanup is non-critical and can run later.
-    setTimeout(() => {
+    this.cleanupStartupTimer = setTimeout(() => {
+      this.cleanupStartupTimer = null
+      if (!this.isRunning) return
       void this.cleanupTempFiles()
       void this.pruneExpiredHistory()
     }, 30_000)
+    this.cleanupStartupTimer.unref?.()
 
     const t4 = performance.now()
 
@@ -190,10 +199,19 @@ export class DownloadCenterModule extends BaseModule {
   async onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
     this.isRunning = false
 
+    this.idleBudgetUnsubscribe?.()
+    this.idleBudgetUnsubscribe = null
+    this.idlePaused = false
+
     if (this.startupBackgroundTimer) {
       clearTimeout(this.startupBackgroundTimer)
       this.startupBackgroundTimer = null
     }
+    if (this.cleanupStartupTimer) {
+      clearTimeout(this.cleanupStartupTimer)
+      this.cleanupStartupTimer = null
+    }
+    this.clearSchedulerTimer()
 
     this.pollingService.unregister(this.networkMonitorTaskId)
     this.pollingService.unregister(this.progressUpdateTaskId)
@@ -376,6 +394,7 @@ export class DownloadCenterModule extends BaseModule {
 
     // 广播任务添加事件
     this.broadcastTaskAdded(task)
+    this.syncIdleSchedulers(true)
 
     return taskId
   }
@@ -407,6 +426,7 @@ export class DownloadCenterModule extends BaseModule {
 
     this.updateTaskCache(task) // Ensure cache is updated
     this.broadcastTaskUpdated(task)
+    this.syncIdleSchedulers()
   }
 
   // 恢复任务
@@ -436,6 +456,7 @@ export class DownloadCenterModule extends BaseModule {
 
     this.updateTaskCache(task) // Ensure cache is updated
     this.broadcastTaskUpdated(task)
+    this.syncIdleSchedulers(true)
   }
 
   // 取消任务
@@ -481,6 +502,7 @@ export class DownloadCenterModule extends BaseModule {
     this.clearTaskCache(taskId)
 
     this.broadcastTaskUpdated(task)
+    this.syncIdleSchedulers()
   }
 
   // 重试任务
@@ -525,6 +547,7 @@ export class DownloadCenterModule extends BaseModule {
 
     this.updateTaskCache(task) // Ensure cache is updated
     this.broadcastTaskUpdated(task)
+    this.syncIdleSchedulers(true)
   }
 
   // 批量暂停所有任务
@@ -1175,8 +1198,28 @@ export class DownloadCenterModule extends BaseModule {
     )
   }
 
-  // 启动网络监控
-  private startNetworkMonitoring(): void {
+  private hasWorkInFlight(): boolean {
+    return (
+      this.taskWorkerMap.size > 0 ||
+      this.taskQueue.getActiveTasks().length > 0 ||
+      this.taskQueue.getPendingTasks().length > 0
+    )
+  }
+
+  private shouldRunIdlePollers(): boolean {
+    return this.isRunning && (!this.idlePaused || this.hasWorkInFlight())
+  }
+
+  private clearSchedulerTimer(): void {
+    if (!this.schedulerTimer) return
+    clearTimeout(this.schedulerTimer)
+    this.schedulerTimer = null
+  }
+
+  private ensureNetworkMonitorPolling(): void {
+    if (this.pollingService.isRegistered(this.networkMonitorTaskId)) {
+      return
+    }
     const getMonitorOptions = () => {
       const hasActiveTasks = this.taskQueue.getActiveTasks().length > 0
       return {
@@ -1195,18 +1238,6 @@ export class DownloadCenterModule extends BaseModule {
       })
     }
 
-    // 初始网络状态检查只使用 light mode，避免首屏阶段触发外部测速请求。
-    void this.networkMonitor
-      .monitorNetwork({ cacheTtlMs: 120000, mode: 'light' })
-      .then((status) => {
-        this.priorityCalculator.setNetworkStatus(status)
-        applyDiagnosticsMeta()
-      })
-
-    // 定期更新网络状态
-    if (this.pollingService.isRegistered(this.networkMonitorTaskId)) {
-      this.pollingService.unregister(this.networkMonitorTaskId)
-    }
     this.pollingService.register(
       this.networkMonitorTaskId,
       async () => {
@@ -1235,50 +1266,134 @@ export class DownloadCenterModule extends BaseModule {
       },
       { interval: 30, unit: 'seconds', initialDelayMs: 1000 + Math.floor(Math.random() * 5000) }
     )
+    this.pollingService.start()
   }
 
-  // 启动任务调度器
-  private startTaskScheduler(): void {
-    this.isRunning = true
-
-    // 启动进度更新定时器
+  private ensureProgressUpdatePolling(): void {
     if (this.pollingService.isRegistered(this.progressUpdateTaskId)) {
-      this.pollingService.unregister(this.progressUpdateTaskId)
+      return
     }
     this.pollingService.register(this.progressUpdateTaskId, () => this.updateProgress(), {
       interval: 1,
       unit: 'seconds'
     })
-
-    // 启动任务调度循环
-    this.scheduleTasks()
+    this.pollingService.start()
   }
 
-  // 任务调度循环
-  private async scheduleTasks(): Promise<void> {
-    while (this.isRunning) {
-      try {
-        // 获取等待中的任务
-        const pendingTasks = this.taskQueue.getPendingTasks()
+  private scheduleNextTaskTick(delayMs: number): void {
+    if (!this.shouldRunIdlePollers()) {
+      this.clearSchedulerTimer()
+      return
+    }
+    if (this.schedulerTimer) {
+      if (delayMs > 0) return
+      clearTimeout(this.schedulerTimer)
+      this.schedulerTimer = null
+    }
+    this.schedulerTimer = setTimeout(
+      () => {
+        this.schedulerTimer = null
+        void this.runSchedulerTick()
+      },
+      Math.max(0, delayMs)
+    )
+    this.schedulerTimer.unref?.()
+  }
 
-        // 分配任务给可用的工作器
-        for (const task of pendingTasks) {
-          if (this.taskWorkerMap.has(task.id)) {
-            continue
-          }
+  private syncIdleSchedulers(immediate = false): void {
+    if (!this.isRunning) {
+      this.clearSchedulerTimer()
+      this.pollingService.unregister(this.progressUpdateTaskId)
+      this.pollingService.unregister(this.networkMonitorTaskId)
+      return
+    }
 
-          const availableWorker = this.findAvailableWorker()
-          if (availableWorker) {
-            // 启动下载任务
-            this.startDownloadTask(task, availableWorker)
-          }
+    if (!this.shouldRunIdlePollers()) {
+      this.clearSchedulerTimer()
+      this.pollingService.unregister(this.progressUpdateTaskId)
+      this.pollingService.unregister(this.networkMonitorTaskId)
+      return
+    }
+
+    this.ensureNetworkMonitorPolling()
+    this.ensureProgressUpdatePolling()
+    if (!this.schedulerTickInFlight) {
+      this.scheduleNextTaskTick(immediate ? 0 : 1000)
+    }
+  }
+
+  // 启动网络监控
+  private startNetworkMonitoring(): void {
+    const applyDiagnosticsMeta = () => {
+      const diagnostics = this.networkMonitor.getLastDiagnostics()
+      if (!diagnostics) return
+      this.pollingService.setTaskMeta(this.networkMonitorTaskId, {
+        cacheHit: diagnostics.cacheHit,
+        mode: diagnostics.mode,
+        phaseDurations: diagnostics.phaseDurations
+      })
+    }
+
+    // 初始网络状态检查只使用 light mode，避免首屏阶段触发外部测速请求。
+    void this.networkMonitor
+      .monitorNetwork({ cacheTtlMs: 120000, mode: 'light' })
+      .then((status) => {
+        this.priorityCalculator.setNetworkStatus(status)
+        applyDiagnosticsMeta()
+      })
+
+    if (!this.idlePaused || this.hasWorkInFlight()) {
+      this.ensureNetworkMonitorPolling()
+    }
+  }
+
+  // 启动任务调度器
+  private startTaskScheduler(): void {
+    this.isRunning = true
+    this.idlePaused = idleBudgetCoordinator.isPausedFor('background-hidden')
+
+    if (!this.idleBudgetUnsubscribe) {
+      this.idleBudgetUnsubscribe = idleBudgetCoordinator.subscribe((snapshot) => {
+        this.idlePaused = isStatePausedFor(snapshot.state, 'background-hidden')
+        this.syncIdleSchedulers(false)
+      })
+    }
+
+    this.syncIdleSchedulers(true)
+  }
+
+  // 任务调度循环（可取消定时器，空闲且无活动任务时降至 0 Hz）
+  private async runSchedulerTick(): Promise<void> {
+    if (!this.isRunning || this.schedulerTickInFlight) {
+      return
+    }
+    this.schedulerTickInFlight = true
+    let nextDelayMs = 1000
+    try {
+      // 获取等待中的任务
+      const pendingTasks = this.taskQueue.getPendingTasks()
+
+      // 分配任务给可用的工作器
+      for (const task of pendingTasks) {
+        if (this.taskWorkerMap.has(task.id)) {
+          continue
         }
 
-        // 等待一段时间再检查
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-      } catch (error) {
-        downloadCenterLog.error('Task scheduler error', { error })
-        await new Promise((resolve) => setTimeout(resolve, 5000))
+        const availableWorker = this.findAvailableWorker()
+        if (availableWorker) {
+          // 启动下载任务
+          void this.startDownloadTask(task, availableWorker)
+        }
+      }
+    } catch (error) {
+      downloadCenterLog.error('Task scheduler error', { error })
+      nextDelayMs = 5000
+    } finally {
+      this.schedulerTickInFlight = false
+      if (this.shouldRunIdlePollers()) {
+        this.scheduleNextTaskTick(nextDelayMs)
+      } else {
+        this.syncIdleSchedulers(false)
       }
     }
   }
@@ -1380,6 +1495,7 @@ export class DownloadCenterModule extends BaseModule {
     } finally {
       // Remove from worker map when task completes or fails
       this.taskWorkerMap.delete(task.id)
+      this.syncIdleSchedulers(false)
     }
   }
 

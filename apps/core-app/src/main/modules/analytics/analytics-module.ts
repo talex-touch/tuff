@@ -32,6 +32,7 @@ import { getStartupAnalytics } from './startup-analytics'
 import { setIpcTracer } from '../../core/channel-core'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
+import { idleBudgetCoordinator, isStatePausedFor } from '../../service/idle-budget-coordinator'
 import { createLogger } from '../../utils/logger'
 import { setPerfSummaryReporter } from '../../utils/perf-monitor'
 import { BaseModule } from '../abstract-base-module'
@@ -124,6 +125,8 @@ export class AnalyticsModule extends BaseModule {
   private sdkEventSampledOutCount = 0
   private reportHealthWindowStartedAt = Date.now()
   private isSignedIn = false
+  private destroyed = false
+  private deferredStartupTimer: NodeJS.Timeout | null = null
 
   constructor() {
     super(AnalyticsModule.key, {
@@ -169,16 +172,37 @@ export class AnalyticsModule extends BaseModule {
       this.core.trackIPC(durationMs, success)
     })
 
+    this.destroyed = false
     this.registerHandlers()
-    this.startReportHealthLogging()
+    if (!idleBudgetCoordinator.isPausedFor('background-hidden')) {
+      this.startReportHealthLogging()
+    }
+
+    this.disposers.push(
+      idleBudgetCoordinator.subscribe((snapshot) => {
+        if (this.destroyed) return
+        if (isStatePausedFor(snapshot.state, 'background-hidden')) {
+          this.sampler.pause()
+          pollingService.unregister(ANALYTICS_REPORT_HEALTH_TASK_ID)
+          return
+        }
+        this.sampler.resume()
+        this.startReportHealthLogging()
+      })
+    )
 
     // hydrateStartupMetrics and the sampler both write snapshots, so defer them past startup.
-    setTimeout(() => {
+    this.deferredStartupTimer = setTimeout(() => {
+      this.deferredStartupTimer = null
+      if (this.destroyed) return
       const startup = getStartupAnalytics().getCurrentMetrics()
       this.core.hydrateStartupMetrics(startup)
 
       // SystemSampler 首次采样延迟 15 秒，给启动任务留出空间
       this.sampler.start({ initialDelayMs: 15_000 })
+      if (idleBudgetCoordinator.isPausedFor('background-hidden')) {
+        this.sampler.pause()
+      }
       analyticsLog.info('Analytics deferred startup tasks executed')
     }, 3_000)
 
@@ -186,6 +210,11 @@ export class AnalyticsModule extends BaseModule {
   }
 
   onDestroy(): MaybePromise<void> {
+    this.destroyed = true
+    if (this.deferredStartupTimer) {
+      clearTimeout(this.deferredStartupTimer)
+      this.deferredStartupTimer = null
+    }
     this.sampler.stop()
     setIpcTracer(null)
     pollingService.unregister(ANALYTICS_REPORT_HEALTH_TASK_ID)
@@ -815,10 +844,17 @@ export class AnalyticsModule extends BaseModule {
   }
 
   private startReportHealthLogging(): void {
+    if (this.destroyed || pollingService.isRegistered(ANALYTICS_REPORT_HEALTH_TASK_ID)) {
+      return
+    }
     pollingService.register(ANALYTICS_REPORT_HEALTH_TASK_ID, () => this.logReporterHealth(), {
       interval: MESSAGE_REPORT_HEALTH_LOG_INTERVAL_MS,
       unit: 'milliseconds',
-      initialDelayMs: MESSAGE_REPORT_HEALTH_LOG_INTERVAL_MS
+      initialDelayMs: MESSAGE_REPORT_HEALTH_LOG_INTERVAL_MS,
+      lane: 'maintenance',
+      backpressure: 'latest_wins',
+      dedupeKey: ANALYTICS_REPORT_HEALTH_TASK_ID,
+      maxInFlight: 1
     })
     pollingService.start()
   }
