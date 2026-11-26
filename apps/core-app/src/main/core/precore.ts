@@ -382,7 +382,7 @@ void app.whenReady().then(() => {
     platform: process.platform,
     overrideRoot:
       process.env.TUFF_ENABLE_RENDERER_OVERRIDE === '1'
-        ? path.join(innerRootPath, 'renderer-override')
+        ? path.join(innerRootPath, 'modules', 'renderer-override')
         : null
   })
   installRendererCspPolicy(session.defaultSession, {

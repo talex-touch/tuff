@@ -372,7 +372,9 @@ export function resolveRendererCspPolicyForUrl(
 export function buildRendererCspFilterUrls(
   config: Pick<RendererCspScopeConfig, 'isPackaged' | 'devServerUrl'>
 ): string[] {
-  const urls = ['file://*']
+  // Chromium's extensions::URLPattern requires a leading path slash on `file` match patterns
+  // (`file:///*`, three slashes); `file://*` fails parsing with kEmptyPath.
+  const urls = ['file:///*']
   if (!config.isPackaged) {
     const devOrigin = parseHttpOrigin(config.devServerUrl)
     if (devOrigin) {

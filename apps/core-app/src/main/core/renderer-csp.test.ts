@@ -21,6 +21,10 @@ import {
 
 const RENDERER_HTML = readFileSync(path.join(__dirname, '../../renderer/index.html'), 'utf8')
 const PRECORE = readFileSync(path.join(__dirname, 'precore.ts'), 'utf8')
+const UPDATE_SYSTEM = readFileSync(
+  path.join(__dirname, '../modules/update/update-system.ts'),
+  'utf8'
+)
 
 const MAC_RENDERER_ROOT = '/Applications/Tuff.app/Contents/Resources/app.asar/out/renderer'
 const WIN_RENDERER_ROOT = 'C:\\Program Files\\Tuff\\resources\\app.asar\\out\\renderer'
@@ -340,19 +344,33 @@ describe('withCspHeader', () => {
 })
 
 describe('installRendererCspPolicy', () => {
-  it('registers narrow URL and resourceType filters (excluding tfile: and external origins)', () => {
-    expect(
-      buildRendererCspFilterUrls({ isPackaged: true, devServerUrl: 'http://127.0.0.1:5173' })
-    ).toEqual(['file://*'])
-    expect(
-      buildRendererCspFilterUrls({ isPackaged: false, devServerUrl: 'http://127.0.0.1:5173/' })
-    ).toEqual(['file://*', 'http://127.0.0.1:5173/*'])
+  it('registers valid Chromium URLPattern filters (file:///* with three slashes, excluding tfile: and external origins)', () => {
+    const prodUrls = buildRendererCspFilterUrls({
+      isPackaged: true,
+      devServerUrl: 'http://127.0.0.1:5173'
+    })
+    const devUrls = buildRendererCspFilterUrls({
+      isPackaged: false,
+      devServerUrl: 'http://127.0.0.1:5173/'
+    })
+
+    expect(prodUrls).toEqual(['file:///*'])
+    expect(devUrls).toEqual(['file:///*', 'http://127.0.0.1:5173/*'])
+
+    // Validate against Chromium extensions::URLPattern syntax: `file://` MUST carry a leading
+    // path slash (`file:///...`), and `http(s)://` MUST carry `<host>[:<port>]/<path>`.
+    const validChromiumPattern = /^(?:file:\/\/\/.*|https?:\/\/[^/\s]+\/.*)$/
+    for (const pattern of [...prodUrls, ...devUrls]) {
+      expect(pattern, `invalid Electron WebRequestFilter match pattern: ${pattern}`).toMatch(
+        validChromiumPattern
+      )
+    }
 
     const { filter } = installOnFakeSession({
       isPackaged: true,
       rendererRoots: [MAC_RENDERER_ROOT]
     })
-    expect(filter.urls).toEqual(['file://*'])
+    expect(filter.urls).toEqual(['file:///*'])
     expect(filter.types).toEqual([...CSP_RESOURCE_TYPES])
   })
 
@@ -440,19 +458,28 @@ describe('installRendererCspPolicy', () => {
 })
 
 describe('resolveDefaultRendererRoots', () => {
-  it('resolves deduplicated renderer directories including optional override root', () => {
+  it('resolves deduplicated renderer directories including modules/renderer-override root', () => {
+    const overrideRoot = '/Users/alice/Library/Application Support/tuff/modules/renderer-override'
     const roots = resolveDefaultRendererRoots({
       mainDir: '/Applications/Tuff.app/Contents/Resources/app.asar/out/main',
       appPath: '/Applications/Tuff.app/Contents/Resources/app.asar',
       resourcesPath: '/Applications/Tuff.app/Contents/Resources',
       platform: 'darwin',
-      overrideRoot: '/Users/alice/Library/Application Support/tuff/renderer-override'
+      overrideRoot
     })
 
     expect(roots).toContain('/Applications/Tuff.app/Contents/Resources/app.asar/out/renderer')
     expect(roots).toContain('/Applications/Tuff.app/Contents/Resources/renderer')
-    expect(roots).toContain('/Users/alice/Library/Application Support/tuff/renderer-override')
+    expect(roots).toContain(overrideRoot)
     expect(new Set(roots).size).toBe(roots.length)
+
+    // Versioned override bundle under `modules/renderer-override/<version>/index.html` must match.
+    expect(
+      isCoreAppRendererFileUrl(
+        'file:///Users/alice/Library/Application%20Support/tuff/modules/renderer-override/2.5.0/index.html',
+        roots
+      )
+    ).toBe(true)
   })
 })
 
@@ -473,5 +500,8 @@ describe('fallback meta parity and precore wiring', () => {
     const readyBlock = PRECORE.slice(readyStart, readyEnd)
     expect(readyBlock).toContain('installRendererCspPolicy(session.defaultSession')
     expect(readyBlock).toContain('installDefaultSessionPermissionPolicy(session.defaultSession')
+    // Override root must match UpdateSystem.resolveRendererOverrideRoot() (`modules/renderer-override`).
+    expect(readyBlock).toContain("path.join(innerRootPath, 'modules', 'renderer-override')")
+    expect(UPDATE_SYSTEM).toContain("path.join(this.storageRoot, 'modules', RENDERER_OVERRIDE_DIR)")
   })
 })
