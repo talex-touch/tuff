@@ -114,6 +114,33 @@ const arrowRuntimeEntry = path.join(path.dirname(arrowPackagePath), arrowEntry)
 const WIDGET_SANDBOX_RUNTIME_ID = 'virtual:widget-sandbox-runtime'
 
 /**
+ * Aligns the fallback `<meta http-equiv="Content-Security-Policy">` with the main process's
+ * scoped dev response header during Vite `serve` only (#689).
+ *
+ * Production builds skip this plugin (`apply: 'serve'`), so `out/renderer/index.html` keeps the
+ * exact strict production `<meta>` CSP with zero localhost/WebSocket allowances.
+ */
+function rendererDevCspPlugin(): Plugin {
+  const devConnectExtras = [
+    `http://${devServerHost}:${devServerPort}`,
+    `ws://${devServerHost}:${devServerPort}`,
+    'http://127.0.0.1:*',
+    'ws://127.0.0.1:*',
+    'http://localhost:*',
+    'ws://localhost:*'
+  ]
+  const uniqueExtras = Array.from(new Set(devConnectExtras)).join(' ')
+
+  return {
+    name: 'tuff:renderer-dev-csp',
+    apply: 'serve',
+    transformIndexHtml(html) {
+      return html.replace(/(connect-src\s+'self')([^;]*;)/, `$1 ${uniqueExtras}$2`)
+    }
+  }
+}
+
+/**
  * Serves the arrow runtime's source text as a virtual module.
  *
  * An alias into node_modules was the obvious first try and is wrong: the dev
@@ -466,6 +493,7 @@ export default defineConfig({
     },
     plugins: [
       ...tuffexDevPlugins,
+      rendererDevCspPlugin(),
       widgetSandboxRuntimePlugin(),
       tuffexOnDemandStylePlugin({ enabled: isProduction }),
       generatorInformation(),

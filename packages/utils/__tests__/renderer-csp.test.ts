@@ -2,28 +2,29 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  REPORT_ONLY_CSP,
-  REPORT_ONLY_CSP_HEADER,
-} from '../../../apps/core-app/src/main/core/report-only-csp'
+  buildRendererCspPolicy,
+  CSP_HEADER,
+  PRODUCTION_RENDERER_CSP,
+  PRODUCTION_RENDERER_META_CSP,
+  SENTRY_INGEST_ORIGIN,
+} from '../../../apps/core-app/src/main/core/renderer-csp'
 
 /**
  * The renderer CSP is the only barrier between injected content and `system.executeCommand` (#689).
  *
  * The renderer holds the contextBridge `ipcRenderer`, so anything that reaches its DOM and executes
- * — markdown, plugin-supplied rich text, an AI response — reaches local code execution. #913
- * already removed the wildcard and `'unsafe-inline'` from `script-src`, which was the severe half.
+ * — markdown, plugin-supplied rich text, an AI response — reaches local code execution.
  *
- * What this pins is that they do not come back, and that the directives nothing uses stay closed
- * rather than falling through to `default-src *`.
+ * Both layers now enforce the hardened policy:
+ * 1. `main/core/renderer-csp.ts` attaches the authoritative `Content-Security-Policy` response
+ *    header (including header-only `frame-ancestors 'none'` and worker script coverage) strictly
+ *    scoped to CoreApp's own renderer URLs.
+ * 2. `apps/core-app/src/renderer/index.html` carries the matching fallback `<meta>` policy with
+ *    zero wildcards (`*`).
  *
- * `'unsafe-eval'` is asserted as *present* on purpose. The plugin widget runtime executes widget
- * code through `new Function`, so removing it would delete plugin widgets rather than harden
- * anything — a test that demanded its absence would be demanding a product change.
- *
- * The two policies are read from different places, and that asymmetry is the point. The enforcing
- * one is a `<meta>` in renderer/index.html. The report-only one cannot be: Chromium discards a
- * report-only policy delivered through `<meta>`, which is how it spent months reporting nothing
- * while reading as installed. It is now a response header built in main/core/report-only-csp.ts.
+ * `'unsafe-eval'` is asserted as *present* on purpose. Official CoreBox plugin widgets
+ * (`touch-intelligence`, `touch-translation`) execute compiled code through `new Function` in
+ * `widget-registry.ts`, so removing it without migrating that executor breaks plugin widgets.
  */
 
 const INDEX_HTML = readFileSync(
@@ -37,14 +38,15 @@ const RENDERER_MAIN = readFileSync(
 )
 
 function policyFor(httpEquiv: string): string {
+  const stripped = INDEX_HTML.replace(/<!--[\s\S]*?-->/g, '')
   const match = new RegExp(
     `http-equiv="${httpEquiv}"\\s*\\n?\\s*content="([\\s\\S]*?)"`,
-  ).exec(INDEX_HTML)
+  ).exec(stripped)
   return (match?.[1] ?? '').replace(/\s+/g, ' ').trim()
 }
 
 const csp = policyFor('Content-Security-Policy')
-const reportOnly = REPORT_ONLY_CSP.replace(/\s+/g, ' ').trim()
+const headerCsp = PRODUCTION_RENDERER_CSP.replace(/\s+/g, ' ').trim()
 
 function find(policy: string, name: string): string | undefined {
   return policy
@@ -57,8 +59,8 @@ function directive(name: string): string | undefined {
   return find(csp, name)
 }
 
-function reportOnlyDirective(name: string): string | undefined {
-  return find(reportOnly, name)
+function headerDirective(name: string): string | undefined {
+  return find(headerCsp, name)
 }
 
 describe('renderer Content-Security-Policy', () => {
@@ -69,14 +71,15 @@ describe('renderer Content-Security-Policy', () => {
     expect(directive('script-src')).toBeDefined()
   })
 
-  it('keeps script-src free of a wildcard and of unsafe-inline', () => {
-    // The regression #913 fixed: either of these lets a javascript: URL or an inline handler that
-    // survives the markdown sanitiser run inside the privileged renderer.
+  it('keeps script-src free of wildcards, unsafe-inline, and data:', () => {
+    // The regression #913 fixed plus dropping `data:` script injection (#689).
     const scriptSrc = directive('script-src')!
 
     expect(scriptSrc).not.toMatch(/(^|\s)\*/)
     expect(scriptSrc).not.toContain('unsafe-inline')
+    expect(scriptSrc).not.toContain('data:')
     expect(scriptSrc).toContain('\'self\'')
+    expect(scriptSrc).toContain('blob:')
   })
 
   it('still allows \'unsafe-eval\', which the widget runtime needs', () => {
@@ -85,61 +88,76 @@ describe('renderer Content-Security-Policy', () => {
     expect(directive('script-src')).toContain('\'unsafe-eval\'')
   })
 
-  it('closes the directives nothing uses instead of letting them fall through', () => {
-    // Without these three, `default-src *` governs them — and the renderer has no <object>,
-    // <embed>, <iframe> or `new Worker` to justify that.
+  it('locks down object-src, frame-src, worker-src, base-uri, and form-action', () => {
     expect(directive('object-src')).toBe('object-src \'none\'')
-    expect(directive('frame-src')).toBe('frame-src \'none\'')
+    // WorkspaceFileViewer.vue renders PDF previews in `<iframe :src="pdfBlobUrl">`.
+    expect(directive('frame-src')).toBe('frame-src blob:')
     expect(directive('worker-src')).toBe('worker-src \'self\' blob:')
+    expect(directive('base-uri')).toBe('base-uri \'self\'')
+    expect(directive('form-action')).toBe('form-action \'self\'')
   })
 
-  it('records that default-src and connect-src are still open', () => {
-    // Not an endorsement — an acknowledgement. Narrowing them needs the set of origins the
-    // renderer actually reaches at runtime, which reading the source cannot settle. The
-    // report-only policy below is how that set is being collected. If someone does narrow these,
-    // this test should be updated rather than deleted, so the change is deliberate.
-    expect(directive('connect-src')).toContain('*')
-    expect(directive('default-src')).toContain('*')
+  it('eliminates wildcards from default-src, connect-src, img-src, font-src, style-src, and media-src', () => {
+    for (const name of [
+      'default-src',
+      'connect-src',
+      'img-src',
+      'font-src',
+      'style-src',
+      'style-src-elem',
+      'media-src',
+    ]) {
+      const value = directive(name)
+      expect(value, name).toBeDefined()
+      expect(value, name).not.toMatch(/(^|\s)\*(\s|$)/)
+    }
+    expect(directive('default-src')).toBe('default-src \'self\' tfile:')
+    expect(directive('connect-src')).not.toMatch(/\bws:|\bwss:/)
+    expect(directive('connect-src')).toContain(SENTRY_INGEST_ORIGIN)
+    expect(directive('connect-src')).toContain('tfile:')
+  })
+
+  it('matches the fallback meta policy exported by main/core/renderer-csp.ts', () => {
+    const normalizedMeta = csp
+      .split(';')
+      .map(part => part.trim())
+      .filter(Boolean)
+      .join('; ')
+    expect(normalizedMeta).toBe(PRODUCTION_RENDERER_META_CSP)
   })
 })
 
-describe('the report-only candidate policy', () => {
-  it('is present, and is the narrow one', () => {
-    // Positive control first: an empty policy would satisfy "contains no wildcard" trivially, and
-    // the header is built by joining a list — one that could be emptied without anything else here
-    // noticing.
-    expect(reportOnly.length).toBeGreaterThan(80)
-    expect(reportOnlyDirective('default-src')).toBe('default-src \'self\' blob: data: tfile: remix:')
+describe('enforcing response-header CSP policy', () => {
+  it('delivers the narrowed enforcing policy via Content-Security-Policy header', () => {
+    expect(CSP_HEADER).toBe('Content-Security-Policy')
+    expect(headerCsp.length).toBeGreaterThan(80)
+    expect(headerDirective('default-src')).toBe('default-src \'self\' tfile:')
+    expect(headerDirective('frame-ancestors')).toBe('frame-ancestors \'none\'')
   })
 
-  it('drops the wildcards the enforcing policy still carries', () => {
-    // The whole point of it. A report-only copy of the enforcing policy would report nothing and
-    // look like a clean bill of health.
-    for (const name of ['default-src', 'connect-src', 'img-src', 'font-src', 'media-src']) {
-      expect(reportOnlyDirective(name), name).not.toContain('*;')
-      expect(reportOnlyDirective(name), name).not.toMatch(/\s\*\s|\s\*$/)
+  it('contains no wildcards and no dev localhost/ws origins in production', () => {
+    for (const name of ['default-src', 'script-src', 'connect-src', 'img-src', 'font-src', 'style-src', 'media-src']) {
+      expect(headerDirective(name), name).not.toMatch(/(^|\s)\*(\s|$)/)
     }
+    expect(headerDirective('connect-src')).toContain(SENTRY_INGEST_ORIGIN)
+    expect(headerDirective('connect-src')).not.toContain('localhost')
+    expect(headerDirective('connect-src')).not.toContain('127.0.0.1')
+    expect(headerDirective('connect-src')).not.toMatch(/\bws:|\bwss:/)
   })
 
-  it('keeps the origins the renderer is known to need', () => {
-    // Sentry is initialised in the renderer (sentry-renderer.ts), and the dev server plus its
-    // websocket would otherwise fill the log with noise that is not a finding.
-    expect(reportOnlyDirective('connect-src')).toContain('ingest.us.sentry.io')
-    expect(reportOnlyDirective('connect-src')).toContain('ws://localhost:*')
+  it('scopes Vite HMR loopback origins strictly to development mode', () => {
+    const devPolicy = buildRendererCspPolicy({
+      mode: 'development',
+      devServerUrl: 'http://127.0.0.1:5173',
+    })
+    const devConnect = find(devPolicy, 'connect-src')
+    expect(devConnect).toContain('ws://127.0.0.1:5173')
+    expect(devConnect).toContain('ws://localhost:*')
+    expect(devConnect).not.toMatch(/(^|\s)\*(\s|$)/)
   })
 
-  it('is reported rather than enforced, and the report is listened for', () => {
-    // A report-only policy nobody listens to is decoration. The listener is what turns it into
-    // the inventory that unblocks narrowing the real policy.
-    expect(REPORT_ONLY_CSP_HEADER).toBe('Content-Security-Policy-Report-Only')
+  it('keeps securitypolicyviolation forwarding active and never reintroduces report-only meta', () => {
     expect(RENDERER_MAIN).toContain('addEventListener(\'securitypolicyviolation\'')
-  })
-
-  it('is not delivered through a <meta> element, where Chromium would discard it', () => {
-    // How this policy spent its first life: present in index.html, ignored by the engine, and
-    // therefore an empty violation log that read as a clean bill of health. Matching the
-    // `<meta http-equiv=` form rather than the header name, because index.html carries a comment
-    // saying exactly this and a bare substring check would pass on the comment.
     expect(INDEX_HTML).not.toMatch(/http-equiv="Content-Security-Policy-Report-Only"/)
   })
 })

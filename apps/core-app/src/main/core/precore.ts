@@ -27,7 +27,7 @@ import {
   WindowAllClosedEvent
 } from './eventbus/touch-event'
 import { installDefaultSessionPermissionPolicy } from './default-session-permissions'
-import { installReportOnlyCspPolicy } from './report-only-csp'
+import { installRendererCspPolicy, resolveDefaultRendererRoots } from './renderer-csp'
 import { installLeaveGuard } from './leave-guard'
 import { getCurrentTouchApp } from './main-runtime-state'
 import {
@@ -332,7 +332,7 @@ export function isDuplicateInstance(): boolean {
   return !hasSingleInstanceLock
 }
 
-let hasLoggedReportOnlyCspDelivery = false
+let hasLoggedRendererCspDelivery = false
 
 /**
  * Permission denials repeat per request, not per permission — one day of dev logs
@@ -372,16 +372,27 @@ void app.whenReady().then(() => {
     }
   })
 
-  // Same reason for the placement: the header has to be attachable before the first document
-  // loads. It replaces the report-only `<meta>` in renderer/index.html, which Chromium ignored
-  // outright because report-only cannot be delivered that way (#689).
-  installReportOnlyCspPolicy(session.defaultSession, {
-    onAttached: (url) => {
-      // Once per launch. Without it, an empty [csp-report-only] log is indistinguishable from
-      // the policy not loading at all — which is exactly how the `<meta>` version went unnoticed.
-      if (hasLoggedReportOnlyCspDelivery) return
-      hasLoggedReportOnlyCspDelivery = true
-      mainLog.info('Report-only CSP attached as a response header', { meta: { url } })
+  // Same reason for the placement: the enforcing CSP response header must be active before the
+  // first renderer document or worker loads. Scoped strictly to CoreApp's own renderer URLs so
+  // external web views, data: overlays, and unrelated files are untouched (#689).
+  const rendererRoots = resolveDefaultRendererRoots({
+    mainDir: __dirname,
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath,
+    platform: process.platform,
+    overrideRoot:
+      process.env.TUFF_ENABLE_RENDERER_OVERRIDE === '1'
+        ? path.join(innerRootPath, 'modules', 'renderer-override')
+        : null
+  })
+  installRendererCspPolicy(session.defaultSession, {
+    isPackaged: app.isPackaged,
+    rendererRoots,
+    devServerUrl: process.env.ELECTRON_RENDERER_URL,
+    onAttached: (url, mode) => {
+      if (hasLoggedRendererCspDelivery) return
+      hasLoggedRendererCspDelivery = true
+      mainLog.info('Enforcing renderer CSP attached as a response header', { meta: { url, mode } })
     }
   })
 
