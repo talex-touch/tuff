@@ -44,7 +44,6 @@
     "typecheck:raw": "nuxt typecheck"
   },
   "dependencies": {
-    "@iconify-json/cib": "catalog:",
     "@langchain/anthropic": "^1.6.0",
     "@langchain/core": "^1.3.2",
     "@langchain/openai": "catalog:",

@@ -67,7 +67,7 @@ const useWebFonts = process.env.NUXT_DISABLE_WEB_FONTS !== 'true'
 
 export default defineConfig({
   // Block `i-cib-*` so the retired `cib` brand collection can never emit CSS back into the
-  // global icons stylesheet even before `@iconify-json/cib` is uninstalled at integration.
+  // global icons stylesheet, even if `@iconify-json/cib` is reinstalled transitively.
   blocklist: [/^m\[pascalCase\(component\)\]$/, /^i-cib-/],
   content: {
     pipeline: {
