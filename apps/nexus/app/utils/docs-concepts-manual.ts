@@ -9,8 +9,9 @@
 
 export const CONCEPTS_MANUAL_PATH = '/docs/dev/concepts'
 
-/** The six domains of the handbook's index; `key` names `docsSidebar.conceptGroups.*`. */
+/** The domains of the handbook's index; `key` names `docsSidebar.conceptGroups.*`. */
 export const CONCEPTS_MANUAL_GROUPS: { key: string, pages: string[] }[] = [
+  { key: 'system', pages: ['tds'] },
   { key: 'geometry', pages: ['curvature', 'concentricity', 'depth-topology'] },
   { key: 'surfaces', pages: ['surface-taxonomy', 'refraction-physics', 'surface-deduction', 'noise-and-specular'] },
   { key: 'color', pages: ['dark-palette', 'irradiation-tuning', 'color-mix-contrast', 'light-modes'] },

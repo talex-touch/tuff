@@ -482,6 +482,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   TagTagsDemo: () => import('./demos/TagTagsDemo.vue'),
   TaskRowsCapsulesDemo: () => import('./demos/TaskRowsCapsulesDemo.vue'),
   TaskRowsListDemo: () => import('./demos/TaskRowsListDemo.vue'),
+  TdsTokenInspectorDemo: () => import('./demos/TdsTokenInspectorDemo.vue'),
   TemplateAccountDemo: () => import('./demos/TemplateAccountDemo.vue'),
   TemplateAgentChatCopilotDemo: () => import('./demos/TemplateAgentChatCopilotDemo.vue'),
   TemplateAgentChatDemo: () => import('./demos/TemplateAgentChatDemo.vue'),

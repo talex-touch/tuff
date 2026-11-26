@@ -42,7 +42,8 @@
 
 
 ## 设计体系与概念
-- **[设计体系与工程概念总览](./concepts/index.zh.mdc)** — 几何曲率、物理材质、色彩暗色、排版工程、微动效节拍与 AI 流式交互 18 篇细致拆解。
+- **[设计体系与工程概念总览](./concepts/index.zh.mdc)** — TDS 令牌体系、几何曲率、物理材质、色彩暗色、排版工程、微动效节拍与 AI 流式交互深度拆解。
+- **[TDS 设计体系与实时令牌检视器](./concepts/tds.zh.mdc)** — 单一真相源 `tokens.json`、WCAG 2.1 折射对比度实时检验、三层主题包与 Core 36 核心原语。
 - **[G2 连续曲率与超椭圆几何](./concepts/curvature.zh.mdc)** — 超越标准圆角，曲率连续性与超椭圆方程。
 - **[Surface 8 种材质物理选型](./concepts/surface-taxonomy.zh.mdc)** — Refraction（默认）与 8 种材质选型矩阵。
 - **[#141414 深灰画布与三层表面阶梯](./concepts/dark-palette.zh.mdc)** — OLED 防拖尾残影与三层深灰空间阶梯。

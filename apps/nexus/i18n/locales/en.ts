@@ -736,6 +736,7 @@ export default {
     },
     conceptsManual: 'Design Concepts Manual',
     conceptGroups: {
+      system: 'Tuff Design System (TDS)',
       geometry: 'Geometry and Curvature',
       surfaces: 'Surfaces and Material Physics',
       color: 'Color Science and Dark Mode',

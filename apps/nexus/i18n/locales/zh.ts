@@ -735,6 +735,7 @@ export default {
     },
     conceptsManual: '设计工程概念手册',
     conceptGroups: {
+      system: 'TDS 设计体系',
       geometry: '几何与空间形态',
       surfaces: '材质物理与环境感知',
       color: '色彩科学与暗色模式',
