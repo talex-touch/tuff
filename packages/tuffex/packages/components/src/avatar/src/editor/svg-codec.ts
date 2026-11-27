@@ -10,9 +10,94 @@ export interface ParsedSvgSource {
   viewBoxWidth: number
   viewBoxHeight: number
   innerMarkup: string
+  /** Sanitized presentation attributes inherited from the root `<svg>` element. */
+  rootAttributes?: Record<string, string>
+  /** False when root `<svg>` carries styling/filters/classes that cannot be faithfully preserved on an inner `<g>`. */
+  preservesRootStyling?: boolean
 }
 
 const DANGEROUS_TAGS = new Set(['script', 'foreignobject', 'iframe', 'object', 'embed'])
+
+const ROOT_PRESENTATION_ATTRS = new Set([
+  'color',
+  'fill',
+  'fill-opacity',
+  'fill-rule',
+  'stroke',
+  'stroke-width',
+  'stroke-opacity',
+  'stroke-linecap',
+  'stroke-linejoin',
+  'stroke-miterlimit',
+  'stroke-dasharray',
+  'stroke-dashoffset',
+  'opacity',
+  'paint-order',
+  'shape-rendering',
+  'vector-effect',
+  'font-family',
+  'font-size',
+  'font-weight',
+  'font-style',
+  'text-anchor',
+  'dominant-baseline',
+])
+
+const UNPRESERVABLE_ROOT_ATTRS = new Set([
+  'class',
+  'style',
+  'filter',
+  'mask',
+  'clip-path',
+])
+
+function isSafeSvgAttrValue(value: string): boolean {
+  const lower = value.trim().toLowerCase()
+  if (!lower)
+    return false
+  if (lower.includes('javascript:') || lower.includes('expression('))
+    return false
+  if (/\burl\s*\(/i.test(lower))
+    return /^url\(\s*['"]?#[a-z0-9_-]+['"]?\s*\)$/i.test(lower)
+  return true
+}
+
+function extractRootPresentationAttrsFromMap(
+  entries: Iterable<readonly [string, string]>,
+): { rootAttributes: Record<string, string>, preservesRootStyling: boolean } {
+  const rootAttributes: Record<string, string> = {}
+  let preservesRootStyling = true
+  for (const [rawName, rawValue] of entries) {
+    const name = rawName.toLowerCase()
+    const value = rawValue.trim()
+    if (!value)
+      continue
+    if (UNPRESERVABLE_ROOT_ATTRS.has(name)) {
+      preservesRootStyling = false
+      continue
+    }
+    if (ROOT_PRESENTATION_ATTRS.has(name)) {
+      if (isSafeSvgAttrValue(value))
+        rootAttributes[name] = value
+      else
+        preservesRootStyling = false
+    }
+  }
+  return { rootAttributes, preservesRootStyling }
+}
+
+function parseTagAttributesRegex(attrSource: string): [string, string][] {
+  const pairs: [string, string][] = []
+  const attrRe = /([a-zA-Z_:][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
+  let match: RegExpExecArray | null = attrRe.exec(attrSource)
+  while (match) {
+    const name = match[1]!
+    const value = match[2] ?? match[3] ?? ''
+    pairs.push([name, value])
+    match = attrRe.exec(attrSource)
+  }
+  return pairs
+}
 
 function parsePositiveLength(raw: string | null | undefined): number | null {
   if (!raw)
@@ -97,6 +182,10 @@ export function parseAndSanitizeSvg(rawSvg: string): ParsedSvgSource | null {
         const width = vbW > 0 ? vbW : (attrW ?? 512)
         const height = vbH > 0 ? vbH : (attrH ?? 512)
 
+        const { rootAttributes, preservesRootStyling } = extractRootPresentationAttrsFromMap(
+          Array.from(root.attributes, attr => [attr.name, attr.value] as const),
+        )
+
         const serializer = new XMLSerializer()
         const innerMarkup = Array.from(root.childNodes)
           .map(node => serializer.serializeToString(node))
@@ -110,6 +199,8 @@ export function parseAndSanitizeSvg(rawSvg: string): ParsedSvgSource | null {
           viewBoxWidth: width,
           viewBoxHeight: height,
           innerMarkup,
+          rootAttributes,
+          preservesRootStyling,
         }
       }
     }
@@ -147,6 +238,10 @@ export function parseAndSanitizeSvg(rawSvg: string): ParsedSvgSource | null {
   const width = vbW > 0 ? vbW : (parsePositiveLength(wMatch?.[1]) ?? 512)
   const height = vbH > 0 ? vbH : (parsePositiveLength(hMatch?.[1]) ?? 512)
 
+  const { rootAttributes, preservesRootStyling } = extractRootPresentationAttrsFromMap(
+    parseTagAttributesRegex(attrs),
+  )
+
   return {
     width,
     height,
@@ -155,6 +250,8 @@ export function parseAndSanitizeSvg(rawSvg: string): ParsedSvgSource | null {
     viewBoxWidth: width,
     viewBoxHeight: height,
     innerMarkup,
+    rootAttributes,
+    preservesRootStyling,
   }
 }
 
@@ -207,13 +304,17 @@ export function buildVectorAvatarSvg(
   const filterStyle = cssFilter !== 'none' ? ` style="filter:${escapeXmlAttr(cssFilter)}"` : ''
   const defs = useClip ? `<defs>${buildClipDef(shape, safeSize, clipId)}</defs>` : ''
   const clipAttr = useClip ? ` clip-path="url(#${clipId})"` : ''
+  const inheritedAttrs = Object.entries(parsed.rootAttributes ?? {})
+    .filter(([name, value]) => ROOT_PRESENTATION_ATTRS.has(name.toLowerCase()) && isSafeSvgAttrValue(value))
+    .map(([name, value]) => ` ${name}="${escapeXmlAttr(value)}"`)
+    .join('')
 
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${safeSize} ${safeSize}" width="${safeSize}" height="${safeSize}">`,
     defs,
     `<g${clipAttr}>`,
     bg,
-    `<g transform="${transformAttr}"${filterStyle}>`,
+    `<g transform="${transformAttr}"${inheritedAttrs}${filterStyle}>`,
     parsed.innerMarkup,
     '</g>',
     '</g>',

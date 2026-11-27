@@ -233,7 +233,8 @@ Standalone avatar editor dialog exported from `@talex-touch/tuffex/avatar`, buil
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `open` | `boolean` | required | Controlled open state (supports `v-model:open`). |
-| `source` | `File \| Blob \| string \| null` | `null` | Initial image, SVG, ICO, GIF, or video source; shows `TxFileUploader` when empty. |
+| `source` | `File \| Blob \| string \| null` | `null` | Initial image, SVG, ICO, GIF, or video source (`File`, `Blob`, or local `blob:`/`data:` URL; remote `http(s)` URLs require `allowRemoteSource`). Shows `TxFileUploader` when empty. |
+| `allowRemoteSource` | `boolean` | `false` | Opt-in gate allowing remote `http(s)` URL strings to load directly in the editor. Disabled by default so the editor never issues unexpected outbound image/video requests. |
 | `shape` | `AvatarShape` | `'circle'` | Initial crop mask shape. |
 | `width` | `string` | `'min(94vw, 800px)'` | Modal dialog width. |
 | `outputFormat` | `AvatarOutputFormat` | `'png'` | Default output format; formats unsupported by the current browser are auto-disabled. |

@@ -79,6 +79,8 @@ const copy = computed(() => (locale.value === 'zh'
         corsTaintedError: '远程图片未开启跨域许可，请改为上传本地文件。',
         loadFailedError: '当前浏览器无法解码该文件。',
         videoUnsupportedError: '当前浏览器不支持该视频编码。',
+        remoteSourceBlockedError: '默认仅支持加载本地文件、Blob 或 data/blob 链接；如需载入远程链接请显式开启 allowRemoteSource。',
+        gifTruncatedNotice: '该 GIF 帧数超出编辑器上限，仅载入了前序帧。',
         pasteHint: '提示：打开弹窗时可直接 Ctrl/⌘+V 粘贴剪贴板图片',
       } satisfies Partial<AvatarEditorLabels>,
     }

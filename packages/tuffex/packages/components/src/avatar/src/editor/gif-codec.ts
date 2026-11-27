@@ -16,6 +16,17 @@ export interface DecodedGif {
   height: number
   frames: GifFrame[]
   totalDurationMs: number
+  /** True when the GIF contained more frames than the decode frame cap. */
+  truncated?: boolean
+  /** Total frame count detected in the GIF byte stream (including skipped frames past the cap). */
+  totalFrameCount?: number
+}
+
+export interface GifDecodeOptions {
+  /** Maximum number of frames to decode into memory. @default 240 */
+  maxFrames?: number
+  /** Maximum cumulative RGBA byte budget across retained frames. @default 134217728 (128 MiB) */
+  maxDecodedBytes?: number
 }
 
 export interface GifEncodeOptions {
@@ -584,12 +595,62 @@ function readSubBlocks(bytes: Uint8Array, startOffset: number): { data: Uint8Arr
 
 const INTERLACE_OFFSETS = [0, 4, 2, 1] as const
 const INTERLACE_STEPS = [8, 8, 4, 2] as const
+export const MAX_GIF_DIMENSION = 4096
+export const MAX_GIF_FRAME_PIXELS = 16_777_216
+export const DEFAULT_MAX_GIF_DECODED_BYTES = 128 * 1024 * 1024
+
+function countRemainingGifFrames(bytes: Uint8Array, startPos: number): number {
+  let pos = startPos
+  let extraFrames = 0
+  while (pos < bytes.length) {
+    const introducer = bytes[pos++]!
+    if (introducer === 0x3B)
+      break
+    if (introducer === 0x21) {
+      if (pos >= bytes.length)
+        break
+      pos++ // extension label
+      const skipped = readSubBlocks(bytes, pos)
+      pos = skipped.nextOffset
+      continue
+    }
+    if (introducer === 0x2C) {
+      if (pos + 9 > bytes.length)
+        break
+      const imgPacked = bytes[pos + 8]!
+      pos += 9
+      if ((imgPacked & 0x80) !== 0) {
+        const lctSize = 1 << ((imgPacked & 0x07) + 1)
+        pos += lctSize * 3
+      }
+      if (pos >= bytes.length)
+        break
+      pos++ // minCodeSize
+      const skipped = readSubBlocks(bytes, pos)
+      pos = skipped.nextOffset
+      extraFrames++
+      continue
+    }
+    break
+  }
+  return extraFrames
+}
 
 /**
  * Decodes all composited RGBA frames of a GIF87a/GIF89a byte array.
  * Works identically in browsers without `ImageDecoder` and in Node/Vitest tests.
  */
-export function decodeGif(bytes: Uint8Array, maxFrames = 240): DecodedGif {
+export function decodeGif(
+  bytes: Uint8Array,
+  maxFramesOrOptions: number | GifDecodeOptions = 240,
+): DecodedGif {
+  const maxFrames = typeof maxFramesOrOptions === 'number'
+    ? maxFramesOrOptions
+    : (maxFramesOrOptions.maxFrames ?? 240)
+  const maxDecodedBytes = typeof maxFramesOrOptions === 'number'
+    ? DEFAULT_MAX_GIF_DECODED_BYTES
+    : (maxFramesOrOptions.maxDecodedBytes ?? DEFAULT_MAX_GIF_DECODED_BYTES)
+
   if (bytes.length < 13)
     throw new Error('Invalid GIF: file too short')
 
@@ -599,6 +660,20 @@ export function decodeGif(bytes: Uint8Array, maxFrames = 240): DecodedGif {
 
   const width = bytes[6]! | (bytes[7]! << 8)
   const height = bytes[8]! | (bytes[9]! << 8)
+  if (
+    width <= 0
+    || height <= 0
+    || width > MAX_GIF_DIMENSION
+    || height > MAX_GIF_DIMENSION
+    || width * height > MAX_GIF_FRAME_PIXELS
+  ) {
+    throw new Error(`Invalid GIF dimensions: ${width}x${height}`)
+  }
+
+  const frameByteLength = width * height * 4
+  if (frameByteLength > maxDecodedBytes)
+    throw new Error(`GIF frame size (${width}x${height}) exceeds decoded pixel budget`)
+
   const packed = bytes[10]!
   const hasGct = (packed & 0x80) !== 0
   const gctSize = hasGct ? 1 << ((packed & 0x07) + 1) : 0
@@ -606,11 +681,13 @@ export function decodeGif(bytes: Uint8Array, maxFrames = 240): DecodedGif {
   let pos = 13
   let gct: Uint8Array | null = null
   if (hasGct) {
+    if (pos + gctSize * 3 > bytes.length)
+      throw new Error('Invalid GIF: truncated global color table')
     gct = bytes.subarray(pos, pos + gctSize * 3)
     pos += gctSize * 3
   }
 
-  const canvas = new Uint8ClampedArray(width * height * 4)
+  const canvas = new Uint8ClampedArray(frameByteLength)
   const frames: GifFrame[] = []
   let totalDurationMs = 0
 
@@ -624,9 +701,13 @@ export function decodeGif(bytes: Uint8Array, maxFrames = 240): DecodedGif {
       break
 
     if (introducer === 0x21) {
+      if (pos >= bytes.length)
+        break
       const label = bytes[pos++]!
       if (label === 0xF9 && pos + 5 <= bytes.length) {
         const blockSize = bytes[pos++]!
+        if (pos + blockSize > bytes.length)
+          break
         const gcePacked = bytes[pos]!
         disposal = (gcePacked >> 2) & 0x07
         const hasTrans = (gcePacked & 0x01) !== 0
@@ -654,18 +735,40 @@ export function decodeGif(bytes: Uint8Array, maxFrames = 240): DecodedGif {
       const imgPacked = bytes[pos + 8]!
       pos += 9
 
+      if (
+        frameW <= 0
+        || frameH <= 0
+        || frameW > MAX_GIF_DIMENSION
+        || frameH > MAX_GIF_DIMENSION
+        || left + frameW > width
+        || top + frameH > height
+        || frameW * frameH > MAX_GIF_FRAME_PIXELS
+      ) {
+        throw new Error(`Invalid GIF frame bounds: ${frameW}x${frameH} at (${left},${top}) within ${width}x${height}`)
+      }
+
       const hasLct = (imgPacked & 0x80) !== 0
       const interlaced = (imgPacked & 0x40) !== 0
       let colorTable = gct
       if (hasLct) {
         const lctSize = 1 << ((imgPacked & 0x07) + 1)
+        if (pos + lctSize * 3 > bytes.length)
+          throw new Error('Invalid GIF: truncated local color table')
         colorTable = bytes.subarray(pos, pos + lctSize * 3)
         pos += lctSize * 3
       }
 
+      if (pos >= bytes.length)
+        throw new Error('Invalid GIF: missing LZW minimum code size')
       const minCodeSize = bytes[pos++]!
+      if (minCodeSize < 2 || minCodeSize > 11)
+        throw new Error(`Invalid GIF LZW minimum code size: ${minCodeSize}`)
+
       const { data: compressed, nextOffset } = readSubBlocks(bytes, pos)
       pos = nextOffset
+
+      if ((frames.length + 1) * frameByteLength > maxDecodedBytes)
+        throw new Error('GIF exceeds maximum decoded pixel budget')
 
       const indices = lzwDecode(compressed, minCodeSize, frameW * frameH)
       const snapshotBefore = disposal === 3 ? new Uint8ClampedArray(canvas) : null
@@ -748,5 +851,17 @@ export function decodeGif(bytes: Uint8Array, maxFrames = 240): DecodedGif {
     }
   }
 
-  return { width, height, frames, totalDurationMs }
+  const remainingFrames = frames.length >= maxFrames && pos < bytes.length
+    ? countRemainingGifFrames(bytes, pos)
+    : 0
+  const totalFrameCount = frames.length + remainingFrames
+
+  return {
+    width,
+    height,
+    frames,
+    totalDurationMs,
+    truncated: remainingFrames > 0,
+    totalFrameCount,
+  }
 }

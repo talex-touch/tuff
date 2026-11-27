@@ -37,6 +37,124 @@ export interface ExportAvatarMediaOptions {
   signal?: AbortSignal
 }
 
+const ACCEPTED_FORMAT_MIMES: Record<AvatarOutputFormat, readonly string[]> = {
+  png: ['image/png'],
+  jpeg: ['image/jpeg', 'image/jpg'],
+  webp: ['image/webp'],
+  avif: ['image/avif'],
+  ico: ['image/x-icon', 'image/vnd.microsoft.icon'],
+  svg: ['image/svg+xml'],
+  gif: ['image/gif'],
+  bmp: ['image/bmp', 'image/x-ms-bmp'],
+}
+
+export function isBlobMimeMatchingFormat(blobType: string, format: AvatarOutputFormat): boolean {
+  const baseMime = (blobType || '').split(';')[0]?.trim().toLowerCase() ?? ''
+  if (!baseMime)
+    return false
+  return ACCEPTED_FORMAT_MIMES[format].includes(baseMime)
+}
+
+export interface TimedGifSlice {
+  index: number
+  delayMs: number
+}
+
+/**
+ * Selects GIF frames whose display intervals `[t, t + delay)` overlap `[startMs, endMs]`,
+ * trims each frame's delay to the overlapping duration, and sums represented delays when
+ * reducing frame count to `maxFrames`.
+ */
+export function selectOverlappingGifFrames(
+  frames: readonly { timestampSec: number, delayMs: number }[],
+  startMs: number,
+  endMs: number,
+  maxFrames: number,
+): TimedGifSlice[] {
+  if (!frames.length)
+    return []
+
+  const safeStart = Math.max(0, startMs)
+  const safeEnd = Math.max(safeStart + 20, endMs)
+  const overlapping: TimedGifSlice[] = []
+
+  for (let i = 0; i < frames.length; i++) {
+    const f = frames[i]!
+    const fStart = Math.max(0, f.timestampSec * 1000)
+    const fEnd = fStart + Math.max(20, f.delayMs)
+    const overlap = Math.min(fEnd, safeEnd) - Math.max(fStart, safeStart)
+    if (overlap > 0) {
+      overlapping.push({
+        index: i,
+        delayMs: Math.max(20, Math.round(overlap)),
+      })
+    }
+  }
+
+  if (!overlapping.length) {
+    // Pick the nearest frame to safeStart so trimming past the end still produces a valid frame.
+    let nearestIdx = 0
+    let bestDist = Number.POSITIVE_INFINITY
+    for (let i = 0; i < frames.length; i++) {
+      const f = frames[i]!
+      const fStart = f.timestampSec * 1000
+      const fEnd = fStart + Math.max(20, f.delayMs)
+      const dist = safeStart < fStart ? fStart - safeStart : safeStart > fEnd ? safeStart - fEnd : 0
+      if (dist < bestDist) {
+        bestDist = dist
+        nearestIdx = i
+      }
+    }
+    return [{ index: nearestIdx, delayMs: Math.max(20, Math.round(frames[nearestIdx]!.delayMs)) }]
+  }
+
+  const cap = Math.max(1, maxFrames)
+  if (overlapping.length <= cap)
+    return overlapping
+
+  const reduced: TimedGifSlice[] = []
+  for (let k = 0; k < cap; k++) {
+    const bucketStart = Math.floor((k * overlapping.length) / cap)
+    const bucketEnd = Math.floor(((k + 1) * overlapping.length) / cap)
+    let summedDelay = 0
+    for (let j = bucketStart; j < bucketEnd; j++)
+      summedDelay += overlapping[j]!.delayMs
+    reduced.push({
+      index: overlapping[bucketStart]!.index,
+      delayMs: Math.max(20, Math.round(summedDelay)),
+    })
+  }
+  return reduced
+}
+
+/**
+ * Computes sample timestamps and per-frame delays for a video GIF clip while preserving
+ * the selected span duration even when `frameCount` is capped by `maxFrames`.
+ */
+export function computeVideoGifClipSchedule(
+  startSec: number,
+  endSec: number,
+  fps: number,
+  maxFrames: number,
+): { timestamps: number[], delaysMs: number[] } {
+  const safeSpan = Math.max(0.1, endSec - startSec)
+  const safeFps = Math.max(4, Math.min(20, Math.round(fps || 10)))
+  const rawCount = Math.max(2, Math.round(safeSpan * safeFps))
+  const frameCount = Math.max(2, Math.min(Math.max(2, maxFrames), rawCount))
+  const totalMs = Math.max(frameCount * 20, Math.round(safeSpan * 1000))
+
+  const timestamps: number[] = []
+  const delaysMs: number[] = []
+  for (let i = 0; i < frameCount; i++) {
+    const t = frameCount === 1 ? startSec : startSec + (safeSpan * i) / (frameCount - 1)
+    const slotStart = Math.round((i * totalMs) / frameCount)
+    const slotEnd = Math.round(((i + 1) * totalMs) / frameCount)
+    timestamps.push(t)
+    delaysMs.push(Math.max(20, slotEnd - slotStart))
+  }
+  return { timestamps, delaysMs }
+}
+
 let cachedFormatSupport: Record<AvatarOutputFormat, boolean> | null = null
 
 function canvasToBlob(
@@ -260,23 +378,12 @@ export async function exportAvatarMedia(
     if (media.kind === 'gif' && media.gifFrames?.length) {
       const startMs = Math.max(0, clip.startTime * 1000)
       const endMs = Math.max(startMs + 50, clip.endTime * 1000)
-      let selected = media.gifFrames.filter((f) => {
-        const tMs = f.timestampSec * 1000
-        return tMs >= startMs - 10 && tMs <= endMs + 10
-      })
-      if (!selected.length)
-        selected = [media.gifFrames[0]!]
+      const slices = selectOverlappingGifFrames(media.gifFrames, startMs, endMs, maxFrames)
 
-      // Thin frames evenly if the source range exceeds maxFrames while preserving total pacing.
-      const targetCount = Math.min(selected.length, maxFrames)
-      const step = selected.length / targetCount
-      const sampledIndices: number[] = []
-      for (let k = 0; k < targetCount; k++)
-        sampledIndices.push(Math.min(selected.length - 1, Math.floor(k * step)))
-
-      for (let idx = 0; idx < sampledIndices.length; idx++) {
+      for (let idx = 0; idx < slices.length; idx++) {
         checkAborted(options.signal)
-        const f = selected[sampledIndices[idx]!]!
+        const slice = slices[idx]!
+        const f = media.gifFrames[slice.index]!
         renderDrawableToCanvas(
           ctx,
           f.canvas,
@@ -292,9 +399,9 @@ export async function exportAvatarMedia(
           rgba: new Uint8ClampedArray(imgData.data),
           width: gifSize,
           height: gifSize,
-          delayMs: Math.round(f.delayMs * Math.max(1, step)),
+          delayMs: slice.delayMs,
         })
-        options.onProgress?.(Math.round(((idx + 1) / sampledIndices.length) * 75))
+        options.onProgress?.(Math.round(((idx + 1) / slices.length) * 75))
         if (idx % 4 === 3)
           await yieldToMainThread()
       }
@@ -307,16 +414,13 @@ export async function exportAvatarMedia(
 
       const start = Math.max(0, Math.min(media.duration, clip.startTime))
       const end = Math.max(start + 0.1, Math.min(media.duration || start + 1, clip.endTime))
-      const fps = Math.max(4, Math.min(20, Math.round(clip.fps || 10)))
-      const rawCount = Math.max(2, Math.round((end - start) * fps))
-      const frameCount = Math.min(maxFrames, rawCount)
-      const delayMs = Math.max(40, Math.round(1000 / fps))
+      const { timestamps, delaysMs } = computeVideoGifClipSchedule(start, end, clip.fps, maxFrames)
+      const frameCount = timestamps.length
 
       try {
         for (let i = 0; i < frameCount; i++) {
           checkAborted(options.signal)
-          const t = frameCount === 1 ? start : start + ((end - start) * i) / (frameCount - 1)
-          await seekVideoElement(video, t)
+          await seekVideoElement(video, timestamps[i]!)
           renderDrawableToCanvas(
             ctx,
             video,
@@ -332,14 +436,14 @@ export async function exportAvatarMedia(
             rgba: new Uint8ClampedArray(imgData.data),
             width: gifSize,
             height: gifSize,
-            delayMs,
+            delayMs: delaysMs[i]!,
           })
           options.onProgress?.(Math.round(((i + 1) / frameCount) * 75))
           await yieldToMainThread()
         }
       }
       finally {
-        await seekVideoElement(video, previousTime)
+        await seekVideoElement(video, previousTime).catch(() => {})
         if (!wasPaused)
           video.play().catch(() => {})
       }
@@ -388,7 +492,7 @@ export async function exportAvatarMedia(
   // Pure SVG -> SVG vector preservation path (does not require rasterizing!)
   if (format === 'svg' && media.kind === 'svg' && media.svgText) {
     const parsed = parseAndSanitizeSvg(media.svgText)
-    if (parsed) {
+    if (parsed && parsed.preservesRootStyling !== false) {
       const svgMarkup = buildVectorAvatarSvg(parsed, options.transform, options.shape, outSize)
       const blob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' })
       const fileName = buildOutputFileName(media.sourceName, 'svg', options.fileName)
@@ -444,8 +548,14 @@ export async function exportAvatarMedia(
       originalFile: media.file,
       svgSource: media.svgText,
     })
-    if (custom)
+    if (custom) {
+      if (!isBlobMimeMatchingFormat(custom.type, format)) {
+        throw new Error(
+          `Custom converter returned "${custom.type || 'unknown'}" instead of expected "${meta.mimeType}"`,
+        )
+      }
       blob = custom
+    }
   }
 
   if (!blob) {

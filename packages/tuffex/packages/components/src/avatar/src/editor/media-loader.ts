@@ -1,7 +1,16 @@
 import type { GifFrame } from './gif-codec'
 import type { AvatarSourceKind } from './types'
-import { decodeGif } from './gif-codec'
+import { decodeGif, DEFAULT_MAX_GIF_DECODED_BYTES, MAX_GIF_DIMENSION } from './gif-codec'
 import { extractBestIcoEntry } from './ico-codec'
+
+export interface LoadAvatarMediaOptions {
+  /** Allow loading remote http(s) URL strings directly into `<img>` / `<video>`. @default false */
+  allowRemoteSource?: boolean
+  /** Maximum frames decoded from animated GIF inputs. @default 180 */
+  maxGifFrames?: number
+  /** Cumulative RGBA byte budget across retained GIF frames. @default 134217728 (128 MiB) */
+  maxGifDecodedBytes?: number
+}
 
 export interface LoadedGifFrame {
   canvas: HTMLCanvasElement
@@ -27,6 +36,12 @@ export interface LoadedAvatarMedia {
   duration: number
   /** True when the media has multiple playable frames. */
   animated: boolean
+  /** True when a GIF exceeded the decoded frame cap and was truncated to the leading frames. */
+  truncated?: boolean
+  /** Total source frame count when a GIF was truncated (or all frames when known). */
+  totalFrameCount?: number
+  /** Frame cap applied when decoding a GIF source. */
+  maxFrameCount?: number
   /** True when a remote URL fell back to non-CORS loading and cannot be read back from canvas. */
   corsTainted: boolean
   /** Revokes any object URLs and detaches video elements owned by this loaded source. */
@@ -38,6 +53,67 @@ const GIF_EXT_RE = /\.gif(?:[?#]|$)/i
 const SVG_EXT_RE = /\.svg(?:[?#]|$)/i
 const ICO_EXT_RE = /\.(?:ico|cur)(?:[?#]|$)/i
 const LOCAL_MEDIA_URL_RE = /^(?:blob|data|tfile|file):/i
+const REMOTE_HTTP_URL_RE = /^https?:\/\//i
+const RELATIVE_PATH_URL_RE = /^\/(?!\/)/
+
+const IMAGE_FTYP_BRANDS = new Set([
+  'avif',
+  'avis',
+  'mif1',
+  'msf1',
+  'heic',
+  'heix',
+  'hevc',
+  'hevx',
+  'heim',
+  'heis',
+  'hevm',
+  'hevs',
+])
+
+const VIDEO_FTYP_BRANDS = new Set([
+  'isom',
+  'iso2',
+  'iso3',
+  'iso4',
+  'iso5',
+  'iso6',
+  'mp41',
+  'mp42',
+  'm4v ',
+  'qt  ',
+  'avc1',
+  'mp71',
+  'dash',
+  '3gp4',
+  '3gp5',
+  '3gp6',
+  '3g2a',
+  'f4v ',
+  'mmp4',
+])
+
+export const DEFAULT_MAX_GIF_LOAD_FRAMES = 180
+
+export function isLocalAvatarSourceUrl(url: string): boolean {
+  return LOCAL_MEDIA_URL_RE.test(url.trim())
+}
+
+function validateAvatarSourceUrl(rawUrl: string, allowRemoteSource: boolean): { url: string, isRemote: boolean } {
+  const url = rawUrl.trim()
+  if (!url)
+    throw new Error('Empty media source URL')
+  if (LOCAL_MEDIA_URL_RE.test(url))
+    return { url, isRemote: false }
+  const isHttp = REMOTE_HTTP_URL_RE.test(url)
+  const isRelative = RELATIVE_PATH_URL_RE.test(url)
+  if (isHttp || isRelative) {
+    if (!allowRemoteSource)
+      throw new Error('Remote URL sources are disabled unless allowRemoteSource is enabled')
+    return { url, isRemote: isHttp }
+  }
+  throw new Error('Unsupported media source URL scheme')
+}
 
 export function readBlobArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
   if (typeof blob.arrayBuffer === 'function')
@@ -89,7 +165,7 @@ export function detectAvatarSourceKind(source: File | Blob | string): AvatarSour
   return 'image'
 }
 
-function sniffKindFromBytes(bytes: Uint8Array, fallback: AvatarSourceKind): AvatarSourceKind {
+export function sniffAvatarKindFromBytes(bytes: Uint8Array, fallback: AvatarSourceKind): AvatarSourceKind {
   if (bytes.length >= 6) {
     const head6 = String.fromCharCode(...bytes.subarray(0, 6))
     if (head6 === 'GIF87a' || head6 === 'GIF89a')
@@ -100,8 +176,27 @@ function sniffKindFromBytes(bytes: Uint8Array, fallback: AvatarSourceKind): Avat
   }
   if (bytes.length >= 12) {
     const ftyp = String.fromCharCode(...bytes.subarray(4, 8))
-    if (ftyp === 'ftyp')
-      return 'video'
+    if (ftyp === 'ftyp') {
+      const majorBrand = String.fromCharCode(...bytes.subarray(8, 12)).toLowerCase()
+      if (IMAGE_FTYP_BRANDS.has(majorBrand))
+        return 'image'
+      if (VIDEO_FTYP_BRANDS.has(majorBrand))
+        return 'video'
+
+      const rawBoxSize = ((bytes[0]! << 24) | (bytes[1]! << 16) | (bytes[2]! << 8) | bytes[3]!) >>> 0
+      const boxEnd = rawBoxSize >= 16 ? Math.min(bytes.length, rawBoxSize) : bytes.length
+      let sawVideoBrand = false
+      for (let off = 16; off + 4 <= boxEnd; off += 4) {
+        const brand = String.fromCharCode(...bytes.subarray(off, off + 4)).toLowerCase()
+        if (IMAGE_FTYP_BRANDS.has(brand))
+          return 'image'
+        if (VIDEO_FTYP_BRANDS.has(brand))
+          sawVideoBrand = true
+      }
+      if (sawVideoBrand)
+        return 'video'
+      return fallback
+    }
     // EBML header for WebM/MKV
     if (bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3)
       return 'video'
@@ -166,11 +261,25 @@ function gifFramesToCanvases(frames: readonly GifFrame[]): LoadedGifFrame[] {
   return result
 }
 
-async function decodeGifFramesInBrowser(bytes: Uint8Array, maxFrames = 180): Promise<{
+class GifPixelBudgetError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'GifPixelBudgetError'
+  }
+}
+
+async function decodeGifFramesInBrowser(
+  bytes: Uint8Array,
+  maxFrames = DEFAULT_MAX_GIF_LOAD_FRAMES,
+  maxDecodedBytes = DEFAULT_MAX_GIF_DECODED_BYTES,
+): Promise<{
   width: number
   height: number
   frames: LoadedGifFrame[]
   duration: number
+  truncated: boolean
+  totalFrameCount: number
+  maxFrameCount: number
 }> {
   const ImageDecoderCtor = (globalThis as Record<string, any>).ImageDecoder
   if (typeof ImageDecoderCtor === 'function') {
@@ -184,82 +293,173 @@ async function decodeGifFramesInBrowser(bytes: Uint8Array, maxFrames = 180): Pro
         })
         await decoder.tracks.ready
         const track = decoder.tracks.selectedTrack
-        const count = Math.min(maxFrames, Math.max(1, track?.frameCount ?? 1))
+        const totalFrameCount = Math.max(1, track?.frameCount ?? 1)
+        const count = Math.min(maxFrames, totalFrameCount)
+        const truncated = totalFrameCount > maxFrames
         const frames: LoadedGifFrame[] = []
-        let width = 0
-        let height = 0
+        let targetWidth = 0
+        let targetHeight = 0
+        let cumulativeBytes = 0
         let elapsedMs = 0
 
         for (let i = 0; i < count; i++) {
           const decoded = await decoder.decode({ frameIndex: i })
           const videoFrame = decoded.image
-          width = width || videoFrame.displayWidth || videoFrame.codedWidth
-          height = height || videoFrame.displayHeight || videoFrame.codedHeight
-          const canvas = document.createElement('canvas')
-          canvas.width = width
-          canvas.height = height
-          const ctx = canvas.getContext('2d')
-          ctx?.drawImage(videoFrame, 0, 0, width, height)
-          const rawUs = typeof videoFrame.duration === 'number' && videoFrame.duration > 0
-            ? videoFrame.duration
-            : 100_000
-          const delayMs = Math.max(20, Math.round(rawUs / 1000))
-          videoFrame.close()
-          frames.push({
-            canvas,
-            delayMs,
-            timestampSec: elapsedMs / 1000,
-          })
-          elapsedMs += delayMs
+          try {
+            const rawWidth = videoFrame.displayWidth || videoFrame.codedWidth
+            const rawHeight = videoFrame.displayHeight || videoFrame.codedHeight
+            if (targetWidth === 0 || targetHeight === 0) {
+              if (
+                rawWidth <= 0
+                || rawHeight <= 0
+                || rawWidth > MAX_GIF_DIMENSION
+                || rawHeight > MAX_GIF_DIMENSION
+              ) {
+                throw new GifPixelBudgetError(`GIF dimensions (${rawWidth}x${rawHeight}) exceed editor limit`)
+              }
+              const projectedBytes = rawWidth * rawHeight * 4 * count
+              if (projectedBytes > maxDecodedBytes) {
+                const scale = Math.sqrt(maxDecodedBytes / projectedBytes)
+                targetWidth = Math.floor(rawWidth * scale)
+                targetHeight = Math.floor(rawHeight * scale)
+                if (
+                  targetWidth < 16
+                  || targetHeight < 16
+                  || targetWidth * targetHeight * 4 * count > maxDecodedBytes
+                ) {
+                  throw new GifPixelBudgetError('GIF exceeds maximum decoded pixel budget')
+                }
+              }
+              else {
+                targetWidth = rawWidth
+                targetHeight = rawHeight
+              }
+            }
+
+            const frameBytes = targetWidth * targetHeight * 4
+            if (cumulativeBytes + frameBytes > maxDecodedBytes)
+              throw new GifPixelBudgetError('GIF exceeds maximum decoded pixel budget')
+
+            const canvas = document.createElement('canvas')
+            canvas.width = targetWidth
+            canvas.height = targetHeight
+            const ctx = canvas.getContext('2d')
+            ctx?.drawImage(videoFrame, 0, 0, targetWidth, targetHeight)
+            const rawUs = typeof videoFrame.duration === 'number' && videoFrame.duration > 0
+              ? videoFrame.duration
+              : 100_000
+            const delayMs = Math.max(20, Math.round(rawUs / 1000))
+            frames.push({
+              canvas,
+              delayMs,
+              timestampSec: elapsedMs / 1000,
+            })
+            cumulativeBytes += frameBytes
+            elapsedMs += delayMs
+          }
+          finally {
+            videoFrame.close()
+          }
         }
 
-        decoder.close?.()
-        if (frames.length > 0 && width > 0 && height > 0) {
-          return { width, height, frames, duration: elapsedMs / 1000 }
+        if (frames.length > 0 && targetWidth > 0 && targetHeight > 0) {
+          return {
+            width: targetWidth,
+            height: targetHeight,
+            frames,
+            duration: elapsedMs / 1000,
+            truncated,
+            totalFrameCount,
+            maxFrameCount: maxFrames,
+          }
         }
       }
     }
-    catch {
-      decoder?.close?.()
+    catch (err) {
+      if (err instanceof GifPixelBudgetError)
+        throw err
       // Fall back to pure-TS GIF89a decoder.
+    }
+    finally {
+      decoder?.close?.()
     }
   }
 
-  const parsed = decodeGif(bytes, maxFrames)
+  const parsed = decodeGif(bytes, { maxFrames, maxDecodedBytes })
   return {
     width: parsed.width,
     height: parsed.height,
     frames: gifFramesToCanvases(parsed.frames),
     duration: parsed.totalDurationMs / 1000,
+    truncated: Boolean(parsed.truncated),
+    totalFrameCount: parsed.totalFrameCount ?? parsed.frames.length,
+    maxFrameCount: maxFrames,
   }
 }
 
 export function seekVideoElement(video: HTMLVideoElement, timeSec: number): Promise<void> {
+  if (video.error)
+    return Promise.reject(new Error('Video element is in an error state'))
+
   const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0
   const target = Math.max(0, Math.min(duration > 0 ? Math.max(0, duration - 0.001) : 0, timeSec))
 
-  if (Math.abs(video.currentTime - target) < 0.004 && video.readyState >= 2)
+  if (Math.abs(video.currentTime - target) < 0.004 && video.readyState >= 2 && !video.seeking)
     return Promise.resolve()
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let settled = false
-    const done = () => {
+    let seekCompleted = false
+
+    const cleanup = () => {
+      video.removeEventListener('seeked', onSeeked)
+      video.removeEventListener('loadeddata', onFrameReady)
+      video.removeEventListener('canplay', onFrameReady)
+      video.removeEventListener('error', onFail)
+      video.removeEventListener('abort', onFail)
+      window.clearTimeout(timer)
+    }
+
+    const succeed = () => {
       if (settled)
         return
       settled = true
-      video.removeEventListener('seeked', done)
-      video.removeEventListener('error', done)
-      window.clearTimeout(timer)
+      cleanup()
       resolve()
     }
-    const timer = window.setTimeout(done, 1500)
-    video.addEventListener('seeked', done, { once: true })
-    video.addEventListener('error', done, { once: true })
+
+    const fail = (message: string) => {
+      if (settled)
+        return
+      settled = true
+      cleanup()
+      reject(new Error(message))
+    }
+
+    const onFrameReady = () => {
+      if (seekCompleted && video.readyState >= 2 && !video.seeking)
+        succeed()
+    }
+
+    const onSeeked = () => {
+      seekCompleted = true
+      if (video.readyState >= 2 && !video.seeking)
+        succeed()
+    }
+
+    const onFail = () => fail('Video seek failed')
+
+    const timer = window.setTimeout(() => fail('Video seek timed out'), 1500)
+    video.addEventListener('seeked', onSeeked)
+    video.addEventListener('loadeddata', onFrameReady)
+    video.addEventListener('canplay', onFrameReady)
+    video.addEventListener('error', onFail, { once: true })
+    video.addEventListener('abort', onFail, { once: true })
     try {
       video.currentTime = target
     }
-    catch {
-      done()
+    catch (err) {
+      fail(err instanceof Error ? err.message : 'Video seek failed')
     }
   })
 }
@@ -359,7 +559,14 @@ function baseNameOf(source: File | Blob | string): string {
  * into a unified editing handle covering raster images, SVGs, multi-res ICOs,
  * multi-frame GIFs, and playable HTML5 videos (MP4/WebM/MOV/OGG).
  */
-export async function loadAvatarMedia(source: File | Blob | string): Promise<LoadedAvatarMedia> {
+export async function loadAvatarMedia(
+  source: File | Blob | string,
+  options: LoadAvatarMediaOptions = {},
+): Promise<LoadedAvatarMedia> {
+  const allowRemoteSource = options.allowRemoteSource === true
+  const maxGifFrames = options.maxGifFrames ?? DEFAULT_MAX_GIF_LOAD_FRAMES
+  const maxGifDecodedBytes = options.maxGifDecodedBytes ?? DEFAULT_MAX_GIF_DECODED_BYTES
+
   const ownedUrls: string[] = []
   const disposeUrls = () => {
     for (const url of ownedUrls)
@@ -372,13 +579,19 @@ export async function loadAvatarMedia(source: File | Blob | string): Promise<Loa
   let kind = detectAvatarSourceKind(source)
 
   const blob: Blob | null = source instanceof Blob ? source : null
-  const remoteUrl: string | null = typeof source === 'string' ? source : null
+  let remoteUrl: string | null = null
+  let isRemoteHttpUrl = false
+  if (typeof source === 'string') {
+    const validated = validateAvatarSourceUrl(source, allowRemoteSource)
+    remoteUrl = validated.url
+    isRemoteHttpUrl = validated.isRemote
+  }
 
   // For local Blobs/Files, sniff header bytes so misnamed files (.png that is actually .ico/.gif/.svg) still work.
   if (blob) {
     try {
       const head = new Uint8Array(await readBlobArrayBuffer(blob.slice(0, 256)))
-      kind = sniffKindFromBytes(head, kind)
+      kind = sniffAvatarKindFromBytes(head, kind)
     }
     catch {
       // Keep extension/MIME-derived kind.
@@ -391,7 +604,7 @@ export async function loadAvatarMedia(source: File | Blob | string): Promise<Loa
       const url = blob ? URL.createObjectURL(blob) : remoteUrl!
       if (blob)
         ownedUrls.push(url)
-      const isRemote = !blob && /^https?:\/\//i.test(url)
+      const isRemote = !blob && isRemoteHttpUrl
       const video = await loadVideoElement(url, isRemote)
       await seekVideoElement(video, 0)
       const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0
@@ -435,7 +648,7 @@ export async function loadAvatarMedia(source: File | Blob | string): Promise<Loa
 
       if (bytes && bytes.length >= 13) {
         try {
-          const decoded = await decodeGifFramesInBrowser(bytes)
+          const decoded = await decodeGifFramesInBrowser(bytes, maxGifFrames, maxGifDecodedBytes)
           if (decoded.frames.length > 0) {
             return {
               kind: 'gif',
@@ -446,12 +659,17 @@ export async function loadAvatarMedia(source: File | Blob | string): Promise<Loa
               gifFrames: decoded.frames,
               duration: decoded.duration,
               animated: decoded.frames.length > 1,
+              truncated: decoded.truncated,
+              totalFrameCount: decoded.totalFrameCount,
+              maxFrameCount: decoded.maxFrameCount,
               corsTainted: false,
               dispose: disposeUrls,
             }
           }
         }
-        catch {
+        catch (err) {
+          if (err instanceof GifPixelBudgetError || (err instanceof Error && err.message.includes('pixel budget')))
+            throw err
           // Fall back to browser <img> decode if GIF frame parsing fails.
         }
       }

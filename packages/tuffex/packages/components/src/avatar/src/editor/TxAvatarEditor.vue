@@ -30,6 +30,7 @@ import {
   formatByteSize,
   formatMediaTime,
   renderDrawableToCanvas,
+  selectOverlappingGifFrames,
   triggerAvatarDownload,
 } from './media-codecs'
 import { loadAvatarMedia, seekVideoElement } from './media-loader'
@@ -59,6 +60,7 @@ const props = withDefaults(defineProps<AvatarEditorProps>(), {
   maxZoom: 6,
   allowVideoCapture: true,
   allowGifAnimation: true,
+  allowRemoteSource: false,
   maxGifDuration: 6,
   maxGifFrames: 60,
   icoSizes: () => [...DEFAULT_ICO_SIZES],
@@ -77,7 +79,8 @@ const modalOpen = computed({
   get: () => props.open,
   set: (v: boolean) => {
     if (!v) {
-      exportAbort?.abort()
+      invalidatePendingLoad()
+      cancelActiveExport()
       stopPlayback()
     }
     emit('update:open', v)
@@ -140,9 +143,24 @@ const supportedFormats = ref<Record<AvatarOutputFormat, boolean>>({
 const transform = reactive<AvatarEditorTransform>({ ...DEFAULT_AVATAR_TRANSFORM })
 
 let loadToken = 0
+let exportToken = 0
+let scrubToken = 0
 let rafId: number | null = null
 let gifTimerId: number | null = null
 let exportAbort: AbortController | null = null
+
+function invalidatePendingLoad(): void {
+  loadToken++
+  loading.value = false
+}
+
+function cancelActiveExport(): void {
+  exportToken++
+  exportAbort?.abort()
+  exportAbort = null
+  exporting.value = false
+  exportProgress.value = 0
+}
 
 // Pointer & multi-touch gesture tracking
 const activePointers = new Map<number, { x: number, y: number }>()
@@ -156,7 +174,7 @@ const availableFormats = computed<AvatarOutputFormat[]>(() => {
     ? props.allowedOutputFormats.filter(f => AVATAR_OUTPUT_FORMATS.includes(f))
     : [...AVATAR_OUTPUT_FORMATS]
   if (!props.allowFormatConversion)
-    return [selectedFormat.value]
+    return list.includes(props.outputFormat) ? [props.outputFormat] : [list[0] ?? 'png']
   return list.length ? list : ['png']
 })
 
@@ -175,13 +193,58 @@ const canExportAnimatedGif = computed(() => {
     m
     && m.animated
     && props.allowGifAnimation
-    && availableFormats.value.includes('gif'),
+    && availableFormats.value.includes('gif')
+    && supportedFormats.value.gif,
   )
 })
 
 const isAnimatedGifExport = computed(() =>
   captureMode.value === 'gif-clip' && canExportAnimatedGif.value,
 )
+
+const effectiveExportFormat = computed<AvatarOutputFormat | null>(() => {
+  const candidate = isAnimatedGifExport.value ? 'gif' : selectedFormat.value
+  if (availableFormats.value.includes(candidate) && supportedFormats.value[candidate])
+    return candidate
+  return null
+})
+
+const hasUsableFormat = computed(() => effectiveExportFormat.value !== null)
+
+const displayErrorMessage = computed(() => {
+  if (errorMessage.value)
+    return errorMessage.value
+  if (media.value && !hasUsableFormat.value)
+    return labels.value.unsupportedFormat
+  return ''
+})
+
+const truncationNotice = computed(() => {
+  const m = media.value
+  if (!m?.truncated)
+    return ''
+  const loaded = m.gifFrames?.length ?? m.maxFrameCount ?? 0
+  const total = m.totalFrameCount
+  if (total && total > loaded)
+    return `${labels.value.gifTruncatedNotice} (${loaded}/${total})`
+  return labels.value.gifTruncatedNotice
+})
+
+function normalizeSelectedFormat(preferred: AvatarOutputFormat = selectedFormat.value): void {
+  const allowed = availableFormats.value
+  const supported = supportedFormats.value
+  if (allowed.includes(preferred) && supported[preferred]) {
+    selectedFormat.value = preferred
+  }
+  else {
+    const firstUsable = allowed.find(fmt => supported[fmt])
+    selectedFormat.value = firstUsable ?? allowed[0] ?? preferred
+  }
+  if (selectedFormat.value !== 'gif' && captureMode.value === 'gif-clip')
+    captureMode.value = 'frame'
+  if (selectedFormat.value === 'ico' && selectedSize.value > 256)
+    selectedSize.value = 256
+}
 
 const activeSizePresets = computed(() => {
   if (isAnimatedGifExport.value)
@@ -207,10 +270,9 @@ const clipEstimatedFrames = computed(() => {
   if (!m || !isAnimatedGifExport.value)
     return 0
   if (m.kind === 'gif' && m.gifFrames?.length) {
-    const startMs = clipStart.value * 1000
-    const endMs = clipEnd.value * 1000
-    const count = m.gifFrames.filter(f => f.timestampSec * 1000 >= startMs - 10 && f.timestampSec * 1000 <= endMs + 10).length
-    return Math.min(props.maxGifFrames, Math.max(1, count))
+    const startMs = Math.max(0, clipStart.value * 1000)
+    const endMs = Math.max(startMs + 50, clipEnd.value * 1000)
+    return selectOverlappingGifFrames(m.gifFrames, startMs, endMs, props.maxGifFrames).length
   }
   const span = Math.max(0.1, clipEnd.value - clipStart.value)
   return Math.min(props.maxGifFrames, Math.max(2, Math.round(span * clipFps.value)))
@@ -386,13 +448,17 @@ function clampCurrentTransform(): void {
 
 async function loadSource(source: File | Blob | string): Promise<void> {
   const token = ++loadToken
+  scrubToken++
+  cancelActiveExport()
   stopPlayback()
   loading.value = true
   errorMessage.value = ''
 
   try {
-    const loaded = await loadAvatarMedia(source)
-    if (token !== loadToken) {
+    const loaded = await loadAvatarMedia(source, {
+      allowRemoteSource: props.allowRemoteSource,
+    })
+    if (token !== loadToken || !props.open) {
       loaded.dispose()
       return
     }
@@ -426,15 +492,20 @@ async function loadSource(source: File | Blob | string): Promise<void> {
     })
 
     await nextTick()
+    if (token !== loadToken)
+      return
     drawStageAndPreviews()
   }
   catch (err) {
     if (token !== loadToken)
       return
     const error = err instanceof Error ? err : new Error(labels.value.loadFailedError)
-    errorMessage.value = error.message.includes('Video')
-      ? labels.value.videoUnsupportedError
-      : labels.value.loadFailedError
+    if (error.message.includes('allowRemoteSource') || error.message.includes('Unsupported media source URL'))
+      errorMessage.value = labels.value.remoteSourceBlockedError
+    else if (error.message.includes('Video'))
+      errorMessage.value = labels.value.videoUnsupportedError
+    else
+      errorMessage.value = labels.value.loadFailedError
     emit('error', error)
   }
   finally {
@@ -511,13 +582,9 @@ function selectCaptureMode(mode: AvatarCaptureMode): void {
 }
 
 function selectFormat(format: AvatarOutputFormat): void {
-  if (!supportedFormats.value[format])
+  if (!availableFormats.value.includes(format) || !supportedFormats.value[format])
     return
-  selectedFormat.value = format
-  if (format !== 'gif' && captureMode.value === 'gif-clip')
-    captureMode.value = 'frame'
-  if (format === 'ico' && selectedSize.value > 256)
-    selectedSize.value = 256
+  normalizeSelectedFormat(format)
   drawStageAndPreviews()
 }
 
@@ -582,10 +649,23 @@ async function scrubTo(value: number): Promise<void> {
     return
   }
   if (m.kind === 'video' && m.video) {
+    const token = ++scrubToken
     const target = clampNumber(value, 0, m.duration)
     videoTime.value = target
-    await seekVideoElement(m.video, target)
-    drawStageAndPreviews()
+    try {
+      await seekVideoElement(m.video, target)
+      if (token !== scrubToken || media.value !== m)
+        return
+      drawStageAndPreviews()
+    }
+    catch (err) {
+      if (token !== scrubToken || media.value !== m)
+        return
+      videoTime.value = clampNumber(m.video.currentTime, 0, m.duration)
+      const error = err instanceof Error ? err : new Error(labels.value.videoUnsupportedError)
+      errorMessage.value = labels.value.videoUnsupportedError
+      emit('error', error)
+    }
   }
 }
 
@@ -803,15 +883,32 @@ async function runExport(downloadOnly: boolean): Promise<void> {
     return
   }
 
+  normalizeSelectedFormat()
+  const targetFormat = effectiveExportFormat.value
+  if (!targetFormat) {
+    const err = new Error(labels.value.unsupportedFormat)
+    errorMessage.value = labels.value.unsupportedFormat
+    emit('error', err)
+    return
+  }
+
   stopPlayback()
+  const myExportToken = ++exportToken
+  const myAbort = new AbortController()
+  exportAbort = myAbort
   exporting.value = true
   exportProgress.value = 0
   errorMessage.value = ''
-  exportAbort = new AbortController()
+
+  const isExportActive = (): boolean =>
+    myExportToken === exportToken
+    && !myAbort.signal.aborted
+    && props.open
+    && media.value === m
 
   try {
     const result = await exportAvatarMedia(m, {
-      format: isAnimatedGifExport.value ? 'gif' : selectedFormat.value,
+      format: targetFormat,
       outputSize: activeExportSize.value,
       quality: selectedQuality.value / 100,
       shape: activeShape.value,
@@ -830,10 +927,14 @@ async function runExport(downloadOnly: boolean): Promise<void> {
       fileName: props.fileName,
       customConverter: props.customConverter,
       onProgress: (p) => {
-        exportProgress.value = p
+        if (isExportActive())
+          exportProgress.value = p
       },
-      signal: exportAbort.signal,
+      signal: myAbort.signal,
     })
+
+    if (!isExportActive())
+      return
 
     if (downloadOnly) {
       triggerAvatarDownload(result.blob, result.file.name)
@@ -842,28 +943,34 @@ async function runExport(downloadOnly: boolean): Promise<void> {
 
     if (props.beforeConfirm) {
       const allowed = await props.beforeConfirm(result)
-      if (allowed === false)
+      if (!isExportActive() || allowed === false)
         return
     }
+
+    if (!isExportActive())
+      return
 
     emit('confirm', result)
     emit('update:open', false)
   }
   catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError')
+    if (!isExportActive() || (err instanceof DOMException && err.name === 'AbortError'))
       return
     const error = err instanceof Error ? err : new Error('Export failed')
     errorMessage.value = error.message
     emit('error', error)
   }
   finally {
-    exporting.value = false
-    exportAbort = null
+    if (myExportToken === exportToken) {
+      exporting.value = false
+      exportAbort = null
+    }
   }
 }
 
 function handleCancel(): void {
-  exportAbort?.abort()
+  invalidatePendingLoad()
+  cancelActiveExport()
   stopPlayback()
   emit('update:open', false)
   emit('cancel')
@@ -875,9 +982,14 @@ watch(() => props.shape, (next) => {
 })
 
 watch(() => props.outputFormat, (next) => {
-  selectedFormat.value = next
+  normalizeSelectedFormat(next)
   drawStageAndPreviews()
 })
+
+watch([() => props.allowedOutputFormats, () => props.allowFormatConversion], () => {
+  normalizeSelectedFormat()
+  drawStageAndPreviews()
+}, { deep: true })
 
 watch(() => props.outputSize, (next) => {
   selectedSize.value = next
@@ -887,7 +999,8 @@ watch(
   [() => props.open, () => props.source],
   ([isOpen, nextSource], [wasOpen, prevSource]) => {
     if (!isOpen) {
-      exportAbort?.abort()
+      invalidatePendingLoad()
+      cancelActiveExport()
       stopPlayback()
       return
     }
@@ -898,11 +1011,11 @@ watch(
       selectedSize.value = props.outputSize
       selectedQuality.value = Math.round(clampNumber(props.outputQuality, 0.1, 1) * 100)
       errorMessage.value = ''
+      normalizeSelectedFormat(props.outputFormat)
 
       void detectSupportedAvatarFormats().then((map) => {
         supportedFormats.value = map
-        if (!map[selectedFormat.value])
-          selectedFormat.value = 'png'
+        normalizeSelectedFormat()
       })
     }
 
@@ -911,8 +1024,11 @@ watch(
         void loadSource(nextSource)
       }
       else {
+        invalidatePendingLoad()
+        cancelActiveExport()
         disposeMedia()
         resetTransformState()
+        errorMessage.value = ''
       }
     }
   },
@@ -948,7 +1064,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (typeof window !== 'undefined')
     window.removeEventListener('paste', handleWindowPaste)
-  exportAbort?.abort()
+  invalidatePendingLoad()
+  cancelActiveExport()
   disposeMedia()
 })
 
@@ -1044,7 +1161,12 @@ defineExpose({
             <button type="button" class="tx-avatar-editor__tool-btn" :title="labels.reset" :aria-label="labels.reset" @click="resetAll">
               <AvatarEditorIcon name="reset" />
             </button>
-            <button type="button" class="tx-avatar-editor__tool-btn tx-avatar-editor__tool-btn--label" @click="triggerReplaceFile">
+            <button
+              type="button"
+              class="tx-avatar-editor__tool-btn tx-avatar-editor__tool-btn--label"
+              :disabled="exporting"
+              @click="triggerReplaceFile"
+            >
               <AvatarEditorIcon name="upload" :size="14" />
               <span>{{ labels.replaceFile }}</span>
             </button>
@@ -1102,8 +1224,12 @@ defineExpose({
         />
       </div>
 
-      <div v-if="errorMessage" class="tx-avatar-editor__error" role="alert">
-        {{ errorMessage }}
+      <div v-if="truncationNotice" class="tx-avatar-editor__notice" role="status">
+        {{ truncationNotice }}
+      </div>
+
+      <div v-if="displayErrorMessage" class="tx-avatar-editor__error" role="alert">
+        {{ displayErrorMessage }}
       </div>
     </div>
 
@@ -1114,7 +1240,7 @@ defineExpose({
             v-if="media && allowDownload"
             type="button"
             class="tx-avatar-editor__btn tx-avatar-editor__btn--ghost"
-            :disabled="exporting || media.corsTainted"
+            :disabled="exporting || media.corsTainted || !hasUsableFormat"
             @click="runExport(true)"
           >
             <AvatarEditorIcon name="download" :size="14" />
@@ -1139,7 +1265,7 @@ defineExpose({
           <button
             type="button"
             class="tx-avatar-editor__btn tx-avatar-editor__btn--primary"
-            :disabled="!media || loading || exporting || media.corsTainted"
+            :disabled="!media || loading || exporting || media.corsTainted || !hasUsableFormat"
             @click="runExport(false)"
           >
             {{ exporting ? `${labels.exporting} ${exportProgress}%` : labels.apply }}
@@ -1407,6 +1533,15 @@ defineExpose({
   display: inline-flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+.tx-avatar-editor__notice {
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--tx-color-warning, #e6a23c) 55%, var(--tx-text-color-primary, #303133));
+  background: var(--tx-color-warning-light-9, #fdf6ec);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-warning, #e6a23c) 32%, transparent);
 }
 
 .tx-avatar-editor__error {

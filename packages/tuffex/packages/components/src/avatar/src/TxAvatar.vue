@@ -5,6 +5,7 @@ import type { AvatarEmits, AvatarProps } from './types'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { TxIcon } from '../../icon'
 import AvatarEditorIcon from './editor/AvatarEditorIcon.vue'
+import { isLocalAvatarSourceUrl } from './editor/media-loader'
 import TxAvatarEditor from './editor/TxAvatarEditor.vue'
 import { AVATAR_EDITOR_DEFAULT_ACCEPT, AVATAR_EDITOR_IMAGE_ACCEPT } from './editor/types'
 
@@ -151,7 +152,15 @@ function openEditor(source?: File | Blob | string | null) {
   if (props.disabled)
     return
   editorMounted.value = true
-  editorSource.value = source !== undefined ? source : (effectiveSrc.value ?? null)
+  if (source !== undefined) {
+    editorSource.value = source
+  }
+  else {
+    const currentSrc = effectiveSrc.value ?? null
+    const canPreload = currentSrc !== null
+      && (props.editorProps?.allowRemoteSource === true || isLocalAvatarSourceUrl(currentSrc))
+    editorSource.value = canPreload ? currentSrc : null
+  }
   editorOpen.value = true
   emit('edit-open')
 }

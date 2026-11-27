@@ -36,10 +36,10 @@ const TxAvatarEditor = withInstall(TxAvatarEditorComponent)
 
 export { TxAvatar, TxAvatarEditor, TxAvatarGroup }
 export { avatarMediaEngine } from './src/editor/engine'
-export type { DecodedGif, GifEncodeOptions, GifFrame } from './src/editor/gif-codec'
+export type { DecodedGif, GifDecodeOptions, GifEncodeOptions, GifFrame } from './src/editor/gif-codec'
 export type { ExtractedIcoEntry, IcoDirectoryEntry, IcoPngEntry } from './src/editor/ico-codec'
-export type { ExportAvatarMediaOptions } from './src/editor/media-codecs'
-export type { LoadedAvatarMedia, LoadedGifFrame } from './src/editor/media-loader'
+export type { ExportAvatarMediaOptions, TimedGifSlice } from './src/editor/media-codecs'
+export type { LoadAvatarMediaOptions, LoadedAvatarMedia, LoadedGifFrame } from './src/editor/media-loader'
 export type { ParsedSvgSource } from './src/editor/svg-codec'
 export type {
   AvatarCaptureMode,

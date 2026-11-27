@@ -13,8 +13,10 @@ import {
 } from '../src/editor/geometry'
 import { decodeGif, encodeGif } from '../src/editor/gif-codec'
 import { encodeIco, extractBestIcoEntry, parseIcoEntries, resolveIcoSizes } from '../src/editor/ico-codec'
-import { buildOutputFileName, formatByteSize, formatMediaTime } from '../src/editor/media-codecs'
-import { detectAvatarSourceKind, readBlobArrayBuffer } from '../src/editor/media-loader'
+import { buildOutputFileName, computeVideoGifClipSchedule, exportAvatarMedia, formatByteSize, formatMediaTime, isBlobMimeMatchingFormat, resetSupportedAvatarFormatsCache, selectOverlappingGifFrames } from '../src/editor/media-codecs'
+import * as mediaCodecs from '../src/editor/media-codecs'
+import { detectAvatarSourceKind, loadAvatarMedia, readBlobArrayBuffer, seekVideoElement, sniffAvatarKindFromBytes } from '../src/editor/media-loader'
+import * as mediaLoader from '../src/editor/media-loader'
 import { buildRasterAvatarSvg, buildVectorAvatarSvg, parseAndSanitizeSvg } from '../src/editor/svg-codec'
 import TxAvatarEditor from '../src/editor/TxAvatarEditor.vue'
 import { DEFAULT_AVATAR_TRANSFORM } from '../src/editor/types'
@@ -368,5 +370,445 @@ describe('txAvatar editable integration & TxAvatarEditor', () => {
 
     expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
     expect(wrapper.emitted('cancel')).toHaveLength(1)
+  })
+})
+
+describe('avatar editor security, codecs & lifecycle guards', () => {
+  const originalStubs = config.global.stubs
+  let getContextSpy: ReturnType<typeof vi.spyOn> | null = null
+
+  beforeAll(() => {
+    config.global.stubs = { ...originalStubs, teleport: true }
+    getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+  })
+
+  afterAll(() => {
+    config.global.stubs = originalStubs
+    getContextSpy?.mockRestore()
+  })
+
+  it('validates GIF screen/frame rects, enforces decoded byte budget, and signals truncation past maxFrames', () => {
+    // 0x0 logical screen
+    const zeroScreen = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0, 0, 0, 0, 0, 0, 0, 0x3B])
+    expect(() => decodeGif(zeroScreen)).toThrow(/Invalid GIF dimensions/i)
+
+    // Oversized logical screen (5000x5000 > 4096)
+    const hugeScreen = new Uint8Array([
+      0x47, 0x49, 0x46, 0x38, 0x39, 0x61,
+      5000 & 0xFF, (5000 >> 8) & 0xFF,
+      5000 & 0xFF, (5000 >> 8) & 0xFF,
+      0, 0, 0, 0x3B,
+    ])
+    expect(() => decodeGif(hugeScreen)).toThrow(/Invalid GIF dimensions/i)
+
+    // Out-of-bounds frame rect (frame at left=10, w=10 inside 16x16 logical screen)
+    const valid2 = encodeGif(
+      [
+        { rgba: new Uint8ClampedArray(8 * 8 * 4).fill(255), width: 8, height: 8, delayMs: 80 },
+        { rgba: new Uint8ClampedArray(8 * 8 * 4).fill(128), width: 8, height: 8, delayMs: 80 },
+        { rgba: new Uint8ClampedArray(8 * 8 * 4).fill(64), width: 8, height: 8, delayMs: 80 },
+      ],
+      { width: 8, height: 8 },
+    )
+    const badRect = new Uint8Array(valid2)
+    const imgDescIdx = badRect.indexOf(0x2C)
+    expect(imgDescIdx).toBeGreaterThan(0)
+    // Set left = 6 on an 8px-wide frame inside 8px screen -> 6 + 8 > 8
+    badRect[imgDescIdx + 1] = 6
+    badRect[imgDescIdx + 2] = 0
+    expect(() => decodeGif(badRect)).toThrow(/Invalid GIF frame bounds/i)
+
+    // Cumulative decoded byte budget: 8x8x4 = 256 bytes/frame, allow only 512 bytes -> fails on 3rd frame
+    expect(() => decodeGif(valid2, { maxFrames: 10, maxDecodedBytes: 512 })).toThrow(/pixel budget/i)
+
+    // Truncation signal when frame count exceeds cap vs <= cap
+    const truncated = decodeGif(valid2, { maxFrames: 2 })
+    expect(truncated.frames).toHaveLength(2)
+    expect(truncated.truncated).toBe(true)
+    expect(truncated.totalFrameCount).toBe(3)
+
+    const full = decodeGif(valid2, { maxFrames: 3 })
+    expect(full.frames).toHaveLength(3)
+    expect(full.truncated).toBe(false)
+    expect(full.totalFrameCount).toBe(3)
+  })
+
+  it('trims GIFs by display-interval overlap and preserves total pacing when reducing frame count', () => {
+    const frames = [
+      { timestampSec: 0, delayMs: 500 }, // [0, 500)
+      { timestampSec: 0.5, delayMs: 500 }, // [500, 1000)
+      { timestampSec: 1.0, delayMs: 500 }, // [1000, 1500)
+      { timestampSec: 1.5, delayMs: 500 }, // [1500, 2000)
+    ]
+    // Clip [250ms, 1250ms] overlaps frames 0 (250ms), 1 (500ms), 2 (250ms) = 1000ms total
+    const slices = selectOverlappingGifFrames(frames, 250, 1250, 10)
+    expect(slices).toEqual([
+      { index: 0, delayMs: 250 },
+      { index: 1, delayMs: 500 },
+      { index: 2, delayMs: 250 },
+    ])
+
+    // Reducing 3 overlapping frames to maxFrames=2 sums represented bucket delays (still 1000ms)
+    const reduced = selectOverlappingGifFrames(frames, 250, 1250, 2)
+    expect(reduced).toHaveLength(2)
+    expect(reduced.reduce((sum, s) => sum + s.delayMs, 0)).toBe(1000)
+  })
+
+  it('preserves full video clip duration when maxFrames caps a high-FPS clip', () => {
+    // 6.0s at 15 FPS would want 90 frames; capped at 30 frames -> total delay stays 6000ms
+    const schedule = computeVideoGifClipSchedule(1.0, 7.0, 15, 30)
+    expect(schedule.timestamps).toHaveLength(30)
+    expect(schedule.delaysMs).toHaveLength(30)
+    expect(schedule.timestamps[0]).toBeCloseTo(1.0, 5)
+    expect(schedule.timestamps[29]).toBeCloseTo(7.0, 5)
+    expect(schedule.delaysMs.reduce((a, b) => a + b, 0)).toBe(6000)
+  })
+
+  it('keeps AVIF ISOBMFF containers on the image path while still detecting MP4/MOV video', () => {
+    const makeFtyp = (major: string, compat = ''): Uint8Array => {
+      const len = 16 + compat.length
+      const buf = new Uint8Array(len)
+      buf[3] = len
+      buf.set([0x66, 0x74, 0x79, 0x70], 4) // 'ftyp'
+      for (let i = 0; i < 4; i++) buf[8 + i] = major.charCodeAt(i)
+      for (let i = 0; i < compat.length; i++) buf[16 + i] = compat.charCodeAt(i)
+      return buf
+    }
+
+    expect(sniffAvatarKindFromBytes(makeFtyp('avif', 'avifmif1'), 'image')).toBe('image')
+    expect(sniffAvatarKindFromBytes(makeFtyp('avis', 'avifmsf1'), 'image')).toBe('image')
+    expect(sniffAvatarKindFromBytes(makeFtyp('mif1', 'avif'), 'image')).toBe('image')
+    expect(sniffAvatarKindFromBytes(makeFtyp('isom', 'mp42'), 'image')).toBe('video')
+    expect(sniffAvatarKindFromBytes(makeFtyp('qt  '), 'image')).toBe('video')
+  })
+
+  it('preserves inherited root SVG presentation attributes and flags unpreservable root styling for raster fallback', () => {
+    const strokedSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/></svg>`
+    const parsed = parseAndSanitizeSvg(strokedSvg)
+    expect(parsed).not.toBeNull()
+    expect(parsed!.preservesRootStyling).toBe(true)
+    expect(parsed!.rootAttributes).toMatchObject({
+      'fill': 'none',
+      'stroke': '#3b82f6',
+      'stroke-width': '2',
+      'stroke-linecap': 'round',
+    })
+    const out = buildVectorAvatarSvg(parsed!, { ...DEFAULT_AVATAR_TRANSFORM }, 'circle', 128)
+    expect(out).toContain('fill="none"')
+    expect(out).toContain('stroke="#3b82f6"')
+    expect(out).toContain('stroke-width="2"')
+    expect(out).toContain('stroke-linecap="round"')
+
+    const styledRootSvg = `<svg viewBox="0 0 24 24" class="icon" style="mix-blend-mode:multiply"><circle cx="12" cy="12" r="9"/></svg>`
+    const parsedStyled = parseAndSanitizeSvg(styledRootSvg)
+    expect(parsedStyled).not.toBeNull()
+    expect(parsedStyled!.preservesRootStyling).toBe(false)
+  })
+
+  it('validates customConverter Blob MIME type instead of relabeling mismatched bytes', async () => {
+    expect(isBlobMimeMatchingFormat('image/webp', 'webp')).toBe(true)
+    expect(isBlobMimeMatchingFormat('image/jpg', 'jpeg')).toBe(true)
+    expect(isBlobMimeMatchingFormat('image/svg+xml;charset=utf-8', 'svg')).toBe(true)
+    expect(isBlobMimeMatchingFormat('image/png', 'webp')).toBe(false)
+    expect(isBlobMimeMatchingFormat('', 'png')).toBe(false)
+
+    const fakeCtx = {
+      save: vi.fn(),
+      restore: vi.fn(),
+      clearRect: vi.fn(),
+      fillRect: vi.fn(),
+      translate: vi.fn(),
+      rotate: vi.fn(),
+      scale: vi.fn(),
+      drawImage: vi.fn(),
+      beginPath: vi.fn(),
+      clip: vi.fn(),
+      arc: vi.fn(),
+      rect: vi.fn(),
+    } as unknown as CanvasRenderingContext2D
+    const localCtxSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(fakeCtx)
+    try {
+      const media = {
+        kind: 'image' as const,
+        naturalWidth: 64,
+        naturalHeight: 64,
+        file: null,
+        sourceName: 'avatar.png',
+        image: {} as HTMLImageElement,
+        duration: 0,
+        animated: false,
+        corsTainted: false,
+        dispose: vi.fn(),
+      }
+      await expect(
+        exportAvatarMedia(media, {
+          format: 'webp',
+          outputSize: 64,
+          quality: 0.9,
+          shape: 'circle',
+          transform: { ...DEFAULT_AVATAR_TRANSFORM },
+          customConverter: async () => new Blob(['not-webp'], { type: 'image/png' }),
+        }),
+      ).rejects.toThrow(/Custom converter returned "image\/png" instead of expected "image\/webp"/i)
+    }
+    finally {
+      localCtxSpy.mockReturnValue(null)
+    }
+  })
+
+  it('rejects seekVideoElement on error, setter exception, or timeout and waits for frame readiness', async () => {
+    vi.useFakeTimers()
+    try {
+      const video = document.createElement('video')
+      Object.defineProperty(video, 'duration', { value: 10, configurable: true })
+      Object.defineProperty(video, 'readyState', { value: 1, configurable: true, writable: true })
+      Object.defineProperty(video, 'seeking', { value: true, configurable: true, writable: true })
+
+      let current = 2
+      Object.defineProperty(video, 'currentTime', {
+        get: () => current,
+        set: (v: number) => {
+          current = v
+        },
+        configurable: true,
+      })
+
+      // Even though currentTime === 2, seeking=true / readyState<2 must NOT fast-path resolve.
+      const pending = seekVideoElement(video, 2)
+      video.dispatchEvent(new Event('seeked'))
+      ;(video as unknown as { readyState: number }).readyState = 2
+      ;(video as unknown as { seeking: boolean }).seeking = false
+      video.dispatchEvent(new Event('canplay'))
+      await expect(pending).resolves.toBeUndefined()
+
+      // Error event rejects
+      const errPromise = seekVideoElement(video, 5)
+      video.dispatchEvent(new Event('error'))
+      await expect(errPromise).rejects.toThrow(/Video seek failed/i)
+
+      // Timeout rejects
+      const timeoutPromise = seekVideoElement(video, 7)
+      const assertion = expect(timeoutPromise).rejects.toThrow(/Video seek timed out/i)
+      await vi.advanceTimersByTimeAsync(1600)
+      await assertion
+
+      // Setter exception rejects
+      Object.defineProperty(video, 'currentTime', {
+        get: () => 0,
+        set: () => {
+          throw new Error('Seek setter failed')
+        },
+        configurable: true,
+      })
+      await expect(seekVideoElement(video, 3)).rejects.toThrow(/Seek setter failed/i)
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('blocks remote http(s) URLs by default in loadAvatarMedia and always blocks javascript: URLs', async () => {
+    const imgSpy = vi.spyOn(globalThis, 'Image')
+    await expect(loadAvatarMedia('https://example.com/avatar.png')).rejects.toThrow(/allowRemoteSource/i)
+    expect(imgSpy).not.toHaveBeenCalled()
+
+    await expect(
+      loadAvatarMedia('javascript:alert(1)', { allowRemoteSource: true }),
+    ).rejects.toThrow(/Unsupported media source URL/i)
+    imgSpy.mockRestore()
+
+    // TxAvatar with remote src does not pass remote URL to TxAvatarEditor unless allowRemoteSource is set
+    const avatar = mount(TxAvatar, {
+      props: {
+        src: 'https://example.com/user.png',
+        editable: true,
+      },
+    })
+    await avatar.trigger('click')
+    await nextTick()
+    expect(avatar.findComponent(TxAvatarEditor).props('source')).toBeNull()
+  })
+
+  it('enforces decoded GIF pixel budget in ImageDecoder path without falling back', async () => {
+    const closeFrame = vi.fn()
+    const closeDecoder = vi.fn()
+    class MockImageDecoder {
+      static isTypeSupported = vi.fn(async () => true)
+      tracks = { ready: Promise.resolve(), selectedTrack: { frameCount: 4 } }
+      decode = vi.fn(async () => ({
+        image: {
+          displayWidth: 256,
+          displayHeight: 256,
+          duration: 100_000,
+          close: closeFrame,
+        },
+      }))
+
+      close = closeDecoder
+    }
+    const origDecoder = (globalThis as Record<string, unknown>).ImageDecoder
+    ;(globalThis as Record<string, unknown>).ImageDecoder = MockImageDecoder
+
+    try {
+      const tinyGif = encodeGif(
+        [{ rgba: new Uint8ClampedArray(4 * 4 * 4).fill(255), width: 4, height: 4, delayMs: 80 }],
+        { width: 4, height: 4 },
+      )
+      const gifFile = new File([tinyGif], 'huge.gif', { type: 'image/gif' })
+      // Budget of 512 bytes cannot fit even a 16x16x4x4 downsampled GIF -> throws budget error directly
+      await expect(
+        loadAvatarMedia(gifFile, { maxGifDecodedBytes: 512 }),
+      ).rejects.toThrow(/pixel budget/i)
+      expect(closeFrame).toHaveBeenCalled()
+      expect(closeDecoder).toHaveBeenCalled()
+    }
+    finally {
+      ;(globalThis as Record<string, unknown>).ImageDecoder = origDecoder
+    }
+  })
+
+  it('invalidates stale loads on close/source-clear, cancels active exports on Cancel/source-replace, exits gif-clip on format prop change, and disables Apply when no format is usable', async () => {
+    resetSupportedAvatarFormatsCache()
+    const detectSpy = vi.spyOn(mediaCodecs, 'detectSupportedAvatarFormats').mockResolvedValue({
+      png: true,
+      jpeg: true,
+      webp: true,
+      avif: false,
+      ico: true,
+      svg: true,
+      gif: true,
+      bmp: true,
+    })
+
+    // 1. Stale pending load disposes cleanly when source clears to null or editor closes
+    let resolveLoad!: (m: mediaLoader.LoadedAvatarMedia) => void
+    const disposeStale = vi.fn()
+    const loadSpy = vi.spyOn(mediaLoader, 'loadAvatarMedia').mockImplementation(
+      () => new Promise(resolve => { resolveLoad = resolve }),
+    )
+    const file1 = new File(['a'], 'a.png', { type: 'image/png' })
+    const wrapper = mount(TxAvatarEditor, {
+      props: {
+        open: true,
+        source: file1,
+      },
+    })
+    await nextTick()
+    // Clear source before load finishes
+    await wrapper.setProps({ source: null })
+    resolveLoad({
+      kind: 'image',
+      naturalWidth: 64,
+      naturalHeight: 64,
+      file: file1,
+      sourceName: 'a.png',
+      image: {} as HTMLImageElement,
+      duration: 0,
+      animated: false,
+      corsTainted: false,
+      dispose: disposeStale,
+    })
+    await nextTick()
+    await Promise.resolve()
+    expect(disposeStale).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('source-change')).toBeUndefined()
+
+    // 2. Unsupported sole allowed format disables Apply and displays explanation
+    const loadedGif: mediaLoader.LoadedAvatarMedia = {
+      kind: 'gif',
+      naturalWidth: 64,
+      naturalHeight: 64,
+      file: new File(['g'], 'anim.gif', { type: 'image/gif' }),
+      sourceName: 'anim.gif',
+      gifFrames: [
+        { canvas: document.createElement('canvas'), delayMs: 100, timestampSec: 0 },
+        { canvas: document.createElement('canvas'), delayMs: 100, timestampSec: 0.1 },
+      ],
+      duration: 0.2,
+      animated: true,
+      truncated: true,
+      totalFrameCount: 250,
+      maxFrameCount: 180,
+      corsTainted: false,
+      dispose: vi.fn(),
+    }
+    loadSpy.mockResolvedValue(loadedGif)
+
+    const unsupportedWrapper = mount(TxAvatarEditor, {
+      props: {
+        open: true,
+        source: loadedGif.file,
+        outputFormat: 'avif',
+        allowedOutputFormats: ['avif'],
+      },
+    })
+    await vi.waitFor(() => {
+      expect(unsupportedWrapper.emitted('source-change')).toHaveLength(1)
+    })
+    await nextTick()
+    expect(unsupportedWrapper.find('.tx-avatar-editor__notice').exists()).toBe(true)
+    expect(unsupportedWrapper.find('.tx-avatar-editor__error').text()).toContain('Not supported')
+    expect((unsupportedWrapper.find('.tx-avatar-editor__btn--primary').element as HTMLButtonElement).disabled).toBe(true)
+
+    // 3. Switching outputFormat prop away from gif exits gif-clip mode & Cancel during beforeConfirm prevents confirm
+    let resolveBeforeConfirm!: (v: boolean) => void
+    const beforeConfirm = vi.fn(() => new Promise<boolean>((resolve) => {
+      resolveBeforeConfirm = resolve
+    }))
+    const exportSpy = vi.spyOn(mediaCodecs, 'exportAvatarMedia').mockResolvedValue({
+      file: new File(['x'], 'anim.gif', { type: 'image/gif' }),
+      blob: new Blob(['x'], { type: 'image/gif' }),
+      url: 'data:image/gif;base64,eA==',
+      dataUrl: 'data:image/gif;base64,eA==',
+      format: 'gif',
+      mimeType: 'image/gif',
+      width: 128,
+      height: 128,
+      size: 1,
+      animated: true,
+      sourceKind: 'gif',
+      originalFile: loadedGif.file,
+      shape: 'circle',
+      transform: { ...DEFAULT_AVATAR_TRANSFORM },
+    })
+
+    const activeWrapper = mount(TxAvatarEditor, {
+      props: {
+        open: true,
+        source: loadedGif.file,
+        outputFormat: 'gif',
+        beforeConfirm,
+      },
+    })
+    await vi.waitFor(() => {
+      expect(activeWrapper.emitted('source-change')).toHaveLength(1)
+    })
+    await nextTick()
+
+    // Enter gif-clip mode via timeline button, then switch outputFormat prop to png -> exits gif-clip
+    const gifClipBtn = activeWrapper.findAll('.tx-avatar-editor__seg-btn').find(b => b.text().includes('Animated GIF'))
+    expect(gifClipBtn).toBeTruthy()
+    await gifClipBtn!.trigger('click')
+    expect(activeWrapper.find('.tx-avatar-editor__clip-grid').exists()).toBe(true)
+    await activeWrapper.setProps({ outputFormat: 'png' })
+    await nextTick()
+    expect(activeWrapper.find('.tx-avatar-editor__clip-grid').exists()).toBe(false)
+
+    // Start Apply -> pause inside beforeConfirm -> click Cancel -> resolve beforeConfirm late -> NO confirm emitted
+    await activeWrapper.find('.tx-avatar-editor__btn--primary').trigger('click')
+    await vi.waitFor(() => {
+      expect(beforeConfirm).toHaveBeenCalledTimes(1)
+    })
+    await activeWrapper.find('.tx-avatar-editor__btn--secondary').trigger('click')
+    resolveBeforeConfirm(true)
+    await nextTick()
+    await Promise.resolve()
+    expect(activeWrapper.emitted('confirm')).toBeUndefined()
+    expect(activeWrapper.emitted('cancel')).toHaveLength(1)
+
+    exportSpy.mockRestore()
+    loadSpy.mockRestore()
+    detectSpy.mockRestore()
+    resetSupportedAvatarFormatsCache()
   })
 })

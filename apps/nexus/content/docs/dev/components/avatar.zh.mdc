@@ -233,7 +233,8 @@ code: |
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `open` | `boolean` | 必填 | 受控开关（支持 `v-model:open`）。 |
-| `source` | `File \| Blob \| string \| null` | `null` | 初始载入的图片、SVG、ICO、GIF 或视频源；为空时展示 `TxFileUploader` 上传区。 |
+| `source` | `File \| Blob \| string \| null` | `null` | 初始载入的图片、SVG、ICO、GIF 或视频源（默认支持 `File`、`Blob` 及本地 `blob:`/`data:` 链接；远程 `http(s)` 链接需开启 `allowRemoteSource`）；为空时展示 `TxFileUploader` 上传区。 |
+| `allowRemoteSource` | `boolean` | `false` | 显式允许编辑器直接加载远程 `http(s)` 链接的开关；默认关闭，避免在未授权时发起远程图片/视频请求。 |
 | `shape` | `AvatarShape` | `'circle'` | 初始裁切遮罩形状。 |
 | `width` | `string` | `'min(94vw, 800px)'` | 弹窗宽度。 |
 | `outputFormat` | `AvatarOutputFormat` | `'png'` | 默认导出格式；浏览器不支持的格式会自动探测并禁用。 |

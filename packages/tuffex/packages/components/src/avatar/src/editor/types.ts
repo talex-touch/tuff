@@ -256,6 +256,8 @@ export interface AvatarEditorLabels {
   corsTaintedError: string
   loadFailedError: string
   videoUnsupportedError: string
+  remoteSourceBlockedError: string
+  gifTruncatedNotice: string
   pasteHint: string
 }
 
@@ -312,6 +314,8 @@ export const AVATAR_EDITOR_DEFAULT_LABELS: Readonly<AvatarEditorLabels> = Object
   corsTaintedError: 'This remote image blocks cross-origin export. Upload a local file instead.',
   loadFailedError: 'Could not decode this file in the current browser.',
   videoUnsupportedError: 'This video codec is not playable in the current browser.',
+  remoteSourceBlockedError: 'Remote URL loading is disabled by default. Upload a local file or enable allowRemoteSource.',
+  gifTruncatedNotice: 'This GIF exceeds the editor frame limit; only the leading frames were loaded.',
   pasteHint: 'Tip: Ctrl/⌘+V to paste an image',
 })
 
@@ -327,6 +331,8 @@ export interface AvatarEditorConfig {
   maxZoom?: number
   allowVideoCapture?: boolean
   allowGifAnimation?: boolean
+  /** Allow loading remote http(s) URL strings directly into `<img>`/`<video>`. Disabled by default so the editor only loads local File/Blob/blob:/data: sources unless explicitly opted in. @default false */
+  allowRemoteSource?: boolean
   maxGifDuration?: number
   maxGifFrames?: number
   icoSizes?: number[]
@@ -341,7 +347,7 @@ export interface AvatarEditorConfig {
 
 export interface AvatarEditorProps extends AvatarEditorConfig {
   open: boolean
-  /** Initial image/SVG/GIF/ICO/video source: File, Blob, or URL string. */
+  /** Initial image/SVG/GIF/ICO/video source: File, Blob, or local `blob:`/`data:` URL string (remote `http(s)` URLs require `allowRemoteSource`). */
   source?: File | Blob | string | null
   /** Initial crop mask shape; mirrors TxAvatar `shape`. */
   shape?: AvatarShape
