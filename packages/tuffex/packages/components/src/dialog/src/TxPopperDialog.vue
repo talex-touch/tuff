@@ -154,6 +154,7 @@ provide('destroy', destroy)
               class="tx-popper-dialog__confirm"
               type="primary"
               native-type="button"
+              block
               @click="destroy"
             >
               {{ confirmText }}
@@ -219,15 +220,33 @@ provide('destroy', destroy)
 
   &__container {
     // Positioned and stacked, so the surface sits under the content without leaving the panel.
+    // Concentric corners: 24px outer radius minus 12px uniform side/bottom inset = 12px action radius.
+    --tx-popper-dialog-radius: 24px;
+    --tx-popper-dialog-inset: 12px;
     position: relative;
     z-index: 0;
-    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 24px var(--tx-popper-dialog-inset) var(--tx-popper-dialog-inset);
     width: min(360px, 80vw);
     max-height: 80vh;
     box-sizing: border-box;
-    overflow: hidden;
     transition: transform 0.25s ease;
-    @include tx-squircle(16px);
+    @include tx-squircle(24px);
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent);
+      border-radius: inherit;
+      corner-shape: inherit;
+      box-shadow: var(--tx-elevation-4, 4px 8px 24px rgba(0, 0, 0, 0.08));
+      box-sizing: border-box;
+      pointer-events: none;
+    }
   }
 
   &__surface {
@@ -241,9 +260,13 @@ provide('destroy', destroy)
 
   &__title {
     margin: 0;
-    font-size: 18px;
+    padding-inline: 12px;
+    font-size: 17px;
     font-weight: var(--tx-font-weight-semibold, 600);
+    line-height: 1.3;
+    letter-spacing: -0.01em;
     text-align: center;
+    text-wrap: balance;
     color: var(--tx-text-color-primary, #303133);
   }
 
@@ -254,27 +277,29 @@ provide('destroy', destroy)
     // which `break-word` does not, so the panel stops being widened by it.
     overflow-wrap: anywhere;
     position: relative;
-    margin-top: 12px;
-    margin-bottom: 60px;
+    margin: 0;
+    padding-inline: 12px;
     max-height: 300px;
     overflow-y: auto;
+    font-size: 13px;
+    line-height: 1.55;
 
     span {
       display: block;
       width: 100%;
       text-align: center;
-      line-height: 1.4;
+      text-wrap: pretty;
       color: var(--tx-text-color-secondary, #909399);
       white-space: pre-line;
     }
   }
 
   &__confirm {
-    position: absolute;
-    left: 16px;
-    right: 16px;
-    bottom: 16px;
-    width: auto;
+    margin-top: 16px;
+    --tx-button-height: 38px;
+    --tx-button-radius: 12px;
+    --fake-radius: inherit;
+    @include tx-squircle(24px, $inset: 12px);
   }
 }
 
@@ -299,6 +324,7 @@ provide('destroy', destroy)
 
 .tx-popper-dialog-moving {
   .tx-popper-dialog__container > :not(.tx-popper-dialog__surface),
+  .tx-popper-dialog__container::after,
   .tx-popper-dialog__surface:not(.tx-base-surface--with-glass, .tx-base-surface--with-filter),
   .tx-popper-dialog__surface:is(.tx-base-surface--with-glass, .tx-base-surface--with-filter)::before,
   .tx-popper-dialog__surface:is(.tx-base-surface--with-glass, .tx-base-surface--with-filter) .tx-base-surface__layer {

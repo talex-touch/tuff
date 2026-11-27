@@ -111,7 +111,7 @@ const fillBackground = computed(() => {
   const c = String(fillColor.value || '')
   if (isGradientColor.value)
     return c
-  return `linear-gradient(90deg, color-mix(in srgb, ${c} 58%, transparent), ${c})`
+  return `linear-gradient(90deg, color-mix(in srgb, ${c} 76%, transparent), ${c})`
 })
 
 /**
@@ -591,10 +591,10 @@ watch(
 @keyframes tx-progress-stardust-twinkle {
   0%,
   100% {
-    opacity: 0.55;
+    opacity: 0.34;
   }
   50% {
-    opacity: 1;
+    opacity: 0.62;
   }
 }
 
@@ -864,32 +864,32 @@ watch(
 }
 
 .tx-progress-bar--flow-stardust::before {
-  opacity: 0.5;
+  opacity: 0.32;
   background-image:
-    radial-gradient(circle at 7px 3px, color-mix(in srgb, var(--tx-color-white, #fff) 55%, transparent) 0 0.45px, transparent 0.9px),
-    radial-gradient(circle at 23px 1.5px, color-mix(in srgb, var(--tx-color-white, #fff) 40%, transparent) 0 0.4px, transparent 0.85px),
-    radial-gradient(circle at 39px 3.5px, color-mix(in srgb, var(--tx-color-white, #fff) 50%, transparent) 0 0.45px, transparent 0.9px),
-    radial-gradient(circle at 58px 1px, color-mix(in srgb, var(--tx-color-white, #fff) 35%, transparent) 0 0.4px, transparent 0.85px),
-    radial-gradient(circle at 71px 2.5px, color-mix(in srgb, var(--tx-color-white, #fff) 55%, transparent) 0 0.45px, transparent 0.9px),
-    radial-gradient(circle at 88px 4px, color-mix(in srgb, var(--tx-color-white, #fff) 40%, transparent) 0 0.4px, transparent 0.85px);
+    radial-gradient(circle at 7px 3px, color-mix(in srgb, var(--tx-color-white, #fff) 42%, transparent) 0 0.35px, transparent 0.75px),
+    radial-gradient(circle at 23px 1.5px, color-mix(in srgb, var(--tx-color-white, #fff) 32%, transparent) 0 0.3px, transparent 0.7px),
+    radial-gradient(circle at 39px 3.5px, color-mix(in srgb, var(--tx-color-white, #fff) 38%, transparent) 0 0.35px, transparent 0.75px),
+    radial-gradient(circle at 58px 1px, color-mix(in srgb, var(--tx-color-white, #fff) 30%, transparent) 0 0.3px, transparent 0.7px),
+    radial-gradient(circle at 71px 2.5px, color-mix(in srgb, var(--tx-color-white, #fff) 42%, transparent) 0 0.35px, transparent 0.75px),
+    radial-gradient(circle at 88px 4px, color-mix(in srgb, var(--tx-color-white, #fff) 32%, transparent) 0 0.3px, transparent 0.7px);
   background-size: 96px 5px;
   background-position: 0 0;
-  animation: tx-progress-stardust-far 4.8s linear infinite;
+  animation: tx-progress-stardust-far 5.4s linear infinite;
 }
 
 .tx-progress-bar--flow-stardust::after {
-  opacity: 0.85;
+  opacity: 0.52;
   background-image:
-    radial-gradient(circle at 12px 2px, var(--tx-color-white, #fff) 0 0.7px, color-mix(in srgb, var(--tx-color-white, #fff) 30%, transparent) 1.1px, transparent 1.8px),
-    radial-gradient(circle at 41px 3.5px, var(--tx-color-white, #fff) 0 0.6px, color-mix(in srgb, var(--tx-color-white, #fff) 28%, transparent) 1px, transparent 1.6px),
-    radial-gradient(circle at 67px 1.5px, var(--tx-color-white, #fff) 0 0.75px, color-mix(in srgb, var(--tx-color-white, #fff) 30%, transparent) 1.2px, transparent 1.9px),
-    radial-gradient(circle at 94px 3px, var(--tx-color-white, #fff) 0 0.6px, color-mix(in srgb, var(--tx-color-white, #fff) 26%, transparent) 1px, transparent 1.6px),
-    radial-gradient(circle at 118px 2px, var(--tx-color-white, #fff) 0 0.7px, color-mix(in srgb, var(--tx-color-white, #fff) 30%, transparent) 1.1px, transparent 1.8px);
+    radial-gradient(circle at 12px 2px, color-mix(in srgb, var(--tx-color-white, #fff) 82%, transparent) 0 0.45px, color-mix(in srgb, var(--tx-color-white, #fff) 22%, transparent) 0.75px, transparent 1.2px),
+    radial-gradient(circle at 41px 3.5px, color-mix(in srgb, var(--tx-color-white, #fff) 75%, transparent) 0 0.4px, color-mix(in srgb, var(--tx-color-white, #fff) 20%, transparent) 0.7px, transparent 1.1px),
+    radial-gradient(circle at 67px 1.5px, color-mix(in srgb, var(--tx-color-white, #fff) 82%, transparent) 0 0.45px, color-mix(in srgb, var(--tx-color-white, #fff) 22%, transparent) 0.75px, transparent 1.2px),
+    radial-gradient(circle at 94px 3px, color-mix(in srgb, var(--tx-color-white, #fff) 72%, transparent) 0 0.4px, color-mix(in srgb, var(--tx-color-white, #fff) 18%, transparent) 0.7px, transparent 1.1px),
+    radial-gradient(circle at 118px 2px, color-mix(in srgb, var(--tx-color-white, #fff) 80%, transparent) 0 0.45px, color-mix(in srgb, var(--tx-color-white, #fff) 22%, transparent) 0.75px, transparent 1.2px);
   background-size: 132px 5px;
   background-position: 0 0;
   animation:
-    tx-progress-stardust-near 2.6s linear infinite,
-    tx-progress-stardust-twinkle 1.7s ease-in-out infinite;
+    tx-progress-stardust-near 3.2s linear infinite,
+    tx-progress-stardust-twinkle 2.1s ease-in-out infinite;
 }
 
 //
@@ -902,7 +902,7 @@ watch(
   display: flex;
   height: 100%;
   width: 100%;
-  gap: 1px;
+  gap: 2px;
 }
 
 .tx-progress-bar__segment {

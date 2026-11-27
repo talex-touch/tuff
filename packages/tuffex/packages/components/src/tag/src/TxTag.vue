@@ -199,20 +199,31 @@ function handleClose(event: MouseEvent): void {
 </template>
 
 <style lang="scss">
+// Sized and rounded on the TxButton scale: `md` matches TxButton `sm` (26px, 8px radius)
+// and `sm` steps down proportionally (22px, 6px radius). Uses a 1px inset ring rather than
+// a layout border so fixed heights hold steady across states.
 .tx-tag {
+  --tx-tag-height: 22px;
+  --tx-tag-pad-x: 8px;
+  --tx-tag-gap: 4px;
+  --tx-tag-radius: 6px;
+
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  border-radius: 8px;
+  justify-content: center;
+  box-sizing: border-box;
+  height: var(--tx-tag-height);
+  padding: 0 var(--tx-tag-pad-x);
+  gap: var(--tx-tag-gap);
+  border: 0;
+  border-radius: var(--tx-tag-radius);
   color: var(--tx-tag-text, var(--tx-tag-color, var(--tx-color-primary)));
   background: var(--tx-tag-bg, color-mix(in srgb, currentColor 12%, transparent));
-  border: 1px solid var(--tx-tag-border, color-mix(in srgb, currentColor 32%, transparent));
-  font-weight: var(--tx-font-weight-semibold, 600);
+  box-shadow: inset 0 0 0 1px var(--tx-tag-border, color-mix(in srgb, currentColor 32%, transparent));
+  font-weight: var(--tx-font-weight-medium, 500);
   font-size: 11px;
-  letter-spacing: 0.05em;
   line-height: 1;
   white-space: nowrap;
-  transition: all 0.2s ease;
   cursor: default;
 
   &[role='button'] {
@@ -225,6 +236,7 @@ function handleClose(event: MouseEvent): void {
   }
 
   &__icon {
+    flex: none;
     font-size: 12px;
     line-height: 1;
   }
@@ -238,12 +250,12 @@ function handleClose(event: MouseEvent): void {
     flex: 0 0 auto;
     width: var(--tx-tag-dot-size, 6px);
     height: var(--tx-tag-dot-size, 6px);
-    margin-right: -1px;
+    margin-right: 0;
     border-radius: 50%;
   }
 
   &__count {
-    padding: 0 4px;
+    padding: 1px 4px;
     margin-right: -2px;
     border-radius: 4px;
     font-size: 10.5px;
@@ -255,17 +267,32 @@ function handleClose(event: MouseEvent): void {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex: none;
+    width: 14px;
+    height: 14px;
     padding: 0;
-    margin-left: 2px;
+    margin-left: 0;
     border: none;
     background: transparent;
     color: inherit;
     cursor: pointer;
-    opacity: 0.7;
-    transition: opacity 0.2s ease;
-    border-radius: 50%;
+    opacity: 0.72;
+    transition: opacity 0.16s ease;
+    border-radius: 4px;
 
-    &:hover {
+    svg {
+      width: 10px;
+      height: 10px;
+    }
+
+    &:hover:not(:disabled) {
+      opacity: 1;
+      background: color-mix(in srgb, currentColor 14%, transparent);
+    }
+
+    &:focus-visible {
+      outline: 1.5px solid currentColor;
+      outline-offset: 1px;
       opacity: 1;
     }
 
@@ -276,29 +303,57 @@ function handleClose(event: MouseEvent): void {
   }
 
   &.pill {
+    --tx-tag-radius: 999px;
     border-radius: 999px;
+
+    .tx-tag__close {
+      border-radius: 50%;
+    }
   }
 
   &--sm {
-    padding: 4px 6px;
+    --tx-tag-height: 22px;
+    --tx-tag-pad-x: 8px;
+    --tx-tag-gap: 4px;
+    --tx-tag-radius: 6px;
+    font-size: 11px;
   }
 
   &--md {
-    padding: 5px 8px;
+    --tx-tag-height: 26px;
+    --tx-tag-pad-x: 10px;
+    --tx-tag-gap: 5px;
+    --tx-tag-radius: 8px;
     font-size: 12px;
 
     .tx-tag__icon {
       font-size: 14px;
     }
+
+    .tx-tag__close {
+      width: 16px;
+      height: 16px;
+
+      svg {
+        width: 11px;
+        height: 11px;
+      }
+    }
   }
 
   &--closable {
-    padding-right: 6px;
+    padding-right: calc(var(--tx-tag-pad-x) - 3px);
   }
 
   &--disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tx-tag__close {
+      transition: none;
+    }
   }
 }
 </style>

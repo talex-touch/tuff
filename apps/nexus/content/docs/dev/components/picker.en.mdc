@@ -132,13 +132,14 @@ type PickerValue = Array<string | number>
 ## Overview
 
 - Each column is a drum the component turns itself, not a native scroller; it handles the pointer, the wheel, clicks, and the keyboard.
-- A drag tracks the pointer, then coasts on its release velocity and settles on the nearest enabled row with a cubic ease-out; the wheel settles 120ms after it stops.
-- Under reduced motion a drag still tracks the pointer, but there is no coast and settling doesn't ease.
+- A drag tracks the pointer with soft rubber-band resistance past the ends, samples release velocity over the recent ~95ms window, coasts with exponential friction deceleration, and hands off seamlessly into a critically-damped spring snap onto the nearest enabled row; wheel/trackpad input follows the same spring and settles 110ms after it pauses.
+- Under reduced motion a drag still tracks the pointer, but there is no coast and settling snaps immediately without animation.
 - When a controlled parent echoes back the value a column is already turning to, the column finishes its turn instead of being re-placed.
 - Only the rows facing the viewer are drawn (11 at the default size, whatever the column length); each carries `aria-setsize` and `aria-posinset`, so screen readers see the full list.
 
 ## Technologies
 
+- Each column viewport is wrapped with `TxEdgeFadeMask` (`axis="vertical"`, `always`) so the top and bottom edges dissolve smoothly into any light, dark, or translucent surface.
 - Rows sit on the drum by `rotateX` of their distance from the offset (defaults: `r = 116px`, a 17.6° step, a 348px perspective); rows skip hit testing, and a click resolves to its row by inverting the projection in closed form.
 - Source: `packages/tuffex/packages/components/src/picker/`.
 

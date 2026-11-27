@@ -636,4 +636,115 @@ describe('txPicker wheel', () => {
       wrapper.unmount()
     })
   })
+
+  it('wraps wheel viewports with TxEdgeFadeMask for top and bottom edge fading in inline and popup modes', async () => {
+    const inline = mountWheel()
+    await flushPromises()
+
+    const inlineMask = inline.find('.tx-edge-fade-mask.tx-picker__mask')
+    expect(inlineMask.exists()).toBe(true)
+    expect(inlineMask.classes()).toContain('tx-edge-fade-mask--vertical')
+    expect(inlineMask.classes()).toContain('tx-edge-fade-mask--always')
+    const inlineStyle = inlineMask.find('.tx-edge-fade-mask__viewport').attributes('style') ?? ''
+    expect(inlineStyle).toContain('linear-gradient(to bottom, transparent 0, black')
+    expect(inlineStyle).toContain('transparent 100%)')
+    inline.unmount()
+
+    const popup = mount(TxPicker, {
+      attachTo: document.body,
+      props: { popup: true, visible: true, lazyMount: false, columns: many, modelValue: ['v20'] },
+    })
+    await flushPromises()
+
+    const popupMask = document.body.querySelector('.tx-picker-popup .tx-edge-fade-mask.tx-picker__mask')
+    expect(popupMask).not.toBeNull()
+    expect(popupMask?.querySelector('.tx-edge-fade-mask__viewport')?.getAttribute('style')).toContain('transparent 100%)')
+    popup.unmount()
+  })
+
+  it('animates inertial coasting and critically-damped spring snap across rAF frames, and cancels on unmount', async () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+    })
+    const cancelSpy = vi.spyOn(globalThis, 'cancelAnimationFrame')
+    try {
+      const wrapper = mountControlledWheel()
+      await flushPromises()
+      const wheel = wrapper.find('.tx-picker__wheel').element
+
+      pointerAt(wheel, 'pointerdown', 100, 0)
+      pointerAt(wheel, 'pointermove', 64, 16)
+      pointerAt(wheel, 'pointermove', 28, 32)
+      pointerAt(wheel, 'pointerup', 28, 48)
+
+      expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['v38']])
+
+      // Mid-coast: drum advances smoothly past 22 toward 38 without teleporting.
+      vi.advanceTimersByTime(64)
+      await nextTick()
+      const midCoast = Number(offsetOf(wrapper))
+      expect(midCoast).toBeGreaterThan(22)
+      expect(midCoast).toBeLessThan(38)
+
+      // After coast + spring settle, drum rests cleanly on row 38.
+      vi.advanceTimersByTime(2200)
+      await nextTick()
+      expect(offsetOf(wrapper)).toBe('38')
+
+      // Start another flick and unmount mid-flight to verify rAF cleanup.
+      pointerAt(wheel, 'pointerdown', 28, 3000)
+      pointerAt(wheel, 'pointermove', 100, 3016)
+      pointerAt(wheel, 'pointerup', 100, 3024)
+      wrapper.unmount()
+      expect(cancelSpy).toHaveBeenCalled()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops release momentum when the pointer pauses before lifting', async () => {
+    const wrapper = mountWheel()
+    await flushPromises()
+    const wheel = wrapper.find('.tx-picker__wheel').element
+
+    pointerAt(wheel, 'pointerdown', 100, 0)
+    pointerAt(wheel, 'pointermove', 64, 16)
+    pointerAt(wheel, 'pointermove', 28, 32)
+    // Pause for 200ms before releasing: no momentum coast should fire.
+    pointerAt(wheel, 'pointerup', 28, 232)
+
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['v22']])
+    wrapper.unmount()
+  })
+
+  it('applies soft rubber-band resistance past bounds and springs back cleanly on release', async () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+    })
+    try {
+      const wrapper = mount(TxPicker, {
+        props: { popup: false, columns: many, modelValue: ['v0'] },
+      })
+      await flushPromises()
+      const wheel = wrapper.find('.tx-picker__wheel').element
+
+      // Drag downward past row 0 (3 rows of pull = +108px): soft rubber-band resists past -1.35.
+      pointerAt(wheel, 'pointerdown', 100, 0)
+      pointerAt(wheel, 'pointermove', 208, 32)
+      await nextTick()
+      const overscrolled = Number(offsetOf(wrapper))
+      expect(overscrolled).toBeLessThan(0)
+      expect(overscrolled).toBeGreaterThan(-1.35)
+
+      pointerAt(wheel, 'pointerup', 208, 180)
+      vi.advanceTimersByTime(1000)
+      await nextTick()
+      expect(offsetOf(wrapper)).toBe('0')
+      wrapper.unmount()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
 })

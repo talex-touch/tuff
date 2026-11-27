@@ -2,6 +2,7 @@
 import type { PickerColumn, PickerEmits, PickerProps, PickerValue } from './types'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
+import TxEdgeFadeMask from '../../edge-fade-mask/src/TxEdgeFadeMask.vue'
 
 // Resolved in setup: inject is only valid here, while allocation happens later.
 const zIndexAllocator = useZIndexAllocator()
@@ -150,6 +151,9 @@ const wheelStepRad = computed(() => 2 * Math.atan(itemHeightPx.value / 2 / wheel
  */
 const wheelWindow = computed(() => Math.ceil(LIMB_RAD / wheelStepRad.value))
 
+/** Top/bottom edge fade depth (px) passed to TxEdgeFadeMask so outer items dissolve cleanly. */
+const fadeSizePx = computed(() => Math.round(itemHeightPx.value * Math.max(1.25, (visibleCount.value - 1) / 2.8)))
+
 /** Shared by the inline and popup columns so both render the same drum. */
 const columnsStyle = computed(() => ({
   '--tx-picker-item-height': `${itemHeightPx.value}px`,
@@ -159,8 +163,26 @@ const columnsStyle = computed(() => ({
   '--tx-picker-step': `${Number(((wheelStepRad.value * 180) / Math.PI).toFixed(3))}`,
 }))
 
-/** How far a flick coasts: velocity in rows/ms times this, in rows. */
-const MOMENTUM_MS = 260
+/** Exponential friction time constant (ms): v(t) = v0 * exp(-t / tau), coast distance = v0 * tau. */
+const MOMENTUM_TAU_MS = 260
+/** Time window (ms) over which pointer drag samples are averaged for release velocity. */
+const VELOCITY_WINDOW_MS = 95
+/** Pointer pause threshold (ms): holding still longer than this before release zeroes momentum. */
+const VELOCITY_STALE_MS = 85
+/** Maximum release velocity (rows/ms) to keep extreme flicks controllable. */
+const MAX_VELOCITY = 0.14
+/** Soft rubber-band overscroll cap (in rows) past either end of the column. */
+const MAX_OVERSCROLL = 1.35
+/** Critically-damped spring angular frequency (rad/ms) for snapping and clicks. */
+const SNAP_SPRING_OMEGA = 0.016
+/** Tighter critically-damped spring angular frequency (rad/ms) for wheel/trackpad tracking. */
+const WHEEL_SPRING_OMEGA = 0.022
+/** Velocity threshold (rows/ms) below which inertial coast hands off to the snap spring. */
+const SPRING_HANDOFF_VELOCITY = 0.0028
+/** Rubber-band boundary damping time constant (ms) when coasting past min/max bounds. */
+const BOUNDS_DAMPING_TAU_MS = 45
+const SETTLE_POS_EPSILON = 0.0008
+const SETTLE_VEL_EPSILON = 0.00008
 
 const colRefs = ref<Array<HTMLElement | null>>([])
 const offsets = ref<number[]>([])
@@ -168,16 +190,27 @@ const offsets = ref<number[]>([])
 interface WheelState {
   rafId: number | null
   settleId: number | null
-  /** The row the running ease is heading to; meaningful only while `rafId` is set. */
+  /** The row the running motion is heading to; meaningful while `rafId` is active. */
   target: number
+  /** Current angular velocity in rows/ms for C1 continuity across handoffs and retargets. */
+  velocity: number
+  /** Accumulated fractional target during wheel/trackpad scrolling. */
+  wheelTarget: number | null
 }
 
 const wheelStates = ref<WheelState[]>([])
 
 function ensureStates() {
   const n = columns.value.length
-  if (wheelStates.value.length !== n)
-    wheelStates.value = Array.from({ length: n }).map(() => ({ rafId: null, settleId: null, target: 0 }))
+  if (wheelStates.value.length !== n) {
+    wheelStates.value = Array.from({ length: n }).map(() => ({
+      rafId: null,
+      settleId: null,
+      target: 0,
+      velocity: 0,
+      wheelTarget: null,
+    }))
+  }
   if (offsets.value.length !== n)
     offsets.value = Array.from({ length: n }).map((_, i) => offsets.value[i] ?? 0)
 }
@@ -188,11 +221,31 @@ function getIndexForValue(colIndex: number, v: any): number {
   return Math.max(0, idx)
 }
 
-function clampIndex(colIndex: number, idx: number): number {
+function maxIndex(colIndex: number): number {
   const len = (columns.value[colIndex]?.options ?? []).length
-  if (len <= 0)
-    return 0
-  return Math.min(len - 1, Math.max(0, idx))
+  return Math.max(0, len - 1)
+}
+
+function clampIndex(colIndex: number, idx: number): number {
+  const max = maxIndex(colIndex)
+  return Math.min(max, Math.max(0, idx))
+}
+
+/**
+ * Asymptotic iOS-style rubber-band resistance past `[0, maxIndex]`.
+ * Derivative is 1 at the boundary (seamless entry) and caps at `MAX_OVERSCROLL`.
+ */
+function applyRubberBand(colIndex: number, raw: number): number {
+  const max = maxIndex(colIndex)
+  if (raw < 0) {
+    const over = -raw
+    return -(over * MAX_OVERSCROLL) / (over + MAX_OVERSCROLL)
+  }
+  if (raw > max) {
+    const over = raw - max
+    return max + (over * MAX_OVERSCROLL) / (over + MAX_OVERSCROLL)
+  }
+  return raw
 }
 
 function offsetOf(colIndex: number): number {
@@ -206,12 +259,22 @@ function setOffset(colIndex: number, value: number) {
   offsets.value = next
 }
 
-function stopWheel(colIndex: number) {
+function clearSettleTimer(colIndex: number) {
+  const state = wheelStates.value[colIndex]
+  if (state?.settleId != null) {
+    window.clearTimeout(state.settleId)
+    state.settleId = null
+  }
+}
+
+function stopWheel(colIndex: number, resetVelocity = true) {
   const state = wheelStates.value[colIndex]
   if (state?.rafId != null) {
     cancelAnimationFrame(state.rafId)
     state.rafId = null
   }
+  if (state && resetVelocity)
+    state.velocity = 0
 }
 
 /** Nearest enabled option to `idx`, searching outward; -1 when a column has none. */
@@ -258,9 +321,115 @@ function prefersReducedMotion(): boolean {
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
+function nowMs(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now()
+}
+
 /**
- * Eases to a row and settles there. Cubic ease-out: quick to leave, slow to
- * arrive, which is the deceleration a flick is supposed to have.
+ * Runs frame-rate-independent wheel physics in `requestAnimationFrame`:
+ * - Optional inertial coasting with exact exponential friction deceleration
+ *   (`v(t) = v0 * exp(-t / MOMENTUM_TAU_MS)`) and soft rubber-band boundary damping;
+ * - Seamless C1-continuous handoff into an exact analytical critically-damped
+ *   spring (`x'' + 2ω x' + ω² x = 0`) settling cleanly onto `target`.
+ */
+function startWheelPhysics(
+  colIndex: number,
+  target: number,
+  options: {
+    initialVelocity?: number
+    coast?: boolean
+    omega?: number
+    allowOverscrollTarget?: boolean
+  } = {},
+) {
+  ensureStates()
+  const state = wheelStates.value[colIndex]
+  if (!state)
+    return
+
+  const initialVelocity = options.initialVelocity ?? state.velocity
+  stopWheel(colIndex, false)
+
+  const resolvedTarget = options.allowOverscrollTarget ? target : clampIndex(colIndex, target)
+  state.target = resolvedTarget
+  const from = offsetOf(colIndex)
+
+  if (
+    prefersReducedMotion()
+    || (Math.abs(resolvedTarget - from) < SETTLE_POS_EPSILON && Math.abs(initialVelocity) < SETTLE_VEL_EPSILON)
+  ) {
+    state.velocity = 0
+    setOffset(colIndex, resolvedTarget)
+    return
+  }
+
+  let pos = from
+  let vel = initialVelocity
+  const omega = options.omega ?? SNAP_SPRING_OMEGA
+  const max = maxIndex(colIndex)
+  const overscrolledOutward = (pos < 0 && vel <= 0) || (pos > max && vel >= 0)
+  let phase: 'coast' | 'spring' = options.coast && !overscrolledOutward && Math.abs(vel) > SPRING_HANDOFF_VELOCITY
+    ? 'coast'
+    : 'spring'
+  let prevAt = nowMs()
+
+  const step = () => {
+    const currentAt = nowMs()
+    const dt = Math.min(32, Math.max(1, currentAt - prevAt))
+    prevAt = currentAt
+
+    if (phase === 'coast') {
+      const decay = Math.exp(-dt / MOMENTUM_TAU_MS)
+      pos += vel * MOMENTUM_TAU_MS * (1 - decay)
+      vel *= decay
+
+      const outLow = pos < 0
+      const outHigh = pos > max
+      if (outLow || outHigh) {
+        vel *= Math.exp(-dt / BOUNDS_DAMPING_TAU_MS)
+        pos = Math.min(max + MAX_OVERSCROLL, Math.max(-MAX_OVERSCROLL, pos))
+        const overscroll = outLow ? -pos : pos - max
+        const movingBack = (outLow && vel >= 0) || (outHigh && vel <= 0)
+        if (movingBack || Math.abs(vel) <= SPRING_HANDOFF_VELOCITY * 1.4 || overscroll >= MAX_OVERSCROLL * 0.72)
+          phase = 'spring'
+      }
+      else {
+        const remaining = resolvedTarget - pos
+        const movingAway = remaining * vel < 0
+        if (movingAway || Math.abs(remaining) <= 0.65 || Math.abs(vel) <= SPRING_HANDOFF_VELOCITY)
+          phase = 'spring'
+      }
+    }
+    else {
+      // Exact analytical critically-damped harmonic oscillator (zeta = 1).
+      const x = pos - resolvedTarget
+      const exp = Math.exp(-omega * dt)
+      const c2 = vel + omega * x
+      pos = resolvedTarget + (x + c2 * dt) * exp
+      vel = (vel - omega * c2 * dt) * exp
+    }
+
+    state.velocity = vel
+    if (
+      phase === 'spring'
+      && Math.abs(pos - resolvedTarget) < SETTLE_POS_EPSILON
+      && Math.abs(vel) < SETTLE_VEL_EPSILON
+    ) {
+      state.rafId = null
+      state.velocity = 0
+      setOffset(colIndex, resolvedTarget)
+      return
+    }
+
+    setOffset(colIndex, pos)
+    state.rafId = requestAnimationFrame(step)
+  }
+
+  state.rafId = requestAnimationFrame(step)
+}
+
+/**
+ * Springs to a row and settles there (or jumps immediately when un-animated / reduced motion).
  */
 function goToIndex(colIndex: number, idx: number, animated = true) {
   ensureStates()
@@ -268,43 +437,26 @@ function goToIndex(colIndex: number, idx: number, animated = true) {
   if (!state)
     return
 
-  stopWheel(colIndex)
+  clearSettleTimer(colIndex)
+  state.wheelTarget = null
   const to = clampIndex(colIndex, idx)
   state.target = to
-  const from = offsetOf(colIndex)
 
-  if (!animated || prefersReducedMotion() || Math.abs(to - from) < 0.001) {
+  if (!animated || prefersReducedMotion()) {
+    stopWheel(colIndex)
     setOffset(colIndex, to)
     return
   }
 
-  const distance = Math.abs(to - from)
-  const duration = Math.min(620, 220 + distance * 55)
-  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
-  const startedAt = now()
-
-  const step = () => {
-    const t = Math.min(1, (now() - startedAt) / duration)
-    const eased = 1 - (1 - t) ** 3
-    setOffset(colIndex, from + (to - from) * eased)
-
-    if (t < 1) {
-      state.rafId = requestAnimationFrame(step)
-      return
-    }
-    state.rafId = null
-    setOffset(colIndex, to)
-  }
-
-  state.rafId = requestAnimationFrame(step)
+  startWheelPhysics(colIndex, to, { coast: false, omega: SNAP_SPRING_OMEGA })
 }
 
 /** Reads the row under the centre line and makes it the value. */
-function commitOffset(colIndex: number) {
+function commitOffset(colIndex: number, sourceOffset = offsetOf(colIndex)) {
   const opts = columns.value[colIndex]?.options ?? []
   if (opts.length === 0)
     return
-  const idx = nearestEnabledIndex(colIndex, Math.round(offsetOf(colIndex)))
+  const idx = nearestEnabledIndex(colIndex, Math.round(clampIndex(colIndex, sourceOffset)))
   if (idx < 0)
     return
   setValueAt(colIndex, opts[idx]?.value)
@@ -312,46 +464,81 @@ function commitOffset(colIndex: number) {
 
 /** Lands on the nearest enabled row once a turn stops. */
 function settleWheel(colIndex: number) {
+  ensureStates()
+  const state = wheelStates.value[colIndex]
   const opts = columns.value[colIndex]?.options ?? []
-  const idx = nearestEnabledIndex(colIndex, Math.round(offsetOf(colIndex)))
+  const reference = state?.wheelTarget ?? offsetOf(colIndex)
+  const idx = nearestEnabledIndex(colIndex, Math.round(clampIndex(colIndex, reference)))
   if (idx < 0)
     return
+  if (state)
+    state.wheelTarget = null
   goToIndex(colIndex, idx)
   setValueAt(colIndex, opts[idx]?.value)
 }
 
-function scheduleSettle(colIndex: number, delay = 120) {
+function scheduleSettle(colIndex: number, delay = 110) {
   ensureStates()
   const state = wheelStates.value[colIndex]
   if (!state)
     return
-  if (state.settleId != null)
-    window.clearTimeout(state.settleId)
+  clearSettleTimer(colIndex)
   state.settleId = window.setTimeout(() => {
     state.settleId = null
     settleWheel(colIndex)
   }, delay)
 }
 
+interface VelocitySample {
+  y: number
+  t: number
+}
+
 interface DragState {
   pointerId: number
   startY: number
   startOffset: number
-  lastY: number
-  lastAt: number
-  /** Rows per millisecond; positive means the column is travelling upward. */
-  velocity: number
+  samples: VelocitySample[]
   moved: boolean
 }
 
 const drags = new Map<number, DragState>()
 const isDragging = ref(false)
 
+/** Computes release velocity (rows/ms) from samples within the recent ~95ms window. */
+function computeDragVelocity(samples: VelocitySample[], releaseAt: number): number {
+  if (samples.length < 2)
+    return 0
+  const latest = samples[samples.length - 1]!
+  if (releaseAt - latest.t > VELOCITY_STALE_MS)
+    return 0
+
+  const windowStart = latest.t - VELOCITY_WINDOW_MS
+  let oldest = samples[0]!
+  for (let i = samples.length - 2; i >= 0; i--) {
+    const sample = samples[i]!
+    oldest = sample
+    if (sample.t <= windowStart)
+      break
+  }
+
+  const dt = latest.t - oldest.t
+  if (dt <= 0)
+    return 0
+
+  const rawVel = -(latest.y - oldest.y) / itemHeightPx.value / dt
+  return Math.max(-MAX_VELOCITY, Math.min(MAX_VELOCITY, rawVel))
+}
+
 function onPointerDown(colIndex: number, event: PointerEvent) {
   if (props.disabled)
     return
   ensureStates()
+  clearSettleTimer(colIndex)
   stopWheel(colIndex)
+  const state = wheelStates.value[colIndex]
+  if (state)
+    state.wheelTarget = null
 
   const target = event.currentTarget as HTMLElement | null
   target?.setPointerCapture?.(event.pointerId)
@@ -360,9 +547,7 @@ function onPointerDown(colIndex: number, event: PointerEvent) {
     pointerId: event.pointerId,
     startY: event.clientY,
     startOffset: offsetOf(colIndex),
-    lastY: event.clientY,
-    lastAt: event.timeStamp,
-    velocity: 0,
+    samples: [{ y: event.clientY, t: event.timeStamp }],
     moved: false,
   })
   isDragging.value = true
@@ -377,13 +562,12 @@ function onPointerMove(colIndex: number, event: PointerEvent) {
   if (Math.abs(dy) > 2)
     drag.moved = true
 
-  setOffset(colIndex, clampIndex(colIndex, drag.startOffset - dy / itemHeightPx.value))
+  setOffset(colIndex, applyRubberBand(colIndex, drag.startOffset - dy / itemHeightPx.value))
 
-  const dt = event.timeStamp - drag.lastAt
-  if (dt > 0)
-    drag.velocity = -(event.clientY - drag.lastY) / itemHeightPx.value / dt
-  drag.lastY = event.clientY
-  drag.lastAt = event.timeStamp
+  drag.samples.push({ y: event.clientY, t: event.timeStamp })
+  const cutoff = event.timeStamp - VELOCITY_WINDOW_MS
+  while (drag.samples.length > 2 && drag.samples[1]!.t < cutoff)
+    drag.samples.shift()
 
   commitOffset(colIndex)
 }
@@ -447,24 +631,61 @@ function onPointerUp(colIndex: number, event: PointerEvent) {
   }
 
   const opts = columns.value[colIndex]?.options ?? []
+  const current = offsetOf(colIndex)
   // No coast under reduced motion: it would land rows away with no motion to show why.
-  const velocity = prefersReducedMotion() ? 0 : drag.velocity
-  const coasted = offsetOf(colIndex) + velocity * MOMENTUM_MS
-  const idx = nearestEnabledIndex(colIndex, Math.round(coasted))
+  const velocity = prefersReducedMotion() ? 0 : computeDragVelocity(drag.samples, event.timeStamp)
+  const projected = current + velocity * MOMENTUM_TAU_MS
+  const idx = nearestEnabledIndex(colIndex, Math.round(clampIndex(colIndex, projected)))
   if (idx < 0)
     return
-  goToIndex(colIndex, idx)
+
+  if (prefersReducedMotion()) {
+    goToIndex(colIndex, idx, false)
+  }
+  else {
+    startWheelPhysics(colIndex, idx, {
+      initialVelocity: velocity,
+      coast: Math.abs(velocity) > SPRING_HANDOFF_VELOCITY,
+      omega: SNAP_SPRING_OMEGA,
+    })
+  }
   setValueAt(colIndex, opts[idx]?.value)
+}
+
+function normalizeWheelRows(event: WheelEvent): number {
+  let deltaPx = event.deltaY
+  if (event.deltaMode === 1)
+    deltaPx *= itemHeightPx.value
+  else if (event.deltaMode === 2)
+    deltaPx *= itemHeightPx.value * visibleCount.value
+  return deltaPx / itemHeightPx.value
 }
 
 function onWheelEvent(colIndex: number, event: WheelEvent) {
   if (props.disabled)
     return
   ensureStates()
-  stopWheel(colIndex)
+  const state = wheelStates.value[colIndex]
+  if (!state)
+    return
 
-  setOffset(colIndex, clampIndex(colIndex, offsetOf(colIndex) + event.deltaY / itemHeightPx.value))
-  commitOffset(colIndex)
+  const base = state.wheelTarget ?? offsetOf(colIndex)
+  const nextTarget = applyRubberBand(colIndex, base + normalizeWheelRows(event))
+  state.wheelTarget = nextTarget
+
+  if (prefersReducedMotion()) {
+    stopWheel(colIndex)
+    setOffset(colIndex, clampIndex(colIndex, nextTarget))
+  }
+  else {
+    startWheelPhysics(colIndex, nextTarget, {
+      coast: false,
+      omega: WHEEL_SPRING_OMEGA,
+      allowOverscrollTarget: true,
+    })
+  }
+
+  commitOffset(colIndex, nextTarget)
   scheduleSettle(colIndex)
 }
 
@@ -573,10 +794,12 @@ function onKeydown(colIndex: number, event: KeyboardEvent) {
  */
 function isTurningTo(colIndex: number, idx: number): boolean {
   const state = wheelStates.value[colIndex]
+  if (drags.has(colIndex) || state?.settleId != null) {
+    const reference = state?.wheelTarget ?? offsetOf(colIndex)
+    return nearestEnabledIndex(colIndex, Math.round(clampIndex(colIndex, reference))) === idx
+  }
   if (state?.rafId != null)
-    return state.target === idx
-  if (drags.has(colIndex) || state?.settleId != null)
-    return nearestEnabledIndex(colIndex, Math.round(offsetOf(colIndex))) === idx
+    return nearestEnabledIndex(colIndex, Math.round(clampIndex(colIndex, state.target))) === idx
   return false
 }
 
@@ -664,12 +887,19 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   for (const state of wheelStates.value) {
-    if (state.rafId != null)
+    if (state.rafId != null) {
       cancelAnimationFrame(state.rafId)
-    if (state.settleId != null)
+      state.rafId = null
+    }
+    if (state.settleId != null) {
       window.clearTimeout(state.settleId)
+      state.settleId = null
+    }
+    state.velocity = 0
+    state.wheelTarget = null
   }
   drags.clear()
+  isDragging.value = false
 })
 </script>
 
@@ -691,37 +921,45 @@ onBeforeUnmount(() => {
       <div class="tx-picker__highlight" aria-hidden="true" />
 
       <div v-for="(col, colIndex) in columns" :key="col.key ?? colIndex" class="tx-picker__col">
-        <div
-          :ref="(el) => (colRefs[colIndex] = el as HTMLElement)"
-          class="tx-picker__wheel"
-          role="listbox"
-          :tabindex="disabled ? -1 : 0"
-          :aria-activedescendant="activeDescendant(colIndex)"
-          :style="columnStyle(colIndex)"
-          @keydown="onKeydown(colIndex, $event)"
-          @pointerdown="onPointerDown(colIndex, $event)"
-          @pointermove="onPointerMove(colIndex, $event)"
-          @pointerup="onPointerUp(colIndex, $event)"
-          @pointercancel="onPointerUp(colIndex, $event)"
-          @wheel.prevent="onWheelEvent(colIndex, $event)"
-          @click="onColumnClick(colIndex, $event)"
+        <TxEdgeFadeMask
+          class="tx-picker__mask"
+          axis="vertical"
+          :size="fadeSizePx"
+          always
+          :observe-resize="false"
         >
           <div
-            v-for="row in visibleRows(colIndex)"
-            :id="optionId(colIndex, row.index)"
-            :key="String(row.option.value)"
-            class="tx-picker__item"
-            role="option"
-            :aria-selected="localValue[colIndex] === row.option.value"
-            :aria-disabled="row.option.disabled || undefined"
-            :aria-setsize="col.options.length"
-            :aria-posinset="row.index + 1"
-            :class="{ 'is-disabled': !!row.option.disabled, 'is-selected': localValue[colIndex] === row.option.value }"
-            :style="{ '--tx-picker-index': row.index }"
+            :ref="(el) => (colRefs[colIndex] = el as HTMLElement)"
+            class="tx-picker__wheel"
+            role="listbox"
+            :tabindex="disabled ? -1 : 0"
+            :aria-activedescendant="activeDescendant(colIndex)"
+            :style="columnStyle(colIndex)"
+            @keydown="onKeydown(colIndex, $event)"
+            @pointerdown="onPointerDown(colIndex, $event)"
+            @pointermove="onPointerMove(colIndex, $event)"
+            @pointerup="onPointerUp(colIndex, $event)"
+            @pointercancel="onPointerUp(colIndex, $event)"
+            @wheel.prevent="onWheelEvent(colIndex, $event)"
+            @click="onColumnClick(colIndex, $event)"
           >
-            {{ row.option.label }}
+            <div
+              v-for="row in visibleRows(colIndex)"
+              :id="optionId(colIndex, row.index)"
+              :key="String(row.option.value)"
+              class="tx-picker__item"
+              role="option"
+              :aria-selected="localValue[colIndex] === row.option.value"
+              :aria-disabled="row.option.disabled || undefined"
+              :aria-setsize="col.options.length"
+              :aria-posinset="row.index + 1"
+              :class="{ 'is-disabled': !!row.option.disabled, 'is-selected': localValue[colIndex] === row.option.value }"
+              :style="{ '--tx-picker-index': row.index }"
+            >
+              {{ row.option.label }}
+            </div>
           </div>
-        </div>
+        </TxEdgeFadeMask>
       </div>
     </div>
   </div>
@@ -748,37 +986,45 @@ onBeforeUnmount(() => {
             <div class="tx-picker__highlight" aria-hidden="true" />
 
             <div v-for="(col, colIndex) in columns" :key="col.key ?? colIndex" class="tx-picker__col">
-              <div
-                :ref="(el) => (colRefs[colIndex] = el as HTMLElement)"
-                class="tx-picker__wheel"
-                role="listbox"
-                :tabindex="disabled ? -1 : 0"
-                :aria-activedescendant="activeDescendant(colIndex)"
-                :style="columnStyle(colIndex)"
-                @keydown="onKeydown(colIndex, $event)"
-                @pointerdown="onPointerDown(colIndex, $event)"
-                @pointermove="onPointerMove(colIndex, $event)"
-                @pointerup="onPointerUp(colIndex, $event)"
-                @pointercancel="onPointerUp(colIndex, $event)"
-                @wheel.prevent="onWheelEvent(colIndex, $event)"
-                @click="onColumnClick(colIndex, $event)"
+              <TxEdgeFadeMask
+                class="tx-picker__mask"
+                axis="vertical"
+                :size="fadeSizePx"
+                always
+                :observe-resize="false"
               >
                 <div
-                  v-for="row in visibleRows(colIndex)"
-                  :id="optionId(colIndex, row.index)"
-                  :key="String(row.option.value)"
-                  class="tx-picker__item"
-                  role="option"
-                  :aria-selected="localValue[colIndex] === row.option.value"
-                  :aria-disabled="row.option.disabled || undefined"
-                  :aria-setsize="col.options.length"
-                  :aria-posinset="row.index + 1"
-                  :class="{ 'is-disabled': !!row.option.disabled, 'is-selected': localValue[colIndex] === row.option.value }"
-                  :style="{ '--tx-picker-index': row.index }"
+                  :ref="(el) => (colRefs[colIndex] = el as HTMLElement)"
+                  class="tx-picker__wheel"
+                  role="listbox"
+                  :tabindex="disabled ? -1 : 0"
+                  :aria-activedescendant="activeDescendant(colIndex)"
+                  :style="columnStyle(colIndex)"
+                  @keydown="onKeydown(colIndex, $event)"
+                  @pointerdown="onPointerDown(colIndex, $event)"
+                  @pointermove="onPointerMove(colIndex, $event)"
+                  @pointerup="onPointerUp(colIndex, $event)"
+                  @pointercancel="onPointerUp(colIndex, $event)"
+                  @wheel.prevent="onWheelEvent(colIndex, $event)"
+                  @click="onColumnClick(colIndex, $event)"
                 >
-                  {{ row.option.label }}
+                  <div
+                    v-for="row in visibleRows(colIndex)"
+                    :id="optionId(colIndex, row.index)"
+                    :key="String(row.option.value)"
+                    class="tx-picker__item"
+                    role="option"
+                    :aria-selected="localValue[colIndex] === row.option.value"
+                    :aria-disabled="row.option.disabled || undefined"
+                    :aria-setsize="col.options.length"
+                    :aria-posinset="row.index + 1"
+                    :class="{ 'is-disabled': !!row.option.disabled, 'is-selected': localValue[colIndex] === row.option.value }"
+                    :style="{ '--tx-picker-index': row.index }"
+                  >
+                    {{ row.option.label }}
+                  </div>
                 </div>
-              </div>
+              </TxEdgeFadeMask>
             </div>
           </div>
         </div>
@@ -852,12 +1098,19 @@ onBeforeUnmount(() => {
 .tx-picker__col {
   flex: 1;
   min-width: 0;
+  height: 100%;
+}
+
+.tx-picker__mask {
+  width: 100%;
+  height: 100%;
 }
 
 /*
  * The drum. It owns the pointer, the wheel and the clicks, so `touch-action`
  * hands the vertical axis over completely — the page must not scroll while a
- * column is being turned.
+ * column is being turned. Top and bottom fade transitions are owned by the
+ * surrounding `TxEdgeFadeMask`.
  */
 .tx-picker__wheel {
   position: relative;
@@ -869,17 +1122,6 @@ onBeforeUnmount(() => {
   // radius), close enough that rows narrow as they roll back over the rim.
   perspective: var(--tx-picker-perspective, 348px);
   perspective-origin: 50% 50%;
-  // The drum fills the column, so height here is angle on the drum: the fade
-  // darkens the surface toward its rim instead of cutting the side rows off.
-  mask-image: linear-gradient(
-    to bottom,
-    rgb(0 0 0 / 0.1) 0%,
-    rgb(0 0 0 / 0.55) 12%,
-    #000 32%,
-    #000 68%,
-    rgb(0 0 0 / 0.55) 88%,
-    rgb(0 0 0 / 0.1) 100%
-  );
 
   &:active {
     cursor: grabbing;
