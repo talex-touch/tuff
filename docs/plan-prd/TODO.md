@@ -57,7 +57,7 @@
 
 ## Release follow-ups
 
-- [ ] **v2.4.15-beta.9 发布说明默认开关勘误登记（历史 tag 未原地改动，待下期发布说明明示）**：`notes/update_2.4.15-beta.9.{zh,en}.md` 的 Known Limitations 仍保留“浏览器工作区默认关闭 / off by default”旧措辞，而代码自 `73e6a1b8c` 起已默认开启（含一次性迁移）；为保持与已发布 GitHub/Nexus 历史记录一致，不直接回改已发布 beta.9 原文，须在下一期发布说明中明确标注默认开启状态。
+- [ ] **v2.4.15-beta.9 发布说明默认开关勘误登记（历史 tag 未原地改动，已在 v2.4.15-beta.15 发布说明明示）**：`notes/update_2.4.15-beta.9.{zh,en}.md` 的 Known Limitations 保留只读历史原文（“浏览器工作区默认关闭 / off by default”），而代码自 `73e6a1b8c` 起已默认开启（含一次性迁移）；`notes/update_2.4.15-beta.15.{zh,en}.md` 已明示默认开启状态，待 `v2.4.15-beta.15` 发布并同步至 GitHub/Nexus 后勾除。
 
 - [x] **v2.4.14 发布说明两处勘误已全部闭环（仓库、GitHub 与 Nexus 同步完成）。** `notes/update_2.4.14.zh.md`、`notes/update_2.4.14.en.md` 和 GitHub Release 正文已于 2026-10-11（`64eb69853`）改正，`.github/workflows/sync-nexus-release-notes.yml`（PR #2213 / #2214）已合入主线；2026-11-22 已执行 `sync-nexus-release-notes.yml`（run `45011852117`）完成 `v2.4.14` 双语 `notes` / `notesHtml` 回写，并通过 `tuff.tagzxia.com` 线上 API 回读验证一致。
   - 「尚未形成习惯时显示学习提示」不成立：`b8f2a2477`（10-03）先把学习提示换成空位占位网格，`0f6c75773`（10-07）又移除了习惯区的整个空态，tag 里已没有这段界面。已改为「尚未形成习惯时不填充虚构常用项目」。

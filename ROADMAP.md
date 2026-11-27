@@ -4,15 +4,15 @@
 > 2026-10-03：工作流切换为 Comet Native，原「活跃任务」表改为冻结记录，只读保留。
 > 定位：项目全貌一览。执行顺序见 [`docs/plan-prd/TODO.md`](docs/plan-prd/TODO.md)；当前工作以用户确认的范围与验收、现有 PRD、工程规格、真实运行证据和当前负责人交接为准；切换前的任务已冻结，见 [`docs/engineering/workflow/backlog.md`](docs/engineering/workflow/backlog.md)。`docs/comet/` 只读保留退出前记录，不作为实时状态。本文不复制易漂移细节，只保留稳定入口与高层状态。
 
-## 🎯 当前版本：v2.4.15-beta.14
+## 🎯 当前版本：v2.4.15-beta.15
 
 | 维度 | 状态 |
 |------|------|
-| CoreApp 版本 | `2.4.15-beta.14`（`apps/core-app/package.json` 与根 `package.json`） |
+| CoreApp 版本 | `2.4.15-beta.15`（`apps/core-app/package.json` 与根 `package.json`） |
 | Node.js | `>=26.0.0`（`.node-version` / 根 `package.json`） |
 | pnpm | `11.24.0`（根 `package.json` `packageManager`） |
 | Electron | `^41.10.6`（根 `package.json` 与 `apps/core-app/package.json`） |
-| TuffEx | `0.9.6`（`origin/master` `f6d9fb127`，含 `TxMatrixLoader` 及 `tuffex-core` / `tuffex-react` / `tuffex-wc` 多框架包） |
+| TuffEx | `0.9.6`（`origin/master` `f6d9fb127`，含 `TxMatrixLoader`、`TxFlowchart` 动效 PR `#2327`、`TxAvatarEditor`/选区高亮/`TxToolCallCard` 延迟展开 PR `#2337` 及 `tuffex-core` / `tuffex-react` / `tuffex-wc` 多框架包） |
 | 当前执行窗口 | 两周稳定化 + 3.0 内核与能耗演进（详见 [`docs/plan-prd/TODO.md`](docs/plan-prd/TODO.md) 与 [`3.0-runtime-and-energy-decision-2026-10-21.md`](docs/engineering/reports/3.0-runtime-and-energy-decision-2026-10-21.md)） |
 
 ---
@@ -29,8 +29,8 @@
 | **R3** | Search / Indexing Runtime | 🔄 ~74% 完成；split 打包 62/62 实跑（`v2.4.15-beta.13`，PR `#2273`/`#2278`）、A10/A14–A16/A18 减容与 8 GiB 上限、Windows Everything CI `26/26`（PR `#2319`，run `45913177460`）已落地；真实 profile SQLite/FTS 与 `scan_progress` 迁移证据、Windows strict acceptance manifest 回填（`#308`）开放 |
 | **R4** | QuickOps 产品化 | 🔄 OmniPanel 基础能力与功能门控已合入；番茄钟/清洁屏幕/app quit cleanup 开放 |
 | **R5** | Plugin Trust Boundary | 🔄 权限 surface fail-closed、Widget 沙箱、零执行 npm 插件生态（PR `#2287`）与主进程响应头强制渲染层 CSP（PR `#2320`，关闭 `#689`）已落地；secret cleanup UX 与第三方插件全生命周期闭环开放 |
-| **R6** | UI / TuffEx | 🔄 TuffEx `0.9.6` + 多框架包与 `TxMatrixLoader`（PR `#2315`/`#2326`）、TDS M0–M3 单源令牌/OpenUI/L1 画布（PR `#2316`）、顶栏舞台操作收敛（PR `#2317`）与 CoreApp 对话框收敛（PR `#2253`）已入 `origin/master`；visual smoke 恢复与实机交互验收开放 |
-| **R7** | Nexus Governance | 🔄 Provider Registry 简化、Admin Console 13/13 活跃页全量迁移（余 `codes.vue` 重定向清理已在 Wave 2 分支 `41b6be34e` 验证待合入）、Nuxt 4.5.2 / unhead 3 升级（PR `#2321`，关闭 `#1098`）、文档全量 SSR 与 Worker 预算 CI 阻断门禁（PR `#2230`/`#2255`/`#2265`/`#2274`）已落地；`#1788` 数据原子性待合入并补 Preview/生产 soak、最终 `--require-deployed-preview` 凭据采集与多渠道支付商业决策开放 |
+| **R6** | UI / TuffEx | 🔄 TuffEx `0.9.6` + 多框架包与 `TxMatrixLoader`/`TxFlowchart`/`TxAvatarEditor`（PR `#2315`/`#2326`/`#2327`/`#2337`）、工作区画布编辑与棱镜揭示（PR `#2330`/`#2340`）、TDS M0–M3 单源令牌/OpenUI/L1 画布（PR `#2316`）、顶栏舞台操作收敛（PR `#2317`）与 CoreApp 对话框收敛（PR `#2253`）已入 `origin/master`；visual smoke 恢复与实机交互验收开放 |
+| **R7** | Nexus Governance | 🔄 Provider Registry 简化、Admin Console 13/13 活跃页全量迁移与 3/3 路由级重定向收口（PR `#2334` `69baf6bc4` 清空 `KNOWN_ORPHANS`）、Nuxt 4.5.2 / unhead 3 升级（PR `#2321`，关闭 `#1098`）、文档全量 SSR 与 Worker 预算 CI 阻断门禁（PR `#2230`/`#2255`/`#2265`/`#2274`）及 `#1788` 数据原子幂等实现（PR `#2332` `8b18bcb15`）已入 `origin/master`；`#1788` Preview/生产 soak、最终 `--require-deployed-preview` 凭据采集与多渠道支付商业决策开放 |
 | **R8** | i18n / Domain Lexicon / Catalog 2.6.0 | ⏸️ domain-lexicon 产品触发暂停；`09-13-voice-provider-cloud-pack` scoped extension 已合入主线（`ad49febb0`），生产签名配置与付费调用验收开放 |
 | **R9** | AI 2.5.x 后续 | ⏸️ 暂停；知识检索/本地 GGUF/ASR 保留路线（R9.2 ContextHygiene P0/P1 已完成） |
 
@@ -131,6 +131,7 @@ talex-touch/
 
 | 日期 | 里程碑 |
 |------|--------|
+| 11-27 | 准备 `v2.4.15-beta.15`：合入工作区画布编辑与棱镜揭示（PR `#2330`/`#2340`）、语音历史音频重试/TTL/分组/词库（PR `#2339`，`Refs #1880`）、`TxAvatarEditor`/CSS 选区高亮/`TxToolCallCard` 延迟展开与 `TxFlowchart`/`TxMatrixLoader`（PR `#2326`/`#2327`/`#2337`）、跨平台 R3 对账基准/Windows PowerShell 回退/Ubuntu 24.04 FUSE3 & AppArmor/原生截图与 OCR 打包保留（PR `#2333`）、`#1788` 数据原子幂等生命周期（PR `#2332`）、CI 关闭关键字与 Nexus/Dependabot 门禁加固（PR `#2331`/`#2336`）、Admin 重定向与 2.5.2 历史快捷键（PR `#2334`）、`tuff-cli 0.1.2`（PR `#2328`/`#2329`）及全部 9 个 Dependabot PR（`#2299`–`#2307`） |
 | 11-26 | Windows Everything 托管门禁 `26/26` 全绿（PR `#2319`，run `45913177460`）；P0 `chokidar-fsevents` asar 回归修复（PR `#2325`）；TDS M0–M3 单源令牌与 L1 画布（PR `#2316`）；Nuxt 4.5.2 / Rust `1.100.0` / `Protocol` 必检门禁（PR `#2321`）；3.0 Phase 2 空闲预算协调器（PR `#2322`）；主进程响应头强制 CSP（PR `#2320`）；macOS 归档防覆盖与缓存对齐（PR `#2318`）；顶栏舞台操作整合（PR `#2317`） |
 | 11-23 ~ 11-25 | TuffEx 多框架包与 Nexus 框架切换器（PR `#2315`）；Herdr Space / ACP 多 CLI 持久宿主 / 零执行 npm 插件生态（PR `#2282`–`#2314`）；`v2.4.15-beta.13` 打包实测（冷启动 `3,429 ms`、split `62/62`、macOS 截图真实捕获，PR `#2273`/`#2278`）；3.0 Phase 1 可选 `utilityProcess` 搜索内核与 Phase 3 渲染后台停帧（PR `#2279`–`#2281`） |
 | 11-18 ~ 11-22 | Nexus 真 SSG 全量正文恢复、Worker 预算 CI 阻断与线上 `tuff.tagzxia.com` 8/8 路由采证（PR `#2230`/`#2255`/`#2265`/`#2274`）；`omp` ACP 接入（PR `#2254`）；CoreApp 对话框收敛至 TuffEx（PR `#2253`）；A14–A16/A6/B1/E2/E3/E5 搜索与索引可靠性修复（PR `#2247`–`#2250`/`#2267`/`#2268`） |
@@ -171,11 +172,11 @@ talex-touch/
 | **安全与 CI** | 渲染层 CSP（`#689`）、Nuxt 生产审计豁免（`#1098`）与 Rust 工具链/`Protocol` 门禁（`#1794`） | ✅ 已闭环（PR `#2320` 响应头强制 CSP；PR `#2321` 升级 Nuxt 4.5.2/unhead 3 清除 9 条豁免、锁定 Rust `1.100.0` 并启用 `Protocol` 必检门禁） |
 | **Windows Everything** | Windows Everything 打包 CoreBox UI 与降级验收（`#308`） | 🔄 PR `#2319`（`6022abdce`）在 `windows-2022` 通过 `26/26`（run `45913177460`，含 SDK 与 unavailable 降级 UI）；余 `#308` 严格 acceptance manifest 补录开放 |
 | **代码质量** | `quality:release` 发布门禁与既有 lint 债务 | ✅ 2026-09-13 5/5 段通过并接入发布流水线（PR `#2252` 补齐 `tuff-analyse` lint）；仅余 `apps/core-app` warn 口径收紧债务 |
-| **跨平台（R1）** | 原生截图跨平台打包运行验收（`#321` / `#322`） | 🟠 macOS arm64 签名包实测通过（`v2.4.15-beta.13`）；Windows/Linux 打包剥离 `tuff_native_screenshot.node` 修复已在 Wave 2 分支 `task/fix/xplat-r3-win-linux @ f3a675f96` 验证待合入，仍待 `beta.15+` 发布包与真机截图验收 |
-| **跨平台（R2）** | macOS 跨架构发行与运行验证（`#311` 已关闭） | 🟡 `v2.4.15-beta.13` 已双架构签名公证发布且归档覆盖已修（PR `#2318`），darwin 架构拒绝单测已在 Wave 2 分支 `f3a675f96` 验证待合入；仅余物理 Intel x64 Mac 真机运行验证受硬件门禁约束 |
-| **搜索（R3）** | 大目录扫描/对账内存峰值（`#318`） | 🟡 traversal 已实测 400k @ 64 MiB；真实 libSQL 25k/100k 分页对账与持久化基准（64/128 MiB 均 `parity=OK`）已在 Wave 2 分支 `task/fix/xplat-r3-win-linux @ f3a675f96` 验证待合入 |
-| **跨平台（R8 / C6）** | Linux 成熟度（`#213`）与 Windows PowerShell 依赖（`#350`） | 🟠 `#213`（Ubuntu 24.04 FUSE3/AppArmor/`.deb` 冒烟）与 `#350`（`reg.exe` 回退与降级诊断）已在 Wave 2 分支 `task/fix/xplat-r3-win-linux @ f3a675f96` 验证待合入；Linux 应用扫描/OCR/更新器/独立验收框架仍开放 |
-| **安全与依赖（`#483` / `#1788`）** | Dependabot 告警、CI 关闭关键字守卫（`#1792`）与数据原子性（`#1788`） | 🟠 `#483` 保持开放（113 条告警，9 个 PR 均被 `Branch Policy` 阻塞）；`#1792`/`#1776`（`task/fix/ci-guards-1792-1776 @ 9f8e55ad8`）与 `#1788`（`task/fix/data-telemetry-billing-atomic-1788 @ cdc0456fc`）已本地验证待合入，`#1788` 仍待 Preview/生产 soak |
+| **跨平台（R1）** | 原生截图跨平台打包运行验收（`#321` / `#322`） | 🟠 macOS arm64 签名包实测通过（`v2.4.15-beta.13`）；Windows/Linux 打包剥离 `tuff_native_screenshot.node` 修复已随 PR `#2333`（`9c75810aa`）合入 `master`，仍待 `v2.4.15-beta.15+` 发布包与真机截图验收 |
+| **跨平台（R2）** | macOS 跨架构发行与运行验证（`#311` 已关闭） | 🟡 `v2.4.15-beta.13` 已双架构签名公证发布且归档覆盖已修（PR `#2318`），darwin 架构拒绝单测已随 PR `#2333`（`9c75810aa`）合入 `master`；仅余物理 Intel x64 Mac 真机运行验证受硬件门禁约束 |
+| **搜索（R3）** | 大目录扫描/对账内存峰值（`#318`） | 🟡 traversal 已实测 400k @ 64 MiB；真实 libSQL 25k/100k 分页对账与持久化基准（64/128 MiB 均 `parity=OK`）已随 PR `#2333`（`9c75810aa`）合入 `master`，`#318` 仍待后续收口验证 |
+| **跨平台（R8 / C6）** | Linux 成熟度（`#213`）与 Windows PowerShell 依赖（`#350`） | 🟠 `#213`（Ubuntu 24.04 FUSE3/AppArmor/`.deb` 冒烟）与 `#350`（`reg.exe` 回退与降级诊断）已随 PR `#2333`（`9c75810aa`）合入 `master`；`v2.4.15-beta.15` 发布 CI 实证及 Linux 应用扫描/OCR/更新器/独立验收框架仍开放 |
+| **安全与依赖（`#483` / `#1788`）** | Dependabot 告警、CI 关闭关键字守卫（`#1792`）与数据原子性（`#1788`） | 🟠 PR `#2336`（`0fb523dc1`）已放行指向 `master` 的 Dependabot PR 且 `#2299`–`#2307` 全部 9 个 PR 已合入 `master`，`#1792`/`#1776`（PR `#2331` `a10c80009`）与 `#1788`（PR `#2332` `8b18bcb15`）均已合入 `master`；`#483`（Electron 41→42+ `#328`、51 条中低危 `--prod` 与 dev 告警）与 `#1788`（Preview/生产 soak）仍保持开放 |
 | **存储（R9）** | SQLite 单写缓解分散与剩余写者收敛 | 🟡 打包 split 62/62 通过，但 AppProvider 尚未迁入 worker typed persistence port，`db/utils.ts` 与真实 profile 迁移证据仍开放 |
 | **能耗（R13 / 3.0）** | 3.0 空闲能耗与安装版真实 profile 持续低能耗验收 | 🟠 Phase 0 Metric 1/3、Phase 1 可选 `utilityProcess`（PR `#2279`/`#2280`）、Phase 2 空闲预算（PR `#2322`）、Phase 3 渲染停帧（PR `#2281`）已落地；Phase 0 Metric 2（`sudo powermetrics`）与 `v2.4.15-beta.15` 打包 10 分钟空闲态/真实 profile 持续复测仍开放 |
 | **文档治理** | `docs:verify` 断链守卫与 `CHANGES.md` 按月归档 | 🟡 `docs:verify` 已作为 CI 必检阻断断链与发布说明契约；`CHANGES.md` 历史按月归档列长期债务 |
