@@ -86,12 +86,13 @@ watch(
 watch(
   columns,
   () => {
-    const normalized = normalizeValue(localValue.value)
-    localValue.value = normalized
-    // A columns change can invalidate the current selection; when normalization actually
-    // altered it, push the corrected value back through v-model so the parent doesn't keep
-    // a stale/invalid value the picker is no longer displaying.
+    // `flush: 'sync'` can run before the `modelValue` watcher copies a newly
+    // updated prop into `localValue`. Reading the latest `props.modelValue`
+    // avoids re-emitting the stale value when a parent updates both together.
     const current = Array.isArray(props.modelValue) ? props.modelValue : []
+    const source = current.length > 0 ? current : localValue.value
+    const normalized = normalizeValue(source)
+    localValue.value = normalized
     if (!valuesEqual(normalized, current)) {
       emit('update:modelValue', normalized)
       emit('change', normalized)
@@ -174,9 +175,14 @@ const MAX_VELOCITY = 0.14
 /** Soft rubber-band overscroll cap (in rows) past either end of the column. */
 const MAX_OVERSCROLL = 1.35
 /** Critically-damped spring angular frequency (rad/ms) for snapping and clicks. */
-const SNAP_SPRING_OMEGA = 0.016
-/** Tighter critically-damped spring angular frequency (rad/ms) for wheel/trackpad tracking. */
-const WHEEL_SPRING_OMEGA = 0.022
+const SNAP_SPRING_OMEGA = 0.024
+/** Tighter critically-damped spring angular frequency (rad/ms) for discrete mouse-wheel detents. */
+const WHEEL_SPRING_OMEGA = 0.032
+/** Idle delay (ms) after the last wheel event before snapping onto the nearest row. */
+const WHEEL_SETTLE_DELAY_MS = 65
+/** Idle gap (ms) + minimum pixel step used to distinguish discrete mouse clicks from trackpad streams. */
+const WHEEL_DISCRETE_GAP_MS = 90
+const WHEEL_DISCRETE_MIN_PX = 48
 /** Velocity threshold (rows/ms) below which inertial coast hands off to the snap spring. */
 const SPRING_HANDOFF_VELOCITY = 0.0028
 /** Rubber-band boundary damping time constant (ms) when coasting past min/max bounds. */
@@ -196,6 +202,10 @@ interface WheelState {
   velocity: number
   /** Accumulated fractional target during wheel/trackpad scrolling. */
   wheelTarget: number | null
+  /** Un-rubber-banded virtual offset during an active wheel gesture for crisp direction reversals. */
+  rawWheelOffset: number | null
+  /** Timestamp of the previous wheel event to tell continuous trackpad streams from discrete clicks. */
+  lastWheelAt: number
 }
 
 const wheelStates = ref<WheelState[]>([])
@@ -209,6 +219,8 @@ function ensureStates() {
       target: 0,
       velocity: 0,
       wheelTarget: null,
+      rawWheelOffset: null,
+      lastWheelAt: 0,
     }))
   }
   if (offsets.value.length !== n)
@@ -439,6 +451,7 @@ function goToIndex(colIndex: number, idx: number, animated = true) {
 
   clearSettleTimer(colIndex)
   state.wheelTarget = null
+  state.rawWheelOffset = null
   const to = clampIndex(colIndex, idx)
   state.target = to
 
@@ -471,13 +484,16 @@ function settleWheel(colIndex: number) {
   const idx = nearestEnabledIndex(colIndex, Math.round(clampIndex(colIndex, reference)))
   if (idx < 0)
     return
-  if (state)
+  if (state) {
     state.wheelTarget = null
+    state.rawWheelOffset = null
+    state.velocity = 0
+  }
   goToIndex(colIndex, idx)
   setValueAt(colIndex, opts[idx]?.value)
 }
 
-function scheduleSettle(colIndex: number, delay = 110) {
+function scheduleSettle(colIndex: number, delay = WHEEL_SETTLE_DELAY_MS) {
   ensureStates()
   const state = wheelStates.value[colIndex]
   if (!state)
@@ -537,8 +553,10 @@ function onPointerDown(colIndex: number, event: PointerEvent) {
   clearSettleTimer(colIndex)
   stopWheel(colIndex)
   const state = wheelStates.value[colIndex]
-  if (state)
+  if (state) {
     state.wheelTarget = null
+    state.rawWheelOffset = null
+  }
 
   const target = event.currentTarget as HTMLElement | null
   target?.setPointerCapture?.(event.pointerId)
@@ -661,6 +679,12 @@ function normalizeWheelRows(event: WheelEvent): number {
   return deltaPx / itemHeightPx.value
 }
 
+function clampRawWheelOffset(colIndex: number, raw: number): number {
+  const max = maxIndex(colIndex)
+  const cap = MAX_OVERSCROLL * 3
+  return Math.min(max + cap, Math.max(-cap, raw))
+}
+
 function onWheelEvent(colIndex: number, event: WheelEvent) {
   if (props.disabled)
     return
@@ -669,24 +693,57 @@ function onWheelEvent(colIndex: number, event: WheelEvent) {
   if (!state)
     return
 
-  const base = state.wheelTarget ?? offsetOf(colIndex)
-  const nextTarget = applyRubberBand(colIndex, base + normalizeWheelRows(event))
-  state.wheelTarget = nextTarget
+  const now = event.timeStamp || nowMs()
+  const dt = state.lastWheelAt > 0 ? now - state.lastWheelAt : Number.POSITIVE_INFINITY
+  state.lastWheelAt = now
 
-  if (prefersReducedMotion()) {
-    stopWheel(colIndex)
-    setOffset(colIndex, clampIndex(colIndex, nextTarget))
-  }
-  else {
-    startWheelPhysics(colIndex, nextTarget, {
-      coast: false,
-      omega: WHEEL_SPRING_OMEGA,
-      allowOverscrollTarget: true,
-    })
+  const deltaRows = normalizeWheelRows(event)
+  const isDiscreteWheel = event.deltaMode !== 0
+    || (dt > WHEEL_DISCRETE_GAP_MS && Math.abs(event.deltaY) >= WHEEL_DISCRETE_MIN_PX && Number.isInteger(event.deltaY))
+
+  if (isDiscreteWheel) {
+    const base = state.wheelTarget ?? offsetOf(colIndex)
+    const nextRaw = clampRawWheelOffset(colIndex, base + deltaRows)
+    const nextTarget = applyRubberBand(colIndex, nextRaw)
+    state.rawWheelOffset = nextRaw
+    state.wheelTarget = nextTarget
+
+    if (prefersReducedMotion()) {
+      stopWheel(colIndex)
+      setOffset(colIndex, clampIndex(colIndex, nextTarget))
+    }
+    else {
+      startWheelPhysics(colIndex, nextTarget, {
+        coast: false,
+        omega: WHEEL_SPRING_OMEGA,
+        allowOverscrollTarget: true,
+      })
+    }
+
+    commitOffset(colIndex, nextTarget)
+    scheduleSettle(colIndex, 80)
+    return
   }
 
-  commitOffset(colIndex, nextTarget)
-  scheduleSettle(colIndex)
+  // Continuous trackpad / high-res wheel stream: apply directly on the exact frame
+  // so the drum stays glued 1:1 to the fingers (OS provides native pixel inertia)
+  // and only engage the snap spring once the gesture pauses.
+  stopWheel(colIndex, false)
+  const baseRaw = state.rawWheelOffset ?? offsetOf(colIndex)
+  const nextRaw = clampRawWheelOffset(colIndex, baseRaw + deltaRows)
+  const nextOffset = prefersReducedMotion()
+    ? clampIndex(colIndex, nextRaw)
+    : applyRubberBand(colIndex, nextRaw)
+
+  state.rawWheelOffset = nextRaw
+  state.wheelTarget = nextOffset
+  state.velocity = dt > 0 && dt < 64
+    ? Math.max(-MAX_VELOCITY, Math.min(MAX_VELOCITY, deltaRows / dt))
+    : 0
+
+  setOffset(colIndex, nextOffset)
+  commitOffset(colIndex, nextOffset)
+  scheduleSettle(colIndex, WHEEL_SETTLE_DELAY_MS)
 }
 
 function onColumnClick(colIndex: number, event: MouseEvent) {
@@ -897,6 +954,7 @@ onBeforeUnmount(() => {
     }
     state.velocity = 0
     state.wheelTarget = null
+    state.rawWheelOffset = null
   }
   drags.clear()
   isDragging.value = false
@@ -1160,7 +1218,7 @@ onBeforeUnmount(() => {
     translateZ(calc(var(--tx-picker-radius, 116px) * -1))
     rotateX(calc((var(--tx-picker-offset, 0) - var(--tx-picker-index, 0)) * var(--tx-picker-step, 17.641) * 1deg))
     translateZ(var(--tx-picker-radius, 116px));
-  transition: color 0.18s ease, font-weight 0.18s ease;
+  transition: color 0.1s ease;
 
   &.is-selected {
     color: var(--tx-text-color-primary, #303133);

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { ComponentPublicInstance, PropType } from 'vue'
 import type { TxIconSource } from '../../icon'
+import type { TreeFlatItem } from './context'
 import type { TreeEmits, TreeKey, TreeNode, TreeValue } from './types'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, provide, ref, watch } from 'vue'
 import { useMorphWindow } from '../../../../utils/use-morph-window'
-import { TxCheckbox } from '../../checkbox'
-import { TxIcon } from '../../icon'
+import { TREE_CONTEXT_KEY } from './context'
+import TxTreeBranch from './TxTreeBranch.vue'
 
 defineOptions({ name: 'TxTree' })
 
@@ -196,16 +197,7 @@ const effectiveExpanded = computed(() => {
   return next
 })
 
-interface FlatItem {
-  node: TreeNode
-  level: number
-  hasChildren: boolean
-  expanded: boolean
-  posInSet: number
-  setSize: number
-}
-
-function flatten(nodes: TreeNode[], level: number, out: FlatItem[]) {
+function flatten(nodes: TreeNode[], level: number, out: TreeFlatItem[]) {
   // Each `nodes` array is one sibling group, so its length and index give the
   // aria-setsize / aria-posinset a screen reader needs to say "item N of M".
   const setSize = nodes.length
@@ -219,7 +211,7 @@ function flatten(nodes: TreeNode[], level: number, out: FlatItem[]) {
 }
 
 const flatItems = computed(() => {
-  const out: FlatItem[] = []
+  const out: TreeFlatItem[] = []
   flatten(filtered.value.nodes, 0, out)
   return out
 })
@@ -228,7 +220,7 @@ const empty = computed(() => flatItems.value.length === 0)
 const focusedKey = ref<TreeKey | null>(null)
 const itemRefs = new Map<TreeKey, HTMLElement>()
 
-function isItemDisabled(item: FlatItem): boolean {
+function isItemDisabled(item: TreeFlatItem): boolean {
   return props.disabled || !!item.node.disabled
 }
 
@@ -249,12 +241,12 @@ function setItemRef(key: TreeKey, element: Element | ComponentPublicInstance | n
     itemRefs.delete(key)
 }
 
-function handleItemFocus(item: FlatItem): void {
+function handleItemFocus(item: TreeFlatItem): void {
   if (!isItemDisabled(item))
     focusedKey.value = item.node.key
 }
 
-function handleItemClick(item: FlatItem): void {
+function handleItemClick(item: TreeFlatItem): void {
   if (isItemDisabled(item))
     return
   focusedKey.value = item.node.key
@@ -288,7 +280,7 @@ function revealItem(element: HTMLElement): void {
     scroller.scrollTop += Math.min(row.bottom - bottom, row.top - top)
 }
 
-async function focusItem(item: FlatItem | undefined): Promise<void> {
+async function focusItem(item: TreeFlatItem | undefined): Promise<void> {
   if (!item || isItemDisabled(item))
     return
   focusedKey.value = item.node.key
@@ -309,7 +301,7 @@ function syncLabelTitle(event: PointerEvent, label: string): void {
     element.removeAttribute('title')
 }
 
-function findChildItem(item: FlatItem, index: number): FlatItem | undefined {
+function findChildItem(item: TreeFlatItem, index: number): TreeFlatItem | undefined {
   for (let current = index + 1; current < flatItems.value.length; current += 1) {
     const candidate = flatItems.value[current]
     if (!candidate || candidate.level <= item.level)
@@ -320,7 +312,7 @@ function findChildItem(item: FlatItem, index: number): FlatItem | undefined {
   return undefined
 }
 
-function findParentItem(item: FlatItem, index: number): FlatItem | undefined {
+function findParentItem(item: TreeFlatItem, index: number): TreeFlatItem | undefined {
   for (let current = index - 1; current >= 0; current -= 1) {
     const candidate = flatItems.value[current]
     if (candidate && candidate.level < item.level && !isItemDisabled(candidate))
@@ -329,7 +321,7 @@ function findParentItem(item: FlatItem, index: number): FlatItem | undefined {
   return undefined
 }
 
-async function handleItemKeydown(event: KeyboardEvent, item: FlatItem): Promise<void> {
+async function handleItemKeydown(event: KeyboardEvent, item: TreeFlatItem): Promise<void> {
   if (event.target !== event.currentTarget || isItemDisabled(item))
     return
 
@@ -386,9 +378,27 @@ async function handleItemKeydown(event: KeyboardEvent, item: FlatItem): Promise<
   }
 }
 
-function itemPadding(level: number): string {
-  return `${level * (props.indent ?? 16)}px`
-}
+provide(TREE_CONTEXT_KEY, {
+  disabled: computed(() => props.disabled),
+  selectable: computed(() => props.selectable),
+  checkable: computed(() => props.checkable),
+  indent: computed(() => props.indent ?? 16),
+  expandLabel: computed(() => props.expandLabel),
+  collapseLabel: computed(() => props.collapseLabel),
+  selectLabel: computed(() => props.selectLabel),
+  morphing,
+  effectiveExpanded,
+  selectedSet,
+  tabStopKey,
+  resolveIcon,
+  setItemRef,
+  handleItemFocus,
+  handleItemClick,
+  handleItemKeydown,
+  toggleExpand,
+  toggleSelect,
+  syncLabelTitle,
+})
 </script>
 
 <template>
@@ -399,69 +409,18 @@ function itemPadding(level: number): string {
       </slot>
     </div>
     <div v-else class="tx-tree__list" role="presentation">
-      <div
-        v-for="item in flatItems"
-        :key="item.node.key"
-        :ref="element => setItemRef(item.node.key, element)"
-        class="tx-tree__item"
-        :style="{ paddingLeft: itemPadding(item.level) }"
-        role="treeitem"
-        :tabindex="isItemDisabled(item) ? -1 : (tabStopKey === item.node.key ? 0 : -1)"
-        :aria-level="item.level + 1"
-        :aria-setsize="item.setSize"
-        :aria-posinset="item.posInSet"
-        :aria-expanded="item.hasChildren ? item.expanded : undefined"
-        :aria-selected="selectable ? selectedSet.has(item.node.key) : undefined"
-        :aria-disabled="isItemDisabled(item) || undefined"
-        @focus="handleItemFocus(item)"
-        @click="handleItemClick(item)"
-        @keydown="handleItemKeydown($event, item)"
+      <TxTreeBranch
+        v-for="(node, index) in filtered.nodes"
+        :key="node.key"
+        :node="node"
+        :level="0"
+        :pos-in-set="index + 1"
+        :set-size="filtered.nodes.length"
       >
-        <slot
-          name="item"
-          :node="item.node"
-          :level="item.level"
-          :expanded="item.expanded"
-          :has-children="item.hasChildren"
-          :selected="selectedSet.has(item.node.key)"
-          :toggle-expand="() => toggleExpand(item.node)"
-          :toggle-select="() => toggleSelect(item.node)"
-          :indent="props.indent ?? 16"
-        >
-          <div
-            class="tx-tree__row"
-            :class="{ 'is-selected': selectedSet.has(item.node.key), 'is-disabled': props.disabled || item.node.disabled }"
-          >
-            <button
-              v-if="item.hasChildren"
-              type="button"
-              class="tx-tree__caret"
-              tabindex="-1"
-              :aria-label="item.expanded ? collapseLabel : expandLabel"
-              @click.stop="toggleExpand(item.node)"
-            >
-              <svg viewBox="0 0 24 24" width="14" height="14" :style="{ transform: item.expanded ? 'rotate(90deg)' : 'rotate(0deg)' }">
-                <path fill="currentColor" d="M10 6l6 6-6 6" />
-              </svg>
-            </button>
-            <span v-else class="tx-tree__caret-placeholder" aria-hidden="true" />
-
-            <TxCheckbox
-              v-if="checkable"
-              :model-value="selectedSet.has(item.node.key)"
-              :disabled="props.disabled || item.node.disabled"
-              :aria-label="selectLabel"
-              tabindex="-1"
-              @click.stop
-              @update:model-value="() => toggleSelect(item.node)"
-            />
-
-            <TxIcon v-if="item.node.icon" :icon="resolveIcon(item.node.icon)" :size="16" />
-
-            <span class="tx-tree__label" @pointerenter="syncLabelTitle($event, item.node.label)">{{ item.node.label }}</span>
-          </div>
-        </slot>
-      </div>
+        <template v-if="$slots.item" #item="slotProps">
+          <slot name="item" v-bind="slotProps" />
+        </template>
+      </TxTreeBranch>
     </div>
   </div>
 </template>
@@ -483,88 +442,6 @@ function itemPadding(level: number): string {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
-}
-
-.tx-tree__item {
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
-  border-radius: 10px;
-  outline: none;
-}
-
-.tx-tree__item:focus-visible {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 24%, transparent);
-}
-
-.tx-tree__row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 6px 10px;
-  border-radius: 10px;
-  cursor: pointer;
-  color: var(--tx-text-color-primary, #303133);
-}
-
-.tx-tree__row > :not(.tx-tree__label) {
-  flex-shrink: 0;
-}
-
-.tx-tree.is-morphing .tx-tree__row {
-  transition: background 150ms ease;
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
-}
-
-.tx-tree__row.is-selected {
-  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
-}
-
-.tx-tree__row.is-disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* `:hover:not(.is-disabled)` is (0,3,0) and `.is-selected` is (0,2,0), so
-   hovering a selected row used to swap its accent for the neutral hover grey —
-   the row looked deselected exactly while you were pointing at it. Excluding
-   the selected row here, and giving it its own hover shade, keeps the accent. */
-.tx-tree__row:hover:not(.is-disabled):not(.is-selected) {
-  background: color-mix(in srgb, var(--tx-fill-color, #f5f7fa) 70%, transparent);
-}
-
-.tx-tree__row.is-selected:hover:not(.is-disabled) {
-  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 20%, transparent);
-}
-
-.tx-tree__caret {
-  width: 18px;
-  height: 18px;
-  border: none;
-  background: transparent;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: var(--tx-text-color-secondary, #909399);
-}
-
-.tx-tree__caret-placeholder {
-  width: 18px;
-  height: 18px;
-}
-
-.tx-tree__label {
-  min-width: 0;
-  overflow: hidden;
-  font-size: 14px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .tx-tree__empty {

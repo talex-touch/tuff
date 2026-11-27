@@ -9,7 +9,7 @@ defineOptions({ name: 'TxEmpty' })
 const props = withDefaults(defineProps<EmptyProps>(), {
   title: 'Nothing here',
   description: '',
-  iconClass: 'i-carbon-incomplete',
+  iconClass: undefined,
   compact: false,
 })
 

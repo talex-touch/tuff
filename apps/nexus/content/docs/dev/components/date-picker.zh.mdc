@@ -66,23 +66,34 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` | `string \| DateRangeValue` | `''` | `YYYY-MM-DD` 日期；`range` 时为 `[start, end]`。 |
+| `modelValue` | `string \| DateRangeValue` | `''` | 格式化字符串（`YYYY-MM-DD`、`HH:mm`、`YYYY-MM-DD HH:mm`），范围模式为 `[start, end]`。 |
 | `visible` | `boolean` | `false` | 弹层显示状态，配合 `v-model:visible`。 |
 | `popup` | `boolean` | `true` | 仅 `picker` 形态：`false` 时内联渲染。 |
-| `variant` | `'picker' \| 'field' \| 'adaptive'` | `'picker'` | `picker` 为滚轮，`field` 为字段日历，`adaptive` 按视口宽度切换。 |
-| `title` | `string` | `'Select date'` | 工具栏标题，转发给 `TxPicker`。 |
-| `placeholder` | `string` | `'Select date'` | 字段日历空值时的占位文本。 |
-| `min` | `string` | - | 最早可选日期（`YYYY-MM-DD`），非法值被忽略。 |
-| `max` | `string` | - | 最晚可选日期（`YYYY-MM-DD`），非法值被忽略。 |
+| `variant` | `'picker' \| 'field' \| 'adaptive'` | `'picker'` | `picker` 为滚轮，`field` 为字段弹层，`adaptive` 按视口宽度切换。 |
+| `mode` | `'date' \| 'time' \| 'datetime' \| 'daterange' \| 'datetimerange'` | `'date'` | 选择模式：日期、时间、日期时间、日期范围或日期时间范围。 |
+| `title` | `string` | `'Select date'` | 工具栏标题与字段 `aria-label`。 |
+| `placeholder` | `string` | 随 `mode` 自适应 | 字段空值时的占位文本。 |
+| `min` | `string` | - | 最早可选边界，格式跟随当前 `mode`。 |
+| `max` | `string` | - | 最晚可选边界，格式跟随当前 `mode`。 |
 | `disabled` | `boolean` | `false` | 禁止交互。 |
+| `clearable` | `boolean` | `false` | 有值时在输入框内展示清除按钮。 |
 | `showToolbar` | `boolean` | `true` | 显示 Picker 工具栏。 |
-| `confirmText` | `string` | `'Confirm'` | 确认按钮文案，转发给 `TxPicker`。 |
+| `showSeconds` | `boolean` | `false` | 时间 / 日期时间模式下增加秒列并输出 `:ss`。 |
+| `minuteStep` | `number` | `1` | 时间滚轮的分钟步进间隔。 |
+| `secondStep` | `number` | `1` | 开启 `showSeconds` 时的秒步进间隔。 |
+| `presets` | `DatePickerPreset[]` | - | 弹层顶部的快捷预设项列表。 |
+| `confirmText` | `string` | `'Confirm'` | 确认按钮文案。 |
 | `cancelText` | `string` | `'Cancel'` | 取消按钮文案，转发给 `TxPicker`。 |
+| `todayText` | `string` | `'Today'` | `date` 模式底栏快捷跳转文案。 |
+| `nowText` | `string` | `'Now'` | 时间 / 日期时间模式底栏快捷跳转文案。 |
+| `startPlaceholder` | `string` | `'Start'` | 范围模式起点占位文案。 |
+| `endPlaceholder` | `string` | `'End'` | 范围模式终点占位文案。 |
+| `timeLabel` | `string` | `'Time'` | 时间滚轮区标题文案。 |
 | `closeOnClickMask` | `boolean` | `true` | 点击遮罩关闭弹层。 |
-| `adaptiveBreakpoint` | `number` | `768` | `adaptive` 切换到字段日历的最小视口宽度。 |
+| `adaptiveBreakpoint` | `number` | `768` | `adaptive` 切换到字段弹层的最小视口宽度。 |
 | `weekStartsOn` | `0 \| 1` | `0` | 字段日历的周起始日：`0` 为周日，`1` 为周一。 |
-| `range` | `boolean` | `false` | 仅字段日历：选择起止两个日期；滚轮形态忽略。 |
-| `rangeSeparator` | `string` | `' → '` | 字段显示值中两个日期之间的分隔文本。 |
+| `range` | `boolean` | `false` | `daterange` 简写（配合 `mode="datetime"` 时自动解析为 `datetimerange`）。 |
+| `rangeSeparator` | `string` | `' → '` | 字段显示值中起止两端的分隔文本。 |
 
 ### 事件
 

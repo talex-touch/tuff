@@ -277,14 +277,17 @@ function getActionSize(action?: EmptyStateAction) {
             </g>
           </svg>
 
-          <!-- Guide State (Directional) -->
+          <!-- Guide State (Directional badge + 3-step progression) -->
           <svg v-else-if="illustrationVariant === 'guide'" viewBox="0 0 64 64" aria-hidden="true">
-            <g class="tx-empty-state__guide-wrapper">
-              <circle class="tx-empty-state__guide-circle" cx="32" cy="20" r="10" />
-              <path class="tx-empty-state__guide-arrow" d="M32 26V14M27 19l5-5 5 5" />
-            </g>
-            <rect class="tx-empty-state__guide-bar" x="20" y="40" width="24" height="4" rx="2" />
-            <rect class="tx-empty-state__guide-progress" x="20" y="40" width="12" height="4" rx="2" />
+            <circle class="tx-empty-state__guide-circle" cx="32" cy="23" r="12" />
+            <path class="tx-empty-state__guide-arrow" d="M27.5 23h9m-3.5-3.5L36.5 23 33 26.5" />
+            <line class="tx-empty-state__guide-track" x1="16" y1="47" x2="48" y2="47" />
+            <line class="tx-empty-state__guide-progress" x1="16" y1="47" x2="48" y2="47" />
+            <circle class="tx-empty-state__guide-dot tx-empty-state__guide-dot--on" cx="16" cy="47" r="3" />
+            <circle class="tx-empty-state__guide-dot" cx="32" cy="47" r="3" />
+            <circle class="tx-empty-state__guide-dot" cx="48" cy="47" r="3" />
+            <circle class="tx-empty-state__guide-dot-on tx-empty-state__guide-dot-on--2" cx="32" cy="47" r="3" />
+            <circle class="tx-empty-state__guide-dot-on tx-empty-state__guide-dot-on--3" cx="48" cy="47" r="3" />
           </svg>
 
           <!-- Error State (App Window + Alert Badge) -->
@@ -874,29 +877,79 @@ function getActionSize(action?: EmptyStateAction) {
   100% { opacity: 0; }
 }
 
-/* --- Guide --- */
+/* --- Guide ---
+   A soft directional badge over a 3-step progress rail. Keeps every motion
+   contained in SVG user units (`px` / `stroke-dashoffset`) instead of `%`
+   transforms that previously flung the arrow and progress pill outside their
+   bounds. */
 .tx-empty-state__guide-circle {
   fill: var(--tx-color-primary-light-9, #ecf5ff);
-  stroke: var(--tx-color-primary, #409eff);
-  stroke-width: 0;
+  stroke: color-mix(in srgb, var(--tx-color-primary, #409eff) 32%, transparent);
+  stroke-width: 1.5;
 }
 
 .tx-empty-state__guide-arrow {
   stroke: var(--tx-color-primary, #409eff);
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  fill: none;
-  animation: tx-empty-state-bounce 2s infinite;
+  animation: tx-empty-state-guide-nudge 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
-.tx-empty-state__guide-bar {
-  fill: color-mix(in srgb, currentColor 10%, transparent);
+.tx-empty-state__guide-track {
+  stroke: color-mix(in srgb, currentColor 18%, transparent);
 }
 
 .tx-empty-state__guide-progress {
-  fill: var(--tx-color-primary-light-5, #b3d8ff);
-  animation: tx-empty-state-shimmer 2s infinite;
+  stroke: var(--tx-color-primary, #409eff);
+  stroke-dasharray: 32;
+  stroke-dashoffset: 32;
+  animation: tx-empty-state-guide-progress 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.tx-empty-state__guide-dot {
+  fill: var(--tx-bg-color, #ffffff);
+  stroke: color-mix(in srgb, currentColor 28%, transparent);
+  stroke-width: 1.75;
+}
+
+.tx-empty-state__guide-dot--on,
+.tx-empty-state__guide-dot-on {
+  fill: var(--tx-color-primary, #409eff);
+  stroke: var(--tx-color-primary, #409eff);
+  stroke-width: 1.75;
+}
+
+.tx-empty-state__guide-dot-on {
+  opacity: 0;
+}
+
+.tx-empty-state__guide-dot-on--2 {
+  animation: tx-empty-state-guide-dot-2 2.8s ease-in-out infinite;
+}
+
+.tx-empty-state__guide-dot-on--3 {
+  animation: tx-empty-state-guide-dot-3 2.8s ease-in-out infinite;
+}
+
+@keyframes tx-empty-state-guide-nudge {
+  0%, 100% { transform: translateX(-1px); }
+  45%, 55% { transform: translateX(2px); }
+}
+
+@keyframes tx-empty-state-guide-progress {
+  0%, 10% { stroke-dashoffset: 32; opacity: 1; }
+  40%, 50% { stroke-dashoffset: 16; opacity: 1; }
+  76%, 88% { stroke-dashoffset: 0; opacity: 1; }
+  96% { stroke-dashoffset: 0; opacity: 0; }
+  100% { stroke-dashoffset: 32; opacity: 0; }
+}
+
+@keyframes tx-empty-state-guide-dot-2 {
+  0%, 36%, 96%, 100% { opacity: 0; }
+  42%, 88% { opacity: 1; }
+}
+
+@keyframes tx-empty-state-guide-dot-3 {
+  0%, 72%, 96%, 100% { opacity: 0; }
+  78%, 88% { opacity: 1; }
 }
 
 /* --- Error State ---
@@ -993,13 +1046,23 @@ function getActionSize(action?: EmptyStateAction) {
   .tx-empty-state__box-lid,
   .tx-empty-state__box-dust,
   .tx-empty-state__guide-arrow,
-  .tx-empty-state__guide-progress {
+  .tx-empty-state__guide-progress,
+  .tx-empty-state__guide-dot-on {
     animation: none;
   }
 
   .tx-empty-state__chart-line,
   .tx-empty-state__offline-slash {
     stroke-dashoffset: 0;
+  }
+
+  .tx-empty-state__guide-progress {
+    stroke-dashoffset: 16;
+    opacity: 1;
+  }
+
+  .tx-empty-state__guide-dot-on--2 {
+    opacity: 1;
   }
 
   .tx-empty-state__chart-dot {

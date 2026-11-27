@@ -146,6 +146,25 @@ describe('txPicker', () => {
     expect(wrapper.emitted('change')?.at(-1)).toEqual([['b', 9]])
   })
 
+  it('does not bounce back a stale value when parent updates modelValue and columns together', async () => {
+    const wrapper = mountInlinePicker({
+      modelValue: ['b', 1],
+    })
+    await flushPromises()
+
+    await wrapper.setProps({
+      modelValue: ['b', 2],
+      columns: [
+        { key: 'letter', options: [{ value: 'a', label: 'A', disabled: true }, { value: 'b', label: 'B' }] },
+        { key: 'number', options: [{ value: 1, label: '1' }, { value: 2, label: '2' }] },
+      ],
+    })
+    await flushPromises()
+
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(wrapper.findAll('.tx-picker__item.is-selected').map(item => item.text())).toEqual(['B', '2'])
+  })
+
   it('emits confirm and cancel from the toolbar', async () => {
     const wrapper = mountInlinePicker({
       modelValue: ['b', 2],
@@ -741,6 +760,36 @@ describe('txPicker wheel', () => {
       vi.advanceTimersByTime(1000)
       await nextTick()
       expect(offsetOf(wrapper)).toBe('0')
+      wrapper.unmount()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('tracks continuous trackpad pixel wheel deltas immediately without spring lag and snaps cleanly on settle', async () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+    })
+    try {
+      const wrapper = mountWheel()
+      await flushPromises()
+      const wheel = wrapper.find('.tx-picker__wheel')
+
+      // Small pixel delta typical of macOS trackpad: offset updates synchronously on the same frame.
+      await wheel.trigger('wheel', { deltaY: 18, deltaMode: 0 })
+      expect(Number(offsetOf(wrapper))).toBeCloseTo(20.5, 4)
+
+      await wheel.trigger('wheel', { deltaY: 18, deltaMode: 0 })
+      expect(Number(offsetOf(wrapper))).toBeCloseTo(21, 4)
+
+      // Half-row pixel nudge settles cleanly to nearest row once the gesture stops.
+      await wheel.trigger('wheel', { deltaY: 24, deltaMode: 0 })
+      expect(Number(offsetOf(wrapper))).toBeCloseTo(21 + 24 / 36, 4)
+
+      vi.advanceTimersByTime(500)
+      await nextTick()
+      expect(offsetOf(wrapper)).toBe('22')
       wrapper.unmount()
     }
     finally {
