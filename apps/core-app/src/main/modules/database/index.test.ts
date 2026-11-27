@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { dbLogMock, scanProgressMigrationMocks, searchIndexWriterMocks } = vi.hoisted(() => ({
   dbLogMock: {
@@ -62,20 +62,14 @@ vi.mock('../../../../resources/db/locator.json?commonjs-external&asset', () => (
   default: '/tmp/db/locator.json'
 }))
 
-vi.mock('../box-tool/search-engine/search-index-writer', () => ({
-  searchIndexWriter: {
-    getStatus: searchIndexWriterMocks.getStatus,
-    withPausedAdmission: searchIndexWriterMocks.withPausedAdmission
-  }
-}))
-
-vi.mock('../box-tool/search-engine/scan-progress-schema', () => ({
+vi.mock('../../db/scan-progress-schema', () => ({
   planScanProgressSourceScopeMigration: scanProgressMigrationMocks.plan,
   runScanProgressSourceScopeMigration: scanProgressMigrationMocks.run
 }))
 
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { registerDatabaseWalSearchIndexWriterPort } from './database-ports'
 import { DatabaseModule } from './index'
 
 function createModule(client: {
@@ -205,9 +199,15 @@ describe('DatabaseModule background startup tasks', () => {
 })
 
 describe('DatabaseModule WAL checkpoint maintenance', () => {
+  let disposeWriterPort: (() => void) | null = null
+
   beforeEach(async () => {
     await dbWriteScheduler.drain()
     vi.clearAllMocks()
+    disposeWriterPort = registerDatabaseWalSearchIndexWriterPort({
+      getStatus: searchIndexWriterMocks.getStatus,
+      withPausedAdmission: searchIndexWriterMocks.withPausedAdmission
+    })
     searchIndexWriterMocks.getStatus.mockReturnValue({
       readiness: 'ready',
       admissionPaused: true,
@@ -222,6 +222,11 @@ describe('DatabaseModule WAL checkpoint maintenance', () => {
         pending: 0
       })
     )
+  })
+
+  afterEach(() => {
+    disposeWriterPort?.()
+    disposeWriterPort = null
   })
 
   it('skips checkpoint when the writer is not quiescent', async () => {

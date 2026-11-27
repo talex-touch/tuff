@@ -26,8 +26,15 @@
 import { createHash } from 'node:crypto'
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
+import {
+  EMPTY_LOCAL_SKILL_CONFIG,
+  normalizeLocalSkillConfig,
+  type LocalSkillConfig
+} from '../../shared/local-skill-config'
 import { createLogger } from '../../utils/logger'
 import { frontmatterFields, frontmatterText } from './frontmatter-fields'
+
+export { EMPTY_LOCAL_SKILL_CONFIG, normalizeLocalSkillConfig, type LocalSkillConfig }
 
 const localSkillLog = createLogger('Intelligence').child('LocalSkills')
 
@@ -59,13 +66,6 @@ const MAX_MANIFEST_CHARS = 512 * 1024
  * hundred full bodies per turn to look at their first twenty lines.
  */
 const MAX_MANIFEST_SCAN_CHARS = 16 * 1024
-
-export interface LocalSkillConfig {
-  /** Directories the user registered, as they typed them. */
-  dirs: string[]
-  /** Ids the user switched off. Absent means enabled — a new skill arrives live. */
-  disabledIds: string[]
-}
 
 export interface LocalSkillEntry {
   /** `local:<12 hex of sha1(realpath)>`; stable while the directory keeps its path. */
@@ -108,28 +108,8 @@ export interface LocalSkillScanEntry extends LocalSkillEntry {
   storeDir: string | null
 }
 
-export const EMPTY_LOCAL_SKILL_CONFIG: LocalSkillConfig = { dirs: [], disabledIds: [] }
-
 export function isLocalSkillId(id: string): boolean {
   return id.startsWith(LOCAL_SKILL_ID_PREFIX)
-}
-
-function uniqueStrings(value: unknown): string[] {
-  if (!Array.isArray(value)) return []
-  const seen = new Set<string>()
-  for (const entry of value) {
-    if (typeof entry !== 'string') continue
-    const text = entry.trim()
-    if (text) seen.add(text)
-  }
-  return [...seen]
-}
-
-/** Tolerates whatever is on disk, including a file written by an older build. */
-export function normalizeLocalSkillConfig(value: unknown): LocalSkillConfig {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return EMPTY_LOCAL_SKILL_CONFIG
-  const record = value as Record<string, unknown>
-  return { dirs: uniqueStrings(record.dirs), disabledIds: uniqueStrings(record.disabledIds) }
 }
 
 export function localSkillId(realDirPath: string): string {
