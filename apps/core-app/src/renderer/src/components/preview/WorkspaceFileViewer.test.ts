@@ -16,7 +16,9 @@ const mocks = vi.hoisted(() => ({
     (payload: { conversationId: string; reviewId: string; updatedAt: number }) => void
   >,
   selection: null as null | { value: SelectionPayload | null },
-  clearSelection: vi.fn()
+  clearSelection: vi.fn(),
+  registerSelectionHighlight: vi.fn(),
+  disposeSelectionHighlight: vi.fn()
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -137,7 +139,20 @@ vi.mock('@talex-touch/tuffex/popover', () => ({
   }
 }))
 
+vi.mock('@talex-touch/tuffex/spinner', () => ({
+  TxSpinner: {
+    props: ['size', 'strokeWidth', 'label'],
+    template: '<span role="status" :aria-label="label" />'
+  }
+}))
+
 vi.mock('@talex-touch/tuffex/selection-actions', () => ({
+  registerSelectionHighlight: (range: Range | null | undefined) => {
+    mocks.registerSelectionHighlight(range)
+    return () => {
+      mocks.disposeSelectionHighlight(range)
+    }
+  },
   useSelectionAnchor: () => {
     const sel = ref<SelectionPayload | null>(null)
     mocks.selection = sel
@@ -1858,5 +1873,158 @@ describe('WorkspaceFileViewer', () => {
     expect(allWriteCalls[2]?.[1]?.expectedMtimeMs).toBeUndefined()
     expect(diskText).toBe('# Notes\n\nLocal edit.\n')
     expect(wrapper.find('[data-testid="file-viewer-conflict-banner"]').exists()).toBe(false)
+  })
+
+  it('persists CSS selection highlight during canvas compose and comment drafting and disposes cleanly', async () => {
+    mocks.send.mockImplementation(async (event: unknown) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        return {
+          path: '/tmp/space/story.md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: 48,
+          truncated: false,
+          mtimeMs: 1000,
+          text: '# Story\n\nA quiet morning paragraph.\n'
+        }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/story.md',
+        displayPath: 'story.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-highlight',
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    const hostNode = document.createElement('p')
+    hostNode.textContent = 'A quiet morning paragraph.'
+    document.body.appendChild(hostNode)
+    const range = document.createRange()
+    range.setStart(hostNode.firstChild!, 0)
+    range.setEnd(hostNode.firstChild!, 15)
+
+    try {
+      mocks.registerSelectionHighlight.mockClear()
+      mocks.disposeSelectionHighlight.mockClear()
+
+      mocks.selection!.value = {
+        text: 'A quiet morning',
+        rects: [new DOMRect(10, 20, 120, 18)],
+        range
+      }
+      await flushPromises()
+
+      // 1. Canvas compose registers a cloned range and disposes when compose closes.
+      await wrapper.get('[data-testid="sel-action-improve"]').trigger('click')
+      await flushPromises()
+      expect(mocks.registerSelectionHighlight).toHaveBeenCalledTimes(1)
+      const composeRange = mocks.registerSelectionHighlight.mock.calls[0]?.[0] as Range
+      expect(composeRange).toBeInstanceOf(Range)
+      expect(composeRange).not.toBe(range)
+      expect(composeRange.toString()).toBe('A quiet morning')
+
+      await wrapper.get('[data-testid="file-viewer-canvas-compose-close"]').trigger('click')
+      await flushPromises()
+      expect(mocks.disposeSelectionHighlight).toHaveBeenCalledTimes(1)
+
+      // 2. Comment composer registers a cloned range and disposes when closed.
+      mocks.selection!.value = {
+        text: 'A quiet morning',
+        rects: [new DOMRect(10, 20, 120, 18)],
+        range
+      }
+      await flushPromises()
+      await wrapper.get('[data-testid="sel-action-comment"]').trigger('click')
+      await flushPromises()
+      expect(mocks.registerSelectionHighlight).toHaveBeenCalledTimes(2)
+      expect(wrapper.find('.WorkspaceFileViewer-CommentComposer').exists()).toBe(true)
+
+      await wrapper.get('.WorkspaceFileViewer-CommentClose').trigger('click')
+      await flushPromises()
+      expect(mocks.disposeSelectionHighlight).toHaveBeenCalledTimes(2)
+    } finally {
+      hostNode.remove()
+    }
+  })
+
+  it('renders TxSpinner while canvas is locked and prismatic curtain markup during sweep reveal', async () => {
+    let diskText = '# Story\n\nOriginal line.\n'
+    let diskMtime = 1000
+    mocks.send.mockImplementation(async (event: unknown) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        return {
+          path: '/tmp/space/story.md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: diskText.length,
+          truncated: false,
+          mtimeMs: diskMtime,
+          text: diskText
+        }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/story.md',
+        displayPath: 'story.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-spinner-curtain',
+        aiActionsEnabled: true,
+        aiStreaming: false,
+        messages: []
+      }
+    })
+    await flushPromises()
+
+    // Lock canvas via active streaming turn targeting story.md -> TxSpinner renders in dock.
+    await wrapper.setProps({
+      aiStreaming: true,
+      messages: [
+        { id: 'u1', role: 'user', content: 'Edit story.md', status: 'complete' },
+        { id: 'a1', role: 'assistant', content: '', status: 'streaming' }
+      ]
+    })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="file-viewer-canvas-spinner"]').exists()).toBe(true)
+
+    // Disk updates and turn completes -> prismatic scanline curtain renders during sweep reveal.
+    diskText = '# Story\n\nUpdated line.\n'
+    diskMtime = 2000
+    await wrapper.setProps({
+      aiStreaming: false,
+      messages: [
+        { id: 'u1', role: 'user', content: 'Edit story.md', status: 'complete' },
+        {
+          id: 'a1',
+          role: 'assistant',
+          content: 'Updated story.md.',
+          status: 'complete',
+          parts: [
+            {
+              type: 'tool-call',
+              id: 't1',
+              name: 'file.write',
+              status: 'done',
+              input: JSON.stringify({ path: 'story.md' })
+            }
+          ]
+        }
+      ]
+    })
+    await flushPromises()
+
+    const sweep = wrapper.find('[data-testid="file-viewer-canvas-sweep"]')
+    expect(sweep.exists()).toBe(true)
+    expect(sweep.find('.WorkspaceFileViewer-CanvasWipeCurtain').exists()).toBe(true)
+    expect(sweep.find('.WorkspaceFileViewer-CanvasWipeVeil').exists()).toBe(true)
+    expect(sweep.find('.WorkspaceFileViewer-CanvasWipeEdge').exists()).toBe(true)
   })
 })
