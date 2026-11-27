@@ -16,6 +16,13 @@ export const pageSearchItems: PageSearchItem[] = [
     searchTokens: ['docs', 'developer', 'documentation', '文档', '开发', '指南'],
   },
   {
+    id: 'page-tuffex',
+    titleKey: 'nav.tuffex',
+    path: '/tuffex',
+    icon: 'i-carbon-cube',
+    searchTokens: ['tuffex', 'components', 'ui', 'design-system', '组件', '组件库', '设计系统'],
+  },
+  {
     id: 'page-guide',
     titleKey: 'nav.tutorial',
     path: '/docs/guide/start',

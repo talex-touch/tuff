@@ -36,12 +36,12 @@ describe('conditional KaTeX detection', () => {
     })
     expect(hasDocMathContent(mathParsed.body)).toBe(true)
 
-    const buttonSource = readFileSync(join(nexusRoot, 'content/docs/dev/components/button.en.mdc'), 'utf8')
-    const buttonParsed = await parseMarkdown(buttonSource, {
+    const guideSource = readFileSync(join(nexusRoot, 'content/docs/guide/start.en.mdc'), 'utf8')
+    const guideParsed = await parseMarkdown(guideSource, {
       highlight: false,
       remark: { plugins: { 'remark-math': { instance: remarkMath } } },
     })
-    expect(hasDocMathContent(buttonParsed.body)).toBe(false)
+    expect(hasDocMathContent(guideParsed.body)).toBe(false)
   })
 
   it('removes unconditional static katex.min.css import from docs/[...slug].vue', () => {

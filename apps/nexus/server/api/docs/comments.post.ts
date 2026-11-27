@@ -1,6 +1,23 @@
+import { getRequestURL } from 'h3'
+import { runAfterResponse } from '../../utils/afterResponse'
 import { requireAuth } from '../../utils/auth'
 import { getUserById } from '../../utils/authStore'
 import { createComment, ensureCommentsSchema, getD1Database, normalizePath, sanitizeContent } from '../../utils/docCommentsStore'
+import { edgeCacheKeyUrl } from '../../utils/edgeCache'
+
+function invalidateCommentsEdgeCache(event: Parameters<typeof getRequestURL>[0], normalizedPath: string) {
+  const store = (globalThis as { caches?: { default?: { delete?: (request: Request) => Promise<boolean> } } }).caches?.default
+  if (!store || typeof store.delete !== 'function')
+    return
+
+  const keyUrl = edgeCacheKeyUrl(getRequestURL(event).origin, {
+    name: 'docs/comments',
+    params: { path: normalizedPath },
+  })
+  runAfterResponse(event, 'docs comments edge cache invalidate', async () => {
+    await store.delete!(new Request(keyUrl))
+  })
+}
 
 export default defineEventHandler(async (event) => {
   const auth = await requireAuth(event)
@@ -42,6 +59,8 @@ export default defineEventHandler(async (event) => {
     userImage,
     content,
   })
+
+  invalidateCommentsEdgeCache(event, normalizedPath)
 
   return { success: true, comment }
 })

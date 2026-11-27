@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { stripLandingImagePrefetches } from './landingResourceHints'
+import { stripLandingImagePrefetches, stripStaticModulepreloads } from './landingResourceHints'
 
 describe('stripLandingImagePrefetches', () => {
   const imagePrefetch = '<link rel="prefetch" as="image" type="image/jpeg" href="/_nuxt/calendar.hash.jpg">'
@@ -36,5 +36,34 @@ describe('stripLandingImagePrefetches', () => {
     const html = [imagePreload, modulePreload].join('')
 
     expect(stripLandingImagePrefetches(html, '/')).toBe(html)
+  })
+})
+
+describe('stripStaticModulepreloads', () => {
+  const entryPreload = '<link rel="modulepreload" as="script" crossorigin href="/_nuxt/entry.abc123.js">'
+  const docsLayoutPreload = '<link rel="modulepreload" as="script" crossorigin href="/_nuxt/docs-layout.def456.js">'
+  const sentryPreload = '<link rel="modulepreload" as="script" crossorigin href="/_nuxt/sentry.client.xyz.js">'
+  const threePreload = '<link rel="modulepreload" as="script" crossorigin href="/_nuxt/vendor-three.xyz.js">'
+  const mermaidPreload = '<link rel="modulepreload" as="script" crossorigin href="/_nuxt/mermaid.core.xyz.js">'
+  const echartsPreload = '<link rel="modulepreload" as="script" crossorigin href="/_nuxt/echarts.xyz.js">'
+  const workboxPreload = '<link rel="modulepreload" as="script" crossorigin href="/_nuxt/workbox-window.xyz.js">'
+
+  it.each(['/', '/en/docs', '/zh/docs/guide/start', '/pricing'])('strips only deferred heavy modulepreloads on static HTML route %s', (routePath) => {
+    const html = [
+      entryPreload,
+      docsLayoutPreload,
+      sentryPreload,
+      threePreload,
+      mermaidPreload,
+      echartsPreload,
+      workboxPreload,
+    ].join('')
+
+    expect(stripStaticModulepreloads(html, routePath)).toBe([entryPreload, docsLayoutPreload].join(''))
+  })
+
+  it('leaves non-static dynamic app routes untouched', () => {
+    const html = [entryPreload, sentryPreload].join('')
+    expect(stripStaticModulepreloads(html, '/dashboard/overview')).toBe(html)
   })
 })

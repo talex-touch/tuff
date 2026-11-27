@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 interface TocLink {
   id: string
@@ -31,17 +31,15 @@ interface RailGeometry {
 }
 
 const { t } = useI18n()
-const route = useRoute()
 
 const tocState = useState<TocLink[]>('docs-toc', () => [])
 const outlineLoadingState = useState<boolean>('docs-outline-loading', () => false)
 
 const activeHash = ref('')
-const headingElements = ref<Record<string, HTMLElement>>({})
 const SCROLL_OFFSET = 120
 
 // Fumadocs-style rail geometry, limited to two levels.
-// getLineOffset → x of the guide line; getItemOffset → text indent.
+// lineOffset -> x of the guide line; itemOffset -> text indent.
 const RAIL_BASE = 8
 function lineOffset(level: number) {
   return level <= 0 ? RAIL_BASE : RAIL_BASE + 8
@@ -62,6 +60,12 @@ const skeletonEntries = [
 const navRef = ref<HTMLElement | null>(null)
 const contentRef = ref<HTMLElement | null>(null)
 let navResizeObserver: ResizeObserver | null = null
+let headingObserver: IntersectionObserver | null = null
+let scrollEdgeRaf: number | null = null
+let nearBottomActive = false
+const intersectingIds = new Set<string>()
+const aboveBandIds = new Set<string>()
+let orderIndexMap = new Map<string, number>()
 
 const geometry = ref<RailGeometry>({ entries: [], width: 0, height: 0, d: '' })
 
@@ -117,6 +121,16 @@ function disconnectNavResizeObserver() {
   navResizeObserver = null
 }
 
+function disconnectHeadingObserver() {
+  if (headingObserver) {
+    headingObserver.disconnect()
+    headingObserver = null
+  }
+  intersectingIds.clear()
+  aboveBandIds.clear()
+  nearBottomActive = false
+}
+
 function escapeSelector(value: string) {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function')
     return CSS.escape(value)
@@ -152,19 +166,156 @@ function syncUrlHash(id: string) {
     history.replaceState(history.state, '', `${window.location.pathname}${window.location.search}${next}`)
 }
 
+function resolveActiveIdFromObserverState(): string {
+  const links = flatLinks.value
+  if (!links.length)
+    return ''
+
+  if (intersectingIds.size > 0) {
+    let topmostId = ''
+    let bestIndex = Number.POSITIVE_INFINITY
+    for (const id of intersectingIds) {
+      const idx = orderIndexMap.get(id) ?? Number.POSITIVE_INFINITY
+      if (idx < bestIndex) {
+        bestIndex = idx
+        topmostId = id
+      }
+    }
+    if (topmostId)
+      return topmostId
+  }
+
+  if (aboveBandIds.size > 0) {
+    let closestAboveId = ''
+    let bestIndex = -1
+    for (const id of aboveBandIds) {
+      const idx = orderIndexMap.get(id) ?? -1
+      if (idx > bestIndex) {
+        bestIndex = idx
+        closestAboveId = id
+      }
+    }
+    if (closestAboveId)
+      return closestAboveId
+  }
+
+  return links[0]?.id ?? ''
+}
+
+function observeHeadings() {
+  if (!import.meta.client)
+    return
+
+  disconnectHeadingObserver()
+
+  const links = flatLinks.value
+  orderIndexMap = new Map(links.map((link, index) => [link.id, index]))
+
+  if (!links.length) {
+    activeHash.value = ''
+    return
+  }
+
+  const elements: HTMLElement[] = []
+  for (const link of links) {
+    const el = document.getElementById(link.id)
+    if (el instanceof HTMLElement)
+      elements.push(el)
+  }
+
+  const initialHash = normalizeHash(window.location.hash)
+  if (initialHash && linkMap.value.has(initialHash))
+    activeHash.value = initialHash
+  else if (!activeHash.value || !linkMap.value.has(activeHash.value))
+    activeHash.value = links[0]?.id ?? ''
+
+  if (!elements.length || !('IntersectionObserver' in window))
+    return
+
+  headingObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        const id = (entry.target as HTMLElement).id
+        if (!id)
+          continue
+        if (entry.isIntersecting) {
+          intersectingIds.add(id)
+          aboveBandIds.delete(id)
+        }
+        else {
+          intersectingIds.delete(id)
+          if (entry.boundingClientRect.top <= SCROLL_OFFSET)
+            aboveBandIds.add(id)
+          else
+            aboveBandIds.delete(id)
+        }
+      }
+
+      if (nearBottomActive)
+        return
+
+      // Passive scroll spy updates local state only; URL hash changes only on explicit click.
+      const nextActive = resolveActiveIdFromObserverState()
+      if (nextActive && activeHash.value !== nextActive)
+        activeHash.value = nextActive
+    },
+    {
+      rootMargin: '-96px 0px -70% 0px',
+      threshold: 0,
+    },
+  )
+
+  for (const el of elements)
+    headingObserver.observe(el)
+}
+
+function checkNearBottomEdge() {
+  if (!import.meta.client || !flatLinks.value.length)
+    return
+
+  const isNearBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4
+  if (isNearBottom) {
+    nearBottomActive = true
+    const last = flatLinks.value[flatLinks.value.length - 1]
+    if (last && activeHash.value !== last.id)
+      activeHash.value = last.id
+    return
+  }
+
+  if (nearBottomActive) {
+    nearBottomActive = false
+    const nextActive = resolveActiveIdFromObserverState()
+    if (nextActive && activeHash.value !== nextActive)
+      activeHash.value = nextActive
+  }
+}
+
 // Measure the on-screen position of every visible outline link and build the
 // continuous bezier rail path (identical technique to Fumadocs' default TOC).
+// Reads `.outline-link` vertical padding once instead of calling getComputedStyle N times.
 const updateGeometry = createThrottleFn(() => {
   if (!import.meta.client || !contentRef.value)
     return
 
   const wrapper = contentRef.value
   const linkEls = new Map<string, HTMLElement>()
+  let firstLink: HTMLElement | null = null
   wrapper.querySelectorAll<HTMLElement>('a[data-id]').forEach((el) => {
     const id = el.getAttribute('data-id')
-    if (id)
+    if (id) {
       linkEls.set(id, el)
+      if (!firstLink)
+        firstLink = el
+    }
   })
+
+  let paddingTop = 0
+  let paddingBottom = 0
+  if (firstLink) {
+    const styles = getComputedStyle(firstLink)
+    paddingTop = Number.parseFloat(styles.paddingTop || '0') || 0
+    paddingBottom = Number.parseFloat(styles.paddingBottom || '0') || 0
+  }
 
   const entries: EntryGeometry[] = []
   let width = 0
@@ -175,10 +326,9 @@ const updateGeometry = createThrottleFn(() => {
     const link = linkEls.get(entry.id)
     if (!link)
       continue
-    const styles = getComputedStyle(link)
     const x = lineOffset(entry.level) + 0.5
-    const top = link.offsetTop + Number.parseFloat(styles.paddingTop || '0')
-    const bottom = link.offsetTop + link.clientHeight - Number.parseFloat(styles.paddingBottom || '0')
+    const top = link.offsetTop + paddingTop
+    const bottom = link.offsetTop + link.clientHeight - paddingBottom
 
     width = Math.max(x + 8, width)
     height = Math.max(height, bottom)
@@ -197,94 +347,58 @@ const updateGeometry = createThrottleFn(() => {
   geometry.value = { entries, width, height, d }
 }, 50)
 
-function scrollToHeading(id: string, behavior: ScrollBehavior = 'smooth') {
+function scrollToHeading(id: string, behavior: ScrollBehavior = 'smooth', updateHash = false) {
   const element = document.getElementById(id)
   if (element) {
     const top = element.getBoundingClientRect().top + window.scrollY - SCROLL_OFFSET
     window.scrollTo({
-      top,
+      top: Math.max(0, top),
       behavior,
     })
-    syncUrlHash(id)
+    if (updateHash)
+      syncUrlHash(id)
     setActiveHash(`#${id}`)
   }
 }
 
-function refreshHeadingElements() {
-  if (!import.meta.client)
-    return
-  const nextMap: Record<string, HTMLElement> = {}
-  for (const entry of flatLinks.value) {
-    const element = document.getElementById(entry.id)
-    if (element instanceof HTMLElement)
-      nextMap[entry.id] = element
-  }
-  headingElements.value = nextMap
+function handleOutlineClick(id: string) {
+  scrollToHeading(id, 'smooth', true)
 }
-
-const updateActiveFromScroll = createThrottleFn((fromScroll = false) => {
-  if (!import.meta.client)
-    return
-  if (!flatLinks.value.length)
-    return
-
-  let current: TocLink | null = null
-  for (const entry of flatLinks.value) {
-    const element = headingElements.value[entry.id] ?? document.getElementById(entry.id)
-    if (!(element instanceof HTMLElement))
-      continue
-
-    const rect = element.getBoundingClientRect()
-    if (rect.top - SCROLL_OFFSET <= 0)
-      current = entry
-    else if (!current)
-      current = entry
-  }
-
-  const isNearBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4
-  if (isNearBottom) {
-    const last = flatLinks.value[flatLinks.value.length - 1]
-    if (last)
-      current = last
-  }
-
-  if (current && activeHash.value !== current.id) {
-    activeHash.value = current.id
-    if (fromScroll)
-      syncUrlHash(current.id)
-  }
-}, 100)
 
 if (import.meta.client) {
   const onHashChange = () => {
     setActiveHash(window.location.hash)
     const hash = normalizeHash(window.location.hash)
     if (hash)
-      scrollToHeading(hash, 'smooth')
+      scrollToHeading(hash, 'smooth', false)
   }
   const onScroll = () => {
-    updateActiveFromScroll(true)
+    if (scrollEdgeRaf !== null)
+      return
+    scrollEdgeRaf = window.requestAnimationFrame(() => {
+      scrollEdgeRaf = null
+      checkNearBottomEdge()
+    })
   }
   const onResize = () => {
-    refreshHeadingElements()
-    updateActiveFromScroll()
     updateGeometry()
+    checkNearBottomEdge()
   }
 
   onMounted(() => {
     setActiveHash(window.location.hash)
     nextTick(() => {
-      refreshHeadingElements()
+      observeHeadings()
       const initialHash = normalizeHash(window.location.hash)
       if (initialHash)
-        scrollToHeading(initialHash, 'auto')
+        scrollToHeading(initialHash, 'auto', false)
       else
-        updateActiveFromScroll()
+        checkNearBottomEdge()
       updateGeometry()
     })
     window.addEventListener('hashchange', onHashChange)
     window.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('resize', onResize)
+    window.addEventListener('resize', onResize, { passive: true })
   })
 
   watch(
@@ -306,9 +420,13 @@ if (import.meta.client) {
     window.removeEventListener('hashchange', onHashChange)
     window.removeEventListener('scroll', onScroll)
     window.removeEventListener('resize', onResize)
+    if (scrollEdgeRaf !== null) {
+      window.cancelAnimationFrame(scrollEdgeRaf)
+      scrollEdgeRaf = null
+    }
+    disconnectHeadingObserver()
     disconnectNavResizeObserver()
     updateGeometry.cancel()
-    updateActiveFromScroll.cancel()
   })
 }
 
@@ -458,22 +576,21 @@ watch(
   () => {
     if (!import.meta.client)
       return
-    nextTick(() => {
-      refreshHeadingElements()
-      updateActiveFromScroll()
-      updateGeometry()
-    })
+    observeHeadings()
+    updateGeometry()
   },
-  { immediate: true },
+  { immediate: true, flush: 'post' },
 )
 
-watch(outlineEntries, () => {
-  if (!import.meta.client)
-    return
-  nextTick(() => {
+watch(
+  outlineEntries,
+  () => {
+    if (!import.meta.client)
+      return
     updateGeometry()
-  })
-})
+  },
+  { flush: 'post' },
+)
 
 watch(activeVisibleId, (id) => {
   nextTick(() => {
@@ -482,39 +599,15 @@ watch(activeVisibleId, (id) => {
       const activeEl = contentRef.value.querySelector(`a[data-id="${escapeSelector(id)}"]`) as HTMLElement | null
       if (activeEl) {
         const nav = navRef.value
-        const navRect = nav.getBoundingClientRect()
-        const elRect = activeEl.getBoundingClientRect()
+        const top = activeEl.offsetTop
+        const bottom = top + activeEl.offsetHeight
         const margin = 40
-        if (elRect.top < navRect.top + margin || elRect.bottom > navRect.bottom - margin)
+        if (top < nav.scrollTop + margin || bottom > nav.scrollTop + nav.clientHeight - margin)
           activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
       }
     }
   })
 })
-
-// Refresh everything after client-side route changes swap in new content.
-watch(
-  () => route.fullPath,
-  () => {
-    if (!import.meta.client)
-      return
-    headingElements.value = {}
-    activeHash.value = ''
-
-    nextTick(() => {
-      setTimeout(() => {
-        refreshHeadingElements()
-        const nextHash = normalizeHash(window.location.hash)
-        if (nextHash)
-          scrollToHeading(nextHash, 'auto')
-        else
-          updateActiveFromScroll()
-        setActiveHash(window.location.hash)
-        updateGeometry()
-      }, 100)
-    })
-  },
-)
 </script>
 
 <template>
@@ -563,7 +656,7 @@ watch(
           :style="{ paddingInlineStart: `${itemOffset(entry.level)}px` }"
           :class="{ 'is-active': isEntryActive(entry.id) }"
           :data-id="entry.id"
-          @click.prevent="scrollToHeading(entry.id)"
+          @click.prevent="handleOutlineClick(entry.id)"
         >
           <span class="line-clamp-2">{{ entry.text }}</span>
         </NuxtLink>

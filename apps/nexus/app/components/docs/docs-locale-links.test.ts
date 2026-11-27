@@ -17,45 +17,24 @@ function read(path: string) {
 }
 
 const docsSidebar = read('../DocsSidebar.vue')
-const syncTable = read('./DocsComponentSyncTable.vue')
-const gallery = read('./DocsComponentsGallery.vue')
 const proseA = read('../content/ProseA.vue')
 const docsPage = read('../../pages/docs/[...slug].vue')
 
 describe('docs links keep the reader\'s locale', () => {
-  it('localizes every sidebar link, the section headers included', () => {
+  it('localizes internal sidebar links while keeping external TuffEx links cross-app', () => {
     expect(docsSidebar).toMatch(/^\s*:link="linkTarget\(section\) \? localizedDocsPath\(linkTarget\(section\)\) : undefined"$/m)
 
     const bindings = docsSidebar.split('\n').filter(line => /^\s*:(?:to|link|href)="/.test(line))
-    expect(bindings).toHaveLength(4)
-    for (const line of bindings)
+    const externalBindings = bindings.filter(line => line.includes('tuffexDocsHref') || line.includes('/tuffex/'))
+    const internalBindings = bindings.filter(line => !line.includes('tuffexDocsHref') && !line.includes('/tuffex/'))
+    expect(externalBindings.length).toBeGreaterThanOrEqual(1)
+    expect(docsSidebar).toContain('/tuffex/${')
+    expect(internalBindings.length).toBeGreaterThanOrEqual(3)
+    for (const line of internalBindings)
       expect(line).toMatch(/="(?:linkTarget\([^)]*\) \? )?localizedDocsPath\(/)
   })
 
-  it('localizes the component sync table', () => {
-    expect(syncTable).toMatch(/^import \{ toLocalizedDocsPath \} from '#shared\/utils\/docs-path'$/m)
-    expect(syncTable).toMatch(/^\s*<NuxtLink :to="toLocalizedDocsPath\(row\.path, localeKey\)" class="docs-sync-table__link">$/m)
-  })
-
-  it('localizes the gallery cell labels, which build their own paths', () => {
-    // Every cell label goes through docPath; the content-path form `/docs/dev/components/button.zh`
-    // opened the English page from a Chinese one.
-    expect(gallery).toMatch(/^import \{ toLocalizedDocsPath \} from '#shared\/utils\/docs-path'$/m)
-    expect(gallery).toMatch(/^function docPath\(slug: string\) \{\n {2}return toLocalizedDocsPath\(`\/docs\/dev\/components\/\$\{slug\}`, localeKey\.value\)$/m)
-    expect(gallery).not.toMatch(/['"`]\/docs\/dev\/components\/\$\{[^}]+\}\.\$\{/)
-
-    // Each lazy suite subcomponent must route cell links through `docPath(...)` and keep
-    // `<ClientOnly>` bound to `GallerySpecimenGate.vue` (which renders `DocsGallerySpecimen`).
-    for (const suite of ['Base', 'Pro', 'Ai', 'Data', 'Motion', 'Flow']) {
-      const suiteSource = read(`./gallery/suites/Gallery${suite}Suite.vue`)
-      expect(gallery).toContain(`import('./gallery/suites/Gallery${suite}Suite.vue')`)
-      expect(suiteSource).toMatch(/^import ClientOnly from '\.\.\/GallerySpecimenGate\.vue'$/m)
-      expect(suiteSource).toContain(':to="docPath(')
-      expect(suiteSource).not.toMatch(/['"`]\/docs\/dev\/components\/\$\{[^}]+\}\.\$\{/)
-    }
-  })
-
-  it('renders content links through ProseA and resolves relative ones against the document', () => {
+  it('renders content links through ProseA, resolves relative links, and marks /tuffex/* external', () => {
     // `:prose="false"` renders native tags; without this mapping every content link was a bare
     // `<a>` and none of the rest of this test ran.
     expect(docsPage).toMatch(/^import ProseA from '~\/components\/content\/ProseA\.vue'$/m)
@@ -66,5 +45,7 @@ describe('docs links keep the reader\'s locale', () => {
 
     expect(proseA).toMatch(/^const sourcePath = inject\(DOCS_SOURCE_PATH_KEY, null\)$/m)
     expect(proseA).toMatch(/^\s*const sourceLink = resolveDocsSourceLinkHref\(props\.href, sourcePath\?\.value, locale\)$/m)
+    expect(proseA).toContain(':external="isExternalAppHref || undefined"')
+    expect(proseA).toContain('/^\\/tuffex(?:\\/|$|\\?|#)/')
   })
 })

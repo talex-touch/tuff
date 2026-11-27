@@ -92,8 +92,8 @@ const expectedStaticRoutes = [
   '/zh/docs/dev',
   '/en/docs/dev/getting-started/quickstart',
   '/zh/docs/dev/getting-started/quickstart',
-  '/en/docs/dev/components',
-  '/zh/docs/dev/components',
+  '/en/docs/dev/api/search',
+  '/zh/docs/dev/api/search',
   '/en/docs/guide/start',
   '/zh/docs/guide/start',
   ...docsApiPrerenderRoutes,
@@ -123,7 +123,7 @@ const suspiciousServerPatterns = [
     pattern: /packages\/tuff-intelligence\/src\/index\.ts/,
   },
 ]
-const allowedDemoWorkerChunks = new Set(['TuffDemoWrapper'])
+const allowedDemoWorkerChunks = new Set()
 const forbiddenRouteChunkPatterns = [
   /(?:^|\/)__tests__(?:\/|$)/,
   /\.api\.test\.mjs$/,
@@ -136,6 +136,7 @@ const forbiddenRouteChunkPatterns = [
 const forbiddenServiceWorkerPrecachePatterns = [
   /_nuxt\/(?!builds\/)/,
   /(?:en|zh)\/docs/,
+  /tuffex\//,
   /__nuxt_content\//,
   /dump\.[^"']+\.sql/,
   /sqlite3[^"']*/,
@@ -196,14 +197,6 @@ const requiredWorkerRouteChunks = [
   {
     route: '/api/docs/navigation/:locale/:scope',
     pattern: /^chunks\/routes\/api\/docs\/navigation\/_locale\/_scope_\.get\.mjs$/,
-  },
-  {
-    route: '/api/docs/sidebar-components',
-    pattern: /^chunks\/routes\/api\/docs\/sidebar-components\/_locale_\.get\.mjs$/,
-  },
-  {
-    route: '/api/docs/sidebar-components/:locale',
-    pattern: /^chunks\/routes\/api\/docs\/sidebar-components\/_locale_\.get\.mjs$/,
   },
   {
     route: '/api/docs/search',
@@ -324,23 +317,13 @@ const htmlBoundaryChecks = [
 const htmlInitialAssetBudgets = [
   {
     label: 'docs initial assets',
-    routePattern: /^(?:en|zh)\/docs\/(?!dev\/components\/).+\.html$/,
+    routePattern: /^(?:en|zh)\/docs\/.+\.html$/,
     maxJsCount: 16,
     maxJsBytes: 620 * 1024,
     maxJsGzipBytes: 205 * 1024,
     maxCssCount: 7,
     maxCssBytes: 400 * 1024,
     maxCssGzipBytes: 78 * 1024,
-  },
-  {
-    label: 'component docs initial assets',
-    routePattern: /^(?:en|zh)\/docs\/dev\/components\/.+\.html$/,
-    maxJsCount: 16,
-    maxJsBytes: 620 * 1024,
-    maxJsGzipBytes: 205 * 1024,
-    maxCssCount: 12,
-    maxCssBytes: 440 * 1024,
-    maxCssGzipBytes: 85 * 1024,
   },
   {
     label: 'store initial assets',
@@ -549,7 +532,7 @@ function checkRequiredRootSqlDumps(distFiles) {
     const excludedRoutes = new Set(Array.isArray(routes.exclude) ? routes.exclude : [])
     for (const collectionName of requiredContentCollections) {
       const runtimePath = `/__nuxt_content/${collectionName}/sql_dump.txt`
-      if (!excludedRoutes.has(runtimePath))
+      if (!isExcludedFromWorker(runtimePath, excludedRoutes))
         findings.push(`${runtimePath} is not excluded from the Worker in _routes.json`)
     }
   }
@@ -593,8 +576,8 @@ function checkRoutes() {
   const missingPatterns = expectedStaticRoutePatterns.filter(route => !excluded.has(route))
   const missingMarkdown = expectedStaticMarkdownRoutes.filter(route => !excluded.has(route))
   // `_redirects` only applies to requests Pages serves itself, so every redirect source must
-  // be kept off the Worker or the rule is dead and the Worker middleware answers instead.
-  const missingRedirectSources = docsStaticRedirects.map(rule => rule.from).filter(from => !excluded.has(from))
+  // be kept off the Worker (directly or via a parent wildcard) or the rule is dead.
+  const missingRedirectSources = docsStaticRedirects.map(rule => rule.from).filter(from => !isExcludedFromWorker(from, excluded))
   const allMissing = [...missing, ...missingPatterns, ...missingMarkdown, ...missingRedirectSources]
 
   return {
@@ -747,6 +730,7 @@ export function checkStaticRedirects(redirectsSource, rules = docsStaticRedirect
 
   const parsed = parseRedirectsFile(redirectsSource)
   const catchAllIndex = parsed.findIndex(entry => entry.from === PAGES_CATCH_ALL_SOURCE)
+  const docsCatchAllIndex = parsed.findIndex(entry => entry.from === '/docs/*')
   let verified = 0
   for (const rule of rules) {
     const index = parsed.findIndex(entry => entry.from === rule.from)
@@ -761,6 +745,16 @@ export function checkStaticRedirects(redirectsSource, rules = docsStaticRedirect
     }
     if (catchAllIndex !== -1 && index > catchAllIndex) {
       findings.push(`${rule.from}: listed after the ${PAGES_CATCH_ALL_SOURCE} catch-all; Pages reads rules in order`)
+      continue
+    }
+    if (
+      isDynamicRedirect(rule)
+      && rule.from.startsWith('/docs/')
+      && rule.from !== '/docs/*'
+      && docsCatchAllIndex !== -1
+      && index > docsCatchAllIndex
+    ) {
+      findings.push(`${rule.from}: listed after /docs/*; Pages reads rules in order`)
       continue
     }
     verified += 1
@@ -823,7 +817,7 @@ export function checkEarlyHints(headersSource, assetExists) {
 
   const blocks = parseCloudflareHeadersFile(headersSource).filter(block => 'link' in block.headers)
   const byPattern = new Map(blocks.map(block => [block.pattern, block.headers.link]))
-  for (const required of ['/en/docs/*', '/zh/docs/*', '/']) {
+  for (const required of ['/en/docs', '/zh/docs', '/en/docs/*', '/zh/docs/*', '/']) {
     if (!byPattern.has(required))
       findings.push(`${required}: no Link block for early hints`)
   }
@@ -935,6 +929,31 @@ function checkServiceWorkerPrecache() {
   }
 
   return Array.from(matches).sort()
+}
+
+/**
+ * Ensures the root Nexus service worker (`sw.js`) never intercepts, precaches, or routes
+ * requests under `/tuffex/`, which is served by the independent `apps/tuffex-docs` SSG app.
+ */
+export function checkServiceWorkerTuffexBoundary(serviceWorkerSource) {
+  if (serviceWorkerSource === null)
+    return { findings: [], verified: 0 }
+
+  const findings = []
+  const tuffexPrecacheMatches = Array.from(
+    serviceWorkerSource.matchAll(/url:["'][^"']*\/?tuffex(?:\/|["'])/gi),
+    match => match[0],
+  )
+  if (tuffexPrecacheMatches.length)
+    findings.push(`sw.js precaches /tuffex/ assets: ${tuffexPrecacheMatches.join(', ')}`)
+
+  if (/\bNavigationRoute\b/.test(serviceWorkerSource) && !/denylist\s*:\s*\[[^\]]*tuffex/i.test(serviceWorkerSource))
+    findings.push('sw.js NavigationRoute does not explicitly denylist /tuffex/')
+
+  if (/registerRoute\s*\([^)]*tuffex/i.test(serviceWorkerSource) && !/denylist\s*:\s*\[[^\]]*tuffex/i.test(serviceWorkerSource))
+    findings.push('sw.js registerRoute matches /tuffex/')
+
+  return { findings, verified: findings.length ? 0 : 1 }
 }
 
 function checkClientSidebaseAuthRuntime(distFiles) {
@@ -1503,6 +1522,9 @@ const suspiciousFindings = checkSuspiciousPatterns(executableFiles)
 const demoWorkerChunks = checkDemoWorkerChunks(executableFiles)
 const forbiddenRouteChunks = checkForbiddenRouteChunks(executableFiles)
 const forbiddenServiceWorkerPrecache = checkServiceWorkerPrecache()
+const serviceWorkerTuffexCheck = checkServiceWorkerTuffexBoundary(
+  existsSync(serviceWorkerPath) ? readFileSync(serviceWorkerPath, 'utf8') : null,
+)
 const clientSidebaseAuthRuntimeFindings = checkClientSidebaseAuthRuntime(distFiles)
 const remoteFontReferenceFindings = checkRemoteFontReferences(distFiles)
 const unprefixedAttributifyFindings = checkUnprefixedAttributifyLeaks(distFiles)
@@ -1539,6 +1561,7 @@ console.log(`[nexus-dist-budget] Static cache headers verified: ${staticCacheHea
 console.log(`[nexus-dist-budget] Early hint Link blocks verified: ${earlyHintCheck.verified}/${earlyHintCheck.blocks ?? 0}`)
 console.log(`[nexus-dist-budget] _headers limits verified: ${headersFileLimitCheck.rules} rules`)
 console.log(`[nexus-dist-budget] Static redirects verified: ${staticRedirectCheck.verified}/${staticRedirectCheck.expected}`)
+console.log(`[nexus-dist-budget] Service worker /tuffex/ boundary verified: ${serviceWorkerTuffexCheck.verified}/1`)
 console.log(`[nexus-dist-budget] Static 404 fallback verified: ${staticFallbackCheck.verified}/1`)
 console.log(`[nexus-dist-budget] Static route files verified: ${expectedStaticRoutes.length - missingStaticRouteFiles.length}/${expectedStaticRoutes.length}`)
 console.log(`[nexus-dist-budget] Worker-owned app routes verified: ${workerOwnedAppRoutes.length - workerOwnedAppRouteFindings.length}/${workerOwnedAppRoutes.length}`)
@@ -1592,6 +1615,12 @@ if (forbiddenServiceWorkerPrecache.length) {
   console.error('[nexus-worker-bundle] oversized content runtime assets found in service worker precache:')
   for (const asset of forbiddenServiceWorkerPrecache)
     console.error(`  ${asset}`)
+}
+
+if (serviceWorkerTuffexCheck.findings.length) {
+  console.error('[nexus-worker-bundle] service worker /tuffex/ boundary violations:')
+  for (const finding of serviceWorkerTuffexCheck.findings)
+    console.error(`  ${finding}`)
 }
 
 if (clientSidebaseAuthRuntimeFindings.length) {
@@ -1732,7 +1761,7 @@ if (staticFallbackCheck.findings.length) {
     console.error(`  ${finding}`)
 }
 
-if (!routeCheck.ok || staticCacheHeaderCheck.findings.length || earlyHintCheck.findings.length || headersFileLimitCheck.findings.length || missingStaticRouteFiles.length || workerOwnedAppRouteFindings.length || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || clientSidebaseAuthRuntimeFindings.length || remoteFontReferenceFindings.length || unprefixedAttributifyFindings.length || authHandlerSingletonFindings.length || missingWorkerRouteChunks.length || workerSourceMapCheck.findings.length || clientContentDatabaseRuntimeFindings.length || rootSqlDumpCheck.findings.length || docsDetailHtmlPayloadFindings.length || docsInitialLifecycleCheck.findings.length || htmlCssBoundaryFindings.length || htmlInitialAssetBudgetFindings.length || sharedEntryCssCheck.findings.length || landingImagePrefetchFindings.length || landingDeferredImageFindings.length || landingShowcaseVideoFindings.length || clientChunkCheck.findings.length || sizeFindings.length || staticRedirectCheck.findings.length || staticFallbackCheck.findings.length)
+if (!routeCheck.ok || staticCacheHeaderCheck.findings.length || earlyHintCheck.findings.length || headersFileLimitCheck.findings.length || missingStaticRouteFiles.length || workerOwnedAppRouteFindings.length || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || serviceWorkerTuffexCheck.findings.length || clientSidebaseAuthRuntimeFindings.length || remoteFontReferenceFindings.length || unprefixedAttributifyFindings.length || authHandlerSingletonFindings.length || missingWorkerRouteChunks.length || workerSourceMapCheck.findings.length || clientContentDatabaseRuntimeFindings.length || rootSqlDumpCheck.findings.length || docsDetailHtmlPayloadFindings.length || docsInitialLifecycleCheck.findings.length || htmlCssBoundaryFindings.length || htmlInitialAssetBudgetFindings.length || sharedEntryCssCheck.findings.length || landingImagePrefetchFindings.length || landingDeferredImageFindings.length || landingShowcaseVideoFindings.length || clientChunkCheck.findings.length || sizeFindings.length || staticRedirectCheck.findings.length || staticFallbackCheck.findings.length)
   process.exit(1)
 }
 

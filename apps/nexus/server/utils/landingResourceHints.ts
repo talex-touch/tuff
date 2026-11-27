@@ -1,5 +1,7 @@
 const IMAGE_PREFETCH_LINK_RE = /<link\b(?=[^>]*\brel=(["'])prefetch\1)(?=[^>]*\bas=(["'])image\2)[^>]*>/gi
 const MODULE_PRELOAD_LINK_RE = /<link\b(?=[^>]*\brel=(['"])modulepreload\1)[^>]*>/gi
+const LINK_HREF_RE = /\bhref=(['"])([^'"]+)\1/i
+const DEFERRED_MODULE_PRELOAD_RE = /(?:^|\/)(?:sentry|vendor-three|mermaid|echarts|workbox)/i
 
 function normalizeRoutePath(path: string | null | undefined) {
   if (!path)
@@ -41,9 +43,16 @@ export function stripLandingImagePrefetches(html: string, routePath?: string | n
   return html.replace(IMAGE_PREFETCH_LINK_RE, '')
 }
 
+export function isDeferredModulepreloadHref(href: string | null | undefined) {
+  return typeof href === 'string' && DEFERRED_MODULE_PRELOAD_RE.test(href)
+}
+
 export function stripStaticModulepreloads(html: string, routePath?: string | null) {
   if (!isStaticHtmlRoute(routePath))
     return html
 
-  return html.replace(MODULE_PRELOAD_LINK_RE, '')
+  return html.replace(MODULE_PRELOAD_LINK_RE, (tag) => {
+    const href = tag.match(LINK_HREF_RE)?.[2]
+    return isDeferredModulepreloadHref(href) ? '' : tag
+  })
 }

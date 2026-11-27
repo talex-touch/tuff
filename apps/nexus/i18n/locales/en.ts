@@ -11,6 +11,7 @@ export default {
     store: 'Store',
     doc: 'Developer',
     developer: 'Developer',
+    tuffex: 'TuffEx UI',
     download: 'Updates',
     blog: 'Blog',
     menu: 'Menu',
@@ -131,6 +132,7 @@ export default {
     },
     category: {
       docs: 'Docs',
+      tuffex: 'TuffEx UI',
       pages: 'Pages',
       features: 'Features',
     },

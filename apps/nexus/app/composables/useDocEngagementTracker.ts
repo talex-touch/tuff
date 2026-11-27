@@ -11,6 +11,11 @@ import { requestJson } from '~/utils/request'
 const FLUSH_INTERVAL_MS = 15_000
 const ACTIVE_WINDOW_MS = 20_000
 /**
+ * Defer `POST /api/docs/view` until the reader has actually stayed visibly on
+ * the page for 3 seconds so instant bounces never write to D1.
+ */
+const VIEW_DWELL_MS = 3_000
+/**
  * A page nobody has scrolled, clicked, typed in or moved the pointer over for this long counts as left
  * alone: its time stops counting and its reports stop until someone comes back. A docs tab left open on
  * a second screen used to report every 15 s for as long as it stayed open — a write to D1 each time.
@@ -19,6 +24,8 @@ const IDLE_STOP_MS = 3 * 60_000
 const SECTION_BUCKETS = 20
 const MAX_ACTIONS_PER_FLUSH = 80
 const MAX_HEAT_BUCKETS_PER_FLUSH = 200
+const POW_MAX_ATTEMPTS = 300_000
+const POW_FALLBACK_YIELD_BATCH = 128
 
 interface ManualActionInput {
   type: string
@@ -52,6 +59,8 @@ interface RuntimeSection {
   title: string
   headingEl: HTMLElement | null
   nextHeadingEl: HTMLElement | null
+  startY: number
+  endY: number
   activeMs: number
   totalMs: number
   buckets: Map<number, { activeMs: number, totalMs: number }>
@@ -108,6 +117,13 @@ function clampInt(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, Math.round(value)))
 }
 
+function yieldToMainThread(): Promise<void> {
+  const schedulerApi = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler
+  if (typeof schedulerApi?.yield === 'function')
+    return schedulerApi.yield()
+  return new Promise(resolve => setTimeout(resolve, 0))
+}
+
 function normalizeAction(action: DocActionPayload): DocActionPayload {
   const type = action.type.trim().toLowerCase().slice(0, 24)
   const source = action.source.trim().toLowerCase().slice(0, 24)
@@ -162,18 +178,18 @@ function trimHeatBuckets(sections: DocSectionPayload[], limit: number): DocSecti
   })
 }
 
-async function minePowNonce(proof: string, difficulty: number): Promise<string> {
+async function minePowNonceFallback(proof: string, difficulty: number): Promise<string> {
   if (difficulty <= 0)
     return ''
 
   const prefix = '0'.repeat(difficulty)
-  for (let attempt = 0; attempt < 300_000; attempt++) {
+  for (let attempt = 0; attempt < POW_MAX_ATTEMPTS; attempt += 1) {
     const candidate = attempt.toString(36)
     const digest = await sha256Hex(`${proof}${candidate}`)
     if (digest.startsWith(prefix))
       return candidate
-    if (attempt % 500 === 0)
-      await Promise.resolve()
+    if (attempt > 0 && attempt % POW_FALLBACK_YIELD_BATCH === 0)
+      await yieldToMainThread()
   }
 
   return ''
@@ -208,6 +224,143 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
   let initInFlight = false
   let sessionRecovering = false
   let lastSelectionFingerprint = ''
+  let lastObservedNormalizedPath = ''
+
+  // Deferred 3s visible dwell tracking before sending `POST /api/docs/view`.
+  let dwellTimer: ReturnType<typeof setTimeout> | null = null
+  let dwellStartedAt = 0
+  let dwellRemainingMs = VIEW_DWELL_MS
+  let sessionGeneration = 0
+
+  // Lazy on-demand PoW Web Worker (spawned only when difficulty > 0, terminated on unmount).
+  let powWorker: Worker | null = null
+  let powWorkerFailed = false
+  let powRequestSeq = 0
+  const pendingPowRequests = new Map<number, {
+    resolve: (nonce: string) => void
+    reject: (error: unknown) => void
+  }>()
+
+  function terminatePowWorker() {
+    if (powWorker) {
+      powWorker.terminate()
+      powWorker = null
+    }
+    if (pendingPowRequests.size > 0) {
+      for (const pending of pendingPowRequests.values())
+        pending.resolve('')
+      pendingPowRequests.clear()
+    }
+  }
+
+  function ensurePowWorker(): Worker | null {
+    if (!import.meta.client || powWorkerFailed || typeof Worker === 'undefined')
+      return null
+
+    if (powWorker)
+      return powWorker
+
+    try {
+      const worker = new Worker(new URL('./pow-miner.worker.ts', import.meta.url), {
+        type: 'module',
+      })
+      worker.addEventListener('message', (event: MessageEvent<{ id?: number, nonce?: string }>) => {
+        const id = event.data?.id
+        if (typeof id !== 'number')
+          return
+        const entry = pendingPowRequests.get(id)
+        if (!entry)
+          return
+        pendingPowRequests.delete(id)
+        entry.resolve(typeof event.data?.nonce === 'string' ? event.data.nonce : '')
+      })
+      worker.addEventListener('error', (error) => {
+        powWorkerFailed = true
+        const entries = Array.from(pendingPowRequests.values())
+        pendingPowRequests.clear()
+        if (powWorker === worker) {
+          powWorker.terminate()
+          powWorker = null
+        }
+        for (const entry of entries)
+          entry.reject(error)
+      })
+      powWorker = worker
+      return worker
+    }
+    catch {
+      powWorkerFailed = true
+      return null
+    }
+  }
+
+  async function minePowNonce(proof: string, difficulty: number): Promise<string> {
+    if (difficulty <= 0)
+      return ''
+
+    const worker = ensurePowWorker()
+    if (worker) {
+      try {
+        return await new Promise<string>((resolve, reject) => {
+          const id = ++powRequestSeq
+          pendingPowRequests.set(id, { resolve, reject })
+          worker.postMessage({
+            id,
+            proof,
+            difficulty,
+            maxAttempts: POW_MAX_ATTEMPTS,
+          })
+        })
+      }
+      catch {
+        // Fall back to main-thread macrotask-yielding mining if the worker fails.
+      }
+    }
+
+    return minePowNonceFallback(proof, difficulty)
+  }
+
+  function clearDwellTimer() {
+    if (dwellTimer !== null) {
+      clearTimeout(dwellTimer)
+      dwellTimer = null
+    }
+    dwellStartedAt = 0
+  }
+
+  function pauseDwellTimer(now = Date.now()) {
+    if (dwellTimer === null)
+      return
+    const elapsed = dwellStartedAt > 0 ? Math.max(0, now - dwellStartedAt) : 0
+    dwellRemainingMs = Math.max(0, dwellRemainingMs - elapsed)
+    clearDwellTimer()
+  }
+
+  function scheduleDeferredSessionInit(generation: number) {
+    if (!import.meta.client || !isEnabled.value || hasSession.value || initInFlight)
+      return
+    if (!normalizedPath.value || !clientId.value)
+      return
+    if (document.hidden)
+      return
+
+    clearDwellTimer()
+    const waitMs = Math.max(0, dwellRemainingMs)
+    dwellStartedAt = Date.now()
+    dwellTimer = setTimeout(() => {
+      dwellTimer = null
+      dwellStartedAt = 0
+      dwellRemainingMs = 0
+
+      if (generation !== sessionGeneration || document.hidden || !isEnabled.value)
+        return
+
+      void initSession().then(() => {
+        if (generation === sessionGeneration && hasSession.value && !document.hidden)
+          startTimer()
+      })
+    }, waitMs)
+  }
 
   function getContentRoot() {
     if (!import.meta.client)
@@ -240,6 +393,8 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
         title: 'Root',
         headingEl: null,
         nextHeadingEl: null,
+        startY: 0,
+        endY: Number.POSITIVE_INFINITY,
         activeMs: 0,
         totalMs: 0,
         buckets: new Map(),
@@ -272,15 +427,44 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
       return
     }
 
+    // Measure all heading offsets once so 15s flushes read cached geometry with 0 layout reads.
+    const scrollY = window.scrollY
+    const offsets = headings.map(heading => heading.getBoundingClientRect().top + scrollY)
+
     sections.value = headings.map((heading, index) => ({
       id: heading.id.trim().slice(0, 120),
       title: (heading.textContent || heading.id || 'Untitled').trim().slice(0, 200),
       headingEl: heading,
       nextHeadingEl: headings[index + 1] || null,
+      startY: offsets[index] ?? 0,
+      endY: index + 1 < offsets.length ? offsets[index + 1]! : Number.POSITIVE_INFINITY,
       activeMs: 0,
       totalMs: 0,
       buckets: new Map(),
     }))
+  }
+
+  function updateSectionOffsets() {
+    if (!import.meta.client || !sections.value.length)
+      return
+
+    if (sections.value.length === 1 && sections.value[0]?.id === 'root')
+      return
+
+    const hasDisconnected = sections.value.some(section => section.headingEl && !section.headingEl.isConnected)
+    if (hasDisconnected) {
+      refreshSections()
+      return
+    }
+
+    const scrollY = window.scrollY
+    const offsets = sections.value.map(section =>
+      section.headingEl ? section.headingEl.getBoundingClientRect().top + scrollY : 0,
+    )
+    sections.value.forEach((section, index) => {
+      section.startY = offsets[index] ?? 0
+      section.endY = index + 1 < offsets.length ? offsets[index + 1]! : Number.POSITIVE_INFINITY
+    })
   }
 
   function resolveCurrentSection() {
@@ -293,12 +477,8 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
     const anchorY = window.scrollY + Math.round(window.innerHeight * 0.35)
 
     for (const section of sections.value) {
-      const startY = section.headingEl
-        ? section.headingEl.getBoundingClientRect().top + window.scrollY
-        : 0
-      const endY = section.nextHeadingEl
-        ? section.nextHeadingEl.getBoundingClientRect().top + window.scrollY
-        : Number.POSITIVE_INFINITY
+      const startY = section.startY
+      const endY = section.endY
 
       if (anchorY < startY || anchorY >= endY)
         continue
@@ -473,6 +653,8 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
       title: 'Root',
       headingEl: null,
       nextHeadingEl: null,
+      startY: 0,
+      endY: Number.POSITIVE_INFINITY,
       activeMs: 0,
       totalMs: 0,
       buckets: new Map(),
@@ -808,15 +990,20 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
       useEventListener(window, 'touchstart', markInteraction, { passive: true })
       useEventListener(window, 'mousemove', useDebounceFn(markInteraction, 400), { passive: true })
 
-      useEventListener(window, 'resize', () => {
-        refreshSections()
-      }, { passive: true })
+      useEventListener(window, 'resize', useDebounceFn(() => {
+        updateSectionOffsets()
+      }, 200), { passive: true })
 
       useEventListener(document, 'visibilitychange', () => {
         if (document.hidden) {
+          pauseDwellTimer()
           void flush('visibility-hidden')
           // A hidden page counts no time, so it has nothing to report until it is shown again.
           stopTimer()
+          return
+        }
+        if (!hasSession.value && isEnabled.value && !initInFlight) {
+          scheduleDeferredSessionInit(sessionGeneration)
           return
         }
         // Nor is the time it spent hidden reading time.
@@ -825,6 +1012,7 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
       })
 
       useEventListener(window, 'pagehide', (event?: PageTransitionEvent) => {
+        pauseDwellTimer()
         stopTimer()
         // When the browser freezes the page into bfcache (`event.persisted === true`), capture
         // visible reading time synchronously and skip async WebCrypto/fetch work that evicts bfcache.
@@ -838,6 +1026,10 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
       useEventListener(window, 'pageshow', (event?: PageTransitionEvent) => {
         if (!event?.persisted)
           return
+        if (!hasSession.value && isEnabled.value && !initInFlight) {
+          scheduleDeferredSessionInit(sessionGeneration)
+          return
+        }
         lastTickAt = Date.now()
         markInteraction()
       })
@@ -888,16 +1080,24 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
     })
 
     onBeforeUnmount(() => {
+      sessionGeneration += 1
+      clearDwellTimer()
       void flush('unmount')
       stopTimer()
+      terminatePowWorker()
     })
 
     watch(
       () => [normalizedPath.value, sourceType.value, clientId.value, isEnabled.value],
       async (_, __, onCleanup) => {
         let cancelled = false
+        const generation = ++sessionGeneration
+        clearDwellTimer()
+        dwellRemainingMs = VIEW_DWELL_MS
+
         onCleanup(() => {
           cancelled = true
+          clearDwellTimer()
         })
 
         if (!isEnabled.value) {
@@ -906,13 +1106,13 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
         }
 
         await flush('session-change')
-        if (cancelled)
+        if (cancelled || generation !== sessionGeneration)
           return
 
+        stopTimer()
         resetState()
-        await initSession()
-        if (!cancelled)
-          startTimer()
+        lastObservedNormalizedPath = normalizedPath.value
+        scheduleDeferredSessionInit(generation)
       },
       { immediate: true },
     )
@@ -921,6 +1121,9 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
       () => route.fullPath,
       async () => {
         if (!isEnabled.value)
+          return
+        // Avoid double-flushing when the doc path itself changed (handled by session watcher).
+        if (normalizedPath.value !== lastObservedNormalizedPath)
           return
         await flush('route-change')
         refreshSections()

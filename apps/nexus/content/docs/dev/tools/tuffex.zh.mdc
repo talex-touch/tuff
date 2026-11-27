@@ -10,8 +10,8 @@ TuffEx（中文名：塔芙）是一个专注于触感体验和流畅动画的�
 > **迁移中** - TuffEx 正在从 Tuff 核心应用迁移组件，技术栈已升级至 Vue 3.5 / Vite 6 / TypeScript 5.8。
 
 ## 组件展示
-- **[Tuffex 组件中心](../components/index.zh.mdc)** — 组件清单、Demo 与 API（双语）。
-- **[组件更新日志与版本历程](../components/changelog.zh.mdc)** — 记录每个组件自哪个版本引入（Since xx）以及每次发版更新了哪些组件。
+- **[Tuffex 组件中心](/tuffex/zh)** — 组件清单、Demo 与 API（双语）。
+- **[组件更新日志与版本历程](/tuffex/zh/changelog)** — 记录每个组件自哪个版本引入（Since xx）以及每次发版更新了哪些组件。
 
 
 ## 安装
@@ -152,8 +152,8 @@ code: |
   pnpm -C packages/tuffex run test
   pnpm -C packages/tuffex run typecheck
 
-  # 展示与文档统一由 Tuff 承载
-  pnpm -C apps/nexus run dev
+  # 独立 TuffEx 组件文档站（SSG）
+  pnpm -C apps/tuffex-docs run dev
 ---
 :::
 

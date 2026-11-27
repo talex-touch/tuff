@@ -26,33 +26,28 @@ afterEach(() => {
 })
 
 describe('trim-content-assets precomputed client manifest trimming', () => {
-  it('classifies demo loaders, demo SFCs, and top-level static assets for removal while keeping entrypoints and SSR modules', () => {
+  it('classifies top-level static assets for removal while keeping entrypoints and SSR modules', () => {
     const entrypoints = new Set(['entry.css', '../../../node_modules/nuxt/dist/app/entry.js'])
 
-    expect(classifyPrecomputedDependency('../nexus-demo-loader:ButtonBasicDemo.js', entrypoints)).toBe('demo-loader')
-    expect(classifyPrecomputedDependency('components/content/demos/ButtonBasicDemo.vue', entrypoints)).toBe('demo-component')
-    expect(classifyPrecomputedDependency('../app/components/content/demos/ButtonBasicDemo.vue', entrypoints)).toBe('demo-component')
     expect(classifyPrecomputedDependency('entry.D1zDeYpB.css', entrypoints)).toBe('static-asset')
     expect(classifyPrecomputedDependency('KaTeX_Main-Regular.woff2', entrypoints)).toBe('static-asset')
     expect(classifyPrecomputedDependency('SearchApp.abc123.jpg', entrypoints)).toBe('static-asset')
     expect(classifyPrecomputedDependency('entry.css', entrypoints)).toBe('keep')
     expect(classifyPrecomputedDependency('../../../node_modules/nuxt/dist/app/entry.js', entrypoints)).toBe('keep')
     expect(classifyPrecomputedDependency('pages/dashboard/overview.vue', entrypoints)).toBe('keep')
-    expect(classifyPrecomputedDependency('components/content/TuffDemoWrapper.vue', entrypoints)).toBe('keep')
+    expect(classifyPrecomputedDependency('components/content/TuffCodeBlock.vue', entrypoints)).toBe('keep')
   })
 
-  it('preserves shared inline variable definitions when stripped demo entries originally held the assignment', async () => {
+  it('preserves shared inline variable definitions when stripped static-asset entries originally held the assignment', async () => {
     const workerRoot = makeTempWorkerRoot()
     const manifestPath = join(workerRoot, 'chunks/build/client.precomputed.mjs')
 
-    // Mirrors Nitro/Vite's precomputed manifest: `e={...}` is assigned inside a demo entry
-    // and referenced by a later SSR page entry. String-slicing the demo entry would leave `e`
-    // undefined; parsing and re-serializing preserves the object cleanly and deduplicates it.
+    // Mirrors Nitro/Vite's precomputed manifest: `e={...}` and `o={...}` are assigned inside a
+    // top-level static-asset entry and referenced by later SSR page entries. String-slicing the
+    // entry would leave `e`/`o` undefined; parsing and re-serializing preserves and deduplicates them.
     const rawManifest = [
       'const s={dependencies:{',
-      '"../nexus-demo-loader:ButtonDemo.js":{scripts:{},styles:{},preload:{"shared.js":e={resourceType:"script",module:!0,preload:!0,file:"shared.js"}},prefetch:{"p.js":{file:"p.js"}}},',
-      '"components/content/demos/ButtonDemo.vue":{scripts:{},styles:{"tuffex.css":o={resourceType:"style",preload:!0,file:"tuffex.css"}},preload:{"shared.js":e,"tuffex.css":o},prefetch:{"p.js":{file:"p.js"}}},',
-      '"tuffex.css":{scripts:{},styles:{"tuffex.css":o},preload:{"tuffex.css":o},prefetch:{}},',
+      '"tuffex.css":{scripts:{},styles:{"tuffex.css":o={resourceType:"style",preload:!0,file:"tuffex.css"}},preload:{"shared.js":e={resourceType:"script",module:!0,preload:!0,file:"shared.js"},"tuffex.css":o},prefetch:{}},',
       '"pages/dashboard/overview.vue":{scripts:{"entry.js":t={resourceType:"script",module:!0,file:"entry.js"}},styles:{"tuffex.css":o},preload:{"shared.js":e,"tuffex.css":o},prefetch:{"lazy.js":{file:"lazy.js"}}},',
       '"pages/docs/[...slug].vue":{scripts:{"entry.js":t},styles:{"tuffex.css":o},preload:{"shared.js":e,"tuffex.css":o},prefetch:{}}',
       '},entrypoints:["pages/dashboard/overview.vue"],modules:{"pages/dashboard/overview.vue":["shared.js"]}};var e,o,t;export{s as default};',
@@ -62,14 +57,11 @@ describe('trim-content-assets precomputed client manifest trimming', () => {
 
     const result = await trimPrecomputedClientManifest(workerRoot)
     expect(result).not.toBeNull()
-    expect(result?.removedDemoLoaders).toBe(1)
-    expect(result?.removedDemoComponents).toBe(1)
     expect(result?.removedStaticAssets).toBe(1)
     expect(result?.removedPrefetchMaps).toBe(2)
     expect(result?.keptDependencies).toBe(2)
 
     const writtenSource = readFileSync(manifestPath, 'utf8')
-    expect(writtenSource).not.toContain('ButtonDemo')
     expect(writtenSource).not.toContain('prefetch:')
     expect(writtenSource).toContain('modules:{}')
 

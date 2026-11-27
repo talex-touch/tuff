@@ -1,7 +1,23 @@
-import { createError, readBody } from 'h3'
+import { createError, getRequestURL, readBody } from 'h3'
+import { runAfterResponse } from '../../utils/afterResponse'
 import { requireAuth } from '../../utils/auth'
 import { readCloudflareBindings } from '../../utils/cloudflare'
 import { DOC_FEEDBACK_TABLE, ensureDocFeedbackSchema, normalizeDocFeedbackPath } from '../../utils/docFeedbackStore'
+import { edgeCacheKeyUrl } from '../../utils/edgeCache'
+
+function invalidateFeedbackEdgeCache(event: Parameters<typeof getRequestURL>[0], normalizedPath: string) {
+  const store = (globalThis as { caches?: { default?: { delete?: (request: Request) => Promise<boolean> } } }).caches?.default
+  if (!store || typeof store.delete !== 'function')
+    return
+
+  const keyUrl = edgeCacheKeyUrl(getRequestURL(event).origin, {
+    name: 'docs/feedback',
+    params: { path: normalizedPath },
+  })
+  runAfterResponse(event, 'docs feedback edge cache invalidate', async () => {
+    await store.delete!(new Request(keyUrl))
+  })
+}
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)
@@ -40,11 +56,14 @@ export default defineEventHandler(async (event) => {
     RETURNING helpful
   `).bind(normalizedPath, userId, helpful ? 1 : 0, Date.now()).first<{ helpful: number }>()
 
-  if (written)
+  if (written) {
+    invalidateFeedbackEdgeCache(event, normalizedPath)
     return { success: true, userVote: helpful }
+  }
 
   await db.prepare(
     `DELETE FROM ${DOC_FEEDBACK_TABLE} WHERE path = ?1 AND user_id = ?2 AND helpful = ?3`,
   ).bind(normalizedPath, userId, helpful ? 1 : 0).run()
+  invalidateFeedbackEdgeCache(event, normalizedPath)
   return { success: true, userVote: null }
 })

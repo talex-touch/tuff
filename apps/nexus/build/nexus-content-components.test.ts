@@ -6,13 +6,13 @@ describe('nexus-content-components', () => {
     const manifest = new Set(['CustomManifestWidget'])
 
     expect(isMdcContentComponent({
-      pascalName: 'TuffDemoWrapper',
-      filePath: '/repo/apps/nexus/app/components/content/TuffDemoWrapper.vue',
+      pascalName: 'TuffCodeBlock',
+      filePath: '/repo/apps/nexus/app/components/content/TuffCodeBlock.vue',
     }, manifest)).toBe(true)
 
     expect(isMdcContentComponent({
-      pascalName: 'DocsComponentsGallery',
-      filePath: '/repo/apps/nexus/app/components/docs/DocsComponentsGallery.vue',
+      pascalName: 'DocsAsideCardsShell',
+      filePath: '/repo/apps/nexus/app/components/docs/DocsAsideCardsShell.vue',
     }, manifest)).toBe(true)
 
     expect(isMdcContentComponent({
@@ -45,8 +45,8 @@ describe('nexus-content-components', () => {
   it('filters content/components.ts in dev without mutating app.components for page auto-imports', () => {
     const seenInTemplate: string[][] = []
     const originalComponents = [
-      { pascalName: 'TuffDemoWrapper', filePath: '/repo/apps/nexus/app/components/content/TuffDemoWrapper.vue' },
-      { pascalName: 'DocsComponentsGallery', filePath: '/repo/apps/nexus/app/components/docs/DocsComponentsGallery.vue' },
+      { pascalName: 'TuffCodeBlock', filePath: '/repo/apps/nexus/app/components/content/TuffCodeBlock.vue' },
+      { pascalName: 'DocsAsideCardsShell', filePath: '/repo/apps/nexus/app/components/docs/DocsAsideCardsShell.vue' },
       { pascalName: 'AdminSubscriptionsPanel', filePath: '/repo/apps/nexus/app/components/admin/AdminSubscriptionsPanel.vue' },
       { pascalName: 'DashboardMetricsPanel', filePath: '/repo/apps/nexus/app/components/dashboard/DashboardMetricsPanel.vue' },
       { pascalName: 'AssetsUploadForm', filePath: '/repo/apps/nexus/app/components/assets/AssetsUploadForm.vue' },
@@ -74,7 +74,7 @@ describe('nexus-content-components', () => {
       options: { manifest: { components: ['TxAlert'] } },
     })
 
-    expect(seenInTemplate[0]).toEqual(['TuffDemoWrapper', 'DocsComponentsGallery'])
+    expect(seenInTemplate[0]).toEqual(['TuffCodeBlock', 'DocsAsideCardsShell'])
     // Original app.components array must remain completely untouched for Nuxt page auto-imports.
     expect(originalComponents).toHaveLength(9)
   })

@@ -41,7 +41,24 @@ export const staticFallbackPrerenderRoutes = [NOT_FOUND_PRERENDER_ROUTE]
  * destination never becomes `:splat`. `build/write-static-redirects.mjs` writes them instead.
  */
 export const docsStaticRedirects = [
+  // Static rules first (Cloudflare Pages evaluates static rules before dynamic ones).
+  { from: '/en/docs/dev/components', to: '/tuffex/en', status: 308 },
+  { from: '/zh/docs/dev/components', to: '/tuffex/zh', status: 308 },
+  { from: '/en/docs/dev/concepts', to: '/tuffex/en/concepts', status: 308 },
+  { from: '/zh/docs/dev/concepts', to: '/tuffex/zh/concepts', status: 308 },
+  { from: '/docs/dev/components', to: '/tuffex/en', status: 308 },
+  { from: '/docs/dev/concepts', to: '/tuffex/en/concepts', status: 308 },
+  { from: '/en/docs/dev/getting-started/tuffex-composition', to: '/tuffex/en/composition', status: 308 },
+  { from: '/zh/docs/dev/getting-started/tuffex-composition', to: '/tuffex/zh/composition', status: 308 },
+  { from: '/llms.txt', to: '/tuffex/llms.txt', status: 308 },
   { from: '/docs', to: '/en/docs', status: 308 },
+  // Dynamic splat rules: TuffEx subpaths MUST precede `/docs/*` so `/docs/*` never shadows them.
+  { from: '/en/docs/dev/components/*', to: '/tuffex/en/:splat', status: 308 },
+  { from: '/zh/docs/dev/components/*', to: '/tuffex/zh/:splat', status: 308 },
+  { from: '/en/docs/dev/concepts/*', to: '/tuffex/en/concepts/:splat', status: 308 },
+  { from: '/zh/docs/dev/concepts/*', to: '/tuffex/zh/concepts/:splat', status: 308 },
+  { from: '/docs/dev/components/*', to: '/tuffex/en/:splat', status: 308 },
+  { from: '/docs/dev/concepts/*', to: '/tuffex/en/concepts/:splat', status: 308 },
   { from: '/docs/*', to: '/en/docs/:splat', status: 308 },
 ]
 
@@ -75,15 +92,10 @@ export const contentApiRouteExcludes = POLICY_DOCUMENT_NAMES.map(name => `/api/c
 
 export const docsApiPrerenderRoutes = [
   ...contentApiPrerenderRoutes,
-  '/api/docs/component-sync',
   '/api/docs/navigation/en/all',
   '/api/docs/navigation/zh/all',
-  '/api/docs/navigation/en/components',
-  '/api/docs/navigation/zh/components',
   '/api/docs/search/en',
   '/api/docs/search/zh',
-  '/api/docs/sidebar-components/en',
-  '/api/docs/sidebar-components/zh',
 ]
 
 /**
@@ -99,7 +111,7 @@ export const docsPrerenderEvidenceRoutes = [
   '/docs',
   '/docs/dev',
   '/docs/dev/getting-started/quickstart',
-  '/docs/dev/components',
+  '/docs/dev/api/search',
   '/docs/guide/start',
 ]
 
@@ -147,8 +159,6 @@ export const docsStaticJsonHeaderRoutes = [
   '/api/docs/page/**',
   '/api/docs/navigation/**',
   '/api/docs/search/**',
-  '/api/docs/sidebar-components/**',
-  '/api/docs/component-sync',
 ]
 /**
  * The raw Markdown twins (`/<locale>/docs/<path>.md`) deliberately have no header rule of their

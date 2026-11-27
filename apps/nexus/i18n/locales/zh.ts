@@ -11,6 +11,7 @@ export default {
     store: '商店',
     doc: '开发',
     developer: '开发者',
+    tuffex: 'TuffEx 组件',
     download: '更新',
     blog: '博客',
     menu: '菜单',
@@ -131,6 +132,7 @@ export default {
     },
     category: {
       docs: '文档',
+      tuffex: 'TuffEx 组件',
       pages: '页面',
       features: '功能',
     },

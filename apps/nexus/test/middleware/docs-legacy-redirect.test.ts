@@ -81,6 +81,30 @@ describe('docs legacy redirect middleware', () => {
     })
   })
 
+  it('redirects moved TuffEx component, concept, composition, and llms routes to /tuffex/* with 308', () => {
+    const cases: Array<[string, string]> = [
+      ['/en/docs/dev/components', '/tuffex/en'],
+      ['/en/docs/dev/components/button?tab=api', '/tuffex/en/button?tab=api'],
+      ['/zh/docs/dev/components', '/tuffex/zh'],
+      ['/zh/docs/dev/components/tabs', '/tuffex/zh/tabs'],
+      ['/en/docs/dev/concepts', '/tuffex/en/concepts'],
+      ['/en/docs/dev/concepts/surface-taxonomy', '/tuffex/en/concepts/surface-taxonomy'],
+      ['/zh/docs/dev/concepts', '/tuffex/zh/concepts'],
+      ['/zh/docs/dev/concepts/dark-palette', '/tuffex/zh/concepts/dark-palette'],
+      ['/docs/dev/components', '/tuffex/en'],
+      ['/docs/dev/components/button', '/tuffex/en/button'],
+      ['/docs/dev/concepts', '/tuffex/en/concepts'],
+      ['/docs/dev/concepts/depth-topology', '/tuffex/en/concepts/depth-topology'],
+      ['/en/docs/dev/getting-started/tuffex-composition', '/tuffex/en/composition'],
+      ['/zh/docs/dev/getting-started/tuffex-composition', '/tuffex/zh/composition'],
+      ['/llms.txt', '/tuffex/llms.txt'],
+    ]
+
+    for (const [from, location] of cases) {
+      expect(handler(createRequest(from)), from).toEqual({ location, status: 308 })
+    }
+  })
+
   it('leaves already-localized and non-docs paths alone', () => {
     expect(handler(createRequest('/en/docs/dev/api/box.md'))).toBeUndefined()
     expect(handler(createRequest('/pricing'))).toBeUndefined()
@@ -107,11 +131,50 @@ function applyStaticRedirect(pathname: string): RedirectResult | undefined {
 }
 
 describe('docs legacy redirect parity with the static _redirects rules', () => {
-  it('sends every canonical docs entry path to the same place by both routes', () => {
-    for (const pathname of ['/docs', '/docs/dev', '/docs/dev/api/box', '/docs/dev/api/box.md', '/docs/guide/start']) {
+  it('sends every canonical docs and TuffEx redirect path to the same place by both routes', () => {
+    for (const pathname of [
+      '/docs',
+      '/docs/dev',
+      '/docs/dev/api/box',
+      '/docs/dev/api/box.md',
+      '/docs/guide/start',
+      '/en/docs/dev/components',
+      '/en/docs/dev/components/button',
+      '/en/docs/dev/components/button.md',
+      '/zh/docs/dev/components',
+      '/zh/docs/dev/components/tabs',
+      '/en/docs/dev/concepts',
+      '/en/docs/dev/concepts/surface-taxonomy',
+      '/zh/docs/dev/concepts',
+      '/zh/docs/dev/concepts/dark-palette',
+      '/docs/dev/components',
+      '/docs/dev/components/button',
+      '/docs/dev/concepts',
+      '/docs/dev/concepts/depth-topology',
+      '/en/docs/dev/getting-started/tuffex-composition',
+      '/zh/docs/dev/getting-started/tuffex-composition',
+      '/llms.txt',
+    ]) {
       const viaPages = applyStaticRedirect(pathname)
       expect(viaPages, pathname).toBeDefined()
       expect(handler(createRequest(pathname)), pathname).toEqual(viaPages)
+    }
+  })
+
+  it('orders all TuffEx splat rules before the /docs/* catch-all', () => {
+    const docsWildcardIndex = docsStaticRedirects.findIndex(rule => rule.from === '/docs/*')
+    expect(docsWildcardIndex).toBeGreaterThan(0)
+    for (const from of [
+      '/en/docs/dev/components/*',
+      '/zh/docs/dev/components/*',
+      '/en/docs/dev/concepts/*',
+      '/zh/docs/dev/concepts/*',
+      '/docs/dev/components/*',
+      '/docs/dev/concepts/*',
+    ]) {
+      const index = docsStaticRedirects.findIndex(rule => rule.from === from)
+      expect(index, from).toBeGreaterThanOrEqual(0)
+      expect(index, `${from} must appear before /docs/*`).toBeLessThan(docsWildcardIndex)
     }
   })
 

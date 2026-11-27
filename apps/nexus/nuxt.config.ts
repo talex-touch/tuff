@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
@@ -20,9 +20,7 @@ import { removeRouteLocalPageComponents } from './build/nexus-page-routes'
 import { createNexusPrerenderRoutes } from './build/nexus-prerender-routes'
 import { contentApiRouteExcludes, createStaticCacheRouteRules } from './build/nexus-static-routes.mjs'
 import { tuffexOnDemandStylePlugin } from '../../packages/tuffex/packages/script/build/on-demand-style-plugin'
-import { nexusDemoLoadersPlugin } from './build/nexus-demo-loaders'
-import { nexusFrameworkRuntimePlugin } from './build/nexus-framework-runtime-plugin'
-import { resolveNexusManualChunk } from './build/nexus-manual-chunks'
+import { createNexusCodeSplittingConfig } from './build/nexus-manual-chunks'
 
 loadEnv({ path: '.env' })
 loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}` })
@@ -33,7 +31,14 @@ loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}.local`, override:
 const isDev = process.env.NODE_ENV !== 'production'
 const useCloudflareDev = isDev && (process.env.NUXT_USE_CLOUDFLARE_DEV === 'true' || process.env.NITRO_PRESET === 'cloudflare-pages')
 const currentDir = dirname(fileURLToPath(import.meta.url))
-const nexusDemoLoaderBase = `/_nuxt/demo-loaders/${randomUUID()}/`
+const DEFERRED_CHUNK_PRELOAD_RE = /(?:^|\/)(?:sentry|vendor-three|mermaid|echarts|workbox|avatar-editor|AvatarEditor)/i
+const CRITICAL_PRELOAD_CHUNK_NAMES = new Set([
+  'nuxt-vue-core',
+  'docs-layout',
+  'nexus-header-controls',
+  'tuffex-utils',
+])
+const CRITICAL_PRELOAD_KEY_RE = /^(?:pages\/|layouts\/)|(?:MDCRenderer|ContentRenderer|TuffCodeBlock)\.vue$/
 const workspaceRoot = resolve(currentDir, '../..')
 const tuffBusinessSourceEntry = resolve(currentDir, '../../packages/tuff-business/src/index.ts')
 const tuffexComponentsSourceRoot = resolve(currentDir, '../../packages/tuffex/packages/components/src')
@@ -283,11 +288,6 @@ export default defineNuxtConfig({
       {
         path: '~/components',
         ignore: [
-          'content/demos/**',
-          'content/demo-registry.ts',
-          'content/demo-loader.ts',
-          'content/demo-lazy.ts',
-          'content/demo-component-loader.ts',
           'content/TuffCodeBlockRenderer.vue',
           'store/**',
           'tuff/**',
@@ -503,7 +503,11 @@ export default defineNuxtConfig({
     // but missing on offline; keep payload extraction disabled until that is fixed.
     defaults: {
       nuxtLink: {
-        prefetch: false,
+        prefetch: true,
+        prefetchOn: {
+          visibility: false,
+          interaction: true,
+        },
       },
     },
     lazyHydration: true,
@@ -551,6 +555,14 @@ export default defineNuxtConfig({
           // itself. Left in the Worker's share, `/docs/*` reached `docs-legacy-redirect.ts`
           // first and the static rules never fired — measured 3–5 s per redirect from CN.
           exclude: [
+            '/assets/*',
+            '/shots/*',
+            '/videos/*',
+            '/vendor/*',
+            '/geo/*',
+            '/_i18n/*',
+            '/__nuxt_content/*',
+            '/llms.txt',
             '/docs',
             '/docs/*',
             '/en/docs',
@@ -560,6 +572,9 @@ export default defineNuxtConfig({
             '/zh/docs.md',
             '/zh/docs/*',
             '/api/docs/page/*',
+            '/api/docs/navigation/*',
+            '/api/docs/search/*',
+            '/api/docs/sidebar-components/*',
             // The prerendered policy documents, one pattern each (see `contentApiRouteExcludes`).
             ...contentApiRouteExcludes,
           ],
@@ -606,25 +621,20 @@ export default defineNuxtConfig({
       __RRWEB_EXCLUDE_IFRAME__: true,
       __RRWEB_EXCLUDE_SHADOW_DOM__: true,
       __SENTRY_EXCLUDE_REPLAY_WORKER__: true,
-      __NEXUS_DEMO_LOADER_BASE__: JSON.stringify(nexusDemoLoaderBase),
     },
     build: {
-      // Dynamic demos and route chunks are fetched on demand; Vite's generated preload map
-      // otherwise re-fetches the entire registry on every prerendered docs page.
-      modulePreload: false,
+      // Preload critical boot and route chunks while keeping deferred heavy libraries strictly lazy.
+      modulePreload: {
+        polyfill: false,
+        resolveDependencies(_filename, deps) {
+          return deps.filter(d => !DEFERRED_CHUNK_PRELOAD_RE.test(d))
+        },
+      },
       // Vite 8 defaults CSS minification to lightningcss, which rejects UnoCSS-generated
       // attribute selectors containing unquoted `=""` values; keep esbuild CSS minification
       // matching the Vite 7 pipeline.
       cssMinify: 'esbuild',
       chunkSizeWarningLimit: 600,
-      rollupOptions: {
-        output: {
-          // Keep explicit family/asset chunking (`nexus-demo-loaders.ts` preserves isolated
-          // `demo-*` chunks via `manualChunks`, and `nexus-manual-chunks.ts` isolates landing
-          // image URL modules from shared Nuxt runtime helpers).
-          manualChunks: resolveNexusManualChunk,
-        },
-      },
     },
     optimizeDeps: {
       include: [
@@ -652,8 +662,6 @@ export default defineNuxtConfig({
     },
     plugins: [
       nexusPageMetaFastPathPlugin(resolve(currentDir, 'app/pages')),
-      nexusDemoLoadersPlugin(currentDir, nexusDemoLoaderBase),
-      nexusFrameworkRuntimePlugin(currentDir),
       tuffexOnDemandStylePlugin({
         enabled: tuffexDevMode === 'dist',
         componentDistRoot: tuffexDevMode === 'dist' ? tuffexDistRoot : undefined,
@@ -689,24 +697,56 @@ export default defineNuxtConfig({
   debug: false,
 
   hooks: {
-    // vue-bundle-renderer 2.5 (Nuxt 4.5.2+) sets `prefetch: true` on every non-font chunk in
-    // normalizeViteManifest(), causing prerendered HTML to emit `<link rel="prefetch">` tags for
-    // deferred Sentry, Three.js, and lazy route/demo chunks. Clear `prefetch` before
-    // precomputeDependencies() runs so lazy imports stay strictly on-demand.
-    // DocsComponentsGallery and its lazy `Gallery*Suite` children wrap every Tx* specimen in
-    // `<ClientOnly>` (`GallerySpecimenGate`), so SSR renders only the gallery shell (styled by
-    // `DocsComponentsGallery.css`) and zero Tx* markup; trimming their SSR manifest `imports`
-    // avoids preloading 115+ client-only TuffEx stylesheets in `*-suite.html` `<head>` while
-    // Vite's client `__vitePreload` still loads them on hydration.
+    // Configure Rolldown `codeSplitting` (minSize: 8192, non-recursive explicit groups) on
+    // client builds only so tiny shared chunks coalesce without ever grouping `vendor-*` chunks
+    // that absorb Vue runtime or folding landing assets into shared runtime chunks.
+    'vite:extendConfig'(config, { isClient }) {
+      if (!isClient)
+        return
+      const mutableConfig = config as {
+        build?: {
+          rolldownOptions?: Record<string, unknown>
+          rollupOptions?: Record<string, unknown>
+        }
+      }
+      mutableConfig.build ??= {}
+      const rolldown = mutableConfig.build.rolldownOptions ?? mutableConfig.build.rollupOptions ?? {}
+      const existingOutput = (rolldown.output && !Array.isArray(rolldown.output)
+        ? { ...(rolldown.output as Record<string, unknown>) }
+        : {}) as Record<string, unknown>
+      delete existingOutput.manualChunks
+      mutableConfig.build.rolldownOptions = {
+        ...rolldown,
+        preserveEntrySignatures: false,
+        output: {
+          ...existingOutput,
+          codeSplitting: createNexusCodeSplittingConfig(),
+        },
+      }
+    },
+    // vue-bundle-renderer 2.5 (Nuxt 4.5.2+) sets `prefetch: true` on every non-font chunk and
+    // `preload: true` on every transitive JS chunk in normalizeViteManifest(), spamming `<head>`
+    // with 30–60 tiny leaf/secondary `<link rel="modulepreload">` tags (including deferred libs
+    // and secondary widgets like AvatarEditor / floating-ui). Keep `prefetch = false` everywhere
+    // and restrict JS `<link rel="modulepreload">` strictly to critical boot, core runtime,
+    // layout, route page, header, TuffEx utility, and core docs prose chunks so Wave-1 parallel
+    // fetch collapses waterfalls without blowing page initial JS budgets (styles stay untouched).
     'build:manifest'(manifest) {
       for (const [key, entry] of Object.entries(manifest)) {
         entry.prefetch = false
-        if (
-          key === 'components/docs/DocsComponentsGallery.vue'
-          || key.startsWith('components/docs/gallery/suites/')
-        ) {
-          entry.imports = []
-        }
+        const isScript = entry.resourceType === 'script' || Boolean(entry.file?.endsWith('.js'))
+        if (!isScript)
+          continue
+
+        const isDeferred = [key, entry.name, entry.file].some(
+          part => typeof part === 'string' && DEFERRED_CHUNK_PRELOAD_RE.test(part),
+        )
+        const isCritical = !isDeferred && (
+          Boolean(entry.isEntry)
+          || (typeof entry.name === 'string' && CRITICAL_PRELOAD_CHUNK_NAMES.has(entry.name))
+          || CRITICAL_PRELOAD_KEY_RE.test(key)
+        )
+        entry.preload = isCritical
       }
     },
     'app:resolve'(app) {
@@ -720,11 +760,6 @@ export default defineNuxtConfig({
     },
     'components:extend'(components) {
       const ignoredContentComponentPatterns = [
-        '/app/components/content/demos/',
-        '/app/components/content/demo-registry.ts',
-        '/app/components/content/demo-loader.ts',
-        '/app/components/content/demo-lazy.ts',
-        '/app/components/content/demo-component-loader.ts',
         '/app/components/content/TuffCodeBlockRenderer.vue',
         '/app/components/store/',
         '/app/components/tuff/',

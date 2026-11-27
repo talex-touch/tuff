@@ -1,131 +1,54 @@
 <script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import DocSection from './docs/DocSection.vue'
-import DocsSuiteTriggerButton from './docs/DocsSuiteTriggerButton.vue'
-import { GLIDE } from '@talex-touch/tuffex/utils/animation/jelly'
-import { stepSpring } from '@talex-touch/tuffex/utils/animation/spring'
-import { useIndicatorBox } from '@talex-touch/tuffex/utils/use-indicator-box'
-import type { JellyIndicatorFrame } from '@talex-touch/tuffex/utils/use-jelly-indicator'
-import { useJellyIndicator } from '@talex-touch/tuffex/utils/use-jelly-indicator'
 import { hasWindow } from '@talex-touch/utils/env'
-import { useLazyDropdownMenu } from '~/composables/useLazyMenu'
-import type { DocsSuiteKey } from '~/utils/docs-suites'
 import { coerceJsonArray } from '~/utils/docs-api'
-import { CONCEPTS_MANUAL_GROUPS, CONCEPTS_MANUAL_PATH, isConceptsManualPath } from '~/utils/docs-concepts-manual'
-import { categoryI18nKey, CATEGORY_SUITE_MAP, resolveStaticComponentSuite, SUITE_CATEGORY_KEYS } from '~/utils/docs-suites'
 import { requestDocsPage } from '~/utils/docs-page-client-cache'
 import { useTypedFetch } from '~/utils/request'
-import { useDocsFramework } from '~/composables/useDocsFramework'
-import {
-  DOCS_FRAMEWORK_META,
-  resolveComponentSlugFromPath,
-} from '~/utils/tuffex-component-slug'
 import { canonicalDocsPageIdentity, normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
-type FrameworkMatrixModule = typeof import('~/data/tuffex-framework-matrix')
-let cachedFrameworkMatrixModule: FrameworkMatrixModule | null = null
-let pendingFrameworkMatrixModule: Promise<FrameworkMatrixModule> | null = null
-
-function loadFrameworkMatrixModule(): Promise<FrameworkMatrixModule> {
-  if (cachedFrameworkMatrixModule)
-    return Promise.resolve(cachedFrameworkMatrixModule)
-  if (!pendingFrameworkMatrixModule) {
-    pendingFrameworkMatrixModule = import('~/data/tuffex-framework-matrix')
-      .then((mod) => {
-        cachedFrameworkMatrixModule = mod
-        return mod
-      })
-      .catch((error) => {
-        pendingFrameworkMatrixModule = null
-        throw error
-      })
-  }
-  return pendingFrameworkMatrixModule
-}
-
-type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
-
-interface SidebarComponentDoc {
-  title: string
-  path: string
-  normalizedPath: string
-  locale: 'en' | 'zh'
-  category: string | null
-  since: string | null
-  syncStatus: SyncStatusKey
-  verified: boolean
-}
-
-const COMPONENT_SYNC_STATUS_ALIASES: Record<string, SyncStatusKey> = {
-  未迁移: 'not_started',
-  迁移中: 'in_progress',
-  已迁移: 'migrated',
-  已确认: 'verified',
-  not_started: 'not_started',
-  in_progress: 'in_progress',
-  migrated: 'migrated',
-  verified: 'verified',
-}
-
 const route = useRoute()
-const { t, te, locale } = useI18n()
-const { framework: activeFramework } = useDocsFramework()
+const { t, locale } = useI18n()
 const navRef = ref<HTMLElement | null>(null)
-const sidebarHydrated = ref(false)
 const docsLocale = computed(() => resolveDocsLocaleFromRoute(route.path))
 const normalizedRoutePath = computed(() => normalizeDocsPagePath(route.path))
-// The design concepts handbook sits beside the component docs but belongs to the
-// Concepts suite, so its pages keep the components sidebar.
-const isConceptsManualRoute = computed(() => isConceptsManualPath(normalizedRoutePath.value))
-const isComponentDocsRoute = computed(
-  () => normalizedRoutePath.value.startsWith('/docs/dev/components') || isConceptsManualRoute.value,
-)
-const shouldLoadComponentDocs = computed(() => sidebarHydrated.value && isComponentDocsRoute.value)
-const docsNavigationScope = computed(() => (isComponentDocsRoute.value ? 'components' : undefined))
-const docsNavigationEndpoint = computed(
-  () => `/api/docs/navigation/${docsLocale.value}/${docsNavigationScope.value ?? 'all'}`,
-)
+const tuffexDocsHref = computed(() => `/tuffex/${docsLocale.value}`)
+const docsNavigationEndpoint = computed(() => `/api/docs/navigation/${docsLocale.value}/all`)
+
 const {
   data: navigationTreePayload,
   pending,
   error,
 } = await useTypedFetch<unknown>(docsNavigationEndpoint, {
-  key: computed(() => `docs-navigation:${docsLocale.value}:${docsNavigationScope.value ?? 'all'}`),
+  key: computed(() => `docs-navigation:${docsLocale.value}:all`),
   server: false,
   lazy: true,
-  // Shares the request the docs page starts with the same key; see the page for why.
+  // Shares the request the docs page starts with the same key and reuses cached payload across SPA navigations.
   dedupe: 'defer',
   responseType: 'json',
   default: () => [],
+  getCachedData: (key: string, app: ReturnType<typeof useNuxtApp>) => {
+    const cached = app.payload.data[key] ?? app.static.data[key]
+    return Array.isArray(cached) && cached.length > 0 ? cached : undefined
+  },
 })
-const sidebarComponentsEndpoint = computed(() => `/api/docs/sidebar-components/${docsLocale.value}`)
-const {
-  data: componentDocsPayload,
-  pending: componentDocsPending,
-  refresh: refreshComponentDocs,
-} = await useTypedFetch<unknown>(sidebarComponentsEndpoint, {
-  key: computed(() => `docs-components-meta:${docsLocale.value}`),
-  server: false,
-  lazy: true,
-  immediate: false,
-  // Pointer and focus on the sidebar ask for the list again while it is still loading; each
-  // ask used to cancel the request in flight and start it over.
-  dedupe: 'defer',
-  responseType: 'json',
-  default: () => [],
-})
+
 const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
-const COMPONENT_DOCS_METADATA_DELAY_MS = 360
-const COMPONENT_DOCS_METADATA_INTENT_DELAY_MS = 180
-const COMPONENT_DOCS_METADATA_IDLE_TIMEOUT_MS = 3600
-const COMPONENT_DOCS_FULL_BODY_PREFETCH_DELAY_MS = 900
-const COMPONENT_DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 2400
+const DOCS_FULL_BODY_PREFETCH_DELAY_MS = 120
+const DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 2400
 let activeScrollFrame: number | null = null
-let componentDocsMetadataTimer: ReturnType<typeof setTimeout> | null = null
-let componentDocsMetadataIdleId: number | null = null
+let plateAnimateFrame: number | null = null
 const prefetchedDocsRouteTargets = new Set<string>()
 const prefetchedDocsFullBodyTargets = new Set<string>()
 const pendingDocsFullBodyPrefetchTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const pendingDocsFullBodyPrefetchIdleIds = new Map<string, number>()
+
+function isSaveDataEnabled() {
+  if (import.meta.server)
+    return false
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
+  return Boolean(connection?.saveData)
+}
 
 function stripCjk(value: string) {
   return value
@@ -135,7 +58,8 @@ function stripCjk(value: string) {
 }
 
 function fallbackTitleFromPath(path?: string) {
-  if (!path) return 'Untitled'
+  if (!path)
+    return 'Untitled'
   return (
     path
       .split('/')
@@ -146,27 +70,6 @@ function fallbackTitleFromPath(path?: string) {
       ?.replace(/\b\w/g, c => c.toUpperCase()) ?? 'Untitled'
   )
 }
-
-const TOP_SECTIONS = computed(() => [
-  {
-    key: 'components',
-    basePath: '/docs/dev/components',
-    // The section root, not `/index`: they render the same document, and the
-    // root is the spelling the Concepts Overview row links.
-    entryPath: '/docs/dev/components',
-    label: t('docsSidebar.components'),
-    icon: 'i-carbon-cube',
-    description: 'Components',
-  },
-  {
-    key: 'extensions',
-    basePath: '/docs/dev',
-    entryPath: '/docs/dev/index',
-    label: t('docsSidebar.extensions'),
-    icon: 'i-carbon-code',
-    description: 'Extensions',
-  },
-])
 
 const SECTION_ORDER: Record<string, string[]> = {
   '/docs/dev': [
@@ -184,7 +87,6 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/getting-started/index',
     '/docs/dev/getting-started/overview',
     '/docs/dev/getting-started/quickstart',
-    '/docs/dev/getting-started/tuffex-composition',
     '/docs/dev/getting-started/plugin-workflow',
   ],
   '/docs/dev/api': [
@@ -254,287 +156,6 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/release/migration',
   ],
   '/docs/dev/tools': ['/docs/dev/tools/index', '/docs/dev/tools/tuff-cli', '/docs/dev/tools/tuffex'],
-  // Mirrors the `category` frontmatter taxonomy applied by
-  // scripts/recategorize-component-docs.py, and fixes the order inside each group.
-  '/docs/dev/components': [
-    // ── suite: concepts — the components index doubles as the Concepts
-    // overview, then the two other standalone pages
-    '/docs/dev/components/index',
-    '/docs/dev/components/installation',
-    '/docs/dev/components/foundations',
-    '/docs/dev/components/theming',
-    '/docs/dev/components/icons',
-    '/docs/dev/components/accessibility',
-    '/docs/dev/components/utils',
-    '/docs/dev/components/sound',
-    '/docs/dev/components/changelog',
-    // ── suite: templates — no overview; the tab lands on the first template
-    // templates — App shells
-    '/docs/dev/components/template-shell',
-    '/docs/dev/components/template-launcher',
-    '/docs/dev/components/template-settings',
-    '/docs/dev/components/template-onboarding',
-    '/docs/dev/components/template-workbench',
-    '/docs/dev/components/template-account',
-    // templates — Content
-    '/docs/dev/components/template-cms',
-    '/docs/dev/components/template-gallery',
-    '/docs/dev/components/template-inbox',
-    '/docs/dev/components/template-files',
-    '/docs/dev/components/template-store',
-    '/docs/dev/components/template-docs',
-    '/docs/dev/components/template-notes',
-    '/docs/dev/components/template-showcase',
-    '/docs/dev/components/template-search',
-    // templates — AI apps
-    '/docs/dev/components/template-agent-chat',
-    '/docs/dev/components/template-ai-answer',
-    '/docs/dev/components/template-research',
-    '/docs/dev/components/template-voice',
-    '/docs/dev/components/template-image-studio',
-    // templates — Data & flow
-    '/docs/dev/components/template-dashboard',
-    '/docs/dev/components/template-automation',
-    '/docs/dev/components/template-release',
-    '/docs/dev/components/template-experiments',
-    '/docs/dev/components/template-kanban',
-    // ── suite: base — overview
-    '/docs/dev/components/base-suite',
-    // base — Basic
-    '/docs/dev/components/button',
-    '/docs/dev/components/icon',
-    '/docs/dev/components/avatar',
-    '/docs/dev/components/avatar-variants',
-    '/docs/dev/components/tag',
-    '/docs/dev/components/badge',
-    '/docs/dev/components/status-badge',
-    '/docs/dev/components/icon-chip',
-    '/docs/dev/components/kbd',
-    '/docs/dev/components/divider',
-    '/docs/dev/components/text',
-    // base — Form
-    '/docs/dev/components/form',
-    '/docs/dev/components/modal-form',
-    '/docs/dev/components/drawer-form',
-    '/docs/dev/components/steps-form',
-    '/docs/dev/components/input',
-    '/docs/dev/components/sensitive-input',
-    '/docs/dev/components/textarea',
-    '/docs/dev/components/number-input',
-    '/docs/dev/components/search-input',
-    '/docs/dev/components/tag-input',
-    '/docs/dev/components/scrub-field',
-    '/docs/dev/components/select',
-    '/docs/dev/components/flat-select',
-    '/docs/dev/components/search-select',
-    '/docs/dev/components/tree-select',
-    '/docs/dev/components/cascader',
-    '/docs/dev/components/picker',
-    '/docs/dev/components/date-picker',
-    '/docs/dev/components/radio',
-    '/docs/dev/components/flat-radio',
-    '/docs/dev/components/checkbox',
-    '/docs/dev/components/switch',
-    '/docs/dev/components/slider',
-    '/docs/dev/components/segmented-slider',
-    '/docs/dev/components/rating',
-    '/docs/dev/components/file-uploader',
-    '/docs/dev/components/image-uploader',
-    // base — Layout
-    '/docs/dev/components/container',
-    '/docs/dev/components/flex',
-    '/docs/dev/components/grid',
-    '/docs/dev/components/grid-layout',
-    '/docs/dev/components/stack',
-    '/docs/dev/components/splitter',
-    '/docs/dev/components/scroll',
-    '/docs/dev/components/collapse',
-    '/docs/dev/components/card',
-    '/docs/dev/components/card-item',
-    '/docs/dev/components/group-block',
-    // base — Navigation
-    '/docs/dev/components/tabs',
-    '/docs/dev/components/tab-bar',
-    '/docs/dev/components/nav-bar',
-    '/docs/dev/components/sidebar-nav',
-    '/docs/dev/components/breadcrumb',
-    '/docs/dev/components/steps',
-    '/docs/dev/components/pagination',
-    '/docs/dev/components/dropdown-menu',
-    '/docs/dev/components/flat-dropdown',
-    '/docs/dev/components/context-menu',
-    // base — Data
-    '/docs/dev/components/data-table',
-    '/docs/dev/components/descriptions',
-    '/docs/dev/components/tree',
-    '/docs/dev/components/sortable-list',
-    '/docs/dev/components/timeline',
-    '/docs/dev/components/transfer',
-    '/docs/dev/components/stat-card',
-    '/docs/dev/components/cell-link',
-    '/docs/dev/components/dot-indicator',
-    '/docs/dev/components/filter-chips',
-    '/docs/dev/components/markdown-view',
-    '/docs/dev/components/image-gallery',
-    '/docs/dev/components/image-preview',
-    // base — Feedback
-    '/docs/dev/components/dialog',
-    '/docs/dev/components/modal',
-    '/docs/dev/components/drawer',
-    '/docs/dev/components/popover',
-    '/docs/dev/components/tooltip',
-    '/docs/dev/components/toast',
-    '/docs/dev/components/toast-panel',
-    '/docs/dev/components/alert',
-    '/docs/dev/components/status-hint',
-    '/docs/dev/components/progress',
-    '/docs/dev/components/progress-bar',
-    '/docs/dev/components/spinner',
-    '/docs/dev/components/loading-overlay',
-    '/docs/dev/components/selection-actions',
-    // base — Status
-    '/docs/dev/components/empty',
-    '/docs/dev/components/empty-state',
-    '/docs/dev/components/no-data',
-    '/docs/dev/components/no-selection',
-    '/docs/dev/components/search-empty',
-    '/docs/dev/components/error-state',
-    '/docs/dev/components/offline-state',
-    '/docs/dev/components/permission-state',
-    '/docs/dev/components/guide-state',
-    '/docs/dev/components/blank-slate',
-    '/docs/dev/components/loading-state',
-    '/docs/dev/components/skeleton',
-    '/docs/dev/components/layout-skeleton',
-    // ── suite: pro — overview
-    '/docs/dev/components/pro-suite',
-    // pro — Advanced
-    '/docs/dev/components/command-palette',
-    '/docs/dev/components/search-panel',
-    '/docs/dev/components/markdown-editor',
-    '/docs/dev/components/code-editor',
-    '/docs/dev/components/terminal',
-    '/docs/dev/components/virtual-list',
-    '/docs/dev/components/version-capsule',
-    '/docs/dev/components/motion-form',
-    '/docs/dev/components/motion-control',
-    '/docs/dev/components/motion-metric',
-    // pro — Effects
-    '/docs/dev/components/glass-surface',
-    '/docs/dev/components/touch-surface',
-    '/docs/dev/components/gradient-border',
-    '/docs/dev/components/outline-border',
-    '/docs/dev/components/border-beam',
-    '/docs/dev/components/prism-glow',
-    '/docs/dev/components/corner-overlay',
-    '/docs/dev/components/gradual-blur',
-    '/docs/dev/components/edge-fade-mask',
-    '/docs/dev/components/glow-text',
-    '/docs/dev/components/keyframe-stroke-text',
-    '/docs/dev/components/tuff-logo-stroke',
-    '/docs/dev/components/text-morph',
-    '/docs/dev/components/icon-morph',
-    '/docs/dev/components/morph',
-    '/docs/dev/components/text-transformer',
-    '/docs/dev/components/transition',
-    '/docs/dev/components/stagger',
-    '/docs/dev/components/fusion',
-    '/docs/dev/components/fusion-surface',
-    '/docs/dev/components/flow-light',
-    '/docs/dev/components/liquid',
-    '/docs/dev/components/flip-overlay',
-    '/docs/dev/components/fold-page',
-    '/docs/dev/components/image-generation',
-    '/docs/dev/components/metal-fx',
-    '/docs/dev/components/voice-beam',
-    // pro — Primitives
-    '/docs/dev/components/base-surface',
-    '/docs/dev/components/base-anchor',
-    '/docs/dev/components/floating',
-    '/docs/dev/components/auto-sizer',
-    '/docs/dev/components/resize-box',
-    // ── suite: ai — AiSuite (standalone page)
-    '/docs/dev/components/ai-suite',
-    // ai — AiChat
-    '/docs/dev/components/chat',
-    '/docs/dev/components/chat-composer',
-    '/docs/dev/components/prompt-bar',
-    '/docs/dev/components/attachment-tray',
-    '/docs/dev/components/mode-chip',
-    '/docs/dev/components/message-actions',
-    '/docs/dev/components/suggestion-chips',
-    '/docs/dev/components/choice-card',
-    '/docs/dev/components/typing-indicator',
-    '/docs/dev/components/conversation-stream',
-    '/docs/dev/components/voice-clip',
-    // ai — AiAgent
-    '/docs/dev/components/agents',
-    '/docs/dev/components/agent-trace',
-    '/docs/dev/components/agent-screen',
-    '/docs/dev/components/task-rows',
-    '/docs/dev/components/tool-call-card',
-    '/docs/dev/components/tool-chips',
-    '/docs/dev/components/tool-confirmation',
-    '/docs/dev/components/approval-card',
-    '/docs/dev/components/working-indicator',
-    '/docs/dev/components/bot-avatar',
-    '/docs/dev/components/miko',
-    // ai — AiReasoning
-    '/docs/dev/components/ai-elements',
-    '/docs/dev/components/chain-of-thought',
-    '/docs/dev/components/reasoning-disclosure',
-    '/docs/dev/components/thinking-orb',
-    '/docs/dev/components/matrix-loader',
-    '/docs/dev/components/stream-element',
-    '/docs/dev/components/stream-text',
-    '/docs/dev/components/stream-markdown',
-    '/docs/dev/components/code-stream',
-    '/docs/dev/components/inline-citation',
-    '/docs/dev/components/sources',
-    // ai — AiContext
-    '/docs/dev/components/context-cards',
-    '/docs/dev/components/context-indicator',
-    '/docs/dev/components/insight-cards',
-    '/docs/dev/components/recommendation-card',
-    '/docs/dev/components/fine-tune-card',
-    // ── suite: data — overview
-    '/docs/dev/components/data-suite',
-    // data — Charts (the @talex-touch/tuffex/charts subpath; mirrors the kumo docs order)
-    '/docs/dev/components/charts',
-    '/docs/dev/components/chart-colors',
-    '/docs/dev/components/echart-charts',
-    '/docs/dev/components/timeseries-chart',
-    '/docs/dev/components/learning-curve',
-    '/docs/dev/components/maps',
-    '/docs/dev/components/mono-chart',
-    '/docs/dev/components/sankey-chart',
-    '/docs/dev/components/custom-chart',
-    // data — Visualization
-    '/docs/dev/components/spark-chart',
-    '/docs/dev/components/allocation-bar',
-    '/docs/dev/components/diff-table',
-    '/docs/dev/components/signal-meter',
-    // ── suite: flow — overview
-    '/docs/dev/components/flow-suite',
-    // flow — Flow
-    '/docs/dev/components/flowchart',
-    // ── suite: motion — overview
-    '/docs/dev/components/motion-suite',
-    // motion — Buttons / Card Spreads / 3D Carousels / Loaders / Dither Charts
-    '/docs/dev/components/motion-button',
-    '/docs/dev/components/card-spread',
-    '/docs/dev/components/carousel-3d',
-    '/docs/dev/components/flip-book',
-    '/docs/dev/components/motion-loader',
-    '/docs/dev/components/dither-chart',
-    // motion — Text / Physics / Interaction / Toggles / Transitions
-    '/docs/dev/components/motion-text',
-    '/docs/dev/components/physics-motion',
-    '/docs/dev/components/motion-dock',
-    '/docs/dev/components/motion',
-    '/docs/dev/components/motion-toggle',
-    '/docs/dev/components/motion-transition',
-  ],
   '/docs/dev/reference': [
     '/docs/dev/reference/index',
     '/docs/dev/reference/manifest',
@@ -569,309 +190,14 @@ const SECTION_ORDER: Record<string, string[]> = {
   ],
 }
 
-// Component docs are split into eight suites (concepts / templates / base / pro /
-// ai / data / flow / motion). Categories follow the shared docs-suites taxonomy;
-// scripts/recategorize-component-docs.py assigns that taxonomy to every page.
-// Installation barrels remain base/pro/ai. Motion is a documentation grouping,
-// and the chart family also has the @talex-touch/tuffex/charts entry.
-type SuiteKey = DocsSuiteKey
-
-interface SuiteDef {
-  key: SuiteKey
-  label: string
-  categories: { key: string; label: string }[]
-  // Rendered as flat links above the groups. The first one is the suite's
-  // overview page, which picking the tab navigates to.
-  standalonePages: string[]
-  // Where picking the tab lands when the suite has no overview page.
-  entryPage?: string
-}
-
-// Category groups come from the shared taxonomy so the sidebar and the suite
-// overview catalogs cannot list different components.
-function suiteCategories(suite: SuiteKey) {
-  return SUITE_CATEGORY_KEYS[suite].map(key => ({
-    key,
-    label: t(`docsSidebar.categories.${categoryI18nKey(key)}`),
-  }))
-}
-
-const SUITES = computed<SuiteDef[]>(() => [
-  {
-    key: 'concepts',
-    label: t('docsSidebar.suites.concepts'),
-    categories: suiteCategories('concepts'),
-    // The overview is the components index itself: it carries the library
-    // positioning and the full component catalog, and lives at the section
-    // root, so it is linked as `/docs/dev/components`. The concepts handbook's
-    // index sits where the overview's own table lists it; its pages follow as
-    // groups (CONCEPTS_MANUAL_GROUPS).
-    standalonePages: [
-      '/docs/dev/components/index',
-      '/docs/dev/components/installation',
-      '/docs/dev/components/foundations',
-      CONCEPTS_MANUAL_PATH,
-      '/docs/dev/components/theming',
-      '/docs/dev/components/icons',
-      '/docs/dev/components/accessibility',
-      '/docs/dev/components/utils',
-      '/docs/dev/components/sound',
-      '/docs/dev/components/changelog',
-    ],
-  },
-  {
-    key: 'templates',
-    label: t('docsSidebar.suites.templates'),
-    categories: suiteCategories('templates'),
-    // Full-page compositions, not components: there is no overview page, so the
-    // tab lands on the first template instead.
-    standalonePages: [],
-    entryPage: '/docs/dev/components/template-shell',
-  },
-  {
-    key: 'base',
-    label: t('docsSidebar.suites.base'),
-    categories: suiteCategories('base'),
-    standalonePages: ['/docs/dev/components/base-suite'],
-  },
-  {
-    key: 'pro',
-    label: t('docsSidebar.suites.pro'),
-    categories: suiteCategories('pro'),
-    standalonePages: ['/docs/dev/components/pro-suite'],
-  },
-  {
-    key: 'ai',
-    label: t('docsSidebar.suites.ai'),
-    categories: suiteCategories('ai'),
-    standalonePages: ['/docs/dev/components/ai-suite'],
-  },
-  {
-    key: 'data',
-    label: t('docsSidebar.suites.data'),
-    categories: suiteCategories('data'),
-    standalonePages: ['/docs/dev/components/data-suite'],
-  },
-  {
-    key: 'flow',
-    label: t('docsSidebar.suites.flow'),
-    categories: suiteCategories('flow'),
-    standalonePages: ['/docs/dev/components/flow-suite'],
-  },
-  {
-    key: 'motion',
-    label: t('docsSidebar.suites.motion'),
-    categories: suiteCategories('motion'),
-    standalonePages: ['/docs/dev/components/motion-suite'],
-  },
-])
-
-
-// Same-component doc families fold into one expandable entry inside their
-// category instead of rendering as flat sibling links. Key = head doc path (its
-// doc title labels the family row); members list every folded doc in display
-// order. `labelKey` swaps a member's doc title for a docsSidebar.* message —
-// the head member needs one so it doesn't repeat the family label verbatim.
-const COMPONENT_FAMILIES: Record<string, { path: string; labelKey?: string }[]> = {
-  '/docs/dev/components/avatar': [
-    { path: '/docs/dev/components/avatar', labelKey: 'docsSidebar.families.avatarBasic' },
-    { path: '/docs/dev/components/avatar-variants' },
-  ],
-}
-
-const FAMILY_BY_MEMBER = new Map<string, string>(
-  Object.entries(COMPONENT_FAMILIES).flatMap(([head, members]) =>
-    members.map(member => [member.path, head] as const),
-  ),
-)
-
-// Manual suite pick; cleared on navigation so the switcher follows the route again.
-const selectedSuite = ref<SuiteKey | null>(null)
-
-const suiteOfRoute = computed<SuiteKey | null>(() => {
-  if (!isComponentDocsRoute.value) return null
-  if (isConceptsManualRoute.value) return 'concepts'
-  // Compared by canonical identity: the Concepts overview is the section's
-  // index document, so the route `/docs/dev/components` and the item's
-  // `/docs/dev/components/index` are the same page under different spellings.
-  const here = canonicalDocsPageIdentity(normalizedRoutePath.value)
-  const current = componentItems.value.find(
-    item => canonicalDocsPageIdentity(item.normalizedPath) === here,
-  )
-  const category = current?.category
-  if (category)
-    return CATEGORY_SUITE_MAP[category] ?? null
-  // Before the metadata lands (and during SSR) a suite's own standalone pages —
-  // its overview, the concepts pages — still name it. Without this the switcher
-  // read "Basics" on the Concepts overview until the fetch resolved.
-  const standaloneSuite = SUITES.value.find(suite =>
-    suite.standalonePages.some(page => canonicalDocsPageIdentity(page) === here),
-  )?.key
-  if (standaloneSuite)
-    return standaloneSuite
-  // Static suite resolution for SSR and initial render before metadata fetch resolves
-  return resolveStaticComponentSuite(here)
-})
-
-// SSR and the first client frame resolve the suite the same way — from the
-// route's standalone pages, else 'base' (componentItems is a client-only lazy
-// fetch) — so server and client markup agree; on a component page the suite may
-// then snap to the route's suite once metadata arrives — a reactive update, not
-// a hydration mismatch.
-const activeSuite = computed<SuiteKey>(() => selectedSuite.value ?? suiteOfRoute.value ?? 'base')
-
-const activeSuiteDef = computed<SuiteDef>(
-  () => SUITES.value.find(suite => suite.key === activeSuite.value) ?? SUITES.value[0]!,
-)
-
-// Suite switcher. The menu renders `SUITES` as-is, so a suite added there shows
-// up without touching this block; one missing from the icon table falls back.
-const SUITE_ICONS: Partial<Record<SuiteKey, string>> = {
-  concepts: 'i-carbon-idea',
-  templates: 'i-carbon-template',
-  base: 'i-carbon-apps',
-  pro: 'i-carbon-magic-wand',
-  ai: 'i-carbon-bot',
-  data: 'i-carbon-chart-line-data',
-  flow: 'i-carbon-flow',
-  motion: 'i-carbon-movement',
-}
-
-function suiteIcon(key: SuiteKey) {
-  return SUITE_ICONS[key] ?? 'i-carbon-folder'
-}
-
-function suiteDescription(key: SuiteKey) {
-  const messageKey = `docsSidebar.suiteDescriptions.${key}`
-  return te(messageKey) ? t(messageKey) : ''
-}
-
-// Pages per suite, counted off the component metadata; empty until it lands.
-const suiteDocCounts = computed(() => {
-  const counts: Partial<Record<SuiteKey, number>> = {}
-  for (const item of componentItems.value) {
-    const suite = item.category ? CATEGORY_SUITE_MAP[item.category] : undefined
-    if (suite)
-      counts[suite] = (counts[suite] ?? 0) + 1
-  }
-  // The concepts handbook is not in that metadata: its index plus its pages.
-  if (counts.concepts && conceptsManualPages.value.length)
-    counts.concepts += conceptsManualPages.value.length + 1
-  return counts
-})
-
-const suiteTriggerRef = ref<InstanceType<typeof DocsSuiteTriggerButton> | null>(null)
-const {
-  isOpen: suiteMenuOpen,
-  menuActivated: suiteMenuActivated,
-  activateMenu: activateSuiteMenu,
-  TxDropdownMenu,
-  TxDropdownItem,
-} = useLazyDropdownMenu(suiteTriggerRef)
-let suiteFocusFrame: number | null = null
-
-function visibleSuiteOptions() {
-  return [...document.querySelectorAll<HTMLElement>('.docs-suite-option')]
-    .filter(option => option.getClientRects().length > 0)
-}
-
-function cancelSuiteFocusFrame() {
-  if (suiteFocusFrame === null)
-    return
-  window.cancelAnimationFrame(suiteFocusFrame)
-  suiteFocusFrame = null
-}
-
-watch(suiteMenuOpen, (open, wasOpen) => {
-  if (!hasWindow())
-    return
-  cancelSuiteFocusFrame()
-
-  // TxDropdownMenu moves focus to its first item on the tick it opens, which is
-  // before its panel has animated in far enough to take focus, so the move is
-  // lost and arrow keys have nowhere to start. Retry for a few frames, landing
-  // on the current suite rather than the first.
-  if (open) {
-    let frames = 0
-    const focusCurrent = () => {
-      suiteFocusFrame = null
-      if (!suiteMenuOpen.value)
-        return
-      const options = visibleSuiteOptions()
-      const target = options.find(option => option.classList.contains('is-current')) ?? options[0]
-      target?.focus()
-      if ((target && document.activeElement === target) || ++frames > 60)
-        return
-      suiteFocusFrame = window.requestAnimationFrame(focusCurrent)
-    }
-    suiteFocusFrame = window.requestAnimationFrame(focusCurrent)
-    return
-  }
-
-  // Escape or a pick closes the menu with focus still on an item. The panel
-  // keeps that item mounted while it animates out and then removes it, which
-  // drops focus to <body>, so hand focus back to the trigger in either case. A
-  // click that moved focus elsewhere — a link in the list below — keeps it
-  // where it went.
-  if (!wasOpen)
-    return
-  void nextTick(() => {
-    const active = document.activeElement
-    if (!active || active === document.body || active.closest('.docs-suite-option'))
-      suiteTriggerRef.value?.focus()
-  })
-})
-
-// The index document is the section root; `/docs/dev/components/index` is a
-// distinct route that path normalization deliberately keeps apart from it.
-const COMPONENTS_INDEX_PATH = '/docs/dev/components/index'
-const COMPONENTS_INDEX_LINK = '/docs/dev/components'
-
-function suiteOverviewLink(suite: SuiteDef | undefined) {
-  const overview = suite?.standalonePages[0] ?? suite?.entryPage
-  if (!overview) return null
-  return overview === COMPONENTS_INDEX_PATH ? COMPONENTS_INDEX_LINK : overview
-}
-
-// Picking a tab is a navigation, not just a filter: a suite's first entry is
-// its overview page — or, for a suite without one, its entry page — and that
-// is what the tab means.
-async function selectSuite(key: SuiteKey) {
-  selectedSuite.value = key
-
-  const target = suiteOverviewLink(SUITES.value.find(def => def.key === key))
-  if (!target) return
-
-  const localized = localizedDocsPath(target)
-  if (localized && localized !== route.path)
-    await navigateTo(localized)
-}
-
-const COMPONENT_SYNC_STATUS_LABELS = computed<Record<Exclude<SyncStatusKey, 'not_started'>, string>>(() => {
-  if (locale.value === 'zh') {
-    return {
-      in_progress: '开发中',
-      migrated: 'AI迁移',
-      verified: '已审阅',
-    }
-  }
-
-  return {
-    in_progress: 'In progress',
-    migrated: 'AI migrated',
-    verified: 'Reviewed',
-  }
-})
-
-const defaultSection = computed(() => 'extensions')
-
 const docLabels = computed<Record<string, string>>(() => ({
   '/docs/guide/start': t('docsNav.start'),
   '/docs/guide/start.zh': t('docsNav.start'),
 }))
 
 function normalizeContentPath(path: string | null | undefined) {
-  if (!path) return null
+  if (!path)
+    return null
   return normalizeDocsPagePath(path)
 }
 
@@ -880,23 +206,26 @@ function localizedDocsPath(path: string | null | undefined) {
 }
 
 function shouldPrefetchDocsTarget(path: string | null | undefined) {
-  if (!path) return false
+  if (!path || isSaveDataEnabled())
+    return false
   const normalized = normalizeContentPath(path)
-  return Boolean(normalized?.startsWith('/docs/dev/components/') || normalized?.startsWith(`${CONCEPTS_MANUAL_PATH}/`))
+  return Boolean(normalized?.startsWith('/docs/') && normalized !== normalizedRoutePath.value)
 }
 
-function prefetchDocsRouteTarget(normalized: string, locale: 'en' | 'zh') {
-  const cacheKey = `${normalized}:${locale}`
-  if (prefetchedDocsRouteTargets.has(cacheKey)) return
+function prefetchDocsRouteTarget(normalized: string, targetLocale: 'en' | 'zh') {
+  const cacheKey = `${normalized}:${targetLocale}`
+  if (prefetchedDocsRouteTargets.has(cacheKey))
+    return
   prefetchedDocsRouteTargets.add(cacheKey)
 
-  const routeTarget = toLocalizedDocsPath(normalized, locale)
+  const routeTarget = toLocalizedDocsPath(normalized, targetLocale)
   void preloadRouteComponents(routeTarget)
 }
 
-function scheduleDocsFullBodyPrefetch(normalized: string, locale: 'en' | 'zh') {
-  const cacheKey = `${normalized}:${locale}`
-  if (prefetchedDocsFullBodyTargets.has(cacheKey) || pendingDocsFullBodyPrefetchTimers.has(cacheKey)) return
+function scheduleDocsFullBodyPrefetch(normalized: string, targetLocale: 'en' | 'zh') {
+  const cacheKey = `${normalized}:${targetLocale}`
+  if (prefetchedDocsFullBodyTargets.has(cacheKey) || pendingDocsFullBodyPrefetchTimers.has(cacheKey))
+    return
 
   const clearPending = () => {
     pendingDocsFullBodyPrefetchTimers.delete(cacheKey)
@@ -904,42 +233,47 @@ function scheduleDocsFullBodyPrefetch(normalized: string, locale: 'en' | 'zh') {
   }
   const prefetchFullDoc = () => {
     clearPending()
-    if (prefetchedDocsFullBodyTargets.has(cacheKey)) return
+    if (prefetchedDocsFullBodyTargets.has(cacheKey))
+      return
     prefetchedDocsFullBodyTargets.add(cacheKey)
-    void requestDocsPage({ path: normalized, locale, body: '1' }).catch(() => {})
+    void requestDocsPage({ path: normalized, locale: targetLocale, body: '1' }).catch(() => {})
   }
 
   const timer = setTimeout(() => {
     pendingDocsFullBodyPrefetchTimers.delete(cacheKey)
     if (hasWindow() && 'requestIdleCallback' in window) {
       const idleId = window.requestIdleCallback(prefetchFullDoc, {
-        timeout: COMPONENT_DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS,
+        timeout: DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS,
       })
       pendingDocsFullBodyPrefetchIdleIds.set(cacheKey, idleId)
       return
     }
 
     prefetchFullDoc()
-  }, COMPONENT_DOCS_FULL_BODY_PREFETCH_DELAY_MS)
+  }, DOCS_FULL_BODY_PREFETCH_DELAY_MS)
   pendingDocsFullBodyPrefetchTimers.set(cacheKey, timer)
 }
 
 function prefetchDocsTarget(path: string | null | undefined) {
-  if (import.meta.server || !shouldPrefetchDocsTarget(path)) return
+  if (import.meta.server || !shouldPrefetchDocsTarget(path))
+    return
 
   const normalized = normalizeContentPath(path)
-  if (!normalized) return
+  if (!normalized)
+    return
 
-  const locale = docsLocale.value
-  prefetchDocsRouteTarget(normalized, locale)
-  scheduleDocsFullBodyPrefetch(normalized, locale)
+  const targetLocale = docsLocale.value
+  prefetchDocsRouteTarget(normalized, targetLocale)
+  scheduleDocsFullBodyPrefetch(normalized, targetLocale)
 }
 
 function cancelDocsFullBodyPrefetch(path: string | null | undefined) {
-  if (import.meta.server || !path) return
+  if (import.meta.server || !path)
+    return
 
   const normalized = normalizeContentPath(path)
-  if (!normalized) return
+  if (!normalized)
+    return
 
   const cacheKey = `${normalized}:${docsLocale.value}`
   const timer = pendingDocsFullBodyPrefetchTimers.get(cacheKey)
@@ -955,19 +289,33 @@ function cancelDocsFullBodyPrefetch(path: string | null | undefined) {
   }
 }
 
+function clearAllPrefetchSchedules() {
+  for (const timer of pendingDocsFullBodyPrefetchTimers.values())
+    clearTimeout(timer)
+  pendingDocsFullBodyPrefetchTimers.clear()
+
+  if (hasWindow() && 'cancelIdleCallback' in window) {
+    for (const idleId of pendingDocsFullBodyPrefetchIdleIds.values())
+      window.cancelIdleCallback(idleId)
+  }
+  pendingDocsFullBodyPrefetchIdleIds.clear()
+}
+
 function filterByLocale(items: any[]): any[] {
-  if (!items.length) return []
+  if (!items.length)
+    return []
   const currentLocale = locale.value
   const otherLocale = currentLocale === 'en' ? 'zh' : 'en'
   const hasCurrentLocale = items.some(item => typeof item?.path === 'string' && item.path.endsWith(`.${currentLocale}`))
 
   return items
-    .filter(item => {
-      if (!item?.path || !hasCurrentLocale) return true
+    .filter((item) => {
+      if (!item?.path || !hasCurrentLocale)
+        return true
       const path = item.path as string
       return !path.endsWith(`.${otherLocale}`)
     })
-    .map(item => {
+    .map((item) => {
       if (Array.isArray(item.children) && item.children.length > 0) {
         return {
           ...item,
@@ -986,7 +334,8 @@ function sortByOrder(items: any[], parentPath: string | null): any[] {
     const bPath = normalizeContentPath(b.path) ?? ''
     const aIndex = orderMap.has(aPath) ? orderMap.get(aPath)! : Number.POSITIVE_INFINITY
     const bIndex = orderMap.has(bPath) ? orderMap.get(bPath)! : Number.POSITIVE_INFINITY
-    if (aIndex !== bIndex) return aIndex - bIndex
+    if (aIndex !== bIndex)
+      return aIndex - bIndex
     const titleA = (a.title || '').toLowerCase()
     const titleB = (b.title || '').toLowerCase()
     return titleA.localeCompare(titleB)
@@ -995,7 +344,7 @@ function sortByOrder(items: any[], parentPath: string | null): any[] {
 
 function sortTree(items: any[], parentPath: string | null): any[] {
   const sorted = sortByOrder(items, parentPath)
-  return sorted.map(item => {
+  return sorted.map((item) => {
     if (Array.isArray(item.children) && item.children.length > 0) {
       const childParent = normalizeContentPath(item.path)
       return {
@@ -1008,426 +357,35 @@ function sortTree(items: any[], parentPath: string | null): any[] {
 }
 
 const items = computed(() => coerceJsonArray<any>(navigationTreePayload.value))
-
-function collectEmbeddedComponentDocs(nodes: any[], localeCode: 'en' | 'zh'): SidebarComponentDoc[] {
-  const results: SidebarComponentDoc[] = []
-  let hasEmbeddedMetadata = false
-
-  const visit = (list: any[]) => {
-    for (const node of list) {
-      if (!node || typeof node !== 'object') continue
-      const path = typeof node.path === 'string' ? node.path : ''
-      const normalized = path ? normalizeContentPath(path) : null
-      if (normalized && normalized.startsWith('/docs/dev/components/')) {
-        const nodeLocale: 'en' | 'zh' = path.endsWith('.zh') ? 'zh' : path.endsWith('.en') ? 'en' : localeCode
-        if (nodeLocale === localeCode) {
-          if ('category' in node || 'syncStatus' in node || 'verified' in node || 'since' in node)
-            hasEmbeddedMetadata = true
-          const verified = node.verified === true
-          const rawStatus = typeof node.syncStatus === 'string' ? node.syncStatus.trim() : ''
-          const syncStatus: SyncStatusKey = verified
-            ? 'verified'
-            : (COMPONENT_SYNC_STATUS_ALIASES[rawStatus] ?? 'not_started')
-          results.push({
-            title: typeof node.title === 'string' && node.title ? node.title : fallbackTitleFromPath(path),
-            path,
-            normalizedPath: normalized,
-            locale: nodeLocale,
-            category: typeof node.category === 'string' ? node.category : null,
-            since: typeof node.since === 'string' && node.since.trim() ? node.since.trim() : null,
-            syncStatus,
-            verified,
-          })
-        }
-      }
-      if (Array.isArray(node.children) && node.children.length > 0)
-        visit(node.children)
-    }
-  }
-
-  visit(nodes)
-  return hasEmbeddedMetadata ? results : []
-}
-
-const embeddedComponentItems = computed(() =>
-  collectEmbeddedComponentDocs(items.value, docsLocale.value),
-)
-const componentItems = computed(
-  () => {
-    if (embeddedComponentItems.value.length > 0)
-      return embeddedComponentItems.value as any[]
-    return coerceJsonArray<SidebarComponentDoc>(componentDocsPayload.value).filter(
-      item => item.locale === docsLocale.value,
-    ) as any[]
-  },
-)
-const lastComponentSections = shallowRef<any[]>([])
 const isTutorialRoute = computed(() => normalizedRoutePath.value.startsWith('/docs/guide'))
 
 const allSections = computed(() => {
-  if (!items.value.length) return []
+  if (!items.value.length)
+    return []
   const [first] = items.value
-  if (first?.path === '/docs' && Array.isArray(first.children)) return first.children
+  if (first?.path === '/docs' && Array.isArray(first.children))
+    return first.children
   return items.value
 })
 
 function findSectionByPath(list: any[], targetPath: string): any | null {
   const normalizedTarget = normalizeContentPath(targetPath)
-  if (!normalizedTarget) return null
+  if (!normalizedTarget)
+    return null
   for (const item of list) {
     const itemPath = normalizeContentPath(item.path)
-    if (itemPath === normalizedTarget) return item
+    if (itemPath === normalizedTarget)
+      return item
     if (Array.isArray(item.children)) {
       const found = findSectionByPath(item.children, targetPath)
-      if (found) return found
+      if (found)
+        return found
     }
   }
   return null
 }
 
-// Folds family members present in a category's flat child list into a single
-// expandable node. Rendering-only: `used` bookkeeping upstream still sees the
-// flat members, so the misc canary bucket is unaffected. A family with only one
-// member present stays a plain link.
-function groupComponentFamilies(children: any[]): any[] {
-  const familyNodes = new Map<string, any>()
-  const grouped: any[] = []
-
-  for (const child of children) {
-    const familyKey = FAMILY_BY_MEMBER.get(child.normalizedPath ?? '')
-    if (!familyKey) {
-      grouped.push(child)
-      continue
-    }
-    let node = familyNodes.get(familyKey)
-    if (!node) {
-      node = { family: true, familyKey, title: '', members: [] }
-      familyNodes.set(familyKey, node)
-      grouped.push(node)
-    }
-    node.members.push(child)
-  }
-
-  if (!familyNodes.size) return grouped
-
-  return grouped.map(entry => {
-    if (!entry.family) return entry
-
-    const defs = COMPONENT_FAMILIES[entry.familyKey] ?? []
-    const order = new Map(defs.map((def, index) => [def.path, index]))
-    const members = [...entry.members].sort(
-      (a: any, b: any) =>
-        (order.get(a.normalizedPath ?? '') ?? Number.POSITIVE_INFINITY) -
-        (order.get(b.normalizedPath ?? '') ?? Number.POSITIVE_INFINITY),
-    )
-    if (members.length === 1) return members[0]
-
-    entry.members = members.map((member: any) => ({
-      ...member,
-      familyLabelKey: defs.find(def => def.path === member.normalizedPath)?.labelKey,
-    }))
-    const headItem = members.find((member: any) => member.normalizedPath === entry.familyKey)
-    entry.title = headItem?.title ?? members[0]?.title ?? fallbackTitleFromPath(entry.familyKey)
-    return entry
-  })
-}
-
-// The handbook's pages follow its own index's six domains (CONCEPTS_MANUAL_GROUPS);
-// a page missing from them lands in the misc canary bucket instead of vanishing.
-// Read off the navigation tree, which the components scope also carries: the
-// component metadata covers `/docs/dev/components` only. The index is left out;
-// it is the handbook's standalone row.
-const conceptsManualPages = computed(() => {
-  const node = findSectionByPath(items.value, CONCEPTS_MANUAL_PATH)
-  const children: any[] = Array.isArray(node?.children) ? node.children : []
-  return children
-    .map(child => ({ ...child, normalizedPath: normalizeContentPath(child.path) }))
-    .filter(child => child.normalizedPath && canonicalDocsPageIdentity(child.normalizedPath) !== CONCEPTS_MANUAL_PATH)
-})
-
-const resolvedComponentSections = computed(() => {
-  const sourceItems = componentItems.value ?? []
-  if (!sourceItems.length) return []
-
-  const normalizedItems = sourceItems.filter(item => item.normalizedPath?.startsWith('/docs/dev/components'))
-
-  if (!normalizedItems.length) return []
-
-  const indexItem = normalizedItems.find(item => item.normalizedPath === COMPONENTS_INDEX_PATH)
-  const entries = normalizedItems.filter(
-    item => item.normalizedPath && item.normalizedPath !== COMPONENTS_INDEX_PATH,
-  )
-
-  const used = new Set<string>()
-  const sections: any[] = []
-
-  const addSection = (title: string, children: any[]) => {
-    if (!children.length) return
-    for (const child of children) {
-      if (child.normalizedPath) used.add(child.normalizedPath)
-    }
-    sections.push({
-      title,
-      path: children[0].path,
-      children: groupComponentFamilies(children),
-      page: false,
-    })
-  }
-
-  for (const standalonePath of activeSuiteDef.value.standalonePages) {
-    if (standalonePath === CONCEPTS_MANUAL_PATH) {
-      sections.push({
-        title: t('docsSidebar.conceptsManual'),
-        path: CONCEPTS_MANUAL_PATH,
-        children: [],
-        page: true,
-      })
-      continue
-    }
-    const isIndex = standalonePath === COMPONENTS_INDEX_PATH
-    const item = isIndex ? indexItem : entries.find(entry => entry.normalizedPath === standalonePath)
-    if (!item) continue
-    used.add(standalonePath)
-    sections.push({
-      title: item.title,
-      path: isIndex ? COMPONENTS_INDEX_LINK : item.path,
-      children: [],
-      page: true,
-    })
-  }
-
-  for (const category of activeSuiteDef.value.categories) {
-    const children = sortByOrder(
-      entries.filter(item => item.category === category.key && !used.has(item.normalizedPath ?? '')),
-      '/docs/dev/components',
-    )
-    addSection(category.label, children)
-  }
-
-  const manualPages = activeSuite.value === 'concepts' ? conceptsManualPages.value : []
-  for (const group of CONCEPTS_MANUAL_GROUPS) {
-    const children = group.pages
-      .map(slug => manualPages.find(page => page.normalizedPath === `${CONCEPTS_MANUAL_PATH}/${slug}`))
-      .filter(Boolean)
-    addSection(t(`docsSidebar.conceptGroups.${group.key}`), children)
-  }
-
-  // Canary bucket: same-suite entries not covered by the groups above, plus
-  // entries whose category is unknown to CATEGORY_SUITE_MAP (visible in every
-  // suite). Stays empty while taxonomy, script and this file agree.
-  const remaining = sortByOrder(
-    entries.filter(item => {
-      if (used.has(item.normalizedPath ?? '')) return false
-      const suite = item.category ? CATEGORY_SUITE_MAP[item.category] : undefined
-      return suite === undefined || suite === activeSuite.value
-    }),
-    '/docs/dev/components',
-  )
-  const ungroupedManualPages = manualPages.filter(page => !used.has(page.normalizedPath))
-  addSection(t('docsSidebar.categories.misc'), [...remaining, ...ungroupedManualPages])
-
-  return sections
-})
-
-const componentSections = computed(() => {
-  if (componentDocsPending.value) return lastComponentSections.value
-
-  return resolvedComponentSections.value
-})
-
-watch(
-  () => [componentDocsPending.value, resolvedComponentSections.value] as const,
-  ([isPending, latestSections]) => {
-    if (!isPending) lastComponentSections.value = latestSections
-  },
-  { immediate: true },
-)
-
-function resolveComponentItemStatus(item: any): SyncStatusKey | null {
-  if (!item) return null
-
-  const preset = typeof item?.syncStatus === 'string' ? item.syncStatus.trim() : ''
-  if (preset) return COMPONENT_SYNC_STATUS_ALIASES[preset] ?? null
-
-  const verified = item?.verified === true
-  if (verified) return 'verified'
-
-  const raw = typeof item?.syncStatus === 'string' ? item.syncStatus.trim() : ''
-  if (!raw) return null
-
-  return COMPONENT_SYNC_STATUS_ALIASES[raw] ?? null
-}
-
-function componentSyncBadge(item: any) {
-  if (activeTopSection.value !== 'components') return null
-
-  const status = resolveComponentItemStatus(item)
-  if (!status || status === 'verified') return null
-
-  // Unrecognised sync states (such as `reviewed`) fall back to not_started: show the version, not "in progress".
-  if (status === 'not_started') {
-    const since = typeof item?.since === 'string' ? item.since.trim() : ''
-    if (!since) return null
-    return { status: 'since', label: t('docsSidebar.since', { version: since }) }
-  }
-
-  return {
-    status,
-    label: COMPONENT_SYNC_STATUS_LABELS.value[status],
-  }
-}
-
-const frameworkMatrixModule = shallowRef<FrameworkMatrixModule | null>(cachedFrameworkMatrixModule)
-
-function componentFrameworkIndicator(item: any) {
-  if (activeTopSection.value !== 'components' || activeFramework.value === 'vue')
-    return null
-  const matrix = frameworkMatrixModule.value
-  if (!matrix)
-    return null
-  const slug = resolveComponentSlugFromPath(item?.normalizedPath ?? item?.path ?? item?.familyKey ?? linkTarget(item))
-  if (!slug)
-    return null
-  const entry = matrix.getComponentFrameworkEntry(slug)
-  if (!entry)
-    return null
-  const status = entry[activeFramework.value]
-  const localeKey = docsLocale.value === 'zh' ? 'zh' : 'en'
-  const meta = DOCS_FRAMEWORK_META[activeFramework.value]
-  return {
-    status,
-    title: `${meta.label}: ${matrix.formatFrameworkStatusLabel(status, localeKey, activeFramework.value)}`,
-  }
-}
-
-const activeTopSection = computed(() => {
-  if (isTutorialRoute.value) return 'tutorial'
-  // Before the base-path scan: the concepts handbook is under `/docs/dev`, the
-  // extensions base path, yet it is listed with the components.
-  if (isComponentDocsRoute.value) return 'components'
-  const path = normalizedRoutePath.value
-  for (const section of TOP_SECTIONS.value) {
-    if (path.startsWith(section.basePath)) return section.key
-  }
-  return defaultSection.value
-})
-
-watch(
-  [activeTopSection, activeFramework],
-  ([section, fw]) => {
-    if (section !== 'components' || fw === 'vue' || frameworkMatrixModule.value)
-      return
-    void loadFrameworkMatrixModule()
-      .then((mod) => {
-        frameworkMatrixModule.value = mod
-      })
-      .catch(() => {})
-  },
-  { immediate: true },
-)
-
-const activeTopSectionIndex = computed(() => {
-  const index = TOP_SECTIONS.value.findIndex(section => section.key === activeTopSection.value)
-  return index >= 0 ? index : 0
-})
-
-// The section switch is a real radiogroup. Its selection reads the route, and
-// picking a segment is a navigation: `activeTopSection` updates when the new
-// page lands, which is what moves the group's indicator. A pick that names the
-// section already showing is ignored rather than re-navigating.
-function onTopSectionChange(key: string) {
-  const section = TOP_SECTIONS.value.find(candidate => candidate.key === key)
-  if (!section || section.key === activeTopSection.value) return
-  void navigateTo(localizedDocsPath(section.entryPath || section.basePath))
-}
-
-const topSectionButtonRefs = ref<Array<HTMLButtonElement | null>>([])
-
-function setTopSectionButtonRef(index: number, el: unknown) {
-  topSectionButtonRefs.value[index] = el instanceof HTMLButtonElement ? el : null
-}
-
-function cycleTopSection(delta: -1 | 1) {
-  const sections = TOP_SECTIONS.value
-  if (sections.length < 2)
-    return
-  const nextIndex = (activeTopSectionIndex.value + delta + sections.length) % sections.length
-  const nextSection = sections[nextIndex]
-  if (nextSection) {
-    topSectionButtonRefs.value[nextIndex]?.focus()
-    onTopSectionChange(nextSection.key)
-  }
-}
-
 const sidebarPending = computed(() => pending.value)
-
-function hasComponentDocsMetadata() {
-  return embeddedComponentItems.value.length > 0 || coerceJsonArray(componentDocsPayload.value).length > 0
-}
-
-function clearComponentDocsMetadataSchedule() {
-  if (componentDocsMetadataTimer) {
-    clearTimeout(componentDocsMetadataTimer)
-    componentDocsMetadataTimer = null
-  }
-  if (componentDocsMetadataIdleId !== null && hasWindow() && 'cancelIdleCallback' in window) {
-    window.cancelIdleCallback(componentDocsMetadataIdleId)
-    componentDocsMetadataIdleId = null
-  }
-}
-
-function requestComponentDocsMetadata() {
-  if (!shouldLoadComponentDocs.value || pending.value || hasComponentDocsMetadata()) return
-  clearComponentDocsMetadataSchedule()
-  void refreshComponentDocs()
-}
-
-function requestComponentDocsMetadataOnIntent() {
-  if (!shouldLoadComponentDocs.value || pending.value || hasComponentDocsMetadata()) return
-
-  clearComponentDocsMetadataSchedule()
-  componentDocsMetadataTimer = setTimeout(() => {
-    componentDocsMetadataTimer = null
-    requestComponentDocsMetadata()
-  }, COMPONENT_DOCS_METADATA_INTENT_DELAY_MS)
-}
-
-function scheduleComponentDocsMetadata() {
-  if (!shouldLoadComponentDocs.value || pending.value || hasComponentDocsMetadata()) return
-
-  clearComponentDocsMetadataSchedule()
-  componentDocsMetadataTimer = setTimeout(() => {
-    componentDocsMetadataTimer = null
-    if (!shouldLoadComponentDocs.value || pending.value || hasComponentDocsMetadata()) return
-    if (hasWindow() && 'requestIdleCallback' in window) {
-      componentDocsMetadataIdleId = window.requestIdleCallback(
-        () => {
-          componentDocsMetadataIdleId = null
-          requestComponentDocsMetadata()
-        },
-        { timeout: COMPONENT_DOCS_METADATA_IDLE_TIMEOUT_MS },
-      )
-      return
-    }
-    requestComponentDocsMetadata()
-  }, COMPONENT_DOCS_METADATA_DELAY_MS)
-}
-
-watch(
-  () => [shouldLoadComponentDocs.value, pending.value, embeddedComponentItems.value.length] as const,
-  ([shouldLoad, navPending, embeddedCount]) => {
-    if (!shouldLoad || navPending || embeddedCount > 0) {
-      clearComponentDocsMetadataSchedule()
-      return
-    }
-    scheduleComponentDocsMetadata()
-  },
-  { immediate: import.meta.client },
-)
-
-onMounted(() => {
-  sidebarHydrated.value = true
-})
 
 const currentSectionData = computed(() => {
   if (isTutorialRoute.value) {
@@ -1436,53 +394,43 @@ const currentSectionData = computed(() => {
       return sectionPath === '/docs/guide'
     })
   }
-  const active = TOP_SECTIONS.value.find(section => section.key === activeTopSection.value)
-  const targetPath = active?.basePath ?? `/docs/${activeTopSection.value}`
-  return findSectionByPath(allSections.value, targetPath)
+  return findSectionByPath(allSections.value, '/docs/dev')
 })
 
 const sections = computed(() => {
-  if (activeTopSection.value === 'components' && componentSections.value.length) return componentSections.value
-
   const data = currentSectionData.value
-  if (!data) return []
+  if (!data)
+    return []
 
   const children = sortTree(filterByLocale(data.children ?? []), normalizeContentPath(data.path))
-  const filtered =
-    activeTopSection.value === 'extensions'
-      ? children.filter((child: any) => {
-          const childPath = normalizeContentPath(child.path)
-          return childPath !== '/docs/dev/components' && childPath !== CONCEPTS_MANUAL_PATH
-        })
-      : children
 
-  // If there are subdirectories (features, scenes, api, etc.), show them as sections
-  // Otherwise, show the files directly as a flat list
-  const hasSubdirs = filtered.some((c: any) => Array.isArray(c.children) && c.children.length > 0)
+  // If there are subdirectories (features, scenes, api, etc.), show them as sections.
+  // Otherwise, show the files directly as a flat list.
+  const hasSubdirs = children.some((c: any) => Array.isArray(c.children) && c.children.length > 0)
 
   const list = hasSubdirs
-    ? filtered
-    : // For flat file lists, wrap them in a single section
-      [
+    ? children
+    : [
         {
           title: data.title,
           path: data.path,
-          children: filtered,
+          children,
           page: false,
         },
       ]
 
   // Locale-suffixed index docs (e.g. index.zh) self-nest in the navigation tree:
-  // the node carries one child with the same title, which rendered as a group
-  // label duplicating its only link. Flatten those into a single page link.
+  // flatten single-child nodes whose title duplicates their parent into a standalone page row.
   return list.map((section: any) => {
     const sectionChildren = Array.isArray(section.children) ? section.children : []
-    if (sectionChildren.length !== 1) return section
+    if (sectionChildren.length !== 1)
+      return section
 
     const child = sectionChildren[0]
     const sectionTitle = itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined)
     const childTitle = itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined)
-    if (sectionTitle !== childTitle) return section
+    if (sectionTitle !== childTitle)
+      return section
 
     return {
       title: child.title,
@@ -1497,36 +445,39 @@ const expandedSections = ref<Record<string, boolean>>({})
 
 function isLinkActive(path: string) {
   const normalizedTarget = normalizeContentPath(path)
-  if (!normalizedTarget) return false
+  if (!normalizedTarget)
+    return false
 
-  if (normalizedRoutePath.value === normalizedTarget) return true
+  if (normalizedRoutePath.value === normalizedTarget)
+    return true
   return normalizedRoutePath.value.startsWith(`${normalizedTarget}/`)
 }
 
-// A page row names one document, which a section root and its `/index`
-// spelling both reach: the overview's link to the handbook lands on
-// `/docs/dev/concepts/index`, the row links `/docs/dev/concepts`.
 function isPageRowActive(section: any) {
   const target = linkTarget(section)
-  if (!target) return false
+  if (!target)
+    return false
   return canonicalDocsPageIdentity(target) === canonicalDocsPageIdentity(normalizedRoutePath.value)
 }
 
 function itemTitle(title?: string, path?: string) {
   if (path) {
     const label = docLabels.value[path]
-    if (label) return locale.value === 'en' ? stripCjk(label) || fallbackTitleFromPath(path) : label
+    if (label)
+      return locale.value === 'en' ? stripCjk(label) || fallbackTitleFromPath(path) : label
   }
 
   const fallback = fallbackTitleFromPath(path)
   const raw = title || fallback
-  if (locale.value !== 'en') return raw
+  if (locale.value !== 'en')
+    return raw
   const stripped = stripCjk(raw)
   return stripped || fallback
 }
 
 function linkTarget(item: any) {
-  if (!item?.path) return null
+  if (!item?.path)
+    return null
 
   if (item.page === false && Array.isArray(item.children) && item.children.length > 0)
     return normalizeContentPath(item.children[0].path)
@@ -1541,6 +492,7 @@ function sectionKey(item: any) {
 function toggleSection(item: any) {
   const key = sectionKey(item)
   expandedSections.value[key] = !expandedSections.value[key]
+  void nextTick(syncNavRows)
 }
 
 function isSectionExpanded(item: any) {
@@ -1548,48 +500,30 @@ function isSectionExpanded(item: any) {
   return expandedSections.value[key] ?? true
 }
 
-// Family entries default to collapsed, except the one holding the active route.
-// Manual toggles win until the next navigation clears them.
-const expandedFamilies = ref<Record<string, boolean>>({})
-
-function familyContainsRoute(node: any) {
-  if (!Array.isArray(node?.members)) return false
-  return node.members.some((member: any) => member.normalizedPath === normalizedRoutePath.value)
-}
-
-function isFamilyExpanded(node: any) {
-  return expandedFamilies.value[node.familyKey] ?? familyContainsRoute(node)
-}
-
-function toggleFamily(node: any) {
-  expandedFamilies.value[node.familyKey] = !isFamilyExpanded(node)
-}
-
-function memberLabel(member: any) {
-  if (member?.familyLabelKey) return t(member.familyLabelKey)
-  return itemTitle(member?.title, member?.path ?? linkTarget(member) ?? undefined)
-}
-
 function findScrollableParent(element: HTMLElement) {
   let current = element.parentElement
   while (current && current !== document.body) {
     const style = window.getComputedStyle(current)
     const canScrollY = ['auto', 'scroll', 'overlay'].includes(style.overflowY)
-    if (canScrollY && current.scrollHeight > current.clientHeight) return current
+    if (canScrollY && current.scrollHeight > current.clientHeight)
+      return current
     current = current.parentElement
   }
   return null
 }
 
 function scrollActiveLinkIntoView() {
-  if (!hasWindow() || !navRef.value) return
+  if (!hasWindow() || !navRef.value)
+    return
 
-  if (activeScrollFrame !== null) window.cancelAnimationFrame(activeScrollFrame)
+  if (activeScrollFrame !== null)
+    window.cancelAnimationFrame(activeScrollFrame)
 
   activeScrollFrame = window.requestAnimationFrame(() => {
     activeScrollFrame = null
-    const activeLink = navRef.value?.querySelector<HTMLElement>('.docs-nav-link.is-active')
-    if (!activeLink) return
+    const activeLink = navRef.value?.querySelector<HTMLElement>('.docs-nav-link.is-active, .DocSection-Header--page.is-active')
+    if (!activeLink)
+      return
 
     const scrollContainer = activeLink.closest<HTMLElement>('.docs-sidebar') ?? findScrollableParent(activeLink)
     if (!scrollContainer) {
@@ -1604,154 +538,135 @@ function scrollActiveLinkIntoView() {
     const linkRect = activeLink.getBoundingClientRect()
     const containerRect = scrollContainer.getBoundingClientRect()
     const offsetTop = linkRect.top - containerRect.top
-    const targetTop =
-      scrollContainer.scrollTop + offsetTop - scrollContainer.clientHeight / 2 + activeLink.clientHeight / 2
+    const targetTop
+      = scrollContainer.scrollTop + offsetTop - scrollContainer.clientHeight / 2 + activeLink.clientHeight / 2
 
     scrollContainer.scrollTo({ top: Math.max(0, targetTop), behavior: 'auto' })
   })
 }
 
-// Initialize all sections as expanded by default
+// Initialize all sections as expanded by default.
 watch(
   () => [sections.value, locale.value],
   () => {
-    // Expand all sections by default (including new ones when switching tabs)
     for (const section of sections.value) {
       const key = sectionKey(section)
-      if (expandedSections.value[key] === undefined) {
+      if (expandedSections.value[key] === undefined)
         expandedSections.value[key] = true
-      }
     }
   },
   { immediate: true },
 )
 
-// When route changes, follow the route's suite again and expand the section
-// containing the active link
+// Expand sections when navigating to a new doc route.
 watch(
   () => normalizedRoutePath.value,
   () => {
-    selectedSuite.value = null
-    expandedFamilies.value = {}
-    for (const section of sections.value) {
+    for (const section of sections.value)
       expandedSections.value[sectionKey(section)] = true
-    }
   },
 )
 
 watch(
-  () => [normalizedRoutePath.value, sidebarPending.value, activeTopSection.value, sections.value],
+  () => [normalizedRoutePath.value, sidebarPending.value, sections.value],
   async () => {
-    if (sidebarPending.value) return
+    if (sidebarPending.value)
+      return
     await nextTick()
     scrollActiveLinkIntoView()
   },
   { immediate: true, flush: 'post' },
 )
 
-// One travelling highlight for the whole list, as in TxSidebarNav: it follows
-// the pointer (or keyboard focus) first and the current page second, so it
-// reads as "where you are about to go" rather than a second current page.
-// Rows keep their ink, weight and the current page's accent bar; the fill is
-// this one plate, measured by `useIndicatorBox` and moved by the library's
-// indicator engine on the glide material.
+// Pure CSS-composited active/hover row highlight plate: zero ResizeObserver,
+// zero 240Hz JS jelly RAF loop, zero onUpdated() hook.
 const NAV_ROW_SELECTOR = '.docs-nav-link, .DocSection-Header--page'
 const CURRENT_NAV_ROW_SELECTOR = 'a.docs-nav-link.is-active, a.DocSection-Header--page.is-active'
-const COLLAPSED_NAV_BODY_SELECTOR = '.DocSection-Body:not(.is-open), .docs-nav-family-body:not(.is-open)'
+const COLLAPSED_NAV_BODY_SELECTOR = '.DocSection-Body:not(.is-open)'
 
 const navListRef = ref<HTMLElement | null>(null)
-const navPlateRef = ref<HTMLElement | null>(null)
 const hoveredNavRow = shallowRef<HTMLElement | null>(null)
 const currentNavRow = shallowRef<HTMLElement | null>(null)
-// Until the plate has painted once the rows keep their own fills — that is all
-// SSR and the first client frames show — and it lands exactly on the fill it
-// replaces. Its fade switches on only after that first paint.
 const navPlateLive = ref(false)
-const navPlateFades = ref(false)
+const navPlateAnimated = ref(false)
+const navPlateMetrics = ref({ y: 0, height: 0, visible: false })
 
-// A row in a collapsed section or family is clipped, not gone; the plate must
-// not land on space the list no longer shows.
 function visibleNavRow(row: HTMLElement | null) {
   return row && row.isConnected && !row.closest(COLLAPSED_NAV_BODY_SELECTOR) ? row : null
 }
 
-function syncNavRows() {
-  currentNavRow.value = visibleNavRow(navListRef.value?.querySelector<HTMLElement>(CURRENT_NAV_ROW_SELECTOR) ?? null)
-  if (!visibleNavRow(hoveredNavRow.value)) hoveredNavRow.value = null
+function resolveOffsetTopWithin(element: HTMLElement, ancestor: HTMLElement) {
+  let top = 0
+  let current: HTMLElement | null = element
+  while (current && current !== ancestor) {
+    top += current.offsetTop
+    current = current.offsetParent as HTMLElement | null
+  }
+  if (current === ancestor)
+    return top
+  return element.getBoundingClientRect().top - ancestor.getBoundingClientRect().top
 }
 
-// Delegated, because rows come from three templates (links, family toggles and
-// DocSection's own page header). Anything that is not a row — a group label,
-// the 1px gap between rows — leaves the plate where it is.
+function updateNavPlate(target: HTMLElement | null) {
+  const list = navListRef.value
+  const validRow = visibleNavRow(target)
+  if (!list || !validRow) {
+    navPlateMetrics.value = { ...navPlateMetrics.value, visible: false }
+    return
+  }
+
+  navPlateMetrics.value = {
+    y: resolveOffsetTopWithin(validRow, list),
+    height: validRow.offsetHeight,
+    visible: true,
+  }
+
+  if (!navPlateLive.value) {
+    navPlateLive.value = true
+    if (hasWindow()) {
+      plateAnimateFrame = window.requestAnimationFrame(() => {
+        plateAnimateFrame = null
+        navPlateAnimated.value = true
+      })
+    }
+  }
+}
+
+const navPlateStyle = computed(() => ({
+  transform: `translate3d(0, ${navPlateMetrics.value.y}px, 0)`,
+  height: `${navPlateMetrics.value.height}px`,
+  opacity: navPlateMetrics.value.visible ? '1' : '0',
+}))
+
+function syncNavRows() {
+  currentNavRow.value = visibleNavRow(navListRef.value?.querySelector<HTMLElement>(CURRENT_NAV_ROW_SELECTOR) ?? null)
+  if (!visibleNavRow(hoveredNavRow.value))
+    hoveredNavRow.value = null
+  updateNavPlate(hoveredNavRow.value ?? currentNavRow.value)
+}
+
 function onNavRowIntent(event: Event) {
   const row = (event.target as Element | null)?.closest<HTMLElement>(NAV_ROW_SELECTOR)
-  if (row && navListRef.value?.contains(row)) hoveredNavRow.value = row
+  if (row && navListRef.value?.contains(row)) {
+    hoveredNavRow.value = row
+    updateNavPlate(row)
+  }
 }
 
 function clearNavRowIntent() {
   hoveredNavRow.value = null
+  updateNavPlate(currentNavRow.value)
 }
-
-const navPlateTarget = () => hoveredNavRow.value ?? currentNavRow.value
-
-const { box: navPlateBox } = useIndicatorBox({ container: navListRef, target: navPlateTarget })
-
-function writeNavPlate(el: HTMLElement, frame: JellyIndicatorFrame) {
-  el.style.opacity = frame.visible ? '1' : '0'
-  el.style.width = `${frame.rect.width}px`
-  el.style.height = `${frame.rect.height}px`
-  el.style.transform = `translate3d(${frame.rect.x}px, ${frame.rect.y}px, 0)`
-}
-
-function revealNavPlate() {
-  navPlateLive.value = true
-  // Two frames: the first paints the plate in place with no transition to run.
-  window.requestAnimationFrame(() =>
-    window.requestAnimationFrame(() => {
-      navPlateFades.value = true
-    }),
-  )
-}
-
-const navPlate = useJellyIndicator({
-  axis: 'y',
-  material: 'glide',
-  integrate: stepSpring,
-  // TxSidebarNav's pace: the glide springs at their reference speed, with a
-  // lighter lag than the tabs because hover tracking wants the plate to keep up.
-  glide: { ...GLIDE, lag: 0.3 },
-  bounds: () => {
-    const list = navListRef.value
-    return list && list.scrollHeight > 0 ? { start: 0, end: list.scrollHeight } : null
-  },
-  onFrame(frame) {
-    if (navPlateRef.value) writeNavPlate(navPlateRef.value, frame)
-    if (frame.visible && !navPlateLive.value) revealNavPlate()
-  },
-})
-
-// Only a new target travels. A re-measure of the same row (a section above it
-// opening, a resize, a font swap) lands in place.
-let landedNavRow: HTMLElement | null | undefined
-
-watch(
-  navPlateBox,
-  box => {
-    const row = navPlateTarget()
-    const animate = row !== landedNavRow
-    landedNavRow = row
-    navPlate.moveTo(box ? { x: box.left, y: box.top, width: box.width, height: box.height } : null, { animate })
-  },
-  { flush: 'post' },
-)
 
 onMounted(syncNavRows)
-onUpdated(syncNavRows)
+watch([normalizedRoutePath, sections], syncNavRows, { flush: 'post' })
 
 onBeforeUnmount(() => {
-  clearComponentDocsMetadataSchedule()
-  if (hasWindow() && activeScrollFrame !== null) window.cancelAnimationFrame(activeScrollFrame)
-  if (hasWindow()) cancelSuiteFocusFrame()
+  clearAllPrefetchSchedules()
+  if (hasWindow() && activeScrollFrame !== null)
+    window.cancelAnimationFrame(activeScrollFrame)
+  if (hasWindow() && plateAnimateFrame !== null)
+    window.cancelAnimationFrame(plateAnimateFrame)
 })
 </script>
 
@@ -1759,113 +674,37 @@ onBeforeUnmount(() => {
   <nav
     ref="navRef"
     class="docs-nav relative flex flex-col"
-    @focusin="requestComponentDocsMetadataOnIntent"
-    @pointerenter="requestComponentDocsMetadataOnIntent"
-    @touchstart.passive="requestComponentDocsMetadataOnIntent"
   >
-    <!-- Section switch + suite switcher (sticky within sidebar). Two fixed rows:
-         the suites used to be a second tab row that wrapped once it outgrew 230px. -->
+    <!-- Section switch: TuffEx UI external cross-app link + Nexus Dev Docs active tab -->
     <div v-if="!isTutorialRoute" class="docs-nav-head">
       <div
         class="docs-nav-sections"
-        role="radiogroup"
         :aria-label="t('docsSidebar.sections')"
-        :data-active-index="activeTopSectionIndex"
+        data-active-index="1"
       >
         <span class="docs-nav-sections__thumb" aria-hidden="true" />
-        <button
-          v-for="(sec, index) in TOP_SECTIONS"
-          :key="sec.key"
-          :ref="(el) => setTopSectionButtonRef(index, el)"
-          type="button"
-          role="radio"
+        <NuxtLink
+          external
+          :to="tuffexDocsHref"
           class="docs-nav-section"
-          :class="{ 'is-checked': activeTopSection === sec.key }"
-          :aria-checked="activeTopSection === sec.key"
-          :tabindex="activeTopSection === sec.key ? 0 : -1"
-          @click="onTopSectionChange(sec.key)"
-          @keydown.left.prevent="cycleTopSection(-1)"
-          @keydown.right.prevent="cycleTopSection(1)"
         >
-          <span :class="sec.icon" class="docs-nav-section__icon" aria-hidden="true" />
-          <span class="docs-nav-section__label">{{ sec.label }}</span>
-        </button>
+          <span class="i-carbon-cube docs-nav-section__icon" aria-hidden="true" />
+          <span class="docs-nav-section__label">{{ t('docsSidebar.components') }}</span>
+          <span class="i-carbon-arrow-up-right docs-nav-section__external" aria-hidden="true" />
+        </NuxtLink>
+        <span
+          class="docs-nav-section is-checked"
+          aria-current="true"
+        >
+          <span class="i-carbon-code docs-nav-section__icon" aria-hidden="true" />
+          <span class="docs-nav-section__label">{{ t('docsSidebar.extensions') }}</span>
+        </span>
       </div>
-      <TxDropdownMenu
-        v-if="activeTopSection === 'components' && suiteMenuActivated"
-        v-model="suiteMenuOpen"
-        trigger="click"
-        placement="bottom-start"
-        :offset="6"
-        :min-width="300"
-        reference-full-width
-      >
-        <template #trigger>
-          <DocsSuiteTriggerButton
-            ref="suiteTriggerRef"
-            :label="activeSuiteDef.label"
-            :sr-label="t('docsSidebar.suiteSwitcher')"
-            :icon="suiteIcon(activeSuite)"
-            :count="suiteDocCounts[activeSuite]"
-            :open="suiteMenuOpen"
-            @keydown.down.prevent="suiteMenuOpen = true"
-            @keydown.up.prevent="suiteMenuOpen = true"
-          />
-        </template>
-
-        <!-- Escape is handled on the item and stopped there. Left to bubble to
-             `document`, it also reached the mobile drawer's (TxDrawer) Escape
-             listener, and the whole drawer closed along with the menu. -->
-        <TxDropdownItem
-          v-for="suite in SUITES"
-          :key="suite.key"
-          role="menuitemradio"
-          class="docs-suite-option"
-          :class="activeSuite === suite.key ? 'is-current' : ''"
-          :aria-checked="activeSuite === suite.key"
-          @select="selectSuite(suite.key)"
-          @keydown.esc.stop="suiteMenuOpen = false"
-        >
-          <span class="docs-suite-option__body">
-            <span class="docs-suite-option__icon" aria-hidden="true">
-              <span :class="suiteIcon(suite.key)" />
-            </span>
-            <span class="docs-suite-option__text">
-              <span class="docs-suite-option__name">{{ suite.label }}</span>
-              <span v-if="suiteDescription(suite.key)" class="docs-suite-option__desc">
-                {{ suiteDescription(suite.key) }}
-              </span>
-            </span>
-          </span>
-          <template #right>
-            <span v-if="activeSuite === suite.key" class="docs-suite-option__check i-carbon-checkmark" aria-hidden="true" />
-            <span v-else-if="suiteDocCounts[suite.key]" class="docs-suite-option__count">
-              {{ suiteDocCounts[suite.key] }}
-            </span>
-          </template>
-        </TxDropdownItem>
-      </TxDropdownMenu>
-      <DocsSuiteTriggerButton
-        v-else-if="activeTopSection === 'components'"
-        ref="suiteTriggerRef"
-        :label="activeSuiteDef.label"
-        :sr-label="t('docsSidebar.suiteSwitcher')"
-        :icon="suiteIcon(activeSuite)"
-        :count="suiteDocCounts[activeSuite]"
-        :open="suiteMenuOpen"
-        @pointerenter="activateSuiteMenu()"
-        @focus="activateSuiteMenu()"
-        @click="activateSuiteMenu(true)"
-        @keydown.down.prevent="activateSuiteMenu(true)"
-        @keydown.up.prevent="activateSuiteMenu(true)"
-      />
     </div>
 
     <!-- Scrollable content.
          Deliberately not gated on `sidebarPending`: the navigation fetch is `server: false`,
-         so `pending` is false during SSR but true on the client's first render. Gating on it
-         made server and client disagree on this node and broke hydration for the whole page.
-         Both sides now take the `sections.length === 0` branch until the fetch resolves. -->
+         so `pending` is false during SSR but true on the client's first render. -->
     <div
       ref="navListRef"
       class="docs-nav-body flex flex-col gap-0.5"
@@ -1875,7 +714,12 @@ onBeforeUnmount(() => {
       @focusin="onNavRowIntent"
       @focusout="clearNavRowIntent"
     >
-      <span ref="navPlateRef" class="docs-nav-plate" :class="{ 'is-fading': navPlateFades }" aria-hidden="true" />
+      <span
+        class="docs-nav-plate"
+        :class="{ 'is-animated': navPlateAnimated }"
+        :style="navPlateStyle"
+        aria-hidden="true"
+      />
       <template v-if="error">
         <div
           class="border border-gray-200 rounded-md bg-white p-3 text-sm text-gray-500 dark:border-gray-800 dark:bg-dark/80 dark:text-gray-300"
@@ -1884,7 +728,6 @@ onBeforeUnmount(() => {
         </div>
       </template>
       <template v-else-if="sections.length === 0">
-        <!-- Show direct links when no subsections -->
         <ul v-if="currentSectionData" class="docs-nav-list">
           <li class="docs-nav-item">
             <NuxtLink
@@ -1926,80 +769,9 @@ onBeforeUnmount(() => {
               </span>
             </span>
           </template>
-          <li v-for="child in section.children" :key="child.familyKey ?? child.path ?? child.title" class="docs-nav-item">
-            <template v-if="child.family">
-              <button
-                type="button"
-                class="docs-nav-link docs-nav-family-toggle"
-                :class="familyContainsRoute(child) ? 'is-active' : ''"
-                :aria-expanded="isFamilyExpanded(child)"
-                @click="toggleFamily(child)"
-              >
-                <span class="truncate" :title="itemTitle(child.title, child.familyKey)">
-                  {{ itemTitle(child.title, child.familyKey) }}
-                </span>
-                <span class="docs-nav-family-trailing">
-                  <span
-                    v-if="componentFrameworkIndicator(child)"
-                    class="docs-nav-fw-dot"
-                    :data-status="componentFrameworkIndicator(child)?.status"
-                    :title="componentFrameworkIndicator(child)?.title"
-                    :aria-label="componentFrameworkIndicator(child)?.title"
-                  />
-                  <span
-                    class="docs-nav-family-indicator i-carbon-chevron-down"
-                    :class="isFamilyExpanded(child) ? 'is-open' : ''"
-                    aria-hidden="true"
-                  />
-                </span>
-              </button>
-              <div
-                class="docs-nav-family-body"
-                :class="isFamilyExpanded(child) ? 'is-open' : ''"
-                :aria-hidden="!isFamilyExpanded(child)"
-                :inert="!isFamilyExpanded(child)"
-              >
-                <div class="docs-nav-family-inner">
-                  <ul class="docs-nav-list docs-nav-family-list">
-                    <li v-for="member in child.members" :key="member.path ?? member.title" class="docs-nav-item">
-                      <NuxtLink
-                        v-if="linkTarget(member)"
-                        :to="localizedDocsPath(linkTarget(member)!)"
-                        :prefetch="false"
-                        class="docs-nav-link"
-                        :class="isLinkActive(linkTarget(member) || member.path || '') ? 'is-active' : ''"
-                        :aria-current="isLinkActive(linkTarget(member) || member.path || '') ? 'page' : undefined"
-                        @focus="prefetchDocsTarget(linkTarget(member))"
-                        @blur="cancelDocsFullBodyPrefetch(linkTarget(member))"
-                        @mouseenter="prefetchDocsTarget(linkTarget(member))"
-                        @mouseleave="cancelDocsFullBodyPrefetch(linkTarget(member))"
-                        @touchstart.passive="prefetchDocsTarget(linkTarget(member))"
-                      >
-                        <span class="truncate" :title="memberLabel(member)">
-                          {{ memberLabel(member) }}
-                        </span>
-                        <span
-                          v-if="componentFrameworkIndicator(member)"
-                          class="docs-nav-fw-dot"
-                          :data-status="componentFrameworkIndicator(member)?.status"
-                          :title="componentFrameworkIndicator(member)?.title"
-                          :aria-label="componentFrameworkIndicator(member)?.title"
-                        />
-                        <span
-                          v-if="componentSyncBadge(member)"
-                          class="docs-nav-sync-badge"
-                          :data-status="componentSyncBadge(member)?.status"
-                        >
-                          {{ componentSyncBadge(member)?.label }}
-                        </span>
-                      </NuxtLink>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </template>
+          <li v-for="child in section.children" :key="child.path ?? child.title" class="docs-nav-item">
             <NuxtLink
-              v-else-if="linkTarget(child)"
+              v-if="linkTarget(child)"
               :to="localizedDocsPath(linkTarget(child)!)"
               :prefetch="false"
               class="docs-nav-link"
@@ -2013,20 +785,6 @@ onBeforeUnmount(() => {
             >
               <span class="truncate" :title="itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined)">
                 {{ itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined) }}
-              </span>
-              <span
-                v-if="componentFrameworkIndicator(child)"
-                class="docs-nav-fw-dot"
-                :data-status="componentFrameworkIndicator(child)?.status"
-                :title="componentFrameworkIndicator(child)?.title"
-                :aria-label="componentFrameworkIndicator(child)?.title"
-              />
-              <span
-                v-if="componentSyncBadge(child)"
-                class="docs-nav-sync-badge"
-                :data-status="componentSyncBadge(child)?.status"
-              >
-                {{ componentSyncBadge(child)?.label }}
               </span>
             </NuxtLink>
           </li>
@@ -2049,23 +807,16 @@ onBeforeUnmount(() => {
   gap: 8px;
   margin-bottom: 10px;
   padding: 4px 0 12px;
-  /* Sticky, so a hairline rather than a shadow separates it from the list
-     scrolling underneath. */
   border-bottom: 1px solid var(--tx-border-color-lighter, #ebeef5);
-  /* Opaque: a blur here resampled the sidebar's backdrop on every scroll frame. */
   background: var(--tx-bg-color, #fff);
 }
 
-/* Under dark the page is darker than every fill token, so the thumb has to be
-   the lighter surface for the active segment to read as raised, not sunk. */
 :global(.dark .docs-nav-head),
 :global([data-theme='dark'] .docs-nav-head) {
   --docs-nav-switch-track: var(--tx-fill-color-lighter, #1d1d1d);
   --docs-nav-switch-thumb: var(--tx-fill-color, #303030);
 }
 
-/* Section switch: native radiogroup with roving tabindex and sliding thumb so
-   every docs page avoids pulling TuffEx radio/glass-surface chunks on load. */
 .docs-nav-head .docs-nav-sections {
   position: relative;
   display: grid;
@@ -2106,8 +857,7 @@ onBeforeUnmount(() => {
   width: 100%;
   min-width: 0;
   height: 28px;
-  gap: 6px;
-  /* Concentric with the track: 10px outer radius minus the 3px inset. */
+  gap: 5px;
   padding: 0 8px;
   border: 0;
   border-radius: 7px;
@@ -2118,12 +868,18 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 500;
   color: var(--docs-nav-ink);
+  text-decoration: none;
   cursor: pointer;
   transition: color 0.16s ease;
 }
 
+.docs-nav-head .docs-nav-section:hover {
+  color: var(--tx-text-color-primary, #303133);
+}
+
 .docs-nav-head .docs-nav-section.is-checked {
   color: var(--tx-text-color-primary, #303133);
+  cursor: default;
 }
 
 .docs-nav-head .docs-nav-section:focus-visible {
@@ -2136,143 +892,14 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
-.docs-suite-trigger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  height: 40px;
-  padding: 0 10px 0 6px;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #ebeef5);
-  color: var(--tx-text-color-primary, #303133);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-}
-
-.docs-suite-trigger:hover,
-.docs-suite-trigger[aria-expanded='true'] {
-  background: var(--docs-nav-switch-track);
-}
-
-.docs-suite-trigger:focus-visible {
-  outline: 2px solid var(--tx-color-primary, #409eff);
-  outline-offset: 2px;
-}
-
-.docs-suite-trigger__icon {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  /* Concentric with the trigger: 12px radius minus the 6px inset. */
-  border-radius: 6px;
-  font-size: 15px;
-  color: var(--tx-color-primary, #409eff);
-  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent);
-}
-
-.docs-suite-trigger__name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.docs-suite-trigger__count {
-  flex: none;
-  padding: 0 6px;
-  border-radius: 999px;
-  /* Mixed from the ink, not a fill token: the trigger itself takes the track
-     fill on hover and while open, and a pill in that colour vanished into it. */
-  background: color-mix(in srgb, var(--tx-text-color-primary, #303133) 8%, transparent);
+.docs-nav-section__external {
   font-size: 11px;
-  font-weight: 600;
-  line-height: 18px;
-  font-variant-numeric: tabular-nums;
-  color: var(--docs-nav-ink);
+  opacity: 0.6;
 }
 
-.docs-suite-trigger__chevron {
-  flex: none;
-  font-size: 14px;
-  color: var(--tx-text-color-secondary, #909399);
-}
-
-/* Menu rows. The panel is teleported, but this markup is slot content and the
-   item root inherits this component's scope, so these rules still reach it. */
-.docs-suite-option__body {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.docs-suite-option__icon {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  font-size: 15px;
-  color: var(--tx-text-color-regular, #606266);
-  background: var(--tx-fill-color-light, #f5f7fa);
-}
-
-.docs-suite-option.is-current .docs-suite-option__icon {
-  color: var(--tx-color-primary, #409eff);
-  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent);
-}
-
-.docs-suite-option__text {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
-.docs-suite-option__name {
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 18px;
-  color: var(--tx-text-color-primary, #303133);
-}
-
-.docs-suite-option__desc {
-  overflow: hidden;
-  font-size: 12px;
-  line-height: 16px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--tx-text-color-secondary, #909399);
-}
-
-.docs-suite-option__count {
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--tx-text-color-secondary, #909399);
-}
-
-.docs-suite-option__check {
-  font-size: 14px;
-  color: var(--tx-color-primary, #409eff);
-}
-
-/* Hover and current-page fills. Under dark the page sits below every fill
-   token, so each step moves one lighter than it does on the light page. */
 .docs-nav {
   --docs-nav-hover: var(--tx-fill-color-light, #f5f7fa);
   --docs-nav-active: var(--tx-fill-color, #f0f2f5);
-  /* Resting ink. Secondary (#909399) is 3.1:1 on the light page, under AA for
-     13px text; regular is 6.3:1. The group labels sit a step lighter at ~5:1. */
   --docs-nav-ink: var(--tx-text-color-regular, #606266);
   --docs-nav-label: color-mix(in srgb, var(--tx-text-color-regular, #606266) 75%, var(--tx-text-color-secondary, #909399));
 }
@@ -2281,7 +908,6 @@ onBeforeUnmount(() => {
 :global([data-theme='dark'] .docs-nav) {
   --docs-nav-hover: var(--tx-fill-color-lighter, #1d1d1d);
   --docs-nav-active: var(--tx-fill-color-light, #262727);
-  /* 7.6:1 and 5.9:1 on the #121212 page. */
   --docs-nav-ink: var(--tx-text-color-secondary, #a3a6ad);
   --docs-nav-label: var(--tx-text-color-placeholder, #8d9095);
 }
@@ -2302,42 +928,6 @@ onBeforeUnmount(() => {
   position: relative;
   background: transparent;
   box-shadow: none;
-}
-
-:deep(.docs-nav-sync-badge) {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: rgba(226, 232, 240, 0.35);
-  color: rgba(71, 85, 105, 0.92);
-  font-size: 9.5px;
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: 0.02em;
-}
-
-:deep(.docs-nav-sync-badge[data-status='in_progress']),
-:deep(.docs-nav-sync-badge[data-status='not_started']) {
-  border-color: rgba(245, 158, 11, 0.35);
-  background: rgba(245, 158, 11, 0.12);
-  color: rgba(180, 83, 9, 0.95);
-}
-
-:deep(.docs-nav-sync-badge[data-status='migrated']) {
-  border-color: rgba(14, 165, 233, 0.35);
-  background: rgba(14, 165, 233, 0.1);
-  color: rgba(3, 105, 161, 0.95);
-}
-
-:deep(.docs-nav-sync-badge[data-status='verified']) {
-  border-color: rgba(16, 185, 129, 0.3);
-  background: rgba(16, 185, 129, 0.1);
-  color: rgba(5, 150, 105, 0.95);
 }
 
 :deep(.docs-nav-link) {
@@ -2362,8 +952,6 @@ onBeforeUnmount(() => {
   background: var(--docs-nav-hover);
 }
 
-/* The current page: a filled row plus a short accent bar on its leading edge,
-   so it still reads as "you are here" in a long list scanned at a glance. */
 :deep(.docs-nav-link.is-active) {
   color: var(--tx-text-color-primary, #303133);
   font-weight: 500;
@@ -2382,15 +970,12 @@ onBeforeUnmount(() => {
   transform: translateY(-50%);
 }
 
-/* A router-active link that is not the current page (an ancestor route) must
-   not pick up a global active-link fill. */
 :deep(.docs-nav-link.router-link-active:not(.is-active)),
 :deep(.docs-nav-link.router-link-exact-active:not(.is-active)) {
   background: transparent;
   box-shadow: none;
 }
 
-/* A click leaves no UA ring on the row; keyboard focus still shows one. */
 :deep(.docs-nav-link:focus:not(:focus-visible)) {
   outline: none;
 }
@@ -2400,93 +985,6 @@ onBeforeUnmount(() => {
   outline-offset: -2px;
 }
 
-/* Family entry: a nav-link-shaped toggle plus a collapsible member list. */
-:deep(.docs-nav-family-toggle) {
-  width: 100%;
-  gap: 4px;
-  border: 0;
-  background: transparent;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-/* A family row holding the current page marks it with ink and weight only:
-   the member row below carries the fill and the bar, and both carrying them
-   read as two current pages. */
-:deep(.docs-nav-family-toggle.is-active) {
-  background: transparent;
-}
-
-:deep(.docs-nav-family-toggle.is-active:hover) {
-  background: var(--docs-nav-hover);
-}
-
-:deep(.docs-nav-family-toggle.is-active)::before {
-  content: none;
-}
-
-:deep(.docs-nav-family-trailing) {
-  flex: none;
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-:deep(.docs-nav-family-trailing .docs-nav-fw-dot) {
-  margin-left: 0;
-}
-
-:deep(.docs-nav-family-indicator) {
-  flex: none;
-  margin-left: 0;
-  font-size: 12px;
-  opacity: 0.45;
-  transform: rotate(-90deg);
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-
-:deep(.docs-nav-family-toggle:hover .docs-nav-family-indicator),
-:deep(.docs-nav-family-toggle:focus-visible .docs-nav-family-indicator) {
-  opacity: 0.8;
-}
-
-:deep(.docs-nav-family-indicator.is-open) {
-  transform: rotate(0deg);
-}
-
-:deep(.docs-nav-family-body) {
-  display: grid;
-  grid-template-rows: 0fr;
-  overflow: hidden;
-  transition: grid-template-rows 0.2s ease;
-}
-
-:deep(.docs-nav-family-body.is-open) {
-  grid-template-rows: 1fr;
-}
-
-:deep(.docs-nav-family-inner) {
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* The "|" rail from the sketch: indent members under the family toggle, the
-   rail lined up under the toggle's text. */
-:deep(.docs-nav-family-list) {
-  margin: 1px 0 0 10px;
-  padding-left: 6px;
-  border-left: 1px solid var(--tx-border-color-lighter, #ebeef5);
-}
-
-/* The travelling highlight. The engine writes its transform, size and opacity
-   every frame, so none of them may carry a transition — CSS would re-ease each
-   written frame and the plate would trail its own spring. The fade is the one
-   exception, and only once the plate has painted in place. Rows are positioned
-   and come later in the tree, so they paint over it. */
 .docs-nav-body {
   position: relative;
 }
@@ -2495,28 +993,28 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 0;
   left: 0;
+  right: 0;
   border-radius: 7px;
   background: var(--docs-nav-active);
   opacity: 0;
   pointer-events: none;
-  will-change: transform;
+  will-change: transform, opacity;
 }
 
-.docs-nav-plate.is-fading {
-  transition: opacity 150ms ease;
+.docs-nav-plate.is-animated {
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 150ms ease;
 }
 
-/* Once live, the plate is the only fill. Declared after the family toggle's
-   hover fill, which has the same specificity. */
 .docs-nav-body.has-plate :deep(.docs-nav-link),
 .docs-nav-body.has-plate :deep(.DocSection-Header--page) {
   background: transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :deep(.docs-nav-family-indicator),
-  :deep(.docs-nav-family-body),
-  .docs-nav-plate.is-fading {
+  .docs-nav-plate.is-animated {
     transition: none;
   }
 }
@@ -2527,61 +1025,5 @@ onBeforeUnmount(() => {
 :global([data-theme='dark'] .docs-nav-item) {
   background: transparent !important;
   box-shadow: none !important;
-}
-
-:global(.dark .docs-nav-sync-badge),
-:global([data-theme='dark'] .docs-nav-sync-badge) {
-  border-color: rgba(71, 85, 105, 0.55);
-  background: rgba(51, 65, 85, 0.45);
-  color: rgba(226, 232, 240, 0.9);
-}
-
-:global(.dark .docs-nav-sync-badge[data-status='in_progress']),
-:global([data-theme='dark'] .docs-nav-sync-badge[data-status='in_progress']),
-:global(.dark .docs-nav-sync-badge[data-status='not_started']),
-:global([data-theme='dark'] .docs-nav-sync-badge[data-status='not_started']) {
-  border-color: rgba(245, 158, 11, 0.5);
-  background: rgba(120, 53, 15, 0.35);
-  color: rgba(253, 186, 116, 0.95);
-}
-
-:global(.dark .docs-nav-sync-badge[data-status='migrated']),
-:global([data-theme='dark'] .docs-nav-sync-badge[data-status='migrated']) {
-  border-color: rgba(14, 165, 233, 0.5);
-  background: rgba(12, 74, 110, 0.35);
-  color: rgba(125, 211, 252, 0.95);
-}
-
-:global(.dark .docs-nav-sync-badge[data-status='verified']),
-:global([data-theme='dark'] .docs-nav-sync-badge[data-status='verified']) {
-  border-color: rgba(16, 185, 129, 0.45);
-  background: rgba(6, 95, 70, 0.35);
-  color: rgba(110, 231, 183, 0.95);
-}
-
-:deep(.docs-nav-fw-dot) {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  margin-left: auto;
-  border-radius: 999px;
-  background: var(--tx-text-color-placeholder, #a8abb2);
-  opacity: 0.45;
-}
-
-:deep(.docs-nav-fw-dot[data-status='ready']) {
-  background: var(--tx-color-success, #67c23a);
-  opacity: 1;
-}
-
-:deep(.docs-nav-fw-dot[data-status='planned']) {
-  background: var(--tx-color-warning, #e6a23c);
-  opacity: 0.55;
-}
-
-:deep(.docs-nav-fw-dot[data-status='unsupported']) {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--tx-text-color-placeholder, #a8abb2);
-  opacity: 0.5;
 }
 </style>

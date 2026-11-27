@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
-import { hasDocument } from '@talex-touch/utils/env'
+import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { Color, Mesh, Program, Renderer, Triangle } from 'ogl'
 import { onMounted, onUnmounted, useTemplateRef, watch } from 'vue'
 
@@ -24,6 +24,11 @@ const props = withDefaults(defineProps<AuroraProps>(), {
   className: '',
   style: () => ({}),
 })
+
+const MAX_DPR = 1.0
+const TARGET_FPS = 24
+const FRAME_INTERVAL_MS = 1000 / TARGET_FPS
+const DEFAULT_COLOR_STOPS = ['#7cff67', '#171D22', '#7cff67']
 
 const containerRef = useTemplateRef<HTMLDivElement>('containerRef')
 
@@ -72,7 +77,7 @@ float snoise(vec2 v){
           dot(x0, x0),
           dot(x12.xy, x12.xy),
           dot(x12.zw, x12.zw)
-      ), 
+      ),
       0.0
   );
   m = m * m;
@@ -111,34 +116,52 @@ struct ColorStop {
 
 void main() {
   vec2 uv = gl_FragCoord.xy / uResolution;
-  
+
   ColorStop colors[3];
   colors[0] = ColorStop(uColorStops[0], 0.0);
   colors[1] = ColorStop(uColorStops[1], 0.5);
   colors[2] = ColorStop(uColorStops[2], 1.0);
-  
+
   vec3 rampColor;
   COLOR_RAMP(colors, uv.x, rampColor);
-  
+
   float height = snoise(vec2(uv.x * 2.0 + uTime * 0.1, uTime * 0.25)) * 0.5 * uAmplitude;
   height = exp(height);
   height = (uv.y * 2.0 - height + 0.2);
   float intensity = 0.6 * height;
-  
+
   float midPoint = 0.20;
   float auroraAlpha = smoothstep(midPoint - uBlend * 0.5, midPoint + uBlend * 0.5, intensity);
-  
+
   vec3 auroraColor = rampColor;
-  
+
   float finalAlpha = auroraAlpha * smoothstep(0.0, 0.5, intensity) * uIntensity;
-  
+
   fragColor = vec4(auroraColor * finalAlpha, finalAlpha);
 }
 `
 
 let renderer: Renderer | null = null
-let animateId = 0
+let program: Program | null = null
+let mesh: Mesh | null = null
+let animateId: number | null = null
+let lastFrameTime = 0
 let auroraDisabled = false
+let isVisible = false
+let isDocumentHidden = false
+let reducedMotion = false
+let observer: IntersectionObserver | null = null
+let motionMediaQuery: MediaQueryList | null = null
+let resizeHandler: (() => void) | null = null
+let parsedColorStops: [number, number, number][] = []
+
+function parseColorStops(stops: string[] | undefined): [number, number, number][] {
+  const source = stops && stops.length >= 3 ? stops.slice(0, 3) : DEFAULT_COLOR_STOPS
+  return source.map((hex) => {
+    const c = new Color(hex)
+    return [c.r, c.g, c.b]
+  })
+}
 
 function hasAuroraWebglSupport() {
   if (!hasDocument())
@@ -155,8 +178,84 @@ function hasAuroraWebglSupport() {
   }
 }
 
+function stopLoop() {
+  if (animateId !== null) {
+    cancelAnimationFrame(animateId)
+    animateId = null
+  }
+}
+
+function renderFrame(t: number) {
+  if (!program || !renderer || !mesh)
+    return
+
+  const time = reducedMotion ? 8 : (props.time ?? t * 0.01)
+  const speed = props.speed ?? 1.0
+  program.uniforms.uTime.value = time * speed * 0.1
+  program.uniforms.uAmplitude.value = props.amplitude ?? 1.0
+  program.uniforms.uBlend.value = props.blend ?? 0.5
+  program.uniforms.uIntensity.value = props.intensity ?? 1.0
+  renderer.render({ scene: mesh })
+}
+
+function loop(t: number) {
+  animateId = null
+  if (!program || !renderer || !mesh || !isVisible || isDocumentHidden)
+    return
+
+  if (reducedMotion) {
+    renderFrame(t)
+    return
+  }
+
+  if (lastFrameTime > 0 && t - lastFrameTime < FRAME_INTERVAL_MS) {
+    animateId = requestAnimationFrame(loop)
+    return
+  }
+
+  lastFrameTime = t
+  renderFrame(t)
+  animateId = requestAnimationFrame(loop)
+}
+
+function startLoop() {
+  if (!program || !renderer || !mesh || !isVisible || isDocumentHidden)
+    return
+  if (reducedMotion) {
+    stopLoop()
+    renderFrame(performance.now())
+    return
+  }
+  if (animateId !== null)
+    return
+  lastFrameTime = 0
+  animateId = requestAnimationFrame(loop)
+}
+
+function onVisibilityChange() {
+  isDocumentHidden = document.hidden
+  if (isDocumentHidden) {
+    stopLoop()
+  }
+  else {
+    startLoop()
+  }
+}
+
+function onReducedMotionChange(event: MediaQueryListEvent) {
+  reducedMotion = event.matches
+  if (reducedMotion) {
+    stopLoop()
+    if (isVisible && !isDocumentHidden)
+      renderFrame(performance.now())
+  }
+  else {
+    startLoop()
+  }
+}
+
 function initAurora() {
-  if (auroraDisabled)
+  if (auroraDisabled || !hasWindow())
     return
 
   const container = containerRef.value
@@ -168,11 +267,15 @@ function initAurora() {
     return
   }
 
+  const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR)
+
   try {
     renderer = new Renderer({
+      dpr,
       alpha: true,
       premultipliedAlpha: true,
-      antialias: true,
+      antialias: false,
+      powerPreference: 'low-power',
     })
   }
   catch {
@@ -194,8 +297,6 @@ function initAurora() {
     return
   }
 
-  let program: Program | undefined
-
   const resize = () => {
     if (!container || !renderer)
       return
@@ -206,25 +307,27 @@ function initAurora() {
     const width = Math.max(parentWidth, 300)
     const height = Math.max(parentHeight, 300)
 
+    renderer.dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR)
     renderer.setSize(width, height)
     if (program) {
-      program.uniforms.uResolution.value = [width, height]
+      program.uniforms.uResolution.value = [
+        renderer.gl.drawingBufferWidth || width,
+        renderer.gl.drawingBufferHeight || height,
+      ]
     }
+    if (reducedMotion && isVisible && !isDocumentHidden)
+      renderFrame(performance.now())
   }
 
-  window.addEventListener('resize', resize)
+  resizeHandler = resize
+  window.addEventListener('resize', resizeHandler, { passive: true })
 
-  let geometry: Triangle
-  let mesh: Mesh
   try {
-    geometry = new Triangle(gl)
+    const geometry = new Triangle(gl)
     if (geometry.attributes.uv)
       delete geometry.attributes.uv
 
-    const colorStopsArray = props.colorStops.map((hex) => {
-      const c = new Color(hex)
-      return [c.r, c.g, c.b]
-    })
+    parsedColorStops = parseColorStops(props.colorStops)
 
     program = new Program(gl, {
       vertex: VERT,
@@ -232,7 +335,7 @@ function initAurora() {
       uniforms: {
         uTime: { value: 0 },
         uAmplitude: { value: props.amplitude },
-        uColorStops: { value: colorStopsArray },
+        uColorStops: { value: parsedColorStops },
         uResolution: {
           value: [
             Math.max(container.parentElement?.offsetWidth || container.offsetWidth || window.innerWidth, 300),
@@ -260,54 +363,83 @@ function initAurora() {
   gl.canvas.style.top = '0'
   gl.canvas.style.left = '0'
 
-  const update = (t: number) => {
-    animateId = requestAnimationFrame(update)
-    const time = props.time ?? t * 0.01
-    const speed = props.speed ?? 1.0
-    if (program) {
-      program.uniforms.uTime.value = time * speed * 0.1
-      program.uniforms.uAmplitude.value = props.amplitude ?? 1.0
-      program.uniforms.uBlend.value = props.blend ?? 0.5
-      program.uniforms.uIntensity.value = props.intensity ?? 1.0
-      const stops = props.colorStops ?? ['#27FF64', '#7cff67', '#27FF64']
-      program.uniforms.uColorStops.value = stops.map((hex: string) => {
-        const c = new Color(hex)
-        return [c.r, c.g, c.b]
-      })
-      renderer?.render({ scene: mesh })
-    }
-  }
-  animateId = requestAnimationFrame(update)
-
   resize()
-
-  return () => {
-    cancelAnimationFrame(animateId)
-    window.removeEventListener('resize', resize)
-    if (container && gl.canvas.parentNode === container) {
-      container.removeChild(gl.canvas)
-    }
-    gl.getExtension('WEBGL_lose_context')?.loseContext()
-  }
+  startLoop()
 }
 
 function cleanup() {
-  if (animateId) {
-    cancelAnimationFrame(animateId)
+  stopLoop()
+
+  if (observer) {
+    observer.disconnect()
+    observer = null
   }
+
+  if (motionMediaQuery) {
+    motionMediaQuery.removeEventListener('change', onReducedMotionChange)
+    motionMediaQuery = null
+  }
+
+  if (hasWindow()) {
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+    if (resizeHandler) {
+      window.removeEventListener('resize', resizeHandler)
+      resizeHandler = null
+    }
+  }
+
   if (renderer) {
     const gl = renderer.gl
     const container = containerRef.value
     if (container && gl.canvas.parentNode === container) {
       container.removeChild(gl.canvas)
     }
-    gl.getExtension('WEBGL_lose_context')?.loseContext()
+    try {
+      gl.getExtension('WEBGL_lose_context')?.loseContext()
+    }
+    catch {
+      // ignore dispose failures in headless / no-gl environments
+    }
   }
+
   renderer = null
+  program = null
+  mesh = null
 }
 
 onMounted(() => {
-  initAurora()
+  if (!containerRef.value || !hasWindow())
+    return
+
+  motionMediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  reducedMotion = motionMediaQuery.matches
+  motionMediaQuery.addEventListener('change', onReducedMotionChange)
+  isDocumentHidden = document.hidden
+  document.addEventListener('visibilitychange', onVisibilityChange)
+
+  if (typeof IntersectionObserver !== 'undefined') {
+    observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.some(entry => entry.isIntersecting)
+        isVisible = visible
+        if (visible) {
+          if (!renderer && !auroraDisabled)
+            initAurora()
+          else
+            startLoop()
+        }
+        else {
+          stopLoop()
+        }
+      },
+      { threshold: 0.01, rootMargin: '80px' },
+    )
+    observer.observe(containerRef.value)
+  }
+  else {
+    isVisible = true
+    initAurora()
+  }
 })
 
 onUnmounted(() => {
@@ -315,12 +447,28 @@ onUnmounted(() => {
 })
 
 watch(
-  () => [props.amplitude, props.intensity],
+  () => props.colorStops,
+  (stops) => {
+    parsedColorStops = parseColorStops(stops)
+    if (program) {
+      program.uniforms.uColorStops.value = parsedColorStops
+      if (reducedMotion && isVisible && !isDocumentHidden)
+        renderFrame(performance.now())
+    }
+  },
+  { deep: true },
+)
+
+watch(
+  () => [props.amplitude, props.blend, props.intensity],
   () => {
-    if (auroraDisabled)
+    if (!program)
       return
-    cleanup()
-    initAurora()
+    program.uniforms.uAmplitude.value = props.amplitude ?? 1.0
+    program.uniforms.uBlend.value = props.blend ?? 0.5
+    program.uniforms.uIntensity.value = props.intensity ?? 1.0
+    if (reducedMotion && isVisible && !isDocumentHidden)
+      renderFrame(performance.now())
   },
 )
 </script>

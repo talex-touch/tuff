@@ -677,12 +677,6 @@ importers:
       '@talex-touch/tuffex-core':
         specifier: workspace:*
         version: link:../../packages/tuffex-core
-      '@talex-touch/tuffex-react':
-        specifier: workspace:*
-        version: link:../../packages/tuffex-react
-      '@talex-touch/tuffex-wc':
-        specifier: workspace:*
-        version: link:../../packages/tuffex-wc
       '@talex-touch/utils':
         specifier: workspace:*
         version: link:../../packages/utils
@@ -710,12 +704,6 @@ importers:
       ogl:
         specifier: 'catalog:'
         version: 1.0.11
-      react:
-        specifier: ^19.0.0
-        version: 19.3.1
-      react-dom:
-        specifier: ^19.0.0
-        version: 19.3.1(react@19.3.1)
       simplex-noise:
         specifier: 'catalog:'
         version: 4.0.3

@@ -19,7 +19,7 @@
 - docs 页面 metadata、canonical、alternate、robots、OG/Twitter、JSON-LD 的变更需复用现有 helper，不要在页面散写重复逻辑。
 - 当前 docs i18n 过渡口径：显式 `/en/docs/**`、`/zh/docs/**` route + 页内 locale 同步；不要擅自改全站 prefix 策略。
 - 入口文档只放当前 SoT、P0/P1 和少量专题；连续审计报告放 archive/index，不逐条塞主入口。
-- 组件文档与模板：改 `content/docs/dev/components/` 前先读 `docs/engineering/specs/frontend/tuffex-docs-sync.md` 与 `docs/engineering/specs/frontend/nexus-docs-templates.md`。
+- 组件文档与模板已迁至独立 SSG 站点 `apps/tuffex-docs/`（`/tuffex/*`）：改 `apps/tuffex-docs/content/docs/components/` 或 `apps/tuffex-docs/app/components/content/demos/` 前先读 `docs/engineering/specs/frontend/tuffex-docs-sync.md` 与 `docs/engineering/specs/frontend/nexus-docs-templates.md`；Nexus 内指向组件/概念文档的链接必须走 `<NuxtLink external>` 或原生 `<a href="/tuffex/...">`。
 
 ## Provider Registry / Governance
 
