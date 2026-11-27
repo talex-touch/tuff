@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import type { SelectionPayload } from '@talex-touch/tuffex/selection-actions'
-import { AgentWorkspaceEvents } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import { TdsCaptureEvents } from '@talex-touch/utils/transport/sdk/domains/tds-capture'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,6 +11,10 @@ enableAutoUnmount(afterEach)
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn(),
+  on: vi.fn(),
+  reviewListeners: [] as Array<
+    (payload: { conversationId: string; reviewId: string; updatedAt: number }) => void
+  >,
   selection: null as null | { value: SelectionPayload | null },
   clearSelection: vi.fn()
 }))
@@ -27,7 +30,8 @@ vi.mock('vue-sonner', () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),
-    info: vi.fn()
+    info: vi.fn(),
+    warning: vi.fn()
   }
 }))
 
@@ -40,17 +44,61 @@ vi.mock('@talex-touch/utils/env', async (importOriginal) => {
 })
 
 vi.mock('@talex-touch/utils/transport', () => ({
-  useTuffTransport: () => ({ send: mocks.send })
+  useTuffTransport: () => ({
+    send: mocks.send,
+    on: (
+      event: unknown,
+      handler: (payload: { conversationId: string; reviewId: string; updatedAt: number }) => void
+    ) => {
+      mocks.on(event, handler)
+      mocks.reviewListeners.push(handler)
+      return () => {
+        const idx = mocks.reviewListeners.indexOf(handler)
+        if (idx >= 0) mocks.reviewListeners.splice(idx, 1)
+      }
+    }
+  })
 }))
 
 vi.mock('@talex-touch/utils/renderer', () => ({
   useAppSdk: () => ({ showInFolder: vi.fn(async () => {}) })
 }))
 
-vi.mock('@talex-touch/tuffex/markdown-view', () => ({
-  TxMarkdownView: {
-    props: ['content'],
-    template: '<div class="tx-md-stub">{{ content }}</div>'
+vi.mock('@talex-touch/tuffex/border-beam', () => ({
+  TxBorderBeam: {
+    props: ['active', 'size', 'theme', 'colorVariant', 'borderRadius', 'strength'],
+    template:
+      '<div :data-beam-active="active ? \'true\' : \'false\'" :data-beam-size="size"><slot /></div>'
+  }
+}))
+
+vi.mock('@talex-touch/tuffex/touch-surface', () => ({
+  TxTouchSurface: {
+    props: ['surface', 'engine'],
+    template: '<div :data-touch-surface="surface" :data-glass-engine="engine"><slot /></div>'
+  }
+}))
+
+vi.mock('@talex-touch/tuffex/markdown-editor', () => ({
+  TxMarkdownEditor: {
+    props: ['modelValue', 'mode', 'theme', 'readonly', 'toolbar', 'statusBar', 'bubble', 'slash'],
+    emits: ['update:modelValue', 'blur'],
+    template: `
+      <div
+        class="tx-md-stub"
+        :data-mode="mode"
+        :data-readonly="readonly ? 'true' : 'false'"
+      >
+        <textarea
+          data-testid="md-editor-input"
+          :value="modelValue"
+          :readonly="readonly"
+          @input="$emit('update:modelValue', $event.target.value)"
+          @blur="$emit('blur')"
+        />
+        <div class="tx-md-content">{{ modelValue }}</div>
+      </div>
+    `
   }
 }))
 
@@ -69,12 +117,14 @@ vi.mock('@talex-touch/tuffex/dropdown-menu', () => ({
   TxDropdownMenu: {
     props: ['modelValue'],
     emits: ['update:modelValue'],
-    template: '<div><slot name="trigger" /><div v-if="modelValue"><slot /></div></div>'
+    template:
+      '<div><div @click="$emit(\'update:modelValue\', !modelValue)"><slot name="trigger" /></div><div v-if="modelValue"><slot /></div></div>'
   },
   TxDropdownItem: {
+    props: ['disabled', 'checked', 'checkType'],
     emits: ['select'],
     template:
-      '<button type="button" @click="$emit(\'select\')"><slot /><slot name="right" /></button>'
+      '<button type="button" :disabled="disabled" :aria-checked="checked !== undefined ? String(checked) : undefined" @click="!disabled && $emit(\'select\')"><slot /><slot name="right" /></button>'
   }
 }))
 
@@ -100,10 +150,10 @@ vi.mock('@talex-touch/tuffex/selection-actions', () => ({
     }
   },
   TxSelectionActions: {
-    props: ['selection', 'actions', 'prompt'],
-    emits: ['action', 'submit', 'update:prompt'],
+    props: ['selection', 'actions', 'prompt', 'state', 'activeActionId'],
+    emits: ['action', 'submit', 'update:prompt', 'keep', 'discard', 'retry'],
     template: `
-      <div data-testid="md-selection-actions">
+      <div data-testid="md-selection-actions" :data-state="state || 'idle'">
         <button
           v-for="item in actions"
           :key="item.id"
@@ -116,11 +166,16 @@ vi.mock('@talex-touch/tuffex/selection-actions', () => ({
           data-testid="sel-submit-custom"
           @click="$emit('submit', { prompt: '请补充风险点', selection })"
         >submit</button>
+        <button type="button" data-testid="sel-keep" @click="$emit('keep')">keep</button>
+        <button type="button" data-testid="sel-discard" @click="$emit('discard')">discard</button>
+        <button type="button" data-testid="sel-retry" @click="$emit('retry')">retry</button>
       </div>
     `
   }
 }))
 
+import { AgentWorkspaceEvents } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+import { toast } from 'vue-sonner'
 import { resetSessionReviewCommentsForTests } from './workspace-file-tree'
 import WorkspaceFileViewer from './WorkspaceFileViewer.vue'
 
@@ -128,6 +183,7 @@ describe('WorkspaceFileViewer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     clearCaptureCache()
+    mocks.reviewListeners.length = 0
     window.sessionStorage.clear()
     resetSessionReviewCommentsForTests()
     mocks.send.mockResolvedValue({
@@ -143,7 +199,7 @@ describe('WorkspaceFileViewer', () => {
     })
   })
 
-  it('moves file path breadcrumbs and size to the bottom statusbar and keeps the header minimal', async () => {
+  it('hides the redundant top header for Markdown and hosts breadcrumbs, actions, and preview/source menu in the bottom statusbar', async () => {
     const wrapper = mount(WorkspaceFileViewer, {
       props: {
         filePath: '/repo/docs/plan-prd/TODO-AI.md',
@@ -155,17 +211,27 @@ describe('WorkspaceFileViewer', () => {
     })
     await flushPromises()
 
-    // Header has no redundant filename, badge, size, or full path text.
-    const headerText = wrapper.get('[data-testid="file-viewer-header"]').text()
-    expect(headerText).not.toContain('TODO-AI.md')
-    expect(headerText).not.toContain('36.8 KB')
-    expect(headerText).not.toContain('/repo/docs')
+    // No redundant top header bar for Markdown documents.
+    expect(wrapper.find('[data-testid="file-viewer-header"]').exists()).toBe(false)
 
-    // Bottom statusbar displays interactive breadcrumbs and file size.
+    // Bottom statusbar displays interactive breadcrumbs, file size, and bottom-right actions (outline, refresh, more).
     const statusBar = wrapper.get('[data-testid="file-viewer-statusbar"]')
     expect(statusBar.get('[data-testid="file-viewer-status-size"]').text()).toBe('36.8 KB')
+    expect(statusBar.find('[data-testid="file-viewer-outline-btn"]').exists()).toBe(true)
+    expect(statusBar.find('[data-testid="file-viewer-refresh"]').exists()).toBe(true)
+    expect(statusBar.find('[data-testid="file-viewer-more"]').exists()).toBe(true)
     const crumbs = statusBar.findAll('.WorkspaceFileViewer-CrumbBtn')
     expect(crumbs.map((c) => c.text())).toEqual(['repo', 'docs', 'plan-prd', 'TODO-AI.md'])
+
+    // Preview / Source view switch lives inside the bottom-right three-dots menu.
+    await statusBar.get('[data-testid="file-viewer-more"]').trigger('click')
+    await flushPromises()
+    expect(
+      statusBar.get('[data-testid="file-viewer-mode-preview"]').attributes('aria-checked')
+    ).toBe('true')
+    await statusBar.get('[data-testid="file-viewer-mode-source"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="file-viewer-markdown"]').exists()).toBe(false)
 
     // Clicking an ancestor breadcrumb reveals the folder in the file tree.
     await crumbs[2]!.trigger('click')
@@ -357,10 +423,13 @@ describe('WorkspaceFileViewer', () => {
     expect(wrapper.find('[data-testid="file-viewer-device-frame"]').exists()).toBe(false)
     expect(wrapper.find('iframe.WorkspaceFileViewer-Frame').exists()).toBe(true)
 
-    // Switching to source mode hides device viewport controls
+    // Switching to source mode via the bottom-right more menu hides device viewport controls & top bar
+    await wrapper.get('[data-testid="file-viewer-more"]').trigger('click')
+    await flushPromises()
     await wrapper.get('[data-testid="file-viewer-mode-source"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-testid="file-viewer-viewport-controls"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="file-viewer-header"]').exists()).toBe(false)
   })
 
   it('enables device viewport switcher for SVG preview while preserving empty iframe sandbox', async () => {
@@ -478,6 +547,424 @@ describe('WorkspaceFileViewer', () => {
     const iframe = wrapper.get('iframe.WorkspaceFileViewer-Frame')
     expect(iframe.attributes('sandbox')).toBe('allow-scripts allow-forms allow-modals')
     expect(iframe.attributes('srcdoc')).toContain("default-src 'none'")
+  })
+
+  it('auto-applies Markdown improve revisions back to the file with GPT Canvas states, inline diff, and one-click undo', async () => {
+    const initialText = '# 无名\n\n醒来时，名字丢了。\n\n系统沉默了三秒。\n\n继续向无。\n'
+    let diskText = initialText
+    let diskMtime = 1000
+
+    mocks.send.mockImplementation(async (event: unknown, payload: Record<string, unknown>) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        return {
+          path: '/tmp/space/无名.md',
+          name: '无名.md',
+          ext: 'md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: diskText.length,
+          truncated: false,
+          mtimeMs: diskMtime,
+          text: diskText
+        }
+      }
+      if (event === AgentWorkspaceEvents.writeFile) {
+        diskText = String(payload.content ?? '')
+        diskMtime += 500
+        return {
+          path: '/tmp/space/无名.md',
+          size: diskText.length,
+          mtimeMs: diskMtime
+        }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/无名.md',
+        displayPath: '无名.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-canvas-1',
+        messages: [{ id: 'u1', role: 'user', content: '写个故事', status: 'complete' }],
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    // Select passage and click "优化" (improve).
+    mocks.selection!.value = {
+      text: '系统沉默了三秒。\n\n继续向无。',
+      rects: [{ left: 10, right: 200, top: 60, bottom: 100, width: 190, height: 40 } as DOMRect]
+    }
+    await flushPromises()
+
+    await wrapper.get('[data-testid="sel-action-improve"]').trigger('click')
+    await flushPromises()
+
+    // Clicking "优化" opens the bottom floating liquid-glass Suggestion Composer first.
+    expect(wrapper.find('[data-testid="file-viewer-canvas-compose"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="md-selection-actions"]').exists()).toBe(false)
+    await wrapper
+      .get('[data-testid="file-viewer-canvas-compose-input"]')
+      .setValue('节奏再克制一点，结尾更有留白感')
+    await wrapper.get('[data-testid="file-viewer-canvas-compose-send"]').trigger('click')
+    await flushPromises()
+
+    // Triggers kinetic launch flight pill, locks editing with active TxBorderBeam + dot/ASCII ripple.
+    expect(document.body.querySelector('[data-testid="file-viewer-launch-flight"]')).not.toBeNull()
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('thinking')
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-locked')
+    ).toBe('true')
+    const beam = wrapper.get('[data-testid="file-viewer-canvas-beam"]')
+    expect(beam.attributes('data-beam-active')).toBe('true')
+    expect(beam.attributes('data-beam-size')).toBe('pulse-inner')
+    expect(wrapper.get('[data-testid="file-viewer-canvas-ripple"]').attributes('data-active')).toBe(
+      'true'
+    )
+    expect(wrapper.find('[data-testid="file-viewer-canvas-bar"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="file-viewer-canvas-dock"]').exists()).toBe(true)
+    expect(
+      wrapper.get('[data-testid="file-viewer-canvas-glass"]').attributes('data-touch-surface')
+    ).toBe('glass')
+    expect(
+      wrapper.get('[data-testid="file-viewer-canvas-glass"]').attributes('data-glass-engine')
+    ).toBe('lens')
+    // Selection pill is hidden, editor is readonly, and reload / view-mode actions are locked while AI is editing.
+    expect(wrapper.find('[data-testid="md-selection-actions"]').exists()).toBe(false)
+    expect(wrapper.get('.tx-md-stub').attributes('data-readonly')).toBe('true')
+    expect(
+      (wrapper.get('[data-testid="file-viewer-refresh"]').element as HTMLButtonElement).disabled
+    ).toBe(true)
+    await wrapper.get('[data-testid="file-viewer-more"]').trigger('click')
+    await flushPromises()
+    expect(
+      (wrapper.get('[data-testid="file-viewer-mode-source"]').element as HTMLButtonElement).disabled
+    ).toBe(true)
+    const emitted = wrapper.emitted('ai-action')?.[0]?.[0] as {
+      actionKind?: string
+      autoApply?: boolean
+      prompt?: string
+    }
+    expect(emitted.actionKind).toBe('improve')
+    expect(emitted.autoApply).toBe(true)
+    expect(emitted.prompt).toContain('节奏再克制一点，结尾更有留白感')
+
+    // AI starts streaming a markdown revision block -> stays locked with BorderBeam active.
+    await wrapper.setProps({
+      aiStreaming: true,
+      messages: [
+        { id: 'u1', role: 'user', content: '写个故事', status: 'complete' },
+        { id: 'u2', role: 'user', content: '优化', status: 'complete' },
+        {
+          id: 'a2',
+          role: 'assistant',
+          content: '### 润色后完整文本\n\n```markdown\n> 系统沉默三秒。',
+          status: 'streaming'
+        }
+      ]
+    })
+    await flushPromises()
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('streaming')
+    expect(beam.attributes('data-beam-active')).toBe('true')
+
+    // AI finishes reply with blockquote-prefixed fenced markdown -> auto-extracts, strips `>`, writes disk,
+    // releases BorderBeam lock, and displays bottom floating glass Accept/Undo/Diff capsule!
+    await wrapper.setProps({
+      aiStreaming: false,
+      messages: [
+        { id: 'u1', role: 'user', content: '写个故事', status: 'complete' },
+        { id: 'u2', role: 'user', content: '优化', status: 'complete' },
+        {
+          id: 'a2',
+          role: 'assistant',
+          content: [
+            '### 润色后完整文本',
+            '```markdown',
+            '> 系统沉默三秒。',
+            '>',
+            '> 继续，向无。',
+            '```',
+            '### 修改效果总结',
+            '- 更克制。'
+          ].join('\n'),
+          status: 'complete'
+        }
+      ]
+    })
+    await flushPromises()
+
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('applied')
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-locked')
+    ).toBe('false')
+    expect(beam.attributes('data-beam-active')).toBe('false')
+    expect(wrapper.get('[data-testid="file-viewer-canvas-ripple"]').attributes('data-active')).toBe(
+      'false'
+    )
+    expect(wrapper.find('[data-testid="file-viewer-canvas-dock"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="file-viewer-canvas-keep"]').text()).toContain(
+      'home.sidePanel.canvasAccept'
+    )
+    expect(wrapper.find('[data-testid="file-viewer-canvas-sweep"]').exists()).toBe(true)
+    expect(diskText).toBe('# 无名\n\n醒来时，名字丢了。\n\n系统沉默三秒。\n\n继续，向无。\n')
+    expect(wrapper.get('.tx-md-content').text()).toContain('继续，向无。')
+    expect(wrapper.get('.tx-md-stub').attributes('data-readonly')).toBe('false')
+
+    // Toggle inline diff view from the bottom glass capsule.
+    await wrapper.get('[data-testid="file-viewer-canvas-diff-toggle"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="file-viewer-canvas-diff"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="file-viewer-canvas-diff"]').text()).toContain('继续，向无。')
+
+    // One-click undo restores exact previous content back to disk.
+    await wrapper.get('[data-testid="file-viewer-canvas-undo"]').trigger('click')
+    await flushPromises()
+    expect(diskText).toBe(initialText)
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('idle')
+    expect(wrapper.find('[data-testid="file-viewer-canvas-dock"]').exists()).toBe(false)
+    expect(wrapper.get('.tx-md-content').text()).toContain('继续向无。')
+  })
+
+  it('allows direct click-to-edit Markdown editing with debounced auto-save and Cmd+S persistence', async () => {
+    vi.useFakeTimers()
+    try {
+      let diskText = '# 无名\n\n第一段正文。\n'
+      let diskMtime = 4000
+
+      mocks.send.mockImplementation(async (event: unknown, payload: Record<string, unknown>) => {
+        if (event === AgentWorkspaceEvents.readFile) {
+          return {
+            path: '/tmp/space/无名.md',
+            name: '无名.md',
+            ext: 'md',
+            kind: 'text',
+            mimeType: 'text/markdown',
+            size: diskText.length,
+            truncated: false,
+            mtimeMs: diskMtime,
+            text: diskText
+          }
+        }
+        if (event === AgentWorkspaceEvents.writeFile) {
+          diskText = String(payload.content ?? '')
+          diskMtime += 500
+          return {
+            path: '/tmp/space/无名.md',
+            size: diskText.length,
+            mtimeMs: diskMtime
+          }
+        }
+        return null
+      })
+
+      const wrapper = mount(WorkspaceFileViewer, {
+        props: {
+          filePath: '/tmp/space/无名.md',
+          displayPath: '无名.md',
+          workspaceRoot: '/tmp/space',
+          conversationId: 'conv-edit-1',
+          aiActionsEnabled: true
+        }
+      })
+      await flushPromises()
+
+      // Renders editable WYSIWYG Markdown editor by default.
+      expect(wrapper.get('.tx-md-stub').attributes('data-mode')).toBe('wysiwyg')
+      expect(wrapper.get('.tx-md-stub').attributes('data-readonly')).toBe('false')
+
+      // Typing updates live content and marks unsaved before debounce elapses.
+      const input = wrapper.get('[data-testid="md-editor-input"]')
+      await input.setValue('# 无名\n\n第一段正文，加上手写修改。\n')
+      await flushPromises()
+      expect(wrapper.get('[data-testid="file-viewer-save-status"]').text()).toContain(
+        'home.sidePanel.editorUnsaved'
+      )
+
+      // After 550ms debounce, auto-saves cleanly via AgentWorkspaceEvents.writeFile.
+      await vi.advanceTimersByTimeAsync(600)
+      await flushPromises()
+      expect(diskText).toBe('# 无名\n\n第一段正文，加上手写修改。\n')
+      expect(wrapper.get('[data-testid="file-viewer-save-status"]').text()).toContain(
+        'home.sidePanel.editorSaved'
+      )
+
+      // Cmd+S saves immediately without waiting for debounce.
+      await input.setValue('# 无名\n\n快捷键立刻落盘。\n')
+      await flushPromises()
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', metaKey: true }))
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 's', metaKey: true }))
+      await flushPromises()
+      expect(diskText).toBe('# 无名\n\n快捷键立刻落盘。\n')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('locks editing with BorderBeam during ambient chat edits targeting the open file and adopts disk changes', async () => {
+    let diskText = '# 无名\n\n原文内容。\n'
+    let diskMtime = 2000
+
+    mocks.send.mockImplementation(async (event: unknown) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        return {
+          path: '/tmp/space/无名.md',
+          name: '无名.md',
+          ext: 'md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: diskText.length,
+          truncated: false,
+          mtimeMs: diskMtime,
+          text: diskText
+        }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/无名.md',
+        displayPath: '无名.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-sync-1',
+        messages: [],
+        aiStreaming: false,
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    // User asks AI directly in left chat to polish 无名.md -> right pane locks + BorderBeam glows!
+    await wrapper.setProps({
+      aiStreaming: true,
+      messages: [
+        { id: 'u1', role: 'user', content: '帮我润色一下 无名.md', status: 'complete' },
+        { id: 'a1', role: 'assistant', content: '', status: 'streaming' }
+      ]
+    })
+    await flushPromises()
+
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-locked')
+    ).toBe('true')
+    expect(
+      wrapper.get('[data-testid="file-viewer-canvas-beam"]').attributes('data-beam-active')
+    ).toBe('true')
+    expect(wrapper.get('[data-testid="file-viewer-canvas-ripple"]').attributes('data-active')).toBe(
+      'true'
+    )
+    expect(wrapper.find('[data-testid="file-viewer-canvas-dock"]').exists()).toBe(true)
+
+    // Simulate agent calling file.write which updates disk and broadcasts ConversationReviewEvents.changed.
+    diskText = '# 无名\n\n由 Agent 直接写入的润色文本。\n'
+    diskMtime = 3000
+    for (const listener of mocks.reviewListeners) {
+      listener({ conversationId: 'conv-sync-1', reviewId: 'rev-1', updatedAt: Date.now() })
+    }
+    await flushPromises()
+
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('applied')
+    // Lock releases once the file update lands and no further write is running.
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-locked')
+    ).toBe('false')
+    expect(
+      wrapper.get('[data-testid="file-viewer-canvas-beam"]').attributes('data-beam-active')
+    ).toBe('false')
+    expect(wrapper.get('.tx-md-stub').text()).toContain('由 Agent 直接写入的润色文本。')
+    // Clicking "同意" (Accept) commits cleanly and dismisses the floating glass capsule.
+    await wrapper.get('[data-testid="file-viewer-canvas-keep"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="file-viewer-canvas-dock"]').exists()).toBe(false)
+    // Must not call writeFile when adopting an agent's disk write.
+    const writeCalls = mocks.send.mock.calls.filter(
+      ([evt]) => evt === AgentWorkspaceEvents.writeFile
+    )
+    expect(writeCalls).toHaveLength(0)
+  })
+
+  it('warns explicitly when AI falsely claims a disk update without calling file.write or returning a revision block', async () => {
+    const initialText = '# 无名\n\n原文内容。\n'
+    mocks.send.mockImplementation(async (event: unknown) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        return {
+          path: '/tmp/space/无名.md',
+          name: '无名.md',
+          ext: 'md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: initialText.length,
+          truncated: false,
+          mtimeMs: 2500,
+          text: initialText
+        }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/无名.md',
+        displayPath: '无名.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-hallucination-1',
+        messages: [{ id: 'u1', role: 'user', content: '写个故事', status: 'complete' }],
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    // Trigger canvas optimize flow from selection.
+    mocks.selection!.value = {
+      text: '原文内容。',
+      rects: [{ left: 10, right: 140, top: 60, bottom: 90, width: 130, height: 30 } as DOMRect]
+    }
+    await flushPromises()
+    await wrapper.get('[data-testid="sel-action-improve"]').trigger('click')
+    await flushPromises()
+    await wrapper
+      .get('[data-testid="file-viewer-canvas-compose-input"]')
+      .setValue('浓缩为正文 优化下')
+    await wrapper.get('[data-testid="file-viewer-canvas-compose-send"]').trigger('click')
+    await flushPromises()
+
+    // AI completes with a fabricated "success: true" claim, zero tool calls, and no fenced code block.
+    await wrapper.setProps({
+      aiStreaming: false,
+      messages: [
+        { id: 'u1', role: 'user', content: '写个故事', status: 'complete' },
+        { id: 'u2', role: 'user', content: '浓缩为正文 优化下', status: 'complete' },
+        {
+          id: 'a2',
+          role: 'assistant',
+          content:
+            '已直接更新文件 `无名.md`（工具返回 `success: true`）。\n\n文件已落盘，可直接查看。',
+          status: 'complete'
+        }
+      ]
+    })
+    await flushPromises()
+
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-locked')
+    ).toBe('false')
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('idle')
+    expect(toast.warning).toHaveBeenCalledWith('home.sidePanel.canvasFalseWriteClaim')
+    expect(wrapper.get('.tx-md-content').text()).toContain('原文内容。')
   })
 
   it('runs debounced 300ms live DOM probe in Electron HTML preview, cancels on rapid file switch, and merges DOM + static issues', async () => {

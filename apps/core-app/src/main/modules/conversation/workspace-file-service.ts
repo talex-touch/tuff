@@ -5,7 +5,9 @@ import type {
   WorkspacePickFileRequest,
   WorkspacePickFileResult,
   WorkspaceReadFileRequest,
-  WorkspaceReadFileResult
+  WorkspaceReadFileResult,
+  WorkspaceWriteFileRequest,
+  WorkspaceWriteFileResult
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import { constants as fsConstants } from 'node:fs'
 import fs from 'node:fs/promises'
@@ -16,6 +18,7 @@ import { BrowserWindow, dialog, shell } from 'electron'
 import { getProject } from '../project/project-store'
 import { peekConversationWorkspaceRoot } from '../local-ai-cli/workspace-root'
 import { getConversation } from './conversation-store'
+import { writeFileAtomically } from './file-review-fs'
 
 const DEFAULT_TEXT_MAX_BYTES = 2 * 1024 * 1024
 const HARD_TEXT_MAX_BYTES = 4 * 1024 * 1024
@@ -578,6 +581,64 @@ export async function readWorkspaceFile(
     }
   } finally {
     await handle.close()
+  }
+}
+
+export async function writeWorkspaceFile(
+  request: WorkspaceWriteFileRequest,
+  ports: WorkspaceFileServicePorts = {}
+): Promise<WorkspaceWriteFileResult> {
+  if (typeof request?.content !== 'string') {
+    throw new Error('WORKSPACE_FILE_CONTENT_INVALID')
+  }
+  const encoded = Buffer.from(request.content, 'utf-8')
+  if (encoded.byteLength > HARD_TEXT_MAX_BYTES) {
+    throw new Error('WORKSPACE_FILE_TOO_LARGE')
+  }
+
+  const candidate = await resolveTargetPath(request?.path ?? '', request?.conversationId, ports)
+  const homeDir = (ports.homedir ?? os.homedir)()
+
+  let canonical: string
+  try {
+    canonical = await fs.realpath(candidate)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      throw new Error(`ENOENT: ${candidate}`)
+    }
+    throw error
+  }
+
+  if (isBlockedSensitivePath(canonical, homeDir) || isBlockedSensitivePath(candidate, homeDir)) {
+    throw new Error('WORKSPACE_FILE_FORBIDDEN')
+  }
+
+  const allowedRoots = await resolveAllowedRoots(request?.conversationId, ports)
+  await assertWithinAllowedRoots(canonical, allowedRoots)
+
+  const lstat = await fs.lstat(canonical)
+  if (lstat.isSymbolicLink()) {
+    throw new Error('WORKSPACE_FILE_FORBIDDEN')
+  }
+  if (!lstat.isFile()) {
+    throw new Error('WORKSPACE_FILE_UNSUPPORTED')
+  }
+
+  if (
+    typeof request.expectedMtimeMs === 'number' &&
+    Number.isFinite(request.expectedMtimeMs) &&
+    Math.abs(lstat.mtimeMs - request.expectedMtimeMs) > 2
+  ) {
+    throw new Error('WORKSPACE_FILE_CONFLICT')
+  }
+
+  await writeFileAtomically(canonical, encoded, lstat.mode & 0o777)
+  const nextStat = await fs.stat(canonical)
+  return {
+    path: canonical,
+    size: nextStat.size,
+    mtimeMs: nextStat.mtimeMs
   }
 }
 

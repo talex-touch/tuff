@@ -8,7 +8,8 @@ import {
   isSafeExternalOpenPath,
   openWorkspaceFileExternal,
   pickWorkspaceFile,
-  readWorkspaceFile
+  readWorkspaceFile,
+  writeWorkspaceFile
 } from './workspace-file-service'
 
 const tempDirs: string[] = []
@@ -184,5 +185,71 @@ describe('workspace-file-service', () => {
       expect(showItemInFolder).toHaveBeenCalledOnce()
     }
     expect(isExecutableFilePath(scriptPath)).toBe(true)
+  })
+
+  it('writes confined text files atomically and enforces mtime conflict, containment, and sensitive-path guards', async () => {
+    const workspaceRoot = await makeTempDir()
+    const outsideDir = await makeTempDir()
+    const docPath = path.join(workspaceRoot, '无名.md')
+    const outsidePath = path.join(outsideDir, 'outside.md')
+    await fs.writeFile(docPath, '# 无名\n\n旧文本。\n', 'utf-8')
+    await fs.writeFile(outsidePath, 'secret', 'utf-8')
+
+    const initial = await readWorkspaceFile(
+      { path: '无名.md', conversationId: 'conv-write-1' },
+      { resolveConversationRoot: async () => workspaceRoot }
+    )
+
+    const written = await writeWorkspaceFile(
+      {
+        path: '无名.md',
+        content: '# 无名\n\n润色后的文本。\n',
+        conversationId: 'conv-write-1',
+        expectedMtimeMs: initial.mtimeMs
+      },
+      { resolveConversationRoot: async () => workspaceRoot }
+    )
+    expect(written.path).toBe(await fs.realpath(docPath))
+    expect(written.size).toBeGreaterThan(0)
+    expect(await fs.readFile(docPath, 'utf-8')).toBe('# 无名\n\n润色后的文本。\n')
+
+    // Stale expectedMtimeMs rejects without overwriting newer content.
+    await expect(
+      writeWorkspaceFile(
+        {
+          path: '无名.md',
+          content: '# 无名\n\n过期覆盖\n',
+          conversationId: 'conv-write-1',
+          expectedMtimeMs: initial.mtimeMs - 5000
+        },
+        { resolveConversationRoot: async () => workspaceRoot }
+      )
+    ).rejects.toThrow('WORKSPACE_FILE_CONFLICT')
+    expect(await fs.readFile(docPath, 'utf-8')).toBe('# 无名\n\n润色后的文本。\n')
+
+    // Escaping workspace root is forbidden.
+    await expect(
+      writeWorkspaceFile(
+        {
+          path: outsidePath,
+          content: 'hacked',
+          conversationId: 'conv-write-1'
+        },
+        { resolveConversationRoot: async () => workspaceRoot }
+      )
+    ).rejects.toThrow('WORKSPACE_FILE_FORBIDDEN')
+
+    // Sensitive paths are forbidden even inside allowed roots.
+    const fakeHome = await makeTempDir()
+    const sshDir = path.join(fakeHome, '.ssh')
+    await fs.mkdir(sshDir)
+    const sshKey = path.join(sshDir, 'config')
+    await fs.writeFile(sshKey, 'Host *', 'utf-8')
+    await expect(
+      writeWorkspaceFile(
+        { path: sshKey, content: 'changed' },
+        { homedir: () => fakeHome, allowedRoots: [fakeHome] }
+      )
+    ).rejects.toThrow('WORKSPACE_FILE_FORBIDDEN')
   })
 })

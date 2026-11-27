@@ -1,16 +1,21 @@
 <script lang="ts" name="WorkspaceFileViewer" setup>
+import type { MarkdownEditorLabels } from '@talex-touch/tuffex/markdown-editor'
 import type { SelectionActionItem, SelectionPayload } from '@talex-touch/tuffex/selection-actions'
 import type { WorkspaceReadFileResult } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
+import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
-import { TxMarkdownView } from '@talex-touch/tuffex/markdown-view'
+import { TxMarkdownEditor } from '@talex-touch/tuffex/markdown-editor'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { TxSelectionActions, useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
-import { isElectronRenderer } from '@talex-touch/utils/env'
+import { TxTouchSurface } from '@talex-touch/tuffex/touch-surface'
+import { hasDocument, hasWindow, isElectronRenderer } from '@talex-touch/utils/env'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AgentWorkspaceEvents } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+import { ConversationReviewEvents } from '@talex-touch/utils/transport/sdk/domains/conversation-review'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -35,6 +40,25 @@ import {
 } from './tds-devices'
 import TdsDeviceFrame from './TdsDeviceFrame.vue'
 import TdsLintPopover from './TdsLintPopover.vue'
+import WorkspaceCanvasLaunchFlight, {
+  type CanvasLaunchFlightPayload
+} from './WorkspaceCanvasLaunchFlight.vue'
+import WorkspaceCanvasRippleOverlay from './WorkspaceCanvasRippleOverlay.vue'
+import {
+  applyCanvasRevisionToSource,
+  computeCanvasLineDiff,
+  computeChangedBlockIndices,
+  extractCanvasRevisionFromReply,
+  findTargetAssistantMessage,
+  isClaimedDiskUpdateReply,
+  formatCanvasImprovePrompt,
+  inspectMessageFileWrites,
+  isMessageStreamingCanvasEdit,
+  isStreamingTurnTargetingFile,
+  normalizeMarkdownMatchText,
+  type CanvasDiffSummary,
+  type CanvasTurnBaseline
+} from './workspace-canvas-edit'
 import {
   buildPathBreadcrumbs,
   extractMarkdownHeadings,
@@ -45,6 +69,7 @@ import {
   resolveFileIconClass,
   writeSessionReviewComments,
   type MarkdownReviewComment,
+  type WorkspaceFileAiActionKind,
   type WorkspaceFileAiActionPayload
 } from './workspace-file-tree'
 
@@ -54,6 +79,10 @@ const props = withDefaults(
     displayPath?: string
     workspaceRoot?: string
     conversationId?: string | null
+    /** Active conversation transcript, used to sync and auto-apply AI document edits. */
+    messages?: ConversationMessage[]
+    /** Whether the host conversation currently has an AI response in flight. */
+    aiStreaming?: boolean
     line?: number
     refreshToken?: number
     /** Show a local back button when the host maintains preview navigation history. */
@@ -69,6 +98,8 @@ const props = withDefaults(
     displayPath: '',
     workspaceRoot: '',
     conversationId: null,
+    messages: () => [],
+    aiStreaming: false,
     line: undefined,
     refreshToken: 0,
     canGoBack: false,
@@ -86,8 +117,67 @@ const emit = defineEmits<{
   (event: 'ai-action', payload: WorkspaceFileAiActionPayload): void
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const transport = isElectronRenderer() ? useTuffTransport() : null
+
+const MARKDOWN_EDITOR_ZH_LABELS: Partial<MarkdownEditorLabels> = {
+  wysiwyg: '所见即所得',
+  source: 'Markdown',
+  preview: '预览',
+  modeGroup: '编辑模式',
+  toolbar: '格式',
+  heading: '标题',
+  heading1: '一级标题',
+  heading2: '二级标题',
+  heading3: '三级标题',
+  slashMenu: '插入',
+  bold: '加粗',
+  italic: '斜体',
+  strike: '删除线',
+  code: '行内代码',
+  highlight: '高亮',
+  highlightColors: '高亮颜色',
+  highlightYellow: '黄色',
+  highlightGreen: '绿色',
+  highlightBlue: '蓝色',
+  highlightPink: '粉色',
+  highlightPurple: '紫色',
+  removeHighlight: '移除高亮',
+  quote: '引用',
+  calloutNote: '备注',
+  calloutTip: '提示',
+  calloutImportant: '重要',
+  calloutWarning: '警告',
+  calloutCaution: '注意',
+  bulletList: '无序列表',
+  orderedList: '有序列表',
+  taskList: '任务列表',
+  link: '链接',
+  image: '图片',
+  table: '表格',
+  codeBlock: '代码块',
+  math: '公式',
+  divider: '分割线',
+  emoji: '表情',
+  undo: '撤销',
+  redo: '重做',
+  emojiSearch: '搜索表情',
+  emojiEmpty: '没有找到表情',
+  emojiRecent: '最近使用',
+  linkPlaceholder: '粘贴或输入链接',
+  apply: '应用',
+  removeLink: '移除链接',
+  mathPlaceholder: 'TeX，例如 E = mc^2',
+  tableColumn: '列'
+}
+
+const markdownEditorLabels = computed<Partial<MarkdownEditorLabels> | undefined>(() =>
+  String(locale?.value ?? '')
+    .toLowerCase()
+    .startsWith('zh')
+    ? MARKDOWN_EDITOR_ZH_LABELS
+    : undefined
+)
 
 function resolveAppSdk() {
   try {
@@ -171,6 +261,9 @@ const supportsPreviewToggle = computed(
 
 const showDeviceViewportControls = computed(
   () => (isHtml.value || isSvg.value) && viewMode.value === 'preview'
+)
+const showTopBar = computed(() =>
+  Boolean(props.canGoBack || showDeviceViewportControls.value || data.value?.kind === 'image')
 )
 const staticLintIssues = computed<TdsLintIssue[]>(() => {
   if (!showDeviceViewportControls.value) return []
@@ -313,14 +406,187 @@ const parentDirectoryPath = computed(() => {
   return current.slice(0, cut)
 })
 
-// ── Markdown Selection Quick AI Actions & Comments ──────────────────────────────────
+// ── Markdown Selection Quick AI Actions, Comments & GPT Canvas Auto-Apply ───────────
+type CanvasEditPhase = 'idle' | 'thinking' | 'streaming' | 'applying' | 'applied'
+type CanvasAppliedSource = 'improve' | 'sync'
+
+interface PendingCanvasSession {
+  filePath: string
+  actionId: string
+  selectedText: string
+  autoApply: boolean
+  beforeText: string
+  beforeMtimeMs: number
+  beforeBlockTexts: string[]
+  baseline: CanvasTurnBaseline
+  lastSeenWriteCount: number
+  diskApplied: boolean
+}
+
+interface AppliedCanvasSnapshot {
+  filePath: string
+  source: CanvasAppliedSource
+  actionId: string
+  selectedText: string
+  beforeText: string
+  afterText: string
+  beforeMtimeMs: number
+  diff: CanvasDiffSummary
+  changedBlockIndices: Set<number>
+}
+
+interface AmbientBeforeSnapshot {
+  filePath: string
+  beforeText: string
+  beforeMtimeMs: number
+  beforeBlockTexts: string[]
+}
+
+interface CanvasComposeSession {
+  scope: 'selection' | 'document'
+  selectedText: string
+  rects: DOMRect[]
+  blockIndices: Set<number>
+}
+
+const canvasPhase = ref<CanvasEditPhase>('idle')
+const canvasPending = ref<PendingCanvasSession | null>(null)
+const canvasApplied = ref<AppliedCanvasSnapshot | null>(null)
+const canvasCompose = ref<CanvasComposeSession | null>(null)
+const canvasComposePrompt = ref('')
+const canvasComposeInputRef = ref<HTMLInputElement | null>(null)
+const canvasDockWrapRef = ref<HTMLElement | null>(null)
+const launchFlight = ref<CanvasLaunchFlightPayload | null>(null)
+const canvasShowDiff = ref(false)
+const canvasUndoing = ref(false)
+const canvasSweepActive = ref(false)
+const canvasSweepKey = ref(0)
+const canvasSweepStyle = ref<{ top: string; height: string }>({ top: '0px', height: '100%' })
+const pendingDomBlockIndices = ref<Set<number>>(new Set())
+const ambientBeforeSnapshot = ref<AmbientBeforeSnapshot | null>(null)
+const ambientSettledMessageId = ref<string | null>(null)
+const beamTheme = ref<'light' | 'dark'>('light')
+
+let launchFlightSeq = 0
+
+let sweepTimer: ReturnType<typeof setTimeout> | null = null
+let canvasWriteInFlight = false
+let canvasFinalizeInFlight = false
+let lastAppliedAssistantId: string | null = null
+let ambientLastHandledMsgId: string | null = null
+let ambientLastWriteCount = 0
+let disposeReviewListener: (() => void) | null = null
+let themeObserver: MutationObserver | null = null
+let themeMediaQuery: MediaQueryList | null = null
+
+function resolveDocumentTheme(): 'light' | 'dark' {
+  if (!hasDocument()) return 'light'
+  const root = document.documentElement
+  const body = document.body
+  const explicit = root.getAttribute('data-theme') || body?.getAttribute('data-theme')
+  if (explicit === 'dark') return 'dark'
+  if (explicit === 'light') return 'light'
+  if (root.classList.contains('dark') || body?.classList.contains('dark')) return 'dark'
+  if (hasWindow() && typeof window.matchMedia === 'function') {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  }
+  return 'light'
+}
+
+function syncBeamTheme(): void {
+  beamTheme.value = resolveDocumentTheme()
+}
+
+const isPendingCanvasBusy = computed(
+  () =>
+    canvasPhase.value === 'thinking' ||
+    canvasPhase.value === 'streaming' ||
+    canvasPhase.value === 'applying'
+)
+
+const isAmbientAiEditing = computed(() => {
+  if (!props.aiActionsEnabled || !data.value || data.value.kind !== 'text') return false
+  if (isPendingCanvasBusy.value) return false
+  const tail = props.messages.at(-1)
+  // Once edits from this assistant turn have been synced to the viewer and no further file write is
+  // running, release the lock so the user can review/accept immediately — and stay unlocked even
+  // after they click Accept/Undo while AI finishes streaming its summary.
+  if (
+    tail?.role === 'assistant' &&
+    tail.id === ambientSettledMessageId.value &&
+    !inspectMessageFileWrites(tail, fileName.value).running
+  ) {
+    return false
+  }
+  return isStreamingTurnTargetingFile(
+    props.messages,
+    {
+      fileName: fileName.value,
+      displayPath: displayPathForAi.value,
+      filePath: resolvedPath.value
+    },
+    props.aiStreaming
+  )
+})
+
+const isCanvasLocked = computed(() => isPendingCanvasBusy.value || isAmbientAiEditing.value)
+
+const showCanvasDock = computed(
+  () =>
+    Boolean(canvasCompose.value) ||
+    isCanvasLocked.value ||
+    (canvasPhase.value === 'applied' && Boolean(canvasApplied.value))
+)
+
+const canvasComposePresets = computed(() => [
+  {
+    id: 'polish',
+    label: t('home.sidePanel.canvasComposePresetPolish'),
+    suggestion: ''
+  },
+  {
+    id: 'concise',
+    label: t('home.sidePanel.canvasComposePresetConcise'),
+    suggestion: t('home.sidePanel.canvasComposePresetConcisePrompt')
+  },
+  {
+    id: 'vivid',
+    label: t('home.sidePanel.canvasComposePresetVivid'),
+    suggestion: t('home.sidePanel.canvasComposePresetVividPrompt')
+  },
+  {
+    id: 'grammar',
+    label: t('home.sidePanel.canvasComposePresetGrammar'),
+    suggestion: t('home.sidePanel.canvasComposePresetGrammarPrompt')
+  }
+])
+
+const canvasStatusText = computed(() => {
+  if (canvasPhase.value === 'applying') return t('home.sidePanel.canvasStatusApplying')
+  if (canvasPhase.value === 'streaming') return t('home.sidePanel.canvasStatusRewriting')
+  const tail = props.messages.at(-1)
+  if (tail?.role === 'assistant' && tail.status === 'streaming') {
+    const writes = inspectMessageFileWrites(tail, fileName.value)
+    if (writes.running || isMessageStreamingCanvasEdit(tail)) {
+      return t('home.sidePanel.canvasStatusRewriting')
+    }
+  }
+  return t('home.sidePanel.canvasStatusOptimizing')
+})
+
+const canvasAppliedTitle = computed(() =>
+  canvasApplied.value?.source === 'improve'
+    ? t('home.sidePanel.canvasAppliedTitle')
+    : t('home.sidePanel.canvasSyncedTitle')
+)
+
 const markdownSelectionActive = computed(() =>
   Boolean(props.aiActionsEnabled && isMarkdown.value && viewMode.value === 'preview')
 )
 
 const { selection: mdSelection, clear: clearMdSelection } = useSelectionAnchor({
   root: markdownContainerRef,
-  disabled: () => !markdownSelectionActive.value,
+  disabled: () => !markdownSelectionActive.value || isCanvasLocked.value || canvasShowDiff.value,
   ignore: () => {
     const node = extractDomNode(selectionBarRef.value)
     return node instanceof Element ? [node] : []
@@ -328,14 +594,860 @@ const { selection: mdSelection, clear: clearMdSelection } = useSelectionAnchor({
   minLength: 2
 })
 
+const activeSelectionPayload = computed<SelectionPayload | null>(() => {
+  if (
+    !markdownSelectionActive.value ||
+    isCanvasLocked.value ||
+    canvasShowDiff.value ||
+    Boolean(canvasCompose.value)
+  ) {
+    return null
+  }
+  return mdSelection.value
+})
+
 const mdSelectionActions = computed<SelectionActionItem[]>(() => [
   { id: 'comment', label: t('home.sidePanel.selectionComment') },
   { id: 'explain', label: t('home.sidePanel.selectionExplain') },
-  { id: 'improve', label: t('home.sidePanel.selectionImprove') },
+  {
+    id: 'improve',
+    label: t('home.sidePanel.selectionImprove'),
+    busyLabel: t('home.sidePanel.selectionImproving')
+  },
   { id: 'quote', label: t('home.sidePanel.selectionQuote'), more: true },
   { id: 'translate', label: t('home.sidePanel.selectionTranslate'), more: true },
   { id: 'copy', label: t('home.copy'), more: true }
 ])
+
+function prefersReducedMotion(): boolean {
+  return (
+    hasWindow() &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
+
+function clearSweepTimer(): void {
+  if (sweepTimer !== null) {
+    clearTimeout(sweepTimer)
+    sweepTimer = null
+  }
+}
+
+function getMarkdownBodyBlocks(): HTMLElement[] {
+  const container = markdownContainerRef.value
+  if (!container) return []
+  const body =
+    container.querySelector('.tx-markdown-editor__surface.markdown-body') ??
+    container.querySelector('.markdown-body')
+  if (!body) return []
+  return Array.from(body.children).filter((el): el is HTMLElement => el instanceof HTMLElement)
+}
+
+function snapshotMarkdownBlockTexts(): string[] {
+  return getMarkdownBodyBlocks().map((el) => normalizeMarkdownMatchText(el.textContent ?? ''))
+}
+
+function resolvePendingBlockIndices(selection: SelectionPayload): Set<number> {
+  const blocks = getMarkdownBodyBlocks()
+  const indices = new Set<number>()
+  if (blocks.length === 0) return indices
+
+  if (selection.range && typeof selection.range.intersectsNode === 'function') {
+    for (let i = 0; i < blocks.length; i += 1) {
+      try {
+        if (selection.range.intersectsNode(blocks[i]!)) {
+          indices.add(i)
+        }
+      } catch {
+        // Ignore detached ranges
+      }
+    }
+  }
+  if (indices.size > 0) return indices
+
+  const selLines = selection.text
+    .split(/\r?\n/)
+    .map((line) => normalizeMarkdownMatchText(line))
+    .filter(Boolean)
+  if (selLines.length === 0) return indices
+
+  for (let i = 0; i < blocks.length; i += 1) {
+    const blockNorm = normalizeMarkdownMatchText(blocks[i]!.textContent ?? '')
+    if (!blockNorm) continue
+    if (selLines.some((line) => blockNorm.includes(line) || line.includes(blockNorm))) {
+      indices.add(i)
+    }
+  }
+  return indices
+}
+
+function measureBlocksClientRects(indices: ReadonlySet<number>): DOMRect[] {
+  const blocks = getMarkdownBodyBlocks()
+  const rects: DOMRect[] = []
+  for (const idx of indices) {
+    const el = blocks[idx]
+    if (!el || typeof el.getBoundingClientRect !== 'function') continue
+    const rect = el.getBoundingClientRect()
+    if (rect.width > 0 || rect.height > 0) {
+      rects.push(rect)
+    }
+  }
+  return rects
+}
+
+function syncMarkdownBlockClasses(entering = false): void {
+  const container = markdownContainerRef.value
+  const blocks = getMarkdownBodyBlocks()
+  for (const el of blocks) {
+    el.classList.remove(
+      'is-canvas-targeted',
+      'is-canvas-pending',
+      'is-canvas-changed',
+      'is-canvas-entering'
+    )
+    el.style.removeProperty('--canvas-stagger-idx')
+  }
+
+  if (canvasCompose.value) {
+    for (const idx of canvasCompose.value.blockIndices) {
+      blocks[idx]?.classList.add('is-canvas-targeted')
+    }
+    return
+  }
+
+  if (isCanvasLocked.value) {
+    for (const idx of pendingDomBlockIndices.value) {
+      blocks[idx]?.classList.add('is-canvas-pending')
+    }
+    return
+  }
+
+  if (canvasPhase.value === 'applied' && canvasApplied.value && blocks.length > 0) {
+    const changed = canvasApplied.value.changedBlockIndices
+    const targets: HTMLElement[] = []
+    let staggerOrder = 0
+    for (let i = 0; i < blocks.length; i += 1) {
+      if (changed.size > 0 && !changed.has(i)) continue
+      const el = blocks[i]!
+      el.classList.add('is-canvas-changed')
+      if (entering) {
+        el.classList.add('is-canvas-entering')
+        el.style.setProperty('--canvas-stagger-idx', String(Math.min(staggerOrder, 10)))
+        staggerOrder += 1
+      }
+      targets.push(el)
+    }
+
+    if (container && targets.length > 0) {
+      const first = targets[0]!
+      const last = targets[targets.length - 1]!
+      const top = Math.max(0, first.offsetTop - 8)
+      const bottom = last.offsetTop + last.offsetHeight + 8
+      const height = Math.max(48, bottom - top)
+      canvasSweepStyle.value = { top: `${top}px`, height: `${height}px` }
+
+      if (entering && typeof first.scrollIntoView === 'function') {
+        first.scrollIntoView({
+          block: 'nearest',
+          behavior: prefersReducedMotion() ? 'auto' : 'smooth'
+        })
+      }
+    } else {
+      canvasSweepStyle.value = { top: '0px', height: '100%' }
+    }
+  }
+}
+
+function resetCanvasState(options?: { clearAmbientSettled?: boolean }): void {
+  clearSweepTimer()
+  canvasPhase.value = 'idle'
+  canvasPending.value = null
+  canvasApplied.value = null
+  canvasCompose.value = null
+  canvasComposePrompt.value = ''
+  canvasShowDiff.value = false
+  canvasSweepActive.value = false
+  pendingDomBlockIndices.value = new Set()
+  ambientBeforeSnapshot.value = null
+  if (options?.clearAmbientSettled) {
+    ambientSettledMessageId.value = null
+  }
+  syncMarkdownBlockClasses(false)
+}
+
+function closeCanvasCompose(): void {
+  if (!canvasCompose.value) return
+  canvasCompose.value = null
+  canvasComposePrompt.value = ''
+  syncMarkdownBlockClasses(false)
+}
+
+function triggerCanvasLaunchFlight(label: string, originEl?: HTMLElement | null): void {
+  if (!hasWindow() || !hasDocument()) return
+  const sourceRect =
+    originEl?.getBoundingClientRect() ??
+    canvasDockWrapRef.value?.getBoundingClientRect() ??
+    markdownContainerRef.value?.getBoundingClientRect()
+  if (!sourceRect) return
+
+  const originX = sourceRect.left + sourceRect.width * 0.5
+  const originY = sourceRect.top + sourceRect.height * 0.5
+
+  // Aim toward the left conversation stream when docked beside chat; otherwise arc upward into stage.
+  const chatTarget =
+    document.querySelector<HTMLElement>('.HomePage-Stream, .TxConversationStream') ??
+    document.querySelector<HTMLElement>('.HomePage-ComposerGroup')
+  let targetX = originX
+  let targetY = Math.max(80, originY - 180)
+  if (chatTarget) {
+    const rect = chatTarget.getBoundingClientRect()
+    if (rect.width > 40 && rect.height > 40) {
+      targetX = rect.left + Math.min(rect.width * 0.62, rect.width - 64)
+      targetY = rect.bottom - Math.min(88, rect.height * 0.22)
+    }
+  }
+
+  const trimmed = label.trim() || t('home.sidePanel.canvasComposePresetPolish')
+  launchFlightSeq += 1
+  launchFlight.value = {
+    id: launchFlightSeq,
+    label: trimmed.length > 32 ? `${trimmed.slice(0, 31)}…` : trimmed,
+    originX,
+    originY,
+    targetX,
+    targetY,
+    theme: beamTheme.value
+  }
+}
+
+function handleLaunchFlightComplete(id: number): void {
+  if (launchFlight.value?.id === id) {
+    launchFlight.value = null
+  }
+}
+
+async function openCanvasCompose(options: {
+  scope: 'selection' | 'document'
+  selection?: SelectionPayload
+}): Promise<void> {
+  if (!data.value || data.value.kind !== 'text' || isCanvasLocked.value) return
+  const fullText = data.value.text ?? ''
+  const isDoc = options.scope === 'document'
+  const selectedText = isDoc ? fullText : (options.selection?.text.trim() ?? '')
+  if (!selectedText.trim()) return
+
+  const blockIndices =
+    !isDoc && options.selection ? resolvePendingBlockIndices(options.selection) : new Set<number>()
+  canvasApplied.value = null
+  canvasShowDiff.value = false
+  canvasPhase.value = 'idle'
+  canvasComposePrompt.value = ''
+  canvasCompose.value = {
+    scope: isDoc ? 'document' : 'selection',
+    selectedText,
+    rects: options.selection?.rects ? [...options.selection.rects] : [],
+    blockIndices
+  }
+
+  clearMdSelection()
+  selectionPrompt.value = ''
+  window.getSelection()?.removeAllRanges()
+  await nextTick()
+  syncMarkdownBlockClasses(false)
+  canvasComposeInputRef.value?.focus()
+}
+
+async function submitCanvasCompose(
+  overrideSuggestion?: string,
+  overrideLabel?: string
+): Promise<void> {
+  const compose = canvasCompose.value
+  if (!compose || isCanvasLocked.value) return
+  const suggestion = (overrideSuggestion ?? canvasComposePrompt.value).trim()
+  const flightLabel =
+    overrideLabel?.trim() ||
+    suggestion ||
+    (compose.scope === 'document'
+      ? t('home.sidePanel.canvasComposeDocumentScope')
+      : t('home.sidePanel.canvasComposePresetPolish'))
+
+  triggerCanvasLaunchFlight(flightLabel, canvasDockWrapRef.value)
+
+  canvasCompose.value = null
+  canvasComposePrompt.value = ''
+  await startCanvasImprove(
+    compose.selectedText,
+    { text: compose.selectedText, rects: compose.rects },
+    {
+      userSuggestion: suggestion,
+      isFullDocument: compose.scope === 'document',
+      blockIndices: compose.blockIndices
+    }
+  )
+}
+
+function onCanvasComposeKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    closeCanvasCompose()
+    return
+  }
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+    event.preventDefault()
+    void submitCanvasCompose()
+  }
+}
+
+function cancelCanvasPending(): void {
+  if (!isPendingCanvasBusy.value) return
+  resetCanvasState()
+}
+
+function keepCanvasEdit(): void {
+  resetCanvasState()
+  clearMdSelection()
+  selectionPrompt.value = ''
+}
+
+function triggerCanvasSweepAnimation(): void {
+  clearSweepTimer()
+  syncMarkdownBlockClasses(true)
+  if (prefersReducedMotion()) {
+    canvasSweepActive.value = false
+    return
+  }
+  canvasSweepKey.value += 1
+  canvasSweepActive.value = true
+  sweepTimer = setTimeout(() => {
+    canvasSweepActive.value = false
+    for (const el of getMarkdownBodyBlocks()) {
+      el.classList.remove('is-canvas-entering')
+    }
+    sweepTimer = null
+  }, 780)
+}
+
+// ── Direct Markdown Editing & Safe Debounced Disk Persistence ───────────────────────
+type MarkdownSaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
+
+const EDITOR_AUTOSAVE_DEBOUNCE_MS = 550
+const editorSaveState = ref<MarkdownSaveState>('idle')
+const markdownEditorReadonly = computed(
+  () => isCanvasLocked.value || Boolean(data.value?.truncated)
+)
+
+let editorSaveTimer: ReturnType<typeof setTimeout> | null = null
+let editorSavedResetTimer: ReturnType<typeof setTimeout> | null = null
+let editorSaveInFlight = false
+let lastPersistedPath = ''
+let lastPersistedText = ''
+
+function clearEditorSaveTimers(): void {
+  if (editorSaveTimer !== null) {
+    clearTimeout(editorSaveTimer)
+    editorSaveTimer = null
+  }
+  if (editorSavedResetTimer !== null) {
+    clearTimeout(editorSavedResetTimer)
+    editorSavedResetTimer = null
+  }
+}
+
+function markDiskSynced(path: string, text: string): void {
+  lastPersistedPath = path
+  lastPersistedText = text
+  clearEditorSaveTimers()
+  editorSaveState.value = 'idle'
+}
+
+function estimateUtf8ByteLength(text: string): number {
+  if (typeof TextEncoder !== 'undefined') {
+    return new TextEncoder().encode(text).byteLength
+  }
+  return text.length
+}
+
+async function persistMarkdownSnapshot(
+  targetPath: string,
+  content: string,
+  expectedMtimeMs: number | undefined,
+  options?: { force?: boolean; allowOverwriteOnConflict?: boolean }
+): Promise<boolean> {
+  if (!transport || !targetPath) return false
+  if (!options?.force && targetPath === lastPersistedPath && content === lastPersistedText) {
+    if (resolvedPath.value === targetPath) {
+      editorSaveState.value = 'idle'
+    }
+    return true
+  }
+  if (editorSaveInFlight) return false
+
+  editorSaveInFlight = true
+  canvasWriteInFlight = true
+  if (resolvedPath.value === targetPath) {
+    editorSaveState.value = 'saving'
+  }
+  try {
+    const written = await transport.send(AgentWorkspaceEvents.writeFile, {
+      path: targetPath,
+      content,
+      conversationId: props.conversationId ?? null,
+      ...(expectedMtimeMs !== undefined && !options?.allowOverwriteOnConflict
+        ? { expectedMtimeMs }
+        : {})
+    })
+    lastPersistedPath = targetPath
+    lastPersistedText = content
+    if (resolvedPath.value === targetPath && data.value?.kind === 'text') {
+      const currentText = data.value.text ?? ''
+      data.value = {
+        ...data.value,
+        size: currentText === content ? written.size : estimateUtf8ByteLength(currentText),
+        mtimeMs: written.mtimeMs,
+        truncated: false
+      }
+      if (currentText !== content) {
+        editorSaveState.value = 'dirty'
+        scheduleMarkdownAutoSave()
+      } else {
+        editorSaveState.value = 'saved'
+        if (editorSavedResetTimer !== null) clearTimeout(editorSavedResetTimer)
+        editorSavedResetTimer = setTimeout(() => {
+          if (editorSaveState.value === 'saved') editorSaveState.value = 'idle'
+          editorSavedResetTimer = null
+        }, 1800)
+      }
+    }
+    return true
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (resolvedPath.value === targetPath) {
+      editorSaveState.value = 'error'
+    }
+    if (/WORKSPACE_FILE_CONFLICT/i.test(msg)) {
+      toast.error(t('home.sidePanel.editorSaveConflict'))
+    } else {
+      toast.error(t('home.sidePanel.canvasApplyFailed'))
+    }
+    return false
+  } finally {
+    canvasWriteInFlight = false
+    editorSaveInFlight = false
+  }
+}
+
+async function saveMarkdownEdits(options?: {
+  force?: boolean
+  allowOverwriteOnConflict?: boolean
+}): Promise<boolean> {
+  if (editorSaveTimer !== null) {
+    clearTimeout(editorSaveTimer)
+    editorSaveTimer = null
+  }
+  if (!isMarkdown.value || !data.value || data.value.kind !== 'text' || data.value.truncated) {
+    return false
+  }
+  if (isCanvasLocked.value) return false
+  return persistMarkdownSnapshot(
+    resolvedPath.value,
+    data.value.text ?? '',
+    data.value.mtimeMs,
+    options
+  )
+}
+
+function scheduleMarkdownAutoSave(): void {
+  if (editorSaveTimer !== null) clearTimeout(editorSaveTimer)
+  editorSaveTimer = setTimeout(() => {
+    editorSaveTimer = null
+    void saveMarkdownEdits()
+  }, EDITOR_AUTOSAVE_DEBOUNCE_MS)
+}
+
+function handleMarkdownEditorInput(nextText: string): void {
+  if (!data.value || data.value.kind !== 'text' || markdownEditorReadonly.value) return
+  if (nextText === (data.value.text ?? '')) return
+  if (canvasPhase.value === 'applied') {
+    resetCanvasState()
+  }
+  data.value = {
+    ...data.value,
+    text: nextText,
+    size: estimateUtf8ByteLength(nextText)
+  }
+  if (resolvedPath.value === lastPersistedPath && nextText === lastPersistedText) {
+    clearEditorSaveTimers()
+    editorSaveState.value = 'idle'
+    return
+  }
+  editorSaveState.value = 'dirty'
+  scheduleMarkdownAutoSave()
+}
+
+function handleMarkdownEditorBlur(): void {
+  if (editorSaveState.value === 'dirty') {
+    void saveMarkdownEdits()
+  }
+}
+
+function commitCanvasVisualTransition(
+  nextData: WorkspaceReadFileResult,
+  beforeText: string,
+  beforeMtimeMs: number,
+  beforeBlockTexts: string[],
+  meta: {
+    source: CanvasAppliedSource
+    actionId: string
+    selectedText: string
+  }
+): void {
+  const afterText = nextData.text ?? ''
+  const diff = computeCanvasLineDiff(beforeText, afterText)
+  data.value = nextData
+  markDiskSynced(nextData.path || resolvedPath.value, afterText)
+  canvasPhase.value = 'applied'
+  canvasShowDiff.value = false
+  pendingDomBlockIndices.value = new Set()
+
+  canvasApplied.value = {
+    filePath: nextData.path || resolvedPath.value,
+    source: meta.source,
+    actionId: meta.actionId,
+    selectedText: meta.selectedText,
+    beforeText,
+    afterText,
+    beforeMtimeMs,
+    diff,
+    changedBlockIndices: new Set()
+  }
+
+  void nextTick(() => {
+    const afterBlockTexts = snapshotMarkdownBlockTexts()
+    const changedBlocks = computeChangedBlockIndices(beforeBlockTexts, afterBlockTexts)
+    if (canvasApplied.value) {
+      canvasApplied.value = {
+        ...canvasApplied.value,
+        changedBlockIndices: changedBlocks
+      }
+    }
+    triggerCanvasSweepAnimation()
+  })
+}
+
+async function syncFromDisk(options: {
+  reason: CanvasAppliedSource
+  fromTool?: boolean
+}): Promise<boolean> {
+  if (!transport || canvasWriteInFlight) return false
+  const targetPath = resolvedPath.value.trim()
+  if (!targetPath) return false
+  const current = data.value
+  if (!current) return false
+
+  const session = canvasPending.value
+  const ambientSnap =
+    ambientBeforeSnapshot.value?.filePath === targetPath ? ambientBeforeSnapshot.value : null
+  const beforeText = session
+    ? session.beforeText
+    : ambientSnap
+      ? ambientSnap.beforeText
+      : (current.text ?? '')
+  const beforeMtimeMs = session
+    ? session.beforeMtimeMs
+    : ambientSnap
+      ? ambientSnap.beforeMtimeMs
+      : current.mtimeMs
+  const beforeBlockTexts = session
+    ? session.beforeBlockTexts
+    : ambientSnap
+      ? ambientSnap.beforeBlockTexts
+      : snapshotMarkdownBlockTexts()
+
+  try {
+    const fresh = await transport.send(AgentWorkspaceEvents.readFile, {
+      path: targetPath,
+      conversationId: props.conversationId ?? null
+    })
+    if (resolvedPath.value !== targetPath) return false
+    if (fresh.kind !== 'text') {
+      if (fresh.mtimeMs !== current.mtimeMs) {
+        data.value = fresh
+      }
+      return false
+    }
+    if ((fresh.text ?? '') === (current.text ?? '')) {
+      return false
+    }
+
+    if (session && session.filePath === targetPath) {
+      session.diskApplied = true
+      canvasPending.value = null
+    }
+    ambientBeforeSnapshot.value = null
+    const tail = props.messages.at(-1)
+    ambientSettledMessageId.value = tail?.role === 'assistant' ? tail.id : null
+    commitCanvasVisualTransition(fresh, beforeText, beforeMtimeMs, beforeBlockTexts, {
+      source: options.reason,
+      actionId: session?.actionId ?? 'sync',
+      selectedText: session?.selectedText ?? ''
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function finalizePendingCanvasSession(target: ConversationMessage): Promise<void> {
+  const session = canvasPending.value
+  if (!session || canvasFinalizeInFlight) return
+  if (session.filePath !== resolvedPath.value) {
+    resetCanvasState()
+    return
+  }
+  if (session.diskApplied) {
+    lastAppliedAssistantId = target.id
+    canvasPending.value = null
+    return
+  }
+
+  canvasFinalizeInFlight = true
+  lastAppliedAssistantId = target.id
+  try {
+    // 1. Disk-first check: if the agent edited the file via file.write / bash / Herdr, adopt it.
+    let syncedFromDisk = await syncFromDisk({ reason: 'improve' })
+    if (syncedFromDisk) return
+
+    const writes = inspectMessageFileWrites(target, fileName.value)
+    if (writes.completedCount > 0) {
+      // Allow a brief flush window when a real file-write tool completed right before turn end.
+      await new Promise((resolve) => setTimeout(resolve, 180))
+      syncedFromDisk = await syncFromDisk({ reason: 'improve' })
+      if (syncedFromDisk) return
+    }
+
+    if (!session.autoApply) {
+      resetCanvasState()
+      return
+    }
+
+    // 2. Fallback: extract revised passage from assistant reply and persist cleanly.
+    const extracted = extractCanvasRevisionFromReply(target.content ?? '', {
+      originalSource: session.beforeText,
+      selectedText: session.selectedText,
+      fileExt: fileExt.value
+    })
+    if (!extracted) {
+      resetCanvasState()
+      const claimedDiskUpdate =
+        writes.completedCount === 0 && isClaimedDiskUpdateReply(target.content ?? '')
+      if (claimedDiskUpdate) {
+        toast.warning(t('home.sidePanel.canvasFalseWriteClaim'))
+      } else {
+        toast.info(t('home.sidePanel.canvasNoRevisionExtracted'))
+      }
+      return
+    }
+
+    const merged = applyCanvasRevisionToSource(session.beforeText, session.selectedText, extracted)
+    if (!merged || !merged.changed) {
+      resetCanvasState()
+      toast.info(t('home.sidePanel.canvasNoRevisionExtracted'))
+      return
+    }
+
+    if (!transport || !data.value || data.value.kind !== 'text') {
+      resetCanvasState()
+      return
+    }
+
+    canvasPhase.value = 'applying'
+    canvasWriteInFlight = true
+    try {
+      const written = await transport.send(AgentWorkspaceEvents.writeFile, {
+        path: session.filePath,
+        content: merged.nextContent,
+        conversationId: props.conversationId ?? null,
+        expectedMtimeMs: session.beforeMtimeMs
+      })
+      if (resolvedPath.value !== session.filePath) {
+        resetCanvasState()
+        return
+      }
+      const nextData: WorkspaceReadFileResult = {
+        ...data.value,
+        text: merged.nextContent,
+        size: written.size,
+        mtimeMs: written.mtimeMs,
+        truncated: false
+      }
+      canvasPending.value = null
+      commitCanvasVisualTransition(
+        nextData,
+        session.beforeText,
+        session.beforeMtimeMs,
+        session.beforeBlockTexts,
+        {
+          source: 'improve',
+          actionId: session.actionId,
+          selectedText: session.selectedText
+        }
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      // If disk changed concurrently right before our write, check disk once before reporting failure.
+      if (/WORKSPACE_FILE_CONFLICT/i.test(msg)) {
+        const adopted = await syncFromDisk({ reason: 'improve' })
+        if (adopted) return
+      }
+      resetCanvasState()
+      toast.error(t('home.sidePanel.canvasApplyFailed'))
+    } finally {
+      canvasWriteInFlight = false
+    }
+  } finally {
+    canvasFinalizeInFlight = false
+  }
+}
+
+async function undoCanvasEdit(): Promise<void> {
+  const snapshot = canvasApplied.value
+  if (!snapshot || canvasUndoing.value || !transport || !data.value || data.value.kind !== 'text') {
+    return
+  }
+  canvasUndoing.value = true
+  canvasWriteInFlight = true
+  try {
+    const written = await transport.send(AgentWorkspaceEvents.writeFile, {
+      path: snapshot.filePath,
+      content: snapshot.beforeText,
+      conversationId: props.conversationId ?? null
+    })
+    if (resolvedPath.value === snapshot.filePath && data.value?.kind === 'text') {
+      data.value = {
+        ...data.value,
+        text: snapshot.beforeText,
+        size: written.size,
+        mtimeMs: written.mtimeMs
+      }
+      markDiskSynced(snapshot.filePath, snapshot.beforeText)
+    }
+    resetCanvasState()
+    toast.success(t('home.sidePanel.canvasUndone'))
+  } catch {
+    toast.error(t('home.sidePanel.canvasApplyFailed'))
+  } finally {
+    canvasWriteInFlight = false
+    canvasUndoing.value = false
+  }
+}
+
+async function startCanvasImprove(
+  selectedText: string,
+  selection: SelectionPayload,
+  options?: {
+    userSuggestion?: string
+    isFullDocument?: boolean
+    blockIndices?: Set<number>
+  }
+): Promise<boolean> {
+  if (!data.value || data.value.kind !== 'text' || isCanvasLocked.value) return false
+  if (editorSaveState.value === 'dirty') {
+    await saveMarkdownEdits({ force: true })
+  }
+  const targetPath = resolvedPath.value
+  const beforeText = data.value.text ?? ''
+  const beforeMtimeMs = data.value.mtimeMs
+  const beforeBlockTexts = snapshotMarkdownBlockTexts()
+  const pendingIndices = options?.blockIndices
+    ? new Set(options.blockIndices)
+    : resolvePendingBlockIndices(selection)
+
+  pendingDomBlockIndices.value = pendingIndices
+  canvasApplied.value = null
+  canvasShowDiff.value = false
+  ambientBeforeSnapshot.value = null
+  ambientSettledMessageId.value = null
+  canvasPhase.value = 'thinking'
+  canvasPending.value = {
+    filePath: targetPath,
+    actionId: 'improve',
+    selectedText,
+    autoApply: true,
+    beforeText,
+    beforeMtimeMs,
+    beforeBlockTexts,
+    baseline: {
+      knownMessageIds: new Set(props.messages.map((m) => m.id)),
+      initialCount: props.messages.length
+    },
+    lastSeenWriteCount: 0,
+    diskApplied: false
+  }
+
+  clearMdSelection()
+  selectionPrompt.value = ''
+  window.getSelection()?.removeAllRanges()
+  void nextTick(() => syncMarkdownBlockClasses(false))
+
+  const formatted = formatCanvasImprovePrompt({
+    displayPath: displayPathForAi.value,
+    selectedText,
+    userSuggestion: options?.userSuggestion,
+    isFullDocument: options?.isFullDocument,
+    instruction: options?.isFullDocument
+      ? t('home.sidePanel.canvasPromptFullDocument')
+      : t('home.sidePanel.selectionPromptImprove')
+  })
+  const accepted = await dispatchAiAction('send', selectedText, formatted, {
+    actionKind: 'improve',
+    autoApply: true
+  })
+  if (!accepted) {
+    resetCanvasState()
+    return false
+  }
+  return true
+}
+
+async function retryCanvasEdit(): Promise<void> {
+  const snapshot = canvasApplied.value
+  if (!snapshot || canvasUndoing.value || !transport || !data.value || data.value.kind !== 'text') {
+    return
+  }
+  const origSelected = snapshot.selectedText
+  const origRects = measureBlocksClientRects(snapshot.changedBlockIndices)
+  canvasUndoing.value = true
+  canvasWriteInFlight = true
+  try {
+    const written = await transport.send(AgentWorkspaceEvents.writeFile, {
+      path: snapshot.filePath,
+      content: snapshot.beforeText,
+      conversationId: props.conversationId ?? null
+    })
+    if (resolvedPath.value !== snapshot.filePath) {
+      resetCanvasState()
+      return
+    }
+    data.value = {
+      ...data.value,
+      text: snapshot.beforeText,
+      size: written.size,
+      mtimeMs: written.mtimeMs
+    }
+    resetCanvasState()
+    await nextTick()
+  } catch {
+    toast.error(t('home.sidePanel.canvasApplyFailed'))
+    return
+  } finally {
+    canvasWriteInFlight = false
+    canvasUndoing.value = false
+  }
+
+  await startCanvasImprove(origSelected, { text: origSelected, rects: origRects })
+}
 
 function dismissMdSelection(): void {
   clearMdSelection()
@@ -345,7 +1457,18 @@ function dismissMdSelection(): void {
 
 watch(
   resolvedPath,
-  (nextPath) => {
+  (nextPath, prevPath) => {
+    if (
+      prevPath &&
+      prevPath !== nextPath &&
+      editorSaveState.value === 'dirty' &&
+      data.value?.kind === 'text' &&
+      data.value.path === prevPath
+    ) {
+      void persistMarkdownSnapshot(prevPath, data.value.text ?? '', data.value.mtimeMs)
+    }
+    clearEditorSaveTimers()
+    editorSaveState.value = 'idle'
     comments.value = readSessionReviewComments(nextPath)
     commentComposerOpen.value = false
     commentDraftQuote.value = ''
@@ -353,17 +1476,115 @@ watch(
     commentsExpanded.value = false
     clearMdSelection()
     selectionPrompt.value = ''
+    resetCanvasState({ clearAmbientSettled: true })
   },
   { immediate: true }
 )
 
-watch(viewMode, () => {
-  clearMdSelection()
-  selectionPrompt.value = ''
+watch(isCanvasLocked, (locked, prevLocked) => {
+  if (locked) {
+    clearEditorSaveTimers()
+    clearMdSelection()
+    selectionPrompt.value = ''
+    commentComposerOpen.value = false
+    outlineOpen.value = false
+    moreMenuOpen.value = false
+    viewportMenuOpen.value = false
+    lintPopoverOpen.value = false
+    window.getSelection()?.removeAllRanges()
+    if (!canvasPending.value && data.value?.kind === 'text' && !ambientBeforeSnapshot.value) {
+      ambientBeforeSnapshot.value = {
+        filePath: resolvedPath.value,
+        beforeText: data.value.text ?? '',
+        beforeMtimeMs: data.value.mtimeMs,
+        beforeBlockTexts: snapshotMarkdownBlockTexts()
+      }
+    }
+  } else if (prevLocked && ambientBeforeSnapshot.value && canvasPhase.value !== 'applied') {
+    // Streaming finished without an explicit tool-write event; do one final disk check to adopt
+    // any silent file write (e.g. shell redirect), otherwise surface a warning if AI falsely claimed a write.
+    void syncFromDisk({ reason: 'sync' })
+      .then((synced) => {
+        if (synced) return
+        const tail = props.messages.at(-1)
+        if (!tail || tail.role !== 'assistant' || tail.status !== 'complete') return
+        const writes = inspectMessageFileWrites(tail, fileName.value)
+        const claimedDiskUpdate =
+          writes.completedCount === 0 && isClaimedDiskUpdateReply(tail.content ?? '')
+        if (claimedDiskUpdate) {
+          toast.warning(t('home.sidePanel.canvasFalseWriteClaim'))
+        }
+      })
+      .finally(() => {
+        ambientBeforeSnapshot.value = null
+      })
+  }
+  void nextTick(() => syncMarkdownBlockClasses(false))
+})
+
+watch(viewMode, (mode) => {
+  if (!isCanvasLocked.value) {
+    clearMdSelection()
+    selectionPrompt.value = ''
+  }
   outlineOpen.value = false
   viewportMenuOpen.value = false
   lintPopoverOpen.value = false
+  if (mode === 'preview' && canvasPhase.value === 'applied') {
+    void nextTick(() => syncMarkdownBlockClasses(false))
+  }
 })
+
+watch(
+  [() => props.messages, () => props.aiStreaming],
+  ([messages, streaming]) => {
+    if (!props.aiActionsEnabled) return
+
+    const session = canvasPending.value
+    if (session && session.filePath === resolvedPath.value) {
+      const target = findTargetAssistantMessage(messages, session.baseline)
+      if (!target) return
+
+      const writes = inspectMessageFileWrites(target, fileName.value)
+      if (
+        canvasPhase.value === 'thinking' &&
+        (writes.running || isMessageStreamingCanvasEdit(target))
+      ) {
+        canvasPhase.value = 'streaming'
+      }
+
+      if (writes.completedCount > session.lastSeenWriteCount) {
+        session.lastSeenWriteCount = writes.completedCount
+        void syncFromDisk({ reason: 'improve', fromTool: true })
+        return
+      }
+
+      if (target.status === 'failed') {
+        cancelCanvasPending()
+        return
+      }
+
+      if (target.status === 'complete' && !streaming && lastAppliedAssistantId !== target.id) {
+        void finalizePendingCanvasSession(target)
+      }
+      return
+    }
+
+    // Ambient sync: if the AI completes a file-write tool touching this open file from normal chat
+    // or review comments, silently sync & animate the right pane automatically.
+    const tail = messages.at(-1)
+    if (!tail || tail.role !== 'assistant' || !data.value) return
+    const writes = inspectMessageFileWrites(tail, fileName.value)
+    if (writes.completedCount === 0) return
+    if (tail.id === ambientLastHandledMsgId && writes.completedCount <= ambientLastWriteCount) {
+      return
+    }
+    ambientLastHandledMsgId = tail.id
+    ambientLastWriteCount = writes.completedCount
+    void syncFromDisk({ reason: 'sync', fromTool: true })
+  },
+  { deep: true }
+)
 
 watch(viewportMenuOpen, (open) => {
   if (!open) {
@@ -402,11 +1623,20 @@ async function handleLintSelectIssue(issue: TdsLintIssue): Promise<void> {
 async function dispatchAiAction(
   mode: 'send' | 'quote',
   selectedText: string,
-  prompt: string
+  prompt: string,
+  meta?: {
+    actionKind?: WorkspaceFileAiActionKind
+    autoApply?: boolean
+  }
 ): Promise<boolean> {
+  if (mode === 'send' && editorSaveState.value === 'dirty') {
+    await saveMarkdownEdits({ force: true })
+  }
   let settled: Promise<boolean> | null = null
   emit('ai-action', {
     mode,
+    ...(meta?.actionKind ? { actionKind: meta.actionKind } : {}),
+    ...(meta?.autoApply ? { autoApply: true } : {}),
     filePath: resolvedPath.value,
     displayPath: displayPathForAi.value,
     selectedText,
@@ -465,19 +1695,25 @@ async function handleMdSelectionAction(payload: {
     return
   }
 
-  const instructionMap: Record<string, string> = {
-    explain: t('home.sidePanel.selectionPromptExplain'),
-    improve: t('home.sidePanel.selectionPromptImprove'),
-    translate: t('home.sidePanel.selectionPromptTranslate')
+  if (payload.id === 'improve') {
+    await openCanvasCompose({ scope: 'selection', selection: payload.selection })
+    return
   }
-  const instruction = instructionMap[payload.id] ?? ''
-  if (instruction) {
+
+  const instructionMap: Record<string, { text: string; kind: WorkspaceFileAiActionKind }> = {
+    explain: { text: t('home.sidePanel.selectionPromptExplain'), kind: 'explain' },
+    translate: { text: t('home.sidePanel.selectionPromptTranslate'), kind: 'translate' }
+  }
+  const entry = instructionMap[payload.id]
+  if (entry?.text) {
     const formatted = formatSingleSelectionPrompt({
       displayPath: displayPathForAi.value,
       selectedText,
-      instruction
+      instruction: entry.text
     })
-    const accepted = await dispatchAiAction('send', selectedText, formatted)
+    const accepted = await dispatchAiAction('send', selectedText, formatted, {
+      actionKind: entry.kind
+    })
     if (!accepted) return
   }
   dismissMdSelection()
@@ -490,12 +1726,16 @@ async function handleMdSelectionSubmit(payload: {
   const selectedText = payload.selection.text.trim()
   const instruction = payload.prompt.trim()
   if (!selectedText || !instruction) return
+  const barNode = extractDomNode(selectionBarRef.value)
+  triggerCanvasLaunchFlight(instruction, barNode instanceof HTMLElement ? barNode : null)
   const formatted = formatSingleSelectionPrompt({
     displayPath: displayPathForAi.value,
     selectedText,
     instruction
   })
-  const accepted = await dispatchAiAction('send', selectedText, formatted)
+  const accepted = await dispatchAiAction('send', selectedText, formatted, {
+    actionKind: 'custom'
+  })
   if (accepted) dismissMdSelection()
 }
 
@@ -625,7 +1865,8 @@ function onCommentKeydown(event: KeyboardEvent): void {
 }
 
 function onDocumentPointerDown(event: PointerEvent): void {
-  if (!mdSelection.value) return
+  if (!activeSelectionPayload.value) return
+  if (isCanvasLocked.value) return
   const target = event.target
   if (!(target instanceof Node)) return
   const barNode = extractDomNode(selectionBarRef.value)
@@ -634,20 +1875,91 @@ function onDocumentPointerDown(event: PointerEvent): void {
 }
 
 function onDocumentKeyDown(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && mdSelection.value) {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+    if (isMarkdown.value && viewMode.value === 'preview' && !markdownEditorReadonly.value) {
+      const active = document.activeElement
+      if (
+        markdownContainerRef.value?.contains(active) ||
+        editorSaveState.value === 'dirty' ||
+        editorSaveState.value === 'error'
+      ) {
+        event.preventDefault()
+        void saveMarkdownEdits({ force: true, allowOverwriteOnConflict: true })
+        return
+      }
+    }
+  }
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    if (
+      props.aiActionsEnabled &&
+      isMarkdown.value &&
+      viewMode.value === 'preview' &&
+      !isCanvasLocked.value
+    ) {
+      const active = document.activeElement
+      if (markdownContainerRef.value?.contains(active) || activeSelectionPayload.value) {
+        event.preventDefault()
+        if (activeSelectionPayload.value) {
+          void openCanvasCompose({ scope: 'selection', selection: activeSelectionPayload.value })
+        } else {
+          void openCanvasCompose({ scope: 'document' })
+        }
+        return
+      }
+    }
+  }
+  if (event.key !== 'Escape') return
+  if (canvasCompose.value) {
+    closeCanvasCompose()
+    return
+  }
+  if (isPendingCanvasBusy.value) {
+    cancelCanvasPending()
+    return
+  }
+  if (canvasShowDiff.value) {
+    canvasShowDiff.value = false
+    return
+  }
+  if (mdSelection.value) {
     dismissMdSelection()
   }
 }
 
 function onBodyScroll(): void {
-  if (mdSelection.value) {
+  if (activeSelectionPayload.value) {
     selectionBarRef.value?.updatePosition?.()
   }
 }
 
 onMounted(() => {
+  syncBeamTheme()
+  if (typeof MutationObserver !== 'undefined' && hasDocument()) {
+    themeObserver = new MutationObserver(syncBeamTheme)
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'data-theme']
+    })
+    if (document.body) {
+      themeObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'data-theme']
+      })
+    }
+  }
+  if (hasWindow() && typeof window.matchMedia === 'function') {
+    themeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    themeMediaQuery.addEventListener?.('change', syncBeamTheme)
+  }
   document.addEventListener('pointerdown', onDocumentPointerDown, true)
   document.addEventListener('keydown', onDocumentKeyDown)
+  if (transport && typeof transport.on === 'function') {
+    disposeReviewListener = transport.on(ConversationReviewEvents.changed, (notification) => {
+      if (!props.aiActionsEnabled) return
+      if (!props.conversationId || notification.conversationId !== props.conversationId) return
+      void syncFromDisk({ reason: canvasPending.value ? 'improve' : 'sync', fromTool: true })
+    })
+  }
 })
 
 function scrollToMarkdownHeading(headingIndex: number): void {
@@ -694,6 +2006,12 @@ async function loadFile(): Promise<void> {
     })
     if (generation !== loadGeneration) return
     data.value = result
+    if (result.kind === 'text') {
+      markDiskSynced(result.path || target, result.text ?? '')
+    } else {
+      clearEditorSaveTimers()
+      editorSaveState.value = 'idle'
+    }
     // Default to preview for HTML/SVG/Markdown/JSON unless an explicit source line was clicked.
     viewMode.value = props.line && props.line > 0 ? 'source' : 'preview'
 
@@ -793,16 +2111,32 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  if (editorSaveState.value === 'dirty' && data.value?.kind === 'text' && !isCanvasLocked.value) {
+    void persistMarkdownSnapshot(resolvedPath.value, data.value.text ?? '', data.value.mtimeMs)
+  }
+  clearEditorSaveTimers()
   loadGeneration += 1
   cancelPendingDomProbe()
   if (activeDomProbeSessionKey) {
     void releaseCaptureSession(activeDomProbeSessionKey)
     activeDomProbeSessionKey = ''
   }
+  clearSweepTimer()
+  themeObserver?.disconnect()
+  themeObserver = null
+  themeMediaQuery?.removeEventListener?.('change', syncBeamTheme)
+  themeMediaQuery = null
+  disposeReviewListener?.()
+  disposeReviewListener = null
   revokePdfUrl()
   document.removeEventListener('pointerdown', onDocumentPointerDown, true)
   document.removeEventListener('keydown', onDocumentKeyDown)
 })
+
+function setViewMode(mode: 'preview' | 'source'): void {
+  if (isCanvasLocked.value) return
+  viewMode.value = mode
+}
 
 function runMoreAction(action: () => void): void {
   moreMenuOpen.value = false
@@ -899,9 +2233,18 @@ function adjustZoom(delta: number): void {
 </script>
 
 <template>
-  <div class="WorkspaceFileViewer" data-testid="workspace-file-viewer">
-    <!-- Slim single-row action bar: view switch on left; ⋮ / ↻ / ≡ on right -->
-    <header class="WorkspaceFileViewer-Header" data-testid="file-viewer-header">
+  <div
+    class="WorkspaceFileViewer"
+    :class="{
+      'is-canvas-locked': isCanvasLocked,
+      'is-canvas-applied': canvasPhase === 'applied'
+    }"
+    :data-canvas-phase="canvasPhase"
+    :data-canvas-locked="isCanvasLocked ? 'true' : 'false'"
+    data-testid="workspace-file-viewer"
+  >
+    <!-- Contextual top bar: shown only when back nav, HTML/SVG device preview, or image zoom is active -->
+    <header v-if="showTopBar" class="WorkspaceFileViewer-Header" data-testid="file-viewer-header">
       <div class="WorkspaceFileViewer-HeaderLead">
         <button
           v-if="canGoBack"
@@ -913,29 +2256,6 @@ function adjustZoom(delta: number): void {
         >
           <span class="i-ri-arrow-left-line" aria-hidden="true" />
         </button>
-
-        <div v-if="supportsPreviewToggle" class="WorkspaceFileViewer-Segment" role="group">
-          <button
-            type="button"
-            class="WorkspaceFileViewer-SegBtn"
-            :class="{ 'is-active': viewMode === 'preview' }"
-            :aria-pressed="viewMode === 'preview'"
-            data-testid="file-viewer-mode-preview"
-            @click="viewMode = 'preview'"
-          >
-            {{ isJson ? t('home.sidePanel.formatted') : t('home.code.preview') }}
-          </button>
-          <button
-            type="button"
-            class="WorkspaceFileViewer-SegBtn"
-            :class="{ 'is-active': viewMode === 'source' }"
-            :aria-pressed="viewMode === 'source'"
-            data-testid="file-viewer-mode-source"
-            @click="viewMode = 'source'"
-          >
-            {{ isJson ? t('home.sidePanel.raw') : t('home.code.source') }}
-          </button>
-        </div>
 
         <div
           v-if="showDeviceViewportControls"
@@ -1118,9 +2438,8 @@ function adjustZoom(delta: number): void {
         </div>
       </div>
 
-      <div class="WorkspaceFileViewer-Toolbar">
+      <div v-if="showDeviceViewportControls" class="WorkspaceFileViewer-Toolbar">
         <TdsLintPopover
-          v-if="showDeviceViewportControls"
           v-model:open="lintPopoverOpen"
           v-model:anti-slop="lintAntiSlop"
           :issues="mergedLintIssues"
@@ -1131,297 +2450,490 @@ function adjustZoom(delta: number): void {
           @send-to-ai="handleLintSendToAi"
           @select-issue="handleLintSelectIssue"
         />
-
-        <TxDropdownMenu
-          v-model="moreMenuOpen"
-          placement="bottom-end"
-          :min-width="200"
-          :panel-card="SHELL_MENU_CARD"
-          panel-background="refraction"
-        >
-          <template #trigger>
-            <button
-              type="button"
-              class="WorkspaceFileViewer-ToolBtn"
-              :class="{ 'is-active': moreMenuOpen }"
-              aria-haspopup="menu"
-              :aria-expanded="moreMenuOpen"
-              :title="t('home.moreActions')"
-              :aria-label="t('home.moreActions')"
-              data-testid="file-viewer-more"
-            >
-              <span class="i-ri-more-2-line" aria-hidden="true" />
-            </button>
-          </template>
-
-          <TxDropdownItem @select="runMoreAction(() => void copyPath())">
-            <span class="WorkspaceFileViewer-MenuItem">
-              <span class="i-ri-links-line" aria-hidden="true" />
-              <span>{{ t('home.sidePanel.copyFullPath') }}</span>
-            </span>
-          </TxDropdownItem>
-
-          <TxDropdownItem
-            v-if="data?.kind === 'text'"
-            @select="runMoreAction(() => void copyContent())"
-          >
-            <span class="WorkspaceFileViewer-MenuItem">
-              <span class="i-ri-clipboard-line" aria-hidden="true" />
-              <span>{{ t('home.sidePanel.copyContent') }}</span>
-            </span>
-          </TxDropdownItem>
-
-          <TxDropdownItem
-            v-if="data?.kind === 'text' && (!supportsPreviewToggle || viewMode === 'source')"
-            @select="runMoreAction(() => (wrapLines = !wrapLines))"
-          >
-            <span class="WorkspaceFileViewer-MenuItem">
-              <span class="i-ri-text-wrap" aria-hidden="true" />
-              <span>{{ t('home.sidePanel.toggleWrap') }}</span>
-            </span>
-            <template v-if="wrapLines" #right>
-              <span class="i-ri-check-line WorkspaceFileViewer-MenuCheck" aria-hidden="true" />
-            </template>
-          </TxDropdownItem>
-
-          <div class="WorkspaceFileViewer-MenuDivider" role="separator" />
-
-          <TxDropdownItem v-if="showOpenInBrowser" @select="runMoreAction(openInBuiltInBrowser)">
-            <span class="WorkspaceFileViewer-MenuItem">
-              <span class="i-ri-window-line" aria-hidden="true" />
-              <span>{{ t('home.fileLink.openInBuiltInBrowser') }}</span>
-            </span>
-          </TxDropdownItem>
-
-          <TxDropdownItem @select="runMoreAction(() => void openWithSystem())">
-            <span class="WorkspaceFileViewer-MenuItem">
-              <span class="i-ri-external-link-line" aria-hidden="true" />
-              <span>{{ t('home.fileLink.openWithSystem') }}</span>
-            </span>
-          </TxDropdownItem>
-
-          <TxDropdownItem @select="runMoreAction(() => void revealInFolder())">
-            <span class="WorkspaceFileViewer-MenuItem">
-              <span class="i-ri-folder-open-line" aria-hidden="true" />
-              <span>{{ t('home.fileLink.revealInFinder') }}</span>
-            </span>
-          </TxDropdownItem>
-        </TxDropdownMenu>
-
-        <button
-          type="button"
-          class="WorkspaceFileViewer-ToolBtn"
-          :title="t('home.sidePanel.reload')"
-          :aria-label="t('home.sidePanel.reload')"
-          data-testid="file-viewer-refresh"
-          @click="loadFile"
-        >
-          <span class="i-ri-refresh-line" aria-hidden="true" />
-        </button>
-
-        <TxPopover
-          v-if="markdownHeadings.length > 0"
-          v-model="outlineOpen"
-          trigger="click"
-          placement="bottom-end"
-          :offset="6"
-          :match-reference-width="false"
-          :min-width="220"
-          :panel-radius="12"
-          :panel-padding="6"
-          :panel-card="SHELL_MENU_CARD"
-          panel-background="refraction"
-        >
-          <template #reference>
-            <button
-              type="button"
-              class="WorkspaceFileViewer-ToolBtn"
-              :class="{ 'is-active': outlineOpen }"
-              :aria-expanded="outlineOpen"
-              :title="t('home.sidePanel.outline')"
-              :aria-label="t('home.sidePanel.outline')"
-              data-testid="file-viewer-outline-btn"
-            >
-              <span class="i-ri-list-unordered" aria-hidden="true" />
-            </button>
-          </template>
-
-          <nav class="WorkspaceFileViewer-Outline" :aria-label="t('home.sidePanel.outline')">
-            <div class="WorkspaceFileViewer-OutlineTitle">{{ t('home.sidePanel.outline') }}</div>
-            <button
-              v-for="heading in markdownHeadings"
-              :key="heading.id"
-              type="button"
-              class="WorkspaceFileViewer-OutlineItem"
-              :style="{ paddingLeft: `${8 + (heading.level - 1) * 12}px` }"
-              @click="scrollToMarkdownHeading(heading.index)"
-            >
-              {{ heading.text }}
-            </button>
-          </nav>
-        </TxPopover>
       </div>
     </header>
 
-    <div class="WorkspaceFileViewer-Body" @scroll.passive="onBodyScroll">
-      <div v-if="loading" class="WorkspaceFileViewer-Loading" aria-hidden="true">
-        <TxSkeleton :rows="8" animated />
-      </div>
-
-      <div v-else-if="error" class="WorkspaceFileViewer-State" role="alert">
-        <span
-          class="i-ri-error-warning-line WorkspaceFileViewer-StateIcon is-danger"
-          aria-hidden="true"
-        />
-        <p class="WorkspaceFileViewer-StateTitle">{{ error }}</p>
-        <p class="WorkspaceFileViewer-StatePath">{{ resolvedPath }}</p>
-        <div class="WorkspaceFileViewer-StateActions">
-          <TxButton size="sm" variant="secondary" @click="loadFile">
-            {{ t('home.workspace.retry') }}
-          </TxButton>
-          <TxButton size="sm" variant="secondary" @click="revealInFolder">
-            {{ t('home.fileLink.revealParentFolder') }}
-          </TxButton>
-        </div>
-      </div>
-
-      <template v-else-if="data">
-        <!-- Directory browser -->
-        <div v-if="data.kind === 'directory'" class="WorkspaceFileViewer-Dir">
-          <button
-            v-if="parentDirectoryPath"
-            type="button"
-            class="WorkspaceFileViewer-DirRow is-parent"
-            @click="openEntry(parentDirectoryPath)"
-          >
-            <span class="i-ri-arrow-up-line WorkspaceFileViewer-DirIcon" aria-hidden="true" />
-            <span class="WorkspaceFileViewer-DirName">..</span>
-          </button>
-          <button
-            v-for="entry in data.entries ?? []"
-            :key="entry.path"
-            type="button"
-            class="WorkspaceFileViewer-DirRow"
-            @click="openEntry(entry.path)"
-          >
-            <span
-              :class="resolveFileIconClass(entry.name, entry.isDirectory)"
-              class="WorkspaceFileViewer-DirIcon"
-              aria-hidden="true"
-            />
-            <span class="WorkspaceFileViewer-DirName">{{ entry.name }}</span>
-            <span
-              v-if="!entry.isDirectory && entry.size !== undefined"
-              class="WorkspaceFileViewer-DirSize"
-            >
-              {{ formatCompactFileSize(entry.size) }}
-            </span>
-          </button>
-        </div>
-
-        <!-- Live HTML / SVG preview -->
+    <!-- StageHost separates TxBorderBeam (z: 1..3 over stage z: 0) from floating glass dock (z: 12) -->
+    <div class="WorkspaceFileViewer-StageHost">
+      <TxBorderBeam
+        class="WorkspaceFileViewer-StageBeam"
+        :class="{
+          'is-locked': isCanvasLocked,
+          'is-light': beamTheme === 'light'
+        }"
+        size="pulse-inner"
+        :active="isCanvasLocked"
+        :theme="beamTheme"
+        color-variant="colorful"
+        :border-radius="10"
+        :saturation="beamTheme === 'light' ? 1.65 : 1.35"
+        :brightness="beamTheme === 'light' ? 0.88 : 1.05"
+        :strength="1"
+        data-testid="file-viewer-canvas-beam"
+      >
         <div
-          v-else-if="(isHtml || isSvg) && viewMode === 'preview'"
-          class="WorkspaceFileViewer-FrameWrap"
-          :class="{ 'is-device-preview': isDevicePresetActive }"
-          data-testid="file-viewer-preview-stage"
+          class="WorkspaceFileViewer-Stage"
+          :class="{
+            'is-canvas-locked': isCanvasLocked,
+            'has-canvas-dock': showCanvasDock
+          }"
+          :aria-busy="isCanvasLocked ? 'true' : undefined"
+          data-testid="file-viewer-stage"
         >
-          <TdsDeviceFrame
-            v-if="isDevicePresetActive"
-            :preset="activeDevicePreset"
-            :orientation="viewportOrientation"
-            :show-shell="showDeviceShell"
-            data-testid="file-viewer-device-frame"
-          >
-            <iframe
-              class="WorkspaceFileViewer-Frame"
-              :sandbox="isHtml ? 'allow-scripts allow-forms allow-modals' : ''"
-              :title="fileName"
-              :srcdoc="sandboxedHtmlSrcdoc"
-            />
-          </TdsDeviceFrame>
-          <iframe
-            v-else
-            class="WorkspaceFileViewer-Frame"
-            :sandbox="isHtml ? 'allow-scripts allow-forms allow-modals' : ''"
-            :title="fileName"
-            :srcdoc="sandboxedHtmlSrcdoc"
-          />
-        </div>
-
-        <!-- Rendered Markdown -->
-        <div
-          v-else-if="isMarkdown && viewMode === 'preview'"
-          ref="markdownContainerRef"
-          class="WorkspaceFileViewer-Markdown"
-          data-testid="file-viewer-markdown"
-        >
-          <TxMarkdownView :content="data.text ?? ''" theme="auto" />
-        </div>
-
-        <!-- Zoomable Image -->
-        <div v-else-if="data.kind === 'image'" class="WorkspaceFileViewer-ImageWrap">
-          <div class="WorkspaceFileViewer-ImageStage">
-            <img
-              :src="imageDataUrl"
-              :alt="fileName"
-              class="WorkspaceFileViewer-Image"
-              :style="{ transform: `scale(${imageZoom})` }"
-            />
-          </div>
-        </div>
-
-        <!-- PDF viewer -->
-        <div v-else-if="data.kind === 'pdf' && pdfBlobUrl" class="WorkspaceFileViewer-FrameWrap">
-          <iframe class="WorkspaceFileViewer-Frame" :src="pdfBlobUrl" :title="fileName" />
-        </div>
-
-        <!-- Binary fallback -->
-        <div v-else-if="data.kind === 'binary'" class="WorkspaceFileViewer-State">
-          <span class="i-ri-file-zip-line WorkspaceFileViewer-StateIcon" aria-hidden="true" />
-          <p class="WorkspaceFileViewer-StateTitle">{{ t('home.sidePanel.binaryUnsupported') }}</p>
-          <p class="WorkspaceFileViewer-StatePath">
-            {{ data.mimeType }} · {{ formatCompactFileSize(data.size) }}
-          </p>
-          <div class="WorkspaceFileViewer-StateActions">
-            <TxButton size="sm" variant="secondary" @click="openWithSystem">
-              {{ t('home.fileLink.openWithSystem') }}
-            </TxButton>
-            <TxButton size="sm" variant="secondary" @click="revealInFolder">
-              {{ t('home.fileLink.revealInFinder') }}
-            </TxButton>
-          </div>
-        </div>
-
-        <!-- Source / Code viewer with line numbers -->
-        <div
-          v-else
-          ref="codeContainerRef"
-          class="WorkspaceFileViewer-Code"
-          :class="{ 'is-wrap': wrapLines }"
-        >
-          <div v-if="data.truncated" class="WorkspaceFileViewer-Truncated">
-            {{ t('home.sidePanel.fileTruncated', { size: formatCompactFileSize(data.size) }) }}
-          </div>
-          <div class="WorkspaceFileViewer-CodeLines" role="region" :aria-label="fileName">
-            <div
-              v-for="(lineText, idx) in codeLines"
-              :key="idx"
-              :data-line="idx + 1"
-              class="WorkspaceFileViewer-CodeLine"
-              :class="{ 'is-highlighted': line === idx + 1 }"
-            >
-              <span class="WorkspaceFileViewer-LineNo" aria-hidden="true">{{ idx + 1 }}</span>
-              <span class="WorkspaceFileViewer-LineText">{{ lineText || ' ' }}</span>
+          <div class="WorkspaceFileViewer-Body" @scroll.passive="onBodyScroll">
+            <div v-if="loading" class="WorkspaceFileViewer-Loading" aria-hidden="true">
+              <TxSkeleton :rows="8" animated />
             </div>
+
+            <div v-else-if="error" class="WorkspaceFileViewer-State" role="alert">
+              <span
+                class="i-ri-error-warning-line WorkspaceFileViewer-StateIcon is-danger"
+                aria-hidden="true"
+              />
+              <p class="WorkspaceFileViewer-StateTitle">{{ error }}</p>
+              <p class="WorkspaceFileViewer-StatePath">{{ resolvedPath }}</p>
+              <div class="WorkspaceFileViewer-StateActions">
+                <TxButton size="sm" variant="secondary" @click="loadFile">
+                  {{ t('home.workspace.retry') }}
+                </TxButton>
+                <TxButton size="sm" variant="secondary" @click="revealInFolder">
+                  {{ t('home.fileLink.revealParentFolder') }}
+                </TxButton>
+              </div>
+            </div>
+
+            <template v-else-if="data">
+              <!-- Inline Canvas Diff View (toggled from Canvas Review Bar) -->
+              <div
+                v-if="canvasShowDiff && canvasApplied"
+                class="WorkspaceFileViewer-CanvasDiff"
+                role="region"
+                :aria-label="t('home.sidePanel.canvasShowDiff')"
+                data-testid="file-viewer-canvas-diff"
+              >
+                <div
+                  v-for="(diffLine, idx) in canvasApplied.diff.lines"
+                  :key="idx"
+                  class="WorkspaceFileViewer-CanvasDiffLine"
+                  :class="`is-${diffLine.type}`"
+                >
+                  <span class="WorkspaceFileViewer-CanvasDiffNo" aria-hidden="true">
+                    {{ diffLine.newLine ?? diffLine.oldLine ?? '' }}
+                  </span>
+                  <span class="WorkspaceFileViewer-CanvasDiffSign" aria-hidden="true">
+                    {{ diffLine.type === 'add' ? '+' : diffLine.type === 'del' ? '−' : ' ' }}
+                  </span>
+                  <span class="WorkspaceFileViewer-CanvasDiffText">{{ diffLine.text || ' ' }}</span>
+                </div>
+              </div>
+
+              <!-- Directory browser -->
+              <div v-else-if="data.kind === 'directory'" class="WorkspaceFileViewer-Dir">
+                <button
+                  v-if="parentDirectoryPath"
+                  type="button"
+                  class="WorkspaceFileViewer-DirRow is-parent"
+                  @click="openEntry(parentDirectoryPath)"
+                >
+                  <span class="i-ri-arrow-up-line WorkspaceFileViewer-DirIcon" aria-hidden="true" />
+                  <span class="WorkspaceFileViewer-DirName">..</span>
+                </button>
+                <button
+                  v-for="entry in data.entries ?? []"
+                  :key="entry.path"
+                  type="button"
+                  class="WorkspaceFileViewer-DirRow"
+                  @click="openEntry(entry.path)"
+                >
+                  <span
+                    :class="resolveFileIconClass(entry.name, entry.isDirectory)"
+                    class="WorkspaceFileViewer-DirIcon"
+                    aria-hidden="true"
+                  />
+                  <span class="WorkspaceFileViewer-DirName">{{ entry.name }}</span>
+                  <span
+                    v-if="!entry.isDirectory && entry.size !== undefined"
+                    class="WorkspaceFileViewer-DirSize"
+                  >
+                    {{ formatCompactFileSize(entry.size) }}
+                  </span>
+                </button>
+              </div>
+
+              <!-- Live HTML / SVG preview -->
+              <div
+                v-else-if="(isHtml || isSvg) && viewMode === 'preview'"
+                class="WorkspaceFileViewer-FrameWrap"
+                :class="{ 'is-device-preview': isDevicePresetActive }"
+                data-testid="file-viewer-preview-stage"
+              >
+                <TdsDeviceFrame
+                  v-if="isDevicePresetActive"
+                  :preset="activeDevicePreset"
+                  :orientation="viewportOrientation"
+                  :show-shell="showDeviceShell"
+                  data-testid="file-viewer-device-frame"
+                >
+                  <iframe
+                    class="WorkspaceFileViewer-Frame"
+                    :sandbox="isHtml ? 'allow-scripts allow-forms allow-modals' : ''"
+                    :title="fileName"
+                    :srcdoc="sandboxedHtmlSrcdoc"
+                  />
+                </TdsDeviceFrame>
+                <iframe
+                  v-else
+                  class="WorkspaceFileViewer-Frame"
+                  :sandbox="isHtml ? 'allow-scripts allow-forms allow-modals' : ''"
+                  :title="fileName"
+                  :srcdoc="sandboxedHtmlSrcdoc"
+                />
+              </div>
+
+              <!-- Editable WYSIWYG Markdown (click anywhere to edit, / for slash blocks, auto-saves to disk) -->
+              <div
+                v-else-if="isMarkdown && viewMode === 'preview'"
+                ref="markdownContainerRef"
+                class="WorkspaceFileViewer-Markdown"
+                :class="{
+                  'is-canvas-locked': isCanvasLocked,
+                  'is-canvas-sweeping': canvasSweepActive
+                }"
+                data-testid="file-viewer-markdown"
+              >
+                <TxMarkdownEditor
+                  :key="resolvedPath"
+                  class="WorkspaceFileViewer-MarkdownEditor"
+                  :model-value="data.text ?? ''"
+                  mode="wysiwyg"
+                  :theme="beamTheme"
+                  :toolbar="false"
+                  :status-bar="false"
+                  :bubble="false"
+                  :slash="true"
+                  :readonly="markdownEditorReadonly"
+                  :min-height="240"
+                  :placeholder="t('home.sidePanel.editorPlaceholder')"
+                  :aria-label="fileName"
+                  :labels="markdownEditorLabels"
+                  data-testid="file-viewer-markdown-editor"
+                  @update:model-value="handleMarkdownEditorInput"
+                  @blur="handleMarkdownEditorBlur"
+                />
+                <div
+                  v-if="canvasSweepActive"
+                  :key="canvasSweepKey"
+                  class="WorkspaceFileViewer-CanvasWipe"
+                  :style="canvasSweepStyle"
+                  aria-hidden="true"
+                  data-testid="file-viewer-canvas-sweep"
+                >
+                  <div class="WorkspaceFileViewer-CanvasWipeBar" />
+                </div>
+              </div>
+
+              <!-- Zoomable Image -->
+              <div v-else-if="data.kind === 'image'" class="WorkspaceFileViewer-ImageWrap">
+                <div class="WorkspaceFileViewer-ImageStage">
+                  <img
+                    :src="imageDataUrl"
+                    :alt="fileName"
+                    class="WorkspaceFileViewer-Image"
+                    :style="{ transform: `scale(${imageZoom})` }"
+                  />
+                </div>
+              </div>
+
+              <!-- PDF viewer -->
+              <div
+                v-else-if="data.kind === 'pdf' && pdfBlobUrl"
+                class="WorkspaceFileViewer-FrameWrap"
+              >
+                <iframe class="WorkspaceFileViewer-Frame" :src="pdfBlobUrl" :title="fileName" />
+              </div>
+
+              <!-- Binary fallback -->
+              <div v-else-if="data.kind === 'binary'" class="WorkspaceFileViewer-State">
+                <span class="i-ri-file-zip-line WorkspaceFileViewer-StateIcon" aria-hidden="true" />
+                <p class="WorkspaceFileViewer-StateTitle">
+                  {{ t('home.sidePanel.binaryUnsupported') }}
+                </p>
+                <p class="WorkspaceFileViewer-StatePath">
+                  {{ data.mimeType }} · {{ formatCompactFileSize(data.size) }}
+                </p>
+                <div class="WorkspaceFileViewer-StateActions">
+                  <TxButton size="sm" variant="secondary" @click="openWithSystem">
+                    {{ t('home.fileLink.openWithSystem') }}
+                  </TxButton>
+                  <TxButton size="sm" variant="secondary" @click="revealInFolder">
+                    {{ t('home.fileLink.revealInFinder') }}
+                  </TxButton>
+                </div>
+              </div>
+
+              <!-- Source / Code viewer with line numbers -->
+              <div
+                v-else
+                ref="codeContainerRef"
+                class="WorkspaceFileViewer-Code"
+                :class="{ 'is-wrap': wrapLines }"
+              >
+                <div v-if="data.truncated" class="WorkspaceFileViewer-Truncated">
+                  {{
+                    t('home.sidePanel.fileTruncated', { size: formatCompactFileSize(data.size) })
+                  }}
+                </div>
+                <div class="WorkspaceFileViewer-CodeLines" role="region" :aria-label="fileName">
+                  <div
+                    v-for="(lineText, idx) in codeLines"
+                    :key="idx"
+                    :data-line="idx + 1"
+                    class="WorkspaceFileViewer-CodeLine"
+                    :class="{
+                      'is-highlighted': line === idx + 1,
+                      'is-canvas-changed':
+                        canvasPhase === 'applied' &&
+                        Boolean(canvasApplied?.diff.changedNewLines.has(idx + 1)),
+                      'is-canvas-entering':
+                        canvasSweepActive &&
+                        Boolean(canvasApplied?.diff.changedNewLines.has(idx + 1))
+                    }"
+                  >
+                    <span class="WorkspaceFileViewer-LineNo" aria-hidden="true">{{ idx + 1 }}</span>
+                    <span class="WorkspaceFileViewer-LineText">{{ lineText || ' ' }}</span>
+                  </div>
+                </div>
+                <div
+                  v-if="canvasSweepActive"
+                  :key="canvasSweepKey"
+                  class="WorkspaceFileViewer-CanvasWipe"
+                  aria-hidden="true"
+                  data-testid="file-viewer-canvas-sweep"
+                >
+                  <div class="WorkspaceFileViewer-CanvasWipeBar" />
+                </div>
+              </div>
+            </template>
           </div>
+
+          <!-- Rising colorful dot + ASCII synthesis ripple field while AI is modifying -->
+          <WorkspaceCanvasRippleOverlay :active="isCanvasLocked" :theme="beamTheme" />
         </div>
-      </template>
+      </TxBorderBeam>
+
+      <!-- Bottom-floating liquid glass status / suggestion composer / approval capsule -->
+      <Transition name="canvas-dock">
+        <div
+          v-if="showCanvasDock"
+          ref="canvasDockWrapRef"
+          class="WorkspaceFileViewer-CanvasDockWrap"
+          :class="{ 'is-compose': Boolean(canvasCompose) }"
+          :role="canvasCompose ? 'dialog' : 'status'"
+          :aria-live="canvasCompose ? undefined : 'polite'"
+          :aria-label="canvasCompose ? t('home.sidePanel.canvasComposeSelectionScope') : undefined"
+          data-testid="file-viewer-canvas-dock"
+        >
+          <TxTouchSurface
+            class="WorkspaceFileViewer-CanvasDockSurface"
+            :class="{
+              'is-dark-surface': beamTheme === 'dark',
+              'is-compose': Boolean(canvasCompose),
+              'is-busy': isCanvasLocked,
+              'is-applied': !isCanvasLocked && !canvasCompose && canvasPhase === 'applied'
+            }"
+            surface="glass"
+            engine="lens"
+            :width="canvasCompose ? '100%' : 'auto'"
+            :height="canvasCompose ? 'auto' : 44"
+            :border-radius="canvasCompose ? 20 : 22"
+            :frost="15"
+            :bezel="10"
+            :thickness="18"
+            :background-opacity="beamTheme === 'dark' ? 0.76 : 0.84"
+            :rim-light="0.9"
+            :lean="canvasCompose ? 0.012 : 0.028"
+            :max-lean="canvasCompose ? 2 : 3"
+            :hover-lift="canvasCompose ? 0.1 : 0.18"
+            :press-grow="canvasCompose ? 0.005 : 0.012"
+            :stretch="0.000025"
+            :max-stretch="0.025"
+            data-testid="file-viewer-canvas-glass"
+          >
+            <div
+              v-if="canvasCompose"
+              class="WorkspaceFileViewer-ComposeDock"
+              data-testid="file-viewer-canvas-compose"
+            >
+              <div class="WorkspaceFileViewer-ComposeTop">
+                <div class="WorkspaceFileViewer-ComposeScope">
+                  <span
+                    class="i-ri-sparkling-2-line WorkspaceFileViewer-DockSparkle"
+                    aria-hidden="true"
+                  />
+                  <span>
+                    {{
+                      canvasCompose.scope === 'document'
+                        ? t('home.sidePanel.canvasComposeDocumentScope')
+                        : t('home.sidePanel.canvasComposeSelectionScope')
+                    }}
+                  </span>
+                </div>
+                <div class="WorkspaceFileViewer-ComposePresets">
+                  <button
+                    v-for="preset in canvasComposePresets"
+                    :key="preset.id"
+                    type="button"
+                    class="WorkspaceFileViewer-ComposeChip"
+                    :data-testid="`file-viewer-canvas-preset-${preset.id}`"
+                    @click="submitCanvasCompose(preset.suggestion, preset.label)"
+                  >
+                    {{ preset.label }}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="WorkspaceFileViewer-DockIconBtn"
+                  :title="t('common.cancel')"
+                  :aria-label="t('common.cancel')"
+                  data-testid="file-viewer-canvas-compose-close"
+                  @click="closeCanvasCompose"
+                >
+                  <span class="i-ri-close-line" aria-hidden="true" />
+                </button>
+              </div>
+
+              <form class="WorkspaceFileViewer-ComposeForm" @submit.prevent="submitCanvasCompose()">
+                <input
+                  ref="canvasComposeInputRef"
+                  v-model="canvasComposePrompt"
+                  type="text"
+                  class="WorkspaceFileViewer-ComposeInput"
+                  :placeholder="t('home.sidePanel.canvasComposePlaceholder')"
+                  :aria-label="t('home.sidePanel.canvasComposePlaceholder')"
+                  data-testid="file-viewer-canvas-compose-input"
+                  @keydown="onCanvasComposeKeydown"
+                />
+                <button
+                  type="button"
+                  class="WorkspaceFileViewer-ComposeSendBtn"
+                  :title="t('home.sidePanel.canvasComposeSend')"
+                  :aria-label="t('home.sidePanel.canvasComposeSend')"
+                  data-testid="file-viewer-canvas-compose-send"
+                  @click="submitCanvasCompose()"
+                >
+                  <span class="i-ri-arrow-up-line" aria-hidden="true" />
+                </button>
+              </form>
+            </div>
+
+            <div v-else class="WorkspaceFileViewer-CanvasDockInner">
+              <template v-if="isCanvasLocked">
+                <span class="WorkspaceFileViewer-DockSpinner" aria-hidden="true" />
+                <span class="WorkspaceFileViewer-DockStatusText">
+                  {{ canvasStatusText }}
+                </span>
+                <template v-if="canvasPending">
+                  <span class="WorkspaceFileViewer-DockDivider" aria-hidden="true" />
+                  <button
+                    type="button"
+                    class="WorkspaceFileViewer-DockBtn"
+                    data-testid="file-viewer-canvas-cancel"
+                    @click="cancelCanvasPending"
+                  >
+                    {{ t('common.cancel') }}
+                  </button>
+                </template>
+              </template>
+
+              <template v-else-if="canvasApplied">
+                <div class="WorkspaceFileViewer-DockSummary">
+                  <span
+                    class="i-ri-sparkling-2-line WorkspaceFileViewer-DockSparkle"
+                    aria-hidden="true"
+                  />
+                  <span
+                    v-if="canvasApplied.diff.additions > 0 || canvasApplied.diff.deletions > 0"
+                    class="WorkspaceFileViewer-DockDelta"
+                    data-testid="file-viewer-canvas-delta"
+                  >
+                    <span v-if="canvasApplied.diff.additions > 0" class="is-add">
+                      +{{ canvasApplied.diff.additions }}
+                    </span>
+                    <span v-if="canvasApplied.diff.deletions > 0" class="is-del">
+                      −{{ canvasApplied.diff.deletions }}
+                    </span>
+                  </span>
+                  <span v-else class="WorkspaceFileViewer-DockStatusText">
+                    {{ canvasAppliedTitle }}
+                  </span>
+                </div>
+
+                <span class="WorkspaceFileViewer-DockDivider" aria-hidden="true" />
+
+                <div class="WorkspaceFileViewer-DockActions">
+                  <button
+                    type="button"
+                    class="WorkspaceFileViewer-DockBtn"
+                    :class="{ 'is-active': canvasShowDiff }"
+                    :aria-pressed="canvasShowDiff"
+                    data-testid="file-viewer-canvas-diff-toggle"
+                    @click="canvasShowDiff = !canvasShowDiff"
+                  >
+                    <span class="i-ri-git-commit-line" aria-hidden="true" />
+                    <span>
+                      {{
+                        canvasShowDiff
+                          ? t('home.sidePanel.canvasHideDiff')
+                          : t('home.sidePanel.canvasShowDiff')
+                      }}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="WorkspaceFileViewer-DockBtn"
+                    :disabled="canvasUndoing"
+                    data-testid="file-viewer-canvas-undo"
+                    @click="undoCanvasEdit"
+                  >
+                    <span class="i-ri-arrow-go-back-line" aria-hidden="true" />
+                    <span>{{ t('home.sidePanel.canvasUndo') }}</span>
+                  </button>
+
+                  <button
+                    v-if="canvasApplied.source === 'improve' && canvasApplied.selectedText"
+                    type="button"
+                    class="WorkspaceFileViewer-DockIconBtn"
+                    :disabled="canvasUndoing"
+                    :title="t('home.sidePanel.canvasRetry')"
+                    :aria-label="t('home.sidePanel.canvasRetry')"
+                    data-testid="file-viewer-canvas-retry"
+                    @click="retryCanvasEdit"
+                  >
+                    <span class="i-ri-refresh-line" aria-hidden="true" />
+                  </button>
+
+                  <button
+                    type="button"
+                    class="WorkspaceFileViewer-DockBtn is-primary"
+                    :disabled="canvasUndoing"
+                    data-testid="file-viewer-canvas-keep"
+                    @click="keepCanvasEdit"
+                  >
+                    <span class="i-ri-check-line" aria-hidden="true" />
+                    <span>{{ t('home.sidePanel.canvasAccept') }}</span>
+                  </button>
+                </div>
+              </template>
+            </div>
+          </TxTouchSurface>
+        </div>
+      </Transition>
     </div>
 
     <!-- Inline Markdown Review Comment Composer (shown only when adding a comment) -->
     <section
-      v-if="commentComposerOpen"
+      v-if="commentComposerOpen && !isCanvasLocked"
       class="WorkspaceFileViewer-CommentComposer"
       :aria-label="t('home.sidePanel.selectionComment')"
       data-testid="file-viewer-comment-composer"
@@ -1602,32 +3114,241 @@ function adjustZoom(delta: number): void {
         </button>
       </div>
 
-      <div class="WorkspaceFileViewer-StatusMeta" data-testid="file-viewer-status-meta">
-        <span v-if="fileExt" class="WorkspaceFileViewer-StatusExt">{{
-          fileExt.toUpperCase()
-        }}</span>
-        <span
-          v-if="data && data.kind !== 'directory'"
-          class="WorkspaceFileViewer-StatusItem"
-          data-testid="file-viewer-status-size"
-        >
-          {{ formatCompactFileSize(data.size) }}
-        </span>
-        <span v-if="data?.kind === 'text'" class="WorkspaceFileViewer-StatusItem">
-          {{ t('home.sidePanel.lineCount', { count: codeLines.length }) }}
-        </span>
-        <span v-else-if="data?.kind === 'directory'" class="WorkspaceFileViewer-StatusItem">
-          {{ t('home.sidePanel.entryCount', { count: data.entries?.length ?? 0 }) }}
-        </span>
+      <div class="WorkspaceFileViewer-StatusRight">
+        <div class="WorkspaceFileViewer-StatusMeta" data-testid="file-viewer-status-meta">
+          <button
+            v-if="editorSaveState === 'error'"
+            type="button"
+            class="WorkspaceFileViewer-SaveBadge is-error"
+            :title="t('home.sidePanel.editorSaveRetry')"
+            data-testid="file-viewer-save-status"
+            @click="saveMarkdownEdits({ force: true, allowOverwriteOnConflict: true })"
+          >
+            {{ t('home.sidePanel.editorSaveFailed') }}
+          </button>
+          <span
+            v-else-if="editorSaveState !== 'idle'"
+            class="WorkspaceFileViewer-SaveBadge"
+            :class="`is-${editorSaveState}`"
+            data-testid="file-viewer-save-status"
+          >
+            <span
+              v-if="editorSaveState === 'dirty'"
+              class="WorkspaceFileViewer-SaveDot"
+              aria-hidden="true"
+            />
+            <span>
+              {{
+                editorSaveState === 'saving'
+                  ? t('home.sidePanel.editorSaving')
+                  : editorSaveState === 'saved'
+                    ? t('home.sidePanel.editorSaved')
+                    : t('home.sidePanel.editorUnsaved')
+              }}
+            </span>
+          </span>
+          <span v-if="fileExt" class="WorkspaceFileViewer-StatusExt">{{
+            fileExt.toUpperCase()
+          }}</span>
+          <span
+            v-if="data && data.kind !== 'directory'"
+            class="WorkspaceFileViewer-StatusItem"
+            data-testid="file-viewer-status-size"
+          >
+            {{ formatCompactFileSize(data.size) }}
+          </span>
+          <span v-if="data?.kind === 'text'" class="WorkspaceFileViewer-StatusItem">
+            {{ t('home.sidePanel.lineCount', { count: codeLines.length }) }}
+          </span>
+          <span v-else-if="data?.kind === 'directory'" class="WorkspaceFileViewer-StatusItem">
+            {{ t('home.sidePanel.entryCount', { count: data.entries?.length ?? 0 }) }}
+          </span>
+        </div>
+
+        <span class="WorkspaceFileViewer-StatusSep" aria-hidden="true" />
+
+        <div class="WorkspaceFileViewer-StatusActions" data-testid="file-viewer-status-actions">
+          <TxPopover
+            v-if="markdownHeadings.length > 0"
+            v-model="outlineOpen"
+            trigger="click"
+            placement="top-end"
+            :offset="6"
+            :match-reference-width="false"
+            :min-width="220"
+            :panel-radius="12"
+            :panel-padding="6"
+            :panel-card="SHELL_MENU_CARD"
+            panel-background="refraction"
+          >
+            <template #reference>
+              <button
+                type="button"
+                class="WorkspaceFileViewer-StatusToolBtn"
+                :class="{ 'is-active': outlineOpen }"
+                :aria-expanded="outlineOpen"
+                :title="t('home.sidePanel.outline')"
+                :aria-label="t('home.sidePanel.outline')"
+                data-testid="file-viewer-outline-btn"
+              >
+                <span class="i-ri-list-unordered" aria-hidden="true" />
+              </button>
+            </template>
+
+            <nav class="WorkspaceFileViewer-Outline" :aria-label="t('home.sidePanel.outline')">
+              <div class="WorkspaceFileViewer-OutlineTitle">{{ t('home.sidePanel.outline') }}</div>
+              <button
+                v-for="heading in markdownHeadings"
+                :key="heading.id"
+                type="button"
+                class="WorkspaceFileViewer-OutlineItem"
+                :style="{ paddingLeft: `${8 + (heading.level - 1) * 12}px` }"
+                @click="scrollToMarkdownHeading(heading.index)"
+              >
+                {{ heading.text }}
+              </button>
+            </nav>
+          </TxPopover>
+
+          <button
+            type="button"
+            class="WorkspaceFileViewer-StatusToolBtn"
+            :disabled="isCanvasLocked"
+            :title="t('home.sidePanel.reload')"
+            :aria-label="t('home.sidePanel.reload')"
+            data-testid="file-viewer-refresh"
+            @click="loadFile"
+          >
+            <span class="i-ri-refresh-line" aria-hidden="true" />
+          </button>
+
+          <TxDropdownMenu
+            v-model="moreMenuOpen"
+            placement="top-end"
+            :min-width="200"
+            :panel-card="SHELL_MENU_CARD"
+            panel-background="refraction"
+          >
+            <template #trigger>
+              <button
+                type="button"
+                class="WorkspaceFileViewer-StatusToolBtn"
+                :class="{ 'is-active': moreMenuOpen }"
+                aria-haspopup="menu"
+                :aria-expanded="moreMenuOpen"
+                :title="t('home.moreActions')"
+                :aria-label="t('home.moreActions')"
+                data-testid="file-viewer-more"
+              >
+                <span class="i-ri-more-2-line" aria-hidden="true" />
+              </button>
+            </template>
+
+            <template v-if="supportsPreviewToggle">
+              <TxDropdownItem
+                v-if="aiActionsEnabled && isMarkdown && viewMode === 'preview'"
+                :disabled="isCanvasLocked"
+                data-testid="file-viewer-improve-full"
+                @select="runMoreAction(() => void openCanvasCompose({ scope: 'document' }))"
+              >
+                <span class="WorkspaceFileViewer-MenuItem">
+                  <span class="i-ri-sparkling-line" aria-hidden="true" />
+                  <span>{{ t('home.sidePanel.canvasImproveFullDoc') }}</span>
+                </span>
+              </TxDropdownItem>
+
+              <TxDropdownItem
+                check-type="radio"
+                :checked="viewMode === 'preview'"
+                :disabled="isCanvasLocked"
+                data-testid="file-viewer-mode-preview"
+                @select="runMoreAction(() => setViewMode('preview'))"
+              >
+                <span class="WorkspaceFileViewer-MenuItem">
+                  <span class="i-ri-eye-line" aria-hidden="true" />
+                  <span>{{ isJson ? t('home.sidePanel.formatted') : t('home.code.preview') }}</span>
+                </span>
+              </TxDropdownItem>
+
+              <TxDropdownItem
+                check-type="radio"
+                :checked="viewMode === 'source'"
+                :disabled="isCanvasLocked"
+                data-testid="file-viewer-mode-source"
+                @select="runMoreAction(() => setViewMode('source'))"
+              >
+                <span class="WorkspaceFileViewer-MenuItem">
+                  <span class="i-ri-code-s-slash-line" aria-hidden="true" />
+                  <span>{{ isJson ? t('home.sidePanel.raw') : t('home.code.source') }}</span>
+                </span>
+              </TxDropdownItem>
+
+              <div class="WorkspaceFileViewer-MenuDivider" role="separator" />
+            </template>
+
+            <TxDropdownItem @select="runMoreAction(() => void copyPath())">
+              <span class="WorkspaceFileViewer-MenuItem">
+                <span class="i-ri-links-line" aria-hidden="true" />
+                <span>{{ t('home.sidePanel.copyFullPath') }}</span>
+              </span>
+            </TxDropdownItem>
+
+            <TxDropdownItem
+              v-if="data?.kind === 'text'"
+              @select="runMoreAction(() => void copyContent())"
+            >
+              <span class="WorkspaceFileViewer-MenuItem">
+                <span class="i-ri-clipboard-line" aria-hidden="true" />
+                <span>{{ t('home.sidePanel.copyContent') }}</span>
+              </span>
+            </TxDropdownItem>
+
+            <TxDropdownItem
+              v-if="data?.kind === 'text' && (!supportsPreviewToggle || viewMode === 'source')"
+              @select="runMoreAction(() => (wrapLines = !wrapLines))"
+            >
+              <span class="WorkspaceFileViewer-MenuItem">
+                <span class="i-ri-text-wrap" aria-hidden="true" />
+                <span>{{ t('home.sidePanel.toggleWrap') }}</span>
+              </span>
+              <template v-if="wrapLines" #right>
+                <span class="i-ri-check-line WorkspaceFileViewer-MenuCheck" aria-hidden="true" />
+              </template>
+            </TxDropdownItem>
+
+            <div class="WorkspaceFileViewer-MenuDivider" role="separator" />
+
+            <TxDropdownItem v-if="showOpenInBrowser" @select="runMoreAction(openInBuiltInBrowser)">
+              <span class="WorkspaceFileViewer-MenuItem">
+                <span class="i-ri-window-line" aria-hidden="true" />
+                <span>{{ t('home.fileLink.openInBuiltInBrowser') }}</span>
+              </span>
+            </TxDropdownItem>
+
+            <TxDropdownItem @select="runMoreAction(() => void openWithSystem())">
+              <span class="WorkspaceFileViewer-MenuItem">
+                <span class="i-ri-external-link-line" aria-hidden="true" />
+                <span>{{ t('home.fileLink.openWithSystem') }}</span>
+              </span>
+            </TxDropdownItem>
+
+            <TxDropdownItem @select="runMoreAction(() => void revealInFolder())">
+              <span class="WorkspaceFileViewer-MenuItem">
+                <span class="i-ri-folder-open-line" aria-hidden="true" />
+                <span>{{ t('home.fileLink.revealInFinder') }}</span>
+              </span>
+            </TxDropdownItem>
+          </TxDropdownMenu>
+        </div>
       </div>
     </footer>
 
     <!-- Floating Markdown Selection AI Actions Pill -->
     <TxSelectionActions
-      v-if="markdownSelectionActive && mdSelection"
+      v-if="activeSelectionPayload"
       ref="selectionBarRef"
       v-model:prompt="selectionPrompt"
-      :selection="mdSelection"
+      :selection="activeSelectionPayload"
       :actions="mdSelectionActions"
       :placeholder="t('home.sidePanel.selectionPromptPlaceholder')"
       :aria-label="t('home.selectionActions')"
@@ -1668,6 +3389,8 @@ function adjustZoom(delta: number): void {
         />
       </template>
     </TxSelectionActions>
+    <!-- Kinetic Launch Flight Pill + Shockwave Ring (teleported to body) -->
+    <WorkspaceCanvasLaunchFlight :flight="launchFlight" @complete="handleLaunchFlightComplete" />
   </div>
 </template>
 
@@ -1684,6 +3407,7 @@ function adjustZoom(delta: number): void {
 }
 
 .WorkspaceFileViewer-Header {
+  position: relative;
   display: flex;
   flex: none;
   gap: 8px;
@@ -1694,6 +3418,411 @@ function adjustZoom(delta: number): void {
   border-bottom: 1px solid var(--shell-border);
   background: var(--shell-surface);
   box-sizing: border-box;
+}
+
+/* ── Stage Perimeter BorderBeam + Floating Liquid Glass Approval Capsule ── */
+.WorkspaceFileViewer-StageHost {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.WorkspaceFileViewer-StageBeam {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+
+  // Boost light-theme pulse-inner contrast so the perimeter beam reads crisply on bright white paper.
+  &.is-light {
+    --beam-stroke-opacity: 2.8;
+    --beam-inner-opacity: 1.9;
+    --beam-bloom-opacity: 1.8;
+  }
+
+  &.is-locked {
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--shell-primary) 34%, transparent);
+  }
+}
+
+.WorkspaceFileViewer-Stage {
+  position: relative;
+  z-index: 0;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 10px;
+
+  &.is-canvas-locked {
+    .WorkspaceFileViewer-Markdown,
+    .WorkspaceFileViewer-Code,
+    .WorkspaceFileViewer-FrameWrap {
+      user-select: none;
+      pointer-events: none;
+    }
+
+    .WorkspaceFileViewer-Markdown,
+    .WorkspaceFileViewer-Code {
+      opacity: 0.86;
+    }
+  }
+
+  &.has-canvas-dock {
+    .WorkspaceFileViewer-Markdown {
+      padding-bottom: 112px;
+    }
+
+    .WorkspaceFileViewer-CodeLines,
+    .WorkspaceFileViewer-CanvasDiff {
+      padding-bottom: 92px;
+    }
+  }
+}
+
+.WorkspaceFileViewer-CanvasDockWrap {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  left: 16px;
+  z-index: 12;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+
+  &.is-compose {
+    right: 18px;
+    left: 18px;
+  }
+}
+
+.WorkspaceFileViewer-CanvasDockSurface {
+  --tx-surface-refraction-mask-rgb: 255 255 255;
+
+  pointer-events: auto;
+  max-width: 100%;
+
+  &.is-compose {
+    width: min(468px, 100%);
+  }
+
+  &.is-dark-surface {
+    --tx-surface-refraction-mask-rgb: 24 27 34;
+  }
+}
+
+.WorkspaceFileViewer-ComposeDock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 10px 10px 14px;
+  box-sizing: border-box;
+  color: var(--shell-text-primary);
+}
+
+.WorkspaceFileViewer-ComposeTop {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.WorkspaceFileViewer-ComposeScope {
+  display: inline-flex;
+  flex: none;
+  gap: 5px;
+  align-items: center;
+  color: var(--shell-text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.WorkspaceFileViewer-ComposePresets {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.WorkspaceFileViewer-ComposeChip {
+  flex: none;
+  height: 22px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--shell-text-primary) 7%, transparent);
+  color: var(--shell-text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background: color-mix(in srgb, var(--shell-primary) 16%, transparent);
+    color: var(--shell-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: 1px;
+  }
+}
+
+.WorkspaceFileViewer-ComposeForm {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.WorkspaceFileViewer-ComposeInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+  padding: 0 4px 0 0;
+  border: none;
+  background: transparent;
+  color: var(--shell-text-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  outline: none;
+
+  &::placeholder {
+    color: var(--shell-text-muted);
+  }
+
+  &:focus,
+  &:focus-visible {
+    outline: none;
+  }
+}
+
+.WorkspaceFileViewer-ComposeSendBtn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--shell-primary);
+  color: var(--shell-on-primary);
+  font-size: 15px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--shell-primary) 36%, transparent);
+
+  &:hover {
+    filter: brightness(1.08);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+
+    &:active {
+      transform: scale(0.9) translateY(-1px);
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: 2px;
+  }
+}
+
+.WorkspaceFileViewer-CanvasDockInner {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  height: 100%;
+  padding: 0 7px 0 14px;
+  color: var(--shell-text-primary);
+  font-size: var(--shell-fs-caption);
+  white-space: nowrap;
+  box-sizing: border-box;
+
+  .WorkspaceFileViewer-CanvasDockSurface.is-busy & {
+    padding: 0 14px;
+  }
+}
+
+.WorkspaceFileViewer-DockSpinner {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid color-mix(in srgb, var(--shell-primary) 26%, transparent);
+  border-top-color: var(--shell-primary);
+  border-radius: 999px;
+  box-sizing: border-box;
+
+  @media (prefers-reduced-motion: no-preference) {
+    animation: canvas-spin 720ms linear infinite;
+  }
+}
+
+.WorkspaceFileViewer-DockSummary {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.WorkspaceFileViewer-DockSparkle {
+  flex: none;
+  font-size: 14px;
+  color: var(--shell-primary);
+}
+
+.WorkspaceFileViewer-DockStatusText {
+  font-weight: 500;
+  color: var(--shell-text-primary);
+  letter-spacing: 0.01em;
+}
+
+.WorkspaceFileViewer-DockDelta {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font-family: var(--tx-font-family-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+
+  .is-add {
+    color: var(--shell-success);
+  }
+
+  .is-del {
+    color: var(--shell-danger);
+  }
+}
+
+.WorkspaceFileViewer-DockDivider {
+  flex: none;
+  width: 1px;
+  height: 14px;
+  background: color-mix(in srgb, var(--shell-text-primary) 14%, transparent);
+}
+
+.WorkspaceFileViewer-DockActions {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.WorkspaceFileViewer-DockBtn {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--shell-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &.is-active {
+    background: color-mix(in srgb, var(--shell-text-primary) 8%, transparent);
+    color: var(--shell-text-primary);
+  }
+
+  &.is-primary {
+    padding: 0 13px;
+    background: var(--shell-primary);
+    color: var(--shell-on-primary);
+    font-weight: 600;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--shell-primary) 34%, transparent);
+
+    &:hover:not(:disabled) {
+      filter: brightness(1.06);
+    }
+  }
+
+  &:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: 1px;
+  }
+}
+
+.WorkspaceFileViewer-DockIconBtn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--shell-text-secondary);
+  font-size: 13.5px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--shell-text-primary) 8%, transparent);
+    color: var(--shell-text-primary);
+  }
+
+  &:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: 1px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .canvas-dock-enter-active,
+  .canvas-dock-leave-active {
+    transition:
+      opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+.canvas-dock-enter-from,
+.canvas-dock-leave-to {
+  opacity: 0;
+  transform: translateY(12px) scale(0.96);
 }
 
 .WorkspaceFileViewer-HeaderLead {
@@ -1709,36 +3838,6 @@ function adjustZoom(delta: number): void {
   flex: none;
   gap: 2px;
   align-items: center;
-}
-
-.WorkspaceFileViewer-Segment {
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: var(--shell-radius-sm);
-  background: var(--shell-surface-2);
-}
-
-.WorkspaceFileViewer-SegBtn {
-  padding: 3px 8px;
-  border: none;
-  border-radius: calc(var(--shell-radius-sm) - 2px);
-  background: transparent;
-  color: var(--shell-text-secondary);
-  font: inherit;
-  font-size: var(--shell-fs-caption);
-  font-weight: 500;
-  cursor: pointer;
-
-  &.is-active {
-    background: var(--shell-bg);
-    color: var(--shell-text-primary);
-    box-shadow: inset 0 0 0 1px var(--shell-border);
-  }
-
-  &:hover:not(.is-active) {
-    color: var(--shell-text-primary);
-  }
 }
 
 .WorkspaceFileViewer-ZoomInline {
@@ -1773,10 +3872,15 @@ function adjustZoom(delta: number): void {
   cursor: pointer;
   min-width: 0;
 
-  &:hover,
+  &:hover:not(:disabled),
   &.is-active {
     background: var(--shell-surface-2);
     color: var(--shell-text-primary);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 
   &:focus-visible {
@@ -1846,6 +3950,11 @@ function adjustZoom(delta: number): void {
 
   &::placeholder {
     color: var(--shell-text-muted);
+  }
+
+  &:focus,
+  &:focus-visible {
+    outline: none;
   }
 }
 
@@ -1973,10 +4082,15 @@ function adjustZoom(delta: number): void {
   font-size: 14px;
   cursor: pointer;
 
-  &:hover,
+  &:hover:not(:disabled),
   &.is-active {
     background: var(--shell-surface-2);
     color: var(--shell-text-primary);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 
   &:focus-visible {
@@ -2111,8 +4225,211 @@ function adjustZoom(delta: number): void {
 }
 
 .WorkspaceFileViewer-Markdown {
-  padding: 16px 20px 28px;
+  position: relative;
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  padding: 16px 22px 28px;
   line-height: 1.65;
+
+  // Seamless borderless paper integration for TxMarkdownEditor (zero card box / double scroll).
+  :deep(.tx-markdown-editor) {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+    --tx-markdown-editor-bg: transparent;
+    --tx-markdown-editor-border: var(--shell-border);
+    --tx-markdown-editor-text: var(--shell-text-primary);
+    --tx-markdown-editor-muted: var(--shell-text-secondary);
+    --tx-markdown-editor-placeholder: var(--shell-text-muted);
+    --tx-markdown-editor-accent: var(--shell-primary);
+    --tx-markdown-editor-pad-x: 0px;
+    --tx-markdown-editor-pad-y: 0px;
+
+    &.is-focused {
+      border-color: transparent;
+      box-shadow: none;
+    }
+
+    .tx-markdown-editor__main {
+      flex: 1 1 auto;
+    }
+
+    .tx-markdown-editor__pane {
+      overflow: visible;
+    }
+
+    .tx-markdown-editor__surface,
+    .tx-markdown-editor__surface:focus,
+    .tx-markdown-editor__surface:focus-visible,
+    .tx-markdown-editor__preview:focus,
+    .tx-markdown-editor__preview:focus-visible {
+      outline: none;
+    }
+
+    .markdown-body > :first-child {
+      margin-top: 0;
+    }
+  }
+
+  // Targeted blocks while typing an optimization suggestion in the bottom glass capsule.
+  :deep(.markdown-body > .is-canvas-targeted) {
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 3px;
+      bottom: 3px;
+      left: -12px;
+      width: 2px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--shell-primary) 72%, transparent);
+      pointer-events: none;
+    }
+  }
+
+  // Target blocks currently being revised by AI: restrained straight margin hairline (zero box clutter).
+  :deep(.markdown-body > .is-canvas-pending) {
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 3px;
+      bottom: 3px;
+      left: -12px;
+      width: 2px;
+      border-radius: 999px;
+      background: var(--shell-primary);
+      pointer-events: none;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      &::before {
+        animation: canvas-rail-pulse 1.5s ease-in-out infinite;
+      }
+    }
+  }
+
+  // Newly applied blocks: whisper-clean straight vertical margin rail — no boxes, no curled corners.
+  :deep(.markdown-body > .is-canvas-changed) {
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 3px;
+      bottom: 3px;
+      left: -12px;
+      width: 2px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--shell-primary) 54%, transparent);
+      pointer-events: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :deep(.markdown-body > .is-canvas-entering) {
+      animation: canvas-block-reveal 440ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      animation-delay: calc(var(--canvas-stagger-idx, 0) * 34ms);
+    }
+  }
+}
+
+/* ── Delicate GPT Canvas Top-to-Bottom Light Veil ── */
+.WorkspaceFileViewer-CanvasWipe {
+  position: absolute;
+  right: 10px;
+  left: 10px;
+  top: 0;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.WorkspaceFileViewer-CanvasWipeBar {
+  position: absolute;
+  inset: 0;
+  min-height: 64px;
+  background: linear-gradient(
+    to bottom,
+    transparent calc(100% - 64px),
+    color-mix(in srgb, var(--shell-primary) 7%, transparent) calc(100% - 14px),
+    color-mix(in srgb, var(--shell-primary) 16%, transparent) calc(100% - 1.5px),
+    color-mix(in srgb, var(--shell-primary) 55%, transparent) 100%
+  );
+  transform: translateY(-100%);
+  will-change: transform, opacity;
+
+  @media (prefers-reduced-motion: no-preference) {
+    animation: canvas-wipe-sweep 660ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+}
+
+/* ── Inline Canvas Diff View ── */
+.WorkspaceFileViewer-CanvasDiff {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  padding: 10px 0 24px;
+  font-family: var(--tx-font-family-mono, ui-monospace, Menlo, Monaco, Consolas, monospace);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.WorkspaceFileViewer-CanvasDiffLine {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 0 8px;
+
+  &.is-add {
+    background: var(--shell-success-soft);
+  }
+
+  &.is-del {
+    background: var(--shell-danger-soft);
+    opacity: 0.85;
+  }
+}
+
+.WorkspaceFileViewer-CanvasDiffNo {
+  flex: none;
+  min-width: 32px;
+  color: var(--shell-text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  user-select: none;
+  opacity: 0.65;
+}
+
+.WorkspaceFileViewer-CanvasDiffSign {
+  flex: none;
+  width: 1ch;
+  color: var(--shell-text-muted);
+  user-select: none;
+
+  .WorkspaceFileViewer-CanvasDiffLine.is-add & {
+    color: var(--shell-success);
+  }
+
+  .WorkspaceFileViewer-CanvasDiffLine.is-del & {
+    color: var(--shell-danger);
+  }
+}
+
+.WorkspaceFileViewer-CanvasDiffText {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .WorkspaceFileViewer-ImageWrap {
@@ -2210,6 +4527,7 @@ function adjustZoom(delta: number): void {
 }
 
 .WorkspaceFileViewer-Code {
+  position: relative;
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -2241,6 +4559,17 @@ function adjustZoom(delta: number): void {
 
   &.is-highlighted {
     background: var(--shell-primary-soft);
+  }
+
+  &.is-canvas-changed {
+    background: color-mix(in srgb, var(--shell-primary) 5%, transparent);
+    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--shell-primary) 62%, transparent);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    &.is-canvas-entering {
+      animation: canvas-block-reveal 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
   }
 }
 
@@ -2497,15 +4826,15 @@ function adjustZoom(delta: number): void {
   }
 }
 
-/* ── Bottom StatusBar (Breadcrumb path + Type / Size / Lines) ── */
+/* ── Bottom StatusBar (Breadcrumb path on left; meta + outline / reload / more menu on right) ── */
 .WorkspaceFileViewer-StatusBar {
   display: flex;
   flex: none;
   gap: 8px;
   align-items: center;
   justify-content: space-between;
-  height: 22px;
-  padding: 0 8px;
+  height: 26px;
+  padding: 0 6px 0 8px;
   border-top: 1px solid var(--shell-border);
   background: var(--shell-surface);
   color: var(--shell-text-muted);
@@ -2606,13 +4935,106 @@ function adjustZoom(delta: number): void {
   }
 }
 
+.WorkspaceFileViewer-StatusRight {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+  align-items: center;
+}
+
 .WorkspaceFileViewer-StatusMeta {
   display: inline-flex;
   flex: none;
-  gap: 8px;
+  gap: 7px;
   align-items: center;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.WorkspaceFileViewer-SaveBadge {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 0 5px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-text-muted);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+
+  &.is-dirty {
+    color: var(--shell-text-secondary);
+  }
+
+  &.is-saved {
+    color: var(--shell-success);
+  }
+
+  &.is-error {
+    background: var(--shell-danger-soft);
+    color: var(--shell-danger);
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: 2px solid var(--shell-danger);
+      outline-offset: 1px;
+    }
+  }
+}
+
+.WorkspaceFileViewer-SaveDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--shell-primary);
+}
+
+.WorkspaceFileViewer-StatusSep {
+  flex: none;
+  width: 1px;
+  height: 12px;
+  background: var(--shell-border);
+}
+
+.WorkspaceFileViewer-StatusActions {
+  display: inline-flex;
+  flex: none;
+  gap: 1px;
+  align-items: center;
+}
+
+.WorkspaceFileViewer-StatusToolBtn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &.is-active {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: 1px;
+  }
 }
 
 .WorkspaceFileViewer-StatusExt {
@@ -2632,5 +5054,57 @@ function adjustZoom(delta: number): void {
 .WorkspaceFileViewer-SelIcon {
   display: inline-flex;
   font-size: 14px;
+}
+
+@keyframes canvas-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes canvas-rail-pulse {
+  0%,
+  100% {
+    opacity: 0.38;
+  }
+
+  50% {
+    opacity: 0.95;
+  }
+}
+
+@keyframes canvas-wipe-sweep {
+  0% {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+
+  14% {
+    opacity: 1;
+  }
+
+  84% {
+    opacity: 1;
+    transform: translateY(0%);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(64px);
+  }
+}
+
+@keyframes canvas-block-reveal {
+  0% {
+    opacity: 0.3;
+    transform: translateY(3px);
+    filter: blur(1.5px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
 }
 </style>

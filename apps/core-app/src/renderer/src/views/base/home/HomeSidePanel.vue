@@ -64,6 +64,7 @@ const props = withDefaults(
     gateway: ActivityGatewayApproval[]
     pendingRun?: WorkspacePendingRun
     loading: boolean
+    aiStreaming?: boolean
     tabs: SidePanelTab[]
     activeTabId: string | null
     recentItems?: SidePanelRecentItem[]
@@ -743,6 +744,8 @@ function onTabBarWheel(event: WheelEvent): void {
         :display-path="activeTab.displayPath"
         :workspace-root="workspaceRoot"
         :conversation-id="conversationId"
+        :messages="messages"
+        :ai-streaming="aiStreaming"
         :line="activeTab.line"
         :refresh-token="activeTab.refreshToken"
         :ai-actions-enabled="true"

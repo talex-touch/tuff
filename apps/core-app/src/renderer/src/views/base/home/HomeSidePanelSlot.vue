@@ -47,6 +47,7 @@ const props = withDefaults(
     gateway: ActivityGatewayApproval[]
     pendingRun?: WorkspacePendingRun
     loading: boolean
+    aiStreaming?: boolean
     tabs: SidePanelTab[]
     activeTabId: string | null
     recentItems?: SidePanelRecentItem[]
@@ -171,6 +172,7 @@ onBeforeUnmount(() => {
           :gateway="gateway"
           :pending-run="pendingRun"
           :loading="loading"
+          :ai-streaming="aiStreaming"
           :tabs="tabs"
           :active-tab-id="activeTabId"
           :recent-items="recentItems"

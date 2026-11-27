@@ -235,6 +235,8 @@ declare module 'vue' {
     VoiceRecordDetails: typeof import('./src/components/intelligence/voice/VoiceRecordDetails.vue')['default']
     WhatsChangedDialog: typeof import('./src/components/update/WhatsChangedDialog.vue')['default']
     WidgetFrame: typeof import('./src/components/render/WidgetFrame.vue')['default']
+    WorkspaceCanvasLaunchFlight: typeof import('./src/components/preview/WorkspaceCanvasLaunchFlight.vue')['default']
+    WorkspaceCanvasRippleOverlay: typeof import('./src/components/preview/WorkspaceCanvasRippleOverlay.vue')['default']
     WorkspaceFileTree: typeof import('./src/components/preview/WorkspaceFileTree.vue')['default']
     WorkspaceFileViewer: typeof import('./src/components/preview/WorkspaceFileViewer.vue')['default']
   }
@@ -465,6 +467,8 @@ declare global {
   const VoiceRecordDetails: typeof import('./src/components/intelligence/voice/VoiceRecordDetails.vue')['default']
   const WhatsChangedDialog: typeof import('./src/components/update/WhatsChangedDialog.vue')['default']
   const WidgetFrame: typeof import('./src/components/render/WidgetFrame.vue')['default']
+  const WorkspaceCanvasLaunchFlight: typeof import('./src/components/preview/WorkspaceCanvasLaunchFlight.vue')['default']
+  const WorkspaceCanvasRippleOverlay: typeof import('./src/components/preview/WorkspaceCanvasRippleOverlay.vue')['default']
   const WorkspaceFileTree: typeof import('./src/components/preview/WorkspaceFileTree.vue')['default']
   const WorkspaceFileViewer: typeof import('./src/components/preview/WorkspaceFileViewer.vue')['default']
 }

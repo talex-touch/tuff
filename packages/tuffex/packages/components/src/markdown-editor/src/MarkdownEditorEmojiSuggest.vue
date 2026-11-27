@@ -60,12 +60,13 @@ watch(() => props.active, async (active) => {
 .tx-markdown-editor-suggest {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  min-width: 200px;
-  max-height: 236px;
+  gap: var(--tx-markdown-editor-menu-gap, 2px);
+  min-width: 204px;
+  max-height: 244px;
   margin: 0;
   padding: 0;
   overflow-y: auto;
+  scrollbar-width: thin;
   list-style: none;
   color: var(--tx-markdown-editor-text);
   font-size: 13px;
@@ -73,15 +74,16 @@ watch(() => props.active, async (active) => {
 
 .tx-markdown-editor-suggest__item {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 8px;
-  height: 28px;
-  padding: 0 8px;
-  border-radius: 7px;
+  gap: var(--tx-markdown-editor-menu-item-gap, 10px);
+  padding: var(--tx-markdown-editor-menu-item-padding, 7px 10px);
+  border-radius: var(--tx-markdown-editor-menu-item-radius, 10px);
+  line-height: 1.35;
   cursor: pointer;
 
   &.is-active {
-    background: color-mix(in srgb, var(--tx-markdown-editor-accent) 14%, transparent);
+    background: color-mix(in srgb, var(--tx-markdown-editor-accent) 12%, transparent);
   }
 }
 
