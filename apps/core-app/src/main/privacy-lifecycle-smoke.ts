@@ -6,6 +6,8 @@ import process from 'node:process'
 import { PrivacyEvents } from '@talex-touch/utils/transport/events'
 import { createPrivacySdk } from '@talex-touch/utils/transport/sdk/domains/privacy'
 import { app } from 'electron'
+import { scheduleDbWrite } from './db/db-write'
+import { AiOrchestratorStore } from './modules/ai/ai-orchestrator-store'
 import {
   createPrivacyDataOwnerRegistry,
   privacyOwnerCompletedDelete,
@@ -463,12 +465,18 @@ async function runSmoke(signal: AbortSignal): Promise<Record<string, unknown>> {
   let result: Record<string, unknown> | undefined
   try {
     const migrationsFolder = await resolvePackagedMigrationsFolder()
+    const createStore = (db: Parameters<NonNullable<Parameters<typeof runOrchestratorPrivacyAcceptance>[0]['createStore']>>[0]) =>
+      new AiOrchestratorStore({
+        getDb: () => db,
+        scheduleWrite: scheduleDbWrite
+      })
     const packagedPrivacyChecks = await runOrchestratorPrivacyAcceptance({
       migrationsFolder,
-      temporaryRoot: rootPath
+      temporaryRoot: rootPath,
+      createStore
     })
     result = await withOrchestratorPrivacyTransportFixture(
-      { migrationsFolder, temporaryRoot: rootPath },
+      { migrationsFolder, temporaryRoot: rootPath, createStore },
       async (fixture) =>
         await runSmokeWithOrchestratorFixture(signal, rootPath, packagedPrivacyChecks, fixture)
     )

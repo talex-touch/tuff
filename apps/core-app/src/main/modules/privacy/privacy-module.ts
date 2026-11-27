@@ -28,11 +28,17 @@ import { createIntelligenceRetentionOwner } from './owners/intelligence-retentio
 import { createOrchestratorRunPrivacyLifecycle } from './owners/orchestrator-run-privacy-lifecycle'
 import { createOcrScreenshotRetentionOwner } from './owners/ocr-screenshot-retention-owner'
 import { createSearchRetentionOwner } from './owners/search-retention-owner'
-import { createVoiceInsightsPrivacyOwner } from './owners/voice-insights-privacy-owner'
-import { voiceRecognitionStore } from '../voice/voice-recognition-store'
-import { voiceInsightsStore } from '../voice/voice-insights-store'
+import {
+  createVoiceInsightsPrivacyOwner,
+  type VoiceInsightsPrivacyStore,
+  type VoiceRecognitionPrivacyStore
+} from './owners/voice-insights-privacy-owner'
 import { createPrivacyCategoryExporter } from './privacy-export'
 import { createPrivacyLifecycleService } from './privacy-lifecycle-service'
+import {
+  getRegisteredPrivacyVoiceStores,
+  resolvePrivacyRuntimeDependencies
+} from './privacy-ports'
 import {
   createMainPrivacySecretFileAdapter,
   createPrivacySecretService
@@ -68,7 +74,14 @@ export interface PrivacyProductionOwnerDependencies {
   readonly contextLifecycle: IntelligenceContextRetentionLifecycle
   readonly telemetryLifecycle: DiagnosticsTelemetryRetentionLifecycle
   readonly logDirectory: string
+  readonly voiceInsightsStore?: VoiceInsightsPrivacyStore
+  readonly voiceRecognitionStore?: VoiceRecognitionPrivacyStore
 }
+
+const emptyVoiceInsightsPrivacyStore: VoiceInsightsPrivacyStore = Object.freeze({
+  getInsights: async () => ({ sessionCount: 0 }),
+  clearInsights: async () => undefined
+})
 
 export function createLivePrivacyDatabaseClient(
   resolveClient: () => PrivacyDatabaseClient | null
@@ -95,6 +108,14 @@ export function resolvePrivacyCoreLogDirectory(innerRootPath: string): string {
 export function createPrivacyProductionOwnerRegistry(
   dependencies: PrivacyProductionOwnerDependencies
 ) {
+  const registeredVoiceStores = getRegisteredPrivacyVoiceStores()
+  const voiceInsights =
+    dependencies.voiceInsightsStore ??
+    registeredVoiceStores?.voiceInsightsStore ??
+    emptyVoiceInsightsPrivacyStore
+  const voiceRecognition =
+    dependencies.voiceRecognitionStore ?? registeredVoiceStores?.voiceRecognitionStore
+
   return createPrivacyDataOwnerRegistry([
     createClipboardRetentionOwner({
       client: dependencies.auxiliaryClient,
@@ -124,7 +145,7 @@ export function createPrivacyProductionOwnerRegistry(
       // skip while inside the startup degrade window.
       isStartupDegradeWindowActive: isInStartupDegradeWindow
     }),
-    createVoiceInsightsPrivacyOwner(voiceInsightsStore, voiceRecognitionStore)
+    createVoiceInsightsPrivacyOwner(voiceInsights, voiceRecognition)
   ])
 }
 
@@ -142,32 +163,22 @@ async function createProductionService(): Promise<PrivacyLifecycleService> {
     { dialog },
     { innerRootPath },
     { tempFileService },
-    { contextHygieneService },
-    { intelligenceAuditLogger },
-    { clipboardModule },
     { databaseModule },
     { operationalErrorService },
     { getMainConfig },
-    { default: searchEngineCore },
     { getSentryService },
-    { aiCliOrchestrator },
-    { aiOrchestratorStore },
-    { t }
+    { t },
+    runtimeDependencies
   ] = await Promise.all([
     import('electron'),
     import('../../core/precore'),
     import('../../service/temp-file.service'),
-    import('../ai/intelligence-context-hygiene'),
-    import('../ai/intelligence-audit-logger'),
-    import('../clipboard'),
     import('../database'),
     import('../observability'),
     import('../storage'),
-    import('../box-tool/search-engine/search-core'),
     import('../sentry'),
-    import('../ai/ai-cli-orchestrator'),
-    import('../ai/ai-orchestrator-store'),
-    import('../../utils/i18n-helper')
+    import('../../utils/i18n-helper'),
+    resolvePrivacyRuntimeDependencies()
   ])
   const { coreClient, auxiliaryClient } = requireDatabaseClients(databaseModule)
   const sentryService = getSentryService()
@@ -175,16 +186,18 @@ async function createProductionService(): Promise<PrivacyLifecycleService> {
     coreClient,
     auxiliaryClient,
     tempFileService,
-    clipboardImagePersistence: clipboardModule.getImagePersistenceForPrivacy(),
-    onClipboardDeleted: (ids) => clipboardModule.evictCommittedRetentionIdsForPrivacy(ids),
-    beforeSearchDelete: () => searchEngineCore.preparePrivacyRetentionCleanup(),
-    onSearchCompleted: () => searchEngineCore.completePrivacyRetentionCleanup(),
-    auditLifecycle: intelligenceAuditLogger,
-    contextLifecycle: contextHygieneService,
+    clipboardImagePersistence: runtimeDependencies.clipboardImagePersistence,
+    onClipboardDeleted: runtimeDependencies.onClipboardDeleted,
+    beforeSearchDelete: runtimeDependencies.beforeSearchDelete,
+    onSearchCompleted: runtimeDependencies.onSearchCompleted,
+    auditLifecycle: runtimeDependencies.auditLifecycle,
+    contextLifecycle: runtimeDependencies.contextLifecycle,
     telemetryLifecycle: Object.freeze({
       clearFailureBefore: sentryService.clearTelemetryFailureBeforeForPrivacy.bind(sentryService)
     }),
-    logDirectory: resolvePrivacyCoreLogDirectory(innerRootPath)
+    logDirectory: resolvePrivacyCoreLogDirectory(innerRootPath),
+    voiceInsightsStore: runtimeDependencies.voiceInsightsStore,
+    voiceRecognitionStore: runtimeDependencies.voiceRecognitionStore
   })
   const policyStore = createMainPrivacyRetentionPolicyStore()
   const exporter = createPrivacyCategoryExporter({
@@ -230,12 +243,8 @@ async function createProductionService(): Promise<PrivacyLifecycleService> {
   })
   const secrets = createPrivacySecretService({ rootPath: innerRootPath, files: secretFiles })
   const orchestratorRuns = createOrchestratorRunPrivacyLifecycle({
-    store: aiOrchestratorStore,
-    fence: Object.freeze({
-      isRunProtected: aiCliOrchestrator.isPrivacyRunProtected.bind(aiCliOrchestrator),
-      acquireRunDeletionFence:
-        aiCliOrchestrator.acquirePrivacyRunDeletionFence.bind(aiCliOrchestrator)
-    })
+    store: runtimeDependencies.orchestratorStore,
+    fence: runtimeDependencies.orchestratorFence
   })
 
   return createPrivacyLifecycleService({

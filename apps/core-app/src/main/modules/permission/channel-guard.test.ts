@@ -1,6 +1,6 @@
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import { createTrustedTestPluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getPermissionModule: vi.fn(),
@@ -11,15 +11,8 @@ vi.mock('./permission-module-ref', () => ({
   getPermissionModule: mocks.getPermissionModule
 }))
 
-vi.mock('../plugin/plugin-module', () => ({
-  pluginModule: {
-    pluginManager: {
-      getPluginByName: mocks.getPluginByName
-    }
-  }
-}))
-
 import { withPermission } from './channel-guard'
+import { registerPermissionPluginBridge, resetPermissionPluginBridge } from './permission-ports'
 
 const pluginContext = {
   plugin: createTrustedTestPluginContext({
@@ -30,9 +23,24 @@ const pluginContext = {
 } as HandlerContext
 
 describe('withPermission privileged plugin mode', () => {
+  let disposeBridge: (() => void) | undefined
+
   beforeEach(() => {
     vi.clearAllMocks()
+    resetPermissionPluginBridge()
     mocks.getPluginByName.mockReturnValue({ sdkapi: 260615 })
+    disposeBridge = registerPermissionPluginBridge({
+      resolvePluginDeclaredSdkApi: (pluginId) => {
+        const plugin = mocks.getPluginByName(pluginId) as { sdkapi?: number } | undefined
+        return typeof plugin?.sdkapi === 'number' ? plugin.sdkapi : undefined
+      }
+    })
+  })
+
+  afterEach(() => {
+    disposeBridge?.()
+    disposeBridge = undefined
+    resetPermissionPluginBridge()
   })
 
   it('fails closed when the permission runtime is unavailable', async () => {
@@ -220,6 +228,58 @@ describe('withPermission privileged plugin mode', () => {
       code: 'PLUGIN_WINDOW_PERMISSION_DENIED',
       pluginId: 'unknown'
     })
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when no plugin sdkapi bridge is registered', async () => {
+    disposeBridge?.()
+    disposeBridge = undefined
+    const checkPermission = vi.fn(() => ({ allowed: true }))
+    mocks.getPermissionModule.mockReturnValue({ checkPermission })
+    const callback = vi.fn()
+    const handler = withPermission(
+      {
+        permissionId: 'window.create',
+        failClosedForPlugin: true,
+        sdkMismatchCode: 'SDKAPI_MISMATCH'
+      },
+      callback
+    )
+
+    await expect(handler({ _sdkapi: 260615 }, pluginContext)).rejects.toMatchObject({
+      code: 'SDKAPI_MISMATCH',
+      permissionId: 'window.create',
+      pluginId: 'touch-test'
+    })
+    expect(checkPermission).not.toHaveBeenCalled()
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when plugin sdkapi bridge rejects asynchronously', async () => {
+    disposeBridge?.()
+    disposeBridge = registerPermissionPluginBridge({
+      resolvePluginDeclaredSdkApi: async () => {
+        throw new Error('async lookup failure')
+      }
+    })
+    const checkPermission = vi.fn(() => ({ allowed: true }))
+    mocks.getPermissionModule.mockReturnValue({ checkPermission })
+    const callback = vi.fn()
+    const handler = withPermission(
+      {
+        permissionId: 'window.create',
+        failClosedForPlugin: true,
+        sdkMismatchCode: 'SDKAPI_MISMATCH'
+      },
+      callback
+    )
+
+    await expect(handler({ _sdkapi: 260615 }, pluginContext)).rejects.toMatchObject({
+      code: 'SDKAPI_MISMATCH',
+      permissionId: 'window.create',
+      pluginId: 'touch-test'
+    })
+    expect(checkPermission).not.toHaveBeenCalled()
     expect(callback).not.toHaveBeenCalled()
   })
 })

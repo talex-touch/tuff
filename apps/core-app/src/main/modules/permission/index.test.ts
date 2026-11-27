@@ -10,8 +10,8 @@ vi.mock('electron', () => ({
 }))
 
 import { PermissionRevokedEvent, TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
-import { registerPluginStorageTeardown } from '../plugin/runtime/plugin-storage-lifecycle'
 import { PermissionModule } from './index'
+import { registerPermissionPluginBridge } from './permission-ports'
 
 type PermissionHandler = (payload: Record<string, unknown>) => Promise<unknown>
 
@@ -74,7 +74,7 @@ describe('PermissionModule revocation events', () => {
           release = resolve
         })
     )
-    disposeTeardown = registerPluginStorageTeardown(teardown)
+    disposeTeardown = registerPermissionPluginBridge({ teardownPluginStorage: teardown })
     const onRevoked = vi.fn()
     touchEventBus.on(TalexEvents.PERMISSION_REVOKED, onRevoked)
     const { handlers, transport } = createHarness()
@@ -101,7 +101,7 @@ describe('PermissionModule revocation events', () => {
           release = resolve
         })
     )
-    disposeTeardown = registerPluginStorageTeardown(teardown)
+    disposeTeardown = registerPermissionPluginBridge({ teardownPluginStorage: teardown })
     const onRevoked = vi.fn()
     touchEventBus.on(TalexEvents.PERMISSION_REVOKED, onRevoked)
     const { handlers } = createHarness({
@@ -229,7 +229,7 @@ describe('PermissionModule revocation events', () => {
     const deletePersistentData = vi.fn()
     const deleteSecret = vi.fn()
     const removeCode = vi.fn()
-    disposeTeardown = registerPluginStorageTeardown(teardown)
+    disposeTeardown = registerPermissionPluginBridge({ teardownPluginStorage: teardown })
     const { handlers } = createHarness({
       revokeAll: vi.fn(async () => {
         authorityAllowed = false

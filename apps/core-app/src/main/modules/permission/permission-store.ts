@@ -20,7 +20,7 @@ import {
 } from '@talex-touch/utils/permission'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import fse from 'fs-extra'
-import { getPluginSdkHardCutGate } from '../plugin/sdkapi-hard-cut-gate'
+import { evaluatePermissionPluginSdkHardCutGate } from './permission-ports'
 
 type AuditLogEntry = PermissionAuditLog
 
@@ -591,7 +591,7 @@ export class PermissionStore {
     const normalizedPermissionId = normalizePermissionId(permissionId)
     const candidates = getPermissionIdCandidates(normalizedPermissionId)
 
-    const sdkGate = getPluginSdkHardCutGate(pluginId, sdkapi)
+    const sdkGate = evaluatePermissionPluginSdkHardCutGate(pluginId, sdkapi)
     if (sdkGate.blocked) {
       return {
         allowed: false,
