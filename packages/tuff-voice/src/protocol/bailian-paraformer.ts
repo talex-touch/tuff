@@ -46,10 +46,31 @@ export function buildBailianHeaders(credentials: BailianCredentials, userAgent =
   return headers
 }
 
+/**
+ * Builds a DashScope Paraformer `run-task` frame.
+ *
+ * Vocabulary biasing constraint: Alibaba Cloud DashScope Paraformer realtime WebSocket does NOT
+ * accept inline `hotwords: string[]` in `run-task`. Hotword lists must be provisioned ahead of
+ * time via DashScope's asynchronous Vocabulary Customization HTTP API and referenced here through
+ * `parameters.vocabulary_id`. Inline `request.hotwords` are therefore intentionally not injected
+ * into this wire frame (custom words still bias the downstream LLM polish prompt and any provider
+ * with inline hotword support such as Doubao or whisper.cpp).
+ */
 export function buildBailianRunTask(
   request: VoiceStreamRequest,
   options: BailianRequestOptions = {},
 ): Record<string, unknown> {
+  const requestProviderOptions = request.providerOptions
+  const mergedProviderOptions: Record<string, unknown> = {
+    ...(requestProviderOptions ?? {}),
+    ...(options.providerOptions ?? {}),
+  }
+  const vocabularyId = readText(options.vocabularyId)
+    || readText(mergedProviderOptions.vocabulary_id)
+    || readText(mergedProviderOptions.vocabularyId)
+  delete mergedProviderOptions.vocabularyId
+  delete mergedProviderOptions.vocabulary_id
+
   const parameters: Record<string, unknown> = {
     format: request.audio.format,
     sample_rate: request.audio.sampleRate,
@@ -67,8 +88,8 @@ export function buildBailianRunTask(
     ...(options.inverseTextNormalizationEnabled === undefined
       ? {}
       : { inverse_text_normalization_enabled: options.inverseTextNormalizationEnabled }),
-    ...(options.vocabularyId ? { vocabulary_id: options.vocabularyId } : {}),
-    ...options.providerOptions,
+    ...(vocabularyId ? { vocabulary_id: vocabularyId } : {}),
+    ...mergedProviderOptions,
   }
   return {
     header: {

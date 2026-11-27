@@ -251,4 +251,24 @@ describe('the language whisper-cli is handed', () => {
     expect(prompt).toContain('以下是普通话的句子，请使用简体中文。')
     expect(prompt).toContain('SGLang, vLLM, DeepSeek')
   })
+
+  it('trims, deduplicates, and caps Whisper hotwords at 64 terms and omits prompt when blank', async () => {
+    const model = await resolvedModel({ languages: ['en'] })
+    const blankArgs = buildWhisperArgs(model, '/tmp/input.wav', '/tmp/result', {
+      language: 'en-US',
+      hotwords: ['   ', ''],
+    })
+    expect(blankArgs).not.toContain('--prompt')
+
+    const many = Array.from({ length: 80 }, (_, index) => ` Term${index} `)
+    const args = buildWhisperArgs(model, '/tmp/input.wav', '/tmp/result', {
+      language: 'en-US',
+      hotwords: ['SGLang', '  SGLang ', ...many],
+    })
+    const prompt = args[args.indexOf('--prompt') + 1]
+    const terms = prompt.split(', ')
+    expect(terms).toHaveLength(64)
+    expect(terms[0]).toBe('SGLang')
+    expect(terms[1]).toBe('Term0')
+  })
 })

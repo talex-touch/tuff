@@ -529,4 +529,74 @@ describe('tuff-voice provider protocol contracts', () => {
     expect(bailianReleased).toBe(true)
     expect(bailianHttp.requests.map(entry => entry.method)).toEqual(['POST', 'POST', 'GET'])
   })
+
+  it('normalizes Doubao hotwords in stream and upload payloads and omits empty lists', async () => {
+    const deduped = buildDoubaoStreamPayload({
+      ...request,
+      hotwords: ['  SGLang  ', 'vLLM', 'SGLang', '   ', 'DeepSeek'],
+    })
+    expect((deduped.request as { hotwords?: unknown }).hotwords).toEqual([
+      { word: 'SGLang' },
+      { word: 'vLLM' },
+      { word: 'DeepSeek' },
+    ])
+
+    const empty = buildDoubaoStreamPayload({
+      ...request,
+      hotwords: ['   ', ''],
+    })
+    expect('hotwords' in (empty.request as Record<string, unknown>)).toBe(false)
+
+    const bodies: Array<Record<string, unknown>> = []
+    const httpClient: VoiceHttpClient = {
+      request: async (req) => {
+        bodies.push(typeof req.body === 'string' ? JSON.parse(req.body) : (req.body as Record<string, unknown>))
+        return { status: 200, headers: {}, body: { result: { text: 'ok', language: 'zh' } } }
+      },
+    }
+    const doubao = new DoubaoVoiceProvider({
+      credentials: { apiKey: 'fixture-key', resourceId: 'resource' },
+      socketFactory: fakeSocketFactory(new FakeSocket()),
+      httpClient,
+    })
+
+    await doubao.transcribeUpload({
+      model: 'bigmodel',
+      source: { kind: 'url', url: 'https://upload.test/a.wav' },
+      requestId: 'u-hot',
+      hotwords: [' Tuff ', 'Tuff', 'vLLM'],
+    })
+    expect((bodies[0] as { request: Record<string, unknown> }).request.hotwords).toEqual([
+      { word: 'Tuff' },
+      { word: 'vLLM' },
+    ])
+
+    await doubao.transcribeUpload({
+      model: 'bigmodel',
+      source: { kind: 'url', url: 'https://upload.test/b.wav' },
+      requestId: 'u-empty',
+      hotwords: ['  '],
+    })
+    expect('hotwords' in (bodies[1] as { request: Record<string, unknown> }).request).toBe(false)
+  })
+
+  it('forwards Bailian vocabulary_id from providerOptions without injecting unsupported inline hotwords', () => {
+    const runWithVocab = buildBailianRunTask({
+      ...request,
+      hotwords: ['SGLang', 'vLLM'],
+      providerOptions: { vocabulary_id: '  vocab-custom-42  ' },
+    })
+    const params = (runWithVocab.payload as { parameters: Record<string, unknown> }).parameters
+    expect(params.vocabulary_id).toBe('vocab-custom-42')
+    // DashScope Paraformer requires pre-registered async vocabulary_id rather than inline hotwords[].
+    expect('hotwords' in params).toBe(false)
+
+    const runWithoutVocab = buildBailianRunTask({
+      ...request,
+      hotwords: ['SGLang'],
+    })
+    const plainParams = (runWithoutVocab.payload as { parameters: Record<string, unknown> }).parameters
+    expect('vocabulary_id' in plainParams).toBe(false)
+    expect('hotwords' in plainParams).toBe(false)
+  })
 })

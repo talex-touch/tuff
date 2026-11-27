@@ -7,17 +7,26 @@ import type {
 import type { CSSProperties } from 'vue'
 import type { DataTableColumn } from '@talex-touch/tuffex/data-table'
 import type { DialogButton } from '@talex-touch/tuffex/dialog'
+import type { FilterChipItem, FilterChipValue } from '@talex-touch/tuffex/filter-chips'
 import type { StatusTone } from '@talex-touch/tuffex/status-badge'
 import type { InsightsMenuItem } from '~/components/settings/insights/types'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCard } from '@talex-touch/tuffex/card'
 import { TxDataTable } from '@talex-touch/tuffex/data-table'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
+import { TxFilterChips } from '@talex-touch/tuffex/filter-chips'
 import { TxPagination } from '@talex-touch/tuffex/pagination'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
-import { normalizeVoiceHistoryEnabled } from '@talex-touch/utils/common/storage/entity/app-settings'
+import {
+  ensureVoiceInputSetting,
+  extractLearnedVoiceTerms,
+  isVoiceHistoryRetentionActive,
+  normalizeVoiceDictionaryEntries,
+  normalizeVoiceHistoryRetention,
+  type VoiceInputSetting
+} from '@talex-touch/utils/common/storage/entity/app-settings'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
@@ -198,8 +207,21 @@ const heatmapScroller = ref<HTMLElement | null>(null)
  */
 const RECORDS_PER_PAGE = 12
 
+type RecordSourceFilter = 'all' | 'dictate' | 'ask' | 'file'
+
+interface RecordDayGroup {
+  dayKey: string
+  label: string
+  records: VoiceRecognitionRecord[]
+}
+
 const recordsOpen = ref(false)
 const recordPage = ref(1)
+const sourceFilter = ref<RecordSourceFilter>('all')
+const retryingRecordIds = ref<Record<string, boolean>>({})
+const deletingRecordIds = ref<Record<string, boolean>>({})
+const savingRecordIds = ref<Record<string, boolean>>({})
+const recordRetryErrors = ref<Record<string, string>>({})
 /**
  * Which row is opened out below the table.
  *
@@ -209,16 +231,61 @@ const recordPage = ref(1)
 const expandedRecordId = ref<string | null>(null)
 /** The full-size reading surface for whichever row is already open. */
 const recordDialogOpen = ref(false)
+
+function matchesSourceFilter(record: VoiceRecognitionRecord, filter: RecordSourceFilter): boolean {
+  if (filter === 'all') return true
+  if (filter === 'dictate') {
+    return record.source === 'dictate' || record.source === 'microphone'
+  }
+  return record.source === filter
+}
+
+const sourceFilterItems = computed<FilterChipItem[]>(() => {
+  const allCount = records.value.length
+  const dictateCount = records.value.filter(
+    (record) => record.source === 'dictate' || record.source === 'microphone'
+  ).length
+  const askCount = records.value.filter((record) => record.source === 'ask').length
+  const fileCount = records.value.filter((record) => record.source === 'file').length
+
+  const items: FilterChipItem[] = [
+    { value: 'all', label: t('voiceInsights.records.filters.all'), count: allCount },
+    { value: 'dictate', label: t('voiceInsights.records.filters.dictate'), count: dictateCount },
+    { value: 'ask', label: t('voiceInsights.records.filters.ask'), count: askCount }
+  ]
+  if (fileCount > 0 || sourceFilter.value === 'file') {
+    items.push({ value: 'file', label: t('voiceInsights.records.filters.file'), count: fileCount })
+  }
+  return items
+})
+
+function selectSourceFilter(value: FilterChipValue): void {
+  const next: RecordSourceFilter =
+    value === 'dictate' || value === 'ask' || value === 'file' ? value : 'all'
+  if (sourceFilter.value === next) return
+  sourceFilter.value = next
+  recordPage.value = 1
+  expandedRecordId.value = null
+}
+
+const filteredRecords = computed(() =>
+  records.value.filter((record) => matchesSourceFilter(record, sourceFilter.value))
+)
 const recordPageCount = computed(() =>
-  Math.max(1, Math.ceil(records.value.length / RECORDS_PER_PAGE))
+  Math.max(1, Math.ceil(filteredRecords.value.length / RECORDS_PER_PAGE))
 )
 const pagedRecords = computed(() => {
   // Clamped rather than trusted: clearing the log while page 4 is open would otherwise leave the
   // drawer showing a slice past the end of the array.
   const page = Math.min(Math.max(1, recordPage.value), recordPageCount.value)
   const start = (page - 1) * RECORDS_PER_PAGE
-  return records.value.slice(start, start + RECORDS_PER_PAGE)
+  return filteredRecords.value.slice(start, start + RECORDS_PER_PAGE)
 })
+const recordEmptyText = computed(() =>
+  records.value.length > 0 && sourceFilter.value !== 'all'
+    ? t('voiceInsights.records.emptyFiltered')
+    : t('voiceInsights.records.empty')
+)
 const expandedRecord = computed<VoiceRecognitionRecord | null>(
   () => pagedRecords.value.find((record) => record.id === expandedRecordId.value) ?? null
 )
@@ -228,6 +295,7 @@ let disposed = false
 let recordMutationCleanup: (() => void) | null = null
 let recordMutationRevision = 0
 let recordClearRevision = 0
+const deletedRecordIds = new Set<string>()
 
 const hasData = computed(() => {
   const value = insights.value
@@ -599,12 +667,38 @@ function applyRecognitionRecordMutation(mutation: VoiceRecognitionRecordMutation
   recordMutationRevision += 1
   if (mutation.type === 'clear') {
     recordClearRevision += 1
+    deletedRecordIds.clear()
     records.value = []
     expandedRecordId.value = null
+    recordDialogOpen.value = false
     recordPage.value = 1
+    recordRetryErrors.value = {}
     return
   }
-  records.value = mergeRecognitionRecords([mutation.record], records.value)
+  if (mutation.type === 'delete') {
+    deletedRecordIds.add(mutation.id)
+    records.value = records.value.filter((record) => record.id !== mutation.id)
+    if (expandedRecordId.value === mutation.id) {
+      expandedRecordId.value = null
+      recordDialogOpen.value = false
+    }
+    const nextErrors = { ...recordRetryErrors.value }
+    delete nextErrors[mutation.id]
+    recordRetryErrors.value = nextErrors
+    return
+  }
+  if (mutation.type === 'prune') {
+    const removed = new Set(mutation.ids)
+    for (const id of removed) deletedRecordIds.add(id)
+    records.value = records.value.filter((record) => !removed.has(record.id))
+    if (expandedRecordId.value && removed.has(expandedRecordId.value)) {
+      expandedRecordId.value = null
+      recordDialogOpen.value = false
+    }
+    return
+  }
+  deletedRecordIds.delete(mutation.record.id)
+  records.value = mergeRecognitionRecords(records.value, [mutation.record])
 }
 
 async function loadInsights(background = false): Promise<void> {
@@ -627,11 +721,12 @@ async function loadInsights(background = false): Promise<void> {
     ])
     if (revision !== loadRevision || disposed) return
     insights.value = next
+    const fetchedRecords = (nextRecords ?? []).filter((record) => !deletedRecordIds.has(record.id))
     records.value =
       recordMutationRevision === mutationRevisionAtStart
-        ? (nextRecords ?? [])
+        ? fetchedRecords
         : recordClearRevision === clearRevisionAtStart
-          ? mergeRecognitionRecords(records.value, nextRecords ?? [])
+          ? mergeRecognitionRecords(fetchedRecords, records.value)
           : records.value
     hasLoaded.value = true
     loadFailed.value = false
@@ -723,7 +818,10 @@ async function clearRecords(): Promise<void> {
   try {
     await voiceSdk.clearRecognitionRecords()
     records.value = []
+    deletedRecordIds.clear()
     expandedRecordId.value = null
+    recordDialogOpen.value = false
+    recordRetryErrors.value = {}
     toast.success(t('voiceInsights.records.clearSuccess'))
   } catch {
     toast.error(t('voiceInsights.records.clearFailed'))
@@ -731,12 +829,185 @@ async function clearRecords(): Promise<void> {
     if (!disposed) recordsClearing.value = false
   }
 }
+
+function resolveRetryErrorMessage(errorCode?: string): string {
+  if (errorCode === 'VOICE_RECORD_AUDIO_MISSING') {
+    return t('voiceInsights.records.retryAudioMissing')
+  }
+  if (errorCode === 'VOICE_RECORD_AUDIO_PATH_INVALID') {
+    return t('voiceInsights.records.retryPathInvalid')
+  }
+  return t('voiceInsights.records.retryFailed')
+}
+
+async function retryRecord(record: VoiceRecognitionRecord): Promise<void> {
+  if (
+    !record.audioUrl ||
+    retryingRecordIds.value[record.id] ||
+    deletingRecordIds.value[record.id] ||
+    disposed
+  ) {
+    return
+  }
+  retryingRecordIds.value = { ...retryingRecordIds.value, [record.id]: true }
+  const clearedErrors = { ...recordRetryErrors.value }
+  delete clearedErrors[record.id]
+  recordRetryErrors.value = clearedErrors
+
+  try {
+    const outcome = await voiceSdk.retryRecognitionRecord({ recordId: record.id })
+    if (disposed) return
+    if (outcome.record) {
+      records.value = mergeRecognitionRecords(records.value, [outcome.record])
+    }
+    if (outcome.status === 'success') {
+      toast.success(t('voiceInsights.records.retrySuccess'))
+    } else if (outcome.status === 'empty') {
+      toast.success(t('voiceInsights.records.retryEmpty'))
+    } else {
+      const message = resolveRetryErrorMessage(outcome.errorCode)
+      recordRetryErrors.value = { ...recordRetryErrors.value, [record.id]: message }
+      toast.error(message)
+    }
+  } catch (error) {
+    if (disposed) return
+    const code =
+      error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+        ? error.code
+        : undefined
+    const message = resolveRetryErrorMessage(code)
+    recordRetryErrors.value = { ...recordRetryErrors.value, [record.id]: message }
+    toast.error(message)
+  } finally {
+    if (!disposed) {
+      const next = { ...retryingRecordIds.value }
+      delete next[record.id]
+      retryingRecordIds.value = next
+    }
+  }
+}
+
+async function deleteRecord(record: VoiceRecognitionRecord): Promise<void> {
+  if (deletingRecordIds.value[record.id] || retryingRecordIds.value[record.id] || disposed) return
+  deletingRecordIds.value = { ...deletingRecordIds.value, [record.id]: true }
+
+  try {
+    await voiceSdk.deleteRecognitionRecord({ recordId: record.id })
+    if (disposed) return
+    deletedRecordIds.add(record.id)
+    records.value = records.value.filter((item) => item.id !== record.id)
+    if (expandedRecordId.value === record.id) {
+      expandedRecordId.value = null
+      recordDialogOpen.value = false
+    }
+    const nextErrors = { ...recordRetryErrors.value }
+    delete nextErrors[record.id]
+    recordRetryErrors.value = nextErrors
+    toast.success(t('voiceInsights.records.deleteSuccess'))
+  } catch {
+    if (!disposed) toast.error(t('voiceInsights.records.deleteFailed'))
+  } finally {
+    if (!disposed) {
+      const next = { ...deletingRecordIds.value }
+      delete next[record.id]
+      deletingRecordIds.value = next
+    }
+  }
+}
+
+function learnDictionaryTermsFromEdit(beforeText: string, afterText: string): string[] {
+  const candidates = extractLearnedVoiceTerms(beforeText, afterText)
+  if (candidates.length === 0) return []
+  ensureVoiceInputSetting(appSetting as Record<string, unknown>)
+  const voiceInput = appSetting.voiceInput as VoiceInputSetting
+  const existing = normalizeVoiceDictionaryEntries(
+    voiceInput.dictionaryEntries,
+    voiceInput.customWords
+  )
+  const existingLower = new Set(existing.map((entry) => entry.term.toLowerCase()))
+  const added: string[] = []
+  const now = Date.now()
+  const next = [...existing]
+  for (const term of candidates) {
+    if (existingLower.has(term.toLowerCase())) continue
+    existingLower.add(term.toLowerCase())
+    next.push({ term, source: 'auto', createdAt: now })
+    added.push(term)
+  }
+  if (added.length === 0) return []
+  const normalized = normalizeVoiceDictionaryEntries(next)
+  voiceInput.dictionaryEntries = normalized
+  voiceInput.customWords = normalized.map((entry) => entry.term)
+  return added
+}
+
+async function saveRecordText(record: VoiceRecognitionRecord, nextText: string): Promise<void> {
+  if (savingRecordIds.value[record.id] || deletingRecordIds.value[record.id] || disposed) return
+  const trimmed = nextText.trim()
+  if (!trimmed) return
+  const previousText = record.text ?? record.rawText ?? ''
+  savingRecordIds.value = { ...savingRecordIds.value, [record.id]: true }
+
+  try {
+    const updated = await voiceSdk.updateRecognitionRecordText({
+      recordId: record.id,
+      text: trimmed
+    })
+    if (disposed) return
+    if (updated) {
+      records.value = mergeRecognitionRecords(records.value, [updated])
+    }
+    const learned = learnDictionaryTermsFromEdit(previousText, trimmed)
+    if (learned.length > 0) {
+      toast.success(t('voiceInsights.records.editLearned', { terms: learned.join(', ') }))
+    } else {
+      toast.success(t('voiceInsights.records.editSuccess'))
+    }
+  } catch {
+    if (!disposed) toast.error(t('voiceInsights.records.editFailed'))
+  } finally {
+    if (!disposed) {
+      const next = { ...savingRecordIds.value }
+      delete next[record.id]
+      savingRecordIds.value = next
+    }
+  }
+}
+
 function recordDateLabel(timestamp: number): string {
   return new Intl.DateTimeFormat(locale.value, {
     dateStyle: 'medium',
     timeStyle: 'short'
   }).format(new Date(timestamp))
 }
+
+function recordDayHeading(dayKey: string): string {
+  const todayKey = dateKeyFromTimestamp(Date.now())
+  if (dayKey === todayKey) return t('voiceInsights.records.days.today')
+  const yesterdayKey = dateKeyFromUtc(utcFromDateKey(todayKey) - DAY_MS)
+  if (dayKey === yesterdayKey) return t('voiceInsights.records.days.yesterday')
+  return formatDateKey(dayKey)
+}
+
+const pagedRecordGroups = computed<RecordDayGroup[]>(() => {
+  const groups: RecordDayGroup[] = []
+  const byKey = new Map<string, RecordDayGroup>()
+  for (const record of pagedRecords.value) {
+    const dayKey = dateKeyFromTimestamp(record.capturedAt)
+    let group = byKey.get(dayKey)
+    if (!group) {
+      group = {
+        dayKey,
+        label: recordDayHeading(dayKey),
+        records: []
+      }
+      byKey.set(dayKey, group)
+      groups.push(group)
+    }
+    group.records.push(record)
+  }
+  return groups
+})
 
 function recordStatusLabel(status: VoiceRecognitionRecord['status']): string {
   return t(`voiceInsights.records.status.${status}`)
@@ -773,21 +1044,22 @@ function recordStatusTone(status: VoiceRecognitionRecord['status']): StatusTone 
 }
 
 /**
- * Four columns, and the transcript is the only one that flexes.
+ * Five columns, and the transcript is the only one that flexes.
  *
- * The other three are given fixed widths so the times line up down the page and the badges sit in
- * one column rather than wherever the text before them happened to end.
+ * The other four are given fixed widths so the times line up down the page and the badges and
+ * per-row retry/delete actions sit in aligned columns rather than drifting with text width.
  */
 const recordColumns = computed<DataTableColumn<VoiceRecognitionRecord>[]>(() => [
   { key: 'text', title: t('voiceInsights.records.columns.text'), auto: true },
   {
     key: 'capturedAt',
     title: t('voiceInsights.records.columns.capturedAt'),
-    width: 150,
+    width: 136,
     nowrap: true
   },
-  { key: 'status', title: t('voiceInsights.records.columns.status'), width: 96, nowrap: true },
-  { key: 'model', title: t('voiceInsights.records.columns.model'), width: 220, nowrap: true }
+  { key: 'status', title: t('voiceInsights.records.columns.status'), width: 86, nowrap: true },
+  { key: 'model', title: t('voiceInsights.records.columns.model'), width: 172, nowrap: true },
+  { key: 'actions', title: t('voiceInsights.records.columns.actions'), width: 118, nowrap: true }
 ])
 
 /**
@@ -864,15 +1136,20 @@ function openRecords(): void {
 /**
  * Whether recognitions are being kept at all.
  *
- * Main writes a record only while `保留识别记录` is on, so an empty log has two causes that look
- * identical from here: nothing has been dictated yet, or nothing was ever allowed to be kept.
+ * Main writes a record only while local retention is active, so an empty log has two causes that
+ * look identical from here: nothing has been dictated yet, or nothing was ever allowed to be kept.
  * The drawer has to be able to tell the reader which one it is looking at.
  */
 const historyRetentionEnabled = computed(() =>
-  normalizeVoiceHistoryEnabled(
-    (appSetting.voiceInput as { historyEnabled?: unknown } | undefined)?.historyEnabled
-  )
+  isVoiceHistoryRetentionActive(appSetting.voiceInput as VoiceInputSetting | undefined)
 )
+
+const historyRetentionPeriodLabel = computed(() => {
+  const retention = normalizeVoiceHistoryRetention(
+    (appSetting.voiceInput as VoiceInputSetting | undefined)?.historyRetention
+  )
+  return t(`settingSpeechRecognition.historyRetention.options.${retention}`)
+})
 
 /** The switch lives in settings; this drawer only points at it. */
 function openRetentionSettings(): void {
@@ -1302,15 +1579,20 @@ onBeforeUnmount(() => {
       v-model:visible="recordsOpen"
       :title="t('voiceInsights.records.title')"
       :close-label="t('common.close')"
-      size="728px"
+      size="780px"
       data-testid="voice-insights-records"
     >
       <div class="VoiceInsights-Records">
-        <!--
-          No blurb. The drawer's own title already says what this is, and the sentence under it
-          repeated that in more words — so the first thing under the heading is the log itself.
-        -->
         <header class="VoiceInsights-RecordsHeading">
+          <TxFilterChips
+            class="VoiceInsights-SourceFilter"
+            role="toolbar"
+            :aria-label="t('voiceInsights.records.filters.label')"
+            :items="sourceFilterItems"
+            :model-value="sourceFilter"
+            data-testid="voice-insights-source-filter"
+            @update:model-value="selectSourceFilter"
+          />
           <TxButton
             variant="bare"
             type="danger"
@@ -1345,68 +1627,129 @@ onBeforeUnmount(() => {
           </TxButton>
         </div>
 
-        <!--
-          A table, not a stack of cards.
-
-          Every record carries the same four facts, and a card per record turned four aligned
-          columns into twelve ragged blocks. The transcript that was hidden behind a disclosure
-          triangle is now the first column, so the log is readable without opening anything; the
-          audio and the full field list open out below the table when a row is picked.
-        -->
-        <TxDataTable
-          :columns="recordColumns"
-          :data="pagedRecords"
-          :empty-text="t('voiceInsights.records.empty')"
-          row-key="id"
-          table-layout="fixed"
-          class="VoiceInsights-RecordTable"
-          data-testid="voice-insights-records-table"
-          highlight-selected
-          :selected-keys="expandedRecordId ? [expandedRecordId] : []"
-          @row-click="toggleRecord($event.row)"
+        <p
+          v-else-if="historyRetentionEnabled"
+          class="VoiceInsights-RecordsPrivacy"
+          data-testid="voice-insights-records-privacy"
         >
-          <!--
-            An em dash when nothing was written, not a repeated placeholder.
-            "No text generated" down five rows said the same thing five times, and the status
-            column already says why for each of them. A dash is absence; it does not need a voice.
-          -->
-          <template #cell-text="{ row }">
-            <span
-              class="VoiceInsights-RecordText"
-              :class="{ 'is-empty': !(row.text || row.rawText) }"
+          {{ t('voiceInsights.records.privacyNotice', { period: historyRetentionPeriodLabel }) }}
+        </p>
+
+        <!--
+          A table grouped by day, not a stack of cards.
+        -->
+        <div class="VoiceInsights-RecordGroups" data-testid="voice-insights-records-table">
+          <TxDataTable
+            v-if="pagedRecordGroups.length === 0"
+            :columns="recordColumns"
+            :data="[]"
+            :empty-text="recordEmptyText"
+            row-key="id"
+            table-layout="fixed"
+            class="VoiceInsights-RecordTable"
+          />
+          <section
+            v-for="(group, groupIndex) in pagedRecordGroups"
+            :key="group.dayKey"
+            class="VoiceInsights-DayGroup"
+            :data-day-key="group.dayKey"
+          >
+            <h4 class="VoiceInsights-DayHeader" data-testid="voice-insights-day-header">
+              {{ group.label }}
+            </h4>
+            <TxDataTable
+              :columns="recordColumns"
+              :data="group.records"
+              :empty-text="recordEmptyText"
+              row-key="id"
+              table-layout="fixed"
+              class="VoiceInsights-RecordTable"
+              :class="{ 'is-continuation': groupIndex > 0 }"
+              highlight-selected
+              :selected-keys="expandedRecordId ? [expandedRecordId] : []"
+              @row-click="toggleRecord($event.row)"
             >
-              {{ row.text || row.rawText || '—' }}
-            </span>
-          </template>
-          <template #cell-capturedAt="{ row }">
-            <span class="VoiceInsights-RecordTime">{{ recordDateLabel(row.capturedAt) }}</span>
-          </template>
-          <template #cell-status="{ row }">
-            <TxStatusBadge
-              size="sm"
-              :status="recordStatusTone(row.status)"
-              :text="recordStatusLabel(row.status)"
-              :data-status="row.status"
-            />
-          </template>
-          <template #cell-model="{ row }">
-            <span
-              class="VoiceInsights-RecordModel"
-              :title="`${recordLocationLabel(row)} · ${recordModelLabel(row)}`"
-            >
-              <span class="VoiceInsights-RecordLocation">{{ recordLocationLabel(row) }}</span>
-              <span class="VoiceInsights-RecordModelSeparator" aria-hidden="true">·</span>
-              <span class="VoiceInsights-RecordModelName">{{ recordModelLabel(row) }}</span>
-            </span>
-          </template>
-        </TxDataTable>
+              <!--
+                An em dash when nothing was written, not a repeated placeholder.
+                "No text generated" down five rows said the same thing five times, and the status
+                column already says why for each of them. A dash is absence; it does not need a voice.
+              -->
+              <template #cell-text="{ row }">
+                <span
+                  class="VoiceInsights-RecordText"
+                  :class="{ 'is-empty': !(row.text || row.rawText) }"
+                >
+                  {{ row.text || row.rawText || '—' }}
+                </span>
+              </template>
+              <template #cell-capturedAt="{ row }">
+                <span class="VoiceInsights-RecordTime">{{ recordDateLabel(row.capturedAt) }}</span>
+              </template>
+              <template #cell-status="{ row }">
+                <TxStatusBadge
+                  size="sm"
+                  :status="recordStatusTone(row.status)"
+                  :text="recordStatusLabel(row.status)"
+                  :data-status="row.status"
+                />
+              </template>
+              <template #cell-model="{ row }">
+                <span
+                  class="VoiceInsights-RecordModel"
+                  :title="`${recordLocationLabel(row)} · ${recordModelLabel(row)}`"
+                >
+                  <span class="VoiceInsights-RecordLocation">{{ recordLocationLabel(row) }}</span>
+                  <span class="VoiceInsights-RecordModelSeparator" aria-hidden="true">·</span>
+                  <span class="VoiceInsights-RecordModelName">{{ recordModelLabel(row) }}</span>
+                </span>
+              </template>
+              <template #cell-actions="{ row }">
+                <div class="VoiceInsights-RecordActions" @click.stop>
+                  <TxButton
+                    size="sm"
+                    variant="bare"
+                    :loading="Boolean(retryingRecordIds[row.id])"
+                    :disabled="
+                      !row.audioUrl ||
+                      Boolean(retryingRecordIds[row.id]) ||
+                      Boolean(deletingRecordIds[row.id])
+                    "
+                    data-testid="voice-record-retry"
+                    :data-record-id="row.id"
+                    @click.stop="retryRecord(row)"
+                  >
+                    {{
+                      retryingRecordIds[row.id]
+                        ? t('voiceInsights.records.retrying')
+                        : t('voiceInsights.records.retry')
+                    }}
+                  </TxButton>
+                  <TxButton
+                    size="sm"
+                    variant="bare"
+                    type="danger"
+                    :loading="Boolean(deletingRecordIds[row.id])"
+                    :disabled="
+                      Boolean(retryingRecordIds[row.id]) || Boolean(deletingRecordIds[row.id])
+                    "
+                    data-testid="voice-record-delete"
+                    :data-record-id="row.id"
+                    @click.stop="deleteRecord(row)"
+                  >
+                    {{ t('voiceInsights.records.delete') }}
+                  </TxButton>
+                </div>
+              </template>
+            </TxDataTable>
+          </section>
+        </div>
 
         <TxPagination
           v-if="recordPageCount > 1"
           v-model:current-page="recordPage"
           class="VoiceInsights-RecordsPager"
           :page-size="RECORDS_PER_PAGE"
-          :total="records.length"
+          :total="filteredRecords.length"
           data-testid="voice-insights-records-pagination"
         />
 
@@ -1422,7 +1765,16 @@ onBeforeUnmount(() => {
           class="VoiceInsights-RecordPanel"
           data-testid="voice-insights-record-details"
         >
-          <VoiceRecordDetails :record="expandedRecord" />
+          <VoiceRecordDetails
+            :record="expandedRecord"
+            :retrying="Boolean(retryingRecordIds[expandedRecord.id])"
+            :deleting="Boolean(deletingRecordIds[expandedRecord.id])"
+            :saving-text="Boolean(savingRecordIds[expandedRecord.id])"
+            :retry-error="recordRetryErrors[expandedRecord.id] ?? null"
+            @retry="retryRecord(expandedRecord)"
+            @delete="deleteRecord(expandedRecord)"
+            @save-text="saveRecordText(expandedRecord, $event)"
+          />
         </section>
       </div>
     </TxDrawer>
@@ -1430,7 +1782,7 @@ onBeforeUnmount(() => {
     <!--
       The reading surface.
 
-      A transcript long enough to need scrolling does not want to be read in a 728px drawer beside
+      A transcript long enough to need scrolling does not want to be read in a 780px drawer beside
       the table it came from, so a second click on an already-open row flips it out full size.
     -->
     <FlipDialog
@@ -1440,7 +1792,17 @@ onBeforeUnmount(() => {
       data-testid="voice-insights-record-dialog"
       @closed="handleRecordDialogClosed"
     >
-      <VoiceRecordDetails v-if="expandedRecord" :record="expandedRecord" />
+      <VoiceRecordDetails
+        v-if="expandedRecord"
+        :record="expandedRecord"
+        :retrying="Boolean(retryingRecordIds[expandedRecord.id])"
+        :deleting="Boolean(deletingRecordIds[expandedRecord.id])"
+        :saving-text="Boolean(savingRecordIds[expandedRecord.id])"
+        :retry-error="recordRetryErrors[expandedRecord.id] ?? null"
+        @retry="retryRecord(expandedRecord)"
+        @delete="deleteRecord(expandedRecord)"
+        @save-text="saveRecordText(expandedRecord, $event)"
+      />
     </FlipDialog>
 
     <TxBottomDialog
@@ -1879,10 +2241,43 @@ onBeforeUnmount(() => {
   gap: var(--shell-space-3);
 }
 
-/* One button, so it goes where a lone action goes: the end of the row. */
+/* Source filter chips on the left, destructive clear button on the right. */
 .VoiceInsights-RecordsHeading {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--shell-space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.VoiceInsights-RecordsPrivacy {
+  margin: 0;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+  line-height: 1.5;
+}
+
+.VoiceInsights-RecordGroups {
+  display: grid;
+  gap: var(--shell-space-3);
+}
+
+.VoiceInsights-DayGroup {
+  display: grid;
+  gap: var(--shell-space-2);
+}
+
+.VoiceInsights-DayHeader {
+  margin: 0;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+  font-weight: 600;
+}
+
+.VoiceInsights-RecordActions {
+  display: flex;
+  gap: var(--shell-space-1);
+  align-items: center;
 }
 
 /*
@@ -1917,6 +2312,10 @@ onBeforeUnmount(() => {
   --tx-data-table-row-selected-bg: color-mix(in srgb, var(--shell-text-primary) 8%, transparent);
 
   border: 1px solid var(--shell-border);
+
+  &.is-continuation :deep(thead) {
+    display: none;
+  }
 }
 
 /*

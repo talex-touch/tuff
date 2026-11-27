@@ -313,4 +313,85 @@ describe('SettingSpeechRecognition', () => {
     expect(settings.voiceInput?.customWords).toEqual(['SGLang', 'vLLM', 'DeepSeek'])
     wrapper.unmount()
   })
+
+  it('switches history retention TTL between 7d, 30d, and off while syncing historyEnabled', async () => {
+    const wrapper = mountSettings()
+    await flushPromises()
+
+    const chips = wrapper.find('[data-testid="voice-history-retention-chips"]')
+    expect(chips.exists()).toBe(true)
+
+    const buttons = chips.findAll('button')
+    expect(buttons).toHaveLength(3)
+
+    // Choose 7d
+    await buttons[0]!.trigger('click')
+    await flushPromises()
+    expect(settings.voiceInput?.historyRetention).toBe('7d')
+    expect(settings.voiceInput?.historyEnabled).toBe(true)
+
+    // Choose off
+    await buttons[2]!.trigger('click')
+    await flushPromises()
+    expect(settings.voiceInput?.historyRetention).toBe('off')
+    expect(settings.voiceInput?.historyEnabled).toBe(false)
+
+    // Re-enabling the boolean toggle restores the default 30d retention period
+    await controlByTitle(wrapper, 'settingSpeechRecognition.history.title').vm.$emit(
+      'update:modelValue',
+      true
+    )
+    await flushPromises()
+    expect(settings.voiceInput?.historyEnabled).toBe(true)
+    expect(settings.voiceInput?.historyRetention).toBe('30d')
+
+    wrapper.unmount()
+  })
+
+  it('supports manual dictionary CRUD with manual and auto source badges', async () => {
+    settings.voiceInput = {
+      ...settings.voiceInput!,
+      dictionaryEntries: [
+        { term: 'SGLang', source: 'manual', createdAt: 10 },
+        { term: 'Qwen3', source: 'auto', createdAt: 20 }
+      ],
+      customWords: ['SGLang', 'Qwen3']
+    }
+
+    const wrapper = mountSettings()
+    await flushPromises()
+
+    const sources = wrapper
+      .findAll('[data-testid="voice-dictionary-source"]')
+      .map((node) => node.attributes('data-source'))
+    expect(sources).toEqual(['manual', 'auto'])
+
+    // Add a new term via Add button
+    const input = wrapper.find('[data-testid="voice-custom-words"] input')
+    await input.setValue('vLLM')
+    await wrapper.find('[data-testid="voice-dictionary-add"]').trigger('click')
+    await flushPromises()
+    expect(settings.voiceInput?.customWords).toEqual(['SGLang', 'Qwen3', 'vLLM'])
+
+    // Edit an auto-learned term inline (upgrades its source to manual)
+    const editButtons = wrapper.findAll('[data-testid="voice-dictionary-edit"]')
+    await editButtons[1]!.trigger('click')
+    await flushPromises()
+    const editInput = wrapper.find('[data-testid="voice-dictionary-edit-input"]')
+    await editInput.setValue('Qwen3-ASR')
+    await wrapper.find('[data-testid="voice-dictionary-save"]').trigger('click')
+    await flushPromises()
+    expect(settings.voiceInput?.customWords).toEqual(['SGLang', 'Qwen3-ASR', 'vLLM'])
+    expect(
+      settings.voiceInput?.dictionaryEntries?.find((e) => e.term === 'Qwen3-ASR')?.source
+    ).toBe('manual')
+
+    // Remove the first entry
+    const removeButtons = wrapper.findAll('[data-testid="voice-dictionary-remove"]')
+    await removeButtons[0]!.trigger('click')
+    await flushPromises()
+    expect(settings.voiceInput?.customWords).toEqual(['Qwen3-ASR', 'vLLM'])
+
+    wrapper.unmount()
+  })
 })

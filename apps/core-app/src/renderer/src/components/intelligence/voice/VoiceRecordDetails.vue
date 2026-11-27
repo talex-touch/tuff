@@ -1,5 +1,7 @@
 <script setup lang="ts" name="VoiceRecordDetails">
 import type { VoiceRecognitionRecord } from '@talex-touch/utils/transport/sdk/domains/voice'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 /**
@@ -8,9 +10,59 @@ import { useI18n } from 'vue-i18n'
  * Extracted because the log shows this in two places — inline under the table, and full size in
  * the flip dialog — and a second copy of a seven-field list is how the two drift apart.
  */
-const props = defineProps<{ record: VoiceRecognitionRecord }>()
+const props = defineProps<{
+  record: VoiceRecognitionRecord
+  retrying?: boolean
+  deleting?: boolean
+  savingText?: boolean
+  retryError?: string | null
+}>()
+
+const emit = defineEmits<{
+  retry: []
+  delete: []
+  'save-text': [text: string]
+}>()
 
 const { locale, t } = useI18n()
+
+const editingText = ref(false)
+const draftText = ref('')
+
+watch(
+  () => props.record.id,
+  () => {
+    editingText.value = false
+    draftText.value = props.record.text ?? props.record.rawText ?? ''
+  },
+  { immediate: true }
+)
+
+watch(
+  () => props.record.text,
+  (next) => {
+    if (!editingText.value) {
+      draftText.value = next ?? props.record.rawText ?? ''
+    }
+  }
+)
+
+function startEditText(): void {
+  draftText.value = props.record.text ?? props.record.rawText ?? ''
+  editingText.value = true
+}
+
+function cancelEditText(): void {
+  editingText.value = false
+  draftText.value = props.record.text ?? props.record.rawText ?? ''
+}
+
+function submitEditText(): void {
+  const trimmed = draftText.value.trim()
+  if (!trimmed) return
+  emit('save-text', trimmed)
+  editingText.value = false
+}
 
 /** One fraction digit: 1.5 s is a reading, 1.504 s is a log line. */
 const secondsFormatter = computed(
@@ -83,6 +135,47 @@ function recognitionLocationLabel(): string {
 
 <template>
   <div class="VoiceRecordDetails">
+    <div class="VoiceRecordDetails-Actions">
+      <TxButton
+        size="sm"
+        variant="flat"
+        :loading="retrying"
+        :disabled="!record.audioUrl || retrying || deleting"
+        data-testid="voice-record-details-retry"
+        @click="emit('retry')"
+      >
+        {{ retrying ? t('voiceInsights.records.retrying') : t('voiceInsights.records.retry') }}
+      </TxButton>
+      <TxButton
+        v-if="!editingText"
+        size="sm"
+        variant="ghost"
+        :disabled="retrying || deleting || savingText"
+        data-testid="voice-record-details-edit"
+        @click="startEditText"
+      >
+        {{ t('voiceInsights.records.editText') }}
+      </TxButton>
+      <TxButton
+        size="sm"
+        variant="bare"
+        type="danger"
+        :loading="deleting"
+        :disabled="retrying || deleting"
+        data-testid="voice-record-details-delete"
+        @click="emit('delete')"
+      >
+        {{ t('voiceInsights.records.delete') }}
+      </TxButton>
+    </div>
+    <p
+      v-if="retryError"
+      class="VoiceRecordDetails-Error"
+      role="alert"
+      data-testid="voice-record-details-error"
+    >
+      {{ retryError }}
+    </p>
     <audio
       v-if="record.audioUrl"
       controls
@@ -98,7 +191,36 @@ function recognitionLocationLabel(): string {
       </div>
       <div>
         <dt>{{ t('voiceInsights.records.finalText') }}</dt>
-        <dd>{{ record.text || '—' }}</dd>
+        <dd v-if="editingText" class="VoiceRecordDetails-EditBox">
+          <textarea
+            v-model="draftText"
+            rows="3"
+            class="VoiceRecordDetails-Editor"
+            data-testid="voice-record-details-editor"
+            :aria-label="t('voiceInsights.records.finalText')"
+          />
+          <div class="VoiceRecordDetails-EditActions">
+            <TxButton
+              size="sm"
+              :loading="savingText"
+              :disabled="!draftText.trim() || savingText"
+              data-testid="voice-record-details-save"
+              @click="submitEditText"
+            >
+              {{ t('voiceInsights.records.saveText') }}
+            </TxButton>
+            <TxButton
+              size="sm"
+              variant="ghost"
+              :disabled="savingText"
+              data-testid="voice-record-details-cancel"
+              @click="cancelEditText"
+            >
+              {{ t('voiceInsights.records.cancelEdit') }}
+            </TxButton>
+          </div>
+        </dd>
+        <dd v-else>{{ record.text || '—' }}</dd>
       </div>
       <div>
         <dt>{{ t('voiceInsights.records.duration') }}</dt>
@@ -178,6 +300,45 @@ function recognitionLocationLabel(): string {
     line-height: 1.5;
     overflow-wrap: anywhere;
   }
+}
+
+.VoiceRecordDetails-Actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--shell-space-2);
+  align-items: center;
+}
+
+.VoiceRecordDetails-Error {
+  margin: 0;
+  padding: var(--shell-space-2) var(--shell-space-3);
+  border-radius: var(--shell-radius-sm);
+  background: color-mix(in srgb, var(--shell-danger, #dc2626) 10%, transparent);
+  color: var(--shell-danger, #dc2626);
+  font-size: var(--shell-fs-caption);
+}
+
+.VoiceRecordDetails-EditBox {
+  display: grid;
+  gap: var(--shell-space-2);
+}
+
+.VoiceRecordDetails-Editor {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--shell-space-2);
+  border: 1px solid var(--shell-border);
+  border-radius: var(--shell-radius-sm);
+  background: var(--shell-bg);
+  color: var(--shell-text-primary);
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.VoiceRecordDetails-EditActions {
+  display: flex;
+  gap: var(--shell-space-2);
 }
 
 .VoiceRecordDetails-AudioMeta {

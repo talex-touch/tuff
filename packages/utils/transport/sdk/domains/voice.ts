@@ -153,7 +153,9 @@ export interface VoiceInsights {
 
 export type VoiceRecognitionRecordStatus = 'success' | 'empty' | 'failed' | 'cancelled'
 export type VoiceRecognitionLocation = 'cloud' | 'on-device'
-
+/** Invocation mode recorded on a microphone recognition session for history filtering. */
+export type VoiceInvocationSource = 'dictate' | 'ask'
+export type VoiceRecognitionRecordSource = VoiceInvocationSource | 'microphone' | 'file'
 
 /** Detailed local record shown only in the host Intelligence settings surface. */
 export interface VoiceRecognitionRecord {
@@ -161,7 +163,7 @@ export interface VoiceRecognitionRecord {
   capturedAt: number
   /** Where recognition actually ran for this attempt; independent from the user's hybrid preference. */
   recognitionLocation?: VoiceRecognitionLocation
-  source: 'microphone' | 'file'
+  source: VoiceRecognitionRecordSource
   status: VoiceRecognitionRecordStatus
   audioUrl?: string
   audioBytes?: number
@@ -195,7 +197,35 @@ export interface VoiceRecognitionRecord {
 /** Main-owned persistence mutation used to keep the host record drawer current. */
 export type VoiceRecognitionRecordMutation =
   | { type: 'upsert'; record: VoiceRecognitionRecord }
+  | { type: 'delete'; id: string }
+  | { type: 'prune'; ids: string[] }
   | { type: 'clear' }
+
+/** Request to re-transcribe a persisted history record from its retained local audio file. */
+export interface VoiceRetryRecordPayload {
+  recordId: string
+  language?: string
+  cleanup?: boolean
+}
+
+/** Structured outcome of a persisted history-row retry. */
+export interface VoiceRetryRecordResult {
+  status: 'success' | 'empty' | 'failed'
+  record?: VoiceRecognitionRecord
+  errorCode?: string
+  retryable?: boolean
+}
+
+/** Request to permanently delete one local recognition record and its retained WAV audio. */
+export interface VoiceDeleteRecognitionRecordPayload {
+  recordId: string
+}
+
+/** Request to save a manual transcript edit on one local recognition record. */
+export interface VoiceUpdateRecognitionRecordTextPayload {
+  recordId: string
+  text: string
+}
 
 
 /** One-shot dictation request: capture mic → STT → optional AI polish. */
@@ -219,6 +249,8 @@ export interface VoiceDictatePayload {
   silenceStopMs?: number
   /** Keep text only, or let main deliver it to the active application. */
   delivery?: VoiceDeliveryMode
+  /** Invocation mode persisted on recognition history (`dictate` vs `ask`). */
+  source?: VoiceInvocationSource
 }
 
 /** Result of a one-shot dictation. */
@@ -324,6 +356,8 @@ export interface VoiceAsrStreamPayload {
    * recovery slot the HUD's undo and retry use.
    */
   keepRecording?: boolean
+  /** Invocation mode persisted on recognition history (`dictate` vs `ask`). */
+  source?: VoiceInvocationSource
 }
 
 /**
@@ -646,6 +680,21 @@ export const voiceApiEvents = {
     .module('api')
     .event('clear-recognition-records')
     .define<void, VoiceApiResponse>(),
+  /** Host-renderer-only re-transcription of one persisted recognition record from retained local audio. */
+  retryRecognitionRecord: defineEvent('voice')
+    .module('api')
+    .event('retry-recognition-record')
+    .define<VoiceRetryRecordPayload, VoiceApiResponse<VoiceRetryRecordResult>>(),
+  /** Host-renderer-only deletion of one local recognition record and its retained audio file. */
+  deleteRecognitionRecord: defineEvent('voice')
+    .module('api')
+    .event('delete-recognition-record')
+    .define<VoiceDeleteRecognitionRecordPayload, VoiceApiResponse<{ deleted: boolean }>>(),
+  /** Host-renderer-only manual transcript update on one persisted recognition record. */
+  updateRecognitionRecordText: defineEvent('voice')
+    .module('api')
+    .event('update-recognition-record-text')
+    .define<VoiceUpdateRecognitionRecordTextPayload, VoiceApiResponse<VoiceRecognitionRecord | null>>(),
   /** Host-renderer-only permanent deletion of all durable aggregate voice insight counters. */
   clearInsights: defineEvent('voice').module('api').event('clear-insights').define<void, VoiceApiResponse>(),
   /**
@@ -712,6 +761,14 @@ export interface VoiceSdk {
   getRecognitionRecords: () => Promise<VoiceRecognitionRecord[]>
   /** Delete detailed local recognition records; available only to the host renderer. */
   clearRecognitionRecords: () => Promise<void>
+  /** Re-transcribe one persisted recognition record from its retained local audio; host renderer only. */
+  retryRecognitionRecord: (payload: VoiceRetryRecordPayload) => Promise<VoiceRetryRecordResult>
+  /** Delete one persisted recognition record and unlink its retained audio file; host renderer only. */
+  deleteRecognitionRecord: (payload: VoiceDeleteRecognitionRecordPayload) => Promise<{ deleted: boolean }>
+  /** Update the final transcript text of one local recognition record; host renderer only. */
+  updateRecognitionRecordText: (
+    payload: VoiceUpdateRecognitionRecordTextPayload,
+  ) => Promise<VoiceRecognitionRecord | null>
   /** Read aggregate-only local voice insights. Available only to the host renderer. */
   getInsights: () => Promise<VoiceInsights>
   /** Delete all durable aggregate-only voice insights. Available only to the host renderer. */
@@ -769,6 +826,20 @@ export function createVoiceSdk(transport: VoiceSdkTransport): VoiceSdk {
     async clearRecognitionRecords() {
       const response = await transport.send(voiceApiEvents.clearRecognitionRecords, undefined)
       assertVoiceApiResponse(response, 'Voice recognition records clear failed')
+    },
+    async retryRecognitionRecord(payload) {
+      const response = await transport.send(voiceApiEvents.retryRecognitionRecord, payload, {
+        timeout: VOICE_RETRY_TRANSPORT_TIMEOUT_MS,
+      })
+      return assertVoiceApiResponse(response, 'Voice recognition record retry failed')
+    },
+    async deleteRecognitionRecord(payload) {
+      const response = await transport.send(voiceApiEvents.deleteRecognitionRecord, payload)
+      return assertVoiceApiResponse(response, 'Voice recognition record delete failed')
+    },
+    async updateRecognitionRecordText(payload) {
+      const response = await transport.send(voiceApiEvents.updateRecognitionRecordText, payload)
+      return assertVoiceApiResponse(response, 'Voice recognition record update failed') ?? null
     },
     async openMicrophoneSettings() {
       const response = await transport.send(voiceApiEvents.openMicrophoneSettings, undefined)

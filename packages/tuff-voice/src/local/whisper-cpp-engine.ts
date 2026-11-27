@@ -253,8 +253,22 @@ export function buildWhisperArgs(
     args.push('-nt')
   }
 
-  const hotwordsPrompt
-    = options.hotwords && options.hotwords.length > 0 ? options.hotwords.join(', ') : undefined
+  const normalizedHotwords: string[] = []
+  if (Array.isArray(options.hotwords)) {
+    const seen = new Set<string>()
+    for (const raw of options.hotwords) {
+      if (typeof raw !== 'string')
+        continue
+      const word = raw.trim()
+      if (!word || seen.has(word))
+        continue
+      seen.add(word)
+      normalizedHotwords.push(word)
+      if (normalizedHotwords.length >= 64)
+        break
+    }
+  }
+  const hotwordsPrompt = normalizedHotwords.length > 0 ? normalizedHotwords.join(', ') : undefined
   const effectivePrompt
     = primer && hotwordsPrompt ? `${primer} 常用词: ${hotwordsPrompt}` : (primer ?? hotwordsPrompt)
   if (effectivePrompt) {

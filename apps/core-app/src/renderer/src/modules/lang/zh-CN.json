@@ -928,9 +928,22 @@
     "description": "语音输入与云端路由配置。",
     "refresh": "刷新",
     "customWords": {
-      "title": "热词与专有词库",
-      "description": "输入专用术语、人名或英文缩写（逗号分隔），辅助语音识别与 AI 润色。",
-      "placeholder": "例如：SGLang, vLLM, DeepSeek, Qwen"
+      "title": "语音词典与热词",
+      "description": "添加专用术语、人名或缩写，提升语音识别（Whisper、豆包）与 AI 润色准确率。",
+      "placeholder": "输入词汇（如：SGLang, vLLM, DeepSeek）",
+      "add": "添加",
+      "edit": "编辑",
+      "save": "保存",
+      "cancel": "取消",
+      "remove": "删除",
+      "empty": "尚未添加自定义词条。",
+      "ariaList": "语音词典词条列表",
+      "editAria": "编辑词条 {term}",
+      "removeAria": "删除词条 {term}",
+      "source": {
+        "manual": "手动",
+        "auto": "自动"
+      }
     },
     "input": {
       "title": "语音输入",
@@ -995,7 +1008,16 @@
     },
     "history": {
       "title": "保留识别记录",
-      "description": "保存源音频与转录；关闭后只留统计。"
+      "description": "按所选保留期限在本机保存源音频与转写记录，便于失败重试并到期自动清理；关闭后不保存音频与记录，仅保留聚合统计。"
+    },
+    "historyRetention": {
+      "title": "记录与音频保留时长",
+      "description": "识别记录与本地 WAV 音频仅存于本机，到期后会在启动及定期维护时自动清理。",
+      "options": {
+        "7d": "7 天",
+        "30d": "30 天",
+        "off": "关闭"
+      }
     },
     "noiseSuppression": {
       "title": "谱降噪",
@@ -2171,7 +2193,7 @@
     "empty": {
       "title": "从下一次语音输入开始",
       "description": "完成一次成功且非空的语音输入后，这里会开始显示真实总量、连续天数与每日活动。",
-      "privacy": "只保留聚合计数；原始音频、转写文本、应用名称与路径不会进入语音输入统计。"
+      "privacy": "统计仅保留聚合计数；开启识别记录时，转写文本与源音频会按设定保留期存于本机以供重试，并在到期后自动清理。"
     },
     "error": {
       "title": "无法加载语音输入统计",
@@ -2221,11 +2243,40 @@
     "records": {
       "title": "识别记录",
       "empty": "还没有可查看的识别记录。",
-      "retentionOff": "当前不保留识别记录，听写完成后不会留下任何内容。",
+      "emptyFiltered": "当前来源筛选下暂无识别记录。",
+      "retentionOff": "当前已关闭保留识别记录，新的源音频与转写内容不会保存在本机。",
       "retentionAction": "开启保留识别记录",
+      "privacyNotice": "识别记录与源音频仅保存在本机，保留 {period} 以供回放与重试，到期自动清理。",
       "clear": "清空记录",
       "clearSuccess": "识别记录已清空",
       "clearFailed": "识别记录清空失败",
+      "retry": "重试",
+      "retrying": "重试中…",
+      "retrySuccess": "已基于本地音频重新转写",
+      "retryEmpty": "已重新识别，但音频中未检测到有效语音",
+      "retryFailed": "重新转写失败，请检查语音识别渠道后重试。",
+      "retryAudioMissing": "本地音频文件已不存在（可能已被清理或删除）。",
+      "retryPathInvalid": "本地音频路径未通过安全校验。",
+      "delete": "删除",
+      "deleteSuccess": "识别记录已删除",
+      "deleteFailed": "删除识别记录失败",
+      "editText": "修正文本",
+      "saveText": "保存",
+      "cancelEdit": "取消",
+      "editSuccess": "转写文本已更新",
+      "editLearned": "转写文本已更新 · 已自动学习：{terms}",
+      "editFailed": "更新转写文本失败",
+      "filters": {
+        "label": "按来源筛选识别记录",
+        "all": "全部",
+        "dictate": "听写",
+        "ask": "问任何问题",
+        "file": "音频文件"
+      },
+      "days": {
+        "today": "今天",
+        "yesterday": "昨天"
+      },
       "audioLabel": "识别源音频",
       "audioUnavailable": "源音频不可用",
       "audioMeta": "音频 {duration} · {bytes} 字节",
@@ -2249,6 +2300,8 @@
       },
       "delivery": "投递",
       "sourceValues": {
+        "dictate": "听写",
+        "ask": "问任何问题",
         "microphone": "麦克风",
         "file": "音频文件"
       },
@@ -2263,7 +2316,8 @@
         "text": "内容",
         "capturedAt": "时间",
         "status": "状态",
-        "model": "识别模型"
+        "model": "识别模型",
+        "actions": "操作"
       },
       "status": {
         "success": "成功",

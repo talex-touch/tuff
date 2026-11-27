@@ -89,6 +89,10 @@ export class BailianParaformerVoiceProvider implements VoiceProviderAdapter {
               heartbeat: request.heartbeat,
               removeDisfluencies: request.enableDdc,
               ...this.options.streamOptions,
+              providerOptions: {
+                ...(request.providerOptions ?? {}),
+                ...(this.options.streamOptions?.providerOptions ?? {}),
+              },
             }),
           ),
         )

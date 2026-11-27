@@ -21,6 +21,7 @@ import {
 
   encodeDoubaoAudioRequest,
   encodeDoubaoFullRequest,
+  normalizeDoubaoHotwords,
   normalizeDoubaoUploadResult,
   parseDoubaoResponse,
 } from '../protocol/doubao'
@@ -234,6 +235,7 @@ export class DoubaoVoiceProvider implements VoiceProviderAdapter {
 
   private buildUploadPayload(request: VoiceUploadRequest, url: string): Record<string, unknown> {
     const format = request.source.kind === 'url' ? request.source.format : request.source.format
+    const hotwords = normalizeDoubaoHotwords(request.hotwords)
     return {
       user: { uid: 'tuff-voice' },
       audio: {
@@ -249,6 +251,7 @@ export class DoubaoVoiceProvider implements VoiceProviderAdapter {
           : { enable_speaker_info: request.enableSpeakerDiarization }),
         ...(request.removeDisfluencies === undefined ? {} : { enable_ddc: request.removeDisfluencies }),
         ...request.providerOptions,
+        ...(hotwords.length > 0 ? { hotwords: hotwords.map(word => ({ word })) } : {}),
       },
     }
   }

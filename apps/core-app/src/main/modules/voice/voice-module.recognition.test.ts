@@ -16,9 +16,14 @@ type VoiceStreamHandler = (payload: unknown, context: StreamTestContext) => unkn
 
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, VoiceStreamHandler>(),
+  handlerOptions: new Map<string, Record<string, unknown>>(),
   on: vi.fn(),
   onStream: vi.fn(),
   transcribeFile: vi.fn(),
+  retryRecord: vi.fn(),
+  deleteRecord: vi.fn(),
+  updateTranscript: vi.fn(),
+  purgeExpired: vi.fn(async () => ({ deletedRecords: 0, deletedFiles: 0 })),
   dispose: vi.fn(),
   register: vi.fn(),
   unregister: vi.fn(),
@@ -68,7 +73,15 @@ vi.mock('../permission/channel-guard', () => ({
 }))
 vi.mock('../../utils/safe-handler', () => ({
   withPermissionSafeApi: vi.fn(
-    (_options: unknown, callback: (payload: unknown, context: unknown) => unknown) => callback
+    (
+      _options: Record<string, unknown>,
+      callback: (payload: unknown, context: unknown) => unknown,
+      safeOptions?: Record<string, unknown>
+    ) => {
+      ;(callback as unknown as { __safeOptions?: Record<string, unknown> }).__safeOptions =
+        safeOptions
+      return callback
+    }
   )
 }))
 vi.mock('./global-dictation', () => ({
@@ -80,12 +93,24 @@ vi.mock('./voice-service', () => ({
     dictate: vi.fn(),
     transcribeUpload: vi.fn(),
     transcribeFile: mocks.transcribeFile,
+    retryRecord: mocks.retryRecord,
     dispose: mocks.dispose,
     discardRecovery: vi.fn(),
     getRecoveryStatus: vi.fn(),
     retryLastFailure: vi.fn(),
     speak: vi.fn(),
     streamDictation: vi.fn()
+  }
+}))
+vi.mock('./voice-recognition-store', () => ({
+  subscribeVoiceRecognitionRecordMutations: vi.fn(() => () => {}),
+  voiceRecognitionStore: {
+    initialize: vi.fn(),
+    list: vi.fn(async () => []),
+    clear: vi.fn(async () => undefined),
+    delete: mocks.deleteRecord,
+    updateTranscript: mocks.updateTranscript,
+    purgeExpired: mocks.purgeExpired
   }
 }))
 vi.mock('./voice-provider-runtime', () => ({
@@ -361,4 +386,95 @@ describe('VoiceModule recognition status capture readiness', () => {
       await module.onDestroy()
     }
   )
+})
+
+describe('VoiceModule recognition record retry/delete/edit transport & retention cleanup', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.handlers.clear()
+  })
+
+  it('rejects plugin callers and forwards host callers for retry, delete, and transcript edit', async () => {
+    mocks.retryRecord.mockResolvedValue({
+      status: 'success',
+      record: { id: 'rec-1', capturedAt: 1, source: 'dictate', status: 'success', text: 'ok' }
+    })
+    mocks.deleteRecord.mockResolvedValue(true)
+    mocks.updateTranscript.mockResolvedValue({
+      id: 'rec-1',
+      capturedAt: 1,
+      source: 'dictate',
+      status: 'success',
+      text: 'edited'
+    })
+
+    const module = registerModule()
+    const retryHandler = mocks.handlers.get(voiceApiEvents.retryRecognitionRecord.toEventName())
+    const deleteHandler = mocks.handlers.get(voiceApiEvents.deleteRecognitionRecord.toEventName())
+    const updateHandler = mocks.handlers.get(
+      voiceApiEvents.updateRecognitionRecordText.toEventName()
+    )
+    expect(retryHandler).toBeDefined()
+    expect(deleteHandler).toBeDefined()
+    expect(updateHandler).toBeDefined()
+
+    const pluginCtx = { ...hostContext(), plugin: { name: 'untrusted-plugin' } }
+    await expect(retryHandler!({ recordId: 'rec-1' }, pluginCtx)).rejects.toThrow(
+      'VOICE_RECOGNITION_RECORDS_HOST_ONLY'
+    )
+    await expect(deleteHandler!({ recordId: 'rec-1' }, pluginCtx)).rejects.toThrow(
+      'VOICE_RECOGNITION_RECORDS_HOST_ONLY'
+    )
+    await expect(updateHandler!({ recordId: 'rec-1', text: 'edited' }, pluginCtx)).rejects.toThrow(
+      'VOICE_RECOGNITION_RECORDS_HOST_ONLY'
+    )
+
+    // Host calls succeed and forward cleanly
+    await expect(retryHandler!({ recordId: 'rec-1' }, hostContext())).resolves.toMatchObject({
+      status: 'success'
+    })
+    expect(mocks.retryRecord).toHaveBeenCalledWith({ recordId: 'rec-1' })
+
+    await expect(deleteHandler!({ recordId: 'rec-1' }, hostContext())).resolves.toEqual({
+      deleted: true
+    })
+    expect(mocks.deleteRecord).toHaveBeenCalledWith('rec-1')
+
+    await expect(
+      updateHandler!({ recordId: 'rec-1', text: 'edited' }, hostContext())
+    ).resolves.toMatchObject({ id: 'rec-1', text: 'edited' })
+    expect(mocks.updateTranscript).toHaveBeenCalledWith('rec-1', 'edited')
+
+    // Invalid recordId is rejected
+    await expect(retryHandler!({ recordId: '   ' }, hostContext())).rejects.toThrow(
+      'VOICE_RECORD_ID_INVALID'
+    )
+
+    // Safe API error projection exposes coded record errors cleanly
+    const safeOptions = (
+      retryHandler as unknown as {
+        __safeOptions?: {
+          projectError?: (
+            error: unknown,
+            payload: unknown,
+            ctx: unknown
+          ) => { code?: string; retryable?: boolean } | null
+        }
+      }
+    ).__safeOptions
+    const projected = safeOptions?.projectError?.(
+      Object.assign(new Error('VOICE_RECORD_AUDIO_PATH_INVALID'), {
+        code: 'VOICE_RECORD_AUDIO_PATH_INVALID',
+        retryable: false
+      }),
+      undefined,
+      hostContext()
+    )
+    expect(projected).toMatchObject({
+      code: 'VOICE_RECORD_AUDIO_PATH_INVALID',
+      retryable: false
+    })
+
+    await module.onDestroy()
+  })
 })
