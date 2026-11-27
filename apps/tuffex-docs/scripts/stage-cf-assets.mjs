@@ -469,7 +469,16 @@ function buildHeadersFile(tuffexStageDir) {
 /tuffex
   Cache-Control: public, max-age=60, s-maxage=3600, stale-while-revalidate=86400${linkLine}
 
-/tuffex/*
+/tuffex/en
+  Cache-Control: public, max-age=60, s-maxage=3600, stale-while-revalidate=86400${linkLine}
+
+/tuffex/en/*
+  Cache-Control: public, max-age=60, s-maxage=3600, stale-while-revalidate=86400${linkLine}
+
+/tuffex/zh
+  Cache-Control: public, max-age=60, s-maxage=3600, stale-while-revalidate=86400${linkLine}
+
+/tuffex/zh/*
   Cache-Control: public, max-age=60, s-maxage=3600, stale-while-revalidate=86400${linkLine}
 
 /tuffex/search-index.*.json

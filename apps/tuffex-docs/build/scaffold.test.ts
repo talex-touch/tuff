@@ -161,6 +161,9 @@ describe('tuffex-docs phase 1 scaffold', () => {
       const headers = readFileSync(join(stageRoot, '_headers'), 'utf8')
       expect(headers).toContain('/tuffex/_tuffex/*')
       expect(headers).toContain('max-age=31536000, immutable')
+      expect(headers).toContain('/tuffex/en/*')
+      expect(headers).toContain('/tuffex/zh/*')
+      expect(headers).not.toMatch(/^\/tuffex\/\*$/m)
       expect(headers).not.toContain('_payload.json')
       expect(headers).toContain('Link: </tuffex/_tuffex/entry.abc.js>; rel=modulepreload; crossorigin, </tuffex/_tuffex/entry.abc.css>; rel=preload; as=style; crossorigin')
 
