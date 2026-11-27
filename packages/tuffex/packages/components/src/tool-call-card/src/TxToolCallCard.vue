@@ -11,6 +11,12 @@ const props = withDefaults(
     toolCall: AiToolCallPart
     defaultExpanded?: boolean
     userOpen?: boolean
+    /**
+     * Delay (ms) before an in-flight (`pending` / `running`) call auto-expands.
+     * Short calls that finish within this window stay compact instead of flashing open and shut.
+     * @default 500
+     */
+    autoExpandDelayMs?: number
     retryLabel?: string
     pendingLabel?: string
     runningLabel?: string
@@ -24,6 +30,7 @@ const props = withDefaults(
   {
     defaultExpanded: false,
     userOpen: undefined,
+    autoExpandDelayMs: 500,
     retryLabel: 'Retry',
     pendingLabel: 'Queued',
     runningLabel: 'Running',
@@ -61,10 +68,113 @@ const canRetry = computed(() => {
 const userOverride = ref<boolean | null>(null)
 const bodyId = useId()
 
+/**
+ * Once a slow in-flight call auto-expands, keep it open long enough for the 260ms
+ * CSS open transition to settle cleanly so calls finishing right past the delay
+ * threshold do not jerk shut mid-animation.
+ */
+const AUTO_OPEN_MIN_DWELL_MS = 400
+const inFlightAutoOpen = ref(false)
+let autoExpandTimer: ReturnType<typeof setTimeout> | null = null
+let autoCollapseTimer: ReturnType<typeof setTimeout> | null = null
+let autoOpenedAt = 0
+
+function clearAutoExpandTimers(): void {
+  if (autoExpandTimer !== null) {
+    clearTimeout(autoExpandTimer)
+    autoExpandTimer = null
+  }
+  if (autoCollapseTimer !== null) {
+    clearTimeout(autoCollapseTimer)
+    autoCollapseTimer = null
+  }
+}
+
+function isInFlightStatus(status: AiToolCallPart['status'] | undefined): boolean {
+  return status === 'pending' || status === 'running'
+}
+
+function syncInFlightAutoOpen(
+  status: AiToolCallPart['status'],
+  previous?: AiToolCallPart['status'],
+): void {
+  if (isInFlightStatus(status)) {
+    if (autoCollapseTimer !== null) {
+      clearTimeout(autoCollapseTimer)
+      autoCollapseTimer = null
+    }
+    const continuing = isInFlightStatus(previous) && (inFlightAutoOpen.value || autoExpandTimer !== null)
+    if (continuing)
+      return
+
+    const delay = Math.max(0, props.autoExpandDelayMs ?? 500)
+    if (delay === 0) {
+      clearAutoExpandTimers()
+      inFlightAutoOpen.value = true
+      autoOpenedAt = Date.now()
+      return
+    }
+
+    clearAutoExpandTimers()
+    inFlightAutoOpen.value = false
+    autoExpandTimer = setTimeout(() => {
+      autoExpandTimer = null
+      if (isInFlightStatus(props.toolCall.status)) {
+        inFlightAutoOpen.value = true
+        autoOpenedAt = Date.now()
+      }
+    }, delay)
+    return
+  }
+
+  // Settled (`done` or `error`): cancel any pending expand so fast calls never flash open.
+  if (autoExpandTimer !== null) {
+    clearTimeout(autoExpandTimer)
+    autoExpandTimer = null
+  }
+
+  if (status === 'error') {
+    if (autoCollapseTimer !== null) {
+      clearTimeout(autoCollapseTimer)
+      autoCollapseTimer = null
+    }
+    inFlightAutoOpen.value = false
+    return
+  }
+
+  if (!inFlightAutoOpen.value)
+    return
+
+  const delay = Math.max(0, props.autoExpandDelayMs ?? 500)
+  const minDwell = delay > 0 ? AUTO_OPEN_MIN_DWELL_MS : 0
+  const remaining = Math.max(0, minDwell - (Date.now() - autoOpenedAt))
+  if (remaining === 0) {
+    inFlightAutoOpen.value = false
+    return
+  }
+
+  if (autoCollapseTimer !== null)
+    clearTimeout(autoCollapseTimer)
+  autoCollapseTimer = setTimeout(() => {
+    autoCollapseTimer = null
+    inFlightAutoOpen.value = false
+  }, remaining)
+}
+
+watch(
+  () => props.toolCall.status,
+  (status, previous) => syncInFlightAutoOpen(status, previous),
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  clearAutoExpandTimers()
+})
+
 const autoOpen = computed(() => {
-  if (props.toolCall.status === 'pending' || props.toolCall.status === 'running')
-    return true
   if (props.toolCall.status === 'error')
+    return true
+  if (inFlightAutoOpen.value)
     return true
   return props.defaultExpanded
 })
@@ -76,8 +186,13 @@ const expanded = computed(() => {
     return userOverride.value
   return autoOpen.value
 })
+
+const userCollapsed = computed(() => props.userOpen === false || userOverride.value === false)
+
 function toggle(): void {
   const next = !expanded.value
+  clearAutoExpandTimers()
+  inFlightAutoOpen.value = false
   userOverride.value = next
   emit('toggle', next)
 }
@@ -368,7 +483,7 @@ onBeforeUnmount(() => {
       </span>
     </button>
 
-    <pre v-if="!expanded && tailText" ref="peekRef" class="tx-tool-call-card__peek">{{ tailText }}</pre>
+    <pre v-if="!expanded && userCollapsed && tailText" ref="peekRef" class="tx-tool-call-card__peek">{{ tailText }}</pre>
 
     <!-- `inert` while closed: a 0fr grid still leaves the retry button and
          scrollable logs in the tab order -->

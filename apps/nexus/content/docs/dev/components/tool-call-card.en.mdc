@@ -51,6 +51,7 @@ code: |
 | `toolCall` | `AiToolCallPart` | — | The call to render. Required. |
 | `defaultExpanded` | `boolean` | `false` | Initial expanded state; read once, on mount. |
 | `userOpen` | `boolean` | — | Host-held expanded state; wins over the reader's click and auto-expansion. Omit it to let the card own the state. |
+| `autoExpandDelayMs` | `number` | `500` | Delay in ms before an in-flight (`pending` / `running`) call auto-expands; fast calls that finish within this window stay compact instead of flashing open and shut. Set `0` to expand immediately. |
 | `retryLabel` | `string` | `'Retry'` | Label of the retry button. |
 | `pendingLabel` | `string` | `'Queued'` | Label for `pending`. |
 | `runningLabel` | `string` | `'Running'` | Label for `running`. |
@@ -88,7 +89,7 @@ code: |
 
 - The body follows `status`: `running` shows `logs`, `done` shows the `result` slot (falling back to `output`), and `error` shows `error`; `input` shows whenever it is set.
 - The header reads: elapsed time while in flight (`(1.0)`), the name (shimmering while in flight), the arguments (`summary`, else the first input line), then the duration once `durationMs` is set.
-- `pending` and `running` auto-expand; once settled the card collapses and keeps the last two lines of output as a preview. Logs, output and the preview stay pinned to their bottom, and every change to `logs` scrolls the log region down.
+- `pending` and `running` wait `autoExpandDelayMs` (default `500ms`) before auto-expanding, and once auto-expanded stay open for at least `400ms` before folding smoothly so sub-half-second calls never flicker open and shut; `error` always expands immediately. Manually collapsing a running call keeps the last two log lines as a preview; logs, output and the preview stay pinned to their bottom, and every change to `logs` scrolls the log region down.
 - Input longer than four lines shows its first four and a toggle built by `linesToggleFormatter`; the footer shows the status.
 - The retry button appears only in the `error` state: `showRetry` true shows it, false hides it, and when unset it shows only if a `retry` listener is bound.
 - `status` is mirrored onto the root's `data-status` for styling.

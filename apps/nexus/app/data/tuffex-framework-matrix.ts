@@ -177,7 +177,7 @@ const COMPOUND_EXPORTS_OVERRIDES: Record<string, {
   wcTags?: readonly string[]
 }> = {
   avatar: {
-    vueExports: ['TxAvatar', 'TxAvatarGroup'],
+    vueExports: ['TxAvatar', 'TxAvatarGroup', 'TxAvatarEditor'],
     wcTags: ['tx-avatar'],
   },
   button: {

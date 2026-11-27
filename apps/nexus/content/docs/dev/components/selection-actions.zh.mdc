@@ -139,7 +139,7 @@ const { selection, clear } = useSelectionAnchor({
 
 - 锚点是选区最后一行的底边，水平居中于整段选区；工具条不翻面（`disableFlip`），只横向推回视口。
 - 锚点是虚拟参考点，`floating-ui` 不会跟随文本重排；流式写入时由宿主调用 `updatePosition()`，窗口缩放与滚动由组件处理。
-- `selection` 是快照：聚焦输入框会清掉浏览器选区，动作仍作用于传入的那一份。
+- `selection` 是快照：聚焦输入框会清掉浏览器原生选区，组件通过 CSS Custom Highlight API（`::highlight(tx-selection-actions)`）自动为 `selection.range` 保留柔和选区高亮，动作仍作用于传入的那一份。
 - 根节点吞掉 `pointerdown`，按按钮不会转移焦点或毁掉选区；`input`、`textarea`、`contenteditable` 内除外。Safari 与 Firefox 此后的光标行为不同，接入时需真机验证。
 - 根节点为 `role="group"`，方向键留给输入框光标；折叠的动作与 `prompt` 为空时的发送键不在 Tab 序列中。
 - 入场是越过终值的弹簧动画；减少动态效果时去掉入场动画、跳过宽度补间，元素停在可见终态。

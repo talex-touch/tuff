@@ -127,10 +127,41 @@ code: |
 ---
 :::
 
+### Upload, Editing & Format Conversion
+Enable `editable` to let users click or drop a file onto the avatar and open the built-in `TxAvatarEditor` (paired with `TxFileUploader`): pan, pinch/wheel zoom, free-angle and 90° rotation, horizontal/vertical flip, color & background matte adjustments, frame capture or animated GIF clip extraction from MP4/WebM/GIF, and client-side conversion across PNG, JPEG, WebP, AVIF, multi-size ICO, SVG, GIF, and BMP.
+:::TuffDemoWrapper{demo="AvatarEditableDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { AvatarEditResult } from '@talex-touch/tuffex/avatar'
+  import { ref } from 'vue'
+
+  const avatarSrc = ref('')
+
+  function handleEdit(result: AvatarEditResult) {
+    // Upload result.file or result.blob; result.url syncs through v-model:src
+    console.log(result.file.name, result.format, result.width, result.size)
+  }
+  </script>
+
+  <template>
+    <TxAvatar
+      v-model:src="avatarSrc"
+      name="Talex DreamSoul"
+      size="xlarge"
+      editable
+      @edit="handleEdit"
+    />
+  </template>
+---
+:::
+
 ### Best Practices
 
 - Pass `name` to generate identity marks instead of hard-coding initials.
 - Provide meaningful `alt` when `src` shows a real user's image.
+- Enable `editable` and listen to `edit` to upload `result.file`; still validate MIME type, dimensions, and size on the server.
+- Remote images without CORS headers taint the canvas in browsers; upload local files or proxy remote sources with CORS enabled.
 - Use `status` for presence only; use `TxStatusBadge` for textual system state.
 - When a group shows `status`, raise `overlap` or enable `spreadOnHover` so dots stay visible.
 - Treat the overflow popover as glance-only; use a list component when members need actions.
@@ -143,7 +174,7 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `src` | `string` | - | Image URL; falls back when it fails to load. |
+| `src` | `string` | - | Image URL (supports `v-model:src`); falls back when it fails to load. |
 | `alt` | `string` | - | Image alt text; provide it when `src` shows a real user. |
 | `name` | `string` | - | Name used to generate initials. |
 | `icon` | `string` | - | Fallback icon name, passed to `TxIcon`. |
@@ -151,6 +182,20 @@ code: |
 | `status` | `'online' \| 'offline' \| 'busy' \| 'away'` | - | Status dot in the corner, inset to follow `shape`. |
 | `shape` | `'circle' \| 'square' \| 'rounded'` | `'circle'` | Avatar shape. |
 | `clickable` | `boolean` | `false` | Enables pointer styling, button semantics, and the `click` event. |
+| `editable` | `boolean` | `false` | Enables upload, drag-and-drop, crop/rotate editing, video/GIF capture, and format conversion. |
+| `disabled` | `boolean` | `false` | Disables click, keyboard, and drop editing while `editable` is enabled. |
+| `editTrigger` | `'editor' \| 'upload'` | `'editor'` | `'editor'` opens the modal directly; `'upload'` opens the file picker first and launches the editor once a file is picked. |
+| `editLabel` | `string` | `'Edit avatar'` | Accessible label for the edit affordance. |
+| `accept` | `string` | Images, SVG, ICO, GIF, and video types | Accepted file types passed to the uploader and file input. |
+| `outputFormat` | `'png' \| 'jpeg' \| 'webp' \| 'avif' \| 'ico' \| 'svg' \| 'gif' \| 'bmp'` | `'png'` | Initial output format in the editor. |
+| `allowedOutputFormats` | `AvatarOutputFormat[]` | All 8 formats | Restricts selectable output formats in the editor. |
+| `allowFormatConversion` | `boolean` | `true` | Allows switching output formats client-side. |
+| `outputSize` | `number` | `512` | Default exported pixel width and height. |
+| `outputQuality` | `number` | `0.92` | Default compression quality for lossy formats (`0.1–1`). |
+| `allowVideoCapture` | `boolean` | `true` | Allows loading MP4/WebM/MOV videos for frame capture or animated GIF clips. |
+| `allowGifAnimation` | `boolean` | `true` | Allows exporting animated GIF clips from GIF or video sources. |
+| `editorLabels` | `Partial<AvatarEditorLabels>` | English defaults | Localization overrides for the built-in editor UI. |
+| `editorProps` | `Partial<AvatarEditorConfig>` | - | Advanced options forwarded to `TxAvatarEditor` (`surface`, `icoSizes`, `maxGifDuration`, `customConverter`, etc.). |
 | `backgroundColor` | `string` | - | Background of the fallback content. |
 | `textColor` | `string` | `'#ffffff'` when `backgroundColor` is set | Text color of the fallback content; applies only with `backgroundColor`. |
 
@@ -159,12 +204,60 @@ code: |
 | Event | Payload | Description |
 |------|---------|-------------|
 | `click` | - | Fires on click, Enter, or Space when `clickable` is set. |
+| `update:src` | `string` | Updated preview URL emitted on confirm for `v-model:src`. |
+| `edit` | `AvatarEditResult` | Fires on confirm with `file`, `blob`, `url`, `format`, `mimeType`, `width`, `height`, `animated`, and `transform`. |
+| `edit-open` | - | Fires when the built-in avatar editor opens. |
+| `edit-cancel` | - | Fires when the editor closes without saving. |
+| `edit-error` | `Error` | Fires when media decoding or format encoding fails. |
 
 #### Slots
 
 | Slot | Props | Description |
 |------|------|-------------|
 | `default` | - | Custom fallback content; takes priority over `icon` and `name`. |
+| `edit-trigger` | - | Replaces the hover/focus icon inside the `editable` overlay. |
+
+#### Exposed Methods
+
+| Name | Type | Description |
+|------|------|-------------|
+| `openEditor` | `(source?: File \| Blob \| string \| null) => void` | Opens the built-in editor imperatively, optionally preloading a `File`, `Blob`, or URL. |
+| `pickFile` | `() => void` | Opens the native file picker and enters the editor once a file is chosen. |
+
+### TxAvatarEditor
+
+Standalone avatar editor dialog exported from `@talex-touch/tuffex/avatar`, built on `TxFileUploader` and `TxModal` (`refraction` surface by default) so it can also be composed with any custom uploader trigger.
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `open` | `boolean` | required | Controlled open state (supports `v-model:open`). |
+| `source` | `File \| Blob \| string \| null` | `null` | Initial image, SVG, ICO, GIF, or video source (`File`, `Blob`, or local `blob:`/`data:` URL; remote `http(s)` URLs require `allowRemoteSource`). Shows `TxFileUploader` when empty. |
+| `allowRemoteSource` | `boolean` | `false` | Opt-in gate allowing remote `http(s)` URL strings to load directly in the editor. Disabled by default so the editor never issues unexpected outbound image/video requests. |
+| `shape` | `AvatarShape` | `'circle'` | Initial crop mask shape. |
+| `width` | `string` | `'min(94vw, 800px)'` | Modal dialog width. |
+| `outputFormat` | `AvatarOutputFormat` | `'png'` | Default output format; formats unsupported by the current browser are auto-disabled. |
+| `allowedOutputFormats` | `AvatarOutputFormat[]` | All 8 formats | Target formats available for conversion. |
+| `outputSize` | `number` | `512` | Default output side length in pixels. |
+| `outputQuality` | `number` | `0.92` | Default quality for lossy formats. |
+| `icoSizes` | `number[]` | `[16, 32, 48, 64, 128, 256]` | Multi-resolution icon layers packed when exporting `.ico`. |
+| `maxGifDuration` | `number` | `6` | Maximum animated GIF clip length in seconds. |
+| `maxGifFrames` | `number` | `60` | Maximum frame count encoded into an animated GIF. |
+| `allowDownload` | `boolean` | `true` | Shows the local download button in the footer. |
+| `surface` | `BaseSurfaceMode` | `'refraction'` | Modal panel material. |
+| `customConverter` | `(ctx) => Promise<Blob \| null \| undefined>` | - | Optional custom encoder hook for host-native or WASM converters. |
+| `beforeConfirm` | `(result) => boolean \| void \| Promise<boolean \| void>` | - | Pre-confirm validation or upload hook; return `false` to keep the editor open. |
+
+#### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `update:open` | `boolean` | Emits when the modal open state changes. |
+| `confirm` | `AvatarEditResult` | Emits after encoding finishes on Apply. |
+| `cancel` | - | Emits when cancelled or closed without saving. |
+| `error` | `Error` | Emits when media loading or encoding fails. |
+| `source-change` | `{ kind, file, width, height }` | Emits when a new media source finishes loading. |
 
 ### TxAvatarGroup
 
@@ -193,14 +286,16 @@ code: |
 
 - Content falls back from the image to the default slot, `icon`, initials from `name`, then the default `user` icon; a failed image load falls back the same way, and a new `src` loads the image again.
 - Initials are the first characters of the first and last words, uppercased.
-- With `clickable`, the root gets `role="button"` and `tabindex="0"`, and Enter / Space emit `click` like a click does.
+- With `clickable` or an enabled `editable` avatar, the root gets `role="button"` and `tabindex="0"`, and Enter / Space activate it like a click; `editable` also accepts dropped files and clipboard paste (`Ctrl/⌘+V`) inside the editor.
+- Output formats are probed against client capabilities at runtime: PNG / JPEG / WebP / AVIF use canvas encoding, while multi-size ICO, vector/wrapped SVG, still & animated GIF89a (including video/GIF clip extraction), and BMP run on built-in zero-dependency codecs.
 - In a group, `z-index` rises left to right, so each avatar covers the bottom-right corner — status dot included — of the one before; `lift` brings the hovered avatar forward.
 - With `overflowPopover` on and avatars overflowing, `+N` is wrapped in `TxPopover`; otherwise it is a plain avatar with no floating layer.
 - Under reduced motion, the hover translate and transitions drop out; the forward stacking and shadow remain.
 
 ## Technologies
 
-- The root doesn't clip; the image and fallback layers do, which lets the status dot extend past the shape.
+- The root doesn't clip; the image, fallback, and edit overlay layers do, which lets the status dot extend past the shape.
+- `TxAvatarEditor` composes `TxModal` (`refraction` surface by default) and `TxFileUploader`, backed by zero-dependency transform geometry, ICO/BMP/SVG/GIF89a codecs, and HTML5 video frame capture in `packages/tuffex/packages/components/src/avatar/src/editor/`.
 - Group negative margins and `z-index` come from the stylesheet (`--tx-avatar-group-overlap`, `--tx-avatar-group-index`); children only get their ring inline.
 - Source: `packages/tuffex/packages/components/src/avatar/`.
 

@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
-import type { AvatarProps } from './types'
-import { computed, ref, watch } from 'vue'
+import type { AvatarEditResult } from './editor/types'
+import type { AvatarEmits, AvatarProps } from './types'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { TxIcon } from '../../icon'
+import AvatarEditorIcon from './editor/AvatarEditorIcon.vue'
+import { isLocalAvatarSourceUrl } from './editor/media-loader'
+import TxAvatarEditor from './editor/TxAvatarEditor.vue'
+import { AVATAR_EDITOR_DEFAULT_ACCEPT, AVATAR_EDITOR_IMAGE_ACCEPT } from './editor/types'
 
 defineOptions({
   name: 'TxAvatar',
@@ -12,20 +17,51 @@ const props = withDefaults(defineProps<AvatarProps>(), {
   size: 'medium',
   shape: 'circle',
   clickable: false,
+  editable: false,
+  disabled: false,
+  editTrigger: 'editor',
+  editLabel: 'Edit avatar',
+  outputFormat: 'png',
+  allowFormatConversion: true,
+  outputSize: 512,
+  outputQuality: 0.92,
+  allowVideoCapture: true,
+  allowGifAnimation: true,
 })
 
-const emit = defineEmits<Emits>()
-
-interface Emits {
-  click: []
-}
+const emit = defineEmits<AvatarEmits>()
 
 const imageError = ref(false)
+const localSrc = ref<string | undefined>(undefined)
+const editorOpen = ref(false)
+const editorMounted = ref(false)
+const editorSource = shallowRef<File | Blob | string | null>(null)
+const isDragOver = ref(false)
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
-// A new `src` gets its own try: the failure was the image before it.
+// A new `src` gets its own try: the failure was the image before it, and external
+// updates supersede an uncontrolled local edit preview.
 watch(() => props.src, () => {
+  localSrc.value = undefined
   imageError.value = false
 })
+
+const effectiveSrc = computed(() => localSrc.value ?? props.src)
+
+const isInteractive = computed(() => props.clickable || (props.editable && !props.disabled))
+
+const resolvedAccept = computed(() => {
+  if (props.accept)
+    return props.accept
+  if (props.editorProps?.accept)
+    return props.editorProps.accept
+  return props.allowVideoCapture ? AVATAR_EDITOR_DEFAULT_ACCEPT : AVATAR_EDITOR_IMAGE_ACCEPT
+})
+
+const mergedEditorLabels = computed(() => ({
+  ...props.editorProps?.labels,
+  ...props.editorLabels,
+}))
 
 const sizePresets = new Set(['small', 'medium', 'large', 'xlarge'])
 
@@ -112,7 +148,50 @@ function handleImageError() {
   imageError.value = true
 }
 
+function openEditor(source?: File | Blob | string | null) {
+  if (props.disabled)
+    return
+  editorMounted.value = true
+  if (source !== undefined) {
+    editorSource.value = source
+  }
+  else {
+    const currentSrc = effectiveSrc.value ?? null
+    const canPreload = currentSrc !== null
+      && (props.editorProps?.allowRemoteSource === true || isLocalAvatarSourceUrl(currentSrc))
+    editorSource.value = canPreload ? currentSrc : null
+  }
+  editorOpen.value = true
+  emit('edit-open')
+}
+
+function pickFile() {
+  if (!props.editable || props.disabled)
+    return
+  fileInputRef.value?.click()
+}
+
+function handleFileInputChange(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file)
+    return
+  openEditor(file)
+}
+
+function activateEditable() {
+  if (props.editTrigger === 'upload') {
+    pickFile()
+    return
+  }
+  openEditor()
+}
+
 function handleClick() {
+  if (props.editable && !props.disabled) {
+    activateEditable()
+  }
   if (props.clickable) {
     emit('click')
   }
@@ -123,13 +202,65 @@ function handleKeydown(ev: KeyboardEvent) {
   // focusable slot content.
   if (ev.target !== ev.currentTarget)
     return
-  if (!props.clickable)
+  if (!isInteractive.value)
     return
   if (ev.key !== 'Enter' && ev.key !== ' ')
     return
   ev.preventDefault()
-  emit('click')
+  if (props.editable && !props.disabled) {
+    activateEditable()
+  }
+  if (props.clickable) {
+    emit('click')
+  }
 }
+
+function handleDragOver(ev: DragEvent) {
+  if (!props.editable || props.disabled)
+    return
+  ev.preventDefault()
+  isDragOver.value = true
+}
+
+function handleDragLeave(ev: DragEvent) {
+  if (!props.editable || props.disabled)
+    return
+  const related = ev.relatedTarget as Node | null
+  if (related && (ev.currentTarget as HTMLElement).contains(related))
+    return
+  isDragOver.value = false
+}
+
+function handleDrop(ev: DragEvent) {
+  if (!props.editable || props.disabled)
+    return
+  ev.preventDefault()
+  isDragOver.value = false
+  const file = ev.dataTransfer?.files?.[0]
+  if (file) {
+    openEditor(file)
+  }
+}
+
+function handleEditorConfirm(result: AvatarEditResult) {
+  localSrc.value = result.url
+  imageError.value = false
+  emit('update:src', result.url)
+  emit('edit', result)
+}
+
+function handleEditorCancel() {
+  emit('edit-cancel')
+}
+
+function handleEditorError(error: Error) {
+  emit('edit-error', error)
+}
+
+defineExpose({
+  openEditor,
+  pickFile,
+})
 </script>
 
 <template>
@@ -137,17 +268,27 @@ function handleKeydown(ev: KeyboardEvent) {
     class="tx-avatar" :class="[
       sizeClass,
       `tx-avatar--${shape}`,
-      { 'tx-avatar--clickable': clickable },
+      {
+        'tx-avatar--clickable': isInteractive,
+        'tx-avatar--editable': editable,
+        'tx-avatar--disabled': editable && disabled,
+        'tx-avatar--drag-over': isDragOver,
+      },
     ]"
     :style="customStyle"
-    :role="clickable ? 'button' : undefined"
-    :tabindex="clickable ? 0 : undefined"
+    :role="isInteractive ? 'button' : undefined"
+    :tabindex="isInteractive ? 0 : undefined"
+    :aria-label="editable ? editLabel : undefined"
+    :aria-disabled="editable && disabled ? 'true' : undefined"
     @click="handleClick"
     @keydown="handleKeydown"
+    @dragover="handleDragOver"
+    @dragleave="handleDragLeave"
+    @drop="handleDrop"
   >
     <img
-      v-if="src && !imageError"
-      :src="src"
+      v-if="effectiveSrc && !imageError"
+      :src="effectiveSrc"
       :alt="alt"
       class="tx-avatar__image"
       @error="handleImageError"
@@ -162,7 +303,46 @@ function handleKeydown(ev: KeyboardEvent) {
       <TxIcon v-else name="user" class="tx-avatar__default-icon" />
     </div>
 
+    <div v-if="editable && !disabled" class="tx-avatar__edit-overlay" aria-hidden="true">
+      <slot name="edit-trigger">
+        <AvatarEditorIcon name="camera" :size="18" />
+      </slot>
+    </div>
+
     <div v-if="status" class="tx-avatar__status" :class="`tx-avatar__status--${status}`" />
+
+    <input
+      v-if="editable"
+      ref="fileInputRef"
+      class="tx-avatar__file-input"
+      type="file"
+      :accept="resolvedAccept"
+      :disabled="disabled"
+      tabindex="-1"
+      aria-hidden="true"
+      @click.stop
+      @change="handleFileInputChange"
+    >
+
+    <TxAvatarEditor
+      v-if="editable && editorMounted"
+      v-bind="editorProps"
+      v-model:open="editorOpen"
+      :source="editorSource"
+      :shape="shape"
+      :accept="resolvedAccept"
+      :output-format="outputFormat"
+      :allowed-output-formats="allowedOutputFormats"
+      :allow-format-conversion="allowFormatConversion"
+      :output-size="outputSize"
+      :output-quality="outputQuality"
+      :allow-video-capture="allowVideoCapture"
+      :allow-gif-animation="allowGifAnimation"
+      :labels="mergedEditorLabels"
+      @confirm="handleEditorConfirm"
+      @cancel="handleEditorCancel"
+      @error="handleEditorError"
+    />
   </div>
 </template>
 
@@ -253,6 +433,10 @@ function handleKeydown(ev: KeyboardEvent) {
 .tx-avatar--clickable {
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 }
 
 .tx-avatar--clickable:focus-visible {
@@ -265,6 +449,17 @@ function handleKeydown(ev: KeyboardEvent) {
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 60%, transparent),
     2px 4px 12px color-mix(in srgb, var(--tx-color-black, #000) 15%, transparent);
+}
+
+.tx-avatar--disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.tx-avatar--drag-over {
+  box-shadow:
+    inset 0 0 0 2px var(--tx-color-primary, #409eff),
+    0 0 0 4px color-mix(in srgb, var(--tx-color-primary, #409eff) 22%, transparent);
 }
 
 .tx-avatar__image {
@@ -282,6 +477,35 @@ function handleKeydown(ev: KeyboardEvent) {
   justify-content: center;
   overflow: hidden;
   border-radius: inherit;
+}
+
+.tx-avatar__edit-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--tx-color-white, #ffffff);
+  background: color-mix(in srgb, var(--tx-color-black, #000000) 48%, transparent);
+  opacity: 0;
+  transition: opacity 0.16s ease;
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+.tx-avatar--editable:hover .tx-avatar__edit-overlay,
+.tx-avatar--editable:focus-visible .tx-avatar__edit-overlay,
+.tx-avatar--drag-over .tx-avatar__edit-overlay {
+  opacity: 1;
+}
+
+.tx-avatar__file-input {
+  display: none;
 }
 
 .tx-avatar__text {

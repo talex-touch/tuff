@@ -14,6 +14,7 @@ withDefaults(defineProps<TxAiToolCallProps>(), {
   description: '',
   defaultExpanded: false,
   userOpen: undefined,
+  autoExpandDelayMs: undefined,
   showRetry: undefined,
 })
 
@@ -36,6 +37,7 @@ defineSlots<{
     :tool-call="toolCall"
     :default-expanded="defaultExpanded"
     :user-open="userOpen"
+    :auto-expand-delay-ms="autoExpandDelayMs"
     :show-retry="showRetry"
     :retry-label="labels?.retry"
     :pending-label="labels?.pending"

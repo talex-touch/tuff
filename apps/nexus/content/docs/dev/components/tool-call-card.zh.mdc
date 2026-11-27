@@ -51,6 +51,7 @@ code: |
 | `toolCall` | `AiToolCallPart` | — | 工具调用数据，必填。 |
 | `defaultExpanded` | `boolean` | `false` | 初始是否展开；只在挂载时读取。 |
 | `userOpen` | `boolean` | — | 宿主持有的展开状态，优先于用户点击与自动展开；不传则由组件自持。 |
+| `autoExpandDelayMs` | `number` | `500` | 进行中（`pending` / `running`）自动展开前的延迟（ms）；在此窗口内完成的短耗时调用保持单行折叠，不闪烁开合；传 `0` 则立即展开。 |
 | `retryLabel` | `string` | `'Retry'` | 重试按钮文案。 |
 | `pendingLabel` | `string` | `'Queued'` | `pending` 的状态文案。 |
 | `runningLabel` | `string` | `'Running'` | `running` 的状态文案。 |
@@ -88,7 +89,7 @@ code: |
 
 - 展开区随 `status` 切换：`running` 显示 `logs`，`done` 显示 `result` 插槽（缺省为 `output`），`error` 显示 `error`；`input` 存在时始终显示。
 - 标题依次为计时（进行中显示 `(1.0)`）、名称（进行中扫光）、参数（`summary`，缺省为入参首行）与耗时（结算后由 `durationMs` 给出）。
-- `pending` 与 `running` 自动展开；结算后自动收起，收起态保留输出的最后两行。日志、输出与收起预览都滚动到底部，`logs` 每次变化都会滚到底。
+- `pending` 与 `running` 超过 `autoExpandDelayMs`（默认 `500ms`）后才自动展开，且一旦自动展开至少停留 `400ms` 再顺滑收起，避免 `0.1s` 级短耗时调用一闪一缩；`error` 状态始终立即展开。进行中若由用户手动折叠，收起态保留日志的最后两行预览；日志、输出与收起预览都滚动到底部，`logs` 每次变化都会滚到底。
 - 入参超过四行时只露出前四行，由 `linesToggleFormatter` 生成的按钮展开或收起；底栏显示状态。
 - 重试按钮只在 `error` 状态出现：`showRetry` 为真时显示，为假时隐藏；未设置时，绑定了 `retry` 监听才显示。
 - `status` 同步到根节点的 `data-status`，供外部定制样式。
