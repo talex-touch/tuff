@@ -1049,4 +1049,66 @@ describe('avatar editor security, codecs & lifecycle guards', () => {
       localCtxSpy.mockReturnValue(null)
     }
   })
+
+  it('honors editorProps.autoSelectAnimated fallback in TxAvatar and auto-plays video sources in TxAvatarEditor', async () => {
+    // 1. Omitted top-level prop falls back to editorProps.autoSelectAnimated
+    const fromEditorProps = mount(TxAvatar, {
+      props: {
+        editable: true,
+        editorProps: { autoSelectAnimated: false },
+      },
+    })
+    await fromEditorProps.trigger('click')
+    await nextTick()
+    expect(fromEditorProps.findComponent(TxAvatarEditor).props('autoSelectAnimated')).toBe(false)
+    fromEditorProps.unmount()
+
+    // 2. Explicit top-level prop overrides editorProps.autoSelectAnimated
+    const topLevelOverride = mount(TxAvatar, {
+      props: {
+        editable: true,
+        autoSelectAnimated: true,
+        editorProps: { autoSelectAnimated: false },
+      },
+    })
+    await topLevelOverride.trigger('click')
+    await nextTick()
+    expect(topLevelOverride.findComponent(TxAvatarEditor).props('autoSelectAnimated')).toBe(true)
+    topLevelOverride.unmount()
+
+    // 3. Video source auto-selects gif-clip and starts playback when reduced-motion is not set
+    const fakeVideo = document.createElement('video')
+    const playSpy = vi.spyOn(fakeVideo, 'play').mockResolvedValue(undefined)
+    const pauseSpy = vi.spyOn(fakeVideo, 'pause').mockImplementation(() => {})
+    const loadSpy = vi.spyOn(mediaLoader, 'loadAvatarMedia').mockResolvedValueOnce({
+      kind: 'video',
+      naturalWidth: 320,
+      naturalHeight: 240,
+      file: new File(['v'], 'clip.mp4', { type: 'video/mp4' }),
+      sourceName: 'clip.mp4',
+      video: fakeVideo,
+      duration: 4,
+      animated: true,
+      corsTainted: false,
+      dispose: vi.fn(),
+    })
+
+    const videoEditor = mount(TxAvatarEditor, {
+      props: {
+        open: true,
+        source: new File(['v'], 'clip.mp4', { type: 'video/mp4' }),
+        outputFormat: 'png',
+      },
+    })
+    await vi.waitFor(() => {
+      expect(videoEditor.emitted('source-change')).toHaveLength(1)
+    })
+    await nextTick()
+    expect(playSpy).toHaveBeenCalledTimes(1)
+    expect(videoEditor.find('.tx-avatar-editor__format-btn.is-active').text().trim()).toBe('GIF')
+    videoEditor.unmount()
+    loadSpy.mockRestore()
+    playSpy.mockRestore()
+    pauseSpy.mockRestore()
+  })
 })

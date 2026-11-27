@@ -762,14 +762,38 @@ export async function loadAvatarMedia(
     }
 
     // 2b. Animated WebP / APNG (decode frames via ImageDecoder when supported)
-    if (kind === 'image' && blob) {
+    if (kind === 'image' && (blob || (remoteUrl && LOCAL_MEDIA_URL_RE.test(remoteUrl)))) {
       try {
-        const head = sniffedHead ?? new Uint8Array(await readBlobArrayBuffer(blob.slice(0, 512)))
-        const animatedMime: 'image/webp' | 'image/png' | null = isAnimatedWebpBytes(head)
-          ? 'image/webp'
-          : ((await isApngBlob(blob, head)) ? 'image/png' : null)
-        if (animatedMime) {
-          const fullBytes = new Uint8Array(await readBlobArrayBuffer(blob))
+        let animatedMime: 'image/webp' | 'image/png' | null = null
+        let fullBytes: Uint8Array | null = null
+
+        if (blob) {
+          const head = sniffedHead ?? new Uint8Array(await readBlobArrayBuffer(blob.slice(0, 512)))
+          animatedMime = isAnimatedWebpBytes(head)
+            ? 'image/webp'
+            : ((await isApngBlob(blob, head)) ? 'image/png' : null)
+          if (animatedMime)
+            fullBytes = new Uint8Array(await readBlobArrayBuffer(blob))
+        }
+        else if (remoteUrl) {
+          try {
+            // eslint-disable-next-line no-restricted-syntax -- reads a local blob:/data:/file: URL already on this machine; no network request.
+            const response = await fetch(remoteUrl)
+            if (response.ok) {
+              const bytes = new Uint8Array(await response.arrayBuffer())
+              animatedMime = isAnimatedWebpBytes(bytes)
+                ? 'image/webp'
+                : (isApngBytes(bytes) ? 'image/png' : null)
+              if (animatedMime)
+                fullBytes = bytes
+            }
+          }
+          catch {
+            // Unreadable local URL: fall through to standard <img> decode.
+          }
+        }
+
+        if (animatedMime && fullBytes) {
           const decoded = await decodeAnimatedFramesInBrowser(fullBytes, animatedMime, maxGifFrames, maxGifDecodedBytes)
           if (decoded && decoded.frames.length > 1) {
             return {

@@ -457,7 +457,9 @@ async function loadSource(source: File | Blob | string): Promise<void> {
     const prefersReducedMotion = typeof window !== 'undefined'
       && typeof window.matchMedia === 'function'
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (prefersAnimated && !prefersReducedMotion && (loaded.gifFrames?.length ?? 0) > 1)
+    const canAutoPlay = (loaded.kind === 'video' && Boolean(loaded.video))
+      || (loaded.gifFrames?.length ?? 0) > 1
+    if (prefersAnimated && !prefersReducedMotion && canAutoPlay)
       togglePlayback()
   }
   catch (err) {
