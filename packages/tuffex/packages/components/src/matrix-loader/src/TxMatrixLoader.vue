@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import type { MatrixLoaderBlendLayer } from './engine/renderer'
 import type { MatrixLoaderProps, MatrixLoaderState } from './types'
-import { hasWindow } from '@talex-touch/utils/env'
+import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAutoTheme } from '../../stream-markdown/src/use-auto-theme'
-import { renderMatrixLoaderFrame, resolveInkRgb } from './engine/renderer'
+import { easeInOutCubic } from './engine/math'
+import { renderMatrixLoaderFrame, resolveInkRgba } from './engine/renderer'
 import { MATRIX_LOADER_DEFAULT_LABELS, MATRIX_LOADER_SIZE_PX } from './types'
 
 defineOptions({ name: 'TxMatrixLoader' })
@@ -33,7 +35,7 @@ const resolvedTheme = useAutoTheme(() => props.theme ?? 'auto')
 
 const pixelSize = computed(() => {
   if (typeof props.displaySize === 'number' && Number.isFinite(props.displaySize) && props.displaySize > 0)
-    return Math.round(props.displaySize)
+    return Math.max(1, Math.round(props.displaySize))
   return MATRIX_LOADER_SIZE_PX[props.size] ?? MATRIX_LOADER_SIZE_PX.md
 })
 
@@ -53,8 +55,9 @@ let detachVisibility: (() => void) | null = null
 let detachMotionQuery: (() => void) | null = null
 let offscreen: HTMLCanvasElement | null = null
 
-let prevState: MatrixLoaderState | undefined
+let prevLayers: MatrixLoaderBlendLayer[] = []
 let morphStartMs = 0
+let lastPaintedSec: number | null = null
 
 function watchReducedMotion(): void {
   if (!hasWindow() || typeof window.matchMedia !== 'function')
@@ -82,7 +85,7 @@ function teardown(): void {
 }
 
 function getOffscreen(): HTMLCanvasElement | null {
-  if (typeof document === 'undefined')
+  if (!hasDocument())
     return null
   if (!offscreen)
     offscreen = document.createElement('canvas')
@@ -107,21 +110,23 @@ function renderFrame(explicitSec?: number): void {
   }
 
   const dark = resolvedTheme.value === 'dark'
-  const inkRgb = resolveInkRgb(props.color, dark)
+  const [ir, ig, ib, inkAlpha] = resolveInkRgba(props.color, dark)
+  const inkRgb: readonly [number, number, number] = [ir, ig, ib]
   const nowMs = typeof performance !== 'undefined' ? performance.now() : 0
   const tSec = typeof explicitSec === 'number' && Number.isFinite(explicitSec)
     ? explicitSec
     : (nowMs / 1000) * effectiveSpeed.value
+  lastPaintedSec = tSec
 
   const dur = Math.max(0, props.transitionDuration)
   let morphMix = 1
-  if (prevState && prevState !== props.state && dur > 0 && !reduced.value && props.time === undefined) {
-    morphMix = Math.min(1, (nowMs - morphStartMs) / dur)
+  if (prevLayers.length > 0 && dur > 0 && !reduced.value && !props.paused && props.time === undefined) {
+    morphMix = Math.min(1, Math.max(0, (nowMs - morphStartMs) / dur))
     if (morphMix >= 1)
-      prevState = undefined
+      prevLayers = []
   }
   else {
-    prevState = undefined
+    prevLayers = []
   }
 
   renderMatrixLoaderFrame(
@@ -144,7 +149,8 @@ function renderFrame(explicitSec?: number): void {
       fxStrength: props.fxStrength,
       dark,
       inkRgb,
-      prevState,
+      inkAlpha,
+      prevLayers: prevLayers.length > 0 ? prevLayers : undefined,
       morphMix,
     },
     props.era === 'dither' || props.era === 'lcd' ? getOffscreen() : null,
@@ -170,6 +176,12 @@ function setup(): void {
     return
   }
 
+  // Paused: preserve the last painted phase on redraws, or paint one initial frame on mount.
+  if (props.paused) {
+    renderFrame(lastPaintedSec ?? undefined)
+    return
+  }
+
   const loop = (): void => {
     renderFrame()
     if (running)
@@ -177,25 +189,28 @@ function setup(): void {
   }
 
   const start = (): void => {
-    if (running || props.paused)
+    if (running || props.paused || reduced.value || props.time !== undefined)
       return
     running = true
     raf = requestAnimationFrame(loop)
   }
 
-  // Paint immediately even when paused or before IO fires.
+  // Paint immediately before IO fires.
   renderFrame()
 
   let visible = true
   if (typeof IntersectionObserver !== 'undefined') {
-    io = new IntersectionObserver(([entry]) => {
+    const observer = new IntersectionObserver(([entry]) => {
+      if (observer !== io)
+        return
       visible = !!entry?.isIntersecting
       if (visible && document.visibilityState !== 'hidden')
         start()
       else
         stopLoop()
     })
-    io.observe(canvas)
+    io = observer
+    observer.observe(canvas)
   }
 
   const onVisibility = (): void => {
@@ -204,7 +219,7 @@ function setup(): void {
     else if (visible)
       start()
   }
-  if (typeof document !== 'undefined') {
+  if (hasDocument()) {
     document.addEventListener('visibilitychange', onVisibility)
     detachVisibility = () => document.removeEventListener('visibilitychange', onVisibility)
   }
@@ -215,9 +230,29 @@ function setup(): void {
 watch(
   () => props.state,
   (next, prev) => {
-    if (prev && next !== prev && props.transitionDuration > 0 && !reduced.value && props.time === undefined) {
-      prevState = prev
-      morphStartMs = typeof performance !== 'undefined' ? performance.now() : 0
+    const dur = Math.max(0, props.transitionDuration)
+    if (prev && next !== prev && dur > 0 && !reduced.value && !props.paused && props.time === undefined) {
+      const nowMs = typeof performance !== 'undefined' ? performance.now() : 0
+      if (prevLayers.length > 0) {
+        const rawProgress = Math.min(1, Math.max(0, (nowMs - morphStartMs) / dur))
+        const curMix = easeInOutCubic(rawProgress)
+        const merged = new Map<MatrixLoaderState, number>()
+        for (const layer of prevLayers) {
+          const w = layer.weight * (1 - curMix)
+          if (w > 0.004)
+            merged.set(layer.state, (merged.get(layer.state) ?? 0) + w)
+        }
+        if (curMix > 0.004)
+          merged.set(prev, (merged.get(prev) ?? 0) + curMix)
+        prevLayers = Array.from(merged, ([state, weight]) => ({ state, weight }))
+      }
+      else {
+        prevLayers = [{ state: prev, weight: 1 }]
+      }
+      morphStartMs = nowMs
+    }
+    else {
+      prevLayers = []
     }
   },
 )

@@ -1,4 +1,5 @@
 import type { MatrixLoaderEra, MatrixLoaderShape, MatrixLoaderState } from '../types'
+import { hasDocument } from '@talex-touch/utils/env'
 import { MATRIX_LOADER_PERIODS } from '../types'
 import {
   BAYER_4X4,
@@ -15,6 +16,11 @@ import {
   sphericalWarp,
 } from './math'
 
+export interface MatrixLoaderBlendLayer {
+  state: MatrixLoaderState
+  weight: number
+}
+
 export interface RenderOptions {
   state: MatrixLoaderState
   era: MatrixLoaderEra
@@ -29,10 +35,14 @@ export interface RenderOptions {
   fxStrength: number
   dark: boolean
   inkRgb: readonly [number, number, number]
+  /** Optional OLED ink alpha channel in `[0, 1]`. Defaults to `1`. */
+  inkAlpha?: number
   /** Optional previous state during smooth state-to-state morph. */
   prevState?: MatrixLoaderState
   /** Morph progress in `[0, 1]` from `prevState` to `state`. */
   morphMix?: number
+  /** Optional weighted outgoing layers for interrupted crossfades. */
+  prevLayers?: readonly MatrixLoaderBlendLayer[]
 }
 
 interface EraStyle {
@@ -183,7 +193,10 @@ function evaluateStateField(
         const bu = u < 0.80 ? easeInOutCubic(clamp((u - lag) / activeSpan, 0, 1)) : 1.0
         const dir = GENERATING_DIRS[r % GENERATING_DIRS.length]!
         const cyc = GENERATING_CYCLES[r % GENERATING_CYCLES.length]!
-        shifts.push(dir * cyc * 2 * step * bu * amp)
+        const rawCycles = cyc * amp
+        const intCycles = Math.round(rawCycles)
+        const fracCycles = rawCycles - intCycles
+        shifts.push(dir * (intCycles * bu + fracCycles * Math.sin(bu * Math.PI)) * 2 * step)
       }
       field.rowShifts = shifts
       field.extraCols = 4
@@ -213,8 +226,10 @@ function evaluateStateField(
       const T = MATRIX_LOADER_PERIODS.accelerating
       const u = (((t - 0.97) / T) % 1 + 1) % 1
       const prog = easeInOutQuint(u)
-      field.accelVel = Math.pow(Math.sin(u * Math.PI), 2.0)
-      field.globalShiftX = prog * 2 * step * amp
+      field.accelVel = Math.sin(u * Math.PI) ** 2.0
+      const intCycles = Math.round(amp)
+      const fracCycles = amp - intCycles
+      field.globalShiftX = (intCycles * prog + fracCycles * Math.sin(prog * Math.PI)) * 2 * step
       field.extraCols = 4
       break
     }
@@ -270,37 +285,39 @@ function drawStateLayer(
   const oxShift = -0.028
 
   const field = evaluateStateField(state, t, N, step, opts.bulge, amp)
-  const modSpan = Math.ceil((N + 2) / 2) * 2 * step
+  const wrapCols = Math.ceil((N + 2) / 2) * 2
+  const modSpan = wrapCols * step
+  const isWrapped = field.extraCols > 0
+  const noiseTime = amp > 0 ? t : 0
+  const inkAlpha = opts.era === 'oled' ? clamp(opts.inkAlpha ?? 1, 0, 1) : 1
 
   ctx.save()
   ctx.translate(size / 2, size / 2)
 
   // Clip scrolling modes (Generating & Accelerating) cleanly to the sphere silhouette.
-  if (field.extraCols > 0) {
+  if (isWrapped) {
     ctx.beginPath()
     ctx.arc(0, 0, R * 1.03, 0, Math.PI * 2)
     ctx.clip()
   }
 
   const [cr, cg, cb] = eraStyle.rgb
-  const cMin = -field.extraCols
-  const cMax = N - 1 + field.extraCols
+  const cMax = isWrapped ? wrapCols - 1 : N - 1
   const segs = size >= 48 ? 6 : 4
 
   for (let r = 0; r < N; r++) {
-    for (let c = cMin; c <= cMax; c++) {
+    for (let c = 0; c <= cMax; c++) {
       if ((((r + c) % 2) + 2) % 2 === 0)
         continue
 
       let u = (c - halfN) * step
       let v = (r - halfN) * step
 
-      if (field.rowShifts) {
-        u += field.rowShifts[r]!
-        u = ((((u + modSpan / 2) % modSpan) + modSpan) % modSpan) - modSpan / 2
-      }
-      if (field.globalShiftX) {
-        u += field.globalShiftX
+      if (isWrapped) {
+        if (field.rowShifts)
+          u += field.rowShifts[r]!
+        else if (field.globalShiftX)
+          u += field.globalShiftX
         u = ((((u + modSpan / 2) % modSpan) + modSpan) % modSpan) - modSpan / 2
       }
 
@@ -316,7 +333,7 @@ function drawStateLayer(
         u *= scalePos
         v *= scalePos
         sizeMul = lerp(1 - 0.34 * amp, 1.0, open)
-        localBulge = field.bulge * lerp(0.25, 1.0, open)
+        localBulge = field.bulge * lerp(1 - 0.75 * Math.min(1, amp), 1.0, open)
       }
       else if (state === 'accelerating') {
         // Subtle kinetic elongation at peak surge velocity.
@@ -325,14 +342,14 @@ function drawStateLayer(
 
       if (opts.noise > 0.001) {
         const nf = opts.noiseFrequency
-        const nt = t * 0.9
+        const nt = noiseTime * 0.9
         u += noise2(u * nf + nt, v * nf + 3.17) * 0.14 * opts.noise
         v += noise2(u * nf + 11.4, v * nf + nt) * 0.14 * opts.noise
         sizeMul *= 1 + noise2(u * nf - nt, v * nf + nt) * 0.22 * opts.noise
       }
 
       const radial = Math.hypot(u, v)
-      if (field.extraCols > 0 && radial > 1.28)
+      if (isWrapped && radial > 1.28)
         continue
 
       const ratio = halftoneRatio(u, opts.taper) * opts.fill * sizeMul
@@ -357,25 +374,28 @@ function drawStateLayer(
       else if (state === 'accelerating') {
         // Peak surge shifts spotlight slightly left as rightmost column slips past the limb.
         const focusCenter = lerp(0.12, -0.18, field.accelVel)
-        const focus = Math.exp(-Math.pow((u - focusCenter) / 0.46, 2))
-        const limb = clamp(1 - 0.86 * Math.pow(Math.abs(u) / 0.98, 1.7), 0.08, 1)
+        const focus = Math.exp(-(((u - focusCenter) / 0.46) ** 2))
+        const limb = clamp(1 - 0.86 * (Math.abs(u) / 0.98) ** 1.7, 0.08, 1)
         const core = clamp(0.12 + 1.28 * focus * limb, 0.12, 1.0)
         lum = clamp(lerp(core, core * 0.74, field.accelVel * 0.72), 0.10, 1.0)
         lum = lerp(1.0, lum, amp)
       }
 
-      if (field.extraCols > 0) {
+      if (isWrapped) {
         // Soften aperture edge clipping so scrolling rows glide cleanly around the limb.
         lum *= 1 - smoothstep(0.98, 1.18, radial)
       }
 
       if (opts.noise > 0.001) {
-        const nl = 0.5 + 0.5 * noise2(u * opts.noiseFrequency * 1.5 + t * 1.4, v * opts.noiseFrequency * 1.5 - t * 0.8)
+        const nl = 0.5 + 0.5 * noise2(u * opts.noiseFrequency * 1.5 + noiseTime * 1.4, v * opts.noiseFrequency * 1.5 - noiseTime * 0.8)
         lum *= lerp(1, 0.35 + 0.65 * nl, opts.noise * 0.7)
       }
 
-      const alpha = clamp(lum * layerAlpha, 0, 1)
-      if (alpha <= 0.004)
+      const baseAlpha = opts.era === 'lcd'
+        ? clamp(0.14 + 0.84 * clamp(lum, 0, 1), 0, 1)
+        : clamp(lum, 0, 1) * inkAlpha
+      const finalAlpha = clamp(baseAlpha * layerAlpha, 0, 1)
+      if (finalAlpha <= 0.004)
         continue
 
       ctx.beginPath()
@@ -431,11 +451,10 @@ function drawStateLayer(
         ctx.closePath()
       }
 
-      const finalAlpha = opts.era === 'lcd' ? clamp(0.14 + 0.84 * alpha, 0, 1) : alpha
       ctx.fillStyle = `rgba(${cr},${cg},${cb},${finalAlpha.toFixed(4)})`
-      if (eraStyle.glow > 0 && alpha > 0.22) {
+      if (eraStyle.glow > 0 && finalAlpha > 0.22) {
         ctx.shadowColor = eraStyle.glowColor
-        ctx.shadowBlur = eraStyle.glow * opts.fxStrength * (size / 64) * alpha
+        ctx.shadowBlur = eraStyle.glow * opts.fxStrength * (size / 64) * finalAlpha
       }
       else {
         ctx.shadowBlur = 0
@@ -568,11 +587,24 @@ export function renderMatrixLoaderFrame(
   // Slightly inset radius when framed inside a hardware micro-display substrate.
   const R = size * (hasSubstrate ? 0.37 : 0.44)
 
-  const mix = opts.prevState && opts.prevState !== opts.state && opts.morphMix !== undefined && opts.morphMix < 1
+  const hasBlend = (opts.prevLayers && opts.prevLayers.length > 0) || (opts.prevState && opts.prevState !== opts.state)
+  const mix = hasBlend && opts.morphMix !== undefined && opts.morphMix < 1
     ? easeInOutCubic(clamp(opts.morphMix, 0, 1))
     : 1
 
-  if (mix < 1 && opts.prevState) {
+  if (mix < 1 && opts.prevLayers && opts.prevLayers.length > 0) {
+    const merged = new Map<MatrixLoaderState, number>()
+    for (const layer of opts.prevLayers) {
+      const w = layer.weight * (1 - mix)
+      if (w > 0.004)
+        merged.set(layer.state, (merged.get(layer.state) ?? 0) + w)
+    }
+    if (mix > 0.004)
+      merged.set(opts.state, (merged.get(opts.state) ?? 0) + mix)
+    for (const [layerState, weight] of merged)
+      drawStateLayer(ctx, layerState, tSec, size, R, opts, eraStyle, clamp(weight, 0, 1))
+  }
+  else if (mix < 1 && opts.prevState) {
     drawStateLayer(ctx, opts.prevState, tSec, size, R, opts, eraStyle, 1 - mix)
     drawStateLayer(ctx, opts.state, tSec, size, R, opts, eraStyle, mix)
   }
@@ -599,10 +631,10 @@ export function renderMatrixLoaderFrame(
 
 let colorProbe: CanvasRenderingContext2D | null = null
 
-/** Resolve a CSS color literal to an sRGB triplet; returns null if unparsable or in canvas-less hosts. */
-export function resolveInkRgb(cssColor: string | undefined, dark: boolean): readonly [number, number, number] {
-  const fallback: readonly [number, number, number] = dark ? [255, 255, 255] : [17, 19, 23]
-  if (!cssColor || typeof document === 'undefined')
+/** Resolve a CSS color literal to an sRGB + alpha tuple `[r, g, b, a]` where `a ∈ [0, 1]`. */
+export function resolveInkRgba(cssColor: string | undefined, dark: boolean): readonly [number, number, number, number] {
+  const fallback: readonly [number, number, number, number] = dark ? [255, 255, 255, 1] : [17, 19, 23, 1]
+  if (!cssColor || !hasDocument())
     return fallback
   try {
     if (!colorProbe) {
@@ -623,10 +655,16 @@ export function resolveInkRgb(cssColor: string | undefined, dark: boolean): read
       return fallback
     ctx.clearRect(0, 0, 1, 1)
     ctx.fillRect(0, 0, 1, 1)
-    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data
-    return [r ?? fallback[0], g ?? fallback[1], b ?? fallback[2]]
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
+    return [r ?? fallback[0], g ?? fallback[1], b ?? fallback[2], a !== undefined ? a / 255 : 1]
   }
   catch {
     return fallback
   }
+}
+
+/** Resolve a CSS color literal to an sRGB triplet; falls back cleanly on invalid colors or canvas-less hosts. */
+export function resolveInkRgb(cssColor: string | undefined, dark: boolean): readonly [number, number, number] {
+  const [r, g, b] = resolveInkRgba(cssColor, dark)
+  return [r, g, b]
 }

@@ -40,7 +40,7 @@ function resetParams(): void {
   fill.value = 1
   speed.value = 1
   intensity.value = 1
-  noise.value = 0
+  noise.value = 0.2
   paused.value = false
 }
 

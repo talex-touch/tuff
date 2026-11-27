@@ -339,6 +339,7 @@ TuffEx 独立包初始基线。
 | [`loading-state`](./loading-state.zh.mdc) | base | 0.3.4 |
 | [`markdown-editor`](./markdown-editor.zh.mdc) | pro | 0.3.9 |
 | [`markdown-view`](./markdown-view.zh.mdc) | base | 0.3.4 |
+| [`matrix-loader`](./matrix-loader.zh.mdc) | ai | 0.9.6 |
 | [`message-actions`](./message-actions.zh.mdc) | ai | 0.3.9 |
 | [`metal-fx`](./metal-fx.zh.mdc) | pro | 0.6.2 |
 | [`miko`](./miko.zh.mdc) | ai | 0.9.3 |

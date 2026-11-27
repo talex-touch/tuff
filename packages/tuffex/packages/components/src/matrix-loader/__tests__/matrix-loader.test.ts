@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { enableAutoUnmount, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   halftoneRatio,
@@ -7,7 +7,7 @@ import {
   normalizeGridSize,
   sphericalWarp,
 } from '../src/engine/math'
-import { renderMatrixLoaderFrame, resolveInkRgb } from '../src/engine/renderer'
+import { renderMatrixLoaderFrame, resolveInkRgb, resolveInkRgba } from '../src/engine/renderer'
 import TxMatrixLoader from '../src/TxMatrixLoader.vue'
 import {
   MATRIX_LOADER_DEFAULT_LABELS,
@@ -48,6 +48,8 @@ function createMockCtx() {
   } as unknown as CanvasRenderingContext2D
   return { ctx, ops }
 }
+
+enableAutoUnmount(afterEach)
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -115,7 +117,8 @@ describe('matrix-loader math engine', () => {
             dark: true,
             inkRgb: [255, 255, 255],
           })
-          expect(ops.filter(op => op === 'fill').length, `${state}/${era}/${shape}`).toBeGreaterThan(0)
+          const minFills = era === 'oled' ? 1 : 2
+          expect(ops.filter(op => op === 'fill').length, `${state}/${era}/${shape}`).toBeGreaterThanOrEqual(minFills)
         }
       }
     }
@@ -147,13 +150,59 @@ describe('matrix-loader math engine', () => {
     expect(ops.filter(op => op === 'fill').length).toBe(24)
   })
 
-  it('falls back cleanly on invalid ink colors', () => {
+  it('falls back cleanly on invalid ink colors and preserves alpha on OLED', () => {
     expect(resolveInkRgb(undefined, true)).toEqual([255, 255, 255])
     expect(resolveInkRgb(undefined, false)).toEqual([17, 19, 23])
+    expect(resolveInkRgba(undefined, true)).toEqual([255, 255, 255, 1])
+
+    const canvas = document.createElement('canvas')
+    canvas.width = 64
+    canvas.height = 64
+    const { ctx, ops } = createMockCtx()
+    renderMatrixLoaderFrame(ctx, canvas, 64, 1, 1.0, {
+      state: 'thinking',
+      era: 'oled',
+      shape: 'quad',
+      gridSize: 5,
+      bulge: 1,
+      taper: 1,
+      fill: 1,
+      intensity: 1,
+      noise: 0,
+      noiseFrequency: 1.4,
+      fxStrength: 0.65,
+      dark: true,
+      inkRgb: [0, 0, 0],
+      inkAlpha: 0,
+    })
+    expect(ops.filter(op => op === 'fill')).toHaveLength(0)
+  })
+
+  it('paints wrapped generating tiles without duplicates', () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 64
+    canvas.height = 64
+    const { ctx, ops } = createMockCtx()
+    renderMatrixLoaderFrame(ctx, canvas, 64, 1, 2.3, {
+      state: 'generating',
+      era: 'oled',
+      shape: 'quad',
+      gridSize: 5,
+      bulge: 1,
+      taper: 1,
+      fill: 1,
+      intensity: 1,
+      noise: 0,
+      noiseFrequency: 1.4,
+      fxStrength: 0.65,
+      dark: true,
+      inkRgb: [255, 255, 255],
+    })
+    expect(ops.filter(op => op === 'fill')).toHaveLength(12)
   })
 })
 
-describe('TxMatrixLoader', () => {
+describe('tx-matrix-loader component', () => {
   it('renders an accessible status region with hidden sr label by default', () => {
     const wrapper = mount(TxMatrixLoader, { props: { state: 'searching' } })
     expect(wrapper.attributes('role')).toBe('status')
@@ -179,13 +228,59 @@ describe('TxMatrixLoader', () => {
     expect(wrapper.find('.tx-matrix-loader__label').text()).toBe('自定义状态')
   })
 
-  it('sizes canvas from standard size tiers and allows displaySize override', async () => {
+  it('sizes canvas from standard size tiers and clamps positive displaySize overrides to >= 1px', async () => {
     const wrapper = mount(TxMatrixLoader, { props: { size: 'lg' } })
     expect(wrapper.find('canvas').attributes('style')).toContain(`width: ${MATRIX_LOADER_SIZE_PX.lg}px`)
 
     await wrapper.setProps({ displaySize: 96 })
     expect(wrapper.find('canvas').attributes('style')).toContain('width: 96px')
     expect(wrapper.find('canvas').attributes('style')).toContain('height: 96px')
+
+    await wrapper.setProps({ displaySize: 0.4 })
+    expect(wrapper.find('canvas').attributes('style')).toContain('width: 1px')
+    expect(wrapper.find('canvas').attributes('style')).toContain('height: 1px')
+  })
+
+  it('ignores queued intersection callbacks from retired observers after unmount', () => {
+    let capturedCb: IntersectionObserverCallback | null = null
+    class MockIO {
+      constructor(cb: IntersectionObserverCallback) {
+        capturedCb = cb
+      }
+
+      observe = vi.fn()
+      disconnect = vi.fn()
+      unobserve = vi.fn()
+      takeRecords = vi.fn(() => [])
+      root = null
+      rootMargin = ''
+      thresholds = []
+    }
+    vi.stubGlobal('IntersectionObserver', MockIO)
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame')
+    const { ctx } = createMockCtx()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx)
+
+    const wrapper = mount(TxMatrixLoader, { props: { state: 'thinking' } })
+    wrapper.unmount()
+    rafSpy.mockClear()
+
+    capturedCb?.([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver)
+    expect(rafSpy).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it('paints the updated state immediately without rAF when paused', async () => {
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame')
+    const { ctx, ops } = createMockCtx()
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctx)
+
+    const wrapper = mount(TxMatrixLoader, { props: { state: 'thinking', paused: true } })
+    ops.length = 0
+    await wrapper.setProps({ state: 'searching' })
+    expect(rafSpy).not.toHaveBeenCalled()
+    // Settled single-layer render (12 tiles, not 24-tile mid-crossfade).
+    expect(ops.filter(op => op === 'fill')).toHaveLength(12)
   })
 
   it('renders deterministically without starting rAF when `time` prop is supplied', () => {
