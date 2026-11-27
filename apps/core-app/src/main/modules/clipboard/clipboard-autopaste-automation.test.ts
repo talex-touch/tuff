@@ -2,6 +2,7 @@ import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type { ClipboardAutopasteAutomationOptions } from './clipboard-autopaste-automation'
 import type { IClipboardItem } from './clipboard-history-persistence'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { registerClipboardPorts, resetClipboardPorts } from './clipboard-ports'
 
 type ClipboardAutopasteAutomationModule = typeof import('./clipboard-autopaste-automation')
 
@@ -110,18 +111,6 @@ vi.mock('../notification.ts', () => ({
   }
 }))
 
-vi.mock('../box-tool/core-box/manager', () => ({
-  coreBoxManager: {
-    trigger: mocks.coreBoxTrigger
-  }
-}))
-
-vi.mock('../box-tool/core-box/manager.ts', () => ({
-  coreBoxManager: {
-    trigger: mocks.coreBoxTrigger
-  }
-}))
-
 // The automation only consumes this image converter. Loading the persistence module would also
 // start Clipboard diagnostics, Sentry and Precore, which are outside this unit-test boundary.
 vi.mock('./clipboard-image-persistence', () => ({
@@ -183,12 +172,20 @@ describe('clipboard-autopaste-automation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    registerClipboardPorts({
+      coreBox: {
+        hideCoreBox: () => {
+          mocks.coreBoxTrigger(false)
+        }
+      }
+    })
     mocks.getAutoPasteCapabilityPatch.mockResolvedValue({ supportLevel: 'supported' })
     mocks.sendPlatformShortcut.mockResolvedValue(undefined)
     mocks.clipboardAvailableFormats.mockReturnValue([])
   })
 
   afterEach(async () => {
+    resetClipboardPorts()
     await drainUnhandledProcessErrors()
     assertNoUnhandledProcessErrors()
   })

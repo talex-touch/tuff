@@ -47,9 +47,8 @@ import { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { t } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
-import { flowBus } from '../flow-bus/flow-bus'
-import { flowTargetRegistry } from '../flow-bus/target-registry'
 import { notificationModule } from '../notification'
+import { getQuickOpsFlowBusPort } from './quick-ops-ports'
 import {
   createQuickOpsDeveloperPreviewResponse,
   QUICK_OPS_DEVELOPER_POLICY_REASON,
@@ -889,9 +888,14 @@ export class QuickOpsModule extends BaseModule<TalexEvents> {
   private registerFlowTarget(): void {
     this.disposeFlowTarget()
 
+    const flowPort = getQuickOpsFlowBusPort()
+    if (!flowPort) {
+      return
+    }
+
     for (const definition of QUICK_OPS_ALL_FLOW_TARGETS) {
       const target: FlowTarget = { ...definition, ...wordQuickOpsFlowTarget(definition.id) }
-      const registered = flowTargetRegistry.registerTarget(QUICK_OPS_FLOW_PLUGIN_ID, target, {
+      const registered = flowPort.registerTarget(QUICK_OPS_FLOW_PLUGIN_ID, target, {
         pluginName: 'QuickOps',
         pluginIcon: 'ri:tools-line',
         isEnabled: true,
@@ -904,7 +908,7 @@ export class QuickOpsModule extends BaseModule<TalexEvents> {
     }
 
     if (this.flowTargetIds.length > 0) {
-      this.flowDeliveryDisposer = flowBus.registerDeliveryHandler(
+      this.flowDeliveryDisposer = flowPort.registerDeliveryHandler(
         QUICK_OPS_FLOW_PLUGIN_ID,
         async (session: FlowSession) => {
           await this.handleFlowDelivery(session)
@@ -1600,7 +1604,7 @@ export class QuickOpsModule extends BaseModule<TalexEvents> {
   }
 
   private acknowledgeFlow(session: FlowSession, ackPayload: Record<string, unknown>): void {
-    flowBus.acknowledge(session.sessionId, ackPayload)
+    getQuickOpsFlowBusPort()?.acknowledge(session.sessionId, ackPayload)
     this.recordFlowAudit(
       session,
       resolveQuickOpsAuditDecision(ackPayload),
@@ -1651,8 +1655,10 @@ export class QuickOpsModule extends BaseModule<TalexEvents> {
   private disposeFlowTarget(): void {
     this.flowDeliveryDisposer?.()
     this.flowDeliveryDisposer = null
+    const flowPort = getQuickOpsFlowBusPort()
     while (this.flowTargetIds.length > 0) {
-      flowTargetRegistry.unregisterTarget(this.flowTargetIds.pop()!)
+      const targetId = this.flowTargetIds.pop()!
+      flowPort?.unregisterTarget(targetId)
     }
   }
 }

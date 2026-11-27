@@ -1,12 +1,11 @@
 import type { PlatformCapability, PlatformCapabilitySupportLevel } from '@talex-touch/utils'
-import type { EverythingStatusResponse } from '../../../shared/events/everything'
 import { execFile } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
-import { everythingProvider } from '../box-tool/addon/files/everything-provider'
 import { isXdotoolAvailable } from '../system/linux-desktop-tools'
 import { t } from '../../utils/i18n-helper'
+import { getPlatformPorts, type PlatformEverythingStatusSnapshot } from './platform-ports'
 
 const execFileAsync = promisify(execFile)
 const TUFF_CLI_DETECT_CACHE_TTL_MS = 60_000
@@ -259,7 +258,7 @@ export function getPermissionDeepLinkCapabilityPatch(): PlatformCapabilityRuntim
 }
 
 function getEverythingCapabilityPatchFromStatus(
-  status: EverythingStatusResponse
+  status: PlatformEverythingStatusSnapshot
 ): PlatformCapabilityRuntimePatch {
   if (process.platform !== 'win32') {
     const reason = t('settings.settingEverything.healthReasonUnsupported')
@@ -281,7 +280,7 @@ function getEverythingCapabilityPatchFromStatus(
 }
 
 export function getEverythingCapabilityPatch(): PlatformCapabilityRuntimePatch {
-  return getEverythingCapabilityPatchFromStatus(everythingProvider.getStatusSnapshot())
+  return getEverythingCapabilityPatchFromStatus(getPlatformPorts().everything.getStatusSnapshot())
 }
 
 export async function detectTuffCliAvailability(): Promise<boolean> {

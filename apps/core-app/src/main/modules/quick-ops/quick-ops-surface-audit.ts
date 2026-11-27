@@ -277,10 +277,9 @@ export function createQuickOpsSurfaceAudit(
     input.pluginSdkSource,
     input.pluginRuntimeSource
   )
-  const deliveryHandlerCount = countOccurrences(
-    input.moduleSource,
-    'flowBus.registerDeliveryHandler('
-  )
+  const deliveryHandlerCount =
+    countOccurrences(input.moduleSource, 'flowBus.registerDeliveryHandler(') +
+    countOccurrences(input.moduleSource, 'flowPort.registerDeliveryHandler(')
 
   const result: QuickOpsSurfaceAuditResult = {
     schema: QUICK_OPS_SURFACE_AUDIT_SCHEMA,
@@ -294,10 +293,13 @@ export function createQuickOpsSurfaceAudit(
       )
     },
     flow: {
-      usesRegistry: input.moduleSource.includes('flowTargetRegistry.registerTarget('),
-      usesQuickOpsPluginId: input.moduleSource.includes(
-        'flowTargetRegistry.registerTarget(QUICK_OPS_FLOW_PLUGIN_ID'
-      ),
+      usesRegistry:
+        input.moduleSource.includes('flowTargetRegistry.registerTarget(') ||
+        input.moduleSource.includes('flowPort.registerTarget('),
+      usesQuickOpsPluginId:
+        input.moduleSource.includes(
+          'flowTargetRegistry.registerTarget(QUICK_OPS_FLOW_PLUGIN_ID'
+        ) || input.moduleSource.includes('flowPort.registerTarget(QUICK_OPS_FLOW_PLUGIN_ID'),
       deliveryHandlerCount,
       singleDeliveryHandler: deliveryHandlerCount === 1
     },

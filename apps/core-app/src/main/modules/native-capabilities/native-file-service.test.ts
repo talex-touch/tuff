@@ -60,15 +60,23 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../box-tool/addon/files/workers/thumbnail-worker-client', () => ({
-  ThumbnailWorkerClient: vi.fn(() => ({
-    generate: mocks.thumbnailGenerate
-  }))
-}))
-
 vi.mock('../../utils/logger', () => ({
   createLogger: vi.fn(() => mocks.logger)
 }))
+
+async function createNativeFileService(options: { registerThumbnailPort?: boolean } = {}) {
+  const [{ NativeFileService }, { registerNativeCapabilitiesPorts, resetNativeCapabilitiesPorts }] =
+    await Promise.all([import('./native-file-service'), import('./native-capabilities-ports')])
+  resetNativeCapabilitiesPorts()
+  if (options.registerThumbnailPort !== false) {
+    registerNativeCapabilitiesPorts({
+      thumbnail: {
+        generate: mocks.thumbnailGenerate as never
+      }
+    })
+  }
+  return new NativeFileService()
+}
 
 describe('NativeFileService', () => {
   afterEach(() => {
@@ -77,8 +85,7 @@ describe('NativeFileService', () => {
   })
 
   it('returns file stat metadata with tfile url', async () => {
-    const { NativeFileService } = await import('./native-file-service')
-    const service = new NativeFileService()
+    const service = await createNativeFileService()
 
     const result = await service.stat({ path: '/tmp/a.png' })
 
@@ -96,8 +103,7 @@ describe('NativeFileService', () => {
   })
 
   it('opens and reveals paths through electron shell', async () => {
-    const { NativeFileService } = await import('./native-file-service')
-    const service = new NativeFileService()
+    const service = await createNativeFileService()
 
     await expect(service.open({ path: '/tmp/a.png' })).resolves.toMatchObject({
       success: true
@@ -111,8 +117,7 @@ describe('NativeFileService', () => {
   })
 
   it('stores generated thumbnails as native tfile refs by default', async () => {
-    const { NativeFileService } = await import('./native-file-service')
-    const service = new NativeFileService()
+    const service = await createNativeFileService()
 
     const result = await service.getThumbnail({ path: '/tmp/a.png' })
 
@@ -133,8 +138,7 @@ describe('NativeFileService', () => {
   })
 
   it('returns data-url thumbnails when requested', async () => {
-    const { NativeFileService } = await import('./native-file-service')
-    const service = new NativeFileService()
+    const service = await createNativeFileService()
 
     const result = await service.getThumbnail({ path: '/tmp/a.png', output: 'data-url' })
 
@@ -147,9 +151,23 @@ describe('NativeFileService', () => {
     })
   })
 
+  it('degrades gracefully when the thumbnail port is unregistered', async () => {
+    const service = await createNativeFileService({ registerThumbnailPort: false })
+
+    const result = await service.getThumbnail({ path: '/tmp/a.png' })
+
+    expect(result).toMatchObject({
+      kind: 'tfile',
+      path: '/tmp/a.png',
+      metadata: {
+        degraded: true,
+        reason: 'thumbnail-provider-unregistered'
+      }
+    })
+  })
+
   it('probes image media metadata without reading large content into transport', async () => {
-    const { NativeFileService } = await import('./native-file-service')
-    const service = new NativeFileService()
+    const service = await createNativeFileService()
 
     const result = await service.probeMedia({ path: '/tmp/a.png' })
 
