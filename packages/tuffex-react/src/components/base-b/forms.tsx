@@ -261,6 +261,7 @@ export interface TxFormProps extends Omit<FormHTMLAttributes<HTMLFormElement>, '
   model?: TxFormValues
   values?: TxFormValues
   defaultValues?: TxFormValues
+  initialValues?: TxFormValues
   rules?: TxFormRules
   schema?: TxFormStandardSchema
   layout?: TxFormLayout
@@ -284,6 +285,7 @@ export const TxForm = forwardRef<TxFormHandle, TxFormProps>((
     model,
     values,
     defaultValues,
+    initialValues,
     rules,
     schema,
     layout,
@@ -309,12 +311,13 @@ export const TxForm = forwardRef<TxFormHandle, TxFormProps>((
   const autoId = useId()
   const formId = id ?? `tx-form-${autoId.replace(/:/g, '')}`
   const controlledValues = values ?? model
+  const resolvedDefaultValues = defaultValues ?? initialValues
   const [currentValues, setCurrentValues] = useControllableState<TxFormValues>({
     value: controlledValues,
-    defaultValue: defaultValues ?? {},
+    defaultValue: resolvedDefaultValues ?? {},
     onChange: onValuesChange,
   })
-  const initialValuesRef = useRef<TxFormValues>(controlledValues ?? defaultValues ?? {})
+  const initialValuesRef = useRef<TxFormValues>(controlledValues ?? resolvedDefaultValues ?? {})
   const [errors, setErrorsState] = useState<Record<string, TxFormFieldMessage>>({})
   const [rootError, setRootError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)

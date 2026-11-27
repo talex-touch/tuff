@@ -1,3 +1,4 @@
+import { getCompatEntry, READY_COMPONENT_IDS } from '@talex-touch/tuffex-core/compat'
 import { computed, onScopeDispose, ref } from '@vue/reactivity'
 import { act } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -99,23 +100,30 @@ describe('reactivity hooks & manifest contract', () => {
     expect(disposed).toHaveBeenCalledTimes(1)
   })
 
-  it('exports the exact locked 32 Phase-1 component modules and symbols', () => {
-    expect(REACT_COMPONENT_IDS).toHaveLength(32)
-    expect([...REACT_COMPONENT_IDS].sort()).toEqual([...LOCKED_32_IDS].sort())
+  it('exports all 100 ready component modules (99 Basics Suite + stream-text) and symbols', () => {
+    expect(REACT_COMPONENT_IDS).toHaveLength(100)
+    expect([...REACT_COMPONENT_IDS].sort()).toEqual([...READY_COMPONENT_IDS].sort())
 
-    const byTier = { A: 0, B: 0, C: 0 }
-    for (const id of LOCKED_32_IDS) {
+    for (const id of LOCKED_32_IDS)
+      expect(REACT_COMPONENTS_MANIFEST[id], `Missing Phase-1 entry ${id}`).toBeDefined()
+
+    const byTier = { A: 0, B: 0, C: 0, D: 0 }
+    for (const id of REACT_COMPONENT_IDS) {
       const entry = REACT_COMPONENTS_MANIFEST[id]
       expect(entry).toBeDefined()
       expect(entry!.status).toBe('ready')
       expect(entry!.sampleTsx.length).toBeGreaterThan(0)
       byTier[entry!.tier] += 1
 
+      const compat = getCompatEntry(id)
+      expect(compat, `Missing compat entry ${id}`).toBeDefined()
+      expect(entry!.exports).toEqual(compat!.reactExports)
+
       for (const symbol of entry!.exports) {
         expect((TuffexReact as Record<string, unknown>)[symbol], `Missing export ${symbol}`).toBeDefined()
       }
     }
 
-    expect(byTier).toEqual({ A: 18, B: 12, C: 2 })
+    expect(byTier.A + byTier.B + byTier.C + byTier.D).toBe(100)
   })
 })
