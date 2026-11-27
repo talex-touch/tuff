@@ -15,18 +15,19 @@ verified: false
 |------|----|
 | 源码版本 | **0.9.6** |
 | 发布版本 | **0.9.6**（最近一次 npm 发布） |
-| 组件模块 | **194**：基础 99 · 进阶 58 · AI 37 |
+| 组件模块 | **195**：基础 99 · 进阶 59 · AI 37 |
 
 ## 版本更新历程
 
 ### 0.9.6 版本（2026-11-27）
 
-在 AI 套件中新增球面半调数学加载器。
+在 AI 套件中新增球面半调数学加载器，在 Pro 套件中新增多设备样机容器。
 
-- **新增组件**：matrix-loader
+- **新增组件**：matrix-loader、device-mockup
 - **主要更新组件**：无
 - **关键特性**：
   - 新增 `TxMatrixLoader`（`@talex-touch/tuffex/ai`）：基于球面凸透镜与半调棋盘格的纯数学 Canvas 加载器，提供 8 种 AI 语义状态、状态间平滑融合、2D 梯度噪声与 5 种电子屏幕显示时代（`oled`、`crt`、`vfd`、`dither`、`lcd`）。
+  - 新增 `TxDeviceMockup`（`@talex-touch/tuffex/pro`）：内置 75+ 款可按需 Tree-Shaking 的手机、平板、笔记本、桌面、圆/方形手表与浏览器外壳预设，支持真 3D 挤出机身与着地阴影、8 套 Shots.so 精选场景搭配、7 种阴影与出血构图、12 组渐变与胶片噪点、设备与横竖屏弹性形变切换，以及按需加载的客户端 SVG/PNG/WebP 导出。
 
 ### 0.9.5 版本（2026-11-23）
 
@@ -285,6 +286,7 @@ TuffEx 独立包初始基线。
 | [`data-table`](./data-table.zh.mdc) | base | 0.3.4 |
 | [`date-picker`](./date-picker.zh.mdc) | base | 0.3.4 |
 | [`descriptions`](./descriptions.zh.mdc) | base | 0.6.3 |
+| [`device-mockup`](./device-mockup.zh.mdc) | pro | 0.9.6 |
 | [`dialog`](./dialog.zh.mdc) | base | 0.3.4 |
 | [`diff-table`](./diff-table.zh.mdc) | pro | 0.3.9 |
 | [`divider`](./divider.zh.mdc) | base | 0.3.7 |

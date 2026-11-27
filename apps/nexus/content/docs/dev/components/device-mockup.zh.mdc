@@ -1,0 +1,343 @@
+---
+title: "DeviceMockup 设备样机"
+description: "支持按需 Tree-Shaking 与 3D 立体机身的多设备样机容器"
+category: Advanced
+status: stable
+since: 0.9.6
+tags: [mockup, device, preview, studio, export, pro]
+syncStatus: reviewed
+verified: true
+---
+
+## 安装
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxDeviceMockup } from '@talex-touch/tuffex/device-mockup'
+  import '@talex-touch/tuffex/device-mockup/style.css'
+  import '@talex-touch/tuffex/base.css' // 设计令牌与重置样式，全应用引入一次
+---
+:::
+
+## 用法
+
+`TxDeviceMockup` 内置 75+ 款可按需 Tree-Shaking 的手机、平板、桌面、圆形与方形手表及浏览器预设，提供真 3D 挤出机身、Shots.so 风格阴影与一键场景搭配、弹性形变切换动画及按需加载的客户端 SVG/PNG/WebP 导出。
+
+### 多设备库与弹性形变
+
+按家族浏览或关键词搜索 75+ 款机型，切换机型与横竖屏时自动播放平滑弹性形变动画（`animated` 默认开启）。
+
+:::TuffDemoWrapper{demo="DeviceMockupBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { iphone17Pro } from '@talex-touch/tuffex/device-mockup/presets/ios'
+  import { ref } from 'vue'
+
+  const orientation = ref<'portrait' | 'landscape'>('portrait')
+  </script>
+
+  <template>
+    <TxDeviceMockup
+      :device="iphone17Pro"
+      :orientation="orientation"
+      animated
+      show-status-bar
+      show-cutout
+      fit="contain"
+      :max-height="380"
+    >
+      <div class="my-app-preview">Live UI</div>
+    </TxDeviceMockup>
+  </template>
+---
+:::
+
+### 3D 立体机身、阴影与构图
+
+启用真 3D 多层挤出机身与着地平面阴影，组合 7 种 Shots.so 阴影、5 种出血裁切构图、8 种边框材质与屏幕玻璃反光。
+
+:::TuffDemoWrapper{demo="DeviceMockupStylesDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { iphone17Pro } from '@talex-touch/tuffex/device-mockup/presets/ios'
+  </script>
+
+  <template>
+    <TxDeviceMockup
+      :device="iphone17Pro"
+      frame-style="default"
+      finish="titanium"
+      perspective="isometric"
+      shadow="grounded"
+      framing="center"
+      interactive-tilt
+      screen-glare
+      backdrop="mesh"
+      gradient-preset="aurora"
+      backdrop-noise
+    >
+      <div class="my-feature-card">TuffEx Pro</div>
+    </TxDeviceMockup>
+  </template>
+---
+:::
+
+### 样机工作室、场景搭配与导出
+
+通过 `scene` 一键套用 8 套精选 Shots.so 搭配，自由切换 12 组渐变、胶片噪点、水印与自定义截图，并在浏览器端异步导出高清 SVG / PNG / WebP。
+
+:::TuffDemoWrapper{demo="DeviceMockupStudioDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxDeviceMockupInstance } from '@talex-touch/tuffex/device-mockup'
+  import { downloadDeviceMockupBlob } from '@talex-touch/tuffex/device-mockup/export'
+  import { macbookPro14 } from '@talex-touch/tuffex/device-mockup/presets/desktop'
+  import { appstoreHeroScene } from '@talex-touch/tuffex/device-mockup/scenes'
+  import { ref } from 'vue'
+
+  const mockupRef = ref<TxDeviceMockupInstance | null>(null)
+
+  async function savePng() {
+    const blob = await mockupRef.value?.exportImage({ format: 'png', scale: 2 })
+    if (blob)
+      downloadDeviceMockupBlob(blob, 'preview.png')
+  }
+  </script>
+
+  <template>
+    <TxDeviceMockup
+      ref="mockupRef"
+      :device="macbookPro14"
+      :scene="appstoreHeroScene"
+      stage-ratio="16:9"
+      src="/screenshots/dashboard.png"
+      watermark="tuff.tagzxia.com"
+    />
+  </template>
+---
+:::
+
+### 按需引入与 Tree-Shaking
+
+核心入口 `@talex-touch/tuffex/device-mockup` 仅内置 `iphone-17-pro` 与 `responsive`，零静态依赖全量机型表、精选场景和导出引擎；按需引入单款预设对象、家族包或独立子路径即可保持最小产物体积。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // 1. 单机型零冗余引入（不打包其余 74 款预设、场景与导出器）
+  import { TxDeviceMockup } from '@talex-touch/tuffex/device-mockup'
+  import { iphone17Pro } from '@talex-touch/tuffex/device-mockup/presets/ios'
+  // <TxDeviceMockup :device="iphone17Pro" />
+
+  // 2. 按家族批量注册，供字符串 ID 同步解析
+  import { registerDeviceMockupPresets } from '@talex-touch/tuffex/device-mockup'
+  import { IOS_DEVICE_PRESETS } from '@talex-touch/tuffex/device-mockup/presets/ios'
+  registerDeviceMockupPresets(IOS_DEVICE_PRESETS)
+
+  // 3. 按需引入独立场景搭配与客户端导出引擎
+  import { DEVICE_MOCKUP_SCENES } from '@talex-touch/tuffex/device-mockup/scenes'
+  import { downloadDeviceMockupBlob, renderDeviceMockupSvg } from '@talex-touch/tuffex/device-mockup/export'
+---
+:::
+
+### 最佳实践
+
+- 仅展示一两款固定机型时，直接从 `@talex-touch/tuffex/device-mockup/presets/<family>` 导入预设对象传给 `:device`，无需引入全量机型目录。
+- 搭配 `fit="contain"` 与外层 `max-height` 约束，确保在手机、折叠屏、手表与桌面宽屏间做弹性形变切换时居中无溢出。
+- 3D 透视下优先选用实体机身（`default`）搭配 `shadow="grounded"` 与 `screen-glare`，获得清晰的金属侧壁厚度与着地投影。
+- 在默认插槽内渲染自定义移动界面时，读取作用域参数 `preset.safeArea.top` 为顶部内容预留安全区内边距，避免与状态栏或灵动岛重叠。
+- 面向客户端高分 PNG/WebP/SVG 导出时，通过 `src` 传入同源图片或 Base64 Data URL，保证离线 SVG 与 Canvas 栅格化完全自包含。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `device` | `DeviceMockupPreset \| DeviceMockupPresetId \| string` | `'iphone-17-pro'` | 预设对象或预设 ID（内置 75+ 款；未注册的字符串 ID 会按家族懒加载）。 |
+| `orientation` | `'portrait' \| 'landscape'` | `'portrait'` | 屏幕方向；支持旋转的手机与平板互换宽高并触发旋转弹性过渡。 |
+| `scene` | `DeviceMockupSceneId \| DeviceMockupScene` | `—` | Shots.so 精选场景搭配；提供背景、边框、阴影、视角与构图默认值，显式传入的属性优先级更高。 |
+| `frameStyle` | `'default' \| 'glass-light' \| 'glass-dark' \| 'liquid-glass' \| 'inset' \| 'outline' \| 'border' \| 'frameless'` | `'default'` | 外壳边框材质与样式风格。 |
+| `finish` | `'obsidian' \| 'silver' \| 'titanium' \| 'graphite'` | `'obsidian'` | 硬件机身表面配色与 3D 挤出侧壁材质。 |
+| `bezelColor` | `string` | `—` | 覆盖机身边框颜色的自定义 CSS 色值。 |
+| `bezelWidth` | `number` | `—` | 自定义边框厚度（px），覆盖预设默认值。 |
+| `radius` | `number` | `—` | 自定义屏幕内圆角半径（px），外圆角按同心规则自动推导。 |
+| `width` | `number` | `—` | 自定义屏幕逻辑宽度（px），`responsive` 预设下常用。 |
+| `height` | `number` | `—` | 自定义屏幕逻辑高度（px），`responsive` 预设下常用。 |
+| `fit` | `'contain' \| 'width' \| 'none'` | `'contain'` | 容器自适应缩放策略。 |
+| `scale` | `number` | `—` | 显式缩放倍率，传入后覆盖自动适应缩放。 |
+| `maxWidth` | `number \| string` | `—` | 组件最大渲染宽度。 |
+| `maxHeight` | `number \| string` | `—` | 组件最大渲染高度。 |
+| `perspective` | `'flat' \| 'tilt-left' \| 'tilt-right' \| 'isometric' \| 'floating' \| 'angled-low'` | `'flat'` | 预设真 3D 镜头视角姿态。 |
+| `interactiveTilt` | `boolean` | `false` | 开启随指针位置动态倾斜的 3D 视差交互。 |
+| `tiltMaxAngle` | `number` | `10` | 指针交互倾斜的最大旋转角度（度）。 |
+| `shadow` | `boolean \| 'none' \| 'soft' \| 'crisp' \| 'grounded' \| 'elevated' \| 'dramatic' \| 'ambient'` | `'elevated'` | 机身投影风格；传 `false` 等同 `'none'`。 |
+| `framing` | `'center' \| 'bleed-bottom' \| 'bleed-top' \| 'bleed-left' \| 'bleed-right' \| 'float'` | `'center'` | 舞台内的构图定位与边缘出血裁切方式。 |
+| `screenGlare` | `boolean` | `false` | 在屏幕表层叠加随视角微调的斜向玻璃反光高光。 |
+| `animated` | `boolean` | `true` | 切换机型、方向、场景、边框或构图时启用弹性形变过渡（减弱动效模式下自动关闭）。 |
+| `showShell` | `boolean` | `true` | 是否绘制设备硬件外壳与支架。 |
+| `showCutout` | `boolean` | `true` | 是否绘制灵动岛、刘海、打孔或笔记本顶缺口。 |
+| `showStatusBar` | `boolean` | `true` | 是否显示移动设备与手表顶部状态栏。 |
+| `statusBarTheme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | 状态栏文字与图标配色策略。 |
+| `statusBarTime` | `string` | `'9:41'` | 状态栏展示的时间文本。 |
+| `showHomeIndicator` | `boolean` | `true` | 是否显示移动设备底部手势指示条。 |
+| `showHardwareButtons` | `boolean` | `true` | 是否绘制机身侧边电源、音量或表冠按键。 |
+| `browserUrl` | `string` | `'https://tuff.tagzxia.com'` | 浏览器类预设地址栏显示的 URL。 |
+| `browserTitle` | `string` | `''` | 浏览器与桌面窗口预设标题栏文本。 |
+| `browserTheme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | 浏览器与桌面窗口 chrome 主题。 |
+| `backdrop` | `'none' \| 'solid' \| 'gradient' \| 'mesh' \| 'studio' \| 'obsidian' \| 'slate' \| 'transparent'` | `'none'` | 外围舞台背景类型。 |
+| `gradientPreset` | `'aurora' \| 'sunset' \| 'ocean' \| 'graphite' \| 'emerald' \| 'lavender' \| 'peach' \| 'midnight' \| 'sand' \| 'cobalt' \| 'rose' \| 'silver-mist'` | `'aurora'` | 舞台在 `gradient` / `mesh` 下的 12 组内置配色预设。 |
+| `backdropValue` | `string` | `—` | 自定义舞台背景色或 CSS `background` 值。 |
+| `backdropNoise` | `boolean` | `false` | 在舞台背景上叠加细腻胶片颗粒纹理。 |
+| `stageRatio` | `'auto' \| '16:9' \| '4:3' \| '1:1' \| '9:16'` | `'auto'` | 舞台外框的固定画幅比例。 |
+| `stagePadding` | `number` | `32` | 舞台边缘到样机的内边距（px）。 |
+| `src` | `string` | `—` | 屏幕内容图片地址或 Data URL；与默认插槽同时存在时作为底图渲染。 |
+| `alt` | `string` | `''` | 屏幕图片与样机图形的替代说明文本。 |
+| `objectFit` | `'cover' \| 'contain' \| 'fill'` | `'cover'` | 传入 `src` 时图片的填充方式。 |
+| `title` | `string` | `—` | 样机下方或图注区域展示的标题。 |
+| `watermark` | `string` | `—` | 舞台角落展示的水印文案。 |
+| `labels` | `Partial<DeviceMockupLabels>` | 英文默认 | 无障碍描述的本地化映射。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `metrics-change` | `(metrics: DeviceMockupMetrics)` | 机型、方向或容器尺寸变化导致实测尺寸与缩放倍率更新时触发。 |
+
+### 插槽
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `default` | `{ preset, width, height, orientation, scale }` | 设备屏幕内部渲染的实时内容；同时传入 `src` 时叠放在图片上方。 |
+| `status-bar` | `—` | 替换默认的移动端顶部状态栏内容。 |
+| `browser-bar` | `—` | 替换默认的浏览器或桌面窗口顶部工具栏与地址栏。 |
+| `caption` | `—` | 替换样机下方的默认 `title` 标题节点。 |
+| `watermark` | `—` | 替换舞台角落的默认 `watermark` 文本节点。 |
+| `overlay` | `—` | 覆盖在样机屏幕之上的标注、浮层或自定义高光层。 |
+
+### 暴露方法
+
+| 方法名 | 签名 | 说明 |
+|------|------|------|
+| `getMetrics` | `() => DeviceMockupMetrics` | 返回当前屏幕逻辑宽高、外壳尺寸、圆角、边框厚度与有效缩放倍率。 |
+| `exportSvg` | `(options?: DeviceMockupExportOptions) => Promise<string>` | 按需懒加载导出模块并生成独立 XML 安全 SVG 源码字符串。 |
+| `exportImage` | `(options?: DeviceMockupExportOptions) => Promise<Blob \| null>` | 按需懒加载导出模块并将当前样机与舞台栅格化为 `png`、`webp` 或 `svg` `Blob`。 |
+
+### CSS 变量
+
+| 变量名 | 说明 |
+|------|------|
+| `--tx-device-shell-bg` | 硬件外壳边框底色，默认 `#141417`，按 `finish` 与 `bezelColor` 覆盖。 |
+| `--tx-device-shell-ring` | 硬件外圈内描边色。 |
+| `--tx-device-shell-rim-highlight` | 金属边框左上边缘高光色。 |
+| `--tx-device-slab-wall` / `--tx-device-slab-edge` / `--tx-device-slab-back` | 3D 挤出机身的侧壁、倒角棱边与背板材质色。 |
+| `--tx-device-cutout-bg` | 灵动岛、刘海、打孔或笔记本顶缺口底色。 |
+| `--tx-device-screen-bg` | 屏幕内容区域默认背景色（默认 `var(--tx-bg-color, #ffffff)`）。 |
+| `--tx-device-status-ink` / `--tx-device-status-ink-dark` | 浅色与深色屏幕下状态栏及手势条墨色。 |
+| `--tx-device-browser-bg` / `--tx-device-browser-border` / `--tx-device-browser-ink` | 浏览器与桌面窗口 chrome 底色、边框与文字色（含对应 `-dark` 变量）。 |
+| `--tx-device-backdrop-studio` / `--tx-device-backdrop-obsidian` / `--tx-device-backdrop-slate` | 内置纯色舞台背景色。 |
+| `--tx-device-shadow-soft` / `--tx-device-shadow-crisp` / `--tx-device-shadow-elevated` / `--tx-device-shadow-dramatic` / `--tx-device-floor-color` | 各档机身投影与 3D 独立着地阴影色值。 |
+| `--tx-device-glare-a` / `--tx-device-glare-b` / `--tx-device-grain-tint` | 屏幕玻璃反光渐变与舞台胶片噪点着色。 |
+| `--tx-device-caption-ink-light` / `--tx-device-caption-ink-dark` | 浅色与深色舞台背景下的图注文字色（含对应 `--tx-device-watermark-ink-*`）。 |
+
+### 类型
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // 核心包（零静态预设目录 / 场景 / 导出器依赖）
+  import type {
+    DeviceMockupBackdrop,
+    DeviceMockupCategory,
+    DeviceMockupExportConfig,
+    DeviceMockupExportFormat,
+    DeviceMockupExportOptions,
+    DeviceMockupExportScale,
+    DeviceMockupFinish,
+    DeviceMockupFit,
+    DeviceMockupFrameStyle,
+    DeviceMockupFraming,
+    DeviceMockupGradientPreset,
+    DeviceMockupLabels,
+    DeviceMockupMetrics,
+    DeviceMockupOrientation,
+    DeviceMockupPerspective,
+    DeviceMockupPreset,
+    DeviceMockupPresetId,
+    DeviceMockupProps,
+    DeviceMockupScene,
+    DeviceMockupSceneId,
+    DeviceMockupShadow,
+    DeviceMockupShape,
+    DeviceMockupStageRatio,
+    TxDeviceMockupInstance,
+  } from '@talex-touch/tuffex/device-mockup'
+
+  import {
+    DEFAULT_DEVICE_MOCKUP_PRESET,
+    DEVICE_MOCKUP_CATEGORIES,
+    DEVICE_MOCKUP_DEFAULT_LABELS,
+    DEVICE_MOCKUP_GRADIENTS,
+    RESPONSIVE_DEVICE_MOCKUP_PRESET,
+    computeDeviceMockupFitScale,
+    defineDeviceMockupPreset,
+    findDeviceMockupPreset,
+    getDeviceMockupPreset,
+    registerDeviceMockupPresets,
+    resolveDeviceMockupDimensions,
+    searchDeviceMockupPresets,
+  } from '@talex-touch/tuffex/device-mockup'
+
+  // 可选子路径（按需 Tree-Shaking）
+  // '@talex-touch/tuffex/device-mockup/presets'
+  // '@talex-touch/tuffex/device-mockup/presets/ios'
+  // '@talex-touch/tuffex/device-mockup/presets/android'
+  // '@talex-touch/tuffex/device-mockup/presets/tablet'
+  // '@talex-touch/tuffex/device-mockup/presets/desktop'
+  // '@talex-touch/tuffex/device-mockup/presets/watch'
+  // '@talex-touch/tuffex/device-mockup/presets/browser'
+  // '@talex-touch/tuffex/device-mockup/scenes'
+  // '@talex-touch/tuffex/device-mockup/export'
+---
+:::
+
+## 概述
+
+- `TxDeviceMockup` 通过 border-box `ResizeObserver` 测量舞台边界并按 `fit` 策略等比缩放内部逻辑视口，缩放变化直接同步不触发形变过渡，卸载时自动清理观察器与定时器。
+- 3D 透视模式启用多层 Z 轴实体挤出机身与独立着地平面阴影，不再将 2D 阴影随平面浮空旋转；透明玻璃边框自动呈现折射厚度边缘。
+- 切换 `device`、`orientation`、`scene`、`frameStyle`、`finish` 或 `framing` 时触发短暂的弹性形变过渡（横竖屏切换叠加旋转阻尼回正）；在 `prefers-reduced-motion: reduce` 下自动跳过所有过渡与指针倾角。
+- 核心组件不静态引入全量预设、场景或导出器；传入预设对象可完全零额外体积运行，传入未注册的字符串 ID 时仅按家族动态加载对应分片。
+- 根节点声明 `role="figure"` 并结合 `alt` / `title` / `labels` 提供无障碍名称；浅色与深色舞台背景自动切换高对比度水印与图注墨色。
+
+## 技术实现
+
+- 多入口 Tree-Shaking 架构：核心渲染（`TxDeviceMockup.vue` + `layout.ts`）、按家族拆分的 75+ 机型目录（`presets/{ios,android,tablet,desktop,watch,browser}`）、精选搭配（`scenes/`）与客户端 SVG/Canvas 导出器（`export/`）相互解耦。
+- 源码：`packages/tuffex/packages/components/src/device-mockup/`。
+
+<TuffDocSourceLink />
+
+## 使用场景
+
+- 产品官网与 App Store 宣传图：通过 `scene` 一键搭配真 3D 机身、出血构图与渐变舞台展示真实交互界面。
+- 多端响应式检视工具：在 75+ 款 iOS、Android、折叠屏、平板、桌面、圆形手表与浏览器窗口间平滑形变切换。
+- 客户端截图美化工作室：本地上传截图，自由调整阴影、胶片噪点、屏幕反光与水印后直接导出高分 PNG / WebP / SVG。
+
+## 相关组件
+
+| 组件 | 适用于 |
+|------|--------|
+| [ImagePreview](/docs/dev/components/image-preview) | 全屏图片缩放、平移与相册浏览 |
+| [GlassSurface](/docs/dev/components/glass-surface) | 独立玻璃拟态与液态透镜表面 |
+| [FoldPage](/docs/dev/components/fold-page) | 3D 折页宣传册与纸角掀开效果 |
+| [AgentScreen](/docs/dev/components/agent-screen) | 智能体远程操作桌面画面展示 |

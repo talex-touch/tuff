@@ -13,19 +13,23 @@
 
 .docs-gallery {
   --docs-gallery-line: color-mix(in srgb, var(--docs-border) 72%, transparent);
+  --docs-gallery-radius: 18px;
+  --docs-gallery-bar-pad: 8px;
+  --docs-gallery-control-radius: calc(var(--docs-gallery-radius) - var(--docs-gallery-bar-pad) - 1px);
 
   border: 1px solid var(--docs-gallery-line);
-  border-radius: 14px;
+  border-radius: var(--docs-gallery-radius);
   overflow: hidden;
 }
 
 .docs-gallery__bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   /* Install command anchors the left edge, version the right. */
   justify-content: space-between;
-  gap: 10px;
-  padding: 12px 20px;
+  gap: 8px;
+  padding: var(--docs-gallery-bar-pad);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
   color: var(--docs-muted);
@@ -41,23 +45,30 @@
    here, so a theme selector is not an option. Measured at this ratio:
    4.66:1 on white, 10.97:1 on the dark page. */
 .docs-gallery__version {
-  padding: 2px 7px;
-  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 9px;
+  border-radius: var(--docs-gallery-control-radius);
   border: 1px solid color-mix(in srgb, var(--tx-color-success) 40%, transparent);
   background: color-mix(in srgb, var(--tx-color-success) 12%, transparent);
   color: color-mix(in srgb, var(--tx-color-success) 55%, var(--tx-text-color-primary));
-  line-height: 1.4;
+  line-height: 1;
 }
 
 .docs-gallery__install {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 10px;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 10px;
   border: 1px solid var(--docs-inline-code-border);
-  border-radius: 8px;
+  border-radius: var(--docs-gallery-control-radius);
   background: var(--docs-inline-code-bg);
   font: inherit;
+  line-height: 1;
   color: inherit;
   cursor: pointer;
   transition: color 0.18s ease, border-color 0.18s ease;

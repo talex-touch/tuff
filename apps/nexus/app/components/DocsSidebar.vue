@@ -396,6 +396,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/code-editor',
     '/docs/dev/components/terminal',
     '/docs/dev/components/virtual-list',
+    '/docs/dev/components/device-mockup',
     '/docs/dev/components/version-capsule',
     '/docs/dev/components/motion-form',
     '/docs/dev/components/motion-control',

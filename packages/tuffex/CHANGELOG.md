@@ -6,11 +6,12 @@
 
 ### 📦 组件变动 (Components)
 
-- **新增组件**: `matrix-loader`
+- **新增组件**: `matrix-loader`, `device-mockup`
 
 ### ✨ 组件增强
 
 - 新增 `TxMatrixLoader`（`@talex-touch/tuffex/ai`）：基于球面凸透镜与半调梯度棋盘格的纯数学 Canvas 加载器，提供 8 种 AI 语义状态（`thinking`、`searching`、`exploring`、`deciding`、`generating`、`extracting`、`accelerating`、`defining`）、状态间平滑过渡、2D 梯度噪声扰动与 5 种电子屏幕显示时代（`oled`、`crt`、`vfd`、`dither`、`lcd`）。
+- 新增 `TxDeviceMockup`（`@talex-touch/tuffex/pro`）：高保真可 Tree-Shaking 设备样机与导出舞台组件，内置 75 款手机（iOS/Android/HarmonyOS）、平板、MacBook/iMac/显示器、圆形与圆角手表、Arc/Safari/Chrome/Firefox/Edge/macOS/Windows 11 窗口预设，提供实体挤出 3D 机身与落地阴影、Shots.so 7 种阴影 / 6 种构图 / 12 组渐变 / 8 套场景搭配、机型与横竖屏弹性形变动画，以及按需加载的客户端 SVG/PNG/WebP 导出。
 
 ## [0.9.5] - 2026-11-23
 

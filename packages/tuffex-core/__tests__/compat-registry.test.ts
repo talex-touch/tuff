@@ -73,7 +73,7 @@ describe('compat-registry Single Source of Truth', () => {
   const aiIds = new Set(extractExportedModules(resolve(tuffexSrcRoot, 'ai/index.ts'), '../'))
 
   it('covers every single module exported by packages/tuffex/packages/components/src/components.ts with zero drift', () => {
-    expect(componentIds).toHaveLength(194)
+    expect(componentIds).toHaveLength(195)
     expect(COMPAT_REGISTRY).toHaveLength(componentIds.length)
     expect(COMPAT_MAP.size).toBe(componentIds.length)
 
@@ -156,8 +156,8 @@ describe('compat-registry Single Source of Truth', () => {
     }
 
     const summary = getCompatSummary()
-    expect(summary.total).toBe(194)
-    expect(summary.vueReady).toBe(194)
+    expect(summary.total).toBe(195)
+    expect(summary.vueReady).toBe(195)
     expect(summary.reactReady).toBe(32)
     expect(summary.wcReady).toBe(32)
     expect(summary.wcUnsupported).toBe(summary.byTier.D)
