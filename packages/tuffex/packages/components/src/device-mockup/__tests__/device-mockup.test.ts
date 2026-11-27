@@ -24,7 +24,7 @@ import {
   TuffDeviceMockup,
   TxDeviceMockup,
 } from '../index'
-import { loadDeviceFamilyForId } from '../src/registry'
+import { loadDeviceFamilyForId, subscribeDeviceMockupRegistry } from '../src/registry'
 import {
   ANDROID_DEVICE_PRESETS,
   BROWSER_DEVICE_PRESETS,
@@ -336,9 +336,20 @@ describe('device-mockup SVG & Canvas export parity', () => {
     expect(renderDeviceMockupSvg({ device: iphone17Pro, src: 'javascript:alert(1)' })).not.toContain('<image ')
 
     const origFetch = globalThis.fetch
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      blob: async () => new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' }),
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: string) => {
+      if (input === '/screenshots/app.png' || input === 'blob:http://localhost:3200/upload') {
+        return {
+          ok: true,
+          blob: async () => new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' }),
+        }
+      }
+      if (input === '/screenshots/unsafe.svg') {
+        return {
+          ok: true,
+          blob: async () => new Blob(['<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'], { type: 'image/svg+xml' }),
+        }
+      }
+      return { ok: false, blob: async () => new Blob([]) }
     }))
     try {
       const svgBlob = await exportDeviceMockupImage({
@@ -349,9 +360,57 @@ describe('device-mockup SVG & Canvas export parity', () => {
       expect(svgBlob).toBeInstanceOf(Blob)
       const svgText = await readBlobAsText(svgBlob!)
       expect(svgText).toContain('<image href="data:image/png;base64,')
+
+      const pathBlob = await exportDeviceMockupImage({
+        device: iphone17Pro,
+        format: 'svg',
+        src: '/screenshots/app.png',
+      })
+      expect(pathBlob).toBeInstanceOf(Blob)
+      const pathText = await readBlobAsText(pathBlob!)
+      expect(pathText).toContain('<image href="data:image/png;base64,')
+      expect(pathText).not.toContain('/screenshots/app.png')
+
+      expect(await exportDeviceMockupImage({
+        device: iphone17Pro,
+        format: 'svg',
+        src: '/screenshots/missing.png',
+      })).toBeNull()
+
+      expect(await exportDeviceMockupImage({
+        device: iphone17Pro,
+        format: 'svg',
+        src: '/screenshots/unsafe.svg',
+      })).toBeNull()
     }
     finally {
       vi.stubGlobal('fetch', origFetch)
+    }
+  })
+
+  it('notifies subscribers when registerDeviceMockupPresets replaces an existing preset and skips duplicate same-ref registrations', () => {
+    const listener = vi.fn()
+    const unsubscribe = subscribeDeviceMockupRegistry(listener)
+    const original = findDeviceMockupPreset('iphone-17-pro')!
+    const replacement = defineDeviceMockupPreset({
+      ...original,
+      width: 420,
+      height: 912,
+    })
+    try {
+      registerDeviceMockupPresets(original)
+      expect(listener).not.toHaveBeenCalled()
+
+      registerDeviceMockupPresets(replacement)
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(findDeviceMockupPreset('iphone-17-pro')?.width).toBe(420)
+
+      registerDeviceMockupPresets(replacement)
+      expect(listener).toHaveBeenCalledTimes(1)
+    }
+    finally {
+      registerDeviceMockupPresets(original)
+      unsubscribe()
     }
   })
 

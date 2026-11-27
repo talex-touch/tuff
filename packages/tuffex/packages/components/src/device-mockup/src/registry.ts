@@ -82,10 +82,11 @@ export function registerDeviceMockupPresets(
   for (const preset of list) {
     if (!preset?.id)
       continue
-    if (!REGISTRY.has(preset.id))
+    if (REGISTRY.get(preset.id) !== preset) {
       changed = true
-    REGISTRY.set(preset.id, preset)
-    SEARCH_INDEX.set(preset.id, buildSearchHaystack(preset))
+      REGISTRY.set(preset.id, preset)
+      SEARCH_INDEX.set(preset.id, buildSearchHaystack(preset))
+    }
   }
   if (changed)
     notifyListeners()

@@ -86,7 +86,8 @@ const STAGE_RATIOS: Record<Exclude<DeviceMockupStageRatio, 'auto'>, number> = {
 const SAFE_BASE64_RASTER_RE = /^data:image\/(?:png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=\s]+$/i
 const SAFE_BASE64_SVG_RE = /^data:image\/svg\+xml(?:;charset=[^;,]+)?;base64,([A-Za-z0-9+/=\s]+)$/i
 const SAFE_UTF8_SVG_RE = /^data:image\/svg\+xml(?:;charset=[^;,]+)?,([\s\S]+)$/i
-const SAFE_HTTP_OR_PATH_RE = /^(?:https?:\/\/[^\s"'<>]+|\/[^\s"'<>]+)$/i
+const SAFE_HTTP_OR_PATH_RE = /^(?:https?:\/\/|\.{0,2}\/(?!\/))[^\s"'<>]+$/i
+const INLINEABLE_URL_RE = /^(?:blob:|https?:\/\/|\.{0,2}\/(?!\/))[^\s"'<>]+$/i
 const UNSAFE_SVG_CONTENT_RE = /<script\b|javascript\s*:|vbscript\s*:|\bon[a-z]+\s*=/i
 const SAFE_COLOR_RE = /^(?:#[0-9a-f]{3,8}|rgba?\([\d.,\s/%+-]+\)|hsla?\([\d.,\s/%+-]+\)|[a-z]{3,20})$/i
 const SANS_FONT = `-apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif`
@@ -170,32 +171,32 @@ function sanitizeAndNormalizeImageSrc(raw: string): string {
   return ''
 }
 
-async function resolveBlobUrlToDataUrl(
-  blobUrl: string,
+async function inlineImageUrlToDataUrl(
+  url: string,
   fetcher: typeof globalThis.fetch | undefined = globalThis.fetch,
 ): Promise<string | null> {
-  if (!/^blob:/i.test(blobUrl) || typeof fetcher !== 'function')
+  if (!INLINEABLE_URL_RE.test(url) || typeof fetcher !== 'function')
     return null
   try {
-    const response = await fetcher(blobUrl)
+    const response = await fetcher(url)
     if (!response.ok)
       return null
     const blob = await response.blob()
-    const mime = blob.type || 'image/png'
+    const mime = (blob.type || 'image/png').split(';')[0]!.trim().toLowerCase()
+    let dataUrl = ''
     if (typeof blob.arrayBuffer === 'function') {
-      const buf = await blob.arrayBuffer()
-      const base64 = bytesToBase64(new Uint8Array(buf))
-      return base64 ? `data:${mime};base64,${base64}` : null
+      const base64 = bytesToBase64(new Uint8Array(await blob.arrayBuffer()))
+      dataUrl = base64 ? `data:${mime};base64,${base64}` : ''
     }
-    if (typeof FileReader !== 'undefined') {
-      return await new Promise<string | null>((resolve) => {
+    else if (typeof FileReader !== 'undefined') {
+      dataUrl = await new Promise<string>((resolve) => {
         const reader = new FileReader()
-        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null)
-        reader.onerror = () => resolve(null)
+        reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
+        reader.onerror = () => resolve('')
         reader.readAsDataURL(blob)
       })
     }
-    return null
+    return sanitizeAndNormalizeImageSrc(dataUrl) || null
   }
   catch {
     return null
@@ -990,10 +991,11 @@ export async function exportDeviceMockupImage(
   const format: DeviceMockupExportFormat = config.format ?? 'png'
   let resolvedConfig = config
   const rawSrc = (config.imageSrc || config.src || '').trim()
-  if (/^blob:/i.test(rawSrc)) {
-    const inlined = await resolveBlobUrlToDataUrl(rawSrc)
-    if (inlined)
-      resolvedConfig = { ...config, imageSrc: inlined }
+  if (rawSrc && INLINEABLE_URL_RE.test(rawSrc)) {
+    const inlined = await inlineImageUrlToDataUrl(rawSrc)
+    if (!inlined)
+      return null
+    resolvedConfig = { ...config, imageSrc: inlined }
   }
 
   const svg = renderDeviceMockupSvg(resolvedConfig)
