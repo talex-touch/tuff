@@ -86,7 +86,7 @@ function tierD(
 }
 
 /**
- * Single Source of Truth Compatibility Matrix covering all 193 exported modules
+ * Single Source of Truth Compatibility Matrix covering all 194 exported modules
  * in `packages/tuffex/packages/components/src/components.ts`.
  */
 export const COMPAT_REGISTRY: readonly CompatEntry[] = Object.freeze([
@@ -186,6 +186,7 @@ export const COMPAT_REGISTRY: readonly CompatEntry[] = Object.freeze([
   planned('loading-state', 'base', 'A'),
   tierD('markdown-editor', 'pro', REASON_RUNTIME_EDITOR),
   ready('markdown-view', 'base', 'C', ['TxMarkdownView']),
+  planned('matrix-loader', 'ai', 'A'),
   planned('message-actions', 'ai', 'B'),
   planned('metal-fx', 'pro', 'C'),
   planned('miko', 'ai', 'A'),
