@@ -37,7 +37,7 @@ export function sanitizeEverythingCliQuery(query: string): string {
 export interface EverythingSdkAddon {
   search?: (query: string, options?: { maxResults?: number }) => unknown
   query?: (query: string, options?: { maxResults?: number }) => unknown
-  getVersion?: () => string
+  getVersion?: () => string | null
 }
 
 export interface EverythingBackendRuntime {

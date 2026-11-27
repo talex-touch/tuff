@@ -481,18 +481,24 @@ async function evaluate<T>(send: CdpSend, expression: string, timeoutMs = 30_000
 
 export function buildScreenshotClipExpression(): string {
   return `(() => {
-    const surface =
-      document.querySelector('.CoreBoxRes-Main') ||
-      document.querySelector('.CoreBoxRes') ||
-      document.querySelector('.CoreBox')
-    if (!surface) return null
-    const rect = surface.getBoundingClientRect()
-    const x = Math.max(0, Math.floor(rect.left))
-    const y = Math.max(0, Math.floor(rect.top))
-    const width = Math.min(Math.ceil(rect.width), window.innerWidth - x)
-    const height = Math.min(Math.ceil(rect.height), window.innerHeight - y)
-    if (width < 80 || height < 80) return null
-    return { x, y, width, height, scale: 1 }
+    const candidates = [
+      { selector: '.CoreBoxRes-Main', minHeight: 80 },
+      { selector: '.CoreBoxRes.CoreBoxRes--visible', minHeight: 80 },
+      { selector: '.CoreBox', minHeight: 40 }
+    ]
+    for (const { selector, minHeight } of candidates) {
+      const surface = document.querySelector(selector)
+      if (!surface) continue
+      const rect = surface.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) continue
+      const x = Math.max(0, Math.floor(rect.left))
+      const y = Math.max(0, Math.floor(rect.top))
+      const width = Math.min(Math.ceil(rect.width), window.innerWidth - x)
+      const height = Math.min(Math.ceil(rect.height), window.innerHeight - y)
+      if (width < 80 || height < minHeight) continue
+      return { x, y, width, height, scale: 1 }
+    }
+    return null
   })()`
 }
 
@@ -871,6 +877,18 @@ export async function prepareIsolatedProfile(
 }
 
 /**
+ * Seed the marker into the isolated profile only when an active Everything backend is expected.
+ *
+ * When Everything is unavailable, `SearchQueryOrchestrator` falls back to `file-provider`. Seeding
+ * the marker under `fixtureRoot` in the degraded phase causes `file-provider` to index it, which
+ * returns a file row on `explicit-file` (breaking `degradedState.zeroResultRows`) and fuzzy-matches
+ * the `"tuff"` prefix on `DEFAULT_EMPTY_TOKEN` (breaking `emptyState.rowCount === 0`).
+ */
+export function shouldSeedProbeMarker(expectBackend: EverythingBackendType): boolean {
+  return expectBackend !== 'unavailable'
+}
+
+/**
  * Seed the marker file into the profile's fixture child.
  *
  * The launched app's `HOME` and file-provider watch root is this fixture child, so the marker the
@@ -880,6 +898,19 @@ export async function prepareIsolatedProfile(
 export async function seedProbeMarker(fixtureRoot: string, marker: string): Promise<void> {
   await mkdir(fixtureRoot, { recursive: true })
   await writeFile(path.join(fixtureRoot, marker), MARKER_FILE_CONTENT, 'utf8')
+}
+
+export async function prepareIsolatedProbeEnvironment(options: {
+  userDataDir: string
+  expectBackend: EverythingBackendType
+  marker: string
+}): Promise<{ profile: string; fixtureRoot: string; markerSeeded: boolean }> {
+  const { profile, fixtureRoot } = await prepareIsolatedProfile(options.userDataDir)
+  const markerSeeded = shouldSeedProbeMarker(options.expectBackend)
+  if (markerSeeded) {
+    await seedProbeMarker(fixtureRoot, options.marker)
+  }
+  return { profile, fixtureRoot, markerSeeded }
 }
 
 function launchPackagedApp(
@@ -1032,8 +1063,11 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
   let preparedProfile: string | null = null
   try {
     if (!options.attachOnly) {
-      const { profile, fixtureRoot } = await prepareIsolatedProfile(options.userDataDir)
-      await seedProbeMarker(fixtureRoot, options.marker)
+      const { profile } = await prepareIsolatedProbeEnvironment({
+        userDataDir: options.userDataDir,
+        expectBackend: options.expectBackend,
+        marker: options.marker
+      })
       // Keep the guarded, canonical spelling for buildLaunchEnv so HOME equals the approved path.
       options.userDataDir = profile
       preparedProfile = profile

@@ -234,8 +234,36 @@ jobs:
       - name: Stop Everything runtime for the degraded UI phase
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           if ($env:TUFF_EVERYTHING_EXE -and (Test-Path $env:TUFF_EVERYTHING_EXE)) {
             Start-Process -FilePath $env:TUFF_EVERYTHING_EXE -ArgumentList '-exit' -Wait -ErrorAction SilentlyContinue
+          }
+          $deadline = (Get-Date).AddSeconds(15)
+          while ((Get-Date) -lt $deadline) {
+            if (@(Get-Process -Name 'Everything' -ErrorAction SilentlyContinue).Count -eq 0) {
+              break
+            }
+            Start-Sleep -Milliseconds 500
+          }
+          $remaining = @(Get-Process -Name 'Everything' -ErrorAction SilentlyContinue)
+          if ($remaining.Count -gt 0) {
+            $remaining | Stop-Process -Force -ErrorAction SilentlyContinue
+            $forceDeadline = (Get-Date).AddSeconds(10)
+            while ((Get-Date) -lt $forceDeadline) {
+              if (@(Get-Process -Name 'Everything' -ErrorAction SilentlyContinue).Count -eq 0) {
+                break
+              }
+              Start-Sleep -Milliseconds 250
+            }
+          }
+          $stillRunning = @(Get-Process -Name 'Everything' -ErrorAction SilentlyContinue)
+          if ($stillRunning.Count -gt 0) {
+            $pids = ($stillRunning | ForEach-Object { $_.Id }) -join ', '
+            throw "Everything process(es) did not stop before degraded UI phase: $pids"
+          }
+          $everythingService = Get-Service -Name 'Everything' -ErrorAction SilentlyContinue
+          if ($everythingService -and $everythingService.Status -ne 'Stopped') {
+            throw "Everything service unexpectedly remained $($everythingService.Status)."
           }
           Write-Host 'Everything runtime stopped for the degraded UI phase.'
 
