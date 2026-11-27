@@ -1,16 +1,15 @@
-# Split out of ci.yml's PR Quality job, for `types: edited` (#1773).
+# Split out of ci.yml's PR Quality job, for `types: edited` (#1773), and extended to check the PR
+# title and constituent commit messages (#1792).
 #
-# The check itself is unchanged and still lives in scripts/check-closing-keywords.mjs. What was
-# wrong was when it ran: `pull_request` with no `types` defaults to opened/synchronize/reopened, so
-# the guard only ever saw the body as of the last push. GitHub reads closing keywords from the body
-# **at merge time**, so a description edited after the last push was never the document that got
-# checked -- and a body that passed could gain "this does not fix #N" during review and merge green,
-# closing an unfixed issue. That is the outcome #213 and #308 recorded, which is what the guard
-# exists to prevent.
+# GitHub reads closing keywords at merge time across TWO surfaces:
+#   1. The PR body (`edited` re-runs the guard so description edits after the last push are checked).
+#   2. The commit message that lands on the default branch. On a squash merge, GitHub builds that
+#      message from the PR title plus the concatenated commit bodies — parsed as plain text, where
+#      even quotes and backticks do not stop `close #N` from closing an issue. Commit 6448f5f9c
+#      (squash merge of #1772) accidentally closed #1748 that way despite a clean PR body.
 #
 # Its own workflow rather than adding `edited` to ci.yml: this needs to re-run on every description
-# edit, and re-running the whole PR Quality job for that would cost minutes each time on a repo
-# where descriptions get edited often. This is a checkout and one node script.
+# or title edit, and re-running the whole PR Quality job for that would cost minutes each time.
 name: PR Body Guard
 
 on:
@@ -33,19 +32,29 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
         with:
+          # Full history is required so `git log base..head` can inspect every constituent commit
+          # message that GitHub concatenates into the squash-merge commit (#1792).
+          fetch-depth: 0
           persist-credentials: false
 
-      # The body goes through the environment rather than being interpolated into the shell, so a
-      # description cannot inject commands. `printf '%s'` rather than `echo` so a body starting with
-      # `-n` or containing backslashes reaches the file verbatim.
-      - name: Check for negated closing keywords in the PR body
+      # PR body and title go through env and temp files rather than shell interpolation or bare
+      # CLI arguments, so neither can inject shell commands (checked by check-workflow-injection)
+      # nor masquerade as a flag like `--self-test`. `printf '%s'` preserves `-n` and backslashes.
+      - name: Check PR body, title, and commits for accidental closing keywords
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
-          node scripts/check-closing-keywords.mjs "$RUNNER_TEMP/pr-body.md"
+          printf '%s' "$PR_TITLE" > "$RUNNER_TEMP/pr-title.txt"
+          node scripts/check-closing-keywords.mjs \
+            --body "$RUNNER_TEMP/pr-body.md" \
+            --title-file "$RUNNER_TEMP/pr-title.txt" \
+            --commits "${PR_BASE_SHA}..${PR_HEAD_SHA}"
 
-      # A guard that matches nothing looks exactly like a repository with no negated keywords, so
-      # the detector proves it fires before its verdict on the body above is worth anything.
+      # A guard that matches nothing looks exactly like a clean PR, so the detector proves it fires
+      # on negations, quotations, and plain-text commit prose before its verdict above counts.
       - name: Check closing-keyword guard self-test
         run: node scripts/check-closing-keywords.mjs --self-test
