@@ -245,7 +245,7 @@ function printLoginHelp() {
 function printDoctorHelp() {
   console.log(`Usage: ${CLI_COMMAND_NAME} doctor`)
   console.log('')
-  console.log('Inspect local AI tools, Codex/Claude config files, MCP readiness, and skills.')
+  console.log('Inspect local AI tools (Codex, Claude, OMP, Pi, Herdr Core), config files, MCP readiness, and skills.')
   console.log('This command is read-only.')
   console.log('')
 }
