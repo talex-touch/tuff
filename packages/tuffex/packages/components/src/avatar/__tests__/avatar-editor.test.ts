@@ -2,6 +2,7 @@ import { config, mount } from '@vue/test-utils'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { TxFileUploader } from '../../file-uploader'
+import AvatarEditorSlider from '../src/editor/AvatarEditorSlider.vue'
 import { encodeBmp } from '../src/editor/bmp-encoder'
 import {
   buildCanvasFilter,
@@ -18,6 +19,7 @@ import { buildOutputFileName, computeVideoGifClipSchedule, exportAvatarMedia, fo
 import * as mediaCodecs from '../src/editor/media-codecs'
 import { detectAvatarSourceKind, isAnimatedWebpBytes, isApngBlob, isApngBytes, loadAvatarMedia, readBlobArrayBuffer, seekVideoElement, sniffAvatarKindFromBytes } from '../src/editor/media-loader'
 import * as mediaLoader from '../src/editor/media-loader'
+import { createStageMotion } from '../src/editor/stage-motion'
 import { buildRasterAvatarSvg, buildVectorAvatarSvg, parseAndSanitizeSvg } from '../src/editor/svg-codec'
 import TxAvatarEditor from '../src/editor/TxAvatarEditor.vue'
 import { DEFAULT_AVATAR_TRANSFORM } from '../src/editor/types'
@@ -1110,5 +1112,61 @@ describe('avatar editor security, codecs & lifecycle guards', () => {
     loadSpy.mockRestore()
     playSpy.mockRestore()
     pauseSpy.mockRestore()
+  })
+
+  it('omits verbose upload/paste hint clutter, snaps magnetic slider angles, and springs across ±180° via shortest path', async () => {
+    // 1. Empty upload state contains zero verbose formats/paste hint paragraphs
+    const emptyEditor = mount(TxAvatarEditor, {
+      props: { open: true },
+    })
+    expect(emptyEditor.find('.tx-avatar-editor__formats-hint').exists()).toBe(false)
+    expect(emptyEditor.find('.tx-avatar-editor__paste-hint').exists()).toBe(false)
+    expect(emptyEditor.find('.tx-avatar-editor__media-glyphs').exists()).toBe(true)
+    emptyEditor.unmount()
+
+    // 2. AvatarEditorSlider snaps magnetically to detents and resets on readout click
+    const slider = mount(AvatarEditorSlider, {
+      props: {
+        modelValue: 45,
+        min: -180,
+        max: 180,
+        icon: 'angle',
+        label: 'Angle',
+        readout: '45°',
+        centerOrigin: true,
+        snapPoints: [-90, 0, 90],
+        snapThreshold: 4,
+        resetValue: 0,
+      },
+    })
+    const input = slider.find('input[type="range"]')
+    await input.setValue('88')
+    expect(slider.emitted('update:modelValue')?.[0]).toEqual([90])
+    await input.setValue('2')
+    expect(slider.emitted('update:modelValue')?.[1]).toEqual([0])
+    await slider.find('.tx-ae-slider__readout--btn').trigger('click')
+    expect(slider.emitted('reset')?.[0]).toEqual([0])
+    slider.unmount()
+
+    // 3. Stage spring takes shortest angular delta across ±180° and settles cleanly
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+    try {
+      const motion = createStageMotion(0.5)
+      motion.snap({ ...DEFAULT_AVATAR_TRANSFORM, rotation: 170 }, 0.5, 0)
+      const frames: number[] = []
+      motion.springTo({ ...DEFAULT_AVATAR_TRANSFORM, rotation: -170 }, 0.24, 1, () => {
+        frames.push(motion.state.rotation)
+      })
+      await vi.advanceTimersByTimeAsync(900)
+      // Rotating from 170° to -170° must advance clockwise (+20° -> ~190° -> normalized -170°), never backwards through 0°
+      expect(frames.length).toBeGreaterThan(2)
+      expect(frames.slice(0, -1).every(deg => deg >= 169)).toBe(true)
+      expect(motion.state.rotation).toBe(-170)
+      expect(motion.state.maskRadiusRatio).toBeCloseTo(0.24, 3)
+      motion.stop()
+    }
+    finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -1,6 +1,6 @@
 import type { AvatarShape } from '../types'
 import type { AvatarEditorTransform } from './types'
-import { traceMaskPath } from './geometry'
+import { clampNumber } from './geometry'
 import { renderDrawableToCanvas } from './media-codecs'
 
 export interface RenderStageOptions {
@@ -12,8 +12,58 @@ export interface RenderStageOptions {
   naturalHeight: number
   transform: AvatarEditorTransform
   shape: AvatarShape
+  /** Animated corner radius ratio in `[0, 0.5]` (`0` = square, `0.24` = rounded, `0.5` = circle). */
+  maskRadiusRatio?: number
+  /** Smoothly faded `[0, 1]` opacity for the rule-of-thirds crop guide. */
+  gridAlpha?: number
   supportsAlpha: boolean
   isInteracting: boolean
+}
+
+export function shapeToRadiusRatio(shape: AvatarShape): number {
+  if (shape === 'circle')
+    return 0.5
+  if (shape === 'rounded')
+    return 0.24
+  return 0
+}
+
+/**
+ * Traces a continuous rounded-rect/circle mask path for smooth morphing between shapes.
+ * When `begin` is `false`, appends as a subpath so `evenodd` scrim cutouts preserve the outer rect.
+ */
+function traceContinuousMaskPath(
+  ctx: CanvasRenderingContext2D,
+  radiusRatio: number,
+  x: number,
+  y: number,
+  size: number,
+  begin = true,
+): void {
+  const clamped = clampNumber(radiusRatio, 0, 0.5)
+  if (begin)
+    ctx.beginPath()
+
+  if (clamped >= 0.499) {
+    const r = size / 2
+    ctx.moveTo(x + size, y + r)
+    ctx.arc(x + r, y + r, r, 0, Math.PI * 2)
+    ctx.closePath()
+    return
+  }
+
+  if (clamped <= 0.002) {
+    ctx.rect(x, y, size, size)
+    return
+  }
+
+  const r = size * clamped
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + size, y, x + size, y + size, r)
+  ctx.arcTo(x + size, y + size, x, y + size, r)
+  ctx.arcTo(x, y + size, x, y, r)
+  ctx.arcTo(x, y, x + size, y, r)
+  ctx.closePath()
 }
 
 /**
@@ -33,6 +83,9 @@ export function renderAvatarEditorStage(options: RenderStageOptions): void {
     supportsAlpha,
     isInteracting,
   } = options
+
+  const radiusRatio = options.maskRadiusRatio ?? shapeToRadiusRatio(shape)
+  const guideAlpha = options.gridAlpha ?? (isInteracting ? 1 : 0)
 
   const dpr = typeof window !== 'undefined' ? Math.min(2, window.devicePixelRatio || 1) : 1
   const pixelSize = Math.round(stageSize * dpr)
@@ -56,19 +109,22 @@ export function renderAvatarEditorStage(options: RenderStageOptions): void {
     { supportsAlpha, applyMaskClip: false },
   )
 
-  if (shape !== 'square') {
+  if (radiusRatio > 0.002) {
     ctx.save()
-    ctx.fillStyle = 'rgba(10, 12, 18, 0.44)'
+    ctx.fillStyle = 'rgba(10, 12, 18, 0.46)'
     ctx.beginPath()
     ctx.rect(0, 0, pixelSize, pixelSize)
-    traceMaskPath(ctx, shape, 0, 0, pixelSize, false)
+    traceContinuousMaskPath(ctx, radiusRatio, 0, 0, pixelSize, false)
     ctx.fill('evenodd')
     ctx.restore()
   }
 
   ctx.save()
-  if (isInteracting) {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.34)'
+  if (guideAlpha > 0.01) {
+    // Clip rule-of-thirds guides neatly inside the active crop aperture.
+    traceContinuousMaskPath(ctx, radiusRatio, 0, 0, pixelSize, true)
+    ctx.clip()
+    ctx.strokeStyle = `rgba(255, 255, 255, ${(0.36 * clampNumber(guideAlpha, 0, 1)).toFixed(3)})`
     ctx.lineWidth = Math.max(1, dpr)
     const third = pixelSize / 3
     ctx.beginPath()
@@ -82,10 +138,12 @@ export function renderAvatarEditorStage(options: RenderStageOptions): void {
     ctx.lineTo(pixelSize, third * 2)
     ctx.stroke()
   }
+  ctx.restore()
 
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.82)'
+  ctx.save()
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.84)'
   ctx.lineWidth = Math.max(1.5, 1.5 * dpr)
-  traceMaskPath(ctx, shape, dpr, dpr, pixelSize - dpr * 2)
+  traceContinuousMaskPath(ctx, radiusRatio, dpr, dpr, pixelSize - dpr * 2, true)
   ctx.stroke()
   ctx.restore()
 

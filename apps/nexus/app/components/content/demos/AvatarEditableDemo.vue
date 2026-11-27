@@ -15,86 +15,84 @@ const standaloneSource = ref<File | null>(null)
 
 const copy = computed(() => (locale.value === 'zh'
   ? {
-      clickTip: '点击或拖入文件到头像上编辑（支持 PNG / JPEG / WebP / ICO / SVG / GIF / BMP / MP4 / WebM）',
-      trySvg: '载入示例 SVG',
-      tryGif: '载入示例动图 GIF',
+      clickTip: '点击或拖入图片 / 动图 / 视频到头像即可编辑',
+      trySvg: '示例 SVG',
+      tryGif: '示例动图',
       shapeLabel: '形状',
       circle: '圆形',
       rounded: '圆角',
       square: '方形',
-      outputLabel: '最近导出',
-      emptyOutput: '上传任意图片、GIF 或 MP4 视频并应用后，这里会显示转换后的文件信息。',
+      emptyOutput: '编辑应用后将显示导出文件信息',
       animatedTag: '动图',
       editLabel: '编辑头像',
       editorLabels: {
         title: '编辑头像',
         close: '关闭',
-        uploadDropText: '拖拽图片、GIF、SVG、ICO 或视频到这里',
-        uploadHintText: '点击浏览，或直接按 Ctrl/⌘+V 粘贴图片',
+        uploadDropText: '拖入或点击上传',
+        uploadHintText: '',
         uploadButtonText: '选择文件',
-        uploadFormatsHint: '端侧支持 PNG、JPEG、WebP、AVIF、ICO、SVG、GIF、BMP、MP4、WebM 互转与截帧',
+        uploadFormatsHint: '',
         replaceFile: '更换文件',
-        rotateLeft: '向左旋转 90°',
-        rotateRight: '向右旋转 90°',
+        rotateLeft: '左转 90°',
+        rotateRight: '右转 90°',
         flipHorizontal: '水平翻转',
         flipVertical: '垂直翻转',
         fitContain: '完整适应',
         fitCover: '填满裁切框',
-        reset: '重置变换',
+        reset: '重置',
         zoom: '缩放',
         rotation: '角度',
         shape: '遮罩',
         shapeCircle: '圆形',
         shapeRounded: '圆角',
         shapeSquare: '方形',
-        maskClip: '将遮罩裁切写入透明通道',
-        adjustments: '色彩与背景调整',
+        maskClip: '透明通道裁切',
+        adjustments: '调色',
         brightness: '亮度',
         contrast: '对比度',
         saturation: '饱和度',
         background: '背景',
         transparent: '透明',
-        outputSection: '格式转换与导出',
+        outputSection: '导出',
         format: '格式',
         outputSize: '尺寸',
         quality: '质量',
-        preview: '实时头像预览',
-        timeline: '截帧与动图截取',
+        preview: '预览',
+        timeline: '时间轴',
         play: '播放',
         pause: '暂停',
         prevFrame: '上一帧',
         nextFrame: '下一帧',
-        captureFrame: '截取单帧',
-        captureGifClip: '导出动态 GIF',
-        clipStart: '起点(s)',
-        clipEnd: '终点(s)',
+        captureFrame: '单帧',
+        captureGifClip: '动图',
+        clipStart: '起点',
+        clipEnd: '终点',
         clipFps: '帧率',
         clipSummary: '片段',
-        download: '下载文件',
+        download: '下载',
         cancel: '取消',
-        apply: '应用头像',
-        exporting: '编码中...',
-        loading: '正在解析媒体...',
+        apply: '应用',
+        exporting: '编码中',
+        loading: '解析中...',
         unsupportedFormat: '当前浏览器不支持该编码格式',
         corsTaintedError: '远程图片未开启跨域许可，请改为上传本地文件。',
         loadFailedError: '当前浏览器无法解码该文件。',
         videoUnsupportedError: '当前浏览器不支持该视频编码。',
-        remoteSourceBlockedError: '默认仅支持加载本地文件、Blob 或 data/blob 链接；如需载入远程链接请显式开启 allowRemoteSource。',
-        gifTruncatedNotice: '该 GIF 帧数超出编辑器上限，仅载入了前序帧。',
-        pasteHint: '提示：打开弹窗时可直接 Ctrl/⌘+V 粘贴剪贴板图片',
+        remoteSourceBlockedError: '默认仅支持本地文件、Blob 或 data/blob 链接；如需载入远程链接请显式开启 allowRemoteSource。',
+        gifTruncatedNotice: '该 GIF 帧数超出上限，仅载入了前序帧。',
+        pasteHint: '',
       } satisfies Partial<AvatarEditorLabels>,
     }
   : {
-      clickTip: 'Click or drop a file onto the avatar to edit (PNG / JPEG / WebP / ICO / SVG / GIF / BMP / MP4 / WebM)',
-      trySvg: 'Try sample SVG',
-      tryGif: 'Try animated GIF',
+      clickTip: 'Click or drop an image, GIF, or video onto the avatar',
+      trySvg: 'Sample SVG',
+      tryGif: 'Sample GIF',
       shapeLabel: 'Shape',
       circle: 'Circle',
       rounded: 'Rounded',
       square: 'Square',
-      outputLabel: 'Last export',
-      emptyOutput: 'Upload any image, animated GIF, or MP4 video and click Apply to inspect the converted output.',
-      animatedTag: 'Animated',
+      emptyOutput: 'Export metadata appears here after applying',
+      animatedTag: 'GIF',
       editLabel: 'Edit avatar',
       editorLabels: undefined,
     }))
@@ -183,27 +181,29 @@ function openSampleGif() {
               type="button"
               class="avatar-editable-demo__shape-btn"
               :class="{ 'is-active': avatarShape === item }"
+              :title="item === 'circle' ? copy.circle : item === 'rounded' ? copy.rounded : copy.square"
+              :aria-label="item === 'circle' ? copy.circle : item === 'rounded' ? copy.rounded : copy.square"
               @click="avatarShape = item"
             >
-              {{ item === 'circle' ? copy.circle : item === 'rounded' ? copy.rounded : copy.square }}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle v-if="item === 'circle'" cx="12" cy="12" r="8" />
+                <rect v-else-if="item === 'rounded'" x="4" y="4" width="16" height="16" rx="4.5" />
+                <rect v-else x="4.5" y="4.5" width="15" height="15" />
+              </svg>
             </button>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="avatar-editable-demo__meta">
-      <template v-if="lastResult">
-        <span class="avatar-editable-demo__meta-label">{{ copy.outputLabel }}</span>
-        <code>{{ lastResult.file.name }}</code>
-        <span>{{ lastResult.mimeType }}</span>
-        <span>{{ lastResult.width }}×{{ lastResult.height }}</span>
-        <span>{{ formatByteSize(lastResult.size) }}</span>
-        <span v-if="lastResult.animated" class="avatar-editable-demo__badge">
-          {{ copy.animatedTag }} · {{ lastResult.frameCount }}f
-        </span>
-      </template>
-      <span v-else class="avatar-editable-demo__empty">{{ copy.emptyOutput }}</span>
+    <div v-if="lastResult" class="avatar-editable-demo__meta">
+      <code>{{ lastResult.file.name }}</code>
+      <span>{{ lastResult.mimeType }}</span>
+      <span>{{ lastResult.width }}×{{ lastResult.height }}</span>
+      <span>{{ formatByteSize(lastResult.size) }}</span>
+      <span v-if="lastResult.animated" class="avatar-editable-demo__badge">
+        {{ copy.animatedTag }} · {{ lastResult.frameCount }}f
+      </span>
     </div>
 
     <TxAvatarEditor
@@ -255,7 +255,11 @@ function openSampleGif() {
 .avatar-editable-demo__btn,
 .avatar-editable-demo__shape-btn {
   appearance: none;
-  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 10px;
   border: none;
   border-radius: 8px;
   font: inherit;
@@ -265,6 +269,11 @@ function openSampleGif() {
   color: var(--tx-text-color-primary, #303133);
   background: var(--tx-fill-color-light, #f5f7fa);
   box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #e4e7ed);
+}
+
+.avatar-editable-demo__shape-btn {
+  width: 28px;
+  padding: 0;
 }
 
 .avatar-editable-demo__btn:hover,
@@ -288,21 +297,13 @@ function openSampleGif() {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 7px 10px;
   border-radius: 10px;
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
   color: var(--tx-text-color-regular, #606266);
   background: var(--tx-fill-color-lighter, #fafafa);
   box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #e4e7ed);
-}
-
-.avatar-editable-demo__meta-label {
-  font-weight: 500;
-  color: var(--tx-text-color-primary, #303133);
-}
-
-.avatar-editable-demo__empty {
-  color: var(--tx-text-color-secondary, #6b7280);
 }
 
 .avatar-editable-demo__badge {
