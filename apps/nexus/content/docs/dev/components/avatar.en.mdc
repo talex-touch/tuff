@@ -194,6 +194,7 @@ code: |
 | `outputQuality` | `number` | `0.92` | Default compression quality for lossy formats (`0.1–1`). |
 | `allowVideoCapture` | `boolean` | `true` | Allows loading MP4/WebM/MOV videos for frame capture or animated GIF clips. |
 | `allowGifAnimation` | `boolean` | `true` | Allows exporting animated GIF clips from GIF or video sources. |
+| `autoSelectAnimated` | `boolean` | `true` | Automatically switches to animated GIF clip mode (with live playback) when an animated GIF, WebP, APNG, or video is uploaded. |
 | `editorLabels` | `Partial<AvatarEditorLabels>` | English defaults | Localization overrides for the built-in editor UI. |
 | `editorProps` | `Partial<AvatarEditorConfig>` | - | Advanced options forwarded to `TxAvatarEditor` (`surface`, `icoSizes`, `maxGifDuration`, `customConverter`, etc.). |
 | `backgroundColor` | `string` | - | Background of the fallback content. |
@@ -242,6 +243,7 @@ Standalone avatar editor dialog exported from `@talex-touch/tuffex/avatar`, buil
 | `outputSize` | `number` | `512` | Default output side length in pixels. |
 | `outputQuality` | `number` | `0.92` | Default quality for lossy formats. |
 | `icoSizes` | `number[]` | `[16, 32, 48, 64, 128, 256]` | Multi-resolution icon layers packed when exporting `.ico`. |
+| `autoSelectAnimated` | `boolean` | `true` | Automatically selects animated GIF export mode when loading animated GIF/WebP/APNG or video sources. |
 | `maxGifDuration` | `number` | `6` | Maximum animated GIF clip length in seconds. |
 | `maxGifFrames` | `number` | `60` | Maximum frame count encoded into an animated GIF. |
 | `allowDownload` | `boolean` | `true` | Shows the local download button in the footer. |

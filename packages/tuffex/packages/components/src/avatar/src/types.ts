@@ -50,6 +50,8 @@ export interface AvatarProps {
   allowVideoCapture?: boolean
   /** Allow animated GIF clip export from GIF and video sources. @default true */
   allowGifAnimation?: boolean
+  /** Automatically select animated GIF export mode when an animated image or video is uploaded. @default true */
+  autoSelectAnimated?: boolean
   /** Localization overrides for the built-in editor UI. */
   editorLabels?: Partial<AvatarEditorLabels>
   /** Additional configuration forwarded to `TxAvatarEditor`. */
