@@ -44,7 +44,7 @@ import {
   subscribeVoiceRecognitionRecordMutations,
   voiceRecognitionStore
 } from './voice-recognition-store'
-import { assistantModule } from '../assistant/module'
+import { getVoiceSurfacePort } from './voice-ports'
 import { CommandVoiceGestureController, registerPlatformVoiceGesture } from './command-gesture'
 import { registerVoiceInputSignInDefault } from './voice-input-sign-in'
 
@@ -160,8 +160,8 @@ export class VoiceModule extends BaseModule<TalexEvents> {
     this.cleanups.push(registerVoiceInputSignInDefault())
     globalDictationController.register()
     this.commandGestureController = new CommandVoiceGestureController(
-      (payload) => assistantModule.handleVoiceCommandGesture(payload),
-      () => assistantModule.isVoiceCommandActive(),
+      (payload) => getVoiceSurfacePort().handleVoiceCommandGesture(payload),
+      () => getVoiceSurfacePort().isVoiceCommandActive(),
       registerPlatformVoiceGesture
     )
     this.commandGestureController.register()

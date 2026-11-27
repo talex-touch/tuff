@@ -1,6 +1,7 @@
 import type { IDownloadOptions } from '@talex-touch/utils/plugin/plugin-source'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { registerPluginPorts } from '../plugin-ports'
 
 interface DownloadTestOptions extends IDownloadOptions {
   resolveHeadersForUrl?: (
@@ -118,6 +119,15 @@ describe('TpexPluginProvider request credentials', () => {
     mocks.getRuntimeNexusBaseUrl.mockReset()
     mocks.request.mockReset()
     mocks.requestNoRedirect.mockReset()
+    registerPluginPorts({
+      cloudAuth: {
+        getAuthToken: mocks.getAuthToken,
+        getSanitizedAuthSessionState: () => ({ isLoaded: false, isSignedIn: false, user: null }),
+        getRuntimeNexusBaseUrl: mocks.getRuntimeNexusBaseUrl,
+        applyExternalAuthCallback: async () => false,
+        applyStepUpToken: () => undefined
+      }
+    })
 
     mocks.getAuthToken.mockReturnValue('runtime-token')
     mocks.getEnabledApiSources.mockReturnValue([])

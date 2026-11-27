@@ -150,6 +150,16 @@ vi.mock('../auth', () => ({
   getAuthToken: authMocks.getAuthToken
 }))
 
+import { registerAiPorts } from './ai-ports'
+registerAiPorts({
+  auth: {
+    subscribeAuthState: authMocks.subscribeAuthState,
+    getSanitizedAuthSessionState: authMocks.getSanitizedAuthSessionState,
+    getAuthToken: authMocks.getAuthToken,
+    performNexusRequestWithAuth: async () => null
+  }
+})
+
 interface TestBinding {
   providerId: string
   models?: string[]

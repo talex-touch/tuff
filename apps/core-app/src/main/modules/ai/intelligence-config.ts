@@ -30,7 +30,7 @@ import {
 } from '@talex-touch/utils/intelligence/model-binding'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
-import { getSanitizedAuthSessionState, subscribeAuthState } from '../auth'
+import { getAiAuthPort, subscribeAiAuthState } from './ai-ports'
 import { tuffIntelligence } from './intelligence-sdk'
 import { normalizeProviderForRuntime, TUFF_NEXUS_PROVIDER_ID } from './provider-runtime'
 import { fetchProviderModels } from './provider-models'
@@ -491,7 +491,7 @@ function applyNexusAsrRouteUserPreference(): boolean {
 export function ensureNexusAsrRoute(packModelIds: string[]): void {
   const models = [...new Set(packModelIds.filter((id) => typeof id === 'string' && id.length > 0))]
   if (models.length === 0) return
-  if (getSanitizedAuthSessionState().isSignedIn !== true) return
+  if (getAiAuthPort().getSanitizedAuthSessionState().isSignedIn !== true) return
 
   try {
     ensureIntelligenceConfigLoaded()
@@ -1576,7 +1576,7 @@ export function setupConfigUpdateListener(): void {
     // Subscribe before reconciling. The startup reconciliation below writes config, and with the
     // subscription last a storage failure left this module without a listener, so every later
     // transition went unnoticed until the next restart.
-    teardownAuthStateListener = subscribeAuthState((state) => {
+    teardownAuthStateListener = subscribeAiAuthState((state) => {
       try {
         applyAuthSignedInTransition(state.isSignedIn === true)
         ensureIntelligenceConfigLoaded()
@@ -1589,7 +1589,7 @@ export function setupConfigUpdateListener(): void {
     // listener is registered. Adopt the session state already in place as the baseline. A failure
     // here is not fatal: `lastAppliedAuthSignedIn` stays unset, so the next notification retries.
     try {
-      applyAuthSignedInTransition(getSanitizedAuthSessionState().isSignedIn)
+      applyAuthSignedInTransition(getAiAuthPort().getSanitizedAuthSessionState().isSignedIn)
     } catch (error) {
       intelligenceConfigLog.warn('Nexus auth reconciliation deferred', { error })
     }

@@ -104,6 +104,29 @@ vi.mock('../auth', () => ({
     user: runtime.authUserId ? { id: runtime.authUserId } : null
   })
 }))
+import { registerVoicePorts } from './voice-ports'
+registerVoicePorts({
+  auth: {
+    getAuthToken: () => runtime.authToken,
+    getSanitizedAuthSessionState: () => ({
+      isLoaded: true,
+      isSignedIn: runtime.authUserId !== null,
+      user: runtime.authUserId ? { id: runtime.authUserId } : null
+    }),
+    subscribeAuthState: () => () => undefined,
+    performNexusRequestWithAuth: async () => null
+  },
+  nexus: {
+    getRuntimeNexusBaseUrl: () => runtime.nexusBaseUrl,
+    transcribeNexusAudio: nexusClient.transcribeNexusAudio,
+    requestNexusVoiceToken: nexusClient.requestNexusVoiceToken,
+    settleNexusVoiceUsage: nexusClient.settleNexusVoiceUsage
+  },
+  catalog: {
+    getVoiceProviderRegistry: () => catalog.registry as never,
+    getVoiceProviderStatus: () => catalog.status as never
+  }
+})
 vi.mock('@talex-touch/tuff-voice', () => ({
   createFetchHttpClient: vi.fn(() => ({ request: vi.fn() })),
   createNodeVoiceSocketFactory: vi.fn(() => ({ connect: vi.fn() })),

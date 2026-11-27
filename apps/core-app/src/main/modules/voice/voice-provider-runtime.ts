@@ -57,16 +57,9 @@ import {
 } from '../ai/intelligence-config'
 import { getIntelligenceProviderManager, providerSupportsCapability } from '../ai/intelligence-sdk'
 import { resolveProviderCredential } from '../ai/provider-credential-runtime'
-import { getAuthToken, getSanitizedAuthSessionState } from '../auth'
-import { getCatalogService } from '../catalog'
 import { getMainConfig } from '../storage'
-import {
-  transcribeNexusAudio,
-  requestNexusVoiceToken,
-  settleNexusVoiceUsage,
-  type NexusVoiceToken
-} from '../nexus/asr-client'
-import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
+import type { NexusVoiceToken } from '../../shared/cloud-port-types'
+import { getVoiceAuthPort, getVoiceCatalogPort, getVoiceNexusPort } from './voice-ports'
 import { createBufferedSttVoiceProvider } from './buffered-stt-provider'
 
 const ASR_CAPABILITY_ID = 'audio.asr'
@@ -138,7 +131,7 @@ function resolveCapabilityRoutes(
     .map((provider) => {
       const config = provider.getConfig()
       const credential = isNexusManagedProvider(config)
-        ? (getAuthToken() ?? undefined)
+        ? (getVoiceAuthPort().getAuthToken() ?? undefined)
         : resolveProviderCredential(config)
       return { ...config, apiKey: credential, hasApiKey: Boolean(credential) }
     })
@@ -277,7 +270,7 @@ function resolveNexusPackRoute(
   let registry: VoiceProviderRegistry | null
   let status: CatalogStatus | null = null
   try {
-    const catalog = getCatalogService()
+    const catalog = getVoiceCatalogPort()
     registry = catalog.getVoiceProviderRegistry()
     status = catalog.getVoiceProviderStatus()
   } catch {
@@ -315,7 +308,10 @@ function resolveNexusPackRoute(
   }
 
   try {
-    if (new URL(descriptor.endpoint.baseUrl).origin !== new URL(getRuntimeNexusBaseUrl()).origin) {
+    if (
+      new URL(descriptor.endpoint.baseUrl).origin !==
+      new URL(getVoiceNexusPort().getRuntimeNexusBaseUrl()).origin
+    ) {
       throw packFailure('VOICE_ASR_PACK_UNSUPPORTED')
     }
   } catch (error) {
@@ -351,7 +347,7 @@ function createNexusPackBufferedProvider(
       invoke: async (payload, options) => {
         const startedAt = Date.now()
         const idempotencyKey = options?.metadata?.idempotencyKey
-        const result = await transcribeNexusAudio(payload, {
+        const result = await getVoiceNexusPort().transcribeNexusAudio(payload, {
           signal: options?.signal,
           timeout: options?.timeout,
           idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : undefined,
@@ -392,7 +388,7 @@ function createNexusRealtimeStreamProvider(
 
       let token: NexusVoiceToken
       try {
-        token = await requestNexusVoiceToken({ signal: req.signal })
+        token = await getVoiceNexusPort().requestNexusVoiceToken({ signal: req.signal })
       } catch {
         return fallbackBuffered.createStream(req)
       }
@@ -428,7 +424,7 @@ function createNexusRealtimeStreamProvider(
 
             const durationMs = lastUsage?.durationMs ?? 0
             if (token.sessionId && durationMs > 0) {
-              void settleNexusVoiceUsage({
+              void getVoiceNexusPort().settleNexusVoiceUsage({
                 sessionId: token.sessionId,
                 durationMs,
                 transcriptUnits: lastText.length,
@@ -470,12 +466,12 @@ function resolveNexusBufferedSttProvider(source: VoiceAsrSource): ConfiguredAsrP
   if (source === 'local') return null
   const route = resolveCapabilityProvider(STT_CAPABILITY_ID, 'stt', true, source)
   if (!route?.model || !isNexusManagedProvider(route.provider)) return null
-  const expectedUserId = getSanitizedAuthSessionState().user?.id
+  const expectedUserId = getVoiceAuthPort().getSanitizedAuthSessionState().user?.id
   if (!expectedUserId) return null
-  const expectedBaseUrl = getRuntimeNexusBaseUrl()
+  const expectedBaseUrl = getVoiceNexusPort().getRuntimeNexusBaseUrl()
   const authorityCheck = () =>
-    getSanitizedAuthSessionState().user?.id === expectedUserId &&
-    getRuntimeNexusBaseUrl() === expectedBaseUrl
+    getVoiceAuthPort().getSanitizedAuthSessionState().user?.id === expectedUserId &&
+    getVoiceNexusPort().getRuntimeNexusBaseUrl() === expectedBaseUrl
   if (getVoiceAsrMetadata(route.provider.metadata)?.protocol === 'nexus-pack') {
     const resolved = resolveNexusPackRoute(route, false)
     if (resolved) return createNexusPackBufferedProvider(route, resolved, authorityCheck)
@@ -573,43 +569,43 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
   }
 
   const credential = isNexusManagedProvider(route.provider)
-    ? getAuthToken()
+    ? getVoiceAuthPort().getAuthToken()
     : resolveProviderCredential(route.provider)
   if (!credential) throw new Error('VOICE_ASR_CREDENTIAL_UNAVAILABLE')
   switch (metadata.protocol) {
     case 'nexus-pack': {
       const resolved = resolveNexusPackRoute(route, true)
       if (!resolved) throw packFailure('VOICE_ASR_PACK_NOT_CONFIGURED')
-      const expectedUserId = getSanitizedAuthSessionState().user?.id
+      const expectedUserId = getVoiceAuthPort().getSanitizedAuthSessionState().user?.id
       if (!expectedUserId) throw new Error('VOICE_ASR_CREDENTIAL_UNAVAILABLE')
-      const expectedBaseUrl = getRuntimeNexusBaseUrl()
+      const expectedBaseUrl = getVoiceNexusPort().getRuntimeNexusBaseUrl()
       if (resolved.descriptor.transport === 'ws-realtime') {
         return createNexusRealtimeStreamProvider(
           route.provider.id,
           resolved.model,
           () =>
-            getSanitizedAuthSessionState().user?.id === expectedUserId &&
-            getRuntimeNexusBaseUrl() === expectedBaseUrl
+            getVoiceAuthPort().getSanitizedAuthSessionState().user?.id === expectedUserId &&
+            getVoiceNexusPort().getRuntimeNexusBaseUrl() === expectedBaseUrl
         )
       }
       return createNexusPackBufferedProvider(
         route,
         resolved,
         () =>
-          getSanitizedAuthSessionState().user?.id === expectedUserId &&
-          getRuntimeNexusBaseUrl() === expectedBaseUrl
+          getVoiceAuthPort().getSanitizedAuthSessionState().user?.id === expectedUserId &&
+          getVoiceNexusPort().getRuntimeNexusBaseUrl() === expectedBaseUrl
       )
     }
     case 'nexus-realtime': {
-      const expectedUserId = getSanitizedAuthSessionState().user?.id
+      const expectedUserId = getVoiceAuthPort().getSanitizedAuthSessionState().user?.id
       if (!expectedUserId) throw new Error('VOICE_ASR_CREDENTIAL_UNAVAILABLE')
-      const expectedBaseUrl = getRuntimeNexusBaseUrl()
+      const expectedBaseUrl = getVoiceNexusPort().getRuntimeNexusBaseUrl()
       return createNexusRealtimeStreamProvider(
         route.provider.id,
         model,
         () =>
-          getSanitizedAuthSessionState().user?.id === expectedUserId &&
-          getRuntimeNexusBaseUrl() === expectedBaseUrl
+          getVoiceAuthPort().getSanitizedAuthSessionState().user?.id === expectedUserId &&
+          getVoiceNexusPort().getRuntimeNexusBaseUrl() === expectedBaseUrl
       )
     }
     case 'bailian-paraformer': {
