@@ -52,7 +52,7 @@ const categoryMeta = computed<Record<BaseCategoryKey, { label: string, desc: str
   form: {
     label: t('docsSidebar.categories.form'),
     desc: props.localeKey === 'zh' ? '表单、输入、选择器、开关、滑块与上传' : 'Forms, inputs, pickers, switches, sliders, and uploaders',
-    icon: 'i-carbon-checkbox-checked',
+    icon: 'i-carbon-edit',
     count: 28,
   },
   layout: {
@@ -82,7 +82,7 @@ const categoryMeta = computed<Record<BaseCategoryKey, { label: string, desc: str
   status: {
     label: t('docsSidebar.categories.status'),
     desc: props.localeKey === 'zh' ? '空状态、错误/离线/权限/引导占位与骨架屏' : 'Empty, error, offline, permission, guide states, and skeletons',
-    icon: 'i-carbon-status-resolved',
+    icon: 'i-carbon-checkmark-outline',
     count: 13,
   },
 }))
@@ -994,7 +994,7 @@ const statusStates = computed<StatusCell[]>(() => [
         <div class="docs-gallery__cat-head not-prose">
           <div class="docs-gallery__cat-meta">
             <span class="docs-gallery__cat-title-wrap">
-              <span class="docs-gallery__cat-icon i-carbon-checkbox-checked" aria-hidden="true" />
+              <span class="docs-gallery__cat-icon i-carbon-edit" aria-hidden="true" />
               <span class="docs-gallery__cat-title">{{ categoryMeta.form.label }}</span>
             </span>
             <span class="docs-gallery__cat-desc">{{ categoryMeta.form.desc }}</span>
@@ -2796,7 +2796,7 @@ const statusStates = computed<StatusCell[]>(() => [
         <div class="docs-gallery__cat-head not-prose">
           <div class="docs-gallery__cat-meta">
             <span class="docs-gallery__cat-title-wrap">
-              <span class="docs-gallery__cat-icon i-carbon-status-resolved" aria-hidden="true" />
+              <span class="docs-gallery__cat-icon i-carbon-checkmark-outline" aria-hidden="true" />
               <span class="docs-gallery__cat-title">{{ categoryMeta.status.label }}</span>
             </span>
             <span class="docs-gallery__cat-desc">{{ categoryMeta.status.desc }}</span>
