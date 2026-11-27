@@ -40,7 +40,7 @@
 
 | 功能     | Windows                              | macOS                | Linux                                 |
 | -------- | ------------------------------------ | -------------------- | ------------------------------------- |
-| 文件搜索 | Everything 三级回退 + 自动安装 + 自愈 ✅ | Spotlight mdfind ✅  | locate/tracker/baloo，缺失时无感知 ⚠️ |
+| 文件搜索 | Everything 三级回退 + 自动安装 + 自愈（hosted `windows-2022` `26/26` CI 全绿，PR `#2319` / run `45913177460`；`#308` manifest 回填开放）✅ | Spotlight mdfind ✅  | locate/tracker/baloo，缺失时无感知 ⚠️ |
 | 应用扫描 | 5 源并行（重依赖 PowerShell）✅      | mdfind+plist+mdls ✅ | 仅 .desktop（139 行）⚠️               |
 | OCR      | WinRT ✅                             | Apple Vision ✅      | stub 未实现 ❌                        |
 | 截图     | Rust xcap 三平台统一，CI 构建链已验证；已签名打包运行证据待补 | 同左                 | 同左                                  |
@@ -169,6 +169,7 @@
   - 本机已安装 arm64 beta.7 的 Developer ID、deep strict codesign、Gatekeeper、公证及 RSA 构建证明/物理 asar SHA 均实查通过。旧“仅 arm64、需先决定是否支持 Intel”判断失效；剩余为下载/OTA 架构选择与 Intel 真机运行证据，不把 arm64 验签冒充 x64 运行验收，也未新增 Universal 承诺。
   - 2026-07-21 进展：Developer ID 签名、App Store Connect API-key 公证、本机/GitHub Secrets 与 ZIP 信任验证已闭环；OTA 已移除 `electron-updater` 双路径。R2 仍保持 open：架构策略、发布清单、下载选择和真机证据尚未收敛。跟踪：[#311](https://github.com/talex-touch/tuff/issues/311)。
   - 2026-08-07 复验：`electron-updater` 已不在任何 `package.json` 中声明，双路径确已移除——本条**只剩 Intel/Universal 范围这个产品决策**，不再含 artifact 冲突成分。#311 仍 open。
+  - **2026-11-26 打包修复（PR `#2318`，`67ea177c0`）**：`postprocess-mac.js` 修复双架构归档覆盖风险，同步对齐 Electron 缓存并去重构建；Intel x64 真机运行证据与 `#311` 产品范围决策仍保持开放。
 
 - [ ] **R3 — 大目录扫描/对账内存峰值** ⚠️ 结构问题已消除，**只剩实测未做**（2026-08-07 复验）
   - 原描述的三层物化**均已不成立**：worker 逐批 post 并等 `batchAckWaiters` 背压；client 的累积版 `scan()` 已删除（[#1091](https://github.com/talex-touch/tuff/pull/1091)），流水线只用 `scanBatches()`；reconciliation 改为消费 `AsyncIterable`、`reconcile()` 逐批调用、`getDbFilesByPaths(diskPaths)` 按批限定路径，行数统计改为 `countRootRows` 普查而非物化集合。
@@ -206,7 +207,7 @@
   - 2026-08-03 深度运行复核：canonical macOS arm64 包在隔离 profile 运行 50+ 分钟、完成 145 次搜索并等待 Worker 空闲关闭后，主进程仍有 775 个 numeric FDs，其中 294 个指向 `database.db`、36 个指向 `database-aux.db`，最高 FD 1032，超过 `database/index.ts` 的 `DB_OPEN_FD_WARN_THRESHOLD = 256`。15 秒四次 `lsof` 采样保持平台且搜索无失败，本轮确认的是高句柄压力，不直接定性为线性泄漏；后续 R9 必须把 libSQL client/session owner registry 与 statement 生命周期纳入验收。
   - 2026-08-04 修复闭环证据：同一 146-app fresh-profile mdls 运行后，provider-level reconcile batching 将 `database.db` numeric FDs 从 148 降到 11；自然 mdls tick、搜索压力与隐藏回收后，全进程 numeric FDs 为 167，低于 `DB_OPEN_FD_WARN_THRESHOLD = 256`，且未使用 forced GC。CoreApp 保留 Windows/Linux 的 Chokidar 4 后端，仅在 macOS 选择 Chokidar 3.6 package alias 的原生 FSEvents 后端；canonical packaged 启动无模块解析错误，应用目录树仅保留 4 个 watcher descriptors。
   - R9 仍保持 open：App Provider 尚未迁入 search-index worker typed persistence port，`db/utils.ts` policy-free mutations、libSQL client/session owner registry 和 aux compatibility mirror 退场仍待后续收敛。
-  - Remaining R9 search-index split write migration is owned by `07-28-migrate-search-index-split-write-paths`: the split has defaulted on since `cd39bdbf6`; `=0` is the emergency rollback. Every remaining 2d/2e writer and provider-before-`searchIndexWriter` readiness assertion still needs focused verification and isolated-profile runtime evidence.
+  - Remaining R9 search-index split write migration is owned by `07-28-migrate-search-index-split-write-paths` (frozen read-only): the split has defaulted on since `cd39bdbf6`; `=0` is the emergency rollback. Isolated packaged 3-phase runtime evidence (`v2.4.15-beta.13`, 62/62) is recorded below and synced in [`search-index-split-write-acceptance.md`](./search-index-split-write-acceptance.md); remaining AppProvider worker migration, dev-launch harness coverage, and `db/utils.ts` convergence remain open.
   - 2026-09-27 **dev 分支与已发布 beta 漂移造成 writer 病态退化**：当前 dev PID 88881（master 尚缺 stage 上已发布的 `9ed43e307` / `bcac84591`）对 7.41GB `search-index.db` 保持 241 个描述符；`app-provider` 每 50 条写批次实测 52.7–94.8s，随后文件 enrichment 的 30s persist barrier 与 scheduler drain 连锁超时。含两笔修复的隔离 build 在同机 100k campaign 已推进 6.3 万文件时仅保持 10 个该库描述符。两笔已发布提交已同步回当前工作树；正在运行的旧 dev 进程需重启后才生效。
   - **2026-11-23 `v2.4.15-beta.13` 打包 split 验收与 `fd` 符号链接根修复**：
     - `search-split:app-evidence --launch packaged --appBundle /Applications/Tuff.app --seedAppCatalog`（非系统隔离沙箱路径）**62/62 全部通过**（`bootstrap` 19/19、`split` 20/20、`rollback` 16/16、`parity` 7/7；`0 SQLITE_BUSY` / `0 SQLITE_LOCKED` / `0` 主库越界写入；`database.db` `198` app 行、`search-index.db` `4` 非 app 文件行与 `202` `search_index` 行、回滚正对照 `13` 写、双拓扑查询与计数完全一致）。
@@ -255,8 +256,10 @@
   - 现场现象：CoreBox 交互搜索（如 `a pet`）与后台文件索引/富化并发，主进程同时承受 Spotlight 654ms 子进程 I/O 物化、FTS 读 808ms、主线程同步 LibSQL 水合、以及 5.2s 慢写导致的 30s drain 超时，造成主进程事件循环卡顿。
   - 目标架构：将 Search Engine Core、文件 Provider（FileProvider、Spotlight、Everything 等）、FTS5 检索及候选数据水合整体移出 Electron 主进程，沉降至独立 Search Engine 子进程（或专用 Worker Thread）。
   - 边界收益：主进程彻底解耦所有搜索计算与 SQLite 连接，仅负责窗口呈现与 IPC 消息中继；搜索慢查询与底层 I/O 争用不再影响 CoreBox 前台响应与动画流畅度。
+  - **2026-11-23 进展（3.0 Phase 1，PR `#2279` `d73e7cb1c` + PR `#2280` `5f3439b6f`）**：已落地同包体 `utilityProcess` 搜索内核宿主与读写客户端桥接（可选开关 `TUFF_SEARCH_KERNEL_UTILITY_PROCESS=1`，默认仍为 `worker_threads`），纯 Node 跨进程基准主进程峰值 RSS `-71.94%`；默认切换待 Phase 0 Metric 2 与 `v2.4.15-beta.15` 打包 Electron soak 验收，Provider 整体迁出主进程仍开放。
 - [ ] **R13 — 安装版真实 profile 的持续低能耗验收未完成**（2026-09-30 实测，源提交 `d28dc473d`）
   - 补丁后另一 120 s 窗口仍为 CPU 116.171%、Energy Impact 4582.138；随后较安静窗口 3.564% / 85.559 不能抵消高负载，能耗问题未关闭。
+  - **2026-11-23 ~ 11-26 进展**：已合入 3.0 Phase 0 探针与 `beta.13` Metric 1/3 实测（PR `#2259`/`#2275`/`#2278`）、Phase 3 后台渲染 0 Hz 停帧（PR `#2281` `fe5862dcc`）与 Phase 2 `IdleBudgetCoordinator` 空闲轮询暂停（PR `#2322` `be7b69729`）；Phase 0 Metric 2（`sudo powermetrics`）与 `v2.4.15-beta.15` 安装版真实 profile 持续低能耗复测仍保持开放。
   - 验收需在安装版真实 profile 上做持续窗口复测；research 原始 JSON 未入库，结论以本条为准。
 
 ### 🟢 低危清理
@@ -286,8 +289,9 @@
 | `07-13-fix-ranking-dead-features`              | B1 + B2                                                                                                   | ✅ B2 已修；B1 写侧接通且隔离真实 EmbeddingGemma 2 页级写入/重开/召回已验收；packaged helper 发布验收另列 |
 | `07-16-fix-usage-statistics-double-counting`   | B3                                                                                                        | ✅ done（单写者 + 保守迁移，4 tests + smoke）                     |
 | `07-16-unify-file-filtering-service`           | B4                                                                                                        | ✅ done（统一策略 + 索引/发布双门，83 tests + typecheck + smoke） |
-| `07-28-migrate-search-index-split-write-paths` | R9 remaining provider/file/embedding write migration; default-on topology, readiness-order, isolated-profile evidence, and `=0` rollback gate | planning
-| (待建)                                         | R1 打包验证 / R2 mac 签名 / R3 流式落库 …                                                                 | backlog                                                           |
+| `07-28-migrate-search-index-split-write-paths` | R9 remaining provider/file/embedding write migration; default-on topology, readiness-order, isolated-profile evidence, and `=0` rollback gate | 🧊 冻结；`2026-11-23` `beta.13` 打包 split `62/62` 已过（见 [`search-index-split-write-acceptance.md`](./search-index-split-write-acceptance.md)），剩余 R9 AppProvider 迁移开放 |
+| `07-17-windows-everything-productionization` | Windows Everything SDK / CLI / unavailable UI 打包门禁（`#308`） | 🧊 冻结；`2026-11-26` PR `#2319`（`6022abdce`）托管 `windows-2022` `26/26` 全通过（run `45913177460`），余 strict Windows acceptance manifest 回填开放 |
+| (待建)                                         | R1 Windows/Linux 截图打包验证 / R2 Intel x64 真机 / R3 流式对账落库实测 … | backlog                                                           |
 
 ### 遗留 carve-out（B1 派生，未做）
 

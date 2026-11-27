@@ -1,6 +1,6 @@
 # Nexus Performance TODO
 
-> 更新时间：2026-11-23
+> 更新时间：2026-11-27
 > 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台性能收口。全局执行顺序服从 [`TODO.md`](./TODO.md)。
 
 ## Goal
@@ -74,10 +74,10 @@
   - toast feedback 动态加载
   - public docs auth/profile graph 移出首访
   - legacy sonner CSS 移出首访
-- docs production static shell / payload 已完成一轮收口：
-  - 所有 docs detail route 生产 SSR 改为 metadata-only (`body=0`)，`/docs` 与 `/docs/index` 保持完整 SSR。
-  - docs 正文通过客户端 idle/full-body fetch 拉取，避免每个 docs HTML 重复携带完整 MDC body。
-  - docs navigation 改为 client lazy fetch，component docs 仍只请求 `scope=components`，避免静态 HTML 重复注入全量 nav tree。
+- docs production static shell / payload 演进记录（**2026-08-27 已改由全量正文 SSG 契约取代旧 `body=0` 策略**）：
+  - 历史阶段（2026-06/07）曾将 docs detail route 生产 SSR 设为 metadata-only（`body=0`）并由客户端补拉正文；2026-08-27 [`nexus-docs-rendering-contract.md`](../engineering/specs/frontend/nexus-docs-rendering-contract.md) 已正式推翻该策略，要求所有预渲染与 SSR 文档页统一 `DOCS_PAGE_RENDER_BODY_MODE = '1'` 首字节下发完整渲染正文（规避中国大陆到 Cloudflare 边缘二次动态请求 1.4–5s 延迟与 ~4% 失败及爬虫空壳）。
+  - 现行生产契约已由 PR `#2230`（`2c5317c3b` / `53a8010a7`）与 PR `#2255`（`a5532b389`）通过 `check-worker-bundle.mjs` 中的 `hasRenderedDocsBody()` 接入 CI `job_nexus` 阻断门禁；2026-11-27 线上实测 `https://tuff.tagzxia.com` 10/10 条 `#1800` 证据路由全部返回 HTTP `200` 且携带 `.docs-rendered-body` 完整正文（如 `/en/docs/dev/getting-started/quickstart` 3,244 可见字符、`/en/docs/dev/components` 23,891 可见字符、`/en/docs/dev` 3,535 可见字符）。
+  - docs navigation 仍保持 client lazy fetch，component docs 仍只请求 `scope=components`，避免静态 HTML 重复注入全量 nav tree。
   - docs engagement tracker 已移除 `beforeunload` flush，保留 `visibilitychange` / `pagehide` flush，避免 docs 公共页面主动引入 bfcache blocker。
   - `node apps/nexus/build/check-worker-bundle.mjs`：`dist total=36.43 MiB`，worker executable JS `8.91 MiB`，gzip `2.11 MiB`，worker JS 文件 `648` 个，Worker sourcemap `0`，静态路由排除 `19` 条通过。
   - `build:analyze-worker` 现在同时守卫 route files、docs detail HTML payload、docs/store/landing/auth/public-info CSS boundary、public route-family 初始 JS/CSS budget 与 HTML 初始资产引用断链；当前静态路由文件 `19/19` 通过。
@@ -86,7 +86,7 @@
   - UnoCSS Attributify 仅允许 `un-` 前缀，阻断 Vue props 到全局 CSS 的误提取；四轮 icon data URI 压缩后 shared entry CSS 当前 `275,750` bytes（gzip `48,150`），并由 `278,000 / 50,000 gzip bytes` 专项门禁、`11` 个大图标 selector 回流检查与 `8` 个兼容 alias compiled rule-byte 上限守卫；production unprefixed Attributify finding `0`，既有本地 production desktop/mobile visual smoke `8/8`，`/new` Palette runtime 与 round 4 六图 compiled CSS visual 均通过。
   - landing 的 below-fold 图片不再依赖浏览器原生 lazy-load 距离启发式：三条 landing HTML 会移除 `rel=prefetch as=image`，四张插件卡背景只在卡片进入 `200px` observer margin 后设置 `src`；artifact guard 同时拒绝 image-prefetch 与插件 JPEG URL 回到初始 HTML。
   - landing showcase 的三个 MP4 只在实际 showcase 进入 viewport 后加载；移除全量 video metadata 预探测，实际 video 负责回传 duration，artifact guard 拒绝任一 showcase MP4 URL 回到 landing initial HTML。
-  - docs detail HTML 全量守卫：`468` 个 docs detail page 最大约 `20.3 KiB`，无 full body marker，无 `/api/docs/navigation` payload；`/docs` 与 `/docs/index` 作为完整 SSR 例外保留。
+  - docs detail HTML 全量守卫（2026-06/07 历史基线曾约束 `468` 个 docs detail page 最大约 `20.3 KiB` 且无 full body marker；现已按 [`nexus-docs-rendering-contract.md`](../engineering/specs/frontend/nexus-docs-rendering-contract.md) 与 PR `#2230`/`#2255` 翻转为强制校验 `hasRenderedDocsBody()` 全量正文渲染，同时继续禁止 `/api/docs/navigation` payload 注入）。
   - docs deferred runtime API 静态证据已补：`output/playwright/nexus-docs-runtime-route-guard-2026-06-28.{json,md}`，Worker 产物中 `/api/docs/page`、navigation、sidebar-components、view、feedback、comments、engagement 路由 chunks `10/10` 存在；该证据不替代 Cloudflare / wrangler runtime HAR。
   - 初始资产静态证据已补：`output/playwright/nexus-initial-asset-budget-2026-06-25.{json,md}`，docs/store/landing/auth route family 全部未超预算；该证据不替代 Cloudflare / wrangler runtime smoke。
   - public route asset budget 静态证据已补：`output/playwright/nexus-public-route-asset-budget-2026-06-28.{json,md}`，docs/store/landing/public-info/auth 共 `5` 个 route family、`468` 个静态 HTML 全部未超预算，CSS boundary finding `0`；该证据不替代 Cloudflare / wrangler production HAR。
@@ -130,18 +130,19 @@
 
 | 主题 | 状态 | 下一步 |
 | --- | --- | --- |
-| docs 文档内容加载 | guarded | docs detail static shell 已扩到全 docs；生产 SSR metadata-only、nav lazy fetch、deferred full-body Worker route chunks、build budget / HTML 抽样证据均已补。下一步继续拆可见区 demo / API table lazy boundary。 |
+| docs 文档内容加载 | guarded | docs detail 已按 [`nexus-docs-rendering-contract.md`](../engineering/specs/frontend/nexus-docs-rendering-contract.md) 恢复全量正文 SSG（`body=1`）并由 `hasRenderedDocsBody()` 在 CI 阻断回归（2026-11-27 线上 10/10 证据路由实测全部含完整正文）；nav lazy fetch 与 build budget / HTML 守卫保持生效。下一步继续拆可见区 demo / API table lazy boundary。 |
 | AI review / aireview 未审批组件 | guarded | 当前 `232/232` localized component docs 已 reviewed + verified；locale-static sidebar/navigation/search payload 与 BaseSurface/Fusion local Wrangler runtime 已复验。旧 worktable 仅保留历史批次。 |
 | dev SSR TTFB / Nuxt macro | guarded | fresh-process / Vite-ready 五路基线与复采已分离 Nitro startup 和 route cold TTFB；嵌套 page-local route 递归过滤、空 page-meta dev fast path 与 focused guard 已补。 |
 | sidebase auth runtime | guarded | sidebase client plugin + named `auth` middleware 已移出客户端产物，explicit auth/protected routes 有静态守卫；local Wrangler 已覆盖 auth session/providers/callback error boundary 与 app callback shell，仍需真实 provider callback smoke。 |
 | route matrix 二轮 | guarded | public/static routes 已合并到 `nexus-static-routes.mjs`；Cloudflare `_routes.json` rule-cap 已用 docs exact/wildcard 规则收口，本地 static desktop/mobile smoke、worker-owned route matrix、dashboard runtime chunk guard、docs bfcache blocker artifact guard、local static back/forward smoke 与 local Wrangler route smoke 已补。仍需 deployed Cloudflare preview、authenticated dashboard 与 bfcache 命中实测。 |
-| production chunk / payload / CSS | guarded | docs/store/dashboard/landing/public-info/auth source boundary、docs metadata-only payload、client Content SQLite zero-runtime guard、静态 route files、初始 JS/CSS budget、worker/dist budget、Worker sourcemap retention、PWA precache trim、remote font artifact guard、local static HAR/screenshot smoke 与 local Wrangler runtime smoke 已有守卫；仍需 deployed Cloudflare Pages preview HAR 作为最终结论。 |
+| production chunk / payload / CSS | guarded | docs/store/dashboard/landing/public-info/auth source boundary、docs 全量正文 SSG + `hasRenderedDocsBody()` 守卫、client Content SQLite zero-runtime guard、静态 route files、初始 JS/CSS budget、worker/dist budget、Worker sourcemap retention、PWA precache trim、remote font artifact guard、local static HAR/screenshot smoke 与 local Wrangler runtime smoke 已有守卫；仍需 deployed Cloudflare Pages preview HAR 作为最终结论。 |
 | 首页 warnings | guarded | `Invalid scope`、async lifecycle `onBeforeUnmount` 与 ScrollTo `autoKill` 配置已修复；desktop/mobile local Wrangler 加载、滚动、截图 smoke warning/error `0`。WebGL `ReadPixels` 在当前干净 Chrome 样本中未复现。 |
 
 ## 2026-10 ~ 11 进度同步（Admin Console 与发布基础设施）
 
 - **Admin Console 迁移与退役 AI 运行时清理（已完成）**：`apps/nexus/app/pages/admin/*.vue` 下 **13/16** 个管理页（`analytics`、`audits`、`emergency`、`governance`、`images`、`intelligence-audits`、`intelligence-overview`、`provider-registry`、`reviews`、`risk`、`subscriptions`、`updates`、`users`；余 `index`、`codes`、`credits` 3 页）已统一迁移至 `AdminPageShell` 与 Admin Console Kit（`27a8e62ae`、`ae3225e09` 等），并已彻底移除退役的后台 AI Agent 运行时（`/api/admin/intelligence-agent/*`、`intelligence-lab/*` 及分析页 AI 面板，`14cbc855c`）。
-- **TuffEx & 文档同步基础设施更新**：`packages/tuffex` 已发布 `0.9.4`（`a2e2cbd9b`）；docs 导航 i18n keys（`#2216`）、docs section switch 样式首屏加载（`3bdf85575`）及 `.github/workflows/sync-nexus-release-notes.yml`（`#2213`/`#2214`）已合入主线。
+- **TuffEx & 文档同步基础设施更新**：`packages/tuffex` 已推进至 `0.9.5` 并新增 `tuffex-core` / `tuffex-react` / `tuffex-wc` 多框架包与 Nexus 框架切换器（PR `#2315` `c65e79dca`）；docs 导航 i18n keys（`#2216`）、docs section switch 样式首屏加载（`3bdf85575`）及 `.github/workflows/sync-nexus-release-notes.yml`（`#2213`/`#2214`）已合入主线。
+- **Nuxt 4.5.2 安全升级与预算复验（2026-11-26，PR `#2321` `1675067ee`，关闭 `#1098`）**：升级至 `nuxt@4.5.2`、`@nuxt/kit@4.5.2`、`@nuxt/devtools@3.4.3`、`unhead@^3.3.1` 与 `postcss@8.5.33`，清空 `.github/prod-audit-allowlist.json` 中 9 条已修复高危豁免（仅余 Electron 41 单条）；同步适配 `docs/[...slug].vue`、`nexus-demo-loaders.ts`、`nexus-manual-chunks.ts` 与 `nuxt.config.ts`，`build:analyze-worker` 全部预算通过（`executable_gzip=2.57 MiB <= 2.70 MiB`、`runtime=84.28 MiB <= 95.00 MiB`、`781 routes / 6 families`、`766 docs routes`、`0` oversized initial chunks）。
 - **代码侧构建/预算门禁与本地 preview 阻断已清零（2026-11-23）**：下方 `2026-10-24` 记录的 `build:analyze-worker` 体积与 route-level 初始资产预算回归已通过 PR `#2230` 与 PR `#2255`（`a5532b389`）收口并接入 `.github/workflows/ci.yml` `job_nexus` 阻断门禁；线上探针暴露的全部代码侧阻断（hydration mismatch、route `_nuxt`/docs 请求扇出、bfcache 与 collector 解析/探针问题）已通过 PR `#2265`（`5c3e67a33`）修复并在本地 `wrangler pages dev` + Playwright 复验通过，未放宽任何门禁阈值。当前仅剩外部 `--require-deployed-preview` Cloudflare Pages 真实 preview 部署及操作员 `--auth-state` / `--provider-callback-evidence` 采集项保持开放。
 
 ## 2026-10-24 本轮剩余

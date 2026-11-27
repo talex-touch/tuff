@@ -1,7 +1,69 @@
 # 变更日志
 
-> 更新时间：2026-10-18
+> 更新时间：2026-11-27
 > 定位：只保留当前阶段的高信号变更索引。早期流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-11-26
+
+### search: Windows Everything 作用域隔离与托管门禁 26/26 通过（PR #2319，`6022abdce`）
+
+- 将 native 文件结果移出索引域并修复探测裁切；`EverythingProvider.tryInitializeSdkBackend()` 在宣告 `sdk-napi` 可用前验证 SDK 运行时探针与 `getVersion()` 有效版本，避免 DLL 缺失或 IPC 停机时误报可用。
+- 降级阶段探测（`expectBackend === 'unavailable'`）跳过 marker 预置，避免 `file-provider` 回退干扰空态/降级断言；`.github/workflows/windows-everything-production.yml` 在降级阶段前等待 `Everything.exe` 彻底退出（含超时 `Stop-Process -Force` 兜底与进程/服务残留 fail-closed）。
+- 实测证据：托管 `windows-2022` `Windows Everything Production Gate`（run `45913177460` / job `140226109250`）`26/26` 全通过，覆盖 Step 20–21 SDK CoreBox UI 与 Step 22–24 降级 UI 校验。将上述产物回填至严格 Windows acceptance manifest 以关闭 `#308` 仍保持开放。
+
+### build/deps: 修复 P0 `chokidar-fsevents` 打包启动回归（PR #2325，`469cfca37`）
+
+- 将 `pnpm-workspace.yaml` 中的 `unplugin@^2.0.0: catalog:build` 收口为 `unplugin@<3.0.0: catalog:build`，消除 `@sentry/vite-plugin@4.9.1` 引入的 `unplugin@1.0.1` / `chokidar@3.6.0` 与别名 `chokidar-fsevents` 的重复依赖冲突，避免 `electron-builder` 丢弃 `app.asar` 中的 `chokidar-fsevents`。
+- 将 `'chokidar-fsevents'` 纳入 `apps/core-app/scripts/build-target/runtime-modules.js` 跨平台打包强制校验并补齐回归测试；实测 `windows-2022` run `45910503550` 确认 0 重复依赖/缺失路径告警，`chokidar-fsevents` 完整打包且 `tuff.exe` 18.2s 进入 `CoreBox renderer ready`。
+
+### tds: 单源 TDS 令牌、细粒度 OpenUI、设备画框、Lint 探针与 L1 画布（PR #2316，`c3f8aa558`）
+
+- 落地 TDS M0–M3：单源 token 同步（`scripts/tds-tokens-sync.mjs`）、核心原语与 WCAG 对比度契约、细粒度 OpenUI、设备画框（`TdsDeviceFrame`）、静态规则与主进程离屏捕获/DOM 探针（`tds-capture/offscreen-renderer.ts`）、L1 设计画布（`TdsDesignCanvas`）、Mockup 导出/打印与三层声明式主题包。
+- 同步完成审查加固：沙箱画布 CSP 补 `form-action 'none'` 与 WebRTC 出口阻断、DPR 池槽位隔离与 `waitQueue` 上界、无 taint PNG 导出、导出错误文案中英本地化及大小写不敏感自定义属性声明发现。
+
+### security/ci: 升级 Nuxt 4.5.2 / unhead 3 并锁定 Rust 工具链与 `Protocol` 必检门禁（PR #2321，`1675067ee`，关闭 `#1098`、`#1794`）
+
+- Nexus 升级至 `nuxt@4.5.2`、`@nuxt/kit@4.5.2`、`@nuxt/devtools@3.4.3`、`unhead@^3.3.1` 与 `postcss@8.5.33`，同时通过区间覆写保持 16 个非 Nuxt 工作区留在 `vite@7.3.7`；从 `.github/prod-audit-allowlist.json` 清除全部 9 条已修复高危豁免（仅余 Electron 41 单条），`build:analyze-worker` 全部预算通过（`executable_gzip=2.57 MiB`、`runtime=84.28 MiB`、`781` 路由、`0` 超标首屏 chunk）。
+- 三套原生/发布工作流（`native-protocol.yml`、`build-and-release.yml`、`windows-everything-production.yml`）统一以 SHA 固定 Rust `1.100.0`；`native-protocol.yml` 将路径过滤改为 `dorny/paths-filter` + 聚合门禁 `Protocol`（`always()`）并已纳入 `master` 分支保护（8/8 必检生效）。
+
+### perf: 落地 3.0 Phase 2 空闲预算协调器与后台轮询暂停（PR #2322，`be7b69729`）
+
+- 新增 `IdleBudgetCoordinator`（`apps/core-app/src/main/service/idle-budget-coordinator.ts`），建立 `active` / `background-hidden`（15s 隐藏宽限期）/ `system-suspended` 三态状态机，联动 `powerMonitor` 与 `PollingService` 全局压力通道，在后台空闲或休眠锁屏时暂停分析系统采样、文件状态/容量轮询、下载中心、错误日志、网络与 OCR 定时循环。
+- 实机打包 `v2.4.15-beta.15` 10 分钟空闲能耗复测与 Phase 0 Metric 2（`sudo powermetrics`）仍保持开放，不提前宣告 Phase 2 实机能耗门禁关闭。
+
+### security/release/shell: 强制渲染层 CSP、修复 macOS 归档覆盖与整合顶栏舞台操作（PR #2320 / #2318 / #2317）
+
+- **渲染层 CSP（PR `#2320`，`5eb8a72e0`，关闭 `#689`）**：以 `apps/core-app/src/main/core/renderer-csp.ts` 替代 report-only 实现，按 `file:///*` 与 `modules/renderer-override` 作用域通过响应头强制下发 CSP 并加固 `index.html` 回退 meta。
+- **macOS 发布构建修复（PR `#2318`，`67ea177c0`）**：修复 `postprocess-mac.js` 双架构归档覆盖风险，对齐 CI Electron 缓存并通过 `ensure-tuffex-build.cjs` 消除重复构建。
+- **顶部标签栏舞台操作（PR `#2317`，`ed9a807b2`）**：新增 `useShellStageActions` 桥接，在开启 `browserWorkspace` 时将 Home / Herdr 舞台右侧控件整合至 `BrowserTabStrip`，消除重复 `HomeTopBar`。
+
+## 2026-11-23 ~ 2026-11-25
+
+### tuffex/nexus: 多框架组件体系与终端高分内联图像（PR #2315 / #2310 / #2298 / #2293 / #2276）
+
+- 新增 `packages/tuffex-core`、`packages/tuffex-react` 与 `packages/tuffex-wc` 多框架包及 Nexus 多框架文档切换器（PR `#2315`，`c65e79dca`），`packages/tuffex` 推进至 `0.9.5`。
+- `TxTerminal` 落地 Retina HiDPI 内联图片与 Kitty Graphics Protocol 渲染（PR `#2298` `c0854b1d4`、PR `#2310` `1d8834c95`），补齐可运行代码块与 Pro Fold Page（PR `#2293`、`#2276`）。
+
+### herdr/ai/plugins: Herdr Space 工作台、统一 ACP 多 CLI 宿主与零执行 npm 插件生态（PR #2282–#2314）
+
+- **统一 ACP 多 CLI 与 Pi 增强**：泛化 ACP 多 CLI 持久运行宿主并支持可选 Git worktree 隔离（PR `#2282` `e65408ab4`、`#2289` `0ba9e1559`），接入 `herdr-core` 运行平面与 ToolGateway herdr 工具（PR `#2290`、`#2295`），落地 Pi 轮中 steering（PR `#2292`）、默认开启的会话/编排/CLI 启动自动恢复（PR `#2288`）与调度器模型胶囊合并（PR `#2291`），全链路继续严守“调度器决定执行器”不变量。
+- **Herdr Space 与工作区面板**：落地 Herdr Space 主舞台、临时 Space、项目标签组、按 Space 隔离的浏览器工作区标签、工作区文件树、停靠右侧栏（内嵌浏览器/终端/Git 分支与逐提交差异视图，PR `#2283`、`#2294`、`#2296`、`#2308`、`#2311`–`#2314`）。
+- **插件生态与商店**：落地零执行 npm 插件生态，完成 29 个官方插件审计并新增 12 个插件（PR `#2287` `a21bd3c07`）；升级商店源编辑器/GitHub topic/NPM 多词发现及 SVG 图标清洗回退（PR `#2297`、`#2309`）。
+
+### 3.0/search/nexus: 3.0 Phase 0/1/3 进展、`v2.4.15-beta.13` 实机采证与质量收敛（PR #2247–#2281）
+
+- **3.0 Phase 0 实机基线与 Phase 1/3 切片**：交付三指标采集探针（PR `#2259` `d317be0cd`、PR `#2275` `65ce6d0d3`），在 `/Applications/Tuff.app` `v2.4.15-beta.13`（`darwin/arm64`，`645e8a01a`）完成 Metric 1（冷启动 `3,429 ms`）与 Metric 3（10 分钟空闲总 RSS 中位 `633.58 MiB`、CPU 中位 `3.46%`）实测，Metric 2（`sudo powermetrics`）仍待补；落地 Phase 1 同包体 `utilityProcess` 搜索内核可选接入（`TUFF_SEARCH_KERNEL_UTILITY_PROCESS=1`，PR `#2279` `d73e7cb1c` + PR `#2280` `5f3439b6f`，纯 Node 跨进程基准主进程峰值 RSS `-71.94%`）与 Phase 3 后台 0 Hz 渲染停帧（PR `#2281` `fe5862dcc`）。
+- **打包搜索与原生验收**：`v2.4.15-beta.13` 隔离打包 `search-split:app-evidence` `62/62` 全通过并修复 `fd` 符号链接监听根规范化（PR `#2273` `44daa9e97`、PR `#2278` `1598f49aa`）；同包官方签名 macOS arm64 原生截图真实捕获 `4112x2658` PNG（Windows/Linux 仍开放）。
+- **AI / UI / 搜索快赢**：完成 `omp` ACP 接入（PR `#2254` `282ae52cc`）、CoreApp 4 个旧对话框包装移除并直连 TuffEx（PR `#2253` `ea7851079`）、UIKit 二期与 `HomePage.vue` 瘦身至 781 行（PR `#2261`、`#2264`）、`file-provider.ts` F1/F3 拆分至 2,650 行与 `app-provider.ts` B1 稳定性重试（PR `#2263`、`#2267`）、A14–A16/A6/E2/E3/E5 存储减容与 `SQLITE_BUSY`/退出卡顿修复（PR `#2247`–`#2250`、`#2268`）、依赖安全升级（`@electron/asar@4.3.2`、`objc2@0.6.5`、`vue-router@^5.5.0`，PR `#2252`、`#2256`）。
+- **Nexus 真 SSG 与线上采证**：恢复 docs 全量正文 SSG（`body=1`）并接入 `check-worker-bundle.mjs` `hasRenderedDocsBody()` 与 CI `job_nexus` 阻断门禁（PR `#2230` `eb3a77249`、PR `#2255` `a5532b389`）；清零 hydration/扇出/bfcache 代码阻断并在 `https://tuff.tagzxia.com` 完成 8/8 路由、bfcache 与真实 GitHub OAuth 采证（PR `#2265` `5c3e67a33`、PR `#2272`、PR `#2274`）。
+
+## 2026-10-20 ~ 2026-11-18
+
+### architecture/search/nexus: 3.0 选型定案、索引上限与整数倒排、发布说明同步
+
+- **3.0 运行时与能耗决策**：明确 3.0 继续以 Electron 为宿主，聚焦「内核进程化 + 空闲预算 + 渲染能耗」（见 [`3.0-runtime-and-energy-decision-2026-10-21.md`](../../engineering/reports/3.0-runtime-and-energy-decision-2026-10-21.md)）。
+- **搜索存储与读路径**：落地 `search-index.db` 8 GiB / 2% 卷容量上限、删除预留与容量模式淘汰（A18，`9e77b1fa6` / `38f9cf445`）、`0055_search_keyword_postings.sql` 整数 `doc_id` 倒排（A10，`ed48495a1`，关键词表体积实测 `-81.8%`）、`PRAGMA auto_vacuum = INCREMENTAL`、worktree 跳过与 fd 剪枝；修复读 worker 时间戳秒转毫秒（B10，`f6b224bfb`），将统计计数、恢复分页与子树对账下沉至 deferred 读 worker 并增加开机热目录追赶。
+- **浏览器工作区与生态运维**：2.5.2 现代浏览器工作区合入全局标签栏与 Phase 2 体验打磨（PR `#2195`、`#2218`），默认开关已调整为开启；`.github/workflows/sync-nexus-release-notes.yml`（PR `#2213` / `#2214`）落地并完成 `v2.4.14` 双语发布说明线上回写（run `45011852117`）；`local-system-ocr` 升级常驻 Rust helper 并以 `isNativeOcrAvailable()` 门控（PR `#2242`）。
 
 ## 2026-10-18
 

@@ -1,6 +1,6 @@
 # TODO 长期债务池（Long-term Backlog）
 
-> 更新时间：2026-11-23
+> 更新时间：2026-11-27
 > 说明：本文承接 `docs/plan-prd/TODO.md` 的非 2 周执行项。主 TODO 只保留当前 release window；本页只保留长尾债务与后续专题。
 
 ## A. 架构与质量债务
@@ -11,6 +11,9 @@
 - [ ] AI Wave B：SSE 断线、鉴权与渠道矩阵集成回归补齐。
 - [ ] SRP Wave C：`plugin-module`、`plugin`、`search-core`、`app-provider`、`file-provider` 大文件职责拆分。截至 2026-11-23（PR `#2263`，`f22d7f9c6`）：`file-provider.ts` 已由 4,073 行降至 **2,993 原始行 / 2,650 代码行**（棘轮由 `2,790` 收紧至 **`2,650`**；Step 2 历史迁移下沉、`indexRowStore` / `subtree-persist`、F1 纯记录映射 `file-provider-record-mapper.ts`（批量发布保留原处）与 F3 4 个死公开成员清理及重复 yield/abort 工具 `file-provider-async-utils.ts` 已落地，单测与契约回归通过，未执行实机 Electron 验收；余 Step 1 构造器、Step 3 分库路由收敛、Step 4 四角色拆分及 F2 索引流水线，见 [`file-provider-architecture-refactoring-analysis-2026-10-18.md`](../engineering/reports/file-provider-architecture-refactoring-analysis-2026-10-18.md)）；同步纳入 `.github/module-size-ratchet.json` 止血的巨石模块包括 `app-provider.ts`（**4,556 原始行 / 3,868 代码行**，PR `#2267` `74680997e` 抽离 `app-provider-item-stability.ts` 并将棘轮由 `3,878` 收紧至 **`3,868`**）、`plugin.ts`（3,854 原始行 / 3,244 代码行）、`plugin-module.ts`（3,568 原始行 / 3,322 代码行，新增棘轮）与 `search-core.ts`（2,850 原始行 / 2,405 代码行，自 ~1,880 回涨，新增棘轮）。
 - [x] Runtime Safety：动态执行边界治理已闭环（2026-10-18）。C1 已彻底剥离 mathjs 死依赖；CoreBox 算式采用手写有限深度 SafeMathParser（无 eval/Function，限深 32、限长 240），单位换算采用纯静态代数算子字典；widget runtime sandbox 采用严格 CSP、词法 AST 阻断、原型与构造器 Proxy 封禁。
+- [x] Renderer CSP 强制收紧（2026-11-26，PR `#2320` `5eb8a72e0`，关闭 `#689`）：以 `apps/core-app/src/main/core/renderer-csp.ts` 替换原 report-only 实现，按 `file:///*` 与 `modules/renderer-override` 作用域通过响应头强制下发渲染层 CSP 并加固 `index.html` 回退 meta。
+- [x] Nuxt 4.5.2 安全升级与 `Protocol` 必检门禁（2026-11-26，PR `#2321` `1675067ee`，关闭 `#1098`、`#1794`）：升级 `nuxt@4.5.2` / `unhead@^3.3.1` 清除 `.github/prod-audit-allowlist.json` 中 9 条已修复高危豁免（仅余 Electron 41 单条）；三套原生/发布工作流 SHA 锁定 Rust `1.100.0`，`native-protocol.yml` 切换为 `dorny/paths-filter` + `Protocol` 必检聚合门禁并纳入 `master` 8/8 必检保护。
+- [x] 3.0 能耗 Phase 2 空闲预算协调器（2026-11-26，PR `#2322` `be7b69729`）：落地 `IdleBudgetCoordinator`（`active` / `background-hidden` / `system-suspended`）与 `PollingService` 全局压力通道，暂停后台空闲轮询循环；Phase 0 Metric 2（`sudo powermetrics`）与 `v2.4.15-beta.15` 打包 10 分钟空闲/长稳验收仍开放（见 [`3.0-runtime-and-energy-decision-2026-10-21.md`](../engineering/reports/3.0-runtime-and-energy-decision-2026-10-21.md)）。
 - [ ] Storage：配置域 SQLite SoT 主迁移已默认启用（`0029_app_config_sot.sql` 与 `ApplicationConfigRepository` 默认使用 `'sqlite'`），仅剩 `TALEX_CONFIG_STORAGE_BACKEND=legacy` 与 `TALEX_CONFIG_LEGACY_MIRROR` 双写镜像在稳定版覆盖确认后的退场窗口及单测清理。
 - [ ] Quality：`quality:release` 已于 2026-09-13（见 [`release-gate-and-worktree-closeout-2026-09-13.md`](../engineering/reports/release-gate-and-worktree-closeout-2026-09-13.md)，历史基线 `55da5867d` / `da19acba8`）5/5 段通过并已在 `.github/workflows/build-and-release.yml` 强制执行；2026-11-23 已通过 PR `#2252`（`2ee7b2f9d`）补齐 `apps/tuff-analyse/package.json` 包级 `lint`/`lint:fix` 脚本并清理 `.github/workflows/ci.yml` 中关于 `docs_verify`（#1254）的过时注释，同步完成并关闭破坏性 Dependabot 升级 `#2184`（`@electron/asar` `4.3.2`）、`#2180`（`objc2` `=0.6.5`）与 `#2178`（`vue-router` `^5.5.0`，PR `#2256`，`82f4decad`）；当前精确残余工程债务仅剩 `apps/core-app/eslint.config.mjs` 对 `src/renderer/**/*.{ts,mts,tsx,vue}` 与 `**/*.{ts,mts,tsx}` 设 `@typescript-eslint/no-explicit-any: 'warn'`（及 `**/*.{ts,mts,tsx,js,mjs,cjs}` `@typescript-eslint/no-unused-vars: 'warn'`）与根 `scripts/lint.mjs` `--max-warnings=0` 的口径对齐。
 - [x] Composer：深色普通主题下权限弹层确认提示对比度已修（2026-10-18）。`HomePermissionMenu.vue` 将小字颜色混合至正文色，真实深色像素采样对比度达到 5.44:1，浅色达到 6.41:1，均达标 WCAG AA 4.5:1。
@@ -22,7 +25,8 @@
 - [x] Composer：Agent profile 分叉改为 child-only override（2026-10-18）。`WorkspaceForkRequest.profileId` 经主进程校验后只写子会话 settings；HomePage 不再先配置源会话。真实 SQLite 回归验证子配置、父 settings/revision/messages 不变，以及非法锚点拒绝后完整数据库无变化；相关 30 项回归和渲染层类型检查通过。未在用户正式会话创建分支，不代表签名包验收完成。
 - [x] CoreApp / TuffEx：UnoCSS 白名单剥离与图标按需 classGlyph 渲染已落地（2026-10-18）。`apps/core-app/uno.config.ts` 已彻底剥离全量 `ICON_CATALOG_CLASSES` safelist 及模块依赖；TxIcon 接入 `classGlyph` 优先解析 SVG 路径，`IntelligenceProviderHeader`、`ProviderList`、`IntelligenceItem`、`IntelligenceChannelsPage`、`AuditBreakdownCard` 与 `TxIconPicker` 局部提供 `provideIconPickerGlyphs()`；IconPicker 接入 AI/品牌/图标分块懒加载与 12 种形状；30 项图标单测及真实浏览器实测（78 个 AI 矢量图标完整渲染、首屏无闪烁）通过。
 - [x] CoreApp：对话框组件统一收敛（2026-11-23，PR `#2253`，`ea7851079`）。已彻底移除 4 个历史对话框包装副本（`TBlowDialog.vue`、`TBottomDialog.vue`、`TPopperDialog.vue`、`TouchTip.vue`）及其 `components.d.ts` 自动导入项并直连 `@talex-touch/tuffex/dialog`；同步完成 TuffEx 对话框生命周期/定时器清理与引用计数背景虚化加固（`createBlowBackgroundBlur`），修复 `dialog-mention.ts` 外部 `clearAll()`/`unregister(id)` 幂等卸载与 `atomicKey` 释放。`packages/tuffex` 327 files / 3,699 tests 与 CoreApp 对话框套件 12 files / 76 tests 通过（单测与构建验证，不替代打包 Electron 实测）。（来源：2026-10-17 #2120 旁路问题审计）
-- [x] TuffEx / PR #2120：琉光材质与旁路问题收口（2026-10-17/18 已通过 `154c61b48` / `20860d02b` 合入主线，TuffEx 已推进至 `0.9.4`）。
+- [x] TuffEx / PR #2120：琉光材质与旁路问题收口（2026-10-17/18 已通过 `154c61b48` / `20860d02b` 合入主线；2026-11-25 PR `#2315` `c65e79dca` 进一步补齐 `tuffex-core` / `tuffex-react` / `tuffex-wc` 多框架包，TuffEx 已推进至 `0.9.5`）。
+- [x] TDS 设计系统 M0–M3（2026-11-26，PR `#2316` `c3f8aa558`）：单源 TDS 令牌、核心原语与对比度契约、细粒度 OpenUI、设备画框、静态/离屏 DOM 捕获探针、L1 设计画布、Mockup 导出与三层声明式主题包已合入主线并完成安全与审查加固。
 - [x] TuffEx / CoreApp：TxIconPicker 模块化与图标分块资产已合入当前主工程（2026-10-18）。已合并 `catalog-ai/brand/emoji/icon`、12 种形状与 `glyphs.ts`，CoreApp 局部提供 `provideIconPickerGlyphs()`，30 项组件单测与真实浏览器渲染通过。
 - [ ] TuffEx / UIKit / Home AI UI 对齐演进（2026-11-23 同步）：坚持“先以 CoreApp 真实生产 UI 为视觉、结构与交互基准升级组件库，严禁将生产 UI 降级迁向占位壳”原则。**第一阶段**（PR `#2226` / `#2227`）已完成 `@talex-touch/tuffex` 与 `@talex-touch/intelligence-uikit` 生产级组件对齐；**第二阶段已全部完成**（首轮 PR `#2261` `b4cc1d762` + 终轮 PR `#2264` `7d3df3c1f`）——升级 `TxAiContextMeter` / `TxAiRunStatus` / `TxAiMessageRail`，删除重复的 `HomeContextMeter` 与 `HomeRunStatus` 改由 `HomeRunDock` 直接复用 `@talex-touch/intelligence-uikit`，`HomeMessageRail.vue` 从 `279 -> 62` 行，`HomePage.vue` 从 `1,943 -> 1,162 -> 781` 行（达成 `<= 800` 目标，零生产 UI 降级，`TuffAIComposer.vue` 完整保留），并修复 `HomePage.submit-race.test.ts` 偶发抖动（`4,317ms -> 181ms`）；单测与类型检查通过，实机 Electron 交互验收仍保持开放（详见 [`omp-runtime-and-tern-gui-integration-analysis-2026-11-01.md`](../engineering/reports/omp-runtime-and-tern-gui-integration-analysis-2026-11-01.md)）。
 
@@ -49,6 +53,7 @@
 
 ## D. 发布与生态
 
+- [x] macOS 归档防覆盖与 P0 `chokidar-fsevents` 打包守卫（2026-11-26，PR `#2318` `67ea177c0` + PR `#2325` `469cfca37`）：修复 `postprocess-mac.js` 双架构归档覆盖、对齐 Electron 缓存并去重构建；以 `unplugin@<3.0.0: catalog:build` 消除 `electron-builder` 重复依赖冲突并将 `chokidar-fsevents` 纳入跨平台打包运行时强制检验（`windows-2022` run `45910503550` 实证 `app.asar` 完整打包且 18.2s 就绪）。
 - [ ] Build Signature：OIDC + RSA 门禁已接入候选（2026-10-18），待真实 GitHub Actions 签发与验签。平台构建器对最终包生成固定版本的 GitHub OIDC provenance，发布组装校验仓库、工作流、源 SHA、issuer、SLSA predicate 和 hosted runner；既有 RSA sidecar/嵌入证明/客户端 pinned key 不变。`actionlint`/ShellCheck 通过，实际 shell gate 对匹配 SHA 通过、错误 SHA 和空包集合拒绝。旧无 OIDC 的恢复产物不豁免；未触发发布，未声称 hosted OIDC 验收通过。
 - [ ] Nexus 支付多渠道 provider 抽象与回调联调。
 - [ ] TuffEx：源码包构建/测试/审计与 Nexus 展示门禁持续收敛。

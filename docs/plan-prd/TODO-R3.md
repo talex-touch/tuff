@@ -1,6 +1,6 @@
 # Tuff R3 Search / Indexing Runtime TODO
 
-> 更新时间：2026-11-23
+> 更新时间：2026-11-27
 > 范围：Roadmap R3 / Search Provider 与 Indexing Runtime。专题设计以 `03-features/search/INDEXING-RUNTIME-V1-PLAN.md` 为准；全局执行顺序服从 [`TODO.md`](./TODO.md)。
 
 ## 当前口径
@@ -42,11 +42,11 @@
 - **Read-worker 下沉与运行稳定性（已合入主线）**：`search-index-read-worker` 已接管文件向量扫描、索引统计计数（`b11cdff1a`、`84a8a8668`）与恢复分页（`6d2bd10a8`）；已合入 subtree 状态持久化与热目录启动追赶（`72b06c1eb`）、热源事件 leading-trailing 节流（`ba6447df4`）、容量模式驱逐与删除余量保护（`38f9cf445` / `9e77b1fa6`）、分批刷写（`835861fa3`）以及 `2.5.1` 文件动作与 `file.search`（`687d48f3f`）。
 - **模块拆分与体积止血**：`FileProvider` 第一轮子服务抽离与冗余扩展写入清理及 F1/F3 拆分（2026-11-23，PR `#2263` `f22d7f9c6`：F1 纯记录映射抽离至 `file-provider-record-mapper.ts`，批量发布保留原处；F3 移除 4 个无调用方公开成员并抽离 yield/abort 辅助函数至 `file-provider-async-utils.ts`）已落地，`file-provider.ts` 降至 **2,650 代码行**（`.github/module-size-ratchet.json` 棘轮由 `2,790` 收紧至 **`2,650`**；未在隔离 Electron 实例复测），且 `search-core.ts`（2,405 代码行 / 2,850 原始行）已纳入 `.github/module-size-ratchet.json`。
 - **当前核心未闭环门禁（收敛剩余项）**：
-  1. `search-split:app-evidence` 3 阶段隔离实跑（bootstrap → split → rollback 真机闭环，排除非 Electron 自检替代）；
+  1. `search-split:app-evidence` 3 阶段隔离实跑：`2026-11-23` 已在 `v2.4.15-beta.13`（`darwin/arm64`，`645e8a01a`）打包隔离路径完成 **62/62** 全通过（`bootstrap` 19/19、`split` 20/20、`rollback` 16/16、`parity` 7/7；同步 PR `#2273` `44daa9e97` 修复 `fd` 符号链接监听根，记录见 [`search-index-split-write-acceptance.md`](../engineering/reports/search-index-split-write-acceptance.md)），仅余 dev-launch 路径、非 macOS 打包路径与剩余 R9 AppProvider worker 迁移开放；
   2. 真实 profile `search:index-migration:evidence-verify -- --strict`（含 `indexing-diagnostics-probe` cold-start `SIGABRT` 隔离修复或 attach-only 采证、`scan_progress` 迁移执行与自然 recent task Settings 截图）；
-  3. Windows Everything CoreBox UI 采证（普通、`@file`、结构化 filter 截图并入 strict acceptance manifest）；
+  3. Windows Everything CoreBox UI 采证：`2026-11-26` PR `#2319`（`6022abdce`）已在托管 `windows-2022` 通过 `Windows Everything Production Gate` **26/26**（run `45913177460` / job `140226109250`，含 Step 20–21 SDK UI 与 Step 22–24 降级 UI）；余将产物回填并纳入 `#308` 严格 Windows acceptance manifest 保持开放；
   4. Quicklinks persistent feed 与 Browser Bookmarks 真实平台/持久源证据；
-  5. 低风险存储减容与运行时隐患收口：`FILE-AND-APP-INDEX-ROADMAP` 的 `A14`/`A15`（不含按 R3 契约保留的 `file_fts`）/`A16` 与 `E2`/`E3`/`E5` 已于 2026-11-22 合入主线（`#2247`–`#2250`），剩余容量/范围产品取舍（`A6`–`A9`、`A17`、`E4`）按独立议题排期。
+  5. 低风险存储减容与运行时隐患收口：`FILE-AND-APP-INDEX-ROADMAP` 的 `A14`/`A15`（不含按 R3 契约保留的 `file_fts`）/`A16` 与 `E2`/`E3`/`E5` 已于 2026-11-22 合入主线（`#2247`–`#2250`），`A6`（索引已满暂停，PR `#2268` `813446aac`）与 `B1`（应用目录稳定性重试，PR `#2267` `74680997e`）已于 2026-11-23 合入主线，剩余容量/范围产品取舍（`A7`–`A9`、`A17`、`E4`）按独立议题排期。
 
 ## 已完成
 
@@ -84,7 +84,7 @@
 | Quicklinks persistent feed                | open                                                                                                      | 需要官方插件持久 feed storage、用户级 clear/rebuild UI 与 Settings evidence。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Browser Bookmarks platform evidence       | partial                                                                                                   | 需要真实浏览器 profile、跨平台 watch root 与 packaged evidence。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | 文件与应用索引后续 | roadmap / 未排期 | 见 [`FILE-AND-APP-INDEX-ROADMAP.md`](./03-features/search/FILE-AND-APP-INDEX-ROADMAP.md)：正文三份存储、向量 JSON 存储、n-gram 体积、VACUUM 门槛、应用重试阶梯、fd stat 并发、名字查询加速评估。 |
-| Everything productionization              | hosted backend/package/performance gate passed / packaged UI manifest open                                | hosted run `29628880312` 已通过 verified SDK/CLI/unavailable、各 200 样本、P95 gate、focused tests、Windows snapshot 与 packaged wrapper/resource/native fail-closed；仍需普通、`@file`、结构化 filter 的交互式 packaged CoreBox evidence，并纳入 strict Windows acceptance manifest。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Everything productionization              | hosted 26/26 CI gate passed (SDK + degraded UI) / strict Windows acceptance manifest backfill open        | hosted run `29628880312` 已通过后端与性能门禁；2026-11-26 PR `#2319`（`6022abdce`）在托管 `windows-2022` `Windows Everything Production Gate`（run `45913177460` / job `140226109250`）通过 `26/26`（含 Step 20–21 SDK CoreBox UI 与 Step 22–24 降级 unavailable UI 校验）；仍需将对应交互式 CoreBox UI 产物回填纳入 `#308` 严格 Windows acceptance manifest 后关闭。 |
 
 ## 高风险迁移前置确认清单
 

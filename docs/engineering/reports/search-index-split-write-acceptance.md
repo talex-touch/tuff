@@ -7,9 +7,7 @@
 > record is in the [backlog](../workflow/backlog.md#07-28-migrate-search-index-split-write-paths). Attach the
 > run report here. The current owner closes R3 against user-agreed acceptance and observed application evidence; the frozen task remains read-only.
 
-Status: **harness ready, application run not yet executed.** Nothing below is claimed as observed
-except the three sections marked `[executed]`. `prd.md` R3 stays open until a run produces a report
-whose checks all pass.
+Status: **packaged isolated run executed and passed 62/62 on `v2.4.15-beta.13` (`darwin/arm64`, 2026-11-23); dev-launch path and non-macOS packaged runs remain unexercised.** Nothing below is claimed as observed except the sections marked `[executed]`. The frozen task record (`07-28-migrate-search-index-split-write-paths`) remains read-only, and all coverage boundaries below continue to apply.
 
 ## The one harness
 
@@ -133,20 +131,23 @@ whose core guards could not be armed fails outright.
   a profile inside the repository, an unknown `--phase`, `--phase split` without a bootstrap, and an
   inherited `TUFF_DB_SEARCH_SPLIT_ENABLED` each exit 1 with the intended message.
 
-## Not executed (and therefore not claimed)
+- `[executed]` **2026-11-23 packaged isolated 3-phase run (`v2.4.15-beta.13`, `darwin/arm64`, commit `645e8a01a`, synced via PR `#2278` `1598f49aa`)**:
+  - Command: `pnpm -C apps/core-app run search-split:app-evidence -- --launch packaged --appBundle /Applications/Tuff.app --seedAppCatalog` against a non-system isolated sandbox profile.
+  - Result: **62/62 assertions passed** (`bootstrap` 19/19, `split` 20/20, `rollback` 16/16, `parity` 7/7).
+  - Observed metrics: `0 SQLITE_BUSY`, `0 SQLITE_LOCKED`, `0` worker-owned sentinel writes reaching primary `database.db`; `database.db` held `198` app rows; `search-index.db` held `4` non-app file rows and `202` `search_index` rows; rollback positive control recorded `13` primary writes; exact count-parity and query-parity matched across split and shared topologies.
+  - Companion bug found & fixed: `file-scan-fd-backend.ts` did not canonicalize symlinked watch roots via `fs.realpath`, causing `isPathInsideRoot` to silently drop files under symlinked temp roots (fixed in PR `#2273` `44daa9e97`).
 
-- No CoreApp launch has been performed by this harness yet. The three phases above have not been
-  run, so no report exists, and no acceptance criterion of `prd.md` R3 is satisfied by this task
-  alone.
-- The dev launch path (`pnpm run dev` → `electron-vite`) and the packaged path (`--launch packaged
-  --appBundle <dist/mac-arm64/tuff.app>`) are wired but unexercised here. The packaged bundle in
-  `dist/` is `2.4.14-beta.46`; a fresh build is required before packaged evidence can be claimed.
+## Remaining unexercised scope (not claimed)
 
-## Hand-off for the run
+- The dev launch path (`pnpm run dev` → `electron-vite`) remains wired but unexercised by this harness.
+- Non-macOS packaged runs (Windows / Linux) were not exercised by the 2026-11-23 `darwin/arm64` run.
+- All limits in `## Coverage boundaries` remain in force (no renderer-level UI search assertion; no `embeddings` sentinel trigger — owned by `EmbeddingService` split unit evidence).
+- Frozen task `07-28-migrate-search-index-split-write-paths` remains read-only; remaining R9 write-path convergence (such as AppProvider migration onto the worker typed persistence port) stays tracked in [`search-crossplatform-audit.md`](./search-crossplatform-audit.md).
+
+## Hand-off for re-runs
 
 1. `pnpm -C apps/core-app run search-split:app-evidence -- --profile /tmp/tuff-split-evidence`
-   (add `--repoSummary <file>` to emit the redacted summary for the repository).
+   (or `--launch packaged --appBundle <path>` and optional `--repoSummary <file>` to emit a redacted summary).
 2. If a phase fails, read `<profile>/.search-split-evidence/phase-<name>.json`; a failing run keeps
    its profile.
-3. Attach `report.json` (or the redacted summary) here, replace the "Not executed" section with the
-   observed result, and only then tick R3 in `prd.md`.
+3. Re-run whenever split write-path ownership or worker persistence changes, and append the new observed evidence here rather than overwriting historical runs.
