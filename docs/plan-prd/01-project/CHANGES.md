@@ -3,6 +3,24 @@
 > 更新时间：2026-11-27
 > 定位：只保留当前阶段的高信号变更索引。早期流水记录已从文档树移除，可从 Git 历史追溯。
 
+## 2026-11-27
+
+### tuffex/nexus/cli: 合入 `TxMatrixLoader`（`0.9.6`）与 `tuff-cli doctor` 扩展（已入 `origin/master`：PR `#2326`、`#2328`）
+
+- **PR `#2326`（`f6d9fb127`）**：TuffEx 推进至 `0.9.6`，新增球面数学加载组件 `TxMatrixLoader`、配套 `tuffex-core` 兼容矩阵与 Nexus 中英文组件文档/画廊示例。
+- **PR `#2328`（`cbd374a66`）**：扩展 `tuff-cli` `doctor` 可执行文件探测，覆盖多版本管理器与本机 AI CLI 路径。
+
+### audit/docs: Wave 2 跨平台、CI 治理、数据原子性与产品长尾实查同步（区分已入主线与本地已验待合入分支）
+
+- **已入 `origin/master` 事实校准**：确认 Windows 原生 OCR CI（`#1517` 已关，`native-protocol.yml` run `45913147990` `windows-2022` `6/6` 全绿）、macOS 双架构议题 `#311` 已关（`beta.13` 双架构签名公证发布）、Nexus 13/13 活跃 Admin 页全部使用 `<AdminPageShell>`（原 3 页为重定向桩）、以及 2.5.2 浏览器工作区自 `73e6a1b8c` 起默认开启并同步登记 `v2.4.15-beta.9` 发布说明历史“默认关闭”措辞勘误。
+- **Wave 2 分支已本地验证待合入（尚未合入 `master`）**：
+  - `task/fix/xplat-r3-win-linux @ f3a675f96`：`#318` 真实 libSQL 25k/100k 分页对账与持久化内存基准（64/128 MiB 均 `fds=1->1`、`parity=OK`）、`#350` Windows PowerShell 缺陷修复/`reg.exe` 回退与类型化诊断、`#213` Ubuntu 24.04 FUSE3/AppArmor/`.deb` 冒烟与分类修复、`#321` Windows/Linux 打包保留 `tuff_native_screenshot.node` 与 `tuff-native-ocr(.exe)`、以及 `#311` darwin 架构失配单测。
+  - `task/fix/ci-guards-1792-1776 @ 9f8e55ad8`：`#1792` 关闭关键字守卫覆盖 PR 标题与全部构成提交、`#1776` 补回 `check:demo-registry` 与 `audit:contrast:self-test`、以及 `#483`（113 条开放告警，保持开放）与 `#2299`–`#2307`（受 `Branch Policy` 与 `#2306` 前置依赖阻塞）实时分诊。
+  - `task/fix/data-telemetry-billing-atomic-1788 @ cdc0456fc`（`Refs #1788`）：CoreApp outbox 幂等键 + ACK 校验、Nexus 单 `db.batch()` 遥测/治理/严格回执、账户删除与 30 天终结器、Credits 原子调账与错误映射（仍待 Preview/生产 soak 证据关闭 `#1788`）。
+  - `task/feat/nexus-admin-tail-and-252 @ 41b6be34e`：`codes.vue` 转为路由级重定向并清空 `KNOWN_ORPHANS` 豁免、补齐 2.5.2 前进/后退快捷键（`Alt+ArrowLeft/Right`、`⌘+[/]`）。
+  - `task/feat/workspace-canvas-edit @ 9a40da388`：隔离迁移工作区画布编辑与文件写入服务及 Markdown 菜单样式。
+- **仍待真机 / 发布包 / 产品拍板**：R1 Windows/Linux 发布包截图实机、R2 物理 Intel x64 Mac 运行验证、R13 / 3.0 Phase 0 Metric 2 与 `v2.4.15-beta.15` 打包长稳能耗、Nexus 多渠道支付商业决策（当前仅 56 行未接入骨架）、`#1880` 语音历史单行重试留存策略、原生 `audio.stt`（0 钩子）与 Tern Daemon Phase 4（0 代码）。
+
 ## 2026-11-26
 
 ### search: Windows Everything 作用域隔离与托管门禁 26/26 通过（PR #2319，`6022abdce`）

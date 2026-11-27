@@ -12,7 +12,7 @@
 | Node.js | `>=26.0.0`（`.node-version` / 根 `package.json`） |
 | pnpm | `11.24.0`（根 `package.json` `packageManager`） |
 | Electron | `^41.10.6`（根 `package.json` 与 `apps/core-app/package.json`） |
-| TuffEx | `0.9.5`（`packages/tuffex/package.json`，含 `tuffex-core` / `tuffex-react` / `tuffex-wc` 多框架包） |
+| TuffEx | `0.9.6`（`origin/master` `f6d9fb127`，含 `TxMatrixLoader` 及 `tuffex-core` / `tuffex-react` / `tuffex-wc` 多框架包） |
 | 当前执行窗口 | 两周稳定化 + 3.0 内核与能耗演进（详见 [`docs/plan-prd/TODO.md`](docs/plan-prd/TODO.md) 与 [`3.0-runtime-and-energy-decision-2026-10-21.md`](docs/engineering/reports/3.0-runtime-and-energy-decision-2026-10-21.md)） |
 
 ---
@@ -29,8 +29,8 @@
 | **R3** | Search / Indexing Runtime | 🔄 ~74% 完成；split 打包 62/62 实跑（`v2.4.15-beta.13`，PR `#2273`/`#2278`）、A10/A14–A16/A18 减容与 8 GiB 上限、Windows Everything CI `26/26`（PR `#2319`，run `45913177460`）已落地；真实 profile SQLite/FTS 与 `scan_progress` 迁移证据、Windows strict acceptance manifest 回填（`#308`）开放 |
 | **R4** | QuickOps 产品化 | 🔄 OmniPanel 基础能力与功能门控已合入；番茄钟/清洁屏幕/app quit cleanup 开放 |
 | **R5** | Plugin Trust Boundary | 🔄 权限 surface fail-closed、Widget 沙箱、零执行 npm 插件生态（PR `#2287`）与主进程响应头强制渲染层 CSP（PR `#2320`，关闭 `#689`）已落地；secret cleanup UX 与第三方插件全生命周期闭环开放 |
-| **R6** | UI / TuffEx | 🔄 TuffEx `0.9.5` + 多框架包体系（PR `#2315`）、TDS M0–M3 单源令牌/OpenUI/L1 画布（PR `#2316`）、顶栏舞台操作收敛（PR `#2317`）与 CoreApp 对话框收敛（PR `#2253`）已落地；visual smoke 恢复与实机交互验收开放 |
-| **R7** | Nexus Governance | 🔄 Provider Registry 简化、Admin Console 13/16 迁移、Nuxt 4.5.2 / unhead 3 升级（PR `#2321`，关闭 `#1098`）、文档全量 SSR 与 Worker 预算 CI 阻断门禁（PR `#2230`/`#2255`/`#2265`/`#2274`）已落地；最终 `--require-deployed-preview` 凭据采集门禁开放 |
+| **R6** | UI / TuffEx | 🔄 TuffEx `0.9.6` + 多框架包与 `TxMatrixLoader`（PR `#2315`/`#2326`）、TDS M0–M3 单源令牌/OpenUI/L1 画布（PR `#2316`）、顶栏舞台操作收敛（PR `#2317`）与 CoreApp 对话框收敛（PR `#2253`）已入 `origin/master`；visual smoke 恢复与实机交互验收开放 |
+| **R7** | Nexus Governance | 🔄 Provider Registry 简化、Admin Console 13/13 活跃页全量迁移（余 `codes.vue` 重定向清理已在 Wave 2 分支 `41b6be34e` 验证待合入）、Nuxt 4.5.2 / unhead 3 升级（PR `#2321`，关闭 `#1098`）、文档全量 SSR 与 Worker 预算 CI 阻断门禁（PR `#2230`/`#2255`/`#2265`/`#2274`）已落地；`#1788` 数据原子性待合入并补 Preview/生产 soak、最终 `--require-deployed-preview` 凭据采集与多渠道支付商业决策开放 |
 | **R8** | i18n / Domain Lexicon / Catalog 2.6.0 | ⏸️ domain-lexicon 产品触发暂停；`09-13-voice-provider-cloud-pack` scoped extension 已合入主线（`ad49febb0`），生产签名配置与付费调用验收开放 |
 | **R9** | AI 2.5.x 后续 | ⏸️ 暂停；知识检索/本地 GGUF/ASR 保留路线（R9.2 ContextHygiene P0/P1 已完成） |
 
@@ -93,7 +93,7 @@ talex-touch/
 │   ├── browser-connector/     # 浏览器扩展连接器
 │   └── screenshot-acceptance/ # 截图验收工具
 ├── packages/
-│   ├── tuffex/                # Vue 3 组件库（0.9.5）
+│   ├── tuffex/                # Vue 3 组件库（0.9.6）
 │   ├── tuffex-core/           # 跨框架组件核心
 │   ├── tuffex-react/          # React 组件绑定
 │   ├── tuffex-wc/             # Web Components 绑定
@@ -171,10 +171,11 @@ talex-touch/
 | **安全与 CI** | 渲染层 CSP（`#689`）、Nuxt 生产审计豁免（`#1098`）与 Rust 工具链/`Protocol` 门禁（`#1794`） | ✅ 已闭环（PR `#2320` 响应头强制 CSP；PR `#2321` 升级 Nuxt 4.5.2/unhead 3 清除 9 条豁免、锁定 Rust `1.100.0` 并启用 `Protocol` 必检门禁） |
 | **Windows Everything** | Windows Everything 打包 CoreBox UI 与降级验收（`#308`） | 🔄 PR `#2319`（`6022abdce`）在 `windows-2022` 通过 `26/26`（run `45913177460`，含 SDK 与 unavailable 降级 UI）；余 `#308` 严格 acceptance manifest 补录开放 |
 | **代码质量** | `quality:release` 发布门禁与既有 lint 债务 | ✅ 2026-09-13 5/5 段通过并接入发布流水线（PR `#2252` 补齐 `tuff-analyse` lint）；仅余 `apps/core-app` warn 口径收紧债务 |
-| **跨平台（R1）** | 原生截图跨平台打包运行验收（`#321` / `#322`） | 🟠 macOS arm64 签名包实测通过（`v2.4.15-beta.13`）；Windows/Linux 打包运行验收与 issue 收口仍开放 |
-| **跨平台（R2）** | macOS 跨架构发行与运行验证（`#311`） | 🟡 arm64/x64 已双架构发行且归档覆盖已修（PR `#2318`）；Intel x64 真机运行证据与范围决策仍开放 |
-| **搜索（R3）** | 大目录扫描/对账内存峰值（`#318`） | 🟡 traversal 已实测 400k 文件 @ 64 MiB 堆上限通过；reconciliation 分页与持久化落库同类实测仍开放 |
-| **跨平台（R8）** | Linux 平台能力与验收成熟度 | 🟠 应用扫描薄弱、无 OCR、更新仅 `openPath`、无独立验收框架，仍开放 |
+| **跨平台（R1）** | 原生截图跨平台打包运行验收（`#321` / `#322`） | 🟠 macOS arm64 签名包实测通过（`v2.4.15-beta.13`）；Windows/Linux 打包剥离 `tuff_native_screenshot.node` 修复已在 Wave 2 分支 `task/fix/xplat-r3-win-linux @ f3a675f96` 验证待合入，仍待 `beta.15+` 发布包与真机截图验收 |
+| **跨平台（R2）** | macOS 跨架构发行与运行验证（`#311` 已关闭） | 🟡 `v2.4.15-beta.13` 已双架构签名公证发布且归档覆盖已修（PR `#2318`），darwin 架构拒绝单测已在 Wave 2 分支 `f3a675f96` 验证待合入；仅余物理 Intel x64 Mac 真机运行验证受硬件门禁约束 |
+| **搜索（R3）** | 大目录扫描/对账内存峰值（`#318`） | 🟡 traversal 已实测 400k @ 64 MiB；真实 libSQL 25k/100k 分页对账与持久化基准（64/128 MiB 均 `parity=OK`）已在 Wave 2 分支 `task/fix/xplat-r3-win-linux @ f3a675f96` 验证待合入 |
+| **跨平台（R8 / C6）** | Linux 成熟度（`#213`）与 Windows PowerShell 依赖（`#350`） | 🟠 `#213`（Ubuntu 24.04 FUSE3/AppArmor/`.deb` 冒烟）与 `#350`（`reg.exe` 回退与降级诊断）已在 Wave 2 分支 `task/fix/xplat-r3-win-linux @ f3a675f96` 验证待合入；Linux 应用扫描/OCR/更新器/独立验收框架仍开放 |
+| **安全与依赖（`#483` / `#1788`）** | Dependabot 告警、CI 关闭关键字守卫（`#1792`）与数据原子性（`#1788`） | 🟠 `#483` 保持开放（113 条告警，9 个 PR 均被 `Branch Policy` 阻塞）；`#1792`/`#1776`（`task/fix/ci-guards-1792-1776 @ 9f8e55ad8`）与 `#1788`（`task/fix/data-telemetry-billing-atomic-1788 @ cdc0456fc`）已本地验证待合入，`#1788` 仍待 Preview/生产 soak |
 | **存储（R9）** | SQLite 单写缓解分散与剩余写者收敛 | 🟡 打包 split 62/62 通过，但 AppProvider 尚未迁入 worker typed persistence port，`db/utils.ts` 与真实 profile 迁移证据仍开放 |
 | **能耗（R13 / 3.0）** | 3.0 空闲能耗与安装版真实 profile 持续低能耗验收 | 🟠 Phase 0 Metric 1/3、Phase 1 可选 `utilityProcess`（PR `#2279`/`#2280`）、Phase 2 空闲预算（PR `#2322`）、Phase 3 渲染停帧（PR `#2281`）已落地；Phase 0 Metric 2（`sudo powermetrics`）与 `v2.4.15-beta.15` 打包 10 分钟空闲态/真实 profile 持续复测仍开放 |
 | **文档治理** | `docs:verify` 断链守卫与 `CHANGES.md` 按月归档 | 🟡 `docs:verify` 已作为 CI 必检阻断断链与发布说明契约；`CHANGES.md` 历史按月归档列长期债务 |
