@@ -1557,7 +1557,7 @@ export function DataTableDemo() {
         return React.createElement(
           'div',
           { className: 'tuff-fw-stage__stack' },
-          React.createElement(TxDataTable, { rowKey: 'id', selectable: true, bordered: true, columns, data, selectedKeys: keys, onSelectedKeysChange: (next: Array<string | number>) => setKeys(Array.isArray(next) ? next : []) }),
+          React.createElement(TxDataTable, { rowKey: 'id', selectable: true, bordered: true, columns, data, selectedKeys: keys, onSelectionChange: (next: Array<string | number>) => setKeys(Array.isArray(next) ? next : []) }),
           React.createElement('span', { className: 'tuff-fw-stage__readout' }, locale === 'zh' ? `已选行: ${keys.length}` : `Selected rows: ${keys.length}`),
         )
       }

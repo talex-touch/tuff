@@ -120,6 +120,7 @@ export interface TxDataTableProps<T = Record<string, any>> extends Omit<HTMLAttr
   renderEmpty?: () => ReactNode
   footer?: ReactNode
   onSelectionChange?: (keys: TxDataTableKey[]) => void
+  onSelectedKeysChange?: (keys: TxDataTableKey[]) => void
   onExpandedKeysChange?: (keys: TxDataTableKey[]) => void
   onExpand?: (payload: { row: T, index: number, expanded: boolean }) => void
   onSortChange?: (sort: TxDataTableSortState | null) => void
@@ -212,6 +213,7 @@ function TxDataTableInner<T extends Record<string, any> = Record<string, any>>(
     renderEmpty,
     footer,
     onSelectionChange,
+    onSelectedKeysChange,
     onExpandedKeysChange,
     onExpand,
     onSortChange,
@@ -227,10 +229,15 @@ function TxDataTableInner<T extends Record<string, any> = Record<string, any>>(
     defaultValue: defaultSort,
     onChange: onSortChange,
   })
+  const handleSelectionChange = useCallback((next: TxDataTableKey[]) => {
+    onSelectionChange?.(next)
+    onSelectedKeysChange?.(next)
+  }, [onSelectionChange, onSelectedKeysChange])
+
   const [currentSelected, setCurrentSelected] = useControllableState<TxDataTableKey[]>({
     value: selectedKeys,
     defaultValue: defaultSelectedKeys,
-    onChange: onSelectionChange,
+    onChange: handleSelectionChange,
   })
   const [currentExpanded, setCurrentExpanded] = useControllableState<TxDataTableKey[]>({
     value: expandedKeys,
