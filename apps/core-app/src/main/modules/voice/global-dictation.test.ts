@@ -60,7 +60,8 @@ const QUICK_EDIT_CALL = 1
 const SESSION_OPTIONS = {
   maxDurationMs: 120_000,
   silenceStopMs: 3_600_000,
-  delivery: 'active-app'
+  delivery: 'active-app',
+  source: 'dictate'
 } as const
 
 function pressGesture(call: number): {

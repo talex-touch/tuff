@@ -188,6 +188,7 @@ export class GlobalDictationController {
         maxDurationMs: 120_000,
         silenceStopMs: 3_600_000,
         delivery: 'active-app',
+        source: 'dictate',
         editTarget: { selection }
       })
       if (this.disposed) {
@@ -207,7 +208,8 @@ export class GlobalDictationController {
     const sessionId = await voiceService.startSession({
       maxDurationMs: 120_000,
       silenceStopMs: 3_600_000,
-      delivery: 'active-app'
+      delivery: 'active-app',
+      source: 'dictate'
     })
     if (this.disposed) {
       voiceService.cancelSession(sessionId)

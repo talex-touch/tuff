@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  DEFAULT_VOICE_HISTORY_RETENTION,
+  extractLearnedVoiceTerms,
+  isVoiceHistoryRetentionActive,
+  normalizeVoiceDictionaryEntries,
+  normalizeVoiceHistoryRetention,
+  resolveVoiceHistoryRetentionMs,
+} from '../common/storage/entity/app-settings'
+import {
   createVoiceSdk,
   isVoiceSpeechCatalogErrorCode,
   type VoiceSdkTransport,
@@ -340,5 +348,112 @@ describe('voice domain sdk', () => {
     expect(voiceApiEvents.transcribeUpload.toEventName()).toBe('voice:api:transcribe-upload')
     expect(voiceApiEvents.asrStream.toEventName()).toBe('voice:api:asr-stream')
     expect(voiceApiEvents.getRecognitionStatus.toEventName()).toBe('voice:api:get-recognition-status')
+    expect(voiceApiEvents.retryRecognitionRecord.toEventName()).toBe('voice:api:retry-recognition-record')
+    expect(voiceApiEvents.deleteRecognitionRecord.toEventName()).toBe('voice:api:delete-recognition-record')
+    expect(voiceApiEvents.updateRecognitionRecordText.toEventName()).toBe('voice:api:update-recognition-record-text')
+  })
+
+  it('retries a persisted record on the retry deadline and deletes/updates records on the default deadline', async () => {
+    const retriedRecord = {
+      id: 'rec-1',
+      capturedAt: 1_700_000_000_000,
+      source: 'dictate' as const,
+      status: 'success' as const,
+      text: 'Re-transcribed',
+    }
+    const transport = createTransportMock(async (event: { toEventName: () => string }) => {
+      if (event === voiceApiEvents.retryRecognitionRecord) {
+        return { ok: true, result: { status: 'success', record: retriedRecord } }
+      }
+      if (event === voiceApiEvents.deleteRecognitionRecord) {
+        return { ok: true, result: { deleted: true } }
+      }
+      if (event === voiceApiEvents.updateRecognitionRecordText) {
+        return { ok: true, result: { ...retriedRecord, text: 'Edited text' } }
+      }
+      return { ok: true }
+    })
+    const sdk = createVoiceSdk(transport as unknown as VoiceSdkTransport)
+
+    await expect(sdk.retryRecognitionRecord({ recordId: 'rec-1' })).resolves.toEqual({
+      status: 'success',
+      record: retriedRecord,
+    })
+    await expect(sdk.deleteRecognitionRecord({ recordId: 'rec-1' })).resolves.toEqual({ deleted: true })
+    await expect(
+      sdk.updateRecognitionRecordText({ recordId: 'rec-1', text: 'Edited text' }),
+    ).resolves.toMatchObject({ id: 'rec-1', text: 'Edited text' })
+
+    expect(transport.send).toHaveBeenCalledWith(
+      voiceApiEvents.retryRecognitionRecord,
+      { recordId: 'rec-1' },
+      { timeout: 180_000 },
+    )
+    expect(transport.send).toHaveBeenCalledWith(voiceApiEvents.deleteRecognitionRecord, {
+      recordId: 'rec-1',
+    })
+    expect(transport.send).toHaveBeenCalledWith(voiceApiEvents.updateRecognitionRecordText, {
+      recordId: 'rec-1',
+      text: 'Edited text',
+    })
+  })
+
+  it('surfaces missing or invalid retained audio as a coded VoiceApiError', async () => {
+    const transport = createTransportMock(async () => ({
+      ok: false,
+      error: 'VOICE_RECORD_AUDIO_PATH_INVALID',
+      code: 'VOICE_RECORD_AUDIO_PATH_INVALID',
+      retryable: false,
+    }))
+    const sdk = createVoiceSdk(transport as unknown as VoiceSdkTransport)
+
+    await expect(sdk.retryRecognitionRecord({ recordId: 'rec-bad' })).rejects.toMatchObject({
+      code: 'VOICE_RECORD_AUDIO_PATH_INVALID',
+      retryable: false,
+    })
+  })
+})
+
+describe('voice history retention & dictionary settings helpers', () => {
+  it('normalizes retention TTL choices and combines them with historyEnabled', () => {
+    expect(DEFAULT_VOICE_HISTORY_RETENTION).toBe('30d')
+    expect(normalizeVoiceHistoryRetention(undefined)).toBe('30d')
+    expect(normalizeVoiceHistoryRetention('bogus')).toBe('30d')
+    expect(normalizeVoiceHistoryRetention('7d')).toBe('7d')
+    expect(normalizeVoiceHistoryRetention('off')).toBe('off')
+
+    expect(resolveVoiceHistoryRetentionMs('7d')).toBe(7 * 24 * 60 * 60 * 1000)
+    expect(resolveVoiceHistoryRetentionMs('30d')).toBe(30 * 24 * 60 * 60 * 1000)
+    expect(resolveVoiceHistoryRetentionMs('off')).toBeNull()
+
+    expect(isVoiceHistoryRetentionActive(undefined)).toBe(true)
+    expect(isVoiceHistoryRetentionActive({ historyEnabled: true, historyRetention: '7d' })).toBe(true)
+    expect(isVoiceHistoryRetentionActive({ historyEnabled: false, historyRetention: '30d' })).toBe(false)
+    expect(isVoiceHistoryRetentionActive({ historyEnabled: true, historyRetention: 'off' })).toBe(false)
+  })
+
+  it('normalizes dictionary entries with manual/auto sources and merges legacy customWords', () => {
+    const entries = normalizeVoiceDictionaryEntries(
+      [
+        { term: ' SGLang ', source: 'manual', createdAt: 100 },
+        { term: 'DeepSeek', source: 'auto', createdAt: 200 },
+        { term: 'SGLang', source: 'auto', createdAt: 300 },
+      ],
+      ['DeepSeek', 'vLLM', '  '],
+    )
+    expect(entries).toEqual([
+      { term: 'SGLang', source: 'manual', createdAt: 100 },
+      { term: 'DeepSeek', source: 'auto', createdAt: 200 },
+      { term: 'vLLM', source: 'manual', createdAt: 0 },
+    ])
+  })
+
+  it('extracts newly introduced terms from manual transcript edits while filtering stopwords', () => {
+    const learned = extractLearnedVoiceTerms(
+      'We tested the local model with great speed',
+      'We tested the SGLang and Qwen3 model with 百炼 speed',
+    )
+    expect(learned).toEqual(['SGLang', 'Qwen3', '百炼'])
+    expect(extractLearnedVoiceTerms('same text', 'same text')).toEqual([])
   })
 })

@@ -442,6 +442,7 @@ describe('VoicePanel dock surface', () => {
       delivery: 'active-app',
       deliveryTiming: 'final',
       emitLevel: true,
+      source: 'dictate',
       // The cap the border divides by, sent rather than inherited from main's default.
       maxDurationMs: 300_000
     })

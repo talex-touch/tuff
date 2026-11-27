@@ -90,6 +90,7 @@ export function buildDoubaoStreamPayload(
     channel: request.audio.channels,
     ...(request.language ? { language: request.language } : {}),
   }
+  const hotwords = normalizeDoubaoHotwords(options.hotwords ?? request.hotwords)
   const requestBody: Record<string, unknown> = {
     model_name: options.model ?? request.model,
     enable_nonstream: options.enableNonstream ?? request.enableNonstream ?? false,
@@ -100,9 +101,7 @@ export function buildDoubaoStreamPayload(
     ...(options.enableSpeakerInfo === undefined ? {} : { enable_speaker_info: options.enableSpeakerInfo }),
     ...(request.heartbeat === undefined ? {} : { heartbeat: request.heartbeat }),
     ...options.providerOptions,
-    ...(options.hotwords || request.hotwords
-      ? { hotwords: (options.hotwords ?? request.hotwords ?? []).map(word => ({ word })) }
-      : {}),
+    ...(hotwords.length > 0 ? { hotwords: hotwords.map(word => ({ word })) } : {}),
   }
   return {
     user: { uid: request.uid ?? 'tuff-voice' },
@@ -316,6 +315,23 @@ export function normalizeDoubaoUploadResult(body: unknown): {
     throw new VoiceProviderError('DOUBAO_RESULT_INVALID', 'Doubao upload response has no final transcript.')
   }
   return { result: event }
+}
+
+export function normalizeDoubaoHotwords(words?: readonly string[]): string[] {
+  if (!Array.isArray(words) || words.length === 0)
+    return []
+  const seen = new Set<string>()
+  const normalized: string[] = []
+  for (const raw of words) {
+    if (typeof raw !== 'string')
+      continue
+    const word = raw.trim()
+    if (!word || seen.has(word))
+      continue
+    seen.add(word)
+    normalized.push(word)
+  }
+  return normalized
 }
 
 export function doubaoAudioSpec(format: VoiceAudioSpec['format'], sampleRate = 16_000): VoiceAudioSpec {

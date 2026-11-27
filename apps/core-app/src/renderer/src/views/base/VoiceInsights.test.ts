@@ -27,7 +27,14 @@ vi.mock('vue-sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
  * page in front of either state of the switch instead of asserting whatever the last test left.
  */
 const appSettingMock = vi.hoisted(() => ({
-  appSetting: { voiceInput: {} as { historyEnabled?: boolean } }
+  appSetting: {
+    voiceInput: {} as {
+      historyEnabled?: boolean
+      historyRetention?: '7d' | '30d' | 'off'
+      customWords?: string[]
+      dictionaryEntries?: Array<{ term: string; source: 'manual' | 'auto'; createdAt: number }>
+    }
+  }
 }))
 
 vi.mock('~/modules/storage/app-storage', async () => {
@@ -832,6 +839,243 @@ describe('VoiceInsights progressive disclosure', () => {
 
     expect(wrapper.find('[data-testid="voice-insights-weeks"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="voice-insights-activity"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+})
+
+describe('VoiceInsights history UX: day grouping, source filters, retry, delete, edit, and honest privacy', () => {
+  const NOW = Date.now()
+  const YESTERDAY = NOW - DAY_MS
+  const OLDER = Date.UTC(2026, 2, 10, 9, 15)
+
+  function setupRecords(recordsFixture: Array<Record<string, unknown>>) {
+    transportSendMock.mockReset()
+    transportSendMock.mockImplementation(
+      async (event: { toEventName: () => string }, payload?: unknown) => {
+        const name = event?.toEventName?.()
+        if (name === voiceApiEvents.getInsights.toEventName()) {
+          return { ok: true, result: summary() }
+        }
+        if (name === voiceApiEvents.getRecognitionRecords.toEventName()) {
+          return { ok: true, result: recordsFixture }
+        }
+        if (name === voiceApiEvents.retryRecognitionRecord.toEventName()) {
+          const { recordId } = payload as { recordId: string }
+          if (recordId === 'rec-missing-audio') {
+            return {
+              ok: true,
+              result: {
+                status: 'failed',
+                errorCode: 'VOICE_RECORD_AUDIO_MISSING',
+                retryable: false
+              }
+            }
+          }
+          return {
+            ok: true,
+            result: {
+              status: 'success',
+              record: {
+                id: recordId,
+                capturedAt: NOW,
+                source: 'dictate',
+                status: 'success',
+                audioUrl: `tfile://voice/${recordId}.wav`,
+                rawText: 're-transcribed raw',
+                text: 'Re-transcribed SGLang.'
+              }
+            }
+          }
+        }
+        if (name === voiceApiEvents.deleteRecognitionRecord.toEventName()) {
+          return { ok: true, result: { deleted: true } }
+        }
+        if (name === voiceApiEvents.updateRecognitionRecordText.toEventName()) {
+          const { recordId, text } = payload as { recordId: string; text: string }
+          const existing = recordsFixture.find((item) => item.id === recordId) ?? {}
+          return { ok: true, result: { ...existing, id: recordId, text } }
+        }
+        return { ok: true }
+      }
+    )
+  }
+
+  beforeEach(() => {
+    appSettingMock.appSetting.voiceInput = {
+      historyEnabled: true,
+      historyRetention: '30d',
+      customWords: [],
+      dictionaryEntries: []
+    }
+  })
+
+  it('groups records by day (Today / Yesterday / date), filters by source, and shows honest local privacy notice', async () => {
+    setupRecords([
+      {
+        id: 'rec-today-dictate',
+        capturedAt: NOW,
+        source: 'dictate',
+        status: 'success',
+        audioUrl: 'tfile://voice/today.wav',
+        text: 'Dictate today'
+      },
+      {
+        id: 'rec-yesterday-ask',
+        capturedAt: YESTERDAY,
+        source: 'ask',
+        status: 'failed',
+        audioUrl: 'tfile://voice/yesterday.wav',
+        errorCode: 'VOICE_ASR_PROVIDER_FAILED'
+      },
+      {
+        id: 'rec-older-legacy',
+        capturedAt: OLDER,
+        source: 'microphone',
+        status: 'success',
+        text: 'Legacy microphone'
+      }
+    ])
+
+    const wrapper = await mountPage()
+    await wrapper.find('[data-testid="voice-insights-records-jump"]').trigger('click')
+
+    // Honest local privacy notice is shown when retention is active
+    const privacy = wrapper.find('[data-testid="voice-insights-records-privacy"]')
+    expect(privacy.exists()).toBe(true)
+    expect(privacy.text()).toContain('voiceInsights.records.privacyNotice')
+
+    // Day headers: Today, Yesterday, and formatted older date
+    const dayHeaders = wrapper
+      .findAll('[data-testid="voice-insights-day-header"]')
+      .map((node) => node.text())
+    expect(dayHeaders).toHaveLength(3)
+    expect(dayHeaders[0]).toBe('voiceInsights.records.days.today')
+    expect(dayHeaders[1]).toBe('voiceInsights.records.days.yesterday')
+
+    // Source filter chips: All (3), Dictate (2: dictate + legacy microphone), Ask (1)
+    const chips = wrapper.findAll('[data-testid="voice-insights-source-filter"] button')
+    expect(chips).toHaveLength(3)
+
+    // Filter to Ask -> only 1 row
+    await chips[2]!.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('.tx-data-table__row')).toHaveLength(1)
+    expect(wrapper.findAll('[data-testid="voice-insights-day-header"]')).toHaveLength(1)
+
+    // Filter to Dictate -> includes both `dictate` and legacy `microphone` (2 rows)
+    await chips[1]!.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('.tx-data-table__row')).toHaveLength(2)
+
+    wrapper.unmount()
+  })
+
+  it('wires per-row retry (success + missing-audio error) and single-row delete', async () => {
+    setupRecords([
+      {
+        id: 'rec-failed',
+        capturedAt: NOW,
+        source: 'dictate',
+        status: 'failed',
+        audioUrl: 'tfile://voice/failed.wav',
+        errorCode: 'VOICE_ASR_PROVIDER_FAILED'
+      },
+      {
+        id: 'rec-missing-audio',
+        capturedAt: NOW - 1_000,
+        source: 'ask',
+        status: 'failed',
+        audioUrl: 'tfile://voice/pruned.wav',
+        errorCode: 'VOICE_ASR_PROVIDER_FAILED'
+      },
+      {
+        id: 'rec-no-audio',
+        capturedAt: NOW - 2_000,
+        source: 'dictate',
+        status: 'cancelled'
+      }
+    ])
+
+    const wrapper = await mountPage()
+
+    // Row without retained audio disables Retry
+    const noAudioRetry = wrapper.find(
+      '[data-testid="voice-record-retry"][data-record-id="rec-no-audio"]'
+    )
+    expect(noAudioRetry.attributes('disabled')).toBeDefined()
+
+    // Successful retry updates row text and status in place
+    const failedRetry = wrapper.find(
+      '[data-testid="voice-record-retry"][data-record-id="rec-failed"]'
+    )
+    expect(failedRetry.attributes('disabled')).toBeUndefined()
+    await failedRetry.trigger('click')
+    await flushPromises()
+
+    expect(transportSendMock).toHaveBeenCalledWith(
+      voiceApiEvents.retryRecognitionRecord,
+      { recordId: 'rec-failed' },
+      { timeout: 180_000 }
+    )
+    expect(wrapper.text()).toContain('Re-transcribed SGLang.')
+
+    // Retry when local WAV was pruned shows inline error in details
+    const rows = wrapper.findAll('.tx-data-table__row')
+    await rows[1]!.trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-testid="voice-record-details-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="voice-record-details-error"]').text()).toContain(
+      'voiceInsights.records.retryAudioMissing'
+    )
+
+    // Single-row delete invokes deleteRecognitionRecord and removes the row
+    await wrapper
+      .find('[data-testid="voice-record-delete"][data-record-id="rec-no-audio"]')
+      .trigger('click')
+    await flushPromises()
+    expect(transportSendMock).toHaveBeenCalledWith(voiceApiEvents.deleteRecognitionRecord, {
+      recordId: 'rec-no-audio'
+    })
+    expect(wrapper.findAll('.tx-data-table__row')).toHaveLength(2)
+
+    wrapper.unmount()
+  })
+
+  it('saves manual transcript edits and auto-learns newly introduced terms into the dictionary', async () => {
+    setupRecords([
+      {
+        id: 'rec-edit',
+        capturedAt: NOW,
+        source: 'dictate',
+        status: 'success',
+        audioUrl: 'tfile://voice/edit.wav',
+        text: 'We deployed the fast engine today'
+      }
+    ])
+
+    const wrapper = await mountPage()
+    await wrapper.find('.tx-data-table__row').trigger('click')
+    await flushPromises()
+
+    await wrapper.find('[data-testid="voice-record-details-edit"]').trigger('click')
+    await flushPromises()
+    await wrapper
+      .find('[data-testid="voice-record-details-editor"]')
+      .setValue('We deployed SGLang and Qwen3 today')
+    await wrapper.find('[data-testid="voice-record-details-save"]').trigger('click')
+    await flushPromises()
+
+    expect(transportSendMock).toHaveBeenCalledWith(voiceApiEvents.updateRecognitionRecordText, {
+      recordId: 'rec-edit',
+      text: 'We deployed SGLang and Qwen3 today'
+    })
+    expect(appSettingMock.appSetting.voiceInput.customWords).toEqual(['SGLang', 'Qwen3'])
+    expect(appSettingMock.appSetting.voiceInput.dictionaryEntries).toEqual([
+      expect.objectContaining({ term: 'SGLang', source: 'auto' }),
+      expect.objectContaining({ term: 'Qwen3', source: 'auto' })
+    ])
 
     wrapper.unmount()
   })

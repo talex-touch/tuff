@@ -1331,6 +1331,7 @@ async function startVoiceSession(): Promise<void> {
         delivery: 'active-app',
         deliveryTiming,
         emitLevel: true,
+        source: 'dictate',
         // Sent, not inherited: the border draws a fraction of this number, so it has to be the
         // number main is actually enforcing rather than whatever its default happens to be.
         maxDurationMs: MAX_RECORDING_MS

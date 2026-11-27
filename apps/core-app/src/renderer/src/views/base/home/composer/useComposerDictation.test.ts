@@ -130,6 +130,7 @@ describe('useComposerDictation', () => {
       cleanup: true,
       emitLevel: true,
       keepRecording: true,
+      source: 'ask',
       language: 'zh'
     })
   })
