@@ -25,7 +25,7 @@
   /* Install command anchors the left edge, version the right. */
   justify-content: space-between;
   gap: 10px;
-  padding: 12px 18px;
+  padding: 12px 20px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
   color: var(--docs-muted);
@@ -1348,5 +1348,310 @@
   .docs-gallery__liquid-item,
   .docs-gallery-stagger-enter-active {
     transition: none;
+  }
+}
+
+/* ── Basics Suite category bands & quick-jump bar ── */
+.docs-gallery__cat-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--docs-gallery-line);
+  background: color-mix(in srgb, var(--docs-inline-code-bg) 52%, transparent);
+}
+
+.docs-gallery a.docs-gallery__cat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--docs-gallery-line);
+  background: var(--tx-bg-color, transparent);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--docs-ink);
+  text-decoration: none;
+  transition: border-color 0.16s ease, color 0.16s ease, background-color 0.16s ease;
+}
+
+.docs-gallery a.docs-gallery__cat-pill:hover {
+  border-color: color-mix(in srgb, var(--docs-accent) 48%, transparent);
+  color: var(--docs-accent);
+  text-decoration: none;
+}
+
+.docs-gallery__cat-pill-icon {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  flex: none;
+  color: var(--docs-muted);
+  transition: color 0.16s ease;
+}
+
+.docs-gallery a.docs-gallery__cat-pill:hover .docs-gallery__cat-pill-icon {
+  color: var(--docs-accent);
+}
+
+.docs-gallery__cat-pill-count {
+  display: inline-flex;
+  align-items: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--docs-muted);
+}
+
+.docs-gallery__cat-section {
+  scroll-margin-top: 84px;
+}
+
+.docs-gallery__cat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 20px;
+  border-top: 1px solid var(--docs-gallery-line);
+  background: color-mix(in srgb, var(--docs-inline-code-bg) 72%, transparent);
+}
+
+.docs-gallery__cat-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.docs-gallery__cat-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.docs-gallery__cat-icon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--docs-accent);
+}
+
+.docs-gallery__cat-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--docs-ink);
+}
+
+.docs-gallery__cat-desc {
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--docs-muted);
+}
+
+.docs-gallery__cat-count {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 6px;
+  border: 1px solid var(--docs-gallery-line);
+  background: var(--tx-bg-color, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--docs-muted);
+}
+
+/* Odd-count category grids span their concluding cell edge-to-edge so no
+   category band finishes with an empty half-row hole. */
+.docs-gallery__cat-section .docs-gallery__grid > .docs-gallery__cell:nth-child(odd):last-child {
+  grid-column: 1 / -1;
+  border-left: none;
+}
+
+/* ── Additional Basics Suite specimens (Text, ModalForm, DrawerForm, StepsForm, IconPicker, ToastPanel, StatusHint) ── */
+.docs-gallery__text-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(320px, 100%);
+}
+
+.docs-gallery__text-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--docs-gallery-line);
+  background: var(--tx-bg-color, transparent);
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--docs-ink);
+}
+
+.docs-gallery__text-tag {
+  display: inline-flex;
+  align-items: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 18px;
+  color: var(--docs-muted);
+}
+
+.docs-gallery__form-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--docs-gallery-line);
+  background: var(--tx-bg-color, transparent);
+}
+
+.docs-gallery__form-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.docs-gallery__form-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--docs-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docs-gallery__form-card-sub {
+  font-size: 11.5px;
+  color: var(--docs-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docs-gallery__steps-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(320px, 100%);
+}
+
+.docs-gallery__steps-done {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--docs-gallery-line);
+  background: var(--tx-bg-color, transparent);
+  font-size: 12.5px;
+  color: var(--docs-ink);
+}
+
+.docs-gallery__icon-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.docs-gallery__icon-picker-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.docs-gallery__icon-picker-code {
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--docs-gallery-line);
+  background: var(--docs-inline-code-bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--docs-ink);
+}
+
+.docs-gallery__toast-panel-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: min(300px, 100%);
+}
+
+.docs-gallery__toast-origin {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--docs-gallery-line);
+  background: var(--tx-bg-color, transparent);
+  overflow: hidden;
+}
+
+.docs-gallery__toast-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--docs-ink);
+}
+
+.docs-gallery__toast-item + .docs-gallery__toast-item {
+  border-top: 1px solid var(--docs-gallery-line);
+}
+
+.docs-gallery__toast-item small {
+  font-size: 11px;
+  color: var(--docs-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.docs-gallery__toast-actions {
+  margin-top: 10px;
+}
+
+.docs-gallery__status-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.docs-gallery__status-hint-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+}
+
+@media (max-width: 640px) {
+  .docs-gallery__cat-head {
+    padding: 10px 14px;
+  }
+
+  .docs-gallery__cat-desc {
+    display: none;
   }
 }
