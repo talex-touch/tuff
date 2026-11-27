@@ -86,7 +86,7 @@ function tierD(
 }
 
 /**
- * Single Source of Truth Compatibility Matrix covering all 194 exported modules
+ * Single Source of Truth Compatibility Matrix covering all 195 exported modules
  * in `packages/tuffex/packages/components/src/components.ts`.
  */
 export const COMPAT_REGISTRY: readonly CompatEntry[] = Object.freeze([
@@ -132,6 +132,7 @@ export const COMPAT_REGISTRY: readonly CompatEntry[] = Object.freeze([
   tierD('data-table', 'base', REASON_SCOPED_SLOTS),
   planned('date-picker', 'base', 'B'),
   planned('descriptions', 'base', 'B'),
+  planned('device-mockup', 'pro', 'B'),
   ready('dialog', 'base', 'B', ['TxDialog']),
   tierD('diff-table', 'pro', REASON_SCOPED_SLOTS),
   ready('divider', 'base', 'A', ['TxDivider']),

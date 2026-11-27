@@ -30,6 +30,6 @@ code: |
 
 Pro suite components import from `@talex-touch/tuffex/pro` and fall into three groups. Components from the Data and Motion suites also import from `/pro`; the chart family (including MonoChart and DitherChart) imports from `@talex-touch/tuffex/charts`.
 
-- **Interaction**: the command palette, code editor, Markdown editor, search panel, terminal, version capsule, and virtual list, plus the motion form, control, and metric components.
+- **Interaction**: the command palette, code editor, Markdown editor, search panel, terminal, virtual list, device mockup, and version capsule, plus the motion form, control, and metric components.
 - **Effects**: border beams, glass and liquid surfaces, gradient borders, progressive blur, text and icon morphs, and outline and prism light.
 - **Primitives**: auto-sizing, anchored positioning, background surfaces, pointer parallax, and resize transitions, the base layer other components often build on.

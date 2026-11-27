@@ -181,6 +181,7 @@ export const STATIC_COMPONENT_SUITE_MAP: Record<string, DocsSuiteKey> = {
   '/docs/dev/components/data-table': 'base',
   '/docs/dev/components/date-picker': 'base',
   '/docs/dev/components/descriptions': 'base',
+  '/docs/dev/components/device-mockup': 'pro',
   '/docs/dev/components/dialog': 'base',
   '/docs/dev/components/diff-table': 'data',
   '/docs/dev/components/dither-chart': 'motion',

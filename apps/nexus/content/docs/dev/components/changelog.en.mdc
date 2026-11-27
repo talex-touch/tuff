@@ -15,18 +15,19 @@ verified: false
 |------|-------|
 | Source version | **0.9.6** |
 | Release version | **0.9.6** (latest npm release) |
-| Component modules | **194**: Base 99 · Pro 58 · AI 37 |
+| Component modules | **195**: Base 99 · Pro 59 · AI 37 |
 
 ## Release History
 
 ### Version 0.9.6 (2026-11-27)
 
-Add the AI pure-math spherical matrix loader.
+Add the AI pure-math spherical matrix loader and the Pro multi-device mockup container.
 
-- **New components**: matrix-loader
+- **New components**: matrix-loader, device-mockup
 - **Main updated components**: none
 - **Key features**:
   - New `TxMatrixLoader` (`@talex-touch/tuffex/ai`): pure-math Canvas 2D spherical halftone loader with 8 AI semantic states, smooth state cross-morphing, 2D gradient noise modulation, and 5 electronic display eras (`oled`, `crt`, `vfd`, `dither`, `lcd`).
+  - New `TxDeviceMockup` (`@talex-touch/tuffex/pro`): 75+ tree-shakeable phone, tablet, laptop, desktop, rounded/circular watch, and browser presets with an extruded 3D hardware chassis, decoupled floor shadows, 8 curated Shots.so scene pairings, 7 shadow styles, bleed framing, 12 gradients with film grain, spring morph transitions on device/orientation switch, and lazy client-side SVG/PNG/WebP export.
 
 ### Version 0.9.5 (2026-11-23)
 
@@ -285,6 +286,7 @@ Introduction versions and installation barrels for all 192 component modules. Do
 | [`data-table`](./data-table.en.mdc) | base | 0.3.4 |
 | [`date-picker`](./date-picker.en.mdc) | base | 0.3.4 |
 | [`descriptions`](./descriptions.en.mdc) | base | 0.6.3 |
+| [`device-mockup`](./device-mockup.en.mdc) | pro | 0.9.6 |
 | [`dialog`](./dialog.en.mdc) | base | 0.3.4 |
 | [`diff-table`](./diff-table.en.mdc) | pro | 0.3.9 |
 | [`divider`](./divider.en.mdc) | base | 0.3.7 |

@@ -134,7 +134,7 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 8px;
-  padding: 8px 18px 10px;
+  padding: 8px 12px;
   border-top: 1px solid var(--tx-border-color-lighter, #ebeef5);
   background: var(--tx-fill-color-light, #f5f7fa);
   font-size: 12px;

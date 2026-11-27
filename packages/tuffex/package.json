@@ -58,6 +58,26 @@
       "import": "./dist/es/charts/src/*/index.js",
       "require": "./dist/lib/charts/src/*/index.js"
     },
+    "./device-mockup/presets": {
+      "types": "./dist/es/device-mockup/presets/index.d.ts",
+      "import": "./dist/es/device-mockup/presets/index.js",
+      "require": "./dist/lib/device-mockup/presets/index.js"
+    },
+    "./device-mockup/presets/*": {
+      "types": "./dist/es/device-mockup/presets/*/index.d.ts",
+      "import": "./dist/es/device-mockup/presets/*/index.js",
+      "require": "./dist/lib/device-mockup/presets/*/index.js"
+    },
+    "./device-mockup/scenes": {
+      "types": "./dist/es/device-mockup/scenes/index.d.ts",
+      "import": "./dist/es/device-mockup/scenes/index.js",
+      "require": "./dist/lib/device-mockup/scenes/index.js"
+    },
+    "./device-mockup/export": {
+      "types": "./dist/es/device-mockup/export/index.d.ts",
+      "import": "./dist/es/device-mockup/export/index.js",
+      "require": "./dist/lib/device-mockup/export/index.js"
+    },
     "./*": {
       "types": "./dist/es/*/index.d.ts",
       "import": "./dist/es/*/index.js",

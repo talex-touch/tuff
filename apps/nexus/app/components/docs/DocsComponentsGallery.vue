@@ -27,6 +27,7 @@ const GalleryChartLegend = defineAsyncComponent(() => import('./gallery/GalleryC
 const GalleryChoiceCard = defineAsyncComponent(() => import('./gallery/GalleryChoiceCard.vue'))
 const GalleryChoroplethMap = defineAsyncComponent(() => import('./gallery/GalleryChoroplethMap.vue'))
 const GalleryCustomChart = defineAsyncComponent(() => import('./gallery/GalleryCustomChart.vue'))
+const GalleryDeviceMockup = defineAsyncComponent(() => import('./gallery/GalleryDeviceMockup.vue'))
 const GalleryEChart = defineAsyncComponent(() => import('./gallery/GalleryEChart.vue'))
 const GalleryEdgeMarquee = defineAsyncComponent(() => import('./gallery/GalleryEdgeMarquee.vue'))
 const GalleryFlowchart = defineAsyncComponent(() => import('./gallery/GalleryFlowchart.vue'))
@@ -770,6 +771,20 @@ function specimenStyle(item: { readonly doc?: string, readonly name?: string, re
         <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 160px">
           <ClientOnly>
             <GalleryVirtualList :title="copy.virtualTitle" :count-label="copy.virtualCount" :names="text.plugins" />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('device-mockup')">
+          {{ cellLabel('DeviceMockup', '设备样机') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 168px">
+          <ClientOnly>
+            <GalleryDeviceMockup />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
