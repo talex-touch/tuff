@@ -250,7 +250,6 @@ function handleClose(event: MouseEvent): void {
     flex: 0 0 auto;
     width: var(--tx-tag-dot-size, 6px);
     height: var(--tx-tag-dot-size, 6px);
-    margin-right: 0;
     border-radius: 50%;
   }
 
@@ -271,7 +270,6 @@ function handleClose(event: MouseEvent): void {
     width: 14px;
     height: 14px;
     padding: 0;
-    margin-left: 0;
     border: none;
     background: transparent;
     color: inherit;
@@ -304,19 +302,10 @@ function handleClose(event: MouseEvent): void {
 
   &.pill {
     --tx-tag-radius: 999px;
-    border-radius: 999px;
 
     .tx-tag__close {
       border-radius: 50%;
     }
-  }
-
-  &--sm {
-    --tx-tag-height: 22px;
-    --tx-tag-pad-x: 8px;
-    --tx-tag-gap: 4px;
-    --tx-tag-radius: 6px;
-    font-size: 11px;
   }
 
   &--md {

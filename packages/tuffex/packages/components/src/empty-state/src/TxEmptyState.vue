@@ -354,7 +354,7 @@ function getActionSize(action?: EmptyStateAction) {
   </div>
 </template>
 
-<style scoped lang="scss">
+<style lang="scss">
 .tx-empty-state {
   width: 100%;
   display: flex;
@@ -936,7 +936,7 @@ function getActionSize(action?: EmptyStateAction) {
 
 @keyframes tx-empty-state-guide-progress {
   0%, 10% { stroke-dashoffset: 32; opacity: 1; }
-  40%, 50% { stroke-dashoffset: 16; opacity: 1; }
+  40%, 50% { stroke-dashoffset: 16; }
   76%, 88% { stroke-dashoffset: 0; opacity: 1; }
   96% { stroke-dashoffset: 0; opacity: 0; }
   100% { stroke-dashoffset: 32; opacity: 0; }
