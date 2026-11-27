@@ -242,6 +242,7 @@ export const STATIC_COMPONENT_SUITE_MAP: Record<string, DocsSuiteKey> = {
   '/docs/dev/components/maps': 'data',
   '/docs/dev/components/markdown-editor': 'pro',
   '/docs/dev/components/markdown-view': 'base',
+  '/docs/dev/components/matrix-loader': 'ai',
   '/docs/dev/components/message-actions': 'ai',
   '/docs/dev/components/metal-fx': 'pro',
   '/docs/dev/components/modal': 'base',

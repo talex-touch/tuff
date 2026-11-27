@@ -327,6 +327,7 @@ Partly adapted from [Beautiful UI](https://www.beautifului.dev) (MIT).
 - [ChainOfThought](./chain-of-thought.en.mdc)
 - [ReasoningDisclosure](./reasoning-disclosure.en.mdc)
 - [ThinkingOrb](./thinking-orb.en.mdc)
+- [MatrixLoader](./matrix-loader.en.mdc)
 - [StreamElement](./stream-element.en.mdc)
 - [StreamText](./stream-text.en.mdc)
 - [StreamMarkdown](./stream-markdown.en.mdc)

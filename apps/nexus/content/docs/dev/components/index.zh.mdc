@@ -327,6 +327,7 @@ code: |
 - [ChainOfThought 推理时间线](./chain-of-thought.zh.mdc)
 - [ReasoningDisclosure 推理过程](./reasoning-disclosure.zh.mdc)
 - [ThinkingOrb 思考指示球](./thinking-orb.zh.mdc)
+- [MatrixLoader 球面矩阵加载器](./matrix-loader.zh.mdc)
 - [StreamElement 流式回答](./stream-element.zh.mdc)
 - [StreamText 流式文字](./stream-text.zh.mdc)
 - [StreamMarkdown 流式 Markdown](./stream-markdown.zh.mdc)
