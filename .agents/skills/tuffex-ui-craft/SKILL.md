@@ -21,9 +21,10 @@ Standard interactive workflow for creating, modifying, and polishing TuffEx comp
 
 ## Phase 0 · Pre-Flight & Isolation
 
-1. **Isolate the workspace**:
-   - Start from `origin/master` on a `task/<type>/<slug>` branch (`feat`, `fix`, `docs`, `perf`). Never develop or commit directly on `master` or `stage`.
-   - If the main checkout has concurrent work, create a dedicated `git worktree` instead of touching the user's working tree.
+1. **Isolate or reuse the right workspace**:
+   - For **new** UI polish work starting clean, branch from `origin/master` on a `task/<type>/<slug>` branch (`feat`, `fix`, `docs`, `perf`). Never develop or commit directly on `master` or `stage`.
+   - If the main checkout has unrelated concurrent work, create a dedicated `git worktree` from `origin/master` instead of touching that working tree.
+   - If the user is asking to preview or continue **their own active UI branch or uncommitted changes**, run the live preview directly against that branch/checkout so their edits are what gets rendered.
 2. **Read the owning frontend specs before editing**:
    - `docs/engineering/specs/frontend/tuffex-design-rules.md` (type scale, `--tx-*` tokens, inset rings, concentric radii, hover motion)
    - `docs/engineering/specs/frontend/tuffex-docs-sync.md` (wrapper blast radius, bilingual `.en.mdc`/`.zh.mdc`, gallery specimens, dev-server traps)
@@ -36,9 +37,9 @@ Standard interactive workflow for creating, modifying, and polishing TuffEx comp
 
 Always get a live visual feedback surface up **before** heavy visual tuning so the user can inspect every change directly in the browser pane.
 
-1. **Launch Nexus in live TuffEx source mode** (instant HMR on `packages/tuffex/packages/components/src/` without waiting for a 25s dist rebuild) on a dedicated localhost port (e.g. `3218`) as a background daemon:
+1. **Launch Nexus in live TuffEx source mode** (instant HMR on `packages/tuffex/packages/components/src/` without waiting for a 25s dist rebuild; `apps/nexus/build/tuffex-dev-mode.ts` reads `NUXT_TUFFEX_SOURCE`) on a dedicated localhost port (e.g. `3218`) as a background daemon:
    ```bash
-   TUFFEX_DEV_MODE=source nice -n 10 pnpm --dir apps/nexus exec nuxt dev --port 3218 --host 127.0.0.1
+   NUXT_TUFFEX_SOURCE=true nice -n 10 pnpm --dir apps/nexus exec nuxt dev --port 3218 --host 127.0.0.1
    ```
 2. **Open the live page in the built-in browser pane** via the `browser` subagent (typically `/en/docs/dev/components/base-suite` for Basics Suite work or `/en/docs/dev/components/<slug>` for a single component).
    - Keep that browser subagent idle and reuse it via `send_message` across feedback rounds; never kill it mid-session.

@@ -24,8 +24,7 @@ import {
   buildYearCells,
   canMoveCalendarView,
   clampDate,
-  clampDateTime,
-  clampTime,
+  clampDateTimeByMode,
   compareDateParts,
   compareDateTimeParts,
   formatDateTime,
@@ -38,8 +37,8 @@ import {
   parseDateTime,
   parseTime,
   parseYmd,
+  resolveDatePickerBounds,
   snapToStep,
-  toDateObj,
   YEAR_BLOCK,
 } from './utils'
 
@@ -98,46 +97,9 @@ const hasTime = computed(() =>
 const resolvedMinuteStep = computed(() => normalizeStep(props.minuteStep, 59))
 const resolvedSecondStep = computed(() => normalizeStep(props.secondStep, 59))
 
-const minDate = computed(() => {
-  const p = parseYmd(props.min || '')
-  return p ? toDateObj(p) : null
-})
-
-const maxDate = computed(() => {
-  const p = parseYmd(props.max || '')
-  return p ? toDateObj(p) : null
-})
-
-const minTime = computed<TimeParts | null>(() => {
-  if (resolvedMode.value === 'time')
-    return parseTime(props.min || '')
-  return null
-})
-
-const maxTime = computed<TimeParts | null>(() => {
-  if (resolvedMode.value === 'time')
-    return parseTime(props.max || '')
-  return null
-})
-
-const minDateTime = computed<DateTimeParts | null>(() => {
-  if (resolvedMode.value === 'datetime' || resolvedMode.value === 'datetimerange')
-    return parseDateTime(props.min || '')
-  return null
-})
-
-const maxDateTime = computed<DateTimeParts | null>(() => {
-  if (resolvedMode.value === 'datetime' || resolvedMode.value === 'datetimerange') {
-    const parsed = parseDateTime(props.max || '')
-    if (!parsed)
-      return null
-    // If caller supplied date-only max like "2026-06-20", include the full day.
-    if ((props.max || '').trim().length <= 10)
-      return { ...parsed, h: 23, min: 59, s: 59 }
-    return parsed
-  }
-  return null
-})
+const bounds = computed(() =>
+  resolveDatePickerBounds(resolvedMode.value, props.min, props.max, props.showSeconds),
+)
 
 const localParts = ref<DateTimeParts>({ y: 2025, m: 1, d: 1, h: 0, min: 0, s: 0 })
 const draftParts = ref<DateTimeParts>({ y: 2025, m: 1, d: 1, h: 0, min: 0, s: 0 })
@@ -181,13 +143,15 @@ watch(
 )
 
 const resolvedVariant = computed(() => {
+  if (isRangeMode.value)
+    return 'field'
   if (props.variant === 'adaptive')
     return isDesktopViewport.value ? 'field' : 'picker'
   return props.variant
 })
 
-/** The wheel picker has no range surface, so range only applies to the calendar. */
-const isRange = computed(() => isRangeMode.value && resolvedVariant.value === 'field')
+/** The wheel picker has no range surface, so range modes always render on the calendar field. */
+const isRange = computed(() => isRangeMode.value)
 
 const modelString = computed(() => (typeof props.modelValue === 'string' ? props.modelValue : ''))
 
@@ -226,16 +190,11 @@ function emitRangeModel(start: DateTimeParts, end: DateTimeParts): void {
 }
 
 function clampSingleByMode(parts: DateTimeParts): DateTimeParts {
-  if (resolvedMode.value === 'time') {
-    const clamped = clampTime(snapTimeParts(parts), minTime.value, maxTime.value)
-    return { ...parts, ...clamped }
-  }
-  if (resolvedMode.value === 'datetime' || resolvedMode.value === 'datetimerange') {
-    const snapped: DateTimeParts = { ...parts, ...snapTimeParts(parts) }
-    return clampDateTime(snapped, minDateTime.value, maxDateTime.value)
-  }
-  const d = clampDate(parts, minDate.value, maxDate.value)
-  return { ...parts, ...d }
+  return clampDateTimeByMode(parts, resolvedMode.value, bounds.value, {
+    showSeconds: props.showSeconds,
+    minuteStep: resolvedMinuteStep.value,
+    secondStep: resolvedSecondStep.value,
+  })
 }
 
 function setRangeFromModel(v: unknown): void {
@@ -271,7 +230,7 @@ function setRangeFromModel(v: unknown): void {
 
   // An empty range still has to open somewhere; `setFromModel` is the single
   // mode's path, so without this the grid sat on the ref's placeholder month.
-  const today = clampDate(nowDateTimeParts(), minDate.value, maxDate.value)
+  const today = clampDate(nowDateTimeParts(), bounds.value.minDate, bounds.value.maxDate)
   calendarMonth.value = { y: today.y, m: today.m }
 }
 
@@ -330,23 +289,6 @@ watch(
   { immediate: true },
 )
 
-watch([minDate, maxDate, minTime, maxTime, minDateTime, maxDateTime], () => {
-  if (isRangeMode.value) {
-    setRangeFromModel(props.modelValue)
-    return
-  }
-  const clamped = clampSingleByMode(localParts.value)
-  const changed = resolvedMode.value === 'date'
-    ? compareDateParts(clamped, localParts.value) !== 0
-    : compareDateTimeParts(clamped, localParts.value) !== 0
-  localParts.value = clamped
-  draftParts.value = { ...clamped }
-  calendarMonth.value = { y: clamped.y, m: clamped.m }
-  // Tightened bounds can pull the current value in-range; keep the parent in sync.
-  if (changed)
-    emitSingleModel(clamped)
-})
-
 const currentEditedTime = computed<TimeParts>(() => {
   if (resolvedMode.value === 'datetimerange') {
     const slot = activeRangeSlot.value === 'end'
@@ -363,7 +305,8 @@ const currentEditedTime = computed<TimeParts>(() => {
 })
 
 function buildTimeCols(refDate: DateParts | null): PickerColumn[] {
-  const hasTimeBounds = Boolean(minTime.value || maxTime.value || minDateTime.value || maxDateTime.value)
+  const b = bounds.value
+  const hasTimeBounds = Boolean(b.minTime || b.maxTime || b.minDateTime || b.maxDateTime)
   return buildTimePickerColumns({
     mode: resolvedMode.value,
     refDate,
@@ -371,10 +314,10 @@ function buildTimeCols(refDate: DateParts | null): PickerColumn[] {
     showSeconds: props.showSeconds,
     minuteStep: resolvedMinuteStep.value,
     secondStep: resolvedSecondStep.value,
-    minTime: minTime.value,
-    maxTime: maxTime.value,
-    minDateTime: minDateTime.value,
-    maxDateTime: maxDateTime.value,
+    minTime: b.minTime,
+    maxTime: b.maxTime,
+    minDateTime: b.minDateTime,
+    maxDateTime: b.maxDateTime,
   })
 }
 
@@ -401,7 +344,7 @@ function onTimePickerChange(v: PickerValue) {
   if (resolvedMode.value === 'datetimerange') {
     const targetRef = activeRangeSlot.value === 'end' ? rangeEnd : rangeStart
     if (!targetRef.value) {
-      const baseDate = clampDate(nowDateTimeParts(), minDate.value, maxDate.value)
+      const baseDate = clampDate(nowDateTimeParts(), bounds.value.minDate, bounds.value.maxDate)
       targetRef.value = clampSingleByMode({ ...baseDate, h, min, s })
     }
     else {
@@ -418,8 +361,8 @@ const pickerColumns = computed<PickerColumn[]>(() => {
     return buildTimeCols(null)
   const dateCols = buildDateWheelColumns({
     parts: localParts.value,
-    minDate: minDate.value,
-    maxDate: maxDate.value,
+    minDate: bounds.value.minDate,
+    maxDate: bounds.value.maxDate,
   })
   return resolvedMode.value === 'datetime'
     ? [...dateCols, ...buildTimeCols(localParts.value)]
@@ -535,6 +478,33 @@ watch(
   },
 )
 
+watch(bounds, () => {
+  if (isRangeMode.value) {
+    if (fieldOpen.value) {
+      if (rangeStart.value)
+        rangeStart.value = clampSingleByMode(rangeStart.value)
+      if (rangeEnd.value)
+        rangeEnd.value = clampSingleByMode(rangeEnd.value)
+      return
+    }
+    setRangeFromModel(props.modelValue)
+    return
+  }
+  const clamped = clampSingleByMode(localParts.value)
+  const changed = resolvedMode.value === 'date'
+    ? compareDateParts(clamped, localParts.value) !== 0
+    : compareDateTimeParts(clamped, localParts.value) !== 0
+  localParts.value = clamped
+  draftParts.value = fieldOpen.value
+    ? clampSingleByMode(draftParts.value)
+    : { ...clamped }
+  if (!fieldOpen.value)
+    calendarMonth.value = { y: clamped.y, m: clamped.m }
+  // Tightened bounds can pull the current value in-range; keep the parent in sync.
+  if (changed)
+    emitSingleModel(clamped)
+})
+
 // Opening eases the field's border; a hover repaints it at once.
 const fieldMorphing = useMorphWindow(fieldOpen, 200)
 // A pick eases the day it lands on. Hovering for a range's far end moves the
@@ -578,7 +548,7 @@ const weekdayLabels = computed(() => {
 })
 
 function isDateOutsideBounds(parts: DateParts): boolean {
-  return checkDateOutsideBounds(parts, minDate.value, maxDate.value)
+  return checkDateOutsideBounds(parts, bounds.value.minDate, bounds.value.maxDate)
 }
 
 const effectiveRange = computed<{ start: DateParts, end: DateParts } | null>(() => {
@@ -602,8 +572,8 @@ const calendarCells = computed<CalendarCell[]>(() =>
     isRangeMode: isRangeMode.value,
     activeDate: activeSingleDate.value,
     span: effectiveRange.value,
-    minDate: minDate.value,
-    maxDate: maxDate.value,
+    minDate: bounds.value.minDate,
+    maxDate: bounds.value.maxDate,
   }),
 )
 
@@ -632,11 +602,11 @@ const panelKey = computed(() => {
 })
 
 const monthCells = computed<PanelCell[]>(() =>
-  buildMonthCells(calendarMonth.value, minDate.value, maxDate.value),
+  buildMonthCells(calendarMonth.value, bounds.value.minDate, bounds.value.maxDate),
 )
 
 const yearCells = computed<PanelCell[]>(() =>
-  buildYearCells(yearBlockStart.value, calendarMonth.value.y, minDate.value, maxDate.value),
+  buildYearCells(yearBlockStart.value, calendarMonth.value.y, bounds.value.minDate, bounds.value.maxDate),
 )
 
 function canMoveCalendarMonth(delta: number): boolean {
@@ -645,8 +615,8 @@ function canMoveCalendarMonth(delta: number): boolean {
     month: calendarMonth.value,
     yearBlockStart: yearBlockStart.value,
     delta,
-    minDate: minDate.value,
-    maxDate: maxDate.value,
+    minDate: bounds.value.minDate,
+    maxDate: bounds.value.maxDate,
   })
 }
 
@@ -716,7 +686,7 @@ function selectCalendarDate(parts: DateParts) {
   if (props.disabled || isDateOutsideBounds(parts))
     return
 
-  const nextDate = clampDate(parts, minDate.value, maxDate.value)
+  const nextDate = clampDate(parts, bounds.value.minDate, bounds.value.maxDate)
 
   if (isRangeMode.value) {
     // The first click anchors the start and arms the preview; the second closes

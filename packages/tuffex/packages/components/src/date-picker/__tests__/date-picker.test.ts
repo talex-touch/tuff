@@ -600,4 +600,56 @@ describe('txDatePicker modes (time, datetime, daterange, datetimerange) and silk
     await wrapper.find('.tx-date-picker-calendar__footer-confirm').trigger('click')
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([readout])
   })
+
+  it('keeps range modes on the calendar field surface even when variant is left at default', () => {
+    const wrapper = mountDatePicker({
+      mode: 'datetimerange',
+      modelValue: ['2026-05-10 09:00', '2026-05-12 18:00'],
+    })
+
+    expect(wrapper.find('.tx-date-picker-field').exists()).toBe(true)
+    expect(wrapper.find('.tx-date-picker-field__value').text()).toBe('2026-05-10 09:00 → 2026-05-12 18:00')
+  })
+
+  it('enforces sub-minute min/max bounds at emitted minute precision when showSeconds is false', async () => {
+    const wrapper = mountDatePicker({
+      variant: 'field',
+      mode: 'time',
+      showSeconds: false,
+      min: '09:30:30',
+      max: '17:30:45',
+      modelValue: '09:00',
+    })
+
+    // 09:30 would parse back as 09:30:00 (< 09:30:30), so min rounds up to 09:31.
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['09:31'])
+
+    await wrapper.findComponent(PickerStub).vm.$emit('update:modelValue', [18, 0])
+    await nextTick()
+    await wrapper.find('.tx-date-picker-calendar__footer-confirm').trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['17:30'])
+  })
+
+  it('preserves a valid open draft when bounds change without invalidating it', async () => {
+    const wrapper = mountDatePicker({
+      variant: 'field',
+      mode: 'time',
+      visible: true,
+      min: '08:00',
+      max: '18:00',
+      modelValue: '09:30',
+    })
+
+    await wrapper.findComponent(PickerStub).vm.$emit('update:modelValue', [11, 0])
+    await nextTick()
+    expect(wrapper.find('.tx-date-picker-calendar__time-readout').text()).toBe('11:00')
+
+    // Tightening max to 17:00 leaves both committed (09:30) and draft (11:00) valid.
+    await wrapper.setProps({ max: '17:00' })
+    await nextTick()
+    expect(wrapper.find('.tx-date-picker-calendar__time-readout').text()).toBe('11:00')
+
+    await wrapper.find('.tx-date-picker-calendar__footer-confirm').trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['11:00'])
+  })
 })

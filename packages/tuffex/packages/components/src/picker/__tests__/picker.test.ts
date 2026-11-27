@@ -796,4 +796,37 @@ describe('txPicker wheel', () => {
       vi.useRealTimers()
     }
   })
+
+  it('replaces a running flick when the column shrinks past its stored target', async () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+    })
+    try {
+      const wrapper = mountWheel()
+      await flushPromises()
+      const wheel = wrapper.find('.tx-picker__wheel').element
+
+      // Start a flick targeting row 38 in a 40-item column.
+      pointerAt(wheel, 'pointerdown', 100, 0)
+      pointerAt(wheel, 'pointermove', 64, 16)
+      pointerAt(wheel, 'pointermove', 28, 32)
+      pointerAt(wheel, 'pointerup', 28, 48)
+
+      // Shrink the column to 10 options and select row 9 while the flick is still active.
+      const shorter = [{
+        key: 'c',
+        options: Array.from({ length: 10 }).map((_, i) => ({ value: `v${i}`, label: `O${i}` })),
+      }]
+      await wrapper.setProps({ columns: shorter, modelValue: ['v9'] })
+      await flushPromises()
+
+      vi.advanceTimersByTime(1000)
+      await nextTick()
+      expect(offsetOf(wrapper)).toBe('9')
+      wrapper.unmount()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
 })

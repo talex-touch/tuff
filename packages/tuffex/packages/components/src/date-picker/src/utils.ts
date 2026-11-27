@@ -197,6 +197,104 @@ export function clampDate(p: DateParts, min: Date | null, max: Date | null): Dat
   return { y, m, d }
 }
 
+export function alignTimeBound(
+  t: TimeParts,
+  direction: 'min' | 'max',
+  showSeconds: boolean,
+): TimeParts {
+  if (showSeconds || t.s === 0)
+    return t
+  if (direction === 'max')
+    return { h: t.h, min: t.min, s: 0 }
+  const totalMin = Math.min(23 * 60 + 59, t.h * 60 + t.min + 1)
+  return { h: Math.floor(totalMin / 60), min: totalMin % 60, s: 0 }
+}
+
+export function alignDateTimeBound(
+  dt: DateTimeParts,
+  direction: 'min' | 'max',
+  showSeconds: boolean,
+): DateTimeParts {
+  if (showSeconds || dt.s === 0)
+    return dt
+  if (direction === 'max')
+    return { ...dt, s: 0 }
+  const next = new Date(dt.y, dt.m - 1, dt.d, dt.h, dt.min + 1, 0)
+  return {
+    y: next.getFullYear(),
+    m: next.getMonth() + 1,
+    d: next.getDate(),
+    h: next.getHours(),
+    min: next.getMinutes(),
+    s: 0,
+  }
+}
+
+export interface DatePickerBounds {
+  minDate: Date | null
+  maxDate: Date | null
+  minTime: TimeParts | null
+  maxTime: TimeParts | null
+  minDateTime: DateTimeParts | null
+  maxDateTime: DateTimeParts | null
+}
+
+export function resolveDatePickerBounds(
+  mode: DatePickerMode,
+  min: string | undefined,
+  max: string | undefined,
+  showSeconds: boolean,
+): DatePickerBounds {
+  const minRaw = min || ''
+  const maxRaw = max || ''
+  const isTime = mode === 'time'
+  const isDateTime = mode === 'datetime' || mode === 'datetimerange'
+
+  const parsedMinTime = isTime ? parseTime(minRaw) : null
+  const parsedMaxTime = isTime ? parseTime(maxRaw) : null
+  const minTime = parsedMinTime ? alignTimeBound(parsedMinTime, 'min', showSeconds) : null
+  const maxTime = parsedMaxTime ? alignTimeBound(parsedMaxTime, 'max', showSeconds) : null
+
+  const parsedMinDt = isDateTime ? parseDateTime(minRaw) : null
+  const minDateTime = parsedMinDt ? alignDateTimeBound(parsedMinDt, 'min', showSeconds) : null
+
+  let maxDateTime: DateTimeParts | null = null
+  if (isDateTime) {
+    const parsedMaxDt = parseDateTime(maxRaw)
+    if (parsedMaxDt) {
+      const full = maxRaw.trim().length <= 10
+        ? { ...parsedMaxDt, h: 23, min: 59, s: 59 }
+        : parsedMaxDt
+      maxDateTime = alignDateTimeBound(full, 'max', showSeconds)
+    }
+  }
+
+  const parsedMinD = minDateTime ? null : parseYmd(minRaw)
+  const parsedMaxD = maxDateTime ? null : parseYmd(maxRaw)
+  const minDate = minDateTime ? toDateObj(minDateTime) : (parsedMinD ? toDateObj(parsedMinD) : null)
+  const maxDate = maxDateTime ? toDateObj(maxDateTime) : (parsedMaxD ? toDateObj(parsedMaxD) : null)
+
+  return { minDate, maxDate, minTime, maxTime, minDateTime, maxDateTime }
+}
+
+export function clampDateTimeByMode(
+  parts: DateTimeParts,
+  mode: DatePickerMode,
+  bounds: DatePickerBounds,
+  opts: { showSeconds: boolean, minuteStep: number, secondStep: number },
+): DateTimeParts {
+  const snappedTime: TimeParts = {
+    h: Math.min(23, Math.max(0, parts.h)),
+    min: snapToStep(parts.min, opts.minuteStep, 59),
+    s: opts.showSeconds ? snapToStep(parts.s, opts.secondStep, 59) : 0,
+  }
+  if (mode === 'time')
+    return { ...parts, ...clampTime(snappedTime, bounds.minTime, bounds.maxTime) }
+  if (mode === 'datetime' || mode === 'datetimerange')
+    return clampDateTime({ ...parts, ...snappedTime }, bounds.minDateTime, bounds.maxDateTime)
+  return { ...parts, ...clampDate(parts, bounds.minDate, bounds.maxDate) }
+}
+
 export function clampTime(p: TimeParts, min: TimeParts | null, max: TimeParts | null): TimeParts {
   let out: TimeParts = {
     h: Math.min(23, Math.max(0, Math.round(p.h))),

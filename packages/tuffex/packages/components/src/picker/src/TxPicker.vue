@@ -850,13 +850,17 @@ function onKeydown(colIndex: number, event: KeyboardEvent) {
  * on that echo would cancel the turn that produced it and snap the drum flat.
  */
 function isTurningTo(colIndex: number, idx: number): boolean {
+  const opts = columns.value[colIndex]?.options ?? []
   const state = wheelStates.value[colIndex]
   if (drags.has(colIndex) || state?.settleId != null) {
     const reference = state?.wheelTarget ?? offsetOf(colIndex)
     return nearestEnabledIndex(colIndex, Math.round(clampIndex(colIndex, reference))) === idx
   }
-  if (state?.rafId != null)
-    return nearestEnabledIndex(colIndex, Math.round(clampIndex(colIndex, state.target))) === idx
+  if (state?.rafId != null) {
+    if (state.target < 0 || state.target > opts.length - 1)
+      return false
+    return nearestEnabledIndex(colIndex, Math.round(state.target)) === idx
+  }
   return false
 }
 
