@@ -1,6 +1,6 @@
 {
   "name": "@talex-touch/tuffex",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "engines": {
     "node": ">=26.0.0"
   },

@@ -39,7 +39,7 @@ describe('tuffex-framework-matrix', () => {
     const exportedSlugs = readExportedComponentSlugs()
     const matrixSlugs = TUFFEX_FRAMEWORK_MATRIX.map(entry => entry.id).sort((a, b) => a.localeCompare(b))
 
-    expect(exportedSlugs).toHaveLength(193)
+    expect(exportedSlugs).toHaveLength(194)
     expect(matrixSlugs).toEqual(exportedSlugs)
     expect(TUFFEX_FRAMEWORK_MAP.size).toBe(exportedSlugs.length)
   })
@@ -119,14 +119,14 @@ describe('tuffex-framework-matrix', () => {
 
   it('computes dynamic coverage summary counters accurately', () => {
     const summary = getFrameworkCoverageSummary()
-    expect(summary.total).toBe(193)
-    expect(summary.vue.ready).toBe(193)
+    expect(summary.total).toBe(194)
+    expect(summary.vue.ready).toBe(194)
     expect(summary.vue.percent).toBe(100)
     expect(summary.react.ready).toBe(32)
     expect(summary.wc.ready).toBe(32)
     expect(summary.wc.unsupported).toBeGreaterThanOrEqual(8)
-    expect(summary.react.ready + summary.react.planned + summary.react.experimental + summary.react.unsupported).toBe(193)
-    expect(summary.wc.ready + summary.wc.planned + summary.wc.experimental + summary.wc.unsupported).toBe(193)
+    expect(summary.react.ready + summary.react.planned + summary.react.experimental + summary.react.unsupported).toBe(194)
+    expect(summary.wc.ready + summary.wc.planned + summary.wc.experimental + summary.wc.unsupported).toBe(194)
   })
 
   it('resolves component slugs from localized and unprefixed docs paths while ignoring overview/template pages', () => {
@@ -170,7 +170,7 @@ describe('tuffex-framework-matrix', () => {
     expect(normalizeDocsFramework('unknown')).toBe('vue')
   })
 
-  it('derives all 193 entries directly from @talex-touch/tuffex-core/compat Single Source of Truth', () => {
+  it('derives all 194 entries directly from @talex-touch/tuffex-core/compat Single Source of Truth', () => {
     expect(TUFFEX_FRAMEWORK_MATRIX).toHaveLength(COMPAT_REGISTRY.length)
     for (const coreEntry of COMPAT_REGISTRY) {
       const nexusEntry = getComponentFrameworkEntry(coreEntry.id)

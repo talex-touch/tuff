@@ -302,6 +302,7 @@ TAXONOMY: dict[str, list[str]] = {
         "chain-of-thought",
         "reasoning-disclosure",
         "thinking-orb",
+        "matrix-loader",
         "stream-element",
         "stream-text",
         "stream-markdown",

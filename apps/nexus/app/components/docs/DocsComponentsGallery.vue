@@ -50,6 +50,7 @@ const GalleryFusion = defineAsyncComponent(() => import('./gallery/GalleryFusion
 const GalleryFusionSurface = defineAsyncComponent(() => import('./gallery/GalleryFusionSurface.vue'))
 const GalleryLearningCurve = defineAsyncComponent(() => import('./gallery/GalleryLearningCurve.vue'))
 const GalleryLiquidMenu = defineAsyncComponent(() => import('./gallery/GalleryLiquidMenu.vue'))
+const GalleryMatrixLoader = defineAsyncComponent(() => import('./gallery/GalleryMatrixLoader.vue'))
 const GallerySankeyChart = defineAsyncComponent(() => import('./gallery/GallerySankeyChart.vue'))
 const GallerySparkChart = defineAsyncComponent(() => import('./gallery/GallerySparkChart.vue'))
 const GalleryStreamElement = defineAsyncComponent(() => import('./gallery/GalleryStreamElement.vue'))
@@ -3433,6 +3434,20 @@ function specimenStyle(item: { readonly doc?: string, readonly name?: string, re
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <GalleryThinkingOrb />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('matrix-loader')">
+          {{ cellLabel('MatrixLoader', '球面矩阵加载器') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryMatrixLoader />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>

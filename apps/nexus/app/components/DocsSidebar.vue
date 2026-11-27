@@ -465,6 +465,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/chain-of-thought',
     '/docs/dev/components/reasoning-disclosure',
     '/docs/dev/components/thinking-orb',
+    '/docs/dev/components/matrix-loader',
     '/docs/dev/components/stream-element',
     '/docs/dev/components/stream-text',
     '/docs/dev/components/stream-markdown',
