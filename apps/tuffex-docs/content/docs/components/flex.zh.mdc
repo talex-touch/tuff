@@ -1,0 +1,100 @@
+---
+title: Flex 弹性布局
+description: 控制方向、对齐、换行与间距的 Flexbox 容器
+category: Layout
+status: beta
+since: 0.3.4
+tags: [flex, layout]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+:::TuffDemoWrapper{demo="FlexFlexDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxFlex justify="space-between" align="center">
+      <TxTag label="Left" />
+      <TxButton variant="primary">Action</TxButton>
+    </TxFlex>
+  </template>
+---
+:::
+
+### 可换行工具栏
+`wrap="wrap"` 让工具栏在窄容器中换行。
+
+```vue
+<template>
+  <TxFlex align="center" justify="space-between" wrap="wrap" gap="0.75rem">
+    <TxFlex align="center" gap="0.5rem" wrap="wrap">
+      <TxTag label="Docs" />
+      <TxTag label="Reviewed" color="var(--tx-color-success)" />
+    </TxFlex>
+    <TxButton size="sm">发布</TxButton>
+  </TxFlex>
+</template>
+```
+
+### 反向排列
+
+```vue
+<template>
+  <TxFlex direction="row-reverse" align="center" gap="8px">
+    <TxButton variant="primary">Primary</TxButton>
+    <TxButton variant="ghost">Secondary</TxButton>
+  </TxFlex>
+</template>
+```
+
+### 最佳实践
+
+- 需要精确的 Flexbox 语义时用 `TxFlex`，常规的横纵节奏用 `TxStack`。
+- 间距交给 `gap`，不要在子元素上写 margin。
+- 容器不添加角色与键盘行为，交互交给语义化的子控件。
+- 重复卡片的网格用 `TxGridLayout`，不要嵌套多层 flex。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `direction` | `'row' \| 'row-reverse' \| 'column' \| 'column-reverse'` | `'row'` | 主轴方向。 |
+| `gap` | `number \| string` | `12` | 子元素间距；数字按 px，字符串原样使用。 |
+| `align` | `string` | `'stretch'` | `align-items`，接受任意 CSS 值；图文行用 `center`。 |
+| `justify` | `string` | `'flex-start'` | `justify-content`，接受任意 CSS 值。 |
+| `wrap` | `'nowrap' \| 'wrap' \| 'wrap-reverse'` | `'nowrap'` | `flex-wrap`。 |
+| `inline` | `boolean` | `false` | 使用 `inline-flex`。 |
+
+### 插槽
+
+| 插槽名 | Props | 说明 |
+|------|------|------|
+| `default` | - | Flex 子元素。 |
+
+### CSS 变量
+
+| 变量 | 来源 | 说明 |
+|------|------|------|
+| `--tx-flex-gap` | `gap` | CSS gap。 |
+| `--tx-flex-align` | `align` | `align-items`。 |
+| `--tx-flex-justify` | `justify` | `justify-content`。 |
+| `--tx-flex-direction` | `direction` | `flex-direction`。 |
+| `--tx-flex-wrap` | `wrap` | `flex-wrap`。 |
+| `--tx-flex-display` | `inline` | `flex` 或 `inline-flex`。 |
+
+## 概述
+
+- 根节点是 `div`，设置 `min-width: 0`，子元素可在受限容器内收缩。
+- props 写入根节点的 `--tx-flex-*` 变量，样式表读取这些变量。
+- `align`、`justify`、`direction`、`wrap` 传空值时回退到默认值。
+
+## 技术实现
+
+- 源码：`packages/tuffex/packages/components/src/flex/`。
+
+<TuffDocSourceLink />

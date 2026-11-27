@@ -1,0 +1,40 @@
+---
+title: Twin-Layer Reserve & Non-Blocking Selection
+description: Holding the final height while complete content replays, via twin-layer Reserve mirrors, so the scrollbar stays put; and safeguarding immediate user copy-selection freedom.
+---
+
+# Twin-Layer Reserve & Non-Blocking Selection
+
+In generative AI interfaces, two crucial baselines are frequently violated: viewport stability and the user's freedom to copy streamed text immediately.
+
+## The Problem of Scrollbar Jitter During Streaming
+
+In traditional chat streams, containers grow by a few pixels on every token.
+This continuous reflow causes scrollbars to twitch, bouncing text vertically and making it impossible for the reader's gaze to settle on earlier paragraphs.
+
+## Twin-Layer Reserve Pre-Measurement Mechanics
+
+`TxStreamText` and `TxStreamElement` both apply the **twin-layer reserve technique**:
+
+- **Live Presentation Layer**: Fully visible, accessible, and interactive, emitting paced tokens.
+- **Reserve Copy Layer**: In replay or pre-calculated contexts, mounts with `aria-hidden="true"`, `inert`, and `visibility: hidden`. It claims the full target grid height upfront, locking the container geometry in place.
+
+In `TxStreamElement` both layers also trim the first child's `margin-top` and the last child's `margin-bottom`, so the copy measures exactly as tall as the answer it holds; `TxStreamText` is inline text, stacked in an `inline-grid`, with no margins to trim. `TxCodeStream`'s `reserve` needs no copy: the complete listing's line count is known, so it holds the code area at that many lines. This applies only while complete content plays back, and `reserve` is off by default: during a genuinely live stream the final height is not known yet, so the container still grows as content arrives.
+
+:::TuffDemoWrapper{demo="ConceptReserveLayerDemo"}
+:::
+
+## Motion Must Never Block Reading or Copying
+
+Some designs apply full-screen overlays or `user-select: none` during generation, forcing users to "wait for the typewriter effect to finish before copying".
+**TuffEx considers this an unacceptable usability defect!**
+
+1. **Instant DOM Availability**: The moment a token releases into the DOM, it lands as an accessible text node. Users can drag-select and strike `Cmd+C` at any millisecond without waiting.
+2. **Zero Pointer Interception**: Transitions operate strictly on visual layers; pointer clicks, double clicks, and drag events are never blocked.
+
+## Skip on Interrupt Capabilities
+
+Power users frequently want to bypass animation during intense workflows:
+- TuffEx itself listens for no scrolling, clicks or ESC; the host decides when to skip. `TxStreamText` and `TxStreamElement` both expose `skip()` on their ref, for the host to call when the user scrolls rapidly, clicks the bottom tray or presses ESC.
+- `skip()` is synchronous: the whole content shows the moment it is called, with no further entrances and no wait for the next frame, handing control straight back to the user.
+- Under `prefers-reduced-motion: reduce`, all pacing delays bypass entirely, guaranteeing unhindered data consumption.

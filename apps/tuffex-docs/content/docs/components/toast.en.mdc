@@ -1,0 +1,162 @@
+---
+title: Toast
+description: A transient notification that stacks in a corner of the screen.
+category: Feedback
+status: beta
+since: 0.3.4
+tags: [toast, feedback, status]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+Mount one `TxToastHost`, then call `toast()`; hovering the stack fans it out and pauses every countdown.
+:::TuffDemoWrapper{demo="ToastToastDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { toast } from '@talex-touch/tuffex/utils'
+  </script>
+
+  <template>
+    <TxToastHost position="bottom-right" />
+    <TxButton @click="toast({ title: 'Saved', description: 'Your changes have been saved.' })">
+      Show toast
+    </TxButton>
+    <TxButton @click="toast({ title: 'Success', description: 'Done', variant: 'success' })">
+      Success
+    </TxButton>
+    <TxButton @click="toast({ title: 'Deleted 1 item', action: { label: 'Undo', onClick: restore } })">
+      With action
+    </TxButton>
+  </template>
+---
+:::
+
+### Dashboard Feedback Center
+Toast handles transient feedback, `TxTooltip` explains the action, `TxLoadingOverlay` blocks a local refresh, and `TxSpinner` covers inline waits.
+:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { clearToasts, toast } from '@talex-touch/tuffex/utils'
+
+  function showFeedbackToast() {
+    // Stable id + duration: 0: the same status replaces the last toast instead of stacking
+    toast({ id: 'nexus-feedback-task-center', title: 'Sync task queued', variant: 'warning', duration: 0 })
+  }
+  </script>
+
+  <template>
+    <TxToastHost />
+    <TxTooltip content="Tooltip explains the current action only.">
+      <TxButton @click="showFeedbackToast">Send toast</TxButton>
+    </TxTooltip>
+    <TxLoadingOverlay :loading="syncing" text="Refreshing task queue…">
+      <TxSpinner :size="16" />
+    </TxLoadingOverlay>
+    <TxButton variant="ghost" @click="clearToasts()">Clear toast</TxButton>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Mount one host near the app root and pass `position`; extra hosts draw nothing but still cost a container and a development warning.
+- On non-English surfaces, pass `ariaLabel` and `closeLabel` to the host: screen readers name the region with the first, and the icon-only close button announces only the second.
+- Give task, save, sync, and retry notifications a stable `id` so repeated status updates replace the previous toast.
+- Show persistent status with a stable `id` and `duration: 0`, and clear it when leaving the page or when the task resolves.
+- Keep descriptions short; long progress, errors with recovery, and forms belong in panels, drawers, or pages.
+- Back critical failures and long tasks with persistent visible copy or page-level status.
+
+## API Reference
+
+### TxToastHost Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `position` | `'top-left' \| 'top-center' \| 'top-right' \| 'bottom-left' \| 'bottom-center' \| 'bottom-right'` | `'bottom-right'` | Corner, or edge center, the stack grows from. |
+| `visibleToasts` | `number` | `3` | Toasts shown at once; the rest wait transparently and move up as front ones leave. |
+| `expand` | `boolean` | `false` | Keeps the stack fanned out after the pointer leaves. |
+| `gap` | `number` | `14` | Pixels between toasts, also the collapsed peek. |
+| `offset` | `number` | `16` | Distance from the viewport edges. |
+| `swipeToDismiss` | `boolean` | `true` | Lets a drag flick a toast off toward its own edge. |
+| `ariaLabel` | `string` | `'Notifications'` | Accessible name of the notification region. |
+| `closeLabel` | `string` | `'Dismiss notification'` | Accessible name of each toast's close button. |
+
+### TxToastHost Exposed Methods
+
+| Name | Type | Description |
+|------|------|-------------|
+| `pause` | `() => void` | Freezes every countdown, the same as `pauseToasts()`. |
+| `resume` | `() => void` | Resumes every countdown from its remaining time, the same as `resumeToasts()`. |
+| `expanded` | `boolean` | Whether the stack is fanned out now (read-only): true when `expand` is set, or while the pointer or focus is inside. |
+
+### toast(options)
+
+Import it from `@talex-touch/tuffex/utils`:
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  toast({
+    id?: string
+    title?: string
+    description?: string
+    variant?: 'default' | 'info' | 'success' | 'warning' | 'danger'
+    duration?: number // default: 2600, 0 = no auto dismiss
+    action?: {
+      label: string
+      onClick?: (id: string) => void
+      dismiss?: boolean // default: true — close the toast after onClick
+    }
+  }): string
+---
+:::
+
+### dismissToast / clearToasts
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { clearToasts, dismissToast, toast } from '@talex-touch/tuffex/utils'
+
+  const id = toast({ title: 'Queued', duration: 0 })
+  dismissToast(id)
+  clearToasts()
+---
+:::
+
+### pauseToasts / resumeToasts / toastsPaused
+
+`TxToastHost` calls these on pointer and focus entry; call them yourself only to hold the stack for another reason, such as a dialog opening over it.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { pauseToasts, resumeToasts, toastsPaused } from '@talex-touch/tuffex/utils'
+
+  pauseToasts()   // every countdown freezes where it is; idempotent
+  toastsPaused()  // => true
+  resumeToasts()  // each toast resumes from the time it had left, not from the top
+---
+:::
+
+## Overview
+
+- The host teleports to `body` as a `role="region"` labeled `aria-label="Notifications"` and a polite live region; `danger` escalates to `role="alert"`, and each toast has a close button named `Dismiss notification`.
+- `toast()` returns the id; the same `id` replaces the existing toast and restarts timing from its `duration`; `duration: 0` stays until `dismissToast(id)` or `clearToasts()`.
+- The newest toast is in front, and each one behind sits back by `gap` pixels at 5% smaller scale; collapsed, only the front toast takes the pointer, and the host's empty area clicks through. Hidden toasts, and those collapsed behind the front one, are `inert`, so keyboard focus and screen readers never reach their actions or close buttons.
+- Pointer or keyboard focus entering the stack expands it and calls `pauseToasts()`; leaving collapses it and calls `resumeToasts()`.
+- Dragging toward the anchored edge dismisses past 45px, or past 12px for a flick faster than 0.32px/ms; the other way moves a fifth as far and springs back, and a drag that starts on a button goes to the button.
+- Only the first host to mount draws; later hosts render an empty container so hydration matches, and warn in development. When the owner unmounts, the next takes over; toasts appear the tick after mount.
+
+## Technologies
+
+- Toasts enter and leave along their position's axis over 0.4s, and only fade under reduced motion; every call raises the host through the shared z-index manager.
+- The utilities live in `packages/tuffex/packages/utils/toast.ts`, and the single-host claim in `src/toast/src/host-registry.ts`.
+- Source: `packages/tuffex/packages/components/src/toast/`.
+
+<TuffDocSourceLink />

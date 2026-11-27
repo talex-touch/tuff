@@ -1,0 +1,89 @@
+---
+title: "FlatDropdown 扁平下拉"
+description: "由插槽定义触发器与内容的浮层下拉面板"
+category: Navigation
+status: beta
+since: 0.3.9
+tags: [dropdown, flat, navigation, floating, menu]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+悬停触发器即展开；`close-on-content-click` 让面板在内部任意点击后关闭。
+:::TuffDemoWrapper{demo="FlatDropdownBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxFlatDropdown trigger="hover" close-on-content-click>
+      <template #trigger="{ open }">
+        <TxButton size="sm" :variant="open ? 'primary' : 'secondary'">操作</TxButton>
+      </template>
+
+      <button @click="lastAction = '复制'">复制</button>
+      <button @click="lastAction = '重命名'">重命名</button>
+    </TxFlatDropdown>
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 破坏性或会改变状态的菜单用 `trigger="click"`；悬停展开在触控板上容易误触。
+- 斜向移入面板由悬停桥与安全三角处理，不要为此调大 `closeDelay`。
+- 需要继承容器的层叠或裁剪上下文时设 `:teleport="false"`；就地渲染会受祖先 `overflow: hidden` 裁剪。
+- 面板翻转到触发器另一侧时，用 `side` 插槽参数翻转自己的装饰（箭头、阴影）。
+- 面板位置在展开后异步写回；需要读取绝对几何时放进 `requestAnimationFrame` 测量。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `modelValue` | `boolean` | `undefined` | 开合状态（`v-model`）；省略时非受控。 |
+| `trigger` | `'hover' \| 'click' \| 'manual'` | `'hover'` | 唤起方式。 |
+| `placement` | `Placement` | `'bottom-start'` | 相对触发器的浮层位置。 |
+| `offset` | `number` | `10` | 触发器与面板的间距（px）。 |
+| `openDelay` | `number` | `0` | 悬停或聚焦后展开的延迟（ms）。 |
+| `closeDelay` | `number` | `600` | 指针离开后关闭的延迟（ms）。 |
+| `exitDuration` | `number` | `280` | 退出动画（缩放 + 模糊）时长（ms）。 |
+| `disabled` | `boolean` | `false` | 禁用全部交互。 |
+| `teleport` | `boolean \| string` | `'body'` | 传送目标；`false` 就地渲染。 |
+| `matchTriggerWidth` | `boolean` | `false` | 面板最小宽度对齐触发器宽度。 |
+| `width` | `number \| string` | `undefined` | 固定面板宽度（px 或任意 CSS 长度），优先于 `matchTriggerWidth`。 |
+| `closeOnClickOutside` | `boolean` | `true` | 点击触发器、面板与悬停桥之外时关闭；`manual` 下不生效。 |
+| `closeOnEsc` | `boolean` | `true` | 按 Esc 关闭。 |
+| `closeOnContentClick` | `boolean` | `false` | 面板内任意点击后关闭。 |
+| `panelClass` | `TxFlatDropdownClass` | `undefined` | 合并到面板元素上的 class。 |
+
+### 事件
+
+| 事件 | 参数 | 说明 |
+|---|---|---|
+| `update:modelValue` | `boolean` | 开合状态变化时触发。 |
+| `open` | — | 面板展开时触发。 |
+| `close` | — | 面板关闭时触发。 |
+
+### 插槽
+
+| 插槽 | 参数 | 说明 |
+|---|---|---|
+| `trigger` | `{ open, toggle, show, hide }` | 锚点元素。 |
+| `default` | `{ open, close, side }` | 面板内容；`side` 为翻转后的实际方向。 |
+
+## 概述
+
+- `hover`：指针进入或获得焦点时展开，离开后等 `closeDelay` 关闭。`click`：点击切换，不应用 `closeDelay`。`manual`：从不自行展开，只由 `v-model` 驱动，适合快捷键等由应用状态唤起的面板。
+- 悬停桥覆盖触发器与面板的间隙；朝面板移动的指针由安全三角保持面板打开，偏离三角、停顿或从背向面板一侧离开后才开始计 `closeDelay`。
+- 未绑定 `v-model` 时自行维护开合；绑定后由宿主回写，组件照常派发 `open` / `close`。
+- `disabled` 阻断所有展开路径，包括触发器插槽的 `show()`。
+- 外部点击、Esc 与面板内点击三条关闭路径各自独立；`manual` 下外部点击不关闭。
+- 触发器包装元素带 `aria-haspopup`、`aria-expanded`，以及指向面板 id 的 `aria-controls`。
+
+## 技术实现
+
+- 悬停桥与安全三角来自 `packages/tuffex/packages/utils/hover-intent.ts`，与锚点家族共用；桥的几何由 Floating UI 中间件链的最后一环算出，渲染为面板的兄弟节点。
+- 源码：`packages/tuffex/packages/components/src/flat-dropdown/`。

@@ -1,0 +1,105 @@
+---
+title: "NavBar"
+description: "A top bar with a title and leading and trailing actions."
+category: Navigation
+status: beta
+since: 0.3.4
+tags: [navigation, mobile, layout]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+::::TuffDemoWrapper{demo="NavBarNavBarDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxNavBar title="Settings" show-back @back="goBack" @click-right="save">
+      <template #right>
+        <span>Save</span>
+      </template>
+    </TxNavBar>
+  </template>
+---
+::::
+
+### Custom Left and Title
+The `left` slot replaces the built-in back icon; clicking it emits only `click-left`, not `back`.
+
+```vue
+<template>
+  <TxNavBar @click-left="openMenu" @click-right="save">
+    <template #left>
+      <TxIcon name="i-carbon-menu" />
+    </template>
+    <template #title>
+      <strong>Workspace</strong>
+    </template>
+    <template #right>
+      Save
+    </template>
+  </TxNavBar>
+</template>
+```
+
+### Sticky
+
+```vue
+<template>
+  <TxNavBar title="Inbox" fixed :z-index="3200" />
+</template>
+```
+
+### Best Practices
+
+- Listen to `@back` for back navigation and keep `@click-left` for a custom left slot; the built-in back button emits both, so don't listen to both.
+- Keep right-slot content short; the title truncates, but the side columns still need room.
+- Don't nest buttons inside `left` or `right`; both action zones are already buttons.
+- Keep `safeAreaTop=true` in mobile shells unless the surrounding layout handles the safe area.
+- Set `disabled` during route transitions or saves to prevent repeated triggers.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | Centered text when there is no `title` slot. |
+| `fixed` | `boolean` | `false` | Sticks to the top with sticky positioning. |
+| `safeAreaTop` | `boolean` | `true` | Renders a top safe-area spacer using `env(safe-area-inset-top)`. |
+| `showBack` | `boolean` | `false` | Shows the built-in back icon when there is no `left` slot. |
+| `disabled` | `boolean` | `false` | Disables both action buttons and suppresses events. |
+| `zIndex` | `number` | `2000` | Stacking level, written to `--tx-nav-bar-z-index`. |
+| `backLabel` | `string` | `'Back'` | The built-in back button's `aria-label`; pass a localized string. |
+| `leftLabel` | `string` | `'Navigation left action'` | The left button's `aria-label` when there is no `left` slot and `showBack` is off. |
+| `rightLabel` | `string` | `'Navigation right action'` | The right button's `aria-label` when there is no `right` slot. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `back` | `void` | Emitted only by the built-in back button. |
+| `click-left` | `void` | Emitted by the built-in back button or custom left content. |
+| `click-right` | `void` | Emitted by the right action when the `right` slot exists. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `left` | none | Replaces the built-in back icon. |
+| `title` | none | Replaces the centered title. |
+| `right` | none | Right-side action content. |
+
+## Overview
+
+- The root is a `<header>`; both action zones are native `<button type="button">` elements.
+- The built-in back button (`showBack` without a `left` slot) emits both `back` and `click-left`; a custom `left` emits only `click-left`.
+- An action zone with no content is disabled and emits nothing.
+- `disabled` adds `is-disabled`, disables both buttons, and blocks every event.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/nav-bar/`.
+
+<TuffDocSourceLink />

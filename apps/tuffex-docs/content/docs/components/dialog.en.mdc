@@ -1,0 +1,291 @@
+---
+title: Dialog
+description: A family of modal dialogs for confirmations and prompts.
+category: Feedback
+status: beta
+since: 0.3.4
+tags: [dialog, modal, confirm]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Bottom Dialog
+`TxBottomDialog` is a mobile-style bottom confirmation, also used as a checkpoint before destructive actions.
+:::TuffDemoWrapper{demo="DialogBottomDialogDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="bottomOpen = true">Show dialog</TxButton>
+    <TxBottomDialog
+      v-if="bottomOpen"
+      title="Confirm action"
+      message="Are you sure you want to continue?"
+      :btns="[
+        { content: 'Cancel', type: 'info', onClick: () => true },
+        { content: 'Confirm', type: 'success', onClick: async () => true },
+      ]"
+      :close="() => (bottomOpen = false)"
+    />
+  </template>
+---
+:::
+
+### Action Rows and Icons
+Each button renders as a full-width action row, with `icon` as its leading glyph.
+:::TuffDemoWrapper{demo="DialogBottomDialogRowsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="rowsOpen = true">Show action rows</TxButton>
+    <TxBottomDialog
+      v-if="rowsOpen"
+      title="Wallet settings"
+      :btns="[
+        { content: 'View private key', icon: 'i-carbon-password', onClick: () => false },
+        { content: 'View recovery phrase', icon: 'i-carbon-list', onClick: () => false },
+        { content: 'Remove wallet', icon: 'i-carbon-warning-alt', type: 'error', onClick: () => false },
+      ]"
+      :close="() => (rowsOpen = false)"
+    />
+  </template>
+---
+:::
+
+### Button Types
+Only `type: 'error'` colors a row; `info`, `warning`, and `success` all render as neutral rows.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const btns = [
+    { content: 'Neutral row', type: 'info', onClick: () => true },
+    { content: 'Also neutral', type: 'success', onClick: () => true },
+    { content: 'Destructive row', type: 'error', onClick: () => true },
+  ]
+---
+:::
+
+### Auto Confirm
+`time` counts down in seconds and clicks the row when it reaches zero.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const btns = [
+    { content: 'Auto confirm', type: 'success', time: 5, onClick: () => true },
+  ]
+---
+:::
+
+### Loading State
+While `onClick` runs, the row is disabled and shows a spinner, so it can't be submitted twice.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const btns = [
+    {
+      content: 'Submit',
+      type: 'success',
+      onClick: async () => {
+        await saveData()
+        return true
+      },
+    },
+  ]
+---
+:::
+
+### Blow Dialog
+`TxBlowDialog` is a centered, high-emphasis dialog that transforms the background as it opens.
+:::TuffDemoWrapper{demo="DialogBlowDialogDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="blowOpen = true">Show blow dialog</TxButton>
+    <TxBlowDialog
+      v-if="blowOpen"
+      title="Welcome"
+      message="Hello! Welcome to the app."
+      confirm-text="Confirm"
+      :close="() => (blowOpen = false)"
+    />
+  </template>
+---
+:::
+
+### Popper Dialog
+`TxPopperDialog` is a compact centered prompt that keeps modal semantics.
+:::TuffDemoWrapper{demo="DialogPopperDialogDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="popperOpen = true">Show popper dialog</TxButton>
+    <TxPopperDialog
+      v-if="popperOpen"
+      title="Tip"
+      message="This is a short tip."
+      confirm-text="Confirm"
+      :close="() => (popperOpen = false)"
+    />
+  </template>
+---
+:::
+
+### Touch Tip
+`TxTouchTip` is a touch-first guidance prompt with several action buttons.
+:::TuffDemoWrapper{demo="DialogTouchTipDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="tipOpen = true">Show TouchTip</TxButton>
+    <TxTouchTip
+      v-if="tipOpen"
+      title="Notice"
+      message="Pick an action."
+      :buttons="[
+        { content: 'Cancel', type: 'info', onClick: () => true },
+        { content: 'Confirm', type: 'success', onClick: async () => true },
+      ]"
+      :close="() => (tipOpen = false)"
+    />
+  </template>
+---
+:::
+
+### Custom Content
+`TxBlowDialog` and `TxPopperDialog` replace their default content with `comp` or `render`.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import CustomContent from './CustomContent.vue'
+
+  // Component
+  h(TxBlowDialog, { comp: CustomContent, close: () => {} })
+
+  // Render function
+  h(TxBlowDialog, {
+    render: () => h('div', [
+      h('h2', 'Dynamic content'),
+      h('p', 'Created with a render function'),
+    ]),
+    close: () => {},
+  })
+---
+:::
+
+### Best Practices
+
+- Keep at most one destructive row, mark it `type: 'error'`, and state the consequence in its label; color only reinforces it.
+- Pass `icon` as a class the host's icon pipeline generates statically (`i-carbon-trash-can`); a name built at runtime renders an empty box.
+- Reserve `TxBlowDialog` for rare, high-emphasis announcements; its background transform is dramatic.
+- On non-English surfaces, pass `closeLabel` to `TxBottomDialog`: the close button is icon-only, so this name is all a screen reader announces.
+- Never pass user-generated content to `messageHtml` unless it is sanitized and marked with `asTrustedDialogHtml()`.
+
+## API Reference
+
+### TxBottomDialog
+
+#### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | Title. |
+| `message` | `string` | `''` | Plain-text body; line breaks are kept. |
+| `stay` | `number` | `0` | Reserved auto-close duration; currently starts no timer on its own. |
+| `close` | `() => void` | *required* | Close callback. |
+| `btns` | `DialogButton[]` | `[]` | Action row configs. |
+| `icon` | `string` | `''` | Legacy icon class; not rendered. |
+| `index` | `number` | `0` | z-index offset added to the allocated layer. |
+| `closeLabel` | `string` | `'Close'` | Accessible name of the header's close button. |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Material of the panel. |
+| `surfaceColor` | `string` | `''` | Colour laid under the material; follows the theme by default. |
+| `surfaceOpacity` | `number` | `0.96` for `mask`, `0.5` otherwise | Opacity of that colour, used by `mask`, `blur`, `acrylic`, `glass` and `refraction`; always opaque under `pure` and `flat`, and `mica` and `plain` lay no base colour. |
+
+### TxBlowDialog / TxPopperDialog
+
+#### Props
+
+Both take the same props.
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | Title. |
+| `message` | `string` | `''` | Plain-text body. |
+| `messageHtml` | `DialogMessageHtml` | `''` | Sanitized, trusted HTML; takes precedence over `message`. |
+| `confirmText` | `string` | `'Confirm'` | Confirm button text. |
+| `close` | `() => void` | *required* | Close callback. |
+| `comp` | `Component` | `undefined` | Component that replaces the default content. |
+| `render` | `() => VNode` | `undefined` | Render function that replaces the default content. |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Material of the panel. |
+| `surfaceColor` | `string` | `''` | Colour laid under the material; follows the theme by default. |
+| `surfaceOpacity` | `number` | `0.96` for `mask`, `0.5` otherwise | Opacity of that colour, used by `mask`, `blur`, `acrylic`, `glass` and `refraction`; always opaque under `pure` and `flat`, and `mica` and `plain` lay no base colour. |
+
+### TxTouchTip
+
+#### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | Title. |
+| `message` | `string` | `''` | Plain-text body. |
+| `messageHtml` | `DialogMessageHtml` | `''` | Sanitized, trusted HTML; takes precedence over `message`. |
+| `buttons` | `TouchTipButton[]` | `[]` | Action button configs. |
+| `close` | `() => void` | *required* | Close callback. |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Material of the panel. |
+| `surfaceColor` | `string` | `''` | Colour laid under the material; follows the theme by default. |
+| `surfaceOpacity` | `number` | `0.96` for `mask`, `0.5` otherwise | Opacity of that colour, used by `mask`, `blur`, `acrylic`, `glass` and `refraction`; always opaque under `pure` and `flat`, and `mica` and `plain` lay no base colour. |
+
+### Types
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface DialogButton {
+    content: string
+    type?: 'info' | 'warning' | 'error' | 'success' // only 'error' colors the row
+    icon?: string // leading icon class
+    time?: number // countdown in seconds; clicks the row at zero
+    onClick: () => Promise<boolean> | boolean // true closes, false stays open
+    loading?: (done: () => void) => void // the row stays loading until done()
+  }
+
+  // TxTouchTip buttons: no icon or time
+  interface TouchTipButton {
+    content: string
+    type?: 'info' | 'warning' | 'error' | 'success'
+    onClick: () => Promise<boolean> | boolean
+    loading?: (done: () => void) => void
+  }
+
+  // The material props all four variants share
+  interface DialogSurfaceProps {
+    surface?: BaseSurfaceMode // 'refraction' by default
+    surfaceColor?: string // follows the theme by default
+    surfaceOpacity?: number // 0.96 for mask, 0.5 otherwise
+  }
+
+  function asTrustedDialogHtml(html: string): TrustedDialogHtml
+---
+:::
+
+## Overview
+
+- All four variants teleport to `body` and take their layer from the shared z-index manager; they emit no events, have no slots, and close only through the required `close` callback. Escape calls `close()` after the leave animation, and the `TxBottomDialog` close button also only cancels and never fires a row action.
+- While open, Tab stays inside the panel. Focus returns to the previously focused element as soon as the close starts (on unmount, for one unmounted open), and the panel is `inert` while it leaves, handing the pointer and the keys to the layer below. `useId()` ids wire the title and body to `aria-labelledby` / `aria-describedby`. `TxBlowDialog` also resets the zoom and fade it applied to `#app` when it unmounts.
+- `TxBottomDialog` and `TxTouchTip` lock page scrolling while open; `message` renders as plain text with line breaks kept, `messageHtml` accepts only values marked by `asTrustedDialogHtml()` (which does not sanitize), and bodies set `overflow-wrap: anywhere` and cap their own height with scrolling, so long tokens don't widen the panel and long content isn't clipped.
+- The panel background is a card-preset `TxBaseSurface` (`fake`) under the content, `refraction` by default: a 50% base colour keeps text legible while the page behind still shows through to be blurred and refracted.
+- The overlay dim of `TxBlowDialog`, `TxPopperDialog` and `TxTouchTip` (and the blur of `TxBlowDialog`) is painted on a pseudo-element of the overlay rather than on its own background and opacity, so the panel's material samples the page, not only the dim; `TxBottomDialog` has no overlay.
+- Panels only move and scale as they open and close; they never fade as a whole. Once a panel's opacity animates, every backdrop filter inside it samples nothing but the panel, and the frost would drop out for the whole transition. What fades is each part of the panel instead: the content, the shadow and outline, and each layer of the material, so a material with a backdrop filter (such as the default `refraction`) samples the page from the first frame to the last.
+
+## Technologies
+
+- The entry exports the four variants (each wrapped with `withInstall`), `asTrustedDialogHtml`, and the public types.
+- Under high contrast the panel's material turns solid on its own, and the `TxBlowDialog` overlay only dims the page without frosting it.
+- Under reduced motion (`prefers-reduced-motion: reduce`) the panels fade in place, without scaling or moving; the zoom and fade `TxBlowDialog` applies to `#app` on open ignores this setting.
+- Source: `packages/tuffex/packages/components/src/dialog/`.
+
+<TuffDocSourceLink />

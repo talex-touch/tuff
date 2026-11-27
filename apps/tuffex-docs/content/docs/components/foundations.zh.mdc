@@ -1,0 +1,181 @@
+---
+title: 设计基础
+description: 设计哲学、几何、折射材质、暗色光学与 Token
+category: Foundations
+status: reviewed
+since: 1.0.0
+tags: [design, concepts, tokens, typography, color, motion, geometry]
+syncStatus: reviewed
+verified: true
+---
+
+# 设计基础
+
+Tuffex（塔芙）的设计基础建立在**物理真实度（Physical Honesty）**、**零迟滞响应（Sub-100ms Velocity）**与**确定性工程纪律（Deterministic Discipline）**三大公理之上。
+
+它不仅定义了基础 CSS 变量，更规定了桌面端人机交互的几何学、材料学与光学底线。
+
+## 几何与曲率工程（Geometry & Squircles）
+
+### G2 曲率连续性与超椭圆
+
+标准 CSS `border-radius` 采用圆弧拼接（$G^1$ 切线连续），在直线与圆弧交点处曲率 $\kappa$ 瞬间从 $0$ 突跃至 $1/R$，在高光或折射材质下会产生肉眼可见的“折痕感”（Specular Break）。
+
+TuffEx 在 TxCard、TxModal、TxCommandPalette、TxFlipOverlay、各类 Dialog 与 CoreBox 上使用超椭圆（Lamé Curve / Squircle）圆角：
+$$\left| \frac{x}{a} \right|^n + \left| \frac{y}{a} \right|^n = 1 \quad (n \approx 3.43)$$
+超椭圆与直线相接处曲率为 0（$G^2$ 连续），45° 方向切入的深度与原来的圆角相同，反射与边缘浑然一体。实现见 `style/mixins.scss` 的 `tx-squircle`，不支持 `corner-shape` 的浏览器保留普通圆角。
+
+### 同心圆角几何守恒
+
+嵌套容器若使用相同的圆角数值，拐角处物理间隙会扩大 $\sqrt{2}$ 倍（约 1.414 倍），导致内部元素产生被挤压的悬空失衡感。
+TuffEx 严格执行同心守恒定律：
+$$R_{\text{outer}} = R_{\text{inner}} + \text{Padding}$$
+
+### 水平内嵌防光标裁切
+
+圆角弧线会向内侵占内容空间。为了防止输入框光标（Caret）切入圆弧，水平内边距必须完全覆盖圆角半径：
+$$Padding_{\text{horizontal}} \ge R$$
+单行文字包裹层的垂直内边距取水平内边距的 **0.6～0.75 倍**（TxModeChip、TxTag 都是 0.625），抵消字体自带行高造成的头重脚轻感。
+
+## 表面材质与次表面折射（Surfaces & Refraction）
+
+### Refraction（琉光折射）默认法则
+
+所有带材质层的组件，**默认材质一律且必须为 `refraction`**：`TxBaseSurface` 的 `mode`、`TxCard` 的 `background`、`TxFlipOverlay`、`TxModal`、`TxCommandPalette` 与 `TxPopperDialog`、`TxBlowDialog`、`TxBottomDialog`、`TxTouchTip` 几种对话框的 `surface`，以及经 `TxBaseAnchor` 渲染的弹出面板（`TxPopover`、`TxTooltip`、下拉与右键菜单、`TxSelect`、`TxSearchSelect`）的 `panelBackground`。
+`TxDrawer` 是经用户确认的例外（2026-10-25）：面板默认 `pure` 实色，后面的页面不透进正文与表单；要琉光时传 `surface="refraction"`。
+若因极端场景要换成其他材质（如 `flat`、`mask`、`glass`），**必须经过用户明确手动确认**；运动中的降级与 `autoDetect` 的临时降级不改声明的材质，不算切换。详见《[Surface 8 种材质物理选型与确认门禁](/zh/concepts/surface-taxonomy)》。
+
+### 斯涅尔折射与 RGB 色散管线
+
+`TxBaseSurface` 的 `refraction` 以 `TxGlassSurface` 为玻璃层，用 SVG 位移贴图（Displacement Map）模拟光线穿透棱镜时的斯涅尔偏折（Snell's Law）：Red、Green、Blue 三个通道各自位移一次，幅度略有不同（默认依次为 −180、−170、−160），通道错开后在折射边缘分离出微弱的光谱彩边（Chromatic Dispersion），打破塑料般的单调感。
+
+### 120Hz 运动降级与 140ms 迟滞恢复
+
+材质随元素移动时，`backdrop-filter` 的取样落后于元素的位置，滤镜层会拖着一块错位的背景走；在 120Hz 屏幕上拖动窗口时，重滤镜还要挤占只有 8.3ms 的帧预算。所以 `TxBaseSurface` 一运动就**当帧降级（0ms，不做防抖）**：`blur`、`glass`、`acrylic` 整体换成 `fallbackMode`（默认 `mask`）；`refraction` 不换材质，玻璃层与滤镜层在 140ms 内淡出，换上一层半透明遮盖。运动结束后再恢复，`autoDetect` 的信号要先安静 **140ms**，防止手势在阈值附近颤抖时反复切换：`refraction` 随即分层恢复，287ms 撤完遮盖；其他材质先保持降级 299ms 再换回。详见《[材质自动推断与 120Hz 运动降级](/zh/concepts/surface-deduction)》。
+
+## 色彩科学与暗色光学（Color Science）
+
+### #141414 深灰画布与三层表面阶梯
+
+为什么不用绝对纯黑 `#000000`？
+1. **防 OLED 拖尾残影**：纯黑导致子像素关闭，滚动时会产生令人眩晕的紫色拖尾（Purple Smearing）。
+2. **保留阴影空间**：阴影的物理本质是比底板更暗。`#141414` 为弥散投影保留了空间纵深。
+3. **三层阶梯**：L0 底板 `--tx-bg-color: #141414`，L1 容器 `--tx-bg-color-overlay: #1d1e1f`（卡片、对话框、抽屉、弹出浮层），L2 高亮 `--tx-fill-color-light: #262727`（悬停、选中）。暗色下 `--tx-fill-color-blank` 是 `transparent`，不承担容器色。
+
+### 暗色模式视网膜光晕字重补偿
+
+根据亥姆霍兹视网膜光渗效应（Optical Irradiation），白字在暗黑底板上会向外发光扩散，**看起来比浅色模式下同字重的字更粗**，粗多少随亮度、对比度和字号而变，没有固定的百分比。
+TuffEx 在暗色主题里把三档强调字重各调轻 40，组件以 `var(--tx-font-weight-medium, 500)` 这样的写法读取，切到暗色主题就随之变轻：
+- 默认正文：`400`，不下调（再低，静态字体就会落到 Light 字面）
+- 行内强调 `--tx-font-weight-medium`：`500`（浅色） $\to$ `460`（暗色）
+- 小标题与按钮 `--tx-font-weight-semibold`：`600`（浅色） $\to$ `560`（暗色）
+- 加粗与数值 `--tx-font-weight-bold`：`700`（浅色） $\to$ `660`（暗色）
+
+只有带字重轴的字体（San Francisco、Segoe UI Variable、Inter Variable）会真正画细；PingFang SC、Microsoft YaHei 这类静态字体把这些值归回浅色模式的同一个字面，补偿不生效，也不会变粗。每个暗色值都落在（浅色值 − 100，浅色值］之内，由 Sass 函数 `tx-dark-weight` 在构建时检查。默认字体栈在没装 Inter 的 macOS 上由 PingFang SC 绘制，看不出这档微调。详见《[暗色视网膜光晕与字重微调补偿](/zh/concepts/irradiation-tuning)》。
+
+### color-mix 墨水融合与 WCAG 4.5:1
+
+语义文字颜色绝不使用孤立纯色相，而是与主墨水在 sRGB 色彩空间动态混色，例如 TxModeChip 危险态的墨水：
+`color-mix(in srgb, var(--tx-color-danger) 55%, var(--tx-text-color-primary))`。
+占比按色相分开定：危险 55%，成功与警告 45%，信息取主色 50%。13px 文字放在 `-light-9` 淡底上，纯色相只有 **2.03:1～2.61:1**，混色后实测 **5.07:1～5.32:1**，达到 WCAG 2.1 AA 的 4.5:1。
+
+## 排版工程与 13–14px 基准（Typography）
+
+- **13px～14px 生产力基准**：桌面生产力工具避免采用营销类大字号，确保关键上下文落在人眼 2 度中央凹扫读视窗内。
+- **等宽代码 0.9em 调和**：等宽字体的 x 高度略高于同字号的无衬线字体（按 macOS 自带字体实测，高出约 1.7%～7.7%），行内 `<code>` 缩到 `0.9em` 并留在基线上，保持垂直行间节奏。`.tx-prose` 里不在 `<pre>` 中的 `<code>` 自动套用，其他地方加 `.tx-inline-code`。
+- **现代软换行**：短标题采用 `text-wrap: balance`（工具类 `.tx-heading`，`TxModal` 的标题已内置）；长段落采用 `text-wrap: pretty` 自动规避段末单字孤行（Orphans；`.tx-prose p`、`.tx-description`、`.tx-help-text`）；严禁硬编码 `<br>`。流式生成的段落例外：还在写入时按普通断行，写完再换回 `pretty`。
+- **正文零 Tracking 铁律**：正文严禁触碰 `letter-spacing`。它不会去掉字偶间距（Kerning Pairs），而是在其外给相邻字符统一加距，冲淡厂商调好的字距节奏；字距不为 0 时，浏览器也不再应用 `fi`、`fl` 这类可选连字。只有 ≤11px 的全大写微型标签、≥17px 的标题与展示数字、头像缩写三类豁免。
+
+## 微动效与微交互节拍（Micro-Motion）
+
+- **动效是空间锚点**：绝大部分微交互压缩在 **90ms～180ms** 之间，动画绝不允许阻碍下一次点击或键盘输入。
+- **悬停必须 0ms 瞬间响应**：严禁在 `:hover` 上过渡背景色和文字颜色（防止产生“泡在浆糊里”的迟滞感）；仅状态形变允许挂载 `.is-morphing` 类名过渡。
+- **90ms+90ms 确认律动**：菜单点击后经历“90ms 清除高亮 + 90ms 激活脉冲”，消除点击即消失的不确定感。
+- **四大合成器属性**：高频动画、加载效果与循环特效只动 `translate`、`scale`、`rotate`、`opacity`，整段交给合成器线程，主线程繁忙时也跟得上刷新率。关键帧里可以用 `var()` 给起点、终点和幅度，但不给自定义属性本身做关键帧动画（它每一帧都在主线程上插值）；重播动画靠两个关键帧名字交替，不用 `void el.offsetWidth` 强制重排。
+
+## AI 流式生成与防抖底线（Streaming & Anti-Jitter）
+
+- **useStreamPacer 节拍器**：至少每 24ms 释放一个词元；积压时按期限均匀提速，每个词元最迟在到达后 600ms 显示；源结束后，剩余积压在 320ms 内放完。网络一次倾泻下来的大块文字，读起来是一段加快的字流。
+- **双层 Reserve 镜像占位**：重放已完成的内容时，隐形的占位层（`aria-hidden`、`inert`、`visibility: hidden`）先撑住完整高度，文字放出期间容器不再长高、滚动条不跳。`reserve` 默认关闭；实时流式输出（包括重新生成）还不知道最终高度，容器仍随内容增高。
+- **即刻可读与框选复制**：文字释放至 DOM 即为纯文本节点，严禁 `user-select: none`，用户在生成过程中随时按下 `Cmd+C` 立即完成复制。
+
+## 颜色体系令牌
+
+### 品牌色与语义色
+
+| Token | Light | Dark | 用途 |
+| --- | --- | --- | --- |
+| `--tx-color-primary` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#409eff;"></span><code>#409eff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#409eff;"></span><code>#409eff</code></span> | 主操作 |
+| `--tx-color-success` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#67c23a;"></span><code>#67c23a</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#4ade80;"></span><code>#4ade80</code></span> | 成功状态 |
+| `--tx-color-warning` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e6a23c;"></span><code>#e6a23c</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#fbbf24;"></span><code>#fbbf24</code></span> | 警告状态 |
+| `--tx-color-danger` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f56c6c;"></span><code>#f56c6c</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f87171;"></span><code>#f87171</code></span> | 错误状态 |
+| `--tx-color-info` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#909399;"></span><code>#909399</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#909399;"></span><code>#909399</code></span> | 信息提示 |
+
+### 主色阶梯
+
+| Token | Light | Dark | 用途 |
+| --- | --- | --- | --- |
+| `--tx-color-primary-light-3` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#79bbff;"></span><code>#79bbff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#3375b9;"></span><code>#3375b9</code></span> | 悬停/聚焦 |
+| `--tx-color-primary-light-5` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#a0cfff;"></span><code>#a0cfff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#2a598a;"></span><code>#2a598a</code></span> | 轻度背景 |
+| `--tx-color-primary-light-7` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#c6e2ff;"></span><code>#c6e2ff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#213d5b;"></span><code>#213d5b</code></span> | 微弱背景 |
+| `--tx-color-primary-light-9` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ecf5ff;"></span><code>#ecf5ff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#18222c;"></span><code>#18222c</code></span> | 面层底色 |
+| `--tx-color-primary-dark-2` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#337ecc;"></span><code>#337ecc</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#66b1ff;"></span><code>#66b1ff</code></span> | 激活态 |
+
+### 文本颜色与无障碍基线
+
+| Token | Light | Dark | 用途与对比度 |
+| --- | --- | --- | --- |
+| `--tx-text-color-primary` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#303133;"></span><code>#303133</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e5eaf3;"></span><code>#e5eaf3</code></span> | 主文本（最高对比度） |
+| `--tx-text-color-regular` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#606266;"></span><code>#606266</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#cfd3dc;"></span><code>#cfd3dc</code></span> | **13px 正文必须基准（实测 5.69:1）** |
+| `--tx-text-color-secondary` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#909399;"></span><code>#909399</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#a3a6ad;"></span><code>#a3a6ad</code></span> | 次级文本（实测 3.08:1，仅限辅助图标） |
+| `--tx-text-color-placeholder` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#a8abb2;"></span><code>#a8abb2</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#8d9095;"></span><code>#8d9095</code></span> | 占位文本 |
+| `--tx-text-color-disabled` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#c0c4cc;"></span><code>#c0c4cc</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#6c6e72;"></span><code>#6c6e72</code></span> | 禁用文本 |
+
+### 背景与边框
+
+| Token | Light | Dark | 用途 |
+| --- | --- | --- | --- |
+| `--tx-bg-color` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ffffff;"></span><code>#ffffff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#141414;"></span><code>#141414</code></span> | 应用背景底板 |
+| `--tx-bg-color-page` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f2f3f5;"></span><code>#f2f3f5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#0a0a0a;"></span><code>#0a0a0a</code></span> | 页面画布 |
+| `--tx-bg-color-overlay` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ffffff;"></span><code>#ffffff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#1d1e1f;"></span><code>#1d1e1f</code></span> | 浮层底板 |
+| `--tx-fill-color` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f0f2f5;"></span><code>#f0f2f5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#303030;"></span><code>#303030</code></span> | 弱填充 |
+| `--tx-fill-color-light` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f5f7fa;"></span><code>#f5f7fa</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#262727;"></span><code>#262727</code></span> | 更浅填充 |
+| `--tx-fill-color-lighter` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#fafafa;"></span><code>#fafafa</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#1d1d1d;"></span><code>#1d1d1d</code></span> | 最浅填充 |
+| `--tx-fill-color-darker` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ebeef5;"></span><code>#ebeef5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#3a3a3a;"></span><code>#3a3a3a</code></span> | 更深填充 |
+| `--tx-fill-color-blank` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ffffff;"></span><code>#ffffff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip tuff-swatch__chip--transparent" style="--swatch:transparent;"></span><code>transparent</code></span> | 透明填充 |
+| `--tx-border-color` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#dcdfe6;"></span><code>#dcdfe6</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#4c4d4f;"></span><code>#4c4d4f</code></span> | 默认边框 |
+| `--tx-border-color-light` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e4e7ed;"></span><code>#e4e7ed</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#414243;"></span><code>#414243</code></span> | 浅边框 |
+| `--tx-border-color-lighter` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ebeef5;"></span><code>#ebeef5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#363637;"></span><code>#363637</code></span> | 更浅边框 |
+| `--tx-border-color-extra-light` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f2f6fc;"></span><code>#f2f6fc</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#2b2b2c;"></span><code>#2b2b2c</code></span> | 最浅边框 |
+
+## 技术实现与规范延伸
+
+- **样式源码**：`packages/tuffex/packages/components/style/variables.scss`，由 `@talex-touch/tuffex/base.css` 统一输出。
+- **扩展深度概念手册**：更深度的物理几何推导与代码实战详见 `apps/nexus/content/docs/dev/concepts/` 专属专题板块。
+
+<style scoped>
+.tuff-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tuff-swatch__chip {
+  width: 16px;
+  height: 16px;
+  border-radius: 6px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.tuff-swatch__chip--transparent {
+  background-image:
+    linear-gradient(45deg, rgba(148, 163, 184, 0.45) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(148, 163, 184, 0.45) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.45) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.45) 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
+</style>

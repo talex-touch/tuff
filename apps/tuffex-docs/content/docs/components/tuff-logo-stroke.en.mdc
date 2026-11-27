@@ -1,0 +1,81 @@
+---
+title: "TuffLogoStroke"
+description: "An animated SVG stroke of the Tuff logo."
+category: Effects
+status: beta
+since: 0.3.4
+tags: [logo, svg, animation]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Animation Modes
+`once` draws the logo in once on mount; `breathe` keeps a subtle pulse after the draw-in; `hover` waits for a hover.
+::::TuffDemoWrapper{demo="TuffLogoStrokeModesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTuffLogoStroke :size="84" mode="once" />
+    <TxTuffLogoStroke :size="84" mode="breathe" />
+    <TxTuffLogoStroke :size="84" mode="hover" />
+  </template>
+---
+::::
+
+### Palette and Duration
+::::TuffDemoWrapper{demo="TuffLogoStrokePaletteDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTuffLogoStroke
+      :size="128"
+      mode="breathe"
+      :duration-ms="2800"
+      stroke-color="#3b82f6"
+      fill-start-color="#0ea5e9"
+      fill-end-color="#8b5cf6"
+      outer-start-color="#fb7185"
+      outer-end-color="#7e22ce"
+    />
+  </template>
+---
+::::
+
+### Best Practices
+
+- Use `once` for splash, loading-complete, or first-view brand moments.
+- Use `hover` when the logo sits near an interactive affordance and shouldn't keep drawing attention.
+- Use `breathe` sparingly; repeating brand motion competes with primary UI feedback.
+- Keep custom colors close to the surrounding surface; high-saturation gradients suit calm backgrounds.
+- Don't wrap the SVG in another animation unless you've checked the combined reduced-motion behavior.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `size` | `string \| number` | `120` | SVG width and height; numbers become px. |
+| `mode` | `'once' \| 'breathe' \| 'hover' \| 'loop'` | `'once'` | Animation trigger; `loop` behaves as `breathe`. |
+| `durationMs` | `number` | `2200` | Base animation duration in ms. |
+| `strokeColor` | `string` | `'#4C4CFF'` | Outline stroke color. |
+| `fillStartColor` | `string` | `'#199FFE'` | Start color of the core fill gradient. |
+| `fillEndColor` | `string` | `'#810DC6'` | End color of the core fill gradient. |
+| `outerStartColor` | `string` | `'#D73E4D'` | Start color of the outer radial gradient. |
+| `outerEndColor` | `string` | `'#7F007F'` | End color of the outer radial gradient. |
+
+## Overview
+
+- It renders one SVG with `role="img"` and the accessible name `Tuff logo stroke animation`.
+- `mode="loop"` is an alias of `breathe` kept for older call sites; both produce the same state class, so write `breathe` in new code.
+- Gradient and filter ids are generated per instance with `useId()`, so logos on one page never collide; snapshot tests should assert unique ids, not exact strings.
+- `durationMs` is written to `--tx-tuff-logo-duration`, and the `breathe` pulse derives from it.
+- Under reduced motion, nothing animates and the fully drawn state shows.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/tuff-logo-stroke/`.
+
+<TuffDocSourceLink />

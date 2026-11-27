@@ -1,0 +1,819 @@
+---
+title: "Form 表单"
+description: "带布局、校验与提交状态的表单容器"
+category: Form
+status: beta
+since: 0.3.4
+tags: [form, validation, input]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 校验
+用户改过字段并离开后，该字段才显示消息；提交时显示全部消息，并聚焦第一个出错的字段。
+:::TuffDemoWrapper{demo="FormFormDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive } from 'vue'
+
+  const form = reactive({ username: '', email: '', confirm: '', website: '' })
+  const rules = {
+    username: [{ required: true }, { minLength: 3, maxLength: 20 }],
+    email: [{ required: true }, { type: 'email' }],
+    confirm: [
+      { required: true },
+      { validator: value => value === form.email || '两次输入的邮箱不一致', deps: ['email'] },
+    ],
+    website: [
+      { type: 'url' },
+      { validator: value => !value || value.startsWith('https://') || '建议使用 https 地址', level: 'warning' },
+    ],
+  }
+
+  function onSubmit(values) {
+    // 全部校验通过后才会调用
+  }
+  </script>
+
+  <template>
+    <TxForm :model="form" :rules="rules" @submit="onSubmit">
+      <TxFormItem label="用户名" prop="username" help="3 到 20 个字符">
+        <TuffInput v-model="form.username" />
+      </TxFormItem>
+      <TxFormItem label="邮箱" prop="email">
+        <TuffInput v-model="form.email" type="email" />
+      </TxFormItem>
+      <TxFormItem label="确认邮箱" prop="confirm">
+        <TuffInput v-model="form.confirm" type="email" />
+      </TxFormItem>
+      <TxFormItem label="个人主页" prop="website">
+        <TuffInput v-model="form.website" placeholder="https://" />
+      </TxFormItem>
+      <TxFormItem>
+        <TxButton variant="primary" native-type="submit">注册</TxButton>
+        <TxButton native-type="reset">重置</TxButton>
+      </TxFormItem>
+    </TxForm>
+  </template>
+---
+:::
+
+### 布局
+`auto` 在表单宽度达到 520px 时把 label 放在左侧，更窄时放到上方。
+:::TuffDemoWrapper{demo="FormLayoutDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxForm :model="form" layout="auto">
+      <TxFormItem label="收件人" prop="name" width="md">
+        <TuffInput v-model="form.name" />
+      </TxFormItem>
+      <TxFormItem label="手机号" prop="phone" width="sm">
+        <TuffInput v-model="form.phone" inputmode="tel" />
+      </TxFormItem>
+      <TxFormRow label="地址">
+        <TxFormItem label="城市" prop="city">
+          <TuffInput v-model="form.city" />
+        </TxFormItem>
+        <TxFormItem label="邮编" prop="zip" width="sm">
+          <TuffInput v-model="form.zip" inputmode="numeric" />
+        </TxFormItem>
+      </TxFormRow>
+      <TxFormItem label="备注" prop="note" width="full">
+        <TxTextarea v-model="form.note" :rows="2" />
+      </TxFormItem>
+    </TxForm>
+  </template>
+---
+:::
+
+### 字段提示
+标签旁的 `?` 悬停或聚焦时浮出详细说明；`help` 常显在控件下方，只放一句短约束。
+:::TuffDemoWrapper{demo="FormHintDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxForm :model="form" :rules="rules">
+      <TxFormItem label="单次条数" prop="batch" hint="每次请求最多返回的条数。超出部分留到下一次请求，不会丢弃。上限越大，单次请求越慢。">
+        <TuffInput v-model="form.batch" inputmode="numeric" />
+      </TxFormItem>
+      <TxFormItem label="名称" prop="name" help="3 到 20 个字符">
+        <TuffInput v-model="form.name" />
+      </TxFormItem>
+    </TxForm>
+  </template>
+---
+:::
+
+### 只读
+`readonly` 把表单当作记录来展示：控件可以聚焦、复制，但不能修改，也不标必填；提交照常可用。
+:::TuffDemoWrapper{demo="FormReadonlyDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive, ref } from 'vue'
+
+  const readonly = ref(true)
+  const member = reactive({ name: '林晓', role: 'editor', plan: 'pro', seats: 5, notify: true })
+  </script>
+
+  <template>
+    <TuffSwitch v-model="readonly" label="只读" />
+    <TxForm :model="member" :readonly="readonly">
+      <TxFormItem label="成员" prop="name" required>
+        <TuffInput v-model="member.name" />
+      </TxFormItem>
+      <TxFormItem label="角色" prop="role" width="md">
+        <TxSelect v-model="member.role" :options="roles" />
+      </TxFormItem>
+      <TxFormItem label="套餐" prop="plan">
+        <TxRadioGroup v-model="member.plan" type="standard" direction="row">
+          <TxRadio value="free" label="免费版" />
+          <TxRadio value="pro" label="专业版" />
+          <TxRadio value="team" label="团队版" />
+        </TxRadioGroup>
+      </TxFormItem>
+      <TxFormItem label="席位" prop="seats" width="sm">
+        <TxNumberInput v-model="member.seats" :min="1" :max="50" />
+      </TxFormItem>
+      <TxFormItem label="邮件通知" prop="notify" inline>
+        <TuffSwitch v-model="member.notify" />
+      </TxFormItem>
+    </TxForm>
+  </template>
+---
+:::
+
+### 异步校验
+声明为 `async` 的 validator 在同步规则通过后运行，输入时防抖，值变化时中止。
+:::TuffDemoWrapper{demo="FormAsyncDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const rules = {
+    handle: [
+      { required: true },
+      { pattern: /^[a-z0-9-]+$/ },
+      {
+        async validator(value, _rule, _model, { signal }) {
+          const res = await fetch(`/api/handles/${value}`, { signal })
+          return res.status === 404 || `${value} 已被占用`
+        },
+      },
+    ],
+  }
+  </script>
+
+  <template>
+    <TxForm :model="form" :rules="rules" :messages="{ validating: '正在检查…' }">
+      <TxFormItem label="账号名" prop="handle">
+        <TuffInput v-model="form.handle" />
+      </TxFormItem>
+    </TxForm>
+  </template>
+---
+:::
+
+### 提交与服务端错误
+`@submit` 在全部校验通过后调用；处理函数中的 `setErrors()` 把服务端错误交还给对应字段。
+:::TuffDemoWrapper{demo="FormSubmitDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const formRef = ref()
+
+  async function onSubmit(values) {
+    const res = await fetch('/api/accounts', { method: 'POST', body: JSON.stringify(values) })
+    if (res.status === 409)
+      formRef.value.setErrors({ email: '该邮箱已注册' })
+    else if (!res.ok)
+      formRef.value.setRootError('网络连接失败，请稍后重试')
+  }
+  </script>
+
+  <template>
+    <TxForm ref="formRef" v-slot="{ submitting }" :model="form" :rules="rules" @submit="onSubmit">
+      <TxFormErrorSummary />
+      <TxFormItem label="昵称" prop="name">
+        <TuffInput v-model="form.name" />
+      </TxFormItem>
+      <TxFormItem label="邮箱" prop="email">
+        <TuffInput v-model="form.email" type="email" />
+      </TxFormItem>
+      <TxFormItem>
+        <TxButton variant="primary" native-type="submit" :loading="submitting">创建账号</TxButton>
+      </TxFormItem>
+    </TxForm>
+  </template>
+---
+:::
+
+### 自动保存
+`autosave` 在停止编辑一秒后经 `@submit` 保存：只校验改过的字段，出错的字段改对后再存，其余照常保存。
+:::TuffDemoWrapper{demo="FormAutosaveDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive, ref } from 'vue'
+
+  const settings = reactive({ name: '林晓', email: 'lin@example.com', notify: true, language: 'zh' })
+  const savedAt = ref(null)
+  const rules = {
+    name: { required: true, message: '请输入显示名称' },
+    email: { type: 'email', message: '邮箱格式不正确' },
+  }
+
+  async function save(values) {
+    await updateSettings(values)
+  }
+  </script>
+
+  <template>
+    <TxForm
+      v-slot="{ submitting }"
+      :model="settings"
+      :rules="rules"
+      :messages="{ autosaved: '更改已保存。', autosaveFailed: '更改未能保存。' }"
+      autosave
+      @submit="save"
+      @submit-success="savedAt = new Date()"
+    >
+      <TxFormItem label="显示名称" prop="name">
+        <TuffInput v-model="settings.name" />
+      </TxFormItem>
+      <TxFormItem label="通知邮箱" prop="email">
+        <TuffInput v-model="settings.email" type="email" />
+      </TxFormItem>
+      <TxFormItem label="邮件通知" prop="notify" inline>
+        <TuffSwitch v-model="settings.notify" />
+      </TxFormItem>
+      <TxFormItem>
+        <!-- 只给眼睛看；读屏由表单的状态区域播报 -->
+        <span>{{ submitting ? '正在保存…' : savedAt ? `已保存 ${savedAt.toLocaleTimeString()}` : '' }}</span>
+      </TxFormItem>
+    </TxForm>
+  </template>
+---
+:::
+
+### 加载与合并数据
+`setBaseline()` 写入取回的数据；用户改过的字段默认保留，由 `reconcile` 决定其他取舍。
+:::TuffDemoWrapper{demo="FormBaselineDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { onMounted, reactive, ref } from 'vue'
+
+  const formRef = ref()
+  const profile = reactive({ name: '', role: '', bio: '' })
+
+  async function refresh() {
+    formRef.value.setBaseline(await fetch('/api/profile').then(res => res.json()))
+  }
+
+  // 以服务器为准；不传 reconcile 时保留用户改过的字段
+  const serverWins = ({ incoming }) => incoming
+
+  onMounted(refresh)
+  </script>
+
+  <template>
+    <TxForm ref="formRef" v-slot="{ dirty }" :model="profile" :reconcile="serverWins" @submit="save">
+      <TxFormItem label="姓名" prop="name">
+        <TuffInput v-model="profile.name" />
+      </TxFormItem>
+      <TxFormItem label="职位" prop="role">
+        <TuffInput v-model="profile.role" />
+      </TxFormItem>
+      <TxFormItem>
+        <TxButton @click="refresh">从服务器刷新</TxButton>
+        <TxButton variant="primary" native-type="submit" :disabled="!dirty">保存</TxButton>
+        <TxButton native-type="reset" :disabled="!dirty">还原</TxButton>
+      </TxFormItem>
+    </TxForm>
+  </template>
+---
+:::
+
+### 草稿
+`persist` 以表单的 `id` 保存用户输入，刷新页面或关掉标签页后再打开都能找回。
+:::TuffDemoWrapper{demo="FormDraftDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { onMounted, reactive, ref } from 'vue'
+
+  const props = defineProps<{ postId: number }>()
+  const formRef = ref()
+  const post = reactive({ title: '', body: '' })
+  const loaded = ref(false)
+
+  onMounted(async () => {
+    formRef.value.setBaseline(await fetch(`/api/posts/${props.postId}`).then(res => res.json()))
+    loaded.value = true
+  })
+  </script>
+
+  <template>
+    <TxForm id="post-editor" ref="formRef" :model="post" :persist="loaded && { recordId: postId }" @submit="save">
+      <TxFormItem label="标题" prop="title">
+        <TuffInput v-model="post.title" />
+      </TxFormItem>
+      <TxFormItem label="正文" prop="body">
+        <TxTextarea v-model="post.body" />
+      </TxFormItem>
+    </TxForm>
+  </template>
+---
+:::
+
+### 离开前确认
+`confirmLeave()` 返回能否离开，只就草稿存不下的修改询问用户。
+
+```ts
+onBeforeRouteLeave(() => formRef.value.confirmLeave())
+```
+
+```vue
+<!-- Escape、遮罩与关闭按钮都会先询问 -->
+<TxModal v-model="open" :before-close="() => formRef?.confirmLeave()">
+  <TxForm ref="formRef" :model="form">…</TxForm>
+</TxModal>
+```
+
+### 查询筛选
+筛选栏用 `inline` 布局排成一行，不常用的条件收进「更多筛选」，并用 `:leave-confirm="false"` 关掉离开前的询问。
+:::TuffDemoWrapper{demo="FormFilterDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive, ref } from 'vue'
+  import { useRoute, useRouter } from 'vue-router'
+
+  const route = useRoute()
+  const router = useRouter()
+  const expanded = ref(false)
+
+  function defaults() {
+    return { keyword: '', status: 'all', owner: 'all', priority: 'all' }
+  }
+
+  // 条件来自地址栏：刷新或分享链接后筛选不变
+  const filters = ref(reactive({ ...defaults(), ...route.query }))
+
+  function apply(values) {
+    const query = Object.fromEntries(Object.entries(values).filter(([, value]) => value && value !== 'all'))
+    router.replace({ query })
+  }
+
+  // 回到不筛选，而不是表单自己会退回的上一次查询
+  function clear() {
+    filters.value = reactive(defaults())
+    apply(filters.value)
+  }
+  </script>
+
+  <template>
+    <TxForm :model="filters" layout="inline" :leave-confirm="false" @submit="apply">
+      <TxFormItem label="关键词" prop="keyword" width="sm">
+        <TuffInput v-model="filters.keyword" enterkeyhint="search" />
+      </TxFormItem>
+      <TxFormItem label="状态" prop="status" width="sm">
+        <TxSelect v-model="filters.status" :options="statuses" />
+      </TxFormItem>
+      <TxFormItem label="负责人" prop="owner" width="sm">
+        <TxSelect v-model="filters.owner" :options="owners" />
+      </TxFormItem>
+      <TxFormItem v-show="expanded" label="优先级" prop="priority" width="sm">
+        <TxSelect v-model="filters.priority" :options="priorities" />
+      </TxFormItem>
+      <div class="filter-actions">
+        <TxButton variant="primary" native-type="submit">查询</TxButton>
+        <TxButton @click="clear">重置</TxButton>
+        <TxButton variant="ghost" :aria-expanded="expanded" @click="expanded = !expanded">
+          {{ expanded ? '收起' : '更多筛选' }}
+        </TxButton>
+      </div>
+    </TxForm>
+  </template>
+---
+:::
+
+### 登录与注册
+用 `autocomplete` 标明每个字段，不开草稿，也不拦截粘贴：密码管理器与短信验证码都靠自动填充和粘贴。
+:::TuffDemoWrapper{demo="FormLoginDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxForm v-slot="{ submitting }" :model="form" :rules="rules" layout="stacked" :leave-confirm="false" @submit="submit">
+      <TxFormItem label="邮箱" prop="email">
+        <TuffInput v-model="form.email" type="email" autocomplete="username" />
+      </TxFormItem>
+      <TxFormItem v-if="mode === 'signup'" label="验证码" prop="code">
+        <TuffInput v-model="form.code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" />
+      </TxFormItem>
+      <TxFormItem label="密码" prop="password">
+        <TuffInput
+          v-model="form.password"
+          type="password"
+          :autocomplete="mode === 'signin' ? 'current-password' : 'new-password'"
+        />
+      </TxFormItem>
+      <TxFormItem>
+        <TxButton variant="primary" native-type="submit" :loading="submitting">
+          {{ mode === 'signin' ? '登录' : '注册' }}
+        </TxButton>
+      </TxFormItem>
+    </TxForm>
+  </template>
+---
+:::
+
+### 长问卷
+`validate-on="submit"` 让用户填写时不被打断，提交时由 `TxFormErrorSummary` 列出所有问题，点击即跳到对应字段。
+:::TuffDemoWrapper{demo="FormSurveyDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxForm v-slot="{ submitting }" :model="answers" :rules="rules" validate-on="submit" @submit="submit">
+      <TxFormErrorSummary title="提交前还有几处要处理" />
+      <TxFormItem label="你的角色" prop="role" width="md">
+        <TxSelect v-model="answers.role" :options="roles" placeholder="请选择" />
+      </TxFormItem>
+      <TxFormItem label="使用年数" prop="years" width="sm">
+        <TxNumberInput v-model="answers.years" :min="0" :max="30" />
+      </TxFormItem>
+      <TxFormItem label="整体满意度" prop="satisfaction">
+        <TxRadioGroup v-model="answers.satisfaction" type="standard" direction="row">
+          <TxRadio v-for="level in levels" :key="level.value" :value="level.value" :label="level.label" />
+        </TxRadioGroup>
+      </TxFormItem>
+      <TxFormItem label="常用功能" prop="features" width="lg">
+        <TxSelect v-model="answers.features" :options="features" multiple />
+      </TxFormItem>
+      <TxFormItem label="建议" prop="feedback" help="选填，至少 10 个字">
+        <TxTextarea v-model="answers.feedback" :rows="3" />
+      </TxFormItem>
+      <TxFormItem prop="contact">
+        <TxCheckbox v-model="answers.contact" label="可以就这份反馈联系我" />
+      </TxFormItem>
+      <TxFormItem>
+        <TxButton variant="primary" native-type="submit" :loading="submitting">提交问卷</TxButton>
+      </TxFormItem>
+    </TxForm>
+  </template>
+---
+:::
+
+### Schema 校验
+`schema` 接受任意 Standard Schema v1 校验器，并按路径把每条问题交给对应字段。
+
+```vue
+<script setup lang="ts">
+import { z } from 'zod'
+
+const schema = z.object({
+  email: z.string().email('邮箱格式不正确'),
+  age: z.number().int().min(18, '需年满 18 岁'),
+})
+</script>
+
+<template>
+  <TxForm :model="form" :schema="schema">
+    <TxFormItem label="邮箱" prop="email">
+      <TuffInput v-model="form.email" />
+    </TxFormItem>
+    <TxFormItem label="年龄" prop="age">
+      <TxNumberInput v-model="form.age" />
+    </TxFormItem>
+  </TxForm>
+</template>
+```
+
+### 自定义控件
+TuffEx 控件自动接入外层表单项；原生元素绑定默认插槽的参数，自定义组件调用 `useTxFormField()`。
+
+```vue
+<TxFormItem v-slot="{ id, ariaInvalid, ariaDescribedby, required }" label="主题色" prop="color">
+  <input :id="id" v-model="form.color" type="color" :aria-invalid="ariaInvalid" :aria-describedby="ariaDescribedby" :required="required">
+</TxFormItem>
+```
+
+```ts
+import { useTxFormField } from '@talex-touch/tuffex/form'
+
+// 在自定义控件的 setup 中
+const field = useTxFormField('input')
+const controlAttrs = computed(() => field?.attrs(attrs) ?? attrs)
+const isDisabled = computed(() => props.disabled || !!field?.disabled)
+```
+
+### 在插件中
+插件视图的 `localStorage` 随视图销毁，草稿要存进插件自己的存储，并在视图关闭前写入。
+
+```ts
+import { flushTxForms, provideTxFormHost } from '@talex-touch/tuffex/form'
+import { LifeCycle, usePluginDraftStorage } from '@talex-touch/utils/plugin/sdk'
+
+const app = createApp(App)
+provideTxFormHost({ storage: usePluginDraftStorage() }, app)
+LifeCycle.onBeforeClose(flushTxForms)
+app.mount('#app')
+```
+
+插件的草稿归插件自己管，宿主不会替它清；草稿里有账号的数据时，按以下约定处理：
+
+- namespace 用 `user:<账号 id>`，未登录用 `anon`；还不知道是谁时给 `null`，期间不保存草稿。
+- 账号变化时，先删掉其他账号的草稿，再切换 namespace。插件每次启动也要删一次，因为账号可能在插件没运行时变了。
+- 读不到当前账号时，这类表单不开 `persist`。
+
+上面的 `provideTxFormHost` 换成：
+
+```ts
+import { clearTxFormDrafts, provideTxFormHost } from '@talex-touch/tuffex/form'
+import { usePluginAccount, usePluginDraftStorage } from '@talex-touch/utils/plugin/sdk'
+import { ref } from 'vue'
+
+const storage = usePluginDraftStorage()
+const account = ref<string | null>(null)
+provideTxFormHost({ storage, namespace: account }, app)
+
+// 先收到一次当前账号，之后账号每次变化再收到一次
+usePluginAccount().onDidChange((session) => {
+  if (!session.isSettled)
+    return
+  const next = session.user ? `user:${session.user.id}` : 'anon'
+  void clearTxFormDrafts({ storage, namespace: ns => ns.startsWith('user:') && ns !== next })
+  account.value = next
+})
+```
+
+### 最佳实践
+
+- `model` 保持为同一个响应式对象；换成新对象即视为新记录：基线重置，消息清空。
+- 取回的数据交给 `setBaseline()`，不要直接写入 `model`，`dirty` 与 `reset()` 才会以它为准。
+- 通用规则放在表单级 `rules`；表单项的 `rules` 替换同一路径的表单级规则，而不是追加。
+- 说明超过一句话放进 `hint`（标签旁的 `?` 浮层）；`help` 只放输入时必须常显的短约束；错误与警告留在控件下方，控件下方不写说明段落。
+- 返回 Promise 的 validator 声明为 `async`，并把 `signal` 传给请求。
+- 记录加载完再开启 `persist`，草稿才会叠在已保存的值上，而不是空值上。
+
+## API 参考
+
+### TxForm
+
+#### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `id` | `string` | 自动生成 | `<form>` 的 id，也是字段 id 的前缀：`<id>-<prop>`。 |
+| `model` | `Record<string, any>` | - | 响应式表单数据，表单项按 `prop` 路径读取。 |
+| `rules` | `FormRules` | - | 以字段路径为 key 的表单级规则。 |
+| `schema` | `FormStandardSchema` | - | Standard Schema v1 校验器（Zod、Valibot、ArkType 等），校验整个 `model`。 没有对应字段的问题列在错误摘要中，并阻止提交。 |
+| `layout` | `'auto' \| 'side' \| 'stacked' \| 'inline'` | `'auto'` | 字段布局；`auto` 在宽度达到 520px 时为 `side`，否则为 `stacked`；`inline` 用于筛选栏。 |
+| `labelPosition` | `'left' \| 'right' \| 'top'` | - | `layout` 的旧写法：`top` 即 `stacked`，`left`、`right` 即 `side` 加对应的对齐。 |
+| `labelAlign` | `'start' \| 'end'` | `'end'` | 侧边 label 的对齐；`labelPosition="left"` 时默认为 `start`。 |
+| `labelWidth` | `string \| number` | `16em` | 侧边 label 列的最大宽度，数字按 px 计；label 都较短时列更窄，且不超过表单宽度的 40%。 |
+| `requiredMark` | `'asterisk' \| 'optional' \| 'none'` | `'asterisk'` | 给必填项标星号，或给选填项标 `messages.optional`，或都不标。 |
+| `validateOn` | `'blur' \| 'submit'` | `'blur'` | 首条消息出现的时机：离开改过的字段时，或首次提交时。 |
+| `messages` | `Partial<FormMessages>` | - | 覆盖内置文案。 |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 传给表单内有尺寸的控件。 |
+| `disabled` | `boolean` | `false` | 禁用表单内所有读取表单状态的控件，并阻止提交。 |
+| `readonly` | `boolean` | `false` | 把值当作记录展示：表单内读取表单状态的控件可以聚焦、复制，但不能修改，也不标必填；提交照常可用。 |
+| `reconcile` | `FormReconcile` | - | `setBaseline()` 或草稿带来的值覆盖用户改过的字段时，决定 `model` 的取值。 |
+| `persist` | `boolean \| FormPersistOptions` | `false` | 以 `id` 保存用户输入；`true` 采用默认设置。 |
+| `leaveConfirm` | `FormLeaveConfirm \| false` | 宿主的，其次 `window.confirm` | 带着草稿存不下的修改离开前询问；`false` 从不询问，适合筛选栏。 |
+| `autosave` | `boolean \| FormAutosaveOptions` | `false` | 停止编辑后经 `submit` 处理函数保存，不用提交按钮；只校验改过的字段，出错的字段改对后再存。`true` 等待 1 秒。 |
+| `onSubmit` | `(values: FormValues, event?: Event) => unknown` | - | 全部校验通过后调用，`values` 为副本；返回的 Promise 会被等待，期间 `submitting` 为 `true`。`@submit` 即绑定它。成功时提交的值成为新基线，除非处理函数自己调用了 `setBaseline()`。 |
+
+#### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `submit-success` | `(values: FormValues)` | 提交或自动保存成功：全部校验通过，且 `submit` 处理函数（如有）成功。 |
+| `validate` | `(valid: boolean)` | `validate()` 校验完全部字段后触发。 |
+| `persist-error` | `(error: unknown)` | 草稿读写失败；连续失败只触发一次。 |
+
+#### 插槽
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `default` | `{ dirty, valid, submitting, submitted, errors, rootError }` | 表单项与操作。 |
+| `draft` | `{ draft, notice, restore, discard }` | 草稿已填入或待恢复时，替换字段上方的提示。 |
+
+#### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `dirty` | `boolean` | 只读，`model` 与基线不同。 |
+| `valid` | `boolean` | 只读，没有阻止提交的错误，无论消息是否已显示。 |
+| `submitting` | `boolean` | 只读，`submit` 处理函数运行中。 |
+| `submitted` | `boolean` | 只读，至少提交过一次；`reset()` 清除。 |
+| `errors` | `Record<string, string>` | 只读，正在显示的错误，按字段路径。 |
+| `rootError` | `string` | 只读，表单级错误。 |
+| `validate` | `() => Promise<boolean>` | 校验全部字段并显示消息，返回是否全部通过。 |
+| `validateField` | `(path: string) => Promise<boolean>` | 校验并显示单个字段。 |
+| `submit` | `() => Promise<boolean>` | 与原生提交相同：校验，再调用 `submit` 处理函数；返回是否成功。开启 `autosave` 时立即保存改动。 |
+| `reset` | `() => void` | 把 `model` 恢复为基线，并清空消息。 |
+| `resetFields` | `() => void` | `reset()` 的旧名。 |
+| `setBaseline` | `(values?: FormValues) => void` | 把取回的数据设为基线；省略参数时，以当前 `model` 为基线。 |
+| `setErrors` | `(errors: Record<string, string \| null \| undefined>, options?: { source?: 'server' \| 'client' }) => void` | 显示外部错误，用户修改该字段后消失；`client` 错误还会阻止提交。 指向未挂载字段的错误会保留，字段挂载时显示。 |
+| `setRootError` | `(message?: string \| null) => void` | 设置或清除表单级错误。 |
+| `clearValidate` | `(paths?: string \| string[]) => void` | 隐藏消息，不修改 `model`。 |
+| `draft` | `FormDraftState` | 只读，草稿填入了哪些字段、还有哪些待恢复、写入时间、是否写入失败。 |
+| `flush` | `() => Promise<void>` | 立即写入草稿。 |
+| `confirmLeave` | `() => Promise<boolean>` | 应用内离开前调用；返回 `true` 即可离开。开启 `autosave` 时先保存待存的改动。 |
+| `restoreDraft` | `() => Promise<boolean>` | 填入草稿中待恢复的字段，返回是否填入了。 |
+| `discardDraft` | `() => Promise<void>` | 把草稿填过的字段改回已保存的值，并删除草稿。 |
+
+### TxFormItem
+
+#### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `label` | `string` | `''` | 标签文本；为空时不渲染 label。 |
+| `prop` | `string` | - | 字段在 `model` 中的路径：`name`、`meta.homepage`、`links[0].url`。 |
+| `rules` | `FormRule \| FormRule[]` | - | 该字段的规则，替换表单级 `rules` 中同一路径的规则。 |
+| `required` | `boolean` | `false` | 显示必填标记，并补上 `required` 规则。 |
+| `help` | `string` | - | 控件下方的帮助文字；显示错误或警告时被替换。 |
+| `hint` | `string` | - | 标签旁 `?` 按钮的详细说明，悬停或聚焦时浮出。 |
+| `width` | `'xs' \| 'sm' \| 'md' \| 'lg' \| 'full'` | - | 控件宽度：80、160、240、360px 或整列。 |
+| `showMessage` | `boolean` | `true` | 在控件下方显示消息；关闭后控件仍标记为无效。 |
+| `inline` | `boolean` | `false` | label 与控件垂直居中；上下布局时改为并排。 |
+| `persist` | `boolean` | `true` | 设为 `false` 时该字段不进草稿，与密码一样。 |
+
+#### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `validate` | `(valid: boolean)` | 该字段校验完成后触发：离开改过的字段时，或表单校验时。 |
+
+#### 插槽
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `default` | `{ id, labelId, ariaInvalid, ariaDescribedby, invalid, required }` | 字段控件；原生元素绑定这些参数，以关联 label 与消息。 |
+
+### TxFormRow
+
+#### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `label` | `string` | `''` | 把整行命名为一组；侧边布局时位于 label 列。 |
+| `condensed` | `boolean` | `false` | 每项最窄缩到 110px 才换行，默认为 220px。 |
+
+#### 插槽
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 同一行的 `TxFormItem`，它们的 label 在上方。 |
+
+### TxFormErrorSummary
+
+#### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `title` | `string` | `messages.summaryTitle` | 摘要标题。 |
+
+### 类型
+
+`FormRule`，`rules` 中的一条：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `required` | `boolean` | 拒绝空值。 |
+| `type` | `'email' \| 'url' \| 'number' \| 'integer'` | 值的格式。 |
+| `min` / `max` | `number` | 数值范围。 |
+| `minLength` / `maxLength` | `number` | 字符串的字符数，或数组的项数。 |
+| `pattern` | `RegExp` | 值须匹配的正则。 |
+| `message` | `string` | 该规则失败时的消息，替换内置文案。 |
+| `level` | `'error' \| 'warning'` | `warning` 只显示消息，不阻止提交。 |
+| `deps` | `string[]` | 这些字段变化时，重新校验已显示消息的本字段。 |
+| `validator` | `(value, rule, model, { signal, path }) => boolean \| string \| Promise<boolean \| string>` | 返回 `false` 或消息即失败；需要等待时声明为 `async`。 |
+
+`FormReconcileContext`，`reconcile` 的参数；每个值都是可修改的副本：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `source` | `'baseline' \| 'draft'` | `baseline` 即 `setBaseline()`；`draft` 是写入后字段又被保存过的草稿。 |
+| `incoming` | `FormValues` | 传入的数据，无论 `model` 最终取什么，都会成为新基线。 |
+| `current` | `FormValues` | 用户留下的 `model`。 |
+| `baseline` | `FormValues` | 用户修改时所依据的基线。 |
+| `dirtyPaths` | `string[]` | 用户改过、且 `incoming` 也带有的字段路径。 |
+| `merged` | `FormValues` | 默认结果，返回空值即采用：`incoming` 中保留 `dirtyPaths` 的用户值；草稿则为 `model` 原样。 |
+| `origin` | `FormValues` | 仅草稿：其修改所依据的已保存值，用于三方合并。 |
+
+`FormPersistOptions`，`persist` 的对象写法：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `recordId` | `string \| number` | 区分不同记录的草稿，如 `/posts/42/edit` 的 `42`。 |
+| `namespace` | `string` | 草稿归属；默认取宿主的，其次为 `default`。 |
+| `version` | `number` | `model` 结构变化时递增，其他版本的草稿会被丢弃。默认 `1`。 |
+| `ttl` | `number \| '7d' \| '12h' \| '30m'` | 草稿自最后一次写入起的有效期，毫秒数或带单位。默认 `'7d'`。 |
+| `storage` | `'local' \| 'session' \| 'memory' \| FormDraftAdapter` | 默认取宿主的，其次为 `local`；`memory` 只保留到页面刷新。 |
+| `exclude` | `string[]` | 除密码类字段外，另外不写入的路径。 |
+| `restore` | `'auto' \| 'manual'` | `manual` 等用户在提示中恢复，或调用 `restoreDraft()`。默认 `auto`。 |
+
+`FormDraftAdapter`，自定义存储；每个方法都可以返回 Promise：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `get` / `remove` | `(key: string) => string \| null` / `(key: string) => void` | 读取或删除一份草稿。 |
+| `set` | `(key: string, value: string) => void` | 没存下时抛出异常，表单会先把草稿留在内存中。 |
+| `clear` | `(prefix: string) => void` | 可选；删除以 `prefix` 开头的键，供 `clearTxFormDrafts()` 使用。 |
+| `keys` | `(prefix: string) => string[]` | 可选；列出以 `prefix` 开头的键，`clearTxFormDrafts()` 用函数挑选 namespace 时需要。 |
+
+`FormAutosaveOptions`，`autosave` 的对象写法：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `delay` | `number` | 停止编辑多久后保存，单位毫秒。默认 `1000`。 |
+
+`FormMessages`，内置文案；默认值为英文，见 `FORM_DEFAULT_MESSAGES`：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `required` / `invalid` / `pattern` | `(label: string) => string` | 必填、validator 失败、格式不符。 |
+| `hint` | `(label: string) => string` | 标签旁 `?` 按钮的可访问名称。 |
+| `type` | `(label: string, type: FormRuleType) => string` | `type` 不符。 |
+| `min` / `max` | `(label: string, limit: number) => string` | 超出数值范围。 |
+| `minLength` / `maxLength` | `(label: string, limit: number, unit: 'characters' \| 'items') => string` | 超出长度范围。 |
+| `field` | `string` | 既无 `label` 也无 `prop` 时代替字段名。 |
+| `errorPrefix` / `warningPrefix` | `string` | 读在错误、警告前，屏幕上隐藏。 |
+| `validating` | `string` | 异步校验超过 1 秒时显示。 |
+| `optional` | `string` | `requiredMark="optional"` 时标在选填项后。 |
+| `summaryTitle` | `string` | `TxFormErrorSummary` 的默认标题。 |
+| `draftRestored` / `draftPending` | `(savedAt: Date) => string` | 草稿已填入，或等待恢复时的提示。 |
+| `draftRestore` / `draftDiscard` | `string` | 提示中的按钮。 |
+| `leaveConfirm` | `string` | 没有其他询问方式时，经 `window.confirm` 询问的文字。 |
+| `autosaved` / `autosaveFailed` | `string` | 自动保存成功时，或失败且页面上没有说明原因时播报；屏幕上隐藏。 |
+
+### CSS 变量
+
+| 变量 | 默认值 | 说明 |
+|------|------|------|
+| `--tx-form-gap` | `20px` | 字段之间的行距。 |
+| `--tx-form-label-max` | `16em` | 侧边 label 列的最大宽度，`labelWidth` 写入它。 |
+| `--tx-form-control-height` | `32px` | 单行控件的高度，用于让 label 对齐控件的第一行。 |
+| `--tx-form-item-min` | `220px` | `TxFormRow` 中每项换行前的最小宽度；`condensed` 时为 `110px`。 |
+
+## 组合式函数与宿主
+
+### useTxFormField
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `useTxFormField` | `(kind?: 'input' \| 'button' \| 'group') => TxFormField \| null` | 把控件接入外层表单项；`kind` 决定 label 如何命名控件。表单之外返回 `null`。 |
+| `id` | `string \| undefined` | 只读，label 指向的 id；同一表单项中只有第一个控件拿到。 |
+| `labelId` / `label` | `string \| undefined` / `string` | 只读，表单项 label 的 id 与文本。 |
+| `describedBy` | `string \| undefined` | 只读，消息、帮助文字与提示的 id，空格分隔。 |
+| `invalid` / `required` | `boolean` | 只读，正在显示错误；必填。 |
+| `disabled` / `size` | `boolean` / `'sm' \| 'md' \| 'lg'` | 只读，表单的 `disabled` 与 `size`。 |
+| `readonly` | `boolean` | 只读，表单的 `readonly`：控件可以聚焦，但不能修改值。 |
+| `attrs` | `(host?: Record<string, unknown>) => Record<string, unknown>` | 合并后的控件属性；控件自身收到的属性优先，`aria-describedby` 两者都保留。 |
+
+### provideTxFormHost
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `provideTxFormHost` | `(host: TxFormHost, app?: App) => void` | 在组件 `setup` 中，或传入 `app` 时在整个应用中，为下层表单提供宿主的设置。也从 `@talex-touch/tuffex/utils` 导出，从那里引入不会加载表单。 |
+| `host.messages` | `MaybeRefOrGetter<Partial<FormMessages>>` | 当前语言的文案；传 ref 或 getter 时随语言切换。 |
+| `host.namespace` | `MaybeRefOrGetter<string \| null>` | 草稿归属，如 `user:42`；尚不知道时传 `null`，期间不保存草稿。 |
+| `host.storage` | `FormDraftStorage` | `persist.storage` 未指定时草稿的存放处。 |
+| `host.leaveConfirm` | `FormLeaveConfirm` | 为没有自己 `leaveConfirm` 的表单询问是否离开。 |
+| `flushTxForms` | `() => Promise<void>` | 立即写入所有已挂载表单待写的草稿，用于页面会被直接关掉的场合。 |
+| `clearTxFormDrafts` | `(options?: { namespace?: string \| ((namespace: string) => boolean), storage?: FormDraftStorage }) => Promise<void>` | 删除全部草稿、某个 namespace 的草稿，或函数选中的每个 namespace 的草稿。 |
+
+## 草稿与离开
+
+- 草稿只填入用户没动过的字段；草稿写入后又被保存过的字段留在提示中，或以 `source: 'draft'` 交给 `reconcile`。
+- 停止输入 300ms 后写入，持续输入时至少每 2 秒写一次，页面隐藏时也会写；提交成功或 `reset()` 后删除。
+- 敏感内容不进草稿：密码输入框、`TxSensitiveInput`、`autocomplete` 要求密码、一次性验证码或银行卡信息的输入框、关闭 `persist` 的表单项与 `exclude` 路径；字段一旦装过这类内容，就一直不写入。
+- 只有存在草稿存不下的修改时，刷新或关闭页面才会先询问：未开启 `persist`、改在敏感字段里，或写入还没落地。
+- 存储拒绝写入时草稿留在内存中，直到写入成功；宿主 namespace 为 `null`，或表单没有 `id`，都不保存草稿。
+- namespace 换成另一个时（如退出登录），留在表单里的修改不写进任何草稿，再次修改前都算未保存；`clearTxFormDrafts({ namespace })` 删除那个人的草稿。
+
+## 概述
+
+- 有效性随值实时计算；消息在用户改过的字段离开后出现（切换窗口不算离开），之后随每次编辑更新。`validate()` 与提交显示全部消息。
+- 规则按顺序执行，遇到第一条错误即停止。异步规则在同步规则通过后运行，输入时防抖 300ms，超过 1 秒显示 `messages.validating`。
+- 提交先校验，再调用处理函数；处理函数返回 `false`、抛出异常或调用 `setErrors()` 即视为失败。失败时焦点移到错误摘要，没有摘要时移到第一个出错的字段。
+- 开启 `autosave` 后，停止编辑约一秒即保存，只校验改过的字段；`disabled` 与 `readonly` 的表单不自动保存。提交与 `confirmLeave()` 立即保存。
+- 控件经 `for` 或 `aria-labelledby` 关联 label，消息经 `aria-describedby` 关联，不设 `role="alert"`。
+- 标签旁的 `?` 是普通按钮，可访问名称来自 `messages.hint`；悬停或键盘聚焦时浮出 `hint` 的说明，Esc 关闭，指针可移入浮层。
+
+## 技术实现
+
+- `auto` 布局用容器查询判断表单自身的宽度；侧边布局用 CSS subgrid 让各项共享 label 列。
+- `schema` 只依赖 Standard Schema v1 接口，不引入校验库。
+- 源码：`packages/tuffex/packages/components/src/form/`；控件读取的 `useTxFormField` 在 `packages/tuffex/packages/utils/form-field.ts`，按需引入控件时不会带上表单；`provideTxFormHost` 在 `packages/tuffex/packages/utils/form-host.ts`，应用启动时提供它不会加载表单。
+
+<TuffDocSourceLink />

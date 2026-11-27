@@ -1,0 +1,219 @@
+---
+title: "Radio"
+description: "A control for choosing one option from a mutually exclusive set."
+category: Form
+status: beta
+since: 0.3.4
+tags: [radio, form, selection]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Button Group
+The default style; the indicator can also be dragged to choose.
+:::TuffDemoWrapper{demo="RadioRadioSimpleDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxRadioValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const value = ref<TxRadioValue>('week')
+  </script>
+
+  <template>
+    <TxRadioGroup v-model="value">
+      <TxRadio value="day">Day</TxRadio>
+      <TxRadio value="week">Week</TxRadio>
+      <TxRadio value="month">Month</TxRadio>
+    </TxRadioGroup>
+  </template>
+---
+:::
+
+### Standard
+Set `type="standard"`; `direction` switches between a row and a column.
+:::TuffDemoWrapper{demo="RadioRadioStandardDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxRadioGroup v-model="value" type="standard" direction="row">
+      <TxRadio value="viewer" label="Viewer" />
+      <TxRadio value="editor" label="Editor" />
+      <TxRadio value="owner" label="Owner" />
+    </TxRadioGroup>
+  </template>
+---
+:::
+
+### Cards
+Set `type="card"` and put the title and description in the default slot.
+:::TuffDemoWrapper{demo="RadioRadioCardDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxRadioGroup v-model="value" type="card">
+      <TxRadio value="local">
+        <strong>Local only</strong>
+        <p>Keep settings on this device.</p>
+      </TxRadio>
+      <TxRadio value="sync">
+        <strong>Sync across devices</strong>
+        <p>Use account sync for preferences.</p>
+      </TxRadio>
+      <TxRadio value="managed" disabled>
+        <strong>Managed by workspace</strong>
+        <p>Policy-driven settings are not enabled.</p>
+      </TxRadio>
+    </TxRadioGroup>
+  </template>
+---
+:::
+
+### Indicator
+`indicatorVariant` sets how the indicator is drawn; `elastic` toggles its stretch motion.
+:::TuffDemoWrapper{demo="RadioRadioIndicatorDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxRadioGroup v-model="value">…</TxRadioGroup>
+    <TxRadioGroup v-model="value" :elastic="false">…</TxRadioGroup>
+    <TxRadioGroup v-model="value" indicator-variant="blur">…</TxRadioGroup>
+    <TxRadioGroup v-model="value" indicator-variant="glass">
+      <TxRadio value="focus">Focus</TxRadio>
+      <TxRadio value="review">Review</TxRadio>
+      <TxRadio value="ship">Ship</TxRadio>
+    </TxRadioGroup>
+  </template>
+---
+:::
+
+### Disabled
+:::TuffDemoWrapper{demo="RadioRadioDisabledDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxRadioGroup v-model="groupValue" disabled>
+      <TxRadio value="locked">Locked</TxRadio>
+      <TxRadio value="archived">Archived</TxRadio>
+    </TxRadioGroup>
+
+    <TxRadioGroup v-model="optionValue">
+      <TxRadio value="automatic" disabled>Automatic</TxRadio>
+      <TxRadio value="manual">Manual</TxRadio>
+    </TxRadioGroup>
+  </template>
+---
+:::
+
+### Playground
+:::TuffDemoWrapper{demo="RadioRadioGroupPlaygroundDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxRadioGroup
+      v-model="value"
+      :type="type"
+      :disabled="disabled"
+      :indicator-variant="indicatorVariant"
+      :elastic="elastic"
+      :stiffness="stiffness"
+      :damping="damping"
+    >
+      <TxRadio value="alpha">Alpha</TxRadio>
+      <TxRadio value="beta">Beta</TxRadio>
+      <TxRadio value="gamma">Gamma</TxRadio>
+    </TxRadioGroup>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Keep every `value` unique within a group.
+- Use `button` for short segmented choices, a column of `standard` radios for long lists, and `card` when options need a description.
+- Disable an unavailable option on its own so it stays visible; disable the whole group only when read-only or loading.
+- Keep the `updateOnSettled` default for `glass` / `blur` indicators unless validation must run immediately.
+
+## API Reference
+
+### TxRadioGroup
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `modelValue` / `v-model` | `string \| number` | - | Value of the selected radio. |
+| `disabled` | `boolean` | `false` | Disables the whole group, including keyboard selection. |
+| `type` | `'button' \| 'standard' \| 'card'` | `'button'` | Style shared by the child radios. |
+| `direction` | `'row' \| 'column'` | - | Layout direction; `button` is always `row`, `standard` defaults to `row`, `card` to `column`. |
+| `indicatorVariant` | `'solid' \| 'outline' \| 'glass' \| 'blur'` | - | Button-group indicator style; when omitted, derived from `glass` / `blur`, otherwise `solid`. |
+| `glass` | `boolean` | `false` | Shorthand for the `glass` indicator. |
+| `blur` | `boolean` | `false` | Shorthand for the `blur` indicator. |
+| `updateOnSettled` | `boolean` | - | Button groups emit only after the indicator settles; on by default for `glass` and `blur`. |
+| `stiffness` | `number` | `110` | Indicator spring stiffness; higher settles faster. |
+| `damping` | `number` | `12` | Indicator spring damping; lower is bouncier. |
+| `blurAmount` | `number` | `1` | Backdrop blur strength of the `blur` indicator. |
+| `elastic` | `boolean` | `true` | Enables the indicator's stretch and impact motion. |
+
+#### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `update:modelValue` | `(value: string \| number)` | Fires when a new value is selected. |
+| `change` | `(value: string \| number)` | Fires together with `update:modelValue`. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | `TxRadio` children. |
+
+#### Keyboard
+
+| Key | Behavior |
+|------|------|
+| `ArrowRight` / `ArrowDown` | Selects the next enabled radio, wrapping to the first. |
+| `ArrowLeft` / `ArrowUp` | Selects the previous enabled radio, wrapping to the last. |
+| `Home` / `End` | Selects the first / last enabled radio. |
+
+### TxRadio
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `value` | `string \| number` | - | Value written to the group when selected. |
+| `label` | `string` | `''` | Text shown when the default slot is empty. |
+| `disabled` | `boolean` | `false` | Disables this radio; keyboard navigation skips it. |
+| `type` | `'button' \| 'standard' \| 'card'` | `'button'` | Style when used standalone; inside a group, the group's `type` wins. |
+| `modelValue` / `v-model` | `boolean` | - | Checked state when used standalone; uncontrolled when omitted, ignored inside a group. |
+
+#### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `click` | `(value: string \| number)` | In a group, fires when an unchecked radio selects itself; standalone, fires on every enabled click. |
+| `update:modelValue` | `(value: boolean)` | Standalone only: fires with `true` when an unchecked radio is clicked. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Label or card content; falls back to `label`. |
+
+## Overview
+
+- `TxRadioGroup` owns the selected value, injects style and disabled state into its radios, and handles keyboard navigation.
+- Inside a `TxFormItem`, `TxRadioGroup` takes the id, `aria-invalid` and `aria-required`, and points at the item's label with `aria-labelledby`; the form's `disabled` applies too.
+- In a group, clicking the checked radio emits nothing.
+- In button groups, the indicator can be dragged horizontally; on release it snaps to and selects the nearest enabled radio. Disabled groups ignore the drag.
+
+## Technologies
+
+- With `updateOnSettled` active, the new value applies inside the group first; `update:modelValue` and `change` fire once the indicator settles.
+- Source: `packages/tuffex/packages/components/src/radio/`.
+
+<TuffDocSourceLink />

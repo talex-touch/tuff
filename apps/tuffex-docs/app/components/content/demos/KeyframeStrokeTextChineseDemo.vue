@@ -1,0 +1,11 @@
+<template>
+  <TxKeyframeStrokeText
+    text="关键帧描边动画"
+    stroke-color="#16a34a"
+    fill-color="#14532d"
+    :duration-ms="2600"
+    :stroke-width="1.6"
+    :font-size="40"
+    :font-weight="700"
+  />
+</template>

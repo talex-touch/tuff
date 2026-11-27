@@ -1,0 +1,99 @@
+---
+title: "InlineCitation"
+description: "A source-reference chip set inside prose."
+category: AiReasoning
+status: beta
+since: 0.3.9
+tags: [ai, citation, source, inline]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+:::TuffDemoWrapper{demo="InlineCitationInlineCitationDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const scoop = { id: 'scoop', url: 'https://scoopdata.io/flavors/pistachio', favicon: '/scoop.svg' }
+  const trends = { id: 'trends', url: 'https://www.trends.google.com/trends/' }
+
+  function open(source: { url: string }) {
+    window.open(source.url, '_blank', 'noopener')
+  }
+  </script>
+
+  <template>
+    <p>
+      Pistachio is the fastest-growing flavor<TxInlineCitation :source="scoop" @open="open" />,
+      and stone-fruit is trending in the same range<TxInlineCitation :source="trends" @open="open" />.
+    </p>
+  </template>
+---
+:::
+
+### Streaming Answer
+A citation pops in as the prose reaches it; the host orchestrates the answer, and the component renders one chip.
+:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" description="Word reveal + inline citation + sources + follow-ups"}
+---
+code: |
+  <template>
+    <p>
+      <span v-for="(token, i) in visible" :key="i">
+        <TxInlineCitation v-if="token.cite" :source="sources[0]" @open="open" />
+        <span v-else>{{ token.text }} </span>
+      </span>
+    </p>
+
+    <TxSources :sources="sources" variant="stack" @open="open" />
+    <TxSuggestionChips :suggestions="followUps" layout="list" @select="ask" />
+  </template>
+---
+:::
+
+### Best Practices
+
+- Listen for `open`, or clicking a citation does nothing.
+- Keep to two or three citations per paragraph; a dense run reads as a list.
+- Usually leave `label` empty: the hostname fallback shows where a claim came from.
+- Keep `source.id` stable in streaming surfaces, so a broken favicon isn't retried as nodes are reused.
+- Use `TxSources` for the source list at the end of an answer; both share `AiSourceItem` and often appear together.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `source` | `AiSourceItem` | — | The reference, `{ id, url, title?, favicon? }`. Required. |
+| `label` | `string` | — | Chip text; falls back to `source.title`, then the `www.`-stripped hostname, then the raw `url`. |
+| `appear` | `boolean` | `true` | Plays the entrance pop on mount; set `false` when re-rendering a settled answer. |
+
+### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `open` | `(source: AiSourceItem)` | Fires on click; navigation is prevented and left to the host. |
+
+### Slots
+
+| Name | Scope | Description |
+|------|-------|-------------|
+| `default` | `{ source, label }` | Replaces the chip text, rich content included. |
+| `icon` | `{ source }` | Replaces the leading favicon. |
+
+## Overview
+
+- It renders a real `<a href>`; a click calls `preventDefault()` and emits `open`, so it never navigates an Electron renderer away. The browser's "open in new tab" and "copy link address" still work.
+- A favicon that fails to load stops rendering, and the chip degrades to text.
+- The icon carries `alt=""` and `aria-hidden`; the accessible name comes from the chip text.
+- The chip sits in the text flow; line height belongs to the surrounding paragraph.
+- The entrance plays once, on mount; flipping `appear` from `false` to `true` replays it.
+
+## Technologies
+
+- Adapted from [Beautiful UI](https://www.beautifului.dev) (© 2026 Shane Levine, MIT).
+- Source: `packages/tuffex/packages/components/src/inline-citation/`.
+
+<TuffDocSourceLink />

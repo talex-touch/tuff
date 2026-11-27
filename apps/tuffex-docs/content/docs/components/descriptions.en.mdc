@@ -1,0 +1,194 @@
+---
+title: "Descriptions"
+description: "A read-only list of label–value pairs laid out in columns."
+category: Data
+status: beta
+since: 0.6.3
+tags: [descriptions, data, detail, key-value, record]
+syncStatus: reviewed
+verified: true
+---
+
+## Installation
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxDescriptions, TxDescriptionsItem } from '@talex-touch/tuffex/descriptions'
+  // One sheet for both components
+  import '@talex-touch/tuffex/descriptions/style.css'
+  import '@talex-touch/tuffex/base.css' // tokens + resets, once per app
+---
+:::
+
+## Usage
+
+### Basic
+Two columns by default; an empty value shows `emptyText`, while `0` shows as a value.
+:::TuffDemoWrapper{demo="DescriptionsBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDescriptions>
+      <TxDescriptionsItem label="Name">{{ user.name }}</TxDescriptionsItem>
+      <TxDescriptionsItem label="Email">{{ user.email }}</TxDescriptionsItem>
+      <TxDescriptionsItem label="Plan">
+        <TxStatusBadge status="success" :text="user.plan" size="sm" />
+      </TxDescriptionsItem>
+      <TxDescriptionsItem label="Credits left">{{ user.credits }}</TxDescriptionsItem>
+      <!-- No phone on file: the value shows emptyText -->
+      <TxDescriptionsItem label="Phone">{{ user.phone }}</TxDescriptionsItem>
+      <TxDescriptionsItem label="Last sign-in">{{ user.lastSignIn }}</TxDescriptionsItem>
+      <TxDescriptionsItem label="User ID" :span="2">
+        <code>{{ user.id }}</code>
+      </TxDescriptionsItem>
+    </TxDescriptions>
+  </template>
+---
+:::
+
+### Layout and Size
+`layout` puts each label beside or above its value; `size="sm"` suits drawers and side panels.
+:::TuffDemoWrapper{demo="DescriptionsLayoutDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const layout = ref<'horizontal' | 'vertical'>('horizontal')
+  const size = ref<'sm' | 'md'>('md')
+  </script>
+
+  <template>
+    <TxDescriptions :layout="layout" :size="size" :columns="3">
+      <TxDescriptionsItem v-for="field in fields" :key="field.label" :label="field.label">
+        {{ field.value }}
+      </TxDescriptionsItem>
+    </TxDescriptions>
+  </template>
+---
+:::
+
+### Columns and Span
+`span` widens a long field up to `columns`; below 480px of container the list falls back to one column.
+:::TuffDemoWrapper{demo="DescriptionsColumnsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDescriptions :columns="3">
+      <TxDescriptionsItem label="Order">TU-2408</TxDescriptionsItem>
+      <TxDescriptionsItem label="Status">
+        <TxStatusBadge status="success" text="Paid" size="sm" />
+      </TxDescriptionsItem>
+      <TxDescriptionsItem label="Amount">$1,840</TxDescriptionsItem>
+      <TxDescriptionsItem label="Customer">Marta Halapin</TxDescriptionsItem>
+      <TxDescriptionsItem label="Shipping address" :span="2">
+        88 Harbour Street, Floor 12, Wellington 6011
+      </TxDescriptionsItem>
+      <TxDescriptionsItem label="Note" :span="3">
+        Wants a digital invoice billed to the paying company.
+      </TxDescriptionsItem>
+    </TxDescriptions>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Leave a missing value empty instead of writing `—`; pass `emptyText` once for a different placeholder.
+- Give a long field (an ID, an address, a note) a `span` rather than lowering `columns` for the whole list.
+- Keep labels short; set `labelWidth` when stacked lists on one page must line up.
+- Put items directly in the default slot (`v-for` and `v-if` are fine); don't wrap them.
+- Let the parent give the list its width: `flex: 1` in a flex row. A shrink-to-fit parent collapses it.
+
+## API Reference
+
+### TxDescriptions
+
+#### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `columns` | `number` | `2` | Items per row, floored, at least 1. |
+| `layout` | `'horizontal' \| 'vertical'` | `'horizontal'` | `horizontal`: labels beside values, sharing a track per column. `vertical`: labels above values. |
+| `size` | `'sm' \| 'md'` | `'md'` | `md`: 14px values, 13px labels. `sm`: 13px for both, with tighter gaps. |
+| `emptyText` | `string` | `'—'` | Placeholder for a value that renders nothing; `0` is a value. |
+| `labelWidth` | `string \| number` | - | Label-track width in the horizontal layout, px for numbers; defaults to the longest label, up to 40%. |
+
+#### Slots
+
+| Slot | Description |
+|------|-------------|
+| `default` | The `TxDescriptionsItem`s, directly; a wrapping element breaks the `<dl>` and the grid. |
+
+### TxDescriptionsItem
+
+#### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `label` | `string` | `''` | Label text; the `label` slot replaces it. |
+| `span` | `number` | `1` | Columns to span, clamped between 1 and `columns`. |
+
+#### Slots
+
+| Slot | Description |
+|------|-------------|
+| `default` | The value; `emptyText` shows when it renders nothing. |
+| `label` | Replaces the label text, inside the same `<dt>`. |
+
+### CSS Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `--tx-descriptions-gap` | `12px`; `sm` `8px` | Row gap, and the label-to-value gap in the horizontal layout; pairs sit twice this apart. |
+| `--tx-descriptions-font-size` | `14px`; `sm` `13px` | Value size; labels are 1px smaller, never under 13px. |
+| `--tx-descriptions-label-width` | unset | Label-track width; `labelWidth` writes it on the root, and hosts may set it on an ancestor. |
+
+- `sm` sets the first two at one class's weight, so any heavier host rule (a scoped class counts) overrides them.
+- The component writes `--tx-descriptions-columns` and `--tx-descriptions-span` itself; hosts don't set them.
+
+### Types
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  type DescriptionsLayout = 'horizontal' | 'vertical'
+  type DescriptionsSize = 'sm' | 'md'
+---
+:::
+
+## Overview
+
+- Each item is a `div` group inside a `<dl>` holding one `dt` and one `dd`, read as a term and its description.
+- In the horizontal layout, a column's labels share one track, as wide as the longest label up to 40%, then wrap; values align with the label's first baseline.
+- Items fill rows in source order; an item that doesn't fit the rest of a row starts the next, leaving a gap.
+- Below 480px of its own width (a container query, not the viewport) the list is one column and every item spans the row.
+- A slot that renders only comments or whitespace (`{{ null }}`, a false `v-if`, an empty `v-for`) is empty and shows `emptyText`; `0` and any element are content.
+- Values wrap anywhere, so a long ID, email, or URL never widens its column.
+
+## Technologies
+
+- CSS `subgrid` aligns the labels; `@container (width < 480px)` on the root drives the one-column fallback, so the list is a separate element inside the root.
+- Source: `packages/tuffex/packages/components/src/descriptions/`.
+
+<TuffDocSourceLink />
+
+## Use cases
+
+- The fields of one record in a drawer or detail panel: a member, a subscription, a run, a plugin.
+- A summary above a form or table, naming what the next step acts on.
+- Read-only settings and metadata inside a card.
+
+## Related components
+
+- [DataTable](/en/data-table): many records with the same fields.
+- [Form](/en/form): the editable counterpart, label and field in a row.
+- [Drawer](/en/drawer): the usual host for one record's details.

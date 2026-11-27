@@ -5,6 +5,7 @@ packages:
   - 'apps/core-app' # Electron main product
   - 'apps/screenshot-acceptance' # Standalone native screenshot acceptance app
   - 'apps/nexus' # Documentation & ecosystem site (Nuxt)
+  - 'apps/tuffex-docs' # Standalone TuffEx component docs (Nuxt pure SSG)
   - 'apps/reverse-proxy-design' # Nexus trust-boundary design publication
   - 'apps/tuff-analyse' # Internal Vite analysis dashboard
   - 'plugins/*' # Official & example plugins
@@ -18,6 +19,7 @@ packages:
   - '!apps/**/out/**'
   - '!apps/**/dist/**'
   - '!apps/**/.output/**' # Nuxt output
+  - '!apps/**/.dist-cf/**' # Cloudflare Workers Static Assets staging
   - '!apps/**/.nuxt/**' # Nuxt dev cache
   - '!apps/**/.vitepress/**'
   - '!packages/**/dist/**'

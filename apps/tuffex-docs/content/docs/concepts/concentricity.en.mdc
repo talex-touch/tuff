@@ -1,0 +1,45 @@
+---
+title: Concentric Radii & Inset Clearance
+description: The geometric conservation law for nested rounded containers, preventing caret clipping, and achieving 0.65x vertical optical padding harmony.
+---
+
+# Concentric Radii & Inset Clearance
+
+When cards, input fields, and tags form nested hierarchies, radii and paddings must obey strict geometric laws.
+
+## Concentric Radii Geometric Law
+
+When inner and outer rounded containers are concentric, their corner arcs must remain parallel and equidistant:
+$$R_{\text{outer}} = R_{\text{inner}} + \text{Padding}$$
+- The outer radius must equal the inner radius plus the gap between them.
+- If the inner element hugs the outer border directly (Padding = 0), both radii must be identical.
+
+## The Visual Failure of Non-Concentric Nesting
+
+When nested containers naively reuse the same radius (e.g. outer 12px, inner 12px, gap 8px):
+- Straight edges maintain an 8px distance.
+- Corner distance balloons to $8 \times \sqrt{2} \approx 11.31\text{px}$!
+Some 41% more distance at the corner produces an ungrounded, pinched visual defect where the inner element feels floating or squeezed.
+
+:::TuffDemoWrapper{demo="ConceptConcentricRadiusDemo"}
+:::
+
+## Caret Clipping Prevention via Horizontal Inset
+
+In rounded input controls (`TxInput`), the corner curve encroaches into the interior content box.
+If the input text or blinking cursor starts too close to the left boundary, the cursor directly slices into the corner curve.
+
+TuffEx mandates the clearance constraint:
+$$Padding_{\text{horizontal}} \ge R$$
+The horizontal padding must fully cover the corner radius value, placing the initial caret safely beyond the curved boundary.
+
+## 0.65x Optical Vertical Padding
+
+Because type carries font leading (internal line-height buffers), identical horizontal and vertical paddings (e.g. `padding: 8px 8px`) look optically bottom-heavy and unbalanced.
+
+TuffEx applies the optical ratio:
+$$Padding_{\text{vertical}} \approx 0.6 \sim 0.75 \times Padding_{\text{horizontal}}$$
+For instance, the 26px TxScrubField sets 12px text on a 14.5px line, leaving 5.75px above and below, and keeps the glyph at either end 9px from the edge: a ratio of about 0.64. TxModeChip is a fixed 28px around an 18px line, which leaves 5px above and below against 8px sideways (`height: 28px; padding: 0 8px`), a ratio of 0.625; TxTag's md size writes the same inset as `padding: 5px 8px`.
+
+:::TuffDemoWrapper{demo="ConceptConcentricInsetDemo"}
+:::

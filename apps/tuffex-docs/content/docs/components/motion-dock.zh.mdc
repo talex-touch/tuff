@@ -1,0 +1,141 @@
+---
+title: "动态应用栏"
+description: "调用方项目支持临近弹簧放大、指针拖动和键盘排序。"
+category: MotionInteraction
+status: beta
+since: 0.7.0
+tags: [motion, dock, reorder]
+syncStatus: reviewed
+verified: false
+---
+
+## 概述
+
+`TxMotionDock` 把调用方提供的真实项目排在一块折射材质底板上。指针距离同时影响当前项目和临近项目，放大的图标向底板上方长出，来源弹簧保持宽高同步。悬停或键盘聚焦的项目上方显示名称气泡，选中项目下方显示圆点。拖动时图标跟随指针，临近项目让出位置，释放后返回新的有序项目数组。组件不使用内置演示颜色替换调用方项目，也不修改传入数组。
+
+应用栏采用水平工具栏语义。原生按钮和链接使用单项轮转焦点、本地化说明，并在真实排序后礼貌播报。暂停时放大停止，项目回到静止尺寸，拖动让位和释放落定照常。减少动态效果时不放大，拖动中的图标仍跟随指针，其余项目直接到位。应用栏不可见或页面隐藏时，所有动画停止。项目始终保持可读和可操作。
+
+## 用法
+
+### 受控项目和插槽
+
+演示在每次用指针或键盘排序后显示当前顺序。它还包含选择、禁用项、真实图标和标签插槽，以及链接到说明段落的原生链接。
+
+:::TuffDemoWrapper{demo="MotionDockDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { MotionDockItem } from '@talex-touch/tuffex/motion-dock'
+  import { ref } from 'vue'
+
+  const activeId = ref('files')
+  const items = ref<MotionDockItem[]>([
+    { id: 'files', label: '文件' },
+    { id: 'search', label: '搜索' },
+    { id: 'calendar', label: '日历' },
+  ])
+  </script>
+
+  <template>
+    <TxMotionDock v-model:items="items" v-model:active-id="activeId" show-labels>
+      <template #icon="{ item }">{{ item.label.slice(0, 1) }}</template>
+      <template #label="{ item }">{{ item.label }}</template>
+    </TxMotionDock>
+    <output>{{ items.map(item => item.id).join(' → ') }}</output>
+  </template>
+---
+:::
+
+### 指针和键盘
+
+沿应用栏移动指针可放大临近项目，放大量随距离按余弦曲线衰减。`md` 使用来源的 28 px 静止尺寸、44 px 峰值和 80 px 影响半径，其他尺寸按同一比例缩放。主指针移动 4 px 后开始拖动：图标从按下的位置起沿应用栏 1:1 跟随，并抬起到 1.06 倍；上下拉动时阻力逐渐增大。图标越过两个槽位的中点即换位，被让开的项目用弹簧滑到新位置。局部排序期间保持指针捕获。释放时图标带着指针速度落入槽位，并返回最终顺序。Escape、指针取消或失去捕获会恢复调用方顺序，不触发排序事件。调用方不应用新顺序时，图标同样滑回原位。调用方从外部替换 `items` 时，旧拖动快照会取消。
+
+左右方向键跳过禁用项循环移动焦点，聚焦的项目像悬停一样放大并显示名称气泡。Home/End 到达首个和末个可用项。Alt + 左右方向键将当前项移动一个位置；Alt + Home/End 移到两端，项目同样滑到新位置。Enter 或空格激活当前项目。链接保持原生导航，空格提供与按钮一致的工具栏激活行为。拖动不会激活项目，也不会屏蔽后续键盘激活。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `items` | `readonly MotionDockItem[]` | 必填 | 调用方顺序和稳定的唯一 ID。需要应用 `update:items`，通常使用 `v-model:items`。 |
+| `activeId` | `string \| number` | — | 选中项目标识，支持 `v-model:active-id`。选择不改变顺序。 |
+| `reorderable` | `boolean` | `true` | 启用指针拖动和 Alt 按键排序；普通导航和激活仍然可用。 |
+| `disabled` | `boolean` | `false` | 禁用全部激活、排序并停止尺寸动画。 |
+| `paused` | `boolean` | `false` | 停止放大并恢复静止尺寸，不禁用项目操作。 |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | 静止尺寸分别为 20、24、28 和 36 px。峰值和影响半径按来源的 44/28 与 80/28 比例缩放。 |
+| `itemSize` | `number` | 由 `size` 决定 | 覆盖静止尺寸，最小 16 px；非有限值使用尺寸预设。 |
+| `magnifiedSize` | `number` | `itemSize × 44 / 28` | 覆盖峰值，不会小于静止尺寸。 |
+| `distance` | `number` | `itemSize × 80 / 28` | 指针影响半径，单位 px，最小 1 px。`md` 为 80。 |
+| `showLabels` | `boolean` | `false` | 在应用栏下显示标签，代替名称气泡。标签不超过图标槽宽，过长时截断；放大的图标显示更多文字。可访问名称始终来自 `item.label`。 |
+| `surface` | `BaseSurfaceMode` | `'refraction'` | 底板材质，取值同 `TxBaseSurface` 的 `mode`。无效值使用 `refraction`。 |
+| `labels` | `Partial<MotionDockLabels>` | 见下表 | 本地化工具栏名称、键盘说明和排序播报。 |
+
+#### 项目和文案
+
+`MotionDockItem` 包含 `id: string | number`、`label: string`，以及可选的 `disabled: boolean` 和 `href: string`。没有 `href` 时渲染原生按钮，有 `href` 时渲染原生链接。禁用链接不能导航。排序保留相同项目对象，包括调用方附加字段。
+
+| 文案 | 默认值 | 用途 |
+| --- | --- | --- |
+| `dock` | `'Application dock'` | 工具栏可访问名称。 |
+| `instructions` | 英文方向键、Home/End、Alt 排序、Enter/空格和 Escape 说明 | 通过稳定的 Vue ID 关联到工具栏。 |
+| `reordered` | `'Moved {label} to position {position} of {total}.'` | 礼貌排序播报。位置从 1 开始；事件索引从 0 开始。 |
+
+### 事件
+
+| 事件 | 载荷 | 说明 |
+| --- | --- | --- |
+| `update:items` | `MotionDockItem[]` | 指针或键盘排序改变后返回的新数组，调用方需要应用。 |
+| `reorder` | `(items, detail)` | 同一个实际有序数组，以及说明操作的 `MotionDockReorder`。 |
+| `update:activeId` | `string \| number` | 原生激活请求选中项目。 |
+| `select` | `(item, index)` | 实际选中项目和当前顺序索引，不伪造业务操作。 |
+
+`MotionDockReorder` 为 `{ id, from, to, source: 'pointer' | 'keyboard' }`。`from` 和 `to` 从 0 开始。顺序未变化的释放或取消拖动不触发排序。组件不会写入存储，也不会替按钮项目执行导航。
+
+### 插槽
+
+| 插槽 | 参数 | 说明 |
+| --- | --- | --- |
+| `item` | `{ item, index, active, dragging }` | 替换原生项目控件中的内容。不要嵌套另一个交互控件。 |
+| `icon` | `{ item, index }` | 图标画面。默认显示调用方标签的首字符；画面对辅助技术隐藏。 |
+| `label` | `{ item, index }` | 名称气泡的内容；`showLabels=true` 时为应用栏下的标签。不替换可访问名称。 |
+
+无需命令式方法。`items`、`activeId`、`reorderable` 和 `paused` 驱动真实状态。
+
+### 导出
+
+`@talex-touch/tuffex/motion-dock` 导出 `TxMotionDock`、可安装的 `MotionDock`、`TxMotionDockInstance`、`MotionDockProps`、`MotionDockEmits`、`MotionDockItem`、`MotionDockId`、`MotionDockLabels`、`MotionDockReorder` 和 `MOTION_DOCK_DEFAULT_LABELS`。
+
+### CSS 变量
+
+| 变量 | 用途 |
+| --- | --- |
+| `--tx-motion-dock-base-size` | 由 `size` / `itemSize` 决定的静止尺寸。 |
+| `--tx-motion-dock-peak-size` | 由 `magnifiedSize` 或比例决定的峰值尺寸。应用栏在底板上方预留峰值与静止尺寸之差的高度。 |
+| `--tx-motion-dock-item-size` | 弹簧逐帧写入的每项尺寸。 |
+| `--tx-motion-dock-pad` | 底板内边距，为静止尺寸的 22% 加 1 px。 |
+| `--tx-motion-dock-gap` | 项目间距，为静止尺寸的 18%，也决定标签可用的宽度。 |
+
+底板由 `TxBaseSurface` 绘制，材质上叠一层半透明的 `--tx-fill-color`。描边、阴影、图标块、名称气泡和圆点使用宿主 `--tx-*` token。颜色不做渐变过渡，切换主题时立即生效；按下的图标立即变暗。
+
+## 来源映射
+
+| 变体 | 原始名称 | 固定版本来源 | 保留行为 |
+| --- | --- | --- | --- |
+| `dock` | `Dock` / `DockItem` | [Dock.tsx](https://github.com/Subhan-code/Amicro--Micro-transitions-/blob/43c29ce9cdd16459e3eab4992381b8d35b38776a/src/components/css-animations/Dock.tsx) | 临近指针距离放大，宽高同步；尺寸弹簧保留质量 0.1、刚度 220、阻尼 16。线性衰减改为余弦衰减，影响半径随尺寸缩放。横向拖动排序改为跟手、让位和释放时的速度交接。内置颜色数组改为调用方项目和插槽。 |
+
+## 最佳实践
+
+- 使用稳定且唯一的 ID，并应用 `update:items`。渲染固定数组而忽略返回顺序，会保留调用方原有顺序。
+- 保留自己的项目对象和业务动作。按钮操作监听 `select`；真实链接提供 `href`。
+- 提供本地化文案和非空项目名称。图标保持装饰内容，不嵌套第二个按钮。
+- 图标使用 `1em` 尺寸。图标块的字号随放大变化，固定像素的图标不会跟着放大。
+- 固定应用或导航顺序使用 `reorderable=false`。禁用项仍在数据中，但不能激活、通过工具栏聚焦或发起拖动。
+- 应用栏长度应适合宿主；放大所需的高度已包含在组件内。可见标签按槽宽截断，名称较长时保持 `showLabels=false`，使用名称气泡。
+- 不再建立悬停计时器或第二套弹簧。组件管理运动活跃状态，收敛或失活时取消唯一 RAF。
+
+## 技术实现
+
+组件使用原生指针捕获和 HTML 工具栏语义。布局只在输入事件和顺序变化时读取，不在弹簧帧中测量：顺序变化前记录各项旧位置，更新后从旧位置弹到新槽位（FLIP）。指针按图标当前绘制的位置计算放大；键盘聚焦按静止槽位计算，两侧对称。`stepSpring`（`utils/animation/spring`）用三组弹簧逐轴推进。尺寸沿用来源参数，不过冲；让位为临界阻尼，约 0.3 秒；只有释放的图标继承最近 100 ms 的指针速度，阻尼比约 0.8，可以略微过冲。单个按需 RAF 写入每项尺寸变量、`translate` 和 `scale`，全部收敛后停止。`useMotionActivity` 提供 SSR 安全的可见性、隐藏页面、减少动态效果和 KeepAlive 控制。停用时图标直接回到静止状态；停用或卸载时释放 RAF、指针捕获和未完成拖动。Dock 不复制 observer 或全局监听器。
+
+按 MIT 许可改编。Copyright (c) 2026 SYED  SUBHAN UDDIN。本页记录实现契约，不声称浏览器或包级验证已完成。

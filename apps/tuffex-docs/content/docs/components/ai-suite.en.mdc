@@ -1,0 +1,50 @@
+---
+title: AI Suite
+description: Components for chat, agents, reasoning, and context.
+category: AiSuite
+status: beta
+since: 0.3.9
+tags: [ai, showcase, beautiful-ui, agent, primitives]
+syncStatus: reviewed
+verified: true
+---
+
+## Installation
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxChatComposer, TxAgentTrace } from '@talex-touch/tuffex/ai'
+  import '@talex-touch/tuffex/base.css'
+  import '@talex-touch/tuffex/chat/style.css'
+  import '@talex-touch/tuffex/agent-trace/style.css'
+---
+:::
+
+## Usage
+
+::DocsComponentsGallery{suite="ai"}
+::
+
+### Chat Panel
+:::TuffDemoWrapper{demo="AiSuiteChatShowcaseDemo" code-lang="vue" description="Segmented switch + reasoning reply + composer"}
+---
+code: |
+  <template>
+    <TxFlatRadio v-model="tab" size="sm">
+      <TxFlatRadioItem value="flavors" label="Flavors" />
+      <TxFlatRadioItem value="suppliers" label="Suppliers" />
+    </TxFlatRadio>
+
+    <TxAiMessage :message="userMessage" :show-avatar="false" compact />
+    <TxChainOfThought :steps="steps" default-open />
+
+    <TxChatComposer v-model="draft" @send="onSend" />
+  </template>
+---
+:::
+
+## Technologies
+
+- Adapted from [Beautiful UI](https://www.beautifului.dev) (© 2026 Shane Levine, MIT); each component's source header keeps the attribution.
+- Under the high-contrast theme, the `--tx-bui-*` tokens keep their standard values.

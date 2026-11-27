@@ -1,0 +1,58 @@
+---
+title: 琉光折射管线与光谱色散模型
+description: 斯涅尔定律、SVG 位移贴图滤镜、Smoothstep 强度映射与 RGB 色散通道位移原理。
+---
+
+# 琉光折射管线与光谱色散模型
+
+`TxBaseSurface` 的 `refraction`（琉光）模式以 `TxGlassSurface` 为玻璃层，在纯 Web 技术栈中还原物理光线折射与色散，呈现清透晶莹的质感。
+
+## 斯涅尔定律与物理折射模拟
+
+光线穿过不同折射率介质时，遵循斯涅尔定律（Snell's Law）：
+$$n_1 \sin\theta_1 = n_2 \sin\theta_2$$
+在数字界面中，透过卡片看底层内容时，边缘光线应当发生几何偏折。TuffEx 使用参数化位移矢量（Displacement Vectors）驱动视口下层的像素偏移，呈现光线折射的弯曲感。
+
+## RGB 光谱色散（Chromatic Dispersion）
+
+自然白光是由不同频率光谱合成的。在真实棱镜中，不同波长光线的折射率不同（柯西色散公式）：
+$$n(\lambda) = A + \frac{B}{\lambda^2}$$
+蓝光的折射率大于红光（$n_{\text{Blue}} > n_{\text{Red}}$）。TuffEx 让 Red、Green、Blue 三个通道各自位移一次，三次的位移幅度略有不同（默认 scale 依次为 −180、−170、−160），通道错开后在折射边缘分离出微弱的光谱彩边，摆脱单调的塑料感。
+
+:::TuffDemoWrapper{demo="ConceptRefractionRayDemo"}
+:::
+
+## Smoothstep 强度矫正曲线
+
+为了避免折射在低强度下过平、高强度下剧烈畸变，`TxBaseSurface` 收到 `refraction-strength`（0–100，默认 62）后，先除以 100，再过三次多项式 `smoothstep`：
+$$S(x) = 3x^2 - 2x^3 \quad (x \in [0, 1])$$
+S 是一阶导数连续的 Hermite 插值，两端斜率为 0：强度在起点和终点附近变化很慢，不会一推就跳。之后还有一条胶片曲线：
+$$s = 1 - \left(1 - S(x)\right)^{1.65}$$
+指数 1.65 属于默认的 `filmic` 档，`soft` 档是 1.15，`cinematic` 档是 2.2。各项参数最后按 s 在两端之间插值，例如 `filmic` 档的位移幅度从 −110 走到 −360，所以强度为 0 时仍保留 −110 的位移。只有传了 `refraction-strength`、`refraction-angle`、`refraction-profile` 三者之一，组件才走这套强度模型；否则用固定的默认参数（位移幅度 −180）。
+
+:::TuffDemoWrapper{demo="ConceptRefractionSmoothstepDemo"}
+:::
+
+## SVG Displacement Map 位移管线
+
+`TxGlassSurface` 的玻璃层是一条 SVG 滤镜，以 `backdrop-filter: url(#…)` 作用在背后的内容上：
+
+:::TuffCodeBlock{lang="xml"}
+---
+code: |
+  <!-- TxGlassSurface 的滤镜（简化，默认参数） -->
+  <filter id="tx-glass-filter-…" color-interpolation-filters="sRGB">
+    <!-- 位移贴图：按元素尺寸生成的 SVG，红色水平渐变、蓝色垂直渐变，中间一块模糊的灰色 -->
+    <feImage href="data:image/svg+xml,…" result="map" />
+    <!-- 每个通道各位移一次：scale = distortionScale + 通道偏移 -->
+    <feDisplacementMap in="SourceGraphic" in2="map" scale="-180" xChannelSelector="R" yChannelSelector="G" result="dispRed" />
+    <feColorMatrix in="dispRed" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="red" />
+    <!-- 绿、蓝通道同理，scale 分别为 -170、-160 -->
+    <feBlend in="red" in2="green" mode="screen" result="rg" />
+    <feBlend in="rg" in2="blue" mode="screen" result="output" />
+    <feGaussianBlur in="output" stdDeviation="0.5" />
+  </filter>
+---
+:::
+
+贴图中间那块灰色里各点位移相同，只是整体平移；弯折集中在边缘一圈。参数由组件用 `setAttribute` 写进各个滤镜节点，元素尺寸变化时 `ResizeObserver` 会重新生成位移贴图。Safari 与 Firefox 不走这条滤镜，退回 `backdrop-filter` 背景模糊。

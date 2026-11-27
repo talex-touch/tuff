@@ -1,0 +1,587 @@
+/* Notes template (TemplateNotesDemo.vue). Unscoped, so every class carries the
+   template's prefix; rules that reach into tuffex components use three classes
+   to outrank their scoped `.tx-*[data-v-*]` selectors whatever the load order. */
+
+.tpl-notes {
+  --tpl-notes-line: var(--tx-border-color-lighter, #ebeef5);
+  --tpl-notes-rail: color-mix(in srgb, var(--tx-bg-color-page, #f2f3f5) 45%, var(--tx-bg-color, #fff));
+  --tpl-notes-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  position: relative;
+  display: grid;
+  height: 100%;
+  box-sizing: border-box;
+  grid-template-areas: 'nav main';
+  grid-template-columns: 208px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--tx-bg-color, #fff);
+  color: var(--tx-text-color-primary, #303133);
+  font-size: 13px;
+}
+
+.tpl-notes__icon-button {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tx-text-color-regular, #606266);
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.tpl-notes__icon-button:hover {
+  background: var(--tx-fill-color-light, #f5f7fa);
+}
+
+.tpl-notes__icon-button:focus-visible,
+.tpl-notes__toast-close:focus-visible {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: 1px;
+}
+
+/* Notebooks -------------------------------------------------------------- */
+
+.tpl-notes__nav {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--tpl-notes-rail);
+  box-shadow: inset -1px 0 0 var(--tpl-notes-line);
+  grid-area: nav;
+  outline: none;
+}
+
+.tpl-notes__nav-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 10px 4px 12px;
+}
+
+.tpl-notes__space-mark {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 16%, transparent);
+  color: var(--tx-color-primary, #409eff);
+  font-size: 13px;
+}
+
+.tpl-notes__space {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tpl-notes__nav-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.tpl-notes__tree {
+  min-height: 0;
+  flex: 1;
+  padding: 2px 6px 10px;
+  overflow-y: auto;
+}
+
+.tpl-notes .tpl-notes__tree .tx-tree__list {
+  gap: 1px;
+}
+
+.tpl-notes__nav-foot {
+  margin: 0;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--tpl-notes-line);
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* The tree's own label never truncates, so the rows are the template's. */
+.tpl-notes-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px 5px 20px;
+  border-radius: 8px;
+  color: var(--tx-text-color-regular, #606266);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.tpl-notes-row:hover {
+  background: var(--tx-fill-color-light, #f5f7fa);
+}
+
+.tpl-notes-row.is-notebook {
+  padding-left: 6px;
+  color: var(--tx-text-color-primary, #303133);
+  font-weight: 600;
+}
+
+.tpl-notes-row.is-current {
+  background: var(--tx-color-primary-light-9, #ecf5ff);
+  color: color-mix(in srgb, var(--tx-color-primary, #409eff) 55%, var(--tx-text-color-primary, #303133));
+  font-weight: 500;
+}
+
+.tpl-notes-row__caret {
+  flex: none;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 12px;
+  transition: transform 0.15s var(--tpl-notes-ease);
+}
+
+.tpl-notes-row__caret.is-open {
+  transform: rotate(90deg);
+}
+
+.tpl-notes-row__icon {
+  flex: none;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 14px;
+}
+
+.tpl-notes-row__label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tpl-notes-row__count {
+  flex: none;
+  color: var(--tx-text-color-placeholder, #a8abb2);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+/* Who else has the note open. */
+.tpl-notes-row__peers {
+  display: inline-flex;
+  flex: none;
+  gap: 3px;
+}
+
+.tpl-notes-row__peer {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.tpl-notes-empty {
+  margin: 0;
+  padding: 8px;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 12px;
+}
+
+/* Below 640px the same aside slides over the note. */
+.tpl-notes__nav.is-drawer {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(280px, 86%);
+  background: var(--tx-bg-color, #fff);
+  box-shadow: var(--tx-elevation-4, 5px 10px 30px rgba(0, 0, 0, 0.14));
+  grid-area: auto;
+  transform: translateX(-104%);
+  transition:
+    transform 0.22s var(--tpl-notes-ease),
+    visibility 0s linear 0.22s;
+  visibility: hidden;
+}
+
+.tpl-notes__nav.is-drawer.is-open {
+  transform: none;
+  transition: transform 0.22s var(--tpl-notes-ease);
+  visibility: visible;
+}
+
+.tpl-notes__scrim {
+  position: absolute;
+  z-index: 4;
+  background: color-mix(in srgb, var(--tx-bg-color-page, #f2f3f5) 72%, transparent);
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.tpl-notes__scrim.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Note ------------------------------------------------------------------- */
+
+.tpl-notes__main {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  grid-area: main;
+}
+
+.tpl-notes__head {
+  display: flex;
+  min-width: 0;
+  min-height: 48px;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+/* The title gives way before the people and the share button do, and the
+   edited line gives way before the title. */
+.tpl-notes .tpl-notes__crumbs {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.tpl-notes .tpl-notes__crumbs .tx-breadcrumb__list {
+  min-width: 0;
+}
+
+.tpl-notes .tpl-notes__crumbs .tx-breadcrumb__item {
+  flex: none;
+}
+
+.tpl-notes .tpl-notes__crumbs .tx-breadcrumb__item:last-child {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.tpl-notes .tpl-notes__crumbs .tx-breadcrumb__link {
+  padding: 3px 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* A flex box cannot ellipsize its own text, so the current crumb is a block. */
+.tpl-notes .tpl-notes__crumbs .tx-breadcrumb__link--current {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+.tpl-notes .tpl-notes__crumbs .tx-breadcrumb__separator {
+  margin: 0 2px;
+  font-size: 14px;
+}
+
+.tpl-notes__edited {
+  display: inline-flex;
+  min-width: 0;
+  flex: 0 100 auto;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tpl-notes__edited-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tpl-notes__people {
+  display: inline-flex;
+  flex: none;
+  margin-left: auto;
+}
+
+.tpl-notes__share {
+  flex: none;
+}
+
+/* Isolated: the editor's carets and marks stack up to z-index 3 inside it, and
+   stay under the toast and the slide-over panel. */
+.tpl-notes__doc {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  padding: 0 12px 12px;
+  isolation: isolate;
+}
+
+/* Fill the column: the editor's pane scrolls instead of the stage. */
+.tpl-notes .tpl-notes__editor {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.tpl-notes .tpl-notes__editor .tx-markdown-editor__main {
+  flex: 1 1 auto;
+}
+
+/* Toast ------------------------------------------------------------------ */
+
+/* Above the status bar, clear of the toolbar's comment button. It keeps its
+   box while closed, so it lets clicks through until it opens. */
+.tpl-notes__toast {
+  position: absolute;
+  z-index: 3;
+  right: 24px;
+  bottom: 56px;
+  width: min(300px, calc(100% - 48px));
+  pointer-events: none;
+}
+
+.tpl-notes__toast.is-open {
+  pointer-events: auto;
+}
+
+.tpl-notes__toast-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.tpl-notes__toast-icon {
+  flex: none;
+  color: var(--tx-color-primary, #409eff);
+  font-size: 15px;
+}
+
+.tpl-notes__toast-text {
+  min-width: 0;
+  flex: 1;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.tpl-notes__toast-close {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tx-text-color-placeholder, #a8abb2);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.tpl-notes__toast-close:hover {
+  background: var(--tx-fill-color-light, #f5f7fa);
+  color: var(--tx-text-color-primary, #303133);
+}
+
+/* Properties (960px and up) ---------------------------------------------- */
+
+.tpl-notes__panel {
+  display: none;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 18px;
+  padding: 14px 14px 16px;
+  overflow-y: auto;
+  background: var(--tpl-notes-rail);
+  box-shadow: inset 1px 0 0 var(--tpl-notes-line);
+  grid-area: panel;
+}
+
+.tpl-notes__section-title {
+  margin: 0 0 8px;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tpl-notes__person {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.tpl-notes__person-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tpl-notes__num {
+  font-variant-numeric: tabular-nums;
+}
+
+.tpl-notes__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tpl-notes__events {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tpl-notes__event {
+  display: grid;
+  align-items: start;
+  column-gap: 8px;
+  grid-template-columns: 20px minmax(0, 1fr);
+  row-gap: 1px;
+}
+
+.tpl-notes__event-avatar {
+  grid-row: span 2;
+}
+
+.tpl-notes__event-text {
+  color: var(--tx-text-color-regular, #606266);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.tpl-notes__event-text strong {
+  color: var(--tx-text-color-primary, #303133);
+  font-weight: 600;
+}
+
+.tpl-notes__event-ago {
+  color: var(--tx-text-color-placeholder, #a8abb2);
+  font-size: 11px;
+}
+
+/* Bands ------------------------------------------------------------------ */
+
+/* The JS band follows the frame's rounded width, so for half a pixel it can
+   still think "column" here: the nav hides unless it is the slide-over. */
+@container template (max-width: 639.98px) {
+  .tpl-notes {
+    grid-template-areas: 'main';
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tpl-notes__nav:not(.is-drawer) {
+    display: none;
+  }
+
+  .tpl-notes__head {
+    gap: 6px;
+    padding: 8px 10px;
+  }
+
+  .tpl-notes__doc {
+    padding: 0 8px 8px;
+  }
+
+  .tpl-notes__toast {
+    right: 18px;
+    bottom: 50px;
+    left: 18px;
+    width: auto;
+  }
+}
+
+@container template (min-width: 960px) {
+  .tpl-notes {
+    grid-template-areas: 'nav main panel';
+    grid-template-columns: 220px minmax(0, 1fr) 248px;
+  }
+
+  .tpl-notes__panel {
+    display: flex;
+  }
+}
+
+@container template (min-width: 1200px) {
+  .tpl-notes {
+    grid-template-columns: 240px minmax(0, 1fr) 272px;
+  }
+
+  .tpl-notes__head {
+    padding: 8px 16px;
+  }
+
+  .tpl-notes__doc {
+    padding: 0 16px 16px;
+  }
+}
+
+/* Motion ----------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  /* `scale`, not `transform`, so it composes with the avatar group's hover lift. */
+  .tpl-notes .tpl-notes__avatar.is-joining {
+    animation: tpl-notes-join 0.45s var(--tpl-notes-ease) both;
+  }
+
+  .tpl-notes .tpl-notes__event.is-live {
+    animation: tpl-notes-rise 0.3s var(--tpl-notes-ease) both;
+  }
+}
+
+@keyframes tpl-notes-join {
+  from {
+    opacity: 0;
+    scale: 0.3;
+  }
+}
+
+@keyframes tpl-notes-rise {
+  from {
+    opacity: 0;
+    translate: 0 -4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tpl-notes__nav.is-drawer,
+  .tpl-notes__nav.is-drawer.is-open,
+  .tpl-notes__scrim,
+  .tpl-notes-row__caret {
+    transition: none;
+  }
+}

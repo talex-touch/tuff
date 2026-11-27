@@ -1,0 +1,94 @@
+---
+title: "FineTuneCard"
+description: "A compact property inspector over one value object."
+category: AiContext
+status: beta
+since: 0.3.9
+tags: [form, inspector, panel, ai]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+All six fields travel in one `values` object; once it differs from `defaults`, the header flips to Edited and changed fields are tinted.
+:::TuffDemoWrapper{demo="FineTuneCardFineTuneCardDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const DEFAULTS = { layout: 'row', width: 324, height: 96, radius: 28, opacity: 100, type: null }
+  const values = ref({ ...DEFAULTS })
+
+  const typeOptions = [
+    { value: 'seasonal', label: 'Seasonal' },
+    { value: 'classic', label: 'Classic' },
+  ]
+  </script>
+
+  <template>
+    <TxFineTuneCard
+      v-model:values="values"
+      :defaults="DEFAULTS"
+      :type-options="typeOptions"
+      title="Flavor card"
+    />
+  </template>
+---
+:::
+
+### Best Practices
+
+- Pass the loaded preset's initial values as `defaults`, not a constant, and swap them with the preset.
+- Use `change` for the undo stack and `update:values` for state; both fire, so don't do the work twice in one handler.
+- Give `ranges` the real constraints (a `radius` no larger than half the short side) and let clamping block invalid values.
+- The inspector is narrow (240px), so abbreviate captions; `fieldLabels` replaces the whole set for localization.
+- On non-English surfaces, pass `layoutLabels`: the three layout options are glyph-only, so these names are all a screen reader announces.
+- Each value input's `aria-label` is built from its caption by `valueLabelFormatter`; on non-English surfaces pass one too, or it reads as "<caption> value".
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `values` | `FineTuneValues` | — | The six-field value object, controlled. |
+| `defaults` | `Partial<FineTuneValues>` | — | Baseline for the header state and per-field tinting. |
+| `edited` | `boolean` | — | Forces the header state, ignoring `defaults`. |
+| `title` | `string` | `'Fine-tune'` | Card title. |
+| `layoutLabel` / `typeLabel` | `string` | `'Layout'` / `'Type'` | Section headings. |
+| `layoutLabels` | `Partial<Record<FineTuneLayout, string>>` | `row layout / col layout / grid layout` | Accessible names of the three layout options. |
+| `typeOptions` | `FineTuneTypeOption[]` | `[]` | Type options, `{ value, label }`. |
+| `typePlaceholder` | `string` | `'Select type'` | Shown until a type is picked. |
+| `adjustLabel` / `editedLabel` | `string` | `'Adjust'` / `'Edited'` | The header's two states. |
+| `fieldLabels` | `Partial<Record<FineTuneField, string>>` | `W / H / Radius / Opacity` | Captions for the four numeric fields. |
+| `valueLabelFormatter` | `(label: string) => string` | `` (label) => `${label} value` `` | Builds each value input's `aria-label` from its caption. |
+| `ranges` | `Partial<Record<FineTuneField, FineTuneRange>>` | see below | Per-field bounds. |
+| `disabled` | `boolean` | `false` | Disables every control at once. |
+
+Default ranges: `width` 40–999, `height` 24–999, `radius` 0–64, `opacity` 0–100.
+
+### Events
+
+| Event | Payload | Description |
+|------|------|-------------|
+| `update:values` | `(values: FineTuneValues)` | Fires on any edit with the whole new object. |
+| `change` | `(key, value)` | Fires with `update:values`, naming the key that moved and its new value. |
+
+## Overview
+
+- The layout segment reuses `TxFlatRadio`: a real `radiogroup`, arrow keys move between options, and the group is one tab stop.
+- The four numeric fields are `TxScrubField`: the caption is the handle, and values can be dragged, stepped with the keyboard, or typed.
+- The type picker opens upward as a `combobox` with a `listbox`: arrow keys rove from the current selection, Home / End, Enter or Space commits, Escape closes and restores focus, and outside clicks or focus-out close it.
+- Nothing is emitted when a value would not change; `disabled` reaches the segment, the fields, and the picker.
+- Under reduced motion the Adjust shimmer stops and the label returns to solid text.
+
+## Technologies
+
+- The type picker, `TxFineTuneChipSelect`, is internal and not exported.
+- Adapted from [Beautiful UI](https://www.beautifului.dev) (© 2026 Shane Levine, MIT).
+- Source: `packages/tuffex/packages/components/src/fine-tune-card/`.
+
+<TuffDocSourceLink />

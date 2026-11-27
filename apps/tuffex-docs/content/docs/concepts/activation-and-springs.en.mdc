@@ -1,0 +1,55 @@
+---
+title: 90ms+90ms Confirmation & Spring Physics
+description: Why instant menu dismissal fails usability; the two-beat 90ms+90ms activation feedback rhythm and second-order damped spring dynamics.
+---
+
+# 90ms+90ms Confirmation & Spring Physics
+
+Click feedback must reconcile spatial certainty with high-speed execution. TuffEx formalizes the confirmation rhythm and continuous spring dynamics.
+
+## Why Instant Menu Dismissal Harms Usability
+
+In many native operating systems, selecting an item from a context menu closes the panel within 0ms.
+Users frequently freeze for a fraction of a second: "Did I actually click that option, or did my pointer slip outside?"
+Missing feedback breaks the cognitive feedback loop.
+
+## The Two-Beat Confirmation Rhythm (90ms + 90ms)
+
+After a click, TuffEx items (`TxDropdownItem`, `TxContextMenuItem`) run a **two-beat confirmation rhythm of about 180ms** before the menu closes:
+
+```
+[User clicks a menu item]
+  │
+  ├─ [Beat 1: 90ms] The row's border, fill and shadow turn transparent, dropping the hover and focus highlight.
+  │
+  ├─ [Beat 2: 90ms] The row switches to TxCardItem's active state to confirm the hit.
+  │
+  └─ [End of beat 2] Emits the select event, then closes the menu.
+```
+
+Each beat is driven by a 90ms `setTimeout`; timers are not exact, and each beat measures about 91ms. The beats run only when the click closes the menu (`close-on-select`) and `activation-feedback` is on (both are by default); otherwise select is emitted at once. Under reduced motion, it also runs at once.
+
+:::TuffDemoWrapper{demo="ConceptMenuBeatDemo"}
+:::
+
+## Cubic Bezier Limitations Under Gesture Interruption
+
+Standard CSS cubic bezier transitions are **fixed-duration time interpolation curves**.
+When user gestures interrupt an ongoing animation (such as catching a drawer mid-flight and reversing direction), the transition starts a fresh fixed-duration curve from where it stands, and its velocity becomes the new curve's starting slope, whatever the velocity $\vec{v}_0$ before the interruption:
+- A curve that starts flat (such as `ease-in-out`) stops dead, then accelerates again.
+- A curve that starts steep (such as TuffEx's `ease-out-strong`) leaps forward instead.
+
+Either way the velocity jumps, and the motion stutters mechanically, violating physical intuition.
+
+## The TuffEx Second-Order Damped Spring Engine
+
+Motion that is drawn frame by frame from JS and must keep its velocity through an interruption steps on TuffEx's `stepSpring`: TxSlider's overdrag rebound, the size morphs of TxMorph and TxTransitionSmoothSize, and TxLiquid, for example. It integrates the second-order damped harmonic oscillator equation ($x$ is the offset from the target):
+$$m \frac{d^2x}{dt^2} + c \frac{dx}{dt} + k x = 0$$
+- **Stiffness ($k$)**: Governs restorative spring force.
+- **Damping ($c$)**: Dissipates oscillation energy, eliminating unwanted wobble.
+- **Mass ($m$)**: Imparts physical inertia.
+
+`stepSpring` integrates with semi-implicit Euler in substeps of 1/240 s. When interrupted, only the target moves; the current position and velocity carry over, maintaining physical continuity.
+
+:::TuffDemoWrapper{demo="ConceptSpringInterruptDemo"}
+:::

@@ -1,0 +1,255 @@
+---
+title: "TimeseriesChart 时序图"
+description: "时序折线与堆叠柱：标记、阈值、缩放与刷选"
+category: Charts
+status: beta
+since: 0.1.0
+tags: [chart, timeseries, line, bar]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+`data` 是序列数组，每条序列的 `data` 是按时间排序的 `[timestamp_ms, value]` 元组。`color` 可省略——按序列位次落到分类色板，位次固定，隐藏某条序列不会让其余序列换色。悬停出 tooltip：多序列按值降序，同名序列去重，二分查找最近采样点。
+
+### 双序列折线
+
+:::TuffDemoWrapper{demo="TimeseriesChartBasicDemo" code-lang="vue" title="折线 + 轴格式化" description="xAxisTickFormat / tooltipValueFormat 自定义刻度与数值文本。"}
+---
+code: |
+  <script setup lang="ts">
+  import { TxTimeseriesChart } from '@talex-touch/tuffex/charts'
+
+  const data = [
+    { name: 'Requests', data: requests },
+    { name: 'Cache hits', data: cacheHits },
+  ]
+  </script>
+
+  <template>
+    <TxTimeseriesChart
+      :data="data"
+      x-axis-name="Time"
+      y-axis-name="Count"
+      :x-axis-tick-format="(ts) => new Date(ts).toLocaleTimeString()"
+      :tooltip-value-format="(v) => `${v} req/s`"
+    />
+  </template>
+---
+:::
+
+### 整数刻度 + tooltip 页脚
+
+`yAxisMinInterval` 丢掉比间隔更近的刻度，适合离散计数；`tooltipFooter` 在 tooltip 行列表下方追加一行说明。
+
+:::TuffDemoWrapper{demo="TimeseriesChartAxisDemo" code-lang="vue" title="整数刻度 + tooltip 页脚" description="yAxisMinInterval 1 只留下整数刻度，tooltipFooter 补一行说明。"}
+---
+code: |
+  <script setup lang="ts">
+  const data = [
+    { name: 'Retries', data: retries },
+  ]
+  </script>
+
+  <template>
+    <TxTimeseriesChart
+      :data="data"
+      :y-axis-min-interval="1"
+      :y-axis-tick-count="5"
+      tooltip-footer="Sampled hourly · retries only"
+      :x-axis-tick-format="(ts) => new Date(ts).toLocaleTimeString()"
+    />
+  </template>
+---
+:::
+
+## API 参考
+
+### TimeseriesChart Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `data` | `TimeseriesData[]` | — | `{ name, data: [ts, value][], color? }`；`color` 缺省按位次取分类色。 |
+| `type` | `'line' \| 'bar'` | `'line'` | 柱状自动堆叠。 |
+| `markers` | `TimeseriesMarker[]` | — | `{ timestamp, label?, description?, color?, lineStyle? }`。 |
+| `thresholds` | `TimeseriesThreshold[]` | — | `{ value, label?, color }`，y 轴自动扩展覆盖。 |
+| `xAxisName` | `string` | — | X 轴名。 |
+| `yAxisName` | `string` | — | Y 轴名。 |
+| `xAxisTickCount` | `number` | `5` | X 轴建议刻度数。 |
+| `yAxisTickCount` | `number` | `5` | Y 轴建议刻度数。 |
+| `xAxisTickFormat` | `(v: number) => string` | — | X 轴刻度格式化。不传时，时间刻度用 d3 的默认格式，是英文。 |
+| `yAxisTickFormat` | `(v: number) => string` | — | Y 轴刻度格式化。 |
+| `yAxisMinInterval` | `number` | — | y 轴刻度最小间隔（ECharts `yAxis.minInterval`）：更近的刻度被丢弃，最低与最高刻度始终保留；设 `1` 时整数刻度不会再打印成 `1.0`。 |
+| `tooltipValueFormat` | `(v: number) => string` | 原值 | tooltip 数值格式化。 |
+| `tooltipMode` | `'all' \| 'single'` | `'all'` | `single` 只显示离光标 y 值最近的一条。 |
+| `tooltipMaxItems` | `number` | `10` | 超出的序列收成一行，文案来自 `labels.more`，默认「+N more」。 |
+| `tooltipFollowCursor` | `'both' \| 'x'` | `'both'` | `x` 时垂直位置固定，避免抖动。 |
+| `tooltipFooter` | `string` | — | 在 tooltip 行列表下方追加一行文本。 |
+| `tooltipBoundary` | `TimeseriesTooltipBoundary` | `'clipping-ancestors'` | tooltip 碰撞边界；默认沿裁剪祖先（`overflow` 非 `visible` 的 offsetParent）与视口求交后翻转。类型 `TimeseriesTooltipBoundary` 从 `@talex-touch/tuffex/charts` 入口导出。 |
+| `incomplete` | `{ before?, after? }` | — | 不完整周期（仅 line）。 |
+| `gradient` | `boolean` | `false` | 折线渐变填充。 |
+| `loading` | `boolean` | `false` | 骨架态。 |
+| `highlightedSeries` | `string \| null` | — | 高亮序列，其余降到 10% 不透明度。 |
+| `hiddenSeries` | `string[]` | `[]` | 隐藏的序列名：不画，也不进 tooltip；用 `v-model:hidden-series` 绑定。 |
+| `height` | `number` | `350` | 像素高度。 |
+| `width` | `number` | 容器实测 | 显式宽度（SSR/测试用）。 |
+| `ariaDescription` | `string` | — | 图表的无障碍名称（svg `role="group"`，按键说明作为描述）；缺省用 `labels.chart`。 |
+| `clusterLabel` | `(n: number) => string` | `` n => `${n} changes` `` | 聚簇标签文案。 |
+| `timestampFormat` | `(ts: number) => string` | 紧凑格式，按浏览器语言 | tooltip 时间行与读屏播报的时间格式。页面语言可能与浏览器不同时，传入按页面语言格式化的函数。 |
+| `zoom` | `boolean` | `true` | 在图上缩放、平移时间轴；`false` 固定视图，此时挂上 `time-range-change` 仍可刷选。 |
+| `window` | `[number, number] \| null` | `null` | 显示的时间窗口（毫秒时间戳），支持 `v-model:window`；`null` 显示全部。 |
+| `labels` | `Partial<TimeseriesChartLabels>` | 英文 | 无障碍名称与按键说明（`chart`、`instructions`、`zoomInstructions`），加载骨架的名称 `loading`，以及 tooltip 收起多余序列的那一行 `more`。 |
+
+### TimeseriesChart Events
+
+| 事件名 | 回调参数 | 说明 |
+|------|------|------|
+| `time-range-change` | `(from: number, to: number)` | 刷选松手时回调所选范围，默认同时放大到这段；`zoom` 为 `false` 时挂上它才能刷选。 |
+| `update:hiddenSeries` | `(names: string[])` | `v-model:hidden-series` 写回。 |
+| `update:window` | `(window: [number, number] \| null)` | 缩放、平移、复位或跟随新数据后写回 `v-model:window`。 |
+
+## 标记与阈值
+
+`markers` 在时间轴上画竖虚线；挤在一起的标记按可视跨度自动聚簇成一条线，标签变成「N changes」（`clusterLabel` 可换文案），悬停标记线可见每条的 `label` 与 `description`。`thresholds` 在数值轴上画水平线，y 轴范围会自动扩到覆盖阈值。
+
+### 部署标记 + SLO 线
+
+:::TuffDemoWrapper{demo="TimeseriesChartMarkersDemo" code-lang="vue" title="标记 + 阈值线" description="后两个标记相距很近，被聚成一簇。"}
+---
+code: |
+  <script setup lang="ts">
+  const markers = [
+    { timestamp: t1, label: 'Deploy v2.4', description: 'Rollout to 50%.' },
+    { timestamp: t2, label: 'Config change' },
+    { timestamp: t2 + tiny, label: 'Alert fired' },
+  ]
+  const thresholds = [
+    { value: 300, label: 'SLO 300ms', color: ChartPalette.semantic('Attention') },
+  ]
+  </script>
+
+  <template>
+    <TxTimeseriesChart :data="data" :markers="markers" :thresholds="thresholds" />
+  </template>
+---
+:::
+
+## 渐变与不完整数据
+
+`gradient` 给折线加纵向渐变填充（序列色 40% → 透明）。`incomplete` 声明 `[before, after]` 之外的数据不完整：边界外的段画成虚线，且与实线段重叠一个采样点保证连线不断。
+
+### 渐变 + 两端虚线
+
+:::TuffDemoWrapper{demo="TimeseriesChartGradientDemo" code-lang="vue" title="渐变 + 不完整区间" description="首尾各三小时是不完整周期。"}
+---
+code: |
+  <template>
+    <TxTimeseriesChart
+      :data="data"
+      gradient
+      :incomplete="{ before: start + 3 * hour, after: start + 20 * hour }"
+    />
+  </template>
+---
+:::
+
+## 柱状堆叠
+
+`type="bar"` 下所有序列自动堆叠（同 kumo 的 `stack: 'total'`），y 轴范围按每个时间点的堆叠总量计算。
+
+### 按天堆叠
+
+:::TuffDemoWrapper{demo="TimeseriesChartBarDemo" code-lang="vue" title="堆叠柱" description="三条序列堆在同一根柱上。"}
+---
+code: |
+  <template>
+    <TxTimeseriesChart type="bar" :data="data" :x-axis-tick-format="formatDay" />
+  </template>
+---
+:::
+
+## 缩放与刷选
+
+时间轴默认可缩放：在绘图区拖出一段，松手放大到这段；放大后拖动平移，越过两端回弹，松手后按速度滑行，按住 Shift 拖动仍是刷选。⌘/Ctrl + 滚轮或触控板捏合以指针为中心缩放，触屏双指捏合同理；触控板横向滑动平移放大后的视图，普通滚轮照常滚动页面；双击显示全部。聚焦图表后 `+` / `-` 缩放、Shift + ← / → 平移、`0` 显示全部。窗口停在最后一个时间点时随新数据前进。`v-model:window` 读写当前窗口，`null` 为全部。
+
+监听 `time-range-change` 可在松手时拿到所选的 `(from, to)` 毫秒时间戳，选区随即清除；`:zoom="false"` 固定视图，此时挂上监听器只刷选、不缩放。拖动不足 4px 视为点击。选区矩形填充 `rgba(120, 140, 180, 0.3)`、1px 描边 `rgba(120, 140, 180, 0.8)`。拖拽过程中选区外的绘图区同步变淡：一层覆盖整个绘图区的亮度 `<mask>`（白色绘图区矩形加两条 `#4D4D4D` 条带）把选区外压到 30%，每条序列因此只挂载一次 —— 与 ECharts `outOfBrush.colorAlpha: 0.3` 等价。
+
+### 拖拽选段
+
+:::TuffDemoWrapper{demo="TimeseriesChartRangeDemo" code-lang="vue" title="刷选" description="拖拽后下方显示所选区间。"}
+---
+code: |
+  <template>
+    <TxTimeseriesChart :data="data" @time-range-change="(from, to) => (range = [from, to])" />
+  </template>
+---
+:::
+
+## 图例联动
+
+`v-model:hidden-series` 双向绑定被隐藏的序列名数组：隐藏的序列不画、tooltip 也跳过。`highlighted-series` 高亮一条序列，其余降到 10% 不透明度（对应 ECharts blur 的 `fromState.opacity * 0.1`）。两者配合 `TxChartLegendItem` 即得可点击、可悬停高亮的图例。
+
+### 点击隐藏 + 悬停高亮
+
+:::TuffDemoWrapper{demo="TimeseriesChartLegendDemo" code-lang="vue" title="图例联动" description="点图例项切换显隐，悬停高亮对应序列。"}
+---
+code: |
+  <template>
+    <TxChartLegendItem
+      v-for="(name, i) in names"
+      :key="name"
+      :name="name"
+      :color="ChartPalette.categoricalVar(i)"
+      value=""
+      :inactive="hidden.includes(name)"
+      @click="toggle(name)"
+      @pointerenter="highlighted = name"
+      @pointerleave="highlighted = null"
+    />
+    <TxTimeseriesChart v-model:hidden-series="hidden" :data="data" :highlighted-series="highlighted" />
+  </template>
+---
+:::
+
+## 加载骨架
+
+`loading` 用谐波波形骨架替换图表，折线与柱状两种形态共享同一条轮廓；shimmer 尊重 `prefers-reduced-motion`。
+
+### 骨架轮播
+
+:::TuffDemoWrapper{demo="TimeseriesChartLoadingDemo" code-lang="vue" title="加载骨架" description="loading 循环开关，交替展示 line / bar 两种骨架。"}
+---
+code: |
+  <template>
+    <TxTimeseriesChart :data="data" :type="type" :loading="loading" />
+  </template>
+---
+:::
+
+## 动画与交互
+
+图表沿用 ECharts 的默认时序（kumo pin `echarts ^6.0.0`）：
+
+- 首绘：折线/面积是从左到右的裁剪揭示，1000ms `easings.linear`；柱状从基线长出（y 由 `baseY` 插值到目标值、高度 0 → 目标）、散点由 0 缩放到半径并淡入，都是 1000ms cubicInOut。
+- 数据更新：几何形变 500ms cubicInOut。
+- 状态切换（emphasis / blur）：在指针到达的那一帧完成，不走 ECharts 的 300ms cubicOut（TuffEx 的悬停规则）。
+- `ANIMATION_THRESHOLD` 2000（导出常量，不是 prop）：单序列点数超过它时直接渲染终态几何，不播动画。
+- tooltip：隐藏前先延迟 100ms，再用 200ms 淡出并移除 DOM，短暂划过不会闪烁；位置通过 `transform: translate3d()` 交给浏览器插值出 400ms 位移（`cubic-bezier(0.23, 1, 0.32, 1)`）；指针跟踪按 50ms 节流，取 leading + trailing 两个采样。
+- 刷选拖拽期间选区外变淡，松手立即恢复，见上节的单层 `<mask>`。
+- 缩放：刷选、鼠标滚轮与按键以临界阻尼弹簧（响应 0.35s）过渡到新窗口；触控板捏合与拖动平移 1:1 跟手，平移松手后按速度滑行。
+- 读数：悬停或按住拖动时十字线吸附到最近的采样时间戳；聚焦图表后 ← / → 逐点读数、Home / End 跳到首尾、Escape 清除，读屏播报时间与各序列的值。触屏单指按住拖动读数，纵向滑动仍滚动页面。
+- 悬停绘图区时，除最接近光标所在时间戳取值的那条序列外，其余序列都降到 10% 不透明度；这是 ECharts `emphasis.focus: 'series'`（只在真正命中数据项时强调）的文档化近似。
+- `prefers-reduced-motion: reduce` 下所有补间直接落到终态，CSS 过渡统一包在 `@media (prefers-reduced-motion: no-preference)` 内。
+
+`@talex-touch/tuffex/charts` 入口同时导出动画原语，便于在自有图表里复用同一套时序：`easings`（`linear | cubicIn | cubicOut | cubicInOut`）、`cubicBezier(x1, y1, x2, y2)`、`tween({ duration, easing, delay, onUpdate, onComplete })`、`useEnterProgress(options)`、`useTweenedNumbers(source, options)`、`prefersReducedMotion()`，以及常量 `ENTER_DURATION` 1000、`UPDATE_DURATION` 500、`STATE_DURATION` 300、`ANIMATION_THRESHOLD` 2000。tooltip 时序常量（`TOOLTIP_FADE_DURATION` 200、`TOOLTIP_MOVE_DURATION` 400、`TOOLTIP_HIDE_DELAY` 100、`TOOLTIP_TRACK_THROTTLE` 50、`tooltipMoveEasing`）由图表入口内的 `core/animate` 提供。
+
+## 与 kumo 的差异
+
+- `enableLegendSelection` + echarts 命令式 action → `v-model:hidden-series` 声明式绑定；高亮用 `highlighted-series`。
+- `tooltipBoundary` 走真实的 clipping-ancestors 碰撞：沿裁剪祖先（`overflow` 非 `visible` 的 offsetParent）与视口求交，越界时翻转，默认 `'clipping-ancestors'`。
+- 刷选拖拽过程中选区外不再只是画矩形：单层亮度 `<mask>` 把选区外压到 30%，序列仍只挂载一次。
+- kumo 的刷选只回调范围；这里默认同时放大，并可平移、捏合与键盘缩放，`:zoom="false"` 回到只刷选。
+- 几何动画与 ECharts 对齐：饼图用 `animationType: 'expansion'` 角向生长、悬停外推 `scaleSize` 5px；sankey 与地图没有几何动画（`SankeyView` 无 `initProps`/`updateProps`，地图 `animationDurationUpdate: 0`），不是缺口。
+- 绘图区悬停的系列级强调是近似：ECharts 只在真正命中数据项时 blur 其余序列，这里按光标时间戳取最近的一条。
+- 建议每条序列 ≤ 5k 点：SVG 渲染在万点级会出现掉帧。

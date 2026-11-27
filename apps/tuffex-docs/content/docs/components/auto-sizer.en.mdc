@@ -1,0 +1,169 @@
+---
+title: "AutoSizer"
+description: "A container that animates to fit its content's size."
+category: Primitives
+status: beta
+since: 0.3.4
+tags: [auto-size, layout, animation]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Height Only
+Syncs only the height, so the surrounding layout keeps its width; wrap the state change in `action()`.
+:::TuffDemoWrapper{demo="AutoSizerAutoSizerHeightDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref<'a' | 'b'>('a')
+  const sizerRef = ref()
+
+  function setTab(next: 'a' | 'b') {
+    sizerRef.value?.action(() => {
+      active.value = next
+    })
+  }
+  </script>
+
+  <template>
+    <TxButton @click="setTab('a')">Tab A</TxButton>
+    <TxButton @click="setTab('b')">Tab B</TxButton>
+
+    <TxAutoSizer ref="sizerRef" :width="false" :duration-ms="250">
+      <div v-if="active === 'a'">Short content.</div>
+      <div v-else>Long content…</div>
+    </TxAutoSizer>
+  </template>
+---
+:::
+
+### Width in a Flex Container
+As a flex item, don't stretch it with `flex: 1` or `width: 100%`, or its width stops following the content.
+:::TuffDemoWrapper{demo="AutoSizerAutoSizerWidthInFlexDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; gap: 12px;">
+      <TxButton @click="toggle">Toggle</TxButton>
+
+      <TxAutoSizer ref="sizerRef" :height="false">
+        <TxButton variant="secondary">
+          {{ wide ? 'Very very long label' : 'Short' }}
+        </TxButton>
+      </TxAutoSizer>
+
+      <div style="flex: 1;">Right Area</div>
+    </div>
+  </template>
+---
+:::
+
+### Width Only
+Syncing only the width shrinks it to its content, which suits changing button labels.
+:::TuffDemoWrapper{demo="AutoSizerAutoSizerWidthDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxAutoSizer ref="sizerRef" :height="false">
+      <TxButton :loading="loading" variant="primary">Submit</TxButton>
+    </TxAutoSizer>
+  </template>
+---
+:::
+
+### Number Transition
+With `TxTextMorph`, the width follows as the digit count changes.
+:::TuffDemoWrapper{demo="AutoSizerAutoSizerTextMorphDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxAutoSizer ref="sizerRef" :height="false">
+      <TxButton variant="secondary">
+        $ <TxTextMorph :text="value" :decimals="2" />
+      </TxButton>
+    </TxAutoSizer>
+  </template>
+---
+:::
+
+### Text Transform
+Width and height both follow; the default `outerClass="overflow-hidden"` clips the blur's overflow.
+:::TuffDemoWrapper{demo="AutoSizerAutoSizerTextTransformerDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxAutoSizer
+      ref="sizerRef"
+      inline
+      :duration-ms="duration"
+      easing="cubic-bezier(0.2, 0, 0, 1)"
+    >
+      <TxCard variant="plain" :padding="12">
+        <TxTextTransformer :text="label" :duration-ms="duration" :blur-px="blurPx" />
+      </TxCard>
+    </TxAutoSizer>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Sync only the height for content areas (tabs, accordions, dropdowns) and only the width for buttons, labels, and numbers.
+- Keep `outerClass="overflow-hidden"` when content animates with blur, scale, or FLIP.
+- Wrap explicit state changes in `action()` or `flip()` rather than changing state and calling `refresh()`, which loses the before/after snapshot the transition needs.
+- Set `observeTarget="both"` only when the wrapper and the content resize independently.
+- Keep `rounding="ceil"` for text to avoid sub-pixel clipping; use `floor` only when a parent needs tighter bounds.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `as` | `string` | `div` | Outer element tag. |
+| `innerAs` | `string` | `div` | Inner element tag. |
+| `width` | `boolean` | `true` | Syncs the width. |
+| `height` | `boolean` | `true` | Syncs the height. |
+| `inline` | `boolean` | - | Shrinks to the content width; when omitted, on only in width-only mode. |
+| `durationMs` | `number` | `200` | Transition duration in ms. |
+| `easing` | `string` | `ease` | Transition timing function. |
+| `outerClass` | `string` | `overflow-hidden` | Outer class, applied before forwarded classes. |
+| `innerClass` | `string` | - | Inner class. |
+| `rounding` | `'none' \| 'round' \| 'floor' \| 'ceil'` | `ceil` | How measured values are rounded. |
+| `immediate` | `boolean` | `true` | Measures right after mount. |
+| `rafBatch` | `boolean` | `true` | Batches measurements with rAF. |
+| `observeTarget` | `'inner' \| 'outer' \| 'both'` | `inner` | Element watched for size changes. |
+
+### Slots
+
+| Slot | Description |
+|------|-------------|
+| `default` | Measured content, rendered in the inner wrapper. |
+
+### Exposed Methods
+
+| Name | Type | Description |
+|------|------|------|
+| `refresh()` | `() => Promise<void>` | Re-measures. |
+| `flip(action)` | `(action: () => void \| Promise<void>) => Promise<void>` | Runs `action` inside a size FLIP transition. |
+| `action(fn, options?)` | `(fn: (el: HTMLElement) => void \| Promise<void>, options?: AutoSizerActionOptions \| detect) => Promise<any>` | Runs a change on the inner or outer element with a transition; returns before/after snapshots and `changedKeys`. |
+| `size` | `{ width: number; height: number } \| null` | The last measured size. |
+| `focus()` | `() => void` | Focuses the outer wrapper when it is focusable. |
+| `outerEl` | `HTMLElement \| null` | The outer wrapper element. |
+
+## Overview
+
+- Forwarded attrs land on the outer wrapper, merged with `outerClass` and the sizing styles; the inner wrapper holds the measured content with `display: flow-root`.
+- It re-measures whenever the content's size changes, including image loads and async rendering.
+- `flip()` and `action()` pause automatic measurement while they run and re-measure after the transition.
+
+## Technologies
+
+- Automatic measurement runs on `ResizeObserver`; explicit changes use a size FLIP.
+- Source: `packages/tuffex/packages/components/src/auto-sizer/`.
+
+<TuffDocSourceLink />

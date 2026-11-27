@@ -1,0 +1,50 @@
+---
+title: AI 套件
+description: 对话、智能体、推理与上下文组件
+category: AiSuite
+status: beta
+since: 0.3.9
+tags: [ai, showcase, beautiful-ui, agent, primitives]
+syncStatus: reviewed
+verified: true
+---
+
+## 安装
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxChatComposer, TxAgentTrace } from '@talex-touch/tuffex/ai'
+  import '@talex-touch/tuffex/base.css'
+  import '@talex-touch/tuffex/chat/style.css'
+  import '@talex-touch/tuffex/agent-trace/style.css'
+---
+:::
+
+## 用法
+
+::DocsComponentsGallery{suite="ai"}
+::
+
+### 聊天面板
+:::TuffDemoWrapper{demo="AiSuiteChatShowcaseDemo" code-lang="vue" description="分段切换 + 推理回复 + 输入条"}
+---
+code: |
+  <template>
+    <TxFlatRadio v-model="tab" size="sm">
+      <TxFlatRadioItem value="flavors" label="口味" />
+      <TxFlatRadioItem value="suppliers" label="供应商" />
+    </TxFlatRadio>
+
+    <TxAiMessage :message="userMessage" :show-avatar="false" compact />
+    <TxChainOfThought :steps="steps" default-open />
+
+    <TxChatComposer v-model="draft" @send="onSend" />
+  </template>
+---
+:::
+
+## 技术实现
+
+- 移植自 [Beautiful UI](https://www.beautifului.dev)（© 2026 Shane Levine，MIT），组件源码文件头保留署名。
+- 高对比主题下，`--tx-bui-*` token 保持原值。

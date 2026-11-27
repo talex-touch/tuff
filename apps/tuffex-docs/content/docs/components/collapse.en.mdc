@@ -1,0 +1,135 @@
+---
+title: Collapse
+description: A group of panels that expand and collapse their content.
+category: Layout
+status: beta
+since: 0.3.4
+tags: [collapse, disclosure, layout]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+::::TuffDemoWrapper{demo="CollapseBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref(['first'])
+  </script>
+
+  <template>
+    <TxCollapse v-model="active">
+      <TxCollapseItem title="Getting Started" name="first">
+        Starter content goes here.
+      </TxCollapseItem>
+      <TxCollapseItem title="Advanced" name="second">
+        Extra options and settings.
+      </TxCollapseItem>
+    </TxCollapse>
+  </template>
+---
+::::
+
+### Accordion
+`accordion` keeps one panel open at a time; clicking the open panel again collapses it.
+::::TuffDemoWrapper{demo="CollapseAccordionDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref('first')
+  </script>
+
+  <template>
+    <TxCollapse v-model="active" accordion>
+      <TxCollapseItem title="Getting Started" name="first">Starter content.</TxCollapseItem>
+      <TxCollapseItem title="Advanced" name="second">Advanced content.</TxCollapseItem>
+    </TxCollapse>
+  </template>
+---
+::::
+
+### Custom Header
+The `title` slot replaces the header text; the arrow still trails it.
+
+```vue
+<template>
+  <TxCollapseItem name="security">
+    <template #title>
+      <TxIcon name="i-carbon-security" />
+      Security settings
+    </template>
+    Require passkeys for privileged operations.
+  </TxCollapseItem>
+</template>
+```
+
+### Best Practices
+
+- Give each panel a stable `name`; with the `title` fallback, localizing or renaming a label loses its open state.
+- Keep headers to short text and put actions and complex controls in the body: the whole header is the toggle button.
+- Disable sections that are unavailable, never the panel that is currently open.
+- Structure long content inside the body instead of nesting collapses.
+- Content stays mounted, so don't run expensive always-on work inside closed panels.
+
+## API Reference
+
+### TxCollapse
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `string \| string[]` | `undefined` | Open panel names: an array normally, a string in accordion mode. |
+| `accordion` | `boolean` | `false` | Keeps one panel open at a time. |
+
+#### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `update:modelValue` | `string \| string[]` | Fires after a panel toggles. |
+| `change` | `string \| string[]` | Fires with `update:modelValue`, with the same value. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | none | The `TxCollapseItem` list. |
+
+### TxCollapseItem
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `undefined` | Header text; also the identity when `name` is missing. |
+| `name` | `string` | `undefined` | Unique panel identity. |
+| `disabled` | `boolean` | `false` | Blocks toggling. |
+| `arrowIcon` | `string` | `'chevron-down'` | Icon name of the trailing arrow, which rotates when open. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `title` | none | Custom header content before the arrow. |
+| `default` | none | Panel body. |
+
+## Overview
+
+- In normal mode a toggle emits the array of open names; in accordion mode it emits a single name, and `''` when the open panel collapses.
+- A panel's identity is `name`, then `title`, then `''`.
+- Headers are native `<button type="button">` elements with `aria-expanded` and `aria-controls`; disabled headers set the native `disabled` attribute.
+- Content is hidden with `v-show` and stays mounted.
+- An item outside a `TxCollapse` renders, but clicking it does nothing.
+
+## Technologies
+
+- `TxCollapse` provides the open state and toggle handler to items through provide / inject; `<Transition>` JS hooks animate the height from 0 to the content height, then release it to `auto`.
+- Source: `packages/tuffex/packages/components/src/collapse/`.
+
+<TuffDocSourceLink />

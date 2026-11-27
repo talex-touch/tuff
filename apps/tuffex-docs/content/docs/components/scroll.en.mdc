@@ -1,0 +1,204 @@
+---
+title: "Scroll"
+description: "A scroll container driven by BetterScroll or native scrolling."
+category: Layout
+status: beta
+since: 0.3.4
+tags: [scroll, layout, better-scroll]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+:::TuffDemoWrapper{demo="ScrollScrollDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxScroll style="height: 220px;">
+      <div v-for="i in 60" :key="i">Row {{ i }}</div>
+    </TxScroll>
+  </template>
+---
+:::
+
+### Horizontal
+`direction` picks the scroll axes: `vertical`, `horizontal`, or `both`.
+:::TuffDemoWrapper{demo="ScrollScrollHorizontalDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxScroll direction="horizontal" style="height: 140px;">
+      <div style="display: flex; gap: 12px; width: 920px;">
+        <div v-for="i in 24" :key="i" style="min-width: 120px;">Col {{ i }}</div>
+      </div>
+    </TxScroll>
+  </template>
+---
+:::
+
+### Bounce and Persistent Scrollbar
+With `scrollbarAlwaysVisible`, the scrollbar stays visible even when the content fits.
+:::TuffDemoWrapper{demo="ScrollScrollBounceAlwaysShowScrollbarDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxScroll :bounce="true" :scrollbar-always-visible="true" style="height: 220px;">
+      <div>Short content</div>
+    </TxScroll>
+  </template>
+---
+:::
+
+### Scroll Chaining
+Scrolling doesn't pass to the outer container by default; `scrollChaining` hands it over once the inner one hits an edge.
+:::TuffDemoWrapper{demo="ScrollScrollScrollChainingDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="height: 320px; overflow: auto;">
+      <TxScroll style="height: 160px;">…</TxScroll>
+      <TxScroll style="height: 160px;" :scroll-chaining="true">…</TxScroll>
+    </div>
+  </template>
+---
+:::
+
+### Native Scrolling
+`native` skips BetterScroll and keeps the same container structure.
+:::TuffDemoWrapper{demo="ScrollScrollNativeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxScroll native style="height: 220px;">
+      <div v-for="i in 60" :key="i">Native Row {{ i }}</div>
+    </TxScroll>
+  </template>
+---
+:::
+
+### Pull to Refresh and Load More
+Listen for `pulling-down` / `pulling-up`, and call `finishPullDown()` / `finishPullUp()` when the async work ends, whether it succeeds or fails.
+:::TuffDemoWrapper{demo="ScrollScrollPullDownPullUpDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const items = ref(Array.from({ length: 30 }, (_, i) => i + 1))
+  const scrollRef = ref()
+
+  async function onPullingDown() {
+    try {
+      await reload()
+    }
+    finally {
+      scrollRef.value?.finishPullDown()
+    }
+  }
+
+  async function onPullingUp() {
+    try {
+      await loadMore()
+    }
+    finally {
+      scrollRef.value?.finishPullUp()
+    }
+  }
+  </script>
+
+  <template>
+    <TxScroll
+      ref="scrollRef"
+      style="height: 260px;"
+      :pull-down-refresh="true"
+      :pull-up-load="true"
+      @pulling-down="onPullingDown"
+      @pulling-up="onPullingUp"
+    >
+      <div v-for="i in items" :key="i">Item {{ i }}</div>
+      <template #footer>Pull up to load more</template>
+    </TxScroll>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Use native mode for plain article or document scrolling; reach for BetterScroll only when you need consistent scrollbars, wheel bridging, bounce, or pull plugins.
+- Keep `scrollChaining=false` in nested panels; enable it only when the parent-child handoff is intentional and tested.
+- Set `noPadding` when the child owns its spacing, such as virtualized lists, tables, and full-bleed media.
+- Give horizontal or both-axis content a definite width, or BetterScroll can't reliably detect horizontal overflow.
+- Don't pass large mutable objects through `options`; configure documented behavior through its props.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `native` | `boolean` | `false` | Forces native scrolling and skips BetterScroll initialization. |
+| `unified` | `boolean` | `false` | Forces BetterScroll over Safari / Chromium auto-native; `native` still wins. |
+| `nativeAutoFallback` | `boolean` | `true` | Switches to native scrolling on macOS + Chromium `145+`; doesn't affect Safari. |
+| `noPadding` | `boolean` | `false` | Removes content padding; horizontal and both-axis content becomes `max-content` wide. |
+| `scrollChaining` | `boolean` | `false` | Hands scrolling to the outer container at the edges. |
+| `direction` | `'vertical' \| 'horizontal' \| 'both'` | `'vertical'` | Scroll axes. |
+| `scrollbar` | `boolean` | `true` | Enables the BetterScroll scrollbar plugin; native mode uses browser scrollbars. |
+| `scrollbarFade` | `boolean` | `true` | Fades the scrollbar when idle. |
+| `scrollbarInteractive` | `boolean` | `true` | Lets users drag the scrollbar. |
+| `scrollbarAlwaysVisible` | `boolean` | `false` | Keeps the scrollbar visible, for bounce or content that fits. |
+| `scrollbarMinSize` | `number` | `18` | Minimum thumb size, written to `--tx-scrollbar-min-size`. |
+| `probeType` | `0 \| 1 \| 2 \| 3` | `3` | BetterScroll `probeType`; sets how often `scroll` fires. |
+| `bounce` | `boolean` | `true` | Edge bounce and wheel overshoot. |
+| `click` | `boolean` | `true` | Passes through BetterScroll's `click` option. |
+| `wheel` | `boolean` | `true` | Wheel bridge in BetterScroll mode; ignores `ctrl` wheel gestures. |
+| `refreshOnContentChange` | `boolean` | `true` | Calls `refresh()` after content changes. |
+| `pullDownRefresh` | `boolean \| Record<string, unknown>` | `false` | Enables pull to refresh; an object becomes the BetterScroll plugin options. |
+| `pullDownThreshold` | `number` | `70` | Pull distance that fires `pulling-down`. |
+| `pullDownStop` | `number` | `56` | Hold position while refreshing; BetterScroll mode only. |
+| `pullUpLoad` | `boolean \| Record<string, unknown>` | `false` | Enables load more; an object becomes the BetterScroll plugin options. |
+| `pullUpThreshold` | `number` | `0` | Distance from the bottom that fires `pulling-up`. |
+| `options` | `Record<string, unknown>` | `{}` | Extra BetterScroll options; the component consumes `wheelOvershoot` itself. |
+
+### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `scroll` | `{ scrollTop: number; scrollLeft: number }` | Fires on scroll with absolute offsets. |
+| `pulling-down` | - | Fires on pull to refresh; not again until `finishPullDown()`. |
+| `pulling-up` | - | Fires on load more; not again until `finishPullUp()`. |
+
+### Slots
+
+| Slot | Description |
+|------|-------------|
+| `default` | Main content, rendered inside `.tx-scroll__content`. |
+| `header` | Before the main content: ahead of `.tx-scroll__content` in native mode, inside it in BetterScroll mode. |
+| `footer` | After the main content; often a loading status. |
+
+### Exposed Methods
+
+| Name | Type | Description |
+|------|------|-------------|
+| `nativeScrollRef` | `Ref<HTMLElement \| null>` | The scroll element in native mode. |
+| `scrollTo(x, y, time?)` | `(x: number, y: number, time?: number) => void` | Scrolls to absolute offsets; `time` applies in BetterScroll mode only. |
+| `getScrollInfo()` | `() => TxScrollInfo` | Current offsets, scroll size, and client size. |
+| `refresh()` | `() => void` | Recomputes BetterScroll's scrollable range; no-op in native mode. |
+| `finishPullDown()` | `() => void` | Ends the current pull-down so it can fire again. |
+| `finishPullUp()` | `() => void` | Ends the current pull-up so it can fire again. |
+
+## Overview
+
+- The mode is chosen in order: `native` → `unified` (BetterScroll) → native on macOS Safari → native when `nativeAutoFallback` is on and macOS + Chromium ≥ 145 → otherwise BetterScroll.
+- Native mode maps `direction` to `overflow-x/y` and `scrollChaining=false` to `overscroll-behavior: contain`; BetterScroll mode maps it to `scrollX`, `scrollY`, and `freeScroll`.
+- Size and content changes are coalesced into one frame before `refresh()`; `refreshOnContentChange=false` turns off only the content-change refreshes, not the resize ones.
+- Native pull to refresh is a touch-threshold fallback at `scrollTop=0`.
+- On macOS, with both `wheel` and `bounce` on, `useTransition: false` is injected by default; set `useTransition` in `options` to override.
+
+## Technologies
+
+- BetterScroll mode lazy-loads `@better-scroll/core` and `@better-scroll/scroll-bar`; the wheel goes through the component's own bridge.
+- Source: `packages/tuffex/packages/components/src/scroll/`.
+
+<TuffDocSourceLink />

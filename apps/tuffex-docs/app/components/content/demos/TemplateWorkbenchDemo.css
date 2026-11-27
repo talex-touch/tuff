@@ -1,0 +1,919 @@
+/* Workbench template. Unscoped so it can reach into TxTree, TxCodeEditor,
+   TxTerminal and the toolbar; every selector starts with a `workbench` class.
+   Their scoped rules weigh (0,2,0), so the overrides here use three classes. */
+
+.workbench {
+  --workbench-line: var(--tx-border-color-lighter, #ebeef5);
+  /* The chrome around the editor sits one step below the editor surface. */
+  --workbench-chrome: color-mix(in srgb, var(--tx-bg-color-page, #f2f3f5) 55%, var(--tx-bg-color, #ffffff));
+  /* Plain token on purpose: TxTerminal hands the computed colour to xterm,
+     which cannot read color-mix(). */
+  --workbench-surface: var(--tx-fill-color-blank, #ffffff);
+  --workbench-hover: color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 70%, transparent);
+  --workbench-focus: color-mix(in srgb, var(--tx-color-primary, #409eff) 60%, transparent);
+
+  position: relative;
+  display: grid;
+  height: 100%;
+  min-width: 0;
+  grid-template-rows: 40px minmax(0, 1fr) 26px;
+  overflow: hidden;
+  background: var(--workbench-chrome);
+  color: var(--tx-text-color-primary, #303133);
+  font-size: 13px;
+  outline: none;
+}
+
+.workbench-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.workbench__spacer {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.workbench-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--tx-text-color-regular, #606266);
+}
+
+.workbench-empty-icon {
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 28px;
+}
+
+.workbench-empty-icon.is-danger {
+  color: var(--tx-color-danger, #f56c6c);
+}
+
+/* ─── title bar ─── */
+
+.workbench__titlebar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 6px;
+  border-bottom: 1px solid var(--workbench-line);
+}
+
+.workbench__mark {
+  flex: none;
+  margin-left: 2px;
+}
+
+.workbench__project {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workbench__branch {
+  flex: none;
+  margin-left: 4px;
+}
+
+.workbench__dev {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  margin-right: 4px;
+  font-size: 12px;
+}
+
+/* ─── main row ─── */
+
+.workbench__main {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ─── explorer ─── */
+
+.workbench__explorer {
+  display: flex;
+  width: 188px;
+  min-height: 0;
+  flex: none;
+  flex-direction: column;
+  border-right: 1px solid var(--workbench-line);
+  background: var(--workbench-chrome);
+}
+
+.workbench__explorer-head {
+  display: flex;
+  height: 34px;
+  flex: none;
+  align-items: center;
+  padding: 0 14px;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.workbench__explorer-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 0 6px 10px;
+}
+
+.workbench .workbench__explorer .tx-tree__list {
+  gap: 0;
+}
+
+.workbench .workbench__explorer .tx-tree__item {
+  border-radius: 6px;
+}
+
+.workbench .workbench__explorer .tx-tree__item:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--workbench-focus);
+}
+
+.workbench-tree__row {
+  display: flex;
+  height: 24px;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px 0 2px;
+  border-radius: 6px;
+  color: var(--tx-text-color-regular, #606266);
+  cursor: pointer;
+  font-size: 12.5px;
+  user-select: none;
+}
+
+.workbench-tree__row:hover {
+  background: var(--workbench-hover);
+}
+
+.workbench-tree__row.is-active {
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent);
+  color: var(--tx-text-color-primary, #303133);
+}
+
+.workbench-tree__caret {
+  width: 14px;
+  flex: none;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 12px;
+}
+
+.workbench-tree__icon {
+  flex: none;
+  font-size: 14px;
+}
+
+.workbench-tree__label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workbench-tree__row.is-folder .workbench-tree__icon {
+  color: var(--tx-text-color-secondary, #909399);
+}
+
+.workbench-tree__row.is-manifest .workbench-tree__icon,
+.workbench-tab.is-manifest .workbench-tab__icon {
+  color: var(--tx-color-primary, #409eff);
+}
+
+.workbench-tree__row.is-json .workbench-tree__icon,
+.workbench-tree__row.is-js .workbench-tree__icon,
+.workbench-tab.is-json .workbench-tab__icon,
+.workbench-tab.is-js .workbench-tab__icon {
+  color: var(--tx-color-warning, #e6a23c);
+}
+
+.workbench-tree__row.is-locale .workbench-tree__icon,
+.workbench-tab.is-locale .workbench-tab__icon {
+  color: var(--tx-color-success, #67c23a);
+}
+
+/* ─── editor column ─── */
+
+.workbench__editor {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-rows: 34px minmax(0, 1fr) auto;
+  background: var(--workbench-surface);
+}
+
+.workbench__tabbar {
+  display: flex;
+  min-width: 0;
+  align-items: stretch;
+  border-bottom: 1px solid var(--workbench-line);
+  background: var(--workbench-chrome);
+}
+
+/* Positioned, so a tab's offsetLeft is measured from the strip. */
+.workbench__tabs {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.workbench__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.workbench-tab {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px 0 12px;
+  border-right: 1px solid var(--workbench-line);
+  color: var(--tx-text-color-secondary, #909399);
+  cursor: pointer;
+  font-size: 12px;
+  outline: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.workbench-tab:hover:not(.is-active) {
+  background: var(--workbench-hover);
+}
+
+.workbench-tab.is-active {
+  /* One pixel down over the strip's bottom line, so the tab joins the editor. */
+  margin-bottom: -1px;
+  background: var(--workbench-surface);
+  color: var(--tx-text-color-primary, #303133);
+}
+
+.workbench-tab.is-active::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: var(--tx-color-primary, #409eff);
+  content: '';
+}
+
+.workbench-tab:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--workbench-focus);
+}
+
+.workbench-tab__icon {
+  flex: none;
+  font-size: 14px;
+}
+
+.workbench-tab__close {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--tx-text-color-secondary, #909399);
+}
+
+.workbench-tab__close > * {
+  grid-area: 1 / 1;
+}
+
+.workbench-tab__close:hover {
+  background: var(--workbench-hover);
+  color: var(--tx-text-color-primary, #303133);
+}
+
+.workbench-tab__x {
+  font-size: 12px;
+  opacity: 0;
+}
+
+.workbench-tab:not(.is-dirty) .workbench-dot {
+  display: none;
+}
+
+.workbench-tab.is-active .workbench-tab__x,
+.workbench-tab:hover .workbench-tab__x {
+  opacity: 1;
+}
+
+/* A dirty tab shows its dot until the pointer is over it. */
+.workbench-tab.is-dirty .workbench-tab__x {
+  opacity: 0;
+}
+
+.workbench-tab.is-dirty:hover .workbench-tab__x {
+  opacity: 1;
+}
+
+.workbench-tab.is-dirty:hover .workbench-dot {
+  opacity: 0;
+}
+
+/* ─── editor toolbar: icon-only, the labels stay as accessible names ─── */
+
+.workbench__tools {
+  flex: none;
+  padding: 0 6px;
+  color: var(--tx-text-color-secondary, #909399);
+}
+
+.workbench .workbench__tools .tx-code-editor-toolbar__actions {
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+
+.workbench .workbench__tools .tx-code-editor-toolbar__action {
+  width: 26px;
+  height: 26px;
+  justify-content: center;
+  padding: 0;
+  border-color: transparent;
+  border-radius: 6px;
+}
+
+.workbench .workbench__tools .tx-code-editor-toolbar__action:hover:not(:disabled) {
+  color: var(--tx-text-color-primary, #303133);
+}
+
+.workbench .workbench__tools .tx-code-editor-toolbar__action:focus-visible {
+  outline: 2px solid var(--workbench-focus);
+  outline-offset: -2px;
+}
+
+.workbench .workbench__tools .tx-code-editor-toolbar__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+/* ─── editors ─── */
+
+.workbench__editors {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.workbench__pane {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  inset: 0;
+}
+
+.workbench__pane.is-empty {
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+/* TxCodeEditor ships as a 160px-tall rounded card; here it fills the pane. */
+.workbench .workbench__pane .tx-code-editor {
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  border: 0;
+  border-radius: 0;
+}
+
+.workbench .workbench__pane .tx-code-editor.is-focused {
+  box-shadow: none;
+}
+
+.workbench .workbench__pane .tx-code-editor__view {
+  min-height: 0;
+}
+
+.workbench .workbench__pane .cm-content {
+  min-height: 0;
+}
+
+.workbench .workbench__pane .cm-scroller {
+  overflow: auto;
+  font-size: 12.5px;
+}
+
+/* ─── bottom panel ─── */
+
+.workbench__panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  border-top: 1px solid var(--workbench-line);
+  background: var(--workbench-chrome);
+}
+
+.workbench__panel-head {
+  display: flex;
+  height: 32px;
+  min-width: 0;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px 0 2px;
+}
+
+.workbench__panel-tabs {
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  align-items: stretch;
+}
+
+.workbench-ptab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--tx-text-color-secondary, #909399);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.workbench-ptab:hover,
+.workbench-ptab.is-active {
+  color: var(--tx-text-color-primary, #303133);
+}
+
+.workbench-ptab.is-active::after {
+  position: absolute;
+  right: 10px;
+  bottom: 0;
+  left: 10px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--tx-color-primary, #409eff);
+  content: '';
+}
+
+.workbench-ptab:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid var(--workbench-focus);
+  outline-offset: -4px;
+}
+
+.workbench-ptab__count {
+  display: inline-grid;
+  min-width: 16px;
+  height: 16px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tx-color-warning, #e6a23c) 18%, transparent);
+  color: var(--tx-color-warning, #e6a23c);
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+.workbench-ptab__count.is-error {
+  background: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 16%, transparent);
+  color: var(--tx-color-danger, #f56c6c);
+}
+
+.workbench__panel-body {
+  display: flex;
+  height: var(--workbench-panel-h, 180px);
+  min-height: 0;
+  flex-direction: column;
+  border-top: 1px solid var(--workbench-line);
+  background: var(--workbench-surface);
+}
+
+.workbench__terminal {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.workbench .workbench__terminal .tx-terminal {
+  min-height: 0;
+  padding: 6px 10px;
+  border-radius: 0;
+  background: var(--workbench-surface);
+  box-shadow: none;
+}
+
+.workbench__problems {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 4px 0;
+}
+
+.workbench-problems {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workbench-problem {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--tx-text-color-primary, #303133);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.workbench-problem:hover {
+  background: var(--workbench-hover);
+}
+
+.workbench-problem:focus-visible {
+  outline: 2px solid var(--workbench-focus);
+  outline-offset: -2px;
+}
+
+.workbench-problem__icon {
+  flex: none;
+  font-size: 14px;
+}
+
+.workbench-problem.is-error .workbench-problem__icon {
+  color: var(--tx-color-danger, #f56c6c);
+}
+
+.workbench-problem.is-warning .workbench-problem__icon {
+  color: var(--tx-color-warning, #e6a23c);
+}
+
+.workbench-problem__text {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workbench-problem__where {
+  flex: none;
+  color: var(--tx-text-color-secondary, #909399);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.workbench-problems__none {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 12px;
+}
+
+.workbench-problems__none > span {
+  color: var(--tx-color-success, #67c23a);
+  font-size: 14px;
+}
+
+/* ─── CoreBox preview ─── */
+
+.workbench__preview {
+  display: flex;
+  width: clamp(260px, 28%, 340px);
+  min-height: 0;
+  flex: none;
+  flex-direction: column;
+  border-left: 1px solid var(--workbench-line);
+  background: var(--workbench-chrome);
+}
+
+.workbench-preview__head {
+  display: flex;
+  height: 34px;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px 0 14px;
+}
+
+.workbench-preview__title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* A small CoreBox: the search field over its result list. */
+.workbench-preview__box {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 10px 10px;
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--tx-bg-color, #ffffff);
+  box-shadow:
+    0 0 0 1px var(--workbench-line),
+    0 12px 28px -20px rgb(0 0 0 / 0.45);
+}
+
+.workbench-preview__search {
+  flex: none;
+}
+
+.workbench-preview__stale {
+  flex: none;
+}
+
+.workbench-preview__results {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.workbench-preview__results > .tx-empty-state {
+  margin: auto 0;
+}
+
+.workbench-preview__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workbench-hit {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--tx-text-color-primary, #303133);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.workbench-hit:hover {
+  background: var(--workbench-hover);
+}
+
+.workbench-hit.is-first {
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 10%, transparent);
+}
+
+.workbench-hit.is-first:hover {
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 15%, transparent);
+}
+
+.workbench-hit:focus-visible {
+  outline: 2px solid var(--workbench-focus);
+  outline-offset: -2px;
+}
+
+.workbench-hit__text {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.workbench-hit__name,
+.workbench-hit__desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workbench-hit__name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.workbench-hit__desc {
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 11.5px;
+}
+
+.workbench-hit__tag {
+  flex: none;
+}
+
+.workbench-preview__foot {
+  flex: none;
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--workbench-line);
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* ─── status bar ─── */
+
+.workbench__statusbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 3px;
+  border-top: 1px solid var(--workbench-line);
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.workbench .workbench__hint {
+  --tx-status-hint-radius: 5px;
+
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.workbench__status-item {
+  display: inline-flex;
+  height: 20px;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+button.workbench__status-item {
+  cursor: pointer;
+}
+
+button.workbench__status-item:hover {
+  background: var(--workbench-hover);
+  color: var(--tx-text-color-primary, #303133);
+}
+
+button.workbench__status-item:focus-visible {
+  outline: 2px solid var(--workbench-focus);
+  outline-offset: -2px;
+}
+
+.workbench__status-icon {
+  font-size: 13px;
+}
+
+.workbench__status-icon.is-error {
+  color: var(--tx-color-danger, #f56c6c);
+}
+
+.workbench__status-icon.is-warning {
+  color: var(--tx-color-warning, #e6a23c);
+}
+
+.workbench__status-item.is-keys {
+  gap: 5px;
+}
+
+/* ─── toast ─── */
+
+.workbench__toast {
+  position: absolute;
+  z-index: 6;
+  right: 12px;
+  bottom: 36px;
+  width: min(340px, calc(100% - 24px));
+  pointer-events: none;
+}
+
+.workbench__toast.is-open {
+  pointer-events: auto;
+}
+
+.workbench-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.workbench-toast__icon {
+  flex: none;
+  color: var(--tx-color-success, #67c23a);
+  font-size: 15px;
+}
+
+.workbench-toast.is-danger .workbench-toast__icon {
+  color: var(--tx-color-danger, #f56c6c);
+}
+
+.workbench-toast__text {
+  min-width: 0;
+  flex: 1;
+  line-height: 1.45;
+}
+
+.workbench-toast__close {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tx-text-color-secondary, #909399);
+  cursor: pointer;
+}
+
+.workbench-toast__close:hover {
+  background: var(--tx-fill-color-light, #f5f7fa);
+}
+
+.workbench-toast__close:focus-visible {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: 1px;
+}
+
+/* ─── bands ─── */
+
+/* < 640: the explorer becomes a drawer over the editor; no preview. */
+@container template (max-width: 639.98px) {
+  .workbench__branch,
+  .workbench__status-item.is-meta {
+    display: none;
+  }
+
+  .workbench__explorer {
+    position: absolute;
+    z-index: 5;
+    width: min(248px, 82%);
+    inset: 0 auto 0 0;
+    box-shadow: 0 16px 36px -12px rgb(0 0 0 / 0.35);
+  }
+}
+
+@container template (max-width: 959.98px) {
+  .workbench__status-item.is-keys {
+    display: none;
+  }
+}
+
+@container template (min-width: 960px) {
+  .workbench__explorer {
+    width: 220px;
+  }
+}

@@ -1,0 +1,64 @@
+---
+title: 13–14px Desktop Baseline & 0.9em Code
+description: Cognitive differences between productivity tools and marketing pages, the 13–14px optical reading ladder, and 0.9em monospace code calibration.
+---
+
+# 13–14px Desktop Baseline & 0.9em Code
+
+The fundamental purpose of typography in productivity software is to sustain high-density, low-fatigue information intake across hours of continuous work.
+
+## Productivity Tools vs Marketing Pages
+
+- **Marketing Sites / Blogs**: Prefer larger type (16px–20px) with loose leading to capture passive attention and encourage rapid scrolling.
+- **Desktop Productivity Tools (IDEs, Consoles, CoreBox)**: Must anchor body type between 13px–14px. Oversized type dilutes information density, forcing constant eye travel that violates the Gestalt Law of Proximity and accelerates visual exhaustion.
+
+## The 13–14px Optical Scanning Baseline
+
+The human foveal vision window covers approximately 2 degrees. At typical desktop viewing distances (50cm–70cm), 13px–14px allows full word units to land inside the fovea, optimizing scanning velocity:
+
+- **Controls & Data Rows (13px–14px)**: Input field values, table cells, button labels.
+- **Secondary Copy (12px)**: Helper copy, empty state notes, shortcut badges.
+- **Micro-labels (10px–11px)**: All-caps tags or miniature badges.
+- **Headings (15px–18px)**: Reserved strictly for card and module titles; prose never exceeds 14px.
+- **Display numerals (22px–32px)**: Stat cards, chart summaries and metric values.
+
+:::TuffDemoWrapper{demo="ConceptTypeScaleDemo"}
+:::
+
+## Monospace X-Height Inflation Mechanics
+
+Technical documentation routinely mixes inline code (`<code>`) into body copy.
+Sans-serif typefaces (e.g. Inter, SF Pro) and monospace code faces (e.g. JetBrains Mono, SF Mono) carry fundamentally divergent font metrics:
+To maximize legibility in code editors, monospace typefaces open up their letter counters, and **their x-height tends to run a little taller than sans-serif type at the same size**. Measured from the macOS system font files, as a fraction of the font size: PingFang SC 0.517, SF Pro 0.508, SF Mono 0.526, Menlo 0.547. The monospace faces are only about 1.7%–7.7% taller.
+
+## Optical Alignment: Scaling Inline Code to 0.9em
+
+If inline code inherits `font-size: 1em`:
+- Monospace tokens stick out awkwardly like unharmonized patches.
+- Inflated height distorts uniform line-height rhythms.
+
+TuffEx's standard solution lives in its style entry: `<code>` inside `.tx-prose` that is not in a `<pre>`, and any element with `tx-inline-code`, scales to 0.9em.
+
+:::TuffCodeBlock{lang="scss"}
+---
+code: |
+  // packages/tuffex/packages/components/style/index.scss
+  .tx-prose :not(pre) > code,
+  .tx-inline-code {
+    padding: 0.15em 0.35em;
+    border-radius: 4px;
+    background-color: var(--tx-fill-color-light, #f5f7fa);
+    font-family: var(--tx-font-family-mono);
+    // Scale to 0.9em to hold back the monospace face's taller x-height
+    font-size: 0.9em;
+    vertical-align: baseline;
+  }
+---
+:::
+
+The components that render inline code themselves (TxStreamText, TxMarkdownView, TxMarkdownEditor, TxChainOfThought) scale it to 0.9em as well; TxStreamMarkdown and the body of these docs use 0.875em.
+
+0.9em is an approximation. The size that lines the two x-heights up is the body x-height divided by the code x-height: measured in Chrome on macOS, these docs set body text at 0.508em and code, which falls back to Menlo, at 0.547em, a ratio of 1.077, so an exact match takes 0.929em and 0.9em sits 3.1% short. Across the pairs of faces above, the exact match falls between 0.93em and 0.98em. The figure below measures both x-heights in your browser.
+
+:::TuffDemoWrapper{demo="ConceptInlineCodeDemo"}
+:::

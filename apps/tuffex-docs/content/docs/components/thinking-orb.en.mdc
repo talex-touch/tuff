@@ -1,0 +1,103 @@
+---
+title: Thinking Orb
+description: A canvas-drawn indicator that a model is thinking.
+category: AiReasoning
+status: beta
+since: 0.3.9
+tags: [ai, loading, canvas]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+::::TuffDemoWrapper{demo="ThinkingOrbThinkingOrbDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxThinkingOrb />
+    <TxThinkingOrb state="searching" :size="64" />
+    <TxThinkingOrb state="solving" :size="20" :display-size="14" />
+  </template>
+---
+::::
+
+### Gradient
+
+`variant="gradient"` colors the dots; without `palette`, each form wears its own.
+
+::::TuffDemoWrapper{demo="ThinkingOrbGradientDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxThinkingOrb state="working" variant="gradient" />
+    <TxThinkingOrb state="searching" variant="gradient" palette="violet" />
+    <TxThinkingOrb variant="gradient" :palette="['#f97316', '#ec4899', '#8b5cf6']" />
+  </template>
+---
+::::
+
+### Best Practices
+
+- For a new orb per thought, key the component by that thought; changing `state` won't reroll it.
+- Pass an explicit `state` where you need determinism, such as screenshot tests and recordings.
+- Keep `size` at `20` or `64`; use `displaySize` for any other rendered size.
+- Show one orb per thought.
+- To tint a status label to match the orb, build its gradient from `ORB_PALETTES`.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `state` | `OrbState \| 'random'` | `'random'` | Which orb to draw; `'random'` rolls once on mount and keeps it. |
+| `size` | `20 \| 64` | `20` | Preset geometry size; only these two are tuned. |
+| `displaySize` | `number` | same as `size` | Rendered CSS size in px; leaves the drawing parameters alone. |
+| `speed` | `number` | `1` | Animation speed multiplier. |
+| `paused` | `boolean` | `false` | Pauses the animation. |
+| `theme` | `'auto' \| 'dark' \| 'light'` | `'auto'` | Color theme; `auto` follows the environment. |
+| `variant` | `'mono' \| 'gradient'` | `'mono'` | `gradient` colors the dots and keeps their depth shading. |
+| `palette` | `OrbPalette` | the form's own palette | Gradient stops, left to right; `var()` is not resolved. Read only by `gradient`. |
+| `label` | `string` | an English label per form | Accessible name; supply it on non-English surfaces. |
+
+### Types
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  type OrbState =
+    | 'working' | 'searching' | 'solving' | 'listening' | 'connecting'
+    | 'weaving' | 'composing' | 'breathing' | 'shaping'
+
+  type OrbVariant = 'mono' | 'gradient'
+
+  type OrbPaletteName =
+    | 'amber' | 'glacier' | 'violet' | 'rose' | 'magenta'
+    | 'teal' | 'indigo' | 'lagoon' | 'forest'
+
+  // A palette name, or CSS colors laid left to right
+  type OrbPalette = OrbPaletteName | readonly string[]
+
+  // Nine palettes of three stops each, and the palette each form defaults to
+  declare const ORB_PALETTES: Record<OrbPaletteName, readonly [string, string, string]>
+  declare const ORB_STATE_PALETTES: Record<OrbState, OrbPaletteName>
+---
+:::
+
+## Overview
+
+- Every mounted orb shares one clock (`performance.now`), so orbs on screen stay in phase.
+- Drawing stops offscreen (`IntersectionObserver`) and while the tab is hidden.
+- Under reduced motion, a single representative frame is drawn; it still follows theme changes.
+- The canvas scales by `devicePixelRatio`, capped at 2.
+- The gradient takes each dot's hue from its horizontal position, so color flows as the orb turns; on dark substrates the dots keep their original lightness and the nearest stay close to white.
+- Without a canvas (jsdom, for instance), the element stays and painting is skipped without throwing.
+
+## Technologies
+
+- Vendored from [thinking-orbs](https://github.com/Jakubantalik/thinking-orbs) v0.2.0 (MIT © Jakub Antalik); the source headers keep the attribution.
+- Source: `packages/tuffex/packages/components/src/thinking-orb/`.
+
+<TuffDocSourceLink />

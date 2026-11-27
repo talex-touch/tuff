@@ -1,0 +1,185 @@
+---
+title: Grid 栅格
+description: 按行与列排布内容的网格容器
+category: Layout
+status: beta
+since: 0.3.4
+tags: [grid, layout, alignment]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+:::TuffDemoWrapper{demo="GridGridDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" :gap="12">
+      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### 响应式列数
+`cols` 可按断点设置。
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="{ xs: 1, sm: 2, md: 3, lg: 4, xl: 5 }" :gap="20">
+      <TxGridItem v-for="i in 10" :key="i">
+        <TxCard>项目 {{ i }}</TxCard>
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### 自适应列数
+`minItemWidth` 按可用宽度自动排布列，优先于 `cols`。
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid min-item-width="250px" :gap="24">
+      <TxGridItem v-for="item in items" :key="item.id">
+        <TxCard>{{ item.title }}</TxCard>
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### 间距
+`gap` 接受数字（px）、`{ row, col }` 或按断点的对象。
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" :gap="32">…</TxGrid>
+    <TxGrid :cols="3" :gap="{ row: 24, col: 16 }">…</TxGrid>
+    <TxGrid :cols="{ xs: 1, md: 2, lg: 3 }" :gap="{ xs: 16, md: 24, lg: 32 }">…</TxGrid>
+  </template>
+---
+:::
+
+### 跨列与跨行
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="4" :gap="16">
+      <TxGridItem>普通项目</TxGridItem>
+      <TxGridItem :col-span="2">跨 2 列</TxGridItem>
+      <TxGridItem>普通项目</TxGridItem>
+      <TxGridItem :col-span="3">跨 3 列</TxGridItem>
+    </TxGrid>
+
+    <TxGrid :cols="3" :gap="16">
+      <TxGridItem>项目 1</TxGridItem>
+      <TxGridItem :row-span="2">跨 2 行</TxGridItem>
+      <TxGridItem>项目 3</TxGridItem>
+      <TxGridItem>项目 4</TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### 对齐
+`justify` / `align` 对齐全部项目，`justifySelf` / `alignSelf` 对齐单个项目。
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" :gap="16" justify="center" align="center" style="height: 400px;">
+      <TxGridItem v-for="i in 3" :key="i">项目 {{ i }}</TxGridItem>
+    </TxGrid>
+
+    <TxGrid :cols="3" :gap="16">
+      <TxGridItem justify-self="start">左对齐</TxGridItem>
+      <TxGridItem justify-self="center">居中对齐</TxGridItem>
+      <TxGridItem justify-self="end">右对齐</TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 已知列数的后台网格用 `cols`，随容器排布的卡片集合用 `minItemWidth`；同一网格只选一种。
+- 使用大跨度项目时，确认每个断点都有足够的列数。
+- 间距优先用数字；需要 `rem`、`clamp()` 等单位时才传字符串。
+- 不要用 Grid 代替语义表格或列表。
+
+## API 参考
+
+### TxGrid
+
+#### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| cols | `number \| Responsive<number>` | `0` | 列数，可按断点设置；为 `0` 时不输出列模板。 |
+| rows | `number` | `0` | 行数；为 `0` 时不输出行模板。 |
+| gap | `GridGap` | `16` | 间距：数字（px）、`{ row, col }` 或按断点的对象。 |
+| minItemWidth | `string` | - | 项目最小宽度，启用 `auto-fit` 自适应列。 |
+| justify | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | 项目的水平对齐。 |
+| align | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | 项目的垂直对齐。 |
+
+#### 插槽
+
+| 插槽名 | Props | 说明 |
+|--------|-------|------|
+| `default` | - | `TxGridItem` 子项。 |
+
+### TxGridItem
+
+#### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| colSpan | `number` | `1` | 跨列数，最小为 1。 |
+| rowSpan | `number` | `1` | 跨行数，最小为 1。 |
+| justifySelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | 自身的水平对齐。 |
+| alignSelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | 自身的垂直对齐。 |
+
+#### 插槽
+
+| 插槽名 | Props | 说明 |
+|--------|-------|------|
+| `default` | - | 单元格内容。 |
+
+### 类型
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+
+  type Responsive<T> = Partial<Record<Breakpoint, T>>
+
+  type GridAlign = 'start' | 'end' | 'center' | 'stretch'
+
+  type GridGap =
+    | number
+    | string
+    | { row?: number | string, col?: number | string }
+    | Responsive<number | string>
+---
+:::
+
+## 概述
+
+- `minItemWidth` 优先于 `cols`，输出 `repeat(auto-fit, minmax(<minItemWidth>, 1fr))`。
+- 响应式值按窗口宽度解析：`xs < 640 ≤ sm < 768 ≤ md < 1024 ≤ lg < 1280 ≤ xl`。当前断点未设置时先取更小断点，再取更大断点。
+- 服务端渲染时按 1024px 解析，即 `lg`。
+
+## 技术实现
+
+- 网格样式由 props 计算后内联到根节点，断点随 `window` 的 `resize` 更新。
+- 源码：`packages/tuffex/packages/components/src/grid/`。
+
+<TuffDocSourceLink />

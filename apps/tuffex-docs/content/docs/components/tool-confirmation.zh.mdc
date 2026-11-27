@@ -1,0 +1,72 @@
+---
+title: Tool Confirmation
+description: 工具调用前的授权卡片
+category: AiAgent
+status: beta
+since: 0.3.9
+tags: [ai, tool, permission]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+`risk` 为 `write` 或 `execute` 时，卡片与允许按钮改用危险色。
+::::TuffDemoWrapper{demo="ToolConfirmationToolConfirmationDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxToolConfirmation
+      tool-name="write_file"
+      risk="write"
+      summary="将改写 src/main.ts"
+      :input="JSON.stringify({ path: 'src/main.ts' }, null, 2)"
+      @approve="onApprove"
+      @deny="onDeny"
+    />
+  </template>
+---
+::::
+
+### 最佳实践
+
+- 收到决定后立即卸载卡片，不要复用。
+- `risk` 如实标注；把写操作标成 `read` 会去掉视觉强调和用户的判断依据。
+- `input` 只放决策所需的字段，并预先截断。
+- 非英文界面同时覆盖 `allowLabel`、`denyLabel`、`rememberLabel` 与 `riskLabels`。
+- `remember` 为真时只在当前会话内生效，不要静默升级为永久授权。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `toolName` | `string` | — | 工具名，也用于可访问名称；必填。 |
+| `summary` | `string` | — | 一句话说明工具将做什么；不传则不渲染。 |
+| `input` | `string` | — | 序列化的入参预览，在 `<pre>` 中原样显示；不传则不渲染。 |
+| `risk` | `'read' \| 'write' \| 'execute'` | `'read'` | 风险等级，同步到 `data-risk`。 |
+| `allowLabel` | `string` | `'Allow'` | 允许按钮的文案。 |
+| `denyLabel` | `string` | `'Deny'` | 拒绝按钮的文案。 |
+| `rememberLabel` | `string` | `'Remember for this session'` | 记住选项的文案。 |
+| `riskLabels` | `Partial<Record<'read' \| 'write' \| 'execute', string>>` | — | 按档覆盖 `Read-only`、`Writes data`、`Executes`，可只覆盖部分。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `approve` | `({ remember: boolean })` | 点击允许时触发。 |
+| `deny` | `({ remember: boolean })` | 点击拒绝时触发，同样携带 `remember`。 |
+
+## 概述
+
+- 组件不执行工具，也不保存授权，只派发决定；执行与持久化由宿主完成。
+- 允许与拒绝只能由用户点击触发，宿主不得用计时器自动放行。
+- 拒绝同样携带 `remember`，因此「本次会话都拒绝」也能实现。
+- `remember` 是内部状态，初值 `false`，派发后不复位：卡片按一次性使用设计。
+- 根节点为 `role="group"`，可访问名称为 `${toolName} confirmation`。
+
+## 技术实现
+
+- 源码：`packages/tuffex/packages/components/src/tool-confirmation/`。

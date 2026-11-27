@@ -1,0 +1,69 @@
+---
+title: "ToastPanel"
+description: "A panel that surfaces a new item beneath its origin."
+category: Feedback
+status: beta
+since: 0.6.0
+tags: [feedback, toast, surface, motion]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Surfacing an Item
+The dashed tether links the new item to the list it came from; the host supplies all card content.
+:::TuffDemoWrapper{demo="ToastPanelToastPanelDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxToastPanel :open="open" :stack="1" aria-label="Latest signal">
+      <div class="row">Theo Morgan · Pioneer Cloud</div>
+    </TxToastPanel>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Keep `tetherLength` short, or the tether stops reading as a link to its origin.
+- Announce an arrival once: set `live="off"` when the host already announces it.
+- Compose the card from existing rows such as `TxCardItem`; this component owns only the arrival posture.
+- Hide it with `open`, not `v-if`: unmounting cuts the leave transition, collapses the tether's box, and makes the layout jump.
+- Use it for the newest result anchored under a list or panel; use `TxToastHost` for a transient message with no position.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| `open` | `boolean` | `true` | Whether it shows; `false` keeps it in the DOM. |
+| `tether` | `boolean` | `true` | Draws the dashed tether. |
+| `tetherLength` | `number` | `28` | Tether length in px; negatives count as 0. |
+| `side` | `'below' \| 'above'` | `'below'` | Which side of its origin it sits on; only the tether direction changes. |
+| `stack` | `number` | `1` | Slivers peeking out behind, clamped to 0–2. |
+| `ariaLabel` | `string` | `'Latest item'` | Accessible name of the region. |
+| `live` | `'polite' \| 'off'` | `'polite'` | Set `'off'` when the host announces elsewhere; `aria-live` is then omitted. |
+
+### Slots
+
+| Name | Description |
+|---|---|
+| `default` | The card's contents. |
+| `tether` | Replaces the default dashed tether. |
+
+## Overview
+
+- Positioning belongs to the host: the component draws only the tether's direction and never places itself. Put it after its origin element.
+- The root is `role="status"` with `aria-live="polite"` by default, because the panel appears without a user action.
+- With `open` false, the card goes `inert` and only a class changes: opacity drops to zero and the panel returns to its travel origin. The component runs no timers; auto-dismiss, hover and focus holding, and re-timing after leave belong to the host.
+- If focus is inside when `open` turns false or the panel unmounts, it goes back to the element it came from, or else to the nearest container above with a `tabindex`.
+- The entrance springs on `--tx-ease-spring`; under reduced motion the travel is dropped and only the fade remains.
+- The `stack` slivers are `aria-hidden` decoration with no content, capped at 2 because a third would show under a pixel of edge.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/toast-panel/`.
+
+<TuffDocSourceLink />

@@ -1,0 +1,72 @@
+---
+title: Tool Confirmation
+description: An authorization card shown before a tool call runs.
+category: AiAgent
+status: beta
+since: 0.3.9
+tags: [ai, tool, permission]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+With `risk` set to `write` or `execute`, the card and the allow button switch to the danger color.
+::::TuffDemoWrapper{demo="ToolConfirmationToolConfirmationDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxToolConfirmation
+      tool-name="write_file"
+      risk="write"
+      summary="Will rewrite src/main.ts"
+      :input="JSON.stringify({ path: 'src/main.ts' }, null, 2)"
+      @approve="onApprove"
+      @deny="onDeny"
+    />
+  </template>
+---
+::::
+
+### Best Practices
+
+- Unmount the card as soon as a decision arrives; never reuse it.
+- Report `risk` honestly; labelling a write as `read` removes both the emphasis and the user's basis for deciding.
+- Put only the decision-relevant fields in `input`, truncated in advance.
+- On non-English surfaces, override `allowLabel`, `denyLabel`, `rememberLabel`, and `riskLabels` together.
+- Scope a `remember` grant to the current session; never quietly make it permanent.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `toolName` | `string` | — | The tool being authorized; also builds the accessible name. Required. |
+| `summary` | `string` | — | One line on what the tool will do; not rendered when unset. |
+| `input` | `string` | — | Serialized input preview, shown verbatim in a `<pre>`; not rendered when unset. |
+| `risk` | `'read' \| 'write' \| 'execute'` | `'read'` | Risk level, mirrored onto `data-risk`. |
+| `allowLabel` | `string` | `'Allow'` | Label of the allow button. |
+| `denyLabel` | `string` | `'Deny'` | Label of the deny button. |
+| `rememberLabel` | `string` | `'Remember for this session'` | Label of the remember checkbox. |
+| `riskLabels` | `Partial<Record<'read' \| 'write' \| 'execute', string>>` | — | Overrides `Read-only`, `Writes data`, and `Executes` per level; partial overrides are fine. |
+
+### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `approve` | `({ remember: boolean })` | Fires when allow is clicked. |
+| `deny` | `({ remember: boolean })` | Fires when deny is clicked, also carrying `remember`. |
+
+## Overview
+
+- The component runs nothing and stores nothing; it reports a decision, and the host executes and persists it.
+- Allow and deny can only be triggered by a user click; the host must never auto-approve on a timer.
+- Deny carries `remember` too, so "deny for the rest of this session" is expressible.
+- `remember` is internal state that starts `false` and does not reset after a decision: the card is single-use.
+- The root is a `role="group"` named `${toolName} confirmation`.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/tool-confirmation/`.

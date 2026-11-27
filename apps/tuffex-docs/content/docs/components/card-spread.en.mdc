@@ -1,0 +1,130 @@
+---
+title: "Card spread"
+description: "Nine card spread layouts with drag selection and keyboard operation."
+category: MotionCards
+status: beta
+since: 0.7.0
+tags: [motion, cards, spread]
+---
+
+## Overview
+
+`TxCardSpread` renders caller-owned items. Each layout keeps its own source coordinates, stacking order and pivot. Hover and keyboard focus expand an uncontrolled deck; the toggle pins it open. `v-model:expanded` controls the layout directly. `v-model` is the zero-based selected item, independent of expansion.
+
+Drawing a card out of the deck chooses it. The card follows the pointer 1:1 from the point you grabbed, and a deliberate pull along its own upright selects its item; any other release puts it back. With reduced motion the card still follows the pointer, and every other motion jumps to rest.
+
+## Usage
+
+### All source layouts
+
+:::TuffDemoWrapper{demo="CardSpreadDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxCardSpread } from '@talex-touch/tuffex/card-spread'
+  const selected = ref(0)
+  const items = [
+    { id: 'draft', title: 'Draft' },
+    { id: 'review', title: 'Review' },
+    { id: 'ready', title: 'Ready' },
+    { id: 'publish', title: 'Publish' },
+    { id: 'archive', title: 'Archive' },
+  ]
+  </script>
+  <template>
+    <TxCardSpread v-model="selected" :items="items" variant="card-stamp-arc"
+      :angle="25" :gap="180" :y-offset="40" colorful />
+  </template>
+---
+:::
+
+The demo displays all nine spreads plus `focus-blur`, filters by the original IDs and exposes real stamp arc/gap/offset sliders. Its images are original inline SVG illustrations, not upstream assets.
+
+| Variant | Geometry and source defaults |
+| --- | --- |
+| `card-arc-5` | Bottom-center pivot; angle 30°, gap 70px, vertical stops `[10,-2,-10,-2,10]`. |
+| `card-arc-7` | Seven distinct arc stops; angle 45°, gap 110px, offset 30px. |
+| `card-long-arc-5` | Wider, flatter arc; angle 15°, gap 140px, offset 20px. |
+| `card-linear-spread` | Horizontal translation only; gap 90px. |
+| `card-corner-fan` | Bottom-left pivot; asymmetric rotation from −10° to +30° by default. |
+| `card-stamp-arc` | Dashed stamp edges; angle stops `[-1,-0.48,0,0.48,1]`, gap 180px, offset 40px. |
+| `card-cascade-stagger` | Center pivot; each step moves 14px right, 28px up and rotates 6°. Collapsed pages retain their 2px stagger. |
+| `card-scatter-spread` | Independent dealt-card coordinates and rotations; no symmetric fan substitution. |
+| `card-wheel-fan` | Pivot below the cards at 110%; rotations ±36° and vertical stops `[-8,-22,-28,-22,-8]`. |
+| `focus-blur` | Extra `FocusBlur` behavior: hovered/focused labels remain clear, siblings blur/fade and dashed brackets spring into view. |
+
+Five- and seven-stop layouts interpolate their source stops for other item counts. No cards are fabricated when items are missing.
+
+### Dragging
+
+Press a card and move 4 px to draw it out of the deck: it lifts to 1.04× and follows the pointer 1:1 from the point you grabbed, floating over the page instead of being clipped to the deck (a deck that scrolls horizontally keeps the card inside its viewport, held by a rubber band). The choice is made on release. A card drawn out along its own upright by about a third of its height or more, counting where the release's velocity would carry it, and further along that upright than across it, is chosen: `update:modelValue` and `select` fire exactly as for a click. A shorter pull, or a mostly sideways one, chooses nothing. Either way the card springs back into its place in the fan, overshooting slightly only when the release carried speed, so you can peek at a card and put it back.
+
+In `focus-blur`, whose items have nothing to pull out, a drag scrubs instead: the item under the pointer is highlighted as with hover, with its siblings blurred and the brackets following, and releasing selects that item without following its link. A plain click behaves as before.
+
+A card that is still moving can be grabbed again and continues from where it is drawn. Escape, or a cancelled pointer, puts the card back without choosing it (and, in `focus-blur`, clears the highlight). A drag never fires the click of the card it ends over. On touch the cards declare `touch-action: none` so a finger can pull them, which means a horizontally scrolling deck pans from the space around its cards; `focus-blur` keeps `pan-y`.
+
+### Best Practices
+
+- Supply stable `id` values and image alternative text. `title` also names the selection control.
+- Use `expanded` when expansion is application state; leave it undefined for hover/focus and the pin toggle.
+- `angle`, `gap` and `yOffset` are the stamp source's arc, spread and offset controls. Other variants retain their own defaults when these props are omitted.
+- Item slots live inside selection buttons: use non-interactive content. `focus-blur` uses a real anchor when an item has `href`.
+- Keep wide layouts horizontally scrollable on small screens. `size` scales the cards and their geometry together.
+- Set `draggable=false` when the deck sits inside a surface that owns pointer drags; clicks, keys, `select()` and `toggle()` keep working. A stray drag never selects: the card has to be drawn out about a third of its height.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `items` | `MotionCardItem[]` | required | Caller-owned content; an empty array renders only `#empty`. |
+| `modelValue` | `number` | internal `0` | Zero-based selected item. |
+| `variant` | `CardSpreadVariant` | `card-arc-5` | One of the ten IDs above; exported as `CARD_SPREAD_VARIANTS`. |
+| `expanded` | `boolean` | undefined | Controlled expansion; undefined enables hover/focus/pinning. |
+| `angle` | `number` | per variant | Source rotation in degrees. |
+| `gap` | `number` | per variant | Horizontal spread distance in pixels. |
+| `yOffset` | `number` | per variant | Source vertical offsets in pixels. |
+| `hoverIntensity` | `number` | `1` | Multiplier for translation and rotation, not card scale. |
+| `duration` | `number` | `500` | Transition duration in milliseconds; timing uses the shared spring. |
+| `colorful` | `boolean` | `false` | Token-based card tints unless the item supplies `color`. |
+| `blurAmount` | `number` | `4` | `focus-blur` sibling blur in pixels. |
+| `opacityAmount` | `number` | `0.4` | `focus-blur` sibling opacity. |
+| `showBrackets` | `boolean` | `true` | Show focus brackets in `focus-blur`. |
+| `animated` | `boolean` | `true` | Motion only; selection and expansion still work when false. |
+| `disabled` | `boolean` | `false` | Disable selection, dragging, link navigation and the pin toggle. |
+| `draggable` | `boolean` | `true` | Pull a card out of the deck to choose it, or scrub `focus-blur` items. Clicks and keys are unaffected; `false` leaves pointer drags to the host. |
+| `size` | `xs / sm / md / lg` | `md` | Card and geometry scale. |
+| `ariaLabel` | `string` | `Card spread` | Group accessible name. |
+| `expandLabel` | `string` | `Expand cards` | Localizable toggle label. |
+| `collapseLabel` | `string` | `Collapse cards` | Localizable pinned/controlled toggle label. |
+
+`MotionCardItem` fields are `id?: string | number`, `title?`, `description?`, `src?`, `alt?`, `date?`, `href?`, and `color?: string`. Images and text are rendered from the caller's data. `color` accepts a CSS color or token expression.
+
+### Events
+
+| Event | Arguments | Meaning |
+| --- | --- | --- |
+| `update:modelValue` | `index: number` | Selection from a card, link, keyboard or drag. |
+| `update:expanded` | `expanded: boolean` | Pin toggle or Escape request. |
+| `select` | `item: MotionCardItem, index: number` | Selected caller-owned item. |
+
+### Slots and instance methods
+
+| API | Contract |
+| --- | --- |
+| `#item` | `{ item, index, selected, expanded }`; replaces content, not card geometry. |
+| `#empty` | Empty-state content when `items.length === 0`. |
+| `select(index)` | Select an existing item unless disabled. |
+| `toggle()` | Toggle pin/controlled expansion unless disabled. |
+
+Left/Right, Home and End select items; native buttons support Enter/Space. Escape releases the pin and emits a controlled collapse request. Focus expands the deck and remains visibly outlined. Dragging adds no shortcut and changes none: a drag never fires the click of the card it ends over, while Enter and Space on a focused card still select it.
+
+## Technologies
+
+Ported from Amicro `CardArc5`, `CardArc7`, `CardLongArc5`, `CardLinearSpread`, `CardCornerFan`, `CardStampArc`, `CardCascadeStagger`, `CardScatterSpread`, `CardWheelFan` and `FocusBlur` at commit `43c29ce9cdd16459e3eab4992381b8d35b38776a`, under MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN.
+
+Transforms use the existing shared spring compiler. `useMotionActivity` removes motion offscreen, in hidden documents, during KeepAlive deactivation and for reduced motion; content and operations remain available. No React/Motion runtime or external demo assets are included.
+
+A drawn-out card is moved with the individual CSS `translate` and `scale` properties on the real card. The pose is measured from the card's unlifted, unmoved place, so the grabbed point stays under the pointer through the lift. On release the choice is projected with `projectMomentum`, and the card returns on the shared spring with the velocity sampled over the last 100ms (`createVelocityTracker`): a damping ratio near 0.8 after a release that carried momentum, critical damping otherwise. The deck takes native pointer capture only once movement passes 4 px, so clicks keep their target.

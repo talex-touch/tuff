@@ -1,0 +1,131 @@
+---
+title: "翻页书"
+description: "双面书页，支持拖动翻页与纸张参数"
+category: MotionCarousels
+status: beta
+since: 0.7.0
+tags: [motion, book, perspective]
+---
+
+## 概述
+
+`TxFlipBook` 在左右静态书页之间翻动一张真实双面纸叶。`v-model` 是从 0 开始的当前右页索引。翻页过程中，纸叶正反面分别保留自己的页面内容。页面来自 `pages` 或 `#page`，组件不内置上游图片集合。
+
+拖动书页同样可以翻页。纸叶随指针跨过页面宽度，释放时根据运动的去向提交翻页或弹回。减少动态效果时，纸叶仍跟随指针，释放后立即完成翻页或弹回。
+
+## 用法
+
+### Book、DitherBook 和内嵌宽屏书页
+
+:::TuffDemoWrapper{demo="FlipBookDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxFlipBook } from '@talex-touch/tuffex/flip-book'
+  const current = ref(0)
+  const pages = [
+    { id: 'one', title: '第一页', content: '晨光从左侧照进来，纸面泛着暖白。' },
+    { id: 'two', title: '第二页', content: '纸叶反面的独立内容。' },
+    { id: 'three', title: '第三页', content: '第三张纸上研究。' },
+  ]
+  </script>
+  <template>
+    <TxFlipBook v-model="current" :pages="pages" :padding="10"
+      :image-radius="20" :crease-opacity="11" aria-label="翻页书"
+      :labels="{ previous: '上一页', next: '下一页', settings: '书页设置' }" />
+  </template>
+---
+:::
+
+演示提供文字页、自制 SVG 插槽图形、当前页滑块、真实翻页事件、纸张设置和开场重放。三种来源呈现都可使用：
+
+| 模式 | 来源行为 |
+| --- | --- |
+| `book` | 核心 Book：左右静态页与双面旋转纸叶，不内置工具栏或设置。调用方可直接控制索引。 |
+| `dither-book` | DitherBook 组合：前后按钮、页面标题、设置面板、紧凑默认值和可选十次开场翻页。比例 16:10，透视 2400px，折痕宽度 48px，最终倾角 6°/−4°。 |
+| `extracted-book` | SimpleCompExtracted 的私有 Book：比例 16:9，透视 3000px，折痕宽度 64px，最终倾角 8°/−6°。桌面显示侧向 SVG 箭头，手机显示底部导航；浮动设置保留更大的参数范围。 |
+
+DitherBook 开场等待 300ms，快速翻页时长为 140ms，间隔为 70ms；最后一次使用普通翻页时长，与来源一致。宽屏预设等待 800ms，每次为 120ms，间隔为 20ms。可见开场结束前，宽屏预设禁用手动前后切换。两种入口姿态与 1200/1500ms 入场时长也分别保留。可复用组件默认 `intro=false`，演示明确开启来源播放。
+
+### 拖动
+
+按住展开的书页（包括页面级翻页按钮）并移动 4 px 即可抓住一页；移动更短仍是翻页的普通点击。按下的一侧决定抬起哪一页：左页向回翻，右页向前翻。纸叶的角度会让自由边停在指针的水平位置下，从平放到跨过整页宽度翻到底。透视可能让被抓住的边在翻页末段略微偏离指针。抓起书页时触发 `flip-start`，拖动期间模型不变。
+
+释放时，如果当前位置加上释放速度还会带它走的距离已越过翻页的中点，翻页就会提交。因此快速甩动只需很短的拖动即可翻过，未过中点的慢速释放则弹回。提交的翻页在释放时请求 `update:modelValue` 和 `change`，落定后发出带新索引的 `flip-end`；弹回的书页以原索引发出 `flip-end`，不请求任何改变。带着速度释放时书页以接近 0.8 的阻尼比摆动，慢速释放以临界阻尼落定，书页落在书页堆上即停，不会穿过去再弹回。
+
+仍在翻动的书页可以再次抓住，从当前绘制的角度继续。Escape 或指针取消会让书页弹回。未设置 `loop` 时，在第一页或最后一页仍可抬起一点点，但会遇到橡皮筋式阻力，释放后弹回，不发出事件。父级拒绝请求的页面时，纸叶会以一次普通翻页翻回。宽屏预设的开场期间锁定手动输入（包括拖动）。触摸保留页面滚动：书页声明 `touch-action: pan-y`，纵向起手的触摸会滚动页面，不会翻页。
+
+### 最佳实践
+
+- 使用稳定的 `id`，并提供有权展示的文字或图片。组件不包含 Pinterest 图片或外部纸纹。
+- 自制图形使用 `#page="{ page, index, side }"`。这个插槽会渲染在真实左右书页与翻动纸叶的正反面。
+- 页面内容应为非交互内容，页面级翻页按钮会覆盖它。应用操作放在书页外。
+- 需要保存编辑结果时使用 `v-model:settings`。单独参数优先于设置对象，设置对象优先于模式和紧凑默认值。
+- 书页与图表组合使用 `mode="extracted-book" size="lg"`。父级背景点击可排除交互元素后调用 `previous()` 或 `next()`，不要注册文档级点击事件。
+- 有限文档设置 `loop=false`。第一页之前的左页保持留白，边界按钮禁用。越过任一端的拖动只会让纸叶遇阻抬起，不发出事件。
+- 书页位于需要自己处理指针拖动的容器内时，设置 `draggable=false`。点击、按钮和键盘仍可翻页。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `pages` | `FlipBookPage[]` | 必填 | 真实页面内容；空数组渲染 `#empty`。 |
+| `modelValue` | `number` | 内部 `0` | 当前右页索引，取整后循环或限制在边界内。 |
+| `mode` | `book / dither-book / extracted-book` | `dither-book` | 核心模式或上表的来源组合预设。 |
+| `compact` | `boolean` | `false` | 默认留白 6px、圆角 8px、阴影 10px。 |
+| `settings` | `Partial<FlipBookSettings>` | 模式默认值 | 受控或编辑器设置对象。 |
+| `padding` | `number` | `10`，宽屏 `14` | 图片或内容留白，单位为像素。 |
+| `imageRadius` | `number` | `20`，宽屏 `32` | 图片或内容圆角，单位为像素。 |
+| `creaseOpacity` | `number` | `11` | 折痕不透明度百分比。 |
+| `paperColor` | `string` | 主题表面变量 | 纸张 CSS 颜色，支持主题变量表达式。 |
+| `shadowIntensity` | `number` | `24`，宽屏 `34` | 内容阴影模糊范围，单位为像素。 |
+| `loop` | `boolean` | `true` | 保留来源循环书页，或使用有限边界。 |
+| `controls` | `boolean` | `true` | 显示组合模式的导航和标题；核心 `book` 不读取。 |
+| `settingsPanel` | `boolean` | `true` | 显示组合模式设置入口与编辑器。 |
+| `intro` | `boolean` | `false` | 可见时启动来源开场翻页。 |
+| `introFlips` | `number` | `10` | 开场翻页次数。 |
+| `animated` | `boolean` | `true` | 启用翻页和入场动效；关闭后立即完成操作。 |
+| `disabled` | `boolean` | `false` | 禁止手动导航、拖动、重放和设置输入。 |
+| `draggable` | `boolean` | `true` | 拖动书页翻页；设为 `false` 可把指针拖动交还给宿主。点击、按钮和键盘不受影响。 |
+| `duration` | `number` | `450` | 普通翻页时长，单位为毫秒。 |
+| `size` | `xs / sm / md / lg` | `md` | 最大宽度分别为 300/400/512/640px，随宿主收缩。 |
+| `ariaLabel` | `string` | `Flip book` | 书页分组无障碍名称。 |
+| `labels` | `FlipBookLabels` | 英文文字 | 前后按钮、设置、纸张字段和重放文字。 |
+
+`FlipBookPage` 字段为 `id?: string | number`、`title?: string`、`src?: string`、`alt?: string` 和 `content?: string`。默认页在提供 `src` 时显示图片，否则显示标题和文字。`FlipBookSettings` 包含 `padding`、`imageRadius`、`creaseOpacity`、`paperColor` 和 `shadowIntensity`。`FlipBookLabels` 接受 `previous`、`next`、`settings`、`padding`、`imageRadius`、`creaseOpacity`、`paperColor`、`shadowIntensity` 和 `intro`。
+
+DitherBook 编辑器的留白范围为 0～30，圆角和折痕为 0～40，阴影为 0～48。宽屏编辑器保留留白和折痕 0～100、圆角 0～32、阴影 0～50。直接传入属性不受编辑器范围限制。
+
+### 事件
+
+| 事件 | 参数 | 含义 |
+| --- | --- | --- |
+| `update:modelValue` | `index: number` | 请求真实右页。拖动翻页在释放时请求。 |
+| `update:settings` | `settings: FlipBookSettings` | 纸张编辑器输入改变。 |
+| `change` | `page: FlipBookPage, index: number` | 导航请求切换到其他调用方页面。 |
+| `flip-start` | `from: number, to: number, direction: 1 / -1` | 翻页开始，也包含减少动态效果时的立即翻页和被拖动抓起的书页。 |
+| `flip-end` | `index: number` | 动画或立即完成后提交目标书页。拖动后弹回的书页在落定后报告原索引。 |
+
+### 插槽与实例方法
+
+| API | 契约 |
+| --- | --- |
+| `#page` | `{ page, index, side }`；side 为 `left / right / front / back`。 |
+| `#empty` | 没有页面时的内容。 |
+| `previous()` | 按来源禁用和开场规则翻到上一页。 |
+| `next()` | 按来源禁用和开场规则翻到下一页。 |
+| `goTo(index)` | 请求页面，遵循禁用、翻页忙碌和循环或边界规则。 |
+| `replayIntro()` | 仅在启用动画且未减少动态效果时重放，按可见状态开始或恢复。 |
+
+左右方向键翻页，Home 和 End 请求首页或尾页。输入框保留原生键盘行为。页面级翻页按钮和工具栏按钮都有无障碍名称及聚焦轮廓。标题变化复用 `TxTextMorph`，不引入第二套文字动画引擎。拖动不增加也不改变键盘行为：拖动不会触发指针下翻页按钮的点击，聚焦翻页按钮上的 Enter 和 Space 仍会翻页。
+
+## 技术实现
+
+来源是 Amicro 中采用 Apache-2.0 的 `dither-charts/DitherBook.tsx` 的 `Book`/`DitherBook`、字节相同的 `simple-comp/DitherBook.tsx` 和 `simple-comp/SimpleCompExtracted.tsx` 内独立的私有 `Book`。固定提交为 `43c29ce9cdd16459e3eab4992381b8d35b38776a`。分发保留 Vue/TuffEx 修改声明和完整 Apache 许可，仓库 MIT 声明不覆盖文件级许可。
+
+纸叶使用原生 Web 动画接口和已有共享弹簧时间曲线。`useMotionActivity` 统一管理可见性、文档状态、KeepAlive 和减少动态效果。失活或卸载时取消定时器与动画，正在失活的翻页提交目标状态。减少动态效果跳过开场，手动翻页仍会立即完成。纸纹由本地 CSS 生成，不请求网络素材。
+
+拖动时纸叶角度按 `acos(1 − 2·行程)/π` 跟随指针的水平行程，被抓住的边在普通透视下跟得上指针。释放时，按 `duration` 缩放的共享弹簧从绘制进度接手，初速度取最后 100ms 的采样（`createVelocityTracker`）；是否提交按 `projectMomentum` 推算的位置判断。抓住正在进行的 Web 动画翻页时，会读取其绘制进度并从那里继续。书页容器只在移动超过 4 px 后才取得原生指针捕获，点击保持原有目标。

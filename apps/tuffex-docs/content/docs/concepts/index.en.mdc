@@ -1,0 +1,46 @@
+---
+title: Design System & Concepts
+description: Tuff and TuffEx core design concepts, physical geometric laws, and productivity micro-interaction guidelines navigation
+---
+
+# Design System & Concepts
+
+The Tuff design system is not a mere collection of visual tokens, but a rigorous engineering contract built upon **perceptual ergonomics**, **modern streaming computation**, and **high-velocity productivity discipline**.
+
+This section systematically breaks down the "why" and "how" behind every design decision across geometry, material physics, color science, typography, micro-motion, and AI streaming interactions.
+
+## Geometry and Curvature
+
+- **[G2 Continuous Curvature & Squircle Geometry](/en/concepts/curvature)** — Moving beyond standard `border-radius` fillets, explaining curvature jumps, superellipse formulas, and Apple smooth corners.
+- **[Concentric Radii & Inset Clearance](/en/concepts/concentricity)** — The $R_{\text{outer}} = R_{\text{inner}} + \text{Padding}$ conservation law, caret clipping prevention, and 0.65x vertical optical padding.
+- **[Open-Order Z-Index & Sticky Dividers](/en/concepts/depth-topology)** — Eliminating `z-index: 99999` chaos: overlays take numbers from one counter in the order they open, drawers first lift it to 10000, and the 1px line divider rule.
+
+## Surfaces and Material Physics
+
+- **[Surface 8-Material Taxonomy & Gatekeepers](/en/concepts/surface-taxonomy)** — Refraction (default), Glass, Acrylic, Mica and the 8-surface matrix with explicit user confirmation gatekeepers.
+- **[Refraction Pipeline & Chromatic Dispersion](/en/concepts/refraction-physics)** — Snell's Law, SVG displacement-map filters, Smoothstep intensity mapping, and RGB chromatic dispersion.
+- **[Adaptive Surface Deduction & 120Hz Fallback](/en/concepts/surface-deduction)** — Pointer velocity sensing, window move hooks, frame budget probes and power saving, with a 0ms fallback and 140ms asymmetric recovery.
+- **[Alpha Noise Masks & Specular Tracking](/en/concepts/noise-and-specular)** — Solving overlay greyness via `mask-composite: intersect` alpha noise and card specular cursor tracking.
+
+## Color Science and Dark Mode
+
+- **[#141414 Canvas & 3-Tier Elevation](/en/concepts/dark-palette)** — Why not pure `#000000`? Preventing OLED purple smearing, preserving shadows, and the 3-tier dark grey scale.
+- **[Retinal Irradiation & Weight Tuning](/en/concepts/irradiation-tuning)** — Helmholtz optical irradiation illusion, perceived expansion of white text on dark, the dark theme's 460/560/660 weight tuning, and static font fallbacks.
+- **[Bipolar Semantic Tints & WCAG 4.5:1](/en/concepts/color-mix-contrast)** — Resolving dark mode `-light-9` distortion, `color-mix` ink fusion, and WCAG 4.5:1 verified across all themes.
+- **[Light Modes & Hue Sorting](/en/concepts/light-modes)** — Why `plus-lighter` turns grey on light backgrounds, and the dual independent hue ordering pipeline.
+
+## Typography and Text Engineering
+
+- **[13–14px Desktop Baseline & 0.9em Code](/en/concepts/type-scale)** — Differences between productivity tools and marketing pages, scanning fatigue, and monospace code 0.9em optical harmony.
+- **[Modern Soft Wrapping & Zero Tracking](/en/concepts/smart-wrapping)** — `text-wrap: pretty` orphan prevention, `balance` heading symmetry, streaming stability, and zero tracking on body text.
+
+## Micro-Motion and Interaction Rhythms
+
+- **[Micro-Motion Philosophy & Sub-100ms Hover](/en/concepts/micro-motion)** — Motion as spatial anchors not entertainment, 0ms instant hover response, and `.is-morphing` state class isolation.
+- **[90ms+90ms Confirmation & Spring Physics](/en/concepts/activation-and-springs)** — Eliminating dismissal uncertainty with a two-beat rhythm, and the second-order damped spring equation.
+- **[Compositor Thread Priority & Dual Keyframes](/en/concepts/compositor-and-replay)** — Four compositor properties for high-frequency animation, `var()` in keyframes versus animating custom properties, and dual keyframe name replay.
+
+## AI Native Streaming Interfaces
+
+- **[Stream Pacer & Reveal Presets](/en/concepts/stream-pacer)** — The `useStreamPacer` clock smoothing network bursts, Aurora / Blur micro-reveals, and single caret handoffs.
+- **[Twin-Layer Reserve & Non-Blocking Selection](/en/concepts/anti-jitter-reserve)** — Reserve pre-measurement holding the final height during replays, and immediate text selection / copying (Cmd+C) contracts.

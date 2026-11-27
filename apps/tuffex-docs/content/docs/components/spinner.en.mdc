@@ -1,0 +1,95 @@
+---
+title: "Spinner"
+description: "A rotating indicator for an indeterminate wait."
+category: Feedback
+status: beta
+since: 0.3.4
+tags: [spinner, loading, progress]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+:::TuffDemoWrapper{demo="SpinnerSpinnerDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSpinner />
+  </template>
+---
+:::
+
+### Sizes
+`size` sets the width and height in px.
+:::TuffDemoWrapper{demo="SpinnerSpinnerSizesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSpinner :size="12" />
+    <TxSpinner :size="16" />
+    <TxSpinner :size="24" />
+    <TxSpinner :size="32" />
+  </template>
+---
+:::
+
+### Visibility Toggle
+`visible` has a built-in enter and leave transition; `v-if` mounts and unmounts directly.
+:::TuffDemoWrapper{demo="SpinnerToggleDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSpinner v-if="showByIf" />
+    <TxSpinner :visible="visible" />
+  </template>
+---
+:::
+
+### Inline Wait
+For short waits inside buttons, inline status rows, or overlays.
+:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <span class="inline-flex items-center gap-2">
+      <TxSpinner :size="14" />
+      Inline wait
+    </span>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Use a spinner only for short indeterminate waits; use `TxProgressBar` once progress is numeric or staged, and `TxLoadingState` for full first-load states.
+- Put status text next to the icon; the spinner shows busy state, not a completion result.
+- Use `visible` for the built-in enter and leave transition; use `v-if` when the host owns mount timing.
+- Set `fallback` only where the CSS animation doesn't suit a constrained surface.
+- Tint it by setting `color` on `TxSpinner` itself; a parent's `color` doesn't reach past the root.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `size` | `number` | `16` | Width and height in px; written to `--tx-spinner-size`. |
+| `strokeWidth` | `number` | `2` | Stroke width of the ring and the SVG; written to `--tx-spinner-stroke`. |
+| `fallback` | `boolean` | `false` | Renders a spinning SVG circle instead of the default ball/ring animation. |
+| `visible` | `boolean` | `true` | Shows or hides it with the `tx-spinner-visibility` transition. |
+| `label` | `string` | `'Loading'` | Accessible name of the status region, announced on appear; override it to localize. |
+
+## Overview
+
+- The root is an inline-flex `span` with `role="status"`, `aria-busy="true"`, and `aria-live="polite"`, named by `label` through `aria-label`; it announces no completion.
+- With `visible=false`, nothing renders once the leave transition ends.
+- `fallback` renders an SVG circle that reuses `size` and `strokeWidth`.
+- The root takes `--tx-text-color-secondary` as its color by default.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/spinner/`.
+
+<TuffDocSourceLink />

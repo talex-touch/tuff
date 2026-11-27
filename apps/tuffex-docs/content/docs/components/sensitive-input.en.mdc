@@ -1,0 +1,121 @@
+---
+title: "SensitiveInput"
+description: "A masked field for API keys and other secrets."
+category: Form
+status: beta
+since: 0.6.0
+tags: [form, input, secret, security]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+
+:::TuffDemoWrapper{demo="SensitiveInputSensitiveInputDemo" code-lang="vue" description="A valid, a rejected, and a read-only key."}
+---
+code: |
+  <script setup lang="ts">
+  import { TxSensitiveInput } from '@talex-touch/tuffex/sensitive-input'
+  import { ref } from 'vue'
+
+  const apiKey = ref('sk_live_a1b2c3d4e5f6g7h8')
+  </script>
+
+  <template>
+    <TxSensitiveInput v-model="apiKey" label="API Key" description="Keep this value secure and do not share it." />
+    <TxSensitiveInput v-model="invalidKey" label="Validation failed" error="This API key is not valid." />
+    <TxSensitiveInput model-value="view-only-secret-key" label="Read-only key" readonly />
+  </template>
+---
+:::
+
+### Best Practices
+
+- Use it for stored secrets the user may read back; use `TxInput type="password"` for a credential being entered and never re-read.
+- Add `readonly` to a key the host issued and the user can't edit; it stays revealable and copyable, and focus stays on the container.
+- Steer people to copy rather than reveal-and-select; listen to `reveal` where a credential surface needs an audit trail.
+- Pass `error` rather than `status="error"` so the state and the message can't drift apart.
+- Localize through `labels`: seven of its ten strings are only heard by screen readers.
+
+### Edge and States
+
+The sensitive input shares the input's edge and states; size variants change only the height and font size, and the radius is 12px at every size.
+
+:::TuffDemoWrapper{demo="SensitiveInputEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSensitiveInput v-model="secret" />
+    <TxSensitiveInput :error="message" />
+  </template>
+---
+:::
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `string` | `''` | The secret (controlled). |
+| `label` | `string` | `''` | Field label; also the masked container's accessible name. |
+| `placeholder` | `string` | `''` | Native placeholder, visible only while empty. |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Height, padding, and icon size; the radius does not change with size and matches `TxInput` (12px). |
+| `status` | `'default' \| 'error'` | — | Explicit visual state; derived from `error` when unset. |
+| `description` | `string` | `''` | Helper text below the field; replaced by `error`. |
+| `error` | `string` | `''` | Validation message; when set, turns the field red and sets `aria-invalid`. |
+| `disabled` | `boolean` | `false` | No reveal, no copy, no edit. |
+| `readonly` | `boolean` | `false` | Blocks editing but not revealing or copying. |
+| `required` | `boolean` | `false` | Marks the label required. |
+| `copyable` | `boolean` | `true` | Renders the copy tab. |
+| `mask` | `string` | `'••••••••'` | Glyphs drawn in place of the value; fixed, so the secret's length doesn't leak. |
+| `copiedDuration` | `number` | `2000` | How long the copy tab stays confirmed, in ms. |
+| `labels` | `Partial<SensitiveInputLabels>` | — | Overrides every rendered string, merged over `SENSITIVE_INPUT_DEFAULT_LABELS`. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|-------------|
+| `update:modelValue` | `(value: string)` | Fires when the value changes. |
+| `copy` | `(value: string)` | Fires after the value reaches the clipboard. |
+| `copyError` | `(error: unknown)` | Fires when the clipboard refuses the write. |
+| `reveal` | — | Fires when the value becomes visible; worth auditing for credentials. |
+| `mask` | — | Fires when the value goes back behind the mask. |
+
+### Exposed Methods
+
+| Method | Description |
+|------|-------------|
+| `focus()` | Focuses the container while masked, otherwise the input. |
+| `blur()` | Blurs the input. |
+| `reveal()` | Reveals the value programmatically. |
+| `mask()` | Re-masks the value. |
+| `copy()` | Runs the copy path; returns a promise. |
+
+## Three States
+
+| State | Behavior |
+|------|------|
+| Masked | The default whenever there is a value. Shows the `mask` glyphs; the container becomes a `role="button"` that reveals on click, Enter, or Space. On hover or focus, the glyphs change to `Click to reveal`. |
+| Revealed | `type` flips to `text` and focus moves into the input. Blur or Escape re-masks, and Escape returns focus to the container; moving focus to the eye or copy button is not a blur, and focus leaving the field from either button re-masks. |
+| Empty | A plain input with no mask, no copy tab, and no `role="button"`. The first typed character switches to revealed; a value arriving from outside lands masked. |
+
+## Overview
+
+- Copying never reveals the value.
+- The masked container is a `role="button"` (it holds buttons, so it can't be a `<button>`) with its own `tabindex`, `aria-label` (`<label>, masked.`), and `aria-describedby`; while masked, the `<input>` is `aria-hidden` with `tabindex="-1"`.
+- Inside a `TxFormItem`, the input takes the item's id; without `label`, the item's label becomes the accessible name, `aria-describedby` adds the item's message, and the field turns red while the item shows an error. The form's `disabled` applies too, and a default `size` takes the form's.
+- A `role="status" aria-live="polite"` region announces `Value hidden` and `Copied to clipboard`.
+- Clicking the `<label>` reveals instead of forwarding focus.
+- `autocomplete="off"` and `data-1p-ignore` / `data-lpignore` keep password-manager overlays off the field.
+- The only transition, the copy tab's opacity, is off under reduced motion.
+
+## Technologies
+
+- Copy tries `navigator.clipboard.writeText` first, then falls back to a hidden-textarea `execCommand` and removes that node in a `finally`, so a failed copy never leaves the secret in the DOM.
+- Source: `packages/tuffex/packages/components/src/sensitive-input/`.
+- Behavior modelled on [Kumo's SensitiveInput](https://kumo-ui.com/components/sensitive-input/).
+
+<TuffDocSourceLink />

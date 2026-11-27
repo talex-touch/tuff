@@ -1,0 +1,100 @@
+---
+title: "CornerOverlay 角标覆盖层"
+description: "固定在内容角落的绝对定位覆盖层"
+category: Effects
+status: beta
+since: 0.3.4
+tags: [overlay, badge, corner]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+`placement` 选择角落，`offsetX` / `offsetY` 设置到边缘的距离。
+::::TuffDemoWrapper{demo="CornerOverlayBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCornerOverlay placement="bottom-right" :offset-x="-2" :offset-y="-2">
+      <span class="avatar">TD</span>
+      <template #overlay>
+        <span class="status-dot" />
+      </template>
+    </TxCornerOverlay>
+    <TxCornerOverlay placement="top-right" :offset-x="-4" :offset-y="-4">
+      <span class="avatar">NX</span>
+      <template #overlay>
+        <TxIcon name="i-carbon-checkmark-filled" />
+      </template>
+    </TxCornerOverlay>
+  </template>
+---
+::::
+
+### 可点击覆盖层
+`overlayPointerEvents="auto"` 让覆盖层接收指针，并取消 `aria-hidden`。
+
+```vue
+<template>
+  <TxCornerOverlay overlay-pointer-events="auto" :offset-x="-4" :offset-y="-4">
+    <TxAvatar :src="avatarUrl" />
+    <template #overlay>
+      <button type="button" aria-label="打开资料操作">•••</button>
+    </template>
+  </TxCornerOverlay>
+</template>
+```
+
+### CSS 偏移值
+字符串偏移原样写入样式。
+
+```vue
+<template>
+  <TxCornerOverlay offset-x="calc(100% - 12px)" offset-y="-0.25rem">
+    <span>基础内容</span>
+    <template #overlay>
+      <TxBadge value="New" />
+    </template>
+  </TxCornerOverlay>
+</template>
+```
+
+### 最佳实践
+
+- 覆盖层默认对读屏隐藏，重要状态要同时写进附近文本或标签。
+- 角标要伸出头像或缩略图边缘时，用负偏移。
+- 交互覆盖层在插槽里放语义化控件；组件不添加点击、焦点或键盘行为。
+- 只放小标记，不放弹层或菜单。
+- 保持基础内容尺寸稳定；覆盖层不占布局空间。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `placement` | `'top-left' \| 'top-right' \| 'bottom-left' \| 'bottom-right'` | `'bottom-right'` | 覆盖层所在的角落。 |
+| `offsetX` | `string \| number` | `0` | 水平偏移；数字按 px。 |
+| `offsetY` | `string \| number` | `0` | 垂直偏移；数字按 px。 |
+| `overlayPointerEvents` | `'none' \| 'auto'` | `'none'` | 覆盖层的 CSS `pointer-events`。 |
+
+### 插槽
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `default` | 无 | 基础内容。 |
+| `overlay` | 无 | 角落内容；未提供时不渲染覆盖层节点。 |
+
+## 概述
+
+- 根节点是 `position: relative` 的行内块 `span`，覆盖层绝对定位。
+- `placement` 决定写入哪一对 inset：`offsetX` 对应 `left` 或 `right`，`offsetY` 对应 `top` 或 `bottom`。
+- `overlayPointerEvents` 为 `none`（默认）时覆盖层带 `aria-hidden="true"`；为 `auto` 时不带，内部控件可以聚焦。
+
+## 技术实现
+
+- 源码：`packages/tuffex/packages/components/src/corner-overlay/`。
+
+<TuffDocSourceLink />

@@ -1,0 +1,54 @@
+---
+title: Open-Order Z-Index & Sticky Dividers
+description: "No hardcoded big numbers: TuffEx overlays take their z-index from one counter in the order they open, drawers first lift it to 10000, and sticky bars use a 1px line instead of a shadow."
+---
+
+# Open-Order Z-Index & Sticky Dividers
+
+In complex desktop applications, arbitrary `z-index` declarations inevitably lead to layer collisions and visual leaks. TuffEx gives overlays no fixed tiers; they take numbers from one counter in the order they open.
+
+## Eliminating the z-index Arms Race
+
+Legacy frontend applications frequently patch layering bugs by bumping numbers to `z-index: 9999` or `99999`. This causes:
+- Dropdown menus poking through system modals.
+- Tooltips getting truncated by sticky headers.
+- Multi-agent or modular features losing coordinate alignment.
+
+Fixed tiers do not solve this either: a dropdown opened inside a modal has to cover the modal, and a modal opened inside a drawer has to cover the drawer. What belongs on top depends on what opened last, not on what kind of component it is.
+
+## Numbers in the Order Overlays Open
+
+When a TuffEx overlay opens, it takes the next number from the z-index allocator (`next()`, the current value plus 1), so whatever opened last always covers what opened before:
+
+- **Who takes a number**: TxModal; the overlays built on TxBaseAnchor, such as TxPopover, TxTooltip, TxSelect, TxDropdownMenu and TxContextMenu; and TxCommandPalette, TxFlipOverlay, TxPicker, TxLoadingOverlay and the dialogs. TxToastHost takes one on every `toast()` call.
+- **Where it starts**: the counter starts at 2000 (`DEFAULT_Z_INDEX_SEED`), so the first overlay gets 2001. Calling `refresh()` with no argument reads the CSS variable `--tx-index-popper` instead and takes the larger of the two.
+- **Drawers**: TxDrawer first calls `refresh(10000)` to lift the counter to at least 10000, then takes a number, so the first drawer is 10001 and overlays opened inside it continue from 10002. With a `z-index` prop it uses that value and lifts the counter to at least that value.
+- **Only upwards**: closing an overlay does not hand its number back; the next overlay still takes a larger one.
+- **One per app**: `app.use(Tuffex)` gives that app its own allocator; callers without a Vue app share the module-level one.
+
+When business code builds an overlay of its own, it should take a number from `useZIndexAllocator()` as well, not hardcode one.
+
+:::TuffDemoWrapper{demo="ConceptDepthStackDemo"}
+:::
+
+`variables.scss` also defines three tokens, `--tx-index-normal: 1`, `--tx-index-top: 1000` and `--tx-index-popper: 2000`. Besides seeding the allocator, `--tx-index-popper` is the layer of TxVersionCapsule's panel; `--tx-index-top` keeps TxMotion's global progress bar under every overlay; no component uses `--tx-index-normal`. TxMotion's global cursor layer is the exception, fixed at 2147483647: it follows the pointer over drawers and modals, and the allocator's numbers have no ceiling. The `z-index` literals inside components are mostly small values from −1 to 10, which order layers within the component's own stacking context.
+
+## Sticky Headers Use 1px Lines, Never Drop Shadows
+
+When a table header or toolbar sticks to the top while content scrolls underneath, **drop shadows are strictly forbidden**.
+
+```scss
+// Anti-pattern: Drop shadow detaches the bar into thin air and blurs passing rows
+.sticky-bar { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+
+// Correct: 1px crisp border establishing a structural barrier
+.sticky-bar {
+  border-bottom: 1px solid var(--tx-border-color);
+  background-color: var(--tx-bg-color); // Must be an opaque backstop
+}
+```
+
+A sticky bar represents a viewport gate, not a hovering carpet. A 1px line establishes a crisp spatial boundary without blurring the first line of scrolling text.
+
+:::TuffDemoWrapper{demo="ConceptStickyHairlineDemo"}
+:::

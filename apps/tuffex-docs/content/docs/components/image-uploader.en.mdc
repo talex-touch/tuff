@@ -1,0 +1,117 @@
+---
+title: "ImageUploader"
+description: "A controlled image picker with local previews."
+category: Form
+status: beta
+since: 0.3.4
+tags: [image, upload, form]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+`max` limits the total count and `accept` the types.
+::::TuffDemoWrapper{demo="ImageUploaderImageUploaderDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const files = ref([])
+  </script>
+
+  <template>
+    <TxImageUploader v-model="files" :max="4" accept="image/png,image/jpeg" />
+  </template>
+---
+::::
+
+### Upload Newly Selected Images
+There is no `add` event: listen to `change` and filter the records that carry `file`.
+
+```vue
+<script setup lang="ts">
+import type { ImageUploaderFile } from '@talex-touch/tuffex/image-uploader'
+import { ref } from 'vue'
+
+const images = ref<ImageUploaderFile[]>([])
+
+async function onChange(next: ImageUploaderFile[]) {
+  const localFiles = next.filter(item => item.file)
+  await uploadImages(localFiles.map(item => item.file!))
+}
+</script>
+
+<template>
+  <TxImageUploader v-model="images" accept="image/*" :max="6" @change="onChange" />
+</template>
+```
+
+### Existing Remote Images
+Records without `file` preview and remove normally; the component never revokes their URLs.
+
+```vue
+<script setup lang="ts">
+const images = ref([
+  { id: 'remote-1', url: cdnUrl, name: 'Cover image' },
+])
+</script>
+```
+
+### Best Practices
+
+- Use `ImageUploader` for image previews only; use `FileUploader` for generic files, drag and drop, file sizes, or an `add` event.
+- Revalidate MIME, dimensions, size, and content on the server; `accept` is only a browser hint.
+- Give remote records durable ids; generated local ids last only for the UI session.
+- After a successful upload, replace local object-URL records with remote ones; don't revoke URLs the component created.
+- Keep `max` in line with the backend limit.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `ImageUploaderFile[]` | required | The image list (controlled). |
+| `multiple` | `boolean` | `true` | Passed to the native input. |
+| `accept` | `string` | `'image/*'` | Accepted image types, passed to the native input. |
+| `disabled` | `boolean` | `false` | Blocks adding and removing. |
+| `max` | `number` | `9` | Maximum total number of images. |
+| `uploadText` | `string` | `'Upload'` | Add-tile text; override to localize. |
+| `removeLabel` | `(name?: string) => string` | `Remove {name}` | Builds each remove button's `aria-label`; override to localize. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `update:modelValue` | `ImageUploaderFile[]` | The full list after an add or remove. |
+| `change` | `ImageUploaderFile[]` | Fires with `update:modelValue`, with the same list. |
+| `remove` | `{ id: string, value: ImageUploaderFile[] }` | The removed id and the remaining list. |
+
+### Types
+
+`ImageUploaderFile`, one entry of the list:
+
+| Field | Type | Description |
+|------|------|-------------|
+| `id` | `string` | Stable id, used as the preview key and remove payload. |
+| `url` | `string` | Preview URL; an object URL for local files. |
+| `name` | `string` | Optional name, used for alt text and the remove label. |
+| `file` | `File` | Optional original file, present only on newly picked local images. |
+
+## Overview
+
+- The add tile is a native `<button type="button">`, disabled when `disabled` or at `max`; a hidden `<input type="file">` takes `multiple`, `accept`, and `disabled`.
+- Local previews use `URL.createObjectURL`; the native input is cleared after each pick, so the same file can be picked again.
+- With `multiple`, additions are capped at the remaining capacity; a single uploader replaces its image.
+- An addition emits `update:modelValue`, then `change`; a removal emits `update:modelValue`, `remove`, then `change`.
+- The component revokes only object URLs it created: on remove for that URL, and all of them on unmount. Remote and parent-owned blob URLs stay with the caller.
+- Previews use `name` as alt text, or an empty alt when unnamed.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/image-uploader/`.
+
+<TuffDocSourceLink />

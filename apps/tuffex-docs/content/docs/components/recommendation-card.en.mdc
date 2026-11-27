@@ -1,0 +1,125 @@
+---
+title: "RecommendationCard"
+description: "An agent suggestion card with its confidence."
+category: AiContext
+status: beta
+since: 0.3.9
+tags: [ai, recommendation, confidence, decision]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Suggestion and Alternatives
+Picking an alternative in the drawer promotes it to the current recommendation, closes the drawer, and clears the confirmed state.
+:::TuffDemoWrapper{demo="RecommendationCardConfidenceDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref('high')
+  const options = [
+    {
+      key: 'high',
+      short: 'Reorder from cone_king · 7-day lead',
+      confidence: 'high',
+      label: 'High confidence',
+      cta: 'Accept',
+      ctaTone: 'accent',
+    },
+    {
+      key: 'review',
+      short: 'Switch to vanilla_madagascar',
+      confidence: 'medium',
+      label: 'Needs review',
+      cta: 'Configure',
+    },
+  ]
+  </script>
+
+  <template>
+    <TxRecommendationCard
+      v-model="active"
+      title="Want me to place this restock order?"
+      :options="options"
+      @accept="run"
+    >
+      <template #body="{ option }">
+        Reorder waffle cones from
+        <mark style="--tx-entity-color: #ef720c">Cone King</mark>
+        with lead time <code class="is-success">7 days</code>.
+      </template>
+    </TxRecommendationCard>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Write `short` to read on its own; it is all the drawer shows.
+- Use `ctaTone: 'danger'` for risky actions so the primary button's weight matches the consequence.
+- Lift `accepted` into the host and set it true only after the request succeeds, or readers will think the order was placed.
+- Keep alternatives to two or three; beyond that, use a list page.
+- Use `TxToolConfirmation` for a binary allow / deny; this card is for multi-option suggestions with confidence.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | — | Card heading, usually the question awaiting confirmation. Required. |
+| `options` | `RecommendationOption[]` | — | The options, required: `{ key, text?, short, confidence?, signal?, tone?, label, cta?, ctaTone? }`. |
+| `modelValue` | `string` | first option's `key` | Key of the current recommendation, for `v-model`. |
+| `open` | `boolean` | — | The alternatives drawer, for `v-model:open`; omit to let the card own it. |
+| `accepted` | `boolean` | — | Whether it is confirmed, for `v-model:accepted`; swaps text and color only, with no undo. |
+| `alternativesLabel` | `string` | `'Alternatives'` | Text of the drawer toggle. |
+| `otherOptionsLabel` | `string` | `'Other options'` | Heading inside the drawer. |
+| `acceptedLabel` | `string` | `'Accepted'` | Primary action text once confirmed. |
+| `acceptLabel` | `string` | `'Accept'` | Primary action text for an option without `cta`. |
+
+### Events
+
+| Event | Arguments | Description |
+|------|------|-------------|
+| `update:modelValue` | `(key: string)` | Fires when the current recommendation changes. |
+| `update:open` | `(open: boolean)` | Fires when the drawer opens or closes. |
+| `update:accepted` | `(accepted: boolean)` | Fires when the confirmed state changes. |
+| `accept` | `(option: RecommendationOption)` | Fires when the primary action is pressed, with the whole option. |
+| `select` | `(option: RecommendationOption)` | Fires when an alternative is picked in the drawer. |
+
+### Slots
+
+| Slot | Scope | Description |
+|------|------|-------------|
+| `body` | `{ option }` | Replaces the rationale; `<code>` for identifiers, `<mark>` for entities. |
+| `meter` | `{ option }` | Replaces a meter, in the footer and every drawer row. |
+| `footer-extra` | — | Inserted on the left of the footer, before the actions. |
+
+## Confidence Mapping
+
+| `confidence` | Segments | Default color |
+|------|------|------|
+| `high` | 3 | `--tx-bui-green` |
+| `medium` | 2 | `--tx-bui-orange` |
+| `low` | 1 | `--tx-bui-red` |
+| `none` (default) | 0 | `--tx-bui-ink-3` |
+
+`signal` and `tone` override the count and the color; `tone` is a raw CSS color that ignores the theme, so prefer `confidence`.
+
+## Overview
+
+- The drawer lists only the other options; the current recommendation never appears twice.
+- The collapsed drawer is `inert`, taking its buttons out of the focus order and the accessibility tree.
+- The rationale has a minimum height (48px by default) so the card doesn't jump between options; tune it with `--tx-bui-recommendation-card-body-min-height`.
+- In `body`, `<code>` renders as an accent-tinted identifier (`is-success` / `is-warning` for semantic colors) and `<mark>` as an entity pill whose dot reads `--tx-entity-color`, neutral grey by default.
+
+## Technologies
+
+- The footer and drawer meters are `TxSignalMeter`, usable on its own.
+- Adapted from [Beautiful UI](https://www.beautifului.dev) (© 2026 Shane Levine, MIT).
+- Source: `packages/tuffex/packages/components/src/recommendation-card/`.
+
+<TuffDocSourceLink />

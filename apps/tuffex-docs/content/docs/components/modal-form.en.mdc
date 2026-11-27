@@ -1,0 +1,158 @@
+---
+title: "ModalForm"
+description: "A form that edits one record in a dialog."
+category: Form
+status: beta
+since: 0.9.2
+tags: [form, modal, dialog]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+Each open edits a copy of `initialValues`; the dialog closes once the submit succeeds, and asks before closing on unsaved changes.
+::::TuffDemoWrapper{demo="ModalFormBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  const member = ref({ name: 'Lin Xiao', email: 'lin@example.com', role: 'editor' })
+  const roles = [
+    { value: 'owner', label: 'Owner' },
+    { value: 'editor', label: 'Editor' },
+    { value: 'viewer', label: 'Viewer' },
+  ]
+  const rules = {
+    name: { required: true, message: 'Enter a name' },
+    email: { type: 'email', message: 'Enter a valid email address' },
+  }
+
+  // Until the promise settles, the dialog stays open and Save shows it is busy
+  async function save(values) {
+    await updateMember(values)
+    member.value = values
+  }
+  </script>
+
+  <template>
+    <TxButton @click="open = true">Edit</TxButton>
+    <TxModalForm
+      v-model="open"
+      title="Edit member"
+      :initial-values="member"
+      :rules="rules"
+      @submit="save"
+    >
+      <template #default="{ model }">
+        <TxFormItem label="Name" prop="name">
+          <TuffInput v-model="model.name" />
+        </TxFormItem>
+        <TxFormItem label="Email" prop="email">
+          <TuffInput v-model="model.email" type="email" />
+        </TxFormItem>
+        <TxFormItem label="Role" prop="role">
+          <TxSelect v-model="model.role" :options="roles" />
+        </TxFormItem>
+      </template>
+    </TxModalForm>
+  </template>
+---
+::::
+
+### Custom Footer
+The `footer` slot receives `formId`, `submitting` and `cancel`; the submit button points at the form with `form`, so Enter and a click submit alike.
+
+```vue
+<TxModalForm v-model="open" :initial-values="member" @submit="save">
+  <template #default="{ model }">…</template>
+  <template #footer="{ formId, submitting, cancel }">
+    <TxButton variant="danger" :disabled="submitting" @click="remove">Delete</TxButton>
+    <TxButton :disabled="submitting" @click="cancel">Cancel</TxButton>
+    <TxButton variant="primary" native-type="submit" :form="formId" :loading="submitting">Save</TxButton>
+  </template>
+</TxModalForm>
+```
+
+### Best Practices
+
+- Keep it to a few fields. Use `TxDrawerForm` for long forms, forms that scroll, or forms read against the page.
+- Return a promise from `@submit`. Return `false`, throw, or call `setErrors()`, and the dialog stays open.
+- Modal forms do not autosave. To save as the user edits, put a `TxForm` with `autosave` in a `TxDrawer`.
+- In a custom footer, close with the slot's `cancel`: like Escape, it asks first.
+- Outside English, pass `submitText`, `cancelText`, `messages.leaveConfirm`, and `modalProps.closeLabel` to name the close button.
+
+## API Reference
+
+### Props
+
+The `TxForm` props below apply too: the dialog builds `model` from `initialValues`, and `autosave` does not apply.
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `boolean` | required | Shows the dialog. Use with `v-model`. |
+| `title` | `string` | `''` | Dialog title. |
+| `width` | `string` | `'480px'` | Dialog width. |
+| `initialValues` | `FormValues` | - | The values the form opens with. Each open edits a copy, so the parent's values change only when the parent changes them. |
+| `submitText` | `string` | `'Save'` | Text of the submit button. |
+| `cancelText` | `string` | `'Cancel'` | Text of the cancel button. |
+| `modalProps` | `Record<string, unknown>` | - | Any other `TxModal` prop, such as `surface` or `fullscreen`. Closing is asked of the form, not of `beforeClose`. |
+| `id` | `string` | generated | The form's id, and the prefix of every field id. |
+| `rules` | `FormRules` | - | Form-level rules keyed by field path. |
+| `schema` | `FormStandardSchema` | - | A Standard Schema v1 validator checked against the whole `model`; issues with no matching field are listed in the error summary. |
+| `layout` | `'auto' \| 'side' \| 'stacked' \| 'inline'` | `'auto'` | Field layout. |
+| `labelPosition` | `'left' \| 'right' \| 'top'` | - | Older spelling of `layout`. |
+| `labelAlign` | `'start' \| 'end'` | `'end'` | Label alignment in the side column. |
+| `labelWidth` | `string \| number` | `16em` | Widest the side label column may grow; numbers are in pixels. |
+| `requiredMark` | `'asterisk' \| 'optional' \| 'none'` | `'asterisk'` | Marks required fields with an asterisk, optional fields with `messages.optional`, or neither. |
+| `validateOn` | `'blur' \| 'submit'` | `'blur'` | When the first message appears: on leaving a changed field, or on the first submit. |
+| `messages` | `Partial<FormMessages>` | - | Overrides the built-in text. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Size of the controls inside; the dialog width is `width`. |
+| `disabled` | `boolean` | `false` | Disables the controls inside that read the form, and blocks submit. |
+| `readonly` | `boolean` | `false` | Shows the values as a record: controls can be focused and copied, not changed; no field is marked required. |
+| `reconcile` | `FormReconcile` | - | Decides what `model` holds when fetched values reach fields the user changed. |
+| `persist` | `boolean \| FormPersistOptions` | `false` | Keeps what the user typed under `id`; `true` takes the defaults. |
+| `leaveConfirm` | `FormLeaveConfirm \| false` | host's, then `window.confirm` | Asked before leaving with changes no draft holds; `false` never asks. |
+| `onSubmit` | `(values: FormValues, event?: Event) => unknown` | - | Called once every check passes; the dialog stays open until a returned promise settles. `@submit` binds it. |
+
+### Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `update:modelValue` | `(value: boolean)` | The dialog opens or closes. |
+| `submit-success` | `(values: FormValues)` | The submit went through; the dialog closes next. |
+| `validate` | `(valid: boolean)` | As on `TxForm`. |
+| `persist-error` | `(error: unknown)` | As on `TxForm`. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | `{ model, dirty, valid, submitting, submitted, errors, rootError }` | The form items. `model` is the copy this open edits. |
+| `footer` | `{ formId, submitting, cancel }` | Replaces the cancel and submit buttons. |
+
+### Exposed Methods
+
+| Name | Type | Description |
+|------|------|-------------|
+| `form` | `TxForm \| null` | The form inside while the dialog is open, with every `TxForm` method; `null` while it is closed. |
+| `cancel` | `() => Promise<void>` | Closes as Cancel does: the form first asks about changes it would lose. |
+
+## Overview
+
+- Each open builds `model` from a copy of `initialValues` and makes it the baseline. Closing unmounts the form with the dialog, so edits never carry over to the next open.
+- When `initialValues` changes while the dialog is open, as when a record finishes loading, it becomes the saved state: untouched fields take the new values, and fields the user changed keep their edits.
+- Escape, the mask, the close button and Cancel all go through the form's `confirmLeave()`, which asks only about changes no draft holds. A running submit cannot be closed.
+- Escape with focus inside a `TxForm` does not reach this path (see the Modal focus rule), so it asks nothing.
+- A submit that goes through emits `submit-success`, then closes.
+- The footer sits outside the `<form>`, and the submit button reaches it through `form`: Enter in a field and a click make the same submit with the same checks.
+
+## Technologies
+
+- Built from `TxModal` and `TxForm`, with `beforeClose` wired to the form's `confirmLeave()`. Opening, copying and closing share `form/src/use-overlay-form.ts` with `TxDrawerForm`.
+- Source: `packages/tuffex/packages/components/src/modal-form/`.
+
+<TuffDocSourceLink />

@@ -1,0 +1,141 @@
+---
+title: "Maps"
+description: "GeoJSON maps: bubble and choropleth, latitude-clamped Mercator by default, pan and zoom."
+category: Charts
+status: beta
+since: 0.1.0
+tags: [chart, map, geo, d3-geo]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+Both map components consume a GeoJSON `FeatureCollection` (the package ships no geo data — bring your own). The default projection is Mercator clamped at ±85.05° latitude, with a display window that crops the empty poles so land fills the container. Container height defaults to the projected window's aspect ratio; pass `height` for a fixed pixel height. Data uses the accessor pattern: a key or `(row) => value` both work.
+
+### Bubble map
+
+Clicking a bubble returns its data row, and point labels render as text, not HTML.
+
+:::TuffDemoWrapper{demo="MapsBubbleMapDemo" code-lang="vue" title="BubbleMap + pan and zoom" description="Bubble area is proportional to value; drag pans, ⌘/Ctrl + scroll zooms."}
+---
+code: |
+  <template>
+    <TxBubbleMap
+      :geo-json="world"
+      :data="colos"
+      lng="lon"
+      lat="lat"
+      value="requests"
+      name="city"
+      :value-format="(v) => `${v.toLocaleString()} req/s`"
+    />
+  </template>
+---
+:::
+
+### Choropleth map
+
+Regions with data answer hover and click; a drag pans the map and never selects a region.
+
+:::TuffDemoWrapper{demo="MapsChoroplethDemo" code-lang="vue" title="ChoroplethMap + legend" description="Continuous shading interpolates by value; regions without data keep the land fill."}
+---
+code: |
+  <template>
+    <TxChoroplethMap
+      :geo-json="world"
+      :data="data"
+      name="country"
+      value="share"
+      show-legend
+      :value-format="(v) => `${v}%`"
+    />
+  </template>
+---
+:::
+
+## API Reference
+
+### Shared Props (both components)
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `geoJson` | `MapGeoJson` | — | `FeatureCollection`, consumer-provided. |
+| `center` | `[lng, lat]` | auto-fit | Map center. |
+| `zoom` | `number` | `1.25` | Multiplier over the auto-fit scale. |
+| `roam` | `boolean` | `true` | Drag pans; ⌘/Ctrl + wheel or a pinch zooms; double-click and `0` reset. `false` pins the map. |
+| `projection` | `GeoProjection \| null` | clamped Mercator | A d3-geo projection; `null` for raw lng/lat. |
+| `showTooltip` | `boolean` | `true` | Hover tooltip. |
+| `valueFormat` | `(v: number) => string` | `toLocaleString` | Value format in the default tooltip. |
+| `aspectRatio` | `number \| string` | projected aspect | Container aspect ratio. |
+| `height` | `number` | — | Fixed pixel height; overrides `aspectRatio`. |
+| `width` | `number` | measured | Explicit width (SSR/tests). |
+| `labels` | `Partial<MapLabels>` | English | `{ map, instructions }`: the accessible name and the instructions read after it. |
+
+### BubbleMap
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `data` / `lng` / `lat` / `value` / `name?` | accessor | — | Data rows and accessors. |
+| `minRadius` / `maxRadius` | `number` | `6` / `26` | Radius range (area-proportional, sqrt scaling). |
+| `bubbleSize` | `(v: number) => number` | — | Explicit radius, overriding min/max scaling. |
+| `bubbleColor` | `MapStyle<T, string>` | chart blue | Constant or `(row) => color`. |
+| `bubbleBorderColor` / `bubbleBorderWidth` | `MapStyle` | `'transparent'` / `0` | Border styling. |
+
+BubbleMap events: `bubble-hover(row \| undefined)`, `bubble-click(row)`; slot `tooltip` (scope `{ row }`).
+
+### ChoroplethMap
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `data` / `name` / `value` | accessor | — | Data rows; `name` joins features via `nameProperty`. |
+| `nameProperty` | `string` | `'name'` | Feature property to join on; ISO codes are often more reliable. |
+| `colorRange` | `string[]` | theme ramp | Low → high continuous ramp. |
+| `min` / `max` | `number` | data extent | Scale bounds. |
+| `noDataColor` | `string` | land fill | Fill for regions without data. |
+| `showLegend` | `boolean` | `false` | Gradient legend bar. |
+
+ChoroplethMap events: `region-hover(row \| undefined)`, `region-click(row)` (both fire only for regions with data); slot `tooltip` (scope `{ row, regionName, value }`).
+
+## Projection & Zoom
+
+`projection` takes a d3-geo projection instance (e.g. `geoNaturalEarth1()`); `null` degrades to raw lng/lat (equirectangular). The instance is fitted in place with `fitExtent`, so pass a stable reference. `zoom` (default 1.25) multiplies the auto-fit scale and is the view that double-click and `0` return to. `roam` is on by default and clamps the scale to `[min(1, zoom), zoom × 8]`; bubbles and strokes counter-scale so their on-screen size stays constant.
+
+## Pan & Zoom Input
+
+A plain wheel always scrolls the page; the map never traps it. A touch screen is different: one finger pans the map and two pinch it, so a swipe that starts on the map does not scroll the page. Leave a margin of page around the map, or set `:roam="false"`.
+
+| Input | Effect |
+|------|------|
+| Drag | Pans 1:1 from where the map was grabbed. Past 4 px the press is a drag and never clicks a bubble or region. |
+| Release mid-drag | Glides to a stop inside the map's bounds. |
+| ⌘/Ctrl + wheel, pinch | Zooms around the pointer, or between the two fingers. |
+| Double-click, double-tap, `0` | Springs back to the starting view. |
+| `←` `→` `↑` `↓` | Pans by 10% of the map. |
+| `+` / `−` | Zooms by √2 about the centre. |
+| `Escape` | Cancels a drag or pinch in progress. |
+
+The view stays inside the map. Where the map is larger than the container it keeps the container covered, where it is smaller it stays inside, and the starting view set by `zoom` and `center` stays reachable at every scale. A drag past an edge resists like a rubber band and springs back on release. Under `prefers-reduced-motion: reduce` the glide, the spring-back and the key steps jump to their end state; a drag still follows the pointer.
+
+A roaming map is a focusable `role="application"`: `labels.map` names it and `labels.instructions` is read after the name. Both merge over `MAP_DEFAULT_LABELS`. `:roam="false"` removes the focus stop and the instructions, and the map ignores every pan, zoom and key, so a swipe scrolls the page again.
+
+## Shading Ramp
+
+Choropleth shading is **continuous**: normalized values land between two adjacent stops of `--tx-chart-map-scale-1..5` and blend with CSS `color-mix(in oklab, …)` — the ramp flips automatically with the theme and no JS ever parses a color. `colorRange` swaps the ramp; `min`/`max` pin the scale bounds.
+
+## Interaction & Animation
+
+The maps carry ECharts' `emphasis` / `blur` and `stateAnimation`, with kumo's defaults reproduced except for the choropleth's dim:
+
+- Bubbles sit at 0.8 base opacity; the hovered bubble scales to 1.2 with opacity 1, switched over 300ms `cubicOut`. On first render every bubble grows from its own centre and fades in from 0, over 1000ms `cubicInOut`; above 2000 data points the enter is skipped and they land on the final frame.
+- A press on a bubble is a click until it moves past 4 px; then it pans the map and the bubble is not clicked.
+- Choropleth hover keeps the hovered region's own ramp colour while every other region drops to `blur.itemStyle.opacity` 0.45 on the frame the pointer arrives: the dim is a hover colour change, which TuffEx's hover rule never eases. Regions without data never take emphasis.
+- As in ECharts' own maps, neither component has **geometry animation** (`animationDurationUpdate: 0`): roam and zoom only rewrite the SVG `transform`, never tweening paths or coordinates.
+- Under `prefers-reduced-motion: reduce` the tweens land on their final frame: bubbles appear at full size and opacity, and emphasis switches instantly.
+
+## Differences from kumo
+
+- `projection` takes a d3-geo instance directly (kumo wraps `{ project, unproject }` for echarts); `null` is implemented as equirectangular.
+- Zoom is an SVG transform; bubbles/strokes counter-scale so their visual size stays constant.
+- `roam` is on by default and the wheel is cooperative: a plain wheel scrolls the page, ⌘/Ctrl + wheel and a pinch zoom.
+- `tooltipFormatter` (HTML string) → the `tooltip` slot.

@@ -1,0 +1,149 @@
+---
+title: Stream Markdown
+description: 面向流式输出的 Markdown 渲染器
+category: AiReasoning
+status: beta
+since: 0.3.9
+tags: [ai, markdown, streaming]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+流式期间，未闭合的尾部围栏推迟渲染，不会以半截形态闪现。
+::::TuffDemoWrapper{demo="StreamMarkdownStreamMarkdownDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import ChartBlock from './ChartBlock.vue'
+
+  const content = ref('# 标题\n\n正在生成…')
+  </script>
+
+  <template>
+    <TxStreamMarkdown
+      :content="content"
+      streaming
+      :renderers="{ chart: ChartBlock }"
+    />
+  </template>
+---
+::::
+
+### 最佳实践
+
+- 不要关闭 `sanitize`：模型输出是不可信内容，这里是它变成 DOM 的地方。
+- 生成结束后把 `streaming` 置为 `false`，否则光标一直留在末尾。
+- 自定义渲染器在 `closed` 为 `false` 时显示加载态，不解析半截内容。
+- `renderers` 的 key 用围栏首个单词的小写形式（` ```chart ` → `chart`）。
+- 非英文界面除了图片与表格文案，代码块和图表的文案也要一并传入：内置的块会显示它们，默认是英文。
+- 静态 Markdown 用 `TxMarkdownView`，不需要这套分块与光标机制。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `content` | `string` | — | Markdown 原文，必填。 |
+| `streaming` | `boolean` | `false` | 仍在输出；控制光标、显影与尾部围栏的延迟渲染。 |
+| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | 新文字的进场方式，预设同 `TxStreamText`；`languid` 只保留缓慢模糊，不上浮。 |
+| `caret` | `boolean` | `true` | `streaming` 时在写入位置显示 Tuff 光标；关闭时立即移除。 |
+| `sanitize` | `boolean` | `true` | 用 DOMPurify 净化 HTML。 |
+| `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | 配色主题；`auto` 跟随环境。 |
+| `renderers` | `Record<string, StreamMarkdownBlockRenderer>` | — | 按围栏语言替换块渲染组件，组件以 props 接收 `StreamMarkdownBlockContext`。 |
+| `blockRemoteImages` | `boolean` | `true` | 远程图片（`http(s)://`、`//`）先显示占位块，读者确认后才加载。 |
+| `blockedImageText` | `string` | `'Remote image blocked'` | 图片占位块的标题。 |
+| `loadImageOnceText` | `string` | `'Load this image'` | 只加载这一张图片的按钮文字。 |
+| `allowSessionImagesText` | `string` | `'Allow for this conversation'` | 放行本次会话全部远程图片的按钮文字。 |
+| `copyTableText` | `string` | `'Copy CSV'` | 表格「复制为 CSV」按钮的文字。 |
+| `copiedTableText` | `string` | `'Copied'` | 复制成功后按钮短暂显示的文字。 |
+| `codePreviewText` | `string` | `'Preview'` | 代码块中把 HTML、SVG、XML 渲染出来查看的按钮文字。 |
+| `codeSourceText` | `string` | `'Code'` | 预览显示时同一按钮的文字，点击回到源码。 |
+| `inlineCodePreview` | `boolean` | `true` | 已闭合的 HTML、SVG、XML 围栏默认在代码块下方渲染预览；设为 `false` 后预览按钮改为发出 `code-preview` 事件，由宿主决定在哪里显示。 |
+| `codeFrameLabelFormatter` | `(lang: string) => string` | `` (lang) => `${lang} preview` `` | 由围栏语言生成预览框的可访问名称。 |
+| `copyCodeText` | `string` | `'Copy'` | 代码块复制按钮的文字。 |
+| `copiedCodeText` | `string` | `'Copied'` | 复制成功后按钮短暂显示的文字。 |
+| `runnableCode` | `boolean` | `false` | 为已闭合的 Shell 围栏在复制按钮左侧显示「执行」按钮，点击触发 `code-run`。 |
+| `runCodeText` | `string` | `'Run'` | Shell 代码块执行按钮的文字。 |
+| `ranCodeText` | `string` | `'Ran'` | 点击执行按钮后短暂显示的文字。 |
+| `runCodeTitle` | `string` | — | Shell 代码块执行按钮的无障碍名称与提示；缺省时回退到 `runCodeText`。 |
+| `diagramZoomLabel` | `string` | `'Zoom diagram'` | 渲染好的图表（点击打开预览）的可访问名称。 |
+| `diagramPreviewLabel` | `string` | `'Diagram preview'` | 图表全屏预览及其中图表滚动区的可访问名称。 |
+| `diagramCloseLabel` | `string` | `'Close preview'` | 预览关闭按钮的可访问名称。 |
+| `diagramErrorText` | `string` | `'Diagram failed to render — showing source.'` | 图表渲染失败、改为显示源码时，源码上方的提示。 |
+| `diagramDownloadLabel` | `string` | `'Download'` | 图表预览里「保存」操作的名称。 |
+| `diagramCopyFailedText` | `string` | `'Could not copy'` | 图表预览里复制源码失败时的提示。 |
+
+### TxCodeBlock 属性
+
+没有专属渲染器的语言都由它渲染；它也单独导出，可在文档之外展示代码。它以 props 接收 `StreamMarkdownBlockContext`；在 `TxStreamMarkdown` 里，文案来自 `code*` 系列属性与 `copyCodeText` / `copiedCodeText`。
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `lang` | `string` | `''` | 围栏语言，决定高亮与是否提供预览；留空时显示为纯文本。 |
+| `code` | `string` | `''` | 源码文本。 |
+| `closed` | `boolean` | `true` | 仅在流式中仍在增长的尾部围栏上为 `false`；为 `false` 时不提供预览。 |
+| `theme` | `'light' \| 'dark'` | `'light'` | 高亮与配色主题。 |
+| `previewable` | `boolean` | `true` | 已闭合的 HTML、SVG、XML 围栏提供渲染预览。 |
+| `inlinePreview` | `boolean` | `true` | 设为 `false` 时不在代码块下方渲染预览，预览按钮改为发出 `preview` 事件。 |
+| `previewLabel` | `string` | `'Preview'` | 切换到渲染预览的按钮文字。 |
+| `codeLabel` | `string` | `'Code'` | 预览显示时同一按钮的文字。 |
+| `frameLabelFormatter` | `(lang: string) => string` | `` (lang) => `${lang} preview` `` | 由围栏语言生成预览框的可访问名称。 |
+| `copyLabel` | `string` | `'Copy'` | 复制按钮的文字。 |
+| `copiedLabel` | `string` | `'Copied'` | 复制成功后按钮短暂显示的文字。 |
+| `runnable` | `boolean` | `false` | 为已闭合的 Shell 围栏在复制按钮左侧提供「执行」按钮。 |
+| `runLabel` | `string` | `'Run'` | 执行按钮的文字。 |
+| `ranLabel` | `string` | `'Ran'` | 点击执行按钮后短暂显示的文字。 |
+| `runTitle` | `string` | — | 执行按钮的无障碍名称与提示；缺省时回退到 `runLabel`。 |
+
+### TxMermaidBlock 属性
+
+内置的 `mermaid` 渲染器，同样以 props 接收 `StreamMarkdownBlockContext`；在 `TxStreamMarkdown` 里，文案来自 `diagram*` 系列属性与 `copyCodeText` / `copiedCodeText`。
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `code` | `string` | `''` | 图表源码。 |
+| `closed` | `boolean` | `false` | 仅在流式中仍在增长的尾部围栏上为 `false`。 |
+| `theme` | `'light' \| 'dark'` | `'light'` | 图表的配色主题。 |
+| `zoomLabel` | `string` | `'Zoom diagram'` | 渲染好的图表（点击打开预览）的可访问名称。 |
+| `previewLabel` | `string` | `'Diagram preview'` | 全屏预览及其中图表滚动区的可访问名称。 |
+| `closeLabel` | `string` | `'Close preview'` | 预览关闭按钮的可访问名称。 |
+| `errorText` | `string` | `'Diagram failed to render — showing source.'` | 图表渲染失败、改为显示源码时，源码上方的提示。 |
+| `copyLabel` | `string` | `'Copy'` | 渲染失败后所显示源码的复制按钮文字。 |
+| `copiedLabel` | `string` | `'Copied'` | 复制成功后按钮短暂显示的文字。 |
+| `downloadLabel` | `string` | `'Download'` | 图表预览里「保存」操作的名称。 |
+| `copyFailedText` | `string` | `'Could not copy'` | 图表预览里复制源码失败时的提示。 |
+| `maxHeight` | `number` | `480` | 图表绘制的最大高度（px），超出后在框内滚动；放大预览仍显示完整图表。 |
+
+### 事件
+
+| 事件名 | 来源 | 载荷 | 说明 |
+|------|------|------|------|
+| `code-preview` | `TxStreamMarkdown` | `StreamMarkdownCodePreview` | `inlineCodePreview` 为 `false` 时，代码块的预览按钮触发。 |
+| `preview` | `TxCodeBlock` | `StreamMarkdownCodePreview` | `inlinePreview` 为 `false` 时，预览按钮触发；`TxStreamMarkdown` 把它转发为 `code-preview`。 |
+| `code-run` | `TxStreamMarkdown` | `CodeRunPayload` | `runnableCode` 为 `true` 时，Shell 代码块的执行按钮触发。 |
+| `run` | `TxCodeBlock` | `CodeRunPayload` | `runnable` 为 `true` 时，Shell 代码块的执行按钮触发；`TxStreamMarkdown` 把它转发为 `code-run`。 |
+
+载荷为 `{ lang, code, srcdoc }`。宿主应把 `srcdoc` 放进不带 `allow-scripts` 的 `sandbox` iframe，与内联预览的隔离方式一致。
+
+## 概述
+
+- 文档按块渲染：追加文本不会重排整篇。
+- 流式中仍在增长的尾部围栏推迟到闭合后再渲染最终形态；渲染器收到的 `closed` 只对它为 `false`。
+- 未注册的语言走内置渲染：`mermaid` 用 `TxMermaidBlock`，其余用 `TxCodeBlock`。
+- 点图表打开全屏预览：焦点移到关闭按钮，Tab 留在预览内，在关闭按钮和图表之间切换；图表比屏幕高时，Tab 到图表上再用方向键滚动。Escape 或点空白处关闭，Escape 只在预览位于最上层时生效；关闭后焦点回到图表。预览打开期间，后面的页面不滚动。
+- 光标同 `TxStreamText`：尾部是段落、标题或引用时紧跟末字符，否则单独位于下方一行；减弱动效时不播放进场，光标静止。
+- DOMPurify 动态加载；`sanitize` 开启时，加载完成前或加载失败时不渲染任何内容。净化不能替代服务端的信任边界。
+- 图片放行记录是模块级的，所有实例共享；切换会话时调用导出的 `resetRemoteImagePolicy()` 清除。
+- 每个实例持有自己的 `Marked`（`gfm`、`breaks`）；GitHub Markdown 样式表限定在 `:where(.tx-md)` 下，不会改写宿主的 `.markdown-body`。
+
+## 技术实现
+
+- 内容先由 `createBlockStream` 切分为块，已稳定的块复用缓存的 HTML。
+- `DOMPurify` 按需动态加载；`sanitize` 开启时，加载完成前不渲染任何内容。每个实例持有自己的 `Marked`。
+- 源码：`packages/tuffex/packages/components/src/stream-markdown/`。
+
+<TuffDocSourceLink />

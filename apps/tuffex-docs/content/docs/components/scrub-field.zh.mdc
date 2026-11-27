@@ -1,0 +1,91 @@
+---
+title: "ScrubField 拖拽数值域"
+description: "标签即拖动手柄的紧凑数值输入"
+category: Form
+status: beta
+since: 0.3.9
+tags: [form, number, drag, inspector]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+
+:::TuffDemoWrapper{demo="ScrubFieldScrubFieldDemo" code-lang="vue" description="整数、百分比与半步长。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const width = ref(324)
+  const opacity = ref(100)
+  const gap = ref(1.5)
+  </script>
+
+  <template>
+    <TxScrubField v-model="width" label="宽" :min="40" :max="999" :active="width !== 324" />
+    <TxScrubField v-model="opacity" label="不透明度" :min="0" :max="100" suffix="%" />
+    <TxScrubField v-model="gap" label="间距" :min="0" :max="8" :step="0.5" />
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 标签保持简短（`W`、`H`、`Radius`），它就是拖动手柄。
+- `active` 由宿主判断，通常是「当前值 ≠ 预设值」；与数据比较，不写死常量。
+- 频繁键入的表单用 `clampOn="blur"`；即时预览的检查器保留默认的 `'input'`。
+- 按轨道位置取值用 `TxSlider`；带加减按钮的表单字段用 `TxNumberInput`。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `number` | — | 当前值（受控）。 |
+| `label` | `string` | — | 短标签，同时是拖动手柄。 |
+| `min` / `max` | `number` | — | 取值范围；拖动、方向键与键入都会夹取。 |
+| `step` | `number` | `1` | 步长；小数步长保留相应的小数位。 |
+| `suffix` | `string` | — | 值后的单位，如 `%`。 |
+| `active` | `boolean` | `false` | 以「已改动」样式高亮；是否改动由宿主判断。 |
+| `disabled` | `boolean` | `false` | 禁用拖动、方向键与键入。 |
+| `pixelsPerStep` | `number` | `2` | 前进一个步长所需的指针位移。 |
+| `shiftMultiplier` | `number` | `10` | 按住 Shift 时方向键的倍率。 |
+| `clampOn` | `'input' \| 'blur'` | `'input'` | 键入时何时夹取：每次按键或失焦。 |
+| `ariaLabel` | `string` | — | 手柄的可访问名，缺省用 `label`。 |
+| `valueLabel` | `string` | `'{label} value'` | 输入框的可访问名。 |
+
+### 事件
+
+| 事件名 | 回调参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: number)` | 值变化时触发；相同值不重复触发。 |
+| `change` | `(value: number)` | 与 `update:modelValue` 同时触发。 |
+| `scrubStart` / `scrubEnd` | — | 拖动开始与结束（含取消）。 |
+
+### 暴露方法
+
+| 方法名 | 说明 |
+|------|------|
+| `focus()` | 聚焦拖动手柄。 |
+| `focusInput()` | 聚焦数值输入框。 |
+
+## 概述
+
+- 拖动：在标签上横向拖动，每 `pixelsPerStep` 像素前进一个 `step`；按起点累计位移，没有轨道。拖动中按 Esc 放弃，值回到按下时。
+- 键盘：↑ → 增加、↓ ← 减少，Shift 乘以 `shiftMultiplier`，Home / End 跳到边界。
+- 键入：右侧是原生 `<input>`；`clampOn="blur"` 保留输入中的文本，失焦时再夹取；Esc 还原文本。
+- 手柄是 `role="slider"`，带 `aria-valuenow` / `aria-valuemin` / `aria-valuemax` / `aria-orientation`，有 `suffix` 时另带 `aria-valuetext`；输入框是另一个控件，有自己的可访问名。
+- 手柄设置 `touch-action: pan-y`，纵向手势留给页面滚动；`pointercancel` 与 `lostpointercapture` 都会结束拖动。
+- 减弱动效下关闭唯一的状态过渡。
+
+## 技术实现
+
+- 量化的是位移而非结果：`round(位移 / pixelsPerStep) * step`，因此小数步长成立，网格外的起始值也不会被吸附。
+- 源码：`packages/tuffex/packages/components/src/scrub-field/`。
+- 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
+
+<TuffDocSourceLink />

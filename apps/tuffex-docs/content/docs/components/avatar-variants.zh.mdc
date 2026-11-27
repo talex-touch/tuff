@@ -1,0 +1,67 @@
+---
+title: "Avatar Variants 头像变体"
+description: "为头像添加状态点、角标与描边的组合配方"
+category: Basic
+status: beta
+since: 1.0.0
+tags: [avatar, badge, status]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 画廊
+`TxAvatar` 与 `TxCornerOverlay`、`TxOutlineBorder`、`TxIcon` 的组合，按状态、活动、平台、系统、社交、上下文分组。
+:::TuffDemoWrapper{demo="AvatarVariantsAvatarVariantsGalleryDemo" code-lang="vue"}
+---
+code: |
+  <!-- 三个代表性配方；完整的 30+ 变体见 demo 源码 -->
+  <template>
+    <!-- 在线状态点 -->
+    <TxCornerOverlay placement="bottom-right" :offset-x="-2" :offset-y="-2">
+      <TxAvatar src="https://i.pravatar.cc/150?u=online" size="large" />
+      <template #overlay>
+        <span class="tx-avatar-variants__dot tx-avatar-variants__dot--online" />
+      </template>
+    </TxCornerOverlay>
+
+    <!-- 平台角标 -->
+    <TxCornerOverlay placement="bottom-right" :offset-x="-4" :offset-y="-4">
+      <TxAvatar size="large" background-color="var(--tx-fill-color-light)">
+        <TxIcon name="i-carbon-chat" :size="24" style="color: var(--tx-color-success)" />
+      </TxAvatar>
+      <template #overlay>
+        <span class="tx-avatar-variants__badge tx-avatar-variants__badge--light">
+          <TxIcon name="i-carbon-mobile" :size="14" style="color: var(--tx-text-color-secondary)" />
+        </span>
+      </template>
+    </TxCornerOverlay>
+
+    <!-- 描边环 + 认证角标 -->
+    <TxOutlineBorder variant="ring" :ring-width="2" ring-color="var(--tx-color-primary)" :padding="2" clip-mode="none">
+      <TxCornerOverlay placement="bottom-right" :offset-x="-4" :offset-y="-4">
+        <TxAvatar src="https://i.pravatar.cc/150?u=verified" size="large" />
+        <template #overlay>
+          <span class="tx-avatar-variants__badge tx-avatar-variants__badge--primary">
+            <TxIcon name="i-carbon-checkmark-filled" :size="14" class="tx-avatar-variants__icon--white" />
+          </span>
+        </template>
+      </TxCornerOverlay>
+    </TxOutlineBorder>
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 只复制所需的最小模式，不要导入整个画廊 demo。
+- 角标表示用户状态时，在相邻文本或父级控件的 label 中写明状态，不要只靠颜色或图标形状。
+- 纯装饰角标用空 `alt` 或 `aria-hidden`。
+
+## 技术实现
+
+- 本页是配方画廊，不是导出的组件；角标样式是 demo 内的本地 CSS 类。
+- 源码：`apps/nexus/app/components/content/demos/AvatarVariantsAvatarVariantsGalleryDemo.vue`、`AvatarVariantCard.vue`；组件见 `packages/tuffex/packages/components/src/avatar/`、`corner-overlay/`、`outline-border/`。
+
+<TuffDocSourceLink />

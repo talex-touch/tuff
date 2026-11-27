@@ -1,0 +1,174 @@
+---
+title: "DrawerForm 抽屉表单"
+description: "在侧边抽屉里新建或编辑记录的表单"
+category: Form
+status: beta
+since: 0.9.2
+tags: [form, drawer, panel]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+抽屉留出页面上下文，适合字段较多的表单；每次打开编辑 `initialValues` 的副本，提交成功才关闭。
+::::TuffDemoWrapper{demo="DrawerFormBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  const projects = ref([])
+  // 每次打开都从这里开始
+  const blank = { name: '', key: '', description: '', visibility: 'team' }
+  const rules = {
+    name: { required: true, message: '请输入项目名称' },
+    key: { pattern: /^[A-Z][A-Z0-9]{1,9}$/, message: '标识需要 2 到 10 位大写字母或数字，以字母开头' },
+  }
+
+  async function create(values) {
+    const project = await createProject(values)
+    projects.value = [project, ...projects.value]
+  }
+  </script>
+
+  <template>
+    <TxButton variant="primary" @click="open = true">新建项目</TxButton>
+    <TxDrawerForm
+      v-model:visible="open"
+      title="新建项目"
+      :initial-values="blank"
+      :rules="rules"
+      :messages="{ leaveConfirm: '有未保存的更改，仍要关闭吗？' }"
+      :drawer-props="{ size: 'min(92vw, 440px)', closeLabel: '关闭抽屉' }"
+      layout="stacked"
+      submit-text="创建"
+      cancel-text="取消"
+      @submit="create"
+    >
+      <template #default="{ model }">
+        <TxFormItem label="名称" prop="name">
+          <TuffInput v-model="model.name" />
+        </TxFormItem>
+        <TxFormItem label="标识" prop="key" help="2 到 10 位大写字母或数字，以字母开头" width="sm">
+          <TuffInput v-model="model.key" />
+        </TxFormItem>
+        <TxFormItem label="描述" prop="description">
+          <TxTextarea v-model="model.description" :rows="3" resize="none" />
+        </TxFormItem>
+        <TxFormItem label="可见范围" prop="visibility">
+          <TxRadioGroup v-model="model.visibility" type="standard" direction="row">
+            <TxRadio value="private" label="仅自己" />
+            <TxRadio value="team" label="团队" />
+            <TxRadio value="public" label="公开" />
+          </TxRadioGroup>
+        </TxFormItem>
+      </template>
+    </TxDrawerForm>
+  </template>
+---
+::::
+
+### 打开后再加载
+先打开抽屉，记录取回后再交给 `initialValues`：它会成为已保存的值，用户已改过的字段保留修改。
+
+```vue
+<script setup lang="ts">
+const open = ref(false)
+const project = ref()
+
+async function edit(id) {
+  project.value = undefined
+  open.value = true
+  project.value = await fetchProject(id)
+}
+</script>
+
+<template>
+  <TxDrawerForm v-model:visible="open" title="编辑项目" :initial-values="project" :disabled="!project" @submit="save">
+    <template #default="{ model }">…</template>
+  </TxDrawerForm>
+</template>
+```
+
+### 最佳实践
+
+- 用于字段较多、需要滚动或要对照页面内容的表单；只有几项字段时用 `TxModalForm`。
+- 抽屉宽度写在 `drawerProps.size`；表单自己的 `size` 决定控件尺寸。
+- 抽屉表单没有自动保存；要边改边存，把带 `autosave` 的 `TxForm` 放进 `TxDrawer`。
+- `@submit` 返回 Promise；返回 `false`、抛出异常或调用 `setErrors()` 时，抽屉留在原处。
+- 非英文界面传入 `submitText`、`cancelText`、`messages.leaveConfirm`，以及关闭按钮的名称 `drawerProps.closeLabel`。
+
+## API 参考
+
+### 属性
+
+下列 `TxForm` 属性同样可传入；`model` 由抽屉按 `initialValues` 构建，`autosave` 不适用。
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `visible` | `boolean` | 必填 | 是否显示，用于 `v-model:visible`。 |
+| `title` | `string` | `''` | 抽屉标题。 |
+| `initialValues` | `FormValues` | - | 打开时的值；每次打开编辑一份副本，父级的值只在父级自己修改时变化。 |
+| `submitText` | `string` | `'Save'` | 提交按钮的文字。 |
+| `cancelText` | `string` | `'Cancel'` | 取消按钮的文字。 |
+| `drawerProps` | `Record<string, unknown>` | - | 其余 `TxDrawer` 属性，如 `size`、`direction`；是否关闭由表单决定，不经过 `beforeClose`。 |
+| `id` | `string` | 自动生成 | 表单的 id，也是字段 id 的前缀：`<id>-<prop>`。 |
+| `rules` | `FormRules` | - | 以字段路径为 key 的表单级规则。 |
+| `schema` | `FormStandardSchema` | - | Standard Schema v1 校验器，校验整个 `model`；没有对应字段的问题列在错误摘要中。 |
+| `layout` | `'auto' \| 'side' \| 'stacked' \| 'inline'` | `'auto'` | 字段布局。 |
+| `labelPosition` | `'left' \| 'right' \| 'top'` | - | `layout` 的旧写法。 |
+| `labelAlign` | `'start' \| 'end'` | `'end'` | 侧边 label 的对齐。 |
+| `labelWidth` | `string \| number` | `16em` | 侧边 label 列的最大宽度，数字按 px 计。 |
+| `requiredMark` | `'asterisk' \| 'optional' \| 'none'` | `'asterisk'` | 必填项标星号，选填项标 `messages.optional`，或都不标。 |
+| `validateOn` | `'blur' \| 'submit'` | `'blur'` | 首条消息出现的时机：离开改过的字段时，或首次提交时。 |
+| `messages` | `Partial<FormMessages>` | - | 覆盖内置文案。 |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 表单内控件的尺寸；抽屉宽度见 `drawerProps.size`。 |
+| `disabled` | `boolean` | `false` | 禁用表单内读取表单状态的控件，并阻止提交。 |
+| `readonly` | `boolean` | `false` | 只读展示：控件可聚焦、复制，但不能修改，也不标必填。 |
+| `reconcile` | `FormReconcile` | - | 取回的数据覆盖用户改过的字段时，决定 `model` 的取值。 |
+| `persist` | `boolean \| FormPersistOptions` | `false` | 以 `id` 保存用户输入（草稿）；`true` 采用默认设置。 |
+| `leaveConfirm` | `FormLeaveConfirm \| false` | 宿主的，其次 `window.confirm` | 带着草稿存不下的修改离开前询问；`false` 从不询问。 |
+| `onSubmit` | `(values: FormValues, event?: Event) => unknown` | - | 全部校验通过后调用；返回的 Promise 完成前抽屉保持打开，`@submit` 即绑定它。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:visible` | `(value: boolean)` | 打开或关闭时触发。 |
+| `submit-success` | `(values: FormValues)` | 提交成功，随后抽屉关闭。 |
+| `validate` | `(valid: boolean)` | 同 `TxForm`。 |
+| `persist-error` | `(error: unknown)` | 同 `TxForm`。 |
+
+### 插槽
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `default` | `{ model, dirty, valid, submitting, submitted, errors, rootError }` | 表单项；`model` 是这次打开编辑的副本。 |
+| `footer` | `{ formId, submitting, cancel }` | 替换底栏的取消与提交按钮；提交按钮用 `:form="formId"` 关联表单。 |
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `form` | `TxForm \| null` | 里面的表单，拥有 `TxForm` 的全部方法；抽屉第一次打开前为 `null`。 |
+| `cancel` | `() => Promise<void>` | 与「取消」相同：先就会丢失的修改询问，再关闭。 |
+
+## 概述
+
+- 每次打开都用 `initialValues` 的副本新建 `model` 并以它为基线，关闭时的修改不会带到下一次打开。
+- 打开期间 `initialValues` 变化会成为新的已保存值：没改过的字段换成新值，改过的字段保留修改。
+- Escape、遮罩、关闭按钮与「取消」都先经过表单的 `confirmLeave()`，只就草稿存不下的修改询问；提交进行中不能关闭。
+- 焦点在 `TxForm` 内按 Escape 不会走到这条路径（见抽屉的焦点规则），因此不询问离开。
+- 抽屉第一次打开后保留内容，表单也随之保留；关闭后不再有要挽留的修改，刷新页面不会询问。
+- 提交成功后先派发 `submit-success`，再关闭。
+
+## 技术实现
+
+- 由 `TxDrawer` 与 `TxForm` 组合而成，`beforeClose` 接表单的 `confirmLeave()`；打开、副本与关闭的逻辑与 `TxModalForm` 共用 `form/src/use-overlay-form.ts`。
+- 底栏在 `<form>` 之外，提交按钮用 `form` 属性关联表单，在字段里按 Enter 与点击按钮是同一次提交。
+- 源码：`packages/tuffex/packages/components/src/drawer-form/`。
+
+<TuffDocSourceLink />

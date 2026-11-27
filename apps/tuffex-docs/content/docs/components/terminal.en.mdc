@@ -1,0 +1,217 @@
+---
+title: Terminal
+description: A terminal view that displays ANSI and Unicode output.
+category: Advanced
+status: beta
+since: 0.7.0
+tags: [terminal, logs, xterm, ansi]
+syncStatus: reviewed
+verified: false
+---
+
+## Installation
+
+```bash
+pnpm add @talex-touch/tuffex
+```
+
+```ts
+import { TxTerminal } from '@talex-touch/tuffex/terminal'
+import '@talex-touch/tuffex/base.css'
+import '@talex-touch/tuffex/terminal/style.css'
+```
+
+## Usage
+
+### Interactive Display
+`ready` hands over the instance and `data` emits keyboard input; input is never echoed automatically.
+:::TuffDemoWrapper{demo="TerminalTerminalDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TerminalInstance } from '@talex-touch/tuffex/terminal'
+  import { ref } from 'vue'
+
+  const lastInput = ref('')
+  function ready(terminal: TerminalInstance) {
+    void terminal.writeln('\x1B[32mANSI · 中文输出 ✓\x1B[0m')
+  }
+  </script>
+
+  <template>
+    <div style="height: 240px">
+      <TxTerminal @ready="ready" @data="lastInput = JSON.stringify($event)" />
+    </div>
+    <output>{{ lastInput }}</output>
+  </template>
+---
+:::
+
+### Read-only Logs
+Pausing belongs to the host: keep collecting records, but stop updating the `lines` passed in.
+:::TuffDemoWrapper{demo="TerminalLogsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const lines = ref(['\x1B[32m[info]\x1B[0m 中文日志 ✓'])
+  </script>
+
+  <template>
+    <TxButton @click="lines.push('[info] next record')">Append</TxButton>
+    <TxButton @click="lines.length = 0">Clear</TxButton>
+    <div style="height: 224px">
+      <TxTerminal read-only :lines="lines" />
+    </div>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Use `lines` for declarative logs and `write()` / `writeln()` for streams; replacing `lines` also wipes imperative output.
+- Give the container a definite height; explicit `cols` / `rows` override fitting on their own axis only.
+- Keep logs `readOnly`, and don't create a PTY just to display them.
+- Handle rejected write promises: unmounting or a failed initialization rejects every pending write.
+- Run privileged commands only through a trusted host SDK: on an explicit user action, with `command` and `args` passed separately, and cleaned up on session switch or unmount.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `readOnly` | `boolean` | `false` | Disables input and `data`, and never autofocuses; selection and copy still work. |
+| `autoFocus` | `boolean` | `false` | Focuses an interactive terminal after initialization; ignored when read-only. |
+| `autoScroll` | `boolean` | `true` | Scrolls to the bottom after output; when off, keeps the viewport, and input doesn't scroll either. |
+| `lines` | `readonly (string \| Uint8Array)[]` | `undefined` | Log records, each followed by CRLF; an unchanged prefix appends, anything else resets and replays. |
+| `cols` | `number` | fit / initial `80` | Fixed column count; otherwise derived from the container. |
+| `rows` | `number` | fit / initial `24` | Fixed row count; otherwise derived from the container. |
+| `fontSize` | `number` | `13` | Font size in px; changes trigger a fit. |
+| `fontFamily` | `string` | `ui-monospace` + Nerd Font fallback stack | Font stack (automatically appended with Nerd Font glyph fallbacks); changes trigger a fit. |
+| `theme` | `ITheme` | host tokens (light/dark 16-color ANSI) | Partial xterm theme; overrides only the colors you set. |
+| `screenReaderMode` | `boolean` | `true` | Mirrors the screen into a DOM tree for screen readers, which halves parse throughput; a host that can detect assistive technology should pass its state. |
+| `labels` | `Partial<TerminalLabels>` | `{ ariaLabel: 'Terminal' }` | Accessible name of the terminal region and its input textarea. |
+
+### Events
+
+| Event | Payload | Description |
+| --- | --- | --- |
+| `data` | `string` | Keyboard, paste, and control-sequence input to forward unchanged; never emitted when read-only. |
+| `resize` | `{ cols: number; rows: number }` | The initial size and later changes; forward to the PTY if there is one. |
+| `ready` | `TerminalInstance` | The display is initialized; the component ref exposes the same methods. |
+
+### Exposed Methods
+
+| Method | Signature | Description |
+| --- | --- | --- |
+| `write(data)` | `(string \| Uint8Array) => Promise<void>` | Queues raw output, even before readiness; resolves once parsed and adds no newline. |
+| `writeln(data)` | `(string \| Uint8Array) => Promise<void>` | Same queue, with CRLF appended. |
+| `clear()` | `() => void` | Queues a scrollback clear; the current prompt line stays. |
+| `reset()` | `() => void` | Queues a buffer and parser reset, dropping content and terminal modes. |
+| `focus()` | `() => void` | Focuses a ready interactive terminal. |
+| `fit()` | `() => TerminalSize \| null` | Fits unpinned axes and returns the size; hidden containers keep their last size; null when unavailable. |
+| `getSize()` | `() => TerminalSize \| null` | Current columns and rows; null before initialization or after disposal. |
+| `getCellSizePixels()` | `() => TerminalPixelSize \| null` | Floor-rounded physical device-pixel cell size for HiDPI image negotiation (such as `herdr-core` `display.cell`); null when unavailable. |
+
+### Types
+
+`/terminal` exports `TerminalProps`, `TerminalEmits`, `TerminalInstance`, `TerminalSize`, `TerminalPixelSize`, `TerminalData`, `TerminalLabels`, `TxTerminalInstance`, and `TERMINAL_DEFAULT_LABELS`. The component is also exported from `/pro` and the root; `Terminal` is the installable wrapper.
+
+## Electron PTY Integration
+
+For trusted Electron renderers with TuffTransport only. The main process owns the PTY and checks `system.shell`; `createTerminalSdk` subscribes before creating, and an aborted `signal` closes a late session automatically. With `awaitDisplay: true`, the SDK acknowledges each output only once the write promise `onData` returns settles, so a process that outpaces the display is paused rather than queued in memory; a promise that never settles stops the process once about 100,000 characters are unacknowledged. Without it, output is acknowledged as soon as `onData` returns.
+
+```vue
+<script setup lang="ts">
+import type { TerminalInstance, TerminalSize } from '@talex-touch/tuffex/terminal'
+import type { TerminalSessionHandle } from '@talex-touch/utils/transport'
+import { createTerminalSdk, useTuffTransport } from '@talex-touch/utils/transport'
+import { onBeforeUnmount, ref, shallowRef } from 'vue'
+
+const props = defineProps<{ directory: string }>()
+const display = shallowRef<TerminalInstance | null>(null)
+const status = ref('')
+const sdk = createTerminalSdk(useTuffTransport())
+let session: TerminalSessionHandle | null = null
+let active: AbortController | null = null
+
+function fail(reason: unknown) {
+  status.value = reason instanceof Error ? reason.message : String(reason)
+}
+function stop() {
+  active?.abort()
+  active = null
+  void session?.close().catch(fail)
+  session = null
+}
+async function start() {
+  stop()
+  const controller = (active = new AbortController())
+  display.value?.reset()
+  const size = display.value?.getSize()
+  try {
+    session = await sdk.create({ command: 'node', args: ['-i'], cwd: props.directory, cols: size?.cols, rows: size?.rows }, {
+      signal: controller.signal,
+      awaitDisplay: true,
+      onData(data) {
+        if (active === controller)
+          return display.value?.write(data).catch(fail)
+      },
+      onExit(exit) {
+        if (active !== controller)
+          return
+        session = null
+        status.value = `exit=${exit.exitCode}, signal=${exit.signal ?? 'none'}`
+      },
+    })
+  }
+  catch (reason) {
+    if (active === controller)
+      fail(reason)
+  }
+}
+const input = (data: string) => void session?.write(data).catch(fail)
+const resize = (size: TerminalSize) => void session?.resize(size.cols, size.rows).catch(fail)
+onBeforeUnmount(stop)
+</script>
+
+<template>
+  <TxButton :disabled="!display" @click="start">Start Node REPL</TxButton>
+  <TxButton @click="stop">Close</TxButton>
+  <div style="height: 280px">
+    <TxTerminal @ready="display = $event" @data="input" @resize="resize" />
+  </div>
+  <output>{{ status }}</output>
+</template>
+```
+
+## Overview
+
+- Display only: mounting never creates a shell, starts a process, or requests Electron privileges, and the component imports neither transport nor Electron.
+- xterm, the fit addon, the WebGL addon, and the image addon load dynamically in `onMounted`; server rendering touches no browser globals.
+- Supports SIXEL, iTerm2 IIP (`OSC 1337`), and passive Kitty Graphics Protocol (`APC _G` and `U+10EEEE` Unicode placeholders) inline image protocols, backing the image overlay canvas at physical device-pixel resolution on HiDPI / Retina displays with device-pixel size reports (`CSI 14t` / `16t` / `18t`) plus DA1 and `XTVERSION` (`CSI > q`) advertisement so TUI previewers such as `yazi` render crisp truecolor images while stale `U+10EEEE` cells degrade cleanly to blank space instead of missing-glyph tofu boxes.
+- Output, `reset()`, and `clear()` share one ordered queue: output goes to xterm as it arrives and is parsed across frames, waiting in the queue once about 8 MB is pending; `reset()` and `clear()` run only after earlier output has been parsed. Binary data is decoded as UTF-8.
+- `lines` is watched deeply, so push, index assignment, replacement, and clearing all work; after mutating bytes inside a `Uint8Array`, trigger one reactive update.
+- Read-only mode blocks input at both xterm and the event boundary and stops the cursor blink; switching from interactive to read-only blurs the input.
+- Unmount disposes xterm, subscriptions, and observers; pending writes reject, and a late dynamic import can't recreate the terminal.
+
+## Technologies
+
+- Built on `@xterm/xterm ^6.0.0`, `@xterm/addon-fit ^0.11.0`, `@xterm/addon-webgl ^0.19.0`, and `@xterm/addon-image ^0.9.0` (all MIT), with the stylesheet in `terminal/style.css`. Draws with WebGL2 by default and falls back to xterm's DOM renderer when WebGL2 is unavailable or fails to load; inline images paint on a pointer-transparent overlay canvas and degrade cleanly to text if the image addon fails to load. Alt + arrow keys send xterm 5's word-motion sequences.
+- Only a terminal on screen holds a WebGL context (Chromium allows about 16 per renderer process), so a hidden terminal releases its context and acquires a new one when shown again. A `ResizeObserver` coalesces fits into one frame; rows and columns follow the content box, so overriding `.tx-terminal`'s `padding` does not cut off the last row. Colors adapt a distinct 16-color ANSI palette to the resolved opaque light or dark host surface, with overlapping wide glyphs rescaled to stay within cell bounds.
+- Source: `packages/tuffex/packages/components/src/terminal/`; process sessions live in `packages/utils/transport/sdk/domains/terminal.ts`.
+
+<TuffDocSourceLink />
+
+## Use cases
+
+- Browser or Electron log viewers whose host owns pause and history.
+- Interactive Electron PTYs whose trusted host owns command execution.
+- ANSI / Unicode output previews that need no process privileges.
+
+## Accessibility
+
+- xterm screen-reader support follows `screenReaderMode` and is on by default; a host that knows no assistive technology is running can turn it off to parse heavy output faster. Read-only output stays selectable and copyable.
+- Leave `autoFocus` off unless the user explicitly opens an interactive terminal; log updates never move focus.

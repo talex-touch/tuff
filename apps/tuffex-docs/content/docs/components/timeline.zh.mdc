@@ -1,0 +1,124 @@
+---
+title: Timeline 时间线
+description: 按时间顺序展示事件的列表
+category: Data
+status: beta
+since: 0.3.4
+tags: [timeline, audit, status]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+`color` 设置节点的语义色。
+:::TuffDemoWrapper{demo="TimelineTimelineDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTimeline>
+      <TxTimelineItem title="设计阶段" time="09:30" color="primary" />
+      <TxTimelineItem title="开发构建" time="12:00" color="success" />
+      <TxTimelineItem title="上线发布" time="16:10" color="warning" />
+    </TxTimeline>
+  </template>
+---
+:::
+
+### 后台审计流程
+权限编排面板中，时间线记录授权步骤，`active` 标出当前步骤。
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTimeline>
+      <TxTimelineItem title="选择权限域" time="09:30" color="primary">
+        release
+      </TxTimelineItem>
+      <TxTimelineItem title="分配资源" time="10:20" color="success" active>
+        docs + notes
+      </TxTimelineItem>
+      <TxTimelineItem title="等待复核" time="11:05" color="warning">
+        security review
+      </TxTimelineItem>
+    </TxTimeline>
+  </template>
+---
+::
+
+### 最佳实践
+
+- 状态写进 `title` 或默认插槽，`color` 只作视觉辅助。
+- 步骤流里只把一个当前事件标为 `active`。
+- 短里程碑序列用 `layout="horizontal"`；审计日志和长历史保持纵向。
+- `time` 保持简短，同一条时间线内格式一致。
+- 密集的时间线只给异常或关键状态加 `icon`。
+
+## API 参考
+
+### TxTimeline
+
+#### 属性
+:::TuffPropsTable
+---
+rows:
+  - name: layout
+    type: "'vertical' | 'horizontal'"
+    default: "'vertical'"
+    description: 布局方向，同步到所有子项。
+---
+:::
+
+#### 插槽
+
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 时间线条目。 |
+
+### TxTimelineItem
+
+#### 属性
+:::TuffPropsTable
+---
+rows:
+  - name: title
+    type: string
+    default: '-'
+    description: 条目标题。
+  - name: time
+    type: string
+    default: '-'
+    description: 时间文本。
+  - name: color
+    type: "'default' | 'primary' | 'success' | 'warning' | 'error'"
+    default: "'default'"
+    description: 节点的语义色。
+  - name: icon
+    type: string
+    default: '-'
+    description: 节点图标。
+  - name: active
+    type: boolean
+    default: 'false'
+    description: 高亮当前事件的条目与节点。
+---
+:::
+
+#### 插槽
+
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 标题与时间下方的事件说明。 |
+
+## 概述
+
+- `TxTimeline` 为 `role="list"`，每个 `TxTimelineItem` 为 `role="listitem"`。
+- `layout` 经 provide / inject 传给子项，子项无需各自设置。
+- 节点圆点与图标带 `aria-hidden`，读屏只读到标题、时间与说明。
+
+## 技术实现
+
+- 源码：`packages/tuffex/packages/components/src/timeline/`。
+
+<TuffDocSourceLink />

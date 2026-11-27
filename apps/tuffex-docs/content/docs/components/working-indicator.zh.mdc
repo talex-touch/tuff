@@ -1,0 +1,84 @@
+---
+title: "WorkingIndicator 工作指示器"
+description: "长任务进行中的行内状态指示器"
+category: AiAgent
+status: beta
+since: 0.3.9
+tags: [ai, loading, status, timer]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+`label` 写正在做什么，`startedAt` 设定计时起点。
+:::TuffDemoWrapper{demo="WorkingIndicatorWorkingIndicatorDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const startedAt = ref(Date.now())
+  </script>
+
+  <template>
+    <TxWorkingIndicator label="正在搅拌" :started-at="startedAt" />
+  </template>
+---
+:::
+
+### 像素图案
+`variant` 决定像素格图案。
+:::TuffDemoWrapper{demo="WorkingIndicatorVariantsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxWorkingIndicator variant="drive" label="正在搅拌" />
+    <TxWorkingIndicator variant="dots" label="正在取样" />
+    <TxWorkingIndicator variant="orbit" label="正在盘点" />
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 用于「某件事正在运行、已运行多久」；输入中用 `TxTypingIndicator`，无语义的等待用 `TxSpinner`，页面级状态用 `TxLoadingState`。
+- `label` 写在做什么（「正在索引仓库」），不要只写「Working」：读数回答多久，标签回答什么。
+- 瞬时操作关闭 `showElapsed`；读数在任务超过几秒后才有意义。
+- 流式场景始终传 `startedAt`，否则组件重建时计时归零。
+- 读屏用户需要耗时信息时，由宿主在任务结束后播报一次总时长。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `label` | `string` | `'Working'` | 微光状态文案。 |
+| `variant` | `'drive' \| 'dots' \| 'orbit'` | `'drive'` | 像素格图案。 |
+| `startedAt` | `number` | — | 计时起点（epoch 毫秒）；不传则从挂载起算。 |
+| `showElapsed` | `boolean` | `true` | 关闭时不渲染读数，并停止定时器。 |
+| `elapsedFormatter` | `(ms: number) => string` | — | 覆盖默认格式（`12.3s` / `2m 3.0s`）。 |
+| `ariaLabel` | `string` | — | 状态区的可访问名称；不传时以可见文案播报。 |
+
+### 插槽
+
+| 插槽名 | 作用域参数 | 说明 |
+|------|------|------|
+| `label` | — | 替换微光文案，可放富文本。 |
+
+## 概述
+
+- 根节点为 `role="status"`；读数每 100ms 更新并带 `aria-hidden="true"`，只有标签会被播报。
+- 读数始终按 `Date.now() - startedAt` 计算，后台标签页节流定时器时也不会走慢。
+- 减少动态效果时格子停在暗态，计时照常。
+- 同目录还导出 `useElapsed` 与 `formatElapsed`，可自行排版读数。
+
+## 技术实现
+
+- 九个格子的动画延迟写在 SCSS 的 `:nth-child()` 里，减少动态效果时一条 `animation: none` 即可全部关闭。
+- 移植自 [Beautiful UI](https://www.beautifului.dev)（© 2026 Shane Levine，MIT）。
+- 源码：`packages/tuffex/packages/components/src/working-indicator/`。
+
+<TuffDocSourceLink />

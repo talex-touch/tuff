@@ -1,0 +1,125 @@
+---
+title: "三维轮播"
+description: "弧线、CoverFlow 与时间机器三维轨迹"
+category: MotionCarousels
+status: beta
+since: 0.7.0
+tags: [motion, carousel, perspective]
+---
+
+## 概述
+
+`TxCarousel3D` 渲染真实 `items`，并通过 `v-model` 提供从 0 开始的当前索引。弧线轮播、CoverFlow 和 Time Machine 使用独立的来源变换。每种轨迹都有彩色与单色 ID。卡片、前后按钮、指示点和时间轴会修改同一个当前项。
+
+拖动舞台同样会修改当前项。卡片堆从按下的位置起 1:1 跟随指针，释放时停在运动所指向的数据项上。减少动态效果时，卡片堆仍跟随指针，释放后直接跳到停靠项。
+
+## 用法
+
+### 六个来源变体与自定义内容
+
+:::TuffDemoWrapper{demo="Carousel3DDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxCarousel3D } from '@talex-touch/tuffex/carousel-3d'
+  const current = ref(0)
+  const items = [
+    { id: 'today', title: '当前版本', date: '今天' },
+    { id: 'week', title: '较早版本', date: '上周' },
+    { id: 'month', title: '首个版本', date: '上月' },
+  ]
+  </script>
+  <template>
+    <TxCarousel3D v-model="current" :items="items" variant="card-time-machine"
+      previous-label="上一项" next-label="下一项" item-label="卡片"
+      timeline-label="时间轴" aria-label="三维轮播" />
+  </template>
+---
+:::
+
+演示展示全部六个 ID，支持筛选，并包含真实卡片插槽。彩色缩略图是自制内联 SVG 景物。Time Machine 在主刻度间保留两个中间刻度；悬停、聚焦、点击或拖动滑块会选择最近的数据项。
+
+| 变体 | 保留的来源几何 |
+| --- | --- |
+| `card-carousel` | 卡片间距 160px；悬停或聚焦后，每级旋转 20°、垂直移动 24px。当前项缩放 1.05，其他项展开时为 0.65，收起时为 0.8。 |
+| `card-carousel-mono` | 相同弧线轨迹；默认插槽显示调用方文字，不显示图片。 |
+| `card-cover-flow` | 透视 1000px；间距 32px，侧面旋转 ±38°，当前项深度 +50px，后方深度每级递减 50px。距离超过两级的卡片淡出。 |
+| `card-cover-flow-mono` | 相同 CoverFlow 轨迹，使用文字表面。 |
+| `card-time-machine` | 透视 800px；后方每级深度 −60px、垂直 −12px、X 轴旋转 +2°。过去卡片向下 300px、向前 200px，旋转 −20°、缩放 1.3 并消失。 |
+| `card-time-machine-mono` | 相同深度卡片堆与时间轴，使用文字表面。 |
+
+原始 ThreeDPage 中的三个三维展示复用这些真实轨迹，不会替换成同一个扇形布局。
+
+### 拖动
+
+在舞台上按下并移动 4 px，卡片堆即被拾起；移动不足 4 px 仍是普通点击。弧线和 CoverFlow 跟随水平移动（向左拖动到后面的项）；Time Machine 跟随垂直移动（向下拖动到后面的项）。一项对应的行程在弧线中为 160 px，CoverFlow 中为 32 px，Time Machine 中为 300 px，并随 `size` 缩放。卡片堆从你抓住的位置继续跟随，不会吸附到指针上。拖动期间不会发出 `update:modelValue` 或 `change`，当前项只在释放时改变一次。
+
+释放时，卡片堆取最后 100ms 的指针速度，推算这个速度会把它带到哪里，并停在最靠近该位置的数据项。快速甩动可以越过多项，慢速释放停在最近的一项；带着速度释放时会轻微过冲再落定。越过第一项或最后一项时，卡片堆像橡皮筋一样产生阻力，释放后回到边界。拖动不会在 `loop` 模式下循环，按钮和方向键仍会循环。
+
+卡片堆仍在运动时抓住它，会从当前绘制位置继续，而不是从目标位置继续。Escape 或指针取消会让卡片堆回到当前项，不发出任何事件。拖动不会触发结束位置下卡片的点击。触摸保留页面滚动：舞台声明 `touch-action: pan-y`（纵向拖动的 Time Machine 为 `pan-x`），沿该方向起手的触摸会滚动页面，不会开始拖动。
+
+### 最佳实践
+
+- 每项提供稳定的 `id` 和 `title`，Time Machine 同时提供 `date`。图片 `src` 和 `alt` 只引用有权展示的素材。
+- 仅在数据适合循环时设置 `loop`。默认到达边界后停止，并禁用对应前后按钮。拖动即使设置了 `loop` 也不会循环。
+- 轮播位于需要自己处理指针拖动的容器内时，设置 `draggable=false`。按钮、刻度、滑块和键盘仍可使用。
+- 弧线的 `expanded` 未设置时由悬停或聚焦驱动；设置布尔值可控制姿态。CoverFlow 和 Time Machine 不读取这个属性。
+- 需要明确点击后才选择时，设置 `timelineHover=false`。键盘聚焦仍会展示刻度几何，但不会选择。
+- `#item` 位于选择按钮内，应提供非交互内容。插槽可替换单色默认内容，同时保留几何。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `items` | `MotionCardItem[]` | 必填 | 调用方卡片；空数组渲染 `#empty`。 |
+| `modelValue` | `number` | 内部 `2`，Time Machine 为 `0` | 从 0 开始的当前项，限制在可用数据范围内。 |
+| `variant` | `Carousel3DVariant` | `card-carousel` | 六个 ID 之一；列表由 `CAROUSEL_3D_VARIANTS` 导出。 |
+| `expanded` | `boolean` | 未设置 | 受控弧线姿态；未设置时由悬停或聚焦控制。 |
+| `loop` | `boolean` | `false` | 前后切换是否循环。 |
+| `animated` | `boolean` | `true` | 启用三维动效，不改变操作。 |
+| `disabled` | `boolean` | `false` | 禁止卡片、按钮、刻度、滑块和拖动修改当前项。 |
+| `draggable` | `boolean` | `true` | 拖动舞台切换数据项；设为 `false` 可把指针拖动交还给宿主。 |
+| `controls` | `boolean` | `true` | 显示前后按钮。 |
+| `dots` | `boolean` | `true` | 显示有无障碍名称的指示点。 |
+| `timeline` | `boolean` | `true` | 显示 Time Machine 刻度和范围滑块。 |
+| `timelineHover` | `boolean` | `true` | 刻度悬停或聚焦时选择最近的数据项。 |
+| `duration` | `number` | `800` | 共享弹簧过渡时长，单位为毫秒。 |
+| `size` | `xs / sm / md / lg` | `md` | 同时缩放卡片尺寸和三维轨迹。 |
+| `ariaLabel` | `string` | `Card carousel` | 区域的无障碍名称。 |
+| `previousLabel` | `string` | `Previous` | 可本地化的上一项文字。 |
+| `nextLabel` | `string` | `Next` | 可本地化的下一项文字。 |
+| `itemLabel` | `string` | `Item` | 可本地化的指示点或缺省项名称。 |
+| `timelineLabel` | `string` | `Timeline` | 可本地化的滑块和刻度名称。 |
+
+`MotionCardItem` 与 CardSpread 共用：`id?`、`title?`、`description?`、`src?`、`alt?`、`date?`、`href?` 和 `color?`。轮播默认使用标题、说明和可选图片；单色 ID 不显示默认图片。组件不内置素材或业务记录。
+
+### 事件
+
+| 事件 | 参数 | 含义 |
+| --- | --- | --- |
+| `update:modelValue` | `index: number` | 真实输入请求修改当前项。 |
+| `change` | `item: MotionCardItem, index: number` | 当前调用方数据项改变；索引未变时不发出。 |
+
+### 插槽与实例方法
+
+| API | 契约 |
+| --- | --- |
+| `#item` | `{ item, index, active }`；替换卡片内容。 |
+| `#caption` | `{ item, index, active: true }`；替换当前标题。 |
+| `#empty` | 空数组内容。 |
+| `previous()` | 与按钮共用边界、循环和禁用规则，移到上一项。 |
+| `next()` | 与按钮共用边界、循环和禁用规则，移到下一项。 |
+| `select(index)` | 对索引取整，再按边界或循环规则选择。 |
+
+方向键选择相邻项，Home 和 End 选择首尾项。原生按钮支持 Enter 和 Space。范围滑块保留原生键盘操作。当前标题以礼貌方式播报，选择不会意外移动焦点。拖动不增加也不改变键盘行为：拖动不会触发结束位置下卡片的点击，聚焦卡片上的 Enter 和 Space 仍会选择它。
+
+## 技术实现
+
+来源为 Amicro 的 `CardCarousel`、`CardCoverFlow`、`CardTimeMachine`、`cards.ts`、卡片 registry 条目和 ThreeDPage 复用展示。固定提交为 `43c29ce9cdd16459e3eab4992381b8d35b38776a`，采用 MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。
+
+CSS 变换使用共享弹簧编译器与 `useMotionActivity`。失活或减少动态效果时，直接显示目标状态，仍可选择。Time Machine 的圆角滤镜使用 Vue `useId`，多个实例及服务端渲染后的水合不会共用标识。组件不包含上游图片，也不引入 React/Motion 运行时。
+
+拖动采样的是卡片堆的绘制位置，因此越过两端释放时只带着当前绘制速度。释放用 `projectMomentum` 推算停靠位置，并把速度（100ms 窗口，`createVelocityTracker`）交给驱动选择的弹簧（`stepSpring`）：带着动量的释放使用接近 0.8 的阻尼比，其余使用临界阻尼。两端使用 `rubberband`。舞台只在移动超过 4 px 后才取得原生指针捕获，普通点击保持原有目标。

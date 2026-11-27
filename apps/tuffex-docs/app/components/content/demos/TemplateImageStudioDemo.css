@@ -1,0 +1,739 @@
+/* ImageStudio template (TemplateImageStudioDemo.vue). Unscoped, so every class
+   carries the template's prefix; rules that reach into tuffex components use
+   three classes to outrank their scoped `.tx-*[data-v-*]` selectors whatever
+   the load order. */
+
+.img-studio {
+  --img-studio-line: var(--tx-border-color-lighter, #ebeef5);
+  --img-studio-rail: color-mix(in srgb, var(--tx-bg-color-page, #f2f3f5) 45%, var(--tx-bg-color, #fff));
+  --img-studio-veil: color-mix(in srgb, var(--tx-bg-color, #fff) 88%, transparent);
+  --img-studio-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  position: relative;
+  display: flex;
+  height: 100%;
+  box-sizing: border-box;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--tx-bg-color, #fff);
+  color: var(--tx-text-color-primary, #303133);
+  font-size: 13px;
+  /* Focusable only so focus has somewhere to go when what held it disables or hides. */
+  outline: none;
+}
+
+/* Header ----------------------------------------------------------------- */
+
+.img-studio__head {
+  display: flex;
+  min-width: 0;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  box-shadow: inset 0 -1px 0 var(--img-studio-line);
+}
+
+.img-studio__logo {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: var(--tx-color-primary-light-9, #ecf5ff);
+  color: var(--tx-color-primary, #409eff);
+  font-size: 16px;
+}
+
+.img-studio__heading {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.img-studio__title,
+.img-studio__subtitle {
+  overflow: hidden;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.img-studio__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.img-studio__subtitle {
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 12px;
+}
+
+.img-studio__sample {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--tx-fill-color-light, #f5f7fa);
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.img-studio__progress {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--tx-color-primary, #409eff);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.img-studio__pulse {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--tx-color-primary, #409eff);
+}
+
+.img-studio .img-studio__head .img-studio__params-toggle {
+  min-width: 0;
+  flex: none;
+}
+
+.img-studio__params-summary {
+  white-space: nowrap;
+}
+
+/* Body ------------------------------------------------------------------- */
+
+/* The columns follow the JS band (the root's `is-*` class), not a container
+   query: whether the parameters are a rail or a sheet is decided there, and
+   the grid has to agree with it to the pixel. */
+.img-studio__body {
+  position: relative;
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: 236px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.img-studio.is-narrow .img-studio__body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.img-studio.is-wide .img-studio__body {
+  grid-template-columns: 236px minmax(0, 1fr) 220px;
+}
+
+.img-studio__section {
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Parameters ------------------------------------------------------------- */
+
+.img-studio__params {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 14px 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--img-studio-rail);
+  box-shadow: inset -1px 0 0 var(--img-studio-line);
+  outline: none;
+  scrollbar-width: thin;
+}
+
+/* Below 640px the same panel slides over the results. `visibility` keeps it
+   out of the tab order once the slide has finished. */
+.img-studio__params.is-sheet {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(288px, 88%);
+  background: var(--tx-bg-color, #fff);
+  box-shadow: var(--tx-elevation-4, 5px 10px 30px rgba(0, 0, 0, 0.14));
+  transform: translateX(-104%);
+  transition:
+    transform 0.22s var(--img-studio-ease),
+    visibility 0s linear 0.22s;
+  visibility: hidden;
+}
+
+.img-studio__params.is-sheet.is-open {
+  transform: none;
+  transition: transform 0.22s var(--img-studio-ease);
+  visibility: visible;
+}
+
+.img-studio__scrim {
+  position: absolute;
+  z-index: 4;
+  background: color-mix(in srgb, var(--tx-bg-color-page, #f2f3f5) 72%, transparent);
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.img-studio__scrim.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.img-studio__params-head {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.img-studio-field {
+  display: flex;
+  min-width: 0;
+  flex: none;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.img-studio-field__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.img-studio-field__label {
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 12px;
+}
+
+.img-studio-field__value {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.img-studio .img-studio-field .tx-flat-select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Three equal segments across the rail; the items do not shrink by default. */
+.img-studio .img-studio-field .tx-flat-radio {
+  display: flex;
+  width: 100%;
+}
+
+.img-studio .img-studio-field .tx-flat-radio-item {
+  min-width: 0;
+  flex: 1 1 0;
+  justify-content: center;
+}
+
+.img-studio-ratio {
+  display: inline-block;
+  box-sizing: border-box;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+}
+
+.img-studio-ratio.is-square {
+  width: 11px;
+  height: 11px;
+}
+
+.img-studio-ratio.is-landscape {
+  width: 15px;
+  height: 9px;
+}
+
+.img-studio-ratio.is-portrait {
+  width: 9px;
+  height: 15px;
+}
+
+/* The end dots are centred on the track's ends, so they need the room. */
+.img-studio-field__slider {
+  padding: 0 10px;
+}
+
+.img-studio-field__seed {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.img-studio .img-studio-field__seed .tx-number-input {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.img-studio__advanced {
+  flex: none;
+}
+
+.img-studio__scrubs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.img-studio__note {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0 0;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.img-studio__note > span:first-child {
+  flex: none;
+  margin-top: 2px;
+  font-size: 13px;
+}
+
+/* Prompt and results ------------------------------------------------------ */
+
+.img-studio__main {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+}
+
+.img-studio__composer {
+  display: flex;
+  min-width: 0;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* The scripted press: the send button's own `:active` scale, held for a beat. */
+.img-studio .img-studio__composer.is-pressing .tx-bui-prompt-bar__send {
+  transform: scale(0.94);
+}
+
+/* Sized by fitGrid in px; the stable gutter keeps a scrollbar from changing
+   the width it measured. */
+.img-studio__results {
+  display: grid;
+  min-height: 0;
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  align-content: center;
+  align-content: safe center;
+  justify-content: center;
+  justify-content: safe center;
+  gap: 10px;
+  grid-template-columns: repeat(var(--cols, 2), var(--tile-w, 160px));
+  padding: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable both-edges;
+  scrollbar-width: thin;
+}
+
+.img-studio__results.is-scroll {
+  align-content: start;
+}
+
+.img-studio-tile {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: var(--tile-ratio, 1 / 1);
+  border-radius: 12px;
+  background: var(--tx-fill-color-light, #f5f7fa);
+  isolation: isolate;
+}
+
+/* Holds focus while its own actions are disabled for a variant. */
+.img-studio-tile:focus-visible {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: -2px;
+}
+
+.img-studio .img-studio-tile .img-studio-tile__gen {
+  position: absolute;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  inset: 0;
+}
+
+.img-studio-tile__img {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  inset: 0;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  user-select: none;
+}
+
+.img-studio-tile.is-done .img-studio-tile__img {
+  opacity: 1;
+}
+
+/* Block, not flex, so a label too long for a small tile ends in an ellipsis. */
+.img-studio-tile__status,
+.img-studio-tile__badge {
+  position: absolute;
+  z-index: 3;
+  bottom: 8px;
+  left: 8px;
+  display: block;
+  max-width: calc(100% - 16px);
+  box-sizing: border-box;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--img-studio-veil);
+  font-size: 11px;
+  line-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.img-studio-tile__status {
+  color: var(--tx-text-color-primary, #303133);
+}
+
+.img-studio-tile__status .img-studio__pulse {
+  display: inline-block;
+  margin-right: 2px;
+  vertical-align: 1px;
+}
+
+.img-studio-tile__badge {
+  color: var(--tx-color-success, #67c23a);
+  font-weight: 500;
+}
+
+.img-studio-tile__badge > span {
+  vertical-align: -2px;
+}
+
+/* A variant of the applied tile is being made: its status takes the corner. */
+.img-studio-tile__status ~ .img-studio-tile__badge {
+  display: none;
+}
+
+/* Shown on hover and keyboard focus; always on touch, which has no hover. */
+.img-studio-tile__actions {
+  position: absolute;
+  z-index: 4;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  max-width: calc(100% - 12px);
+  box-sizing: border-box;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--img-studio-veil);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.img-studio-tile:hover .img-studio-tile__actions,
+.img-studio-tile:focus-within .img-studio-tile__actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .img-studio-tile__actions {
+    opacity: 1;
+  }
+}
+
+/* History (960px and up) --------------------------------------------------- */
+
+.img-studio__history {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 10px 12px 12px;
+  background: var(--img-studio-rail);
+  box-shadow: inset 1px 0 0 var(--img-studio-line);
+}
+
+.img-studio__history-list {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.img-studio-set {
+  display: grid;
+  width: 100%;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  column-gap: 10px;
+  cursor: pointer;
+  font: inherit;
+  grid-template-columns: 52px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  row-gap: 2px;
+  text-align: left;
+}
+
+.img-studio-set:hover {
+  background: var(--tx-fill-color-light, #f5f7fa);
+}
+
+.img-studio-set.is-active {
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 9%, transparent);
+}
+
+.img-studio-set:focus-visible {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: -2px;
+}
+
+.img-studio-set__thumbs {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--tx-fill-color-light, #f5f7fa);
+  gap: 2px;
+  grid-row: 1 / span 2;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.img-studio-set__thumbs.is-1 {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+
+.img-studio-set__thumbs.is-2 {
+  grid-template-rows: 1fr;
+}
+
+.img-studio-set__thumbs.is-3 .img-studio-set__thumb:first-child {
+  grid-row: span 2;
+}
+
+.img-studio-set__thumb {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--tx-fill-color, #f0f2f5);
+}
+
+.img-studio-set__thumb img {
+  position: absolute;
+  display: block;
+  width: 100%;
+  height: 100%;
+  inset: 0;
+  object-fit: cover;
+}
+
+.img-studio-set__prompt {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  font-size: 12px;
+  -webkit-line-clamp: 2;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* Wraps rather than cutting off when the set was made. historyMeta() glues
+   each part with no-break spaces, and keep-all stops a break between Han
+   characters, so lines only break after a separator: never inside "12 分钟前". */
+.img-studio-set__meta {
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+/* Toast ------------------------------------------------------------------ */
+
+/* Centred at the foot of the stage. It keeps its box while closed, so it lets
+   clicks through until it opens. */
+.img-studio__toast {
+  position: absolute;
+  z-index: 6;
+  bottom: 14px;
+  left: 50%;
+  width: min(320px, calc(100% - 28px));
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.img-studio__toast.is-open {
+  pointer-events: auto;
+}
+
+.img-studio-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.img-studio-toast__icon {
+  flex: none;
+  color: var(--tx-color-success, #67c23a);
+  font-size: 15px;
+}
+
+.img-studio-toast__text {
+  min-width: 0;
+  flex: 1;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.img-studio-toast__action {
+  height: 24px;
+  flex: none;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tx-color-primary, #409eff);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.img-studio-toast__action:hover {
+  background: var(--tx-color-primary-light-9, #ecf5ff);
+}
+
+.img-studio-toast__close {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tx-text-color-placeholder, #a8abb2);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.img-studio-toast__close:hover {
+  background: var(--tx-fill-color-light, #f5f7fa);
+  color: var(--tx-text-color-primary, #303133);
+}
+
+.img-studio-toast__action:focus-visible,
+.img-studio-toast__close:focus-visible {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: 1px;
+}
+
+/* Bands ------------------------------------------------------------------ */
+
+@container template (max-width: 639.98px) {
+  .img-studio__head {
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .img-studio__logo,
+  .img-studio__subtitle,
+  .img-studio__progress-text {
+    display: none;
+  }
+
+  .img-studio__main {
+    padding: 10px;
+  }
+}
+
+@container template (max-width: 419.98px) {
+  .img-studio__params-summary {
+    display: none;
+  }
+}
+
+/* Motion ----------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .img-studio__pulse {
+    animation: img-studio-pulse 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes img-studio-pulse {
+  50% {
+    opacity: 0.35;
+    scale: 0.7;
+  }
+}
+
+/* Off screen nothing animates, the pulses included. */
+.img-studio.is-offscreen .img-studio__pulse {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .img-studio__params.is-sheet,
+  .img-studio__params.is-sheet.is-open,
+  .img-studio__scrim,
+  .img-studio-tile__img,
+  .img-studio-tile__actions {
+    transition: none;
+  }
+}

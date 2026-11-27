@@ -1,0 +1,212 @@
+---
+title: FoldPage
+description: Interactive 3D multi-panel fold and paper corner peel effects.
+category: Effects
+status: beta
+since: 0.9.5
+tags: [fold, peel, paper, 3d, effect]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Multi-Panel Fold
+`TxFoldPage` folds and unfolds a multi-panel surface in 3D perspective using either a concertina `accordion` or staggered `gate` tri-fold layout, with horizontal/vertical axes, pointer momentum drag, and click toggling.
+:::TuffDemoWrapper{demo="FoldPageBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxFoldPage } from '@talex-touch/tuffex/fold-page'
+
+  const open = ref(false)
+  const panels = [
+    { id: 'surface', badge: '01 · Surface', title: 'Refraction Base', content: 'Built on TxBaseSurface refraction.' },
+    { id: 'crease', badge: '02 · Lighting', title: 'Crease Shading', content: 'Seamless 3D joints with angle sheen.' },
+    { id: 'spring', badge: '03 · Physics', title: 'Spring Momentum', content: 'Pointer drag with velocity settle.' },
+  ]
+  </script>
+
+  <template>
+    <TxFoldPage v-model="open" :panels="panels" fold-style="accordion" />
+  </template>
+---
+:::
+
+### Corner Peel
+`TxFoldCorner` uses perpendicular-bisector polygon clipping and an exact 2D reflection matrix to curl and peel back any corner of a card, exposing an interactive `#under` layer underneath.
+:::TuffDemoWrapper{demo="FoldPageCornerDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxFoldCorner } from '@talex-touch/tuffex/fold-page'
+
+  const peeled = ref(false)
+  </script>
+
+  <template>
+    <TxFoldCorner v-model="peeled" corner="bottom-right" trigger="hover-drag">
+      <template #default>
+        <p>Hover to curl, drag diagonally, or click to peel the corner.</p>
+      </template>
+      <template #under>
+        <p>Signing key: tx_live_98f4c1a7</p>
+      </template>
+    </TxFoldCorner>
+  </template>
+---
+:::
+
+### Combined Usage
+Nest `TxFoldCorner` inside a named `#panel-<id>` slot of `TxFoldPage` to pair a 3D brochure spread with a peelable metadata card.
+:::TuffDemoWrapper{demo="FoldPageCombinedDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxFoldPage v-model="open" :panels="panels">
+      <template #panel-inspect>
+        <TxFoldCorner v-model="peeled" corner="bottom-right" size="sm" @pointerdown.stop @click.stop>
+          <template #default>Checksum Digest</template>
+          <template #under>SHA-256 verified</template>
+        </TxFoldCorner>
+      </template>
+    </TxFoldPage>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Keep the default `surface="refraction"` so folded facets and peeled sheets match TuffEx's light, dark, and high-contrast surfaces.
+- In `gate` mode, wing panels automatically render a 180-degree rotated `#cover` backface with an opaque backing so inner content never bleeds through when closed.
+- When nesting `TxFoldCorner` or another draggable control inside `TxFoldPage`, add `@pointerdown.stop` and `@click.stop` on the inner element so pointer gestures do not bubble to the outer fold container.
+- Pass `rest-peel="0"` when a sheet should sit completely flat at rest; the `#under` layer automatically stays `inert` and `aria-hidden` until peeled past the threshold.
+- Use `size` (`xs`, `sm`, `md`, `lg`) or an explicit container height; vertical tri-folds work best at `md` or `lg` so each panel retains comfortable vertical space.
+
+## API Reference
+
+### TxFoldPage
+
+#### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `boolean` | `false` | Whether the fold spread is open; bind with `v-model`. |
+| `progress` | `number` | `undefined` | Controlled continuous openness (`0` to `1`); bind with `v-model:progress`. |
+| `panels` | `FoldPagePanel[]` | `undefined` | Panel definitions; falls back to `count` numbered panels when omitted. |
+| `count` | `number` | `3` | Number of panels when `panels` is omitted (minimum `2`). |
+| `direction` | `'horizontal' \| 'vertical'` | `'horizontal'` | Axis along which panels fold. |
+| `foldStyle` | `'accordion' \| 'gate'` | `'accordion'` | Concertina accordion or staggered cover-wing tri-fold. |
+| `foldAngle` | `number` | `68` (`accordion`), `172` (`gate`) | Closed fold angle in degrees. |
+| `perspective` | `number` | `1400` | CSS 3D perspective distance in px. |
+| `creaseOpacity` | `number` | `0.28` | Crease shadow and highlight intensity (`0` to `1`). |
+| `surface` | `BaseSurfaceMode` | `'refraction'` | Surface mode forwarded to `TxBaseSurface`. |
+| `surfaceColor` | `string` | `''` | Optional surface tint color; follows the theme by default. |
+| `surfaceOpacity` | `number` | `0.78` (`accordion`), `0.94` (`gate`) | Surface base opacity (`0` to `1`). |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Height and padding preset. |
+| `radius` | `number` | `16` | Outer corner radius in px. |
+| `draggable` | `boolean` | `true` | Allows pointer dragging to scrub fold progress. |
+| `clickToToggle` | `boolean` | `true` | Toggles open state on non-interactive surface clicks. |
+| `stiffness` | `number` | `220` | Spring stiffness for settle animation. |
+| `damping` | `number` | `24` | Spring damping for settle animation. |
+| `disabled` | `boolean` | `false` | Disables pointer and keyboard interaction. |
+| `ariaLabel` | `string` | `'Fold page'` | Accessible label on the fold region. |
+| `labels` | `FoldPageLabels` | English defaults | Accessible labels for the toggle button (`expand`, `collapse`, `toggle`). |
+
+#### Events
+
+| Event | Params | Description |
+|-------|--------|-------------|
+| `update:modelValue` | `(value: boolean)` | Emits when open state changes. |
+| `update:progress` | `(progress: number)` | Emits continuous openness (`0` to `1`) during drags or uncontrolled motion. |
+| `change` | `(value: boolean)` | Emits when the boolean state actually changes. |
+| `fold-start` | `(to: boolean)` | Emits when a fold transition or drag begins. |
+| `fold-end` | `(value: boolean)` | Emits when the fold settles at its target state. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `panel` | `{ panel, index, count, progress, angle, open }` | Shared slot for rendering any panel. |
+| `panel-<index>` | `{ panel, index, count, progress, angle, open }` | Per-index panel override. |
+| `panel-<id>` | `{ panel, index, count, progress, angle, open }` | Per-`panel.id` override. |
+| `cover` | `{ open, progress, toggle }` | Front cover backface of the primary wing in `gate` mode. |
+
+#### Exposed Methods
+
+| Method | Type | Description |
+|--------|------|-------------|
+| `open()` | `() => void` | Unfolds the panels flat. |
+| `close()` | `() => void` | Folds the panels closed. |
+| `toggle()` | `() => void` | Toggles between folded and flat states. |
+| `setProgress(value)` | `(value: number) => void` | Jumps immediately to a progress value (`0` to `1`). |
+
+### TxFoldCorner
+
+#### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `boolean` | `false` | Whether the corner is peeled open; bind with `v-model`. |
+| `progress` | `number` | `undefined` | Controlled peel depth (`0` to `1`); bind with `v-model:progress`. |
+| `corner` | `'top-left' \| 'top-right' \| 'bottom-left' \| 'bottom-right'` | `'bottom-right'` | Corner from which the sheet peels. |
+| `trigger` | `'hover' \| 'click' \| 'drag' \| 'hover-drag'` | `'hover-drag'` | Interaction trigger mode. |
+| `restPeel` | `number` | `0.12` | Subtle dog-ear peel amount at rest (`0` to `1`). |
+| `hoverPeel` | `number` | `0.28` | Corner curl amount on pointer hover (`0` to `1`). |
+| `openPeel` | `number` | `0.84` | Target peel depth when opened (`0` to `1`). |
+| `surface` | `BaseSurfaceMode` | `'refraction'` | Surface mode forwarded to `TxBaseSurface`. |
+| `surfaceColor` | `string` | `''` | Optional surface tint color; follows the theme by default. |
+| `surfaceOpacity` | `number` | `0.96` | Opacity of the front sheet and curled flap back. |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Container height and padding preset. |
+| `radius` | `number` | `16` | Outer corner radius in px. |
+| `creaseOpacity` | `number` | `0.26` | Dynamic flap drop-shadow and crease sheen strength (`0` to `1`). |
+| `stiffness` | `number` | `240` | 2D spring stiffness. |
+| `damping` | `number` | `26` | 2D spring damping. |
+| `disabled` | `boolean` | `false` | Disables hover, drag, click, and keyboard peeling. |
+| `ariaLabel` | `string` | `'Fold corner'` | Accessible label on the corner region. |
+| `labels` | `FoldCornerLabels` | English defaults | Accessible labels for the corner handle (`peel`, `flatten`, `toggle`). |
+
+#### Events
+
+| Event | Params | Description |
+|-------|--------|-------------|
+| `update:modelValue` | `(value: boolean)` | Emits when peeled state changes. |
+| `update:progress` | `(progress: number)` | Emits continuous peel progress (`0` to `1`). |
+| `change` | `(value: boolean)` | Emits when peeled state actually changes. |
+| `peel-start` | `(to: boolean)` | Emits when peeling or flattening begins. |
+| `peel-end` | `(value: boolean)` | Emits when the corner settles. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | `{ progress, peeled, corner, angleDeg, toggle }` | Front sheet content. |
+| `under` | `{ progress, peeled, corner, angleDeg, toggle }` | Underlying content revealed beneath the peel. |
+| `reveal` | `{ progress, peeled, corner, angleDeg, toggle }` | Alias for the `under` slot. |
+| `flap` | `{ progress, peeled, corner, angleDeg, toggle }` | Underside content of the curled paper flap. |
+
+#### Exposed Methods
+
+| Method | Type | Description |
+|--------|------|-------------|
+| `peel()` | `() => void` | Peels the corner open. |
+| `flatten()` | `() => void` | Returns the corner to rest. |
+| `toggle()` | `() => void` | Toggles between peeled and resting states. |
+| `setProgress(value)` | `(value: number) => void` | Jumps immediately to a peel depth (`0` to `1`). |
+
+## Overview
+
+- `TxFoldPage` derives continuous 3D panel translations and hinge angles from measured container bounds so seams remain locked across the full fold sweep, while `gate` mode staggers outer wings with explicit Z separation to avoid Z-fighting.
+- `TxFoldCorner` constructs the perpendicular bisector between the corner origin and the active tip, splits the rectangle via Sutherland-Hodgman polygon clipping, and reflects the flap using a 2D reflection matrix so the crease line stays pinned to the sheet.
+- While `TxFoldCorner` sits near rest (`progress < 0.08`), the `#under` layer carries `inert` and `aria-hidden="true"` so concealed controls stay out of the keyboard Tab order.
+- Both components honor `prefers-reduced-motion: reduce`, snapping immediately to the target state without running the frame loop.
+
+## Technologies
+
+- Spring physics run on `stepSpring`, `createFrameLoop`, and `projectMomentum` from `@talex-touch/tuffex/utils`, sleeping as soon as motion settles.
+- Framework-free 3D layout and 2D reflection geometry live in `geometry.ts` (`computeFoldPageLayout`, `computeCornerPeelGeometry`, `clipPolygonHalfPlane`).
+- Source: `packages/tuffex/packages/components/src/fold-page/`.
+
+<TuffDocSourceLink />

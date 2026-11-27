@@ -1,0 +1,69 @@
+---
+title: "DotIndicator"
+description: "A status primitive: a colored dot beside text."
+category: Data
+status: beta
+since: 0.3.9
+tags: [status, dot, table, data]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+`color` tints the dot; `label` or the default slot supplies the text.
+:::TuffDemoWrapper{demo="DotIndicatorDotIndicatorDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDotIndicator color="var(--tx-bui-green)" label="Very strong" />
+    <TxDotIndicator color="var(--tx-bui-orange)" label="Weak" />
+    <TxDotIndicator color="var(--tx-bui-red)" label="Very weak" />
+    <TxDotIndicator color="var(--tx-bui-ink-3)" label="No communication" />
+
+    <TxDotIndicator color="var(--tx-bui-orange)">
+      <strong>44% average</strong>
+    </TxDotIndicator>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Prefer a `label`: color must never be the only carrier of state.
+- Use `ariaLabel` alone only when other text in the same row already conveys the meaning.
+- Take colors from `--tx-bui-*` or `--tx-color-*` variables; a hardcoded hex won't follow the theme.
+- In a footer aggregate, wrap the slot text in `<strong>` to emphasize the figure; the dot stays aligned.
+- Use the dot in dense contexts such as table cells and footers; use `TxStatusBadge` for a standalone status marker.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `color` | `string` | `'currentColor'` | Dot color; any CSS color or custom property. |
+| `label` | `string` | - | Text beside the dot. |
+| `size` | `number` | `8` | Dot diameter in px. |
+| `ariaLabel` | `string` | - | Accessible name when there is no visible text. |
+
+### Slots
+
+| Name | Description |
+|------|------|
+| `default` | Replaces the text beside the dot. |
+
+## Overview
+
+- With a `label` or the default slot, the text carries the meaning; no role or `aria-label` is added.
+- With only `ariaLabel`, it renders as `role="img"` with that name.
+- With neither, it is decoration and gets `aria-hidden="true"`.
+- The text uses tabular figures, so changing numbers don't shift sideways.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/dot-indicator/`.
+- Adapted from [Beautiful UI](https://www.beautifului.dev) (© 2026 Shane Levine, MIT); upstream's dot is purely visual, and this port adds the three accessibility identities.
+
+<TuffDocSourceLink />

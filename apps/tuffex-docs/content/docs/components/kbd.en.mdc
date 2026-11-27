@@ -1,0 +1,57 @@
+---
+title: Kbd
+description: A token that shows a keyboard key.
+category: Basic
+status: beta
+since: 0.3.7
+tags: [keyboard, shortcut, token]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Shortcuts
+::::TuffDemoWrapper{demo="KbdKbdDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxKbd tone="primary">⌘</TxKbd>
+    <TxKbd tone="primary">K</TxKbd>
+  </template>
+---
+::::
+
+### Best Practices
+
+- Render a key combination as separate `TxKbd` tokens, not one long string.
+- Make key names platform-aware: `⌘` on macOS, `Ctrl` on Windows / Linux.
+- Reserve `tone="primary"` for the main shortcut of a page or command, at most one group per screen.
+- Pair shortcuts with visible action text; on their own they are hard to discover.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `size` | `'sm' \| 'md'` | `'sm'` | `sm` for inline help and menu shortcuts; `md` for shortcuts shown on their own. |
+| `tone` | `'default' \| 'primary'` | `'default'` | `primary` highlights the main shortcut. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Key label, such as `⌘`, `Ctrl`, or `K`. |
+
+## Overview
+
+- The root is a native `<kbd>`.
+- It renders only its default slot and holds no state.
+- `tone="primary"` changes only the appearance, never the slot text.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/kbd/`.
+
+<TuffDocSourceLink />

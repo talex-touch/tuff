@@ -1,0 +1,107 @@
+---
+title: "SearchPanel 内联搜索面板"
+description: "输入框、实时结果与空态合为一体的内联搜索卡片"
+category: Advanced
+status: beta
+since: 0.3.9
+tags: [search, filter, listbox, command]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 实时过滤
+:::TuffDemoWrapper{demo="SearchPanelSearchPanelDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSearchPanel v-model="query" :items="items" @select="run" />
+  </template>
+
+  <script setup lang="ts">
+  const items = [
+    { id: 'a', label: 'Forecast summer demand' },
+    { id: 'b', label: 'Find waffle cone suppliers', keywords: ['vendor'] },
+    { id: 'c', label: 'Retire low sellers', disabled: true },
+  ]
+  </script>
+---
+:::
+
+### 最佳实践
+
+- 全局唤起的命令面板用 `TxCommandPalette`；版面内长驻的搜索区用本组件，两者键盘契约一致。
+- 用作命令列表时在 `select` 中执行动作并清空查询；用作筛选器时保留查询。
+- 远端搜索传 `:filter="items => items"` 关闭内建匹配，在 `queryChange` 中自行防抖取数。
+- 同义词放进 `keywords`；不可用的项设 `disabled` 置灰，不要从 `items` 中删除。
+- 按最常见的结果数设定 `minHeight`，过小会重新出现跳动。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string` | `''` | 查询文本，配合 `v-model`。 |
+| `items` | `SearchPanelItem[]` | `[]` | 候选项。 |
+| `placeholder` | `string` | `'Search'` | 输入框占位文本。 |
+| `ariaLabel` | `string` | - | 输入框的无障碍名称；缺省时用 `placeholder`。 |
+| `idleCount` | `number` | `5` | 空查询时显示的条数；`0` 显示全部。 |
+| `emptyThreshold` | `number` | `3` | 显示空态所需的最短查询长度。 |
+| `emptyTitle` | `string` | `'No results found'` | 空态标题。 |
+| `emptyDescription` | `string` | `'Adjust your search to try again'` | 空态说明。 |
+| `clearLabel` | `string` | `'Clear search'` | 清除按钮的无障碍名称。 |
+| `listLabel` | `string` | `'Search results'` | 结果列表的无障碍名称。 |
+| `minHeight` | `number \| string` | `248` | 预留高度，结果增减时版面不跳动。 |
+| `filter` | `(items, query) => items` | - | 替换内建匹配：对 `label` 与 `keywords` 不区分大小写的 `includes`。 |
+| `clearable` | `boolean` | `true` | 显示清除按钮。 |
+| `disabled` | `boolean` | `false` | 禁用输入。 |
+
+### 事件
+
+| 事件名 | 载荷 | 说明 |
+|------|------|------|
+| `update:modelValue` | `string` | 查询文本变化时触发。 |
+| `queryChange` | `string` | 与 `update:modelValue` 同值，供不用 `v-model` 的宿主监听。 |
+| `select` | `SearchPanelItem` | 点击或按 Enter 选中结果时触发。 |
+| `clear` | - | 通过清除按钮或 Esc 清空时触发。 |
+
+### 插槽
+
+| 插槽名 | 作用域 | 说明 |
+|------|------|------|
+| `item` | `{ item, active, query }` | 替换单行内容。 |
+| `empty` | `{ query }` | 替换空态。 |
+| `footer` | - | 列表下方、卡片内部的内容。 |
+
+### 暴露方法
+
+| 名称 | 说明 |
+|------|------|
+| `focus()` | 聚焦输入框。 |
+| `blur()` | 让输入框失焦。 |
+| `clear()` | 清空查询并派发 `clear`。 |
+
+### 类型
+
+| 名称 | 说明 |
+|------|------|
+| `SearchPanelItem` | `{ id, label, keywords?, disabled? }`；`keywords` 参与内建匹配但不显示。 |
+
+## 概述
+
+- 内联渲染：无遮罩、无模态语义、无焦点陷阱，可放进页面、侧栏或浮层。
+- ↑ ↓ 两端循环并跳过禁用项，Home / End 跳到首尾可用项，Enter 选中，Esc 在有内容时清空；输入法组合期间忽略 Enter。
+- 遵循 combobox 范式：输入框是带 `aria-autocomplete="list"`、`aria-controls`、`aria-activedescendant` 的 `role="combobox"`；行是 `tabindex="-1"` 的 `role="option"`，焦点始终留在输入框。
+- 高亮由 `is-active` 表示，鼠标移动时同步到指针所在行。
+- 选中结果不回写输入框，由宿主处理 `select`。
+- 查询不足 `emptyThreshold` 个字符时，无匹配也不显示空态。
+
+## 技术实现
+
+- 空态复用 `TxSearchEmpty`，只通过其公开 CSS 变量与 `icon` 插槽调整。
+- 改编自 [Beautiful UI](https://www.beautifului.dev)，© 2026 Shane Levine，MIT 协议；键盘导航与 ARIA 为新增。
+- 源码：`packages/tuffex/packages/components/src/search-panel/`。
+
+<TuffDocSourceLink />

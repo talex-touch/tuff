@@ -1,0 +1,64 @@
+---
+title: Stream Pacer & Reveal Presets
+description: Mitigating LLM token arrival jitter via useStreamPacer clock scheduling, Aurora micro-reveals, and the single caret handoff contract.
+---
+
+# Stream Pacer & Reveal Presets
+
+In generative AI interfaces, token arrival rates are non-uniform. Piping raw network packets directly into the DOM triggers visually jarring spasms.
+
+## Token Arrival Jitter in LLM Streaming
+
+Server-side batching and network hops introduce severe burstiness:
+- Long initial delays waiting for the First-Token (TTFT).
+- Sudden TCP bursts dumping dozens of characters instantaneously.
+- Unpredictable multi-second pauses mid-sentence.
+
+Without smoothing buffers, the UI oscillates between frozen pauses and overwhelming text dumps, fatiguing the reader's eyes.
+
+## The useStreamPacer Clock State Machine
+
+TuffEx's `TxStreamText` and `TxStreamElement` decouple raw network streams from DOM rendering via an internal clock pacer. This is how `TxStreamText` calls it (excerpt):
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // Pacing comes from props, falling back to STREAM_PACING_DEFAULTS
+  const pacer = useStreamPacer({
+    total: () => available.value,     // units arrived so far
+    streaming: () => props.streaming, // the source is still producing
+    wordMs: () => props.wordMs,       // 24 by default: at least one unit every 24ms
+    maxLagMs: () => props.maxLagMs,   // 600 by default: every unit shows by arrival + 600ms
+    drainMs: () => props.drainMs,     // 320 by default: the rest clears within 320ms of the end
+    pauseMs: () => props.pauseMs,     // 400 by default: live, caught up and quiet for 400ms reads paused
+  })
+---
+:::
+
+- **Steady Stream**: At least one unit every 24ms.
+- **Continuous catch-up**: While streaming, the release rate is the larger of 1 / wordMs and the backlog over the time left until the oldest waiting unit's deadline, its arrival plus `maxLagMs` (600ms). The whole backlog clears evenly by then, so a burst reads as a quicker flow rather than a block slammed onto the screen; a source that keeps outrunning 24ms per unit settles just under 600ms behind.
+- **Drain**: The moment the source ends, the rate is fixed at the larger of 1 / wordMs and the backlog over `drainMs`, clearing the rest within 320ms.
+- **Pause**: Once the source is still live, the display has caught up and nothing has been released for 400ms, the state becomes `paused`. The caret does not change with the state: in every live state it plays the same orbit and breath.
+- **Held last word**: `TxStreamText` holds back a last word that may still be growing until whitespace, closing punctuation, or 200ms of quiet from the source.
+
+`useStreamPacer` is exported from `stream-text` too and works on its own; `total` and `streaming` are required.
+
+## Reveal Style Presets (Aurora and Blur)
+
+As words emerge, delicate presets enrich the presentation:
+- **`aurora` (default, 460ms)**: Fades in out of a 4px blur while its colour sweeps from blue through violet and pink onto the ink.
+- **`hue` (180ms)**: The same fade and colour sweep, without the blur.
+- **`blur` (420ms)**: Fades in out of a 4px blur, with no colour.
+- **`languid` (900ms)**: Fades in out of an 8px blur while rising 4px.
+- **`none` (0ms)**: Instantaneous text painting.
+
+With reduced motion turned on, `TxStreamText` skips the pacing and plays no entrance: words appear in their final style the moment they arrive.
+
+:::TuffDemoWrapper{demo="ConceptStreamPacerDemo"}
+:::
+
+## Single Caret Handoff Contract
+
+When a rich Markdown payload spans paragraphs, lists, and code blocks:
+**Multiple blinking carets are strictly forbidden!**
+As downstream parts take over generation, upstream parts instantly retract their caret. When the answer completes, the final caret gently dissolves.

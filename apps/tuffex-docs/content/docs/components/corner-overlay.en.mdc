@@ -1,0 +1,100 @@
+---
+title: "CornerOverlay"
+description: "An absolutely positioned layer pinned to a corner of its content."
+category: Effects
+status: beta
+since: 0.3.4
+tags: [overlay, badge, corner]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+`placement` picks the corner; `offsetX` / `offsetY` set the distance from its edges.
+::::TuffDemoWrapper{demo="CornerOverlayBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCornerOverlay placement="bottom-right" :offset-x="-2" :offset-y="-2">
+      <span class="avatar">TD</span>
+      <template #overlay>
+        <span class="status-dot" />
+      </template>
+    </TxCornerOverlay>
+    <TxCornerOverlay placement="top-right" :offset-x="-4" :offset-y="-4">
+      <span class="avatar">NX</span>
+      <template #overlay>
+        <TxIcon name="i-carbon-checkmark-filled" />
+      </template>
+    </TxCornerOverlay>
+  </template>
+---
+::::
+
+### Clickable Overlay
+`overlayPointerEvents="auto"` lets the overlay receive pointer input and drops its `aria-hidden`.
+
+```vue
+<template>
+  <TxCornerOverlay overlay-pointer-events="auto" :offset-x="-4" :offset-y="-4">
+    <TxAvatar :src="avatarUrl" />
+    <template #overlay>
+      <button type="button" aria-label="Open profile actions">•••</button>
+    </template>
+  </TxCornerOverlay>
+</template>
+```
+
+### CSS Offset Values
+String offsets are written to the style as-is.
+
+```vue
+<template>
+  <TxCornerOverlay offset-x="calc(100% - 12px)" offset-y="-0.25rem">
+    <span>Base</span>
+    <template #overlay>
+      <TxBadge value="New" />
+    </template>
+  </TxCornerOverlay>
+</template>
+```
+
+### Best Practices
+
+- The overlay is hidden from screen readers by default, so state important status in nearby text or a label too.
+- Use negative offsets for badges that extend past an avatar or thumbnail.
+- For an interactive overlay, put a semantic control in the slot; the component adds no click, focus, or keyboard behavior.
+- Keep overlays to small marks, not popovers or menus.
+- Keep the base content's size stable; the overlay reserves no layout space.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `placement` | `'top-left' \| 'top-right' \| 'bottom-left' \| 'bottom-right'` | `'bottom-right'` | Corner the overlay sits in. |
+| `offsetX` | `string \| number` | `0` | Horizontal inset; numbers are px. |
+| `offsetY` | `string \| number` | `0` | Vertical inset; numbers are px. |
+| `overlayPointerEvents` | `'none' \| 'auto'` | `'none'` | CSS `pointer-events` of the overlay. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | none | Base content. |
+| `overlay` | none | Corner content; without it, no overlay node renders. |
+
+## Overview
+
+- The root is an inline-block `span` with `position: relative`; the overlay is absolutely positioned.
+- `placement` selects the inset pair: `offsetX` sets `left` or `right`, and `offsetY` sets `top` or `bottom`.
+- With `overlayPointerEvents` at `none` (the default), the overlay has `aria-hidden="true"`; at `auto` it does not, so controls inside can take focus.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/corner-overlay/`.
+
+<TuffDocSourceLink />

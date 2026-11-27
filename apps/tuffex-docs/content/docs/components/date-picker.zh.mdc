@@ -1,0 +1,130 @@
+---
+title: "DatePicker 日期选择"
+description: "以 YYYY-MM-DD 字符串为值的日期选择器"
+category: Form
+status: beta
+since: 0.3.4
+tags: [date-picker, form, calendar]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 弹层、字段与内联
+`v-model:visible` 控制弹层，`variant` 选择形态，`popup="false"` 内联渲染。
+:::TuffDemoWrapper{demo="DatePickerDatePickerDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="visible = true">打开日期选择器</TxButton>
+    <TxDatePicker
+      v-model="releaseDate"
+      v-model:visible="visible"
+      title="发布日期"
+      min="2025-01-01"
+      max="2030-12-31"
+    />
+
+    <TxDatePicker v-model="fieldDate" variant="adaptive" placeholder="选择日期" />
+
+    <TxDatePicker
+      v-model="inlineDate"
+      :visible="true"
+      :popup="false"
+      :show-toolbar="false"
+      min="2026-05-10"
+      max="2026-05-31"
+    />
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 日期只存 `YYYY-MM-DD` 字符串；组件不处理时区与时间。
+- 桌面密集表单用 `variant="field"`，移动优先流程用 `variant="picker"`；两种形态都在同一布局里验证过才用 `adaptive`。
+- 外层卡片已负责展开与留白时，用 `picker` 形态加 `popup="false"` 内联渲染。
+- 有明确的地区习惯时，显式设置 `weekStartsOn`。
+
+### 边缘与状态
+
+日期字段与输入框同高，悬停、展开和禁用颜色取自输入框，禁用时不降低透明度。
+
+:::TuffDemoWrapper{demo="DatePickerEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDatePicker v-model="date" variant="field" />
+  </template>
+---
+:::
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string \| DateRangeValue` | `''` | `YYYY-MM-DD` 日期；`range` 时为 `[start, end]`。 |
+| `visible` | `boolean` | `false` | 弹层显示状态，配合 `v-model:visible`。 |
+| `popup` | `boolean` | `true` | 仅 `picker` 形态：`false` 时内联渲染。 |
+| `variant` | `'picker' \| 'field' \| 'adaptive'` | `'picker'` | `picker` 为滚轮，`field` 为字段日历，`adaptive` 按视口宽度切换。 |
+| `title` | `string` | `'Select date'` | 工具栏标题，转发给 `TxPicker`。 |
+| `placeholder` | `string` | `'Select date'` | 字段日历空值时的占位文本。 |
+| `min` | `string` | - | 最早可选日期（`YYYY-MM-DD`），非法值被忽略。 |
+| `max` | `string` | - | 最晚可选日期（`YYYY-MM-DD`），非法值被忽略。 |
+| `disabled` | `boolean` | `false` | 禁止交互。 |
+| `showToolbar` | `boolean` | `true` | 显示 Picker 工具栏。 |
+| `confirmText` | `string` | `'Confirm'` | 确认按钮文案，转发给 `TxPicker`。 |
+| `cancelText` | `string` | `'Cancel'` | 取消按钮文案，转发给 `TxPicker`。 |
+| `closeOnClickMask` | `boolean` | `true` | 点击遮罩关闭弹层。 |
+| `adaptiveBreakpoint` | `number` | `768` | `adaptive` 切换到字段日历的最小视口宽度。 |
+| `weekStartsOn` | `0 \| 1` | `0` | 字段日历的周起始日：`0` 为周日，`1` 为周一。 |
+| `range` | `boolean` | `false` | 仅字段日历：选择起止两个日期；滚轮形态忽略。 |
+| `rangeSeparator` | `string` | `' → '` | 字段显示值中两个日期之间的分隔文本。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: string \| DateRangeValue)` | 日期变化时触发，参数已格式化。 |
+| `change` | `(value: string \| DateRangeValue)` | 与 `update:modelValue` 同时触发。 |
+| `update:visible` | `(visible: boolean)` | 请求切换显示状态时触发。 |
+| `confirm` | `(value: string)` | 点击确认时触发，参数为当前日期。 |
+| `cancel` | - | 点击取消时触发。 |
+| `open` | - | 打开时触发。 |
+| `close` | - | 关闭时触发。 |
+
+### CSS 变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `--tx-date-picker-selected-shade` | `#111827` | 字段日历里选中的日、月、年格子渐变的暗端，以 28% 混入主色。 |
+
+### 类型
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  type DateRangeValue = [string, string] // [start, end]，各为 YYYY-MM-DD
+---
+:::
+
+`range` 时的值；两端都选定后才派发。
+
+## 概述
+
+- 值始终按 `YYYY-MM-DD` 输出；空值或非法值按本地今天初始化，再限制在 `min` / `max` 内。
+- `picker` 形态由 `v-model:visible` 控制弹层；`field` 形态经 `TxPopover` 渲染，同样同步 `update:visible`、`open`、`close`。
+- 滚动列变化即触发 `update:modelValue` 与 `change`；`confirm` 后按 Picker 的行为关闭。
+- 字段日历宽度跟随月历网格（280–360px），不跟随输入框；标题按钮逐级拉远：日 → 月 → 12 年区块，箭头按当前视图步进，关闭后回到日期网格。
+- `range`：第一次点击定起点并预览区段，第二次闭合并按先后顺序输出 `[start, end]`；两端齐全前不派发事件，中途关闭即放弃。
+- 日历使用 `grid` / `gridcell` 与 `aria-selected`；减少动态效果时，滑动与缩放降级为短促淡入淡出。
+
+## 技术实现
+
+- 区间内的日期带 `is-in-range`，两端带 `is-range-start` / `is-range-end`。
+- 源码：`packages/tuffex/packages/components/src/date-picker/`。
+
+<TuffDocSourceLink />

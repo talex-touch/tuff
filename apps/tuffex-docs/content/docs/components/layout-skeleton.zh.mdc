@@ -1,0 +1,64 @@
+---
+title: LayoutSkeleton 布局骨架
+description: 模拟完整应用布局的骨架占位
+category: Status
+status: beta
+since: 0.3.4
+tags: [skeleton, layout, loading]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 布局占位
+尺寸由外层容器决定。
+:::TuffDemoWrapper{demo="LayoutSkeletonLayoutPlaceholderDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="height: 240px;">
+      <TxLayoutSkeleton />
+    </div>
+  </template>
+---
+:::
+
+### 面板占位
+:::TuffDemoWrapper{demo="LayoutSkeletonPanelPlaceholderDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard>
+      <TxLayoutSkeleton />
+    </TxCard>
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 给外层容器明确的高度；组件只填满 `width: 100%` 与 `height: 100%`。
+- 用于最终形状稳定的页面、面板、侧栏摘要与详情栏。
+- 最终界面没有顶栏或侧栏时，改用 `TxSkeleton`、`TxCardSkeleton` 或 `TxListItemSkeleton` 拼出真实结构。
+- 不要用它占位表格行；表格主体用 `TxDataTable` 的 `loadingVariant="skeleton"`。
+
+## API 参考
+
+### 属性
+
+无属性；尺寸由外层容器决定。
+
+## 概述
+
+- 固定渲染 36px 顶栏、6 个侧栏项（首项为当前项）与 8 条内容行（首行为标题）。
+- 侧栏宽 `clamp(72px, 30%, 200px)`，窄容器中按比例收缩，不挤压内容区。
+- 文字条宽度取自固定序列，SSR、hydration 与视觉测试结果稳定。
+- 根节点为 `aria-hidden="true"`；加载状态由宿主播报，例如区域上的 `aria-busy`。
+- 减少动态效果时只停止闪烁，占位块保留。
+
+## 技术实现
+
+- 源码：`packages/tuffex/packages/components/src/layout-skeleton/`。
+
+<TuffDocSourceLink />

@@ -1,0 +1,115 @@
+---
+title: "ImageGallery 图片画廊"
+description: "缩略图网格加全屏灯箱预览"
+category: Data
+status: beta
+since: 0.3.4
+tags: [image, gallery, preview]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+点击缩略图用 [ImagePreview](/zh/image-preview) 全屏打开，可缩放、拖动并滑动翻页；`startIndex` 指定当前预览的图片。
+::::TuffDemoWrapper{demo="ImageGalleryImageGalleryDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const items = [
+    { id: 'one', url: '/images/one.png', name: '工作区概览' },
+    { id: 'two', url: '/images/two.png', name: '发布图表' },
+  ]
+  </script>
+
+  <template>
+    <TxImageGallery :items="items" :start-index="1" />
+  </template>
+---
+::::
+
+### 追踪预览打开
+
+```vue
+<script setup lang="ts">
+function onOpen({ index, item }: { index: number, item: { id: string } }) {
+  analytics.track('gallery_open', { index, imageId: item.id })
+}
+</script>
+
+<template>
+  <TxImageGallery :items="images" @open="onOpen" @close="onClose" />
+</template>
+```
+
+### 控制起始图片
+`startIndex` 只选择预览索引，不会打开灯箱。
+
+```vue
+<template>
+  <TxImageGallery :items="screenshots" :start-index="selectedIndex" />
+</template>
+```
+
+### 最佳实践
+
+- 使用稳定的 `id`，不要用数组索引作长期图库数据的 key。
+- 信息性图片提供 `name`，按钮标签、alt 与预览标题才有意义。
+- 列表规模保持适中：组件渲染全部缩略图，不做虚拟化。
+- 不可信的远程图片 URL 先在应用边界归一化或代理。
+- 不要在 `@open` 中同步改动 `items`，以免已打开的图片失效。
+- 非英文界面覆盖全部文案 prop 与两个 formatter，预览的 `labelFormatter` 与 `zoomLabel` 经 `previewProps` 传入：预览的按钮只有图标，读屏读到的就是这些名称；`failedText` 是可见文字。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `items` | `ImageGalleryItem[]` | 必填 | 缩略图及全屏预览的图片。 |
+| `startIndex` | `number` | `0` | 当前预览索引，收敛到有效范围。 |
+| `previousLabel` | `string` | `'Previous image'` | 上一张按钮的可访问名称。 |
+| `nextLabel` | `string` | `'Next image'` | 下一张按钮的可访问名称。 |
+| `previousText` / `nextText` | `string` | - | 已弃用，不再显示：预览的翻页按钮只有图标，名称取 `previousLabel` / `nextLabel`。 |
+| `previewTitle` | `string` | `'Preview'` | 预览对话框的可访问名称，后接当前图片的 `name`。 |
+| `closeLabel` | `string` | `'Close'` | 预览关闭按钮的可访问名称。 |
+| `zoomInLabel` | `string` | `'Zoom in'` | 预览放大按钮的可访问名称。 |
+| `zoomOutLabel` | `string` | `'Zoom out'` | 预览缩小按钮的可访问名称。 |
+| `resetLabel` | `string` | `'Fit to screen'` | 预览缩放菜单的第一项，恢复整张图片。 |
+| `failedText` | `string` | `'This image could not be loaded'` | 预览图加载失败时显示在占位里的文字。 |
+| `itemLabelFormatter` | `(index: number) => string` | `` (i) => `Image ${i + 1}` `` | 图片没有 `name` 时生成显示名称。 |
+| `openLabelFormatter` | `(label: string) => string` | `` (label) => `Open ${label} preview` `` | 由显示名称生成缩略图的 `aria-label`。 |
+| `previewProps` | `ImageGalleryPreviewProps` | - | 传给预览的其余选项，如 `actions`、`indicator`、`bounce` 与材质；图片、失败记录、飞出位置与上面这些文案由画廊设置。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `open` | `{ index: number, item: ImageGalleryItem }` | 缩略图打开全屏预览后触发。 |
+| `close` | `void` | 预览关闭时触发。 |
+| `action` | `ImagePreviewActionEvent` | 在预览中选中操作、执行前触发；调用 `preventDefault()` 后由宿主执行。 |
+
+### ImageGalleryItem
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `string` | 缩略图的稳定 key。 |
+| `url` | `string` | 缩略图与预览图的 URL。 |
+| `name` | `string` | 可选显示名称，用于标签、alt 与预览的名称。 |
+
+## 概述
+
+- 缩略图是原生 `<button type="button">`，`aria-label` 由 `openLabelFormatter` 生成；`alt` 取 `item.name`，未命名图片有意使用空 alt。
+- 预览困住 Tab 焦点；Escape、关闭按钮、点击背景、把图片上下拖走或 `items` 变空都会关闭，焦点回到触发的缩略图。
+- 打开后可用滚轮、触控板或双指缩放，放大后拖动平移；未放大时左右滑动或 ← / → 翻页。翻到两端时翻页按钮设为 `aria-disabled` 而不禁用，焦点不会掉到 `body`。
+- 顶栏的图片名称与「当前 / 总数」计数是 `aria-live` 区域，翻页后读屏会播报。
+- 预览从点击的缩略图放大飞出，关闭时缩回它；打开后整张图片完整显示、不裁切，小图不放大到超过原始像素；宽度不超过 640px 或高度不超过 480px 时图片铺满屏幕，控件浮在图片上。
+- 图片加载前按上一张看过的图片的比例（第一张按 4:3）留出位置，150 ms 后仍未加载才显示加载效果（默认 `sweep-gradient`，经 `previewProps` 的 `loadingEffect` 设置；减少动态效果时静止）；加载失败时缩略图与预览都显示占位，同一地址不再重试，`url` 变化后重新加载。
+
+## 技术实现
+
+- 预览即 [TxImagePreview](/zh/image-preview)（teleport 到 `body`），手势、键盘与占位的细节见它的页面；`TxAttachmentTray` 打开的是同一个预览，行为一致。预览在第一次要用时才加载：指针移到画廊上或焦点进入画廊时开始，加载完成前按下的缩略图在加载完成后打开。按需样式插件让预览的样式随它一起加载；手动引入样式时另引 `image-preview`、`base-surface`、`flow-light` 与 `glass-surface` 的 `style.css`。
+- 源码：`packages/tuffex/packages/components/src/image-gallery/`。
+
+<TuffDocSourceLink />

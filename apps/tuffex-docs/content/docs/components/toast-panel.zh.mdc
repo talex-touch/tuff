@@ -1,0 +1,69 @@
+---
+title: "ToastPanel 浮出面板"
+description: "从来源下方浮出新条目的面板"
+category: Feedback
+status: beta
+since: 0.6.0
+tags: [feedback, toast, surface, motion]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 新条目浮出
+虚线牵引把新条目连到它来自的列表；卡片内容完全由宿主提供。
+:::TuffDemoWrapper{demo="ToastPanelToastPanelDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxToastPanel :open="open" :stack="1" aria-label="最新信号">
+      <div class="row">Theo Morgan · Pioneer Cloud</div>
+    </TxToastPanel>
+  </template>
+---
+:::
+
+### 最佳实践
+
+- `tetherLength` 不要太长，否则看不出牵引线连着谁。
+- 同一次到达只播报一次：宿主已在别处播报时设 `live="off"`。
+- 卡片内容用现成的行组件（如 `TxCardItem`）拼，本组件只负责外层的浮出姿态。
+- 隐藏用 `open` 而不是 `v-if`：卸载会切断离场过渡，并让牵引线的盒子塌掉、布局上跳。
+- 锚在列表或面板下的最新结果用本组件；与位置无关的一次性提示用 `TxToastHost`。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `open` | `boolean` | `true` | 是否显示；`false` 时仍留在 DOM 中。 |
+| `tether` | `boolean` | `true` | 显示虚线牵引。 |
+| `tetherLength` | `number` | `28` | 牵引线长度（px），负值按 0 处理。 |
+| `side` | `'below' \| 'above'` | `'below'` | 面板在来源下方还是上方；只影响牵引线方向。 |
+| `stack` | `number` | `1` | 身后露出的薄片数，夹在 0–2。 |
+| `ariaLabel` | `string` | `'Latest item'` | 区域的无障碍名。 |
+| `live` | `'polite' \| 'off'` | `'polite'` | 宿主已在别处播报时设 `'off'`，不再设置 `aria-live`。 |
+
+### 插槽
+
+| 插槽名 | 说明 |
+|---|---|
+| `default` | 卡片内容。 |
+| `tether` | 替换默认的虚线牵引。 |
+
+## 概述
+
+- 位置由宿主决定：组件只画牵引线的方向，不定位自己；放在来源元素之后即可。
+- 根节点为 `role="status"`，默认带 `aria-live="polite"`，因为面板会在没有用户操作时出现。
+- `open` 为 `false` 时卡片设为 `inert`，面板只切换类名：opacity 归零并回到位移起点。组件不计时，自动收起、悬停与聚焦保持、离开后重新计时都由宿主负责。
+- `open` 变为 `false` 或面板卸载时，焦点若在面板内，会交还给进入前持有焦点的元素；来源不可用时交给上方最近的带 `tabindex` 的容器。
+- 入场沿 `--tx-ease-spring` 回弹；减少动态效果时去掉位移，只保留淡入。
+- `stack` 薄片是 `aria-hidden` 的装饰，不承载内容；上限为 2，第三片露出的边不到一像素。
+
+## 技术实现
+
+- 源码：`packages/tuffex/packages/components/src/toast-panel/`。
+
+<TuffDocSourceLink />

@@ -1,0 +1,56 @@
+---
+title: G2 Continuous Curvature & Squircle Geometry
+description: Why standard circular fillets look harsh in premium interfaces; deriving G0/G1 to G2 continuity and implementing Apple-style smooth corners.
+---
+
+# G2 Continuous Curvature & Squircle Geometry
+
+In precision industrial design (such as luxury automotive contours) and modern operating systems (such as Apple macOS / iOS), curvature continuity directly dictates the softness of light reflection.
+
+## Geometric Continuity Orders
+
+Geometric continuity defines the smoothness at the junction of two curves:
+
+- **$G^0$ Continuity (Positional)**: The curves touch at the junction, but their tangents diverge abruptly (a 90-degree corner).
+- **$G^1$ Continuity (Tangential)**: The curves share the same tangent vector at the junction, making first derivatives continuous. Standard CSS `border-radius` is a classic $G^1$ fillet (straight lines tangent to quarter circles).
+- **$G^2$ Continuity (Curvature)**: The curves share the exact same curvature $\kappa$ across the junction, making second derivatives continuous.
+
+## Why Circular Fillets Break Visual Continuity
+
+For a standard circular fillet:
+- The straight edge has zero curvature ($\kappa = 0$).
+- Entering the circle instantaneously jumps curvature to $\kappa = \frac{1}{R}$.
+This second-derivative jump causes an optical crease under specular lighting or refraction (the Specular Break phenomenon).
+
+## The Superellipse Formula and Apple Smooth Corners
+
+Starting with iOS 7, Apple moved its app icons to "continuous corners", a shape usually approximated by a superellipse (Lamé curve):
+$$\left| \frac{x}{a} \right|^n + \left| \frac{y}{b} \right|^n = 1 \quad (n \approx 4 \sim 5)$$
+For $n > 2$ the superellipse meets the straight edge with zero curvature, so the curvature carries across the joint ($G^2$); for $n > 3$ the rate of change of curvature is zero there too, and curvature climbs gently from 0 to its peak on the 45° diagonal.
+
+:::TuffDemoWrapper{demo="ConceptCurvatureCombDemo"}
+:::
+
+## TuffEx Engineering Implementation
+
+TuffEx draws superellipse corners with CSS `corner-shape`: `border-radius` sets how much of each edge the corner takes, and `superellipse(K)` has the exponent $n = 2^K$. `tx-squircle` grows the radius to $(1 + s) \cdot R$, then picks the exponent that cuts as deep along the 45° diagonal as a circular arc of radius R. The default $s = 0.6$ gives $1.6R$ and `superellipse(1.777)` ($n \approx 3.43$):
+
+:::TuffCodeBlock{lang="scss"}
+---
+code: |
+  // packages/tuffex/packages/components/style/mixins.scss
+  @mixin tx-squircle($radius: 16px, $smoothness: $tx-squircle-smoothness, $inset: 0) {
+    border-radius: tx-squircle-inset($radius, $inset);
+    @supports (corner-shape: superellipse(2)) {
+      border-radius: tx-squircle-inset(tx-squircle-radius($radius, $smoothness), $inset);
+      corner-shape: superellipse(#{tx-squircle-exponent($smoothness)});
+    }
+  }
+---
+:::
+
+- **Fallback**: browsers without `corner-shape` (Safari, Firefox) keep the plain radius. TuffEx does not reshape them with an SVG mask: a mask clips the outer shadow and leaves a `backdrop-filter` inside nothing to sample, which breaks the default refraction material.
+- **Tokens and utility classes**: code that cannot include the mixin reads `--tx-corner-smooth-scale` and `--tx-corner-smooth-shape`; templates can use `.tx-corner-smooth-sm`, `-md` and `-lg` (8 / 16 / 24px).
+- **Child layers**: a layer that copies the outline with `border-radius: inherit` also needs `corner-shape: inherit`, because the property does not inherit. A layer that sits inside a border or padding cannot inherit at all: pass that distance to `tx-squircle` as `$inset`, which takes it off the radius and keeps the layer concentric with its host.
+
+TxCard, TxModal, TxCommandPalette, TxFlipOverlay and the dialogs already use smooth corners, as does CoreBox with its rounded appearance, so refracted edges follow one continuous curve.

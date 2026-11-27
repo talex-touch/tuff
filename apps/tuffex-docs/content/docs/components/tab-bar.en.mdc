@@ -1,0 +1,102 @@
+---
+title: "TabBar"
+description: "A bottom navigation bar for an app's top-level destinations."
+category: Navigation
+status: beta
+since: 0.3.4
+tags: [navigation, tabs, mobile]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+::::TuffDemoWrapper{demo="TabBarTabBarDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref('home')
+  const items = [
+    { value: 'home', label: 'Home', iconClass: 'i-carbon-home' },
+    { value: 'search', label: 'Search', iconClass: 'i-carbon-search', badge: 3 },
+    { value: 'profile', label: 'Me', iconClass: 'i-carbon-user' },
+  ]
+  </script>
+
+  <template>
+    <TxTabBar v-model="value" :items="items" :fixed="false" />
+  </template>
+---
+::::
+
+### Indicator and Size
+`indicator` sets how the slider behind the active item is drawn; `size` switches between `sm`, `md`, and `lg`.
+:::TuffDemoWrapper{demo="TabBarIndicatorDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTabBar v-model="active" :items="items" :fixed="false" indicator="line" size="sm" />
+  </template>
+---
+:::
+
+### Best Practices
+
+- Keep three to five primary destinations, within reach of a thumb.
+- Use stable primitive `value`s that map cleanly to routes or view keys.
+- Turn off `fixed` and `safeAreaBottom` inside previews, modals, and custom shells, or the bar pins to the real viewport bottom.
+- Keep `badge` short: a number or compact status text.
+- Don't nest interactive controls in labels; each item is already a button.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `string \| number` | `''` | Active value (`v-model`). |
+| `items` | `TabBarItem[]` | `[]` | Items, rendered left to right. |
+| `indicator` | `'none' \| 'pill' \| 'line' \| 'block' \| 'dot'` | `'pill'` | Sliding indicator: color only, a raised surface, a top rule, a tint, or a dot. |
+| `size` | `'sm' \| 'md' \| 'lg'` | `'md'` | Size tier; height, icon, label, and inset ship as inline CSS variables. |
+| `fixed` | `boolean` | `true` | Pins the bar to the viewport bottom with `position: fixed`. |
+| `safeAreaBottom` | `boolean` | `true` | Renders an `env(safe-area-inset-bottom)` spacer below the items. |
+| `disabled` | `boolean` | `false` | Disables every item and blocks value updates. |
+| `zIndex` | `number` | `2000` | Stacking level, written to `--tx-tab-bar-z-index`. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `update:modelValue` | `TabBarValue` | The picked item's value (`v-model`). |
+| `change` | `TabBarValue` | Fires with the same value after an enabled item is picked. |
+
+### Types
+
+`TabBarItem`, one entry of `items`:
+
+| Field | Type | Description |
+|------|------|-------------|
+| `value` | `string \| number` | Value emitted on selection. |
+| `label` | `string` | Visible label. |
+| `iconClass` | `string` | Icon class shown above the label. |
+| `badge` | `string \| number` | Badge on the icon; `null`, `undefined`, and empty strings are hidden. |
+| `disabled` | `boolean` | Disables only this item. |
+
+## Overview
+
+- The root is a `<nav>` landmark, not a tab widget, so it has no `role="tablist"`. Each item is a `<button>`, and the active one has `aria-current="page"`.
+- The indicator is measured by `useIndicatorBox`, as in `TxSidebarNav`; a `ResizeObserver` re-measures after a resize or font swap.
+- Only a new selection travels. The first measurement, a resize, a font swap, and a change of `size` or `indicator` land in place, as does every change under reduced motion.
+- The indicator never scales and lengthens only along the bar on the way; at either end it stops at the edge, so an `overflow: hidden` frame never clips it.
+- Picking a disabled item, or any item while `disabled`, emits nothing; picking the active item still emits `update:modelValue` and `change`.
+- Each `size` value is a CSS variable you can override on its own, such as `--tx-tab-bar-height`; an unknown size falls back to `md`.
+
+## Technologies
+
+- The indicator runs on the glide material of `useJellyIndicator`, shared with `TxTabs`, `TxFlatRadio`, and `TxSidebarNav`, and writes styles every frame without re-rendering.
+- Source: `packages/tuffex/packages/components/src/tab-bar/`.
+
+<TuffDocSourceLink />

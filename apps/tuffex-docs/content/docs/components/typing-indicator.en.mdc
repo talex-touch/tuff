@@ -1,0 +1,86 @@
+---
+title: "TypingIndicator"
+description: "An inline typing and loading indicator for chat."
+category: AiChat
+status: beta
+since: 1.0.0
+tags: [typing, loading, chat]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+:::TuffDemoWrapper{demo="TypingIndicatorTypingIndicatorDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTypingIndicator />
+  </template>
+---
+:::
+
+### Variants
+`variant` picks the style; each variant has its own size props.
+:::TuffDemoWrapper{demo="TypingIndicatorTypingIndicatorVariantsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTypingIndicator text="Typing…" />
+    <TxTypingIndicator variant="ai" :loader-size="32" text="Generating…" />
+    <TxTypingIndicator variant="pure" :pure-size="12" text="Loading" />
+    <TxTypingIndicator variant="ring" :ring-size="22" :ring-thickness="3" :show-text="false" />
+    <TxTypingIndicator variant="circle-dash" :circle-dash-dash-deg="10" :circle-dash-gap-deg="10" :show-text="false" />
+    <TxTypingIndicator variant="bars" :bars-size="16" :show-text="false" />
+  </template>
+---
+:::
+
+### Best Practices
+
+- Use the default `dots` for inline chat rows and compact assistant placeholders.
+- Use `ai` for brand-led generation states with room for the larger loader.
+- Use `pure`, `ring`, `circle-dash`, or `bars` in toolbars, message metadata rows, or next to skeletons.
+- Keep `showText=true` unless a visible label nearby already names the pending operation.
+- Don't mix many variants in one transcript.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `variant` | `'dots' \| 'ai' \| 'pure' \| 'ring' \| 'circle-dash' \| 'bars'` | `'dots'` | Indicator style. |
+| `text` | `string` | `'Typing…'` | Label shown while `showText` is on. |
+| `showText` | `boolean` | `true` | Shows the label. |
+| `ariaLabel` | `string` | - | Screen-reader text while `showText` is off; falls back to `text`. |
+| `size` | `number` | `6` | Dot diameter of `dots`, in px. |
+| `gap` | `number` | `5` | Gap between `dots`, in px. |
+| `loaderSize` | `number` | `44` | Size of `ai`, in px. |
+| `pureSize` | `number` | `14` | Diameter of `pure`, in px. |
+| `ringSize` | `number` | `18` | Diameter of `ring`, in px. |
+| `ringThickness` | `number` | `2` | Stroke width of `ring`, in px. |
+| `circleDashSize` | `number` | `18` | Diameter of `circle-dash`, in px. |
+| `circleDashThickness` | `number` | `2` | Stroke width of `circle-dash`, in px. |
+| `circleDashDashDeg` | `number` | `12` | Dash angle of `circle-dash`, in degrees. |
+| `circleDashGapDeg` | `number` | `12` | Gap angle of `circle-dash`, in degrees. |
+| `barsSize` | `number` | `12` | Height of `bars`, in px. |
+
+### CSS Variables
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `--tx-typing-indicator-color` | `--tx-text-color-secondary` | Colour of every variant, recolored in one place. |
+
+## Overview
+
+- The root is `role="status"` with `aria-live="polite"`; every loader graphic is `aria-hidden`.
+- With `showText` off, a visually hidden label (`ariaLabel`, else `text`) still renders, so screen readers announce it.
+
+## Technologies
+
+- The `ai` variant draws through an SVG mask with a per-instance id, so several instances on a page don't collide.
+- Source: `packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue`.
+
+<TuffDocSourceLink path="packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue" />

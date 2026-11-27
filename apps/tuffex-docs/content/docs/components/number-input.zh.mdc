@@ -1,0 +1,101 @@
+---
+title: NumberInput
+description: 带步进按钮与范围限制的数字输入框
+category: Form
+status: beta
+since: 0.3.7
+tags: [number, input, form]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 范围与精度
+`min` / `max` 限定范围，`step` 设定步长，`precision` 设定小数位。
+::::TuffDemoWrapper{demo="NumberInputNumberInputDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const percentage = ref(35)
+  </script>
+
+  <template>
+    <TxNumberInput v-model="percentage" :min="0" :max="100" :step="5" :precision="0" />
+  </template>
+---
+::::
+
+### 最佳实践
+
+- 百分比、配额、分页等场景显式传入 `min`、`max` 与 `step`。
+- 小数用 `precision` 处理，不要在消费端每次事件后再四舍五入。
+- 表格筛选等高密度区域设置 `controls=false`，键盘输入更快。
+- 在校验与 API 映射中，把 `null` 当作未设置。
+
+### 边缘与状态
+
+步进按钮沿同一条内描边排列，外角与外框同心；状态颜色与输入框一致。
+
+:::TuffDemoWrapper{demo="NumberInputEdgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxNumberInput v-model="count" />
+    <TxNumberInput disabled />
+  </template>
+---
+:::
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `number \| null` | `null` | 数字值；空输入为 `null`，配合 `v-model` 使用。 |
+| `min` | `number` | - | 最小值。 |
+| `max` | `number` | - | 最大值。 |
+| `step` | `number` | `1` | 步进按钮与原生输入的步长。 |
+| `precision` | `number` | - | 保留的小数位数。 |
+| `placeholder` | `string` | `''` | 占位文本。 |
+| `disabled` | `boolean` | `false` | 禁用输入与按钮。 |
+| `readonly` | `boolean` | `false` | 只读，并阻止步进。 |
+| `controls` | `boolean` | `true` | 显示减少与增加按钮。 |
+| `decreaseLabel` | `string` | `'Decrease value'` | 减少按钮的 `aria-label`，本地化时传入。 |
+| `increaseLabel` | `string` | `'Increase value'` | 增加按钮的 `aria-label`，本地化时传入。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: number \| null)` | 值归一化后触发。 |
+| `change` | `(value: number \| null)` | 与 `update:modelValue` 同时触发。 |
+| `focus` | `(event: FocusEvent)` | 原生 focus 事件。 |
+| `blur` | `(event: FocusEvent)` | 原生 blur 事件，失焦时再次归一化。 |
+
+### 暴露方法
+
+| 名称 | 说明 |
+|------|------|
+| `focus()` | 聚焦原生输入。 |
+| `blur()` | 让原生输入失焦。 |
+| `inputRef` | 原生输入的 ref。 |
+
+## 概述
+
+- 空输入归一化为 `null`。
+- 手输值在失焦时、步进结果立即限制在 `min` / `max` 内，再按 `precision` 取舍小数。
+- 失焦时无法解析的文本回退为当前值，没有当前值时为 `null`。
+- `controls=false` 隐藏步进按钮，保留原生数字输入。
+- `readonly` 与 `disabled` 都阻止步进；`disabled` 还禁用输入框。
+- 在 `TxFormItem` 中自动取得 id、`aria-describedby`、`aria-invalid` 与 `required`，显示错误时边缘变红；表单的 `disabled` 同样生效，并阻止步进。
+
+## 技术实现
+
+- 除 `class` / `style` 外的 attrs 透传给原生 input。
+- 源码：`packages/tuffex/packages/components/src/number-input/`。
+
+<TuffDocSourceLink />

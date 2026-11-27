@@ -1,0 +1,123 @@
+---
+title: "3D carousel"
+description: "Arc, CoverFlow and Time Machine carousels with dragging and a timeline."
+category: MotionCarousels
+status: beta
+since: 0.7.0
+tags: [motion, carousel, perspective]
+---
+
+## Overview
+
+`TxCarousel3D` renders real `items` and exposes their zero-based current index through `v-model`. Arc carousel, CoverFlow and Time Machine use independent source transforms. Every path has its own color and monochrome ID. Cards, previous/next controls, indicators and timeline all change the same current item.
+
+Dragging the stage changes it too. The deck follows the pointer 1:1 from the point you grabbed it and, on release, settles on the item the motion was heading for. With reduced motion the deck still follows the pointer; on release it jumps straight to the resting item.
+
+## Usage
+
+### Six source variants and custom content
+
+:::TuffDemoWrapper{demo="Carousel3DDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxCarousel3D } from '@talex-touch/tuffex/carousel-3d'
+  const current = ref(0)
+  const items = [
+    { id: 'today', title: 'Current revision', date: 'Today' },
+    { id: 'week', title: 'Earlier revision', date: 'Last week' },
+    { id: 'month', title: 'First revision', date: 'Last month' },
+  ]
+  </script>
+  <template>
+    <TxCarousel3D v-model="current" :items="items" variant="card-time-machine" />
+  </template>
+---
+:::
+
+The demo shows all six IDs, supports filtering, and includes a real item slot. Its color thumbnails are original inline SVG landscapes. Time Machine has main ticks plus two intermediate ticks per interval; hovering, focusing, clicking or dragging the scrubber selects the nearest item.
+
+| Variant | Preserved source geometry |
+| --- | --- |
+| `card-carousel` | 160px item spacing; hovered/focused offsets rotate 20° and move 24px vertically per step. Active scale 1.05; inactive scale 0.65 expanded, 0.8 collapsed. |
+| `card-carousel-mono` | Same arc path, default slot displays caller-owned text instead of images. |
+| `card-cover-flow` | 1000px perspective; 32px spacing, ±38° side rotation, active depth +50px and 50px depth steps behind it. Cards beyond two steps fade out. |
+| `card-cover-flow-mono` | Same CoverFlow path with text surfaces. |
+| `card-time-machine` | 800px perspective; depth −60px, vertical −12px and X rotation +2° per future step. Past cards move down 300px, forward 200px, rotate −20°, scale 1.3 and disappear. |
+| `card-time-machine-mono` | Same depth stack and timeline with text surfaces. |
+
+The original ThreeDPage's three spatial specimens reuse these actual paths. No generic fan replaces the three geometries.
+
+### Dragging
+
+Press the stage and move 4 px to pick the deck up; a press that stays under 4 px is an ordinary click. Arc and CoverFlow follow horizontal movement (drag left for later items); Time Machine follows vertical movement (drag down for later items). One item is 160 px of travel in the arc, 32 px in CoverFlow and 300 px in Time Machine, scaled with `size`. The deck follows from the point you grabbed, so nothing snaps to the pointer. No `update:modelValue` or `change` is emitted while dragging; the current item changes once, on release.
+
+On release the deck takes the pointer's velocity over the last 100ms, projects where that speed would carry it, and settles on the item nearest that point. A flick can pass several items, a slow release rests on the closest one, and a release that carried speed overshoots slightly before it settles. Past the first or last item the deck resists like a rubber band and returns on release. A drag never wraps in `loop` mode; the buttons and arrow keys still do.
+
+Grabbing the deck while it is still moving continues from where it is drawn, not from its target. Escape, or a cancelled pointer, returns the deck to the current item and emits nothing. A drag never fires the click of the card it ends over. Touch keeps page scrolling: the stage declares `touch-action: pan-y` (Time Machine, which drags vertically, `pan-x`), and a touch that sets off along that axis scrolls the page instead of dragging.
+
+### Best Practices
+
+- Give every item a stable `id`, `title`, and a `date` when using Time Machine. Supply `src` and `alt` only for images you are allowed to display.
+- Set `loop` only when wrapping is meaningful. The default stops and disables previous/next controls at the ends. Dragging never wraps, even with `loop`.
+- Set `draggable=false` when the carousel sits inside a surface that owns pointer drags. Buttons, ticks, the scrubber and the keyboard keep working.
+- Leave `expanded` undefined for arc hover/focus behavior; set it to a boolean to control the arc pose. CoverFlow and Time Machine do not use this prop.
+- Use `timelineHover=false` when selection should wait for an explicit click. Keyboard focus still previews the tick geometry without selecting.
+- `#item` is inside a selection button and should contain non-interactive content. It can override the monochrome default without changing geometry.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `items` | `MotionCardItem[]` | required | Caller-owned cards; empty arrays render `#empty`. |
+| `modelValue` | `number` | internal `2`, Time Machine `0` | Current zero-based item; clipped to the available items. |
+| `variant` | `Carousel3DVariant` | `card-carousel` | One of six IDs; `CAROUSEL_3D_VARIANTS` exports the list. |
+| `expanded` | `boolean` | undefined | Controlled arc pose; otherwise hover/focus controls it. |
+| `loop` | `boolean` | `false` | Wrap previous/next selection. |
+| `animated` | `boolean` | `true` | Enable spatial motion without changing operations. |
+| `disabled` | `boolean` | `false` | Disable card, control, tick, scrubber and drag changes. |
+| `draggable` | `boolean` | `true` | Drag the stage to move through the items; `false` leaves pointer drags to the host. |
+| `controls` | `boolean` | `true` | Show previous/next controls. |
+| `dots` | `boolean` | `true` | Show accessible item indicators. |
+| `timeline` | `boolean` | `true` | Show Time Machine tick controls and range scrubber. |
+| `timelineHover` | `boolean` | `true` | Tick hover/focus selects the nearest item. |
+| `duration` | `number` | `800` | Shared-spring transition duration in milliseconds. |
+| `size` | `xs / sm / md / lg` | `md` | Scale card dimensions and spatial paths together. |
+| `ariaLabel` | `string` | `Card carousel` | Region accessible name. |
+| `previousLabel` | `string` | `Previous` | Localizable control label. |
+| `nextLabel` | `string` | `Next` | Localizable control label. |
+| `itemLabel` | `string` | `Item` | Localizable indicator/item fallback name. |
+| `timelineLabel` | `string` | `Timeline` | Localizable scrubber and tick accessible name. |
+
+`MotionCardItem` is shared with CardSpread: `id?`, `title?`, `description?`, `src?`, `alt?`, `date?`, `href?`, `color?`. Carousel defaults use title/description and, for color IDs, an optional image. No default assets or business records are embedded in the component.
+
+### Events
+
+| Event | Arguments | Meaning |
+| --- | --- | --- |
+| `update:modelValue` | `index: number` | Current item requested by actual input. |
+| `change` | `item: MotionCardItem, index: number` | Changed caller-owned item; unchanged indices do not emit. |
+
+### Slots and instance methods
+
+| API | Contract |
+| --- | --- |
+| `#item` | `{ item, index, active }`; replaces a card's content. |
+| `#caption` | `{ item, index, active: true }`; replaces the current caption. |
+| `#empty` | Content for an empty items array. |
+| `previous()` | Use the same clamping/wrapping and disabled rules as controls, moving to the previous item. |
+| `next()` | Use the same clamping/wrapping and disabled rules as controls, moving to the next item. |
+| `select(index)` | Select an item, rounding and clamping/wrapping the requested index. |
+
+Arrow keys select adjacent items; Home and End select boundary items. Native buttons support Enter/Space. The range scrubber retains its native keyboard behavior. Current captions are announced politely, and selection does not move focus unexpectedly. Dragging adds no shortcut and changes none: a drag never fires the click of the card it ends over, while Enter and Space on a focused card still select it.
+
+## Technologies
+
+Ported from Amicro `CardCarousel`, `CardCoverFlow`, `CardTimeMachine`, `cards.ts`, card registry entries and the reused ThreeDPage specimens at commit `43c29ce9cdd16459e3eab4992381b8d35b38776a`, under MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN.
+
+CSS transforms use the shared spring compiler and `useMotionActivity`. Inactive/reduced motion renders the destination immediately without disabling selection. Time Machine's squircle filter uses a Vue `useId` identifier, so multiple instances and SSR hydration do not collide. No upstream image assets or React/Motion runtime are included.
+
+Dragging samples the drawn deck position, so a release past either end carries only the speed the deck is drawn at. The release is projected with `projectMomentum` and its velocity (a 100ms window, `createVelocityTracker`) is handed to the spring that drives selection (`stepSpring`): a damping ratio near 0.8 after a release that carried momentum, critical damping otherwise. The ends use `rubberband`. The stage takes native pointer capture only once movement passes 4 px, so clicks keep their target.

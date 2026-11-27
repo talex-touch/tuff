@@ -1,0 +1,90 @@
+---
+title: "IconMorph"
+description: "A stroke icon that morphs into another icon with spring physics."
+category: Effects
+status: beta
+since: 0.6.0
+tags: [icon, morph, vector, animation, spring, svg]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+Changing `icon` springs the shape into the new icon.
+:::TuffDemoWrapper{demo="IconMorphIconMorphDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxIconMorph } from '@talex-touch/tuffex/icon-morph'
+
+  const isOpen = ref(false)
+  </script>
+
+  <template>
+    <button @click="isOpen = !isOpen">
+      <TxIconMorph :icon="isOpen ? 'close' : 'menu'" spring="snappy" :size="24" />
+    </button>
+  </template>
+---
+:::
+
+### Controlled Progress
+Pass `from`, `to`, and `progress` to drive the morph from a gesture, scroll position, or custom transition, without the spring.
+
+```vue
+<template>
+  <TxIconMorph from="menu" to="close" :progress="dragProgress" :size="24" />
+</template>
+```
+
+### Best Practices
+
+- Use it for stateful buttons: play / pause, menu / close, search / clear, plus / check.
+- Use `spring="snappy"` for click feedback and `spring="smooth"` for larger UI transitions.
+- Stroke icons (Lucide, Tabler, Feather) morph best; crossfade filled glyphs instead.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `icon` | `IconInput` | - | Current icon when uncontrolled: a preset name (`'menu'`, `'close'`, `'check'`, `'play'`, `'pause'`, …), a path `d`, an `IconNode`, or `<svg>` markup. |
+| `from` | `IconInput` | - | Start icon in controlled mode. |
+| `to` | `IconInput` | - | Target icon in controlled mode. |
+| `progress` | `number` | - | Controlled progress (0–1); setting it enters controlled mode and stops the spring. |
+| `spring` | `'snappy' \| 'smooth' \| 'bouncy' \| { stiffness?: number, damping?: number }` | `'snappy'` | Spring for uncontrolled transitions. |
+| `size` | `number \| string` | `24` | Icon width and height in px. |
+| `strokeWidth` | `number \| string` | `2` | Stroke width. |
+| `absoluteStrokeWidth` | `boolean` | `false` | Keeps the stroke width constant as `size` changes, per the Lucide convention. |
+| `viewBox` | `string` | `'0 0 24 24'` | The root `<svg>` viewBox; the default matches the engine's 24-unit grid. |
+| `label` | `string` | - | Accessible name: renders `role="img"` and a `<title>`; without it the icon is `aria-hidden="true"`. |
+| `color` | `string` | `'currentColor'` | Stroke color. |
+| `reducedMotion` | `'never' \| 'user' \| 'always'` | `'never'` | Reduced-motion policy: `user` follows the OS setting, `always` jumps straight to the end. |
+
+### Exposed Methods
+
+| Name | Type | Description |
+|------|------|-------------|
+| `morphTo` | `(icon: IconInput, spring?: SpringPreset \| MorphOptions) => void` | Springs to the icon; without `spring`, uses the `spring` prop. |
+| `set` | `(icon: IconInput) => void` | Jumps to the icon without animating. |
+| `seek` | `(icon: IconInput, t: number) => void` | Freezes the morph toward the icon at progress `t` (0–1), without the spring. |
+| `progress` | `number` | Read-only current morph progress; `1` at rest. |
+| `getMorph` | `() => Morph \| null` | Returns the underlying `Morph` driver, or `null` before any icon shows up. |
+
+## Overview
+
+- `label` sets the accessible name: it renders `role="img"` and a `<title>`, and without it the icon is `aria-hidden="true"`.
+- With `reducedMotion="user"` the icon follows the system's reduced-motion setting; with `always` it jumps straight to the end.
+- With both `from` and `to` set, the icon is controlled and `icon` changes are ignored; removing either one hands the path back to `icon`.
+
+## Technologies
+
+- The engine aligns both paths with 2D Procrustes to detect rotation, interpolates in polar space, and drives it with a damped spring.
+- Exports `TxIconMorph`, `IconMorph`, `TxMorphIcon`, and `MorphIcon` from `@talex-touch/tuffex/icon-morph` or `@talex-touch/tuffex`.
+- Source: `packages/tuffex/packages/components/src/icon-morph/`.
+
+<TuffDocSourceLink />

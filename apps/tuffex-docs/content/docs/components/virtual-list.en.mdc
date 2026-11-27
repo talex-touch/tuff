@@ -1,0 +1,115 @@
+---
+title: "VirtualList"
+description: "A fixed-row-height list that renders only the visible rows."
+category: Advanced
+status: beta
+since: 0.3.4
+tags: [virtual-list, performance, list]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+`itemHeight` fixes the row height and `height` sets the viewport.
+:::TuffDemoWrapper{demo="VirtualListVirtualListDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const items = Array.from({ length: 100 }, (_, index) => `Item ${index + 1}`)
+  </script>
+
+  <template>
+    <TxVirtualList :items="items" :item-height="36" height="240px">
+      <template #item="{ item, index }">
+        {{ index + 1 }}. {{ item }}
+      </template>
+    </TxVirtualList>
+  </template>
+---
+:::
+
+### Stable Item Keys
+
+```vue
+<template>
+  <TxVirtualList :items="users" :item-height="44" height="360px" item-key="id">
+    <template #item="{ item }">
+      <UserRow :user="item" />
+    </template>
+  </TxVirtualList>
+</template>
+```
+
+### Imperative Scrolling
+
+```vue
+<script setup lang="ts">
+const listRef = ref()
+
+function jumpToLatest() {
+  listRef.value?.scrollToBottom()
+}
+</script>
+
+<template>
+  <TxButton @click="jumpToLatest">Latest</TxButton>
+  <TxVirtualList ref="listRef" :items="logs" :item-height="32" :height="400" />
+</template>
+```
+
+### Best Practices
+
+- Use it only for fixed-height rows; variable heights throw off the scroll math.
+- Point `itemKey` at a stable id for object lists; index keys suit immutable arrays only.
+- Keep `overscan` modest: more rows scroll smoother but cost more DOM work.
+- Put spacing inside the fixed-height row, not as vertical margins around it.
+- Use `scroll` for analytics or lazy-load triggers, not per-frame heavy work.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `items` | `T[]` | `[]` | The full data set. |
+| `itemHeight` | `number` | required | Fixed row height in px; every row must match it. |
+| `height` | `number \| string` | `320` | Scroll container height; numbers become px. |
+| `overscan` | `number` | `4` | Extra rows rendered before and after the viewport. |
+| `itemKey` | `keyof T \| (item: T, index: number) => string \| number` | `index` | Row key: a field name or function; a missing field falls back to its index in `items`. |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| `scroll` | `{ scrollTop: number, startIndex: number, endIndex: number }` | Fires after a scroll updates the visible range. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `item` | `{ item: T, index: number }` | Renders each visible item; defaults to `item` as text. |
+
+### Exposed Methods
+
+| Method | Signature | Description |
+|------|-----------|-------------|
+| `scrollToIndex` | `(index: number) => void` | Scrolls to `Math.max(0, index) * itemHeight`; indexes past the last item aren't clamped. |
+| `scrollToTop` | `() => void` | Scrolls to the top. |
+| `scrollToBottom` | `() => void` | Scrolls to `max(0, totalHeight - viewHeight)`. |
+
+## Overview
+
+- Every row is exactly `itemHeight` px tall; a numeric `height` becomes px, and a string is applied as-is.
+- Numeric, px, and bare numeric string heights count immediately; `%`, `vh`, `vw`, `rem`, and `em` wait for the mounted `clientHeight`, so give SSR or hidden containers a concrete height.
+- With `ResizeObserver` available, container resizes update the viewport height.
+- The visible range runs from `floor(scrollTop / itemHeight) - overscan` to the viewport's end plus `overscan`, clamped between `0` and `items.length`.
+- The spacer is `items.length * itemHeight` tall, and visible items shift by `startIndex * itemHeight`.
+- The container and rows carry no `role` or `aria-*`. For list semantics, wrap them with `role="list"` / `role="listitem"` and set `aria-setsize` / `aria-posinset` from the real total and absolute indexes.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/virtual-list/`.
+
+<TuffDocSourceLink />

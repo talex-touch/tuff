@@ -1,0 +1,64 @@
+---
+title: LayoutSkeleton
+description: A skeleton placeholder shaped like a full app layout.
+category: Status
+status: beta
+since: 0.3.4
+tags: [skeleton, layout, loading]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Layout Placeholder
+The wrapper sets the size.
+:::TuffDemoWrapper{demo="LayoutSkeletonLayoutPlaceholderDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="height: 240px;">
+      <TxLayoutSkeleton />
+    </div>
+  </template>
+---
+:::
+
+### Panel Placeholder
+:::TuffDemoWrapper{demo="LayoutSkeletonPanelPlaceholderDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard>
+      <TxLayoutSkeleton />
+    </TxCard>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Give the wrapper an explicit height; the component only fills `width: 100%` and `height: 100%`.
+- Use it for pages, panels, side summaries, and detail panes whose final shape is stable.
+- When the final UI has no header or sidebar, compose `TxSkeleton`, `TxCardSkeleton`, or `TxListItemSkeleton` into the real structure instead.
+- Don't use it for table rows; use `TxDataTable` with `loadingVariant="skeleton"` for table bodies.
+
+## API Reference
+
+### Props
+
+No props; the size follows the container.
+
+## Overview
+
+- Always renders a 36px header, 6 sidebar items (the first is the current item), and 8 content lines (the first is a title).
+- The sidebar is `clamp(72px, 30%, 200px)` wide and shrinks in proportion in narrow containers instead of squeezing the content.
+- Line widths come from fixed sequences, so SSR, hydration, and visual tests stay stable.
+- The root is `aria-hidden="true"`; the host announces loading, for example with `aria-busy` on the region.
+- Under reduced motion only the shimmer stops; the placeholders stay.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/layout-skeleton/`.
+
+<TuffDocSourceLink />

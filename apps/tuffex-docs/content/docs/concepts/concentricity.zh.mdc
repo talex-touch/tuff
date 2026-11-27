@@ -1,0 +1,45 @@
+---
+title: 同心圆角法则与微内嵌防裁切
+description: 嵌套圆角容器的同心几何守恒定律、光标裁切规避与 0.65x 垂直光学内边距调和。
+---
+
+# 同心圆角法则与微内嵌防裁切
+
+当卡片、输入框与标签形成多层嵌套时，圆角与内边距必须服从严格的物理几何关系。
+
+## 同心圆角几何守恒定律
+
+若内外两个圆角矩形完全同心，拐角处的圆弧必须保持等距平行：
+$$R_{\text{outer}} = R_{\text{inner}} + \text{Padding}$$
+- 外层半径等于内层半径加上内外两层之间的间隙距离。
+- 如果内层紧贴外层边缘（Padding = 0），则内外半径必须完全相同。
+
+## 内外圆角错误嵌套的视觉灾难
+
+如果内外容器错误地使用了相同的圆角数值（例如外层 12px，内层 12px，间距 8px）：
+- 平直边缘处间距为 8px。
+- 拐角处的实际物理距离扩大为 $8 \times \sqrt{2} \approx 11.31\text{px}$！
+间距凭空多出约 41%，内部元素会产生被生硬“挤压”或悬空的失衡感。
+
+:::TuffDemoWrapper{demo="ConceptConcentricRadiusDemo"}
+:::
+
+## 水平内边距防光标裁切
+
+在带有圆角的输入控件（`TxInput`）中，圆弧会向容器内部侵入空间。
+如果输入文字或闪烁光标距离左侧边缘过近，光标会直接穿透并切入圆角弧线内部。
+
+TuffEx 的安全内嵌铁律：
+$$Padding_{\text{horizontal}} \ge R$$
+水平内边距必须完全覆盖容器的圆角半径，使光标起点彻底避开圆弧的侵占区域。
+
+## 0.65x 黄金垂直光学内边距
+
+字体由于带有内部行高（Leading），上下自带不可见的行间距。如果按钮或 Chip 采用相等的上下和左右内边距（如 `padding: 8px 8px`），在视觉上会呈现出不匀称的头重脚轻感。
+
+TuffEx 的包裹层光学比例：
+$$Padding_{\text{vertical}} \approx 0.6 \sim 0.75 \times Padding_{\text{horizontal}}$$
+例如 26px 高的 TxScrubField，12px 字的行高 14.5px，上下各留 5.75px，两端的字离边缘 9px，比值约 0.64。TxModeChip 固定 28px 高、行高 18px，上下各留 5px，左右是 8px（`height: 28px; padding: 0 8px`），比值 0.625；TxTag 的 md 尺寸直接写作 `padding: 5px 8px`。
+
+:::TuffDemoWrapper{demo="ConceptConcentricInsetDemo"}
+:::

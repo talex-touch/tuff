@@ -1,0 +1,889 @@
+/* Voice template. Unscoped: every selector carries the `vnote` prefix. The few
+   TuffEx internals it adjusts sit under `.vnote`, so they outrank the
+   components' scoped rules whichever stylesheet loads first. */
+
+.vnote {
+  --vnote-line: var(--tx-border-color-lighter, #ebeef5);
+  --vnote-panel: color-mix(in srgb, var(--tx-bg-color-page, #f2f3f5) 45%, var(--tx-bg-color, #fff));
+  --vnote-danger: var(--tx-color-danger, #f56c6c);
+  /* Small red text on a red wash, pulled toward the text colour so it keeps
+     its contrast: darker on light, lighter on dark. */
+  --vnote-danger-text: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 78%, var(--tx-text-color-primary, #303133));
+
+  position: relative;
+  display: grid;
+  height: 100%;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--tx-bg-color, #fff);
+  color: var(--tx-text-color-primary, #303133);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Header ---------------------------------------------------------------- */
+
+.vnote__head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--vnote-line);
+}
+
+.vnote__mark {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--vnote-danger) 14%, transparent);
+  color: var(--vnote-danger);
+  font-size: 15px;
+}
+
+.vnote__title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vnote__sample,
+.vnote__tabs {
+  flex: none;
+}
+
+.vnote__spacer {
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+/* Ellipsis rather than overflow when the stage is barely past the narrow band. */
+.vnote__hint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tx-text-color-regular, #606266);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vnote__hint > span {
+  display: inline-block;
+  margin-right: 5px;
+  font-size: 13px;
+  vertical-align: -2px;
+}
+
+/* Body ------------------------------------------------------------------ */
+
+.vnote__body {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+/* Recordings list ------------------------------------------------------- */
+
+.vnote-list {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border-right: 1px solid var(--vnote-line);
+  background: var(--vnote-panel);
+}
+
+.vnote-list__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px 6px;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.vnote-list__count {
+  min-width: 20px;
+  box-sizing: border-box;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--tx-fill-color-light, #f5f7fa);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  text-align: center;
+}
+
+.vnote-list__rows {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 2px 10px 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+/* The honesty note: plain text, not a muted aside. */
+.vnote-list__note {
+  margin: 0;
+  padding: 8px 14px 10px;
+  border-top: 1px solid var(--vnote-line);
+  color: var(--tx-text-color-regular, #606266);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.vnote-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 9px 10px 9px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.vnote-row:hover {
+  background: color-mix(in srgb, var(--tx-fill-color-light, #f5f7fa) 80%, transparent);
+}
+
+.vnote-row.is-selected {
+  background: var(--tx-bg-color, #fff);
+  box-shadow:
+    0 0 0 1px var(--vnote-line),
+    0 6px 14px -12px rgba(0, 0, 0, 0.35);
+}
+
+/* The bar marks the open recording without leaning on the fill alone. */
+.vnote-row.is-selected::before {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--tx-color-primary, #409eff);
+  content: '';
+}
+
+.vnote-row__select {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: start;
+}
+
+.vnote-row__select:focus-visible {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: 2px;
+}
+
+.vnote-row__title {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vnote-row__date {
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 11px;
+}
+
+/* A block for the clip's `max-width: 100%` to resolve against. */
+.vnote-row__clip {
+  display: flex;
+  min-width: 0;
+}
+
+.vnote-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 11px;
+}
+
+.vnote-row.is-recording .vnote-row__meta {
+  color: var(--vnote-danger-text);
+}
+
+.vnote-row.is-recording .vnote-row__meta::before {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--vnote-danger);
+  animation: vnote-blink 1.2s ease-in-out infinite;
+  content: '';
+}
+
+/* Recorder -------------------------------------------------------------- */
+
+.vnote-main {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 14px 0;
+}
+
+/* TxVoiceBeam's root. Its glow layers stack up to z-index 4 over the slot and
+   paint nothing until it is active, so the card isolates them, keeps its own
+   surface for the idle state, and lifts the content above. */
+.vnote-rec {
+  isolation: isolate;
+  border-radius: 16px;
+  background: var(--tx-bg-color-overlay, #fff);
+  box-shadow:
+    inset 0 0 0 1px var(--vnote-line),
+    0 8px 20px -16px rgba(0, 0, 0, 0.4);
+}
+
+.vnote-rec__body {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.vnote-rec__text {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1px;
+}
+
+.vnote-rec__title {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vnote-rec__sub {
+  overflow: hidden;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vnote-rec__clock {
+  flex: none;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* The record key: a dot to start, a square to stop, a ring while summarizing. */
+.vnote-key {
+  position: relative;
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--vnote-danger) 12%, var(--tx-bg-color, #fff));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vnote-danger) 34%, transparent);
+  color: var(--vnote-danger);
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    transform 0.16s ease;
+}
+
+.vnote-key:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--vnote-danger) 20%, var(--tx-bg-color, #fff));
+}
+
+.vnote-key:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.vnote-key:focus-visible {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: 3px;
+}
+
+.vnote-key:disabled {
+  cursor: progress;
+}
+
+.vnote-key__glyph {
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: currentColor;
+  transition:
+    width 0.2s ease,
+    height 0.2s ease,
+    border-radius 0.2s ease;
+}
+
+.vnote-key.is-stop .vnote-key__glyph {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+}
+
+/* A ring breathing outward while the take is live. */
+.vnote-key.is-stop::after {
+  position: absolute;
+  inset: -4px;
+  border: 2px solid color-mix(in srgb, var(--vnote-danger) 45%, transparent);
+  border-radius: 50%;
+  animation: vnote-pulse 1.6s ease-out infinite;
+  content: '';
+  pointer-events: none;
+}
+
+.vnote-key.is-busy {
+  background: var(--tx-fill-color-light, #f5f7fa);
+  box-shadow: inset 0 0 0 1px var(--vnote-line);
+  color: var(--tx-text-color-secondary, #909399);
+}
+
+.vnote-key.is-busy .vnote-key__glyph {
+  width: 18px;
+  height: 18px;
+  border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-top-color: currentColor;
+  background: transparent;
+  animation: vnote-spin 0.8s linear infinite;
+}
+
+/* Detail ---------------------------------------------------------------- */
+
+/* Column and narrow: the transcript, then the summary, in one scroller under
+   the recorder. Followed while the reader is at its end. */
+.vnote-detail {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  align-content: start;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding-bottom: 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.vnote-transcript,
+.vnote-summary {
+  min-width: 0;
+}
+
+.vnote-section-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.vnote-section-head__meta {
+  margin-left: auto;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.vnote-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--vnote-danger) 12%, transparent);
+  color: var(--vnote-danger-text);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.vnote-live::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vnote-danger);
+  animation: vnote-blink 1.2s ease-in-out infinite;
+  content: '';
+}
+
+.vnote-empty {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px dashed var(--tx-border-color, #dcdfe6);
+  border-radius: 12px;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Transcript ------------------------------------------------------------ */
+
+.vnote-lines {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vnote-line {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 10px;
+  animation: vnote-rise 0.32s var(--tx-ease-out-strong, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+
+/* Speaker initials: each hue darkened until white text holds 4.5:1. */
+.vnote-avatar {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.vnote-avatar.is-s0 {
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 70%, #000);
+}
+
+.vnote-avatar.is-s1 {
+  background: color-mix(in srgb, var(--tx-color-warning, #e6a23c) 62%, #000);
+}
+
+.vnote-avatar.is-s2 {
+  background: color-mix(in srgb, var(--tx-color-success, #67c23a) 64%, #000);
+}
+
+.vnote-line__body {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.vnote-line__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.vnote-line__name {
+  font-weight: 600;
+}
+
+.vnote-line__at {
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vnote-line__text {
+  color: var(--tx-text-color-regular, #606266);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* Summary --------------------------------------------------------------- */
+
+/* A border rather than an inset ring: in the expanded stage the card is its
+   own scroller, and an inset shadow would sit under the scrolled text. */
+.vnote-summary {
+  border: 1px solid var(--vnote-line);
+  border-radius: 14px;
+  background: var(--vnote-panel);
+}
+
+/* The top padding also clears the avatar's overscan above its box. */
+.vnote-summary__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+}
+
+.vnote-summary__head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.vnote-summary__titles {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.vnote-summary__title {
+  font-weight: 600;
+}
+
+.vnote-summary__status {
+  overflow: hidden;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vnote-summary__tag {
+  flex: none;
+}
+
+.vnote-skeleton {
+  display: grid;
+  gap: 9px;
+  padding: 2px 0 4px;
+}
+
+.vnote-points {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vnote-point {
+  position: relative;
+  padding-left: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* Centred on the first line: half the 1.6 line box, less half the dot. */
+.vnote-point::before {
+  position: absolute;
+  top: calc(0.8em - 2.5px);
+  left: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--tx-color-primary, #409eff);
+  content: '';
+}
+
+.vnote-todos {
+  display: grid;
+  gap: 6px;
+}
+
+.vnote-todos__head {
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.vnote-todos__list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vnote-todo {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--tx-bg-color, #fff);
+  box-shadow: inset 0 0 0 1px var(--vnote-line);
+  animation: vnote-rise 0.32s var(--tx-ease-out-strong, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+
+/* TxCheckbox centres its box on the label, and the box has no in-flow content
+   to hold its width; a to-do that wraps would squeeze it. */
+.vnote .vnote-todo .tx-checkbox {
+  align-items: flex-start;
+  text-align: start;
+}
+
+.vnote .vnote-todo .tx-checkbox__box {
+  flex: none;
+  margin-top: 1px;
+}
+
+.vnote .vnote-todo .tx-checkbox__label {
+  color: var(--tx-text-color-primary, #303133);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.vnote .vnote-todo.is-done .tx-checkbox__label {
+  color: var(--tx-text-color-secondary, #909399);
+  text-decoration: line-through;
+}
+
+/* Under the label: the 18px box plus the checkbox's 8px gap. */
+.vnote-todo__meta {
+  padding-left: 26px;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 11px;
+}
+
+.vnote-follow {
+  margin-top: 2px;
+}
+
+/* Toast ----------------------------------------------------------------- */
+
+/* Under the header's right end. It keeps its box while closed, so it lets
+   clicks through until it opens. */
+.vnote-toast {
+  position: absolute;
+  z-index: 6;
+  top: 54px;
+  right: 14px;
+  width: min(300px, calc(100% - 28px));
+  pointer-events: none;
+}
+
+.vnote-toast.is-open {
+  pointer-events: auto;
+}
+
+.vnote-toast__card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.vnote-toast__icon {
+  flex: none;
+  font-size: 15px;
+}
+
+.vnote-toast__icon.is-success {
+  color: var(--tx-color-success, #67c23a);
+}
+
+.vnote-toast__icon.is-info {
+  color: var(--tx-color-primary, #409eff);
+}
+
+.vnote-toast__text {
+  min-width: 0;
+  flex: 1;
+  font-weight: 500;
+}
+
+.vnote-toast__close {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tx-text-color-placeholder, #a8abb2);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.vnote-toast__close:hover {
+  background: var(--tx-fill-color-light, #f5f7fa);
+  color: var(--tx-text-color-primary, #303133);
+}
+
+.vnote-toast__close:focus-visible {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: 1px;
+}
+
+/* Bands ----------------------------------------------------------------- */
+
+/* Narrow: one pane at a time; the header's toggle swaps the list and the
+   detail, and choosing a recording opens it. */
+@container template (max-width: 639px) {
+  .vnote__head {
+    padding: 8px 12px;
+  }
+
+  .vnote__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vnote-list {
+    border-right: 0;
+  }
+
+  .vnote[data-pane='detail'] .vnote-list,
+  .vnote[data-pane='list'] .vnote-main {
+    display: none;
+  }
+
+  .vnote-main {
+    gap: 10px;
+    padding: 10px 12px 0;
+  }
+
+  .vnote-rec__body {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .vnote-rec__clock {
+    font-size: 18px;
+  }
+
+  .vnote-toast {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+  }
+}
+
+/* A phone-sized stage: the toggle takes its own row rather than squeezing
+   the title to nothing. */
+@container template (max-width: 419px) {
+  .vnote__head {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .vnote__tabs {
+    margin-left: auto;
+  }
+}
+
+/* Wide: the summary takes its own column, and the transcript and the summary
+   scroll apart. */
+@container template (min-width: 960px) {
+  .vnote__body {
+    grid-template-columns: 264px minmax(0, 1fr);
+  }
+
+  .vnote-main {
+    grid-template-areas:
+      'rec summary'
+      'transcript summary';
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 36%);
+    column-gap: 16px;
+    padding: 14px 16px;
+  }
+
+  .vnote-rec {
+    grid-area: rec;
+  }
+
+  .vnote-detail {
+    display: contents;
+  }
+
+  .vnote-transcript {
+    min-height: 0;
+    grid-area: transcript;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .vnote-summary {
+    min-height: 0;
+    grid-area: summary;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vnote-row,
+  .vnote-key,
+  .vnote-key__glyph {
+    transition: none;
+  }
+
+  .vnote-line,
+  .vnote-todo,
+  .vnote-live::before,
+  .vnote-key.is-stop::after,
+  .vnote-key.is-busy .vnote-key__glyph,
+  .vnote-row.is-recording .vnote-row__meta::before {
+    animation: none;
+  }
+}
+
+@keyframes vnote-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes vnote-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes vnote-pulse {
+  from {
+    opacity: 0.9;
+    transform: scale(0.92);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.22);
+  }
+}
+
+@keyframes vnote-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

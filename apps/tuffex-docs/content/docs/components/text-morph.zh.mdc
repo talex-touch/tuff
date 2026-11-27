@@ -1,0 +1,136 @@
+---
+title: "TextMorph 文本形变"
+description: "只让变化的字符段动起来的文本形变"
+category: Effects
+status: beta
+since: 0.6.0
+tags: [text, morph, number, spring, live-region]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+只有真正变化的字符段会动，容器宽高与字符同曲线过渡。
+:::TuffDemoWrapper{demo="TextMorphTextMorphDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const phrases = [
+    'Hello world',
+    'Hello there',
+    'Goodbye there',
+    'Goodbye and thanks for all the fish',
+  ]
+
+  const index = ref(0)
+  const phrase = computed(() => phrases[index.value] ?? '')
+
+  function next() {
+    index.value = (index.value + 1) % phrases.length
+  }
+  </script>
+
+  <template>
+    <TxButton @click="next">Next phrase</TxButton>
+    <TxTextMorph :text="phrase" :duration-ms="400" />
+  </template>
+---
+:::
+
+### 数字位值
+数字按位值而非从左到右匹配：`1,204 → 1,318` 只滚百位和十位，千位不动。
+:::TuffDemoWrapper{demo="TextMorphNumberPlaceValueDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const total = ref(1204)
+  </script>
+
+  <template>
+    <!-- 1,204 -> 1,318 滚百位和十位，千位不动 -->
+    <TxTextMorph :text="`$${total.toLocaleString('en')}`" />
+
+    <!-- 直接传数字时，locale 与 decimals 负责格式化 -->
+    <TxTextMorph :text="total" locale="en" :decimals="2" />
+  </template>
+---
+:::
+
+### 弹簧
+`spring` 接预设名或物理系数，同时决定曲线与时长；设了之后忽略 `durationMs` 与 `easing`。
+:::TuffDemoWrapper{demo="TextMorphSpringDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTextMorph text="Settling" spring="snappy" />
+    <TxTextMorph text="Settling" spring="smooth" />
+    <TxTextMorph text="Settling" spring="bouncy" />
+    <TxTextMorph text="Settling" :spring="{ stiffness: 200, damping: 20 }" />
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 计数器、金额、百分比这类「同一个量在变」的值优先用它。
+- 输入框里跟随键入的数字要传 `cursorIndex`，否则在 `20` 前插一位会被当成整列重新编号。
+- 需要软换行或省略号截断时用 `TxTextTransformer` 的 `mode="fade"`；这里只有 `\n` 会换行。
+- 同一屏不要放太多高频实例：每个字符段都是一个元素，形变期间各自提升为合成层。
+- 不要再套 `TxAutoSizer`，引擎自己动画容器宽高。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `text` | `string \| number` | - | 要渲染的值；数字先按 `locale` 与 `decimals` 格式化。 |
+| `tag` | `string` | `span` | 根节点标签。 |
+| `durationMs` | `number` | `400` | 形变时长（ms）；设了 `spring` 时忽略。 |
+| `easing` | `string` | `cubic-bezier(0.19, 1, 0.22, 1)` | CSS 缓动函数；设了 `spring` 时忽略。 |
+| `spring` | `'snappy' \| 'smooth' \| 'bouncy' \| { stiffness?, damping?, mass? }` | - | 弹簧物理，同时决定曲线与时长。 |
+| `scale` | `boolean` | `true` | 离场段是否带缩放。 |
+| `numbers` | `boolean` | `true` | 数字按位值滚动；关闭后退回字符级形变。 |
+| `decimals` | `number` | - | 小数位数，仅当 `text` 是数字时生效。 |
+| `locale` | `string` | `en` | 用于分段与数字格式化。 |
+| `cursorIndex` | `number` | - | 光标位置；值里恰好一个数字时改用光标匹配。 |
+| `disabled` | `boolean` | `false` | 跳过动画，直接写入值。 |
+| `respectReducedMotion` | `boolean` | `true` | 把减少动态效果当作 `disabled`。 |
+| `debug` | `boolean` | `false` | 给根节点和每个段描边，便于排查。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `animation-start` | - | 一次形变开始；首帧渲染不触发。 |
+| `animation-complete` | - | 形变走完；每次形变与 `animation-cancel` 恰好触发其一。 |
+| `animation-cancel` | - | 形变被下一次更新打断。 |
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `rootRef` | `HTMLElement \| null` | 引擎写入内容的根元素。 |
+
+## 概述
+
+- 动效单位是字符段而非整串：存活的段 FLIP 到新位置，新增的段从最近的锚点淡入，离场的段脱离文档流后淡出。
+- 完整值在视觉隐藏的 `[tx-morph-sr]` 节点里，段元素都是 `aria-hidden`，屏幕阅读器只读一次完整值。
+- 可选中的段保留原文空白（NBSP、连续空格、制表符、换行、组合字符）；离场段不参与选择，复制不会混入上一轮文本。
+- 数字的千分位逗号跟着量级走；量级跳跃达到 3 位及以上时不再携带数字，整体替换。
+- 形变中途再次更新会把当前速度带进新曲线，高频更新不会停在起步阶段。
+- 减少动态效果或 `disabled` 时直接写入 `textContent`，并清空内部段记录。
+
+## 技术实现
+
+- 引擎命令式创建并接管段元素（首帧纯文本只为 SSR 水合），所以样式不是 scoped，靠 `tx-morph-*` 属性名隔离。
+- 引擎（另导出为 `TextMorphEngine` / `MorphController`）移植自 [lochie/torph](https://github.com/lochie/torph)（MIT），弹簧层换成与 `TxLiquid` 共用的 `liquid/src/spring.ts`。
+- 源码：`packages/tuffex/packages/components/src/text-morph/`。
+
+<TuffDocSourceLink />

@@ -1,0 +1,177 @@
+---
+title: "CodeEditor 代码编辑器"
+description: "基于 CodeMirror 的配置与代码编辑器"
+category: Advanced
+status: beta
+since: 0.3.4
+tags: [code, editor, json, yaml]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 语言
+`language` 选择语言；只有 JSON 与 YAML 支持格式化与校验，其余语言只有高亮与基础编辑。
+::::TuffDemoWrapper{demo="CodeEditorCodeEditorDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const jsonValue = ref('{"name":"Tuffex","version":1}')
+  const yamlValue = ref('name: Tuffex\nversion: 1\n')
+  </script>
+
+  <template>
+    <TxCodeEditor v-model="jsonValue" language="json" />
+    <TxCodeEditor v-model="yamlValue" language="yaml" />
+  </template>
+---
+::::
+
+### 工具栏
+`toolbar` 插槽提供编辑器方法，`TxCodeEditorToolbar` 提供标准按钮布局。
+::::TuffDemoWrapper{demo="CodeEditorToolbarDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const actions = [
+    { key: 'format', label: '格式化', icon: 'i-carbon-code' },
+    { key: 'search', label: '搜索', icon: 'i-carbon-search', shortcut: '⌘F' },
+    { key: 'copy', label: '复制', icon: 'i-carbon-copy' },
+  ]
+  </script>
+
+  <template>
+    <TxCodeEditor v-model="value" language="json">
+      <template #toolbar="editor">
+        <TxCodeEditorToolbar :actions="actions" compact @action="(key) => runAction(key, editor)" />
+      </template>
+    </TxCodeEditor>
+  </template>
+---
+::::
+
+### 最佳实践
+
+- 需要校验与格式化的配置用 JSON 或 YAML；TOML、INI、JavaScript 只适合高亮与基础编辑。
+- 用户可能暂存非法语法时，不要开启 `formatOnBlur`。
+- 生成内容与示例用 `readOnly` 展示，不要用禁用的表单字段代替。
+- 用工具栏提高可发现性，同时保留快捷键。
+- 自定义 `extensions` 只做局部改动：它们追加在内置扩展之后，作用于整个编辑器。
+
+## API 参考
+
+### TxCodeEditor
+
+#### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string` | `''` | 文档内容，配合 `v-model` 使用。 |
+| `language` | `'json' \| 'yaml' \| 'toml' \| 'ini' \| 'javascript' \| 'js'` | `'json'` | 语言；`js` 等同于 `javascript`。 |
+| `theme` | `'auto' \| 'light' \| 'dark' \| 'github' \| 'dracula' \| 'monokai'` | `'auto'` | 配色；`auto` 跟随页面主题。 |
+| `readOnly` | `boolean` | `false` | 禁止编辑，同时禁用格式化。 |
+| `lineNumbers` | `boolean` | `true` | 显示行号，并高亮当前行的行号。 |
+| `lineWrapping` | `boolean` | `false` | 自动换行。 |
+| `placeholder` | `string` | `''` | 文档为空时的占位文本。 |
+| `tabSize` | `number` | `2` | 缩进宽度；非法值回退为 `2`，其余四舍五入。 |
+| `formatOnBlur` | `boolean` | `false` | 失焦后执行 `format()`。 |
+| `formatOnInit` | `boolean` | `false` | 编辑器挂载后执行一次 `format()`。 |
+| `lint` | `boolean` | `true` | 当前语言有校验器时显示诊断。 |
+| `search` | `boolean` | `true` | 启用搜索面板及其快捷键。 |
+| `completion` | `boolean` | `true` | 启用自动补全、括号闭合及其快捷键。 |
+| `extensions` | `Extension[]` | `[]` | 追加在内置扩展之后的 CodeMirror 扩展。 |
+
+#### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `string` | 编辑或格式化改变文档时触发。 |
+| `change` | `string` | 与 `update:modelValue` 同时触发。 |
+| `focus` | `()` | 编辑器获得焦点时触发。 |
+| `blur` | `()` | 编辑器失去焦点时触发。 |
+| `format` | `{ value: string; language: CodeEditorLanguage }` | 格式化改变了文档时触发。 |
+
+#### 插槽
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `toolbar` | `{ format, openSearch, foldAll, unfoldAll, copy, getValue }` | 编辑器上方的工具栏，运行时挂载后渲染。 |
+
+#### 暴露方法
+
+| 方法 | 类型 | 说明 |
+|------|------|------|
+| `focus()` | `() => void` | 聚焦编辑器。 |
+| `blur()` | `() => void` | 让编辑器失焦。 |
+| `format()` | `() => boolean` | 格式化 JSON/YAML；无法格式化或结果不变时返回 `false`。 |
+| `openSearch()` | `() => boolean` | `search` 开启时打开搜索面板。 |
+| `foldAll()` | `() => boolean` | 折叠全部代码块。 |
+| `unfoldAll()` | `() => boolean` | 展开全部代码块。 |
+| `copy()` | `() => Promise<boolean>` | 通过 `navigator.clipboard` 复制全文。 |
+| `getValue()` | `() => string` | 当前文档；运行时挂载前返回 `modelValue`。 |
+| `getView()` | `() => EditorView \| null` | CodeMirror 的 `EditorView`；挂载前为 `null`。 |
+
+### TxCodeEditorToolbar
+
+#### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `actions` | `CodeEditorToolbarAction[]` | 内置 actions | 按钮列表；为空时使用 `format`、`search`、`foldAll`、`unfoldAll`、`copy`。 |
+| `compact` | `boolean` | `false` | 缩小按钮内边距。 |
+
+#### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `action` | `CodeEditorToolbarActionKey` | 点击未禁用的按钮时触发。 |
+
+#### 插槽
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `leading` | - | 按钮组之前的内容。 |
+| `trailing` | - | 按钮组之后的内容。 |
+
+### 类型
+
+#### CodeEditorToolbarAction
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `key` | `'format' \| 'search' \| 'foldAll' \| 'unfoldAll' \| 'copy'` | 点击时随 `action` 派发的 id。 |
+| `label` | `string` | 按钮文案；缺省时用内置英文文案。 |
+| `icon` | `TxIconSource \| string` | `TxIcon` 图标源或图标名。 |
+| `active` | `boolean` | 显示激活样式。 |
+| `disabled` | `boolean` | 禁用按钮，不派发 `action`。 |
+| `shortcut` | `string` | 显示在文案之后的快捷键。 |
+
+## 概述
+
+- 运行时编辑器在挂载后动态加载；加载前暴露方法返回安全默认值，`toolbar` 插槽不渲染。
+- `theme="auto"` 读取 `html` / `body` 的 `data-theme` 与 `dark` / `light` class，并随 `html` 的变化切换。
+- 只有 JSON 与 YAML 有格式化与校验，缩进取 `tabSize`。
+- 外部写入 `modelValue` 会替换整份文档，不回派 `update:modelValue` 与 `change`。
+- `Cmd/Ctrl+Shift+F` 执行 `format()`。该快捷键总被拦截，不支持格式化的语言也会吞掉按键。
+
+## 技术实现
+
+- JSON 用 `JSON.stringify`、YAML 用 `yaml` 包格式化；TOML 与 INI 使用本地 stream parser 高亮。
+- 源码：`packages/tuffex/packages/components/src/code-editor/`。
+
+<TuffDocSourceLink />
+
+## 自定义
+
+| CSS 变量 | 用途 |
+|------|------|
+| `--tx-code-editor-bg` | 外壳与编辑区背景。 |
+| `--tx-code-editor-border` | 外壳边框与工具栏分隔线。 |
+| `--tx-code-editor-toolbar-bg` | 工具栏背景。 |
+| `--tx-code-editor-text` | 工具栏文字。 |
+| `--tx-code-editor-focus` | 聚焦边框与外环。 |
+
+这些变量由解析后的 `theme` 写入根节点。优先用 `theme` 换配色，只在宿主主题需要微调外壳时覆盖。

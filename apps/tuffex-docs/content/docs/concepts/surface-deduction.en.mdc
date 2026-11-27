@@ -1,0 +1,79 @@
+---
+title: Adaptive Surface Deduction & 120Hz Fallback
+description: Pointer velocity sensing, window move and resize, frame budget probes and power saving, with a 0ms fallback and 140ms asymmetric recovery to prevent frame drops.
+---
+
+# Adaptive Surface Deduction & 120Hz Fallback
+
+Refraction and backdrop blur both sample what lies behind them through `backdrop-filter`. When the surface moves with its element, the sampling lags behind the element's position, and the filter layers drag a misaligned patch of backdrop along; while a window is dragged on a 120Hz (ProMotion) display, heavy filters also eat into a frame budget of only 8.3ms. `TxBaseSurface` therefore degrades while it moves and recovers once it stops.
+
+## Why Runtime Auto Deduction is Essential
+
+Client runtimes vary widely:
+- The user may suddenly grab the title bar and drag the window at speed.
+- A laptop may switch to a power-saving mode when its battery runs low.
+- An older integrated GPU may not keep up with heavy filters and drop frame after frame.
+
+Asking product code to sprinkle `if (isDragging) { ... }` checks across views rots quickly and misses cases. TuffEx moves this judgement into `TxBaseSurface`'s `autoDetect` environment sensing (off by default).
+
+A host can leave it off and set the `moving` prop itself instead. In TuffEx, `TxBaseAnchor`'s pop-up panels set it during some of their open and close animations (`surfaceMotionAdaptation` defaults to `auto`), `TxFlipOverlay` sets it during its flip, and `TxCard` sets it during its inertial (`inertial`) follow motion.
+
+## The autoDetect Sensor Matrix
+
+With `autoDetect` on, the component combines the following runtime signals. All but the third are page-wide: every surface with `autoDetect` shares one set of listeners, and the listeners, the battery subscription and the frame probe exist only while at least one such surface is mounted.
+1. **Pointer velocity sensing**: only a pressed pointer counts. Samples are at least 16ms apart, the speed is $|\vec{v}| = \frac{\|\Delta \vec{s}\|}{\Delta t}$, and a single sample above $1.2\text{px/ms}$ counts as fast motion. Hovering without a button pressed does not count; once the pointer holds still or slows down, the signal ends when 140ms pass without another fast sample.
+2. **Window move and resize**: the page's own `resize` events count automatically. A page receives no event when its window moves, so the host forwards one: in Electron, relay the `BrowserWindow`'s `move` (and `will-move`) events to the renderer and call `notifySurfaceWindowMotion()`. The signal ends 140ms after the last report.
+3. **Transforms on the surface and its ancestors**: the component listens on the surface element and every ancestor for `transitionstart`, `transitionend` and `transitioncancel` on `transform` / `translate`, counting only transitions on those elements themselves, not ones bubbling up from elsewhere; a `MutationObserver` watches their inline `style`, so any of them carrying an inline `transform` counts as motion, and motion ends once none does.
+4. **Frame budget probes**: after mount, the component samples about 30 frames in idle time (3 seconds at most) and estimates the display's frame budget from the fastest tenth of the intervals (at most 16.67ms; about 8.3ms on a 120Hz display). A third or more of the frames overrunning 1.5 budgets reads as `reduced`; a median frame over 2.5 budgets reads as `minimal`; a median frame over 250ms means the browser is throttling the page, and the reading is discarded. A degraded page is probed again after 30, 60, 120 and then 300 seconds, a restored one once more 1.5 seconds later, and no probe runs while the page is hidden or unfocused.
+5. **Power saving**: through the Battery Status API, a device that is not charging and at or below 20% charge saves power. The host can override this with `setSurfacePowerSaving(true | false)` (from Electron's `powerMonitor`, say); `null` hands the signal back to the battery API.
+
+The first three are motion signals and decide **when** to fall back; the last two decide **which material** renders: under power saving or `reduced`, `refraction`, `glass` and `acrylic` become `blur`; under `minimal`, every backdrop-sampling material (`blur` included) becomes a solid `flat` fill. `mica`, `plain`, `pure` and `mask` are left alone.
+
+`getSurfaceEnvironment()` returns the page's current `pointerMoving`, `windowMoving`, `powerSaving` and `frameTier` as read-only refs, and the thresholds are exported as `SURFACE_POINTER_SPEED_THRESHOLD`, `SURFACE_MOTION_SETTLE_MS` and `SURFACE_LOW_BATTERY_LEVEL`.
+
+## Instant 0ms Fallback & 140ms Asymmetric Recovery
+
+To keep motion free of stutter, TuffEx runs an **asymmetric clock**:
+- **Fallback (0ms)**: the frame any motion signal appears, the surface falls back, with no debounce. The heavy filters hand the GPU back at once, and the drag keeps up with the pointer.
+- **Recovery (140ms hysteresis)**: when the signals stop, the surface does not switch straight back, which would make it flicker when a gesture trembles around the threshold; it starts recovering once 140ms pass with no new signal.
+
+The clock is exported as `useSurfaceMotionGuard(emitFallback, { settleMs })`: `onMotionStart()` calls back `true` at once, and `onMotionEnd()` calls back `false` after `settleMs` (140ms by default) of quiet. A host that knows when it moves can drive `moving` through it.
+
+## Fast Fallback, Layered Recovery
+
+Below, "motion ends" means after the 140ms hysteresis for `autoDetect`, and the moment the host sets `moving` back to `false` for the prop.
+
+`blur`, `glass` and `acrylic` switch the whole material:
+- **Fallback**: as soon as motion starts, the rendered mode becomes `fallbackMode`. The default is `mask`, with the tint at `fallbackMaskOpacity` (0.95 by default on `TxBaseSurface`; `TxCard` passes 0.26); `pure` is the other choice.
+- **Recovery**: after motion ends the fallback holds for `max(transitionDuration, settleDelay)`, by default `max(299, 150)` = 299ms, then the original material returns.
+
+`refraction` keeps its mode and degrades layer by layer instead:
+- **Fallback**: the glass and filter layers fade out over 140ms, a translucent cover rises to 0.55 over 180ms, the refraction parameters' blend drops to 0.28, and the refraction rim hides at once.
+- **Recovery**: it starts the moment motion ends, with no waiting period. The parameters are back in 182ms; the cover holds for 60ms, then clears over 227ms and is gone at 287ms; the glass and filter layers fade back over 220ms after an 80ms delay; 60ms after the recovery ends, the rim fades back over 220ms. Motion during the recovery goes straight back to the fallback.
+
+`pure`, `mask`, `flat`, `mica` and `plain` have no backdrop-sampling filter layers and do nothing in motion.
+
+:::TuffDemoWrapper{demo="ConceptSurfaceDeductionDemo"}
+:::
+
+## State Machine Diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> Refraction_Active: mode = refraction, healthy environment
+    Refraction_Active --> Layered_Fallback: A motion signal appears (0ms)
+    Layered_Fallback --> Refraction_Recovering: Signals quiet for 140ms
+    Refraction_Recovering --> Layered_Fallback: Motion during the recovery
+    Refraction_Recovering --> Refraction_Active: After 287ms (the rim fades back 60 + 220ms later)
+    Refraction_Active --> Blur_Degraded: Power saving, or frame budget reduced
+    Blur_Degraded --> Refraction_Active: Power saving off and frame budget ok again
+    Blur_Degraded --> Fallback_Mode: A motion signal appears (0ms, switches to fallbackMode)
+    Fallback_Mode --> Settling: Signals quiet for 140ms
+    Settling --> Fallback_Mode: Motion again
+    Settling --> Blur_Degraded: After 299ms
+    Refraction_Active --> Flat: Frame budget minimal
+    Blur_Degraded --> Flat: Frame budget minimal
+    Flat --> Blur_Degraded: A later probe reads reduced, or ok with power saving on
+    Flat --> Refraction_Active: A later probe reads ok, with power saving off
+```
+A surface whose `mode` is `blur`, `glass` or `acrylic` keeps its own material at rest and goes round the same `Fallback_Mode` and `Settling` loop in motion. So a moving surface never drags a misaligned backdrop along, and it returns to full refraction once it stops.

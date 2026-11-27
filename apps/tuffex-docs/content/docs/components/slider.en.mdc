@@ -1,0 +1,152 @@
+---
+title: "Slider"
+description: "A control for choosing a number within a range."
+category: Form
+status: beta
+since: 0.3.4
+tags: [slider, form, input]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+:::TuffDemoWrapper{demo="SliderSliderDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref(30)
+  </script>
+
+  <template>
+    <TxSlider v-model="value" :min="0" :max="100" :step="1" />
+  </template>
+---
+:::
+
+### Show Value
+:::TuffDemoWrapper{demo="SliderSliderShowValueDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSlider v-model="value" :min="0" :max="100" :step="1" show-value />
+  </template>
+---
+:::
+
+### Formatted Display
+`formatValue` formats the side readout, and the tooltip too when `tooltipFormatter` is absent.
+:::TuffDemoWrapper{demo="SliderSliderFormatValueDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSlider v-model="value" show-value :format-value="value => `${value}%`" />
+  </template>
+---
+:::
+
+### Disabled
+:::TuffDemoWrapper{demo="SliderSliderDisabledDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSlider v-model="value" disabled show-value />
+  </template>
+---
+:::
+
+### Elastic Tooltip
+`tooltipTilt` tilts and trails the tooltip with pointer speed and acceleration; `tooltipJelly` adds a wobble on top.
+:::TuffDemoWrapper{demo="SliderSliderElasticTooltipDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSlider
+      v-model="value"
+      show-value
+      tooltip-tilt
+      tooltip-jelly
+      :tooltip-tilt-max-deg="22"
+      :tooltip-offset-max-px="36"
+      :tooltip-spring-stiffness="420"
+      :tooltip-spring-damping="26"
+      :tooltip-jelly-frequency="11"
+      :tooltip-jelly-squash="0.32"
+    />
+  </template>
+---
+:::
+
+### Best Practices
+
+- Use a slider for continuous or near-continuous numbers; use `TxSegmentedSlider` when each stop has its own meaning.
+- Put units in nearby text or in `formatValue` / `tooltipFormatter`, never in `modelValue`.
+- Keep `min`, `max`, and `step` stable while the user drags, or the thumb jumps.
+- Reserve tilt and jelly motion for exploratory tuning surfaces, not dense forms.
+- Resize the pill with `--tx-slider-surface-width` / `--tx-slider-surface-size`, not `--tx-slider-thumb-size` alone; to drop the thumb, set `thumbSurface=false` before zeroing it.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `modelValue` | `number` | `0` | Current value; displayed clamped to `min..max`. |
+| `min` | `number` | `0` | Minimum value. |
+| `max` | `number` | `100` | Maximum value. |
+| `step` | `number` | `1` | Step size. |
+| `disabled` | `boolean` | `false` | Disables the slider and hides the tooltip. |
+| `active` | `boolean` | `true` | When `false`, suspends observers, global tracking, and motion; the value and `disabled` are untouched. |
+| `overdrag` | `boolean` | `false` | Lets the thumb be pulled past either end with resistance and spring back on release; the value stays clamped. |
+| `ariaLabel` | `string` | - | Accessible name, applied to the native range input rather than the wrapper. |
+| `ariaLabelledby` | `string` | - | ID(s) of visible elements that name the range input. |
+| `showValue` | `boolean` | `false` | Shows the current value beside the slider. |
+| `formatValue` | `(value: number) => string` | - | Formats the side readout. |
+| `thumbSurface` | `boolean` | `true` | Always-visible capsule thumb with the Radio indicator's material and jelly; `false` gives a flat disc. |
+| `thumbVariant` | `'solid' \| 'blur' \| 'glass'` | `'blur'` | Capsule body: `solid` is opaque, `blur` thins and frosts the track below, `glass` turns refractive while held. |
+| `showTooltip` | `boolean` | `true` | Shows the tooltip when its trigger condition is met. |
+| `tooltipTrigger` | `'drag' \| 'hover' \| 'always'` | `'drag'` | When the tooltip shows. |
+| `tooltipFormatter` | `(value: number) => string` | - | Formats the tooltip text. |
+| `tooltipPlacement` | `'top' \| 'bottom'` | `'top'` | Puts the tooltip above or below the thumb. |
+| `tooltipTilt` | `boolean` | `false` | Enables velocity-based follow, tilt, offset, squash, and skew. |
+| `tooltipTiltMaxDeg` | `number` | `18` | Maximum tilt angle. |
+| `tooltipOffsetMaxPx` | `number` | `28` | Maximum horizontal offset. |
+| `tooltipAccelBoost` | `number` | `0.65` | How much acceleration adds to the motion's intensity. |
+| `tooltipSpringStiffness` | `number` | `320` | Spring stiffness for follow, offset, and tilt. |
+| `tooltipSpringDamping` | `number` | `24` | Spring damping for follow, offset, and tilt. |
+| `tooltipMotion` | `'blur' \| 'fade' \| 'none'` | `'blur'` | Enter/leave motion; `none` skips the transition wrapper. |
+| `tooltipMotionDuration` | `number` | `160` | Enter/leave duration in ms; negative values count as 0. |
+| `tooltipMotionBlurPx` | `number` | `10` | Blur radius of the `blur` motion in px; negative values count as 0. |
+| `tooltipDistortSkewDeg` | `number` | `8` | Maximum skew while moving. |
+| `tooltipJelly` | `boolean` | `true` | Adds an acceleration-triggered wobble on top of the tilt. |
+| `tooltipJellyFrequency` | `number` | `8.5` | Wobble frequency in Hz. |
+| `tooltipJellyDecay` | `number` | `10` | Wobble decay; higher settles faster. |
+| `tooltipJellyRotateDeg` | `number` | `10` | Maximum wobble rotation. |
+| `tooltipJellySkewDeg` | `number` | `12` | Maximum wobble skew. |
+| `tooltipJellySquash` | `number` | `0.16` | Maximum wobble squash. |
+| `tooltipJellyTriggerAccel` | `number` | `2800` | Acceleration threshold that starts the wobble. |
+
+### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `update:modelValue` | `number` | Fires on native `input` with the clamped value. |
+| `change` | `number` | Fires on native `change`. |
+
+## Overview
+
+- With the default `thumbSurface`, the native thumb becomes a hit area as wide as the capsule; the keyboard focus ring is drawn on the capsule, except after a drag-initiated focus.
+- `active=false`, KeepAlive deactivation, and unmount all stop frame work, detach global pointer listeners, and disconnect size observers; resuming re-observes the current layout.
+- Reduced-motion changes apply immediately, even mid-drag: deformation stops while the native input and static readouts remain.
+- `overdrag` resists harder the further the pull, showing at most one thumb's width; on release it springs back with the speed it was let go at, and a new grab takes over where it is. Off under reduced motion.
+
+## Technologies
+
+- The thumb deforms with the same jelly maths as the Radio indicator, from `packages/tuffex/packages/utils/animation/jelly.ts`.
+- No slots are exposed: tooltip, thumb, track, and readout render internally so pointer math and tooltip transforms stay in sync.
+- Source: `packages/tuffex/packages/components/src/slider/`.
+
+<TuffDocSourceLink />

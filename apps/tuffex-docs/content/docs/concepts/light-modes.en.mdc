@@ -1,0 +1,53 @@
+---
+title: Light Modes & Hue Sorting
+description: Why plus-lighter glows collapse into muddy grey on white surfaces; separate hue orders for dark and light, and how TxPrismGlow implements them.
+---
+
+# Light Modes & Hue Sorting
+
+Glowing light beams that look stunning in dark mode (such as ambient AI streaming beams) frequently degenerate into muddy grey smudges on light surfaces.
+
+## Additive Light Only Works on Dark Surfaces
+
+On dark backgrounds, light beams combine via additive blending (CSS `mix-blend-mode: plus-lighter`):
+$$\text{Color}_{\text{Result}} = \min(1, \text{Color}_A + \text{Color}_B)$$
+Where two beams intersect, luminance accumulates toward pure white (`(1, 1, 1)`), recreating radiant beams crossing in the night sky.
+
+## Why Glows Turn Muddy Grey in Light Mode
+
+Light-mode canvases already sit near pure white:
+- Additive blending fails on white backgrounds because pixels cannot get brighter.
+- Blending transparent layers normally calculates the average color: **Two hues separated by more than 120° on the color wheel (e.g. yellow and blue) average directly into dull grey**!
+- Instead of radiant illumination, light surfaces end up covered in dirty, desaturated smudges.
+
+## Light-Mode Adjacent Hue Ordering Pipeline
+
+To maintain crisp vibrancy on light canvases, TuffEx sets an **adjacent hue rule** for cones that set off together:
+- In light mode, cones that set off together, and so overlap, stay within 120° of each other in hue.
+- Two hues more than 120° apart (blue and yellow, purple and yellow) never set off in the same group.
+
+:::TuffDemoWrapper{demo="ConceptLightBlendDemo"}
+:::
+
+## TxPrismGlow's Two Hue Orders
+
+`TxPrismGlow`'s six cones use the same six hues on dark and light surfaces; the light surface only reorders them. `cones.ts` gives every cone a `hue` for dark surfaces and a `lightHue` for light ones (oklch degrees), and the light order trades cone 2's yellow for cone 4's purple:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // prism-glow/src/cones.ts (hues only)
+  export const PRISM_GLOW_CONES = [
+    { hue: 350, lightHue: 350 },
+    { hue: 95, lightHue: 300 }, // cone 2: yellow on dark, purple on light
+    { hue: 205, lightHue: 205 },
+    { hue: 300, lightHue: 95 }, // cone 4: purple on dark, yellow on light
+    { hue: 150, lightHue: 150 },
+    { hue: 258, lightHue: 258 },
+  ]
+---
+:::
+
+The phases decide which cones set off together: cone 2 travels with cone 6 for the first 0.4 × duration (2.4s at the default 6s, the whole of a CoreBox search), and cones 3, 4 and 5 start out together near the right edge. In the dark order cones 2 and 6 are yellow and blue, 163° apart; in the light order cone 2 is purple, only 42° from cone 6's blue. Dark surfaces add overlaps towards white with `plus-lighter`, so any two hues merge cleanly; light surfaces blend them `normal`, and an overlap is the average of the two colours. The accent palette, which follows the primary colour, spans 100° in all, so it needs no light order.
+
+The gate in `prism-glow.test.ts` computes exactly this rule: during the opening stretch, any two cones whose light hues are more than 120° apart keep their centres at least 30cqw apart, so their halos never meet. The same test asserts that the dark order does clash (blue catches yellow) as a positive control. After the opening the cones' periods differ and they still catch each other up; the gate covers only the opening.

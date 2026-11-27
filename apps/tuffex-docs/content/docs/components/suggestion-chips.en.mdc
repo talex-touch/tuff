@@ -1,0 +1,88 @@
+---
+title: Suggestion Chips
+description: A set of follow-up prompts that users send with one tap.
+category: AiChat
+status: beta
+since: 0.3.9
+tags: [ai, suggestion, chips]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+::::TuffDemoWrapper{demo="SuggestionChipsSuggestionChipsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const suggestions = ref([
+    { id: 'explain', text: 'Explain this code' },
+    { id: 'test', text: 'Add unit tests' },
+    { id: 'perf', text: 'Any room to optimise?' },
+  ])
+
+  function handleSelect(suggestion: { id: string, text: string }) {
+    console.log(suggestion.id)
+  }
+  </script>
+
+  <template>
+    <TxSuggestionChips :suggestions="suggestions" @select="handleSelect" />
+  </template>
+---
+::::
+
+### Vertical Follow-up List
+`layout="list"` turns the chips into rule-separated rows, each led by a return arrow.
+:::TuffDemoWrapper{demo="AiSuiteStreamingAnswerDemo" code-lang="vue" description="Usable, with the sources, once the prose finishes"}
+---
+code: |
+  <template>
+    <p class="text-[12px] font-medium">Follow-ups</p>
+    <TxSuggestionChips :suggestions="followUps" layout="list" @select="ask" />
+  </template>
+---
+:::
+
+### Best Practices
+
+- Offer three to five suggestions.
+- Word them as a user would say them ("Add unit tests"), not as feature names ("Test generation").
+- Clear or replace the list after a tap so the same prompt can't be sent twice.
+- Use stable ids rather than the label text, so analytics and de-duplication survive copy changes.
+- End a settled answer with `layout="list"`.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `suggestions` | `AiSuggestion[]` | — | The suggestions, each `{ id: string, text: string }`. Required. |
+| `layout` | `'wrap' \| 'list'` | `'wrap'` | `list` stacks them into rule-separated rows with a return glyph. |
+
+### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `select` | `(suggestion: AiSuggestion)` | Fires when a chip is clicked, with the whole suggestion. |
+
+## Overview
+
+- Nothing renders when `suggestions` is empty.
+- Each chip is keyed by `id`; keep ids unique within a set.
+- The component holds no selection state and doesn't remove a suggestion after a tap.
+- `wrap` scrolls horizontally on overflow, with a hidden scrollbar and edge masks that signal the overflow.
+- `list` rows stagger in by position, 90ms apart; under reduced motion they simply appear.
+- The container is `role="list"` and each chip `role="listitem"`, which overrides the button semantics; add surrounding text where button semantics matter.
+
+## Technologies
+
+- The list rows' stagger is a CSS animation delay: each row's `--tx-suggestion-chips-index` times 90ms, with no script timer.
+- The edge fades on the `wrap` layout are `mask-image` gradients.
+- Source: `packages/tuffex/packages/components/src/suggestion-chips/`.
+
+<TuffDocSourceLink />

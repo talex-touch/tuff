@@ -1,0 +1,195 @@
+---
+title: "EmptyState"
+description: "A placeholder view for empty, loading, error, and other page states."
+category: Status
+status: beta
+since: 0.3.4
+tags: [empty, state, guide]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Presets and Actions
+`variant` picks the preset title, description, and illustration; `primaryAction` and `secondaryAction` generate the buttons.
+:::TuffDemoWrapper{demo="EmptyStateEmptyStateVariantDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxEmptyState
+      variant="no-data"
+      :primary-action="{ label: 'Create', type: 'primary' }"
+      :secondary-action="{ label: 'Refresh' }"
+    />
+  </template>
+---
+:::
+
+### Horizontal Layout
+:::TuffDemoWrapper{demo="EmptyStateEmptyStateHorizontalDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxEmptyState
+      variant="no-selection"
+      layout="horizontal"
+      surface="card"
+      title="No selection"
+      description="Pick an item from the left to continue."
+    />
+  </template>
+---
+:::
+
+### Custom Slots
+`variant="custom"` has no preset copy or illustration; the slots supply everything.
+:::TuffDemoWrapper{demo="EmptyStateEmptyStateSlotsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxEmptyState variant="custom">
+      <template #icon>
+        <TxIcon name="i-carbon-search" :size="28" />
+      </template>
+      <template #title>
+        Setup required
+      </template>
+      <template #description>
+        Connect a workspace to enable this feature.
+      </template>
+      <template #actions>
+        <TxButton type="primary">Connect</TxButton>
+        <TxButton>Learn more</TxButton>
+      </template>
+    </TxEmptyState>
+  </template>
+---
+:::
+
+### Dashboard Recovery States
+:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const mode = ref<'loading' | 'empty' | 'error'>('empty')
+  </script>
+
+  <template>
+    <TxLoadingState v-if="mode === 'loading'" title="Loading rules" surface="card" />
+    <TxEmptyState
+      v-else-if="mode === 'empty'"
+      variant="no-data"
+      title="No automation rules yet"
+      surface="card"
+      :primary-action="{ label: 'Create rule', type: 'primary' }"
+    />
+    <TxErrorState v-else title="Rules failed to load" surface="card" />
+  </template>
+---
+:::
+
+### Best Practices
+
+- Pick the closest preset before overriding copy: `search-empty` for filters, `no-selection` for split panes, `permission` for access, `offline` for network failures.
+- Make the title situational and actionable: "No automation rules yet", not "Empty".
+- Switch loading, empty, and error states inside one data container to avoid layout jumps.
+- Use `primaryAction` / `secondaryAction` for standard flows; use the `actions` slot only for a custom layout.
+- Use `surface="card"` in dashboards and panels; keep `plain` inside tables, drawers, and cards that already frame it.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `variant` | `EmptyStateVariant` | `'empty'` | Preset title, description, and illustration. |
+| `title` | `string` | - | Overrides the preset title; an empty string hides it. |
+| `description` | `string` | - | Overrides the preset description; an empty string hides it. |
+| `icon` | `TxIconSource \| string \| null` | - | Icon source or class that replaces the illustration; `null` hides the icon area. |
+| `iconSize` | `number` | size preset | Icon or spinner size in px; defaults to `28`, `36`, or `44` by `size`. |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Stacks the icon and content, or places them side by side. |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Aligns the icon, copy, and actions. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Spacing, text scale, and illustration size. |
+| `surface` | `'plain' \| 'card'` | `'plain'` | `card` adds a bordered card surface. |
+| `primaryAction` | `EmptyStateAction` | - | Renders the primary button, which emits `primary`. |
+| `secondaryAction` | `EmptyStateAction` | - | Renders the secondary button before the primary one; it emits `secondary`. |
+| `actionSize` | `TxButtonProps['size']` | `'sm'` | Default size of the generated buttons. |
+| `loading` | `boolean` | `false` | Shows `TxSpinner` when no custom icon is given. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `primary` | - | Fires when the generated primary button is clicked. |
+| `secondary` | - | Fires when the generated secondary button is clicked. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|------|
+| `icon` | - | Replaces the illustration, the spinner, or `icon`. |
+| `title` | - | Replaces the title. |
+| `description` | - | Replaces the description. |
+| `actions` | - | Replaces the generated primary and secondary buttons. |
+
+### Types
+
+#### EmptyStateAction
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `label` | `string` | - | Button text. |
+| `type` | `TxButtonProps['type']` | - | Tone forwarded to `TxButton`. |
+| `variant` | `TxButtonProps['variant']` | - | Visual variant forwarded to `TxButton`. |
+| `size` | `TxButtonProps['size']` | - | Per-button size; falls back to `actionSize`. |
+| `disabled` | `boolean` | `false` | Disables the button, which then emits nothing. |
+| `icon` | `string` | - | Icon class forwarded to `TxButton`. |
+
+#### EmptyStateVariant Defaults
+
+| Variant | Default title | Default description | Illustration source |
+|------|------|------|------|
+| `empty` | `Nothing here` | `There is nothing to show yet.` | Built-in SVG illustration. |
+| `blank-slate` | `Start from scratch` | `Create your first item to get started.` | Built-in SVG illustration. |
+| `no-data` | `No data` | `No data available yet.` | Built-in SVG illustration. |
+| `no-selection` | `Nothing selected` | `Select an item to see details.` | Built-in SVG illustration. |
+| `search-empty` | `No results` | `Try a different keyword or filter.` | Built-in SVG illustration. |
+| `loading` | `Loading` | `Please wait a moment.` | Built-in skeleton illustration; a spinner when `loading=true`. |
+| `offline` | `You are offline` | `Check your connection and retry.` | Built-in SVG illustration. |
+| `permission` | `Access denied` | `You do not have permission to view this content.` | Built-in SVG illustration. |
+| `error` | `Something went wrong` | `Please try again later.` | Built-in SVG illustration. |
+| `guide` | `Start here` | `Follow the steps to get started.` | Built-in SVG illustration. |
+| `custom` | empty | empty | None unless `icon` or the `icon` slot is provided. |
+
+### Preset Components
+
+Each preset fixes `variant` and forwards every other prop, event, and slot to `TxEmptyState` unchanged.
+
+| Component | Forced variant | Notes |
+|------|------|------|
+| [`TxBlankSlate`](/en/blank-slate) | `blank-slate` | Defaults to `size="large"`, `layout="vertical"`, and `surface="plain"`. |
+| [`TxLoadingState`](/en/loading-state) | `loading` | Loading placeholder. |
+| [`TxNoSelection`](/en/no-selection) | `no-selection` | Detail pane before a list item is selected. |
+| [`TxNoData`](/en/no-data) | `no-data` | Successful load with no data. |
+| [`TxSearchEmpty`](/en/search-empty) | `search-empty` | Search or filter with no matches. |
+| [`TxOfflineState`](/en/offline-state) | `offline` | Network unavailable. |
+| [`TxPermissionState`](/en/permission-state) | `permission` | Access denied. |
+| [`TxErrorState`](/en/error-state) | `error` | Error. |
+| [`TxGuideState`](/en/guide-state) | `guide` | Guided onboarding. |
+
+## Overview
+
+- The `variant` preset resolves first, then explicit props apply; a slot wins over generated content in its region.
+- The `actions` slot replaces both generated buttons; generated buttons render secondary first, then primary.
+- `icon=null` hides the illustration; `loading` swaps in `TxSpinner` only when there is no `icon` slot and `icon` is empty.
+- `surface="card"` adds visual containment only; semantics and button behavior are unchanged.
+- Under reduced motion, every illustration rests on a complete still frame.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/empty-state/`; each preset lives in its own directory.
+
+<TuffDocSourceLink />

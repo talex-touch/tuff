@@ -1,0 +1,214 @@
+---
+title: "StatusHint 状态提示"
+description: "说明一次操作结果的单行状态提示"
+category: Feedback
+status: beta
+since: 0.6.1
+tags: [hint, outcome, tone, morph, grain]
+syncStatus: reviewed
+verified: true
+---
+
+## 安装
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxStatusHint } from '@talex-touch/tuffex/status-hint'
+  import '@talex-touch/tuffex/status-hint/style.css'
+  // 组件内部渲染 TxTextTransformer（它又渲染 TxTextMorph）和 TxIcon，它们的样式表需单独引入
+  import '@talex-touch/tuffex/text-transformer/style.css'
+  import '@talex-touch/tuffex/text-morph/style.css'
+  import '@talex-touch/tuffex/icon/style.css'
+  import '@talex-touch/tuffex/base.css' // 设计令牌与重置样式，全应用引入一次
+---
+:::
+
+## 用法
+
+### 基础
+新消息从旧文字逐字变换；同一消息再次出现时，新的 `pulseKey` 让强调重放。
+:::TuffDemoWrapper{demo="StatusHintStatusHintDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const feedback = ref<{ id: number, tone: 'success' | 'danger', message: string } | null>(null)
+  let lastId = 0
+  let timer: number | undefined
+
+  // 新消息替换当前消息，并重新开始 1.2 秒计时
+  function show(message: string, tone: 'success' | 'danger' = 'success') {
+    feedback.value = { id: ++lastId, tone, message }
+    window.clearTimeout(timer)
+    timer = window.setTimeout(() => { feedback.value = null }, 1200)
+  }
+  </script>
+
+  <template>
+    <TxButton size="sm" @click="show('已复制')">复制</TxButton>
+    <TxButton size="sm" @click="show('固定失败', 'danger')">模拟失败</TxButton>
+
+    <!-- 不按消息设 :key：提示保持挂载，新消息才会逐字变换 -->
+    <Transition name="tx-status-hint">
+      <TxStatusHint
+        v-if="feedback"
+        :text="feedback.message"
+        :tone="feedback.tone"
+        :pulse-key="feedback.id"
+        :live="false"
+      />
+    </Transition>
+    <!-- 提示和消息同时挂载，由常驻的播报区负责播报 -->
+    <span class="sr-only" role="status">{{ feedback?.message ?? '' }}</span>
+  </template>
+---
+:::
+
+### 色调与尺寸
+`tone` 只作用于色带和图标；`md` 独占一行，`sm` 放在工具栏或顶栏里。
+:::TuffDemoWrapper{demo="StatusHintTonesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <!-- 静态陈列：没有会变化的消息要播报，所以关掉播报区 -->
+    <TxStatusHint tone="success" text="已复制" :live="false" />
+    <TxStatusHint tone="warning" text="仅保存在本地" :live="false" />
+    <TxStatusHint tone="danger" text="固定失败" :live="false" />
+    <TxStatusHint tone="info" text="已在浏览器中打开" :live="false" />
+    <TxStatusHint tone="muted" text="没有变化" :live="false" />
+
+    <TxStatusHint size="sm" tone="success" text="已复制" :live="false" />
+  </template>
+---
+:::
+
+### 摆放
+贴着栏的边缘铺开时，用权重高于单个类的类（scoped 类即可）定位，并设置两个 CSS 变量。
+:::TuffDemoWrapper{demo="StatusHintPlacementDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="footer">
+      <div v-if="!feedback" class="footer__item">备忘录 · 应用</div>
+      <Transition name="tx-status-hint">
+        <TxStatusHint
+          v-if="feedback"
+          class="footer__feedback"
+          :text="feedback.message"
+          :tone="feedback.tone"
+          :pulse-key="feedback.id"
+          :live="false"
+        />
+      </Transition>
+      <div class="footer__keys"><TxKbd>⌘K</TxKbd> 操作</div>
+    </div>
+  </template>
+
+  <style scoped>
+  /* 底栏是提示的包含块，并按自己的圆角裁切色带 */
+  .footer {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 44px;
+    padding: 0 12px;
+    overflow: hidden;
+    border-radius: 10px;
+  }
+
+  /* scoped 类的权重高于根元素的单类规则，与样式表的加载顺序无关 */
+  .footer__feedback {
+    --tx-status-hint-radius: 0;
+    --tx-status-hint-pad-x: 12px;
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 50%;
+    pointer-events: none;
+  }
+
+  /* 用 auto 外边距而不是 space-between：条目被换下时，快捷键保持原位 */
+  .footer__keys {
+    margin-left: auto;
+  }
+  </style>
+---
+:::
+
+### 最佳实践
+
+- 消息变化期间保持挂载：不要按消息设 `:key`；`v-if` 只表示「没有消息」，并包在 `<Transition name="tx-status-hint">` 里。
+- 把每条消息的 id 传给 `pulseKey`，否则同一文字连续出现时，第二次操作看起来没有生效。
+- 只放两到四个词的一行文案；它不换行，很长的细节（如 provider 的错误信息）放到能换行的地方。
+- 提示与消息同时挂载，或宿主已有播报区时，传 `live=false` 并从常驻的 `role="status"` 区域播报；不要在组件上加 `role` 或 `aria-live`，透传属性会落在根元素 `div` 上。
+- 一个界面只放一处；需要排队、堆叠或定时消失时，用 [Toast 提示](/zh/toast)。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `text` | `string \| number` | - | 必填，一行短文案；`animated` 时新值从旧值逐字形变。 |
+| `tone` | `'success' \| 'warning' \| 'danger' \| 'info' \| 'muted'` | `'success'` | 色带与图标的颜色，复用 `StatusTone`；`info` 用主色色相。 |
+| `size` | `'sm' \| 'md'` | `'md'` | `md`：13px 文字、16px 图标；`sm`：12px 文字、14px 图标。 |
+| `pulseKey` | `string \| number` | - | 挂载后一变就重放强调；传每条消息的 id。 |
+| `animated` | `boolean` | `true` | `false` 时直接显示终态、文字为纯文本；接宿主自己的动效开关。 |
+| `live` | `boolean` | `true` | `true` 时文字是 polite 播报区；`false` 时组件内没有任何播报区。 |
+
+### 插槽
+
+| 插槽 | 说明 |
+|------|------|
+| `icon` | 替换色调图标，沿用同一个 `aria-hidden` 方框与动画；`muted` 只能这样加图标。 |
+
+### CSS 变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `--tx-status-hint-radius` | `8px` | 提示与色带的圆角；贴边摆放时设为 `0`。 |
+| `--tx-status-hint-pad-x` | `10px`；`sm` 为 `8px` | 左右内边距，也是末端淡出区的宽度。 |
+| `--tx-status-hint-accent` | 色调颜色 | 色带与图标的颜色，由色调决定；`muted` 取 `--tx-text-color-secondary`。 |
+| `--tx-status-hint-wash-strength` | `0.26`；暗色主题下 `0.2` | 色带左缘的不透明度；38% 处为它的 0.45 倍，右端为零。 |
+
+- 组件从不设置 `--tx-status-hint-radius`，写在提示或任意祖先上都会生效；`--tx-status-hint-pad-x` 用权重高于单个类的规则覆盖。
+- `--tx-status-hint-accent` 与 `--tx-status-hint-wash-strength` 用内联 `style` 或权重高于两个类的选择器覆盖。
+- `--tx-status-hint-pad-y`、`--tx-status-hint-icon-size`、`--tx-status-hint-spring`、`--tx-status-hint-spring-duration` 由组件设置，宿主不要改。
+
+## 概述
+
+- 文字在所有色调下都是 `--tx-text-color-primary`、字重 600；`muted` 是中性灰，没有默认图标。
+- 不换行、不加省略号：最宽等于容器，更长的值在末端内边距里淡出并被裁掉。
+- 挂载时色带从左缘涌现，图标与文字沿弹簧落定，文字第一帧即可读；`text` 或 `pulseKey` 变化时重放强调，同一次更新只重放一次。
+- `text` 变化时文字逐字形变（380ms），行内提示的宽度随之伸缩；离场时文字先淡出、色带随后，只动不透明度。
+- `animated=false` 与 `prefers-reduced-motion: reduce` 都直接显示终态；只开减弱动效时，形变引擎仍挂载，但新值直接写入。
+- 色带、颗粒与末端淡出按物理方向从左往右绘制，从右到左的页面不会镜像。
+
+## 技术实现
+
+- 色带是色调颜色加遮罩：渐变与 140px 平铺的 `feTurbulence` 噪点经 `mask-composite: intersect` 求交，不支持时不画色带；重放靠 `is-pulse-a` / `is-pulse-b` 两套相同的关键帧交替。
+- 弹簧取自 `liquid/src/spring.ts` 的 `resolveTransition('bouncy')`，挂载后才写入；服务端渲染回退到 `620ms cubic-bezier(0.34, 1.56, 0.64, 1)`，水合结果一致。
+- 源码：`packages/tuffex/packages/components/src/status-hint/`；`StatusTone` 来自 `status-badge`。
+
+<TuffDocSourceLink />
+
+## 使用场景
+
+- 在操作发生的地方说明结果：「已复制」「已固定」「固定失败」。
+- CoreBox 的操作反馈：显示在底栏，底栏不在屏时显示在顶栏。
+
+## 相关组件
+
+- [Toast 提示](/zh/toast)：由一个宿主绘制、会堆叠和定时消失的全局通知。
+- [Alert 警告](/zh/alert)：带标题、正文和关闭按钮，以 `role="alert"` 播报的行内横幅。
+- [StatusBadge 状态徽标](/zh/status-badge)：常驻屏幕的状态胶囊；StatusHint 沿用它的 `StatusTone`。
+- [TextTransformer 文本变换](/zh/text-transformer)：提示文字背后的文本引擎。

@@ -1,0 +1,58 @@
+---
+title: Bipolar Semantic Tints & WCAG 4.5:1
+description: The inversion trap of light tints in dark mode, the color-mix ink fusion formula, and verified WCAG 4.5:1 contrast across all themes.
+---
+
+# Bipolar Semantic Tints & WCAG 4.5:1
+
+In multi-theme design systems, semantic tokens (Danger Red, Success Green, Warning Amber, Info Blue) require adaptive mathematical blending across light and dark modes.
+
+## The Inversion Trap of Light Tints in Dark Mode
+
+Traditional component libraries pair soft tints (`-light-9`, like `#fef0f0`) with saturated text in light mode.
+When transitioning to dark mode:
+- Tints copied from light palettes paint as blinding white blocks over dark canvases.
+- Simply inverting the text colour does not help: the raw hue on such a pale tint often misses the WCAG 2.1 AA 4.5:1 minimum (measured at just 2.08:1), leaving the text illegible.
+
+## The color-mix Ink Fusion Formula
+
+TuffEx solves this mathematically: **Semantic text inks never use raw hues directly; they blend with primary ink (`--tx-text-color-primary`) in sRGB space**:
+
+:::TuffCodeBlock{lang="scss"}
+---
+code: |
+  // TxModeChip's ink: the hue mixed into the primary text colour
+  --tx-mode-chip-ink: color-mix(
+    in srgb,
+    var(--tx-color-danger, #f56c6c) 55%, // is-danger
+    var(--tx-text-color-primary, #303133)
+  );
+  // is-success: var(--tx-color-success, #67c23a) 45%
+  // is-warning: var(--tx-color-warning, #e6a23c) 45%
+  // is-info:    var(--tx-color-primary, #409eff) 50%
+---
+:::
+
+Each hue has its own share: 55% for danger, 45% for success and warning, 50% for info. Info takes the primary hue, `--tx-color-primary`, because `--tx-color-info` is a grey that would read as muted.
+
+- In light mode, primary ink is near-black, pulling semantic text darker for crisp contrast against soft tints.
+- In dark mode, primary ink is near-white, pulling semantic text brighter for luminous readability against deep carbon.
+
+## Verified WCAG 2.1 4.5:1 Contrast Table
+
+Empirical measurements conducted on 13px text:
+
+| Semantic Hue | Raw Hue Contrast | TuffEx color-mix Contrast | Compliance |
+|---|---|---|---|
+| **Danger** | 2.61:1 (Illegible) | **5.07:1** | **PASS (Compliant)** |
+| **Success** | 2.08:1 (Washed out) | **5.18:1** | **PASS (Compliant)** |
+| **Warning** | 2.03:1 (Muddy brown) | **5.11:1** | **PASS (Compliant)** |
+| **Info / Primary** | 2.53:1 (Sub-threshold) | **5.32:1** | **PASS (Compliant)** |
+
+:::TuffDemoWrapper{demo="ConceptColorMixContrastDemo"}
+:::
+
+## Why Color Alone Must Never Convey State
+
+Over 8% of male users experience color vision deficiencies (protanopia, deuteranopia).
+**Iron Rule: Never use hue as the sole conveyor of status**. Always accompany colored badges with distinct glyphs and accessible text labels (e.g. red cross icon plus explicit "Failed" text).

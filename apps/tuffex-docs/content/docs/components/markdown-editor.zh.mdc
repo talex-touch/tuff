@@ -1,0 +1,308 @@
+---
+title: MarkdownEditor
+description: 所见即所得、源码与预览的 Markdown 编辑器
+category: Advanced
+status: beta
+since: 0.3.9
+tags: [markdown, editor, wysiwyg, math, comments, collaboration, ai]
+syncStatus: reviewed
+verified: true
+---
+
+## 安装
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxMarkdownEditor } from '@talex-touch/tuffex/markdown-editor'
+  import '@talex-touch/tuffex/markdown-editor/style.css'
+  // 编辑器内部渲染的组件，样式需单独引入
+  import '@talex-touch/tuffex/base-anchor/style.css'
+  import '@talex-touch/tuffex/base-surface/style.css'
+  import '@talex-touch/tuffex/card/style.css'
+  import '@talex-touch/tuffex/flow-light/style.css'
+  import '@talex-touch/tuffex/glass-surface/style.css'
+  import '@talex-touch/tuffex/icon/style.css'
+  import '@talex-touch/tuffex/spinner/style.css'
+  import '@talex-touch/tuffex/stream-text/style.css'
+  import 'katex/dist/katex.min.css' // 可选：公式按 KaTeX 排版，否则输出 MathML
+  import '@talex-touch/tuffex/base.css' // 设计令牌与重置样式，全应用引入一次
+---
+:::
+
+## 用法
+
+### 基础
+`v-model` 绑定 Markdown；传入 `uploadImage`、`ai` 与 `v-model:comments` 即开启图片上传、AI 改写和评论。
+::::TuffDemoWrapper{demo="MarkdownEditorMarkdownEditorDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { MarkdownEditorAi, MarkdownEditorComment, MarkdownEditorUploadImage } from '@talex-touch/tuffex/markdown-editor'
+  import { ref } from 'vue'
+
+  const content = ref('# 发布说明\n\n这一版重写了搜索管线：==冷启动快了 38%==。')
+  const comments = ref<MarkdownEditorComment[]>([])
+
+  // 把图片传到自己的存储，返回 CDN 地址
+  const uploadImage: MarkdownEditorUploadImage = async (file, { onProgress, signal }) => {
+    const url = await uploadToCdn(file, { onProgress, signal })
+    return { url, alt: file.name }
+  }
+
+  // 把选中的文字交给模型，逐段返回改写结果
+  const ai: MarkdownEditorAi = request => streamRewrite(request)
+  </script>
+
+  <template>
+    <TxMarkdownEditor
+      v-model="content"
+      v-model:comments="comments"
+      :user="{ id: 'me', name: '我' }"
+      :upload-image="uploadImage"
+      :ai="ai"
+    />
+  </template>
+---
+::::
+
+### 自定义表情包
+`emojiPacks` 把自己的表情图片加入选择器与 `:` 补全；文档里写的仍是 `:name:`，预览与所见即所得中显示为图片。
+::::TuffDemoWrapper{demo="MarkdownEditorCustomEmojiDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxEmojiPack } from '@talex-touch/tuffex/markdown-editor'
+  import { ref } from 'vue'
+
+  const content = ref('今天的版本 :party_parrot: 顺利上线 :ship_it:。')
+
+  // 保持引用稳定：放进 ref 或 const，不要在模板里写字面量数组
+  const packs: TxEmojiPack[] = [{
+    id: 'party',
+    name: '派对',
+    emoji: [
+      { name: 'party_parrot', src: 'https://cdn.example.com/emoji/party-parrot.gif', keywords: '庆祝 开心' },
+      { name: 'ship_it', src: 'https://cdn.example.com/emoji/ship-it.png', keywords: '发布 上线' },
+    ],
+  }]
+  </script>
+
+  <template>
+    <TxMarkdownEditor v-model="content" :emoji-packs="packs" />
+  </template>
+---
+::::
+
+### 多人协同
+`collaboration` 接入实时协作：编辑器收发变更集与光标，并发编辑由适配器合并。
+::::TuffDemoWrapper{demo="MarkdownEditorCollaborationDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { MarkdownEditorCollaboration } from '@talex-touch/tuffex/markdown-editor'
+  import { ref } from 'vue'
+
+  const content = ref(session.text())
+
+  // session 是宿主的协作客户端（OT、CRDT 等），远端变更须相对编辑器当前的文档
+  const collaboration: MarkdownEditorCollaboration = {
+    send: changes => session.send(changes),
+    sendPresence: presence => session.sendPresence(presence),
+    subscribe: ({ onChanges, onPeers }) => session.subscribe(onChanges, onPeers),
+  }
+  </script>
+
+  <template>
+    <TxMarkdownEditor
+      v-model="content"
+      :user="{ id: 'lin', name: '林夏', color: '#0ea5e9' }"
+      :collaboration="collaboration"
+    />
+  </template>
+---
+::::
+
+### 最佳实践
+
+- 用户或 provider 写的内容保持 `sanitize=true`；自定义表情的 `src` 用 https 或 `data:` 地址，`sanitize` 开启时（默认如此）其他协议的地址会被消毒器去掉。
+- 表情的 `name`（短代码）会写进文档，只增不改：改名后，旧文档里的 `:name:` 会变回文字；表情包的 `name` 只是标签页名字，可以随时改。`emojiPacks` 要保持引用稳定，放进 `ref` 或 `const`，不要在模板里写字面量数组。
+- 模式或评论侧栏需要写入路由或 query 时，使用受控的 `mode` 或 `v-model:comments-open`；只想展开某个评论线程时调用 `openComments(id)`。
+- `uploadImage` 与 `ai` 响应 `signal`：用户删除占位、停止或放弃时中止请求。
+- 宿主不扫描 tuffex 源码时，把 `src/toolbar-icons.ts` 的 `MARKDOWN_EDITOR_ICON_CLASSES` 加入 UnoCSS safelist。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string` | `''` | Markdown 源文本，配合 `v-model` 使用。 |
+| `placeholder` | `string` | `''` | 可编辑模式下的占位文本。 |
+| `mode` | `'wysiwyg' \| 'source' \| 'preview'` | - | 受控模式。 |
+| `defaultMode` | `'wysiwyg' \| 'source' \| 'preview'` | `'wysiwyg'` | 非受控时的初始模式。 |
+| `disabled` | `boolean` | `false` | 禁用工具栏、模式切换与编辑区。 |
+| `readonly` | `boolean` | `false` | 禁止编辑，仍可阅读与切换模式。 |
+| `sanitize` | `boolean` | `true` | 用 DOMPurify 净化渲染的 HTML；只对可信内容关闭。 |
+| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | 主题；`auto` 跟随页面。 |
+| `toolbar` | `boolean` | `true` | 显示工具栏与模式切换。 |
+| `toolbarActions` | `MarkdownEditorToolbarActionKey[]` | 内置集合 | 工具栏按钮及顺序。 |
+| `minHeight` | `string \| number` | `220` | 编辑区最小高度。 |
+| `maxHeight` | `string \| number` | - | 编辑区最大高度。 |
+| `ariaLabel` | `string` | `'Markdown editor'` | 两种编辑区共用的无障碍名称。 |
+| `linkPrompt` | `(selectedText: string) => string \| Promise<string>` | - | 替换内置的链接输入框；返回 URL，返回 `''` 取消。 |
+| `math` | `boolean` | `true` | 用 KaTeX 渲染 `$…$` 与 `$$…$$`。 |
+| `emoji` | `boolean` | `true` | 渲染 `:shortcode:`，开启 `:` 补全与表情选择器。 |
+| `emojiPacks` | `readonly TxEmojiPack[]` | - | 自定义表情包：选择器里每个含合法表情的包一个标签页，`:name:` 渲染为图片。 |
+| `highlight` | `boolean` | `true` | `==文字==` 高亮与高亮笔的颜色。 |
+| `callouts` | `boolean` | `true` | 首行为 `[!NOTE]`、`[!TIP]`、`[!IMPORTANT]`、`[!WARNING]`、`[!CAUTION]` 的引用显示为提示块。 |
+| `codeTheme` | `MarkdownEditorCodeTheme` | `'github'` | 带语言的代码块的语法高亮预设；`'none'` 不着色。 |
+| `slash` | `boolean` | `true` | 所见即所得模式下，段首的 `/` 打开块菜单。 |
+| `bubble` | `boolean` | `true` | 所见即所得模式下，选中文字时浮出格式条。 |
+| `ai` | `MarkdownEditorAi` | - | 格式条上的 AI 改写；不传则不显示。 |
+| `uploadImage` | `MarkdownEditorUploadImage` | - | 上传粘贴、拖入或选择的图片，返回托管地址；不传时图片按钮改为填写地址。 |
+| `comments` | `MarkdownEditorComment[]` | - | 评论线程，配合 `v-model:comments` 使用；不传则隐藏评论。 |
+| `commentsOpen` | `boolean` | - | 评论侧栏是否打开，配合 `v-model:comments-open` 使用；不绑定时由编辑器自己维护。 |
+| `user` | `MarkdownEditorUser` | `{ id: 'local', name: labels.you }` | 本地用户：评论作者，也是协作者看到的身份。 |
+| `collaboration` | `MarkdownEditorCollaboration` | - | 实时协作的传输。 |
+| `statusBar` | `boolean` | `true` | 底部的字数、字符数与协作者。 |
+| `labels` | `Partial<MarkdownEditorLabels>` | 英文文案 | 覆盖界面文案。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: string)` | 内容变化时触发。 |
+| `change` | `(value: string)` | 与 `update:modelValue` 同时触发。 |
+| `update:mode` | `(mode: MarkdownEditorMode)` | 切换模式时触发，配合 `v-model:mode`。 |
+| `mode-change` | `(mode: MarkdownEditorMode)` | 与 `update:mode` 同时触发。 |
+| `focus` | `()` | 编辑区获得焦点时触发。 |
+| `blur` | `()` | 编辑区失去焦点时触发。 |
+| `update:comments` | `(comments: MarkdownEditorComment[])` | 线程变化或区间随编辑移动时触发，配合 `v-model:comments`。 |
+| `update:commentsOpen` | `(open: boolean)` | 评论侧栏打开或关闭时触发，配合 `v-model:comments-open`。 |
+| `comment-create` | `(comment: MarkdownEditorComment)` | 新建线程时触发。 |
+| `comment-reply` | `(comment: MarkdownEditorComment, reply: MarkdownEditorCommentReply)` | 回复线程时触发。 |
+| `comment-resolve` | `(comment: MarkdownEditorComment)` | 解决或重新打开线程时触发，以 `resolved` 区分。 |
+| `comment-delete` | `(comment: MarkdownEditorComment)` | 删除线程时触发。 |
+| `upload-error` | `(error: unknown, file: File)` | 图片上传失败时触发。 |
+| `ai-error` | `(error: unknown)` | AI 改写失败时触发。 |
+
+### 暴露方法
+
+| 方法 | 说明 |
+|------|------|
+| `focus()` | 聚焦当前模式的编辑区。 |
+| `blur()` | 让当前编辑区失焦。 |
+| `setMode(mode)` | 切换模式。 |
+| `getMode()` | 返回当前模式。 |
+| `openComments(id?)` | 打开评论侧栏；传入线程 `id` 时选中该线程并滚动到它。 |
+| `getValue()` | 返回当前 Markdown。 |
+| `setValue(value)` | 以一次编辑替换全文：派发更新，并发送给协作者。 |
+| `getSelection()` | 返回选区，以 Markdown 源码偏移表示。 |
+| `setSelection(selection)` | 聚焦并设置选区。 |
+| `insert(markdown)` | 以用户编辑的方式把 Markdown 插入到选区。 |
+
+### 类型
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  type MarkdownEditorMode = 'wysiwyg' | 'source' | 'preview'
+
+  type MarkdownEditorToolbarActionKey =
+    | 'heading' | 'bold' | 'italic' | 'strike' | 'code' | 'highlight' | 'quote'
+    | 'bulletList' | 'orderedList' | 'taskList' | 'link' | 'image' | 'table'
+    | 'codeBlock' | 'math' | 'divider' | 'emoji' | 'undo' | 'redo'
+
+  type MarkdownEditorCodeTheme = 'github' | 'one' | 'vitesse' | 'catppuccin' | 'solarized' | 'none'
+
+  // 自定义表情：name 只含小写字母、数字、_、+、-，2 到 40 个字符
+  interface TxCustomEmoji { name: string, src: string, keywords?: string }
+  interface TxEmojiPack { id: string, name: string, emoji: TxCustomEmoji[] }
+
+  interface MarkdownEditorAiRequest {
+    action: 'improve' | 'shorten' | 'expand' | 'fix' | 'translate' | 'custom'
+    instruction: string // custom 时为用户输入的要求
+    text: string // 选中的 Markdown，答案将替换它
+    before: string // 前后各至多 2,000 字符的上下文
+    after: string
+    signal: AbortSignal // 停止、重试或放弃时中止
+  }
+  type MarkdownEditorAi = (request: MarkdownEditorAiRequest) => string | Promise<string> | AsyncIterable<string>
+
+  type MarkdownEditorUploadImage = (
+    file: File,
+    context: { onProgress: (percent: number) => void, signal: AbortSignal },
+  ) => Promise<string | { url: string, alt?: string, title?: string }>
+
+  interface MarkdownEditorUser { id: string, name: string, color?: string, avatar?: string }
+
+  interface MarkdownEditorComment {
+    id: string
+    from: number // 源码区间，随编辑移动
+    to: number
+    quote: string // 区间失配时按它重新定位
+    author: MarkdownEditorUser
+    body: string
+    createdAt: number
+    resolved?: boolean
+    replies?: MarkdownEditorCommentReply[]
+  }
+
+  // 一次替换；变更集中的偏移都相对变更前的文档
+  interface MarkdownTextChange { from: number, to: number, insert: string }
+
+  interface MarkdownEditorCollaboration {
+    send: (changes: MarkdownTextChange[]) => void
+    sendPresence?: (presence: { selection: MarkdownEditorSelection | null, mode: MarkdownEditorMode }) => void
+    subscribe: (handlers: {
+      onChanges: (changes: MarkdownTextChange[]) => void // 相对编辑器当前的文档
+      onPeers?: (peers: MarkdownEditorPeer[]) => void
+    }) => () => void
+  }
+---
+:::
+
+## 变更集
+
+协作适配器用这些函数合并并发编辑，均从 `@talex-touch/tuffex/markdown-editor` 导出。
+
+| 函数 | 说明 |
+|------|------|
+| `applyMarkdownChanges(doc, changes)` | 把变更集应用到文本。 |
+| `composeMarkdownChanges(a, b, docLength)` | 把先后两个变更集合成一个。 |
+| `mapMarkdownPosition(pos, changes, assoc?)` | 位置经过变更集后的落点；`assoc` 决定插入点上的位置落在插入内容之前（`-1`）还是之后（`1`）。 |
+| `transformMarkdownChanges(a, b, docLength)` | 重排两个并发变更集，返回 `[a', b']`；同一处插入时 `a` 在前。 |
+
+## 字数统计
+
+状态栏用 `@talex-touch/tuffex/markdown-editor` 导出的 `markdownStats` 计数；在编辑器之外显示同样的数字时调用它。
+
+| 函数 | 说明 |
+|------|------|
+| `markdownStats(markdown)` | 返回 `{ words, characters }`。Markdown 标记与链接地址不计入；汉字、假名与谚文每个字计一词；`characters` 不含空白。 |
+
+## 概述
+
+- 传入 `mode` 为受控模式，否则由 `defaultMode` 初始化；三种模式共用同一份 Markdown。预览不能输入，格式按钮停用，任务列表的勾选框仍可点击切换。
+- 所见即所得按块渲染；光标进入加粗、链接、行内公式等格式时露出 Markdown 标记，可直接编辑。段首输入 `/`（中文输入法下为 `、`）打开块菜单。
+- 输入 `:` 打开补全，或点工具栏的表情按钮打开选择器；选择器的标签页依次为「最近」、各个含合法表情的表情包、内置分类。自定义表情的 `name` 只能是小写字母、数字、`_`、`+`、`-`，2 到 40 个字符，不合法的条目被忽略；与内置短代码同名时自定义表情生效。`:name:` 在预览与所见即所得中显示为图片，源码模式显示文字。
+- 选中文字浮出格式条：格式、高亮颜色、链接、评论与 AI。AI 的答案流式显示，可逐词查看改动，再替换、插入到下方、重试或放弃；`Esc` 放弃并恢复选区。
+- 图片先以带进度的占位插入，上传完成后换成 `uploadImage` 返回的地址，删除占位即中止上传。每次编辑都以变更集提交，撤销历史、评论区间与协作者的光标随之移动。
+- 两种编辑模式共用快捷键：`Mod+B` 加粗、`Mod+I` 斜体、`Mod+E` 行内代码、`Mod+Shift+X` 删除线、`Mod+Shift+H` 高亮、`Mod+K` 链接、`Mod+Alt+1–6` 标题、`Mod+Alt+M` 评论。模式切换是 `role="group"` 的切换按钮组；`Esc` 关闭打开着的表情或高亮颜色菜单并认领这个按键，外层浮层因此保持打开。
+
+## 技术实现
+
+- 源码模式基于 CodeMirror 6；所见即所得是 contenteditable 的块视图，按 marked 的词法结果渲染，与源码逐字符映射。代码块用 CSS Custom Highlight API 着色，shiki、KaTeX 与 AI 面板都在首次用到时加载。
+- 内置表情数据源自 emojilib 2.4.0（MIT）。
+- 自定义表情包的类型 `TxEmojiPack` 与图标选择器共用，定义在 `icon/src/emoji-pack.ts`。
+- 源码：`packages/tuffex/packages/components/src/markdown-editor/`。
+
+<TuffDocSourceLink />

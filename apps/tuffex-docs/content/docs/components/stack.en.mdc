@@ -1,0 +1,103 @@
+---
+title: "Stack"
+description: "A container that spaces its children along one axis."
+category: Layout
+status: beta
+since: 0.3.4
+tags: [stack, flex, layout]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+:::TuffDemoWrapper{demo="StackStackDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxStack :gap="10">
+      <TxButton>One</TxButton>
+      <TxButton variant="secondary">Two</TxButton>
+      <TxButton variant="ghost">Three</TxButton>
+    </TxStack>
+  </template>
+---
+:::
+
+### Horizontal Actions
+`direction="horizontal"` lays children out in a row; `wrap` lets them wrap in a narrow container.
+
+```vue
+<template>
+  <TxStack direction="horizontal" align="center" justify="flex-end" :gap="8" wrap>
+    <TxButton variant="ghost">Cancel</TxButton>
+    <TxButton variant="primary">Save</TxButton>
+  </TxStack>
+</template>
+```
+
+### Inline Stack
+`inline` uses `inline-flex`, so the stack can sit inside a line of text.
+
+```vue
+<template>
+  <span>
+    Status:
+    <TxStack inline direction="horizontal" align="center" gap="0.5rem">
+      <TxBadge value="Live" variant="success" />
+      <TxTag label="Beta" size="sm" />
+    </TxStack>
+  </span>
+</template>
+```
+
+### Best Practices
+
+- Use `TxStack` to set the rhythm between siblings, not for arbitrary page layout.
+- Use `vertical` for forms and settings panels, `horizontal` for action rows and compact metadata.
+- Space children with `gap`, not empty spacer elements.
+- Use `TxFlex` when you need native directions such as `row-reverse` or `column-reverse`.
+- The stack adds no semantic role; keep list, form, and navigation semantics on the children or the surrounding element.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `direction` | `'horizontal' \| 'vertical'` | `'vertical'` | Main-axis direction. |
+| `gap` | `number \| string` | `12` | Gap between children; numbers are px, strings pass through. |
+| `align` | `string` | `'stretch'` | `align-items`; accepts any valid value, such as `safe center`. |
+| `justify` | `string` | `'flex-start'` | `justify-content`; accepts any valid value. |
+| `wrap` | `boolean` | `false` | Allows wrapping. |
+| `inline` | `boolean` | `false` | Uses `inline-flex`. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Stacked children. |
+
+### CSS Variables
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `--tx-stack-gap` | `gap` | CSS gap. |
+| `--tx-stack-align` | `align` | `align-items`. |
+| `--tx-stack-justify` | `justify` | `justify-content`. |
+| `--tx-stack-direction` | `direction` | Resolved `flex-direction`. |
+| `--tx-stack-wrap` | `wrap` | Resolved `flex-wrap`. |
+| `--tx-stack-display` | `inline` | `flex` or `inline-flex`. |
+
+## Overview
+
+- The root is a `div` with `min-width: 0`, so children can shrink inside constrained containers.
+- Props write the `--tx-stack-*` variables on the root, and the stylesheet reads them.
+- `vertical` maps to `column` and `horizontal` to `row`; empty `align` or `justify` values fall back to the defaults.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/stack/`.
+
+<TuffDocSourceLink />

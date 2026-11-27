@@ -1,0 +1,174 @@
+---
+title: Container
+description: A width-limited, padded container with a 24-column grid.
+category: Layout
+status: beta
+since: 0.3.4
+tags: [container, layout, grid]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxContainer>
+      <p>Content inside the container</p>
+    </TxContainer>
+  </template>
+---
+:::
+
+### Basic
+`TxContainer` owns the max width and side padding; `TxRow` / `TxCol` change column spans by breakpoint.
+:::TuffDemoWrapper{demo="ContainerContainerDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxContainer max-width="680px" :padding="18">
+      <TxRow :gutter="{ xs: 10, sm: 14, md: 18 }" align="stretch">
+        <TxCol :xs="24" :sm="12" :md="8">Overview</TxCol>
+        <TxCol :xs="24" :sm="12" :md="8">Metrics</TxCol>
+        <TxCol :xs="24" :sm="24" :md="8">Actions</TxCol>
+      </TxRow>
+    </TxContainer>
+  </template>
+---
+:::
+
+### Width
+`fluid` fills the parent, `maxWidth` caps the width, and `responsive` switches the cap by breakpoint.
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxContainer fluid>Fluid container, 100% wide</TxContainer>
+    <TxContainer max-width="1200px">Max width 1200px</TxContainer>
+    <TxContainer responsive>Responsive container</TxContainer>
+  </template>
+---
+:::
+
+### Spacing
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxContainer padding="small">Small padding</TxContainer>
+    <TxContainer padding="large">Large padding</TxContainer>
+    <TxContainer :padding="32">Custom padding</TxContainer>
+    <TxContainer margin="auto">Horizontally centered</TxContainer>
+  </template>
+---
+:::
+
+### Grid
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxRow>
+      <TxCol :span="12">Left content</TxCol>
+      <TxCol :span="12">Right content</TxCol>
+    </TxRow>
+
+    <TxRow :gutter="{ xs: 8, sm: 16, md: 24, lg: 32 }">
+      <TxCol v-for="n in 4" :key="n" :xs="24" :sm="12" :md="8" :lg="6">
+        Responsive column {{ n }}
+      </TxCol>
+    </TxRow>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Use one `TxContainer` per page section; nested containers make width and padding hard to reason about.
+- Change layouts with `xs`–`xl` instead of duplicating markup per breakpoint.
+- Match `gutter` to the page spacing scale; don't mix large gutters with tiny column padding in one row.
+- All three components render neutral `div`s; put semantic elements (`main`, `aside`, `nav`, `section`) inside them.
+- Set `wrap=false` only for horizontally scrolling or fixed-width toolbars.
+
+## API Reference
+
+### TxContainer
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|--------|------|
+| fluid | `boolean` | `false` | Removes the max width and fills the parent. |
+| maxWidth | `string` | `'1200px'` | Maximum width. |
+| responsive | `boolean` | `false` | Switches the max width by breakpoint: 640 / 768 / 1024 / 1280px. |
+| padding | `'small' \| 'medium' \| 'large' \| number` | `'medium'` | Side padding: presets of 12 / 16 / 24px, or pixels clamped at 0. |
+| margin | `'auto' \| string \| number` | `'auto'` | Side margin; `auto` centers, other values apply as `0 <value>`. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|------|------|
+| `default` | - | Content constrained by the max width and padding. |
+
+### TxRow
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|--------|------|
+| gutter | `number \| Partial<Record<'xs' \| 'sm' \| 'md' \| 'lg' \| 'xl', number>>` | `0` | Column spacing in px, optionally per breakpoint. |
+| align | `'top' \| 'middle' \| 'bottom' \| 'stretch'` | `'stretch'` | Vertical alignment of the columns. |
+| justify | `'start' \| 'end' \| 'center' \| 'space-around' \| 'space-between' \| 'space-evenly'` | `'start'` | Horizontal distribution of the columns. |
+| wrap | `boolean` | `true` | Allows wrapping. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|------|------|
+| `default` | - | `TxCol` children or other flex items. |
+
+### TxCol
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|--------|------|
+| span | `number` | `24` | Columns spanned, out of 24. |
+| offset | `number` | `0` | Columns of offset on the left. |
+| xs | `number` | - | Span at the xs breakpoint (< 640px). |
+| sm | `number` | - | Span at the sm breakpoint (≥ 640px). |
+| md | `number` | - | Span at the md breakpoint (≥ 768px). |
+| lg | `number` | - | Span at the lg breakpoint (≥ 1024px). |
+| xl | `number` | - | Span at the xl breakpoint (≥ 1280px). |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|------|------|
+| `default` | - | Column content. |
+
+## Overview
+
+- Breakpoint values carry upward: an unset breakpoint takes the nearest smaller one's value; with none set, `TxCol` uses `span` and `TxRow` uses `0`.
+- `TxRow` writes the active gutter to `--tx-row-gutter`; each column takes half as left and right padding, and the row cancels the outer halves with negative margins.
+- `span` and `offset` are clamped to 0–24.
+
+## Technologies
+
+- Breakpoints follow `window.innerWidth` and update on `resize`, regardless of the container's own width.
+- The row is `calc(100% + var(--tx-row-gutter))` wide so that, with its negative margins, the outer columns line up with the container padding.
+- Source: `packages/tuffex/packages/components/src/container/`.
+
+<TuffDocSourceLink />
+
+## Customization
+
+| Variable | Written by | Purpose |
+|----------|------------|---------|
+| `--tx-container-max-width` | `maxWidth` / `fluid` | Maximum width. |
+| `--tx-container-padding` | `padding` | Side padding. |
+| `--tx-row-gutter` | `gutter` | Column spacing. |
+
+Props write all three as inline styles on the root; adjust them through the props.

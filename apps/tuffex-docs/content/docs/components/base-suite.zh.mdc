@@ -1,0 +1,27 @@
+---
+title: 基础套件
+description: 通用、表单、布局、导航、数据展示、反馈与状态组件
+category: BaseSuite
+status: beta
+since: 0.3.9
+tags: [base, suite, overview]
+syncStatus: reviewed
+verified: false
+---
+
+## 安装
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxButton, TuffSwitch } from '@talex-touch/tuffex/base'
+  import '@talex-touch/tuffex/base.css'
+  import '@talex-touch/tuffex/button/style.css'
+  import '@talex-touch/tuffex/switch/style.css'
+---
+:::
+
+## 用法
+
+::DocsComponentsGallery{suite="base"}
+::

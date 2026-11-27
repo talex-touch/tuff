@@ -1,0 +1,291 @@
+---
+title: Dialog 对话框
+description: 用于确认与提示的一组模态对话框
+category: Feedback
+status: beta
+since: 0.3.4
+tags: [dialog, modal, confirm]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 底部对话框
+`TxBottomDialog` 是移动端风格的底部确认，也用作破坏性操作前的检查点。
+:::TuffDemoWrapper{demo="DialogBottomDialogDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="bottomOpen = true">显示对话框</TxButton>
+    <TxBottomDialog
+      v-if="bottomOpen"
+      title="确认操作"
+      message="您确定要继续吗？"
+      :btns="[
+        { content: '取消', type: 'info', onClick: () => true },
+        { content: '确认', type: 'success', onClick: async () => true },
+      ]"
+      :close="() => (bottomOpen = false)"
+    />
+  </template>
+---
+:::
+
+### 行动行与图标
+每个按钮渲染为整行宽的行动行，`icon` 是行首图标。
+:::TuffDemoWrapper{demo="DialogBottomDialogRowsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="rowsOpen = true">显示行动列表</TxButton>
+    <TxBottomDialog
+      v-if="rowsOpen"
+      title="钱包设置"
+      :btns="[
+        { content: '查看私钥', icon: 'i-carbon-password', onClick: () => false },
+        { content: '查看助记词', icon: 'i-carbon-list', onClick: () => false },
+        { content: '移除钱包', icon: 'i-carbon-warning-alt', type: 'error', onClick: () => false },
+      ]"
+      :close="() => (rowsOpen = false)"
+    />
+  </template>
+---
+:::
+
+### 按钮类型
+只有 `type: 'error'` 会给行上色；`info`、`warning`、`success` 都渲染为中性行。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const btns = [
+    { content: '中性行', type: 'info', onClick: () => true },
+    { content: '也是中性行', type: 'success', onClick: () => true },
+    { content: '破坏性行', type: 'error', onClick: () => true },
+  ]
+---
+:::
+
+### 自动确认
+`time` 按秒倒计时，归零时自动点击该行。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const btns = [
+    { content: '自动确认', type: 'success', time: 5, onClick: () => true },
+  ]
+---
+:::
+
+### 加载状态
+`onClick` 执行期间该行禁用并显示 spinner，不会被重复提交。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const btns = [
+    {
+      content: '提交',
+      type: 'success',
+      onClick: async () => {
+        await saveData()
+        return true
+      },
+    },
+  ]
+---
+:::
+
+### 爆炸对话框
+`TxBlowDialog` 是居中的高强调对话框，打开时背景随之变换。
+:::TuffDemoWrapper{demo="DialogBlowDialogDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="blowOpen = true">显示爆炸对话框</TxButton>
+    <TxBlowDialog
+      v-if="blowOpen"
+      title="欢迎"
+      message="你好！欢迎使用我们的应用。"
+      confirm-text="确认"
+      :close="() => (blowOpen = false)"
+    />
+  </template>
+---
+:::
+
+### 弹出对话框
+`TxPopperDialog` 是紧凑的居中提示，保留模态语义。
+:::TuffDemoWrapper{demo="DialogPopperDialogDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="popperOpen = true">显示弹出对话框</TxButton>
+    <TxPopperDialog
+      v-if="popperOpen"
+      title="提示"
+      message="这是一段提示内容。"
+      confirm-text="确认"
+      :close="() => (popperOpen = false)"
+    />
+  </template>
+---
+:::
+
+### 触控提示
+`TxTouchTip` 是面向触控、带多个操作按钮的引导提示。
+:::TuffDemoWrapper{demo="DialogTouchTipDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="tipOpen = true">显示 TouchTip</TxButton>
+    <TxTouchTip
+      v-if="tipOpen"
+      title="提示"
+      message="请选择一个操作。"
+      :buttons="[
+        { content: '取消', type: 'info', onClick: () => true },
+        { content: '确定', type: 'success', onClick: async () => true },
+      ]"
+      :close="() => (tipOpen = false)"
+    />
+  </template>
+---
+:::
+
+### 自定义内容
+`TxBlowDialog` 与 `TxPopperDialog` 用 `comp` 或 `render` 替换默认内容。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import CustomContent from './CustomContent.vue'
+
+  // 组件
+  h(TxBlowDialog, { comp: CustomContent, close: () => {} })
+
+  // 渲染函数
+  h(TxBlowDialog, {
+    render: () => h('div', [
+      h('h2', '动态内容'),
+      h('p', '使用渲染函数创建'),
+    ]),
+    close: () => {},
+  })
+---
+:::
+
+### 最佳实践
+
+- 破坏性行最多一行，用 `type: 'error'`，并在文案中写明后果；颜色只是补充。
+- `icon` 传宿主图标流水线能静态生成的 class（如 `i-carbon-trash-can`）；运行时拼接的名称会渲染成空方块。
+- `TxBlowDialog` 的背景变换很强烈，只用于少数高强调公告。
+- 非英文界面给 `TxBottomDialog` 传入 `closeLabel`：关闭按钮只有图标，读屏读到的就是这个名称。
+- 用户生成的内容不要传给 `messageHtml`，除非已清洗并经 `asTrustedDialogHtml()` 标记。
+
+## API 参考
+
+### TxBottomDialog
+
+#### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | 标题。 |
+| `message` | `string` | `''` | 纯文本正文，保留换行。 |
+| `stay` | `number` | `0` | 预留的自动关闭时长；目前不会单独启动计时。 |
+| `close` | `() => void` | *必填* | 关闭回调。 |
+| `btns` | `DialogButton[]` | `[]` | 行动行配置。 |
+| `icon` | `string` | `''` | 旧版图标 class，当前不渲染。 |
+| `index` | `number` | `0` | 叠加在分配层级上的 z-index 偏移。 |
+| `closeLabel` | `string` | `'Close'` | 头部关闭按钮的可访问名称。 |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 面板材质。 |
+| `surfaceColor` | `string` | `''` | 材质下垫的底色；默认跟随主题。 |
+| `surfaceOpacity` | `number` | `mask` 为 `0.96`，其余为 `0.5` | 底色的不透明度，作用于 `mask`、`blur`、`acrylic`、`glass`、`refraction`；`pure`、`flat` 下恒为不透明，`mica`、`plain` 不垫底色。 |
+
+### TxBlowDialog / TxPopperDialog
+
+#### 属性
+
+两者的属性相同。
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | 标题。 |
+| `message` | `string` | `''` | 纯文本正文。 |
+| `messageHtml` | `DialogMessageHtml` | `''` | 已清洗的可信 HTML，优先于 `message`。 |
+| `confirmText` | `string` | `'Confirm'` | 确认按钮文案。 |
+| `close` | `() => void` | *必填* | 关闭回调。 |
+| `comp` | `Component` | `undefined` | 替换默认内容的组件。 |
+| `render` | `() => VNode` | `undefined` | 替换默认内容的渲染函数。 |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 面板材质。 |
+| `surfaceColor` | `string` | `''` | 材质下垫的底色；默认跟随主题。 |
+| `surfaceOpacity` | `number` | `mask` 为 `0.96`，其余为 `0.5` | 底色的不透明度，作用于 `mask`、`blur`、`acrylic`、`glass`、`refraction`；`pure`、`flat` 下恒为不透明，`mica`、`plain` 不垫底色。 |
+
+### TxTouchTip
+
+#### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | 标题。 |
+| `message` | `string` | `''` | 纯文本正文。 |
+| `messageHtml` | `DialogMessageHtml` | `''` | 已清洗的可信 HTML，优先于 `message`。 |
+| `buttons` | `TouchTipButton[]` | `[]` | 操作按钮配置。 |
+| `close` | `() => void` | *必填* | 关闭回调。 |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | 面板材质。 |
+| `surfaceColor` | `string` | `''` | 材质下垫的底色；默认跟随主题。 |
+| `surfaceOpacity` | `number` | `mask` 为 `0.96`，其余为 `0.5` | 底色的不透明度，作用于 `mask`、`blur`、`acrylic`、`glass`、`refraction`；`pure`、`flat` 下恒为不透明，`mica`、`plain` 不垫底色。 |
+
+### 类型
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface DialogButton {
+    content: string
+    type?: 'info' | 'warning' | 'error' | 'success' // 只有 'error' 改变行的颜色
+    icon?: string // 行首图标 class
+    time?: number // 倒计时秒数，归零时自动点击
+    onClick: () => Promise<boolean> | boolean // true 关闭，false 保持打开
+    loading?: (done: () => void) => void // 调用 done() 前该行保持加载态
+  }
+
+  // TxTouchTip 的按钮：没有 icon 与 time
+  interface TouchTipButton {
+    content: string
+    type?: 'info' | 'warning' | 'error' | 'success'
+    onClick: () => Promise<boolean> | boolean
+    loading?: (done: () => void) => void
+  }
+
+  // 四个变体共有的材质属性
+  interface DialogSurfaceProps {
+    surface?: BaseSurfaceMode // 默认 'refraction'
+    surfaceColor?: string // 默认跟随主题
+    surfaceOpacity?: number // mask 为 0.96，其余为 0.5
+  }
+
+  function asTrustedDialogHtml(html: string): TrustedDialogHtml
+---
+:::
+
+## 概述
+
+- 四个变体都 teleport 到 `body`，由共享 z-index manager 分配层级；不派发事件、不提供插槽，只通过必填的 `close` 回调关闭。Escape 在离场动画后调用 `close()`；`TxBottomDialog` 的关闭按钮同样只取消，不触发任何行动行。
+- 打开期间 Tab 留在面板内；一开始关闭焦点就回到打开前的元素（未经关闭就被卸载的，在卸载时回去），离场期间面板为 `inert`，指针与按键交给下面的一层。标题与正文用 `useId()` 生成的 id 关联 `aria-labelledby` / `aria-describedby`。`TxBlowDialog` 卸载时也会还原它对 `#app` 施加的缩放与淡化。
+- `TxBottomDialog` 与 `TxTouchTip` 打开期间锁住页面滚动；`message` 按纯文本渲染并保留换行，`messageHtml` 只接受经 `asTrustedDialogHtml()` 标记的值，该函数本身不做清洗；正文设置 `overflow-wrap: anywhere` 并自行限高滚动，长 token 不会撑宽面板，长内容不会被裁切。
+- 面板背景是一层卡片预设的 `TxBaseSurface`（`fake`），垫在内容之下，默认 `refraction`：50% 的底色既保住文字可读，又让后面的页面透上来被模糊、折射。
+- `TxBlowDialog`、`TxPopperDialog` 与 `TxTouchTip` 的遮罩变暗（`TxBlowDialog` 还有模糊）画在遮罩的一层伪元素上，而不是遮罩自身的背景与透明度，所以面板材质采到的是页面，而不只是遮罩的暗色；`TxBottomDialog` 没有遮罩。
+- 面板开合时只位移、缩放，不整体淡入淡出：整体透明度一变，里面的背景滤镜就只能采到面板自己，磨砂会在整个过渡里消失。淡入淡出的是面板上的各个部分：内容、阴影与描边，以及材质的每一层，所以带背景滤镜的材质（如默认的 `refraction`）从第一帧到最后一帧都采着页面。
+
+## 技术实现
+
+- 入口导出四个变体（各自经 `withInstall` 包装）、`asTrustedDialogHtml` 与公共类型。
+- 高对比度下面板材质自行变为实色，`TxBlowDialog` 的遮罩只变暗、不再模糊。
+- 减少动态效果（`prefers-reduced-motion: reduce`）时面板原地淡入淡出，不缩放、不位移；`TxBlowDialog` 打开时对 `#app` 的放大与变淡不受这项设置影响。
+- 源码：`packages/tuffex/packages/components/src/dialog/`。
+
+<TuffDocSourceLink />

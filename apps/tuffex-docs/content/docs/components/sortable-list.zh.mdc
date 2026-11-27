@@ -1,0 +1,138 @@
+---
+title: "SortableList 拖拽排序"
+description: "支持拖拽与键盘重排的可排序列表"
+category: Data
+status: beta
+since: 0.3.4
+tags: [sortable, drag-drop, list]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+每项需要稳定的字符串 `id`；`item` 插槽的 `dragging` 标记被拖的行。
+:::TuffDemoWrapper{demo="SortableListSortableListDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const list = ref([
+    { id: 'one', title: '第一项' },
+    { id: 'two', title: '第二项' },
+    { id: 'three', title: '第三项' },
+  ])
+  </script>
+
+  <template>
+    <TxSortableList v-model="list">
+      <template #item="{ item, dragging }">
+        <div :class="['sortable-row', { 'sortable-row--dragging': dragging }]">
+          {{ item.title }}
+        </div>
+      </template>
+    </TxSortableList>
+  </template>
+---
+:::
+
+### 拖拽模式
+默认的 `pointer` 让行跟手、其余行弹性让位；条目要拖出本列表（如看板跨列）时用 `dragMode="native"`。
+
+```vue
+<template>
+  <TxSortableList v-model="column.cards" drag-mode="native" />
+</template>
+```
+
+### 拖拽手柄模式
+`handle` 要求拖拽从 `[data-tx-sort-handle="true"]` 内开始；默认行自带手柄，自定义插槽把 `handleAttrs` 展开到手柄元素上。
+
+```vue
+<template>
+  <TxSortableList v-model="steps" handle @reorder="saveOrder">
+    <template #item="{ item, handleAttrs }">
+      <div>
+        <button type="button" v-bind="handleAttrs" aria-label="拖拽项目">☰</button>
+        <span>{{ item.title }}</span>
+      </div>
+    </template>
+  </TxSortableList>
+</template>
+```
+
+### 持久化排序
+
+```vue
+<script setup lang="ts">
+const tasks = ref([{ id: 'draft' }, { id: 'review' }, { id: 'ship' }])
+
+async function persistOrder({ items }: { items: Array<{ id: string }> }) {
+  tasks.value = items
+  await api.saveTaskOrder(items.map(item => item.id))
+}
+</script>
+
+<template>
+  <TxSortableList v-model="tasks" @reorder="persistOrder" />
+</template>
+```
+
+### 最佳实践
+
+- 使用稳定的持久化 id，不要用数组索引作 id。
+- 用 `v-model` 更新本地数组；服务端需要顺序时在 `reorder` 中持久化。
+- 行内有按钮、链接、输入框或可选中文本时开启 `handle`；触屏上的长列表也开启，避免整行接管滑动。
+- id 不可读时传 `itemLabel`，否则读屏会念出 `plugin-a1b3` 这样的 id。
+- 列表规模保持适中；超长列表改用其它拖拽策略并配合虚拟化。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `SortableListItem[]` | 必填 | 有序列表数据，每项需有稳定的字符串 `id`。 |
+| `disabled` | `boolean` | `false` | 禁用拖拽、键盘重排与排序事件。 |
+| `handle` | `boolean` | `false` | 要求从 `[data-tx-sort-handle="true"]` 开始拖拽。 |
+| `dragMode` | `'pointer' \| 'native'` | `'pointer'` | `pointer` 行跟手、其余行让位；`native` 走 HTML5 拖放，可拖出本列表。 |
+| `ariaLabel` | `string` | - | 列表的可访问名称。 |
+| `itemLabel` | `(item) => string` | - | 播报中的条目名称，缺省为 `id`。 |
+| `labels` | `SortableListLabels` | - | `grabbed` / `moved` / `dropped` / `cancelled` 与内置 `handle` 的播报模板，支持 `{item}`、`{position}`、`{size}`。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `SortableListItem[]` | 指针拖拽松手时触发一次；原生拖拽与键盘每移动一步触发一次。 |
+| `reorder` | `{ from: number, to: number, items: SortableListItem[] }` | 交互结束时触发一次，带起止索引。 |
+
+### 插槽
+
+| 插槽名 | Props | 说明 |
+|------|------|------|
+| `item` | `{ item, dragging, grabbed, index, handleAttrs }` | 自定义每一项，缺省显示 `id`；`handleAttrs` 展开到发起拖拽的元素上。 |
+
+### SortableListItem
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `string` | key 与拖拽状态使用的稳定身份；其它字段保留。 |
+
+## 概述
+
+- 根节点为 `role="list"`，每项为 `role="listitem"`。
+- 预览由组件持有，行的移动不依赖宿主写回 `modelValue`；重排发出浅拷贝数组，条目对象保持引用。
+- 指针拖拽移动 4px 后才开始，结束时的 click 被吞掉；输入框与可编辑区域不发起拖拽；Escape 或 `pointercancel` 取消且不发事件。
+- 原生拖拽在 `dragover` 经过行时即重排；拖到列表外释放同样生效。
+- 键盘：整个列表一个 Tab 停靠点；空格或回车拿起、方向键移动、再按放下，Escape 恢复原顺序，失焦自动放下；每一步经 `role="status"` 区域播报。
+- 减少动态效果时不抬升、弹簧时长为 0；被拖的行仍跟随指针。
+
+## 技术实现
+
+- 位移与抬升分别写在 `translate` 与 `scale` 属性上，各自计时；弹簧由 `resolveTransition` 编译为 CSS `linear()` 曲线。
+- 源码：`packages/tuffex/packages/components/src/sortable-list/`。
+
+<TuffDocSourceLink />

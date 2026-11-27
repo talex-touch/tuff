@@ -1,0 +1,46 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+
+const { locale } = useI18n()
+const zh = computed(() => locale.value === 'zh')
+
+const FORMS = [
+  'working',
+  'searching',
+  'solving',
+  'listening',
+  'connecting',
+  'weaving',
+  'composing',
+  'breathing',
+  'shaping',
+] as const
+
+// Remounting is the only way to reroll a random orb, so the demo bumps a key.
+const rollKey = ref(0)
+</script>
+
+<template>
+  <div class="flex flex-col gap-5">
+    <div class="flex items-center gap-3">
+      <TxThinkingOrb :key="rollKey" :size="64" />
+      <TxButton size="sm" variant="secondary" @click="rollKey++">
+        {{ zh ? '换一颗（重新挂载）' : 'Reroll (remount)' }}
+      </TxButton>
+      <span class="text-sm text-[var(--tx-text-color-secondary)]">
+        {{ zh ? '默认随机形态，挂载后保持不变。' : 'The form is random by default and kept for the whole mount.' }}
+      </span>
+    </div>
+
+    <div class="flex flex-wrap gap-4">
+      <div
+        v-for="form in FORMS"
+        :key="form"
+        class="flex flex-col items-center gap-1"
+      >
+        <TxThinkingOrb :state="form" :size="20" />
+        <span class="text-xs text-[var(--tx-text-color-secondary)]">{{ form }}</span>
+      </div>
+    </div>
+  </div>
+</template>

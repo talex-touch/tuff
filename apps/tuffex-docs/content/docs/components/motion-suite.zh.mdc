@@ -1,0 +1,85 @@
+---
+title: 动效套件
+description: 按钮、卡片、轮播、加载与抖动图表动效
+category: MotionSuite
+status: beta
+since: 0.6.3
+tags: [motion, interaction, animation, suite, overview]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+下方每个格子都渲染真实组件，内容或数据由标本传入。使用悬停、焦点、点击、拖动或可见控件体验行为。重置按钮只重新挂载当前标本，模型与播放状态一起恢复；点击组件名称进入完整变体演示和 API 页。
+
+::DocsComponentsGallery{suite="motion"}
+::
+
+### 最佳实践
+
+- 数值、条目、状态和导航由应用驱动。按钮反馈、加载循环或提交请求不能证明业务操作成功。
+- 重复和装饰动效不要进入 live region。保留一份可读文字和原生键盘控件。
+- 尊重减少动态效果与可见性。共享活动门禁在隐藏、失活或卸载时停止持续工作。
+- 文字值变化复用 `TxTextMorph`，运动复用共享 spring；这些家族不新增文字 diff 或物理引擎。
+
+## API 参考
+
+### 引入
+
+```ts
+import {
+  TxCardSpread,
+  TxCarousel3D,
+  TxFlipBook,
+  TxMotion,
+  TxMotionButton,
+  TxMotionDock,
+  TxMotionLoader,
+  TxMotionText,
+  TxMotionToggle,
+  TxMotionTransition,
+  TxPhysicsMotion,
+} from '@talex-touch/tuffex/pro'
+import { TxDitherChart } from '@talex-touch/tuffex/charts'
+import '@talex-touch/tuffex/base.css'
+```
+
+上方 `suite="motion"` 是文档预览分类，没有第四套安装 barrel。`@talex-touch/tuffex/motion` 是 `TxMotion` 的合法单组件子路径。手动引入组件时，按《[安装与引入](/zh/installation)》和对应组件 API 页加载按需样式。
+
+### 属性
+
+| 总览组件 | 属性 | 值 | 行为 |
+| --- | --- | --- | --- |
+| `DocsComponentsGallery` | `suite` | `motion` | 只展示 Motion 部分，包含十二个实时标本和各自的重置控件。 |
+
+### 相关套件
+
+- [数据套件](/zh/data-suite)：MonoChart、现有图表族和轻量可视化。
+- [进阶套件](/zh/pro-suite)：MotionForm、MotionControl、MotionMetric，以及现有视觉效果和原语。
+- [理念](/zh)：安装、主题、无障碍和完整组件索引。
+
+## 概述
+
+- 十二个家族共享可见性、减少动态效果与 spring 物理；失活时停止持续工作。
+- 文字值变化统一经 `TxTextMorph`，不引入第二套文字 diff 或物理引擎。
+- 安装使用 Pro barrel；DitherChart 另有 `@talex-touch/tuffex/charts` 入口，随 npm 0.7.0 发布。
+
+## 技术实现
+
+- 来源改编保留 Amicro 的 MIT 署名与源文件级 Apache-2.0 声明；Lucide 图标数据另保留 ISC 及适用的 Feather-MIT 声明，不引入 React 或 Lucide 运行时依赖。
+
+## 相关组件
+
+- [MotionButton 动效按钮](/zh/motion-button)：命名按钮效果与来源预设。
+- [卡片展开](/zh/card-spread)：弧形、扇形与印章布局。
+- [三维轮播](/zh/carousel-3d)：弧线、CoverFlow 与时间机器路径。
+- [翻页书](/zh/flip-book)：可拖动翻页的双面书页。
+- [动态加载器](/zh/motion-loader)：137 个来源加载场景。
+- [DitherChart 抖动图表](/zh/dither-chart)：像素、有序抖动与 SVG 图案。
+- [MotionText 文字动效](/zh/motion-text)：字符、词与段落的文字效果。
+- [物理动效](/zh/physics-motion)：61 个可抓取的物理场景。
+- [Motion 通用交互](/zh/motion)：入场、悬停、指针与滚动联动。
+- [动态应用栏](/zh/motion-dock)：放大与键盘排序的调用方条目。
+- [MotionToggle 动态开关](/zh/motion-toggle)：受控开关与操作样式。
+- [MotionTransition 动态转场](/zh/motion-transition)：门、液体波、光圈与帘幕切换。

@@ -1,0 +1,100 @@
+---
+title: Flex
+description: A Flexbox container with explicit direction, alignment, wrapping, and gap.
+category: Layout
+status: beta
+since: 0.3.4
+tags: [flex, layout]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+:::TuffDemoWrapper{demo="FlexFlexDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxFlex justify="space-between" align="center">
+      <TxTag label="Left" />
+      <TxButton variant="primary">Action</TxButton>
+    </TxFlex>
+  </template>
+---
+:::
+
+### Wrapping Toolbar
+`wrap="wrap"` lets a toolbar wrap in a narrow container.
+
+```vue
+<template>
+  <TxFlex align="center" justify="space-between" wrap="wrap" gap="0.75rem">
+    <TxFlex align="center" gap="0.5rem" wrap="wrap">
+      <TxTag label="Docs" />
+      <TxTag label="Reviewed" color="var(--tx-color-success)" />
+    </TxFlex>
+    <TxButton size="sm">Publish</TxButton>
+  </TxFlex>
+</template>
+```
+
+### Reverse Direction
+
+```vue
+<template>
+  <TxFlex direction="row-reverse" align="center" gap="8px">
+    <TxButton variant="primary">Primary</TxButton>
+    <TxButton variant="ghost">Secondary</TxButton>
+  </TxFlex>
+</template>
+```
+
+### Best Practices
+
+- Use `TxFlex` when you need exact Flexbox semantics, and `TxStack` for everyday horizontal or vertical rhythm.
+- Space children with `gap`, not margins on the children.
+- The container adds no roles or keyboard behavior; leave interaction to semantic child controls.
+- Lay out repeated cards with `TxGridLayout`, not nested flex rows.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `direction` | `'row' \| 'row-reverse' \| 'column' \| 'column-reverse'` | `'row'` | Main-axis direction. |
+| `gap` | `number \| string` | `12` | Gap between children; numbers are px, strings pass through. |
+| `align` | `string` | `'stretch'` | `align-items`; accepts any CSS value. Use `center` for icon-and-label rows. |
+| `justify` | `string` | `'flex-start'` | `justify-content`; accepts any CSS value. |
+| `wrap` | `'nowrap' \| 'wrap' \| 'wrap-reverse'` | `'nowrap'` | `flex-wrap`. |
+| `inline` | `boolean` | `false` | Uses `inline-flex`. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Flex children. |
+
+### CSS Variables
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `--tx-flex-gap` | `gap` | CSS gap. |
+| `--tx-flex-align` | `align` | `align-items`. |
+| `--tx-flex-justify` | `justify` | `justify-content`. |
+| `--tx-flex-direction` | `direction` | `flex-direction`. |
+| `--tx-flex-wrap` | `wrap` | `flex-wrap`. |
+| `--tx-flex-display` | `inline` | `flex` or `inline-flex`. |
+
+## Overview
+
+- The root is a `div` with `min-width: 0`, so children can shrink inside constrained containers.
+- Props write the `--tx-flex-*` variables on the root, and the stylesheet reads them.
+- Empty `align`, `justify`, `direction`, or `wrap` values fall back to the defaults.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/flex/`.
+
+<TuffDocSourceLink />

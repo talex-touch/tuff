@@ -1,0 +1,115 @@
+---
+title: Divider
+description: A horizontal or vertical line that separates content.
+category: Basic
+status: beta
+since: 0.3.7
+tags: [divider, separator, layout]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+The default slot adds a label; `textPlacement` sets where it sits.
+:::TuffDemoWrapper{demo="DividerBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <p>Primary configuration area</p>
+    <TxDivider />
+    <p>Advanced configuration area</p>
+    <TxDivider text-placement="left">Advanced options</TxDivider>
+    <TxDivider dashed text-placement="right">Dashed divider</TxDivider>
+  </template>
+---
+:::
+
+### Gradient
+`gradient` takes `start`, `end`, or `both`; `true` equals `both`.
+:::TuffDemoWrapper{demo="DividerGradientDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDivider gradient="start" />
+    <TxDivider gradient="end" />
+    <TxDivider gradient />
+    <TxDivider gradient text-placement="center">Gradient label</TxDivider>
+  </template>
+---
+:::
+
+### Vertical
+`direction="vertical"` separates inline content and also supports `dashed` and `gradient`.
+:::TuffDemoWrapper{demo="DividerVerticalDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <span>Published</span>
+    <TxDivider direction="vertical" />
+    <span>Platform team</span>
+    <TxDivider direction="vertical" dashed />
+    <span>Updated just now</span>
+    <TxDivider direction="vertical" gradient />
+    <span>Gradient</span>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Separate semantic sections, not every row; dense tables and lists use row spacing or table borders.
+- Keep labels short; turn long text into a real heading.
+- Use vertical dividers only in inline metadata or toolbars, where surrounding text already gives context.
+- Inside Drawer, Card, and Form surfaces, use `TxDivider` instead of hard-coded borders.
+
+## API Reference
+
+### Props
+
+::TuffPropsTable
+---
+rows:
+  - name: direction
+    description: 'Divider direction.'
+    type: "'horizontal' | 'vertical'"
+    default: "'horizontal'"
+  - name: dashed
+    description: 'Renders a dashed line.'
+    type: 'boolean'
+    default: 'false'
+  - name: textPlacement
+    description: 'Label position on horizontal dividers.'
+    type: "'left' | 'center' | 'right'"
+    default: "'center'"
+  - name: gradient
+    description: 'Fade direction; true equals both.'
+    type: "boolean | 'start' | 'end' | 'both'"
+    default: 'false'
+---
+::
+
+### Slots
+
+::TuffPropsTable
+---
+rows:
+  - name: default
+    description: 'Label text on horizontal dividers; not rendered when vertical.'
+    type: '-'
+    default: '-'
+---
+::
+
+## Overview
+
+- The root is `role="separator"`, with `aria-orientation` taken from `direction`.
+- Horizontal dividers span the container width; labels render only when horizontal.
+- `start` fades in from transparent, `end` fades out to transparent, and `both` fades both ends around a solid middle; vertical dividers fade along the vertical axis.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/divider/`.
+
+<TuffDocSourceLink />

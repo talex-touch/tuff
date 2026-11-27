@@ -1,0 +1,163 @@
+---
+title: "Popover"
+description: "A lightweight panel anchored to its trigger."
+category: Feedback
+status: beta
+since: 0.3.4
+tags: [popover, overlay, floating]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+:::TuffDemoWrapper{demo="PopoverPopoverDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxPopover v-model="open">
+      <template #reference>
+        <TxButton>Click</TxButton>
+      </template>
+
+      Popover content
+    </TxPopover>
+  </template>
+---
+:::
+
+### Trigger and Panel
+`trigger` picks click or hover; `panelBackground` and the other `panel*` props style the panel.
+:::TuffDemoWrapper{demo="PopoverPopoverVisualEffectsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxPopover
+      v-model="open"
+      :trigger="trigger"
+      :placement="placement"
+      :panel-background="background"
+      :keep-alive-content="keepAliveContent"
+      :width="284"
+    >
+      <template #reference>
+        <TxButton>Click me</TxButton>
+      </template>
+
+      <strong>Popover panel</strong>
+      <TxButton size="sm">Action</TxButton>
+    </TxPopover>
+  </template>
+---
+:::
+
+### Dashboard Navigation
+Tabs hold the top-level sections; light actions go in `TxDropdownMenu`, short notes in `TxPopover`, and dense settings in `TxDrawer`.
+:::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDropdownMenu>
+      <template #trigger>
+        <TxButton>Release actions</TxButton>
+      </template>
+      <TxDropdownItem>Quick release</TxDropdownItem>
+    </TxDropdownMenu>
+
+    <TxPopover>
+      <template #reference>
+        <TxButton variant="secondary">Policy notes</TxButton>
+      </template>
+      Keep popovers short and action-light.
+    </TxPopover>
+
+    <TxTabs v-model="active" placement="left" indicator-variant="pill">
+      <TxTabItem name="Overview" activation>Overview settings</TxTabItem>
+      <TxTabItem name="Releases">Release settings</TxTabItem>
+    </TxTabs>
+
+    <TxDrawer v-model:visible="drawerVisible" title="Release policy" />
+  </template>
+---
+:::
+
+### Best Practices
+
+- Hold short notes, compact filters, and one or two light actions; move anything past one screen or with many fields to a Drawer.
+- Set `toggleOnReferenceClick=false` when the reference contains an input or manages its own focus, as `TxSearchSelect` does.
+- Keep `keepAliveContent` on for stateful filters and small forms; static copy can turn it off.
+- Bound option panels with `maxHeight` or inner scrolling rather than letting a popover cover the viewport.
+- Turn on `showArrow` only when triggers sit close together and the panel must show which one it belongs to.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `modelValue` | `boolean` | - | Whether the panel is open (`v-model`); omit it for uncontrolled use. |
+| `disabled` | `boolean` | `false` | Blocks opening and closes an open panel. |
+| `eager` | `boolean` | `false` | Mounts the content before the first open. |
+| `placement` | `PopoverPlacement` | `'bottom-start'` | Preferred side. |
+| `offset` | `number` | auto | Gap to the reference: `6` without an arrow, `max(8, arrowSize / 2 + 2)` with one. |
+| `width` | `number` | `0` | Panel width; `0` matches the reference width. |
+| `minWidth` | `number` | `0` | Minimum width. |
+| `maxWidth` | `number` | `360` | Maximum width. |
+| `maxHeight` | `number` | `420` | Maximum height; content beyond it scrolls inside the panel. |
+| `unlimitedHeight` | `boolean` | `false` | Removes the height cap, for panels that scroll themselves. |
+| `referenceFullWidth` | `boolean` | `false` | Stretches the reference container to full width. |
+| `referenceClass` | `BaseAnchorClassValue` | - | Extra class for the reference wrapper. |
+| `showArrow` | `boolean` | `false` | Shows an arrow. |
+| `arrowSize` | `number` | `12` | Arrow size in px. |
+| `trigger` | `'click' \| 'hover' \| 'manual'` | `'click'` | How it opens; `manual` binds no reference interaction, so `modelValue` alone decides. |
+| `openDelay` | `number` | From the `menu` preset (`120`) | Hover open delay in ms; the shared delay service supplies it when unset. |
+| `closeDelay` | `number` | From the `menu` preset (`100`) | Hover close delay in ms; the shared delay service supplies it when unset. |
+| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'expand' }` | Animation config forwarded to BaseAnchor; each type uses its own default timing. |
+| `virtualReference` | `BaseAnchorVirtualReference` | - | Positions against an arbitrary rect, such as the pointer or a selection, instead of the reference. |
+| `matchReferenceWidth` | `boolean` | `width <= 0` | With `width` at `0`, matches the reference width; `false` sizes the panel to its content. |
+| `keepAliveContent` | `boolean` | `true` | Keeps content and its state after close. |
+| `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | Toggles on reference click. |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Panel border style. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Panel background. |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Panel shadow. |
+| `panelRadius` | `number` | `18` | Panel corner radius in px. |
+| `panelPadding` | `number` | `10` | Panel padding in px. |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | Advanced overrides forwarded to the panel card. |
+| `closeOnClickOutside` | `boolean` | `true` | Closes on an outside click; ignored with `hover`. |
+| `closeOnEsc` | `boolean` | `true` | Closes on Escape. |
+
+### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `open` | - | Fires when the popover opens itself. |
+| `close` | - | Fires when the popover closes itself. |
+| `update:modelValue` | `boolean` | Fires when the popover requests an open-state change, controlled or not. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `reference` | - | Trigger content, rendered inside the reference wrapper. |
+| `default` | `{ side: string }` | Panel content; `side` is the final side. |
+
+### Exposed Methods
+
+| Name | Type | Description |
+|------|------|------|
+| `updatePosition` | `() => void` | Recomputes the position; call it after the `virtualReference` rect changes. |
+
+## Overview
+
+- With `modelValue` it is controlled; otherwise it keeps its own open state.
+- With `trigger="click"`, a reference click toggles it and an outside click or Escape closes it; with `hover`, delays drive it and outside clicks are ignored.
+- Escape closes this popover and stops there: an enclosing modal or drawer stays open.
+- On the way to the panel, the hover bridge and safe triangle hold it open: crossing the `offset` gap, resting on the panel padding, or passing another hover trigger diagonally neither closes it nor hands it away.
+
+## Technologies
+
+- Built on `TxTooltip` (`layer="menu"`); the shared anchor-delay service schedules its delays and closes other panels on the same layer.
+- Source: `packages/tuffex/packages/components/src/popover/`.
+
+<TuffDocSourceLink />

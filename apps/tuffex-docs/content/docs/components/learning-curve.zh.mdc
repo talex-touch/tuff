@@ -1,0 +1,188 @@
+---
+title: "LearningCurve 学习曲线"
+description: "按训练步数比较多次运行的平滑指标曲线"
+category: Charts
+status: beta
+since: 0.8.0
+tags: [chart, training, smoothing, seeds]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 多次运行与种子
+`seeds` 画成均值与 ± 标准差区间，`smoothing` 调平滑强度；图例接 `v-model:hidden-runs` 与 `highlighted-run`。
+:::TuffDemoWrapper{demo="LearningCurveBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { TxLearningCurve } from '@talex-touch/tuffex/charts'
+
+  // 每个种子是按步数排列的 [step, value] 数组
+  const runs = [
+    { name: 'SAC', seeds: [sac1, sac2, sac3] },
+    { name: 'TD3', seeds: [td31, td32, td33] },
+    { name: 'PPO', seeds: [ppo1, ppo2, ppo3] },
+  ]
+  </script>
+
+  <template>
+    <TxLearningCurve
+      v-model:hidden-runs="hidden"
+      :runs="runs"
+      :smoothing="smoothing"
+      :highlighted-run="highlighted"
+      x-axis-name="环境步数"
+      y-axis-name="回合回报"
+    />
+  </template>
+---
+:::
+
+### 实时训练
+数据变长时曲线随之增长；窗口停在最后一步时跟着训练前进，`v-model:window` 读写当前窗口。
+:::TuffDemoWrapper{demo="LearningCurveStreamingDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const logged = ref(16)
+  const runs = computed(() => finished.map(run => ({
+    name: run.name,
+    seeds: run.seeds.map(seed => seed.slice(0, logged.value)),
+  })))
+  const view = ref<[number, number] | null>(null)
+  </script>
+
+  <template>
+    <TxLearningCurve v-model:window="view" :runs="runs" :smoothing="0.8" />
+  </template>
+---
+:::
+
+### 对数步数轴
+单个种子的运行传 `data`；`x-type="log"` 展开训练初期，第 0 步及以下不画。
+:::TuffDemoWrapper{demo="LearningCurveLogAxisDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxLearningCurve
+      x-type="log"
+      :runs="[
+        { name: 'lr 1e-3', data: lossFast },
+        { name: 'lr 3e-4', data: lossSlow },
+      ]"
+      y-axis-name="训练损失"
+    />
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 比较算法时给每次运行传多个种子，用区间判断差异是否超出种子之间的波动。
+- `smoothing` 只改变画法；读数时 tooltip 同时列出平滑值与原始值。
+- 把 `highlightedRun` 接到图例悬停，`v-model:hidden-runs` 接到图例点击。
+- 本地化 `labels`：`step` 决定 tooltip 标题和读屏播报里步数的写法。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `runs` | `LearningCurveRun[]` | — | 要比较的运行。 |
+| `smoothing` | `number` | `0.6` | 指数移动平均的权重，0–0.99；`0` 画原始值。 |
+| `showRaw` | `boolean` | `true` | 在平滑曲线下画淡色的原始值。 |
+| `showBand` | `boolean` | `true` | 多种子运行画 ± 一个标准差的区间。 |
+| `xType` | `'linear' \| 'log'` | `'linear'` | 步数轴刻度；`log` 不画第 0 步及以下。 |
+| `zoom` | `boolean` | `true` | 在图上缩放、平移步数轴；`false` 固定视图。 |
+| `highlightedRun` | `string \| null` | — | 强调一次运行，其余变淡。 |
+| `xAxisName` | `string` | — | 步数轴的轴名。 |
+| `yAxisName` | `string` | — | 数值轴的轴名。 |
+| `yAxisNameGap` | `number` | `56` | 数值轴与轴名之间的间距（像素）。 |
+| `xAxisTickFormat` | `(step: number) => string` | SI 前缀 | 步数刻度；步数过千时默认写作 `200k`、`1.5M`。 |
+| `yAxisTickFormat` | `(value: number) => string` | — | 数值刻度。 |
+| `stepFormat` | `(step: number) => string` | 千分位 | tooltip 与读屏中的步数。 |
+| `tooltipValueFormat` | `(value: number) => string` | 四位有效数字 | tooltip 与读屏中的数值。 |
+| `height` | `number` | `300` | 像素高度。 |
+| `width` | `number` | 容器实测 | 显式宽度，用于 SSR 与测试。 |
+| `ariaDescription` | `string` | — | 图表的无障碍描述。 |
+| `labels` | `Partial<LearningCurveLabels>` | 英文 | 无障碍名称、按键说明与 tooltip 文案。 |
+| `hiddenRuns` | `string[]` | `[]` | 隐藏的运行名；不画，也不进 tooltip。 |
+| `window` | `[number, number] \| null` | `null` | 显示的步数窗口，支持 `v-model:window`；`null` 显示全部。 |
+
+### 事件
+
+| 事件 | 参数 | 说明 |
+|------|------|------|
+| `update:hiddenRuns` | `hiddenRuns: string[]` | `v-model:hidden-runs` 写回。 |
+| `update:window` | `window: [number, number] \| null` | 缩放、平移、复位或跟随新数据后写回。 |
+
+### 类型
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface LearningCurveRun {
+    name: string                           // tooltip 中的名称，hiddenRuns 与 highlightedRun 按它引用
+    data?: Array<[number, number]>         // 单个种子的 [step, value]
+    seeds?: Array<Array<[number, number]>> // 多个种子，优先于 data
+    color?: string                         // 默认按位次取分类色
+  }
+
+  interface LearningCurveLabels extends ChartLabels {
+    step: (step: string) => string         // 由格式化后的步数生成 tooltip 标题与播报
+    raw: string                            // tooltip 中原始值前的标签
+  }
+
+  // 同一套平滑与聚合，可在服务端预先计算
+  function smoothEma(values: readonly number[], weight: number): number[]
+  function aggregateSeeds(seeds: Array<Array<[number, number]>>, weight: number): RunCurve
+
+  interface RunCurve {
+    steps: number[]
+    raw: number[]                          // 各种子原始值的均值
+    smoothed: number[]                     // 各种子平滑值的均值
+    spread: number[] | null                // 平滑值的标准差，单个种子时为 null
+  }
+---
+:::
+
+## 交互
+
+| 输入 | 效果 |
+|------|------|
+| 悬停、按住拖动 | 读出最近一步各运行的平滑值、区间与原始值，强调离指针最近的运行。 |
+| 触屏单指按住拖动 | 读数；纵向滑动仍滚动页面。 |
+| 拖过一段 | 放大到这段步数。 |
+| 放大后拖动 | 平移，越过两端回弹，松手后滑行；按住 Shift 拖动仍是框选。 |
+| ⌘/Ctrl + 滚轮、捏合 | 以指针为中心缩放。 |
+| 触控板横向滑动 | 平移放大后的视图。 |
+| 双击 | 显示全部步数。 |
+| ← / →、Home / End | 逐步读数、跳到首尾。 |
+| + / −、Shift + ← / →、0 | 缩放、平移、显示全部。 |
+| Escape | 清除读数，或取消正在拖出的框选。 |
+
+## 概述
+
+- 每个种子先按自己的步数平滑，再读到所有种子步数的并集上：曲线是平滑值的均值，区间是它们的总体标准差。
+- 只有部分种子到达的步数，均值与区间只算到达的种子。
+- 数值轴适配视图内画出的平滑线、原始值与区间；缩放、平移、隐藏运行或新数据到来时以弹簧过渡。
+- 读数吸附到最近的已记录步数；键盘读数没有指针高度，同等对待每次运行。
+- 窗口停在最后一步时随新数据前进，其余时候新数据不移动视图。
+- `prefers-reduced-motion: reduce` 下不播入场、缩放与滑行动画，数值轴直接落定。
+
+## 技术实现
+
+- 平滑与 TensorBoard 相同：去偏的指数移动平均，开头几步不被拉向 0；点数超过绘图区宽度四倍时按像素列保留首、尾、最低与最高点再绘制。
+- 由 `TxChart` 原语组合而成，缩放与平移和 `TxTimeseriesChart` 共用同一视图层。
+- 源码：`packages/tuffex/packages/components/src/charts/src/learning-curve/`。
+
+<TuffDocSourceLink path="packages/tuffex/packages/components/src/charts/src/learning-curve/index.ts" />
+
+## 相关组件
+
+- [TimeseriesChart 时序图](/zh/timeseries-chart)：以时间为横轴的指标，缩放手势相同。
+- [Custom Chart 自定义图表](/zh/custom-chart)：用同一套原语拼装其他图表。
+- [Charts 图表](/zh/charts)：图表家族总览与选型。

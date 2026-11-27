@@ -1,0 +1,139 @@
+---
+title: Matrix Loader
+description: A pure-math spherical halftone matrix loader for AI states.
+category: AiReasoning
+status: beta
+since: 0.9.6
+tags: [ai, loading, canvas, math]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Eight Semantic States
+
+One $5 \times 5$ halftone checkerboard warped through a spherical lens expresses eight AI reasoning and execution phases, smoothly morphing in place whenever `state` changes.
+
+::::TuffDemoWrapper{demo="MatrixLoaderStatesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxMatrixLoader state="thinking" size="md" />
+    <TxMatrixLoader state="searching" size="md" show-label />
+    <TxMatrixLoader state="extracting" size="lg" />
+    <TxMatrixLoader state="defining" size="lg" />
+  </template>
+---
+::::
+
+### Display Eras
+
+Switch `era` across five electronic display aesthetics and combine with `shape` (`quad`, `circle`, `diamond`). The default `oled` era keeps a transparent background and adapts its ink to light and dark themes; the other eras render a framed micro-screen with scanlines, phosphor glow, or Bayer dithering.
+
+::::TuffDemoWrapper{demo="MatrixLoaderErasDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxMatrixLoader state="searching" era="oled" size="lg" />
+    <TxMatrixLoader state="searching" era="crt" size="lg" />
+    <TxMatrixLoader state="searching" era="vfd" size="lg" />
+    <TxMatrixLoader state="searching" era="dither" size="lg" />
+    <TxMatrixLoader state="searching" era="lcd" size="lg" />
+  </template>
+---
+::::
+
+### Math & Noise Lab
+
+Tune grid resolution, spherical curvature, halftone size taper, and 2D gradient noise in real time.
+
+::::TuffDemoWrapper{demo="MatrixLoaderLabDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxMatrixLoader
+      state="exploring"
+      :display-size="96"
+      :grid-size="5"
+      :bulge="1"
+      :taper="1"
+      :noise="0.2"
+      show-label
+    />
+  </template>
+---
+::::
+
+### Best Practices
+
+- Keep a single mounted instance and update `state` as an AI run progresses (`thinking` → `searching` → `generating`) so transitions cross-morph cleanly.
+- Prefer the default `era="oled"` with `size="xs"` or `size="sm"` inline beside text so the transparent canvas blends with any surface.
+- Pass an explicit `time` (in seconds) for deterministic visual regression tests or frame capture; this bypasses `requestAnimationFrame`.
+- Supply localized copy via `labels` or `label` on non-English surfaces; add `aria-hidden="true"` when adjacent text already announces the status.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `state` | `MatrixLoaderState` | `'thinking'` | Semantic motion field across 8 AI phases. |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Standard size tier (18 / 24 / 40 / 64px). |
+| `displaySize` | `number` | — | Explicit CSS pixel size; overrides `size`. |
+| `era` | `MatrixLoaderEra` | `'oled'` | Display era: `oled`, `crt`, `vfd`, `dither`, `lcd`. |
+| `shape` | `MatrixLoaderShape` | `'quad'` | Primitive per tile: `quad`, `circle`, `diamond`. |
+| `gridSize` | `number` | `5` | Odd grid order (3, 5, 7, 9). |
+| `bulge` | `number` | `1` | Spherical curvature (`0` = flat plane, `1` = full sphere). |
+| `taper` | `number` | `1` | Left-to-right halftone size gradient (`0` = uniform). |
+| `fill` | `number` | `1` | Tile fill ratio relative to cell pitch (`0.45`–`1.25`). |
+| `speed` | `number` | `1` | Positive playback speed multiplier. |
+| `intensity` | `number` | `1` | Motion amplitude (`0` holds the rest composition). |
+| `noise` | `number` | `0` | 2D gradient noise drift strength (`0`–`1`). |
+| `noiseFrequency` | `number` | `1.4` | Spatial frequency of the 2D noise field. |
+| `fxStrength` | `number` | `0.65` | Scanline, glow, or quantization strength for non-OLED eras (`0`–`1`). |
+| `theme` | `'auto' \| 'dark' \| 'light'` | `'auto'` | Color theme; `auto` tracks the document theme. |
+| `color` | `string` | — | Custom CSS ink color for the `oled` era. |
+| `transitionDuration` | `number` | `220` | Cross-morph duration in ms when `state` changes. |
+| `paused` | `boolean` | `false` | Pauses the loop while keeping the current frame painted. |
+| `time` | `number` | — | Deterministic timestamp in seconds; skips rAF when finite. |
+| `label` | `string` | `labels[state]` | Explicit status label; takes precedence over `labels`. |
+| `labels` | `MatrixLoaderLabels` | English defaults | Localized per-state label map. |
+| `showLabel` | `boolean` | `false` | Displays the status label visually below the canvas. |
+
+### Types
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  type MatrixLoaderState =
+    | 'thinking' | 'searching' | 'exploring' | 'deciding'
+    | 'generating' | 'extracting' | 'accelerating' | 'defining'
+
+  type MatrixLoaderEra = 'oled' | 'crt' | 'vfd' | 'dither' | 'lcd'
+  type MatrixLoaderShape = 'quad' | 'circle' | 'diamond'
+  type MatrixLoaderSize = 'xs' | 'sm' | 'md' | 'lg'
+  type MatrixLoaderLabels = Partial<Record<MatrixLoaderState, string>>
+---
+:::
+
+### Exposed Methods
+
+| Name | Signature | Description |
+|------|-----------|-------------|
+| `renderFrame` | `(explicitSec?: number) => void` | Imperatively paints a single frame at the given timestamp in seconds. |
+
+## Overview
+
+- Mounted instances share `performance.now()`, keeping multiple loaders on screen in phase.
+- Playback pauses automatically when scrolled offscreen (`IntersectionObserver`) or when the tab is hidden (`visibilitychange`).
+- Under `prefers-reduced-motion: reduce`, the loop stops and paints one representative static frame that still follows theme and prop updates.
+- The canvas scales with `devicePixelRatio` capped at 2; canvas-less environments (SSR, jsdom) keep the semantic wrapper and skip drawing safely.
+- The root exposes `role="status"` and `aria-live="polite"`; when `showLabel` is `false`, the label remains in the accessibility tree via the clip pattern.
+
+## Technologies
+
+- Dependency-free Canvas 2D mathematical engine combining a tapered halftone grid, 2D spherical lens warp, analytic state fields, 2D gradient noise, and 4×4 Bayer ordered dithering.
+- Source: `packages/tuffex/packages/components/src/matrix-loader/`.
+
+<TuffDocSourceLink />

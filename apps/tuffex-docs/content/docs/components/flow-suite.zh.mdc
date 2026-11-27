@@ -1,0 +1,43 @@
+---
+title: 流程套件
+description: 工作流编排：多曲线连线、信号脉冲、运行态节点与可缩放画布
+category: FlowSuite
+status: beta
+since: 0.6.0
+tags: [flow, workflow, canvas, suite, overview]
+syncStatus: reviewed
+verified: true
+---
+
+## 安装
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxFlowchart } from '@talex-touch/tuffex/flowchart'
+  import '@talex-touch/tuffex/base.css'
+  import '@talex-touch/tuffex/flowchart/style.css'
+---
+:::
+
+## 用法
+
+每个格子都是可交互的真实组件，拖动节点或点击左上角名称进入完整案例与 API 文档。
+
+::DocsComponentsGallery{suite="flow"}
+::
+
+### 典型编排场景
+
+| 场景 | 推荐配置 | 示例入口 |
+|---|---|---|
+| 规则引擎与事件触发 | 竖向 `bezier` + 自定义 `#node` 插槽 + 网格吸附 | [基础工作流](/zh/flowchart#基础工作流) |
+| API 路由与容灾降级 | 多语义色连线 + 脉冲光束 + 中点标签 + `edge-click` | [连线曲线与光效](/zh/flowchart#连线曲线端点画布与光效) |
+| CI/CD 发布流水线 | `direction="horizontal"` + 节点运行态 `status` + 并行分支 | [横向流水线与运行态](/zh/flowchart#横向流水线与运行态) |
+| AI Agent 多工具编排 | 扇出/汇聚 DAG + 选中态联动 + `fitView()` 自适应 | [AI Agent 多分支编排](/zh/flowchart#ai-agent-多分支编排) |
+| 风险审批状态机 | `edgeType="smoothstep"` + `background="lines"` + 条件分支标签 | [正交审批与风险分流](/zh/flowchart#正交审批与风险分流状态机) |
+| 完整自动化编辑器 | 画布 + 配置表单 + 运行历史 + 实时日志分栏 | [Automation 模板](/zh/template-automation) |
+
+## 概述
+
+流程套件负责把多步骤、多分支的自动化、流水线与 Agent 工具链画成一张可读、可拖拽、可观测的实时图。**Flowchart** 提供受控画布原语：支持点阵/网格/十字背景、竖向与横向流向、`bezier` / `smoothstep` / `straight` 曲线路由、方向箭头与脉冲光束、节点运行状态光环、对齐参考线以及平移缩放和缩略图导航。运行时经 `@talex-touch/tuffex/flowchart` 或 `@talex-touch/tuffex/ai` 引入。

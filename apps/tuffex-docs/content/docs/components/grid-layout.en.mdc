@@ -1,0 +1,100 @@
+---
+title: "GridLayout"
+description: "A grid container with auto-fit columns and a pointer spotlight."
+category: Layout
+status: beta
+since: 0.3.4
+tags: [grid, layout, responsive]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+Children with `.tx-grid-layout__item` get the card style and a spotlight that follows the pointer.
+:::TuffDemoWrapper{demo="GridLayoutGridLayoutDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGridLayout>
+      <div v-for="i in 6" :key="i" class="tx-grid-layout__item">
+        Item {{ i }}
+      </div>
+    </TxGridLayout>
+  </template>
+---
+:::
+
+### Card Grid
+
+```vue
+<template>
+  <TxGridLayout min-item-width="240px" gap="16px" :max-columns="3">
+    <article v-for="card in cards" :key="card.id" class="tx-grid-layout__item">
+      <h3>{{ card.title }}</h3>
+      <p>{{ card.description }}</p>
+    </article>
+  </TxGridLayout>
+</template>
+```
+
+### Static Grid
+
+```vue
+<template>
+  <TxGridLayout :interactive="false" min-item-width="180px" gap="12px">
+    <div v-for="metric in metrics" :key="metric.name">
+      {{ metric.name }}
+    </div>
+  </TxGridLayout>
+</template>
+```
+
+### Best Practices
+
+- Use `TxGridLayout` for repeated peer cards, and `TxFlex` or `TxStack` for one-dimensional alignment.
+- Add `.tx-grid-layout__item` only when you want the built-in background, radius, and spotlight.
+- Turn off `interactive` for large, dense, or virtualized grids to avoid restyling every item on each pointer move.
+- Set `minItemWidth` to the card's real minimum readable width, not as a spacing hack.
+- Don't nest an interactive grid inside other pointer-heavy surfaces.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `minItemWidth` | `string` | `'300px'` | Minimum width of the auto-fit columns. |
+| `gap` | `string` | `'1.5rem'` | Grid gap. |
+| `maxColumns` | `number` | `4` | Fixed column count at viewport widths ≥ 1400px. |
+| `interactive` | `boolean` | `true` | Updates spotlight variables on pointer move; when off, children are never restyled. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Grid items; add `.tx-grid-layout__item` for the built-in style and spotlight. |
+
+### CSS Variables
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `--tx-grid-gap` | `gap` | Grid gap. |
+| `--tx-grid-min-width` | `minItemWidth` | Minimum column width. |
+| `--tx-grid-max-columns` | `maxColumns` | Wide-screen column count. |
+| `--tx-grid-op` | pointer state | Spotlight opacity on each item. |
+| `--tx-grid-x` / `--tx-grid-y` | pointer state | Pointer position relative to each item. |
+
+## Overview
+
+- Columns default to `repeat(auto-fit, minmax(minItemWidth, 1fr))` and become `repeat(maxColumns, 1fr)` at viewport widths ≥ 1400px.
+- Spotlight variables are written only to `.tx-grid-layout__item` descendants; other children are untouched.
+- `--tx-grid-op` resets to `0` when the pointer leaves or `interactive` turns off.
+
+## Technologies
+
+- On pointer move, the next frame reads each item's position once, then writes the spotlight variables that each `.tx-grid-layout__item`'s `::before` radial gradient reads.
+- Source: `packages/tuffex/packages/components/src/grid-layout/`.
+
+<TuffDocSourceLink />

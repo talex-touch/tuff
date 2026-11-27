@@ -1,0 +1,95 @@
+---
+title: "Spinner 加载"
+description: "表示不确定等待的旋转指示器"
+category: Feedback
+status: beta
+since: 0.3.4
+tags: [spinner, loading, progress]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+:::TuffDemoWrapper{demo="SpinnerSpinnerDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSpinner />
+  </template>
+---
+:::
+
+### 尺寸
+`size` 设置宽高（px）。
+:::TuffDemoWrapper{demo="SpinnerSpinnerSizesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSpinner :size="12" />
+    <TxSpinner :size="16" />
+    <TxSpinner :size="24" />
+    <TxSpinner :size="32" />
+  </template>
+---
+:::
+
+### 显隐切换
+`visible` 带内置的进出场过渡；`v-if` 直接挂载或卸载。
+:::TuffDemoWrapper{demo="SpinnerToggleDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSpinner v-if="showByIf" />
+    <TxSpinner :visible="visible" />
+  </template>
+---
+:::
+
+### 行内等待
+用于按钮、行内状态或遮罩内部的短等待。
+:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <span class="inline-flex items-center gap-2">
+      <TxSpinner :size="14" />
+      行内等待
+    </span>
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 只用于不确定的短等待；有数值或阶段进度时用 `TxProgressBar`，整块首屏加载用 `TxLoadingState`。
+- 文案放在图标旁边；Spinner 只表达忙碌，不表达完成结果。
+- 需要内置进出场过渡时用 `visible`；挂载时机由宿主管理时用 `v-if`。
+- 只有 CSS 动效不适合受限表面时才设置 `fallback`。
+- 着色时直接在 `TxSpinner` 上设置 `color`；父级的 `color` 不会穿透根节点。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `size` | `number` | `16` | 宽高（px），写入 `--tx-spinner-size`。 |
+| `strokeWidth` | `number` | `2` | 环形与 SVG 的线宽，写入 `--tx-spinner-stroke`。 |
+| `fallback` | `boolean` | `false` | 渲染 SVG 旋转圆环，替代默认的 ball/ring 动效。 |
+| `visible` | `boolean` | `true` | 显示或隐藏，带 `tx-spinner-visibility` 过渡。 |
+| `label` | `string` | `'Loading'` | 状态区域的可访问名，出现时被播报；本地化时覆盖。 |
+
+## 概述
+
+- 根节点是 inline-flex 的 `span`，带 `role="status"`、`aria-busy="true"`、`aria-live="polite"`，以 `label` 作为 `aria-label`；不播报完成。
+- `visible=false` 时，离场过渡结束后不再渲染。
+- `fallback` 渲染 SVG circle，沿用 `size` 与 `strokeWidth`。
+- 根节点默认取 `--tx-text-color-secondary` 作为颜色。
+
+## 技术实现
+
+- 源码：`packages/tuffex/packages/components/src/spinner/`。
+
+<TuffDocSourceLink />

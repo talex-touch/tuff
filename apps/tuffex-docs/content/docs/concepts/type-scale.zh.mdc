@@ -1,0 +1,64 @@
+---
+title: 13–14px 生产力基准与等宽 0.9em 调和
+description: 生产力工具与营销官网的字号认知差异、13-14px 黄金视网膜扫读阶梯与等宽代码 0.9em 光学校准。
+---
+
+# 13–14px 生产力基准与等宽 0.9em 调和
+
+生产力工具排版的核心使命是让专业用户在长达数小时的高强度工作中保持清晰、低疲劳的高密度信息摄入。
+
+## 生产力工具与营销页面的本质区别
+
+- **营销官网 / 博客**：字号通常偏大（16px～20px），文字密度稀疏，目标是在数秒内抓住访客注意力，鼓励快速滚屏。
+- **桌面生产力工具（IDE、系统控制台、CoreBox）**：字号必须收敛在 13px～14px。过大字号会导致可视信息被严重稀释，用户必须频繁转动眼球扫读，破坏了格式塔心理学中的“接近律”（Proximity Law），加重认知负荷。
+
+## 13–14px 黄金视网膜扫描基准
+
+人眼高分辨率中央凹视场角仅有 2 度左右。在桌面正常视距（50cm～70cm）下，13px～14px 正好使得一个单词完整落在中央凹视区内，扫读效率最高：
+
+- **操作控件与数据行（13px～14px）**：输入框值、表格单元格、按钮文案。
+- **辅助说明与元数据（12px）**：次级描述、空状态提示、快捷键徽标。
+- **微型标签（10px～11px）**：全大写字母或极小状态标签。
+- **标题层级（15px～18px）**：仅用于模块与卡片标题，正文绝不突破 14px。
+- **展示数字（22px～32px）**：统计卡、图表摘要与指标数值。
+
+:::TuffDemoWrapper{demo="ConceptTypeScaleDemo"}
+:::
+
+## 等宽字体 X 高度膨胀原理
+
+在技术文档与日志中，经常在正文中混排内联代码（`<code>`）。
+无衬线字体（如 Inter、SF Pro）与等宽编程字体（如 JetBrains Mono、SF Mono）在字体设计度量衡（Font Metrics）上存在天然差异：
+等宽字体为了在代码编辑器中清晰可辨，字腔宽大，**x 高度（x-height）往往比同字号的无衬线字体略高**。按 macOS 自带字体文件量出的 x 高度（与字号之比）：苹方 0.517、SF Pro 0.508、SF Mono 0.526、Menlo 0.547，等宽体只比正文高出约 1.7%～7.7%。
+
+## 行内代码缩小至 0.9em 的光学调和
+
+如果行内代码机械地继承父级 `font-size: 1em`：
+- 代码文字在视觉上会突兀地凸出，犹如正文中的硬补丁。
+- 上下撑开原本匀称的行高，打乱排版呼吸节奏。
+
+TuffEx 的标准解决方案在样式入口里：`.tx-prose` 中不在 `<pre>` 里的 `<code>`，以及任何加了 `tx-inline-code` 的元素，都缩到 0.9em。
+
+:::TuffCodeBlock{lang="scss"}
+---
+code: |
+  // packages/tuffex/packages/components/style/index.scss
+  .tx-prose :not(pre) > code,
+  .tx-inline-code {
+    padding: 0.15em 0.35em;
+    border-radius: 4px;
+    background-color: var(--tx-fill-color-light, #f5f7fa);
+    font-family: var(--tx-font-family-mono);
+    // 缩到 0.9em，压住等宽字体偏高的 x 高度
+    font-size: 0.9em;
+    vertical-align: baseline;
+  }
+---
+:::
+
+自己渲染行内代码的组件（TxStreamText、TxMarkdownView、TxMarkdownEditor、TxChainOfThought）同样缩到 0.9em；TxStreamMarkdown 和本站文档正文用 0.875em。
+
+0.9em 是个近似值。让两种 x 高度对齐的字号是「正文 x 高度 ÷ 代码 x 高度」：本站在 macOS 的 Chrome 里实测正文 0.508em、代码（落到 Menlo）0.547em，比值 1.077，恰好对齐要 0.929em，0.9em 还矮 3.1%。按上面几款字体两两组合，恰好对齐的字号落在 0.93em～0.98em 之间。下图在当前浏览器里实测这两个 x 高度。
+
+:::TuffDemoWrapper{demo="ConceptInlineCodeDemo"}
+:::

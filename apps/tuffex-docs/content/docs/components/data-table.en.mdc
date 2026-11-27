@@ -1,0 +1,429 @@
+---
+title: DataTable
+description: A data table with semantic cells, column filtering, sorting, selection, and expandable rows.
+category: Data
+status: beta
+since: 0.3.4
+tags: [table, data, list]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+Semantic `type` values provide numeric sorting, tag pills, and local calendar dates; `filter: true` adds the matching header filter.
+::TuffDemoWrapper{demo="DataTableDataTableDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const columns = [
+    { key: 'name', title: 'Name' },
+    { key: 'role', title: 'Role', type: 'tag', filter: true },
+    { key: 'score', title: 'Score', type: 'number', filter: true },
+    { key: 'joinedAt', title: 'Joined', type: 'date', filter: true },
+  ]
+
+  const data = [
+    { id: 1, name: 'Ava', role: 'Designer', score: 92, joinedAt: '2026-10-14' },
+    { id: 2, name: 'Noah', role: 'Engineer', score: 88, joinedAt: '2026-10-13' },
+    { id: 3, name: 'Mia', role: 'PM', score: 95, joinedAt: '2026-10-12' },
+  ]
+  </script>
+
+  <template>
+    <TxDataTable :columns="columns" :data="data" striped bordered />
+  </template>
+---
+::
+
+### Sorting
+Number and date columns sort on their own, other columns opt in with `sortable`; `defaultSort` sets the starting order, and `sortCycle` decides whether a third click unsorts.
+::TuffDemoWrapper{demo="DataTableSortingDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const columns = [
+    { key: 'title', title: 'Track', sortable: true },
+    { key: 'artist', title: 'Artist' },
+    { key: 'duration', title: 'Length', type: 'number', format: formatDuration },
+    { key: 'plays', title: 'Plays', type: 'number' },
+    { key: 'releasedAt', title: 'Released', type: 'date' },
+  ]
+  </script>
+
+  <template>
+    <TxDataTable
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :default-sort="{ key: 'plays', order: 'desc' }"
+      sort-cycle="bi"
+      @update:sort="sort = $event"
+    />
+  </template>
+---
+::
+
+### Filtering
+`filter: true` gives each column the filter its type calls for: text search, tag picks, a number range, or date presets; a `filter-<key>` slot swaps in a panel of your own, and `v-model:filter` hands the state to the parent.
+::TuffDemoWrapper{demo="DataTableFiltersDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const filter = ref({})
+
+  const columns = [
+    { key: 'title', title: 'Track', filter: true },
+    { key: 'artist', title: 'Artist', type: 'tag', filter: true },
+    { key: 'duration', title: 'Length', type: 'number', filter: true },
+    { key: 'plays', title: 'Plays', type: 'number', filter: true },
+    { key: 'updatedAt', title: 'Updated', type: 'datetime', filter: true },
+  ]
+
+  // A preset writes the { min, max } shape a number column already filters by.
+  const RANGES = { short: { max: 180 }, mid: { min: 180, max: 240 }, long: { min: 240 } }
+  </script>
+
+  <template>
+    <TxDataTable v-model:filter="filter" :columns="columns" :data="rows" :labels="labels" row-key="id">
+      <template #filter-duration="{ filterValue, setFilter, close }">
+        <TxFlatRadio
+          :model-value="bucketOf(filterValue)"
+          @update:model-value="value => { setFilter(RANGES[value]); close() }"
+        >
+          <TxFlatRadioItem value="all" label="All" />
+          <TxFlatRadioItem value="short" label="Under 3 min" />
+          <TxFlatRadioItem value="mid" label="3–4 min" />
+          <TxFlatRadioItem value="long" label="Over 4 min" />
+        </TxFlatRadio>
+      </template>
+    </TxDataTable>
+  </template>
+---
+::
+
+### Row Selection
+`selectable` adds a selection column; `v-model:selected-keys` syncs the selected rows.
+::TuffDemoWrapper{demo="DataTableDataTableSelectableDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDataTable
+      v-model:selected-keys="selectedKeys"
+      :columns="columns"
+      :data="data"
+      row-key="id"
+      selectable
+    />
+  </template>
+---
+::
+
+### Expandable Rows
+`expandable` adds a leading toggle column; the `#expanded` slot renders the detail under a row.
+::TuffDemoWrapper{demo="DataTableExpandableRowsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDataTable
+      v-model:expanded-keys="expandedKeys"
+      :columns="columns"
+      :data="data"
+      row-key="id"
+      expandable
+      :row-expandable="row => Boolean(row.note)"
+    >
+      <template #expanded="{ row }">
+        {{ row.note }}
+      </template>
+    </TxDataTable>
+  </template>
+---
+::
+
+### Adaptive Column Widths
+A nowrap column without a declared width hugs its content and the others share what is left; the action column pins right by default, and the table scrolls once nothing fits.
+::TuffDemoWrapper{demo="DataTableColumnWidthsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  // No column declares a width; the one that wraps gets a floor.
+  const columns = [
+    { key: 'code', title: 'Code', fixed: 'left', nowrap: true },
+    { key: 'title', title: 'Track', minWidth: 160 },
+    { key: 'artist', title: 'Artist', type: 'tag' },
+    { key: 'plays', title: 'Plays', type: 'number' },
+    { key: 'source', title: 'Source', type: 'source' },
+    { key: 'actions', title: 'Actions' },
+  ]
+  </script>
+
+  <template>
+    <TxDataTable :columns="columns" :data="rows" row-key="id" selectable scroll-x>
+      <template #cell-actions>
+        <TxButton variant="secondary" size="sm">Edit</TxButton>
+        <TxIconButton icon="i-carbon-overflow-menu-horizontal" size="sm" label="More" />
+      </template>
+    </TxDataTable>
+  </template>
+---
+::
+
+### Loading States
+`loadingVariant` picks a veil, skeleton rows, or a shimmer; skeleton and shimmer draw placeholder rows only while there are none, and a refresh keeps the existing rows.
+::TuffDemoWrapper{demo="DataTableSkeletonLoadingDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <!-- variant: 'overlay' | 'skeleton' | 'shimmer' -->
+    <TxDataTable
+      :columns="columns"
+      :data="rows"
+      :loading="loading"
+      :loading-variant="variant"
+      :skeleton-rows="pageSize"
+      row-key="id"
+    />
+  </template>
+---
+::
+
+### Empty State
+The `#empty` slot replaces the empty state of a table with no rows, with room for an explanation and an action; to change only the text, pass `emptyText`.
+::TuffDemoWrapper{demo="DataTableEmptyStateDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDataTable :columns="columns" :data="visibleRows" row-key="id">
+      <template #empty>
+        <TxEmptyState
+          variant="search-empty"
+          size="small"
+          :title="`No tracks match “${query}”`"
+          :primary-action="{ label: 'Clear search', variant: 'secondary' }"
+          @primary="query = ''"
+        />
+      </template>
+    </TxDataTable>
+  </template>
+---
+::
+
+### Records Table
+A wide layout with a pinned header and footer, a frozen first column, and selection highlighting; cells compose `TxTag`, `TxDotIndicator`, and `TxCellLink`.
+::TuffDemoWrapper{demo="DataTableRecordsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDataTable
+      v-model:selected-keys="selectedKeys"
+      :columns="columns"
+      :data="rows"
+      :sort="sort"
+      row-key="id"
+      selectable
+      highlight-selected
+      table-layout="fixed"
+      nowrap
+      sort-cycle="bi"
+      :max-height="380"
+      scroll-x
+      sticky-header
+      sticky-footer
+      @update:sort="sort = $event"
+    >
+      <template #cell-tags="{ value }">
+        <TxTag v-for="tag in value" :key="tag" :label="tag" :dot="TAG_COLORS[tag]" variant="soft" />
+      </template>
+      <template #cell-strength="{ row }">
+        <TxDotIndicator :color="STRENGTH_TONE[row.strength]" :label="STRENGTH_LABEL[row.strength]" />
+      </template>
+      <template #cell-website="{ value }">
+        <TxCellLink :href="`https://${value}`" :label="value" external @open="openSite" />
+      </template>
+
+      <template #footer-name>
+        <strong>{{ rows.length }}</strong> count
+      </template>
+      <template #footer-website>
+        {{ linkCount }} links
+      </template>
+    </TxDataTable>
+  </template>
+---
+::
+
+### Data Operations Panel
+`TxPagination` pages the list, and `TxSkeleton` / `TxLayoutSkeleton` preview the loading state.
+::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDataTable
+      v-model:selected-keys="selectedKeys"
+      :columns="columns"
+      :data="pagedRows"
+      row-key="id"
+      selectable
+      striped
+      bordered
+    />
+    <TxPagination v-model:current-page="page" :total="rows.length" :page-size="4" show-info />
+  </template>
+---
+::
+
+### Best Practices
+
+- Pass a stable `rowKey` for business lists; to keep selection across pages, drive `selectedKeys` with business ids, not default indexes. For large data, page on the host and pass in the slice, since the table does not virtualize.
+- For server-loaded lists, use `loadingVariant="skeleton"` or `"shimmer"` with `skeletonRows` set to the page size; keep the default `overlay` for short local waits.
+- Let content size the columns: a nowrap column needs no declared width, a long wrapping column takes a `minWidth` floor, and when several columns pin to one side, give them numeric `width`s; keep one horizontal scroller (`scrollX` or an outer `overflow-x: auto`).
+- A pinned header or footer needs `maxHeight` or a scrolling ancestor, and must not sit in `TxScroll`'s default mode; sort on comparable fields such as timestamps, and a `date` column reads `YYYY-MM-DD` as a local calendar day.
+- Use `filterOnClient=false` for remote filtering and handle `filterChange`; the filter controls and selection checkboxes speak English by default, so localize them with `labels`, `selectAllLabel`, and `selectRowLabelFormatter`.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|------|------|
+| `columns` | `DataTableColumn[]` | `[]` | Column config. |
+| `data` | `any[]` | `[]` | Data source. |
+| `rowKey` | `keyof T \| (row: T, index: number) => string \| number` | `index` | Unique row key. |
+| `loading` | `boolean` | `false` | Loading state. |
+| `loadingVariant` | `'overlay' \| 'skeleton' \| 'shimmer'` | `'overlay'` | `overlay` veils the table with a spinner; `skeleton` draws placeholder rows, or only a bar when rows exist; `shimmer` sweeps a band of light across the placeholder rows or the existing ones. |
+| `skeletonRows` | `number` | `5` | Placeholder rows `skeleton` and `shimmer` draw before the first data lands; match the page size so nothing moves. A table whose host sets its height fills it to the bottom. |
+| `emptyText` | `string` | `'No data'` | Empty text. |
+| `striped` | `boolean` | `false` | Zebra rows. |
+| `bordered` | `boolean` | `false` | Show borders. |
+| `hover` | `boolean` | `true` | Hover highlight. |
+| `interactiveRows` | `boolean` | `false` | Makes rows focusable so Enter / Space fire `rowClick`; on automatically with a `rowClick` listener. |
+| `selectable` | `boolean` | `false` | Adds a selection column. |
+| `selectedKeys` | `Array<string \| number>` | `[]` | Keys of the selected rows. |
+| `selectAllLabel` | `string` | `'Select all'` | Accessible name of the header checkbox. |
+| `selectRowLabel` | `string` | `'Select row'` | Accessible name every row checkbox shares. |
+| `selectRowLabelFormatter` | `(row, index) => string` | - | Names each row checkbox so a screen reader can tell rows apart; wins over `selectRowLabel`. |
+| `expandable` | `boolean` | `false` | Adds a leading toggle column; an expanded row renders a detail row beneath it. |
+| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | Initial expanded rows when uncontrolled; `expandedKeys` wins if both are passed. |
+| `expandedKeys` | `Array<string \| number>` | - | Controlled expanded rows, bound with `v-model:expanded-keys`. |
+| `rowExpandable` | `(row, index) => boolean` | - | Per-row gate for expanding; a rejected row keeps an empty leading cell. |
+| `expandLabel` | `string` | `'Expand row'` | Accessible name of a closed toggle. |
+| `collapseLabel` | `string` | `'Collapse row'` | Accessible name of an open toggle. |
+| `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | Initial sort when uncontrolled; pass either this or `sort`. |
+| `sort` | `{ key: string; order: 'asc' \| 'desc' \| null } \| null` | - | Controlled sort; `null` means unsorted. |
+| `sortOnClient` | `boolean` | `true` | Sorts locally; set `false` for remote sorting, which only emits. |
+| `sortCycle` | `'tri' \| 'bi'` | `'tri'` | `tri`: ascending → descending → unsorted; `bi` alternates and never unsorts. |
+| `tableLayout` | `'auto' \| 'fixed'` | `'auto'` | Native `table-layout`; use `fixed` when column widths must stay stable. |
+| `nowrap` | `boolean` | `false` | Prevents wrapping in every header and cell. |
+| `maxHeight` | `string \| number` | - | Caps the height and scrolls the table vertically; what sticky rows stick to. |
+| `scrollX` | `boolean` | `false` | Scrolls horizontally inside the component; for wide tables with fixed columns. |
+| `stickyHeader` | `boolean` | `false` | Pins the header row. |
+| `stickyFooter` | `boolean` | `false` | Pins the summary row. |
+| `rowClass` | `(row, index) => string \| string[] \| Record<string, boolean>` | - | Extra classes per row, such as a tint by state. |
+| `highlightSelected` | `boolean` | `false` | Tints selected rows. |
+| `defaultFilter` | `DataTableFilterState` | `{}` | Initial filter values in uncontrolled mode. |
+| `filter` | `DataTableFilterState` | - | Controlled values by column key; bind with `v-model:filter`. |
+| `filterOnClient` | `boolean` | `true` | Filters rows locally; `false` delegates row retrieval to the caller. |
+| `autoStickyActions` | `boolean` | `true` | Defaults action columns to the right fixed edge; an explicit column `fixed` takes precedence. |
+| `labels` | `Partial<DataTableLabels>` | - | Text of the filter controls; pass only the keys to replace, the rest keep their English defaults. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `update:selectedKeys` | `(keys)` | Selection update. |
+| `selectionChange` | `(keys)` | Selection change. |
+| `update:expandedKeys` | `(keys)` | Expansion update; fires in controlled and uncontrolled modes. |
+| `expand` | `({ row, index, expanded })` | A row was expanded or collapsed. |
+| `sortChange` | `(sort)` | Sort change. |
+| `update:sort` | `(sort)` | Sort change; fires in controlled and uncontrolled modes. |
+| `update:filter` | `(filter)` | Filter values changed; fires in controlled and uncontrolled modes. |
+| `filterChange` | `(filter)` | Filter changes for client or remote filtering. |
+| `rowClick` | `({ row, index })` | Row click. |
+
+### Slots
+
+| Name | Description |
+|------|------|
+| `header-<columnKey>` | Custom header; receives `{ column, sorted, order, toggle }`, where `toggle` advances the sort cycle. |
+| `cell-<columnKey>` | Custom cell; receives `{ row, column, value, index }`. |
+| `filter-<columnKey>` | Custom filter panel; receives `{ column, filterValue, setFilter, clearFilter, close }`, where `close` closes the panel. |
+| `expanded` | Detail of an expanded row, spanning every column; receives `{ row, index }`. |
+| `footer` | The whole summary row of your own `<td>`s, which can span columns. Any footer slot renders a `<tfoot>`. |
+| `footer-<columnKey>` | One summary cell per column; receives `{ column, data }`. `footer` wins when both exist. |
+| `empty` | Empty state when there are no rows and `loading=false`. |
+
+### DataTableColumn
+
+| Field | Type | Description |
+|------|------|------|
+| `key` | `string` | Column key. |
+| `title` | `string` | Header title. |
+| `type` | `'text' \| 'number' \| 'datetime' \| 'date' \| 'tag' \| 'source' \| 'actions'` | Semantic display, sort, and filter behavior; cell slots and `format` take precedence. |
+| `dataIndex` | `string` | Data field. |
+| `width` | `string \| number` | Column width. Left out, a nowrap column hugs its content and the others share what is left. |
+| `minWidth` | `string \| number` | Minimum column width. |
+| `maxWidth` | `string \| number` | Maximum column width. |
+| `auto` | `boolean` | Forces the column width to `auto`. |
+| `fixed` | `boolean \| 'left' \| 'right'` | Sticky side; `true` means `'left'`. Offsets are measured from the rendered widths, and left ones include the toggle and selection columns. |
+| `nowrap` | `boolean` | Prevents wrapping in this column. |
+| `align` | `'left' \| 'center' \| 'right'` | Alignment. |
+| `sortable` | `boolean` | Sortable. |
+| `sorter` | `(a, b) => number` | Custom sorter. |
+| `filter` | `boolean` | Adds a type-aware header filter; off by default. |
+| `filterOptions` | `DataTableFilterOption[]` | Custom tag-filter options containing `label`, `value`, and optional `tone` and `count` (the row count shown beside the option). |
+| `format` | `(value, row, index) => string` | Cell formatter. |
+| `headerClass` | `string` | Header class. |
+| `cellClass` | `string` | Cell class. |
+
+### DataTableLabels
+
+| Key | Default | Description |
+|------|------|------|
+| `filter` | `'Filter {column}'` | Accessible name of a filter button; `{column}` becomes the column title. |
+| `filterAll` | `'All'` | Option that clears a tag filter. |
+| `filterAnyTime` | `'Any time'` | Option that clears a date filter. |
+| `filterToday` | `'Today'` | Date preset: today. |
+| `filterLast3Days` | `'Last 3 days'` | Date preset: the last 3 days. |
+| `filterLast7Days` | `'Last 7 days'` | Date preset: the last 7 days. |
+| `filterLast30Days` | `'Last 30 days'` | Date preset: the last 30 days. |
+| `filterSearch` | `'Search'` | Placeholder of the text filter and of a long tag list's search field. |
+| `filterMin` | `'Min'` | Lower bound of a number range. |
+| `filterMax` | `'Max'` | Upper bound of a number range. |
+| `filterReset` | `'Reset'` | Clears a number range. |
+| `filterApply` | `'Done'` | Closes a number range. |
+
+## Overview
+
+- Passing `sort` or `expandedKeys` (even `null` or `[]`) makes it controlled: the table only emits updates and renders what the parent sends back.
+- `filter` also makes filtering controlled. Tags accept one value or multiple values, numbers accept `{ min, max }`, and dates accept `today`, `3d`, `7d`, `30d`, or timestamp `{ start, end }` values. Text columns match a case-insensitive substring.
+- When a tag filter gathers its options from the rows, client filtering counts the rows behind each one; at 8 options the panel gains a search field.
+- Sortable headers carry `scope="col"` and `aria-sort`; click, Enter, and Space step through `sortCycle`.
+- The select-all box is named by `selectAllLabel`, and each row box by `selectRowLabelFormatter`, else `selectRowLabel`. On a partial selection the select-all box is `indeterminate` (`aria-checked="mixed"`); clicks in the selection and toggle cells never fire `rowClick`.
+- `loading` sets `aria-busy` on the `<table>`, and the empty state stays hidden while loading. `overlay` covers only the visible part of the table, and a table with no rows keeps the height of its empty state.
+- Placeholder rows are `aria-hidden` and as tall as a one-line row. Under reduced motion the refresh bar holds still and the shimmer becomes a still wash.
+- `stickyHeader`, `stickyFooter`, or `maxHeight` switches to `border-collapse: separate`. The last row has no bottom rule; the rule above a `tfoot` stays.
+
+## Technologies
+
+- The skeleton variant renders `TxSkeleton`. The on-demand style plugin loads its sheet; when importing styles by hand, add `@talex-touch/tuffex/skeleton/style.css`.
+- Semantic defaults, filtering, and sorting share the internal `useDataTableData` module; the internal `useDataTableLayout` measures column widths, fixed-column offsets, the veil's height, and the shimmer bands.
+- Tag and date filters use `TxDropdownMenu` / `TxDropdownItem`, number and text filters use `TxPopover`; the teleported panels keep component-owned BEM styling.
+- Source: `packages/tuffex/packages/components/src/data-table/`.
+
+<TuffDocSourceLink />
+
+## Customization
+
+| CSS variable | Used for |
+|------|------|
+| `--tx-data-table-row-hover-bg` | Row hover fill. |
+| `--tx-data-table-row-selected-bg` | Selected-row fill under `highlightSelected`. |
+
+```css
+.records-shell {
+  --tx-data-table-row-hover-bg: var(--tx-bui-hover);
+  --tx-data-table-row-selected-bg: color-mix(in srgb, var(--tx-bui-accent) 7%, var(--tx-bui-surface));
+}
+```

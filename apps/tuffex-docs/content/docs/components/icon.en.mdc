@@ -1,0 +1,329 @@
+---
+title: Icon
+description: An icon rendered from a class, a built-in name, or a resource.
+category: Basic
+status: beta
+since: 0.3.4
+tags: [icon, glyph, visual]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Class Icons
+
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <!-- Remix Icon -->
+    <i class="i-ri-home-line" />
+    <i class="i-ri-search-line" />
+    <i class="i-ri-settings-3-line" />
+    <!-- Carbon -->
+    <i class="i-carbon-user" />
+    <i class="i-carbon-folder" />
+
+    <!-- Simple Icons (brand) -->
+    <i class="i-simple-icons-github" />
+    <i class="i-simple-icons-visualstudiocode" />
+  </template>
+---
+:::
+
+### TuffIcon
+In `TuffIcon` (alias `TxIcon`), `name` takes a class or built-in name and `icon` takes a structured source.
+
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TuffIcon name="i-ri-home-line" />
+    <TuffIcon name="chevron-down" />
+    <TuffIcon :icon="{ type: 'emoji', value: '🚀' }" />
+    <TuffIcon :icon="{ type: 'url', value: '/app.svg', colorful: true }" />
+  </template>
+---
+:::
+
+### TuffIcons Constants
+`@talex-touch/utils` provides predefined icon constants.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { TuffIcons, AppIcons } from '@talex-touch/utils'
+
+  // UI icons
+  TuffIcons.Home // 'i-ri-home-line'
+  TuffIcons.Search // 'i-ri-search-line'
+  TuffIcons.Settings // 'i-ri-settings-3-line'
+
+  // Brand icons
+  AppIcons.VSCode // 'i-simple-icons-visualstudiocode'
+  AppIcons.GitHub // 'i-simple-icons-github'
+---
+:::
+
+| Category | Constant | Class |
+|----------|----------|-------|
+| Navigation | `TuffIcons.Home` | `i-ri-home-line` |
+| | `TuffIcons.Back` | `i-ri-arrow-left-line` |
+| | `TuffIcons.Forward` | `i-ri-arrow-right-line` |
+| | `TuffIcons.Menu` | `i-ri-menu-line` |
+| Actions | `TuffIcons.Search` | `i-ri-search-line` |
+| | `TuffIcons.Add` | `i-ri-add-line` |
+| | `TuffIcons.Delete` | `i-ri-delete-bin-line` |
+| | `TuffIcons.Edit` | `i-ri-edit-line` |
+| | `TuffIcons.Copy` | `i-ri-file-copy-line` |
+| | `TuffIcons.Save` | `i-ri-save-line` |
+| | `TuffIcons.Download` | `i-ri-download-line` |
+| | `TuffIcons.Upload` | `i-ri-upload-line` |
+| | `TuffIcons.Refresh` | `i-ri-refresh-line` |
+| Status | `TuffIcons.Check` | `i-ri-check-line` |
+| | `TuffIcons.Close` | `i-ri-close-line` |
+| | `TuffIcons.Warning` | `i-ri-error-warning-line` |
+| | `TuffIcons.Info` | `i-ri-information-line` |
+| | `TuffIcons.Error` | `i-ri-close-circle-line` |
+| Files | `TuffIcons.File` | `i-ri-file-line` |
+| | `TuffIcons.Folder` | `i-ri-folder-line` |
+| | `TuffIcons.FileCode` | `i-ri-file-code-line` |
+| | `TuffIcons.FileImage` | `i-ri-image-line` |
+| UI elements | `TuffIcons.Settings` | `i-ri-settings-3-line` |
+| | `TuffIcons.User` | `i-ri-user-line` |
+| | `TuffIcons.Star` | `i-ri-star-line` |
+| | `TuffIcons.Heart` | `i-ri-heart-line` |
+| | `TuffIcons.Lock` | `i-ri-lock-line` |
+| | `TuffIcons.Eye` | `i-ri-eye-line` |
+| Brands | `AppIcons.GitHub` | `i-simple-icons-github` |
+| | `AppIcons.VSCode` | `i-simple-icons-visualstudiocode` |
+| | `AppIcons.Chrome` | `i-simple-icons-googlechrome` |
+| | `AppIcons.Discord` | `i-simple-icons-discord` |
+
+### Custom Styles
+
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <!-- Size -->
+    <i class="i-ri-home-line text-sm" />
+    <i class="i-ri-home-line text-base" />
+    <i class="i-ri-home-line text-xl" />
+    <i class="i-ri-home-line text-2xl" />
+
+    <!-- Color -->
+    <i class="i-ri-star-line text-yellow-500" />
+    <i class="i-ri-heart-fill text-red-500" />
+    <i class="i-ri-check-circle-fill text-green-500" />
+
+    <!-- Motion -->
+    <i class="i-ri-loader-4-line animate-spin" />
+  </template>
+---
+:::
+
+### Status Indicator
+`tone` on `TxStatusIcon` overlays a status dot on the icon's bottom-right corner.
+:::TuffDemoWrapper{demo="IconTxStatusIconDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxStatusIcon name="i-carbon-translate" :size="24" tone="success" />
+    <TxStatusIcon name="i-carbon-translate" :size="24" tone="warning" />
+    <TxStatusIcon name="i-carbon-translate" :size="24" tone="error" />
+    <TxStatusIcon name="i-carbon-translate" :size="24" tone="info" />
+    <TxStatusIcon name="i-carbon-translate" :size="24" tone="loading" />
+  </template>
+---
+:::
+
+### OS Icons
+`TxOsIcon` detects the platform from `platform` and `os`.
+:::TuffDemoWrapper{demo="OsIconOsIconDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxOsIcon platform="darwin" os="macOS 15" />
+    <TxOsIcon platform="win32" os="Windows 11" />
+    <TxOsIcon platform="linux" os="Ubuntu 24.04" />
+  </template>
+---
+:::
+
+### Icon Sources
+
+| `type` | Use |
+|------|------|
+| `class` | Icon class name (recommended). |
+| `emoji` | Lightweight emphasis. |
+| `file` / `url` | Local or remote icons. |
+| `builtin` | Built-in icons: `check`, `chevron-down`, `chevron-right`, `chevron-left`, `arrow-left`, `arrow-up`, `arrow-down`, `plus`, `close`, `search`, `user`, `star`, `star-half`, `info`, `check-circle`, `x-circle`, `alert-triangle`. |
+
+Set `colorful` on the component or as `icon.colorful`.
+
+### Best Practices
+
+- Prefer UnoCSS classes (`i-*`) in product UI, since they inherit `currentColor`; use `TxIconSource` for status, URL / file resolution, or original colors.
+- Set `alt` only when the icon itself carries meaning; let surrounding text describe decorative icons.
+- Keep `colorful=false` for monochrome SVGs so they follow the theme; set `colorful=true` for brand marks and multi-color art.
+- Inject `TX_ICON_CONFIG_KEY` once at the app shell instead of passing resolvers to every icon.
+- Pair `TxOsIcon` with visible platform text and size it with CSS font-size; treat the fallback glyph as a visual default, not a validation result.
+
+## API Reference
+
+### TxIcon
+
+#### Props
+::TuffPropsTable
+---
+rows:
+  - name: icon
+    type: 'TxIconSource | null'
+    default: '-'
+    description: 'Structured icon source (type / value); an alternative to name.'
+  - name: name
+    type: 'string'
+    default: '-'
+    description: 'Class or built-in icon name.'
+  - name: size
+    type: 'number'
+    default: '-'
+    description: 'Size in px; inherits the parent font size when omitted.'
+  - name: colorful
+    type: 'boolean'
+    default: 'false'
+    description: 'Keeps the original SVG colors.'
+  - name: alt
+    type: 'string'
+    default: "''"
+    description: 'Accessible name, written to title; also the alt of the fallback image.'
+  - name: empty
+    type: 'string'
+    default: "''"
+    description: 'Fallback image URL shown when no icon resolves.'
+  - name: urlResolver
+    type: "(url: string, type: 'url' | 'file') => string"
+    default: '-'
+    description: 'Overrides URL / file path resolution.'
+  - name: svgFetcher
+    type: '(url: string) => Promise<string>'
+    default: '-'
+    description: 'Overrides how SVG content is fetched.'
+---
+::
+
+#### Slots
+
+| Name | Props | Description |
+|------|------|------|
+| `empty` | - | Replaces the fallback content shown when no icon resolves. |
+
+### TxStatusIcon
+
+#### Props
+::TuffPropsTable
+---
+rows:
+  - name: icon
+    type: 'TxIconSource | null'
+    default: '-'
+    description: 'Structured icon source (type / value); an alternative to name.'
+  - name: name
+    type: 'string'
+    default: '-'
+    description: 'Class or built-in icon name.'
+  - name: alt
+    type: 'string'
+    default: "''"
+    description: 'Accessible name, written to title; also the alt of the fallback image.'
+  - name: empty
+    type: 'string'
+    default: "''"
+    description: 'Fallback image URL shown when no icon resolves.'
+  - name: colorful
+    type: 'boolean'
+    default: 'true'
+    description: 'Keeps the original SVG colors; defaults to true, unlike TxIcon.'
+  - name: size
+    type: 'number'
+    default: '18'
+    description: 'Size in px; defaults to 18, while TxIcon inherits the parent font size.'
+  - name: tone
+    type: "'none' | 'loading' | 'warning' | 'success' | 'error' | 'info'"
+    default: "'none'"
+    description: 'Status dot at the bottom-right corner; hidden with none.'
+  - name: indicatorSize
+    type: 'number'
+    default: 'auto'
+    description: 'Status dot size in px.'
+  - name: indicatorOffset
+    type: 'number'
+    default: '0'
+    description: 'Status dot offset in px.'
+---
+::
+
+`icon`, `name`, `alt`, and `empty` work as on `TxIcon`.
+
+### TxOsIcon
+
+#### Props
+::TuffPropsTable
+---
+rows:
+  - name: platform
+    type: 'string'
+    default: "''"
+    description: 'Platform identifier such as darwin, win32, or linux.'
+  - name: os
+    type: 'string'
+    default: "''"
+    description: 'Readable OS name, also used for detection.'
+---
+::
+
+### classIcon / getIcon
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { classIcon, getIcon } from '@talex-touch/utils'
+
+  const icon = classIcon('i-ri-star-line')
+  // { type: 'class', value: 'i-ri-star-line' }
+
+  const searchIcon = getIcon('Search')
+  // { type: 'class', value: 'i-ri-search-line' }
+---
+:::
+
+## Icon sets
+
+| Set | Prefix | Description |
+|-----|--------|-------------|
+| Remix Icon | `i-ri-` | General UI icons, outline / filled styles |
+| Carbon | `i-carbon-` | IBM design system icons |
+| Simple Icons | `i-simple-icons-` | Brand / logo icons |
+
+## Icon search
+
+Browse and search every icon at [Icônes](https://icones.js.org/).
+
+## Overview
+
+- A `name` starting with `i-` renders as a class, a built-in name renders its SVG, and anything else renders as a class — showing nothing if no such class exists.
+- `file` values and local absolute `url` values pass through the injected `fileProtocol` or `urlResolver`.
+- With `colorful=false`, a monochrome SVG whose content is readable (data URL or `svgFetcher`) renders as a `currentColor` mask; multi-color or unreadable SVGs render as images.
+- An `icon.status` of `loading` or `error` takes precedence over the icon.
+- With `alt`, the root is `role="img"` with a `title`; without it, the root is `aria-hidden="true"`.
+- `TxOsIcon` joins and lowercases `platform` and `os` to detect macOS / Windows / Linux, falling back to macOS; its SVG is `aria-hidden`.
+
+## Technologies
+
+- `shouldRenderSvgAsMask` checks whether every paint color in an SVG is neutral or `currentColor` to decide on mask rendering.
+- `TX_ICON_CONFIG_KEY` injects `urlResolver`, `svgFetcher`, `fileProtocol`, and `classGlyph`, which draws the classes it resolves from path data instead of the host's CSS.
+- Source: `packages/tuffex/packages/components/src/icon/`.
+
+<TuffDocSourceLink />

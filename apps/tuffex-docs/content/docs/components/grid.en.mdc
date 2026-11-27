@@ -1,0 +1,185 @@
+---
+title: Grid
+description: A container that arranges content in rows and columns.
+category: Layout
+status: beta
+since: 0.3.4
+tags: [grid, layout, alignment]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+:::TuffDemoWrapper{demo="GridGridDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" :gap="12">
+      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### Responsive Columns
+`cols` can be set per breakpoint.
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="{ xs: 1, sm: 2, md: 3, lg: 4, xl: 5 }" :gap="20">
+      <TxGridItem v-for="i in 10" :key="i">
+        <TxCard>Item {{ i }}</TxCard>
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### Auto-Fit Columns
+`minItemWidth` fits as many columns as the width allows and takes precedence over `cols`.
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid min-item-width="250px" :gap="24">
+      <TxGridItem v-for="item in items" :key="item.id">
+        <TxCard>{{ item.title }}</TxCard>
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### Gaps
+`gap` takes a number (px), `{ row, col }`, or a per-breakpoint object.
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" :gap="32">…</TxGrid>
+    <TxGrid :cols="3" :gap="{ row: 24, col: 16 }">…</TxGrid>
+    <TxGrid :cols="{ xs: 1, md: 2, lg: 3 }" :gap="{ xs: 16, md: 24, lg: 32 }">…</TxGrid>
+  </template>
+---
+:::
+
+### Column and Row Spans
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="4" :gap="16">
+      <TxGridItem>Item</TxGridItem>
+      <TxGridItem :col-span="2">Span 2</TxGridItem>
+      <TxGridItem>Item</TxGridItem>
+      <TxGridItem :col-span="3">Span 3</TxGridItem>
+    </TxGrid>
+
+    <TxGrid :cols="3" :gap="16">
+      <TxGridItem>Item 1</TxGridItem>
+      <TxGridItem :row-span="2">Span 2 rows</TxGridItem>
+      <TxGridItem>Item 3</TxGridItem>
+      <TxGridItem>Item 4</TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### Alignment
+`justify` / `align` align every item; `justifySelf` / `alignSelf` align one.
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" :gap="16" justify="center" align="center" style="height: 400px;">
+      <TxGridItem v-for="i in 3" :key="i">Item {{ i }}</TxGridItem>
+    </TxGrid>
+
+    <TxGrid :cols="3" :gap="16">
+      <TxGridItem justify-self="start">Start</TxGridItem>
+      <TxGridItem justify-self="center">Center</TxGridItem>
+      <TxGridItem justify-self="end">End</TxGridItem>
+    </TxGrid>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Use `cols` for dashboard grids with a known column count and `minItemWidth` for card collections that fill the container; pick one per grid.
+- With large spans, make sure every breakpoint has enough columns.
+- Prefer numeric gaps; pass strings only for units such as `rem` or `clamp()`.
+- Don't use Grid in place of a semantic table or list.
+
+## API Reference
+
+### TxGrid
+
+#### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| cols | `number \| Responsive<number>` | `0` | Column count, optionally per breakpoint; `0` sets no column template. |
+| rows | `number` | `0` | Row count; `0` sets no row template. |
+| gap | `GridGap` | `16` | Gap: a number (px), `{ row, col }`, or a per-breakpoint object. |
+| minItemWidth | `string` | - | Minimum item width; switches to `auto-fit` columns. |
+| justify | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Horizontal alignment of items. |
+| align | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Vertical alignment of items. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | `TxGridItem` children. |
+
+### TxGridItem
+
+#### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| colSpan | `number` | `1` | Columns spanned, at least 1. |
+| rowSpan | `number` | `1` | Rows spanned, at least 1. |
+| justifySelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | The item's own horizontal alignment. |
+| alignSelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | The item's own vertical alignment. |
+
+#### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | Cell content. |
+
+### Types
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+
+  type Responsive<T> = Partial<Record<Breakpoint, T>>
+
+  type GridAlign = 'start' | 'end' | 'center' | 'stretch'
+
+  type GridGap =
+    | number
+    | string
+    | { row?: number | string, col?: number | string }
+    | Responsive<number | string>
+---
+:::
+
+## Overview
+
+- `minItemWidth` takes precedence over `cols` and emits `repeat(auto-fit, minmax(<minItemWidth>, 1fr))`.
+- Responsive values follow the window width: `xs < 640 ≤ sm < 768 ≤ md < 1024 ≤ lg < 1280 ≤ xl`. An unset breakpoint takes the nearest smaller value, then the nearest larger one.
+- During server rendering the width is taken as 1024px, which is `lg`.
+
+## Technologies
+
+- Props compute the grid styles and inline them on the root; the breakpoint updates on `window` `resize`.
+- Source: `packages/tuffex/packages/components/src/grid/`.
+
+<TuffDocSourceLink />

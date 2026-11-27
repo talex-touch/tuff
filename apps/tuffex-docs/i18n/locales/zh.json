@@ -1,0 +1,284 @@
+{
+  "nav": {
+    "home": "Tuff",
+    "docs": "文档",
+    "developer": "开发者",
+    "components": "TuffEx 组件库",
+    "store": "插件商店",
+    "updates": "更新",
+    "menu": "菜单"
+  },
+  "ui": {
+    "languageToggle": {
+      "zhLabel": "中文",
+      "enLabel": "English",
+      "switchToZh": "切换语言到中文",
+      "switchToEn": "切换语言到英文"
+    },
+    "themeToggle": {
+      "title": "主题模式",
+      "dark": "dark",
+      "light": "light",
+      "auto": "auto",
+      "selectMode": "主题模式：{mode}",
+      "switchToLight": "切换到浅色模式",
+      "switchToDark": "切换到深色模式"
+    },
+    "geoMap": {
+      "empty": "暂无地理位置数据",
+      "failed": "地图加载失败",
+      "label": "世界地图",
+      "instructions": "拖拽或用方向键平移。双指捏合、按住 Control 或 Command 滚动，或按加号减号缩放。双击或按 0 复位。"
+    }
+  },
+  "common": {
+    "collapse": "收起",
+    "confirm": "确认",
+    "retry": "重试",
+    "save": "保存",
+    "refresh": "刷新",
+    "loading": "加载中...",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "remove": "移除",
+    "delete": "删除",
+    "cancel": "取消",
+    "close": "关闭",
+    "copy": "复制",
+    "copied": "已复制",
+    "error": "错误"
+  },
+  "form": {
+    "field": "字段",
+    "required": "{label}为必填项",
+    "type": {
+      "email": "{label}需要是邮箱地址",
+      "url": "{label}需要是网址",
+      "number": "{label}需要是数字",
+      "integer": "{label}需要是整数"
+    },
+    "min": "{label}不能小于 {min}",
+    "max": "{label}不能大于 {max}",
+    "minLength": {
+      "characters": "{label}至少需要 {min} 个字符",
+      "items": "{label}至少需要 {min} 项"
+    },
+    "maxLength": {
+      "characters": "{label}最多 {max} 个字符",
+      "items": "{label}最多 {max} 项"
+    },
+    "pattern": "{label}格式不正确",
+    "invalid": "{label}无效",
+    "hint": "{label}的说明",
+    "errorPrefix": "错误：",
+    "warningPrefix": "警告：",
+    "validating": "正在校验…",
+    "optional": "（选填）",
+    "summaryTitle": "请修改以下问题",
+    "draftRestored": "已恢复 {time} 未保存的更改。",
+    "draftPending": "有 {time} 未保存的更改。",
+    "draftRestore": "恢复",
+    "draftDiscard": "丢弃",
+    "leaveConfirm": "有未保存的更改，仍要离开吗？",
+    "autosaved": "更改已保存。",
+    "autosaveFailed": "更改未能保存。"
+  },
+  "notFound": {
+    "title": "页面未找到",
+    "description": "你要访问的 TuffEx 文档页面不存在，或已被移动。",
+    "seoDescription": "页面 {path} 不存在或已被移动。",
+    "backHome": "返回 TuffEx 文档首页",
+    "goBack": "返回上页"
+  },
+  "search": {
+    "open": "搜索",
+    "openAria": "搜索 TuffEx 文档",
+    "placeholder": "搜索组件、概念与指南…",
+    "empty": "没有找到匹配的文档",
+    "loading": "正在加载搜索索引…",
+    "unavailable": "无法加载搜索索引，请稍后重试。",
+    "shortcuts": {
+      "label": "搜索快捷键",
+      "open": "打开搜索",
+      "quickOpen": "快速唤起",
+      "close": "关闭"
+    },
+    "category": {
+      "docs": "文档",
+      "components": "组件",
+      "concepts": "理念"
+    }
+  },
+  "docs": {
+    "textLoopDemo": {
+      "gap": "完全消失再进入（默认）",
+      "clip": "部分消失（边缘硬切）",
+      "fade": "比例消失（边缘渐隐）",
+      "wrap": "不消失（首尾相接）"
+    },
+    "imagePreviewOptionsDemo": {
+      "sweepGradient": "扫光",
+      "pixelsOrganic": "像素有机",
+      "pixelsMechanic": "像素机械",
+      "skeleton": "骨架",
+      "none": "无"
+    },
+    "verified": "已验证",
+    "loading": "正在获取文档…",
+    "notFoundTitle": "未找到文档",
+    "notFoundDescription": "当前路径暂未匹配到内容，请返回 TuffEx 文档首页。",
+    "backHome": "返回文档首页",
+    "bodyErrorTitle": "文档内容加载失败",
+    "bodyErrorDescription": "内容没有取回来，请检查网络后重试。",
+    "bodyErrorRetry": "重试",
+    "redirecting": "正在跳转到 TuffEx 文档…",
+    "outlineLabel": "本页目录",
+    "sidebarLabel": "导航",
+    "rawMarkdown": "查看 Markdown",
+    "aside": {
+      "copyPrompt": "复制为 Prompt",
+      "copyPromptDone": "已复制本页 Markdown",
+      "copyPromptFailed": "复制失败，点按重试",
+      "copyPromptHint": "复制本页的 Markdown 源文件，可直接粘贴给 AI",
+      "resources": "资源",
+      "reportIssue": "反馈问题",
+      "requestFeature": "功能建议",
+      "viewGitHub": "在 GitHub 查看"
+    },
+    "aiNotice": {
+      "title": "AI Generated",
+      "description": "AI 生成内容，仅供参考。最终以 Verified 文档为准。"
+    },
+    "noOutline": "为文档添加标题后，这里会自动生成导航。",
+    "lastUpdatedLabel": "最后更新于",
+    "previousChapter": "上一篇",
+    "nextChapter": "下一篇",
+    "share": "分享",
+    "shareCopied": "链接已复制！",
+    "shareFailed": "复制失败",
+    "editOnGitHub": "编辑此页",
+    "demo": {
+      "showCode": "展开代码",
+      "hideCode": "隐藏代码",
+      "reset": "重置",
+      "loading": "示例加载中...",
+      "loadFailed": "示例加载失败。",
+      "notFound": "未找到示例组件。"
+    },
+    "framework": {
+      "switcherLabel": "切换目标框架",
+      "vue": "Vue",
+      "react": "React",
+      "wc": "WC",
+      "wcFull": "Web Components",
+      "ready": "已适配",
+      "experimental": "实验性",
+      "planned": "规划中",
+      "unsupportedWc": "暂不适配 WC",
+      "liveRuntime": "实时",
+      "previewFallbackReact": "暂未适配 React · 回退显示 Vue 预览",
+      "previewFallbackWcPlanned": "暂未适配 Web Components · 回退显示 Vue 预览",
+      "previewFallbackWcUnsupported": "暂不适配 Web Components（仅 Vue / React）· 回退显示 Vue 预览",
+      "runtimeUnlinked": "当前环境尚未链接 {pkg} · 保留 Vue 实时预览并展示 {framework} 代码",
+      "installLabel": "安装",
+      "importLabel": "引入",
+      "copyInstall": "复制安装命令",
+      "copyImport": "复制引入代码",
+      "copied": "已复制",
+      "codeTabActive": "{framework} 代码",
+      "codeTabVue": "Vue 源码",
+      "matrixTitle": "多框架适配覆盖矩阵",
+      "matrixSearchPlaceholder": "按组件名、标签 (tx-*) 或导出符号 (Tx*) 搜索…",
+      "matrixFilterAll": "全部",
+      "matrixFilterReactReady": "React 已适配",
+      "matrixFilterWcReady": "WC 已适配",
+      "matrixEmpty": "没有符合当前筛选条件的组件。",
+      "matrixColumns": {
+        "component": "组件",
+        "tier": "层级",
+        "vue": "Vue 3",
+        "react": "React",
+        "wc": "Web Components",
+        "exports": "标签 / 导出"
+      },
+      "matrixSummary": "{ready}/{total} ({percent}%)"
+    }
+  },
+  "docsNav": {
+    "start": "快速上手"
+  },
+  "docsSidebar": {
+    "error": "导航加载失败，请稍后再试。",
+    "extensions": "扩展",
+    "components": "组件",
+    "since": "自 {version}",
+    "sections": "文档分区",
+    "suiteSwitcher": "组件套件",
+    "suiteDescriptions": {
+      "concepts": "安装、主题与设计基础",
+      "templates": "整页组件组合",
+      "base": "表单、布局与反馈",
+      "pro": "视觉效果、高级交互与原语",
+      "ai": "对话、智能体与推理",
+      "data": "图表与数据可视化",
+      "flow": "流程图与编排",
+      "motion": "按钮、卡片与输入驱动动效"
+    },
+    "suites": {
+      "concepts": "理念",
+      "templates": "模板",
+      "base": "基础",
+      "pro": "进阶",
+      "ai": "AI",
+      "data": "数据",
+      "flow": "流程",
+      "motion": "动效"
+    },
+    "categories": {
+      "templateApp": "应用框架",
+      "templateContent": "内容运营",
+      "templateAi": "AI 应用",
+      "templateData": "数据与流程",
+      "basic": "通用",
+      "form": "表单",
+      "layout": "布局",
+      "navigation": "导航",
+      "data": "数据展示",
+      "charts": "图表",
+      "feedback": "反馈",
+      "status": "状态占位",
+      "advanced": "高级交互",
+      "visualization": "可视化",
+      "effects": "视觉效果",
+      "primitives": "底层原语",
+      "aiChat": "对话",
+      "aiAgent": "智能体",
+      "aiReasoning": "推理与生成",
+      "aiContext": "上下文与洞察",
+      "flow": "流程编排",
+      "motionButtons": "按钮",
+      "motionCards": "卡片展开",
+      "motionCarousels": "3D 轮播",
+      "motionLoaders": "加载动效",
+      "motionCharts": "抖动图表",
+      "motionText": "文字",
+      "motionPhysics": "物理动效",
+      "motionInteraction": "悬停、指针与滚动",
+      "motionToggles": "切换控件",
+      "motionTransitions": "转场",
+      "misc": "其他"
+    },
+    "conceptsManual": "设计工程概念手册",
+    "conceptGroups": {
+      "geometry": "几何与空间形态",
+      "surfaces": "材质物理与环境感知",
+      "color": "色彩科学与暗色模式",
+      "typography": "排版美学与文本工程",
+      "motion": "微动效与微交互节拍",
+      "ai": "AI 原生交互与流式生成"
+    },
+    "families": {
+      "avatarBasic": "基础头像"
+    }
+  }
+}

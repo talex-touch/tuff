@@ -1,0 +1,191 @@
+---
+title: Inbox
+description: A three-pane inbox with keyboard shortcuts and new-mail alerts.
+category: TemplateContent
+status: beta
+since: 0.6.0
+tags: [template, inbox, list, reader, keyboard]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+### Three-pane inbox
+:::TuffDemoWrapper{demo="TemplateInboxDemo" code-lang="vue" description="Click the list, then J / K to move, E to archive, S to star, and Enter to reply. Sample data."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // Shortcuts live on the template root, not on document, and step aside
+  // while an editable element has focus.
+  function onKeydown(event: KeyboardEvent) {
+    if (event.defaultPrevented || isEditable(event.target))
+      return
+    if (event.key === 'j' || event.key === 'ArrowDown')
+      move(1)
+    else if (event.key === 'e')
+      archive(selected.value)
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Inbox" :height="580" @enter="startArrivals">
+      <div class="inbox" @keydown="onKeydown">
+        <TxSidebarNav v-if="wide" v-model="view" :items="navItems" :groups="navGroups" action-label="Compose" />
+        <TxFilterChips v-else v-model="view" :items="folderChips" aria-label="Mailboxes" />
+
+        <TxSplitter v-model="split" :min="0.3" :max="0.62">
+          <template #a>
+            <!-- TxVirtualList has no semantics: the host adds listbox, option and position -->
+            <div role="listbox" tabindex="0" aria-label="Inbox" :aria-activedescendant="activeId">
+              <TxVirtualList ref="list" :items="mails" :item-height="76" item-key="id" height="100%">
+                <template #item="{ item, index }">
+                  <div
+                    :id="item.id"
+                    role="option"
+                    :aria-selected="item.id === selectedId"
+                    :aria-setsize="mails.length"
+                    :aria-posinset="index + 1"
+                    @click="select(item.id)"
+                  >
+                    …
+                  </div>
+                </template>
+              </TxVirtualList>
+            </div>
+          </template>
+
+          <template #b>
+            <TxMessageActions :copy-text="plainBody" :appear="false">…</TxMessageActions>
+            <TxMarkdownView :content="selected.body" />
+            <TxAttachmentTray :attachments="selected.attachments" :size-formatter="formatSize" />
+            <TxChatComposer v-model="reply" placeholder="Reply…" @send="send" @attachment-add="addFiles" />
+          </template>
+        </TxSplitter>
+      </div>
+    </TemplateFrame>
+  </template>
+
+  <style scoped>
+  .inbox { display: grid; grid-template-columns: minmax(0, 1fr); }
+
+  @container template (min-width: 960px) {
+    /* A fixed-width sidebar: only the list and the reader follow the divider */
+    .inbox { grid-template-columns: 216px minmax(0, 1fr); }
+  }
+  </style>
+---
+:::
+
+### Notification center
+A single feed grouped by day, where each notice carries an in-place quick action; suits short, frequent notices that need quick handling.
+:::TuffDemoWrapper{demo="TemplateInboxNotificationsDemo" code-lang="vue" description="Click the list, then J / K to move, E to toggle read, and X to select; quick actions run in place with Undo. Sample data."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // During do-not-disturb new notices slip in and are counted; security notices
+  // still alert while "break through" is on
+  function deliver(notice: Notice) {
+    notices.value.unshift(notice)
+    if (dndActive.value && !(notice.urgent && dnd.bypass)) {
+      silenced.value += 1
+      return
+    }
+    showArrival(notice)
+  }
+
+  // Quick actions only ever run from the reader's click: playback delivers
+  // notices and never approves anything on your behalf
+  function runAction(notice: Notice, action: ActionId) {
+    notice.unread = false
+    notice.result = notice.results[action] ?? null
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Notification center" :height="580" @enter="startArrivals">
+      <TxModeChip
+        :label="dndActive ? 'Do not disturb · until 11:30' : 'Notifications on'"
+        :icon="dndActive ? 'i-carbon-notification-off' : 'i-carbon-notification'"
+        :tone="dndActive ? 'warning' : 'muted'"
+        @click="toggleDnd"
+      />
+      <TxFilterChips v-model="kind" :items="kindItems" aria-label="Filter by type" />
+
+      <section v-for="group in groups" :key="group.key">
+        <TxCardItem
+          v-for="notice in group.items"
+          :key="notice.id"
+          role="article"
+          clickable
+          :tabindex="notice.id === tabStop ? 0 : -1"
+          @click="markReadAndOpen(notice)"
+        >
+          <template #description>
+            {{ notice.body }}
+            <!-- A button click must not bubble into "mark read and open" -->
+            <span @click.stop>
+              <TxStatusBadge v-if="notice.result" :text="notice.result.text" :status="notice.result.tone" />
+              <template v-else>
+                <TxButton v-for="action in notice.actions" :key="action" size="sm" @click="runAction(notice, action)">…</TxButton>
+              </template>
+            </span>
+          </template>
+        </TxCardItem>
+      </section>
+
+      <TxCollapse v-model="snoozeOpen">
+        <TxCollapseItem name="snoozed" title="Snoozed · 2">…</TxCollapseItem>
+      </TxCollapse>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## Overview
+
+The mail and notification center of a Tuff account: hundreds of messages to skim, move through by keyboard, and answer in place, without new mail interrupting the read.
+
+- With focus inside, ↑ / ↓ or J / K move, E archives, S stars, and Enter focuses the reply box; single-letter keys do nothing inside a text field.
+- Three new messages arrive once it scrolls into view; if you have scrolled down, they land above the viewport and the list stays put; reduced motion shows them from the start.
+- In the reply box Enter adds a line and ⌘ / Ctrl + Enter sends; Archive and Move to apply at once and can be undone.
+- Expanded (≥ 960px) a fixed 216px sidebar takes over; below 640px only the list shows, the reader slides in from the right, and Esc returns.
+- Notification center: quick actions run in place and can be undone; approve, decline, and it was me / not me only ever come from your own click.
+- Notification center: J / K move, E toggles read, X selects and enters select mode, and Esc leaves it; the ⋯ menu snoozes a notice or mutes its source.
+- Notification center: during do-not-disturb new notices slip in and are counted, and security notices still alert while break-through is on; expanded, the settings stay open on the right.
+
+## Customization
+
+- For bigger mailboxes, keep a fixed row height (`item-height`) and move search and paging to the server; fill `aria-setsize` and `aria-posinset` from the real totals.
+- When bodies come from outside, keep TxMarkdownView's default sanitizing and intercept link clicks in the host.
+- Rebind the shortcuts as needed, but keep them on the component root and let single-letter keys through in editable elements.
+- The host owns attachment upload: TxChatComposer only hands over File objects, and the host creates and revokes the object URLs.
+- Notification center: for real push, let one set of quiet-hours and source settings decide whether a notice alerts; take quick-action results from the server, and on failure keep the original buttons.
+
+## Related components
+
+| Region | Components | Role |
+|---|---|---|
+| Navigation (expanded) | [TxSidebarNav](/en/sidebar-nav), [TxDotIndicator](/en/dot-indicator) | Mailboxes, labels, unread counts |
+| Folders (column and narrow) | [TxFilterChips](/en/filter-chips) | Same folders, with unread counts |
+| Header | [TxSearchInput](/en/search-input), [TxButton](/en/button), [TxKbd](/en/kbd) | Search, Compose, shortcut hints |
+| Split | [TxSplitter](/en/splitter) | Divider between list and reader |
+| Message list | [TxVirtualList](/en/virtual-list), [TxAvatar](/en/avatar), [TxDotIndicator](/en/dot-indicator), [TxTag](/en/tag), [TxIconButton](/en/button), [TxBadge](/en/badge), [TxDropdownMenu](/en/dropdown-menu), [TxSkeleton](/en/skeleton) | Virtual list of about 160 messages |
+| Empty states | [TxSearchEmpty](/en/search-empty), [TxEmptyState](/en/empty-state), [TxNoSelection](/en/no-selection) | No results, empty, nothing selected |
+| Reader | [TxMessageActions](/en/message-actions), [TxDropdownMenu](/en/dropdown-menu), [TxMarkdownView](/en/markdown-view), [TxAttachmentTray](/en/attachment-tray) | Body, attachments, thread, actions |
+| Reply | [TxChatComposer](/en/chat-composer), [TxAttachmentTray](/en/attachment-tray) | Shortcut send and attachments |
+| Notifications | [TxToastPanel](/en/toast-panel) | View and Undo notices |
+| Header (Notification center) | [TxBadge](/en/badge), [TxModeChip](/en/mode-chip), [TxButton](/en/button), [TxIconButton](/en/button), [TxPopover](/en/popover) | Unread, do-not-disturb, select mode |
+| Type filter (Notification center) | [TxFilterChips](/en/filter-chips), [TxSwitch](/en/switch) | Type filter and Unread only |
+| Notice rows (Notification center) | [TxCardItem](/en/card-item), [TxAvatar](/en/avatar), [TxIconChip](/en/icon-chip), [TxDotIndicator](/en/dot-indicator), [TxTag](/en/tag), [TxStatusBadge](/en/status-badge) | Avatar, unread dot, quick actions |
+| Row menu (Notification center) | [TxDropdownMenu / TxDropdownSubmenu](/en/dropdown-menu) | Snooze, mute, delete |
+| Bulk (Notification center) | [TxCheckbox](/en/checkbox), [TxButton](/en/button) | Group select and bulk bar |
+| Snoozed (Notification center) | [TxCollapse / TxCollapseItem](/en/collapse) | Collapsed list you can unsnooze |
+| Settings (Notification center) | [TxSwitch](/en/switch), [TxSelect](/en/select), [TxFlatRadio](/en/flat-radio), [TxIconChip](/en/icon-chip), [TxTooltip](/en/tooltip) | Quiet hours and per-source delivery |
+| Empty states (Notification center) | [TxEmptyState](/en/empty-state) | Clear filters or see snoozed |

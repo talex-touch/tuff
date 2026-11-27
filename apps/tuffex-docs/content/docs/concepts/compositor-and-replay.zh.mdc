@@ -1,0 +1,87 @@
+---
+title: 合成器线程优先与双 Keyframe 重放
+description: 高频与循环动画绝不可引起排版重排；四大合成器属性保障与双 Keyframe 名字交替规避重排技巧。
+---
+
+# 合成器线程优先与双 Keyframe 重放
+
+界面丝滑度的决定性门槛在于：动画能否整段交给合成器线程（Compositor Thread），不被主线程上的排版重排拖累。合成器线程本身是一条 CPU 线程（Chromium 里位于渲染进程），它把已经栅格化的图层交给 GPU 拼合，并不跑在 GPU 上。
+
+## 为什么高频动画绝不可引起排版重排？
+
+浏览器渲染管线分为三级：
+1. **Layout（排版重排）**：计算元素几何尺寸与流式位置（耗时极高）。
+2. **Paint（像素重绘）**：计算颜色、文本抗锯齿与阴影。
+3. **Composite（合成器合成）**：GPU 将图层直接拼接合成（极低耗时，零主线程依赖）。
+
+如果动画改变了 `width`、`height`、`margin` 或 `top/left`，浏览器在每一帧都必须被迫重新执行整页排版重排，瞬间导致 60Hz/120Hz 帧率暴跌。
+
+## 四大合成器安全金刚属性
+
+TuffEx 强制规定：所有高频动效、微交互和循环背景动效，**严格只能使用四大合成属性**：
+
+- **`translate`**（位置移动，使用独立 CSS translate 属性而非 transform 复合矩阵）
+- **`scale`**（缩放变换）
+- **`rotate`**（旋转变换）
+- **`opacity`**（透明度渐变）
+
+这四项属性的动画可以整个交给合成器线程：元素提升为独立图层、栅格化一次之后，每一帧只需对这张现成的图层做位移、缩放、旋转或调整透明度再合成，不必重新排版或重绘。所以即便主线程正在执行密集的 JavaScript 计算，动画依然能跟上显示器的刷新率（60Hz、120Hz 或更高）。
+
+:::TuffDemoWrapper{demo="ConceptCompositorDemo"}
+:::
+
+一次性的尺寸形变不受这条规定约束，例如折叠面板展开、TxTransitionSmoothSize 跟着内容长高。它们要把后面的内容推开，只靠这四项属性做不到，所以允许改动排版。它们不循环，也不跟着指针高频触发，每次状态切换只跑一次。里面的内容按完整尺寸排好不动，每一帧浏览器只是重新摆放后面的元素，不会重新折行。折叠面板的写法是 `style/mixins.scss` 里的 `bui-disclosure-collapse`。
+
+## Keyframes 里能写 CSS 变量吗？
+
+能。动画开始时，浏览器按元素把关键帧里的 `var()` 解析成具体值，再把整段动画交给合成器，和直接写数值一样；动画途中改了变量，浏览器按新值重新解析，动画接着跑。能不能合成，看的是关键帧动的是哪个属性：
+
+| 关键帧动的是 | 在哪条线程上跑 |
+|---|---|
+| `translate`、`scale`、`opacity`、`transform`，写不写 `var()` 都一样 | 合成器 |
+| `filter: blur()`、`box-shadow`、`color`、`width`，写不写 `var()` 都一样 | 主线程 |
+| 自定义属性本身，再由 `transform` 之类读取 | 主线程 |
+
+第二行就是上文说的非合成属性。第三行容易被当成能合成：自定义属性每一帧都在主线程上插值，读它的 `transform` 本身不是动画，只是每帧跟着重算样式。要动哪个合成属性，就直接给它写关键帧，变量只用来给起点、终点、幅度这类值：
+
+:::TuffCodeBlock{lang="scss"}
+---
+code: |
+  // 合成器：变量只给起点（TxBadge 的入场位移）
+  @keyframes tx-badge-slide-in {
+    from { translate: var(--tx-badge-offset-x, -8.2px) var(--tx-badge-offset-y, 12.4px); }
+    to { translate: 0 0; }
+  }
+
+  // 主线程：动的是自定义属性 --pulse，transform 只是每帧跟着重算
+  @property --pulse { syntax: '<number>'; inherits: false; initial-value: 1; }
+  @keyframes bad-pulse { 50% { --pulse: 1.08; } }
+  .element { transform: scale(var(--pulse)); animation: bad-pulse 1.2s ease-out; }
+---
+:::
+
+以上是 2026-10 在 Chromium 152 里用 DevTools 时间线跟踪核对的结果，WebKit 与 Gecko 没有实测。
+
+## 双 Keyframe 名字交替重放技巧
+
+当需要“在同一元素上重新播放一次动画”（例如表单校验失败时晃动卡片）：
+传统做法是使用 `void el.offsetWidth` 强制刷新 DOM，这会在主线程引发一次极度昂贵的强制同步重排。
+
+TuffEx 采用双 Keyframe 翻转技巧：
+
+:::TuffCodeBlock{lang="scss"}
+---
+code: |
+  // 声明两个逻辑完全相同、名称不同的 Keyframe
+  @keyframes tx-pulse-a { 30% { scale: 1.1; } }
+  @keyframes tx-pulse-b { 30% { scale: 1.1; } }
+
+  .tx-box.is-pulse-a { animation: tx-pulse-a 240ms ease-out; }
+  .tx-box.is-pulse-b { animation: tx-pulse-b 240ms ease-out; }
+---
+:::
+
+JavaScript 每次重播只需切换 `is-pulse-a` 与 `is-pulse-b` 类名。由于动画名称改变，浏览器会自动重播动画，**全过程零 DOM 重排开销**！
+
+:::TuffDemoWrapper{demo="ConceptKeyframeReplayDemo"}
+:::
