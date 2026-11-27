@@ -11,7 +11,6 @@ import tuffexPkg from '../../../../../packages/tuffex/package.json'
 // admits it, and the specimen wrapper adds the reset button that remounts it so
 // its entrance can be watched again.
 import ClientOnly from './gallery/GallerySpecimenGate.vue'
-import GalleryBaseSuite from './gallery/GalleryBaseSuite.vue'
 import DocsGalleryFrameworkBar from './DocsGalleryFrameworkBar.vue'
 import { galleryText } from './gallery/gallery-text'
 import { createSpecimenQueue, SPECIMEN_QUEUE_KEY } from './gallery/specimen-queue'
@@ -23,6 +22,7 @@ const props = defineProps<{ suite: Exclude<DocsSuiteKey, 'concepts' | 'templates
 // One queue per gallery, so this page's specimens mount in document order.
 provide(SPECIMEN_QUEUE_KEY, createSpecimenQueue())
 const galleryAmicroSpecimen = shallowRef<Component | null>(null)
+const GalleryBaseSuite = defineAsyncComponent(() => import('./gallery/GalleryBaseSuite.vue'))
 const GalleryChartLegend = defineAsyncComponent(() => import('./gallery/GalleryChartLegend.vue'))
 const GalleryChoiceCard = defineAsyncComponent(() => import('./gallery/GalleryChoiceCard.vue'))
 const GalleryChoroplethMap = defineAsyncComponent(() => import('./gallery/GalleryChoroplethMap.vue'))

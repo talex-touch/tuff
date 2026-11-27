@@ -1534,7 +1534,7 @@ const showPanelFooter = computed(() =>
 .tx-date-picker-calendar__cell.is-selected {
   color: var(--tx-color-on-primary, #fff);
   background: var(--tx-color-primary, #409eff);
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, transparent);
+  box-shadow: 1px 2px 6px color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, transparent);
   animation: tx-date-pick 220ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
 }
 

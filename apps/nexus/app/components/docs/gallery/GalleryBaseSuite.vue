@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import './GalleryBaseSuite.css'
 import type { FileUploaderFile } from '@tuffex-components/file-uploader'
 import type { FormRules, FormValues } from '@tuffex-components/form'
 import type { IconPickerShape } from '@tuffex-components/icon-picker'
