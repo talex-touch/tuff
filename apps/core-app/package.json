@@ -90,7 +90,7 @@
     "check:app-root-single-source:self-test": "node scripts/check-app-root-single-source.mjs --self-test"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.141",
+    "@anthropic-ai/claude-agent-sdk": "0.3.331",
     "@arrow-js/core": "1.0.6",
     "@earendil-works/pi-agent-core": "0.85.1",
     "@earendil-works/pi-ai": "0.85.1",
