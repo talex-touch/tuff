@@ -69,6 +69,12 @@ export default defineConfig({
         chunkFileNames: 'chunks/[name].js',
         manualChunks(id) {
           const normalized = id.replace(/\\/g, '/')
+          // Isolate Vue SFC & Vite virtual helpers into zero-dependency leaf chunks
+          // so Rollup can never create circular chunk TDZ on `_export_sfc`.
+          if (normalized.includes('plugin-vue:export-helper'))
+            return 'vue-export-helper'
+          if (normalized.includes('vite/preload-helper'))
+            return 'vite-preload-helper'
           if (normalized.includes('/src/runtime/'))
             return 'wc-runtime'
           if (normalized.includes('/src/elements/tier-a'))
@@ -77,60 +83,23 @@ export default defineConfig({
             return 'tier-b'
           if (normalized.includes('/src/elements/tier-c'))
             return 'tier-c'
-          if (normalized.includes('/packages/tuffex/packages/utils/'))
-            return 'tuffex-shared'
-          const tuffexMatch = normalized.match(/\/packages\/tuffex\/packages\/components\/src\/([^/]+)\//)
-          if (tuffexMatch) {
-            const comp = tuffexMatch[1]!
-            if ([
-              'markdown-view',
-              'stream-text',
-              'thinking-indicator',
-              'typing-indicator',
-            ].includes(comp)) {
-              return 'tier-c'
-            }
-            if ([
-              'base-anchor',
-              'card-item',
-              'checkbox',
-              'collapse',
-              'copy-button',
-              'dialog',
-              'drawer',
-              'input',
-              'modal',
-              'popover',
-              'progress-bar',
-              'radio',
-              'search-input',
-              'select',
-              'slider',
-              'tabs',
-              'textarea',
-              'tooltip',
-            ].includes(comp)) {
-              return 'tier-b'
-            }
-            if ([
-              'alert',
-              'avatar',
-              'badge',
-              'dot-indicator',
-              'empty',
-              'empty-state',
-              'kbd',
-              'no-data',
-              'progress',
-              'skeleton',
-              'stat-card',
-              'status-badge',
-              'status-hint',
-              'switch',
-              'tag',
-            ].includes(comp)) {
-              return 'tier-a'
-            }
+          if (normalized.includes('/src/elements/base-a'))
+            return 'base-a'
+          if (normalized.includes('/src/elements/base-b'))
+            return 'base-b'
+          // Keep dynamically imported icon-picker glyph tables & lazy image-generation effects on-demand
+          if (
+            normalized.includes('/packages/tuffex/packages/components/src/icon-picker/src/generated/')
+            || normalized.includes('/packages/tuffex/packages/components/src/image-generation/')
+          ) {
+            return undefined
+          }
+          // Keep all statically shared TuffEx Vue components & utils in one cycle-free chunk
+          // imported strictly one-way by the element wrapper chunks (`tier-*` / `base-*`).
+          if (
+            normalized.includes('/packages/tuffex/packages/utils/')
+            || normalized.includes('/packages/tuffex/packages/components/src/')
+          ) {
             return 'tuffex-shared'
           }
           return undefined

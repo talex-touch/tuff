@@ -4,6 +4,7 @@ export type PropCoerceKind
     | 'number'
     | 'string-or-number'
     | 'boolean-or-string'
+    | 'boolean-or-json'
     | 'json'
     | 'string-or-json'
     | 'any'
@@ -133,6 +134,34 @@ export function coerceStringOrJson(raw: unknown): unknown {
   return raw
 }
 
+/**
+ * Coerce values that may be either a boolean flag or a JSON object/array
+ * (e.g. `TxForm` `persist: boolean | FormPersistOptions`, `TxScroll` `pullDownRefresh: boolean | object`).
+ */
+export function coerceBooleanOrJson(raw: unknown): unknown {
+  if (raw === undefined || raw === null)
+    return undefined
+  if (typeof raw === 'boolean')
+    return raw
+  if (typeof raw !== 'string')
+    return raw
+  const trimmed = raw.trim()
+  const lower = trimmed.toLowerCase()
+  if (lower === '' || lower === 'true' || lower === '1')
+    return true
+  if (lower === 'false' || lower === '0')
+    return false
+  if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+    try {
+      return JSON.parse(trimmed)
+    }
+    catch {
+      return undefined
+    }
+  }
+  return coerceBoolean(raw)
+}
+
 export function coercePropValue(kind: PropCoerceKind, raw: unknown): unknown {
   if (raw === undefined)
     return undefined
@@ -150,6 +179,8 @@ export function coercePropValue(kind: PropCoerceKind, raw: unknown): unknown {
       return coerceStringOrNumber(raw)
     case 'boolean-or-string':
       return coerceBooleanOrString(raw)
+    case 'boolean-or-json':
+      return coerceBooleanOrJson(raw)
     case 'json':
       return coerceJson(raw)
     case 'string-or-json':

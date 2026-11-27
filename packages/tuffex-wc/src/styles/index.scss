@@ -2,7 +2,35 @@
 // 1) Base design tokens (--tx-*), dark & high-contrast themes, and core utilities
 @use '@tuffex-style/index.scss';
 
-// 2) Zero-specificity default host layout for custom element tags (Light DOM friendly)
+// 2) Semantic container regions (used by <tx-header>, <tx-aside>, <tx-main>, <tx-footer>)
+.tx-header,
+.tx-footer {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.tx-aside {
+  display: block;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.tx-main {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.tx-toast--inline {
+  position: relative;
+  pointer-events: auto;
+}
+
+// 3) Zero-specificity default host layout for custom element tags (Light DOM friendly)
 :where(
   tx-button,
   tx-badge,
@@ -19,7 +47,23 @@
   tx-radio-group,
   tx-tooltip,
   tx-popover,
-  tx-stream-text
+  tx-stream-text,
+  tx-icon,
+  tx-icon-chip,
+  tx-cell-link,
+  tx-breadcrumb-item,
+  tx-rating,
+  tx-filter-chips,
+  tx-flat-radio,
+  tx-flat-radio-item,
+  tx-flat-select,
+  tx-flat-select-item,
+  tx-scrub-field,
+  tx-dropdown-menu,
+  tx-flat-dropdown,
+  tx-icon-picker,
+  tx-tab-item,
+  tx-select-item
 ) {
   display: inline-block;
   box-sizing: border-box;
@@ -41,19 +85,90 @@
   tx-collapse,
   tx-collapse-item,
   tx-select,
-  tx-markdown-view
+  tx-markdown-view,
+  tx-container,
+  tx-header,
+  tx-aside,
+  tx-main,
+  tx-footer,
+  tx-flex,
+  tx-grid,
+  tx-grid-layout,
+  tx-stack,
+  tx-splitter,
+  tx-scroll,
+  tx-group-block,
+  tx-block-line,
+  tx-block-slot,
+  tx-block-switch,
+  tx-card-item,
+  tx-layout-skeleton,
+  tx-text,
+  tx-blank-slate,
+  tx-empty-state,
+  tx-error-state,
+  tx-guide-state,
+  tx-loading-state,
+  tx-no-data,
+  tx-no-selection,
+  tx-offline-state,
+  tx-permission-state,
+  tx-search-empty,
+  tx-breadcrumb,
+  tx-nav-bar,
+  tx-sidebar-nav,
+  tx-tab-bar,
+  tx-pagination,
+  tx-steps,
+  tx-loading-overlay,
+  tx-toast,
+  tx-toast-panel,
+  tx-timeline,
+  tx-number-input,
+  tx-search-input,
+  tx-sensitive-input,
+  tx-tag-input,
+  tx-segmented-slider,
+  tx-search-select,
+  tx-cascader,
+  tx-tree,
+  tx-tree-select,
+  tx-date-picker,
+  tx-picker,
+  tx-form,
+  tx-form-error-summary,
+  tx-steps-form,
+  tx-context-menu,
+  tx-context-menu-item,
+  tx-dropdown-item,
+  tx-data-table,
+  tx-descriptions,
+  tx-sortable-list,
+  tx-transfer,
+  tx-file-uploader,
+  tx-image-uploader,
+  tx-image-gallery
 ) {
   display: block;
   box-sizing: border-box;
 }
 
-:where(tx-dialog, tx-drawer) {
+:where(
+  tx-dialog,
+  tx-drawer,
+  tx-modal,
+  tx-modal-form,
+  tx-drawer-form,
+  tx-selection-actions,
+  tx-image-preview,
+  tx-grid-item,
+  tx-step,
+  tx-timeline-item,
+  tx-descriptions-item,
+  tx-form-item,
+  tx-form-row
+) {
   display: contents;
-}
-
-:where(tx-tab-item, tx-select-item) {
-  display: inline-block;
-  box-sizing: border-box;
 }
 
 :where(
@@ -92,7 +207,94 @@
   tx-select,
   tx-select-item,
   tx-stream-text,
-  tx-markdown-view
+  tx-markdown-view,
+  tx-container,
+  tx-header,
+  tx-aside,
+  tx-main,
+  tx-footer,
+  tx-flex,
+  tx-grid,
+  tx-grid-item,
+  tx-grid-layout,
+  tx-stack,
+  tx-splitter,
+  tx-scroll,
+  tx-group-block,
+  tx-block-line,
+  tx-block-slot,
+  tx-block-switch,
+  tx-card-item,
+  tx-layout-skeleton,
+  tx-text,
+  tx-icon,
+  tx-icon-chip,
+  tx-cell-link,
+  tx-blank-slate,
+  tx-empty-state,
+  tx-error-state,
+  tx-guide-state,
+  tx-loading-state,
+  tx-no-data,
+  tx-no-selection,
+  tx-offline-state,
+  tx-permission-state,
+  tx-search-empty,
+  tx-breadcrumb,
+  tx-breadcrumb-item,
+  tx-nav-bar,
+  tx-sidebar-nav,
+  tx-tab-bar,
+  tx-pagination,
+  tx-steps,
+  tx-step,
+  tx-loading-overlay,
+  tx-modal,
+  tx-toast,
+  tx-toast-panel,
+  tx-timeline,
+  tx-timeline-item,
+  tx-number-input,
+  tx-search-input,
+  tx-sensitive-input,
+  tx-tag-input,
+  tx-scrub-field,
+  tx-segmented-slider,
+  tx-rating,
+  tx-filter-chips,
+  tx-flat-radio,
+  tx-flat-radio-item,
+  tx-flat-select,
+  tx-flat-select-item,
+  tx-search-select,
+  tx-cascader,
+  tx-tree,
+  tx-tree-select,
+  tx-date-picker,
+  tx-picker,
+  tx-form,
+  tx-form-item,
+  tx-form-row,
+  tx-form-error-summary,
+  tx-modal-form,
+  tx-drawer-form,
+  tx-steps-form,
+  tx-context-menu,
+  tx-context-menu-item,
+  tx-dropdown-menu,
+  tx-dropdown-item,
+  tx-flat-dropdown,
+  tx-selection-actions,
+  tx-data-table,
+  tx-descriptions,
+  tx-descriptions-item,
+  tx-sortable-list,
+  tx-transfer,
+  tx-file-uploader,
+  tx-image-uploader,
+  tx-image-gallery,
+  tx-image-preview,
+  tx-icon-picker
 )[hidden] {
   display: none !important;
 }
