@@ -1,5 +1,12 @@
 import type { VNode } from 'vue'
 import type { PopoverPlacement } from '../../popover'
+import type {
+  AvatarEditorConfig,
+  AvatarEditorLabels,
+  AvatarEditResult,
+  AvatarEditTrigger,
+  AvatarOutputFormat,
+} from './editor/types'
 
 export type AvatarPresetSize = 'small' | 'medium' | 'large' | 'xlarge'
 export type AvatarSize = AvatarPresetSize | number | `${number}` | `${number}px`
@@ -19,12 +26,45 @@ export interface AvatarProps {
   status?: AvatarStatus
   shape?: AvatarShape
   clickable?: boolean
+  /** Enables interactive upload, crop, rotate, frame capture and format conversion. */
+  editable?: boolean
+  /** Disables editing interaction when `editable` is enabled. */
+  disabled?: boolean
+  /** `'editor'` opens the modal directly; `'upload'` opens the file picker first and launches the editor once a file is selected. @default 'editor' */
+  editTrigger?: AvatarEditTrigger
+  /** Accessible label for the edit affordance. @default 'Edit avatar' */
+  editLabel?: string
+  /** Accepted file types passed to the uploader and file picker. */
+  accept?: string
+  /** Default output format in the editor. @default 'png' */
+  outputFormat?: AvatarOutputFormat
+  /** Restrict selectable output formats in the editor. */
+  allowedOutputFormats?: AvatarOutputFormat[]
+  /** Allow switching output formats client-side. @default true */
+  allowFormatConversion?: boolean
+  /** Default output pixel width/height. @default 512 */
+  outputSize?: number
+  /** Default lossy encoding quality (`0.1` to `1`). @default 0.92 */
+  outputQuality?: number
+  /** Allow MP4/WebM/MOV video frame & clip extraction. @default true */
+  allowVideoCapture?: boolean
+  /** Allow animated GIF clip export from GIF and video sources. @default true */
+  allowGifAnimation?: boolean
+  /** Localization overrides for the built-in editor UI. */
+  editorLabels?: Partial<AvatarEditorLabels>
+  /** Additional configuration forwarded to `TxAvatarEditor`. */
+  editorProps?: Partial<AvatarEditorConfig>
   backgroundColor?: string
   textColor?: string
 }
 
 export interface AvatarEmits {
-  click: []
+  'click': []
+  'update:src': [src: string]
+  'edit': [result: AvatarEditResult]
+  'edit-open': []
+  'edit-cancel': []
+  'edit-error': [error: Error]
 }
 
 export interface AvatarGroupProps {

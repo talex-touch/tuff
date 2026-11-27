@@ -20,6 +20,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   AutoSizerAutoSizerWidthDemo: () => import('./demos/AutoSizerAutoSizerWidthDemo.vue'),
   AutoSizerAutoSizerWidthInFlexDemo: () => import('./demos/AutoSizerAutoSizerWidthInFlexDemo.vue'),
   AvatarBasicDemo: () => import('./demos/AvatarBasicDemo.vue'),
+  AvatarEditableDemo: () => import('./demos/AvatarEditableDemo.vue'),
   AvatarGroupDemo: () => import('./demos/AvatarGroupDemo.vue'),
   AvatarGroupHoverDemo: () => import('./demos/AvatarGroupHoverDemo.vue'),
   AvatarGroupPopoverDemo: () => import('./demos/AvatarGroupPopoverDemo.vue'),

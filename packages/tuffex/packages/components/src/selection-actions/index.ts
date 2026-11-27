@@ -12,6 +12,10 @@ import type {
 } from './src/use-selection-anchor'
 import { withInstall } from '../../../utils/withInstall'
 import TxSelectionActions from './src/TxSelectionActions.vue'
+import {
+  registerSelectionHighlight,
+  TX_SELECTION_HIGHLIGHT_NAME,
+} from './src/selection-highlight'
 import { resolveSelectionPayload, useSelectionAnchor } from './src/use-selection-anchor'
 
 /**
@@ -38,7 +42,14 @@ import { resolveSelectionPayload, useSelectionAnchor } from './src/use-selection
  */
 const SelectionActions = withInstall(TxSelectionActions)
 
-export { resolveSelectionPayload, SelectionActions, TxSelectionActions, useSelectionAnchor }
+export {
+  registerSelectionHighlight,
+  resolveSelectionPayload,
+  SelectionActions,
+  TX_SELECTION_HIGHLIGHT_NAME,
+  TxSelectionActions,
+  useSelectionAnchor,
+}
 export type {
   ResolveSelectionInput,
   SelectionActionItem,

@@ -139,7 +139,7 @@ Returns `{ selection, clear }`: `selection` is a `Ref<SelectionPayload | null>`,
 
 - The anchor is the bottom of the selection's last line, centered on the whole selection. The bar never flips (`disableFlip`); it is only shifted back into the viewport horizontally.
 - The anchor is a virtual reference, so `floating-ui` won't follow text reflow; the host calls `updatePosition()` while streaming, and the component handles resize and scroll.
-- `selection` is a snapshot: focusing the field clears the browser selection, but actions still target the payload passed in.
+- `selection` is a snapshot: focusing the field clears the browser's native selection, so the bar preserves a visual tint over `selection.range` via the CSS Custom Highlight API (`::highlight(tx-selection-actions)`) while actions target the payload passed in.
 - The root swallows `pointerdown`, so pressing a button neither moves focus nor destroys the selection, except inside an `input`, `textarea`, or `contenteditable`. Safari and Firefox differ in caret behavior afterward; verify on real browsers.
 - The root is `role="group"`, leaving arrow keys to the field's caret; folded actions, and the send control while `prompt` is empty, stay out of the tab order.
 - The entrance is a spring that overshoots its end value; under reduced motion it is dropped, the width tween is skipped, and the bar rests on its visible end state.

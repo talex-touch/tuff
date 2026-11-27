@@ -503,11 +503,12 @@ const emptyStateStyleAliases = [
 // Declare that exact new edge for the existing consumers of the surface stack.
 const onDemandImportBudgets = [
   {
-    // TxAvatarGroup's overflow popover is opt-in at runtime but statically imported,
-    // so `avatar` now carries the whole anchor stack. Declared rather than left
-    // implicit: this is the edge that would otherwise grow unnoticed.
+    // TxAvatarGroup's overflow popover and TxAvatarEditor (TxModal + TxFileUploader)
+    // are opt-in at runtime but statically imported from `avatar`, so `avatar` carries
+    // the anchor stack, modal, and file-uploader. Declared explicitly so unexpected
+    // growth still fails the audit.
     subpath: 'avatar',
-    allowedComponentDirs: ['avatar', 'base-anchor', 'base-surface', 'card', 'flow-light', 'glass-surface', 'icon', 'popover', 'spinner', 'tooltip'],
+    allowedComponentDirs: ['avatar', 'base-anchor', 'base-surface', 'card', 'file-uploader', 'flow-light', 'glass-surface', 'icon', 'modal', 'popover', 'spinner', 'tooltip'],
     forbiddenStaticSpecifierPrefixes: ['gsap'],
   },
   {

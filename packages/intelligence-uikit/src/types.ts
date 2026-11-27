@@ -486,6 +486,7 @@ export interface TxAiToolCallProps {
   toolCall?: AiToolCallPart;
   defaultExpanded?: boolean;
   userOpen?: boolean;
+  autoExpandDelayMs?: number;
   showRetry?: boolean;
   labels?: Record<string, string>;
 }

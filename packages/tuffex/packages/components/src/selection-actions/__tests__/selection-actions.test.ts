@@ -1,6 +1,7 @@
 import type { SelectionPayload } from '../src/types'
 import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
+import { TX_SELECTION_HIGHLIGHT_NAME } from '../src/selection-highlight'
 import TxSelectionActions from '../src/TxSelectionActions.vue'
 
 function rect(top: number, bottom: number, left: number, right: number): DOMRect {
@@ -317,5 +318,56 @@ describe('txSelectionActions', () => {
     const onInput = new MouseEvent('pointerdown', { bubbles: true, cancelable: true })
     input.dispatchEvent(onInput)
     expect(onInput.defaultPrevented, 'a press on the prompt must still focus it').toBe(false)
+  })
+
+  it('paints a persistent CSS Custom Highlight on the selected range when the prompt field takes focus and cleans up on dismiss', async () => {
+    const registry = new Map<string, Set<AbstractRange>>()
+    class MockHighlight extends Set<AbstractRange> {}
+    const origCss = (globalThis as { CSS?: unknown }).CSS
+    const origHighlight = (globalThis as { Highlight?: unknown }).Highlight
+    Object.defineProperty(globalThis, 'CSS', {
+      configurable: true,
+      value: { highlights: registry },
+    })
+    Object.defineProperty(globalThis, 'Highlight', {
+      configurable: true,
+      value: MockHighlight,
+    })
+
+    try {
+      const p = document.createElement('p')
+      p.textContent = '稍微玄幻一点的段落文本'
+      document.body.appendChild(p)
+      const range = document.createRange()
+      range.setStart(p.firstChild!, 0)
+      range.setEnd(p.firstChild!, 6)
+
+      // Simulate an active native selection when the bar first opens.
+      const nativeSel = window.getSelection()
+      nativeSel?.removeAllRanges()
+      nativeSel?.addRange(range.cloneRange())
+
+      const wrapper = mountBar({ selection: selection({ range }) })
+      await wrapper.vm.$nextTick()
+
+      // While native selection is active and bar is idle + unfocused, do not double-paint.
+      expect(registry.has(TX_SELECTION_HIGHLIGHT_NAME)).toBe(false)
+
+      // Focusing the prompt input collapses native selection -> persistent highlight activates immediately.
+      const input = document.querySelector('.tx-bui-selection-actions__input')! as HTMLInputElement
+      nativeSel?.removeAllRanges()
+      input.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      await wrapper.vm.$nextTick()
+
+      expect(registry.get(TX_SELECTION_HIGHLIGHT_NAME)?.has(range)).toBe(true)
+
+      // Clearing selection removes the custom highlight cleanly.
+      await wrapper.setProps({ selection: null })
+      expect(registry.has(TX_SELECTION_HIGHLIGHT_NAME)).toBe(false)
+    }
+    finally {
+      Object.defineProperty(globalThis, 'CSS', { configurable: true, value: origCss })
+      Object.defineProperty(globalThis, 'Highlight', { configurable: true, value: origHighlight })
+    }
   })
 })

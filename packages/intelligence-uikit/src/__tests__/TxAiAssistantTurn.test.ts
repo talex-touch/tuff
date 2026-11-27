@@ -138,19 +138,27 @@ describe('txAiAssistantTurn presentation and actions', () => {
   })
 
   it('preserves independent open and closed choices after a streaming rollback remounts and realigns segments', async () => {
-    const reasoning = (id: string, status: 'active' | 'done'): TxAiSegment => ({ kind: 'reasoning', id, step: { id, kind: 'thinking', title: id, body: 'Reasoning detail', status } })
-    const openThought = reasoning('open-thought', 'done')
-    const closedThought = reasoning('closed-thought', 'active')
-    const openTool = segment(tool({ id: 'open-tool', name: 'open-tool' }))
-    const closedTool = segment(tool({ id: 'closed-tool', name: 'closed-tool', status: 'running' }))
-    const wrapper = mountTurn({ streaming: true, segments: [openThought, closedThought, openTool, closedTool] })
-    const header = (text: string) => wrapper.findAll('button[aria-expanded]').find(button => button.text().includes(text))!
-    for (const id of ['open-thought', 'closed-thought', 'open-tool', 'closed-tool']) await header(id).trigger('click')
-    const expected = { 'open-thought': 'true', 'closed-thought': 'false', 'open-tool': 'true', 'closed-tool': 'false' }
-    for (const [id, open] of Object.entries(expected)) expect(header(id).attributes('aria-expanded')).toBe(open)
-    // A rollback temporarily withdraws segments before a delta rebuilds the ordered trail.
-    await wrapper.setProps({ segments: [{ kind: 'text', id: 'delta', text: 'New answer', streaming: true }] })
-    await wrapper.setProps({ segments: [closedTool, reasoning('closed-thought', 'active'), openTool, reasoning('open-thought', 'done')] })
-    for (const [id, open] of Object.entries(expected)) expect(header(id).attributes('aria-expanded')).toBe(open)
+    vi.useFakeTimers()
+    try {
+      const reasoning = (id: string, status: 'active' | 'done'): TxAiSegment => ({ kind: 'reasoning', id, step: { id, kind: 'thinking', title: id, body: 'Reasoning detail', status } })
+      const openThought = reasoning('open-thought', 'done')
+      const closedThought = reasoning('closed-thought', 'active')
+      const openTool = segment(tool({ id: 'open-tool', name: 'open-tool' }))
+      const closedTool = segment(tool({ id: 'closed-tool', name: 'closed-tool', status: 'running' }))
+      const wrapper = mountTurn({ streaming: true, segments: [openThought, closedThought, openTool, closedTool] })
+      // Let the running tool cross the default 500ms quiet window so it auto-expands before the user folds it.
+      await vi.advanceTimersByTimeAsync(500)
+      const header = (text: string) => wrapper.findAll('button[aria-expanded]').find(button => button.text().includes(text))!
+      for (const id of ['open-thought', 'closed-thought', 'open-tool', 'closed-tool']) await header(id).trigger('click')
+      const expected = { 'open-thought': 'true', 'closed-thought': 'false', 'open-tool': 'true', 'closed-tool': 'false' }
+      for (const [id, open] of Object.entries(expected)) expect(header(id).attributes('aria-expanded')).toBe(open)
+      // A rollback temporarily withdraws segments before a delta rebuilds the ordered trail.
+      await wrapper.setProps({ segments: [{ kind: 'text', id: 'delta', text: 'New answer', streaming: true }] })
+      await wrapper.setProps({ segments: [closedTool, reasoning('closed-thought', 'active'), openTool, reasoning('open-thought', 'done')] })
+      for (const [id, open] of Object.entries(expected)) expect(header(id).attributes('aria-expanded')).toBe(open)
+    }
+    finally {
+      vi.useRealTimers()
+    }
   })
 })
