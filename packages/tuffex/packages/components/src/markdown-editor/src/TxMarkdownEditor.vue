@@ -1370,6 +1370,10 @@ defineExpose({
       :offset="8"
       :width="320"
       :max-width="320"
+      panel-variant="solid"
+      panel-background="refraction"
+      panel-shadow="soft"
+      :panel-radius="18"
       :panel-padding="12"
     >
       <MarkdownEditorPrompt
@@ -1395,9 +1399,13 @@ defineExpose({
       :virtual-reference="suggestReference"
       placement="bottom-start"
       :offset="6"
-      :min-width="220"
-      :max-width="280"
-      :panel-padding="4"
+      :min-width="228"
+      :max-width="288"
+      panel-variant="solid"
+      panel-background="refraction"
+      panel-shadow="soft"
+      :panel-radius="18"
+      :panel-padding="8"
     >
       <MarkdownEditorEmojiSuggest
         v-if="suggest"
@@ -1484,6 +1492,13 @@ $checkbox-tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
   --tx-markdown-editor-ai-3: var(--tx-stream-reveal-3, oklch(62% 0.13 350));
   --tx-markdown-editor-pad-x: 20px;
   --tx-markdown-editor-pad-y: 16px;
+  // Concentric menu geometry matching TxDropdownMenu (outer 18px = inner 10px + panel padding 8px).
+  --tx-markdown-editor-menu-padding: 8px;
+  --tx-markdown-editor-menu-gap: 2px;
+  --tx-markdown-editor-menu-radius: 18px;
+  --tx-markdown-editor-menu-item-radius: 10px;
+  --tx-markdown-editor-menu-item-padding: 7px 10px;
+  --tx-markdown-editor-menu-item-gap: 10px;
 
   color: var(--tx-markdown-editor-text);
 }
@@ -1838,8 +1853,8 @@ $checkbox-tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
   // The code theme's colours when it has loaded; `currentColor` is the inherited colour.
   pre {
     position: relative;
-    padding: 12px;
-    border-radius: 8px;
+    padding: 12px 14px;
+    border-radius: 10px;
     border: 1px solid var(--tx-markdown-editor-border);
     background: var(--tx-markdown-editor-code-bg, color-mix(in srgb, currentColor 5%, transparent));
     color: var(--tx-markdown-editor-code-fg, currentColor);
@@ -1858,7 +1873,7 @@ $checkbox-tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
     top: 6px;
     right: 8px;
     padding: 0 6px;
-    border-radius: 4px;
+    border-radius: 5px;
     background: inherit;
     color: color-mix(in srgb, currentColor 55%, transparent);
     font-family: $mono;
@@ -1869,11 +1884,23 @@ $checkbox-tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
   }
 
   blockquote {
-    padding: 10px 14px;
-    border-left: 4px solid color-mix(in srgb, var(--tx-markdown-editor-accent) 55%, transparent);
-    border-radius: 0 8px 8px 0;
+    position: relative;
+    padding: 10px 14px 10px 16px;
+    border: 0;
+    border-radius: 10px;
+    overflow: hidden;
     background: color-mix(in srgb, var(--tx-markdown-editor-accent) 7%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-markdown-editor-accent) 16%, transparent);
     color: var(--tx-markdown-editor-muted);
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 3.5px;
+      background: color-mix(in srgb, var(--tx-markdown-editor-accent) 62%, transparent);
+      pointer-events: none;
+    }
 
     > :last-child {
       margin-bottom: 0;
@@ -1884,9 +1911,13 @@ $checkbox-tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
   .tx-markdown-editor__callout {
     --tx-markdown-editor-callout: var(--tx-markdown-editor-callout-note);
 
-    border-left-color: var(--tx-markdown-editor-callout);
     background: color-mix(in srgb, var(--tx-markdown-editor-callout) 8%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-markdown-editor-callout) 20%, transparent);
     color: var(--tx-markdown-editor-text);
+
+    &::before {
+      background: var(--tx-markdown-editor-callout);
+    }
   }
 
   @each $type in tip, important, warning, caution {
@@ -1899,7 +1930,7 @@ $checkbox-tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 2px;
+    margin-bottom: 4px;
     color: var(--tx-markdown-editor-callout);
     font-weight: var(--tx-font-weight-semibold, 600);
   }
@@ -1912,19 +1943,31 @@ $checkbox-tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
 
   table {
     width: 100%;
-    border-collapse: collapse;
-    overflow: auto;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid var(--tx-markdown-editor-border);
+    border-radius: 10px;
+    overflow: hidden;
   }
 
   th,
   td {
-    padding: 8px 10px;
-    border: 1px solid var(--tx-markdown-editor-border);
+    padding: 8px 12px;
+    border-right: 1px solid var(--tx-markdown-editor-border);
+    border-bottom: 1px solid var(--tx-markdown-editor-border);
     text-align: left;
+
+    &:last-child {
+      border-right: 0;
+    }
+  }
+
+  tr:last-child td {
+    border-bottom: 0;
   }
 
   th {
-    background: color-mix(in srgb, currentColor 6%, transparent);
+    background: color-mix(in srgb, currentColor 5%, transparent);
     font-weight: var(--tx-font-weight-semibold, 600);
   }
 

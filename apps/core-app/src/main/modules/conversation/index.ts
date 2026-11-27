@@ -17,7 +17,8 @@ import { fileReviewService, setFileReviewGatewayProvider } from './file-review-s
 import {
   openWorkspaceFileExternal,
   pickWorkspaceFile,
-  readWorkspaceFile
+  readWorkspaceFile,
+  writeWorkspaceFile
 } from './workspace-file-service'
 import {
   checkoutWorkspaceGitBranch,
@@ -158,6 +159,10 @@ export class ConversationModule extends BaseModule<TalexEvents> {
       transport.on(AgentWorkspaceEvents.readFile, (payload, context) => {
         assertHostOwned(context)
         return readWorkspaceFile(payload)
+      }),
+      transport.on(AgentWorkspaceEvents.writeFile, (payload, context) => {
+        assertHostOwned(context)
+        return writeWorkspaceFile(payload)
       }),
       transport.on(AgentWorkspaceEvents.pickFile, (payload, context) => {
         assertHostOwned(context)

@@ -8,7 +8,8 @@ import {
   isSafeExternalOpenPath,
   openWorkspaceFileExternal,
   pickWorkspaceFile,
-  readWorkspaceFile
+  readWorkspaceFile,
+  writeWorkspaceFile
 } from './workspace-file-service'
 
 const tempDirs: string[] = []
@@ -20,6 +21,7 @@ async function makeTempDir(): Promise<string> {
 }
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
 
@@ -184,5 +186,178 @@ describe('workspace-file-service', () => {
       expect(showItemInFolder).toHaveBeenCalledOnce()
     }
     expect(isExecutableFilePath(scriptPath)).toBe(true)
+  })
+
+  it('writes confined text files atomically and enforces mtime conflict, containment, and sensitive-path guards', async () => {
+    const workspaceRoot = await makeTempDir()
+    const outsideDir = await makeTempDir()
+    const docPath = path.join(workspaceRoot, '无名.md')
+    const outsidePath = path.join(outsideDir, 'outside.md')
+    await fs.writeFile(docPath, '# 无名\n\n旧文本。\n', 'utf-8')
+    await fs.writeFile(outsidePath, 'secret', 'utf-8')
+
+    const initial = await readWorkspaceFile(
+      { path: '无名.md', conversationId: 'conv-write-1' },
+      { resolveConversationRoot: async () => workspaceRoot }
+    )
+
+    const written = await writeWorkspaceFile(
+      {
+        path: '无名.md',
+        content: '# 无名\n\n润色后的文本。\n',
+        conversationId: 'conv-write-1',
+        expectedMtimeMs: initial.mtimeMs
+      },
+      { resolveConversationRoot: async () => workspaceRoot }
+    )
+    expect(written.path).toBe(await fs.realpath(docPath))
+    expect(written.size).toBeGreaterThan(0)
+    expect(await fs.readFile(docPath, 'utf-8')).toBe('# 无名\n\n润色后的文本。\n')
+
+    // Stale expectedMtimeMs rejects without overwriting newer content.
+    await expect(
+      writeWorkspaceFile(
+        {
+          path: '无名.md',
+          content: '# 无名\n\n过期覆盖\n',
+          conversationId: 'conv-write-1',
+          expectedMtimeMs: initial.mtimeMs - 5000
+        },
+        { resolveConversationRoot: async () => workspaceRoot }
+      )
+    ).rejects.toThrow('WORKSPACE_FILE_CONFLICT')
+    expect(await fs.readFile(docPath, 'utf-8')).toBe('# 无名\n\n润色后的文本。\n')
+
+    // Escaping workspace root is forbidden.
+    await expect(
+      writeWorkspaceFile(
+        {
+          path: outsidePath,
+          content: 'hacked',
+          conversationId: 'conv-write-1'
+        },
+        { resolveConversationRoot: async () => workspaceRoot }
+      )
+    ).rejects.toThrow('WORKSPACE_FILE_FORBIDDEN')
+
+    // Sensitive paths are forbidden even inside allowed roots.
+    const fakeHome = await makeTempDir()
+    const sshDir = path.join(fakeHome, '.ssh')
+    await fs.mkdir(sshDir)
+    const sshKey = path.join(sshDir, 'config')
+    await fs.writeFile(sshKey, 'Host *', 'utf-8')
+    await expect(
+      writeWorkspaceFile(
+        { path: sshKey, content: 'changed' },
+        { homedir: () => fakeHome, allowedRoots: [fakeHome] }
+      )
+    ).rejects.toThrow('WORKSPACE_FILE_FORBIDDEN')
+  })
+
+  it('rejects writeWorkspaceFile for files only authorized via pickWorkspaceFile preview allowlist', async () => {
+    const workspaceRoot = await makeTempDir()
+    const outsideDir = await makeTempDir()
+    const outsideFile = path.join(outsideDir, 'picked-outside.md')
+    await fs.writeFile(outsideFile, 'original-outside', 'utf-8')
+
+    const picked = await pickWorkspaceFile(
+      {},
+      {
+        openDialog: vi.fn(async () => ({ canceled: false, filePaths: [outsideFile] })) as never
+      }
+    )
+    expect(picked.path).toBe(await fs.realpath(outsideFile))
+
+    // Reading remains permitted for preview.
+    const preview = await readWorkspaceFile({ path: outsideFile })
+    expect(preview.kind).toBe('text')
+    expect(preview.text).toBe('original-outside')
+
+    // Writing must still be forbidden regardless of conversation context.
+    await expect(writeWorkspaceFile({ path: outsideFile, content: 'tampered' })).rejects.toThrow(
+      'WORKSPACE_FILE_FORBIDDEN'
+    )
+
+    await expect(
+      writeWorkspaceFile(
+        { path: outsideFile, content: 'tampered', conversationId: 'conv-other' },
+        { resolveConversationRoot: async () => workspaceRoot }
+      )
+    ).rejects.toThrow('WORKSPACE_FILE_FORBIDDEN')
+
+    expect(await fs.readFile(outsideFile, 'utf-8')).toBe('original-outside')
+  })
+
+  it('serializes concurrent guarded writes so only one succeeds and the second fails with WORKSPACE_FILE_CONFLICT', async () => {
+    const workspaceRoot = await makeTempDir()
+    const docPath = path.join(workspaceRoot, 'concurrent.md')
+    await fs.writeFile(docPath, 'base content\n', 'utf-8')
+
+    const initial = await readWorkspaceFile(
+      { path: 'concurrent.md', conversationId: 'conv-lock' },
+      { resolveConversationRoot: async () => workspaceRoot }
+    )
+
+    const [first, second] = await Promise.allSettled([
+      writeWorkspaceFile(
+        {
+          path: 'concurrent.md',
+          content: 'writer-one-content\n',
+          conversationId: 'conv-lock',
+          expectedMtimeMs: initial.mtimeMs
+        },
+        { resolveConversationRoot: async () => workspaceRoot }
+      ),
+      writeWorkspaceFile(
+        {
+          path: 'concurrent.md',
+          content: 'writer-two-content\n',
+          conversationId: 'conv-lock',
+          expectedMtimeMs: initial.mtimeMs
+        },
+        { resolveConversationRoot: async () => workspaceRoot }
+      )
+    ])
+
+    const outcomes = [first, second]
+    const fulfilled = outcomes.filter((r) => r.status === 'fulfilled')
+    const rejected = outcomes.filter((r) => r.status === 'rejected')
+    expect(fulfilled).toHaveLength(1)
+    expect(rejected).toHaveLength(1)
+    expect(String((rejected[0] as PromiseRejectedResult).reason)).toMatch(/WORKSPACE_FILE_CONFLICT/)
+
+    const diskContent = await fs.readFile(docPath, 'utf-8')
+    const expectedWinner =
+      first.status === 'fulfilled' ? 'writer-one-content\n' : 'writer-two-content\n'
+    expect(diskContent).toBe(expectedWinner)
+  })
+
+  it('returns staged file size and mtimeMs rather than racing with post-rename external overwrites', async () => {
+    const workspaceRoot = await makeTempDir()
+    const docPath = path.join(workspaceRoot, 'staged-stat.md')
+    await fs.writeFile(docPath, 'seed', 'utf-8')
+    const canonical = await fs.realpath(docPath)
+
+    const ourContent = 'short-our-write\n'
+    const externalContent = 'external-concurrent-writer-payload-that-is-much-longer-than-ours\n'
+    const futureTimeMs = Date.now() + 60_000
+
+    const realRename = fs.rename.bind(fs)
+    vi.spyOn(fs, 'rename').mockImplementation(async (oldPath, newPath) => {
+      await realRename(oldPath, newPath)
+      if (String(newPath) === canonical) {
+        await fs.writeFile(canonical, externalContent, 'utf-8')
+        const futureSec = futureTimeMs / 1000
+        await fs.utimes(canonical, futureSec, futureSec)
+      }
+    })
+
+    const result = await writeWorkspaceFile(
+      { path: 'staged-stat.md', content: ourContent, conversationId: 'conv-staged' },
+      { resolveConversationRoot: async () => workspaceRoot }
+    )
+
+    expect(result.size).toBe(Buffer.byteLength(ourContent, 'utf-8'))
+    expect(result.mtimeMs).toBeLessThan(futureTimeMs - 10_000)
   })
 })

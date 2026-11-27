@@ -25,8 +25,22 @@ export interface MarkdownHeadingItem {
   index: number
 }
 
+export type WorkspaceFileAiActionKind =
+  | 'improve'
+  | 'explain'
+  | 'translate'
+  | 'comment'
+  | 'custom'
+  | 'lint'
+
 export interface WorkspaceFileAiActionPayload {
   mode: 'send' | 'quote'
+  actionKind?: WorkspaceFileAiActionKind
+  /**
+   * When true, the viewer tracks the resulting AI turn and auto-applies the revised content
+   * back to `filePath` (via disk sync or extracted reply patch) with GPT Canvas animations.
+   */
+  autoApply?: boolean
   filePath: string
   displayPath: string
   selectedText: string

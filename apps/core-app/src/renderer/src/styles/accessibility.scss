@@ -52,7 +52,9 @@
  * native control as well double-framed every form field. The wrapper's own
  * indicator is the one that counts.
  */
-.tx-input__inner:focus-visible {
+.tx-input__inner:focus-visible,
+.tx-markdown-editor__surface:focus-visible,
+.tx-markdown-editor__preview:focus-visible {
   outline: none;
 }
 

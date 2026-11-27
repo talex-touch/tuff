@@ -205,6 +205,20 @@ export interface WorkspaceReadFileResult {
   entries?: WorkspaceFileEntry[]
 }
 
+export interface WorkspaceWriteFileRequest {
+  path: string
+  content: string
+  conversationId?: string | null
+  /** Optional optimistic concurrency guard; refuses when current disk mtime diverges. */
+  expectedMtimeMs?: number
+}
+
+export interface WorkspaceWriteFileResult {
+  path: string
+  size: number
+  mtimeMs: number
+}
+
 export interface WorkspacePickFileRequest {
   conversationId?: string | null
   defaultPath?: string
@@ -238,6 +252,7 @@ export const AgentWorkspaceEvents = {
   approveRun: defineEvent('agent-workspace').module('api').event('run:approve').define<WorkspaceRunDecisionRequest, ConversationWorkspaceState>(),
   rejectRun: defineEvent('agent-workspace').module('api').event('run:reject').define<WorkspaceRunDecisionRequest, ConversationWorkspaceState>(),
   readFile: defineEvent('agent-workspace').module('api').event('file:read').define<WorkspaceReadFileRequest, WorkspaceReadFileResult>(),
+  writeFile: defineEvent('agent-workspace').module('api').event('file:write').define<WorkspaceWriteFileRequest, WorkspaceWriteFileResult>(),
   pickFile: defineEvent('agent-workspace').module('api').event('file:pick').define<WorkspacePickFileRequest, WorkspacePickFileResult>(),
   openFileExternal: defineEvent('agent-workspace').module('api').event('file:open-external').define<WorkspaceOpenFileExternalRequest, WorkspaceOpenFileExternalResult>(),
   changed: defineEvent('agent-workspace').module('push').event('changed').define<ConversationWorkspaceState, void>(),
@@ -258,6 +273,7 @@ export interface AgentWorkspaceSdk {
   approveRun: (request: WorkspaceRunDecisionRequest) => Promise<ConversationWorkspaceState>
   rejectRun: (request: WorkspaceRunDecisionRequest) => Promise<ConversationWorkspaceState>
   readFile: (request: WorkspaceReadFileRequest) => Promise<WorkspaceReadFileResult>
+  writeFile: (request: WorkspaceWriteFileRequest) => Promise<WorkspaceWriteFileResult>
   pickFile: (request?: WorkspacePickFileRequest) => Promise<WorkspacePickFileResult>
   openFileExternal: (request: WorkspaceOpenFileExternalRequest) => Promise<WorkspaceOpenFileExternalResult>
   onChanged: (listener: (state: ConversationWorkspaceState) => void) => () => void
@@ -279,6 +295,7 @@ export function createAgentWorkspaceSdk(transport: Pick<ITuffTransport, 'send' |
     approveRun: request => transport.send(AgentWorkspaceEvents.approveRun, request),
     rejectRun: request => transport.send(AgentWorkspaceEvents.rejectRun, request),
     readFile: request => transport.send(AgentWorkspaceEvents.readFile, request),
+    writeFile: request => transport.send(AgentWorkspaceEvents.writeFile, request),
     pickFile: request => transport.send(AgentWorkspaceEvents.pickFile, request ?? {}),
     openFileExternal: request => transport.send(AgentWorkspaceEvents.openFileExternal, request),
     onChanged: listener => transport.on(AgentWorkspaceEvents.changed, listener),

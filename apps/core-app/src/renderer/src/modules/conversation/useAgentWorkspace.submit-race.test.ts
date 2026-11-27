@@ -138,6 +138,7 @@ function host(initial: ConversationWorkspaceState[]) {
     approveRun: unexpected,
     rejectRun: unexpected,
     readFile: unexpected,
+    writeFile: unexpected,
     pickFile: unexpected,
     openFileExternal: unexpected,
     onChanged: (listener) => {

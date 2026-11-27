@@ -1097,6 +1097,7 @@ function handleFileAiAction(payload: WorkspaceFileAiActionPayload): void {
         :activity-turns="activityTurns"
         :gateway="[]"
         :loading="projectionLoading"
+        :ai-streaming="isStreaming"
         :tabs="sidePanelTabs"
         :active-tab-id="activeSidePanelTabId"
         @locate="streamRef?.scrollToIndex($event)"
