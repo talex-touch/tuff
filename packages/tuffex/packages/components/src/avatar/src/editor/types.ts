@@ -331,6 +331,8 @@ export interface AvatarEditorConfig {
   maxZoom?: number
   allowVideoCapture?: boolean
   allowGifAnimation?: boolean
+  /** Automatically select animated GIF clip mode when an animated GIF/WebP/APNG or video is loaded. @default true */
+  autoSelectAnimated?: boolean
   /** Allow loading remote http(s) URL strings directly into `<img>`/`<video>`. Disabled by default so the editor only loads local File/Blob/blob:/data: sources unless explicitly opted in. @default false */
   allowRemoteSource?: boolean
   maxGifDuration?: number

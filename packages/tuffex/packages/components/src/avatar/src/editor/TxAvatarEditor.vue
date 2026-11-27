@@ -22,18 +22,17 @@ import {
   computeContainZoom,
   computeCoverZoom,
   normalizeRotation,
-  traceMaskPath,
 } from './geometry'
 import {
   detectSupportedAvatarFormats,
   exportAvatarMedia,
   formatByteSize,
   formatMediaTime,
-  renderDrawableToCanvas,
   selectOverlappingGifFrames,
   triggerAvatarDownload,
 } from './media-codecs'
 import { loadAvatarMedia, seekVideoElement } from './media-loader'
+import { renderAvatarEditorStage } from './stage-render'
 import {
   AVATAR_EDITOR_DEFAULT_ACCEPT,
   AVATAR_EDITOR_DEFAULT_LABELS,
@@ -60,6 +59,7 @@ const props = withDefaults(defineProps<AvatarEditorProps>(), {
   maxZoom: 6,
   allowVideoCapture: true,
   allowGifAnimation: true,
+  autoSelectAnimated: true,
   allowRemoteSource: false,
   maxGifDuration: 6,
   maxGifFrames: 60,
@@ -119,6 +119,7 @@ const selectedFormat = ref<AvatarOutputFormat>(props.outputFormat)
 const selectedSize = ref<number>(props.outputSize)
 const selectedQuality = ref<number>(Math.round(clampNumber(props.outputQuality, 0.1, 1) * 100))
 const captureMode = ref<AvatarCaptureMode>('frame')
+const autoSelectedAnimated = ref(false)
 
 // Media timeline state (video & animated GIF)
 const isPlaying = ref(false)
@@ -184,7 +185,7 @@ const hasTimeline = computed(() => {
   const m = media.value
   if (!m)
     return false
-  return m.kind === 'video' || (m.kind === 'gif' && (m.gifFrames?.length ?? 0) > 1)
+  return m.kind === 'video' || (m.gifFrames?.length ?? 0) > 1
 })
 
 const canExportAnimatedGif = computed(() => {
@@ -269,7 +270,7 @@ const clipEstimatedFrames = computed(() => {
   const m = media.value
   if (!m || !isAnimatedGifExport.value)
     return 0
-  if (m.kind === 'gif' && m.gifFrames?.length) {
+  if (m.gifFrames?.length) {
     const startMs = Math.max(0, clipStart.value * 1000)
     const endMs = Math.max(startMs + 50, clipEnd.value * 1000)
     return selectOverlappingGifFrames(m.gifFrames, startMs, endMs, props.maxGifFrames).length
@@ -299,7 +300,7 @@ const currentTimelineText = computed(() => {
   const m = media.value
   if (!m)
     return ''
-  if (m.kind === 'gif' && m.gifFrames?.length)
+  if (m.gifFrames?.length)
     return `${gifFrameIndex.value + 1} / ${m.gifFrames.length}`
   return `${formatMediaTime(videoTime.value)} / ${formatMediaTime(m.duration)}`
 })
@@ -333,7 +334,7 @@ function currentDrawable(): CanvasImageSource | null {
     return null
   if (m.kind === 'video' && m.video)
     return m.video
-  if (m.kind === 'gif' && m.gifFrames?.length) {
+  if (m.gifFrames?.length) {
     const idx = clampNumber(gifFrameIndex.value, 0, m.gifFrames.length - 1)
     return m.gifFrames[idx]?.canvas ?? null
   }
@@ -349,88 +350,21 @@ function drawStageAndPreviews(): void {
   if (!drawable)
     return
 
-  const dpr = typeof window !== 'undefined' ? Math.min(2, window.devicePixelRatio || 1) : 1
-  const pixelSize = Math.round(STAGE_SIZE * dpr)
-  if (canvas.width !== pixelSize || canvas.height !== pixelSize) {
-    canvas.width = pixelSize
-    canvas.height = pixelSize
-  }
-
-  const ctx = canvas.getContext('2d')
-  if (!ctx)
-    return
-
-  const supportsAlpha = isAnimatedGifExport.value || activeFormatMeta.value.supportsAlpha
-  renderDrawableToCanvas(
-    ctx,
+  renderAvatarEditorStage({
+    stageCanvas: canvas,
+    previewTargets: [
+      [previewCanvasLgRef.value, PREVIEW_SIZES[0]],
+      [previewCanvasSmRef.value, PREVIEW_SIZES[1]],
+    ],
+    stageSize: STAGE_SIZE,
     drawable,
-    m.naturalWidth,
-    m.naturalHeight,
-    pixelSize,
+    naturalWidth: m.naturalWidth,
+    naturalHeight: m.naturalHeight,
     transform,
-    activeShape.value,
-    { supportsAlpha, applyMaskClip: false },
-  )
-
-  if (activeShape.value !== 'square') {
-    ctx.save()
-    ctx.fillStyle = 'rgba(10, 12, 18, 0.44)'
-    ctx.beginPath()
-    ctx.rect(0, 0, pixelSize, pixelSize)
-    traceMaskPath(ctx, activeShape.value, 0, 0, pixelSize, false)
-    ctx.fill('evenodd')
-    ctx.restore()
-  }
-
-  ctx.save()
-  if (isInteracting.value) {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.34)'
-    ctx.lineWidth = Math.max(1, dpr)
-    const third = pixelSize / 3
-    ctx.beginPath()
-    ctx.moveTo(third, 0)
-    ctx.lineTo(third, pixelSize)
-    ctx.moveTo(third * 2, 0)
-    ctx.lineTo(third * 2, pixelSize)
-    ctx.moveTo(0, third)
-    ctx.lineTo(pixelSize, third)
-    ctx.moveTo(0, third * 2)
-    ctx.lineTo(pixelSize, third * 2)
-    ctx.stroke()
-  }
-
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.82)'
-  ctx.lineWidth = Math.max(1.5, 1.5 * dpr)
-  traceMaskPath(ctx, activeShape.value, dpr, dpr, pixelSize - dpr * 2)
-  ctx.stroke()
-  ctx.restore()
-
-  const previewTargets: [HTMLCanvasElement | null, number][] = [
-    [previewCanvasLgRef.value, PREVIEW_SIZES[0]],
-    [previewCanvasSmRef.value, PREVIEW_SIZES[1]],
-  ]
-  for (const [target, cssSize] of previewTargets) {
-    if (!target)
-      continue
-    const pSize = Math.round(cssSize * dpr)
-    if (target.width !== pSize || target.height !== pSize) {
-      target.width = pSize
-      target.height = pSize
-    }
-    const pCtx = target.getContext('2d')
-    if (!pCtx)
-      continue
-    renderDrawableToCanvas(
-      pCtx,
-      drawable,
-      m.naturalWidth,
-      m.naturalHeight,
-      pSize,
-      transform,
-      activeShape.value,
-      { supportsAlpha, applyMaskClip: true },
-    )
-  }
+    shape: activeShape.value,
+    supportsAlpha: isAnimatedGifExport.value || activeFormatMeta.value.supportsAlpha,
+    isInteracting: isInteracting.value,
+  })
 }
 
 function clampCurrentTransform(): void {
@@ -474,12 +408,36 @@ async function loadSource(source: File | Blob | string): Promise<void> {
     resetTransformState()
     videoTime.value = 0
     gifFrameIndex.value = 0
-    captureMode.value = 'frame'
-    clipStart.value = 0
-    clipEnd.value = Math.min(
-      loaded.duration > 0 ? loaded.duration : 2,
-      props.maxGifDuration,
+
+    const prefersAnimated = Boolean(
+      props.autoSelectAnimated
+      && loaded.animated
+      && props.allowGifAnimation
+      && availableFormats.value.includes('gif')
+      && supportedFormats.value.gif
+      && (props.allowFormatConversion || selectedFormat.value === 'gif'),
     )
+
+    if (prefersAnimated) {
+      captureMode.value = 'gif-clip'
+      selectedFormat.value = 'gif'
+      clipStart.value = 0
+      const defaultSpan = loaded.kind === 'video'
+        ? Math.min(3, props.maxGifDuration)
+        : props.maxGifDuration
+      clipEnd.value = Math.min(loaded.duration > 0 ? loaded.duration : 2, defaultSpan)
+    }
+    else {
+      captureMode.value = 'frame'
+      if (autoSelectedAnimated.value)
+        normalizeSelectedFormat(props.outputFormat)
+      clipStart.value = 0
+      clipEnd.value = Math.min(
+        loaded.duration > 0 ? loaded.duration : 2,
+        props.maxGifDuration,
+      )
+    }
+    autoSelectedAnimated.value = prefersAnimated
 
     if (loaded.corsTainted)
       errorMessage.value = labels.value.corsTaintedError
@@ -495,6 +453,12 @@ async function loadSource(source: File | Blob | string): Promise<void> {
     if (token !== loadToken)
       return
     drawStageAndPreviews()
+
+    const prefersReducedMotion = typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersAnimated && !prefersReducedMotion && (loaded.gifFrames?.length ?? 0) > 1)
+      togglePlayback()
   }
   catch (err) {
     if (token !== loadToken)
@@ -584,13 +548,14 @@ function selectCaptureMode(mode: AvatarCaptureMode): void {
 function selectFormat(format: AvatarOutputFormat): void {
   if (!availableFormats.value.includes(format) || !supportedFormats.value[format])
     return
+  autoSelectedAnimated.value = false
   normalizeSelectedFormat(format)
   drawStageAndPreviews()
 }
 
 function scheduleGifNextFrame(): void {
   const m = media.value
-  if (!isPlaying.value || !m || m.kind !== 'gif' || !m.gifFrames?.length)
+  if (!isPlaying.value || !m || !m.gifFrames?.length)
     return
   const current = m.gifFrames[gifFrameIndex.value]
   const delay = Math.max(25, current?.delayMs ?? 100)
@@ -632,7 +597,7 @@ function togglePlayback(): void {
     })
     rafId = requestAnimationFrame(tickVideoFrame)
   }
-  else if (m.kind === 'gif' && m.gifFrames && m.gifFrames.length > 1) {
+  else if (m.gifFrames && m.gifFrames.length > 1) {
     isPlaying.value = true
     scheduleGifNextFrame()
   }
@@ -643,7 +608,7 @@ async function scrubTo(value: number): Promise<void> {
   if (!m)
     return
   stopPlayback()
-  if (m.kind === 'gif' && m.gifFrames?.length) {
+  if (m.gifFrames?.length) {
     gifFrameIndex.value = Math.round(clampNumber(value, 0, m.gifFrames.length - 1))
     drawStageAndPreviews()
     return
@@ -673,7 +638,7 @@ function stepFrame(delta: number): void {
   const m = media.value
   if (!m)
     return
-  if (m.kind === 'gif' && m.gifFrames?.length) {
+  if (m.gifFrames?.length) {
     const total = m.gifFrames.length
     gifFrameIndex.value = (gifFrameIndex.value + delta + total) % total
     drawStageAndPreviews()
@@ -982,6 +947,7 @@ watch(() => props.shape, (next) => {
 })
 
 watch(() => props.outputFormat, (next) => {
+  autoSelectedAnimated.value = false
   normalizeSelectedFormat(next)
   drawStageAndPreviews()
 })
@@ -1010,6 +976,7 @@ watch(
       selectedFormat.value = props.outputFormat
       selectedSize.value = props.outputSize
       selectedQuality.value = Math.round(clampNumber(props.outputQuality, 0.1, 1) * 100)
+      autoSelectedAnimated.value = false
       errorMessage.value = ''
       normalizeSelectedFormat(props.outputFormat)
 
@@ -1175,7 +1142,7 @@ defineExpose({
           <AvatarEditorTimeline
             v-if="hasTimeline"
             :labels="labels"
-            :is-gif="media.kind === 'gif' && Boolean(media.gifFrames)"
+            :is-gif="Boolean(media.gifFrames?.length)"
             :gif-frame-count="media.gifFrames?.length ?? 0"
             :gif-frame-index="gifFrameIndex"
             :video-time="videoTime"

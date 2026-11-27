@@ -194,6 +194,7 @@ code: |
 | `outputQuality` | `number` | `0.92` | 有损格式（JPEG / WebP / AVIF）默认压缩质量（`0.1–1`）。 |
 | `allowVideoCapture` | `boolean` | `true` | 是否允许解析 MP4 / WebM / MOV 等视频并截帧或截动图。 |
 | `allowGifAnimation` | `boolean` | `true` | 是否允许将 GIF 或视频片段编码为动态 GIF 头像。 |
+| `autoSelectAnimated` | `boolean` | `true` | 上传动态 GIF / 动图 WebP / APNG 或视频时是否自动切换到动态 GIF 模式并自动预览播放。 |
 | `editorLabels` | `Partial<AvatarEditorLabels>` | 英文默认文案 | 覆盖内置编辑器的界面文案以本地化。 |
 | `editorProps` | `Partial<AvatarEditorConfig>` | - | 透传给 `TxAvatarEditor` 的高级配置（`surface`、`icoSizes`、`maxGifDuration`、`customConverter` 等）。 |
 | `backgroundColor` | `string` | - | 回退内容的背景色。 |
@@ -242,6 +243,7 @@ code: |
 | `outputSize` | `number` | `512` | 默认输出边长像素。 |
 | `outputQuality` | `number` | `0.92` | 有损格式默认质量。 |
 | `icoSizes` | `number[]` | `[16, 32, 48, 64, 128, 256]` | 导出 `.ico` 时打包的多尺寸层级。 |
+| `autoSelectAnimated` | `boolean` | `true` | 载入动态 GIF / WebP / APNG 或视频时自动选中动态 GIF 导出模式。 |
 | `maxGifDuration` | `number` | `6` | 动态 GIF 截取的最大秒数。 |
 | `maxGifFrames` | `number` | `60` | 动态 GIF 截取的最大帧数上限。 |
 | `allowDownload` | `boolean` | `true` | 是否在底栏显示本地下载按钮。 |

@@ -320,7 +320,7 @@ function resolveCurrentDrawable(
 ): CanvasImageSource {
   if (media.kind === 'video' && media.video)
     return media.video
-  if (media.kind === 'gif' && media.gifFrames?.length) {
+  if (media.gifFrames?.length) {
     const idx = Math.max(0, Math.min(media.gifFrames.length - 1, gifFrameIndex))
     return media.gifFrames[idx]!.canvas
   }
@@ -375,7 +375,7 @@ export async function exportAvatarMedia(
 
     const frames: { rgba: Uint8ClampedArray, width: number, height: number, delayMs: number }[] = []
 
-    if (media.kind === 'gif' && media.gifFrames?.length) {
+    if (media.gifFrames?.length) {
       const startMs = Math.max(0, clip.startTime * 1000)
       const endMs = Math.max(startMs + 50, clip.endTime * 1000)
       const slices = selectOverlappingGifFrames(media.gifFrames, startMs, endMs, maxFrames)
@@ -636,7 +636,7 @@ export async function exportAvatarMedia(
 
   const frameTime = media.kind === 'video'
     ? (options.videoTimeSec ?? media.video?.currentTime ?? 0)
-    : (media.kind === 'gif' ? media.gifFrames?.[options.gifFrameIndex ?? 0]?.timestampSec : undefined)
+    : (media.gifFrames?.length ? media.gifFrames[options.gifFrameIndex ?? 0]?.timestampSec : undefined)
 
   return {
     file,

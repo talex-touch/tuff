@@ -10,12 +10,13 @@ import {
   computeCoverZoom,
   computeTransformMetrics,
   normalizeRotation,
+  traceMaskPath,
 } from '../src/editor/geometry'
 import { decodeGif, encodeGif } from '../src/editor/gif-codec'
 import { encodeIco, extractBestIcoEntry, parseIcoEntries, resolveIcoSizes } from '../src/editor/ico-codec'
 import { buildOutputFileName, computeVideoGifClipSchedule, exportAvatarMedia, formatByteSize, formatMediaTime, isBlobMimeMatchingFormat, resetSupportedAvatarFormatsCache, selectOverlappingGifFrames } from '../src/editor/media-codecs'
 import * as mediaCodecs from '../src/editor/media-codecs'
-import { detectAvatarSourceKind, loadAvatarMedia, readBlobArrayBuffer, seekVideoElement, sniffAvatarKindFromBytes } from '../src/editor/media-loader'
+import { detectAvatarSourceKind, isAnimatedWebpBytes, isApngBytes, loadAvatarMedia, readBlobArrayBuffer, seekVideoElement, sniffAvatarKindFromBytes } from '../src/editor/media-loader'
 import * as mediaLoader from '../src/editor/media-loader'
 import { buildRasterAvatarSvg, buildVectorAvatarSvg, parseAndSanitizeSvg } from '../src/editor/svg-codec'
 import TxAvatarEditor from '../src/editor/TxAvatarEditor.vue'
@@ -55,6 +56,46 @@ describe('avatar editor geometry & helpers', () => {
   it('builds CSS canvas filter strings only for modified channels', () => {
     expect(buildCanvasFilter({ ...DEFAULT_AVATAR_TRANSFORM })).toBe('none')
     expect(buildCanvasFilter({ ...DEFAULT_AVATAR_TRANSFORM, brightness: 120, saturation: 80 })).toBe('brightness(120%) saturate(80%)')
+  })
+
+  it('preserves outer path when traceMaskPath runs with begin=false for evenodd scrim cutouts', () => {
+    const calls: string[] = []
+    const mockCtx = {
+      beginPath: () => calls.push('beginPath'),
+      rect: () => calls.push('rect'),
+      moveTo: () => calls.push('moveTo'),
+      arc: () => calls.push('arc'),
+      arcTo: () => calls.push('arcTo'),
+      closePath: () => calls.push('closePath'),
+    } as unknown as CanvasRenderingContext2D
+
+    mockCtx.beginPath()
+    mockCtx.rect(0, 0, 312, 312)
+    traceMaskPath(mockCtx, 'circle', 0, 0, 312, false)
+    expect(calls.filter(c => c === 'beginPath')).toHaveLength(1)
+    expect(calls).toContain('moveTo')
+    expect(calls).toContain('arc')
+  })
+
+  it('sniffs animated WebP (VP8X) and APNG (acTL) binary headers', () => {
+    const animWebp = new Uint8Array(24)
+    animWebp.set([0x52, 0x49, 0x46, 0x46], 0) // RIFF
+    animWebp.set([0x57, 0x45, 0x42, 0x50], 8) // WEBP
+    animWebp.set([0x56, 0x50, 0x38, 0x58], 12) // VP8X
+    animWebp[20] = 0x02 // animation flag
+    expect(isAnimatedWebpBytes(animWebp)).toBe(true)
+    animWebp[20] = 0x10 // alpha only, no animation
+    expect(isAnimatedWebpBytes(animWebp)).toBe(false)
+
+    const apng = new Uint8Array(40)
+    apng.set([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], 0)
+    apng.set([0, 0, 0, 8, 0x61, 0x63, 0x54, 0x4C], 8) // chunk len=8, type='acTL'
+    expect(isApngBytes(apng)).toBe(true)
+
+    const staticPng = new Uint8Array(40)
+    staticPng.set([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], 0)
+    staticPng.set([0, 0, 0, 4, 0x49, 0x44, 0x41, 0x54], 8) // IDAT directly
+    expect(isApngBytes(staticPng)).toBe(false)
   })
 
   it('detects media source kinds across images, icons, vectors, GIFs, and videos', () => {
@@ -810,5 +851,126 @@ describe('avatar editor security, codecs & lifecycle guards', () => {
     loadSpy.mockRestore()
     detectSpy.mockRestore()
     resetSupportedAvatarFormatsCache()
+  })
+
+  it('auto-selects animated GIF clip mode for animated GIFs and respects autoSelectAnimated=false and static restore', async () => {
+    const w = 8
+    const h = 8
+    const frameA = new Uint8ClampedArray(w * h * 4).fill(255)
+    const frameB = new Uint8ClampedArray(w * h * 4).fill(120)
+    for (let i = 3; i < frameB.length; i += 4)
+      frameB[i] = 255
+    const gifBytes = encodeGif([
+      { rgba: frameA, width: w, height: h, delayMs: 120 },
+      { rgba: frameB, width: w, height: h, delayMs: 120 },
+    ], { width: w, height: h, loop: 0 })
+    const gifFile = new File([gifBytes], 'anim.gif', { type: 'image/gif' })
+
+    const wrapper = mount(TxAvatarEditor, {
+      props: {
+        open: true,
+        source: gifFile,
+        outputFormat: 'png',
+      },
+    })
+
+    await vi.waitFor(() => {
+      expect(wrapper.emitted('source-change')).toHaveLength(1)
+    })
+    await nextTick()
+
+    const timelineBtns = wrapper.findAll('.tx-avatar-editor__timeline .tx-avatar-editor__seg-btn')
+    expect(timelineBtns).toHaveLength(2)
+    expect(timelineBtns[1]!.classes()).toContain('is-active')
+    expect(wrapper.find('.tx-avatar-editor__format-btn.is-active').text().trim()).toBe('GIF')
+
+    // Subsequent static source restores default outputFormat ('png') and exits gif-clip mode
+    const loadSpy = vi.spyOn(mediaLoader, 'loadAvatarMedia').mockResolvedValueOnce({
+      kind: 'image',
+      naturalWidth: 64,
+      naturalHeight: 64,
+      file: new File(['s'], 'static.png', { type: 'image/png' }),
+      sourceName: 'static.png',
+      image: {} as HTMLImageElement,
+      duration: 0,
+      animated: false,
+      corsTainted: false,
+      dispose: vi.fn(),
+    })
+    await wrapper.setProps({ source: new File(['s'], 'static.png', { type: 'image/png' }) })
+    await vi.waitFor(() => {
+      expect(wrapper.emitted('source-change')).toHaveLength(2)
+    })
+    await nextTick()
+    expect(wrapper.find('.tx-avatar-editor__format-btn.is-active').text().trim()).toBe('PNG')
+    expect(wrapper.find('.tx-avatar-editor__clip-grid').exists()).toBe(false)
+    loadSpy.mockRestore()
+    wrapper.unmount()
+
+    // Opt-out: autoSelectAnimated=false stays on static frame + initial outputFormat
+    const optOutWrapper = mount(TxAvatarEditor, {
+      props: {
+        open: true,
+        source: gifFile,
+        outputFormat: 'png',
+        autoSelectAnimated: false,
+      },
+    })
+    await vi.waitFor(() => {
+      expect(optOutWrapper.emitted('source-change')).toHaveLength(1)
+    })
+    await nextTick()
+    const optOutBtns = optOutWrapper.findAll('.tx-avatar-editor__timeline .tx-avatar-editor__seg-btn')
+    expect(optOutBtns[0]!.classes()).toContain('is-active')
+    expect(optOutWrapper.find('.tx-avatar-editor__format-btn.is-active').text().trim()).toBe('PNG')
+    optOutWrapper.unmount()
+  })
+
+  it('decodes animated WebP frames via ImageDecoder with pixel-budget enforcement', async () => {
+    const closeFrame = vi.fn()
+    const closeDecoder = vi.fn()
+    class MockAnimatedWebpDecoder {
+      static isTypeSupported = vi.fn(async (mime: string) => mime === 'image/webp')
+      tracks = { ready: Promise.resolve(), selectedTrack: { frameCount: 3 } }
+      decode = vi.fn(async () => ({
+        image: {
+          displayWidth: 32,
+          displayHeight: 32,
+          duration: 80_000,
+          close: closeFrame,
+        },
+      }))
+
+      close = closeDecoder
+    }
+
+    const origDecoder = (globalThis as Record<string, unknown>).ImageDecoder
+    ;(globalThis as Record<string, unknown>).ImageDecoder = MockAnimatedWebpDecoder
+
+    try {
+      const animWebp = new Uint8Array(24)
+      animWebp.set([0x52, 0x49, 0x46, 0x46], 0) // RIFF
+      animWebp.set([0x57, 0x45, 0x42, 0x50], 8) // WEBP
+      animWebp.set([0x56, 0x50, 0x38, 0x58], 12) // VP8X
+      animWebp[20] = 0x02 // animation flag
+      const webpFile = new File([animWebp], 'sticker.webp', { type: 'image/webp' })
+
+      const loaded = await loadAvatarMedia(webpFile)
+      expect(loaded.kind).toBe('image')
+      expect(loaded.animated).toBe(true)
+      expect(loaded.gifFrames).toHaveLength(3)
+      expect(loaded.duration).toBeCloseTo(0.24, 3)
+      expect(closeFrame).toHaveBeenCalledTimes(3)
+      expect(closeDecoder).toHaveBeenCalledTimes(1)
+      loaded.dispose()
+
+      // Budget enforcement still rejects oversized animated WebP without silently falling back
+      await expect(
+        loadAvatarMedia(webpFile, { maxGifDecodedBytes: 512 }),
+      ).rejects.toThrow(/pixel budget/i)
+    }
+    finally {
+      ;(globalThis as Record<string, unknown>).ImageDecoder = origDecoder
+    }
   })
 })

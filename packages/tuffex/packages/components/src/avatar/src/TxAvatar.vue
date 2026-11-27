@@ -27,6 +27,7 @@ const props = withDefaults(defineProps<AvatarProps>(), {
   outputQuality: 0.92,
   allowVideoCapture: true,
   allowGifAnimation: true,
+  autoSelectAnimated: true,
 })
 
 const emit = defineEmits<AvatarEmits>()
@@ -338,6 +339,7 @@ defineExpose({
       :output-quality="outputQuality"
       :allow-video-capture="allowVideoCapture"
       :allow-gif-animation="allowGifAnimation"
+      :auto-select-animated="autoSelectAnimated"
       :labels="mergedEditorLabels"
       @confirm="handleEditorConfirm"
       @cancel="handleEditorCancel"

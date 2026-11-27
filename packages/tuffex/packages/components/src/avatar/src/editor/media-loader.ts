@@ -268,8 +268,39 @@ class GifPixelBudgetError extends Error {
   }
 }
 
-async function decodeGifFramesInBrowser(
+export function isAnimatedWebpBytes(bytes: Uint8Array): boolean {
+  if (bytes.length < 21)
+    return false
+  const riff = String.fromCharCode(bytes[0]!, bytes[1]!, bytes[2]!, bytes[3]!)
+  const webp = String.fromCharCode(bytes[8]!, bytes[9]!, bytes[10]!, bytes[11]!)
+  if (riff !== 'RIFF' || webp !== 'WEBP')
+    return false
+  const chunk = String.fromCharCode(bytes[12]!, bytes[13]!, bytes[14]!, bytes[15]!)
+  // VP8X flags byte at offset 20: bit 1 (0x02) marks an animated WebP.
+  return chunk === 'VP8X' && (bytes[20]! & 0x02) !== 0
+}
+
+export function isApngBytes(bytes: Uint8Array): boolean {
+  if (bytes.length < 33)
+    return false
+  if (bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4E || bytes[3] !== 0x47)
+    return false
+  let pos = 8
+  while (pos + 8 <= bytes.length) {
+    const len = ((bytes[pos]! << 24) | (bytes[pos + 1]! << 16) | (bytes[pos + 2]! << 8) | bytes[pos + 3]!) >>> 0
+    const type = String.fromCharCode(bytes[pos + 4]!, bytes[pos + 5]!, bytes[pos + 6]!, bytes[pos + 7]!)
+    if (type === 'acTL')
+      return true
+    if (type === 'IDAT' || type === 'IEND')
+      return false
+    pos += 12 + len
+  }
+  return false
+}
+
+async function decodeAnimatedFramesInBrowser(
   bytes: Uint8Array,
+  mimeType: 'image/gif' | 'image/webp' | 'image/png',
   maxFrames = DEFAULT_MAX_GIF_LOAD_FRAMES,
   maxDecodedBytes = DEFAULT_MAX_GIF_DECODED_BYTES,
 ): Promise<{
@@ -280,20 +311,22 @@ async function decodeGifFramesInBrowser(
   truncated: boolean
   totalFrameCount: number
   maxFrameCount: number
-}> {
+} | null> {
   const ImageDecoderCtor = (globalThis as Record<string, any>).ImageDecoder
   if (typeof ImageDecoderCtor === 'function') {
     let decoder: any = null
     try {
-      const supported = await ImageDecoderCtor.isTypeSupported?.('image/gif')
+      const supported = await ImageDecoderCtor.isTypeSupported?.(mimeType)
       if (supported) {
         decoder = new ImageDecoderCtor({
           data: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
-          type: 'image/gif',
+          type: mimeType,
         })
         await decoder.tracks.ready
         const track = decoder.tracks.selectedTrack
         const totalFrameCount = Math.max(1, track?.frameCount ?? 1)
+        if (mimeType !== 'image/gif' && totalFrameCount <= 1)
+          return null
         const count = Math.min(maxFrames, totalFrameCount)
         const truncated = totalFrameCount > maxFrames
         const frames: LoadedGifFrame[] = []
@@ -384,6 +417,9 @@ async function decodeGifFramesInBrowser(
       decoder?.close?.()
     }
   }
+
+  if (mimeType !== 'image/gif')
+    return null
 
   const parsed = decodeGif(bytes, { maxFrames, maxDecodedBytes })
   return {
@@ -588,10 +624,11 @@ export async function loadAvatarMedia(
   }
 
   // For local Blobs/Files, sniff header bytes so misnamed files (.png that is actually .ico/.gif/.svg) still work.
+  let sniffedHead: Uint8Array | null = null
   if (blob) {
     try {
-      const head = new Uint8Array(await readBlobArrayBuffer(blob.slice(0, 256)))
-      kind = sniffAvatarKindFromBytes(head, kind)
+      sniffedHead = new Uint8Array(await readBlobArrayBuffer(blob.slice(0, 512)))
+      kind = sniffAvatarKindFromBytes(sniffedHead, kind)
     }
     catch {
       // Keep extension/MIME-derived kind.
@@ -648,8 +685,8 @@ export async function loadAvatarMedia(
 
       if (bytes && bytes.length >= 13) {
         try {
-          const decoded = await decodeGifFramesInBrowser(bytes, maxGifFrames, maxGifDecodedBytes)
-          if (decoded.frames.length > 0) {
+          const decoded = await decodeAnimatedFramesInBrowser(bytes, 'image/gif', maxGifFrames, maxGifDecodedBytes)
+          if (decoded && decoded.frames.length > 0) {
             return {
               kind: 'gif',
               naturalWidth: decoded.width,
@@ -672,6 +709,42 @@ export async function loadAvatarMedia(
             throw err
           // Fall back to browser <img> decode if GIF frame parsing fails.
         }
+      }
+    }
+
+    // 2b. Animated WebP / APNG (decode frames via ImageDecoder when supported)
+    if (kind === 'image' && blob) {
+      try {
+        const head = sniffedHead ?? new Uint8Array(await readBlobArrayBuffer(blob.slice(0, 512)))
+        const animatedMime: 'image/webp' | 'image/png' | null = isAnimatedWebpBytes(head)
+          ? 'image/webp'
+          : (isApngBytes(head) ? 'image/png' : null)
+        if (animatedMime) {
+          const fullBytes = new Uint8Array(await readBlobArrayBuffer(blob))
+          const decoded = await decodeAnimatedFramesInBrowser(fullBytes, animatedMime, maxGifFrames, maxGifDecodedBytes)
+          if (decoded && decoded.frames.length > 1) {
+            return {
+              kind: 'image',
+              naturalWidth: decoded.width,
+              naturalHeight: decoded.height,
+              file,
+              sourceName,
+              gifFrames: decoded.frames,
+              duration: decoded.duration,
+              animated: true,
+              truncated: decoded.truncated,
+              totalFrameCount: decoded.totalFrameCount,
+              maxFrameCount: decoded.maxFrameCount,
+              corsTainted: false,
+              dispose: disposeUrls,
+            }
+          }
+        }
+      }
+      catch (err) {
+        if (err instanceof GifPixelBudgetError || (err instanceof Error && err.message.includes('pixel budget')))
+          throw err
+        // Fall through to standard <img> decode.
       }
     }
 
