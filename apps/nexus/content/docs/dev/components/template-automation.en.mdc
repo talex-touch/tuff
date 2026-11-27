@@ -95,7 +95,7 @@ Tuff's screenshot OCR flow as an automation you can edit and run: an AI re-read 
 
 - For your own flow, nodes and edges are plain arrays and `flowNodes()` only computes coordinates; edges always run from a node's bottom to the next node's top, so offset branch nodes sideways.
 - For a real runner, replace the timed steps in `buildPlan()` with backend events (SSE or WebSocket); each event calls `setNode()` once and appends a log line.
-- TxFlowchart has no per-edge styling API: the template borrows `dashed` for "in flight" and keeps the color and motion inside `prefers-reduced-motion: no-preference`.
+- This template styles `dashed` for "in flight" inside `prefers-reduced-motion: no-preference`; new flows can also use `TxFlowchart`'s built-in `edge.tone`, `edge.animated` and `edge.pulse` directly.
 - TxFlatSelect and the fine-tune card's type menu don't teleport; keep them clear of `overflow: hidden` ancestors and away from the container's bottom edge.
 
 ## Related components
