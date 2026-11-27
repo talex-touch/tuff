@@ -766,4 +766,174 @@ describe('win app scanner', () => {
     const flattenedApps = await getApps()
     expect(flattenedApps).toHaveLength(5)
   })
+
+  it('normalizes PascalCase PowerShell registry records produced by ConvertTo-Json', async () => {
+    const targetPath = 'C:\\Program Files\\PascalApp\\PascalApp.exe'
+    readdirMock.mockResolvedValue([])
+    statMock.mockImplementation(async (target: string) => {
+      if (target === targetPath) return createFileStat()
+      throw new Error(`Unexpected stat path: ${target}`)
+    })
+    mockPowerShellOutputs({
+      registryApps: [
+        {
+          DisplayName: 'Pascal App',
+          DisplayIcon: `"${targetPath}",0`,
+          Publisher: 'Pascal Corp',
+          SystemComponent: 0
+        }
+      ]
+    })
+
+    const { getAppsBySource } = await import('./win')
+    const results = await getAppsBySource()
+    const registry = results.find((result) => result.sourceId === 'windows-registry')
+
+    expect(registry?.apps).toHaveLength(1)
+    expect(registry?.apps[0]).toMatchObject({
+      name: 'Pascal App',
+      launchTarget: targetPath,
+      description: 'Pascal Corp'
+    })
+    expect(registry?.diagnostics).toMatchObject({
+      status: 'ready',
+      backend: 'powershell',
+      fallbackUsed: false
+    })
+  })
+
+  it('falls back to reg.exe for Uninstall and App Paths and exposes degraded diagnostics when PowerShell is unavailable (#350)', async () => {
+    const uninstallTarget = 'C:\\Program Files\\FallbackApp\\FallbackApp.exe'
+    const appPathTarget = 'C:\\Program Files\\Code\\Code.exe'
+
+    readdirMock.mockResolvedValue([])
+    statMock.mockImplementation(async (target: string) => {
+      if (target === uninstallTarget || target === appPathTarget) return createFileStat()
+      throw new Error(`Unexpected stat path: ${target}`)
+    })
+    execFileSafeMock.mockImplementation(async (command: string, args: string[]) => {
+      if (command === 'powershell') {
+        throw Object.assign(new Error('spawn powershell ENOENT'), { code: 'ENOENT' })
+      }
+      if (command === 'reg' && args[1]?.includes('Uninstall')) {
+        if (args[1].startsWith('HKLM\\Software\\Microsoft')) {
+          return {
+            stdout: [
+              'HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\FallbackApp',
+              '    DisplayName    REG_SZ    Fallback App',
+              `    DisplayIcon    REG_SZ    "${uninstallTarget}",0`,
+              '    Publisher    REG_SZ    Fallback Inc.',
+              '    SystemComponent    REG_DWORD    0x0'
+            ].join('\r\n'),
+            stderr: ''
+          }
+        }
+        throw Object.assign(new Error('reg query failed'), {
+          stderr: 'ERROR: The system was unable to find the specified registry key or value.'
+        })
+      }
+      if (command === 'reg' && args[1]?.includes('App Paths')) {
+        if (args[1].startsWith('HKLM\\Software\\Microsoft')) {
+          return {
+            stdout: [
+              'HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\code.exe',
+              `    (Default)    REG_SZ    ${appPathTarget}`,
+              '    Path    REG_SZ    C:\\Program Files\\Code'
+            ].join('\r\n'),
+            stderr: ''
+          }
+        }
+        throw Object.assign(new Error('reg query failed'), {
+          stderr: 'ERROR: The system was unable to find the specified registry key or value.'
+        })
+      }
+      throw new Error(`Unexpected command: ${command} ${args.join(' ')}`)
+    })
+
+    const { getAppsBySource } = await import('./win')
+    const results = await getAppsBySource()
+
+    const uwp = results.find((result) => result.sourceId === 'windows-uwp')
+    expect(uwp?.apps).toEqual([])
+    expect(uwp?.error).toContain('powershell-not-found')
+    expect(uwp?.diagnostics).toMatchObject({
+      status: 'failed',
+      backend: 'unavailable',
+      fallbackUsed: false,
+      reasonCode: 'powershell-not-found'
+    })
+    expect(uwp?.diagnostics?.recovery).toContain('reg.exe')
+
+    const registry = results.find((result) => result.sourceId === 'windows-registry')
+    expect(registry?.error).toBeUndefined()
+    expect(registry?.apps).toHaveLength(1)
+    expect(registry?.apps[0]).toMatchObject({
+      name: 'Fallback App',
+      launchTarget: uninstallTarget
+    })
+    expect(registry?.diagnostics).toMatchObject({
+      status: 'degraded',
+      backend: 'reg-query',
+      fallbackUsed: true,
+      reasonCode: 'powershell-not-found'
+    })
+    expect(registry?.diagnostics?.attempts.map((a) => `${a.backend}:${a.status}`)).toEqual([
+      'powershell:failed',
+      'reg-query:ok'
+    ])
+
+    const appPaths = results.find((result) => result.sourceId === 'windows-app-paths')
+    expect(appPaths?.error).toBeUndefined()
+    expect(appPaths?.apps).toHaveLength(1)
+    expect(appPaths?.apps[0]).toMatchObject({
+      name: 'code',
+      launchTarget: appPathTarget
+    })
+    expect(appPaths?.diagnostics).toMatchObject({
+      status: 'degraded',
+      backend: 'reg-query',
+      fallbackUsed: true,
+      reasonCode: 'powershell-not-found'
+    })
+  })
+
+  it('classifies ExecutionPolicy blocks and reports explicit failure when both PowerShell and reg.exe fail (#350)', async () => {
+    readdirMock.mockResolvedValue([])
+    execFileSafeMock.mockImplementation(async (command: string) => {
+      if (command === 'powershell') {
+        throw Object.assign(new Error('PowerShell blocked'), {
+          stderr:
+            'AuthorizationManager check failed. Execution of scripts is disabled on this system. PSSecurityException'
+        })
+      }
+      throw Object.assign(new Error('spawn reg ENOENT'), { code: 'ENOENT' })
+    })
+
+    const { getAppsBySource } = await import('./win')
+    const results = await getAppsBySource()
+
+    const uwp = results.find((result) => result.sourceId === 'windows-uwp')
+    expect(uwp?.error).toContain('powershell-execution-policy')
+    expect(uwp?.diagnostics).toMatchObject({
+      status: 'failed',
+      backend: 'unavailable',
+      reasonCode: 'powershell-execution-policy'
+    })
+    expect(uwp?.diagnostics?.recovery).toContain('ExecutionPolicy')
+
+    const registry = results.find((result) => result.sourceId === 'windows-registry')
+    expect(registry?.apps).toEqual([])
+    expect(registry?.error).toContain('powershell-execution-policy')
+    expect(registry?.error).toContain('reg.exe fallback failed')
+    expect(registry?.diagnostics).toMatchObject({
+      status: 'failed',
+      backend: 'unavailable',
+      fallbackUsed: true,
+      reasonCode: 'powershell-execution-policy'
+    })
+    expect(registry?.diagnostics?.attempts.map((a) => `${a.backend}:${a.status}`)).toEqual([
+      'powershell:failed',
+      'reg-query:failed'
+    ])
+  })
 })

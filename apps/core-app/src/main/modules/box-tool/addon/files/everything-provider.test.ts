@@ -1592,6 +1592,54 @@ describe('everything-provider fallback chain', () => {
     })
   })
 
+  it('falls back to reg.exe for Windows registry Path discovery and records diagnostics when PowerShell is unavailable (#350)', async () => {
+    const { EverythingBackendService } = await import('./everything-backend-service')
+    type ExecFileAsyncFn = NonNullable<
+      ConstructorParameters<typeof EverythingBackendService>[0]
+    >['execFileAsync']
+    const execMock = vi.fn(async (file: string, args: string[]) => {
+      if (file === 'powershell') {
+        expect(args.at(-1)).not.toContain("${'$'}")
+        throw Object.assign(new Error('spawn powershell ENOENT'), { code: 'ENOENT' })
+      }
+      if (file === 'reg' && args[1]?.includes('Session Manager')) {
+        return {
+          stdout: [
+            'HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment',
+            '    Path    REG_EXPAND_SZ    C:\\Windows\\System32;C:\\Tools\\Everything'
+          ].join('\r\n'),
+          stderr: ''
+        }
+      }
+      if (file === 'reg' && args[1] === 'HKCU\\Environment') {
+        return {
+          stdout: [
+            'HKEY_CURRENT_USER\\Environment',
+            '    Path    REG_SZ    C:\\Users\\demo\\bin'
+          ].join('\r\n'),
+          stderr: ''
+        }
+      }
+      throw new Error(`Unexpected command: ${file}`)
+    })
+    const onError = vi.fn()
+    const service = new EverythingBackendService({
+      execFileAsync: execMock as unknown as ExecFileAsyncFn,
+      platform: 'win32'
+    })
+
+    const paths = await service.readRegistryPathValues(onError)
+
+    expect(paths).toEqual(['C:\\Windows\\System32;C:\\Tools\\Everything', 'C:\\Users\\demo\\bin'])
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(service.getRegistryPathDiagnostics()).toMatchObject({
+      status: 'degraded',
+      backend: 'reg-query',
+      fallbackUsed: true,
+      reasonCode: 'powershell-not-found'
+    })
+  })
+
   it('summarizes missing Everything installation when app, service and CLI are absent', async () => {
     await withPlatform('win32', async () => {
       const provider = everythingProvider as unknown as MutableEverythingProvider

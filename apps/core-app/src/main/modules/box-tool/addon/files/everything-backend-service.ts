@@ -10,8 +10,19 @@ import {
   parseEverythingVersion,
   type EverythingSearchResult
 } from './everything-parser'
+import {
+  buildWindowsPowerShellArgs,
+  classifyWindowsPowerShellError,
+  parseRegQueryPathValues,
+  type WindowsBackendAttempt,
+  type WindowsSourceDiagnostics
+} from '../../../platform/windows-powershell'
 
 const execFileAsync = promisify(execFile)
+const REGISTRY_PATH_KEYS = [
+  'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment',
+  'HKCU\\Environment'
+]
 
 /**
  * Makes a query safe to pass as an argv element to es.exe.
@@ -61,6 +72,7 @@ export class EverythingBackendService {
   private readonly platform: NodeJS.Platform
   private readonly resourcesPath: string
   private readonly cwd: () => string
+  private lastRegistryPathDiagnostics: WindowsSourceDiagnostics | null = null
 
   constructor(runtime: EverythingBackendRuntime = {}) {
     this.exec = runtime.execFileAsync ?? execFileAsync
@@ -207,31 +219,113 @@ export class EverythingBackendService {
     return /Everything IPC window not found|\bError\s+8\b/i.test(output)
   }
 
+  getRegistryPathDiagnostics(): WindowsSourceDiagnostics | null {
+    return this.lastRegistryPathDiagnostics
+  }
+
   async readRegistryPathValues(onError?: (error: unknown) => void): Promise<string[]> {
     if (this.platform !== 'win32') return []
     const script = [
       '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
       '$values = @()',
-      "${'$'}machine = (Get-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment' -Name Path -ErrorAction SilentlyContinue).Path",
-      "${'$'}user = (Get-ItemProperty -Path 'HKCU:\\Environment' -Name Path -ErrorAction SilentlyContinue).Path",
-      "foreach (${'$'}value in @(${'$'}machine, ${'$'}user)) { if (${'$'}value) { ${'$'}values += [PSCustomObject]@{ Path = [string]${'$'}value } } }",
-      "${'$'}values | ConvertTo-Json -Compress"
+      "$machine = (Get-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment' -Name Path -ErrorAction SilentlyContinue).Path",
+      "$user = (Get-ItemProperty -Path 'HKCU:\\Environment' -Name Path -ErrorAction SilentlyContinue).Path",
+      'foreach ($value in @($machine, $user)) { if ($value) { $values += [PSCustomObject]@{ Path = [string]$value } } }',
+      '$values | ConvertTo-Json -Compress'
     ].join('\n')
+    const attempts: WindowsBackendAttempt[] = []
+    const psStartedAt = Date.now()
     try {
-      const { stdout } = await this.exec(
-        'powershell',
-        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
-        { timeout: 3000, windowsHide: true }
-      )
+      const { stdout } = await this.exec('powershell', buildWindowsPowerShellArgs(script), {
+        timeout: 3000,
+        windowsHide: true
+      })
       const raw = String(stdout).trim()
-      if (!raw) return []
-      const records = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [JSON.parse(raw)]
+      const parsed = raw ? JSON.parse(raw) : []
+      const records = Array.isArray(parsed) ? parsed : [parsed]
+      attempts.push({
+        backend: 'powershell',
+        command: 'powershell Get-ItemProperty Environment\\Path',
+        status: 'ok',
+        durationMs: Date.now() - psStartedAt
+      })
+      this.lastRegistryPathDiagnostics = {
+        status: 'ready',
+        backend: 'powershell',
+        fallbackUsed: false,
+        attempts
+      }
       return records
         .map((record: { Path?: unknown; path?: unknown }) => record.Path ?? record.path ?? '')
         .filter(
           (value: unknown): value is string => typeof value === 'string' && Boolean(value.trim())
         )
     } catch (error) {
+      const classified = classifyWindowsPowerShellError(error)
+      attempts.push({
+        backend: 'powershell',
+        command: 'powershell Get-ItemProperty Environment\\Path',
+        status: 'failed',
+        reasonCode: classified.code,
+        error: classified.summary,
+        durationMs: Date.now() - psStartedAt
+      })
+
+      const regStartedAt = Date.now()
+      const regResults = await Promise.allSettled(
+        REGISTRY_PATH_KEYS.map((key) =>
+          this.exec('reg', ['query', key, '/v', 'Path'], { timeout: 3000, windowsHide: true })
+        )
+      )
+      const regOutputs: string[] = []
+      let regFailure: string | null = null
+      for (const result of regResults) {
+        if (result.status === 'fulfilled') {
+          regOutputs.push(String(result.value.stdout ?? ''))
+        } else {
+          regFailure =
+            result.reason instanceof Error ? result.reason.message : String(result.reason)
+        }
+      }
+
+      if (regOutputs.length > 0) {
+        const values = parseRegQueryPathValues(regOutputs.join('\n'))
+        attempts.push({
+          backend: 'reg-query',
+          command: 'reg query Environment /v Path',
+          status: 'ok',
+          durationMs: Date.now() - regStartedAt
+        })
+        this.lastRegistryPathDiagnostics = {
+          status: 'degraded',
+          backend: 'reg-query',
+          fallbackUsed: true,
+          reasonCode: classified.code,
+          reason: classified.summary,
+          recovery: classified.recovery,
+          attempts
+        }
+        onError?.(error)
+        return values
+      }
+
+      attempts.push({
+        backend: 'reg-query',
+        command: 'reg query Environment /v Path',
+        status: 'failed',
+        reasonCode: 'fallback-failed',
+        error: regFailure ?? 'reg.exe query failed',
+        durationMs: Date.now() - regStartedAt
+      })
+      this.lastRegistryPathDiagnostics = {
+        status: 'failed',
+        backend: 'unavailable',
+        fallbackUsed: true,
+        reasonCode: classified.code,
+        reason: `${classified.summary}; reg.exe fallback failed: ${regFailure ?? 'unknown error'}`,
+        recovery: classified.recovery,
+        attempts
+      }
       onError?.(error)
       return []
     }

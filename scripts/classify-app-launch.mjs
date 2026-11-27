@@ -56,6 +56,45 @@ const NO_DISPLAY_PATTERNS = [
 ]
 
 /**
+ * Legacy FUSE2 AppImage failing on stock Ubuntu 24.04, which no longer ships libfuse2 (#213).
+ * Kept as a product packaging defect: switching to the static FUSE3 runtime (`toolsets.appimage`)
+ * eliminates the libfuse2 dependency instead of blaming the user's host.
+ */
+const MISSING_FUSE_PATTERNS = [
+  /error loading libfuse\.so\.2/i,
+  /AppImages require FUSE to run/i,
+  /dlopen\(\):\s*error loading libfuse/i,
+]
+
+/**
+ * AppImage `--appimage-extract-and-run` prints each extracted path as `/tmp/appimage_extracted_...`.
+ * In v2.4.15-beta.13 the 45s timeout expired mid-extraction before `AppRun` or `tuff` ever ran,
+ * leaving only extraction lines and `exit=124 state=alive`, which previously false-passed as `ok`.
+ */
+function isIncompleteAppImageExtraction(text) {
+  const lines = text
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+  if (lines.length === 0)
+    return false
+  let extractedLines = 0
+  for (const line of lines) {
+    if (line.startsWith('/tmp/appimage_extracted_')) {
+      extractedLines += 1
+      continue
+    }
+    // The final line can be truncated mid-write when timeout kills the extractor (e.g. `/tmp/appi`).
+    if (extractedLines > 0 && line === lines.at(-1) && '/tmp/appimage_extracted_'.startsWith(line)) {
+      extractedLines += 1
+      continue
+    }
+    return false
+  }
+  return extractedLines > 0
+}
+
+/**
  * macOS refusing to run the bundle at all (#308).
  *
  * A CI build is ad-hoc or Developer ID signed and never notarized, so Gatekeeper has an opinion.
@@ -118,6 +157,9 @@ export function classifyLaunch({ output, exitCode, stayedAlive }) {
   if (SANDBOX_PATTERNS.some(pattern => pattern.test(text)))
     return { verdict: 'sandbox-denied', product: true }
 
+  if (MISSING_FUSE_PATTERNS.some(pattern => pattern.test(text)))
+    return { verdict: 'missing-fuse', product: true }
+
   if (CODE_SIGNATURE_PATTERNS.some(pattern => pattern.test(text)))
     return { verdict: 'code-signature', product: true }
 
@@ -146,6 +188,9 @@ export function classifyLaunch({ output, exitCode, stayedAlive }) {
     if (match)
       return { verdict: 'missing-library', product: false, detail: match[1] }
   }
+
+  if (stayedAlive && isIncompleteAppImageExtraction(text))
+    return { verdict: 'extract-timeout', product: false, detail: 'AppImage extraction did not finish before timeout' }
 
   if (stayedAlive)
     return { verdict: 'ok', product: false }
@@ -201,6 +246,10 @@ export function describeUsernsRestriction(raw) {
 const DESCRIPTIONS = {
   'sandbox-denied': 'The app could not create its sandbox. This is #213: Ubuntu 24.04 restricts '
     + 'unprivileged user namespaces, a .deb carries an AppArmor profile and an AppImage cannot.',
+  'missing-fuse': 'The AppImage requires legacy FUSE2 (libfuse.so.2), which Ubuntu 24.04 does not '
+    + 'ship by default (#213). Package the AppImage with the static FUSE3 runtime (`toolsets.appimage`).',
+  'extract-timeout': 'AppImage `--appimage-extract-and-run` timed out while still extracting files '
+    + 'before AppRun or the Electron binary started. Extract before launching the timed smoke step.',
   'no-display': 'No X server was available. The smoke step is supposed to provide one, so this is '
     + 'a problem with the step rather than with the build.',
   'missing-library': 'The runner is missing an Electron runtime dependency. A CI environment gap, '
@@ -445,7 +494,62 @@ function selfTest() {
     { name: 'a missing DLL is a product problem, unlike a missing .so', actual: classifyLaunch({ output: '0xc0000135', exitCode: 1, stayedAlive: false }).product, expected: true },
     { name: 'a missing .so is still not a product problem', actual: classifyLaunch({ output: 'error while loading shared libraries: libgbm.so.1', exitCode: 127, stayedAlive: false }).product, expected: false },
     { name: 'a sandbox refusal still outranks a missing DLL', actual: classifyLaunch({ output: '0xc0000135\nNo usable sandbox!', exitCode: 1, stayedAlive: false }).verdict, expected: 'sandbox-denied' },
-    { name: 'every verdict has a description', actual: Object.keys(DESCRIPTIONS).length, expected: 7 },
+    // Ubuntu 24.04 AppImage FUSE2 & extract-timeout regressions (#213).
+    {
+      name: 'a missing libfuse.so.2 error is a product missing-fuse verdict',
+      actual: classifyLaunch({
+        output: 'dlopen(): error loading libfuse.so.2\nAppImages require FUSE to run.',
+        exitCode: 127,
+        stayedAlive: false,
+      }).verdict,
+      expected: 'missing-fuse',
+    },
+    {
+      name: 'missing-fuse is classified as a product packaging defect',
+      actual: classifyLaunch({
+        output: 'dlopen(): error loading libfuse.so.2',
+        exitCode: 127,
+        stayedAlive: false,
+      }).product,
+      expected: true,
+    },
+    {
+      name: 'a sandbox refusal still outranks missing-fuse',
+      actual: classifyLaunch({
+        output: 'dlopen(): error loading libfuse.so.2\nNo usable sandbox!',
+        exitCode: 1,
+        stayedAlive: false,
+      }).verdict,
+      expected: 'sandbox-denied',
+    },
+    {
+      name: 'truncated AppImage extraction lines on timeout do not false-pass as ok',
+      actual: classifyLaunch({
+        output: '/tmp/appimage_extracted_abc/AppRun\n/tmp/appimage_extracted_abc/resources/app.asar\n/tmp/appi',
+        exitCode: 124,
+        stayedAlive: true,
+      }).verdict,
+      expected: 'extract-timeout',
+    },
+    {
+      name: 'extract-timeout is classified as a CI smoke-step issue, not a product defect',
+      actual: classifyLaunch({
+        output: '/tmp/appimage_extracted_abc/AppRun\n/tmp/appimage_extracted_abc/tuff',
+        exitCode: 124,
+        stayedAlive: true,
+      }).product,
+      expected: false,
+    },
+    {
+      name: 'extraction lines followed by real app output still classify as ok',
+      actual: classifyLaunch({
+        output: '/tmp/appimage_extracted_abc/AppRun\n[CoreApp] ready',
+        exitCode: 124,
+        stayedAlive: true,
+      }).verdict,
+      expected: 'ok',
+    },
+    { name: 'every verdict has a description', actual: Object.keys(DESCRIPTIONS).length, expected: 9 },
   ]
 
   let failed = 0

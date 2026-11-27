@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
+vi.mock('electron', () => ({
+  app: {
+    getLocale: () => 'en-US',
+    whenReady: () => Promise.resolve()
+  }
+}))
+
 const { isXdotoolAvailableMock } = vi.hoisted(() => ({
   isXdotoolAvailableMock: vi.fn()
 }))
@@ -69,6 +76,9 @@ describe('platform capability runtime patch', () => {
 
     expect(patch.supportLevel).toBe('best_effort')
     expectActionableCapabilityMetadata(patch, 'POWERSHELL_FOREGROUND_WINDOW')
+    expect(patch.attempt).toContain('powershell')
+    expect(patch.recovery).toEqual(expect.any(String))
+    expect(patch.recovery?.length).toBeGreaterThan(0)
   })
 
   it('reports Linux active-app as unsupported when xdotool is missing', async () => {

@@ -164,6 +164,49 @@ describe('preserveRequiredNativeAddons', () => {
 
     expect(kept).toEqual(['tuff_native_ocr.node'])
   })
+
+  it.each<[target: 'win' | 'linux', extraAddons: string[]]>([
+    ['win', ['tuff_native_screenshot.node', 'tuff-native-ocr.exe']],
+    ['linux', ['tuff_native_screenshot.node', 'tuff-native-ocr']]
+  ])(
+    'preserves and restores separately-built screenshot and Rust OCR binaries on %s across install-app-deps (#321)',
+    (target, extraAddons) => {
+      const targetAddons = requiredNativeAddonNames(target)
+      const fixture = createNativeAddonsFixture([
+        ...targetAddons,
+        ...extraAddons,
+        UNREQUESTED_ADDON
+      ])
+
+      const preserved = preserveRequiredNativeAddons({
+        projectRoot: fixture.projectRoot,
+        target,
+        tempRoot: fixture.tempRoot
+      })
+
+      expect([...preserved.kept].sort()).toEqual([...targetAddons, ...extraAddons].sort())
+      expect(existsSync(path.join(preserved.backupDir, UNREQUESTED_ADDON))).toBe(false)
+
+      // Simulate node-gyp wiping build/Release and rebuilding only binding.gyp addons.
+      simulateInstallAppDepsRebuild(fixture.releaseDir, GYP_BUILT_ADDONS)
+      for (const extra of extraAddons) {
+        expect(existsSync(path.join(fixture.releaseDir, extra))).toBe(false)
+      }
+
+      const restored = restorePreservedNativeAddons({
+        projectRoot: fixture.projectRoot,
+        preserved
+      })
+
+      for (const extra of extraAddons) {
+        expect(restored).toContain(extra)
+        expect(readFileSync(path.join(fixture.releaseDir, extra), 'utf8')).toBe(
+          `cargo-built:${extra}\n`
+        )
+      }
+      expect(existsSync(path.join(fixture.releaseDir, UNREQUESTED_ADDON))).toBe(false)
+    }
+  )
 })
 
 describe('a preservation that fails part way', () => {
