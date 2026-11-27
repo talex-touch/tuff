@@ -1,21 +1,26 @@
 <script setup lang="ts">
 import { defineAsyncComponent, h, type FunctionalComponent } from 'vue'
 import DocHero from '~/components/docs/DocHero.vue'
-import DocsFrameworkStatusBar from '~/components/docs/DocsFrameworkStatusBar.vue'
 import ProseA from '~/components/content/ProseA.vue'
 import DocsProseHeading from '~/components/docs/DocsProseHeading.vue'
-import { resolveComponentSlugFromPath } from '~/data/tuffex-framework-matrix'
+import { resolveComponentSlugFromPath } from '~/utils/tuffex-component-slug'
+import { hasDocMathContent } from '~/utils/docs-math'
+import { buildDocsMetaState, slimDocsPagePayload } from '~/utils/docs-page-payload'
 import { appDescription, appName } from '~/constants'
 import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
 import { cacheDocsFullBody, hasCachedDocsFullBody, isDocsPageRecordForRoute, readCachedDocsFullBody, requestDocsPage, resolveDocsFullBodyCacheKey } from '~/utils/docs-page-client-cache'
 import { buildDocOutlineFromBody, buildDocOutlineTree, type DocTocEntry } from '~/utils/docs-outline'
 import { buildDocsSeoHead, normalizeDocsSeoCanonicalPath } from '~/utils/docs-seo'
+import { createDocsPrimaryDemoTracker, DOCS_PRIMARY_DEMO_KEY } from '~/utils/docs-primary-demo'
 import { DOCS_SOURCE_PATH_KEY } from '~/utils/docs-source-path'
 import { useTypedFetch } from '~/utils/request'
 import { CONCEPTS_MANUAL_PATH, CONCEPTS_MANUAL_READING_ORDER, isConceptsManualPath } from '~/utils/docs-concepts-manual'
 import { canonicalDocsPageIdentity, normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
-// Formulas arrive as KaTeX markup rendered when the page was parsed (utils/remark-math.ts).
-import 'katex/dist/katex.min.css'
+
+const DocsFrameworkStatusBar = defineAsyncComponent(() => import('~/components/docs/DocsFrameworkStatusBar.vue'))
+// Formulas arrive as KaTeX markup rendered when the page was parsed (utils/remark-math.ts);
+// load katex.min.css only when the active document actually contains math nodes.
+const LazyDocsKatexStyles = defineAsyncComponent(() => import('~/components/docs/DocsKatexStyles.vue'))
 
 // Two retries, then the reader gets an error with a retry button instead of a blank page.
 // The API behind this is dynamic and has been measured resetting connections on slow links,
@@ -44,6 +49,7 @@ definePageMeta({
   key: route => route.path,
 })
 
+const nuxtApp = useNuxtApp()
 const route = useRoute()
 const router = useRouter()
 const requestUrl = useRequestURL()
@@ -162,10 +168,11 @@ function resolveDocMeta(record: Record<string, any> | null | undefined) {
     return {}
 
   const parsedMeta = coerceJsonRecord<Record<string, any>>(record.meta) ?? {}
+  const { body: _body, rawbody: _rawbody, toc: _toc, ...rest } = record
 
   return {
     ...parsedMeta,
-    ...record,
+    ...rest,
   }
 }
 
@@ -178,6 +185,7 @@ const { data: docPayload, status } = await useTypedFetch<Record<string, any> | n
       locale: docsLocale.value,
       body: DOCS_PAGE_RENDER_BODY_MODE,
     })),
+    transform: slimDocsPagePayload,
     default: () => null,
     immediate: import.meta.server,
     watch: false,
@@ -201,6 +209,8 @@ const fullDocError = ref(false)
 
 const docMeta = computed(() => resolveDocMeta((doc.value ?? null) as Record<string, any> | null))
 const renderDoc = computed(() => (shouldSplitDocBody.value ? fullDoc.value ?? doc.value : doc.value))
+const domHasMath = ref(false)
+const hasMathContent = computed(() => hasDocMathContent(renderDoc.value?.body) || domHasMath.value)
 
 // `ProseA` resolves an author's relative content link (`./installation.zh.mdc`) against the
 // document being rendered: such a link is relative to the source file, not to the URL.
@@ -208,6 +218,11 @@ provide(DOCS_SOURCE_PATH_KEY, computed(() => {
   const path = renderDoc.value?.path ?? doc.value?.path
   return typeof path === 'string' ? path : null
 }))
+
+// Coordinates multi-demo component pages so only the first TuffDemoWrapper mounts the
+// shared React/WC interactive showcase while subsequent variant demos keep their distinct Vue previews.
+const primaryDemoTracker = createDocsPrimaryDemoTracker()
+provide(DOCS_PRIMARY_DEMO_KEY, primaryDemoTracker)
 
 // The loading skeleton reuses TxSkeleton without joining the first-paint TuffEx
 // import graph (docs-page-performance.test.ts guards this): async chunk only.
@@ -498,6 +513,7 @@ watch(requestKey, () => {
   clearCodeEnhanceSchedule()
   clearPagerFullBodyPrefetchSchedules()
   clearRenderedCodeHeaders()
+  domHasMath.value = false
   isLoading.value = true
   void loadActiveDocForRoute()
 })
@@ -560,6 +576,24 @@ const shouldMountDocEngagementPanels = ref(false)
 // the skeleton holds space until Suspense resolves. A body already present at setup
 // was rendered on the server, and hydration must agree with that.
 const primaryDocBodyResolved = ref(Boolean(renderDoc.value?.body))
+// Keep `nuxtApp.isHydrating` true until the inner `<Suspense>` around `<ContentRenderer>`
+// resolves its async MDC components (e.g. `DocsComponentsGallery`), matching `NuxtLayout`.
+let finishDocBodyHydration: (() => void) | null = null
+if (import.meta.client && nuxtApp.isHydrating && viewState.value === 'content' && Boolean(renderDoc.value?.body)) {
+  const done = nuxtApp.deferHydration()
+  const releaseDocBodyHydration = () => {
+    if (!finishDocBodyHydration)
+      return
+    finishDocBodyHydration = null
+    done()
+  }
+  finishDocBodyHydration = releaseDocBodyHydration
+  const removeErrorHook = nuxtApp.hooks.hookOnce('app:error', releaseDocBodyHydration)
+  onBeforeUnmount(() => {
+    removeErrorHook()
+    releaseDocBodyHydration()
+  })
+}
 // The heading the URL points at until hydration finishes and can scroll into view.
 let pendingDocHash = ''
 const docEngagementAnchorRef = ref<HTMLElement | null>(null)
@@ -1108,6 +1142,9 @@ const currentDocRenderKey = computed(() => {
   const path = typeof source?.path === 'string' ? source.path : docPath.value
   return `${path}:${docsLocale.value}:${source?.body ? 'body' : 'meta'}`
 })
+watch(currentDocRenderKey, () => {
+  primaryDemoTracker.reset()
+})
 const isDocsContentReady = computed(() => viewState.value === 'content' && Boolean(doc.value))
 const shouldShowDocBodySkeleton = computed(() =>
   renderDoc.value?.body ? !primaryDocBodyResolved.value : !fullDocError.value,
@@ -1125,7 +1162,7 @@ watch(
       const rawTitle = currentDoc.seo?.title ?? currentDoc.title ?? ''
       docTitleState.value = normalizeTitleForLocale(String(rawTitle), currentDoc.path ?? docPath.value)
       docLocaleState.value = resolveDocLocale(currentDoc)
-      docMetaState.value = { ...docMeta.value }
+      docMetaState.value = buildDocsMetaState(docMeta.value)
       if (!outlineState.value.length)
         void scheduleOutlineSync(120)
       return
@@ -1425,6 +1462,10 @@ function handlePrimaryDocBodyPending() {
 
 function handlePrimaryDocBodyResolve() {
   primaryDocBodyResolved.value = true
+  if (finishDocBodyHydration) {
+    const release = finishDocBodyHydration
+    void nextTick(release)
+  }
   void scheduleCodeEnhance(0)
   void scheduleOutlineSync(0)
   // The body may arrive after SPA navigation, so retry scrolling to the active hash target.
@@ -1585,6 +1626,9 @@ function enhanceCodeBlocks() {
     pre.dataset.codeEnhanced = 'true'
   })
 
+  if (!domHasMath.value && document.querySelector('.docs-prose .katex, .docs-prose .katex-display'))
+    domHasMath.value = true
+
   void renderMermaidBlocks()
 }
 
@@ -1681,6 +1725,7 @@ watch(
 
 <template>
   <div class="docs-root relative">
+    <LazyDocsKatexStyles v-if="hasMathContent" />
     <div :key="viewState" class="docs-state">
         <div v-if="viewState === 'loading'" class="docs-surface docs-surface--skeleton" role="status" aria-live="polite">
           <span class="sr-only">{{ t('docs.loading') }}</span>
@@ -1742,10 +1787,11 @@ watch(
               :updated-label="heroUpdatedLabel"
               :verified-label="heroVerifiedLabel"
             />
-            <DocsFrameworkStatusBar
-              v-if="activeComponentSlug"
-              :slug="activeComponentSlug"
-            />
+            <div v-if="activeComponentSlug" class="docs-fw-status-slot">
+              <DocsFrameworkStatusBar
+                :slug="activeComponentSlug"
+              />
+            </div>
           </div>
           <div
             v-if="heroSyncBanner"
@@ -2068,6 +2114,7 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 2.75rem;
+  min-width: 0;
   background: transparent;
   isolation: isolate;
 }
@@ -2076,10 +2123,16 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
 }
 
 .docs-surface--hero .docs-hero-block {
   padding-bottom: 0.5rem;
+}
+
+.docs-fw-status-slot {
+  min-height: 46px;
+  min-width: 0;
 }
 
 .docs-sync-banner {
@@ -2318,6 +2371,7 @@ a.docs-hero-crumb:hover {
   --tw-prose-pre-bg: var(--docs-code-bg);
   --tw-prose-th-borders: var(--docs-border);
   --tw-prose-td-borders: var(--docs-border);
+  min-width: 0;
   color: var(--docs-ink);
 }
 

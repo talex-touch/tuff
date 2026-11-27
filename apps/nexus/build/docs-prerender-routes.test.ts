@@ -295,4 +295,14 @@ describe('docs prerender routes', () => {
       '/docs/dev/getting-started/quickstart',
     ]))
   })
+
+  it('produces identical route lists when reusing precomputed docs routes', () => {
+    const docsRoutes = createDocsPrerenderRoutes(nexusRoot)
+    expect(createDocsPageApiPrerenderRoutes(nexusRoot, docsRoutes)).toEqual(
+      createDocsPageApiPrerenderRoutes(nexusRoot),
+    )
+    expect(createDocsMarkdownPrerenderRoutes(nexusRoot, docsRoutes)).toEqual(
+      createDocsMarkdownPrerenderRoutes(nexusRoot),
+    )
+  })
 })

@@ -130,6 +130,8 @@ describe('Nexus deploy asset budget', () => {
     expect(installed.css.length, 'i-carbon-settings should resolve from @iconify-json/carbon').toBeGreaterThan(0)
     const uninstalled = await uno.generate('i-ri-settings-line', { preflights: false, safelist: false })
     expect(uninstalled.css.length, 'i-ri-settings-line should not resolve — ri is not a dependency').toBe(0)
+    const retiredCib = await uno.generate('i-cib-windows', { preflights: false, safelist: false })
+    expect(retiredCib.css.length, 'i-cib-* should be blocked from emitting CSS').toBe(0)
   })
 
   /*
@@ -147,6 +149,34 @@ describe('Nexus deploy asset budget', () => {
     expect(css).toMatch(/:where\(\.i-logos-vue\)\{[^}]*background:url\("data:image\/svg\+xml/)
     expect(css).toMatch(/(?:^|\n)\.text-amber-600\{/)
     expect(css).toMatch(/(?:^|\n)\.w-4\{/)
+  })
+
+  it('routes demo-only icons into the lazy demo-icons layer with zero specificity', async () => {
+    const uno = await createGenerator(unoConfig)
+    const result = await uno.generate('i-carbon-settings i-carbon-build-tool', { preflights: false, safelist: false })
+
+    expect(result.getLayer('icons')).toMatch(/:where\(\.i-carbon-settings\)\{/)
+    expect(result.getLayer('icons')).not.toContain('i-carbon-build-tool')
+    expect(result.getLayer('demo-icons')).toMatch(/:where\(\.i-carbon-build-tool\)\{/)
+  })
+
+  it('schedules UnoCSS icon layers in idle after app:suspense:resolve without app:mounted', () => {
+    const pluginSource = readFileSync(join(nexusRoot, 'app/plugins/unocss-icons.client.ts'), 'utf8')
+    expect(pluginSource).toContain("nuxtApp.hook('app:suspense:resolve'")
+    expect(pluginSource).not.toContain("nuxtApp.hook('app:mounted'")
+    expect(pluginSource).not.toContain('requestAnimationFrame')
+    expect(pluginSource).toContain('requestIdleCallback')
+    expect(pluginSource).toContain("import('uno:icons.css')")
+    expect(pluginSource).toContain("import('uno:demo-icons.css')")
+  })
+
+  it('keeps data gallery chart specimens and ECharts strictly lazy and client-only for SSR', () => {
+    const dataSuiteSource = readFileSync(join(nexusRoot, 'app/components/docs/gallery/suites/GalleryDataSuite.vue'), 'utf8')
+    const echartSpecimenSource = readFileSync(join(nexusRoot, 'app/components/docs/gallery/GalleryEChart.vue'), 'utf8')
+    expect(dataSuiteSource).toContain('if (import.meta.server)')
+    expect(dataSuiteSource).toContain("clientAsync(() => import('../GalleryEChart.vue'))")
+    expect(echartSpecimenSource).toContain('if (import.meta.server)')
+    expect(echartSpecimenSource).not.toMatch(/^import\s+\{[^}]*TxEChart/m)
   })
 
   it('keeps oversized route-local icon paths out of the shared entry CSS', () => {
@@ -183,9 +213,9 @@ describe('Nexus deploy asset budget', () => {
     expect(unoSource).not.toContain('i-simple-icons-')
     expect(iconSources).not.toContain('i-ri-')
     expect(iconSources).not.toContain('i-simple-icons-')
-    // 5.5 KB of path against i-carbon-linux-alt's 1.0 KB; likewise cib's apple
-    // (1.3 KB) against carbon's (0.7 KB). Safari and Edge have no carbon
-    // equivalent and stay on cib.
+    // All `i-cib-*` usages have been retired onto `carbon` so `@iconify-json/cib`
+    // can be dropped cleanly without emitting any brand SVGs into `__uno_icons.css`.
+    expect(iconSources).not.toContain('i-cib-')
     expect(iconSources).not.toContain('i-cib-linux')
     expect(iconSources).not.toContain('i-cib-apple')
     for (const icon of [

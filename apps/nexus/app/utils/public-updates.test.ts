@@ -73,6 +73,22 @@ describe('public-updates cold hydration helpers', () => {
       prerenderedAt: undefined,
       liveLoaded: false,
     })).toBe(false)
+
+    // Live SSR (no prerenderedAt) that already returned a populated payload must not trigger a redundant client refetch
+    expect(shouldRefreshPublicUpdates({
+      payload: { updates: [staticAnnouncement] },
+      prerenderedAt: undefined,
+      serverRendered: true,
+      liveLoaded: false,
+    })).toBe(false)
+
+    // Empty SSR payload still refreshes on client mount
+    expect(shouldRefreshPublicUpdates({
+      payload: { updates: [] },
+      prerenderedAt: undefined,
+      serverRendered: true,
+      liveLoaded: false,
+    })).toBe(true)
   })
 
   it('keeps the prerendered payload during hydration, then drops stale/static cache until live fetch succeeds', () => {
@@ -146,6 +162,13 @@ describe('public-updates cold hydration helpers', () => {
       payload: { prerenderedAt: 1794996369434, data: { 'public-updates': staticOnly } },
       static: { data: {} },
     }, 'public-updates', 'refresh:manual')).toBeUndefined()
+
+    // Live SSR payload stored in payload.data (without prerenderedAt) stays cached without redundant refetch
+    expect(resolvePublicUpdatesFromApp({
+      isHydrating: false,
+      payload: { prerenderedAt: undefined, serverRendered: true, data: { 'public-updates': staticOnly } },
+      static: { data: {} },
+    }, 'public-updates', 'initial')).toBe(staticOnly)
   })
 
   it('refreshes on cold mount of prerendered payload and only skips once committed live payload exists', async () => {

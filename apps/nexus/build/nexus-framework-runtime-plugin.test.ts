@@ -77,18 +77,32 @@ describe('nexus-framework-runtime-plugin', () => {
     expect(probe.reactDomClientEntry).toBe('react-dom/client')
   })
 
-  it('pre-bundles @floating-ui/dom via a pnpm-resolvable optimizeDeps entry in nuxt.config.ts', async () => {
+  it('pre-bundles only essential lightweight floating-ui deps via pnpm-resolvable optimizeDeps entries in nuxt.config.ts', async () => {
     vi.stubGlobal('defineNuxtConfig', (config: unknown) => config)
     try {
       const mod = await import('../nuxt.config')
       const config = mod.default as { vite?: { optimizeDeps?: { include?: string[] } } }
       const include = config.vite?.optimizeDeps?.include ?? []
 
+      const floatingVueEntry = include.find(entry => entry === '@floating-ui/vue' || entry.endsWith('> @floating-ui/vue'))
+      expect(floatingVueEntry).toBe('@talex-touch/tuffex > @floating-ui/vue')
+
       const floatingDomEntry = include.find(entry => entry === '@floating-ui/dom' || entry.endsWith('> @floating-ui/dom'))
       expect(floatingDomEntry).toBe('@talex-touch/tuffex-core > @floating-ui/dom')
 
+      // Heavy lazy-only libraries stay out of cold dev pre-bundling.
+      for (const heavyDep of ['mermaid', 'echarts/core', 'ogl', 'react', '@talex-touch/tuffex > shiki'])
+        expect(include).not.toContain(heavyDep)
+
       const nexusRoot = resolve(import.meta.dirname, '..')
       const nexusReq = createRequire(resolve(nexusRoot, 'package.json'))
+
+      const tuffexPkgJson = nexusReq.resolve('@talex-touch/tuffex/package.json')
+      const tuffexReq = createRequire(tuffexPkgJson)
+      const floatingVueEntryPath = tuffexReq.resolve('@floating-ui/vue')
+      expect(existsSync(floatingVueEntryPath)).toBe(true)
+      expect(dirname(floatingVueEntryPath)).toContain('@floating-ui')
+
       const corePkgJson = nexusReq.resolve('@talex-touch/tuffex-core/package.json')
       const coreReq = createRequire(corePkgJson)
       const floatingDomEntryPath = coreReq.resolve('@floating-ui/dom')

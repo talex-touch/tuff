@@ -14,6 +14,7 @@ import { remarkCloseComponentTags } from './app/utils/remark-close-component-tag
 import { remarkMath } from './app/utils/remark-math'
 import { remarkMermaid } from './app/utils/remark-mermaid'
 import { resolveTuffexDevMode } from './build/tuffex-dev-mode'
+import { filterContentComponentsTemplate } from './build/nexus-content-components'
 import { nexusPageMetaFastPathPlugin } from './build/nexus-page-meta-fast-path'
 import { removeRouteLocalPageComponents } from './build/nexus-page-routes'
 import { createNexusPrerenderRoutes } from './build/nexus-prerender-routes'
@@ -112,6 +113,8 @@ const nextAuthCoreEntry = resolve(
 )
 const vueDevtoolsApiNoopEntry = resolve(currentDir, 'app/utils/vue-devtools-api-noop.ts')
 const isProd = process.env.NODE_ENV === 'production'
+const isNuxtDevCli = process.argv.includes('dev')
+const enableEslintModule = !isDev || !isNuxtDevCli || isEnvFlagEnabled(process.env.NUXT_ENABLE_ESLINT_MODULE)
 const useVueDevtoolsApiNoop = isDev && process.env.NUXT_DISABLE_VUE_DEVTOOLS_API_NOOP !== 'true'
 const enablePwaModule = isProd || process.env.VITE_PLUGIN_PWA === 'true'
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
@@ -231,10 +234,11 @@ function isSentryClientPlugin(file: string | undefined) {
   if (!file)
     return false
 
-  const normalized = file.replace(/\\/g, '/').replace(/\.m?js$/, '')
+  const normalized = file.replace(/\\/g, '/').replace(/\.m?(?:js|ts)$/, '')
   return normalized.endsWith('/sentry-client-config')
     || normalized.endsWith('/@sentry/nuxt/build/module/runtime/plugins/sentry.client')
     || (normalized.includes('/@sentry+nuxt') && normalized.endsWith('/runtime/plugins/sentry.client'))
+    || (disableSentry && normalized.endsWith('/app/plugins/sentry-deferred.client'))
 }
 
 function removeSentryClientPlugins(app: { plugins: Array<{ src?: string }> }) {
@@ -251,7 +255,9 @@ const nitroTypegenRouteExcludes = [
   '/api/dashboard/provider-registry/providers/:id/capabilities',
   '/api/dashboard/provider-registry/providers/:id/capabilities/:capabilityId',
 ]
-const nexusPrerenderRoutes = createNexusPrerenderRoutes(currentDir)
+const nexusPrerenderRoutes = (isDev || disablePrerender)
+  ? []
+  : createNexusPrerenderRoutes(currentDir)
 
 export default defineNuxtConfig({
   modules: [
@@ -259,7 +265,7 @@ export default defineNuxtConfig({
     '@pinia/nuxt',
     '@nuxtjs/color-mode',
     ...(enablePwaModule ? ['@vite-pwa/nuxt'] : []),
-    '@nuxt/eslint',
+    ...(enableEslintModule ? ['@nuxt/eslint'] : []),
     '@nuxt/content',
     '@nuxtjs/i18n',
     '@sidebase/nuxt-auth',
@@ -283,6 +289,8 @@ export default defineNuxtConfig({
           'content/demo-lazy.ts',
           'content/demo-component-loader.ts',
           'content/TuffCodeBlockRenderer.vue',
+          'store/**',
+          'tuff/**',
         ],
       },
     ],
@@ -464,11 +472,6 @@ export default defineNuxtConfig({
     },
   },
 
-  ignore: [
-    'app/plugins/highlight.client.ts',
-    'app/plugins/mermaid.client.ts',
-  ],
-
   build: {
     transpile: [
       '@talex-touch/tuff-business',
@@ -482,6 +485,10 @@ export default defineNuxtConfig({
     '/terms': { redirect: '/license' },
     '/updates': { disableServerSideAuth: true },
     '/updates/**': { disableServerSideAuth: true },
+    '/admin': { ssr: false },
+    '/admin/**': { ssr: false },
+    '/dashboard': { ssr: false },
+    '/dashboard/**': { ssr: false },
     // Edge cache headers for prerendered docs HTML/JSON and i18n messages; see the
     // constants for the window and why. Static responses only — the Worker keeps its own.
     ...createStaticCacheRouteRules(),
@@ -621,37 +628,11 @@ export default defineNuxtConfig({
     },
     optimizeDeps: {
       include: [
-        'mermaid',
-        'gsap',
-        'gsap/ScrollTrigger',
-        'gsap/ScrollToPlugin',
-        'theme-colors',
-        'simplex-noise',
         '@vueuse/core',
-        'marked',
-        'echarts/core',
-        'echarts/charts',
-        'echarts/components',
-        'echarts/renderers',
-        '@talex-touch/tuffex > shiki',
-        '@talex-touch/tuffex > shiki > @shikijs/core',
-        '@talex-touch/tuffex > @shikijs/engine-javascript',
-        '@talex-touch/tuffex > shiki > @shikijs/langs',
-        '@talex-touch/tuffex > shiki > @shikijs/themes',
-        '@talex-touch/tuffex > @better-scroll/core',
-        '@talex-touch/tuffex > @better-scroll/scroll-bar',
-        '@talex-touch/tuffex > @better-scroll/pull-down',
-        '@talex-touch/tuffex > @better-scroll/pull-up',
-        '@talex-touch/tuffex > dompurify',
-        '@floating-ui/vue',
+        '@talex-touch/tuffex > @floating-ui/vue',
         // Nested specifier so pnpm strict layout resolves @floating-ui/dom cleanly
         // and Vite's tryOptimizedResolve satisfies tuffex-core / tuffex-react overlays without a cold reload.
         '@talex-touch/tuffex-core > @floating-ui/dom',
-        'react',
-        'react-dom',
-        'react-dom/client',
-        'react/jsx-runtime',
-        'ogl',
       ],
     },
     resolve: {
@@ -712,15 +693,20 @@ export default defineNuxtConfig({
     // normalizeViteManifest(), causing prerendered HTML to emit `<link rel="prefetch">` tags for
     // deferred Sentry, Three.js, and lazy route/demo chunks. Clear `prefetch` before
     // precomputeDependencies() runs so lazy imports stay strictly on-demand.
-    // DocsComponentsGallery wraps every Tx* specimen in `<ClientOnly>` (`GallerySpecimenGate`), so
-    // SSR renders only its own shell (styled by `DocsComponentsGallery.css`) and zero Tx* markup;
-    // trimming its SSR manifest `imports` avoids preloading 115+ client-only TuffEx stylesheets in
-    // `*-suite.html` `<head>` while Vite's client `__vitePreload` still loads them on hydration.
+    // DocsComponentsGallery and its lazy `Gallery*Suite` children wrap every Tx* specimen in
+    // `<ClientOnly>` (`GallerySpecimenGate`), so SSR renders only the gallery shell (styled by
+    // `DocsComponentsGallery.css`) and zero Tx* markup; trimming their SSR manifest `imports`
+    // avoids preloading 115+ client-only TuffEx stylesheets in `*-suite.html` `<head>` while
+    // Vite's client `__vitePreload` still loads them on hydration.
     'build:manifest'(manifest) {
       for (const [key, entry] of Object.entries(manifest)) {
         entry.prefetch = false
-        if (key === 'components/docs/DocsComponentsGallery.vue')
+        if (
+          key === 'components/docs/DocsComponentsGallery.vue'
+          || key.startsWith('components/docs/gallery/suites/')
+        ) {
           entry.imports = []
+        }
       }
     },
     'app:resolve'(app) {
@@ -730,6 +716,7 @@ export default defineNuxtConfig({
     'app:templates'(app) {
       removeSidebaseAuthAppRuntime(app)
       removeSentryClientPlugins(app)
+      filterContentComponentsTemplate(app)
     },
     'components:extend'(components) {
       const ignoredContentComponentPatterns = [
@@ -741,7 +728,6 @@ export default defineNuxtConfig({
         '/app/components/content/TuffCodeBlockRenderer.vue',
         '/app/components/store/',
         '/app/components/tuff/',
-        '/app/components/theme/components/',
         '/@nuxtjs/mdc/dist/runtime/components/prose/',
         '/node_modules/@nuxtjs/mdc/dist/runtime/components/prose/',
       ]

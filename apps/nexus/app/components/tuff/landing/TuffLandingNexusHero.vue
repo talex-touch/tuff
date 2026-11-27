@@ -47,12 +47,74 @@ const heroPlatform = ref<HeroPlatform>('darwin')
 const ready = ref(false)
 const enableMotion = ref(false)
 const shouldMountEventHorizon = ref(false)
+let horizonIdleId: number | null = null
+let horizonTimeoutId: number | null = null
+let releasesIdleId: number | null = null
+let releasesTimeoutId: number | null = null
+let releasesLoadStarted = false
+
+function clearHorizonSchedule() {
+  if (!hasWindow())
+    return
+  if (horizonIdleId !== null && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(horizonIdleId)
+    horizonIdleId = null
+  }
+  if (horizonTimeoutId !== null) {
+    window.clearTimeout(horizonTimeoutId)
+    horizonTimeoutId = null
+  }
+}
+
+function clearReleasesSchedule() {
+  if (!hasWindow())
+    return
+  if (releasesIdleId !== null && 'cancelIdleCallback' in window) {
+    window.cancelIdleCallback(releasesIdleId)
+    releasesIdleId = null
+  }
+  if (releasesTimeoutId !== null) {
+    window.clearTimeout(releasesTimeoutId)
+    releasesTimeoutId = null
+  }
+}
 
 function mountEventHorizon() {
+  clearHorizonSchedule()
   if (shouldMountEventHorizon.value)
     return
   shouldMountEventHorizon.value = true
   startSceneDemo()
+}
+
+function scheduleEventHorizonMount() {
+  if (!hasWindow() || shouldMountEventHorizon.value)
+    return
+
+  if (typeof window.requestIdleCallback === 'function') {
+    horizonIdleId = window.requestIdleCallback(mountEventHorizon, { timeout: 1200 })
+    return
+  }
+  horizonTimeoutId = window.setTimeout(mountEventHorizon, 180)
+}
+
+function ensureReleasesLoaded() {
+  clearReleasesSchedule()
+  if (releasesLoadStarted)
+    return
+  releasesLoadStarted = true
+  void loadReleases()
+}
+
+function scheduleReleasesLoad() {
+  if (!hasWindow() || releasesLoadStarted)
+    return
+
+  if (typeof window.requestIdleCallback === 'function') {
+    releasesIdleId = window.requestIdleCallback(ensureReleasesLoaded, { timeout: 1800 })
+    return
+  }
+  releasesTimeoutId = window.setTimeout(ensureReleasesLoaded, 300)
 }
 
 
@@ -376,12 +438,10 @@ function toReleaseItem(release: AppRelease): ReleaseItem {
 }
 
 async function loadReleases() {
-  // The history list only needs assets for the newest release in each channel; the stable build is
-  // fetched separately because the mixed page may not contain one.
-  const [live, stable] = await Promise.all([
-    fetchReleases({ limit: 12, includeAssets: 'featured' }),
-    fetchLatestRelease('RELEASE'),
-  ])
+  // Featured mode already attaches assets to the newest release in each channel.
+  // Only fall back to `/api/releases/latest?channel=RELEASE` when the mixed page does not carry
+  // a certified RELEASE build with downloadable assets.
+  const live = await fetchReleases({ limit: 12, includeAssets: 'featured' })
 
   if (live?.length) {
     const sorted = [...live].sort((a, b) =>
@@ -389,6 +449,13 @@ async function loadReleases() {
     releaseList.value = sorted.map(toReleaseItem)
   }
 
+  const featuredStable = releaseList.value.find(item => item.channel === 'RELEASE' && item.assets?.length)
+  if (featuredStable) {
+    stableRelease.value = featuredStable
+    return
+  }
+
+  const stable = await fetchLatestRelease('RELEASE')
   // Both lookups can come back empty; the seeded fallback stays in place then.
   stableRelease.value
     = (stable ? toReleaseItem(stable) : null)
@@ -452,6 +519,7 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 function openOverlay() {
+  ensureReleasesLoaded()
   overlayOpen.value = true
   if (!hasWindow())
     return
@@ -493,10 +561,10 @@ onMounted(() => {
 
   revealFrame = requestAnimationFrame(() => {
     ready.value = true
+    scheduleEventHorizonMount()
+    scheduleReleasesLoad()
   })
-  mountEventHorizon()
 
-  loadReleases()
   if (hasWindow()) {
     const route = useRoute()
     if (route.query.video !== undefined || route.query.watch !== undefined || route.hash === '#video' || route.hash === '#watch-video')
@@ -509,6 +577,8 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(revealFrame)
     revealFrame = null
   }
+  clearHorizonSchedule()
+  clearReleasesSchedule()
   demoCancelled = true
   demoTimers.forEach(id => hasWindow() && window.clearTimeout(id))
   demoTimers.clear()
@@ -569,7 +639,13 @@ onBeforeUnmount(() => {
         </NuxtLink>
       </div>
 
-      <div v-if="latestRelease" class="ExpHero-VersionWrap reveal" style="--d: 150ms">
+      <div
+        v-if="latestRelease"
+        class="ExpHero-VersionWrap reveal"
+        style="--d: 150ms"
+        @pointerenter.once="ensureReleasesLoaded"
+        @focusin.once="ensureReleasesLoaded"
+      >
         <TxVersionCapsule
           ref="triggerRef"
           class="ExpHero-Capsule"

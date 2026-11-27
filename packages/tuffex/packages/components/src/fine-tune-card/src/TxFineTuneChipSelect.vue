@@ -6,7 +6,7 @@
 // on a click anywhere else. All four are added here — the visuals are the same.
 
 import type { FineTuneChipSelectEmits, FineTuneChipSelectProps } from './types'
-import { computed, getCurrentInstance, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 
 defineOptions({ name: 'TxFineTuneChipSelect' })
 
@@ -18,7 +18,7 @@ const props = withDefaults(defineProps<FineTuneChipSelectProps>(), {
 
 const emit = defineEmits<FineTuneChipSelectEmits>()
 
-const uid = getCurrentInstance()?.uid ?? 0
+const uid = useId()
 const listboxId = `tx-bui-chip-select-${uid}-listbox`
 const optionId = (index: number) => `tx-bui-chip-select-${uid}-option-${index}`
 

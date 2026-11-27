@@ -1,16 +1,14 @@
 <script setup lang="ts">
-import { type ComponentPublicInstance, computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { type ComponentPublicInstance, computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useId, watch } from 'vue'
 import TuffDemoClientRenderer from './TuffDemoClientRenderer.client.vue'
 import { queueDemoActivation, queueDemoPrefetch, shouldActivateDemo } from './demo-lazy'
 import { loadDemoComponent } from './demo-component-loader'
 import { useDocsFramework } from '~/composables/useDocsFramework'
+import { DOCS_PRIMARY_DEMO_KEY } from '~/utils/docs-primary-demo'
 import {
   DOCS_FRAMEWORK_META,
-  formatTierDescription,
-  getComponentFrameworkEntry,
   resolveComponentSlugFromPath,
-} from '~/data/tuffex-framework-matrix'
-import { getFrameworkShowcase } from '~/data/tuffex-framework-showcases'
+} from '~/utils/tuffex-component-slug'
 
 interface DemoWrapperProps {
   demo: string
@@ -47,6 +45,29 @@ const route = useRoute()
 const { framework } = useDocsFramework()
 
 const localeKey = computed<'zh' | 'en'>(() => (locale.value === 'zh' ? 'zh' : 'en'))
+const frameworkModules = shallowRef<LoadedFrameworkModules | null>(getCachedFrameworkModules())
+const frameworkModulesFailed = ref(false)
+let unmounted = false
+
+watch(
+  framework,
+  (activeFramework) => {
+    if (activeFramework === 'vue' || frameworkModules.value)
+      return
+
+    frameworkModulesFailed.value = false
+    void loadFrameworkModules()
+      .then((modules) => {
+        if (!unmounted)
+          frameworkModules.value = modules
+      })
+      .catch(() => {
+        if (!unmounted)
+          frameworkModulesFailed.value = true
+      })
+  },
+  { immediate: true },
+)
 
 const resolvedComponentSlug = computed(() => {
   if (props.component?.trim())
@@ -54,10 +75,42 @@ const resolvedComponentSlug = computed(() => {
   return resolveComponentSlugFromPath(route.path)
 })
 
-const compatEntry = computed(() => getComponentFrameworkEntry(resolvedComponentSlug.value))
+const primaryDemoTracker = inject(DOCS_PRIMARY_DEMO_KEY, null)
+const demoInstanceId = `${props.demo || 'demo'}:${useId()}`
+let claimedPrimarySlug = ''
+
+watch(
+  resolvedComponentSlug,
+  (nextSlug) => {
+    if (claimedPrimarySlug && claimedPrimarySlug !== nextSlug) {
+      primaryDemoTracker?.releasePrimary(claimedPrimarySlug, demoInstanceId)
+      claimedPrimarySlug = ''
+    }
+    if (nextSlug && primaryDemoTracker) {
+      primaryDemoTracker.claimPrimary(nextSlug, demoInstanceId)
+      claimedPrimarySlug = nextSlug
+    }
+  },
+  { immediate: true },
+)
+
+const isPrimaryFrameworkDemo = computed(() => {
+  const slug = resolvedComponentSlug.value
+  if (!primaryDemoTracker || !slug)
+    return true
+  return primaryDemoTracker.isPrimary(slug, demoInstanceId)
+})
+
+const compatEntry = computed(() => {
+  if (framework.value === 'vue' || !frameworkModules.value)
+    return null
+  return frameworkModules.value.matrix.getComponentFrameworkEntry(resolvedComponentSlug.value)
+})
 
 const activeFrameworkStatus = computed(() => {
   if (framework.value === 'vue')
+    return 'ready' as const
+  if (!frameworkModules.value)
     return 'ready' as const
   if (!compatEntry.value)
     return 'planned' as const
@@ -65,25 +118,38 @@ const activeFrameworkStatus = computed(() => {
 })
 
 const activeShowcase = computed(() => {
-  if (framework.value === 'vue' || activeFrameworkStatus.value !== 'ready')
+  if (framework.value === 'vue' || !frameworkModules.value || activeFrameworkStatus.value !== 'ready')
     return null
-  return getFrameworkShowcase(resolvedComponentSlug.value)
+  return frameworkModules.value.showcases.getFrameworkShowcase(resolvedComponentSlug.value)
 })
 
-const shouldMountFrameworkStage = computed(() =>
+const hasReadyShowcase = computed(() =>
   framework.value !== 'vue'
   && activeFrameworkStatus.value === 'ready'
   && Boolean(activeShowcase.value),
+)
+
+const isSecondaryFrameworkVariant = computed(() =>
+  hasReadyShowcase.value && !isPrimaryFrameworkDemo.value,
+)
+
+const shouldMountFrameworkStage = computed(() =>
+  hasReadyShowcase.value && isPrimaryFrameworkDemo.value,
 )
 
 const frameworkStageState = ref<'idle' | 'loading' | 'live' | 'unlinked' | 'error'>('idle')
 const codeViewMode = ref<'active' | 'vue'>('active')
 
 watch(
-  () => [framework.value, resolvedComponentSlug.value] as const,
-  () => {
-    frameworkStageState.value = shouldMountFrameworkStage.value ? 'loading' : 'idle'
-    codeViewMode.value = 'active'
+  () => [framework.value, resolvedComponentSlug.value, shouldMountFrameworkStage.value] as const,
+  ([nextFramework, nextSlug, nextShouldMount], [prevFramework, prevSlug]) => {
+    if (nextFramework !== prevFramework || nextSlug !== prevSlug) {
+      frameworkStageState.value = nextShouldMount ? 'loading' : 'idle'
+      codeViewMode.value = 'active'
+      return
+    }
+    if (nextShouldMount && frameworkStageState.value === 'idle')
+      frameworkStageState.value = 'loading'
   },
 )
 
@@ -102,8 +168,22 @@ const frameworkBanner = computed<{ tone: 'info' | 'warning', text: string, tier?
   if (framework.value === 'vue')
     return null
 
+  const modules = frameworkModules.value
+  if (!modules) {
+    if (!frameworkModulesFailed.value)
+      return null
+    const meta = DOCS_FRAMEWORK_META[framework.value]
+    return {
+      tone: 'info',
+      text: t('docs.framework.runtimeUnlinked', {
+        pkg: meta.packageName,
+        framework: meta.shortLabel,
+      }),
+    }
+  }
+
   const tierText = compatEntry.value
-    ? formatTierDescription(compatEntry.value.tier, localeKey.value)
+    ? modules.matrix.formatTierDescription(compatEntry.value.tier, localeKey.value)
     : undefined
 
   if (activeFrameworkStatus.value !== 'ready') {
@@ -154,7 +234,7 @@ function decodeHtmlEntities(value: string) {
 const vueCode = computed(() => (props.code ? decodeHtmlEntities(props.code) : ''))
 
 const frameworkSpecificCode = computed(() => {
-  if (!activeShowcase.value)
+  if (!activeShowcase.value || !isPrimaryFrameworkDemo.value)
     return ''
   if (framework.value === 'react')
     return activeShowcase.value.reactCode(localeKey.value)
@@ -324,6 +404,11 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  unmounted = true
+  if (claimedPrimarySlug) {
+    primaryDemoTracker?.releasePrimary(claimedPrimarySlug, demoInstanceId)
+    claimedPrimarySlug = ''
+  }
   if (demoVisibilityObserver) {
     demoVisibilityObserver.disconnect()
     demoVisibilityObserver = null
@@ -333,6 +418,43 @@ onBeforeUnmount(() => {
   cancelQueuedActivation?.()
   cancelQueuedActivation = null
 })
+</script>
+
+<script lang="ts">
+type FrameworkMatrixModule = typeof import('~/data/tuffex-framework-matrix')
+type FrameworkShowcasesModule = typeof import('~/data/tuffex-framework-showcases')
+
+interface LoadedFrameworkModules {
+  matrix: FrameworkMatrixModule
+  showcases: FrameworkShowcasesModule
+}
+
+let cachedFrameworkModules: LoadedFrameworkModules | null = null
+let pendingFrameworkModules: Promise<LoadedFrameworkModules> | null = null
+
+function getCachedFrameworkModules() {
+  return cachedFrameworkModules
+}
+
+function loadFrameworkModules(): Promise<LoadedFrameworkModules> {
+  if (cachedFrameworkModules)
+    return Promise.resolve(cachedFrameworkModules)
+  if (!pendingFrameworkModules) {
+    pendingFrameworkModules = Promise.all([
+      import('~/data/tuffex-framework-matrix'),
+      import('~/data/tuffex-framework-showcases'),
+    ])
+      .then(([matrix, showcases]) => {
+        cachedFrameworkModules = { matrix, showcases }
+        return cachedFrameworkModules
+      })
+      .catch((error) => {
+        pendingFrameworkModules = null
+        throw error
+      })
+  }
+  return pendingFrameworkModules
+}
 </script>
 
 <template>
@@ -354,7 +476,17 @@ onBeforeUnmount(() => {
             <span class="tuff-demo__dot is-green" />
           </div>
           <span
-            v-if="framework !== 'vue'"
+            v-if="isSecondaryFrameworkVariant"
+            class="tuff-demo__fw-badge tuff-demo__fw-badge--variant"
+            data-variant="vue"
+          >
+            <span class="tuff-demo__fw-badge-icon i-logos-vue" aria-hidden="true" />
+            <span class="tuff-demo__fw-badge-text">
+              {{ t('docs.framework.vueVariantTag', { framework: activeFrameworkMeta.shortLabel }) }}
+            </span>
+          </span>
+          <span
+            v-else-if="framework !== 'vue'"
             class="tuff-demo__fw-badge"
             :data-live="isLiveFrameworkRendered ? 'true' : 'false'"
             :data-status="activeFrameworkStatus"
@@ -554,6 +686,8 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  min-width: 0;
+  max-width: 100%;
   height: 22px;
   padding: 0 8px;
   border-radius: 999px;
@@ -563,6 +697,17 @@ onBeforeUnmount(() => {
   font-size: 12px;
   font-weight: 500;
   line-height: 1;
+}
+
+.tuff-demo__fw-badge--variant {
+  background: color-mix(in srgb, var(--tx-fill-color-light, #f5f7fa) 86%, transparent);
+  color: var(--tx-text-color-regular, #606266);
+}
+
+.tuff-demo__fw-badge-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tuff-demo__fw-badge[data-live='true'] {
@@ -818,10 +963,12 @@ onBeforeUnmount(() => {
 
 .tuff-demo__code-body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 0fr;
   opacity: 0;
   transition: grid-template-rows 0.25s ease, opacity 0.25s ease;
   width: 100%;
+  min-width: 0;
 }
 
 .tuff-demo__code.is-open .tuff-demo__code-body {
@@ -831,6 +978,7 @@ onBeforeUnmount(() => {
 
 .tuff-demo__code-body-inner {
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;

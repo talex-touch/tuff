@@ -387,15 +387,15 @@ function getDeviceBrandIcon(device: DeviceItem): string {
   if (value.includes('mac') || value.includes('darwin') || value.includes('iphone') || value.includes('ipad') || value.includes('ios'))
     return 'i-carbon-apple'
   if (value.includes('win'))
-    return 'i-cib-windows'
+    return 'i-carbon-grid'
   if (value.includes('linux'))
     return 'i-carbon-linux-alt'
   if (value.includes('android'))
-    return 'i-cib-android'
+    return 'i-carbon-mobile'
   if (value.includes('safari'))
-    return 'i-cib-safari'
+    return 'i-carbon-compass'
   if (value.includes('edge'))
-    return 'i-cib-microsoft-edge'
+    return 'i-carbon-globe'
   if (value.includes('web'))
     return 'i-carbon-application-web'
   return 'i-carbon-devices'

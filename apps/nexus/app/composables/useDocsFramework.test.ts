@@ -6,6 +6,7 @@ import {
   readFrameworkFromQuery,
   readFrameworkFromStorage,
   resolveInitialClientFramework,
+  scheduleAfterHydration,
   writeFrameworkToStorage,
 } from './useDocsFramework'
 
@@ -82,5 +83,40 @@ describe('useDocsFramework helpers', () => {
     expect(buildQueryWithFramework({ tab: 'api', [DOCS_FRAMEWORK_QUERY_KEY]: 'wc' }, 'vue')).toEqual({
       tab: 'api',
     })
+  })
+
+  it('defers initial client framework application until app:suspense:resolve while hydrating', () => {
+    const callbacks: Array<() => void> = []
+    let applied = 0
+    const deferred = scheduleAfterHydration(
+      {
+        isHydrating: true,
+        hooks: {
+          hookOnce(name, fn) {
+            expect(name).toBe('app:suspense:resolve')
+            callbacks.push(fn)
+          },
+        },
+      },
+      () => {
+        applied += 1
+      },
+    )
+
+    expect(deferred).toBe(true)
+    expect(applied).toBe(0)
+    expect(callbacks).toHaveLength(1)
+
+    callbacks[0]!()
+    expect(applied).toBe(1)
+
+    const immediate = scheduleAfterHydration(
+      { isHydrating: false, hooks: { hookOnce: () => {} } },
+      () => {
+        applied += 1
+      },
+    )
+    expect(immediate).toBe(false)
+    expect(applied).toBe(2)
   })
 })

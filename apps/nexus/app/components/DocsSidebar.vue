@@ -17,11 +17,30 @@ import { useTypedFetch } from '~/utils/request'
 import { useDocsFramework } from '~/composables/useDocsFramework'
 import {
   DOCS_FRAMEWORK_META,
-  formatFrameworkStatusLabel,
-  getComponentFrameworkEntry,
   resolveComponentSlugFromPath,
-} from '~/data/tuffex-framework-matrix'
+} from '~/utils/tuffex-component-slug'
 import { canonicalDocsPageIdentity, normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
+
+type FrameworkMatrixModule = typeof import('~/data/tuffex-framework-matrix')
+let cachedFrameworkMatrixModule: FrameworkMatrixModule | null = null
+let pendingFrameworkMatrixModule: Promise<FrameworkMatrixModule> | null = null
+
+function loadFrameworkMatrixModule(): Promise<FrameworkMatrixModule> {
+  if (cachedFrameworkMatrixModule)
+    return Promise.resolve(cachedFrameworkMatrixModule)
+  if (!pendingFrameworkMatrixModule) {
+    pendingFrameworkMatrixModule = import('~/data/tuffex-framework-matrix')
+      .then((mod) => {
+        cachedFrameworkMatrixModule = mod
+        return mod
+      })
+      .catch((error) => {
+        pendingFrameworkMatrixModule = null
+        throw error
+      })
+  }
+  return pendingFrameworkMatrixModule
+}
 
 type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
 
@@ -1258,13 +1277,18 @@ function componentSyncBadge(item: any) {
   }
 }
 
+const frameworkMatrixModule = shallowRef<FrameworkMatrixModule | null>(cachedFrameworkMatrixModule)
+
 function componentFrameworkIndicator(item: any) {
   if (activeTopSection.value !== 'components' || activeFramework.value === 'vue')
     return null
-  const slug = resolveComponentSlugFromPath(item?.normalizedPath ?? item?.path ?? linkTarget(item))
+  const matrix = frameworkMatrixModule.value
+  if (!matrix)
+    return null
+  const slug = resolveComponentSlugFromPath(item?.normalizedPath ?? item?.path ?? item?.familyKey ?? linkTarget(item))
   if (!slug)
     return null
-  const entry = getComponentFrameworkEntry(slug)
+  const entry = matrix.getComponentFrameworkEntry(slug)
   if (!entry)
     return null
   const status = entry[activeFramework.value]
@@ -1272,7 +1296,7 @@ function componentFrameworkIndicator(item: any) {
   const meta = DOCS_FRAMEWORK_META[activeFramework.value]
   return {
     status,
-    title: `${meta.label}: ${formatFrameworkStatusLabel(status, localeKey, activeFramework.value)}`,
+    title: `${meta.label}: ${matrix.formatFrameworkStatusLabel(status, localeKey, activeFramework.value)}`,
   }
 }
 
@@ -1287,6 +1311,20 @@ const activeTopSection = computed(() => {
   }
   return defaultSection.value
 })
+
+watch(
+  [activeTopSection, activeFramework],
+  ([section, fw]) => {
+    if (section !== 'components' || fw === 'vue' || frameworkMatrixModule.value)
+      return
+    void loadFrameworkMatrixModule()
+      .then((mod) => {
+        frameworkMatrixModule.value = mod
+      })
+      .catch(() => {})
+  },
+  { immediate: true },
+)
 
 const activeTopSectionIndex = computed(() => {
   const index = TOP_SECTIONS.value.findIndex(section => section.key === activeTopSection.value)
@@ -1900,11 +1938,20 @@ onBeforeUnmount(() => {
                 <span class="truncate" :title="itemTitle(child.title, child.familyKey)">
                   {{ itemTitle(child.title, child.familyKey) }}
                 </span>
-                <span
-                  class="docs-nav-family-indicator i-carbon-chevron-down"
-                  :class="isFamilyExpanded(child) ? 'is-open' : ''"
-                  aria-hidden="true"
-                />
+                <span class="docs-nav-family-trailing">
+                  <span
+                    v-if="componentFrameworkIndicator(child)"
+                    class="docs-nav-fw-dot"
+                    :data-status="componentFrameworkIndicator(child)?.status"
+                    :title="componentFrameworkIndicator(child)?.title"
+                    :aria-label="componentFrameworkIndicator(child)?.title"
+                  />
+                  <span
+                    class="docs-nav-family-indicator i-carbon-chevron-down"
+                    :class="isFamilyExpanded(child) ? 'is-open' : ''"
+                    aria-hidden="true"
+                  />
+                </span>
               </button>
               <div
                 class="docs-nav-family-body"
@@ -2379,9 +2426,21 @@ onBeforeUnmount(() => {
   content: none;
 }
 
-:deep(.docs-nav-family-indicator) {
+:deep(.docs-nav-family-trailing) {
   flex: none;
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+:deep(.docs-nav-family-trailing .docs-nav-fw-dot) {
+  margin-left: 0;
+}
+
+:deep(.docs-nav-family-indicator) {
+  flex: none;
+  margin-left: 0;
   font-size: 12px;
   opacity: 0.45;
   transform: rotate(-90deg);

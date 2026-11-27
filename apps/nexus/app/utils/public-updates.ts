@@ -26,6 +26,7 @@ export interface PublicUpdatesCacheSource {
   isHydrating?: boolean
   payload: {
     prerenderedAt?: unknown
+    serverRendered?: boolean
     data: Record<string, unknown>
   }
   static: {
@@ -43,6 +44,7 @@ export interface PublicUpdatesRefreshState {
   payload: PublicUpdatesPayload | null | undefined
   prerenderedAt?: unknown
   liveLoaded?: boolean
+  serverRendered?: boolean
 }
 
 export function markLivePublicUpdatesPayload(
@@ -97,6 +99,8 @@ export function shouldRefreshPublicUpdates(
     return false
   if (state.prerenderedAt)
     return true
+  if (state.serverRendered && hasPopulatedUpdates(state.payload))
+    return false
   return !hasNonAnnouncementUpdates(state.payload)
 }
 
@@ -114,6 +118,7 @@ export function resolvePublicUpdatesCachedData(
     isHydrating?: boolean
     prerenderedAt?: unknown
     liveLoaded?: boolean
+    serverRendered?: boolean
   },
 ): PublicUpdatesPayload | undefined {
   if (options.cause === 'refresh:manual' || options.cause === 'refresh:hook')
@@ -125,7 +130,11 @@ export function resolvePublicUpdatesCachedData(
   const liveLoaded = Boolean(options.liveLoaded || isLivePublicUpdatesPayload(payload))
   if (liveLoaded)
     return payload
-  if (options.prerenderedAt || !hasNonAnnouncementUpdates(payload))
+  if (options.prerenderedAt)
+    return undefined
+  if (options.serverRendered)
+    return payload
+  if (!hasNonAnnouncementUpdates(payload))
     return undefined
   return payload
 }
@@ -135,11 +144,13 @@ export function resolvePublicUpdatesFromApp(
   key: string,
   cause?: string,
 ): PublicUpdatesPayload | undefined {
-  const cached = (nuxtApp.payload.data[key] ?? nuxtApp.static.data[key]) as PublicUpdatesPayload | undefined
+  const fromPayload = nuxtApp.payload.data[key] as PublicUpdatesPayload | undefined
+  const cached = (fromPayload ?? nuxtApp.static.data[key]) as PublicUpdatesPayload | undefined
   return resolvePublicUpdatesCachedData(cached, {
     cause,
     isHydrating: nuxtApp.isHydrating,
     prerenderedAt: nuxtApp.payload.prerenderedAt,
+    serverRendered: Boolean(fromPayload && nuxtApp.payload.serverRendered),
   })
 }
 

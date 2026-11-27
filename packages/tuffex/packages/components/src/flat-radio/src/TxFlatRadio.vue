@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { JellyIndicatorFrame } from '../../../../utils/use-jelly-indicator'
 import type { TxFlatRadioProps, TxFlatRadioSize, TxFlatRadioValue } from './types'
-import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, provide, ref, toRefs, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, toRefs, useId, watch } from 'vue'
 import { drawnScale } from '../../../../utils/drawn-scale'
 import { useJellyIndicator } from '../../../../utils/use-jelly-indicator'
 import { springSteps } from '../../liquid/src/spring'
@@ -91,13 +91,13 @@ function select(value: TxFlatRadioValue) {
 // through aria-activedescendant.
 const focusedValue = ref<TxFlatRadioValue | null>(null)
 
-const uid = getCurrentInstance()?.uid ?? 0
+const groupId = useId()
 const idMap = new Map<TxFlatRadioValue, string>()
 let idSeq = 0
 function getItemId(value: TxFlatRadioValue): string {
   let id = idMap.get(value)
   if (id == null) {
-    id = `tx-flat-radio-${uid}-item-${idSeq++}`
+    id = `tx-flat-radio-${groupId}-item-${idSeq++}`
     idMap.set(value, id)
   }
   return id

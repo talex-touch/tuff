@@ -42,7 +42,6 @@ const CONFIGURED_EXCLUSIONS = [
   '/app/components/content/TuffCodeBlockRenderer.vue',
   '/app/components/store/',
   '/app/components/tuff/',
-  '/app/components/theme/components/',
 ]
 
 /**

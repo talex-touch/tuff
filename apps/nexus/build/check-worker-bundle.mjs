@@ -46,7 +46,7 @@ const distContentAssetPatterns = [
   /^api\/docs\/page\//,
   /^dump\.[^/]+\.sql$/,
   /^geo\//,
-  /^assets\/updates\/download-bg\.png$/,
+  /^assets\/updates\/download-bg\.webp$/,
 ]
 const clientChunkBudget = {
   initialMaxBytes: 420_000,

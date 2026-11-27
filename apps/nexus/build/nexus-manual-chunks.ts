@@ -4,6 +4,7 @@ const TUFFEX_CORE_STYLE_COMPONENTS = new Set([
   'button',
   'card',
   'flow-light',
+  'icon',
   'popover',
   'spinner',
   'status-icon',
@@ -44,6 +45,7 @@ const HEADER_COMPONENT_PATTERN = /\/app\/components\/(?:TheHeader|HeaderControls
 const DOCS_LAYOUT_COMPONENT_PATTERN = /\/app\/(?:layouts\/docs|components\/DocsOutline|components\/DocsSidebar|components\/docs\/DocsAsideCardsShell|components\/docs\/DocsCopyPromptButton)\.vue$/
 const DOCS_DEMO_SHELL_COMPONENT_PATTERN = /\/app\/components\/content\/(?:TuffDemoWrapper|TuffDemoClientRenderer\.client|TuffDocSourceLink)\.vue$/
 const DOCS_SURFACE_STYLE_PATTERN = /\/app\/(?:layouts\/docs|components\/DocsOutline|components\/DocsSidebar|components\/docs\/(?:DocsAsideCardsShell|DocsCopyPromptButton|DocApiTable)|components\/content\/(?:TuffDemoWrapper|TuffDocSourceLink|TuffCodeBlockRenderer))\.vue$/
+const DOCS_FRAMEWORK_STYLE_PATTERN = /\/app\/components\/docs\/(?:DocsFrameworkStatusBar|DocsFrameworkSwitcher)\.vue$/
 const LANDING_IMAGE_ASSET_PATTERN = /\/app\/images\/assets\//
 const THREE_VENDOR_PATTERN = /\/node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?three\//
 const TUFFEX_DIST_COMPONENT_PATTERN = /\/packages\/tuffex\/dist\/es\/([^/]+)\//
@@ -80,6 +82,8 @@ export function resolveNexusManualChunk(id: string): string | undefined {
     return 'nexus-header'
   if (DOCS_SURFACE_STYLE_PATTERN.test(cleanId))
     return 'docs-surface'
+  if (DOCS_FRAMEWORK_STYLE_PATTERN.test(cleanId))
+    return 'docs-framework-controls'
 
   const tuffexMatch = cleanId.match(TUFFEX_DIST_COMPONENT_PATTERN)
   if (!tuffexMatch)

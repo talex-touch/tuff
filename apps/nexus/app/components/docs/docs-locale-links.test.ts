@@ -43,6 +43,16 @@ describe('docs links keep the reader\'s locale', () => {
     expect(gallery).toMatch(/^import \{ toLocalizedDocsPath \} from '#shared\/utils\/docs-path'$/m)
     expect(gallery).toMatch(/^function docPath\(slug: string\) \{\n {2}return toLocalizedDocsPath\(`\/docs\/dev\/components\/\$\{slug\}`, localeKey\.value\)$/m)
     expect(gallery).not.toMatch(/['"`]\/docs\/dev\/components\/\$\{[^}]+\}\.\$\{/)
+
+    // Each lazy suite subcomponent must route cell links through `docPath(...)` and keep
+    // `<ClientOnly>` bound to `GallerySpecimenGate.vue` (which renders `DocsGallerySpecimen`).
+    for (const suite of ['Base', 'Pro', 'Ai', 'Data', 'Motion', 'Flow']) {
+      const suiteSource = read(`./gallery/suites/Gallery${suite}Suite.vue`)
+      expect(gallery).toContain(`import('./gallery/suites/Gallery${suite}Suite.vue')`)
+      expect(suiteSource).toMatch(/^import ClientOnly from '\.\.\/GallerySpecimenGate\.vue'$/m)
+      expect(suiteSource).toContain(':to="docPath(')
+      expect(suiteSource).not.toMatch(/['"`]\/docs\/dev\/components\/\$\{[^}]+\}\.\$\{/)
+    }
   })
 
   it('renders content links through ProseA and resolves relative ones against the document', () => {

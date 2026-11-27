@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { BaseAnchorClassValue, BaseAnchorProps } from '../../base-anchor/src/types'
 import type { PopoverProps } from './types'
-import { computed, getCurrentInstance, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
 import TxTooltip from '../../tooltip/src/TxTooltip.vue'
 
 defineOptions({ name: 'TxPopover' })
@@ -43,7 +43,7 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 // Stable id so the reference can advertise the popover panel it controls.
-const uid = getCurrentInstance()?.uid ?? 0
+const uid = useId()
 const panelId = `tx-popover-${uid}`
 
 const resolvedOffset = computed(() => {
