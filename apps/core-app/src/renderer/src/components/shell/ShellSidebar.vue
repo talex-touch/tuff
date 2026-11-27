@@ -9,7 +9,15 @@ import {
   type BrowserWorkspaceState
 } from '@talex-touch/utils/transport/sdk/domains/browser'
 import { useConversationEntry } from '~/modules/conversation/useConversationEntry'
+import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
+import {
+  BROWSER_SCOPE_KEY,
+  isDeprecatedInternalBrowserUrl,
+  projectSpaceKey,
+  resolveBrowserTabSpaceKey,
+  setLastWorkspaceScope
+} from '~/modules/layout/useShellWorkspaceTabs'
 import { groupedSettingNavigation } from '~/modules/settings/categories'
 import { useCoreBoxShortcut } from '~/modules/shortcuts/useCoreBoxShortcut'
 import { appSetting } from '~/modules/storage/app-storage'
@@ -23,7 +31,6 @@ import ShellConversationList from './ShellConversationList.vue'
 import ShellNavGroup from './ShellNavGroup.vue'
 import ShellNavItem from './ShellNavItem.vue'
 import ShellSearchEntry from './ShellSearchEntry.vue'
-import ShellSidebarHerdrSection from './ShellSidebarHerdrSection.vue'
 import ShellUpdateNotice from './ShellUpdateNotice.vue'
 /** How long the rail snap animates. Short enough to still feel like a latch, not a slide. */
 const SNAP_DURATION = 200
@@ -54,7 +61,6 @@ const contextTransition = computed(() =>
 )
 
 const browserEnabled = computed(() => isBetaFeatureEnabled(appSetting, 'browserWorkspace'))
-const herdrEnabled = computed(() => isBetaFeatureEnabled(appSetting, 'herdrRuntime'))
 const browserSdk = createBrowserSdk(transport)
 const browserState = shallowRef<BrowserWorkspaceState | null>(null)
 let unsubBrowser: (() => void) | undefined
@@ -95,86 +101,49 @@ const appVersion = computed(() =>
   packageJson.value?.version ? `v${packageJson.value.version}` : ''
 )
 
+const history = useConversationHistory()
 const activeBrowserTab = computed(() =>
   browserState.value?.tabs.find((tab) => tab.id === browserState.value?.activeTabId)
 )
-const isStoreActive = computed(
-  () =>
-    route.path === '/store' ||
-    (route.path === '/browser' &&
-      (activeBrowserTab.value?.url?.startsWith('tuff://store') ?? false))
-)
-const isSettingsActive = computed(
-  () =>
-    route.path.startsWith('/setting') ||
-    (route.path === '/browser' &&
-      (activeBrowserTab.value?.url?.startsWith('tuff://setting') ?? false))
-)
-const isBrowserActive = computed(
-  () => route.path === '/browser' && !isStoreActive.value && !isSettingsActive.value
-)
+function resolveConversationSpace(conversationId: string): string | null {
+  const record = history.conversations.value.find((item) => item.id === conversationId)
+  return record ? projectSpaceKey(record.projectId) : null
+}
+const isStoreActive = computed(() => route.path === '/store')
+const isSettingsActive = computed(() => route.path.startsWith('/setting'))
+const isBrowserActive = computed(() => {
+  if (route.path !== '/browser') return false
+  const active = activeBrowserTab.value
+  if (!active) return true
+  if (isDeprecatedInternalBrowserUrl(active.url)) return false
+  return !resolveBrowserTabSpaceKey(active, resolveConversationSpace)
+})
+
+function isStandaloneBrowserTab(tab: { id: string; url: string }): boolean {
+  return (
+    !isDeprecatedInternalBrowserUrl(tab.url) &&
+    !resolveBrowserTabSpaceKey(tab, resolveConversationSpace)
+  )
+}
 
 async function openBrowserWorkspace(): Promise<void> {
+  setLastWorkspaceScope(BROWSER_SCOPE_KEY)
   if (route.path !== '/browser') {
     await router.push('/browser')
   }
   try {
     const s = await browserSdk.getState()
     const active = s.tabs.find((tab) => tab.id === s.activeTabId)
-    if (active && (!active.url || active.url.startsWith('http'))) {
+    if (active && isStandaloneBrowserTab(active)) {
       return
     }
-    const landing = s.tabs.find((tab) => !tab.url)
-    if (landing) {
-      await browserSdk.activateTab(landing.id)
+    const existing =
+      s.tabs.find((tab) => isStandaloneBrowserTab(tab) && !tab.url) ??
+      s.tabs.find((tab) => isStandaloneBrowserTab(tab))
+    if (existing) {
+      await browserSdk.activateTab(existing.id)
     } else {
       await browserSdk.createTab('')
-    }
-  } catch (err) {
-    void err
-  }
-}
-
-async function openStoreTab(): Promise<void> {
-  if (!browserEnabled.value) {
-    if (route.path !== '/store') {
-      await router.push('/store')
-    }
-    return
-  }
-  if (route.path !== '/browser') {
-    await router.push('/browser')
-  }
-  try {
-    const s = await browserSdk.getState()
-    const existing = s.tabs.find((tab) => tab.url.startsWith('tuff://store'))
-    if (existing) {
-      await browserSdk.activateTab(existing.id)
-    } else {
-      await browserSdk.createTab('tuff://store')
-    }
-  } catch (err) {
-    void err
-  }
-}
-
-async function openSettingsTab(): Promise<void> {
-  if (!browserEnabled.value) {
-    if (route.path !== '/setting') {
-      await router.push('/setting')
-    }
-    return
-  }
-  if (route.path !== '/browser') {
-    await router.push('/browser')
-  }
-  try {
-    const s = await browserSdk.getState()
-    const existing = s.tabs.find((tab) => tab.url.startsWith('tuff://setting'))
-    if (existing) {
-      await browserSdk.activateTab(existing.id)
-    } else {
-      await browserSdk.createTab('tuff://settings')
     }
   } catch (err) {
     void err
@@ -277,9 +246,8 @@ onMounted(() => {
           <ShellNavItem
             icon="i-ri-store-2-line"
             :label="t('shell.store')"
-            :to="browserEnabled ? undefined : '/store'"
+            to="/store"
             :active="isStoreActive"
-            @select="openStoreTab"
           >
             <template #hint><MetaHintBadge command="open-store" placement="trailing" /></template>
           </ShellNavItem>
@@ -287,16 +255,13 @@ onMounted(() => {
 
         <ShellConversationList />
 
-        <ShellSidebarHerdrSection v-if="herdrEnabled" />
-
         <div class="ShellSidebar-Spacer" />
 
         <ShellNavItem
           icon="i-ri-settings-3-line"
           :label="t('shell.setting')"
-          :to="browserEnabled ? undefined : '/setting'"
+          to="/setting"
           :active="isSettingsActive"
-          @select="openSettingsTab"
         >
           <template #hint><MetaHintBadge command="open-settings" placement="trailing" /></template>
         </ShellNavItem>

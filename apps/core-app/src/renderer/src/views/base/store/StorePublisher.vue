@@ -14,6 +14,7 @@ import { TxTag } from '@talex-touch/tuffex/tag'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import StoreIcon from '~/components/store/StoreIcon.vue'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
+import { normalizeStoreIcon } from '~/modules/store/providers/store-icon-normalizer'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { useUserPlugins } from '~/composables/store/useUserPlugins'
 import { describeFailure, failureMessage } from '~/utils/failure-text'
@@ -106,10 +107,12 @@ const sortedRecords = computed(() =>
 )
 
 function toStorePlugin(plugin: UserPluginRecord): StorePlugin {
+  const normalizedIcon = normalizeStoreIcon(plugin.iconUrl, getAuthBaseUrl())
   return {
     id: plugin.slug,
     name: plugin.name,
-    iconUrl: plugin.iconUrl ?? undefined,
+    icon: normalizedIcon.icon,
+    iconUrl: normalizedIcon.iconUrl,
     providerId: 'nexus',
     providerName: 'Nexus',
     providerType: 'nexusStore',
@@ -442,7 +445,7 @@ onMounted(() => {
     </div>
     <div v-else class="publisher-list">
       <article v-for="plugin in sortedRecords" :key="plugin.id" class="publisher-card">
-        <StoreIcon :plugin="toStorePlugin(plugin)" />
+        <StoreIcon :item="toStorePlugin(plugin)" />
         <div class="publisher-card-main">
           <div class="publisher-card-title">
             <h3>{{ plugin.name }}</h3>

@@ -16,7 +16,7 @@ const architectures = universal ? ['arm64', 'x86_64'] : [process.arch === 'x64' 
 const newestInput = Math.max(fs.statSync(source).mtimeMs, fs.statSync(__filename).mtimeMs)
 if (fs.existsSync(output) && fs.lstatSync(output).isFile() && fs.statSync(output).mtimeMs >= newestInput) {
   try {
-    execFileSync('lipo', ['-verify_arch', ...architectures, output], { stdio: 'pipe' })
+    execFileSync('lipo', [output, '-verify_arch', ...architectures], { stdio: 'pipe' })
     execFileSync('codesign', ['--verify', '--strict', output], { stdio: 'pipe' })
     fs.accessSync(output, fs.constants.X_OK)
     console.log(`[build-update] Reusing ${architectures.join('+')} helper`)

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { FunctionalComponent, ObjectDirective, VNode } from 'vue'
+import type { RippleEffect } from '@talex-touch/tuffex-core'
 import type { ButtonEmits, ButtonProps } from './types'
+import { createRippleEffect } from '@talex-touch/tuffex-core'
 import { resolveButtonSize } from './size'
 import { computed, Fragment, h, nextTick, onBeforeUnmount, ref, Text, useAttrs, useSlots, watch } from 'vue'
 import { useFlip } from '../../../../utils/animation/flip'
@@ -35,27 +37,23 @@ const props = withDefaults(defineProps<ButtonProps>(), {
 
 const emit = defineEmits<ButtonEmits>()
 
-type WaveDirectiveModule = typeof import('v-wave')
-
-let waveDirectivePromise: Promise<ObjectDirective<HTMLElement>> | null = null
-
-function loadWaveDirective() {
-  if (!waveDirectivePromise) {
-    waveDirectivePromise = import('v-wave').then((mod: WaveDirectiveModule) => {
-      return mod.default.createLocalWaveDirective().vWave as ObjectDirective<HTMLElement>
-    })
-  }
-  return waveDirectivePromise
-}
+const rippleInstances = new WeakMap<HTMLElement, RippleEffect>()
 
 const vWave: ObjectDirective<HTMLElement> = {
-  async mounted(el, binding, vnode, prevVnode) {
-    const directive = await loadWaveDirective()
-    directive.mounted?.(el, binding, vnode, prevVnode)
+  mounted(el) {
+    el.setAttribute('data-v-wave-boundary', 'true')
+    const ripple = createRippleEffect({
+      initialOpacity: 0.22,
+      finalOpacity: 0.08,
+      duration: 420,
+    })
+    ripple.attach(el)
+    rippleInstances.set(el, ripple)
   },
-  async updated(el, binding, vnode, prevVnode) {
-    const directive = await loadWaveDirective()
-    directive.updated?.(el, binding, vnode, prevVnode)
+  beforeUnmount(el) {
+    rippleInstances.get(el)?.destroy()
+    rippleInstances.delete(el)
+    el.removeAttribute('data-v-wave-boundary')
   },
 }
 

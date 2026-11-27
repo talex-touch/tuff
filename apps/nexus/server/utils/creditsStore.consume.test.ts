@@ -158,6 +158,33 @@ describe('consumeCredits', () => {
     // The plan is read beside the first batch (mocked here).
     expect(counting.roundTrips() - before).toBe(2)
   })
+
+  it('rolls back ledger and team balance when the user balance update fails mid-batch', async () => {
+    await store.consumeCredits(eventFor(), USER, 10, 'warm')
+    d1.sqlite.exec(`
+      CREATE TRIGGER fail_user_balance_debit
+      BEFORE UPDATE ON credit_balances
+      WHEN NEW.scope = 'user'
+      BEGIN
+        SELECT RAISE(ABORT, 'simulated user balance update failure');
+      END;
+    `)
+
+    await expect(
+      store.consumeCredits(eventFor(), USER, 200, 'probe', {}, { idempotencyKey: 'probe-rollback-01' }),
+    ).rejects.toThrow('simulated user balance update failure')
+
+    expect(balance('team', `team_${USER}`)).toEqual({ quota: 2000000, used: 10 })
+    expect(balance('user', USER)).toEqual({ quota: 20000, used: 10 })
+    expect(ledgerCount()).toBe(1)
+  })
+
+  it('fails closed when a malformed idempotency key is supplied', async () => {
+    await expect(
+      store.consumeCredits(eventFor(), USER, 10, 'probe', {}, { idempotencyKey: 'short' }),
+    ).rejects.toThrow('Invalid credit idempotency key.')
+    expect(ledgerCount()).toBe(0)
+  })
 })
 
 describe('releaseConsumedCredits', () => {
@@ -184,5 +211,47 @@ describe('releaseConsumedCredits', () => {
 
     expect(again.ledgerId).toBe(first.ledgerId)
     expect(balance('user', USER)).toEqual({ quota: 20000, used: 400 })
+  })
+
+  it('releases once across concurrent requests carrying the same idempotency key', async () => {
+    const hold = await store.consumeCredits(eventFor(), USER, 500, 'reserve')
+    const options = { idempotencyKey: 'release-key-concurrent', reservationLedgerId: hold.ledgerId }
+
+    const outcomes = await Promise.all([1, 2, 3].map(() =>
+      store.releaseConsumedCredits(eventFor(), USER, 150, 'release', {}, options),
+    ))
+
+    expect(new Set(outcomes.map(item => item.ledgerId)).size).toBe(1)
+    expect(balance('user', USER)).toEqual({ quota: 20000, used: 350 })
+    expect(balance('team', `team_${USER}`)).toEqual({ quota: 2000000, used: 350 })
+    expect(ledgerCount()).toBe(2)
+  })
+})
+
+describe('claimDailyCheckin atomicity', () => {
+  it('pays once across concurrent check-ins and rolls back on mid-batch failure', async () => {
+    const outcomes = await Promise.all([
+      store.claimDailyCheckin(eventFor(), USER),
+      store.claimDailyCheckin(eventFor(), USER),
+      store.claimDailyCheckin(eventFor(), USER),
+    ])
+
+    expect(outcomes.filter(item => item.claimed)).toHaveLength(1)
+    expect(outcomes.filter(item => !item.claimed)).toHaveLength(2)
+    expect(balance('user', USER)).toEqual({ quota: 20500, used: 0 })
+    expect(ledgerCount()).toBe(1)
+
+    // Next day: mid-batch failure on credit_checkins rolls back quota & ledger cleanly.
+    vi.setSystemTime(new Date('2026-10-16T08:00:00.000Z'))
+    d1.sqlite.exec(`
+      CREATE TRIGGER fail_checkin_insert
+      BEFORE INSERT ON credit_checkins
+      BEGIN
+        SELECT RAISE(ABORT, 'simulated checkin failure');
+      END;
+    `)
+    await expect(store.claimDailyCheckin(eventFor(), USER)).rejects.toThrow('simulated checkin failure')
+    expect(balance('user', USER)).toEqual({ quota: 20500, used: 0 })
+    expect(ledgerCount()).toBe(1)
   })
 })

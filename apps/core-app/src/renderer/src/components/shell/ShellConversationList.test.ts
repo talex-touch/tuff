@@ -285,10 +285,10 @@ vi.mock('./ShellSearchEntry.vue', () => ({
 }))
 vi.mock('./ShellNavGroup.vue', () => ({ default: defineComponent({ name: 'ShellNavGroup' }) }))
 vi.mock('./ShellBackRow.vue', () => ({ default: defineComponent({ name: 'ShellBackRow' }) }))
-vi.mock('./ShellSidebarHerdrSection.vue', () => ({
+vi.mock('./ShellHerdrSpace.vue', () => ({
   default: {
-    name: 'ShellSidebarHerdrSection',
-    render: () => null
+    name: 'ShellHerdrSpace',
+    template: '<div class="ShellHerdrSpace-Stub" data-testid="herdr-space-stub" />'
   }
 }))
 
@@ -931,6 +931,23 @@ describe('shellConversationList sections', () => {
     expect(titles).toEqual(['shell.spaces.title'])
     expect(wrapper.find('.ShellTemporarySpace-Name').text()).toBe('shell.spaces.temporary')
     expect(wrapper.find('.ShellTemporarySpace-Children').text()).toContain('hi')
+    expect(
+      wrapper
+        .find('.ShellConversationList-Section--spaces [data-testid="herdr-space-stub"]')
+        .exists()
+    ).toBe(true)
+  })
+
+  it('hides Herdr Space from Spaces when herdrRuntime beta feature is disabled', async () => {
+    settings().betaFeatures = { herdrRuntime: false }
+    try {
+      listState.projects = [project({ id: 'p1' })]
+      const wrapper = await mountList()
+
+      expect(wrapper.find('[data-testid="herdr-space-stub"]').exists()).toBe(false)
+    } finally {
+      delete settings().betaFeatures
+    }
   })
 
   it('keeps the Spaces title, its actions, and a folder offer when there are no projects', async () => {

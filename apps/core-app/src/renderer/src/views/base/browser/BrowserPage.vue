@@ -19,7 +19,8 @@ import {
 } from 'vue'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { herdrConversationRoute } from '../../../../../shared/app-surface-routes'
 import {
   formatSiteHost,
   localIcon,
@@ -32,6 +33,15 @@ import {
   parseBrowserFilePreviewUrl
 } from '~/modules/browser-workspace/preview-url'
 import { useBrowserWorkspace } from '~/modules/browser-workspace/useBrowserWorkspace'
+import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
+import {
+  getSpaceTabs,
+  projectSpaceKey,
+  removeSpaceTab,
+  resolveBrowserTabSpaceKey,
+  spaceBrowserTabId
+} from '~/modules/layout/useShellWorkspaceTabs'
+import { SETTING_CATEGORIES } from '~/modules/settings/categories'
 import WorkspaceFileViewer from '~/components/preview/WorkspaceFileViewer.vue'
 import {
   isOpenableBrowserUrl,
@@ -51,13 +61,20 @@ import { describeBrowserError } from './browser-errors'
 
 const { t, locale } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const { isMac } = useRendererPlatform()
 const sdk = createBrowserSdk(useTuffTransport())
+const history = useConversationHistory()
+function resolveConversationSpace(conversationId: string): string | null {
+  const record = history.conversations.value.find((item) => item.id === conversationId)
+  return record ? projectSpaceKey(record.projectId) : null
+}
 const {
   state,
   connecting,
   error,
   tabMenuOpen,
+  addTabMenuOpen,
   pluginToolbarOpen,
   accountOpen,
   command,
@@ -313,30 +330,31 @@ watch(
   }
 )
 
+function resolveLegacySettingRedirectPath(rawCategory: unknown): string {
+  const candidate = Array.isArray(rawCategory) ? rawCategory[0] : rawCategory
+  if (typeof candidate !== 'string') return '/setting'
+  const normalized = candidate.trim().toLowerCase()
+  if (!normalized) return '/setting'
+
+  for (const cat of SETTING_CATEGORIES) {
+    if (cat.key === normalized) return cat.path
+    for (const child of cat.children ?? []) {
+      if (normalized === `${cat.key}-${child.key}` || normalized === `${cat.key}/${child.key}`) {
+        return child.path
+      }
+    }
+  }
+  return '/setting'
+}
+
 watch(
   () => [route.query.category, route.query.tab] as const,
   async ([category, tab]) => {
     if (route.path !== '/browser') return
     if (category) {
-      const s = state.value ?? (await sdk.getState().catch(() => null))
-      if (s) {
-        const existing = s.tabs.find((t) => t.url.startsWith('tuff://setting'))
-        if (existing) {
-          if (existing.id !== s.activeTabId) await sdk.activateTab(existing.id)
-        } else {
-          await sdk.createTab('tuff://settings')
-        }
-      }
+      await router.replace(resolveLegacySettingRedirectPath(category))
     } else if (tab === 'store') {
-      const s = state.value ?? (await sdk.getState().catch(() => null))
-      if (s) {
-        const existing = s.tabs.find((t) => t.url.startsWith('tuff://store'))
-        if (existing) {
-          if (existing.id !== s.activeTabId) await sdk.activateTab(existing.id)
-        } else {
-          await sdk.createTab('tuff://store')
-        }
-      }
+      await router.replace('/store')
     }
   },
   { immediate: true }
@@ -352,6 +370,7 @@ const isSuspended = computed(() => {
     document.hidden ||
     overlayOpen.value ||
     tabMenuOpen.value ||
+    addTabMenuOpen.value ||
     pluginToolbarOpen.value ||
     accountOpen.value ||
     chromeSaveOpen.value ||
@@ -547,6 +566,7 @@ function hasBlockingOverlay(): boolean {
   return Boolean(
     overlayOpen.value ||
     tabMenuOpen.value ||
+    addTabMenuOpen.value ||
     pluginToolbarOpen.value ||
     accountOpen.value ||
     chromeSaveOpen.value ||
@@ -595,6 +615,13 @@ function scheduleViewport(): void {
   if (!viewportFrame) viewportFrame = requestAnimationFrame(measureViewport)
 }
 
+function isEditableKeyTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable) return true
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+}
+
 function onKeydown(event: KeyboardEvent): void {
   if (
     !onRoute.value ||
@@ -605,7 +632,21 @@ function onKeydown(event: KeyboardEvent): void {
   )
     return
   const modifier = commandModifierHeld(event, isMac.value) && !event.altKey
+  const altOnly = event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey
   const key = event.key.toLowerCase()
+  const backChord =
+    (isMac.value && modifier && !event.shiftKey && (event.code === 'BracketLeft' || key === '[')) ||
+    (altOnly &&
+      !isEditableKeyTarget(event.target) &&
+      (event.code === 'ArrowLeft' || key === 'arrowleft'))
+  const forwardChord =
+    (isMac.value &&
+      modifier &&
+      !event.shiftKey &&
+      (event.code === 'BracketRight' || key === ']')) ||
+    (altOnly &&
+      !isEditableKeyTarget(event.target) &&
+      (event.code === 'ArrowRight' || key === 'arrowright'))
   if (modifier && !event.shiftKey && (event.code === 'KeyL' || key === 'l')) {
     if (isSettingsTab.value || isStoreTab.value) return
     event.preventDefault()
@@ -624,7 +665,35 @@ function onKeydown(event: KeyboardEvent): void {
   ) {
     event.preventDefault()
     panel.value = null
-    void command(() => sdk.closeTab(activeTab.value!.id))
+    const closingTab = activeTab.value
+    const boundSpace = resolveBrowserTabSpaceKey(closingTab, resolveConversationSpace)
+    const spaceTabs = boundSpace ? getSpaceTabs(boundSpace) : []
+    const closingIndex = spaceTabs.findIndex((tab) => tab.id === spaceBrowserTabId(closingTab.id))
+    const fallbackTab =
+      closingIndex < 0 ? null : (spaceTabs[closingIndex + 1] ?? spaceTabs[closingIndex - 1] ?? null)
+    void command(() => sdk.closeTab(closingTab.id)).then((accepted) => {
+      if (!accepted || !boundSpace) return
+      const { nextTab: removedNextTab } = removeSpaceTab(
+        boundSpace,
+        spaceBrowserTabId(closingTab.id)
+      )
+      const remaining = getSpaceTabs(boundSpace)
+      const nextTab =
+        removedNextTab ??
+        (fallbackTab && remaining.some((tab) => tab.id === fallbackTab.id) ? fallbackTab : null)
+      if (nextTab?.kind === 'browser') {
+        void command(() => sdk.activateTab(nextTab.browserTabId))
+        return
+      }
+      if (route.path !== '/browser') return
+      if (nextTab?.kind === 'conversation') {
+        void router.push(`/home/c/${nextTab.conversationId}`)
+      } else if (nextTab?.kind === 'herdr') {
+        void router.push(herdrConversationRoute(nextTab.address))
+      } else {
+        void router.push('/home')
+      }
+    })
   } else if (modifier && (event.code === 'KeyR' || key === 'r') && activeTab.value?.url) {
     event.preventDefault()
     if (isPreviewTab.value) {
@@ -632,6 +701,30 @@ function onKeydown(event: KeyboardEvent): void {
     } else {
       void command(() => sdk.reload(activeTab.value!.id))
     }
+  } else if (
+    backChord &&
+    !panel.value &&
+    activeTab.value?.url &&
+    !isSettingsTab.value &&
+    !isStoreTab.value
+  ) {
+    if (isPreviewTab.value) {
+      if (!canGoBackPreview.value) return
+      event.preventDefault()
+      void goBackPreview()
+    } else if (activeTab.value.canGoBack) {
+      event.preventDefault()
+      void command(() => sdk.back(activeTab.value!.id))
+    }
+  } else if (
+    forwardChord &&
+    !panel.value &&
+    activeTab.value?.url &&
+    !localPage.value &&
+    activeTab.value.canGoForward
+  ) {
+    event.preventDefault()
+    void command(() => sdk.forward(activeTab.value!.id))
   } else if (event.key === 'Escape' && panel.value) {
     event.preventDefault()
     panel.value = null
@@ -673,6 +766,7 @@ watch(
     panel,
     overlayOpen,
     tabMenuOpen,
+    addTabMenuOpen,
     pluginToolbarOpen,
     accountOpen,
     chromeSaveOpen,
@@ -694,6 +788,7 @@ watch(
     !panel.value &&
     !overlayOpen.value &&
     !tabMenuOpen.value &&
+    !addTabMenuOpen.value &&
     !pluginToolbarOpen.value &&
     !accountOpen.value &&
     !chromeSaveOpen.value &&
@@ -790,6 +885,7 @@ onActivated(() => {
 onDeactivated(() => {
   surfaceActive.value = false
   tabMenuOpen.value = false
+  addTabMenuOpen.value = false
   pluginToolbarOpen.value = false
   chromeSaveOpen.value = false
   cookieDialogOpen.value = false

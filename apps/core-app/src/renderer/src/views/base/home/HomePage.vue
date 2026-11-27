@@ -4,15 +4,28 @@ import type {
   WorkspaceQueueDeliveryMode,
   WorkspaceQueuedInput
 } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+import type { WorkspaceFileAiActionPayload } from '~/components/preview/workspace-file-tree'
 import { TxSelectionActions } from '@talex-touch/tuffex/selection-actions'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
-import { computed, nextTick, provide, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  provide,
+  ref,
+  watch
+} from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { isBetaFeatureEnabled } from '../../../../../shared/beta-features'
 import { WORKSPACE_QUEUE_LIMIT } from '~/modules/conversation/useAgentWorkspace'
 import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
 import { useShellRightSidebar } from '~/modules/layout/useShellRightSidebar'
+import { useShellStageActions } from '~/modules/layout/useShellStageActions'
 import { useShellTerminal } from '~/modules/layout/useShellTerminal'
+import { appSetting } from '~/modules/storage/app-storage'
 import { homeMessageContextKey } from './composables/home-message-context'
 import { useConversationRestore } from './composables/useConversationRestore'
 import { useConversationTitle } from './composables/useConversationTitle'
@@ -163,6 +176,9 @@ const {
   isResizing,
   tabs: sidePanelTabs,
   activeTabId: activeSidePanelTabId,
+  recentItems: sidePanelRecentItems,
+  removeRecentItem: removeSidePanelRecent,
+  clearRecentItems: clearSidePanelRecents,
   openLauncher,
   openFileInSidebar,
   openWebInSidebar,
@@ -176,6 +192,7 @@ const {
   closeAllTabs: closeAllSidePanelTabs,
   startResize: startSidePanelResize,
   resetWidth: resetSidePanelWidth,
+  gitAvailable,
   effectiveWorkspaceRoot,
   showCodePreview,
   openWebInBuiltInBrowser,
@@ -246,6 +263,59 @@ function runCodeInTerminal(payload: CodeRunPayload): void {
     cwd: effectiveWorkspaceRoot.value,
     lang: payload.lang
   })
+}
+
+async function runFileAiAction(payload: WorkspaceFileAiActionPayload): Promise<boolean> {
+  const prompt = payload.prompt.trim()
+  if (!prompt) return false
+
+  if (payload.mode === 'quote') {
+    const existing = draft.value.replace(/\s+$/, '')
+    draft.value = existing ? `${existing}\n\n${payload.prompt}` : payload.prompt
+    await nextTick()
+    const input = inputRef.value
+    if (input) {
+      input.focus()
+      input.selectionStart = input.value.length
+      input.selectionEnd = input.value.length
+      autoGrow()
+    }
+    return true
+  }
+
+  if (conversationId.value && draft.value.trim()) {
+    try {
+      await workspace.submit(prompt)
+      return true
+    } catch (error) {
+      reportSubmitError(error)
+      return false
+    }
+  }
+
+  const prevDraft = draft.value
+  const nextDraft = prevDraft.trim() ? `${prevDraft.replace(/\s+$/, '')}\n\n${prompt}` : prompt
+  draft.value = nextDraft
+  await nextTick()
+  if (!canSend.value) {
+    draft.value = prevDraft
+    return false
+  }
+  await submit()
+  if (draft.value === nextDraft) {
+    draft.value = prevDraft
+    return false
+  }
+  return true
+}
+
+function handleFileAiAction(payload: WorkspaceFileAiActionPayload): void {
+  const result = runFileAiAction(payload)
+  if (payload.settle) {
+    payload.settle(result)
+  } else {
+    void result
+  }
 }
 
 const messageParts = useMessageParts({
@@ -482,6 +552,47 @@ provide(homeMessageContextKey, {
 
 const { showTurnMetrics, isTurnFooterResting } = useTurnMetrics(messages)
 
+const browserWorkspaceEnabled = computed(() => isBetaFeatureEnabled(appSetting, 'browserWorkspace'))
+const showHomeTopBar = computed(() => !props.browserLanding && !browserWorkspaceEnabled.value)
+const keepAliveActive = ref(true)
+onActivated(() => {
+  keepAliveActive.value = true
+})
+onDeactivated(() => {
+  keepAliveActive.value = false
+})
+
+const shellStageActions = useShellStageActions()
+let unregisterStageActions: (() => void) | null = null
+watch(
+  () => !props.browserLanding && isHomeRoute.value && keepAliveActive.value,
+  (active) => {
+    unregisterStageActions?.()
+    unregisterStageActions = null
+    if (!active) return
+    unregisterStageActions = shellStageActions.register({
+      surface: 'home',
+      isPanelOpen: () => panelOpen.value,
+      togglePanel: () => {
+        panelOpen.value = !panelOpen.value
+      },
+      showTurnInfo: () => true,
+      getTurn: () => lastTurn.value,
+      getMessageCount: () => messages.value.length,
+      canBranch: () => hasHistory.value && !workspace.busy.value && !branching.value,
+      isBranching: () => branching.value,
+      branch: () => {
+        void branchTo({})
+      }
+    })
+  },
+  { immediate: true }
+)
+onBeforeUnmount(() => {
+  unregisterStageActions?.()
+  unregisterStageActions = null
+})
+
 useHomeCommands({
   isHomeRoute,
   browserLanding: () => props.browserLanding,
@@ -507,7 +618,7 @@ useHomeCommands({
     }"
   >
     <HomeTopBar
-      v-if="!browserLanding"
+      v-if="showHomeTopBar"
       :title="conversationTitle"
       :panel-open="panelOpen"
       :turn="lastTurn"
@@ -723,6 +834,7 @@ useHomeCommands({
         :messages="messages"
         :conversation-id="conversationId"
         :workspace-root="effectiveWorkspaceRoot"
+        :git-available="gitAvailable"
         :context="workspace.state.value?.context"
         :turn="lastTurn"
         :activity-turns="activityTurns"
@@ -732,6 +844,7 @@ useHomeCommands({
         :loading="workspace.loading.value"
         :tabs="sidePanelTabs"
         :active-tab-id="activeSidePanelTabId"
+        :recent-items="sidePanelRecentItems"
         @locate="streamRef?.scrollToIndex($event)"
         @select-tab="selectSidePanelTab"
         @close-tab="closeSidePanelTab"
@@ -763,6 +876,9 @@ useHomeCommands({
         @open-web-external="openWebExternal"
         @start-resize="startSidePanelResize"
         @reset-width="resetSidePanelWidth"
+        @remove-recent="removeSidePanelRecent"
+        @clear-recents="clearSidePanelRecents"
+        @ai-action="handleFileAiAction"
       />
     </div>
 

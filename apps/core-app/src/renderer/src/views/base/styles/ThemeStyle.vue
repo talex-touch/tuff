@@ -39,6 +39,7 @@ import { createRendererLogger } from '~/utils/renderer-log'
 import { toTfileUrl } from '@talex-touch/utils/network'
 import CoreBoxCanvasSection from './CoreBoxCanvasSection.vue'
 import SectionItem from './SectionItem.vue'
+import TdsThemePackSection from './TdsThemePackSection.vue'
 import { getWallpaperSourceHintKey } from './wallpaper-display-state'
 
 import WindowSectionVue from './WindowSection.vue'
@@ -96,6 +97,10 @@ const windowPreference = computed<ThemeWindowPreference>({
     themeStyle.value.theme.window = normalizeWindowPreference(value)
   }
 })
+
+function handleApplyPackWindowPreference(preference: ThemeWindowPreference): void {
+  windowPreference.value = preference
+}
 const windowPreferenceLoading = ref(false)
 let windowPreferenceLoadingTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -518,6 +523,8 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
       </WindowSectionVue>
 
       <CoreBoxCanvasSection v-if="showAdvancedSettings" />
+
+      <TdsThemePackSection @apply-window-preference="handleApplyPackWindowPreference" />
 
       <TuffGroupBlock
         :name="t('themeStyle.personalized')"

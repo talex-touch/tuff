@@ -45,7 +45,9 @@ const DOCS_LAYOUT_COMPONENT_PATTERN = /\/app\/(?:layouts\/docs|components\/DocsO
 const DOCS_DEMO_SHELL_COMPONENT_PATTERN = /\/app\/components\/content\/(?:TuffDemoWrapper|TuffDemoClientRenderer\.client|TuffDocSourceLink)\.vue$/
 const DOCS_SURFACE_STYLE_PATTERN = /\/app\/(?:layouts\/docs|components\/DocsOutline|components\/DocsSidebar|components\/docs\/(?:DocsAsideCardsShell|DocsCopyPromptButton|DocApiTable)|components\/content\/(?:TuffDemoWrapper|TuffDocSourceLink|TuffCodeBlockRenderer))\.vue$/
 const LANDING_IMAGE_ASSET_PATTERN = /\/app\/images\/assets\//
+const THREE_VENDOR_PATTERN = /\/node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?three\//
 const TUFFEX_DIST_COMPONENT_PATTERN = /\/packages\/tuffex\/dist\/es\/([^/]+)\//
+const TUFFEX_WC_CHUNK_PATTERN = /\/packages\/tuffex-wc\/dist\/chunks\/([a-z0-9-]+)\.js$/
 
 /**
  * Consolidates tiny shared header/docs SFCs and TuffEx style-only dependency entrypoints
@@ -60,6 +62,11 @@ export function resolveNexusManualChunk(id: string): string | undefined {
 
   const isStyleAsset = cleanId.endsWith('.css') || id.includes('type=style')
   if (!isStyleAsset) {
+    if (THREE_VENDOR_PATTERN.test(cleanId))
+      return 'vendor-three'
+    const wcChunkMatch = cleanId.match(TUFFEX_WC_CHUNK_PATTERN)
+    if (wcChunkMatch)
+      return `tuffex-wc-${wcChunkMatch[1]}`
     if (HEADER_COMPONENT_PATTERN.test(cleanId))
       return 'nexus-header-controls'
     if (DOCS_LAYOUT_COMPONENT_PATTERN.test(cleanId))

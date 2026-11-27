@@ -1,4 +1,5 @@
 import type { Ref } from 'vue'
+import { hasDocument } from '@talex-touch/utils/env'
 import { computed, onBeforeUnmount, ref, shallowRef, unref, watch } from 'vue'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 
@@ -40,6 +41,7 @@ interface SharedRuntimeState {
   error: Ref<string | null>
   start: () => void
   stop: () => void
+  disposeVisibilityListener: () => void
 }
 
 const sharedStates = new Map<string, SharedRuntimeState>()
@@ -77,11 +79,16 @@ function ensureSharedState(
     lastUpdatedAt: ref(0),
     error: ref<string | null>(null),
     start: () => {},
-    stop: () => {}
+    stop: () => {},
+    disposeVisibilityListener: () => {}
+  }
+
+  function isDocumentHidden(): boolean {
+    return hasDocument() && document.hidden === true
   }
 
   async function tick(): Promise<void> {
-    if (state.inFlight) return
+    if (state.inFlight || isDocumentHidden()) return
 
     state.inFlight = true
     try {
@@ -112,7 +119,7 @@ function ensureSharedState(
   }
 
   function start(): void {
-    if (state.timerId != null) return
+    if (state.timerId != null || isDocumentHidden()) return
     void tick()
     state.timerId = window.setInterval(() => {
       void tick()
@@ -125,9 +132,29 @@ function ensureSharedState(
     state.timerId = null
   }
 
+  const handleVisibilityChange = (): void => {
+    if (state.refCount <= 0) return
+    if (isDocumentHidden()) {
+      stop()
+      return
+    }
+    start()
+  }
+
+  if (hasDocument() && typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+  }
+
+  const disposeVisibilityListener = (): void => {
+    if (hasDocument() && typeof document.removeEventListener === 'function') {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }
+
   sharedStates.set(name, state)
   state.start = start
   state.stop = stop
+  state.disposeVisibilityListener = disposeVisibilityListener
 
   return state
 }
@@ -150,6 +177,7 @@ function release(name: string): void {
   if (state.refCount > 0) return
 
   state.stop()
+  state.disposeVisibilityListener()
   sharedStates.delete(name)
 }
 

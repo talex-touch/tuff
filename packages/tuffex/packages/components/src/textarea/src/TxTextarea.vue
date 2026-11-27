@@ -142,7 +142,7 @@ defineExpose({
   border: 0;
   border-radius: 12px;
   background: var(--tx-bg-color, #ffffff);
-  box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
+  box-shadow: inset 0 0 0 1px var(--tx-coloring-field-border-color, var(--tx-border-color, #dcdfe6));
 }
 
 .tx-textarea.is-morphing {

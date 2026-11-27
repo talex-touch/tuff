@@ -1,5 +1,6 @@
 import type {
   BrowserSdk,
+  BrowserTabState,
   BrowserWorkspaceState
 } from '@talex-touch/utils/transport/sdk/domains/browser'
 
@@ -11,14 +12,21 @@ export type BrowserTabMenuAction =
   | 'close-left'
   | 'close-right'
 
+export interface RunBrowserTabActionOptions {
+  /** Restrict bulk-close actions to tabs visible in the current scope (e.g. standalone tabs). */
+  filter?: (tab: BrowserTabState) => boolean
+}
+
 export async function runBrowserTabAction(
   sdk: BrowserSdk,
   action: BrowserTabMenuAction,
-  tabId: string
+  tabId: string,
+  options?: RunBrowserTabActionOptions
 ): Promise<BrowserWorkspaceState> {
   let state = await sdk.getState()
-  const index = state.tabs.findIndex((tab) => tab.id === tabId)
-  const target = state.tabs[index]
+  const scopedTabs = options?.filter ? state.tabs.filter(options.filter) : state.tabs
+  const index = scopedTabs.findIndex((tab) => tab.id === tabId)
+  const target = scopedTabs[index]
   if (!target) throw new Error('BROWSER_TAB_NOT_FOUND')
 
   if (action === 'reload') return sdk.reload(target.id)
@@ -27,10 +35,10 @@ export async function runBrowserTabAction(
 
   const tabs =
     action === 'close-left'
-      ? state.tabs.slice(0, index)
+      ? scopedTabs.slice(0, index)
       : action === 'close-right'
-        ? state.tabs.slice(index + 1)
-        : state.tabs.filter((tab) => tab.id !== target.id)
+        ? scopedTabs.slice(index + 1)
+        : scopedTabs.filter((tab) => tab.id !== target.id)
   if (tabs.length === 0) return state
 
   if (tabs.some((tab) => tab.id === state.activeTabId)) {

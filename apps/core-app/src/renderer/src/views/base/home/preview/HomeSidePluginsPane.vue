@@ -5,21 +5,16 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { isElectronRenderer } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { createBrowserSdk } from '@talex-touch/utils/transport/sdk/domains/browser'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { APP_SURFACE_ROUTES } from '../../../../../../shared/app-surface-routes'
-import { isBetaFeatureEnabled } from '../../../../../../shared/beta-features'
-import { appSetting } from '~/modules/storage/app-storage'
 import HomePreviewEmpty from './HomePreviewEmpty.vue'
 
 const { t } = useI18n()
 const router = useRouter()
 const transport = isElectronRenderer() ? useTuffTransport() : null
 const pluginSdk = transport ? createPluginSdk(transport) : null
-const browserSdk = transport ? createBrowserSdk(transport) : null
 
 const plugins = ref<ITouchPlugin[]>([])
 const loading = ref(false)
@@ -51,21 +46,6 @@ async function refresh(): Promise<void> {
 }
 
 async function openPluginStore(): Promise<void> {
-  if (browserSdk && isBetaFeatureEnabled(appSetting, 'browserWorkspace')) {
-    try {
-      const state = await browserSdk.getState()
-      const existing = state.tabs.find((tab) => tab.url.startsWith('tuff://store'))
-      if (existing) {
-        await browserSdk.activateTab(existing.id)
-      } else {
-        await browserSdk.createTab('tuff://store')
-      }
-      await router.push(APP_SURFACE_ROUTES.browser)
-      return
-    } catch {
-      // fall back to store route
-    }
-  }
   await router.push('/store').catch(() => {})
 }
 

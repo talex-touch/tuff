@@ -1,4 +1,8 @@
 // @vitest-environment jsdom
+import { existsSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
   EverythingDiagnosticStage,
@@ -8,7 +12,10 @@ import type {
 import type { EverythingCoreBoxSearchModeId } from '../src/main/modules/platform/everything-corebox-ui-verifier'
 import {
   buildDomSummaryExpression,
-  checkEverythingModeBackendUsage
+  buildScreenshotClipExpression,
+  checkEverythingModeBackendUsage,
+  prepareIsolatedProbeEnvironment,
+  shouldSeedProbeMarker
 } from './coreapp-packaged-corebox-everything-probe'
 
 /**
@@ -84,6 +91,132 @@ describe('probe DOM row classification', () => {
     }
     expect(summary.resultRowCount).toBe(0)
     expect(summary.noticeRowCount).toBe(1)
+  })
+})
+
+function mockElementRect(
+  element: Element | null,
+  rect: { left: number; top: number; width: number; height: number }
+): void {
+  if (!element) throw new Error('Expected element to exist')
+  element.getBoundingClientRect = () =>
+    ({
+      x: rect.left,
+      y: rect.top,
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      right: rect.left + rect.width,
+      bottom: rect.top + rect.height,
+      toJSON: () => rect
+    }) as DOMRect
+}
+
+function runScreenshotClip(): {
+  x: number
+  y: number
+  width: number
+  height: number
+  scale: number
+} | null {
+  return new Function(`return ${buildScreenshotClipExpression()}`)() as {
+    x: number
+    y: number
+    width: number
+    height: number
+    scale: number
+  } | null
+}
+
+describe('buildScreenshotClipExpression', () => {
+  it('clips to the visible 56px CoreBox header when CoreBoxRes is mounted but hidden (0x0)', () => {
+    document.body.innerHTML = `
+      <div class="CoreBox"></div>
+      <div class="CoreBoxRes"></div>
+    `
+    mockElementRect(document.querySelector('.CoreBox'), { left: 0, top: 0, width: 720, height: 56 })
+    mockElementRect(document.querySelector('.CoreBoxRes'), {
+      left: 0,
+      top: 56,
+      width: 0,
+      height: 0
+    })
+
+    expect(runScreenshotClip()).toEqual({ x: 0, y: 0, width: 720, height: 56, scale: 1 })
+  })
+
+  it('prefers expanded CoreBoxRes-Main over CoreBoxRes and CoreBox when results are visible', () => {
+    document.body.innerHTML = `
+      <div class="CoreBox"></div>
+      <div class="CoreBoxRes CoreBoxRes--visible">
+        <div class="CoreBoxRes-Main"></div>
+      </div>
+    `
+    mockElementRect(document.querySelector('.CoreBox'), { left: 0, top: 0, width: 720, height: 56 })
+    mockElementRect(document.querySelector('.CoreBoxRes'), {
+      left: 0,
+      top: 56,
+      width: 720,
+      height: 340
+    })
+    mockElementRect(document.querySelector('.CoreBoxRes-Main'), {
+      left: 0,
+      top: 56,
+      width: 288,
+      height: 340
+    })
+
+    expect(runScreenshotClip()).toEqual({ x: 0, y: 56, width: 288, height: 340, scale: 1 })
+  })
+
+  it('falls back to visible CoreBoxRes--visible when CoreBoxRes-Main is hidden, and skips short result surfaces', () => {
+    document.body.innerHTML = `
+      <div class="CoreBox"></div>
+      <div class="CoreBoxRes CoreBoxRes--visible">
+        <div class="CoreBoxRes-Main"></div>
+      </div>
+    `
+    mockElementRect(document.querySelector('.CoreBox'), { left: 0, top: 0, width: 720, height: 56 })
+    mockElementRect(document.querySelector('.CoreBoxRes'), {
+      left: 0,
+      top: 56,
+      width: 720,
+      height: 220
+    })
+    mockElementRect(document.querySelector('.CoreBoxRes-Main'), {
+      left: 0,
+      top: 56,
+      width: 0,
+      height: 0
+    })
+
+    expect(runScreenshotClip()).toEqual({ x: 0, y: 56, width: 720, height: 220, scale: 1 })
+
+    // A result surface below the 80px expanded minimum falls through to the collapsed CoreBox bar.
+    mockElementRect(document.querySelector('.CoreBoxRes'), {
+      left: 0,
+      top: 56,
+      width: 720,
+      height: 60
+    })
+    expect(runScreenshotClip()).toEqual({ x: 0, y: 0, width: 720, height: 56, scale: 1 })
+  })
+
+  it('returns null when every candidate is hidden or smaller than its minimum threshold', () => {
+    document.body.innerHTML = `
+      <div class="CoreBox"></div>
+      <div class="CoreBoxRes"></div>
+    `
+    mockElementRect(document.querySelector('.CoreBox'), { left: 0, top: 0, width: 720, height: 32 })
+    mockElementRect(document.querySelector('.CoreBoxRes'), {
+      left: 0,
+      top: 56,
+      width: 0,
+      height: 0
+    })
+
+    expect(runScreenshotClip()).toBeNull()
   })
 })
 
@@ -388,5 +521,40 @@ describe('checkEverythingModeBackendUsage', () => {
       after: null
     })
     expect(failures).toEqual([])
+  })
+})
+
+describe('prepareIsolatedProbeEnvironment', () => {
+  it('skips seeding the probe marker in the unavailable degraded phase and seeds it for active backends', async () => {
+    expect(shouldSeedProbeMarker('unavailable')).toBe(false)
+    expect(shouldSeedProbeMarker('sdk-napi')).toBe(true)
+    expect(shouldSeedProbeMarker('cli')).toBe(true)
+
+    const marker = 'tuff-everything-ci-marker.txt'
+    const degradedDir = await mkdtemp(path.join(os.tmpdir(), 'tuff-probe-degraded-'))
+    const sdkDir = await mkdtemp(path.join(os.tmpdir(), 'tuff-probe-sdk-'))
+    try {
+      const degraded = await prepareIsolatedProbeEnvironment({
+        userDataDir: degradedDir,
+        expectBackend: 'unavailable',
+        marker
+      })
+      expect(degraded.markerSeeded).toBe(false)
+      expect(existsSync(path.join(degraded.fixtureRoot, marker))).toBe(false)
+      expect(
+        existsSync(path.join(degraded.profile, 'tuff', 'modules', 'config', 'app-setting.ini'))
+      ).toBe(true)
+
+      const sdk = await prepareIsolatedProbeEnvironment({
+        userDataDir: sdkDir,
+        expectBackend: 'sdk-napi',
+        marker
+      })
+      expect(sdk.markerSeeded).toBe(true)
+      expect(existsSync(path.join(sdk.fixtureRoot, marker))).toBe(true)
+    } finally {
+      await rm(degradedDir, { recursive: true, force: true })
+      await rm(sdkDir, { recursive: true, force: true })
+    }
   })
 })

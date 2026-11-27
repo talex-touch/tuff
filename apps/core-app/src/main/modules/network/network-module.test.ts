@@ -2,6 +2,7 @@ import type { ModuleInitContext } from '@talex-touch/utils'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NetworkEvents } from '@talex-touch/utils/transport/events'
+import { idleBudgetCoordinator } from '../../service/idle-budget-coordinator'
 import { NetworkModule } from './network-module'
 
 const mocks = vi.hoisted(() => ({
@@ -183,5 +184,47 @@ describe('NetworkModule lifecycle status', () => {
     })
 
     module.onDestroy({} as never)
+  })
+
+  it('pauses 5s net.isOnline polling during background-hidden and system-suspended and resumes without duplicate timers', () => {
+    const module = new NetworkModule()
+    const coordinatorInternal = idleBudgetCoordinator as unknown as {
+      transitionTo: (
+        state: 'active' | 'background-hidden' | 'system-suspended',
+        reason: string
+      ) => void
+    }
+
+    module.onInit({} as ModuleInitContext<TalexEvents>)
+    // Initial probe ran synchronously on init.
+    expect(mocks.isOnline).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(5_000)
+    expect(mocks.isOnline).toHaveBeenCalledTimes(2)
+
+    // Enter background-hidden -> 0 polls over 30s.
+    coordinatorInternal.transitionTo('background-hidden', 'window-hidden-grace-elapsed')
+    vi.advanceTimersByTime(30_000)
+    expect(mocks.isOnline).toHaveBeenCalledTimes(2)
+
+    // Enter system-suspended -> still 0 polls over 30s.
+    coordinatorInternal.transitionTo('system-suspended', 'power-suspend')
+    vi.advanceTimersByTime(30_000)
+    expect(mocks.isOnline).toHaveBeenCalledTimes(2)
+
+    // Return to active -> immediate resume probe + single 5s interval (no duplicates).
+    coordinatorInternal.transitionTo('active', 'power-resume')
+    expect(mocks.isOnline).toHaveBeenCalledTimes(3)
+
+    vi.advanceTimersByTime(5_000)
+    expect(mocks.isOnline).toHaveBeenCalledTimes(4)
+    vi.advanceTimersByTime(5_000)
+    expect(mocks.isOnline).toHaveBeenCalledTimes(5)
+
+    module.onDestroy({} as never)
+    idleBudgetCoordinator.destroy()
+    vi.advanceTimersByTime(30_000)
+    expect(mocks.isOnline).toHaveBeenCalledTimes(5)
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

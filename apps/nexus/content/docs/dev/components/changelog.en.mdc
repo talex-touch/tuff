@@ -13,11 +13,20 @@ verified: false
 
 | Item | Value |
 |------|-------|
-| Source version | **0.9.5** |
-| Release version | **0.9.5** (latest npm release) |
-| Component modules | **193**: Base 99 · Pro 58 · AI 36 |
+| Source version | **0.9.6** |
+| Release version | **0.9.6** (latest npm release) |
+| Component modules | **194**: Base 99 · Pro 58 · AI 37 |
 
 ## Release History
+
+### Version 0.9.6 (2026-11-27)
+
+Add the AI pure-math spherical matrix loader.
+
+- **New components**: matrix-loader
+- **Main updated components**: none
+- **Key features**:
+  - New `TxMatrixLoader` (`@talex-touch/tuffex/ai`): pure-math Canvas 2D spherical halftone loader with 8 AI semantic states, smooth state cross-morphing, 2D gradient noise modulation, and 5 electronic display eras (`oled`, `crt`, `vfd`, `dither`, `lcd`).
 
 ### Version 0.9.5 (2026-11-23)
 
@@ -330,6 +339,7 @@ Introduction versions and installation barrels for all 192 component modules. Do
 | [`loading-state`](./loading-state.en.mdc) | base | 0.3.4 |
 | [`markdown-editor`](./markdown-editor.en.mdc) | pro | 0.3.9 |
 | [`markdown-view`](./markdown-view.en.mdc) | base | 0.3.4 |
+| [`matrix-loader`](./matrix-loader.en.mdc) | ai | 0.9.6 |
 | [`message-actions`](./message-actions.en.mdc) | ai | 0.3.9 |
 | [`metal-fx`](./metal-fx.en.mdc) | pro | 0.6.2 |
 | [`miko`](./miko.en.mdc) | ai | 0.9.3 |

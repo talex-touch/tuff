@@ -4,7 +4,11 @@ import { createHash } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings, shouldUseCloudflareBindings } from './cloudflare'
 import { resolveRequestIp } from './ipSecurityStore'
-import { recordPlatformGovernanceEvent, type RecordPlatformGovernanceEventInput } from './platformGovernanceStore'
+import {
+  ensurePlatformGovernanceSchema,
+  preparePlatformGovernanceEventStatement,
+  type RecordPlatformGovernanceEventInput,
+} from './platformGovernanceStore'
 import { resolveRequestGeo } from './requestGeo'
 import { scheduleTelemetryDailyRollup, withUnrolledTelemetryDays } from './telemetryDailyRollup'
 import { scheduleTelemetryRetentionMaintenance } from './telemetryRetentionMaintenance'
@@ -180,11 +184,15 @@ export function digestTelemetryBatchPayload(payload: unknown): string {
 }
 
 function stableSerialize(value: unknown): string {
-  if (value === null || typeof value !== 'object')
+  if (value === null || value === undefined)
+    return 'null'
+  if (typeof value !== 'object')
     return JSON.stringify(value)
   if (Array.isArray(value))
-    return `[${value.map(stableSerialize).join(',')}]`
-  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b))
+    return `[${value.map(entry => (entry === undefined ? 'null' : stableSerialize(entry))).join(',')}]`
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, entry]) => entry !== undefined)
+    .sort(([a], [b]) => a.localeCompare(b))
   return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${stableSerialize(entry)}`).join(',')}}`
 }
 
@@ -245,6 +253,10 @@ export interface TelemetryBatchReceiptInput {
  * The receipt row as a statement, so a route can commit it in the same `db.batch()` as the event
  * rows it acknowledges. A receipt without its rows, or rows without their receipt, is exactly the
  * false-success / duplicate-on-retry pair #1788 describes.
+ *
+ * Uses strict `INSERT` (no `ON CONFLICT DO NOTHING`) so that a concurrent duplicate
+ * `(scope, idempotency_key)` triggers a UNIQUE constraint error inside `db.batch()`, atomically
+ * rolling back any duplicate event rows, stats counters, or governance writes in the losing request.
  */
 export function buildTelemetryBatchReceiptStatement(
   db: D1Database,
@@ -256,8 +268,7 @@ export function buildTelemetryBatchReceiptStatement(
   return db.prepare(`
     INSERT INTO ${TELEMETRY_BATCH_RECEIPTS_TABLE} (
       scope, idempotency_key, payload_hash, response_json, created_at, expires_at
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-    ON CONFLICT(scope, idempotency_key) DO NOTHING;
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6);
   `).bind(
     input.scope,
     input.idempotencyKey,
@@ -277,7 +288,22 @@ export async function storeTelemetryBatchReceipt(
     throw createError({ statusCode: 503, statusMessage: 'Telemetry database not available' })
 
   await ensureTelemetrySchema(db)
-  await buildTelemetryBatchReceiptStatement(db, input).run()
+  const now = input.now ?? new Date()
+  const retentionDays = Number.isFinite(input.retentionDays) ? Math.max(14, Number(input.retentionDays)) : 14
+  const expiresAt = new Date(now.getTime() + retentionDays * 24 * 60 * 60 * 1000).toISOString()
+  await db.prepare(`
+    INSERT INTO ${TELEMETRY_BATCH_RECEIPTS_TABLE} (
+      scope, idempotency_key, payload_hash, response_json, created_at, expires_at
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+    ON CONFLICT(scope, idempotency_key) DO NOTHING;
+  `).bind(
+    input.scope,
+    input.idempotencyKey,
+    input.payloadHash,
+    JSON.stringify(input.response),
+    now.toISOString(),
+    expiresAt,
+  ).run()
 }
 
 async function ensureTelemetryColumns(db: D1Database): Promise<void> {
@@ -722,6 +748,8 @@ export async function prepareTelemetryWrite(
   const context = resolveTelemetryRequestContext(event)
   const batch = new TelemetryWriteBatch(db)
   const results = inputs.map(input => planTelemetryEvent(db, batch, context, input))
+  if (batch.governance.length > 0)
+    await ensurePlatformGovernanceSchema(db)
   return { db, batch, results }
 }
 
@@ -731,21 +759,25 @@ export interface CommitTelemetryWriteOptions {
 }
 
 /**
- * One `db.batch()` for the whole request; governance follow-ups and retention maintenance run
- * only after it committed, so they never describe rows that did not land.
+ * One `db.batch()` for the whole request: event rows, quarantine rows, daily stats, governance
+ * events, and the receipt all commit or roll back together. Maintenance and rollup scheduling run
+ * only after commit succeeds.
  */
 export async function commitTelemetryWrite(
   event: H3Event,
   prepared: { db: D1Database, batch: TelemetryWriteBatch },
   options: CommitTelemetryWriteOptions = {},
 ): Promise<void> {
-  const statements = [...prepared.batch.toStatements(), ...(options.extraStatements ?? [])]
+  const governanceStatements = prepared.batch.governance.map(input =>
+    preparePlatformGovernanceEventStatement(prepared.db, event, input),
+  )
+  const statements = [
+    ...prepared.batch.toStatements(),
+    ...governanceStatements,
+    ...(options.extraStatements ?? []),
+  ]
   if (statements.length > 0)
     await prepared.db.batch(statements)
-
-  for (const input of prepared.batch.governance) {
-    await recordPlatformGovernanceEvent(event, input).catch(() => {})
-  }
 
   scheduleTelemetryRetentionMaintenance(event, prepared.db)
   scheduleTelemetryDailyRollup(event, prepared.db)

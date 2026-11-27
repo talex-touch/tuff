@@ -99,6 +99,36 @@ function buildStartupReportHeaders(payload: unknown): Record<string, string> {
   return headers
 }
 
+function assertCompleteStartupAck(rawData: unknown): void {
+  if (rawData === undefined || rawData === null || rawData === '') return
+  if (typeof rawData === 'string') {
+    const trimmed = rawData.trim()
+    if (!trimmed) return
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(trimmed)
+    } catch {
+      throw Object.assign(new Error('STARTUP_ACK_INVALID'), { code: 'STARTUP_ACK_INVALID' })
+    }
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      Array.isArray(parsed) ||
+      (parsed as { success?: unknown }).success !== true
+    ) {
+      throw Object.assign(new Error('STARTUP_ACK_INVALID'), { code: 'STARTUP_ACK_INVALID' })
+    }
+    return
+  }
+  if (
+    typeof rawData !== 'object' ||
+    Array.isArray(rawData) ||
+    (rawData as { success?: unknown }).success !== true
+  ) {
+    throw Object.assign(new Error('STARTUP_ACK_INVALID'), { code: 'STARTUP_ACK_INVALID' })
+  }
+}
+
 /**
  * Startup Analytics Service
  * Tracks and stores startup performance metrics
@@ -457,7 +487,7 @@ export class StartupAnalytics {
 
       attempted += 1
       try {
-        await getNetworkService().request<string>({
+        const response = await getNetworkService().request<string>({
           method: 'POST',
           url: endpoint,
           headers: buildStartupReportHeaders(item.payload),
@@ -465,6 +495,7 @@ export class StartupAnalytics {
           responseType: 'text',
           timeoutMs: STARTUP_REPORT_REQUEST_TIMEOUT_MS
         })
+        assertCompleteStartupAck(response?.data)
         succeeded += 1
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
@@ -569,7 +600,7 @@ export class StartupAnalytics {
 
       attempted += 1
       try {
-        await getNetworkService().request<string>({
+        const response = await getNetworkService().request<string>({
           method: 'POST',
           url: endpoint,
           headers: buildStartupReportHeaders(item.payload),
@@ -577,6 +608,7 @@ export class StartupAnalytics {
           responseType: 'text',
           timeoutMs: STARTUP_REPORT_REQUEST_TIMEOUT_MS
         })
+        assertCompleteStartupAck(response?.data)
         await store.remove(item.id)
         succeeded += 1
       } catch (error) {

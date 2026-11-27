@@ -99,8 +99,11 @@ jobs:
       # (binding.gyp declares only ocr and everything; audio and screenshot are Cargo artifacts).
       # Without this step the snapshot below fails; with it, the same two addons the release
       # pipeline builds are the ones under test.
+      # Pinned to match native-protocol.yml and build-and-release.yml (#1794).
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable branch
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
+        with:
+          toolchain: '1.100.0'
 
       - name: Cache Rust workspace
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -231,8 +234,36 @@ jobs:
       - name: Stop Everything runtime for the degraded UI phase
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           if ($env:TUFF_EVERYTHING_EXE -and (Test-Path $env:TUFF_EVERYTHING_EXE)) {
             Start-Process -FilePath $env:TUFF_EVERYTHING_EXE -ArgumentList '-exit' -Wait -ErrorAction SilentlyContinue
+          }
+          $deadline = (Get-Date).AddSeconds(15)
+          while ((Get-Date) -lt $deadline) {
+            if (@(Get-Process -Name 'Everything' -ErrorAction SilentlyContinue).Count -eq 0) {
+              break
+            }
+            Start-Sleep -Milliseconds 500
+          }
+          $remaining = @(Get-Process -Name 'Everything' -ErrorAction SilentlyContinue)
+          if ($remaining.Count -gt 0) {
+            $remaining | Stop-Process -Force -ErrorAction SilentlyContinue
+            $forceDeadline = (Get-Date).AddSeconds(10)
+            while ((Get-Date) -lt $forceDeadline) {
+              if (@(Get-Process -Name 'Everything' -ErrorAction SilentlyContinue).Count -eq 0) {
+                break
+              }
+              Start-Sleep -Milliseconds 250
+            }
+          }
+          $stillRunning = @(Get-Process -Name 'Everything' -ErrorAction SilentlyContinue)
+          if ($stillRunning.Count -gt 0) {
+            $pids = ($stillRunning | ForEach-Object { $_.Id }) -join ', '
+            throw "Everything process(es) did not stop before degraded UI phase: $pids"
+          }
+          $everythingService = Get-Service -Name 'Everything' -ErrorAction SilentlyContinue
+          if ($everythingService -and $everythingService.Status -ne 'Stopped') {
+            throw "Everything service unexpectedly remained $($everythingService.Status)."
           }
           Write-Host 'Everything runtime stopped for the degraded UI phase.'
 

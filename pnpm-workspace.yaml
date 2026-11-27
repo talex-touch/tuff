@@ -91,9 +91,9 @@ catalog:
 catalogs:
   build:
     '@nuxt/content': ^3.15.0
-    '@nuxt/devtools': ^3.4.2
+    '@nuxt/devtools': 3.4.3
     '@nuxt/eslint': 1.15.2
-    '@nuxt/kit': ^4.4.8
+    '@nuxt/kit': 4.5.2
     '@nuxtjs/color-mode': ^3.5.2
     '@nuxtjs/i18n': ^10.4.0
     '@pinia/nuxt': ^1.0.2
@@ -102,7 +102,7 @@ catalogs:
     '@unocss/preset-typography': ^66.7.5
     '@vite-pwa/nuxt': ^1.1.1
     '@vueuse/nuxt': ^13.9.0
-    nuxt: ^4.4.8
+    nuxt: 4.5.2
     unocss: ^66.7.5
     unplugin: ^2.3.11
     vite: ^7.3.6
@@ -207,7 +207,7 @@ overrides:
   nuxt: catalog:build
   picomatch@^2.0.0: 2.3.2
   picomatch@^4.0.0: 4.0.5
-  postcss: 8.5.23
+  postcss: 8.5.33
   preact: 10.29.6
   qs: 6.16.1
   proxy-addr: 2.0.8
@@ -225,10 +225,14 @@ overrides:
   tar: 7.5.21
   undici@^6.0.0: 6.29.1
   undici@^7.0.0: 7.30.1
-  unhead: 2.1.15
-  unplugin: catalog:build
+  # Lifted from 2.1.15 for Nuxt 4.5.x (#1098); Nuxt 4.5.2 requires unhead ^3.3.1 (./stream/iife export).
+  unhead: ^3.3.1
+  # Keep unplugin <3 consumers (including @sentry/vite-plugin's ^1.0.1) on 2.3.11 so unplugin@1.0.1
+  # does not pull chokidar@3.6.0 into root dependencies and collide with core-app's chokidar-fsevents
+  # alias in electron-builder, while Nuxt 4.5.2 continues resolving unplugin@3.7.0.
+  unplugin@<3.0.0: catalog:build
   uuid: 14.0.1
-  vite: 7.3.7
+  vite@^7.0.0: 7.3.7
   vue-i18n: 11.4.16
   # Nuxt (#app) and apps/nexus sfc-typed-router must share one vue-router copy so
   # RouteNamedMap and NavigationGuard types do not split across two resolved versions.

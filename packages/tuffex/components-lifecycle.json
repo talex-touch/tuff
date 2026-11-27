@@ -1,8 +1,18 @@
 {
   "$schema": "./components-lifecycle.schema.json",
-  "currentVersion": "0.9.5",
-  "totalComponents": 193,
+  "currentVersion": "0.9.6",
+  "totalComponents": 194,
   "versions": [
+    {
+      "version": "0.9.6",
+      "date": "2026-11-27",
+      "title": "新增 AI 球面矩阵加载器 (AI MatrixLoader)",
+      "newComponents": [
+        "matrix-loader"
+      ],
+      "updatedComponents": [],
+      "summary": "新增 @talex-touch/tuffex/ai 的 TxMatrixLoader 球面半调数学加载器，提供 8 种 AI 语义状态、状态间平滑融合、2D 梯度噪声扰动与 5 种电子屏幕显示时代（oled、crt、vfd、dither、lcd）。"
+    },
     {
       "version": "0.9.5",
       "date": "2026-11-23",
@@ -993,6 +1003,11 @@
       "slug": "markdown-view",
       "since": "0.3.4",
       "suite": "base"
+    },
+    "matrix-loader": {
+      "slug": "matrix-loader",
+      "since": "0.9.6",
+      "suite": "ai"
     },
     "message-actions": {
       "slug": "message-actions",

@@ -1,6 +1,7 @@
 import type {
   HerdrProjectedConversation,
   HerdrProjectedMessage,
+  HerdrProjectedMessagePart,
   HerdrProjectedProvider,
   HerdrProjectedToolCall,
   HerdrSessionUpsertPayload,
@@ -27,8 +28,8 @@ export const HERDR_PROJECTION_DEFAULT_LIMIT = 50
 export const HERDR_PROJECTION_MAX_LIMIT = 120
 export const HERDR_PROJECTION_WATCH_DEBOUNCE_MS = 250
 
-const MAX_ARGS_PREVIEW_CHARS = 240
-const MAX_OUTPUT_PREVIEW_CHARS = 400
+const MAX_ARGS_PREVIEW_CHARS = 1200
+const MAX_OUTPUT_PREVIEW_CHARS = 2400
 const SESSION_MATCH_GRACE_MS = 5_000
 const WRAPPER_EXECUTABLES = new Set([
   'node',
@@ -244,6 +245,41 @@ async function readBoundedJsonlTail(
   }
 }
 
+function appendProjectedPart(
+  parts: HerdrProjectedMessagePart[],
+  part: HerdrProjectedMessagePart
+): void {
+  if (part.type === 'text' || part.type === 'reasoning') {
+    if (!part.text.trim()) return
+    const prev = parts[parts.length - 1]
+    if (prev && prev.type === part.type) {
+      prev.text = `${prev.text}\n${part.text}`
+      return
+    }
+    parts.push({ type: part.type, text: part.text })
+    return
+  }
+  parts.push(part)
+}
+
+function ensureMessageParts(message: HerdrProjectedMessage): HerdrProjectedMessagePart[] {
+  if (message.parts) return message.parts
+  const parts: HerdrProjectedMessagePart[] = []
+  if (message.reasoning) {
+    appendProjectedPart(parts, { type: 'reasoning', text: message.reasoning })
+  }
+  if (message.text) {
+    appendProjectedPart(parts, { type: 'text', text: message.text })
+  }
+  if (message.toolCalls) {
+    for (const call of message.toolCalls) {
+      appendProjectedPart(parts, { type: 'tool-call', toolCallId: call.id })
+    }
+  }
+  message.parts = parts
+  return parts
+}
+
 export interface ParsedProjectionResult {
   messages: HerdrProjectedMessage[]
   truncated: boolean
@@ -277,22 +313,32 @@ export function parseNativeSessionJsonlLines(
     toolCallsById.set(call.id, call)
     const last = messages[messages.length - 1]
     if (last && last.role === 'assistant') {
+      const parts = ensureMessageParts(last)
       if (!last.toolCalls) last.toolCalls = []
       last.toolCalls.push(call)
       if (pendingReasoning.length > 0) {
-        last.reasoning = [last.reasoning, ...pendingReasoning].filter(Boolean).join('\n')
+        const joined = pendingReasoning.join('\n')
+        last.reasoning = [last.reasoning, joined].filter(Boolean).join('\n')
+        appendProjectedPart(parts, { type: 'reasoning', text: joined })
         pendingReasoning = []
       }
+      appendProjectedPart(parts, { type: 'tool-call', toolCallId: call.id })
       return
     }
     const reasoning = pendingReasoning.length > 0 ? pendingReasoning.join('\n') : undefined
     pendingReasoning = []
+    const parts: HerdrProjectedMessagePart[] = []
+    if (reasoning) {
+      appendProjectedPart(parts, { type: 'reasoning', text: reasoning })
+    }
+    appendProjectedPart(parts, { type: 'tool-call', toolCallId: call.id })
     messages.push({
       id: nextId(preferredId),
       role: 'assistant',
       text: '',
       ...(reasoning ? { reasoning } : {}),
       toolCalls: [call],
+      parts,
       timestamp
     })
   }
@@ -313,19 +359,21 @@ export function parseNativeSessionJsonlLines(
       return
     }
     if (preview) {
+      const orphanCallId = callId || nextId()
       messages.push({
         id: nextId(callId ? `tool-${callId}` : undefined),
         role: 'tool',
         text: preview,
         toolCalls: [
           {
-            id: callId || nextId(),
+            id: orphanCallId,
             name: fallbackName,
             status: isError ? 'failed' : 'completed',
             outputPreview: preview,
             ...(isError ? { isError: true } : {})
           }
         ],
+        parts: [{ type: 'tool-call', toolCallId: orphanCallId }],
         timestamp
       })
     }
@@ -386,20 +434,31 @@ export function parseNativeSessionJsonlLines(
         const content = messageObj?.content ?? parsed.content
         const textParts: string[] = []
         const reasoningParts: string[] = [...pendingReasoning]
+        const orderedParts: HerdrProjectedMessagePart[] = []
+        for (const thought of pendingReasoning) {
+          appendProjectedPart(orderedParts, { type: 'reasoning', text: thought })
+        }
         pendingReasoning = []
         const toolCalls: HerdrProjectedToolCall[] = []
 
         if (typeof content === 'string') {
-          if (content.trim()) textParts.push(content)
+          if (content.trim()) {
+            textParts.push(content)
+            appendProjectedPart(orderedParts, { type: 'text', text: content })
+          }
         } else if (Array.isArray(content)) {
           for (const rawBlock of content) {
             const block = asRecord(rawBlock)
             if (!block) continue
             if (block.type === 'text' && typeof block.text === 'string' && block.text) {
               textParts.push(block.text)
+              appendProjectedPart(orderedParts, { type: 'text', text: block.text })
             } else if (block.type === 'thinking') {
               const thought = asString(block.thinking) ?? asString(block.text)
-              if (thought) reasoningParts.push(thought)
+              if (thought) {
+                reasoningParts.push(thought)
+                appendProjectedPart(orderedParts, { type: 'reasoning', text: thought })
+              }
             } else if (block.type === 'tool_use') {
               const callId = asString(block.id) ?? nextId()
               const call: HerdrProjectedToolCall = {
@@ -410,6 +469,7 @@ export function parseNativeSessionJsonlLines(
               }
               toolCalls.push(call)
               toolCallsById.set(callId, call)
+              appendProjectedPart(orderedParts, { type: 'tool-call', toolCallId: callId })
             }
           }
         }
@@ -423,6 +483,7 @@ export function parseNativeSessionJsonlLines(
             text,
             ...(reasoning ? { reasoning } : {}),
             ...(toolCalls.length > 0 ? { toolCalls } : {}),
+            ...(orderedParts.length > 0 ? { parts: orderedParts } : {}),
             timestamp
           })
         }
@@ -465,11 +526,17 @@ export function parseNativeSessionJsonlLines(
         } else if (roleRaw === 'assistant') {
           const reasoning = pendingReasoning.length > 0 ? pendingReasoning.join('\n') : undefined
           pendingReasoning = []
+          const orderedParts: HerdrProjectedMessagePart[] = []
+          if (reasoning) {
+            appendProjectedPart(orderedParts, { type: 'reasoning', text: reasoning })
+          }
+          appendProjectedPart(orderedParts, { type: 'text', text })
           messages.push({
             id: nextId(recordId),
             role: 'assistant',
             text,
             ...(reasoning ? { reasoning } : {}),
+            ...(orderedParts.length > 0 ? { parts: orderedParts } : {}),
             timestamp
           })
         } else if (roleRaw === 'system') {
@@ -527,20 +594,31 @@ export function parseNativeSessionJsonlLines(
       const content = messageObj.content
       const textParts: string[] = []
       const reasoningParts: string[] = [...pendingReasoning]
+      const orderedParts: HerdrProjectedMessagePart[] = []
+      for (const thought of pendingReasoning) {
+        appendProjectedPart(orderedParts, { type: 'reasoning', text: thought })
+      }
       pendingReasoning = []
       const toolCalls: HerdrProjectedToolCall[] = []
 
       if (typeof content === 'string') {
-        if (content.trim()) textParts.push(content)
+        if (content.trim()) {
+          textParts.push(content)
+          appendProjectedPart(orderedParts, { type: 'text', text: content })
+        }
       } else if (Array.isArray(content)) {
         for (const rawBlock of content) {
           const block = asRecord(rawBlock)
           if (!block) continue
           if (block.type === 'text' && typeof block.text === 'string' && block.text) {
             textParts.push(block.text)
+            appendProjectedPart(orderedParts, { type: 'text', text: block.text })
           } else if (block.type === 'thinking') {
             const thought = asString(block.thinking) ?? asString(block.text)
-            if (thought) reasoningParts.push(thought)
+            if (thought) {
+              reasoningParts.push(thought)
+              appendProjectedPart(orderedParts, { type: 'reasoning', text: thought })
+            }
           } else if (block.type === 'toolCall' || block.type === 'tool_use') {
             const callId = asString(block.id) ?? nextId()
             const call: HerdrProjectedToolCall = {
@@ -554,6 +632,7 @@ export function parseNativeSessionJsonlLines(
             }
             toolCalls.push(call)
             toolCallsById.set(callId, call)
+            appendProjectedPart(orderedParts, { type: 'tool-call', toolCallId: callId })
           }
         }
       }
@@ -567,6 +646,7 @@ export function parseNativeSessionJsonlLines(
           text,
           ...(reasoning ? { reasoning } : {}),
           ...(toolCalls.length > 0 ? { toolCalls } : {}),
+          ...(orderedParts.length > 0 ? { parts: orderedParts } : {}),
           timestamp: msgTimestamp
         })
       }

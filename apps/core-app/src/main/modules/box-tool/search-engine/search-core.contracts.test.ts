@@ -1200,6 +1200,289 @@ describe('SearchEngineCore facade contracts', () => {
       ['native-file']
     ])
   })
+
+  it('retains aliased native file-provider results outside watch roots across live and cached searches after usage-identity canonicalization', async () => {
+    const [
+      { recommendationSourceRegistry },
+      { FILE_RECOMMENDATION_ALIASES, FILE_RECOMMENDATION_SOURCE_ID }
+    ] = await Promise.all([
+      import('./recommendation/recommendation-source-registry'),
+      import('./recommendation/file-recommendation-source')
+    ])
+
+    const indexedInScope: TuffItem = {
+      ...buildItem('indexed-in-scope', 'file-provider', 'Indexed In Scope'),
+      kind: 'file',
+      source: { id: 'file-provider', name: 'Files', type: 'file' },
+      meta: { file: { path: '/scope/indexed-in-scope.txt' } }
+    }
+    const indexedOutOfScope: TuffItem = {
+      ...buildItem('indexed-out-of-scope', 'file-provider', 'Indexed Out Of Scope'),
+      kind: 'file',
+      source: { id: 'file-provider', name: 'Files', type: 'file' },
+      meta: { file: { path: '/outside/indexed-out-of-scope.txt' } }
+    }
+    const everythingItem: TuffItem = {
+      ...buildItem('everything-marker', 'everything-provider', 'tuff-everything-ci-marker.txt'),
+      kind: 'file',
+      source: { id: 'everything-provider', name: 'Everything Search', type: 'file' },
+      meta: {
+        file: { path: 'D:\\a\\_temp\\tuff-everything-fixture\\tuff-everything-ci-marker.txt' }
+      }
+    }
+    const spotlightItem: TuffItem = {
+      ...buildItem('spotlight-outside', 'macos-spotlight-provider', 'Spotlight Outside'),
+      kind: 'file',
+      source: { id: 'macos-spotlight-provider', name: 'Spotlight Search', type: 'file' },
+      meta: { file: { path: '/outside/spotlight-note.txt' } }
+    }
+    const linuxNativeItem: TuffItem = {
+      ...buildItem('linux-outside', 'linux-native-file-provider', 'Linux Outside'),
+      kind: 'file',
+      source: { id: 'linux-native-file-provider', name: 'Linux Native File Search', type: 'file' },
+      meta: { file: { path: '/outside/linux-doc.txt' } }
+    }
+    const windowsShellItem: TuffItem = {
+      ...buildItem('windows-shell-this-pc', 'windows-shell-file-provider', 'This PC'),
+      kind: 'folder',
+      source: {
+        id: 'windows-shell-file-provider',
+        name: 'Windows Shell File Entries',
+        type: 'file'
+      },
+      meta: { file: { path: 'shell:MyComputerFolder' } }
+    }
+
+    let fileItems = [indexedInScope, indexedOutOfScope]
+    let everythingItems = [everythingItem]
+    let spotlightItems = [spotlightItem]
+    let linuxNativeItems = [linuxNativeItem]
+    let windowsShellItems = [windowsShellItem]
+
+    for (const providerId of [
+      'file-provider',
+      'everything-provider',
+      'macos-spotlight-provider',
+      'linux-native-file-provider',
+      'windows-shell-file-provider'
+    ]) {
+      core.unregisterProvider(providerId)
+    }
+    // Register after unregisterProvider('file-provider'), which clears that id from the registry.
+    recommendationSourceRegistry.unregister(FILE_RECOMMENDATION_SOURCE_ID)
+    const disposeSource = recommendationSourceRegistry.registerSource({
+      sourceId: FILE_RECOMMENDATION_SOURCE_ID,
+      aliases: FILE_RECOMMENDATION_ALIASES,
+      rebuild: async () => []
+    })
+    core.registerProvider({
+      ...buildProvider('file-provider', async () => ({ items: fileItems }) as never),
+      type: 'file'
+    } as never)
+    core.registerProvider({
+      ...buildProvider('everything-provider', async () => ({ items: everythingItems }) as never),
+      type: 'file'
+    } as never)
+    core.registerProvider({
+      ...buildProvider(
+        'macos-spotlight-provider',
+        async () => ({ items: spotlightItems }) as never
+      ),
+      type: 'file'
+    } as never)
+    core.registerProvider({
+      ...buildProvider(
+        'linux-native-file-provider',
+        async () => ({ items: linuxNativeItems }) as never
+      ),
+      type: 'file'
+    } as never)
+    core.registerProvider({
+      ...buildProvider(
+        'windows-shell-file-provider',
+        async () => ({ items: windowsShellItems }) as never
+      ),
+      type: 'file'
+    } as never)
+    core.activateProviders([
+      { id: 'file-provider' },
+      { id: 'everything-provider' },
+      { id: 'macos-spotlight-provider' },
+      { id: 'linux-native-file-provider' },
+      { id: 'windows-shell-file-provider' }
+    ] as IProviderActivate[])
+
+    const query = { inputs: [], text: 'tuff-everything-ci-marker' } as TuffQuery
+    try {
+      const live = core.startSearch(query, {
+        caller: { kind: 'core-box', id: 'everything-scope:live' }
+      })
+      const liveResult = await live.result
+      await live.completed
+
+      expect(liveResult.items.map((item) => item.id).sort()).toEqual([
+        'everything-marker',
+        'indexed-in-scope',
+        'linux-outside',
+        'spotlight-outside',
+        'windows-shell-this-pc'
+      ])
+      // Usage-identity canonicalization remains intact on native file results for stats/dedupe.
+      for (const id of ['everything-marker', 'spotlight-outside', 'linux-outside']) {
+        const matched = liveResult.items.find((item) => item.id === id)
+        expect(matched?.meta?._originalSourceId).toBe(FILE_RECOMMENDATION_SOURCE_ID)
+      }
+
+      // Empty provider outputs prove the second query is served from cache, and withdrawing
+      // file-provider's scope must drop only index-owned items.
+      fileItems = []
+      everythingItems = []
+      spotlightItems = []
+      linuxNativeItems = []
+      windowsShellItems = []
+      state.filePathAdmitted.mockImplementation(() => false)
+
+      const cached = core.startSearch(query, {
+        caller: { kind: 'core-box', id: 'everything-scope:cached' }
+      })
+      const cachedResult = await cached.result
+      await cached.completed
+
+      expect(cachedResult.items.map((item) => item.id).sort()).toEqual([
+        'everything-marker',
+        'linux-outside',
+        'spotlight-outside',
+        'windows-shell-this-pc'
+      ])
+      for (const id of ['everything-marker', 'spotlight-outside', 'linux-outside']) {
+        const matched = cachedResult.items.find((item) => item.id === id)
+        expect(matched?.meta?._originalSourceId).toBe(FILE_RECOMMENDATION_SOURCE_ID)
+      }
+    } finally {
+      disposeSource()
+    }
+  })
+
+  it('does not drop canonicalized aliased native file-provider items during cached missing-file checks', async () => {
+    const [
+      { recommendationSourceRegistry },
+      { FILE_RECOMMENDATION_ALIASES, FILE_RECOMMENDATION_SOURCE_ID }
+    ] = await Promise.all([
+      import('./recommendation/recommendation-source-registry'),
+      import('./recommendation/file-recommendation-source')
+    ])
+
+    const directory = await mkdtemp(join(tmpdir(), 'tuff-search-aliased-missing-'))
+    const ownedTempPath = join(directory, 'owned.txt')
+    const everythingTempPath = join(directory, 'everything.txt')
+    const spotlightTempPath = join(directory, 'spotlight.txt')
+    const ownedPath = '/scope/aliased-owned.txt'
+    const everythingPath = '/outside/aliased-everything.txt'
+    const spotlightPath = '/outside/aliased-spotlight.txt'
+    await writeFile(ownedTempPath, 'indexed')
+    await writeFile(everythingTempPath, 'everything')
+    await writeFile(spotlightTempPath, 'spotlight')
+    const realExistsSync = fs.existsSync.bind(fs)
+    const existsSyncSpy = vi.spyOn(fs, 'existsSync').mockImplementation((candidate) => {
+      if (candidate === ownedPath) return realExistsSync(ownedTempPath)
+      if (candidate === everythingPath) return realExistsSync(everythingTempPath)
+      if (candidate === spotlightPath) return realExistsSync(spotlightTempPath)
+      return realExistsSync(candidate)
+    })
+
+    let ownedItems: TuffItem[] = [
+      {
+        ...buildItem('aliased-owned', 'file-provider', 'Indexed Owned'),
+        kind: 'file',
+        source: { id: 'file-provider', name: 'Files', type: 'file' },
+        meta: { file: { path: ownedPath } }
+      }
+    ]
+    let everythingItems: TuffItem[] = [
+      {
+        ...buildItem('aliased-everything', 'everything-provider', 'Everything File'),
+        kind: 'file',
+        source: { id: 'everything-provider', name: 'Everything Search', type: 'file' },
+        meta: { file: { path: everythingPath } }
+      }
+    ]
+    let spotlightItems: TuffItem[] = [
+      {
+        ...buildItem('aliased-spotlight', 'macos-spotlight-provider', 'Spotlight File'),
+        kind: 'file',
+        source: { id: 'macos-spotlight-provider', name: 'Spotlight Search', type: 'file' },
+        meta: { file: { path: spotlightPath } }
+      }
+    ]
+
+    for (const providerId of ['file-provider', 'everything-provider', 'macos-spotlight-provider']) {
+      core.unregisterProvider(providerId)
+    }
+    recommendationSourceRegistry.unregister(FILE_RECOMMENDATION_SOURCE_ID)
+    const disposeSource = recommendationSourceRegistry.registerSource({
+      sourceId: FILE_RECOMMENDATION_SOURCE_ID,
+      aliases: FILE_RECOMMENDATION_ALIASES,
+      rebuild: async () => []
+    })
+    core.registerProvider({
+      ...buildProvider('file-provider', async () => ({ items: ownedItems }) as never),
+      type: 'file'
+    } as never)
+    core.registerProvider({
+      ...buildProvider('everything-provider', async () => ({ items: everythingItems }) as never),
+      type: 'file'
+    } as never)
+    core.registerProvider({
+      ...buildProvider(
+        'macos-spotlight-provider',
+        async () => ({ items: spotlightItems }) as never
+      ),
+      type: 'file'
+    } as never)
+    core.activateProviders([
+      { id: 'file-provider' },
+      { id: 'everything-provider' },
+      { id: 'macos-spotlight-provider' }
+    ] as IProviderActivate[])
+
+    const query = { inputs: [], text: 'aliased missing file check' } as TuffQuery
+    try {
+      const first = core.startSearch(query, {
+        caller: { kind: 'core-box', id: 'aliased-missing:before-delete' }
+      })
+      const firstResult = await first.result
+      await first.completed
+      expect(firstResult.items.map((item) => item.id).sort()).toEqual([
+        'aliased-everything',
+        'aliased-owned',
+        'aliased-spotlight'
+      ])
+      expect(
+        firstResult.items.find((item) => item.id === 'aliased-everything')?.meta?._originalSourceId
+      ).toBe(FILE_RECOMMENDATION_SOURCE_ID)
+
+      ownedItems = []
+      everythingItems = []
+      spotlightItems = []
+      await rm(ownedTempPath)
+      await rm(everythingTempPath)
+      await rm(spotlightTempPath)
+
+      const second = core.startSearch(query, {
+        caller: { kind: 'core-box', id: 'aliased-missing:after-delete' }
+      })
+      const secondResult = await second.result
+      await second.completed
+      expect(secondResult.items.map((item) => item.id).sort()).toEqual([
+        'aliased-everything',
+        'aliased-spotlight'
+      ])
+    } finally {
+      disposeSource()
+      existsSyncSpy.mockRestore()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
   it('drops deleted index-owned files from cached hits while retaining missing native-file results', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'tuff-search-cache-files-'))
     const ownedTempPath = join(directory, 'owned.txt')

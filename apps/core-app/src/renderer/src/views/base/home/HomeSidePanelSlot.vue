@@ -12,7 +12,12 @@ import type {
   ActivityTurn
 } from '~/modules/conversation/workspace-activity'
 import type { HomeModelLimits } from '~/modules/conversation/workspace-panel'
-import type { SidePanelTab, SidePanelWorkspaceKind } from './composables/useHomeSidePanel'
+import type { WorkspaceFileAiActionPayload } from '~/components/preview/workspace-file-tree'
+import type {
+  SidePanelRecentItem,
+  SidePanelTab,
+  SidePanelWorkspaceKind
+} from './composables/useHomeSidePanel'
 import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useShellRightSidebar } from '~/modules/layout/useShellRightSidebar'
@@ -34,6 +39,7 @@ const props = withDefaults(
     messages: ConversationMessage[]
     conversationId: string | null
     workspaceRoot?: string
+    gitAvailable?: boolean
     context?: WorkspaceContextProjection
     turn?: ConversationTurnMeta
     activityTurns: ActivityTurn[]
@@ -43,11 +49,14 @@ const props = withDefaults(
     loading: boolean
     tabs: SidePanelTab[]
     activeTabId: string | null
+    recentItems?: SidePanelRecentItem[]
   }>(),
   {
     width: 460,
     dockToShell: false,
-    active: true
+    active: true,
+    gitAvailable: true,
+    recentItems: () => []
   }
 )
 
@@ -78,6 +87,9 @@ const emit = defineEmits<{
   (event: 'open-web-external', url: string): void
   (event: 'start-resize', pointerEvent: PointerEvent): void
   (event: 'reset-width'): void
+  (event: 'remove-recent', id: string): void
+  (event: 'clear-recents'): void
+  (event: 'ai-action', payload: WorkspaceFileAiActionPayload): void
 }>()
 
 const { t } = useI18n()
@@ -151,6 +163,7 @@ onBeforeUnmount(() => {
           :messages="messages"
           :conversation-id="conversationId"
           :workspace-root="workspaceRoot"
+          :git-available="gitAvailable"
           :context="context"
           :turn="turn"
           :activity-turns="activityTurns"
@@ -160,6 +173,7 @@ onBeforeUnmount(() => {
           :loading="loading"
           :tabs="tabs"
           :active-tab-id="activeTabId"
+          :recent-items="recentItems"
           :panel-active="visible"
           :docked-to-shell="shouldTeleport"
           @locate="emit('locate', $event)"
@@ -179,6 +193,9 @@ onBeforeUnmount(() => {
           @open-web-in-browser="emit('open-web-in-browser', $event)"
           @open-file-in-browser="emit('open-file-in-browser', $event)"
           @open-web-external="emit('open-web-external', $event)"
+          @remove-recent="emit('remove-recent', $event)"
+          @clear-recents="emit('clear-recents')"
+          @ai-action="emit('ai-action', $event)"
         />
       </div>
     </Transition>

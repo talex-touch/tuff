@@ -24,7 +24,13 @@ const snapshotListeners = new Set<(payload: { tabId: string; snapshot: string })
 const focusAddressListeners = new Set<() => void>()
 
 function makeState(
-  tabs: Array<{ id: string; url: string; title: string }>,
+  tabs: Array<{
+    id: string
+    url: string
+    title: string
+    canGoBack?: boolean
+    canGoForward?: boolean
+  }>,
   activeTabId: string,
   revision = 1
 ): BrowserWorkspaceState {
@@ -35,8 +41,8 @@ function makeState(
       ...tab,
       favicon: null,
       loading: false,
-      canGoBack: false,
-      canGoForward: false,
+      canGoBack: tab.canGoBack ?? false,
+      canGoForward: tab.canGoForward ?? false,
       error: null
     })),
     recent: [],
@@ -102,13 +108,24 @@ vi.mock('vue-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key, locale: ref('en-US') })
 }))
 vi.mock('vue-router', () => ({
-  useRoute: () => route
+  useRoute: () => route,
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() })
 }))
 vi.mock('vue-sonner', () => ({
   toast: { success: vi.fn(), info: vi.fn(), warning: vi.fn(), error: vi.fn() }
 }))
 vi.mock('~/modules/platform/renderer-platform', () => ({
   useRendererPlatform: () => platformState
+}))
+vi.mock('~/modules/conversation/useConversationHistory', () => ({
+  useConversationHistory: () => ({
+    conversations: ref([]),
+    loading: ref(false),
+    refresh: vi.fn(async () => undefined),
+    load: vi.fn(async () => null),
+    rename: vi.fn(async () => undefined),
+    remove: vi.fn(async () => undefined)
+  })
 }))
 vi.mock('~/modules/browser-connection/useBrowserConnection', () => ({
   isOpenableBrowserUrl: (url?: string) => Boolean(url && url.startsWith('http')),
@@ -415,5 +432,102 @@ describe('BrowserPage shortcuts & lifecycle hygiene', () => {
     await nextTick()
     expect(viewer().attributes('data-path')).toBe('/repo/src')
     expect(viewer().attributes('data-can-go-back')).toBe('false')
+
+    // Navigating forward again and pressing macOS Cmd+[ also returns via local preview history.
+    await wrapper.get('[data-testid="preview-open-file"]').trigger('click')
+    await flushPromises()
+    await nextTick()
+    expect(viewer().attributes('data-path')).toBe('/repo/src/index.ts')
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: '[',
+        code: 'BracketLeft',
+        metaKey: true,
+        cancelable: true
+      })
+    )
+    await flushPromises()
+    await nextTick()
+    expect(viewer().attributes('data-path')).toBe('/repo/src')
+    expect(viewer().attributes('data-can-go-back')).toBe('false')
+  })
+
+  it('handles Alt+ArrowLeft/Right and macOS Cmd+[/] history shortcuts without hijacking editable inputs', async () => {
+    workspaceState = makeState(
+      [
+        {
+          id: 't1',
+          url: 'https://one.example/',
+          title: 'One',
+          canGoBack: true,
+          canGoForward: true
+        }
+      ],
+      't1',
+      1
+    )
+
+    const wrapper = mount(BrowserPage, { attachTo: document.body })
+    await flushPromises()
+    await nextTick()
+    sendMock.mockClear()
+
+    // Alt+ArrowLeft inside the address bar must not trigger browser back.
+    const addressInput = wrapper.find('input').element as HTMLInputElement
+    addressInput.focus()
+    addressInput.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'ArrowLeft',
+        code: 'ArrowLeft',
+        altKey: true,
+        bubbles: true,
+        cancelable: true
+      })
+    )
+    await flushPromises()
+    expect(sendMock).not.toHaveBeenCalledWith(BrowserEvents.back, expect.anything())
+
+    // Alt+ArrowLeft / Alt+ArrowRight outside editable inputs navigate history.
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'ArrowLeft',
+        code: 'ArrowLeft',
+        altKey: true,
+        cancelable: true
+      })
+    )
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'ArrowRight',
+        code: 'ArrowRight',
+        altKey: true,
+        cancelable: true
+      })
+    )
+    await flushPromises()
+    expect(sendMock).toHaveBeenCalledWith(BrowserEvents.back, { tabId: 't1' })
+    expect(sendMock).toHaveBeenCalledWith(BrowserEvents.forward, { tabId: 't1' })
+
+    // macOS Cmd+[ / Cmd+] also navigate history.
+    sendMock.mockClear()
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: '[',
+        code: 'BracketLeft',
+        metaKey: true,
+        cancelable: true
+      })
+    )
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: ']',
+        code: 'BracketRight',
+        metaKey: true,
+        cancelable: true
+      })
+    )
+    await flushPromises()
+    expect(sendMock).toHaveBeenCalledWith(BrowserEvents.back, { tabId: 't1' })
+    expect(sendMock).toHaveBeenCalledWith(BrowserEvents.forward, { tabId: 't1' })
   })
 })

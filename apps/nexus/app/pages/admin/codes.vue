@@ -1,29 +1,13 @@
 <script setup lang="ts">
+// Activation codes live under `/admin/subscriptions`. A route-level redirect
+// emits a real 302 instead of rendering an empty 200 admin shell before
+// hydration; `/admin/subscriptions` enforces `layouts/admin.vue`'s
+// `useAdminGate` for both admins and non-admins.
 definePageMeta({
-  layout: 'admin',
-  requiresAuth: true,
-  pageTransition: {
-    name: 'fade',
-    mode: 'out-in',
-  },
+  redirect: '/admin/subscriptions',
 })
 
 defineI18nRoute(false)
-
-const { user } = useAuthUser()
-
-watch(() => user.value, (current) => {
-  if (!current)
-    return
-  // `replace` matters: this route only forwards, so leaving it in history means
-  // Back lands here and is immediately forwarded again — the reader cannot get
-  // out of the subscriptions page with the Back button.
-  if (isAdminAccountRole(current.role)) {
-    navigateTo('/admin/subscriptions', { replace: true })
-    return
-  }
-  navigateTo('/dashboard/overview', { replace: true })
-}, { immediate: true })
 </script>
 
 <template>

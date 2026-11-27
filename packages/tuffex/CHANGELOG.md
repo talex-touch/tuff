@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-11-27
+
+### 📦 组件变动 (Components)
+
+- **新增组件**: `matrix-loader`
+
+### ✨ 组件增强
+
+- 新增 `TxMatrixLoader`（`@talex-touch/tuffex/ai`）：基于球面凸透镜与半调梯度棋盘格的纯数学 Canvas 加载器，提供 8 种 AI 语义状态（`thinking`、`searching`、`exploring`、`deciding`、`generating`、`extracting`、`accelerating`、`defining`）、状态间平滑过渡、2D 梯度噪声扰动与 5 种电子屏幕显示时代（`oled`、`crt`、`vfd`、`dither`、`lcd`）。
+
 ## [0.9.5] - 2026-11-23
 
 ### 📦 组件变动 (Components)

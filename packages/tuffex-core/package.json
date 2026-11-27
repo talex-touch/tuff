@@ -1,0 +1,64 @@
+{
+  "name": "@talex-touch/tuffex-core",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Framework-agnostic reactive primitives, DOM/a11y/motion utilities, headless state machines, and multi-framework compatibility registry for TuffEx.",
+  "author": "TalexDreamSoul <TalexDreamSoul@gmail.com>",
+  "license": "MIT",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    },
+    "./wc": {
+      "types": "./dist/wc.d.ts",
+      "import": "./dist/wc.js"
+    },
+    "./compat": {
+      "types": "./dist/compat-registry.d.ts",
+      "import": "./dist/compat-registry.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "lint": "eslint --cache --max-warnings=0 --no-warn-ignored .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@floating-ui/dom": "^1.7.6",
+    "@vue/reactivity": "^3.5.27"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:dev",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "vite-plugin-dts": "^4.5.4",
+    "vitest": "^3.2.7"
+  }
+}

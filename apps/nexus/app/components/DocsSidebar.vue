@@ -14,6 +14,13 @@ import { CONCEPTS_MANUAL_GROUPS, CONCEPTS_MANUAL_PATH, isConceptsManualPath } fr
 import { categoryI18nKey, CATEGORY_SUITE_MAP, resolveStaticComponentSuite, SUITE_CATEGORY_KEYS } from '~/utils/docs-suites'
 import { requestDocsPage } from '~/utils/docs-page-client-cache'
 import { useTypedFetch } from '~/utils/request'
+import { useDocsFramework } from '~/composables/useDocsFramework'
+import {
+  DOCS_FRAMEWORK_META,
+  formatFrameworkStatusLabel,
+  getComponentFrameworkEntry,
+  resolveComponentSlugFromPath,
+} from '~/data/tuffex-framework-matrix'
 import { canonicalDocsPageIdentity, normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
@@ -42,6 +49,7 @@ const COMPONENT_SYNC_STATUS_ALIASES: Record<string, SyncStatusKey> = {
 
 const route = useRoute()
 const { t, te, locale } = useI18n()
+const { framework: activeFramework } = useDocsFramework()
 const navRef = ref<HTMLElement | null>(null)
 const sidebarHydrated = ref(false)
 const docsLocale = computed(() => resolveDocsLocaleFromRoute(route.path))
@@ -457,6 +465,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/chain-of-thought',
     '/docs/dev/components/reasoning-disclosure',
     '/docs/dev/components/thinking-orb',
+    '/docs/dev/components/matrix-loader',
     '/docs/dev/components/stream-element',
     '/docs/dev/components/stream-text',
     '/docs/dev/components/stream-markdown',
@@ -1249,6 +1258,24 @@ function componentSyncBadge(item: any) {
   }
 }
 
+function componentFrameworkIndicator(item: any) {
+  if (activeTopSection.value !== 'components' || activeFramework.value === 'vue')
+    return null
+  const slug = resolveComponentSlugFromPath(item?.normalizedPath ?? item?.path ?? linkTarget(item))
+  if (!slug)
+    return null
+  const entry = getComponentFrameworkEntry(slug)
+  if (!entry)
+    return null
+  const status = entry[activeFramework.value]
+  const localeKey = docsLocale.value === 'zh' ? 'zh' : 'en'
+  const meta = DOCS_FRAMEWORK_META[activeFramework.value]
+  return {
+    status,
+    title: `${meta.label}: ${formatFrameworkStatusLabel(status, localeKey, activeFramework.value)}`,
+  }
+}
+
 const activeTopSection = computed(() => {
   if (isTutorialRoute.value) return 'tutorial'
   // Before the base-path scan: the concepts handbook is under `/docs/dev`, the
@@ -1905,6 +1932,13 @@ onBeforeUnmount(() => {
                           {{ memberLabel(member) }}
                         </span>
                         <span
+                          v-if="componentFrameworkIndicator(member)"
+                          class="docs-nav-fw-dot"
+                          :data-status="componentFrameworkIndicator(member)?.status"
+                          :title="componentFrameworkIndicator(member)?.title"
+                          :aria-label="componentFrameworkIndicator(member)?.title"
+                        />
+                        <span
                           v-if="componentSyncBadge(member)"
                           class="docs-nav-sync-badge"
                           :data-status="componentSyncBadge(member)?.status"
@@ -1933,6 +1967,13 @@ onBeforeUnmount(() => {
               <span class="truncate" :title="itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined)">
                 {{ itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined) }}
               </span>
+              <span
+                v-if="componentFrameworkIndicator(child)"
+                class="docs-nav-fw-dot"
+                :data-status="componentFrameworkIndicator(child)?.status"
+                :title="componentFrameworkIndicator(child)?.title"
+                :aria-label="componentFrameworkIndicator(child)?.title"
+              />
               <span
                 v-if="componentSyncBadge(child)"
                 class="docs-nav-sync-badge"
@@ -2457,5 +2498,31 @@ onBeforeUnmount(() => {
   border-color: rgba(16, 185, 129, 0.45);
   background: rgba(6, 95, 70, 0.35);
   color: rgba(110, 231, 183, 0.95);
+}
+
+:deep(.docs-nav-fw-dot) {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-radius: 999px;
+  background: var(--tx-text-color-placeholder, #a8abb2);
+  opacity: 0.45;
+}
+
+:deep(.docs-nav-fw-dot[data-status='ready']) {
+  background: var(--tx-color-success, #67c23a);
+  opacity: 1;
+}
+
+:deep(.docs-nav-fw-dot[data-status='planned']) {
+  background: var(--tx-color-warning, #e6a23c);
+  opacity: 0.55;
+}
+
+:deep(.docs-nav-fw-dot[data-status='unsupported']) {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--tx-text-color-placeholder, #a8abb2);
+  opacity: 0.5;
 }
 </style>

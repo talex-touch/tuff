@@ -218,6 +218,7 @@ interface MutableEverythingProvider {
   }
   diagnostics: { stages: Record<string, unknown>; lastUpdated: number | null }
   sdkAddon: unknown
+  everythingVersion: string | null
   esPath: string | null
   configuredCliPath: string | null
   backendService: EverythingBackendService
@@ -238,6 +239,7 @@ interface MutableEverythingProvider {
     maxResults: number,
     signal?: AbortSignal
   ) => Promise<unknown[]>
+  tryInitializeSdkBackend: () => Promise<boolean>
   tryInitializeCliBackend: () => Promise<boolean>
   detectEverything: () => Promise<void>
   buildUnavailableNotice: (query: { text: string; inputs: unknown[] }) => unknown
@@ -352,6 +354,7 @@ afterEach(() => {
   }
   provider.diagnostics = { stages: {}, lastUpdated: null }
   provider.sdkAddon = null
+  provider.everythingVersion = null
   provider.esPath = null
   provider.configuredCliPath = null
   provider.installJob = null
@@ -1921,5 +1924,121 @@ describe('everything-provider fallback chain', () => {
     await everythingProvider.onExecute({ item } as never)
 
     expect(shellOpenPathMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects an SDK wrapper whose getVersion returns null (missing DLL or unloaded binding)', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    vi.spyOn(provider.backendService, 'sdkCandidates').mockReturnValue([
+      '@talex-touch/tuff-native/everything'
+    ])
+    vi.spyOn(provider.backendService, 'loadSdkAddon').mockResolvedValue({
+      search: vi.fn(() => []),
+      getVersion: vi.fn(() => null)
+    })
+
+    await expect(provider.tryInitializeSdkBackend()).resolves.toBe(false)
+    expect(provider.backend).toBe('unavailable')
+    expect(provider.isAvailable).toBe(false)
+    expect(provider.sdkAddon).toBeNull()
+    expect(provider.everythingVersion).toBeNull()
+    expect(provider.diagnostics.stages['sdk-load']).toEqual(
+      expect.objectContaining({
+        stage: 'sdk-load',
+        status: 'failed',
+        backend: 'sdk-napi',
+        errorCode: 'ERR_EVERYTHING_SDK_UNAVAILABLE'
+      })
+    )
+    expect(provider.diagnostics.stages['sdk-query']).toBeUndefined()
+  })
+
+  it('rejects an SDK wrapper whose getVersion returns 0.0.0.0', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    vi.spyOn(provider.backendService, 'sdkCandidates').mockReturnValue([
+      '@talex-touch/tuff-native/everything'
+    ])
+    vi.spyOn(provider.backendService, 'loadSdkAddon').mockResolvedValue({
+      search: vi.fn(() => []),
+      getVersion: vi.fn(() => '0.0.0.0')
+    })
+
+    await expect(provider.tryInitializeSdkBackend()).resolves.toBe(false)
+    expect(provider.backend).toBe('unavailable')
+    expect(provider.isAvailable).toBe(false)
+    expect(provider.sdkAddon).toBeNull()
+    expect(provider.everythingVersion).toBeNull()
+    expect(provider.diagnostics.stages['sdk-load']).toEqual(
+      expect.objectContaining({
+        stage: 'sdk-load',
+        status: 'failed',
+        errorCode: 'ERR_EVERYTHING_SDK_UNAVAILABLE'
+      })
+    )
+    expect(provider.diagnostics.stages['sdk-query']).toBeUndefined()
+  })
+
+  it('rejects an SDK wrapper when the runtime IPC probe fails', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    vi.spyOn(provider.backendService, 'sdkCandidates').mockReturnValue([
+      '@talex-touch/tuff-native/everything'
+    ])
+    vi.spyOn(provider.backendService, 'loadSdkAddon').mockResolvedValue({
+      search: vi.fn(() => {
+        throw Object.assign(new Error('Everything query failed, error code: 2'), {
+          code: 'ERR_EVERYTHING_QUERY_FAILED'
+        })
+      }),
+      getVersion: vi.fn(() => '1.4.1.1032')
+    })
+
+    await expect(provider.tryInitializeSdkBackend()).resolves.toBe(false)
+    expect(provider.backend).toBe('unavailable')
+    expect(provider.isAvailable).toBe(false)
+    expect(provider.sdkAddon).toBeNull()
+    expect(provider.lastBackendError).toBe('Everything query failed, error code: 2')
+    expect(provider.diagnostics.stages['sdk-load']).toEqual(
+      expect.objectContaining({
+        stage: 'sdk-load',
+        status: 'failed',
+        errorCode: 'ERR_EVERYTHING_QUERY_FAILED'
+      })
+    )
+    expect(provider.diagnostics.stages['sdk-query']).toBeUndefined()
+  })
+
+  it('accepts an operational SDK wrapper and supports minimal mocked addons without getVersion', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    const liveSearch = vi.fn(() => [])
+    vi.spyOn(provider.backendService, 'sdkCandidates').mockReturnValue([
+      '@talex-touch/tuff-native/everything'
+    ])
+    vi.spyOn(provider.backendService, 'loadSdkAddon').mockResolvedValueOnce({
+      search: liveSearch,
+      getVersion: vi.fn(() => '1.4.1.1032')
+    })
+
+    await expect(provider.tryInitializeSdkBackend()).resolves.toBe(true)
+    expect(liveSearch).toHaveBeenCalledWith('*.txt', { maxResults: 1 })
+    expect(provider.backend).toBe('sdk-napi')
+    expect(provider.isAvailable).toBe(true)
+    expect(provider.everythingVersion).toBe('1.4.1.1032')
+    expect(provider.diagnostics.stages['sdk-load']).toEqual(
+      expect.objectContaining({
+        stage: 'sdk-load',
+        status: 'success',
+        backend: 'sdk-napi'
+      })
+    )
+    expect(provider.diagnostics.stages['sdk-query']).toBeUndefined()
+
+    const minimalSearch = vi.fn(() => [])
+    vi.spyOn(provider.backendService, 'loadSdkAddon').mockResolvedValueOnce({
+      search: minimalSearch
+    })
+
+    await expect(provider.tryInitializeSdkBackend()).resolves.toBe(true)
+    expect(minimalSearch).toHaveBeenCalledWith('*.txt', { maxResults: 1 })
+    expect(provider.backend).toBe('sdk-napi')
+    expect(provider.isAvailable).toBe(true)
   })
 })

@@ -3,7 +3,6 @@ import type { ConversationTurnMeta } from '~/modules/conversation/useHomeConvers
 import { useI18n } from 'vue-i18n'
 import MetaHintBadge from '~/components/shell/MetaHintBadge.vue'
 import ShellAccountAvatar from '~/components/shell/ShellAccountAvatar.vue'
-import { useShellTerminal } from '~/modules/layout/useShellTerminal'
 import HomeTurnInfoMenu from './HomeTurnInfoMenu.vue'
 
 /**
@@ -33,7 +32,6 @@ defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { terminalOpen, toggleTerminal } = useShellTerminal()
 </script>
 
 <template>
@@ -52,9 +50,15 @@ const { terminalOpen, toggleTerminal } = useShellTerminal()
       <h1 v-if="props.title" class="HomeTopBar-Title" :title="props.title">
         {{ props.title }}
       </h1>
+      <div v-if="$slots['left-extra']" class="HomeTopBar-LeftExtra">
+        <slot name="left-extra" />
+      </div>
     </div>
 
     <div class="HomeTopBar-Actions">
+      <div v-if="$slots['actions-lead']" class="HomeTopBar-ActionsLead">
+        <slot name="actions-lead" />
+      </div>
       <!-- Branches the whole thread into a new conversation (Main's fork); shown only when there
            is a settled history to branch. -->
       <button
@@ -90,17 +94,6 @@ const { terminalOpen, toggleTerminal } = useShellTerminal()
       </div>
       <!-- The unified Tuff account / Chrome profiles entry. It closes itself when Home deactivates. -->
       <ShellAccountAvatar />
-      <button
-        class="HomeTopBar-IconBtn"
-        type="button"
-        :aria-pressed="Boolean(terminalOpen)"
-        :aria-label="t('shortcuts.commands.toggleTerminal')"
-        :title="t('shortcuts.commands.toggleTerminal')"
-        @click="toggleTerminal"
-      >
-        <span class="i-ri-terminal-box-line" />
-        <MetaHintBadge command="toggle-terminal" placement="below" />
-      </button>
       <!-- Last, so it sits against the panel it opens: the panel runs the full height beside this
            bar, and its tabs start just past the toggle. -->
       <button
@@ -157,7 +150,12 @@ const { terminalOpen, toggleTerminal } = useShellTerminal()
   font-weight: 500;
 }
 
-.HomeTopBar-ProjectSlot {
+.HomeTopBar-ProjectSlot,
+.HomeTopBar-LeftExtra,
+.HomeTopBar-ActionsLead {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex: none;
   -webkit-app-region: no-drag;
 }

@@ -20,6 +20,7 @@ const __dirname = dirname(__filename)
 
 const componentPath =resolve(__dirname, '../../components')
 const baseStyleSourcePath = resolve(componentPath, 'style/index.scss')
+const tokensStyleSourcePath = resolve(componentPath, 'style/tokens.scss')
 
 /**
  * Every step writes into a staging directory, whose files are moved over `dist`
@@ -115,7 +116,7 @@ return src(`${componentPath}/src/**/src/style/**/*.scss`)
 }
 
 export const buildBaseStyle = () => {
-  return src(`${componentPath}/style/index.scss`)
+  return src([`${componentPath}/style/index.scss`, `${componentPath}/style/tokens.scss`])
     .pipe(sass())
     .pipe(autoPrefixer())
     .pipe(dest(`${distPath()}/lib`))
@@ -204,13 +205,32 @@ async function readBaseStyle(): Promise<string> {
   return sassLang.compile(baseStyleSourcePath, { style: 'compressed' }).css
 }
 
+async function readTokensStyle(): Promise<string> {
+  const generatedCandidates = [
+    resolve(distPath(), 'es/tokens.css'),
+    resolve(distPath(), 'lib/tokens.css'),
+  ]
+
+  for (const candidate of generatedCandidates) {
+    try {
+      return await readFile(candidate, 'utf-8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+  }
+
+  return sassLang.compile(tokensStyleSourcePath, { style: 'compressed' }).css
+}
+
 export const buildStyleEntry = async () => {
   const dist = distPath()
   await mkdir(dist, { recursive: true })
-  const baseStyle = await readBaseStyle()
+  const [baseStyle, tokensStyle] = await Promise.all([readBaseStyle(), readTokensStyle()])
   await Promise.all([
     writeFile(resolve(dist, 'es/base.css'), baseStyle),
     writeFile(resolve(dist, 'lib/base.css'), baseStyle),
+    writeFile(resolve(dist, 'es/tokens.css'), tokensStyle),
+    writeFile(resolve(dist, 'lib/tokens.css'), tokensStyle),
     rm(resolve(dist, 'es/index.css'), { force: true }),
     rm(resolve(dist, 'lib/index.css'), { force: true }),
   ])

@@ -24,6 +24,7 @@ interface StoreItem {
   downloads?: string
   rating?: number
   icon?: string
+  iconUrl?: string
   category?: string
   official?: boolean
   providerTrustLevel?: string

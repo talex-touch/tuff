@@ -9,17 +9,34 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import * as sass from 'sass'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, reactive, ref } from 'vue'
+import type { HerdrProjectedSession } from '~/modules/herdr/useHerdrRuntime'
 
 enableAutoUnmount(afterEach)
 
-const route = reactive({ path: '/browser' })
+const route = reactive<{ path: string; params?: Record<string, string> }>({
+  path: '/browser',
+  params: {}
+})
 const routerPush = vi.fn(async (to: string) => {
   route.path = to
+  if (to.startsWith('/home/c/')) {
+    route.params = { id: to.slice('/home/c/'.length) }
+  } else if (to.startsWith('/home/herdr/')) {
+    route.params = { address: decodeURIComponent(to.slice('/home/herdr/'.length)) }
+  } else {
+    route.params = {}
+  }
 })
 const platformState = {
   isMac: ref(true),
   platform: ref('darwin')
 }
+const mockConversations = ref<
+  Array<{ id: string; title: string; projectId: string | null; updatedAt: number }>
+>([])
+const mockHerdrSessions = ref<HerdrProjectedSession[]>([])
+const mockHerdrConnected = ref(true)
+const mockHerdrStartSession = vi.fn(async () => ({ address: 't99' }))
 
 let workspaceState: BrowserWorkspaceState
 const changedListeners = new Set<(state: BrowserWorkspaceState) => void>()
@@ -109,6 +126,36 @@ vi.mock('vue-router', () => ({
 vi.mock('~/modules/platform/renderer-platform', () => ({
   useRendererPlatform: () => platformState
 }))
+vi.mock('~/modules/conversation/useConversationHistory', () => ({
+  useConversationHistory: () => ({
+    conversations: mockConversations,
+    loading: ref(false),
+    refresh: vi.fn(async () => undefined),
+    load: vi.fn(async () => null),
+    rename: vi.fn(async () => undefined),
+    remove: vi.fn(async () => undefined)
+  })
+}))
+vi.mock('~/modules/herdr/useHerdrRuntime', () => ({
+  useHerdrRuntime: () => ({
+    isConnected: mockHerdrConnected,
+    sessionByAddress: {
+      get value() {
+        const map = new Map<string, HerdrProjectedSession>()
+        for (const item of mockHerdrSessions.value) map.set(item.address, item)
+        return map
+      }
+    },
+    startSession: mockHerdrStartSession
+  })
+}))
+vi.mock('vue-sonner', () => ({
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
+    info: vi.fn()
+  }
+}))
 vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({
     send: sendMock,
@@ -155,13 +202,40 @@ vi.mock('@talex-touch/tuffex/context-menu', () => ({
   TxContextMenuItem: {
     props: ['disabled'],
     template:
-      '<button type="button" :disabled="disabled" @click="$emit(\'select\')"><slot /></button>'
+      '<button type="button" :disabled="disabled" @click="$emit(\'select\')"><slot /><slot name="right" /></button>'
   }
+}))
+vi.mock('@talex-touch/tuffex/dropdown-menu', () => ({
+  TxDropdownMenu: {
+    props: ['modelValue', 'disabled'],
+    emits: ['update:modelValue'],
+    template:
+      '<div data-testid="add-tab-dropdown" :data-open="String(modelValue)"><div @click="!disabled && $emit(\'update:modelValue\', !modelValue)"><slot name="trigger" :open="Boolean(modelValue)" /></div><div v-if="modelValue" data-testid="add-tab-dropdown-menu"><slot /></div></div>'
+  },
+  TxDropdownItem: {
+    props: ['disabled'],
+    emits: ['select'],
+    template:
+      '<button type="button" :disabled="disabled" @click="$emit(\'select\')"><slot /><slot name="right" /></button>'
+  }
+}))
+vi.mock('@talex-touch/tuffex/kbd', () => ({
+  TxKbd: { template: '<kbd class="tx-kbd-stub"><slot /></kbd>' }
 }))
 vi.mock('@talex-touch/tuffex/skeleton', () => ({
   TxSkeleton: { template: '<div data-testid="tab-skeleton" />' }
 }))
 
+import {
+  __resetShellStageActionsForTesting,
+  useShellStageActions
+} from '~/modules/layout/useShellStageActions'
+import {
+  attachBrowserTabToSpace,
+  getSpaceTabs,
+  projectSpaceKey,
+  resetShellWorkspaceTabsForTests
+} from '~/modules/layout/useShellWorkspaceTabs'
 import BrowserTabStrip from './BrowserTabStrip.vue'
 
 const DIR = dirname(fileURLToPath(import.meta.url))
@@ -175,7 +249,14 @@ function extractSfcCss(relativeFile: string): string {
 
 describe('BrowserTabStrip layout, drag regions & tab actions', () => {
   beforeEach(() => {
+    resetShellWorkspaceTabsForTests()
+    __resetShellStageActionsForTesting()
     route.path = '/browser'
+    route.params = {}
+    mockConversations.value = []
+    mockHerdrSessions.value = []
+    mockHerdrConnected.value = true
+    mockHerdrStartSession.mockClear()
     platformState.isMac.value = true
     platformState.platform.value = 'darwin'
     sendMock.mockClear()
@@ -271,18 +352,23 @@ describe('BrowserTabStrip layout, drag regions & tab actions', () => {
     )
   })
 
-  it('navigates to /browser before activating or creating tabs from other routes, and closes tabs in place', async () => {
-    route.path = '/home'
+  it('keeps browser tabs visible yet unselected on /store and /setting, closing in place and jumping back on click', async () => {
+    route.path = '/store'
     const wrapper = mount(BrowserTabStrip)
     await flushPromises()
 
-    // Middle-click closes background tab without leaving /home.
-    await wrapper.findAll('.BrowserTabStrip-Tab')[1]!.trigger('auxclick', { button: 1 })
+    // On /store, browser tabs remain visible but none is active.
+    const tabs = wrapper.findAll('.BrowserTabStrip-Tab')
+    expect(tabs).toHaveLength(2)
+    expect(wrapper.findAll('.BrowserTabStrip-Tab.is-active')).toHaveLength(0)
+
+    // Middle-click closes background tab without leaving /store.
+    await tabs[1]!.trigger('auxclick', { button: 1 })
     await flushPromises()
     expect(sendMock).toHaveBeenCalledWith(BrowserEvents.closeTab, { tabId: 't2' })
-    expect(route.path).toBe('/home')
+    expect(route.path).toBe('/store')
 
-    // Clicking + from /home switches to /browser and creates a tab.
+    // Clicking + from /store switches to /browser and creates a tab.
     await wrapper.find('button[aria-label="browser.addTab"]').trigger('click')
     await flushPromises()
     expect(routerPush).toHaveBeenCalledWith('/browser')
@@ -294,6 +380,84 @@ describe('BrowserTabStrip layout, drag regions & tab actions', () => {
     await activeTabButton.trigger('click')
     await flushPromises()
     expect(sendMock).not.toHaveBeenCalledWith(BrowserEvents.activateTab, expect.anything())
+  })
+
+  it('scopes top tabs by Space and conversation, isolates Spaces from Browser, and clears active state on /setting', async () => {
+    mockConversations.value = [
+      { id: 'c-todo', title: '你能看到目前 todo 吗', projectId: 'proj-talex', updatedAt: 10 },
+      { id: 'c-hello', title: '问候与待命', projectId: 'proj-talex', updatedAt: 9 },
+      { id: 'c-calc', title: '极简计算器', projectId: null, updatedAt: 8 }
+    ]
+    workspaceState = makeState(
+      [
+        { id: 't1', url: 'https://one.example/', title: 'One' },
+        {
+          id: 't-prev',
+          url: 'tuff://preview?path=%2Frepo%2FTODO.md&conversationId=c-todo',
+          title: ''
+        },
+        { id: 't-store', url: 'tuff://store', title: 'Store' },
+        { id: 't-settings', url: 'tuff://settings', title: 'Settings' }
+      ],
+      't1',
+      10
+    )
+
+    const wrapper = mount(BrowserTabStrip)
+    await flushPromises()
+
+    // Deprecated tuff://store and tuff://settings tabs are hidden and auto-closed;
+    // the preview tab belongs to proj-talex, so Browser scope only shows 'One'.
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual(['One'])
+    expect(sendMock).toHaveBeenCalledWith(BrowserEvents.closeTab, { tabId: 't-store' })
+    expect(sendMock).toHaveBeenCalledWith(BrowserEvents.closeTab, { tabId: 't-settings' })
+
+    // Opening a conversation in proj-talex switches the top strip to proj-talex tabs
+    // (showing its file preview + the opened conversation).
+    route.path = '/home/c/c-todo'
+    route.params = { id: 'c-todo' }
+    await nextTick()
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      'TODO.md',
+      '你能看到目前 todo 吗'
+    ])
+    expect(wrapper.find('.BrowserTabStrip-Tab.is-active .BrowserTabStrip-TabTitle').text()).toBe(
+      '你能看到目前 todo 吗'
+    )
+
+    // Opening a second conversation in the same Space appends its tab alongside.
+    route.path = '/home/c/c-hello'
+    route.params = { id: 'c-hello' }
+    await nextTick()
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      'TODO.md',
+      '你能看到目前 todo 吗',
+      '问候与待命'
+    ])
+
+    // Navigating to /setting preserves proj-talex tabs with NO tab highlighted.
+    route.path = '/setting'
+    route.params = {}
+    await nextTick()
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      'TODO.md',
+      '你能看到目前 todo 吗',
+      '问候与待命'
+    ])
+    expect(wrapper.findAll('.BrowserTabStrip-Tab.is-active')).toHaveLength(0)
+
+    // Clicking a conversation tab from /setting jumps straight back to that conversation.
+    await wrapper.find('[id="browser-tab-conv:c-todo"]').trigger('click')
+    await flushPromises()
+    expect(routerPush).toHaveBeenCalledWith('/home/c/c-todo')
+
+    // Switching to temporary space replaces the strip with temporary space's tabs.
+    route.path = '/home/c/c-calc'
+    route.params = { id: 'c-calc' }
+    await nextTick()
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      '极简计算器'
+    ])
   })
 
   it('converts vertical wheel deltas into horizontal tablist scroll when overflowing', async () => {
@@ -332,5 +496,469 @@ describe('BrowserTabStrip layout, drag regions & tab actions', () => {
     await nextTick()
 
     expect(wrapper.find('[data-testid="tab-context-menu"]').attributes('data-open')).toBe('false')
+  })
+
+  it('renders right-side shortcut keycaps and hint icons in tab context menu and supports add-tab dropdown actions', async () => {
+    workspaceState = makeState(
+      [
+        { id: 't1', url: 'https://one.example/', title: 'One' },
+        { id: 't2', url: 'https://two.example/', title: 'Two' },
+        { id: 't3', url: 'https://three.example/', title: 'Three' }
+      ],
+      't2',
+      15
+    )
+
+    const wrapper = mount(BrowserTabStrip)
+    await flushPromises()
+
+    // Open context menu on middle tab (1 tab left, 1 tab right, 2 other tabs).
+    await wrapper.findAll('.BrowserTabStrip-Tab')[1]!.trigger('contextmenu')
+    await nextTick()
+    const menu = wrapper.find('[data-testid="tab-context-menu"]')
+    expect(menu.findAll('.tx-kbd-stub').map((node) => node.text())).toEqual(['⌘', 'R', '⌘', 'W'])
+    expect(menu.find('.i-ri-skip-left-line').exists()).toBe(true)
+    expect(menu.find('.i-ri-skip-right-line').exists()).toBe(true)
+    expect(menu.find('.i-ri-close-circle-line').exists()).toBe(true)
+    expect(menu.findAll('.BrowserTabStrip-MenuCount').map((node) => node.text())).toEqual([
+      '2',
+      '1',
+      '1'
+    ])
+
+    // Open + add-tab dropdown: store/settings are gone; New Tab works cleanly.
+    await wrapper.find('[data-testid="browser-add-tab-menu-trigger"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-testid="add-tab-dropdown-menu"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="browser-add-menu-store"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="browser-add-menu-setting"]').exists()).toBe(false)
+
+    await wrapper.find('[data-testid="browser-add-menu-new-tab"]').trigger('click')
+    await flushPromises()
+    expect(sendMock).toHaveBeenCalledWith(BrowserEvents.createTab, {})
+  })
+
+  it('protects Space-bound tabs from standalone bulk close and keeps Space entries intact on close failure', async () => {
+    const spaceKey = projectSpaceKey('proj-safe')
+    mockConversations.value = [
+      { id: 'c-1', title: 'Main Chat', projectId: 'proj-safe', updatedAt: 10 }
+    ]
+    attachBrowserTabToSpace('space-w', spaceKey, 'c-1')
+    workspaceState = makeState(
+      [
+        { id: 'standalone-a', url: 'https://a.example/', title: 'A' },
+        { id: 'space-w', url: 'https://space.example/', title: 'Space Web' },
+        { id: 'standalone-b', url: 'https://b.example/', title: 'B' }
+      ],
+      'standalone-a',
+      20
+    )
+
+    const wrapper = mount(BrowserTabStrip)
+    await flushPromises()
+
+    // Standalone strip shows [A, B], hiding Space W.
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual(['A', 'B'])
+
+    // Open context menu on A and invoke "close right" -> closes ONLY standalone-b, never space-w.
+    await wrapper.findAll('.BrowserTabStrip-Tab')[0]!.trigger('contextmenu')
+    await nextTick()
+    const menuButtons = wrapper.findAll('[data-testid="tab-context-menu"] button')
+    const closeRightBtn = menuButtons.find((btn) =>
+      btn.text().includes('browser.tabMenu.closeRight')
+    )
+    expect(closeRightBtn).toBeTruthy()
+    await closeRightBtn!.trigger('click')
+    await flushPromises()
+
+    expect(sendMock).toHaveBeenCalledWith(BrowserEvents.closeTab, { tabId: 'standalone-b' })
+    expect(sendMock).not.toHaveBeenCalledWith(BrowserEvents.closeTab, { tabId: 'space-w' })
+    expect(getSpaceTabs(spaceKey).map((tab) => tab.id)).toContain('browser:space-w')
+
+    // Switch into proj-safe Space and fail sdk.closeTab on space-w -> space-w stays in Space.
+    route.path = '/home/c/c-1'
+    route.params = { id: 'c-1' }
+    await nextTick()
+    sendMock.mockImplementationOnce(async () => {
+      throw new Error('CLOSE_FAILED')
+    })
+    const closeSpaceWebBtn = wrapper.find('button[aria-label="browser.closeTab:Space Web"]')
+    expect(closeSpaceWebBtn.exists()).toBe(true)
+    await closeSpaceWebBtn.trigger('click')
+    await flushPromises()
+
+    expect(getSpaceTabs(spaceKey).map((tab) => tab.id)).toContain('browser:space-w')
+  })
+
+  it('gives each Herdr project its own top tab strip populated with all of that project terminals', async () => {
+    mockConversations.value = [
+      { id: 'c-todo', title: '你能看到目前 todo 吗', projectId: 'proj-talex', updatedAt: 10 }
+    ]
+    mockHerdrSessions.value = [
+      {
+        address: 't85',
+        machine: null,
+        name: null,
+        title: '',
+        argv: ['zsh'],
+        cwd: '/private/tmp/thunder-sing-damaged',
+        foregroundName: 'zsh',
+        foregroundCwd: '/private/tmp/thunder-sing-damaged',
+        foregroundPid: 11,
+        state: 'live',
+        status: null,
+        statusMs: 900,
+        reported: true,
+        turn: 0,
+        keep: true,
+        template: null,
+        parent: null,
+        labels: { 'herdr.space': 'sp-sing', where: 'thunder-sing-damaged / 1' },
+        cols: 80,
+        rows: 24,
+        pid: 11,
+        exitCode: null,
+        signal: null,
+        reason: null,
+        screen: 'exact',
+        createdMs: 800,
+        finishedMs: null,
+        projectId: null,
+        projectName: null,
+        displayTitle: 'zsh · thunder-sing-damaged / 1',
+        appName: 'zsh',
+        effectiveCwd: '/private/tmp/thunder-sing-damaged'
+      },
+      {
+        address: 't7',
+        machine: null,
+        name: null,
+        title: '',
+        argv: ['omp'],
+        cwd: '/private/tmp/thunder-sing-damaged',
+        foregroundName: 'omp',
+        foregroundCwd: '/private/tmp/thunder-sing-damaged',
+        foregroundPid: 10,
+        state: 'live',
+        status: { state: 'done', app: 'omp' },
+        statusMs: 1000,
+        reported: true,
+        turn: 1,
+        keep: true,
+        template: null,
+        parent: null,
+        labels: { 'herdr.space': 'sp-sing', where: 'thunder-sing-damaged / 2' },
+        cols: 80,
+        rows: 24,
+        pid: 10,
+        exitCode: null,
+        signal: null,
+        reason: null,
+        screen: 'exact',
+        createdMs: 900,
+        finishedMs: null,
+        projectId: null,
+        projectName: null,
+        displayTitle: 'KSING: 部署 VOD 打分结算服务',
+        appName: 'omp',
+        effectiveCwd: '/private/tmp/thunder-sing-damaged'
+      },
+      {
+        address: 'prod/t2',
+        machine: 'prod',
+        name: null,
+        title: '',
+        argv: ['zsh'],
+        cwd: '/srv/work',
+        foregroundName: 'zsh',
+        foregroundCwd: '/srv/work',
+        foregroundPid: 20,
+        state: 'live',
+        status: { state: 'idle' },
+        statusMs: 1000,
+        reported: true,
+        turn: 0,
+        keep: true,
+        template: null,
+        parent: null,
+        labels: { 'herdr.space': 'sp-work', where: 'Work / 1' },
+        cols: 80,
+        rows: 24,
+        pid: 20,
+        exitCode: null,
+        signal: null,
+        reason: null,
+        screen: 'exact',
+        createdMs: 900,
+        finishedMs: null,
+        projectId: null,
+        projectName: null,
+        displayTitle: 'antigravity · Work / 1',
+        appName: 'zsh',
+        effectiveCwd: '/srv/work'
+      }
+    ]
+
+    const wrapper = mount(BrowserTabStrip)
+    await flushPromises()
+
+    // Start inside a normal project Space.
+    route.path = '/home/c/c-todo'
+    route.params = { id: 'c-todo' }
+    await nextTick()
+    expect(wrapper.find('[data-browser-tabbar]').attributes('data-tab-scope')).toBe(
+      'space:project:proj-talex'
+    )
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      '你能看到目前 todo 吗'
+    ])
+
+    // Opening one terminal of thunder-sing-damaged switches top tabs to ALL terminals of that project!
+    route.path = '/home/herdr/t7'
+    route.params = { address: 't7' }
+    await nextTick()
+    expect(wrapper.find('[data-browser-tabbar]').attributes('data-tab-scope')).toBe(
+      'space:herdr:hs:sp-sing'
+    )
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      'zsh · 1',
+      'KSING: 部署 VOD 打分结算服务'
+    ])
+    expect(wrapper.find('.BrowserTabStrip-Tab.is-active .BrowserTabStrip-TabTitle').text()).toBe(
+      'KSING: 部署 VOD 打分结算服务'
+    )
+
+    // Primary + spawns a new terminal INSIDE the active Herdr project (cwd + herdr.space labels).
+    await wrapper.find('button[aria-label="herdr.sidebar.newSession"]').trigger('click')
+    await flushPromises()
+    expect(mockHerdrStartSession).toHaveBeenCalledWith({
+      cwd: '/private/tmp/thunder-sing-damaged',
+      labels: {
+        'herdr.space': 'sp-sing',
+        where: 'thunder-sing-damaged / 3'
+      }
+    })
+    expect(routerPush).toHaveBeenCalledWith('/home/herdr/t99')
+
+    // Switching to another Herdr project replaces the top strip with that project's terminals.
+    route.path = '/home/herdr/prod%2Ft2'
+    route.params = { address: 'prod/t2' }
+    await nextTick()
+    expect(wrapper.find('[data-browser-tabbar]').attributes('data-tab-scope')).toBe(
+      'space:herdr:hs:m:prod:sp-work'
+    )
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      'antigravity · 1'
+    ])
+    expect(wrapper.find('.BrowserTabStrip-Tab.is-active .BrowserTabStrip-TabTitle').text()).toBe(
+      'antigravity · 1'
+    )
+
+    // Navigating to /setting preserves that Herdr project's tabs unselected; clicking a tab jumps back.
+    route.path = '/setting'
+    route.params = {}
+    await nextTick()
+    expect(wrapper.findAll('.BrowserTabStrip-Tab.is-active')).toHaveLength(0)
+    await wrapper.find('[id="browser-tab-herdr:prod/t2"]').trigger('click')
+    await flushPromises()
+    expect(routerPush).toHaveBeenCalledWith('/home/herdr/prod%2Ft2')
+
+    // Switching back to the normal project Space restores its own tab list untouched.
+    route.path = '/home/c/c-todo'
+    route.params = { id: 'c-todo' }
+    await nextTick()
+    expect(wrapper.findAll('.BrowserTabStrip-TabTitle').map((n) => n.text())).toEqual([
+      '你能看到目前 todo 吗'
+    ])
+  })
+
+  it('exposes Herdr view mode, session actions, and right-sidebar toggle in the Herdr tab context menu', async () => {
+    const { __resetHerdrStageControlForTesting, useHerdrStageControl } =
+      await import('~/modules/herdr/useHerdrStageControl')
+    __resetHerdrStageControlForTesting()
+
+    const setViewMode = vi.fn()
+    const togglePanel = vi.fn()
+    const refreshProjection = vi.fn(async () => {})
+    const interrupt = vi.fn(async () => {})
+    const kill = vi.fn(async () => {})
+    let currentMode: 'chat' | 'terminal' = 'terminal'
+
+    useHerdrStageControl().registerActiveStage({
+      address: 't7',
+      getViewMode: () => currentMode,
+      setViewMode: (mode) => {
+        currentMode = mode
+        setViewMode(mode)
+      },
+      isPanelOpen: () => false,
+      togglePanel,
+      refreshProjection,
+      interrupt,
+      kill
+    })
+
+    mockHerdrSessions.value = [
+      {
+        address: 't7',
+        machine: null,
+        name: null,
+        title: 'antigravity · 1',
+        argv: ['zsh'],
+        cwd: '/repo',
+        foregroundName: 'antigravity',
+        foregroundCwd: '/repo',
+        foregroundPid: 7,
+        state: 'live',
+        status: { state: 'done', app: 'antigravity' },
+        statusMs: 1000,
+        reported: true,
+        turn: 12,
+        keep: false,
+        template: null,
+        parent: null,
+        labels: { 'herdr.space': 'sp-demo', where: 'demo / 1' },
+        cols: 120,
+        rows: 30,
+        pid: 7,
+        exitCode: null,
+        signal: null,
+        reason: null,
+        screen: 'exact',
+        createdMs: 900,
+        finishedMs: null,
+        projectId: null,
+        projectName: null,
+        displayTitle: 'antigravity · demo / 1',
+        appName: 'antigravity',
+        effectiveCwd: '/repo'
+      }
+    ]
+
+    route.path = '/home/herdr/t7'
+    route.params = { address: 't7' }
+    const wrapper = mount(BrowserTabStrip)
+    await flushPromises()
+
+    // Right-click the Herdr tab to open the context menu.
+    await wrapper.get('.BrowserTabStrip-Tab[data-tab-kind="herdr"]').trigger('contextmenu')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="herdr-tab-menu-mode-chat"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="herdr-tab-menu-mode-terminal"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="herdr-tab-menu-refresh"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="herdr-tab-menu-interrupt"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="herdr-tab-menu-toggle-panel"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="herdr-tab-menu-kill"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="herdr-tab-menu-mode-chat"]').trigger('click')
+    expect(setViewMode).toHaveBeenCalledWith('chat')
+
+    await wrapper.get('.BrowserTabStrip-Tab[data-tab-kind="herdr"]').trigger('contextmenu')
+    await flushPromises()
+    await wrapper.get('[data-testid="herdr-tab-menu-toggle-panel"]').trigger('click')
+    expect(togglePanel).toHaveBeenCalledTimes(1)
+
+    await wrapper.get('.BrowserTabStrip-Tab[data-tab-kind="herdr"]').trigger('contextmenu')
+    await flushPromises()
+    await wrapper.get('[data-testid="herdr-tab-menu-interrupt"]').trigger('click')
+    expect(interrupt).toHaveBeenCalledTimes(1)
+
+    __resetHerdrStageControlForTesting()
+  })
+
+  it('renders moved Home stage actions (more, sidebar toggle, optional branch) in the top tab strip without a terminal toggle', async () => {
+    const panelOpen = ref(false)
+    const canBranch = ref(false)
+    const branch = vi.fn()
+    const dispose = useShellStageActions().register({
+      surface: 'home',
+      isPanelOpen: () => panelOpen.value,
+      togglePanel: () => {
+        panelOpen.value = !panelOpen.value
+      },
+      showTurnInfo: () => true,
+      getTurn: () => undefined,
+      getMessageCount: () => 2,
+      canBranch: () => canBranch.value,
+      isBranching: () => false,
+      branch
+    })
+
+    route.path = '/home'
+    const wrapper = mount(BrowserTabStrip)
+    await flushPromises()
+
+    const actions = wrapper.get('.BrowserTabStrip-Actions')
+    expect(actions.classes()).toContain('BrowserTabStrip-NoDrag')
+    expect(actions.find('[data-testid="tabstrip-more-btn"]').exists()).toBe(true)
+    expect(actions.find('[data-testid="tabstrip-panel-toggle"]').exists()).toBe(true)
+    expect(actions.find('[data-testid="account-avatar"]').exists()).toBe(true)
+    expect(actions.find('[data-testid="tabstrip-branch-btn"]').exists()).toBe(false)
+    expect(actions.find('.i-ri-terminal-box-line').exists()).toBe(false)
+
+    // Sidebar toggle toggles panelOpen and reflects pressed/active state.
+    const panelToggle = actions.get('[data-testid="tabstrip-panel-toggle"]')
+    expect(panelToggle.attributes('aria-pressed')).toBe('false')
+    await panelToggle.trigger('click')
+    await nextTick()
+    expect(panelOpen.value).toBe(true)
+    expect(panelToggle.attributes('aria-pressed')).toBe('true')
+    expect(panelToggle.classes()).toContain('is-active')
+
+    // Three-dots menu opens HomeTurnInfoMenu.
+    await actions.get('[data-testid="tabstrip-more-btn"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('.HomeTurnInfoMenu').exists()).toBe(true)
+
+    // Branch button appears once conversation has settled history.
+    canBranch.value = true
+    await nextTick()
+    await actions.get('[data-testid="tabstrip-branch-btn"]').trigger('click')
+    expect(branch).toHaveBeenCalledTimes(1)
+
+    // Unfocused routes never inherit Home trailing actions or no-drag hit box.
+    route.path = '/setting'
+    await nextTick()
+    expect(actions.classes()).not.toContain('BrowserTabStrip-NoDrag')
+    expect(actions.find('[data-testid="tabstrip-panel-toggle"]').exists()).toBe(false)
+    expect(actions.find('[data-testid="tabstrip-more-btn"]').exists()).toBe(false)
+
+    dispose()
+  })
+
+  it('renders right-sidebar toggle for active Herdr stage and gates turn-info menu on showTurnInfo', async () => {
+    const panelOpen = ref(false)
+    const showTurnInfo = ref(false)
+    const dispose = useShellStageActions().register({
+      surface: 'herdr',
+      isPanelOpen: () => panelOpen.value,
+      togglePanel: () => {
+        panelOpen.value = !panelOpen.value
+      },
+      showTurnInfo: () => showTurnInfo.value,
+      getTurn: () => undefined,
+      getMessageCount: () => 0
+    })
+
+    route.path = '/home/herdr/t7'
+    route.params = { address: 't7' }
+    const wrapper = mount(BrowserTabStrip)
+    await flushPromises()
+
+    const actions = wrapper.get('.BrowserTabStrip-Actions')
+    expect(actions.classes()).toContain('BrowserTabStrip-NoDrag')
+    expect(actions.find('[data-testid="tabstrip-panel-toggle"]').exists()).toBe(true)
+    expect(actions.find('[data-testid="tabstrip-more-btn"]').exists()).toBe(false)
+    expect(actions.find('.i-ri-terminal-box-line').exists()).toBe(false)
+
+    showTurnInfo.value = true
+    await nextTick()
+    expect(actions.find('[data-testid="tabstrip-more-btn"]').exists()).toBe(true)
+
+    await actions.get('[data-testid="tabstrip-panel-toggle"]').trigger('click')
+    expect(panelOpen.value).toBe(true)
+
+    dispose()
   })
 })

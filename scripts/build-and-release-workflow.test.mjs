@@ -98,4 +98,44 @@ describe('build-and-release same-SHA quality gate', () => {
     expect(launchLine).toMatch(/^APPIMAGE_EXTRACT_AND_RUN=1 timeout /)
     expect(launchLine).toContain('"$APPIMAGE" --appimage-extract-and-run --disable-gpu')
   })
+
+  it('aligns Electron cache env paths, caches them via actions/cache before install, and does not wipe them before build', () => {
+    const build = workflow.jobs['build-and-release']
+    expect(build.env?.ELECTRON_CACHE).toBeUndefined()
+    expect(build.env?.ELECTRON_BUILDER_CACHE).toBeUndefined()
+
+    const configIndex = build.steps.findIndex(step => step.name === 'Configure Electron Cache Paths')
+    const cacheIndex = build.steps.findIndex(step => step.uses?.startsWith('actions/cache@'))
+    const installIndex = build.steps.findIndex(step => step.name === 'Install Dependencies')
+    expect(configIndex).toBeGreaterThan(-1)
+    expect(cacheIndex).toBeGreaterThan(configIndex)
+    expect(installIndex).toBeGreaterThan(cacheIndex)
+
+    /* eslint-disable no-template-curly-in-string -- matching literal bash variable expansions in workflow YAML */
+    const configStep = build.steps[configIndex]
+    expect(configStep.run).toContain('ELECTRON_CACHE=${RUNNER_TEMP}/tuff-cache/electron')
+    expect(configStep.run).toContain('ELECTRON_BUILDER_CACHE=${RUNNER_TEMP}/tuff-cache/electron-builder')
+
+    const cacheStep = build.steps[cacheIndex]
+    expect(String(cacheStep.with?.path ?? '')).toContain('runner.temp')
+    expect(String(cacheStep.with?.path ?? '')).toContain('tuff-cache/electron')
+    expect(String(cacheStep.with?.path ?? '')).toContain('tuff-cache/electron-builder')
+
+    const prepareStep = build.steps.find(step => step.name === 'Prepare Build Environment')
+    expect(prepareStep?.run).toContain('mkdir -p "${ELECTRON_CACHE}"')
+    expect(prepareStep?.run).toContain('mkdir -p "${ELECTRON_BUILDER_CACHE}"')
+    /* eslint-enable no-template-curly-in-string */
+
+    const cleanStep = build.steps.find(step => step.name === 'Clean Previous Build Artifacts')
+    const cleanCommands = String(cleanStep?.run ?? '').replace(/^\s*#.*$/gm, '')
+    expect(cleanCommands).not.toContain('ELECTRON_CACHE')
+    expect(cleanCommands).not.toContain('ELECTRON_BUILDER_CACHE')
+    expect(cleanCommands).not.toContain('tuff-cache/electron')
+  })
+
+  it('keeps the macOS release runner on macos-26 for the TranslationHelper macOS 26 SDK contract', () => {
+    const build = workflow.jobs['build-and-release']
+    const macEntry = build.strategy?.matrix?.include?.find(entry => entry.os === 'macos-latest')
+    expect(macEntry?.image).toBe('macos-26')
+  })
 })

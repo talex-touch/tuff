@@ -15,6 +15,7 @@
 // covered — BUI has no high-contrast ramp, so these components keep their
 // standard palette there. Known limitation, documented in the ai-suite doc.
 
+:host,
 :root {
   // Background layers
   --tx-bui-page: #fafafb;
@@ -80,6 +81,8 @@
   --tx-bui-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
 }
 
+:host([data-theme="dark"]),
+:host(.dark),
 [data-theme='dark'],
 .dark {
   /**

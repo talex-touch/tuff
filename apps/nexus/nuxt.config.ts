@@ -20,6 +20,7 @@ import { createNexusPrerenderRoutes } from './build/nexus-prerender-routes'
 import { contentApiRouteExcludes, createStaticCacheRouteRules } from './build/nexus-static-routes.mjs'
 import { tuffexOnDemandStylePlugin } from '../../packages/tuffex/packages/script/build/on-demand-style-plugin'
 import { nexusDemoLoadersPlugin } from './build/nexus-demo-loaders'
+import { nexusFrameworkRuntimePlugin } from './build/nexus-framework-runtime-plugin'
 import { resolveNexusManualChunk } from './build/nexus-manual-chunks'
 
 loadEnv({ path: '.env' })
@@ -473,6 +474,7 @@ export default defineNuxtConfig({
       '@talex-touch/tuff-business',
       '@talex-touch/utils',
       '@talex-touch/tuffex',
+      '@talex-touch/tuffex-core',
     ],
   },
 
@@ -603,14 +605,16 @@ export default defineNuxtConfig({
       // Dynamic demos and route chunks are fetched on demand; Vite's generated preload map
       // otherwise re-fetches the entire registry on every prerendered docs page.
       modulePreload: false,
+      // Vite 8 defaults CSS minification to lightningcss, which rejects UnoCSS-generated
+      // attribute selectors containing unquoted `=""` values; keep esbuild CSS minification
+      // matching the Vite 7 pipeline.
+      cssMinify: 'esbuild',
       chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
-          // Fold sub-12 KB automatic client chunks into importers so routes do not fan out into
-          // dozens of sub-KB requests (`nexus-demo-loaders.ts` preserves isolated `demo-*` chunks
-          // via `onlyExplicitManualChunks: true`, and `nexus-manual-chunks.ts` isolates landing
-          // image URL modules so they never fold into shared Nuxt runtime helpers).
-          experimentalMinChunkSize: 12288,
+          // Keep explicit family/asset chunking (`nexus-demo-loaders.ts` preserves isolated
+          // `demo-*` chunks via `manualChunks`, and `nexus-manual-chunks.ts` isolates landing
+          // image URL modules from shared Nuxt runtime helpers).
           manualChunks: resolveNexusManualChunk,
         },
       },
@@ -640,7 +644,13 @@ export default defineNuxtConfig({
         '@talex-touch/tuffex > @better-scroll/pull-up',
         '@talex-touch/tuffex > dompurify',
         '@floating-ui/vue',
-        '@talex-touch/tuffex > v-wave',
+        // Nested specifier so pnpm strict layout resolves @floating-ui/dom cleanly
+        // and Vite's tryOptimizedResolve satisfies tuffex-core / tuffex-react overlays without a cold reload.
+        '@talex-touch/tuffex-core > @floating-ui/dom',
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'react/jsx-runtime',
         'ogl',
       ],
     },
@@ -662,6 +672,7 @@ export default defineNuxtConfig({
     plugins: [
       nexusPageMetaFastPathPlugin(resolve(currentDir, 'app/pages')),
       nexusDemoLoadersPlugin(currentDir, nexusDemoLoaderBase),
+      nexusFrameworkRuntimePlugin(currentDir),
       tuffexOnDemandStylePlugin({
         enabled: tuffexDevMode === 'dist',
         componentDistRoot: tuffexDevMode === 'dist' ? tuffexDistRoot : undefined,
@@ -697,6 +708,21 @@ export default defineNuxtConfig({
   debug: false,
 
   hooks: {
+    // vue-bundle-renderer 2.5 (Nuxt 4.5.2+) sets `prefetch: true` on every non-font chunk in
+    // normalizeViteManifest(), causing prerendered HTML to emit `<link rel="prefetch">` tags for
+    // deferred Sentry, Three.js, and lazy route/demo chunks. Clear `prefetch` before
+    // precomputeDependencies() runs so lazy imports stay strictly on-demand.
+    // DocsComponentsGallery wraps every Tx* specimen in `<ClientOnly>` (`GallerySpecimenGate`), so
+    // SSR renders only its own shell (styled by `DocsComponentsGallery.css`) and zero Tx* markup;
+    // trimming its SSR manifest `imports` avoids preloading 115+ client-only TuffEx stylesheets in
+    // `*-suite.html` `<head>` while Vite's client `__vitePreload` still loads them on hydration.
+    'build:manifest'(manifest) {
+      for (const [key, entry] of Object.entries(manifest)) {
+        entry.prefetch = false
+        if (key === 'components/docs/DocsComponentsGallery.vue')
+          entry.imports = []
+      }
+    },
     'app:resolve'(app) {
       removeSidebaseAuthAppRuntime(app)
       removeSentryClientPlugins(app)

@@ -111,6 +111,7 @@ import {
   buildProviderSummary,
   buildProviderTelemetry,
   isDeferredSemanticQueryEligible,
+  isIndexOwnedFileItem,
   roundDuration,
   resolveProviderCategory,
   resolveSearchScene,
@@ -332,11 +333,9 @@ export class SearchEngineCore
     let accepted: TuffItem[] | null = null
     for (let index = 0; index < filtered.length; index += 1) {
       const item = filtered[index]
-      const original = item.meta?._originalSourceId
-      const sourceId = typeof original === 'string' ? original : item.source.id
       const filePath = item.meta?.file?.path
       if (
-        sourceId === FILE_INDEXED_SOURCE_ID &&
+        isIndexOwnedFileItem(item, FILE_INDEXED_SOURCE_ID) &&
         filePath &&
         !fileProvider.isSearchPathAdmitted(filePath)
       ) {
@@ -359,11 +358,9 @@ export class SearchEngineCore
     let kept: TuffItem[] | null = null
     for (let index = 0; index < items.length; index += 1) {
       const item = items[index]
-      const original = item.meta?._originalSourceId
-      const sourceId = typeof original === 'string' ? original : item.source.id
       const filePath = item.meta?.file?.path
       if (
-        sourceId === FILE_INDEXED_SOURCE_ID &&
+        isIndexOwnedFileItem(item, FILE_INDEXED_SOURCE_ID) &&
         typeof filePath === 'string' &&
         filePath.trim() &&
         'missing' in normalizeResultFilePath(filePath)

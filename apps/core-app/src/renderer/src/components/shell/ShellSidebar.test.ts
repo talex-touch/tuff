@@ -37,6 +37,16 @@ vi.mock('~/modules/conversation/useConversationEntry', () => ({
     enterPickedProjectConversation: vi.fn()
   })
 }))
+vi.mock('~/modules/conversation/useConversationHistory', () => ({
+  useConversationHistory: () => ({
+    conversations: ref([]),
+    loading: ref(false),
+    refresh: vi.fn(async () => undefined),
+    load: vi.fn(async () => null),
+    rename: vi.fn(async () => undefined),
+    remove: vi.fn(async () => undefined)
+  })
+}))
 vi.mock('~/modules/layout/useProjectFolders', () => ({
   blankConversationOwner: () => null
 }))
@@ -132,12 +142,13 @@ describe('ShellSidebar settings context', () => {
     route.path = '/home'
   })
 
-  it('renders direct /setting link when browserWorkspace is off', async () => {
+  it('renders direct /store and /setting links even when browserWorkspace is on', async () => {
     route.path = '/home'
-    appSettingMock.betaFeatures.browserWorkspace = false
+    appSettingMock.betaFeatures.browserWorkspace = true
     const wrapper = mount(ShellSidebar)
     await nextTick()
 
+    expect(wrapper.find('[data-to="/store"]').exists()).toBe(true)
     expect(wrapper.find('[data-to="/setting"]').exists()).toBe(true)
   })
 })

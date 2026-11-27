@@ -3,9 +3,6 @@ import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { createBrowserSdk } from '@talex-touch/utils/transport/sdk/domains/browser'
-import { isBetaFeatureEnabled } from '../../../shared/beta-features'
-import { appSetting } from '~/modules/storage/app-storage'
 import { useConversationEntry } from '~/modules/conversation/useConversationEntry'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
 import { useShellTerminal } from '~/modules/layout/useShellTerminal'
@@ -49,38 +46,12 @@ export function useMainWindowCommands() {
     {
       id: 'open-store',
       run: async () => {
-        if (isBetaFeatureEnabled(appSetting, 'browserWorkspace')) {
-          if (router.currentRoute.value.path !== '/browser') {
-            await router.push('/browser')
-          }
-          const sdk = createBrowserSdk(transport)
-          const s = await sdk.getState().catch(() => null)
-          if (s) {
-            const existing = s.tabs.find((tab) => tab.url.startsWith('tuff://store'))
-            if (existing) await sdk.activateTab(existing.id)
-            else await sdk.createTab('tuff://store')
-            return
-          }
-        }
         await router.push('/store')
       }
     },
     {
       id: 'open-settings',
       run: async () => {
-        if (isBetaFeatureEnabled(appSetting, 'browserWorkspace')) {
-          if (router.currentRoute.value.path !== '/browser') {
-            await router.push('/browser')
-          }
-          const sdk = createBrowserSdk(transport)
-          const s = await sdk.getState().catch(() => null)
-          if (s) {
-            const existing = s.tabs.find((tab) => tab.url.startsWith('tuff://setting'))
-            if (existing) await sdk.activateTab(existing.id)
-            else await sdk.createTab('tuff://settings')
-            return
-          }
-        }
         await router.push('/setting')
       }
     },

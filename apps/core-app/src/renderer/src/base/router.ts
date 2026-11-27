@@ -36,6 +36,7 @@ const ROUTE_COMPONENT_LOAD_WARN_MS = 150
 const STORE_ROUTE_CACHE_KEY = 'store-shell'
 /** `/home` and `/home/c/:id` are one surface, so they share a cache entry. */
 const HOME_ROUTE_CACHE_KEY = 'home-shell'
+const HERDR_CONVERSATION_CACHE_KEY = 'herdr-conversation-shell'
 
 function resolveRoutePattern(route: RouteLocationNormalizedLoaded): string {
   const last = Array.isArray(route?.matched) ? route.matched[route.matched.length - 1] : null
@@ -250,6 +251,20 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: APP_SURFACE_ROUTES.herdrConversation,
+    name: '$I18n:router.herdrConversation',
+    component: withRouteComponentPerf(
+      '/home/herdr',
+      () => import('../views/base/home/HerdrConversationStage.vue')
+    ),
+    meta: {
+      index: 0,
+      keepAlive: true,
+      keepAliveKey: HERDR_CONVERSATION_CACHE_KEY,
+      betaFeature: 'herdrRuntime'
+    }
+  },
+  {
     // Voice insights now live with the Intelligence voice pipeline; retain the old URL as a
     // stable redirect for bookmarks and older plugin navigation payloads.
     path: '/voice-insights',
@@ -408,22 +423,6 @@ const router = createRouter({
  * Keeps `/setting?section=<id>` deep links working after settings moved from one long page to
  * per-category routes. Those links are still emitted by notifications and other modules.
  */
-router.beforeEach((to, _from, next) => {
-  if (isBetaFeatureEnabled(appSetting, 'browserWorkspace')) {
-    if (to.path.startsWith('/setting')) {
-      const rawCategory = to.path.replace(/^\/setting\/?/, '')
-      const category = rawCategory.replace(/\//g, '-') || 'overview'
-      next({ path: '/browser', query: { ...to.query, category }, replace: true })
-      return
-    }
-    if (to.path.startsWith('/store')) {
-      next({ path: '/browser', query: { ...to.query, tab: 'store' }, replace: true })
-      return
-    }
-  }
-  next()
-})
-
 router.beforeEach((to, _from, next) => {
   const section = typeof to.query.section === 'string' ? to.query.section : ''
   if (!section || !to.path.startsWith('/setting')) {

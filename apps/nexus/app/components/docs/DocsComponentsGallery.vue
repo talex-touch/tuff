@@ -29,6 +29,7 @@ import tuffexPkg from '../../../../../packages/tuffex/package.json'
 // admits it, and the specimen wrapper adds the reset button that remounts it so
 // its entrance can be watched again.
 import ClientOnly from './gallery/GallerySpecimenGate.vue'
+import DocsGalleryFrameworkBar from './DocsGalleryFrameworkBar.vue'
 import { galleryText } from './gallery/gallery-text'
 import { createSpecimenQueue, SPECIMEN_QUEUE_KEY } from './gallery/specimen-queue'
 import { tileImage } from './gallery/tile-image'
@@ -45,10 +46,12 @@ const GalleryChoroplethMap = defineAsyncComponent(() => import('./gallery/Galler
 const GalleryCustomChart = defineAsyncComponent(() => import('./gallery/GalleryCustomChart.vue'))
 const GalleryEChart = defineAsyncComponent(() => import('./gallery/GalleryEChart.vue'))
 const GalleryEdgeMarquee = defineAsyncComponent(() => import('./gallery/GalleryEdgeMarquee.vue'))
+const GalleryFlowchart = defineAsyncComponent(() => import('./gallery/GalleryFlowchart.vue'))
 const GalleryFusion = defineAsyncComponent(() => import('./gallery/GalleryFusion.vue'))
 const GalleryFusionSurface = defineAsyncComponent(() => import('./gallery/GalleryFusionSurface.vue'))
 const GalleryLearningCurve = defineAsyncComponent(() => import('./gallery/GalleryLearningCurve.vue'))
 const GalleryLiquidMenu = defineAsyncComponent(() => import('./gallery/GalleryLiquidMenu.vue'))
+const GalleryMatrixLoader = defineAsyncComponent(() => import('./gallery/GalleryMatrixLoader.vue'))
 const GallerySankeyChart = defineAsyncComponent(() => import('./gallery/GallerySankeyChart.vue'))
 const GallerySparkChart = defineAsyncComponent(() => import('./gallery/GallerySparkChart.vue'))
 const GalleryStreamElement = defineAsyncComponent(() => import('./gallery/GalleryStreamElement.vue'))
@@ -655,31 +658,6 @@ const chatListMessages = computed(() => [
   { id: 'a1', role: 'assistant' as const, content: copy.value.aboutBody, createdAt: 1_705_000_001_000 },
 ])
 const aiSampleMessage = computed(() => chatMessages.value[1] ?? chatMessages.value[0]!)
-type FlowSpecimenId = 'trigger' | 'branch'
-
-// Flowchart is controlled: it reports a drag and leaves the write to the host.
-// Positions live apart from the copy so a locale switch keeps a dragged node
-// where the reader left it.
-const flowPositions = ref<Record<FlowSpecimenId, { x: number, y: number }>>({
-  trigger: { x: 200, y: 8 },
-  branch: { x: 200, y: 150 },
-})
-
-const flowNodes = computed(() => [
-  { id: 'trigger', tone: 'violet' as const, label: copy.value.flowNodes.trigger.label, ...flowPositions.value.trigger },
-  { id: 'branch', tone: 'orange' as const, label: copy.value.flowNodes.branch.label, ...flowPositions.value.branch },
-])
-
-const flowEdges = [{ from: 'trigger', to: 'branch' }]
-
-function flowCopy(id: string) {
-  return copy.value.flowNodes[id as FlowSpecimenId]
-}
-
-function moveFlowNode({ id, x, y }: { id: string, x: number, y: number }): void {
-  if (id in flowPositions.value)
-    flowPositions.value[id as FlowSpecimenId] = { x, y }
-}
 
 const traceRows = computed(() => [
   { id: 'read', primary: copy.value.toolRows[0]?.label ?? '', secondary: 'manifest.json', mono: true, status: 'done' as const },
@@ -836,23 +814,6 @@ const citeSources = [
   { id: 'repo', url: 'https://github.com/talex-touch/talex-touch' },
   { id: 'npm', url: 'https://www.npmjs.com/package/@talex-touch/tuffex' },
 ]
-
-const INSTALL_CMD = 'pnpm add @talex-touch/tuffex'
-const copied = ref(false)
-let copyTimer: ReturnType<typeof setTimeout> | null = null
-
-async function copyInstall() {
-  try {
-    await navigator.clipboard.writeText(INSTALL_CMD)
-  }
-  catch {
-    return
-  }
-  copied.value = true
-  if (copyTimer)
-    clearTimeout(copyTimer)
-  copyTimer = setTimeout(() => (copied.value = false), 1600)
-}
 // `height` is the specimen's tallest height in px, given only where it outgrows
 // the default stage, and `narrowHeight` its height in the narrowest two-column
 // cells where that is taller still: the stage reserves both
@@ -883,19 +844,7 @@ function specimenStyle(item: { readonly doc?: string, readonly name?: string, re
 
 <template>
   <div class="docs-gallery">
-    <div class="docs-gallery__bar">
-      <button
-        type="button"
-        class="docs-gallery__install"
-        :aria-label="text.copyCommand(INSTALL_CMD)"
-        @click="copyInstall"
-      >
-        <span class="docs-gallery__install-prompt" aria-hidden="true">$</span>
-        <span>{{ INSTALL_CMD }}</span>
-        <span class="docs-gallery__install-icon" :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" aria-hidden="true" />
-      </button>
-      <span class="docs-gallery__version">v{{ tuffexPkg.version }}</span>
-    </div>
+    <DocsGalleryFrameworkBar :suite="props.suite" :version="tuffexPkg.version" />
 
     <div v-if="props.suite === 'base'" class="docs-gallery__grid">
       <section class="docs-gallery__cell">
@@ -3469,6 +3418,20 @@ function specimenStyle(item: { readonly doc?: string, readonly name?: string, re
       </section>
 
       <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('matrix-loader')">
+          {{ cellLabel('MatrixLoader', '球面矩阵加载器') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryMatrixLoader />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('working-indicator')">
           {{ cellLabel('WorkingIndicator', '工作指示器') }}
         </NuxtLink>
@@ -4332,24 +4295,7 @@ function specimenStyle(item: { readonly doc?: string, readonly name?: string, re
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__flow">
-              <TxFlowchart
-                :nodes="flowNodes"
-                :edges="flowEdges"
-                :height="260"
-                :node-width="240"
-                draggable
-                :aria-label="copy.flowAria"
-                @node-move="moveFlowNode"
-              >
-                <template #node="{ node }">
-                  <div class="docs-gallery__flow-card">
-                    <strong>{{ flowCopy(node.id).title }}</strong>
-                    <small>{{ flowCopy(node.id).detail }}</small>
-                  </div>
-                </template>
-              </TxFlowchart>
-            </div>
+            <GalleryFlowchart />
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>

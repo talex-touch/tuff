@@ -50,6 +50,9 @@ jobs:
             nexus:
               - 'apps/nexus/**'
               - 'packages/tuffex/**'
+              - 'packages/tuffex-core/**'
+              - 'packages/tuffex-react/**'
+              - 'packages/tuffex-wc/**'
               - '.github/workflows/ci.yml'
 
       # A contribution policy, so it only makes sense on the incoming change, not on the branch.
@@ -189,11 +192,11 @@ jobs:
       - name: Check maintenance-audit report claims
         run: pnpm check audit-report-claims && pnpm check audit-report-claims --self-test
 
-      # The negated-closing-keyword guard moved to .github/workflows/pr-body-guard.yml (#1773). It
-      # has to re-run when a description is edited, and this job's trigger has no `edited` type, so
-      # here it only ever saw the body as of the last push -- while GitHub reads closing keywords
-      # from the body at merge time. Adding `edited` to this workflow would re-run every step above
-      # on each description edit; the guard is a checkout and one node script, so it went alone.
+      # The accidental-closing-keyword guard moved to .github/workflows/pr-body-guard.yml (#1773,
+      # extended to PR title + constituent commit messages in #1792). It has to re-run when a PR
+      # description or title is edited, and this job's trigger has no `edited` type. Adding `edited`
+      # to this workflow would re-run every step above on each description edit; the guard is a
+      # checkout and one node script, so it lives in its own workflow.
 
       # 34 distinct blocked reasons live across plugins/ and 20 of them belong to exactly one
       # plugin, so the vocabulary is open and a closed union would be the wrong contract. Only the
@@ -386,14 +389,19 @@ jobs:
   # Path-filtered because the build is the expensive part: it builds tuffex first and asks for
   # an 8GB heap, so it should not sit on every unrelated pull request.
   #
-  # Two of the four check:* scripts are deliberately absent, because they are deployment-time
-  # checks rather than PR gates and both fail without their inputs:
+  # Non-PR / external-input Nexus checks are deliberately absent from this job:
   #   check:deployment-secrets  → exit 64, wants CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN.
-  #     Now run weekly by nexus-deployment-secret-watch.yml. It reads live Cloudflare state,
+  #     Run weekly by nexus-deployment-secret-watch.yml. It reads live Cloudflare state,
   #     and the drift it catches — a Secret deleted in the dashboard — arrives with no commit
   #     for a PR gate to run on, so a schedule is the only place it can work.
-  #   check:runtime-evidence → exit 1, wants an output/playwright directory from a prior run.
-  # Neither belongs on a pull request: they read secrets and artifacts a PR does not have.
+  #   check:runtime-evidence (and :deployed / :template) → exit 1, wants an output/playwright
+  #     directory of Wrangler/Playwright smoke JSON + HAR sidecars from a prior runtime run.
+  #     Its pure validator contract is unit-tested in apps/nexus/build/check-runtime-evidence.test.ts
+  #     under job_app_tests (nexus).
+  #   audit:contrast → requires a live localhost:3200 dev server + headless Chrome CDP; its pure
+  #     colour/luminance parser self-test (`audit:contrast:self-test`) runs below.
+  # All five static `check:*` scripts (api-routes, mdc-fences, icon-collections, doc-parity,
+  # demo-registry), `audit:contrast:self-test`, `build`, and `build:analyze-worker` run here.
   job_nexus:
     name: Nexus (build + checks)
     runs-on: ubuntu-latest
@@ -449,6 +457,22 @@ jobs:
       # "heading 10 is h2 in zh but h3 in en".
       - name: Verify zh/en doc parity
         run: pnpm -C apps/nexus check:doc-parity
+
+      # Re-wired into job_nexus (#1776): commit 65e09d5f4 introduced check:demo-registry and its
+      # --self-test (and docs/engineering/specs/frontend/bui-component-family.md records it as
+      # CI-gated), but the step was subsequently dropped from ci.yml. Keeps demo-registry.ts,
+      # demos/*.vue, and TuffDemoWrapper content refs agreeing three ways so missing keys cannot
+      # render empty demo boxes or leave orphaned demo files behind.
+      - name: Verify demo registry and self-test
+        run: |
+          pnpm -C apps/nexus check:demo-registry
+          node apps/nexus/build/check-demo-registry-orphans.mjs --self-test
+
+      # Pure Node self-test for the WCAG contrast parser (rgb() vs CSS Color 4 color(srgb ...)).
+      # The full `audit:contrast` sweep requires a live localhost:3200 dev server and Chrome CDP,
+      # so only the deterministic self-test runs on PR CI.
+      - name: Verify contrast audit parser self-test
+        run: pnpm -C apps/nexus audit:contrast:self-test
 
       # Blocking. It was briefly continue-on-error because wiring it up is what discovered
       # the build was broken — nitro could not resolve @panva/hkdf from next-auth against a
@@ -515,6 +539,10 @@ jobs:
       - name: Build tuffex
         if: ${{ matrix.app == 'nexus' || matrix.app == 'core-app' }}
         run: pnpm -C packages/tuffex build
+
+      - name: Build tuffex multi-framework packages
+        if: ${{ matrix.app == 'nexus' }}
+        run: pnpm -C packages/tuffex-wc build && pnpm -C packages/tuffex-react build
 
       # The plugin SQLite sandbox tests need out/main/plugin-sqlite-worker.js, and only
       # electron-vite build produces it: the worker is a rollup input in the main-process build

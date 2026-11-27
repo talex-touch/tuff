@@ -41,6 +41,11 @@ interface TelemetryBatchAck extends Record<string, unknown> {
 
 const TELEMETRY_BATCH_SCOPE = 'telemetry.batch'
 
+function isUniqueConstraintError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /UNIQUE constraint failed|PRIMARY KEY constraint failed|SQLITE_CONSTRAINT/i.test(message)
+}
+
 async function resolveTelemetryPrivacySettings(event: Parameters<typeof getUserById>[0], userId: string | null): Promise<UserPrivacySettings | null> {
   if (!userId) return null
   const user = await getUserById(event, userId)
@@ -81,7 +86,11 @@ export default defineEventHandler(async (event) => {
   // and at up to 100 events per request it was the cheaper way to fabricate history (#901).
   const resolvedUserId = await resolveTelemetryUserId(event)
   const privacySettings = await resolveTelemetryPrivacySettings(event, resolvedUserId)
-  const payloadHash = digestTelemetryBatchPayload({ dropped, events: eventsToProcess })
+  const payloadHash = digestTelemetryBatchPayload({
+    callerUserId: resolvedUserId ?? null,
+    dropped,
+    events: eventsToProcess,
+  })
   const receipt = await getTelemetryBatchReceipt<TelemetryBatchAck>(
     event,
     TELEMETRY_BATCH_SCOPE,
@@ -162,18 +171,41 @@ export default defineEventHandler(async (event) => {
     processed: accepted,
   }
 
-  // Rows, counters and the receipt that acknowledges them commit in one D1 batch: a retry after a
-  // failure finds either everything (and gets the stored ACK back) or nothing (and writes it all).
-  await commitTelemetryWrite(event, { db: prepared.db, batch: prepared.batch }, {
-    extraStatements: [
-      buildTelemetryBatchReceiptStatement(prepared.db, {
-        scope: TELEMETRY_BATCH_SCOPE,
+  // Rows, counters, governance events and the receipt that acknowledges them commit in one D1 batch:
+  // a retry after a failure finds either everything (and gets the stored ACK back) or nothing (and
+  // writes it all). A concurrent duplicate hits the receipt PRIMARY KEY, rolls back its batch, and
+  // resolves cleanly against the winning receipt.
+  try {
+    await commitTelemetryWrite(event, { db: prepared.db, batch: prepared.batch }, {
+      extraStatements: [
+        buildTelemetryBatchReceiptStatement(prepared.db, {
+          scope: TELEMETRY_BATCH_SCOPE,
+          idempotencyKey,
+          payloadHash,
+          response,
+        }),
+      ],
+    })
+  }
+  catch (error) {
+    if (isUniqueConstraintError(error)) {
+      const winner = await getTelemetryBatchReceipt<TelemetryBatchAck>(
+        event,
+        TELEMETRY_BATCH_SCOPE,
         idempotencyKey,
-        payloadHash,
-        response,
-      }),
-    ],
-  })
+      )
+      if (winner) {
+        if (winner.payloadHash !== payloadHash) {
+          throw createError({ statusCode: 409, statusMessage: 'Idempotency key reused with different telemetry payload' })
+        }
+        return {
+          ...winner.response,
+          duplicate: true,
+        }
+      }
+    }
+    throw error
+  }
 
   return response
 })

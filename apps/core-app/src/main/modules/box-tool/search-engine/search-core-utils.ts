@@ -1,4 +1,4 @@
-import type { IProviderActivate, TuffQuery } from '@talex-touch/utils'
+import type { IProviderActivate, TuffItem, TuffQuery } from '@talex-touch/utils'
 import crypto from 'node:crypto'
 
 const PROVIDER_ALIASES: Record<string, string[]> = {
@@ -79,6 +79,23 @@ export interface SearchTraceProviderSummary {
 export function isDeferredSemanticQueryEligible(text: string): boolean {
   const normalized = text.trim()
   return normalized.length >= 3 || /^\p{Script=Han}{1,2}$/u.test(normalized)
+}
+
+/**
+ * Whether an item is owned by the local file index rather than an independent native file provider
+ * (`everything-provider`, `macos-spotlight-provider`, `linux-native-file-provider`,
+ * `windows-shell-file-provider`).
+ *
+ * `SearchUsageService.injectUsageStats` canonicalizes native file providers onto the indexed source
+ * id in `meta._originalSourceId` so usage counts and recommendation deduplication stay unified.
+ * Checking `item.source` first keeps live and cached native file results out of `file-provider`'s
+ * watch-root and missing-file filters, while non-file carriers such as rebuilt `recommendation-grid`
+ * cards still inherit index ownership through `meta._originalSourceId`.
+ */
+export function isIndexOwnedFileItem(item: TuffItem, indexedSourceId: string): boolean {
+  if (item.source.id === indexedSourceId) return true
+  if (item.source.type === 'file') return false
+  return item.meta?._originalSourceId === indexedSourceId
 }
 
 export function resolveProviderCategory(providerId: string): string {

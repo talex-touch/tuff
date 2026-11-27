@@ -144,9 +144,8 @@ class MockD1Database {
     if (this.failOn?.(sql)) {
       throw new Error(`D1 statement failed: ${sql.trim().slice(0, 40)}`)
     }
-    // Governance rows and the schema DDL are allowed outside a batch; telemetry rows, counters
-    // and receipts are not.
-    if (!this.inBatch && /INSERT INTO (telemetry_events|daily_stats|telemetry_batch_receipts)/.test(sql)) {
+    // Telemetry rows, counters, governance events and receipts must all land inside one batch.
+    if (!this.inBatch && /INSERT INTO (telemetry_events|daily_stats|telemetry_batch_receipts|platform_governance_events)/.test(sql)) {
       this.standaloneRuns.push(sql.trim().slice(0, 60))
     }
     if (sql.includes('CREATE TABLE') || sql.includes('CREATE INDEX') || sql.includes('ALTER TABLE')) {
@@ -155,16 +154,20 @@ class MockD1Database {
 
     if (sql.includes('INSERT INTO telemetry_batch_receipts')) {
       const [scope, idempotencyKey, payloadHash, responseJson, createdAt, expiresAt] = args
-      if (!this.receiptRows.some(row => row.scope === scope && row.idempotency_key === idempotencyKey)) {
-        this.receiptRows.push({
-          scope: String(scope),
-          idempotency_key: String(idempotencyKey),
-          payload_hash: String(payloadHash),
-          response_json: String(responseJson),
-          created_at: String(createdAt),
-          expires_at: String(expiresAt),
-        })
+      const exists = this.receiptRows.some(row => row.scope === scope && row.idempotency_key === idempotencyKey)
+      if (exists) {
+        if (sql.includes('ON CONFLICT'))
+          return { meta: { changes: 0 } }
+        throw new Error('UNIQUE constraint failed: telemetry_batch_receipts.scope, telemetry_batch_receipts.idempotency_key')
       }
+      this.receiptRows.push({
+        scope: String(scope),
+        idempotency_key: String(idempotencyKey),
+        payload_hash: String(payloadHash),
+        response_json: String(responseJson),
+        created_at: String(createdAt),
+        expires_at: String(expiresAt),
+      })
       return { meta: { changes: 1 } }
     }
 
@@ -883,10 +886,10 @@ describe('telemetryStore single-commit writes (#1788)', () => {
       ],
     })
 
-    // Exactly one batch for the commit: the two rows and the receipt. Search counters are no longer
-    // written per event; the daily rollup derives them from these rows.
+    // Exactly one batch for the commit: the two event rows, their two governance rows, and the
+    // receipt all commit together in one transaction.
     expect(db.batchSizes).toHaveLength(batchesBeforeCommit + 1)
-    expect(db.batchSizes.at(-1)).toBe(3)
+    expect(db.batchSizes.at(-1)).toBe(5)
     expect(prepared.batch!.size).toBe(2)
     expect(db.standaloneRuns).toEqual([])
 
@@ -899,11 +902,32 @@ describe('telemetryStore single-commit writes (#1788)', () => {
     const receipt = await getTelemetryBatchReceipt(makeEvent(), 'telemetry.batch', 'sentry:00000000-0000-4000-8000-000000000001')
     expect(receipt?.response).toEqual({ success: true, accepted: 2, rejected: 0 })
 
-    // Governance follow-ups, retention maintenance and the rollup check run after the commit (the
-    // governance store schedules maintenance on its own as well, so the count is not exactly one).
+    // Governance rows landed inside the same commit batch; retention and rollup run after commit.
     expect(db.governanceRows).toHaveLength(2)
     expect(state.maintenanceSchedules.some(schedule => schedule.db === db)).toBe(true)
     expect(state.rollupSchedules.some(schedule => schedule.db === db)).toBe(true)
+  })
+
+  it('rolls back telemetry rows and receipt when a governance write fails mid-batch', async () => {
+    const db = state.db as MockD1Database
+    const prepared = await prepareTelemetryWrite(makeEvent(), [searchEvent(120)])
+
+    db.failOn = sql => sql.includes('INSERT INTO platform_governance_events')
+    await expect(commitTelemetryWrite(makeEvent(), { db: prepared.db!, batch: prepared.batch! }, {
+      extraStatements: [
+        buildTelemetryBatchReceiptStatement(db, {
+          scope: 'telemetry.batch',
+          idempotencyKey: 'sentry:00000000-0000-4000-8000-000000000009',
+          payloadHash: 'hash-gov-fail',
+          response: { success: true, accepted: 1, rejected: 0 },
+        }),
+      ],
+    })).rejects.toThrow('D1 statement failed')
+
+    expect(db.telemetryRows).toHaveLength(0)
+    expect(db.governanceRows).toHaveLength(0)
+    expect(db.receiptRows).toHaveLength(0)
+    expect(state.maintenanceSchedules).toHaveLength(0)
   })
 
   it('leaves no rows, counters or receipt behind when one statement of the batch fails', async () => {

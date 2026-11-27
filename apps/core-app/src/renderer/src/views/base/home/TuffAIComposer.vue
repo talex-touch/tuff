@@ -50,6 +50,10 @@ interface Props {
   sendQueues?: boolean
   canSteer?: boolean
   deliveryMode?: WorkspaceQueueDeliveryMode
+  /** Hide Tuff's local tool-permission menu for external hosts (e.g. Herdr CLI sessions). */
+  hidePermissionMenu?: boolean
+  /** Render the model/host pill as a read-only display badge without opening HomeModelMenu. */
+  readonlyModel?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -60,11 +64,13 @@ const props = withDefaults(defineProps<Props>(), {
   beamActive: false,
   sendQueues: false,
   canSteer: false,
-  deliveryMode: 'queue'
+  deliveryMode: 'queue',
+  hidePermissionMenu: false,
+  readonlyModel: false
 })
 
 const draft = defineModel<string>('draft', { required: true })
-const permissionMode = defineModel<AgentToolsMode>('permissionMode', { required: true })
+const permissionMode = defineModel<AgentToolsMode>('permissionMode', { default: 'off' })
 
 const emit = defineEmits<{
   (event: 'update:deliveryMode', mode: WorkspaceQueueDeliveryMode): void
@@ -219,6 +225,8 @@ defineExpose({ box: boxRef, input: inputEl, ghost: ghostEl, focus, launch })
         :mic-blocked="dictation.captureBlocked.value"
         :mic-elapsed-ms="dictation.elapsedMs.value"
         :mic-outcome="dictation.outcome.value"
+        :hide-permission-menu="hidePermissionMenu"
+        :readonly-model="readonlyModel"
         @update:delivery-mode="emit('update:deliveryMode', $event)"
         @files="emit('files', $event)"
         @send="emit('send')"
