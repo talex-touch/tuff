@@ -217,7 +217,10 @@ export default defineNuxtConfig({
       modulePreload: {
         polyfill: false,
         resolveDependencies(_filename, deps) {
-          return deps.filter(d => !DEFERRED_CHUNK_PATTERN.test(d))
+          // NEVER filter `.css` assets from Vite's `__vitePreload` dependency list:
+          // Vite injects dynamic chunk stylesheets through `deps`, so dropping CSS matching
+          // `Demo.` or `Gallery.*Suite` breaks demo and suite styling at runtime.
+          return deps.filter(d => d.endsWith('.css') || !DEFERRED_CHUNK_PATTERN.test(d))
         },
       },
     },
@@ -287,30 +290,32 @@ export default defineNuxtConfig({
     'vite:extendConfig'(config, { isClient }) {
       if (!isClient)
         return
-      config.build = config.build ?? {}
-      const rollup = (config.build.rollupOptions ?? {}) as Record<string, unknown>
+      const mutableConfig = config as {
+        build?: {
+          rollupOptions?: Record<string, unknown>
+        }
+      }
+      mutableConfig.build = mutableConfig.build ?? {}
+      const rollup = (mutableConfig.build.rollupOptions ?? {}) as Record<string, unknown>
       const existingOutput = (rollup.output && !Array.isArray(rollup.output) ? rollup.output : {}) as Record<string, unknown>
-      config.build.rollupOptions = {
+      mutableConfig.build.rollupOptions = {
         ...rollup,
         preserveEntrySignatures: false,
         output: {
           ...existingOutput,
           codeSplitting: createTuffexCodeSplittingConfig(),
         },
-      } as never
+      }
     },
     'build:manifest'(manifest) {
       for (const [key, entry] of Object.entries(manifest)) {
         entry.prefetch = false
+        const isScript = entry.resourceType === 'script' || Boolean(entry.file?.endsWith('.js'))
+        if (!isScript)
+          continue
         const target = `${key} ${entry.name ?? ''} ${entry.file ?? ''}`
         if (DEFERRED_CHUNK_PATTERN.test(target))
           entry.preload = false
-        if (
-          key === 'components/docs/DocsComponentsGallery.vue'
-          || /^components\/docs\/gallery\/suites\/Gallery.*Suite\.vue$/.test(key)
-        ) {
-          entry.imports = []
-        }
       }
     },
     'components:extend'(components) {

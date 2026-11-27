@@ -263,7 +263,7 @@ export default defineNuxtModule({
       componentRegistry.clear()
       seedLocalComponents(appDir, componentRegistry)
       for (const comp of components) {
-        const name = comp.pascalName || comp.name
+        const name = comp.pascalName || (comp as { name?: string }).name
         if (!name || !comp.filePath)
           continue
         const entry: MdcComponentImportResolution = {
@@ -358,14 +358,18 @@ declare module '${VIRTUAL_DOC_PAGES_ID}' {
     const devSearchIndexPlugin = createDevSearchIndexPlugin(contentDocsDir)
 
     nuxt.hook('vite:extendConfig', (config) => {
-      config.vue = {
-        ...(config.vue ?? {}),
-        include: normalizeVueInclude(config.vue?.include),
+      const mutableConfig = config as {
+        vue?: { include?: unknown } & Record<string, unknown>
+        plugins?: unknown[]
       }
-      config.plugins = config.plugins ?? []
-      config.plugins.unshift(mdcVuePlugin)
+      mutableConfig.vue = {
+        ...(mutableConfig.vue ?? {}),
+        include: normalizeVueInclude(mutableConfig.vue?.include as never),
+      }
+      mutableConfig.plugins = mutableConfig.plugins ?? []
+      mutableConfig.plugins.unshift(mdcVuePlugin)
       if (nuxt.options.dev)
-        config.plugins.push(devSearchIndexPlugin)
+        mutableConfig.plugins.push(devSearchIndexPlugin)
     })
   },
 })

@@ -217,4 +217,15 @@ describe('tuffex-docs phase 1 scaffold', () => {
       common: { copy: 'Copy' },
     })
   })
+
+  it('guards CSS stylesheet loading in nuxt.config.ts and preserves 13px family toggle typography in DocsSidebar.vue', () => {
+    const nuxtConfig = readFileSync(join(appRoot, 'nuxt.config.ts'), 'utf8')
+    expect(nuxtConfig).toMatch(/resolveDependencies\([^)]*\)\s*\{[\s\S]*?\.endsWith\(['"]\.css['"]\)/)
+    expect(nuxtConfig).not.toContain('entry.imports = []')
+
+    const sidebarSource = readFileSync(join(appRoot, 'app/components/docs/DocsSidebar.vue'), 'utf8')
+    const familyToggleBlock = sidebarSource.match(/:deep\(\.docs-nav-family-toggle\)\s*\{[^}]*\}/)?.[0] ?? ''
+    expect(familyToggleBlock).toContain('font-family: inherit;')
+    expect(familyToggleBlock).not.toMatch(/\bfont:\s*inherit\b/)
+  })
 })

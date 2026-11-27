@@ -379,4 +379,23 @@ describe('style imports on a dev server', () => {
   it('leaves them to the sibling\'s own import in a build', () => {
     expect(injectedStyles('build')).toEqual(['base-surface', 'dialog'])
   })
+
+  it('marks transformed dist component barrels with moduleSideEffects: true so Rolldown preserves injected CSS under sideEffects: ["**/*.css", "**/*.scss"]', () => {
+    const plugin = tuffexOnDemandStylePlugin({
+      styleDeps,
+      componentDistRoot: '/pkg/dist/es',
+    })
+    hookOf(plugin.configResolved).call({} as never, { command: 'build' } as never)
+    const barrelCode = `import TxDialog from './src/TxDialog.vue.js';\nexport { TxDialog };`
+    const result = hookOf(plugin.transform)
+      .call({ parse: parseAst } as never, barrelCode, '/pkg/dist/es/dialog/index.js') as {
+        code: string
+        moduleSideEffects?: boolean
+      } | null
+
+    expect(result).not.toBeNull()
+    expect(result?.moduleSideEffects).toBe(true)
+    expect(result?.code).toContain(`import '../base-surface/style.css';`)
+    expect(result?.code).toContain(`import './style.css';`)
+  })
 })

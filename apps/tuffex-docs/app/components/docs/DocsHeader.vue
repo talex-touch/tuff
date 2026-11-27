@@ -12,6 +12,14 @@ const { t } = useI18n()
 
 const docsLocale = computed(() => resolveLocaleFromPath(route.path))
 const isZh = computed(() => docsLocale.value === 'zh')
+const activeHeaderSection = computed<'concepts' | 'composition' | 'components'>(() => {
+  const path = route.path.replace(/^\/tuffex(?=\/|$)/, '').replace(/^\/(?:en|zh)(?=\/|$)/, '') || '/'
+  if (path === '/concepts' || path.startsWith('/concepts/'))
+    return 'concepts'
+  if (path === '/composition' || path.startsWith('/composition/'))
+    return 'composition'
+  return 'components'
+})
 const searchOpen = useState<boolean>('tuffex-search-open', () => false)
 
 const scrolled = ref(false)
@@ -93,7 +101,8 @@ onBeforeUnmount(() => {
         <div class="docs-header__links">
           <NuxtLink
             :to="`/${docsLocale}`"
-            class="docs-header__link is-active"
+            class="docs-header__link"
+            :class="{ 'is-active': activeHeaderSection === 'components' }"
             @pointerenter="prefetchDocPage(docsLocale, '')"
             @focus="prefetchDocPage(docsLocale, '')"
           >
@@ -102,6 +111,7 @@ onBeforeUnmount(() => {
           <NuxtLink
             :to="`/${docsLocale}/concepts`"
             class="docs-header__link"
+            :class="{ 'is-active': activeHeaderSection === 'concepts' }"
             @pointerenter="prefetchDocPage(docsLocale, 'concepts')"
             @focus="prefetchDocPage(docsLocale, 'concepts')"
           >
@@ -110,6 +120,7 @@ onBeforeUnmount(() => {
           <NuxtLink
             :to="`/${docsLocale}/composition`"
             class="docs-header__link"
+            :class="{ 'is-active': activeHeaderSection === 'composition' }"
             @pointerenter="prefetchDocPage(docsLocale, 'composition')"
             @focus="prefetchDocPage(docsLocale, 'composition')"
           >

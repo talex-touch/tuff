@@ -100,10 +100,11 @@ export default defineNuxtModule({
       )
     }
 
-    // Dynamically import UnoCSS `icons` and `demo-icons` layers after Suspense resolves so
-    // ~190 KiB of inline SVG Carbon/Logos rules are split out of render-blocking `entry.css`.
-    // The `[class^="i-"],[class*=" i-"]{width:1.2em;height:1.2em}` preflight in `uno.config.ts`
-    // reserves glyph dimensions on SSR byte 1 with zero CLS.
+    // Split UnoCSS `icons` (shell/nav UI icons) and `demo-icons` (demo-only icons) out of
+    // render-blocking `entry.css`. Load `uno:icons.css` immediately on client plugin boot
+    // (parallel with hydration, never blocked behind heavy Gallery*Suite Suspense resolution!)
+    // so header/sidebar icons paint without a multi-second blank flash, while keeping
+    // `uno:demo-icons.css` deferred until Suspense resolves / idle.
     addPluginTemplate({
       filename: 'tuffex-unocss-icons.client.mjs',
       mode: 'client',
@@ -111,21 +112,34 @@ export default defineNuxtModule({
 import { defineNuxtPlugin } from '#app'
 
 export default defineNuxtPlugin((nuxtApp) => {
-  let loaded = false
-  const loadIconLayers = () => {
-    if (loaded)
+  let coreLoaded = false
+  let demoLoaded = false
+
+  const loadCoreIcons = () => {
+    if (coreLoaded)
       return
-    loaded = true
+    coreLoaded = true
     void import('uno:icons.css')
+  }
+
+  const loadDemoIcons = () => {
+    if (demoLoaded)
+      return
+    demoLoaded = true
     void import('uno:demo-icons.css')
   }
 
+  if (typeof queueMicrotask === 'function')
+    queueMicrotask(loadCoreIcons)
+  else
+    setTimeout(loadCoreIcons, 0)
+
   nuxtApp.hook('app:suspense:resolve', () => {
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-      window.requestIdleCallback(loadIconLayers, { timeout: 250 })
+      window.requestIdleCallback(loadDemoIcons, { timeout: 250 })
     }
     else {
-      setTimeout(loadIconLayers, 0)
+      setTimeout(loadDemoIcons, 0)
     }
   })
 })

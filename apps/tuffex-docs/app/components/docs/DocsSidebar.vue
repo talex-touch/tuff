@@ -1051,7 +1051,7 @@ await navReady
   width: 100%;
   border: 0;
   background: transparent;
-  font: inherit;
+  font-family: inherit;
   text-align: left;
   cursor: pointer;
 }

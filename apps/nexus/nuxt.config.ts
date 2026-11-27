@@ -627,7 +627,7 @@ export default defineNuxtConfig({
       modulePreload: {
         polyfill: false,
         resolveDependencies(_filename, deps) {
-          return deps.filter(d => !DEFERRED_CHUNK_PRELOAD_RE.test(d))
+          return deps.filter(d => d.endsWith('.css') || !DEFERRED_CHUNK_PRELOAD_RE.test(d))
         },
       },
       // Vite 8 defaults CSS minification to lightningcss, which rejects UnoCSS-generated

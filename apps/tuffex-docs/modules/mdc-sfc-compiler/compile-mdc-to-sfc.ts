@@ -425,6 +425,8 @@ function serializeStaticAttributes(
 
   let out = ''
   for (const [name, value] of attrMap) {
+    if (value === false)
+      continue
     if (value === true)
       out += ` ${name}`
     else
