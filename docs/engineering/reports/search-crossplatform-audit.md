@@ -165,8 +165,8 @@
     - R1 保持开放：macOS arm64 官方签名包截图运行实证已完成，仍留待 Windows / Linux 打包实机截图验收与 issue `#321` / `#322` 关闭收口（不以 macOS arm64 实证替代 Windows / Linux 跨平台运行验收）。
   - **2026-11-27 跨平台实查与 P0 打包剥离修复**：
     - 已入 `origin/master`：`native-protocol.yml`（run `45913147990`，2026-11-26）三端 **3/3 GREEN**（macOS `140226035731`、Ubuntu `140226035743`、Windows `140226035793`）。但在 `v2.4.15-beta.13` 发布产物（run `45135360654`，Windows `137565261789` / Ubuntu `137565261816`）中，`electron-builder install-app-deps` 清空了 `build/Release/`，而 `native-addons.js:preserveRequiredNativeAddons()` 漏掉了 `tuff_native_screenshot.node` 与 `tuff-native-ocr(.exe)`（Linux AppImage 实查 0 个截图/Rust OCR 二进制）。
-    - **Wave 2 分支已本地验证待合入（`task/fix/xplat-r3-win-linux @ f3a675f96`）**：在 `apps/core-app/scripts/build-target/native-addons.js` 新增 `separatelyBuiltNativeAddonNames(target)` 跨 `install-app-deps` 保留上述二进制，并补齐 `native-addons.test.ts`（19/19 通过）。
-    - **仍待发布包与真机**：`#321` / R1 保持开放，直至该修复合入 `master` 后在 `v2.4.15-beta.15+` 发布 CI 实证 Windows / Linux 打包产物包含 `tuff_native_screenshot.node` 且完成物理/GUI 截图捕获验收。
+    - **已合入 `origin/master`（PR `#2333` `9c75810aa`）**：在 `apps/core-app/scripts/build-target/native-addons.js` 新增 `separatelyBuiltNativeAddonNames(target)` 跨 `install-app-deps` 保留上述二进制，并补齐 `native-addons.test.ts`（19/19 通过）。
+    - **仍待发布包与真机**：`#321` / R1 保持开放，直至在 `v2.4.15-beta.15+` 发布 CI 实证 Windows / Linux 打包产物包含 `tuff_native_screenshot.node` 且完成物理/GUI 截图捕获验收。
 
 - [ ] **R2 — macOS 双架构已发行，跨架构运行证据仍需核对**
   - 2026-10-18 当前源码及正式资产复核：`electron-builder.yml` 的 DMG/ZIP 均声明 `arm64` 与 `x64`。官方 `v2.4.15-beta.7` GitHub inventory 含两种架构的 DMG、ZIP 及签名；发布 manifest 为 `darwin/arm64` 与 `darwin/x64` 分别列出首选 DMG、SHA-256 和签名。
@@ -174,16 +174,16 @@
   - 2026-07-21 进展：Developer ID 签名、App Store Connect API-key 公证、本机/GitHub Secrets 与 ZIP 信任验证已闭环；OTA 已移除 `electron-updater` 双路径。R2 仍保持 open：架构策略、发布清单、下载选择和真机证据尚未收敛。跟踪：[#311](https://github.com/talex-touch/tuff/issues/311)。
   - 2026-08-07 复验：`electron-updater` 已不在任何 `package.json` 中声明，双路径确已移除——本条**只剩 Intel/Universal 范围这个产品决策**，不再含 artifact 冲突成分。
   - **2026-11-26 打包修复（已入 `origin/master`，PR `#2318`，`67ea177c0`）**：`postprocess-mac.js` 修复双架构归档覆盖风险，同步对齐 Electron 缓存并去重构建。
-  - **2026-11-27 事实核对与 Wave 2 补充**：GitHub Issue `#311` 已于 `2026-08-12` **CLOSED**；`v2.4.15-beta.13`（run `45135360654`，macOS job `137565261764`）已完成 Developer ID 签名、公证并双架构发布 `macos-arm64.{dmg,zip}` 与 `macos-x64.{dmg,zip}` + `.sig`，`tuff-release-manifest.json` 分别含独立 `darwin/arm64` 与 `darwin/x64` 条目（`v2.4.15-beta.14` run `45203887910` 仅因 macOS job `137803469842` 被取消而中断）。**Wave 2 分支已本地验证待合入（`task/fix/xplat-r3-win-linux @ f3a675f96`）**：在 `update-system.test.ts` 补齐 darwin 架构失配拒绝测试。**仍待真机**：物理 Intel (`darwin/x64`) Mac 安装、启动与 OTA 真机验收仍受硬件门禁约束（另注 Apple Silicon 上 Safari/Firefox 缺 `userAgentData` 会回退至 Nexus `x64` 下载项）。
+  - **2026-11-27 事实核对与 PR `#2333` 补充**：GitHub Issue `#311` 已于 `2026-08-12` **CLOSED**；`v2.4.15-beta.13`（run `45135360654`，macOS job `137565261764`）已完成 Developer ID 签名、公证并双架构发布 `macos-arm64.{dmg,zip}` 与 `macos-x64.{dmg,zip}` + `.sig`，`tuff-release-manifest.json` 分别含独立 `darwin/arm64` 与 `darwin/x64` 条目（`v2.4.15-beta.14` run `45203887910` 仅因 macOS job `137803469842` 被取消而中断）。**已合入 `origin/master`（PR `#2333` `9c75810aa`）**：在 `update-system.test.ts` 补齐 darwin 架构失配拒绝测试。**仍待真机**：物理 Intel (`darwin/x64`) Mac 安装、启动与 OTA 真机验收仍受硬件门禁约束（另注 Apple Silicon 上 Safari/Firefox 缺 `userAgentData` 会回退至 Nexus `x64` 下载项）。
 
-- [ ] **R3 — 大目录扫描/对账内存峰值** ⚠️ 结构问题已消除，分页对账与持久化基准已于 Wave 2 本地实测待合入（2026-11-27）
+- [ ] **R3 — 大目录扫描/对账内存峰值** ⚠️ 结构问题已消除，分页对账与持久化基准已随 PR `#2333` 合入 `master`（2026-11-27）
   - 原描述的三层物化**均已不成立**：worker 逐批 post 并等 `batchAckWaiters` 背压；client 的累积版 `scan()` 已删除（[#1091](https://github.com/talex-touch/tuff/pull/1091)），流水线只用 `scanBatches()`；reconciliation 改为消费 `AsyncIterable`、`reconcile()` 逐批调用、`getDbFilesByPaths(diskPaths)` 按批限定路径，行数统计改为 `countRootRows` 普查而非物化集合。
   - 2026-08-07 **traversal 已实测**（`apps/core-app/scripts/file-scan-memory-benchmark.mjs`，合成树 25k/100k/400k × batch 100/500/2000）：`retained` 全部 ≈ 0，无累积；**40 万文件在 `--max-old-space-size=64` 下完整跑完**，峰值堆 33.5 MiB、retained −0.8 MiB。取消在 10 批后立即生效（112ms 返回）。worker 侧在发下一批前 `await acknowledged`，在途未确认批次恒为 1。
   - ⚠️ **一处需要写清楚的观测**：无堆压力时峰值堆随文件数增长（batch=500 下 13.9 → 33.4 → 58.7 MiB），且**三种批大小在同一文件数下几乎相同**——所以「峰值由 batch size 决定」这句话按字面不成立。真实机制是 V8 有余量时惰性扩堆；施压后同一工作量只用三分之一空间即可完成，说明**上界是真的、只是不由 batch size 表达**。
-  - **2026-11-27 分页对账 + SQLite 持久化实测（Wave 2 分支已本地验证待合入：`task/fix/xplat-r3-win-linux @ f3a675f96`）**：新增真实 Node + 真实 libSQL 基准 `apps/core-app/scripts/file-reconcile-memory-benchmark.mjs`（驱动 `scanDirectoryBatches`、对账服务、`SqliteFileIndexPersistenceRepository` 与 keyset 分页，`batch=500`、`page=64`、5% 增/改/删）：
+  - **2026-11-27 分页对账 + SQLite 持久化实测（已合入 `origin/master`：PR `#2333` `9c75810aa`）**：新增真实 Node + 真实 libSQL 基准 `apps/core-app/scripts/file-reconcile-memory-benchmark.mjs`（驱动 `scanDirectoryBatches`、对账服务、`SqliteFileIndexPersistenceRepository` 与 keyset 分页，`batch=500`、`page=64`、5% 增/改/删）：
     - `25k` steady（`--expose-gc`）：`pages=411, peakRSS=202.8 MiB, peakHeap=56.1 MiB, retained=1.4 MiB, fds=1->1, parity=OK`；`25k@64MiB`（`--max-old-space-size=64`）：`peakRSS=180.1 MiB, peakHeap=54.7 MiB, retained=-0.7 MiB, fds=1->1, parity=OK`。
     - `100k` steady：`pages=1641, peakRSS=241.5 MiB, peakHeap=89.1 MiB, retained=-1.7 MiB, fds=1->1, parity=OK`；`100k@128MiB`（`--max-old-space-size=128`）：`peakRSS=169.6 MiB, peakHeap=61.4 MiB, retained=-0.6 MiB, fds=1->1, parity=OK`。
-    - 中途取消（`25k`，`--cancel-at 5000`）：`pages=0, parity=OK`，零破坏性删除；对账/持久化路径未发现无界分配缺陷。保持 `[ ]` 待分支合入 `master` 后收口 [#318](https://github.com/talex-touch/tuff/issues/318) / [#480](https://github.com/talex-touch/tuff/issues/480)。
+    - 中途取消（`25k`，`--cancel-at 5000`）：`pages=0, parity=OK`，零破坏性删除；对账/持久化路径未发现无界分配缺陷。保持 `[ ]` 待后续发布与真实大目录复核后收口 [#318](https://github.com/talex-touch/tuff/issues/318) / [#480](https://github.com/talex-touch/tuff/issues/480)。
 
 ### 🟡 中危架构债
 
@@ -206,7 +206,7 @@
 
 - [ ] **R8 — Linux 全面二等公民**
   - 应用扫描 139 行 / 图标暴力 360 次 stat 无缓存（`addon/apps/linux.ts:15`）/ 无 OCR / 更新只 openPath / Everything 无对等 / 无验收框架（仅 windows-acceptance-\*）。
-  - **2026-11-27 `#213` Ubuntu 24.04 启动修复（Wave 2 分支已本地验证待合入：`task/fix/xplat-r3-win-linux @ f3a675f96`）**：查明 `v2.4.15-beta.13` 的 `ubuntu-24.04` AppImage 冒烟实为假绿（45s 超时截断解压，且默认 FUSE2 `toolsets.appimage: '0.0.0'`）；分支已切换 FUSE3 `toolsets.appimage: '1.0.3'`、显式配置 `deb.appArmorProfile`（`userns`）与 Ubuntu 24.04 `t64` OR 依赖，在 `build-and-release.yml` 拆分解压超时并补真实 `.deb` 安装与 `/etc/apparmor.d/tuff` 冒烟，并在 `classify-app-launch.mjs` 补齐 `missing-fuse` / `extract-timeout` 分类（57/57 `--self-test`）。R8 其余 Linux 能力与验收缺口仍保持开放。
+  - **2026-11-27 `#213` Ubuntu 24.04 启动修复（已合入 `origin/master`：PR `#2333` `9c75810aa`）**：查明 `v2.4.15-beta.13` 的 `ubuntu-24.04` AppImage 冒烟实为假绿（45s 超时截断解压，且默认 FUSE2 `toolsets.appimage: '0.0.0'`）；已切换 FUSE3 `toolsets.appimage: '1.0.3'`、显式配置 `deb.appArmorProfile`（`userns`）与 Ubuntu 24.04 `t64` OR 依赖，在 `build-and-release.yml` 拆分解压超时并补真实 `.deb` 安装与 `/etc/apparmor.d/tuff` 冒烟，并在 `classify-app-launch.mjs` 补齐 `missing-fuse` / `extract-timeout` 分类（57/57 `--self-test`）。待 `v2.4.15-beta.15` 发布 CI 实证及 R8 其余 Linux 能力与验收缺口收口，保持开放。
 
 - [ ] **R9 — SQLite 单写瓶颈缓解逻辑分散 5+ 处**
   - `dbWriteScheduler` + `withSqliteRetry` + worker `directMode` + `AdaptiveBatchScheduler` + `UsageStatsQueue` 采样丢弃；同一痛点各自处理，新人难判断某次写走哪条路。
@@ -283,7 +283,7 @@
 - [x] **C4 — 死代码** ✅ 已修（[#342](https://github.com/talex-touch/tuff/issues/342) / [PR #1083](https://github.com/talex-touch/tuff/pull/1083)，2026-08-07）：两个 handler 连同只为它们存在的 `enqueueIncrementalUpdate` 依赖（声明/字段/构造赋值/上游传入的闭包）与三个类型 import 一并删除。确认路径：`file-provider.ts:2442` 传的是 `subscribeToFileSystemEvents: () => undefined`，真实增量在 `indexed-source-event-router.ts:93` 绑的是另一套命名的 `handleFileAddedOrChanged`。
 - [x] **C5 — Windows OCR COM apartment** ✅ 已修（[#344](https://github.com/talex-touch/tuff/issues/344) / [PR #1679](https://github.com/talex-touch/tuff/pull/1679)，提交 `542db9a5b`）：`winrt_ocr.cpp` 通过 RAII `ApartmentScope` 在每次调用退出时配对 `winrt::uninit_apartment()`，并在 `RPC_E_CHANGED_MODE` 时安全借用外部单线程套间。后续 `tuff-native-ocr` 常驻 Rust helper 复用了同套 `ApartmentScope` 实现与 WIC `<= 2000px` 原生缩放解码。
 - [ ] **C6 — Windows 全链路重依赖 PowerShell**：应用扫描 4 源 + Everything 装 PATH 全经 `powershell -Command`，ExecutionPolicy 受限时大面积降级且扫描侧无降级 UI。
-  - **2026-11-27 `#350` 弹性与降级诊断修复（Wave 2 分支已本地验证待合入：`task/fix/xplat-r3-win-linux @ f3a675f96`）**：新增共享 `windows-powershell.ts` 错误分类与纯 Node `reg.exe query` 解析；修复 `win.ts` PascalCase `DisplayName` 与 `everything-backend-service.ts` 损坏的 `${'$'}` PowerShell 语法缺陷；为 PowerShell 调用补齐超时、`windowsHide` 与 `reg.exe` 回退，并将类型化降级诊断（`reasonCode`/`recovery`/`attempts`）接入 `AppProvider.getIndexedSourceEvidence()` 与 `capability-adapter.ts`。保持 `[ ]` 待分支合入 `master` 后收口 `#350`。
+  - **2026-11-27 `#350` 弹性与降级诊断修复（已合入 `origin/master`：PR `#2333` `9c75810aa`）**：新增共享 `windows-powershell.ts` 错误分类与纯 Node `reg.exe query` 解析；修复 `win.ts` PascalCase `DisplayName` 与 `everything-backend-service.ts` 损坏的 `${'$'}` PowerShell 语法缺陷；为 PowerShell 调用补齐超时、`windowsHide` 与 `reg.exe` 回退，并将类型化降级诊断（`reasonCode`/`recovery`/`attempts`）接入 `AppProvider.getIndexedSourceEvidence()` 与 `capability-adapter.ts`。保持 `[ ]` 待后续 Windows 运行/发布复核后收口 `#350`。
 - [x] **C7 — CoreBox 对话搜索按每次按键全表 `instr` 扫消息** ✅ 已修（2026-10-18）：
   - 位置：`modules/conversation/conversation-store.ts:searchConversations`。
   - 根因与优化：原 `conversationMessages` 内容检索对整个消息表执行全表扫描（`SCAN conversation_messages`），长历史用户按键会带来同步 I/O 阻塞。
@@ -301,7 +301,7 @@
 | `07-16-unify-file-filtering-service`           | B4                                                                                                        | ✅ done（统一策略 + 索引/发布双门，83 tests + typecheck + smoke） |
 | `07-28-migrate-search-index-split-write-paths` | R9 remaining provider/file/embedding write migration; default-on topology, readiness-order, isolated-profile evidence, and `=0` rollback gate | 🧊 冻结；`2026-11-23` `beta.13` 打包 split `62/62` 已过（见 [`search-index-split-write-acceptance.md`](./search-index-split-write-acceptance.md)），剩余 R9 AppProvider 迁移开放 |
 | `07-17-windows-everything-productionization` | Windows Everything SDK / CLI / unavailable UI 打包门禁（`#308`） | 🧊 冻结；`2026-11-26` PR `#2319`（`6022abdce`）托管 `windows-2022` `26/26` 全通过（run `45913177460`），余 strict Windows acceptance manifest 回填开放 |
-| (待建)                                         | R1 Windows/Linux 截图打包真机验收 / R2 Intel x64 真机 / R3(`#318`)・R8(`#213`)・C6(`#350`) Wave 2 分支待合入 … | Wave 2 分支 `task/fix/xplat-r3-win-linux @ f3a675f96` 已本地验证待合入；硬件/发布包验收仍开放 |
+| (待建)                                         | R1 Windows/Linux 截图打包真机验收 / R2 Intel x64 真机 / R3(`#318`)・R8(`#213`)・C6(`#350`) 后续实证 … | 代码与基准修复已随 PR `#2333`（`9c75810aa`）合入 `master`；`v2.4.15-beta.15+` 发布包与硬件真机验收仍开放 |
 
 ### 遗留 carve-out（B1 派生，未做）
 

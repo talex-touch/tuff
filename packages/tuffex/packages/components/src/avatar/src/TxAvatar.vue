@@ -27,6 +27,7 @@ const props = withDefaults(defineProps<AvatarProps>(), {
   outputQuality: 0.92,
   allowVideoCapture: true,
   allowGifAnimation: true,
+  autoSelectAnimated: undefined,
 })
 
 const emit = defineEmits<AvatarEmits>()
@@ -62,6 +63,10 @@ const mergedEditorLabels = computed(() => ({
   ...props.editorProps?.labels,
   ...props.editorLabels,
 }))
+
+const resolvedAutoSelectAnimated = computed(() =>
+  props.autoSelectAnimated ?? props.editorProps?.autoSelectAnimated ?? true,
+)
 
 const sizePresets = new Set(['small', 'medium', 'large', 'xlarge'])
 
@@ -338,6 +343,7 @@ defineExpose({
       :output-quality="outputQuality"
       :allow-video-capture="allowVideoCapture"
       :allow-gif-animation="allowGifAnimation"
+      :auto-select-animated="resolvedAutoSelectAnimated"
       :labels="mergedEditorLabels"
       @confirm="handleEditorConfirm"
       @cancel="handleEditorCancel"

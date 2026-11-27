@@ -8,15 +8,20 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TxMarkdownEditor } from '@talex-touch/tuffex/markdown-editor'
 import { TxPopover } from '@talex-touch/tuffex/popover'
-import { TxSelectionActions, useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
+import {
+  registerSelectionHighlight,
+  TxSelectionActions,
+  useSelectionAnchor
+} from '@talex-touch/tuffex/selection-actions'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxTouchSurface } from '@talex-touch/tuffex/touch-surface'
 import { hasDocument, hasWindow, isElectronRenderer } from '@talex-touch/utils/env'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AgentWorkspaceEvents } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import { ConversationReviewEvents } from '@talex-touch/utils/transport/sdk/domains/conversation-review'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { SHELL_MENU_CARD } from '~/components/shell/shell-menu-panel'
@@ -455,6 +460,7 @@ interface CanvasComposeSession {
   sourceRange: SourceRange | null
   rects: DOMRect[]
   blockIndices: Set<number>
+  range?: Range
 }
 
 const markdownEditorRef = ref<InstanceType<typeof TxMarkdownEditor> | null>(null)
@@ -462,6 +468,7 @@ const canvasPhase = ref<CanvasEditPhase>('idle')
 const canvasPending = ref<PendingCanvasSession | null>(null)
 const canvasApplied = ref<AppliedCanvasSnapshot | null>(null)
 const canvasCompose = ref<CanvasComposeSession | null>(null)
+const commentDraftRange = ref<Range | null>(null)
 const canvasComposePrompt = ref('')
 const canvasComposeInputRef = ref<HTMLInputElement | null>(null)
 const canvasDockWrapRef = ref<HTMLElement | null>(null)
@@ -471,7 +478,11 @@ const canvasUndoing = ref(false)
 const canvasConflictRefreshAvailable = ref(false)
 const canvasSweepActive = ref(false)
 const canvasSweepKey = ref(0)
-const canvasSweepStyle = ref<{ top: string; height: string }>({ top: '0px', height: '100%' })
+const canvasSweepStyle = ref<Record<string, string>>({
+  top: '0px',
+  height: '100%',
+  '--canvas-sweep-travel': '240px'
+})
 const pendingDomBlockIndices = ref<Set<number>>(new Set())
 const ambientBeforeSnapshot = ref<AmbientBeforeSnapshot | null>(null)
 const ambientSettledMessageId = ref<string | null>(null)
@@ -740,6 +751,7 @@ function syncMarkdownBlockClasses(entering = false): void {
       'is-canvas-entering'
     )
     el.style.removeProperty('--canvas-stagger-idx')
+    el.style.removeProperty('--canvas-reveal-delay')
   }
 
   if (canvasCompose.value) {
@@ -775,10 +787,33 @@ function syncMarkdownBlockClasses(entering = false): void {
     if (container && targets.length > 0) {
       const first = targets[0]!
       const last = targets[targets.length - 1]!
-      const top = Math.max(0, first.offsetTop - 8)
-      const bottom = last.offsetTop + last.offsetHeight + 8
-      const height = Math.max(48, bottom - top)
-      canvasSweepStyle.value = { top: `${top}px`, height: `${height}px` }
+      const containerRect = container.getBoundingClientRect()
+      const firstRect = first.getBoundingClientRect()
+      const lastRect = last.getBoundingClientRect()
+      const hasLayout = containerRect.height > 0 && (firstRect.height > 0 || lastRect.height > 0)
+      const rawTop = hasLayout ? firstRect.top - containerRect.top : first.offsetTop
+      const rawBottom = hasLayout
+        ? lastRect.bottom - containerRect.top
+        : last.offsetTop + last.offsetHeight
+      const top = Math.max(0, Math.round(rawTop - 10))
+      const height = Math.max(96, Math.round(rawBottom - rawTop + 20))
+      canvasSweepStyle.value = {
+        top: `${top}px`,
+        height: `${height}px`,
+        '--canvas-sweep-travel': `${height}px`
+      }
+
+      if (entering) {
+        for (let idx = 0; idx < targets.length; idx += 1) {
+          const el = targets[idx]!
+          let progress = targets.length > 1 ? idx / (targets.length - 1) : 0
+          if (hasLayout && height > 0) {
+            const elTop = el.getBoundingClientRect().top - containerRect.top
+            progress = Math.max(0, Math.min(1, (elTop - top) / Math.max(1, height)))
+          }
+          el.style.setProperty('--canvas-reveal-delay', `${Math.round(progress * 560)}ms`)
+        }
+      }
 
       if (entering && typeof first.scrollIntoView === 'function') {
         first.scrollIntoView({
@@ -787,7 +822,11 @@ function syncMarkdownBlockClasses(entering = false): void {
         })
       }
     } else {
-      canvasSweepStyle.value = { top: '0px', height: '100%' }
+      canvasSweepStyle.value = {
+        top: '0px',
+        height: '100%',
+        '--canvas-sweep-travel': `${Math.max(240, Math.round(container?.clientHeight ?? 240))}px`
+      }
     }
   }
 }
@@ -887,7 +926,8 @@ async function openCanvasCompose(options: {
     selectedText,
     sourceRange,
     rects: options.selection?.rects ? [...options.selection.rects] : [],
-    blockIndices
+    blockIndices,
+    range: !isDoc ? options.selection?.range?.cloneRange() : undefined
   }
 
   clearMdSelection()
@@ -966,9 +1006,10 @@ function triggerCanvasSweepAnimation(): void {
     canvasSweepActive.value = false
     for (const el of getMarkdownBodyBlocks()) {
       el.classList.remove('is-canvas-entering')
+      el.style.removeProperty('--canvas-reveal-delay')
     }
     sweepTimer = null
-  }, 780)
+  }, 1480)
 }
 
 // ── Direct Markdown Editing & Safe Debounced Disk Persistence ───────────────────────
@@ -1802,11 +1843,23 @@ function dismissMdSelection(): void {
   window.getSelection()?.removeAllRanges()
 }
 
+watchEffect((onCleanup) => {
+  const persistedRange =
+    canvasCompose.value?.range ?? (commentComposerOpen.value ? commentDraftRange.value : null)
+  if (!persistedRange) return
+  onCleanup(registerSelectionHighlight(persistedRange))
+})
+
+watch(commentComposerOpen, (open) => {
+  if (!open) commentDraftRange.value = null
+})
+
 watch(
   resolvedPath,
   (nextPath) => {
     comments.value = readSessionReviewComments(nextPath)
     commentComposerOpen.value = false
+    commentDraftRange.value = null
     commentDraftQuote.value = ''
     commentDraftText.value = ''
     commentsExpanded.value = false
@@ -1867,7 +1920,11 @@ watch(isCanvasLocked, (locked, prevLocked) => {
         }
       })
   }
-  void nextTick(() => syncMarkdownBlockClasses(false))
+  void nextTick(() => {
+    if (!canvasSweepActive.value) {
+      syncMarkdownBlockClasses(false)
+    }
+  })
 })
 
 watch(viewMode, (mode) => {
@@ -2029,6 +2086,7 @@ async function handleMdSelectionAction(payload: {
   if (payload.id === 'comment') {
     commentDraftQuote.value = selectedText
     commentDraftText.value = ''
+    commentDraftRange.value = payload.selection.range?.cloneRange() ?? null
     commentComposerOpen.value = true
     dismissMdSelection()
     await nextTick()
@@ -2904,7 +2962,7 @@ function adjustZoom(delta: number): void {
         :active="isCanvasLocked"
         :theme="beamTheme"
         color-variant="colorful"
-        :border-radius="10"
+        :border-radius="0"
         :saturation="beamTheme === 'light' ? 1.65 : 1.35"
         :brightness="beamTheme === 'light' ? 0.88 : 1.05"
         :strength="1"
@@ -3088,11 +3146,15 @@ function adjustZoom(delta: number): void {
                   v-if="canvasSweepActive"
                   :key="canvasSweepKey"
                   class="WorkspaceFileViewer-CanvasWipe"
+                  :class="`is-${beamTheme}`"
                   :style="canvasSweepStyle"
                   aria-hidden="true"
                   data-testid="file-viewer-canvas-sweep"
                 >
-                  <div class="WorkspaceFileViewer-CanvasWipeBar" />
+                  <div class="WorkspaceFileViewer-CanvasWipeCurtain">
+                    <div class="WorkspaceFileViewer-CanvasWipeVeil" />
+                    <div class="WorkspaceFileViewer-CanvasWipeEdge" />
+                  </div>
                 </div>
               </div>
 
@@ -3171,10 +3233,14 @@ function adjustZoom(delta: number): void {
                   v-if="canvasSweepActive"
                   :key="canvasSweepKey"
                   class="WorkspaceFileViewer-CanvasWipe"
+                  :class="`is-${beamTheme}`"
                   aria-hidden="true"
                   data-testid="file-viewer-canvas-sweep"
                 >
-                  <div class="WorkspaceFileViewer-CanvasWipeBar" />
+                  <div class="WorkspaceFileViewer-CanvasWipeCurtain">
+                    <div class="WorkspaceFileViewer-CanvasWipeVeil" />
+                    <div class="WorkspaceFileViewer-CanvasWipeEdge" />
+                  </div>
                 </div>
               </div>
             </template>
@@ -3292,7 +3358,13 @@ function adjustZoom(delta: number): void {
 
             <div v-else class="WorkspaceFileViewer-CanvasDockInner">
               <template v-if="isCanvasLocked">
-                <span class="WorkspaceFileViewer-DockSpinner" aria-hidden="true" />
+                <TxSpinner
+                  class="WorkspaceFileViewer-DockSpinner"
+                  :size="15"
+                  :stroke-width="2"
+                  :label="canvasStatusText"
+                  data-testid="file-viewer-canvas-spinner"
+                />
                 <span class="WorkspaceFileViewer-DockStatusText">
                   {{ canvasStatusText }}
                 </span>
@@ -3985,7 +4057,7 @@ function adjustZoom(delta: number): void {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 0;
 
   &.is-canvas-locked {
     .WorkspaceFileViewer-Markdown,
@@ -4193,16 +4265,7 @@ function adjustZoom(delta: number): void {
 
 .WorkspaceFileViewer-DockSpinner {
   flex: none;
-  width: 13px;
-  height: 13px;
-  border: 1.5px solid color-mix(in srgb, var(--shell-primary) 26%, transparent);
-  border-top-color: var(--shell-primary);
-  border-radius: 999px;
-  box-sizing: border-box;
-
-  @media (prefers-reduced-motion: no-preference) {
-    animation: canvas-spin 720ms linear infinite;
-  }
+  color: var(--shell-primary);
 }
 
 .WorkspaceFileViewer-DockSummary {
@@ -4837,9 +4900,11 @@ function adjustZoom(delta: number): void {
     }
   }
 
-  // Newly applied blocks: whisper-clean straight vertical margin rail — no boxes, no curled corners.
+  // Newly applied blocks: crisp prismatic-to-primary straight margin hairline (zero box clutter),
+  // paired with synchronized curtain-clip ink materialization & ephemeral chromatic wash.
   :deep(.markdown-body > .is-canvas-changed) {
     position: relative;
+    z-index: 0;
 
     &::before {
       content: '';
@@ -4847,50 +4912,125 @@ function adjustZoom(delta: number): void {
       top: 3px;
       bottom: 3px;
       left: -12px;
-      width: 2px;
+      width: 2.5px;
       border-radius: 999px;
-      background: color-mix(in srgb, var(--shell-primary) 54%, transparent);
+      background: linear-gradient(
+        180deg,
+        #38bdf8 0%,
+        color-mix(in srgb, var(--shell-primary, #2b7fd9) 68%, #a855f7 32%) 52%,
+        rgba(244, 63, 94, 0.78) 100%
+      );
       pointer-events: none;
     }
   }
 
   @media (prefers-reduced-motion: no-preference) {
     :deep(.markdown-body > .is-canvas-entering) {
-      animation: canvas-block-reveal 440ms cubic-bezier(0.22, 1, 0.36, 1) both;
-      animation-delay: calc(var(--canvas-stagger-idx, 0) * 34ms);
+      animation: canvas-block-materialize 660ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      animation-delay: var(--canvas-reveal-delay, calc(var(--canvas-stagger-idx, 0) * 56ms));
+
+      &::after {
+        content: '';
+        position: absolute;
+        inset: -3px -10px;
+        z-index: -1;
+        border-radius: 8px;
+        background: linear-gradient(
+          92deg,
+          rgba(56, 189, 248, 0.22) 0%,
+          rgba(129, 140, 248, 0.19) 36%,
+          rgba(192, 132, 252, 0.18) 68%,
+          rgba(251, 113, 133, 0.14) 100%
+        );
+        pointer-events: none;
+        animation: canvas-block-sheen 1320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        animation-delay: var(--canvas-reveal-delay, calc(var(--canvas-stagger-idx, 0) * 56ms));
+      }
     }
   }
 }
 
-/* ── Delicate GPT Canvas Top-to-Bottom Light Veil ── */
+/* ── Iridescent Prismatic Scanline Curtain (GPT Canvas / Writing Tools Replacement Reveal) ── */
 .WorkspaceFileViewer-CanvasWipe {
   position: absolute;
-  right: 10px;
-  left: 10px;
+  right: 8px;
+  left: 8px;
   top: 0;
   height: 100%;
   overflow: hidden;
-  border-radius: 8px;
   pointer-events: none;
-  z-index: 3;
+  z-index: 4;
 }
 
-.WorkspaceFileViewer-CanvasWipeBar {
+.WorkspaceFileViewer-CanvasWipeCurtain {
   position: absolute;
-  inset: 0;
-  min-height: 64px;
-  background: linear-gradient(
-    to bottom,
-    transparent calc(100% - 64px),
-    color-mix(in srgb, var(--shell-primary) 7%, transparent) calc(100% - 14px),
-    color-mix(in srgb, var(--shell-primary) 16%, transparent) calc(100% - 1.5px),
-    color-mix(in srgb, var(--shell-primary) 55%, transparent) 100%
-  );
-  transform: translateY(-100%);
+  right: 0;
+  left: 0;
+  top: 0;
+  height: 92px;
+  transform: translate3d(0, -92px, 0);
   will-change: transform, opacity;
 
   @media (prefers-reduced-motion: no-preference) {
-    animation: canvas-wipe-sweep 660ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: canvas-wipe-sweep 1060ms cubic-bezier(0.32, 0.08, 0.24, 1) forwards;
+  }
+}
+
+.WorkspaceFileViewer-CanvasWipeVeil {
+  position: absolute;
+  inset: 0 0 2px 0;
+  background:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(56, 189, 248, 0.08) 40%,
+      rgba(168, 85, 247, 0.2) 78%,
+      rgba(244, 63, 94, 0.24) 100%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(56, 189, 248, 0.24) 0%,
+      rgba(99, 102, 241, 0.24) 34%,
+      rgba(192, 132, 252, 0.25) 66%,
+      rgba(251, 146, 60, 0.22) 100%
+    );
+  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.45) 48%, #000 100%);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, 0.45) 48%,
+    #000 100%
+  );
+
+  .WorkspaceFileViewer-CanvasWipe.is-dark & {
+    opacity: 1.3;
+  }
+}
+
+.WorkspaceFileViewer-CanvasWipeEdge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(6, 182, 212, 0.25) 0%,
+    #06b6d4 16%,
+    #3b82f6 38%,
+    #8b5cf6 60%,
+    #ec4899 82%,
+    rgba(245, 158, 11, 0.35) 100%
+  );
+  box-shadow:
+    0 0 16px 3px rgba(99, 102, 241, 0.56),
+    0 0 32px 6px rgba(236, 72, 153, 0.32);
+
+  .WorkspaceFileViewer-CanvasWipe.is-dark & {
+    box-shadow:
+      0 0 20px 4px rgba(129, 140, 248, 0.72),
+      0 0 38px 8px rgba(236, 72, 153, 0.44);
   }
 }
 
@@ -5643,12 +5783,6 @@ function adjustZoom(delta: number): void {
   font-size: 14px;
 }
 
-@keyframes canvas-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @keyframes canvas-rail-pulse {
   0%,
   100% {
@@ -5663,21 +5797,61 @@ function adjustZoom(delta: number): void {
 @keyframes canvas-wipe-sweep {
   0% {
     opacity: 0;
-    transform: translateY(-100%);
+    transform: translate3d(0, -92px, 0);
   }
 
-  14% {
+  10% {
     opacity: 1;
   }
 
-  84% {
+  88% {
     opacity: 1;
-    transform: translateY(0%);
+    transform: translate3d(0, calc(var(--canvas-sweep-travel, 240px) - 92px), 0);
   }
 
   100% {
     opacity: 0;
-    transform: translateY(64px);
+    transform: translate3d(0, calc(var(--canvas-sweep-travel, 240px) - 60px), 0);
+  }
+}
+
+@keyframes canvas-block-materialize {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-4px);
+    filter: blur(4px);
+  }
+
+  58% {
+    opacity: 0.96;
+    clip-path: inset(0 0 0% 0);
+    transform: translateY(0);
+    filter: blur(0.4px);
+  }
+
+  100% {
+    opacity: 1;
+    clip-path: inset(0 0 0% 0);
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes canvas-block-sheen {
+  0% {
+    opacity: 0;
+    transform: scaleX(0.96);
+  }
+
+  18% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
   }
 }
 
