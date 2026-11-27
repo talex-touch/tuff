@@ -280,20 +280,69 @@ export function isAnimatedWebpBytes(bytes: Uint8Array): boolean {
   return chunk === 'VP8X' && (bytes[20]! & 0x02) !== 0
 }
 
+function hasPngSignature(bytes: Uint8Array): boolean {
+  return bytes.length >= 8
+    && bytes[0] === 0x89
+    && bytes[1] === 0x50
+    && bytes[2] === 0x4E
+    && bytes[3] === 0x47
+    && bytes[4] === 0x0D
+    && bytes[5] === 0x0A
+    && bytes[6] === 0x1A
+    && bytes[7] === 0x0A
+}
+
 export function isApngBytes(bytes: Uint8Array): boolean {
-  if (bytes.length < 33)
-    return false
-  if (bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4E || bytes[3] !== 0x47)
+  if (bytes.length < 33 || !hasPngSignature(bytes))
     return false
   let pos = 8
   while (pos + 8 <= bytes.length) {
     const len = ((bytes[pos]! << 24) | (bytes[pos + 1]! << 16) | (bytes[pos + 2]! << 8) | bytes[pos + 3]!) >>> 0
+    const nextPos = pos + 12 + len
+    if (nextPos > bytes.length)
+      return false
     const type = String.fromCharCode(bytes[pos + 4]!, bytes[pos + 5]!, bytes[pos + 6]!, bytes[pos + 7]!)
     if (type === 'acTL')
       return true
     if (type === 'IDAT' || type === 'IEND')
       return false
-    pos += 12 + len
+    pos = nextPos
+  }
+  return false
+}
+
+/**
+ * Walks PNG chunk headers directly across a `Blob` until `acTL` or `IDAT`/`IEND`,
+ * detecting APNGs even when large ancillary chunks (`iCCP`, `eXIf`, etc.) precede `acTL`.
+ */
+export async function isApngBlob(blob: Blob, head?: Uint8Array): Promise<boolean> {
+  if (blob.size < 33)
+    return false
+  const sig = head && head.length >= 8
+    ? head
+    : new Uint8Array(await readBlobArrayBuffer(blob.slice(0, 8)))
+  if (!hasPngSignature(sig))
+    return false
+  if (head && isApngBytes(head))
+    return true
+
+  let pos = 8
+  let chunks = 0
+  while (pos + 8 <= blob.size && chunks < 128) {
+    const header = new Uint8Array(await readBlobArrayBuffer(blob.slice(pos, pos + 8)))
+    if (header.length < 8)
+      return false
+    const len = ((header[0]! << 24) | (header[1]! << 16) | (header[2]! << 8) | header[3]!) >>> 0
+    const nextPos = pos + 12 + len
+    if (nextPos > blob.size)
+      return false
+    const type = String.fromCharCode(header[4]!, header[5]!, header[6]!, header[7]!)
+    if (type === 'acTL')
+      return true
+    if (type === 'IDAT' || type === 'IEND')
+      return false
+    pos = nextPos
+    chunks++
   }
   return false
 }
@@ -718,7 +767,7 @@ export async function loadAvatarMedia(
         const head = sniffedHead ?? new Uint8Array(await readBlobArrayBuffer(blob.slice(0, 512)))
         const animatedMime: 'image/webp' | 'image/png' | null = isAnimatedWebpBytes(head)
           ? 'image/webp'
-          : (isApngBytes(head) ? 'image/png' : null)
+          : ((await isApngBlob(blob, head)) ? 'image/png' : null)
         if (animatedMime) {
           const fullBytes = new Uint8Array(await readBlobArrayBuffer(blob))
           const decoded = await decodeAnimatedFramesInBrowser(fullBytes, animatedMime, maxGifFrames, maxGifDecodedBytes)

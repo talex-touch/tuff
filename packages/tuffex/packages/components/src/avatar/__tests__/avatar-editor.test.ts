@@ -16,7 +16,7 @@ import { decodeGif, encodeGif } from '../src/editor/gif-codec'
 import { encodeIco, extractBestIcoEntry, parseIcoEntries, resolveIcoSizes } from '../src/editor/ico-codec'
 import { buildOutputFileName, computeVideoGifClipSchedule, exportAvatarMedia, formatByteSize, formatMediaTime, isBlobMimeMatchingFormat, resetSupportedAvatarFormatsCache, selectOverlappingGifFrames } from '../src/editor/media-codecs'
 import * as mediaCodecs from '../src/editor/media-codecs'
-import { detectAvatarSourceKind, isAnimatedWebpBytes, isApngBytes, loadAvatarMedia, readBlobArrayBuffer, seekVideoElement, sniffAvatarKindFromBytes } from '../src/editor/media-loader'
+import { detectAvatarSourceKind, isAnimatedWebpBytes, isApngBlob, isApngBytes, loadAvatarMedia, readBlobArrayBuffer, seekVideoElement, sniffAvatarKindFromBytes } from '../src/editor/media-loader'
 import * as mediaLoader from '../src/editor/media-loader'
 import { buildRasterAvatarSvg, buildVectorAvatarSvg, parseAndSanitizeSvg } from '../src/editor/svg-codec'
 import TxAvatarEditor from '../src/editor/TxAvatarEditor.vue'
@@ -971,6 +971,82 @@ describe('avatar editor security, codecs & lifecycle guards', () => {
     }
     finally {
       ;(globalThis as Record<string, unknown>).ImageDecoder = origDecoder
+    }
+  })
+
+  it('walks PNG chunks past large ancillary chunks to detect APNG acTL and aborts exportAvatarMedia after customConverter cancellation', async () => {
+    const makeChunk = (type: string, payloadLen: number): Uint8Array => {
+      const out = new Uint8Array(12 + payloadLen)
+      out[0] = (payloadLen >>> 24) & 0xFF
+      out[1] = (payloadLen >>> 16) & 0xFF
+      out[2] = (payloadLen >>> 8) & 0xFF
+      out[3] = payloadLen & 0xFF
+      for (let i = 0; i < 4; i++)
+        out[4 + i] = type.charCodeAt(i)
+      return out
+    }
+    const sig = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+    const ihdr = makeChunk('IHDR', 13)
+    const largeIccp = makeChunk('iCCP', 2048) // pushes acTL well past 512 bytes
+    const actl = makeChunk('acTL', 8)
+    const idat = makeChunk('IDAT', 4)
+
+    const apngWithIccp = new Blob([sig, ihdr, largeIccp, actl, idat], { type: 'image/png' })
+    expect(await isApngBlob(apngWithIccp, new Uint8Array(await readBlobArrayBuffer(apngWithIccp.slice(0, 512))))).toBe(true)
+
+    const staticWithIccp = new Blob([sig, ihdr, largeIccp, idat], { type: 'image/png' })
+    expect(await isApngBlob(staticWithIccp, new Uint8Array(await readBlobArrayBuffer(staticWithIccp.slice(0, 512))))).toBe(false)
+
+    // Abort during customConverter rejects with AbortError and never reports 100% progress
+    const fakeCtx = {
+      save: vi.fn(),
+      restore: vi.fn(),
+      clearRect: vi.fn(),
+      fillRect: vi.fn(),
+      translate: vi.fn(),
+      rotate: vi.fn(),
+      scale: vi.fn(),
+      drawImage: vi.fn(),
+      beginPath: vi.fn(),
+      clip: vi.fn(),
+      arc: vi.fn(),
+      rect: vi.fn(),
+    } as unknown as CanvasRenderingContext2D
+    const localCtxSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(fakeCtx)
+    const controller = new AbortController()
+    const progressMarks: number[] = []
+    try {
+      const media = {
+        kind: 'image' as const,
+        naturalWidth: 64,
+        naturalHeight: 64,
+        file: null,
+        sourceName: 'avatar.png',
+        image: {} as HTMLImageElement,
+        duration: 0,
+        animated: false,
+        corsTainted: false,
+        dispose: vi.fn(),
+      }
+      await expect(
+        exportAvatarMedia(media, {
+          format: 'webp',
+          outputSize: 64,
+          quality: 0.9,
+          shape: 'circle',
+          transform: { ...DEFAULT_AVATAR_TRANSFORM },
+          signal: controller.signal,
+          onProgress: p => progressMarks.push(p),
+          customConverter: async () => {
+            controller.abort()
+            return new Blob(['webp'], { type: 'image/webp' })
+          },
+        }),
+      ).rejects.toThrow(/aborted/i)
+      expect(progressMarks).not.toContain(100)
+    }
+    finally {
+      localCtxSpy.mockReturnValue(null)
     }
   })
 })

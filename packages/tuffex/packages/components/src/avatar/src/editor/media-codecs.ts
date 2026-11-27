@@ -451,11 +451,12 @@ export async function exportAvatarMedia(
 
     checkAborted(options.signal)
     const gifBytes = encodeGif(frames, { width: gifSize, height: gifSize, loop: 0 })
-    options.onProgress?.(100)
     const blob = new Blob([gifBytes], { type: meta.mimeType })
     const fileName = buildOutputFileName(media.sourceName, 'gif', options.fileName)
     const file = new File([blob], fileName, { type: meta.mimeType })
     const dataUrl = await blobToDataUrl(blob)
+    checkAborted(options.signal)
+    options.onProgress?.(100)
 
     return {
       file,
@@ -478,8 +479,10 @@ export async function exportAvatarMedia(
   }
 
   // Still-frame / single-image export
-  if (media.kind === 'video' && media.video && typeof options.videoTimeSec === 'number')
+  if (media.kind === 'video' && media.video && typeof options.videoTimeSec === 'number') {
     await seekVideoElement(media.video, options.videoTimeSec)
+    checkAborted(options.signal)
+  }
 
   const drawable = resolveCurrentDrawable(media, options.gifFrameIndex ?? 0)
   const canvas = document.createElement('canvas')
@@ -498,6 +501,7 @@ export async function exportAvatarMedia(
       const fileName = buildOutputFileName(media.sourceName, 'svg', options.fileName)
       const file = new File([blob], fileName, { type: meta.mimeType })
       const dataUrl = await blobToDataUrl(blob)
+      checkAborted(options.signal)
       options.onProgress?.(100)
       return {
         file,
@@ -548,6 +552,7 @@ export async function exportAvatarMedia(
       originalFile: media.file,
       svgSource: media.svgText,
     })
+    checkAborted(options.signal)
     if (custom) {
       if (!isBlobMimeMatchingFormat(custom.type, format)) {
         throw new Error(
@@ -563,6 +568,7 @@ export async function exportAvatarMedia(
       const icoSizes = resolveIcoSizes(outSize, options.icoSizes ?? DEFAULT_ICO_SIZES)
       const entries: { width: number, height: number, pngBytes: Uint8Array }[] = []
       for (const dim of icoSizes) {
+        checkAborted(options.signal)
         const c = document.createElement('canvas')
         c.width = dim
         c.height = dim
@@ -628,10 +634,12 @@ export async function exportAvatarMedia(
     }
   }
 
+  checkAborted(options.signal)
   options.onProgress?.(90)
   const fileName = buildOutputFileName(media.sourceName, format, options.fileName)
   const file = new File([blob], fileName, { type: meta.mimeType })
   const dataUrl = await blobToDataUrl(blob)
+  checkAborted(options.signal)
   options.onProgress?.(100)
 
   const frameTime = media.kind === 'video'
