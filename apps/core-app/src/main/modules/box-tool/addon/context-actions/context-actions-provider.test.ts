@@ -1,5 +1,5 @@
 import type { TuffItem } from '@talex-touch/utils'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createCoreBoxContextActionsOpenRequest, toContextActionQuery } from '@talex-touch/utils'
 
 const mocks = vi.hoisted(() => ({
@@ -30,43 +30,19 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../../ai/intelligence-capability-status', () => ({
-  resolveCapabilityStatus: mocks.capabilityStatus
-}))
-
-vi.mock('../../../ai/intelligence-sdk', () => ({
-  tuffIntelligence: {
-    code: { review: mocks.codeReview },
-    text: {
-      summarize: mocks.summarize,
-      rewrite: mocks.rewrite,
-      translate: mocks.translate
-    },
-    vision: {
-      ocr: mocks.ocr,
-      caption: mocks.caption
-    }
-  }
-}))
-
-vi.mock('../../../plugin/plugin-module', () => ({
-  pluginModule: {
-    pluginManager: {}
-  }
-}))
-
-vi.mock('../../../plugin/adapters/plugin-features-adapter', () => ({
-  default: {
-    // search-core calls this as it registers the provider (#523).
-    attach: vi.fn(),
-    onSearch: mocks.pluginSearch
-  }
-}))
-
 vi.mock('../../../../utils/external-url-policy', () => ({
   openValidatedExternalUrl: mocks.openExternal
 }))
 
+import { normalizeIntelligenceError } from '../../../ai/intelligence-error-normalizer'
+import {
+  registerBoxToolAiCapabilityPort,
+  resetBoxToolAiCapabilityPort
+} from '../../ports/ai-capability-port'
+import {
+  registerBoxToolPluginHostPort,
+  resetBoxToolPluginHostPort
+} from '../../ports/plugin-host-port'
 import { CONTEXT_ACTION_IDS, ContextActionsProvider } from './context-actions-provider'
 
 const signal = new AbortController().signal
@@ -138,7 +114,7 @@ function unavailableQuery() {
   )
 }
 
-afterEach(() => {
+function resetMocksAndPorts() {
   vi.clearAllMocks()
   mocks.capabilityStatus.mockImplementation((capabilityId: string) => ({
     capabilityId,
@@ -163,6 +139,68 @@ afterEach(() => {
     allowed: true,
     url: 'https://www.google.com/search?q=test'
   })
+  registerBoxToolAiCapabilityPort({
+    intelligence: {
+      code: { review: mocks.codeReview },
+      text: {
+        summarize: mocks.summarize,
+        rewrite: mocks.rewrite,
+        translate: mocks.translate
+      },
+      vision: {
+        ocr: mocks.ocr,
+        caption: mocks.caption
+      },
+      embedding: {
+        generate: vi.fn(),
+        generateLocalImage: vi.fn()
+      },
+      rag: {
+        rerank: vi.fn()
+      }
+    },
+    normalizeIntelligenceError,
+    resolveCapabilityStatus: mocks.capabilityStatus,
+    searchConversations: async () => [],
+    isLocalEmbeddingReady: () => false,
+    isLocalEmbeddingImageReady: () => false,
+    getLocalEmbeddingModelKey: () => 'test-local-embedding-model',
+    runWithEmbeddingPriority: (_priority, run) => run(),
+    onUsageLimitsChanged: () => () => {},
+    readUsageLimitInfo: () => null
+  })
+  registerBoxToolPluginHostPort({
+    hasPluginManager: () => true,
+    setActivePlugin: vi.fn(),
+    getPluginProviderDetail: vi.fn(() => null),
+    installDevPluginFromPath: vi.fn(),
+    canInstallTpexPlugin: () => false,
+    installTpexPluginFromPath: vi.fn(),
+    handleActiveFeatureInput: vi.fn(async () => false),
+    searchPluginFeatures: mocks.pluginSearch,
+    getDefaultSearchProviders: () => ({}),
+    usePluginInjections: vi.fn(() => null),
+    resolvePluginViewSecurityProfile: vi.fn(() => ({
+      candidateProfile: 'trusted-plugin-view' as const,
+      effectiveProfile: 'trusted-plugin-view' as const,
+      reason: 'trusted-candidate' as const
+    })),
+    buildPluginViewWebPreferences: vi.fn(() => ({})),
+    createPluginViewNavigationPolicy: vi.fn(async () => ({})),
+    installPluginViewNavigationPolicy: vi.fn(),
+    registerPluginWebContents: vi.fn(() => 'token'),
+    unregisterPluginWebContents: vi.fn(() => true),
+    closePluginWebContents: vi.fn()
+  })
+}
+
+beforeEach(() => {
+  resetMocksAndPorts()
+})
+
+afterEach(() => {
+  resetBoxToolAiCapabilityPort()
+  resetBoxToolPluginHostPort()
 })
 
 describe('ContextActionsProvider matching', () => {

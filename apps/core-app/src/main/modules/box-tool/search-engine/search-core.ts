@@ -36,9 +36,8 @@ import { enterPerfContext } from '../../../utils/perf-context'
 import { perfMonitor } from '../../../utils/perf-monitor'
 import { normalizeResultFilePath } from '../../../utils/local-renderable-assets'
 import { databaseModule } from '../../database'
-import { pluginEntityProvider } from '../../plugin/adapters/plugin-entity-provider'
-import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { getSentryService } from '../../sentry'
+import { getBoxToolDefaultPluginSearchProviders } from '../ports/plugin-host-port'
 import {
   getMainConfig,
   isMainStorageReady,
@@ -479,9 +478,14 @@ export class SearchEngineCore
     }
     this.registerProvider(fileProvider)
 
-    PluginFeaturesAdapter.attach(this)
-    this.registerProvider(PluginFeaturesAdapter)
-    this.registerProvider(pluginEntityProvider)
+    const pluginSearchProviders = getBoxToolDefaultPluginSearchProviders()
+    if (pluginSearchProviders.featuresAdapter) {
+      pluginSearchProviders.featuresAdapter.attach(this)
+      this.registerProvider(pluginSearchProviders.featuresAdapter)
+    }
+    if (pluginSearchProviders.entityProvider) {
+      this.registerProvider(pluginSearchProviders.entityProvider)
+    }
     this.registerProvider(previewProvider)
   }
 

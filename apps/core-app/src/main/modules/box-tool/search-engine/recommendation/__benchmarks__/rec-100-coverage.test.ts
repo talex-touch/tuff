@@ -1,6 +1,6 @@
 import os from 'node:os'
 import type * as sqliteRetry from '../../../../../db/sqlite-retry'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 const runtimeState = vi.hoisted(() => ({
   clipboardItem: null as { type: string; content: string; timestamp: Date } | null,
@@ -123,23 +123,10 @@ vi.mock('../../../../storage', () => ({
       : undefined
 }))
 
-vi.mock('../../../../ai/intelligence-sdk', () => ({
-  tuffIntelligence: {
-    embedding: {
-      generate: vi.fn(async (payload: { text: string }) => {
-        runtimeState.embeddingGenerateCalls += 1
-        if (runtimeState.embeddingGenerateImpl) {
-          return await runtimeState.embeddingGenerateImpl(payload)
-        }
-        return { result: new Array(64).fill(0.1) }
-      })
-    },
-    rag: {
-      rerank: vi.fn(async () => ({ result: { results: [] } }))
-    }
-  }
-}))
-
+import {
+  registerBoxToolAiCapabilityPort,
+  resetBoxToolAiCapabilityPort
+} from '../../../ports/ai-capability-port'
 import {
   evaluateRec100Suite,
   type Rec100RuntimeHooks,
@@ -167,8 +154,56 @@ describe('Tuff Smart Recommendation & Dual-Layer Gemma 100-Scenario Coverage Sui
   }
 
   beforeAll(async () => {
+    registerBoxToolAiCapabilityPort({
+      intelligence: {
+        code: { review: vi.fn() },
+        text: { summarize: vi.fn(), rewrite: vi.fn(), translate: vi.fn() },
+        vision: { ocr: vi.fn(), caption: vi.fn() },
+        embedding: {
+          generate: vi.fn(async (payload: { text: string }) => {
+            runtimeState.embeddingGenerateCalls += 1
+            if (runtimeState.embeddingGenerateImpl) {
+              return (await runtimeState.embeddingGenerateImpl(payload)) as never
+            }
+            return { result: new Array(64).fill(0.1) } as never
+          }),
+          generateLocalImage: vi.fn()
+        },
+        rag: {
+          rerank: vi.fn(async () => ({ result: { results: [] } }) as never)
+        }
+      },
+      normalizeIntelligenceError: (error, options) => ({
+        code: 'UNKNOWN',
+        message: String(error),
+        reason: String(error),
+        recovery: '',
+        capabilityId: options?.capabilityId
+      }),
+      resolveCapabilityStatus: (capabilityId) => ({
+        capabilityId,
+        available: false,
+        providerIds: []
+      }),
+      searchConversations: async () => [],
+      isLocalEmbeddingReady: () => false,
+      isLocalEmbeddingImageReady: () => false,
+      getLocalEmbeddingModelKey: () => 'test-local-embedding-model',
+      runWithEmbeddingPriority: (_priority, run) => run(),
+      onUsageLimitsChanged: () => () => {},
+      readUsageLimitInfo: (error) => {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'USAGE_LIMIT_REACHED' && 'usageLimit' in error) {
+          return (error as { usageLimit: never }).usageLimit
+        }
+        return null
+      }
+    })
     report = await evaluateRec100Suite(hooks)
   }, 60_000)
+
+  afterAll(() => {
+    resetBoxToolAiCapabilityPort()
+  })
 
   it('defines exactly 100 concrete scenarios across 10 balanced categories (10 each)', () => {
     expect(REC_100_CATEGORIES).toHaveLength(10)

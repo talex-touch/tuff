@@ -1,7 +1,7 @@
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { createLogger } from '../../../utils/logger'
-import { DivisionBoxManager } from '../../division-box/manager'
+import { getBoxToolSurfaceBridgePort } from '../ports/surface-bridge-port'
 import { coreBoxManager } from './manager'
 import { coreBoxTransport } from './transport/core-box-transport'
 import { windowManager } from './window'
@@ -95,7 +95,7 @@ class CoreBoxKeyTransport {
     const senderWebContentsId = context?.sender?.id
     if (typeof senderWebContentsId === 'number') {
       const session =
-        DivisionBoxManager.getInstance().findSessionByWindowWebContentsId(senderWebContentsId)
+        getBoxToolSurfaceBridgePort()?.findSessionByWindowWebContentsId(senderWebContentsId)
       if (session) {
         if (!session.forwardKeyEventToUIView(event)) {
           keyTransportLog.debug('Key event ignored: DivisionBox has no live plugin UI view')

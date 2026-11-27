@@ -5,7 +5,7 @@ import { BEHAVIOR_DECAY_LAMBDA } from '../../../../db/utils'
 import type * as ItemRebuilderModule from './item-rebuilder'
 import type { ScoredItem } from './recommendation-engine'
 import { ContextProvider, type ContextSignal, hashContextContent } from './context-provider'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const intelligenceSdkMock = vi.hoisted(() => ({
   embeddingGenerate: vi.fn(),
@@ -138,8 +138,14 @@ import { recommendationSourceRegistry } from './recommendation-source-registry'
 import {
   createUsageLimitError,
   emptyUsageLimits,
-  notifyUsageLimitsChanged
+  notifyUsageLimitsChanged,
+  onUsageLimitsChanged,
+  readUsageLimitInfo
 } from '../../../ai/usage-ledger/usage-limits'
+import {
+  registerBoxToolAiCapabilityPort,
+  resetBoxToolAiCapabilityPort
+} from '../../ports/ai-capability-port'
 
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
@@ -210,7 +216,45 @@ type RecommendationCacheRecord = {
  */
 const pluginProviderDisposers: Array<() => void> = []
 
+beforeEach(() => {
+  registerBoxToolAiCapabilityPort({
+    intelligence: {
+      code: { review: vi.fn() },
+      text: { summarize: vi.fn(), rewrite: vi.fn(), translate: vi.fn() },
+      vision: { ocr: vi.fn(), caption: vi.fn() },
+      embedding: {
+        generate: intelligenceSdkMock.embeddingGenerate,
+        generateLocalImage: vi.fn()
+      },
+      rag: {
+        rerank: intelligenceSdkMock.ragRerank
+      }
+    },
+    normalizeIntelligenceError: (error, options) => ({
+      code: 'UNKNOWN',
+      message: String(error),
+      reason: String(error),
+      recovery: '',
+      capabilityId: options?.capabilityId
+    }),
+    resolveCapabilityStatus: (capabilityId) => ({
+      capabilityId,
+      available: false,
+      providerIds: []
+    }),
+    searchConversations: async () => [],
+    isLocalEmbeddingReady: () => false,
+    isLocalEmbeddingImageReady: () => false,
+    getLocalEmbeddingModelKey: () => 'test-local-embedding-model',
+    runWithEmbeddingPriority: (_priority, run) => run(),
+    onUsageLimitsChanged: (listener) => onUsageLimitsChanged(listener),
+    notifyUsageLimitsChanged: (limits) => notifyUsageLimitsChanged(limits),
+    readUsageLimitInfo: (error) => readUsageLimitInfo(error)
+  })
+})
+
 afterEach(() => {
+  resetBoxToolAiCapabilityPort()
   while (pluginProviderDisposers.length) pluginProviderDisposers.pop()?.()
 })
 

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { CoreBoxFocusTelemetryRecord } from '@talex-touch/utils/core-box/focus-diagnostics'
 
 const mocks = vi.hoisted(() => {
@@ -185,12 +185,9 @@ vi.mock('../../../utils/logger', () => ({
   createLogger: vi.fn(() => mocks.logger)
 }))
 
-vi.mock('../../division-box/manager', () => ({
-  DivisionBoxManager: {
-    getInstance: vi.fn(() => ({
-      createSessionWithoutUI: mocks.createSessionWithoutUI,
-      destroySession: mocks.destroySession
-    }))
+vi.mock('../../global-shortcon', () => ({
+  shortcutModule: {
+    getWindowShortcutAccelerator: vi.fn(() => undefined)
   }
 }))
 
@@ -198,20 +195,6 @@ vi.mock('../../permission', () => ({
   getPermissionModule: vi.fn(() => ({
     enforcePermission: mocks.enforcePermission
   }))
-}))
-
-vi.mock('../../plugin/plugin-module', () => ({
-  pluginModule: {
-    pluginManager: null
-  }
-}))
-
-vi.mock('../../plugin/runtime/plugin-injections', () => ({
-  usePluginInjections: vi.fn(() => ({}))
-}))
-
-vi.mock('../../plugin/runtime/plugin-view-security-profile', () => ({
-  resolvePluginViewSecurityProfile: vi.fn(() => ({}))
 }))
 
 vi.mock('../../storage', () => ({
@@ -274,6 +257,10 @@ vi.mock('../../system/foreground-app-snapshot', () => ({
 }))
 
 import { app } from 'electron'
+import {
+  registerBoxToolSurfaceBridgePort,
+  resetBoxToolSurfaceBridgePort
+} from '../ports/surface-bridge-port'
 import { coreBoxManager } from './manager'
 import { COREBOX_MIN_HEIGHT, COREBOX_WIDTH, WindowManager } from './window'
 
@@ -384,6 +371,15 @@ describe('WindowManager CoreBox compact bounds', () => {
     mocks.destroySession.mockResolvedValue(undefined)
     mocks.relinquishCachedView.mockReturnValue({ cacheKey: 'demo-plugin:feature' })
     mocks.restoreCachedView.mockReturnValue(true)
+    registerBoxToolSurfaceBridgePort({
+      findSessionByWindowWebContentsId: vi.fn(() => undefined),
+      createSessionWithoutUI: mocks.createSessionWithoutUI,
+      destroySession: mocks.destroySession
+    })
+  })
+
+  afterEach(() => {
+    resetBoxToolSurfaceBridgePort()
   })
 
   it('applies compact bounds even when the CoreBox window is hidden', () => {
@@ -1205,5 +1201,36 @@ describe('WindowManager CoreBox compact bounds', () => {
     expect(pluginViewController.getClipboardAllowedTypes()).toBe(0)
     expect(view.webContents.close).toHaveBeenCalledTimes(1)
     expect(response.success).toBe(false)
+  })
+
+  it('fails cleanly without extracting the view when the DivisionBox surface bridge port is unregistered', async () => {
+    resetBoxToolSurfaceBridgePort()
+    const manager = new WindowManager()
+    const browserWindow = {
+      isDestroyed: vi.fn(() => false),
+      isVisible: vi.fn(() => true),
+      getBounds: vi.fn(() => ({ x: 200, y: 100, width: 720, height: 600 }))
+    }
+    manager.windows = [
+      {
+        window: browserWindow
+      } as unknown as WindowManager['windows'][number]
+    ]
+
+    const plugin = { name: 'demo-plugin', sdkapi: 2 }
+    vi.spyOn(manager, 'getAttachedPlugin').mockReturnValue(plugin as never)
+    const extract = vi.spyOn(manager, 'extractUIView')
+
+    const response = await manager.detachUIViewToDivisionBox()
+
+    expect(extract).not.toHaveBeenCalled()
+    expect(mocks.createSessionWithoutUI).not.toHaveBeenCalled()
+    expect(response).toEqual({
+      success: false,
+      error: {
+        code: 'STATE_ERROR',
+        message: 'DivisionBox surface bridge is unavailable.'
+      }
+    })
   })
 })

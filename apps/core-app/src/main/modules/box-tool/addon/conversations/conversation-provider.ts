@@ -7,7 +7,7 @@ import type {
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
-import type { ConversationSearchHit } from '../../../conversation/conversation-store'
+import type { BoxToolConversationSearchHit } from '../../ports/ai-capability-port'
 import type { ProviderContext } from '../../search-engine/types'
 import { performance } from 'node:perf_hooks'
 import { TuffInputType, TuffItemBuilder, TuffSearchResultBuilder } from '@talex-touch/utils'
@@ -16,7 +16,7 @@ import {
   getAppDestinationNavigationService,
   normalizeConversationId
 } from '../../../app-destination/app-destination-navigation'
-import { searchConversations } from '../../../conversation/conversation-store'
+import { searchBoxToolConversations } from '../../ports/ai-capability-port'
 import { recordAcceptedExecute, resolveExecuteEventId } from '../../search-engine/execute-recorder'
 import { t } from '../../../../utils/i18n-helper'
 
@@ -57,9 +57,9 @@ export class ConversationProvider implements ISearchProvider<ProviderContext> {
       return this.createResult(query, [], startedAt, 'success')
     }
 
-    let hits: ConversationSearchHit[]
+    let hits: BoxToolConversationSearchHit[]
     try {
-      hits = await searchConversations(rawText)
+      hits = await searchBoxToolConversations(rawText)
     } catch (error) {
       // A failed source must not take the search down with it: the rest of the results are still
       // what the user asked for, and the source row says this one did not answer.
@@ -135,7 +135,7 @@ export class ConversationProvider implements ISearchProvider<ProviderContext> {
     return normalizeConversationId(metaConversationId)
   }
 
-  private buildConversationItem(hit: ConversationSearchHit, rawQueryText: string): TuffItem {
+  private buildConversationItem(hit: BoxToolConversationSearchHit, rawQueryText: string): TuffItem {
     // An untitled thread is a real state (the title is generated after the first turn), and a blank
     // row in the list reads as a rendering bug rather than as a conversation.
     const title = hit.title.trim() || t('shell.history.untitled')

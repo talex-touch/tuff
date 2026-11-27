@@ -11,7 +11,10 @@ import type {
 } from './semantic-profile'
 import { StorageList } from '@talex-touch/utils'
 import { getFileRecommendationBridge } from '../../addon/files/file-recommendation-bridge'
-import { readUsageLimitInfo } from '../../../ai/usage-ledger/usage-limits'
+import {
+  readBoxToolUsageLimitInfo,
+  requireBoxToolIntelligence
+} from '../../ports/ai-capability-port'
 import { hashContextContent } from './context-provider'
 import { BUILTIN_CLIPBOARD_URL_SOURCE_ID } from './plugin-recommendation-source'
 import { toErrorMeta, type LogMeta } from './recommendation-utils'
@@ -484,7 +487,7 @@ export class RecommendationSemanticScorer {
   }
 
   public pauseOnUsageLimit(error: unknown): boolean {
-    const usageLimit = readUsageLimitInfo(error)
+    const usageLimit = readBoxToolUsageLimitInfo(error)
     if (!usageLimit) return false
     this.cooldownUntil = Math.max(this.cooldownUntil, usageLimit.resetsAt)
     this.pausedByUsageLimit = true
@@ -540,9 +543,9 @@ export class RecommendationSemanticScorer {
     if (targets.length === 0 || !semanticProfile.text) return scored
 
     try {
-      const { tuffIntelligence } = await import('../../../ai/intelligence-sdk')
+      const intelligence = requireBoxToolIntelligence()
       const contextEmbedding = await withTimeout(
-        tuffIntelligence.embedding.generate(
+        intelligence.embedding.generate(
           { text: semanticProfile.text },
           {
             timeout: SEMANTIC_AI_TIMEOUT_MS,
@@ -563,7 +566,7 @@ export class RecommendationSemanticScorer {
             let pending = inflightByText.get(candidateProfile.text)
             if (!pending) {
               pending = withTimeout(
-                tuffIntelligence.embedding.generate(
+                intelligence.embedding.generate(
                   { text: candidateProfile.text },
                   {
                     timeout: SEMANTIC_AI_TIMEOUT_MS,
@@ -628,9 +631,9 @@ export class RecommendationSemanticScorer {
     if (targets.length === 0 || !semanticProfile.text) return scored
 
     try {
-      const { tuffIntelligence } = await import('../../../ai/intelligence-sdk')
+      const intelligence = requireBoxToolIntelligence()
       const result = await withTimeout(
-        tuffIntelligence.rag.rerank(
+        intelligence.rag.rerank(
           {
             query: semanticProfile.text,
             documents: targets.map((item) => {
