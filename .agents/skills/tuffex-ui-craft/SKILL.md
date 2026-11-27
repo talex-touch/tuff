@@ -2,15 +2,22 @@
 name: tuffex-ui-craft
 description: >-
   End-to-end interactive workflow for creating, modifying, and visually polishing
-  TuffEx components and Nexus docs/gallery UI in talex-touch. Use whenever the
-  user asks to build or refine UI components, fix visual/motion/alignment issues,
-  preview changes live in Nexus for iterative feedback, or land and release
-  TuffEx UI changes through PR and npm publish.
+  TuffEx components and Nexus docs/gallery UI in talex-touch. Trigger when the
+  user mentions "细微调整 UI", "深度优化 UI", "精调 UI", subtle/deep UI polish,
+  creating or refining TuffEx components, previewing UI changes live in Nexus
+  for iterative feedback, or landing and releasing TuffEx UI changes. When
+  triggered by general phrasing like "细微调整 UI" or "深度优化 UI", ask the
+  user to confirm activating this workflow before starting the live preview loop.
 ---
 
 # TuffEx UI Craft Loop
 
 Standard interactive workflow for creating, modifying, and polishing TuffEx components (`packages/tuffex`) and their Nexus showcase/docs (`apps/nexus`) — from isolated setup and live side-by-side preview to iterative feedback, full audits, PR landing, and release.
+
+## Activation Gate
+
+- When the user asks for **"细微调整 UI"**, **"深度优化 UI"**, **"精调 UI"**, or similar open-ended UI polish without explicitly invoking this skill, **briefly confirm with the user whether to activate `tuffex-ui-craft`** (isolated branch/worktree → live Nexus preview in the side browser pane → multi-round visual feedback → audits → commit/PR/release) before spinning up the dev server.
+- If the user already explicitly invoked this skill or directly asked to launch local preview, proceed straight to Phase 0.
 
 ## Phase 0 · Pre-Flight & Isolation
 
