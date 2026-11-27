@@ -61,6 +61,7 @@ code: |
 | `threshold` | `number` | `1` | Pixel tolerance for reaching a scroll boundary; negative values count as `0`. |
 | `disabled` | `boolean` | `false` | Turns the mask off. |
 | `observeResize` | `boolean` | `true` | Watches the viewport and its first child with `ResizeObserver`. |
+| `always` | `boolean` | `false` | Always fades both edges regardless of native scroll overflow (for transformed or virtualized viewports such as `TxPicker`). |
 
 ### Slots
 
@@ -77,8 +78,8 @@ code: |
 
 ## Overview
 
-- The root renders as `as` around one viewport, which is `overflow: auto` along `axis` and hides overflow on the other axis.
-- No mask is output while disabled, when content cannot scroll, or when the scroll range is within `threshold`.
+- The root renders as `as` around one viewport, which is `overflow: auto` along `axis` and hides overflow on the other axis (or `overflow: hidden` when `always` is enabled).
+- No mask is output while disabled, or (when `always` is `false`) when content cannot scroll or the scroll range is within `threshold`.
 - Scrolling toggles the leading and trailing fades from `scrollTop` / `scrollLeft`.
 - Changing `observeResize` or unmounting disconnects the observer.
 - The component adds only a neutral scroll viewport; keep landmarks and headings in the slotted content.

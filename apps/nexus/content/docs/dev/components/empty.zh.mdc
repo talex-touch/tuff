@@ -53,14 +53,14 @@ code: |
 |------|------|---------|------|
 | `title` | `string` | `'Nothing here'` | 主文案。 |
 | `description` | `string` | `''` | 标题下的说明。 |
-| `iconClass` | `string` | `'i-carbon-incomplete'` | 图标 class，作为 `icon` 传给 `TxEmptyState`。 |
+| `iconClass` | `string` | `-` | 可选图标 class，作为 `icon` 传给 `TxEmptyState`；设置后覆盖内置空状态插画。 |
 | `compact` | `boolean` | `false` | 为 `true` 时 `size="small"`，否则为 `medium`。 |
 
 ### 插槽
 
 | 插槽名 | Props | 说明 |
 |------|------|------|
-| `icon` | - | 替换 `iconClass` 图标。 |
+| `icon` | - | 替换默认插画或 `iconClass` 图标。 |
 | `title` | - | 替换标题。 |
 | `description` | - | 替换说明。 |
 | `action` | - | 操作区，替换 `TxEmptyState` 的 `actions` 插槽。 |

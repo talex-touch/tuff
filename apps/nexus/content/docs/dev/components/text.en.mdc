@@ -80,7 +80,7 @@ code: |
 
 - The root is a `<span>` with `display: block`; its width comes from the parent.
 - End ellipsis uses CSS. Start and middle ellipses are measured on mount, on resize and once the font loads; `title` carries the full text when cut.
-- Looping starts only when the text overflows, runs at about 40px/s, and only animates `transform`.
+- Auto and looping scrolls run at a constant linear speed of about 40px/s; hover scroll cross-fades the ellipsis into a soft edge-masked track and glides at a constant 48px/s, animating only `transform` and `opacity`.
 - On touch, `scroll="hover"` expands on a tap and collapses on another tap or a tap outside the component.
 - Screen readers read the full text, never the truncated form.
 - Reduced motion stops every scroll mode and falls back to a static cut.

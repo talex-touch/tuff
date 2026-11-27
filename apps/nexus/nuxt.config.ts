@@ -712,14 +712,15 @@ export default defineNuxtConfig({
     // normalizeViteManifest(), causing prerendered HTML to emit `<link rel="prefetch">` tags for
     // deferred Sentry, Three.js, and lazy route/demo chunks. Clear `prefetch` before
     // precomputeDependencies() runs so lazy imports stay strictly on-demand.
-    // DocsComponentsGallery wraps every Tx* specimen in `<ClientOnly>` (`GallerySpecimenGate`), so
-    // SSR renders only its own shell (styled by `DocsComponentsGallery.css`) and zero Tx* markup;
-    // trimming its SSR manifest `imports` avoids preloading 115+ client-only TuffEx stylesheets in
-    // `*-suite.html` `<head>` while Vite's client `__vitePreload` still loads them on hydration.
+    // DocsComponentsGallery and GalleryBaseSuite wrap every Tx* specimen in `<ClientOnly>`
+    // (`GallerySpecimenGate`), so SSR renders only their shells and zero Tx* markup;
+    // trimming their SSR manifest `imports` avoids preloading 75–115+ client-only TuffEx
+    // stylesheets in `*-suite.html` `<head>` while Vite's client `__vitePreload` still loads
+    // them on hydration.
     'build:manifest'(manifest) {
       for (const [key, entry] of Object.entries(manifest)) {
         entry.prefetch = false
-        if (key === 'components/docs/DocsComponentsGallery.vue')
+        if (key === 'components/docs/DocsComponentsGallery.vue' || key === 'components/docs/gallery/GalleryBaseSuite.vue')
           entry.imports = []
       }
     },

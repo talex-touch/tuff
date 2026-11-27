@@ -84,20 +84,22 @@ code: |
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `--tx-status-chip-size` | `18px`（`sm`：`15px`） | 状态圆盘直径，字形随之缩放；由 `size` 类设在根节点上。 |
+| `--tx-status-height` | `26px`（`sm`：`22px`） | 徽标高度，与 `TxTag` 及 `TxButton sm` 对齐。 |
+| `--tx-status-radius` | `8px`（`sm`：`6px`） | 圆角半径。 |
+| `--tx-status-chip-size` | `16px`（`sm`：`14px`） | 半透明图标底圈直径，字形随之缩放；由 `size` 类设在根节点上。 |
 
 ## 概述
 
 - 没有点击监听时根节点为 `role="status"`；绑定 `@click` 后变为可聚焦的 `role="button"`，Enter / Space 可触发。
 - `status` 优先于 `statusKey`；`statusKey` 映射为：`granted` → success、`denied` → danger、`notDetermined` → warning、`unsupported` → muted，其余为 info。
-- 默认字形均为实心，外圈由色盘提供：success `i-carbon-checkmark`、warning `i-carbon-time`、danger `i-carbon-close`、info `i-carbon-information`。
-- `muted` 没有字形，渲染为虚线空心环；传入 `icon` 后恢复实心色盘。
+- 默认字形位于轻量的语义半透明底圈内：success `i-carbon-checkmark`、warning `i-carbon-time`、danger `i-carbon-close`、info `i-carbon-information`。
+- `muted` 没有字形，渲染为虚线空心环；传入 `icon` 后恢复半透明底圈。
 - `osOnly` 隐藏状态图标，但保留文字。
 
 ## 技术实现
 
-- 色盘取独立的 `--tx-status-chip-*` 色阶而非 `--tx-color-*`，使反白字形对比度不低于 3:1；高对比暗色主题反转为浅盘深字形。
-- 标签使用等宽字体；背景是状态色 14% 的浅填充，外圈是 32% 的 1px 内描边，不占布局。
+- 图标底圈使用 12% 语义半透明填充（`--tx-status-chip-bg`），配以向主墨色按 65% 校准的语义字形色（`--tx-status-glyph`），在亮色、暗色与高对比度主题下保持轻盈观感且对比度均不低于 3:1。
+- 标签使用等宽字体；背景是状态色 12% 的浅填充，外圈是 30% 的 1px 内描边，不占布局。
 - 源码：`packages/tuffex/packages/components/src/status-badge/`。
 
 <TuffDocSourceLink />

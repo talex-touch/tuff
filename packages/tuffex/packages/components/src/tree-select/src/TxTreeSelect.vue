@@ -228,11 +228,12 @@ defineExpose({
                     v-if="hasChildren"
                     type="button"
                     class="tx-tree-select__caret"
+                    :class="{ 'is-expanded': expanded }"
                     tabindex="-1"
                     :aria-label="expanded ? 'Collapse' : 'Expand'"
                     @click.stop="toggleExpand()"
                   >
-                    <svg viewBox="0 0 24 24" width="14" height="14" :style="{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }">
+                    <svg viewBox="0 0 24 24" width="14" height="14">
                       <path fill="currentColor" d="M10 6l6 6-6 6" />
                     </svg>
                   </button>
@@ -365,7 +366,7 @@ defineExpose({
     align-items: center;
     justify-content: center;
     color: var(--tx-text-color-secondary, #909399);
-    transition: transform 0.2s ease;
+    transition: transform 0.24s var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
   }
 
   &.is-open {
@@ -422,6 +423,21 @@ defineExpose({
   justify-content: center;
   cursor: pointer;
   color: var(--tx-text-color-secondary, #909399);
+
+  svg {
+    transition: transform 0.24s var(--tx-ease-out-strong, cubic-bezier(0.22, 1, 0.36, 1));
+  }
+
+  &.is-expanded svg {
+    transform: rotate(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-tree-select__arrow,
+  .tx-tree-select__caret svg {
+    transition-duration: 0.01ms;
+  }
 }
 
 .tx-tree-select__caret-placeholder {

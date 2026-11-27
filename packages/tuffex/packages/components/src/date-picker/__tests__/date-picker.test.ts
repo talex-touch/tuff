@@ -31,6 +31,8 @@ const PopoverStub = defineComponent({
     matchReferenceWidth: { type: Boolean, default: undefined },
     minWidth: { type: Number, default: undefined },
     maxWidth: { type: Number, default: undefined },
+    animation: { type: Object, default: undefined },
+    panelBackground: { type: String, default: undefined },
   },
   emits: ['update:modelValue'],
   template: `
@@ -447,5 +449,207 @@ describe('txDatePicker range selection', () => {
 
     expect(wrapper.emitted('update:modelValue')?.[0][0]).toBe('2026-05-22')
     expect(dayCell(wrapper, '21').classes()).not.toContain('is-in-range')
+  })
+})
+
+describe('txDatePicker modes (time, datetime, daterange, datetimerange) and silky popover', () => {
+  function dayCell(wrapper: ReturnType<typeof mountDatePicker>, label: string) {
+    return wrapper.findAll('.tx-date-picker-calendar__cell')
+      .find(cell => cell.text() === label && !cell.classes('is-outside-month'))!
+  }
+
+  it('configures crisp non-bouncy popover animation and blur surface', () => {
+    const wrapper = mountDatePicker({ variant: 'field', modelValue: '2026-05-20' })
+    const popover = wrapper.findComponent(PopoverStub)
+
+    expect(popover.props('panelBackground')).toBe('blur')
+    expect(popover.props('animation')).toMatchObject({
+      type: 'expand',
+      duration: 240,
+      closeDuration: 150,
+      ease: 'power3.out',
+      scale: 0.96,
+      distance: 6,
+    })
+  })
+
+  it('supports time mode with HH:mm and optional seconds + minuteStep', async () => {
+    const wrapper = mountDatePicker({
+      variant: 'field',
+      mode: 'time',
+      modelValue: '09:30',
+      minuteStep: 5,
+    })
+
+    expect(wrapper.find('.tx-date-picker-field__value').text()).toBe('09:30')
+    expect(wrapper.find('.tx-date-picker-calendar__date-pane').exists()).toBe(false)
+    expect(wrapper.find('.tx-date-picker-calendar__time-pane').exists()).toBe(true)
+
+    const picker = wrapper.findComponent(PickerStub)
+    expect(picker.props('columns').map((c: PickerColumn) => c.key)).toEqual(['hour', 'minute'])
+    expect(picker.props('columns')[1].options).toHaveLength(12)
+
+    await picker.vm.$emit('update:modelValue', [14, 45])
+    await nextTick()
+    expect(wrapper.find('.tx-date-picker-calendar__time-readout').text()).toBe('14:45')
+    // Draft updates do not emit until Confirm is clicked.
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+
+    await wrapper.find('.tx-date-picker-calendar__footer-confirm').trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['14:45'])
+    expect(wrapper.emitted('confirm')?.[0]).toEqual(['14:45'])
+
+    const withSec = mountDatePicker({
+      variant: 'field',
+      mode: 'time',
+      showSeconds: true,
+      modelValue: '09:30:15',
+    })
+    expect(withSec.find('.tx-date-picker-field__value').text()).toBe('09:30:15')
+    expect(withSec.findComponent(PickerStub).props('columns').map((c: PickerColumn) => c.key)).toEqual(['hour', 'minute', 'second'])
+  })
+
+  it('supports datetime mode combining calendar and time wheels before confirm', async () => {
+    const wrapper = mountDatePicker({
+      variant: 'field',
+      mode: 'datetime',
+      modelValue: '2026-05-20 09:30',
+    })
+
+    expect(wrapper.find('.tx-date-picker-field__value').text()).toBe('2026-05-20 09:30')
+    expect(wrapper.find('.tx-date-picker-calendar').classes()).toContain('is-split')
+
+    await dayCell(wrapper, '24').trigger('click')
+    // Picking a date in datetime mode keeps the popover open to adjust time.
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+
+    await wrapper.findComponent(PickerStub).vm.$emit('update:modelValue', [18, 15])
+    await nextTick()
+
+    await wrapper.find('.tx-date-picker-calendar__footer-confirm').trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['2026-05-24 18:15'])
+    expect(wrapper.emitted('confirm')?.[0]).toEqual(['2026-05-24 18:15'])
+  })
+
+  it('supports datetimerange mode with start/end slot switching and chronological ordering', async () => {
+    const wrapper = mountDatePicker({
+      variant: 'field',
+      mode: 'datetimerange',
+      modelValue: ['2026-05-10 09:00', '2026-05-12 18:00'],
+    })
+
+    expect(wrapper.find('.tx-date-picker-field__value').text()).toBe('2026-05-10 09:00 → 2026-05-12 18:00')
+    const pills = wrapper.findAll('.tx-date-picker-calendar__range-pill')
+    expect(pills).toHaveLength(2)
+
+    await dayCell(wrapper, '15').trigger('click')
+    await dayCell(wrapper, '17').trigger('click')
+
+    // Tune end time on the active end slot, then switch to start slot and tune start time.
+    await wrapper.findComponent(PickerStub).vm.$emit('update:modelValue', [20, 30])
+    await pills[0]!.trigger('click')
+    await wrapper.findComponent(PickerStub).vm.$emit('update:modelValue', [8, 15])
+    await nextTick()
+
+    await wrapper.find('.tx-date-picker-calendar__footer-confirm').trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[0][0]).toEqual(['2026-05-15 08:15', '2026-05-17 20:30'])
+  })
+
+  it('applies presets and clearable reset cleanly', async () => {
+    const wrapper = mountDatePicker({
+      variant: 'field',
+      mode: 'daterange',
+      clearable: true,
+      modelValue: ['2026-05-01', '2026-05-07'],
+      presets: [
+        { label: 'Next 7d', value: ['2026-05-10', '2026-05-16'] },
+      ],
+    })
+
+    await wrapper.find('.tx-date-picker-calendar__preset').trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[0][0]).toEqual(['2026-05-10', '2026-05-16'])
+
+    await wrapper.find('.tx-date-picker-field__clear').trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[1][0]).toEqual(['', ''])
+  })
+
+  it('clicks Now in time mode with minuteStep without oscillating the embedded TxPicker', async () => {
+    const wrapper = mount(TxDatePicker, {
+      props: {
+        variant: 'field',
+        mode: 'time',
+        minuteStep: 5,
+        modelValue: '14:30',
+        visible: true,
+      },
+      global: {
+        stubs: { TxPopover: PopoverStub },
+      },
+    })
+    await nextTick()
+
+    await wrapper.find('.tx-date-picker-calendar__footer-link').trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const readout = wrapper.find('.tx-date-picker-calendar__time-readout').text()
+    expect(readout).toMatch(/^\d{2}:\d{2}$/)
+    // Clicking Now updates the draft cleanly without echoing stale 14:30 back into modelValue.
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+
+    await wrapper.find('.tx-date-picker-calendar__footer-confirm').trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([readout])
+  })
+
+  it('keeps range modes on the calendar field surface even when variant is left at default', () => {
+    const wrapper = mountDatePicker({
+      mode: 'datetimerange',
+      modelValue: ['2026-05-10 09:00', '2026-05-12 18:00'],
+    })
+
+    expect(wrapper.find('.tx-date-picker-field').exists()).toBe(true)
+    expect(wrapper.find('.tx-date-picker-field__value').text()).toBe('2026-05-10 09:00 → 2026-05-12 18:00')
+  })
+
+  it('enforces sub-minute min/max bounds at emitted minute precision when showSeconds is false', async () => {
+    const wrapper = mountDatePicker({
+      variant: 'field',
+      mode: 'time',
+      showSeconds: false,
+      min: '09:30:30',
+      max: '17:30:45',
+      modelValue: '09:00',
+    })
+
+    // 09:30 would parse back as 09:30:00 (< 09:30:30), so min rounds up to 09:31.
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['09:31'])
+
+    await wrapper.findComponent(PickerStub).vm.$emit('update:modelValue', [18, 0])
+    await nextTick()
+    await wrapper.find('.tx-date-picker-calendar__footer-confirm').trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['17:30'])
+  })
+
+  it('preserves a valid open draft when bounds change without invalidating it', async () => {
+    const wrapper = mountDatePicker({
+      variant: 'field',
+      mode: 'time',
+      visible: true,
+      min: '08:00',
+      max: '18:00',
+      modelValue: '09:30',
+    })
+
+    await wrapper.findComponent(PickerStub).vm.$emit('update:modelValue', [11, 0])
+    await nextTick()
+    expect(wrapper.find('.tx-date-picker-calendar__time-readout').text()).toBe('11:00')
+
+    // Tightening max to 17:00 leaves both committed (09:30) and draft (11:00) valid.
+    await wrapper.setProps({ max: '17:00' })
+    await nextTick()
+    expect(wrapper.find('.tx-date-picker-calendar__time-readout').text()).toBe('11:00')
+
+    await wrapper.find('.tx-date-picker-calendar__footer-confirm').trigger('click')
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['11:00'])
   })
 })

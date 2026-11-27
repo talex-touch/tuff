@@ -419,7 +419,11 @@ const pageStyleBudgets = [
     // page carries too: 137.1 -> 137.4 KiB measured. Actuals plus minimal headroom, growth from here fails.
     // 137.5 -> 137.7 on 2026-11-04 for the same focus transitions and disabled tokens, which this page
     // carries too: 137.4 -> 137.6 KiB measured. Actuals plus minimal headroom, growth from here fails.
-    limit: 137.7 * 1024,
+    // 137.7 -> 139.1 on 2026-11-27 for TxEmptyState's redesigned 3-step guide illustration
+    // (`empty-state/style.css` replaces broken `%`-offset bounce/shimmer keyframes with contained
+    // user-unit progress and reduced-motion framing): 137.6 -> 139.0 KiB measured. Actuals plus
+    // minimal headroom, growth from here fails.
+    limit: 139.1 * 1024,
   },
   {
     label: 'chat',

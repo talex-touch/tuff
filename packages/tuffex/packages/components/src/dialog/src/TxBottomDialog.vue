@@ -376,13 +376,14 @@ async function forClose(): Promise<void> {
   &__container {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     // Participates in the panel's height cap: a flex item refuses to shrink
     // below its content without `min-height: 0`, and the cap does nothing.
     flex: 1 1 auto;
     min-height: 0;
     width: 100%;
-    padding: 20px;
+    // Uniform 12px side/bottom inset matches 24px outer radius -> 12px concentric action rows.
+    padding: 18px 12px 12px;
     box-sizing: border-box;
     overflow: hidden;
     border-radius: inherit;
@@ -394,6 +395,7 @@ async function forClose(): Promise<void> {
     display: flex;
     align-items: center;
     gap: 12px;
+    padding-inline: 6px;
     min-height: 32px;
   }
 
@@ -446,7 +448,8 @@ async function forClose(): Promise<void> {
     max-height: 46vh;
     min-height: 0;
     overflow-y: auto;
-    margin: -4px 0 0;
+    margin: -2px 0 0;
+    padding-inline: 6px;
     font-size: 14px;
     line-height: 1.45;
     // `regular`, not `secondary`: this is body copy a reader has to read.
@@ -458,7 +461,7 @@ async function forClose(): Promise<void> {
   &__rows {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
     // Same reason as the message body: the panel clips, so the list scrolls.
     max-height: 46vh;
     min-height: 0;
@@ -476,7 +479,7 @@ async function forClose(): Promise<void> {
     box-sizing: border-box;
 
     border: none;
-    border-radius: 14px;
+    @include tx-squircle(24px, $inset: 12px);
     background: var(--tx-bottom-dialog-surface);
     color: var(--tx-text-color-primary, #303133);
     font-family: inherit;

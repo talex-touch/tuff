@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TxOsIcon from '../../icon/src/TxOsIcon.vue'
 import TxStatusBadge from '../src/TxStatusBadge.vue'
+import txStatusBadgeSource from '../src/TxStatusBadge.vue?raw'
 
 describe('txStatusBadge', () => {
   it('renders text, size, and explicit status tone', () => {
@@ -105,14 +106,17 @@ describe('txStatusBadge', () => {
     expect(wrapper.find('.tx-status-badge__glyph').classes()).toContain('i-carbon-pause')
   })
 
-  it('paints the disc from the chip ramp, not from the label hue', () => {
+  it('uses a lightweight translucent semantic chip and contrast-calibrated semantic glyph instead of a heavy solid disc', () => {
     const wrapper = mount(TxStatusBadge, { props: { text: 'Cancelled', status: 'danger' } })
     const style = wrapper.attributes('style')!
 
-    // Two different ramps on purpose: a glyph knocked out of `--tx-color-danger`
-    // measures 2.88:1, under the 3:1 minimum for a graphical object.
     expect(style).toContain('--tx-status-color: var(--tx-color-danger)')
-    expect(style).toContain('--tx-status-chip: var(--tx-status-chip-danger)')
+    expect(style).toContain('--tx-status-chip-bg: color-mix(in srgb, var(--tx-color-danger) 12%, transparent)')
+    expect(style).toContain('--tx-status-glyph: color-mix(in srgb, var(--tx-color-danger) 65%, var(--tx-text-color-primary, #303133))')
+    expect(style).not.toContain('--tx-status-chip:')
+    expect(txStatusBadgeSource).not.toContain('var(--tx-status-chip-on')
+    expect(txStatusBadgeSource).toContain('--tx-status-height: 22px;')
+    expect(txStatusBadgeSource).toContain('--tx-status-height: 26px;')
   })
 
   it('becomes a keyboard-reachable button when a click listener is attached', async () => {

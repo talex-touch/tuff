@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TxTag from '../src/TxTag.vue'
+import txTagSource from '../src/TxTag.vue?raw'
 
 describe('txTag', () => {
   it('renders label, icon, configured small size, and style variables', () => {
@@ -149,5 +150,16 @@ describe('txTag', () => {
 
     // Pre-fix the close button hardcoded aria-label="Remove tag" with no override.
     expect(wrapper.find('.tx-tag__close').attributes('aria-label')).toBe('移除标签')
+  })
+
+  it('aligns heights, radii, and inset-ring styling with the TxButton scale', () => {
+    expect(txTagSource).toContain('--tx-tag-height: 22px;')
+    expect(txTagSource).toContain('--tx-tag-radius: 6px;')
+    expect(txTagSource).toContain('--tx-tag-height: 26px;')
+    expect(txTagSource).toContain('--tx-tag-radius: 8px;')
+    expect(txTagSource).toContain('box-shadow: inset 0 0 0 1px var(--tx-tag-border')
+    expect(txTagSource).not.toContain('letter-spacing:')
+    expect(txTagSource).not.toContain('transition: all')
+    expect(txTagSource).toContain('@media (prefers-reduced-motion: reduce)')
   })
 })

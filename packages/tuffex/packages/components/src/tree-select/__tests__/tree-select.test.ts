@@ -87,4 +87,25 @@ describe('txTreeSelect', () => {
 
     expect(wrapper.findComponent(TxTree).props('filterText')).toBe('')
   })
+
+  it('toggles subtree expansion smoothly via caret without double-indenting custom rows', async () => {
+    const wrapper = mount(TxTreeSelect, {
+      props: { nodes, searchable: false },
+      global: { stubs: { TxPopover: PopoverStub, transition: false } },
+    })
+
+    const caret = wrapper.find('.tx-tree-select__caret')
+    expect(caret.classes()).not.toContain('is-expanded')
+    expect(wrapper.find('.tx-tree__children').exists()).toBe(false)
+
+    await caret.trigger('click')
+
+    expect(caret.classes()).toContain('is-expanded')
+    expect(wrapper.find('.tx-tree__children').exists()).toBe(true)
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+
+    const items = wrapper.findAll('[role="treeitem"]')
+    expect((items[1]?.element as HTMLElement).style.paddingLeft).toBe('')
+    expect((wrapper.findAll('.tx-tree-select__item')[1]?.element as HTMLElement).style.paddingLeft).toBe('26px')
+  })
 })

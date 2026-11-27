@@ -107,6 +107,18 @@ describe('txEmptyState', () => {
     expect(illustration.find('.tx-empty-state__error-pulse--late').exists()).toBe(true)
   })
 
+  it('draws the guide illustration as a directional badge over a 3-step rail', () => {
+    const wrapper = mount(TxEmptyState, { props: { variant: 'guide' } })
+    const illustration = wrapper.find('.tx-empty-state__illustration')
+
+    expect(illustration.attributes('data-variant')).toBe('guide')
+    expect(illustration.find('.tx-empty-state__guide-circle').exists()).toBe(true)
+    expect(illustration.find('.tx-empty-state__guide-arrow').exists()).toBe(true)
+    expect(illustration.find('.tx-empty-state__guide-track').exists()).toBe(true)
+    expect(illustration.find('.tx-empty-state__guide-progress').exists()).toBe(true)
+    expect(illustration.findAll('.tx-empty-state__guide-dot')).toHaveLength(3)
+  })
+
   it('styles the error ripple and stops it under reduced motion', () => {
     expect(txEmptyStateSource).toMatch(/\.tx-empty-state__error-pulse \{[^}]*animation: tx-empty-state-error-ripple/)
     expect(txEmptyStateSource).toContain('@keyframes tx-empty-state-error-ripple')

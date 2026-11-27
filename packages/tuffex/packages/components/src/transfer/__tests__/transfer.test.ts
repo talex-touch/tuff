@@ -116,6 +116,23 @@ describe('txTransfer', () => {
     expect(buttons[1].attributes('aria-label')).toBe('Remove selected')
   })
 
+  it('switches the action button to primary variant and shows the checked count when armed', async () => {
+    const wrapper = mount(TxTransfer, {
+      props: { data, modelValue: [] },
+    })
+
+    const addButton = () => wrapper.findAll('.tx-transfer__actions button')[0]!
+    expect(addButton().classes()).toContain('variant-secondary')
+    expect(addButton().classes()).not.toContain('is-armed')
+    expect(addButton().find('.tx-transfer__action-count').exists()).toBe(false)
+
+    await wrapper.findAll('.tx-transfer__item .tx-checkbox')[0]!.trigger('click')
+
+    expect(addButton().classes()).toContain('variant-primary')
+    expect(addButton().classes()).toContain('is-armed')
+    expect(addButton().find('.tx-transfer__action-count').text()).toBe('1')
+  })
+
   it('gives each row checkbox an accessible name from its item label', () => {
     const wrapper = mount(TxTransfer, {
       props: { data, modelValue: ['docs'] },

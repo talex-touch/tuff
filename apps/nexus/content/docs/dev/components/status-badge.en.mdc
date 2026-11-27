@@ -84,20 +84,22 @@ code: |
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `--tx-status-chip-size` | `18px` (`sm`: `15px`) | Diameter of the status disc, which scales the glyph; set on the root by the `size` class. |
+| `--tx-status-height` | `26px` (`sm`: `22px`) | Badge height, aligned with `TxTag` and `TxButton sm`. |
+| `--tx-status-radius` | `8px` (`sm`: `6px`) | Corner radius. |
+| `--tx-status-chip-size` | `16px` (`sm`: `14px`) | Diameter of the translucent icon halo, which scales the glyph; set on the root by the `size` class. |
 
 ## Overview
 
 - Without a click listener, the root is `role="status"`; with `@click`, it becomes a focusable `role="button"` that Enter / Space activate.
 - `status` wins over `statusKey`, which maps `granted` → success, `denied` → danger, `notDetermined` → warning, `unsupported` → muted, and anything else to info.
-- Default glyphs are solid, since the disc supplies the enclosing circle: success `i-carbon-checkmark`, warning `i-carbon-time`, danger `i-carbon-close`, info `i-carbon-information`.
-- `muted` has no glyph and renders an empty dashed ring; passing `icon` restores the filled disc.
+- Default glyphs sit inside a lightweight translucent semantic halo: success `i-carbon-checkmark`, warning `i-carbon-time`, danger `i-carbon-close`, info `i-carbon-information`.
+- `muted` has no glyph and renders an empty dashed ring; passing `icon` restores the translucent icon halo.
 - `osOnly` hides the status icon but keeps the text.
 
 ## Technologies
 
-- The disc uses a separate `--tx-status-chip-*` ramp, not `--tx-color-*`, so knocked-out glyphs stay at or above 3:1; high-contrast dark inverts it to a light disc with a dark glyph.
-- The label is monospace, on a 14% status-color fill with a 32%, 1px inset ring that takes no layout space.
+- The icon halo uses a 12% semantic tint (`--tx-status-chip-bg`) paired with a contrast-calibrated semantic glyph (`--tx-status-glyph`, mixed 65% toward primary ink) so icons stay lightweight while clearing WCAG 3:1 across light, dark, and high-contrast themes.
+- The label is monospace, on a 12% status-color fill with a 30%, 1px inset ring that takes no layout space.
 - Source: `packages/tuffex/packages/components/src/status-badge/`.
 
 <TuffDocSourceLink />

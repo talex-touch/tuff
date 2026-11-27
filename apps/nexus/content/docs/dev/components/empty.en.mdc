@@ -53,14 +53,14 @@ Renders [TxEmptyState](./empty-state.en.mdc) with `variant="empty"`, `surface="c
 |------|------|---------|-------------|
 | `title` | `string` | `'Nothing here'` | Main message. |
 | `description` | `string` | `''` | Supporting text below the title. |
-| `iconClass` | `string` | `'i-carbon-incomplete'` | Icon class, passed to `TxEmptyState` as `icon`. |
+| `iconClass` | `string` | `-` | Optional icon class passed to `TxEmptyState` as `icon`; overrides the built-in empty illustration when set. |
 | `compact` | `boolean` | `false` | `true` sets `size="small"`; otherwise `medium`. |
 
 ### Slots
 
 | Slot | Props | Description |
 |------|------|-------------|
-| `icon` | - | Replaces the `iconClass` icon. |
+| `icon` | - | Replaces the default illustration or `iconClass` icon. |
 | `title` | - | Replaces the title. |
 | `description` | - | Replaces the description. |
 | `action` | - | Action area; replaces the `actions` slot of `TxEmptyState`. |
