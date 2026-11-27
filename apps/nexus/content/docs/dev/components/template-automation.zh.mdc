@@ -95,7 +95,7 @@ code: |
 
 - 换成自己的流程：节点与连线都是普通数组，`flowNodes()` 只按画布尺寸算坐标；连线总从上一节点底边连到下一节点顶边，分支节点要横向错开。
 - 接真实执行器时，把 `buildPlan()` 里的定时步骤换成后端事件（SSE / WebSocket），每个事件调用一次 `setNode()` 并追加一行日志。
-- TxFlowchart 没有逐条连线的样式 API：模板借用 `dashed` 表示「正在传递」，颜色与流动写在 `prefers-reduced-motion: no-preference` 之内。
+- 模板这里借用 `dashed` 加自定义样式表示「正在传递」；新场景也可直接使用 `TxFlowchart` 内置的 `edge.tone`、`edge.animated` 与 `edge.pulse`。
 - TxFlatSelect 与微调卡片的类型菜单都不 teleport，要避开 `overflow: hidden` 的裁切，并远离容器底边。
 
 ## 相关组件

@@ -1,6 +1,6 @@
 ---
 title: "Flowchart 流程画布"
-description: "点阵画布上的工作流节点与连线，受控且可拖拽"
+description: "支持多种曲线、脉冲光效、运行态节点与缩放缩略图的可控工作流画布"
 category: Flow
 status: beta
 since: 0.6.0
@@ -9,22 +9,44 @@ syncStatus: reviewed
 verified: true
 ---
 
+## 安装
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxFlowchart } from '@talex-touch/tuffex/flowchart'
+  import '@talex-touch/tuffex/flowchart/style.css'
+  import '@talex-touch/tuffex/base.css'
+---
+:::
+
 ## 用法
 
-### Flowchart
+### 基础工作流
 
-:::TuffDemoWrapper{demo="FlowchartFlowchartDemo" code-lang="vue" title="订单工作流" description="触发器与条件分支两个节点，连线随卡片高度自动重算；按住卡片可以拖动，落点吸附到点阵。"}
+通过 `#node` 插槽自定义任意卡片内容；拖动卡片时吸附到点阵并触发 `node-move`，连线、锚点与脉冲光束实时跟随卡片高度。
+
+:::TuffDemoWrapper{demo="FlowchartFlowchartDemo" code-lang="vue" title="订单工作流" description="触发器与条件分支，卡片高度变化或拖拽时连线自动重算。"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
   const nodes = ref([
-    { id: 'trigger', label: 'Trigger', tone: 'violet', x: 240, y: 26 },
-    { id: 'branch', label: 'If / Else', tone: 'orange', x: 240, y: 178 },
+    { id: 'trigger', label: '触发器', tone: 'violet', x: 240, y: 20 },
+    { id: 'branch', label: '条件分支', tone: 'orange', x: 240, y: 178 },
   ])
 
-  const edges = [{ from: 'trigger', to: 'branch' }]
+  const edges = [
+    { from: 'trigger', to: 'branch', tone: 'violet', pulse: true, label: '事件载荷', markerEnd: 'arrow' },
+  ]
 
   function place({ id, x, y }) {
     const node = nodes.value.find(n => n.id === id)
@@ -36,78 +58,285 @@ code: |
   </script>
 
   <template>
-    <TxFlowchart :nodes="nodes" :edges="edges" draggable @node-move="place">
+    <TxFlowchart :nodes="nodes" :edges="edges" draggable ports @node-move="place">
       <template #node="{ node }">
-        <!-- 卡片内容完全由宿主提供 -->
+        <!-- 卡片内容由宿主提供；不传插槽时可使用 title / description 内置排版 -->
       </template>
     </TxFlowchart>
   </template>
 ---
 :::
 
+### 连线曲线、端点、画布与光效
+
+实时切换 `edgeType`（贝塞尔 / 圆角折线 / 直线）、`edgeMarker`（箭头 / 圆点 / 无）、`background`（点阵 / 网格 / 十字 / 纯净），以及 `pulse` 脉冲光束、`animated` 虚线流动与 `ports` 连接锚点。
+
+:::TuffDemoWrapper{demo="FlowchartEdgesDemo" code-lang="vue" title="连线风格与画布材质实验室" description="按需组合语义色连线、中点标签、端点箭头与脉冲光效，点击连线触发 edge-click。"}
+---
+code: |
+  <template>
+    <TxFlowchart
+      :nodes="nodes"
+      :edges="[
+        { from: 'gateway', to: 'cache', tone: 'green', pulse: true, animated: true, label: '命中 · 4ms' },
+        { from: 'gateway', to: 'origin', tone: 'accent', pulse: true, label: '回源 · 42ms' },
+        { from: 'origin', to: 'fallback', tone: 'orange', dashed: true, label: '超时降级' },
+      ]"
+      edge-type="bezier"
+      edge-marker="arrow"
+      background="dots"
+      ports
+      draggable
+      @edge-click="onEdgeClick"
+    />
+  </template>
+---
+:::
+
+### 横向流水线与运行态
+
+`direction="horizontal"` 将锚点切到卡片左右两侧；结合节点的 `status`（`running` / `success` / `warning` / `error`）与连线脉冲，直接呈现 CI/CD 发布流水线的实时执行与阻断路径。
+
+:::TuffDemoWrapper{demo="FlowchartPipelineDemo" code-lang="vue" title="横向 CI/CD 发布流水线" description="点击运行或模拟失败，观察并行分支的执行光环、脉冲信号与阻断回馈。"}
+---
+code: |
+  <template>
+    <TxFlowchart
+      ref="flowRef"
+      :nodes="stages"
+      :edges="links"
+      direction="horizontal"
+      edge-marker="arrow"
+      :selected-id="selectedId"
+      ports
+      pannable
+      zoomable
+      controls
+      @node-click="({ id }) => (selectedId = id)"
+    />
+  </template>
+---
+:::
+
+### AI Agent 多分支编排
+
+将意图路由、向量检索、SQL 工具、代码沙箱与流式合成编排在同一张有向无环图上；切换路由模式即可动态高亮对应分支与指标标签。
+
+:::TuffDemoWrapper{demo="FlowchartAgentDemo" code-lang="vue" title="AI Agent 多分支编排" description="切换不同工具链路或并行模式，点击节点查看配置与耗时。"}
+---
+code: |
+  <template>
+    <TxFlowchart
+      :nodes="agentNodes"
+      :edges="agentEdges"
+      edge-marker="arrow"
+      :selected-id="selectedId"
+      ports
+      pannable
+      zoomable
+      controls
+      @node-click="({ id }) => (selectedId = id)"
+      @canvas-click="selectedId = null"
+    />
+  </template>
+---
+:::
+
+### 画布缩放、缩略图与对齐参考线
+
+开启 `pannable`、`zoomable`、`controls` 与 `minimap` 获得完整画布导航；拖拽节点时自动浮现与同行/同列节点的对齐参考线，并可通过 `fitView()` 一键适配新增节点。
+
+:::TuffDemoWrapper{demo="FlowchartCanvasDemo" code-lang="vue" title="画布导航与动态编排游乐场" description="拖拽空白处平移，Ctrl/⌘ + 滚轮缩放，点击缩略图跳转，动态增删节点并自动整理。"}
+---
+code: |
+  <template>
+    <TxFlowchart
+      ref="flowRef"
+      :nodes="nodes"
+      :edges="edges"
+      background="cross"
+      edge-marker="arrow"
+      draggable
+      ports
+      pannable
+      zoomable
+      controls
+      minimap
+      @node-move="place"
+      @viewport-change="onViewportChange"
+    />
+  </template>
+---
+:::
+
+### 正交审批与风险分流状态机
+
+`edgeType="smoothstep"` 搭配 `background="lines"` 适合风控分流、审批会签与异常回滚等结构化状态机场景。
+
+:::TuffDemoWrapper{demo="FlowchartApprovalDemo" code-lang="vue" title="风险分级发布审批流" description="切换低、中、高风险等级，实时高亮对应正交分支与节点状态。"}
+---
+code: |
+  <template>
+    <TxFlowchart
+      :nodes="approvalNodes"
+      :edges="approvalEdges"
+      edge-type="smoothstep"
+      background="lines"
+      edge-marker="arrow"
+      ports
+      pannable
+      zoomable
+      controls
+    />
+  </template>
+---
+:::
+
 ### 最佳实践
 
-- 同一条流水线上的节点写同一个 `x`，让连线退化成直线。
-- 卡片内容自己控制高度，不要给卡片写死 `height`——连线是按实测高度画的，写死会让两者对不上。
-- 分类胶囊的 `tone` 表达的是**步骤种类**（触发、分支、动作），不是状态，所以它用的是 BUI 的强调色集而不是 `--tx-*` 语义色阶。
+- 竖向流水线给同一主干节点写相同 `x`，横向流水线给同行节点写相同 `y`，让主干连线保持笔直。
+- 不要给卡片写死 `height`——连线与左右锚点都按 `ResizeObserver` 实测尺寸计算。
+- 简单节点直接传入 `title`、`description`、`meta`、`badge` 使用内置卡片排版；需要表单、规则令牌或复杂交互时再写 `#node` 插槽。
+- 分类胶囊的 `tone` 表示**步骤种类**（触发、分支、动作），节点 `status` 表示**运行状态**（`running`、`success`、`warning`、`error`），两者分层表达更清晰。
+- 宽图或动态增删节点场景，在挂载或更新后调用 `flowRef.value?.fitView()`，保证窄屏也不裁切卡片。
 
 ## API 参考
 
-### Props
+### 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
-| `nodes` | `FlowNode[]` | — | 画布上的节点。必填。 |
-| `edges` | `FlowEdge[]` | `[]` | 节点间的连线。 |
+| `nodes` | `FlowNode[]` | — | 画布上的节点列表。必填。 |
+| `edges` | `FlowEdge[]` | `[]` | 节点间的有向连线列表。 |
 | `height` | `number` | `333` | 画布高度（px）。 |
 | `nodeWidth` | `number` | `290` | 节点默认宽度，可被 `FlowNode.width` 覆盖。 |
-| `grid` | `number` | `22` | 点阵间距，同时是拖拽吸附步长。 |
-| `dots` | `boolean` | `true` | 是否绘制点阵。 |
+| `grid` | `number` | `22` | 背景网格间距，同时是拖拽吸附步长。 |
+| `dots` | `boolean` | `true` | 是否绘制点阵（`background` 未指定时生效）。 |
+| `background` | `FlowBackground` | — | 画布背景材质：`dots` / `lines` / `cross` / `none`。 |
+| `direction` | `FlowDirection` | `'vertical'` | 布局方向：`vertical`（上下连接）或 `horizontal`（左右连接）。 |
+| `edgeType` | `FlowEdgeType` | `'bezier'` | 默认连线曲线：`bezier` / `smoothstep` / `straight`。 |
+| `edgeMarker` | `FlowEdgeMarker` | `'none'` | 默认端点标记：`none` / `arrow` / `dot`。 |
+| `ports` | `boolean` | `false` | 是否在已连接的卡片边缘绘制锚点圆点。 |
+| `selectedId` | `string \| null` | `null` | 受控选中节点 id。 |
 | `draggable` | `boolean` | `false` | 是否允许拖拽节点。 |
-| `snap` | `boolean` | `true` | 拖拽时是否吸附到点阵。 |
+| `snap` | `boolean` | `true` | 拖拽时是否吸附到网格。 |
+| `snapGuides` | `boolean` | `true` | 拖拽对齐其他节点时是否显示参考线。 |
+| `pannable` | `boolean` | `false` | 是否允许拖拽空白画布平移视口。 |
+| `zoomable` | `boolean` | `false` | 是否允许 `Ctrl/⌘ + 滚轮` 或 HUD 缩放视口。 |
+| `minZoom` | `number` | `0.45` | 最小缩放倍率。 |
+| `maxZoom` | `number` | `1.75` | 最大缩放倍率。 |
+| `controls` | `boolean` | `false` | 是否在右下角显示缩放与适应视图 HUD。 |
+| `minimap` | `boolean` | `false` | 是否在左下角显示可点击跳转的实时缩略图。 |
 | `ariaLabel` | `string` | `'Workflow'` | 画布区域的无障碍名称。 |
+| `labels` | `FlowchartLabels` | `{}` | HUD 按钮与缩略图的本地化无障碍文案。 |
 
-`FlowNode` 的字段：`id`、`x`、`y` 必填；`label` 是卡片上方的分类胶囊，`tone` 取 `violet` / `orange` / `accent` / `green` / `red` / `neutral`；`width` 覆盖单个节点宽度；`draggable` 单独关掉某个节点的拖拽。
+### 类型
 
-### Events
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  type FlowNodeTone = 'violet' | 'orange' | 'accent' | 'green' | 'red' | 'neutral'
+  type FlowNodeStatus = 'idle' | 'active' | 'running' | 'success' | 'warning' | 'error'
+  type FlowEdgeType = 'bezier' | 'smoothstep' | 'straight'
+  type FlowEdgeMarker = 'none' | 'arrow' | 'dot'
+  type FlowDirection = 'vertical' | 'horizontal'
+  type FlowBackground = 'dots' | 'lines' | 'cross' | 'none'
+
+  interface FlowNode {
+    id: string
+    x: number
+    y: number
+    label?: string
+    tone?: FlowNodeTone
+    width?: number
+    draggable?: boolean
+    status?: FlowNodeStatus
+    selected?: boolean
+    ports?: boolean
+    title?: string
+    description?: string
+    meta?: string
+    badge?: string
+  }
+
+  interface FlowEdge {
+    id?: string
+    from: string
+    to: string
+    type?: FlowEdgeType
+    tone?: FlowNodeTone
+    dashed?: boolean
+    animated?: boolean
+    pulse?: boolean
+    active?: boolean
+    label?: string
+    markerEnd?: FlowEdgeMarker
+  }
+---
+:::
+
+### 事件
 
 | 事件名 | 回调参数 | 说明 |
 |---|---|---|
-| `node-move` | `{ id, x, y }` | 某个节点拖拽结束。组件不会改 `nodes`，宿主要自己写回去这次移动才会留下。 |
-| `node-click` | `{ id, node }` | 节点被点击、或在聚焦时按下 Enter / 空格。 |
+| `node-move` | `{ id, x, y }` | 节点拖拽结束。组件不直接修改 `nodes`，由宿主回写坐标。 |
+| `node-click` | `{ id, node }` | 节点被点击，或在聚焦时按下 Enter / 空格（拖拽超过 4px 时自动抑制）。 |
+| `edge-click` | `{ edge, index }` | 连线或其中点标签被点击。 |
+| `canvas-click` | — | 点击画布空白背景时触发，常用于清空选中态。 |
+| `viewport-change` | `{ x, y, zoom }` | 视口平移、缩放或调用 `fitView` / `resetView` 后触发。 |
 
-### Slots
+### 插槽
 
 | 插槽名 | 作用域参数 | 说明 |
 |---|---|---|
-| `node` | `{ node, index }` | 卡片内容。不传则渲染一张空卡。 |
+| `node` | `{ node, index }` | 自定义节点卡片内容。未传时若节点包含 `title`/`description`/`meta`/`badge` 则渲染内置结构化卡片。 |
 | `label` | `{ node }` | 替换卡片上方的分类胶囊。 |
+| `edge-label` | `{ edge, index }` | 自定义连线中点标签内容。 |
+| `toolbar` | `{ zoom, zoomIn, zoomOut, fitView, resetView }` | 替换右下角默认 HUD 缩放工具条。 |
+| `empty` | — | `nodes` 为空时的占位视图。 |
+
+### 暴露方法
+
+| 方法名 | 签名 | 说明 |
+|---|---|---|
+| `fitView` | `(padding?: number) => void` | 按所有节点外接包围盒自动缩放并居中视口。 |
+| `zoomIn` | `() => void` | 以画布中心放大一档（+15%）。 |
+| `zoomOut` | `() => void` | 以画布中心缩小一档（−15%）。 |
+| `resetView` | `() => void` | 重置视口到 `(0, 0)` 与 `100%` 缩放。 |
+| `centerOn` | `(nodeId: string) => void` | 将指定节点平滑定位到画布中心。 |
+| `getViewport` | `() => FlowViewport` | 读取当前 `{ x, y, zoom }` 视口状态。 |
 
 ## 坐标系
 
-`x` 是节点的**水平中心**，不是左边缘——节点用 `translateX(-50%)` 骑在这条中线上，所以同一条竖直流水线上的节点写同一个 `x` 就能对齐，不用先知道卡片有多宽。`y` 是上边缘。两者都是画布内的 CSS 像素。
+`x` 是节点的**水平中心**，`y` 是节点的**上边缘**（CSS 像素）。竖向模式下连线从上游卡片底边连到下游卡片顶边；横向模式下连线从上游卡片右侧中点连到下游卡片左侧中点，均由 `ResizeObserver` 实测卡片尺寸与位置得到。
 
-`grid` 同时是点阵间距和拖拽吸附的步长，默认 `22px`。点阵用 `radial-gradient` 画：圆点落在 1px、渐隐到 1.25px。硬停在 1px 会在栅格尺寸上锯齿成方块，超过约 1.5px 又会变成和卡片抢视线的纹理。
+`grid` 同时控制背景纹理步距与拖拽吸附步长，并在视口平移缩放时同步跟随。
 
 ## 连线
 
-`edges` 里的每条连线从 `from` 的**下边缘**画到 `to` 的**上边缘**。卡片高度由内容决定——两行条件比一行触发器高——所以组件用 `ResizeObserver` 实测每张卡的高度再算路径，而不是假设一个值把线头画进卡片里或者悬在卡片下方。
+每条连线支持 `bezier`、`smoothstep`（带圆角与反向回环绕行）和 `straight` 三种几何路由。`pulse` 使用 SVG `pathLength="100"` 绘制双层发光脉冲束，在不同曲率与笔直连线上保持一致速率且不会因 SVG 滤镜包围盒塌缩而消失。
 
-曲线的两个控制点都越过中点并且交叉（各偏 0.55 倍垂距）。竖直对齐的一对因此读作直线，而横向错开的一对仍然是垂直进出卡片，不会像 0.5 那样松垮。
-
-指向画布上不存在的节点的连线会被**跳过**，不会画到原点——否则一条线会横穿整个画布。
+指向画布上不存在的节点的连线会被自动跳过。
 
 ## 概述
 
-- **始终受控。** 组件不写 `nodes`。拖拽过程中它在内部记一个临时偏移让卡片跟手，松手时清掉偏移并发出 `node-move`；宿主不写回，节点就弹回原位。这一点是刻意的：撤销栈、吸附到别的规则、服务端持久化都应该由宿主决定。
-- **可拖拽节点带 `touch-action: none`。** 否则触摸拖拽会变成滚动页面。
-- **节点可聚焦。** 每个节点是 Tab 停靠点，Enter / 空格触发 `node-click`，焦点环由 `:focus-visible` 给出。
-- 连线画在卡片**下方**，这样卡片的发丝环阴影会盖住线头，而不是让线横穿卡片圆角。
+- **始终受控**：组件不直接写入 `nodes` 或 `edges`，拖拽偏移在松手后经 `node-move` 上报，且拖拽超过 4px 自动抑制随后的 `node-click`。
+- **不劫持页面滚动**：`zoomable` 仅响应 `Ctrl / ⌘ + 滚轮` 与 HUD 按钮，普通滚轮保持页面自然滚动。
+- **尊重减少动态效果**：所有循环动效（虚线流动、脉冲光束、运行态光环）均写在 `@media (prefers-reduced-motion: no-preference)` 之内，减少动态效果下保持清晰静态提示。
+- **无障碍与键盘支持**：每个节点均为 Tab 停靠点，支持 `Enter` / 空格触发 `node-click` 与 `aria-selected`；连线层标注 `aria-hidden="true"`，连线标签与 HUD 控件均为原生 `<button type="button">`。
 
 ## 技术实现
 
 - 组件源码：`packages/tuffex/packages/components/src/flowchart/src/TxFlowchart.vue`。
-- 类型：`packages/tuffex/packages/components/src/flowchart/src/types.ts`。
-- 移植自 Beautiful UI（https://www.beautifului.dev）第 16 例 Flowchart，© 2026 Shane Levine，MIT。
+- 纯几何路由与视口计算：`packages/tuffex/packages/components/src/flowchart/src/geometry.ts`。
+- 类型定义：`packages/tuffex/packages/components/src/flowchart/src/types.ts`。
+- 初始原型移植自 Beautiful UI（https://www.beautifului.dev）第 16 例 Flowchart，© 2026 Shane Levine，MIT，并在此基础上扩展了曲线路由、光效、运行态与画布导航能力。
+
+## 相关组件
+
+- [Automation 自动化编排模板](/docs/dev/components/template-automation)：带配置侧栏、运行记录与实时日志的完整工作流编辑器模板。
+- [Steps 步骤条](/docs/dev/components/steps)：线性阶段进度提示。
+- [Timeline 时间线](/docs/dev/components/timeline)：按时间顺序展示运行历史与事件记录。
+- [AgentTrace 智能体轨迹](/docs/dev/components/agent-trace)：线性呈现智能体工具调用明细。
 
 <TuffDocSourceLink />
