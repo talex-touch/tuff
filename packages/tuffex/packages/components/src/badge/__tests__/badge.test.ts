@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxBadge from '../src/TxBadge.vue'
+import txBadgeSource from '../src/TxBadge.vue?raw'
 
 interface ResizeObserverControl {
   ResizeObserverMock: ReturnType<typeof vi.fn>
@@ -193,5 +194,15 @@ describe('txBadge', () => {
     await wrapper.setProps({ open: true })
     expect(wrapper.classes()).toContain('is-open')
     expect(wrapper.classes()).not.toContain('is-closed')
+  })
+
+  it('aligns sizing with inset rings and clears border/ring chrome on dot mode', () => {
+    const custom = mount(TxBadge, { props: { value: 3, color: '#111827' } })
+    expect(custom.attributes('style')).toContain('--tx-badge-border: transparent')
+
+    expect(txBadgeSource).toContain('--tx-badge-height: 20px;')
+    expect(txBadgeSource).toContain('--tx-badge-radius: 999px;')
+    expect(txBadgeSource).toContain('box-shadow: inset 0 0 0 1px var(--tx-badge-border, transparent);')
+    expect(txBadgeSource).toContain('box-shadow: none;')
   })
 })

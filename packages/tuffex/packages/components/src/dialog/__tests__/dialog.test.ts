@@ -3,8 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import TxBottomDialog from '../src/TxBottomDialog.vue'
 import TxBlowDialog from '../src/TxBlowDialog.vue'
+import txBlowDialogSource from '../src/TxBlowDialog.vue?raw'
+import txBottomDialogSource from '../src/TxBottomDialog.vue?raw'
 import TxPopperDialog from '../src/TxPopperDialog.vue'
+import txPopperDialogSource from '../src/TxPopperDialog.vue?raw'
 import TxTouchTip from '../src/TxTouchTip.vue'
+import txTouchTipSource from '../src/TxTouchTip.vue?raw'
 import { asTrustedDialogHtml } from '../src/types'
 
 describe('dialog components', () => {
@@ -600,5 +604,27 @@ describe('dialog components', () => {
     expect(app.style.opacity).toBe('')
     expect(app.style.transition).toBe('')
     expect(app.style.getPropertyValue('--app-accent')).toBe('coral')
+  })
+
+  it('keeps concentric nested radii (24px outer, 12px inset, 12px inner) across all dialog variants', () => {
+    for (const [name, source] of [
+      ['TxBlowDialog', txBlowDialogSource],
+      ['TxPopperDialog', txPopperDialogSource],
+      ['TxTouchTip', txTouchTipSource],
+      ['TxBottomDialog', txBottomDialogSource],
+    ] as const) {
+      expect(source, `${name} outer squircle`).toContain('@include tx-squircle(24px)')
+      expect(source, `${name} concentric inner squircle`).toContain('@include tx-squircle(24px, $inset: 12px)')
+    }
+
+    // Button-hosted dialogs let fake-background inherit the concentric squircle geometry.
+    for (const [name, source] of [
+      ['TxBlowDialog', txBlowDialogSource],
+      ['TxPopperDialog', txPopperDialogSource],
+      ['TxTouchTip', txTouchTipSource],
+    ] as const) {
+      expect(source, `${name} fake-radius inherit`).toContain('--fake-radius: inherit;')
+      expect(source, `${name} concentric button radius`).toContain('--tx-button-radius: 12px;')
+    }
   })
 })

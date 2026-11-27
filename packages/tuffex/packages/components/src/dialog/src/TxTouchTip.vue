@@ -256,6 +256,9 @@ onUnmounted(() => {
   }
 
   &__container {
+    // Concentric corners: 24px outer radius minus 12px uniform side/bottom inset = 12px button radius.
+    --tx-touch-tip-radius: 24px;
+    --tx-touch-tip-inset: 12px;
     position: absolute;
     left: 50%;
     top: 50%;
@@ -263,25 +266,29 @@ onUnmounted(() => {
     z-index: 0;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-width: 420px;
-    min-height: 260px;
-    width: min(420px, 88vw);
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 8px;
+    width: min(380px, 88vw);
+    max-height: 80vh;
+    padding: 24px var(--tx-touch-tip-inset) var(--tx-touch-tip-inset);
+    box-sizing: border-box;
     color: var(--tx-text-color-primary, #303133);
     transform: translate(-50%, -50%);
     transition: transform 0.22s ease;
-    @include tx-squircle(12px);
+    @include tx-squircle(24px);
 
-    // The shadow, on a layer of its own so it can fade while the panel does not.
+    // The rim and shadow, on a layer of their own so they can fade while the panel does not.
     &::after {
       content: '';
       position: absolute;
       inset: 0;
       z-index: 1;
+      border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent);
       border-radius: inherit;
       corner-shape: inherit;
       box-shadow: 9px 18px 65px rgba(0, 0, 0, 0.25);
+      box-sizing: border-box;
       pointer-events: none;
     }
   }
@@ -296,13 +303,14 @@ onUnmounted(() => {
   }
 
   &__title {
-    position: absolute;
-    top: 16px;
     margin: 0;
-    height: 32px;
-    line-height: 32px;
-    font-size: 18px;
+    padding-inline: 12px;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    font-size: 17px;
     font-weight: var(--tx-font-weight-semibold, 600);
+    text-align: center;
+    text-wrap: balance;
   }
 
   &__content {
@@ -312,29 +320,36 @@ onUnmounted(() => {
     // which `break-word` does not, so the panel stops being widened by it.
     overflow-wrap: anywhere;
     position: relative;
-    width: 80%;
-    height: calc(100% - 30px);
-    // Fixed height plus a clipping panel meant a long body simply vanished
-    // below the fold with nothing to reach it.
+    width: 100%;
+    padding-inline: 12px;
+    box-sizing: border-box;
+    max-height: 300px;
     overflow-y: auto;
+    font-size: 13px;
+    line-height: 1.55;
     text-align: center;
+    text-wrap: pretty;
     color: var(--tx-text-color-secondary, #909399);
     white-space: pre-line;
   }
 
   &__btns {
-    position: absolute;
     display: flex;
-    gap: 12px;
+    gap: 8px;
     justify-content: center;
     align-items: center;
-    bottom: 16px;
-    width: 80%;
+    width: 100%;
+    margin-top: 16px;
     user-select: none;
   }
 
   &__btn {
     flex: 1;
+    min-width: 0;
+    --tx-button-height: 40px;
+    --tx-button-radius: 12px;
+    --fake-radius: inherit;
+    @include tx-squircle(24px, $inset: 12px);
   }
 }
 

@@ -18,6 +18,7 @@ const customStyle = computed(() => {
     return {
       '--tx-badge-bg': props.color,
       '--tx-badge-text': '#ffffff',
+      '--tx-badge-border': 'transparent',
       '--tx-badge-dot': props.color,
     }
   }
@@ -79,19 +80,31 @@ watch(
 </template>
 
 <style scoped>
+/* Sized right below TxTag sm (22px) on the TxButton scale: 20px fixed height
+   with a 1px inset ring so single-digit counters stay circular (20x20) and
+   label badges stay crisp pills without layout border inflation. */
 .tx-badge {
+  --tx-badge-height: 20px;
+  --tx-badge-pad-x: 7px;
+  --tx-badge-radius: 999px;
+
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 2px 8px;
-  font-size: 12px;
+  box-sizing: border-box;
+  height: var(--tx-badge-height);
+  min-width: var(--tx-badge-height);
+  padding: 0 var(--tx-badge-pad-x);
+  font-size: 11px;
   font-weight: var(--tx-font-weight-medium, 500);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
-  border-radius: 9999px;
+  border: 0;
+  border-radius: var(--tx-badge-radius);
   white-space: nowrap;
-  background: var(--tx-badge-bg, #f3f4f6);
-  color: var(--tx-badge-text, #374151);
-  border: 1px solid var(--tx-badge-border, transparent);
+  background: var(--tx-badge-bg, var(--tx-fill-color-light, #f5f7fa));
+  color: var(--tx-badge-text, var(--tx-text-color-secondary, #909399));
+  box-shadow: inset 0 0 0 1px var(--tx-badge-border, transparent);
   transform: scale(1);
   transform-origin: center;
   opacity: 1;
@@ -103,35 +116,35 @@ watch(
 }
 
 /* Status variants ride the semantic tokens with the family recipe
-   (12% bg / 32% border, same as TxStatusBadge) so they hold up in dark mode. */
+   (12% bg / 30% inset ring, matching TxTag and TxStatusBadge) so they hold up in dark mode. */
 .tx-badge--default {
-  --tx-badge-bg: var(--tx-fill-color-light, #f3f4f6);
-  --tx-badge-text: var(--tx-text-color-secondary, #374151);
-  --tx-badge-border: transparent;
+  --tx-badge-bg: var(--tx-fill-color-light, #f5f7fa);
+  --tx-badge-text: var(--tx-text-color-secondary, #909399);
+  --tx-badge-border: var(--tx-border-color-light, #e4e7ed);
 }
 
 .tx-badge--primary {
   --tx-badge-bg: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
   --tx-badge-text: var(--tx-color-primary, #409eff);
-  --tx-badge-border: color-mix(in srgb, var(--tx-color-primary, #409eff) 32%, transparent);
+  --tx-badge-border: color-mix(in srgb, var(--tx-color-primary, #409eff) 30%, transparent);
 }
 
 .tx-badge--success {
   --tx-badge-bg: color-mix(in srgb, var(--tx-color-success, #67c23a) 12%, transparent);
   --tx-badge-text: var(--tx-color-success, #67c23a);
-  --tx-badge-border: color-mix(in srgb, var(--tx-color-success, #67c23a) 32%, transparent);
+  --tx-badge-border: color-mix(in srgb, var(--tx-color-success, #67c23a) 30%, transparent);
 }
 
 .tx-badge--warning {
   --tx-badge-bg: color-mix(in srgb, var(--tx-color-warning, #e6a23c) 12%, transparent);
   --tx-badge-text: var(--tx-color-warning, #e6a23c);
-  --tx-badge-border: color-mix(in srgb, var(--tx-color-warning, #e6a23c) 32%, transparent);
+  --tx-badge-border: color-mix(in srgb, var(--tx-color-warning, #e6a23c) 30%, transparent);
 }
 
 .tx-badge--error {
   --tx-badge-bg: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 12%, transparent);
   --tx-badge-text: var(--tx-color-danger, #f56c6c);
-  --tx-badge-border: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 32%, transparent);
+  --tx-badge-border: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 30%, transparent);
 }
 
 /* The engine animates the number's own container on the morph curve, so the pill
@@ -139,6 +152,7 @@ watch(
    and no `box-sizing: content-box`, both of which existed for the measured inline
    width this no longer writes. */
 .tx-badge--numeric {
+  padding: 0 var(--tx-badge-numeric-pad-x, 5px);
   overflow: clip;
 }
 
@@ -153,6 +167,8 @@ watch(
   padding: 0;
   min-width: 8px;
   border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
 }
 
 .tx-badge__dot {

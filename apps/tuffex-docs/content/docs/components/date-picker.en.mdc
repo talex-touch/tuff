@@ -66,23 +66,34 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `string \| DateRangeValue` | `''` | A `YYYY-MM-DD` date; a `[start, end]` pair under `range`. |
+| `modelValue` | `string \| DateRangeValue` | `''` | Formatted string (`YYYY-MM-DD`, `HH:mm`, `YYYY-MM-DD HH:mm`) or `[start, end]` pair for range modes. |
 | `visible` | `boolean` | `false` | Popup visibility, bound with `v-model:visible`. |
 | `popup` | `boolean` | `true` | Picker surface only: `false` renders it inline. |
-| `variant` | `'picker' \| 'field' \| 'adaptive'` | `'picker'` | `picker` is the wheel, `field` the calendar field, `adaptive` switches by viewport width. |
-| `title` | `string` | `'Select date'` | Toolbar title, forwarded to `TxPicker`. |
-| `placeholder` | `string` | `'Select date'` | Placeholder of the empty field calendar. |
-| `min` | `string` | - | Earliest selectable date (`YYYY-MM-DD`); invalid values are ignored. |
-| `max` | `string` | - | Latest selectable date (`YYYY-MM-DD`); invalid values are ignored. |
+| `variant` | `'picker' \| 'field' \| 'adaptive'` | `'picker'` | `picker` is the wheel, `field` the popover panel, `adaptive` switches by viewport width. |
+| `mode` | `'date' \| 'time' \| 'datetime' \| 'daterange' \| 'datetimerange'` | `'date'` | Selects date, time, date-time, date range, or date-time range surface and value format. |
+| `title` | `string` | `'Select date'` | Toolbar title and field aria-label. |
+| `placeholder` | `string` | auto by `mode` | Placeholder of the empty field control. |
+| `min` | `string` | - | Earliest selectable bound matching the active `mode`. |
+| `max` | `string` | - | Latest selectable bound matching the active `mode`. |
 | `disabled` | `boolean` | `false` | Blocks interaction. |
+| `clearable` | `boolean` | `false` | Shows a clear button inside the field when a value is set. |
 | `showToolbar` | `boolean` | `true` | Shows the picker toolbar. |
-| `confirmText` | `string` | `'Confirm'` | Confirm button label, forwarded to `TxPicker`. |
+| `showSeconds` | `boolean` | `false` | Adds a seconds wheel and `:ss` suffix in time / datetime modes. |
+| `minuteStep` | `number` | `1` | Minute increment in time wheels. |
+| `secondStep` | `number` | `1` | Second increment in time wheels when `showSeconds` is enabled. |
+| `presets` | `DatePickerPreset[]` | - | Optional quick-select chips shown at the top of the popover. |
+| `confirmText` | `string` | `'Confirm'` | Confirm button label. |
 | `cancelText` | `string` | `'Cancel'` | Cancel button label, forwarded to `TxPicker`. |
+| `todayText` | `string` | `'Today'` | Quick-jump label in the `date` footer. |
+| `nowText` | `string` | `'Now'` | Quick-jump label in time / datetime footers. |
+| `startPlaceholder` | `string` | `'Start'` | Start slot label in range modes. |
+| `endPlaceholder` | `string` | `'End'` | End slot label in range modes. |
+| `timeLabel` | `string` | `'Time'` | Header label of the time wheel pane. |
 | `closeOnClickMask` | `boolean` | `true` | Closes the popup when the mask is clicked. |
-| `adaptiveBreakpoint` | `number` | `768` | Minimum viewport width at which `adaptive` shows the field calendar. |
+| `adaptiveBreakpoint` | `number` | `768` | Minimum viewport width at which `adaptive` shows the field panel. |
 | `weekStartsOn` | `0 \| 1` | `0` | First day of the field calendar's week: `0` Sunday, `1` Monday. |
-| `range` | `boolean` | `false` | Field calendar only: picks a start and an end date; the wheel ignores it. |
-| `rangeSeparator` | `string` | `' → '` | Text between the two dates in the field's display value. |
+| `range` | `boolean` | `false` | Shorthand for `daterange` (or `datetimerange` when combined with `mode="datetime"`). |
+| `rangeSeparator` | `string` | `' → '` | Text between the two endpoints in the field's display value. |
 
 ### Events
 

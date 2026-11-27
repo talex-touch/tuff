@@ -13,9 +13,11 @@ import type {
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { TxFileUploader } from '../../../file-uploader'
 import { TxModal } from '../../../modal'
+import { TxTooltip } from '../../../tooltip'
 import AvatarEditorIcon from './AvatarEditorIcon.vue'
 import AvatarEditorPanel from './AvatarEditorPanel.vue'
 import AvatarEditorTimeline from './AvatarEditorTimeline.vue'
+import AvatarEditorToolbar from './AvatarEditorToolbar.vue'
 import {
   clampNumber,
   clampTransform,
@@ -26,13 +28,13 @@ import {
 import {
   detectSupportedAvatarFormats,
   exportAvatarMedia,
-  formatByteSize,
   formatMediaTime,
   selectOverlappingGifFrames,
   triggerAvatarDownload,
 } from './media-codecs'
 import { loadAvatarMedia, seekVideoElement } from './media-loader'
-import { renderAvatarEditorStage } from './stage-render'
+import { createStageMotion } from './stage-motion'
+import { renderAvatarEditorStage, shapeToRadiusRatio } from './stage-render'
 import {
   AVATAR_EDITOR_DEFAULT_ACCEPT,
   AVATAR_EDITOR_DEFAULT_LABELS,
@@ -46,10 +48,13 @@ import {
 
 defineOptions({ name: 'TxAvatarEditor' })
 
+const DEFAULT_MODAL_WIDTH = 'min(94vw, 760px)'
+const EMPTY_MODAL_WIDTH = 'min(92vw, 460px)'
+
 const props = withDefaults(defineProps<AvatarEditorProps>(), {
   source: null,
   shape: 'circle',
-  width: 'min(94vw, 800px)',
+  width: DEFAULT_MODAL_WIDTH,
   outputFormat: 'png',
   allowFormatConversion: true,
   outputSize: 512,
@@ -71,8 +76,8 @@ const props = withDefaults(defineProps<AvatarEditorProps>(), {
 
 const emit = defineEmits<AvatarEditorEmits>()
 
-const STAGE_SIZE = 312
-const PREVIEW_SIZES = [56, 32] as const
+const STAGE_SIZE = 304
+const PREVIEW_SIZES = [48, 28] as const
 const GIF_SIZE_PRESETS = [128, 192, 256, 320] as const
 
 const modalOpen = computed({
@@ -82,6 +87,7 @@ const modalOpen = computed({
       invalidatePendingLoad()
       cancelActiveExport()
       stopPlayback()
+      stageMotion.stop()
     }
     emit('update:open', v)
     if (!v)
@@ -113,6 +119,8 @@ const exportProgress = ref(0)
 const errorMessage = ref('')
 const dragOver = ref(false)
 const isInteracting = ref(false)
+const stageHud = ref('')
+const sessionKey = ref(0)
 
 const activeShape = ref<AvatarShape>(props.shape)
 const selectedFormat = ref<AvatarOutputFormat>(props.outputFormat)
@@ -121,7 +129,7 @@ const selectedQuality = ref<number>(Math.round(clampNumber(props.outputQuality, 
 const captureMode = ref<AvatarCaptureMode>('frame')
 const autoSelectedAnimated = ref(false)
 
-// Media timeline state (video & animated GIF)
+// Media timeline state (video & animated images)
 const isPlaying = ref(false)
 const videoTime = ref(0)
 const gifFrameIndex = ref(0)
@@ -142,13 +150,37 @@ const supportedFormats = ref<Record<AvatarOutputFormat, boolean>>({
 })
 
 const transform = reactive<AvatarEditorTransform>({ ...DEFAULT_AVATAR_TRANSFORM })
+const stageMotion = createStageMotion(shapeToRadiusRatio(props.shape))
 
 let loadToken = 0
 let exportToken = 0
 let scrubToken = 0
 let rafId: number | null = null
 let gifTimerId: number | null = null
+let hudTimerId: number | null = null
 let exportAbort: AbortController | null = null
+
+const resolvedModalWidth = computed(() =>
+  !media.value && props.width === DEFAULT_MODAL_WIDTH ? EMPTY_MODAL_WIDTH : props.width,
+)
+
+function clearHudTimer(): void {
+  if (hudTimerId !== null) {
+    window.clearTimeout(hudTimerId)
+    hudTimerId = null
+  }
+}
+
+function flashStageHud(text: string): void {
+  stageHud.value = text
+  clearHudTimer()
+  if (typeof window !== 'undefined') {
+    hudTimerId = window.setTimeout(() => {
+      stageHud.value = ''
+      hudTimerId = null
+    }, 680)
+  }
+}
 
 function invalidatePendingLoad(): void {
   loadToken++
@@ -282,17 +314,17 @@ const clipEstimatedFrames = computed(() => {
 const formatCapabilityNote = computed(() => {
   const m = media.value
   if (isAnimatedGifExport.value)
-    return `GIF89a · ${clipEstimatedFrames.value}f · ${clipSize.value}px`
+    return `GIF · ${clipEstimatedFrames.value}f · ${clipSize.value}px`
   if (selectedFormat.value === 'ico') {
     const sizes = props.icoSizes.filter(s => s <= Math.min(256, selectedSize.value))
     const minS = sizes[0] ?? 16
     const maxS = sizes[sizes.length - 1] ?? Math.min(256, selectedSize.value)
-    return `Multi-size ${minS}–${maxS}px`
+    return `ICO · ${minS}–${maxS}px`
   }
   if (selectedFormat.value === 'svg' && m?.kind === 'svg' && m.svgText)
-    return 'Vector SVG'
+    return 'SVG · Vector'
   if (activeFormatMeta.value.lossy)
-    return `${selectedQuality.value}% · ${selectedSize.value}px`
+    return `${activeFormatMeta.value.label} · ${selectedQuality.value}% · ${selectedSize.value}px`
   return `${activeFormatMeta.value.label} · ${selectedSize.value}px`
 })
 
@@ -320,6 +352,7 @@ function stopPlayback(): void {
 
 function disposeMedia(): void {
   stopPlayback()
+  stageMotion.stop()
   media.value?.dispose()
   media.value = null
 }
@@ -341,7 +374,7 @@ function currentDrawable(): CanvasImageSource | null {
   return m.image ?? null
 }
 
-function drawStageAndPreviews(): void {
+function paintStage(): void {
   const m = media.value
   const canvas = stageCanvasRef.value
   if (!m || !canvas)
@@ -350,6 +383,7 @@ function drawStageAndPreviews(): void {
   if (!drawable)
     return
 
+  const v = stageMotion.state
   renderAvatarEditorStage({
     stageCanvas: canvas,
     previewTargets: [
@@ -360,11 +394,28 @@ function drawStageAndPreviews(): void {
     drawable,
     naturalWidth: m.naturalWidth,
     naturalHeight: m.naturalHeight,
-    transform,
+    transform: {
+      ...transform,
+      zoom: v.zoom,
+      offsetX: v.offsetX,
+      offsetY: v.offsetY,
+      rotation: v.rotation,
+    },
     shape: activeShape.value,
+    maskRadiusRatio: v.maskRadiusRatio,
+    gridAlpha: v.gridAlpha,
     supportsAlpha: isAnimatedGifExport.value || activeFormatMeta.value.supportsAlpha,
     isInteracting: isInteracting.value,
   })
+}
+
+function snapAndDraw(): void {
+  stageMotion.snap(transform, shapeToRadiusRatio(activeShape.value), isInteracting.value ? 1 : 0)
+  paintStage()
+}
+
+function springAndDraw(): void {
+  stageMotion.springTo(transform, shapeToRadiusRatio(activeShape.value), isInteracting.value ? 1 : 0, paintStage)
 }
 
 function clampCurrentTransform(): void {
@@ -380,11 +431,29 @@ function clampCurrentTransform(): void {
   Object.assign(transform, clamped)
 }
 
+function applyImmediateTransform(patch: Partial<AvatarEditorTransform>): void {
+  Object.assign(transform, patch)
+  clampCurrentTransform()
+  snapAndDraw()
+}
+
+function applySpringTransform(patch: Partial<AvatarEditorTransform>): void {
+  Object.assign(transform, patch)
+  clampCurrentTransform()
+  springAndDraw()
+}
+
+function selectShape(shape: AvatarShape): void {
+  activeShape.value = shape
+  springAndDraw()
+}
+
 async function loadSource(source: File | Blob | string): Promise<void> {
   const token = ++loadToken
   scrubToken++
   cancelActiveExport()
   stopPlayback()
+  stageMotion.stop()
   loading.value = true
   errorMessage.value = ''
 
@@ -400,6 +469,8 @@ async function loadSource(source: File | Blob | string): Promise<void> {
       loaded.dispose()
       errorMessage.value = labels.value.videoUnsupportedError
       emit('error', new Error(labels.value.videoUnsupportedError))
+      if (media.value)
+        snapAndDraw()
       return
     }
 
@@ -452,7 +523,7 @@ async function loadSource(source: File | Blob | string): Promise<void> {
     await nextTick()
     if (token !== loadToken)
       return
-    drawStageAndPreviews()
+    snapAndDraw()
 
     const prefersReducedMotion = typeof window !== 'undefined'
       && typeof window.matchMedia === 'function'
@@ -473,6 +544,8 @@ async function loadSource(source: File | Blob | string): Promise<void> {
     else
       errorMessage.value = labels.value.loadFailedError
     emit('error', error)
+    if (media.value)
+      snapAndDraw()
   }
   finally {
     if (token === loadToken)
@@ -494,17 +567,18 @@ function triggerReplaceFile(): void {
 function rotateBy(deltaDeg: number): void {
   transform.rotation = normalizeRotation(transform.rotation + deltaDeg)
   clampCurrentTransform()
-  drawStageAndPreviews()
+  springAndDraw()
+  flashStageHud(`${Math.round(transform.rotation)}°`)
 }
 
 function toggleFlipX(): void {
   transform.flipX = !transform.flipX
-  drawStageAndPreviews()
+  paintStage()
 }
 
 function toggleFlipY(): void {
   transform.flipY = !transform.flipY
-  drawStageAndPreviews()
+  paintStage()
 }
 
 function fitContain(): void {
@@ -518,7 +592,8 @@ function fitContain(): void {
   )
   transform.offsetX = 0
   transform.offsetY = 0
-  drawStageAndPreviews()
+  springAndDraw()
+  flashStageHud(`${Math.round(transform.zoom * 100)}%`)
 }
 
 function fitCover(): void {
@@ -532,19 +607,21 @@ function fitCover(): void {
   )
   transform.offsetX = 0
   transform.offsetY = 0
-  drawStageAndPreviews()
+  springAndDraw()
+  flashStageHud(`${Math.round(transform.zoom * 100)}%`)
 }
 
 function resetAll(): void {
   resetTransformState()
-  drawStageAndPreviews()
+  springAndDraw()
+  flashStageHud('100%')
 }
 
 function selectCaptureMode(mode: AvatarCaptureMode): void {
   captureMode.value = mode
   if (mode === 'gif-clip' && availableFormats.value.includes('gif'))
     selectedFormat.value = 'gif'
-  drawStageAndPreviews()
+  paintStage()
 }
 
 function selectFormat(format: AvatarOutputFormat): void {
@@ -552,7 +629,7 @@ function selectFormat(format: AvatarOutputFormat): void {
     return
   autoSelectedAnimated.value = false
   normalizeSelectedFormat(format)
-  drawStageAndPreviews()
+  paintStage()
 }
 
 function scheduleGifNextFrame(): void {
@@ -565,7 +642,7 @@ function scheduleGifNextFrame(): void {
     if (!isPlaying.value || !media.value?.gifFrames?.length)
       return
     gifFrameIndex.value = (gifFrameIndex.value + 1) % media.value.gifFrames.length
-    drawStageAndPreviews()
+    paintStage()
     scheduleGifNextFrame()
   }, delay)
 }
@@ -577,7 +654,7 @@ function tickVideoFrame(): void {
   videoTime.value = m.video.currentTime
   if (isAnimatedGifExport.value && m.video.currentTime >= clipEnd.value)
     m.video.currentTime = clipStart.value
-  drawStageAndPreviews()
+  paintStage()
   rafId = requestAnimationFrame(tickVideoFrame)
 }
 
@@ -612,7 +689,7 @@ async function scrubTo(value: number): Promise<void> {
   stopPlayback()
   if (m.gifFrames?.length) {
     gifFrameIndex.value = Math.round(clampNumber(value, 0, m.gifFrames.length - 1))
-    drawStageAndPreviews()
+    paintStage()
     return
   }
   if (m.kind === 'video' && m.video) {
@@ -623,7 +700,7 @@ async function scrubTo(value: number): Promise<void> {
       await seekVideoElement(m.video, target)
       if (token !== scrubToken || media.value !== m)
         return
-      drawStageAndPreviews()
+      paintStage()
     }
     catch (err) {
       if (token !== scrubToken || media.value !== m)
@@ -643,7 +720,7 @@ function stepFrame(delta: number): void {
   if (m.gifFrames?.length) {
     const total = m.gifFrames.length
     gifFrameIndex.value = (gifFrameIndex.value + delta + total) % total
-    drawStageAndPreviews()
+    paintStage()
     return
   }
   if (m.kind === 'video')
@@ -691,7 +768,7 @@ function onStagePointerDown(e: PointerEvent): void {
     pinchStartDist = Math.hypot(a!.x - b!.x, a!.y - b!.y) || 1
     pinchStartZoom = transform.zoom
   }
-  drawStageAndPreviews()
+  springAndDraw()
 }
 
 function onStagePointerMove(e: PointerEvent): void {
@@ -705,7 +782,8 @@ function onStagePointerMove(e: PointerEvent): void {
     if (pinchStartDist > 0) {
       transform.zoom = clampNumber(pinchStartZoom * (dist / pinchStartDist), props.minZoom, props.maxZoom)
       clampCurrentTransform()
-      drawStageAndPreviews()
+      snapAndDraw()
+      flashStageHud(`${Math.round(transform.zoom * 100)}%`)
     }
     return
   }
@@ -715,7 +793,7 @@ function onStagePointerMove(e: PointerEvent): void {
   transform.offsetX = dragStartOffset.x + (e.clientX - dragStartPoint.x) / span
   transform.offsetY = dragStartOffset.y + (e.clientY - dragStartPoint.y) / span
   clampCurrentTransform()
-  drawStageAndPreviews()
+  snapAndDraw()
 }
 
 function onStagePointerUp(e: PointerEvent): void {
@@ -727,7 +805,7 @@ function onStagePointerUp(e: PointerEvent): void {
   }
   else if (activePointers.size === 0) {
     isInteracting.value = false
-    drawStageAndPreviews()
+    springAndDraw()
   }
 }
 
@@ -735,10 +813,26 @@ function onStageWheel(e: WheelEvent): void {
   if (!media.value)
     return
   e.preventDefault()
-  const factor = Math.exp(-e.deltaY * 0.0018)
-  transform.zoom = clampNumber(transform.zoom * factor, props.minZoom, props.maxZoom)
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  const snap = { ...stageMotion.state }
+  const prevZoom = snap.zoom
+  const nextZoom = clampNumber(prevZoom * Math.exp(-e.deltaY * 0.0018), props.minZoom, props.maxZoom)
+  transform.rotation = normalizeRotation(snap.rotation)
+  if (rect.width > 0 && rect.height > 0 && nextZoom !== prevZoom) {
+    const px = (e.clientX - rect.left) / rect.width - 0.5
+    const py = (e.clientY - rect.top) / rect.height - 0.5
+    const scaleRatio = nextZoom / prevZoom
+    transform.offsetX = px - (px - snap.offsetX) * scaleRatio
+    transform.offsetY = py - (py - snap.offsetY) * scaleRatio
+  }
+  else {
+    transform.offsetX = snap.offsetX
+    transform.offsetY = snap.offsetY
+  }
+  transform.zoom = nextZoom
   clampCurrentTransform()
-  drawStageAndPreviews()
+  snapAndDraw()
+  flashStageHud(`${Math.round(transform.zoom * 100)}%`)
 }
 
 function onStageKeydown(e: KeyboardEvent): void {
@@ -766,11 +860,13 @@ function onStageKeydown(e: KeyboardEvent): void {
     case '=':
       e.preventDefault()
       transform.zoom = clampNumber(transform.zoom + 0.15, props.minZoom, props.maxZoom)
+      flashStageHud(`${Math.round(transform.zoom * 100)}%`)
       break
     case '-':
     case '_':
       e.preventDefault()
       transform.zoom = clampNumber(transform.zoom - 0.15, props.minZoom, props.maxZoom)
+      flashStageHud(`${Math.round(transform.zoom * 100)}%`)
       break
     case '[':
       e.preventDefault()
@@ -794,7 +890,7 @@ function onStageKeydown(e: KeyboardEvent): void {
       return
   }
   clampCurrentTransform()
-  drawStageAndPreviews()
+  springAndDraw()
 }
 
 function onStageDoubleClick(): void {
@@ -939,24 +1035,25 @@ function handleCancel(): void {
   invalidatePendingLoad()
   cancelActiveExport()
   stopPlayback()
+  stageMotion.stop()
   emit('update:open', false)
   emit('cancel')
 }
 
 watch(() => props.shape, (next) => {
   activeShape.value = next
-  drawStageAndPreviews()
+  springAndDraw()
 })
 
 watch(() => props.outputFormat, (next) => {
   autoSelectedAnimated.value = false
   normalizeSelectedFormat(next)
-  drawStageAndPreviews()
+  paintStage()
 })
 
 watch([() => props.allowedOutputFormats, () => props.allowFormatConversion], () => {
   normalizeSelectedFormat()
-  drawStageAndPreviews()
+  paintStage()
 }, { deep: true })
 
 watch(() => props.outputSize, (next) => {
@@ -970,10 +1067,14 @@ watch(
       invalidatePendingLoad()
       cancelActiveExport()
       stopPlayback()
+      stageMotion.stop()
+      clearHudTimer()
+      stageHud.value = ''
       return
     }
 
     if (!wasOpen) {
+      sessionKey.value++
       activeShape.value = props.shape
       selectedFormat.value = props.outputFormat
       selectedSize.value = props.outputSize
@@ -1006,10 +1107,6 @@ watch(
 
 watch(
   () => [
-    transform.zoom,
-    transform.offsetX,
-    transform.offsetY,
-    transform.rotation,
     transform.flipX,
     transform.flipY,
     transform.brightness,
@@ -1017,11 +1114,10 @@ watch(
     transform.saturation,
     transform.background,
     transform.maskClip,
-    activeShape.value,
   ],
   () => {
     if (media.value)
-      drawStageAndPreviews()
+      paintStage()
   },
 )
 
@@ -1033,6 +1129,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (typeof window !== 'undefined')
     window.removeEventListener('paste', handleWindowPaste)
+  clearHudTimer()
   invalidatePendingLoad()
   cancelActiveExport()
   disposeMedia()
@@ -1049,12 +1146,19 @@ defineExpose({
   <TxModal
     v-model="modalOpen"
     :title="labels.title"
-    :width="width"
+    :width="resolvedModalWidth"
     :close-label="labels.close"
     :surface="surface"
   >
     <div class="tx-avatar-editor">
+      <!-- Visual-first upload state: crisp media icons + minimal TxFileUploader, zero text clutter -->
       <div v-show="!media" class="tx-avatar-editor__upload-pane">
+        <div class="tx-avatar-editor__media-glyphs" aria-hidden="true">
+          <span class="tx-avatar-editor__glyph-chip"><AvatarEditorIcon name="image" :size="15" /></span>
+          <span class="tx-avatar-editor__glyph-chip"><AvatarEditorIcon name="film" :size="15" /></span>
+          <span class="tx-avatar-editor__glyph-chip"><AvatarEditorIcon name="video" :size="15" /></span>
+          <span class="tx-avatar-editor__glyph-chip"><AvatarEditorIcon name="sparkle" :size="15" /></span>
+        </div>
         <TxFileUploader
           ref="uploaderRef"
           v-model="uploadedFiles"
@@ -1067,9 +1171,6 @@ defineExpose({
           :button-text="labels.uploadButtonText"
           @add="handleUploaderAdd"
         />
-        <p class="tx-avatar-editor__formats-hint">
-          {{ labels.uploadFormatsHint }}
-        </p>
       </div>
 
       <div v-if="media" class="tx-avatar-editor__workspace">
@@ -1100,46 +1201,28 @@ defineExpose({
             <div v-if="loading" class="tx-avatar-editor__overlay-msg" role="status" aria-live="polite">
               {{ labels.loading }}
             </div>
+            <div class="tx-avatar-editor__hud" :class="{ 'is-visible': Boolean(stageHud) }" aria-hidden="true">
+              {{ stageHud }}
+            </div>
             <div class="tx-avatar-editor__source-badge">
               <span>{{ media.kind.toUpperCase() }}</span>
               <span>{{ media.naturalWidth }}×{{ media.naturalHeight }}</span>
-              <span v-if="media.file">{{ formatByteSize(media.file.size) }}</span>
             </div>
           </div>
 
-          <div class="tx-avatar-editor__toolbar">
-            <button type="button" class="tx-avatar-editor__tool-btn" :title="labels.rotateLeft" :aria-label="labels.rotateLeft" @click="rotateBy(-90)">
-              <AvatarEditorIcon name="rotateLeft" />
-            </button>
-            <button type="button" class="tx-avatar-editor__tool-btn" :title="labels.rotateRight" :aria-label="labels.rotateRight" @click="rotateBy(90)">
-              <AvatarEditorIcon name="rotateRight" />
-            </button>
-            <button type="button" class="tx-avatar-editor__tool-btn" :class="{ 'is-active': transform.flipX }" :aria-pressed="transform.flipX" :title="labels.flipHorizontal" :aria-label="labels.flipHorizontal" @click="toggleFlipX">
-              <AvatarEditorIcon name="flipH" />
-            </button>
-            <button type="button" class="tx-avatar-editor__tool-btn" :class="{ 'is-active': transform.flipY }" :aria-pressed="transform.flipY" :title="labels.flipVertical" :aria-label="labels.flipVertical" @click="toggleFlipY">
-              <AvatarEditorIcon name="flipV" />
-            </button>
-            <span class="tx-avatar-editor__tool-sep" aria-hidden="true" />
-            <button type="button" class="tx-avatar-editor__tool-btn" :title="labels.fitContain" :aria-label="labels.fitContain" @click="fitContain">
-              <AvatarEditorIcon name="fitContain" />
-            </button>
-            <button type="button" class="tx-avatar-editor__tool-btn" :title="labels.fitCover" :aria-label="labels.fitCover" @click="fitCover">
-              <AvatarEditorIcon name="fitCover" />
-            </button>
-            <button type="button" class="tx-avatar-editor__tool-btn" :title="labels.reset" :aria-label="labels.reset" @click="resetAll">
-              <AvatarEditorIcon name="reset" />
-            </button>
-            <button
-              type="button"
-              class="tx-avatar-editor__tool-btn tx-avatar-editor__tool-btn--label"
-              :disabled="exporting"
-              @click="triggerReplaceFile"
-            >
-              <AvatarEditorIcon name="upload" :size="14" />
-              <span>{{ labels.replaceFile }}</span>
-            </button>
-          </div>
+          <AvatarEditorToolbar
+            :labels="labels"
+            :flip-x="transform.flipX"
+            :flip-y="transform.flipY"
+            :exporting="exporting"
+            @rotate="rotateBy"
+            @flip-x="toggleFlipX"
+            @flip-y="toggleFlipY"
+            @fit-contain="fitContain"
+            @fit-cover="fitCover"
+            @reset="resetAll"
+            @replace="triggerReplaceFile"
+          />
 
           <AvatarEditorTimeline
             v-if="hasTimeline"
@@ -1183,8 +1266,10 @@ defineExpose({
           :selected-quality="selectedQuality"
           :is-animated-gif-export="isAnimatedGifExport"
           :format-capability-note="formatCapabilityNote"
-          @update:shape="activeShape = $event"
-          @update-transform="Object.assign(transform, $event)"
+          :session-key="sessionKey"
+          @update:shape="selectShape"
+          @update-transform="applyImmediateTransform"
+          @spring-transform="applySpringTransform"
           @select-format="selectFormat"
           @update:export-size="setActiveExportSize"
           @update:quality="selectedQuality = $event"
@@ -1205,22 +1290,17 @@ defineExpose({
     <template #footer>
       <div class="tx-avatar-editor__footer">
         <div class="tx-avatar-editor__footer-left">
-          <button
-            v-if="media && allowDownload"
-            type="button"
-            class="tx-avatar-editor__btn tx-avatar-editor__btn--ghost"
-            :disabled="exporting || media.corsTainted || !hasUsableFormat"
-            @click="runExport(true)"
-          >
-            <AvatarEditorIcon name="download" :size="14" />
-            <span>{{ labels.download }}</span>
-          </button>
-          <span v-if="exporting" class="tx-avatar-editor__progress" role="status" aria-live="polite">
-            {{ labels.exporting }} {{ exportProgress }}%
-          </span>
-          <span v-else-if="!media" class="tx-avatar-editor__paste-hint">
-            {{ labels.pasteHint }}
-          </span>
+          <TxTooltip v-if="media && allowDownload" :content="labels.download">
+            <button
+              type="button"
+              class="tx-avatar-editor__btn tx-avatar-editor__btn--icon"
+              :aria-label="labels.download"
+              :disabled="exporting || media.corsTainted || !hasUsableFormat"
+              @click="runExport(true)"
+            >
+              <AvatarEditorIcon name="download" :size="15" />
+            </button>
+          </TxTooltip>
         </div>
 
         <div class="tx-avatar-editor__footer-right">
@@ -1232,12 +1312,21 @@ defineExpose({
             {{ labels.cancel }}
           </button>
           <button
+            v-if="media"
             type="button"
             class="tx-avatar-editor__btn tx-avatar-editor__btn--primary"
-            :disabled="!media || loading || exporting || media.corsTainted || !hasUsableFormat"
+            :disabled="loading || exporting || media.corsTainted || !hasUsableFormat"
             @click="runExport(false)"
           >
-            {{ exporting ? `${labels.exporting} ${exportProgress}%` : labels.apply }}
+            <span
+              v-if="exporting"
+              class="tx-avatar-editor__btn-fill"
+              :style="{ width: `${exportProgress}%` }"
+              aria-hidden="true"
+            />
+            <span class="tx-avatar-editor__btn-text">
+              {{ exporting ? `${exportProgress}%` : labels.apply }}
+            </span>
           </button>
         </div>
       </div>
@@ -1246,38 +1335,190 @@ defineExpose({
 </template>
 
 <style lang="scss">
-.tx-avatar-editor {
+.tx-avatar-editor,
+.tx-avatar-editor__footer {
+  --a-p: var(--tx-color-primary, #409eff);
+  --a-pb: var(--tx-color-primary-light-9, #ecf5ff);
+  --a-pr: color-mix(in srgb, var(--a-p) 46%, transparent);
+  --a-t: var(--tx-text-color-primary, #303133);
+  --a-r: var(--tx-text-color-regular, #606266);
+  --a-s: var(--tx-text-color-secondary, #6b7280);
+  --a-f: var(--tx-fill-color-light, #f5f7fa);
+  --a-h: var(--tx-fill-color, #ebedf0);
+  --a-c: var(--tx-fill-color-lighter, #fafafa);
+  --a-b: var(--tx-bg-color, #fff);
+  --a-k: var(--tx-color-black, #000);
+  --a-w: var(--tx-color-on-primary, #fff);
+  --a-l: var(--tx-border-color-lighter, #e4e7ed);
+  --a-ls: var(--tx-border-color-extra-light, #ebeef5);
+  --a-bd: inset 0 0 0 1px var(--a-l);
+  --a-bds: inset 0 0 0 1px var(--a-ls);
+  --a-e: var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+}
+
+.tx-avatar-editor,
+.tx-avatar-editor__upload-pane,
+.tx-avatar-editor__stage-col,
+.tx-avatar-editor__panel,
+.tx-avatar-editor__preview-right,
+.tx-avatar-editor__group,
+.tx-avatar-editor__adjust-body,
+.tx-avatar-editor__timeline,
+.tx-avatar-editor__clip-grid {
   display: flex;
   flex-direction: column;
+}
+
+.tx-avatar-editor__toolbar,
+.tx-avatar-editor__preview-row,
+.tx-avatar-editor__disclosure,
+.tx-avatar-editor__swatch-row,
+.tx-avatar-editor__size-row,
+.tx-avatar-editor__timeline-head,
+.tx-avatar-editor__clip-meta,
+.tx-avatar-editor__transport,
+.tx-avatar-editor__footer,
+.tx-avatar-editor__footer-left,
+.tx-avatar-editor__footer-right,
+.tx-ae-slider,
+.tx-ae-slider__track-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.tx-avatar-editor__preview-row,
+.tx-avatar-editor__disclosure,
+.tx-avatar-editor__swatch-row,
+.tx-avatar-editor__timeline-head,
+.tx-avatar-editor__clip-meta,
+.tx-avatar-editor__footer {
+  justify-content: space-between;
+}
+
+.tx-avatar-editor__glyph-chip,
+.tx-avatar-editor__tool-btn,
+.tx-avatar-editor__alpha-btn,
+.tx-avatar-editor__mini-btn,
+.tx-avatar-editor__row-icon,
+.tx-avatar-editor__btn,
+.tx-ae-slider__icon,
+.tx-ae-glide__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tx-avatar-editor__preview-row,
+.tx-avatar-editor__timeline {
+  border-radius: 12px;
+  background: var(--a-c);
+  box-shadow: var(--a-bd);
+}
+
+.tx-avatar-editor__preview-sub,
+.tx-avatar-editor__unit,
+.tx-avatar-editor__timeline-readout,
+.tx-avatar-editor__clip-span,
+.tx-avatar-editor__fps-unit {
+  font-size: 11px;
+  color: var(--a-s);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tx-ae-slider__detent,
+.tx-ae-slider__thumb,
+.tx-avatar-editor__trim-handle,
+.tx-avatar-editor__trim-handle::after {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.tx-avatar-editor {
   gap: 12px;
   font-size: 13px;
-  color: var(--tx-text-color-primary, #303133);
+  color: var(--a-t);
+}
+
+.tx-avatar-editor__workspace button,
+.tx-avatar-editor__btn {
+  appearance: none;
+  border: none;
+  font: inherit;
+  transition: transform 140ms var(--a-e);
+
+  &:active:not(:disabled):not(.tx-avatar-editor__trim-handle) {
+    transform: scale(0.95);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--a-p);
+    outline-offset: 1px;
+  }
+}
+
+.tx-avatar-editor__tool-btn,
+.tx-avatar-editor__alpha-btn,
+.tx-avatar-editor__format-btn {
+  border-radius: 8px;
+  background: var(--a-f);
+  color: var(--a-r);
+  cursor: pointer;
+  box-shadow: var(--a-bds);
+
+  &:hover:not(:disabled) {
+    background: var(--a-h);
+    color: var(--a-t);
+  }
+
+  &.is-active {
+    background: var(--a-pb);
+    color: var(--a-p);
+    box-shadow: inset 0 0 0 1px var(--a-pr);
+  }
+}
+
+.tx-avatar-editor__tool-btn,
+.tx-avatar-editor__alpha-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
 }
 
 .tx-avatar-editor__upload-pane {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-.tx-avatar-editor__formats-hint,
-.tx-avatar-editor__paste-hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--tx-text-color-secondary, #6b7280);
+.tx-avatar-editor__media-glyphs {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.tx-avatar-editor__glyph-chip {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: var(--a-s);
+  background: var(--a-c);
+  box-shadow: var(--a-bds);
 }
 
 .tx-avatar-editor__workspace {
   display: grid;
-  grid-template-columns: minmax(260px, 312px) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(260px, 304px) minmax(0, 1fr);
+  gap: 16px;
   align-items: start;
 }
 
 .tx-avatar-editor__stage-col {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  gap: 9px;
 }
 
 .tx-avatar-editor__stage-wrap {
@@ -1289,26 +1530,19 @@ defineExpose({
   cursor: grab;
   touch-action: none;
   user-select: none;
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #e4e7ed);
-  background-color: var(--tx-fill-color-light, #f5f7fa);
-  background-image:
-    linear-gradient(45deg, var(--tx-fill-color, #ebedf0) 25%, transparent 25%),
-    linear-gradient(-45deg, var(--tx-fill-color, #ebedf0) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, var(--tx-fill-color, #ebedf0) 75%),
-    linear-gradient(-45deg, transparent 75%, var(--tx-fill-color, #ebedf0) 75%);
-  background-size: 16px 16px;
-  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  box-shadow: var(--a-bd);
+  background: var(--a-f) conic-gradient(var(--a-h) 90deg, transparent 0 180deg, var(--a-h) 0 270deg, transparent 0) 0 0 / 16px 16px;
 
   &.is-grabbing {
     cursor: grabbing;
   }
 
   &.is-drag-over {
-    box-shadow: inset 0 0 0 2px var(--tx-color-primary, #409eff);
+    box-shadow: inset 0 0 0 2px var(--a-p);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--tx-color-primary, #409eff);
+    outline: 2px solid var(--a-p);
     outline-offset: 2px;
   }
 }
@@ -1325,277 +1559,138 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
   font-weight: 500;
-  background: color-mix(in srgb, var(--tx-bg-color, #ffffff) 78%, transparent);
+  background: color-mix(in srgb, var(--a-b) 78%, transparent);
+}
+
+.tx-avatar-editor__hud,
+.tx-avatar-editor__source-badge {
+  position: absolute;
+  border-radius: 999px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  color: var(--a-w);
+  backdrop-filter: blur(6px);
+}
+
+.tx-avatar-editor__hud {
+  top: 10px;
+  left: 50%;
+  padding: 3px 10px;
+  font-size: 11px;
+  background: color-mix(in srgb, var(--a-k) 58%, transparent);
+  opacity: 0;
+  transform: translate(-50%, -4px) scale(0.96);
+  transition: opacity 160ms ease, transform 180ms var(--a-e);
+
+  &.is-visible {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
 }
 
 .tx-avatar-editor__source-badge {
-  position: absolute;
   left: 8px;
   bottom: 8px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
-  color: var(--tx-text-color-primary, #303133);
-  background: color-mix(in srgb, var(--tx-bg-color-overlay, #ffffff) 82%, transparent);
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #e4e7ed);
+  gap: 5px;
+  padding: 2px 7px;
+  font-size: 10px;
+  background: color-mix(in srgb, var(--a-k) 44%, transparent);
+  opacity: 0.78;
+  transition: opacity 150ms ease;
 }
 
-.tx-avatar-editor__toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 3px;
+.tx-avatar-editor__stage-wrap:hover .tx-avatar-editor__source-badge {
+  opacity: 1;
 }
 
-.tx-avatar-editor__tool-btn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 28px;
-  min-width: 28px;
-  padding: 0 6px;
-  border: none;
-  border-radius: 8px;
-  background: var(--tx-fill-color-light, #f5f7fa);
-  color: var(--tx-text-color-regular, #606266);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-extra-light, #ebeef5);
-
-  &:hover {
-    background: var(--tx-fill-color, #ebedf0);
-    color: var(--tx-text-color-primary, #303133);
-  }
-
-  &.is-active {
-    background: var(--tx-color-primary-light-9, #ecf5ff);
-    color: var(--tx-color-primary, #409eff);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 42%, transparent);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--tx-color-primary, #409eff);
-    outline-offset: 1px;
-  }
-}
-
-.tx-avatar-editor__tool-btn--label {
-  margin-left: auto;
-  padding: 0 8px;
-  font-weight: 500;
-}
-
-.tx-avatar-editor__tool-sep {
-  width: 1px;
-  height: 16px;
-  margin: 0 2px;
-  background: var(--tx-border-color-lighter, #e4e7ed);
-}
-
-.tx-avatar-editor__section-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--tx-text-color-secondary, #6b7280);
-}
-
-.tx-avatar-editor__range {
-  accent-color: var(--tx-color-primary, #409eff);
-  cursor: pointer;
-  height: 18px;
-  margin: 0;
-}
-
-.tx-avatar-editor__range--grow {
-  flex: 1;
-  min-width: 0;
-}
-
-.tx-avatar-editor__readout {
-  flex-shrink: 0;
-  min-width: 44px;
-  text-align: right;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--tx-text-color-secondary, #6b7280);
-}
-
-.tx-avatar-editor__segmented {
-  display: inline-flex;
-  padding: 2px;
-  border-radius: 9px;
-  background: var(--tx-fill-color-light, #f5f7fa);
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-extra-light, #ebeef5);
-}
-
-.tx-avatar-editor__seg-btn {
-  appearance: none;
-  padding: 4px 10px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--tx-text-color-regular, #606266);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-
-  &:hover {
-    color: var(--tx-text-color-primary, #303133);
-  }
-
-  &.is-active {
-    background: var(--tx-bg-color, #ffffff);
-    color: var(--tx-text-color-primary, #303133);
-    font-weight: 500;
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--tx-color-black, #000000) 8%, transparent);
-  }
-}
-
-.tx-avatar-editor__pill {
-  appearance: none;
-  padding: 4px 9px;
-  border: none;
-  border-radius: 8px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  color: var(--tx-text-color-regular, #606266);
-  background: var(--tx-fill-color-light, #f5f7fa);
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-extra-light, #ebeef5);
-
-  &:hover:not(:disabled) {
-    background: var(--tx-fill-color, #ebedf0);
-    color: var(--tx-text-color-primary, #303133);
-  }
-
-  &.is-active {
-    background: var(--tx-color-primary-light-9, #ecf5ff);
-    color: var(--tx-color-primary, #409eff);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 48%, transparent);
-  }
-
-  &:disabled {
-    opacity: 0.42;
-    cursor: not-allowed;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--tx-color-primary, #409eff);
-    outline-offset: 1px;
-  }
-}
-
-.tx-avatar-editor__pills {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.tx-avatar-editor__notice {
+.tx-avatar-editor__notice,
+.tx-avatar-editor__error {
   padding: 8px 12px;
   border-radius: 10px;
   font-size: 12px;
-  color: color-mix(in srgb, var(--tx-color-warning, #e6a23c) 55%, var(--tx-text-color-primary, #303133));
+}
+
+.tx-avatar-editor__notice {
+  color: color-mix(in srgb, var(--tx-color-warning, #e6a23c) 55%, var(--a-t));
   background: var(--tx-color-warning-light-9, #fdf6ec);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-warning, #e6a23c) 32%, transparent);
 }
 
 .tx-avatar-editor__error {
-  padding: 8px 12px;
-  border-radius: 10px;
-  font-size: 12px;
-  color: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 55%, var(--tx-text-color-primary, #303133));
+  color: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 55%, var(--a-t));
   background: var(--tx-color-danger-light-9, #fef0f0);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-danger, #f56c6c) 28%, transparent);
 }
 
 .tx-avatar-editor__footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 12px;
   width: 100%;
 }
 
 .tx-avatar-editor__footer-left,
 .tx-avatar-editor__footer-right {
-  display: flex;
-  align-items: center;
   gap: 8px;
 }
 
-.tx-avatar-editor__progress {
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--tx-text-color-secondary, #6b7280);
-}
-
 .tx-avatar-editor__btn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  overflow: hidden;
   gap: 6px;
   height: 32px;
   padding: 0 14px;
-  border: none;
   border-radius: 9px;
-  font: inherit;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
+}
 
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+.tx-avatar-editor__btn--icon {
+  width: 32px;
+  padding: 0;
+  background: transparent;
+  color: var(--a-r);
+  box-shadow: var(--a-bd);
 
-  &:focus-visible {
-    outline: 2px solid var(--tx-color-primary, #409eff);
-    outline-offset: 2px;
+  &:hover:not(:disabled) {
+    background: var(--a-f);
+    color: var(--a-t);
   }
 }
 
 .tx-avatar-editor__btn--primary {
-  background: var(--tx-color-primary, #409eff);
-  color: var(--tx-color-on-primary, #ffffff);
+  min-width: 76px;
+  background: var(--a-p);
+  color: var(--a-w);
 
   &:hover:not(:disabled) {
     background: var(--tx-color-primary-light-3, #66b1ff);
   }
 }
 
-.tx-avatar-editor__btn--secondary {
-  background: var(--tx-fill-color-light, #f5f7fa);
-  color: var(--tx-text-color-primary, #303133);
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #e4e7ed);
-
-  &:hover:not(:disabled) {
-    background: var(--tx-fill-color, #ebedf0);
-  }
+.tx-avatar-editor__btn-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--a-w) 22%, transparent);
+  pointer-events: none;
 }
 
-.tx-avatar-editor__btn--ghost {
-  background: transparent;
-  color: var(--tx-text-color-regular, #606266);
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #e4e7ed);
+.tx-avatar-editor__btn-text {
+  position: relative;
+  z-index: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.tx-avatar-editor__btn--secondary {
+  background: var(--a-f);
+  color: var(--a-t);
+  box-shadow: var(--a-bd);
 
   &:hover:not(:disabled) {
-    background: var(--tx-fill-color-light, #f5f7fa);
-    color: var(--tx-text-color-primary, #303133);
+    background: var(--a-h);
   }
 }
 
@@ -1604,13 +1699,20 @@ defineExpose({
   flex-shrink: 0;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .tx-avatar-editor *,
+  .tx-avatar-editor__btn {
+    transition: none;
+  }
+}
+
 @media (max-width: 680px) {
   .tx-avatar-editor__workspace {
     grid-template-columns: 1fr;
   }
 
   .tx-avatar-editor__stage-wrap {
-    max-width: 312px;
+    max-width: 304px;
     margin: 0 auto;
   }
 

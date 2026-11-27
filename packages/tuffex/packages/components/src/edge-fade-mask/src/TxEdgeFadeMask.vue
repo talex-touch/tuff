@@ -14,6 +14,7 @@ const props = withDefaults(defineProps<EdgeFadeMaskProps>(), {
   threshold: 1,
   disabled: false,
   observeResize: true,
+  always: false,
 })
 
 const viewportRef = ref<HTMLElement | null>(null)
@@ -26,8 +27,22 @@ function toCssUnit(value: string | number): string {
 }
 
 function updateFadeState() {
+  if (props.disabled) {
+    canScroll.value = false
+    showLeadingFade.value = false
+    showTrailingFade.value = false
+    return
+  }
+
+  if (props.always) {
+    canScroll.value = true
+    showLeadingFade.value = true
+    showTrailingFade.value = true
+    return
+  }
+
   const element = viewportRef.value
-  if (!element || props.disabled) {
+  if (!element) {
     canScroll.value = false
     showLeadingFade.value = false
     showTrailingFade.value = false
@@ -57,13 +72,17 @@ function updateFadeState() {
 }
 
 const maskStyle = computed<CSSProperties>(() => {
-  if (props.disabled || !canScroll.value)
+  if (props.disabled)
+    return {}
+
+  const active = props.always || canScroll.value
+  if (!active)
     return {}
 
   const size = toCssUnit(props.size)
   const direction = props.axis === 'horizontal' ? 'to right' : 'to bottom'
-  const leading = showLeadingFade.value ? 'transparent' : 'black'
-  const trailing = showTrailingFade.value ? 'transparent' : 'black'
+  const leading = props.always || showLeadingFade.value ? 'transparent' : 'black'
+  const trailing = props.always || showTrailingFade.value ? 'transparent' : 'black'
   const maskImage = `linear-gradient(${direction}, ${leading} 0, black ${size}, black calc(100% - ${size}), ${trailing} 100%)`
 
   return {
@@ -81,6 +100,7 @@ const maskStyle = computed<CSSProperties>(() => {
 const rootClass = computed(() => ({
   'tx-edge-fade-mask--vertical': props.axis === 'vertical',
   'tx-edge-fade-mask--horizontal': props.axis === 'horizontal',
+  'tx-edge-fade-mask--always': props.always,
 }))
 
 let resizeObserver: ResizeObserver | null = null
@@ -117,7 +137,7 @@ function handleScroll() {
 }
 
 watch(
-  () => [props.axis, props.disabled, props.threshold] as const,
+  () => [props.axis, props.disabled, props.threshold, props.always] as const,
   () => {
     void nextTick(() => {
       updateFadeState()
@@ -202,5 +222,9 @@ defineExpose({
 .tx-edge-fade-mask--horizontal .tx-edge-fade-mask__viewport {
   overflow-x: auto;
   overflow-y: hidden;
+}
+
+.tx-edge-fade-mask--always .tx-edge-fade-mask__viewport {
+  overflow: hidden;
 }
 </style>

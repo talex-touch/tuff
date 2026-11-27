@@ -256,4 +256,33 @@ describe('txTree', () => {
 
     expect(wrapper.text()).toContain('Alpha-1')
   })
+
+  it('animates subtree expand and collapse via a grouped transition container and caret state', async () => {
+    const wrapper = mount(TxTree, {
+      props: { nodes, defaultExpandedKeys: [] },
+      global: { stubs: { transition: false } },
+    })
+
+    const caret = wrapper.find('.tx-tree__caret')
+    expect(caret.classes()).not.toContain('is-expanded')
+    expect(wrapper.find('.tx-tree__children').exists()).toBe(false)
+
+    await caret.trigger('click')
+
+    expect(caret.classes()).toContain('is-expanded')
+    const group = wrapper.find('.tx-tree__children')
+    expect(group.exists()).toBe(true)
+    expect(group.attributes('role')).toBe('group')
+    expect(group.classes()).toContain('tx-tree-children-enter-active')
+
+    // Indentation lives inside the row so full-width hover/selection styling aligns cleanly.
+    const items = wrapper.findAll('[role="treeitem"]')
+    expect((items[1]?.element as HTMLElement).style.paddingLeft).toBe('')
+    expect((wrapper.findAll('.tx-tree__row')[1]?.element as HTMLElement).style.paddingLeft).toBe('26px')
+
+    await caret.trigger('click')
+
+    expect(caret.classes()).not.toContain('is-expanded')
+    expect(wrapper.find('.tx-tree__children').classes()).toContain('tx-tree-children-leave-active')
+  })
 })

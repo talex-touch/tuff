@@ -240,11 +240,15 @@ describe('txSelect', () => {
       },
     })
 
+    expect(wrapper.find('.tuff-select__multi-trigger').classes()).toContain('has-tags')
     expect(wrapper.findAll('.tuff-select__tag-label').map(item => item.text())).toEqual(['Alpha', 'Gamma'])
 
     await wrapper.find('.tuff-select__tag-remove').trigger('click')
 
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([['gamma']])
+
+    await wrapper.setProps({ modelValue: [] })
+    expect(wrapper.find('.tuff-select__multi-trigger').classes()).not.toContain('has-tags')
   })
 
   it('toggles multiple direct options without closing into a scalar', async () => {

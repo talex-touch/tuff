@@ -61,6 +61,7 @@ code: |
 | `threshold` | `number` | `1` | 判定到达滚动边界的像素容差；负值按 `0` 处理。 |
 | `disabled` | `boolean` | `false` | 关闭遮罩。 |
 | `observeResize` | `boolean` | `true` | 用 `ResizeObserver` 观察视口和首个子元素。 |
+| `always` | `boolean` | `false` | 忽略原生滚动溢出指标，始终在两端施加渐隐（适用于 `TxPicker` 等变换/虚拟视口）。 |
 
 ### 插槽
 
@@ -77,8 +78,8 @@ code: |
 
 ## 概述
 
-- 根节点按 `as` 渲染，内含一个视口；视口沿 `axis` 方向 `overflow: auto`，另一方向隐藏溢出。
-- 禁用、内容不可滚动或可滚动范围不超过 `threshold` 时，不输出 mask。
+- 根节点按 `as` 渲染，内含一个视口；视口沿 `axis` 方向 `overflow: auto`，另一方向隐藏溢出（开启 `always` 时视口为 `overflow: hidden`）。
+- 禁用时，或在 `always` 为 `false` 且内容不可滚动或可滚动范围不超过 `threshold` 时，不输出 mask。
 - 滚动时按 `scrollTop` / `scrollLeft` 分别开关前后两端的渐隐。
 - `observeResize` 变化或组件卸载时断开 observer。
 - 组件只添加中性的滚动视口，语义地标与标题放在插槽内容里。
