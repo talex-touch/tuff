@@ -20,7 +20,8 @@ task/<type>/<slug> ──PR──► master ──┬──catch-up──► sta
 |--------|------|----------|
 | `master` | The integration branch and the production line. Pull requests land here; a stable tag is taken here. | Permanent |
 | `stage` | The beta channel. `stage` is what testers are handed, so a beta is cut from it. | Permanent |
-| `task/<type>/<slug>` | Every other piece of work, including urgent fixes. | Deleted on merge |
+| `task/<type>/<slug>` | Every other human piece of work, including urgent fixes. | Deleted on merge |
+| `dependabot/<ecosystem>/<slug...>` | Automated dependency PRs opened by `dependabot[bot]` targeting `master` only (never `stage`, never direct pushes or human PRs). | Deleted on merge |
 | `gh-pages` | Docs deployment. Orphan history, exempt from every rule above. | Permanent |
 
 `main` is not a second production branch, `dev/*` is retired (a `task/` branch already means "my
@@ -56,6 +57,7 @@ work is a guard people learn to route around, which costs more than the gap it w
 | `task/` depth | Exactly `<type>/<slug>` — three segments. A slug never nests, or the whitelist stops being a regex. |
 | `<type>` | `build · chore · ci · docs · feat · fix · perf · ref · sec · test` — a subset of `commitlint.config.cts`'s `type-enum`, asserted by `--self-test`, so a branch and its commits cannot disagree about what kind of change this is. |
 | `<slug>` | `[a-z0-9._-]`, starts alphanumeric, ≤40 chars. |
+| `dependabot/` | `dependabot/<ecosystem>/<slug...>` for ecosystems configured in `.github/dependabot.yml` (`cargo · github_actions · npm_and_yarn`), asserted by `--self-test`. Allowed **only** on `pull_request` runs targeting `master` authored by `dependabot[bot]` (never `stage`, never direct pushes, never human-opened PRs). Package/action path segments preserve upstream ASCII casing (e.g. `Swatinem/rust-cache-2.9.3`) while rejecting `..`, leading `.`/`-`, and trailing `.`/`.lock`. |
 | Tags | `v<MAJOR.MINOR.PATCH>` on `master`, `v<MAJOR.MINOR.PATCH>-beta.<n>` on `stage`. Nothing else is a release tag. |
 
 There is no `hotfix` type, deliberately: a fix is `fix`, and whether it needs a beta round first is a
@@ -175,11 +177,13 @@ Three properties of the guard are deliberate and should survive any edit:
 
 ## Changing the policy
 
-1. Change the rule in `scripts/check-branch-policy.mjs` (`TASK_TYPES`, `LONG_LIVED`, `EXEMPT_BRANCHES`).
-2. Add the case to its `--self-test`, including the mirror: the name that must now be rejected.
+1. Change the rule in `scripts/check-branch-policy.mjs` (`TASK_TYPES`, `DEPENDABOT_ECOSYSTEMS`, `LONG_LIVED`, `EXEMPT_BRANCHES`).
+2. Add the case to its `--self-test` (and `scripts/check-branch-policy.test.mjs`), including the mirror: the name or context that must now be rejected.
 3. Update this file.
 4. For `task/<type>` additions, the type must exist in `commitlint.config.cts`'s `type-enum` — the
-   self-test asserts it.
+   self-test asserts it. For `.github/dependabot.yml` ecosystem additions, keep
+   `DEPENDABOT_ECOSYSTEMS` / `DEPENDABOT_CONFIG_ECOSYSTEM_MAP` in sync — the self-test asserts that
+   too.
 5. Changing *which runs a rule is fatal in* is a policy change too, not a tweak. The failing contexts
    live in `evaluate` (`publishesBeta` for `I1`), and both halves need a case each way: one run that
    must fail, one that must only warn. A scope that is only tested in the failing direction is how a

@@ -43,10 +43,13 @@ jobs:
           # script tolerates a failed read, so the remote branch and tag audits would quietly SKIP.
           persist-credentials: false
 
-      # No arguments: the script reads GITHUB_HEAD_REF / GITHUB_REF_NAME / GITHUB_REF_TYPE itself, so
-      # the PR source branch, the pushed branch and the pushed tag are all read the way GitHub means
-      # them rather than through shell interpolation.
+      # No arguments: the script reads GITHUB_EVENT_NAME / GITHUB_HEAD_REF / GITHUB_BASE_REF /
+      # GITHUB_REF_NAME / GITHUB_REF_TYPE itself (plus GITHUB_PR_AUTHOR passed via env: rather than
+      # shell interpolation), so PR branches, Dependabot authorship, pushed branches, and pushed
+      # tags are all read the way GitHub means them.
       - name: Check branch and tag policy
+        env:
+          GITHUB_PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: node scripts/check-branch-policy.mjs
 
       # A guard that matches nothing looks exactly like a repository with nothing to report, and this
