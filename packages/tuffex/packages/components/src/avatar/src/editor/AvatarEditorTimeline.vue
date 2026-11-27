@@ -233,32 +233,20 @@ function onHandleKeydown(which: 'start' | 'end', ev: KeyboardEvent): void {
 
 <style lang="scss">
 .tx-avatar-editor__timeline {
-  display: flex;
-  flex-direction: column;
   gap: 8px;
   padding: 9px 10px;
-  border-radius: 12px;
-  background: var(--tx-fill-color-lighter, #fafafa);
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #e4e7ed);
 }
 
-.tx-avatar-editor__timeline-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.tx-avatar-editor__timeline-head,
+.tx-avatar-editor__clip-meta {
   gap: 8px;
 }
 
 .tx-avatar-editor__timeline-readout {
   margin-left: auto;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--tx-text-color-secondary, #6b7280);
 }
 
 .tx-avatar-editor__transport {
-  display: flex;
-  align-items: center;
   gap: 5px;
 }
 
@@ -268,45 +256,24 @@ function onHandleKeydown(which: 'start' | 'end', ev: KeyboardEvent): void {
 }
 
 .tx-avatar-editor__mini-btn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 24px;
   height: 24px;
   padding: 0;
-  border: none;
   border-radius: 7px;
-  background: var(--tx-bg-color, #ffffff);
-  color: var(--tx-text-color-primary, #303133);
+  background: var(--a-b);
+  color: var(--a-t);
   cursor: pointer;
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #e4e7ed);
-  transition: transform 140ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+  box-shadow: var(--a-bd);
 
   &:hover {
-    background: var(--tx-fill-color, #ebedf0);
-  }
-
-  &:active {
-    transform: scale(0.93);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--tx-color-primary, #409eff);
-    outline-offset: 1px;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
+    background: var(--a-h);
   }
 }
 
 .tx-avatar-editor__clip-grid {
-  display: flex;
-  flex-direction: column;
   gap: 7px;
   padding-top: 7px;
-  border-top: 1px solid var(--tx-border-color-extra-light, #ebeef5);
+  border-top: 1px solid var(--a-ls);
 }
 
 .tx-avatar-editor__trim-bar {
@@ -314,96 +281,59 @@ function onHandleKeydown(which: 'start' | 'end', ev: KeyboardEvent): void {
   height: 20px;
   margin: 0 5px;
   border-radius: 7px;
-  background: var(--tx-fill-color-light, #f0f2f5);
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-extra-light, #ebeef5);
+  background: var(--a-f);
+  box-shadow: var(--a-bds);
   touch-action: none;
   user-select: none;
 }
 
 .tx-avatar-editor__trim-window {
   position: absolute;
-  top: 2px;
-  bottom: 2px;
+  inset: 2px auto;
   border-radius: 5px;
-  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 20%, transparent);
-  box-shadow: inset 0 0 0 1.5px var(--tx-color-primary, #409eff);
+  background: color-mix(in srgb, var(--a-p) 20%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--a-p);
   pointer-events: none;
 }
 
 .tx-avatar-editor__trim-playhead {
   position: absolute;
-  top: 3px;
-  bottom: 3px;
+  inset: 3px auto;
   width: 2px;
   border-radius: 1px;
   transform: translateX(-50%);
-  background: var(--tx-text-color-primary, #303133);
+  background: var(--a-t);
   opacity: 0.65;
   pointer-events: none;
 }
 
 .tx-avatar-editor__trim-handle {
-  position: absolute;
-  top: 50%;
   width: 10px;
   height: 18px;
   padding: 0;
-  border: none;
   border-radius: 4px;
-  transform: translate(-50%, -50%) scale(1);
-  background: var(--tx-color-primary, #409eff);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--tx-color-black, #000000) 22%, transparent);
+  background: var(--a-p);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--a-k) 22%, transparent);
   cursor: ew-resize;
-  transition: transform 150ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
 
   &::after {
     content: '';
-    position: absolute;
     left: 50%;
-    top: 50%;
     width: 2px;
     height: 8px;
     border-radius: 1px;
-    transform: translate(-50%, -50%);
-    background: var(--tx-color-on-primary, #ffffff);
+    background: var(--a-w);
   }
 
   &:hover,
   &.is-dragging {
     transform: translate(-50%, -50%) scale(1.12);
   }
-
-  &:focus-visible {
-    outline: 2px solid var(--tx-color-primary, #409eff);
-    outline-offset: 2px;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
-}
-
-.tx-avatar-editor__clip-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.tx-avatar-editor__clip-span {
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--tx-text-color-secondary, #6b7280);
 }
 
 .tx-avatar-editor__clip-fps {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-}
-
-.tx-avatar-editor__fps-unit {
-  font-size: 11px;
-  color: var(--tx-text-color-secondary, #6b7280);
 }
 </style>

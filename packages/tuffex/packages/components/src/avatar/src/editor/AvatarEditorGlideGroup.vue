@@ -179,8 +179,8 @@ onBeforeUnmount(() => {
   align-items: center;
   padding: 2px;
   border-radius: 9px;
-  background: var(--tx-fill-color-light, #f5f7fa);
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-extra-light, #ebeef5);
+  background: var(--a-f);
+  box-shadow: var(--a-bds);
   overflow: hidden;
 }
 
@@ -189,64 +189,34 @@ onBeforeUnmount(() => {
   top: 0;
   left: 0;
   border-radius: 7px;
-  background: var(--tx-bg-color-overlay, #ffffff);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--tx-color-black, #000000) 10%, transparent);
+  background: var(--tx-bg-color-overlay, #fff);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--a-k) 10%, transparent);
   opacity: 0;
   pointer-events: none;
-  z-index: 0;
   transition: opacity 140ms ease;
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
 }
 
 .tx-ae-glide__btn {
   position: relative;
   z-index: 1;
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   gap: 4px;
   padding: 4px 9px;
-  border: none;
   border-radius: 7px;
   background: transparent;
-  color: var(--tx-text-color-regular, #606266);
-  font: inherit;
+  color: var(--a-r);
   font-size: 12px;
   line-height: 1.25;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   white-space: nowrap;
-  transition: transform 140ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
 
-  &:hover:not(:disabled) {
-    color: var(--tx-text-color-primary, #303133);
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.95);
+  &:hover:not(:disabled),
+  &.is-active {
+    color: var(--a-t);
   }
 
   &.is-active {
-    color: var(--tx-text-color-primary, #303133);
     font-weight: 500;
-  }
-
-  &:disabled {
-    opacity: 0.42;
-    cursor: not-allowed;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--tx-color-primary, #409eff);
-    outline-offset: -1px;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
   }
 }
 

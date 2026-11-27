@@ -1124,7 +1124,7 @@ describe('avatar editor security, codecs & lifecycle guards', () => {
     expect(emptyEditor.find('.tx-avatar-editor__media-glyphs').exists()).toBe(true)
     emptyEditor.unmount()
 
-    // 2. AvatarEditorSlider snaps magnetically to detents and resets on readout click
+    // 2. AvatarEditorSlider snaps magnetically during pointer drag, stays unsnapped for keyboard steps, and resets on readout click
     const slider = mount(AvatarEditorSlider, {
       props: {
         modelValue: 45,
@@ -1140,10 +1140,12 @@ describe('avatar editor security, codecs & lifecycle guards', () => {
       },
     })
     const input = slider.find('input[type="range"]')
+    await input.trigger('pointerdown')
     await input.setValue('88')
     expect(slider.emitted('update:modelValue')?.[0]).toEqual([90])
+    await input.trigger('pointerup')
     await input.setValue('2')
-    expect(slider.emitted('update:modelValue')?.[1]).toEqual([0])
+    expect(slider.emitted('update:modelValue')?.[1]).toEqual([2])
     await slider.find('.tx-ae-slider__readout--btn').trigger('click')
     expect(slider.emitted('reset')?.[0]).toEqual([0])
     slider.unmount()

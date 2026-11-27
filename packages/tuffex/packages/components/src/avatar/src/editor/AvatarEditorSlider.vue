@@ -74,7 +74,7 @@ function onInput(ev: Event): void {
   const raw = Number((ev.target as HTMLInputElement).value)
   if (!Number.isFinite(raw))
     return
-  emit('update:modelValue', applySnap(raw))
+  emit('update:modelValue', dragging.value ? applySnap(raw) : raw)
 }
 
 function handleReset(): void {
@@ -133,20 +133,15 @@ function handleReset(): void {
 
 <style lang="scss">
 .tx-ae-slider {
-  display: flex;
-  align-items: center;
   gap: 8px;
   min-width: 0;
 }
 
 .tx-ae-slider__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 22px;
   height: 22px;
   flex-shrink: 0;
-  color: var(--tx-text-color-secondary, #6b7280);
+  color: var(--a-s);
 }
 
 .tx-ae-slider__track-wrap {
@@ -156,8 +151,6 @@ function handleReset(): void {
   height: 22px;
   padding: 0 7px;
   box-sizing: border-box;
-  display: flex;
-  align-items: center;
 }
 
 .tx-ae-slider__rail {
@@ -169,43 +162,28 @@ function handleReset(): void {
 }
 
 .tx-ae-slider__detent {
-  position: absolute;
   left: 50%;
-  top: 50%;
   width: 2px;
   height: 8px;
   border-radius: 1px;
-  transform: translate(-50%, -50%);
   background: var(--tx-border-color, #cbd5e1);
 }
 
 .tx-ae-slider__fill {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  inset: 0 auto;
   border-radius: 999px;
-  background: var(--tx-color-primary, #409eff);
+  background: var(--a-p);
 }
 
 .tx-ae-slider__thumb {
-  position: absolute;
-  top: 50%;
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  transform: translate(-50%, -50%) scale(1);
-  background: var(--tx-bg-color, #ffffff);
-  box-shadow:
-    0 1px 3px color-mix(in srgb, var(--tx-color-black, #000000) 18%, transparent),
-    inset 0 0 0 1.5px var(--tx-color-primary, #409eff);
-  transition:
-    transform 180ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
-    box-shadow 180ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+  background: var(--a-b);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--a-k) 18%, transparent), inset 0 0 0 1.5px var(--a-p);
+  transition: transform 180ms var(--a-e), box-shadow 180ms var(--a-e);
   pointer-events: none;
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
 }
 
 .tx-ae-slider__track-wrap:hover .tx-ae-slider__thumb {
@@ -214,10 +192,7 @@ function handleReset(): void {
 
 .tx-ae-slider.is-dragging .tx-ae-slider__thumb {
   transform: translate(-50%, -50%) scale(1.2);
-  box-shadow:
-    0 0 0 4px color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent),
-    0 1px 4px color-mix(in srgb, var(--tx-color-black, #000000) 20%, transparent),
-    inset 0 0 0 1.5px var(--tx-color-primary, #409eff);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--a-p) 18%, transparent), 0 1px 4px color-mix(in srgb, var(--a-k) 20%, transparent), inset 0 0 0 1.5px var(--a-p);
 }
 
 .tx-ae-slider__native {
@@ -228,18 +203,10 @@ function handleReset(): void {
   margin: 0;
   opacity: 0;
   cursor: pointer;
-
-  &:focus-visible + .tx-ae-slider__rail,
-  &:focus-visible ~ .tx-ae-slider__rail {
-    outline: 2px solid var(--tx-color-primary, #409eff);
-    outline-offset: 4px;
-  }
 }
 
 .tx-ae-slider__track-wrap:has(.tx-ae-slider__native:focus-visible) .tx-ae-slider__thumb {
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--tx-color-primary, #409eff) 24%, transparent),
-    inset 0 0 0 1.5px var(--tx-color-primary, #409eff);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--a-p) 24%, transparent), inset 0 0 0 1.5px var(--a-p);
 }
 
 .tx-ae-slider__readout {
@@ -248,38 +215,23 @@ function handleReset(): void {
   text-align: right;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: var(--tx-text-color-secondary, #6b7280);
+  color: var(--a-s);
 }
 
 .tx-ae-slider__readout--btn {
-  appearance: none;
   padding: 2px 5px;
-  border: none;
   border-radius: 6px;
   background: transparent;
-  font: inherit;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--tx-text-color-secondary, #6b7280);
   cursor: pointer;
-  transition: transform 140ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
 
   &.is-modified {
-    color: var(--tx-color-primary, #409eff);
+    color: var(--a-p);
     font-weight: 500;
   }
 
   &:hover {
-    background: var(--tx-fill-color-light, #f5f7fa);
-    color: var(--tx-text-color-primary, #303133);
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
+    background: var(--a-f);
+    color: var(--a-t);
   }
 }
 </style>

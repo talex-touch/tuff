@@ -78,62 +78,18 @@ const emit = defineEmits<{
 
 <style lang="scss">
 .tx-avatar-editor__toolbar {
-  display: flex;
-  align-items: center;
   gap: 4px;
 }
 
 .tx-avatar-editor__tool-btn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: var(--tx-fill-color-light, #f5f7fa);
-  color: var(--tx-text-color-regular, #606266);
   cursor: pointer;
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-extra-light, #ebeef5);
-  transition: transform 140ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
-
-  &:hover:not(:disabled) {
-    background: var(--tx-fill-color, #ebedf0);
-    color: var(--tx-text-color-primary, #303133);
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.93);
-  }
-
-  &.is-active {
-    background: var(--tx-color-primary-light-9, #ecf5ff);
-    color: var(--tx-color-primary, #409eff);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 42%, transparent);
-  }
-
-  &:disabled {
-    opacity: 0.42;
-    cursor: not-allowed;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--tx-color-primary, #409eff);
-    outline-offset: 1px;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
 }
 
 .tx-avatar-editor__tool-sep {
   width: 1px;
   height: 16px;
   margin: 0 2px;
-  background: var(--tx-border-color-lighter, #e4e7ed);
+  background: var(--a-l);
 }
 
 .tx-avatar-editor__tool-spacer {

@@ -178,7 +178,7 @@ function springTransform(patch: Partial<AvatarEditorTransform>): void {
         </span>
       </button>
 
-      <div class="tx-avatar-editor__collapse" :class="{ 'is-open': showAdjustments }">
+      <div class="tx-avatar-editor__collapse" :class="{ 'is-open': showAdjustments }" :inert="!showAdjustments">
         <div class="tx-avatar-editor__collapse-inner">
           <div class="tx-avatar-editor__adjust-body">
             <AvatarEditorSlider
@@ -289,7 +289,7 @@ function springTransform(patch: Partial<AvatarEditorTransform>): void {
         <span class="tx-avatar-editor__unit">px</span>
       </div>
 
-      <div class="tx-avatar-editor__collapse" :class="{ 'is-open': activeFormatMeta.lossy && !isAnimatedGifExport }">
+      <div class="tx-avatar-editor__collapse" :class="{ 'is-open': activeFormatMeta.lossy && !isAnimatedGifExport }" :inert="!(activeFormatMeta.lossy && !isAnimatedGifExport)">
         <div class="tx-avatar-editor__collapse-inner">
           <div class="tx-avatar-editor__quality-wrap">
             <AvatarEditorSlider
@@ -314,21 +314,13 @@ function springTransform(patch: Partial<AvatarEditorTransform>): void {
 
 <style lang="scss">
 .tx-avatar-editor__panel {
-  display: flex;
-  flex-direction: column;
   gap: 10px;
   min-width: 0;
 }
 
 .tx-avatar-editor__preview-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--tx-fill-color-lighter, #fafafa);
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #e4e7ed);
 }
 
 .tx-avatar-editor__previews {
@@ -341,156 +333,67 @@ function springTransform(patch: Partial<AvatarEditorTransform>): void {
 .tx-avatar-editor__preview-canvas {
   display: block;
   box-shadow: inset 0 0 0 1px var(--tx-border-color-light, #dcdfe6);
-  background: var(--tx-fill-color, #f0f2f5);
-  transition: border-radius 260ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+  background: var(--a-h);
+  transition: border-radius 260ms var(--a-e);
 
-  &.tx-avatar-editor__preview-canvas--lg {
-    width: 48px;
-    height: 48px;
-  }
-
-  &.tx-avatar-editor__preview-canvas--sm {
-    width: 28px;
-    height: 28px;
-  }
-
-  &.is-circle {
-    border-radius: 50%;
-  }
-
-  &.is-rounded {
-    border-radius: 24%;
-  }
-
-  &.is-square {
-    border-radius: 5px;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
+  &--lg { width: 48px; height: 48px; }
+  &--sm { width: 28px; height: 28px; }
+  &.is-circle { border-radius: 50%; }
+  &.is-rounded { border-radius: 24%; }
+  &.is-square { border-radius: 5px; }
 }
 
 .tx-avatar-editor__preview-right {
-  display: flex;
-  flex-direction: column;
   align-items: flex-end;
   gap: 5px;
   min-width: 0;
 }
 
-.tx-avatar-editor__shape-bar {
+.tx-avatar-editor__shape-bar,
+.tx-avatar-editor__disclosure-title,
+.tx-avatar-editor__swatches {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
 .tx-avatar-editor__alpha-btn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: none;
   border-radius: 9px;
-  background: var(--tx-fill-color-light, #f5f7fa);
-  color: var(--tx-text-color-secondary, #6b7280);
+  color: var(--a-s);
   cursor: pointer;
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-extra-light, #ebeef5);
-  transition: transform 150ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
-
-  &:hover {
-    background: var(--tx-fill-color, #ebedf0);
-    color: var(--tx-text-color-primary, #303133);
-  }
-
-  &:active {
-    transform: scale(0.94);
-  }
-
-  &.is-active {
-    background: var(--tx-color-primary-light-9, #ecf5ff);
-    color: var(--tx-color-primary, #409eff);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 46%, transparent);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--tx-color-primary, #409eff);
-    outline-offset: 1px;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
-}
-
-.tx-avatar-editor__preview-sub {
-  font-size: 11px;
-  color: var(--tx-text-color-secondary, #6b7280);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 .tx-avatar-editor__group {
-  display: flex;
-  flex-direction: column;
   gap: 8px;
   padding-top: 10px;
-  border-top: 1px solid var(--tx-border-color-extra-light, #ebeef5);
+  border-top: 1px solid var(--a-ls);
 }
 
 .tx-avatar-editor__disclosure {
-  appearance: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   width: 100%;
   padding: 3px 2px;
-  border: none;
   background: transparent;
-  color: var(--tx-text-color-regular, #606266);
-  font: inherit;
+  color: var(--a-r);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
 
   &:hover {
-    color: var(--tx-text-color-primary, #303133);
+    color: var(--a-t);
   }
-
-  &:focus-visible {
-    outline: 2px solid var(--tx-color-primary, #409eff);
-    outline-offset: 2px;
-    border-radius: 6px;
-  }
-}
-
-.tx-avatar-editor__disclosure-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .tx-avatar-editor__dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--tx-color-primary, #409eff);
+  background: var(--a-p);
 }
 
 .tx-avatar-editor__chevron {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--tx-text-color-secondary, #6b7280);
-  transform: rotate(0deg);
-  transition: transform 220ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
+  color: var(--a-s);
+  transition: transform 220ms var(--a-e);
 }
 
 .tx-avatar-editor__disclosure.is-open .tx-avatar-editor__chevron {
@@ -501,17 +404,11 @@ function springTransform(patch: Partial<AvatarEditorTransform>): void {
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
-  transition:
-    grid-template-rows 240ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
-    opacity 180ms ease;
+  transition: grid-template-rows 240ms var(--a-e), opacity 180ms ease;
 
   &.is-open {
     grid-template-rows: 1fr;
     opacity: 1;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
   }
 }
 
@@ -521,109 +418,57 @@ function springTransform(patch: Partial<AvatarEditorTransform>): void {
 }
 
 .tx-avatar-editor__adjust-body {
-  display: flex;
-  flex-direction: column;
   gap: 6px;
   padding-top: 4px;
 }
 
 .tx-avatar-editor__swatch-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 8px;
   padding-top: 2px;
 }
 
 .tx-avatar-editor__row-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 22px;
   height: 22px;
-  color: var(--tx-text-color-secondary, #6b7280);
+  color: var(--a-s);
 }
 
-.tx-avatar-editor__swatches {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.tx-avatar-editor__swatch {
-  appearance: none;
+.tx-avatar-editor__swatch,
+.tx-avatar-editor__color-picker {
   width: 20px;
   height: 20px;
   padding: 0;
-  border: none;
   border-radius: 50%;
   cursor: pointer;
   box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
-  transition: transform 150ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
 
   &:hover {
     transform: scale(1.1);
   }
+}
 
-  &:active {
-    transform: scale(0.94);
-  }
-
+.tx-avatar-editor__swatch {
   &.is-transparent {
-    background-image:
-      linear-gradient(45deg, var(--tx-border-color-light, #dcdfe6) 25%, transparent 25%),
-      linear-gradient(-45deg, var(--tx-border-color-light, #dcdfe6) 25%, transparent 25%),
-      linear-gradient(45deg, transparent 75%, var(--tx-border-color-light, #dcdfe6) 75%),
-      linear-gradient(-45deg, transparent 75%, var(--tx-border-color-light, #dcdfe6) 75%);
-    background-size: 8px 8px;
-    background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+    background: conic-gradient(var(--tx-border-color-light, #dcdfe6) 90deg, transparent 0 180deg, var(--tx-border-color-light, #dcdfe6) 0 270deg, transparent 0) 0 0 / 8px 8px;
   }
 
   &.is-active {
-    box-shadow:
-      inset 0 0 0 1.5px var(--tx-bg-color, #ffffff),
-      0 0 0 2px var(--tx-color-primary, #409eff);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
+    box-shadow: inset 0 0 0 1.5px var(--a-b), 0 0 0 2px var(--a-p);
   }
 }
 
 .tx-avatar-editor__color-picker {
   position: relative;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
   overflow: hidden;
-  cursor: pointer;
-  background: conic-gradient(
-    var(--tx-color-danger, #f56c6c),
-    var(--tx-color-warning, #e6a23c),
-    var(--tx-color-success, #67c23a),
-    var(--tx-color-primary, #409eff),
-    var(--tx-color-danger, #f56c6c)
-  );
-  box-shadow: inset 0 0 0 1px var(--tx-border-color, #dcdfe6);
-  transition: transform 150ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+  background: conic-gradient(var(--tx-color-danger, #f56c6c), var(--tx-color-warning, #e6a23c), var(--tx-color-success, #67c23a), var(--a-p), var(--tx-color-danger, #f56c6c));
 
-  &:hover {
-    transform: scale(1.1);
-  }
-
-  input[type='color'] {
+  input {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
-    padding: 0;
-    border: none;
     opacity: 0;
     cursor: pointer;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
   }
 }
 
@@ -634,61 +479,14 @@ function springTransform(patch: Partial<AvatarEditorTransform>): void {
 }
 
 .tx-avatar-editor__format-btn {
-  appearance: none;
   height: 28px;
   padding: 0 6px;
-  border: none;
-  border-radius: 8px;
-  font: inherit;
   font-size: 12px;
   font-weight: 500;
-  cursor: pointer;
-  color: var(--tx-text-color-regular, #606266);
-  background: var(--tx-fill-color-light, #f5f7fa);
-  box-shadow: inset 0 0 0 1px var(--tx-border-color-extra-light, #ebeef5);
-  transition: transform 140ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
-
-  &:hover:not(:disabled) {
-    background: var(--tx-fill-color, #ebedf0);
-    color: var(--tx-text-color-primary, #303133);
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.95);
-  }
-
-  &.is-active {
-    background: var(--tx-color-primary-light-9, #ecf5ff);
-    color: var(--tx-color-primary, #409eff);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 48%, transparent);
-  }
-
-  &:disabled {
-    opacity: 0.38;
-    cursor: not-allowed;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--tx-color-primary, #409eff);
-    outline-offset: 1px;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
 }
 
 .tx-avatar-editor__size-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
   gap: 6px;
-}
-
-.tx-avatar-editor__unit {
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--tx-text-color-secondary, #6b7280);
 }
 
 .tx-avatar-editor__quality-wrap {
