@@ -173,33 +173,50 @@ function sanitizeAndNormalizeImageSrc(raw: string): string {
 
 async function inlineImageUrlToDataUrl(
   url: string,
+  timeoutMs: number,
   fetcher: typeof globalThis.fetch | undefined = globalThis.fetch,
 ): Promise<string | null> {
-  if (!INLINEABLE_URL_RE.test(url) || typeof fetcher !== 'function')
+  if (!INLINEABLE_URL_RE.test(url) || typeof fetcher !== 'function' || timeoutMs <= 0)
     return null
-  try {
-    const response = await fetcher(url)
-    if (!response.ok)
+  const ctrl = typeof AbortController === 'function' ? new AbortController() : undefined
+  let activeReader: FileReader | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const task = (async () => {
+    const res = await fetcher(url, ctrl ? { signal: ctrl.signal } : undefined)
+    if (!res.ok)
       return null
-    const blob = await response.blob()
+    const blob = await res.blob()
     const mime = (blob.type || 'image/png').split(';')[0]!.trim().toLowerCase()
     let dataUrl = ''
     if (typeof blob.arrayBuffer === 'function') {
-      const base64 = bytesToBase64(new Uint8Array(await blob.arrayBuffer()))
-      dataUrl = base64 ? `data:${mime};base64,${base64}` : ''
+      const b64 = bytesToBase64(new Uint8Array(await blob.arrayBuffer()))
+      dataUrl = b64 ? `data:${mime};base64,${b64}` : ''
     }
     else if (typeof FileReader !== 'undefined') {
       dataUrl = await new Promise<string>((resolve) => {
         const reader = new FileReader()
+        activeReader = reader
         reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
         reader.onerror = () => resolve('')
+        reader.onabort = () => resolve('')
         reader.readAsDataURL(blob)
       })
     }
     return sanitizeAndNormalizeImageSrc(dataUrl) || null
+  })().catch(() => null)
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      ctrl?.abort()
+      activeReader?.abort()
+      resolve(null)
+    }, timeoutMs)
+  })
+  try {
+    return await Promise.race([task, timeout])
   }
-  catch {
-    return null
+  finally {
+    if (timer !== undefined)
+      clearTimeout(timer)
   }
 }
 
@@ -441,20 +458,21 @@ function renderBackdropSvg(
   }
 }
 
+const SHADOW_FILTER_SPECS: Record<Exclude<DeviceMockupShadowVariant, 'none'>, readonly [string, string, string, string, number, number, number, string, string]> = {
+  soft: ['-22%', '-18%', '148%', '148%', 5, 10, 14, '0.36', '0.16'],
+  crisp: ['-16%', '-14%', '136%', '136%', 3, 6, 5, '0.46', '0.22'],
+  grounded: ['-22%', '-18%', '148%', '148%', 4, 10, 10, '0.52', '0.24'],
+  dramatic: ['-30%', '-24%', '166%', '166%', 14, 30, 30, '0.64', '0.32'],
+  ambient: ['-30%', '-24%', '166%', '166%', 8, 20, 26, '0.48', '0.32'],
+  elevated: ['-24%', '-18%', '152%', '152%', 8, 18, 18, '0.48', '0.22'],
+}
+
 function renderShadowFilterSvg(shadowMode: DeviceMockupShadowVariant, darkBg: boolean, ambientColor: string): string {
   if (shadowMode === 'none')
     return ''
-  if (shadowMode === 'soft')
-    return `<filter id="tx-dm-shadow" x="-22%" y="-18%" width="148%" height="148%"><feDropShadow dx="5" dy="10" stdDeviation="14" flood-color="#000000" flood-opacity="${darkBg ? '0.36' : '0.16'}" /></filter>`
-  if (shadowMode === 'crisp')
-    return `<filter id="tx-dm-shadow" x="-16%" y="-14%" width="136%" height="136%"><feDropShadow dx="3" dy="6" stdDeviation="5" flood-color="#000000" flood-opacity="${darkBg ? '0.46' : '0.22'}" /></filter>`
-  if (shadowMode === 'grounded')
-    return `<filter id="tx-dm-shadow" x="-22%" y="-18%" width="148%" height="148%"><feDropShadow dx="4" dy="10" stdDeviation="10" flood-color="#000000" flood-opacity="${darkBg ? '0.52' : '0.24'}" /></filter>`
-  if (shadowMode === 'dramatic')
-    return `<filter id="tx-dm-shadow" x="-30%" y="-24%" width="166%" height="166%"><feDropShadow dx="14" dy="30" stdDeviation="30" flood-color="#000000" flood-opacity="${darkBg ? '0.64' : '0.32'}" /></filter>`
-  if (shadowMode === 'ambient')
-    return `<filter id="tx-dm-shadow" x="-30%" y="-24%" width="166%" height="166%"><feDropShadow dx="8" dy="20" stdDeviation="26" flood-color="${escapeDeviceMockupXml(ambientColor)}" flood-opacity="${darkBg ? '0.48' : '0.32'}" /></filter>`
-  return `<filter id="tx-dm-shadow" x="-24%" y="-18%" width="152%" height="152%"><feDropShadow dx="8" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity="${darkBg ? '0.48' : '0.22'}" /></filter>`
+  const [x, y, w, h, dx, dy, std, dOp, lOp] = SHADOW_FILTER_SPECS[shadowMode] ?? SHADOW_FILTER_SPECS.elevated
+  const color = shadowMode === 'ambient' ? escapeDeviceMockupXml(ambientColor) : '#000000'
+  return `<filter id="tx-dm-shadow" x="${x}" y="${y}" width="${w}" height="${h}"><feDropShadow dx="${dx}" dy="${dy}" stdDeviation="${std}" flood-color="${color}" flood-opacity="${darkBg ? dOp : lOp}" /></filter>`
 }
 
 function renderHardwareAttachmentsSvg(
@@ -989,10 +1007,14 @@ export async function exportDeviceMockupImage(
   config: DeviceMockupExportConfig = {},
 ): Promise<Blob | null> {
   const format: DeviceMockupExportFormat = config.format ?? 'png'
+  const timeoutMs = typeof config.timeoutMs === 'number' && Number.isFinite(config.timeoutMs) && config.timeoutMs > 0
+    ? config.timeoutMs
+    : 3000
+  const deadline = Date.now() + timeoutMs
   let resolvedConfig = config
   const rawSrc = (config.imageSrc || config.src || '').trim()
   if (rawSrc && INLINEABLE_URL_RE.test(rawSrc)) {
-    const inlined = await inlineImageUrlToDataUrl(rawSrc)
+    const inlined = await inlineImageUrlToDataUrl(rawSrc, timeoutMs)
     if (!inlined)
       return null
     resolvedConfig = { ...config, imageSrc: inlined }
@@ -1036,9 +1058,9 @@ export async function exportDeviceMockupImage(
   if (!ctx)
     return null
 
-  const timeoutMs = typeof resolvedConfig.timeoutMs === 'number' && Number.isFinite(resolvedConfig.timeoutMs) && resolvedConfig.timeoutMs > 0
-    ? resolvedConfig.timeoutMs
-    : 3000
+  const remainingMs = deadline - Date.now()
+  if (remainingMs <= 0)
+    return null
 
   let objectUrl: string | null = null
   const canUseObjectUrl = typeof URL !== 'undefined'
@@ -1072,7 +1094,7 @@ export async function exportDeviceMockupImage(
       resolve(blob)
     }
 
-    const timer = setTimeout(() => finish(null), timeoutMs)
+    const timer = setTimeout(() => finish(null), remainingMs)
     const img = new Image()
     img.decoding = 'async'
     img.onload = () => {

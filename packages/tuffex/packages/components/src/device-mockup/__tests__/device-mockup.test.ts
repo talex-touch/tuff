@@ -382,6 +382,19 @@ describe('device-mockup SVG & Canvas export parity', () => {
         format: 'svg',
         src: '/screenshots/unsafe.svg',
       })).toBeNull()
+
+      let abortedSignal: AbortSignal | undefined
+      vi.stubGlobal('fetch', vi.fn().mockImplementation((_input: string, init?: RequestInit) => {
+        abortedSignal = init?.signal ?? undefined
+        return new Promise(() => {})
+      }))
+      expect(await exportDeviceMockupImage({
+        device: iphone17Pro,
+        format: 'svg',
+        src: '/screenshots/stalled.png',
+        timeoutMs: 25,
+      })).toBeNull()
+      expect(abortedSignal?.aborted).toBe(true)
     }
     finally {
       vi.stubGlobal('fetch', origFetch)
