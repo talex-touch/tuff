@@ -86,17 +86,26 @@ describe('build-and-release same-SHA quality gate', () => {
     expect(String(createRelease.if)).toContain('needs.release-quality.result == \'success\'')
   })
 
-  it('exports the official AppImage no-FUSE signal for the packaged Linux launch', () => {
+  it('extracts the AppImage without FUSE outside the launch timeout and smoke-tests the .deb AppArmor install (#213)', () => {
     const build = workflow.jobs['build-and-release']
     const launch = build.steps.find(step => step.name === 'Smoke: launch the packaged Linux app')
     expect(launch, 'the Linux packaged launch smoke must exist').toBeDefined()
 
-    const launchLine = launch.run
-      .split(/\r?\n/)
-      .map(line => line.trim())
-      .find(line => line.includes('timeout --signal=TERM 45s'))
-    expect(launchLine).toMatch(/^APPIMAGE_EXTRACT_AND_RUN=1 timeout /)
-    expect(launchLine).toContain('"$APPIMAGE" --appimage-extract-and-run --disable-gpu')
+    const commands = launch.run.replace(/^\s*#.*$/gm, '')
+    const lines = commands.split(/\r?\n/).map(line => line.trim())
+    const extractIndex = lines.findIndex(line => line.includes('"$APPIMAGE" --appimage-extract'))
+    const appImageTimeoutIndex = lines.findIndex(line => line.includes('timeout --signal=TERM 45s'))
+    const debTimeoutIndex = lines.findIndex(line => line.includes('timeout --signal=TERM 30s'))
+
+    expect(extractIndex).toBeGreaterThan(-1)
+    expect(appImageTimeoutIndex).toBeGreaterThan(extractIndex)
+    expect(debTimeoutIndex).toBeGreaterThan(appImageTimeoutIndex)
+
+    expect(commands).not.toContain('--appimage-extract-and-run')
+    expect(lines[appImageTimeoutIndex]).toMatch(/^timeout --signal=TERM 45s xvfb-run /)
+    expect(commands).toContain('"$APPIMAGE_EXTRACT_DIR/squashfs-root/AppRun" --disable-gpu')
+    expect(commands).toContain('/etc/apparmor.d/tuff')
+    expect(commands).toContain('/opt/tuff/tuff --disable-gpu')
   })
 
   it('aligns Electron cache env paths, caches them via actions/cache before install, and does not wipe them before build', () => {

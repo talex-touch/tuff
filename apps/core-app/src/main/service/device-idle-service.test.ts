@@ -43,6 +43,22 @@ vi.mock('../core/eventbus/touch-event', () => ({
   }
 }))
 
+type ExecFileCallback = (
+  error: Error | null,
+  result?: { stdout: string; stderr: string } | string
+) => void
+
+function resolveExecFileCallback(
+  optionsOrCallback: unknown,
+  maybeCallback: unknown
+): ExecFileCallback {
+  const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback
+  if (typeof callback !== 'function') {
+    throw new TypeError('execFile mock expected a callback function')
+  }
+  return callback as ExecFileCallback
+}
+
 describe('DeviceIdleService canRun', () => {
   const originalPlatform = process.platform
 
@@ -58,8 +74,9 @@ describe('DeviceIdleService canRun', () => {
     getMainConfigMock.mockReturnValue(undefined)
     powerMonitorMock.getSystemIdleTime.mockReturnValue(5)
     powerMonitorMock.isOnBatteryPower.mockReturnValue(false)
-    execFileMock.mockImplementation((_file, _args, callback) => {
-      callback(null, '80\n')
+    execFileMock.mockImplementation((_file, _args, optionsOrCallback, maybeCallback) => {
+      const callback = resolveExecFileCallback(optionsOrCallback, maybeCallback)
+      callback(null, { stdout: '80\n', stderr: '' })
     })
   })
 
@@ -105,10 +122,17 @@ describe('DeviceIdleService canRun', () => {
     expect(decision.snapshot.battery).toEqual(
       expect.objectContaining({
         charging: true,
-        onBattery: false
+        onBattery: false,
+        level: 80
       })
     )
     expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(execFileMock).toHaveBeenCalledWith(
+      'powershell',
+      expect.arrayContaining(['-NoProfile', '-NonInteractive', '-Command']),
+      expect.objectContaining({ timeout: 5_000, windowsHide: true }),
+      expect.any(Function)
+    )
   })
 
   it('reuses recent battery status for repeated idle checks', async () => {
@@ -143,8 +167,9 @@ describe('DeviceIdleService canRun', () => {
     powerMonitorMock.getSystemIdleTime.mockReturnValue(120)
 
     let resolveBattery!: (stdout: string) => void
-    execFileMock.mockImplementation((_file, _args, callback) => {
-      resolveBattery = (stdout: string) => callback(null, stdout)
+    execFileMock.mockImplementation((_file, _args, optionsOrCallback, maybeCallback) => {
+      const callback = resolveExecFileCallback(optionsOrCallback, maybeCallback)
+      resolveBattery = (stdout: string) => callback(null, { stdout, stderr: '' })
     })
 
     const first = service.canRun({ idleThresholdMs: 60_000 })
@@ -168,7 +193,8 @@ describe('DeviceIdleService canRun', () => {
     const service = DeviceIdleService.getInstance()
 
     powerMonitorMock.getSystemIdleTime.mockReturnValue(120)
-    execFileMock.mockImplementation((_file, _args, callback) => {
+    execFileMock.mockImplementation((_file, _args, optionsOrCallback, maybeCallback) => {
+      const callback = resolveExecFileCallback(optionsOrCallback, maybeCallback)
       callback(Object.assign(new Error('spawn EBADF'), { code: 'EBADF' }))
     })
 
