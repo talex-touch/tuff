@@ -32,7 +32,7 @@ const API_KEY_SCHEMA = defineD1Schema('api-keys', {
   ],
 })
 
-async function ensureApiKeySchema(db: D1Database) {
+export async function ensureApiKeySchema(db: D1Database) {
   await ensureD1Schema(db, API_KEY_SCHEMA)
 }
 

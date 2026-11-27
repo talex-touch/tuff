@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   holdMaintenanceRun: vi.fn(async () => {}),
   runTelemetryRetentionMaintenanceIfDue: vi.fn(async () => ({ status: 'skipped' })),
   cleanupDocEngagementRecords: vi.fn(async () => ({ sessions: 3, nonces: 1, challenges: 0 })),
+  finalizeExpiredAccountDeletions: vi.fn(async () => ({ scanned: 1, finalized: 1, alreadyFinalized: 0, failed: 0, errors: [] })),
   bindings: { DB: {}, MAINTENANCE_SECRET: 'shared-secret' } as Record<string, unknown> | undefined,
 }))
 
@@ -19,6 +20,7 @@ vi.mock('../../server/utils/asrTranscriptionService', () => ({ reconcileExpiredA
 vi.mock('../../server/utils/maintenanceLease', () => ({ holdMaintenanceRun: mocks.holdMaintenanceRun }))
 vi.mock('../../server/utils/telemetryRetentionMaintenance', () => ({ runTelemetryRetentionMaintenanceIfDue: mocks.runTelemetryRetentionMaintenanceIfDue }))
 vi.mock('../../server/utils/docAnalyticsStore', () => ({ cleanupDocEngagementRecords: mocks.cleanupDocEngagementRecords }))
+vi.mock('../../server/utils/privacyDataStore', () => ({ finalizeExpiredAccountDeletions: mocks.finalizeExpiredAccountDeletions }))
 vi.mock('../../server/utils/cloudflare', () => ({ readCloudflareBindings: () => mocks.bindings }))
 
 let handler: (event: any) => Promise<any>
@@ -60,9 +62,23 @@ describe('/api/internal/maintenance/:task', () => {
     expect(result).toMatchObject({ task: 'asr', result: { results: { scanned: 0 } } })
   })
 
-  it('runs retention and the docs cleanup, and refuses an unknown task', async () => {
+  it('runs retention, docs cleanup, and privacy-deletions, failing closed when any deletion fails', async () => {
     expect(await handler(event('retention', 'shared-secret'))).toMatchObject({ task: 'retention', result: { status: 'skipped' } })
     expect(await handler(event('docs', 'shared-secret'))).toMatchObject({ task: 'docs', result: { sessions: 3 } })
+    expect(await handler(event('privacy-deletions', 'shared-secret'))).toMatchObject({
+      task: 'privacy-deletions',
+      result: { scanned: 1, finalized: 1, failed: 0 },
+    })
+
+    mocks.finalizeExpiredAccountDeletions.mockResolvedValueOnce({
+      scanned: 1,
+      finalized: 0,
+      alreadyFinalized: 0,
+      failed: 1,
+      errors: [{ userIdHash: 'abc', message: 'boom' }],
+    })
+    await expect(handler(event('privacy-deletions', 'shared-secret'))).rejects.toMatchObject({ statusCode: 500 })
+
     await expect(handler(event('drop-everything', 'shared-secret'))).rejects.toMatchObject({ statusCode: 404 })
   })
 })

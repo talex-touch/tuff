@@ -81,4 +81,45 @@ describe('telemetryRetentionStore', () => {
     expect(stat('2026-05-10', 'events_by_type', 'search')).toBe(1)
     expect(stat('2026-04-01', 'governance_scope_action', 'app:visit')).toBe(1)
   })
+
+  it('cleans expired telemetry batch receipts in bounded batches while keeping unexpired receipts', async () => {
+    state.db!.sqlite.exec(`
+      CREATE TABLE telemetry_batch_receipts (
+        scope TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        payload_hash TEXT NOT NULL,
+        response_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        PRIMARY KEY (scope, idempotency_key)
+      );
+      INSERT INTO telemetry_batch_receipts VALUES
+        ('telemetry.batch', 'expired-0001', 'h1', '{"success":true}', '2026-05-01T00:00:00.000Z', '2026-05-15T00:00:00.000Z'),
+        ('telemetry.batch', 'expired-0002', 'h2', '{"success":true}', '2026-05-10T00:00:00.000Z', '2026-05-24T00:00:00.000Z'),
+        ('telemetry.batch', 'active-0001', 'h3', '{"success":true}', '2026-06-10T00:00:00.000Z', '2026-06-24T00:00:00.000Z');
+    `)
+
+    const dryRunResult = await runTelemetryRetention(event, { now, batchLimit: 1, dryRun: true })
+    expect(dryRunResult.receipts).toEqual({
+      table: 'telemetry_batch_receipts',
+      cutoff: now.toISOString(),
+      matched: 2,
+      deleted: 0,
+      remainingAfterBatch: 2,
+    })
+
+    const applied = await runTelemetryRetention(event, { now, batchLimit: 1, dryRun: false })
+    expect(applied.receipts).toEqual({
+      table: 'telemetry_batch_receipts',
+      cutoff: now.toISOString(),
+      matched: 2,
+      deleted: 1,
+      remainingAfterBatch: 1,
+    })
+    const remainingKeys = (state.db!.sqlite
+      .prepare('SELECT idempotency_key FROM telemetry_batch_receipts ORDER BY idempotency_key')
+      .all() as Array<{ idempotency_key: string }>)
+      .map(row => row.idempotency_key)
+    expect(remainingKeys).toEqual(['active-0001', 'expired-0002'])
+  })
 })

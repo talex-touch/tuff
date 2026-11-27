@@ -1,4 +1,4 @@
-import { createError, readBody } from 'h3'
+import { createError, getHeader, readBody } from 'h3'
 import { requireAdmin } from '../../../../utils/auth'
 import { getUserById } from '../../../../utils/authStore'
 import { logAdminAudit } from '../../../../utils/adminAuditStore'
@@ -8,6 +8,7 @@ import {
   getCreditSummary,
   getUserCreditAdjustLimits,
   listCreditLedgerByUsers,
+  normalizeCreditIdempotencyKey,
 } from '../../../../utils/creditsStore'
 
 const MAX_CREDIT_ADJUSTMENT = 1_000_000_000
@@ -43,12 +44,26 @@ export default defineEventHandler(async (event) => {
     ? body.reason.trim().slice(0, 120)
     : `admin-${direction === 'add' ? 'credit' : 'debit'}`
 
+  const rawIdempotencyKey = event?.node?.req ? getHeader(event, 'x-idempotency-key') : undefined
+  let idempotencyKey: string | undefined
+  if (rawIdempotencyKey !== undefined && String(rawIdempotencyKey).trim() !== '') {
+    const normalized = normalizeCreditIdempotencyKey(rawIdempotencyKey)
+    if (!normalized)
+      throw createError({ statusCode: 400, statusMessage: 'Invalid X-Idempotency-Key header.' })
+    idempotencyKey = normalized
+  }
+
   let adjustment
   try {
-    adjustment = await adjustUserCredits(event, id, direction === 'add' ? amount : -amount, reason, {
+    const adjustmentMetadata = {
       adminUserId: adminId,
       source: 'admin-user-management',
-    })
+    }
+    adjustment = idempotencyKey
+      ? await adjustUserCredits(event, id, direction === 'add' ? amount : -amount, reason, adjustmentMetadata, {
+          idempotencyKey,
+        })
+      : await adjustUserCredits(event, id, direction === 'add' ? amount : -amount, reason, adjustmentMetadata)
   }
   catch (error) {
     // A deduction past the floor wrote nothing, so there is nothing to audit.
@@ -62,6 +77,8 @@ export default defineEventHandler(async (event) => {
       })
     }
     const message = error instanceof Error ? error.message : 'Failed to adjust credits.'
+    if (message === 'Credit idempotency conflict.')
+      throw createError({ statusCode: 409, statusMessage: message })
     throw createError({ statusCode: 400, statusMessage: message })
   }
 

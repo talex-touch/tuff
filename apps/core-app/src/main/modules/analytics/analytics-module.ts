@@ -23,6 +23,7 @@ import type {
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { PerfSummary } from '../../utils/perf-monitor'
 import type { AnalyticsMessageStore } from './message-store'
+import { randomUUID } from 'node:crypto'
 import process from 'node:process'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -107,6 +108,7 @@ export class AnalyticsModule extends BaseModule {
   private messageStore?: AnalyticsMessageStore
   private messageReportQueue: QueuedMessageReport[] = []
   private messageReportIndex = new Map<string, QueuedMessageReport>()
+  private pendingMessageReportBatch: { key: string; signature: string } | null = null
   private messageReportTimer: NodeJS.Timeout | null = null
   private messageReportInFlight = false
   private messageReportBackoffMs = MESSAGE_REPORT_BASE_DELAY_MS
@@ -628,6 +630,7 @@ export class AnalyticsModule extends BaseModule {
     if (!config.enabled) {
       this.messageReportQueue = []
       this.messageReportIndex.clear()
+      this.pendingMessageReportBatch = null
       this.messageReportBackoffMs = MESSAGE_REPORT_BASE_DELAY_MS
       this.messageReportConsecutiveFailures = 0
       this.messageReportCircuitOpenUntil = 0
@@ -684,13 +687,30 @@ export class AnalyticsModule extends BaseModule {
         }))
       }
 
-      await getNetworkService().request<string>({
+      const batchSignature = batch.map((entry) => entry.message.id).join(',')
+      const idempotencyKey =
+        this.pendingMessageReportBatch?.signature === batchSignature
+          ? this.pendingMessageReportBatch.key
+          : `msg:${randomUUID()}`
+      this.pendingMessageReportBatch = { key: idempotencyKey, signature: batchSignature }
+
+      const response = await getNetworkService().request<string>({
         method: 'POST',
         url: endpoint,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': idempotencyKey
+        },
         body: payload,
         responseType: 'text'
       })
+
+      if (response?.data && typeof response.data === 'string' && response.data.trim()) {
+        const parsed = JSON.parse(response.data) as { success?: unknown }
+        if (!parsed || typeof parsed !== 'object' || parsed.success !== true) {
+          throw new Error('ANALYTICS_MESSAGE_ACK_INVALID')
+        }
+      }
 
       for (const entry of batch) {
         this.messageReportIndex.delete(entry.key)
@@ -698,6 +718,7 @@ export class AnalyticsModule extends BaseModule {
       this.messageReportQueue = this.messageReportQueue.filter(
         (entry) => !batch.some((done) => done.key === entry.key)
       )
+      this.pendingMessageReportBatch = null
       this.messageReportSucceededItems += batch.length
       this.messageReportBackoffMs = MESSAGE_REPORT_BASE_DELAY_MS
       this.messageReportConsecutiveFailures = 0

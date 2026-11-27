@@ -1,4 +1,5 @@
 import { createError, getHeader, readBody } from 'h3'
+import { DEFAULT_USER_PRIVACY_SETTINGS, getUserById, type UserPrivacySettings } from '../../utils/authStore'
 import { guardTelemetryIp } from '../../utils/ipSecurityStore'
 import {
   buildTelemetryBatchReceiptStatement,
@@ -11,6 +12,8 @@ import {
 } from '../../utils/telemetryStore'
 import { resolveTelemetryUserId } from '../../utils/telemetryIdentity'
 
+type TelemetryEventType = 'search' | 'visit' | 'error' | 'feature_use' | 'performance'
+
 interface TelemetryRecordAck extends Record<string, unknown> {
   success: true
   accepted: number
@@ -19,6 +22,30 @@ interface TelemetryRecordAck extends Record<string, unknown> {
 }
 
 const TELEMETRY_RECORD_SCOPE = 'telemetry.record'
+
+function isUniqueConstraintError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /UNIQUE constraint failed|PRIMARY KEY constraint failed|SQLITE_CONSTRAINT/i.test(message)
+}
+
+async function resolveTelemetryPrivacySettings(
+  event: Parameters<typeof getUserById>[0],
+  userId: string | null,
+): Promise<UserPrivacySettings | null> {
+  if (!userId) return null
+  const user = await getUserById(event, userId)
+  return user?.privacySettings ?? DEFAULT_USER_PRIVACY_SETTINGS
+}
+
+function isTelemetryAllowedByPrivacy(
+  eventType: TelemetryEventType,
+  settings: UserPrivacySettings | null,
+): boolean {
+  if (!settings) return true
+  if (!settings.analytics) return false
+  if (eventType === 'error') return settings.crashReports
+  return settings.usageData
+}
 
 /**
  * The key comes from the header; the startup report's `metadata.idempotencyKey` is honoured too,
@@ -66,6 +93,7 @@ export default defineEventHandler(async (event) => {
   // Deliberately not read from the body: this route is unauthenticated, so a body userId is a
   // claim anyone can make about anyone (#901). Null here means the event is anonymous.
   const resolvedUserId = await resolveTelemetryUserId(event)
+  const privacySettings = await resolveTelemetryPrivacySettings(event, resolvedUserId)
   // An event with no proven owner is anonymous whatever the body claims, and an explicit
   // `isAnonymous: true` from a signed-in client is respected (anonymous mode).
   const anonymous = !resolvedUserId || isAnonymous !== false
@@ -88,7 +116,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const idempotencyKey = resolveRecordIdempotencyKey(getHeader(event, 'x-idempotency-key'), metadata)
-  const payloadHash = idempotencyKey ? digestTelemetryBatchPayload(payload) : null
+  const payloadHash = idempotencyKey
+    ? digestTelemetryBatchPayload({ callerUserId: resolvedUserId ?? null, payload })
+    : null
   if (idempotencyKey && payloadHash) {
     const receipt = await getTelemetryBatchReceipt<TelemetryRecordAck>(event, TELEMETRY_RECORD_SCOPE, idempotencyKey)
     if (receipt) {
@@ -99,9 +129,10 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const prepared = await prepareTelemetryWrite(event, [payload])
-  const result = prepared.results[0]
-  if (!prepared.db || !prepared.batch || !result || result.status === 'dropped') {
+  const allowedByPrivacy = isTelemetryAllowedByPrivacy(eventType as TelemetryEventType, privacySettings)
+  const prepared = await prepareTelemetryWrite(event, allowedByPrivacy ? [payload] : [])
+  const result = allowedByPrivacy ? prepared.results[0] : null
+  if (!prepared.db || !prepared.batch || (allowedByPrivacy && (!result || result.status === 'dropped'))) {
     // Previously this answered `success: true` with nothing stored, which the client took as
     // delivered and removed from its outbox.
     throw createError({ statusCode: 503, statusMessage: 'Telemetry database not available' })
@@ -109,21 +140,35 @@ export default defineEventHandler(async (event) => {
 
   const response: TelemetryRecordAck = {
     success: true,
-    accepted: result.status === 'accepted' ? 1 : 0,
-    rejected: result.status === 'accepted' ? 0 : 1,
+    accepted: allowedByPrivacy && result?.status === 'accepted' ? 1 : 0,
+    rejected: allowedByPrivacy && result?.status === 'accepted' ? 0 : 1,
     duplicate: false,
   }
 
-  await commitTelemetryWrite(event, { db: prepared.db, batch: prepared.batch }, {
-    extraStatements: idempotencyKey && payloadHash
-      ? [buildTelemetryBatchReceiptStatement(prepared.db, {
-          scope: TELEMETRY_RECORD_SCOPE,
-          idempotencyKey,
-          payloadHash,
-          response,
-        })]
-      : [],
-  })
+  try {
+    await commitTelemetryWrite(event, { db: prepared.db, batch: prepared.batch }, {
+      extraStatements: idempotencyKey && payloadHash
+        ? [buildTelemetryBatchReceiptStatement(prepared.db, {
+            scope: TELEMETRY_RECORD_SCOPE,
+            idempotencyKey,
+            payloadHash,
+            response,
+          })]
+        : [],
+    })
+  }
+  catch (error) {
+    if (idempotencyKey && payloadHash && isUniqueConstraintError(error)) {
+      const winner = await getTelemetryBatchReceipt<TelemetryRecordAck>(event, TELEMETRY_RECORD_SCOPE, idempotencyKey)
+      if (winner) {
+        if (winner.payloadHash !== payloadHash) {
+          throw createError({ statusCode: 409, statusMessage: 'Idempotency key reused with different telemetry payload' })
+        }
+        return { ...winner.response, duplicate: true }
+      }
+    }
+    throw error
+  }
 
   return response
 })

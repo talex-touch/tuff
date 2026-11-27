@@ -344,9 +344,11 @@ const AUTH_SCHEMA = defineD1Schema('auth', {
   ],
 })
 
-async function ensureAuthSchema(db: D1Database) {
+export async function ensureAuthSchema(db: D1Database) {
   await ensureD1Schema(db, AUTH_SCHEMA)
 }
+
+export const AUTH_DELETION_RECOVERY_WINDOW_MS = ACCOUNT_DELETION_RECOVERY_WINDOW_MS
 
 export type UserStatus = 'active' | 'merged' | 'disabled' | 'deletion_pending'
 export type EmailState = 'verified' | 'unverified' | 'missing'

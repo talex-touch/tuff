@@ -131,11 +131,15 @@ function sumCredits(...values: number[]): number {
 }
 
 function stableSerialize(value: unknown): string {
-  if (value === null || typeof value !== 'object')
+  if (value === null || value === undefined)
+    return 'null'
+  if (typeof value !== 'object')
     return JSON.stringify(value)
   if (Array.isArray(value))
-    return `[${value.map(stableSerialize).join(',')}]`
-  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b))
+    return `[${value.map(entry => (entry === undefined ? 'null' : stableSerialize(entry))).join(',')}]`
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, entry]) => entry !== undefined)
+    .sort(([a], [b]) => a.localeCompare(b))
   return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${stableSerialize(entry)}`).join(',')}}`
 }
 
@@ -143,11 +147,25 @@ function digestCreditConsumptionPayload(value: unknown): string {
   return createHash('sha256').update(stableSerialize(value)).digest('hex')
 }
 
-function normalizeCreditIdempotencyKey(value: unknown): string | null {
+export function normalizeCreditIdempotencyKey(value: unknown): string | null {
   if (typeof value !== 'string')
     return null
   const trimmed = value.trim()
   return CREDIT_IDEMPOTENCY_KEY_PATTERN.test(trimmed) ? trimmed : null
+}
+
+function resolveProvidedCreditIdempotencyKey(value: string | undefined): string | null {
+  if (value === undefined)
+    return null
+  if (typeof value !== 'string')
+    throw new Error('Invalid credit idempotency key.')
+  const trimmed = value.trim()
+  if (!trimmed)
+    return null
+  const normalized = normalizeCreditIdempotencyKey(trimmed)
+  if (!normalized)
+    throw new Error('Invalid credit idempotency key.')
+  return normalized
 }
 
 function normalizeCreditBalanceRow<T extends { quota?: unknown; used?: unknown }>(
@@ -1129,6 +1147,7 @@ export interface CreditAdjustmentResult {
   delta: number
   reason: string
   createdAt: string
+  idempotencyKey?: string
 }
 
 /**
@@ -1205,48 +1224,147 @@ export async function adjustUserCredits(
   delta: number,
   reason: string,
   metadata?: Record<string, any>,
+  options: { idempotencyKey?: string } = {},
 ): Promise<CreditAdjustmentResult> {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
-  const planFloor = await ensureBalance(event, 'user', userId)
 
   const normalizedDelta = resolveCreditAmount(delta)
   if (!normalizedDelta)
     throw new Error('Invalid credit amount.')
 
+  const idempotencyKey = resolveProvidedCreditIdempotencyKey(options.idempotencyKey)
+  const ledgerMetadata = { ...(metadata ?? {}), userId }
+  const idempotencyHash = idempotencyKey
+    ? digestCreditConsumptionPayload({
+        scope: 'user',
+        userId,
+        delta: normalizedDelta,
+        reason,
+        metadata: ledgerMetadata,
+      })
+    : null
+
+  const toExistingAdjustment = (existing: LedgerIdempotencyRow): CreditAdjustmentResult => {
+    const existingDelta = resolveCreditAmount(existing.delta)
+    if (existingDelta !== normalizedDelta || (existing.idempotency_hash && existing.idempotency_hash !== idempotencyHash))
+      throw new Error('Credit idempotency conflict.')
+    return {
+      ledgerId: existing.id,
+      userId,
+      delta: existingDelta,
+      reason,
+      createdAt: existing.created_at,
+      idempotencyKey: idempotencyKey ?? undefined,
+    }
+  }
+
+  if (idempotencyKey) {
+    const existing = await db.prepare(`
+      SELECT id, delta, created_at, metadata, idempotency_hash
+      FROM ${CREDIT_LEDGER_TABLE}
+      WHERE scope = 'user'
+        AND scope_id = ?
+        AND reason = ?
+        AND idempotency_key = ?
+      LIMIT 1
+    `).bind(userId, reason, idempotencyKey).first<LedgerIdempotencyRow>()
+    if (existing)
+      return toExistingAdjustment(existing)
+  }
+
+  const planFloor = await ensureBalance(event, 'user', userId)
   const month = getMonthKey()
-  const update = normalizedDelta > 0
+  const now = new Date().toISOString()
+  const ledgerId = crypto.randomUUID()
+
+  // Insert the ledger row conditioned on the balance check, then update the balance conditioned on
+  // that ledger row existing, inside one atomic D1 batch. If either statement fails, both roll back
+  // so balance and ledger can never drift apart.
+  const insertLedger = normalizedDelta > 0
     ? db.prepare(`
-        UPDATE ${CREDIT_BALANCES_TABLE}
-        SET quota = quota + ?
-        WHERE scope = 'user' AND scope_id = ? AND month = ?
-      `).bind(normalizedDelta, userId, month)
+        INSERT INTO ${CREDIT_LEDGER_TABLE} (
+          id, scope, scope_id, delta, reason, created_at, metadata, idempotency_key, idempotency_hash
+        )
+        SELECT ?, 'user', ?, ?, ?, ?, ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1 FROM ${CREDIT_BALANCES_TABLE}
+          WHERE scope = 'user' AND scope_id = ? AND month = ?
+        )
+      `).bind(
+        ledgerId,
+        userId,
+        normalizedDelta,
+        reason,
+        now,
+        JSON.stringify(ledgerMetadata),
+        idempotencyKey,
+        idempotencyHash,
+        userId,
+        month,
+      )
     : db.prepare(`
+        INSERT INTO ${CREDIT_LEDGER_TABLE} (
+          id, scope, scope_id, delta, reason, created_at, metadata, idempotency_key, idempotency_hash
+        )
+        SELECT ?, 'user', ?, ?, ?, ?, ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1 FROM ${CREDIT_BALANCES_TABLE}
+          WHERE scope = 'user' AND scope_id = ? AND month = ?
+            AND quota + ? >= MAX(?, used)
+        )
+      `).bind(
+        ledgerId,
+        userId,
+        normalizedDelta,
+        reason,
+        now,
+        JSON.stringify(ledgerMetadata),
+        idempotencyKey,
+        idempotencyHash,
+        userId,
+        month,
+        normalizedDelta,
+        planFloor,
+      )
+
+  let batchResults: Awaited<ReturnType<D1Database['batch']>>
+  try {
+    batchResults = await db.batch([
+      insertLedger,
+      db.prepare(`
         UPDATE ${CREDIT_BALANCES_TABLE}
         SET quota = quota + ?
-        WHERE scope = 'user' AND scope_id = ? AND month = ?
-          AND quota + ? >= MAX(?, used)
-      `).bind(normalizedDelta, userId, month, normalizedDelta, planFloor)
-  const updated = await update.run()
-  if (((updated.meta as { changes?: number } | undefined)?.changes ?? 0) < 1) {
+        WHERE scope = 'user'
+          AND scope_id = ?
+          AND month = ?
+          AND EXISTS (SELECT 1 FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?)
+      `).bind(normalizedDelta, userId, month, ledgerId),
+    ])
+  }
+  catch (error) {
+    if (idempotencyKey && isUniqueConstraintError(error)) {
+      const winner = await db.prepare(`
+        SELECT id, delta, created_at, metadata, idempotency_hash
+        FROM ${CREDIT_LEDGER_TABLE}
+        WHERE scope = 'user' AND scope_id = ? AND reason = ? AND idempotency_key = ?
+        LIMIT 1
+      `).bind(userId, reason, idempotencyKey).first<LedgerIdempotencyRow>()
+      if (winner)
+        return toExistingAdjustment(winner)
+    }
+    throw error
+  }
+
+  const insertedLedger = Number((batchResults[0]?.meta as { changes?: number } | undefined)?.changes ?? 0)
+  const updatedBalance = Number((batchResults[1]?.meta as { changes?: number } | undefined)?.changes ?? 0)
+  if (insertedLedger < 1) {
     if (normalizedDelta < 0)
       throw new CreditDeductLimitError(await getUserCreditAdjustLimits(event, userId))
     throw new Error('Credit balance update failed.')
   }
-
-  const now = new Date().toISOString()
-  const ledgerId = crypto.randomUUID()
-  await db.prepare(`
-    INSERT INTO ${CREDIT_LEDGER_TABLE} (id, scope, scope_id, delta, reason, created_at, metadata)
-    VALUES (?, 'user', ?, ?, ?, ?, ?)
-  `).bind(
-    ledgerId,
-    userId,
-    normalizedDelta,
-    reason,
-    now,
-    JSON.stringify({ ...(metadata ?? {}), userId }),
-  ).run()
+  if (updatedBalance < 1)
+    throw new Error('Credit balance update failed.')
 
   return {
     ledgerId,
@@ -1254,6 +1372,7 @@ export async function adjustUserCredits(
     delta: normalizedDelta,
     reason,
     createdAt: now,
+    ...(idempotencyKey ? { idempotencyKey } : {}),
   }
 }
 
@@ -1299,7 +1418,7 @@ export async function consumeCredits(
   }
   const normalizedAmount = Math.max(1, normalizeCreditAmount(numericAmount))
   const month = getMonthKey()
-  const idempotencyKey = normalizeCreditIdempotencyKey(options.idempotencyKey)
+  const idempotencyKey = resolveProvidedCreditIdempotencyKey(options.idempotencyKey)
 
   const [[teamsResult, existingResult, boostResult], subscription] = await Promise.all([db.batch([
     prepareUserTeamsQuery(db, userId),
@@ -1510,7 +1629,7 @@ export async function releaseConsumedCredits(
   const normalizedAmount = Math.max(1, normalizeCreditAmount(numericAmount))
   const reservationLedgerId = options.reservationLedgerId?.trim() || null
 
-  const idempotencyKey = normalizeCreditIdempotencyKey(options.idempotencyKey)
+  const idempotencyKey = resolveProvidedCreditIdempotencyKey(options.idempotencyKey)
 
   let teamId: string
   let month: string
@@ -1590,6 +1709,31 @@ export async function releaseConsumedCredits(
           metadata: { ...(metadata ?? {}), userId },
         })
       : null
+  const toExistingRelease = (existing: LedgerIdempotencyRow): CreditConsumptionResult => {
+    const existingMetadata = parseLedgerMetadata(existing.metadata ?? null)
+    const existingAmount = Math.abs(resolveCreditAmount(existing.delta))
+    const matchesCurrentHash = existing.idempotency_hash === idempotencyHash
+    const matchesLegacyAsrHash = Boolean(
+      reservationLedgerId &&
+      legacyIdempotencyHash &&
+      existing.idempotency_hash === legacyIdempotencyHash &&
+      existingMetadata?.reservationLedgerId === undefined,
+    )
+    if (existingAmount !== normalizedAmount || (!matchesCurrentHash && !matchesLegacyAsrHash))
+      throw new Error('Credit idempotency conflict.')
+
+    return {
+      ledgerId: existing.id,
+      teamId,
+      userId,
+      amount: existingAmount,
+      reason,
+      createdAt: existing.created_at,
+      metadata: existingMetadata && Object.keys(existingMetadata).length ? existingMetadata : ledgerMetadata,
+      idempotencyKey: idempotencyKey!,
+    }
+  }
+
   if (idempotencyKey) {
     const existing = prefetchedExisting !== undefined
       ? prefetchedExisting
@@ -1603,83 +1747,78 @@ export async function releaseConsumedCredits(
         LIMIT 1
       `).bind(teamId, reason, idempotencyKey).first<LedgerIdempotencyRow>()
 
-    if (existing) {
-      const existingMetadata = parseLedgerMetadata(existing.metadata ?? null)
-      const existingAmount = Math.abs(resolveCreditAmount(existing.delta))
-      const matchesCurrentHash = existing.idempotency_hash === idempotencyHash
-      const matchesLegacyAsrHash = Boolean(
-        reservationLedgerId &&
-        legacyIdempotencyHash &&
-        existing.idempotency_hash === legacyIdempotencyHash &&
-        existingMetadata?.reservationLedgerId === undefined,
-      )
-      if (existingAmount !== normalizedAmount || (!matchesCurrentHash && !matchesLegacyAsrHash))
-        throw new Error('Credit idempotency conflict.')
-
-      return {
-        ledgerId: existing.id,
-        teamId,
-        userId,
-        amount: existingAmount,
-        reason,
-        createdAt: existing.created_at,
-        metadata: existingMetadata && Object.keys(existingMetadata).length ? existingMetadata : ledgerMetadata,
-        idempotencyKey,
-      }
-    }
+    if (existing)
+      return toExistingRelease(existing)
   }
 
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
-  const batchResults = await db.batch([
-    db.prepare(`
-      INSERT INTO ${CREDIT_LEDGER_TABLE} (
-        id, scope, scope_id, delta, reason, created_at, metadata, idempotency_key, idempotency_hash
-      )
-      SELECT ?, 'team', ?, ?, ?, ?, ?, ?, ?
-      WHERE EXISTS (
-        SELECT 1 FROM ${CREDIT_BALANCES_TABLE}
-        WHERE scope = 'team' AND scope_id = ? AND month = ? AND used >= ?
-      )
-      AND EXISTS (
-        SELECT 1 FROM ${CREDIT_BALANCES_TABLE}
-        WHERE scope = 'user' AND scope_id = ? AND month = ? AND used >= ?
-      )
-    `).bind(
-      id,
-      teamId,
-      normalizedAmount,
-      reason,
-      now,
-      JSON.stringify(ledgerMetadata),
-      idempotencyKey,
-      idempotencyHash,
-      teamId,
-      month,
-      normalizedAmount,
-      userId,
-      month,
-      normalizedAmount,
-    ),
-    db.prepare(`
-      UPDATE ${CREDIT_BALANCES_TABLE}
-      SET used = used - ?
-      WHERE scope = 'team'
-        AND scope_id = ?
-        AND month = ?
-        AND used >= ?
-        AND EXISTS (SELECT 1 FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?)
-    `).bind(normalizedAmount, teamId, month, normalizedAmount, id),
-    db.prepare(`
-      UPDATE ${CREDIT_BALANCES_TABLE}
-      SET used = used - ?
-      WHERE scope = 'user'
-        AND scope_id = ?
-        AND month = ?
-        AND used >= ?
-        AND EXISTS (SELECT 1 FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?)
-    `).bind(normalizedAmount, userId, month, normalizedAmount, id),
-  ])
+  let batchResults: Awaited<ReturnType<D1Database['batch']>>
+  try {
+    batchResults = await db.batch([
+      db.prepare(`
+        INSERT INTO ${CREDIT_LEDGER_TABLE} (
+          id, scope, scope_id, delta, reason, created_at, metadata, idempotency_key, idempotency_hash
+        )
+        SELECT ?, 'team', ?, ?, ?, ?, ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1 FROM ${CREDIT_BALANCES_TABLE}
+          WHERE scope = 'team' AND scope_id = ? AND month = ? AND used >= ?
+        )
+        AND EXISTS (
+          SELECT 1 FROM ${CREDIT_BALANCES_TABLE}
+          WHERE scope = 'user' AND scope_id = ? AND month = ? AND used >= ?
+        )
+      `).bind(
+        id,
+        teamId,
+        normalizedAmount,
+        reason,
+        now,
+        JSON.stringify(ledgerMetadata),
+        idempotencyKey,
+        idempotencyHash,
+        teamId,
+        month,
+        normalizedAmount,
+        userId,
+        month,
+        normalizedAmount,
+      ),
+      db.prepare(`
+        UPDATE ${CREDIT_BALANCES_TABLE}
+        SET used = used - ?
+        WHERE scope = 'team'
+          AND scope_id = ?
+          AND month = ?
+          AND used >= ?
+          AND EXISTS (SELECT 1 FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?)
+      `).bind(normalizedAmount, teamId, month, normalizedAmount, id),
+      db.prepare(`
+        UPDATE ${CREDIT_BALANCES_TABLE}
+        SET used = used - ?
+        WHERE scope = 'user'
+          AND scope_id = ?
+          AND month = ?
+          AND used >= ?
+          AND EXISTS (SELECT 1 FROM ${CREDIT_LEDGER_TABLE} WHERE id = ?)
+      `).bind(normalizedAmount, userId, month, normalizedAmount, id),
+    ])
+  }
+  catch (error) {
+    // A concurrent release with the same key committed first: return its row or fail with conflict.
+    if (idempotencyKey && isUniqueConstraintError(error)) {
+      const winner = await db.prepare(`
+        SELECT id, delta, created_at, metadata, idempotency_hash
+        FROM ${CREDIT_LEDGER_TABLE}
+        WHERE scope = 'team' AND scope_id = ? AND reason = ? AND idempotency_key = ?
+        LIMIT 1
+      `).bind(teamId, reason, idempotencyKey).first<LedgerIdempotencyRow>()
+      if (winner)
+        return toExistingRelease(winner)
+    }
+    throw error
+  }
 
   const insertedLedger = Number((batchResults[0] as { meta?: { changes?: number } } | undefined)?.meta?.changes ?? 0)
   const updatedTeam = Number((batchResults[1] as { meta?: { changes?: number } } | undefined)?.meta?.changes ?? 0)
