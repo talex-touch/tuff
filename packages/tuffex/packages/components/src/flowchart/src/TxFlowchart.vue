@@ -409,10 +409,13 @@ function onNodePointerDown(event: PointerEvent, node: FlowNode): void {
         suppressNextNodeClick = false
       }, 0)
     }
-    // Report the landing position whenever a pointermove happened so controlled
-    // hosts always stay in step with what was drawn.
-    if (offset)
-      emit('node-move', { id: node.id, x: Math.round(node.x + offset.dx), y: Math.round(node.y + offset.dy) })
+    // Report the landing position against the live node so concurrent host updates
+    // during a drag stay consistent with what was drawn on screen.
+    if (offset) {
+      const current = props.nodes.find(n => n.id === node.id)
+      if (current)
+        emit('node-move', { id: current.id, x: Math.round(current.x + offset.dx), y: Math.round(current.y + offset.dy) })
+    }
   }
 
   target.addEventListener('pointermove', move)
@@ -424,7 +427,7 @@ function onCanvasPointerDown(event: PointerEvent): void {
   if (!props.pannable || event.button !== 0)
     return
   const target = event.target as HTMLElement | null
-  if (target?.closest('.tx-bui-flowchart__node, .tx-bui-flowchart__hud, .tx-bui-flowchart__minimap, .tx-bui-flowchart__edge-label'))
+  if (target?.closest('.tx-bui-flowchart__node, .tx-bui-flowchart__hud, .tx-bui-flowchart__minimap, .tx-bui-flowchart__edge-label, .tx-bui-flowchart__edge-hit'))
     return
 
   const startX = event.clientX
@@ -497,7 +500,7 @@ function onCanvasClick(event: MouseEvent): void {
   if (suppressNextCanvasClick)
     return
   const target = event.target as HTMLElement | null
-  if (target?.closest('.tx-bui-flowchart__node, .tx-bui-flowchart__hud, .tx-bui-flowchart__minimap, .tx-bui-flowchart__edge-label'))
+  if (target?.closest('.tx-bui-flowchart__node, .tx-bui-flowchart__hud, .tx-bui-flowchart__minimap, .tx-bui-flowchart__edge-label, .tx-bui-flowchart__edge-hit'))
     return
   emit('canvas-click')
 }
@@ -539,6 +542,33 @@ function onMinimapClick(event: MouseEvent): void {
     x: w / 2 - targetX * viewport.zoom,
     y: h / 2 - targetY * viewport.zoom,
   })
+}
+
+function onMinimapKeydown(event: KeyboardEvent): void {
+  const step = 48
+  switch (event.key) {
+    case 'ArrowLeft':
+      event.preventDefault()
+      updateViewport({ x: viewport.x + step })
+      break
+    case 'ArrowRight':
+      event.preventDefault()
+      updateViewport({ x: viewport.x - step })
+      break
+    case 'ArrowUp':
+      event.preventDefault()
+      updateViewport({ y: viewport.y + step })
+      break
+    case 'ArrowDown':
+      event.preventDefault()
+      updateViewport({ y: viewport.y - step })
+      break
+    case 'Home':
+    case '0':
+      event.preventDefault()
+      fitView()
+      break
+  }
 }
 
 function zoomAtCenter(delta: number): void {
@@ -857,7 +887,9 @@ function minimapNodeTone(node: FlowNode): FlowNodeTone {
       v-if="minimap && minimapData"
       class="tx-bui-flowchart__minimap"
       role="region"
+      tabindex="0"
       :aria-label="hudLabels.minimap"
+      @keydown="onMinimapKeydown"
     >
       <svg
         class="tx-bui-flowchart__minimap-svg"
@@ -1195,27 +1227,27 @@ function minimapNodeTone(node: FlowNode): FlowNodeTone {
 
     &--accent {
       color: var(--tx-bui-accent-ink, #0170dd);
-      box-shadow: 0 0 0 1px color-mix(in oklab, var(--tx-bui-accent, #0285ff) 36%, transparent), 0 1px 3px #1018280d;
+      box-shadow: 0 0 0 1px color-mix(in oklab, var(--tx-bui-accent, #0285ff) 36%, transparent), var(--tx-bui-shadow-btn, 0 0 0 1px #e0e2e5, 1px 2px 2px #1018280d);
     }
 
     &--violet {
       color: var(--tx-bui-violet, #6b3fd4);
-      box-shadow: 0 0 0 1px color-mix(in oklab, var(--tx-bui-violet, #6b3fd4) 36%, transparent), 0 1px 3px #1018280d;
+      box-shadow: 0 0 0 1px color-mix(in oklab, var(--tx-bui-violet, #6b3fd4) 36%, transparent), var(--tx-bui-shadow-btn, 0 0 0 1px #e0e2e5, 1px 2px 2px #1018280d);
     }
 
     &--orange {
       color: var(--tx-bui-orange, #ef720c);
-      box-shadow: 0 0 0 1px color-mix(in oklab, var(--tx-bui-orange, #ef720c) 36%, transparent), 0 1px 3px #1018280d;
+      box-shadow: 0 0 0 1px color-mix(in oklab, var(--tx-bui-orange, #ef720c) 36%, transparent), var(--tx-bui-shadow-btn, 0 0 0 1px #e0e2e5, 1px 2px 2px #1018280d);
     }
 
     &--green {
       color: var(--tx-bui-green, #189a4d);
-      box-shadow: 0 0 0 1px color-mix(in oklab, var(--tx-bui-green, #189a4d) 36%, transparent), 0 1px 3px #1018280d;
+      box-shadow: 0 0 0 1px color-mix(in oklab, var(--tx-bui-green, #189a4d) 36%, transparent), var(--tx-bui-shadow-btn, 0 0 0 1px #e0e2e5, 1px 2px 2px #1018280d);
     }
 
     &--red {
       color: var(--tx-bui-red, #e3474c);
-      box-shadow: 0 0 0 1px color-mix(in oklab, var(--tx-bui-red, #e3474c) 36%, transparent), 0 1px 3px #1018280d;
+      box-shadow: 0 0 0 1px color-mix(in oklab, var(--tx-bui-red, #e3474c) 36%, transparent), var(--tx-bui-shadow-btn, 0 0 0 1px #e0e2e5, 1px 2px 2px #1018280d);
     }
   }
 
@@ -1506,6 +1538,11 @@ function minimapNodeTone(node: FlowNode): FlowNodeTone {
     background-color: color-mix(in oklab, var(--tx-bui-surface, #fff) 92%, transparent);
     box-shadow: var(--tx-bui-shadow-raised, 0 0 0 1px #ecedef, 2px 4px 10px #0000000b);
     backdrop-filter: blur(8px);
+
+    &:focus-visible {
+      outline: 2px solid var(--tx-bui-accent, #0285ff);
+      outline-offset: 2px;
+    }
   }
 
   &__minimap-svg {
