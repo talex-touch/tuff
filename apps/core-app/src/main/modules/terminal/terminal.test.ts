@@ -6,6 +6,10 @@ import { EventEmitter } from 'node:events'
 import { TerminalEvents } from '@talex-touch/utils/transport/events/terminal'
 import { createTrustedTestPluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  registerPermissionPluginBridge,
+  resetPermissionPluginBridge
+} from '../permission/permission-ports'
 import { TerminalModule } from './index'
 import { PtySessionCore } from './pty-session-core'
 
@@ -94,6 +98,9 @@ let resizes: Array<[number, number]>
 let kills: number
 let emitOutput: (data: string) => void
 beforeEach(() => {
+  registerPermissionPluginBridge({
+    resolvePluginDeclaredSdkApi: () => 260228
+  })
   boundary.handlers.clear()
   boundary.allowed = true
   boundary.permissionAvailable = true
@@ -133,6 +140,7 @@ beforeEach(() => {
   module.onInit({} as never)
 })
 afterEach(async () => {
+  resetPermissionPluginBridge()
   await module.onDestroy()
 })
 

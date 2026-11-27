@@ -101,6 +101,11 @@ interface ContextRegistrarHarness {
   registerContextChannels: (registerProtectedSafe: unknown) => void
 }
 
+import {
+  registerPermissionPluginBridge,
+  resetPermissionPluginBridge
+} from '../permission/permission-ports'
+
 const testDir = dirname(fileURLToPath(import.meta.url))
 const migrationsFolder = resolve(testDir, '../../../../resources/db/migrations')
 const SDK_API = SdkApi.V260817
@@ -164,6 +169,12 @@ const EDIT: EvaluateMemoryInput = {
 
 beforeEach(async () => {
   permissionMocks.getPluginByName.mockReturnValue({ sdkapi: SDK_API })
+  registerPermissionPluginBridge({
+    resolvePluginDeclaredSdkApi: (pluginId) => {
+      const plugin = permissionMocks.getPluginByName(pluginId) as { sdkapi?: number } | undefined
+      return typeof plugin?.sdkapi === 'number' ? plugin.sdkapi : undefined
+    }
+  })
   permissionMocks.checkPermission.mockReturnValue({ allowed: true })
   permissionMocks.getPermissionModule.mockReturnValue({
     checkPermission: permissionMocks.checkPermission
@@ -176,6 +187,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  resetPermissionPluginBridge()
   client.close()
   await rm(sandbox, { recursive: true, force: true })
 })

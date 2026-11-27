@@ -478,14 +478,12 @@ export class SearchEngineCore
     }
     this.registerProvider(fileProvider)
 
-    const pluginSearchProviders = getBoxToolDefaultPluginSearchProviders()
-    if (pluginSearchProviders.featuresAdapter) {
-      pluginSearchProviders.featuresAdapter.attach(this)
-      this.registerProvider(pluginSearchProviders.featuresAdapter)
+    const { featuresAdapter, entityProvider } = getBoxToolDefaultPluginSearchProviders()
+    if (featuresAdapter) {
+      featuresAdapter.attach(this)
+      this.registerProvider(featuresAdapter)
     }
-    if (pluginSearchProviders.entityProvider) {
-      this.registerProvider(pluginSearchProviders.entityProvider)
-    }
+    if (entityProvider) this.registerProvider(entityProvider)
     this.registerProvider(previewProvider)
   }
 

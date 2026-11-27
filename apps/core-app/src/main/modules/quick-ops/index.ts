@@ -889,9 +889,7 @@ export class QuickOpsModule extends BaseModule<TalexEvents> {
     this.disposeFlowTarget()
 
     const flowPort = getQuickOpsFlowBusPort()
-    if (!flowPort) {
-      return
-    }
+    if (!flowPort) return
 
     for (const definition of QUICK_OPS_ALL_FLOW_TARGETS) {
       const target: FlowTarget = { ...definition, ...wordQuickOpsFlowTarget(definition.id) }
@@ -1657,8 +1655,7 @@ export class QuickOpsModule extends BaseModule<TalexEvents> {
     this.flowDeliveryDisposer = null
     const flowPort = getQuickOpsFlowBusPort()
     while (this.flowTargetIds.length > 0) {
-      const targetId = this.flowTargetIds.pop()!
-      flowPort?.unregisterTarget(targetId)
+      flowPort?.unregisterTarget(this.flowTargetIds.pop()!)
     }
   }
 }
