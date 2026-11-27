@@ -57,7 +57,8 @@ import {
   isStreamingTurnTargetingFile,
   normalizeMarkdownMatchText,
   type CanvasDiffSummary,
-  type CanvasTurnBaseline
+  type CanvasTurnBaseline,
+  type SourceRange
 } from './workspace-canvas-edit'
 import {
   buildPathBreadcrumbs,
@@ -411,9 +412,12 @@ type CanvasEditPhase = 'idle' | 'thinking' | 'streaming' | 'applying' | 'applied
 type CanvasAppliedSource = 'improve' | 'sync'
 
 interface PendingCanvasSession {
+  opToken: number
   filePath: string
   actionId: string
+  scope: 'selection' | 'document'
   selectedText: string
+  sourceRange: SourceRange | null
   autoApply: boolean
   beforeText: string
   beforeMtimeMs: number
@@ -427,10 +431,13 @@ interface AppliedCanvasSnapshot {
   filePath: string
   source: CanvasAppliedSource
   actionId: string
+  scope: 'selection' | 'document'
   selectedText: string
+  sourceRange: SourceRange | null
   beforeText: string
   afterText: string
   beforeMtimeMs: number
+  afterMtimeMs: number
   diff: CanvasDiffSummary
   changedBlockIndices: Set<number>
 }
@@ -445,10 +452,12 @@ interface AmbientBeforeSnapshot {
 interface CanvasComposeSession {
   scope: 'selection' | 'document'
   selectedText: string
+  sourceRange: SourceRange | null
   rects: DOMRect[]
   blockIndices: Set<number>
 }
 
+const markdownEditorRef = ref<InstanceType<typeof TxMarkdownEditor> | null>(null)
 const canvasPhase = ref<CanvasEditPhase>('idle')
 const canvasPending = ref<PendingCanvasSession | null>(null)
 const canvasApplied = ref<AppliedCanvasSnapshot | null>(null)
@@ -459,6 +468,7 @@ const canvasDockWrapRef = ref<HTMLElement | null>(null)
 const launchFlight = ref<CanvasLaunchFlightPayload | null>(null)
 const canvasShowDiff = ref(false)
 const canvasUndoing = ref(false)
+const canvasConflictRefreshAvailable = ref(false)
 const canvasSweepActive = ref(false)
 const canvasSweepKey = ref(0)
 const canvasSweepStyle = ref<{ top: string; height: string }>({ top: '0px', height: '100%' })
@@ -468,6 +478,8 @@ const ambientSettledMessageId = ref<string | null>(null)
 const beamTheme = ref<'light' | 'dark'>('light')
 
 let launchFlightSeq = 0
+let canvasOpToken = 0
+let isUnmounted = false
 
 let sweepTimer: ReturnType<typeof setTimeout> | null = null
 let canvasWriteInFlight = false
@@ -478,6 +490,31 @@ let ambientLastWriteCount = 0
 let disposeReviewListener: (() => void) | null = null
 let themeObserver: MutationObserver | null = null
 let themeMediaQuery: MediaQueryList | null = null
+
+const currentFileIdentity = computed(() => ({
+  fileName: fileName.value,
+  displayPath: displayPathForAi.value,
+  filePath: resolvedPath.value
+}))
+
+const isTruncatedText = computed(() => Boolean(data.value?.kind === 'text' && data.value.truncated))
+
+function isCanvasOpActive(token: number, expectedPath?: string): boolean {
+  if (isUnmounted || token !== canvasOpToken) return false
+  if (expectedPath !== undefined && resolvedPath.value !== expectedPath) return false
+  return true
+}
+
+function captureEditorSourceRange(): SourceRange | null {
+  const editor = markdownEditorRef.value as unknown as {
+    getSelection?: () => { from: number; to: number } | null
+  } | null
+  const sel = editor?.getSelection?.()
+  if (!sel || typeof sel.from !== 'number' || typeof sel.to !== 'number') return null
+  const start = Math.min(sel.from, sel.to)
+  const end = Math.max(sel.from, sel.to)
+  return end > start ? { start, end } : null
+}
 
 function resolveDocumentTheme(): 'light' | 'dark' {
   if (!hasDocument()) return 'light'
@@ -514,19 +551,11 @@ const isAmbientAiEditing = computed(() => {
   if (
     tail?.role === 'assistant' &&
     tail.id === ambientSettledMessageId.value &&
-    !inspectMessageFileWrites(tail, fileName.value).running
+    !inspectMessageFileWrites(tail, currentFileIdentity.value).running
   ) {
     return false
   }
-  return isStreamingTurnTargetingFile(
-    props.messages,
-    {
-      fileName: fileName.value,
-      displayPath: displayPathForAi.value,
-      filePath: resolvedPath.value
-    },
-    props.aiStreaming
-  )
+  return isStreamingTurnTargetingFile(props.messages, currentFileIdentity.value, props.aiStreaming)
 })
 
 const isCanvasLocked = computed(() => isPendingCanvasBusy.value || isAmbientAiEditing.value)
@@ -566,7 +595,7 @@ const canvasStatusText = computed(() => {
   if (canvasPhase.value === 'streaming') return t('home.sidePanel.canvasStatusRewriting')
   const tail = props.messages.at(-1)
   if (tail?.role === 'assistant' && tail.status === 'streaming') {
-    const writes = inspectMessageFileWrites(tail, fileName.value)
+    const writes = inspectMessageFileWrites(tail, currentFileIdentity.value)
     if (writes.running || isMessageStreamingCanvasEdit(tail)) {
       return t('home.sidePanel.canvasStatusRewriting')
     }
@@ -609,11 +638,15 @@ const activeSelectionPayload = computed<SelectionPayload | null>(() => {
 const mdSelectionActions = computed<SelectionActionItem[]>(() => [
   { id: 'comment', label: t('home.sidePanel.selectionComment') },
   { id: 'explain', label: t('home.sidePanel.selectionExplain') },
-  {
-    id: 'improve',
-    label: t('home.sidePanel.selectionImprove'),
-    busyLabel: t('home.sidePanel.selectionImproving')
-  },
+  ...(isTruncatedText.value
+    ? []
+    : [
+        {
+          id: 'improve',
+          label: t('home.sidePanel.selectionImprove'),
+          busyLabel: t('home.sidePanel.selectionImproving')
+        }
+      ]),
   { id: 'quote', label: t('home.sidePanel.selectionQuote'), more: true },
   { id: 'translate', label: t('home.sidePanel.selectionTranslate'), more: true },
   { id: 'copy', label: t('home.copy'), more: true }
@@ -760,6 +793,7 @@ function syncMarkdownBlockClasses(entering = false): void {
 }
 
 function resetCanvasState(options?: { clearAmbientSettled?: boolean }): void {
+  canvasOpToken += 1
   clearSweepTimer()
   canvasPhase.value = 'idle'
   canvasPending.value = null
@@ -767,6 +801,7 @@ function resetCanvasState(options?: { clearAmbientSettled?: boolean }): void {
   canvasCompose.value = null
   canvasComposePrompt.value = ''
   canvasShowDiff.value = false
+  canvasConflictRefreshAvailable.value = false
   canvasSweepActive.value = false
   pendingDomBlockIndices.value = new Set()
   ambientBeforeSnapshot.value = null
@@ -831,21 +866,26 @@ async function openCanvasCompose(options: {
   scope: 'selection' | 'document'
   selection?: SelectionPayload
 }): Promise<void> {
-  if (!data.value || data.value.kind !== 'text' || isCanvasLocked.value) return
+  if (!data.value || data.value.kind !== 'text' || data.value.truncated || isCanvasLocked.value) {
+    return
+  }
   const fullText = data.value.text ?? ''
   const isDoc = options.scope === 'document'
   const selectedText = isDoc ? fullText : (options.selection?.text.trim() ?? '')
   if (!selectedText.trim()) return
 
+  const sourceRange = isDoc ? null : captureEditorSourceRange()
   const blockIndices =
     !isDoc && options.selection ? resolvePendingBlockIndices(options.selection) : new Set<number>()
   canvasApplied.value = null
   canvasShowDiff.value = false
+  canvasConflictRefreshAvailable.value = false
   canvasPhase.value = 'idle'
   canvasComposePrompt.value = ''
   canvasCompose.value = {
     scope: isDoc ? 'document' : 'selection',
     selectedText,
+    sourceRange,
     rects: options.selection?.rects ? [...options.selection.rects] : [],
     blockIndices
   }
@@ -863,7 +903,7 @@ async function submitCanvasCompose(
   overrideLabel?: string
 ): Promise<void> {
   const compose = canvasCompose.value
-  if (!compose || isCanvasLocked.value) return
+  if (!compose || isCanvasLocked.value || isTruncatedText.value) return
   const suggestion = (overrideSuggestion ?? canvasComposePrompt.value).trim()
   const flightLabel =
     overrideLabel?.trim() ||
@@ -872,19 +912,21 @@ async function submitCanvasCompose(
       ? t('home.sidePanel.canvasComposeDocumentScope')
       : t('home.sidePanel.canvasComposePresetPolish'))
 
-  triggerCanvasLaunchFlight(flightLabel, canvasDockWrapRef.value)
-
   canvasCompose.value = null
   canvasComposePrompt.value = ''
-  await startCanvasImprove(
+  const started = await startCanvasImprove(
     compose.selectedText,
     { text: compose.selectedText, rects: compose.rects },
     {
       userSuggestion: suggestion,
       isFullDocument: compose.scope === 'document',
-      blockIndices: compose.blockIndices
+      blockIndices: compose.blockIndices,
+      sourceRange: compose.sourceRange
     }
   )
+  if (started) {
+    triggerCanvasLaunchFlight(flightLabel, canvasDockWrapRef.value)
+  }
 }
 
 function onCanvasComposeKeydown(event: KeyboardEvent): void {
@@ -932,17 +974,42 @@ function triggerCanvasSweepAnimation(): void {
 // ── Direct Markdown Editing & Safe Debounced Disk Persistence ───────────────────────
 type MarkdownSaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
 
+interface RetainedDraftEntry {
+  text: string
+  baseMtimeMs: number | undefined
+  diskText: string
+  conflict: boolean
+}
+
 const EDITOR_AUTOSAVE_DEBOUNCE_MS = 550
 const editorSaveState = ref<MarkdownSaveState>('idle')
+const editorSaveConflict = ref(false)
+const draftConflictDiskSnapshot = ref<WorkspaceReadFileResult | null>(null)
+const showDraftConflictDiff = ref(false)
 const markdownEditorReadonly = computed(
   () => isCanvasLocked.value || Boolean(data.value?.truncated)
 )
 
+const draftConflictDiff = computed<CanvasDiffSummary | null>(() => {
+  if (
+    !showDraftConflictDiff.value ||
+    !draftConflictDiskSnapshot.value ||
+    data.value?.kind !== 'text'
+  ) {
+    return null
+  }
+  return computeCanvasLineDiff(draftConflictDiskSnapshot.value.text ?? '', data.value.text ?? '')
+})
+
 let editorSaveTimer: ReturnType<typeof setTimeout> | null = null
 let editorSavedResetTimer: ReturnType<typeof setTimeout> | null = null
 let editorSaveInFlight = false
+let activeSavePromise: Promise<boolean> | null = null
+let activeSavePath = ''
 let lastPersistedPath = ''
 let lastPersistedText = ''
+let lastPersistedMtimeMs: number | undefined
+const retainedDrafts = new Map<string, RetainedDraftEntry>()
 
 function clearEditorSaveTimers(): void {
   if (editorSaveTimer !== null) {
@@ -955,11 +1022,31 @@ function clearEditorSaveTimers(): void {
   }
 }
 
-function markDiskSynced(path: string, text: string): void {
+function hasUnsavedLocalDraft(targetPath = resolvedPath.value): boolean {
+  if (!targetPath || !data.value || data.value.kind !== 'text' || data.value.truncated) {
+    return false
+  }
+  if (data.value.path && data.value.path !== targetPath) return false
+  if (
+    editorSaveState.value === 'dirty' ||
+    editorSaveState.value === 'error' ||
+    editorSaveConflict.value
+  ) {
+    return true
+  }
+  return targetPath === lastPersistedPath && (data.value.text ?? '') !== lastPersistedText
+}
+
+function markDiskSynced(path: string, text: string, mtimeMs?: number): void {
   lastPersistedPath = path
   lastPersistedText = text
+  lastPersistedMtimeMs = mtimeMs ?? (data.value?.path === path ? data.value.mtimeMs : undefined)
   clearEditorSaveTimers()
   editorSaveState.value = 'idle'
+  editorSaveConflict.value = false
+  draftConflictDiskSnapshot.value = null
+  showDraftConflictDiff.value = false
+  retainedDrafts.delete(path)
 }
 
 function estimateUtf8ByteLength(text: string): number {
@@ -969,6 +1056,22 @@ function estimateUtf8ByteLength(text: string): number {
   return text.length
 }
 
+async function fetchConflictingDiskSnapshot(targetPath: string): Promise<void> {
+  if (!transport || !targetPath) return
+  try {
+    const fresh = await transport.send(AgentWorkspaceEvents.readFile, {
+      path: targetPath,
+      conversationId: props.conversationId ?? null
+    })
+    if (isUnmounted || resolvedPath.value !== targetPath || fresh.kind !== 'text') return
+    if (editorSaveConflict.value) {
+      draftConflictDiskSnapshot.value = fresh
+    }
+  } catch {
+    // Keep existing conflict state even if inspection read fails.
+  }
+}
+
 async function persistMarkdownSnapshot(
   targetPath: string,
   content: string,
@@ -976,65 +1079,113 @@ async function persistMarkdownSnapshot(
   options?: { force?: boolean; allowOverwriteOnConflict?: boolean }
 ): Promise<boolean> {
   if (!transport || !targetPath) return false
-  if (!options?.force && targetPath === lastPersistedPath && content === lastPersistedText) {
+  if (editorSaveInFlight) {
+    if (activeSavePromise && activeSavePath === targetPath) {
+      await activeSavePromise
+      if (!options?.force && targetPath === lastPersistedPath && content === lastPersistedText) {
+        return true
+      }
+      if (editorSaveInFlight) return false
+    } else {
+      return false
+    }
+  }
+  if (
+    !options?.force &&
+    !options?.allowOverwriteOnConflict &&
+    targetPath === lastPersistedPath &&
+    content === lastPersistedText
+  ) {
     if (resolvedPath.value === targetPath) {
       editorSaveState.value = 'idle'
+      editorSaveConflict.value = false
     }
     return true
   }
-  if (editorSaveInFlight) return false
 
   editorSaveInFlight = true
+  activeSavePath = targetPath
   canvasWriteInFlight = true
   if (resolvedPath.value === targetPath) {
     editorSaveState.value = 'saving'
   }
-  try {
-    const written = await transport.send(AgentWorkspaceEvents.writeFile, {
-      path: targetPath,
-      content,
-      conversationId: props.conversationId ?? null,
-      ...(expectedMtimeMs !== undefined && !options?.allowOverwriteOnConflict
-        ? { expectedMtimeMs }
-        : {})
-    })
-    lastPersistedPath = targetPath
-    lastPersistedText = content
-    if (resolvedPath.value === targetPath && data.value?.kind === 'text') {
-      const currentText = data.value.text ?? ''
-      data.value = {
-        ...data.value,
-        size: currentText === content ? written.size : estimateUtf8ByteLength(currentText),
-        mtimeMs: written.mtimeMs,
-        truncated: false
+
+  const runSave = (async (): Promise<boolean> => {
+    try {
+      const written = await transport.send(AgentWorkspaceEvents.writeFile, {
+        path: targetPath,
+        content,
+        conversationId: props.conversationId ?? null,
+        ...(expectedMtimeMs !== undefined && !options?.allowOverwriteOnConflict
+          ? { expectedMtimeMs }
+          : {})
+      })
+      lastPersistedPath = targetPath
+      lastPersistedText = content
+      lastPersistedMtimeMs = written.mtimeMs
+      retainedDrafts.delete(targetPath)
+      if (!isUnmounted && resolvedPath.value === targetPath && data.value?.kind === 'text') {
+        editorSaveConflict.value = false
+        draftConflictDiskSnapshot.value = null
+        showDraftConflictDiff.value = false
+        const currentText = data.value.text ?? ''
+        data.value = {
+          ...data.value,
+          size: currentText === content ? written.size : estimateUtf8ByteLength(currentText),
+          mtimeMs: written.mtimeMs,
+          truncated: false
+        }
+        if (currentText !== content) {
+          editorSaveState.value = 'dirty'
+          scheduleMarkdownAutoSave()
+        } else {
+          editorSaveState.value = 'saved'
+          if (editorSavedResetTimer !== null) clearTimeout(editorSavedResetTimer)
+          editorSavedResetTimer = setTimeout(() => {
+            if (editorSaveState.value === 'saved') editorSaveState.value = 'idle'
+            editorSavedResetTimer = null
+          }, 1800)
+        }
       }
-      if (currentText !== content) {
-        editorSaveState.value = 'dirty'
-        scheduleMarkdownAutoSave()
+      return true
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const isConflict = /WORKSPACE_FILE_CONFLICT/i.test(msg)
+      retainedDrafts.set(targetPath, {
+        text: content,
+        baseMtimeMs: expectedMtimeMs,
+        diskText: targetPath === lastPersistedPath ? lastPersistedText : '',
+        conflict: isConflict
+      })
+      if (!isUnmounted && resolvedPath.value === targetPath) {
+        editorSaveState.value = 'error'
+        if (isConflict) {
+          editorSaveConflict.value = true
+          void fetchConflictingDiskSnapshot(targetPath)
+        }
+      }
+      if (isConflict) {
+        toast.error(t('home.sidePanel.editorSaveConflict'))
       } else {
-        editorSaveState.value = 'saved'
-        if (editorSavedResetTimer !== null) clearTimeout(editorSavedResetTimer)
-        editorSavedResetTimer = setTimeout(() => {
-          if (editorSaveState.value === 'saved') editorSaveState.value = 'idle'
-          editorSavedResetTimer = null
-        }, 1800)
+        toast.error(t('home.sidePanel.canvasApplyFailed'))
+      }
+      return false
+    } finally {
+      canvasWriteInFlight = false
+      editorSaveInFlight = false
+      if (activeSavePath === targetPath) {
+        activeSavePath = ''
       }
     }
-    return true
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    if (resolvedPath.value === targetPath) {
-      editorSaveState.value = 'error'
-    }
-    if (/WORKSPACE_FILE_CONFLICT/i.test(msg)) {
-      toast.error(t('home.sidePanel.editorSaveConflict'))
-    } else {
-      toast.error(t('home.sidePanel.canvasApplyFailed'))
-    }
-    return false
+  })()
+
+  activeSavePromise = runSave
+  try {
+    return await runSave
   } finally {
-    canvasWriteInFlight = false
-    editorSaveInFlight = false
+    if (activeSavePromise === runSave) {
+      activeSavePromise = null
+    }
   }
 }
 
@@ -1050,12 +1201,39 @@ async function saveMarkdownEdits(options?: {
     return false
   }
   if (isCanvasLocked.value) return false
-  return persistMarkdownSnapshot(
-    resolvedPath.value,
-    data.value.text ?? '',
-    data.value.mtimeMs,
-    options
-  )
+  const expectedMtime =
+    resolvedPath.value === lastPersistedPath && lastPersistedMtimeMs !== undefined
+      ? lastPersistedMtimeMs
+      : data.value.mtimeMs
+  return persistMarkdownSnapshot(resolvedPath.value, data.value.text ?? '', expectedMtime, options)
+}
+
+async function ensureDraftSavedBeforeAiAction(): Promise<boolean> {
+  const targetPath = resolvedPath.value
+  if (activeSavePromise && activeSavePath === targetPath) {
+    const inFlightOk = await activeSavePromise
+    if (isUnmounted || resolvedPath.value !== targetPath) return false
+    if (!inFlightOk && hasUnsavedLocalDraft(targetPath)) return false
+  }
+  if (!hasUnsavedLocalDraft(targetPath)) return true
+  return await saveMarkdownEdits({ force: true })
+}
+
+async function reloadFromConflictingDisk(): Promise<void> {
+  const targetPath = resolvedPath.value
+  if (!targetPath) return
+  retainedDrafts.delete(targetPath)
+  const snapshot = draftConflictDiskSnapshot.value
+  if (snapshot && snapshot.kind === 'text' && (snapshot.path || targetPath) === targetPath) {
+    data.value = snapshot
+    markDiskSynced(snapshot.path || targetPath, snapshot.text ?? '', snapshot.mtimeMs)
+    return
+  }
+  await loadFile({ discardDraft: true })
+}
+
+async function overwriteDiskWithLocalDraft(): Promise<void> {
+  await saveMarkdownEdits({ force: true, allowOverwriteOnConflict: true })
 }
 
 function scheduleMarkdownAutoSave(): void {
@@ -1077,9 +1255,23 @@ function handleMarkdownEditorInput(nextText: string): void {
     text: nextText,
     size: estimateUtf8ByteLength(nextText)
   }
-  if (resolvedPath.value === lastPersistedPath && nextText === lastPersistedText) {
+  if (
+    !editorSaveConflict.value &&
+    resolvedPath.value === lastPersistedPath &&
+    nextText === lastPersistedText
+  ) {
     clearEditorSaveTimers()
     editorSaveState.value = 'idle'
+    retainedDrafts.delete(resolvedPath.value)
+    return
+  }
+  if (editorSaveConflict.value) {
+    retainedDrafts.set(resolvedPath.value, {
+      text: nextText,
+      baseMtimeMs: lastPersistedMtimeMs ?? data.value.mtimeMs,
+      diskText: lastPersistedText,
+      conflict: true
+    })
     return
   }
   editorSaveState.value = 'dirty'
@@ -1087,7 +1279,7 @@ function handleMarkdownEditorInput(nextText: string): void {
 }
 
 function handleMarkdownEditorBlur(): void {
-  if (editorSaveState.value === 'dirty') {
+  if (editorSaveState.value === 'dirty' && !editorSaveConflict.value) {
     void saveMarkdownEdits()
   }
 }
@@ -1100,37 +1292,44 @@ function commitCanvasVisualTransition(
   meta: {
     source: CanvasAppliedSource
     actionId: string
+    scope: 'selection' | 'document'
     selectedText: string
+    sourceRange: SourceRange | null
   }
 ): void {
   const afterText = nextData.text ?? ''
   const diff = computeCanvasLineDiff(beforeText, afterText)
+  const targetPath = nextData.path || resolvedPath.value
   data.value = nextData
-  markDiskSynced(nextData.path || resolvedPath.value, afterText)
+  markDiskSynced(targetPath, afterText, nextData.mtimeMs)
   canvasPhase.value = 'applied'
   canvasShowDiff.value = false
+  canvasConflictRefreshAvailable.value = false
   pendingDomBlockIndices.value = new Set()
 
   canvasApplied.value = {
-    filePath: nextData.path || resolvedPath.value,
+    filePath: targetPath,
     source: meta.source,
     actionId: meta.actionId,
+    scope: meta.scope,
     selectedText: meta.selectedText,
+    sourceRange: meta.sourceRange,
     beforeText,
     afterText,
     beforeMtimeMs,
+    afterMtimeMs: nextData.mtimeMs,
     diff,
     changedBlockIndices: new Set()
   }
 
+  const transitionToken = canvasOpToken
   void nextTick(() => {
+    if (!isCanvasOpActive(transitionToken, targetPath) || !canvasApplied.value) return
     const afterBlockTexts = snapshotMarkdownBlockTexts()
     const changedBlocks = computeChangedBlockIndices(beforeBlockTexts, afterBlockTexts)
-    if (canvasApplied.value) {
-      canvasApplied.value = {
-        ...canvasApplied.value,
-        changedBlockIndices: changedBlocks
-      }
+    canvasApplied.value = {
+      ...canvasApplied.value,
+      changedBlockIndices: changedBlocks
     }
     triggerCanvasSweepAnimation()
   })
@@ -1139,6 +1338,7 @@ function commitCanvasVisualTransition(
 async function syncFromDisk(options: {
   reason: CanvasAppliedSource
   fromTool?: boolean
+  expectedOpToken?: number
 }): Promise<boolean> {
   if (!transport || canvasWriteInFlight) return false
   const targetPath = resolvedPath.value.trim()
@@ -1147,18 +1347,21 @@ async function syncFromDisk(options: {
   if (!current) return false
 
   const session = canvasPending.value
+  const opToken = options.expectedOpToken ?? session?.opToken ?? canvasOpToken
   const ambientSnap =
     ambientBeforeSnapshot.value?.filePath === targetPath ? ambientBeforeSnapshot.value : null
+  const diskBaselineText =
+    targetPath === lastPersistedPath ? lastPersistedText : (current.text ?? '')
   const beforeText = session
     ? session.beforeText
     : ambientSnap
       ? ambientSnap.beforeText
-      : (current.text ?? '')
+      : diskBaselineText
   const beforeMtimeMs = session
     ? session.beforeMtimeMs
     : ambientSnap
       ? ambientSnap.beforeMtimeMs
-      : current.mtimeMs
+      : (lastPersistedMtimeMs ?? current.mtimeMs)
   const beforeBlockTexts = session
     ? session.beforeBlockTexts
     : ambientSnap
@@ -1170,15 +1373,60 @@ async function syncFromDisk(options: {
       path: targetPath,
       conversationId: props.conversationId ?? null
     })
-    if (resolvedPath.value !== targetPath) return false
+    if (isUnmounted || resolvedPath.value !== targetPath) return false
+    if (options.expectedOpToken !== undefined && !isCanvasOpActive(opToken, targetPath)) {
+      return false
+    }
+    if (
+      session &&
+      (canvasPending.value !== session || !isCanvasOpActive(session.opToken, targetPath))
+    ) {
+      return false
+    }
     if (fresh.kind !== 'text') {
       if (fresh.mtimeMs !== current.mtimeMs) {
         data.value = fresh
       }
       return false
     }
-    if ((fresh.text ?? '') === (current.text ?? '')) {
+    const freshText = fresh.text ?? ''
+    if (freshText === diskBaselineText) {
       return false
+    }
+
+    // Preserve unsaved local draft instead of silently overwriting it when disk changes concurrently.
+    const liveLocalText = data.value?.kind === 'text' ? (data.value.text ?? '') : ''
+    if (hasUnsavedLocalDraft(targetPath) && freshText !== liveLocalText) {
+      draftConflictDiskSnapshot.value = fresh
+      editorSaveConflict.value = true
+      editorSaveState.value = 'error'
+      retainedDrafts.set(targetPath, {
+        text: liveLocalText,
+        baseMtimeMs: lastPersistedMtimeMs ?? current.mtimeMs,
+        diskText: diskBaselineText,
+        conflict: true
+      })
+      if (session && session.filePath === targetPath) {
+        session.diskApplied = true
+        canvasPending.value = null
+      }
+      canvasPhase.value = 'idle'
+      pendingDomBlockIndices.value = new Set()
+      ambientBeforeSnapshot.value = null
+      const tail = props.messages.at(-1)
+      ambientSettledMessageId.value = tail?.role === 'assistant' ? tail.id : null
+      toast.error(t('home.sidePanel.editorSaveConflict'))
+      return true
+    }
+
+    if (fresh.truncated) {
+      if (session && session.filePath === targetPath) {
+        session.diskApplied = true
+      }
+      data.value = fresh
+      markDiskSynced(fresh.path || targetPath, freshText, fresh.mtimeMs)
+      resetCanvasState()
+      return true
     }
 
     if (session && session.filePath === targetPath) {
@@ -1191,7 +1439,9 @@ async function syncFromDisk(options: {
     commitCanvasVisualTransition(fresh, beforeText, beforeMtimeMs, beforeBlockTexts, {
       source: options.reason,
       actionId: session?.actionId ?? 'sync',
-      selectedText: session?.selectedText ?? ''
+      scope: session?.scope ?? 'selection',
+      selectedText: session?.selectedText ?? '',
+      sourceRange: session?.sourceRange ?? null
     })
     return true
   } catch {
@@ -1202,7 +1452,8 @@ async function syncFromDisk(options: {
 async function finalizePendingCanvasSession(target: ConversationMessage): Promise<void> {
   const session = canvasPending.value
   if (!session || canvasFinalizeInFlight) return
-  if (session.filePath !== resolvedPath.value) {
+  const opToken = session.opToken
+  if (!isCanvasOpActive(opToken, session.filePath)) {
     resetCanvasState()
     return
   }
@@ -1216,18 +1467,27 @@ async function finalizePendingCanvasSession(target: ConversationMessage): Promis
   lastAppliedAssistantId = target.id
   try {
     // 1. Disk-first check: if the agent edited the file via file.write / bash / Herdr, adopt it.
-    let syncedFromDisk = await syncFromDisk({ reason: 'improve' })
+    let syncedFromDisk = await syncFromDisk({ reason: 'improve', expectedOpToken: opToken })
     if (syncedFromDisk) return
+    if (!isCanvasOpActive(opToken, session.filePath) || canvasPending.value !== session) return
 
-    const writes = inspectMessageFileWrites(target, fileName.value)
-    if (writes.completedCount > 0) {
+    const writes = inspectMessageFileWrites(target, currentFileIdentity.value)
+    if (writes.completedCount > 0 || writes.unknownCompletedCount > 0) {
       // Allow a brief flush window when a real file-write tool completed right before turn end.
       await new Promise((resolve) => setTimeout(resolve, 180))
-      syncedFromDisk = await syncFromDisk({ reason: 'improve' })
+      if (!isCanvasOpActive(opToken, session.filePath) || canvasPending.value !== session) return
+      syncedFromDisk = await syncFromDisk({ reason: 'improve', expectedOpToken: opToken })
       if (syncedFromDisk) return
+      if (!isCanvasOpActive(opToken, session.filePath) || canvasPending.value !== session) return
     }
 
     if (!session.autoApply) {
+      resetCanvasState()
+      return
+    }
+
+    // Never auto-write over a truncated file preview.
+    if (!data.value || data.value.kind !== 'text' || data.value.truncated) {
       resetCanvasState()
       return
     }
@@ -1239,9 +1499,12 @@ async function finalizePendingCanvasSession(target: ConversationMessage): Promis
       fileExt: fileExt.value
     })
     if (!extracted) {
+      if (!isCanvasOpActive(opToken, session.filePath) || canvasPending.value !== session) return
       resetCanvasState()
       const claimedDiskUpdate =
-        writes.completedCount === 0 && isClaimedDiskUpdateReply(target.content ?? '')
+        writes.completedCount === 0 &&
+        writes.unknownCompletedCount === 0 &&
+        isClaimedDiskUpdateReply(target.content ?? '')
       if (claimedDiskUpdate) {
         toast.warning(t('home.sidePanel.canvasFalseWriteClaim'))
       } else {
@@ -1250,15 +1513,30 @@ async function finalizePendingCanvasSession(target: ConversationMessage): Promis
       return
     }
 
-    const merged = applyCanvasRevisionToSource(session.beforeText, session.selectedText, extracted)
+    const merged = applyCanvasRevisionToSource(
+      session.beforeText,
+      session.selectedText,
+      extracted,
+      {
+        scope: session.scope,
+        sourceRange: session.sourceRange
+      }
+    )
     if (!merged || !merged.changed) {
+      if (!isCanvasOpActive(opToken, session.filePath) || canvasPending.value !== session) return
       resetCanvasState()
       toast.info(t('home.sidePanel.canvasNoRevisionExtracted'))
       return
     }
 
-    if (!transport || !data.value || data.value.kind !== 'text') {
-      resetCanvasState()
+    if (
+      !transport ||
+      !data.value ||
+      data.value.kind !== 'text' ||
+      data.value.truncated ||
+      !isCanvasOpActive(opToken, session.filePath) ||
+      canvasPending.value !== session
+    ) {
       return
     }
 
@@ -1271,7 +1549,10 @@ async function finalizePendingCanvasSession(target: ConversationMessage): Promis
         conversationId: props.conversationId ?? null,
         expectedMtimeMs: session.beforeMtimeMs
       })
-      if (resolvedPath.value !== session.filePath) {
+      if (!isCanvasOpActive(opToken, session.filePath) || canvasPending.value !== session) {
+        return
+      }
+      if (!data.value || data.value.kind !== 'text') {
         resetCanvasState()
         return
       }
@@ -1291,15 +1572,21 @@ async function finalizePendingCanvasSession(target: ConversationMessage): Promis
         {
           source: 'improve',
           actionId: session.actionId,
-          selectedText: session.selectedText
+          scope: session.scope,
+          selectedText: session.selectedText,
+          sourceRange: session.sourceRange
         }
       )
     } catch (err) {
+      if (!isCanvasOpActive(opToken, session.filePath) || canvasPending.value !== session) {
+        return
+      }
       const msg = err instanceof Error ? err.message : String(err)
       // If disk changed concurrently right before our write, check disk once before reporting failure.
       if (/WORKSPACE_FILE_CONFLICT/i.test(msg)) {
-        const adopted = await syncFromDisk({ reason: 'improve' })
+        const adopted = await syncFromDisk({ reason: 'improve', expectedOpToken: opToken })
         if (adopted) return
+        if (!isCanvasOpActive(opToken, session.filePath)) return
       }
       resetCanvasState()
       toast.error(t('home.sidePanel.canvasApplyFailed'))
@@ -1311,32 +1598,47 @@ async function finalizePendingCanvasSession(target: ConversationMessage): Promis
   }
 }
 
+async function refreshAfterCanvasConflict(): Promise<void> {
+  resetCanvasState()
+  await loadFile({ discardDraft: true })
+}
+
 async function undoCanvasEdit(): Promise<void> {
   const snapshot = canvasApplied.value
   if (!snapshot || canvasUndoing.value || !transport || !data.value || data.value.kind !== 'text') {
     return
   }
+  const opToken = canvasOpToken
   canvasUndoing.value = true
   canvasWriteInFlight = true
   try {
     const written = await transport.send(AgentWorkspaceEvents.writeFile, {
       path: snapshot.filePath,
       content: snapshot.beforeText,
-      conversationId: props.conversationId ?? null
+      conversationId: props.conversationId ?? null,
+      expectedMtimeMs: snapshot.afterMtimeMs
     })
-    if (resolvedPath.value === snapshot.filePath && data.value?.kind === 'text') {
+    if (!isCanvasOpActive(opToken, snapshot.filePath)) return
+    if (data.value?.kind === 'text') {
       data.value = {
         ...data.value,
         text: snapshot.beforeText,
         size: written.size,
         mtimeMs: written.mtimeMs
       }
-      markDiskSynced(snapshot.filePath, snapshot.beforeText)
+      markDiskSynced(snapshot.filePath, snapshot.beforeText, written.mtimeMs)
     }
     resetCanvasState()
     toast.success(t('home.sidePanel.canvasUndone'))
-  } catch {
-    toast.error(t('home.sidePanel.canvasApplyFailed'))
+  } catch (err) {
+    if (!isCanvasOpActive(opToken, snapshot.filePath)) return
+    const msg = err instanceof Error ? err.message : String(err)
+    if (/WORKSPACE_FILE_CONFLICT/i.test(msg)) {
+      canvasConflictRefreshAvailable.value = true
+      toast.error(t('home.sidePanel.canvasUndoConflict'))
+    } else {
+      toast.error(t('home.sidePanel.canvasApplyFailed'))
+    }
   } finally {
     canvasWriteInFlight = false
     canvasUndoing.value = false
@@ -1350,37 +1652,71 @@ async function startCanvasImprove(
     userSuggestion?: string
     isFullDocument?: boolean
     blockIndices?: Set<number>
+    sourceRange?: SourceRange | null
   }
 ): Promise<boolean> {
-  if (!data.value || data.value.kind !== 'text' || isCanvasLocked.value) return false
-  if (editorSaveState.value === 'dirty') {
-    await saveMarkdownEdits({ force: true })
+  if (!data.value || data.value.kind !== 'text' || data.value.truncated || isCanvasLocked.value) {
+    return false
   }
+  const initialPath = resolvedPath.value
+  const savedBeforeDispatch = await ensureDraftSavedBeforeAiAction()
+  if (!savedBeforeDispatch) return false
+  if (
+    isUnmounted ||
+    resolvedPath.value !== initialPath ||
+    !data.value ||
+    data.value.kind !== 'text' ||
+    data.value.truncated ||
+    isCanvasLocked.value
+  ) {
+    return false
+  }
+
   const targetPath = resolvedPath.value
+  const scope: 'selection' | 'document' = options?.isFullDocument ? 'document' : 'selection'
   const beforeText = data.value.text ?? ''
   const beforeMtimeMs = data.value.mtimeMs
   const beforeBlockTexts = snapshotMarkdownBlockTexts()
   const pendingIndices = options?.blockIndices
     ? new Set(options.blockIndices)
     : resolvePendingBlockIndices(selection)
+  const sourceRange =
+    scope === 'document' ? null : (options?.sourceRange ?? captureEditorSourceRange())
 
+  const formatted = formatCanvasImprovePrompt({
+    displayPath: displayPathForAi.value,
+    selectedText,
+    userSuggestion: options?.userSuggestion,
+    isFullDocument: scope === 'document',
+    instruction:
+      scope === 'document'
+        ? t('home.sidePanel.canvasPromptFullDocument')
+        : t('home.sidePanel.selectionPromptImprove')
+  })
+
+  const opToken = ++canvasOpToken
   pendingDomBlockIndices.value = pendingIndices
   canvasApplied.value = null
   canvasShowDiff.value = false
+  canvasConflictRefreshAvailable.value = false
   ambientBeforeSnapshot.value = null
   ambientSettledMessageId.value = null
   canvasPhase.value = 'thinking'
   canvasPending.value = {
+    opToken,
     filePath: targetPath,
     actionId: 'improve',
+    scope,
     selectedText,
+    sourceRange,
     autoApply: true,
     beforeText,
     beforeMtimeMs,
     beforeBlockTexts,
     baseline: {
       knownMessageIds: new Set(props.messages.map((m) => m.id)),
-      initialCount: props.messages.length
+      initialCount: props.messages.length,
+      requestPrompt: formatted
     },
     lastSeenWriteCount: 0,
     diskApplied: false
@@ -1391,21 +1727,14 @@ async function startCanvasImprove(
   window.getSelection()?.removeAllRanges()
   void nextTick(() => syncMarkdownBlockClasses(false))
 
-  const formatted = formatCanvasImprovePrompt({
-    displayPath: displayPathForAi.value,
-    selectedText,
-    userSuggestion: options?.userSuggestion,
-    isFullDocument: options?.isFullDocument,
-    instruction: options?.isFullDocument
-      ? t('home.sidePanel.canvasPromptFullDocument')
-      : t('home.sidePanel.selectionPromptImprove')
-  })
   const accepted = await dispatchAiAction('send', selectedText, formatted, {
     actionKind: 'improve',
     autoApply: true
   })
   if (!accepted) {
-    resetCanvasState()
+    if (isCanvasOpActive(opToken, targetPath)) {
+      resetCanvasState()
+    }
     return false
   }
   return true
@@ -1416,7 +1745,10 @@ async function retryCanvasEdit(): Promise<void> {
   if (!snapshot || canvasUndoing.value || !transport || !data.value || data.value.kind !== 'text') {
     return
   }
+  const opToken = canvasOpToken
   const origSelected = snapshot.selectedText
+  const origScope = snapshot.scope
+  const origSourceRange = snapshot.sourceRange
   const origRects = measureBlocksClientRects(snapshot.changedBlockIndices)
   canvasUndoing.value = true
   canvasWriteInFlight = true
@@ -1424,29 +1756,44 @@ async function retryCanvasEdit(): Promise<void> {
     const written = await transport.send(AgentWorkspaceEvents.writeFile, {
       path: snapshot.filePath,
       content: snapshot.beforeText,
-      conversationId: props.conversationId ?? null
+      conversationId: props.conversationId ?? null,
+      expectedMtimeMs: snapshot.afterMtimeMs
     })
-    if (resolvedPath.value !== snapshot.filePath) {
-      resetCanvasState()
-      return
-    }
-    data.value = {
-      ...data.value,
-      text: snapshot.beforeText,
-      size: written.size,
-      mtimeMs: written.mtimeMs
+    if (!isCanvasOpActive(opToken, snapshot.filePath)) return
+    if (data.value?.kind === 'text') {
+      data.value = {
+        ...data.value,
+        text: snapshot.beforeText,
+        size: written.size,
+        mtimeMs: written.mtimeMs
+      }
+      markDiskSynced(snapshot.filePath, snapshot.beforeText, written.mtimeMs)
     }
     resetCanvasState()
     await nextTick()
-  } catch {
-    toast.error(t('home.sidePanel.canvasApplyFailed'))
+  } catch (err) {
+    if (!isCanvasOpActive(opToken, snapshot.filePath)) return
+    const msg = err instanceof Error ? err.message : String(err)
+    if (/WORKSPACE_FILE_CONFLICT/i.test(msg)) {
+      canvasConflictRefreshAvailable.value = true
+      toast.error(t('home.sidePanel.canvasUndoConflict'))
+    } else {
+      toast.error(t('home.sidePanel.canvasApplyFailed'))
+    }
     return
   } finally {
     canvasWriteInFlight = false
     canvasUndoing.value = false
   }
 
-  await startCanvasImprove(origSelected, { text: origSelected, rects: origRects })
+  await startCanvasImprove(
+    origSelected,
+    { text: origSelected, rects: origRects },
+    {
+      isFullDocument: origScope === 'document',
+      sourceRange: origSourceRange
+    }
+  )
 }
 
 function dismissMdSelection(): void {
@@ -1457,18 +1804,7 @@ function dismissMdSelection(): void {
 
 watch(
   resolvedPath,
-  (nextPath, prevPath) => {
-    if (
-      prevPath &&
-      prevPath !== nextPath &&
-      editorSaveState.value === 'dirty' &&
-      data.value?.kind === 'text' &&
-      data.value.path === prevPath
-    ) {
-      void persistMarkdownSnapshot(prevPath, data.value.text ?? '', data.value.mtimeMs)
-    }
-    clearEditorSaveTimers()
-    editorSaveState.value = 'idle'
+  (nextPath) => {
     comments.value = readSessionReviewComments(nextPath)
     commentComposerOpen.value = false
     commentDraftQuote.value = ''
@@ -1493,30 +1829,42 @@ watch(isCanvasLocked, (locked, prevLocked) => {
     lintPopoverOpen.value = false
     window.getSelection()?.removeAllRanges()
     if (!canvasPending.value && data.value?.kind === 'text' && !ambientBeforeSnapshot.value) {
+      const targetPath = resolvedPath.value
+      const diskText =
+        targetPath === lastPersistedPath ? lastPersistedText : (data.value.text ?? '')
       ambientBeforeSnapshot.value = {
-        filePath: resolvedPath.value,
-        beforeText: data.value.text ?? '',
-        beforeMtimeMs: data.value.mtimeMs,
+        filePath: targetPath,
+        beforeText: diskText,
+        beforeMtimeMs:
+          targetPath === lastPersistedPath && lastPersistedMtimeMs !== undefined
+            ? lastPersistedMtimeMs
+            : data.value.mtimeMs,
         beforeBlockTexts: snapshotMarkdownBlockTexts()
       }
     }
   } else if (prevLocked && ambientBeforeSnapshot.value && canvasPhase.value !== 'applied') {
+    const ambientToken = canvasOpToken
+    const ambientPath = ambientBeforeSnapshot.value.filePath
     // Streaming finished without an explicit tool-write event; do one final disk check to adopt
     // any silent file write (e.g. shell redirect), otherwise surface a warning if AI falsely claimed a write.
-    void syncFromDisk({ reason: 'sync' })
+    void syncFromDisk({ reason: 'sync', expectedOpToken: ambientToken })
       .then((synced) => {
-        if (synced) return
+        if (synced || !isCanvasOpActive(ambientToken, ambientPath)) return
         const tail = props.messages.at(-1)
         if (!tail || tail.role !== 'assistant' || tail.status !== 'complete') return
-        const writes = inspectMessageFileWrites(tail, fileName.value)
+        const writes = inspectMessageFileWrites(tail, currentFileIdentity.value)
         const claimedDiskUpdate =
-          writes.completedCount === 0 && isClaimedDiskUpdateReply(tail.content ?? '')
+          writes.completedCount === 0 &&
+          writes.unknownCompletedCount === 0 &&
+          isClaimedDiskUpdateReply(tail.content ?? '')
         if (claimedDiskUpdate) {
           toast.warning(t('home.sidePanel.canvasFalseWriteClaim'))
         }
       })
       .finally(() => {
-        ambientBeforeSnapshot.value = null
+        if (ambientBeforeSnapshot.value?.filePath === ambientPath) {
+          ambientBeforeSnapshot.value = null
+        }
       })
   }
   void nextTick(() => syncMarkdownBlockClasses(false))
@@ -1545,18 +1893,12 @@ watch(
       const target = findTargetAssistantMessage(messages, session.baseline)
       if (!target) return
 
-      const writes = inspectMessageFileWrites(target, fileName.value)
+      const writes = inspectMessageFileWrites(target, currentFileIdentity.value)
       if (
         canvasPhase.value === 'thinking' &&
-        (writes.running || isMessageStreamingCanvasEdit(target))
+        (writes.running || writes.unknownRunning || isMessageStreamingCanvasEdit(target))
       ) {
         canvasPhase.value = 'streaming'
-      }
-
-      if (writes.completedCount > session.lastSeenWriteCount) {
-        session.lastSeenWriteCount = writes.completedCount
-        void syncFromDisk({ reason: 'improve', fromTool: true })
-        return
       }
 
       if (target.status === 'failed') {
@@ -1564,7 +1906,16 @@ watch(
         return
       }
 
-      if (target.status === 'complete' && !streaming && lastAppliedAssistantId !== target.id) {
+      const isTerminal = target.status === 'complete' && !streaming
+      if (writes.completedCount > session.lastSeenWriteCount) {
+        session.lastSeenWriteCount = writes.completedCount
+        if (!isTerminal) {
+          void syncFromDisk({ reason: 'improve', fromTool: true, expectedOpToken: session.opToken })
+          return
+        }
+      }
+
+      if (isTerminal && lastAppliedAssistantId !== target.id) {
         void finalizePendingCanvasSession(target)
       }
       return
@@ -1574,7 +1925,7 @@ watch(
     // or review comments, silently sync & animate the right pane automatically.
     const tail = messages.at(-1)
     if (!tail || tail.role !== 'assistant' || !data.value) return
-    const writes = inspectMessageFileWrites(tail, fileName.value)
+    const writes = inspectMessageFileWrites(tail, currentFileIdentity.value)
     if (writes.completedCount === 0) return
     if (tail.id === ambientLastHandledMsgId && writes.completedCount <= ambientLastWriteCount) {
       return
@@ -1629,8 +1980,9 @@ async function dispatchAiAction(
     autoApply?: boolean
   }
 ): Promise<boolean> {
-  if (mode === 'send' && editorSaveState.value === 'dirty') {
-    await saveMarkdownEdits({ force: true })
+  if (mode === 'send') {
+    const saved = await ensureDraftSavedBeforeAiAction()
+    if (!saved) return false
   }
   let settled: Promise<boolean> | null = null
   emit('ai-action', {
@@ -1727,7 +2079,6 @@ async function handleMdSelectionSubmit(payload: {
   const instruction = payload.prompt.trim()
   if (!selectedText || !instruction) return
   const barNode = extractDomNode(selectionBarRef.value)
-  triggerCanvasLaunchFlight(instruction, barNode instanceof HTMLElement ? barNode : null)
   const formatted = formatSingleSelectionPrompt({
     displayPath: displayPathForAi.value,
     selectedText,
@@ -1736,7 +2087,10 @@ async function handleMdSelectionSubmit(payload: {
   const accepted = await dispatchAiAction('send', selectedText, formatted, {
     actionKind: 'custom'
   })
-  if (accepted) dismissMdSelection()
+  if (accepted) {
+    triggerCanvasLaunchFlight(instruction, barNode instanceof HTMLElement ? barNode : null)
+    dismissMdSelection()
+  }
 }
 
 function saveDraftComment(): void {
@@ -1884,7 +2238,8 @@ function onDocumentKeyDown(event: KeyboardEvent): void {
         editorSaveState.value === 'error'
       ) {
         event.preventDefault()
-        void saveMarkdownEdits({ force: true, allowOverwriteOnConflict: true })
+        // Keep expectedMtimeMs conflict guard on ordinary Cmd/Ctrl+S saves.
+        void saveMarkdownEdits({ force: true })
         return
       }
     }
@@ -1894,7 +2249,8 @@ function onDocumentKeyDown(event: KeyboardEvent): void {
       props.aiActionsEnabled &&
       isMarkdown.value &&
       viewMode.value === 'preview' &&
-      !isCanvasLocked.value
+      !isCanvasLocked.value &&
+      !isTruncatedText.value
     ) {
       const active = document.activeElement
       if (markdownContainerRef.value?.contains(active) || activeSelectionPayload.value) {
@@ -1978,9 +2334,57 @@ async function scrollToTargetLine(): Promise<void> {
   row?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 }
 
-async function loadFile(): Promise<void> {
+async function loadFile(options?: { discardDraft?: boolean }): Promise<void> {
   const target = props.filePath.trim()
   const generation = ++loadGeneration
+  const prevPath = resolvedPath.value
+  const prevData = data.value
+  const hadUnsavedPrevDraft = !options?.discardDraft && hasUnsavedLocalDraft(prevPath)
+  const capturedPrevDraft: RetainedDraftEntry | null =
+    hadUnsavedPrevDraft && prevData?.kind === 'text'
+      ? {
+          text: prevData.text ?? '',
+          baseMtimeMs:
+            prevPath === lastPersistedPath && lastPersistedMtimeMs !== undefined
+              ? lastPersistedMtimeMs
+              : prevData.mtimeMs,
+          diskText: prevPath === lastPersistedPath ? lastPersistedText : '',
+          conflict: editorSaveConflict.value
+        }
+      : null
+
+  clearEditorSaveTimers()
+  canvasOpToken += 1
+
+  // Flush or retain the previous file's unsaved draft BEFORE replacing `data`.
+  if (capturedPrevDraft && prevPath) {
+    if (capturedPrevDraft.conflict) {
+      retainedDrafts.set(prevPath, capturedPrevDraft)
+    } else {
+      if (activeSavePromise && activeSavePath === prevPath) {
+        await activeSavePromise
+        if (generation !== loadGeneration || isUnmounted) return
+      }
+      const stillUnsaved =
+        prevPath !== lastPersistedPath || capturedPrevDraft.text !== lastPersistedText
+      if (stillUnsaved) {
+        const saved = await persistMarkdownSnapshot(
+          prevPath,
+          capturedPrevDraft.text,
+          capturedPrevDraft.baseMtimeMs,
+          { force: true }
+        )
+        if (generation !== loadGeneration || isUnmounted) return
+        if (!saved) {
+          retainedDrafts.set(prevPath, {
+            ...capturedPrevDraft,
+            conflict: editorSaveConflict.value || capturedPrevDraft.conflict
+          })
+        }
+      }
+    }
+  }
+
   revokePdfUrl()
   error.value = ''
   imageZoom.value = 1
@@ -2004,13 +2408,37 @@ async function loadFile(): Promise<void> {
       path: target,
       conversationId: props.conversationId ?? null
     })
-    if (generation !== loadGeneration) return
-    data.value = result
-    if (result.kind === 'text') {
-      markDiskSynced(result.path || target, result.text ?? '')
+    if (generation !== loadGeneration || isUnmounted) return
+    const loadedPath = result.path || target
+    const retained = !options?.discardDraft ? retainedDrafts.get(loadedPath) : undefined
+    if (retained && result.kind === 'text') {
+      const isConflict = retained.conflict || (result.text ?? '') !== retained.diskText
+      lastPersistedPath = loadedPath
+      lastPersistedText = isConflict ? retained.diskText : (result.text ?? '')
+      lastPersistedMtimeMs = isConflict ? retained.baseMtimeMs : result.mtimeMs
+      data.value = {
+        ...result,
+        text: retained.text,
+        size: estimateUtf8ByteLength(retained.text),
+        ...(isConflict && retained.baseMtimeMs !== undefined
+          ? { mtimeMs: retained.baseMtimeMs }
+          : {})
+      }
+      editorSaveState.value = 'error'
+      editorSaveConflict.value = isConflict
+      draftConflictDiskSnapshot.value = isConflict ? result : null
+      showDraftConflictDiff.value = false
     } else {
-      clearEditorSaveTimers()
-      editorSaveState.value = 'idle'
+      data.value = result
+      if (result.kind === 'text') {
+        markDiskSynced(loadedPath, result.text ?? '', result.mtimeMs)
+      } else {
+        clearEditorSaveTimers()
+        editorSaveState.value = 'idle'
+        editorSaveConflict.value = false
+        draftConflictDiskSnapshot.value = null
+        showDraftConflictDiff.value = false
+      }
     }
     // Default to preview for HTML/SVG/Markdown/JSON unless an explicit source line was clicked.
     viewMode.value = props.line && props.line > 0 ? 'source' : 'preview'
@@ -2111,8 +2539,19 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  if (editorSaveState.value === 'dirty' && data.value?.kind === 'text' && !isCanvasLocked.value) {
-    void persistMarkdownSnapshot(resolvedPath.value, data.value.text ?? '', data.value.mtimeMs)
+  isUnmounted = true
+  canvasOpToken += 1
+  if (
+    hasUnsavedLocalDraft(resolvedPath.value) &&
+    !editorSaveConflict.value &&
+    data.value?.kind === 'text' &&
+    !isCanvasLocked.value
+  ) {
+    const expectedMtime =
+      resolvedPath.value === lastPersistedPath && lastPersistedMtimeMs !== undefined
+        ? lastPersistedMtimeMs
+        : data.value.mtimeMs
+    void persistMarkdownSnapshot(resolvedPath.value, data.value.text ?? '', expectedMtime)
   }
   clearEditorSaveTimers()
   loadGeneration += 1
@@ -2493,7 +2932,7 @@ function adjustZoom(delta: number): void {
               <p class="WorkspaceFileViewer-StateTitle">{{ error }}</p>
               <p class="WorkspaceFileViewer-StatePath">{{ resolvedPath }}</p>
               <div class="WorkspaceFileViewer-StateActions">
-                <TxButton size="sm" variant="secondary" @click="loadFile">
+                <TxButton size="sm" variant="secondary" @click="loadFile()">
                   {{ t('home.workspace.retry') }}
                 </TxButton>
                 <TxButton size="sm" variant="secondary" @click="revealInFolder">
@@ -2513,6 +2952,30 @@ function adjustZoom(delta: number): void {
               >
                 <div
                   v-for="(diffLine, idx) in canvasApplied.diff.lines"
+                  :key="idx"
+                  class="WorkspaceFileViewer-CanvasDiffLine"
+                  :class="`is-${diffLine.type}`"
+                >
+                  <span class="WorkspaceFileViewer-CanvasDiffNo" aria-hidden="true">
+                    {{ diffLine.newLine ?? diffLine.oldLine ?? '' }}
+                  </span>
+                  <span class="WorkspaceFileViewer-CanvasDiffSign" aria-hidden="true">
+                    {{ diffLine.type === 'add' ? '+' : diffLine.type === 'del' ? '−' : ' ' }}
+                  </span>
+                  <span class="WorkspaceFileViewer-CanvasDiffText">{{ diffLine.text || ' ' }}</span>
+                </div>
+              </div>
+
+              <!-- Inline Draft Conflict Diff View (disk vs unsaved local draft) -->
+              <div
+                v-else-if="showDraftConflictDiff && draftConflictDiff"
+                class="WorkspaceFileViewer-CanvasDiff"
+                role="region"
+                :aria-label="t('home.sidePanel.editorConflictDiff')"
+                data-testid="file-viewer-conflict-diff"
+              >
+                <div
+                  v-for="(diffLine, idx) in draftConflictDiff.lines"
                   :key="idx"
                   class="WorkspaceFileViewer-CanvasDiffLine"
                   :class="`is-${diffLine.type}`"
@@ -2602,6 +3065,7 @@ function adjustZoom(delta: number): void {
                 data-testid="file-viewer-markdown"
               >
                 <TxMarkdownEditor
+                  ref="markdownEditorRef"
                   :key="resolvedPath"
                   class="WorkspaceFileViewer-MarkdownEditor"
                   :model-value="data.text ?? ''"
@@ -2914,6 +3378,18 @@ function adjustZoom(delta: number): void {
                   </button>
 
                   <button
+                    v-if="canvasConflictRefreshAvailable"
+                    type="button"
+                    class="WorkspaceFileViewer-DockBtn"
+                    :disabled="canvasUndoing"
+                    data-testid="file-viewer-canvas-conflict-refresh"
+                    @click="refreshAfterCanvasConflict"
+                  >
+                    <span class="i-ri-refresh-line" aria-hidden="true" />
+                    <span>{{ t('home.sidePanel.canvasRefresh') }}</span>
+                  </button>
+
+                  <button
                     type="button"
                     class="WorkspaceFileViewer-DockBtn is-primary"
                     :disabled="canvasUndoing"
@@ -2930,6 +3406,50 @@ function adjustZoom(delta: number): void {
         </div>
       </Transition>
     </div>
+
+    <!-- Disk Conflict Resolution Banner (explicit compare, reload, or overwrite) -->
+    <section
+      v-if="editorSaveConflict && !isCanvasLocked"
+      class="WorkspaceFileViewer-ConflictBanner"
+      role="alert"
+      data-testid="file-viewer-conflict-banner"
+    >
+      <div class="WorkspaceFileViewer-ConflictLead">
+        <span class="i-ri-error-warning-line WorkspaceFileViewer-ConflictIcon" aria-hidden="true" />
+        <span class="WorkspaceFileViewer-ConflictText">
+          {{ t('home.sidePanel.editorSaveConflict') }}
+        </span>
+      </div>
+      <div class="WorkspaceFileViewer-ConflictActions">
+        <button
+          v-if="draftConflictDiskSnapshot"
+          type="button"
+          class="WorkspaceFileViewer-ConflictBtn"
+          :class="{ 'is-active': showDraftConflictDiff }"
+          :aria-pressed="showDraftConflictDiff"
+          data-testid="file-viewer-conflict-diff-toggle"
+          @click="showDraftConflictDiff = !showDraftConflictDiff"
+        >
+          {{ t('home.sidePanel.editorConflictDiff') }}
+        </button>
+        <button
+          type="button"
+          class="WorkspaceFileViewer-ConflictBtn"
+          data-testid="file-viewer-conflict-reload"
+          @click="reloadFromConflictingDisk"
+        >
+          {{ t('home.sidePanel.editorConflictReload') }}
+        </button>
+        <button
+          type="button"
+          class="WorkspaceFileViewer-ConflictBtn is-danger"
+          data-testid="file-viewer-conflict-overwrite"
+          @click="overwriteDiskWithLocalDraft"
+        >
+          {{ t('home.sidePanel.editorConflictOverwrite') }}
+        </button>
+      </div>
+    </section>
 
     <!-- Inline Markdown Review Comment Composer (shown only when adding a comment) -->
     <section
@@ -3122,7 +3642,7 @@ function adjustZoom(delta: number): void {
             class="WorkspaceFileViewer-SaveBadge is-error"
             :title="t('home.sidePanel.editorSaveRetry')"
             data-testid="file-viewer-save-status"
-            @click="saveMarkdownEdits({ force: true, allowOverwriteOnConflict: true })"
+            @click="saveMarkdownEdits({ force: true })"
           >
             {{ t('home.sidePanel.editorSaveFailed') }}
           </button>
@@ -3217,7 +3737,7 @@ function adjustZoom(delta: number): void {
             :title="t('home.sidePanel.reload')"
             :aria-label="t('home.sidePanel.reload')"
             data-testid="file-viewer-refresh"
-            @click="loadFile"
+            @click="loadFile()"
           >
             <span class="i-ri-refresh-line" aria-hidden="true" />
           </button>
@@ -3247,7 +3767,7 @@ function adjustZoom(delta: number): void {
             <template v-if="supportsPreviewToggle">
               <TxDropdownItem
                 v-if="aiActionsEnabled && isMarkdown && viewMode === 'preview'"
-                :disabled="isCanvasLocked"
+                :disabled="isCanvasLocked || isTruncatedText"
                 data-testid="file-viewer-improve-full"
                 @select="runMoreAction(() => void openCanvasCompose({ scope: 'document' }))"
               >
@@ -4949,6 +5469,73 @@ function adjustZoom(delta: number): void {
   align-items: center;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.WorkspaceFileViewer-ConflictBanner {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-top: 1px solid var(--shell-border);
+  background: var(--shell-danger-soft);
+  color: var(--shell-text-primary);
+  font-size: 11.5px;
+}
+
+.WorkspaceFileViewer-ConflictLead {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.WorkspaceFileViewer-ConflictIcon {
+  flex: none;
+  color: var(--shell-danger);
+  font-size: 14px;
+}
+
+.WorkspaceFileViewer-ConflictText {
+  line-height: 1.35;
+}
+
+.WorkspaceFileViewer-ConflictActions {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+  align-items: center;
+}
+
+.WorkspaceFileViewer-ConflictBtn {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--shell-border);
+  border-radius: 6px;
+  background: var(--shell-surface);
+  color: var(--shell-text-primary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover,
+  &.is-active {
+    background: var(--shell-surface-2);
+  }
+
+  &.is-danger {
+    border-color: transparent;
+    background: var(--shell-danger);
+    color: var(--shell-on-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: 1px;
+  }
 }
 
 .WorkspaceFileViewer-SaveBadge {

@@ -1,6 +1,23 @@
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
 import { formatQuotedSnippet } from './workspace-file-tree'
 
+export interface SourceRange {
+  start: number
+  end: number
+}
+
+export interface LocateSelectionOptions {
+  /** Explicit character offsets into `source` when captured from the editor selection. */
+  sourceRange?: SourceRange | null
+}
+
+export interface ApplyCanvasRevisionOptions {
+  /** Explicit edit scope; `'document'` replaces the entire file, `'selection'` requires a source match. */
+  scope?: 'selection' | 'document'
+  /** Explicit character offsets into `source` when captured from the editor selection. */
+  sourceRange?: SourceRange | null
+}
+
 export interface SourceSelectionMatch {
   start: number
   end: number
@@ -31,13 +48,21 @@ export interface CanvasDiffSummary {
 export interface CanvasTurnBaseline {
   knownMessageIds: ReadonlySet<string>
   initialCount: number
+  /** Exact prompt submitted by this Canvas request to bind its own user/assistant turn. */
+  requestPrompt?: string
+  /** Optional matched user message id once observed. */
+  boundUserMessageId?: string
+}
+
+export interface MessageFileWriteInspection {
+  running: boolean
+  completedCount: number
+  unknownRunning: boolean
+  unknownCompletedCount: number
 }
 
 const REVISION_HEADING_CUE_RE =
   /(?:润色后|优化后|修改后|改写后|修订后|完整文本|更新后|最终版本|revised|polished|updated|improved|rewritten)/i
-
-const META_REPLY_CUE_RE =
-  /(?:^|\n)\s*(?:#{1,4}\s*(?:修改|优化|润色|建议|说明|总结|改动|changes|summary|suggestions)|(?:主要改动|修改说明|优化说明|变更说明|Changes made|Summary of changes)\s*[:：]|[-*]\s*["“「][^"\n]+["”」]\s*(?:->|→))/im
 
 const CLAIMED_DISK_UPDATE_RE =
   /(?:已直接更新|已更新文件|已落盘|文件已更新|已将修改写入|已写入文件|工具返回[\s\S]{0,24}success|updated the file|saved to disk|written to disk|file has been updated)/i
@@ -135,14 +160,307 @@ function splitSourceLineSpans(source: string): SourceLineSpan[] {
   return spans
 }
 
+interface AtomicInlineSpan {
+  rawStart: number
+  rawEnd: number
+  normStart: number
+  normEnd: number
+}
+
+interface PairedInlineSpan {
+  openStart: number
+  openEnd: number
+  closeStart: number
+  closeEnd: number
+  innerNormStart: number
+  innerNormEnd: number
+}
+
+interface NormalizedLineOffsetMap {
+  text: string
+  rawStarts: number[]
+  rawEnds: number[]
+  atomicSpans: AtomicInlineSpan[]
+  pairedSpans: PairedInlineSpan[]
+}
+
+function normalizeInlineChar(ch: string): string {
+  if (ch === '“' || ch === '”' || ch === '「' || ch === '」' || ch === '『' || ch === '』') {
+    return '"'
+  }
+  if (ch === '‘' || ch === '’') return "'"
+  if (ch === '—' || ch === '–') return '-'
+  return ch
+}
+
+function findBalancedInlinePairs(
+  rawLine: string,
+  contentStart: number,
+  skipRanges: readonly SourceRange[]
+): Array<{ openStart: number; openEnd: number; closeStart: number; closeEnd: number }> {
+  const isSkipped = (idx: number): boolean =>
+    skipRanges.some((range) => idx >= range.start && idx < range.end)
+  const stack: Array<{ marker: string; start: number; end: number }> = []
+  const pairs: Array<{ openStart: number; openEnd: number; closeStart: number; closeEnd: number }> =
+    []
+
+  let i = contentStart
+  while (i < rawLine.length) {
+    if (isSkipped(i)) {
+      i += 1
+      continue
+    }
+    const ch = rawLine[i]!
+    if (ch !== '*' && ch !== '_' && ch !== '`' && ch !== '~') {
+      i += 1
+      continue
+    }
+    let j = i
+    while (j < rawLine.length && rawLine[j] === ch && !isSkipped(j)) {
+      j += 1
+    }
+    const marker = rawLine.slice(i, j)
+    let matchedIdx = -1
+    for (let s = stack.length - 1; s >= 0; s -= 1) {
+      if (stack[s]!.marker === marker) {
+        matchedIdx = s
+        break
+      }
+    }
+    if (matchedIdx >= 0) {
+      const open = stack[matchedIdx]!
+      stack.splice(matchedIdx)
+      if (i > open.end) {
+        pairs.push({
+          openStart: open.start,
+          openEnd: open.end,
+          closeStart: i,
+          closeEnd: j
+        })
+      }
+    } else {
+      stack.push({ marker, start: i, end: j })
+    }
+    i = j
+  }
+  return pairs
+}
+
+function buildNormalizedLineOffsetMap(rawLine: string): NormalizedLineOffsetMap {
+  let contentStart = 0
+  const prefixPatterns = [/^\s*(?:>\s*)+/, /^\s*#{1,6}\s+/, /^\s*(?:[-*+]|\d+\.)\s+/]
+  for (const re of prefixPatterns) {
+    const match = re.exec(rawLine.slice(contentStart))
+    if (match) {
+      contentStart += match[0].length
+    }
+  }
+
+  // Locate inline Markdown links and images first so formatting markers inside URLs are ignored.
+  const linkTokenRe = /!?\[([^\]]*)\]\([^)]*\)/g
+  linkTokenRe.lastIndex = contentStart
+  const linkTokens: Array<{ start: number; end: number; labelStart: number; labelEnd: number }> = []
+  let linkMatch: RegExpExecArray | null
+  while ((linkMatch = linkTokenRe.exec(rawLine)) !== null) {
+    const tokenStart = linkMatch.index
+    const tokenEnd = tokenStart + linkMatch[0].length
+    const bracketOffset = linkMatch[0].startsWith('!') ? 2 : 1
+    const labelStart = tokenStart + bracketOffset
+    const labelEnd = labelStart + (linkMatch[1]?.length ?? 0)
+    linkTokens.push({ start: tokenStart, end: tokenEnd, labelStart, labelEnd })
+  }
+
+  const rawPairs = findBalancedInlinePairs(
+    rawLine,
+    contentStart,
+    linkTokens.map((t) => ({ start: t.start, end: t.end }))
+  )
+
+  const chars: string[] = []
+  const rawStarts: number[] = []
+  const rawEnds: number[] = []
+  const atomicSpans: AtomicInlineSpan[] = []
+
+  const appendTextSlice = (sliceStart: number, sliceEnd: number): void => {
+    let idx = sliceStart
+    while (idx < sliceEnd) {
+      const ch = rawLine[idx]!
+      if (ch === '*' || ch === '_' || ch === '`' || ch === '~') {
+        idx += 1
+        continue
+      }
+      if (/\s/.test(ch)) {
+        const wsStart = idx
+        while (idx < sliceEnd && /\s/.test(rawLine[idx]!)) {
+          idx += 1
+        }
+        if (chars.length > 0 && chars[chars.length - 1] !== ' ') {
+          chars.push(' ')
+          rawStarts.push(wsStart)
+          rawEnds.push(idx)
+        } else if (chars.length > 0 && chars[chars.length - 1] === ' ') {
+          rawEnds[rawEnds.length - 1] = idx
+        }
+        continue
+      }
+      chars.push(normalizeInlineChar(ch))
+      rawStarts.push(idx)
+      rawEnds.push(idx + 1)
+      idx += 1
+    }
+  }
+
+  let cursor = contentStart
+  for (const token of linkTokens) {
+    if (token.start > cursor) {
+      appendTextSlice(cursor, token.start)
+    }
+    const normStart = chars.length
+    appendTextSlice(token.labelStart, token.labelEnd)
+    const normEnd = chars.length
+    if (normEnd > normStart) {
+      atomicSpans.push({
+        rawStart: token.start,
+        rawEnd: token.end,
+        normStart,
+        normEnd
+      })
+    }
+    cursor = token.end
+  }
+  if (cursor < rawLine.length) {
+    appendTextSlice(cursor, rawLine.length)
+  }
+
+  // Trim trailing normalized space if present.
+  while (chars.length > 0 && chars[chars.length - 1] === ' ') {
+    chars.pop()
+    rawStarts.pop()
+    rawEnds.pop()
+  }
+
+  const pairedSpans: PairedInlineSpan[] = []
+  for (const pair of rawPairs) {
+    let innerNormStart = -1
+    let innerNormEnd = -1
+    for (let k = 0; k < rawStarts.length; k += 1) {
+      const s = rawStarts[k]!
+      const e = rawEnds[k]!
+      if (s >= pair.openEnd && e <= pair.closeStart) {
+        if (innerNormStart === -1) innerNormStart = k
+        innerNormEnd = k + 1
+      }
+    }
+    if (innerNormStart >= 0 && innerNormEnd > innerNormStart) {
+      pairedSpans.push({
+        openStart: pair.openStart,
+        openEnd: pair.openEnd,
+        closeStart: pair.closeStart,
+        closeEnd: pair.closeEnd,
+        innerNormStart,
+        innerNormEnd
+      })
+    }
+  }
+
+  return {
+    text: chars.join(''),
+    rawStarts,
+    rawEnds,
+    atomicSpans,
+    pairedSpans
+  }
+}
+
+/**
+ * Maps a normalized substring back to exact character offsets inside `rawLine`.
+ * Absorbs balanced Markdown formatting pairs completely contained within the selection and
+ * declines (`null`) ambiguous duplicates or matches straddling formatting/link boundaries.
+ */
+function mapNormalizedSubstringToRawSpan(
+  rawLine: string,
+  needle: string,
+  mode: 'any' | 'prefix' | 'suffix'
+): SourceRange | null {
+  if (!needle) return null
+  const mapped = buildNormalizedLineOffsetMap(rawLine)
+  if (!mapped.text) return null
+
+  let matchStart = -1
+  let matchEnd = -1
+  if (mode === 'prefix') {
+    if (!mapped.text.startsWith(needle)) return null
+    matchStart = 0
+    matchEnd = needle.length
+  } else if (mode === 'suffix') {
+    if (!mapped.text.endsWith(needle)) return null
+    matchStart = mapped.text.length - needle.length
+    matchEnd = mapped.text.length
+  } else {
+    const first = mapped.text.indexOf(needle)
+    if (first < 0) return null
+    if (mapped.text.indexOf(needle, first + 1) >= 0) return null
+    matchStart = first
+    matchEnd = first + needle.length
+  }
+
+  if (matchStart < 0 || matchEnd <= matchStart || matchEnd > mapped.rawEnds.length) {
+    return null
+  }
+
+  let start = mapped.rawStarts[matchStart]!
+  let end = mapped.rawEnds[matchEnd - 1]!
+
+  for (const atomic of mapped.atomicSpans) {
+    if (matchStart <= atomic.normStart && matchEnd >= atomic.normEnd) {
+      start = Math.min(start, atomic.rawStart)
+      end = Math.max(end, atomic.rawEnd)
+    } else if (matchStart < atomic.normEnd && matchEnd > atomic.normStart) {
+      return null
+    }
+  }
+
+  for (const pair of mapped.pairedSpans) {
+    if (matchStart <= pair.innerNormStart && matchEnd >= pair.innerNormEnd) {
+      start = Math.min(start, pair.openStart)
+      end = Math.max(end, pair.closeEnd)
+    } else if (matchStart >= pair.innerNormStart && matchEnd <= pair.innerNormEnd) {
+      // Selection stays strictly inside the paired run; delimiters remain balanced outside.
+      continue
+    } else if (matchStart < pair.innerNormEnd && matchEnd > pair.innerNormStart) {
+      // Crosses one delimiter without its matching partner -> decline to avoid broken Markdown.
+      return null
+    }
+  }
+
+  return start < end ? { start, end } : null
+}
+
+function sourceSliceMatchesSelection(slice: string, normalizedSelected: string): boolean {
+  const normalizedSlice = slice.replace(/\r\n/g, '\n').trim()
+  if (!normalizedSlice) return false
+  if (normalizedSlice === normalizedSelected) return true
+  const sliceLines = normalizedSlice
+    .split('\n')
+    .map((line) => normalizeMarkdownMatchText(line))
+    .filter(Boolean)
+  const selLines = normalizedSelected
+    .split('\n')
+    .map((line) => normalizeMarkdownMatchText(line))
+    .filter(Boolean)
+  if (sliceLines.length === 0 || sliceLines.length !== selLines.length) return false
+  return sliceLines.every((line, idx) => line === selLines[idx])
+}
+
 /**
  * Locates a rendered preview text selection inside raw Markdown / text source.
- * Supports exact matches, multi-paragraph selections across blank lines, Markdown syntax
- * differences (`#`, `**`, smart quotes), and partial single-line selections.
+ * Honors an explicit `sourceRange` when available; otherwise requires a single unambiguous match
+ * and maps partial selections back to exact source boundaries without expanding to whole lines.
  */
 export function locateSelectionInSource(
   source: string,
-  selectedText: string
+  selectedText: string,
+  options?: LocateSelectionOptions
 ): SourceSelectionMatch | null {
   if (!source || !selectedText.trim()) return null
 
@@ -157,7 +475,6 @@ export function locateSelectionInSource(
     if (nonEmptySource.length === 0) return true
     const covered = nonEmptySource.filter((line) => line.start >= start && line.end <= end).length
     if (covered / nonEmptySource.length >= 0.85) return true
-    // Also treat selecting everything after a single top-level H1 heading as body-full.
     if (
       nonEmptySource.length >= 2 &&
       /^\s*#\s+/.test(nonEmptySource[0]!.raw) &&
@@ -168,18 +485,43 @@ export function locateSelectionInSource(
     return false
   }
 
-  // Tier 1: Exact substring match (fast path for plain text or identical raw markdown).
+  // Tier 0: Explicit source range captured from the editor selection (resolves duplicate paragraphs).
+  const explicitRange = options?.sourceRange
+  if (
+    explicitRange &&
+    Number.isInteger(explicitRange.start) &&
+    Number.isInteger(explicitRange.end) &&
+    explicitRange.start >= 0 &&
+    explicitRange.end > explicitRange.start &&
+    explicitRange.end <= source.length
+  ) {
+    const slice = source.slice(explicitRange.start, explicitRange.end)
+    if (sourceSliceMatchesSelection(slice, normalizedSelected)) {
+      return {
+        start: explicitRange.start,
+        end: explicitRange.end,
+        isFullDocument: checkFullDoc(explicitRange.start, explicitRange.end)
+      }
+    }
+  }
+
+  // Tier 1: Unique exact substring match (reject duplicate matches when no source range is given).
   const exactIdx = source.indexOf(normalizedSelected)
   if (exactIdx >= 0) {
+    if (source.indexOf(normalizedSelected, exactIdx + 1) >= 0) {
+      return null
+    }
     const end = exactIdx + normalizedSelected.length
     return { start: exactIdx, end, isFullDocument: checkFullDoc(exactIdx, end) }
   }
 
-  // Also try exact match on LF-normalized text when source has CRLF.
+  // Also try unique exact match on LF-normalized text when source has CRLF.
   if (source.includes('\r\n')) {
     const lfIdx = normalizedSource.indexOf(normalizedSelected)
     if (lfIdx >= 0) {
-      // Map LF index back to CRLF index.
+      if (normalizedSource.indexOf(normalizedSelected, lfIdx + 1) >= 0) {
+        return null
+      }
       const prefix = normalizedSource.slice(0, lfIdx)
       const crCountBefore = (prefix.match(/\n/g) ?? []).length
       const matchedSlice = normalizedSource.slice(lfIdx, lfIdx + normalizedSelected.length)
@@ -200,59 +542,101 @@ export function locateSelectionInSource(
 
   if (selLines.length === 1) {
     const needle = selLines[0]!
-    // Prefer exact full-line normalized match first.
-    const exactLine = nonEmptySource.find((line) => line.stripped === needle)
-    if (exactLine) {
+    // Prefer unique exact full-line normalized match first.
+    const exactLines = nonEmptySource.filter((line) => line.stripped === needle)
+    if (exactLines.length === 1) {
+      const exactLine = exactLines[0]!
       return {
         start: exactLine.start,
         end: exactLine.end,
         isFullDocument: checkFullDoc(exactLine.start, exactLine.end)
       }
     }
-    // Partial substring inside one source line.
+    if (exactLines.length > 1) return null
+
+    // Partial substring inside one source line: map normalized offsets back to exact raw bounds.
+    const partialMatches: SourceRange[] = []
     for (const line of nonEmptySource) {
       const rawIdx = line.raw.indexOf(normalizedSelected)
       if (rawIdx >= 0) {
-        const start = line.start + rawIdx
-        const end = start + normalizedSelected.length
-        return { start, end, isFullDocument: false }
+        if (line.raw.indexOf(normalizedSelected, rawIdx + 1) >= 0) return null
+        partialMatches.push({
+          start: line.start + rawIdx,
+          end: line.start + rawIdx + normalizedSelected.length
+        })
+        continue
       }
       if (line.stripped.includes(needle)) {
-        return {
-          start: line.start,
-          end: line.end,
-          isFullDocument: checkFullDoc(line.start, line.end)
-        }
+        const mapped = mapNormalizedSubstringToRawSpan(line.raw, needle, 'any')
+        if (!mapped) return null
+        partialMatches.push({
+          start: line.start + mapped.start,
+          end: line.start + mapped.end
+        })
       }
     }
+    if (partialMatches.length === 1) {
+      const match = partialMatches[0]!
+      return {
+        start: match.start,
+        end: match.end,
+        isFullDocument: checkFullDoc(match.start, match.end)
+      }
+    }
+    return null
   }
 
-  // Contiguous non-empty line sequence match.
+  // Contiguous non-empty line sequence match (must be unique; partial boundary lines map exact offsets).
   if (selLines.length <= nonEmptySource.length) {
+    const windowMatches: SourceRange[] = []
     for (let i = 0; i <= nonEmptySource.length - selLines.length; i += 1) {
       let allMatch = true
+      let firstOffset = 0
+      let lastEndOffset = nonEmptySource[i + selLines.length - 1]!.raw.length
       for (let j = 0; j < selLines.length; j += 1) {
-        const srcLine = nonEmptySource[i + j]!.stripped
+        const span = nonEmptySource[i + j]!
+        const srcLine = span.stripped
         const selLine = selLines[j]!
         if (srcLine === selLine) continue
-        // Allow partial boundary match on the very first or very last selected line.
-        const isFirst = j === 0 && srcLine.endsWith(selLine)
-        const isLast = j === selLines.length - 1 && srcLine.startsWith(selLine)
-        if (!isFirst && !isLast) {
-          allMatch = false
-          break
+        if (j === 0 && srcLine.endsWith(selLine)) {
+          const mapped = mapNormalizedSubstringToRawSpan(span.raw, selLine, 'suffix')
+          if (!mapped) {
+            allMatch = false
+            break
+          }
+          firstOffset = mapped.start
+          continue
         }
+        if (j === selLines.length - 1 && srcLine.startsWith(selLine)) {
+          const mapped = mapNormalizedSubstringToRawSpan(span.raw, selLine, 'prefix')
+          if (!mapped) {
+            allMatch = false
+            break
+          }
+          lastEndOffset = mapped.end
+          continue
+        }
+        allMatch = false
+        break
       }
       if (allMatch) {
         const firstSpan = nonEmptySource[i]!
         const lastSpan = nonEmptySource[i + selLines.length - 1]!
-        return {
-          start: firstSpan.start,
-          end: lastSpan.end,
-          isFullDocument: checkFullDoc(firstSpan.start, lastSpan.end)
-        }
+        windowMatches.push({
+          start: firstSpan.start + firstOffset,
+          end: lastSpan.start + lastEndOffset
+        })
       }
     }
+    if (windowMatches.length === 1) {
+      const match = windowMatches[0]!
+      return {
+        start: match.start,
+        end: match.end,
+        isFullDocument: checkFullDoc(match.start, match.end)
+      }
+    }
+    if (windowMatches.length > 1) return null
   }
 
   // Tier 3: First + last line anchor match (handles soft line wraps inside a multi-paragraph selection).
@@ -260,19 +644,33 @@ export function locateSelectionInSource(
     const firstNeedle = selLines[0]!
     const lastNeedle = selLines[selLines.length - 1]!
     const startCandidates = nonEmptySource.filter(
-      (line) => line.stripped === firstNeedle || line.stripped.includes(firstNeedle)
+      (line) => line.stripped === firstNeedle || line.stripped.endsWith(firstNeedle)
     )
     const endCandidates = nonEmptySource.filter(
-      (line) => line.stripped === lastNeedle || line.stripped.includes(lastNeedle)
+      (line) => line.stripped === lastNeedle || line.stripped.startsWith(lastNeedle)
     )
     if (startCandidates.length === 1 && endCandidates.length === 1) {
       const firstSpan = startCandidates[0]!
       const lastSpan = endCandidates[0]!
       if (lastSpan.index >= firstSpan.index) {
+        let startOffset = 0
+        if (firstSpan.stripped !== firstNeedle) {
+          const mapped = mapNormalizedSubstringToRawSpan(firstSpan.raw, firstNeedle, 'suffix')
+          if (!mapped) return null
+          startOffset = mapped.start
+        }
+        let endOffset = lastSpan.raw.length
+        if (lastSpan.stripped !== lastNeedle) {
+          const mapped = mapNormalizedSubstringToRawSpan(lastSpan.raw, lastNeedle, 'prefix')
+          if (!mapped) return null
+          endOffset = mapped.end
+        }
+        const start = firstSpan.start + startOffset
+        const end = lastSpan.start + endOffset
         return {
-          start: firstSpan.start,
-          end: lastSpan.end,
-          isFullDocument: checkFullDoc(firstSpan.start, lastSpan.end)
+          start,
+          end,
+          isFullDocument: checkFullDoc(start, end)
         }
       }
     }
@@ -423,15 +821,9 @@ export function extractCanvasRevisionFromReply(
     return cleaned || null
   }
 
-  // 3. Pure direct rewrite without fences (reject commentary/status-report replies fail-closed).
-  if (META_REPLY_CUE_RE.test(trimmed) || isClaimedDiskUpdateReply(trimmed)) return null
-
-  const selLen = Math.max(1, options.selectedText.trim().length)
-  if (trimmed.length > Math.max(4000, selLen * 4)) return null
-  if (trimmed.length < Math.min(4, selLen * 0.2)) return null
-
-  const cleaned = stripAccidentalBlockquotePrefix(trimmed, options.selectedText)
-  return cleaned || null
+  // Fail closed for automatic writes: unstructured prose or refusals are surfaced for review
+  // in chat rather than auto-written over the document.
+  return null
 }
 
 /**
@@ -441,7 +833,8 @@ export function extractCanvasRevisionFromReply(
 export function applyCanvasRevisionToSource(
   source: string,
   selectedText: string,
-  revision: string
+  revision: string,
+  options?: ApplyCanvasRevisionOptions
 ): CanvasApplyResult | null {
   const cleanRevision = revision.replace(/\r\n/g, '\n').trim()
   if (!cleanRevision) return null
@@ -450,41 +843,7 @@ export function applyCanvasRevisionToSource(
   const hadTrailingNewline = source.endsWith('\n')
   const formattedRevision = eol === '\r\n' ? cleanRevision.replace(/\n/g, '\r\n') : cleanRevision
 
-  const match = locateSelectionInSource(source, selectedText)
-  if (match) {
-    let effectiveStart = match.start
-    // If the original document starts with a heading (e.g. `# 无名`) before the selection,
-    // and the AI returned the full document including that same heading, replace from 0 so
-    // the heading is not duplicated.
-    if (effectiveStart > 0) {
-      const prefixTrimmed = source.slice(0, effectiveStart).trim()
-      const firstRevLine = cleanRevision.split('\n')[0]?.trim() ?? ''
-      if (
-        prefixTrimmed &&
-        !prefixTrimmed.includes('\n') &&
-        normalizeMarkdownMatchText(prefixTrimmed) === normalizeMarkdownMatchText(firstRevLine)
-      ) {
-        effectiveStart = 0
-      }
-    }
-
-    let nextContent = source.slice(0, effectiveStart) + formattedRevision + source.slice(match.end)
-    if (hadTrailingNewline && !nextContent.endsWith(eol)) {
-      nextContent += eol
-    }
-
-    return {
-      nextContent,
-      changed: nextContent !== source,
-      mode: match.isFullDocument || effectiveStart === 0 ? 'document' : 'selection'
-    }
-  }
-
-  // Fallback: if selection could not be matched character-by-character but covered virtually the
-  // entire document, allow full-document replacement cleanly.
-  const normSource = normalizeMarkdownMatchText(source)
-  const normSel = normalizeMarkdownMatchText(selectedText)
-  if (normSource && normSel && normSel.length / normSource.length >= 0.8) {
+  if (options?.scope === 'document') {
     let nextContent = formattedRevision
     if (hadTrailingNewline && !nextContent.endsWith(eol)) {
       nextContent += eol
@@ -496,7 +855,39 @@ export function applyCanvasRevisionToSource(
     }
   }
 
-  return null
+  const match = locateSelectionInSource(
+    source,
+    selectedText,
+    options?.sourceRange ? { sourceRange: options.sourceRange } : undefined
+  )
+  if (!match) return null
+
+  let effectiveStart = match.start
+  // If the original document starts with a heading (e.g. `# 无名`) before the selection,
+  // and the AI returned the full document including that same heading, replace from 0 so
+  // the heading is not duplicated.
+  if (effectiveStart > 0) {
+    const prefixTrimmed = source.slice(0, effectiveStart).trim()
+    const firstRevLine = cleanRevision.split('\n')[0]?.trim() ?? ''
+    if (
+      prefixTrimmed &&
+      !prefixTrimmed.includes('\n') &&
+      normalizeMarkdownMatchText(prefixTrimmed) === normalizeMarkdownMatchText(firstRevLine)
+    ) {
+      effectiveStart = 0
+    }
+  }
+
+  let nextContent = source.slice(0, effectiveStart) + formattedRevision + source.slice(match.end)
+  if (hadTrailingNewline && !nextContent.endsWith(eol)) {
+    nextContent += eol
+  }
+
+  return {
+    nextContent,
+    changed: nextContent !== source,
+    mode: match.isFullDocument || effectiveStart === 0 ? 'document' : 'selection'
+  }
 }
 
 const MAX_LCS_LINES = 1200
@@ -710,66 +1101,238 @@ export function formatCanvasImprovePrompt(options: {
   return header ? `${header}\n${quote}\n\n${directive}` : `${quote}\n\n${directive}`
 }
 
+function normalizeTurnPrompt(raw: string | undefined): string {
+  return (raw ?? '').replace(/\r\n/g, '\n').replace(/\s+/g, ' ').trim()
+}
+
 /**
- * Finds the assistant message spawned after `baseline` was captured when a Canvas action fired.
- * Avoids matching pre-existing assistant turns even if their IDs are re-minted on snapshot sync.
+ * Finds the assistant message belonging strictly to the user turn initiated by this Canvas request.
+ * Never accepts replies belonging to a prior known turn or an unrelated concurrent/queued prompt.
  */
 export function findTargetAssistantMessage(
   messages: readonly ConversationMessage[],
   baseline: CanvasTurnBaseline
 ): ConversationMessage | null {
-  // Walk backward for the latest assistant message introduced after baseline.
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
+  const expectedPrompt = normalizeTurnPrompt(baseline.requestPrompt)
+  let matchedUserIdx = -1
+
+  if (baseline.boundUserMessageId) {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const msg = messages[i]!
+      if (msg.role === 'user' && msg.id === baseline.boundUserMessageId) {
+        matchedUserIdx = i
+        break
+      }
+    }
+  } else if (expectedPrompt) {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const msg = messages[i]!
+      if (msg.role !== 'user' || baseline.knownMessageIds.has(msg.id)) continue
+      const content = normalizeTurnPrompt(msg.content)
+      if (!content) continue
+      if (content === expectedPrompt || content.includes(expectedPrompt)) {
+        matchedUserIdx = i
+        break
+      }
+    }
+  } else {
+    // Without an explicit request prompt, still require a NEW user turn after baseline so an
+    // unrelated in-flight assistant reply to a prior known user turn is never accepted.
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const msg = messages[i]!
+      if (msg.role === 'user' && baseline.knownMessageIds.has(msg.id)) break
+      if (msg.role === 'user' && !baseline.knownMessageIds.has(msg.id)) {
+        matchedUserIdx = i
+        break
+      }
+    }
+  }
+
+  if (matchedUserIdx < 0) return null
+
+  let candidate: ConversationMessage | null = null
+  for (let i = matchedUserIdx + 1; i < messages.length; i += 1) {
     const msg = messages[i]!
-    if (msg.role === 'user' && baseline.knownMessageIds.has(msg.id)) {
-      break
+    if (msg.role === 'user') break
+    if (msg.role === 'assistant' && !baseline.knownMessageIds.has(msg.id)) {
+      candidate = msg
     }
-    if (msg.role !== 'assistant') continue
+  }
+  return candidate
+}
+
+function normalizeComparableToolPath(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^['"`]|['"`]$/g, '')
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/\/+/g, '/')
+    .toLowerCase()
+}
+
+function collectPathsFromJsonValue(value: unknown, out: Set<string>, depth = 0): void {
+  if (depth > 4 || value === null || value === undefined) return
+  if (Array.isArray(value)) {
+    for (const item of value) collectPathsFromJsonValue(item, out, depth + 1)
+    return
+  }
+  if (typeof value !== 'object') return
+  const record = value as Record<string, unknown>
+  const pathKeys = [
+    'path',
+    'filePath',
+    'file_path',
+    'targetPath',
+    'target_path',
+    'filename',
+    'file'
+  ]
+  for (const key of pathKeys) {
+    const candidate = record[key]
+    if (typeof candidate === 'string' && candidate.trim()) {
+      out.add(candidate.trim())
+    }
+  }
+  for (const nestedKey of ['files', 'edits', 'operations', 'patches']) {
+    if (nestedKey in record) {
+      collectPathsFromJsonValue(record[nestedKey], out, depth + 1)
+    }
+  }
+}
+
+function extractToolTargetPaths(part: {
+  input?: string
+  summary?: string
+  output?: string
+}): string[] {
+  const paths = new Set<string>()
+  const rawInput = typeof part.input === 'string' ? part.input.trim() : ''
+  if (rawInput) {
+    if (rawInput.startsWith('{') || rawInput.startsWith('[')) {
+      try {
+        collectPathsFromJsonValue(JSON.parse(rawInput), paths)
+      } catch {
+        // Fallback regex below handles streaming/truncated JSON input.
+      }
+    }
+    const jsonFieldRe =
+      /"(?:path|filePath|file_path|targetPath|target_path|filename|file)"\s*:\s*"([^"]+)"/g
+    let m: RegExpExecArray | null
+    while ((m = jsonFieldRe.exec(rawInput)) !== null) {
+      if (m[1]?.trim()) paths.add(m[1].trim())
+    }
+  }
+
+  const combined = `${rawInput}\n${part.summary ?? ''}`
+  const patchRe = /^\s*(?:\*\*\*\s+(?:Update|Add|Delete)\s+File:|\+\+\+\s+(?:b\/)?)\s*([^\r\n]+)/gm
+  let pm: RegExpExecArray | null
+  while ((pm = patchRe.exec(combined)) !== null) {
+    const candidate = pm[1]?.trim()
+    if (candidate && candidate !== '/dev/null') {
+      paths.add(candidate)
+    }
+  }
+
+  return Array.from(paths)
+}
+
+function normalizeTargetIdentity(target?: string | CanvasFileIdentity): CanvasFileIdentity | null {
+  if (!target) return null
+  if (typeof target === 'string') {
+    const trimmed = target.trim()
+    return trimmed ? { fileName: trimmed } : null
+  }
+  if (!target.fileName.trim() && !target.displayPath?.trim() && !target.filePath?.trim()) {
+    return null
+  }
+  return target
+}
+
+function doesToolPathMatchIdentity(rawToolPath: string, identity: CanvasFileIdentity): boolean {
+  const toolPath = normalizeComparableToolPath(rawToolPath)
+  if (!toolPath) return false
+  const fullPath = identity.filePath ? normalizeComparableToolPath(identity.filePath) : ''
+  const displayPath = identity.displayPath ? normalizeComparableToolPath(identity.displayPath) : ''
+  const fileName = normalizeComparableToolPath(identity.fileName)
+
+  if (fullPath && toolPath === fullPath) return true
+  if (displayPath && toolPath === displayPath) return true
+
+  const toolHasDir = toolPath.includes('/')
+  if (toolHasDir) {
+    if (fullPath && (fullPath.endsWith(`/${toolPath}`) || toolPath.endsWith(`/${fullPath}`))) {
+      return true
+    }
     if (
-      !baseline.knownMessageIds.has(msg.id) &&
-      (i >= baseline.initialCount || msg.status === 'streaming')
+      displayPath &&
+      (displayPath.endsWith(`/${toolPath}`) || toolPath.endsWith(`/${displayPath}`))
     ) {
-      return msg
+      return true
     }
+    // When only basename was provided as identity, allow matching exact basename segment.
+    if (!fullPath && !displayPath && fileName && toolPath.endsWith(`/${fileName}`)) {
+      return true
+    }
+    return false
   }
-  // Fallback for adapters that re-index without preserving prior IDs.
-  if (messages.length > baseline.initialCount) {
-    const tail = messages[messages.length - 1]
-    if (tail?.role === 'assistant') return tail
-  }
-  return null
+
+  return Boolean(fileName && toolPath === fileName)
 }
 
 /**
- * Returns true if the assistant message contains a file-writing tool call (optionally matching
- * `targetFileName`), and distinguishes in-flight vs finished tool calls.
+ * Inspects file-writing tool calls on an assistant message against the currently open file.
+ * Confirmed target-path mismatches (e.g. `other.md` while `notes.md` is open) are ignored;
+ * tool calls whose target path cannot be parsed are tracked separately as unknown.
  */
 export function inspectMessageFileWrites(
   message: ConversationMessage,
-  targetFileName?: string
-): { running: boolean; completedCount: number } {
+  target?: string | CanvasFileIdentity
+): MessageFileWriteInspection {
   let running = false
   let completedCount = 0
-  const needle = targetFileName?.trim().toLowerCase() || ''
+  let unknownRunning = false
+  let unknownCompletedCount = 0
+  const identity = normalizeTargetIdentity(target)
+  const needles = identity ? buildFileNeedles(identity) : []
 
   for (const part of message.parts ?? []) {
     if (part.type !== 'tool-call') continue
     const isFileWrite = FILE_WRITE_TOOL_NAME_RE.test(part.name)
-    const haystack =
-      `${part.input ?? ''}\n${part.summary ?? ''}\n${part.output ?? ''}`.toLowerCase()
-    const touchesTarget = !needle || haystack.includes(needle)
-    if (!isFileWrite && !touchesTarget) continue
-    if (
-      !isFileWrite &&
-      !/(?:write|edit|patch|sed|cat\s*>|tee\s)/i.test(`${part.name} ${haystack}`)
-    ) {
-      continue
+    const haystack = `${part.input ?? ''}\n${part.summary ?? ''}\n${part.output ?? ''}`
+    const isWriteLike =
+      isFileWrite || /(?:write|edit|patch|sed|cat\s*>|tee\s)/i.test(`${part.name} ${haystack}`)
+    if (!isWriteLike) continue
+
+    let classification: 'match' | 'mismatch' | 'unknown'
+    if (!identity) {
+      classification = 'match'
+    } else {
+      const exposedPaths = extractToolTargetPaths(part)
+      if (exposedPaths.length > 0) {
+        classification = exposedPaths.some((p) => doesToolPathMatchIdentity(p, identity))
+          ? 'match'
+          : 'mismatch'
+      } else if (textMentionsFile(haystack, needles)) {
+        classification = 'match'
+      } else if (isFileWrite) {
+        classification = 'unknown'
+      } else {
+        classification = 'mismatch'
+      }
     }
-    if (part.status === 'running') running = true
-    else if (part.status === 'done') completedCount += 1
+
+    if (classification === 'mismatch') continue
+    if (classification === 'match') {
+      if (part.status === 'running') running = true
+      else if (part.status === 'done') completedCount += 1
+    } else {
+      if (part.status === 'running') unknownRunning = true
+      else if (part.status === 'done') unknownCompletedCount += 1
+    }
   }
 
-  return { running, completedCount }
+  return { running, completedCount, unknownRunning, unknownCompletedCount }
 }
 
 /**
@@ -824,11 +1387,20 @@ export function isStreamingTurnTargetingFile(
     for (const part of tail.parts ?? []) {
       if (part.type === 'tool-call') {
         const haystack = `${part.input ?? ''}\n${part.summary ?? ''}\n${part.output ?? ''}`
-        if (FILE_TOUCH_TOOL_NAME_RE.test(part.name) && textMentionsFile(haystack, needles)) {
-          return true
+        const exposedPaths = extractToolTargetPaths(part)
+        if (FILE_TOUCH_TOOL_NAME_RE.test(part.name)) {
+          if (exposedPaths.length > 0) {
+            if (exposedPaths.some((p) => doesToolPathMatchIdentity(p, identity))) return true
+            continue
+          }
+          if (textMentionsFile(haystack, needles)) return true
         }
         if (FILE_WRITE_TOOL_NAME_RE.test(part.name) && part.status === 'running') {
-          if (!part.input || textMentionsFile(haystack, needles)) return true
+          if (exposedPaths.length > 0) {
+            if (exposedPaths.some((p) => doesToolPathMatchIdentity(p, identity))) return true
+          } else if (!part.input || textMentionsFile(haystack, needles)) {
+            return true
+          }
         }
       } else if (part.type === 'reasoning') {
         const reasoningText = 'text' in part && typeof part.text === 'string' ? part.text : ''

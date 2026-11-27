@@ -211,7 +211,9 @@ describe('workspace-canvas-edit', () => {
     expect(target?.id).toBe('a2')
     expect(inspectMessageFileWrites(target!, '无名.md')).toEqual({
       running: true,
-      completedCount: 0
+      completedCount: 0,
+      unknownRunning: false,
+      unknownCompletedCount: 0
     })
     expect(isMessageStreamingCanvasEdit(target!)).toBe(true)
   })
@@ -301,5 +303,212 @@ describe('workspace-canvas-edit', () => {
         false
       )
     ).toBe(false)
+  })
+
+  it('rejects ambiguous duplicate selections without sourceRange and targets exact occurrence when sourceRange is supplied', () => {
+    const duplicateDoc = '# Notes\n\nRepeat me.\n\nMiddle paragraph.\n\nRepeat me.\n'
+    expect(locateSelectionInSource(duplicateDoc, 'Repeat me.')).toBeNull()
+    expect(applyCanvasRevisionToSource(duplicateDoc, 'Repeat me.', 'Updated second.')).toBeNull()
+
+    const crlfDoc = duplicateDoc.replace(/\n/g, '\r\n')
+    expect(locateSelectionInSource(crlfDoc, 'Repeat me.')).toBeNull()
+
+    const secondStart = duplicateDoc.lastIndexOf('Repeat me.')
+    const secondEnd = secondStart + 'Repeat me.'.length
+    const targeted = applyCanvasRevisionToSource(duplicateDoc, 'Repeat me.', 'Updated second.', {
+      sourceRange: { start: secondStart, end: secondEnd }
+    })
+    expect(targeted).not.toBeNull()
+    expect(targeted!.nextContent).toBe(
+      '# Notes\n\nRepeat me.\n\nMiddle paragraph.\n\nUpdated second.\n'
+    )
+  })
+
+  it('splices partial formatted selections cleanly without replacing the whole line or corrupting link/formatting syntax', () => {
+    const formattedLine = 'Keep **this** phrase intact.'
+    const partial = applyCanvasRevisionToSource(formattedLine, 'this phrase', 'that wording')
+    expect(partial).not.toBeNull()
+    expect(partial!.nextContent).toBe('Keep that wording intact.')
+
+    const multiline = 'Prefix *alpha*\n\n**beta** suffix'
+    const multiPartial = applyCanvasRevisionToSource(multiline, 'alpha\nbeta', 'gamma\n\ndelta')
+    expect(multiPartial).not.toBeNull()
+    expect(multiPartial!.nextContent).toBe('Prefix gamma\n\ndelta suffix')
+
+    // Absorb a complete Markdown link cleanly without touching trailing text.
+    const wholeLink = applyCanvasRevisionToSource(
+      'Keep [link](https://example.com) here',
+      'Keep link',
+      'Use reference'
+    )
+    expect(wholeLink).not.toBeNull()
+    expect(wholeLink!.nextContent).toBe('Use reference here')
+
+    // Reject selections that straddle half a Markdown link or formatting pair.
+    expect(
+      locateSelectionInSource('Keep [link text](https://example.com) here', 'Keep link')
+    ).toBeNull()
+    expect(locateSelectionInSource('Keep **bold text** here', 'Keep bold')).toBeNull()
+  })
+
+  it('does not fall back to unstructured prose replies when no revision tag or fenced block is present', () => {
+    const refusal = "I can't revise that passage without more context."
+    expect(
+      extractCanvasRevisionFromReply(refusal, {
+        originalSource: 'Keep this paragraph.',
+        selectedText: 'Keep this paragraph.',
+        fileExt: 'md'
+      })
+    ).toBeNull()
+
+    const tagged = '<tuff-canvas-edit>\nTighter paragraph.\n</tuff-canvas-edit>'
+    expect(
+      extractCanvasRevisionFromReply(tagged, {
+        originalSource: 'Keep this paragraph.',
+        selectedText: 'Keep this paragraph.',
+        fileExt: 'md'
+      })
+    ).toBe('Tighter paragraph.')
+  })
+
+  it('refuses full-document replacement on unmatched selection scope unless scope is explicitly document', () => {
+    const source = '# Notes\n\nKeep this.'
+    expect(
+      applyCanvasRevisionToSource(source, 'This is a different paragraph.', 'Replacement.')
+    ).toBeNull()
+
+    const explicitFull = applyCanvasRevisionToSource(source, source, '# Notes\n\nRewritten.', {
+      scope: 'document'
+    })
+    expect(explicitFull).not.toBeNull()
+    expect(explicitFull!.mode).toBe('document')
+    expect(explicitFull!.nextContent).toBe('# Notes\n\nRewritten.')
+  })
+
+  it('matches file-write tool calls by target path and ignores unrelated files or same-basename folders', () => {
+    const identity = {
+      fileName: 'notes.md',
+      displayPath: 'dirB/notes.md',
+      filePath: '/repo/dirB/notes.md'
+    }
+
+    const otherFileMsg: ConversationMessage = {
+      id: 'a-other',
+      role: 'assistant',
+      content: '',
+      status: 'complete',
+      parts: [
+        {
+          type: 'tool-call',
+          id: 'tc-other',
+          name: 'file.write',
+          status: 'done',
+          input: '{"path":"other.md"}'
+        },
+        {
+          type: 'tool-call',
+          id: 'tc-dir-a',
+          name: 'file.write',
+          status: 'done',
+          input: '{"path":"dirA/notes.md"}'
+        }
+      ]
+    }
+    expect(inspectMessageFileWrites(otherFileMsg, identity)).toEqual({
+      running: false,
+      completedCount: 0,
+      unknownRunning: false,
+      unknownCompletedCount: 0
+    })
+
+    const matchingMsg: ConversationMessage = {
+      id: 'a-match',
+      role: 'assistant',
+      content: '',
+      status: 'complete',
+      parts: [
+        {
+          type: 'tool-call',
+          id: 'tc-match',
+          name: 'file.write',
+          status: 'done',
+          input: '{"path":"dirB/notes.md"}'
+        },
+        {
+          type: 'tool-call',
+          id: 'tc-unknown',
+          name: 'file.write',
+          status: 'done',
+          input: '{}'
+        }
+      ]
+    }
+    expect(inspectMessageFileWrites(matchingMsg, identity)).toEqual({
+      running: false,
+      completedCount: 1,
+      unknownRunning: false,
+      unknownCompletedCount: 1
+    })
+
+    // Running file.write targeting another file must not lock the open file.
+    expect(
+      isStreamingTurnTargetingFile(
+        [
+          { id: 'u1', role: 'user', content: '继续处理刚才的任务', status: 'complete' },
+          {
+            id: 'a1',
+            role: 'assistant',
+            content: '',
+            status: 'streaming',
+            parts: [
+              {
+                type: 'tool-call',
+                id: 'tc-run-other',
+                name: 'file.write',
+                status: 'running',
+                input: '{"path":"other.md"}'
+              }
+            ]
+          }
+        ],
+        identity,
+        true
+      )
+    ).toBe(false)
+  })
+
+  it('binds findTargetAssistantMessage strictly to the matching Canvas user turn', () => {
+    const prior: ConversationMessage[] = [
+      { id: 'u1', role: 'user', content: 'write story', status: 'complete' }
+    ]
+    const canvasPrompt = '[Canvas prompt for 无名.md]\n> 原文'
+    const baseline = {
+      knownMessageIds: new Set(prior.map((m) => m.id)),
+      initialCount: prior.length,
+      requestPrompt: canvasPrompt
+    }
+
+    // Assistant reply to a prior turn (no new user message) must be ignored.
+    const priorTurnReply: ConversationMessage[] = [
+      ...prior,
+      { id: 'a1', role: 'assistant', content: '```markdown\nwrong\n```', status: 'complete' }
+    ]
+    expect(findTargetAssistantMessage(priorTurnReply, baseline)).toBeNull()
+
+    // Unrelated newer user/assistant turn must be ignored when requestPrompt does not match.
+    const unrelatedTurn: ConversationMessage[] = [
+      ...priorTurnReply,
+      { id: 'u-other', role: 'user', content: 'unrelated chat', status: 'complete' },
+      { id: 'a-other', role: 'assistant', content: '```markdown\nother\n```', status: 'complete' }
+    ]
+    expect(findTargetAssistantMessage(unrelatedTurn, baseline)).toBeNull()
+
+    // Once the matching Canvas user turn and its assistant reply arrive, bind to it.
+    const withCanvasTurn: ConversationMessage[] = [
+      ...unrelatedTurn,
+      { id: 'u-canvas', role: 'user', content: canvasPrompt, status: 'complete' },
+      { id: 'a-canvas', role: 'assistant', content: '```markdown\nright\n```', status: 'complete' }
+    ]
+    expect(findTargetAssistantMessage(withCanvasTurn, baseline)?.id).toBe('a-canvas')
   })
 })

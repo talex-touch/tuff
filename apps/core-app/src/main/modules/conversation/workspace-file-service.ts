@@ -18,7 +18,7 @@ import { BrowserWindow, dialog, shell } from 'electron'
 import { getProject } from '../project/project-store'
 import { peekConversationWorkspaceRoot } from '../local-ai-cli/workspace-root'
 import { getConversation } from './conversation-store'
-import { writeFileAtomically } from './file-review-fs'
+import { PathLockRegistry, writeFileAtomically } from './file-review-fs'
 
 const DEFAULT_TEXT_MAX_BYTES = 2 * 1024 * 1024
 const HARD_TEXT_MAX_BYTES = 4 * 1024 * 1024
@@ -233,6 +233,7 @@ const BLOCKED_HOME_SUBPATHS = [
 ]
 
 const approvedPickedPaths = new Set<string>()
+const workspaceWriteLocks = new PathLockRegistry()
 
 export interface WorkspaceFileServicePorts {
   resolveConversationRoot?: (conversationId: string) => Promise<string | null>
@@ -307,7 +308,11 @@ async function resolveAllowedRoots(
   return roots
 }
 
-async function assertWithinAllowedRoots(canonical: string, roots: string[]): Promise<void> {
+async function assertWithinAllowedRoots(
+  canonical: string,
+  roots: string[],
+  options: { allowPickedPreview?: boolean } = {}
+): Promise<void> {
   const compCanonical = normalizeComparable(canonical)
   for (const root of roots) {
     const realRoot = await fs.realpath(root).catch(() => null)
@@ -317,7 +322,7 @@ async function assertWithinAllowedRoots(canonical: string, roots: string[]): Pro
     const escapes = rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)
     if (!escapes) return
   }
-  if (isApprovedPickedWorkspacePath(canonical)) return
+  if (options.allowPickedPreview !== false && isApprovedPickedWorkspacePath(canonical)) return
   throw new Error('WORKSPACE_FILE_FORBIDDEN')
 }
 
@@ -615,31 +620,38 @@ export async function writeWorkspaceFile(
   }
 
   const allowedRoots = await resolveAllowedRoots(request?.conversationId, ports)
-  await assertWithinAllowedRoots(canonical, allowedRoots)
+  // Preview-picked paths are read/reveal only; writes require containment under an allowed root.
+  await assertWithinAllowedRoots(canonical, allowedRoots, { allowPickedPreview: false })
 
-  const lstat = await fs.lstat(canonical)
-  if (lstat.isSymbolicLink()) {
-    throw new Error('WORKSPACE_FILE_FORBIDDEN')
-  }
-  if (!lstat.isFile()) {
-    throw new Error('WORKSPACE_FILE_UNSUPPORTED')
-  }
+  const lockKey = normalizeComparable(canonical)
+  return workspaceWriteLocks.withLocks([lockKey], async () => {
+    const lstat = await fs.lstat(canonical)
+    if (lstat.isSymbolicLink()) {
+      throw new Error('WORKSPACE_FILE_FORBIDDEN')
+    }
+    if (!lstat.isFile()) {
+      throw new Error('WORKSPACE_FILE_UNSUPPORTED')
+    }
 
-  if (
-    typeof request.expectedMtimeMs === 'number' &&
-    Number.isFinite(request.expectedMtimeMs) &&
-    Math.abs(lstat.mtimeMs - request.expectedMtimeMs) > 2
-  ) {
-    throw new Error('WORKSPACE_FILE_CONFLICT')
-  }
+    if (
+      typeof request.expectedMtimeMs === 'number' &&
+      Number.isFinite(request.expectedMtimeMs) &&
+      Math.abs(lstat.mtimeMs - request.expectedMtimeMs) > 2
+    ) {
+      throw new Error('WORKSPACE_FILE_CONFLICT')
+    }
 
-  await writeFileAtomically(canonical, encoded, lstat.mode & 0o777)
-  const nextStat = await fs.stat(canonical)
-  return {
-    path: canonical,
-    size: nextStat.size,
-    mtimeMs: nextStat.mtimeMs
-  }
+    const committed = await writeFileAtomically(canonical, encoded, lstat.mode & 0o777, {
+      // Ensure sequential guarded writes advance mtime past the 2ms tolerance so a concurrent
+      // second writer queued on the same expectedMtimeMs deterministically observes a conflict.
+      minMtimeMs: Math.ceil(lstat.mtimeMs) + 5
+    })
+    return {
+      path: canonical,
+      size: committed.size,
+      mtimeMs: committed.mtimeMs
+    }
+  })
 }
 
 export async function pickWorkspaceFile(
