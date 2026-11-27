@@ -4,7 +4,9 @@
  * `docs/engineering/specs/guides/branch-and-release.md`.
  *
  * Two branches are long-lived. `master` is the production line, `stage` is the beta channel, and
- * every other branch is `task/<type>/<slug>`, deleted on merge.
+ * every other human branch is `task/<type>/<slug>`, deleted on merge. Automated Dependabot PRs
+ * (`dependabot/<ecosystem>/<slug...>` opened by `dependabot[bot]` targeting `master`) are admitted
+ * as a narrow, fail-closed exception without weakening human branch hygiene or beta-channel gates.
  *
  * One sentence is load-bearing: **a beta is cut from a `stage` that already contains `master`**.
  * `stage` is what testers are handed, so a stage trailing master publishes a beta that is missing
@@ -23,10 +25,12 @@
  *   node scripts/check-branch-policy.mjs                  # current branch, plus every decidable invariant
  *   node scripts/check-branch-policy.mjs --tag v2.4.15    # release time: also check the tag's landing branch
  *   node scripts/check-branch-policy.mjs --branch task/fix/x --offline
+ *   node scripts/check-branch-policy.mjs --branch dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21 --base master --pr-author 'dependabot[bot]' --offline
  *
- * CI needs no arguments: the script reads GITHUB_HEAD_REF / GITHUB_REF_NAME / GITHUB_REF_TYPE, and
- * falls back to HEAD locally. Ancestry needs full history, so a CI job must check out with
- * `fetch-depth: 0`; a shallow clone it cannot repair is a FAIL, never a silent pass.
+ * CI needs no arguments: the script reads GITHUB_EVENT_NAME / GITHUB_HEAD_REF / GITHUB_BASE_REF /
+ * GITHUB_REF_NAME / GITHUB_REF_TYPE / GITHUB_PR_AUTHOR (with GITHUB_EVENT_PATH fallback), and falls
+ * back to HEAD locally. Ancestry needs full history, so a CI job must check out with `fetch-depth: 0`;
+ * a shallow clone it cannot repair is a FAIL, never a silent pass.
  *
  * Exit 0 pass (warnings allowed) / 1 failure / 2 usage.
  */
@@ -53,21 +57,103 @@ export const EXEMPT_BRANCHES = ['gh-pages']
  */
 export const TASK_TYPES = ['build', 'chore', 'ci', 'docs', 'feat', 'fix', 'perf', 'ref', 'sec', 'test']
 
+/**
+ * Automated Dependabot PR policy constants.
+ *
+ * Dependabot cannot follow `task/<type>/<slug>` because GitHub generates its branches as
+ * `dependabot/<ecosystem>/<path-or-package>-<version>` (with nested segments for scoped npm
+ * packages, Cargo subdirectories, and GitHub Action owner/repo pairs). To admit genuine
+ * Dependabot PRs without weakening human `task/<type>/<slug>` hygiene or beta-channel guards:
+ *   1. The branch name must match `dependabot/<ecosystem>/<segment>(/<segment>)*` where
+ *      `<ecosystem>` is configured in `.github/dependabot.yml` (verified by `--self-test`).
+ *   2. The run must be a `pull_request` targeting `master` (never `stage`, never a direct push).
+ *   3. The PR creator (`pull_request.user.login`) must be `dependabot[bot]` (never `GITHUB_ACTOR`,
+ *      so maintainer re-runs or lockfile fixups on a Dependabot PR stay green while human-opened
+ *      PRs cannot bypass `task/<type>/<slug>` by naming a branch `dependabot/*`).
+ */
+export const DEPENDABOT_LOGIN = 'dependabot[bot]'
+export const DEPENDABOT_BASE_BRANCH = 'master'
+export const DEPENDABOT_ECOSYSTEMS = ['cargo', 'github_actions', 'npm_and_yarn']
+export const DEPENDABOT_CONFIG_ECOSYSTEM_MAP = {
+  'cargo': 'cargo',
+  'github-actions': 'github_actions',
+  'npm': 'npm_and_yarn',
+}
+
 /** Lowercase ASCII only: a case-insensitive APFS checkout cannot hold `dev/X` and `dev/x` at once. */
 const SLUG = /^[a-z0-9][a-z0-9._-]{0,39}$/
+/**
+ * Dependabot path/package segments after `dependabot/<ecosystem>/`.
+ *
+ * Uppercase ASCII is permitted here (and ONLY here -- never on `task/<type>/<slug>` or
+ * `<ecosystem>`) because Dependabot preserves upstream GitHub Action owner casing in branch names
+ * (e.g. `dependabot/github_actions/Swatinem/rust-cache-2.9.3` in this repo's workflows).
+ */
+const DEPENDABOT_SEGMENT = /^[a-z0-9][\w.-]{0,127}$/i
+const DEPENDABOT_MAX_LENGTH = 200
 /** `v1.2.3` or `v1.2.3-beta.4` / `v1.2.3-snapshot.20260925-120000`. */
 const VERSION_TAG = /^v\d+\.\d+\.\d+(?:-([a-z]+)\..+)?$/
 
+const DEPENDABOT_HINT
+  = `allowed for ${DEPENDABOT_LOGIN} PRs -> ${DEPENDABOT_BASE_BRANCH}: dependabot/<ecosystem>/<slug...>`
+    + ` (ecosystem ∈ ${DEPENDABOT_ECOSYSTEMS.join('|')})`
+
 const WHITELIST_HINT
   = 'allowed: master | stage | task/<type>/<slug> | gh-pages'
-    + ` (type ∈ ${TASK_TYPES.join('|')}, slug = lowercase [a-z0-9._-], ≤40)`
+    + ` (type ∈ ${TASK_TYPES.join('|')}, slug = lowercase [a-z0-9._-], ≤40);`
+    + ` ${DEPENDABOT_LOGIN} PRs -> ${DEPENDABOT_BASE_BRANCH} also allow dependabot/<ecosystem>/<slug...>`
+
+/**
+ * Validate Dependabot's `dependabot/<ecosystem>/<slug...>` branch shape (name only; PR target and
+ * authorship are enforced by `classifyBranch`).
+ *
+ * @param {string} name
+ * @returns {{ok: true, ecosystem: string} | {ok: false, reason: string}} `ok: false` carries a printable rejection reason.
+ */
+export function validateDependabotBranchName(name) {
+  if (typeof name !== 'string' || !name)
+    return { ok: false, reason: 'empty branch name' }
+  if (name.length > DEPENDABOT_MAX_LENGTH)
+    return { ok: false, reason: `dependabot/ branch name exceeds ${DEPENDABOT_MAX_LENGTH} characters. ${DEPENDABOT_HINT}` }
+
+  const segments = name.split('/')
+  if (segments[0] !== 'dependabot')
+    return { ok: false, reason: `branch does not start with dependabot/. ${DEPENDABOT_HINT}` }
+  if (segments.length < 3) {
+    return { ok: false, reason: `dependabot/ takes <ecosystem>/<slug...>, got ${segments.length - 1} segment(s). ${DEPENDABOT_HINT}` }
+  }
+
+  const [, ecosystem, ...rest] = segments
+  if (!DEPENDABOT_ECOSYSTEMS.includes(ecosystem)) {
+    return { ok: false, reason: `"${ecosystem}" is not a configured Dependabot ecosystem. ${DEPENDABOT_HINT}` }
+  }
+
+  for (const segment of rest) {
+    if (!DEPENDABOT_SEGMENT.test(segment) || segment.includes('..') || segment.endsWith('.') || segment.endsWith('.lock')) {
+      return { ok: false, reason: `"${segment}" is not a valid Dependabot branch segment. ${DEPENDABOT_HINT}` }
+    }
+  }
+
+  return { ok: true, ecosystem }
+}
 
 /**
  * Is this a branch name the policy allows, and which class is it?
  *
- * @returns {{ok: true, kind: 'long-lived'|'task'|'exempt'|'detached'} | {ok: false, reason: string}} `ok: false` carries the reason a name is rejected, ready to print.
+ * `dependabot/*` is context-sensitive and fails closed: without a `pull_request` context targeting
+ * `master` authored by `dependabot[bot]` (or `remoteAudit: true` for W1's non-blocking remote
+ * inventory), `dependabot/*` is rejected so direct pushes, local branches, `stage`-targeted PRs,
+ * and human PRs cannot bypass `task/<type>/<slug>`.
+ *
+ * @param {string} name
+ * @param {object} [context]
+ * @param {string} [context.eventName]
+ * @param {string} [context.baseBranch]
+ * @param {string} [context.prAuthor]
+ * @param {boolean} [context.remoteAudit]
+ * @returns {{ok: true, kind: 'long-lived'|'task'|'exempt'|'detached'|'dependabot'} | {ok: false, reason: string}} `ok: false` carries the reason a name is rejected, ready to print.
  */
-export function classifyBranch(name) {
+export function classifyBranch(name, context = {}) {
   if (!name || name === 'HEAD')
     return { ok: true, kind: 'detached' }
   if (LONG_LIVED.includes(name))
@@ -76,6 +162,36 @@ export function classifyBranch(name) {
     return { ok: true, kind: 'exempt' }
 
   const segments = name.split('/')
+  if (segments[0] === 'dependabot') {
+    const shape = validateDependabotBranchName(name)
+    if (!shape.ok)
+      return shape
+    if (context.remoteAudit)
+      return { ok: true, kind: 'dependabot' }
+    if (context.eventName !== 'pull_request') {
+      const got = context.eventName ? `event "${context.eventName}"` : 'non-PR run'
+      return {
+        ok: false,
+        reason: `dependabot/* is only allowed on pull_request runs targeting ${DEPENDABOT_BASE_BRANCH} by ${DEPENDABOT_LOGIN} (got ${got}). ${WHITELIST_HINT}`,
+      }
+    }
+    if (context.baseBranch !== DEPENDABOT_BASE_BRANCH) {
+      const got = context.baseBranch ? `"${context.baseBranch}"` : '<unknown>'
+      return {
+        ok: false,
+        reason: `dependabot/* pull requests must target ${DEPENDABOT_BASE_BRANCH}, got base branch ${got}. ${DEPENDABOT_HINT}`,
+      }
+    }
+    if (context.prAuthor !== DEPENDABOT_LOGIN) {
+      const got = context.prAuthor ? `"${context.prAuthor}"` : '<unknown>'
+      return {
+        ok: false,
+        reason: `dependabot/* is reserved for ${DEPENDABOT_LOGIN} pull requests targeting ${DEPENDABOT_BASE_BRANCH}, got PR author ${got}. ${WHITELIST_HINT}`,
+      }
+    }
+    return { ok: true, kind: 'dependabot' }
+  }
+
   if (segments[0] !== 'task')
     return { ok: false, reason: `not in the whitelist. ${WHITELIST_HINT}` }
   if (segments.length !== 3) {
@@ -116,6 +232,9 @@ const entry = (level, id, text) => ({ level, id, text })
  * @param {object} state
  * @param {string} state.branch                     branch under test ('' when detached)
  * @param {string} state.tag                        tag under test ('' when this run is not a release)
+ * @param {string} [state.eventName]                workflow event name (e.g. 'pull_request', 'push', '')
+ * @param {string} [state.baseBranch]               PR target branch ('' when not a PR)
+ * @param {string} [state.prAuthor]                 PR creator login (`pull_request.user.login`, '' when unknown)
  * @param {string[]} state.remoteBranches           `origin` heads, [] when unknown
  * @param {boolean} state.masterPresent             origin/master resolves
  * @param {boolean} state.stagePresent              origin/stage resolves
@@ -138,9 +257,16 @@ export function evaluate(state) {
   else out.push(entry('FAIL', 'I0', 'history: shallow clone -- every ancestry answer would be a false negative (CI: give the job fetch-depth: 0; locally: git fetch --unshallow)'))
 
   // I3 -- the branch under test. A detached HEAD is a local tag/commit inspection, not a branch.
-  const branch = classifyBranch(state.branch)
+  const branchContext = {
+    eventName: state.eventName ?? '',
+    baseBranch: state.baseBranch ?? '',
+    prAuthor: state.prAuthor ?? '',
+  }
+  const branch = classifyBranch(state.branch, branchContext)
   if (branch.ok && branch.kind === 'detached')
     out.push(entry('SKIP', 'I3', `branch name: detached HEAD (inspecting a tag or commit)`))
+  else if (branch.ok && branch.kind === 'dependabot')
+    out.push(entry('OK', 'I3', `branch name ${state.branch} (dependabot PR -> ${DEPENDABOT_BASE_BRANCH} by ${DEPENDABOT_LOGIN})`))
   else if (branch.ok)
     out.push(entry('OK', 'I3', `branch name ${state.branch} (${branch.kind})`))
   else out.push(entry('FAIL', 'I3', `branch name ${state.branch}: ${branch.reason}`))
@@ -220,7 +346,10 @@ export function evaluate(state) {
     out.push(entry('SKIP', 'W1', 'remote branch audit: no origin refs read (no origin remote, or nothing fetched yet)'))
   }
   else {
-    const offenders = state.remoteBranches.filter(name => !classifyBranch(name).ok)
+    // Open Dependabot PR branches live on origin until merged/closed; W1 has no per-branch PR
+    // metadata, so well-formed `dependabot/<ecosystem>/<slug...>` refs are not flagged as drift,
+    // while malformed `dependabot/*` names still warn and I3 enforces target + author on active PRs.
+    const offenders = state.remoteBranches.filter(name => !classifyBranch(name, { remoteAudit: true }).ok)
     if (offenders.length === 0) {
       out.push(entry('OK', 'W1', `remote branch audit: all ${state.remoteBranches.length} branch(es) are in the whitelist`))
     }
@@ -286,14 +415,20 @@ function isAncestor(ancestor, descendant) {
 
 const resolve = ref => git(['rev-parse', '--verify', '--quiet', ref], { optional: true })
 
-function parseArgs(argv) {
-  const args = { branch: '', tag: '', fetch: true }
+export function parseArgs(argv) {
+  const args = { branch: '', tag: '', base: '', event: '', prAuthor: '', fetch: true }
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     if (arg === '--branch')
       args.branch = argv[++index] ?? ''
     else if (arg === '--tag')
       args.tag = argv[++index] ?? ''
+    else if (arg === '--base')
+      args.base = argv[++index] ?? ''
+    else if (arg === '--event')
+      args.event = argv[++index] ?? ''
+    else if (arg === '--pr-author')
+      args.prAuthor = argv[++index] ?? ''
     else if (arg === '--offline')
       args.fetch = false
     else throw new Error(`unknown argument ${arg}`)
@@ -357,19 +492,49 @@ function originTags({ fetch }) {
   return [...new Set(names.filter(Boolean).map(name => name.replace(/\^\{\}$/, '')))]
 }
 
-/** Result and tag are different events: a result event carries no branch, a tag event carries the tag. */
-function fromEnvironment(args) {
+function readGithubEvent(eventPath) {
+  if (!eventPath)
+    return null
+  try {
+    return JSON.parse(fs.readFileSync(eventPath, 'utf8'))
+  }
+  catch {
+    return null
+  }
+}
+
+/**
+ * Resolve branch, tag, and PR context from CLI flags, GitHub Actions env, and local HEAD.
+ *
+ * `GITHUB_ACTOR` is intentionally NOT used for `prAuthor`: a maintainer clicking "Re-run jobs" or
+ * pushing a fixup commit onto a Dependabot PR changes `GITHUB_ACTOR` while `pull_request.user.login`
+ * stays `dependabot[bot]`. Only `GITHUB_PR_AUTHOR` (set from `github.event.pull_request.user.login`
+ * in workflow `env:`) or `GITHUB_EVENT_PATH`'s `pull_request.user.login` identifies the PR creator.
+ */
+export function fromEnvironment(args, env = process.env, readEvent = readGithubEvent) {
+  const rawEventName = args.event || env.GITHUB_EVENT_NAME || ''
+  const eventName = rawEventName || (args.base || env.GITHUB_BASE_REF ? 'pull_request' : '')
+  const isPullRequest = eventName === 'pull_request'
+  const needsEventPayload = isPullRequest && ((!args.base && !env.GITHUB_BASE_REF) || (!args.prAuthor && !env.GITHUB_PR_AUTHOR))
+  const eventPayload = needsEventPayload ? readEvent(env.GITHUB_EVENT_PATH) : null
+
   const branch = args.branch
-    || process.env.GITHUB_HEAD_REF
-    || (process.env.GITHUB_REF_TYPE === 'tag' ? '' : process.env.GITHUB_REF_NAME)
+    || env.GITHUB_HEAD_REF
+    || (env.GITHUB_REF_TYPE === 'tag' ? '' : env.GITHUB_REF_NAME)
     || git(['rev-parse', '--abbrev-ref', 'HEAD'], { optional: true })
-  const tag = args.tag || (process.env.GITHUB_REF_TYPE === 'tag' ? process.env.GITHUB_REF_NAME ?? '' : '')
-  return { branch, tag }
+  const tag = args.tag || (env.GITHUB_REF_TYPE === 'tag' ? env.GITHUB_REF_NAME ?? '' : '')
+  const baseBranch = args.base
+    || env.GITHUB_BASE_REF
+    || (isPullRequest ? eventPayload?.pull_request?.base?.ref ?? '' : '')
+  const prAuthor = args.prAuthor
+    || env.GITHUB_PR_AUTHOR
+    || (isPullRequest ? eventPayload?.pull_request?.user?.login ?? '' : '')
+  return { branch, tag, eventName, baseBranch, prAuthor }
 }
 
 function main(argv) {
   const args = parseArgs(argv)
-  const { branch, tag } = fromEnvironment(args)
+  const { branch, tag, eventName, baseBranch, prAuthor } = fromEnvironment(args)
 
   const shallow = git(['rev-parse', '--is-shallow-repository'], { optional: true }) === 'true'
   if (shallow && args.fetch) {
@@ -435,6 +600,9 @@ function main(argv) {
   const state = {
     branch,
     tag,
+    eventName,
+    baseBranch,
+    prAuthor,
     tagRefMismatch,
     remoteBranches: originHeads(args),
     masterPresent,
@@ -449,7 +617,10 @@ function main(argv) {
   }
 
   const results = evaluate(state)
-  console.log(`== branch/tag policy  branch=${branch || '<detached>'} tag=${tag || '<none>'}${args.fetch ? '' : ' (offline: refs as of the last fetch)'}`)
+  const prSummary = eventName === 'pull_request'
+    ? ` base=${baseBranch || '<unknown>'}${prAuthor ? ` author=${prAuthor}` : ''}`
+    : ''
+  console.log(`== branch/tag policy  branch=${branch || '<detached>'}${prSummary} tag=${tag || '<none>'}${args.fetch ? '' : ' (offline: refs as of the last fetch)'}`)
   for (const result of results) console.log(`   ${result.level.padEnd(4)} ${result.id}  ${result.text}`)
 
   const failed = results.filter(r => r.level === 'FAIL').length
@@ -469,7 +640,22 @@ function main(argv) {
 function selfTest() {
   const cases = []
   const check = (name, actual, expected) => cases.push({ name, actual, expected })
-  const nameCase = (branch, expected) => check(`branch ${branch || '<empty>'}`, classifyBranch(branch).ok, expected)
+  const nameCase = (branch, expected, context) => check(`branch ${branch || '<empty>'}`, classifyBranch(branch, context).ok, expected)
+  const dependabotPrToMaster = {
+    eventName: 'pull_request',
+    baseBranch: 'master',
+    prAuthor: DEPENDABOT_LOGIN,
+  }
+  const dependabotPrToStage = {
+    eventName: 'pull_request',
+    baseBranch: 'stage',
+    prAuthor: DEPENDABOT_LOGIN,
+  }
+  const humanPrToMaster = {
+    eventName: 'pull_request',
+    baseBranch: 'master',
+    prAuthor: 'octocat',
+  }
 
   // I3 -- names.
   nameCase('master', true)
@@ -495,6 +681,37 @@ function selfTest() {
   nameCase('task/feat/-leading', false)
   nameCase(`task/feat/${'x'.repeat(41)}`, false) // slug cap
   nameCase(`task/feat/${'x'.repeat(40)}`, true)
+
+  // I3 -- Dependabot PRs targeting master (allowed) and mirror rejections.
+  check('dependabot npm_and_yarn PR -> master ok', classifyBranch('dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21', dependabotPrToMaster).ok, true)
+  check('dependabot scoped npm_and_yarn PR -> master ok', classifyBranch('dependabot/npm_and_yarn/anthropic-ai/claude-agent-sdk-0.3.330', dependabotPrToMaster).ok, true)
+  check('dependabot cargo nested path PR -> master ok', classifyBranch('dependabot/cargo/packages/tuff-native/cc-1.11.3', dependabotPrToMaster).ok, true)
+  check('dependabot github_actions PR -> master ok', classifyBranch('dependabot/github_actions/jdx/mise-action-5.3.0', dependabotPrToMaster).ok, true)
+  check('dependabot github_actions preserves upstream owner casing -> master ok', classifyBranch('dependabot/github_actions/Swatinem/rust-cache-2.9.3', dependabotPrToMaster).ok, true)
+  check('dependabot kind is dependabot', classifyBranch('dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21', dependabotPrToMaster).kind, 'dependabot')
+  check('dependabot PR -> stage rejected', classifyBranch('dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21', dependabotPrToStage).ok, false)
+  check('dependabot PR -> other base rejected', classifyBranch('dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21', { ...dependabotPrToMaster, baseBranch: 'task/feat/other' }).ok, false)
+  check('dependabot PR by human author rejected', classifyBranch('dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21', humanPrToMaster).ok, false)
+  check('dependabot PR with missing author fails closed', classifyBranch('dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21', { eventName: 'pull_request', baseBranch: 'master', prAuthor: '' }).ok, false)
+  check('dependabot direct push rejected', classifyBranch('dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21', { eventName: 'push', baseBranch: '', prAuthor: '' }).ok, false)
+  check('dependabot without PR context fails closed', classifyBranch('dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21').ok, false)
+  check('dependabot bare prefix rejected', classifyBranch('dependabot', dependabotPrToMaster).ok, false)
+  check('dependabot trailing slash only rejected', classifyBranch('dependabot/', dependabotPrToMaster).ok, false)
+  check('dependabot missing slug rejected', classifyBranch('dependabot/npm_and_yarn', dependabotPrToMaster).ok, false)
+  check('dependabot empty slug rejected', classifyBranch('dependabot/npm_and_yarn/', dependabotPrToMaster).ok, false)
+  check('dependabot double slash rejected', classifyBranch('dependabot/npm_and_yarn//vitepress-2.0.0', dependabotPrToMaster).ok, false)
+  check('dependabot unknown ecosystem rejected', classifyBranch('dependabot/feat/sneaky-pr', dependabotPrToMaster).ok, false)
+  check('dependabot uppercase ecosystem rejected', classifyBranch('dependabot/NPM_AND_YARN/vitepress-2.0.0', dependabotPrToMaster).ok, false)
+  check('dependabot uppercase prefix rejected', classifyBranch('Dependabot/npm_and_yarn/vitepress-2.0.0', dependabotPrToMaster).ok, false)
+  check('dependabot traversal segment rejected', classifyBranch('dependabot/npm_and_yarn/../escape', dependabotPrToMaster).ok, false)
+  check('dependabot embedded .. rejected', classifyBranch('dependabot/npm_and_yarn/pkg..ver', dependabotPrToMaster).ok, false)
+  check('dependabot leading dot segment rejected', classifyBranch('dependabot/npm_and_yarn/.hidden', dependabotPrToMaster).ok, false)
+  check('dependabot leading dash segment rejected', classifyBranch('dependabot/npm_and_yarn/-leading', dependabotPrToMaster).ok, false)
+  check('dependabot trailing dot rejected', classifyBranch('dependabot/npm_and_yarn/pkg.', dependabotPrToMaster).ok, false)
+  check('dependabot .lock suffix rejected', classifyBranch('dependabot/npm_and_yarn/pkg.lock', dependabotPrToMaster).ok, false)
+  check('dependabot invalid @ char rejected', classifyBranch('dependabot/npm_and_yarn/@scope/pkg-1.0.0', dependabotPrToMaster).ok, false)
+  check('human feature branch still rejected on PR -> master', classifyBranch('feature/no-task-prefix', humanPrToMaster).ok, false)
+  check('human task branch still passes on PR -> master', classifyBranch('task/fix/human-work', humanPrToMaster).ok, true)
 
   // I2 -- tag classification.
   check('tag v2.4.15', classifyTag('v2.4.15').kind, 'stable')
@@ -560,6 +777,26 @@ function selfTest() {
   check('no tag skips I2', levels({}).includes('I2:SKIP'), true)
 
   check('historical off-policy branch only warns', levels({ remoteBranches: ['master', 'stage', 'release/x'] }).includes('W1:WARN'), true)
+  check('open dependabot branch in remote audit is ok', levels({ remoteBranches: ['master', 'stage', 'dependabot/cargo/packages/tuff-native/cc-1.11.3'] }).includes('W1:OK'), true)
+  check('malformed dependabot branch in remote audit warns', levels({ remoteBranches: ['master', 'stage', 'dependabot/bad'] }).includes('W1:WARN'), true)
+  check('evaluate passes valid dependabot PR -> master', levels({
+    branch: 'dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21',
+    eventName: 'pull_request',
+    baseBranch: 'master',
+    prAuthor: DEPENDABOT_LOGIN,
+  }).includes('I3:OK'), true)
+  check('evaluate fails dependabot PR -> stage', levels({
+    branch: 'dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21',
+    eventName: 'pull_request',
+    baseBranch: 'stage',
+    prAuthor: DEPENDABOT_LOGIN,
+  }).includes('I3:FAIL'), true)
+  check('evaluate fails human PR on dependabot branch', levels({
+    branch: 'dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21',
+    eventName: 'pull_request',
+    baseBranch: 'master',
+    prAuthor: 'octocat',
+  }).includes('I3:FAIL'), true)
   check('off-policy branch is still a failure when it is the current one', levels({ branch: 'release/x' }).includes('I3:FAIL'), true)
   check('clean branch list is ok', levels({}).includes('W1:OK'), true)
   check('no remote read skips W1', levels({ remoteBranches: [] }).includes('W1:SKIP'), true)
@@ -585,6 +822,20 @@ function selfTest() {
   const declared = new Set([...enumBlock.matchAll(/'([a-z]+)'/g)].map(m => m[1]))
   check('commitlint enum is readable', declared.size > 5, true)
   for (const type of TASK_TYPES) check(`task type ${type} exists in the commitlint enum`, declared.has(type), true)
+
+  // Every ecosystem configured in `.github/dependabot.yml` must map to DEPENDABOT_ECOSYSTEMS so a
+  // newly enabled Dependabot ecosystem cannot silently break Branch Policy.
+  const dependabotConfig = fs.readFileSync(path.join(ROOT, '.github/dependabot.yml'), 'utf8')
+  const configuredEcosystems = dependabotConfig
+    .split('\n')
+    .map(line => line.split('#', 1)[0].trim())
+    .map(line => /^(?:-\s*)?package-ecosystem:\s*["']?([a-z0-9-]+)["']?$/.exec(line)?.[1] ?? '')
+    .filter(Boolean)
+  check('dependabot.yml ecosystems are readable', configuredEcosystems.length > 0, true)
+  for (const configured of configuredEcosystems) {
+    const mapped = DEPENDABOT_CONFIG_ECOSYSTEM_MAP[configured]
+    check(`dependabot.yml ecosystem ${configured} is allowed`, Boolean(mapped && DEPENDABOT_ECOSYSTEMS.includes(mapped)), true)
+  }
 
   let failed = 0
   for (const testCase of cases) {
