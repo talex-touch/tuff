@@ -2547,6 +2547,111 @@ describe('appProvider rebuild maintenance', () => {
     })
   })
 
+  it('surfaces Windows PowerShell fallback diagnostics into grouped source evidence (#350)', async () => {
+    await withPlatform('win32', async () => {
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+
+      getWatchPathsMock.mockReturnValue([
+        'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs'
+      ])
+      getAppsBySourceMock.mockResolvedValue([
+        {
+          sourceId: 'windows-start-menu',
+          label: 'Windows Start Menu',
+          apps: [{ name: 'Start App' }]
+        },
+        {
+          sourceId: 'windows-uwp',
+          label: 'Windows UWP / Get-StartApps',
+          apps: [],
+          error: 'powershell-execution-policy: blocked by group policy',
+          diagnostics: {
+            status: 'failed',
+            backend: 'unavailable',
+            fallbackUsed: false,
+            reasonCode: 'powershell-execution-policy',
+            reason: 'blocked by group policy',
+            recovery: 'Check Get-ExecutionPolicy -List.',
+            attempts: [
+              {
+                backend: 'powershell',
+                status: 'failed',
+                reasonCode: 'powershell-execution-policy',
+                error: 'blocked by group policy'
+              }
+            ]
+          }
+        },
+        {
+          sourceId: 'windows-registry',
+          label: 'Windows Uninstall Registry',
+          apps: [{ name: 'Fallback App' }],
+          diagnostics: {
+            status: 'degraded',
+            backend: 'reg-query',
+            fallbackUsed: true,
+            reasonCode: 'powershell-execution-policy',
+            reason: 'blocked by group policy',
+            recovery: 'Desktop apps fall back to Start Menu and reg.exe.',
+            attempts: [
+              {
+                backend: 'powershell',
+                status: 'failed',
+                reasonCode: 'powershell-execution-policy'
+              },
+              { backend: 'reg-query', status: 'ok' }
+            ]
+          }
+        },
+        {
+          sourceId: 'windows-app-paths',
+          label: 'Windows App Paths Registry',
+          apps: []
+        },
+        {
+          sourceId: 'windows-steam',
+          label: 'Steam app manifests',
+          apps: []
+        }
+      ])
+      privateProvider.dbUtils = {
+        getFilesByType: vi.fn(async () => [])
+      } as unknown
+
+      const evidence = await appProvider.getIndexedSourceEvidence()
+
+      expect(evidence).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'app-provider:windows-uwp',
+            itemCount: 0,
+            status: 'degraded',
+            reason: 'powershell-execution-policy: blocked by group policy',
+            metadata: expect.objectContaining({
+              backend: 'unavailable',
+              fallbackUsed: false,
+              reasonCode: 'powershell-execution-policy',
+              recovery: 'Check Get-ExecutionPolicy -List.'
+            })
+          }),
+          expect.objectContaining({
+            id: 'app-provider:windows-registry',
+            itemCount: 1,
+            status: 'degraded',
+            reason: 'powershell-execution-policy (fallback: reg-query)',
+            metadata: expect.objectContaining({
+              backend: 'reg-query',
+              fallbackUsed: true,
+              reasonCode: 'powershell-execution-policy',
+              recovery: 'Desktop apps fall back to Start Menu and reg.exe.'
+            })
+          })
+        ])
+      )
+    })
+  })
+
   it('returns indexed source record batches from app scans', async () => {
     await withPlatform('win32', async () => {
       const { appProvider } = await loadSubject()

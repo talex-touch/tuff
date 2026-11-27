@@ -12,6 +12,8 @@ export interface PlatformCapability {
   supportLevel?: PlatformCapabilitySupportLevel
   issueCode?: string
   reason?: string
+  attempt?: string
+  recovery?: string
   limitations?: string[]
   sensitive?: boolean
 }

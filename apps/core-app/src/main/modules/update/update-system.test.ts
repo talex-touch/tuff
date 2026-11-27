@@ -321,4 +321,73 @@ describe('UpdateSystem install handoff preparation', () => {
 
     expect(downloadCenter.notificationService.showUpdateReadyNotification).not.toHaveBeenCalled()
   })
+
+  it('rejects a manifest whose darwin architecture does not match the running host (#311)', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const hostArch = process.arch === 'arm64' ? 'arm64' : 'x64'
+    const otherArch = hostArch === 'arm64' ? 'x64' : 'arm64'
+    const mismatchAssetName = `tuff-2.4.15-beta.13-macos-${otherArch}.dmg`
+    const mismatchSigUrl = `https://example.test/${mismatchAssetName}.sig`
+
+    networkRequestMock.mockImplementation(async ({ url }: { url: string }) => {
+      if (url === manifestUrl) {
+        return {
+          data: {
+            schemaVersion: 2,
+            release: {
+              tag: 'v2.4.15-beta.13',
+              version: '2.4.15-beta.13',
+              channel: 'BETA',
+              rollbackFromVersion: '2.4.15-beta.12',
+              rollbackCompatible: false
+            },
+            artifacts: [
+              {
+                name: mismatchAssetName,
+                component: 'core',
+                platform: 'darwin',
+                arch: otherArch,
+                sha256,
+                signature: `${mismatchAssetName}.sig`
+              }
+            ]
+          }
+        }
+      }
+      throw new Error(`Unexpected update request: ${url}`)
+    })
+
+    const updateSystem = new UpdateSystem(createDownloadCenterMock() as never, {
+      storageRoot: '/tmp/tuff-test'
+    })
+
+    await expect(
+      updateSystem.downloadUpdate({
+        source: 'nexus',
+        tag_name: 'v2.4.15-beta.13',
+        name: 'Tuff 2.4.15-beta.13',
+        published_at: '2026-11-23T08:00:00.000Z',
+        body: '',
+        assets: [
+          {
+            name: mismatchAssetName,
+            url: `https://example.test/${mismatchAssetName}`,
+            size: 100,
+            platform: 'darwin',
+            arch: otherArch,
+            checksum: sha256,
+            signatureUrl: mismatchSigUrl
+          },
+          { name: `${mismatchAssetName}.sig`, url: mismatchSigUrl, size: 32 },
+          {
+            name: 'tuff-release-manifest.json',
+            url: manifestUrl,
+            size: 512,
+            platform: 'darwin',
+            arch: otherArch
+          }
+        ]
+      })
+    ).rejects.toThrow('Update release manifest is required and must match this platform')
+  })
 })

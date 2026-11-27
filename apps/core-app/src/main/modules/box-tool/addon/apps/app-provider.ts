@@ -77,6 +77,7 @@ import { deviceIdleService } from '../../../../service/device-idle-service'
 import { iconService } from '../../../../service/icon-service'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { operationalErrorService } from '../../../observability'
+import { mapWindowsSourceResultsToGroupedEvidence } from '../../../platform/windows-powershell'
 import FileSystemWatcher from '../../file-system-watcher'
 import { resolvePreviousAppContext } from '../../search-engine/app-launch-recorder'
 import { recordAcceptedExecute, resolveExecuteEventId } from '../../search-engine/execute-recorder'
@@ -1892,12 +1893,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       sourceId: this.id,
       keys: this.getPlatformEvidenceKeys().filter((key) => key !== 'unknown'),
       labels: APP_SOURCE_EVIDENCE_LABELS,
-      results: results.map((result) => ({
-        sourceId: result.sourceId,
-        label: result.label,
-        itemCount: result.apps.length,
-        error: result.error
-      })),
+      results: mapWindowsSourceResultsToGroupedEvidence(results),
       metadata: {
         platform: process.platform
       },

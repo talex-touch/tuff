@@ -21,6 +21,8 @@ export interface PlatformCapabilityRuntimePatch {
   supportLevel: PlatformCapabilitySupportLevel
   issueCode?: string
   reason?: string
+  attempt?: string
+  recovery?: string
   limitations?: string[]
 }
 
@@ -66,12 +68,15 @@ function withLimitations(
   supportLevel: PlatformCapabilitySupportLevel,
   reason?: string,
   issueCode?: string,
-  limitations?: string[]
+  limitations?: string[],
+  diagnostics?: { attempt?: string; recovery?: string }
 ): PlatformCapabilityRuntimePatch {
   return {
     supportLevel,
     ...(issueCode ? { issueCode } : {}),
     ...(reason ? { reason } : {}),
+    ...(diagnostics?.attempt ? { attempt: diagnostics.attempt } : {}),
+    ...(diagnostics?.recovery ? { recovery: diagnostics.recovery } : {}),
     ...(limitations && limitations.length > 0 ? { limitations } : {})
   }
 }
@@ -110,6 +115,8 @@ export function applyCapabilityRuntimePatch(
     supportLevel: patch.supportLevel,
     issueCode: patch.issueCode,
     reason: patch.reason,
+    ...(patch.attempt ? { attempt: patch.attempt } : {}),
+    ...(patch.recovery ? { recovery: patch.recovery } : {}),
     limitations:
       patch.limitations && patch.limitations.length > 0 ? [...patch.limitations] : undefined
   }
@@ -130,7 +137,13 @@ export async function getActiveAppCapabilityPatch(): Promise<PlatformCapabilityR
       'best_effort',
       t('settings.settingPlatformCapabilities.items.activeApp.powershellReason'),
       'POWERSHELL_FOREGROUND_WINDOW',
-      [t('settings.settingPlatformCapabilities.items.activeApp.powershellLimit')]
+      [t('settings.settingPlatformCapabilities.items.activeApp.powershellLimit')],
+      {
+        attempt:
+          'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass (Win32 GetForegroundWindow)',
+        recovery:
+          'Ensure Windows PowerShell (powershell.exe) is available and not blocked by enterprise policy; active-app probing degrades cleanly when unavailable.'
+      }
     )
   }
 

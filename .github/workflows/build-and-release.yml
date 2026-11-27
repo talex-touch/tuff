@@ -803,21 +803,64 @@ jobs:
             exit 1
           fi
           chmod +x "$APPIMAGE"
-          echo "Launching $APPIMAGE"
 
-          # --appimage-extract-and-run avoids needing FUSE, which the runner does not have. It
-          # changes how the file is mounted, not how the app sandboxes, so the thing #213 is about
-          # is still exercised.
+          # Extract the AppImage OUTSIDE the launch timeout. In v2.4.15-beta.13 running
+          # `timeout 45s ... --appimage-extract-and-run` timed out mid-extraction before `AppRun`
+          # or `tuff` ever executed, leaving only `/tmp/appimage_extracted_*` paths and a false
+          # `verdict: ok` (#213).
+          APPIMAGE_EXTRACT_DIR=$(mktemp -d)
+          echo "Extracting $APPIMAGE into $APPIMAGE_EXTRACT_DIR"
+          (
+            cd "$APPIMAGE_EXTRACT_DIR"
+            "$APPIMAGE" --appimage-extract > /tmp/appimage-extract.log 2>&1
+          )
+          if [ ! -x "$APPIMAGE_EXTRACT_DIR/squashfs-root/AppRun" ] || [ ! -x "$APPIMAGE_EXTRACT_DIR/squashfs-root/tuff" ]; then
+            echo "AppImage extraction did not produce executable AppRun and tuff binaries."
+            tail -n 40 /tmp/appimage-extract.log || true
+            rm -rf "$APPIMAGE_EXTRACT_DIR"
+            exit 1
+          fi
+
+          echo "Launching extracted AppImage AppRun"
           set +e
-          APPIMAGE_EXTRACT_AND_RUN=1 timeout --signal=TERM 45s xvfb-run -a --server-args="-screen 0 1280x1024x24" "$APPIMAGE" --appimage-extract-and-run --disable-gpu > /tmp/launch.log 2>&1
+          timeout --signal=TERM 45s xvfb-run -a --server-args="-screen 0 1280x1024x24" \
+            "$APPIMAGE_EXTRACT_DIR/squashfs-root/AppRun" --disable-gpu > /tmp/launch.log 2>&1
           CODE=$?
           set -e
+          rm -rf "$APPIMAGE_EXTRACT_DIR"
 
           # 124 is timeout's own code for "still running when I killed it", which is the success
           # shape here: a launcher that is alive after 45s started. Any other code means it exited.
           if [ "$CODE" -eq 124 ]; then STATE=alive; else STATE=dead; fi
-          echo "exit=$CODE state=$STATE"
+          echo "appimage exit=$CODE state=$STATE"
           node scripts/classify-app-launch.mjs /tmp/launch.log "$CODE" "$STATE"
+
+          # Also verify the Ubuntu 24.04 .deb installation + AppArmor profile contract (#213):
+          # dpkg postinst installs /etc/apparmor.d/tuff granting `userns` so /opt/tuff/tuff starts
+          # under kernel.apparmor_restrict_unprivileged_userns=1 without --no-sandbox.
+          DEB=$(find apps/core-app/dist -name "*.deb" -type f | head -1)
+          if [ -z "$DEB" ]; then
+            echo "No .deb package to smoke test."
+            exit 1
+          fi
+          echo "Installing $DEB"
+          sudo apt-get install -y -qq "$(realpath "$DEB")"
+          if command -v apparmor_status >/dev/null 2>&1 && sudo apparmor_status --enabled >/dev/null 2>&1; then
+            if [ ! -f /etc/apparmor.d/tuff ]; then
+              echo "Expected /etc/apparmor.d/tuff to be installed by .deb postinst."
+              exit 1
+            fi
+            echo "Verified /etc/apparmor.d/tuff installed by .deb postinst"
+          fi
+          echo "Launching installed /opt/tuff/tuff"
+          set +e
+          timeout --signal=TERM 30s xvfb-run -a --server-args="-screen 0 1280x1024x24" \
+            /opt/tuff/tuff --disable-gpu > /tmp/deb-launch.log 2>&1
+          DEB_CODE=$?
+          set -e
+          if [ "$DEB_CODE" -eq 124 ]; then DEB_STATE=alive; else DEB_STATE=dead; fi
+          echo "deb exit=$DEB_CODE state=$DEB_STATE"
+          node scripts/classify-app-launch.mjs /tmp/deb-launch.log "$DEB_CODE" "$DEB_STATE"
 
       - name: Upload Linux launch log
         if: always() && matrix.os == 'ubuntu-latest'
