@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { describe, it } from 'vitest'
 
@@ -41,6 +42,15 @@ const BASE_STATE = {
   tagRelativeToMaster: false,
   tagRelativeToStage: false,
   tagRefMismatch: null,
+}
+
+function sanitizedCliEnv(overrides = {}) {
+  const env = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!key.startsWith('GITHUB_'))
+      env[key] = value
+  }
+  return { ...env, ...overrides }
 }
 
 function withEventFile(payload, run) {
@@ -247,11 +257,14 @@ describe('branch policy: Dependabot PR allow rule', () => {
   })
 
   it('executes cleanly end-to-end via CLI for valid and invalid Dependabot PR contexts', () => {
+    const cleanEnv = sanitizedCliEnv()
     const okOut = execFileSync(
       process.execPath,
       [
         SCRIPT,
         '--offline',
+        '--event',
+        'pull_request',
         '--branch',
         'dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21',
         '--base',
@@ -259,7 +272,7 @@ describe('branch policy: Dependabot PR allow rule', () => {
         '--pr-author',
         DEPENDABOT_LOGIN,
       ],
-      { cwd: ROOT, encoding: 'utf8' },
+      { cwd: ROOT, encoding: 'utf8', env: cleanEnv },
     )
     assert.match(okOut, /OK\s+I3\s+branch name dependabot\/npm_and_yarn\/vitepress-2\.0\.0-alpha\.21/)
     assert.match(okOut, /== result: pass/)
@@ -272,6 +285,8 @@ describe('branch policy: Dependabot PR allow rule', () => {
         [
           SCRIPT,
           '--offline',
+          '--event',
+          'pull_request',
           '--branch',
           'dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21',
           '--base',
@@ -279,7 +294,7 @@ describe('branch policy: Dependabot PR allow rule', () => {
           '--pr-author',
           DEPENDABOT_LOGIN,
         ],
-        { cwd: ROOT, encoding: 'utf8' },
+        { cwd: ROOT, encoding: 'utf8', env: cleanEnv },
       )
     }
     catch (error) {
@@ -289,5 +304,61 @@ describe('branch policy: Dependabot PR allow rule', () => {
     assert.equal(stageExit, 1)
     assert.match(stageOut, /FAIL\s+I3.*must target master, got base branch "stage"/)
     assert.ok(DEPENDABOT_ECOSYSTEMS.includes('npm_and_yarn'))
+  })
+
+  it('stays deterministic under inherited push-to-master CI env while keeping push events fail-closed', () => {
+    const pushMasterEnv = sanitizedCliEnv({
+      GITHUB_EVENT_NAME: 'push',
+      GITHUB_BASE_REF: '',
+      GITHUB_HEAD_REF: '',
+      GITHUB_REF: 'refs/heads/master',
+      GITHUB_REF_NAME: 'master',
+      GITHUB_REF_TYPE: 'branch',
+      GITHUB_ACTOR: 'talexdreamsoul',
+    })
+
+    const explicitPrOut = execFileSync(
+      process.execPath,
+      [
+        SCRIPT,
+        '--offline',
+        '--event',
+        'pull_request',
+        '--branch',
+        'dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21',
+        '--base',
+        'master',
+        '--pr-author',
+        DEPENDABOT_LOGIN,
+      ],
+      { cwd: ROOT, encoding: 'utf8', env: pushMasterEnv },
+    )
+    assert.match(explicitPrOut, /OK\s+I3\s+branch name dependabot\/npm_and_yarn\/vitepress-2\.0\.0-alpha\.21/)
+    assert.match(explicitPrOut, /== result: pass/)
+
+    let pushExit = 0
+    let pushOut = ''
+    try {
+      execFileSync(
+        process.execPath,
+        [
+          SCRIPT,
+          '--offline',
+          '--branch',
+          'dependabot/npm_and_yarn/vitepress-2.0.0-alpha.21',
+          '--base',
+          'master',
+          '--pr-author',
+          DEPENDABOT_LOGIN,
+        ],
+        { cwd: ROOT, encoding: 'utf8', env: pushMasterEnv },
+      )
+    }
+    catch (error) {
+      pushExit = error.status
+      pushOut = `${error.stdout ?? ''}${error.stderr ?? ''}`
+    }
+    assert.equal(pushExit, 1)
+    assert.match(pushOut, /FAIL\s+I3.*got event "push"/)
   })
 })
