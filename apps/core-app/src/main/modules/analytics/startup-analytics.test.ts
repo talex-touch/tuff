@@ -565,6 +565,16 @@ describe('StartupAnalytics outbox failure codes and idempotency', () => {
     expect(store.remove).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps the queued startup report when a 200 response carries a non-success ACK', async () => {
+    networkRequestMock.mockResolvedValue({
+      status: 200,
+      data: JSON.stringify({ success: false })
+    })
+    const store = await flushDb([dbItem(11, STARTUP_KEY)])
+    expect(store.remove).not.toHaveBeenCalled()
+    expect(store.markAttempt).toHaveBeenCalledWith(11, 'STARTUP_ACK_INVALID')
+  })
+
   it('stamps every queued report with a startup:<sessionId> key', async () => {
     const analytics = new StartupAnalytics({ enabled: true, maxHistory: 5 })
     ;(analytics as unknown as { currentMetrics: StartupMetrics }).currentMetrics = makeMetrics({

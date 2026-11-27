@@ -18,7 +18,7 @@ describe('maintenance worker', () => {
   })
 
   it('has a task for every cron it is scheduled on', () => {
-    expect(Object.values(TASKS_BY_CRON).flat().sort()).toEqual(['asr', 'docs', 'retention'])
+    expect(Object.values(TASKS_BY_CRON).flat().sort()).toEqual(['asr', 'docs', 'privacy-deletions', 'retention'])
   })
 
   it('fails the scheduled event when a task fails', async () => {

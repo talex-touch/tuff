@@ -5,6 +5,7 @@ import { reconcileExpiredAsrSettlements } from '../../../utils/asrTranscriptionS
 import { readCloudflareBindings } from '../../../utils/cloudflare'
 import { cleanupDocEngagementRecords } from '../../../utils/docAnalyticsStore'
 import { holdMaintenanceRun } from '../../../utils/maintenanceLease'
+import { finalizeExpiredAccountDeletions } from '../../../utils/privacyDataStore'
 import { runTelemetryRetentionMaintenanceIfDue } from '../../../utils/telemetryRetentionMaintenance'
 
 /**
@@ -48,6 +49,17 @@ export default defineEventHandler(async (event) => {
       return { task, durationMs: Date.now() - startedAt, result: await runTelemetryRetentionMaintenanceIfDue(db) }
     case 'docs':
       return { task, durationMs: Date.now() - startedAt, result: await cleanupDocEngagementRecords(db) }
+    case 'privacy-deletions': {
+      const result = await finalizeExpiredAccountDeletions(event)
+      if (result.failed > 0) {
+        throw createError({
+          statusCode: 500,
+          statusMessage: 'Account deletion finalization incomplete',
+          data: { task, durationMs: Date.now() - startedAt, result },
+        })
+      }
+      return { task, durationMs: Date.now() - startedAt, result }
+    }
     default:
       throw createError({ statusCode: 404, statusMessage: 'Not Found' })
   }

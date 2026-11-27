@@ -1,4 +1,4 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { createHash, randomUUID } from 'node:crypto'
 import { createError, getHeader } from 'h3'
@@ -7635,10 +7635,10 @@ function normalizeAnalyticsTopLimit(topLimit?: number): number {
   return Number.isFinite(topLimit) && topLimit && topLimit > 0 ? Math.min(Math.floor(topLimit), 50) : 12
 }
 
-export async function recordPlatformGovernanceEvent(
+function buildPlatformGovernanceEventRecord(
   event: H3Event | undefined,
   input: RecordPlatformGovernanceEventInput,
-): Promise<PlatformGovernanceEvent> {
+): { record: PlatformGovernanceEvent, metadataJson: string | null } {
   const now = new Date().toISOString()
   const scope = assertString(input.scope, 'scope', 80)
   const action = assertString(input.action, 'action', 120)
@@ -7658,6 +7658,47 @@ export async function recordPlatformGovernanceEvent(
     occurredAt: normalizeIso(input.occurredAt),
     createdAt: now,
   }
+  return { record, metadataJson: metadata.json }
+}
+
+export async function ensurePlatformGovernanceSchema(db: D1Database): Promise<void> {
+  await ensureGovernanceSchema(db)
+}
+
+export function preparePlatformGovernanceEventStatement(
+  db: D1Database,
+  event: H3Event | undefined,
+  input: RecordPlatformGovernanceEventInput,
+): D1PreparedStatement {
+  const { record, metadataJson } = buildPlatformGovernanceEventRecord(event, input)
+  return db.prepare(`
+    INSERT INTO ${EVENTS_TABLE} (
+      id, scope, action, actor_hash, context_hash, resource_type, resource_id,
+      channel, unit, quantity, metadata_json, occurred_at, created_at
+    )
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13);
+  `).bind(
+    record.id,
+    record.scope,
+    record.action,
+    record.actorHash,
+    record.contextHash,
+    record.resourceType,
+    record.resourceId,
+    record.channel,
+    record.unit,
+    record.quantity,
+    metadataJson,
+    record.occurredAt,
+    record.createdAt,
+  )
+}
+
+export async function recordPlatformGovernanceEvent(
+  event: H3Event | undefined,
+  input: RecordPlatformGovernanceEventInput,
+): Promise<PlatformGovernanceEvent> {
+  const { record, metadataJson } = buildPlatformGovernanceEventRecord(event, input)
 
   const db = getD1Database(event)
   if (!db) {
@@ -7685,7 +7726,7 @@ export async function recordPlatformGovernanceEvent(
     record.channel,
     record.unit,
     record.quantity,
-    metadata.json,
+    metadataJson,
     record.occurredAt,
     record.createdAt,
   ).run()

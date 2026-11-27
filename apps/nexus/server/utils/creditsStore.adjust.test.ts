@@ -229,4 +229,58 @@ describe('adjustUserCredits: the deduction floor', () => {
     expect(balanceOf(USER)).toEqual({ quota: 20200, used: 0 })
     expect(ledgerOf(USER)).toHaveLength(1)
   })
+
+  it('rolls back balance changes when the ledger write fails and rolls back ledger writes when the balance update fails', async () => {
+    await seedBalance(USER, { quota: 20500, used: 0 })
+
+    d1.sqlite.exec(`
+      CREATE TRIGGER fail_adjust_ledger
+      BEFORE INSERT ON credit_ledger
+      BEGIN
+        SELECT RAISE(ABORT, 'simulated ledger failure');
+      END;
+    `)
+    await expect(store.adjustUserCredits(event, USER, -200, 'probe')).rejects.toThrow('simulated ledger failure')
+    expect(balanceOf(USER)).toEqual({ quota: 20500, used: 0 })
+    expect(ledgerOf(USER)).toEqual([])
+
+    d1.sqlite.exec(`
+      DROP TRIGGER fail_adjust_ledger;
+      CREATE TRIGGER fail_adjust_balance
+      BEFORE UPDATE ON credit_balances
+      BEGIN
+        SELECT RAISE(ABORT, 'simulated balance failure');
+      END;
+    `)
+    await expect(store.adjustUserCredits(event, USER, 500, 'promo')).rejects.toThrow('simulated balance failure')
+    expect(balanceOf(USER)).toEqual({ quota: 20500, used: 0 })
+    expect(ledgerOf(USER)).toEqual([])
+  })
+
+  it('applies an idempotent adjustment once across serial and concurrent retries and fails closed on payload conflict', async () => {
+    await seedBalance(USER, { quota: 20500, used: 0 })
+
+    const key = 'admin-adjust:00000001'
+    const concurrent = await Promise.all([
+      store.adjustUserCredits(event, USER, 500, 'promo', { adminUserId: 'admin_1' }, { idempotencyKey: key }),
+      store.adjustUserCredits(event, USER, 500, 'promo', { adminUserId: 'admin_1' }, { idempotencyKey: key }),
+      store.adjustUserCredits(event, USER, 500, 'promo', { adminUserId: 'admin_1' }, { idempotencyKey: key }),
+    ])
+
+    expect(new Set(concurrent.map(item => item.ledgerId)).size).toBe(1)
+    expect(balanceOf(USER)).toEqual({ quota: 21000, used: 0 })
+    expect(ledgerOf(USER)).toEqual([{ delta: 500, reason: 'promo' }])
+
+    const serial = await store.adjustUserCredits(event, USER, 500, 'promo', { adminUserId: 'admin_1' }, { idempotencyKey: key })
+    expect(serial.ledgerId).toBe(concurrent[0]!.ledgerId)
+    expect(balanceOf(USER)).toEqual({ quota: 21000, used: 0 })
+
+    await expect(
+      store.adjustUserCredits(event, USER, 600, 'promo', { adminUserId: 'admin_1' }, { idempotencyKey: key }),
+    ).rejects.toThrow('Credit idempotency conflict.')
+    await expect(
+      store.adjustUserCredits(event, USER, 500, 'promo', { adminUserId: 'admin_1' }, { idempotencyKey: 'bad' }),
+    ).rejects.toThrow('Invalid credit idempotency key.')
+    expect(balanceOf(USER)).toEqual({ quota: 21000, used: 0 })
+  })
 })

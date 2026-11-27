@@ -21,7 +21,7 @@ interface ScheduledEvent {
 export const TASKS_BY_CRON: Record<string, readonly string[]> = {
   '*/5 * * * *': ['asr'],
   '11 */6 * * *': ['retention'],
-  '37 4 * * *': ['docs'],
+  '37 4 * * *': ['docs', 'privacy-deletions'],
 }
 
 export async function runMaintenanceTasks(cron: string, env: Env, fetchImpl: typeof fetch = fetch): Promise<void> {

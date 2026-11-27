@@ -13,6 +13,16 @@ const identityMocks = vi.hoisted(() => ({
   resolveTelemetryUserId: vi.fn(),
 }))
 
+const authStoreMocks = vi.hoisted(() => ({
+  DEFAULT_USER_PRIVACY_SETTINGS: {
+    analytics: true,
+    crashReports: true,
+    usageData: false,
+    personalization: true,
+  },
+  getUserById: vi.fn(),
+}))
+
 const telemetryMocks = vi.hoisted(() => ({
   fakeDb: { kind: 'd1' },
   fakeBatch: { kind: 'batch' },
@@ -31,6 +41,7 @@ vi.mock('h3', async () => {
   }
 })
 
+vi.mock('../../server/utils/authStore', () => authStoreMocks)
 vi.mock('../../server/utils/ipSecurityStore', () => ipMocks)
 vi.mock('../../server/utils/telemetryIdentity', () => identityMocks)
 vi.mock('../../server/utils/telemetryStore', async () => {
@@ -94,6 +105,9 @@ describe('/api/telemetry/record idempotency', () => {
     h3Mocks.readBody.mockResolvedValue(startupBody())
     ipMocks.guardTelemetryIp.mockResolvedValue(undefined)
     identityMocks.resolveTelemetryUserId.mockResolvedValue(null)
+    authStoreMocks.getUserById.mockResolvedValue({
+      privacySettings: { analytics: true, crashReports: true, usageData: true, personalization: true },
+    })
     telemetryMocks.getTelemetryBatchReceipt.mockResolvedValue(null)
     acceptEverything()
   })
@@ -192,6 +206,9 @@ describe('/api/telemetry/record attribution', () => {
     vi.clearAllMocks()
     h3Mocks.getHeader.mockReturnValue(null)
     ipMocks.guardTelemetryIp.mockResolvedValue(undefined)
+    authStoreMocks.getUserById.mockResolvedValue({
+      privacySettings: { analytics: true, crashReports: true, usageData: true, personalization: true },
+    })
     telemetryMocks.getTelemetryBatchReceipt.mockResolvedValue(null)
     acceptEverything()
   })
@@ -207,10 +224,25 @@ describe('/api/telemetry/record attribution', () => {
     acceptEverything()
     ipMocks.guardTelemetryIp.mockResolvedValue(undefined)
     identityMocks.resolveTelemetryUserId.mockResolvedValue('user-1')
+    authStoreMocks.getUserById.mockResolvedValue({
+      privacySettings: { analytics: true, crashReports: true, usageData: true, personalization: true },
+    })
     telemetryMocks.getTelemetryBatchReceipt.mockResolvedValue(null)
     h3Mocks.readBody.mockResolvedValue(startupBody({ isAnonymous: true }))
     await handler({})
     expect(preparedInput()).toMatchObject({ userId: undefined, isAnonymous: true })
+  })
+
+  it('rejects authenticated events disallowed by the user privacy settings without writing them', async () => {
+    identityMocks.resolveTelemetryUserId.mockResolvedValue('user-1')
+    authStoreMocks.getUserById.mockResolvedValue({
+      privacySettings: { analytics: true, crashReports: true, usageData: false, personalization: true },
+    })
+    h3Mocks.readBody.mockResolvedValue(startupBody({ eventType: 'visit', isAnonymous: false }))
+
+    await expect(handler({})).resolves.toEqual({ success: true, accepted: 0, rejected: 1, duplicate: false })
+    expect(telemetryMocks.prepareTelemetryWrite).toHaveBeenCalledWith(expect.anything(), [])
+    expect(committedReceipt().response).toEqual({ success: true, accepted: 0, rejected: 1, duplicate: false })
   })
 
   it('never attributes an unauthenticated event, whatever the body says', async () => {
