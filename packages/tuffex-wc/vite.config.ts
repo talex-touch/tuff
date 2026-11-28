@@ -21,6 +21,77 @@ const externalDeps = [
   'marked',
 ]
 
+const TUFFEX_WC_MEDIA_COMPONENTS = new Set([
+  'avatar',
+  'file-uploader',
+  'icon-morph',
+  'icon-picker',
+  'image-gallery',
+  'image-preview',
+  'image-uploader',
+])
+
+const TUFFEX_WC_DATA_COMPONENTS = new Set([
+  'cascader',
+  'data-table',
+  'date-picker',
+  'descriptions',
+  'drawer-form',
+  'form',
+  'modal-form',
+  'picker',
+  'sortable-list',
+  'steps',
+  'steps-form',
+  'timeline',
+  'transfer',
+  'tree',
+  'tree-select',
+])
+
+const TUFFEX_WC_EXTRAS_COMPONENTS = new Set([
+  'ai-elements',
+  'alert',
+  'badge',
+  'breadcrumb',
+  'collapse',
+  'container',
+  'context-menu',
+  'dialog',
+  'filter-chips',
+  'flat-dropdown',
+  'flat-select',
+  'grid',
+  'grid-layout',
+  'group-block',
+  'inline-citation',
+  'markdown-view',
+  'nav-bar',
+  'pagination',
+  'progress',
+  'progress-bar',
+  'radio',
+  'rating',
+  'scrub-field',
+  'search-select',
+  'segmented-slider',
+  'selection-actions',
+  'sensitive-input',
+  'sidebar-nav',
+  'slider',
+  'splitter',
+  'stat-card',
+  'status-badge',
+  'status-hint',
+  'stream-text',
+  'tab-bar',
+  'tabs',
+  'tag-input',
+  'textarea',
+  'toast',
+  'toast-panel',
+])
+
 export default defineConfig({
   resolve: {
     alias: [
@@ -94,14 +165,22 @@ export default defineConfig({
           ) {
             return undefined
           }
-          // Keep all statically shared TuffEx Vue components & utils in one cycle-free chunk
-          // imported strictly one-way by the element wrapper chunks (`tier-*` / `base-*`).
-          if (
-            normalized.includes('/packages/tuffex/packages/utils/')
-            || normalized.includes('/packages/tuffex/packages/components/src/')
-          ) {
+          // Partition TuffEx Vue components into strictly cycle-free layered chunks so
+          // each chunk stays comfortably under Nexus's 600 KB client chunk budget and
+          // element wrappers (`tier-*` / `base-*`) import them strictly one-way.
+          const tuffexCompMatch = normalized.match(/\/packages\/tuffex\/packages\/components\/src\/([^/]+)\//)
+          if (tuffexCompMatch) {
+            const comp = tuffexCompMatch[1]!
+            if (TUFFEX_WC_MEDIA_COMPONENTS.has(comp))
+              return 'tuffex-media'
+            if (TUFFEX_WC_DATA_COMPONENTS.has(comp))
+              return 'tuffex-data'
+            if (TUFFEX_WC_EXTRAS_COMPONENTS.has(comp))
+              return 'tuffex-extras'
             return 'tuffex-shared'
           }
+          if (normalized.includes('/packages/tuffex/packages/utils/'))
+            return 'tuffex-shared'
           return undefined
         },
       },
