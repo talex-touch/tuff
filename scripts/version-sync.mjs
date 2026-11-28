@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { execSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { stdin as input, stdout as output } from 'node:process'
+import { execFileSync } from 'node:child_process'
+import { readFileSync, realpathSync } from 'node:fs'
+import path, { dirname, join } from 'node:path'
+import process, { stdin as input, stdout as output } from 'node:process'
 import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
 import chalk from 'chalk'
@@ -13,6 +13,37 @@ const __dirname = dirname(__filename)
 const rootDir = join(__dirname, '..')
 const VERSION_FILES = ['package.json', 'apps/core-app/package.json']
 const isInteractive = Boolean(input.isTTY && output.isTTY)
+
+export const SEMVER_VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9a-z-]+(?:\.[0-9a-z-]+)*)?$/i
+export const RELEASE_TAG_PATTERN = /^v\d+\.\d+\.\d+(?:-[0-9a-z-]+(?:\.[0-9a-z-]+)*)?$/i
+export const GIT_BRANCH_PATTERN = /^[\w./-]+$/
+
+export function assertValidVersion(version) {
+  if (typeof version !== 'string' || !SEMVER_VERSION_PATTERN.test(version)) {
+    throw new Error(`Invalid semantic version: ${String(version)}`)
+  }
+  return version
+}
+
+export function assertValidTag(tag) {
+  if (typeof tag !== 'string' || !RELEASE_TAG_PATTERN.test(tag)) {
+    throw new Error(`Invalid release tag: ${String(tag)}`)
+  }
+  return tag
+}
+
+export function assertValidBranch(branch) {
+  if (
+    typeof branch !== 'string'
+    || !GIT_BRANCH_PATTERN.test(branch)
+    || branch.startsWith('-')
+    || branch.includes('..')
+    || branch.endsWith('.lock')
+  ) {
+    throw new Error(`Invalid git branch name: ${String(branch)}`)
+  }
+  return branch
+}
 
 const log = {
   title(message) {
@@ -32,17 +63,25 @@ const log = {
   },
 }
 
-if (process.env.TALEX_VERSION_SYNC_CHILD === '1') {
-  log.warn('Detected recursive version script call. Skipping.')
-  process.exit(0)
+function runFile(bin, args = [], options = {}) {
+  execFileSync(bin, args, { stdio: 'inherit', cwd: rootDir, ...options })
 }
 
-function runCommand(command, options = {}) {
-  execSync(command, { stdio: 'inherit', cwd: rootDir, ...options })
+function execPnpmSync(args, options = {}) {
+  const execOptions = { stdio: 'inherit', cwd: rootDir, ...options }
+  try {
+    return execFileSync('pnpm', args, execOptions)
+  }
+  catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return execFileSync('corepack', ['pnpm', ...args], execOptions)
+    }
+    throw error
+  }
 }
 
 function getGitStatusLines() {
-  const status = execSync('git status --porcelain', {
+  const status = execFileSync('git', ['status', '--porcelain'], {
     encoding: 'utf-8',
     cwd: rootDir,
   }).trim()
@@ -55,18 +94,19 @@ function getChangedFiles() {
   const lines = getGitStatusLines()
   return lines
     .map(line => line.slice(3).trim())
-    .map(path => (path.includes(' -> ') ? path.split(' -> ').pop() : path))
+    .map(entry => (entry.includes(' -> ') ? entry.split(' -> ').pop() : entry))
     .filter(Boolean)
 }
 
 function readRootVersion() {
   const content = readFileSync(join(rootDir, 'package.json'), 'utf-8')
   const data = JSON.parse(content)
-  return data.version
+  return assertValidVersion(data.version)
 }
 
 function tagExists(tag) {
-  const existing = execSync(`git tag -l "${tag}"`, {
+  assertValidTag(tag)
+  const existing = execFileSync('git', ['tag', '-l', '--', tag], {
     encoding: 'utf-8',
     cwd: rootDir,
   }).trim()
@@ -84,8 +124,7 @@ function stageFiles(files) {
   if (!files.length) {
     return
   }
-  const args = files.map(file => `"${file}"`).join(' ')
-  execSync(`git add -- ${args}`, { stdio: 'inherit', cwd: rootDir })
+  runFile('git', ['add', '--', ...files])
 }
 
 function formatFileList(files) {
@@ -115,11 +154,11 @@ async function confirmAction(question) {
  */
 function getCurrentBranch() {
   try {
-    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+    const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
       encoding: 'utf-8',
       cwd: rootDir,
     }).trim()
-    return branch === 'HEAD' ? null : branch
+    return branch === 'HEAD' ? null : assertValidBranch(branch)
   }
   catch (error) {
     log.error(`Failed to read current branch: ${error.message}`)
@@ -222,7 +261,7 @@ async function runVersionSync() {
   log.info('Running bumpp (no commit/tag)...')
   try {
     const finalArgs = [...bumppArgs, '--yes', '--no-commit', '--no-tag', '--no-push']
-    runCommand(`bumpp ${finalArgs.join(' ')}`, {
+    execPnpmSync(['exec', 'bumpp', ...finalArgs], {
       env: { ...process.env, TALEX_VERSION_SYNC_CHILD: '1' },
     })
   }
@@ -235,7 +274,7 @@ async function runVersionSync() {
 
   log.info('Syncing core package version...')
   try {
-    runCommand('node scripts/sync-core-package.mjs')
+    runFile(process.execPath, ['scripts/sync-core-package.mjs'])
   }
   catch {
     log.error('sync-core-package failed.')
@@ -244,7 +283,7 @@ async function runVersionSync() {
 
   log.info('Running pnpm install --lockfile-only --ignore-scripts...')
   try {
-    runCommand('pnpm install --lockfile-only --ignore-scripts')
+    execPnpmSync(['install', '--lockfile-only', '--ignore-scripts'])
   }
   catch {
     log.error('pnpm install failed.')
@@ -253,7 +292,7 @@ async function runVersionSync() {
 
   const changedFiles = getChangedFiles()
   if (versionAfter === versionBefore) {
-    const tagName = `v${versionAfter}`
+    const tagName = assertValidTag(`v${versionAfter}`)
     if (tagExists(tagName)) {
       log.info(`Tag ${tagName} already exists. Nothing to do.`)
       return
@@ -272,9 +311,9 @@ async function runVersionSync() {
 
     try {
       log.info('Creating annotated tag...')
-      runCommand(`git tag -a ${tagName} -m "release: ${tagName}"`)
+      runFile('git', ['tag', '-a', tagName, '-m', `release: ${tagName}`])
       log.info(`Pushing tag ${tagName}...`)
-      runCommand(`git push origin ${tagName}`)
+      runFile('git', ['push', 'origin', '--', tagName])
     }
     catch {
       log.error('Failed to create or push tag.')
@@ -290,7 +329,7 @@ async function runVersionSync() {
     return
   }
 
-  const tagName = `v${versionAfter}`
+  const tagName = assertValidTag(`v${versionAfter}`)
   ensureTagNotExists(tagName)
 
   const lockfiles = changedFiles.filter(file => file.endsWith('pnpm-lock.yaml'))
@@ -298,22 +337,38 @@ async function runVersionSync() {
   stageFiles(filesToCommit)
 
   log.info('Committing version update...')
-  runCommand(`git commit -m "release: ${tagName}"`)
+  runFile('git', ['commit', '-m', `release: ${tagName}`])
 
   log.info('Creating annotated tag...')
-  runCommand(`git tag -a ${tagName} -m "release: ${tagName}"`)
+  runFile('git', ['tag', '-a', tagName, '-m', `release: ${tagName}`])
 
   log.info(`Pushing commits to ${releaseBranch}...`)
-  runCommand(`git push origin HEAD:${releaseBranch}`)
+  runFile('git', ['push', 'origin', '--', `HEAD:${releaseBranch}`])
 
   log.info(`Pushing tag ${tagName}...`)
-  runCommand(`git push origin ${tagName}`)
+  runFile('git', ['push', 'origin', '--', tagName])
 
   log.success(`Version sync completed. Tag ${tagName} created and pushed.`)
 }
 
-// 执行主流程
-runVersionSync().catch((error) => {
-  log.error(error instanceof Error ? error.message : String(error))
-  process.exit(1)
-})
+function invokedDirectly() {
+  if (!process.argv[1])
+    return false
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(__filename)
+  }
+  catch {
+    return path.resolve(process.argv[1]) === __filename
+  }
+}
+
+if (invokedDirectly()) {
+  if (process.env.TALEX_VERSION_SYNC_CHILD === '1') {
+    log.warn('Detected recursive version script call. Skipping.')
+    process.exit(0)
+  }
+  runVersionSync().catch((error) => {
+    log.error(error instanceof Error ? error.message : String(error))
+    process.exit(1)
+  })
+}

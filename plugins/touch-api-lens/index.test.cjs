@@ -514,3 +514,75 @@ test('rolls back newly written secret if collections.json persistence fails', as
   assert.equal(res.status, 'blocked')
   assert.equal(harness.secretStore.size, 0)
 })
+
+test('strips/vaults URL userinfo, sensitive query params, and sensitive JSON/form body fields, rehydrates on run, and preserves $ in fetch()', async () => {
+  const harness = createHarness()
+  const rawQuerySecret = 'query-api-key-secret-8899'
+  const rawBodySecret = 'body-client-secret-7766'
+  const rawPass = 'url-pass-5544'
+
+  await harness.module.onFeatureTriggered('api-lens', {
+    text: `save vault-all curl -X POST "https://alice:${rawPass}@api.example.com/v1/login?api_key=${rawQuerySecret}&page=1" --json '{"user":"alice","client_secret":"${rawBodySecret}","note":"cost $& $$"}'`,
+  })
+
+  // Previews and exported snippets must NEVER leak URL userinfo, query secrets, or body secrets
+  const itemsJson = JSON.stringify(harness.state.items)
+  assert.doesNotMatch(itemsJson, new RegExp(`${rawPass}|${rawQuerySecret}|${rawBodySecret}`))
+
+  const sendItem = findItemByAction(harness.state.items, 'send-request')
+  await harness.module.onItemAction(sendItem, { actionId: 'copy-fetch' })
+  const fetchSnippet = harness.state.clipboardWrites.at(-1)
+  assert.doesNotMatch(fetchSnippet, new RegExp(`${rawPass}|${rawQuerySecret}|${rawBodySecret}`))
+  assert.match(fetchSnippet, /cost \$& \$\$/)
+
+  // Save preset and verify collections.json has ZERO secrets
+  const saveRes = await harness.module.onItemAction(findItemByAction(harness.state.items, 'save-preset'))
+  assert.equal(saveRes.success, true)
+  const storedCollections = harness.storageFiles.get('collections.json')
+  const collectionsJson = JSON.stringify(storedCollections)
+  assert.doesNotMatch(collectionsJson, new RegExp(`${rawPass}|${rawQuerySecret}|${rawBodySecret}`))
+  assert.match(storedCollections.presets[0].secretKey, /^apilens\.[0-9a-f]{32}$/)
+
+  // Run preset and verify headers, query params, and body fields are all rehydrated
+  await harness.module.onFeatureTriggered('api-lens', { text: 'run vault-all' })
+  const runRes = await harness.module.onItemAction(findItemByAction(harness.state.items, 'run-preset'))
+  assert.equal(runRes.success, true)
+  assert.equal(harness.state.httpCalls.length, 1)
+  assert.equal(harness.state.httpCalls[0].url, `https://api.example.com/v1/login?api_key=${rawQuerySecret}&page=1`)
+  assert.match(harness.state.httpCalls[0].headers.Authorization, /^Basic /)
+  assert.deepEqual(JSON.parse(harness.state.httpCalls[0].body), {
+    user: 'alice',
+    client_secret: rawBodySecret,
+    note: 'cost $& $$',
+  })
+})
+
+test('purges vault secret keys when presets are evicted beyond MAX_PRESETS', async () => {
+  const existingPresets = Array.from({ length: 64 }, (_, i) => ({
+    id: `preset-old-${i}`,
+    name: `old-${i}`,
+    method: 'GET',
+    url: `https://api.example.com/items/${i}`,
+    headers: {},
+    secretHeaderNames: ['Authorization'],
+    secretKey: `apilens.${String(i).padStart(32, '0')}`,
+    body: null,
+  }))
+  const existingSecrets = existingPresets.map(p => [p.secretKey, JSON.stringify({ Authorization: `Bearer tok-${p.name}` })])
+  const evictedKey = existingPresets[63].secretKey
+
+  const harness = createHarness({
+    files: [['collections.json', { presets: existingPresets }]],
+    secrets: existingSecrets,
+  })
+  assert.equal(harness.secretStore.has(evictedKey), true)
+
+  await harness.module.onFeatureTriggered('api-lens', {
+    text: 'save newest GET https://api.example.com/new',
+  })
+  const saveRes = await harness.module.onItemAction(findItemByAction(harness.state.items, 'save-preset'))
+  assert.equal(saveRes.success, true)
+  assert.equal(harness.storageFiles.get('collections.json').presets.length, 64)
+  assert.equal(harness.secretStore.has(evictedKey), false)
+  assert.ok(harness.state.secretDeletes.includes(evictedKey))
+})

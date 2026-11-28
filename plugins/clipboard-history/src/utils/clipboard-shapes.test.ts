@@ -6,8 +6,12 @@ import {
   detectCommand,
   detectSecret,
   extractLinks,
+  getClipboardDisplayTitle,
+  getClipboardPreviewText,
+  hasPrivateKeySecret,
   isSshRelatedPath,
   parseLinkParams,
+  readSecretPlainValue,
   selectClipboardInsight,
 } from './clipboard-shapes'
 
@@ -96,6 +100,32 @@ describe('secret detection', () => {
   it('treats a sensitive env assignment as a credential but leaves plain ones alone', () => {
     expect(detectSecret('API_TOKEN=abcdefghijklmnop')?.kind).toBe('env')
     expect(detectSecret('NODE_ENV=production')).toBeNull()
+  })
+
+  it('prioritizes private-key over preceding critical tokens and blocks reveal in all guards', () => {
+    const keyBody = 'MIIEowIBAAKCAQEAxLoNGoOfHmExamplePrivateKeyBody'
+    const mixed = `ghp_1234567890abcdefghijklmnopqrstuvwxyz\n-----BEGIN RSA PRIVATE KEY-----\n${keyBody}\n-----END RSA PRIVATE KEY-----`
+    const info = detectSecret(mixed)
+
+    expect(info?.kind).toBe('private-key')
+    expect(hasPrivateKeySecret(mixed)).toBe(true)
+
+    const preview = getClipboardPreviewText(text(mixed), true)
+    expect(preview).not.toContain(keyBody)
+
+    // Even if a caller supplies a non-private-key ClipboardSecretInfo, readSecretPlainValue refuses reveal.
+    const spoofedInfo = { ...info!, kind: 'token' as const }
+    expect(readSecretPlainValue(spoofedInfo, mixed)).not.toContain(keyBody)
+  })
+
+  it('skips host-ip spans in readSecretPlainValue when an IP precedes a non-critical credential', () => {
+    const content = `host 10.0.3.14 uses ${STRIPE_TEST_KEY}`
+    const info = detectSecret(content)
+    expect(info).not.toBeNull()
+    expect(readSecretPlainValue(info!, content)).toBe(STRIPE_TEST_KEY)
+
+    expect(getClipboardDisplayTitle(text('ssh deploy@10.0.3.14'), { maskHostIp: true })).not.toContain('10.0.3')
+    expect(getClipboardDisplayTitle(text('ssh deploy@10.0.3.14'), { maskHostIp: false })).toContain('10.0.3.14')
   })
 })
 

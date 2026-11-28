@@ -534,3 +534,113 @@ test('blocks saving a 129th account at MAX_ACCOUNTS without writing an orphan se
   assert.equal(res.reason, 'account-limit-reached')
   assert.equal(h.secrets.size, 0)
 })
+
+test('serializes concurrent enrollments and deletions so no account is dropped or secret orphaned', async () => {
+  const files = new Map()
+  let activeWrites = 0
+  let maxConcurrentWrites = 0
+  let gatedReadCount = 0
+  let releaseGate = null
+  let gateEnteredResolve = null
+  let gateActive = false
+
+  const armGate = () => {
+    gatedReadCount = 0
+    gateActive = true
+    return new Promise((resolve) => {
+      gateEnteredResolve = resolve
+    })
+  }
+
+  const h = createHarness({
+    nowMs: 59 * 1000,
+    files,
+    storage: {
+      async getFile(name) {
+        if (name === 'totp-accounts.json') {
+          gatedReadCount += 1
+          if (gateActive) {
+            gateActive = false
+            gateEnteredResolve()
+            await new Promise((resolve) => {
+              releaseGate = resolve
+            })
+          }
+          else {
+            await Promise.resolve()
+          }
+        }
+        const existing = files.get(name)
+        return existing ? structuredClone(existing) : null
+      },
+      async setFile(name, value) {
+        activeWrites += 1
+        maxConcurrentWrites = Math.max(maxConcurrentWrites, activeWrites)
+        try {
+          await Promise.resolve()
+          files.set(name, structuredClone(value))
+        }
+        finally {
+          activeWrites -= 1
+        }
+      },
+    },
+  })
+
+  await h.module.onInit()
+
+  await h.module.onFeatureTriggered('totp-vault', { text: `add First a@test ${RFC_SHA1_SEED}` })
+  const enrollItem1 = h.state.items[0]
+
+  await h.module.onFeatureTriggered('totp-vault', { text: `add Second b@test ${RFC_SHA256_SEED}` })
+  const enrollItem2 = h.state.items[0]
+
+  const firstEnrollReadEntered = armGate()
+  const p1 = h.module.onItemAction(enrollItem1, { actionId: 'save-account' })
+  const p2 = h.module.onItemAction(enrollItem2, { actionId: 'save-account' })
+  await firstEnrollReadEntered
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.equal(gatedReadCount, 1, 'second enrollment must wait in queue before reading metadata')
+  releaseGate()
+  const [r1, r2] = await Promise.all([p1, p2])
+
+  assert.equal(r1.success, true)
+  assert.equal(r2.success, true)
+  assert.equal(maxConcurrentWrites, 1)
+  const storedAccounts = files.get('totp-accounts.json').accounts
+  assert.equal(storedAccounts.length, 2)
+  assert.equal(h.secrets.size, 2)
+  assert.deepEqual(
+    storedAccounts.map(a => a.issuer).sort(),
+    ['First', 'Second'],
+  )
+
+  // Concurrent delete + enroll must also serialize cleanly
+  await h.module.onFeatureTriggered('totp-vault', { text: '' })
+  const firstAccountItem = h.state.items.find(i => i.render.basic.title.includes('First'))
+  assert.ok(firstAccountItem, 'expected First account item to be listed')
+  await h.module.onFeatureTriggered('totp-vault', { text: `add Third c@test ${RFC_SHA1_SEED}` })
+  const enrollItem3 = h.state.items[0]
+
+  const deleteReadEntered = armGate()
+  const delPromise = h.module.onItemAction(firstAccountItem, { actionId: 'delete-account' })
+  const enroll3Promise = h.module.onItemAction(enrollItem3, { actionId: 'save-account' })
+  await deleteReadEntered
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.equal(gatedReadCount, 1, 'concurrent enroll must wait for in-flight delete to finish')
+  releaseGate()
+  const [delRes, enroll3Res] = await Promise.all([delPromise, enroll3Promise])
+
+  assert.equal(delRes.success, true)
+  assert.equal(enroll3Res.success, true)
+  assert.equal(maxConcurrentWrites, 1)
+  const finalAccounts = files.get('totp-accounts.json').accounts
+  assert.equal(finalAccounts.length, 2)
+  assert.equal(h.secrets.size, 2)
+  assert.deepEqual(
+    finalAccounts.map(a => a.issuer).sort(),
+    ['Second', 'Third'],
+  )
+})

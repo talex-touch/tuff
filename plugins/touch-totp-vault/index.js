@@ -459,128 +459,142 @@ function mapHostError(error, fallbackReason, fallbackMessage) {
   }
 }
 
-// Fail-closed account enrollment: secret.set MUST succeed before touching plugin.storage!
-async function enrollAccountFailClosed(draft) {
-  if (!hasSecretCapability()) {
-    return {
-      externalAction: true,
-      success: false,
-      status: 'blocked',
-      reason: 'capability-unavailable',
-      message: '安全密钥存储不可用，已拒绝保存',
-    }
-  }
+// Serialize read-modify-write metadata mutations so concurrent enrollments/deletes
+// cannot drop an account or leave an orphaned secret in secure storage.
+let metadataWriteQueue = Promise.resolve()
 
-  let existingAccounts
-  try {
-    existingAccounts = await loadAccounts()
-  }
-  catch (error) {
-    logger?.error?.('[touch-totp-vault] Failed to load existing accounts before save')
-    return mapHostError(error, 'storage-read-failed', '读取账户列表失败，未保存新账户')
-  }
-
-  if (existingAccounts.length >= MAX_ACCOUNTS) {
-    return {
-      externalAction: true,
-      success: false,
-      status: 'blocked',
-      reason: 'account-limit-reached',
-      message: `已达到最大账户数上限（${MAX_ACCOUNTS}），请先删除不需要的账户后再添加`,
-    }
-  }
-
-  const accountId = generateAccountId()
-  const secretKey = buildSecretKey(accountId)
-
-  // Step 1: Write Base32 seed EXCLUSIVELY to host encrypted secret capability FIRST.
-  try {
-    await secret.set(secretKey, draft.base32Seed)
-  }
-  catch (error) {
-    logger?.error?.('[touch-totp-vault] Failed to store secret')
-    return mapHostError(error, 'secret-store-failed', '安全密钥写入失败，未保存账户配置')
-  }
-
-  // Step 2: Only after secret.set succeeded, persist sanitized metadata to plugin.storage.
-  try {
-    const metadata = sanitizeAccountMetadata({
-      id: accountId,
-      secretKey,
-      issuer: draft.issuer,
-      label: draft.label,
-      algorithm: draft.algorithm,
-      digits: draft.digits,
-      period: draft.period,
-      createdAt: Date.now(),
-    })
-    await saveAccounts([...existingAccounts, metadata])
-    return {
-      externalAction: true,
-      success: true,
-      status: 'started',
-      message: `已安全保存 ${metadata.issuer} (${metadata.label})`,
-    }
-  }
-  catch (error) {
-    // Rollback orphan secret best-effort if metadata persistence failed
-    try {
-      await secret.delete(secretKey)
-    }
-    catch {
-      logger?.warn?.('[touch-totp-vault] Failed to rollback secret after metadata failure')
-    }
-    logger?.error?.('[touch-totp-vault] Failed to save sanitized metadata')
-    return mapHostError(error, 'action-failed', '账户元数据保存失败，已回滚密钥')
-  }
+function serializeMetadataMutation(task) {
+  const run = metadataWriteQueue.then(task, task)
+  metadataWriteQueue = run.then(() => undefined, () => undefined)
+  return run
 }
 
-async function deleteAccountFailClosed(accountId) {
-  if (!hasSecretCapability()) {
-    return {
-      externalAction: true,
-      success: false,
-      status: 'blocked',
-      reason: 'capability-unavailable',
-      message: '安全密钥存储不可用，无法删除密钥',
+// Fail-closed account enrollment: secret.set MUST succeed before touching plugin.storage!
+function enrollAccountFailClosed(draft) {
+  return serializeMetadataMutation(async () => {
+    if (!hasSecretCapability()) {
+      return {
+        externalAction: true,
+        success: false,
+        status: 'blocked',
+        reason: 'capability-unavailable',
+        message: '安全密钥存储不可用，已拒绝保存',
+      }
     }
-  }
 
-  const accounts = await loadAccounts()
-  const target = accounts.find(a => a.id === accountId)
-  if (!target) {
-    return {
-      externalAction: true,
-      success: false,
-      status: 'blocked',
-      reason: 'account-not-found',
-      message: '未找到指定 2FA 账户',
+    let existingAccounts
+    try {
+      existingAccounts = await loadAccounts()
     }
-  }
-
-  // Step 1: Delete from encrypted secret store FIRST (fail-closed)
-  try {
-    await secret.delete(target.secretKey)
-  }
-  catch (error) {
-    logger?.error?.('[touch-totp-vault] Failed to delete secret')
-    return mapHostError(error, 'secret-delete-failed', '删除安全密钥失败，已保留账户记录')
-  }
-
-  // Step 2: Remove sanitized metadata entry
-  try {
-    await saveAccounts(accounts.filter(a => a.id !== accountId))
-    return {
-      externalAction: true,
-      success: true,
-      status: 'started',
-      message: `已移除 ${target.issuer} (${target.label})`,
+    catch (error) {
+      logger?.error?.('[touch-totp-vault] Failed to load existing accounts before save')
+      return mapHostError(error, 'storage-read-failed', '读取账户列表失败，未保存新账户')
     }
-  }
-  catch (error) {
-    logger?.error?.('[touch-totp-vault] Failed to update metadata after delete')
-    return mapHostError(error, 'action-failed', '更新账户列表失败')
-  }
+
+    if (existingAccounts.length >= MAX_ACCOUNTS) {
+      return {
+        externalAction: true,
+        success: false,
+        status: 'blocked',
+        reason: 'account-limit-reached',
+        message: `已达到最大账户数上限（${MAX_ACCOUNTS}），请先删除不需要的账户后再添加`,
+      }
+    }
+
+    const accountId = generateAccountId()
+    const secretKey = buildSecretKey(accountId)
+
+    // Step 1: Write Base32 seed EXCLUSIVELY to host encrypted secret capability FIRST.
+    try {
+      await secret.set(secretKey, draft.base32Seed)
+    }
+    catch (error) {
+      logger?.error?.('[touch-totp-vault] Failed to store secret')
+      return mapHostError(error, 'secret-store-failed', '安全密钥写入失败，未保存账户配置')
+    }
+
+    // Step 2: Only after secret.set succeeded, persist sanitized metadata to plugin.storage.
+    try {
+      const metadata = sanitizeAccountMetadata({
+        id: accountId,
+        secretKey,
+        issuer: draft.issuer,
+        label: draft.label,
+        algorithm: draft.algorithm,
+        digits: draft.digits,
+        period: draft.period,
+        createdAt: Date.now(),
+      })
+      await saveAccounts([...existingAccounts, metadata])
+      return {
+        externalAction: true,
+        success: true,
+        status: 'started',
+        message: `已安全保存 ${metadata.issuer} (${metadata.label})`,
+      }
+    }
+    catch (error) {
+      // Rollback orphan secret best-effort if metadata persistence failed
+      try {
+        await secret.delete(secretKey)
+      }
+      catch {
+        logger?.warn?.('[touch-totp-vault] Failed to rollback secret after metadata failure')
+      }
+      logger?.error?.('[touch-totp-vault] Failed to save sanitized metadata')
+      return mapHostError(error, 'action-failed', '账户元数据保存失败，已回滚密钥')
+    }
+  })
+}
+
+function deleteAccountFailClosed(accountId) {
+  return serializeMetadataMutation(async () => {
+    if (!hasSecretCapability()) {
+      return {
+        externalAction: true,
+        success: false,
+        status: 'blocked',
+        reason: 'capability-unavailable',
+        message: '安全密钥存储不可用，无法删除密钥',
+      }
+    }
+
+    const accounts = await loadAccounts()
+    const target = accounts.find(a => a.id === accountId)
+    if (!target) {
+      return {
+        externalAction: true,
+        success: false,
+        status: 'blocked',
+        reason: 'account-not-found',
+        message: '未找到指定 2FA 账户',
+      }
+    }
+
+    // Step 1: Delete from encrypted secret store FIRST (fail-closed)
+    try {
+      await secret.delete(target.secretKey)
+    }
+    catch (error) {
+      logger?.error?.('[touch-totp-vault] Failed to delete secret')
+      return mapHostError(error, 'secret-delete-failed', '删除安全密钥失败，已保留账户记录')
+    }
+
+    // Step 2: Remove sanitized metadata entry
+    try {
+      await saveAccounts(accounts.filter(a => a.id !== accountId))
+      return {
+        externalAction: true,
+        success: true,
+        status: 'started',
+        message: `已移除 ${target.issuer} (${target.label})`,
+      }
+    }
+    catch (error) {
+      logger?.error?.('[touch-totp-vault] Failed to update metadata after delete')
+      return mapHostError(error, 'action-failed', '更新账户列表失败')
+    }
+  })
 }
 
 // =============================================================================

@@ -707,6 +707,8 @@ function parseRegexQuery(rawText) {
   return { mode: 'library', keyword: input }
 }
 
+const MAX_NESTED_BRANCHING = 64
+
 function readQuantifierAt(pattern, index) {
   const ch = pattern[index]
   if (ch === '*' || ch === '+') {
@@ -714,6 +716,8 @@ function readQuantifierAt(pattern, index) {
     return {
       endIndex: index + (lazy ? 2 : 1),
       unbounded: true,
+      infinite: true,
+      minBound: ch === '+' ? 1 : 0,
       maxBound: Infinity,
       raw: pattern.slice(index, index + (lazy ? 2 : 1)),
     }
@@ -723,6 +727,8 @@ function readQuantifierAt(pattern, index) {
     return {
       endIndex: index + (lazy ? 2 : 1),
       unbounded: false,
+      infinite: false,
+      minBound: 0,
       maxBound: 1,
       raw: pattern.slice(index, index + (lazy ? 2 : 1)),
     }
@@ -737,7 +743,9 @@ function readQuantifierAt(pattern, index) {
         : (match[2] === '' ? Infinity : Number.parseInt(match[2], 10))
       return {
         endIndex: index + match[0].length,
-        unbounded: max === Infinity || max >= 4,
+        unbounded: max === Infinity || (max > min && max >= 4),
+        infinite: max === Infinity,
+        minBound: min,
         maxBound: max,
         raw: match[0],
       }
@@ -746,13 +754,247 @@ function readQuantifierAt(pattern, index) {
   return null
 }
 
+function addAsciiRange(set, startCode, endCode) {
+  const lo = Math.max(0, Math.min(startCode, endCode))
+  const hi = Math.min(127, Math.max(startCode, endCode))
+  for (let code = lo; code <= hi; code += 1) {
+    set.add(code)
+  }
+}
+
+function addEscapeClassToSet(set, escapeChar) {
+  if (escapeChar === 'd') {
+    addAsciiRange(set, 48, 57)
+    return true
+  }
+  if (escapeChar === 'D') {
+    for (let c = 0; c <= 127; c += 1) {
+      if (c < 48 || c > 57)
+        set.add(c)
+    }
+    return true
+  }
+  if (escapeChar === 'w') {
+    addAsciiRange(set, 48, 57)
+    addAsciiRange(set, 65, 90)
+    addAsciiRange(set, 97, 122)
+    set.add(95)
+    return true
+  }
+  if (escapeChar === 'W') {
+    for (let c = 0; c <= 127; c += 1) {
+      const isWord = (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95
+      if (!isWord)
+        set.add(c)
+    }
+    return true
+  }
+  if (escapeChar === 's') {
+    for (const c of [9, 10, 11, 12, 13, 32]) set.add(c)
+    return true
+  }
+  if (escapeChar === 'S') {
+    const spaces = new Set([9, 10, 11, 12, 13, 32])
+    for (let c = 0; c <= 127; c += 1) {
+      if (!spaces.has(c))
+        set.add(c)
+    }
+    return true
+  }
+  return false
+}
+
+function parseCharClassSet(token) {
+  if (!token || token[0] !== '[' || token[token.length - 1] !== ']') {
+    return null
+  }
+  const inner = token.slice(1, -1)
+  const negated = inner.startsWith('^')
+  const body = negated ? inner.slice(1) : inner
+  const set = new Set()
+
+  const readClassAtom = (pos) => {
+    if (body[pos] === '\\' && pos + 1 < body.length) {
+      const next = body[pos + 1]
+      if ('dDwWsS'.includes(next)) {
+        return { kind: 'class', escape: next, nextPos: pos + 2 }
+      }
+      const escapeCodes = { n: 10, r: 13, t: 9, f: 12, v: 11, 0: 0 }
+      const code = Object.prototype.hasOwnProperty.call(escapeCodes, next) ? escapeCodes[next] : next.charCodeAt(0)
+      return { kind: 'char', code, nextPos: pos + 2 }
+    }
+    return { kind: 'char', code: body.charCodeAt(pos), nextPos: pos + 1 }
+  }
+
+  let idx = 0
+  while (idx < body.length) {
+    const item = readClassAtom(idx)
+    if (item.kind === 'class') {
+      addEscapeClassToSet(set, item.escape)
+      idx = item.nextPos
+      continue
+    }
+    if (item.nextPos + 1 < body.length && body[item.nextPos] === '-') {
+      const endItem = readClassAtom(item.nextPos + 1)
+      if (endItem.kind === 'char') {
+        addAsciiRange(set, item.code, endItem.code)
+        idx = endItem.nextPos
+        continue
+      }
+    }
+    if (item.code <= 127) {
+      set.add(item.code)
+    }
+    idx = item.nextPos
+  }
+
+  if (negated) {
+    const inverted = new Set()
+    for (let c = 0; c <= 127; c += 1) {
+      if (!set.has(c))
+        inverted.add(c)
+    }
+    return { wildcard: false, chars: inverted }
+  }
+  return { wildcard: false, chars: set }
+}
+
+function charSetForAtom(atom) {
+  if (!atom) {
+    return null
+  }
+  if (atom === '.') {
+    return { wildcard: true, chars: null }
+  }
+  if (atom.startsWith('[') && atom.endsWith(']')) {
+    return parseCharClassSet(atom)
+  }
+  if (atom.startsWith('\\') && atom.length >= 2) {
+    const ch = atom[1]
+    if ('dDwWsS'.includes(ch)) {
+      const set = new Set()
+      addEscapeClassToSet(set, ch)
+      return { wildcard: false, chars: set }
+    }
+    if ('bBAZz'.includes(ch)) {
+      return null
+    }
+    if (/^\\[1-9]\d*$|^\\k<[^>]+>$/.test(atom)) {
+      return { wildcard: true, chars: null }
+    }
+    if (ch === 'p' || ch === 'P') {
+      return { wildcard: true, chars: null }
+    }
+    const code = ch.charCodeAt(0)
+    return { wildcard: false, chars: new Set(code <= 127 ? [code] : []) }
+  }
+  if (atom.length === 1) {
+    const code = atom.charCodeAt(0)
+    return { wildcard: false, chars: new Set(code <= 127 ? [code] : []) }
+  }
+  return null
+}
+
+function charSetsOverlap(a, b) {
+  if (!a || !b) {
+    return false
+  }
+  if (a.wildcard || b.wildcard) {
+    return true
+  }
+  if (!a.chars || !b.chars || a.chars.size === 0 || b.chars.size === 0) {
+    return false
+  }
+  for (const code of a.chars) {
+    if (b.chars.has(code)) {
+      return true
+    }
+  }
+  return false
+}
+
+function mergeCharSets(a, b) {
+  if (!a) {
+    return b
+  }
+  if (!b) {
+    return a
+  }
+  if (a.wildcard || b.wildcard) {
+    return { wildcard: true, chars: null }
+  }
+  const merged = new Set(a.chars)
+  for (const code of b.chars) {
+    merged.add(code)
+  }
+  return { wildcard: false, chars: merged }
+}
+
+function readLeadingAtomToken(branch) {
+  let pos = 0
+  while (pos < branch.length) {
+    const ch = branch[pos]
+    if (ch === '^' || ch === '$') {
+      pos += 1
+      continue
+    }
+    if (ch === '(') {
+      pos += 1
+      if (branch[pos] === '?') {
+        const rest = branch.slice(pos)
+        if (rest.startsWith('?:')) {
+          pos += 2
+        }
+        else if (rest.startsWith('?<') && !rest.startsWith('?<=') && !rest.startsWith('?<!')) {
+          const closeAngle = branch.indexOf('>', pos + 2)
+          if (closeAngle > pos) {
+            pos = closeAngle + 1
+          }
+        }
+        else {
+          return null
+        }
+      }
+      continue
+    }
+    if (ch === '[') {
+      let escaped = false
+      for (let i = pos + 1; i < branch.length; i += 1) {
+        if (escaped) {
+          escaped = false
+          continue
+        }
+        if (branch[i] === '\\') {
+          escaped = true
+          continue
+        }
+        if (branch[i] === ']') {
+          return branch.slice(pos, i + 1)
+        }
+      }
+      return null
+    }
+    if (ch === '\\') {
+      const end = readEscapedAtomEnd(branch, pos)
+      const token = branch.slice(pos, end + 1)
+      if (token === '\\b' || token === '\\B') {
+        pos = end + 1
+        continue
+      }
+      return token
+    }
+    return ch
+  }
+  return null
+}
+
 function branchesOverlapRisk(branches) {
   if (branches.length < 2) {
     return false
   }
-  const normalized = branches.map(b => b.trim()).filter(Boolean)
-  if (normalized.length < 2) {
-    return false
+  const normalized = branches.map(b => b.trim())
+  if (normalized.some(b => b.length === 0)) {
+    return true
   }
   const unique = new Set(normalized)
   if (unique.size < normalized.length) {
@@ -765,15 +1007,9 @@ function branchesOverlapRisk(branches) {
       if (a.startsWith(b) || b.startsWith(a)) {
         return true
       }
-      const pair = [a, b].sort().join('|')
-      if (
-        a === '.'
-        || b === '.'
-        || pair === '\\d|\\w'
-        || pair === '\\S|\\d'
-        || pair === '\\S|\\w'
-        || pair === '\\D|\\w'
-      ) {
+      const leadA = readLeadingAtomToken(a)
+      const leadB = readLeadingAtomToken(b)
+      if (leadA && leadB && charSetsOverlap(charSetForAtom(leadA), charSetForAtom(leadB))) {
         return true
       }
     }
@@ -785,6 +1021,12 @@ function readEscapedAtomEnd(pattern, backslashIndex) {
   const next = pattern[backslashIndex + 1]
   if (!next) {
     return backslashIndex
+  }
+  if (next === 'k' && pattern[backslashIndex + 2] === '<') {
+    const closeAngle = pattern.indexOf('>', backslashIndex + 3)
+    if (closeAngle > backslashIndex + 2) {
+      return closeAngle
+    }
   }
   if ((next === 'p' || next === 'P' || next === 'u') && pattern[backslashIndex + 2] === '{') {
     const closeBrace = pattern.indexOf('}', backslashIndex + 3)
@@ -801,6 +1043,10 @@ function readEscapedAtomEnd(pattern, backslashIndex) {
   return backslashIndex + 1
 }
 
+function isBackreferenceAtom(atom) {
+  return /^\\[1-9]\d*$/.test(atom) || /^\\k<[^>]+>$/.test(atom)
+}
+
 function analyzeRedosRisk(pattern) {
   const issues = []
   if (pattern.length > MAX_PATTERN_LENGTH) {
@@ -812,8 +1058,125 @@ function analyzeRedosRisk(pattern) {
   }
 
   let inClass = false
+  let classStart = -1
   const groupStack = []
+  const topScope = {
+    prevQuant: null,
+    adjacentOverlapAltBranching: 1,
+  }
+  let totalOverlapAltGroups = 0
   let consecutiveWildcardRuns = 0
+
+  const currentScope = () => (
+    groupStack.length > 0
+      ? groupStack[groupStack.length - 1]
+      : topScope
+  )
+
+  const recordVariableSpan = (entryQuant, exitQuant, label) => {
+    const scope = currentScope()
+    const prev = scope.prevQuant
+    if (prev && entryQuant && charSetsOverlap(prev.charSet, entryQuant.charSet)) {
+      if (prev.unbounded || entryQuant.unbounded) {
+        issues.push(`Adjacent overlapping quantifiers detected near ${truncateText(label, 32)}`)
+      }
+      else {
+        const nextProduct = Math.min(1e9, prev.chainProduct * entryQuant.chainProduct)
+        if (nextProduct > MAX_NESTED_BRANCHING) {
+          issues.push(`Chained overlapping variable quantifiers detected near ${truncateText(label, 32)}`)
+        }
+        scope.prevQuant = {
+          charSet: mergeCharSets(prev.charSet, exitQuant.charSet),
+          unbounded: false,
+          chainProduct: nextProduct,
+        }
+        return
+      }
+    }
+    scope.prevQuant = exitQuant
+  }
+
+  const recordAtomQuantifier = (atomToken, q) => {
+    const scope = currentScope()
+    const isAnchor = atomToken === '^' || atomToken === '$' || atomToken === '\\b' || atomToken === '\\B'
+    const atomSet = isAnchor ? null : charSetForAtom(atomToken)
+
+    if (groupStack.length > 0 && atomSet) {
+      const top = groupStack[groupStack.length - 1]
+      top.allCharSet = mergeCharSets(top.allCharSet, atomSet)
+    }
+
+    if (q) {
+      if (q.maxBound !== Infinity && q.maxBound > MAX_QUANTIFIER_BOUND) {
+        issues.push(`Excessive quantifier bound ${q.raw} exceeds ${MAX_QUANTIFIER_BOUND}`)
+      }
+      if (isBackreferenceAtom(atomToken) && q.maxBound >= 2) {
+        issues.push(`Quantified backreference detected: ${truncateText(atomToken + q.raw, 40)}`)
+      }
+      const isVariable = q.infinite || q.maxBound > q.minBound
+      const span = q.infinite ? MAX_NESTED_BRANCHING + 1 : Math.max(1, q.maxBound - q.minBound + 1)
+
+      if (groupStack.length > 0) {
+        const top = groupStack[groupStack.length - 1]
+        if (q.unbounded) {
+          top.hasInnerQuantifier = true
+        }
+        if (q.infinite) {
+          top.hasInfiniteInner = true
+        }
+        if (q.maxBound >= 2) {
+          top.hasAnyInnerRepeat = true
+          top.repeatDepth = Math.max(top.repeatDepth, 1)
+          if (q.maxBound > q.minBound) {
+            top.hasVariableInnerRepeat = true
+            const factor = Math.min(span, MAX_NESTED_BRANCHING + 1)
+            top.branchingFactor = Math.min(1e9, top.branchingFactor * factor)
+          }
+        }
+      }
+
+      if (isVariable && atomSet) {
+        const quantInfo = {
+          charSet: atomSet,
+          unbounded: q.unbounded,
+          chainProduct: span,
+        }
+        if (groupStack.length > 0) {
+          const top = groupStack[groupStack.length - 1]
+          if (!top.sawRequiredPrefix && top.branches.length === 1) {
+            top.leadingQuant = top.leadingQuant
+              ? {
+                  charSet: mergeCharSets(top.leadingQuant.charSet, quantInfo.charSet),
+                  unbounded: top.leadingQuant.unbounded || quantInfo.unbounded,
+                  chainProduct: Math.min(1e9, top.leadingQuant.chainProduct * quantInfo.chainProduct),
+                }
+              : quantInfo
+          }
+          if (q.minBound >= 1) {
+            top.sawRequiredPrefix = true
+          }
+        }
+        recordVariableSpan(quantInfo, quantInfo, atomToken + q.raw)
+        if (q.minBound >= 1) {
+          scope.adjacentOverlapAltBranching = 1
+        }
+      }
+      else if (q.minBound >= 1) {
+        if (groupStack.length > 0) {
+          groupStack[groupStack.length - 1].sawRequiredPrefix = true
+        }
+        scope.prevQuant = null
+        scope.adjacentOverlapAltBranching = 1
+      }
+    }
+    else if (!isAnchor) {
+      if (groupStack.length > 0) {
+        groupStack[groupStack.length - 1].sawRequiredPrefix = true
+      }
+      scope.prevQuant = null
+      scope.adjacentOverlapAltBranching = 1
+    }
+  }
 
   for (let i = 0; i < pattern.length; i += 1) {
     const ch = pattern[i]
@@ -827,15 +1190,13 @@ function analyzeRedosRisk(pattern) {
       if (groupStack.length > 0) {
         const top = groupStack[groupStack.length - 1]
         top.branches[top.branches.length - 1] += atom
+        if (isBackreferenceAtom(atom)) {
+          top.hasBackref = true
+        }
       }
       const nextQ = readQuantifierAt(pattern, i + 1)
+      recordAtomQuantifier(atom, nextQ)
       if (nextQ) {
-        if (nextQ.maxBound !== Infinity && nextQ.maxBound > MAX_QUANTIFIER_BOUND) {
-          issues.push(`Excessive quantifier bound ${nextQ.raw} exceeds ${MAX_QUANTIFIER_BOUND}`)
-        }
-        if (nextQ.unbounded && groupStack.length > 0) {
-          groupStack[groupStack.length - 1].hasInnerQuantifier = true
-        }
         i = nextQ.endIndex - 1
       }
       else {
@@ -845,19 +1206,24 @@ function analyzeRedosRisk(pattern) {
     }
     if (ch === '[' && !inClass) {
       inClass = true
+      classStart = i
       continue
     }
     if (ch === ']' && inClass) {
       inClass = false
+      const charClassToken = pattern.slice(classStart, i + 1)
+      classStart = -1
+      if (groupStack.length > 0) {
+        const top = groupStack[groupStack.length - 1]
+        top.branches[top.branches.length - 1] += charClassToken
+      }
       const q = readQuantifierAt(pattern, i + 1)
+      recordAtomQuantifier(charClassToken, q)
       if (q) {
-        if (q.maxBound !== Infinity && q.maxBound > MAX_QUANTIFIER_BOUND) {
-          issues.push(`Excessive quantifier bound ${q.raw} exceeds ${MAX_QUANTIFIER_BOUND}`)
-        }
-        if (q.unbounded && groupStack.length > 0) {
-          groupStack[groupStack.length - 1].hasInnerQuantifier = true
-        }
         i = q.endIndex - 1
+      }
+      else {
+        consecutiveWildcardRuns = 0
       }
       continue
     }
@@ -893,6 +1259,17 @@ function analyzeRedosRisk(pattern) {
         start: i,
         bodyStart,
         hasInnerQuantifier: false,
+        hasInfiniteInner: false,
+        hasAnyInnerRepeat: false,
+        hasVariableInnerRepeat: false,
+        hasBackref: false,
+        repeatDepth: 0,
+        branchingFactor: 1,
+        prevQuant: null,
+        leadingQuant: null,
+        allCharSet: null,
+        sawRequiredPrefix: false,
+        adjacentOverlapAltBranching: 1,
         isLookaround,
         branches: [''],
       })
@@ -901,7 +1278,12 @@ function analyzeRedosRisk(pattern) {
     }
 
     if (ch === '|' && groupStack.length > 0) {
-      groupStack[groupStack.length - 1].branches.push('')
+      const top = groupStack[groupStack.length - 1]
+      top.branches.push('')
+      top.prevQuant = null
+      top.leadingQuant = null
+      top.sawRequiredPrefix = false
+      top.adjacentOverlapAltBranching = 1
       continue
     }
 
@@ -909,25 +1291,171 @@ function analyzeRedosRisk(pattern) {
       const group = groupStack.pop()
       const q = readQuantifierAt(pattern, i + 1)
       const groupText = pattern.slice(group.start, i + 1)
+      let propagatedDepth = group.repeatDepth
+      let propagatedBranching = group.branchingFactor
+      const outerScope = currentScope()
+      const hasOverlappingAlt = group.branches.length > 1 && branchesOverlapRisk(group.branches)
+
       if (q) {
         if (q.maxBound !== Infinity && q.maxBound > MAX_QUANTIFIER_BOUND) {
           issues.push(`Excessive quantifier bound ${q.raw} exceeds ${MAX_QUANTIFIER_BOUND}`)
         }
         if (q.unbounded) {
-          if (group.hasInnerQuantifier) {
+          if (group.hasInnerQuantifier || group.hasVariableInnerRepeat) {
             issues.push(`Nested quantifier detected: ${truncateText(groupText + q.raw, 40)}`)
           }
-          if (branchesOverlapRisk(group.branches)) {
+          if (group.hasBackref) {
+            issues.push(`Repeated group containing backreference: ${truncateText(groupText + q.raw, 40)}`)
+          }
+          if (hasOverlappingAlt) {
             issues.push(`Overlapping repeated alternation: ${truncateText(groupText + q.raw, 40)}`)
           }
-          if (groupStack.length > 0) {
-            groupStack[groupStack.length - 1].hasInnerQuantifier = true
+        }
+        if (q.maxBound >= 2) {
+          propagatedDepth = group.repeatDepth + 1
+          if (group.hasInfiniteInner) {
+            issues.push(`Nested quantifier detected: ${truncateText(groupText + q.raw, 40)}`)
+          }
+          if (group.hasVariableInnerRepeat && q.maxBound > q.minBound) {
+            const exponent = q.infinite ? 12 : Math.min(q.maxBound, 12)
+            propagatedBranching = Math.min(1e9, Math.max(2, group.branchingFactor) ** exponent)
+            if (propagatedBranching > MAX_NESTED_BRANCHING || propagatedDepth >= 3) {
+              issues.push(`Bounded nested quantifier branching risk: ${truncateText(groupText + q.raw, 40)}`)
+            }
+          }
+          else if (group.hasAnyInnerRepeat && propagatedDepth >= 3 && (group.hasVariableInnerRepeat || q.maxBound > q.minBound)) {
+            issues.push(`Bounded nested quantifier branching risk: ${truncateText(groupText + q.raw, 40)}`)
+          }
+          if (hasOverlappingAlt && q.maxBound >= 4) {
+            issues.push(`Overlapping repeated alternation: ${truncateText(groupText + q.raw, 40)}`)
+          }
+        }
+        if (hasOverlappingAlt && !group.isLookaround && !q.unbounded && q.maxBound < 4) {
+          const repeatCount = Math.max(1, q.maxBound)
+          totalOverlapAltGroups += repeatCount
+          if (totalOverlapAltGroups >= 7) {
+            issues.push(`Excessive concatenated overlapping alternations detected near ${truncateText(groupText, 40)}`)
+          }
+          const altFactor = Math.min(1e9, Math.max(2, group.branches.length) ** repeatCount)
+          outerScope.adjacentOverlapAltBranching = Math.min(1e9, outerScope.adjacentOverlapAltBranching * altFactor)
+          if (outerScope.adjacentOverlapAltBranching > MAX_NESTED_BRANCHING) {
+            issues.push(`Concatenated overlapping alternations exceed branching limit near ${truncateText(groupText, 40)}`)
+          }
+        }
+        if (groupStack.length > 0) {
+          const parent = groupStack[groupStack.length - 1]
+          if (q.unbounded || group.hasInnerQuantifier) {
+            parent.hasInnerQuantifier = true
+          }
+          if (q.infinite || group.hasInfiniteInner) {
+            parent.hasInfiniteInner = true
+          }
+          if (q.maxBound >= 2 || group.hasAnyInnerRepeat) {
+            parent.hasAnyInnerRepeat = true
+          }
+          if ((q.maxBound >= 2 && q.maxBound > q.minBound) || group.hasVariableInnerRepeat) {
+            parent.hasVariableInnerRepeat = true
+          }
+          if (group.hasBackref) {
+            parent.hasBackref = true
+          }
+          parent.repeatDepth = Math.max(parent.repeatDepth, propagatedDepth)
+          parent.branchingFactor = Math.min(1e9, Math.max(parent.branchingFactor, propagatedBranching))
+          if (group.allCharSet) {
+            parent.allCharSet = mergeCharSets(parent.allCharSet, group.allCharSet)
+          }
+        }
+
+        if (!group.isLookaround) {
+          const isVariable = q.infinite || q.maxBound > q.minBound
+          const span = q.infinite ? MAX_NESTED_BRANCHING + 1 : Math.max(1, q.maxBound - q.minBound + 1)
+          if (isVariable && group.allCharSet) {
+            const quantInfo = {
+              charSet: group.allCharSet,
+              unbounded: q.unbounded,
+              chainProduct: span,
+            }
+            if (groupStack.length > 0 && !outerScope.sawRequiredPrefix && outerScope.branches.length === 1) {
+              outerScope.leadingQuant = outerScope.leadingQuant
+                ? {
+                    charSet: mergeCharSets(outerScope.leadingQuant.charSet, quantInfo.charSet),
+                    unbounded: outerScope.leadingQuant.unbounded || quantInfo.unbounded,
+                    chainProduct: Math.min(1e9, outerScope.leadingQuant.chainProduct * quantInfo.chainProduct),
+                  }
+                : quantInfo
+            }
+            recordVariableSpan(quantInfo, quantInfo, groupText + q.raw)
+          }
+          else if (q.minBound >= 1) {
+            outerScope.prevQuant = null
+          }
+          if (groupStack.length > 0 && q.minBound >= 1) {
+            outerScope.sawRequiredPrefix = true
+          }
+          if (!hasOverlappingAlt && q.minBound >= 1) {
+            outerScope.adjacentOverlapAltBranching = 1
           }
         }
         i = q.endIndex - 1
       }
-      else if (group.hasInnerQuantifier && groupStack.length > 0) {
-        groupStack[groupStack.length - 1].hasInnerQuantifier = true
+      else {
+        if (groupStack.length > 0) {
+          const parent = groupStack[groupStack.length - 1]
+          if (group.hasInnerQuantifier)
+            parent.hasInnerQuantifier = true
+          if (group.hasInfiniteInner)
+            parent.hasInfiniteInner = true
+          if (group.hasAnyInnerRepeat)
+            parent.hasAnyInnerRepeat = true
+          if (group.hasVariableInnerRepeat)
+            parent.hasVariableInnerRepeat = true
+          if (group.hasBackref)
+            parent.hasBackref = true
+          parent.repeatDepth = Math.max(parent.repeatDepth, group.repeatDepth)
+          parent.branchingFactor = Math.min(1e9, Math.max(parent.branchingFactor, group.branchingFactor))
+          if (group.allCharSet) {
+            parent.allCharSet = mergeCharSets(parent.allCharSet, group.allCharSet)
+          }
+        }
+        if (!group.isLookaround) {
+          if (hasOverlappingAlt) {
+            totalOverlapAltGroups += 1
+            if (totalOverlapAltGroups >= 7) {
+              issues.push(`Excessive concatenated overlapping alternations detected near ${truncateText(groupText, 40)}`)
+            }
+            const altFactor = Math.min(1e9, Math.max(2, group.branches.length))
+            outerScope.adjacentOverlapAltBranching = Math.min(1e9, outerScope.adjacentOverlapAltBranching * altFactor)
+            if (outerScope.adjacentOverlapAltBranching > MAX_NESTED_BRANCHING) {
+              issues.push(`Concatenated overlapping alternations exceed branching limit near ${truncateText(groupText, 40)}`)
+            }
+          }
+          if (group.branches.length === 1 && (group.leadingQuant || group.prevQuant)) {
+            if (groupStack.length > 0 && !outerScope.sawRequiredPrefix && outerScope.branches.length === 1 && group.leadingQuant) {
+              outerScope.leadingQuant = outerScope.leadingQuant
+                ? {
+                    charSet: mergeCharSets(outerScope.leadingQuant.charSet, group.leadingQuant.charSet),
+                    unbounded: outerScope.leadingQuant.unbounded || group.leadingQuant.unbounded,
+                    chainProduct: Math.min(1e9, outerScope.leadingQuant.chainProduct * group.leadingQuant.chainProduct),
+                  }
+                : group.leadingQuant
+            }
+            if (group.leadingQuant) {
+              recordVariableSpan(group.leadingQuant, group.prevQuant, groupText)
+            }
+            else {
+              outerScope.prevQuant = group.prevQuant
+            }
+          }
+          else {
+            outerScope.prevQuant = null
+          }
+          if (groupStack.length > 0 && group.sawRequiredPrefix) {
+            outerScope.sawRequiredPrefix = true
+          }
+          if (!hasOverlappingAlt && group.sawRequiredPrefix) {
+            outerScope.adjacentOverlapAltBranching = 1
+          }
+        }
       }
       if (groupStack.length > 0) {
         const parent = groupStack[groupStack.length - 1]
@@ -942,19 +1470,12 @@ function analyzeRedosRisk(pattern) {
     }
 
     const nextQ = readQuantifierAt(pattern, i + 1)
+    recordAtomQuantifier(ch, nextQ)
     if (nextQ) {
-      if (nextQ.maxBound !== Infinity && nextQ.maxBound > MAX_QUANTIFIER_BOUND) {
-        issues.push(`Excessive quantifier bound ${nextQ.raw} exceeds ${MAX_QUANTIFIER_BOUND}`)
-      }
-      if (nextQ.unbounded) {
-        if (groupStack.length > 0) {
-          groupStack[groupStack.length - 1].hasInnerQuantifier = true
-        }
-        if (ch === '.') {
-          consecutiveWildcardRuns += 1
-          if (consecutiveWildcardRuns >= 3) {
-            issues.push('Chained unbounded wildcard quantifiers (.*.*.*)')
-          }
+      if (nextQ.unbounded && ch === '.') {
+        consecutiveWildcardRuns += 1
+        if (consecutiveWildcardRuns >= 3) {
+          issues.push('Chained unbounded wildcard quantifiers (.*.*.*)')
         }
       }
       i = nextQ.endIndex - 1

@@ -25,7 +25,7 @@
 // obscuring it with concatenation would make the fixtures unreadable.
 /* eslint-disable no-template-curly-in-string */
 
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -48,9 +48,24 @@ const UNSAFE = [
   'github.event.issue.',
   'github.event.pull_request.title',
   'github.event.pull_request.body',
+  'github.event.pull_request.head.ref',
+  'github.event.pull_request.head.label',
+  'github.event.pull_request.head.repo.default_branch',
   'github.event.comment.',
+  'github.event.review.',
+  'github.event.review_comment.',
+  'github.event.discussion.',
+  'github.event.commits',
+  'github.event.head_commit.',
+  'github.event.pages.',
+  'github.event.workflow_run.head_branch',
+  'github.event.workflow_run.head_commit.',
+  'github.event.workflow_run.display_title',
   'github.head_ref',
 ]
+
+const SCRIPT_BLOCK_RE = /^-?\s*(?:run|script):\s*[|>]/
+const INLINE_SCRIPT_RE = /^-?\s*(?:run|script):\s*(\S.*)$/
 
 export function findInjections(files, readFile, unsafe = UNSAFE) {
   const problems = []
@@ -68,24 +83,24 @@ export function findInjections(files, readFile, unsafe = UNSAFE) {
       && !/^\s+workflow_dispatch:/m.test(text)
     const active = reusableOnly ? unsafe.filter(entry => entry !== 'inputs.') : unsafe
     const lines = text.split('\n')
-    let inRun = false
-    let runIndent = 0
+    let inScript = false
+    let scriptIndent = 0
     lines.forEach((line, index) => {
       const stripped = line.trimStart()
       const indent = line.length - stripped.length
-      if (/^-?\s*run:\s*[|>]/.test(stripped)) {
-        inRun = true
-        runIndent = indent
+      if (inScript && stripped && indent <= scriptIndent)
+        inScript = false
+      if (SCRIPT_BLOCK_RE.test(stripped)) {
+        inScript = true
+        scriptIndent = indent
         return
       }
-      // A single-line `run: echo ${{ … }}` is a run body too. Only block scalars were
-      // recognised, so every one-line step was invisible to this check — including
-      // package-ci.yml:82, `run: ${{ inputs.typecheck-command }}`. Verified by injecting
-      // github.event.pull_request.title into a real workflow: it parsed, it sat in a run:
-      // step, and the scan still reported clean (#741).
-      const inlineRun = stripped.match(/^-?\s*run:\s*(\S.*)$/)
-      if (inlineRun) {
-        const body = inlineRun[1]
+      // A single-line `run: echo ${{ … }}` or `script: ...` is an executable body too. Only block
+      // scalars were recognised originally, so one-line steps and github-script `script:` blocks
+      // were invisible (#741).
+      const inlineScript = stripped.match(INLINE_SCRIPT_RE)
+      if (inlineScript) {
+        const body = inlineScript[1]
         if (body.includes('${{')) {
           const context = active.find(candidate => body.includes(candidate))
           if (context)
@@ -93,9 +108,7 @@ export function findInjections(files, readFile, unsafe = UNSAFE) {
         }
         return
       }
-      if (inRun && stripped && indent <= runIndent)
-        inRun = false
-      if (!inRun || !line.includes('${{'))
+      if (!inScript || !line.includes('${{'))
         return
       // One finding per line. `github.event.inputs.x` matches both `github.event.inputs.`
       // and `inputs.`, and reporting it twice makes the count meaningless — which the
@@ -179,6 +192,24 @@ function selfTest() {
       text: '      run: |\n        echo hi\n      - name: next\n        with:\n          x: ${{ github.event.inputs.tag }}\n',
       expect: 0,
     },
+    {
+      name: 'github-script script: block interpolation is caught',
+      text: '      - uses: actions/github-script@v7\n        with:\n          script: |\n            console.log("${{ github.event.pull_request.head.ref }}")\n',
+      expect: 1,
+    },
+    {
+      name: 'attacker-controlled commit, review, discussion, and workflow_run contexts are caught',
+      text: [
+        '      run: |',
+        '        echo "${{ github.event.head_commit.message }}"',
+        '        echo "${{ github.event.commits[0].message }}"',
+        '        echo "${{ github.event.review.body }}"',
+        '        echo "${{ github.event.discussion.title }}"',
+        '        echo "${{ github.event.workflow_run.head_branch }}"',
+        '',
+      ].join('\n'),
+      expect: 5,
+    },
   ]
 
   let failures = 0
@@ -224,6 +255,18 @@ function main() {
   )
 }
 
+function invokedDirectly() {
+  if (!process.argv[1])
+    return false
+  const self = fileURLToPath(import.meta.url)
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(self)
+  }
+  catch {
+    return path.resolve(process.argv[1]) === self
+  }
+}
+
 // Guarded so findInjections can be imported without running the check.
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+if (invokedDirectly())
   main()

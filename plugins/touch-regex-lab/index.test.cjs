@@ -352,3 +352,43 @@ test('ReDoS guard blocks escaped nested quantifiers, escaped overlaps, and non-c
     assert.ok(blockedItem, `expected ReDoS guard to block: ${query} (got: ${JSON.stringify(items.map(i => i.title))})`)
   }
 })
+
+test('ReDoS guard blocks overlapping char-class alternations, bounded nesting, adjacent overlaps, and quantified backrefs', async () => {
+  const h = createHarness()
+  const dangerousQueries = [
+    '/([a-z]|[a-z])+$/ :: aaaaaaaaaaaaaaaaaaaaaaaa!',
+    '/([a-z]|[a-f])+$/ :: aaaaaaaaaaaaaaaaaaaaaaaa!',
+    '/([0-9]|\\d)+$/ :: 111111111111111111111111!',
+    '/((a{1,3}){1,3}){1,3}$/ :: aaaaaaaaaaaaaaaaaaaaaaaa!',
+    '/(a{1,3})+$/ :: aaaaaaaaaaaaaaaaaaaaaaaa!',
+    '/(a+){2}$/ :: aaaaaaaaaaaaaaaaaaaaaaaa!',
+    '/\\w+\\w+\\w+!/ :: aaaaaaaaaaaaaaaaaaaaaaaa',
+    '/[a-z]+[a-z]+!/ :: aaaaaaaaaaaaaaaaaaaaaaaa',
+    '/(a+)\\1+$/ :: aaaaaaaaaaaaaaaaaaaaaaaa!',
+    '/(a+)(a+)(a+)(a+)!/ :: aaaaaaaaaaaaaaaaaaaaaaaa',
+    '/(?:a*)(?:a*)(?:a*)(?:a*)b/ :: aaaaaaaaaaaaaaaaaaaaaaaa',
+    '/([a-z]a|[a-f]a)+$/ :: aaaaaaaaaaaaaaaaaaaaaaaa!',
+    '/a{0,3}a{0,3}a{0,3}a{0,3}a{0,3}a{0,3}a{0,3}a{0,3}!/ :: aaaaaaaaaaaaaaaaaaaaaaaa',
+    `/${'(a|a)'.repeat(20)}b/ :: ${'a'.repeat(20)}!`,
+  ]
+
+  for (const query of dangerousQueries) {
+    h.pushedBatches.length = 0
+    await h.mod.onFeatureTriggered('regex-lab', { text: query })
+    const items = h.pushedBatches.at(-1) || []
+    const blockedItem = items.find(item => item.id === 'regex-lab-redos-blocked')
+    assert.ok(blockedItem, `expected ReDoS guard to block: ${query} (got: ${JSON.stringify(items.map(i => i.title))})`)
+  }
+
+  // Legitimate fixed-repetition MAC address and IPv4 CIDR remain safe
+  for (const [safeQuery, label] of [
+    ['/^(?:[0-9A-Fa-f]{2}([-:]))(?:[0-9A-Fa-f]{2}\\1){4}[0-9A-Fa-f]{2}$/ :: AA:BB:CC:11:22:33', 'MAC address'],
+    ['/^(?:(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\/(?:3[0-2]|[12]?\\d)$/ :: 10.0.0.0/24', 'IPv4 CIDR'],
+  ]) {
+    h.pushedBatches.length = 0
+    await h.mod.onFeatureTriggered('regex-lab', { text: safeQuery })
+    const summary = (h.pushedBatches.at(-1) || []).find(item => item.id === 'regex-lab-summary')
+    assert.ok(summary, `expected valid ${label} regex to execute cleanly`)
+    assert.match(summary.title, /1 match/)
+  }
+})

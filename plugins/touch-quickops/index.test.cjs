@@ -318,3 +318,76 @@ test('flow.dispatch maps permission-unavailable, permission-request-failed and c
     assert.doesNotMatch(JSON.stringify(result), /private/)
   }
 })
+
+test('projectItemsForHost preserves validated developer-preview custom Vue render, className, and finalScore', async () => {
+  const { plugin, state } = loadPlugin({
+    quickOps: {
+      async developerPreview() {
+        return {
+          state: 'ready',
+          abilityId: 'quickops.preview.uuid',
+          confidence: 0.99,
+          payload: {
+            title: 'UUID Preview',
+            summary: '550e8400-e29b-41d4-a716-446655440000',
+          },
+        }
+      },
+    },
+  })
+
+  await plugin.onFeatureTriggered('quickops', { text: 'uuid' })
+  assert.equal(state.items.length, 1)
+  const [previewItem] = state.items
+  assert.equal(previewItem.kind, 'preview')
+  assert.equal(previewItem.className, 'core-preview-card')
+  assert.equal(previewItem.finalScore, 1)
+  assert.equal(previewItem.render.mode, 'custom')
+  assert.equal(previewItem.render.custom.type, 'vue')
+  assert.equal(previewItem.render.custom.content, 'core-preview-card')
+  assert.equal(previewItem.render.custom.data.title, 'UUID Preview')
+})
+
+test('onItemAction rejects disallowed, confirmation-only, high-risk, or mismatched flow.dispatch targetIds', async () => {
+  const { plugin, state } = loadPlugin({
+    flow: {
+      async dispatch(payload, options) {
+        state.flowCalls.push({ payload, options })
+        return { sessionId: 'should-not-run', state: 'ACKED' }
+      },
+    },
+  })
+
+  const forbiddenPayloads = [
+    {
+      targetId: 'quickops.port-kill',
+      payload: { type: 'json', data: { targetId: 'quickops.port-kill' } },
+      options: { preferredTarget: 'quickops.port-kill', skipSelector: true, requireAck: true },
+    },
+    {
+      targetId: 'quickops.keep-awake',
+      payload: { type: 'json', data: { targetId: 'quickops.keep-awake' } },
+      options: { preferredTarget: 'quickops.keep-awake', skipSelector: true, requireAck: true },
+    },
+    {
+      targetId: 'evil.arbitrary-target',
+      payload: { type: 'json', data: { targetId: 'evil.arbitrary-target' } },
+      options: { preferredTarget: 'evil.arbitrary-target', skipSelector: true, requireAck: true },
+    },
+    {
+      targetId: 'quickops.stop-timer',
+      payload: { type: 'json', data: { targetId: 'quickops.port-kill' } },
+      options: { preferredTarget: 'quickops.port-kill', skipSelector: true, requireAck: true },
+    },
+  ]
+
+  for (const payload of forbiddenPayloads) {
+    const res = await plugin.onItemAction({
+      meta: { defaultAction: 'quickops-flow-action' },
+      actions: [{ id: 'quickops-flow-action', type: 'plugin', payload }],
+    })
+    assert.equal(res.status, 'blocked')
+    assert.equal(res.reason, 'disallowed-flow-target')
+  }
+  assert.equal(state.flowCalls.length, 0)
+})

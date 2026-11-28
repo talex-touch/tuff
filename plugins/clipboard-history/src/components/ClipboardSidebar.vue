@@ -1,22 +1,30 @@
 <script lang="ts" setup>
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
 import type { ClipboardSection } from '~/utils/clipboard-items'
+import { computed } from 'vue'
 import ClipboardGlyph from './ClipboardGlyph.vue'
 import { getClipboardSubtitle, getClipboardTagLabels, resolveListImageSrc } from '~/utils/clipboard-items'
 import { getClipboardDisplayTitle } from '~/utils/clipboard-shapes'
+import { useMaskHostIp } from '~/utils/use-disclosure-state'
 
-defineProps<{
-  sections: ClipboardSection[]
-  selectedId: number | null
-  loading: boolean
-  loadingMore: boolean
-  hasMore: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    sections: ClipboardSection[]
+    selectedId: number | null
+    loading: boolean
+    loadingMore: boolean
+    hasMore: boolean
+    maskHostIp?: boolean | null
+  }>(),
+  { maskHostIp: null },
+)
 
 const emit = defineEmits<{
   (event: 'select', item: PluginClipboardItem): void
   (event: 'loadMore'): void
 }>()
+const persistedMaskHostIp = useMaskHostIp()
+const maskHostIp = computed(() => props.maskHostIp ?? persistedMaskHostIp.value)
 
 function onScroll(event: Event): void {
   const target = event.target as HTMLElement | null
@@ -84,8 +92,8 @@ function onScroll(event: Event): void {
               </div>
 
               <div class="item-copy">
-                <p class="item-preview" :title="getClipboardDisplayTitle(item)">
-                  {{ getClipboardDisplayTitle(item) }}
+                <p class="item-preview" :title="getClipboardDisplayTitle(item, { maskHostIp })">
+                  {{ getClipboardDisplayTitle(item, { maskHostIp }) }}
                 </p>
                 <p class="item-meta">
                   {{ getClipboardSubtitle(item) }}

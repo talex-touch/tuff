@@ -9,6 +9,7 @@ import { CustomTranslateProvider } from '../providers/custom-translate'
 import { DeepLTranslateProvider } from '../providers/deepl-translate'
 import { TencentTranslateProvider } from '../providers/tencent-translate'
 import { canPersistProviderSecrets, hasProviderSecretDefinition } from '../composables/useTranslationProvider'
+import { validateProviderApiUrl } from '../utils/url-validation'
 
 interface Props {
   show: boolean
@@ -120,6 +121,18 @@ function closeModal() {
   emit('close')
 }
 
+function validateConfiguredApiUrl(): { valid: boolean, error?: string } {
+  if (!props.provider)
+    return { valid: true }
+  const providersWithEditableUrl = new Set(['deepl', 'custom', 'baidu', 'tencent', 'mymemory'])
+  if (!providersWithEditableUrl.has(props.provider.id))
+    return { valid: true }
+  if (props.provider.id === 'custom' || configForm.apiUrl.trim().length > 0) {
+    return validateProviderApiUrl(configForm.apiUrl)
+  }
+  return { valid: true }
+}
+
 async function saveConfig() {
   if (!props.provider)
     return
@@ -127,6 +140,12 @@ async function saveConfig() {
   const missingFields = getMissingRequiredFields()
   if (missingFields.length > 0) {
     testResult.value = { success: false, message: `请填写必填项: ${missingFields.join(', ')}` }
+    return
+  }
+
+  const urlCheck = validateConfiguredApiUrl()
+  if (!urlCheck.valid) {
+    testResult.value = { success: false, message: urlCheck.error || 'API URL 无效' }
     return
   }
 
@@ -196,6 +215,12 @@ async function testConnection() {
 
   if (missingFields.length > 0) {
     testResult.value = { success: false, message: `请填写必填项: ${missingFields.join(', ')}` }
+    return
+  }
+
+  const urlCheck = validateConfiguredApiUrl()
+  if (!urlCheck.valid) {
+    testResult.value = { success: false, message: urlCheck.error || 'API URL 无效' }
     return
   }
 

@@ -19,12 +19,14 @@ import {
   toHistoryQueryType,
 } from '~/utils/clipboard-items'
 import { classifyClipboardItem, getClipboardPrimaryActionLabel, resolveClipboardPrimaryAction } from '~/utils/clipboard-shapes'
+import { useMaskHostIp } from '~/utils/use-disclosure-state'
 
 type ClipboardGlyphName = InstanceType<typeof ClipboardGlyph>['$props']['name']
 
 const clipboard = useClipboard()
 const feature = useFeature()
 const box = useBox()
+const maskHostIp = useMaskHostIp()
 const filter = ref<ClipboardFilter>('all')
 const searchQuery = ref('')
 const debouncedQuery = ref('')
@@ -747,6 +749,7 @@ watch(
             :loading="loading"
             :loading-more="loadingMore"
             :has-more="hasMore"
+            :mask-host-ip="maskHostIp"
             @select="selectedId = $event.id ?? null"
             @load-more="loadHistory()"
           />
@@ -764,6 +767,7 @@ watch(
             :resolved-image-url="selectedResolvedImageUrl"
             :resolving-image-url="resolvingSelectedImageUrl"
             :source-application="selectedSourceApplication"
+            :mask-host-ip="maskHostIp"
             @copy-text="handleCopyText"
             @open-link="handleOpenLink"
             @preview-file="file => handleRevealFile(file.path)"

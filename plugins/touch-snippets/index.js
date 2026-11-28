@@ -19,14 +19,23 @@ const DEFAULT_SNIPPETS = [
   },
 ]
 const SENSITIVE_CONTENT_PATTERNS = [
-  /(?:api[_-]?key|secret|password|passwd|token|private[_-]?key)\s*[:=]/i,
-  /-----BEGIN (?:RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----/,
-  /\bsk-[\w-]{20,}\b/,
-  /\bghp_\w{20,}\b/,
+  /['"`]?(?:api[_-]?key|secret(?:[_-]?key)?|password|passwd|pwd|access[_-]?token|refresh[_-]?token|auth[_-]?token|token|private[_-]?key|client[_-]?secret|session[_-]?id)['"`]?\s*[:=]/i,
+  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----/,
+  /\bBearer\s+[\w.~+/=-]{8,}/i,
+  /\bBasic\s+[A-Z0-9+/=]{12,}/i,
+  /\bsk-[\w-]{16,}\b/,
+  /\bsk_(?:live|test)_[A-Z0-9]{16,}\b/i,
+  /\b(?:gh[pousr]_[A-Z0-9]{20,}|github_pat_\w{20,})\b/i,
   /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/,
+  /\bxox[baprs]-[A-Z0-9-]{10,}\b/i,
+  /\bAIza[\w-]{30,}\b/,
+  /\bnpm_[A-Z0-9]{20,}\b/i,
+  /\beyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]{8,}\b/,
+  /\b[a-z][a-z0-9+.-]*:\/\/[^:\s/@]+:[^@\s/]+@[^\s/]+/i,
 ]
 
 let sequence = 0
+let pendingCloudPublishToken = null
 
 function normalizeText(value) {
   return String(value ?? '').trim()
@@ -235,7 +244,7 @@ async function resolveClipboardPlaceholders(content) {
     })
   }
   const clipboardText = await clipboard.readText()
-  return content.replace(/\{\{clipboard\}\}/gi, normalizeText(clipboardText))
+  return content.replace(/\{\{clipboard\}\}/gi, () => normalizeText(clipboardText))
 }
 
 async function replaceItems(items) {
@@ -369,9 +378,52 @@ async function listCloudPackages(featureId) {
   await replaceItems(items)
 }
 
+async function showCloudPublishConfirmation(featureId) {
+  const { snippets } = await loadStore()
+  const shareable = snippets.filter(snippet => !containsSensitiveContent(snippet))
+  const skippedCount = snippets.length - shareable.length
+  if (shareable.length === 0) {
+    pendingCloudPublishToken = null
+    await replaceItems([
+      buildItem({
+        id: `${featureId}-cloud-publish-empty`,
+        featureId,
+        title: '无可公开发布的片段',
+        subtitle: `已过滤 ${skippedCount} 个疑似包含敏感信息的片段`,
+        actionId: 'cloud-publish-cancel',
+      }),
+    ])
+    return { shareableCount: 0, skippedCount }
+  }
+
+  const confirmToken = nextId('cloud-publish-confirm')
+  pendingCloudPublishToken = confirmToken
+  await replaceItems([
+    buildItem({
+      id: `${featureId}-cloud-publish-confirm`,
+      featureId,
+      title: '确认公开发布到 CloudShare',
+      subtitle: `将以公开可见（public）上传 ${shareable.length} 个片段${skippedCount > 0 ? `（已过滤 ${skippedCount} 个敏感片段）` : ''}`,
+      actionId: 'cloud-publish-confirm',
+      payload: { confirmToken },
+    }),
+    buildItem({
+      id: `${featureId}-cloud-publish-cancel`,
+      featureId,
+      title: '取消公开发布',
+      subtitle: '返回片段管理，不上传任何内容',
+      actionId: 'cloud-publish-cancel',
+    }),
+  ])
+  return { shareableCount: shareable.length, skippedCount }
+}
+
 async function publishCloudPackage() {
   const { snippets } = await loadStore()
   const shareable = snippets.filter(snippet => !containsSensitiveContent(snippet))
+  if (shareable.length === 0) {
+    throw new Error('no shareable snippets')
+  }
   return await requireChannel().send('snippets.cloud.publish', {
     pack: {
       format: 'tuff.snippet-pack+json',
@@ -415,6 +467,7 @@ const pluginLifecycle = {
   },
 
   async onFeatureTriggered(featureId, query) {
+    pendingCloudPublishToken = null
     try {
       await ensureStore()
       const text = getQueryText(query)
@@ -499,8 +552,41 @@ const pluginLifecycle = {
         return { externalAction: true, status: 'started' }
       }
       if (actionId === 'cloud-publish') {
+        const preview = await showCloudPublishConfirmation(featureId)
+        if (preview.shareableCount === 0) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'no-shareable-snippets',
+            message: '所有片段均被识别为敏感内容，已取消公开上传',
+          }
+        }
+        return {
+          externalAction: true,
+          status: 'confirmation-required',
+          message: '请确认将非敏感片段公开发布到 CloudShare',
+        }
+      }
+      if (actionId === 'cloud-publish-confirm') {
+        const confirmToken = normalizeText(payload.confirmToken)
+        if (!confirmToken || !pendingCloudPublishToken || confirmToken !== pendingCloudPublishToken) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'confirmation-required',
+            message: '请先发起公开发布并完成二次确认',
+          }
+        }
+        pendingCloudPublishToken = null
         await publishCloudPackage()
         return { externalAction: true, status: 'started' }
+      }
+      if (actionId === 'cloud-publish-cancel') {
+        pendingCloudPublishToken = null
+        await showManager(featureId, '')
+        return { externalAction: true, status: 'cancelled' }
       }
       if (actionId === 'cloud-install') {
         await installCloudPackage(normalizeText(payload.packageId))

@@ -28,8 +28,11 @@ const EXEMPT_OWNERS = {
   actions: 'GitHub\'s own namespace, served by the same platform that runs the workflow.',
 }
 
-const USES = /^\s*(?:-\s*)?uses:\s*([\w.-]+)\/([\w./-]+)@(\S+)/
+const USES_LINE = /^\s*(?:-\s*)?uses:\s*(?:'([^']+)'|"([^"]+)"|([^\s#]+))/
+const ACTION_REF = /^([\w.-]+)\/([\w./-]+)@(\S+)$/
+const DOCKER_REF = /^docker:\/\/.+$/i
 const FULL_SHA = /^[0-9a-f]{40}$/
+const DOCKER_DIGEST = /@sha256:[0-9a-f]{64}$/i
 
 export function findUnpinned(files, readFile, exempt = EXEMPT_OWNERS) {
   const problems = []
@@ -38,13 +41,29 @@ export function findUnpinned(files, readFile, exempt = EXEMPT_OWNERS) {
     if (!text)
       continue
     text.split('\n').forEach((line, index) => {
-      const match = USES.exec(line)
+      const lineMatch = USES_LINE.exec(line)
+      if (!lineMatch)
+        return
+      const target = (lineMatch[1] ?? lineMatch[2] ?? lineMatch[3] ?? '').trim()
+      if (!target || target.startsWith('./') || target.startsWith('../'))
+        return
+
+      if (DOCKER_REF.test(target)) {
+        if (!DOCKER_DIGEST.test(target)) {
+          const atIndex = target.lastIndexOf('@')
+          const action = atIndex > 0 ? target.slice(0, atIndex) : target
+          const ref = atIndex > 0 ? target.slice(atIndex + 1) : 'mutable-tag'
+          problems.push({ file, line: index + 1, action, ref })
+        }
+        return
+      }
+
+      const match = ACTION_REF.exec(target)
       if (!match)
         return
       const [, owner, repo, ref] = match
-      if (owner in exempt)
+      if (Object.hasOwn(exempt, owner))
         return
-      // A local composite action (./.github/workflows/x.yml) never matches USES.
       if (FULL_SHA.test(ref))
         return
       problems.push({ file, line: index + 1, action: `${owner}/${repo}`, ref })
@@ -99,6 +118,21 @@ function selfTest() {
       name: 'a reusable local workflow is not an action reference',
       text: '    uses: ./.github/workflows/package-ci.yml\n',
       expect: 0,
+    },
+    {
+      name: 'a single-quoted or double-quoted mutable action ref is caught',
+      text: '      - uses: \'pnpm/action-setup@v6\'\n      - uses: "pnpm/action-setup@v6"\n',
+      expect: 2,
+    },
+    {
+      name: 'an unpinned docker:// action ref is caught while sha256 digest is accepted',
+      text: '      - uses: docker://alpine:3.18\n      - uses: docker://alpine@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n',
+      expect: 1,
+    },
+    {
+      name: 'prototype property names are not treated as exempt owners',
+      text: '      - uses: constructor/action@v1\n      - uses: toString/action@v1\n',
+      expect: 2,
     },
   ]
 

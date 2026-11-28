@@ -14,7 +14,7 @@
  */
 import { Buffer } from 'node:buffer'
 import { createHash, timingSafeEqual } from 'node:crypto'
-import { createReadStream } from 'node:fs'
+import { createReadStream, realpathSync } from 'node:fs'
 import { chmod, copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -273,8 +273,19 @@ async function main() {
   )
 }
 
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-if (isMain) {
+function invokedDirectly() {
+  if (!process.argv[1])
+    return false
+  const self = fileURLToPath(import.meta.url)
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(self)
+  }
+  catch {
+    return path.resolve(process.argv[1]) === self
+  }
+}
+
+if (invokedDirectly()) {
   main().catch((error) => {
     console.error(`[stage-herdr-core] Error: ${error instanceof Error ? error.message : String(error)}`)
     process.exit(1)

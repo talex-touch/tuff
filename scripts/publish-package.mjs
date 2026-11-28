@@ -29,25 +29,117 @@ function normalizePackagePath(packagePath) {
   return packagePath.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/$/, '')
 }
 
-function run(command, options = {}) {
-  execFileSync(command, {
-    cwd: repoRoot,
-    stdio: 'inherit',
-    shell: true,
-    env: process.env,
-    ...options,
-  })
+const SEMVER_VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9a-z-]+(?:\.[0-9a-z-]+)*)?(?:\+[0-9a-z-]+(?:\.[0-9a-z-]+)*)?$/i
+const DIST_TAG_PATTERN = /^[0-9a-z][\w.-]{0,63}$/i
+const PACKAGE_NAME_PATTERN = /^(?:@[\w.-]+\/)?[\w.-]+$/
+const ALLOWED_ACCESS_VALUES = new Set(['public', 'restricted'])
+const SHELL_METACHAR_PATTERN = /[;&|`$<>()\\\n\r]/
+
+export function assertValidVersion(version) {
+  if (typeof version !== 'string' || !SEMVER_VERSION_PATTERN.test(version)) {
+    throw new Error(`Invalid package version: ${String(version)}`)
+  }
+  return version
 }
 
-function runOutput(command, options = {}) {
-  return execFileSync(command, {
+export function assertValidDistTag(tag) {
+  if (typeof tag !== 'string' || !DIST_TAG_PATTERN.test(tag)) {
+    throw new Error(`Invalid npm dist-tag: ${String(tag)}`)
+  }
+  return tag
+}
+
+export function assertValidPackageName(name) {
+  if (typeof name !== 'string' || !PACKAGE_NAME_PATTERN.test(name)) {
+    throw new Error(`Invalid package name: ${String(name)}`)
+  }
+  return name
+}
+
+export function parseConfiguredCommand(command) {
+  if (Array.isArray(command)) {
+    if (command.length === 0 || command.some(part => typeof part !== 'string' || !part.length)) {
+      throw new Error('Configured command array must contain non-empty strings')
+    }
+    return { bin: command[0], args: command.slice(1) }
+  }
+  if (typeof command !== 'string' || !command.trim() || SHELL_METACHAR_PATTERN.test(command)) {
+    throw new Error(`Refusing unsafe configured command: ${String(command)}`)
+  }
+  const tokens = []
+  let current = ''
+  let quote = ''
+  let hasToken = false
+  for (let index = 0; index < command.length; index += 1) {
+    const ch = command[index]
+    if (quote) {
+      if (ch === quote) {
+        quote = ''
+      }
+      else {
+        current += ch
+      }
+      continue
+    }
+    if (ch === '"' || ch === '\'') {
+      quote = ch
+      hasToken = true
+      continue
+    }
+    if (/\s/.test(ch)) {
+      if (hasToken) {
+        tokens.push(current)
+        current = ''
+        hasToken = false
+      }
+      continue
+    }
+    current += ch
+    hasToken = true
+  }
+  if (quote) {
+    throw new Error(`Unclosed quote in configured command: ${command}`)
+  }
+  if (hasToken) {
+    tokens.push(current)
+  }
+  if (tokens.length === 0) {
+    throw new Error(`Empty configured command: ${command}`)
+  }
+  return { bin: tokens[0], args: tokens.slice(1) }
+}
+
+function runFile(bin, args = [], options = {}) {
+  const execOptions = {
+    cwd: repoRoot,
+    stdio: 'inherit',
+    env: process.env,
+    ...options,
+  }
+  if (bin === 'pnpm') {
+    execPnpmSync(args, execOptions)
+    return
+  }
+  execFileSync(bin, args, execOptions)
+}
+
+function runFileOutput(bin, args = [], options = {}) {
+  const execOptions = {
     cwd: repoRoot,
     encoding: 'utf8',
-    shell: true,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: process.env,
     ...options,
-  }).trim()
+  }
+  const result = bin === 'pnpm'
+    ? execPnpmSync(args, execOptions)
+    : execFileSync(bin, args, execOptions)
+  return String(result).trim()
+}
+
+function runConfiguredCommand(command, options = {}) {
+  const { bin, args } = parseConfiguredCommand(command)
+  runFile(bin, args, options)
 }
 
 function execPnpmSync(args, options) {
@@ -87,21 +179,24 @@ function ensureCleanGit() {
   if (skipGitCheck)
     return
 
-  const status = runOutput('git status --porcelain')
+  const status = runFileOutput('git', ['status', '--porcelain'])
   if (status) {
     throw new Error(`Working tree is not clean. Commit or stash changes before publishing.\n${status}`)
   }
 }
 
 function getDistTag(version) {
+  assertValidVersion(version)
   if (explicitTag)
-    return explicitTag
+    return assertValidDistTag(explicitTag)
   return version.includes('-') ? 'next' : 'latest'
 }
 
 function npmVersionExists(packageName, version) {
+  assertValidPackageName(packageName)
+  assertValidVersion(version)
   try {
-    runOutput(`npm view "${packageName}@${version}" version`)
+    runFileOutput('npm', ['view', `${packageName}@${version}`, 'version'])
     return true
   }
   catch {
@@ -173,7 +268,12 @@ export const REGISTRY_MANIFEST_FIELDS = [
 ]
 
 function readRegistryField(packageName, version, field) {
-  return runOutput(`npm view "${packageName}@${version}" ${field} --json`)
+  assertValidPackageName(packageName)
+  assertValidVersion(version)
+  if (!REGISTRY_MANIFEST_FIELDS.includes(field)) {
+    throw new Error(`Unsupported registry manifest field: ${String(field)}`)
+  }
+  return runFileOutput('npm', ['view', `${packageName}@${version}`, field, '--json'])
 }
 
 /**
@@ -252,29 +352,31 @@ export function verifyRegistryManifest(packageInfo, version, readField = readReg
 
 function main() {
   const packageInfo = getPackageInfo()
+  assertValidPackageName(packageInfo.name)
   const manifest = readJson(path.join(repoRoot, packageInfo.path, 'package.json'))
-  const distTag = getDistTag(manifest.version)
+  const version = assertValidVersion(manifest.version)
+  const distTag = getDistTag(version)
 
   ensureCleanGit()
 
   if (!skipTests && packageInfo.testCommand)
-    run(packageInfo.testCommand)
+    runConfiguredCommand(packageInfo.testCommand)
   for (const command of packageInfo.preBuildCommands ?? []) {
     if (!skipBuild)
-      run(command)
+      runConfiguredCommand(command)
   }
   if (!skipBuild && packageInfo.buildCommand)
-    run(packageInfo.buildCommand)
+    runConfiguredCommand(packageInfo.buildCommand)
 
   for (const packageName of packageInfo.waitForPackages ?? []) {
     waitForPackage(packageName)
   }
 
-  run(`node scripts/validate-publish-manifests.mjs --filter "${packageInfo.name}" --pack`)
+  runFile(process.execPath, ['scripts/validate-publish-manifests.mjs', '--filter', packageInfo.name, '--pack'])
 
-  if (npmVersionExists(packageInfo.name, manifest.version)) {
-    console.log(`[publish-package] ${packageInfo.name}@${manifest.version} already exists on npm. Skipping publish.`)
-    verifyRegistryManifest(packageInfo, manifest.version)
+  if (npmVersionExists(packageInfo.name, version)) {
+    console.log(`[publish-package] ${packageInfo.name}@${version} already exists on npm. Skipping publish.`)
+    verifyRegistryManifest(packageInfo, version)
     return
   }
 
@@ -282,13 +384,17 @@ function main() {
   try {
     const tarballPath = packPackage(packageInfo, tempRoot)
     const access = packageInfo.access ?? 'public'
-    const publishCommand = dryRun
-      ? `npm publish "${tarballPath}" --access ${access} --tag "${distTag}" --dry-run`
-      : `npm publish "${tarballPath}" --access ${access} --tag "${distTag}"`
-    run(publishCommand)
+    if (!ALLOWED_ACCESS_VALUES.has(access)) {
+      throw new Error(`Unsupported npm publish access level: ${String(access)}`)
+    }
+    const publishArgs = ['publish', tarballPath, '--access', access, '--tag', distTag]
+    if (dryRun) {
+      publishArgs.push('--dry-run')
+    }
+    runFile('npm', publishArgs)
 
     if (!dryRun) {
-      verifyRegistryManifest(packageInfo, manifest.version)
+      verifyRegistryManifest(packageInfo, version)
     }
   }
   finally {
@@ -296,8 +402,20 @@ function main() {
   }
 }
 
+function invokedDirectly() {
+  if (!process.argv[1])
+    return false
+  const self = fileURLToPath(import.meta.url)
+  try {
+    return fs.realpathSync(process.argv[1]) === fs.realpathSync(self)
+  }
+  catch {
+    return path.resolve(process.argv[1]) === self
+  }
+}
+
 // Guarded so the tests can import verifyRegistryManifest without running a publish.
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (invokedDirectly()) {
   try {
     main()
   }

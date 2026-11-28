@@ -21,7 +21,9 @@ on:
       registry:
         description: Target npm registry URL
         required: false
-        type: string
+        type: choice
+        options:
+          - https://registry.npmjs.org
         default: https://registry.npmjs.org
       provenance:
         description: Attach npm OIDC provenance attestation on live publish
@@ -50,6 +52,22 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Validate Target Registry
+        id: registry
+        env:
+          INPUT_REGISTRY: ${{ inputs.registry }}
+        run: |
+          set -euo pipefail
+          case "${INPUT_REGISTRY}" in
+            https://registry.npmjs.org)
+              echo "url=https://registry.npmjs.org" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Refusing unsupported npm registry: ${INPUT_REGISTRY}"
+              exit 1
+              ;;
+          esac
+
       - name: Setup PNPM
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
@@ -58,7 +76,7 @@ jobs:
         with:
           node-version-file: .node-version
           cache: pnpm
-          registry-url: ${{ inputs.registry }}
+          registry-url: ${{ steps.registry.outputs.url }}
 
       - name: Install Dependencies
         env:
@@ -95,7 +113,7 @@ jobs:
           INPUT_PLUGIN_FILTER: ${{ inputs.plugin_filter }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
           INPUT_DIST_TAG: ${{ inputs.dist_tag }}
-          INPUT_REGISTRY: ${{ inputs.registry }}
+          INPUT_REGISTRY: ${{ steps.registry.outputs.url }}
           INPUT_PROVENANCE: ${{ inputs.provenance }}
         run: |
           set -euo pipefail

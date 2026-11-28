@@ -240,7 +240,26 @@ test('CloudShare operations use fixed host-owned request/reply payloads without 
   await harness.plugin.onItemAction(actionItem(state.items, 'cloud-list'))
   await harness.plugin.onItemAction(actionItem(state.items, 'cloud-install'))
   await harness.plugin.onFeatureTriggered('snippets-manage', { text: '' })
-  await harness.plugin.onItemAction(actionItem(state.items, 'cloud-publish'))
+
+  // Step 1: clicking cloud-publish requires explicit confirmation and must NOT upload yet
+  const previewResult = await harness.plugin.onItemAction(actionItem(state.items, 'cloud-publish'))
+  assert.equal(previewResult.status, 'confirmation-required')
+  assert.deepEqual(state.channelCalls.map(call => call.operation), [
+    'snippets.cloud.list',
+    'snippets.cloud.install',
+  ])
+
+  // Forged confirm token is rejected
+  const forgedResult = await harness.plugin.onItemAction({
+    meta: { featureId: 'snippets-manage', defaultAction: 'cloud-publish-confirm' },
+    actions: [{ id: 'cloud-publish-confirm', payload: { confirmToken: 'forged' } }],
+  })
+  assert.equal(forgedResult.status, 'blocked')
+  assert.equal(forgedResult.reason, 'confirmation-required')
+
+  // Step 2: confirming with issued item publishes the filtered pack
+  const confirmResult = await harness.plugin.onItemAction(actionItem(state.items, 'cloud-publish-confirm'))
+  assert.equal(confirmResult.status, 'started')
 
   assert.deepEqual(state.channelCalls.map(call => call.operation), [
     'snippets.cloud.list',
@@ -389,4 +408,58 @@ test('guards missing clipboard.writeText and maps canonical permission/capabilit
     assert.equal(result.status, 'blocked')
     assert.equal(result.reason, expectedReason, code)
   }
+})
+
+test('preserves literal $ replacement patterns in {{clipboard}} and filters quoted JSON/token secrets on CloudShare publish', async () => {
+  const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3OCJ9.signaturepart1234'
+  const files = new Map([
+    ['snippets.json', {
+      snippets: [
+        { id: 'tmpl', title: 'Price', content: 'Total: {{clipboard}} USD', tags: [] },
+        { id: 'json-key', title: 'JSON', content: '{"apiKey": "plain-secret-value"}', tags: [] },
+        { id: 'bearer', title: 'Auth', content: 'Authorization: Bearer my-live-bearer-token-1234', tags: [] },
+        { id: 'gh-pat', title: 'GH', content: 'github_pat_11ABCDEFG0abcdefghijklmnop', tags: [] },
+        { id: 'slack', title: 'Slack', content: 'xoxb-1234567890-abcdefghij', tags: [] },
+        { id: 'google', title: 'Google', content: 'AIzaSyA1234567890abcdefghijklmnopqrstuv', tags: [] },
+        { id: 'npm', title: 'npm', content: 'npm_1234567890abcdefghijklmnopqrstuvwxyz', tags: [] },
+        { id: 'jwt', title: 'JWT', content: jwt, tags: [] },
+        { id: 'db', title: 'DB', content: 'postgres://admin:supersecret@db.internal:5432/app', tags: [] },
+        { id: 'enc-key', title: 'Encrypted', content: '-----BEGIN ENCRYPTED PRIVATE KEY-----\nabc\n-----END ENCRYPTED PRIVATE KEY-----', tags: [] },
+        { id: 'pgp-block', title: 'PGP', content: '-----BEGIN PGP PRIVATE KEY BLOCK-----\nmQENBF...\n-----END PGP PRIVATE KEY BLOCK-----', tags: [] },
+      ],
+    }],
+  ])
+
+  const publishedPayloads = []
+  const { plugin, state } = loadPlugin({
+    files,
+    clipboard: {
+      async readText() {
+        return '$& $$ $\' $1 100'
+      },
+      async writeText(value) {
+        state.clipboardWrites.push(value)
+      },
+    },
+    touchChannel: {
+      async send(operation, payload) {
+        publishedPayloads.push({ operation, payload })
+        return { package: { id: 'ok' } }
+      },
+    },
+  })
+
+  // Verify $ replacement tokens are never interpreted by String.prototype.replace
+  await plugin.onFeatureTriggered('snippets-search', { text: 'Price' })
+  await plugin.onItemAction(actionItem(state.items, 'copy'))
+  assert.deepEqual(state.clipboardWrites, ['Total: $& $$ $\' $1 100 USD'])
+
+  // Verify every sensitive snippet is excluded from CloudShare public publish
+  await plugin.onFeatureTriggered('snippets-manage', { text: '' })
+  await plugin.onItemAction(actionItem(state.items, 'cloud-publish'))
+  await plugin.onItemAction(actionItem(state.items, 'cloud-publish-confirm'))
+
+  assert.equal(publishedPayloads.length, 1)
+  assert.deepEqual(publishedPayloads[0].payload.pack.snippets.map(s => s.id), ['tmpl'])
+  assert.equal(publishedPayloads[0].payload.pack.skippedSensitiveCount, 10)
 })

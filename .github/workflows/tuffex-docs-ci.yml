@@ -104,7 +104,7 @@ jobs:
           fi
 
       - name: Upload staged Cloudflare assets
-        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true) }}
+        if: ${{ github.ref == 'refs/heads/master' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true)) }}
         uses: actions/upload-artifact@v7
         with:
           name: tuffex-docs-dist-cf
@@ -118,7 +118,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: tuffex_docs_ci
-    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true) }}
+    if: ${{ github.ref == 'refs/heads/master' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true)) }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -140,6 +140,9 @@ jobs:
           name: tuffex-docs-dist-cf
           path: apps/tuffex-docs/.dist-cf
 
+      - name: Install Wrangler dependencies without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter @talex-touch/tuffex-docs
+
       - name: Deploy with Wrangler when Cloudflare credentials are configured
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -149,5 +152,4 @@ jobs:
             echo "Skipping Cloudflare Workers Assets deploy: CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN not configured."
             exit 0
           fi
-          pnpm install --frozen-lockfile --filter @talex-touch/tuffex-docs
           pnpm -C apps/tuffex-docs exec wrangler deploy

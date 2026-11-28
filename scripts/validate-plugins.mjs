@@ -8,7 +8,7 @@
  * Exit code 1 on any error-level issue.
  */
 
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -350,6 +350,35 @@ export function checkPackageManifestParity(pluginName, packageManifest, manifest
   return failed
 }
 
+/**
+ * Resolve a manifest entry point and verify it stays strictly within `pluginPath`
+ * (blocking `../` traversal, absolute paths, and symlink escapes).
+ *
+ * @returns {string | null} Resolved absolute path inside `pluginPath`, or `null` if escaped/invalid.
+ */
+export function resolveContainedEntryPath(pluginPath, entryFile) {
+  if (typeof entryFile !== 'string' || !entryFile.trim() || entryFile.includes('\0'))
+    return null
+  const resolvedRoot = path.resolve(pluginPath)
+  const resolvedEntry = path.resolve(resolvedRoot, entryFile)
+  const rel = path.relative(resolvedRoot, resolvedEntry)
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel))
+    return null
+  if (fs.existsSync(resolvedEntry)) {
+    try {
+      const realRoot = fs.realpathSync(resolvedRoot)
+      const realEntry = fs.realpathSync(resolvedEntry)
+      const realRel = path.relative(realRoot, realEntry)
+      if (!realRel || realRel.startsWith('..') || path.isAbsolute(realRel))
+        return null
+    }
+    catch {
+      return null
+    }
+  }
+  return resolvedEntry
+}
+
 for (const pluginName of pluginDirs) {
   totalPlugins++
   const pluginPath = path.join(pluginsDir, pluginName)
@@ -415,13 +444,17 @@ for (const pluginName of pluginDirs) {
 
   // 3. Entry point exists + syntax check
   const entryFile = manifest.main || manifest.build?.index?.entry || 'index.js'
-  const entryPath = path.join(pluginPath, entryFile)
-  if (!fs.existsSync(entryPath)) {
+  const entryPath = resolveContainedEntryPath(pluginPath, entryFile)
+  if (!entryPath) {
+    logError(pluginName, `Entry file "${entryFile}" resolves outside plugin directory`)
+    pluginHasError = true
+  }
+  else if (!fs.existsSync(entryPath)) {
     logWarn(pluginName, `Entry file "${entryFile}" not found (plugin may be UI-only)`)
   }
   else if (/\.[cm]?js$/i.test(entryFile)) {
     try {
-      execSync(`node -c "${entryPath}"`, { stdio: 'pipe' })
+      execFileSync(process.execPath, ['-c', entryPath], { stdio: 'pipe' })
     }
     catch (e) {
       logError(pluginName, `Syntax error in ${entryFile}: ${e.stderr?.toString().trim() || e.message}`)
@@ -447,6 +480,7 @@ for (const pluginName of pluginDirs) {
       // asking for a permission the runtime does not define passed CI silently. All 24
       // plugins are clean today, so this fails nothing that currently works (#735).
       logError(pluginName, `Unknown permission IDs: ${unknownIds.join(', ')}`)
+      pluginHasError = true
     }
   }
 
@@ -666,6 +700,21 @@ function selfTest() {
         { id: 'com.tuffex.code-snippets', name: 'touch-code-snippets', version: '1.0.1', sdkapi: 261011, category: 'utilities' },
       ),
       expect: false,
+    },
+    {
+      name: 'entry path escaping plugin directory is rejected',
+      run: () => resolveContainedEntryPath('/tmp/plugin-root', '../outside.js') === null,
+      expect: true,
+    },
+    {
+      name: 'absolute entry path outside plugin directory is rejected',
+      run: () => resolveContainedEntryPath('/tmp/plugin-root', '/etc/passwd') === null,
+      expect: true,
+    },
+    {
+      name: 'contained relative entry path is accepted',
+      run: () => resolveContainedEntryPath('/tmp/plugin-root', 'dist/index.mjs') === path.resolve('/tmp/plugin-root', 'dist/index.mjs'),
+      expect: true,
     },
   ]
 

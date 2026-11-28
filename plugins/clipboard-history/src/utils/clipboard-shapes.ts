@@ -156,6 +156,15 @@ function describeJwt(value: string): string | undefined {
  * 写在句子里时，主进程给它挂上「API 密钥」标签，这里却判定为否、把 key 明文渲染了
  * 出来。现在按 span 判定，嵌在正文里的同样会被打码。
  */
+export function hasPrivateKeySecret(rawContent: string | null | undefined): boolean {
+  const content = rawContent ?? ''
+  if (!content) {
+    return false
+  }
+  const { secrets } = classifyClipboardContent({ type: 'text', content })
+  return secrets.some(hit => hit.kind === 'private-key')
+}
+
 export function detectSecret(rawContent: string | null | undefined): ClipboardSecretInfo | null {
   const content = rawContent ?? ''
   if (!content) {
@@ -164,9 +173,12 @@ export function detectSecret(rawContent: string | null | undefined): ClipboardSe
 
   const { secrets } = classifyClipboardContent({ type: 'text', content })
   // 一条内容可能命中多段；洞察区只讲一件事，优先讲最危险的那一段。
+  // 私钥永远拥有最高优先级，避免前面出现其他高危 token 时绕过私钥不可揭示约束。
   // 主机 IP 不参与评选——它要掩码，但它不是这一档要讲的东西。
   const credentials = secrets.filter(isCredentialHit)
-  const primary = credentials.find(hit => hit.critical) ?? credentials[0]
+  const primary = credentials.find(hit => hit.kind === 'private-key')
+    ?? credentials.find(hit => hit.critical)
+    ?? credentials[0]
   if (!primary) {
     return null
   }
@@ -198,7 +210,11 @@ export function readSecretPlainValue(secret: ClipboardSecretInfo, rawContent: st
   }
 
   const { secrets } = classifyClipboardContent({ type: 'text', content })
-  const primary = secrets.find(hit => hit.critical) ?? secrets[0]
+  if (secrets.some(hit => hit.kind === 'private-key')) {
+    return secret.maskedContent
+  }
+  const credentials = secrets.filter(isCredentialHit)
+  const primary = credentials.find(hit => hit.critical) ?? credentials[0]
   return primary ? content.slice(primary.start, primary.end) : content.trim()
 }
 
@@ -266,8 +282,8 @@ export function getClipboardPreviewText(
   }
 
   // 私钥吞掉 reveal，不依赖调用方记得「私钥不要渲染开关」。
-  const secret = detectSecret(content)
-  return reveal && secret?.kind !== 'private-key' ? content : masked
+  const hasPrivateKey = hasPrivateKeySecret(content)
+  return reveal && !hasPrivateKey ? content : masked
 }
 
 /**

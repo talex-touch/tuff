@@ -62,9 +62,10 @@ jobs:
             echo "VOICE_PROVIDER_CATALOG_PAYLOAD_KEY is required to encrypt the pack payload."
             exit 1
           fi
-          signing_key="${RUNNER_TEMP}/release-signing-private.pem"
-          payload_key="${RUNNER_TEMP}/payload-key.b64"
           umask 077
+          signing_key="$(mktemp "${RUNNER_TEMP}/release-signing-private.XXXXXX.pem")"
+          payload_key="$(mktemp "${RUNNER_TEMP}/payload-key.XXXXXX.b64")"
+          trap 'rm -f "${signing_key:-}" "${payload_key:-}"' EXIT
           if [[ "${RELEASE_SIGNING_PRIVATE_KEY}" == -----BEGIN* ]]; then
             printf '%s' "${RELEASE_SIGNING_PRIVATE_KEY}" > "${signing_key}"
           else

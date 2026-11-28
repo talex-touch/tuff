@@ -36,7 +36,9 @@ const SENSITIVE_HEADER_NAMES = new Set([
   'x-xsrf-token',
 ])
 const SENSITIVE_HEADER_PATTERN = /token|secret|key|auth|cookie|password|credential|session/i
+const SENSITIVE_FIELD_PATTERN = /^(?:.*(?:token|secret|password|passwd|pwd|api[_-]?key|auth|credential|private[_-]?key|signature|session).*|key|sig)$/i
 const SECRET_KEY_PATTERN = /^[\w.-]{1,48}$/
+const REDACTED_SECRET_PLACEHOLDER = '<SECRET_VALUE>'
 
 let triggerGeneration = 0
 let tokenCounter = 0
@@ -92,14 +94,361 @@ function encodeBase64(text) {
   return out
 }
 
-function fnv1aHex(input) {
-  let hash = 0x811C9DC5
-  const text = String(input ?? '')
-  for (let i = 0; i < text.length; i += 1) {
-    hash ^= text.charCodeAt(i)
-    hash = Math.imul(hash, 0x01000193) >>> 0
+const SHA256_K = [
+  0x428A2F98,
+  0x71374491,
+  0xB5C0FBCF,
+  0xE9B5DBA5,
+  0x3956C25B,
+  0x59F111F1,
+  0x923F82A4,
+  0xAB1C5ED5,
+  0xD807AA98,
+  0x12835B01,
+  0x243185BE,
+  0x550C7DC3,
+  0x72BE5D74,
+  0x80DEB1FE,
+  0x9BDC06A7,
+  0xC19BF174,
+  0xE49B69C1,
+  0xEFBE4786,
+  0x0FC19DC6,
+  0x240CA1CC,
+  0x2DE92C6F,
+  0x4A7484AA,
+  0x5CB0A9DC,
+  0x76F988DA,
+  0x983E5152,
+  0xA831C66D,
+  0xB00327C8,
+  0xBF597FC7,
+  0xC6E00BF3,
+  0xD5A79147,
+  0x06CA6351,
+  0x14292967,
+  0x27B70A85,
+  0x2E1B2138,
+  0x4D2C6DFC,
+  0x53380D13,
+  0x650A7354,
+  0x766A0ABB,
+  0x81C2C92E,
+  0x92722C85,
+  0xA2BFE8A1,
+  0xA81A664B,
+  0xC24B8B70,
+  0xC76C51A3,
+  0xD192E819,
+  0xD6990624,
+  0xF40E3585,
+  0x106AA070,
+  0x19A4C116,
+  0x1E376C08,
+  0x2748774C,
+  0x34B0BCB5,
+  0x391C0CB3,
+  0x4ED8AA4A,
+  0x5B9CCA4F,
+  0x682E6FF3,
+  0x748F82EE,
+  0x78A5636F,
+  0x84C87814,
+  0x8CC70208,
+  0x90BEFFFA,
+  0xA4506CEB,
+  0xBEF9A3F7,
+  0xC67178F2,
+]
+
+function rotr32(x, n) {
+  return ((x >>> n) | (x << (32 - n))) >>> 0
+}
+
+function sha256Hex(input) {
+  const bytes = new TextEncoder().encode(String(input ?? ''))
+  const bitLen = bytes.length * 8
+  const paddedLen = (((bytes.length + 9) + 63) & ~63)
+  const buf = new Uint8Array(paddedLen)
+  buf.set(bytes)
+  buf[bytes.length] = 0x80
+  const view = new DataView(buf.buffer)
+  view.setUint32(paddedLen - 8, Math.floor(bitLen / 0x100000000) >>> 0, false)
+  view.setUint32(paddedLen - 4, bitLen >>> 0, false)
+
+  let h0 = 0x6A09E667
+  let h1 = 0xBB67AE85
+  let h2 = 0x3C6EF372
+  let h3 = 0xA54FF53A
+  let h4 = 0x510E527F
+  let h5 = 0x9B05688C
+  let h6 = 0x1F83D9AB
+  let h7 = 0x5BE0CD19
+  const w = new Uint32Array(64)
+
+  for (let offset = 0; offset < paddedLen; offset += 64) {
+    for (let i = 0; i < 16; i += 1)
+      w[i] = view.getUint32(offset + i * 4, false)
+    for (let i = 16; i < 64; i += 1) {
+      const s0 = (rotr32(w[i - 15], 7) ^ rotr32(w[i - 15], 18) ^ (w[i - 15] >>> 3)) >>> 0
+      const s1 = (rotr32(w[i - 2], 17) ^ rotr32(w[i - 2], 19) ^ (w[i - 2] >>> 10)) >>> 0
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0
+    }
+    let a = h0
+    let b = h1
+    let c = h2
+    let d = h3
+    let e = h4
+    let f = h5
+    let g = h6
+    let h = h7
+    for (let i = 0; i < 64; i += 1) {
+      const S1 = (rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25)) >>> 0
+      const ch = ((e & f) ^ (~e & g)) >>> 0
+      const t1 = (h + S1 + ch + SHA256_K[i] + w[i]) >>> 0
+      const S0 = (rotr32(a, 2) ^ rotr32(a, 13) ^ rotr32(a, 22)) >>> 0
+      const maj = ((a & b) ^ (a & c) ^ (b & c)) >>> 0
+      const t2 = (S0 + maj) >>> 0
+      h = g
+      g = f
+      f = e
+      e = (d + t1) >>> 0
+      d = c
+      c = b
+      b = a
+      a = (t1 + t2) >>> 0
+    }
+    h0 = (h0 + a) >>> 0
+    h1 = (h1 + b) >>> 0
+    h2 = (h2 + c) >>> 0
+    h3 = (h3 + d) >>> 0
+    h4 = (h4 + e) >>> 0
+    h5 = (h5 + f) >>> 0
+    h6 = (h6 + g) >>> 0
+    h7 = (h7 + h) >>> 0
   }
-  return hash.toString(16).padStart(8, '0')
+
+  return [h0, h1, h2, h3, h4, h5, h6, h7]
+    .map(word => word.toString(16).padStart(8, '0'))
+    .join('')
+}
+
+function isSensitiveFieldName(fieldName) {
+  const normalized = normalizeText(fieldName)
+  if (!normalized)
+    return false
+  return SENSITIVE_FIELD_PATTERN.test(normalized)
+}
+
+function extractAndRedactUrlSecrets(rawUrl) {
+  const normalized = normalizeHttpUrl(rawUrl)
+  if (!normalized)
+    return { sanitizedUrl: '', secretQueryParams: {}, secretQueryNames: [] }
+  try {
+    const parsed = new URL(normalized)
+    const secretQueryParams = {}
+    const secretQueryNames = []
+    const entries = Array.from(parsed.searchParams.entries())
+    if (entries.length === 0)
+      return { sanitizedUrl: parsed.toString(), secretQueryParams, secretQueryNames }
+
+    const rebuilt = new URLSearchParams()
+    const keyOccurrence = new Map()
+    for (const [key, value] of entries) {
+      const idx = keyOccurrence.get(key) ?? 0
+      keyOccurrence.set(key, idx + 1)
+      if (isSensitiveFieldName(key) && value && value !== REDACTED_SECRET_PLACEHOLDER) {
+        const slot = `${key}#${idx}`
+        secretQueryParams[slot] = value
+        if (!secretQueryNames.includes(key))
+          secretQueryNames.push(key)
+        rebuilt.append(key, REDACTED_SECRET_PLACEHOLDER)
+      }
+      else {
+        rebuilt.append(key, value)
+      }
+    }
+    parsed.search = rebuilt.toString()
+    return { sanitizedUrl: parsed.toString(), secretQueryParams, secretQueryNames }
+  }
+  catch {
+    return { sanitizedUrl: normalized, secretQueryParams: {}, secretQueryNames: [] }
+  }
+}
+
+function rehydrateUrlSecrets(sanitizedUrl, secretQueryParams) {
+  if (!sanitizedUrl || !secretQueryParams || typeof secretQueryParams !== 'object')
+    return sanitizedUrl
+  try {
+    const parsed = new URL(sanitizedUrl)
+    const rebuilt = new URLSearchParams()
+    const keyOccurrence = new Map()
+    for (const [key, value] of parsed.searchParams.entries()) {
+      const idx = keyOccurrence.get(key) ?? 0
+      keyOccurrence.set(key, idx + 1)
+      const slot = `${key}#${idx}`
+      if (Object.prototype.hasOwnProperty.call(secretQueryParams, slot)) {
+        rebuilt.append(key, String(secretQueryParams[slot]))
+      }
+      else if (Object.prototype.hasOwnProperty.call(secretQueryParams, key) && value === REDACTED_SECRET_PLACEHOLDER) {
+        rebuilt.append(key, String(secretQueryParams[key]))
+      }
+      else {
+        rebuilt.append(key, value)
+      }
+    }
+    parsed.search = rebuilt.toString()
+    return parsed.toString()
+  }
+  catch {
+    return sanitizedUrl
+  }
+}
+
+function redactJsonValue(node, pathPrefix, secretMap, secretNames) {
+  if (Array.isArray(node)) {
+    return node.map((item, idx) => redactJsonValue(item, `${pathPrefix}[${idx}]`, secretMap, secretNames))
+  }
+  if (node && typeof node === 'object') {
+    const copy = {}
+    for (const [key, value] of Object.entries(node)) {
+      const path = pathPrefix ? `${pathPrefix}.${key}` : key
+      if (
+        isSensitiveFieldName(key)
+        && (typeof value === 'string' || typeof value === 'number')
+        && String(value).length > 0
+        && value !== REDACTED_SECRET_PLACEHOLDER
+      ) {
+        secretMap[path] = value
+        if (!secretNames.includes(key))
+          secretNames.push(key)
+        copy[key] = REDACTED_SECRET_PLACEHOLDER
+      }
+      else {
+        copy[key] = redactJsonValue(value, path, secretMap, secretNames)
+      }
+    }
+    return copy
+  }
+  return node
+}
+
+function rehydrateJsonValue(node, pathPrefix, secretMap) {
+  if (Array.isArray(node)) {
+    return node.map((item, idx) => rehydrateJsonValue(item, `${pathPrefix}[${idx}]`, secretMap))
+  }
+  if (node && typeof node === 'object') {
+    const copy = {}
+    for (const [key, value] of Object.entries(node)) {
+      const path = pathPrefix ? `${pathPrefix}.${key}` : key
+      if (Object.prototype.hasOwnProperty.call(secretMap, path)) {
+        copy[key] = secretMap[path]
+      }
+      else {
+        copy[key] = rehydrateJsonValue(value, path, secretMap)
+      }
+    }
+    return copy
+  }
+  return node
+}
+
+function extractAndRedactBodySecrets(rawBody, headers = {}) {
+  if (typeof rawBody !== 'string' || rawBody.length === 0)
+    return { sanitizedBody: rawBody ?? null, secretBodyFields: {}, secretBodyNames: [], bodyFormat: null }
+
+  const trimmed = rawBody.trim()
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      const secretBodyFields = {}
+      const secretBodyNames = []
+      const redacted = redactJsonValue(parsed, '', secretBodyFields, secretBodyNames)
+      if (secretBodyNames.length > 0) {
+        return {
+          sanitizedBody: JSON.stringify(redacted),
+          secretBodyFields,
+          secretBodyNames,
+          bodyFormat: 'json',
+        }
+      }
+      return { sanitizedBody: rawBody, secretBodyFields: {}, secretBodyNames: [], bodyFormat: null }
+    }
+    catch {
+      // Not valid JSON; fall through to form check.
+    }
+  }
+
+  const contentType = Object.entries(headers || {})
+    .find(([k]) => k.toLowerCase() === 'content-type')?.[1] || ''
+  const looksLikeForm = /application\/x-www-form-urlencoded/i.test(contentType)
+    || (/^[^=\s]+=[^&\n]*(?:&[^=\s]+=[^&\n]*)*$/.test(trimmed))
+  if (looksLikeForm) {
+    const params = new URLSearchParams(trimmed)
+    const secretBodyFields = {}
+    const secretBodyNames = []
+    const rebuilt = new URLSearchParams()
+    const keyOccurrence = new Map()
+    for (const [key, value] of params.entries()) {
+      const idx = keyOccurrence.get(key) ?? 0
+      keyOccurrence.set(key, idx + 1)
+      if (isSensitiveFieldName(key) && value && value !== REDACTED_SECRET_PLACEHOLDER) {
+        secretBodyFields[`${key}#${idx}`] = value
+        if (!secretBodyNames.includes(key))
+          secretBodyNames.push(key)
+        rebuilt.append(key, REDACTED_SECRET_PLACEHOLDER)
+      }
+      else {
+        rebuilt.append(key, value)
+      }
+    }
+    if (secretBodyNames.length > 0) {
+      return {
+        sanitizedBody: rebuilt.toString(),
+        secretBodyFields,
+        secretBodyNames,
+        bodyFormat: 'form',
+      }
+    }
+  }
+
+  return { sanitizedBody: rawBody, secretBodyFields: {}, secretBodyNames: [], bodyFormat: null }
+}
+
+function rehydrateBodySecrets(sanitizedBody, secretBodyPayload) {
+  if (typeof sanitizedBody !== 'string' || !sanitizedBody || !secretBodyPayload || typeof secretBodyPayload !== 'object')
+    return sanitizedBody
+  const { format, fields } = secretBodyPayload
+  if (!fields || typeof fields !== 'object')
+    return sanitizedBody
+
+  if (format === 'json') {
+    try {
+      const parsed = JSON.parse(sanitizedBody)
+      return JSON.stringify(rehydrateJsonValue(parsed, '', fields))
+    }
+    catch {
+      return sanitizedBody
+    }
+  }
+  if (format === 'form') {
+    const params = new URLSearchParams(sanitizedBody)
+    const rebuilt = new URLSearchParams()
+    const keyOccurrence = new Map()
+    for (const [key, value] of params.entries()) {
+      const idx = keyOccurrence.get(key) ?? 0
+      keyOccurrence.set(key, idx + 1)
+      const slot = `${key}#${idx}`
+      if (Object.prototype.hasOwnProperty.call(fields, slot)) {
+        rebuilt.append(key, String(fields[slot]))
+      }
+      else {
+        rebuilt.append(key, value)
+      }
+    }
+    return rebuilt.toString()
+  }
+  return sanitizedBody
 }
 
 function isSensitiveHeader(headerName) {
@@ -178,15 +527,17 @@ function sanitizePresetName(rawName) {
   return trimmed.replace(/[\r\n\t]+/g, ' ').slice(0, 48)
 }
 
+let secretKeySequence = 0
+
 function buildSecretKey(presetName) {
-  const slug = sanitizePresetName(presetName)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 24) || 'preset'
-  const hash = fnv1aHex(sanitizePresetName(presetName).toLowerCase())
-  const candidate = `apilens.${slug}.${hash}`
-  return SECRET_KEY_PATTERN.test(candidate) ? candidate : `apilens.p.${hash}`
+  const webCrypto = globalThis.crypto
+  if (webCrypto && typeof webCrypto.randomUUID === 'function') {
+    const uuid = webCrypto.randomUUID().replace(/-/g, '')
+    return `apilens.${uuid}`
+  }
+  secretKeySequence += 1
+  const digest = sha256Hex(`${sanitizePresetName(presetName).toLowerCase()}:${Date.now()}:${secretKeySequence}:${Math.random()}`).slice(0, 32)
+  return `apilens.${digest}`
 }
 
 function normalizeHttpUrl(rawUrl, headersOut) {
@@ -197,9 +548,11 @@ function normalizeHttpUrl(rawUrl, headersOut) {
     const parsed = new URL(candidate)
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
       return ''
-    if ((parsed.username || parsed.password) && headersOut) {
-      const credentials = `${decodeURIComponent(parsed.username)}:${decodeURIComponent(parsed.password)}`
-      setHeaderCaseInsensitive(headersOut, 'Authorization', `Basic ${encodeBase64(credentials)}`)
+    if (parsed.username || parsed.password) {
+      if (headersOut) {
+        const credentials = `${decodeURIComponent(parsed.username)}:${decodeURIComponent(parsed.password)}`
+        setHeaderCaseInsensitive(headersOut, 'Authorization', `Basic ${encodeBase64(credentials)}`)
+      }
       parsed.username = ''
       parsed.password = ''
     }
@@ -669,7 +1022,9 @@ function shellSingleQuote(value) {
 
 function formatCurlSnippet(request, { secretHeaderNames = [] } = {}) {
   const { publicHeaders, sensitiveHeaders } = splitHeaders(request.headers || {})
-  const lines = [`curl -X ${request.method} ${shellSingleQuote(request.url)}`]
+  const { sanitizedUrl } = extractAndRedactUrlSecrets(request.url)
+  const { sanitizedBody } = extractAndRedactBodySecrets(request.body, request.headers || {})
+  const lines = [`curl -X ${request.method} ${shellSingleQuote(sanitizedUrl || request.url)}`]
 
   for (const [k, v] of Object.entries(publicHeaders))
     lines.push(`  -H ${shellSingleQuote(`${k}: ${v}`)}`)
@@ -684,14 +1039,16 @@ function formatCurlSnippet(request, { secretHeaderNames = [] } = {}) {
       lines.push(`  -H ${shellSingleQuote(`${name}: ${placeholderForSensitiveHeader(name, '')}`)}`)
   }
 
-  if (request.body !== null && request.body !== undefined && request.body !== '')
-    lines.push(`  --data-raw ${shellSingleQuote(request.body)}`)
+  if (sanitizedBody !== null && sanitizedBody !== undefined && sanitizedBody !== '')
+    lines.push(`  --data-raw ${shellSingleQuote(sanitizedBody)}`)
 
   return lines.join(' \\\n')
 }
 
 function formatFetchSnippet(request, { secretHeaderNames = [] } = {}) {
   const { publicHeaders, sensitiveHeaders } = splitHeaders(request.headers || {})
+  const { sanitizedUrl } = extractAndRedactUrlSecrets(request.url)
+  const { sanitizedBody } = extractAndRedactBodySecrets(request.body, request.headers || {})
   const exportHeaders = { ...publicHeaders }
 
   const emittedSensitive = new Set()
@@ -709,13 +1066,13 @@ function formatFetchSnippet(request, { secretHeaderNames = [] } = {}) {
     opts.headers = exportHeaders
 
   let bodyLine = ''
-  if (request.body !== null && request.body !== undefined && request.body !== '') {
+  if (sanitizedBody !== null && sanitizedBody !== undefined && sanitizedBody !== '') {
     try {
-      const parsedJson = JSON.parse(request.body)
+      const parsedJson = JSON.parse(sanitizedBody)
       bodyLine = `JSON.stringify(${JSON.stringify(parsedJson, null, 2)})`
     }
     catch {
-      opts.body = request.body
+      opts.body = sanitizedBody
     }
   }
 
@@ -725,10 +1082,10 @@ function formatFetchSnippet(request, { secretHeaderNames = [] } = {}) {
       .split('\n')
       .map((line, idx) => (idx === 0 ? line : `  ${line}`))
       .join('\n')
-    optsCode = optsCode.replace(/\n\}$/, `,\n  "body": ${indentedBody}\n}`)
+    optsCode = optsCode.replace(/\n\}$/, () => `,\n  "body": ${indentedBody}\n}`)
   }
 
-  return `const response = await ${FETCH_IDENTIFIER}(${JSON.stringify(request.url)}, ${optsCode})\nconst data = await response.json()`
+  return `const response = await ${FETCH_IDENTIFIER}(${JSON.stringify(sanitizedUrl || request.url)}, ${optsCode})\nconst data = await response.json()`
 }
 
 function formatHeadersSummary(request, secretHeaderNames = []) {
@@ -753,32 +1110,42 @@ function sanitizePresetForStorage(rawPreset) {
     return null
   const name = sanitizePresetName(rawPreset.name)
   const method = normalizeText(rawPreset.method).toUpperCase()
-  const url = normalizeHttpUrl(rawPreset.url)
-  if (!name || !ALLOWED_METHODS.has(method) || !url)
+  const { sanitizedUrl } = extractAndRedactUrlSecrets(rawPreset.url)
+  if (!name || !ALLOWED_METHODS.has(method) || !sanitizedUrl)
     return null
 
   const { publicHeaders } = splitHeaders(rawPreset.headers || {})
   const secretHeaderNames = Array.isArray(rawPreset.secretHeaderNames)
     ? Array.from(new Set(rawPreset.secretHeaderNames.map(normalizeText).filter(Boolean))).slice(0, 16)
     : []
+  const secretQueryNames = Array.isArray(rawPreset.secretQueryNames)
+    ? Array.from(new Set(rawPreset.secretQueryNames.map(normalizeText).filter(Boolean))).slice(0, 16)
+    : []
+  const secretBodyNames = Array.isArray(rawPreset.secretBodyNames)
+    ? Array.from(new Set(rawPreset.secretBodyNames.map(normalizeText).filter(Boolean))).slice(0, 16)
+    : []
+  const hasAnySecrets = secretHeaderNames.length > 0 || secretQueryNames.length > 0 || secretBodyNames.length > 0
   const rawSecretKey = normalizeText(rawPreset.secretKey)
-  const secretKey = secretHeaderNames.length > 0 && SECRET_KEY_PATTERN.test(rawSecretKey)
+  const secretKey = hasAnySecrets && SECRET_KEY_PATTERN.test(rawSecretKey)
     ? rawSecretKey
     : null
-  const body = typeof rawPreset.body === 'string' && rawPreset.body.length > 0
+  const rawBody = typeof rawPreset.body === 'string' && rawPreset.body.length > 0
     ? rawPreset.body.slice(0, MAX_BODY_CHARS)
     : null
+  const { sanitizedBody } = extractAndRedactBodySecrets(rawBody, publicHeaders)
 
   const now = Date.now()
   return {
-    id: normalizeText(rawPreset.id) || `preset-${fnv1aHex(name.toLowerCase())}`,
+    id: normalizeText(rawPreset.id) || `preset-${sha256Hex(name.toLowerCase()).slice(0, 16)}`,
     name,
     method,
-    url,
+    url: sanitizedUrl,
     headers: publicHeaders,
     secretHeaderNames,
+    ...(secretQueryNames.length > 0 ? { secretQueryNames } : {}),
+    ...(secretBodyNames.length > 0 ? { secretBodyNames } : {}),
     secretKey,
-    body,
+    body: sanitizedBody,
     createdAt: Number.isSafeInteger(rawPreset.createdAt) ? rawPreset.createdAt : now,
     updatedAt: Number.isSafeInteger(rawPreset.updatedAt) ? rawPreset.updatedAt : now,
   }
@@ -1028,7 +1395,12 @@ function buildResponseItems(snapshot, prefix = 'last') {
 
 function buildRequestPreviewItems(request, { networkPermitted, presetName = '' } = {}) {
   const { publicHeaders, secretHeaderNames } = splitHeaders(request.headers || {})
+  const { sanitizedUrl, secretQueryNames } = extractAndRedactUrlSecrets(request.url)
+  const { sanitizedBody, secretBodyNames } = extractAndRedactBodySecrets(request.body, request.headers || {})
+  const displayUrl = sanitizedUrl || request.url
+  const displayBody = sanitizedBody ?? request.body
   const totalHeaders = Object.keys(publicHeaders).length + secretHeaderNames.length
+  const totalSecrets = secretHeaderNames.length + secretQueryNames.length + secretBodyNames.length
   const sendToken = registerIssuedAction({ kind: 'send-request', request })
   const curlText = formatCurlSnippet(request)
   const fetchText = formatFetchSnippet(request)
@@ -1041,14 +1413,16 @@ function buildRequestPreviewItems(request, { networkPermitted, presetName = '' }
     : ''
   const secretNote = secretHeaderNames.length > 0
     ? ` · ${secretHeaderNames.length} secret header(s) redacted`
-    : ''
+    : totalSecrets > 0
+      ? ` · ${totalSecrets} secret field(s) redacted`
+      : ''
 
   if (presetName) {
     const saveToken = registerIssuedAction({ kind: 'save-preset', presetName, request })
     items.push(buildActionItem({
       id: `${FEATURE_ID}-save-preset`,
       title: `Save Preset "${presetName}" (${request.method})`,
-      subtitle: `${request.url}${secretHeaderNames.length ? ` · ${secretHeaderNames.length} secret(s) isolated in secure store` : ''}`,
+      subtitle: `${displayUrl}${totalSecrets ? ` · ${totalSecrets} secret(s) isolated in secure store` : ''}`,
       actionId: 'save-preset',
       actionLabel: 'Save Preset',
       payload: { token: saveToken },
@@ -1057,7 +1431,7 @@ function buildRequestPreviewItems(request, { networkPermitted, presetName = '' }
 
   items.push(buildActionItem({
     id: `${FEATURE_ID}-send`,
-    title: `Send ${request.method} ${truncateText(request.url, 72)}`,
+    title: `Send ${request.method} ${truncateText(displayUrl, 72)}`,
     subtitle: `${totalHeaders} header(s)${request.body ? ` · Body ${formatByteSize(utf8ByteLength(request.body))}` : ''}${secretNote}${permissionNote}`,
     actionId: 'send-request',
     actionLabel: 'Send Request',
@@ -1074,10 +1448,10 @@ function buildRequestPreviewItems(request, { networkPermitted, presetName = '' }
     subtitle: formatHeadersSummary(request),
   }))
 
-  if (request.body !== null && request.body !== undefined && request.body !== '') {
+  if (displayBody !== null && displayBody !== undefined && displayBody !== '') {
     let bodyKind = 'Raw Body'
     try {
-      JSON.parse(request.body)
+      JSON.parse(displayBody)
       bodyKind = 'JSON Body'
     }
     catch {
@@ -1086,7 +1460,7 @@ function buildRequestPreviewItems(request, { networkPermitted, presetName = '' }
     items.push(buildInfoItem({
       id: `${FEATURE_ID}-preview-body`,
       title: `Parsed ${bodyKind} (${formatByteSize(utf8ByteLength(request.body))})`,
-      subtitle: truncateText(request.body, 110),
+      subtitle: truncateText(displayBody, 110),
     }))
   }
 
@@ -1301,8 +1675,16 @@ async function handleSavePreset(presetName, request) {
     }
   }
 
-  const { publicHeaders, sensitiveHeaders, secretHeaderNames } = splitHeaders(request.headers || {})
-  const secretKey = secretHeaderNames.length > 0 ? buildSecretKey(safeName) : null
+  const mergedInputHeaders = { ...(request.headers || {}) }
+  const urlWithoutUserinfo = normalizeHttpUrl(request.url, mergedInputHeaders)
+  const { publicHeaders, sensitiveHeaders, secretHeaderNames } = splitHeaders(mergedInputHeaders)
+  const { sanitizedUrl, secretQueryParams, secretQueryNames } = extractAndRedactUrlSecrets(urlWithoutUserinfo)
+  const { sanitizedBody, secretBodyFields, secretBodyNames, bodyFormat } = extractAndRedactBodySecrets(
+    request.body,
+    mergedInputHeaders,
+  )
+  const hasAnySecrets = secretHeaderNames.length > 0 || secretQueryNames.length > 0 || secretBodyNames.length > 0
+  const secretKey = hasAnySecrets ? buildSecretKey(safeName) : null
 
   let presets
   let existingIndex
@@ -1316,14 +1698,16 @@ async function handleSavePreset(presetName, request) {
     previous = existingIndex >= 0 ? presets[existingIndex] : null
 
     nextPreset = sanitizePresetForStorage({
-      id: previous?.id || `preset-${fnv1aHex(safeName.toLowerCase())}`,
+      id: previous?.id || `preset-${sha256Hex(safeName.toLowerCase()).slice(0, 16)}`,
       name: safeName,
       method: request.method,
-      url: request.url,
+      url: sanitizedUrl,
       headers: publicHeaders,
       secretHeaderNames,
+      secretQueryNames,
+      secretBodyNames,
       secretKey,
-      body: request.body,
+      body: sanitizedBody,
       createdAt: previous?.createdAt || now,
       updatedAt: now,
     })
@@ -1353,7 +1737,7 @@ async function handleSavePreset(presetName, request) {
   let wroteSecret = false
   let previousSecretValue = null
   const replacingSameSecretKey = Boolean(secretKey && previous?.secretKey === secretKey)
-  if (secretHeaderNames.length > 0) {
+  if (hasAnySecrets) {
     if (typeof secret?.set !== 'function') {
       return {
         externalAction: true,
@@ -1371,8 +1755,13 @@ async function handleSavePreset(presetName, request) {
         previousSecretValue = null
       }
     }
+    const vaultPayload = {
+      ...sensitiveHeaders,
+      ...(secretQueryNames.length > 0 ? { __query: secretQueryParams } : {}),
+      ...(secretBodyNames.length > 0 ? { __body: { format: bodyFormat, fields: secretBodyFields } } : {}),
+    }
     try {
-      await secret.set(secretKey, JSON.stringify(sensitiveHeaders))
+      await secret.set(secretKey, JSON.stringify(vaultPayload))
       wroteSecret = true
     }
     catch (error) {
@@ -1382,7 +1771,7 @@ async function handleSavePreset(presetName, request) {
         success: false,
         status: 'blocked',
         reason: mapHostErrorReason(error, 'secret-write-failed'),
-        message: 'Failed to securely store auth headers; preset was not saved',
+        message: 'Failed to securely store request secrets; preset was not saved',
       }
     }
   }
@@ -1394,24 +1783,39 @@ async function handleSavePreset(presetName, request) {
     else
       updated.unshift(nextPreset)
 
-    await plugin.storage.setFile(COLLECTIONS_FILE, { presets: updated.slice(0, MAX_PRESETS) })
+    const kept = updated.slice(0, MAX_PRESETS)
+    const evicted = updated.slice(MAX_PRESETS)
+    await plugin.storage.setFile(COLLECTIONS_FILE, { presets: kept })
 
-    // If an updated preset dropped secrets, remove the old secret key cleanly
-    if (previous?.secretKey && !secretKey && typeof secret?.delete === 'function') {
-      try {
-        await secret.delete(previous.secretKey)
+    // Clean up replaced previous secret key and any secret keys belonging to evicted presets
+    if (typeof secret?.delete === 'function') {
+      const keptSecretKeys = new Set(kept.map(item => item.secretKey).filter(Boolean))
+      const obsoleteKeys = new Set()
+      if (previous?.secretKey && previous.secretKey !== secretKey && !keptSecretKeys.has(previous.secretKey)) {
+        obsoleteKeys.add(previous.secretKey)
       }
-      catch {
-        // Non-fatal cleanup after metadata commit
+      for (const dropped of evicted) {
+        if (dropped?.secretKey && !keptSecretKeys.has(dropped.secretKey)) {
+          obsoleteKeys.add(dropped.secretKey)
+        }
+      }
+      for (const staleKey of obsoleteKeys) {
+        try {
+          await secret.delete(staleKey)
+        }
+        catch {
+          // Non-fatal cleanup after metadata commit
+        }
       }
     }
 
+    const totalSecretCount = secretHeaderNames.length + secretQueryNames.length + secretBodyNames.length
     return {
       externalAction: true,
       success: true,
       status: 'saved',
-      message: secretHeaderNames.length > 0
-        ? `Saved "${safeName}" (${secretHeaderNames.length} secret header(s) isolated)`
+      message: totalSecretCount > 0
+        ? `Saved "${safeName}" (${totalSecretCount} secret(s) isolated)`
         : `Saved preset "${safeName}"`,
     }
   }
@@ -1484,7 +1888,12 @@ async function handleRunPreset(presetId, actionGeneration) {
   }
 
   const mergedHeaders = { ...preset.headers }
-  if (preset.secretHeaderNames.length > 0) {
+  let resolvedUrl = preset.url
+  let resolvedBody = preset.body
+  const hasAnySecrets = (preset.secretHeaderNames?.length || 0) > 0
+    || (preset.secretQueryNames?.length || 0) > 0
+    || (preset.secretBodyNames?.length || 0) > 0
+  if (hasAnySecrets) {
     if (!preset.secretKey || typeof secret?.get !== 'function') {
       return {
         externalAction: true,
@@ -1515,8 +1924,17 @@ async function handleRunPreset(presetId, actionGeneration) {
           message: 'Saved auth secret payload is invalid',
         }
       }
-      for (const [k, v] of Object.entries(parsedSecrets))
-        setHeaderCaseInsensitive(mergedHeaders, k, String(v ?? ''))
+      for (const [k, v] of Object.entries(parsedSecrets)) {
+        if (k === '__query') {
+          resolvedUrl = rehydrateUrlSecrets(resolvedUrl, v)
+        }
+        else if (k === '__body') {
+          resolvedBody = rehydrateBodySecrets(resolvedBody, v)
+        }
+        else {
+          setHeaderCaseInsensitive(mergedHeaders, k, String(v ?? ''))
+        }
+      }
     }
     catch (error) {
       logger?.warn?.('[touch-api-lens] Failed to read preset secret')
@@ -1532,9 +1950,9 @@ async function handleRunPreset(presetId, actionGeneration) {
 
   return executeHttpRequest({
     method: preset.method,
-    url: preset.url,
+    url: resolvedUrl,
     headers: mergedHeaders,
-    body: preset.body,
+    body: resolvedBody,
   }, actionGeneration)
 }
 
