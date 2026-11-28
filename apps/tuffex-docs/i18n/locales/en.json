@@ -157,6 +157,10 @@
     "shareCopied": "Link copied!",
     "shareFailed": "Copy failed",
     "editOnGitHub": "Edit this page",
+    "codeBlock": {
+      "copy": "Copy",
+      "copied": "Copied"
+    },
     "demo": {
       "showCode": "Show code",
       "hideCode": "Hide code",
@@ -176,6 +180,11 @@
       "planned": "Planned",
       "unsupportedWc": "Vue & React Only",
       "liveRuntime": "Live",
+      "vueVariantTag": "Vue variant · Live {framework} in first demo",
+      "gallerySuiteReady": "{framework} ready in suite: {ready} / {total}",
+      "gallerySuitePlanned": "{framework} planned (Vue specimens)",
+      "galleryViewList": "View ready ({count})",
+      "galleryHideList": "Hide list",
       "previewFallbackReact": "Not yet adapted for React · Showing Vue preview",
       "previewFallbackWcPlanned": "Not yet adapted for Web Components · Showing Vue preview",
       "previewFallbackWcUnsupported": "Vue & React only (scoped-slot / form-context) · Showing Vue preview",

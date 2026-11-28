@@ -287,5 +287,15 @@ describe('tuffex-docs phase 1 scaffold', () => {
 
     const slugPage = readFileSync(join(appRoot, 'app/pages/[...slug].vue'), 'utf8')
     expect(slugPage).toContain("flush: 'pre'")
+
+    // Verify every required gallery & codeBlock i18n key exists in both en.json and zh.json
+    const enMessages = JSON.parse(readFileSync(join(appRoot, 'i18n/locales/en.json'), 'utf8'))
+    const zhMessages = JSON.parse(readFileSync(join(appRoot, 'i18n/locales/zh.json'), 'utf8'))
+    for (const key of ['gallerySuiteReady', 'gallerySuitePlanned', 'galleryViewList', 'galleryHideList', 'vueVariantTag']) {
+      expect(typeof enMessages.docs.framework[key], `missing en docs.framework.${key}`).toBe('string')
+      expect(typeof zhMessages.docs.framework[key], `missing zh docs.framework.${key}`).toBe('string')
+    }
+    expect(typeof enMessages.docs.codeBlock.copy).toBe('string')
+    expect(typeof zhMessages.docs.codeBlock.copy).toBe('string')
   })
 })
