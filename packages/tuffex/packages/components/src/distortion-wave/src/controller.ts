@@ -193,7 +193,7 @@ const HEX_PALETTES = new Map<string, Palette>();
 function paletteOf(given: PaletteLike | undefined, fallback: Palette): Palette {
   if (!given) return fallback;
   if (typeof given !== "string") return given;
-  if (given in PALETTES) return PALETTES[given as PaletteName];
+  if (Object.prototype.hasOwnProperty.call(PALETTES, given)) return PALETTES[given as PaletteName];
   if (!/^#?[0-9a-f]{6}$/i.test(given)) return fallback;
   const key = given.replace("#", "").toLowerCase();
   let p = HEX_PALETTES.get(key);
@@ -670,6 +670,13 @@ export class WaveController {
     this.flush();
     const resting = !this.run && (this.p <= 0 || this.p >= 1);
     if (resting && this.p === to) {
+      if (this.raf) {
+        cancelAnimationFrame(this.raf);
+        this.raf = 0;
+      }
+      this.renderer?.clear();
+      if (this.canvas) this.canvas.style.display = "none";
+      this.show(to);
       this.playOpts = null;
       return;
     }
@@ -922,14 +929,19 @@ export class WaveController {
       }
       const x = patch.getContext("2d");
       if (!x) return;
-      x.setTransform(1, 0, 0, 1, 0, 0);
-      x.globalCompositeOperation = "copy";
-      x.drawImage(pic, x0, y0, w, h, 0, 0, w, h);
-      x.globalCompositeOperation = "source-over";
-      x.drawImage(el, 0, 0, el.width, el.height, L - x0, T - y0, box.w * bs, box.h * bs);
-      r.patchScreen(which, patch, x0, y0);
-      if (which === "content") content = true;
-      else revealed = true;
+      try {
+        x.setTransform(1, 0, 0, 1, 0, 0);
+        x.globalCompositeOperation = "copy";
+        x.drawImage(pic, x0, y0, w, h, 0, 0, w, h);
+        x.globalCompositeOperation = "source-over";
+        x.drawImage(el, 0, 0, el.width, el.height, L - x0, T - y0, box.w * bs, box.h * bs);
+        r.patchScreen(which, patch, x0, y0);
+        if (which === "content") content = true;
+        else revealed = true;
+      } catch {
+        // An origin-unclean live canvas taints the staging patch; drop it so later clean canvases still work.
+        this.patch = null;
+      }
     }
     if (content) r.reblur("content");
     if (revealed) r.reblur("revealed");
@@ -995,7 +1007,13 @@ export class WaveController {
     cs.pointerEvents = "none";
     cs.zIndex = "1";
     cs.display = "none";
-    const renderer = new WaveRenderer(canvas, { alpha: true });
+    let renderer: WaveRenderer;
+    try {
+      renderer = new WaveRenderer(canvas, { alpha: true });
+    } catch {
+      this.failed = true;
+      return null;
+    }
     if (!renderer.ok) {
       this.failed = true;
       return null;
@@ -1005,6 +1023,7 @@ export class WaveController {
       "webglcontextlost",
       (e) => {
         e.preventDefault();
+        if (this.canvas !== canvas) return;
         this.slots.content.ready = this.slots.revealed.ready = false;
         // Nothing can be drawn now: end where the wave was going.
         if (this.run) this.finish();
@@ -1015,7 +1034,19 @@ export class WaveController {
       "webglcontextrestored",
       () => {
         if (this.destroyed || this.canvas !== canvas) return;
-        this.renderer = new WaveRenderer(canvas, { alpha: true });
+        try {
+          const restored = new WaveRenderer(canvas, { alpha: true });
+          if (!restored.ok) {
+            this.failed = true;
+            this.dropRenderer();
+            return;
+          }
+          this.renderer = restored;
+        } catch {
+          this.failed = true;
+          this.dropRenderer();
+          return;
+        }
         this.primed = false;
         this.slots.content.stale = this.slots.revealed.stale = true;
         this.scheduleRefresh(true);
@@ -1122,7 +1153,7 @@ export class WaveController {
         slot.size = shot.size;
         source = shot.canvas;
       }
-      if (this.destroyed || this.renderer !== renderer || renderer.lost) return;
+      if (this.destroyed || this.renderer !== renderer || renderer.lost || this.slots[which] !== slot) return;
       // The element changed size meanwhile: this is a picture of the old one.
       if (epoch !== this.epoch) return;
       renderer.setScreen(source, g.vw, g.vh, this.style.blur, which);
@@ -1139,7 +1170,7 @@ export class WaveController {
       slot.last = performance.now();
       slot.cost = slot.last - began;
     }
-    if (this.destroyed) return;
+    if (this.destroyed || this.slots[which] !== slot) return;
     // A picture that began before this run may predate what set it off.
     if (landed && (began >= this.runAt || !slot.stale)) this.waiting[which] = false;
     if (slot.broken) this.waiting[which] = false;

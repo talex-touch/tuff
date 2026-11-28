@@ -363,10 +363,13 @@ void main() {
   }
   float flow = 0.62 + (ring ? turn / (2.0 * PI) : along * 0.2) + time * 0.13 + d * 0.0015 + (ring ? 0.0 : 0.05 * sin(w.q.y * 0.009 + time));
   vec3 lab = paletteAt(flow);
-  lab = mix(lab, uAhead, 0.5 * exp(-pow((d - 30.0) / 50.0, 2.0)));
-  lab = mix(lab, uBehind, 0.5 * exp(-pow((d + 84.0) / 72.0, 2.0)));
+  float da = (d - 30.0) / 50.0;
+  float db = (d + 84.0) / 72.0;
+  float dc = (d + 8.0) / 26.0;
+  lab = mix(lab, uAhead, 0.5 * exp(-(da * da)));
+  lab = mix(lab, uBehind, 0.5 * exp(-(db * db)));
   lab.yz *= 1.22;
-  lab = mix(lab, vec3(0.99, 0.0, 0.0), 0.7 * exp(-pow((d + 8.0) / 26.0, 2.0)));
+  lab = mix(lab, vec3(0.99, 0.0, 0.0), 0.7 * exp(-(dc * dc)));
   vec3 rimLab = paletteAt(aroundA / (2.0 * PI) + time * (0.12 + 0.25 * uPulse) + inset * 0.0012);
   rimLab.yz *= 1.1;
   lab = mix(lab, rimLab, rimA / (rimA + bandA + 1e-4));
@@ -640,12 +643,19 @@ export class WaveRenderer {
     return small;
   }
 
-  /** A scratch target per size, kept for the next blur. */
+  /** Bounded scratch target cache (max 2 sizes) so repeated resizes cannot grow GPU memory unboundedly. */
   private scratches = new Map<string, Target>();
   private scratch(w: number, h: number) {
     const key = `${w}x${h}`;
     let t = this.scratches.get(key);
     if (!t) {
+      if (this.scratches.size >= 2) {
+        const oldestKey = this.scratches.keys().next().value;
+        if (oldestKey !== undefined) {
+          this.drop(this.scratches.get(oldestKey) ?? null);
+          this.scratches.delete(oldestKey);
+        }
+      }
       t = this.target(w, h);
       this.scratches.set(key, t);
     }
@@ -663,24 +673,33 @@ export class WaveRenderer {
     if (!this.ok) return;
     const gl = this.gl;
     const { w, h } = pixelSize(source);
-    this.sizePt.w = widthPt;
-    this.sizePt.h = heightPt;
-    let s = this.screens[which];
-    if (s && (s.w !== w || s.h !== h)) {
-      this.dropScreen(s);
-      s = null;
-    }
-    if (!s) {
-      s = { sharp: this.texture(w, h, source, true), near: null, far: null, w, h };
+    const prev = this.screens[which];
+    const resized = Boolean(prev && (prev.w !== w || prev.h !== h));
+    let next: Screen;
+    if (!prev || resized) {
+      // Upload the replacement texture before releasing the old screen so a failed upload never leaves dangling handles.
+      const sharp = this.texture(w, h, source, true);
+      next = { sharp, near: null, far: null, w, h };
+      try {
+        next.near = this.blurred(next.sharp, next.w, next.h, NEAR, null);
+        next.far = this.blurred(next.sharp, next.w, next.h, Math.max(blurPt, NEAR), null);
+      } catch (err) {
+        this.dropScreen(next);
+        throw err;
+      }
+      if (prev) this.dropScreen(prev);
     } else {
-      gl.bindTexture(gl.TEXTURE_2D, s.sharp);
+      gl.bindTexture(gl.TEXTURE_2D, prev.sharp);
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
       gl.generateMipmap(gl.TEXTURE_2D);
+      prev.near = this.blurred(prev.sharp, prev.w, prev.h, NEAR, prev.near);
+      prev.far = this.blurred(prev.sharp, prev.w, prev.h, Math.max(blurPt, NEAR), prev.far);
+      next = prev;
     }
-    s.near = this.blurred(s.sharp, s.w, s.h, NEAR, s.near);
-    s.far = this.blurred(s.sharp, s.w, s.h, Math.max(blurPt, NEAR), s.far);
-    this.screens[which] = s;
+    this.sizePt.w = widthPt;
+    this.sizePt.h = heightPt;
+    this.screens[which] = next;
     this.farBlur = blurPt;
   }
 

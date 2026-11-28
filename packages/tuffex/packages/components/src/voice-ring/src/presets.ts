@@ -101,14 +101,17 @@ export interface Resolved {
 
 /** Resolve a type at a size, with the density and dot-size multipliers. */
 export function resolvePreset(type: VoiceOrbType, size: number, dots = 1, dotSize = 1): Resolved {
-  const key = type in PRESETS ? type : 'orbit';
+  const key = Object.prototype.hasOwnProperty.call(PRESETS, type) ? type : 'orbit';
   const preset = PRESETS[key];
-  const scale = Math.min(1.4, Math.max(0.2, size / 200)) * Math.max(0.1, dots);
+  const safeSize = Number.isFinite(size) ? size : 160;
+  const safeDots = Number.isFinite(dots) ? Math.min(4, Math.max(0.1, dots)) : 1;
+  const scale = Math.min(1.4, Math.max(0.2, safeSize / 200)) * safeDots;
   const opts: TypeOpts = { ...preset.opts };
   for (const [knob, exp] of Object.entries(preset.counts)) {
     const v = opts[knob];
     if (v != null) opts[knob] = Math.max(1, Math.round(v * scale ** exp));
   }
-  if (dotSize !== 1) opts.rMul = Math.max(0.1, dotSize);
+  const safeDotSize = Number.isFinite(dotSize) ? Math.min(4, Math.max(0.1, dotSize)) : 1;
+  if (safeDotSize !== 1) opts.rMul = safeDotSize;
   return { frame: TYPE_FRAMES[key], speed: preset.speed, driveGain: preset.driveGain, gain: preset.gain ?? 1, opts };
 }

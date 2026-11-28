@@ -96,6 +96,7 @@ describe('TxDistortionWave component', () => {
       await wrapper.setProps({ revealed: true })
       vi.advanceTimersByTime(500)
 
+      expect(onFinish).toHaveBeenCalledTimes(1)
       expect(onFinish).toHaveBeenCalledWith(true)
       expect(wrapper.emitted('finish')).toEqual([[true]])
       wrapper.unmount()

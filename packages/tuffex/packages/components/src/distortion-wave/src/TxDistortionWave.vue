@@ -3,7 +3,7 @@
 import type { CSSProperties } from 'vue'
 import type { PlayOptions, WaveOptions } from './controller'
 import type { DistortionWaveHandle, DistortionWaveProps } from './types'
-import { computed, onBeforeUnmount, onDeactivated, onMounted, ref, shallowRef, useSlots, watch } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, shallowRef, useSlots, watch } from 'vue'
 import { WaveController } from './controller'
 
 defineOptions({ name: 'TxDistortionWave' })
@@ -57,7 +57,7 @@ const initialFirstStyle: CSSProperties = hasRevealedSlot.value && startRevealed 
 const initialSecondStyle: CSSProperties = startRevealed ? LAYER_BASE : LAYER_HIDDEN
 
 function handleFinish(revealed: boolean): void {
-  props.onFinish?.(revealed)
+  // Vue dispatches `emit('finish', ...)` to both `@finish` listeners and `:on-finish` props once.
   emit('finish', revealed)
 }
 
@@ -101,6 +101,7 @@ function destroyController(): void {
 }
 
 onMounted(mountController)
+onActivated(mountController)
 onDeactivated(destroyController)
 onBeforeUnmount(destroyController)
 

@@ -60,6 +60,45 @@ describe('TxVoiceRing engine', () => {
     expect(voice.level).toBeGreaterThan(0.2)
     expect(voice.pan).toBeLessThan(-0.05)
   })
+
+  it('bounds non-finite density multipliers and handles low sample-rate analysers without NaN', () => {
+    const bounded = resolveVoiceRingPreset('sash', 200, Number.POSITIVE_INFINITY, Number.NaN)
+    expect(Number.isFinite(bounded.opts.segs as number)).toBe(true)
+    expect(Number.isFinite(bounded.opts.ghostN as number)).toBe(true)
+
+    const huge = resolveVoiceRingPreset('sash', 200, 1_000_000, 1)
+    expect((huge.opts.ghostN as number)).toBeLessThan(1000)
+
+    const follower = new VoiceFollower()
+    const fakeAnalyser = {
+      fftSize: 1024,
+      frequencyBinCount: 512,
+      context: { sampleRate: 8000 },
+      getFloatTimeDomainData: (arr: Float32Array) => arr.fill(0.1),
+      getByteFrequencyData: (arr: Uint8Array) => arr.fill(64),
+    } as unknown as AnalyserNode
+
+    follower.readAnalyser(fakeAnalyser, 0.85, 1 / 60)
+    const stepped = follower.step(1 / 60, {
+      sensitivity: 0.85,
+      threshold: 0.04,
+      attack: 0.06,
+      release: 0.32,
+      idle: 0.1,
+      driveGain: 1,
+      calm: 0.4,
+      rate: 1,
+      processing: false,
+      direction: null,
+    }, true)
+
+    for (const v of stepped.spectrum) {
+      expect(Number.isFinite(v)).toBe(true)
+    }
+    for (const v of stepped.bands) {
+      expect(Number.isFinite(v)).toBe(true)
+    }
+  })
 })
 
 describe('TxVoiceRing component', () => {

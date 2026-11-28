@@ -296,27 +296,29 @@ function blobToData(blob: Blob): Promise<string | null> {
 }
 
 async function fetchText(url: string): Promise<string | null> {
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), 4000);
   try {
-    const stop = new AbortController();
-    const timer = setTimeout(() => stop.abort(), 4000);
     const res = await globalThis.fetch(url, { signal: stop.signal });
-    clearTimeout(timer);
     return res.ok ? await res.text() : null;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
 async function fetchData(url: string): Promise<string | null> {
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), 4000);
   try {
-    const stop = new AbortController();
-    const timer = setTimeout(() => stop.abort(), 4000);
     const res = await globalThis.fetch(url, { signal: stop.signal });
-    clearTimeout(timer);
     if (!res.ok) return null;
     return await blobToData(await res.blob());
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

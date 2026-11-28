@@ -135,8 +135,10 @@ export class VoiceFollower {
     analyser.getByteFrequencyData(freq);
     const binHz = analyser.context.sampleRate / analyser.fftSize;
     const avg = (lo: number, hi: number) => {
+      if (freq.length === 0 || !Number.isFinite(binHz) || binHz <= 0) return 0;
       const from = Math.max(0, Math.floor(lo / binHz));
-      const to = Math.max(from, Math.min(freq.length - 1, Math.ceil(hi / binHz)));
+      if (from >= freq.length) return 0;
+      const to = Math.min(freq.length - 1, Math.max(from, Math.ceil(hi / binHz)));
       let acc = 0;
       for (let i = from; i <= to; i++) acc += freq[i];
       return acc / (to - from + 1) / 255;

@@ -42,7 +42,12 @@ export function useVoiceRingMicrophone(options: UseVoiceRingMicrophoneOptions = 
   const state = ref<VoiceRingMicrophoneState>(supported ? 'idle' : 'unsupported')
   const error = shallowRef<Error | null>(null)
 
+  let pending: Promise<MediaStream | null> | null = null
+  let requestToken = 0
+
   function stop(): void {
+    requestToken += 1
+    pending = null
     const current = stream.value
     stream.value = null
     if (current) {
@@ -51,38 +56,52 @@ export function useVoiceRingMicrophone(options: UseVoiceRingMicrophoneOptions = 
     state.value = isMediaSupported() ? 'idle' : 'unsupported'
   }
 
-  async function start(): Promise<MediaStream | null> {
+  function start(): Promise<MediaStream | null> {
     if (!isMediaSupported()) {
       state.value = 'unsupported'
-      return null
+      return Promise.resolve(null)
     }
-    if (stream.value) return stream.value
+    if (stream.value) return Promise.resolve(stream.value)
+    if (pending) return pending
 
+    const token = ++requestToken
     getAudioContext()
     state.value = 'requesting'
     error.value = null
-    try {
-      const next = await navigator.mediaDevices.getUserMedia({
-        audio: { ...DEFAULT_CONSTRAINTS, ...(options.constraints ?? {}) },
-      })
-      stream.value = next
-      state.value = 'live'
-      const onEnded = () => {
-        if (stream.value !== next) return
-        stream.value = null
-        state.value = 'idle'
+    const request = (async (): Promise<MediaStream | null> => {
+      try {
+        const next = await navigator.mediaDevices.getUserMedia({
+          audio: { ...DEFAULT_CONSTRAINTS, ...(options.constraints ?? {}) },
+        })
+        if (token !== requestToken) {
+          for (const track of next.getTracks()) track.stop()
+          return null
+        }
+        stream.value = next
+        state.value = 'live'
+        const onEnded = () => {
+          if (stream.value !== next) return
+          stream.value = null
+          state.value = 'idle'
+        }
+        for (const track of next.getAudioTracks()) {
+          track.addEventListener('ended', onEnded)
+        }
+        return next
       }
-      for (const track of next.getAudioTracks()) {
-        track.addEventListener('ended', onEnded)
+      catch (cause) {
+        if (token !== requestToken) return null
+        const err = cause instanceof Error ? cause : new Error(String(cause))
+        error.value = err
+        state.value = err.name === 'NotAllowedError' || err.name === 'SecurityError' ? 'denied' : 'error'
+        return null
       }
-      return next
-    }
-    catch (cause) {
-      const err = cause instanceof Error ? cause : new Error(String(cause))
-      error.value = err
-      state.value = err.name === 'NotAllowedError' || err.name === 'SecurityError' ? 'denied' : 'error'
-      return null
-    }
+      finally {
+        if (token === requestToken) pending = null
+      }
+    })()
+    pending = request
+    return request
   }
 
   onMounted(() => {
