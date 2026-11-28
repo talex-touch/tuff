@@ -110,7 +110,7 @@ function generateTuffexVirtualIndexCode(entries: MdcDocRouteEntry[]): string {
     '    : clean === \'concepts/index\'',
     '      ? \'concepts\'',
     '      : clean;',
-    '  return `${loc}:${normalized}`;',
+    '  return loc + \':\' + normalized;',
     '}',
     '',
     'export function hasDocPage(locale, slug) {',

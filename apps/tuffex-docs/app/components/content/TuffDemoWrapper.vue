@@ -52,6 +52,16 @@ interface FrameworkModulesBundle {
   showcases: typeof import('~/data/tuffex-framework-showcases')
 }
 
+const props = withDefaults(defineProps<DemoWrapperProps>(), {
+  code: '',
+  codeHtml: '',
+  codeLang: 'vue',
+  title: '',
+  description: '',
+  component: '',
+  minHeight: 160,
+})
+
 let cachedFrameworkModules: FrameworkModulesBundle | null = null
 let frameworkModulesPromise: Promise<FrameworkModulesBundle> | null = null
 
@@ -72,16 +82,6 @@ function loadFrameworkModules(): Promise<FrameworkModulesBundle> {
   }
   return frameworkModulesPromise
 }
-
-const props = withDefaults(defineProps<DemoWrapperProps>(), {
-  code: '',
-  codeHtml: '',
-  codeLang: 'vue',
-  title: '',
-  description: '',
-  component: '',
-  minHeight: 160,
-})
 
 const LazyEmbeddedCodeBlock = defineAsyncComponent(() => import('./TuffCodeBlock.vue'))
 const LazyDocsFrameworkLiveStage = defineAsyncComponent(() => import('./DocsFrameworkLiveStage.client.vue'))

@@ -8,6 +8,8 @@
  * demos appear promptly without producing >50ms Long Tasks.
  */
 
+import { hasWindow } from '@talex-touch/utils/env'
+
 interface ScheduledTask {
   id: number
   run: () => void
@@ -20,7 +22,7 @@ const queue: ScheduledTask[] = []
 let flushScheduled = false
 let rafId: number | null = null
 
-type SchedulerWithYield = {
+interface SchedulerWithYield {
   yield?: () => Promise<void>
 }
 
@@ -72,7 +74,7 @@ function scheduleFlush() {
     return
   flushScheduled = true
 
-  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+  if (hasWindow() && typeof window.requestAnimationFrame === 'function') {
     rafId = window.requestAnimationFrame(() => {
       void flushQueue()
     })
@@ -124,7 +126,7 @@ export function resetDemoMountQueue(): void {
   for (const task of queue)
     task.cancelled = true
   queue.length = 0
-  if (rafId !== null && typeof window !== 'undefined') {
+  if (rafId !== null && hasWindow()) {
     window.cancelAnimationFrame(rafId)
     rafId = null
   }

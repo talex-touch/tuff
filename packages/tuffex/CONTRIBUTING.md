@@ -26,7 +26,7 @@ pnpm install --frozen-lockfile
 - `packages/utils/`: TuffEx utilities and shared helpers.
 - `packages/script/`: package build scripts.
 - `scripts/`: export, type, and package-size audits.
-- [Nexus component docs](../../apps/nexus/content/docs/dev/components/index.en.mdc):
+- [TuffEx component docs](../../apps/tuffex-docs/content/docs/components/index.en.mdc):
   public component documentation and examples.
 
 Use an existing component as the directory and naming template. The

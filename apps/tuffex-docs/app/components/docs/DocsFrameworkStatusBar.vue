@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
 import type { PackageManager } from '~/utils/docs-install-command'
-import type { DocsFramework, FrameworkSupportStatus } from '~/data/tuffex-framework-matrix'
+import type { FrameworkSupportStatus } from '~/data/tuffex-framework-matrix'
 import {
   buildFrameworkImportSnippet,
   buildFrameworkInstallSnippet,

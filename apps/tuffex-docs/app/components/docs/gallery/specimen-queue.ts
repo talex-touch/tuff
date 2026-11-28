@@ -104,11 +104,15 @@ export function createSpecimenQueue(): SpecimenQueue {
     flushRunning = true
 
     try {
-      while (!disposed && waiting.length > 0) {
+      while (waiting.length > 0) {
+        if (disposed)
+          break
         const start = typeof performance !== 'undefined' ? performance.now() : 0
         let count = 0
 
-        while (!disposed && waiting.length > 0 && count < MAX_SPECIMENS_PER_FRAME) {
+        while (waiting.length > 0 && count < MAX_SPECIMENS_PER_FRAME) {
+          if (disposed)
+            break
           const next = waiting.shift()
           next?.()
           count += 1

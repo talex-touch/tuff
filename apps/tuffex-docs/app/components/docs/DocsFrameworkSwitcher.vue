@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { DocsFramework, FrameworkSupportStatus } from '~/data/tuffex-framework-matrix'
+import type { FrameworkSupportStatus } from '~/data/tuffex-framework-matrix'
 import {
   DOCS_FRAMEWORK_META,
   DOCS_FRAMEWORKS,

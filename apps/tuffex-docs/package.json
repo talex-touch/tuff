@@ -16,6 +16,7 @@
     "preview": "npx serve .dist-cf",
     "preview:cf": "wrangler dev",
     "typecheck": "nuxt typecheck",
+    "lint": "eslint .",
     "test": "vitest run"
   },
   "dependencies": {
@@ -39,6 +40,7 @@
     "vue-router": "catalog:"
   },
   "devDependencies": {
+    "@antfu/eslint-config": "catalog:dev",
     "@iconify-json/carbon": "catalog:icons",
     "@iconify-json/logos": "catalog:",
     "@nuxtjs/color-mode": "catalog:build",
@@ -49,6 +51,7 @@
     "@unocss/nuxt": "catalog:build",
     "@vue/compiler-sfc": "catalog:",
     "@vueuse/core": "catalog:frontend",
+    "eslint": "catalog:dev",
     "nuxt": "catalog:build",
     "sass": "catalog:",
     "shiki": "^4.4.2",

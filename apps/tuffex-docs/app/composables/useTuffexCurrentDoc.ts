@@ -1,4 +1,5 @@
 import type { Component, ComputedRef, InjectionKey, Ref, ShallowRef } from 'vue'
+import { hasNavigator } from '@talex-touch/utils/env'
 import { computed, ref, shallowRef, watch } from 'vue'
 import {
   hasDocPage,
@@ -113,7 +114,7 @@ async function fetchCompiledDoc(
 export function prefetchDocPage(locale: SupportedLocale, slug = ''): void {
   if (!import.meta.client)
     return
-  if (typeof navigator !== 'undefined' && (navigator as NavigatorWithConnection).connection?.saveData)
+  if (hasNavigator() && (navigator as NavigatorWithConnection).connection?.saveData)
     return
   if (!hasDocPage(locale, slug))
     return

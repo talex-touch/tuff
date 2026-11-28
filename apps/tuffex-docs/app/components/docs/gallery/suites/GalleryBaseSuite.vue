@@ -20,6 +20,7 @@ import {
   TxSearchEmpty,
 } from '#components'
 import { useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
+import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { toast } from '@talex-touch/tuffex/utils'
 import { galleryText } from '../gallery-text'
 // Every `<ClientOnly>` below is this gate, not Nuxt's: each one sits directly
@@ -103,7 +104,7 @@ const STICKY_LANDING_OFFSET = 178
 
 function scrollToCategory(key: BaseCategoryKey) {
   activeCategory.value = key
-  if (!import.meta.client || typeof document === 'undefined')
+  if (!import.meta.client || !hasDocument())
     return
   const el = document.getElementById(`base-cat-${key}`)
   if (!el)
@@ -130,7 +131,7 @@ function scrollToCategory(key: BaseCategoryKey) {
 }
 
 onMounted(() => {
-  if (typeof window === 'undefined' || !('IntersectionObserver' in window))
+  if (!hasWindow() || !('IntersectionObserver' in window))
     return
   const keys: BaseCategoryKey[] = ['basic', 'form', 'layout', 'navigation', 'data', 'feedback', 'status']
   const visible = new Set<BaseCategoryKey>()
@@ -665,7 +666,7 @@ function onProgressVisibilityChange(visible: boolean) {
 }
 
 function syncProgressTimer() {
-  if (!import.meta.client || typeof document === 'undefined' || progressReducedMotion || document.hidden || !progressVisible.value) {
+  if (!import.meta.client || !hasDocument() || progressReducedMotion || document.hidden || !progressVisible.value) {
     stopProgressTimer()
     return
   }

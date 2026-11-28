@@ -389,10 +389,18 @@ onBeforeUnmount(() => {
       <table class="doc-api-table__table">
         <thead>
           <tr>
-            <th class="col-param">{{ labels.parameter }}</th>
-            <th class="col-type">{{ labels.type }}</th>
-            <th class="col-default">{{ labels.default }}</th>
-            <th class="col-desc">{{ labels.description }}</th>
+            <th class="col-param">
+              {{ labels.parameter }}
+            </th>
+            <th class="col-type">
+              {{ labels.type }}
+            </th>
+            <th class="col-default">
+              {{ labels.default }}
+            </th>
+            <th class="col-desc">
+              {{ labels.description }}
+            </th>
           </tr>
         </thead>
         <tbody>

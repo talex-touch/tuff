@@ -1,3 +1,5 @@
+import { hasNavigator } from '@talex-touch/utils/env'
+
 export type SupportedLocale = 'en' | 'zh'
 
 export const TUFFEX_BASE_PATH = '/tuffex'
@@ -254,7 +256,7 @@ export function detectBrowserPreferredLocale(): SupportedLocale {
   if (stored)
     return stored
 
-  if (import.meta.client && typeof navigator !== 'undefined') {
+  if (import.meta.client && hasNavigator()) {
     const lang = (navigator.languages?.[0] || navigator.language || '').toLowerCase()
     if (lang.startsWith('zh'))
       return 'zh'
