@@ -1,3 +1,4 @@
+import '../style/index.scss'
 import type {
   BubbleMapProps,
   ChoroplethMapProps,

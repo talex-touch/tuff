@@ -158,16 +158,36 @@ function isBottomDocked(component: unknown): boolean {
  * for an accent.
  */
 function seriesDefaults(component: unknown, tokens: EChartThemeTokens): object {
-  if (!isPlainObject(component) || component.type !== 'gauge')
+  if (!isPlainObject(component))
     return {}
-  return {
-    axisLine: { lineStyle: { color: [[1, tokens.splitLine]] } },
-    axisTick: { lineStyle: { color: tokens.splitLine } },
-    splitLine: { lineStyle: { color: tokens.splitLine } },
-    axisLabel: { color: tokens.text },
-    detail: { color: tokens.text },
-    title: { color: tokens.textMuted },
+  if (component.type === 'gauge') {
+    return {
+      axisLine: { lineStyle: { color: [[1, tokens.splitLine]] } },
+      axisTick: { lineStyle: { color: tokens.splitLine } },
+      splitLine: { lineStyle: { color: tokens.splitLine } },
+      axisLabel: { color: tokens.text },
+      detail: { color: tokens.text },
+      title: { color: tokens.textMuted },
+    }
   }
+  if (component.type === 'treemap') {
+    const callerItemStyle = isPlainObject(component.itemStyle) ? component.itemStyle : {}
+    const levelItemStyle = {
+      borderColor: tokens.axisLine,
+      borderWidth: 1,
+      gapWidth: 2,
+      ...callerItemStyle,
+    }
+    return {
+      itemStyle: { borderColor: tokens.axisLine, gapWidth: 2 },
+      upperLabel: { color: tokens.text, fontSize: 11, height: 22 },
+      levels: [
+        { itemStyle: levelItemStyle },
+        { itemStyle: levelItemStyle },
+      ],
+    }
+  }
+  return {}
 }
 
 /** Untouched series are returned as-is; only themed families pay for a copy. */
@@ -193,6 +213,8 @@ export function decorateChartOption(option: EChartsOption, tokens: EChartThemeTo
     : Array.isArray(result.visualMap) ? result.visualMap : [result.visualMap]
   const bottomDocked = visualMaps.some(map => readShow(map) !== false && isBottomDocked(map))
 
+  if (result.title)
+    result.title = mapComponents(result.title, title => withDefaults(title, { textStyle: { color: tokens.text, fontSize: 13, fontWeight: 500 } }))
   if (result.tooltip)
     result.tooltip = mapComponents(result.tooltip, tooltip => withDefaults(tooltip, tooltipDefaults()))
   if (result.xAxis)

@@ -17,6 +17,15 @@ const copy = computed(() => locale.value === 'zh'
   : { names: ['Installs', 'Errors'], labels: undefined })
 const time = computed(() => chartTimeFormats(locale.value))
 const data = computed<TimeseriesData[]>(() => copy.value.names.map((name, index) => ({ name, data: samples[index]! })))
+
+function compactDateTick(ms: number): string {
+  const date = new Date(ms)
+  const hours = date.getHours()
+  const minutes = date.getMinutes()
+  if (hours !== 0 || minutes !== 0)
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+  return `${date.getMonth() + 1}/${date.getDate()}`
+}
 </script>
 
 <template>
@@ -24,8 +33,9 @@ const data = computed<TimeseriesData[]>(() => copy.value.names.map((name, index)
     <TxTimeseriesChart
       type="bar"
       :data="data"
-      :height="150"
-      :x-axis-tick-format="time.tick"
+      :height="168"
+      :x-axis-tick-count="4"
+      :x-axis-tick-format="compactDateTick"
       :timestamp-format="time.stamp"
       :labels="copy.labels"
     />

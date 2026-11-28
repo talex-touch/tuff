@@ -168,6 +168,13 @@ function onLeave(): void {
       :viewBox="`0 0 ${base.width.value} ${base.height.value}`"
     >
       <g :transform="base.transform.value">
+        <path
+          v-if="base.graticulePath.value"
+          class="tx-map__graticule"
+          :d="base.graticulePath.value"
+          :stroke-width="0.5 / base.scaleFactor.value"
+          aria-hidden="true"
+        />
         <!-- kumo's geo layer sets `emphasis: { disabled: true }`: land never reacts. -->
         <path
           class="tx-map__land"
@@ -191,6 +198,48 @@ function onLeave(): void {
         />
       </g>
     </svg>
+
+    <div
+      v-if="props.roam && base.ready.value"
+      class="tx-map__controls"
+      @pointerdown.stop
+      @dblclick.stop
+      @click.stop
+    >
+      <button
+        type="button"
+        class="tx-map__control-btn"
+        aria-label="Zoom in"
+        :disabled="!base.canZoomIn.value"
+        @click="base.zoomIn"
+      >
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+          <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="tx-map__control-btn"
+        aria-label="Zoom out"
+        :disabled="!base.canZoomOut.value"
+        @click="base.zoomOut"
+      >
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+          <path d="M3.5 8h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+      </button>
+      <button
+        v-if="base.isTransformed.value"
+        type="button"
+        class="tx-map__control-btn"
+        aria-label="Reset view"
+        @click="base.resetView"
+      >
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+          <path d="M4.5 6.5A4 4 0 1 1 5.2 11M4.5 3.5v3h3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </button>
+    </div>
 
     <div
       v-if="props.showTooltip && hovered"

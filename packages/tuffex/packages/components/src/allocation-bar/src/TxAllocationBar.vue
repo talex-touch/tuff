@@ -227,10 +227,22 @@ function selectAndFocus(index: number): void {
     </div>
 
     <div v-if="detail && activeSegment" class="tx-bui-allocation-bar__detail">
-      <span
-        class="tx-bui-allocation-bar__detail-label"
-        :style="{ color: activeColor }"
-      >{{ activeSegment.label }}</span>
+      <div class="tx-bui-allocation-bar__detail-head">
+        <span class="tx-bui-allocation-bar__detail-title">
+          <span
+            class="tx-bui-allocation-bar__detail-dot"
+            aria-hidden="true"
+            :style="{ background: activeColor }"
+          />
+          <span
+            class="tx-bui-allocation-bar__detail-label"
+            :style="{ color: activeColor }"
+          >{{ activeSegment.label }}</span>
+        </span>
+        <span class="tx-bui-allocation-bar__detail-percent">
+          {{ formatPercent(activeSegment.percent) }}
+        </span>
+      </div>
       <span v-if="activeSegment.description" class="tx-bui-allocation-bar__detail-body">
         {{ activeSegment.description }}
       </span>
@@ -261,39 +273,63 @@ $allocation-ease: cubic-bezier(0.16, 1, 0.3, 1);
 .tx-bui-allocation-bar__track {
   display: flex;
   gap: 2px;
-  height: 36px;
+  height: 14px;
   padding: 2px;
-  overflow: hidden;
   // A sideways drag sweeps the selection; a vertical swipe still scrolls the page.
   touch-action: pan-y;
-  cursor: crosshair;
+  cursor: pointer;
   -webkit-user-select: none;
   user-select: none;
   background: var(--tx-bui-field, #f2f2f3);
-  border-radius: 999px;
+  border-radius: 7px;
+  box-shadow: var(--tx-bui-shadow-hairline, 0 0 0 1px #ecedef);
 }
 
 .tx-bui-allocation-bar__segment {
   position: relative;
   height: 100%;
+  padding: 0;
+  border: 0;
   overflow: hidden;
   cursor: inherit;
-  border-radius: 999px;
-  opacity: 0.58;
+  border-radius: 3px;
+  opacity: 0.42;
   transition:
-    opacity 0.3s $allocation-ease,
-    box-shadow 0.3s $allocation-ease,
-    transform 0.3s $allocation-ease;
+    opacity 0.25s $allocation-ease,
+    box-shadow 0.25s $allocation-ease,
+    transform 0.25s $allocation-ease;
+
+  &:first-child {
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+  }
+
+  &:last-child {
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+  }
+
+  &:hover:not(.is-active) {
+    opacity: 0.72;
+  }
 
   &.is-active {
     opacity: 1;
-    // Inner rim, not an outer ring: the segment sits inside a pill track and an
-    // outer ring would collide with its neighbour's edge.
-    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 22%);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 24%);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--tx-bui-accent, #0285ff);
+    outline-offset: 2px;
+    z-index: 1;
   }
 
   &:active {
-    transform: scale(0.98);
+    transform: scaleY(0.92);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -317,19 +353,14 @@ $allocation-ease: cubic-bezier(0.16, 1, 0.3, 1);
 
 .tx-bui-allocation-bar__sheen {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: 4px;
-  width: 0;
-  background: rgb(255 255 255 / 20%);
-  border-radius: 999px;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(255 255 255 / 26%) 0%, rgb(255 255 255 / 0%) 60%);
+  border-radius: inherit;
   opacity: 0;
-  transition:
-    width 0.5s $allocation-ease,
-    opacity 0.5s $allocation-ease;
+  pointer-events: none;
+  transition: opacity 0.28s $allocation-ease;
 
   .tx-bui-allocation-bar__segment.is-active & {
-    width: calc(100% - 8px);
     opacity: 1;
   }
 
@@ -344,26 +375,31 @@ $allocation-ease: cubic-bezier(0.16, 1, 0.3, 1);
 
 .tx-bui-allocation-bar__legend {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   align-items: center;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .tx-bui-allocation-bar__chip {
   display: inline-flex;
-  gap: 4px;
+  gap: 5px;
   align-items: center;
-  padding: 2px 6px;
-  font-size: 11px;
+  padding: 3px 8px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  line-height: 1.3;
   color: var(--tx-bui-ink-2, #62656b);
   cursor: pointer;
-  border-radius: 999px;
+  border-radius: 7px;
   transition: transform 0.15s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
 
   .tx-bui-allocation-bar.is-morphing & {
     transition:
       background-color 0.15s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
       color 0.15s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
+      box-shadow 0.15s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
       transform 0.15s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
 
     @media (prefers-reduced-motion: reduce) {
@@ -379,6 +415,11 @@ $allocation-ease: cubic-bezier(0.16, 1, 0.3, 1);
   &.is-active {
     color: var(--tx-bui-ink, #1f2124);
     background: var(--tx-bui-field, #f2f2f3);
+    box-shadow: var(--tx-bui-shadow-hairline, 0 0 0 1px #ecedef);
+  }
+
+  &:focus {
+    outline: none;
   }
 
   &:focus-visible {
@@ -387,7 +428,7 @@ $allocation-ease: cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   &:active {
-    transform: scale(0.96);
+    transform: scale(0.97);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -400,9 +441,9 @@ $allocation-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .tx-bui-allocation-bar__dot {
-  flex: 0 0 6px;
-  width: 6px;
-  height: 6px;
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
 }
 
@@ -411,17 +452,43 @@ $allocation-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .tx-bui-allocation-bar__detail {
-  min-height: 64px;
-  padding: 8px 10px;
-  margin-top: 12px;
+  padding: 10px 12px;
+  margin-top: 10px;
   background: var(--tx-bui-inset, #f7f8f9);
-  border-radius: var(--tx-bui-radius-control, 8px);
+  border-radius: var(--tx-bui-radius-control, 10px);
   box-shadow: var(--tx-bui-shadow-hairline, 0 0 0 1px #ecedef);
 }
 
+.tx-bui-allocation-bar__detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tx-bui-allocation-bar__detail-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tx-bui-allocation-bar__detail-dot {
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+}
+
 .tx-bui-allocation-bar__detail-label {
-  display: block;
-  font-size: 11.5px;
+  font-size: 12.5px;
+  font-weight: var(--tx-font-weight-semibold, 600);
+  color: var(--tx-bui-ink, #1f2124);
+}
+
+.tx-bui-allocation-bar__detail-percent {
+  @include bui-tabular-nums;
+  font-size: 12px;
   font-weight: var(--tx-font-weight-medium, 500);
   color: var(--tx-bui-ink-2, #62656b);
 }
@@ -429,8 +496,8 @@ $allocation-ease: cubic-bezier(0.16, 1, 0.3, 1);
 .tx-bui-allocation-bar__detail-body {
   display: block;
   margin-top: 4px;
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--tx-bui-ink-3, #9a9da3);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--tx-bui-ink-2, #62656b);
 }
 </style>

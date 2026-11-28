@@ -1,5 +1,21 @@
 # TouchX UI 更新日志
 
+## [0.9.8] - 2026-11-28
+
+### 📦 组件变动 (Components)
+
+- **更新组件**: `allocation-bar`, `charts`
+
+### ✨ 组件增强
+
+- **地图体系重构（`TxChoroplethMap` / `TxBubbleMap`）**：新增海面画布外框、`d3-geo` 经纬网、清晰国界描边、右上角毛玻璃缩放/复位控件、毛玻璃悬浮 Tooltip 与底部分级图例栏。
+- **占比条视觉重构（`TxAllocationBar`）**：收敛为 14px 精准分段条（外侧内切圆角 + 2px 段间分隔 + 顶部玻璃微高光），移除笨重胶囊嵌套与默认焦点灰圈，并升级图例 Chip 与底部详情卡信息层级（色点 + 标题 + 右对齐百分比）。
+- **ECharts 暗色主题对齐**：`decorateChartOption` 新增 `treemap` 父级标题栏/边框与 `title` 文本主题色适配，消除暗色模式下矩形树图白底标题栏与饼图中心标题低对比度问题。
+
+### 🐛 组件修复
+
+- **深层图表子路径按需样式加载**：修复 `tuffexOnDemandStylePlugin` 无法识别 `@talex-touch/tuffex/charts/src/*` 静态、动态与 dist 入口导致 `Maps` / `SankeyChart` / `LearningCurve` / `MonoChart` / `DitherChart` / `ECharts` 样式缺失的问题，并在各图表子路径入口补齐 `--tx-chart-*` 主题令牌导入。
+
 ## [0.9.7] - 2026-11-28
 
 ### 📦 组件变动 (Components)

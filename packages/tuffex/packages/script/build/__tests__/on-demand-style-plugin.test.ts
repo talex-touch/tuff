@@ -398,4 +398,37 @@ describe('style imports on a dev server', () => {
     expect(result?.code).toContain(`import '../base-surface/style.css';`)
     expect(result?.code).toContain(`import './style.css';`)
   })
+
+  it('injects the charts stylesheet for deep @talex-touch/tuffex/charts/src/* static, dynamic, and dist imports', () => {
+    const plugin = tuffexOnDemandStylePlugin({ styleDeps })
+    hookOf(plugin.configResolved).call({} as never, { command: 'build' } as never)
+
+    const staticResult = hookOf(plugin.transform).call(
+      { parse: parseAst } as never,
+      `import { TxChoroplethMap } from '@talex-touch/tuffex/charts/src/maps'\nexport default TxChoroplethMap`,
+      '/app/src/MapView.vue',
+    ) as { code: string, moduleSideEffects?: boolean } | null
+    expect(staticResult?.code).toContain(`import '@talex-touch/tuffex/charts/style.css';`)
+    expect(staticResult?.moduleSideEffects).toBe(true)
+
+    const dynamicResult = hookOf(plugin.transform).call(
+      { parse: parseAst } as never,
+      `export const load = () => import('@talex-touch/tuffex/charts/src/echart')`,
+      '/app/src/EChartView.vue',
+    ) as { code: string } | null
+    expect(dynamicResult?.code).toContain(`import('@talex-touch/tuffex/charts/style.css')`)
+
+    const distPlugin = tuffexOnDemandStylePlugin({
+      styleDeps,
+      componentDistRoot: '/pkg/dist/es',
+    })
+    hookOf(distPlugin.configResolved).call({} as never, { command: 'build' } as never)
+    const distResult = hookOf(distPlugin.transform).call(
+      { parse: parseAst } as never,
+      `import TxChoroplethMap from './src/TxChoroplethMap.vue.js';\nexport { TxChoroplethMap };`,
+      '/pkg/dist/es/charts/src/maps/index.js',
+    ) as { code: string, moduleSideEffects?: boolean } | null
+    expect(distResult?.moduleSideEffects).toBe(true)
+    expect(distResult?.code).toContain(`import '../../style.css';`)
+  })
 })

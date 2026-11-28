@@ -1,3 +1,4 @@
+import '../style/index.scss'
 import { withInstall } from '../utils/with-install'
 import MonoChart from './src/TxMonoChart.vue'
 

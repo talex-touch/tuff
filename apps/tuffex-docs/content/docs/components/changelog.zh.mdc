@@ -13,11 +13,23 @@ verified: false
 
 | 项目 | 值 |
 |------|----|
-| 源码版本 | **0.9.7** |
-| 发布版本 | **0.9.7**（最近一次 npm 发布） |
+| 源码版本 | **0.9.8** |
+| 发布版本 | **0.9.8**（最近一次 npm 发布） |
 | 组件模块 | **197**：基础 99 · 进阶 61 · AI 37 |
 
 ## 版本更新历程
+
+### 0.9.8 版本（2026-11-28）
+
+修复深层图表子路径按需样式加载，重构 `Maps` 地图与 `TxAllocationBar` 占比条视觉设计，补齐 ECharts 暗色主题装饰，并扩展 Data Suite 展示全部 37 个数据与图表组件。
+
+- **新增组件**：无
+- **主要更新组件**：allocation-bar、charts
+- **关键特性与修复**：
+  - **深层图表子路径按需样式修复**：`tuffexOnDemandStylePlugin` 新增 `@talex-touch/tuffex/charts/src/*` 静态、动态与 dist 入口识别并自动注入 `charts/style.css`，各图表子路径入口补齐 `--tx-chart-*` 主题令牌导入，彻底解决 `Maps` / `SankeyChart` / `LearningCurve` / `MonoChart` / `DitherChart` 样式丢失问题。
+  - **地图体系重构（`TxChoroplethMap` / `TxBubbleMap`）**：新增海面画布框架、`d3-geo` 经纬网、清晰国界描边、右上角毛玻璃缩放与复位控件、毛玻璃悬浮 Tooltip 与底部分级色带图例栏。
+  - **占比条重构（`TxAllocationBar`）**：收敛为 14px 精准分段条（外侧内切圆角、2px 段间分隔与顶部玻璃微高光），消除笨重胶囊嵌套与异常焦点框，并优化图例 Chip 与底部详情卡层级。
+  - **ECharts 暗色主题对齐**：`decorateChartOption` 补齐 `treemap` 父级标题栏/边框与 `title` 文本主题色适配，修复暗色模式下矩形树图白底标题栏与饼图中心标题低对比度问题。
 
 ### 0.9.7 版本（2026-11-28）
 
