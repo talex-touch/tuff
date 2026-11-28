@@ -4,6 +4,7 @@ import type { CalloutToken, MarkdownCalloutTitles } from './markdown-callout'
 import type { MarkdownEditorLabels } from './types'
 import DOMPurify from 'dompurify'
 import { Marked } from 'marked'
+import { hasWindow } from '../../../../utils/env'
 import { createMathExtension } from '../../../../utils/markdown-math-syntax'
 import { markdownEmojiText } from './emoji'
 import { CALLOUT_CLASS, CALLOUT_TITLE_CLASS, calloutTitles, markCallout } from './markdown-callout'
@@ -359,8 +360,11 @@ export class MarkdownRenderer {
       catch {
         html = `<p>${escapeHtml(segment.raw)}</p>`
       }
-      if (this.options.sanitize)
+      if (this.options.sanitize) {
+        if (!hasWindow() || typeof DOMPurify?.sanitize !== 'function')
+          return ''
         html = DOMPurify.sanitize(html)
+      }
     }
 
     if (this.html.size >= CACHE_LIMIT)

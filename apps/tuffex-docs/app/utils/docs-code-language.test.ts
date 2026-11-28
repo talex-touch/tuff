@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { normalizeShikiLang } from '../../modules/shiki-js-highlighter'
 import { formatDocsCodeLanguage } from './docs-code-language'
 
 function readRelative(path: string) {
@@ -11,6 +12,34 @@ describe('tuffex-docs code block & gallery polish contracts', () => {
     expect(formatDocsCodeLanguage('typescript')).toBe('TypeScript')
     expect(formatDocsCodeLanguage('vue')).toBe('Vue')
     expect(formatDocsCodeLanguage('txt', '文本')).toBe('文本')
+  })
+
+  it('guards Object.prototype keys in language label and Shiki alias lookups', () => {
+    expect(formatDocsCodeLanguage('constructor')).toBe('Constructor')
+    expect(formatDocsCodeLanguage('toString')).toBe('Tostring')
+    expect(formatDocsCodeLanguage('valueOf')).toBe('Valueof')
+    expect(normalizeShikiLang('constructor')).toBe('text')
+    expect(normalizeShikiLang('toString')).toBe('text')
+    expect(normalizeShikiLang('__proto__')).toBe('text')
+  })
+
+  it('enforces tuffex-docs security, staging, changelog, and SSR 404 invariants', () => {
+    const renderer = readRelative('../components/content/TuffCodeBlockRenderer.vue')
+    expect(renderer).toContain('delete node.dataset.mermaidSource')
+
+    const stageScript = readRelative('../../scripts/stage-cf-assets.mjs')
+    expect(stageScript).toContain('basename(file)')
+
+    const slugPage = readRelative('../pages/[...slug].vue')
+    const readyIdx = slugPage.indexOf('await currentDoc.ready')
+    const statusIdx = slugPage.indexOf('setResponseStatus(404)')
+    expect(readyIdx).toBeGreaterThan(-1)
+    expect(statusIdx).toBeGreaterThan(readyIdx)
+
+    const changelogEn = readRelative('../../content/docs/components/changelog.en.mdc')
+    const changelogZh = readRelative('../../content/docs/components/changelog.zh.mdc')
+    expect(changelogEn).not.toContain('(/en/motion-toggle)')
+    expect(changelogZh).not.toContain('(/zh/motion-toggle)')
   })
 
   it('removes traffic-light dots and EXAMPLE prefix from TuffCodeBlockRenderer', () => {

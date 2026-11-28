@@ -1,8 +1,10 @@
-import { getSearchQuery } from '@codemirror/search'
+import { getSearchQuery, replaceAll, replaceNext, SearchQuery, setSearchQuery } from '@codemirror/search'
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
-import TxCodeEditor from '../src/TxCodeEditor.vue'
 import { nextTick } from 'vue'
+import TxCodeEditor from '../src/TxCodeEditor.vue'
+import TxCodeEditorTree from '../src/TxCodeEditorTree.vue'
+import { encodeTreePathKey, isCssColorValue } from '../src/tree-parser'
 
 async function mountCodeEditor(options: Parameters<typeof mount>[1]) {
   const wrapper = mount(TxCodeEditor, options)
@@ -133,5 +135,96 @@ describe('txCodeEditor', () => {
     const emitted = wrapper.emitted('update:modelValue')
     const latest = emitted?.[emitted.length - 1]?.[0] as string
     expect(JSON.parse(latest).enabled).toBe(false)
+  })
+
+  it('enforces readOnly in EditorState so Search & Replace cannot mutate the document', async () => {
+    const wrapper = await mountCodeEditor({
+      props: {
+        modelValue: '{"key": "secret"}',
+        readOnly: true,
+      },
+    })
+    const vm = wrapper.vm as { openSearch: () => boolean, getView: () => any, getValue: () => string }
+    const view = vm.getView()
+    expect(view.state.readOnly).toBe(true)
+
+    expect(vm.openSearch()).toBe(true)
+    await nextTick()
+
+    expect(wrapper.find('.cm-search input[name="replace"]').exists()).toBe(false)
+    expect(wrapper.find('.cm-search button[name="replace"]').exists()).toBe(false)
+    expect(wrapper.find('.cm-search button[name="replaceAll"]').exists()).toBe(false)
+
+    view.dispatch({
+      effects: setSearchQuery.of(new SearchQuery({ search: 'secret', replace: 'pwned' })),
+    })
+    replaceNext(view)
+    replaceAll(view)
+    expect(vm.getValue()).toBe('{"key": "secret"}')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('observes document.body class/data-theme changes in auto theme mode', async () => {
+    document.documentElement.classList.remove('dark', 'light')
+    document.documentElement.removeAttribute('data-theme')
+    document.body.classList.remove('dark', 'light')
+    document.body.removeAttribute('data-theme')
+
+    const wrapper = await mountCodeEditor({
+      props: {
+        modelValue: '{"a":1}',
+        theme: 'auto',
+      },
+    })
+
+    expect(wrapper.find('.tx-code-editor').attributes('data-theme')).toBe('light')
+
+    document.body.classList.add('dark')
+    await flushPromises()
+    await nextTick()
+    expect(wrapper.find('.tx-code-editor').attributes('data-theme')).toBe('dark')
+
+    document.body.classList.remove('dark')
+    wrapper.unmount()
+  })
+
+  it('guards TxCodeEditorTree against YAML cycles, dotted/$ path collisions, and unsafe CSS color strings', async () => {
+    expect(isCssColorValue('rgb(255, 0, 128)')).toBe(true)
+    expect(isCssColorValue('oklch(0.65 0.18 250 / 80%)')).toBe(true)
+    expect(isCssColorValue('rgb(0);background:url(//x)')).toBe(false)
+    expect(isCssColorValue('rgb(   )')).toBe(false)
+
+    expect(encodeTreePathKey([])).not.toBe(encodeTreePathKey(['$']))
+    expect(encodeTreePathKey(['a.b'])).not.toBe(encodeTreePathKey(['a', 'b']))
+
+    const cyclicYaml = 'a: &a\n  b: *a\n'
+    const cycleWrapper = mount(TxCodeEditorTree, {
+      props: {
+        source: cyclicYaml,
+        language: 'yaml',
+      },
+    })
+    await cycleWrapper.find('button[title="Expand all"]').trigger('click')
+    await nextTick()
+    expect(cycleWrapper.text()).toContain('[Circular]')
+
+    const collidingJson = JSON.stringify({
+      '$': { leaf: 1 },
+      'a.b': { first: true },
+      'a': { b: { second: true } },
+    })
+    const collisionWrapper = mount(TxCodeEditorTree, {
+      props: {
+        source: collidingJson,
+        language: 'json',
+      },
+    })
+    const rows = collisionWrapper.findAll('.tx-ce-nr')
+    const dollarRow = rows.find(row => row.text().startsWith('$:'))
+    expect(dollarRow).toBeTruthy()
+    await dollarRow!.trigger('click')
+    await nextTick()
+    expect(rows[0]!.classes()).not.toContain('is-selected')
+    expect(dollarRow!.classes()).toContain('is-selected')
   })
 })

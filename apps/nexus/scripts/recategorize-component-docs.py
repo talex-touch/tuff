@@ -15,7 +15,7 @@ Categories roll up into eight suites via app/utils/docs-suites.ts:
 - flow 流程:     FlowSuite, Flow
 - motion 动效: MotionSuite, MotionButtons, MotionCards, MotionCarousels,
   MotionLoaders, MotionCharts, MotionText, MotionPhysics, MotionInteraction,
-  MotionToggles, MotionTransitions
+  MotionTransitions
 
 The suite assignment originated in retired task 08-30-docs-suite-split (see the frozen task index);
 keep this file, DocsSidebar.vue and app/utils/docs-suites.ts in sync — a doc on
@@ -379,9 +379,6 @@ TAXONOMY: dict[str, list[str]] = {
         "motion",
         "pixel-field",
         "voice-ring",
-    ],
-    "MotionToggles": [
-        "motion-toggle",
     ],
     "MotionTransitions": [
         "motion-transition",

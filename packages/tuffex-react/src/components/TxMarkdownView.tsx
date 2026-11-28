@@ -63,7 +63,7 @@ export const TxMarkdownView = forwardRef<HTMLDivElement, TxMarkdownViewProps>((
       return raw
     if (hasWindow() && typeof DOMPurify?.sanitize === 'function')
       return DOMPurify.sanitize(raw)
-    return raw.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    return ''
   }, [markedInstance, content, sanitize])
 
   const resolvedTheme: 'light' | 'dark' = theme === 'auto' ? autoTheme : theme === 'dark' ? 'dark' : 'light'

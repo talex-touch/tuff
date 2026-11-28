@@ -71,10 +71,6 @@ const {
 
 const isZh = computed(() => docLocale.value === 'zh')
 
-if (import.meta.server && !fetchedMeta.value) {
-  setResponseStatus(404)
-}
-
 // Provide source path & primary demo tracker to descendant MDC components
 provide(DOCS_SOURCE_PATH_KEY, computed(() => displayMeta.value?.path ?? null))
 const primaryDemoTracker = createDocsPrimaryDemoTracker()
@@ -419,6 +415,10 @@ onBeforeUnmount(() => {
 
 if (!injectedDoc)
   await currentDoc.ready
+
+if (import.meta.server && !fetchedMeta.value) {
+  setResponseStatus(404)
+}
 </script>
 
 <template>

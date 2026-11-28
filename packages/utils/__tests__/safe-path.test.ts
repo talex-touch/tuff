@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { displayBasename, displayExtension, displayParentName, isAbsolutePath, isSafePathSegment, normalizeAbsolutePath } from '../common/utils/safe-path'
+import { displayBasename, displayExtension, displayParentName, isAbsolutePath, isSafePathSegment, normalizeAbsolutePath, resolveSafePath } from '../common/utils/safe-path'
 
 /**
  * These run under vitest, where `window` is undefined, so `safe-path` picks `node:path`.
@@ -126,5 +126,37 @@ describe('display helpers', () => {
     }
     expect(displayParentName('report.pdf')).toBe('')
     expect(displayBasename('')).toBe('')
+  })
+})
+
+describe('resolveSafePath edge cases', () => {
+  it('accepts valid descendants when baseDir is the filesystem root', () => {
+    const res = resolveSafePath('/', 'tmp/example.txt')
+    expect(res.error).toBeUndefined()
+    expect(res.resolvedPath).toBe(path.resolve('/', 'tmp/example.txt'))
+
+    const rootBlocked = resolveSafePath('/', '/', { allowAbsolute: true, allowRoot: false })
+    expect(rootBlocked).toEqual({ resolvedPath: null, error: 'PATH_ROOT_NOT_ALLOWED' })
+  })
+
+  it('rejects sibling prefix traversal while allowing ..-prefixed filenames inside baseDir', () => {
+    const base = path.resolve('/tmp/tuff-base')
+    expect(resolveSafePath(base, '../tuff-base-other/a.txt')).toEqual({
+      resolvedPath: null,
+      error: 'PATH_TRAVERSAL',
+    })
+    const dotdotFile = resolveSafePath(base, '..notes.txt')
+    expect(dotdotFile.error).toBeUndefined()
+    expect(dotdotFile.resolvedPath).toBe(path.join(base, '..notes.txt'))
+  })
+
+  it('handles case differences on case-insensitive platforms', () => {
+    if (process.platform !== 'darwin' && process.platform !== 'win32')
+      return
+    const res = resolveSafePath('/Tmp/TuffCaseBase', '/tmp/tuffcasebase/sub/file.txt', {
+      allowAbsolute: true,
+    })
+    expect(res.error).toBeUndefined()
+    expect(res.resolvedPath).toBe(path.resolve('/tmp/tuffcasebase/sub/file.txt'))
   })
 })

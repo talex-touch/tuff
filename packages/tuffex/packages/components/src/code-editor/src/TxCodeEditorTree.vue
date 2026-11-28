@@ -3,7 +3,7 @@ import type { CodeEditorLanguage } from './types'
 import type { TreeValue } from './tree-parser'
 import { computed, ref, watch } from 'vue'
 import TxCodeEditorTreeNode from './TxCodeEditorTreeNode.vue'
-import { parseStructuredValue, serializeStructuredValue, setValueAtPath } from './tree-parser'
+import { encodeTreePathKey, parseStructuredValue, serializeStructuredValue, setValueAtPath } from './tree-parser'
 
 defineOptions({
   name: 'TxCodeEditorTree',
@@ -24,24 +24,39 @@ const emit = defineEmits<{
   switchToCode: []
 }>()
 
+const ROOT_PATH_KEY = encodeTreePathKey([])
+const rootAncestors: ReadonlySet<object> = new Set()
+
 const parsed = computed(() => parseStructuredValue(props.source, props.language))
-const expandedPaths = ref<Set<string>>(new Set(['$']))
+const expandedPaths = ref<Set<string>>(new Set([ROOT_PATH_KEY]))
 const selectedPath = ref<(string | number)[]>([])
 const initialized = ref(false)
 
-function collectBranchPaths(value: TreeValue, maxDepth: number, path: (string | number)[] = [], depth = 0, out: string[] = []): string[] {
+function collectBranchPaths(
+  value: TreeValue,
+  maxDepth: number,
+  path: (string | number)[] = [],
+  depth = 0,
+  out: string[] = [],
+  ancestors: ReadonlySet<object> = new Set(),
+): string[] {
   if (value === null || typeof value !== 'object')
     return out
+  if (ancestors.has(value))
+    return out
   if (depth <= maxDepth)
-    out.push(path.length === 0 ? '$' : path.map(String).join('.'))
+    out.push(encodeTreePathKey(path))
   if (depth >= maxDepth)
     return out
 
+  const nextAncestors = new Set(ancestors)
+  nextAncestors.add(value)
+
   if (Array.isArray(value)) {
-    value.forEach((item, index) => collectBranchPaths(item, maxDepth, [...path, index], depth + 1, out))
+    value.forEach((item, index) => collectBranchPaths(item, maxDepth, [...path, index], depth + 1, out, nextAncestors))
   }
   else {
-    Object.entries(value).forEach(([key, item]) => collectBranchPaths(item, maxDepth, [...path, key], depth + 1, out))
+    Object.entries(value).forEach(([key, item]) => collectBranchPaths(item, maxDepth, [...path, key], depth + 1, out, nextAncestors))
   }
   return out
 }
@@ -57,9 +72,7 @@ watch(
   { immediate: true },
 )
 
-const selectedPathKey = computed(() =>
-  selectedPath.value.length === 0 ? '$' : selectedPath.value.map(String).join('.'),
-)
+const selectedPathKey = computed(() => encodeTreePathKey(selectedPath.value))
 
 function togglePath(pathKey: string) {
   const next = new Set(expandedPaths.value)
@@ -77,7 +90,7 @@ function expandAll() {
 }
 
 function collapseAll() {
-  expandedPaths.value = new Set(['$'])
+  expandedPaths.value = new Set([ROOT_PATH_KEY])
 }
 
 function handleSelect(path: (string | number)[]) {
@@ -126,6 +139,7 @@ function handleUpdateValue(payload: { path: (string | number)[], value: TreeValu
         :expanded-paths="expandedPaths"
         :selected-path-key="selectedPathKey"
         :editable="!readOnly && parsed.editable"
+        :ancestors="rootAncestors"
         @toggle="togglePath"
         @select="handleSelect"
         @update-value="handleUpdateValue"

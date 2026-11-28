@@ -6,7 +6,7 @@ import path from 'node:path'
 import { networkClient } from '@talex-touch/utils/network'
 import fs from 'fs-extra'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { publish } from '../publish'
+import { publish, resolveNpmPublishInvocation } from '../publish'
 
 const expiredAppJwt = [
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9',
@@ -435,5 +435,48 @@ describe('publish', () => {
     expect(request).toHaveBeenCalledTimes(1)
     expect(request.mock.calls[0]?.[0].url).toContain('/api/dashboard/auth/publisher')
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Publisher authentication was rejected by Nexus before publish'))
+  })
+
+  it('rejects cmd.exe metacharacters in npm publish arguments and avoids shell on Windows when npm-cli.js exists', () => {
+    for (const badArg of [
+      'https://registry.npmjs.org/a&calc',
+      'https://registry.npmjs.org/a|whoami',
+      'https://registry.npmjs.org/%TEMP%',
+      'latest^evil',
+      'tag"bad',
+      'tag with space',
+      '(evil)',
+    ]) {
+      expect(() => resolveNpmPublishInvocation(['publish', '--registry', badArg], { platform: 'win32' }), badArg).toThrow(/disallowed/i)
+    }
+
+    const winWithBundledCli = resolveNpmPublishInvocation(
+      ['publish', '--access', 'public', '--registry', 'https://registry.npmjs.org'],
+      {
+        platform: 'win32',
+        execPath: 'C:\\Program Files\\nodejs\\node.exe',
+        npmExecPath: '',
+        existsSync: p => p.endsWith('npm-cli.js'),
+      },
+    )
+    expect(winWithBundledCli).toEqual({
+      command: 'C:\\Program Files\\nodejs\\node.exe',
+      args: [
+        'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js',
+        'publish',
+        '--access',
+        'public',
+        '--registry',
+        'https://registry.npmjs.org',
+      ],
+      shell: false,
+    })
+
+    const posixInvocation = resolveNpmPublishInvocation(['publish', '--access', 'public'], { platform: 'linux' })
+    expect(posixInvocation).toEqual({
+      command: 'npm',
+      args: ['publish', '--access', 'public'],
+      shell: false,
+    })
   })
 })

@@ -672,6 +672,11 @@ export function isAllowedNpmRegistryUrl(
   if (!parsed.hostname || parsed.username || parsed.password || parsed.search || parsed.hash)
     return false
 
+  // Reject shell metacharacters in registry URLs (e.g., `&`, `|`, `%`, `^`, `!`, `"`)
+  // so Windows CLI invocations and downstream scripts can never interpret them.
+  if (/[&|<>^%!"'`;\\]/.test(trimmed) || /[&|<>^%!"'`;\\]/.test(parsed.pathname))
+    return false
+
   if (parsed.protocol === 'https:')
     return true
 

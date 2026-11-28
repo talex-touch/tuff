@@ -782,7 +782,7 @@ function buildRegexPayload(parsed: ParsedQuickOpsCommand): PreviewCardPayload {
       `Regex pattern length must be between 1 and ${MAX_REGEX_PATTERN_LENGTH}`,
     );
   }
-  if (hasRegexBacktrackingRisk(regexInput.pattern)) {
+  if (hasRegexBacktrackingRisk(regexInput.pattern, regexInput.flags)) {
     return buildErrorPayload(
       parsed,
       "Regex pattern is too complex for preview",
@@ -841,8 +841,798 @@ function buildRegexPayload(parsed: ParsedQuickOpsCommand): PreviewCardPayload {
   }
 }
 
-function hasRegexBacktrackingRisk(pattern: string): boolean {
-  return /\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)[+*{]/.test(pattern) || /\\[1-9]/.test(pattern);
+interface RegexCharSet {
+  ascii: Uint32Array;
+  nonAscii: boolean;
+}
+
+type RegexAstNode =
+  | { kind: "empty" }
+  | { kind: "anchor" }
+  | { kind: "backref" }
+  | { kind: "charset"; set: RegexCharSet }
+  | { kind: "sequence"; items: RegexAstNode[] }
+  | { kind: "alternation"; branches: RegexAstNode[] }
+  | { kind: "group"; body: RegexAstNode; lookaround: boolean }
+  | { kind: "quantifier"; body: RegexAstNode; min: number; max: number };
+
+const MAX_REGEX_QUANTIFIERS = 20;
+const MAX_REGEX_GROUP_DEPTH = 12;
+const MAX_REGEX_FINITE_REPETITION = 100;
+const WIDE_QUANTIFIER_SPAN = 10;
+const MAX_OVERLAPPING_BRANCH_PRODUCT = 256;
+
+function createEmptyCharSet(): RegexCharSet {
+  return { ascii: new Uint32Array(4), nonAscii: false };
+}
+
+function createFullCharSet(): RegexCharSet {
+  const ascii = new Uint32Array(4);
+  ascii[0] = 0xFFFFFFFF;
+  ascii[1] = 0xFFFFFFFF;
+  ascii[2] = 0xFFFFFFFF;
+  ascii[3] = 0xFFFFFFFF;
+  return { ascii, nonAscii: true };
+}
+
+function setAsciiBit(ascii: Uint32Array, code: number): void {
+  const word = code >>> 5;
+  ascii[word] = (ascii[word] ?? 0) | (1 << (code & 31));
+}
+
+function clearAsciiBit(ascii: Uint32Array, code: number): void {
+  const word = code >>> 5;
+  ascii[word] = (ascii[word] ?? 0) & ~(1 << (code & 31));
+}
+
+function addCodeToCharSet(target: RegexCharSet, code: number, ignoreCase: boolean): void {
+  if (code < 0) return;
+  if (code < 128) {
+    setAsciiBit(target.ascii, code);
+    if (ignoreCase) {
+      if (code >= 65 && code <= 90) {
+        setAsciiBit(target.ascii, code + 32);
+      } else if (code >= 97 && code <= 122) {
+        setAsciiBit(target.ascii, code - 32);
+      }
+    }
+  } else {
+    target.nonAscii = true;
+  }
+}
+
+function addRangeToCharSet(
+  target: RegexCharSet,
+  from: number,
+  to: number,
+  ignoreCase: boolean,
+): void {
+  const start = Math.min(from, to);
+  const end = Math.max(from, to);
+  const asciiEnd = Math.min(end, 127);
+  for (let code = Math.max(0, start); code <= asciiEnd; code += 1) {
+    addCodeToCharSet(target, code, ignoreCase);
+  }
+  if (end >= 128) target.nonAscii = true;
+}
+
+function mergeCharSets(target: RegexCharSet, source: RegexCharSet): void {
+  for (let i = 0; i < 4; i += 1) {
+    target.ascii[i] = (target.ascii[i] ?? 0) | (source.ascii[i] ?? 0);
+  }
+  if (source.nonAscii) target.nonAscii = true;
+}
+
+function negateCharSet(source: RegexCharSet): RegexCharSet {
+  const ascii = new Uint32Array(4);
+  for (let i = 0; i < 4; i += 1) ascii[i] = (~source.ascii[i]!) >>> 0;
+  return { ascii, nonAscii: !source.nonAscii };
+}
+
+function charSetsOverlap(a: RegexCharSet, b: RegexCharSet): boolean {
+  if (a.nonAscii && b.nonAscii) return true;
+  for (let i = 0; i < 4; i += 1) {
+    if ((a.ascii[i]! & b.ascii[i]!) !== 0) return true;
+  }
+  return false;
+}
+
+function charSetForShorthand(ch: string, ignoreCase: boolean): RegexCharSet | null {
+  if (ch === "d" || ch === "D") {
+    const digits = createEmptyCharSet();
+    addRangeToCharSet(digits, 48, 57, false);
+    return ch === "d" ? digits : negateCharSet(digits);
+  }
+  if (ch === "w" || ch === "W") {
+    const word = createEmptyCharSet();
+    addRangeToCharSet(word, 48, 57, false);
+    addRangeToCharSet(word, 65, 90, false);
+    addRangeToCharSet(word, 97, 122, false);
+    addCodeToCharSet(word, 95, false);
+    return ch === "w" ? word : negateCharSet(word);
+  }
+  if (ch === "s" || ch === "S") {
+    const ws = createEmptyCharSet();
+    for (const code of [9, 10, 11, 12, 13, 32]) addCodeToCharSet(ws, code, false);
+    ws.nonAscii = true;
+    return ch === "s" ? ws : negateCharSet(ws);
+  }
+  if (ch === "p" || ch === "P") {
+    return createFullCharSet();
+  }
+  if (ch === "n") {
+    const set = createEmptyCharSet();
+    addCodeToCharSet(set, 10, false);
+    return set;
+  }
+  if (ch === "r") {
+    const set = createEmptyCharSet();
+    addCodeToCharSet(set, 13, false);
+    return set;
+  }
+  if (ch === "t") {
+    const set = createEmptyCharSet();
+    addCodeToCharSet(set, 9, false);
+    return set;
+  }
+  if (ch === "f") {
+    const set = createEmptyCharSet();
+    addCodeToCharSet(set, 12, false);
+    return set;
+  }
+  if (ch === "v") {
+    const set = createEmptyCharSet();
+    addCodeToCharSet(set, 11, false);
+    return set;
+  }
+  if (ch === "0") {
+    const set = createEmptyCharSet();
+    addCodeToCharSet(set, 0, false);
+    return set;
+  }
+  const set = createEmptyCharSet();
+  addCodeToCharSet(set, ch.charCodeAt(0), ignoreCase);
+  return set;
+}
+
+function parseRegexAst(
+  pattern: string,
+  flags: string,
+): { ast: RegexAstNode; quantifierCount: number; maxDepth: number } | null {
+  const ignoreCase = flags.includes("i");
+  const dotAll = flags.includes("s");
+  let pos = 0;
+  let quantifierCount = 0;
+  let maxDepth = 0;
+
+  function parseEscapeInClass(): { code?: number; set?: RegexCharSet } {
+    if (pos >= pattern.length) return { set: createFullCharSet() };
+    const ch = pattern[pos]!;
+    pos += 1;
+    if (ch === "x" && pos + 2 <= pattern.length && /^[0-9a-fA-F]{2}$/.test(pattern.slice(pos, pos + 2))) {
+      const code = Number.parseInt(pattern.slice(pos, pos + 2), 16);
+      pos += 2;
+      return { code };
+    }
+    if (ch === "u") {
+      if (pattern[pos] === "{") {
+        const close = pattern.indexOf("}", pos + 1);
+        if (close > pos + 1) {
+          const code = Number.parseInt(pattern.slice(pos + 1, close), 16);
+          pos = close + 1;
+          return Number.isFinite(code) ? { code } : { set: createFullCharSet() };
+        }
+      } else if (pos + 4 <= pattern.length && /^[0-9a-fA-F]{4}$/.test(pattern.slice(pos, pos + 4))) {
+        const code = Number.parseInt(pattern.slice(pos, pos + 4), 16);
+        pos += 4;
+        return { code };
+      }
+    }
+    if ((ch === "p" || ch === "P") && pattern[pos] === "{") {
+      const close = pattern.indexOf("}", pos + 1);
+      if (close > pos) pos = close + 1;
+      return { set: createFullCharSet() };
+    }
+    if (ch === "d" || ch === "D" || ch === "w" || ch === "W" || ch === "s" || ch === "S") {
+      return { set: charSetForShorthand(ch, ignoreCase)! };
+    }
+    if (ch === "n") return { code: 10 };
+    if (ch === "r") return { code: 13 };
+    if (ch === "t") return { code: 9 };
+    if (ch === "f") return { code: 12 };
+    if (ch === "v") return { code: 11 };
+    if (ch === "b") return { code: 8 };
+    if (ch === "0") return { code: 0 };
+    return { code: ch.charCodeAt(0) };
+  }
+
+  function parseCharClass(): RegexAstNode | null {
+    pos += 1; // skip '['
+    let negated = false;
+    if (pattern[pos] === "^") {
+      negated = true;
+      pos += 1;
+    }
+    const set = createEmptyCharSet();
+    let closed = false;
+    let first = true;
+
+    while (pos < pattern.length) {
+      const ch = pattern[pos]!;
+      if (ch === "]" && !first) {
+        pos += 1;
+        closed = true;
+        break;
+      }
+      first = false;
+
+      let startCode: number | undefined;
+      if (ch === "\\") {
+        pos += 1;
+        const esc = parseEscapeInClass();
+        if (esc.set) {
+          mergeCharSets(set, esc.set);
+          continue;
+        }
+        startCode = esc.code;
+      } else {
+        startCode = ch.charCodeAt(0);
+        pos += 1;
+      }
+
+      if (
+        startCode !== undefined &&
+        pattern[pos] === "-" &&
+        pos + 1 < pattern.length &&
+        pattern[pos + 1] !== "]"
+      ) {
+        pos += 1; // skip '-'
+        let endCode: number | undefined;
+        if (pattern[pos] === "\\") {
+          pos += 1;
+          const escEnd = parseEscapeInClass();
+          if (escEnd.set) {
+            addCodeToCharSet(set, startCode, ignoreCase);
+            addCodeToCharSet(set, 45, false);
+            mergeCharSets(set, escEnd.set);
+            continue;
+          }
+          endCode = escEnd.code;
+        } else {
+          endCode = pattern[pos]!.charCodeAt(0);
+          pos += 1;
+        }
+        if (endCode !== undefined) {
+          addRangeToCharSet(set, startCode, endCode, ignoreCase);
+        }
+      } else if (startCode !== undefined) {
+        addCodeToCharSet(set, startCode, ignoreCase);
+      }
+    }
+
+    if (!closed) return null;
+    return { kind: "charset", set: negated ? negateCharSet(set) : set };
+  }
+
+  function parseQuantifier(): { min: number; max: number } | null {
+    const ch = pattern[pos];
+    if (ch === "*") {
+      pos += 1;
+      if (pattern[pos] === "?") pos += 1;
+      return { min: 0, max: Number.POSITIVE_INFINITY };
+    }
+    if (ch === "+") {
+      pos += 1;
+      if (pattern[pos] === "?") pos += 1;
+      return { min: 1, max: Number.POSITIVE_INFINITY };
+    }
+    if (ch === "?") {
+      pos += 1;
+      if (pattern[pos] === "?") pos += 1;
+      return { min: 0, max: 1 };
+    }
+    if (ch === "{") {
+      const rest = pattern.slice(pos);
+      const braceMatch = /^\{(\d+)(?:,(\d*))?\}/.exec(rest);
+      if (braceMatch) {
+        const min = Number.parseInt(braceMatch[1]!, 10);
+        const max =
+          braceMatch[2] === undefined
+            ? min
+            : braceMatch[2] === ""
+              ? Number.POSITIVE_INFINITY
+              : Number.parseInt(braceMatch[2], 10);
+        pos += braceMatch[0].length;
+        if (pattern[pos] === "?") pos += 1;
+        return { min, max };
+      }
+    }
+    return null;
+  }
+
+  function parseAtom(depth: number): RegexAstNode | null {
+    const ch = pattern[pos]!;
+    if (ch === "(") {
+      pos += 1;
+      const nextDepth = depth + 1;
+      if (nextDepth > maxDepth) maxDepth = nextDepth;
+      let lookaround = false;
+      if (pattern[pos] === "?") {
+        pos += 1;
+        if (pattern[pos] === ":" || pattern[pos] === "=" || pattern[pos] === "!") {
+          lookaround = pattern[pos] === "=" || pattern[pos] === "!";
+          pos += 1;
+        } else if (pattern[pos] === "<") {
+          pos += 1;
+          if (pattern[pos] === "=" || pattern[pos] === "!") {
+            lookaround = true;
+            pos += 1;
+          } else {
+            const closeName = pattern.indexOf(">", pos);
+            if (closeName === -1) return null;
+            pos = closeName + 1;
+          }
+        }
+      }
+      const body = parseAlternation(nextDepth);
+      if (!body || pattern[pos] !== ")") return null;
+      pos += 1;
+      return { kind: "group", body, lookaround };
+    }
+    if (ch === "[") {
+      return parseCharClass();
+    }
+    if (ch === ".") {
+      pos += 1;
+      const set = createFullCharSet();
+      if (!dotAll) {
+        clearAsciiBit(set.ascii, 10);
+        clearAsciiBit(set.ascii, 13);
+      }
+      return { kind: "charset", set };
+    }
+    if (ch === "^" || ch === "$") {
+      pos += 1;
+      return { kind: "anchor" };
+    }
+    if (ch === "\\") {
+      pos += 1;
+      if (pos >= pattern.length) return null;
+      const esc = pattern[pos]!;
+      if (esc >= "1" && esc <= "9") {
+        pos += 1;
+        return { kind: "backref" };
+      }
+      if (esc === "k" && pattern[pos + 1] === "<") {
+        const close = pattern.indexOf(">", pos + 2);
+        if (close === -1) return null;
+        pos = close + 1;
+        return { kind: "backref" };
+      }
+      if (esc === "b" || esc === "B") {
+        pos += 1;
+        return { kind: "anchor" };
+      }
+      const parsed = parseEscapeInClass();
+      if (parsed.set) return { kind: "charset", set: parsed.set };
+      const set = createEmptyCharSet();
+      if (parsed.code !== undefined) addCodeToCharSet(set, parsed.code, ignoreCase);
+      return { kind: "charset", set };
+    }
+    pos += 1;
+    const set = createEmptyCharSet();
+    addCodeToCharSet(set, ch.charCodeAt(0), ignoreCase);
+    return { kind: "charset", set };
+  }
+
+  function parseSequence(depth: number): RegexAstNode | null {
+    const items: RegexAstNode[] = [];
+    while (pos < pattern.length && pattern[pos] !== ")" && pattern[pos] !== "|") {
+      const atom = parseAtom(depth);
+      if (!atom) return null;
+      let node: RegexAstNode = atom;
+      const quant = parseQuantifier();
+      if (quant) {
+        quantifierCount += 1;
+        node = { kind: "quantifier", body: node, min: quant.min, max: quant.max };
+      }
+      items.push(node);
+    }
+    if (items.length === 0) return { kind: "empty" };
+    if (items.length === 1) return items[0]!;
+    return { kind: "sequence", items };
+  }
+
+  function parseAlternation(depth: number): RegexAstNode | null {
+    const first = parseSequence(depth);
+    if (!first) return null;
+    const branches: RegexAstNode[] = [first];
+    while (pos < pattern.length && pattern[pos] === "|") {
+      pos += 1;
+      const next = parseSequence(depth);
+      if (!next) return null;
+      branches.push(next);
+    }
+    if (branches.length === 1) return branches[0]!;
+    return { kind: "alternation", branches };
+  }
+
+  const ast = parseAlternation(0);
+  if (!ast || pos !== pattern.length) return null;
+  return { ast, quantifierCount, maxDepth };
+}
+
+function canMatchEmpty(node: RegexAstNode): boolean {
+  switch (node.kind) {
+    case "empty":
+    case "anchor":
+      return true;
+    case "charset":
+    case "backref":
+      return false;
+    case "group":
+      return node.lookaround ? true : canMatchEmpty(node.body);
+    case "quantifier":
+      return node.min === 0 || canMatchEmpty(node.body);
+    case "sequence":
+      return node.items.every(canMatchEmpty);
+    case "alternation":
+      return node.branches.some(canMatchEmpty);
+  }
+}
+
+function firstCharSet(node: RegexAstNode): RegexCharSet {
+  switch (node.kind) {
+    case "empty":
+    case "anchor":
+      return createEmptyCharSet();
+    case "backref":
+      return createFullCharSet();
+    case "charset":
+      return node.set;
+    case "group":
+      return node.lookaround ? createEmptyCharSet() : firstCharSet(node.body);
+    case "quantifier":
+      return firstCharSet(node.body);
+    case "alternation": {
+      const merged = createEmptyCharSet();
+      for (const branch of node.branches) mergeCharSets(merged, firstCharSet(branch));
+      return merged;
+    }
+    case "sequence": {
+      const merged = createEmptyCharSet();
+      for (const item of node.items) {
+        mergeCharSets(merged, firstCharSet(item));
+        if (!canMatchEmpty(item)) break;
+      }
+      return merged;
+    }
+  }
+}
+
+function allCharSet(node: RegexAstNode): RegexCharSet {
+  switch (node.kind) {
+    case "empty":
+    case "anchor":
+      return createEmptyCharSet();
+    case "backref":
+      return createFullCharSet();
+    case "charset":
+      return node.set;
+    case "group":
+      return node.lookaround ? createEmptyCharSet() : allCharSet(node.body);
+    case "quantifier":
+      return allCharSet(node.body);
+    case "alternation": {
+      const merged = createEmptyCharSet();
+      for (const branch of node.branches) mergeCharSets(merged, allCharSet(branch));
+      return merged;
+    }
+    case "sequence": {
+      const merged = createEmptyCharSet();
+      for (const item of node.items) mergeCharSets(merged, allCharSet(item));
+      return merged;
+    }
+  }
+}
+
+function capBranchProduct(product: number): number {
+  return product > MAX_OVERLAPPING_BRANCH_PRODUCT
+    ? MAX_OVERLAPPING_BRANCH_PRODUCT + 1
+    : product;
+}
+
+function flattenSequenceItems(node: RegexAstNode): RegexAstNode[] {
+  if (node.kind === "group" && !node.lookaround) {
+    return flattenSequenceItems(node.body);
+  }
+  if (node.kind === "sequence") {
+    return node.items.flatMap(flattenSequenceItems);
+  }
+  return [node];
+}
+
+function getVariableQuantifierSpan(node: RegexAstNode): number {
+  switch (node.kind) {
+    case "empty":
+    case "anchor":
+    case "charset":
+    case "backref":
+      return 1;
+    case "group":
+      return node.lookaround ? 1 : getVariableQuantifierSpan(node.body);
+    case "quantifier": {
+      if (node.min !== node.max) {
+        return Number.isFinite(node.max)
+          ? node.max - node.min + 1
+          : Number.POSITIVE_INFINITY;
+      }
+      return getVariableQuantifierSpan(node.body);
+    }
+    case "alternation": {
+      let maxSpan = 1;
+      for (const branch of node.branches) {
+        const span = getVariableQuantifierSpan(branch);
+        if (span > maxSpan) maxSpan = span;
+      }
+      return maxSpan;
+    }
+    case "sequence": {
+      let maxSpan = 1;
+      for (const item of node.items) {
+        const span = getVariableQuantifierSpan(item);
+        if (span > maxSpan) maxSpan = span;
+      }
+      return maxSpan;
+    }
+  }
+}
+
+function getAlternationAmbiguityFactor(branches: RegexAstNode[]): number {
+  const sets = branches.map(firstCharSet);
+  const nullableFlags = branches.map(canMatchEmpty);
+  let ambiguousCount = 0;
+
+  for (let i = 0; i < branches.length; i += 1) {
+    if (nullableFlags[i]) {
+      ambiguousCount += 1;
+      continue;
+    }
+    let overlapsOther = false;
+    for (let j = 0; j < branches.length; j += 1) {
+      if (i !== j && charSetsOverlap(sets[i]!, sets[j]!)) {
+        overlapsOther = true;
+        break;
+      }
+    }
+    if (overlapsOther) ambiguousCount += 1;
+  }
+
+  // A single nullable branch in a multi-branch alternation (e.g. `(a|)`) still creates
+  // a 2-way choice (consume branch vs skip via empty branch).
+  if (ambiguousCount === 1 && nullableFlags.some(Boolean) && branches.length >= 2) {
+    return 2;
+  }
+  return Math.max(1, ambiguousCount);
+}
+
+function computeAmbiguousAlternationProduct(node: RegexAstNode): number {
+  switch (node.kind) {
+    case "empty":
+    case "anchor":
+    case "charset":
+    case "backref":
+      return 1;
+    case "group":
+      return node.lookaround ? 1 : computeAmbiguousAlternationProduct(node.body);
+    case "quantifier": {
+      const inner = computeAmbiguousAlternationProduct(node.body);
+      if (inner <= 1) return 1;
+      const reps = Number.isFinite(node.max) ? node.max : MAX_OVERLAPPING_BRANCH_PRODUCT + 1;
+      let product = 1;
+      for (let i = 0; i < reps; i += 1) {
+        product = capBranchProduct(product * inner);
+        if (product > MAX_OVERLAPPING_BRANCH_PRODUCT) return product;
+      }
+      return product;
+    }
+    case "alternation": {
+      const selfFactor = getAlternationAmbiguityFactor(node.branches);
+      let maxBranchProduct = 1;
+      for (const branch of node.branches) {
+        const bp = computeAmbiguousAlternationProduct(branch);
+        if (bp > maxBranchProduct) maxBranchProduct = bp;
+      }
+      return capBranchProduct(selfFactor * maxBranchProduct);
+    }
+    case "sequence": {
+      let product = 1;
+      for (const item of node.items) {
+        product = capBranchProduct(product * computeAmbiguousAlternationProduct(item));
+        if (product > MAX_OVERLAPPING_BRANCH_PRODUCT) return product;
+      }
+      return product;
+    }
+  }
+}
+
+function containsVariableQuantifier(node: RegexAstNode): boolean {
+  switch (node.kind) {
+    case "empty":
+    case "anchor":
+    case "charset":
+    case "backref":
+      return false;
+    case "group":
+      return containsVariableQuantifier(node.body);
+    case "quantifier":
+      return node.min !== node.max || containsVariableQuantifier(node.body);
+    case "sequence":
+      return node.items.some(containsVariableQuantifier);
+    case "alternation":
+      return node.branches.some(containsVariableQuantifier);
+  }
+}
+
+function containsLookaround(node: RegexAstNode): boolean {
+  switch (node.kind) {
+    case "empty":
+    case "anchor":
+    case "charset":
+    case "backref":
+      return false;
+    case "group":
+      return node.lookaround || containsLookaround(node.body);
+    case "quantifier":
+      return containsLookaround(node.body);
+    case "sequence":
+      return node.items.some(containsLookaround);
+    case "alternation":
+      return node.branches.some(containsLookaround);
+  }
+}
+
+function hasOverlappingAlternation(node: RegexAstNode): boolean {
+  switch (node.kind) {
+    case "empty":
+    case "anchor":
+    case "charset":
+    case "backref":
+      return false;
+    case "group":
+      return !node.lookaround && hasOverlappingAlternation(node.body);
+    case "quantifier":
+      return hasOverlappingAlternation(node.body);
+    case "sequence":
+      return node.items.some(hasOverlappingAlternation);
+    case "alternation": {
+      const sets = node.branches.map(firstCharSet);
+      for (let i = 0; i < sets.length; i += 1) {
+        if (canMatchEmpty(node.branches[i]!)) return true;
+        for (let j = i + 1; j < sets.length; j += 1) {
+          if (charSetsOverlap(sets[i]!, sets[j]!)) return true;
+        }
+      }
+      return node.branches.some(hasOverlappingAlternation);
+    }
+  }
+}
+
+function inspectRegexAstRisk(node: RegexAstNode, insideRepeat: boolean): boolean {
+  switch (node.kind) {
+    case "empty":
+    case "anchor":
+    case "charset":
+      return false;
+    case "backref":
+      return true;
+    case "group":
+      if (insideRepeat && node.lookaround) return true;
+      return inspectRegexAstRisk(node.body, insideRepeat);
+    case "quantifier": {
+      if (
+        node.min > MAX_REGEX_FINITE_REPETITION ||
+        (Number.isFinite(node.max) && node.max > MAX_REGEX_FINITE_REPETITION)
+      ) {
+        return true;
+      }
+      const isRepeatable = node.max > 1;
+      const isVariable = node.min !== node.max;
+      if (insideRepeat && isVariable) return true;
+      if (isRepeatable) {
+        if (containsLookaround(node.body)) return true;
+        if (isVariable && canMatchEmpty(node.body)) return true;
+        if (containsVariableQuantifier(node.body)) return true;
+        if (hasOverlappingAlternation(node.body)) return true;
+      }
+      return inspectRegexAstRisk(node.body, insideRepeat || isRepeatable);
+    }
+    case "alternation":
+      return node.branches.some((branch) => inspectRegexAstRisk(branch, insideRepeat));
+    case "sequence": {
+      const items = node.items.flatMap(flattenSequenceItems);
+      let overlappingWideCount = 0;
+      let followerOverlapProduct = 1;
+      const ambiguousVarIndices = new Set<number>();
+
+      for (let i = 0; i < items.length; i += 1) {
+        const current = items[i]!;
+        if (inspectRegexAstRisk(current, insideRepeat)) return true;
+
+        const currentSpan = getVariableQuantifierSpan(current);
+        if (currentSpan <= 1) continue;
+
+        const currentChars = allCharSet(current);
+        let overlapsAnyFollower = false;
+        for (let j = i + 1; j < items.length; j += 1) {
+          const next = items[j]!;
+          const nextFirst = firstCharSet(next);
+          if (charSetsOverlap(currentChars, nextFirst)) {
+            overlapsAnyFollower = true;
+            const nextSpan = getVariableQuantifierSpan(next);
+            if (nextSpan > 1) {
+              if (currentSpan >= WIDE_QUANTIFIER_SPAN && nextSpan >= WIDE_QUANTIFIER_SPAN) {
+                return true;
+              }
+              ambiguousVarIndices.add(i);
+              ambiguousVarIndices.add(j);
+            }
+          }
+          if (!canMatchEmpty(next)) break;
+        }
+        if (overlapsAnyFollower) {
+          const boundedFactor = Math.min(currentSpan, WIDE_QUANTIFIER_SPAN);
+          followerOverlapProduct = capBranchProduct(followerOverlapProduct * boundedFactor);
+          if (followerOverlapProduct > MAX_OVERLAPPING_BRANCH_PRODUCT) return true;
+          if (currentSpan >= WIDE_QUANTIFIER_SPAN) {
+            overlappingWideCount += 1;
+            if (overlappingWideCount >= 3) return true;
+          }
+        }
+      }
+
+      if (ambiguousVarIndices.size > 0) {
+        let varChainProduct = 1;
+        for (const idx of ambiguousVarIndices) {
+          const factor = Math.min(getVariableQuantifierSpan(items[idx]!), WIDE_QUANTIFIER_SPAN);
+          varChainProduct = capBranchProduct(varChainProduct * factor);
+          if (varChainProduct > MAX_OVERLAPPING_BRANCH_PRODUCT) return true;
+        }
+        const altProduct = computeAmbiguousAlternationProduct({ kind: "sequence", items });
+        if (capBranchProduct(varChainProduct * altProduct) > MAX_OVERLAPPING_BRANCH_PRODUCT) {
+          return true;
+        }
+      }
+      return false;
+    }
+  }
+}
+
+export function hasRegexBacktrackingRisk(pattern: string, flags = ""): boolean {
+  if (/\\[1-9]|\\k<[^>]+>/.test(pattern)) return true;
+
+  const parsed = parseRegexAst(pattern, flags);
+  if (!parsed) {
+    // Allow invalid syntax to fall through to `new RegExp` so the caller gets the SyntaxError.
+    try {
+      // eslint-disable-next-line no-new
+      new RegExp(pattern, flags);
+    } catch {
+      return false;
+    }
+    // Valid JS regex that our conservative parser did not model: fail closed.
+    return true;
+  }
+
+  if (parsed.quantifierCount > MAX_REGEX_QUANTIFIERS || parsed.maxDepth > MAX_REGEX_GROUP_DEPTH) {
+    return true;
+  }
+
+  if (computeAmbiguousAlternationProduct(parsed.ast) > MAX_OVERLAPPING_BRANCH_PRODUCT) {
+    return true;
+  }
+
+  return inspectRegexAstRisk(parsed.ast, false);
 }
 
 function collectRegexMatches(regex: RegExp, target: string): RegexMatchResult {

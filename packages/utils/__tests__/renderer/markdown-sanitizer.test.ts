@@ -119,4 +119,26 @@ describe('sanitizeMarkdownHtml without a DOM', () => {
     expect(output).toContain('<strong>world</strong>')
     expect(output).toContain('href="https://example.test"')
   })
+
+  it('strips adjacent quoted attributes with no separating whitespace and entity-encoded schemes in SSR', () => {
+    const imgOut = sanitizeMarkdownHtml('<img src="/x"onerror="alert(1)">')
+    expect(imgOut).toContain('src="/x"')
+    expect(imgOut).not.toContain('onerror')
+
+    const linkOut = sanitizeMarkdownHtml('<a title="x"href="javascript:alert(1)">click</a>')
+    expect(linkOut).toContain('title="x"')
+    expect(linkOut).not.toContain('javascript:')
+
+    const detailsOut = sanitizeMarkdownHtml('<details open=""ontoggle="alert(1)">hi</details>')
+    expect(detailsOut).not.toContain('ontoggle')
+
+    const entityOut = sanitizeMarkdownHtml('<a href="&#106;avascript:alert(1)">x</a><a href="&#x6a;avascript:alert(2)">y</a>')
+    expect(entityOut).not.toContain('javascript:')
+    expect(entityOut).not.toContain('href=')
+
+    // Unclosed tag fails closed by escaping `<` instead of emitting raw partial attributes.
+    const unclosedOut = sanitizeMarkdownHtml('<img src="/x" onerror="alert(1)"')
+    expect(unclosedOut).toContain('&lt;')
+    expect(unclosedOut).not.toMatch(/<img\b/i)
+  })
 })

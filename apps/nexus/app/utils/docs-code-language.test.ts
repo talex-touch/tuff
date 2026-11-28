@@ -32,6 +32,8 @@ describe('formatDocsCodeLanguage', () => {
   it('sanitizes and title-cases unknown languages', () => {
     expect(formatDocsCodeLanguage('nginx')).toBe('Nginx')
     expect(formatDocsCodeLanguage('  hcl! ')).toBe('Hcl')
+    expect(formatDocsCodeLanguage('constructor')).toBe('Constructor')
+    expect(formatDocsCodeLanguage('toString')).toBe('Tostring')
   })
 })
 

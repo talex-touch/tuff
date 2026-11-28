@@ -133,7 +133,7 @@ verified: false
 
 动效原语与 Motion 套件、悬停弹层的悬停桥，以及终端显示组件。
 
-- **新增组件（16 个）**：[card-spread](/zh/card-spread)、[carousel-3d](/zh/carousel-3d)、[flip-book](/zh/flip-book)、[morph](/zh/morph)、[motion](/zh/motion)、[motion-button](/zh/motion-button)、[motion-control](/zh/motion-control)、[motion-dock](/zh/motion-dock)、[motion-form](/zh/motion-form)、[motion-loader](/zh/motion-loader)、[motion-metric](/zh/motion-metric)、[motion-text](/zh/motion-text)、[motion-toggle](/zh/motion-toggle)、[motion-transition](/zh/motion-transition)、[physics-motion](/zh/physics-motion)、[terminal](/zh/terminal)
+- **新增组件（16 个）**：[card-spread](/zh/card-spread)、[carousel-3d](/zh/carousel-3d)、[flip-book](/zh/flip-book)、[morph](/zh/morph)、[motion](/zh/motion)、[motion-button](/zh/motion-button)、[motion-control](/zh/motion-control)、[motion-dock](/zh/motion-dock)、[motion-form](/zh/motion-form)、[motion-loader](/zh/motion-loader)、[motion-metric](/zh/motion-metric)、[motion-text](/zh/motion-text)、[motion-toggle](/zh/motion-button)、[motion-transition](/zh/motion-transition)、[physics-motion](/zh/physics-motion)、[terminal](/zh/terminal)
 - **更新组件（18 个）**：[ai-elements](/zh/ai-elements)、[base-anchor](/zh/base-anchor)、[button](/zh/button)、[charts](/zh/charts)、[chat](/zh/chat)、[code-stream](/zh/code-stream)、[flat-dropdown](/zh/flat-dropdown)、[fusion-surface](/zh/fusion-surface)、[icon-chip](/zh/icon-chip)、[icon-morph](/zh/icon-morph)、[liquid](/zh/liquid)、[popover](/zh/popover)、[rating](/zh/rating)、[slider](/zh/slider)、[steps](/zh/steps)、[switch](/zh/switch)、[tooltip](/zh/tooltip)、[transition](/zh/transition)
 - **Motion 文档套件**：导航新增[动效套件](/zh/motion-suite)，含可独立重置的实时标本，以及双语分类、侧栏、总览和演示注册
 - **现有 charts 模块新增**：Motion 中的 [dither-chart](/zh/dither-chart) 与 Data 中的 [mono-chart](/zh/mono-chart)，均从 `@talex-touch/tuffex/charts` 导出
@@ -361,7 +361,7 @@ TuffEx 独立包初始基线。
 | [`motion-loader`](/zh/motion-loader) | pro | 0.7.0 |
 | [`motion-metric`](/zh/motion-metric) | pro | 0.7.0 |
 | [`motion-text`](/zh/motion-text) | pro | 0.7.0 |
-| [`motion-toggle`](/zh/motion-toggle) | pro | 0.7.0 |
+| [`motion-toggle`](/zh/motion-button) | pro | 0.7.0 |
 | [`motion-transition`](/zh/motion-transition) | pro | 0.7.0 |
 | [`nav-bar`](/zh/nav-bar) | base | 0.3.4 |
 | [`no-data`](/zh/no-data) | base | 0.3.4 |

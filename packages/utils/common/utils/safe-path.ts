@@ -108,6 +108,12 @@ export function normalizeAbsolutePath(value: string): string | null {
   return path.normalize(trimmed)
 }
 
+function isCaseInsensitivePlatform(): boolean {
+  if (typeof process === 'undefined' || !process.platform)
+    return false
+  return process.platform === 'darwin' || process.platform === 'win32'
+}
+
 export function resolveSafePath(
   baseDir: string,
   targetPath: string,
@@ -126,22 +132,32 @@ export function resolveSafePath(
     return { resolvedPath: null, error: 'PATH_NULL_BYTE' }
   }
 
-  if (!allowAbsolute && isAbsolutePath(target)) {
+  const targetIsAbsolute = isAbsolutePath(target)
+  if (!allowAbsolute && targetIsAbsolute) {
     return { resolvedPath: null, error: 'PATH_ABSOLUTE_NOT_ALLOWED' }
   }
 
+  if (targetIsAbsolute && !path.isAbsolute(target)) {
+    return { resolvedPath: null, error: 'PATH_TRAVERSAL' }
+  }
+
   const resolvedBase = path.resolve(base)
-  const resolvedTarget = allowAbsolute && isAbsolutePath(target)
-    ? path.normalize(target)
+  const resolvedTarget = allowAbsolute && targetIsAbsolute
+    ? path.resolve(target)
     : path.resolve(resolvedBase, target)
 
-  if (resolvedTarget === resolvedBase) {
+  const caseInsensitive = isCaseInsensitivePlatform()
+  const compareBase = caseInsensitive ? resolvedBase.toLowerCase() : resolvedBase
+  const compareTarget = caseInsensitive ? resolvedTarget.toLowerCase() : resolvedTarget
+  const rel = path.relative(compareBase, compareTarget)
+
+  if (rel === '') {
     return allowRoot
       ? { resolvedPath: resolvedTarget }
       : { resolvedPath: null, error: 'PATH_ROOT_NOT_ALLOWED' }
   }
 
-  if (!resolvedTarget.startsWith(`${resolvedBase}${path.sep}`)) {
+  if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
     return { resolvedPath: null, error: 'PATH_TRAVERSAL' }
   }
 

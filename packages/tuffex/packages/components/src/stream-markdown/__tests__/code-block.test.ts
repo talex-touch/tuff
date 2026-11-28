@@ -136,11 +136,18 @@ describe('txCodeBlock', () => {
     expect(frame.exists()).toBe(true)
     // Empty sandbox: no scripts, no same-origin — markup only.
     expect(frame.attributes('sandbox')).toBe('')
-    expect(frame.attributes('srcdoc')).toContain('<h1>hey</h1>')
+    const srcdoc = frame.attributes('srcdoc') ?? ''
+    expect(srcdoc).toContain('http-equiv="Content-Security-Policy"')
+    expect(srcdoc).toContain("default-src 'none'")
+    expect(srcdoc).toContain("img-src data: blob:")
+    expect(srcdoc).toContain("script-src 'none'")
+    const nested = new DOMParser().parseFromString(srcdoc, 'text/html').querySelector('iframe')
+    expect(nested?.getAttribute('sandbox')).toBe('')
+    expect(nested?.getAttribute('srcdoc')).toContain('<h1>hey</h1>')
     expect(wrapper.find('.tx-code-block__toggle').text()).toBe('Code')
   })
 
-  it('wraps svg previews in a centring document', async () => {
+  it('wraps svg previews in a centring document inside the CSP sandbox frame', async () => {
     const wrapper = mount(TxCodeBlock, {
       props: { lang: 'svg', code: '<svg viewBox="0 0 1 1"></svg>', closed: true },
     })
@@ -149,7 +156,10 @@ describe('txCodeBlock', () => {
 
     const srcdoc = wrapper.find('iframe').attributes('srcdoc') ?? ''
     expect(srcdoc).toContain('<!doctype html>')
-    expect(srcdoc).toContain('<svg viewBox="0 0 1 1"></svg>')
+    expect(srcdoc).toContain('http-equiv="Content-Security-Policy"')
+    const nested = new DOMParser().parseFromString(srcdoc, 'text/html').querySelector('iframe')
+    expect(nested?.getAttribute('srcdoc')).toContain('<!doctype html>')
+    expect(nested?.getAttribute('srcdoc')).toContain('<svg viewBox="0 0 1 1"></svg>')
   })
 
   it('never offers a preview for open fences, code languages or opted-out hosts', async () => {

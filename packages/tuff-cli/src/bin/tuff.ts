@@ -3,7 +3,6 @@
 import type { BuildConfig, DevConfig } from '@talex-touch/tuff-cli-core'
 import type { Locale } from '../cli/i18n'
 import type { SkillInstallPlan, SkillInstallPlanItem } from '../cli/local-capabilities'
-import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
@@ -47,6 +46,7 @@ import {
   installRecommendedSkills,
   resolveSkillInstallPlan,
 } from '../cli/local-capabilities'
+import { openBrowser, validateBrowserUrl } from '../cli/open-browser'
 import {
   askConfirm,
   askLanguageSwitch,
@@ -270,27 +270,6 @@ function printAsciiLogo(): void {
   console.log(ASCII_TUFF)
 }
 
-function openBrowser(url: string): void {
-  const platform = process.platform
-  try {
-    if (platform === 'darwin') {
-      const child = spawn('open', [url], { stdio: 'ignore', detached: true })
-      child.unref()
-      return
-    }
-    if (platform === 'win32') {
-      const child = spawn('cmd', ['/c', 'start', '', url], { stdio: 'ignore', detached: true })
-      child.unref()
-      return
-    }
-    const child = spawn('xdg-open', [url], { stdio: 'ignore', detached: true })
-    child.unref()
-  }
-  catch {
-    // Ignore
-  }
-}
-
 async function startDeviceAuth(): Promise<{
   deviceCode: string
   userCode: string
@@ -327,7 +306,11 @@ async function startDeviceAuth(): Promise<{
       = typeof response.data?.message === 'string' ? response.data.message : `HTTP ${response.status}`
     throw new Error(message)
   }
-  return response.data
+  const authorizeUrl = validateBrowserUrl(response.data?.authorizeUrl ?? '')
+  return {
+    ...response.data,
+    authorizeUrl,
+  }
 }
 
 async function pollDeviceAuth(

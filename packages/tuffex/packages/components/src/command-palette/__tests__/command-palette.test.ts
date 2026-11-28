@@ -172,6 +172,34 @@ describe('txCommandPalette', () => {
     expect(emitted?.[0][0].id).toBe('c')
   })
 
+  it('does not highlight or select any command when all filtered commands are disabled', async () => {
+    const wrapper = mount(TxCommandPalette, {
+      props: {
+        modelValue: true,
+        commands: [
+          { id: 'a', title: 'Alpha', disabled: true },
+          { id: 'b', title: 'Beta', disabled: true },
+        ],
+      },
+      global: {
+        stubs: { Teleport: true },
+      },
+    })
+
+    const input = wrapper.find('input')
+    expect(wrapper.find('.tx-command-palette__item.is-active').exists()).toBe(false)
+    expect(wrapper.findAll('.tx-command-palette__item').every(el => el.attributes('aria-selected') === 'false')).toBe(true)
+    expect(input.attributes('aria-activedescendant')).toBeUndefined()
+
+    await input.trigger('keydown', { key: 'ArrowDown' })
+    await input.trigger('keydown', { key: 'ArrowUp' })
+    await input.trigger('keydown', { key: 'Enter' })
+
+    expect(wrapper.find('.tx-command-palette__item.is-active').exists()).toBe(false)
+    expect(input.attributes('aria-activedescendant')).toBeUndefined()
+    expect(wrapper.emitted('select')).toBeUndefined()
+  })
+
   it('exposes combobox/listbox semantics with an active-descendant', () => {
     const wrapper = mount(TxCommandPalette, {
       props: {

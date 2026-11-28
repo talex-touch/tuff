@@ -16,7 +16,102 @@ export interface ParsedSvgSource {
   preservesRootStyling?: boolean
 }
 
-const DANGEROUS_TAGS = new Set(['script', 'foreignobject', 'iframe', 'object', 'embed'])
+const SVG_NS = 'http://www.w3.org/2000/svg'
+const XLINK_NS = 'http://www.w3.org/1999/xlink'
+const XML_NS = 'http://www.w3.org/XML/1998/namespace'
+const XMLNS_NS = 'http://www.w3.org/2000/xmlns/'
+
+const ALLOWED_SVG_TAGS = new Set([
+  'svg',
+  'g',
+  'defs',
+  'symbol',
+  'use',
+  'title',
+  'desc',
+  'metadata',
+  'clippath',
+  'mask',
+  'pattern',
+  'marker',
+  'switch',
+  'path',
+  'circle',
+  'ellipse',
+  'rect',
+  'line',
+  'polyline',
+  'polygon',
+  'text',
+  'tspan',
+  'textpath',
+  'lineargradient',
+  'radialgradient',
+  'stop',
+  'filter',
+  'feblend',
+  'fecolormatrix',
+  'fecomponenttransfer',
+  'fecomposite',
+  'feconvolvematrix',
+  'fediffuselighting',
+  'fedisplacementmap',
+  'fedistantlight',
+  'fedropshadow',
+  'feflood',
+  'fefunca',
+  'fefuncb',
+  'fefuncg',
+  'fefuncr',
+  'fegaussianblur',
+  'feimage',
+  'femerge',
+  'femergenode',
+  'femorphology',
+  'feoffset',
+  'fepointlight',
+  'fespecularlighting',
+  'fespotlight',
+  'fetile',
+  'feturbulence',
+  'image',
+])
+
+const BLOCKED_ATTR_LOCAL_NAMES = new Set([
+  'style',
+  'src',
+  'srcdoc',
+  'action',
+  'formaction',
+  'actuate',
+  'show',
+  'role',
+  'arcrole',
+  'attributename',
+  'to',
+  'from',
+  'by',
+])
+
+const ALLOWED_ATTR_NAMESPACES = new Set([
+  '',
+  SVG_NS,
+  XLINK_NS,
+  XML_NS,
+  XMLNS_NS,
+])
+
+const SAFE_FRAGMENT_HREF_RE = /^#[a-z_][\w:-]*$/i
+const SAFE_RASTER_DATA_URI_RE = /^data:image\/(?:png|jpe?g|webp|gif);base64,[a-z0-9+/=\s]+$/i
+
+function hasControlChar(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i)
+    if (code <= 0x1F || code === 0x7F)
+      return true
+  }
+  return false
+}
 
 const ROOT_PRESENTATION_ATTRS = new Set([
   'color',
@@ -51,14 +146,44 @@ const UNPRESERVABLE_ROOT_ATTRS = new Set([
   'clip-path',
 ])
 
+function stripControlAndWhitespace(value: string): string {
+  return Array.from(value)
+    .filter((char) => {
+      const code = char.charCodeAt(0)
+      return code > 0x1F && code !== 0x7F && !/\s/.test(char)
+    })
+    .join('')
+}
+
+function isSafeSvgHref(value: string, elementLocalName: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed || hasControlChar(trimmed))
+    return false
+  if (SAFE_FRAGMENT_HREF_RE.test(trimmed))
+    return true
+  if ((elementLocalName === 'image' || elementLocalName === 'feimage') && SAFE_RASTER_DATA_URI_RE.test(trimmed))
+    return true
+  return false
+}
+
 function isSafeSvgAttrValue(value: string): boolean {
-  const lower = value.trim().toLowerCase()
-  if (!lower)
+  const trimmed = value.trim()
+  if (!trimmed)
     return false
-  if (lower.includes('javascript:') || lower.includes('expression('))
+  if (hasControlChar(trimmed))
     return false
+  const compactLower = stripControlAndWhitespace(trimmed).toLowerCase()
+  if (
+    compactLower.includes('javascript:')
+    || compactLower.includes('vbscript:')
+    || compactLower.includes('expression(')
+    || compactLower.includes('@import')
+  ) {
+    return false
+  }
+  const lower = trimmed.toLowerCase()
   if (/\burl\s*\(/i.test(lower))
-    return /^url\(\s*['"]?#[a-z0-9_-]+['"]?\s*\)$/i.test(lower)
+    return /^url\(\s*['"]?#[a-z_][\w:-]*['"]?\s*\)$/i.test(lower)
   return true
 }
 
@@ -86,19 +211,6 @@ function extractRootPresentationAttrsFromMap(
   return { rootAttributes, preservesRootStyling }
 }
 
-function parseTagAttributesRegex(attrSource: string): [string, string][] {
-  const pairs: [string, string][] = []
-  const attrRe = /([a-zA-Z_:][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
-  let match: RegExpExecArray | null = attrRe.exec(attrSource)
-  while (match) {
-    const name = match[1]!
-    const value = match[2] ?? match[3] ?? ''
-    pairs.push([name, value])
-    match = attrRe.exec(attrSource)
-  }
-  return pairs
-}
-
 function parsePositiveLength(raw: string | null | undefined): number | null {
   if (!raw)
     return null
@@ -117,141 +229,150 @@ function escapeXmlAttr(value: string): string {
     .replace(/>/g, '&gt;')
 }
 
-function stripDangerousRegex(markup: string): string {
-  return markup
-    .replace(/<\s*(script|foreignObject|iframe|object|embed)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
-    .replace(/<\s*(script|foreignObject|iframe|object|embed)\b[^>]*\/\s*>/gi, '')
-    .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/(?:href|xlink:href)\s*=\s*(?:"\s*javascript:[^"]*"|'\s*javascript:[^']*')/gi, '')
+function hasXmlParserError(doc: Document): boolean {
+  if (doc.querySelector('parsererror'))
+    return true
+  if (doc.getElementsByTagName('parsererror').length > 0)
+    return true
+  if (typeof doc.getElementsByTagNameNS === 'function' && doc.getElementsByTagNameNS('*', 'parsererror').length > 0)
+    return true
+  return false
 }
 
 /**
  * Parses and sanitizes an uploaded SVG document so it can be safely re-wrapped
  * with vector crop/rotation/flip transforms without executing embedded scripts.
+ *
+ * Fails closed (`null`) when DOMParser/XMLSerializer is unavailable or when the
+ * SVG document is malformed XML (never falls back to regex stripping).
  */
 export function parseAndSanitizeSvg(rawSvg: string): ParsedSvgSource | null {
   const trimmed = rawSvg.trim()
   if (!trimmed || !/<svg\b/i.test(trimmed))
     return null
 
-  if (typeof DOMParser !== 'undefined') {
-    try {
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(trimmed, 'image/svg+xml')
-      const root = doc.documentElement
-      if (root && root.tagName.toLowerCase() === 'svg' && !doc.querySelector('parsererror')) {
-        const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT)
-        const toRemove: Element[] = []
-        let current = walker.nextNode() as Element | null
-        while (current) {
-          if (DANGEROUS_TAGS.has(current.tagName.toLowerCase())) {
-            toRemove.push(current)
-          }
-          else {
-            for (const attr of Array.from(current.attributes)) {
-              const name = attr.name.toLowerCase()
-              const val = attr.value.trim().toLowerCase()
-              if (name.startsWith('on'))
-                current.removeAttribute(attr.name)
-              else if ((name === 'href' || name === 'xlink:href') && val.startsWith('javascript:'))
-                current.removeAttribute(attr.name)
-            }
-          }
-          current = walker.nextNode() as Element | null
-        }
-        for (const el of toRemove)
-          el.remove()
-
-        const vbRaw = root.getAttribute('viewBox')
-        let vbMinX = 0
-        let vbMinY = 0
-        let vbW = 0
-        let vbH = 0
-        if (vbRaw) {
-          const parts = vbRaw.trim().split(/[\s,]+/).map(Number)
-          if (parts.length === 4 && parts.every(Number.isFinite) && parts[2]! > 0 && parts[3]! > 0) {
-            vbMinX = parts[0]!
-            vbMinY = parts[1]!
-            vbW = parts[2]!
-            vbH = parts[3]!
-          }
-        }
-
-        const attrW = parsePositiveLength(root.getAttribute('width'))
-        const attrH = parsePositiveLength(root.getAttribute('height'))
-        const width = vbW > 0 ? vbW : (attrW ?? 512)
-        const height = vbH > 0 ? vbH : (attrH ?? 512)
-
-        const { rootAttributes, preservesRootStyling } = extractRootPresentationAttrsFromMap(
-          Array.from(root.attributes, attr => [attr.name, attr.value] as const),
-        )
-
-        const serializer = new XMLSerializer()
-        const innerMarkup = Array.from(root.childNodes)
-          .map(node => serializer.serializeToString(node))
-          .join('')
-
-        return {
-          width,
-          height,
-          viewBoxMinX: vbW > 0 ? vbMinX : 0,
-          viewBoxMinY: vbH > 0 ? vbMinY : 0,
-          viewBoxWidth: width,
-          viewBoxHeight: height,
-          innerMarkup,
-          rootAttributes,
-          preservesRootStyling,
-        }
-      }
-    }
-    catch {
-      // Fall through to lightweight text parser below.
-    }
-  }
-
-  const openMatch = trimmed.match(/<svg\b([^>]*)>/i)
-  const closeIdx = trimmed.toLowerCase().lastIndexOf('</svg>')
-  if (!openMatch || closeIdx < 0)
+  if (typeof DOMParser === 'undefined' || typeof XMLSerializer === 'undefined')
     return null
 
-  const attrs = openMatch[1] ?? ''
-  const innerRaw = trimmed.slice((openMatch.index ?? 0) + openMatch[0].length, closeIdx)
-  const innerMarkup = stripDangerousRegex(innerRaw)
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(trimmed, 'image/svg+xml')
+    const root = doc.documentElement
+    if (!root || hasXmlParserError(doc))
+      return null
 
-  const vbMatch = attrs.match(/\bviewBox\s*=\s*["']([^"']+)["']/i)
-  let vbMinX = 0
-  let vbMinY = 0
-  let vbW = 0
-  let vbH = 0
-  if (vbMatch?.[1]) {
-    const parts = vbMatch[1].trim().split(/[\s,]+/).map(Number)
-    if (parts.length === 4 && parts.every(Number.isFinite) && parts[2]! > 0 && parts[3]! > 0) {
-      vbMinX = parts[0]!
-      vbMinY = parts[1]!
-      vbW = parts[2]!
-      vbH = parts[3]!
+    const rootLocalName = (root.localName || root.tagName.split(':').pop() || '').toLowerCase()
+    if (rootLocalName !== 'svg')
+      return null
+    if (root.namespaceURI && root.namespaceURI !== SVG_NS)
+      return null
+
+    const walker = doc.createTreeWalker(
+      root,
+      NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_PROCESSING_INSTRUCTION,
+    )
+    const toRemove: ChildNode[] = []
+    let droppedStyling = false
+    let current = walker.nextNode()
+    while (current) {
+      if (current.nodeType === Node.PROCESSING_INSTRUCTION_NODE) {
+        toRemove.push(current as ChildNode)
+      }
+      else if (current.nodeType === Node.ELEMENT_NODE) {
+        const el = current as Element
+        const localName = (el.localName || el.tagName.split(':').pop() || '').toLowerCase()
+        const validNamespace = !el.namespaceURI || el.namespaceURI === SVG_NS
+        if (!validNamespace || !ALLOWED_SVG_TAGS.has(localName)) {
+          if (localName === 'style')
+            droppedStyling = true
+          toRemove.push(el)
+        }
+        else {
+          for (const attr of Array.from(el.attributes)) {
+            const attrNameLower = attr.name.toLowerCase()
+            const attrLocalName = (attr.localName || attr.name.split(':').pop() || '').toLowerCase()
+            const attrNs = attr.namespaceURI ?? ''
+
+            if (attrNameLower === 'xmlns' || attrNameLower.startsWith('xmlns:')) {
+              const allowedXmlns = (attrNameLower === 'xmlns' && attr.value.trim() === SVG_NS)
+                || (attrNameLower === 'xmlns:xlink' && attr.value.trim() === XLINK_NS)
+              if (!allowedXmlns)
+                el.removeAttribute(attr.name)
+              continue
+            }
+
+            if (!ALLOWED_ATTR_NAMESPACES.has(attrNs)) {
+              el.removeAttribute(attr.name)
+              continue
+            }
+
+            if (attrLocalName.startsWith('on') || BLOCKED_ATTR_LOCAL_NAMES.has(attrLocalName)) {
+              if (attrLocalName === 'style')
+                droppedStyling = true
+              el.removeAttribute(attr.name)
+              continue
+            }
+
+            if (attrLocalName === 'href') {
+              if (!isSafeSvgHref(attr.value, localName))
+                el.removeAttribute(attr.name)
+              continue
+            }
+
+            if (attr.value.trim() && !isSafeSvgAttrValue(attr.value)) {
+              el.removeAttribute(attr.name)
+            }
+          }
+        }
+      }
+      current = walker.nextNode()
+    }
+    for (const node of toRemove)
+      node.remove()
+
+    const vbRaw = root.getAttribute('viewBox')
+    let vbMinX = 0
+    let vbMinY = 0
+    let vbW = 0
+    let vbH = 0
+    if (vbRaw) {
+      const parts = vbRaw.trim().split(/[\s,]+/).map(Number)
+      if (parts.length === 4 && parts.every(Number.isFinite) && parts[2]! > 0 && parts[3]! > 0) {
+        vbMinX = parts[0]!
+        vbMinY = parts[1]!
+        vbW = parts[2]!
+        vbH = parts[3]!
+      }
+    }
+
+    const attrW = parsePositiveLength(root.getAttribute('width'))
+    const attrH = parsePositiveLength(root.getAttribute('height'))
+    const width = vbW > 0 ? vbW : (attrW ?? 512)
+    const height = vbH > 0 ? vbH : (attrH ?? 512)
+
+    const { rootAttributes, preservesRootStyling: rootPreserved } = extractRootPresentationAttrsFromMap(
+      Array.from(root.attributes, attr => [attr.name, attr.value] as const),
+    )
+
+    const serializer = new XMLSerializer()
+    const innerMarkup = Array.from(root.childNodes)
+      .map(node => serializer.serializeToString(node))
+      .join('')
+
+    return {
+      width,
+      height,
+      viewBoxMinX: vbW > 0 ? vbMinX : 0,
+      viewBoxMinY: vbH > 0 ? vbMinY : 0,
+      viewBoxWidth: width,
+      viewBoxHeight: height,
+      innerMarkup,
+      rootAttributes,
+      preservesRootStyling: rootPreserved && !droppedStyling,
     }
   }
-
-  const wMatch = attrs.match(/\bwidth\s*=\s*["']([^"']+)["']/i)
-  const hMatch = attrs.match(/\bheight\s*=\s*["']([^"']+)["']/i)
-  const width = vbW > 0 ? vbW : (parsePositiveLength(wMatch?.[1]) ?? 512)
-  const height = vbH > 0 ? vbH : (parsePositiveLength(hMatch?.[1]) ?? 512)
-
-  const { rootAttributes, preservesRootStyling } = extractRootPresentationAttrsFromMap(
-    parseTagAttributesRegex(attrs),
-  )
-
-  return {
-    width,
-    height,
-    viewBoxMinX: vbW > 0 ? vbMinX : 0,
-    viewBoxMinY: vbH > 0 ? vbMinY : 0,
-    viewBoxWidth: width,
-    viewBoxHeight: height,
-    innerMarkup,
-    rootAttributes,
-    preservesRootStyling,
+  catch {
+    return null
   }
 }
 

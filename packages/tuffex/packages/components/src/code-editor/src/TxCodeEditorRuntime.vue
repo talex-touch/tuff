@@ -324,10 +324,13 @@ function setupThemeObserver(): void {
   themeObserver = new MutationObserver(() => {
     syncAutoTheme()
   })
-  themeObserver.observe(root, {
+  const observerInit: MutationObserverInit = {
     attributes: true,
     attributeFilter: ['class', 'data-theme'],
-  })
+  }
+  themeObserver.observe(root, observerInit)
+  if (document.body)
+    themeObserver.observe(document.body, observerInit)
 }
 
 const resolvedTheme = computed<ResolvedTheme>(() => {
@@ -648,6 +651,7 @@ function buildExtensions(): Extension[] {
     syntaxHighlighting(createHighlightStyle(theme), { fallback: true }),
     indentUnit.of(' '.repeat(tabSize)),
     EditorState.tabSize.of(tabSize),
+    EditorState.readOnly.of(props.readOnly),
     EditorView.editable.of(!props.readOnly),
     updateListener,
     drawSelection(),

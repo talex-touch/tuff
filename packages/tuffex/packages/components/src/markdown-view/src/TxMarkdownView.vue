@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MarkdownViewProps } from './types'
-import { hasDocument } from '@talex-touch/tuffex-core'
+import { hasDocument, hasWindow } from '@talex-touch/tuffex-core'
 import { Marked } from 'marked'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
@@ -28,14 +28,26 @@ let themeObserver: MutationObserver | null = null
 let sanitizerLoading = false
 
 async function ensureSanitizer(): Promise<void> {
+  if (!hasWindow()) {
+    sanitizer.value = null
+    sanitizerReady.value = true
+    return
+  }
+
   if (sanitizer.value || sanitizerLoading)
     return
 
   sanitizerLoading = true
   try {
     const mod = await import('dompurify')
-    const dp = mod.default
-    sanitizer.value = (html: string) => dp.sanitize(html)
+    const dp = (mod as { default?: { sanitize?: unknown } }).default ?? (mod as { sanitize?: unknown })
+    if (typeof dp?.sanitize === 'function') {
+      const sanitizeFn = dp.sanitize.bind(dp) as (html: string) => string
+      sanitizer.value = (html: string) => sanitizeFn(html)
+    }
+    else {
+      sanitizer.value = null
+    }
   }
   catch {
     sanitizer.value = null

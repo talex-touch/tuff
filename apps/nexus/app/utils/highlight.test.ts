@@ -59,4 +59,26 @@ describe('local code highlighter (zero polling, zero CDN)', () => {
     expect(codeRendererSource).not.toContain('cdn.jsdelivr.net')
     expect(codeRendererSource).not.toContain('window.hljs')
   })
+
+  it('highlights ordinary HTML and Vue tags with quoted expressions cleanly', () => {
+    const html = highlightCodeToHtml('<div class="card" :title="a < b">ok</div>', 'vue')
+    expect(html).toContain('hljs-name')
+    expect(html).toContain('hljs-attr')
+    expect(html).toContain('hljs-string')
+    expect(html).toContain('ok')
+  })
+
+  it('does not suffer cubic backtracking on unclosed markup tags with many spaces', () => {
+    const malformedSpaces = `<div${' '.repeat(4000)}`
+    const malformedRepeated = '<div '.repeat(2000)
+
+    const start = performance.now()
+    const outSpaces = highlightCodeToHtml(malformedSpaces, 'html')
+    const outRepeated = highlightCodeToHtml(malformedRepeated, 'vue')
+    const elapsedMs = performance.now() - start
+
+    expect(outSpaces).toContain('&lt;div')
+    expect(outRepeated).toContain('&lt;div')
+    expect(elapsedMs).toBeLessThan(250)
+  })
 })

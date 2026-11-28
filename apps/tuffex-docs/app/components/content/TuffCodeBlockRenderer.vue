@@ -64,6 +64,7 @@ async function renderMermaidCode() {
   const node = mermaidRef.value
   if (!node)
     return
+  delete node.dataset.mermaidSource
   node.removeAttribute('data-processed')
   const { renderMermaidInDocument } = await import('~/utils/mermaid-renderer')
   await renderMermaidInDocument(node.parentElement ?? node)

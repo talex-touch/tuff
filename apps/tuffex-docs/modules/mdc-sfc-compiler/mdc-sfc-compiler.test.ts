@@ -249,4 +249,28 @@ Named slot footer with [Link](/en/tabs) and {{ footerVar }}.
     expect(synthCompiled.sfc).toContain('href="/tuffex/en/button"')
     expect(synthCompiled.sfc).toContain('href="/tuffex/en/tabs"')
   })
+
+  it('escapes {{ and }} in dynamic component slots in a single pass and ignores Object.prototype keys', async () => {
+    const mdc = `---
+title: Mustache Safety
+---
+
+::Alert{:label="constructor" :fallback="toString"}
+Use \`{{ x }}\` or plain {{ x }} inside a dynamic slot.
+::
+`
+    const compiled = await compileMdcToSfc(mdc, {
+      filePath: 'mustache-safety.en.mdc',
+      baseURL: '/tuffex',
+      resolveComponentImport: name => (name === 'Alert' ? { path: '~/components/content/Alert.vue' } : null),
+    })
+
+    // Must compile cleanly with @vue/compiler-sfc (the old sequential .replace emitted `{{ '{{' {{ '}}' }}`).
+    compileAndValidateSfc(compiled.sfc, 'mustache-safety.en.mdc')
+    expect(compiled.sfc).not.toContain('{{ \'{{\' {{ \'}}\' }}')
+    // Must not resolve Object.prototype.constructor / toString as bound prop values.
+    expect(compiled.sfc).toContain('"label":"constructor"')
+    expect(compiled.sfc).toContain('"fallback":"toString"')
+    expect(compiled.sfc).not.toContain('[native code]')
+  })
 })

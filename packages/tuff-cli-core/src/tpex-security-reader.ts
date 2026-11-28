@@ -40,10 +40,6 @@ function readTarOctal(block: Buffer, start: number, length: number): number {
   return Number.parseInt(value, 8)
 }
 
-function normalizeArchivePath(rawPath: string): string {
-  return rawPath.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/{2,}/g, '/')
-}
-
 function entryType(typeFlag: string): PluginPackageEntry['type'] {
   if (!typeFlag || typeFlag === '0' || typeFlag === '7')
     return 'file'
@@ -93,7 +89,7 @@ function verifyFileMap(manifest: unknown, files: Map<string, Buffer>): boolean {
   const actualPaths = Array.from(files.keys())
     .filter(path => path !== 'manifest.json' && path !== 'key.talex')
     .sort()
-  const expectedPaths = expected.map(([rawPath]) => normalizeArchivePath(rawPath)).sort()
+  const expectedPaths = expected.map(([rawPath]) => rawPath).sort()
   if (actualPaths.length !== expectedPaths.length)
     return false
   if (actualPaths.some((path, index) => path !== expectedPaths[index]))
@@ -101,7 +97,7 @@ function verifyFileMap(manifest: unknown, files: Map<string, Buffer>): boolean {
   return expected.every(([rawPath, rawDigest]) => {
     if (typeof rawDigest !== 'string' || !/^sha256-[a-f0-9]{64}$/.test(rawDigest))
       return false
-    const content = files.get(normalizeArchivePath(rawPath))
+    const content = files.get(rawPath)
     return Boolean(content)
       && createHash('sha256').update(content!).digest('hex') === rawDigest.slice('sha256-'.length)
   })
@@ -128,21 +124,22 @@ export function readTpexSecurityScanInput(packagePath: string): TpexSecurityScan
 
     const name = readTarString(header, 0, TAR_NAME_BYTES)
     const prefix = readTarString(header, TAR_PREFIX_OFFSET, TAR_PREFIX_BYTES)
-    const path = normalizeArchivePath(prefix ? `${prefix}/${name}` : name)
+    const rawPath = prefix ? `${prefix}/${name}` : name
     const size = readTarOctal(header, 124, 12)
     const type = entryType(readTarString(header, 156, 1))
     if (size < 0 || offset + size > buffer.length) {
       throw new Error('TPEX archive contains an invalid entry size.')
     }
-    entries.push({ path, type, size })
+    entries.push({ path: rawPath, type, size })
     if (entries.length > PLUGIN_PACKAGE_MAX_ENTRY_COUNT) {
       throw new Error('TPEX package exceeds the package policy entry-count limit.')
     }
 
     const content = buffer.subarray(offset, offset + size)
     if (type === 'file') {
-      regularFiles.set(path, content)
-      if (path.split('/').at(-1)?.toLowerCase() === 'manifest.json') {
+      if (!regularFiles.has(rawPath))
+        regularFiles.set(rawPath, content)
+      if (rawPath === 'manifest.json' && manifest === undefined) {
         try {
           manifest = JSON.parse(content.toString('utf8')) as unknown
         }

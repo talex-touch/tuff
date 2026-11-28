@@ -1555,9 +1555,10 @@ function finalizeBuildManifest(manifest: IManifest, buildDir: string): void {
     absolute: true,
     dot: true,
   })
-  const filesToHash = filesInBuild.filter(
-    file => path.basename(file) !== 'manifest.json',
-  )
+  const filesToHash = filesInBuild.filter((file) => {
+    const relPath = path.relative(buildDir, file).replace(/\\/g, '/')
+    return relPath !== 'manifest.json' && relPath !== 'key.talex'
+  })
 
   manifest._files = generateFilesSha256(filesToHash, buildDir)
   manifest._signature = generateSignature(manifest._files)

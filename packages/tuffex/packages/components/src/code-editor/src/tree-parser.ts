@@ -37,7 +37,11 @@ const CSS_NAMED_COLORS = new Set([
 ])
 
 const HEX_COLOR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
-const FUNC_COLOR_RE = /^(?:rgba?|hsla?|oklch|oklab|lab|lch)\(\s*[^)]+\)$/i
+const FUNC_COLOR_RE = /^(?:rgba?|hsla?|oklch|oklab|lab|lch)\(\s*[0-9a-z.%+-][0-9a-z.%+/,\s-]*\)$/i
+
+export function encodeTreePathKey(path: readonly (string | number)[]): string {
+  return JSON.stringify(path)
+}
 
 export function isCssColorValue(value: unknown): value is string {
   if (typeof value !== 'string')

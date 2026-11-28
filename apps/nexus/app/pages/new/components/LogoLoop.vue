@@ -172,6 +172,8 @@ const isHovered = ref(false)
 let rafRef: number | null = null
 let lastTimestampRef: number | null = null
 let resizeObserver: ResizeObserver | null = null
+let mountTimer: number | null = null
+let isUnmounted = false
 let cleanupResize: (() => void) | undefined
 let cleanupImages: (() => void) | undefined
 let cleanupAnimation: (() => void) | undefined
@@ -383,7 +385,12 @@ function cleanup() {
 
 onMounted(async () => {
   await nextTick()
-  window.setTimeout(() => {
+  if (isUnmounted)
+    return
+  mountTimer = window.setTimeout(() => {
+    mountTimer = null
+    if (isUnmounted)
+      return
     cleanupResize = setupResizeObserver()
     cleanupImages = setupImageLoader()
     cleanupAnimation = startAnimationLoop()
@@ -391,6 +398,11 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  isUnmounted = true
+  if (mountTimer !== null) {
+    window.clearTimeout(mountTimer)
+    mountTimer = null
+  }
   cleanup()
 })
 
@@ -398,6 +410,8 @@ watch(
   [() => props.logos, () => props.gap, () => props.logoHeight, () => props.direction],
   async () => {
     await nextTick()
+    if (isUnmounted)
+      return
     cleanupImages?.()
     cleanupImages = setupImageLoader()
     cleanupAnimation?.()
@@ -407,6 +421,8 @@ watch(
 )
 
 watch([() => props.speed, () => props.direction, () => props.hoverSpeed, () => props.pauseOnHover], () => {
+  if (isUnmounted)
+    return
   cleanupAnimation?.()
   cleanupAnimation = startAnimationLoop()
 })
