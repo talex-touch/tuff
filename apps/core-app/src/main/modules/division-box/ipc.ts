@@ -21,6 +21,7 @@ import { pluginModule } from '../plugin/plugin-module'
 import { divisionBoxIpcLog } from './logger'
 import { DivisionBoxManager } from './manager'
 import { resolveDivisionBoxPermissionActor } from './permission-actor'
+import type { DivisionBoxSession } from './session'
 
 /**
  * Validates DivisionBoxConfig format
@@ -121,7 +122,7 @@ function createSuccessResponse<T>(data: T): IPCResponse<T> {
  * @param error - Error object or message
  * @returns IPCResponse object
  */
-function createErrorResponse(error: DivisionBoxError | Error | string): IPCResponse {
+function createErrorResponse(error: DivisionBoxError | Error | string | unknown): IPCResponse {
   if (error instanceof DivisionBoxError) {
     return {
       success: false,
@@ -133,10 +134,11 @@ function createErrorResponse(error: DivisionBoxError | Error | string): IPCRespo
   }
 
   if (error instanceof Error) {
+    const withCode = error as Error & { code?: string }
     return {
       success: false,
       error: {
-        code: DivisionBoxErrorCode.IPC_ERROR,
+        code: (withCode.code as DivisionBoxErrorCode | undefined) ?? DivisionBoxErrorCode.IPC_ERROR,
         message: error.message
       }
     }
@@ -200,6 +202,33 @@ export class DivisionBoxIPC {
       return pluginModule.pluginManager?.plugins.get(pluginId)?.sdkapi
     }
 
+    const getAuthoritativePluginOrThrow = (context: HandlerContext) => {
+      if (!context?.plugin) {
+        return undefined
+      }
+      if (!isAuthoritativePluginContext(context.plugin)) {
+        throw new DivisionBoxError(
+          DivisionBoxErrorCode.PERMISSION_DENIED,
+          'DivisionBox operations require an authoritative plugin caller.'
+        )
+      }
+      return context.plugin
+    }
+
+    const assertSessionOwner = (session: DivisionBoxSession, context: HandlerContext): void => {
+      const authoritativePlugin = getAuthoritativePluginOrThrow(context)
+      if (!authoritativePlugin) {
+        return
+      }
+      const ownerPluginId = session.getAttachedPlugin()?.name ?? session.meta?.pluginId
+      if (!ownerPluginId || ownerPluginId !== authoritativePlugin.name) {
+        throw new DivisionBoxError(
+          DivisionBoxErrorCode.PERMISSION_DENIED,
+          'Caller does not own this DivisionBox session.'
+        )
+      }
+    }
+
     const enforce = (context: HandlerContext, apiName: string, payload?: unknown) => {
       const { pluginId, sdkapi } = resolveDivisionBoxPermissionActor(
         context,
@@ -211,257 +240,335 @@ export class DivisionBoxIPC {
       }
       const perm = getPermissionModule()
       if (!perm) {
-        return
+        throw new DivisionBoxError(
+          DivisionBoxErrorCode.PERMISSION_DENIED,
+          'Permission module is unavailable for DivisionBox operation.'
+        )
       }
       perm.enforcePermission(pluginId, apiName, sdkapi)
     }
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.open, async (payload, context) => {
-        const validation = validateConfig(payload)
-        if (!validation.valid) {
-          return createErrorResponse(validation.error!)
-        }
+        try {
+          const validation = validateConfig(payload)
+          if (!validation.valid) {
+            return createErrorResponse(validation.error!)
+          }
 
-        const requiresPluginView = !payload.url.startsWith('tuff://detached')
-        const authoritativePlugin = isAuthoritativePluginContext(context.plugin)
-          ? context.plugin
-          : undefined
-        if (requiresPluginView && !authoritativePlugin) {
-          return createErrorResponse(
-            new DivisionBoxError(
-              DivisionBoxErrorCode.PERMISSION_DENIED,
-              'DivisionBox UI views require an authoritative plugin caller.'
+          const requiresPluginView = !payload.url.startsWith('tuff://detached')
+          const authoritativePlugin = getAuthoritativePluginOrThrow(context)
+          if (requiresPluginView && !authoritativePlugin) {
+            return createErrorResponse(
+              new DivisionBoxError(
+                DivisionBoxErrorCode.PERMISSION_DENIED,
+                'DivisionBox UI views require an authoritative plugin caller.'
+              )
             )
-          )
-        }
-        if (
-          authoritativePlugin &&
-          payload.pluginId &&
-          payload.pluginId !== authoritativePlugin.name
-        ) {
-          return createErrorResponse(
-            new DivisionBoxError(
-              DivisionBoxErrorCode.PERMISSION_DENIED,
-              'DivisionBox UI view owner does not match the caller.'
+          }
+          if (
+            authoritativePlugin &&
+            payload.pluginId &&
+            payload.pluginId !== authoritativePlugin.name
+          ) {
+            return createErrorResponse(
+              new DivisionBoxError(
+                DivisionBoxErrorCode.PERMISSION_DENIED,
+                'DivisionBox UI view owner does not match the caller.'
+              )
             )
-          )
+          }
+
+          const ownerBoundPayload = authoritativePlugin
+            ? { ...payload, pluginId: authoritativePlugin.name }
+            : payload
+          enforce(context, 'division-box:session:open', ownerBoundPayload)
+          const session = await this.manager.createSession(ownerBoundPayload)
+          const pluginName = session.getAttachedPlugin()?.name ?? session.meta?.pluginId
+
+          session.onStateChange((event) => {
+            this.broadcastStateChanged(event, pluginName)
+          })
+
+          const sessionInfo: SessionInfo = {
+            sessionId: session.sessionId,
+            state: session.getState(),
+            meta: session.meta
+          }
+
+          return createSuccessResponse(sessionInfo)
+        } catch (error) {
+          return createErrorResponse(error)
         }
-
-        const ownerBoundPayload = authoritativePlugin
-          ? { ...payload, pluginId: authoritativePlugin.name }
-          : payload
-        enforce(context, 'division-box:session:open', ownerBoundPayload)
-        const session = await this.manager.createSession(ownerBoundPayload)
-        const pluginName = session.getAttachedPlugin()?.name ?? session.meta?.pluginId
-
-        session.onStateChange((event) => {
-          this.broadcastStateChanged(event, pluginName)
-        })
-
-        const sessionInfo: SessionInfo = {
-          sessionId: session.sessionId,
-          state: session.getState(),
-          meta: session.meta
-        }
-
-        return createSuccessResponse(sessionInfo)
       })
     )
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.close, async (payload, context) => {
-        enforce(context, 'division-box:session:close', payload)
-        const { sessionId, options } = payload
-        const validation = validateSessionId(sessionId)
-        if (!validation.valid) {
-          return createErrorResponse(validation.error!)
+        try {
+          getAuthoritativePluginOrThrow(context)
+          enforce(context, 'division-box:session:close', payload)
+          const { sessionId, options } = payload
+          const validation = validateSessionId(sessionId)
+          if (!validation.valid) {
+            return createErrorResponse(validation.error!)
+          }
+
+          const session = this.manager.getSession(sessionId)
+          if (!session) {
+            return createErrorResponse(
+              new DivisionBoxError(
+                DivisionBoxErrorCode.SESSION_NOT_FOUND,
+                `Session not found: ${sessionId}`,
+                sessionId
+              )
+            )
+          }
+          assertSessionOwner(session, context)
+          const pluginName = session.getAttachedPlugin()?.name ?? session.meta?.pluginId
+
+          await this.manager.destroySession(sessionId, options)
+          this.broadcastSessionDestroyed(sessionId, pluginName)
+          return createSuccessResponse({ success: true })
+        } catch (error) {
+          return createErrorResponse(error)
         }
-
-        const session = this.manager.getSession(sessionId)
-        const pluginName = session?.getAttachedPlugin()?.name ?? session?.meta?.pluginId
-
-        await this.manager.destroySession(sessionId, options)
-        this.broadcastSessionDestroyed(sessionId, pluginName)
-        return createSuccessResponse({ success: true })
       })
     )
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.getState, async (payload, context) => {
-        enforce(context, 'division-box:session:get-state', payload)
-        const { sessionId, key } = payload
-        const validation = validateSessionId(sessionId)
-        if (!validation.valid) {
-          return createErrorResponse(validation.error!)
-        }
+        try {
+          getAuthoritativePluginOrThrow(context)
+          enforce(context, 'division-box:session:get-state', payload)
+          const { sessionId, key } = payload
+          const validation = validateSessionId(sessionId)
+          if (!validation.valid) {
+            return createErrorResponse(validation.error!)
+          }
 
-        const session = this.manager.getSession(sessionId)
-        if (!session) {
-          return createErrorResponse(
-            new DivisionBoxError(
-              DivisionBoxErrorCode.SESSION_NOT_FOUND,
-              `Session not found: ${sessionId}`,
-              sessionId
+          const session = this.manager.getSession(sessionId)
+          if (!session) {
+            return createErrorResponse(
+              new DivisionBoxError(
+                DivisionBoxErrorCode.SESSION_NOT_FOUND,
+                `Session not found: ${sessionId}`,
+                sessionId
+              )
             )
-          )
-        }
+          }
+          assertSessionOwner(session, context)
 
-        if (key && typeof key === 'string') {
-          return createSuccessResponse(session.getSessionState(key))
-        }
+          if (key && typeof key === 'string') {
+            return createSuccessResponse(session.getSessionState(key))
+          }
 
-        return createSuccessResponse({ state: session.getState() })
+          return createSuccessResponse({ state: session.getState() })
+        } catch (error) {
+          return createErrorResponse(error)
+        }
       })
     )
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.updateState, async (payload, context) => {
-        enforce(context, 'division-box:session:update-state', payload)
-        const { sessionId, key, value } = payload
-        const validation = validateSessionId(sessionId)
-        if (!validation.valid) {
-          return createErrorResponse(validation.error!)
-        }
+        try {
+          getAuthoritativePluginOrThrow(context)
+          enforce(context, 'division-box:session:update-state', payload)
+          const { sessionId, key, value } = payload
+          const validation = validateSessionId(sessionId)
+          if (!validation.valid) {
+            return createErrorResponse(validation.error!)
+          }
 
-        if (!key || typeof key !== 'string') {
-          return createErrorResponse('Invalid or missing key')
-        }
+          if (!key || typeof key !== 'string') {
+            return createErrorResponse('Invalid or missing key')
+          }
 
-        const session = this.manager.getSession(sessionId)
-        if (!session) {
-          return createErrorResponse(
-            new DivisionBoxError(
-              DivisionBoxErrorCode.SESSION_NOT_FOUND,
-              `Session not found: ${sessionId}`,
-              sessionId
+          const session = this.manager.getSession(sessionId)
+          if (!session) {
+            return createErrorResponse(
+              new DivisionBoxError(
+                DivisionBoxErrorCode.SESSION_NOT_FOUND,
+                `Session not found: ${sessionId}`,
+                sessionId
+              )
             )
-          )
-        }
+          }
+          assertSessionOwner(session, context)
 
-        session.setSessionState(key, value)
-        return createSuccessResponse({ success: true })
+          session.setSessionState(key, value)
+          return createSuccessResponse({ success: true })
+        } catch (error) {
+          return createErrorResponse(error)
+        }
       })
     )
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.getActiveSessions, async (payload, context) => {
-        enforce(context, 'division-box:session:get-active-sessions', payload)
-        const sessions = this.manager.getActiveSessionsInfo()
-        return createSuccessResponse(sessions)
+        try {
+          const authoritativePlugin = getAuthoritativePluginOrThrow(context)
+          enforce(context, 'division-box:session:get-active-sessions', payload)
+          const sessions = this.manager.getActiveSessionsInfo()
+          if (authoritativePlugin) {
+            const scoped = sessions.filter((info) => {
+              const session = this.manager.getSession(info.sessionId)
+              const ownerPluginId = session?.getAttachedPlugin()?.name ?? info.meta?.pluginId
+              return ownerPluginId === authoritativePlugin.name
+            })
+            return createSuccessResponse(scoped)
+          }
+          return createSuccessResponse(sessions)
+        } catch (error) {
+          return createErrorResponse(error)
+        }
       })
     )
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.togglePin, async (payload, context) => {
-        enforce(context, 'division-box:window:toggle-pin', payload)
-        const { sessionId } = payload
-        const validation = validateSessionId(sessionId)
-        if (!validation.valid) {
-          return createErrorResponse(validation.error!)
-        }
+        try {
+          getAuthoritativePluginOrThrow(context)
+          enforce(context, 'division-box:window:toggle-pin', payload)
+          const { sessionId } = payload
+          const validation = validateSessionId(sessionId)
+          if (!validation.valid) {
+            return createErrorResponse(validation.error!)
+          }
 
-        const session = this.manager.getSession(sessionId)
-        if (!session) {
-          return createErrorResponse('Session not found')
-        }
+          const session = this.manager.getSession(sessionId)
+          if (!session) {
+            return createErrorResponse('Session not found')
+          }
+          assertSessionOwner(session, context)
 
-        const isPinned = session.toggleAlwaysOnTop()
-        return createSuccessResponse({ isPinned })
+          const isPinned = session.toggleAlwaysOnTop()
+          return createSuccessResponse({ isPinned })
+        } catch (error) {
+          return createErrorResponse(error)
+        }
       })
     )
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.setOpacity, async (payload, context) => {
-        enforce(context, 'division-box:window:set-opacity', payload)
-        const { sessionId, opacity } = payload
-        const validation = validateSessionId(sessionId)
-        if (!validation.valid) {
-          return createErrorResponse(validation.error!)
-        }
+        try {
+          getAuthoritativePluginOrThrow(context)
+          enforce(context, 'division-box:window:set-opacity', payload)
+          const { sessionId, opacity } = payload
+          const validation = validateSessionId(sessionId)
+          if (!validation.valid) {
+            return createErrorResponse(validation.error!)
+          }
+          if (typeof opacity !== 'number' || !Number.isFinite(opacity)) {
+            return createErrorResponse('Invalid opacity value')
+          }
 
-        const session = this.manager.getSession(sessionId)
-        if (!session) {
-          return createErrorResponse('Session not found')
-        }
+          const session = this.manager.getSession(sessionId)
+          if (!session) {
+            return createErrorResponse('Session not found')
+          }
+          assertSessionOwner(session, context)
 
-        session.setOpacity(opacity)
-        return createSuccessResponse({ opacity: session.getOpacity() })
+          session.setOpacity(opacity)
+          return createSuccessResponse({ opacity: session.getOpacity() })
+        } catch (error) {
+          return createErrorResponse(error)
+        }
       })
     )
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.toggleDevTools, async (payload, context) => {
-        enforce(context, 'division-box:window:toggle-devtools', payload)
-        const { sessionId } = payload
-        const validation = validateSessionId(sessionId)
-        if (!validation.valid) {
-          return createErrorResponse(validation.error!)
-        }
+        try {
+          getAuthoritativePluginOrThrow(context)
+          enforce(context, 'division-box:window:toggle-devtools', payload)
+          const { sessionId } = payload
+          const validation = validateSessionId(sessionId)
+          if (!validation.valid) {
+            return createErrorResponse(validation.error!)
+          }
 
-        const session = this.manager.getSession(sessionId)
-        if (!session) {
-          return createErrorResponse('Session not found')
-        }
+          const session = this.manager.getSession(sessionId)
+          if (!session) {
+            return createErrorResponse('Session not found')
+          }
+          assertSessionOwner(session, context)
 
-        if (session.isDevToolsOpen()) {
-          session.closeDevTools()
-        } else {
-          session.openDevTools()
-        }
+          if (session.isDevToolsOpen()) {
+            session.closeDevTools()
+          } else {
+            session.openDevTools()
+          }
 
-        return createSuccessResponse({ isOpen: session.isDevToolsOpen() })
+          return createSuccessResponse({ isOpen: session.isDevToolsOpen() })
+        } catch (error) {
+          return createErrorResponse(error)
+        }
       })
     )
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.getWindowState, async (payload, context) => {
-        enforce(context, 'division-box:window:get-window-state', payload)
-        const { sessionId } = payload
-        const validation = validateSessionId(sessionId)
-        if (!validation.valid) {
-          return createErrorResponse(validation.error!)
-        }
+        try {
+          getAuthoritativePluginOrThrow(context)
+          enforce(context, 'division-box:window:get-window-state', payload)
+          const { sessionId } = payload
+          const validation = validateSessionId(sessionId)
+          if (!validation.valid) {
+            return createErrorResponse(validation.error!)
+          }
 
-        const session = this.manager.getSession(sessionId)
-        if (!session) {
-          return createErrorResponse('Session not found')
-        }
+          const session = this.manager.getSession(sessionId)
+          if (!session) {
+            return createErrorResponse('Session not found')
+          }
+          assertSessionOwner(session, context)
 
-        return createSuccessResponse({
-          isPinned: session.isAlwaysOnTop(),
-          opacity: session.getOpacity(),
-          isDevToolsOpen: session.isDevToolsOpen()
-        })
+          return createSuccessResponse({
+            isPinned: session.isAlwaysOnTop(),
+            opacity: session.getOpacity(),
+            isDevToolsOpen: session.isDevToolsOpen()
+          })
+        } catch (error) {
+          return createErrorResponse(error)
+        }
       })
     )
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.inputChange, async (payload, context) => {
-        enforce(context, 'division-box:ui:input-change', payload)
-        const { sessionId, input, query } = payload
-        const validation = validateSessionId(sessionId)
-        if (!validation.valid) {
-          return createErrorResponse(validation.error!)
-        }
+        try {
+          getAuthoritativePluginOrThrow(context)
+          enforce(context, 'division-box:ui:input-change', payload)
+          const { sessionId, input, query } = payload
+          const validation = validateSessionId(sessionId)
+          if (!validation.valid) {
+            return createErrorResponse(validation.error!)
+          }
 
-        const session = this.manager.getSession(sessionId)
-        if (!session) {
-          return createErrorResponse('Session not found')
-        }
+          const session = this.manager.getSession(sessionId)
+          if (!session) {
+            return createErrorResponse('Session not found')
+          }
+          assertSessionOwner(session, context)
 
-        const plugin = session.getAttachedPlugin()
-        if (plugin) {
-          void transport
-            .sendToPlugin(plugin.name, CoreBoxEvents.input.change, {
-              input,
-              query,
-              source: 'renderer'
-            })
-            .catch(() => {})
-        }
+          const plugin = session.getAttachedPlugin()
+          if (plugin) {
+            void transport
+              .sendToPlugin(plugin.name, CoreBoxEvents.input.change, {
+                input,
+                query,
+                source: 'renderer'
+              })
+              .catch(() => {})
+          }
 
-        return createSuccessResponse({ received: true })
+          return createSuccessResponse({ received: true })
+        } catch (error) {
+          return createErrorResponse(error)
+        }
       })
     )
   }

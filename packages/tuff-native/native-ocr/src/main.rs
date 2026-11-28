@@ -1,7 +1,7 @@
 mod base64;
 
 use std::ffi::{CStr, CString};
-use std::fs::File;
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, BufWriter, Read, Write};
 use std::os::raw::{c_char, c_int};
 use std::path::Path;
@@ -10,6 +10,7 @@ use std::ptr;
 use serde::{Deserialize, Serialize};
 
 const MAX_OCR_INPUT_BYTES: usize = 16 * 1024 * 1024;
+const MAX_REQUEST_LINE_BYTES: usize = 24 * 1024 * 1024;
 const DEFAULT_MAX_BLOCKS: i32 = 120;
 
 #[repr(C)]
@@ -168,23 +169,35 @@ impl HelperResponse {
     }
 }
 
-fn read_bounded_image_file(raw_path: &str) -> Result<Vec<u8>, (&'static str, String)> {
-    let trimmed = raw_path.trim();
-    if trimmed.is_empty() {
+fn open_regular_image_file(path: &Path) -> Result<(File, fs::Metadata), (&'static str, String)> {
+    let link_meta = fs::symlink_metadata(path).map_err(|err| {
+        (
+            "ERR_OCR_FILE_READ_FAILED",
+            format!("Failed to stat image file: {err}"),
+        )
+    })?;
+    if link_meta.file_type().is_symlink() {
         return Err((
-            "ERR_OCR_DECODE_FAILED",
-            "Image filePath is empty".to_string(),
+            "ERR_OCR_FILE_READ_FAILED",
+            "OCR image path must not be a symbolic link".to_string(),
         ));
     }
-    let path = Path::new(trimmed);
-    if !path.is_absolute() {
+    if !link_meta.is_file() {
         return Err((
-            "ERR_OCR_INVALID_REQUEST",
-            "Image filePath must be an absolute path".to_string(),
+            "ERR_OCR_FILE_READ_FAILED",
+            "OCR image path is not a regular file".to_string(),
         ));
     }
 
-    let file = File::open(path).map_err(|err| {
+    let mut open_options = OpenOptions::new();
+    open_options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        open_options.custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW);
+    }
+
+    let file = open_options.open(path).map_err(|err| {
         (
             "ERR_OCR_FILE_READ_FAILED",
             format!("Failed to open image file: {err}"),
@@ -202,6 +215,36 @@ fn read_bounded_image_file(raw_path: &str) -> Result<Vec<u8>, (&'static str, Str
             "OCR image path is not a regular file".to_string(),
         ));
     }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if link_meta.dev() != meta.dev() || link_meta.ino() != meta.ino() {
+            return Err((
+                "ERR_OCR_FILE_READ_FAILED",
+                "OCR image file changed during open".to_string(),
+            ));
+        }
+    }
+    Ok((file, meta))
+}
+
+fn read_bounded_image_file(raw_path: &str) -> Result<Vec<u8>, (&'static str, String)> {
+    let trimmed = raw_path.trim();
+    if trimmed.is_empty() {
+        return Err((
+            "ERR_OCR_DECODE_FAILED",
+            "Image filePath is empty".to_string(),
+        ));
+    }
+    let path = Path::new(trimmed);
+    if !path.is_absolute() {
+        return Err((
+            "ERR_OCR_INVALID_REQUEST",
+            "Image filePath must be an absolute path".to_string(),
+        ));
+    }
+
+    let (file, meta) = open_regular_image_file(path)?;
     if meta.len() == 0 {
         return Err((
             "ERR_OCR_DECODE_FAILED",
@@ -453,24 +496,91 @@ fn dispatch_line(line: &str) -> (Option<HelperResponse>, bool) {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum BoundedLineStatus {
+    Eof,
+    Line,
+    TooLong,
+}
+
+fn read_bounded_line<R: BufRead>(
+    reader: &mut R,
+    out: &mut Vec<u8>,
+    max_bytes: usize,
+) -> io::Result<BoundedLineStatus> {
+    out.clear();
+    let mut read_any = false;
+    let mut exceeded = false;
+
+    loop {
+        let available = reader.fill_buf()?;
+        if available.is_empty() {
+            return Ok(if !read_any {
+                BoundedLineStatus::Eof
+            } else if exceeded {
+                BoundedLineStatus::TooLong
+            } else {
+                BoundedLineStatus::Line
+            });
+        }
+        read_any = true;
+
+        let newline_pos = available.iter().position(|&b| b == b'\n');
+        let consume_len = newline_pos.map_or(available.len(), |pos| pos + 1);
+
+        if !exceeded {
+            if out.len().saturating_add(consume_len) > max_bytes {
+                exceeded = true;
+                out.clear();
+            } else {
+                out.extend_from_slice(&available[..consume_len]);
+            }
+        }
+
+        reader.consume(consume_len);
+        if newline_pos.is_some() {
+            return Ok(if exceeded {
+                BoundedLineStatus::TooLong
+            } else {
+                BoundedLineStatus::Line
+            });
+        }
+    }
+}
+
 fn main() {
     let stdin = io::stdin();
     let stdout = io::stdout();
     let mut reader = io::BufReader::new(stdin.lock());
     let mut writer = BufWriter::new(stdout.lock());
-    let mut line = String::new();
+    let mut line_buf = Vec::new();
 
-    loop {
-        line.clear();
-        let read = match reader.read_line(&mut line) {
-            Ok(count) => count,
-            Err(_) => break,
+    while let Ok(status) = read_bounded_line(&mut reader, &mut line_buf, MAX_REQUEST_LINE_BYTES) {
+        let (response, should_exit) = match status {
+            BoundedLineStatus::Eof => break,
+            BoundedLineStatus::TooLong => (
+                Some(HelperResponse::error(
+                    String::new(),
+                    "ERR_OCR_INVALID_REQUEST",
+                    format!(
+                        "OCR request line exceeds maximum length of {MAX_REQUEST_LINE_BYTES} bytes"
+                    ),
+                )),
+                false,
+            ),
+            BoundedLineStatus::Line => match std::str::from_utf8(&line_buf) {
+                Ok(line) => dispatch_line(line),
+                Err(_) => (
+                    Some(HelperResponse::error(
+                        String::new(),
+                        "ERR_OCR_INVALID_REQUEST",
+                        "OCR request line is not valid UTF-8",
+                    )),
+                    false,
+                ),
+            },
         };
-        if read == 0 {
-            break;
-        }
 
-        let (response, should_exit) = dispatch_line(&line);
         if let Some(payload) = response {
             if serde_json::to_writer(&mut writer, &payload).is_err() {
                 break;
@@ -544,5 +654,57 @@ mod tests {
         assert_eq!(resp.code.as_deref(), Some("ERR_OCR_DECODE_FAILED"));
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         assert_eq!(resp.code.as_deref(), Some("ERR_OCR_UNSUPPORTED_PLATFORM"));
+    }
+
+    #[test]
+    fn bounded_line_reader_rejects_oversized_lines_and_recovers() {
+        let input = b"{\"id\":\"too-long-payload\"}\n{\"id\":\"ok\",\"operation\":\"ping\"}\n";
+        let mut cursor = io::Cursor::new(&input[..]);
+        let mut buf = Vec::new();
+
+        assert_eq!(
+            read_bounded_line(&mut cursor, &mut buf, 16).unwrap(),
+            BoundedLineStatus::TooLong
+        );
+        assert!(buf.is_empty());
+
+        assert_eq!(
+            read_bounded_line(&mut cursor, &mut buf, 64).unwrap(),
+            BoundedLineStatus::Line
+        );
+        assert_eq!(
+            std::str::from_utf8(&buf).unwrap(),
+            "{\"id\":\"ok\",\"operation\":\"ping\"}\n"
+        );
+        assert_eq!(
+            read_bounded_line(&mut cursor, &mut buf, 64).unwrap(),
+            BoundedLineStatus::Eof
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_and_directory_paths_before_reading() {
+        use std::os::unix::fs::symlink;
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let target = std::env::temp_dir().join(format!("tuff-ocr-real-{unique}.png"));
+        let link = std::env::temp_dir().join(format!("tuff-ocr-link-{unique}.png"));
+        std::fs::write(&target, b"pngdata").unwrap();
+        symlink(&target, &link).unwrap();
+
+        let err = read_bounded_image_file(&link.to_string_lossy()).unwrap_err();
+        assert_eq!(err.0, "ERR_OCR_FILE_READ_FAILED");
+        assert!(err.1.contains("symbolic link"));
+
+        let dir_err = read_bounded_image_file(&std::env::temp_dir().to_string_lossy()).unwrap_err();
+        assert_eq!(dir_err.0, "ERR_OCR_FILE_READ_FAILED");
+        assert!(dir_err.1.contains("regular file"));
+
+        let _ = std::fs::remove_file(&link);
+        let _ = std::fs::remove_file(&target);
     }
 }

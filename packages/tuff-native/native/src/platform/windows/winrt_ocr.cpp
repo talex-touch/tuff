@@ -108,25 +108,25 @@ bool BuildBitmapFromBytes(
     const uint32_t orientedWidth = decoder.OrientedPixelWidth();
     const uint32_t orientedHeight = decoder.OrientedPixelHeight();
 
-    if (rawWidth > kMaxOcrImageEdge || rawHeight > kMaxOcrImageEdge) {
+    BitmapTransform transform;
+    if (orientedWidth > kMaxOcrImageEdge || orientedHeight > kMaxOcrImageEdge) {
       const double scale = std::min(
-          static_cast<double>(kMaxOcrImageEdge) / static_cast<double>(rawWidth),
-          static_cast<double>(kMaxOcrImageEdge) / static_cast<double>(rawHeight));
-      BitmapTransform transform;
+          static_cast<double>(kMaxOcrImageEdge) / static_cast<double>(orientedWidth),
+          static_cast<double>(kMaxOcrImageEdge) / static_cast<double>(orientedHeight));
+      // WinRT applies BitmapTransform scaling in raw pixel coordinates before EXIF rotation.
       transform.ScaledWidth(std::max<uint32_t>(1, static_cast<uint32_t>(std::lround(rawWidth * scale))));
       transform.ScaledHeight(std::max<uint32_t>(1, static_cast<uint32_t>(std::lround(rawHeight * scale))));
       transform.InterpolationMode(BitmapInterpolationMode::Fant);
-      outDecoded.bitmap = decoder.GetSoftwareBitmapAsync(
-          BitmapPixelFormat::Bgra8,
-          BitmapAlphaMode::Ignore,
-          transform,
-          ExifOrientationMode::RespectExifOrientation,
-          ColorManagementMode::DoNotColorManage).get();
-    } else {
-      outDecoded.bitmap = decoder.GetSoftwareBitmapAsync(
-          BitmapPixelFormat::Bgra8,
-          BitmapAlphaMode::Ignore).get();
     }
+
+    // Always respect EXIF orientation in both scaled and unscaled paths so decoded pixels
+    // and bounding-box coordinates stay aligned with orientedWidth/orientedHeight.
+    outDecoded.bitmap = decoder.GetSoftwareBitmapAsync(
+        BitmapPixelFormat::Bgra8,
+        BitmapAlphaMode::Ignore,
+        transform,
+        ExifOrientationMode::RespectExifOrientation,
+        ColorManagementMode::DoNotColorManage).get();
 
     const uint32_t decodedWidth = outDecoded.bitmap.PixelWidth();
     const uint32_t decodedHeight = outDecoded.bitmap.PixelHeight();

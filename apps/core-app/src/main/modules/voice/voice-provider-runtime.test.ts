@@ -531,7 +531,7 @@ describe('capability-bound voice ASR provider resolution', () => {
     expect(() => getConfiguredAsrProvider()).toThrow('VOICE_ASR_MODEL_UNSUPPORTED')
     expect(adapterOptions.qwen).toEqual([])
   })
-  it('constructs DynamicScriptVoiceProvider from scriptContent metadata in sandbox', () => {
+  it('fails closed for dynamic-script protocol instead of executing scriptContent in main process', () => {
     const scriptContent =
       'module.exports = { createSession: () => ({ writePcm: () => {}, end: () => {} }) }'
     configure(
@@ -545,19 +545,15 @@ describe('capability-bound voice ASR provider resolution', () => {
       { scriptChan: 'script-secret-key' }
     )
 
-    const configured = getConfiguredAsrProvider()
-    expect(configured.model).toBe('wechat-v1')
-    expect(configured.provider.id).toBe('dynamic-script')
-    expect(configured.mode).toBe('realtime')
-    expect(adapterOptions.dynamicScript).toEqual([
-      expect.objectContaining({
-        scriptContent,
-        providerId: 'scriptChan'
-      })
-    ])
+    expect(getRecognitionStatus().asr).toEqual({
+      ready: false,
+      reason: 'VOICE_ASR_PROVIDER_UNAVAILABLE'
+    })
+    expect(() => getConfiguredAsrProvider()).toThrow('VOICE_ASR_PROVIDER_UNAVAILABLE')
+    expect(adapterOptions.dynamicScript).toEqual([])
   })
 
-  it('silently falls back to buffered Nexus provider when dynamic-script construction fails', () => {
+  it('does not silently fall back to buffered Nexus provider when dynamic-script is configured', () => {
     const brokenScript = 'throw_on_construct'
     configure(
       {
@@ -574,10 +570,8 @@ describe('capability-bound voice ASR provider resolution', () => {
       { brokenScriptChan: 'key-1' }
     )
 
-    const configured = getConfiguredAsrProvider()
-    expect(configured.model).toBe(NEXUS_AUDIO_TRANSCRIBE_MODEL)
-    expect(configured.mode).toBe('buffered')
-    expect(configured.location).toBe('cloud')
+    expect(() => getConfiguredAsrProvider()).toThrow('VOICE_ASR_PROVIDER_UNAVAILABLE')
+    expect(adapterOptions.dynamicScript).toEqual([])
   })
 
   it('routes nexus-realtime to direct DashScope Qwen realtime provider with signed ephemeral token', async () => {
@@ -708,7 +702,7 @@ describe('capability-bound voice ASR provider resolution', () => {
     expect(() => getConfiguredAsrProvider()).toThrow('VOICE_ASR_MODEL_UNSUPPORTED')
     expect(adapterOptions.bailian).toEqual([])
   })
-  it('configures DoubaoImeVoiceProvider when protocol is doubao-ime', () => {
+  it('fails closed for doubao-ime and for doubao channels missing resourceId', () => {
     configure(
       {
         'doubao-ime-chan': channel('doubao-ime-chan', {
@@ -723,11 +717,29 @@ describe('capability-bound voice ASR provider resolution', () => {
       { 'doubao-ime-chan': 'auto-token-exempt' }
     )
 
-    const configured = getConfiguredAsrProvider()
-    expect(configured.provider.id).toBe('doubao-ime')
-    expect(configured.location).toBe('cloud')
-    expect(configured.mode).toBe('realtime')
-    expect(adapterOptions.doubaoIme.length).toBe(1)
+    expect(getRecognitionStatus().asr).toEqual({
+      ready: false,
+      reason: 'VOICE_ASR_PROVIDER_UNAVAILABLE'
+    })
+    expect(() => getConfiguredAsrProvider()).toThrow('VOICE_ASR_PROVIDER_UNAVAILABLE')
+    expect(adapterOptions.doubaoIme).toEqual([])
+
+    configure(
+      {
+        'doubao-incomplete': channel('doubao-incomplete', {
+          models: ['bigmodel'],
+          metadata: { voiceAsr: { protocol: 'doubao' } }
+        })
+      },
+      {
+        'audio.asr': [{ providerId: 'doubao-incomplete', priority: 1, models: ['bigmodel'] }]
+      },
+      { 'doubao-incomplete': 'user-doubao-key' }
+    )
+
+    expect(() => getConfiguredAsrProvider()).toThrow('VOICE_ASR_PROVIDER_UNAVAILABLE')
+    expect(adapterOptions.doubao).toEqual([])
+    expect(adapterOptions.doubaoIme).toEqual([])
   })
 
   it('does not fall back to an enabled custom channel that lacks the audio.asr binding', () => {

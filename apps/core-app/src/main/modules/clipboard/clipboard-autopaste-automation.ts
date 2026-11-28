@@ -171,7 +171,7 @@ export class ClipboardAutopasteAutomation {
   ): Promise<ClipboardActionResult> {
     const applyPayload = buildApplyPayloadFromCopyAndPaste(request)
     try {
-      await this.applyToActiveApp(applyPayload)
+      await this.applyToActiveApp(applyPayload, { allowLocalFilePath: !context?.plugin })
       return { success: true }
     } catch (error) {
       return this.toActionFailureResult(
@@ -271,7 +271,11 @@ export class ClipboardAutopasteAutomation {
     }
   }
 
-  public writeItemToClipboard(item: IClipboardItem, payload: ClipboardApplyPayload): void {
+  public writeItemToClipboard(
+    item: IClipboardItem,
+    payload: ClipboardApplyPayload,
+    options?: { allowLocalFilePath?: boolean }
+  ): void {
     if (item.type === 'text') {
       const html = item.rawContent ?? payload.html ?? undefined
       clipboard.write({
@@ -285,7 +289,9 @@ export class ClipboardAutopasteAutomation {
 
     if (item.type === 'image') {
       const source = item.content ?? ''
-      const image = createNativeImageFromClipboardSource(source)
+      const image = createNativeImageFromClipboardSource(source, {
+        allowLocalFilePath: options?.allowLocalFilePath
+      })
       if (image.isEmpty()) {
         throw new Error('Image clipboard item could not be reconstructed.')
       }
@@ -330,13 +336,16 @@ export class ClipboardAutopasteAutomation {
     this.options.onWrite?.()
   }
 
-  public async applyToActiveApp(payload: ClipboardApplyPayload): Promise<void> {
+  public async applyToActiveApp(
+    payload: ClipboardApplyPayload,
+    options?: { allowLocalFilePath?: boolean }
+  ): Promise<void> {
     const item = this.normalizeApplyPayload(payload)
 
     if (typeof item.id === 'number') {
       this.options.rememberFreshness(item)
     }
-    this.writeItemToClipboard(item, payload)
+    this.writeItemToClipboard(item, payload, options)
 
     if (payload.hideCoreBox !== false) {
       try {

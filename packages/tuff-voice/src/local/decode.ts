@@ -74,7 +74,7 @@ export function runLocalProcess(
 ): Promise<LocalProcessResult> {
   const stderrLimit = options.stderrLimit ?? 8_000
   return new Promise<LocalProcessResult>((settle, reject) => {
-    const child = spawn(binary, [...args], { stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(binary, [...args], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
     let stdout = ''
     let stderr = ''
 

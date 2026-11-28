@@ -162,74 +162,76 @@ mod darwin {
         event_flags: *const FSEventStreamEventFlags,
         event_ids: *const FSEventStreamEventId,
     ) {
-        if client_info.is_null() || num_events == 0 {
-            return;
-        }
-        let ctx = unsafe { &*(client_info as *const CallbackContext) };
-        if !ctx.alive.load(Ordering::Acquire) {
-            return;
-        }
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if client_info.is_null() || num_events == 0 {
+                return;
+            }
+            let ctx = unsafe { &*(client_info as *const CallbackContext) };
+            if !ctx.alive.load(Ordering::Acquire) {
+                return;
+            }
 
-        let path_ptrs = event_paths as *const *const c_char;
-        let mut batch = Vec::with_capacity(num_events.min(512));
+            let path_ptrs = event_paths as *const *const c_char;
+            let mut batch = Vec::with_capacity(num_events.min(512));
 
-        for i in 0..num_events {
-            let flags = unsafe { *event_flags.add(i) };
-            let event_id = unsafe { *event_ids.add(i) };
-            let raw_path_ptr = unsafe { *path_ptrs.add(i) };
-            let path = if !raw_path_ptr.is_null() {
-                unsafe { CStr::from_ptr(raw_path_ptr) }
-                    .to_string_lossy()
-                    .into_owned()
-            } else {
-                String::new()
-            };
+            for i in 0..num_events {
+                let flags = unsafe { *event_flags.add(i) };
+                let event_id = unsafe { *event_ids.add(i) };
+                let raw_path_ptr = unsafe { *path_ptrs.add(i) };
+                let path = if !raw_path_ptr.is_null() {
+                    unsafe { CStr::from_ptr(raw_path_ptr) }
+                        .to_string_lossy()
+                        .into_owned()
+                } else {
+                    String::new()
+                };
 
-            let is_history_done = (flags & FLAG_HISTORY_DONE) != 0;
-            let kind = if (flags & FLAG_ITEM_IS_SYMLINK) != 0 {
-                "symlink"
-            } else if (flags & FLAG_ITEM_IS_DIR) != 0 {
-                "dir"
-            } else if (flags & FLAG_ITEM_IS_FILE) != 0 {
-                "file"
-            } else {
-                "unknown"
-            };
+                let is_history_done = (flags & FLAG_HISTORY_DONE) != 0;
+                let kind = if (flags & FLAG_ITEM_IS_SYMLINK) != 0 {
+                    "symlink"
+                } else if (flags & FLAG_ITEM_IS_DIR) != 0 {
+                    "dir"
+                } else if (flags & FLAG_ITEM_IS_FILE) != 0 {
+                    "file"
+                } else {
+                    "unknown"
+                };
 
-            let action = if is_history_done {
-                "history-done"
-            } else if (flags
-                & (FLAG_MUST_SCAN_SUB_DIRS
-                    | FLAG_USER_DROPPED
-                    | FLAG_KERNEL_DROPPED
-                    | FLAG_EVENT_IDS_WRAPPED
-                    | FLAG_ROOT_CHANGED))
-                != 0
-            {
-                "must-scan"
-            } else if (flags & FLAG_ITEM_RENAMED) != 0 {
-                "renamed"
-            } else if (flags & FLAG_ITEM_REMOVED) != 0 {
-                "removed"
-            } else if (flags & FLAG_ITEM_CREATED) != 0 {
-                "created"
-            } else {
-                "modified"
-            };
+                let action = if is_history_done {
+                    "history-done"
+                } else if (flags
+                    & (FLAG_MUST_SCAN_SUB_DIRS
+                        | FLAG_USER_DROPPED
+                        | FLAG_KERNEL_DROPPED
+                        | FLAG_EVENT_IDS_WRAPPED
+                        | FLAG_ROOT_CHANGED))
+                    != 0
+                {
+                    "must-scan"
+                } else if (flags & FLAG_ITEM_RENAMED) != 0 {
+                    "renamed"
+                } else if (flags & FLAG_ITEM_REMOVED) != 0 {
+                    "removed"
+                } else if (flags & FLAG_ITEM_CREATED) != 0 {
+                    "created"
+                } else {
+                    "modified"
+                };
 
-            batch.push(NativeFsEventItem {
-                event_id: event_id.to_string(),
-                path,
-                kind: kind.to_string(),
-                action: action.to_string(),
-                flags,
-                is_history_done,
-            });
-        }
+                batch.push(NativeFsEventItem {
+                    event_id: event_id.to_string(),
+                    path,
+                    kind: kind.to_string(),
+                    action: action.to_string(),
+                    flags,
+                    is_history_done,
+                });
+            }
 
-        if !batch.is_empty() && ctx.alive.load(Ordering::Acquire) {
-            (ctx.emit)(batch);
-        }
+            if !batch.is_empty() && ctx.alive.load(Ordering::Acquire) {
+                (ctx.emit)(batch);
+            }
+        }));
     }
 
     pub struct NativeStreamHandle {
@@ -359,20 +361,36 @@ mod darwin {
     }
 
     impl NativeStreamHandle {
-        pub fn stop(mut self) {
+        fn stop_inner(&mut self) {
             self.alive.store(false, Ordering::Release);
             unsafe {
-                FSEventStreamStop(self.stream);
-                FSEventStreamInvalidate(self.stream);
-                FSEventStreamRelease(self.stream);
-                // Drain any in-flight callback already scheduled on this serial queue before releasing context.
-                dispatch_sync_f(self.queue, ptr::null_mut(), noop_dispatch_barrier);
-                dispatch_release(self.queue);
+                if !self.stream.is_null() {
+                    FSEventStreamStop(self.stream);
+                    FSEventStreamInvalidate(self.stream);
+                    FSEventStreamRelease(self.stream);
+                    self.stream = ptr::null_mut();
+                }
+                if !self.queue.is_null() {
+                    // Drain any in-flight callback already scheduled on this serial queue before releasing context.
+                    dispatch_sync_f(self.queue, ptr::null_mut(), noop_dispatch_barrier);
+                    dispatch_release(self.queue);
+                    self.queue = ptr::null_mut();
+                }
                 if !self.ctx_ptr.is_null() {
                     drop(Box::from_raw(self.ctx_ptr));
                     self.ctx_ptr = ptr::null_mut();
                 }
             }
+        }
+
+        pub fn stop(mut self) {
+            self.stop_inner();
+        }
+    }
+
+    impl Drop for NativeStreamHandle {
+        fn drop(&mut self) {
+            self.stop_inner();
         }
     }
 }

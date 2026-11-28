@@ -26,7 +26,6 @@ import type {
 import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { eq } from 'drizzle-orm'
-import type { NativeImage } from 'electron'
 import type * as schema from '../db/schema'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -337,6 +336,11 @@ export class ClipboardModule extends BaseModule {
     },
     setTaskMeta: (meta) => {
       pollingService.setTaskMeta(CLIPBOARD_POLL_TASK_ID, meta)
+    },
+    checkPluginPermission: (pluginId, apiName, sdkapi) => {
+      const permModule = getPermissionModule()
+      if (!permModule) return false
+      return permModule.checkPermission(pluginId, apiName, sdkapi).allowed
     },
     logInfo: (message, data?: LogOptions) => {
       clipboardLog.info(message, data)
@@ -844,10 +848,6 @@ export class ClipboardModule extends BaseModule {
 
   private notifyTransportChange(): void {
     this.transportHandlers.notifyChange()
-  }
-
-  private createNativeImageFromSource(source: string): NativeImage {
-    return this.imagePersistence.createNativeImageFromSource(source)
   }
 
   private startTempCleanupTasks(): void {
@@ -1518,10 +1518,13 @@ export class ClipboardModule extends BaseModule {
             // kept `readonly string[]` and never matched ClipboardWriteRequest. Invisible while
             // the parameter was `any` (#548).
             const { files, ...content } = request.content
-            await this.write({
-              ...content,
-              ...(files ? { files: [...files] } : {})
-            })
+            await this.write(
+              {
+                ...content,
+                ...(files ? { files: [...files] } : {})
+              },
+              { isPluginCaller: true }
+            )
           }
           if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
         },
@@ -1545,17 +1548,25 @@ export class ClipboardModule extends BaseModule {
     )
   }
 
-  public async write(request: ClipboardWriteRequest): Promise<void> {
+  public async write(
+    request: ClipboardWriteRequest,
+    options?: { isPluginCaller?: boolean }
+  ): Promise<void> {
     const payload = normalizeClipboardWritePayload(request)
     if (!payload) return
-    await this.writePayload(payload)
+    await this.writePayload(payload, options)
   }
 
-  private async writePayload(payload: ClipboardWritePayload): Promise<void> {
+  private async writePayload(
+    payload: ClipboardWritePayload,
+    options?: { isPluginCaller?: boolean }
+  ): Promise<void> {
     const { text, html, image, files } = payload ?? {}
 
     if (image) {
-      const img = this.createNativeImageFromSource(image)
+      const img = this.imagePersistence.createNativeImageFromSource(image, {
+        allowLocalFilePath: !options?.isPluginCaller
+      })
       if (!img.isEmpty()) {
         clipboard.writeImage(img)
         this.clipboardHelper?.primeImage(img)
@@ -1626,8 +1637,8 @@ export class ClipboardModule extends BaseModule {
       clearHistory: async () => {
         await this.cleanupHistory({ type: 'all' })
       },
-      write: async (request) => {
-        await this.write(request)
+      write: async (request, context) => {
+        await this.write(request, { isPluginCaller: Boolean(context?.plugin) })
       },
       clearClipboard: () => {
         clipboard.clear()

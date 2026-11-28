@@ -119,7 +119,7 @@ export interface SpeechModelInstallProgress {
 }
 
 let progress: SpeechModelInstallProgress | null = null
-let inFlight: Promise<unknown> | null = null
+let installQueueTail: Promise<void> = Promise.resolve()
 
 export function getSpeechModelProgress(): SpeechModelInstallProgress | null {
   return progress
@@ -331,8 +331,18 @@ export async function installSpeechModel(
   id: string,
   version: string
 ): Promise<{ id: string; version: string; bytes: number; reused: number; downloaded: number }> {
-  if (inFlight) await inFlight.catch(() => undefined)
-  const task = (async () => {
+  const previous = installQueueTail
+  let releaseTurn!: () => void
+  const currentTurn = new Promise<void>((resolve) => {
+    releaseTurn = resolve
+  })
+  installQueueTail = previous.then(
+    () => currentTurn,
+    () => currentTurn
+  )
+
+  await previous.catch(() => undefined)
+  try {
     const parsed = await fetchSpeechCatalog()
     const item: SpeechModelCatalogItem | undefined = parsed.items.find(
       (candidate) => candidate.entry.id === id && candidate.entry.version === version
@@ -365,14 +375,9 @@ export async function installSpeechModel(
       reused: report.reused.length,
       downloaded: report.downloaded.length
     }
-  })()
-
-  inFlight = task
-  try {
-    return await task
   } finally {
-    inFlight = null
     progress = null
+    releaseTurn()
   }
 }
 

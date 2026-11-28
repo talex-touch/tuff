@@ -16,6 +16,8 @@ import type {
 } from '@talex-touch/utils/types/flow'
 import { FlowErrorCode } from '@talex-touch/utils/types/flow'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { getPermissionModule } from '../permission'
+import { pluginModule } from '../plugin/plugin-module'
 import { flowConsentStore, requiresFlowConsent } from './flow-consent'
 import { flowAuditLogger } from './flow-audit-logger'
 import { flowBusDispatchLog } from './logger'
@@ -49,9 +51,16 @@ export class FlowBus {
 
   /** Delivery handlers by plugin ID */
   private deliveryHandlers: Map<string, (session: FlowSession) => Promise<void>> = new Map()
+  private cleanupRegistered = false
 
   private constructor() {
-    // Start periodic cleanup
+    this.ensureCleanupPolling()
+  }
+
+  private ensureCleanupPolling(): void {
+    if (this.cleanupRegistered) {
+      return
+    }
     this.pollingService.register(
       this.cleanupTaskId,
       () => {
@@ -60,6 +69,20 @@ export class FlowBus {
       { interval: 60, unit: 'seconds' }
     )
     this.pollingService.start()
+    this.cleanupRegistered = true
+  }
+
+  dispose(): void {
+    if (this.cleanupRegistered) {
+      this.pollingService.unregister(this.cleanupTaskId)
+      this.cleanupRegistered = false
+    }
+    for (const [sessionId, pending] of this.pendingSelections.entries()) {
+      clearTimeout(pending.timeout)
+      pending.resolve(null)
+      this.pendingSelections.delete(sessionId)
+    }
+    this.deliveryHandlers.clear()
   }
 
   static getInstance(): FlowBus {
@@ -81,6 +104,7 @@ export class FlowBus {
     if (signal?.aborted) {
       return { sessionId: '', state: 'CANCELLED' }
     }
+    this.ensureCleanupPolling()
     // Validate payload
     const validationError = this.validatePayload(payload)
     if (validationError) {
@@ -358,9 +382,9 @@ export class FlowBus {
           updatedAt: Date.now()
         })
 
-        // Execute fallback if specified
+        // Execute fallback if specified (requires clipboard:write for plugin callers)
         if (options.fallbackAction === 'copy') {
-          await this.executeFallbackCopy(payload)
+          await this.executeFallbackCopy(payload, senderId)
         }
 
         flowBusDispatchLog.error('Payload delivery failed', {
@@ -386,7 +410,7 @@ export class FlowBus {
   /**
    * Validates payload
    */
-  private validatePayload(payload: FlowPayload): FlowError | null {
+  validatePayload(payload: FlowPayload): FlowError | null {
     if (!payload || typeof payload !== 'object') {
       return {
         code: FlowErrorCode.PAYLOAD_INVALID,
@@ -410,6 +434,12 @@ export class FlowBus {
 
     // Check size
     const size = this.estimatePayloadSize(payload)
+    if (!Number.isFinite(size)) {
+      return {
+        code: FlowErrorCode.PAYLOAD_INVALID,
+        message: 'Payload is not serializable'
+      }
+    }
     if (size > MAX_PAYLOAD_SIZE) {
       return {
         code: FlowErrorCode.PAYLOAD_TOO_LARGE,
@@ -425,9 +455,13 @@ export class FlowBus {
    */
   private estimatePayloadSize(payload: FlowPayload): number {
     try {
-      return JSON.stringify(payload).length * 2 // UTF-16
+      const serialized = JSON.stringify(payload)
+      if (typeof serialized !== 'string') {
+        return Number.POSITIVE_INFINITY
+      }
+      return serialized.length * 2 // UTF-16
     } catch {
-      return 0
+      return Number.POSITIVE_INFINITY
     }
   }
 
@@ -497,9 +531,22 @@ export class FlowBus {
    * Waits for session acknowledgment
    */
   private waitForAcknowledgment(sessionId: string, timeout: number): Promise<FlowSession> {
+    const existing = flowSessionManager.getSession(sessionId)
+    if (!existing || ['ACKED', 'FAILED', 'CANCELLED'].includes(existing.state)) {
+      return Promise.resolve(existing!)
+    }
+
     return new Promise((resolve) => {
-      const timeoutId = setTimeout(() => {
+      let settled = false
+      const settle = (session: FlowSession) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeoutId)
         unsubscribe()
+        resolve(session)
+      }
+
+      const timeoutId = setTimeout(() => {
         const session = flowSessionManager.getSession(sessionId)
         if (session && session.state === 'PROCESSING') {
           flowSessionManager.setError(sessionId, {
@@ -507,24 +554,36 @@ export class FlowBus {
             message: 'Acknowledgment timeout'
           })
         }
-        resolve(flowSessionManager.getSession(sessionId)!)
+        settle(flowSessionManager.getSession(sessionId)!)
       }, timeout)
 
       const unsubscribe = flowSessionManager.addListener(sessionId, (update) => {
         if (['ACKED', 'FAILED', 'CANCELLED'].includes(update.currentState)) {
-          clearTimeout(timeoutId)
-          unsubscribe()
-          resolve(flowSessionManager.getSession(sessionId)!)
+          settle(flowSessionManager.getSession(sessionId)!)
         }
       })
+
+      // Re-check after subscribing to close any race where state turned terminal concurrently.
+      const current = flowSessionManager.getSession(sessionId)
+      if (!current || ['ACKED', 'FAILED', 'CANCELLED'].includes(current.state)) {
+        settle(current!)
+      }
     })
   }
 
   /**
    * Executes fallback copy action
    */
-  private async executeFallbackCopy(payload: FlowPayload): Promise<void> {
+  private async executeFallbackCopy(payload: FlowPayload, senderId?: string): Promise<void> {
     try {
+      if (senderId && senderId !== 'corebox' && senderId !== 'system') {
+        const perm = getPermissionModule()
+        if (!perm) {
+          throw new Error('Permission module is unavailable for fallback clipboard copy')
+        }
+        const sdkapi = pluginModule.pluginManager?.plugins.get(senderId)?.sdkapi
+        perm.enforcePermission(senderId, 'clipboard:write', sdkapi)
+      }
       const { clipboard } = await import('electron')
       if (payload.type === 'text' && typeof payload.data === 'string') {
         clipboard.writeText(payload.data)

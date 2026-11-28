@@ -191,6 +191,28 @@ describe('DivisionBoxSession window creation', () => {
     // A 'floating' level (not a bare true) is what keeps the preview above ordinary app windows.
     expect(setAlwaysOnTop).toHaveBeenCalledWith(true, 'floating')
   })
+
+  it('notifies DESTROY listeners before clearing them and ignores non-finite opacity', async () => {
+    const setOpacity = vi.fn()
+    const { session, touchWindow } = createSession(vi.fn())
+    Object.assign(touchWindow.window, { setOpacity, destroy: vi.fn() })
+
+    session.setOpacity(Number.NaN)
+    session.setOpacity(Number.POSITIVE_INFINITY)
+    expect(setOpacity).not.toHaveBeenCalled()
+
+    session.setOpacity(0.75)
+    expect(setOpacity).toHaveBeenCalledWith(0.75)
+
+    const events: string[] = []
+    session.onStateChange((event) => {
+      events.push(event.newState)
+    })
+
+    await session.destroy()
+    await session.destroy()
+    expect(events).toEqual(['destroy'])
+  })
 })
 
 describe('DivisionBoxSession window webContents identity', () => {

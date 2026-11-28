@@ -1,10 +1,14 @@
 import type { VoiceProviderEvent, VoiceStreamRequest } from '../contracts'
 import { Buffer } from 'node:buffer'
+import { VoiceProviderError } from '../contracts'
 
 export const DEFAULT_DOUBAO_IME_STREAM_URL = 'wss://frontier-audio-ime-ws.doubao.com/ocean/api/v1/ws'
 export const DEFAULT_DOUBAO_IME_TOKEN_URL = 'https://ime.oceancloudapi.com/api/v1/user/get_config'
-export const DOUBAO_IME_APP_KEY = 'OrnqKvSSrs'
-export const DOUBAO_IME_ACCESS_KEY = 'SYlxZr6LnvBaIVmF'
+
+export interface DoubaoImeCredentials {
+  appKey: string
+  accessKey: string
+}
 
 export interface DoubaoImeTokenResponse {
   Code?: number
@@ -14,52 +18,85 @@ export interface DoubaoImeTokenResponse {
   }
 }
 
-let cachedToken: string | null = null
-let cachedTokenExpiresAt = 0
+const tokenCache = new Map<string, { token: string, expiresAt: number }>()
+
+function assertDoubaoImeCredentials(credentials?: Partial<DoubaoImeCredentials>): DoubaoImeCredentials {
+  const appKey = credentials?.appKey?.trim() ?? ''
+  const accessKey = credentials?.accessKey?.trim() ?? ''
+  if (!appKey || !accessKey) {
+    throw new VoiceProviderError(
+      'DOUBAO_IME_CREDENTIALS_MISSING',
+      'Doubao IME requires explicit caller-provided appKey and accessKey credentials.',
+    )
+  }
+  return { appKey, accessKey }
+}
 
 /**
- * Fetches and caches a valid 24h SAMI Odin Token for Doubao IME cloud ASR.
+ * Fetches and caches a valid SAMI token for Doubao IME cloud ASR using caller-provided credentials.
  */
-export async function acquireDoubaoImeToken(fetchImpl: typeof fetch = fetch): Promise<string> {
+export async function acquireDoubaoImeToken(
+  credentials: DoubaoImeCredentials,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string> {
+  const { appKey, accessKey } = assertDoubaoImeCredentials(credentials)
+  const cacheKey = `${appKey}:${accessKey}`
   const now = Date.now()
-  if (cachedToken && now < cachedTokenExpiresAt - 600_000) {
-    return cachedToken
+  const cached = tokenCache.get(cacheKey)
+  if (cached && now < cached.expiresAt - 600_000) {
+    return cached.token
   }
 
   const response = await fetchImpl(DEFAULT_DOUBAO_IME_TOKEN_URL, {
     method: 'POST',
     headers: {
-      'User-Agent': 'DoubaoIme/1.0.0 (Macintosh; Apple Silicon)',
+      'User-Agent': 'tuff-voice',
       'Content-Type': 'application/json',
-      'X-Api-Access-Key': DOUBAO_IME_ACCESS_KEY,
+      'X-Api-Access-Key': accessKey,
       'X-Api-Request-Id': crypto.randomUUID(),
     },
-    body: JSON.stringify({ sami_app_key: DOUBAO_IME_APP_KEY }),
+    body: JSON.stringify({ sami_app_key: appKey }),
+    redirect: 'manual',
   })
 
   if (!response.ok) {
-    throw new Error(`Failed to acquire Doubao IME token: HTTP ${response.status}`)
+    throw new VoiceProviderError(
+      `DOUBAO_IME_HTTP_${response.status}`,
+      `Failed to acquire Doubao IME token: HTTP ${response.status}`,
+      { retryable: response.status >= 500 },
+    )
   }
 
   const data = (await response.json()) as DoubaoImeTokenResponse
   if (data.Code === 0 && data.Data?.sami_token) {
-    cachedToken = data.Data.sami_token
-    cachedTokenExpiresAt = now + 18_000_000 // 5 hours
-    return cachedToken
+    tokenCache.set(cacheKey, {
+      token: data.Data.sami_token,
+      expiresAt: now + 18_000_000, // 5 hours
+    })
+    return data.Data.sami_token
   }
 
-  throw new Error(`Invalid Doubao IME token response: ${JSON.stringify(data)}`)
+  throw new VoiceProviderError('DOUBAO_IME_TOKEN_INVALID', 'Invalid Doubao IME token response.')
+}
+
+export function clearDoubaoImeTokenCache(): void {
+  tokenCache.clear()
 }
 
 export function buildDoubaoImeStartTask(
   taskId: string,
   sessionId: string,
   token: string,
+  appKey: string,
   request?: Partial<VoiceStreamRequest>,
 ): string {
+  const trimmedAppKey = appKey.trim()
+  if (!trimmedAppKey) {
+    throw new VoiceProviderError('DOUBAO_IME_CREDENTIALS_MISSING', 'Doubao IME appKey is required.')
+  }
   const payload = {
-    app_name: 'DoubaoIme',
-    app_version: '1.0.0.207',
+    app_name: 'tuff-voice',
+    app_version: '1.0.0',
     enable_asr_twopass: request?.enableNonstream ?? true,
     enable_asr_threepass: request?.enableDdc ?? true,
     strong_ddc: request?.enableDdc ?? true,
@@ -74,7 +111,7 @@ export function buildDoubaoImeStartTask(
     session_id: sessionId,
     namespace: 'ASR',
     event: 'StartTask',
-    appkey: DOUBAO_IME_APP_KEY,
+    appkey: trimmedAppKey,
     token,
     payload: JSON.stringify(payload),
   })
@@ -84,10 +121,15 @@ export function buildDoubaoImeAudioRequest(
   taskId: string,
   sessionId: string,
   token: string,
+  appKey: string,
   seqId: number,
   audioChunk: Uint8Array,
   isLast = false,
 ): string {
+  const trimmedAppKey = appKey.trim()
+  if (!trimmedAppKey) {
+    throw new VoiceProviderError('DOUBAO_IME_CREDENTIALS_MISSING', 'Doubao IME appKey is required.')
+  }
   const extra = {
     is_history_audio: false,
     seq_id: seqId,
@@ -100,7 +142,7 @@ export function buildDoubaoImeAudioRequest(
     session_id: sessionId,
     namespace: 'ASR',
     event: 'TaskRequest',
-    appkey: DOUBAO_IME_APP_KEY,
+    appkey: trimmedAppKey,
     token,
     payload: Buffer.from(audioChunk).toString('base64'),
     extra: JSON.stringify(extra),
@@ -111,13 +153,18 @@ export function buildDoubaoImeFinishTask(
   taskId: string,
   sessionId: string,
   token: string,
+  appKey: string,
 ): string {
+  const trimmedAppKey = appKey.trim()
+  if (!trimmedAppKey) {
+    throw new VoiceProviderError('DOUBAO_IME_CREDENTIALS_MISSING', 'Doubao IME appKey is required.')
+  }
   return JSON.stringify({
     task_id: taskId,
     session_id: sessionId,
     namespace: 'ASR',
     event: 'FinishTask',
-    appkey: DOUBAO_IME_APP_KEY,
+    appkey: trimmedAppKey,
     token,
   })
 }

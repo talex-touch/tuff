@@ -467,4 +467,28 @@ describe('NativeCapabilitiesModule', () => {
       code: 'ERR_NATIVE_FILE_INDEX_UNAVAILABLE'
     })
   })
+
+  it('checks native:file:open permission for file.open status and forwards plugin caller context', async () => {
+    mocks.checkPermission.mockClear()
+    mocks.enforcePermission.mockClear()
+    mocks.open.mockClear()
+    mocks.checkPermission.mockReturnValueOnce({ allowed: false })
+
+    const { NativeCapabilitiesModule } = await import('./index')
+    const module = new NativeCapabilitiesModule()
+    initNativeModule(module)
+
+    const statusHandler = mocks.handlers.get(NativeEvents.capabilities.get.toEventName())
+    const status = statusHandler?.({ id: 'file.open' }, createContext('demo.plugin', 260713))
+    expect(mocks.checkPermission).toHaveBeenCalledWith('demo.plugin', 'native:file:open', 260713)
+    expect(status).toMatchObject({ id: 'file.open', permission: 'denied' })
+
+    const openHandler = mocks.handlers.get(NativeEvents.file.open.toEventName())
+    await openHandler?.({ path: '/tmp/doc.pdf' }, createContext('demo.plugin', 260713))
+    expect(mocks.enforcePermission).toHaveBeenCalledWith('demo.plugin', 'native:file:open', 260713)
+    expect(mocks.open).toHaveBeenCalledWith(
+      { path: '/tmp/doc.pdf' },
+      { isPluginCaller: true, pluginName: 'demo.plugin' }
+    )
+  })
 })

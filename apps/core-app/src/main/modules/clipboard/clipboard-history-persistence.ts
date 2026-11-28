@@ -374,7 +374,7 @@ export class ClipboardHistoryPersistence {
       conditions.push(
         and(
           eq(clipboardHistoryMeta.key, 'source'),
-          eq(clipboardHistoryMeta.value, JSON.stringify('custom'))
+          eq(clipboardHistoryMeta.value, JSON.stringify(source))
         )!
       )
     }

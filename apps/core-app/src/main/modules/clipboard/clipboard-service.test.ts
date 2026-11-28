@@ -198,4 +198,29 @@ describe('clipboard-service', () => {
     expect(service.isNativeActive()).toBe(true)
     expect(service.getReader()).toBeNull()
   })
+
+  it('does not leak a native watcher when destroyed while module import is awaiting', async () => {
+    let destroyed = false
+    let resolveImport!: (mod: unknown) => void
+    const importPromise = new Promise((resolve) => {
+      resolveImport = resolve
+    })
+    const startWatch = vi.fn(() => ({ stop: vi.fn(), isRunning: true }))
+    const service = new ClipboardService({
+      isDestroyed: () => destroyed,
+      scheduleMonitor: vi.fn(),
+      importWatcherModule: () => importPromise,
+      logInfo: vi.fn(),
+      logWarn: vi.fn(),
+      logDebug: vi.fn()
+    })
+
+    const starting = service.start()
+    destroyed = true
+    resolveImport({ startWatch })
+    await starting
+
+    expect(startWatch).not.toHaveBeenCalled()
+    expect(service.isNativeActive()).toBe(false)
+  })
 })

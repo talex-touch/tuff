@@ -69,7 +69,7 @@ export interface ClipboardTransportHandlers {
   deleteItem: (request: ClipboardDeleteRequest) => Promise<void>
   setFavorite: (request: ClipboardSetFavoriteRequest) => Promise<void>
   clearHistory: () => Promise<void>
-  write: (request: ClipboardWriteRequest) => Promise<void>
+  write: (request: ClipboardWriteRequest, context?: HandlerContext) => Promise<void>
   clearClipboard: () => void
   copyAndPaste: (
     request: ClipboardCopyAndPasteRequest,
@@ -259,7 +259,7 @@ export class ClipboardTransportHandlersRegistry {
         ClipboardEvents.write,
         async (request: ClipboardWriteRequest, context: HandlerContext) => {
           handlers.enforcePermission(context.plugin?.name, 'clipboard:write', request)
-          await handlers.write(request)
+          await handlers.write(request, context)
         }
       ),
       transport.on(ClipboardEvents.clear, async (_request: void, context: HandlerContext) => {
@@ -322,18 +322,27 @@ export class ClipboardTransportHandlersRegistry {
         ClipboardEvents.change,
         (_request: void, context: StreamContext<ClipboardChangePayload>) => {
           handlers.enforcePermission(context.plugin?.name, 'clipboard:read', undefined)
+          if (context.isCancelled() || context.signal?.aborted) {
+            return
+          }
           const listener = () => {
-            if (context.isCancelled()) {
-              this.changeListeners.delete(listener)
+            if (context.isCancelled() || context.signal?.aborted) {
+              cleanup()
               return
             }
             context.emit(handlers.buildChangePayload())
           }
+          const cleanup = () => {
+            this.changeListeners.delete(listener)
+          }
 
           this.changeListeners.add(listener)
+          context.signal?.addEventListener('abort', cleanup, { once: true })
           void handlers.ensureInitialCacheLoaded().finally(() => {
-            if (!context.isCancelled()) {
+            if (!context.isCancelled() && !context.signal?.aborted) {
               listener()
+            } else {
+              cleanup()
             }
           })
         }

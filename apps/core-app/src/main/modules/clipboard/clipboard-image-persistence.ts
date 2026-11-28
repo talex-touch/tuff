@@ -22,6 +22,22 @@ import { parsePngDimensions } from './clipboard-reader'
 const CLIPBOARD_IMAGE_NAMESPACE = 'clipboard/images'
 const CLIPBOARD_LIVE_IMAGE_NAMESPACE = 'clipboard/live-images'
 const CLIPBOARD_IMAGE_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000
+const MAX_PLUGIN_CLIPBOARD_IMAGE_DATA_URL_BYTES = 16 * 1024 * 1024
+
+export interface CreateClipboardImageOptions {
+  /**
+   * When false (e.g. plugin callers), only bounded `data:image/` URLs are accepted.
+   * Local filesystem paths (`file://`, `tfile:`, or bare paths) are rejected so a
+   * `clipboard:write` plugin cannot exfiltrate arbitrary local image files.
+   */
+  allowLocalFilePath?: boolean
+}
+
+function createClipboardImageSourceError(code: string, message: string): Error & { code: string } {
+  const err = new Error(message) as Error & { code: string }
+  err.code = code
+  return err
+}
 
 export interface ClipboardImagePersistenceOptions {
   getDatabase: () => LibSQLDatabase<typeof schema> | undefined
@@ -30,9 +46,32 @@ export interface ClipboardImagePersistenceOptions {
   logWarn: (message: string, data?: LogOptions) => void
 }
 
-export function createNativeImageFromClipboardSource(source: string): NativeImage {
+export function createNativeImageFromClipboardSource(
+  source: string,
+  options: CreateClipboardImageOptions = {}
+): NativeImage {
   if (!source) {
     return nativeImage.createEmpty()
+  }
+
+  if (options.allowLocalFilePath === false) {
+    const trimmed = source.trim()
+    if (!/^data:image\/[a-z0-9.+-]+;base64,/i.test(trimmed)) {
+      throw createClipboardImageSourceError(
+        'ERR_CLIPBOARD_LOCAL_IMAGE_PATH_DENIED',
+        'Plugin clipboard image writes must use a base64 data:image/ URL; local file paths are not allowed.'
+      )
+    }
+    const commaIndex = trimmed.indexOf(',')
+    const base64Len = trimmed.length - commaIndex - 1
+    const estimatedBytes = Math.floor((base64Len * 3) / 4)
+    if (estimatedBytes > MAX_PLUGIN_CLIPBOARD_IMAGE_DATA_URL_BYTES) {
+      throw createClipboardImageSourceError(
+        'ERR_CLIPBOARD_IMAGE_TOO_LARGE',
+        `Plugin clipboard image exceeds maximum size (${MAX_PLUGIN_CLIPBOARD_IMAGE_DATA_URL_BYTES} bytes).`
+      )
+    }
+    return nativeImage.createFromDataURL(trimmed)
   }
 
   if (isDataUrl(source)) {
@@ -123,8 +162,11 @@ export class ClipboardImagePersistence {
 
   constructor(private readonly options: ClipboardImagePersistenceOptions) {}
 
-  public createNativeImageFromSource(source: string): NativeImage {
-    return createNativeImageFromClipboardSource(source)
+  public createNativeImageFromSource(
+    source: string,
+    options?: CreateClipboardImageOptions
+  ): NativeImage {
+    return createNativeImageFromClipboardSource(source, options)
   }
 
   public async createClipboardImageFile(buffer: Buffer): Promise<{

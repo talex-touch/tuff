@@ -11,6 +11,7 @@ import {
   buildWavHeader,
   buildWhisperArgs,
   createLocalEngine,
+  installSpeechBundle,
   isPrimerEcho,
   listInstalledModels,
   loadInstalledModel,
@@ -524,5 +525,92 @@ describe('local decode lifecycle', () => {
       timeoutMs: 5_000,
       label: 'absent binary',
     })).rejects.toThrow(/Could not start absent binary/)
+  })
+
+  it('aborts an in-flight partial decode signal when LocalOfflineVoiceProvider.abort() is called', async () => {
+    let partialSignal: AbortSignal | undefined
+    let partialStarted!: () => void
+    const startedPromise = new Promise<void>((resolve) => {
+      partialStarted = resolve
+    })
+
+    const fakeEngine = {
+      id: 'whisper-cpp' as const,
+      checkAvailability: async () => ({ available: true, binaryPath: process.execPath }),
+      transcribe: async (_model: ResolvedLocalModel, _wavPath: string, options: { signal?: AbortSignal }) => {
+        partialSignal = options.signal
+        partialStarted()
+        return await new Promise<never>((_resolve, reject) => {
+          options.signal?.addEventListener('abort', () => {
+            reject(new VoiceProviderError('VOICE_STREAM_ABORTED', 'aborted'))
+          }, { once: true })
+        })
+      },
+    }
+
+    const provider = new LocalOfflineVoiceProvider({
+      model: {
+        descriptor: descriptorFixture(),
+        directory: '/models/fixture-model/1.0.0',
+        weightsPath: '/models/fixture-model/1.0.0/weights.bin',
+      },
+      engine: fakeEngine,
+      partialIntervalMs: 10,
+      partialMinAudioMs: 10,
+    })
+
+    const stream = await provider.createStream({
+      model: 'fixture-model',
+      audio: { format: 'pcm', sampleRate: 16000, channels: 1, bitsPerSample: 16 },
+      requestId: 'req-abort-partial',
+    })
+
+    // Write 100ms of PCM (3200 bytes at 16kHz 16-bit mono) to trigger partial decode.
+    await stream.writePcm(new Uint8Array(3200))
+    await startedPromise
+    expect(partialSignal?.aborted).toBe(false)
+
+    await stream.abort('user-cancelled')
+    expect(partialSignal?.aborted).toBe(true)
+  })
+
+  it('aborts oversized bundle downloads mid-stream without exhausting disk', async () => {
+    const root = await makeWorkspace()
+    let chunksSent = 0
+    const oversizedBody = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        chunksSent += 1
+        controller.enqueue(new Uint8Array(1024).fill(chunksSent & 0xFF))
+        if (chunksSent >= 10)
+          controller.close()
+      },
+    })
+
+    const fakeFetch = async () => new Response(oversizedBody, { status: 200 })
+
+    const descriptor = descriptorFixture({
+      runtime: { kind: 'ggml', file: 'weights.bin', bytes: 16, sha256: 'a'.repeat(64) },
+    })
+
+    await expect(
+      installSpeechBundle(
+        {
+          id: 'fixture-model',
+          version: '1.0.0',
+          engine: 'whisper-cpp',
+          files: [
+            {
+              role: 'weights',
+              file: 'weights.bin',
+              bytes: 16,
+              sha256: 'a'.repeat(64),
+              url: 'https://cdn.example.com/weights.bin',
+            },
+          ],
+          descriptor,
+        },
+        { root, fetchImpl: fakeFetch as unknown as typeof fetch },
+      ),
+    ).rejects.toMatchObject({ code: 'SPEECH_BUNDLE_DIGEST_MISMATCH' })
   })
 })

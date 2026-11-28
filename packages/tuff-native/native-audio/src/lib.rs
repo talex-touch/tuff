@@ -512,6 +512,7 @@ fn play_audio_blocking(bytes: Vec<u8>) -> Result<String> {
 /// taking the work off the event loop (#845, same shape as #841).
 pub struct PlayAudioTask {
     bytes: Vec<u8>,
+    oversized_len: Option<usize>,
 }
 
 impl Task for PlayAudioTask {
@@ -519,6 +520,11 @@ impl Task for PlayAudioTask {
     type JsValue = AudioPlaybackStart;
 
     fn compute(&mut self) -> Result<Self::Output> {
+        if let Some(len) = self.oversized_len {
+            return Err(Error::from_reason(format!(
+                "audio-too-large: {len} bytes exceeds {MAX_PLAYBACK_INPUT_BYTES}"
+            )));
+        }
         play_audio_blocking(std::mem::take(&mut self.bytes))
     }
 
@@ -527,11 +533,22 @@ impl Task for PlayAudioTask {
     }
 }
 
+fn prepare_play_audio_task(bytes: &[u8]) -> PlayAudioTask {
+    if bytes.len() > MAX_PLAYBACK_INPUT_BYTES {
+        return PlayAudioTask {
+            bytes: Vec::new(),
+            oversized_len: Some(bytes.len()),
+        };
+    }
+    PlayAudioTask {
+        bytes: bytes.to_vec(),
+        oversized_len: None,
+    }
+}
+
 #[napi]
 pub fn play_audio(bytes: Buffer) -> AsyncTask<PlayAudioTask> {
-    AsyncTask::new(PlayAudioTask {
-        bytes: bytes.to_vec(),
-    })
+    AsyncTask::new(prepare_play_audio_task(&bytes))
 }
 
 #[napi]
@@ -3337,5 +3354,15 @@ mod tests {
             response > -1.0,
             "the tone did not survive a non-finite sample, measured {response:.2} dB"
         );
+    }
+
+    #[test]
+    fn play_audio_rejects_oversized_buffers_without_copying_them() {
+        let oversized = vec![0u8; MAX_PLAYBACK_INPUT_BYTES + 1];
+        let mut task = prepare_play_audio_task(&oversized);
+        assert!(task.bytes.is_empty());
+        assert_eq!(task.oversized_len, Some(MAX_PLAYBACK_INPUT_BYTES + 1));
+        let err = task.compute().unwrap_err();
+        assert!(err.reason.contains("audio-too-large"));
     }
 }

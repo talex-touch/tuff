@@ -28,11 +28,12 @@ vi.mock('@talex-touch/tuff-voice', () => ({
   resolveModelStoreRoot: () => '/models'
 }))
 import type { ParsedSpeechModelCatalog } from '@talex-touch/tuff-voice'
-import { parseSpeechModelCatalog } from '@talex-touch/tuff-voice'
+import { installSpeechBundle, parseSpeechModelCatalog } from '@talex-touch/tuff-voice'
 import { registerVoicePorts } from './voice-ports'
 import {
   clearSpeechCatalogCache,
   fetchSpeechCatalog,
+  installSpeechModel,
   projectSpeechCatalogApiError
 } from './speech-model-service'
 
@@ -267,5 +268,102 @@ describe('speech catalog failure projection', () => {
     const second = await fetchSpeechCatalog()
     expect(second).toBe(first)
     expect(auth.performNexusRequestWithAuth).toHaveBeenCalledTimes(1)
+  })
+
+  it('strictly serializes 3+ concurrent installSpeechModel calls in FIFO order', async () => {
+    const fakeCatalog: ParsedSpeechModelCatalog = {
+      catalog: { schemaVersion: 1, generatedAt: '2026-10-14T00:00:00Z', models: [], runtimes: [] },
+      items: [
+        {
+          entry: {
+            id: 'model-a',
+            version: '1.0.0',
+            name: 'Model A',
+            engine: 'whisper-cpp',
+            bytes: 100,
+            languages: ['zh'],
+            defaultLanguage: 'zh',
+            recommended: false
+          } as never,
+          spec: {
+            id: 'model-a',
+            version: '1.0.0',
+            engine: 'whisper-cpp',
+            files: [],
+            descriptor: {}
+          },
+          descriptor: {} as never
+        }
+      ],
+      runtimes: [],
+      recommended: null
+    }
+    vi.mocked(parseSpeechModelCatalog).mockReturnValueOnce(fakeCatalog)
+    auth.performNexusRequestWithAuth.mockResolvedValueOnce(
+      nexusResponse({
+        headers: { 'x-content-sha256': VALID_CATALOG_DIGEST },
+        body: VALID_CATALOG_BODY
+      })
+    )
+
+    let active = 0
+    let peakActive = 0
+    const order: number[] = []
+    let seq = 0
+
+    const createDeferred = () => {
+      let resolve!: () => void
+      const promise = new Promise<void>((res) => {
+        resolve = res
+      })
+      return { promise, resolve }
+    }
+
+    const started = [createDeferred(), createDeferred(), createDeferred()]
+    const release = [createDeferred(), createDeferred(), createDeferred()]
+
+    vi.mocked(installSpeechBundle).mockImplementation(async () => {
+      const mySeq = ++seq
+      active += 1
+      peakActive = Math.max(peakActive, active)
+      order.push(mySeq)
+      started[mySeq - 1]!.resolve()
+      await release[mySeq - 1]!.promise
+      active -= 1
+      return {
+        id: 'model-a',
+        version: '1.0.0',
+        directory: '/models/model-a/1.0.0',
+        downloaded: [{ file: 'weights.bin', bytes: 100 }],
+        reused: []
+      }
+    })
+
+    const installs = [
+      installSpeechModel('model-a', '1.0.0'),
+      installSpeechModel('model-a', '1.0.0'),
+      installSpeechModel('model-a', '1.0.0')
+    ]
+
+    await started[0]!.promise
+    expect(order).toEqual([1])
+    expect(active).toBe(1)
+
+    release[0]!.resolve()
+    await started[1]!.promise
+    expect(order).toEqual([1, 2])
+    expect(active).toBe(1)
+
+    release[1]!.resolve()
+    await started[2]!.promise
+    expect(order).toEqual([1, 2, 3])
+    expect(active).toBe(1)
+
+    release[2]!.resolve()
+    const results = await Promise.all(installs)
+
+    expect(results).toHaveLength(3)
+    expect(peakActive).toBe(1)
+    expect(order).toEqual([1, 2, 3])
   })
 })

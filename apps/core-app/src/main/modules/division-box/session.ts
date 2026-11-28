@@ -808,6 +808,7 @@ export class DivisionBoxSession {
    */
   setOpacity(opacity: number): void {
     if (!this.touchWindow) return
+    if (typeof opacity !== 'number' || !Number.isFinite(opacity)) return
 
     const clampedOpacity = Math.max(0.1, Math.min(1.0, opacity))
     this.touchWindow.window.setOpacity(clampedOpacity)
@@ -876,20 +877,25 @@ export class DivisionBoxSession {
    * Destroys the session and cleans up all resources
    */
   async destroy(): Promise<void> {
+    const oldState = this.state
+    const alreadyDestroyed = oldState === DivisionBoxState.DESTROY
+
+    this.state = DivisionBoxState.DESTROY
     this.destroyWindow()
     this.clearSessionState()
-    this.stateChangeListeners.clear()
 
-    const oldState = this.state
-    this.state = DivisionBoxState.DESTROY
+    if (!alreadyDestroyed) {
+      const event: StateChangeEvent = {
+        sessionId: this.sessionId,
+        oldState,
+        newState: DivisionBoxState.DESTROY,
+        timestamp: Date.now()
+      }
 
-    const event: StateChangeEvent = {
-      sessionId: this.sessionId,
-      oldState,
-      newState: DivisionBoxState.DESTROY,
-      timestamp: Date.now()
+      // Notify cleanup listeners (e.g. DivisionBoxManager) BEFORE clearing listeners.
+      this.notifyStateChange(event)
     }
 
-    this.notifyStateChange(event)
+    this.stateChangeListeners.clear()
   }
 }

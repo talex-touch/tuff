@@ -18,6 +18,7 @@ const POS_SEQUENCE = 0b0001
 const NEG_WITH_SEQUENCE = 0b0011
 const JSON_SERIALIZATION = 0b0001
 const GZIP_COMPRESSION = 0b0001
+export const MAX_DOUBAO_DECOMPRESSED_PAYLOAD_BYTES = 2 * 1024 * 1024
 
 export interface DoubaoFrame {
   code: number
@@ -174,12 +175,15 @@ export function decodeDoubaoFrame(input: Uint8Array): DoubaoFrame {
   }
 
   let payloadBytes = message.subarray(offset)
+  if (payloadBytes.length > MAX_DOUBAO_DECOMPRESSED_PAYLOAD_BYTES) {
+    throw new VoiceProviderError('DOUBAO_FRAME_INVALID', 'Doubao response payload exceeds maximum allowed size.')
+  }
   if (compression === GZIP_COMPRESSION) {
     try {
-      payloadBytes = gunzipSync(payloadBytes)
+      payloadBytes = gunzipSync(payloadBytes, { maxOutputLength: MAX_DOUBAO_DECOMPRESSED_PAYLOAD_BYTES })
     }
     catch (error) {
-      throw new VoiceProviderError('DOUBAO_FRAME_INVALID', 'Doubao response compression is invalid.', { cause: error })
+      throw new VoiceProviderError('DOUBAO_FRAME_INVALID', 'Doubao response compression is invalid or too large.', { cause: error })
     }
   }
   let payload: Record<string, unknown> | undefined

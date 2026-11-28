@@ -15,10 +15,11 @@ pub mod string_pool;
 pub mod top_k;
 
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, RwLock};
 
 use napi::bindgen_prelude::{AsyncTask, Function};
-use napi::{Error, Result, Status};
+use napi::{Env, Error, Result, Status};
 use napi_derive::napi;
 
 use arena::ArenaState;
@@ -192,7 +193,8 @@ impl NativeFileArena {
 
 #[napi]
 pub struct NativeFsEventsWatcher {
-    handle: Mutex<Option<NativeStreamHandle>>,
+    handle: Arc<Mutex<Option<NativeStreamHandle>>>,
+    cleanup_registered: AtomicBool,
 }
 
 impl Default for NativeFsEventsWatcher {
@@ -201,22 +203,36 @@ impl Default for NativeFsEventsWatcher {
     }
 }
 
+impl Drop for NativeFsEventsWatcher {
+    fn drop(&mut self) {
+        let _ = stop_fsevents_watcher(&self.handle);
+    }
+}
+
 #[napi]
 impl NativeFsEventsWatcher {
     #[napi(constructor)]
     pub fn new() -> Self {
         Self {
-            handle: Mutex::new(None),
+            handle: Arc::new(Mutex::new(None)),
+            cleanup_registered: AtomicBool::new(false),
         }
     }
 
     #[napi]
     pub fn start(
         &self,
+        env: Env,
         options: JsFsEventsStartOptions,
         on_events: Function<'_, Vec<JsFsEventItem>, ()>,
     ) -> Result<JsFsEventsStartResult> {
-        start_fsevents_watcher(&self.handle, options, on_events)
+        start_fsevents_watcher(
+            env,
+            &self.handle,
+            &self.cleanup_registered,
+            options,
+            on_events,
+        )
     }
 
     #[napi]

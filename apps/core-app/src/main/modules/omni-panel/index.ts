@@ -341,6 +341,7 @@ export class OmniPanelModule extends BaseModule {
   private transportDisposers: Array<() => void> = []
   private eventDisposers: Array<() => void> = []
   private panelWindow: TouchWindow | null = null
+  private ensureWindowPromise: Promise<TouchWindow> | null = null
   private panelRendererReady = true
   private panelRendererReadyWaiters = new Set<(ready: boolean) => void>()
   private contextDeliveryPending = false
@@ -459,6 +460,7 @@ export class OmniPanelModule extends BaseModule {
       this.panelWindow.window.close()
     }
     this.panelWindow = null
+    this.ensureWindowPromise = null
   }
 
   private getSettingsSnapshot(setting?: AppSetting): OmniPanelSettings {
@@ -899,46 +901,83 @@ export class OmniPanelModule extends BaseModule {
   }
 
   private async ensureWindow(): Promise<TouchWindow> {
+    if (this.destroying) {
+      throw new Error('OmniPanelModule is destroying')
+    }
     if (this.panelWindow && !this.panelWindow.window.isDestroyed()) {
       return this.panelWindow
     }
-
-    // OmniPanel is the slide-out command panel — always visible across all
-    // macOS Spaces so it's reachable without the user needing to switch.
-    this.resetPanelRendererReady()
-    const window = new TouchWindow({ ...OmniPanelWindowOption })
-    window.window.setVisibleOnAllWorkspaces(true)
-    window.window.setAlwaysOnTop(true, 'floating')
-    if (typeof window.window.webContents.on === 'function') {
-      window.window.webContents.on('did-start-loading', () => {
-        this.resetPanelRendererReady()
-      })
+    if (this.ensureWindowPromise) {
+      return await this.ensureWindowPromise
     }
-    window.window.on('closed', () => {
-      this.clearPanelRendererReady()
-      this.panelWindow = null
-    })
-    window.window.on('hide', () => {})
-    window.window.on('show', () => {})
-    window.window.on('blur', () => {
-      if (!this.panelWindow || this.panelWindow.window.isDestroyed()) return
-      if (!this.panelWindow.window.isVisible()) return
-      this.hide()
-    })
 
-    if (app.isPackaged) {
-      await window.loadFile(getCoreBoxRendererPath())
-    } else {
-      const rendererUrl = process.env.ELECTRON_RENDERER_URL
-      if (!rendererUrl) {
-        throw new Error('ELECTRON_RENDERER_URL is not set')
+    const creating = (async (): Promise<TouchWindow> => {
+      // OmniPanel is the slide-out command panel — always visible across all
+      // macOS Spaces so it's reachable without the user needing to switch.
+      this.resetPanelRendererReady()
+      const window = new TouchWindow({ ...OmniPanelWindowOption })
+      try {
+        window.window.setVisibleOnAllWorkspaces(true)
+        window.window.setAlwaysOnTop(true, 'floating')
+        if (typeof window.window.webContents.on === 'function') {
+          window.window.webContents.on('did-start-loading', () => {
+            this.resetPanelRendererReady()
+          })
+        }
+        window.window.on('closed', () => {
+          this.clearPanelRendererReady()
+          if (this.panelWindow === window) {
+            this.panelWindow = null
+          }
+        })
+        window.window.on('hide', () => {})
+        window.window.on('show', () => {})
+        window.window.on('blur', () => {
+          if (!this.panelWindow || this.panelWindow.window.isDestroyed()) return
+          if (!this.panelWindow.window.isVisible()) return
+          this.hide()
+        })
+
+        if (app.isPackaged) {
+          await window.loadFile(getCoreBoxRendererPath())
+        } else {
+          const rendererUrl = process.env.ELECTRON_RENDERER_URL
+          if (!rendererUrl) {
+            throw new Error('ELECTRON_RENDERER_URL is not set')
+          }
+          await window.loadURL(rendererUrl)
+        }
+
+        if (this.destroying || window.window.isDestroyed()) {
+          if (!window.window.isDestroyed()) {
+            window.window.destroy()
+          }
+          throw new Error('OmniPanelModule destroyed while initializing window')
+        }
+
+        window.window.hide()
+        this.panelWindow = window
+        return window
+      } catch (error) {
+        this.clearPanelRendererReady()
+        if (!window.window.isDestroyed()) {
+          window.window.destroy()
+        }
+        if (this.panelWindow === window) {
+          this.panelWindow = null
+        }
+        throw error
       }
-      await window.loadURL(rendererUrl)
-    }
+    })()
 
-    window.window.hide()
-    this.panelWindow = window
-    return window
+    this.ensureWindowPromise = creating
+    try {
+      return await creating
+    } finally {
+      if (this.ensureWindowPromise === creating) {
+        this.ensureWindowPromise = null
+      }
+    }
   }
 
   hideForPasteBack(): void {

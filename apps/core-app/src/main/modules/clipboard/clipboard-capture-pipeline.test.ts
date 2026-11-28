@@ -47,11 +47,14 @@ function createImage(): FakeClipboardImage {
 
 const mocks = vi.hoisted(() => ({
   availableFormats: vi.fn(),
+  has: vi.fn((_format: string) => false),
+  readBuffer: vi.fn(() => Buffer.alloc(0)),
   readText: vi.fn(),
   readHTML: vi.fn(),
   readImage: vi.fn(createEmptyImage),
   createFromBuffer: vi.fn(() => createEmptyImage()),
   sendToPlugin: vi.fn(async () => undefined),
+  checkPluginPermission: vi.fn(() => true),
   getAttachedPlugin: vi.fn(),
   shouldForwardClipboardChange: vi.fn(),
   schedule: vi.fn(async (_label: string, operation: () => Promise<unknown>) => await operation()),
@@ -76,6 +79,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   clipboard: {
     availableFormats: mocks.availableFormats,
+    has: mocks.has,
+    readBuffer: mocks.readBuffer,
     readText: mocks.readText,
     readHTML: mocks.readHTML,
     readImage: mocks.readImage
@@ -174,6 +179,7 @@ function createPipeline(
       cooldownUntil = value
     },
     setTaskMeta: mocks.setTaskMeta,
+    checkPluginPermission: mocks.checkPluginPermission,
     logInfo: mocks.logInfo,
     logWarn: mocks.logWarn
   })
@@ -201,9 +207,12 @@ describe('clipboard-capture-pipeline', () => {
       }
     })
     mocks.availableFormats.mockReturnValue(['text/plain', 'text/html'])
+    mocks.has.mockReturnValue(false)
+    mocks.readBuffer.mockReturnValue(Buffer.alloc(0))
     mocks.readText.mockReturnValue('https://example.test')
     mocks.readHTML.mockReturnValue('<b>https://example.test</b>')
     mocks.readImage.mockReturnValue(createEmptyImage())
+    mocks.checkPluginPermission.mockReturnValue(true)
     mocks.getAttachedPlugin.mockReturnValue({ name: 'demo-plugin', _uniqueChannelKey: 'key' })
     mocks.shouldForwardClipboardChange.mockReturnValue(true)
   })
@@ -252,23 +261,30 @@ describe('clipboard-capture-pipeline', () => {
     )
   })
 
-  /**
-   * `retention_protected` 的列、索引和清理侧的豁免条件在这之前就都存在了，但没有任何
-   * 代码写过它——所以密钥和普通文本一样会在 90 天后被清掉。清理侧不需要改动，
-   * 也就意味着这条链路只有"采集时写没写"这一个失败点，必须有测试盯着它。
-   */
-  it('marks a captured secret as retention protected, and ordinary text as not', async () => {
-    const context = createPipeline()
+  it('marks a captured secret as retention protected only when opt-in protectSecrets is enabled', async () => {
+    const defaultContext = createPipeline()
     mocks.readText
       .mockReturnValueOnce('previous')
       .mockReturnValue(`sk-${'FAKEKEYFORTESTS0FAKEKEYFORTESTS1FAKEKEY0'}`)
 
-    await context.pipeline.process('visible-poll')
+    await defaultContext.pipeline.process('visible-poll')
+
+    expect(mocks.values).toHaveBeenCalledWith(
+      expect.objectContaining({ retentionProtected: false })
+    )
+
+    mocks.values.mockClear()
+    const optInContext = createPipeline({ protectSecrets: true })
+    mocks.readText
+      .mockReturnValueOnce('previous')
+      .mockReturnValue(`sk-${'FAKEKEYFORTESTS0FAKEKEYFORTESTS1FAKEKEY0'}`)
+
+    await optInContext.pipeline.process('visible-poll')
 
     expect(mocks.values).toHaveBeenCalledWith(expect.objectContaining({ retentionProtected: true }))
 
     mocks.values.mockClear()
-    const ordinary = createPipeline()
+    const ordinary = createPipeline({ protectSecrets: true })
     mocks.readText.mockReturnValueOnce('previous').mockReturnValue('今天下午三点开会')
 
     await ordinary.pipeline.process('visible-poll')
@@ -276,6 +292,94 @@ describe('clipboard-capture-pipeline', () => {
     expect(mocks.values).toHaveBeenCalledWith(
       expect.objectContaining({ retentionProtected: false })
     )
+  })
+
+  it('skips capture and forwarding for concealed or transient password-manager pasteboard formats', async () => {
+    for (const marker of [
+      'org.nspasteboard.ConcealedType',
+      'org.nspasteboard.TransientType',
+      'ExcludeClipboardContentFromMonitorProcessing',
+      'x-kde-passwordmanagerhint'
+    ]) {
+      mocks.values.mockClear()
+      mocks.sendToPlugin.mockClear()
+      mocks.availableFormats.mockReturnValue(['text/plain', marker])
+      mocks.readText.mockReturnValue('super-secret-password')
+
+      const context = createPipeline()
+      await context.pipeline.process('visible-poll')
+
+      expect(mocks.values, `${marker} must not be persisted`).not.toHaveBeenCalled()
+      expect(context.updateMemoryCache).not.toHaveBeenCalled()
+      expect(mocks.sendToPlugin).not.toHaveBeenCalled()
+    }
+
+    // Windows CanIncludeInClipboardHistory = DWORD 0 must also skip capture.
+    mocks.values.mockClear()
+    mocks.availableFormats.mockReturnValue(['text/plain', 'CanIncludeInClipboardHistory'])
+    mocks.readBuffer.mockReturnValue(Buffer.from([0, 0, 0, 0]))
+    const winContext = createPipeline()
+    await winContext.pipeline.process('visible-poll')
+    expect(mocks.values).not.toHaveBeenCalled()
+
+    // Real Electron runtime omits OS privacy markers from availableFormats() and only exposes
+    // them through clipboard.has(marker). Verify direct probing skips capture.
+    for (const marker of [
+      'org.nspasteboard.ConcealedType',
+      'org.nspasteboard.TransientType',
+      'org.nspasteboard.AutoGeneratedType',
+      'com.agilebits.onepassword',
+      'ExcludeClipboardContentFromMonitorProcessing',
+      'x-kde-passwordmanagerhint',
+      'org.kde.klipper.ignore'
+    ]) {
+      mocks.values.mockClear()
+      mocks.sendToPlugin.mockClear()
+      mocks.availableFormats.mockReturnValue(['text/plain'])
+      mocks.has.mockImplementation((fmt: string) => fmt === marker)
+      mocks.readText.mockReturnValueOnce('prev').mockReturnValue('password-manager-secret')
+
+      const probedContext = createPipeline()
+      await probedContext.pipeline.process('visible-poll')
+
+      expect(
+        mocks.values,
+        `${marker} probed via clipboard.has must not persist`
+      ).not.toHaveBeenCalled()
+      expect(mocks.sendToPlugin).not.toHaveBeenCalled()
+    }
+
+    // Probed Windows CanIncludeInClipboardHistory: DWORD 0 or empty fails closed; DWORD 1 allows.
+    mocks.values.mockClear()
+    mocks.availableFormats.mockReturnValue(['text/plain'])
+    mocks.has.mockImplementation((fmt: string) => fmt === 'CanIncludeInClipboardHistory')
+    mocks.readBuffer.mockReturnValue(Buffer.from([0, 0, 0, 0]))
+    mocks.readText.mockReturnValueOnce('prev').mockReturnValue('win-hidden-secret')
+    const winProbedBlocked = createPipeline()
+    await winProbedBlocked.pipeline.process('visible-poll')
+    expect(mocks.values).not.toHaveBeenCalled()
+
+    mocks.values.mockClear()
+    mocks.readBuffer.mockReturnValue(Buffer.from([1, 0, 0, 0]))
+    mocks.readText.mockReturnValueOnce('prev').mockReturnValue('win-allowed-text')
+    const winProbedAllowed = createPipeline()
+    await winProbedAllowed.pipeline.process('visible-poll')
+    expect(mocks.values).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not forward clipboard changes to an attached plugin lacking clipboard:read permission', async () => {
+    mocks.checkPluginPermission.mockReturnValue(false)
+    const context = createPipeline()
+    mocks.readText.mockReturnValueOnce('previous').mockReturnValue('https://example.test')
+
+    await context.pipeline.process('visible-poll')
+
+    expect(mocks.checkPluginPermission).toHaveBeenCalledWith(
+      'demo-plugin',
+      'clipboard:read',
+      undefined
+    )
+    expect(mocks.sendToPlugin).not.toHaveBeenCalled()
   })
 
   /**

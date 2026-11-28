@@ -12,7 +12,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { resolveLocalFilePath, toTfileUrl } from '@talex-touch/utils/network'
-import { nativeImage, shell } from 'electron'
+import { dialog, nativeImage, shell } from 'electron'
 import {
   IMAGE_THUMBNAIL_EXTENSIONS,
   VIDEO_THUMBNAIL_EXTENSIONS,
@@ -29,6 +29,177 @@ type CodedError = Error & { code?: string }
 const IMAGE_EXTENSIONS = new Set([...IMAGE_THUMBNAIL_EXTENSIONS, 'svg', 'ico'])
 const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus'])
 const VIDEO_EXTENSIONS = new Set([...VIDEO_THUMBNAIL_EXTENSIONS])
+
+/**
+ * Executable, script, installer, shortcut, and macOS bundle extensions that plugin callers
+ * must never launch via `shell.openPath()`.
+ */
+const BLOCKED_PLUGIN_OPEN_EXTENSIONS = new Set([
+  'action',
+  'app',
+  'appex',
+  'appimage',
+  'applescript',
+  'application',
+  'appref-ms',
+  'appx',
+  'appxbundle',
+  'bash',
+  'bat',
+  'bin',
+  'bundle',
+  'chm',
+  'cmd',
+  'com',
+  'command',
+  'cpl',
+  'csh',
+  'desktop',
+  'diagcab',
+  'dll',
+  'dmg',
+  'dylib',
+  'exe',
+  'fileloc',
+  'fish',
+  'hta',
+  'inetloc',
+  'inf',
+  'iso',
+  'jar',
+  'jnlp',
+  'js',
+  'jse',
+  'ksh',
+  'library-ms',
+  'lnk',
+  'mobileconfig',
+  'mpkg',
+  'msc',
+  'msi',
+  'msix',
+  'msixbundle',
+  'msp',
+  'osa',
+  'out',
+  'pif',
+  'pkg',
+  'prefpane',
+  'ps1',
+  'psd1',
+  'psm1',
+  'py',
+  'pyw',
+  'reg',
+  'run',
+  'scf',
+  'scpt',
+  'scptd',
+  'scr',
+  'sct',
+  'search-ms',
+  'service',
+  'settingcontent-ms',
+  'sh',
+  'so',
+  'sparsebundle',
+  'sparseimage',
+  'terminal',
+  'tool',
+  'url',
+  'vbe',
+  'vbs',
+  'webloc',
+  'workflow',
+  'wsc',
+  'wsf',
+  'wsh',
+  'xbap',
+  'xip',
+  'zsh'
+])
+
+export interface NativeFileOpenCallerOptions {
+  isPluginCaller?: boolean
+  pluginName?: string
+  confirmPluginOpen?: (targetPath: string, pluginName?: string) => Promise<boolean>
+}
+
+function getSecurityExtension(filePath: string): string {
+  // Windows strips trailing dots and spaces when resolving filenames (e.g. "run.bat." -> "run.bat").
+  const trimmed = filePath.replace(/[\\/]+$/, '').replace(/[. ]+$/, '')
+  return path.extname(trimmed).replace(/^\./, '').toLowerCase()
+}
+
+async function resolveRealPathForPluginOpen(filePath: string): Promise<string> {
+  if (typeof fs.realpath !== 'function') {
+    throw createCodedError(
+      'Unable to resolve canonical file path for plugin open',
+      'ERR_NATIVE_FILE_OPEN_BLOCKED'
+    )
+  }
+  try {
+    return await fs.realpath(filePath)
+  } catch (error) {
+    const coded = createCodedError(
+      'Unable to resolve canonical file path for plugin open',
+      'ERR_NATIVE_FILE_OPEN_BLOCKED'
+    )
+    coded.cause = error
+    throw coded
+  }
+}
+
+function isBlockedPluginOpenTarget(
+  requestedPath: string,
+  resolvedPath: string,
+  stats: Awaited<ReturnType<typeof fs.stat>>
+): boolean {
+  if (
+    BLOCKED_PLUGIN_OPEN_EXTENSIONS.has(getSecurityExtension(requestedPath)) ||
+    BLOCKED_PLUGIN_OPEN_EXTENSIONS.has(getSecurityExtension(resolvedPath))
+  ) {
+    return true
+  }
+  if (
+    process.platform !== 'win32' &&
+    stats.isFile() &&
+    typeof stats.mode === 'number' &&
+    (stats.mode & 0o111) !== 0
+  ) {
+    return true
+  }
+  return false
+}
+
+async function validatePluginOpenTarget(filePath: string): Promise<{ resolvedPath: string }> {
+  const resolvedPath = await resolveRealPathForPluginOpen(filePath)
+  const stats = await getFileStats(resolvedPath)
+  if (isBlockedPluginOpenTarget(filePath, resolvedPath, stats)) {
+    throw createCodedError(
+      'Opening executable, script, or application package files is blocked for plugin callers',
+      'ERR_NATIVE_FILE_OPEN_BLOCKED'
+    )
+  }
+  return { resolvedPath }
+}
+
+async function confirmPluginFileOpen(targetPath: string, pluginName?: string): Promise<boolean> {
+  if (!dialog || typeof dialog.showMessageBox !== 'function') {
+    return false
+  }
+  const callerLabel = pluginName ? `Plugin "${pluginName}"` : 'A plugin'
+  const result = await dialog.showMessageBox({
+    type: 'warning',
+    buttons: ['Open', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+    title: 'Confirm File Open',
+    message: `${callerLabel} wants to open "${path.basename(targetPath)}".`,
+    detail: targetPath
+  })
+  return result.response === 0
+}
 
 function createCodedError(message: string, code: string): CodedError {
   const error = new Error(message) as CodedError
@@ -265,12 +436,35 @@ export class NativeFileService {
     return { path: filePath, success: true }
   }
 
-  async open(request: NativeFilePathRequest): Promise<NativeFileActionResult> {
+  async open(
+    request: NativeFilePathRequest,
+    callerOptions?: NativeFileOpenCallerOptions
+  ): Promise<NativeFileActionResult> {
     const filePath = normalizePathRequest(request)
     await getFileStats(filePath)
-    const message = await shell.openPath(filePath)
+    let targetPathToOpen = filePath
+    if (callerOptions?.isPluginCaller) {
+      const { resolvedPath: resolvedBefore } = await validatePluginOpenTarget(filePath)
+      const confirmFn = callerOptions.confirmPluginOpen ?? confirmPluginFileOpen
+      const approved = await confirmFn(resolvedBefore, callerOptions.pluginName)
+      if (!approved) {
+        throw createCodedError(
+          'Opening file was declined by the user',
+          'ERR_NATIVE_FILE_OPEN_DECLINED'
+        )
+      }
+      const { resolvedPath: resolvedAfter } = await validatePluginOpenTarget(filePath)
+      if (resolvedAfter !== resolvedBefore) {
+        throw createCodedError(
+          'File target changed during user confirmation',
+          'ERR_NATIVE_FILE_OPEN_BLOCKED'
+        )
+      }
+      targetPathToOpen = resolvedAfter
+    }
+    const message = await shell.openPath(targetPathToOpen)
     return {
-      path: filePath,
+      path: targetPathToOpen,
       success: !message,
       message: message || undefined
     }

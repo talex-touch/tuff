@@ -27,6 +27,7 @@ const MAX_DIVISION_BOX_INSTANCES = 5
 export class DivisionBoxWindowPool {
   private static instance: DivisionBoxWindowPool | null = null
   private readonly activeWindows = new Set<BrowserWindow>()
+  private pendingCount = 0
   private destroyed = false
 
   private constructor() {}
@@ -74,16 +75,25 @@ export class DivisionBoxWindowPool {
   }
 
   async acquire(): Promise<TouchWindow> {
-    if (this.activeWindows.size >= MAX_DIVISION_BOX_INSTANCES) {
+    if (this.activeWindows.size + this.pendingCount >= MAX_DIVISION_BOX_INSTANCES) {
       throw new Error(`Maximum DivisionBox instances (${MAX_DIVISION_BOX_INSTANCES}) reached`)
     }
 
-    const touchWindow = await this.createOnDemandWindow()
-    this.activeWindows.add(touchWindow.window)
-    divisionBoxWindowPoolLog.debug(
-      `Created on demand (${this.activeWindows.size}/${MAX_DIVISION_BOX_INSTANCES} active)`
-    )
-    return touchWindow
+    this.pendingCount += 1
+    try {
+      const touchWindow = await this.createOnDemandWindow()
+      if (this.destroyed || devProcessManager.isShuttingDownProcess()) {
+        if (!touchWindow.window.isDestroyed()) touchWindow.window.destroy()
+        throw new Error('DivisionBox window owner is shutting down')
+      }
+      this.activeWindows.add(touchWindow.window)
+      divisionBoxWindowPoolLog.debug(
+        `Created on demand (${this.activeWindows.size}/${MAX_DIVISION_BOX_INSTANCES} active)`
+      )
+      return touchWindow
+    } finally {
+      this.pendingCount = Math.max(0, this.pendingCount - 1)
+    }
   }
 
   release(window: BrowserWindow): void {
@@ -92,7 +102,7 @@ export class DivisionBoxWindowPool {
   }
 
   getTotalWindowCount(): number {
-    return this.activeWindows.size
+    return this.activeWindows.size + this.pendingCount
   }
 
   getActiveCount(): number {
@@ -109,7 +119,7 @@ export class DivisionBoxWindowPool {
       poolSize: 0,
       activeCount: this.activeWindows.size,
       maxInstances: MAX_DIVISION_BOX_INSTANCES,
-      canCreate: this.activeWindows.size < MAX_DIVISION_BOX_INSTANCES
+      canCreate: this.activeWindows.size + this.pendingCount < MAX_DIVISION_BOX_INSTANCES
     }
   }
 

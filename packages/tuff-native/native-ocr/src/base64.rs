@@ -34,7 +34,11 @@ fn decode_sextet(byte: u8) -> Option<u8> {
 /// Decodes standard RFC 4648 Base64 (ignoring ASCII whitespace) up to `max_bytes`.
 pub fn decode_with_limit(input: &str, max_bytes: usize) -> Result<Vec<u8>, Base64DecodeError> {
     let bytes = input.as_bytes();
-    let mut output = Vec::with_capacity((bytes.len() / 4) * 3);
+    let estimated = (bytes.len() / 4).saturating_mul(3).min(max_bytes);
+    let mut output = Vec::new();
+    if output.try_reserve(estimated).is_err() {
+        return Err(Base64DecodeError::OutputLimitExceeded);
+    }
     let mut quartet = [0u8; 4];
     let mut q_len = 0usize;
     let mut padding_seen = false;
@@ -134,6 +138,17 @@ mod tests {
         );
         assert_eq!(
             decode_with_limit("SGVsbG8=", 4),
+            Err(Base64DecodeError::OutputLimitExceeded)
+        );
+    }
+
+    #[test]
+    fn caps_upfront_allocation_to_max_bytes() {
+        // Large valid-looking input with a tiny max_bytes must fail fast without allocating
+        // proportionally to input length.
+        let large = "AAAA".repeat(1024 * 64);
+        assert_eq!(
+            decode_with_limit(&large, 8),
             Err(Base64DecodeError::OutputLimitExceeded)
         );
     }

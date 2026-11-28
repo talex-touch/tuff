@@ -1,4 +1,6 @@
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
+import { DivisionBoxError, DivisionBoxErrorCode } from '@talex-touch/utils'
+import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 
 type ResolvePluginSdkapi = (pluginId?: string) => number | undefined
 
@@ -27,19 +29,51 @@ function resolvePayloadSdkapi(payload: Record<string, unknown> | null): number |
   return typeof payloadSdkapi === 'number' ? payloadSdkapi : undefined
 }
 
+function resolveVerifiedSdkapi(
+  pluginId: string,
+  payloadSdkapi: number | undefined,
+  resolvePluginSdkapi: ResolvePluginSdkapi,
+  contextSdkapi?: number
+): number | undefined {
+  const declaredSdkapi =
+    typeof contextSdkapi === 'number' ? contextSdkapi : resolvePluginSdkapi(pluginId)
+  if (typeof payloadSdkapi === 'number' && payloadSdkapi !== declaredSdkapi) {
+    const error = new Error(
+      `Plugin sdkapi mismatch: payload=${payloadSdkapi}, declared=${declaredSdkapi}`
+    ) as Error & { code?: string; pluginId?: string }
+    error.code = 'SDKAPI_MISMATCH'
+    error.pluginId = pluginId
+    throw error
+  }
+  return declaredSdkapi
+}
+
 export function resolveDivisionBoxPermissionActor(
   context: HandlerContext,
   payload: unknown,
   resolvePluginSdkapi: ResolvePluginSdkapi
 ): { pluginId?: string; sdkapi?: number } {
   const payloadRecord = toPayloadRecord(payload)
-  const contextPluginId = context?.plugin?.name
   const payloadSdkapi = resolvePayloadSdkapi(payloadRecord)
 
-  if (contextPluginId) {
+  if (context?.plugin) {
+    if (!isAuthoritativePluginContext(context.plugin)) {
+      throw new DivisionBoxError(
+        DivisionBoxErrorCode.PERMISSION_DENIED,
+        'DivisionBox operations require an authoritative plugin caller.'
+      )
+    }
+    const contextPluginId = context.plugin.name
+    const rawContextSdkapi = (context.plugin as { sdkapi?: unknown }).sdkapi
+    const contextSdkapi = typeof rawContextSdkapi === 'number' ? rawContextSdkapi : undefined
     return {
       pluginId: contextPluginId,
-      sdkapi: payloadSdkapi ?? resolvePluginSdkapi(contextPluginId)
+      sdkapi: resolveVerifiedSdkapi(
+        contextPluginId,
+        payloadSdkapi,
+        resolvePluginSdkapi,
+        contextSdkapi
+      )
     }
   }
 
@@ -53,6 +87,6 @@ export function resolveDivisionBoxPermissionActor(
 
   return {
     pluginId: actorPluginId,
-    sdkapi: payloadSdkapi ?? resolvePluginSdkapi(actorPluginId)
+    sdkapi: resolveVerifiedSdkapi(actorPluginId, payloadSdkapi, resolvePluginSdkapi)
   }
 }

@@ -1567,4 +1567,52 @@ describe('omniPanel project-local-ai context', () => {
     expect(payload.text).toBe('shortcut draft')
     expect(payload.localAi).toBeUndefined()
   })
+
+  it('deduplicates concurrent ensureWindow() calls and destroys orphan window on load failure', async () => {
+    const module = new OmniPanelModule() as unknown as {
+      ensureWindow: () => Promise<{ window: { destroy?: ReturnType<typeof vi.fn> } }>
+    }
+
+    let resolveFirstLoad!: () => void
+    const { TouchWindow } = await import('../../core/touch-window')
+    const originalLoadFile = TouchWindow.prototype.loadFile
+    TouchWindow.prototype.loadFile = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFirstLoad = resolve
+        })
+    ) as unknown as typeof TouchWindow.prototype.loadFile
+
+    try {
+      const p1 = module.ensureWindow()
+      const p2 = module.ensureWindow()
+      expect(touchWindowInstances).toHaveLength(1)
+      resolveFirstLoad()
+      const [w1, w2] = await Promise.all([p1, p2])
+      expect(w1).toBe(w2)
+      expect(touchWindowInstances).toHaveLength(1)
+    } finally {
+      TouchWindow.prototype.loadFile = originalLoadFile
+    }
+
+    // Load rejection must destroy the orphan window and clear the in-flight promise.
+    touchWindowInstances.length = 0
+    const module2 = new OmniPanelModule() as unknown as {
+      ensureWindow: () => Promise<unknown>
+    }
+    const destroySpy = vi.fn()
+    TouchWindow.prototype.loadFile = vi.fn(async function (this: {
+      window: Record<string, unknown>
+    }) {
+      this.window.destroy = destroySpy
+      throw new Error('load-boom')
+    }) as unknown as typeof TouchWindow.prototype.loadFile
+
+    try {
+      await expect(module2.ensureWindow()).rejects.toThrow('load-boom')
+      expect(destroySpy).toHaveBeenCalledTimes(1)
+    } finally {
+      TouchWindow.prototype.loadFile = originalLoadFile
+    }
+  })
 })

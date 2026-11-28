@@ -281,8 +281,10 @@ export class DivisionBoxManager {
         await session.setState(DivisionBoxState.ACTIVE)
       }
     } catch (error) {
-      // Clean up on error
+      // Clean up window, pool slot, and registry on error
+      await session.destroy().catch(() => undefined)
       this.sessions.delete(sessionId)
+      this.lruCache.remove(sessionId)
       this.disableMemoryPressurePollingIfIdle()
       throw error
     }
@@ -354,7 +356,9 @@ export class DivisionBoxManager {
     try {
       await session.createWindow()
     } catch (error) {
+      await session.destroy().catch(() => undefined)
       this.sessions.delete(sessionId)
+      this.lruCache.remove(sessionId)
       this.disableMemoryPressurePollingIfIdle()
       throw error
     }

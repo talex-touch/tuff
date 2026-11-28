@@ -499,4 +499,89 @@ describe('ScreenshotSessionManager', () => {
       })
     ).rejects.toMatchObject({ code: 'SCREENSHOT_SESSION_DISPOSED' })
   })
+
+  it('releases all frozenResources on cancel and discards late in-flight compose outputs', async () => {
+    const harness = createHarness()
+    let resolveCompose!: (val: NativeScreenshotCaptureResult) => void
+    vi.mocked(harness.service.composeFrozenRegion).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCompose = resolve
+        })
+    )
+
+    const started = await harness.manager.start({
+      entrypoint: 'shortcut',
+      ownerKey: 'internal:shortcut',
+      completionMode: 'return-resource',
+      delayMs: 0,
+      initialTarget: 'free-region'
+    })
+    const sessionId = started.sessionId!
+    const senderId = harness.windows[0].webContentsId
+
+    await harness.manager.command(sessionId, senderId, {
+      type: 'set-selection',
+      selection: { x: 10, y: 10, width: 100, height: 100 }
+    })
+
+    const confirmPromise = harness.manager.command(sessionId, senderId, { type: 'confirm' })
+    harness.manager.cancel(sessionId, 'user-cancelled-mid-compose')
+
+    resolveCompose({
+      ...captureResult(displays[0]),
+      tfileUrl: 'tfile:///managed/late-compose.png'
+    })
+    await confirmPromise
+
+    const released = vi.mocked(harness.service.releaseTempArtifact).mock.calls.map((c) => c[0])
+    expect(released).toContain('tfile:///managed/display%3Aleft.png')
+    expect(released).toContain('tfile:///managed/display%3Aprimary.png')
+    expect(released).toContain('tfile:///managed/late-compose.png')
+  })
+
+  it('holds confirming phase across saveResource to block concurrent selection changes', async () => {
+    const harness = createHarness()
+    let resolveSave!: (saved: boolean) => void
+    let markSaveEntered!: () => void
+    const saveEntered = new Promise<void>((resolve) => {
+      markSaveEntered = resolve
+    })
+    harness.saveResource.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSave = resolve
+          markSaveEntered()
+        })
+    )
+
+    const started = await harness.manager.start({
+      entrypoint: 'shortcut',
+      ownerKey: 'internal:shortcut',
+      completionMode: 'editor',
+      delayMs: 0,
+      initialTarget: 'free-region'
+    })
+    const sessionId = started.sessionId!
+    const senderId = harness.windows[0].webContentsId
+
+    await harness.manager.command(sessionId, senderId, {
+      type: 'set-selection',
+      selection: { x: 10, y: 10, width: 100, height: 100 }
+    })
+
+    const saveCmd = harness.manager.command(sessionId, senderId, { type: 'save' })
+    await saveEntered
+
+    expect(harness.manager.getOverlayState(sessionId, senderId)?.phase).toBe('confirming')
+    const blockedSelection = await harness.manager.command(sessionId, senderId, {
+      type: 'set-selection',
+      selection: { x: 20, y: 20, width: 50, height: 50 }
+    })
+    expect(blockedSelection.accepted).toBe(false)
+
+    resolveSave(true)
+    expect(await saveCmd).toEqual({ accepted: true })
+    expect(harness.manager.getOverlayState(sessionId, senderId)?.phase).toBe('selecting')
+  })
 })

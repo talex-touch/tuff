@@ -9,19 +9,19 @@ describe('clipboard classification settings', () => {
     expect(
       resolveClipboardClassificationSettings({
         verificationCodeRetentionMs: 15 * 60_000,
-        protectSecrets: false,
+        protectSecrets: true,
         customKeyPrefixes: ['cr_', 'zz-']
       })
     ).toEqual({
       verificationCodeRetentionMs: 15 * 60_000,
-      protectSecrets: false,
+      protectSecrets: true,
       customKeyPrefixes: ['cr_', 'zz-']
     })
   })
 
   /**
-   * 配置文件是用户可编辑的。一个手改坏的字段不该让分类整个失效——尤其
-   * `protectSecrets`：读不出来时必须偏向"保护"，否则一次配置手误就能让密钥开始过期。
+   * 配置文件是用户可编辑的。未显式开启 `protectSecrets: true` 时默认不永久保留明文密钥，
+   * 避免凭据在未加密 SQLite 中无限期滞留。
    */
   it.each<[unknown, string]>([
     [{ verificationCodeRetentionMs: 'soon' }, 'verificationCodeRetentionMs'],
@@ -32,24 +32,24 @@ describe('clipboard classification settings', () => {
     [{}, 'empty'],
     [null, 'null'],
     ['nonsense', 'string']
-  ])('falls back to defaults for a broken %s', (raw) => {
+  ])('falls back to safe defaults for a broken %s', (raw) => {
     const resolved = resolveClipboardClassificationSettings(raw)
     expect(resolved.verificationCodeRetentionMs).toBe(
       DEFAULT_CLIPBOARD_CLASSIFICATION_SETTINGS.verificationCodeRetentionMs
     )
     expect(resolved.customKeyPrefixes).toEqual([])
-    expect(resolved.protectSecrets).toBe(true)
+    expect(resolved.protectSecrets).toBe(false)
   })
 
-  it('only turns secret protection off for an explicit false', () => {
-    expect(resolveClipboardClassificationSettings({ protectSecrets: false }).protectSecrets).toBe(
-      false
+  it('only enables secret retention protection for an explicit true', () => {
+    expect(resolveClipboardClassificationSettings({ protectSecrets: true }).protectSecrets).toBe(
+      true
     )
-    for (const value of [undefined, null, 0, '', 'false']) {
+    for (const value of [undefined, null, 0, 1, '', 'true', false]) {
       expect(
         resolveClipboardClassificationSettings({ protectSecrets: value }).protectSecrets,
-        `${String(value)} should not disable protection`
-      ).toBe(true)
+        `${String(value)} should not enable permanent plaintext secret retention`
+      ).toBe(false)
     }
   })
 

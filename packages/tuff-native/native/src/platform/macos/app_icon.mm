@@ -73,21 +73,24 @@ bool WriteIconOnMainQueue(const DarwinAppIconWriteOptions *options,
       }
 
       [NSGraphicsContext saveGraphicsState];
-      [NSGraphicsContext setCurrentContext:graphicsContext];
-      graphicsContext.imageInterpolation = NSImageInterpolationHigh;
-      const NSRect targetRect = NSMakeRect(0, 0, targetSize, targetSize);
-      [[NSColor clearColor] setFill];
-      NSRectFillUsingOperation(targetRect, NSCompositingOperationCopy);
-      [sourceImage drawInRect:targetRect
-                     fromRect:NSZeroRect
-                    operation:NSCompositingOperationSourceOver
-                     fraction:1.0
-               respectFlipped:YES
-                        hints:@{
-                          NSImageHintInterpolation : @(NSImageInterpolationHigh)
-                        }];
-      [graphicsContext flushGraphics];
-      [NSGraphicsContext restoreGraphicsState];
+      @try {
+        [NSGraphicsContext setCurrentContext:graphicsContext];
+        graphicsContext.imageInterpolation = NSImageInterpolationHigh;
+        const NSRect targetRect = NSMakeRect(0, 0, targetSize, targetSize);
+        [[NSColor clearColor] setFill];
+        NSRectFillUsingOperation(targetRect, NSCompositingOperationCopy);
+        [sourceImage drawInRect:targetRect
+                       fromRect:NSZeroRect
+                      operation:NSCompositingOperationSourceOver
+                       fraction:1.0
+                 respectFlipped:YES
+                          hints:@{
+                            NSImageHintInterpolation : @(NSImageInterpolationHigh)
+                          }];
+        [graphicsContext flushGraphics];
+      } @finally {
+        [NSGraphicsContext restoreGraphicsState];
+      }
 
       NSData *png = [bitmap representationUsingType:NSBitmapImageFileTypePNG
                                          properties:@{}];

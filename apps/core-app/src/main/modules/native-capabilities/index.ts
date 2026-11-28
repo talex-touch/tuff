@@ -309,7 +309,10 @@ export class NativeCapabilitiesModule extends BaseModule {
       }),
       transport.on(NativeEvents.file.open, (payload, context) => {
         enforceNativePermission(context, 'native:file:open')
-        return nativeFileService.open(payload)
+        return nativeFileService.open(payload, {
+          isPluginCaller: Boolean(context.plugin),
+          pluginName: context.plugin?.name
+        })
       }),
       transport.on(NativeEvents.file.getIcon, (payload, context) => {
         enforceNativePermission(context, 'native:file:get-icon')
@@ -394,8 +397,17 @@ export class NativeCapabilitiesModule extends BaseModule {
           features: ['query', 'status']
         }
       }
-      case 'file.stat':
       case 'file.open':
+        return {
+          id,
+          supported: true,
+          available: true,
+          platform: process.platform,
+          engine: 'electron',
+          permission: toPermissionState(context, 'native:file:open'),
+          features: ['open']
+        }
+      case 'file.stat':
       case 'file.thumbnail':
         return {
           id,

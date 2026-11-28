@@ -10,15 +10,23 @@ import type { getTuffTransportMain, HandlerContext } from '@talex-touch/utils/tr
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { FlowBusIPC } from './ipc'
 import { FlowEvents } from '@talex-touch/utils/transport/main'
+import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { t } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import { getPermissionModule } from '../permission'
+import { pluginModule } from '../plugin/plugin-module'
 import { flowBus } from './flow-bus'
 import { initializeFlowBusIPC } from './ipc'
 import { flowBusModuleLog } from './logger'
 import { nativeShareService } from './native-share'
 import { flowTargetRegistry } from './target-registry'
+
+function createModuleSecurityError(code: string, message: string): Error & { code: string } {
+  const err = new Error(message) as Error & { code: string }
+  err.code = code
+  return err
+}
 
 /**
  * FlowBusModule
@@ -50,31 +58,89 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
 
     this.registerTransportHandlers(transport)
 
-    // Register native share targets
+    // Register native share targets and delivery handler
     this.registerNativeShareTargets()
 
     flowBusModuleLog.info('Module initialized')
   }
 
   private registerTransportHandlers(tx: ReturnType<typeof getTuffTransportMain>): void {
-    const enforce = (context: HandlerContext, apiName: string, sdkapi?: number) => {
-      const pluginId = context?.plugin?.name
-      if (!pluginId) {
-        return
+    const resolvePluginSdkapi = (
+      pluginId: string,
+      payloadSdkapi?: number,
+      contextSdkapi?: number
+    ): number | undefined => {
+      const declaredSdkapi =
+        typeof contextSdkapi === 'number'
+          ? contextSdkapi
+          : pluginModule.pluginManager?.plugins.get(pluginId)?.sdkapi
+      if (typeof payloadSdkapi === 'number' && payloadSdkapi !== declaredSdkapi) {
+        throw createModuleSecurityError(
+          'SDKAPI_MISMATCH',
+          `Plugin sdkapi mismatch: payload=${payloadSdkapi}, declared=${declaredSdkapi}`
+        )
       }
-      const perm = getPermissionModule()
-      if (!perm) {
-        return
+      return declaredSdkapi
+    }
+
+    const resolveCallerPlugin = (
+      context: HandlerContext,
+      apiName: string,
+      payloadPluginId?: string,
+      payloadSdkapi?: number
+    ): { pluginId?: string; sdkapi?: number; isPluginCaller: boolean } => {
+      if (context?.plugin) {
+        if (!isAuthoritativePluginContext(context.plugin)) {
+          throw createModuleSecurityError(
+            'PERMISSION_DENIED',
+            'Flow target management requires an authoritative plugin caller.'
+          )
+        }
+        const pluginId = context.plugin.name
+        if (payloadPluginId && payloadPluginId !== pluginId) {
+          throw createModuleSecurityError(
+            'PERMISSION_DENIED',
+            'Plugin cannot modify Flow targets owned by another plugin.'
+          )
+        }
+        const rawContextSdkapi = (context.plugin as { sdkapi?: unknown }).sdkapi
+        const contextSdkapi = typeof rawContextSdkapi === 'number' ? rawContextSdkapi : undefined
+        const sdkapi = resolvePluginSdkapi(pluginId, payloadSdkapi, contextSdkapi)
+        const perm = getPermissionModule()
+        if (!perm) {
+          throw createModuleSecurityError(
+            'PERMISSION_DENIED',
+            'Permission module is unavailable for Flow target operation.'
+          )
+        }
+        perm.enforcePermission(pluginId, apiName, sdkapi)
+        return { pluginId, sdkapi, isPluginCaller: true }
       }
-      perm.enforcePermission(pluginId, apiName, sdkapi)
+
+      if (payloadPluginId === 'native') {
+        throw createModuleSecurityError(
+          'PERMISSION_DENIED',
+          'Native Flow targets cannot be modified via plugin target channels.'
+        )
+      }
+
+      return { pluginId: payloadPluginId, isPluginCaller: false }
     }
 
     this.transportDisposers.push(
       tx.on(FlowEvents.registerTargets, async (payload, context) => {
-        enforce(context, 'flow:plugin:register-targets', payload?._sdkapi)
-        const { pluginId, targets, pluginName, pluginIcon, isEnabled } = payload || {}
+        const { pluginId: resolvedPluginId } = resolveCallerPlugin(
+          context,
+          'flow:plugin:register-targets',
+          payload?.pluginId,
+          payload?._sdkapi
+        )
+        const { targets, pluginName, pluginIcon, isEnabled } = payload || {}
+        if (!resolvedPluginId) {
+          throw createModuleSecurityError('INVALID_PAYLOAD', 'pluginId is required')
+        }
         if (targets?.length) {
-          flowTargetRegistry.registerPluginTargets(pluginId, targets, {
+          flowTargetRegistry.registerPluginTargets(resolvedPluginId, targets, {
             pluginName,
             pluginIcon,
             isEnabled
@@ -86,44 +152,65 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
 
     this.transportDisposers.push(
       tx.on(FlowEvents.unregisterTargets, async (payload, context) => {
-        enforce(context, 'flow:plugin:unregister-targets', payload?._sdkapi)
-        flowTargetRegistry.unregisterPluginTargets(payload.pluginId)
+        const { pluginId: resolvedPluginId } = resolveCallerPlugin(
+          context,
+          'flow:plugin:unregister-targets',
+          payload?.pluginId,
+          payload?._sdkapi
+        )
+        if (!resolvedPluginId) {
+          throw createModuleSecurityError('INVALID_PAYLOAD', 'pluginId is required')
+        }
+        flowTargetRegistry.unregisterPluginTargets(resolvedPluginId)
         return { success: true }
       })
     )
 
     this.transportDisposers.push(
       tx.on(FlowEvents.setPluginEnabled, async (payload, context) => {
-        enforce(context, 'flow:plugin:set-plugin-enabled', payload?._sdkapi)
-        flowTargetRegistry.setPluginEnabled(payload.pluginId, payload.enabled)
+        const { pluginId: resolvedPluginId } = resolveCallerPlugin(
+          context,
+          'flow:plugin:set-plugin-enabled',
+          payload?.pluginId,
+          payload?._sdkapi
+        )
+        if (!resolvedPluginId) {
+          throw createModuleSecurityError('INVALID_PAYLOAD', 'pluginId is required')
+        }
+        flowTargetRegistry.setPluginEnabled(resolvedPluginId, payload.enabled)
         return { success: true }
       })
     )
 
     this.transportDisposers.push(
       tx.on(FlowEvents.setPluginHandler, async (payload, context) => {
-        enforce(context, 'flow:plugin:set-plugin-handler', payload?._sdkapi)
-        flowTargetRegistry.setPluginFlowHandler(payload.pluginId, payload.hasHandler)
+        const { pluginId: resolvedPluginId } = resolveCallerPlugin(
+          context,
+          'flow:plugin:set-plugin-handler',
+          payload?.pluginId,
+          payload?._sdkapi
+        )
+        if (!resolvedPluginId) {
+          throw createModuleSecurityError('INVALID_PAYLOAD', 'pluginId is required')
+        }
+        flowTargetRegistry.setPluginFlowHandler(resolvedPluginId, payload.hasHandler)
 
-        const pluginId = payload.pluginId as string
         const hasHandler = Boolean(payload.hasHandler)
-        if (pluginId) {
-          const existing = this.flowDeliveryDisposers.get(pluginId)
-          if (existing) {
-            existing()
-            this.flowDeliveryDisposers.delete(pluginId)
-          }
+        const existing = this.flowDeliveryDisposers.get(resolvedPluginId)
+        if (existing) {
+          existing()
+          this.flowDeliveryDisposers.delete(resolvedPluginId)
+        }
 
-          if (hasHandler) {
-            const dispose = flowBus.registerDeliveryHandler(pluginId, async (session) => {
-              await tx.sendToPlugin(pluginId, FlowEvents.deliver, {
-                sessionId: session.sessionId,
-                payload: session.payload,
-                senderId: session.senderId
-              })
+        if (hasHandler) {
+          const dispose = flowBus.registerDeliveryHandler(resolvedPluginId, async (session) => {
+            await tx.sendToPlugin(resolvedPluginId, FlowEvents.deliver, {
+              sessionId: session.sessionId,
+              payload: session.payload,
+              senderId: session.senderId
             })
-            this.flowDeliveryDisposers.set(pluginId, dispose)
-          }
+          })
+          this.flowDeliveryDisposers.set(resolvedPluginId, dispose)
         }
         return { success: true }
       })
@@ -131,20 +218,35 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
 
     this.transportDisposers.push(
       tx.on(FlowEvents.nativeShare, async (payload, context) => {
-        enforce(context, 'flow:native:share', payload?._sdkapi)
+        const caller = resolveCallerPlugin(
+          context,
+          'flow:native:share',
+          undefined,
+          payload?._sdkapi
+        )
+        const validationError = flowBus.validatePayload(payload.payload)
+        if (validationError) {
+          return {
+            success: false,
+            error: validationError.message
+          }
+        }
         const options = nativeShareService.payloadToShareOptions(payload.payload)
         if (payload.target) {
           options.target = nativeShareService.normalizeTarget(
             payload.target
           ) as NativeShareOptions['target']
         }
-        return await nativeShareService.share(options)
+        return await nativeShareService.share(options, {
+          callerPluginId: caller.isPluginCaller ? caller.pluginId : undefined,
+          callerSdkApi: caller.isPluginCaller ? caller.sdkapi : undefined
+        })
       })
     )
   }
 
   /**
-   * Registers native system share targets
+   * Registers native system share targets and the 'native' delivery handler
    */
   private registerNativeShareTargets(): void {
     const targets = nativeShareService.getAvailableTargets()
@@ -161,6 +263,31 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
         })
       })
     }
+
+    const existingNativeDisposer = this.flowDeliveryDisposers.get('native')
+    if (existingNativeDisposer) {
+      existingNativeDisposer()
+      this.flowDeliveryDisposers.delete('native')
+    }
+    const disposeNative = flowBus.registerDeliveryHandler('native', async (session) => {
+      const options = nativeShareService.payloadToShareOptions(session.payload)
+      options.target = nativeShareService.normalizeTarget(session.targetId)
+      const isPluginSender =
+        Boolean(session.senderId) && session.senderId !== 'corebox' && session.senderId !== 'system'
+      const callerPluginId = isPluginSender ? session.senderId : undefined
+      const callerSdkApi = callerPluginId
+        ? pluginModule.pluginManager?.plugins.get(callerPluginId)?.sdkapi
+        : undefined
+      const result = await nativeShareService.share(options, {
+        callerPluginId,
+        callerSdkApi
+      })
+      if (!result.success) {
+        throw new Error(result.error || 'Native share delivery failed')
+      }
+      flowBus.acknowledge(session.sessionId, result)
+    })
+    this.flowDeliveryDisposers.set('native', disposeNative)
 
     flowBusModuleLog.info('Registered native share targets', {
       meta: {
@@ -195,6 +322,9 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       }
     }
     this.transportDisposers = []
+
+    flowBus.dispose()
+    void nativeShareService.cleanupTempFiles()
 
     // Clear all targets
     flowTargetRegistry.clear()

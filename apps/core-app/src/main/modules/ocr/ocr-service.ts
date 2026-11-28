@@ -9,7 +9,7 @@ import type { IClipboardItem } from '../clipboard'
 
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { stat } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import path from 'node:path'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -38,6 +38,7 @@ import { windowManager } from '../box-tool/core-box/window'
 import { detectClipboardTags, getClipboardTagSearchTerms } from '../clipboard-tagging'
 import { databaseModule } from '../database'
 import { notificationModule } from '../notification'
+import { getPermissionModule } from '../permission'
 import { idleBudgetCoordinator, isStatePausedFor } from '../../service/idle-budget-coordinator'
 import {
   computeOcrConfigPersistSignature,
@@ -232,6 +233,35 @@ class OcrService {
   private channelRegistered = false
   private transportChannel: unknown = null
   private idleBudgetUnsubscribe: (() => void) | null = null
+  private staleRecoveryScheduled = false
+
+  private async recoverStaleProcessingJobs(): Promise<void> {
+    if (!this.db) return
+    const now = new Date()
+    await this.withDbWrite(
+      'ocr.jobs.recover-stale',
+      async (db) => {
+        await db
+          .update(ocrJobs)
+          .set({
+            status: 'failed',
+            lastError: 'Interrupted while processing in previous session',
+            nextRetryAt: null,
+            finishedAt: now
+          })
+          .where(and(eq(ocrJobs.status, 'processing'), sql`${ocrJobs.attempts} >= ${MAX_ATTEMPTS}`))
+        await db
+          .update(ocrJobs)
+          .set({
+            status: 'pending',
+            lastError: 'Interrupted while processing in previous session',
+            nextRetryAt: null
+          })
+          .where(and(eq(ocrJobs.status, 'processing'), lt(ocrJobs.attempts, MAX_ATTEMPTS)))
+      },
+      { priority: 'critical', dropPolicy: 'none' }
+    )
+  }
 
   private registerDispatcherTask(): void {
     if (pollingService.isRegistered(this.pollTaskId)) return
@@ -269,6 +299,11 @@ class OcrService {
         }
         this.registerDispatcherTask()
       })
+    }
+
+    if (!this.staleRecoveryScheduled) {
+      this.staleRecoveryScheduled = true
+      void this.recoverStaleProcessingJobs().catch(() => {})
     }
 
     if (!idleBudgetCoordinator.isPausedFor('background-hidden')) {
@@ -320,7 +355,11 @@ class OcrService {
 
     transport.on(ocrDashboardEvent, async (payload) => {
       try {
-        const limit = typeof payload?.limit === 'number' && payload.limit > 0 ? payload.limit : 50
+        const rawLimit =
+          typeof payload?.limit === 'number' && Number.isFinite(payload.limit)
+            ? Math.floor(payload.limit)
+            : 50
+        const limit = Math.min(Math.max(rawLimit, 1), 200)
         const snapshot = await this.getDashboardSnapshot(limit)
         return {
           ok: true,
@@ -339,7 +378,8 @@ class OcrService {
 
   public async getDashboardSnapshot(limit = 50) {
     this.ensureInitialized()
-    return this.buildDashboardSnapshot(limit)
+    const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.floor(limit), 1), 200) : 50
+    return this.buildDashboardSnapshot(safeLimit)
   }
 
   private async buildDashboardSnapshot(limit: number) {
@@ -715,9 +755,9 @@ class OcrService {
     filePath: string,
     missingError: string | null
   ): Promise<boolean> {
-    let stats: Awaited<ReturnType<typeof stat>>
+    let stats: Awaited<ReturnType<typeof lstat>>
     try {
-      stats = await stat(filePath)
+      stats = await lstat(filePath)
     } catch (error) {
       const code = (error as { code?: unknown } | null)?.code
       if (code === 'ENOENT' || code === 'ENOTDIR') {
@@ -725,6 +765,9 @@ class OcrService {
         throw new Error(missingError)
       }
       throw error
+    }
+    if (stats.isSymbolicLink() || !stats.isFile()) {
+      throw new Error('[OCR] Image source must be a regular file')
     }
     if (stats.size > MAX_OCR_IMAGE_BYTES) {
       throw new Error(`[OCR] Image file too large: ${stats.size} > ${MAX_OCR_IMAGE_BYTES}`)
@@ -896,14 +939,23 @@ class OcrService {
         })
 
         this.nextDispatchAt = Date.now() + OCR_MIN_START_INTERVAL_MS
-        const task = this.runAgentJob(job.id!, job).finally(() => {
-          this.activeJobs.delete(job.id!)
-          // The existing dispatcher poll resumes pending jobs; no immediate drain or extra timer.
-          this.nextDispatchAt = Math.max(
-            this.nextDispatchAt,
-            Date.now() + OCR_COMPLETION_COOLDOWN_MS
-          )
-        })
+        const task = this.runAgentJob(job.id!, job)
+          .catch(async (error) => {
+            await this.failJob(
+              job.id!,
+              error instanceof Error ? error.message : String(error),
+              error,
+              job.attempts ?? 0
+            ).catch(() => {})
+          })
+          .finally(() => {
+            this.activeJobs.delete(job.id!)
+            // The existing dispatcher poll resumes pending jobs; no immediate drain or extra timer.
+            this.nextDispatchAt = Math.max(
+              this.nextDispatchAt,
+              Date.now() + OCR_COMPLETION_COOLDOWN_MS
+            )
+          })
 
         this.activeJobs.set(job.id!, task)
       }
@@ -932,36 +984,36 @@ class OcrService {
       })
     }
 
-    ensureIntelligenceConfigLoaded()
-
-    const capabilityOptions = getCapabilityOptions('vision.ocr')
-    const normalizedSource = await this.normalizeSourceForAgent(
-      parsed.source,
-      job.clipboardId ?? null
-    )
-    const payload: IntelligenceVisionOcrPayload = {
-      source: normalizedSource,
-      language: parsed.options?.language,
-      prompt: this.buildAgentPrompt(parsed),
-      includeLayout: true,
-      includeKeywords: true,
-      metadata: {
-        jobId,
-        clipboardId: job.clipboardId,
-        payloadHash: job.payloadHash
-      }
-    }
-
-    const allowedProviderIds = [
-      INTERNAL_SYSTEM_OCR_PROVIDER_ID,
-      ...(capabilityOptions.allowedProviderIds ?? [])
-    ].filter((id, index, all) => Boolean(id) && all.indexOf(id) === index)
-
-    const modelPreference = ['system-ocr', ...(capabilityOptions.modelPreference ?? [])].filter(
-      (model, index, all) => Boolean(model) && all.indexOf(model) === index
-    )
-
     try {
+      ensureIntelligenceConfigLoaded()
+
+      const capabilityOptions = getCapabilityOptions('vision.ocr')
+      const normalizedSource = await this.normalizeSourceForAgent(
+        parsed.source,
+        job.clipboardId ?? null
+      )
+      const payload: IntelligenceVisionOcrPayload = {
+        source: normalizedSource,
+        language: parsed.options?.language,
+        prompt: this.buildAgentPrompt(parsed),
+        includeLayout: true,
+        includeKeywords: true,
+        metadata: {
+          jobId,
+          clipboardId: job.clipboardId,
+          payloadHash: job.payloadHash
+        }
+      }
+
+      const allowedProviderIds = [
+        INTERNAL_SYSTEM_OCR_PROVIDER_ID,
+        ...(capabilityOptions.allowedProviderIds ?? [])
+      ].filter((id, index, all) => Boolean(id) && all.indexOf(id) === index)
+
+      const modelPreference = ['system-ocr', ...(capabilityOptions.modelPreference ?? [])].filter(
+        (model, index, all) => Boolean(model) && all.indexOf(model) === index
+      )
+
       const invocation = await tuffIntelligence.invoke<IntelligenceVisionOcrResult>(
         'vision.ocr',
         payload,
@@ -1555,18 +1607,26 @@ class OcrService {
    * Metadata is already persisted to DB and memory cache via handleMetaPatch callback
    */
   private broadcastMetaUpdate(clipboardId: number, patch: Record<string, unknown>): void {
-    // Notify attached plugin UI view if any
+    // Notify attached plugin UI view only if it holds clipboard:read permission
     const activePlugin = windowManager.getAttachedPlugin()
-    if (activePlugin?._uniqueChannelKey && this.transportChannel) {
-      const channel = this.transportChannel as {
-        broadcastPlugin: (pluginName: string, eventName: string, arg?: unknown) => void
-      }
-      const transport = getTuffTransportMain(channel, channel)
-      transport.broadcastPlugin(activePlugin.name, coreBoxClipboardMetaUpdatedEvent, {
-        clipboardId,
-        patch
-      })
+    if (!activePlugin?._uniqueChannelKey || !this.transportChannel) {
+      return
     }
+    const perm = getPermissionModule()
+    if (
+      !perm ||
+      !perm.checkPermission(activePlugin.name, 'clipboard:read', activePlugin.sdkapi).allowed
+    ) {
+      return
+    }
+    const channel = this.transportChannel as {
+      broadcastPlugin: (pluginName: string, eventName: string, arg?: unknown) => void
+    }
+    const transport = getTuffTransportMain(channel, channel)
+    transport.broadcastPlugin(activePlugin.name, coreBoxClipboardMetaUpdatedEvent, {
+      clipboardId,
+      patch
+    })
   }
 
   setTransportChannel(channel: unknown): void {

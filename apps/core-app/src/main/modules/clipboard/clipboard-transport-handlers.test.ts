@@ -186,4 +186,29 @@ describe('clipboard-transport-handlers', () => {
       true
     )
   })
+
+  it('removes cancelled change stream listeners immediately when context.signal aborts', async () => {
+    const registry = new ClipboardTransportHandlersRegistry()
+    const handlers = createHandlers({
+      buildChangePayload: vi.fn(() => ({ latest: null, history: [] }))
+    })
+    registry.register({}, handlers)
+
+    const streamHandler = transportOnStream.mock.calls[0]?.[1]
+    const controller = new AbortController()
+    const context = {
+      plugin: { name: 'sample-plugin' },
+      emit: vi.fn(),
+      isCancelled: vi.fn(() => controller.signal.aborted),
+      signal: controller.signal
+    }
+
+    await streamHandler(undefined, context)
+    await Promise.resolve()
+    expect(context.emit).toHaveBeenCalledTimes(1)
+
+    controller.abort()
+    registry.notifyChange()
+    expect(context.emit).toHaveBeenCalledTimes(1)
+  })
 })
