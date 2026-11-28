@@ -754,7 +754,7 @@ export function registerPluginStorageTransportHandlers(
       try {
         if (isRecord(context) && context.plugin !== undefined) {
           const plugin = resolvePrivilegedPlugin(payload, context)
-          ensureStoragePermission(plugin, 'system.shell')
+          ensureStoragePermission(plugin, 'system:shell')
           await shell.openPath(plugin.getConfigPath())
           return
         }

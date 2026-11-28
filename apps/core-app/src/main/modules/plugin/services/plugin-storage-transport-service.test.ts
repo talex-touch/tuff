@@ -310,7 +310,7 @@ describe('plugin privileged storage transport', () => {
     })
   })
 
-  it('requires system.shell permission when a plugin invokes plugin:storage:open-folder', async () => {
+  it('requires system:shell API permission when a plugin invokes plugin:storage:open-folder', async () => {
     const { shell } = await import('electron')
     const harness = createHarness()
     ;(harness.plugin as unknown as { getConfigPath: () => string }).getConfigPath = vi.fn(
@@ -322,24 +322,34 @@ describe('plugin privileged storage transport', () => {
     await openFolder({ pluginName: 'alpha' }, { plugin: { name: 'alpha', verified: true } })
     expect(shell.openPath).not.toHaveBeenCalled()
 
-    // Authoritative plugin lacking system.shell is rejected.
+    // Authoritative plugin lacking system:shell is rejected.
     permissionState.current = {
-      checkPermission: vi.fn((_plugin: string, perm: string) => ({
-        allowed: perm !== 'system.shell',
-        permissionId: perm
+      checkPermission: vi.fn((_plugin: string, apiName: string) => ({
+        allowed: apiName !== 'system:shell',
+        permissionId: 'system.shell'
       }))
     }
     await openFolder({ pluginName: 'alpha' }, { plugin: harness.trusted })
+    expect(permissionState.current.checkPermission).toHaveBeenCalledWith(
+      'alpha',
+      'system:shell',
+      harness.plugin.sdkapi
+    )
     expect(shell.openPath).not.toHaveBeenCalled()
 
-    // Authoritative plugin holding system.shell succeeds.
+    // Authoritative plugin holding system:shell succeeds.
     permissionState.current = {
-      checkPermission: vi.fn((_plugin: string, perm: string) => ({
-        allowed: perm === 'system.shell',
-        permissionId: perm
+      checkPermission: vi.fn((_plugin: string, apiName: string) => ({
+        allowed: apiName === 'system:shell',
+        permissionId: 'system.shell'
       }))
     }
     await openFolder({ pluginName: 'alpha' }, { plugin: harness.trusted })
+    expect(permissionState.current.checkPermission).toHaveBeenCalledWith(
+      'alpha',
+      'system:shell',
+      harness.plugin.sdkapi
+    )
     expect(shell.openPath).toHaveBeenCalledWith('/tmp/tuff/plugins/alpha/config')
 
     // Host caller (no plugin context) succeeds without plugin permission check.
