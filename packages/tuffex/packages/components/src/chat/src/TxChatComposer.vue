@@ -752,7 +752,7 @@ onBeforeUnmount(stopTrayMotion)
   </div>
 </template>
 
-<style scoped lang="scss">
+<style lang="scss">
 // The root is the shell. It owns the fallthrough class and attributes, the drop
 // target and — only while a tray shows — the flat tray fill. The surface is
 // `__card`, stacked above either tray so a placement change can slide it across

@@ -70,7 +70,7 @@ code: |
 ## 概述
 
 - `copyText` 为空字符串时仍渲染复制按钮，但点击无效果；要隐藏就不传。
-- 复制写入 `navigator.clipboard`，随后按钮进入「已复制」态 1200ms，期间忽略重复点击。
+- 复制写入 `navigator.clipboard`，随后按钮进入「已复制」态 1200ms，期间忽略重复点击；点击重新生成时图标旋转一圈反馈响应（减少动态效果时不播放旋转）。
 - 朗读按钮是开关：任何状态下点击都派发 `speak`（含 `loading`），由宿主开始或停止播放；`speaking` 时 `aria-pressed="true"`。
 - `role="toolbar"`：只占一个 Tab 落点，方向键在控件间循环移动，Home / End 跳到首尾。
 - 方向键顺序实时读取 DOM（`button:not([disabled])`、`[href]`、`tabindex` 非 -1），禁用按钮被排除。

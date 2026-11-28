@@ -70,13 +70,15 @@ function navButtons(wrapper: VueWrapper): { prev: HTMLButtonElement, next: HTMLB
 }
 
 describe('txChoiceCard', () => {
-  it('renders the question and one native button per option', () => {
+  it('renders the question inside TxCard and one TxButton per option', () => {
     const wrapper = mountCard({ steps: [start] })
 
+    expect(wrapper.find('.tx-choice-card__card.tx-card').exists()).toBe(true)
     expect(wrapper.find('h3.tx-choice-card__title').text()).toBe('Where do we start?')
     const buttons = optionButtons(wrapper)
     expect(buttons).toHaveLength(4)
     expect(buttons.every(button => button.getAttribute('type') === 'button')).toBe(true)
+    expect(buttons.every(button => button.classList.contains('tx-button'))).toBe(true)
     expect(buttons[0]!.querySelector('.tx-choice-card__label')!.textContent).toBe('Write a weekly report')
     expect(buttons[0]!.querySelector('.tx-choice-card__desc')!.textContent).toBe('Sum up what shipped this week')
     // A real list around the buttons: a `listitem` role on the button itself would strip

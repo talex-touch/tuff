@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 import type { JellyIndicatorFrame } from '../../../../utils/use-jelly-indicator'
-import type { SidebarNavEmits, SidebarNavGroup, SidebarNavItem, SidebarNavProps, SidebarNavValue } from './types'
-import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
+import type { SidebarNavGroup, SidebarNavItem, SidebarNavProps, SidebarNavValue } from './types'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, useId, watch } from 'vue'
 import { TxIconChip } from '../../icon-chip'
 import { GLIDE, timeScaleSpring } from '../../../../utils/animation/jelly'
 import { useIndicatorBox } from '../../../../utils/use-indicator-box'
@@ -11,22 +11,69 @@ import { springSteps } from '../../liquid/src/spring'
 
 defineOptions({ name: 'TxSidebarNav' })
 
-const props = withDefaults(defineProps<SidebarNavProps>(), {
+const props = withDefaults(defineProps<SidebarNavProps & {
+  collapsible?: boolean
+  collapsed?: boolean
+  collapseLabel?: string
+  expandLabel?: string
+}>(), {
   workspaceLabel: 'Switch workspace',
   ariaLabel: 'Workspace',
+  collapsible: false,
+  collapsed: undefined,
+  collapseLabel: 'Collapse sidebar',
+  expandLabel: 'Expand sidebar',
   indicatorDuration: 220,
 })
 
-const emit = defineEmits<SidebarNavEmits>()
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: SidebarNavValue): void
+  (e: 'update:query', value: string): void
+  (e: 'update:collapsed', collapsed: boolean): void
+  (e: 'select', item: SidebarNavItem): void
+  (e: 'action'): void
+  (e: 'itemAction', item: SidebarNavItem): void
+  (e: 'groupAction', group: SidebarNavGroup): void
+  (e: 'workspaceClick'): void
+}>()
 
 defineSlots<{
   /** Replaces the whole workspace switcher. */
   workspace?: () => any
   /** Replaces the leading glyph of an item. */
   'item-icon'?: (props: { item: SidebarNavItem, active: boolean }) => any
+  /** Replaces the trailing action glyph on a group header. */
+  'group-action'?: (props: { group: SidebarNavGroup }) => any
   /** Appended below the item groups. */
   footer?: () => any
 }>()
+
+const internalCollapsed = ref(false)
+const isCollapsed = computed(() => props.collapsed ?? internalCollapsed.value)
+const closedGroups = reactive(new Set<string>(
+  (props.groups ?? []).filter(group => group.collapsible && group.defaultOpen === false).map(group => group.key),
+))
+
+function toggleCollapsed() {
+  const next = !isCollapsed.value
+  internalCollapsed.value = next
+  emit('update:collapsed', next)
+  void nextTick(() => measure())
+}
+
+function isGroupOpen(key: string): boolean {
+  return !closedGroups.has(key)
+}
+
+function toggleGroup(group: SidebarNavGroup) {
+  if (!group.collapsible)
+    return
+  if (closedGroups.has(group.key))
+    closedGroups.delete(group.key)
+  else
+    closedGroups.add(group.key)
+  void nextTick(() => measure())
+}
 
 const navRef = ref<HTMLElement | null>(null)
 const searchInputRef = ref<HTMLInputElement | null>(null)
@@ -63,6 +110,9 @@ interface RenderedGroup {
   key: string
   label: string
   items: SidebarNavItem[]
+  source?: SidebarNavGroup
+  collapsible: boolean
+  open: boolean
 }
 
 // Ungrouped items lead the list under no header. A group with nothing left
@@ -74,12 +124,15 @@ const renderedGroups = computed<RenderedGroup[]>(() => {
 
   const result: RenderedGroup[] = []
   if (loose.length)
-    result.push({ key: '__ungrouped', label: '', items: loose })
+    result.push({ key: '__ungrouped', label: '', items: loose, collapsible: false, open: true })
 
   for (const group of groups) {
     const items = visibleItems.value.filter(item => item.group === group.key)
-    if (items.length)
-      result.push({ key: group.key, label: group.label, items })
+    if (items.length) {
+      const collapsible = Boolean(group.collapsible)
+      const open = !collapsible || isCollapsed.value || queryValue.value.trim().length > 0 || isGroupOpen(group.key)
+      result.push({ key: group.key, label: group.label, items, source: group, collapsible, open })
+    }
   }
   return result
 })
@@ -246,42 +299,64 @@ defineExpose({
 </script>
 
 <template>
-  <nav class="tx-bui-sidebar-nav" :aria-label="ariaLabel">
-    <slot name="workspace">
-      <button
-        v-if="workspace"
-        type="button"
-        class="tx-bui-sidebar-nav__workspace"
-        :aria-label="workspaceLabel"
-        @click="emit('workspaceClick')"
-      >
-        <TxIconChip :size="32" tone="ink" :font-size="13">
-          {{ workspaceInitials(workspace.name, workspace.initials) }}
-        </TxIconChip>
-        <span class="tx-bui-sidebar-nav__workspace-text">
-          <span class="tx-bui-sidebar-nav__workspace-name">{{ workspace.name }}</span>
-          <span v-if="workspace.description" class="tx-bui-sidebar-nav__workspace-desc">
-            {{ workspace.description }}
-          </span>
-        </span>
-        <svg
-          class="tx-bui-sidebar-nav__workspace-chevron"
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
+  <nav
+    class="tx-bui-sidebar-nav"
+    :class="{ 'is-collapsed': isCollapsed }"
+    :aria-label="ariaLabel"
+  >
+    <div v-if="workspace || $slots.workspace || collapsible" class="tx-bui-sidebar-nav__top">
+      <slot name="workspace">
+        <button
+          v-if="workspace"
+          type="button"
+          class="tx-bui-sidebar-nav__workspace"
+          :aria-label="workspaceLabel"
+          :title="isCollapsed ? workspace.name : undefined"
+          @click="emit('workspaceClick')"
         >
-          <path d="M7 15l5 5 5-5M7 9l5-5 5 5" />
+          <TxIconChip :size="32" tone="ink" :font-size="13">
+            {{ workspaceInitials(workspace.name, workspace.initials) }}
+          </TxIconChip>
+          <span v-if="!isCollapsed" class="tx-bui-sidebar-nav__workspace-text">
+            <span class="tx-bui-sidebar-nav__workspace-name">{{ workspace.name }}</span>
+            <span v-if="workspace.description" class="tx-bui-sidebar-nav__workspace-desc">
+              {{ workspace.description }}
+            </span>
+          </span>
+          <svg
+            v-if="!isCollapsed"
+            class="tx-bui-sidebar-nav__workspace-chevron"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M7 15l5 5 5-5M7 9l5-5 5 5" />
+          </svg>
+        </button>
+      </slot>
+      <button
+        v-if="collapsible"
+        type="button"
+        class="tx-bui-sidebar-nav__collapse-btn"
+        :aria-expanded="!isCollapsed"
+        :aria-label="isCollapsed ? expandLabel : collapseLabel"
+        :title="isCollapsed ? expandLabel : collapseLabel"
+        @click="toggleCollapsed"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="16" rx="2.5" />
+          <path d="M9 4v16" />
         </svg>
       </button>
-    </slot>
+    </div>
 
-    <label v-if="searchPlaceholder" class="tx-bui-sidebar-nav__search">
+    <label v-if="searchPlaceholder && !isCollapsed" class="tx-bui-sidebar-nav__search">
       <svg
         class="tx-bui-sidebar-nav__search-icon"
         width="12"
@@ -314,9 +389,11 @@ defineExpose({
       v-if="actionLabel"
       type="button"
       class="tx-bui-sidebar-nav__action"
+      :aria-label="isCollapsed ? actionLabel : undefined"
+      :title="isCollapsed ? actionLabel : undefined"
       @click="emit('action')"
     >
-      <span class="tx-bui-sidebar-nav__action-label">{{ actionLabel }}</span>
+      <span v-if="!isCollapsed" class="tx-bui-sidebar-nav__action-label">{{ actionLabel }}</span>
       <span class="tx-bui-sidebar-nav__action-plus" aria-hidden="true">
         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
           <path d="M12 5v14M5 12h14" />
@@ -338,12 +415,53 @@ defineExpose({
       />
 
       <div v-for="group in renderedGroups" :key="group.key" class="tx-bui-sidebar-nav__group">
-        <div v-if="group.label" :id="groupLabelId(group.key)" class="tx-bui-sidebar-nav__group-label">
-          {{ group.label }}
+        <div v-if="group.label && !isCollapsed" class="tx-bui-sidebar-nav__group-head">
+          <button
+            v-if="group.collapsible && group.source"
+            type="button"
+            class="tx-bui-sidebar-nav__group-toggle"
+            :aria-expanded="group.open"
+            @click="toggleGroup(group.source)"
+          >
+            <svg
+              class="tx-bui-sidebar-nav__group-chevron"
+              :class="{ 'is-open': group.open }"
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+            <span :id="groupLabelId(group.key)" class="tx-bui-sidebar-nav__group-label">{{ group.label }}</span>
+          </button>
+          <div v-else :id="groupLabelId(group.key)" class="tx-bui-sidebar-nav__group-label">
+            {{ group.label }}
+          </div>
+          <button
+            v-if="group.source?.action"
+            type="button"
+            class="tx-bui-sidebar-nav__group-action"
+            :aria-label="group.source.action.label"
+            @click="emit('groupAction', group.source)"
+          >
+            <slot name="group-action" :group="group.source">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="M21 21l-4.3-4.3" />
+              </svg>
+            </slot>
+          </button>
         </div>
         <ul
+          v-if="group.open"
           class="tx-bui-sidebar-nav__list"
-          :aria-labelledby="group.label ? groupLabelId(group.key) : undefined"
+          :aria-labelledby="group.label && !isCollapsed ? groupLabelId(group.key) : undefined"
         >
           <li
             v-for="item in group.items"
@@ -360,22 +478,27 @@ defineExpose({
               class="tx-bui-sidebar-nav__row"
               :disabled="item.disabled"
               :aria-current="isActive(item) ? 'page' : undefined"
+              :aria-label="isCollapsed ? item.label : undefined"
+              :title="isCollapsed ? item.label : undefined"
               @click="onSelect(item)"
             >
               <span class="tx-bui-sidebar-nav__icon">
                 <slot name="item-icon" :item="item" :active="isActive(item)">
                   <i v-if="item.icon" :class="item.icon" aria-hidden="true" />
+                  <span v-else-if="isCollapsed" class="tx-bui-sidebar-nav__fallback-initial" aria-hidden="true">{{ item.label.slice(0, 1) }}</span>
                 </slot>
               </span>
-              <span class="tx-bui-sidebar-nav__label">{{ item.label }}</span>
+              <span v-if="!isCollapsed" class="tx-bui-sidebar-nav__label">{{ item.label }}</span>
+              <span v-if="item.loading && !isCollapsed" class="tx-bui-sidebar-nav__loading" aria-hidden="true" />
+              <span v-if="item.meta && !isCollapsed" class="tx-bui-sidebar-nav__meta">{{ item.meta }}</span>
               <span
-                v-if="item.badge !== undefined"
+                v-if="item.badge !== undefined && !isCollapsed"
                 :key="String(item.badge)"
                 class="tx-bui-sidebar-nav__badge"
               >{{ item.badge }}</span>
             </button>
             <button
-              v-if="item.action"
+              v-if="item.action && !isCollapsed"
               type="button"
               class="tx-bui-sidebar-nav__item-action"
               :aria-label="item.action.label"
@@ -391,7 +514,9 @@ defineExpose({
       </div>
     </div>
 
-    <slot name="footer" />
+    <div v-if="$slots.footer && !isCollapsed" class="tx-bui-sidebar-nav__footer">
+      <slot name="footer" />
+    </div>
   </nav>
 </template>
 
@@ -409,15 +534,64 @@ defineExpose({
   border-radius: var(--tx-bui-radius-card, 10px);
   box-shadow: var(--tx-bui-shadow-raised, 0 0 0 1px #ecedef, 0 2px 10px #0000000b);
 
+  &.is-collapsed {
+    width: var(--tx-bui-sidebar-nav-collapsed-width, 54px);
+
+    .tx-bui-sidebar-nav__top {
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .tx-bui-sidebar-nav__workspace {
+      justify-content: center;
+      padding: 4px;
+    }
+
+    .tx-bui-sidebar-nav__action,
+    .tx-bui-sidebar-nav__row {
+      justify-content: center;
+      padding: 6px;
+    }
+  }
+
+  &__top {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+
+  &__collapse-btn {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    color: var(--tx-bui-ink-3, #9a9da3);
+    cursor: pointer;
+    border-radius: var(--tx-bui-radius-control, 8px);
+
+    &:hover {
+      color: var(--tx-bui-ink, #1f2124);
+      background: var(--tx-bui-hover, #f4f5f6);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--tx-bui-accent, #0285ff);
+      outline-offset: -2px;
+    }
+  }
+
   &__workspace {
     @include bui-press-scale;
 
     display: flex;
+    flex: 1;
     gap: 10px;
     align-items: center;
-    width: 100%;
+    min-width: 0;
     padding: 6px;
-    margin-bottom: 8px;
     text-align: left;
     cursor: pointer;
     border-radius: var(--tx-bui-radius-control, 8px);
@@ -596,13 +770,95 @@ defineExpose({
     }
   }
 
+  &__group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 2px 4px;
+  }
+
+  &__group-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    padding: 2px 4px;
+    color: var(--tx-bui-ink-3, #9a9da3);
+    cursor: pointer;
+    border-radius: 5px;
+
+    &:hover {
+      color: var(--tx-bui-ink-2, #62656b);
+      background: var(--tx-bui-hover, #f4f5f6);
+    }
+
+    .tx-bui-sidebar-nav__group-label {
+      padding: 0;
+    }
+  }
+
+  &__group-chevron {
+    flex: none;
+    transition: transform 140ms ease;
+
+    &.is-open {
+      transform: rotate(90deg);
+    }
+  }
+
+  &__group-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    color: var(--tx-bui-ink-3, #9a9da3);
+    cursor: pointer;
+    border-radius: 5px;
+
+    &:hover {
+      color: var(--tx-bui-ink, #1f2124);
+      background: var(--tx-bui-hover, #f4f5f6);
+    }
+  }
+
   &__group-label {
-    padding: 4px 8px;
+    padding: 4px 4px;
     font-size: 10.5px;
     font-weight: var(--tx-font-weight-medium, 500);
     color: var(--tx-bui-ink-3, #9a9da3);
     text-transform: uppercase;
     letter-spacing: 0.08em;
+  }
+
+  &__meta {
+    @include bui-tabular-nums;
+
+    flex: none;
+    font-size: 11px;
+    color: var(--tx-bui-ink-3, #9a9da3);
+  }
+
+  &__loading {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--tx-bui-accent, #0285ff);
+    opacity: 0.85;
+  }
+
+  &__fallback-initial {
+    font-size: 11px;
+    font-weight: var(--tx-font-weight-semibold, 600);
+    text-transform: uppercase;
+  }
+
+  &__footer {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--tx-bui-line, #ecedef);
   }
 
   &__list {
@@ -760,6 +1016,7 @@ defineExpose({
     &__icon,
     &__label,
     &__item-action,
+    &__group-chevron,
     &__indicator.is-revealed {
       transition: none;
     }

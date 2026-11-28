@@ -255,10 +255,25 @@ const zh = {
 
   /* ── AI suite ── */
   chatComposer: { sendButtonText: '发送' } satisfies PropsOf<typeof TxChatComposer>,
-  messageActions: { label: '消息操作', copyLabel: '复制', copiedLabel: '已复制', regenerateLabel: '重新生成' } satisfies PropsOf<typeof TxMessageActions>,
-  promptBar: { sendLabel: '发送' } satisfies PropsOf<typeof TxPromptBar>,
+  messageActions: {
+    label: '消息操作',
+    copyLabel: '复制',
+    copiedLabel: '已复制',
+    regenerateLabel: '重新生成',
+    speakLabel: '朗读',
+    stopSpeakLabel: '停止朗读',
+  } satisfies PropsOf<typeof TxMessageActions>,
+  promptBar: {
+    sendLabel: '发送',
+    modelLabel: '选择模型',
+    attachLabel: '添加上下文与数据源',
+    startDictationLabel: '开始语音输入',
+    stopDictationLabel: '停止语音输入',
+    sourcesHintText: '输入关键词搜索上下文源',
+    commandsHintText: '输入斜杠命令',
+  } satisfies PropsOf<typeof TxPromptBar>,
   agentTrace: { activeLabel: '思考中', doneLabel: '已思考' } satisfies PropsOf<typeof TxAgentTrace>,
-  agentsList: { enabledTitle: '已启用', disabledTitle: '已停用', emptyText: '暂无智能体' } satisfies PropsOf<typeof TxAgentsList>,
+  agentsList: { enabledTitle: '已启用', disabledTitle: '待命', emptyText: '暂无智能体' } satisfies PropsOf<typeof TxAgentsList>,
   approvalCard: {
     ariaLabel: '审批问题',
     sendLabel: '发送答案',
@@ -274,7 +289,7 @@ const zh = {
     customLabel: '自定义答案',
     pagerLabelFormatter: (position: number) => `转到第 ${position} 题`,
   } satisfies PropsOf<typeof TxApprovalCard>,
-  taskRows: { doneText: '已完成', errorText: '失败' } satisfies PropsOf<typeof TxTaskRows>,
+  taskRows: { doneText: '已完成', runningText: '进行中', errorText: '失败' } satisfies PropsOf<typeof TxTaskRows>,
   toolCallCard: {
     doneLabel: '完成',
     inputLabel: '输入',
@@ -320,8 +335,9 @@ const zh = {
     { key: 'channel', title: '通道', width: '45%' },
   ] satisfies DiffTableProps['columns'],
   diffRows: [
-    { key: 'clipboard', change: 'added', data: { name: zhPlugins.clipboard, channel: '稳定版' } },
     { key: 'legacy', change: 'removed', data: { name: '旧版', channel: '测试版' } },
+    { key: 'browser', change: 'unchanged', data: { name: zhPlugins.browser, channel: '稳定版' } },
+    { key: 'clipboard', change: 'added', data: { name: zhPlugins.clipboard, channel: '稳定版' } },
   ] satisfies DiffTableProps['rows'],
 }
 
@@ -467,9 +483,9 @@ const en = {
   messageActions: {} satisfies PropsOf<typeof TxMessageActions>,
   promptBar: {} satisfies PropsOf<typeof TxPromptBar>,
   agentTrace: {} satisfies PropsOf<typeof TxAgentTrace>,
-  agentsList: {} satisfies PropsOf<typeof TxAgentsList>,
+  agentsList: { disabledTitle: 'Standby' } satisfies PropsOf<typeof TxAgentsList>,
   approvalCard: {} satisfies PropsOf<typeof TxApprovalCard>,
-  taskRows: {} satisfies PropsOf<typeof TxTaskRows>,
+  taskRows: { runningText: 'Running' } satisfies PropsOf<typeof TxTaskRows>,
   toolCallCard: {} satisfies PropsOf<typeof TxToolCallCard>,
   toolConfirmation: {} satisfies PropsOf<typeof TxToolConfirmation>,
   toolConfirmationName: 'write_file confirmation',
@@ -493,8 +509,9 @@ const en = {
     { key: 'channel', title: 'Channel', width: '45%' },
   ] satisfies DiffTableProps['columns'],
   diffRows: [
-    { key: 'clipboard', change: 'added', data: { name: enPlugins.clipboard, channel: 'Stable' } },
     { key: 'legacy', change: 'removed', data: { name: 'Legacy', channel: 'Beta' } },
+    { key: 'browser', change: 'unchanged', data: { name: enPlugins.browser, channel: 'Stable' } },
+    { key: 'clipboard', change: 'added', data: { name: enPlugins.clipboard, channel: 'Stable' } },
   ] satisfies DiffTableProps['rows'],
 }
 

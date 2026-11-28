@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 import type { ContextCardsEmits, ContextCardsProps, ContextChunk, ContextChunkOpenPayload } from './types'
+import { TxTag } from '../../tag'
 import TxContextChunk from './TxContextChunk.vue'
 
 defineOptions({ name: 'TxContextCards' })
@@ -48,7 +49,13 @@ function onOpen(payload: ContextChunkOpenPayload) {
     <slot name="header">
       <div v-if="title || total !== undefined" class="tx-bui-context-cards__header">
         <span v-if="title" class="tx-bui-context-cards__title">{{ title }}</span>
-        <span v-if="total !== undefined" class="tx-bui-context-cards__total">{{ total }}</span>
+        <TxTag
+          v-if="total !== undefined"
+          class="tx-bui-context-cards__total"
+          :label="String(total)"
+          size="sm"
+          variant="plain"
+        />
       </div>
     </slot>
 
@@ -108,17 +115,6 @@ function onOpen(payload: ContextChunkOpenPayload) {
 
   &__total {
     @include bui-tabular-nums;
-
-    display: inline-flex;
-    align-items: center;
-    height: 20px;
-    padding: 0 6px;
-    font-size: 11.5px;
-    font-weight: var(--tx-font-weight-medium, 500);
-    color: var(--tx-bui-ink-2, #62656b);
-    background: var(--tx-bui-inset, #f7f8f9);
-    border-radius: 6px;
-    box-shadow: var(--tx-bui-shadow-hairline, 0 0 0 1px #ecedef);
   }
 
   @media (prefers-reduced-motion: reduce) {

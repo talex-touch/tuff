@@ -34,6 +34,8 @@ export interface ChatMessageModel {
   id: string
   role: ChatMessageRole
   content: string
+  /** Optional sender display name shown in the header and forwarded to `TxAvatar` initials. */
+  name?: string
   createdAt?: number
   avatarUrl?: string
   status?: ChatMessageStatus

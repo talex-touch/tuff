@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { AiChainStep } from '../../ai-elements/src/types'
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
+import { TxIcon } from '../../icon'
+import { TxSpinner } from '../../spinner'
 import TxThinkingOrb from '../../thinking-orb/src/TxThinkingOrb.vue'
 import TxThinkingBody from './TxThinkingBody.vue'
 
@@ -213,10 +215,7 @@ const showBullets = computed(
       <span class="tx-chain-of-thought__icon" aria-hidden="true">
         <!-- A live chain gets a thinking orb (random per chain); settled ones keep the bulb. -->
         <TxThinkingOrb v-if="streaming && hasActive" :size="20" :display-size="14" />
-        <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 3a6 6 0 0 1 6 6c0 2.2-1.2 3.6-2.4 4.8-.7.7-1.1 1.4-1.3 2.2h-4.6c-.2-.8-.6-1.5-1.3-2.2C7.2 12.6 6 11.2 6 9a6 6 0 0 1 6-6Z" />
-          <path d="M9.5 19.5h5M10.5 22h3" />
-        </svg>
+        <TxIcon v-else name="lightbulb" :size="13" />
       </span>
       <span class="tx-chain-of-thought__label">{{ label }}</span>
       <!-- A count of one is noise: the label already names the single step. -->
@@ -226,9 +225,7 @@ const showBullets = computed(
         elapsedLabel
       }}</span>
       <span class="tx-chain-of-thought__chevron" :class="{ 'is-open': open }" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="m6 9 6 6 6-6" />
-        </svg>
+        <TxIcon name="chevron-down" :size="12" />
       </span>
     </button>
 
@@ -243,18 +240,15 @@ const showBullets = computed(
           :data-kind="step.kind"
         >
           <span v-if="showBullets" class="tx-chain-of-thought__bullet" aria-hidden="true">
-            <svg v-if="step.status === 'active'" class="tx-chain-of-thought__spin" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4">
-              <path d="M21 12a9 9 0 1 1-9-9" />
-            </svg>
-            <svg v-else-if="step.status === 'error'" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4">
-              <path d="m6 6 12 12M18 6 6 18" />
-            </svg>
-            <svg v-else-if="step.kind === 'tool'" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M14.7 6.3a4.5 4.5 0 0 0-6 5.7L3 17.7V21h3.3l5.7-5.7a4.5 4.5 0 0 0 5.7-6l-3 3-2.7-.6-.6-2.7 3.3-2.7Z" />
-            </svg>
-            <svg v-else viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4">
-              <path d="m4.5 12.5 5 5 10-11" />
-            </svg>
+            <TxSpinner
+              v-if="step.status === 'active'"
+              class="tx-chain-of-thought__spin"
+              :size="14"
+              :stroke-width="1.5"
+            />
+            <TxIcon v-else-if="step.status === 'error'" name="x-circle" :size="16" />
+            <TxIcon v-else-if="step.kind === 'tool'" name="wrench" :size="10" />
+            <TxIcon v-else name="check-circle" :size="16" />
           </span>
           <div class="tx-chain-of-thought__content">
             <span v-if="showStepTitles" class="tx-chain-of-thought__title">
@@ -304,9 +298,13 @@ const showBullets = computed(
     padding: 3px 0;
     border: none;
     background: transparent;
-    color: var(--tx-text-color-secondary, #6b7280);
+    color: var(--tx-text-color-regular, #606266);
     font: inherit;
     cursor: pointer;
+
+    &:hover {
+      color: var(--tx-text-color-primary, #303133);
+    }
   }
 
   .tx-chain-of-thought__icon {
@@ -416,10 +414,12 @@ const showBullets = computed(
     width: 16px;
     height: 16px;
     margin-top: 1px;
-    border: 1px solid var(--tx-border-color-light, #e4e7ed);
     border-radius: 999px;
-    background: var(--tx-fill-color-blank, #fff);
     color: var(--tx-color-success, #67c23a);
+
+    .tx-spinner {
+      color: inherit;
+    }
   }
 
   .tx-chain-of-thought__step[data-status='active'] .tx-chain-of-thought__bullet {
@@ -431,11 +431,9 @@ const showBullets = computed(
   }
 
   .tx-chain-of-thought__step[data-kind='tool'][data-status='done'] .tx-chain-of-thought__bullet {
+    border: 1px solid var(--tx-border-color-light, #e4e7ed);
+    background: var(--tx-fill-color-blank, #fff);
     color: var(--tx-text-color-secondary, #6b7280);
-  }
-
-  .tx-chain-of-thought__spin {
-    animation: tx-chain-spin 0.9s linear infinite;
   }
 
   .tx-chain-of-thought__content {
@@ -465,7 +463,7 @@ const showBullets = computed(
   // Tool output is the one that gets bounded — a log or a JSON dump can be megabytes.
   .tx-chain-of-thought__body {
     margin-top: 4px;
-    color: var(--tx-text-color-secondary, #6b7280);
+    color: var(--tx-text-color-regular, #606266);
     font-size: 12px;
     line-height: 1.6;
     word-break: break-word;
@@ -521,16 +519,9 @@ const showBullets = computed(
   }
 }
 
-@keyframes tx-chain-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .tx-chain-of-thought .tx-chain-of-thought__collapse,
   .tx-chain-of-thought .tx-chain-of-thought__chevron,
-  .tx-chain-of-thought .tx-chain-of-thought__spin,
   .tx-chain-of-thought.is-thinking .tx-chain-of-thought__label {
     transition: none;
     animation: none;

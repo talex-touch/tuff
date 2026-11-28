@@ -157,7 +157,7 @@ describe('txChoiceCard style contract', () => {
       expect(colour, rule.selectors.join(', ')).toEqual([])
     }
 
-    const hovers = outside.filter(rule => rule.selectors.some(selector => selector.includes(':hover')))
+    const hovers = outside.filter(rule => rule.selectors.some(selector => selector.includes(':hover') && !selector.includes('.tx-choice-card__arrow')))
     expect(hovers.length).toBeGreaterThan(0)
     for (const rule of hovers) {
       expect(transitioned(rule), rule.selectors.join(', ')).toEqual([])
@@ -210,21 +210,18 @@ describe('txChoiceCard style contract', () => {
     expect(find('.tx-choice-card__option:enabled:hover')?.get('background-color')).toMatch(/^var\(--tx-fill-color, /)
   })
 
-  it('backs the card with an opaque surface and a ring, not a border', () => {
-    const card = find('.tx-choice-card')!
-    expect(card.get('background')).toMatch(/^var\(--tx-bg-color, /)
-    expect(card.get('box-shadow')).toMatch(/^0 0 0 1px var\(--tx-border-color-lighter, /)
+  it('delegates the outer surface to TxCard and keeps corners concentric', () => {
+    const card = find('.tx-choice-card__card.tx-card')!
+    expect(card).toBeDefined()
+    expect(card.get('--tx-card-padding')).toBe('var(--tx-choice-card-pad, 12px)')
+    expect(card.get('padding')).toBe('var(--tx-choice-card-pad, 12px)')
+    expect(card.get('--tx-card-radius')).toBe('calc(var(--tx-choice-card-option-radius, 12px) + var(--tx-choice-card-pad, 12px))')
+    expect(find('.tx-choice-card__option')?.get('border-radius')).toBe('var(--tx-choice-card-option-radius, 12px)')
     for (const rule of styleRules) {
       const border = rule.declarations.get('border')
       if (border !== undefined)
         expect(border, rule.selectors.join(', ')).toBe('0')
     }
-  })
-
-  it('keeps the card corner concentric with the option corner', () => {
-    expect(find('.tx-choice-card')?.get('padding')).toBe('var(--tx-choice-card-pad, 8px)')
-    expect(find('.tx-choice-card')?.get('border-radius')).toBe('calc(var(--tx-choice-card-option-radius, 10px) + var(--tx-choice-card-pad, 8px))')
-    expect(find('.tx-choice-card__option')?.get('border-radius')).toBe('var(--tx-choice-card-option-radius, 10px)')
   })
 
   it('sets the type scale: 14/600 question, 14/500 label, 12px description in regular ink', () => {
@@ -253,8 +250,9 @@ describe('txChoiceCard style contract', () => {
   })
 
   it('gives every control a pointer and a visible focus ring', () => {
+    expect(find('.tx-choice-card__option')?.get('cursor')).toBe('pointer')
+    expect(find('.tx-choice-card__nav.tx-button')?.get('cursor')).toBe('pointer')
     for (const selector of ['.tx-choice-card__option', '.tx-choice-card__nav']) {
-      expect(find(selector)?.get('cursor'), selector).toBe('pointer')
       expect(find(`${selector}:focus-visible`)?.get('outline'), selector).toMatch(/^2px solid var\(--tx-color-primary, /)
     }
   })

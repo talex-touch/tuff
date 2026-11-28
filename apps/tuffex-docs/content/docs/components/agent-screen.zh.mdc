@@ -55,6 +55,13 @@ code: |
 | `ratio` | `string` | `'2964 / 1856'` | 画框的 CSS `aspect-ratio`，默认取上游采集图的比例。 |
 | `ariaLabel` | `string` | `'Agent screen'` | 整个区域的无障碍名称。 |
 | `loadingLabel` | `string` | `'Waiting for the agent’s screen'` | 加载时朗读的文本。 |
+| `expandable` | `boolean` | `false` | 点击画框或展开按钮后打开放大查看弹窗。 |
+| `teachable` | `boolean` | `false` | 在放大弹窗顶部显示「Teach a task」录制切换按钮。 |
+| `teaching` | `boolean` | `undefined` | 录制状态受控值（`v-model:teaching`）。 |
+| `expandLabel` | `string` | `'Expand screen'` | 放大按钮的无障碍名称。 |
+| `closeLabel` | `string` | `'Close'` | 弹窗关闭按钮的无障碍名称。 |
+| `teachLabel` | `string` | `'Teach a task'` | 开始示教录制按钮文案。 |
+| `stopTeachLabel` | `string` | `'Stop recording'` | 录制中状态按钮文案。 |
 
 ### 插槽
 

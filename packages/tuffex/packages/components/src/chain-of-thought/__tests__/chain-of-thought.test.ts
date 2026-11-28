@@ -22,9 +22,12 @@ describe('txChainOfThought', () => {
     const items = wrapper.findAll('.tx-chain-of-thought__step')
     expect(items).toHaveLength(3)
     expect(items[0]!.attributes('data-kind')).toBe('thinking')
+    expect(items[0]!.find('.tuff-icon[data-icon-value="check-circle"]').exists()).toBe(true)
     expect(items[1]!.attributes('data-kind')).toBe('tool')
+    expect(items[1]!.find('.tuff-icon[data-icon-value="wrench"]').exists()).toBe(true)
     expect(items[2]!.attributes('data-status')).toBe('active')
     expect(items[2]!.find('.tx-chain-of-thought__spin').exists()).toBe(true)
+    expect(items[2]!.find('.tx-spinner').exists()).toBe(true)
     expect(wrapper.find('.tx-chain-of-thought__count').text()).toBe('3')
   })
 
@@ -156,7 +159,9 @@ describe('txChainOfThought', () => {
       props: { steps: steps([{}, { status: 'error' }, {}]) },
     })
 
-    expect(wrapper.findAll('.tx-chain-of-thought__step')[1]!.attributes('data-status')).toBe('error')
+    const errorStep = wrapper.findAll('.tx-chain-of-thought__step')[1]!
+    expect(errorStep.attributes('data-status')).toBe('error')
+    expect(errorStep.find('.tuff-icon[data-icon-value="x-circle"]').exists()).toBe(true)
   })
 
   it('renders a duration suffix only on settled steps that carry one', () => {

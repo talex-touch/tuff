@@ -100,7 +100,17 @@ export function useAutoResize(
   let microtaskPromise: Promise<void> | null = null
   let microtaskPromiseResolve: (() => void) | null = null
   let pendingManual = false
-  let activeApplyCleanup: (() => void) | null = null
+  let activeApplyCleanup: ((resume?: boolean) => void) | null = null
+
+  const pauseObserver = () => {
+    ro.value?.disconnect()
+    ro.value = null
+  }
+
+  const resumeObserver = () => {
+    if (enabled.value)
+      start()
+  }
 
   const round = (v: number) => {
     switch (opt.rounding) {
@@ -127,220 +137,21 @@ export function useAutoResize(
     return typeof (el as any).animate === 'function'
   }
 
-  const apply = (e: AutoResizeEvent, styleEl: HTMLElement) => {
-    if (!opt.applyStyle)
-      return
-
-    // Pause ResizeObserver during style application to prevent feedback loops
-    ro.value?.disconnect()
-
-    activeApplyCleanup?.()
-    activeApplyCleanup = null
-
-    if (opt.applyMode === 'sync') {
-      if (opt.width)
-        styleEl.style.width = `${e.next.width}px`
-      if (opt.height)
-        styleEl.style.height = `${e.next.height}px`
-      // Resume ResizeObserver immediately for sync mode
-      if (enabled.value)
-        start()
-      return
-    }
-
-    const resolvedApplyMode: AutoResizeApplyMode = opt.applyMode === 'auto'
-      ? (canWaapi(styleEl) ? 'waapi' : 'transition')
-      : opt.applyMode
-
-    const prev = e.prev
-    if (!prev)
-      return
-
-    const props: string[] = []
-    if (opt.width && prev.width !== e.next.width)
-      props.push('width')
-    if (opt.height && prev.height !== e.next.height)
-      props.push('height')
-
-    if (props.length === 0)
-      return
-
-    const prevWidth = styleEl.style.width
-    const prevHeight = styleEl.style.height
-
-    if (resolvedApplyMode === 'waapi') {
-      if (!canWaapi(styleEl))
-        return
-
-      if (props.includes('width'))
-        styleEl.style.width = `${prev.width}px`
-      if (props.includes('height'))
-        styleEl.style.height = `${prev.height}px`
-
-      const frames: Keyframe[] = [
-        {
-          ...(props.includes('width') ? { width: `${prev.width}px` } : {}),
-          ...(props.includes('height') ? { height: `${prev.height}px` } : {}),
-        },
-        {
-          ...(props.includes('width') ? { width: `${e.next.width}px` } : {}),
-          ...(props.includes('height') ? { height: `${e.next.height}px` } : {}),
-        },
-      ]
-
-      const anim = (styleEl as any).animate(frames, {
-        duration: opt.durationMs,
-        easing: opt.easing,
-        fill: 'forwards',
-      }) as Animation
-
-      let finished = false
-      const done = () => {
-        if (finished)
-          return
-        finished = true
-
-        if (opt.clearStyleOnFinish) {
-          if (props.includes('width'))
-            styleEl.style.width = ''
-          if (props.includes('height'))
-            styleEl.style.height = ''
-        }
-        else {
-          if (props.includes('width'))
-            styleEl.style.width = prevWidth
-          if (props.includes('height'))
-            styleEl.style.height = prevHeight
-        }
-      }
-
-      const onFinish = () => {
-        done()
-        // Resume ResizeObserver after animation finishes
-        if (enabled.value)
-          start()
-      }
-      const onCancel = () => {
-        done()
-        // Resume ResizeObserver after animation cancels
-        if (enabled.value)
-          start()
-      }
-
-      anim.addEventListener('finish', onFinish, { once: true })
-      anim.addEventListener('cancel', onCancel, { once: true })
-
-      activeApplyCleanup = () => {
-        anim.removeEventListener('finish', onFinish)
-        anim.removeEventListener('cancel', onCancel)
-        anim.cancel()
-        done()
-        // Resume ResizeObserver after animation cleanup
-        if (enabled.value)
-          start()
-      }
-
-      return
-    }
-
-    const prevTransitionProperty = styleEl.style.transitionProperty
-    const prevTransitionDuration = styleEl.style.transitionDuration
-    const prevTransitionTimingFunction = styleEl.style.transitionTimingFunction
-
-    styleEl.style.transitionProperty = props.join(',')
-    styleEl.style.transitionDuration = '0ms'
-    styleEl.style.transitionTimingFunction = opt.easing
-
-    if (props.includes('width'))
-      styleEl.style.width = `${prev.width}px`
-    if (props.includes('height'))
-      styleEl.style.height = `${prev.height}px`
-
-    styleEl.offsetWidth
-
-    styleEl.style.transitionDuration = `${opt.durationMs}ms`
-    if (props.includes('width'))
-      styleEl.style.width = `${e.next.width}px`
-    if (props.includes('height'))
-      styleEl.style.height = `${e.next.height}px`
-
-    let finished = false
-    const remaining = new Set(props)
-    let timeoutId: number | null = null
-
-    const done = () => {
-      if (finished)
-        return
-      finished = true
-
-      styleEl.style.transitionProperty = prevTransitionProperty
-      styleEl.style.transitionDuration = prevTransitionDuration
-      styleEl.style.transitionTimingFunction = prevTransitionTimingFunction
-
-      if (opt.clearStyleOnFinish) {
-        if (props.includes('width'))
-          styleEl.style.width = ''
-        if (props.includes('height'))
-          styleEl.style.height = ''
-      }
-      else {
-        if (props.includes('width'))
-          styleEl.style.width = prevWidth
-        if (props.includes('height'))
-          styleEl.style.height = prevHeight
-      }
-    }
-
-    const onEnd = (ev: TransitionEvent) => {
-      if (ev.target !== styleEl)
-        return
-      if (!props.includes(ev.propertyName))
-        return
-
-      remaining.delete(ev.propertyName)
-      if (remaining.size > 0)
-        return
-
-      styleEl.removeEventListener('transitionend', onEnd)
-      done()
-      // Resume ResizeObserver after transition ends
-      if (enabled.value)
-        start()
-    }
-
-    styleEl.addEventListener('transitionend', onEnd)
-
-    if (typeof setTimeout !== 'undefined') {
-      timeoutId = setTimeout(() => {
-        styleEl.removeEventListener('transitionend', onEnd)
-        done()
-        // Resume ResizeObserver after timeout
-        if (enabled.value)
-          start()
-      }, opt.durationMs + 34) as unknown as number
-    }
-
-    activeApplyCleanup = () => {
-      styleEl.removeEventListener('transitionend', onEnd)
-      if (timeoutId != null)
-        clearTimeout(timeoutId)
-      done()
-      // Resume ResizeObserver after transition cleanup
-      if (enabled.value)
-        start()
-    }
+  const measureBox = (el: HTMLElement): AutoResizeSize => {
+    const rect = el.getBoundingClientRect()
+    const ow = el.offsetWidth
+    const oh = el.offsetHeight
+    // When an ancestor CSS transform (such as a popover open scale animation) is active,
+    // getBoundingClientRect() returns the transformed box while offsetWidth/offsetHeight
+    // reflects the untransformed layout size. Keep rect when unscaled so subpixel rounding
+    // modes and jsdom mocks that stub getBoundingClientRect() remain exact.
+    const width = ow > 0 && Math.abs(rect.width - ow) > 1 ? ow : rect.width
+    const height = oh > 0 && Math.abs(rect.height - oh) > 1 ? oh : rect.height
+    return { width, height }
   }
 
-  const measureAndSync = async (isManual: boolean) => {
-    await nextTick()
-    const { inner, styleEl } = getTargets()
-    if (!inner || !styleEl)
-      return
-    if (!enabled.value)
-      return
-
-    const rect = inner.getBoundingClientRect()
-
+  const computeMeasuredSize = (inner: HTMLElement, styleEl: HTMLElement): AutoResizeSize => {
+    const box = measureBox(inner)
     let extraW = 0
     let extraH = 0
     if (styleEl !== inner) {
@@ -355,10 +166,274 @@ export function useAutoResize(
       }
     }
 
-    const next: AutoResizeSize = {
-      width: round(rect.width + extraW),
-      height: round(rect.height + extraH),
+    return {
+      width: round(box.width + extraW),
+      height: round(box.height + extraH),
     }
+  }
+
+  const apply = (e: AutoResizeEvent, styleEl: HTMLElement) => {
+    if (!opt.applyStyle)
+      return
+
+    let interruptedFrom: AutoResizeSize | null = null
+    if (activeApplyCleanup) {
+      const liveBox = measureBox(styleEl)
+      if (liveBox.width > 0 || liveBox.height > 0) {
+        interruptedFrom = {
+          width: round(liveBox.width),
+          height: round(liveBox.height),
+        }
+      }
+      const cleanup = activeApplyCleanup
+      activeApplyCleanup = null
+      cleanup(false)
+    }
+
+    if (opt.applyMode === 'sync') {
+      const nextW = opt.width ? `${e.next.width}px` : null
+      const nextH = opt.height ? `${e.next.height}px` : null
+      const needsWrite = (nextW !== null && styleEl.style.width !== nextW)
+        || (nextH !== null && styleEl.style.height !== nextH)
+      if (!needsWrite) {
+        resumeObserver()
+        return
+      }
+      pauseObserver()
+      if (nextW !== null)
+        styleEl.style.width = nextW
+      if (nextH !== null)
+        styleEl.style.height = nextH
+      resumeObserver()
+      return
+    }
+
+    const resolvedApplyMode: AutoResizeApplyMode = opt.applyMode === 'auto'
+      ? (canWaapi(styleEl) ? 'waapi' : 'transition')
+      : opt.applyMode
+
+    const from = interruptedFrom ?? e.prev
+    if (!from) {
+      resumeObserver()
+      return
+    }
+
+    const props: string[] = []
+    if (opt.width && from.width !== e.next.width)
+      props.push('width')
+    if (opt.height && from.height !== e.next.height)
+      props.push('height')
+
+    if (props.length === 0) {
+      resumeObserver()
+      return
+    }
+
+    if (resolvedApplyMode === 'waapi' && !canWaapi(styleEl)) {
+      resumeObserver()
+      return
+    }
+
+    // Pause ResizeObserver only while actively mutating/animating styleEl
+    pauseObserver()
+
+    const prevWidth = styleEl.style.width
+    const prevHeight = styleEl.style.height
+
+    if (resolvedApplyMode === 'waapi') {
+      if (props.includes('width'))
+        styleEl.style.width = `${from.width}px`
+      if (props.includes('height'))
+        styleEl.style.height = `${from.height}px`
+
+      const frames: Keyframe[] = [
+        {
+          ...(props.includes('width') ? { width: `${from.width}px` } : {}),
+          ...(props.includes('height') ? { height: `${from.height}px` } : {}),
+        },
+        {
+          ...(props.includes('width') ? { width: `${e.next.width}px` } : {}),
+          ...(props.includes('height') ? { height: `${e.next.height}px` } : {}),
+        },
+      ]
+
+      const anim = (styleEl as any).animate(frames, {
+        duration: opt.durationMs,
+        easing: opt.easing,
+        fill: 'forwards',
+      }) as Animation
+
+      let finished = false
+      const done = (committed: boolean) => {
+        if (finished)
+          return
+        finished = true
+
+        if (opt.clearStyleOnFinish) {
+          if (props.includes('width'))
+            styleEl.style.width = ''
+          if (props.includes('height'))
+            styleEl.style.height = ''
+        }
+        else if (committed) {
+          if (props.includes('width'))
+            styleEl.style.width = `${e.next.width}px`
+          if (props.includes('height'))
+            styleEl.style.height = `${e.next.height}px`
+        }
+        else {
+          if (props.includes('width'))
+            styleEl.style.width = prevWidth
+          if (props.includes('height'))
+            styleEl.style.height = prevHeight
+        }
+      }
+
+      const cleanup = (resume = true) => {
+        anim.removeEventListener('finish', onFinish)
+        anim.removeEventListener('cancel', onCancel)
+        done(false)
+        anim.cancel()
+        if (activeApplyCleanup === cleanup)
+          activeApplyCleanup = null
+        if (resume)
+          resumeObserver()
+      }
+
+      function onFinish() {
+        anim.removeEventListener('cancel', onCancel)
+        done(true)
+        // Release fill: 'forwards' after inline styles settle so future content
+        // height/width changes are never pinned to the completed animation keyframe.
+        anim.cancel()
+        if (activeApplyCleanup === cleanup)
+          activeApplyCleanup = null
+        resumeObserver()
+      }
+
+      function onCancel() {
+        anim.removeEventListener('finish', onFinish)
+        done(false)
+        if (activeApplyCleanup === cleanup)
+          activeApplyCleanup = null
+        resumeObserver()
+      }
+
+      anim.addEventListener('finish', onFinish, { once: true })
+      anim.addEventListener('cancel', onCancel, { once: true })
+
+      activeApplyCleanup = cleanup
+      return
+    }
+
+    const prevTransitionProperty = styleEl.style.transitionProperty
+    const prevTransitionDuration = styleEl.style.transitionDuration
+    const prevTransitionTimingFunction = styleEl.style.transitionTimingFunction
+
+    styleEl.style.transitionProperty = props.join(',')
+    styleEl.style.transitionDuration = '0ms'
+    styleEl.style.transitionTimingFunction = opt.easing
+
+    if (props.includes('width'))
+      styleEl.style.width = `${from.width}px`
+    if (props.includes('height'))
+      styleEl.style.height = `${from.height}px`
+
+    styleEl.offsetWidth
+
+    styleEl.style.transitionDuration = `${opt.durationMs}ms`
+    if (props.includes('width'))
+      styleEl.style.width = `${e.next.width}px`
+    if (props.includes('height'))
+      styleEl.style.height = `${e.next.height}px`
+
+    let finished = false
+    const remaining = new Set(props)
+    let timeoutId: number | null = null
+
+    const done = (committed: boolean) => {
+      if (finished)
+        return
+      finished = true
+
+      styleEl.style.transitionProperty = prevTransitionProperty
+      styleEl.style.transitionDuration = prevTransitionDuration
+      styleEl.style.transitionTimingFunction = prevTransitionTimingFunction
+
+      if (opt.clearStyleOnFinish) {
+        if (props.includes('width'))
+          styleEl.style.width = ''
+        if (props.includes('height'))
+          styleEl.style.height = ''
+      }
+      else if (committed) {
+        if (props.includes('width'))
+          styleEl.style.width = `${e.next.width}px`
+        if (props.includes('height'))
+          styleEl.style.height = `${e.next.height}px`
+      }
+      else {
+        if (props.includes('width'))
+          styleEl.style.width = prevWidth
+        if (props.includes('height'))
+          styleEl.style.height = prevHeight
+      }
+    }
+
+    const cleanup = (resume = true) => {
+      styleEl.removeEventListener('transitionend', onEnd)
+      if (timeoutId != null)
+        clearTimeout(timeoutId)
+      done(false)
+      if (activeApplyCleanup === cleanup)
+        activeApplyCleanup = null
+      if (resume)
+        resumeObserver()
+    }
+
+    function onEnd(ev: TransitionEvent) {
+      if (ev.target !== styleEl)
+        return
+      if (!props.includes(ev.propertyName))
+        return
+
+      remaining.delete(ev.propertyName)
+      if (remaining.size > 0)
+        return
+
+      styleEl.removeEventListener('transitionend', onEnd)
+      if (timeoutId != null)
+        clearTimeout(timeoutId)
+      done(true)
+      if (activeApplyCleanup === cleanup)
+        activeApplyCleanup = null
+      resumeObserver()
+    }
+
+    styleEl.addEventListener('transitionend', onEnd)
+
+    if (typeof setTimeout !== 'undefined') {
+      timeoutId = setTimeout(() => {
+        styleEl.removeEventListener('transitionend', onEnd)
+        done(true)
+        if (activeApplyCleanup === cleanup)
+          activeApplyCleanup = null
+        resumeObserver()
+      }, opt.durationMs + 34) as unknown as number
+    }
+
+    activeApplyCleanup = cleanup
+  }
+
+  const measureAndSync = async (isManual: boolean) => {
+    await nextTick()
+    const { inner, styleEl } = getTargets()
+    if (!inner || !styleEl)
+      return
+    if (!enabled.value)
+      return
+
+    const next = computeMeasuredSize(inner, styleEl)
 
     const prev = size.value
     const event: AutoResizeEvent = { prev, next, isManual }
@@ -379,26 +454,7 @@ export function useAutoResize(
     if (!enabled.value)
       return null
 
-    const rect = inner.getBoundingClientRect()
-
-    let extraW = 0
-    let extraH = 0
-    if (styleEl !== inner) {
-      const cs = getComputedStyle(styleEl)
-      if (cs.boxSizing === 'border-box') {
-        const px = Number.parseFloat(cs.paddingLeft) + Number.parseFloat(cs.paddingRight)
-        const py = Number.parseFloat(cs.paddingTop) + Number.parseFloat(cs.paddingBottom)
-        const bx = Number.parseFloat(cs.borderLeftWidth) + Number.parseFloat(cs.borderRightWidth)
-        const by = Number.parseFloat(cs.borderTopWidth) + Number.parseFloat(cs.borderBottomWidth)
-        extraW = (Number.isFinite(px) ? px : 0) + (Number.isFinite(bx) ? bx : 0)
-        extraH = (Number.isFinite(py) ? py : 0) + (Number.isFinite(by) ? by : 0)
-      }
-    }
-
-    const next: AutoResizeSize = {
-      width: round(rect.width + extraW),
-      height: round(rect.height + extraH),
-    }
+    const next = computeMeasuredSize(inner, styleEl)
 
     const prev = size.value
     const event: AutoResizeEvent = { prev, next, isManual }
@@ -510,8 +566,7 @@ export function useAutoResize(
   }
 
   const stop = () => {
-    ro.value?.disconnect()
-    ro.value = null
+    pauseObserver()
     if (rafId != null)
       cancelAnimationFrame(rafId)
     rafId = null
@@ -522,8 +577,9 @@ export function useAutoResize(
     microtaskPromiseResolve = null
     microtaskPromise = null
     pendingManual = false
-    activeApplyCleanup?.()
+    const cleanup = activeApplyCleanup
     activeApplyCleanup = null
+    cleanup?.(false)
   }
 
   const setEnabled = (v: boolean) => {

@@ -8,6 +8,7 @@
 
 import type { InsightCardsEmits, InsightCardsProps, InsightPage } from './types'
 import { computed, ref } from 'vue'
+import { TxButton } from '../../button'
 
 defineOptions({ name: 'TxInsightCards' })
 
@@ -90,9 +91,10 @@ defineExpose({ previous, next, goTo })
         <span v-if="showCount" class="tx-bui-insight-cards__count">{{ pages.length }}</span>
       </span>
       <span class="tx-bui-insight-cards__pager">
-        <button
-          type="button"
+        <TxButton
           class="tx-bui-insight-cards__step"
+          size="sm"
+          variant="bare"
           :aria-label="previousLabel"
           :disabled="!canGoBack || pages.length === 0"
           @click="previous"
@@ -100,10 +102,11 @@ defineExpose({ previous, next, goTo })
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M15 18l-6-6 6-6" />
           </svg>
-        </button>
-        <button
-          type="button"
+        </TxButton>
+        <TxButton
           class="tx-bui-insight-cards__step"
+          size="sm"
+          variant="bare"
           :aria-label="nextLabel"
           :disabled="!canGoForward || pages.length === 0"
           @click="next"
@@ -111,7 +114,7 @@ defineExpose({ previous, next, goTo })
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M9 6l6 6-6 6" />
           </svg>
-        </button>
+        </TxButton>
       </span>
     </div>
 
@@ -127,14 +130,16 @@ defineExpose({ previous, next, goTo })
       </div>
 
       <slot name="follow-up" :page="page" :index="index">
-        <button
+        <TxButton
           v-if="page.suggestion"
-          type="button"
           class="tx-bui-insight-cards__follow-up"
+          size="sm"
+          variant="secondary"
+          round
           @click="followUp"
         >
           {{ page.suggestion }}
-        </button>
+        </TxButton>
       </slot>
     </div>
   </div>
@@ -180,42 +185,17 @@ defineExpose({ previous, next, goTo })
   align-items: center;
 }
 
-.tx-bui-insight-cards__step {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.tx-bui-insight-cards__step.tx-button {
   width: 24px;
+  min-width: 24px;
   height: 24px;
+  padding: 0;
   color: var(--tx-bui-ink-3, #9a9da3);
-  cursor: pointer;
   border-radius: var(--tx-bui-radius-chip, 6px);
-  transition: transform 0.1s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
 
   &:hover:not(:disabled) {
     color: var(--tx-bui-ink, #1f2124);
     background: var(--tx-bui-hover, #f4f5f6);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--tx-bui-accent, #0285ff);
-    outline-offset: 1px;
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.96);
-  }
-
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.4;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-
-    &:active:not(:disabled) {
-      transform: none;
-    }
   }
 }
 
@@ -230,24 +210,8 @@ defineExpose({ previous, next, goTo })
   margin-top: 8px;
 }
 
-.tx-bui-insight-cards__follow-up {
+.tx-bui-insight-cards__follow-up.tx-button {
   margin-top: 8px;
-  padding: 6px 12px;
   font-size: 12px;
-  text-align: left;
-  color: var(--tx-bui-ink, #1f2124);
-  cursor: pointer;
-  background: var(--tx-bui-surface, #fff);
-  border-radius: 999px;
-  box-shadow: var(--tx-bui-shadow-btn, 0 0 0 1px #e0e2e5, 0 1px 2px #1018280d);
-
-  &:hover {
-    background: var(--tx-bui-hover, #f4f5f6);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--tx-bui-accent, #0285ff);
-    outline-offset: 1px;
-  }
 }
 </style>

@@ -17,6 +17,8 @@ export interface FreshChunksOptions {
   durationMs?: number
   /** Class applied to the wrapper spans. */
   className?: string
+  /** Class applied to newly appended list items / table rows inside a growing block. */
+  itemClassName?: string
   /** Injectable clock, for tests. */
   now?: () => number
 }
@@ -26,6 +28,13 @@ interface Chunk {
   end: number
   t0: number
 }
+
+interface ItemArrival {
+  index: number
+  t0: number
+}
+
+const STREAM_ITEM_SELECTOR = 'li, tbody > tr'
 
 export interface FreshChunks {
   /**
@@ -48,16 +57,21 @@ export interface FreshChunks {
 export function createFreshChunks(options: FreshChunksOptions = {}): FreshChunks {
   const duration = options.durationMs ?? 440
   const className = options.className ?? 'tx-stream-md__fresh'
+  const itemClassName = options.itemClassName ?? 'tx-stream-md__fresh-item'
   const now = options.now ?? (() => performance.now())
 
   let blockId: number | string | null = null
   let text = ''
   let chunks: Chunk[] = []
+  let itemCount = 0
+  let itemArrivals: ItemArrival[] = []
 
   function reset(): void {
     blockId = null
     text = ''
     chunks = []
+    itemCount = 0
+    itemArrivals = []
   }
 
   function update(el: HTMLElement, id: number | string): void {
@@ -65,17 +79,32 @@ export function createFreshChunks(options: FreshChunksOptions = {}): FreshChunks
     // Offsets are computed against clean DOM. A fresh `v-html` patch arrives
     // clean anyway; this covers update calls with no patch in between.
     unwrap(el)
-    const nextText = el.textContent ?? ''
+    // `marked.parser` appends trailing newlines after closing block tags
+    // (`<p>...</p>\n`, `<ul>\n<li>...</li>\n</ul>\n`). Trimming trailing
+    // whitespace keeps prefix growth intact across every delta instead of
+    // treating every append before `\n` as a rewrite.
+    const nextText = (el.textContent ?? '').trimEnd()
+    const items = Array.from(el.querySelectorAll<HTMLElement>(STREAM_ITEM_SELECTOR))
 
     if (blockId !== id) {
       // A brand-new tail block: everything it holds just arrived.
       blockId = id
       text = nextText
       chunks = nextText ? [{ start: 0, end: nextText.length, t0: t }] : []
+      itemCount = items.length
+      itemArrivals = []
     }
     else if (nextText.length > text.length && nextText.startsWith(text)) {
       chunks.push({ start: text.length, end: nextText.length, t0: t })
       text = nextText
+      if (items.length > itemCount) {
+        for (let index = itemCount; index < items.length; index++)
+          itemArrivals.push({ index, t0: t })
+      }
+      else if (items.length < itemCount) {
+        itemArrivals = itemArrivals.filter(entry => entry.index < items.length)
+      }
+      itemCount = items.length
     }
     else if (nextText !== text) {
       // The parser rewrote earlier output (an emphasis closing, a reference
@@ -83,10 +112,26 @@ export function createFreshChunks(options: FreshChunksOptions = {}): FreshChunks
       // replaying settled text reads worse than skipping one beat.
       text = nextText
       chunks = []
+      itemCount = items.length
+      itemArrivals = []
+    }
+    else if (items.length > itemCount) {
+      for (let index = itemCount; index < items.length; index++)
+        itemArrivals.push({ index, t0: t })
+      itemCount = items.length
     }
 
     chunks = chunks.filter(chunk => t - chunk.t0 < duration)
     for (const chunk of chunks) wrapChunk(el, chunk, t)
+
+    itemArrivals = itemArrivals.filter(entry => t - entry.t0 < duration && entry.index < items.length)
+    for (const entry of itemArrivals) {
+      const item = items[entry.index]
+      if (!item)
+        continue
+      item.classList.add(itemClassName)
+      item.style.animationDelay = `${(-(t - entry.t0)).toFixed(1)}ms`
+    }
   }
 
   function wrapChunk(el: HTMLElement, chunk: Chunk, t: number): void {
@@ -103,8 +148,14 @@ export function createFreshChunks(options: FreshChunksOptions = {}): FreshChunks
       offset = nodeEnd
       const from = Math.max(chunk.start, nodeStart)
       const to = Math.min(chunk.end, nodeEnd)
-      if (from < to)
-        targets.push({ node, from: from - nodeStart, to: to - nodeStart })
+      if (from < to) {
+        const localFrom = from - nodeStart
+        const localTo = to - nodeStart
+        // Never wrap pure whitespace slices — inter-element `\n` nodes inside
+        // `<ul>`, `<ol>`, `<table>`, or `<tr>` must not gain child `<span>`s.
+        if (node.data.slice(localFrom, localTo).trim())
+          targets.push({ node, from: localFrom, to: localTo })
+      }
       if (nodeEnd >= chunk.end)
         break
     }
@@ -135,6 +186,10 @@ export function createFreshChunks(options: FreshChunksOptions = {}): FreshChunks
       if (parent instanceof Element || parent instanceof Document || parent instanceof DocumentFragment)
         parent.normalize()
     }
+    for (const item of Array.from(root.querySelectorAll<HTMLElement>(`.${itemClassName}`))) {
+      item.classList.remove(itemClassName)
+      item.style.removeProperty('animation-delay')
+    }
   }
 
   function finish(root: ParentNode): void {
@@ -145,8 +200,10 @@ export function createFreshChunks(options: FreshChunksOptions = {}): FreshChunks
   function seed(el: HTMLElement, id: number | string): void {
     unwrap(el)
     blockId = id
-    text = el.textContent ?? ''
+    text = (el.textContent ?? '').trimEnd()
     chunks = []
+    itemCount = el.querySelectorAll(STREAM_ITEM_SELECTOR).length
+    itemArrivals = []
   }
 
   return { update, seed, finish, reset }

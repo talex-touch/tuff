@@ -146,6 +146,10 @@ code: |
 | `lang` | `string` | `''` | Shiki 语言 id；留空不高亮，也不加载 Shiki。 |
 | `filename` | `string` | — | 头部文件名，等宽。 |
 | `langLabel` | `string` | — | 文件名旁的语言标签，如 `TypeScript`。 |
+| `diff` | `CodeDiffRow[]` | — | 统一 diff 行；与 `code` 同传时可配合 `diffToggle` 切换视图。 |
+| `diffToggle` | `boolean` | `false` | 同时提供 `code` 与 `diff` 时在顶栏显示 `Code / Diff` 切换开关。 |
+| `defaultView` | `'code' \| 'diff'` | `'diff'` | 开启 `diffToggle` 时的默认视图。 |
+| `diffLabel` | `string` | `'Diff'` | `diffToggle` 对比视图按钮文案。 |
 | `revealedLines` | `number` | — | 显现到第几行，越界时夹取；省略或传 `-1` 表示全部。 |
 | `streaming` | `boolean` | — | 流式模式：源头仍在输出；`false` 时直接显示，可用 `replay()` 回放。 |
 | `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | 流式模式：词的进场方式；代码保持语法颜色，`aurora` 等同 `blur`，`hue` 只是淡入。 |

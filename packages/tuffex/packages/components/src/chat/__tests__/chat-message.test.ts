@@ -153,6 +153,28 @@ describe('txChatMessage rich variants, status, and actions', () => {
     expect(wrapper.findAll('.tx-chat-message__typing i')).toHaveLength(3)
   })
 
+  it('renders avatar via TxAvatar, bubble via TxCard, and keeps author/time outside the card', async () => {
+    const wrapper = mount(TxChatMessage, {
+      props: {
+        markdown: false,
+        message: {
+          id: 'a2',
+          role: 'assistant',
+          name: 'Tuff AI',
+          content: 'Ready to ship.',
+          createdAt: 1_705_000_000_000,
+        },
+      },
+    })
+    await nextTick()
+
+    expect(wrapper.find('.tx-chat-message__avatar .tx-avatar').exists()).toBe(true)
+    expect(wrapper.find('.tx-chat-message__avatar .tx-avatar__text').text()).toBe('TA')
+    expect(wrapper.find('.tx-chat-message__bubble.tx-card').exists()).toBe(true)
+    expect(wrapper.find('.tx-chat-message__header .tx-chat-message__author').text()).toBe('Tuff AI')
+    expect(wrapper.find('.tx-chat-message__bubble .tx-chat-message__header').exists()).toBe(false)
+  })
+
   it('renders a native audio fallback and retry control when lazy TxVoiceClip loading fails', async () => {
     voiceImportState.shouldFail = true
     vi.resetModules()
@@ -188,5 +210,23 @@ describe('txChatMessage rich variants, status, and actions', () => {
     expect(wrapper.find('.tx-voice-clip').exists()).toBe(true)
     expect(wrapper.find('.tx-voice-clip').attributes('data-src')).toBe('blob:voice-1')
     expect(wrapper.find('.tx-chat-message__voice-fallback').exists()).toBe(false)
+  })
+
+  it('renders role-aware fallback avatar icons when no avatarUrl is provided', () => {
+    const userMsg = mount(TxChatMessage, {
+      props: {
+        markdown: false,
+        message: { id: 'u1', role: 'user', content: 'Hello' },
+      },
+    })
+    const aiMsg = mount(TxChatMessage, {
+      props: {
+        markdown: false,
+        message: { id: 'a1', role: 'assistant', content: 'Hi' },
+      },
+    })
+
+    expect(userMsg.find('.tx-avatar .tx-avatar__fallback svg circle').exists()).toBe(true)
+    expect(aiMsg.find('.tx-avatar .tx-avatar__fallback svg path').exists()).toBe(true)
   })
 })

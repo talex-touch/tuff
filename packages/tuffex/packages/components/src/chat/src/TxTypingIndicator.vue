@@ -114,7 +114,7 @@ const circleDashStyle = computed(() => ({
   </div>
 </template>
 
-<style scoped lang="scss">
+<style lang="scss">
 .tx-typing-indicator {
   display: inline-flex;
   align-items: center;
@@ -198,10 +198,8 @@ const circleDashStyle = computed(() => ({
   border-radius: 999px;
   background: conic-gradient(
     from 0deg,
-    currentColor 0deg,
-    currentColor 92deg,
-    transparent 92deg,
-    transparent 360deg
+    currentColor 0deg 96deg,
+    color-mix(in srgb, currentColor 18%, transparent) 96deg 360deg
   );
   mask: radial-gradient(
     farthest-side,

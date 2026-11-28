@@ -135,7 +135,8 @@
 
 /* Odd-count category grids span their concluding cell edge-to-edge so no
    category band finishes with an empty half-row hole. */
-.docs-gallery__cat-section .docs-gallery__grid > .docs-gallery__cell:nth-child(odd):last-child {
+.docs-gallery__cat-section .docs-gallery__grid > .docs-gallery__cell:nth-child(odd):last-child,
+.docs-gallery__cat-section .docs-gallery__grid > .docs-gallery__cell--full {
   grid-column: 1 / -1;
   border-left: none;
 }

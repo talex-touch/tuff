@@ -12,6 +12,8 @@ import type {
 import { computed, onMounted, ref, useSlots, watch } from 'vue'
 import { useLazyComponent } from '../../../../utils/use-lazy-component'
 import TxAttachmentTray from '../../attachment-tray/src/TxAttachmentTray.vue'
+import TxAvatar from '../../avatar/src/TxAvatar.vue'
+import TxCard from '../../card/src/TxCard.vue'
 import TxMarkdownView from '../../markdown-view/src/TxMarkdownView.vue'
 import TxMessageActions from '../../message-actions/src/TxMessageActions.vue'
 
@@ -57,6 +59,11 @@ const shouldShowAvatar = computed(() => {
 })
 
 const roleClass = computed(() => `tx-chat-message--${props.message.role}`)
+const isFlatBubble = computed(() =>
+  props.variant === 'clean' || (props.variant === 'hybrid' && props.message.role !== 'user'),
+)
+const hasAvatarContent = computed(() => Boolean(props.message.avatarUrl || props.message.name?.trim()))
+const showHeader = computed(() => Boolean(slots.header || props.message.name || createdText.value))
 
 const { component: streamMarkdownComp, load: loadStreamMarkdown } = useLazyComponent<typeof TxStreamMarkdownComponent>(
   () => import('../../stream-markdown').then(module => module.TxStreamMarkdown),
@@ -147,6 +154,7 @@ function onImageClick(url: string, name?: string): void {
       roleClass,
       `is-variant-${variant}`,
       {
+        'is-flat-bubble': isFlatBubble,
         'is-streaming': isStreaming,
         'is-pending': isPending,
         'is-error': isError,
@@ -157,12 +165,44 @@ function onImageClick(url: string, name?: string): void {
     <div class="tx-chat-message__meta">
       <div v-if="shouldShowAvatar" class="tx-chat-message__avatar">
         <slot name="avatar" :message="message">
-          <img v-if="message.avatarUrl" :src="message.avatarUrl" alt="">
-          <div v-else class="tx-chat-message__avatar-fallback" aria-hidden="true" />
+          <TxAvatar
+            v-if="hasAvatarContent"
+            class="tx-chat-message__avatar-badge"
+            :src="message.avatarUrl"
+            :name="message.name"
+            :alt="message.name || ''"
+            :size="30"
+            shape="rounded"
+          />
+          <TxAvatar
+            v-else
+            class="tx-chat-message__avatar-badge"
+            :size="30"
+            shape="rounded"
+          >
+            <svg v-if="message.role === 'user'" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="8" r="3.5" />
+              <path d="M5.5 19.5a6.5 6.5 0 0 1 13 0" />
+            </svg>
+            <svg v-else-if="message.role === 'assistant'" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+              <path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 8v4m0 4h.01" />
+            </svg>
+          </TxAvatar>
         </slot>
       </div>
 
       <div class="tx-chat-message__body">
+        <header v-if="showHeader" class="tx-chat-message__header">
+          <slot name="header" :message="message">
+            <span v-if="message.name" class="tx-chat-message__author">{{ message.name }}</span>
+            <span v-if="createdText" class="tx-chat-message__time">{{ createdText }}</span>
+          </slot>
+        </header>
+
         <div v-if="slots.voice || message.voice?.src" class="tx-chat-message__voice">
           <slot name="voice" :message="message">
             <component
@@ -193,13 +233,16 @@ function onImageClick(url: string, name?: string): void {
           </slot>
         </div>
 
-        <div class="tx-chat-message__bubble">
-          <header v-if="slots.header || createdText" class="tx-chat-message__header">
-            <slot name="header" :message="message">
-              <span v-if="createdText" class="tx-chat-message__time">{{ createdText }}</span>
-            </slot>
-          </header>
-
+        <TxCard
+          class="tx-chat-message__bubble"
+          :variant="isFlatBubble ? 'plain' : 'solid'"
+          :background="isFlatBubble ? 'pure' : 'refraction'"
+          shadow="none"
+          :padding="isFlatBubble ? 0 : 12"
+          :radius="isFlatBubble ? 0 : 16"
+          :refraction-strength="isFlatBubble ? 0 : 28"
+          refraction-tone="mist"
+        >
           <div class="tx-chat-message__content">
             <slot name="content" :message="message">
               <component
@@ -264,7 +307,7 @@ function onImageClick(url: string, name?: string): void {
           <div v-if="slots.footer" class="tx-chat-message__footer">
             <slot name="footer" :message="message" />
           </div>
-        </div>
+        </TxCard>
 
         <div v-if="showActionRow" class="tx-chat-message__actions-wrap">
           <div class="tx-chat-message__actions-inner">
@@ -292,7 +335,7 @@ function onImageClick(url: string, name?: string): void {
   </article>
 </template>
 
-<style scoped lang="scss">
+<style lang="scss">
 .tx-chat-message {
   width: 100%;
 }
@@ -304,28 +347,20 @@ function onImageClick(url: string, name?: string): void {
 }
 
 .tx-chat-message__avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 10px;
-  overflow: hidden;
   flex-shrink: 0;
-  background: var(--tx-fill-color-light, #f5f7fa);
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
+  padding-top: 2px;
 }
 
-.tx-chat-message__avatar-fallback {
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--tx-color-primary, #409eff) 30%, transparent),
-    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 75%, transparent)
-  );
+.tx-chat-message__avatar-badge.tx-avatar {
+  border-radius: 10px;
+  --tx-avatar-bg: var(--tx-fill-color-light, #f5f7fa);
+  --tx-avatar-text: var(--tx-text-color-regular, #606266);
+}
+
+.tx-chat-message--user .tx-chat-message__avatar-badge.tx-avatar {
+  --tx-avatar-bg: color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, var(--tx-fill-color-light, #f5f7fa));
+  --tx-avatar-text: color-mix(in srgb, var(--tx-color-primary, #409eff) 76%, var(--tx-text-color-primary, #303133));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, transparent);
 }
 
 .tx-chat-message__body {
@@ -333,7 +368,28 @@ function onImageClick(url: string, name?: string): void {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 4px;
+}
+
+.tx-chat-message__header {
+  display: flex;
+  align-items: baseline;
   gap: 6px;
+  padding: 0 2px;
+  line-height: 16px;
+}
+
+.tx-chat-message__author {
+  font-size: 12px;
+  font-weight: var(--tx-font-weight-medium, 500);
+  color: var(--tx-text-color-regular, #606266);
+}
+
+.tx-chat-message__time,
+.tx-chat-message__metrics {
+  font-size: 11px;
+  color: var(--tx-text-color-secondary, #6b7280);
+  font-variant-numeric: tabular-nums;
 }
 
 .tx-chat-message__voice {
@@ -352,33 +408,42 @@ function onImageClick(url: string, name?: string): void {
   max-width: 100%;
 }
 
-.tx-chat-message__bubble {
+.tx-chat-message__bubble.tx-card {
+  width: fit-content;
+  max-width: min(92%, 620px);
   min-width: 0;
-  border-radius: 14px;
-  border: 1px solid var(--tx-border-color-lighter, #e5e7eb);
-  background: var(--tx-fill-color-blank, #fff);
-  padding: 10px 12px;
+  padding: 10px 14px;
 }
 
-.tx-chat-message__header {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 6px;
-}
+.tx-chat-message__content {
+  font-size: 13.5px;
+  line-height: 1.58;
+  color: var(--tx-text-color-primary, #111827);
 
-.tx-chat-message__time,
-.tx-chat-message__metrics {
-  font-size: 11px;
-  color: var(--tx-text-color-secondary, #6b7280);
-  font-variant-numeric: tabular-nums;
+  .tx-markdown-view,
+  .tx-markdown-view .markdown-body {
+    font-size: inherit;
+    line-height: inherit;
+    color: inherit;
+    background: transparent;
+  }
+
+  .tx-markdown-view .markdown-body p {
+    margin: 6px 0;
+  }
+
+  .tx-markdown-view .markdown-body > :first-child {
+    margin-top: 0;
+  }
+
+  .tx-markdown-view .markdown-body > :last-child {
+    margin-bottom: 0;
+  }
 }
 
 .tx-chat-message__plain {
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--tx-text-color-primary, #111827);
 }
 
 .tx-chat-message__status {
@@ -499,41 +564,45 @@ function onImageClick(url: string, name?: string): void {
   flex-direction: row-reverse;
 }
 
-.tx-chat-message--user .tx-chat-message__bubble {
-  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 7%, var(--tx-fill-color-blank, #fff));
-  border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 35%, transparent);
+.tx-chat-message--user .tx-chat-message__body {
+  align-items: flex-end;
+}
+
+.tx-chat-message--user .tx-chat-message__header {
+  flex-direction: row-reverse;
+}
+
+.tx-chat-message--user .tx-chat-message__bubble.tx-card {
+  max-width: min(84%, 560px);
+  --tx-card-fake-background: color-mix(in srgb, var(--tx-color-primary, #409eff) 10%, var(--tx-bg-color-overlay, #ffffff));
+  border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 30%, transparent);
+}
+
+.tx-chat-message--user .tx-chat-message__actions-inner {
+  justify-content: flex-end;
 }
 
 .tx-chat-message--user.is-variant-hybrid {
-  .tx-chat-message__body {
-    align-items: flex-end;
-  }
-
-  .tx-chat-message__bubble {
+  .tx-chat-message__bubble.tx-card {
     max-width: min(78%, 560px);
     padding: 9px 14px;
-    background: var(--tx-fill-color-light, #f5f7fa);
-    border-color: var(--tx-border-color-lighter, #e5e7eb);
   }
 
   .tx-chat-message__voice {
     justify-content: flex-end;
   }
-
-  .tx-chat-message__actions-inner {
-    justify-content: flex-end;
-  }
 }
 
-.tx-chat-message--assistant.is-variant-hybrid .tx-chat-message__bubble,
-.tx-chat-message.is-variant-clean .tx-chat-message__bubble {
-  border-color: transparent;
-  background: transparent;
+.tx-chat-message.is-flat-bubble .tx-chat-message__bubble.tx-card {
+  width: 100%;
+  max-width: 100%;
   padding: 2px 0;
+  background: transparent;
+  --tx-card-fake-background: transparent;
 }
 
-.tx-chat-message--system .tx-chat-message__bubble {
-  background: color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 55%, transparent);
+.tx-chat-message--system .tx-chat-message__bubble.tx-card {
+  --tx-card-fake-background: color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 65%, var(--tx-bg-color-overlay, #ffffff));
 }
 
 @keyframes tx-chat-msg-pulse {

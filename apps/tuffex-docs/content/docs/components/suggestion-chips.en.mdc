@@ -75,14 +75,14 @@ code: |
 - Nothing renders when `suggestions` is empty.
 - Each chip is keyed by `id`; keep ids unique within a set.
 - The component holds no selection state and doesn't remove a suggestion after a tap.
-- `wrap` scrolls horizontally on overflow, with a hidden scrollbar and edge masks that signal the overflow.
-- `list` rows stagger in by position, 90ms apart; under reduced motion they simply appear.
+- `wrap` flows chips naturally across lines with `--tx-button-radius` corners (default `10px`), full inset rings, and immediate hover tint.
+- `list` rows stagger in by position, 90ms apart, separated by hairline dividers; under reduced motion they simply appear.
 - The container is `role="list"` and each chip `role="listitem"`, which overrides the button semantics; add surrounding text where button semantics matter.
 
 ## Technologies
 
 - The list rows' stagger is a CSS animation delay: each row's `--tx-suggestion-chips-index` times 90ms, with no script timer.
-- The edge fades on the `wrap` layout are `mask-image` gradients.
+- `wrap` uses `flex-wrap: wrap` with inset rings, while `list` draws inter-row hairlines via pseudo-elements.
 - Source: `packages/tuffex/packages/components/src/suggestion-chips/`.
 
 <TuffDocSourceLink />

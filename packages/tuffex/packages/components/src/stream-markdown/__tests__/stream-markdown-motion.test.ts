@@ -249,6 +249,18 @@ describe('stream markdown caret', () => {
     expect(caretOffset(wrapper)).toBe('10.0px 70.0px')
   })
 
+  it('keeps the caret inline at the active list item instead of dropping to a block line', async () => {
+    stubGeometry({ right: 164, top: 96, height: 20 })
+    const wrapper = mount(TxStreamMarkdown, {
+      props: { content: 'Intro\n\n- 第一项\n- 第二项', streaming: true },
+    })
+    await flushSanitizer()
+    await frames()
+    expect(wrapper.find('.tx-stream-md__markup--tail ul').exists()).toBe(true)
+    expect(wrapper.find('.tx-stream-md__cursor').exists()).toBe(false)
+    expect(caretOffset(wrapper)).toBe('144.0px 96.0px')
+  })
+
   it('moves the same caret element as the write head changes element', async () => {
     stubGeometry({ right: 140, top: 50, height: 20 })
     const wrapper = mount(TxStreamMarkdown, { props: { content: 'Intro paragraph', streaming: true } })

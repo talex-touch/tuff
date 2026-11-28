@@ -1,13 +1,16 @@
 <script setup lang="ts">
 // Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
-import type { TxFlatRadioValue } from '../../flat-radio/src/types'
+import type { TxFlatRadioValue } from '../../flat-radio'
+import type { TxFlatSelectValue } from '../../flat-select'
 import type { FineTuneCardEmits, FineTuneCardProps, FineTuneField, FineTuneLayout, FineTuneRange, FineTuneValues } from './types'
 import { computed } from 'vue'
-import TxFlatRadio from '../../flat-radio/src/TxFlatRadio.vue'
-import TxFlatRadioItem from '../../flat-radio/src/TxFlatRadioItem.vue'
-import TxScrubField from '../../scrub-field/src/TxScrubField.vue'
-import TxFineTuneChipSelect from './TxFineTuneChipSelect.vue'
+import { TxCard } from '../../card'
+import { TxFlatRadio, TxFlatRadioItem } from '../../flat-radio'
+import { TxFlatSelect, TxFlatSelectItem } from '../../flat-select'
+import { TxIcon } from '../../icon'
+import { TxIconChip } from '../../icon-chip'
+import { TxScrubField } from '../../scrub-field'
 
 defineOptions({ name: 'TxFineTuneCard' })
 
@@ -93,27 +96,44 @@ function onLayout(value: TxFlatRadioValue | TxFlatRadioValue[]): void {
   if (typeof value === 'string')
     update('layout', value as FineTuneLayout)
 }
+
+function onType(value: TxFlatSelectValue): void {
+  if (typeof value === 'string' && value)
+    update('type', value)
+}
 </script>
 
 <template>
-  <div class="tx-bui-fine-tune-card" :class="{ 'is-disabled': disabled }">
+  <TxCard
+    class="tx-bui-fine-tune-card"
+    :class="{ 'is-disabled': disabled }"
+    variant="solid"
+    background="pure"
+    shadow="soft"
+    :padding="0"
+    :radius="10"
+  >
     <div class="tx-bui-fine-tune-card__header">
       <span class="tx-bui-fine-tune-card__title">{{ title }}</span>
 
       <!-- The v-if/v-else pair mounts a fresh node on every flip, which is what
            replays the badge's pop-in; no explicit :key is needed here. -->
       <span v-if="isEdited" class="tx-bui-fine-tune-card__edited">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M20 6L9 17l-5-5" />
-        </svg>
+        <TxIcon name="check" :size="11" />
         {{ editedLabel }}
       </span>
       <span v-else class="tx-bui-fine-tune-card__adjust">
-        <span class="tx-bui-fine-tune-card__spark" aria-hidden="true">
+        <TxIconChip
+          class="tx-bui-fine-tune-card__spark"
+          :size="18"
+          tone="accent"
+          variant="soft"
+          :radius="5"
+        >
           <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />
           </svg>
-        </span>
+        </TxIconChip>
         <span class="tx-bui-fine-tune-card__adjust-label">{{ adjustLabel }}</span>
       </span>
     </div>
@@ -194,17 +214,24 @@ function onLayout(value: TxFlatRadioValue | TxFlatRadioValue[]): void {
     <div class="tx-bui-fine-tune-card__footer">
       <span class="tx-bui-fine-tune-card__footer-label">{{ typeLabel }}</span>
       <div class="tx-bui-fine-tune-card__type">
-        <TxFineTuneChipSelect
-          :model-value="values.type"
-          :options="typeOptions"
+        <TxFlatSelect
+          class="tx-bui-fine-tune-card__select"
+          :model-value="values.type ?? ''"
           :placeholder="typePlaceholder"
           :aria-label="typeLabel"
           :disabled="disabled"
-          @update:model-value="update('type', $event)"
-        />
+          @update:model-value="onType"
+        >
+          <TxFlatSelectItem
+            v-for="option in typeOptions"
+            :key="option.value"
+            :value="option.value"
+            :label="option.label"
+          />
+        </TxFlatSelect>
       </div>
     </div>
-  </div>
+  </TxCard>
 </template>
 
 <style lang="scss">
@@ -213,12 +240,13 @@ function onLayout(value: TxFlatRadioValue | TxFlatRadioValue[]): void {
 @include bui-keyframes-pop-in;
 @include bui-keyframes-shimmer-text;
 
-.tx-bui-fine-tune-card {
+.tx-bui-fine-tune-card.tx-bui-fine-tune-card {
   @include bui-scope;
 
   position: relative;
   width: 100%;
   max-width: 240px;
+  overflow: visible;
   background: var(--tx-bui-surface, #fff);
   border-radius: var(--tx-bui-radius-card, 10px);
   box-shadow: var(--tx-bui-shadow-raised, 0 0 0 1px #ecedef, 0 2px 10px #0000000b);
@@ -260,18 +288,6 @@ function onLayout(value: TxFlatRadioValue | TxFlatRadioValue[]): void {
   display: flex;
   gap: 6px;
   align-items: center;
-}
-
-.tx-bui-fine-tune-card__spark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  color: var(--tx-bui-accent, #0285ff);
-  background: var(--tx-bui-accent-tint, #e9f3ff);
-  border-radius: 5px;
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--tx-bui-accent, #0285ff) 30%, transparent);
 }
 
 // The family's shimmer mixin sweeps the ink ramp; this one sweeps the accent,
@@ -408,5 +424,28 @@ function onLayout(value: TxFlatRadioValue | TxFlatRadioValue[]): void {
 .tx-bui-fine-tune-card__type {
   width: 120px;
   margin-right: -2px;
+
+  .tx-flat-select.tx-bui-fine-tune-card__select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .tx-bui-fine-tune-card__select .tx-flat-select__trigger {
+    height: 26px;
+    padding: 0 6px 0 8px;
+    border-radius: var(--tx-bui-radius-chip, 6px);
+    background: var(--tx-bui-inset, #f7f8f9);
+    font-size: 12px;
+  }
+
+  .tx-bui-fine-tune-card__select .tx-flat-select__dropdown {
+    z-index: 10;
+  }
+
+  .tx-bui-fine-tune-card__select .tx-flat-select-item {
+    height: 28px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
 }
 </style>

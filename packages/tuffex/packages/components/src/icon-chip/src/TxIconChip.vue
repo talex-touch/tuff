@@ -64,10 +64,10 @@ const style = computed(() => ({
 </template>
 
 <style lang="scss">
-@use '../../../style/mixins.scss' as *;
-
 .tx-bui-icon-chip {
-  @include bui-scope;
+  box-sizing: border-box;
+  font-family: var(--tx-font-family, "Inter", "Helvetica Neue", Arial, sans-serif);
+  color: var(--tx-bui-ink, #1f2124);
 
   display: inline-flex;
   flex-shrink: 0;
@@ -91,6 +91,7 @@ const style = computed(() => ({
   }
 
   > svg {
+    display: block;
     width: 62%;
     height: 62%;
   }

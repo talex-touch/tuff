@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { TxButton } from '../../button'
+import TxCard from '../../card/src/TxCard.vue'
+import TxCheckbox from '../../checkbox/src/TxCheckbox.vue'
+import { TxIcon } from '../../icon'
+import TxTag from '../../tag/src/TxTag.vue'
 
 defineOptions({ name: 'TxToolConfirmation' })
 
@@ -38,99 +43,124 @@ const DEFAULT_RISK_LABELS: Record<'read' | 'write' | 'execute', string> = {
 
 const riskLabel = computed(() => props.riskLabels?.[props.risk] ?? DEFAULT_RISK_LABELS[props.risk])
 const dangerous = computed(() => props.risk !== 'read')
+
+const riskColor = computed(() => {
+  if (props.risk === 'write')
+    return 'var(--tx-color-warning)'
+  if (props.risk === 'execute')
+    return 'var(--tx-color-danger)'
+  return 'var(--tx-color-primary)'
+})
+
+const allowVariant = computed<'primary' | 'warning' | 'danger'>(() => {
+  if (props.risk === 'write')
+    return 'warning'
+  if (props.risk === 'execute')
+    return 'danger'
+  return 'primary'
+})
 </script>
 
 <template>
-  <div class="tx-tool-confirmation" :data-risk="risk" role="group" :aria-label="`${toolName} confirmation`">
+  <TxCard
+    class="tx-tool-confirmation"
+    :data-risk="risk"
+    variant="solid"
+    background="pure"
+    :padding="12"
+    :radius="16"
+    role="group"
+    :aria-label="`${toolName} confirmation`"
+  >
     <div class="tx-tool-confirmation__head">
       <span class="tx-tool-confirmation__icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14.7 6.3a4.5 4.5 0 0 0-6 5.7L3 17.7V21h3.3l5.7-5.7a4.5 4.5 0 0 0 5.7-6l-3 3-2.7-.6-.6-2.7 3.3-2.7Z" />
-        </svg>
+        <TxIcon name="wrench" :size="14" />
       </span>
       <span class="tx-tool-confirmation__name">{{ toolName }}</span>
-      <span class="tx-tool-confirmation__risk">{{ riskLabel }}</span>
+      <TxTag
+        class="tx-tool-confirmation__risk"
+        :label="riskLabel"
+        :color="riskColor"
+        size="sm"
+        variant="outline"
+        pill
+      />
     </div>
 
     <p v-if="summary" class="tx-tool-confirmation__summary">
-{{ summary }}
-</p>
+      {{ summary }}
+    </p>
     <pre v-if="input" class="tx-tool-confirmation__input">{{ input }}</pre>
 
     <div class="tx-tool-confirmation__actions">
-      <label class="tx-tool-confirmation__remember">
-        <input v-model="remember" type="checkbox">
-        <span>{{ rememberLabel }}</span>
-      </label>
+      <TxCheckbox
+        v-model="remember"
+        class="tx-tool-confirmation__remember"
+        :label="rememberLabel"
+      />
       <div class="tx-tool-confirmation__buttons">
-        <button
-          type="button"
+        <TxButton
           class="tx-tool-confirmation__deny"
+          size="sm"
+          variant="ghost"
           @click="emit('deny', { remember })"
         >
           {{ denyLabel }}
-        </button>
-        <button
-          type="button"
+        </TxButton>
+        <TxButton
           class="tx-tool-confirmation__allow"
           :class="{ 'is-dangerous': dangerous }"
+          size="sm"
+          :variant="allowVariant"
+          :plain="dangerous"
           @click="emit('approve', { remember })"
         >
           {{ allowLabel }}
-        </button>
+        </TxButton>
       </div>
     </div>
-  </div>
+  </TxCard>
 </template>
 
 <style lang="scss">
 .tx-tool-confirmation {
-  padding: 10px 12px;
-  border: 1px solid var(--tx-border-color-lighter, #e5e7eb);
-  border-left-width: 3px;
-  border-left-color: var(--tx-color-primary, #409eff);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 40%, transparent);
-  font-size: 12.5px;
-
-  &[data-risk='write'],
-  &[data-risk='execute'] {
-    border-left-color: var(--tx-color-danger, #f56c6c);
-  }
+  width: 100%;
+  color: var(--tx-text-color-primary, #303133);
+  font-size: 13px;
 
   .tx-tool-confirmation__head {
     display: flex;
     align-items: center;
     gap: 8px;
+    min-width: 0;
   }
 
   .tx-tool-confirmation__icon {
     display: inline-flex;
-    color: var(--tx-text-color-secondary, #6b7280);
+    flex: none;
+    color: var(--tx-text-color-regular, #606266);
   }
 
   .tx-tool-confirmation__name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--tx-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: 12.5px;
     font-weight: var(--tx-font-weight-semibold, 600);
   }
 
   .tx-tool-confirmation__risk {
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--tx-text-color-secondary, #6b7280) 12%, transparent);
-    color: var(--tx-text-color-secondary, #6b7280);
-    font-size: 10.5px;
-    font-weight: var(--tx-font-weight-semibold, 600);
-  }
-
-  &[data-risk='write'] .tx-tool-confirmation__risk,
-  &[data-risk='execute'] .tx-tool-confirmation__risk {
-    background: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 12%, transparent);
-    color: var(--tx-color-danger, #f56c6c);
+    flex: none;
+    margin-left: auto;
   }
 
   .tx-tool-confirmation__summary {
     margin: 6px 0 0;
-    color: var(--tx-text-color-secondary, #6b7280);
+    color: var(--tx-text-color-regular, #606266);
+    font-size: 12.5px;
+    line-height: 1.5;
   }
 
   .tx-tool-confirmation__input {
@@ -138,9 +168,11 @@ const dangerous = computed(() => props.risk !== 'read')
     padding: 8px 10px;
     max-height: 120px;
     overflow: auto;
-    border: 1px solid var(--tx-border-color-lighter, #e5e7eb);
     border-radius: 8px;
-    background: var(--tx-fill-color-blank, #fff);
+    background: var(--tx-fill-color-light, #f5f7fa);
+    box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #ebeef5);
+    color: var(--tx-text-color-primary, #303133);
+    font-family: var(--tx-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
     font-size: 11.5px;
     line-height: 1.55;
     white-space: pre-wrap;
@@ -156,50 +188,14 @@ const dangerous = computed(() => props.risk !== 'read')
   }
 
   .tx-tool-confirmation__remember {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--tx-text-color-secondary, #6b7280);
+    color: var(--tx-text-color-regular, #606266);
     font-size: 12px;
-    cursor: pointer;
   }
 
   .tx-tool-confirmation__buttons {
     display: flex;
-    gap: 8px;
-  }
-
-  .tx-tool-confirmation__deny,
-  .tx-tool-confirmation__allow {
-    padding: 5px 14px;
-    border-radius: 999px;
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
-  }
-
-  .tx-tool-confirmation__deny {
-    border: 1px solid var(--tx-border-color, #dcdfe6);
-    background: transparent;
-    color: var(--tx-text-color-secondary, #6b7280);
-
-    &:hover {
-      border-color: var(--tx-text-color-secondary, #6b7280);
-    }
-  }
-
-  .tx-tool-confirmation__allow {
-    border: 1px solid transparent;
-    background: var(--tx-color-primary, #409eff);
-    color: var(--tx-color-on-primary, #fff);
-
-    &:hover {
-      opacity: 0.9;
-    }
-
-    &.is-dangerous {
-      background: var(--tx-color-danger, #f56c6c);
-    }
+    flex: none;
+    gap: 6px;
   }
 }
 </style>

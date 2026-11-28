@@ -122,7 +122,7 @@ code: |
 ## 概述
 
 - `kind: 'image'` 进入图片网格，`kind: 'file'` 进入文件胶囊；两类放在同一个 `attachments` 中。
-- 每个文件渲染为 `TxAttachmentChip`，Tray 向它透传 `removable`、`removeLabel`、`cancelLabel` 与 `sizeFormatter`。
+- 每个文件渲染为 `TxAttachmentChip`，内置通过 [IconChip](/zh/icon-chip) 按文件后缀与 MIME 自动展示格式色块（如红底 `PDF`、绿底 `CSV`、橙底 `ZIP`），Tray 向它透传 `removable`、`removeLabel`、`cancelLabel` 与 `sizeFormatter`。
 - `uploading` 为真的附件始终带取消按钮：图片绘制环形进度，文件胶囊显示百分比和一条细进度条。
 - 图片的移除或取消按钮在缩略图右上角内侧，悬停或键盘聚焦时出现，触屏上常显。
 - 点击图片用 [ImagePreview](/zh/image-preview) 全屏打开，不派发 `open`；图片从缩略图放大飞出、关闭时缩回，可用滚轮、触控板或双指缩放，放大后拖动平移，未放大时左右滑动或 ← / → 翻页，上下拖走关闭。翻到两端时翻页按钮设为 `aria-disabled`，焦点不会掉到 `body`。
@@ -132,7 +132,7 @@ code: |
 ## 技术实现
 
 - 缩略图自行固定 `img` 的外边距与尺寸，放进带排版样式的文章里也不会偏移；预览挂在 `<body>` 上，不受文章样式影响。
-- 预览即 `TxImagePreview`，与 `TxImageGallery` 打开的是同一个组件。它在第一次要用时才加载：指针移到托盘上或焦点进入托盘时开始，加载完成前按下的图片在加载完成后打开。按需样式插件让它的样式随它一起加载；手动引入样式时另引 `image-preview`、`base-surface`、`flow-light` 与 `glass-surface` 的 `style.css`。
+- 预览即 `TxImagePreview`，与 `TxImageGallery` 打开的是同一个组件。它在第一次要用时才加载：指针移到托盘上或焦点进入托盘时开始，加载完成前按下的图片在加载完成后打开。按需样式插件让它的样式随它一起加载；手动引入样式时另引 `icon-chip`、`image-preview`、`base-surface`、`flow-light` 与 `glass-surface` 的 `style.css`。
 - 源码：`packages/tuffex/packages/components/src/attachment-tray/`。
 
 <TuffDocSourceLink />

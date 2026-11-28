@@ -272,7 +272,9 @@ onBeforeUnmount(() => {
   bottom: 32px;
   z-index: 10;
   width: 100%;
+  margin: 0;
   padding: 4px;
+  list-style: none;
   background: var(--tx-bui-surface, #fff);
   border-radius: 10px;
   box-shadow: var(--tx-bui-shadow-raised, 0 0 0 1px #ecedef, 0 2px 10px #0000000b);

@@ -23,6 +23,7 @@ export { TxAgentScreen }
 export { TxAgentScreen as AgentScreen }
 export type {
   AgentScreenCursor,
+  AgentScreenEmits,
   AgentScreenProps,
   AgentScreenState,
 } from './src/types'

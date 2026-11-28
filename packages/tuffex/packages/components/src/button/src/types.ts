@@ -46,5 +46,5 @@ export interface ButtonProps {
 
 export interface ButtonEmits {
   /** 点击事件 */
-  click: [event: MouseEvent]
+  click: [ev: MouseEvent]
 }

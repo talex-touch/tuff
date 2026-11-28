@@ -46,7 +46,17 @@ onBeforeUnmount(() => clearTimeout(timer))
 const userMessage = computed(() => ({
   id: 'q1',
   role: 'user' as const,
+  name: zh.value ? '你' : 'You',
   content: asked.value || question.value,
+}))
+
+const assistantReply = computed(() => ({
+  id: 'a1',
+  role: 'assistant' as const,
+  name: 'Tuff AI',
+  content: zh.value
+    ? '薄荷巧克力同比小幅回落 **5.6%**，主要由开心果（**+23%**）分流所致；建议保留常驻配额并将增量补货倾斜至核果系列。'
+    : 'Mint chip dipped **5.6% YoY** as demand shifted toward pistachio (**+23%**); hold baseline stock and allocate extra replenishment to nut flavors.',
 }))
 
 const salesSteps = computed(() => [
@@ -77,6 +87,7 @@ const trendSteps = computed(() => [
 const showUser = computed(() => phase.value !== 'idle')
 const showSales = computed(() => phase.value === 'reply1' || phase.value === 'reply2' || phase.value === 'done')
 const showTrend = computed(() => phase.value === 'reply2' || phase.value === 'done')
+const showReply = computed(() => phase.value === 'done')
 // "Produced but not yet final": the upstream signature is a half-opaque,
 // barely-blurred, slightly-shrunk block that settles into place.
 const resolving = computed(() => phase.value === 'reply2')
@@ -102,7 +113,7 @@ function replay(): void {
       </TxFlatRadio>
 
       <div class="chat__bar-actions">
-        <TxIconButton icon="i-carbon-add" size="sm" :label="zh ? '新会话' : 'New thread'" @click="replay" />
+        <TxIconButton icon="i-carbon-add" size="sm" :label="zh ? '重播会话' : 'Replay thread'" @click="replay" />
         <TxIconButton icon="i-carbon-time" size="sm" :label="zh ? '历史' : 'History'" />
         <TxIconButton icon="i-carbon-overflow-menu-horizontal" size="sm" :label="zh ? '更多' : 'More'" />
       </div>
@@ -112,11 +123,22 @@ function replay(): void {
     <div class="chat__body">
       <TxAiMessage v-if="showUser" :message="userMessage" :show-avatar="false" compact />
 
-      <TxChainOfThought v-if="showSales" :steps="salesSteps" default-open />
+      <TxChainOfThought
+        v-if="showSales"
+        :label="zh ? '思维链 · 销售历史' : 'Chain of thought · Sales'"
+        :steps="salesSteps"
+        default-open
+      />
 
       <div v-if="showTrend" class="chat__section" :class="{ 'is-resolving': resolving }">
-        <TxChainOfThought :steps="trendSteps" default-open />
+        <TxChainOfThought
+          :label="zh ? '思维链 · 趋势识别' : 'Chain of thought · Trends'"
+          :steps="trendSteps"
+          default-open
+        />
       </div>
+
+      <TxAiMessage v-if="showReply" :message="assistantReply" show-avatar compact />
     </div>
 
     <TxChatComposer
@@ -134,12 +156,14 @@ function replay(): void {
 .chat {
   display: flex;
   flex-direction: column;
-  height: 288px;
-  max-width: 380px;
+  width: 100%;
+  max-width: 560px;
+  height: 368px;
+  margin: 0 auto;
   overflow: hidden;
-  border-radius: 14px;
-  background: var(--tx-fill-color-blank, #fff);
-  box-shadow: 0 0 0 1px var(--tx-border-color-lighter), 0 1px 2px rgb(16 24 40 / 4%), 0 2px 6px rgb(16 24 40 / 3%);
+  border-radius: 16px;
+  background: var(--tx-bg-color-overlay, var(--tx-fill-color-blank, #fff));
+  box-shadow: 0 0 0 1px var(--tx-border-color-lighter), 0 1px 2px rgb(16 24 40 / 4%), 0 6px 18px rgb(16 24 40 / 6%);
 }
 
 .chat__bar {
@@ -147,7 +171,7 @@ function replay(): void {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px;
+  padding: 7px 8px;
   border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
@@ -162,7 +186,7 @@ function replay(): void {
   flex-direction: column;
   gap: 10px;
   min-height: 0;
-  padding: 10px 12px 4px;
+  padding: 12px 14px 8px;
   overflow-y: auto;
 }
 

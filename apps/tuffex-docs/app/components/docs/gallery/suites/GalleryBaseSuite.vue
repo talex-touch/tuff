@@ -515,6 +515,23 @@ const blockSwitch = ref(true)
 const page = ref(2)
 const pageSize = ref(10)
 const navTab = ref('home')
+const sidebarNavTab = ref('chat-1')
+const sidebarNavGroups = computed(() => (props.localeKey === 'zh'
+  ? [{ key: 'chats', label: '近期会话', collapsible: true }]
+  : [{ key: 'chats', label: 'Chats', collapsible: true }]))
+const sidebarNavItems = computed(() => (props.localeKey === 'zh'
+  ? [
+      { value: 'home', label: '首页', icon: 'i-carbon-home' },
+      { value: 'invite', label: '邀请成员', icon: 'i-carbon-user-follow', meta: '3/10' },
+      { value: 'chat-1', label: 'AI 套件视觉打磨', group: 'chats', icon: 'i-carbon-chat', loading: true },
+      { value: 'chat-2', label: '按需样式体积审计', group: 'chats', icon: 'i-carbon-chat' },
+    ]
+  : [
+      { value: 'home', label: 'Home', icon: 'i-carbon-home' },
+      { value: 'invite', label: 'Invite users', icon: 'i-carbon-user-follow', meta: '3/10' },
+      { value: 'chat-1', label: 'AI Suite visual polish', group: 'chats', icon: 'i-carbon-chat', loading: true },
+      { value: 'chat-2', label: 'On-demand CSS audit', group: 'chats', icon: 'i-carbon-chat' },
+    ]))
 const tabBarItems = computed(() => [
   { value: 'home', label: copy.value.suiteBase, iconClass: 'i-carbon-home' },
   { value: 'search', label: copy.value.searching, iconClass: 'i-carbon-search', badge: 3 },
@@ -562,10 +579,44 @@ const descriptionFields = computed(() => (props.localeKey === 'zh'
       { label: 'Homepage', value: '' },
     ]))
 const filterChip = ref('all')
-const filterChipItems = computed(() => [
-  { value: 'all', label: copy.value.suiteBase, count: 100 },
-  { value: 'beta', label: copy.value.reviewing, count: 12, dot: 'var(--tx-color-warning)' },
-])
+const filterTableTasks = computed(() => (props.localeKey === 'zh'
+  ? [
+      { id: 't1', name: '更新 AI 套件视觉', status: 'in-progress', label: '进行中' },
+      { id: 't2', name: '补齐 Diff 浮层预览', status: 'done', label: '已完成' },
+      { id: 't3', name: '同步组件双语文档', status: 'todo', label: '待处理' },
+    ]
+  : [
+      { id: 't1', name: 'Polish AI Suite', status: 'in-progress', label: 'In Progress' },
+      { id: 't2', name: 'Add Diff popover', status: 'done', label: 'Completed' },
+      { id: 't3', name: 'Sync bilingual docs', status: 'todo', label: 'To do' },
+    ]))
+const filterChipItems = computed(() => (props.localeKey === 'zh'
+  ? [
+      { value: 'all', label: '全部', count: 3 },
+      { value: 'todo', label: '待处理', count: 1, dot: 'var(--tx-color-warning)' },
+      { value: 'in-progress', label: '进行中', count: 1, dot: 'var(--tx-color-primary)' },
+      { value: 'done', label: '已完成', count: 1, dot: 'var(--tx-color-success)' },
+    ]
+  : [
+      { value: 'all', label: 'All', count: 3 },
+      { value: 'todo', label: 'To do', count: 1, dot: 'var(--tx-color-warning)' },
+      { value: 'in-progress', label: 'In Progress', count: 1, dot: 'var(--tx-color-primary)' },
+      { value: 'done', label: 'Completed', count: 1, dot: 'var(--tx-color-success)' },
+    ]))
+const filteredTasks = computed(() =>
+  filterChip.value === 'all'
+    ? filterTableTasks.value
+    : filterTableTasks.value.filter(task => task.status === filterChip.value),
+)
+const filterTableColumns = computed(() => (props.localeKey === 'zh'
+  ? [
+      { key: 'name', title: '任务', dataIndex: 'name' },
+      { key: 'label', title: '状态', dataIndex: 'label' },
+    ]
+  : [
+      { key: 'name', title: 'Task', dataIndex: 'name' },
+      { key: 'label', title: 'Status', dataIndex: 'label' },
+    ]))
 const galleryTiles = [
   { id: 'a', url: tileImage('#1e3a8a', '#60a5fa', '#e0f2fe', 8), en: 'Dawn ridge', zh: '山脊晨光' },
   { id: 'b', url: tileImage('#064e3b', '#4ade80', '#fef9c3', 8), en: 'Pine valley', zh: '松谷' },
@@ -2033,7 +2084,14 @@ const statusStates = computed<StatusCell[]>(() => [
           <div class="docs-gallery__stage not-prose">
             <ClientOnly>
               <div class="docs-gallery__sidebar">
-                <TxSidebarNav v-model="navTab" :items="tabBarItems" v-bind="text.sidebarNav" />
+                <TxSidebarNav
+                  v-model="sidebarNavTab"
+                  :workspace="{ name: 'Tuff Ops', initials: 'T' }"
+                  :groups="sidebarNavGroups"
+                  :items="sidebarNavItems"
+                  collapsible
+                  v-bind="text.sidebarNav"
+                />
               </div>
               <template #fallback>
                 <div class="docs-gallery__ph" />
@@ -2372,7 +2430,10 @@ const statusStates = computed<StatusCell[]>(() => [
           </NuxtLink>
           <div class="docs-gallery__stage not-prose">
             <ClientOnly>
-              <TxFilterChips v-model="filterChip" :items="filterChipItems" v-bind="text.filterChips" />
+              <div class="docs-gallery__block docs-gallery__stack">
+                <TxFilterChips v-model="filterChip" :items="filterChipItems" v-bind="text.filterChips" />
+                <TxDataTable :columns="filterTableColumns" :data="filteredTasks" row-key="id" hover />
+              </div>
               <template #fallback>
                 <div class="docs-gallery__ph" />
               </template>

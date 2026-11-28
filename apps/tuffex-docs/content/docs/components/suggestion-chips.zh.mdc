@@ -75,14 +75,14 @@ code: |
 - `suggestions` 为空时不渲染。
 - 每个胶囊以 `id` 作 key，同组内 `id` 必须唯一。
 - 组件不维护选中态，点击后也不移除建议。
-- `wrap` 溢出时横向滚动，滚动条隐藏，两侧渐变遮罩提示可滚动。
-- `list` 的各行按位置错峰浮现（每行 90ms）；减少动态效果时直接显示。
+- `wrap` 按多行自然换行排列，圆角遵循 `--tx-button-radius`（默认 `10px`）并保持完整内环描边与悬停主色提亮。
+- `list` 的各行按位置错峰浮现（每行 90ms），行间以细分隔线区隔；减少动态效果时直接显示。
 - 容器为 `role="list"`、胶囊为 `role="listitem"`，覆盖了按钮的隐式语义；需要按钮语义时在外层补充说明文字。
 
 ## 技术实现
 
 - 列表行的错峰入场由 CSS 动画延迟完成：每行的 `--tx-suggestion-chips-index` 乘以 90 毫秒，不用脚本计时。
-- `wrap` 布局两侧的渐变遮罩由 `mask-image` 实现。
+- `wrap` 布局采用 `flex-wrap: wrap` 与内环描边，`list` 布局通过伪元素绘制行间细分隔线。
 - 源码：`packages/tuffex/packages/components/src/suggestion-chips/`。
 
 <TuffDocSourceLink />

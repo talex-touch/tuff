@@ -80,4 +80,44 @@ export interface AgentScreenProps {
    * @default 'Waiting for the agent’s screen'
    */
   loadingLabel?: string
+
+  /**
+   * Clicking the frame opens an expanded modal viewer with a close control.
+   * @default false
+   */
+  expandable?: boolean
+
+  /**
+   * Shows a `Teach a task` recording toggle inside the expanded viewer.
+   * @default false
+   */
+  teachable?: boolean
+
+  /**
+   * Controlled recording state (`v-model:teaching`) when `teachable` is enabled.
+   */
+  teaching?: boolean
+
+  /** @default 'Expand screen' */
+  expandLabel?: string
+
+  /** @default 'Close' */
+  closeLabel?: string
+
+  /** @default 'Teach a task' */
+  teachLabel?: string
+
+  /** @default 'Stop recording' */
+  stopTeachLabel?: string
+}
+
+/**
+ * Events for the TxAgentScreen component.
+ *
+ * @public
+ */
+export interface AgentScreenEmits {
+  'update:teaching': [teaching: boolean]
+  'expand': []
+  'close': []
 }

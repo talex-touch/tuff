@@ -2,6 +2,8 @@
 // Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 import type { ApprovalAnswer, ApprovalAnswerMap, ApprovalCardEmits, ApprovalCardProps, ApprovalQuestion } from './types'
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
+import { TxButton } from '../../button'
+import TxCheckbox from '../../checkbox/src/TxCheckbox.vue'
 
 defineOptions({ name: 'TxApprovalCard' })
 
@@ -244,14 +246,15 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
 </script>
 
 <template>
-  <button
+  <TxButton
     v-if="!isOpen"
-    type="button"
     class="tx-bui-approval-card__reopen"
+    size="sm"
+    variant="secondary"
     @click="setOpen(true)"
   >
     {{ reopenLabel }}
-  </button>
+  </TxButton>
 
   <div v-else class="tx-bui-approval-card" role="group" :aria-label="ariaLabel">
     <div class="tx-bui-approval-card__shell">
@@ -263,9 +266,9 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
             </svg>
           </span>
           <span class="tx-bui-approval-card__sent-text">{{ sentLabel }}</span>
-          <button type="button" class="tx-bui-approval-card__restart" @click="reset">
+          <TxButton class="tx-bui-approval-card__restart" size="sm" variant="bare" @click="reset">
             {{ startOverLabel }}
-          </button>
+          </TxButton>
         </slot>
       </div>
 
@@ -274,41 +277,46 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
           <span :id="questionId" class="tx-bui-approval-card__question">
             <slot name="question" :question="question" :index="currentIndex">{{ question.question }}</slot>
           </span>
-          <button
+          <TxButton
             v-if="dismissible"
-            type="button"
             class="tx-bui-approval-card__dismiss"
+            size="sm"
+            variant="bare"
             :aria-label="dismissLabel"
             @click="setOpen(false)"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
-          </button>
+          </TxButton>
         </div>
 
         <div class="tx-bui-approval-card__options" role="group" :aria-labelledby="questionId">
-          <button
-            v-for="option in question.options"
-            :key="option.value"
-            type="button"
-            class="tx-bui-approval-card__option"
-            :class="{ 'is-selected': selectedValues.includes(option.value) }"
-            :aria-pressed="selectedValues.includes(option.value)"
-            @click="toggleOption(option.value)"
-          >
-            <span
-              class="tx-bui-approval-card__indicator"
-              :class="(question.type ?? 'radio') === 'radio' ? 'is-radio' : 'is-check'"
-              aria-hidden="true"
+          <template v-for="option in question.options" :key="option.value">
+            <button
+              v-if="(question.type ?? 'radio') === 'radio'"
+              type="button"
+              class="tx-bui-approval-card__option"
+              :class="{ 'is-selected': selectedValues.includes(option.value) }"
+              :aria-pressed="selectedValues.includes(option.value)"
+              @click="toggleOption(option.value)"
             >
-              <span v-if="(question.type ?? 'radio') === 'radio'" class="tx-bui-approval-card__dot" />
-              <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-            </span>
-            <span class="tx-bui-approval-card__option-label">{{ option.label }}</span>
-          </button>
+              <span class="tx-bui-approval-card__indicator is-radio" aria-hidden="true">
+                <span class="tx-bui-approval-card__dot" />
+              </span>
+              <span class="tx-bui-approval-card__option-label">{{ option.label }}</span>
+            </button>
+            <TxCheckbox
+              v-else
+              :model-value="selectedValues.includes(option.value)"
+              class="tx-bui-approval-card__option tx-bui-approval-card__option--check"
+              :class="{ 'is-selected': selectedValues.includes(option.value) }"
+              :aria-pressed="selectedValues.includes(option.value)"
+              @update:model-value="toggleOption(option.value)"
+            >
+              <span class="tx-bui-approval-card__option-label">{{ option.label }}</span>
+            </TxCheckbox>
+          </template>
 
           <label v-if="question.allowCustom !== false" class="tx-bui-approval-card__custom">
             <span class="tx-bui-approval-card__indicator is-spacer" aria-hidden="true" />
@@ -325,9 +333,10 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
 
       <div class="tx-bui-approval-card__footer">
         <span class="tx-bui-approval-card__pager">
-          <button
-            type="button"
+          <TxButton
             class="tx-bui-approval-card__nav"
+            size="sm"
+            variant="bare"
             :aria-label="prevLabel"
             :disabled="currentIndex === 0 || isSent"
             @click="goTo(currentIndex - 1)"
@@ -335,7 +344,7 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M15 18l-6-6 6-6" />
             </svg>
-          </button>
+          </TxButton>
 
           <span class="tx-bui-approval-card__dots">
             <button
@@ -354,9 +363,10 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
             />
           </span>
 
-          <button
-            type="button"
+          <TxButton
             class="tx-bui-approval-card__nav"
+            size="sm"
+            variant="bare"
             :aria-label="nextLabel"
             :disabled="isLast || isSent"
             @click="goTo(currentIndex + 1)"
@@ -364,23 +374,25 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M9 6l6 6-6 6" />
             </svg>
-          </button>
+          </TxButton>
         </span>
 
         <span class="tx-bui-approval-card__actions">
           <slot name="footer-extra" />
-          <button
+          <TxButton
             v-if="skippable && !isSent"
-            type="button"
             class="tx-bui-approval-card__skip"
+            size="sm"
+            variant="bare"
             @click="skip"
           >
             {{ skipLabel }}
-          </button>
-          <button
+          </TxButton>
+          <TxButton
             v-if="!isSent"
-            type="button"
             class="tx-bui-approval-card__send"
+            size="sm"
+            variant="primary"
             :aria-label="isLast ? sendLabel : nextQuestionLabel"
             :disabled="!hasAnswer"
             @click="submit"
@@ -388,7 +400,7 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 19V5M5 12l7-7 7 7" />
             </svg>
-          </button>
+          </TxButton>
         </span>
       </div>
     </div>
@@ -401,21 +413,8 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
 @include bui-keyframes-fade-up;
 @include bui-keyframes-pop-in;
 
-.tx-bui-approval-card__reopen {
+.tx-bui-approval-card__reopen.tx-button {
   @include bui-scope;
-
-  padding: 8px 12px;
-  font-size: 12.5px;
-  font-weight: var(--tx-font-weight-medium, 500);
-  color: var(--tx-bui-ink, #1f2124);
-  cursor: pointer;
-  background: var(--tx-bui-surface, #fff);
-  border-radius: var(--tx-bui-radius-control, 8px);
-  box-shadow: var(--tx-bui-shadow-btn, 0 0 0 1px #e0e2e5, 0 1px 2px #1018280d);
-
-  &:hover {
-    background: var(--tx-bui-hover, #f4f5f6);
-  }
 }
 
 .tx-bui-approval-card {
@@ -499,15 +498,13 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
     color: var(--tx-bui-ink, #1f2124);
   }
 
-  .tx-bui-approval-card__dismiss {
-    display: inline-flex;
+  .tx-bui-approval-card__dismiss.tx-button {
     flex: none;
-    align-items: center;
-    justify-content: center;
     width: 28px;
+    min-width: 28px;
     height: 28px;
+    padding: 0;
     color: var(--tx-bui-ink-3, #9a9da3);
-    cursor: pointer;
     border-radius: var(--tx-bui-radius-control, 8px);
 
     &:hover {
@@ -537,8 +534,18 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
   .tx-bui-approval-card__option {
     cursor: pointer;
 
+    &.tx-bui-approval-card__option--check.tx-checkbox {
+      width: calc(100% + 12px);
+      justify-content: flex-start;
+      padding: 4px 6px;
+    }
+
     &:hover {
       background: var(--tx-bui-hover, #f4f5f6);
+
+      .tx-bui-approval-card__option-label {
+        color: var(--tx-bui-ink, #1f2124);
+      }
     }
   }
 
@@ -557,7 +564,7 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
     color: transparent;
     // The unselected ring is an inset shadow rather than a border so the box
     // stays 16px and the glyph does not shift when it fills in.
-    box-shadow: inset 0 0 0 1.5px var(--tx-bui-line-strong, #e0e2e5);
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--tx-bui-ink-2, #62656b) 45%, var(--tx-bui-line-strong, #e0e2e5));
     transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 
     &.is-radio {
@@ -595,7 +602,6 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
   .tx-bui-approval-card__option-label {
     font-size: 13px;
     color: var(--tx-bui-ink-2, #62656b);
-    transition: color 0.2s ease;
   }
 
   .tx-bui-approval-card__option.is-selected .tx-bui-approval-card__option-label {
@@ -613,7 +619,8 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
     outline: none;
 
     &::placeholder {
-      color: var(--tx-bui-ink-3, #9a9da3);
+      color: var(--tx-bui-ink-2, #62656b);
+      opacity: 0.72;
     }
   }
 
@@ -639,21 +646,14 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
     margin-right: -2px;
   }
 
-  .tx-bui-approval-card__nav {
-    display: inline-flex;
+  .tx-bui-approval-card__nav.tx-button {
     flex: none;
-    align-items: center;
-    justify-content: center;
     width: 24px;
+    min-width: 24px;
     height: 24px;
+    padding: 0;
     color: var(--tx-bui-ink-3, #9a9da3);
-    cursor: pointer;
     border-radius: 5px;
-
-    &:disabled {
-      cursor: default;
-      opacity: 0.35;
-    }
 
     &:not(:disabled):hover {
       color: var(--tx-bui-ink-2, #62656b);
@@ -693,57 +693,23 @@ defineExpose({ next: () => goTo(currentIndex.value + 1), prev: () => goTo(curren
     }
   }
 
-  // Text, not an icon, and quieter than send: skipping is the secondary way out
-  // of a question, and an icon pair would read as two equal choices.
-  .tx-bui-approval-card__skip {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
+  .tx-bui-approval-card__skip.tx-button {
     height: 28px;
     padding: 0 8px;
-    border: 0;
-    border-radius: var(--tx-bui-radius-chip, 6px);
-    background: transparent;
     color: var(--tx-bui-ink-3, #9a9da3);
     font-size: 12px;
-    cursor: pointer;
 
     &:hover {
       color: var(--tx-bui-ink-2, #62656b);
     }
-
-    &:focus-visible {
-      outline: 2px solid var(--tx-bui-accent, #0285ff);
-      outline-offset: 2px;
-    }
   }
 
-  .tx-bui-approval-card__send {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
+  .tx-bui-approval-card__send.tx-button {
     width: 28px;
+    min-width: 28px;
     height: 28px;
-    // Disabled is the base state so the enabled ink treatment lives in one
-    // place; the `disabled` attribute is exactly `!hasAnswer`.
-    color: var(--tx-bui-ink-3, #9a9da3);
-    cursor: default;
-    background: var(--tx-bui-field, #f2f2f3);
+    padding: 0;
     border-radius: 8px;
-    box-shadow: var(--tx-bui-shadow-btn, 0 0 0 1px #e0e2e5, 0 1px 2px #1018280d);
-    transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
-
-    &:not(:disabled) {
-      color: var(--tx-bui-surface, #fff);
-      cursor: pointer;
-      background: var(--tx-bui-ink, #1f2124);
-      box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%);
-    }
-
-    &:not(:disabled):active {
-      transform: scale(0.96);
-    }
   }
 
   @media (prefers-reduced-motion: reduce) {

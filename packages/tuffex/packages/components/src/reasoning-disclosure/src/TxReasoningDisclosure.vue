@@ -111,10 +111,14 @@ watch(
     padding: 2px 0;
     border: none;
     background: transparent;
-    color: var(--tx-text-color-secondary, #6b7280);
+    color: var(--tx-text-color-regular, #606266);
     font: inherit;
     font-size: 12px;
     cursor: pointer;
+
+    &:hover {
+      color: var(--tx-text-color-primary, #303133);
+    }
   }
 
   .tx-reasoning-disclosure__icon {
@@ -136,8 +140,9 @@ watch(
   }
 
   .tx-reasoning-disclosure__duration {
-    color: var(--tx-text-color-placeholder, #a8abb2);
+    color: var(--tx-text-color-secondary, #6b7280);
     font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
   }
 
   .tx-reasoning-disclosure__chevron {
@@ -175,8 +180,8 @@ watch(
     max-height: 200px;
     margin-top: 4px;
     overflow: auto;
-    color: var(--tx-text-color-secondary, #6b7280);
-    font-size: 12px;
+    color: var(--tx-text-color-regular, #606266);
+    font-size: 12.5px;
     line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-word;

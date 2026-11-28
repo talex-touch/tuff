@@ -63,6 +63,10 @@ code: |
 | `actionLabel` | `string` | - | Primary action label; omit to drop the button. |
 | `filter` | `(items, query) => items` | - | Replaces the built-in match; pass `items => items` for remote results. |
 | `ariaLabel` | `string` | `'Workspace'` | Accessible name of the `<nav>` landmark. |
+| `collapsible` | `boolean` | `false` | Renders a collapse toggle in the header to shrink into an icon rail. |
+| `collapsed` | `boolean` | `undefined` | Controlled rail state (`v-model:collapsed`); omit for uncontrolled mode. |
+| `collapseLabel` | `string` | `'Collapse sidebar'` | Accessible name for collapsing the sidebar. |
+| `expandLabel` | `string` | `'Expand sidebar'` | Accessible name for expanding the sidebar. |
 | `indicatorDuration` | `number` | `220` | Highlight speed in ms, time-scaling the glide springs; values under 100 play as 100. |
 
 ### Events
@@ -71,9 +75,11 @@ code: |
 |------|------|------|
 | `update:modelValue` | `SidebarNavValue` | Fires when the active item changes. |
 | `update:query` | `string` | Fires when the search text changes. |
+| `update:collapsed` | `boolean` | Fires when the collapsed rail state changes. |
 | `select` | `SidebarNavItem` | Fires when an item is activated; disabled items don't emit. |
 | `action` | - | Fires when the primary action button is pressed. |
 | `itemAction` | `SidebarNavItem` | Fires when a row's trailing quick action is pressed. |
+| `groupAction` | `SidebarNavGroup` | Fires when a group header's trailing action is pressed. |
 | `workspaceClick` | - | Fires when the workspace switcher is pressed. |
 
 ### Slots
@@ -82,6 +88,7 @@ code: |
 |------|------|
 | `workspace` | Replaces the whole workspace switcher row. |
 | `item-icon` | Replaces an item's leading icon; scope is `{ item, active }`. |
+| `group-action` | Replaces a group header's trailing action glyph; scope is `{ group }`. |
 | `footer` | Appended below the groups. |
 
 ### Exposed Methods

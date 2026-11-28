@@ -52,6 +52,18 @@ export interface CodeStreamProps {
    */
   diff?: CodeDiffRow[]
   /**
+   * Offers a `Code / Diff` toggle in the header when both `code` and `diff` are supplied.
+   * @default false
+   */
+  diffToggle?: boolean
+  /**
+   * Initial view when `diffToggle` is enabled.
+   * @default 'diff'
+   */
+  defaultView?: 'code' | 'diff'
+  /** Label for the diff view toggle button. @default 'Diff' */
+  diffLabel?: string
+  /**
    * How many lines are revealed. Omit (or pass -1) to show everything — the
    * host owns the cadence, the component owns the transition.
    */

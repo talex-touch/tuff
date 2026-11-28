@@ -16,6 +16,10 @@ export interface SidebarNavItem {
   icon?: string
   /** Count capsule. Changing it replays the pop-in. */
   badge?: string | number
+  /** Quiet trailing metadata text, e.g. `3/10`. */
+  meta?: string
+  /** Shows a subtle activity indicator beside the row (e.g. streaming chat). */
+  loading?: boolean
   /** Trailing quick action, revealed on hover/focus and on the active row. */
   action?: SidebarNavItemAction
   disabled?: boolean
@@ -25,6 +29,12 @@ export interface SidebarNavGroup {
   key: string
   /** Rendered uppercase by CSS — pass it in normal case. */
   label: string
+  /** Lets the group header toggle its items open or shut. */
+  collapsible?: boolean
+  /** Initial open state when `collapsible` is true. @default true */
+  defaultOpen?: boolean
+  /** Optional trailing icon button on the group header (e.g. search chats or add). */
+  action?: SidebarNavItemAction
 }
 
 export interface SidebarNavWorkspace {
@@ -61,6 +71,14 @@ export interface SidebarNavProps {
   filter?: (items: SidebarNavItem[], query: string) => SidebarNavItem[]
   /** Accessible name for the nav landmark. @default 'Workspace' */
   ariaLabel?: string
+  /** Shows a collapse toggle button in the header to shrink into an icon rail. @default false */
+  collapsible?: boolean
+  /** Controlled rail state (`v-model:collapsed`). Omit to let the nav own it. */
+  collapsed?: boolean
+  /** Accessible name for collapsing the sidebar. @default 'Collapse sidebar' */
+  collapseLabel?: string
+  /** Accessible name for expanding the sidebar. @default 'Expand sidebar' */
+  expandLabel?: string
   /**
    * Speed of the floating highlight, in ms: the shared glide springs played
    * faster or slower as a whole (the default, 220, is their reference pace).
@@ -72,12 +90,15 @@ export interface SidebarNavProps {
 export interface SidebarNavEmits {
   (e: 'update:modelValue', value: SidebarNavValue): void
   (e: 'update:query', value: string): void
+  (e: 'update:collapsed', collapsed: boolean): void
   /** A navigation item was activated. */
   (e: 'select', item: SidebarNavItem): void
   /** The primary action button was pressed. */
   (e: 'action'): void
   /** An item's trailing quick action was pressed. */
   (e: 'itemAction', item: SidebarNavItem): void
+  /** A group header's trailing action was pressed. */
+  (e: 'groupAction', group: SidebarNavGroup): void
   /** The workspace switcher was pressed. */
   (e: 'workspaceClick'): void
 }

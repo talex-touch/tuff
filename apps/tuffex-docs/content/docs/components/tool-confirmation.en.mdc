@@ -12,7 +12,7 @@ verified: true
 ## Usage
 
 ### Basic
-With `risk` set to `write` or `execute`, the card and the allow button switch to the danger color.
+With `risk` set to `write`, the risk pill and allow button switch to an amber warning tint; `execute` uses a danger tint. The remember toggle follows TuffEx's checkmark box styling.
 ::::TuffDemoWrapper{demo="ToolConfirmationToolConfirmationDemo" code-lang="vue"}
 ---
 code: |

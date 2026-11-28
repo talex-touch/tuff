@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import TxToolConfirmation from '../src/TxToolConfirmation.vue'
 
 describe('txToolConfirmation', () => {
-  it('shows the tool, summary, input and risk chip', () => {
+  it('shows the tool, summary, input and TxTag risk chip', () => {
     const wrapper = mount(TxToolConfirmation, {
       props: {
         toolName: 'tuff_search_files',
@@ -13,19 +13,22 @@ describe('txToolConfirmation', () => {
       },
     })
 
+    expect(wrapper.classes()).toContain('tx-card')
     expect(wrapper.find('.tx-tool-confirmation__name').text()).toBe('tuff_search_files')
     expect(wrapper.find('.tx-tool-confirmation__summary').text()).toContain('largest files')
     expect(wrapper.find('.tx-tool-confirmation__input').text()).toContain('"/tmp"')
-    expect(wrapper.find('.tx-tool-confirmation__risk').text()).toBe('Read-only')
+    const riskTag = wrapper.find('.tx-tool-confirmation__risk')
+    expect(riskTag.classes()).toContain('tx-tag')
+    expect(riskTag.text()).toBe('Read-only')
     expect(wrapper.attributes('data-risk')).toBe('read')
   })
 
-  it('carries the remember choice on approve', async () => {
+  it('carries the remember choice on approve via TxCheckbox and TxButton', async () => {
     const wrapper = mount(TxToolConfirmation, {
       props: { toolName: 'read' },
     })
 
-    await wrapper.find('.tx-tool-confirmation__remember input').setValue(true)
+    await wrapper.find('.tx-tool-confirmation__remember').trigger('click')
     await wrapper.find('.tx-tool-confirmation__allow').trigger('click')
 
     expect(wrapper.emitted('approve')).toEqual([[{ remember: true }]])
@@ -37,7 +40,9 @@ describe('txToolConfirmation', () => {
       props: { toolName: 'read' },
     })
 
-    await wrapper.find('.tx-tool-confirmation__deny').trigger('click')
+    const deny = wrapper.find('.tx-tool-confirmation__deny')
+    expect(deny.classes()).toContain('tx-button')
+    await deny.trigger('click')
     expect(wrapper.emitted('deny')).toEqual([[{ remember: false }]])
   })
 
@@ -47,7 +52,9 @@ describe('txToolConfirmation', () => {
     })
 
     expect(wrapper.attributes('data-risk')).toBe('execute')
-    expect(wrapper.find('.tx-tool-confirmation__allow').classes()).toContain('is-dangerous')
+    const allow = wrapper.find('.tx-tool-confirmation__allow')
+    expect(allow.classes()).toContain('tx-button')
+    expect(allow.classes()).toContain('is-dangerous')
     expect(wrapper.find('.tx-tool-confirmation__risk').text()).toBe('Executes')
   })
 
@@ -66,5 +73,21 @@ describe('txToolConfirmation', () => {
     expect(wrapper.find('.tx-tool-confirmation__deny').text()).toBe('拒绝')
     expect(wrapper.find('.tx-tool-confirmation__remember').text()).toContain('本会话记住')
     expect(wrapper.find('.tx-tool-confirmation__risk').text()).toBe('只读')
+  })
+
+  it('toggles TxCheckbox checked state on remember click', async () => {
+    const wrapper = mount(TxToolConfirmation, {
+      props: { toolName: 'write_file', risk: 'write' },
+    })
+
+    const checkbox = wrapper.find('.tx-tool-confirmation__remember')
+    expect(checkbox.classes()).toContain('tx-checkbox')
+    expect(checkbox.attributes('aria-checked')).toBe('false')
+    expect(checkbox.classes()).not.toContain('is-checked')
+
+    await checkbox.trigger('click')
+    expect(checkbox.attributes('aria-checked')).toBe('true')
+    expect(checkbox.classes()).toContain('is-checked')
+    expect(wrapper.attributes('data-risk')).toBe('write')
   })
 })

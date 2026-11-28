@@ -23,6 +23,50 @@ interface OpenRun {
   /** `*`, `_` or `~`. */
   char: string
   length: number
+  /** Character offset in `content` immediately after the opening run. */
+  after: number
+}
+
+const LIST_PREFIX_RE = /^ {0,3}(?:[*+-]|\d+[.)])(?:[ \t]+|$)/
+const BARE_LIST_MARKER_RE = /^ {0,3}(?:[-*+]|\d+[.)])$/
+const BARE_HEADING_MARKER_RE = /^ {0,3}#{1,6}$/
+
+/**
+ * Holds back an unspaced block marker sitting alone on the trailing line
+ * (`\n\n-`, `\n\n1.`, `\n\n##`) until its space or first word lands, so the
+ * reader never sees a raw `-` / `1.` / `##` paragraph flash and snap into a
+ * list or heading on the next token. An opened marker with a trailing space
+ * (`## `, `- `) is left intact so the caret can wait at the new line's start.
+ */
+export function trimIncompleteBlockMarker(content: string): string {
+  if (!content) return content
+
+  const lines = content.split('\n')
+  let inFence = false
+  let fenceMarker = ''
+  for (let i = 0; i < lines.length - 1; i++) {
+    const fence = /^ {0,3}(`{3,}|~{3,})/.exec(lines[i]!)
+    if (!fence) continue
+    const marker = fence[1]!
+    if (!inFence) {
+      inFence = true
+      fenceMarker = marker
+    } else if (marker[0] === fenceMarker[0] && marker.length >= fenceMarker.length) {
+      inFence = false
+      fenceMarker = ''
+    }
+  }
+  if (inFence) return content
+
+  const last = lines[lines.length - 1]!
+  const prev = lines.length >= 2 ? lines[lines.length - 2]! : ''
+  const afterBoundary = lines.length === 1 || prev.trim() === '' || LIST_PREFIX_RE.test(prev)
+
+  if (BARE_HEADING_MARKER_RE.test(last) || (afterBoundary && BARE_LIST_MARKER_RE.test(last))) {
+    return lines.slice(0, -1).join('\n')
+  }
+
+  return content
 }
 
 /**
@@ -39,9 +83,11 @@ export function completeInlineMarkup(content: string): string {
 
   // Delimiter state is per-document, not per-line: emphasis spans newlines.
   let backtickRun = 0
+  let backtickAfter = -1
   const runs: OpenRun[] = []
   let openBracket = false
   let openParen = false
+  let lineOffset = 0
 
   for (const [lineIndex, line] of lines.entries()) {
     const fence = /^ {0,3}(`{3,}|~{3,})/.exec(line)
@@ -54,12 +100,21 @@ export function completeInlineMarkup(content: string): string {
         inFence = false
         fenceMarker = ''
       }
+      lineOffset += line.length + 1
       continue
     }
     // Fenced code is verbatim; its asterisks and backticks are not markup.
-    if (inFence) continue
+    if (inFence) {
+      lineOffset += line.length + 1
+      continue
+    }
 
-    for (let index = 0; index < line.length; index++) {
+    // Skip list markers (`* `, `- `, `+ `, `1. `) so a `* ` bullet is never
+    // mistaken for an unclosed italic delimiter.
+    const listPrefix = backtickRun === 0 ? LIST_PREFIX_RE.exec(line) : null
+    const startIndex = listPrefix ? listPrefix[0].length : 0
+
+    for (let index = startIndex; index < line.length; index++) {
       const char = line[index]!
 
       if (char === '\\') {
@@ -71,8 +126,14 @@ export function completeInlineMarkup(content: string): string {
       if (char === '`') {
         let length = 1
         while (line[index + length] === '`') length += 1
-        if (backtickRun === 0) backtickRun = length
-        else if (backtickRun === length) backtickRun = 0
+        if (backtickRun === 0) {
+          backtickRun = length
+          backtickAfter = lineOffset + index + length
+        }
+        else if (backtickRun === length) {
+          backtickRun = 0
+          backtickAfter = -1
+        }
         index += length - 1
         continue
       }
@@ -88,7 +149,7 @@ export function completeInlineMarkup(content: string): string {
 
         const last = runs[runs.length - 1]
         if (last && last.char === char && last.length === length) runs.pop()
-        else runs.push({ char, length })
+        else runs.push({ char, length, after: lineOffset + index + 1 })
         continue
       }
 
@@ -116,10 +177,13 @@ export function completeInlineMarkup(content: string): string {
     // paragraphs, so state must not leak into the next one.
     if (line.trim() === '' && lineIndex < lines.length - 1) {
       backtickRun = 0
+      backtickAfter = -1
       runs.length = 0
       openBracket = false
       openParen = false
     }
+
+    lineOffset += line.length + 1
   }
 
   // An unterminated fence is the block stream's business, not this function's —
@@ -128,6 +192,17 @@ export function completeInlineMarkup(content: string): string {
   if (inFence) return content
 
   let completed = content
+  // A lone opener sitting at EOF with no text after it (`hello **`, ``hello ` ``)
+  // would turn into literal `****` if closed; hold it back until its first char lands.
+  if (backtickRun > 0 && backtickAfter === completed.length) {
+    completed = completed.slice(0, completed.length - backtickRun)
+    backtickRun = 0
+  }
+  while (runs.length > 0 && runs[runs.length - 1]!.after === completed.length) {
+    const emptyRun = runs.pop()!
+    completed = completed.slice(0, completed.length - emptyRun.length)
+  }
+
   if (openParen) completed += ')'
   else if (openBracket) completed += ']'
   // Innermost first, or the closers nest wrongly.

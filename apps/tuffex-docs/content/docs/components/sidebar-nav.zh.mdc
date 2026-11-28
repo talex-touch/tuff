@@ -63,6 +63,10 @@ code: |
 | `actionLabel` | `string` | - | 主操作文案；不传则不渲染按钮。 |
 | `filter` | `(items, query) => items` | - | 替换内建匹配；远端场景传 `items => items`。 |
 | `ariaLabel` | `string` | `'Workspace'` | `<nav>` 地标的可访问名。 |
+| `collapsible` | `boolean` | `false` | 在工作区头部显示折叠按钮，支持收起为图标轨。 |
+| `collapsed` | `boolean` | `undefined` | 受控折叠态（`v-model:collapsed`）；省略时由组件自持。 |
+| `collapseLabel` | `string` | `'Collapse sidebar'` | 收起侧栏按钮的无障碍名。 |
+| `expandLabel` | `string` | `'Expand sidebar'` | 展开侧栏按钮的无障碍名。 |
 | `indicatorDuration` | `number` | `220` | 高亮块速度（ms），整体缩放滑行弹簧；小于 100 按 100 播放。 |
 
 ### 事件
@@ -71,9 +75,11 @@ code: |
 |------|------|------|
 | `update:modelValue` | `SidebarNavValue` | 选中项变化时触发。 |
 | `update:query` | `string` | 搜索文本变化时触发。 |
+| `update:collapsed` | `boolean` | 折叠态切换时触发。 |
 | `select` | `SidebarNavItem` | 激活导航项时触发；禁用项不派发。 |
 | `action` | - | 按下主操作按钮时触发。 |
 | `itemAction` | `SidebarNavItem` | 按下行尾快捷操作时触发。 |
+| `groupAction` | `SidebarNavGroup` | 按下分组头尾部的快捷操作时触发。 |
 | `workspaceClick` | - | 按下工作区切换行时触发。 |
 
 ### 插槽
@@ -82,6 +88,7 @@ code: |
 |------|------|
 | `workspace` | 替换整个工作区切换行。 |
 | `item-icon` | 替换导航项的前置图标，作用域 `{ item, active }`。 |
+| `group-action` | 替换分组头尾部的操作图标，作用域 `{ group }`。 |
 | `footer` | 追加在分组下方。 |
 
 ### 暴露方法

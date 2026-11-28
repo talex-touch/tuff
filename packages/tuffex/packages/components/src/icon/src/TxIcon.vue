@@ -130,6 +130,28 @@ const builtinIcons = {
     viewBox: '0 0 24 24',
     path: 'M12 2 1.5 20.5h21zm0 4.2L19 18.5H5zm-1 3.8h2v4.5h-2zm0 5.8h2v2h-2z',
   },
+  // Chrome stroke icons shared by AI reasoning/tool cards so they stay
+  // self-contained without requiring a host icon collection.
+  'lightbulb': {
+    viewBox: '0 0 24 24',
+    path: 'M12 3a6 6 0 0 1 6 6c0 2.2-1.2 3.6-2.4 4.8-.7.7-1.1 1.4-1.3 2.2h-4.6c-.2-.8-.6-1.5-1.3-2.2C7.2 12.6 6 11.2 6 9a6 6 0 0 1 6-6ZM9.5 19.5h5M10.5 22h3',
+    stroke: 1.85,
+  },
+  'wrench': {
+    viewBox: '0 0 24 24',
+    path: 'M14.7 6.3a4.5 4.5 0 0 0-6 5.7L3 17.7V21h3.3l5.7-5.7a4.5 4.5 0 0 0 5.7-6l-3 3-2.7-.6-.6-2.7 3.3-2.7Z',
+    stroke: 1.85,
+  },
+  'clock': {
+    viewBox: '0 0 24 24',
+    path: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7v5l3 3',
+    stroke: 1.85,
+  },
+  'refresh': {
+    viewBox: '0 0 24 24',
+    path: 'M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16M16 21h5v-5',
+    stroke: 1.85,
+  },
 } as const
 
 // Remix `image-line`, drawn here so the error state needs no icon collection

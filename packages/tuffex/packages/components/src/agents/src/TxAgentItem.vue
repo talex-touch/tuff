@@ -2,6 +2,7 @@
 import type { AgentItemProps } from './types'
 import { computed } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
+import TxTag from '../../tag/src/TxTag.vue'
 
 defineOptions({
   name: 'TxAgentItem',
@@ -62,14 +63,16 @@ function handleSelect() {
     </template>
 
     <template v-if="badgeText !== '' && badgeText !== undefined && badgeText !== null" #right>
-      <span class="tx-agent-item__badge">
-        <slot name="badge">{{ badgeText }}</slot>
-      </span>
+      <TxTag class="tx-agent-item__badge" size="sm" variant="plain" pill>
+        <slot name="badge">
+          {{ badgeText }}
+        </slot>
+      </TxTag>
     </template>
   </TxCardItem>
 </template>
 
-<style scoped lang="scss">
+<style lang="scss">
 .tx-agent-item {
   --tx-card-item-padding: 0.75rem 0.75rem;
   --tx-card-item-radius: 12px;
@@ -111,13 +114,8 @@ function handleSelect() {
   text-overflow: ellipsis;
 }
 
-.tx-agent-item__badge {
-  font-size: 12px;
-  font-weight: var(--tx-font-weight-semibold, 600);
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  border: 1px solid var(--tx-border-color-lighter, #e5e7eb);
-  color: var(--tx-text-color-secondary, #6b7280);
-  background: var(--tx-fill-color-blank, #fff);
+.tx-agent-item__badge.tx-tag {
+  flex: none;
+  font-variant-numeric: tabular-nums;
 }
 </style>

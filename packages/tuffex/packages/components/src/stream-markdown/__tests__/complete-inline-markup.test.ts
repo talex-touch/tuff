@@ -1,6 +1,6 @@
 import { Marked } from 'marked'
 import { describe, expect, it } from 'vitest'
-import { completeInlineMarkup } from '../src/complete-inline-markup'
+import { completeInlineMarkup, trimIncompleteBlockMarker } from '../src/complete-inline-markup'
 
 const marked = new Marked({ gfm: true, breaks: true })
 
@@ -101,5 +101,24 @@ describe('completeInlineMarkup', () => {
     const text = (html: string): string => html.replace(/<[^>]+>/g, '').trim()
     expect(text(rendered('**bold'))).toBe('bold')
     expect(text(rendered('a `co'))).toBe('a co')
+  })
+
+  it('does not treat bullet list markers as unclosed italics or flash lone openers at EOF', () => {
+    expect(completeInlineMarkup('* 第一项')).toBe('* 第一项')
+    expect(completeInlineMarkup('* 第一项\n* 第二项\n* 第三项')).toBe('* 第一项\n* 第二项\n* 第三项')
+    expect(completeInlineMarkup('hello **')).toBe('hello ')
+    expect(completeInlineMarkup('hello `')).toBe('hello ')
+  })
+})
+
+describe('trimIncompleteBlockMarker', () => {
+  it('holds back bare unspaced list and heading prefixes until a space or text lands', () => {
+    expect(trimIncompleteBlockMarker('Intro\n\n-')).toBe('Intro\n')
+    expect(trimIncompleteBlockMarker('- 第一项\n-')).toBe('- 第一项')
+    expect(trimIncompleteBlockMarker('Intro\n\n1.')).toBe('Intro\n')
+    expect(trimIncompleteBlockMarker('Intro\n\n###')).toBe('Intro\n')
+    // Opened markers with trailing space stay intact so the caret waits on the new line.
+    expect(trimIncompleteBlockMarker('Intro\n\n## ')).toBe('Intro\n\n## ')
+    expect(trimIncompleteBlockMarker('- 第一项\n- ')).toBe('- 第一项\n- ')
   })
 })

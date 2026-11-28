@@ -122,4 +122,17 @@ describe('txCodeStream diff mode', () => {
     expect(wrapper.find('.tx-bui-code-stream__header').exists()).toBe(true)
     expect(wrapper.find('.tx-bui-code-stream__tally').exists()).toBe(true)
   })
+
+  it('toggles between full code and unified diff when diffToggle is enabled', async () => {
+    const wrapper = mountDiff({ diffToggle: true, defaultView: 'code' })
+
+    expect(wrapper.find('.tx-bui-code-stream__mode-switch').exists()).toBe(true)
+    expect(wrapper.find('.tx-bui-code-stream__tally').exists()).toBe(false)
+    expect(wrapper.find('.tx-bui-code-stream__body').text()).not.toContain('"-14C"')
+
+    const buttons = wrapper.findAll('.tx-bui-code-stream__mode-btn')
+    await buttons[1]!.trigger('click')
+    expect(wrapper.find('.tx-bui-code-stream__tally').exists()).toBe(true)
+    expect(wrapper.find('.tx-bui-code-stream__body').text()).toContain('"-14C"')
+  })
 })

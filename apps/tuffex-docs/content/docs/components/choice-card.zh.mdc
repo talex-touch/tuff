@@ -23,7 +23,9 @@ code: |
 code: |
   import { TxChoiceCard } from '@talex-touch/tuffex/choice-card'
   import '@talex-touch/tuffex/choice-card/style.css'
-  // 卡片内部渲染 TxIcon 与 TxSkeleton，它们的样式表需单独引入
+  // 卡片容器基于 TxCard，内部操作使用 TxButton，同时渲染 TxIcon 与 TxSkeleton
+  import '@talex-touch/tuffex/card/style.css'
+  import '@talex-touch/tuffex/button/style.css'
   import '@talex-touch/tuffex/icon/style.css'
   import '@talex-touch/tuffex/skeleton/style.css'
   import '@talex-touch/tuffex/base.css' // 设计令牌与重置样式，全应用引入一次
@@ -227,8 +229,8 @@ code: |
 
 | 变量 | 说明 |
 |------|------|
-| `--tx-choice-card-pad` | 卡片边缘到选项的内距，默认 `8px`；卡片圆角随之变大。 |
-| `--tx-choice-card-option-radius` | 选项圆角，默认 `10px`；卡片圆角为它加内距，保持同心。 |
+| `--tx-choice-card-pad` | 卡片边缘到选项的内距，默认 `12px`（对齐 `TxCard` 默认内距）；卡片圆角随之变大。 |
+| `--tx-choice-card-option-radius` | 选项圆角，默认 `12px`；卡片圆角为它加内距，保持同心。 |
 | `--tx-choice-card-option-pad-x` | 选项与标题的水平内距，默认 `12px`。 |
 | `--tx-choice-card-label-line` | 标题行高与图标框高度，默认 `20px`。 |
 | `--tx-choice-card-desc-line` | 说明行高，默认 `18px`。 |

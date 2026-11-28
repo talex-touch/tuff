@@ -95,7 +95,7 @@ const elapsedText = computed(() => (props.elapsedFormatter ?? formatElapsed)(ela
     height: 4px;
     border-radius: 1px;
     background: var(--tx-bui-ink, #1f2124);
-    opacity: 0.15;
+    opacity: 0.22;
   }
 
   &.is-dots .tx-bui-working-indicator__cell {
@@ -154,7 +154,7 @@ const elapsedText = computed(() => (props.elapsedFormatter ?? formatElapsed)(ela
   .tx-bui-working-indicator__elapsed {
     @include bui-tabular-nums;
 
-    color: var(--tx-bui-ink-3, #9a9da3);
+    color: var(--tx-bui-ink-2, #62656b);
     font-family: var(--tx-bui-font-mono, "JetBrains Mono", ui-monospace, "SF Mono", monospace);
     font-size: 12px;
   }

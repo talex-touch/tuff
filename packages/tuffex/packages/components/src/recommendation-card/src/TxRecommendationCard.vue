@@ -3,6 +3,7 @@
 import type { RecommendationCardEmits, RecommendationCardProps, RecommendationConfidence, RecommendationOption } from './types'
 import { computed, ref, useId } from 'vue'
 import { useMorphWindow } from '../../../../utils/use-morph-window'
+import { TxButton } from '../../button'
 import TxSignalMeter from '../../signal-meter/src/TxSignalMeter.vue'
 
 defineOptions({ name: 'TxRecommendationCard' })
@@ -152,24 +153,26 @@ function accept(): void {
 
       <span class="tx-bui-recommendation-card__actions">
         <slot name="footer-extra" />
-        <button
-          type="button"
+        <TxButton
           class="tx-bui-recommendation-card__alternatives"
           :class="{ 'is-open': isOpen }"
+          size="sm"
+          variant="secondary"
           :aria-expanded="isOpen"
           :aria-controls="drawerId"
           @click="setOpen(!isOpen)"
         >
           {{ alternativesLabel }}
-        </button>
-        <button
-          type="button"
+        </TxButton>
+        <TxButton
           class="tx-bui-recommendation-card__accept"
           :class="[`is-tone-${active.ctaTone ?? 'ink'}`, { 'is-accepted': isAccepted }]"
+          size="sm"
+          :variant="isAccepted ? 'success' : active.ctaTone === 'danger' ? 'danger' : 'primary'"
           @click="accept"
         >
           {{ isAccepted ? acceptedLabel : (active.cta ?? acceptLabel) }}
-        </button>
+        </TxButton>
       </span>
     </div>
   </div>
@@ -355,67 +358,8 @@ function accept(): void {
     color: var(--tx-bui-ink-2, #62656b);
   }
 
-  .tx-bui-recommendation-card__alternatives {
-    height: 28px;
-    padding: 0 10px;
-    font-size: 12.5px;
-    font-weight: var(--tx-font-weight-medium, 500);
-    color: var(--tx-bui-ink, #1f2124);
-    cursor: pointer;
-    background: var(--tx-bui-surface, #fff);
-    border-radius: var(--tx-bui-radius-control, 8px);
-    box-shadow: var(--tx-bui-shadow-btn, 0 0 0 1px #e0e2e5, 0 1px 2px #1018280d);
-    transition: transform 0.1s ease;
-
-    &:hover,
-    &.is-open {
-      background: var(--tx-bui-hover, #f4f5f6);
-    }
-
-    &:active {
-      transform: scale(0.96);
-    }
-  }
-
-  &.is-morphing .tx-bui-recommendation-card__alternatives {
-    transition: background-color 0.1s ease, transform 0.1s ease;
-  }
-
-  .tx-bui-recommendation-card__accept {
-    height: 28px;
-    padding: 0 12px;
-    font-size: 12.5px;
-    font-weight: var(--tx-font-weight-medium, 500);
-    color: var(--tx-bui-canvas, #f1f2f3);
-    cursor: pointer;
-    background: var(--tx-bui-ink, #1f2124);
-    border-radius: var(--tx-bui-radius-control, 8px);
-    // Upstream keeps these ambient values in both themes; they read as a bevel
-    // on the solid fill rather than as a themed hairline.
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 14%),
-      0 0 0 1px rgb(16 24 40 / 12%),
-      0 1px 2px rgb(16 24 40 / 10%);
-    transition: background-color 0.15s ease, transform 0.15s ease;
-
-    &.is-tone-accent {
-      color: var(--tx-color-white, #fff);
-      background: var(--tx-bui-accent, #0285ff);
-    }
-
-    &.is-tone-danger {
-      color: var(--tx-color-white, #fff);
-      background: var(--tx-bui-red, #e3474c);
-    }
-
-    &.is-accepted {
-      color: var(--tx-color-white, #fff);
-      background: var(--tx-bui-green, #189a4d);
-    }
-
-    &:active {
-      transform: scale(0.96);
-    }
+  .tx-bui-recommendation-card__alternatives.tx-button.is-open {
+    background: var(--tx-bui-hover, #f4f5f6);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -423,16 +367,8 @@ function accept(): void {
       animation: none;
     }
 
-    .tx-bui-recommendation-card__drawer,
-    .tx-bui-recommendation-card__alternatives,
-    &.is-morphing .tx-bui-recommendation-card__alternatives,
-    .tx-bui-recommendation-card__accept {
+    .tx-bui-recommendation-card__drawer {
       transition: none;
-    }
-
-    .tx-bui-recommendation-card__alternatives:active,
-    .tx-bui-recommendation-card__accept:active {
-      transform: none;
     }
   }
 }

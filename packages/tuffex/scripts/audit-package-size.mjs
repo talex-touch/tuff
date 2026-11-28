@@ -327,7 +327,12 @@ const LIMITS = {
   // Minimal headroom, growth from here fails.
   // 898 -> 1024 on 2026-11-03: the owner set a 1 MiB ceiling for the full CSS when TxText landed
   // (~1.2 KiB of styles, which the 898 KiB line could not take with 0.2 KiB of headroom).
-  fullCssBytes: 1024 * 1024,
+  // 1024 -> 1034 on 2026-11-28: AI Suite polish & Beautiful UI parity sync add the TxDiffChips
+  // diff preview popover, TxSidebarNav collapsible rail & groups, TxAgentScreen expanded modal
+  // with teach toggle, TxCodeStream Code/Diff toggle, TxChoiceCard TxCard+TxButton redesign, and
+  // TxSuggestionChips/TxCellLink harmonization (measured 1031.5 KiB full CSS; chat page CSS
+  // shrank 192.0 -> 189.5 KiB with 0 repeated rules). Actuals plus minimal headroom.
+  fullCssBytes: 1034 * 1024,
   // 96 -> 56 on 2026-09-12: the largest stylesheet was `stream-markdown` at
   // 103.3 KiB carrying a duplicated copy of the markdown sheet; at 50.1 KiB it
   // is back under, and the next largest is `markdown-view` at 40.8. Actuals plus
@@ -472,7 +477,13 @@ const pageStyleBudgets = [
     // (`stream-markdown/style.css` +1,597 B for `.tx-code-block__run*` action button and ran state):
     // measured 196,445 B (191.8 KiB) across the same 28 sheets (gzip 29.2 KiB, 0 repeated rules,
     // no new style-deps). Actuals plus minimal headroom, growth from here fails.
-    limit: 192.5 * 1024,
+    // 192.5 -> 218 on 2026-11-28: `TxAttachmentChip` now renders file-format badges via `TxIconChip`
+    // (`icon-chip/style.css` joins the closure after dropping unused `bui-scope` rules) and
+    // `TxChatMessage` is rebuilt on `TxAvatar` + `TxCard` (`card/style.css` was already in the
+    // closure; `avatar/style.css` 21.9 KiB + `file-uploader/style.css` 2.3 KiB join through
+    // `style-deps.json`). Measured 216.9 KiB across 31 sheets (gzip 33.8 KiB, 0 repeated rules).
+    // Actuals plus minimal headroom, growth from here fails.
+    limit: 218 * 1024,
   },
 ]
 
