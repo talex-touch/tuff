@@ -3171,6 +3171,7 @@
       "title": "侧边栏",
       "tabs": "侧边栏标签页",
       "newTab": "新建标签 / 快捷入口",
+      "moreActions": "更多操作",
       "newTabMenu": "快速新建标签页",
       "searchPlaceholder": "搜索、输入网址或文件路径",
       "recentOpened": "最近打开",

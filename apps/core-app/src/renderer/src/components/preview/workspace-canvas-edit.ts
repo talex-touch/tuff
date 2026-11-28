@@ -1421,3 +1421,57 @@ export function isStreamingTurnTargetingFile(
 
   return false
 }
+
+export interface InlineRevealSegment {
+  /** `'anchor'` stays static in place; `'reveal'` emerges word-by-word through the pacer. */
+  kind: 'anchor' | 'reveal'
+  text: string
+}
+
+/**
+ * Splits an updated paragraph `after` relative to `before` into gap-free inline reveal segments:
+ * - Unchanged leading prefix stays `'anchor'` so the reader's eye never jumps.
+ * - Everything from the first changed point to the end of the paragraph streams continuously as
+ *   one `'reveal'` run so there is never a mid-line blank gap before a floating trailing island.
+ */
+export function computeInlineRevealSegments(before: string, after: string): InlineRevealSegment[] {
+  if (!after) return []
+  if (!before || before === after) {
+    return [{ kind: before === after ? 'anchor' : 'reveal', text: after }]
+  }
+
+  let prefixLen = 0
+  const minLen = Math.min(before.length, after.length)
+  while (prefixLen < minLen && before[prefixLen] === after[prefixLen]) {
+    prefixLen += 1
+  }
+
+  // Keep UTF-16 surrogate pairs intact (e.g. 😀 vs 😁 share a high surrogate 0xD83D).
+  if (prefixLen > 0) {
+    const prevCode = after.charCodeAt(prefixLen - 1)
+    if (prevCode >= 0xd800 && prevCode <= 0xdbff) {
+      prefixLen -= 1
+    }
+  }
+
+  // Snap prefix back to a clean boundary if we landed mid-ASCII word so half a word never stays frozen.
+  if (
+    prefixLen > 0 &&
+    prefixLen < after.length &&
+    /[A-Za-z0-9]/.test(after[prefixLen - 1]!) &&
+    /[A-Za-z0-9]/.test(after[prefixLen]!)
+  ) {
+    while (prefixLen > 0 && /[A-Za-z0-9]/.test(after[prefixLen - 1]!)) {
+      prefixLen -= 1
+    }
+  }
+
+  const segments: InlineRevealSegment[] = []
+  if (prefixLen > 0) {
+    segments.push({ kind: 'anchor', text: after.slice(0, prefixLen) })
+  }
+  if (prefixLen < after.length) {
+    segments.push({ kind: 'reveal', text: after.slice(prefixLen) })
+  }
+  return segments
+}

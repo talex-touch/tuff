@@ -1,5 +1,6 @@
 <script lang="ts" name="TdsDesignCanvas" setup>
 import { TxPopover } from '@talex-touch/tuffex/popover'
+import { TxTouchSurface } from '@talex-touch/tuffex/touch-surface'
 import { hasDocument, hasWindow, useReducedMotion } from '@talex-touch/tuffex/utils'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { SHELL_MENU_CARD } from '~/components/shell/shell-menu-panel'
@@ -330,6 +331,37 @@ const askFrameMenuOpen = ref(false)
 const askFramePrompt = ref('')
 const askFrameInputRef = ref<HTMLTextAreaElement | null>(null)
 const mockupExportOpen = ref(false)
+const moreMenuOpen = ref(false)
+const isDarkTheme = ref(false)
+let themeObserver: MutationObserver | null = null
+let themeMediaQuery: MediaQueryList | null = null
+
+function resolveDocumentDarkTheme(): boolean {
+  if (!hasDocument()) return false
+  const root = document.documentElement
+  const body = document.body
+  const explicit = root.getAttribute('data-theme') || body?.getAttribute('data-theme')
+  if (explicit === 'dark') return true
+  if (explicit === 'light') return false
+  if (root.classList.contains('dark') || body?.classList.contains('dark')) return true
+  if (hasWindow() && typeof window.matchMedia === 'function') {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  }
+  return false
+}
+
+function syncCanvasTheme(): void {
+  isDarkTheme.value = resolveDocumentDarkTheme()
+}
+
+function closeMoreMenu(): void {
+  moreMenuOpen.value = false
+}
+
+function runMoreAction(action: () => void): void {
+  moreMenuOpen.value = false
+  action()
+}
 
 const VALID_CANVAS_PATTERNS: readonly TdsCanvasPattern[] = ['none', 'dots', 'grid', 'paper-grain']
 const normalizedCanvasPattern = computed<TdsCanvasPattern>(() =>
@@ -1305,6 +1337,24 @@ watch(
 )
 
 onMounted(() => {
+  syncCanvasTheme()
+  if (typeof MutationObserver !== 'undefined' && hasDocument()) {
+    themeObserver = new MutationObserver(syncCanvasTheme)
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'data-theme']
+    })
+    if (document.body) {
+      themeObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'data-theme']
+      })
+    }
+  }
+  if (hasWindow() && typeof window.matchMedia === 'function') {
+    themeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    themeMediaQuery.addEventListener?.('change', syncCanvasTheme)
+  }
   syncViewportResizeObserver(viewportRef.value)
   if (hasWindow()) {
     window.addEventListener('keyup', onKeyUp)
@@ -1324,6 +1374,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearPendingShieldDrag()
   cancelViewportSpring()
+  themeObserver?.disconnect()
+  themeObserver = null
+  themeMediaQuery?.removeEventListener?.('change', syncCanvasTheme)
+  themeMediaQuery = null
   if (wheelIdleTimer !== null) {
     clearTimeout(wheelIdleTimer)
     wheelIdleTimer = null
@@ -1361,253 +1415,6 @@ onBeforeUnmount(() => {
     <div class="TdsDesignCanvas-SrOnly" role="status" aria-live="polite">
       {{ statusAnnouncement }}
     </div>
-
-    <!-- Primary single-row toolbar separated by a 1px hairline border -->
-    <header class="TdsDesignCanvas-Toolbar" data-testid="tds-canvas-toolbar">
-      <div class="TdsDesignCanvas-Group" role="group">
-        <button
-          type="button"
-          class="TdsDesignCanvas-IconBtn"
-          :class="{ 'is-active': activeTool === 'select' && !spaceHeld }"
-          :aria-pressed="activeTool === 'select' && !spaceHeld"
-          :title="labels.selectTool"
-          :aria-label="labels.selectTool"
-          data-testid="tds-canvas-tool-select"
-          @click="activeTool = 'select'"
-        >
-          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-            <span class="i-ri-cursor-line" />
-          </span>
-        </button>
-
-        <button
-          type="button"
-          class="TdsDesignCanvas-IconBtn"
-          :class="{ 'is-active': effectiveHandMode }"
-          :aria-pressed="effectiveHandMode"
-          :title="labels.handTool"
-          :aria-label="labels.handTool"
-          data-testid="tds-canvas-tool-hand"
-          @click="activeTool = 'hand'"
-        >
-          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-            <span class="i-ri-hand" />
-          </span>
-        </button>
-
-        <button
-          type="button"
-          class="TdsDesignCanvas-IconBtn"
-          :class="{ 'is-active': activeTool === 'note' && !spaceHeld }"
-          :aria-pressed="activeTool === 'note' && !spaceHeld"
-          :title="labels.noteTool"
-          :aria-label="labels.noteTool"
-          data-testid="tds-canvas-tool-note"
-          @click="activeTool = activeTool === 'note' ? 'select' : 'note'"
-        >
-          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-            <span class="i-ri-chat-new-line" />
-          </span>
-        </button>
-      </div>
-
-      <span class="TdsDesignCanvas-Sep" aria-hidden="true" />
-
-      <div class="TdsDesignCanvas-Group" role="group">
-        <button
-          type="button"
-          class="TdsDesignCanvas-IconBtn"
-          :title="labels.zoomOut"
-          :aria-label="labels.zoomOut"
-          data-testid="tds-canvas-zoom-out"
-          @click="zoomByFactor(0.8)"
-        >
-          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-            <span class="i-ri-subtract-line" />
-          </span>
-        </button>
-
-        <button
-          type="button"
-          class="TdsDesignCanvas-ZoomBtn"
-          :title="labels.zoomReset"
-          :aria-label="labels.zoomReset"
-          data-testid="tds-canvas-zoom-readout"
-          @click="resetZoom"
-        >
-          {{ zoomPercent }}%
-        </button>
-
-        <button
-          type="button"
-          class="TdsDesignCanvas-IconBtn"
-          :title="labels.zoomIn"
-          :aria-label="labels.zoomIn"
-          data-testid="tds-canvas-zoom-in"
-          @click="zoomByFactor(1.25)"
-        >
-          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-            <span class="i-ri-add-line" />
-          </span>
-        </button>
-
-        <button
-          type="button"
-          class="TdsDesignCanvas-IconBtn"
-          :title="labels.fitToScreen"
-          :aria-label="labels.fitToScreen"
-          data-testid="tds-canvas-fit"
-          @click="fitToScreen"
-        >
-          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-            <span class="i-ri-fullscreen-exit-line" />
-          </span>
-        </button>
-
-        <button
-          type="button"
-          class="TdsDesignCanvas-IconBtn"
-          :disabled="frames.length === 0 || isPeeking"
-          :title="labels.autoArrange"
-          :aria-label="labels.autoArrange"
-          data-testid="tds-canvas-arrange"
-          @click="handleAutoArrange"
-        >
-          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-            <span class="i-ri-layout-grid-line" />
-          </span>
-        </button>
-      </div>
-
-      <div class="TdsDesignCanvas-ToolbarEnd">
-        <button
-          v-if="aiActionsEnabled && pendingNotes.length > 0"
-          type="button"
-          class="TdsDesignCanvas-PillBtn is-primary"
-          data-testid="tds-canvas-send-notes-ai"
-          @click="handleSendPendingNotesToAi"
-        >
-          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-            <span class="i-ri-sparkling-2-line" />
-          </span>
-          <span>{{ labels.sendNotesToAi }}</span>
-          <span class="TdsDesignCanvas-Count">{{ pendingNotes.length }}</span>
-        </button>
-
-        <TxPopover
-          v-model="addFrameMenuOpen"
-          trigger="click"
-          placement="bottom-end"
-          :offset="6"
-          :match-reference-width="false"
-          :min-width="248"
-          :panel-radius="12"
-          :panel-padding="8"
-          :panel-card="SHELL_MENU_CARD"
-          panel-background="refraction"
-        >
-          <template #reference>
-            <button
-              type="button"
-              class="TdsDesignCanvas-PillBtn"
-              :class="{ 'is-active': addFrameMenuOpen }"
-              :aria-expanded="addFrameMenuOpen"
-              data-testid="tds-canvas-add-frame-trigger"
-            >
-              <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-                <span class="i-ri-add-line" />
-              </span>
-              <span>{{ labels.addFrame }}</span>
-            </button>
-          </template>
-
-          <div class="TdsDesignCanvas-PresetPopover">
-            <label class="TdsDesignCanvas-SearchField">
-              <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-                <span class="i-ri-search-line" />
-              </span>
-              <input
-                v-model="addFrameQuery"
-                type="search"
-                class="TdsDesignCanvas-SearchInput"
-                :placeholder="labels.deviceSearchPlaceholder"
-                :aria-label="labels.deviceSearchPlaceholder"
-                data-testid="tds-canvas-add-frame-search"
-              />
-            </label>
-            <div class="TdsDesignCanvas-PresetList">
-              <button
-                v-for="preset in filteredAddPresets"
-                :key="preset.id"
-                type="button"
-                class="TdsDesignCanvas-PresetItem"
-                :data-testid="`tds-canvas-add-preset-${preset.id}`"
-                @click="handleAddFrame(preset)"
-              >
-                <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-                  <span :class="getDeviceCategoryIcon(preset.category)" />
-                </span>
-                <span class="TdsDesignCanvas-PresetName">{{
-                  formatPresetOptionLabel(preset)
-                }}</span>
-                <span v-if="preset.width > 0" class="TdsDesignCanvas-PresetDim">
-                  {{ preset.width }}×{{ preset.height }}
-                </span>
-              </button>
-            </div>
-          </div>
-        </TxPopover>
-
-        <button
-          type="button"
-          class="TdsDesignCanvas-PillBtn"
-          :class="{ 'is-active': historyOpen }"
-          :aria-pressed="historyOpen"
-          :title="labels.historyToggle"
-          data-testid="tds-canvas-history-toggle"
-          @click="historyOpen = !historyOpen"
-        >
-          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-            <span class="i-ri-history-line" />
-          </span>
-          <span>{{ labels.historyToggle }}</span>
-          <span v-if="historyState.entries.length > 0" class="TdsDesignCanvas-Count">
-            {{ historyState.entries.length }}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          class="TdsDesignCanvas-PillBtn"
-          :class="{ 'is-active': compareOpen }"
-          :aria-pressed="compareOpen"
-          :disabled="!canOpenCompare"
-          :title="labels.compareToggle"
-          data-testid="tds-canvas-compare-toggle"
-          @click="toggleCompareMode"
-        >
-          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-            <span class="i-ri-split-cells-horizontal" />
-          </span>
-          <span>{{ labels.compareToggle }}</span>
-        </button>
-
-        <button
-          type="button"
-          class="TdsDesignCanvas-PillBtn"
-          :class="{ 'is-active': mockupExportOpen }"
-          :disabled="frames.length === 0"
-          :title="labels.mockupExport"
-          data-testid="tds-canvas-export-mockup"
-          @click="mockupExportOpen = true"
-        >
-          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-            <span class="i-ri-download-2-line" />
-          </span>
-          <span>{{ labels.mockupExport }}</span>
-        </button>
-      </div>
-    </header>
 
     <!-- Contextual inspector bar for the currently selected frame -->
     <div
@@ -1791,114 +1598,6 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </TxPopover>
-      </div>
-    </div>
-
-    <!-- Toggleable compact History Bar -->
-    <div v-if="historyOpen" class="TdsDesignCanvas-HistoryBar" data-testid="tds-canvas-history-bar">
-      <div class="TdsDesignCanvas-HistoryControls">
-        <button
-          type="button"
-          class="TdsDesignCanvas-PillBtn"
-          :disabled="isPeeking || frames.length === 0"
-          data-testid="tds-canvas-history-save"
-          @click="handleSaveSnapshot"
-        >
-          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-            <span class="i-ri-save-line" />
-          </span>
-          <span>{{ labels.historySaveSnapshot }}</span>
-        </button>
-
-        <button
-          type="button"
-          class="TdsDesignCanvas-IconBtn"
-          :disabled="!canUndo"
-          :title="labels.historyUndo"
-          :aria-label="labels.historyUndo"
-          data-testid="tds-canvas-history-undo"
-          @click="handleHistoryUndo"
-        >
-          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-            <span class="i-ri-arrow-go-back-line" />
-          </span>
-        </button>
-
-        <button
-          type="button"
-          class="TdsDesignCanvas-IconBtn"
-          :disabled="!canRedo"
-          :title="labels.historyRedo"
-          :aria-label="labels.historyRedo"
-          data-testid="tds-canvas-history-redo"
-          @click="handleHistoryRedo"
-        >
-          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-            <span class="i-ri-arrow-go-forward-line" />
-          </span>
-        </button>
-      </div>
-
-      <div v-if="historyEntriesReversed.length === 0" class="TdsDesignCanvas-HistoryEmpty">
-        {{ labels.historyEmpty }}
-      </div>
-
-      <div v-else class="TdsDesignCanvas-HistoryList">
-        <div
-          v-for="entry in historyEntriesReversed"
-          :key="entry.id"
-          class="TdsDesignCanvas-HistoryItem"
-          :class="{
-            'is-current': getEntryTimelineIndex(entry.id) === historyState.cursor,
-            'is-peeking': peekingSnapshotId === entry.id
-          }"
-          :data-testid="`tds-canvas-history-entry-${entry.id}`"
-        >
-          <span class="TdsDesignCanvas-HistoryLabel">{{ entry.label }}</span>
-          <span
-            v-if="getEntryDiffSummary(getEntryTimelineIndex(entry.id))"
-            class="TdsDesignCanvas-HistoryDiff"
-          >
-            {{ getEntryDiffSummary(getEntryTimelineIndex(entry.id)) }}
-          </span>
-          <button
-            type="button"
-            class="TdsDesignCanvas-MiniBtn"
-            :class="{ 'is-active': peekingSnapshotId === entry.id }"
-            :data-testid="`tds-canvas-history-peek-${entry.id}`"
-            @click="handleTogglePeek(entry.id)"
-          >
-            <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-              <span class="i-ri-eye-line" />
-            </span>
-            <span>{{
-              peekingSnapshotId === entry.id ? labels.historyExitPeek : labels.historyPeek
-            }}</span>
-          </button>
-          <button
-            type="button"
-            class="TdsDesignCanvas-MiniBtn"
-            :data-testid="`tds-canvas-history-restore-${entry.id}`"
-            @click="handleRestoreSnapshot(entry.id)"
-          >
-            <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-              <span class="i-ri-restart-line" />
-            </span>
-            <span>{{ labels.historyRestore }}</span>
-          </button>
-          <button
-            type="button"
-            class="TdsDesignCanvas-MiniBtn"
-            :disabled="!canOpenCompare"
-            :data-testid="`tds-canvas-history-compare-${entry.id}`"
-            @click="openCompareWithSnapshot(entry.id)"
-          >
-            <span class="TdsDesignCanvas-Icon" aria-hidden="true">
-              <span class="i-ri-split-cells-horizontal" />
-            </span>
-            <span>{{ labels.compareToggle }}</span>
-          </button>
-        </div>
       </div>
     </div>
 
@@ -2397,7 +2096,439 @@ onBeforeUnmount(() => {
           aria-hidden="true"
         />
       </div>
+
+      <!-- Bottom-floating liquid glass tool & viewport capsule (TxTouchSurface glass lens) -->
+      <div
+        class="TdsDesignCanvas-FloatingDock"
+        data-testid="tds-canvas-floating-dock"
+        @pointerdown.stop
+        @wheel.stop
+      >
+        <TxTouchSurface
+          class="TdsDesignCanvas-FloatingSurface"
+          :class="{ 'is-dark-surface': isDarkTheme }"
+          surface="glass"
+          engine="lens"
+          width="auto"
+          :height="38"
+          :border-radius="19"
+          :frost="15"
+          :bezel="10"
+          :thickness="18"
+          :background-opacity="isDarkTheme ? 0.76 : 0.84"
+          :rim-light="0.9"
+          :lean="0.024"
+          :max-lean="2.5"
+          :hover-lift="0.16"
+          :press-grow="0.01"
+          :stretch="0.000025"
+          :max-stretch="0.022"
+          data-testid="tds-canvas-floating-glass"
+        >
+          <div class="TdsDesignCanvas-FloatingInner" data-testid="tds-canvas-toolbar">
+            <div class="TdsDesignCanvas-Group" role="group">
+              <button
+                type="button"
+                class="TdsDesignCanvas-GlassBtn"
+                :class="{ 'is-active': activeTool === 'select' && !spaceHeld }"
+                :aria-pressed="activeTool === 'select' && !spaceHeld"
+                :title="labels.selectTool"
+                :aria-label="labels.selectTool"
+                data-testid="tds-canvas-tool-select"
+                @click="activeTool = 'select'"
+              >
+                <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+                  <span class="i-ri-cursor-line" />
+                </span>
+              </button>
+
+              <button
+                type="button"
+                class="TdsDesignCanvas-GlassBtn"
+                :class="{ 'is-active': effectiveHandMode }"
+                :aria-pressed="effectiveHandMode"
+                :title="labels.handTool"
+                :aria-label="labels.handTool"
+                data-testid="tds-canvas-tool-hand"
+                @click="activeTool = 'hand'"
+              >
+                <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+                  <span class="i-ri-hand" />
+                </span>
+              </button>
+
+              <button
+                type="button"
+                class="TdsDesignCanvas-GlassBtn"
+                :class="{ 'is-active': activeTool === 'note' && !spaceHeld }"
+                :aria-pressed="activeTool === 'note' && !spaceHeld"
+                :title="labels.noteTool"
+                :aria-label="labels.noteTool"
+                data-testid="tds-canvas-tool-note"
+                @click="activeTool = activeTool === 'note' ? 'select' : 'note'"
+              >
+                <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+                  <span class="i-ri-chat-new-line" />
+                </span>
+              </button>
+            </div>
+
+            <span class="TdsDesignCanvas-GlassSep" aria-hidden="true" />
+
+            <div class="TdsDesignCanvas-Group" role="group">
+              <button
+                type="button"
+                class="TdsDesignCanvas-GlassBtn"
+                :title="labels.zoomOut"
+                :aria-label="labels.zoomOut"
+                data-testid="tds-canvas-zoom-out"
+                @click="zoomByFactor(0.8)"
+              >
+                <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+                  <span class="i-ri-subtract-line" />
+                </span>
+              </button>
+
+              <button
+                type="button"
+                class="TdsDesignCanvas-ZoomBtn TdsDesignCanvas-GlassZoom"
+                :title="labels.zoomReset"
+                :aria-label="labels.zoomReset"
+                data-testid="tds-canvas-zoom-readout"
+                @click="resetZoom"
+              >
+                {{ zoomPercent }}%
+              </button>
+
+              <button
+                type="button"
+                class="TdsDesignCanvas-GlassBtn"
+                :title="labels.zoomIn"
+                :aria-label="labels.zoomIn"
+                data-testid="tds-canvas-zoom-in"
+                @click="zoomByFactor(1.25)"
+              >
+                <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+                  <span class="i-ri-add-line" />
+                </span>
+              </button>
+
+              <button
+                type="button"
+                class="TdsDesignCanvas-GlassBtn"
+                :title="labels.fitToScreen"
+                :aria-label="labels.fitToScreen"
+                data-testid="tds-canvas-fit"
+                @click="fitToScreen"
+              >
+                <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+                  <span class="i-ri-fullscreen-exit-line" />
+                </span>
+              </button>
+
+              <button
+                type="button"
+                class="TdsDesignCanvas-GlassBtn"
+                :disabled="frames.length === 0 || isPeeking"
+                :title="labels.autoArrange"
+                :aria-label="labels.autoArrange"
+                data-testid="tds-canvas-arrange"
+                @click="handleAutoArrange"
+              >
+                <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+                  <span class="i-ri-layout-grid-line" />
+                </span>
+              </button>
+            </div>
+          </div>
+        </TxTouchSurface>
+      </div>
     </div>
+
+    <!-- Toggleable compact History Bar docked cleanly above the bottom status bar -->
+    <div v-if="historyOpen" class="TdsDesignCanvas-HistoryBar" data-testid="tds-canvas-history-bar">
+      <div class="TdsDesignCanvas-HistoryControls">
+        <button
+          type="button"
+          class="TdsDesignCanvas-PillBtn"
+          :disabled="isPeeking || frames.length === 0"
+          data-testid="tds-canvas-history-save"
+          @click="handleSaveSnapshot"
+        >
+          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+            <span class="i-ri-save-line" />
+          </span>
+          <span>{{ labels.historySaveSnapshot }}</span>
+        </button>
+
+        <button
+          type="button"
+          class="TdsDesignCanvas-IconBtn"
+          :disabled="!canUndo"
+          :title="labels.historyUndo"
+          :aria-label="labels.historyUndo"
+          data-testid="tds-canvas-history-undo"
+          @click="handleHistoryUndo"
+        >
+          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+            <span class="i-ri-arrow-go-back-line" />
+          </span>
+        </button>
+
+        <button
+          type="button"
+          class="TdsDesignCanvas-IconBtn"
+          :disabled="!canRedo"
+          :title="labels.historyRedo"
+          :aria-label="labels.historyRedo"
+          data-testid="tds-canvas-history-redo"
+          @click="handleHistoryRedo"
+        >
+          <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+            <span class="i-ri-arrow-go-forward-line" />
+          </span>
+        </button>
+      </div>
+
+      <div v-if="historyEntriesReversed.length === 0" class="TdsDesignCanvas-HistoryEmpty">
+        {{ labels.historyEmpty }}
+      </div>
+
+      <div v-else class="TdsDesignCanvas-HistoryList">
+        <div
+          v-for="entry in historyEntriesReversed"
+          :key="entry.id"
+          class="TdsDesignCanvas-HistoryItem"
+          :class="{
+            'is-current': getEntryTimelineIndex(entry.id) === historyState.cursor,
+            'is-peeking': peekingSnapshotId === entry.id
+          }"
+          :data-testid="`tds-canvas-history-entry-${entry.id}`"
+        >
+          <span class="TdsDesignCanvas-HistoryLabel">{{ entry.label }}</span>
+          <span
+            v-if="getEntryDiffSummary(getEntryTimelineIndex(entry.id))"
+            class="TdsDesignCanvas-HistoryDiff"
+          >
+            {{ getEntryDiffSummary(getEntryTimelineIndex(entry.id)) }}
+          </span>
+          <button
+            type="button"
+            class="TdsDesignCanvas-MiniBtn"
+            :class="{ 'is-active': peekingSnapshotId === entry.id }"
+            :data-testid="`tds-canvas-history-peek-${entry.id}`"
+            @click="handleTogglePeek(entry.id)"
+          >
+            <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+              <span class="i-ri-eye-line" />
+            </span>
+            <span>{{
+              peekingSnapshotId === entry.id ? labels.historyExitPeek : labels.historyPeek
+            }}</span>
+          </button>
+          <button
+            type="button"
+            class="TdsDesignCanvas-MiniBtn"
+            :data-testid="`tds-canvas-history-restore-${entry.id}`"
+            @click="handleRestoreSnapshot(entry.id)"
+          >
+            <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+              <span class="i-ri-restart-line" />
+            </span>
+            <span>{{ labels.historyRestore }}</span>
+          </button>
+          <button
+            type="button"
+            class="TdsDesignCanvas-MiniBtn"
+            :disabled="!canOpenCompare"
+            :data-testid="`tds-canvas-history-compare-${entry.id}`"
+            @click="openCompareWithSnapshot(entry.id)"
+          >
+            <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+              <span class="i-ri-split-cells-horizontal" />
+            </span>
+            <span>{{ labels.compareToggle }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Unified compact bottom StatusBar (converged to 2-3 crisp controls) -->
+    <footer class="TdsDesignCanvas-StatusBar" data-testid="tds-canvas-statusbar">
+      <div class="TdsDesignCanvas-StatusLeft">
+        <slot name="status-left">
+          <span v-if="selectedFrame" class="TdsDesignCanvas-StatusTitle">
+            {{ selectedFrame.title }}
+          </span>
+          <span v-else class="TdsDesignCanvas-StatusMeta">
+            {{ frames.length }}
+          </span>
+        </slot>
+      </div>
+
+      <div class="TdsDesignCanvas-StatusRight">
+        <slot name="status-pending-notes">
+          <button
+            v-if="aiActionsEnabled && pendingNotes.length > 0"
+            type="button"
+            class="TdsDesignCanvas-StatusBtn is-primary"
+            data-testid="tds-canvas-send-notes-ai"
+            @click="handleSendPendingNotesToAi"
+          >
+            <span class="TdsDesignCanvas-StatusIcon" aria-hidden="true">
+              <span class="i-ri-sparkling-2-line" />
+            </span>
+            <span>{{ labels.sendNotesToAi }}</span>
+            <span class="TdsDesignCanvas-StatusCount">{{ pendingNotes.length }}</span>
+          </button>
+        </slot>
+
+        <slot name="status-add">
+          <TxPopover
+            v-model="addFrameMenuOpen"
+            trigger="click"
+            placement="top-end"
+            :offset="6"
+            :match-reference-width="false"
+            :min-width="248"
+            :panel-radius="12"
+            :panel-padding="8"
+            :panel-card="SHELL_MENU_CARD"
+            panel-background="refraction"
+          >
+            <template #reference>
+              <button
+                type="button"
+                class="TdsDesignCanvas-StatusBtn"
+                :class="{ 'is-active': addFrameMenuOpen }"
+                :aria-expanded="addFrameMenuOpen"
+                data-testid="tds-canvas-add-frame-trigger"
+              >
+                <span class="TdsDesignCanvas-StatusIcon" aria-hidden="true">
+                  <span class="i-ri-add-line" />
+                </span>
+                <span>{{ labels.addFrame }}</span>
+              </button>
+            </template>
+
+            <div class="TdsDesignCanvas-PresetPopover">
+              <label class="TdsDesignCanvas-SearchField">
+                <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+                  <span class="i-ri-search-line" />
+                </span>
+                <input
+                  v-model="addFrameQuery"
+                  type="search"
+                  class="TdsDesignCanvas-SearchInput"
+                  :placeholder="labels.deviceSearchPlaceholder"
+                  :aria-label="labels.deviceSearchPlaceholder"
+                  data-testid="tds-canvas-add-frame-search"
+                />
+              </label>
+              <div class="TdsDesignCanvas-PresetList">
+                <button
+                  v-for="preset in filteredAddPresets"
+                  :key="preset.id"
+                  type="button"
+                  class="TdsDesignCanvas-PresetItem"
+                  :data-testid="`tds-canvas-add-preset-${preset.id}`"
+                  @click="handleAddFrame(preset)"
+                >
+                  <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+                    <span :class="getDeviceCategoryIcon(preset.category)" />
+                  </span>
+                  <span class="TdsDesignCanvas-PresetName">{{
+                    formatPresetOptionLabel(preset)
+                  }}</span>
+                  <span v-if="preset.width > 0" class="TdsDesignCanvas-PresetDim">
+                    {{ preset.width }}×{{ preset.height }}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </TxPopover>
+        </slot>
+
+        <button
+          type="button"
+          class="TdsDesignCanvas-StatusBtn"
+          :class="{ 'is-active': historyOpen }"
+          :aria-pressed="historyOpen"
+          :title="labels.historyToggle"
+          data-testid="tds-canvas-history-toggle"
+          @click="historyOpen = !historyOpen"
+        >
+          <span class="TdsDesignCanvas-StatusIcon" aria-hidden="true">
+            <span class="i-ri-history-line" />
+          </span>
+          <span>{{ labels.historyToggle }}</span>
+          <span v-if="historyState.entries.length > 0" class="TdsDesignCanvas-StatusCount">
+            {{ historyState.entries.length }}
+          </span>
+        </button>
+
+        <TxPopover
+          v-model="moreMenuOpen"
+          trigger="click"
+          placement="top-end"
+          :offset="6"
+          :match-reference-width="false"
+          :min-width="184"
+          :panel-radius="12"
+          :panel-padding="6"
+          :panel-card="SHELL_MENU_CARD"
+          panel-background="refraction"
+        >
+          <template #reference>
+            <button
+              type="button"
+              class="TdsDesignCanvas-StatusToolBtn"
+              :class="{ 'is-active': moreMenuOpen || compareOpen || mockupExportOpen }"
+              :aria-expanded="moreMenuOpen"
+              :title="labels.moreActions"
+              :aria-label="labels.moreActions"
+              data-testid="tds-canvas-more-trigger"
+            >
+              <span class="i-ri-more-fill" aria-hidden="true" />
+            </button>
+          </template>
+
+          <div class="TdsDesignCanvas-MoreMenu" role="menu">
+            <button
+              type="button"
+              role="menuitem"
+              class="TdsDesignCanvas-MoreItem"
+              :class="{ 'is-active': compareOpen }"
+              :disabled="!canOpenCompare"
+              data-testid="tds-canvas-compare-toggle"
+              @click="runMoreAction(toggleCompareMode)"
+            >
+              <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+                <span class="i-ri-split-cells-horizontal" />
+              </span>
+              <span>{{ labels.compareToggle }}</span>
+            </button>
+
+            <button
+              type="button"
+              role="menuitem"
+              class="TdsDesignCanvas-MoreItem"
+              :class="{ 'is-active': mockupExportOpen }"
+              :disabled="frames.length === 0"
+              data-testid="tds-canvas-export-mockup"
+              @click="runMoreAction(() => (mockupExportOpen = true))"
+            >
+              <span class="TdsDesignCanvas-Icon" aria-hidden="true">
+                <span class="i-ri-download-2-line" />
+              </span>
+              <span>{{ labels.mockupExport }}</span>
+            </button>
+
+            <slot name="status-more-items" :close="closeMoreMenu" />
+          </div>
+        </TxPopover>
+      </div>
+    </footer>
 
     <TdsMockupExportDialog
       v-model="mockupExportOpen"
@@ -2446,24 +2577,264 @@ onBeforeUnmount(() => {
   line-height: 1;
 }
 
-.TdsDesignCanvas-Toolbar {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  gap: var(--shell-space-2);
-  align-items: center;
-  min-height: 38px;
-  padding: 5px var(--shell-space-3);
-  border-bottom: 1px solid var(--shell-border);
-  background: var(--shell-bg);
+.TdsDesignCanvas-FloatingDock {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  z-index: 12;
+  display: inline-flex;
+  justify-content: center;
+  max-width: calc(100% - 24px);
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
-.TdsDesignCanvas-ToolbarEnd {
+.TdsDesignCanvas-FloatingSurface {
+  pointer-events: auto;
+  box-shadow:
+    0 12px 32px -12px var(--shell-shadow),
+    0 0 0 1px color-mix(in srgb, var(--shell-border-strong) 72%, transparent);
+}
+
+.TdsDesignCanvas-FloatingInner {
   display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--shell-space-1);
+  gap: 5px;
   align-items: center;
-  margin-left: auto;
+  height: 38px;
+  padding: 0 7px;
+  box-sizing: border-box;
+}
+
+.TdsDesignCanvas-GlassSep {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  background: color-mix(in srgb, var(--shell-border-strong) 78%, transparent);
+}
+
+.TdsDesignCanvas-GlassBtn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--shell-radius-full);
+  background: transparent;
+  color: var(--shell-text-regular);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--shell-text-primary) 10%, transparent);
+    color: var(--shell-text-primary);
+  }
+
+  &.is-active {
+    background: var(--shell-primary-soft);
+    color: var(--shell-primary);
+    box-shadow: inset 0 0 0 1px var(--shell-primary-border);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--shell-focus-ring);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.TdsDesignCanvas-GlassZoom {
+  min-width: 44px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: var(--shell-radius-full);
+}
+
+.TdsDesignCanvas-StatusBar {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 6px 0 8px;
+  border-top: 1px solid var(--shell-border);
+  background: var(--shell-surface);
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.TdsDesignCanvas-StatusLeft {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.TdsDesignCanvas-StatusRight {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+}
+
+.TdsDesignCanvas-StatusTitle {
+  overflow: hidden;
+  max-width: 180px;
+  color: var(--shell-text-primary);
+  font-weight: var(--shell-font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.TdsDesignCanvas-StatusMeta {
+  color: var(--shell-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.TdsDesignCanvas-StatusBtn {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-regular);
+  font: inherit;
+  font-size: var(--shell-fs-caption);
+  font-weight: var(--shell-font-weight-medium);
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &.is-active {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+
+  &.is-primary {
+    background: var(--shell-primary);
+    color: var(--shell-on-primary);
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--shell-primary) 90%, var(--shell-text-primary));
+      color: var(--shell-on-primary);
+    }
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--shell-focus-ring);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.TdsDesignCanvas-StatusToolBtn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &.is-active {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--shell-focus-ring);
+  }
+}
+
+.TdsDesignCanvas-StatusIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.TdsDesignCanvas-StatusCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: var(--shell-radius-full);
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.TdsDesignCanvas-MoreMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 172px;
+}
+
+.TdsDesignCanvas-MoreItem {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-regular);
+  font: inherit;
+  font-size: var(--shell-fs-sm);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+
+  &.is-active {
+    background: var(--shell-primary-soft);
+    color: var(--shell-primary);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--shell-focus-ring);
+  }
 }
 
 .TdsDesignCanvas-Group {
@@ -2755,7 +3126,7 @@ onBeforeUnmount(() => {
   align-items: center;
   min-height: 36px;
   padding: 5px var(--shell-space-3);
-  border-bottom: 1px solid var(--shell-border);
+  border-top: 1px solid var(--shell-border);
   background: var(--shell-bg);
   overflow-x: auto;
 }
@@ -3262,7 +3633,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 100%;
   height: 100%;
-  padding: var(--shell-space-5);
+  padding: var(--shell-space-5) var(--shell-space-5) 64px;
   text-align: center;
   box-sizing: border-box;
 }

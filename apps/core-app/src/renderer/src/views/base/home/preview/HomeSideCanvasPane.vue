@@ -972,6 +972,7 @@ const canvasLabels = computed<Partial<TdsCanvasLabels>>(() => ({
   emptyDescription: t('home.sidePanel.canvasEmptyDescription'),
   emptyAddPhone: t('home.sidePanel.canvasEmptyAddPhone'),
   emptyAddDesktop: t('home.sidePanel.canvasEmptyAddDesktop'),
+  moreActions: t('home.sidePanel.moreActions'),
   mockupExport: t('home.sidePanel.canvasMockupExport'),
   mockupDialogTitle: t('home.sidePanel.canvasMockupDialogTitle'),
   mockupClose: t('home.sidePanel.canvasMockupClose'),
@@ -1084,6 +1085,11 @@ function handleSelectFrame(frameId: string | null): void {
 function handleOpenLint(frameId: string): void {
   selectedFrameId.value = frameId
   lintOpen.value = true
+}
+
+function handleSyncFromChatAndClose(close: () => void): void {
+  handleSyncFromChat()
+  close()
 }
 
 function handleSyncFromChat(): void {
@@ -1200,265 +1206,6 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
     :aria-label="t('home.sidePanel.canvas')"
     data-testid="home-side-canvas-pane"
   >
-    <header class="HomeSideCanvasPane-Toolbar">
-      <div class="HomeSideCanvasPane-ToolbarGroup">
-        <TxPopover
-          v-model="addMenuOpen"
-          trigger="click"
-          placement="bottom-start"
-          :offset="6"
-          :match-reference-width="false"
-          :min-width="264"
-          :panel-radius="12"
-          :panel-padding="8"
-          :panel-card="SHELL_MENU_CARD"
-          panel-background="refraction"
-        >
-          <template #reference>
-            <button
-              type="button"
-              class="HomeSideCanvasPane-ActionBtn"
-              :aria-expanded="addMenuOpen"
-              data-testid="canvas-add-frame-trigger"
-            >
-              <span class="i-ri-add-line" aria-hidden="true" />
-              <span>{{ t('home.sidePanel.canvasAddFrame') }}</span>
-            </button>
-          </template>
-
-          <div class="HomeSideCanvasPane-PresetMenu" data-testid="canvas-preset-popover">
-            <label class="HomeSideCanvasPane-PresetSearch">
-              <span class="i-ri-search-line HomeSideCanvasPane-SearchIcon" aria-hidden="true" />
-              <input
-                v-model="presetQuery"
-                type="text"
-                class="HomeSideCanvasPane-SearchInput"
-                :placeholder="t('home.sidePanel.canvasPresetSearch')"
-                :aria-label="t('home.sidePanel.canvasPresetSearch')"
-                data-testid="canvas-preset-search"
-              />
-            </label>
-
-            <div class="HomeSideCanvasPane-PresetCats" role="tablist">
-              <button
-                v-for="cat in presetCategories"
-                :key="cat.id"
-                type="button"
-                role="tab"
-                class="HomeSideCanvasPane-CatChip"
-                :class="{ 'is-active': presetCategory === cat.id }"
-                :aria-selected="presetCategory === cat.id"
-                @click="presetCategory = cat.id"
-              >
-                {{ cat.label }}
-              </button>
-            </div>
-
-            <div class="HomeSideCanvasPane-PresetList">
-              <button
-                v-for="preset in filteredPresets"
-                :key="preset.id"
-                type="button"
-                class="HomeSideCanvasPane-PresetOption"
-                :class="{
-                  'is-featured': (QUICK_PRESET_IDS as readonly string[]).includes(preset.id)
-                }"
-                :data-testid="`canvas-preset-option-${preset.id}`"
-                @click="addPresetFrame(preset)"
-              >
-                <span
-                  :class="getDeviceCategoryIcon(preset.category)"
-                  class="HomeSideCanvasPane-PresetIcon"
-                  aria-hidden="true"
-                />
-                <span class="HomeSideCanvasPane-PresetName">
-                  {{ formatPresetOptionLabel(preset) }}
-                </span>
-                <span class="HomeSideCanvasPane-PresetDims">
-                  {{ formatPresetOptionDims(preset) }}
-                </span>
-              </button>
-
-              <p v-if="filteredPresets.length === 0" class="HomeSideCanvasPane-PresetEmpty">
-                {{ t('home.sidePanel.canvasPresetEmpty') }}
-              </p>
-            </div>
-          </div>
-        </TxPopover>
-
-        <button
-          type="button"
-          class="HomeSideCanvasPane-IconBtn"
-          :title="t('home.sidePanel.canvasSyncMessages')"
-          :aria-label="t('home.sidePanel.canvasSyncMessages')"
-          data-testid="canvas-sync-messages"
-          @click="handleSyncFromChat"
-        >
-          <span class="i-ri-refresh-line" aria-hidden="true" />
-        </button>
-
-        <span
-          v-if="inspectedFrame"
-          class="HomeSideCanvasPane-ActiveTitle"
-          :title="inspectedFrame.title"
-          data-testid="canvas-active-frame-title"
-        >
-          {{ inspectedFrame.title }}
-        </span>
-      </div>
-
-      <div class="HomeSideCanvasPane-ToolbarGroup">
-        <button
-          v-if="aiActionsEnabled && pendingNotes.length > 0"
-          type="button"
-          class="HomeSideCanvasPane-ActionBtn HomeSideCanvasPane-ActionBtn--primary"
-          :disabled="sendingAiAction"
-          data-testid="canvas-send-notes-bar"
-          @click="handleSendPendingNotesBar"
-        >
-          <span class="i-ri-sparkling-line" aria-hidden="true" />
-          <span>{{ t('home.sidePanel.canvasSendNotesToAi') }}</span>
-          <span class="HomeSideCanvasPane-Badge">{{ pendingNotes.length }}</span>
-        </button>
-
-        <TxPopover
-          v-model="themeMenuOpen"
-          trigger="click"
-          placement="bottom-end"
-          :offset="6"
-          :match-reference-width="false"
-          :min-width="268"
-          :panel-radius="12"
-          :panel-padding="8"
-          :panel-card="SHELL_MENU_CARD"
-          panel-background="refraction"
-        >
-          <template #reference>
-            <button
-              type="button"
-              class="HomeSideCanvasPane-ActionBtn HomeSideCanvasPane-ThemeTrigger"
-              :aria-expanded="themeMenuOpen"
-              :aria-label="t('home.sidePanel.canvasThemeTitle')"
-              :title="t('home.sidePanel.canvasThemeTitle')"
-              data-testid="canvas-theme-pack-trigger"
-            >
-              <span
-                class="HomeSideCanvasPane-ThemeTriggerDot"
-                :style="{ backgroundColor: selectedCanvasPackAccentColor }"
-                aria-hidden="true"
-              />
-              <span class="i-ri-palette-line" aria-hidden="true" />
-              <span class="HomeSideCanvasPane-ThemeTriggerLabel">
-                {{ resolvePackDisplayName(selectedCanvasPack) }}
-              </span>
-            </button>
-          </template>
-
-          <div class="HomeSideCanvasPane-ThemeMenu" data-testid="canvas-theme-pack-popover">
-            <div class="HomeSideCanvasPane-ThemeHeader">
-              <div class="HomeSideCanvasPane-ThemeHeaderRow">
-                <span class="HomeSideCanvasPane-ThemeTitle">
-                  {{ t('home.sidePanel.canvasThemeTitle') }}
-                </span>
-                <span class="HomeSideCanvasPane-ThemeScopeTag">
-                  {{
-                    canvasThemePackId
-                      ? t('home.sidePanel.canvasThemePreviewing')
-                      : t('home.sidePanel.canvasThemeFollowApp')
-                  }}
-                </span>
-              </div>
-              <p class="HomeSideCanvasPane-ThemeHint">
-                {{ t('home.sidePanel.canvasThemeHint') }}
-              </p>
-            </div>
-
-            <div
-              class="HomeSideCanvasPane-ThemeList"
-              role="listbox"
-              :aria-label="t('home.sidePanel.canvasThemeLabel')"
-            >
-              <button
-                v-for="pack in themePacks"
-                :key="pack.meta.id"
-                type="button"
-                role="option"
-                class="HomeSideCanvasPane-ThemeOption"
-                :class="{ 'is-selected': selectedCanvasPack.meta.id === pack.meta.id }"
-                :aria-selected="selectedCanvasPack.meta.id === pack.meta.id"
-                :data-testid="`canvas-theme-pack-option-${pack.meta.id}`"
-                @click="handleSelectCanvasPack(pack)"
-              >
-                <span class="HomeSideCanvasPane-ThemeSwatches" aria-hidden="true">
-                  <span
-                    v-for="(color, idx) in getPackSwatchColors(pack)"
-                    :key="idx"
-                    class="HomeSideCanvasPane-ThemeSwatchDot"
-                    :style="{ backgroundColor: color }"
-                  />
-                </span>
-                <span class="HomeSideCanvasPane-ThemeMeta">
-                  <span class="HomeSideCanvasPane-ThemeNameRow">
-                    <span class="HomeSideCanvasPane-ThemeName">
-                      {{ resolvePackDisplayName(pack) }}
-                    </span>
-                    <span
-                      v-if="appActiveThemePackId === pack.meta.id"
-                      class="HomeSideCanvasPane-ThemeAppTag"
-                    >
-                      {{ t('home.sidePanel.canvasThemeAppActive') }}
-                    </span>
-                  </span>
-                  <span class="HomeSideCanvasPane-ThemePattern">
-                    {{ resolvePatternLabel(pack.surface?.canvasPattern) }}
-                  </span>
-                </span>
-                <span
-                  v-if="selectedCanvasPack.meta.id === pack.meta.id"
-                  class="i-ri-check-line HomeSideCanvasPane-ThemeCheck"
-                  aria-hidden="true"
-                />
-              </button>
-            </div>
-
-            <div class="HomeSideCanvasPane-ThemeFooter">
-              <button
-                v-if="canvasThemePackId !== null"
-                type="button"
-                class="HomeSideCanvasPane-ThemeFooterGhost"
-                data-testid="canvas-theme-follow-app"
-                @click="handleFollowAppThemePack"
-              >
-                {{ t('home.sidePanel.canvasThemeFollowApp') }}
-              </button>
-              <button
-                type="button"
-                class="HomeSideCanvasPane-ActionBtn HomeSideCanvasPane-ThemeApplyBtn"
-                :disabled="!isCanvasPackDifferentFromApp"
-                data-testid="canvas-theme-apply-to-app"
-                @click="handleApplyPackToApp(selectedCanvasPack)"
-              >
-                <span class="i-ri-window-line" aria-hidden="true" />
-                <span>{{ t('home.sidePanel.canvasThemeApplyToApp') }}</span>
-              </button>
-            </div>
-          </div>
-        </TxPopover>
-
-        <TdsLintPopover
-          v-if="inspectedFrame"
-          v-model:open="lintOpen"
-          v-model:anti-slop="antiSlopEnabled"
-          :issues="inspectedLintIssues"
-          :display-path="inspectedFrame.title"
-          :ai-actions-enabled="aiActionsEnabled"
-          :sending="sendingAiAction"
-          placement="bottom-end"
-          @send-to-ai="handleSendLintToAi"
-        />
-      </div>
-    </header>
-
     <div class="HomeSideCanvasPane-Stage">
       <TdsDesignCanvas
         :key="canvasSessionKey"
@@ -1481,7 +1228,269 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
         @open-lint="handleOpenLint"
         @send-notes-to-ai="handleSendNotesToAi"
         @ask-frame-ai="handleAskFrameAi"
-      />
+      >
+        <template #status-left>
+          <TxPopover
+            v-model="themeMenuOpen"
+            trigger="click"
+            placement="top-start"
+            :offset="6"
+            :match-reference-width="false"
+            :min-width="268"
+            :panel-radius="12"
+            :panel-padding="8"
+            :panel-card="SHELL_MENU_CARD"
+            panel-background="refraction"
+          >
+            <template #reference>
+              <button
+                type="button"
+                class="HomeSideCanvasPane-StatusBtn HomeSideCanvasPane-ThemeTrigger"
+                :aria-expanded="themeMenuOpen"
+                :aria-label="t('home.sidePanel.canvasThemeTitle')"
+                :title="t('home.sidePanel.canvasThemeTitle')"
+                data-testid="canvas-theme-pack-trigger"
+              >
+                <span
+                  class="HomeSideCanvasPane-ThemeTriggerDot"
+                  :style="{ backgroundColor: selectedCanvasPackAccentColor }"
+                  aria-hidden="true"
+                />
+                <span class="i-ri-palette-line" aria-hidden="true" />
+                <span class="HomeSideCanvasPane-ThemeTriggerLabel">
+                  {{ resolvePackDisplayName(selectedCanvasPack) }}
+                </span>
+              </button>
+            </template>
+
+            <div class="HomeSideCanvasPane-ThemeMenu" data-testid="canvas-theme-pack-popover">
+              <div class="HomeSideCanvasPane-ThemeHeader">
+                <div class="HomeSideCanvasPane-ThemeHeaderRow">
+                  <span class="HomeSideCanvasPane-ThemeTitle">
+                    {{ t('home.sidePanel.canvasThemeTitle') }}
+                  </span>
+                  <span class="HomeSideCanvasPane-ThemeScopeTag">
+                    {{
+                      canvasThemePackId
+                        ? t('home.sidePanel.canvasThemePreviewing')
+                        : t('home.sidePanel.canvasThemeFollowApp')
+                    }}
+                  </span>
+                </div>
+                <p class="HomeSideCanvasPane-ThemeHint">
+                  {{ t('home.sidePanel.canvasThemeHint') }}
+                </p>
+              </div>
+
+              <div
+                class="HomeSideCanvasPane-ThemeList"
+                role="listbox"
+                :aria-label="t('home.sidePanel.canvasThemeLabel')"
+              >
+                <button
+                  v-for="pack in themePacks"
+                  :key="pack.meta.id"
+                  type="button"
+                  role="option"
+                  class="HomeSideCanvasPane-ThemeOption"
+                  :class="{ 'is-selected': selectedCanvasPack.meta.id === pack.meta.id }"
+                  :aria-selected="selectedCanvasPack.meta.id === pack.meta.id"
+                  :data-testid="`canvas-theme-pack-option-${pack.meta.id}`"
+                  @click="handleSelectCanvasPack(pack)"
+                >
+                  <span class="HomeSideCanvasPane-ThemeSwatches" aria-hidden="true">
+                    <span
+                      v-for="(color, idx) in getPackSwatchColors(pack)"
+                      :key="idx"
+                      class="HomeSideCanvasPane-ThemeSwatchDot"
+                      :style="{ backgroundColor: color }"
+                    />
+                  </span>
+                  <span class="HomeSideCanvasPane-ThemeMeta">
+                    <span class="HomeSideCanvasPane-ThemeNameRow">
+                      <span class="HomeSideCanvasPane-ThemeName">
+                        {{ resolvePackDisplayName(pack) }}
+                      </span>
+                      <span
+                        v-if="appActiveThemePackId === pack.meta.id"
+                        class="HomeSideCanvasPane-ThemeAppTag"
+                      >
+                        {{ t('home.sidePanel.canvasThemeAppActive') }}
+                      </span>
+                    </span>
+                    <span class="HomeSideCanvasPane-ThemePattern">
+                      {{ resolvePatternLabel(pack.surface?.canvasPattern) }}
+                    </span>
+                  </span>
+                  <span
+                    v-if="selectedCanvasPack.meta.id === pack.meta.id"
+                    class="i-ri-check-line HomeSideCanvasPane-ThemeCheck"
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
+
+              <div class="HomeSideCanvasPane-ThemeFooter">
+                <button
+                  v-if="canvasThemePackId !== null"
+                  type="button"
+                  class="HomeSideCanvasPane-ThemeFooterGhost"
+                  data-testid="canvas-theme-follow-app"
+                  @click="handleFollowAppThemePack"
+                >
+                  {{ t('home.sidePanel.canvasThemeFollowApp') }}
+                </button>
+                <button
+                  type="button"
+                  class="HomeSideCanvasPane-ActionBtn HomeSideCanvasPane-ThemeApplyBtn"
+                  :disabled="!isCanvasPackDifferentFromApp"
+                  data-testid="canvas-theme-apply-to-app"
+                  @click="handleApplyPackToApp(selectedCanvasPack)"
+                >
+                  <span class="i-ri-window-line" aria-hidden="true" />
+                  <span>{{ t('home.sidePanel.canvasThemeApplyToApp') }}</span>
+                </button>
+              </div>
+            </div>
+          </TxPopover>
+
+          <TdsLintPopover
+            v-if="inspectedFrame"
+            v-model:open="lintOpen"
+            v-model:anti-slop="antiSlopEnabled"
+            :issues="inspectedLintIssues"
+            :display-path="inspectedFrame.title"
+            :ai-actions-enabled="aiActionsEnabled"
+            :sending="sendingAiAction"
+            placement="top-start"
+            @send-to-ai="handleSendLintToAi"
+          />
+
+          <span
+            v-if="inspectedFrame"
+            class="HomeSideCanvasPane-ActiveTitle"
+            :title="inspectedFrame.title"
+            data-testid="canvas-active-frame-title"
+          >
+            {{ inspectedFrame.title }}
+          </span>
+        </template>
+
+        <template #status-pending-notes>
+          <button
+            v-if="aiActionsEnabled && pendingNotes.length > 0"
+            type="button"
+            class="HomeSideCanvasPane-StatusBtn HomeSideCanvasPane-StatusBtn--primary"
+            :disabled="sendingAiAction"
+            data-testid="canvas-send-notes-bar"
+            @click="handleSendPendingNotesBar"
+          >
+            <span class="i-ri-sparkling-line" aria-hidden="true" />
+            <span>{{ t('home.sidePanel.canvasSendNotesToAi') }}</span>
+            <span class="HomeSideCanvasPane-Badge">{{ pendingNotes.length }}</span>
+          </button>
+        </template>
+
+        <template #status-add>
+          <TxPopover
+            v-model="addMenuOpen"
+            trigger="click"
+            placement="top-end"
+            :offset="6"
+            :match-reference-width="false"
+            :min-width="264"
+            :panel-radius="12"
+            :panel-padding="8"
+            :panel-card="SHELL_MENU_CARD"
+            panel-background="refraction"
+          >
+            <template #reference>
+              <button
+                type="button"
+                class="HomeSideCanvasPane-StatusBtn"
+                :class="{ 'is-active': addMenuOpen }"
+                :aria-expanded="addMenuOpen"
+                data-testid="canvas-add-frame-trigger"
+              >
+                <span class="i-ri-add-line" aria-hidden="true" />
+                <span>{{ t('home.sidePanel.canvasAddFrame') }}</span>
+              </button>
+            </template>
+
+            <div class="HomeSideCanvasPane-PresetMenu" data-testid="canvas-preset-popover">
+              <label class="HomeSideCanvasPane-PresetSearch">
+                <span class="i-ri-search-line HomeSideCanvasPane-SearchIcon" aria-hidden="true" />
+                <input
+                  v-model="presetQuery"
+                  type="text"
+                  class="HomeSideCanvasPane-SearchInput"
+                  :placeholder="t('home.sidePanel.canvasPresetSearch')"
+                  :aria-label="t('home.sidePanel.canvasPresetSearch')"
+                  data-testid="canvas-preset-search"
+                />
+              </label>
+
+              <div class="HomeSideCanvasPane-PresetCats" role="tablist">
+                <button
+                  v-for="cat in presetCategories"
+                  :key="cat.id"
+                  type="button"
+                  role="tab"
+                  class="HomeSideCanvasPane-CatChip"
+                  :class="{ 'is-active': presetCategory === cat.id }"
+                  :aria-selected="presetCategory === cat.id"
+                  @click="presetCategory = cat.id"
+                >
+                  {{ cat.label }}
+                </button>
+              </div>
+
+              <div class="HomeSideCanvasPane-PresetList">
+                <button
+                  v-for="preset in filteredPresets"
+                  :key="preset.id"
+                  type="button"
+                  class="HomeSideCanvasPane-PresetOption"
+                  :class="{
+                    'is-featured': (QUICK_PRESET_IDS as readonly string[]).includes(preset.id)
+                  }"
+                  :data-testid="`canvas-preset-option-${preset.id}`"
+                  @click="addPresetFrame(preset)"
+                >
+                  <span
+                    :class="getDeviceCategoryIcon(preset.category)"
+                    class="HomeSideCanvasPane-PresetIcon"
+                    aria-hidden="true"
+                  />
+                  <span class="HomeSideCanvasPane-PresetName">
+                    {{ formatPresetOptionLabel(preset) }}
+                  </span>
+                  <span class="HomeSideCanvasPane-PresetDims">
+                    {{ formatPresetOptionDims(preset) }}
+                  </span>
+                </button>
+
+                <p v-if="filteredPresets.length === 0" class="HomeSideCanvasPane-PresetEmpty">
+                  {{ t('home.sidePanel.canvasPresetEmpty') }}
+                </p>
+              </div>
+            </div>
+          </TxPopover>
+        </template>
+
+        <template #status-more-items="{ close }">
+          <button
+            type="button"
+            role="menuitem"
+            class="HomeSideCanvasPane-MoreItem"
+            data-testid="canvas-sync-messages"
+            @click="handleSyncFromChatAndClose(close)"
+          >
+            <span class="i-ri-refresh-line" aria-hidden="true" />
+            <span>{{ t('home.sidePanel.canvasSyncMessages') }}</span>
+          </button>
+        </template>
+      </TdsDesignCanvas>
     </div>
   </section>
 </template>
@@ -1499,24 +1508,76 @@ async function handleAskFrameAi(payload: TdsCanvasAskFramePayload): Promise<void
   color: var(--shell-text-primary);
 }
 
-.HomeSideCanvasPane-Toolbar {
-  display: flex;
+.HomeSideCanvasPane-StatusBtn {
+  display: inline-flex;
   flex: none;
-  gap: 8px;
+  gap: 5px;
   align-items: center;
-  justify-content: space-between;
-  min-height: 36px;
-  padding: 5px 10px;
-  border-bottom: 1px solid var(--shell-border);
-  background: var(--shell-surface);
-  box-sizing: border-box;
+  height: 20px;
+  padding: 0 7px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-regular);
+  font: inherit;
+  font-size: var(--shell-fs-caption);
+  font-weight: var(--shell-font-weight-medium);
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &.is-active {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-focus-ring);
+    outline-offset: 1px;
+  }
+
+  &--primary {
+    background: var(--shell-primary);
+    color: var(--shell-on-primary);
+
+    &:hover:not(:disabled) {
+      background: var(--shell-primary);
+      color: var(--shell-on-primary);
+      filter: brightness(1.06);
+    }
+  }
 }
 
-.HomeSideCanvasPane-ToolbarGroup {
+.HomeSideCanvasPane-MoreItem {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
-  min-width: 0;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-regular);
+  font: inherit;
+  font-size: var(--shell-fs-sm);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-focus-ring);
+    outline-offset: -1px;
+  }
 }
 
 .HomeSideCanvasPane-ActionBtn {

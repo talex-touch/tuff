@@ -8,7 +8,7 @@ import type { StreamRevealPreset } from './types'
 export const STREAM_REVEAL_DURATION_MS: Readonly<Record<StreamRevealPreset, number>> = {
   aurora: 460,
   hue: 180,
-  blur: 420,
+  blur: 520,
   languid: 900,
   none: 0,
 }
@@ -21,5 +21,5 @@ export const STREAM_PACING_DEFAULTS = {
 } as const
 
 export function streamRevealDuration(preset: StreamRevealPreset | undefined): number {
-  return STREAM_REVEAL_DURATION_MS[preset ?? 'aurora'] ?? STREAM_REVEAL_DURATION_MS.aurora
+  return STREAM_REVEAL_DURATION_MS[preset ?? 'blur'] ?? STREAM_REVEAL_DURATION_MS.blur
 }

@@ -49,7 +49,13 @@ code: |
 |------|------|---------|-------------|
 | `content` | `string` | — | The Markdown source. Required. |
 | `streaming` | `boolean` | `false` | Output is still arriving; drives the caret, the reveal, and deferred tail-fence rendering. |
-| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | How new text enters, with `TxStreamText`'s presets; `languid` keeps its slow blur but not its rise. |
+| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'blur'` | How new text enters, defaulting to monochrome blur with `TxStreamText`'s presets; `languid` keeps its slow blur but not its rise. |
+| `paced` | `boolean` | `false` | Releases arriving Markdown word by word through `useStreamPacer`; keep `false` when nested inside `TxStreamElement`. |
+| `wordMs` | `number` | `24` | Releases one word every `wordMs` when `paced` is enabled. |
+| `maxLagMs` | `number` | `600` | No queued word shows later than this after arriving when `paced` is enabled. |
+| `drainMs` | `number` | `320` | Once `streaming` turns false under `paced`, drains the remaining backlog within this window. |
+| `pauseMs` | `number` | `400` | Reports `paused` after this long without a new word when `paced` is enabled. |
+| `locale` | `string` | `'zh'` | Locale passed to `Intl.Segmenter` for word segmentation when `paced` is enabled. |
 | `caret` | `boolean` | `true` | Shows the Tuff caret at the write head while `streaming`; switched off, it goes at once. |
 | `sanitize` | `boolean` | `true` | Sanitizes HTML through DOMPurify. |
 | `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | Color theme; `auto` follows the environment. |

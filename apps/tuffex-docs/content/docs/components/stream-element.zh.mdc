@@ -108,7 +108,7 @@ code: |
 | `maxLagMs` | `number` | `600` | 任何词都在到达后这段时间内显示。 |
 | `drainMs` | `number` | `320` | `streaming` 变为 false 后，在这段时间内放完剩余部分。 |
 | `pauseMs` | `number` | `400` | 超过这段时间没有新词即报告 `paused`。 |
-| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | 词的进场方式，预设同 `TxStreamText`；代码保持语法颜色。 |
+| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'blur'` | 词的进场方式，默认纯黑白模糊显影，预设同 `TxStreamText`；代码保持语法颜色。 |
 | `caret` | `boolean` | `true` | 流式进行时在写入位置显示光标。 |
 | `reserve` | `boolean` | `false` | 完整内容回放时占住最终版面，`replay()` 时也占住回答当前的高度；`streaming` 时忽略。 |
 | `renderers` | `Record<string, Component>` | — | 按名称渲染自定义片段的组件；`part-<name>` 插槽优先。 |

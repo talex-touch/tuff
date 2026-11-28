@@ -58,9 +58,25 @@ export interface StreamMarkdownProps {
   /**
    * How newly streamed text enters: the StreamElement family's presets.
    * `languid` loses its rise here, because a streamed chunk runs across words
-   * and has to stay inline. @default 'aurora'
+   * and has to stay inline. @default 'blur'
    */
   reveal?: StreamRevealPreset
+  /**
+   * Releases arriving markdown through `useStreamPacer` word by word so bursty
+   * chunks emerge at a steady reading cadence. Leave `false` when a parent
+   * (`TxStreamElement`) already owns the clock. @default false
+   */
+  paced?: boolean
+  /** Pace in ms per word when `paced` is enabled. @default 24 */
+  wordMs?: number
+  /** Upper bound in ms before a queued word is shown when `paced` is enabled. @default 600 */
+  maxLagMs?: number
+  /** Time in ms to drain remaining backlog after `streaming` turns false. @default 320 */
+  drainMs?: number
+  /** Quiet window in ms before the pacer reports `paused`. @default 400 */
+  pauseMs?: number
+  /** Locale passed to `Intl.Segmenter` when `paced` is enabled. @default 'zh' */
+  locale?: string
   /** Shows the Tuff caret at the write head while streaming. @default true */
   caret?: boolean
   /** Sanitizes rendered HTML through dompurify. On by default; keep it on. */

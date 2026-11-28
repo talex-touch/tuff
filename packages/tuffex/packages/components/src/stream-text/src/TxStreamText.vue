@@ -16,7 +16,7 @@ defineOptions({ name: 'TxStreamText' })
 
 const props = withDefaults(defineProps<StreamTextProps>(), {
   streaming: false,
-  reveal: 'aurora',
+  reveal: 'blur',
   caret: true,
   reserve: false,
   paced: true,

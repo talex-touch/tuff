@@ -265,15 +265,43 @@ describe('stream markdown caret', () => {
 })
 
 describe('stream markdown reveal preset', () => {
-  it('writes the preset onto the root, aurora by default', async () => {
+  it('writes the preset onto the root, monochrome blur by default', async () => {
     const wrapper = mount(TxStreamMarkdown, { props: { content: 'Hello', streaming: true } })
     await flushSanitizer()
-    expect(wrapper.classes()).toContain('is-reveal-aurora')
-    expect(wrapper.attributes('style')).toContain('--tx-stream-reveal-duration: 460ms')
+    expect(wrapper.classes()).toContain('is-reveal-blur')
+    expect(wrapper.attributes('style')).toContain('--tx-stream-reveal-duration: 520ms')
 
     await wrapper.setProps({ reveal: 'hue' })
     expect(wrapper.classes()).toContain('is-reveal-hue')
     expect(wrapper.attributes('style')).toContain('--tx-stream-reveal-duration: 180ms')
+  })
+
+  it('paces bursty markdown arrival word by word when paced is enabled and drains cleanly', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+    try {
+      const wrapper = mount(TxStreamMarkdown, {
+        props: { content: '', streaming: true, paced: true, wordMs: 30, drainMs: 180 },
+      })
+      await flushSanitizer()
+      await wrapper.setProps({ content: 'First brave word arrives steadily across the line.' })
+      await nextTick()
+
+      // First animation frame releases the leading word, not the entire burst at once.
+      vi.advanceTimersByTime(16)
+      await nextTick()
+      const earlyText = wrapper.find('.markdown-body').text().trim()
+      expect(earlyText.length).toBeGreaterThan(0)
+      expect(earlyText).not.toContain('line.')
+
+      // Stopping the stream drains the backlog cleanly to the full text.
+      await wrapper.setProps({ streaming: false })
+      vi.advanceTimersByTime(260)
+      await nextTick()
+      expect(wrapper.find('.markdown-body').text()).toContain('across the line.')
+      expect(wrapper.classes()).not.toContain('is-streaming')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('under reduced motion plays no preset', async () => {

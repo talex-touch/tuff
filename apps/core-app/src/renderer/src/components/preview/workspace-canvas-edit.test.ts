@@ -4,6 +4,7 @@ import {
   applyCanvasRevisionToSource,
   computeCanvasLineDiff,
   computeChangedBlockIndices,
+  computeInlineRevealSegments,
   extractCanvasRevisionFromReply,
   findTargetAssistantMessage,
   inspectMessageFileWrites,
@@ -510,5 +511,45 @@ describe('workspace-canvas-edit', () => {
       { id: 'a-canvas', role: 'assistant', content: '```markdown\nright\n```', status: 'complete' }
     ]
     expect(findTargetAssistantMessage(withCanvasTurn, baseline)?.id).toBe('a-canvas')
+  })
+
+  it('computes gap-free inline reveal segments anchoring leading prefix and streaming continuously to end', () => {
+    // 1. Anchors unchanged leading prefix and streams updated tail without mid-line gaps.
+    expect(
+      computeInlineRevealSegments(
+        '从休眠舱醒来，名字不见了。',
+        '从休眠舱醒来，金属气味先于记忆抵达——我想不起自己的名字。'
+      )
+    ).toEqual([
+      { kind: 'anchor', text: '从休眠舱醒来，' },
+      { kind: 'reveal', text: '金属气味先于记忆抵达——我想不起自己的名字。' }
+    ])
+
+    // 2. Interior edits also stream continuously from the first divergence to avoid a floating trailing gap.
+    expect(
+      computeInlineRevealSegments(
+        '厨房的水龙头要向左拧才关得严。我走过去拧了一下。',
+        '厨房的水龙头要向左再拧半圈才关得严。我走过去拧了一下。'
+      )
+    ).toEqual([
+      { kind: 'anchor', text: '厨房的水龙头要向左' },
+      { kind: 'reveal', text: '再拧半圈才关得严。我走过去拧了一下。' }
+    ])
+
+    // 3. Does not break in the middle of an ASCII word when anchoring.
+    expect(computeInlineRevealSegments('Hello world today', 'Hello wonderful today')).toEqual([
+      { kind: 'anchor', text: 'Hello ' },
+      { kind: 'reveal', text: 'wonderful today' }
+    ])
+
+    // 4. Completely rewritten paragraph streams continuously from index 0.
+    expect(computeInlineRevealSegments('旧句子。', '完全崭新的第一段文字。')).toEqual([
+      { kind: 'reveal', text: '完全崭新的第一段文字。' }
+    ])
+
+    // 5. Never splits a UTF-16 surrogate pair across anchor and reveal segments.
+    expect(computeInlineRevealSegments('😀 old', '😁 new')).toEqual([
+      { kind: 'reveal', text: '😁 new' }
+    ])
   })
 })

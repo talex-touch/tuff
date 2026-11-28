@@ -48,6 +48,13 @@ vi.mock('@talex-touch/tuffex/popover', () => ({
   }
 }))
 
+vi.mock('@talex-touch/tuffex/touch-surface', () => ({
+  TxTouchSurface: {
+    props: ['surface', 'engine'],
+    template: '<div :data-touch-surface="surface" :data-glass-engine="engine"><slot /></div>'
+  }
+}))
+
 import TdsDesignCanvas from './TdsDesignCanvas.vue'
 
 function makeFrame(overrides: Partial<TdsCanvasFrame> = {}): TdsCanvasFrame {
@@ -634,7 +641,9 @@ describe('TdsDesignCanvas component interactions', () => {
       wrapper.get('[data-testid="tds-canvas-frame-iframe-f1"]').attributes('srcdoc')
     ).toContain('Pricing v2')
 
-    // Enter Before/After compare mode against Initial snapshot
+    // Enter Before/After compare mode via bottom statusbar overflow menu
+    await wrapper.get('[data-testid="tds-canvas-more-trigger"]').trigger('click')
+    await nextTick()
     await wrapper.get('[data-testid="tds-canvas-compare-toggle"]').trigger('click')
     await nextTick()
     expect(wrapper.find('[data-testid="tds-canvas-compare-overlay"]').exists()).toBe(true)
@@ -935,6 +944,8 @@ describe('TdsDesignCanvas component interactions', () => {
       await nextTick()
 
       // Enter Compare mode -> stage unmounts and ResizeObserver disconnects
+      await wrapper.get('[data-testid="tds-canvas-more-trigger"]').trigger('click')
+      await nextTick()
       await wrapper.get('[data-testid="tds-canvas-compare-toggle"]').trigger('click')
       await nextTick()
       expect(stageDisconnectedCount).toBe(1)
@@ -972,6 +983,25 @@ describe('TdsDesignCanvas component interactions', () => {
     for (const tag of popoverTags) {
       expect(tag).toContain('panel-background="refraction"')
     }
+  })
+
+  it('renders bottom floating TxTouchSurface glass capsule and converged bottom statusbar with zero top toolbar', async () => {
+    const wrapper = mount(TdsDesignCanvas, {
+      props: { frames: [] }
+    })
+    await flushPromises()
+
+    expect(wrapper.find('header.TdsDesignCanvas-Toolbar').exists()).toBe(false)
+    const glass = wrapper.get('[data-testid="tds-canvas-floating-glass"]')
+    expect(glass.attributes('data-touch-surface')).toBe('glass')
+    expect(glass.attributes('data-glass-engine')).toBe('lens')
+    expect(glass.find('[data-testid="tds-canvas-tool-select"]').exists()).toBe(true)
+    expect(glass.find('[data-testid="tds-canvas-zoom-readout"]').exists()).toBe(true)
+
+    const statusBar = wrapper.get('[data-testid="tds-canvas-statusbar"]')
+    expect(statusBar.find('[data-testid="tds-canvas-add-frame-trigger"]').exists()).toBe(true)
+    expect(statusBar.find('[data-testid="tds-canvas-history-toggle"]').exists()).toBe(true)
+    expect(statusBar.find('[data-testid="tds-canvas-more-trigger"]').exists()).toBe(true)
   })
 
   it('cancels pending shield drag when pointer is released outside stage or moves without primary button held', async () => {

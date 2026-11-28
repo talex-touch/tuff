@@ -200,6 +200,7 @@ export interface TdsCanvasLabels {
   emptyDescription: string
   emptyAddPhone: string
   emptyAddDesktop: string
+  moreActions: string
   mockupExport: string
   mockupDialogTitle: string
   mockupClose: string
@@ -280,6 +281,7 @@ export const DEFAULT_TDS_CANVAS_LABELS: Readonly<TdsCanvasLabels> = {
     'Add a device frame or let AI generate HTML/SVG screens to inspect side by side.',
   emptyAddPhone: 'Add iPhone 17 Pro',
   emptyAddDesktop: 'Add Desktop HD',
+  moreActions: 'More actions',
   mockupExport: 'Export mockup',
   mockupDialogTitle: 'Export mockup showcase',
   mockupClose: 'Close',
