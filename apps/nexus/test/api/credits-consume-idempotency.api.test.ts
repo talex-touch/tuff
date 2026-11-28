@@ -23,7 +23,13 @@ vi.mock('h3', async () => {
 })
 
 vi.mock('../../server/utils/auth', () => authMocks)
-vi.mock('../../server/utils/creditsStore', () => creditsMocks)
+vi.mock('../../server/utils/creditsStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../server/utils/creditsStore')>()
+  return {
+    ...creditsMocks,
+    normalizeCreditIdempotencyKey: actual.normalizeCreditIdempotencyKey,
+  }
+})
 
 let handler: (event: any) => Promise<any>
 
@@ -74,5 +80,29 @@ describe('/api/credits/consume idempotency', () => {
       statusMessage: 'Invalid amount.',
     })
     expect(creditsMocks.consumeCredits).not.toHaveBeenCalled()
+  })
+
+  it('rejects a malformed X-Idempotency-Key header with 400 before touching the store', async () => {
+    h3Mocks.getHeader.mockReturnValue('bad')
+
+    await expect(handler({})).rejects.toMatchObject({
+      statusCode: 400,
+      statusMessage: 'Invalid X-Idempotency-Key header.',
+    })
+    expect(creditsMocks.consumeCredits).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['Credit idempotency conflict.', 409],
+    ['User credits exceeded.', 402],
+    ['Team credits exceeded.', 402],
+    ['Cloudflare D1 database is not available.', 503],
+  ])('maps store error %s to HTTP %i', async (message, statusCode) => {
+    creditsMocks.consumeCredits.mockRejectedValueOnce(new Error(message))
+
+    await expect(handler({})).rejects.toMatchObject({
+      statusCode,
+      statusMessage: message,
+    })
   })
 })

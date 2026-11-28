@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import type { SelectionPayload } from '@talex-touch/tuffex/selection-actions'
-import { AgentWorkspaceEvents } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
 import { TdsCaptureEvents } from '@talex-touch/utils/transport/sdk/domains/tds-capture'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,8 +11,14 @@ enableAutoUnmount(afterEach)
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn(),
+  on: vi.fn(),
+  reviewListeners: [] as Array<
+    (payload: { conversationId: string; reviewId: string; updatedAt: number }) => void
+  >,
   selection: null as null | { value: SelectionPayload | null },
-  clearSelection: vi.fn()
+  clearSelection: vi.fn(),
+  registerSelectionHighlight: vi.fn(),
+  disposeSelectionHighlight: vi.fn()
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -27,7 +32,8 @@ vi.mock('vue-sonner', () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),
-    info: vi.fn()
+    info: vi.fn(),
+    warning: vi.fn()
   }
 }))
 
@@ -40,17 +46,66 @@ vi.mock('@talex-touch/utils/env', async (importOriginal) => {
 })
 
 vi.mock('@talex-touch/utils/transport', () => ({
-  useTuffTransport: () => ({ send: mocks.send })
+  useTuffTransport: () => ({
+    send: mocks.send,
+    on: (
+      event: unknown,
+      handler: (payload: { conversationId: string; reviewId: string; updatedAt: number }) => void
+    ) => {
+      mocks.on(event, handler)
+      mocks.reviewListeners.push(handler)
+      return () => {
+        const idx = mocks.reviewListeners.indexOf(handler)
+        if (idx >= 0) mocks.reviewListeners.splice(idx, 1)
+      }
+    }
+  })
 }))
 
 vi.mock('@talex-touch/utils/renderer', () => ({
   useAppSdk: () => ({ showInFolder: vi.fn(async () => {}) })
 }))
 
-vi.mock('@talex-touch/tuffex/markdown-view', () => ({
-  TxMarkdownView: {
-    props: ['content'],
-    template: '<div class="tx-md-stub">{{ content }}</div>'
+vi.mock('@talex-touch/tuffex/border-beam', () => ({
+  TxBorderBeam: {
+    props: ['active', 'size', 'theme', 'colorVariant', 'borderRadius', 'strength'],
+    template:
+      '<div :data-beam-active="active ? \'true\' : \'false\'" :data-beam-size="size"><slot /></div>'
+  }
+}))
+
+vi.mock('@talex-touch/tuffex/touch-surface', () => ({
+  TxTouchSurface: {
+    props: ['surface', 'engine'],
+    template: '<div :data-touch-surface="surface" :data-glass-engine="engine"><slot /></div>'
+  }
+}))
+
+vi.mock('@talex-touch/tuffex/markdown-editor', () => ({
+  TxMarkdownEditor: {
+    props: ['modelValue', 'mode', 'theme', 'readonly', 'toolbar', 'statusBar', 'bubble', 'slash'],
+    emits: ['update:modelValue', 'blur'],
+    template: `
+      <div
+        class="tx-md-stub"
+        :data-mode="mode"
+        :data-readonly="readonly ? 'true' : 'false'"
+      >
+        <textarea
+          data-testid="md-editor-input"
+          :value="modelValue"
+          :readonly="readonly"
+          @input="$emit('update:modelValue', $event.target.value)"
+          @blur="$emit('blur')"
+        />
+        <div class="tx-md-content markdown-body">
+          <p
+            v-for="(blk, idx) in String(modelValue || '').split(/\\n{2,}/).filter(Boolean)"
+            :key="idx"
+          >{{ blk }}</p>
+        </div>
+      </div>
+    `
   }
 }))
 
@@ -69,12 +124,14 @@ vi.mock('@talex-touch/tuffex/dropdown-menu', () => ({
   TxDropdownMenu: {
     props: ['modelValue'],
     emits: ['update:modelValue'],
-    template: '<div><slot name="trigger" /><div v-if="modelValue"><slot /></div></div>'
+    template:
+      '<div><div @click="$emit(\'update:modelValue\', !modelValue)"><slot name="trigger" /></div><div v-if="modelValue"><slot /></div></div>'
   },
   TxDropdownItem: {
+    props: ['disabled', 'checked', 'checkType'],
     emits: ['select'],
     template:
-      '<button type="button" @click="$emit(\'select\')"><slot /><slot name="right" /></button>'
+      '<button type="button" :disabled="disabled" :aria-checked="checked !== undefined ? String(checked) : undefined" @click="!disabled && $emit(\'select\')"><slot /><slot name="right" /></button>'
   }
 }))
 
@@ -87,7 +144,20 @@ vi.mock('@talex-touch/tuffex/popover', () => ({
   }
 }))
 
+vi.mock('@talex-touch/tuffex/spinner', () => ({
+  TxSpinner: {
+    props: ['size', 'strokeWidth', 'label'],
+    template: '<span role="status" :aria-label="label" />'
+  }
+}))
+
 vi.mock('@talex-touch/tuffex/selection-actions', () => ({
+  registerSelectionHighlight: (range: Range | null | undefined) => {
+    mocks.registerSelectionHighlight(range)
+    return () => {
+      mocks.disposeSelectionHighlight(range)
+    }
+  },
   useSelectionAnchor: () => {
     const sel = ref<SelectionPayload | null>(null)
     mocks.selection = sel
@@ -100,10 +170,10 @@ vi.mock('@talex-touch/tuffex/selection-actions', () => ({
     }
   },
   TxSelectionActions: {
-    props: ['selection', 'actions', 'prompt'],
-    emits: ['action', 'submit', 'update:prompt'],
+    props: ['selection', 'actions', 'prompt', 'state', 'activeActionId'],
+    emits: ['action', 'submit', 'update:prompt', 'keep', 'discard', 'retry'],
     template: `
-      <div data-testid="md-selection-actions">
+      <div data-testid="md-selection-actions" :data-state="state || 'idle'">
         <button
           v-for="item in actions"
           :key="item.id"
@@ -116,11 +186,16 @@ vi.mock('@talex-touch/tuffex/selection-actions', () => ({
           data-testid="sel-submit-custom"
           @click="$emit('submit', { prompt: '请补充风险点', selection })"
         >submit</button>
+        <button type="button" data-testid="sel-keep" @click="$emit('keep')">keep</button>
+        <button type="button" data-testid="sel-discard" @click="$emit('discard')">discard</button>
+        <button type="button" data-testid="sel-retry" @click="$emit('retry')">retry</button>
       </div>
     `
   }
 }))
 
+import { AgentWorkspaceEvents } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+import { toast } from 'vue-sonner'
 import { resetSessionReviewCommentsForTests } from './workspace-file-tree'
 import WorkspaceFileViewer from './WorkspaceFileViewer.vue'
 
@@ -128,6 +203,7 @@ describe('WorkspaceFileViewer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     clearCaptureCache()
+    mocks.reviewListeners.length = 0
     window.sessionStorage.clear()
     resetSessionReviewCommentsForTests()
     mocks.send.mockResolvedValue({
@@ -143,7 +219,7 @@ describe('WorkspaceFileViewer', () => {
     })
   })
 
-  it('moves file path breadcrumbs and size to the bottom statusbar and keeps the header minimal', async () => {
+  it('hides the redundant top header for Markdown and hosts breadcrumbs, actions, and preview/source menu in the bottom statusbar', async () => {
     const wrapper = mount(WorkspaceFileViewer, {
       props: {
         filePath: '/repo/docs/plan-prd/TODO-AI.md',
@@ -155,17 +231,27 @@ describe('WorkspaceFileViewer', () => {
     })
     await flushPromises()
 
-    // Header has no redundant filename, badge, size, or full path text.
-    const headerText = wrapper.get('[data-testid="file-viewer-header"]').text()
-    expect(headerText).not.toContain('TODO-AI.md')
-    expect(headerText).not.toContain('36.8 KB')
-    expect(headerText).not.toContain('/repo/docs')
+    // No redundant top header bar for Markdown documents.
+    expect(wrapper.find('[data-testid="file-viewer-header"]').exists()).toBe(false)
 
-    // Bottom statusbar displays interactive breadcrumbs and file size.
+    // Bottom statusbar displays interactive breadcrumbs, file size, and bottom-right actions (outline, refresh, more).
     const statusBar = wrapper.get('[data-testid="file-viewer-statusbar"]')
     expect(statusBar.get('[data-testid="file-viewer-status-size"]').text()).toBe('36.8 KB')
+    expect(statusBar.find('[data-testid="file-viewer-outline-btn"]').exists()).toBe(true)
+    expect(statusBar.find('[data-testid="file-viewer-refresh"]').exists()).toBe(true)
+    expect(statusBar.find('[data-testid="file-viewer-more"]').exists()).toBe(true)
     const crumbs = statusBar.findAll('.WorkspaceFileViewer-CrumbBtn')
     expect(crumbs.map((c) => c.text())).toEqual(['repo', 'docs', 'plan-prd', 'TODO-AI.md'])
+
+    // Preview / Source view switch lives inside the bottom-right three-dots menu.
+    await statusBar.get('[data-testid="file-viewer-more"]').trigger('click')
+    await flushPromises()
+    expect(
+      statusBar.get('[data-testid="file-viewer-mode-preview"]').attributes('aria-checked')
+    ).toBe('true')
+    await statusBar.get('[data-testid="file-viewer-mode-source"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="file-viewer-markdown"]').exists()).toBe(false)
 
     // Clicking an ancestor breadcrumb reveals the folder in the file tree.
     await crumbs[2]!.trigger('click')
@@ -357,10 +443,13 @@ describe('WorkspaceFileViewer', () => {
     expect(wrapper.find('[data-testid="file-viewer-device-frame"]').exists()).toBe(false)
     expect(wrapper.find('iframe.WorkspaceFileViewer-Frame').exists()).toBe(true)
 
-    // Switching to source mode hides device viewport controls
+    // Switching to source mode via the bottom-right more menu hides device viewport controls & top bar
+    await wrapper.get('[data-testid="file-viewer-more"]').trigger('click')
+    await flushPromises()
     await wrapper.get('[data-testid="file-viewer-mode-source"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-testid="file-viewer-viewport-controls"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="file-viewer-header"]').exists()).toBe(false)
   })
 
   it('enables device viewport switcher for SVG preview while preserving empty iframe sandbox', async () => {
@@ -478,6 +567,430 @@ describe('WorkspaceFileViewer', () => {
     const iframe = wrapper.get('iframe.WorkspaceFileViewer-Frame')
     expect(iframe.attributes('sandbox')).toBe('allow-scripts allow-forms allow-modals')
     expect(iframe.attributes('srcdoc')).toContain("default-src 'none'")
+  })
+
+  it('auto-applies Markdown improve revisions back to the file with GPT Canvas states, inline diff, and one-click undo', async () => {
+    const initialText = '# 无名\n\n醒来时，名字丢了。\n\n系统沉默了三秒。\n\n继续向无。\n'
+    let diskText = initialText
+    let diskMtime = 1000
+
+    mocks.send.mockImplementation(async (event: unknown, payload: Record<string, unknown>) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        return {
+          path: '/tmp/space/无名.md',
+          name: '无名.md',
+          ext: 'md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: diskText.length,
+          truncated: false,
+          mtimeMs: diskMtime,
+          text: diskText
+        }
+      }
+      if (event === AgentWorkspaceEvents.writeFile) {
+        diskText = String(payload.content ?? '')
+        diskMtime += 500
+        return {
+          path: '/tmp/space/无名.md',
+          size: diskText.length,
+          mtimeMs: diskMtime
+        }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/无名.md',
+        displayPath: '无名.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-canvas-1',
+        messages: [{ id: 'u1', role: 'user', content: '写个故事', status: 'complete' }],
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    // Select passage and click "优化" (improve).
+    mocks.selection!.value = {
+      text: '系统沉默了三秒。\n\n继续向无。',
+      rects: [{ left: 10, right: 200, top: 60, bottom: 100, width: 190, height: 40 } as DOMRect]
+    }
+    await flushPromises()
+
+    await wrapper.get('[data-testid="sel-action-improve"]').trigger('click')
+    await flushPromises()
+
+    // Clicking "优化" opens the bottom floating liquid-glass Suggestion Composer first.
+    expect(wrapper.find('[data-testid="file-viewer-canvas-compose"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="md-selection-actions"]').exists()).toBe(false)
+    await wrapper
+      .get('[data-testid="file-viewer-canvas-compose-input"]')
+      .setValue('节奏再克制一点，结尾更有留白感')
+    await wrapper.get('[data-testid="file-viewer-canvas-compose-send"]').trigger('click')
+    await flushPromises()
+
+    // Triggers kinetic launch flight pill, locks editing with active TxBorderBeam + dot/ASCII ripple.
+    expect(document.body.querySelector('[data-testid="file-viewer-launch-flight"]')).not.toBeNull()
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('thinking')
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-locked')
+    ).toBe('true')
+    const beam = wrapper.get('[data-testid="file-viewer-canvas-beam"]')
+    expect(beam.attributes('data-beam-active')).toBe('true')
+    expect(beam.attributes('data-beam-size')).toBe('pulse-inner')
+    expect(wrapper.get('[data-testid="file-viewer-canvas-ripple"]').attributes('data-active')).toBe(
+      'true'
+    )
+    expect(wrapper.find('[data-testid="file-viewer-canvas-bar"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="file-viewer-canvas-dock"]').exists()).toBe(true)
+    expect(
+      wrapper.get('[data-testid="file-viewer-canvas-glass"]').attributes('data-touch-surface')
+    ).toBe('glass')
+    expect(
+      wrapper.get('[data-testid="file-viewer-canvas-glass"]').attributes('data-glass-engine')
+    ).toBe('lens')
+    // Selection pill is hidden, editor is readonly, and reload / view-mode actions are locked while AI is editing.
+    expect(wrapper.find('[data-testid="md-selection-actions"]').exists()).toBe(false)
+    expect(wrapper.get('.tx-md-stub').attributes('data-readonly')).toBe('true')
+    expect(
+      (wrapper.get('[data-testid="file-viewer-refresh"]').element as HTMLButtonElement).disabled
+    ).toBe(true)
+    await wrapper.get('[data-testid="file-viewer-more"]').trigger('click')
+    await flushPromises()
+    expect(
+      (wrapper.get('[data-testid="file-viewer-mode-source"]').element as HTMLButtonElement).disabled
+    ).toBe(true)
+    const emitted = wrapper.emitted('ai-action')?.[0]?.[0] as {
+      actionKind?: string
+      autoApply?: boolean
+      prompt?: string
+    }
+    expect(emitted.actionKind).toBe('improve')
+    expect(emitted.autoApply).toBe(true)
+    expect(emitted.prompt).toContain('节奏再克制一点，结尾更有留白感')
+
+    // AI starts streaming a markdown revision block -> stays locked with BorderBeam active.
+    await wrapper.setProps({
+      aiStreaming: true,
+      messages: [
+        { id: 'u1', role: 'user', content: '写个故事', status: 'complete' },
+        { id: 'u2', role: 'user', content: emitted.prompt ?? '优化', status: 'complete' },
+        {
+          id: 'a2',
+          role: 'assistant',
+          content: '### 润色后完整文本\n\n```markdown\n> 系统沉默三秒。',
+          status: 'streaming'
+        }
+      ]
+    })
+    await flushPromises()
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('streaming')
+    expect(beam.attributes('data-beam-active')).toBe('true')
+
+    // AI finishes reply with blockquote-prefixed fenced markdown -> auto-extracts, strips `>`, writes disk,
+    // releases BorderBeam lock, and displays bottom floating glass Accept/Undo/Diff capsule!
+    await wrapper.setProps({
+      aiStreaming: false,
+      messages: [
+        { id: 'u1', role: 'user', content: '写个故事', status: 'complete' },
+        { id: 'u2', role: 'user', content: emitted.prompt ?? '优化', status: 'complete' },
+        {
+          id: 'a2',
+          role: 'assistant',
+          content: [
+            '### 润色后完整文本',
+            '```markdown',
+            '> 系统沉默三秒。',
+            '>',
+            '> 继续，向无。',
+            '```',
+            '### 修改效果总结',
+            '- 更克制。'
+          ].join('\n'),
+          status: 'complete'
+        }
+      ]
+    })
+    await flushPromises()
+
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('applied')
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-locked')
+    ).toBe('false')
+    expect(beam.attributes('data-beam-active')).toBe('false')
+    expect(wrapper.get('[data-testid="file-viewer-canvas-ripple"]').attributes('data-active')).toBe(
+      'false'
+    )
+    expect(wrapper.find('[data-testid="file-viewer-canvas-dock"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="file-viewer-canvas-keep"]').text()).toContain(
+      'home.sidePanel.canvasAccept'
+    )
+    expect(wrapper.find('[data-testid="file-viewer-canvas-sweep"]').exists()).toBe(true)
+    expect(diskText).toBe('# 无名\n\n醒来时，名字丢了。\n\n系统沉默三秒。\n\n继续，向无。\n')
+    expect(wrapper.get('.tx-md-content').text()).toContain('继续，向无。')
+    expect(wrapper.get('.tx-md-stub').attributes('data-readonly')).toBe('false')
+
+    // Toggle inline diff view from the bottom glass capsule.
+    await wrapper.get('[data-testid="file-viewer-canvas-diff-toggle"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="file-viewer-canvas-diff"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="file-viewer-canvas-diff"]').text()).toContain('继续，向无。')
+
+    // One-click undo restores exact previous content back to disk.
+    await wrapper.get('[data-testid="file-viewer-canvas-undo"]').trigger('click')
+    await flushPromises()
+    expect(diskText).toBe(initialText)
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('idle')
+    expect(wrapper.find('[data-testid="file-viewer-canvas-dock"]').exists()).toBe(false)
+    expect(wrapper.get('.tx-md-content').text()).toContain('继续向无。')
+  })
+
+  it('allows direct click-to-edit Markdown editing with debounced auto-save and Cmd+S persistence', async () => {
+    vi.useFakeTimers()
+    try {
+      let diskText = '# 无名\n\n第一段正文。\n'
+      let diskMtime = 4000
+
+      mocks.send.mockImplementation(async (event: unknown, payload: Record<string, unknown>) => {
+        if (event === AgentWorkspaceEvents.readFile) {
+          return {
+            path: '/tmp/space/无名.md',
+            name: '无名.md',
+            ext: 'md',
+            kind: 'text',
+            mimeType: 'text/markdown',
+            size: diskText.length,
+            truncated: false,
+            mtimeMs: diskMtime,
+            text: diskText
+          }
+        }
+        if (event === AgentWorkspaceEvents.writeFile) {
+          diskText = String(payload.content ?? '')
+          diskMtime += 500
+          return {
+            path: '/tmp/space/无名.md',
+            size: diskText.length,
+            mtimeMs: diskMtime
+          }
+        }
+        return null
+      })
+
+      const wrapper = mount(WorkspaceFileViewer, {
+        props: {
+          filePath: '/tmp/space/无名.md',
+          displayPath: '无名.md',
+          workspaceRoot: '/tmp/space',
+          conversationId: 'conv-edit-1',
+          aiActionsEnabled: true
+        }
+      })
+      await flushPromises()
+
+      // Renders editable WYSIWYG Markdown editor by default.
+      expect(wrapper.get('.tx-md-stub').attributes('data-mode')).toBe('wysiwyg')
+      expect(wrapper.get('.tx-md-stub').attributes('data-readonly')).toBe('false')
+
+      // Typing updates live content and marks unsaved before debounce elapses.
+      const input = wrapper.get('[data-testid="md-editor-input"]')
+      await input.setValue('# 无名\n\n第一段正文，加上手写修改。\n')
+      await flushPromises()
+      expect(wrapper.get('[data-testid="file-viewer-save-status"]').text()).toContain(
+        'home.sidePanel.editorUnsaved'
+      )
+
+      // After 550ms debounce, auto-saves cleanly via AgentWorkspaceEvents.writeFile.
+      await vi.advanceTimersByTimeAsync(600)
+      await flushPromises()
+      expect(diskText).toBe('# 无名\n\n第一段正文，加上手写修改。\n')
+      expect(wrapper.get('[data-testid="file-viewer-save-status"]').text()).toContain(
+        'home.sidePanel.editorSaved'
+      )
+
+      // Cmd+S saves immediately without waiting for debounce.
+      await input.setValue('# 无名\n\n快捷键立刻落盘。\n')
+      await flushPromises()
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', metaKey: true }))
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 's', metaKey: true }))
+      await flushPromises()
+      expect(diskText).toBe('# 无名\n\n快捷键立刻落盘。\n')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('locks editing with BorderBeam during ambient chat edits targeting the open file and adopts disk changes', async () => {
+    let diskText = '# 无名\n\n原文内容。\n'
+    let diskMtime = 2000
+
+    mocks.send.mockImplementation(async (event: unknown) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        return {
+          path: '/tmp/space/无名.md',
+          name: '无名.md',
+          ext: 'md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: diskText.length,
+          truncated: false,
+          mtimeMs: diskMtime,
+          text: diskText
+        }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/无名.md',
+        displayPath: '无名.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-sync-1',
+        messages: [],
+        aiStreaming: false,
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    // User asks AI directly in left chat to polish 无名.md -> right pane locks + BorderBeam glows!
+    await wrapper.setProps({
+      aiStreaming: true,
+      messages: [
+        { id: 'u1', role: 'user', content: '帮我润色一下 无名.md', status: 'complete' },
+        { id: 'a1', role: 'assistant', content: '', status: 'streaming' }
+      ]
+    })
+    await flushPromises()
+
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-locked')
+    ).toBe('true')
+    expect(
+      wrapper.get('[data-testid="file-viewer-canvas-beam"]').attributes('data-beam-active')
+    ).toBe('true')
+    expect(wrapper.get('[data-testid="file-viewer-canvas-ripple"]').attributes('data-active')).toBe(
+      'true'
+    )
+    expect(wrapper.find('[data-testid="file-viewer-canvas-dock"]').exists()).toBe(true)
+
+    // Simulate agent calling file.write which updates disk and broadcasts ConversationReviewEvents.changed.
+    diskText = '# 无名\n\n由 Agent 直接写入的润色文本。\n'
+    diskMtime = 3000
+    for (const listener of mocks.reviewListeners) {
+      listener({ conversationId: 'conv-sync-1', reviewId: 'rev-1', updatedAt: Date.now() })
+    }
+    await flushPromises()
+
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('applied')
+    // Lock releases once the file update lands and no further write is running.
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-locked')
+    ).toBe('false')
+    expect(
+      wrapper.get('[data-testid="file-viewer-canvas-beam"]').attributes('data-beam-active')
+    ).toBe('false')
+    expect(wrapper.get('.tx-md-stub').text()).toContain('由 Agent 直接写入的润色文本。')
+    // Clicking "同意" (Accept) commits cleanly and dismisses the floating glass capsule.
+    await wrapper.get('[data-testid="file-viewer-canvas-keep"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="file-viewer-canvas-dock"]').exists()).toBe(false)
+    // Must not call writeFile when adopting an agent's disk write.
+    const writeCalls = mocks.send.mock.calls.filter(
+      ([evt]) => evt === AgentWorkspaceEvents.writeFile
+    )
+    expect(writeCalls).toHaveLength(0)
+  })
+
+  it('warns explicitly when AI falsely claims a disk update without calling file.write or returning a revision block', async () => {
+    const initialText = '# 无名\n\n原文内容。\n'
+    mocks.send.mockImplementation(async (event: unknown) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        return {
+          path: '/tmp/space/无名.md',
+          name: '无名.md',
+          ext: 'md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: initialText.length,
+          truncated: false,
+          mtimeMs: 2500,
+          text: initialText
+        }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/无名.md',
+        displayPath: '无名.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-hallucination-1',
+        messages: [{ id: 'u1', role: 'user', content: '写个故事', status: 'complete' }],
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    // Trigger canvas optimize flow from selection.
+    mocks.selection!.value = {
+      text: '原文内容。',
+      rects: [{ left: 10, right: 140, top: 60, bottom: 90, width: 130, height: 30 } as DOMRect]
+    }
+    await flushPromises()
+    await wrapper.get('[data-testid="sel-action-improve"]').trigger('click')
+    await flushPromises()
+    await wrapper
+      .get('[data-testid="file-viewer-canvas-compose-input"]')
+      .setValue('浓缩为正文 优化下')
+    await wrapper.get('[data-testid="file-viewer-canvas-compose-send"]').trigger('click')
+    await flushPromises()
+
+    const emitted = wrapper.emitted('ai-action')?.[0]?.[0] as { prompt?: string }
+    // AI completes with a fabricated "success: true" claim, zero tool calls, and no fenced code block.
+    await wrapper.setProps({
+      aiStreaming: false,
+      messages: [
+        { id: 'u1', role: 'user', content: '写个故事', status: 'complete' },
+        {
+          id: 'u2',
+          role: 'user',
+          content: emitted.prompt ?? '浓缩为正文 优化下',
+          status: 'complete'
+        },
+        {
+          id: 'a2',
+          role: 'assistant',
+          content:
+            '已直接更新文件 `无名.md`（工具返回 `success: true`）。\n\n文件已落盘，可直接查看。',
+          status: 'complete'
+        }
+      ]
+    })
+    await flushPromises()
+
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-locked')
+    ).toBe('false')
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('idle')
+    expect(toast.warning).toHaveBeenCalledWith('home.sidePanel.canvasFalseWriteClaim')
+    expect(wrapper.get('.tx-md-content').text()).toContain('原文内容。')
   })
 
   it('runs debounced 300ms live DOM probe in Electron HTML preview, cancels on rapid file switch, and merges DOM + static issues', async () => {
@@ -639,6 +1152,985 @@ describe('WorkspaceFileViewer', () => {
       expect(894 * scale + 34).toBeLessThanOrEqual(600)
     } finally {
       globalThis.ResizeObserver = originalRO
+    }
+  })
+
+  it('blocks Canvas improve, full-doc improve, and Cmd+K on truncated files', async () => {
+    mocks.send.mockResolvedValue({
+      path: '/tmp/space/huge.md',
+      name: 'huge.md',
+      ext: 'md',
+      kind: 'text',
+      mimeType: 'text/markdown',
+      size: 2 * 1024 * 1024,
+      truncated: true,
+      mtimeMs: 1000,
+      text: '# Huge\n\nPartial preview only.\n'
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/huge.md',
+        displayPath: 'huge.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-trunc',
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    expect(wrapper.get('.tx-md-stub').attributes('data-readonly')).toBe('true')
+
+    // Selection actions omit `improve` for truncated previews.
+    mocks.selection!.value = {
+      text: 'Partial preview only.',
+      rects: [{ left: 10, right: 140, top: 60, bottom: 90, width: 130, height: 30 } as DOMRect]
+    }
+    await flushPromises()
+    expect(wrapper.find('[data-testid="sel-action-improve"]').exists()).toBe(false)
+
+    // Full-document improve dropdown item is disabled.
+    await wrapper.get('[data-testid="file-viewer-more"]').trigger('click')
+    await flushPromises()
+    expect(
+      (wrapper.get('[data-testid="file-viewer-improve-full"]').element as HTMLButtonElement)
+        .disabled
+    ).toBe(true)
+
+    // Cmd+K does not open Canvas compose on truncated files.
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="file-viewer-canvas-compose"]').exists()).toBe(false)
+  })
+
+  it('preserves unsaved local drafts on concurrent disk sync and surfaces conflict compare/reload controls', async () => {
+    let diskText = '# Notes\n\nOriginal paragraph.\n'
+    let diskMtime = 1000
+
+    mocks.send.mockImplementation(async (event: unknown) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        return {
+          path: '/tmp/space/notes.md',
+          name: 'notes.md',
+          ext: 'md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: diskText.length,
+          truncated: false,
+          mtimeMs: diskMtime,
+          text: diskText
+        }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/notes.md',
+        displayPath: 'notes.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-draft-sync',
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    // User types local unsaved changes (not yet auto-saved).
+    const input = wrapper.get('[data-testid="md-editor-input"]')
+    await input.setValue('# Notes\n\nMy unsaved local draft.\n')
+    await flushPromises()
+
+    // External / AI write changes disk concurrently and broadcasts review change.
+    diskText = '# Notes\n\nExternal disk version.\n'
+    diskMtime = 2000
+    for (const listener of mocks.reviewListeners) {
+      listener({ conversationId: 'conv-draft-sync', reviewId: 'rev-c1', updatedAt: Date.now() })
+    }
+    await flushPromises()
+
+    // Local draft MUST be preserved and conflict banner shown.
+    expect(
+      (wrapper.get('[data-testid="md-editor-input"]').element as HTMLTextAreaElement).value
+    ).toBe('# Notes\n\nMy unsaved local draft.\n')
+    expect(wrapper.find('[data-testid="file-viewer-conflict-banner"]').exists()).toBe(true)
+
+    // Compare toggle shows diff between disk and local draft.
+    await wrapper.get('[data-testid="file-viewer-conflict-diff-toggle"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="file-viewer-conflict-diff"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="file-viewer-conflict-diff"]').text()).toContain(
+      'My unsaved local draft.'
+    )
+
+    // Explicit reload discards local draft and adopts disk snapshot.
+    await wrapper.get('[data-testid="file-viewer-conflict-reload"]').trigger('click')
+    await flushPromises()
+    expect(
+      (wrapper.get('[data-testid="md-editor-input"]').element as HTMLTextAreaElement).value
+    ).toBe('# Notes\n\nExternal disk version.\n')
+    expect(wrapper.find('[data-testid="file-viewer-conflict-banner"]').exists()).toBe(false)
+  })
+
+  it('aborts in-flight Canvas finalization write when cancelled during pending disk check', async () => {
+    const initialText = '# Notes\n\nKeep me.\n'
+    let readCallCount = 0
+    let resolveDiskCheck: ((val: unknown) => void) | null = null
+
+    mocks.send.mockImplementation(async (event: unknown) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        readCallCount += 1
+        if (readCallCount === 1) {
+          return {
+            path: '/tmp/space/notes.md',
+            name: 'notes.md',
+            ext: 'md',
+            kind: 'text',
+            mimeType: 'text/markdown',
+            size: initialText.length,
+            truncated: false,
+            mtimeMs: 1000,
+            text: initialText
+          }
+        }
+        return new Promise((resolve) => {
+          resolveDiskCheck = resolve
+        })
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/notes.md',
+        displayPath: 'notes.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-cancel-race',
+        messages: [{ id: 'u1', role: 'user', content: 'start', status: 'complete' }],
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    mocks.selection!.value = {
+      text: 'Keep me.',
+      rects: [{ left: 10, right: 120, top: 40, bottom: 70, width: 110, height: 30 } as DOMRect]
+    }
+    await flushPromises()
+    await wrapper.get('[data-testid="sel-action-improve"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="file-viewer-canvas-compose-send"]').trigger('click')
+    await flushPromises()
+
+    const emitted = wrapper.emitted('ai-action')?.[0]?.[0] as { prompt?: string }
+    await wrapper.setProps({
+      aiStreaming: false,
+      messages: [
+        { id: 'u1', role: 'user', content: 'start', status: 'complete' },
+        { id: 'u2', role: 'user', content: emitted.prompt!, status: 'complete' },
+        {
+          id: 'a2',
+          role: 'assistant',
+          content: '```markdown\nRewritten line.\n```',
+          status: 'complete'
+        }
+      ]
+    })
+    await flushPromises()
+    expect(resolveDiskCheck).not.toBeNull()
+
+    // Cancel while disk check is still in flight.
+    await wrapper.get('[data-testid="file-viewer-canvas-cancel"]').trigger('click')
+    await flushPromises()
+
+    // Now resolve the stale disk check -> must NOT write to disk or transition to applied.
+    resolveDiskCheck!({
+      path: '/tmp/space/notes.md',
+      name: 'notes.md',
+      ext: 'md',
+      kind: 'text',
+      mimeType: 'text/markdown',
+      size: initialText.length,
+      truncated: false,
+      mtimeMs: 1000,
+      text: initialText
+    })
+    await flushPromises()
+
+    const writeCalls = mocks.send.mock.calls.filter(
+      ([evt]) => evt === AgentWorkspaceEvents.writeFile
+    )
+    expect(writeCalls).toHaveLength(0)
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('idle')
+  })
+
+  it('guards Canvas Undo and Retry with expectedMtimeMs and retains review state with refresh option on conflict', async () => {
+    let diskText = '# Notes\n\nBefore edit.\n'
+    let diskMtime = 1000
+    let failUndoConflict = false
+
+    mocks.send.mockImplementation(async (event: unknown, payload: Record<string, unknown>) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        return {
+          path: '/tmp/space/notes.md',
+          name: 'notes.md',
+          ext: 'md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: diskText.length,
+          truncated: false,
+          mtimeMs: diskMtime,
+          text: diskText
+        }
+      }
+      if (event === AgentWorkspaceEvents.writeFile) {
+        if (failUndoConflict) {
+          throw new Error('WORKSPACE_FILE_CONFLICT')
+        }
+        diskText = String(payload.content ?? '')
+        diskMtime += 500
+        return {
+          path: '/tmp/space/notes.md',
+          size: diskText.length,
+          mtimeMs: diskMtime
+        }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/notes.md',
+        displayPath: 'notes.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-undo-guard',
+        messages: [{ id: 'u1', role: 'user', content: 'start', status: 'complete' }],
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    mocks.selection!.value = {
+      text: 'Before edit.',
+      rects: [{ left: 10, right: 120, top: 40, bottom: 70, width: 110, height: 30 } as DOMRect]
+    }
+    await flushPromises()
+    await wrapper.get('[data-testid="sel-action-improve"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="file-viewer-canvas-compose-send"]').trigger('click')
+    await flushPromises()
+
+    const emitted = wrapper.emitted('ai-action')?.[0]?.[0] as { prompt?: string }
+    await wrapper.setProps({
+      aiStreaming: false,
+      messages: [
+        { id: 'u1', role: 'user', content: 'start', status: 'complete' },
+        { id: 'u2', role: 'user', content: emitted.prompt!, status: 'complete' },
+        {
+          id: 'a2',
+          role: 'assistant',
+          content: '```markdown\nAfter edit.\n```',
+          status: 'complete'
+        }
+      ]
+    })
+    await flushPromises()
+    expect(diskMtime).toBe(1500)
+
+    // External edit bumps disk -> Undo and Retry MUST pass expectedMtimeMs: 1500 and retain review state on conflict.
+    failUndoConflict = true
+    diskText = '# Notes\n\nExternal edit on disk.\n'
+    diskMtime = 2500
+
+    await wrapper.get('[data-testid="file-viewer-canvas-undo"]').trigger('click')
+    await flushPromises()
+
+    const undoCall = mocks.send.mock.calls.filter(
+      ([evt]) => evt === AgentWorkspaceEvents.writeFile
+    )[1]
+    expect(undoCall?.[1]?.expectedMtimeMs).toBe(1500)
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('applied')
+    expect(toast.error).toHaveBeenCalledWith('home.sidePanel.canvasUndoConflict')
+    expect(wrapper.find('[data-testid="file-viewer-canvas-conflict-refresh"]').exists()).toBe(true)
+
+    // Retry also sends expectedMtimeMs: 1500 and aborts cleanly on conflict without dispatching a new AI turn.
+    await wrapper.get('[data-testid="file-viewer-canvas-retry"]').trigger('click')
+    await flushPromises()
+    const retryCall = mocks.send.mock.calls.filter(
+      ([evt]) => evt === AgentWorkspaceEvents.writeFile
+    )[2]
+    expect(retryCall?.[1]?.expectedMtimeMs).toBe(1500)
+    expect(wrapper.emitted('ai-action')).toHaveLength(1)
+
+    // Clicking Refresh adopts the latest disk version and clears the applied state.
+    await wrapper.get('[data-testid="file-viewer-canvas-conflict-refresh"]').trigger('click')
+    await flushPromises()
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('idle')
+    expect(
+      (wrapper.get('[data-testid="md-editor-input"]').element as HTMLTextAreaElement).value
+    ).toBe('# Notes\n\nExternal edit on disk.\n')
+  })
+
+  it('aborts dispatching AI actions when guarded pre-save fails on an unsaved local draft', async () => {
+    const initialText = '# Notes\n\nOriginal.\n'
+    mocks.send.mockImplementation(async (event: unknown) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        return {
+          path: '/tmp/space/notes.md',
+          name: 'notes.md',
+          ext: 'md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: initialText.length,
+          truncated: false,
+          mtimeMs: 1000,
+          text: initialText
+        }
+      }
+      if (event === AgentWorkspaceEvents.writeFile) {
+        throw new Error('WORKSPACE_FILE_CONFLICT')
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/notes.md',
+        displayPath: 'notes.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-presave-abort',
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="md-editor-input"]').setValue('# Notes\n\nUnsaved edit.\n')
+    await flushPromises()
+
+    mocks.selection!.value = {
+      text: 'Unsaved edit.',
+      rects: [{ left: 10, right: 120, top: 40, bottom: 70, width: 110, height: 30 } as DOMRect]
+    }
+    await flushPromises()
+
+    await wrapper.get('[data-testid="sel-action-improve"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="file-viewer-canvas-compose-send"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.emitted('ai-action')).toBeUndefined()
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('idle')
+    expect(wrapper.find('[data-testid="file-viewer-conflict-banner"]').exists()).toBe(true)
+  })
+
+  it('flushes or retains unsaved drafts when switching files instead of dropping edits', async () => {
+    const files: Record<string, { text: string; mtimeMs: number }> = {
+      '/tmp/space/a.md': { text: '# A\n\nInitial A.\n', mtimeMs: 1000 },
+      '/tmp/space/b.md': { text: '# B\n\nInitial B.\n', mtimeMs: 2000 }
+    }
+    let rejectAWrite = false
+
+    mocks.send.mockImplementation(async (event: unknown, payload: Record<string, unknown>) => {
+      const target = String(payload.path ?? '')
+      if (event === AgentWorkspaceEvents.readFile) {
+        const entry = files[target]!
+        return {
+          path: target,
+          name: target.split('/').pop()!,
+          ext: 'md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: entry.text.length,
+          truncated: false,
+          mtimeMs: entry.mtimeMs,
+          text: entry.text
+        }
+      }
+      if (event === AgentWorkspaceEvents.writeFile) {
+        if (rejectAWrite && target === '/tmp/space/a.md') {
+          throw new Error('WORKSPACE_FILE_CONFLICT')
+        }
+        const entry = files[target]!
+        entry.text = String(payload.content ?? '')
+        entry.mtimeMs += 500
+        return { path: target, size: entry.text.length, mtimeMs: entry.mtimeMs }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/a.md',
+        displayPath: 'a.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-switch-draft',
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    // Case 1: Clean flush before switching from a.md to b.md.
+    await wrapper.get('[data-testid="md-editor-input"]').setValue('# A\n\nFlushed before switch.\n')
+    await flushPromises()
+
+    await wrapper.setProps({ filePath: '/tmp/space/b.md', displayPath: 'b.md' })
+    await flushPromises()
+
+    expect(files['/tmp/space/a.md']!.text).toBe('# A\n\nFlushed before switch.\n')
+    expect(
+      (wrapper.get('[data-testid="md-editor-input"]').element as HTMLTextAreaElement).value
+    ).toBe('# B\n\nInitial B.\n')
+
+    // Case 2: Failed flush retains draft and restores it with conflict banner when switching back.
+    await wrapper.setProps({ filePath: '/tmp/space/a.md', displayPath: 'a.md' })
+    await flushPromises()
+
+    rejectAWrite = true
+    await wrapper
+      .get('[data-testid="md-editor-input"]')
+      .setValue('# A\n\nRetained conflict draft.\n')
+    await flushPromises()
+
+    await wrapper.setProps({ filePath: '/tmp/space/b.md', displayPath: 'b.md' })
+    await flushPromises()
+    expect(
+      (wrapper.get('[data-testid="md-editor-input"]').element as HTMLTextAreaElement).value
+    ).toBe('# B\n\nInitial B.\n')
+
+    await wrapper.setProps({ filePath: '/tmp/space/a.md', displayPath: 'a.md' })
+    await flushPromises()
+    expect(
+      (wrapper.get('[data-testid="md-editor-input"]').element as HTMLTextAreaElement).value
+    ).toBe('# A\n\nRetained conflict draft.\n')
+    expect(wrapper.find('[data-testid="file-viewer-conflict-banner"]').exists()).toBe(true)
+  })
+
+  it('ignores unrelated concurrent assistant turns and only finalizes the matching Canvas turn', async () => {
+    let diskText = '# Notes\n\nTarget line.\n'
+    let diskMtime = 1000
+
+    mocks.send.mockImplementation(async (event: unknown, payload: Record<string, unknown>) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        return {
+          path: '/tmp/space/notes.md',
+          name: 'notes.md',
+          ext: 'md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: diskText.length,
+          truncated: false,
+          mtimeMs: diskMtime,
+          text: diskText
+        }
+      }
+      if (event === AgentWorkspaceEvents.writeFile) {
+        diskText = String(payload.content ?? '')
+        diskMtime += 500
+        return { path: '/tmp/space/notes.md', size: diskText.length, mtimeMs: diskMtime }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/notes.md',
+        displayPath: 'notes.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-turn-bind',
+        messages: [{ id: 'u1', role: 'user', content: 'start', status: 'complete' }],
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    mocks.selection!.value = {
+      text: 'Target line.',
+      rects: [{ left: 10, right: 120, top: 40, bottom: 70, width: 110, height: 30 } as DOMRect]
+    }
+    await flushPromises()
+    await wrapper.get('[data-testid="sel-action-improve"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="file-viewer-canvas-compose-send"]').trigger('click')
+    await flushPromises()
+
+    const emitted = wrapper.emitted('ai-action')?.[0]?.[0] as { prompt?: string }
+
+    // Unrelated turn completes first -> must NOT apply or unlock Canvas.
+    await wrapper.setProps({
+      aiStreaming: false,
+      messages: [
+        { id: 'u1', role: 'user', content: 'start', status: 'complete' },
+        { id: 'u-other', role: 'user', content: 'unrelated request', status: 'complete' },
+        {
+          id: 'a-other',
+          role: 'assistant',
+          content: '```markdown\nUnrelated code\n```',
+          status: 'complete'
+        }
+      ]
+    })
+    await flushPromises()
+    expect(diskText).toBe('# Notes\n\nTarget line.\n')
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('thinking')
+
+    // Matching Canvas turn completes -> applies cleanly.
+    await wrapper.setProps({
+      aiStreaming: false,
+      messages: [
+        { id: 'u1', role: 'user', content: 'start', status: 'complete' },
+        { id: 'u-other', role: 'user', content: 'unrelated request', status: 'complete' },
+        {
+          id: 'a-other',
+          role: 'assistant',
+          content: '```markdown\nUnrelated code\n```',
+          status: 'complete'
+        },
+        { id: 'u-canvas', role: 'user', content: emitted.prompt!, status: 'complete' },
+        {
+          id: 'a-canvas',
+          role: 'assistant',
+          content: '```markdown\nPolished target line.\n```',
+          status: 'complete'
+        }
+      ]
+    })
+    await flushPromises()
+    expect(diskText).toBe('# Notes\n\nPolished target line.\n')
+    expect(
+      wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+    ).toBe('applied')
+  })
+
+  it('finalizes and unlocks Canvas when a terminal turn arrives with a newly completed file.write tool call and unchanged disk', async () => {
+    vi.useFakeTimers()
+    try {
+      const initialText = '# Notes\n\nOriginal text.\n'
+      mocks.send.mockImplementation(async (event: unknown) => {
+        if (event === AgentWorkspaceEvents.readFile) {
+          return {
+            path: '/tmp/space/notes.md',
+            name: 'notes.md',
+            ext: 'md',
+            kind: 'text',
+            mimeType: 'text/markdown',
+            size: initialText.length,
+            truncated: false,
+            mtimeMs: 1000,
+            text: initialText
+          }
+        }
+        return null
+      })
+
+      const wrapper = mount(WorkspaceFileViewer, {
+        props: {
+          filePath: '/tmp/space/notes.md',
+          displayPath: 'notes.md',
+          workspaceRoot: '/tmp/space',
+          conversationId: 'conv-terminal-write',
+          messages: [{ id: 'u1', role: 'user', content: 'start', status: 'complete' }],
+          aiActionsEnabled: true
+        }
+      })
+      await flushPromises()
+
+      mocks.selection!.value = {
+        text: 'Original text.',
+        rects: [{ left: 10, right: 120, top: 40, bottom: 70, width: 110, height: 30 } as DOMRect]
+      }
+      await flushPromises()
+      await wrapper.get('[data-testid="sel-action-improve"]').trigger('click')
+      await flushPromises()
+      await wrapper.get('[data-testid="file-viewer-canvas-compose-send"]').trigger('click')
+      await flushPromises()
+
+      const emitted = wrapper.emitted('ai-action')?.[0]?.[0] as { prompt?: string }
+      // Terminal message arrives in one update with newly completed file.write tool call and unchanged disk.
+      await wrapper.setProps({
+        aiStreaming: false,
+        messages: [
+          { id: 'u1', role: 'user', content: 'start', status: 'complete' },
+          { id: 'u2', role: 'user', content: emitted.prompt!, status: 'complete' },
+          {
+            id: 'a2',
+            role: 'assistant',
+            content: 'Done.',
+            status: 'complete',
+            parts: [
+              {
+                type: 'tool-call',
+                id: 'tc-write',
+                name: 'file.write',
+                status: 'done',
+                input: '{"path":"notes.md"}'
+              }
+            ]
+          }
+        ]
+      })
+      await vi.advanceTimersByTimeAsync(250)
+      await flushPromises()
+
+      expect(
+        wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-locked')
+      ).toBe('false')
+      expect(
+        wrapper.get('[data-testid="workspace-file-viewer"]').attributes('data-canvas-phase')
+      ).toBe('idle')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps expectedMtimeMs on Cmd+S and save-error retry, requiring explicit conflict overwrite button to force-write', async () => {
+    let diskText = '# Notes\n\nDisk newer version.\n'
+    let diskMtime = 2000
+    let loadedInitial = false
+
+    mocks.send.mockImplementation(async (event: unknown, payload: Record<string, unknown>) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        if (!loadedInitial) {
+          loadedInitial = true
+          return {
+            path: '/tmp/space/notes.md',
+            name: 'notes.md',
+            ext: 'md',
+            kind: 'text',
+            mimeType: 'text/markdown',
+            size: '# Notes\n\nBase.\n'.length,
+            truncated: false,
+            mtimeMs: 1000,
+            text: '# Notes\n\nBase.\n'
+          }
+        }
+        return {
+          path: '/tmp/space/notes.md',
+          name: 'notes.md',
+          ext: 'md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: diskText.length,
+          truncated: false,
+          mtimeMs: diskMtime,
+          text: diskText
+        }
+      }
+      if (event === AgentWorkspaceEvents.writeFile) {
+        if (payload.expectedMtimeMs !== undefined && payload.expectedMtimeMs !== diskMtime) {
+          throw new Error('WORKSPACE_FILE_CONFLICT')
+        }
+        diskText = String(payload.content ?? '')
+        diskMtime += 500
+        return { path: '/tmp/space/notes.md', size: diskText.length, mtimeMs: diskMtime }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/notes.md',
+        displayPath: 'notes.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-explicit-overwrite',
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="md-editor-input"]').setValue('# Notes\n\nLocal edit.\n')
+    await flushPromises()
+
+    // Cmd+S keeps expectedMtimeMs=1000 -> conflicts instead of silently overwriting disk.
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 's', metaKey: true }))
+    await flushPromises()
+    expect(diskText).toBe('# Notes\n\nDisk newer version.\n')
+    expect(wrapper.find('[data-testid="file-viewer-conflict-banner"]').exists()).toBe(true)
+
+    // Clicking the status-bar save-error retry badge ALSO keeps expectedMtimeMs=1000.
+    await wrapper.get('[data-testid="file-viewer-save-status"]').trigger('click')
+    await flushPromises()
+    expect(diskText).toBe('# Notes\n\nDisk newer version.\n')
+
+    const guardedWriteCalls = mocks.send.mock.calls.filter(
+      ([evt]) => evt === AgentWorkspaceEvents.writeFile
+    )
+    expect(guardedWriteCalls).toHaveLength(2)
+    expect(guardedWriteCalls[0]?.[1]?.expectedMtimeMs).toBe(1000)
+    expect(guardedWriteCalls[1]?.[1]?.expectedMtimeMs).toBe(1000)
+
+    // Only clicking the explicit Overwrite disk button omits expectedMtimeMs and writes disk.
+    await wrapper.get('[data-testid="file-viewer-conflict-overwrite"]').trigger('click')
+    await flushPromises()
+
+    const allWriteCalls = mocks.send.mock.calls.filter(
+      ([evt]) => evt === AgentWorkspaceEvents.writeFile
+    )
+    expect(allWriteCalls).toHaveLength(3)
+    expect(allWriteCalls[2]?.[1]?.expectedMtimeMs).toBeUndefined()
+    expect(diskText).toBe('# Notes\n\nLocal edit.\n')
+    expect(wrapper.find('[data-testid="file-viewer-conflict-banner"]').exists()).toBe(false)
+  })
+
+  it('persists CSS selection highlight during canvas compose and comment drafting and disposes cleanly', async () => {
+    mocks.send.mockImplementation(async (event: unknown) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        return {
+          path: '/tmp/space/story.md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: 48,
+          truncated: false,
+          mtimeMs: 1000,
+          text: '# Story\n\nA quiet morning paragraph.\n'
+        }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/story.md',
+        displayPath: 'story.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-highlight',
+        aiActionsEnabled: true
+      }
+    })
+    await flushPromises()
+
+    const hostNode = document.createElement('p')
+    hostNode.textContent = 'A quiet morning paragraph.'
+    document.body.appendChild(hostNode)
+    const range = document.createRange()
+    range.setStart(hostNode.firstChild!, 0)
+    range.setEnd(hostNode.firstChild!, 15)
+
+    try {
+      mocks.registerSelectionHighlight.mockClear()
+      mocks.disposeSelectionHighlight.mockClear()
+
+      mocks.selection!.value = {
+        text: 'A quiet morning',
+        rects: [new DOMRect(10, 20, 120, 18)],
+        range
+      }
+      await flushPromises()
+
+      // 1. Canvas compose registers a cloned range and disposes when compose closes.
+      await wrapper.get('[data-testid="sel-action-improve"]').trigger('click')
+      await flushPromises()
+      expect(mocks.registerSelectionHighlight).toHaveBeenCalledTimes(1)
+      const composeRange = mocks.registerSelectionHighlight.mock.calls[0]?.[0] as Range
+      expect(composeRange).toBeInstanceOf(Range)
+      expect(composeRange).not.toBe(range)
+      expect(composeRange.toString()).toBe('A quiet morning')
+
+      await wrapper.get('[data-testid="file-viewer-canvas-compose-close"]').trigger('click')
+      await flushPromises()
+      expect(mocks.disposeSelectionHighlight).toHaveBeenCalledTimes(1)
+
+      // 2. Comment composer registers a cloned range and disposes when closed.
+      mocks.selection!.value = {
+        text: 'A quiet morning',
+        rects: [new DOMRect(10, 20, 120, 18)],
+        range
+      }
+      await flushPromises()
+      await wrapper.get('[data-testid="sel-action-comment"]').trigger('click')
+      await flushPromises()
+      expect(mocks.registerSelectionHighlight).toHaveBeenCalledTimes(2)
+      expect(wrapper.find('.WorkspaceFileViewer-CommentComposer').exists()).toBe(true)
+
+      await wrapper.get('.WorkspaceFileViewer-CommentClose').trigger('click')
+      await flushPromises()
+      expect(mocks.disposeSelectionHighlight).toHaveBeenCalledTimes(2)
+    } finally {
+      hostNode.remove()
+    }
+  })
+
+  it('renders TxSpinner while canvas is locked and prismatic curtain markup during sweep reveal', async () => {
+    let diskText = '# Story\n\nOriginal line.\n'
+    let diskMtime = 1000
+    mocks.send.mockImplementation(async (event: unknown) => {
+      if (event === AgentWorkspaceEvents.readFile) {
+        return {
+          path: '/tmp/space/story.md',
+          kind: 'text',
+          mimeType: 'text/markdown',
+          size: diskText.length,
+          truncated: false,
+          mtimeMs: diskMtime,
+          text: diskText
+        }
+      }
+      return null
+    })
+
+    const wrapper = mount(WorkspaceFileViewer, {
+      props: {
+        filePath: '/tmp/space/story.md',
+        displayPath: 'story.md',
+        workspaceRoot: '/tmp/space',
+        conversationId: 'conv-spinner-curtain',
+        aiActionsEnabled: true,
+        aiStreaming: false,
+        messages: []
+      }
+    })
+    await flushPromises()
+
+    // Lock canvas via active streaming turn targeting story.md -> TxSpinner renders in dock.
+    await wrapper.setProps({
+      aiStreaming: true,
+      messages: [
+        { id: 'u1', role: 'user', content: 'Edit story.md', status: 'complete' },
+        { id: 'a1', role: 'assistant', content: '', status: 'streaming' }
+      ]
+    })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="file-viewer-canvas-spinner"]').exists()).toBe(true)
+
+    // Disk updates and turn completes -> prismatic scanline curtain renders during sweep reveal.
+    diskText = '# Story\n\nUpdated line.\n'
+    diskMtime = 2000
+    await wrapper.setProps({
+      aiStreaming: false,
+      messages: [
+        { id: 'u1', role: 'user', content: 'Edit story.md', status: 'complete' },
+        {
+          id: 'a1',
+          role: 'assistant',
+          content: 'Updated story.md.',
+          status: 'complete',
+          parts: [
+            {
+              type: 'tool-call',
+              id: 't1',
+              name: 'file.write',
+              status: 'done',
+              input: JSON.stringify({ path: 'story.md' })
+            }
+          ]
+        }
+      ]
+    })
+    await flushPromises()
+
+    const sweep = wrapper.find('[data-testid="file-viewer-canvas-sweep"]')
+    expect(sweep.exists()).toBe(true)
+    expect(sweep.find('.WorkspaceFileViewer-CanvasReplaceVeil').exists()).toBe(true)
+    const oldLayer = wrapper.find('[data-testid="file-viewer-canvas-old-layer"]')
+    expect(oldLayer.exists()).toBe(true)
+    expect(oldLayer.text()).toContain('Original line.')
+  })
+
+  it('paces changed plain paragraph words through useStreamPacer with monochrome blur and unwraps cleanly', async () => {
+    vi.useFakeTimers({
+      toFake: [
+        'setTimeout',
+        'clearTimeout',
+        'requestAnimationFrame',
+        'cancelAnimationFrame',
+        'performance'
+      ]
+    })
+    try {
+      let diskText = '# Story\n\n从休眠舱醒来，名字不见了。\n'
+      let diskMtime = 1000
+      mocks.send.mockImplementation(async (event: unknown) => {
+        if (event === AgentWorkspaceEvents.readFile) {
+          return {
+            path: '/tmp/space/story.md',
+            kind: 'text',
+            mimeType: 'text/markdown',
+            size: diskText.length,
+            truncated: false,
+            mtimeMs: diskMtime,
+            text: diskText
+          }
+        }
+        return null
+      })
+
+      const wrapper = mount(WorkspaceFileViewer, {
+        props: {
+          filePath: '/tmp/space/story.md',
+          displayPath: 'story.md',
+          workspaceRoot: '/tmp/space',
+          conversationId: 'conv-paced-reveal',
+          aiActionsEnabled: true,
+          aiStreaming: false,
+          messages: []
+        }
+      })
+      await flushPromises()
+
+      await wrapper.setProps({
+        aiStreaming: true,
+        messages: [
+          { id: 'u1', role: 'user', content: '润色 story.md', status: 'complete' },
+          { id: 'a1', role: 'assistant', content: '', status: 'streaming' }
+        ]
+      })
+      await flushPromises()
+
+      diskText = '# Story\n\n从休眠舱醒来，金属气味先于记忆抵达——我想不起自己的名字。\n'
+      diskMtime = 2000
+      await wrapper.setProps({
+        aiStreaming: false,
+        messages: [
+          { id: 'u1', role: 'user', content: '润色 story.md', status: 'complete' },
+          {
+            id: 'a1',
+            role: 'assistant',
+            content: '已更新 story.md。',
+            status: 'complete',
+            parts: [
+              {
+                type: 'tool-call',
+                id: 't-pace',
+                name: 'file.write',
+                status: 'done',
+                input: JSON.stringify({ path: 'story.md' })
+              }
+            ]
+          }
+        ]
+      })
+      await flushPromises()
+      await nextTick()
+
+      // Changed paragraph keeps leading prefix anchored and wraps newly written words in paced spans.
+      const revealSpans = wrapper.findAll('.WorkspaceFileViewer-RevealWord')
+      expect(revealSpans.length).toBeGreaterThan(2)
+      const paragraphs = wrapper.findAll('.markdown-body > p')
+      expect(paragraphs[1]?.text()).toContain('从休眠舱醒来，')
+      expect(revealSpans.map((n) => n.text()).join('')).not.toContain('从休眠舱醒来')
+
+      // Advance rAF frames -> words reveal progressively, then settle and unwrap cleanly back to text nodes.
+      vi.advanceTimersByTime(120)
+      await nextTick()
+      expect(wrapper.findAll('.WorkspaceFileViewer-RevealWord.is-revealed').length).toBeGreaterThan(
+        0
+      )
+
+      vi.advanceTimersByTime(3400)
+      await nextTick()
+      expect(wrapper.findAll('.WorkspaceFileViewer-RevealWord')).toHaveLength(0)
+      expect(wrapper.find('[data-testid="file-viewer-canvas-sweep"]').exists()).toBe(false)
+      expect(paragraphs[1]?.text()).toContain('我想不起自己的名字。')
+    } finally {
+      vi.useRealTimers()
     }
   })
 })

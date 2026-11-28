@@ -8,12 +8,16 @@ import { mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import sharp from 'sharp'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FileProviderContentCapacityService } from './services/file-provider-content-capacity-service'
 vi.mock('../../../ai/intelligence-sdk', () => ({
   tuffIntelligence: { embedding: { generate: vi.fn(), generateLocalImage: vi.fn() } }
 }))
 import * as schema from '../../../../db/schema'
+import {
+  registerBoxToolAiCapabilityPort,
+  resetBoxToolAiCapabilityPort
+} from '../../ports/ai-capability-port'
 import {
   EmbeddingService,
   type EmbeddingDbRouting,
@@ -26,7 +30,12 @@ import { hashFileContentChunk } from './services/file-content-match'
 import { tuffIntelligence } from '../../../ai/intelligence-sdk'
 import { getLocalEmbeddingRuntime } from '../../../ai/local-embedding-runtime'
 import { LOCAL_EMBEDDING_MODEL_KEY } from '../../../ai/local-embedding-model'
-import { currentEmbeddingPriority, EmbeddingJobQueue } from '../../../ai/local-embedding-queue'
+import {
+  currentEmbeddingPriority,
+  EmbeddingJobQueue,
+  runWithEmbeddingPriority
+} from '../../../ai/local-embedding-queue'
+import { onUsageLimitsChanged, readUsageLimitInfo } from '../../../ai/usage-ledger/usage-limits'
 import { FileProviderEmbeddingIndexService } from './services/file-provider-embedding-index-service'
 import type { IndexWorkerFileResult } from './workers/file-index-worker-client'
 import { FileProviderSearchResultService } from './services/file-provider-search-result-service'
@@ -94,7 +103,43 @@ function createEmbeddingService(
   services.push(service)
   return service
 }
+beforeEach(() => {
+  registerBoxToolAiCapabilityPort({
+    intelligence: {
+      code: { review: vi.fn() },
+      text: { summarize: vi.fn(), rewrite: vi.fn(), translate: vi.fn() },
+      vision: { ocr: vi.fn(), caption: vi.fn() },
+      embedding: {
+        generate: (payload, options) => tuffIntelligence.embedding.generate(payload, options),
+        generateLocalImage: (input, options) =>
+          tuffIntelligence.embedding.generateLocalImage(input, options)
+      },
+      rag: { rerank: vi.fn() }
+    },
+    normalizeIntelligenceError: (error, options) => ({
+      code: 'UNKNOWN',
+      message: String(error),
+      reason: String(error),
+      recovery: '',
+      capabilityId: options?.capabilityId
+    }),
+    resolveCapabilityStatus: (capabilityId) => ({
+      capabilityId,
+      available: false,
+      providerIds: []
+    }),
+    searchConversations: async () => [],
+    isLocalEmbeddingReady: () => getLocalEmbeddingRuntime().isReady(),
+    isLocalEmbeddingImageReady: () => getLocalEmbeddingRuntime().isImageReady(),
+    getLocalEmbeddingModelKey: () => LOCAL_EMBEDDING_MODEL_KEY,
+    runWithEmbeddingPriority: (priority, run) => runWithEmbeddingPriority(priority, run),
+    onUsageLimitsChanged: (listener) => onUsageLimitsChanged(listener),
+    readUsageLimitInfo: (error) => readUsageLimitInfo(error)
+  })
+})
+
 afterEach(async () => {
+  resetBoxToolAiCapabilityPort()
   vi.restoreAllMocks()
   for (const service of services.splice(0)) await service.close()
   for (const client of clients.splice(0)) client.close()

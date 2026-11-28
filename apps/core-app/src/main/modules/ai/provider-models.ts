@@ -2,8 +2,7 @@ import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { getNetworkService } from '../network'
 import { isNexusManagedProvider } from '@talex-touch/utils/intelligence/nexus-provider'
-import { performNexusRequestWithAuth } from '../auth'
-import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
+import { getAiAuthPort, getAiNexusPort } from './ai-ports'
 
 const DEFAULT_BASE_URLS: Partial<Record<IntelligenceProviderType, string>> = {
   [IntelligenceProviderType.OPENAI]: 'https://api.openai.com/v1',
@@ -205,8 +204,8 @@ async function fetchNexusModels(
   _options: FetchProviderModelsOptions = {}
 ): Promise<string[]> {
   try {
-    const baseUrl = getRuntimeNexusBaseUrl()
-    const response = await performNexusRequestWithAuth(
+    const baseUrl = getAiNexusPort().getRuntimeNexusBaseUrl()
+    const response = await getAiAuthPort().performNexusRequestWithAuth(
       {
         url: `${baseUrl.replace(/\/+$/, '')}/api/v1/intelligence/models`,
         method: 'GET'

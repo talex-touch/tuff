@@ -615,6 +615,13 @@ function scheduleViewport(): void {
   if (!viewportFrame) viewportFrame = requestAnimationFrame(measureViewport)
 }
 
+function isEditableKeyTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable) return true
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+}
+
 function onKeydown(event: KeyboardEvent): void {
   if (
     !onRoute.value ||
@@ -625,7 +632,21 @@ function onKeydown(event: KeyboardEvent): void {
   )
     return
   const modifier = commandModifierHeld(event, isMac.value) && !event.altKey
+  const altOnly = event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey
   const key = event.key.toLowerCase()
+  const backChord =
+    (isMac.value && modifier && !event.shiftKey && (event.code === 'BracketLeft' || key === '[')) ||
+    (altOnly &&
+      !isEditableKeyTarget(event.target) &&
+      (event.code === 'ArrowLeft' || key === 'arrowleft'))
+  const forwardChord =
+    (isMac.value &&
+      modifier &&
+      !event.shiftKey &&
+      (event.code === 'BracketRight' || key === ']')) ||
+    (altOnly &&
+      !isEditableKeyTarget(event.target) &&
+      (event.code === 'ArrowRight' || key === 'arrowright'))
   if (modifier && !event.shiftKey && (event.code === 'KeyL' || key === 'l')) {
     if (isSettingsTab.value || isStoreTab.value) return
     event.preventDefault()
@@ -680,6 +701,30 @@ function onKeydown(event: KeyboardEvent): void {
     } else {
       void command(() => sdk.reload(activeTab.value!.id))
     }
+  } else if (
+    backChord &&
+    !panel.value &&
+    activeTab.value?.url &&
+    !isSettingsTab.value &&
+    !isStoreTab.value
+  ) {
+    if (isPreviewTab.value) {
+      if (!canGoBackPreview.value) return
+      event.preventDefault()
+      void goBackPreview()
+    } else if (activeTab.value.canGoBack) {
+      event.preventDefault()
+      void command(() => sdk.back(activeTab.value!.id))
+    }
+  } else if (
+    forwardChord &&
+    !panel.value &&
+    activeTab.value?.url &&
+    !localPage.value &&
+    activeTab.value.canGoForward
+  ) {
+    event.preventDefault()
+    void command(() => sdk.forward(activeTab.value!.id))
   } else if (event.key === 'Escape' && panel.value) {
     event.preventDefault()
     panel.value = null

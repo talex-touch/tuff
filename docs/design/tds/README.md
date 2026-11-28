@@ -86,12 +86,12 @@ flowchart TD
 | `apps/core-app/src/renderer/src/modules/tds-theme/{presets,runtime,tds-theme-pack.test}.ts` | 主题包焦点环同步（`--shell-focus-ring`）、亮色语义芯片在 `0.85` Refraction 玻璃上的 AA 校准与跨背景合成对比度回归测试 | `tds-theme-pack.test.ts` |
 | `apps/core-app/src/renderer/src/views/base/styles/TdsThemePackSection.vue` | 主题包卡片在 `window-refraction` / `window-filter` 半透明窗体下的高不透明度表面、色块胶囊底衬、无回流选中环与主色焦点环加固 | `TdsThemePackSection.test.ts` |
 
-### 2.6 P0 / P1：CI 门禁、安全画布持久化、共享主题协议、AI 设计提示词与 Nexus 文档站
+### 2.6 P0 / P1：CI 门禁、安全画布持久化、共享主题协议、AI 设计提示词与 TuffEx 文档站
 
 | 能力 / 文件 | 角色 | 机器校验 |
 | --- | --- | --- |
-| [tds.zh.mdc](../../../apps/nexus/content/docs/dev/concepts/tds.zh.mdc) / [tds.en.mdc](../../../apps/nexus/content/docs/dev/concepts/tds.en.mdc) | **Nexus 双语 TDS 设计体系指南**：覆盖单一真相源、`#141414` 暗色基底、默认 `refraction` 材质、13–14px 排版、WCAG 2.1 AA/AAA、三层主题包与 Core 36 原语 | `check:doc-parity`、`check:mdc-fences`、`docs:verify` |
-| [TdsTokenInspectorDemo.vue](../../../apps/nexus/app/components/content/demos/TdsTokenInspectorDemo.vue) & [tds-inspector.ts](../../../apps/nexus/app/utils/tds-inspector.ts) | **单一真相源实时检视器**：直连 `tokens.json`，提供四套主题色板与 `--shell-*` / `--tx-*` 收敛表、实色 vs `0.85` 折射玻璃跨壁纸（`#e8e8ec` / `#0b0b0d`）WCAG 2.1 对比度检验、可检索的 Core 36 组件矩阵 | [tds-token-inspector.test.ts](../../../apps/nexus/test/tds-token-inspector.test.ts)、`check:demo-registry` |
+| [tds.zh.mdc](../../../apps/tuffex-docs/content/docs/concepts/tds.zh.mdc) / [tds.en.mdc](../../../apps/tuffex-docs/content/docs/concepts/tds.en.mdc) | **TuffEx Docs 双语 TDS 设计体系指南**（Nexus Dev Hub `/tuffex/{locale}/concepts/tds` 入口）：覆盖单一真相源、`#141414` 暗色基底、默认 `refraction` 材质、13–14px 排版、WCAG 2.1 AA/AAA、三层主题包与 Core 36 原语 | `check-doc-parity.mjs`、`check-mdc-fences.mjs`、`docs:verify` |
+| [TdsTokenInspectorDemo.vue](../../../apps/tuffex-docs/app/components/content/demos/TdsTokenInspectorDemo.vue) & [tds-inspector.ts](../../../apps/tuffex-docs/app/utils/tds-inspector.ts) | **单一真相源实时检视器**：直连 `tokens.json`，提供四套主题色板与 `--shell-*` / `--tx-*` 收敛表、实色 vs `0.85` 折射玻璃跨壁纸（`#e8e8ec` / `#0b0b0d`）WCAG 2.1 对比度检验、可检索的 Core 36 组件矩阵 | [tds-token-inspector.test.ts](../../../apps/tuffex-docs/test/tds-token-inspector.test.ts)、`check-demo-registry.mjs` |
 | `pnpm tds:check` CI 门禁 & `live-animation-clock` 收敛 | 将 `scripts/tds-tokens-sync.mjs --check` 与脚本单测接入 `PR Quality` CI；CoreApp 壳层/主页常驻无限 CSS 动画统一受 `live-animation-clock` 减动效、隐藏页签与窗口拖动门控 | `pnpm tds:check`、`live-animation-clock.test.ts` |
 | 主进程安全画布持久化（Canvas Session Store） | 将侧栏画布会话从渲染层临时 `sessionStorage` 升级为主进程宿主持久化存储，支持跨重启恢复与严格输入校验 | CoreApp 主进程与渲染层单测 |
 | `@talex-touch/utils` 共享主题包协议 | 抽离纯数据 `TdsThemePack` 类型、校验器与 CSS 导出器至 `@talex-touch/utils`，面向插件生态与商店分发并保持多框架令牌一致 | `packages/utils` 单测与 `typecheck` |
@@ -198,12 +198,13 @@ nice -n 10 pnpm -C apps/core-app exec vitest run \
 nice -n 10 pnpm -C packages/tuffex run audit:colors
 nice -n 10 pnpm -C packages/tuffex vitest run packages/components/src/__tests__/dark-fill-tints.test.ts
 
-# 5. Nexus TDS 文档站检视器与文档门禁（P1-5）
-nice -n 10 pnpm -C apps/nexus exec vitest run test/tds-token-inspector.test.ts test/docs
-nice -n 10 pnpm -C apps/nexus check:demo-registry \
-  && nice -n 10 pnpm -C apps/nexus check:mdc-fences \
+# 5. TuffEx Docs & Nexus TDS 文档站检视器与文档门禁（P1-5）
+nice -n 10 pnpm -C apps/tuffex-docs exec vitest run
+nice -n 10 node apps/tuffex-docs/scripts/checks/check-demo-registry.mjs \
+  && nice -n 10 node apps/tuffex-docs/scripts/checks/check-mdc-fences.mjs \
+  && nice -n 10 node apps/tuffex-docs/scripts/checks/check-doc-parity.mjs \
   && nice -n 10 pnpm -C apps/nexus check:doc-parity \
-  && nice -n 10 pnpm -C apps/nexus check:icon-collections
+  && nice -n 10 pnpm -C apps/nexus check:mdc-fences
 nice -n 10 node scripts/docs/run-docs-verify.mjs
 ```
 

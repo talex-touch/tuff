@@ -5,6 +5,7 @@ import { TELEMETRY_EVENT_TYPES_SQL } from './telemetrySanitizer'
 const TELEMETRY_TABLE = 'telemetry_events'
 const DAILY_STATS_TABLE = 'daily_stats'
 const GOVERNANCE_EVENTS_TABLE = 'platform_governance_events'
+const TELEMETRY_BATCH_RECEIPTS_TABLE = 'telemetry_batch_receipts'
 const DEFAULT_TELEMETRY_RETENTION_DAYS = 7
 const DEFAULT_GOVERNANCE_RETENTION_DAYS = 14
 const DEFAULT_BATCH_LIMIT = 10000
@@ -27,6 +28,14 @@ export interface RetentionTableResult {
   remainingAfterBatch: number
 }
 
+export interface RetentionReceiptResult {
+  table: 'telemetry_batch_receipts'
+  cutoff: string
+  matched: number
+  deleted: number
+  remainingAfterBatch: number
+}
+
 export interface TelemetryRetentionResult {
   dryRun: boolean
   generatedAt: string
@@ -34,6 +43,7 @@ export interface TelemetryRetentionResult {
   governanceRetentionDays: number
   batchLimit: number
   tables: RetentionTableResult[]
+  receipts?: RetentionReceiptResult
 }
 
 function normalizePositiveInteger(value: unknown, fallback: number, max: number): number {
@@ -177,6 +187,61 @@ async function cleanupTable(
   }
 }
 
+async function cleanupExpiredReceipts(
+  db: D1Database,
+  cutoff: string,
+  batchLimit: number,
+  dryRun: boolean,
+): Promise<RetentionReceiptResult | undefined> {
+  const exists = await db.prepare(`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?1 LIMIT 1
+  `).bind(TELEMETRY_BATCH_RECEIPTS_TABLE).first<{ name?: string }>()
+  if (!exists?.name)
+    return undefined
+
+  const count = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM ${TELEMETRY_BATCH_RECEIPTS_TABLE}
+    WHERE expires_at < ?1
+  `).bind(cutoff)
+
+  if (dryRun) {
+    const row = await count.first<{ count?: number }>()
+    const matched = Number(row?.count ?? 0)
+    return {
+      table: TELEMETRY_BATCH_RECEIPTS_TABLE,
+      cutoff,
+      matched,
+      deleted: 0,
+      remainingAfterBatch: matched,
+    }
+  }
+
+  const [counted, removed] = await db.batch([
+    count,
+    db.prepare(`
+      DELETE FROM ${TELEMETRY_BATCH_RECEIPTS_TABLE}
+      WHERE rowid IN (
+        SELECT rowid
+        FROM ${TELEMETRY_BATCH_RECEIPTS_TABLE}
+        WHERE expires_at < ?1
+        ORDER BY expires_at ASC
+        LIMIT ?2
+      )
+    `).bind(cutoff, batchLimit),
+  ])
+  const matched = Number((counted?.results?.[0] as { count?: number } | undefined)?.count ?? 0)
+  const deleted = Number((removed?.meta as { changes?: number } | undefined)?.changes ?? 0)
+
+  return {
+    table: TELEMETRY_BATCH_RECEIPTS_TABLE,
+    cutoff,
+    matched,
+    deleted,
+    remainingAfterBatch: Math.max(0, matched - deleted),
+  }
+}
+
 export async function runTelemetryRetentionForDatabase(
   db: D1Database,
   input: TelemetryRetentionInput = {},
@@ -196,11 +261,13 @@ export async function runTelemetryRetentionForDatabase(
   const dryRun = input.dryRun !== false
   const telemetryCutoff = resolveCutoff(now, telemetryRetentionDays)
   const governanceCutoff = resolveCutoff(now, governanceRetentionDays)
+  const receiptCutoff = now.toISOString()
 
   const tables = [
     await cleanupTable(db, TELEMETRY_TABLE, 'created_at', telemetryCutoff, batchLimit, dryRun),
     await cleanupTable(db, GOVERNANCE_EVENTS_TABLE, 'occurred_at', governanceCutoff, batchLimit, dryRun),
   ]
+  const receipts = await cleanupExpiredReceipts(db, receiptCutoff, batchLimit, dryRun)
 
   return {
     dryRun,
@@ -209,5 +276,6 @@ export async function runTelemetryRetentionForDatabase(
     governanceRetentionDays,
     batchLimit,
     tables,
+    ...(receipts ? { receipts } : {}),
   }
 }

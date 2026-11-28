@@ -46,6 +46,172 @@ export function normalizeVoiceHistoryEnabled(value: unknown): boolean {
 }
 
 /**
+ * How long local recognition history rows and their retained WAV recordings are kept before
+ * automatic expiration cleanup purges them.
+ *
+ * Defaults to `30d` (one month). `off` disables local history/audio retention alongside
+ * `historyEnabled: false`.
+ */
+export const VOICE_HISTORY_RETENTION_OPTIONS = ['7d', '30d', 'off'] as const
+export type VoiceHistoryRetention = typeof VOICE_HISTORY_RETENTION_OPTIONS[number]
+export const DEFAULT_VOICE_HISTORY_RETENTION: VoiceHistoryRetention = '30d'
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+export const VOICE_HISTORY_RETENTION_MS: Readonly<Record<VoiceHistoryRetention, number | null>> = Object.freeze({
+  '7d': 7 * DAY_MS,
+  '30d': 30 * DAY_MS,
+  off: null,
+})
+
+export function normalizeVoiceHistoryRetention(value: unknown): VoiceHistoryRetention {
+  return value === '7d' || value === '30d' || value === 'off'
+    ? value
+    : DEFAULT_VOICE_HISTORY_RETENTION
+}
+
+export function resolveVoiceHistoryRetentionMs(value: unknown): number | null {
+  return VOICE_HISTORY_RETENTION_MS[normalizeVoiceHistoryRetention(value)]
+}
+
+/**
+ * Effective local retention gate combining the boolean toggle and the retention window selector.
+ *
+ * Turning either `historyEnabled` off or `historyRetention` to `'off'` stops writing new local
+ * transcripts and audio files.
+ */
+export function isVoiceHistoryRetentionActive(
+  voiceInput: { historyEnabled?: unknown, historyRetention?: unknown } | undefined,
+): boolean {
+  if (!normalizeVoiceHistoryEnabled(voiceInput?.historyEnabled))
+    return false
+  return normalizeVoiceHistoryRetention(voiceInput?.historyRetention) !== 'off'
+}
+
+export const VOICE_DICTIONARY_SOURCES = ['manual', 'auto'] as const
+export type VoiceDictionarySource = typeof VOICE_DICTIONARY_SOURCES[number]
+
+export interface VoiceDictionaryEntry {
+  term: string
+  source: VoiceDictionarySource
+  createdAt: number
+}
+
+const MAX_VOICE_DICTIONARY_ENTRIES = 200
+const MAX_VOICE_DICTIONARY_TERM_LENGTH = 64
+
+export function normalizeVoiceDictionaryEntries(
+  entries: unknown,
+  legacyCustomWords?: unknown,
+): VoiceDictionaryEntry[] {
+  const seen = new Set<string>()
+  const normalized: VoiceDictionaryEntry[] = []
+
+  const append = (rawTerm: unknown, source: VoiceDictionarySource, createdAt: unknown): void => {
+    if (normalized.length >= MAX_VOICE_DICTIONARY_ENTRIES || typeof rawTerm !== 'string')
+      return
+    const term = rawTerm.trim().slice(0, MAX_VOICE_DICTIONARY_TERM_LENGTH)
+    if (!term || seen.has(term))
+      return
+    seen.add(term)
+    const timestamp = typeof createdAt === 'number' && Number.isFinite(createdAt) && createdAt >= 0
+      ? Math.floor(createdAt)
+      : 0
+    normalized.push({ term, source, createdAt: timestamp })
+  }
+
+  if (Array.isArray(entries)) {
+    for (const item of entries) {
+      if (!item || typeof item !== 'object' || Array.isArray(item))
+        continue
+      const record = item as Record<string, unknown>
+      const source: VoiceDictionarySource = record.source === 'auto' ? 'auto' : 'manual'
+      append(record.term, source, record.createdAt)
+    }
+  }
+
+  if (Array.isArray(legacyCustomWords)) {
+    for (const word of legacyCustomWords) {
+      append(word, 'manual', 0)
+    }
+  }
+
+  return normalized
+}
+
+const LEARNED_TERM_TOKEN_PATTERN = /[A-Za-z][A-Za-z0-9._+-]{1,39}|[\p{Script=Han}]{2,12}/gu
+const LEARNED_TERM_STOPWORDS = new Set([
+  'the',
+  'and',
+  'for',
+  'that',
+  'this',
+  'with',
+  'from',
+  'have',
+  'will',
+  'just',
+  'not',
+  'are',
+  'was',
+  'were',
+  'been',
+  'into',
+  'about',
+  'also',
+  'then',
+  'than',
+  'when',
+  'what',
+  'which',
+  'where',
+  'there',
+  'their',
+  'they',
+  'them',
+  'your',
+  'ours',
+])
+
+/**
+ * Extracts newly introduced terms from a manual transcript edit so they can be auto-added to the
+ * local voice dictionary with `source: 'auto'`.
+ */
+export function extractLearnedVoiceTerms(beforeText: string, afterText: string, maxTerms = 5): string[] {
+  const before = beforeText.trim()
+  const after = afterText.trim()
+  if (!after || before === after)
+    return []
+
+  const existingLower = new Set(
+    (before.match(LEARNED_TERM_TOKEN_PATTERN) ?? []).map(token => token.toLowerCase()),
+  )
+  const learned: string[] = []
+  const seen = new Set<string>()
+  const limit = Math.max(1, Math.min(20, Math.floor(maxTerms)))
+
+  for (const token of after.match(LEARNED_TERM_TOKEN_PATTERN) ?? []) {
+    const trimmed = token.trim()
+    const lower = trimmed.toLowerCase()
+    if (!trimmed || trimmed.length < 2 || trimmed.length > 40)
+      continue
+    if (existingLower.has(lower) || seen.has(trimmed))
+      continue
+    if (LEARNED_TERM_STOPWORDS.has(lower))
+      continue
+    // Prefer newly introduced specialized Latin/mixed tokens or short CJK terms absent from raw text.
+    if (/^[a-z]+$/.test(trimmed) && trimmed.length < 4)
+      continue
+    seen.add(trimmed)
+    learned.push(trimmed)
+    if (learned.length >= limit)
+      break
+  }
+
+  return learned
+}
+
+/**
  * Who last set `voiceInput.enabled`: the Settings switch, or the sign-in that turned it on.
  *
  * Absent means nobody has — the profile is still on its default.
@@ -311,6 +477,9 @@ const _appSettingOriginData = {
     /** 保留识别记录（源音频与转录）。默认开启，用户可在设置里关闭；读取统一走 `normalizeVoiceHistoryEnabled`。 */
     historyEnabled: true,
 
+    /** 识别记录与本地源音频保留期限（默认 30 天 / 1 个月）。 */
+    historyRetention: DEFAULT_VOICE_HISTORY_RETENTION as VoiceHistoryRetention,
+
     /**
      * 识别来源偏好：云端 / 本地 / 混合。
      *
@@ -318,6 +487,18 @@ const _appSettingOriginData = {
      * 是唯一不会让既有配置失去路由的那个。
      */
     source: DEFAULT_VOICE_ASR_SOURCE as VoiceAsrSource,
+  } as {
+    enabled: boolean
+    language: string
+    polishEnabled: boolean
+    polishStrength: VoicePolishStrength
+    noiseSuppression: boolean
+    historyEnabled: boolean
+    historyRetention?: VoiceHistoryRetention
+    source: VoiceAsrSource
+    enabledSource?: VoiceInputEnabledSource
+    customWords?: string[]
+    dictionaryEntries?: VoiceDictionaryEntry[]
   },
   clipboard: {
     /**
@@ -772,10 +953,13 @@ export interface VoiceInputSetting {
   polishStrength: VoicePolishStrength
   source?: VoiceAsrSource
   historyEnabled?: boolean
+  historyRetention?: VoiceHistoryRetention
   noiseSuppression?: boolean
   enabledSource?: VoiceInputEnabledSource
   /** User-defined specialized vocabulary or hotwords for speech recognition and polish biasing. */
   customWords?: string[]
+  /** Structured dictionary entries carrying manual/auto provenance; synced with `customWords`. */
+  dictionaryEntries?: VoiceDictionaryEntry[]
 }
 
 function isSettingRecord(value: unknown): value is Record<string, unknown> {
@@ -813,6 +997,8 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
   const polishStrength = normalizeVoicePolishStrength(source.polishStrength)
   const hasHistory = Object.prototype.hasOwnProperty.call(source, 'historyEnabled')
   const historyEnabled = normalizeVoiceHistoryEnabled(source.historyEnabled)
+  const hasHistoryRetention = Object.prototype.hasOwnProperty.call(source, 'historyRetention')
+  const historyRetention = normalizeVoiceHistoryRetention(source.historyRetention)
   const hasNoiseSuppression = Object.prototype.hasOwnProperty.call(source, 'noiseSuppression')
   // `=== true` rather than `!== false`: an unreadable value has to land on off. Turning
   // suppression on by accident changes what the recogniser hears, and the user never asked.
@@ -826,6 +1012,7 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
     && source.polishEnabled === polishEnabled
     && source.polishStrength === polishStrength
     && (!hasHistory || source.historyEnabled === historyEnabled)
+    && (!hasHistoryRetention || source.historyRetention === historyRetention)
     && (!hasNoiseSuppression || source.noiseSuppression === noiseSuppression)
     && (!hasSource || source.source === asrSource)
   ) {
@@ -839,6 +1026,7 @@ export function ensureVoiceInputSetting(setting: Record<string, unknown>): boole
     polishEnabled,
     polishStrength,
     ...(hasHistory ? { historyEnabled } : {}),
+    ...(hasHistoryRetention ? { historyRetention } : {}),
     ...(hasNoiseSuppression ? { noiseSuppression } : {}),
     ...(hasSource ? { source: asrSource } : {}),
   }

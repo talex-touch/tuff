@@ -589,6 +589,7 @@ export function useComposerDictation(
       emitLevel: true,
       // The audio stays with main once the session ends, for the voice clip (`DictationClip`).
       keepRecording: true,
+      source: 'ask',
       ...(options.language?.() ? { language: options.language() } : {})
     }
 

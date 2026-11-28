@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, lt } from 'drizzle-orm'
 import type {
   VoiceRecognitionLocation,
   VoiceRecognitionRecord,
@@ -7,17 +7,52 @@ import type {
 
 import { toTfileUrl } from '@talex-touch/utils/network'
 import { Buffer } from 'node:buffer'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import * as schema from '../../db/schema'
 import { resolveCurrentAuxDb, scheduleAuxWrite } from '../../db/db-write'
 import type { TempFileService } from '../../service/temp-file.service'
 import { createLogger } from '../../utils/logger'
 
-const RECORDING_NAMESPACE = 'voice/recordings'
+export const VOICE_RECORDING_NAMESPACE = 'voice/recordings'
+const RECORDING_NAMESPACE = VOICE_RECORDING_NAMESPACE
 const MAX_RECORDS = 200
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024
 const MAX_TEXT_LENGTH = 2_000_000
+/**
+ * Grace period before sweeping an unreferenced WAV inside `voice/recordings`, so an in-flight
+ * `record()` call that just created a file before its DB transaction commits is never raced.
+ */
+const ORPHAN_AUDIO_GRACE_MS = 60_000
 const voiceRecordLog = createLogger('VoiceRecords')
 const mutationListeners = new Set<(mutation: VoiceRecognitionRecordMutation) => void>()
+
+export type VoiceRecognitionStoredRow = typeof schema.voiceRecognitionRecords.$inferSelect
+
+export type VoiceRetainedAudioReadResult =
+  | { ok: true; buffer: Buffer; ext: string; canonicalPath: string }
+  | { ok: false; code: 'VOICE_RECORD_AUDIO_PATH_INVALID' | 'VOICE_RECORD_AUDIO_MISSING' }
+
+export interface VoiceRecognitionRetryUpdate {
+  status: VoiceRecognitionRecord['status']
+  recognitionLocation?: VoiceRecognitionLocation
+  recognitionDurationMs?: number
+  providerLatencyMs?: number | null
+  rawText?: string | null
+  text?: string | null
+  providerId?: string
+  model?: string
+  channel?: string
+  inputTokens?: number | null
+  outputTokens?: number | null
+  totalTokens?: number | null
+  errorCode: string | null
+}
+
+export interface VoiceRecognitionPurgeResult {
+  deletedRecords: number
+  deletedFiles: number
+}
 
 export function subscribeVoiceRecognitionRecordMutations(
   listener: (mutation: VoiceRecognitionRecordMutation) => void
@@ -139,6 +174,11 @@ function toRecord(row: typeof schema.voiceRecognitionRecords.$inferSelect): Voic
   }
 }
 
+function isWithinDirectory(root: string, target: string): boolean {
+  const relative = path.relative(root, target)
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+}
+
 /** Main-owned local recognition history. Audio URLs are controlled tfile resources, never paths. */
 export class VoiceRecognitionStore {
   initialize(): void {
@@ -153,6 +193,105 @@ export class VoiceRecognitionStore {
       retentionMs: null,
       automaticCleanup: false
     })
+  }
+
+  async getStoredRow(id: string): Promise<VoiceRecognitionStoredRow | null> {
+    if (typeof id !== 'string' || !id.trim()) return null
+    const db = resolveCurrentAuxDb()?.db
+    if (!db) return null
+    const [row] = await db
+      .select()
+      .from(schema.voiceRecognitionRecords)
+      .where(eq(schema.voiceRecognitionRecords.id, id))
+      .limit(1)
+    return row ?? null
+  }
+
+  async getRecord(id: string): Promise<VoiceRecognitionRecord | null> {
+    const row = await this.getStoredRow(id)
+    return row ? toRecord(row) : null
+  }
+
+  /**
+   * Resolves and reads a retained local audio file strictly inside the managed `voice/recordings`
+   * namespace. Rejects relative paths, path traversal (`..`), symlinks, non-regular files, and
+   * paths escaping the canonical namespace root before reading a byte.
+   */
+  async readRetainedAudio(audioPath: string): Promise<VoiceRetainedAudioReadResult> {
+    if (
+      typeof audioPath !== 'string' ||
+      !audioPath.trim() ||
+      audioPath.includes('\0') ||
+      !path.isAbsolute(audioPath)
+    ) {
+      return { ok: false, code: 'VOICE_RECORD_AUDIO_PATH_INVALID' }
+    }
+
+    const tempFileService = await loadTempFileService()
+    this.ensureNamespace(tempFileService)
+    const configuredRoot = path.resolve(tempFileService.resolveNamespaceDir(RECORDING_NAMESPACE))
+    const resolvedTarget = path.resolve(audioPath)
+    let canonicalRoot: string | null = null
+    try {
+      canonicalRoot = await fs.realpath(configuredRoot)
+    } catch {
+      canonicalRoot = null
+    }
+
+    const lexicallyContained =
+      isWithinDirectory(configuredRoot, resolvedTarget) ||
+      (canonicalRoot !== null && isWithinDirectory(canonicalRoot, resolvedTarget))
+    if (!lexicallyContained) {
+      return { ok: false, code: 'VOICE_RECORD_AUDIO_PATH_INVALID' }
+    }
+
+    if (!canonicalRoot) {
+      return { ok: false, code: 'VOICE_RECORD_AUDIO_MISSING' }
+    }
+
+    let directStat: Awaited<ReturnType<typeof fs.lstat>>
+    try {
+      directStat = await fs.lstat(resolvedTarget)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { ok: false, code: 'VOICE_RECORD_AUDIO_MISSING' }
+      }
+      return { ok: false, code: 'VOICE_RECORD_AUDIO_PATH_INVALID' }
+    }
+    if (!directStat.isFile() || directStat.isSymbolicLink()) {
+      return { ok: false, code: 'VOICE_RECORD_AUDIO_PATH_INVALID' }
+    }
+
+    let canonicalPath: string
+    try {
+      canonicalPath = await fs.realpath(resolvedTarget)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { ok: false, code: 'VOICE_RECORD_AUDIO_MISSING' }
+      }
+      return { ok: false, code: 'VOICE_RECORD_AUDIO_PATH_INVALID' }
+    }
+    if (!isWithinDirectory(canonicalRoot, canonicalPath)) {
+      return { ok: false, code: 'VOICE_RECORD_AUDIO_PATH_INVALID' }
+    }
+
+    if (directStat.size <= 0 || directStat.size > MAX_AUDIO_BYTES) {
+      return { ok: false, code: 'VOICE_RECORD_AUDIO_MISSING' }
+    }
+
+    try {
+      const buffer = await fs.readFile(canonicalPath)
+      if (buffer.byteLength <= 0 || buffer.byteLength > MAX_AUDIO_BYTES) {
+        return { ok: false, code: 'VOICE_RECORD_AUDIO_MISSING' }
+      }
+      const ext = path.extname(canonicalPath).replace(/^\./, '').toLowerCase() || 'wav'
+      return { ok: true, buffer, ext, canonicalPath }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { ok: false, code: 'VOICE_RECORD_AUDIO_MISSING' }
+      }
+      return { ok: false, code: 'VOICE_RECORD_AUDIO_PATH_INVALID' }
+    }
   }
 
   async record(input: VoiceRecognitionRecordInput): Promise<void> {
@@ -297,6 +436,290 @@ export class VoiceRecognitionStore {
     return rows.map(toRecord)
   }
 
+  /**
+   * Atomically updates an existing row after a per-row retry without touching `capturedAt`,
+   * `source`, or its retained `audioPath`. Returns `null` if the row was deleted concurrently.
+   */
+  async updateRetryResult(
+    id: string,
+    patch: VoiceRecognitionRetryUpdate
+  ): Promise<VoiceRecognitionRecord | null> {
+    if (typeof id !== 'string' || !id.trim()) return null
+    const values: Partial<typeof schema.voiceRecognitionRecords.$inferInsert> = {
+      status: patch.status,
+      errorCode: patch.errorCode ? patch.errorCode.slice(0, 128) : null,
+      ...(patch.recognitionLocation ? { recognitionLocation: patch.recognitionLocation } : {}),
+      ...(boundedNumber(patch.recognitionDurationMs) === undefined
+        ? {}
+        : { recognitionDurationMs: boundedNumber(patch.recognitionDurationMs) }),
+      ...(patch.providerLatencyMs === undefined
+        ? {}
+        : {
+            providerLatencyMs:
+              patch.providerLatencyMs === null
+                ? null
+                : (boundedNumber(patch.providerLatencyMs) ?? null)
+          }),
+      ...(patch.rawText === undefined
+        ? {}
+        : { rawText: patch.rawText === null ? null : (boundedText(patch.rawText) ?? null) }),
+      ...(patch.text === undefined
+        ? {}
+        : { text: patch.text === null ? null : (boundedText(patch.text) ?? null) }),
+      ...(patch.providerId ? { providerId: patch.providerId.slice(0, 128) } : {}),
+      ...(patch.model ? { model: patch.model.slice(0, 128) } : {}),
+      ...(patch.channel ? { channel: patch.channel.slice(0, 128) } : {}),
+      ...(patch.inputTokens === undefined
+        ? {}
+        : {
+            inputTokens:
+              patch.inputTokens === null ? null : (boundedNumber(patch.inputTokens) ?? null)
+          }),
+      ...(patch.outputTokens === undefined
+        ? {}
+        : {
+            outputTokens:
+              patch.outputTokens === null ? null : (boundedNumber(patch.outputTokens) ?? null)
+          }),
+      ...(patch.totalTokens === undefined
+        ? {}
+        : {
+            totalTokens:
+              patch.totalTokens === null ? null : (boundedNumber(patch.totalTokens) ?? null)
+          })
+    }
+
+    const updated = await scheduleAuxWrite('voice-records.retry-update', async (db) => {
+      return await db.transaction(async (tx) => {
+        const [existing] = await tx
+          .select({ id: schema.voiceRecognitionRecords.id })
+          .from(schema.voiceRecognitionRecords)
+          .where(eq(schema.voiceRecognitionRecords.id, id))
+          .limit(1)
+        if (!existing) return null
+        await tx
+          .update(schema.voiceRecognitionRecords)
+          .set(values)
+          .where(eq(schema.voiceRecognitionRecords.id, id))
+        const [stored] = await tx
+          .select()
+          .from(schema.voiceRecognitionRecords)
+          .where(eq(schema.voiceRecognitionRecords.id, id))
+          .limit(1)
+        return stored ? toRecord(stored) : null
+      })
+    })
+    if (updated) {
+      emitVoiceRecognitionRecordMutation({ type: 'upsert', record: updated })
+    }
+    return updated
+  }
+
+  /** Atomically persists a user's manual transcript edit on an existing history record. */
+  async updateTranscript(id: string, text: string): Promise<VoiceRecognitionRecord | null> {
+    if (typeof id !== 'string' || !id.trim()) return null
+    const nextText = boundedText(text)
+    if (!nextText) return null
+    const updated = await scheduleAuxWrite('voice-records.update-text', async (db) => {
+      return await db.transaction(async (tx) => {
+        const [existing] = await tx
+          .select({ id: schema.voiceRecognitionRecords.id })
+          .from(schema.voiceRecognitionRecords)
+          .where(eq(schema.voiceRecognitionRecords.id, id))
+          .limit(1)
+        if (!existing) return null
+        await tx
+          .update(schema.voiceRecognitionRecords)
+          .set({ text: nextText })
+          .where(eq(schema.voiceRecognitionRecords.id, id))
+        const [stored] = await tx
+          .select()
+          .from(schema.voiceRecognitionRecords)
+          .where(eq(schema.voiceRecognitionRecords.id, id))
+          .limit(1)
+        return stored ? toRecord(stored) : null
+      })
+    })
+    if (updated) {
+      emitVoiceRecognitionRecordMutation({ type: 'upsert', record: updated })
+    }
+    return updated
+  }
+
+  /** Permanently deletes one history record and unlinks its retained WAV audio file. */
+  async delete(id: string): Promise<boolean> {
+    if (typeof id !== 'string' || !id.trim()) return false
+    const tempFileService = await loadTempFileService()
+    this.ensureNamespace(tempFileService)
+    const outcome = await scheduleAuxWrite('voice-records.delete', async (db) => {
+      return await db.transaction(async (tx) => {
+        const [existing] = await tx
+          .select({
+            id: schema.voiceRecognitionRecords.id,
+            audioPath: schema.voiceRecognitionRecords.audioPath
+          })
+          .from(schema.voiceRecognitionRecords)
+          .where(eq(schema.voiceRecognitionRecords.id, id))
+          .limit(1)
+        if (!existing) return { deleted: false, audioPath: null as string | null }
+        await tx
+          .delete(schema.voiceRecognitionRecords)
+          .where(eq(schema.voiceRecognitionRecords.id, id))
+        return { deleted: true, audioPath: existing.audioPath }
+      })
+    })
+    if (!outcome.deleted) return false
+    emitVoiceRecognitionRecordMutation({ type: 'delete', id })
+    if (outcome.audioPath) {
+      try {
+        await tempFileService.deleteFileFromNamespaces(outcome.audioPath, [RECORDING_NAMESPACE])
+      } catch (error) {
+        voiceRecordLog.warn('Deleted recognition record audio cleanup failed', {
+          meta: { code: 'VOICE_RECORD_AUDIO_DELETE_FAILED' },
+          error
+        })
+      }
+    }
+    return true
+  }
+
+  /**
+   * Purges expired history rows (`capturedAt < nowMs - retentionMs`), unlinks their WAV files,
+   * and sweeps any unreferenced orphan files left in `voice/recordings`.
+   */
+  async purgeExpired(
+    retentionMs: number | null,
+    nowMs = Date.now()
+  ): Promise<VoiceRecognitionPurgeResult> {
+    if (
+      retentionMs === null ||
+      !Number.isFinite(retentionMs) ||
+      retentionMs <= 0 ||
+      !Number.isFinite(nowMs)
+    ) {
+      return { deletedRecords: 0, deletedFiles: 0 }
+    }
+    const db = resolveCurrentAuxDb()?.db
+    if (!db) return { deletedRecords: 0, deletedFiles: 0 }
+
+    const tempFileService = await loadTempFileService()
+    this.ensureNamespace(tempFileService)
+    const cutoffMs = Math.floor(nowMs - retentionMs)
+
+    const outcome = await scheduleAuxWrite(
+      'voice-records.purge-expired',
+      async (writeDb) => {
+        return await writeDb.transaction(async (tx) => {
+          const expired = await tx
+            .select({
+              id: schema.voiceRecognitionRecords.id,
+              audioPath: schema.voiceRecognitionRecords.audioPath
+            })
+            .from(schema.voiceRecognitionRecords)
+            .where(lt(schema.voiceRecognitionRecords.capturedAt, cutoffMs))
+          if (expired.length > 0) {
+            await tx
+              .delete(schema.voiceRecognitionRecords)
+              .where(lt(schema.voiceRecognitionRecords.capturedAt, cutoffMs))
+          }
+          const surviving = await tx
+            .select({ audioPath: schema.voiceRecognitionRecords.audioPath })
+            .from(schema.voiceRecognitionRecords)
+          return {
+            expiredIds: expired.map((row) => row.id),
+            expiredPaths: expired.flatMap((row) => (row.audioPath ? [row.audioPath] : [])),
+            survivingPaths: surviving.flatMap((row) => (row.audioPath ? [row.audioPath] : []))
+          }
+        })
+      },
+      { priority: 'background' }
+    )
+
+    if (outcome.expiredIds.length > 0) {
+      emitVoiceRecognitionRecordMutation({ type: 'prune', ids: outcome.expiredIds })
+    }
+
+    let deletedFiles = 0
+    for (const filePath of outcome.expiredPaths) {
+      try {
+        const deleted = await tempFileService.deleteFileFromNamespaces(filePath, [
+          RECORDING_NAMESPACE
+        ])
+        if (deleted) deletedFiles += 1
+      } catch (error) {
+        voiceRecordLog.warn('Expired recognition audio cleanup failed', {
+          meta: { code: 'VOICE_RECORD_EXPIRED_AUDIO_CLEANUP_FAILED' },
+          error
+        })
+      }
+    }
+
+    deletedFiles += await this.sweepOrphanedAudioFiles(
+      tempFileService,
+      outcome.survivingPaths,
+      nowMs - ORPHAN_AUDIO_GRACE_MS
+    )
+
+    return {
+      deletedRecords: outcome.expiredIds.length,
+      deletedFiles
+    }
+  }
+
+  private async sweepOrphanedAudioFiles(
+    tempFileService: TempFileService,
+    survivingPaths: readonly string[],
+    orphanCutoffMs: number
+  ): Promise<number> {
+    if (typeof tempFileService.resolveNamespaceDir !== 'function') return 0
+    const namespaceDir = tempFileService.resolveNamespaceDir(RECORDING_NAMESPACE)
+    let canonicalRoot: string
+    try {
+      canonicalRoot = await fs.realpath(namespaceDir)
+    } catch {
+      return 0
+    }
+
+    const referenced = new Set<string>()
+    for (const rawPath of survivingPaths) {
+      referenced.add(path.resolve(rawPath))
+      try {
+        referenced.add(await fs.realpath(rawPath))
+      } catch {
+        // Ignore dangling references when building the keep-set.
+      }
+    }
+
+    let entries: Array<import('node:fs').Dirent>
+    try {
+      entries = await fs.readdir(canonicalRoot, { withFileTypes: true })
+    } catch {
+      return 0
+    }
+
+    let deletedFiles = 0
+    for (const entry of entries) {
+      if (entry.isSymbolicLink() || !entry.isFile()) continue
+      if (entry.name.startsWith('.') && entry.name.endsWith('.recovery')) continue
+      const candidatePath = path.join(canonicalRoot, entry.name)
+      try {
+        const canonicalFile = await fs.realpath(candidatePath)
+        if (!isWithinDirectory(canonicalRoot, canonicalFile)) continue
+        if (referenced.has(candidatePath) || referenced.has(canonicalFile)) continue
+        const stat = await fs.lstat(canonicalFile)
+        if (!stat.isFile() || stat.isSymbolicLink()) continue
+        if (Number.isFinite(stat.mtimeMs) && stat.mtimeMs >= orphanCutoffMs) continue
+        const deleted = await tempFileService.deleteFileFromNamespaces(canonicalFile, [
+          RECORDING_NAMESPACE
+        ])
+        if (deleted) deletedFiles += 1
+      } catch {
+        // Best-effort orphan cleanup.
+      }
+    }
+    return deletedFiles
+  }
+
   async clear(): Promise<void> {
     const db = resolveCurrentAuxDb()?.db
     if (!db) return
@@ -309,9 +732,11 @@ export class VoiceRecognitionStore {
       await writeDb.delete(schema.voiceRecognitionRecords)
     })
     emitVoiceRecognitionRecordMutation({ type: 'clear' })
-    for (const path of paths.flatMap((row) => (row.audioPath ? [row.audioPath] : []))) {
-      await tempFileService.deleteFileFromNamespaces(path, [RECORDING_NAMESPACE])
+    for (const filePath of paths.flatMap((row) => (row.audioPath ? [row.audioPath] : []))) {
+      await tempFileService.deleteFileFromNamespaces(filePath, [RECORDING_NAMESPACE])
     }
+    // Sweep any unreferenced orphan WAVs left behind by earlier crashes or failed writes.
+    await this.sweepOrphanedAudioFiles(tempFileService, [], Date.now() + 1)
   }
 }
 

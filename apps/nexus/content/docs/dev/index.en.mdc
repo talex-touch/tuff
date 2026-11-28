@@ -38,17 +38,17 @@
 ## Developer Tools
 - **[TUFF CLI](./tools/tuff-cli.en.mdc)** — command-line tool for creating and managing plugin projects.
 - **[TuffEx](./tools/tuffex.en.mdc)** — Vue3 component library with unified design language.
-- **[Tuffex Components](./components/index.en.mdc)** — component catalog, demos, and API (Ta Fu).
+- **[Tuffex Components](/tuffex/en)** — component catalog, demos, and API (Ta Fu).
 
 
 ## Design System & Concepts
-- **[Design System & Concepts Overview](./concepts/index.en.mdc)** — In-depth breakdown across TDS tokens, geometry, surfaces, dark palette, typography, micro-motion, and AI streaming.
-- **[Tuff Design System (TDS) & Live Token Inspector](./concepts/tds.en.mdc)** — Single-source `tokens.json`, live WCAG 2.1 refraction contrast checker, 3-layer Theme Packs, and Core 36 primitives.
-- **[G2 Continuous Curvature & Squircle Geometry](./concepts/curvature.en.mdc)** — Beyond circular fillets, curvature continuity, and superellipses.
-- **[Surface 8-Material Taxonomy](./concepts/surface-taxonomy.en.mdc)** — Refraction (default) and the 8-surface material matrix.
-- **[#141414 Canvas & 3-Tier Elevation](./concepts/dark-palette.en.mdc)** — Preventing OLED smearing and the 3-tier dark scale.
-- **[Micro-Motion Philosophy & Sub-100ms Hover](./concepts/micro-motion.en.mdc)** — Productivity micro-motion and instant 0ms hover feedback.
-- **[Stream Pacer & Reserve Layout](./concepts/stream-pacer.en.mdc)** — useStreamPacer cadence and anti-jitter reserve geometry.
+- **[Design System & Concepts Overview](/tuffex/en/concepts)** — In-depth breakdown across TDS tokens, geometry, surfaces, dark palette, typography, micro-motion, and AI streaming.
+- **[Tuff Design System (TDS) & Live Token Inspector](/tuffex/en/concepts/tds)** — Single-source `tokens.json`, live WCAG 2.1 refraction contrast checker, 3-layer Theme Packs, and Core 36 primitives.
+- **[G2 Continuous Curvature & Squircle Geometry](/tuffex/en/concepts/curvature)** — Beyond circular fillets, curvature continuity, and superellipses.
+- **[Surface 8-Material Taxonomy](/tuffex/en/concepts/surface-taxonomy)** — Refraction (default) and the 8-surface material matrix.
+- **[#141414 Canvas & 3-Tier Elevation](/tuffex/en/concepts/dark-palette)** — Preventing OLED smearing and the 3-tier dark scale.
+- **[Micro-Motion Philosophy & Sub-100ms Hover](/tuffex/en/concepts/micro-motion)** — Productivity micro-motion and instant 0ms hover feedback.
+- **[Stream Pacer & Reserve Layout](/tuffex/en/concepts/stream-pacer)** — useStreamPacer cadence and anti-jitter reserve geometry.
 ## Publishing
 - **[Plugin workflow](./getting-started/plugin-workflow.en.mdc)**
 

@@ -1,0 +1,189 @@
+---
+title: "ToolChips"
+description: "A compact flow of the tool calls in one agent run."
+category: AiAgent
+status: beta
+since: 0.3.9
+tags: [ai, tool, diff, disclosure]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Run Flow
+`rows` grows as data arrives; `diffs` summarizes the files the run changed.
+:::TuffDemoWrapper{demo="ToolChipsRunFlowDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const rows = [
+    {
+      id: 'think',
+      label: 'Thinking',
+      chip: 'Planning the churn schedule…',
+      icon: 'think',
+      detail: [{ text: 'Weekend demand carries pistachio, so it churns first.' }],
+    },
+    {
+      id: 'write',
+      label: 'Write 204 lines',
+      chip: 'ChurnSchedule.tsx',
+      icon: 'write',
+      mono: true,
+      detailMono: true,
+      detail: [{ text: '+ const windows = slots.filter(Boolean)', tone: 'add' }],
+    },
+  ]
+
+  const diffs = [
+    { file: 'flavors.css', add: 13, del: 0 },
+    { file: 'ChurnSchedule.tsx', add: 74, del: 41 },
+  ]
+  </script>
+
+  <template>
+    <TxToolChips :rows="rows" :diffs="diffs" :more-count="2" />
+  </template>
+---
+:::
+
+### Standalone Diff Chips
+`TxDiffChips` is exported on its own and needs no surrounding tool-call flow.
+
+```vue
+<script setup lang="ts">
+import { TxDiffChips } from '@talex-touch/tuffex/tool-chips'
+
+const diffs = [
+  { file: 'flavors.css', add: 13, del: 0 },
+  { file: 'menu.ts', add: 8, del: 2 },
+]
+</script>
+
+<template>
+  <TxDiffChips :diffs="diffs" :more-count="2" @select="openFile" />
+</template>
+```
+
+### Best Practices
+
+- Put what was done in `label` (`Write 204 lines`) and what it was done to in `chip` (a file, a command); collapsed, those two are all a reader scans.
+- Set `mono` on paths and commands, never on prose.
+- Keep details to two or three lines; move long logs to `TxToolCallCard`.
+- List only the first few diffs and hand the rest to `moreCount`.
+- On streaming surfaces, hold `expandedRows` in the host so a remount keeps the reader's choice.
+
+## API Reference
+
+### TxToolChips
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `rows` | `ToolChipRow[]` | — | Row data. Required. |
+| `diffs` | `ToolChipDiff[]` | `[]` | Diff data; when empty, the diff section and its divider don't render. |
+| `summary` | `string` | — | Header text; falls back to `summaryFormatter`. |
+| `summaryFormatter` | `(rowCount: number) => string` | `` n => `${n} tool call${n === 1 ? '' : 's'}` `` | Default header text, pluralized by count. |
+| `open` | `boolean` | — | Open state of the whole run, for `v-model:open`; omit to let the component own it. |
+| `defaultOpen` | `boolean` | `true` | Initial open state when uncontrolled. |
+| `expandedRows` | `string[]` | — | Ids of the expanded rows, for `v-model:expandedRows`. |
+| `defaultExpandedRows` | `string[]` | `[]` | Rows expanded on first render when uncontrolled. |
+| `moreCount` | `number` | `0` | Diffs not listed in `diffs`. |
+| `moreLabelFormatter` | `(count: number) => string` | `` n => `+${n} more` `` | Text of the overflow control. |
+
+#### Events
+
+| Event | Arguments | Description |
+|------|------|-------------|
+| `update:open` | `(open: boolean)` | Fires when the whole run opens or closes. |
+| `update:expandedRows` | `(ids: string[])` | Fires when the expanded rows change. |
+| `toggle` | `(id: string, expanded: boolean)` | Fires when a row toggles, with its new state. |
+| `rowClick` | `(row: ToolChipRow)` | Fires when a row is pressed, alongside `toggle`. |
+| `diffClick` | `(diff: ToolChipDiff)` | Fires when a diff chip is pressed. |
+| `more` | `()` | Fires when the diff overflow control is pressed. |
+
+#### Slots
+
+| Slot | Scope | Description |
+|------|------|-------------|
+| `row-icon` | `{ row }` | Replaces the row glyph; required for any non-built-in `icon`. |
+| `chip` | `{ row }` | Replaces the trailing chip's contents. |
+| `detail` | `{ row }` | Replaces the expanded detail. |
+| `diffs` | `{ diffs }` | Replaces the diff section's contents, keeping the divider. |
+
+#### Exposed Methods
+
+| Method | Description |
+|------|-------------|
+| `expand(id)` / `collapse(id)` | Expands or collapses one row; a no-op if it is already in that state. |
+| `expandAll()` / `collapseAll()` | Expands or collapses every row. |
+
+### TxDiffChips
+
+#### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `diffs` | `ToolChipDiff[]` | — | The diff list. Required. |
+| `moreCount` | `number` | `0` | Diffs not listed; above zero, renders `+N more`. |
+| `moreLabelFormatter` | `(count: number) => string` | `` n => `+${n} more` `` | Text of the overflow control. |
+| `staggerStep` | `number` | `80` | Entrance stagger between chips, in ms. |
+
+#### Events
+
+| Event | Arguments | Description |
+|------|------|-------------|
+| `select` | `(diff: ToolChipDiff)` | Fires when a diff chip is pressed. |
+| `more` | `()` | Fires when the overflow control is pressed. |
+
+#### Slots
+
+| Slot | Scope | Description |
+|------|------|-------------|
+| `chip` | `{ diff }` | Replaces one chip's contents. |
+
+### Types
+
+#### ToolChipRow
+
+| Field | Type | Description |
+|------|------|-------------|
+| `id` | `string` | Stable row key; expansion is tracked by it. |
+| `label` | `string` | What was done. |
+| `chip` | `string` | Trailing chip: an argument, path, or command; fills the remaining width and truncates. |
+| `icon` | `'think' \| 'write' \| 'run' \| 'read' \| string` | The four built-in glyphs; any other value needs the `row-icon` slot. |
+| `mono` | `boolean` | Sets the chip in the monospace face. |
+| `detailMono` | `boolean` | Sets the detail lines in the monospace face. |
+| `detail` | `{ text, tone? }[]` | Expanded detail; `tone` is `add` (success) or `del` (danger). |
+
+#### ToolChipDiff
+
+| Field | Type | Description |
+|------|------|-------------|
+| `file` | `string` | File name. |
+| `add` | `number` | Added lines, shown as `+N`. |
+| `del` | `number` | Removed lines, shown as `−N` with a U+2212 minus; hidden when zero. |
+
+## Overview
+
+- Expansion is keyed by `row.id`, so two rows with the same label stay independent.
+- `open` and `expandedRows` follow the prop when one is passed and are self-held otherwise; events fire either way.
+- On hover the tool glyph fades out and the chevron in; expanded rows, and touch devices (`hover: none`), always show the chevron.
+- Every number uses `tabular-nums`, so widths hold steady while a run streams.
+- The component never plays itself: the host appends to `rows` as data arrives, and each row brings its own entrance.
+- `TxToolChips` renders `TxDiffChips` inside, passing `diffs`, `moreCount`, and `moreLabelFormatter` through and forwarding `select` and `more` as `diffClick` and `more`.
+
+## Technologies
+
+- Override the chip's text color with `--tx-bui-tool-chips-chip-color`.
+- Adapted from [Beautiful UI](https://www.beautifului.dev) (© 2026 Shane Levine, MIT).
+- Source: `packages/tuffex/packages/components/src/tool-chips/`.
+
+<TuffDocSourceLink />
+
+## Related components
+
+- [ToolCallCard](/en/tool-call-card): the full card for a single call, with status, logs, and retry.
+- [Chain of Thought](/en/chain-of-thought): a thinking chain with Markdown bodies.

@@ -1,0 +1,124 @@
+---
+title: Settings 设置中心
+description: 分区导航、分组设置行、改动即时保存的设置中心
+category: TemplateApp
+status: beta
+since: 0.6.0
+tags: [template, settings, form, preferences]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+### 分区设置页
+:::TuffDemoWrapper{demo="TemplateSettingsDemo" code-lang="vue" description="改任何一项，页头依次显示「保存中…」与「已保存」。"}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive, ref, watch } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // TxTabs 只渲染当前面板、切走就卸载，所以所有值放在同一个对象里
+  const settings = reactive({ theme: 'system', opacity: 92, density: 'cozy', maxResults: 8 })
+  const page = ref('general')
+  const saveState = ref<'idle' | 'saving' | 'saved'>('idle')
+
+  let timer: ReturnType<typeof setTimeout> | undefined
+  watch(settings, () => {
+    saveState.value = 'saving'
+    clearTimeout(timer)
+    timer = setTimeout(() => (saveState.value = 'saved'), 600)
+  }, { deep: true })
+  </script>
+
+  <template>
+    <TemplateFrame title="Settings" @enter="play">
+      <template #default="{ width }">
+        <div class="settings">
+          <!-- navMinWidth 是内联样式，窄屏只能靠 prop 把导航挪到顶部 -->
+          <TxTabs
+            v-model="page"
+            :placement="width > 0 && width < 640 ? 'top' : 'left'"
+            :nav-min-width="184"
+            :content-padding="0"
+            borderless
+            indicator-variant="block"
+          >
+            <TxTabHeader>
+              <h3>{{ titles[page] }}</h3>
+              <TxStatusHint :text="saveText[saveState]" :tone="saveState === 'saved' ? 'success' : saveState === 'saving' ? 'info' : 'muted'" size="sm" />
+              <TxButton size="sm" variant="ghost" icon="i-carbon-reset" @click="ask('reset')">
+                重置
+              </TxButton>
+            </TxTabHeader>
+
+            <TxTabItemGroup name="通用">
+              <TxTabItem name="general" icon-class="i-carbon-settings">
+                <template #name>
+                  通用
+                </template>
+                <TxGroupBlock name="外观" default-icon="i-carbon-color-palette" :collapsible="false">
+                  <TxBlockSlot title="主题" description="浅色、深色或跟随系统">
+                    <TxFlatRadio v-model="settings.theme" size="sm">
+                      <TxFlatRadioItem value="light" label="浅色" icon="i-carbon-sun" />
+                      <TxFlatRadioItem value="dark" label="深色" icon="i-carbon-moon" />
+                      <TxFlatRadioItem value="system" label="跟随系统" icon="i-carbon-screen" />
+                    </TxFlatRadio>
+                  </TxBlockSlot>
+                  <TxBlockSlot title="窗口透明度" description="CoreBox 背后透出多少桌面">
+                    <TxSlider v-model="settings.opacity" :min="60" :max="100" show-value />
+                  </TxBlockSlot>
+                </TxGroupBlock>
+              </TxTabItem>
+              <!-- CoreBox、快捷键 -->
+            </TxTabItemGroup>
+            <!-- 智能：AI 模型、隐私；账户 -->
+          </TxTabs>
+
+          <aside v-if="width >= 960" class="settings__preview">
+            <!-- 迷你 CoreBox：主题、透明度、密度、条数都读自 settings -->
+          </aside>
+
+          <TxModal v-model="confirmOpen" :title="confirm.title">
+            {{ confirm.body }}
+          </TxModal>
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## 概述
+
+Tuff 的设置中心：改动即时保存，页头只显示保存状态，没有「保存」按钮。
+
+- 改动后页头显示「保存中…」，600ms 内无新改动即变为「已保存 · 刚刚」。
+- 呼出快捷键可录制：组合须含 ⌘、⌃ 或 ⌥，Esc 或点别处取消。
+- 快捷键页可筛选、逐个启停；AI 页的 API Key 默认遮盖（示例值）。
+- 重置、清空剪贴板历史、退出其他设备都先确认。
+- 进入视口后自动演示一次，读者一操作即停止；减少动态效果时直接显示最终状态，并关闭分区切换动画。
+- 宽屏（≥ 960px）右侧出现实时预览；窄屏（< 640px）导航移到顶部，控件换到标签下方。
+
+## 自定义
+
+- 接真实存储时，把 `watch(settings)` 里的计时器换成防抖写入；失败时把状态改为「未保存」并给出重试。
+- 新分区的 TxTabItem 用稳定的英文 `name`，标签放进 `#name` 插槽，切换语言时当前分区才不会丢。
+- TxTabs 会卸载切走的面板：值不要存在行组件里，头像的 object URL 也要自己持有一份。
+- TxGroupBlock 统一 `collapsible=false`（gsap 驱动的展开没有减弱动态效果兜底），也不设会写 localStorage 的 `memoryName`。
+- 敏感字段放在分组正文，不放进 56px 设置行；TxFlatSelect 就地展开、不 teleport，要避开滚动容器的裁切。
+
+## 相关组件
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 导航 | [TxTabs / TxTabItemGroup / TxTabItem](/zh/tabs) | 分组的分区导航 |
+| 页头 | [TxTabs](/zh/tabs) 的 TxTabHeader、[TxStatusHint](/zh/status-hint)、[TxButton](/zh/button) | 分区标题、保存状态与重置 |
+| 设置行 | [TxGroupBlock / TxBlockSlot / TxBlockLine](/zh/group-block) | 固定展开的分组与设置行 |
+| 通用与 CoreBox | [TuffSwitch](/zh/switch)、[TxFlatSelect](/zh/flat-select)、[TxFlatRadio](/zh/flat-radio)、[TxSlider](/zh/slider)、[TxSelect](/zh/select)、[TxSegmentedSlider](/zh/segmented-slider)、[TxNumberInput](/zh/number-input)、[TxInput](/zh/input)、[TxKbd](/zh/kbd) | 外观、快捷键与结果设置 |
+| 快捷键 | [TxSearchInput](/zh/search-input)、[TxKbd](/zh/kbd)、[TuffSwitch](/zh/switch)、[TxSearchEmpty](/zh/search-empty) | 可筛选、可启停的快捷键 |
+| AI 与隐私 | [TxAlert](/zh/alert)、[TxSensitiveInput](/zh/sensitive-input)、[TxCheckbox](/zh/checkbox)、[TxRadioGroup / TxRadio](/zh/radio) | 服务商、密钥与隐私选项 |
+| 账户 | [TxAvatar](/zh/avatar)、[TxImageUploader](/zh/image-uploader) | 头像、名称、邮箱与套餐 |
+| 确认框 | [TxModal](/zh/modal)、[TxCheckbox](/zh/checkbox) | 危险操作前的确认 |
+| 实时预览（宽屏） | [TxIconChip](/zh/icon-chip)、手写迷你 CoreBox | 迷你 CoreBox 预览 |

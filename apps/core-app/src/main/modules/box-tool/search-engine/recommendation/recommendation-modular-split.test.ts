@@ -1,6 +1,6 @@
 import type { TuffItem } from '@talex-touch/utils'
 import type { ContextSignal } from './context-provider'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const intelligenceSdkMock = vi.hoisted(() => ({
   embeddingGenerate: vi.fn(),
@@ -72,6 +72,10 @@ vi.mock('../../../clipboard', () => ({
 
 import { registerFileRecommendationBridge } from '../../addon/files/file-recommendation-bridge'
 import {
+  registerBoxToolAiCapabilityPort,
+  resetBoxToolAiCapabilityPort
+} from '../../ports/ai-capability-port'
+import {
   isBrowserApp,
   isDeveloperTool,
   isEntertainmentOrSocialApp,
@@ -119,7 +123,44 @@ const baseContext: ContextSignal = {
 describe('recommendation modular refactor & dual-layer bridge', () => {
   let disposeBridge: (() => void) | null = null
 
+  beforeEach(() => {
+    registerBoxToolAiCapabilityPort({
+      intelligence: {
+        code: { review: vi.fn() },
+        text: { summarize: vi.fn(), rewrite: vi.fn(), translate: vi.fn() },
+        vision: { ocr: vi.fn(), caption: vi.fn() },
+        embedding: {
+          generate: (...args: unknown[]) => intelligenceSdkMock.embeddingGenerate(...args),
+          generateLocalImage: vi.fn()
+        },
+        rag: {
+          rerank: (...args: unknown[]) => intelligenceSdkMock.ragRerank(...args)
+        }
+      },
+      normalizeIntelligenceError: (error, options) => ({
+        code: 'UNKNOWN',
+        message: String(error),
+        reason: String(error),
+        recovery: '',
+        capabilityId: options?.capabilityId
+      }),
+      resolveCapabilityStatus: (capabilityId) => ({
+        capabilityId,
+        available: false,
+        providerIds: []
+      }),
+      searchConversations: async () => [],
+      isLocalEmbeddingReady: () => false,
+      isLocalEmbeddingImageReady: () => false,
+      getLocalEmbeddingModelKey: () => 'test-local-embedding-model',
+      runWithEmbeddingPriority: (_priority, run) => run(),
+      onUsageLimitsChanged: () => () => {},
+      readUsageLimitInfo: () => null
+    })
+  })
+
   afterEach(() => {
+    resetBoxToolAiCapabilityPort()
     disposeBridge?.()
     disposeBridge = null
     clipboardLatest.current = null

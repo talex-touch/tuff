@@ -23,6 +23,7 @@ import {
   PROVIDER_ICON_CLASSES,
   PROVIDER_ID_ICON_CLASSES
 } from './src/renderer/src/modules/intelligence/provider-icons'
+import { MARKDOWN_EDITOR_ICON_CLASSES } from '../../packages/tuffex/packages/components/src/markdown-editor/src/toolbar-icons'
 
 /**
  * Icon classes that only ever appear inside plain `.ts` modules.
@@ -93,6 +94,12 @@ const AGENT_ICONS_MODULE = fileURLToPath(
 const BROWSER_TAB_PRESENTATION_MODULE = fileURLToPath(
   new URL('./src/renderer/src/modules/browser-workspace/tab-presentation.ts', import.meta.url)
 )
+const MARKDOWN_EDITOR_ICONS_MODULE = fileURLToPath(
+  new URL(
+    '../../packages/tuffex/packages/components/src/markdown-editor/src/toolbar-icons.ts',
+    import.meta.url
+  )
+)
 
 export default defineConfig({
   // The dev server watches only the config file itself. Without this, a new icon in the table
@@ -107,7 +114,8 @@ export default defineConfig({
     FLOW_TARGET_ICONS_MODULE,
     OMNI_PANEL_BUILTIN_ICONS_MODULE,
     AGENT_ICONS_MODULE,
-    BROWSER_TAB_PRESENTATION_MODULE
+    BROWSER_TAB_PRESENTATION_MODULE,
+    MARKDOWN_EDITOR_ICONS_MODULE
   ],
   safelist: [
     ...COREBOX_ACTION_ICONS,
@@ -151,7 +159,9 @@ export default defineConfig({
     ...AGENT_ICON_CLASSES,
     // Browser workspace shortcuts, recent cards, and tab favicons
     // (`renderer/src/modules/browser-workspace/tab-presentation.ts`).
-    ...BROWSER_TAB_ICON_CLASSES
+    ...BROWSER_TAB_ICON_CLASSES,
+    // TxMarkdownEditor slash-menu, callout, and prompt icons (Carbon).
+    ...MARKDOWN_EDITOR_ICON_CLASSES
   ],
   theme: {
     colors: {

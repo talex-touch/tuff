@@ -17,6 +17,7 @@ import { isStartupBenchmarkMode } from './core/acceptance-mode'
 import { configureAboutPanel, installApplicationMenu } from './core/application-menu'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 import { prepareDatabaseRuntime } from './core/native-runtime-threads'
+import { registerAllAxiomaticPorts } from './core/ports'
 import { innerRootPath, isDuplicateInstance } from './core/precore'
 import { setQuitIntent } from './core/quit-intent'
 import { loadStartupModules, resolveStartupModuleName } from './core/startup-module-loader'
@@ -312,6 +313,8 @@ app.whenReady().then(async () => {
   mainLog.info('Electron ready, bootstrapping modules')
 
   try {
+    // Wire all Axiomatic Design DIP ports before startup config reads, protocol init, or module loads.
+    registerAllAxiomaticPorts()
     const analytics = getStartupAnalytics()
     const startupAppConfig = await readStartupAppConfig({
       databasePath: path.join(innerRootPath, 'modules', 'database', 'database.db'),

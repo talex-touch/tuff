@@ -1,5 +1,8 @@
 import { shell } from 'electron'
 import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import { StorageList } from '@talex-touch/utils'
+import { resolveVoiceHistoryRetentionMs } from '@talex-touch/utils/common/storage/entity/app-settings'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import type { getTuffTransportMain, HandlerContext } from '@talex-touch/utils/transport/main'
 import type { StreamContext } from '@talex-touch/utils/transport/types'
 import type {
@@ -11,6 +14,10 @@ import type {
 import { voiceApiEvents } from '@talex-touch/utils/transport/sdk/domains/voice'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
+import {
+  getStartupDegradeWindowRemainingMs,
+  isInStartupDegradeWindow
+} from '../../db/runtime-flags'
 import { createLogger } from '../../utils/logger'
 import {
   getSpeechModelProgress,
@@ -37,7 +44,7 @@ import {
   subscribeVoiceRecognitionRecordMutations,
   voiceRecognitionStore
 } from './voice-recognition-store'
-import { assistantModule } from '../assistant/module'
+import { getVoiceSurfacePort } from './voice-ports'
 import { CommandVoiceGestureController, registerPlatformVoiceGesture } from './command-gesture'
 import { registerVoiceInputSignInDefault } from './voice-input-sign-in'
 
@@ -56,6 +63,16 @@ const MICROPHONE_SETTINGS_URL: Partial<Record<NodeJS.Platform, string>> = {
   win32: 'ms-settings:privacy-microphone'
 }
 const VOICE_PERMISSION = 'voice.dictation'
+const VOICE_HISTORY_RETENTION_TASK_ID = 'voice-records.retention-cleanup'
+const VOICE_HISTORY_RETENTION_INTERVAL_MS = 6 * 60 * 60 * 1000
+const VOICE_HISTORY_RETENTION_TIMEOUT_MS = 60_000
+const VOICE_RECORD_PUBLIC_ERROR_CODES = new Set([
+  'VOICE_RECOGNITION_RECORDS_HOST_ONLY',
+  'VOICE_RECORD_ID_INVALID',
+  'VOICE_RECORD_NOT_FOUND',
+  'VOICE_RECORD_AUDIO_MISSING',
+  'VOICE_RECORD_AUDIO_PATH_INVALID'
+])
 
 /**
  * The usage limit set in Audit refuses the recognition and speech these channels run. That refusal
@@ -65,6 +82,35 @@ const VOICE_PERMISSION = 'voice.dictation'
  */
 function projectVoiceUsageLimit(error: unknown, context: HandlerContext) {
   return projectUsageLimitFailure(error, { host: !context?.plugin })
+}
+
+function projectVoiceRecordError(error: unknown, context: HandlerContext) {
+  const usageLimit = projectVoiceUsageLimit(error, context)
+  if (usageLimit) return usageLimit
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
+      ? error.code
+      : error instanceof Error && VOICE_RECORD_PUBLIC_ERROR_CODES.has(error.message)
+        ? error.message
+        : undefined
+  if (!code || !VOICE_RECORD_PUBLIC_ERROR_CODES.has(code)) return undefined
+  const retryable =
+    typeof error === 'object' && error !== null && 'retryable' in error
+      ? Boolean(error.retryable)
+      : false
+  return { error: code, code, retryable }
+}
+
+async function resolveConfiguredHistoryRetentionMs(): Promise<number | null> {
+  try {
+    const storage = await import('../storage')
+    const setting = storage.getMainConfig(StorageList.APP_SETTING) as
+      | { voiceInput?: { historyRetention?: unknown } }
+      | undefined
+    return resolveVoiceHistoryRetentionMs(setting?.voiceInput?.historyRetention)
+  } catch {
+    return resolveVoiceHistoryRetentionMs(undefined)
+  }
 }
 
 /**
@@ -82,18 +128,22 @@ export class VoiceModule extends BaseModule<TalexEvents> {
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private cleanups: Array<() => void> = []
   private commandGestureController: CommandVoiceGestureController | null = null
+  private retentionStartupTimer: ReturnType<typeof setTimeout> | null = null
+  private destroyed = false
 
   constructor() {
     super(VoiceModule.key)
   }
 
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    this.destroyed = false
     const runtime = resolveMainRuntime(ctx, 'VoiceModule.onInit')
     this.transport = runtime.transport
 
     voiceLog.info('Initializing Voice module')
     voiceRecognitionStore.initialize()
     void voiceKeptRecordings.initialize()
+    this.scheduleHistoryRetentionCleanup()
     const mainWindow = runtime.window?.window
     this.cleanups.push(
       subscribeVoiceRecognitionRecordMutations((mutation) => {
@@ -110,12 +160,59 @@ export class VoiceModule extends BaseModule<TalexEvents> {
     this.cleanups.push(registerVoiceInputSignInDefault())
     globalDictationController.register()
     this.commandGestureController = new CommandVoiceGestureController(
-      (payload) => assistantModule.handleVoiceCommandGesture(payload),
-      () => assistantModule.isVoiceCommandActive(),
+      (payload) => getVoiceSurfacePort().handleVoiceCommandGesture(payload),
+      () => getVoiceSurfacePort().isVoiceCommandActive(),
       registerPlatformVoiceGesture
     )
     this.commandGestureController.register()
     voiceLog.success('Voice module initialized')
+  }
+
+  private scheduleHistoryRetentionCleanup(): void {
+    if (typeof voiceRecognitionStore.purgeExpired !== 'function') return
+    const runCleanup = async (): Promise<void> => {
+      if (this.destroyed || isInStartupDegradeWindow()) return
+      try {
+        const retentionMs = await resolveConfiguredHistoryRetentionMs()
+        if (retentionMs === null) return
+        const result = await voiceRecognitionStore.purgeExpired(retentionMs)
+        if (result.deletedRecords > 0 || result.deletedFiles > 0) {
+          voiceLog.info('Voice recognition retention cleanup completed', {
+            meta: {
+              deletedRecords: result.deletedRecords,
+              deletedFiles: result.deletedFiles
+            }
+          })
+        }
+      } catch (error) {
+        voiceLog.warn('Voice recognition retention cleanup failed', { error })
+      }
+    }
+
+    const delayMs = isInStartupDegradeWindow()
+      ? Math.max(1_000, getStartupDegradeWindowRemainingMs() + 1_000)
+      : 5_000
+    this.retentionStartupTimer = setTimeout(() => {
+      this.retentionStartupTimer = null
+      void runCleanup()
+    }, delayMs)
+    this.retentionStartupTimer.unref?.()
+
+    try {
+      const polling = PollingService.getInstance()
+      if (!polling.isRegistered(VOICE_HISTORY_RETENTION_TASK_ID)) {
+        polling.register(VOICE_HISTORY_RETENTION_TASK_ID, runCleanup, {
+          lane: 'maintenance',
+          backpressure: 'latest_wins',
+          dedupeKey: VOICE_HISTORY_RETENTION_TASK_ID,
+          interval: VOICE_HISTORY_RETENTION_INTERVAL_MS,
+          unit: 'milliseconds',
+          timeoutMs: VOICE_HISTORY_RETENTION_TIMEOUT_MS
+        })
+      }
+    } catch (error) {
+      voiceLog.warn('Voice retention polling registration failed', { error })
+    }
   }
 
   /**
@@ -136,6 +233,16 @@ export class VoiceModule extends BaseModule<TalexEvents> {
   }
 
   async onDestroy(): Promise<void> {
+    this.destroyed = true
+    if (this.retentionStartupTimer) {
+      clearTimeout(this.retentionStartupTimer)
+      this.retentionStartupTimer = null
+    }
+    try {
+      PollingService.getInstance().unregister(VOICE_HISTORY_RETENTION_TASK_ID)
+    } catch {
+      // Polling may not have been registered in isolated unit tests.
+    }
     this.commandGestureController?.unregister()
     this.commandGestureController = null
     voiceService.dispose()
@@ -359,6 +466,78 @@ export class VoiceModule extends BaseModule<TalexEvents> {
           },
           {
             onError: (error) => voiceLog.error('Voice recognition records clear failed:', { error })
+          }
+        )
+      )
+    )
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.retryRecognitionRecord,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          async (payload, context) => {
+            if (context?.plugin) throw new Error('VOICE_RECOGNITION_RECORDS_HOST_ONLY')
+            const recordId = typeof payload?.recordId === 'string' ? payload.recordId.trim() : ''
+            if (!recordId) {
+              throw Object.assign(new Error('VOICE_RECORD_ID_INVALID'), {
+                code: 'VOICE_RECORD_ID_INVALID',
+                retryable: false
+              })
+            }
+            return await voiceService.retryRecord({ ...payload, recordId })
+          },
+          {
+            onError: (error) => voiceLog.error('Voice recognition record retry failed:', { error }),
+            projectError: (error, _payload, context) => projectVoiceRecordError(error, context)
+          }
+        )
+      )
+    )
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.deleteRecognitionRecord,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          async (payload, context) => {
+            if (context?.plugin) throw new Error('VOICE_RECOGNITION_RECORDS_HOST_ONLY')
+            const recordId = typeof payload?.recordId === 'string' ? payload.recordId.trim() : ''
+            if (!recordId) {
+              throw Object.assign(new Error('VOICE_RECORD_ID_INVALID'), {
+                code: 'VOICE_RECORD_ID_INVALID',
+                retryable: false
+              })
+            }
+            const deleted = await voiceRecognitionStore.delete(recordId)
+            return { deleted }
+          },
+          {
+            onError: (error) =>
+              voiceLog.error('Voice recognition record delete failed:', { error }),
+            projectError: (error, _payload, context) => projectVoiceRecordError(error, context)
+          }
+        )
+      )
+    )
+    this.cleanups.push(
+      transport.on(
+        voiceApiEvents.updateRecognitionRecordText,
+        withPermissionSafeApi(
+          { permissionId: VOICE_PERMISSION },
+          async (payload, context) => {
+            if (context?.plugin) throw new Error('VOICE_RECOGNITION_RECORDS_HOST_ONLY')
+            const recordId = typeof payload?.recordId === 'string' ? payload.recordId.trim() : ''
+            if (!recordId) {
+              throw Object.assign(new Error('VOICE_RECORD_ID_INVALID'), {
+                code: 'VOICE_RECORD_ID_INVALID',
+                retryable: false
+              })
+            }
+            return await voiceRecognitionStore.updateTranscript(recordId, payload.text)
+          },
+          {
+            onError: (error) =>
+              voiceLog.error('Voice recognition record update failed:', { error }),
+            projectError: (error, _payload, context) => projectVoiceRecordError(error, context)
           }
         )
       )

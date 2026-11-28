@@ -11,6 +11,13 @@ const LazyToastContainer = defineAsyncComponent(() => import('~/components/Toast
 useHead({
   title: appName,
   titleTemplate: title => (!title || title === appName) ? appName : (title.includes(appName) || title.includes('Tuff') ? title : `${title} · Tuff`),
+  script: [
+    {
+      key: 'tuffex-speculation-rules',
+      type: 'speculationrules',
+      innerHTML: '{"prerender":[{"where":{"href_matches":"/tuffex/*"},"eagerness":"moderate"}]}',
+    },
+  ],
 })
 
 const { t, te, locale } = useI18n()

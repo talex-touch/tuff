@@ -1422,7 +1422,19 @@ describe('SentryServiceModule ends an outbox round on an endpoint-wide failure (
     }
   }
 
-  async function createService(items: ReturnType<typeof outboxItem>[]) {
+  async function createService(
+    items: Array<{
+      id: number
+      endpoint: string
+      payload: {
+        metadata: { kind: string; idempotencyKey?: string }
+        events: Array<Record<string, unknown>>
+      }
+      createdAt: number
+      retryCount: number
+      lastError: string | null
+    }>
+  ) {
     const { SentryServiceModule } = await import('./sentry-service')
     const store = {
       list: vi.fn(async () => items),
@@ -1470,4 +1482,62 @@ describe('SentryServiceModule ends an outbox round on an endpoint-wide failure (
     expect(store.markAttempt).toHaveBeenCalledWith(1, 'HTTP_400')
     expect(store.remove).toHaveBeenCalledTimes(2)
   })
+
+  it('derives a stable deterministic X-Idempotency-Key when a legacy outbox batch has none', async () => {
+    const legacyItem = {
+      id: 42,
+      endpoint: 'https://nexus.local/api/telemetry/batch',
+      payload: {
+        metadata: { kind: 'sentry.nexus.batch' },
+        events: [{ eventType: 'search', searchDurationMs: 15 }]
+      },
+      createdAt: 42,
+      retryCount: 0,
+      lastError: null
+    }
+    const { service, store } = await createService([legacyItem])
+    networkRequestMock.mockResolvedValueOnce({ status: 503, data: '' })
+    await service.flushQueuedNexusTelemetryOutbox()
+
+    const firstKey = (networkRequestMock.mock.calls[0]?.[0] as { headers: Record<string, string> })
+      .headers['X-Idempotency-Key']
+    expect(firstKey).toMatch(/^sentry:outbox:42:[a-f0-9]{24}$/)
+    expect(store.remove).not.toHaveBeenCalled()
+
+    // Clearing cooldown and retrying the exact same legacy item emits the exact same key.
+    ;(service as unknown as { telemetryCooldownUntil: number | null }).telemetryCooldownUntil = null
+    networkRequestMock.mockResolvedValueOnce({
+      status: 200,
+      data: JSON.stringify({
+        success: true,
+        accepted: 1,
+        rejected: 0,
+        duplicate: false,
+        dropped: 0,
+        processed: 1
+      })
+    })
+    await service.flushQueuedNexusTelemetryOutbox()
+
+    const secondKey = (networkRequestMock.mock.calls[1]?.[0] as { headers: Record<string, string> })
+      .headers['X-Idempotency-Key']
+    expect(secondKey).toBe(firstKey)
+    expect(store.remove).toHaveBeenCalledWith(42)
+  })
+
+  it.each([
+    ['explicit failure JSON', JSON.stringify({ success: false, processed: 0 })],
+    ['non-JSON proxy HTML', '<html><body>502 Bad Gateway</body></html>']
+  ])(
+    'retains the outbox batch when a 200 response carries %s instead of a valid ACK',
+    async (_label, body) => {
+      const { service, store } = await createService([outboxItem(1)])
+      networkRequestMock.mockResolvedValue({ status: 200, data: body })
+
+      await service.flushQueuedNexusTelemetryOutbox()
+
+      expect(store.remove).not.toHaveBeenCalled()
+      expect(store.markAttempt).toHaveBeenCalledWith(1, 'TELEMETRY_ACK_INVALID')
+    }
+  )
 })

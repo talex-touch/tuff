@@ -1,6 +1,6 @@
 import type { AiToolCallPart } from '../../ai-elements/src/types'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import TxToolCallCard from '../src/TxToolCallCard.vue'
 
 enableAutoUnmount(afterEach)
@@ -70,24 +70,83 @@ describe('txToolCallCard', () => {
     expect(wrapper.find('.tx-tool-call-card__header').attributes('aria-expanded')).toBe('false')
     expect(wrapper.find('.tx-tool-call-card__collapse').classes()).not.toContain('is-open')
   })
-  it('automatically expands while in flight, collapses when done, and stays open on error', async () => {
+  it('keeps ultra-short in-flight calls compact without flashing open or showing peek', async () => {
+    vi.useFakeTimers()
+    try {
+      const wrapper = mount(TxToolCallCard, {
+        props: { toolCall: toolCall({ status: 'pending' }) },
+      })
+      // Still within the default 500ms quiet window: stays collapsed.
+      expect(wrapper.find('.tx-tool-call-card__collapse').classes()).not.toContain('is-open')
+
+      await vi.advanceTimersByTimeAsync(100)
+      await wrapper.setProps({ toolCall: toolCall({ status: 'running', logs: 'fast stdout' }) })
+      expect(wrapper.find('.tx-tool-call-card__collapse').classes()).not.toContain('is-open')
+      expect(wrapper.find('.tx-tool-call-card__peek').exists()).toBe(false)
+
+      // Settles at 220ms (< 500ms): never expands or bounces.
+      await vi.advanceTimersByTimeAsync(120)
+      await wrapper.setProps({
+        toolCall: toolCall({ status: 'done', output: 'ok', durationMs: 120 }),
+      })
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(wrapper.find('.tx-tool-call-card__collapse').classes()).not.toContain('is-open')
+      expect(wrapper.find('.tx-tool-call-card__peek').exists()).toBe(false)
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('auto-expands long-running calls after autoExpandDelayMs, holds briefly before folding, and opens immediately on error', async () => {
+    vi.useFakeTimers()
+    try {
+      const wrapper = mount(TxToolCallCard, {
+        props: { toolCall: toolCall({ status: 'pending' }) },
+      })
+      expect(wrapper.find('.tx-tool-call-card__collapse').classes()).not.toContain('is-open')
+
+      // pending -> running continues the same quiet window without resetting it.
+      await vi.advanceTimersByTimeAsync(200)
+      await wrapper.setProps({ toolCall: toolCall({ status: 'running', logs: 'working...' }) })
+      expect(wrapper.find('.tx-tool-call-card__collapse').classes()).not.toContain('is-open')
+
+      // Reaching 500ms total in-flight auto-expands cleanly.
+      await vi.advanceTimersByTimeAsync(300)
+      expect(wrapper.find('.tx-tool-call-card__collapse').classes()).toContain('is-open')
+
+      // Finishing right after opening (50ms later) holds briefly so the open transition finishes cleanly.
+      await vi.advanceTimersByTimeAsync(50)
+      await wrapper.setProps({ toolCall: toolCall({ status: 'done', output: 'result', durationMs: 550 }) })
+      expect(wrapper.find('.tx-tool-call-card__collapse').classes()).toContain('is-open')
+
+      await vi.advanceTimersByTimeAsync(360)
+      expect(wrapper.find('.tx-tool-call-card__collapse').classes()).not.toContain('is-open')
+      expect(wrapper.find('.tx-tool-call-card__peek').exists()).toBe(false)
+
+      // Errors always open immediately with zero delay.
+      await wrapper.setProps({ toolCall: toolCall({ status: 'error', error: 'failed' }) })
+      expect(wrapper.find('.tx-tool-call-card__collapse').classes()).toContain('is-open')
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('supports autoExpandDelayMs=0 for immediate open/close and shows peek only when user collapses a running call', async () => {
     const wrapper = mount(TxToolCallCard, {
-      props: { toolCall: toolCall({ status: 'pending' }) },
+      props: { toolCall: toolCall({ status: 'running', logs: 'line 1\nline 2\nline 3' }), autoExpandDelayMs: 0 },
     })
-    // A call about to run opens at once, so its arguments show as they stream in.
     expect(wrapper.find('.tx-tool-call-card__collapse').classes()).toContain('is-open')
 
-    // Transitions to running -> automatically expands
-    await wrapper.setProps({ toolCall: toolCall({ status: 'running', logs: 'working...' }) })
-    expect(wrapper.find('.tx-tool-call-card__collapse').classes()).toContain('is-open')
-
-    // Transitions to done -> automatically collapses and omits peek
-    await wrapper.setProps({ toolCall: toolCall({ status: 'done', output: 'result' }) })
+    // User manually collapses while running -> peek shows last two lines.
+    await wrapper.find('.tx-tool-call-card__header').trigger('click')
     expect(wrapper.find('.tx-tool-call-card__collapse').classes()).not.toContain('is-open')
+    expect(wrapper.find('.tx-tool-call-card__peek').text()).toBe('line 2\nline 3')
+
+    // Settles to done -> peek disappears.
+    await wrapper.setProps({ toolCall: toolCall({ status: 'done', output: 'done' }) })
     expect(wrapper.find('.tx-tool-call-card__peek').exists()).toBe(false)
-    // Transitions to error -> automatically stays expanded
-    await wrapper.setProps({ toolCall: toolCall({ status: 'error', error: 'failed' }) })
-    expect(wrapper.find('.tx-tool-call-card__collapse').classes()).toContain('is-open')
   })
 
   it('allows user manual click to override autoOpen state', async () => {

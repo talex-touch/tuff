@@ -1,0 +1,102 @@
+---
+title: Notes 协作笔记
+description: 带笔记本目录、所见即所得编辑与多人协作的笔记应用
+category: TemplateContent
+status: beta
+since: 0.9.1
+tags: [template, notes, markdown, editor, collaboration]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+### 协作笔记
+:::TuffDemoWrapper{demo="TemplateNotesDemo" code-lang="vue" description="进入视口后林夕加入并逐字写下一条待办，周屿随后评论；点任意处即可接手编辑。"}
+---
+code: |
+  <script setup lang="ts">
+  import type { MarkdownEditorCollaboration, MarkdownEditorCollaborationHandlers } from '@talex-touch/tuffex/markdown-editor'
+  import { ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  const body = ref(NOTE) // Markdown 源码，即编辑器的 v-model
+  const comments = ref(THREADS) // 锚定在正文上的评论串，随每次修改同步
+
+  // 整个会话只用一个适配器：换成新对象会重启会话。
+  // 不提供 sendPresence，编辑器就不会启动在场计时器。
+  let handlers: MarkdownEditorCollaborationHandlers | null = null
+  const collaboration: MarkdownEditorCollaboration = {
+    send: () => markEdited('me'),
+    subscribe(next) {
+      handlers = next
+      next.onPeers?.(peers())
+      return () => (handlers = null)
+    },
+  }
+
+  // 脚本里的同事和服务器走同一条路径输入
+  function peerType(at: number, text: string) {
+    handlers?.onChanges([{ from: at, to: at, insert: text }])
+    lin.selection = { anchor: at + text.length, head: at + text.length }
+    handlers?.onPeers?.(peers())
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Notes" :height="600" @enter="play">
+      <aside class="notes__nav">
+        <TxSearchInput v-model="query" placeholder="搜索笔记" />
+        <TxTree :nodes="tree" :model-value="activeId" :filter-text="query" @select="open" />
+      </aside>
+
+      <section class="notes__main">
+        <TxBreadcrumb :items="crumbs" />
+        <TxAvatarGroup :size="24">
+          <TxAvatar v-for="person in present" :key="person.id" :name="person.name" />
+        </TxAvatarGroup>
+        <TxMarkdownEditor
+          :key="activeId" v-model="body" v-model:comments="comments"
+          :user="me" :collaboration="collaboration" :ai="ai" :min-height="0"
+        />
+      </section>
+
+      <!-- 由容器查询在 960px 起显示 -->
+      <aside class="notes__panel">
+        <TxDescriptions :columns="1" size="sm">
+          <TxDescriptionsItem label="字数">{{ words }}</TxDescriptionsItem>
+        </TxDescriptions>
+      </aside>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## 概述
+
+仿 Notion / Bear 的团队笔记空间：左侧是笔记本，中间用 TxMarkdownEditor 的所见即所得模式打开一篇笔记，顶栏显示谁在场。人物、笔记与数字均为示例数据，选区工具条里的 AI 改写在本地模拟，不调用模型。
+
+- 首次进入视口时播放一次：约 0.7 秒后林夕加入，移到一条待办的末尾，逐字写下 `- [ ] 周五前把「阅后即焚」合进 beta`；随后周屿选中「周五前」并发表评论，舞台内的提示卡显示约 4 秒。整段约 6 秒。
+- 两位同事都经由编辑器真实的 `collaboration` 适配器进入：光标与名牌走 `onPeers`，输入走 `onChanges`，撤销历史、评论锚点与状态栏计数都像对待服务器推送一样跟随他们的修改。评论用 `v-model:comments` 绑定。
+- 模板内的第一次指针、按键或聚焦即接手：林夕立刻写完手上这一行，之后不再安排任何动作。减少动态效果时直接显示结束状态，不启动计时器。
+- 脚本不会聚焦或滚动任何元素：远端修改只更新编辑器的 DOM，读者的选区保持原位。
+- 点目录里的笔记即可打开，搜索同时匹配标题与正文；「新建笔记」在当前笔记本里新增一篇空白笔记，并把光标放进去。
+- 宽屏（≥ 960px）增加笔记属性（创建者、笔记本、更新于、字数、评论、标签）与最近动态；640–959px 保留目录与编辑区；640px 以下目录从菜单按钮滑出。
+
+## 自定义
+
+- 接真实后端时，`send` 转发每一次本地修改，`subscribe` 推送已经变基到编辑器当前文档上的远端修改；变基可用 `@talex-touch/tuffex/markdown-editor` 导出的 `transformMarkdownChanges` 与 `mapMarkdownPosition`。适配器对象要保持不变：换成新对象会重启会话。
+- 编辑器按笔记设置 `key`，每篇笔记各有自己的文档、撤销历史与订阅，重新挂载时会再次通报在场的人。
+- 协作者的名牌在光标移动后显示 2.5 秒，而编辑器只是随修改映射过去的光标不算移动；脚本在林夕开始输入前先移动她的光标，所以整行输入期间名牌一直可见。
+- 周屿的评论表现为高亮、评论按钮上的计数和提示卡，侧栏保持关闭；编辑器的 `openComments(id)` 可以直接打开到某个评论线程。
+- 「字数」一行取自 `@talex-touch/tuffex/markdown-editor` 导出的 `markdownStats(body).words`，与状态栏同一计数。
+
+## 相关组件
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 笔记本目录 | [TxTree](/zh/tree)、[TxSearchInput](/zh/search-input)、[TxButton](/zh/button) | 三个笔记本、筛选与新建笔记 |
+| 顶栏 | [TxBreadcrumb](/zh/breadcrumb)、[TxAvatarGroup](/zh/avatar)、[TxAvatar](/zh/avatar)、[TxButton](/zh/button)、[TxIconButton](/zh/button) | 笔记位置、在场的人与分享 |
+| 编辑区 | [TxMarkdownEditor](/zh/markdown-editor) | 所见即所得、工具栏、斜杠菜单、选区工具条、评论与状态栏，接入协作适配器 |
+| 属性栏（宽屏） | [TxDescriptions](/zh/descriptions)、[TxTag](/zh/tag)、[TxAvatar](/zh/avatar) | 创建者、更新时间、字数、评论、标签与动态 |
+| 提示 | [TxToastPanel](/zh/toast-panel) | 周屿的评论与分享链接 |

@@ -2,8 +2,12 @@ import type { IExecuteArgs, TuffItem } from '@talex-touch/utils'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TuffInputType } from '@talex-touch/utils'
+import {
+  registerBoxToolPluginHostPort,
+  resetBoxToolPluginHostPort
+} from '../../ports/plugin-host-port'
 
 const mocks = vi.hoisted(() => ({
   addAppByPath: vi.fn(async () => ({ success: true, status: 'added' })),
@@ -25,18 +29,6 @@ vi.mock('@talex-touch/utils/common/logger', () => ({
 
 vi.mock('@talex-touch/utils/transport/main', () => ({
   getTuffTransportMain: vi.fn(() => null)
-}))
-
-vi.mock('../../../plugin/dev-plugin-installer', () => ({
-  installDevPluginFromPath: mocks.installDevPluginFromPath
-}))
-
-vi.mock('../../../plugin/plugin-module', () => ({
-  pluginModule: {
-    pluginManager: {
-      installFromSource: mocks.installFromSource
-    }
-  }
 }))
 
 vi.mock('../../../screenshot-session', () => ({
@@ -88,7 +80,35 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>)
 }
 
 describe('SystemActionsProvider app index actions', () => {
+  beforeEach(() => {
+    registerBoxToolPluginHostPort({
+      hasPluginManager: () => true,
+      setActivePlugin: vi.fn(),
+      getPluginProviderDetail: vi.fn(() => null),
+      installDevPluginFromPath: mocks.installDevPluginFromPath,
+      canInstallTpexPlugin: () => true,
+      installTpexPluginFromPath: (sourcePath) =>
+        mocks.installFromSource({ source: sourcePath, hintType: 'tpex' }),
+      handleActiveFeatureInput: vi.fn(async () => false),
+      searchPluginFeatures: vi.fn(),
+      getDefaultSearchProviders: () => ({}),
+      usePluginInjections: vi.fn(() => null),
+      resolvePluginViewSecurityProfile: vi.fn(() => ({
+        candidateProfile: 'trusted-plugin-view' as const,
+        effectiveProfile: 'trusted-plugin-view' as const,
+        reason: 'trusted-candidate' as const
+      })),
+      buildPluginViewWebPreferences: vi.fn(() => ({})),
+      createPluginViewNavigationPolicy: vi.fn(async () => ({})),
+      installPluginViewNavigationPolicy: vi.fn(),
+      registerPluginWebContents: vi.fn(() => 'token'),
+      unregisterPluginWebContents: vi.fn(() => true),
+      closePluginWebContents: vi.fn()
+    })
+  })
+
   afterEach(() => {
+    resetBoxToolPluginHostPort()
     vi.clearAllMocks()
     vi.restoreAllMocks()
   })

@@ -15,6 +15,10 @@ class GuestContents extends EventEmitter {
   destroyed = false
   focusCalls = 0
   reloadCalls = 0
+  backCalls = 0
+  forwardCalls = 0
+  canGoBackFlag = false
+  canGoForwardFlag = false
   url = ''
   title = ''
   loads: LoadRequest[] = []
@@ -23,10 +27,14 @@ class GuestContents extends EventEmitter {
   }
 
   navigationHistory = {
-    canGoBack: () => false,
-    canGoForward: () => false,
-    goBack: () => {},
-    goForward: () => {}
+    canGoBack: () => this.canGoBackFlag,
+    canGoForward: () => this.canGoForwardFlag,
+    goBack: () => {
+      this.backCalls += 1
+    },
+    goForward: () => {
+      this.forwardCalls += 1
+    }
   }
 
   isDestroyed() {
@@ -1087,5 +1095,72 @@ describe('guest keyboard shortcuts (before-input-event)', () => {
     expect(owner.ownerFocusCalls).toBe(3)
     expect(focusAddress).toHaveBeenCalledTimes(2)
     expect(tab(manager, manager.getState().activeTabId).url).toBe('')
+  })
+
+  it('handles Alt+ArrowLeft/Right and macOS Cmd+[/] history navigation inside guest views', async () => {
+    const { manager, guests } = createWorkspace(undefined, {
+      tabs: [{ id: 'web', url: 'https://one.example/', title: 'One' }],
+      activeTabId: 'web',
+      recent: [],
+      bookmarks: []
+    })
+    manager.setViewport(visibleViewport)
+    const guest = guests[0]!
+    guest.webContents.canGoBackFlag = true
+    guest.webContents.canGoForwardFlag = true
+
+    const altBack = { preventDefault: vi.fn() }
+    guest.webContents.emit('before-input-event', altBack, {
+      type: 'keyDown',
+      key: 'ArrowLeft',
+      code: 'ArrowLeft',
+      isAutoRepeat: false,
+      meta: false,
+      control: false,
+      alt: true,
+      shift: false
+    })
+    expect(altBack.preventDefault).toHaveBeenCalledTimes(1)
+    expect(guest.webContents.backCalls).toBe(1)
+
+    const altForward = { preventDefault: vi.fn() }
+    guest.webContents.emit('before-input-event', altForward, {
+      type: 'keyDown',
+      key: 'ArrowRight',
+      code: 'ArrowRight',
+      isAutoRepeat: false,
+      meta: false,
+      control: false,
+      alt: true,
+      shift: false
+    })
+    expect(altForward.preventDefault).toHaveBeenCalledTimes(1)
+    expect(guest.webContents.forwardCalls).toBe(1)
+
+    const cmdBack = { preventDefault: vi.fn() }
+    guest.webContents.emit('before-input-event', cmdBack, {
+      type: 'keyDown',
+      key: '[',
+      code: 'BracketLeft',
+      isAutoRepeat: false,
+      ...commandModifier
+    })
+    const cmdForward = { preventDefault: vi.fn() }
+    guest.webContents.emit('before-input-event', cmdForward, {
+      type: 'keyDown',
+      key: ']',
+      code: 'BracketRight',
+      isAutoRepeat: false,
+      ...commandModifier
+    })
+    if (process.platform === 'darwin') {
+      expect(cmdBack.preventDefault).toHaveBeenCalledTimes(1)
+      expect(cmdForward.preventDefault).toHaveBeenCalledTimes(1)
+      expect(guest.webContents.backCalls).toBe(2)
+      expect(guest.webContents.forwardCalls).toBe(2)
+    } else {
+      expect(cmdBack.preventDefault).not.toHaveBeenCalled()
+      expect(cmdForward.preventDefault).not.toHaveBeenCalled()
+    }
   })
 })

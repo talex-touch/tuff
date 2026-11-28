@@ -3,8 +3,10 @@ import en from '../../i18n/locales/en'
 import zh from '../../i18n/locales/zh'
 import dashboardEn from '../../i18n/locales/route/en/dashboard'
 import landingEn from '../../i18n/locales/route/en/landing'
+import storeEn from '../../i18n/locales/route/en/store'
 import dashboardZh from '../../i18n/locales/route/zh/dashboard'
 import landingZh from '../../i18n/locales/route/zh/landing'
+import storeZh from '../../i18n/locales/route/zh/store'
 import { historicalFixtures, loadHistoricalFixture } from './helpers/fixtures'
 import { stripCommentsAndStrings } from './helpers/js-text'
 import { maskInertRegions } from './helpers/sfc'
@@ -282,10 +284,12 @@ function buildLocale(base: LocaleMessages, chunks: Record<string, LocaleMessages
 const english = buildLocale(en as LocaleMessages, {
   dashboard: dashboardEn as LocaleMessages,
   landing: landingEn as LocaleMessages,
+  store: storeEn as LocaleMessages,
 })
 const chinese = buildLocale(zh as LocaleMessages, {
   dashboard: dashboardZh as LocaleMessages,
   landing: landingZh as LocaleMessages,
+  store: storeZh as LocaleMessages,
 })
 const scanOptions: I18nScanOptions = { english, chinese }
 

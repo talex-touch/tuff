@@ -152,4 +152,25 @@ describe('txEdgeFadeMask', () => {
     wrapper.unmount()
     expect(disconnect).toHaveBeenCalledTimes(2)
   })
+
+  it('applies both edge fades immediately when always is true without native scroll overflow', async () => {
+    const wrapper = mount(TxEdgeFadeMask, {
+      props: {
+        axis: 'vertical',
+        size: 48,
+        always: true,
+        observeResize: false,
+      },
+      slots: {
+        default: '<div>Drum viewport</div>',
+      },
+    })
+
+    const viewport = wrapper.find<HTMLElement>('.tx-edge-fade-mask__viewport')
+    expect(wrapper.classes()).toContain('tx-edge-fade-mask--always')
+    expect(viewport.attributes('style')).toContain('linear-gradient(to bottom, transparent 0, black 48px, black calc(100% - 48px), transparent 100%)')
+
+    await wrapper.setProps({ disabled: true })
+    expect(viewport.attributes('style') ?? '').toBe('')
+  })
 })

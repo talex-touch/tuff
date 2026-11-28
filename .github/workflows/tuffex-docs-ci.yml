@@ -1,0 +1,153 @@
+name: TuffEx Docs CI
+
+on:
+  pull_request:
+    paths:
+      - 'apps/tuffex-docs/**'
+      - 'packages/tuffex/**'
+      - 'packages/tuffex-core/**'
+      - 'packages/tuffex-react/**'
+      - 'packages/tuffex-wc/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/tuffex-docs-ci.yml'
+  push:
+    branches:
+      - master
+      - main
+      - stage
+    paths:
+      - 'apps/tuffex-docs/**'
+      - 'packages/tuffex/**'
+      - 'packages/tuffex-core/**'
+      - 'packages/tuffex-react/**'
+      - 'packages/tuffex-wc/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/tuffex-docs-ci.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_cloudflare:
+        description: 'Deploy staged .dist-cf assets to Cloudflare Workers Assets'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tuffex-docs-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tuffex_docs_ci:
+    name: TuffEx Docs (checks + SSG)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build TuffEx workspace packages
+        run: |
+          pnpm -C packages/tuffex-core run build
+          pnpm -C apps/tuffex-docs run build:packages
+
+      - name: Verify zh/en doc parity
+        run: node apps/tuffex-docs/scripts/checks/check-doc-parity.mjs
+
+      - name: Verify demo registry and self-test
+        run: |
+          node apps/tuffex-docs/scripts/checks/check-demo-registry.mjs
+          node apps/tuffex-docs/scripts/checks/check-demo-registry.mjs --self-test
+
+      - name: Verify MDC fences
+        run: node apps/tuffex-docs/scripts/checks/check-mdc-fences.mjs
+
+      - name: Run unit tests
+        run: pnpm -C apps/tuffex-docs exec vitest run
+
+      - name: Typecheck app and server
+        run: |
+          pnpm -C apps/tuffex-docs run prepare
+          pnpm -C apps/tuffex-docs exec vue-tsc --noEmit -p .nuxt/tsconfig.app.json
+          pnpm -C apps/tuffex-docs exec tsc --noEmit -p .nuxt/tsconfig.server.json
+
+      - name: Generate and stage Cloudflare static assets
+        run: pnpm -C apps/tuffex-docs run generate
+
+      - name: Verify staged Cloudflare asset contract
+        run: |
+          test -f apps/tuffex-docs/.dist-cf/_headers
+          test -f apps/tuffex-docs/.dist-cf/tuffex/404.html
+          test -f apps/tuffex-docs/.dist-cf/tuffex/llms.txt
+          test -f apps/tuffex-docs/.dist-cf/tuffex/search-index.en.json
+          test -f apps/tuffex-docs/.dist-cf/tuffex/search-index.zh.json
+          test -f apps/tuffex-docs/.dist-cf/tuffex/sitemap.xml
+          if find apps/tuffex-docs/.dist-cf \( -name '_payload.json' -o -name '*.wasm' \) | grep -q .; then
+            echo "Unexpected _payload.json or .wasm artifact in apps/tuffex-docs/.dist-cf"
+            exit 1
+          fi
+
+      - name: Upload staged Cloudflare assets
+        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true) }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: tuffex-docs-dist-cf
+          path: apps/tuffex-docs/.dist-cf
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 3
+
+  deploy_cloudflare:
+    name: Deploy TuffEx Docs (Cloudflare Workers Assets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: tuffex_docs_ci
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true) }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Download staged Cloudflare assets
+        uses: actions/download-artifact@v7
+        with:
+          name: tuffex-docs-dist-cf
+          path: apps/tuffex-docs/.dist-cf
+
+      - name: Deploy with Wrangler when Cloudflare credentials are configured
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ] || [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "Skipping Cloudflare Workers Assets deploy: CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN not configured."
+            exit 0
+          fi
+          pnpm install --frozen-lockfile --filter @talex-touch/tuffex-docs
+          pnpm -C apps/tuffex-docs exec wrangler deploy

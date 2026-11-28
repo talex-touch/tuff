@@ -13,6 +13,9 @@ export interface WindowsCapabilityCommandResult {
   stdoutLineCount?: number
   stderr?: string
   error?: string
+  attempt?: string
+  reasonCode?: string
+  recovery?: string
 }
 
 export interface WindowsStartAppRecord {

@@ -1,0 +1,108 @@
+---
+title: Files 文件管理
+description: 带文件夹树、多选、右键菜单与拖入上传的文件管理器
+category: TemplateContent
+status: beta
+since: 0.6.0
+tags: [template, files, tree, upload, context-menu]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+### 工作区文件
+:::TuffDemoWrapper{demo="TemplateFilesDemo" code-lang="vue" description="单击选择、双击打开、空格预览、右键打开菜单，可从桌面拖入文件。图中为示例数据，文件不会离开浏览器。"}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive, ref } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // 插件存储按宿主的真实规则校验：单文件 10 MB、总量 100 MB、1,000 个文件、扁平
+  const PLUGIN_FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
+
+  // 整个模板只有一个 manual 菜单：文件格和空白处都从这里打开
+  const menuRef = ref()
+  const menu = reactive({ ids: [] as string[], anchorId: null as string | null })
+  function onContextMenu(event: MouseEvent) {
+    event.preventDefault()
+    prepareMenu(event.target) // 填好 menu.ids 与 menu.anchorId
+    menuRef.value.openAt(event)
+  }
+
+  // TxContextMenu 关闭后不还焦点，由模板交回打开它的文件格
+  function onMenuClose() {
+    tileOf(menu.anchorId)?.focus({ preventScroll: true })
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="工作区文件" :height="580" @enter="syncFromMacBook">
+      <TxBreadcrumb :items="crumbs" separator-icon="i-carbon-chevron-right" @click="onCrumb" />
+
+      <TxTree :nodes="folders" :model-value="folder" :expanded-keys="expanded" @update:model-value="open">
+        <template #item="{ node, expanded, hasChildren, toggleExpand }">
+          <!-- 整行点击是「选择」；展开按钮要 .stop，否则会同时选中这一行 -->
+          <button v-if="hasChildren" type="button" tabindex="-1" @click.stop="toggleExpand()">…</button>
+          <span :class="expanded ? 'i-carbon-folder-open' : 'i-carbon-folder'" />
+          {{ node.label }}
+        </template>
+      </TxTree>
+
+      <div role="listbox" aria-multiselectable="true" @keydown="onGridKeydown" @contextmenu="onContextMenu">
+        <div v-for="file in files" :key="file.id" role="option" :aria-selected="selected.has(file.id)">…</div>
+      </div>
+
+      <!-- 拖入桌面文件时铺在文件区上。它只交出 File：进度、缩略图和回收 URL 都归宿主 -->
+      <div v-show="draggingFiles" class="drop-layer">
+        <TxFileUploader ref="uploader" :model-value="[]" multiple @add="queueUploads" />
+      </div>
+
+      <TxContextMenu ref="menuRef" trigger="manual" @close="onMenuClose">
+        <template #menu>
+          <TxContextMenuItem shortcut="F2" @select="rename">重命名</TxContextMenuItem>
+          <TxContextMenuDivider />
+          <TxContextMenuItem danger shortcut="⌫" @select="remove">删除</TxContextMenuItem>
+        </template>
+      </TxContextMenu>
+
+      <!-- 进度每秒变好几次：托盘本身不播报，另用一个读屏状态只报开始和结束 -->
+      <TxToastPanel :open="trayOpen" live="off">…</TxToastPanel>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## 概述
+
+Tuff 工作区的文件：在设备间同步，另有按宿主真实限额管理的「插件存储」分区。
+
+- 选择：单击选中，⌘ / Ctrl 加选，Shift 连选，方向键按行列移动，Esc 清空；按键挂在文件区上。
+- 打开：双击或回车打开；空格快速预览，← / → 切换；F2 重命名；⌫ / Delete 删除，可撤销。
+- 右键、Shift + F10 或菜单键打开同一个菜单，键盘打开时锚在当前文件格；把文件格拖到树上的文件夹即可移动。
+- 从桌面拖入文件即上传，托盘逐个显示进度；插件文件夹拒绝超出限额（单文件 10 MB、总量 100 MB、1,000 个）或文件名不合规的文件。
+- 首次进入视口时从 MacBook 同步两张截图；减少动态效果时截图一开始就在。
+- 展开后（≥ 960px）树与格子变大，≥ 1200px 出现预览栏；窄于 640px 时隐藏树，子文件夹以格子出现。
+
+## 自定义
+
+- 接真实存储时，用上传请求的进度事件替换模拟进度；TxFileUploader 只接收 `File`，校验放在宿主里，并与真实限额共用同一份常量。
+- 文件很多时，网格换成按行分组的虚拟列表，列表视图用 TxDataTable 的受控排序配合服务端分页。
+- 跨文件夹搜索的结果作为一个临时虚拟文件夹显示，每项带上所在路径。
+- 缩略图来自服务端时，固定格子高度、图片设 `draggable="false"`；object URL 在删除、重置与卸载时统一回收。
+
+## 相关组件
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 路径与工具栏 | [TxBreadcrumb](/zh/breadcrumb)、[TxDropdownMenu](/zh/dropdown-menu)、[TxIconButton](/zh/button)、[TxSearchInput](/zh/search-input)、[TxFlatRadio](/zh/flat-radio)、[TxButton](/zh/button) | 路径、搜索、视图与上传 |
+| 文件夹树 | [TxTree](/zh/tree) | 受控展开的树，可拖入移动 |
+| 配额 | [TxProgressBar](/zh/progress-bar)、[TxStatusBadge](/zh/status-badge) | 插件用量与配额条 |
+| 网格 | [TxIconChip](/zh/icon-chip)、[TxCornerOverlay](/zh/corner-overlay)、[TxCheckbox](/zh/checkbox)、[TxTag](/zh/tag) | 缩略图、角标与复选框 |
+| 列表 | [TxDataTable](/zh/data-table) | 共用选择集的可排序列表 |
+| 右键菜单 | [TxContextMenu / TxContextMenuItem / TxContextMenuDivider / TxContextMenuSubmenu](/zh/context-menu) | 文件格与空白处共用的菜单 |
+| 拖入上传 | [TxFileUploader](/zh/file-uploader)、[TxToastPanel](/zh/toast-panel)、[TxCardItem](/zh/card-item)、[TxProgressBar](/zh/progress-bar) | 投放层与上传进度托盘 |
+| 预览 | [TxModal](/zh/modal)、[TxMarkdownView](/zh/markdown-view)、[TxImageGallery](/zh/image-gallery)、[TxEmptyState](/zh/empty-state)、[TxSplitter](/zh/splitter)、[TxNoSelection](/zh/no-selection) | 快速预览与宽屏预览栏 |
+| 批量与反馈 | [TxButton](/zh/button)、[TxToastPanel](/zh/toast-panel)、[TxSearchEmpty](/zh/search-empty) | 批量栏、撤销与清除搜索 |
+| 移动到… | [TxModal](/zh/modal)、[TxTree](/zh/tree) | 可放入的目标文件夹 |

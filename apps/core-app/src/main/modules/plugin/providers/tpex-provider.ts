@@ -14,7 +14,7 @@ import compressing from 'compressing'
 import fse from 'fs-extra'
 import { getEnabledApiSources } from '../../../service/store-api.service'
 import { getNetworkService } from '../../network'
-import { getRuntimeNexusBaseUrl } from '../../nexus/runtime-base'
+import { getPluginCloudAuthPort } from '../plugin-ports'
 import { createProviderLogger } from './logger'
 import { downloadToTempFile, mergeHeadersCaseInsensitive, stripAuthorizationHeader } from './utils'
 
@@ -39,7 +39,7 @@ function getPrimaryApiBase(): string {
   } catch {
     // Storage not ready yet, use default
   }
-  return getRuntimeNexusBaseUrl()
+  return getPluginCloudAuthPort().getRuntimeNexusBaseUrl()
 }
 
 async function peekTpexManifest(tpexPath: string): Promise<IManifest | undefined> {
@@ -129,15 +129,14 @@ export class TpexPluginProvider implements PluginProvider {
 
     let runtimeUrl: URL
     try {
-      runtimeUrl = new URL(getRuntimeNexusBaseUrl())
+      runtimeUrl = new URL(getPluginCloudAuthPort().getRuntimeNexusBaseUrl())
     } catch {
       return resolvedHeaders
     }
     if (runtimeUrl.protocol !== 'http:' && runtimeUrl.protocol !== 'https:') return resolvedHeaders
     if (requestUrl.origin !== runtimeUrl.origin) return resolvedHeaders
 
-    const { getAuthToken } = await import('../../auth')
-    const token = getAuthToken()
+    const token = getPluginCloudAuthPort().getAuthToken()
     if (token) resolvedHeaders.Authorization = `Bearer ${token}`
     return resolvedHeaders
   }

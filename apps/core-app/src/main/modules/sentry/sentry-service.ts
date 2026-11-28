@@ -10,7 +10,7 @@ import type { CoreBoxFocusTelemetryRecord } from '@talex-touch/utils/core-box/fo
 import { sanitizeCoreBoxFocusRecord } from '@talex-touch/utils/core-box/focus-telemetry'
 import fs, { type Dir } from 'node:fs'
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { isProxy } from 'node:util/types'
 import * as Sentry from '@sentry/electron/main'
 import { StorageList } from '@talex-touch/utils'
@@ -254,6 +254,47 @@ function getEnvironmentContext(): Record<string, unknown> {
     isPackaged: app.isPackaged,
     buildTimestamp: Date.now()
   }
+}
+
+const TELEMETRY_IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/
+
+function resolveBatchOutboxIdempotencyKey(
+  itemId: number,
+  metadata: Record<string, unknown> | undefined,
+  events: unknown[]
+): string {
+  const existing =
+    typeof metadata?.idempotencyKey === 'string' ? metadata.idempotencyKey.trim() : ''
+  if (TELEMETRY_IDEMPOTENCY_KEY_PATTERN.test(existing)) {
+    return existing
+  }
+  const digest = createHash('sha256').update(JSON.stringify(events)).digest('hex').slice(0, 24)
+  return `sentry:outbox:${itemId}:${digest}`
+}
+
+function isCompleteTelemetryAckResponse(rawData: unknown): boolean {
+  if (rawData === undefined || rawData === null || rawData === '') {
+    return true
+  }
+  if (typeof rawData === 'string') {
+    const trimmed = rawData.trim()
+    if (!trimmed) return true
+    try {
+      const parsed = JSON.parse(trimmed) as unknown
+      return (
+        !!parsed &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed) &&
+        (parsed as { success?: unknown }).success === true
+      )
+    } catch {
+      return false
+    }
+  }
+  if (typeof rawData === 'object' && !Array.isArray(rawData)) {
+    return (rawData as { success?: unknown }).success === true
+  }
+  return false
 }
 
 /** True when at least one queued event was stamped non-anonymous at queue time. */
@@ -1597,13 +1638,10 @@ export class SentryServiceModule extends BaseModule {
           payload.metadata && typeof payload.metadata === 'object'
             ? (payload.metadata as Record<string, unknown>)
             : undefined
-        const idempotencyKey =
-          metadata && typeof metadata.idempotencyKey === 'string'
-            ? metadata.idempotencyKey
-            : undefined
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-        if (idempotencyKey) {
-          headers['X-Idempotency-Key'] = idempotencyKey
+        const idempotencyKey = resolveBatchOutboxIdempotencyKey(item.id, metadata, events)
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': idempotencyKey
         }
         // Attribution needs the connection to prove who is uploading: Nexus ignores a body
         // userId (#901) and attributes only events that explicitly opted out of anonymity, so
@@ -1649,6 +1687,18 @@ export class SentryServiceModule extends BaseModule {
           await store.markAttempt(item.id, failureCode)
           if (cooldownMs) break
           continue
+        }
+
+        if (!isCompleteTelemetryAckResponse(response.data)) {
+          this.failedNexusUploads++
+          this.schedulePersistTelemetryStats()
+          const failureCode = 'TELEMETRY_ACK_INVALID'
+          this.recordTelemetryFailure('Telemetry upload returned invalid acknowledgement', {
+            status: response.status,
+            code: failureCode
+          })
+          await store.markAttempt(item.id, failureCode)
+          break
         }
 
         await store.remove(item.id)

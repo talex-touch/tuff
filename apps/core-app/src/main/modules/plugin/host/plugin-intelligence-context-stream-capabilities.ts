@@ -8,7 +8,7 @@ import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/secur
 import { types as utilTypes } from 'node:util'
 import type { PluginHostCapabilityDefinition } from './plugin-host-capabilities'
 import type { PluginHostCapabilityResourceContext } from './plugin-host-resources'
-import { normalizeIntelligenceError } from '../../ai/intelligence-error-normalizer'
+import { classifyIntelligenceErrorCode } from '../../../shared/intelligence-error-code'
 import {
   type PluginIntelligenceContextRequest,
   type PluginIntelligenceContextSummary,
@@ -123,7 +123,7 @@ function projectStreamErrorCode(error: unknown): IntelligenceErrorCode {
     }
   }
   try {
-    return normalizeIntelligenceError(error, { capabilityId: 'text.chat' }).code
+    return classifyIntelligenceErrorCode(error)
   } catch {
     return 'UNKNOWN'
   }

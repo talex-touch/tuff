@@ -34,11 +34,9 @@ const emit = defineEmits<StatusBadgeEmits>()
 /**
  * Mapping of status tones to their visual properties.
  *
- * The glyphs are solid, not outlined: each one sits knocked out of a filled
- * disc, so the disc supplies the enclosing circle and an outlined glyph would
- * draw a second one inside it. `muted` is the exception — it renders as an
- * empty dashed ring with no glyph at all, which is how a "not started" state
- * reads as absence rather than as one more filled state.
+ * Each glyph sits inside a lightweight translucent circular halo (12% semantic
+ * tint) rather than a heavy solid disc; `muted` renders as an empty dashed ring
+ * with no glyph, reading as absence rather than an active state.
  */
 const toneMap: Record<StatusTone, ToneMeta> = {
   success: { color: 'var(--tx-color-success)', icon: 'i-carbon-checkmark' },
@@ -78,16 +76,22 @@ const toneMeta = computed(() => toneMap[resolvedTone.value])
 /**
  * CSS custom properties for dynamic styling.
  *
- * `--tx-status-color` tints the label and the fill; `--tx-status-chip` paints
- * the disc and is a *different, darker* ramp on purpose — see the token comment
- * in `style/variables.scss`.
+ * `--tx-status-color` tints the label, pill fill, and subtle translucent chip;
+ * `--tx-status-glyph` mixes the hue toward primary ink so the icon inside the
+ * soft translucent chip clears WCAG 3:1 non-text contrast across all four themes
+ * without a heavy solid filled disc:
+ *   light:   success 3.28, warning 3.23, danger 3.82, info 3.72, muted 3.96
+ *   dark:    success 7.17, warning 7.28, danger 6.15, info 6.22, muted 6.58
+ *   hcLight: success 7.17, warning 6.27, danger 6.94, info 6.43, muted 8.61
+ *   hcDark:  success 9.58, warning 9.37, danger 8.82, info 8.81, muted 9.54
  */
 const styleVars = computed(() => {
   const color = toneMeta.value.color
   return {
     '--tx-status-color': color,
-    '--tx-status-bg': `color-mix(in srgb, ${color} 14%, transparent)`,
-    '--tx-status-chip': `var(--tx-status-chip-${resolvedTone.value})`,
+    '--tx-status-bg': `color-mix(in srgb, ${color} 12%, transparent)`,
+    '--tx-status-chip-bg': `color-mix(in srgb, ${color} 12%, transparent)`,
+    '--tx-status-glyph': `color-mix(in srgb, ${color} 65%, var(--tx-text-color-primary, #303133))`,
   }
 })
 
@@ -164,27 +168,24 @@ function handleKeydown(event: KeyboardEvent): void {
 </template>
 
 <style lang="scss">
-// A monospace label on a soft tint, with the state's glyph knocked out of a
-// solid disc. The 999px/500-weight pill this replaced read as a quiet TxButton
-// at a glance; the mono face and the square-ish 8px radius give the family its
-// own silhouette, and the disc is what makes the state legible before the text
-// is read.
-//
-// Keep the soft tint in the badge family; an inset ring defines the edge
-// without changing the badge's dimensions or its content spacing.
+// A monospace label on a soft tint, paired with a lightweight translucent icon
+// halo (12% semantic tint) and matching semantic glyph color. Heights and radii
+// mirror TxTag (`sm` 22px / 6px, `md` 26px / 8px, matching TxButton `sm` 26px),
+// using a 1px inset ring so the box stays fixed-height without border bloat.
 .tx-status-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
+  height: var(--tx-status-height, 26px);
   gap: 6px;
-  border-radius: 8px;
+  border-radius: var(--tx-status-radius, 8px);
   font-family: var(--tx-font-mono, ui-monospace, "SF Mono", monospace);
   font-size: 12px;
   font-weight: var(--tx-font-weight-medium, 500);
   color: var(--tx-status-color, var(--tx-text-color-primary));
-  background: var(--tx-status-bg, color-mix(in srgb, currentColor 14%, transparent));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-status-color, currentColor) 32%, transparent);
-  transition: background-color 0.25s ease;
+  background: var(--tx-status-bg, color-mix(in srgb, currentColor 12%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-status-color, currentColor) 30%, transparent);
 
   // Keyed off the role rather than a class: `interactive` is derived from
   // whether the host attached a click listener, and that is exactly what
@@ -199,7 +200,7 @@ function handleKeydown(event: KeyboardEvent): void {
     outline-offset: 2px;
   }
 
-  // The OS marker is a bare glyph, not a disc: it names a platform, not a state.
+  // The OS marker is a bare glyph, not a chip: it names a platform, not a state.
   &__icon {
     flex: none;
     font-size: 1em;
@@ -211,45 +212,34 @@ function handleKeydown(event: KeyboardEvent): void {
     }
   }
 
-  // The disc. Its fill comes from `--tx-status-chip-*`, a darker ramp than the
-  // label's hue, because a knocked-out glyph on `--tx-color-*` measures
-  // 1.67–2.90:1 — under the 3:1 minimum for a graphical object. Against the
-  // chip ramp the worst pairing across all four themes is 3.30:1 (success, which
-  // light and dark share). High-contrast dark inverts the pairing rather
-  // than darkening the disc, since its palette is light-on-dark by design.
+  // Lightweight translucent semantic chip: 12% alpha fill with a contrast-calibrated
+  // semantic glyph (`--tx-status-glyph`), replacing the heavy solid filled disc.
   &__chip {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex: none;
-    // Driven by a custom property, not a per-size rule block: a host that
-    // compresses the badge (smaller padding and font-size for a dense table
-    // row) has to be able to bring the disc down with it. It used to scale off
-    // the text automatically, and two callers relied on that.
-    width: var(--tx-status-chip-size, 18px);
-    height: var(--tx-status-chip-size, 18px);
-    font-size: var(--tx-status-chip-size, 18px);
+    width: var(--tx-status-chip-size, 16px);
+    height: var(--tx-status-chip-size, 16px);
+    font-size: var(--tx-status-chip-size, 16px);
     border-radius: 50%;
-    background: var(--tx-status-chip, var(--tx-status-color));
-    color: var(--tx-status-chip-on, #ffffff);
+    background: var(--tx-status-chip-bg, color-mix(in srgb, var(--tx-status-color, currentColor) 12%, transparent));
+    color: var(--tx-status-glyph, var(--tx-status-color, currentColor));
 
-    // "Not started" is an absence, so it reads as an empty ring rather than one
-    // more filled disc competing with the states that actually happened.
+    // "Not started" is an absence, so it reads as an empty dashed ring rather than
+    // a filled status marker competing with active states.
     &.is-hollow {
       background: transparent;
-      border: 1.5px dashed var(--tx-status-chip, currentColor);
+      border: 1.5px dashed color-mix(in srgb, var(--tx-status-color, currentColor) 55%, transparent);
+      box-sizing: border-box;
     }
   }
 
   &__glyph {
-    // Sized off the disc rather than the text: the glyph has to sit inside a
-    // circle, not align with the baseline.
-    font-size: 0.62em;
+    // Sized off the chip rather than the text so the glyph centres optically inside the halo.
+    font-size: 0.72em;
     line-height: 1;
 
-    // `1em` of the glyph's own 0.62em, so the box is 62% of the disc. It
-    // used to be 0.62em here too, which applied the ratio twice and drew a
-    // 7px glyph in the 18px disc.
     &[class] {
       width: 1em;
       height: 1em;
@@ -261,29 +251,33 @@ function handleKeydown(event: KeyboardEvent): void {
   }
 
   &--sm {
-    --tx-status-chip-size: 15px;
+    --tx-status-height: 22px;
+    --tx-status-radius: 6px;
+    --tx-status-chip-size: 14px;
 
-    padding: 4px 8px;
+    gap: 5px;
+    padding: 0 7px;
+    font-size: 11px;
   }
 
   &--md {
-    --tx-status-chip-size: 18px;
+    --tx-status-height: 26px;
+    --tx-status-radius: 8px;
+    --tx-status-chip-size: 16px;
 
-    padding: 5px 10px;
+    gap: 6px;
+    padding: 0 9px;
+    font-size: 12px;
   }
 
-  // A badge that opens with a disc tightens the leading inset so the disc sits
-  // the same distance from the edge as it does from the top and bottom.
+  // A badge that opens with a chip tightens the leading inset so the chip sits
+  // at an optically balanced distance from the left edge.
   &--sm.has-icon {
     padding-left: 4px;
   }
 
   &--md.has-icon {
     padding-left: 5px;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
   }
 }
 </style>

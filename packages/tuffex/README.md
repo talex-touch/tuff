@@ -91,7 +91,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## Component Inventory
 
-Current source-of-truth export modules: **193**.
+Current source-of-truth export modules: **198**.
 
 Every module ships in exactly one of three suites, each exposed as its own category entry:
 
@@ -119,9 +119,9 @@ Advanced interaction, visualization, effects and low-level primitives. Import fr
 
 - `Interaction (7)`: `command-palette`, `search-panel`, `markdown-editor`, `code-editor`, `terminal`, `virtual-list`, `version-capsule`
 - `Animated controls (3)`: `motion-control`, `motion-form`, `motion-metric`
-- `Visualization (5)`: `charts`, `spark-chart`, `allocation-bar`, `diff-table`, `signal-meter`
+- `Visualization (6)`: `charts`, `spark-chart`, `allocation-bar`, `diff-table`, `signal-meter`, `device-mockup`
 - `Effects (27)`: `glass-surface`, `touch-surface`, `gradient-border`, `outline-border`, `border-beam`, `prism-glow`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `icon-morph`, `morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `fusion-surface`, `flow-light`, `liquid`, `flip-overlay`, `fold-page`, `image-generation`, `metal-fx`, `voice-beam`
-- `Motion (11)`: `card-spread`, `carousel-3d`, `flip-book`, `motion`, `motion-button`, `motion-dock`, `motion-loader`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
+- `Motion (14)`: `card-spread`, `carousel-3d`, `distortion-wave`, `flip-book`, `motion`, `motion-button`, `motion-dock`, `motion-loader`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`, `pixel-field`, `voice-ring`
 - `Primitives (5)`: `base-surface`, `base-anchor`, `floating`, `auto-sizer`, `resize-box`
 
 Nexus presents the Motion family in its own documentation suite: Buttons, Card Spreads, 3D Carousels, Loaders, Dither Charts and additional text, physics, pointer, scroll, toggle and transition effects. Installation stays within `pro` or the component subpaths; there is no fourth suite installer. `TxMonoChart` and `TxDitherChart` use the existing `@talex-touch/tuffex/charts` SVG/d3 entry, with Mono documented under Data and Dither under Motion.
@@ -134,7 +134,7 @@ Chat, agent, reasoning and context components for AI-native interfaces. Import f
 
 - `Chat (9)`: `chat`, `prompt-bar`, `attachment-tray`, `mode-chip`, `message-actions`, `suggestion-chips`, `choice-card`, `conversation-stream`, `voice-clip`
 - `Agents (11)`: `agents`, `agent-screen`, `agent-trace`, `task-rows`, `tool-call-card`, `tool-chips`, `tool-confirmation`, `approval-card`, `working-indicator`, `bot-avatar`, `miko`
-- `Reasoning (10)`: `ai-elements`, `chain-of-thought`, `reasoning-disclosure`, `thinking-orb`, `stream-element`, `stream-text`, `stream-markdown`, `code-stream`, `inline-citation`, `sources`
+- `Reasoning (11)`: `ai-elements`, `chain-of-thought`, `reasoning-disclosure`, `thinking-orb`, `matrix-loader`, `stream-element`, `stream-text`, `stream-markdown`, `code-stream`, `inline-citation`, `sources`
 - `Context & Insight (5)`: `context-cards`, `context-indicator`, `insight-cards`, `recommendation-card`, `fine-tune-card`
 - `Flow (1)`: `flowchart`
 

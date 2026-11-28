@@ -48,9 +48,13 @@ defineExpose({
     :virtual-reference="reference"
     placement="bottom-start"
     :offset="6"
-    :min-width="248"
-    :max-width="280"
-    :panel-padding="4"
+    :min-width="256"
+    :max-width="292"
+    panel-variant="solid"
+    panel-background="refraction"
+    panel-shadow="soft"
+    :panel-radius="18"
+    :panel-padding="8"
     @update:model-value="(open: boolean) => !open && emit('close')"
   >
     <ul
@@ -86,11 +90,12 @@ defineExpose({
 .tx-markdown-editor-slash {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  max-height: 304px;
+  gap: var(--tx-markdown-editor-menu-gap, 2px);
+  max-height: 278px;
   margin: 0;
   padding: 0;
   overflow-y: auto;
+  scrollbar-width: thin;
   list-style: none;
   color: var(--tx-markdown-editor-text);
   font-size: 13px;
@@ -98,15 +103,16 @@ defineExpose({
 
 .tx-markdown-editor-slash__item {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 10px;
-  height: 34px;
-  padding: 0 8px 0 5px;
-  border-radius: 8px;
+  gap: var(--tx-markdown-editor-menu-item-gap, 10px);
+  padding: var(--tx-markdown-editor-menu-item-padding, 7px 10px);
+  border-radius: var(--tx-markdown-editor-menu-item-radius, 10px);
+  line-height: 1.35;
   cursor: pointer;
 
   &.is-active {
-    background: color-mix(in srgb, var(--tx-markdown-editor-accent) 14%, transparent);
+    background: color-mix(in srgb, var(--tx-markdown-editor-accent) 12%, transparent);
   }
 }
 
@@ -117,23 +123,23 @@ defineExpose({
   justify-content: center;
   width: 24px;
   height: 24px;
-  border: 1px solid var(--tx-markdown-editor-border);
-  border-radius: 6px;
-  background: var(--tx-markdown-editor-bg);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--tx-markdown-editor-text) 5%, transparent);
   color: var(--tx-markdown-editor-muted);
   font-size: 11px;
-  font-weight: calc(var(--tx-font-weight-bold, 700) - 50);
+  font-weight: var(--tx-font-weight-semibold, 600);
   letter-spacing: -0.02em;
 }
 
 .tx-markdown-editor-slash__item.is-active .tx-markdown-editor-slash__icon {
-  border-color: color-mix(in srgb, var(--tx-markdown-editor-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--tx-markdown-editor-accent) 16%, transparent);
   color: var(--tx-markdown-editor-accent);
 }
 
 .tx-markdown-editor-slash__label {
   flex: 1;
   min-width: 0;
+  font-weight: var(--tx-font-weight-medium, 500);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -144,5 +150,6 @@ defineExpose({
   color: var(--tx-markdown-editor-placeholder);
   font-family: var(--tx-font-family-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   font-size: 11px;
+  opacity: 0.78;
 }
 </style>

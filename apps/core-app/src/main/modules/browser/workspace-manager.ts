@@ -672,19 +672,21 @@ export class BrowserWorkspaceManager {
       else if (commandWithOptionalShift && (code === 'KeyR' || key === 'r'))
         action = this.reload(tab.id)
       else if (
-        input.alt &&
-        !input.meta &&
-        !input.control &&
-        !input.shift &&
-        (code === 'ArrowLeft' || key === 'arrowleft')
+        (isMac && command && (code === 'BracketLeft' || key === '[')) ||
+        (input.alt &&
+          !input.meta &&
+          !input.control &&
+          !input.shift &&
+          (code === 'ArrowLeft' || key === 'arrowleft'))
       )
         action = this.back(tab.id)
       else if (
-        input.alt &&
-        !input.meta &&
-        !input.control &&
-        !input.shift &&
-        (code === 'ArrowRight' || key === 'arrowright')
+        (isMac && command && (code === 'BracketRight' || key === ']')) ||
+        (input.alt &&
+          !input.meta &&
+          !input.control &&
+          !input.shift &&
+          (code === 'ArrowRight' || key === 'arrowright'))
       )
         action = this.forward(tab.id)
       if (action) {

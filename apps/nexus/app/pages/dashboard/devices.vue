@@ -229,29 +229,24 @@ async function copyText(value: string | null | undefined) {
 }
 
 /**
- * Brand glyphs come from carbon where it has one and `cib` otherwise — both are
- * installed, unlike the `simple-icons`/`ri` names these used to carry, which is
- * why every macOS row (the common case) drew an empty box.
- *
- * carbon is preferred where the shapes are equivalent because these are inlined
- * into the shared entry CSS: carbon's linux-alt path is 1.0 KB against cib's
- * 5.5 KB, and its apple is 0.7 KB against 1.3 KB. Safari and Edge have no
- * carbon equivalent, so they stay on cib.
+ * Device platform glyphs stay on the `carbon` collection so the shared icons
+ * stylesheet does not pull in the heavy `cib` brand collection for a handful of
+ * dashboard rows.
  */
 function getDeviceBrandIcon(device: DeviceItem): string {
   const value = `${device.platform || ''} ${device.deviceName || ''} ${device.clientType || ''}`.toLowerCase()
   if (value.includes('mac') || value.includes('darwin') || value.includes('iphone') || value.includes('ipad') || value.includes('ios'))
     return 'i-carbon-apple'
   if (value.includes('win'))
-    return 'i-cib-windows'
+    return 'i-carbon-grid'
   if (value.includes('linux'))
     return 'i-carbon-linux-alt'
   if (value.includes('android'))
-    return 'i-cib-android'
+    return 'i-carbon-mobile'
   if (value.includes('safari'))
-    return 'i-cib-safari'
+    return 'i-carbon-compass'
   if (value.includes('edge'))
-    return 'i-cib-microsoft-edge'
+    return 'i-carbon-globe'
   if (value.includes('web'))
     return 'i-carbon-application-web'
   return 'i-carbon-devices'

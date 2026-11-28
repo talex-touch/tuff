@@ -1,6 +1,6 @@
 # Tuff AI Stable TODO
 
-> 更新时间：2026-11-23
+> 更新时间：2026-11-27
 > 范围：Roadmap R2 / AI 2.5.0 Stable。主验收矩阵以 `04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md` 为准；全局执行顺序服从 [`TODO.md`](./TODO.md)，本文件不单独抢占稳定化窗口。
 
 ## 当前口径
@@ -33,10 +33,10 @@
 
 目标：复用现有 Capability / Provider 路由，把通过运行时探针的 macOS 系统能力作为机器本地 provider 自动注入；不把机器可用性持久化或同步到其他设备，也不建立第二套同名能力路由。
 
-- [ ] **原生 OCR / `vision.ocr`**：已确认（macOS `packages/tuff-native/native/src/platform/macos/vision_ocr.mm` 调用 `<Vision/Vision.h>` / `VNRecognizeTextRequest`）并完成常驻 Rust 化升级（不重复注册）——`local-system-ocr`（`LocalProvider.visionOcr`）已通过 `@talex-touch/tuff-native` 封装 macOS Apple Vision（`apple-vision`）与 Windows WinRT（`windows-ocr`），支持 `blocks` 布局坐标、语言提示与 `AbortSignal` / 超时取消；现已升级为常驻 Rust `tuff-native-ocr` helper（`file` 直读与 ImageIO/WIC `<= 2000px` 原生缩放 + `utilityProcess` 降级，避免 `sharp` 主/子进程搬运与大图卡顿，并免除 `vision.ocr` 缓存 key 序列化）。**待补**：① 非沙盒 macOS `pnpm core:dev` 的 `.accurate` 实图冒烟，以及 Windows CI 对 `winrt_ocr.cpp` 与 `tuff-native-ocr.exe` 的编译/运行验收；② `apps/core-app/src/main/modules/ai/intelligence-config.ts` 已改为通过 fail-closed `isNativeOcrAvailable()`（校验 `TUFF_DISABLE_NATIVE_OCR !== '1'` 与 `getNativeOcrSupport()?.supported`）门控 `local-system-ocr` 的 `vision.ocr` 绑定播种、运行时 provider 注入与 `getCapabilityOptions('vision.ocr')` 放行；仍待补齐跨平台对齐（Linux stub 实现）与多语言评测边界。
+- [ ] **原生 OCR / `vision.ocr`**：已确认（macOS `packages/tuff-native/native/src/platform/macos/vision_ocr.mm` 调用 `<Vision/Vision.h>` / `VNRequestTextRecognitionLevelAccurate`）并完成常驻 Rust 化升级（不重复注册）——`local-system-ocr`（`LocalProvider.visionOcr`）已通过 `@talex-touch/tuff-native` 封装 macOS Apple Vision（`apple-vision`）与 Windows WinRT（`windows-ocr`），支持 `blocks` 布局坐标、语言提示与 `AbortSignal` / 超时取消；现已升级为常驻 Rust `tuff-native-ocr` helper（`file` 直读与 ImageIO/WIC `<= 2000px` 原生缩放 + `utilityProcess` 降级，避免 `sharp` 主/子进程搬运与大图卡顿，并免除 `vision.ocr` 缓存 key 序列化）。**Windows CI 已绿（已入 `origin/master`）**：`#1517` 已关闭，真实 `windows-2022`（`native-protocol.yml` run `45913147990` / job `140226035793`）`build:ocr`、`ocr-helper.test.js` 与 `tuff-native-ocr.test.ts`（`6/6`，`TUFF_NATIVE_OCR_REQUIRED=1`）全部通过；`v2.4.15-beta.13` 打包剥离 `tuff-native-ocr(.exe)` 的根因已随 PR `#2333`（`9c75810aa`）合入 `origin/master` 修复。**仍待补**：① 非沙盒 macOS 桌面 `.accurate` 实图冒烟；② `v2.4.15-beta.15+` 发布包二进制复核；③ `apps/core-app/src/main/modules/ai/intelligence-config.ts` 已以 fail-closed `isNativeOcrAvailable()` 门控注入与放行，但 Linux 原生 OCR（仅 stub）与多语言评测边界仍开放。
 - [x] **原生翻译 / `text.translate`**：已接入 macOS 26+ 的后台 `TranslationSession(installedSource:target:)`。`local-system-translation` 仅在实际会话就绪后注入，复用 Swift 进程与语言对会话；translation 插件优先使用本地路由。macOS 27 真机中英互译、插件宿主、测试进程禁网、缺包、取消和超时恢复已通过。语言包由系统设置安装，不自动下载；macOS 26 真机与正式安装包验收未覆盖。
 - [x] **语言识别（翻译内部）**：已使用 `NLLanguageRecognizer` 自动识别源语言。简繁共用字短句按已安装的中文语言包提供识别提示；显式源语言不变。不新增独立渠道。
-- [ ] **原生语音识别 / `audio.stt`**：评估 Speech framework 的实时/批量、离线能力、语言覆盖、模型下载与权限恢复；只有真实流式延迟和稳定性达到现有语音会话要求时才进入渠道列表。
+- [ ] **原生语音识别 / `audio.stt`**：2026-11-27 实查确认 `packages/tuff-native` 与 `apps/core-app` 当前针对 macOS `Speech.framework` / `SFSpeechRecognizer` / `SpeechAnalyzer` 为 **0 处钩子**（`native-audio` 仅负责麦克风采集/RNNoise、播放、AX 输入与 Fn/Esc HID 监听；本地 ASR 当前走 `packages/tuff-voice` 的 `whisper-cpp` 与 `sherpa-onnx`）。评估实时/批量、离线能力、语言覆盖、模型下载与权限恢复，只有真实流式延迟和稳定性达到现有语音会话要求时才进入渠道列表。
 - [ ] **OCR → 翻译组合**：允许复用 `vision.ocr` 与 `text.translate` 形成图片文字翻译降级链；不得把“提取文字后翻译”标成保留排版的 `image.translate.e2e`。
 
 接入门禁：
@@ -49,13 +49,18 @@
 
 ## 2026-10 ~ 11 AI 运行时与 UI 增量落地
 
-> 注：本节补录 2026-10-10 以后已合入主线的非 Stable-manifest 运行时能力，不改变上方 `R2 AI Stable` 的 `--requireCurrentVersion` 当前版本重采要求（manifest baseline 仍为 `2.4.12-beta.8`，相对当前版本 `2.4.15-beta.9` 仍需重采）。
+> 注：本节补录 2026-10-10 以后已合入主线的非 Stable-manifest 运行时能力，不改变上方 `R2 AI Stable` 的 `--requireCurrentVersion` 当前版本重采要求（manifest baseline 仍为 `2.4.12-beta.8`，相对当前 CoreApp 版本仍需重采，版本号以 `apps/core-app/package.json` 为准）。
 
 - **`local-ai-cli` 与调度器路由不变量（已落地）**：`localAiCliModule`（`local_ai_cli_sessions`、`pi` / `omp` / `codex` / `claude` 可执行探测、工作区隔离与 `--version` 探测进程回收）已合入；`providers/pi-cli-provider.ts` 与 `providers/cli-config-provider.ts` 确立“调度器决定执行器”不变量——第三方 CLI 仅在其对应调度器配置（`profile:cli:{codex,claude,omp}`）下启动进程，其他调度器或未指定调度器仅复用 `~/.codex/config.toml`、`~/.claude/settings.json`、`~/.omp/agent/models.{yml,yaml,json}` 端点（分别标记为 `codex-config` / `claude-config` / `omp-config`）。
 - **`models.dev` 定价目录与 `usage-ledger` 全局账本（已落地）**：`pricing/models-dev-catalog.ts`、`pricing/model-pricing.ts` 与 `usage-ledger/`（含全局 backfill、配额拒绝与限额校验）已接入主进程。
 - **OpenAI Responses API 与 `pi-agent-core@0.85.1`（已落地）**：`ai-import-config-parser.ts` 与 `langchain-openai-compatible-provider.ts` 支持 `openai-responses`（`transport: 'responses'`）；内置智能体运行宿主使用 `@earendil-works/pi-agent-core@0.85.1`（`PiAgentRuntimeHost`），并接入 `tool-gateway` / `mcp-host` 与 `0056_ai_orchestrator_run_messages.sql` 运行日志持久化。
 - **`omp` ACP 底座与 orchestrator 接线（2026-11-23 已接线，PR `#2254`，`282ae52cc`）**：`OmpAcpClient`（`packages/tuff-intelligence/src/omp/omp-acp-client.ts`）与 `OmpAgentRuntimeHost`（`apps/core-app/src/main/modules/ai/omp/omp-agent-runtime-host.ts`）已正式接入 `ai-cli-orchestrator.ts`，严格守住 `AGENTS.md`“调度器决定执行器”不变量——仅 `profile:cli:omp` 路由至 `OmpAgentRuntimeHost`，内置 Tuff 调度、未指定调度及 `profile:cli:{codex,claude}` 均保持不变；同步打通 MCP Host 环回桥接、fail-closed `session/request_permission` 工具确认门禁、有界 SIGTERM→SIGKILL 进程回收、重启安全恢复（运行中标记 `interrupted`、排队任务续跑）与实时 text/reasoning 增量流式透出。`packages/tuff-intelligence` 11 files / 46 tests 与 `apps/core-app` AI/MCP/conversation 153 files / 1,871 tests 通过（单测与集成验证；真实本机 `omp` 二进制与打包 Electron 端到端实测另行单独验收；详情见 [`omp-runtime-and-tern-gui-integration-analysis-2026-11-01.md`](../engineering/reports/omp-runtime-and-tern-gui-integration-analysis-2026-11-01.md)）。
 - **Home AI UI 与 `intelligence-uikit` 演进进展（2026-11-23 同步）**：**第一阶段**（PR `#2226` / `#2227`）已完成 `@talex-touch/tuffex` 与 `@talex-touch/intelligence-uikit` 对齐升级；**第二阶段已全部完成**（PR `#2261` `b4cc1d762` + PR `#2264` `7d3df3c1f`）——在完整保留 `TuffAIComposer.vue`（397 行 + `composer/*`）与 `HomeMessageRow.vue` 生产体验的前提下，完成 `HomeRunDock`（替代重复 `HomeContextMeter`/`HomeRunStatus`）与 `HomeMessageRail.vue`（`279 -> 62` 行）向 `@talex-touch/intelligence-uikit` 收敛，将 `HomePage.vue` 从 `1,943 -> 1,162 -> 781` 行（达成 `<= 800` 目标），并修复 `HomePage.submit-race.test.ts` 偶发抖动（`4,317ms -> 181ms`）。上述收敛已通过单测与类型检查，实机打包 Electron 交互验收另行追踪，继续坚持不降级迁向占位壳原则。
+- **统一 ACP 多 CLI 持久宿主、Herdr Space 与 Pi 轮中 steering（2026-11-23 ~ 11-26 已入 `origin/master`）**：泛化 ACP & 多 CLI 持久运行宿主与可选 Git worktree 隔离（PR `#2282` `e65408ab4`、PR `#2289` `0ba9e1559`），集成 `herdr-core` 运行平面、ToolGateway herdr 工具与 Herdr Space 主舞台/项目标签组/停靠右侧栏（PR `#2290`/`#2294`/`#2295`/`#2308`/`#2314`/`#2317`），落地 Pi 轮中 steering 与默认开启的会话/编排/CLI 启动自动恢复（PR `#2288` `4d4338f6b`、PR `#2292` `dd175ae68`），继续严守 `AGENTS.md` 调度器决定执行器不变量；不替代 R2 Stable `--requireCurrentVersion` 打包重采。
+- **Packaged `omp` 与 Tern Daemon Phase 4 实查现状（2026-11-27）**：`OmpAgentRuntimeHost` 仅从宿主 `PATH` 解析 `omp` 二进制（`electron-builder.yml` 未随应用内置打包 `omp`，打包 Electron 端到端实测仍开放）；Tern Daemon Phase 4（`daemon.sock` / `tern ctl` / `carly`）当前仓库 **0 行代码**。
+- **`#1880` 语音转写历史与词库进展（2026-11-27，Option A 已随 PR `#2339` 合入，实机/打包验收仍开放）**：
+  - **已入 `origin/master`（PR `#2339` `9cde7c34c`，`Refs #1880`）**：在既有 SQLite `voice_recognition_records`、HUD `retryLastFailure`、Composer `VoiceKeptRecordings` 与 `voiceInput.customWords` 基础上，落地 Option A（本地保留音频重转写）——失败/取消/空会话落盘显式来源（`dictate` vs `ask`）与规范目录内 WAV 路径；新增 host-only `retryRecord` / `deleteRecognitionRecord` / `updateRecognitionRecordText` 与并发重试去重；新增可配置 `voiceInput.historyRetention`（`7d` / `30d` / `off`，默认 `30d`）与启动后/每 6 小时自动清理，并对齐隐私文案与敏感数据清册；新增按日分组、`All`/`Dictate`/`Ask` 来源筛选与自定义词库 CRUD 及编辑自动学习。
+  - **仍开放**：`v2.4.15-beta.15+` 打包实机语音录制/历史重试/TTL 清理验收，以及百炼 DashScope 异步 `vocabulary_id` 同步后续支持（当前已透传 `providerOptions` 并文档化其异步约束）。
 
 ## 已完成
 

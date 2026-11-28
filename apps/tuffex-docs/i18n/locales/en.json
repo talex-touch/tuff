@@ -1,0 +1,294 @@
+{
+  "nav": {
+    "home": "Tuff",
+    "docs": "Docs",
+    "developer": "Developer",
+    "components": "TuffEx UI",
+    "store": "Store",
+    "updates": "Updates",
+    "menu": "Menu"
+  },
+  "ui": {
+    "languageToggle": {
+      "zhLabel": "中文",
+      "enLabel": "English",
+      "switchToZh": "Switch language to Chinese",
+      "switchToEn": "Switch language to English"
+    },
+    "themeToggle": {
+      "title": "Theme mode",
+      "dark": "dark",
+      "light": "light",
+      "auto": "auto",
+      "selectMode": "Theme mode: {mode}",
+      "switchToLight": "Switch to light mode",
+      "switchToDark": "Switch to dark mode"
+    },
+    "geoMap": {
+      "empty": "No geographic data",
+      "failed": "Could not load the map",
+      "label": "World map",
+      "instructions": "Drag or use the arrow keys to pan. Pinch, hold Control or Command while scrolling, or press plus and minus to zoom. Double-click or press 0 to reset."
+    }
+  },
+  "common": {
+    "collapse": "Collapse",
+    "confirm": "Confirm",
+    "retry": "Retry",
+    "save": "Save",
+    "refresh": "Refresh",
+    "loading": "Loading...",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "remove": "Remove",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "close": "Close",
+    "copy": "Copy",
+    "copied": "Copied",
+    "error": "Error"
+  },
+  "form": {
+    "field": "Field",
+    "required": "{label} is required",
+    "type": {
+      "email": "{label} must be an email address",
+      "url": "{label} must be a web address",
+      "number": "{label} must be a number",
+      "integer": "{label} must be a whole number"
+    },
+    "min": "{label} must be at least {min}",
+    "max": "{label} must be at most {max}",
+    "minLength": {
+      "characters": "{label} needs at least {min} character | {label} needs at least {min} characters",
+      "items": "{label} needs at least {min} item | {label} needs at least {min} items"
+    },
+    "maxLength": {
+      "characters": "{label} allows at most {max} character | {label} allows at most {max} characters",
+      "items": "{label} allows at most {max} item | {label} allows at most {max} items"
+    },
+    "pattern": "{label} is not in the expected format",
+    "invalid": "{label} is invalid",
+    "hint": "More about {label}",
+    "errorPrefix": "Error: ",
+    "warningPrefix": "Warning: ",
+    "validating": "Validating…",
+    "optional": "(optional)",
+    "summaryTitle": "There is a problem",
+    "draftRestored": "Restored unsaved changes from {time}.",
+    "draftPending": "You have unsaved changes from {time}.",
+    "draftRestore": "Restore",
+    "draftDiscard": "Discard",
+    "leaveConfirm": "You have unsaved changes. Leave anyway?",
+    "autosaved": "Changes saved.",
+    "autosaveFailed": "Your changes could not be saved."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "description": "The TuffEx documentation page you are looking for does not exist or has moved.",
+    "seoDescription": "The page {path} does not exist or has been moved.",
+    "backHome": "Back to TuffEx Docs",
+    "goBack": "Go Back"
+  },
+  "search": {
+    "open": "Search",
+    "openAria": "Search TuffEx docs",
+    "placeholder": "Search components, concepts, and guides…",
+    "empty": "No matching docs found",
+    "loading": "Loading search index…",
+    "unavailable": "Could not load the search index. Please try again.",
+    "shortcuts": {
+      "label": "Search shortcuts",
+      "open": "Open search",
+      "quickOpen": "Quick open",
+      "close": "Close"
+    },
+    "category": {
+      "docs": "Docs",
+      "components": "Components",
+      "concepts": "Concepts"
+    }
+  },
+  "docs": {
+    "textLoopDemo": {
+      "gap": "Clears fully, then re-enters (default)",
+      "clip": "Partly clipped at the edge",
+      "fade": "Fades at the edges",
+      "wrap": "Never clears (wraps)"
+    },
+    "imagePreviewOptionsDemo": {
+      "sweepGradient": "Sweep",
+      "pixelsOrganic": "Pixels organic",
+      "pixelsMechanic": "Pixels mechanic",
+      "skeleton": "Skeleton",
+      "none": "None"
+    },
+    "verified": "Verified",
+    "loading": "Fetching document…",
+    "notFoundTitle": "Document not found",
+    "notFoundDescription": "We could not find content for this route yet. Head back to the TuffEx docs overview.",
+    "backHome": "Back to docs home",
+    "bodyErrorTitle": "Could not load this document",
+    "bodyErrorDescription": "The content did not come through. Check your connection and try again.",
+    "bodyErrorRetry": "Retry",
+    "redirecting": "Redirecting to TuffEx docs…",
+    "outlineLabel": "On this page",
+    "sidebarLabel": "Navigation",
+    "rawMarkdown": "View Markdown",
+    "aside": {
+      "copyPrompt": "Copy as prompt",
+      "copyPromptDone": "Copied page Markdown",
+      "copyPromptFailed": "Copy failed, try again",
+      "copyPromptHint": "Copies this page's Markdown source, ready to paste into an AI chat",
+      "resources": "Resources",
+      "reportIssue": "Report an issue",
+      "requestFeature": "Request a feature",
+      "viewGitHub": "View on GitHub"
+    },
+    "aiNotice": {
+      "title": "AI Generated",
+      "description": "AI generated content for reference only. Please rely on Verified docs."
+    },
+    "noOutline": "Headings will appear here once added to this document.",
+    "lastUpdatedLabel": "Last edited on",
+    "previousChapter": "Previous",
+    "nextChapter": "Next",
+    "share": "Share",
+    "shareCopied": "Link copied!",
+    "shareFailed": "Copy failed",
+    "editOnGitHub": "Edit this page",
+    "codeBlock": {
+      "copy": "Copy",
+      "copied": "Copied"
+    },
+    "demo": {
+      "showCode": "Show code",
+      "hideCode": "Hide code",
+      "reset": "Reset",
+      "loading": "Loading demo...",
+      "loadFailed": "Failed to load demo.",
+      "notFound": "Demo component not found."
+    },
+    "framework": {
+      "switcherLabel": "Framework runtime",
+      "vue": "Vue",
+      "react": "React",
+      "wc": "WC",
+      "wcFull": "Web Components",
+      "ready": "Ready",
+      "experimental": "Experimental",
+      "planned": "Planned",
+      "unsupportedWc": "Vue & React Only",
+      "liveRuntime": "Live",
+      "vueVariantTag": "Vue variant · Live {framework} in first demo",
+      "gallerySuiteReady": "{framework} ready in suite: {ready} / {total}",
+      "gallerySuitePlanned": "{framework} planned (Vue specimens)",
+      "galleryViewList": "View ready ({count})",
+      "galleryHideList": "Hide list",
+      "previewFallbackReact": "Not yet adapted for React · Showing Vue preview",
+      "previewFallbackWcPlanned": "Not yet adapted for Web Components · Showing Vue preview",
+      "previewFallbackWcUnsupported": "Vue & React only (scoped-slot / form-context) · Showing Vue preview",
+      "runtimeUnlinked": "{pkg} is not linked in this build · Showing Vue preview with {framework} snippet below",
+      "installLabel": "Install",
+      "importLabel": "Import",
+      "copyInstall": "Copy install command",
+      "copyImport": "Copy import snippet",
+      "copied": "Copied",
+      "codeTabActive": "{framework} code",
+      "codeTabVue": "Vue source",
+      "matrixTitle": "Multi-framework adaptation matrix",
+      "matrixSearchPlaceholder": "Filter by component, tag (tx-*), or export (Tx*)…",
+      "matrixFilterAll": "All",
+      "matrixFilterReactReady": "React ready",
+      "matrixFilterWcReady": "WC ready",
+      "matrixEmpty": "No components match the current filter.",
+      "matrixColumns": {
+        "component": "Component",
+        "tier": "Tier",
+        "vue": "Vue 3",
+        "react": "React",
+        "wc": "Web Components",
+        "exports": "Tag / Export"
+      },
+      "matrixSummary": "{ready}/{total} ({percent}%)"
+    }
+  },
+  "docsNav": {
+    "start": "Get started"
+  },
+  "docsSidebar": {
+    "error": "Navigation failed to load. Please try again.",
+    "extensions": "Ext",
+    "components": "UI",
+    "since": "Since {version}",
+    "sections": "Docs sections",
+    "suiteSwitcher": "Component suite",
+    "suiteDescriptions": {
+      "concepts": "Install, theming and foundations",
+      "templates": "Full-page compositions",
+      "base": "Forms, layout and feedback",
+      "pro": "Effects, interaction, primitives",
+      "ai": "Chat, agents and reasoning",
+      "data": "Charts and visualization",
+      "flow": "Flowcharts and orchestration",
+      "motion": "Buttons, cards and input-driven motion"
+    },
+    "suites": {
+      "concepts": "Concepts",
+      "templates": "Templates",
+      "base": "Basics",
+      "pro": "Pro",
+      "ai": "AI",
+      "data": "Data",
+      "flow": "Flow",
+      "motion": "Motion"
+    },
+    "categories": {
+      "templateApp": "App shells",
+      "templateContent": "Content",
+      "templateAi": "AI apps",
+      "templateData": "Data & flow",
+      "basic": "General",
+      "form": "Form",
+      "layout": "Layout",
+      "navigation": "Navigation",
+      "data": "Data Display",
+      "charts": "Charts",
+      "feedback": "Feedback",
+      "status": "Status & Empty",
+      "advanced": "Interaction",
+      "visualization": "Visualization",
+      "effects": "Effects",
+      "primitives": "Primitives",
+      "aiChat": "Chat",
+      "aiAgent": "Agents",
+      "aiReasoning": "Reasoning",
+      "aiContext": "Context & Insight",
+      "flow": "Flow",
+      "motionButtons": "Buttons",
+      "motionCards": "Card Spreads",
+      "motionCarousels": "3D Carousels",
+      "motionLoaders": "Loaders",
+      "motionCharts": "Dither Charts",
+      "motionText": "Text",
+      "motionPhysics": "Physics",
+      "motionInteraction": "Hover, Cursor & Scroll",
+      "motionToggles": "Toggles",
+      "motionTransitions": "Transitions",
+      "misc": "Misc"
+    },
+    "conceptsManual": "Design Concepts Manual",
+    "conceptGroups": {
+      "system": "Tuff Design System (TDS)",
+      "geometry": "Geometry and Curvature",
+      "surfaces": "Surfaces and Material Physics",
+      "color": "Color Science and Dark Mode",
+      "typography": "Typography and Text Engineering",
+      "motion": "Micro-Motion and Interaction Rhythms",
+      "ai": "AI Native Streaming Interfaces"
+    },
+    "families": {
+      "avatarBasic": "Basic Avatar"
+    }
+  }
+}

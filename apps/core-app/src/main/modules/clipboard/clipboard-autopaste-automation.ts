@@ -12,10 +12,10 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { clipboard } from 'electron'
 import { t } from '../../utils/i18n-helper'
-import { coreBoxManager } from '../box-tool/core-box/manager'
 import { notificationModule } from '../notification'
 import { getAutoPasteCapabilityPatch } from '../platform/capability-adapter'
 import { sendPlatformShortcut } from '../system/desktop-shortcut'
+import { getClipboardPorts } from './clipboard-ports'
 import {
   autoPasteFailedMessage,
   ClipboardActionRuntimeError,
@@ -340,7 +340,7 @@ export class ClipboardAutopasteAutomation {
 
     if (payload.hideCoreBox !== false) {
       try {
-        coreBoxManager.trigger(false)
+        getClipboardPorts().coreBox.hideCoreBox()
       } catch (error) {
         this.options.logDebug('Failed to hide CoreBox before auto paste', { error })
       }

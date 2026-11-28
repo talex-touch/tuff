@@ -1,0 +1,195 @@
+/**
+ * Manifest Parser for DivisionBox Configuration
+ *
+ * Pure stateless parser/validator for the divisionBox configuration block from plugin manifests.
+ * Lives in `main/shared` so both DP5 (`plugin-loaders`) and DP7 (`division-box`) can consume it
+ * without introducing an upper-triangular runtime dependency.
+ */
+
+import type {
+  DivisionBoxConfig,
+  DivisionBoxSize,
+  ManifestDivisionBoxConfig
+} from '@talex-touch/utils'
+import { createLogger } from '../utils/logger'
+import type { Primitive } from '../utils/logger'
+
+const logger = createLogger('DivisionBoxManifestParser')
+
+const DEFAULT_MANIFEST_CONFIG = {
+  defaultSize: 'medium' as DivisionBoxSize,
+  keepAlive: false,
+  header: {
+    show: true
+  }
+}
+
+const VALID_SIZES: readonly DivisionBoxSize[] = ['compact', 'medium', 'expanded']
+
+function isValidSize(size: unknown): size is DivisionBoxSize {
+  return typeof size === 'string' && VALID_SIZES.includes(size as DivisionBoxSize)
+}
+
+function formatMetaValue(value: unknown): Primitive {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value
+  }
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
+export function parseManifestDivisionBoxConfig(
+  manifestConfig: unknown,
+  pluginName: string
+): ManifestDivisionBoxConfig {
+  if (!manifestConfig || typeof manifestConfig !== 'object') {
+    if (manifestConfig !== undefined && manifestConfig !== null) {
+      logger.warn(`[${pluginName}] Invalid divisionBox configuration format, using defaults`, {
+        meta: { providedConfig: formatMetaValue(manifestConfig) }
+      })
+    }
+    return { ...DEFAULT_MANIFEST_CONFIG }
+  }
+
+  const config = manifestConfig as Record<string, unknown>
+  const result: ManifestDivisionBoxConfig = {
+    defaultSize: DEFAULT_MANIFEST_CONFIG.defaultSize,
+    keepAlive: DEFAULT_MANIFEST_CONFIG.keepAlive,
+    header: { show: true }
+  }
+
+  if ('defaultSize' in config) {
+    if (isValidSize(config.defaultSize)) {
+      result.defaultSize = config.defaultSize
+    } else {
+      logger.warn(
+        `[${pluginName}] Invalid defaultSize: "${config.defaultSize}", using default "medium". Valid sizes: ${Array.from(VALID_SIZES).join(', ')}`,
+        {
+          meta: {
+            providedSize: String(config.defaultSize)
+          }
+        }
+      )
+    }
+  }
+
+  if ('keepAlive' in config) {
+    if (typeof config.keepAlive === 'boolean') {
+      result.keepAlive = config.keepAlive
+    } else {
+      logger.warn(
+        `[${pluginName}] Invalid keepAlive value: "${config.keepAlive}", using default false`,
+        {
+          meta: {
+            providedValue: formatMetaValue(config.keepAlive),
+            expectedType: 'boolean'
+          }
+        }
+      )
+    }
+  }
+
+  if ('header' in config && typeof config.header === 'object' && config.header !== null) {
+    const headerConfig = config.header as Record<string, unknown>
+
+    if ('show' in headerConfig) {
+      if (typeof headerConfig.show === 'boolean' && result.header) {
+        result.header.show = headerConfig.show
+      } else {
+        logger.warn(
+          `[${pluginName}] Invalid header.show value: "${headerConfig.show}", using default true`,
+          {
+            meta: {
+              providedValue: formatMetaValue(headerConfig.show),
+              expectedType: 'boolean'
+            }
+          }
+        )
+      }
+    }
+
+    if ('title' in headerConfig) {
+      if (
+        typeof headerConfig.title === 'string' &&
+        headerConfig.title.length > 0 &&
+        result.header
+      ) {
+        result.header.title = headerConfig.title
+      } else if (headerConfig.title !== undefined && headerConfig.title !== null) {
+        logger.warn(`[${pluginName}] Invalid header.title value, ignoring`, {
+          meta: {
+            providedValue: formatMetaValue(headerConfig.title),
+            expectedType: 'non-empty string'
+          }
+        })
+      }
+    }
+
+    if ('icon' in headerConfig) {
+      if (typeof headerConfig.icon === 'string' && headerConfig.icon.length > 0 && result.header) {
+        result.header.icon = headerConfig.icon
+      } else if (headerConfig.icon !== undefined && headerConfig.icon !== null) {
+        logger.warn(`[${pluginName}] Invalid header.icon value, ignoring`, {
+          meta: {
+            providedValue: formatMetaValue(headerConfig.icon),
+            expectedType: 'non-empty string'
+          }
+        })
+      }
+    }
+  } else if ('header' in config && config.header !== undefined) {
+    logger.warn(`[${pluginName}] Invalid header configuration format, using defaults`, {
+      meta: {
+        providedHeader: formatMetaValue(config.header),
+        expectedType: 'object'
+      }
+    })
+  }
+
+  logger.debug(
+    `[${pluginName}] Parsed divisionBox configuration: size=${result.defaultSize}, keepAlive=${result.keepAlive}, headerShow=${result.header?.show}`
+  )
+
+  return result
+}
+
+export function mergeManifestWithRuntimeConfig(
+  manifestConfig: Required<ManifestDivisionBoxConfig>,
+  runtimeConfig: Partial<DivisionBoxConfig>
+): DivisionBoxConfig {
+  return {
+    url: runtimeConfig.url!,
+    title: runtimeConfig.title!,
+    pluginId: runtimeConfig.pluginId,
+    icon: runtimeConfig.icon ?? manifestConfig.header.icon,
+    size: runtimeConfig.size ?? manifestConfig.defaultSize,
+    keepAlive: runtimeConfig.keepAlive ?? manifestConfig.keepAlive,
+    header: runtimeConfig.header ?? {
+      show: manifestConfig.header.show ?? true,
+      title: manifestConfig.header.title,
+      icon: manifestConfig.header.icon
+    },
+    webPreferences: runtimeConfig.webPreferences
+  }
+}
+
+export function getDefaultManifestConfig(): ManifestDivisionBoxConfig {
+  return {
+    defaultSize: 'medium',
+    keepAlive: false,
+    header: {
+      show: true,
+      title: undefined,
+      icon: undefined
+    }
+  }
+}

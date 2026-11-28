@@ -87,7 +87,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## 组件梳理
 
-当前源码导出模块总数：**193**。
+当前源码导出模块总数：**198**。
 
 全部模块按三大套件划分，每个套件都有独立的分类入口：
 
@@ -115,9 +115,9 @@ import { TxPromptBar } from '@talex-touch/tuffex/ai'
 
 - `高级交互 (7)`: `command-palette`, `search-panel`, `markdown-editor`, `code-editor`, `terminal`, `virtual-list`, `version-capsule`
 - `动效复合控件 (3)`: `motion-control`, `motion-form`, `motion-metric`
-- `可视化 (5)`: `charts`, `spark-chart`, `allocation-bar`, `diff-table`, `signal-meter`
+- `可视化 (6)`: `charts`, `spark-chart`, `allocation-bar`, `diff-table`, `signal-meter`, `device-mockup`
 - `视觉效果 (27)`: `glass-surface`, `touch-surface`, `gradient-border`, `outline-border`, `border-beam`, `prism-glow`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `icon-morph`, `morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `fusion-surface`, `flow-light`, `liquid`, `flip-overlay`, `fold-page`, `image-generation`, `metal-fx`, `voice-beam`
-- `Motion (11)`: `card-spread`, `carousel-3d`, `flip-book`, `motion`, `motion-button`, `motion-dock`, `motion-loader`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`
+- `Motion (14)`: `card-spread`, `carousel-3d`, `distortion-wave`, `flip-book`, `motion`, `motion-button`, `motion-dock`, `motion-loader`, `motion-text`, `motion-toggle`, `motion-transition`, `physics-motion`, `pixel-field`, `voice-ring`
 - `底层原语 (5)`: `base-surface`, `base-anchor`, `floating`, `auto-sizer`, `resize-box`
 
 Nexus 为 Motion 提供独立文档章节，包含 Buttons、Card Spreads、3D Carousels、Loaders、Dither Charts，以及文字、物理、指针、滚动、开关和转场能力。安装仍使用 `pro` 或单组件子路径，不增加第四套安装器。`TxMonoChart` 与 `TxDitherChart` 沿用现有 `@talex-touch/tuffex/charts` SVG/d3 入口；Mono 文档位于 Data，Dither 位于 Motion。
@@ -130,7 +130,7 @@ Nexus 为 Motion 提供独立文档章节，包含 Buttons、Card Spreads、3D C
 
 - `对话 (9)`: `chat`, `prompt-bar`, `attachment-tray`, `mode-chip`, `message-actions`, `suggestion-chips`, `choice-card`, `conversation-stream`, `voice-clip`
 - `智能体 (11)`: `agents`, `agent-screen`, `agent-trace`, `task-rows`, `tool-call-card`, `tool-chips`, `tool-confirmation`, `approval-card`, `working-indicator`, `bot-avatar`, `miko`
-- `推理与生成 (10)`: `ai-elements`, `chain-of-thought`, `reasoning-disclosure`, `thinking-orb`, `stream-element`, `stream-text`, `stream-markdown`, `code-stream`, `inline-citation`, `sources`
+- `推理与生成 (11)`: `ai-elements`, `chain-of-thought`, `reasoning-disclosure`, `thinking-orb`, `matrix-loader`, `stream-element`, `stream-text`, `stream-markdown`, `code-stream`, `inline-citation`, `sources`
 - `上下文与洞察 (5)`: `context-cards`, `context-indicator`, `insight-cards`, `recommendation-card`, `fine-tune-card`
 - `流程编排 (1)`: `flowchart`
 

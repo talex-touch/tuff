@@ -1,0 +1,336 @@
+---
+title: "Card"
+description: "A surface container with header, body, and footer slots."
+category: Layout
+status: beta
+since: 0.3.4
+tags: [card, surface, layout]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Basic
+:::TuffDemoWrapper{demo="CardBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard>
+      A generic container for content.
+    </TxCard>
+  </template>
+---
+:::
+
+### Header and Footer
+:::TuffDemoWrapper{demo="CardBasicSlotsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard shadow="soft">
+      <template #header>
+        Card title
+        <TxButton size="sm" variant="ghost">Action</TxButton>
+      </template>
+      Slots: header / default / footer
+      <template #footer>
+        <TxButton size="sm" variant="secondary">Cancel</TxButton>
+        <TxButton size="sm" variant="primary">Confirm</TxButton>
+      </template>
+    </TxCard>
+  </template>
+---
+:::
+
+### Inertial
+`inertial` makes the card follow the pointer and spring back on leave; `inertialMaxOffset` caps the travel and `inertialRebound` sets the bounce.
+:::TuffDemoWrapper{demo="CardInertialDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard inertial :inertial-max-offset="26" :inertial-rebound="0.12">
+      Inertial drag
+    </TxCard>
+  </template>
+---
+:::
+
+### Title
+:::TuffDemoWrapper{demo="CardHeaderDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard>
+      <template #header>Card title</template>
+      Using header slot
+    </TxCard>
+  </template>
+---
+:::
+
+### Actions
+:::TuffDemoWrapper{demo="CardHeaderFooterActionsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard shadow="soft">
+      <template #header>
+        User info
+        <TxButton size="sm" variant="ghost">More</TxButton>
+      </template>
+      Zhang San · Frontend Engineer
+      <template #footer>
+        <TxButton size="sm" variant="secondary">Cancel</TxButton>
+        <TxButton size="sm" variant="primary">Confirm</TxButton>
+      </template>
+    </TxCard>
+  </template>
+---
+:::
+
+### Variants
+`plain` drops the border and the hover feedback.
+:::TuffDemoWrapper{demo="CardVariantsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard variant="solid">solid</TxCard>
+    <TxCard variant="dashed">dashed</TxCard>
+    <TxCard variant="plain">plain</TxCard>
+  </template>
+---
+:::
+
+### Backgrounds
+`background` picks the surface material from the same values as [BaseSurface](/en/base-surface)'s `mode`, with `refraction` as the default and the recommendation; refraction runs no SVG displacement layer unless you pass `refraction-renderer="svg"`, and `refraction-glass-opacity` sets its strength.
+:::TuffDemoWrapper{demo="CardCardBackgroundsScrollDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard background="refraction" refraction-profile="filmic" refraction-tone="vivid">
+      refraction
+    </TxCard>
+    <TxCard background="glass">glass</TxCard>
+    <TxCard background="blur">blur</TxCard>
+    <TxCard background="mask">mask</TxCard>
+  </template>
+---
+:::
+
+### Specular light
+`specular` lights the card surface with a pointer-following glow in dark themes, plus a narrow glint along the border; light themes and high contrast draw nothing, `dashed` borders get no glint, and [Alpha Noise Masks & Specular Tracking](/en/concepts/noise-and-specular) explains where the values come from.
+:::TuffDemoWrapper{demo="ConceptCardSpecularDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="dark">
+      <TxCard specular>
+        A faint light follows the pointer over the surface
+      </TxCard>
+    </div>
+  </template>
+---
+:::
+
+### Empty State
+:::TuffDemoWrapper{demo="CardCardWithEmptyDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard variant="plain" :padding="16">
+      <TxEmpty title="Nothing here" description="Create your first item to get started.">
+        <template #action>
+          <TxButton variant="primary" size="sm">Create</TxButton>
+        </template>
+      </TxEmpty>
+    </TxCard>
+    <TxEmpty title="Empty only" description="No Card wrapper, pure empty block." compact />
+  </template>
+---
+:::
+
+### Overlay Panels
+Popover, SearchSelect, and other overlays render their panel with TxCard, configured through `panel-*` props.
+:::TuffDemoWrapper{demo="CardCardCompositionsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxPopover
+      panel-variant="solid"
+      panel-shadow="soft"
+      :panel-radius="18"
+      :panel-padding="10"
+    >
+      <template #reference>
+        <TxButton variant="primary">Popover panel</TxButton>
+      </template>
+      Popover panel uses TxCard
+    </TxPopover>
+    <TxSearchSelect
+      v-model="value"
+      :options="options"
+      panel-shadow="soft"
+      :panel-radius="18"
+      :panel-padding="6"
+    />
+  </template>
+---
+:::
+
+### Sizes
+`size` only sets the padding.
+:::TuffDemoWrapper{demo="CardSizeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard size="small">size=small</TxCard>
+    <TxCard size="medium">size=medium</TxCard>
+    <TxCard size="large">size=large</TxCard>
+  </template>
+---
+:::
+
+### Padding and Radius
+:::TuffDemoWrapper{demo="CardLayoutPropsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard :padding="10" :radius="10">padding=10</TxCard>
+    <TxCard :padding="18" :radius="10">padding=18</TxCard>
+    <TxCard variant="plain" :padding="14" :radius="22">radius=22</TxCard>
+  </template>
+---
+:::
+
+### States
+:::TuffDemoWrapper{demo="CardStatesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard clickable @click="open">clickable</TxCard>
+    <TxCard loading :loading-spinner-size="20">loading</TxCard>
+    <TxCard disabled>disabled</TxCard>
+  </template>
+---
+:::
+
+### Flow light
+`flowLight` is passed to the card's surface whatever its `background`; floating panels turn it on through `panelCard`.
+:::TuffDemoWrapper{demo="CardFlowLightDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard shadow="soft" flow-light="rim">
+      Card content
+    </TxCard>
+    <TxPopover :panel-card="{ flowLight: 'corners' }">
+      <template #reference>
+        <TxButton>Floating panel</TxButton>
+      </template>
+      Panel content
+    </TxPopover>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Use `clickable` only for whole-card navigation or selection; put separate actions on real buttons or links inside the slots.
+- Tune the look with `variant`, `shadow`, `size`, `radius`, and `padding`; override CSS variables only to align slot content or the mask color.
+- For low-level refraction or filter parameters (`displace`, `distortionScale`, `redOffset`, …), use `TxBaseSurface`.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|--------|------|
+| variant | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Border style; `plain` has no border and no hover feedback. |
+| background | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction' \| 'acrylic' \| 'mica' \| 'flat' \| 'plain'` | `'refraction'` | Surface material, the same values as `TxBaseSurface`'s `mode`. |
+| shadow | `'none' \| 'soft' \| 'medium'` | `'none'` | Shadow strength. |
+| size | `'small' \| 'medium' \| 'large'` | `'medium'` | Padding preset: `10` / `12` / `16` px. |
+| radius | `number` | `18` | Corner radius in px. |
+| padding | `number` | - | Padding in px; overrides `size`. |
+| glassBlur | `boolean` | `true` | Enables blur under `glass` / `refraction`. |
+| glassBlurAmount | `number` | `22` | Blur radius in px under `glass` / `refraction`. |
+| glassOverlay | `boolean` | `true` | Enables the highlight layer under `glass` / `refraction`. |
+| glassOverlayOpacity | `number` | `0.18` | Highlight layer opacity. |
+| maskOpacity | `number` | `0.75` | Surface opacity under `mask`, clamped to `0..1`; `acrylic`'s tint takes 0.8 of it. |
+| fallbackMaskOpacity | `number` | `0.26` | Mask opacity (0–1) when the surface falls back during motion. |
+| surfaceMoving | `boolean` | `false` | External motion flag, merged with inertial motion and forwarded to the surface. |
+| refractionStrength | `number` | `62` | Refraction strength (0–100); drives dispersion and distortion. |
+| refractionProfile | `'soft' \| 'filmic' \| 'cinematic'` | `'filmic'` | Refraction style preset. |
+| refractionTone | `'mist' \| 'balanced' \| 'vivid'` | `'vivid'` | Refraction tone preset; `vivid` avoids a gray cast. |
+| refractionAngle | `number` | `-24` | Main dispersion direction in degrees. |
+| refractionRenderer | `'css' \| 'svg'` | `'css'` | Refraction renderer, as on `TxBaseSurface`: `css` runs no SVG displacement layer, `svg` adds it. |
+| refractionGlassOpacity | `number` | `0.3` | Opacity of the displacement layer under the `svg` renderer (0–1). |
+| refractionLightFollowMouse | `boolean` | `false` | Makes the highlight anchor follow the pointer. |
+| refractionLightFollowIntensity | `number` | `0.45` | Follow weight (0–1) on dispersion angle and strength. |
+| refractionLightSpring | `boolean` | `true` | Springs the light as it follows the pointer. |
+| refractionLightSpringStiffness | `number` | `0.15` | Light spring stiffness, clamped to `0.01–0.55`. |
+| refractionLightSpringDamping | `number` | `0.6` | Light spring damping, clamped to `0.55–0.99`. |
+| flowLight | `'corners' \| 'rim' \| 'aurora' \| false` | - | The flow light on the surface; absent or `false` is off. |
+| flowLightIntensity | `number` | `1` | Flow light strength, multiplying the theme opacity. |
+| clickable | `boolean` | `false` | Enables hover and press feedback (scales to `0.985`) and emits `click`. |
+| specular | `boolean` | - | A faint light that follows the pointer, with a glint along the border, in dark themes; follows `clickable` when absent and is off while disabled. |
+| loading | `boolean` | `false` | Covers the card with a `TxSpinner` overlay. |
+| loadingSpinnerSize | `number` | - | Spinner size in px; `12` when omitted. |
+| disabled | `boolean` | `false` | Disabled styling; blocks `click` and pointer motion. |
+| inertial | `boolean` | `false` | Follows the pointer and springs back on leave. |
+| inertialMaxOffset | `number` | `22` | Maximum follow offset in px. |
+| inertialRebound | `number` | `0.12` | Rebound factor, clamped to `0..1`; higher is bouncier. |
+
+### Events
+
+| Event | Params | Description |
+|--------|------|------|
+| `click` | `(event: MouseEvent)` | Fires on click, Enter, or Space when the card is clickable and not disabled. |
+
+### Slots
+
+| Slot | Props | Description |
+|--------|-------|------|
+| `default` | - | Body content. |
+| `header` | - | Header above the body. |
+| `footer` | - | Footer below the body. |
+| `cover` | - | Cover before the header and body. |
+
+## Overview
+
+- When clickable, the root gets `role="button"` and `tabindex="0"`, and Enter / Space fire `click`; otherwise it is a plain `div`.
+- A disabled clickable card sets `aria-disabled` and leaves the tab order.
+- Only key presses on the card itself activate it; Enter / Space in slotted controls don't.
+- The `loading` overlay is `aria-hidden`; screen-reader and form-busy announcements are up to the caller.
+- `background` is forwarded to `TxBaseSurface` as the surface mode: `mask` and `acrylic` use `maskOpacity`, and `mask`, `acrylic` and `mica` take `--tx-card-fake-background` as their base colour; `blur` and `acrylic` both blur 30px; `glass` and `refraction` use the blur and overlay props; refraction props apply only under `refraction`.
+
+## Technologies
+
+- The surface is an `aria-hidden` `TxBaseSurface`; inertia is a `requestAnimationFrame` spring that writes `--tx-card-dx` / `--tx-card-dy` and stops once settled.
+- Source: `packages/tuffex/packages/components/src/card/`.
+
+<TuffDocSourceLink />
+
+## Customization
+
+:::TuffCodeBlock{lang="css"}
+---
+code: |
+  .custom-card {
+    /* Base color sampled by mask and refraction fallback surfaces */
+    --tx-card-fake-background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 92%, transparent);
+  }
+---
+:::
+
+| Variable | Written by | Purpose |
+|----------|------------|---------|
+| `--tx-card-radius` | `radius` | Radius of the root. The surface, cover, and loading overlay sit inside the border and take this radius less `--tx-card-border-width`, so their corners stay concentric with the root's. |
+| `--tx-card-border-width` | `variant` | Border width: 1px for `solid` and `dashed`, 0 for `plain`. Do not set it by hand. |
+| `--tx-card-padding` | `padding` or `size` | Padding and the cover's negative margin. |
+| `--tx-card-dx` / `--tx-card-dy` | inertial motion | Root offset; don't set manually. |
+| `--tx-card-fake-background` | caller / theme | Base color of `mask`, `acrylic` and `mica` surfaces and of refraction fallback surfaces. |
+| `--tx-card-light-x` / `--tx-card-light-y` | `specular` | Position of the light, in percent of the card's width and height, written on `.tx-card__specular`; don't set manually. |
+| `--tx-surface-refraction-mask-color` | root inline style | Forwards `--tx-card-fake-background` to `TxBaseSurface`; override that one instead. |
+
+To follow an app theme, override global tokens such as `--tx-bg-color-overlay`, `--tx-border-color-light`, and `--tx-color-primary`.

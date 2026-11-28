@@ -31,8 +31,10 @@ export const earlyHintFamilies = [
     pattern: route,
     samples: [route === '/' ? 'index.html' : `${route.replace(/^\//, '')}.html`],
   })),
-  { pattern: '/en/docs/*', samples: ['en/docs.html', 'en/docs/dev/components/button.html', 'en/docs/guide/start.html'] },
-  { pattern: '/zh/docs/*', samples: ['zh/docs.html', 'zh/docs/dev/components/button.html', 'zh/docs/guide/start.html'] },
+  { pattern: '/en/docs', samples: ['en/docs.html'] },
+  { pattern: '/zh/docs', samples: ['zh/docs.html'] },
+  { pattern: '/en/docs/*', samples: ['en/docs.html', 'en/docs/dev/api/search.html', 'en/docs/guide/start.html'] },
+  { pattern: '/zh/docs/*', samples: ['zh/docs.html', 'zh/docs/dev/api/search.html', 'zh/docs/guide/start.html'] },
 ]
 
 const ENTRY_SCRIPT_RE = /<script[^>]*\btype="module"[^>]*\bsrc="(\/_nuxt\/[^"]+\.js)"/

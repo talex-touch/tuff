@@ -231,6 +231,14 @@ vi.mock('../nexus/scene-client', () => ({
   extractTranslatedTextFromSceneRun: extractTranslatedTextFromSceneRunMock
 }))
 
+import { registerOmniPanelPorts } from './omni-panel-ports'
+registerOmniPanelPorts({
+  nexus: {
+    runNexusScene: runNexusSceneMock,
+    extractTranslatedTextFromSceneRun: extractTranslatedTextFromSceneRunMock
+  }
+})
+
 vi.mock('../storage', () => ({
   getMainConfig: vi.fn(() => ({})),
   saveMainConfig: saveMainConfigMock

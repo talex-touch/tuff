@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { createGenerator } from 'unocss'
-import { hasRenderedDocsBody } from './check-worker-bundle.mjs'
+import {
+  checkServiceWorkerTuffexBoundary,
+  checkStaticRedirects,
+  hasRenderedDocsBody,
+} from './check-worker-bundle.mjs'
+import { docsStaticRedirects } from './nexus-static-routes.mjs'
+import { mergeStaticRedirects } from './write-static-redirects.mjs'
 import enLocale from '../i18n/locales/en'
 import zhLocale from '../i18n/locales/zh'
 import unoConfig from '../uno.config'
@@ -54,14 +60,38 @@ describe('Nexus deploy asset budget', () => {
     expect(pwaSource).toContain("'**/dump.*.sql'")
     expect(pwaSource).toContain("'**/*.wasm'")
     expect(pwaSource).toContain("'**/sqlite3*'")
+    expect(pwaSource).toContain('/^\\/tuffex(\\/|$)/')
 
     expect(guardSource).toContain('forbiddenServiceWorkerPrecachePatterns')
     expect(guardSource).toContain('/_nuxt\\/(?!builds\\/)/')
     expect(guardSource).toContain('(?:en|zh)\\/docs')
+    expect(guardSource).toContain('/tuffex\\//')
+    expect(guardSource).toContain('checkServiceWorkerTuffexBoundary')
     expect(guardSource).toContain('__nuxt_content\\/')
     expect(guardSource).toContain('dump\\.[^"\']+\\.sql')
     expect(guardSource).toContain('sqlite3[^"\']*')
     expect(guardSource).toContain('\\.wasm')
+  })
+
+  it('verifies sw.js never intercepts or precaches /tuffex/ and _redirects routes legacy TuffEx paths with 308', () => {
+    const safeSw = 'registerRoute(new NavigationRoute(createHandlerBoundToURL("/"),{denylist:[/^\\/tuffex(\\/|$)/,/.*/]}));precacheAndRoute([{url:"favicon.ico",revision:"1"}]);'
+    expect(checkServiceWorkerTuffexBoundary(safeSw)).toEqual({ findings: [], verified: 1 })
+    expect(checkServiceWorkerTuffexBoundary('precacheAndRoute([{url:"favicon.ico",revision:"1"}]);')).toEqual({ findings: [], verified: 1 })
+
+    const unsafeNavSw = 'registerRoute(new NavigationRoute(createHandlerBoundToURL("/"),{denylist:[/.*/]}));'
+    expect(checkServiceWorkerTuffexBoundary(unsafeNavSw).findings).toContain(
+      'sw.js NavigationRoute does not explicitly denylist /tuffex/',
+    )
+
+    const unsafePrecacheSw = 'precacheAndRoute([{url:"/tuffex/en/button.html",revision:"1"}]);'
+    expect(checkServiceWorkerTuffexBoundary(unsafePrecacheSw).findings[0]).toContain('sw.js precaches /tuffex/ assets')
+
+    const renderedRedirects = mergeStaticRedirects('/terms\t/license\t307\n')
+    expect(renderedRedirects).toContain('/en/docs/dev/components/* /tuffex/en/:splat 308')
+    expect(renderedRedirects).toContain('/llms.txt /tuffex/llms.txt 308')
+    const redirectCheck = checkStaticRedirects(renderedRedirects)
+    expect(redirectCheck.findings).toEqual([])
+    expect(redirectCheck.verified).toBe(docsStaticRedirects.length)
   })
 
   it('keeps production builds independent from remote web-font providers', () => {
@@ -130,6 +160,8 @@ describe('Nexus deploy asset budget', () => {
     expect(installed.css.length, 'i-carbon-settings should resolve from @iconify-json/carbon').toBeGreaterThan(0)
     const uninstalled = await uno.generate('i-ri-settings-line', { preflights: false, safelist: false })
     expect(uninstalled.css.length, 'i-ri-settings-line should not resolve — ri is not a dependency').toBe(0)
+    const retiredCib = await uno.generate('i-cib-windows', { preflights: false, safelist: false })
+    expect(retiredCib.css.length, 'i-cib-* should be blocked from emitting CSS').toBe(0)
   })
 
   /*
@@ -147,6 +179,27 @@ describe('Nexus deploy asset budget', () => {
     expect(css).toMatch(/:where\(\.i-logos-vue\)\{[^}]*background:url\("data:image\/svg\+xml/)
     expect(css).toMatch(/(?:^|\n)\.text-amber-600\{/)
     expect(css).toMatch(/(?:^|\n)\.w-4\{/)
+  })
+
+  it('keeps UnoCSS free of evicted demo-icons scanning and routes icons into the icons layer with zero specificity', async () => {
+    const unoSource = readFileSync(unoConfigPath, 'utf8')
+    expect(unoSource).not.toContain('demo-icons')
+    expect(unoSource).not.toContain('components/content/demos/')
+
+    const uno = await createGenerator(unoConfig)
+    const result = await uno.generate('i-carbon-settings i-carbon-build-tool', { preflights: false, safelist: false })
+
+    expect(result.getLayer('icons')).toMatch(/:where\(\.i-carbon-settings\)\{/)
+    expect(result.getLayer('icons')).toMatch(/:where\(\.i-carbon-build-tool\)\{/)
+  })
+
+  it('schedules UnoCSS icon layers in idle after app:suspense:resolve without app:mounted', () => {
+    const pluginSource = readFileSync(join(nexusRoot, 'app/plugins/unocss-icons.client.ts'), 'utf8')
+    expect(pluginSource).toContain("nuxtApp.hook('app:suspense:resolve'")
+    expect(pluginSource).not.toContain("nuxtApp.hook('app:mounted'")
+    expect(pluginSource).not.toContain('requestAnimationFrame')
+    expect(pluginSource).toContain('requestIdleCallback')
+    expect(pluginSource).toContain("import('uno:icons.css')")
   })
 
   it('keeps oversized route-local icon paths out of the shared entry CSS', () => {
@@ -183,9 +236,9 @@ describe('Nexus deploy asset budget', () => {
     expect(unoSource).not.toContain('i-simple-icons-')
     expect(iconSources).not.toContain('i-ri-')
     expect(iconSources).not.toContain('i-simple-icons-')
-    // 5.5 KB of path against i-carbon-linux-alt's 1.0 KB; likewise cib's apple
-    // (1.3 KB) against carbon's (0.7 KB). Safari and Edge have no carbon
-    // equivalent and stay on cib.
+    // All `i-cib-*` usages have been retired onto `carbon` so `@iconify-json/cib`
+    // can be dropped cleanly without emitting any brand SVGs into `__uno_icons.css`.
+    expect(iconSources).not.toContain('i-cib-')
     expect(iconSources).not.toContain('i-cib-linux')
     expect(iconSources).not.toContain('i-cib-apple')
     for (const icon of [
@@ -346,9 +399,6 @@ describe('Nexus deploy asset budget', () => {
     expect(guardSource).toContain('/api/docs/navigation')
     expect(guardSource).toContain('/api/docs/navigation/:locale/:scope')
     expect(guardSource).toContain('navigation\\/_locale\\/_scope_\\.get\\.mjs')
-    expect(guardSource).toContain('/api/docs/sidebar-components')
-    expect(guardSource).toContain('/api/docs/sidebar-components/:locale')
-    expect(guardSource).toContain('sidebar-components\\/_locale_\\.get\\.mjs')
     expect(guardSource).toContain('/api/docs/search')
     expect(guardSource).toContain('/api/docs/search/:locale')
     expect(guardSource).toContain('search\\/_locale_\\.get\\.mjs')
@@ -387,7 +437,28 @@ describe('Nexus deploy asset budget', () => {
     // `*` in `_routes.json` spans path separators, so `/en/docs/*` also covers the nested
     // raw-Markdown twins. The roots do not match it and need their own entries, or they reach
     // a Worker with no filesystem to read the Markdown source from.
-    for (const required of ['/en/docs', '/en/docs.md', '/en/docs/*', '/zh/docs', '/zh/docs.md', '/zh/docs/*', '/api/docs/page/*'])
+    for (const required of [
+      '/assets/*',
+      '/shots/*',
+      '/videos/*',
+      '/vendor/*',
+      '/geo/*',
+      '/_i18n/*',
+      '/__nuxt_content/*',
+      '/llms.txt',
+      '/docs',
+      '/docs/*',
+      '/en/docs',
+      '/en/docs.md',
+      '/en/docs/*',
+      '/zh/docs',
+      '/zh/docs.md',
+      '/zh/docs/*',
+      '/api/docs/page/*',
+      '/api/docs/navigation/*',
+      '/api/docs/search/*',
+      '/api/docs/sidebar-components/*',
+    ])
       expect(excluded).toContain(required)
 
     expect(guardSource).toContain('expectedStaticRoutePatterns')

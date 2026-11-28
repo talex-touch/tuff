@@ -4,7 +4,6 @@ import {
   createDocToken,
   ensureDocAnalyticsSchema,
   expirePendingSessions,
-  getDocSecurityState,
   isAllowedDocPathForSource,
   normalizeDocPath,
   normalizeDocSourceType,
@@ -79,26 +78,58 @@ export default defineEventHandler(async (event) => {
   // TODO-SEC-1: 接入全局风险引擎后，替换当前 docs 独立风险状态读取逻辑。
   if (ip) {
     if (ENFORCE_DOC_SECURITY) {
-      security = await getDocSecurityState(db, ip, clientId)
-      if (security?.blockedUntil && security.blockedUntil > Date.now()) {
+      const now = Date.now()
+      // Batch the independent security-state lookup and overdue-session cleanup into one D1 round trip.
+      const [securityResult, expiredResult] = await db.batch([
+        db.prepare(
+          'SELECT violation_count, risk_level, blocked_until FROM doc_analytics_security WHERE ip = ?1 AND client_id = ?2',
+        ).bind(ip, clientId),
+        db.prepare(`
+          UPDATE doc_engagement_sessions
+          SET status = 'expired'
+          WHERE session_id IN (
+            SELECT session_id FROM doc_engagement_sessions
+            WHERE ip = ?1 AND client_id = ?2 AND status = 'pending' AND expect_report_at < ?3
+            LIMIT 20
+          )
+          RETURNING session_id;
+        `).bind(ip, clientId, now),
+      ])
+
+      const securityRow = (securityResult?.results?.[0] ?? null) as {
+        violation_count?: number
+        risk_level?: number
+        blocked_until?: number | null
+      } | null
+      if (securityRow) {
+        security = {
+          violationCount: securityRow.violation_count ?? 0,
+          riskLevel: securityRow.risk_level ?? 0,
+          blockedUntil: securityRow.blocked_until ?? null,
+        }
+      }
+      if (security?.blockedUntil && security.blockedUntil > now) {
         throw createError({ statusCode: 403, statusMessage: 'IP blocked' })
+      }
+
+      const expiredCount = expiredResult?.results?.length ?? 0
+      if (expiredCount > 0) {
+        security = await recordDocViolation(db, {
+          ip,
+          clientId,
+          weight: Math.min(expiredCount, EXPIRED_SESSION_VIOLATION_WEIGHT_CAP),
+        })
+        if (security.blockedUntil && security.blockedUntil > Date.now()) {
+          throw createError({ statusCode: 403, statusMessage: 'IP blocked' })
+        }
       }
     }
-
-    const expiredCount = await expirePendingSessions(db, {
-      ip,
-      clientId,
-      now: Date.now(),
-    })
-    if (ENFORCE_DOC_SECURITY && expiredCount > 0) {
-      security = await recordDocViolation(db, {
+    else {
+      await expirePendingSessions(db, {
         ip,
         clientId,
-        weight: Math.min(expiredCount, EXPIRED_SESSION_VIOLATION_WEIGHT_CAP),
+        now: Date.now(),
       })
-      if (security.blockedUntil && security.blockedUntil > Date.now()) {
-        throw createError({ statusCode: 403, statusMessage: 'IP blocked' })
-      }
     }
   }
 

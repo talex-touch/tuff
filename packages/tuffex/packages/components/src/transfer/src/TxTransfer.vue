@@ -272,27 +272,29 @@ function toggleSelectAll(side: 'source' | 'target', checked: boolean) {
 
     <div class="tx-transfer__actions">
       <TxButton
-        variant="ghost"
+        size="sm"
+        :variant="leftChecked.length > 0 ? 'primary' : 'secondary'"
         class="tx-transfer__action-btn"
         :class="{ 'is-armed': leftChecked.length > 0 }"
         :disabled="leftChecked.length === 0"
         :aria-label="addAriaLabel"
         @click="handleAdd"
       >
-        <TxIcon name="chevron-right" />
+        <TxIcon class="tx-transfer__action-icon" name="chevron-right" :size="14" />
         <span v-if="leftChecked.length > 0" class="tx-transfer__action-count">{{
           leftChecked.length
         }}</span>
       </TxButton>
       <TxButton
-        variant="ghost"
+        size="sm"
+        :variant="rightChecked.length > 0 ? 'primary' : 'secondary'"
         class="tx-transfer__action-btn"
         :class="{ 'is-armed': rightChecked.length > 0 }"
         :disabled="rightChecked.length === 0"
         :aria-label="removeAriaLabel"
         @click="handleRemove"
       >
-        <TxIcon name="chevron-left" />
+        <TxIcon class="tx-transfer__action-icon" name="chevron-left" :size="14" />
         <span v-if="rightChecked.length > 0" class="tx-transfer__action-count">{{
           rightChecked.length
         }}</span>
@@ -368,7 +370,7 @@ function toggleSelectAll(side: 'source' | 'target', checked: boolean) {
 .tx-transfer {
   display: flex;
   align-items: stretch;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
 }
 
@@ -412,6 +414,14 @@ function toggleSelectAll(side: 'source' | 'target', checked: boolean) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tx-transfer__count {
+  flex: none;
+  font-size: 12px;
+  font-weight: var(--tx-font-weight-medium, 500);
+  font-variant-numeric: tabular-nums;
+  color: var(--tx-text-color-secondary, #909399);
 }
 
 .tx-transfer__filter {
@@ -495,36 +505,79 @@ function toggleSelectAll(side: 'source' | 'target', checked: boolean) {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
 }
 
-/* Icon-only ghost buttons read as decoration between two bordered panels, so the
-   only control that moves anything looked like it did nothing. These carry their
-   own chrome and light up once there is a selection to move. */
+/* Drive TxButton through its own surface tokens (`--fake-color` / `--fake-opacity` /
+   `--tx-button-border-color`): painting `background` directly on a `.fake-background`
+   button sits underneath the 75% `::before` veil, washing solid primary blue into pale
+   tint under white ink. */
 .tx-transfer__action-btn {
-  min-width: 40px;
-  height: 36px;
-  padding: 0 10px;
-  gap: 4px;
-  border: 1px solid var(--tx-border-color, #dcdfe6);
-  border-radius: 10px;
-  background: var(--tx-fill-color-blank, #ffffff);
-  color: var(--tx-text-color-regular, #606266);
+  --tx-button-height: 30px;
+  --tx-button-radius: 8px;
+  --fake-radius: 8px;
+  --fake-opacity: 1;
+  --fake-index: -1;
+  --fake-color: var(--tx-fill-color-blank, #ffffff);
+  --tx-button-border-color: var(--tx-border-color-lighter, #ebeef5);
+  --tx-button-bg-color-hover: transparent;
+  min-width: 34px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--tx-text-color-secondary, #909399);
+  transition:
+    border-color 0.16s ease,
+    color 0.16s ease,
+    opacity 0.16s ease;
+
+  :deep(.tx-button__inner) {
+    --tx-button-gap: 3px;
+    gap: 3px;
+  }
+
+  &:hover:not(:disabled) {
+    --fake-color: var(--tx-fill-color-light, #f5f7fa);
+    --tx-button-border-color: var(--tx-border-color, #dcdfe6);
+    background-color: transparent;
+    color: var(--tx-text-color-primary, #303133);
+  }
+
+  &.is-armed {
+    --fake-color: var(--tx-color-primary-light-9, #ecf5ff);
+    --tx-button-border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 48%, transparent);
+    --tx-button-bg-color-hover: transparent;
+    background-color: transparent;
+    color: var(--tx-color-primary, #409eff);
+
+    &:hover:not(:disabled) {
+      --fake-color: var(--tx-color-primary-light-8, #d9ecff);
+      --tx-button-border-color: var(--tx-color-primary, #409eff);
+      background-color: transparent;
+      color: var(--tx-color-primary, #409eff);
+    }
+
+    &:active:not(:disabled) {
+      --fake-color: var(--tx-color-primary-light-7, #c6e2ff);
+    }
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    --fake-opacity: 1;
+    --fake-index: -1;
+  }
 }
 
-.tx-transfer__action-btn.is-armed {
-  border-color: var(--tx-color-primary, #409eff);
-  background: var(--tx-color-primary, #409eff);
-  color: var(--tx-color-on-primary, #fff);
-}
-
-.tx-transfer__action-btn:disabled {
-  opacity: 0.5;
+.tx-transfer__action-icon {
+  flex: none;
 }
 
 .tx-transfer__action-count {
   font-size: 12px;
   font-weight: var(--tx-font-weight-semibold, 600);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
@@ -546,7 +599,7 @@ function toggleSelectAll(side: 'source' | 'target', checked: boolean) {
     justify-content: center;
   }
 
-  .tx-transfer__actions :deep(.tx-button) {
+  .tx-transfer__action-icon {
     transform: rotate(90deg);
   }
 }

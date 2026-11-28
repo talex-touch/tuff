@@ -1,8 +1,8 @@
 import {
   SEARCH_TRACE_STATS_SCHEMA,
   evaluateSearchTracePerformance
-} from '../box-tool/search-engine/search-trace-stats'
-import type { SearchTracePerformanceSummary } from '../box-tool/search-engine/search-trace-stats'
+} from '../../shared/search-trace-stats-gate'
+import type { SearchTracePerformanceSummary } from '../../shared/search-trace-stats-gate'
 import {
   APP_INDEX_DIAGNOSTIC_EVIDENCE_KIND,
   APP_INDEX_DIAGNOSTIC_EVIDENCE_SCHEMA_VERSION,

@@ -147,6 +147,16 @@ vi.mock('../auth', () => ({
   getAuthToken: vi.fn(() => (authMocks.session.isSignedIn ? 'nexus-access-token' : null))
 }))
 
+import { registerAiPorts } from './ai-ports'
+registerAiPorts({
+  auth: {
+    subscribeAuthState: authMocks.subscribeAuthState,
+    getSanitizedAuthSessionState: authMocks.getSanitizedAuthSessionState,
+    getAuthToken: () => (authMocks.session.isSignedIn ? 'nexus-access-token' : null),
+    performNexusRequestWithAuth: async () => null
+  }
+})
+
 const nativeOcrMocks = vi.hoisted(() => ({
   getNativeOcrSupport: vi.fn<() => { supported: boolean; platform: string; reason?: string }>(
     () => ({
@@ -1083,6 +1093,15 @@ function toggleNexusRouteFromChannelsPage(enabled: boolean, notify = true): void
  */
 async function importFreshConfigModule() {
   vi.resetModules()
+  const aiPorts = await import('./ai-ports')
+  aiPorts.registerAiPorts({
+    auth: {
+      subscribeAuthState: authMocks.subscribeAuthState,
+      getSanitizedAuthSessionState: authMocks.getSanitizedAuthSessionState,
+      getAuthToken: () => (authMocks.session.isSignedIn ? 'nexus-access-token' : null),
+      performNexusRequestWithAuth: async () => null
+    }
+  })
   const config = await import('./intelligence-config')
   const sdk = await import('./intelligence-sdk')
   return { config, updateConfig: vi.mocked(sdk.tuffIntelligence.updateConfig) }

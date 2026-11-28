@@ -1,6 +1,23 @@
+import { getRequestURL } from 'h3'
+import { runAfterResponse } from '../../../utils/afterResponse'
 import { requireAuth } from '../../../utils/auth'
 import { getUserById } from '../../../utils/authStore'
-import { deleteComment, ensureCommentsSchema, getCommentOwner, getD1Database } from '../../../utils/docCommentsStore'
+import { deleteComment, ensureCommentsSchema, getD1Database, normalizePath } from '../../../utils/docCommentsStore'
+import { edgeCacheKeyUrl } from '../../../utils/edgeCache'
+
+function invalidateCommentsEdgeCache(event: Parameters<typeof getRequestURL>[0], normalizedPath: string) {
+  const store = (globalThis as { caches?: { default?: { delete?: (request: Request) => Promise<boolean> } } }).caches?.default
+  if (!store || typeof store.delete !== 'function')
+    return
+
+  const keyUrl = edgeCacheKeyUrl(getRequestURL(event).origin, {
+    name: 'docs/comments',
+    params: { path: normalizedPath },
+  })
+  runAfterResponse(event, 'docs comments edge cache invalidate', async () => {
+    await store.delete!(new Request(keyUrl))
+  })
+}
 
 export default defineEventHandler(async (event) => {
   const auth = await requireAuth(event)
@@ -18,18 +35,23 @@ export default defineEventHandler(async (event) => {
 
   await ensureCommentsSchema(db)
 
-  const ownerId = await getCommentOwner(db, id)
-  if (!ownerId) {
+  const existing = await db.prepare(
+    'SELECT user_id, path FROM doc_comments WHERE id = ?1',
+  ).bind(id).first<{ user_id: string, path: string }>()
+  if (!existing?.user_id) {
     throw createError({ statusCode: 404, statusMessage: 'Comment not found' })
   }
 
   const user = auth.user ?? await getUserById(event, userId)
   const isAdmin = user?.role === 'admin'
 
-  if (ownerId !== userId && !isAdmin) {
+  if (existing.user_id !== userId && !isAdmin) {
     throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
   }
 
   await deleteComment(db, id)
+  if (existing.path)
+    invalidateCommentsEdgeCache(event, normalizePath(existing.path))
+
   return { success: true }
 })

@@ -1,5 +1,8 @@
+import './styles/base-a.css'
 import './styles/index.scss'
 
+export * from './components/base-a'
+export * from './components/base-b'
 export { createReactiveStreamPacer, segmentWords } from './components/stream-pacer'
 // Tier A (18)
 export { TxAlert } from './components/TxAlert'

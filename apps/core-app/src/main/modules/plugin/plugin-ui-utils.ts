@@ -3,7 +3,7 @@
  */
 
 import { createLogger } from '../../utils/logger'
-import { DivisionBoxManager } from '../division-box/manager'
+import { getPluginDivisionBoxPort } from './plugin-ports'
 
 const pluginUiUtilsLog = createLogger('PluginSystem').child('UIUtils')
 
@@ -52,8 +52,8 @@ export async function checkPluginActiveUI(pluginName: string): Promise<PluginAct
 
   // Check DivisionBox sessions
   try {
-    const divisionBoxManager = DivisionBoxManager.getInstance()
-    const activeSessions = divisionBoxManager.getActiveSessions()
+    const divisionBoxPort = getPluginDivisionBoxPort()
+    const activeSessions = divisionBoxPort?.getActiveSessions() ?? []
 
     for (const session of activeSessions) {
       const attachedPlugin = session.getAttachedPlugin()
@@ -114,14 +114,14 @@ export async function closePluginActiveUI(pluginName: string): Promise<boolean> 
 
   // Close DivisionBox sessions
   try {
-    const divisionBoxManager = DivisionBoxManager.getInstance()
-    const activeSessions = divisionBoxManager.getActiveSessions()
+    const divisionBoxPort = getPluginDivisionBoxPort()
+    const activeSessions = divisionBoxPort?.getActiveSessions() ?? []
 
     for (const session of activeSessions) {
       const attachedPlugin = session.getAttachedPlugin()
       if (attachedPlugin?.name === pluginName) {
         try {
-          await divisionBoxManager.destroySession(session.sessionId)
+          await divisionBoxPort?.destroySession(session.sessionId)
         } catch (error) {
           pluginUiUtilsLog.error('Failed to destroy DivisionBox plugin session', {
             meta: { pluginName, sessionId: session.sessionId },

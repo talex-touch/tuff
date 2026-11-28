@@ -19,9 +19,12 @@ import type {
   VoiceFileTranscriptionEvent,
   VoiceKeptRecording,
   VoiceRecognitionLocation,
+  VoiceRecognitionRecordSource,
   VoiceRecoveryKind,
   VoiceRecoveryStatus,
   VoiceRetryPayload,
+  VoiceRetryRecordPayload,
+  VoiceRetryRecordResult,
   VoiceRetryResult,
   VoiceSpeakPayload,
   VoiceSpeakResult,
@@ -41,7 +44,8 @@ import { VOICE_CAPTURE_UNAVAILABLE_CODES } from '@talex-touch/utils/transport/sd
 import { StorageList } from '@talex-touch/utils'
 import {
   DEFAULT_VOICE_POLISH_STRENGTH,
-  normalizeVoiceHistoryEnabled,
+  isVoiceHistoryRetentionActive,
+  normalizeVoiceDictionaryEntries,
   normalizeVoicePolishStrength
 } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { createLogger } from '../../utils/logger'
@@ -64,7 +68,7 @@ import {
 } from './quick-edit-prompt'
 import { selectVoiceFile } from './voice-file-transcription'
 import { voiceInsightsStore } from './voice-insights-store'
-import { voiceKeptRecordings } from './voice-kept-recordings'
+import { readKeptWav, voiceKeptRecordings } from './voice-kept-recordings'
 import { createLiveDelivery } from './voice-live-delivery'
 import { getConfiguredAsrProvider, getVoiceRecognitionLocation } from './voice-provider-runtime'
 import { voiceRecognitionStore } from './voice-recognition-store'
@@ -72,12 +76,45 @@ import { voiceRecognitionStore } from './voice-recognition-store'
 function isVoiceHistoryEnabled(): boolean {
   try {
     const setting = getMainConfig(StorageList.APP_SETTING) as {
-      voiceInput?: { historyEnabled?: unknown }
+      voiceInput?: { historyEnabled?: unknown; historyRetention?: unknown }
     }
-    return normalizeVoiceHistoryEnabled(setting.voiceInput?.historyEnabled)
+    return isVoiceHistoryRetentionActive(setting.voiceInput)
   } catch {
     return false
   }
+}
+
+function resolvePolishEnabled(): boolean {
+  try {
+    const setting = getMainConfig(StorageList.APP_SETTING) as
+      | { voiceInput?: { polishEnabled?: unknown } }
+      | undefined
+    return setting?.voiceInput?.polishEnabled !== false
+  } catch {
+    return true
+  }
+}
+
+function resolveSessionRecordSource(source: unknown): VoiceRecognitionRecordSource {
+  if (source === 'dictate' || source === 'ask') return source
+  return 'microphone'
+}
+
+function extractVoiceErrorCode(error: unknown, fallback = 'VOICE_RECOGNITION_FAILED'): string {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof error.code === 'string' &&
+    error.code.trim()
+  ) {
+    return error.code.trim()
+  }
+  if (error instanceof Error && error.message.trim() === 'VOICE_OPERATION_CANCELLED') {
+    return 'VOICE_OPERATION_CANCELLED'
+  }
+  if (error instanceof Error && error.name) return error.name
+  return fallback
 }
 
 /**
@@ -372,6 +409,7 @@ interface RetryBuffer {
   chunks: Buffer[]
   bytes: number
   sampleRate: number
+  source: VoiceRecognitionRecordSource
   language?: string
   /** Exact main-owned adapter snapshot from the failed stream; never re-resolved from settings. */
   provider: VoiceProviderAdapter
@@ -407,6 +445,7 @@ interface VoiceSessionRecord {
   /** True only when this session opened a *different* device than the last one that named one. */
   readonly deviceChanged: boolean
   readonly caller: string
+  readonly source: VoiceRecognitionRecordSource
   readonly delivery: VoiceDictatePayload['delivery']
   readonly polishStrength: VoicePolishStrength
   readonly targetKey: string | null
@@ -474,13 +513,14 @@ export function resolveVoiceVocabulary(): string[] {
   try {
     const setting = getMainConfig(StorageList.APP_SETTING) as
       | {
-          voiceInput?: { customWords?: unknown; vocabulary?: unknown }
+          voiceInput?: { customWords?: unknown; vocabulary?: unknown; dictionaryEntries?: unknown }
         }
       | undefined
-    const configured = setting?.voiceInput?.customWords ?? setting?.voiceInput?.vocabulary
-    const userWords = Array.isArray(configured)
-      ? configured.filter((w): w is string => typeof w === 'string' && Boolean(w.trim()))
-      : []
+    const entries = normalizeVoiceDictionaryEntries(
+      setting?.voiceInput?.dictionaryEntries,
+      setting?.voiceInput?.customWords ?? setting?.voiceInput?.vocabulary
+    )
+    const userWords = entries.map((entry) => entry.term)
     const seen: Record<string, true> = {}
     const combined = [...userWords, ...DEFAULT_TECHNICAL_VOCABULARY]
     const deduplicated: string[] = []
@@ -646,6 +686,7 @@ export class VoiceService {
   /** See RECOVERY_GRACE_MS: one slot, memory only, dropped as soon as its reason disappears. */
   private retryBuffer: RetryBuffer | null = null
   private retryInFlight: ActiveVoiceRetry | null = null
+  private readonly recordRetriesInFlight = new Map<string, Promise<VoiceRetryRecordResult>>()
   private retryBufferGeneration = 0
   /** The last input device that named itself; `null` until one does. See `noteCaptureDevice`. */
   private lastDeviceName: string | null = null
@@ -695,6 +736,7 @@ export class VoiceService {
     providerRequestId: string,
     reuseProviderRequestId: boolean,
     sampleRate: number,
+    source: VoiceRecognitionRecordSource,
     provider: VoiceProviderAdapter,
     model: string,
     recognitionLocation: VoiceRecognitionLocation,
@@ -714,6 +756,7 @@ export class VoiceService {
       chunks: [],
       bytes: 0,
       sampleRate,
+      source,
       provider,
       model,
       recognitionLocation,
@@ -861,6 +904,7 @@ export class VoiceService {
       deviceName,
       deviceChanged,
       caller,
+      source: resolveSessionRecordSource(payload.source),
       delivery: payload.delivery ?? 'none',
       polishStrength,
       targetKey,
@@ -908,23 +952,39 @@ export class VoiceService {
       }
       throw error
     }
-    const finalized = await this.finalizeCapture(
-      capture,
-      {
-        cleanup: options.cleanup,
-        language: options.language,
-        delivery: record.delivery,
-        polishStrength: record.polishStrength,
-        /*
-         * Dropping this field here silently demotes an edit to dictation: the instruction would be
-         * polished and then typed over the passage instead of replacing it.
-         */
-        ...(record.editTarget ? { editTarget: record.editTarget } : {})
-      },
-      record.abortSignal,
-      record.caller,
-      record.polishContext
-    )
+    let finalized: FinalizedCaptureResult
+    try {
+      finalized = await this.finalizeCapture(
+        capture,
+        {
+          cleanup: options.cleanup,
+          language: options.language,
+          delivery: record.delivery,
+          polishStrength: record.polishStrength,
+          /*
+           * Dropping this field here silently demotes an edit to dictation: the instruction would be
+           * polished and then typed over the passage instead of replacing it.
+           */
+          ...(record.editTarget ? { editTarget: record.editTarget } : {})
+        },
+        record.abortSignal,
+        record.caller,
+        record.polishContext
+      )
+    } catch (error) {
+      const cancelled = error instanceof Error && error.message === 'VOICE_OPERATION_CANCELLED'
+      await this.recordRecognitionDetail({
+        id: record.id,
+        capturedAt: Date.now(),
+        source: record.source,
+        status: cancelled ? 'cancelled' : 'failed',
+        ...(capture.audio && capture.audio.byteLength > 0 ? { audio: capture.audio } : {}),
+        audioDurationMs: capture.durationMs,
+        recognitionDurationMs: Math.max(0, Date.now() - record.startedAt),
+        errorCode: extractVoiceErrorCode(error)
+      })
+      throw error
+    }
     const { recognitionProviderId, recognitionModel, recognitionLocation, ...result } = finalized
     if (record.delivery === 'active-app' && result.text) {
       /*
@@ -945,7 +1005,7 @@ export class VoiceService {
       VoiceRecognitionRecordInput,
       'id' | 'capturedAt' | 'status' | 'text'
     > = {
-      source: 'microphone',
+      source: record.source,
       ...(recognitionLocation ? { recognitionLocation } : {}),
       ...(recognitionProviderId ? { providerId: recognitionProviderId } : {}),
       ...(recognitionModel ? { model: recognitionModel } : {}),
@@ -1393,6 +1453,7 @@ export class VoiceService {
       ...(payload.removeDisfluencies === undefined
         ? {}
         : { removeDisfluencies: payload.removeDisfluencies }),
+      hotwords: resolveVoiceVocabulary(),
       requestId: nextVoiceSessionId(),
       signal
     }
@@ -1424,15 +1485,33 @@ export class VoiceService {
     }
     const startedAt = Date.now()
     yield { type: 'selected', name: selected.name }
-    const response = await tuffIntelligence.audio.stt(
-      { audio: selected.audio, format: selected.format },
-      {
-        signal,
-        timeout: TRANSCRIPTION_TIMEOUT_MS,
-        metadata: { caller: 'core.voice.file-transcription' }
-      }
-    )
-    throwIfCancelled(signal)
+    let response: Awaited<ReturnType<typeof tuffIntelligence.audio.stt>>
+    try {
+      response = await tuffIntelligence.audio.stt(
+        { audio: selected.audio, format: selected.format },
+        {
+          signal,
+          timeout: TRANSCRIPTION_TIMEOUT_MS,
+          metadata: { caller: 'core.voice.file-transcription' }
+        }
+      )
+      throwIfCancelled(signal)
+    } catch (error) {
+      const cancelled = error instanceof Error && error.message === 'VOICE_OPERATION_CANCELLED'
+      await this.recordRecognitionDetail({
+        id: nextVoiceSessionId(),
+        capturedAt: startedAt,
+        source: 'file',
+        status: cancelled ? 'cancelled' : 'failed',
+        audio: Buffer.from(selected.audio),
+        audioFormat: 'encoded',
+        audioExt: selected.format,
+        audioBytes: selected.audio.byteLength,
+        recognitionDurationMs: Math.max(0, Date.now() - startedAt),
+        errorCode: extractVoiceErrorCode(error)
+      })
+      throw error
+    }
     const text = typeof response.result?.text === 'string' ? response.result.text.trim() : ''
     const providerLatencyMs = normalizeLatency(response.latency)
     await this.recordRecognitionDetail({
@@ -1672,6 +1751,7 @@ export class VoiceService {
       requestId,
       reuseProviderRequestId,
       DEFAULT_ASR_SAMPLE_RATE,
+      session.source,
       provider,
       model,
       recognitionLocation,
@@ -1794,7 +1874,7 @@ export class VoiceService {
         }
         const details: Omit<VoiceRecognitionRecordInput, 'id' | 'capturedAt' | 'status' | 'text'> =
           {
-            source: 'microphone',
+            source: session.source,
             recognitionLocation,
 
             audioFormat: 'pcm',
@@ -1916,7 +1996,7 @@ export class VoiceService {
         await this.recordRecognitionDetail({
           id: session.id,
           capturedAt: Date.now(),
-          source: 'microphone',
+          source: session.source,
           recognitionLocation,
 
           status: 'empty',
@@ -1939,22 +2019,14 @@ export class VoiceService {
       yield { type: 'end' }
     } catch (error) {
       const cancelled = error instanceof Error && error.message === 'VOICE_OPERATION_CANCELLED'
-      const errorCode =
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        typeof error.code === 'string'
-          ? error.code
-          : error instanceof Error
-            ? error.name
-            : 'VOICE_RECOGNITION_FAILED'
+      const errorCode = extractVoiceErrorCode(error)
       const retryable =
         !error || typeof error !== 'object' || !('retryable' in error) || error.retryable !== false
       const preserveFailureAudio = errorCode !== 'VOICE_ASR_AUTHORITY_CHANGED'
       await this.recordRecognitionDetail({
         id: session.id,
         capturedAt: Date.now(),
-        source: 'microphone',
+        source: session.source,
         recognitionLocation,
 
         status: cancelled ? 'cancelled' : 'failed',
@@ -2042,7 +2114,8 @@ export class VoiceService {
       requestId: buffered ? randomUUID() : nextVoiceSessionId(),
       signal,
       timeoutMs: buffered ? BUFFERED_TRANSCRIPTION_TIMEOUT_MS : CAPABILITY_TIMEOUT_MS,
-      enableDdc: true
+      enableDdc: true,
+      hotwords: resolveVoiceVocabulary()
     }
     let connection: VoiceStreamConnection | null = null
     let text = ''
@@ -2151,7 +2224,8 @@ export class VoiceService {
       requestId: buffer.reuseProviderRequestId ? buffer.providerRequestId : nextVoiceSessionId(),
       signal,
       timeoutMs: buffer.requestTimeoutMs,
-      enableDdc: true
+      enableDdc: true,
+      hotwords: resolveVoiceVocabulary()
     }
     let targetKey: string | null = null
     let connection: VoiceStreamConnection | null = null
@@ -2217,7 +2291,7 @@ export class VoiceService {
         polishedText !== null,
         Date.now(),
         {
-          source: 'microphone',
+          source: buffer.source,
           recognitionLocation: buffer.recognitionLocation,
           audioFormat: 'pcm',
           audioSampleRate: buffer.sampleRate,
@@ -2239,6 +2313,265 @@ export class VoiceService {
       text: deliveredText,
       ...(detectedLanguage ? { language: detectedLanguage } : {}),
       ...(delivery ? { delivery } : {})
+    }
+  }
+
+  /**
+   * Re-transcribes one persisted history record from its retained local audio file strictly inside
+   * the `voice/recordings` namespace, updating the database row atomically.
+   */
+  async retryRecord(
+    payload: VoiceRetryRecordPayload,
+    signal?: AbortSignal
+  ): Promise<VoiceRetryRecordResult> {
+    throwIfCancelled(signal)
+    const recordId = typeof payload?.recordId === 'string' ? payload.recordId.trim() : ''
+    if (!recordId || recordId.length > 128) {
+      throw Object.assign(new Error('VOICE_RECORD_ID_INVALID'), {
+        code: 'VOICE_RECORD_ID_INVALID',
+        retryable: false
+      })
+    }
+
+    const existing = this.recordRetriesInFlight.get(recordId)
+    if (existing) return await awaitWithAbort(existing, signal)
+
+    const operation = this.retryRecordOnce({ ...payload, recordId }, signal)
+    this.recordRetriesInFlight.set(recordId, operation)
+    const release = (): void => {
+      if (this.recordRetriesInFlight.get(recordId) === operation) {
+        this.recordRetriesInFlight.delete(recordId)
+      }
+    }
+    void operation.then(release, release)
+    return await awaitWithAbort(operation, signal)
+  }
+
+  private async retryRecordOnce(
+    payload: VoiceRetryRecordPayload,
+    signal?: AbortSignal
+  ): Promise<VoiceRetryRecordResult> {
+    throwIfCancelled(signal)
+    const stored = await voiceRecognitionStore.getStoredRow(payload.recordId)
+    if (!stored) {
+      return {
+        status: 'failed',
+        errorCode: 'VOICE_RECORD_NOT_FOUND',
+        retryable: false
+      }
+    }
+
+    if (!stored.audioPath) {
+      const current = await voiceRecognitionStore.getRecord(stored.id)
+      return {
+        status: 'failed',
+        ...(current ? { record: current } : {}),
+        errorCode: 'VOICE_RECORD_AUDIO_MISSING',
+        retryable: false
+      }
+    }
+
+    const retained = await voiceRecognitionStore.readRetainedAudio(stored.audioPath)
+    if (!retained.ok) {
+      if (retained.code === 'VOICE_RECORD_AUDIO_PATH_INVALID') {
+        throw Object.assign(new Error(retained.code), {
+          code: retained.code,
+          retryable: false
+        })
+      }
+      const current = await voiceRecognitionStore.getRecord(stored.id)
+      return {
+        status: 'failed',
+        ...(current ? { record: current } : {}),
+        errorCode: retained.code,
+        retryable: false
+      }
+    }
+
+    const attemptStartedAt = Date.now()
+    const vocabulary = resolveVoiceVocabulary()
+    const parsedWav = readKeptWav(retained.buffer)
+    let rawText = ''
+    let providerId: string | undefined
+    let model: string | undefined
+    let recognitionLocation: VoiceRecognitionLocation | undefined
+    let providerLatencyMs: number | undefined
+    let usage: VoiceUsage | undefined
+
+    try {
+      if (parsedWav) {
+        const configured = getConfiguredAsrProvider()
+        const buffered = configured.mode === 'buffered'
+        providerId = configured.provider.id
+        model = configured.model
+        recognitionLocation = configured.location
+        const request: VoiceStreamRequest = {
+          model: configured.model,
+          audio: {
+            format: 'pcm',
+            sampleRate: parsedWav.sampleRate,
+            channels: PCM_CHANNELS,
+            bitsPerSample: PCM_BITS_PER_SAMPLE,
+            codec: 'raw'
+          },
+          ...(payload.language ? { language: payload.language } : {}),
+          requestId: buffered ? randomUUID() : nextVoiceSessionId(),
+          signal,
+          timeoutMs: buffered ? BUFFERED_TRANSCRIPTION_TIMEOUT_MS : CAPABILITY_TIMEOUT_MS,
+          enableDdc: true,
+          hotwords: vocabulary
+        }
+        let connection: VoiceStreamConnection | null = null
+        try {
+          connection = await configured.provider.createStream(request)
+          for (
+            let offset = 0;
+            offset < parsedWav.pcm.byteLength;
+            offset += KEPT_REPLAY_CHUNK_BYTES
+          ) {
+            throwIfCancelled(signal)
+            await connection.writePcm(
+              parsedWav.pcm.subarray(offset, offset + KEPT_REPLAY_CHUNK_BYTES)
+            )
+          }
+          throwIfCancelled(signal)
+          await connection.end()
+          for await (const event of connection.events) {
+            throwIfCancelled(signal)
+            if (event.type === 'error') {
+              const usageLimitCause = readUsageLimitCause(event)
+              throw Object.assign(new Error(event.code || 'VOICE_ASR_RETRY_FAILED'), {
+                code: event.code || 'VOICE_ASR_RETRY_FAILED',
+                retryable: event.retryable,
+                ...(usageLimitCause ? { cause: usageLimitCause } : {})
+              })
+            }
+            if (event.type !== 'final' || !event.text.trim()) continue
+            rawText += event.text
+            const eventLatency = normalizeLatency(event.latencyMs)
+            if (eventLatency !== undefined) providerLatencyMs = eventLatency
+            if (event.usage) usage = event.usage
+          }
+        } finally {
+          if (connection) {
+            await connection.abort('Voice record retry ended').catch(() => {})
+          }
+        }
+      } else {
+        const audioArrayBuffer = retained.buffer.buffer.slice(
+          retained.buffer.byteOffset,
+          retained.buffer.byteOffset + retained.buffer.byteLength
+        ) as ArrayBuffer
+        const response = await awaitWithAbort(
+          tuffIntelligence.audio.stt(
+            {
+              audio: audioArrayBuffer,
+              format: retained.ext,
+              ...(payload.language ? { language: payload.language } : {})
+            },
+            {
+              signal,
+              timeout: TRANSCRIPTION_TIMEOUT_MS,
+              metadata: { caller: 'core.voice.record-retry' }
+            }
+          ),
+          signal
+        )
+        rawText = typeof response.result?.text === 'string' ? response.result.text.trim() : ''
+        providerId = response.provider
+        model = response.model
+        recognitionLocation = response.provider
+          ? getVoiceRecognitionLocation(response.provider)
+          : undefined
+        providerLatencyMs = normalizeLatency(response.latency)
+      }
+    } catch (error) {
+      if (signal?.aborted) throw voiceCancellationError()
+      const errorCode = extractVoiceErrorCode(error, 'VOICE_ASR_RETRY_FAILED')
+      const retryable =
+        !error || typeof error !== 'object' || !('retryable' in error) || error.retryable !== false
+      const failedRecord = await voiceRecognitionStore.updateRetryResult(stored.id, {
+        status: 'failed',
+        errorCode,
+        recognitionDurationMs: Math.max(0, Date.now() - attemptStartedAt),
+        ...(providerId ? { providerId, channel: providerId } : {}),
+        ...(model ? { model } : {}),
+        ...(recognitionLocation ? { recognitionLocation } : {})
+      })
+      return {
+        status: 'failed',
+        ...(failedRecord ? { record: failedRecord } : {}),
+        errorCode,
+        retryable
+      }
+    }
+
+    throwIfCancelled(signal)
+    const recognized = rawText.trim()
+    const recognitionDurationMs = Math.max(0, Date.now() - attemptStartedAt)
+    if (!recognized) {
+      const emptyRecord = await voiceRecognitionStore.updateRetryResult(stored.id, {
+        status: 'empty',
+        rawText: null,
+        text: null,
+        errorCode: null,
+        recognitionDurationMs,
+        providerLatencyMs: providerLatencyMs ?? null,
+        ...(providerId ? { providerId, channel: providerId } : {}),
+        ...(model ? { model } : {}),
+        ...(recognitionLocation ? { recognitionLocation } : {})
+      })
+      return {
+        status: 'empty',
+        ...(emptyRecord ? { record: emptyRecord } : {})
+      }
+    }
+
+    const cleanup = payload.cleanup ?? resolvePolishEnabled()
+    const polishedText = cleanup
+      ? await this.polish(
+          recognized,
+          resolvePolishStrength(undefined),
+          signal,
+          'core.voice.record-retry',
+          { vocabulary }
+        )
+      : null
+    throwIfCancelled(signal)
+    const finalText = polishedText ?? recognized
+
+    const updated = await voiceRecognitionStore.updateRetryResult(stored.id, {
+      status: 'success',
+      rawText: recognized,
+      text: finalText,
+      errorCode: null,
+      recognitionDurationMs,
+      providerLatencyMs: providerLatencyMs ?? null,
+      ...(providerId ? { providerId, channel: providerId } : {}),
+      ...(model ? { model } : {}),
+      ...(recognitionLocation ? { recognitionLocation } : {}),
+      ...(usage?.inputTokens === undefined ? {} : { inputTokens: usage.inputTokens }),
+      ...(usage?.outputTokens === undefined ? {} : { outputTokens: usage.outputTokens }),
+      ...(usage?.totalTokens === undefined ? {} : { totalTokens: usage.totalTokens })
+    })
+
+    if (updated) {
+      try {
+        await voiceInsightsStore.recordSuccess({
+          captureId: stored.id,
+          text: finalText,
+          durationMs: stored.audioDurationMs ?? 0,
+          polished: polishedText !== null,
+          capturedAt: stored.capturedAt
+        })
+      } catch (error) {
+        voiceLog.warn('Voice insights update after record retry failed', { error })
+      }
+    }
+
+    return {
+      status: 'success',
+      ...(updated ? { record: updated } : {})
     }
   }
 
@@ -2351,6 +2684,13 @@ export class VoiceService {
       } catch {
         // Active application discovery is best-effort; polish proceeds without target hints.
       }
+    }
+    if (!effectiveContext) {
+      const vocabulary = resolveVoiceVocabulary()
+      if (vocabulary.length > 0) effectiveContext = { vocabulary }
+    } else if (!effectiveContext.vocabulary && !effectiveContext.terms) {
+      const vocabulary = resolveVoiceVocabulary()
+      if (vocabulary.length > 0) effectiveContext = { ...effectiveContext, vocabulary }
     }
     const tier = resolvePolishTier(transcript)
     const units = countPolishUnits(transcript)

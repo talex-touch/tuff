@@ -6,6 +6,10 @@ import type {
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { createTrustedTestPluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { setPermissionModule } from '../modules/permission'
+import {
+  registerPermissionPluginBridge,
+  resetPermissionPluginBridge
+} from '../modules/permission/permission-ports'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -76,6 +80,12 @@ describe('registerSystemSelectionCaptureHandlers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.getPluginByName.mockReturnValue({ sdkapi: 260713 })
+    registerPermissionPluginBridge({
+      resolvePluginDeclaredSdkApi: (pluginId) => {
+        const plugin = mocks.getPluginByName(pluginId) as { sdkapi?: number } | undefined
+        return typeof plugin?.sdkapi === 'number' ? plugin.sdkapi : undefined
+      }
+    })
     setPermissionModule({ checkPermission: mocks.checkPermission } as never)
     mocks.checkPermission.mockReturnValue({ allowed: true })
     mocks.capture.mockResolvedValue({
@@ -89,6 +99,7 @@ describe('registerSystemSelectionCaptureHandlers', () => {
   })
 
   afterEach(() => {
+    resetPermissionPluginBridge()
     setPermissionModule(null as never)
   })
 

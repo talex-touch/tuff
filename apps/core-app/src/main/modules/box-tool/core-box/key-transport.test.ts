@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ForwardedKeyEvent } from './key-transport'
 
 /**
@@ -54,17 +54,15 @@ vi.mock('./manager', () => ({
   }
 }))
 
-vi.mock('../../division-box/manager', () => ({
-  DivisionBoxManager: {
-    getInstance: vi.fn(() => mocks.divisionBoxManager)
-  }
-}))
-
 vi.mock('../../../utils/logger', () => ({
   createLogger: vi.fn(() => mocks.logger)
 }))
 
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import {
+  registerBoxToolSurfaceBridgePort,
+  resetBoxToolSurfaceBridgePort
+} from '../ports/surface-bridge-port'
 import { coreBoxKeyTransport } from './key-transport'
 
 const DIVISION_BOX_WINDOW_ID = 42
@@ -104,7 +102,17 @@ describe('CoreBox key transport DivisionBox routing', () => {
     mocks.session.forwardKeyEventToUIView.mockReturnValue(true)
     mocks.divisionBoxManager.findSessionByWindowWebContentsId.mockReturnValue(undefined)
     mocks.isUIViewActive.mockReturnValue(false)
+    registerBoxToolSurfaceBridgePort({
+      findSessionByWindowWebContentsId: mocks.divisionBoxManager
+        .findSessionByWindowWebContentsId as never,
+      createSessionWithoutUI: vi.fn(),
+      destroySession: vi.fn()
+    })
     coreBoxKeyTransport.register()
+  })
+
+  afterEach(() => {
+    resetBoxToolSurfaceBridgePort()
   })
 
   it('routes a key from a DivisionBox window to its session instead of the CoreBox UI view', () => {

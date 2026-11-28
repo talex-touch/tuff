@@ -18,7 +18,9 @@ const useWebFonts = process.env.NUXT_DISABLE_WEB_FONTS !== 'true'
   && process.env.UNOCSS_WEBFONTS === 'true'
 
 export default defineConfig({
-  blocklist: [/^m\[pascalCase\(component\)\]$/],
+  // Block `i-cib-*` so the retired `cib` brand collection can never emit CSS back into the
+  // global icons stylesheet, even if `@iconify-json/cib` is reinstalled transitively.
+  blocklist: [/^m\[pascalCase\(component\)\]$/, /^i-cib-/],
   content: {
     pipeline: {
       // Uno's default pipeline only scans template-ish files, so icon classes
@@ -108,7 +110,7 @@ export default defineConfig({
   ],
   /*
    * Icon rules carry no specificity. The icons layer ships as its own stylesheet, appended to
-   * `<head>` once the app has mounted, so in the cascade it comes after every other sheet. At
+   * `<head>` once the app has resolved, so in the cascade they come after every other sheet. At
    * class specificity that let an icon rule's `color:inherit` and `width:1.2em` beat the
    * `text-amber-600` or `w-4` on the same element — utilities the single-sheet order used to
    * let win, because `icons` sorts before `default`. `:where()` settles it for good: any classed
@@ -128,6 +130,10 @@ export default defineConfig({
     presetAttributify({ prefixedOnly: true }),
     presetIcons({
       scale: 1.2,
+      collections: {
+        carbon: () => import('@iconify-json/carbon/icons.json', { with: { type: 'json' } }).then(m => m.default),
+        logos: () => import('@iconify-json/logos/icons.json', { with: { type: 'json' } }).then(m => m.default),
+      },
     }),
     presetWebFonts({
       provider: useWebFonts ? 'google' : 'none',

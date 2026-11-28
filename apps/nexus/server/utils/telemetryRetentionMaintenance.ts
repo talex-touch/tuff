@@ -26,7 +26,10 @@ function addMs(now: Date, ms: number): string {
 }
 
 function hasBacklog(result: TelemetryRetentionResult): boolean {
-  return result.tables.some(table => table.remainingAfterBatch > 0)
+  return (
+    result.tables.some(table => table.remainingAfterBatch > 0)
+    || (result.receipts?.remainingAfterBatch ?? 0) > 0
+  )
 }
 
 function getWaitUntil(event: H3Event | undefined): ((promise: Promise<unknown>) => void) | null {

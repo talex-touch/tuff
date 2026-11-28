@@ -1,0 +1,70 @@
+---
+title: Accessibility
+description: The accessibility conventions Tuffex components share, and where coverage stops.
+category: Foundations
+status: beta
+since: 0.4.0
+tags: [a11y, focus, reduced-motion, contrast, aria]
+syncStatus: reviewed
+verified: false
+---
+
+## Scope
+
+WCAG 2.1 AA is the build target, not a certification.
+
+## Focus
+
+Focus rings appear on `:focus-visible` only: a mouse click leaves no ring, keyboard traversal always shows one.
+
+| Token | Role |
+|-------|------|
+| `--tx-focus-ring-color` | The ring's color |
+| `--tx-focus-ring-shadow` | The halo around it |
+
+- The dark and high-contrast palettes redefine both tokens.
+- A component without a `:focus-visible` rule is either not focusable or delegates focus to a focusable child.
+- Components clipped by a rounded frame draw the ring inset, so the parent's `overflow: hidden` can't cut it into square corners. The collapse header is the reference.
+
+## Motion
+
+| Convention | Practice |
+|------------|----------|
+| Honor `prefers-reduced-motion: reduce` | Keep the state, drop the travel: an indeterminate bar stops sweeping but keeps its translucent track; a disclosure opens instantly |
+| Animate composited properties only | `transform` and `opacity` |
+| When layout must animate (height `0` ↔ `auto`) | Measure, then drive the value in JavaScript; never tween `height` from a guessed fixed value |
+
+## Contrast
+
+The high-contrast palette raises text and border contrast in light and dark, and material panels paint an opaque fill instead of blurring the page behind them; it follows the OS through `@media (prefers-contrast: more)`. Selectors that force it on or opt out, and what changes per component, are in [Theming](/en/theming).
+
+Token pairs that are easy to get wrong (a tinted badge on its own tint, a version pill on a dark page) carry their measured ratio in a comment beside the declaration.
+
+## Semantics
+
+| Pattern | Practice |
+|---------|----------|
+| Named by visible text | The accessible name comes from the visible label; controls that would need printed text (a progress bar) take an `ariaLabel` prop |
+| Decoration hidden | Glyphs that duplicate adjacent text carry `aria-hidden`, so the label is read once |
+| Disclosures wired | The trigger sets `aria-expanded`; `aria-controls` points at the panel's generated id |
+
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxProgressBar :percentage="40" ariaLabel="Upload progress" />
+  </template>
+---
+:::
+
+## Where coverage stops
+
+- There is no automated accessibility suite; each component's own tests and review cover a11y behavior, so gaps are possible.
+- Components still marked `In progress` in the sidebar have not been reviewed.
+- Screen-reader testing is manual, with no fixed test matrix.
+- Every component page links its source; a fix there reaches every consumer.
+
+## Technologies
+
+- Focus and contrast tokens: `packages/tuffex/packages/components/style/variables.scss`.
+- Theme and contrast selectors: [Theming](/en/theming).

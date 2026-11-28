@@ -21,11 +21,12 @@ import {
   TuffInputType,
   TuffSearchResultBuilder
 } from '@talex-touch/utils'
-import { normalizeIntelligenceError } from '../../../ai/intelligence-error-normalizer'
-import { resolveCapabilityStatus } from '../../../ai/intelligence-capability-status'
-import { tuffIntelligence } from '../../../ai/intelligence-sdk'
-import { pluginModule } from '../../../plugin/plugin-module'
-import PluginFeaturesAdapter from '../../../plugin/adapters/plugin-features-adapter'
+import {
+  normalizeBoxToolIntelligenceError,
+  requireBoxToolIntelligence,
+  resolveBoxToolCapabilityStatus
+} from '../../ports/ai-capability-port'
+import { hasBoxToolPluginManager, searchBoxToolPluginFeatures } from '../../ports/plugin-host-port'
 import { t } from '../../../../utils/i18n-helper'
 import { openValidatedExternalUrl } from '../../../../utils/external-url-policy'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -196,7 +197,7 @@ async function executeIntelligence<T>(
     }
     return successText(successMessage, output)
   } catch (error) {
-    const normalized = normalizeIntelligenceError(error, { capabilityId })
+    const normalized = normalizeBoxToolIntelligenceError(error, { capabilityId })
     return {
       status: 'error',
       code: normalized.code,
@@ -229,7 +230,7 @@ const BUILTIN_ACTIONS: readonly ContextActionDefinition[] = [
       return await executeIntelligence(
         'code.review',
         async () =>
-          await tuffIntelligence.code.review(
+          await requireBoxToolIntelligence().code.review(
             {
               code: input.content,
               focusAreas: ['bugs', 'security', 'best-practices']
@@ -263,7 +264,7 @@ const BUILTIN_ACTIONS: readonly ContextActionDefinition[] = [
       return await executeIntelligence(
         'text.summarize',
         async () =>
-          await tuffIntelligence.text.summarize(
+          await requireBoxToolIntelligence().text.summarize(
             { text: input.content, style: 'bullet-points', maxLength: 600 },
             { metadata: intelligenceMetadata(CONTEXT_ACTION_IDS.Summarize, input) }
           ),
@@ -294,7 +295,7 @@ const BUILTIN_ACTIONS: readonly ContextActionDefinition[] = [
       return await executeIntelligence(
         'text.rewrite',
         async () =>
-          await tuffIntelligence.text.rewrite(
+          await requireBoxToolIntelligence().text.rewrite(
             { text: input.content, style: 'professional', tone: 'neutral' },
             { metadata: intelligenceMetadata(CONTEXT_ACTION_IDS.Polish, input) }
           ),
@@ -325,7 +326,7 @@ const BUILTIN_ACTIONS: readonly ContextActionDefinition[] = [
       return await executeIntelligence(
         'text.rewrite',
         async () =>
-          await tuffIntelligence.text.rewrite(
+          await requireBoxToolIntelligence().text.rewrite(
             { text: input.content, style: 'simplified', tone: 'friendly' },
             { metadata: intelligenceMetadata(CONTEXT_ACTION_IDS.Rewrite, input) }
           ),
@@ -402,7 +403,7 @@ const BUILTIN_ACTIONS: readonly ContextActionDefinition[] = [
       return await executeIntelligence(
         'vision.ocr',
         async () =>
-          await tuffIntelligence.vision.ocr(
+          await requireBoxToolIntelligence().vision.ocr(
             {
               source: { type: 'base64', base64: trimDataUrlPrefix(input.content) },
               includeKeywords: true,
@@ -436,7 +437,8 @@ const BUILTIN_ACTIONS: readonly ContextActionDefinition[] = [
       }
       try {
         const metadata = intelligenceMetadata(CONTEXT_ACTION_IDS.TranslateImageText, input)
-        const ocr = await tuffIntelligence.vision.ocr(
+        const intelligence = requireBoxToolIntelligence()
+        const ocr = await intelligence.vision.ocr(
           {
             source: { type: 'base64', base64: trimDataUrlPrefix(input.content) },
             includeLayout: false
@@ -452,7 +454,7 @@ const BUILTIN_ACTIONS: readonly ContextActionDefinition[] = [
             recoverable: true
           }
         }
-        const translated = await tuffIntelligence.text.translate(
+        const translated = await intelligence.text.translate(
           { text: sourceText, sourceLang: 'auto', targetLang: 'zh' },
           { metadata }
         )
@@ -461,7 +463,7 @@ const BUILTIN_ACTIONS: readonly ContextActionDefinition[] = [
           translated.result
         )
       } catch (error) {
-        const normalized = normalizeIntelligenceError(error, {
+        const normalized = normalizeBoxToolIntelligenceError(error, {
           capabilityId: 'vision.ocr + text.translate'
         })
         return {
@@ -495,7 +497,7 @@ const BUILTIN_ACTIONS: readonly ContextActionDefinition[] = [
       return await executeIntelligence(
         'image.caption',
         async () =>
-          await tuffIntelligence.vision.caption(
+          await requireBoxToolIntelligence().vision.caption(
             {
               source: { type: 'base64', base64: trimDataUrlPrefix(input.content) },
               style: 'detailed',
@@ -566,7 +568,7 @@ class BuiltinContextActionProvider implements ContextActionProvider<ContextActio
   async match(input: ContextActionInput): Promise<ContextActionMatch<ContextActionId>[]> {
     return BUILTIN_ACTIONS.filter((action) => action.inputType === input.type).map((action) => {
       const unavailableCapability = action.capabilityIds.find(
-        (capabilityId) => !resolveCapabilityStatus(capabilityId).available
+        (capabilityId) => !resolveBoxToolCapabilityStatus(capabilityId).available
       )
       const unavailableReason = unavailableCapability
         ? {
@@ -765,9 +767,10 @@ export class ContextActionsProvider implements ISearchProvider<ProviderContext> 
     signal: AbortSignal
   ): Promise<TuffItem[]> {
     const routes = PLUGIN_ROUTES.filter((route) => route.inputType === input.type)
-    if (routes.length === 0 || !pluginModule.pluginManager) return []
+    if (routes.length === 0 || !hasBoxToolPluginManager()) return []
 
-    const pluginResult = await PluginFeaturesAdapter.onSearch(query, signal)
+    const pluginResult = await searchBoxToolPluginFeatures(query, signal)
+    if (!pluginResult) return []
     const matchedItems = new Map<string, TuffItem>()
     for (const item of pluginResult.items ?? []) {
       const pluginName = item.meta?.pluginName

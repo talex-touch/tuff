@@ -18,7 +18,9 @@ import { Marked } from 'marked'
 import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from 'vue'
 import { useReducedMotion } from '../../../../utils/use-reduced-motion'
 import { streamRevealDuration } from '../../stream-text/src/presets'
+import { segmentWords } from '../../stream-text/src/segment'
 import TxStreamCaret from '../../stream-text/src/TxStreamCaret.vue'
+import { useStreamPacer } from '../../stream-text/src/use-stream-pacer'
 import TxCodeBlock from './TxCodeBlock.vue'
 import TxMermaidBlock from './TxMermaidBlock.vue'
 import { completeInlineMarkup, completeTable } from './complete-inline-markup'
@@ -38,7 +40,9 @@ defineOptions({ name: 'TxStreamMarkdown' })
 
 const props = withDefaults(defineProps<StreamMarkdownProps>(), {
   streaming: false,
-  reveal: 'aurora',
+  reveal: 'blur',
+  paced: false,
+  locale: 'zh',
   caret: true,
   sanitize: true,
   theme: 'auto',
@@ -75,6 +79,67 @@ const markedInstance = new Marked({ gfm: true, breaks: true })
     })),
   )
 
+const reduced = useReducedMotion()
+const isPacing = computed(() => props.paced && !reduced.value)
+
+const pacedUnitEnds = computed<number[]>(() => {
+  if (!isPacing.value || !props.content)
+    return []
+  const units = segmentWords(props.content, props.locale)
+  const ends: number[] = []
+  let offset = 0
+  for (const unit of units) {
+    offset += unit.text.length + unit.ws.length
+    ends.push(offset)
+  }
+  return ends
+})
+
+const pacer = useStreamPacer({
+  total: () => pacedUnitEnds.value.length,
+  streaming: () => props.streaming,
+  wordMs: () => props.wordMs,
+  maxLagMs: () => props.maxLagMs,
+  drainMs: () => props.drainMs,
+  pauseMs: () => props.pauseMs,
+  paced: () => isPacing.value,
+})
+
+watch(
+  () => props.content,
+  (next, previous) => {
+    if (!isPacing.value || previous === undefined || next.startsWith(previous))
+      return
+    const limit = Math.min(previous.length, next.length)
+    let common = 0
+    while (common < limit && previous[common] === next[common])
+      common++
+    const ends = pacedUnitEnds.value
+    let keep = 0
+    while (keep < ends.length && ends[keep]! <= common)
+      keep++
+    if (keep < pacer.revealed.value)
+      pacer.rewind(keep)
+  },
+  { flush: 'sync' },
+)
+
+const renderedContent = computed(() => {
+  if (!isPacing.value)
+    return props.content
+  const ends = pacedUnitEnds.value
+  const count = pacer.revealed.value
+  if (count >= ends.length)
+    return props.content
+  if (count <= 0)
+    return ''
+  return props.content.slice(0, ends[count - 1] ?? 0)
+})
+
+const effectiveStreaming = computed(
+  () => props.streaming || (isPacing.value && (pacer.state.value === 'streaming' || pacer.state.value === 'draining')),
+)
+
 /**
  * Rendered blocks are cached HTML strings, so a policy change reaches nothing on
  * its own. Dropping the cache and re-feeding the content is what turns a
@@ -83,7 +148,7 @@ const markedInstance = new Marked({ gfm: true, breaks: true })
 watch(remoteImagePolicyVersion, () => {
   stream.reset()
   blocks.value = stream.update(
-    props.streaming ? completeInlineMarkup(completeTable(props.content)) : props.content,
+    effectiveStreaming.value ? completeInlineMarkup(completeTable(renderedContent.value)) : renderedContent.value,
   )
 })
 
@@ -198,7 +263,7 @@ const canRender = computed(() => !props.sanitize || (sanitizerReady.value && !!s
 const blocks = shallowRef<StreamBlock[]>([])
 
 watch(
-  [() => props.content, canRender, () => props.sanitize, () => props.streaming],
+  [renderedContent, canRender, () => props.sanitize, effectiveStreaming],
   ([content, ok, sanitize, streaming], previous) => {
     if (!ok) {
       blocks.value = []
@@ -229,7 +294,6 @@ const resolvedTheme = useAutoTheme(() => props.theme ?? 'auto')
 
 // The StreamElement family's reveal: fresh text and new blocks enter with the
 // shared presets, timed by the one duration written onto the root.
-const reduced = useReducedMotion()
 const preset = computed(() => (reduced.value ? 'none' : props.reveal))
 const revealDuration = computed(() => streamRevealDuration(preset.value))
 const rootStyle = computed(() => ({ '--tx-stream-reveal-duration': `${revealDuration.value}ms` }))
@@ -291,7 +355,7 @@ function rendererCopy(lang: string): Record<string, unknown> | undefined {
  * of a live stream stays provisional.
  */
 function isBlockClosed(block: StreamBlock, index: number): boolean {
-  return block.fenceClosed || index < blocks.value.length - 1 || !props.streaming
+  return block.fenceClosed || index < blocks.value.length - 1 || !effectiveStreaming.value
 }
 
 const tailBlock = computed(() => blocks.value.at(-1) ?? null)
@@ -327,7 +391,7 @@ function motionless(): boolean {
 }
 
 watch(
-  [tailMarkupId, () => tailBlock.value?.html, () => props.streaming],
+  [tailMarkupId, () => tailBlock.value?.html, effectiveStreaming],
   ([id, , streaming]) => {
     const root = rootRef.value
     if (!root)
@@ -359,7 +423,7 @@ const inlineCursor = computed(() => {
 })
 
 const showBlockCursor = computed(
-  () => props.streaming && blocks.value.length > 0 && !inlineCursor.value,
+  () => effectiveStreaming.value && blocks.value.length > 0 && !inlineCursor.value,
 )
 
 // ---------------------------------------------------------------------------
@@ -375,7 +439,7 @@ const showBlockCursor = computed(
 // would multiply the offset too and the caret would fly in from the corner.
 // ---------------------------------------------------------------------------
 
-const showCaret = computed(() => props.caret && props.streaming && blocks.value.length > 0)
+const showCaret = computed(() => props.caret && effectiveStreaming.value && blocks.value.length > 0)
 const caretRef = ref<HTMLElement | null>(null)
 let caretFrame = 0
 let caretObserver: ResizeObserver | null = null
@@ -479,7 +543,7 @@ function isSuppressedFence(block: StreamBlock): boolean {
   <div
     ref="rootRef"
     class="tx-md tx-stream-md"
-    :class="[resolvedTheme, `is-reveal-${preset}`, { 'is-streaming': streaming }]"
+    :class="[resolvedTheme, `is-reveal-${preset}`, { 'is-streaming': effectiveStreaming }]"
     :style="rootStyle"
     :data-theme="resolvedTheme"
   >
@@ -495,7 +559,7 @@ function isSuppressedFence(block: StreamBlock): boolean {
             :lang="block.lang"
             :code="block.code"
             :closed="isBlockClosed(block, index)"
-            :streaming="streaming"
+            :streaming="effectiveStreaming"
             :theme="resolvedTheme"
           />
         </template>
@@ -503,7 +567,7 @@ function isSuppressedFence(block: StreamBlock): boolean {
           v-else
           class="tx-stream-md__block tx-stream-md__markup"
           :class="{
-            'tx-stream-md__markup--tail': streaming && inlineCursor && index === blocks.length - 1,
+            'tx-stream-md__markup--tail': effectiveStreaming && inlineCursor && index === blocks.length - 1,
             'tx-stream-md__block--last': index === blocks.length - 1,
           }"
           :data-stream-block="block.id"
@@ -569,11 +633,11 @@ function isSuppressedFence(block: StreamBlock): boolean {
     // Blocks enter once, on insertion: settled blocks never remount, so they
     // never replay this; the growing tail patches in place, so it doesn't either.
     &.is-streaming:not(.is-reveal-none) .tx-stream-md__block {
-      animation: tx-stream-fade-blur var(--tx-stream-reveal-duration, 460ms) cubic-bezier(0.22, 0.61, 0.25, 1) both;
+      animation: tx-stream-fade-blur var(--tx-stream-reveal-duration, 520ms) cubic-bezier(0.22, 1, 0.36, 1) both;
     }
 
     .tx-stream-md__block {
-      transition: --tx-stream-md-ink 0.5s ease;
+      transition: --tx-stream-md-ink 0.56s cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     .markdown-body .tx-stream-md__table-copy {
@@ -615,7 +679,7 @@ function isSuppressedFence(block: StreamBlock): boolean {
   }
 
   &.is-streaming .tx-stream-md__block--last {
-    --tx-stream-md-ink: 0.65;
+    --tx-stream-md-ink: 0.72;
   }
 
   // The block cursor line: where the caret goes when the tail is a list, a

@@ -1,0 +1,38 @@
+---
+title: Data Suite
+description: "Visualization and charts: in-package data displays plus the charts subpath"
+category: DataSuite
+status: beta
+since: 0.4.0
+tags: [data, charts, visualization, suite, overview]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+Every cell is a live, interactive component; click the name in the top-left corner to open its documentation.
+
+::DocsComponentsGallery{suite="data"}
+::
+
+## Choosing a component
+
+| To show | Component |
+|------|------|
+| A metric over time, with markers, thresholds and brushing | [TimeseriesChart](/en/timeseries-chart) |
+| Training progress: runs and seeds compared over steps | [LearningCurve](/en/learning-curve) |
+| Geographic distribution | [Maps](/en/maps) |
+| Where traffic, budget or conversions flow | [SankeyChart](/en/sankey-chart) |
+| Lines, areas, bars, scatter and arcs combined freely | [Custom Chart](/en/custom-chart) |
+| Monochrome dashboard charts and an activity calendar | [MonoChart](/en/mono-chart) |
+| Funnels, gauges, heatmaps, radars, treemaps and other types | [ECharts](/en/echart-charts) |
+| Presentational charts with a dithered texture | [DitherChart](/en/dither-chart), in the [Motion suite](/en/motion-suite) |
+| A trend, share, difference or strength within a line | [SparkChart](/en/spark-chart), [AllocationBar](/en/allocation-bar), [DiffTable](/en/diff-table), [SignalMeter](/en/signal-meter) |
+
+## Overview
+
+- Charts import from `@talex-touch/tuffex/charts` and the visualization components live in the main package; both ship through the `@talex-touch/tuffex/pro` entry.
+- Everything except the ECharts charts renders with Vue (SVG, Canvas or DOM/CSS) and never loads echarts; the ECharts charts load the optional `echarts` dependency when they mount.
+- The native charts share the `--tx-chart-*` theme variables and `ChartPalette`, and follow the host's light and dark themes.
+- The native charts animate on ECharts' default timings: 1000ms enter, 500ms data update, 300ms state switch; under `prefers-reduced-motion: reduce` they land on the final frame.

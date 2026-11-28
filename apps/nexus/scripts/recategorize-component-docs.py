@@ -225,6 +225,7 @@ TAXONOMY: dict[str, list[str]] = {
         "code-editor",
         "terminal",
         "virtual-list",
+        "device-mockup",
         "version-capsule",
         "motion-form",
         "motion-control",
@@ -302,6 +303,7 @@ TAXONOMY: dict[str, list[str]] = {
         "chain-of-thought",
         "reasoning-disclosure",
         "thinking-orb",
+        "matrix-loader",
         "stream-element",
         "stream-text",
         "stream-markdown",
@@ -375,12 +377,15 @@ TAXONOMY: dict[str, list[str]] = {
     "MotionInteraction": [
         "motion-dock",
         "motion",
+        "pixel-field",
+        "voice-ring",
     ],
     "MotionToggles": [
         "motion-toggle",
     ],
     "MotionTransitions": [
         "motion-transition",
+        "distortion-wave",
     ],
 }
 

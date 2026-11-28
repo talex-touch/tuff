@@ -107,6 +107,11 @@ vi.mock('./intelligence-config', () => ({
   setupConfigUpdateListener: vi.fn()
 }))
 
+import {
+  registerPermissionPluginBridge,
+  resetPermissionPluginBridge
+} from '../permission/permission-ports'
+
 const SDK_API = SdkApi.V260817
 const testDir = dirname(fileURLToPath(import.meta.url))
 const migrationsFolder = resolve(testDir, '../../../../resources/db/migrations')
@@ -395,6 +400,12 @@ beforeEach(() => {
   vi.clearAllMocks()
   intelligenceQuotaManager.clearCache()
   permissionMocks.getPluginByName.mockReturnValue({ sdkapi: SDK_API })
+  registerPermissionPluginBridge({
+    resolvePluginDeclaredSdkApi: (pluginId) => {
+      const plugin = permissionMocks.getPluginByName(pluginId) as { sdkapi?: number } | undefined
+      return typeof plugin?.sdkapi === 'number' ? plugin.sdkapi : undefined
+    }
+  })
   permissionMocks.checkPermission.mockReturnValue({ allowed: true })
   permissionMocks.getPermissionModule.mockReturnValue({
     checkPermission: permissionMocks.checkPermission
@@ -402,6 +413,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  resetPermissionPluginBridge()
   vi.restoreAllMocks()
 })
 

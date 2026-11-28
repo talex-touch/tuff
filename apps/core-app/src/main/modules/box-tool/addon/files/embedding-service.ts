@@ -1,11 +1,4 @@
 import type { BatchItem } from 'drizzle-orm/batch'
-import { tuffIntelligence } from '../../../ai/intelligence-sdk'
-import {
-  getLocalEmbeddingRuntime,
-  type LocalEmbeddingImageInput
-} from '../../../ai/local-embedding-runtime'
-import { LOCAL_EMBEDDING_MODEL_KEY } from '../../../ai/local-embedding-model'
-import { runWithEmbeddingPriority } from '../../../ai/local-embedding-queue'
 import type { FileParserChunk } from '@talex-touch/utils/electron/file-parsers'
 import { hashFileContentChunk } from './services/file-content-match'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
@@ -21,8 +14,17 @@ import {
 } from '../../../../db/schema'
 import { scheduleDbWrite } from '../../../../db/db-write'
 import { encodeVectorBlob } from '../../../../db/embedding-vector-codec'
-import { onUsageLimitsChanged, readUsageLimitInfo } from '../../../ai/usage-ledger/usage-limits'
 import { enterPerfContext } from '../../../../utils/perf-context'
+import {
+  getBoxToolLocalEmbeddingModelKey,
+  isBoxToolLocalEmbeddingImageReady,
+  isBoxToolLocalEmbeddingReady,
+  readBoxToolUsageLimitInfo,
+  requireBoxToolIntelligence,
+  runBoxToolWithEmbeddingPriority,
+  subscribeBoxToolUsageLimitsChanged,
+  type BoxToolLocalEmbeddingImageInput
+} from '../../ports/ai-capability-port'
 import {
   SearchIndexReadWorkerClient,
   type SearchIndexReadWorkerClientOptions
@@ -47,7 +49,7 @@ function filesEmbeddingOptions(): { metadata: { caller: string; localEmbeddingRu
   return {
     metadata: {
       caller: 'core.files.embedding',
-      ...(getLocalEmbeddingRuntime().isReady() ? { localEmbeddingRuntime: 'llama.cpp' } : {})
+      ...(isBoxToolLocalEmbeddingReady() ? { localEmbeddingRuntime: 'llama.cpp' } : {})
     }
   }
 }
@@ -125,7 +127,7 @@ export interface EmbeddingFileInput {
   chunks?: FileParserChunk[]
   fileVersion?: number
   fileSize?: number | null
-  image?: LocalEmbeddingImageInput
+  image?: BoxToolLocalEmbeddingImageInput
 }
 
 export type FileEmbeddingGenerator = (
@@ -145,7 +147,7 @@ async function generateFileEmbedding(
     purpose === 'query' && options.metadata.localEmbeddingRuntime === 'llama.cpp'
       ? `task: search result | query: ${text}`
       : text
-  const result = await tuffIntelligence.embedding.generate({ text: input }, options)
+  const result = await requireBoxToolIntelligence().embedding.generate({ text: input }, options)
   return { vector: result.result, model: result.model || 'unknown' }
 }
 
@@ -168,10 +170,11 @@ export class EmbeddingService {
   private readonly failedTextAttempts = new Map<string, number>()
   private semanticReader: { path: string; client: SearchIndexReadWorkerClient } | null = null
   private closed = false
+  private readonly disposeUsageLimitsListener: () => void
 
   /** Lightweight media capability probe; never starts or upgrades the runtime. */
   isImageReady(): boolean {
-    return getLocalEmbeddingRuntime().isImageReady()
+    return isBoxToolLocalEmbeddingImageReady()
   }
 
   /** Abort in-flight text/image generation when content indexing is disabled or shutting down. */
@@ -188,11 +191,14 @@ export class EmbeddingService {
     // Raising or clearing the limit is the user saying "go on": the pause lifts now, not at the
     // reset time. If a limit still binds, the next call is refused before any provider work and
     // pauses again — one refusal, no loop.
-    onUsageLimitsChanged(() => this.liftUsageLimitPause())
+    this.disposeUsageLimitsListener = subscribeBoxToolUsageLimitsChanged(() =>
+      this.liftUsageLimitPause()
+    )
   }
 
   async close(): Promise<void> {
     this.closed = true
+    this.disposeUsageLimitsListener()
     this.cancelPending()
     const reader = this.semanticReader
     this.semanticReader = null
@@ -237,7 +243,7 @@ export class EmbeddingService {
    * logged once per pause, never retried. Any other failure is left to the caller.
    */
   private pauseOnUsageLimit(error: unknown): boolean {
-    const info = readUsageLimitInfo(error)
+    const info = readBoxToolUsageLimitInfo(error)
     if (!info) return false
     const current = this.usageLimitPause
     this.usageLimitPause = {
@@ -528,14 +534,15 @@ export class EmbeddingService {
     ])
     if (operationSignal.aborted) return 'skipped'
     try {
-      const generated = await tuffIntelligence.embedding.generateLocalImage(image, {
+      const generated = await requireBoxToolIntelligence().embedding.generateLocalImage(image, {
         signal: operationSignal,
         metadata: { caller: 'core.files.embedding' }
       })
       if (operationSignal.aborted) return 'skipped'
       if (this.routing.checkContentCapacity && !(await this.routing.checkContentCapacity()))
         return 'paused'
-      if (generated.model !== LOCAL_EMBEDDING_MODEL_KEY || !usableVector(generated.result))
+      const localModelKey = getBoxToolLocalEmbeddingModelKey()
+      if (!localModelKey || generated.model !== localModelKey || !usableVector(generated.result))
         throw new Error('FILE_EMBEDDING_IMAGE_INVALID_VECTOR')
       const currentImage = await stat(image.path)
       if (
@@ -709,11 +716,12 @@ export class EmbeddingService {
     const windowSize = Math.max(1, Math.min(500, Math.floor(options?.batchSize ?? 200)))
     const rawTextModel =
       options?.activeTextModel !== undefined ? options.activeTextModel : this.activeTextModel
+    const localModelKey = getBoxToolLocalEmbeddingModelKey()
     const resolvedTextModel =
       rawTextModel && rawTextModel !== 'unknown'
         ? rawTextModel
-        : getLocalEmbeddingRuntime().isReady()
-          ? LOCAL_EMBEDDING_MODEL_KEY
+        : isBoxToolLocalEmbeddingReady()
+          ? localModelKey
           : null
 
     const readDb = this.routing.getReadDb()
@@ -779,7 +787,7 @@ export class EmbeddingService {
           orphanEmbeddingIds.push(row.id)
           continue
         }
-        const expectedModel = liveFile.hasContent ? resolvedTextModel : LOCAL_EMBEDDING_MODEL_KEY
+        const expectedModel = liveFile.hasContent ? resolvedTextModel : localModelKey
         if (expectedModel && row.model !== expectedModel) {
           staleEmbeddingIds.push(row.id)
           staleFiles.set(numericId, expectedModel)
@@ -926,14 +934,14 @@ export class EmbeddingService {
     query: string,
     signal?: AbortSignal
   ): Promise<CachedEmbedding | null> {
-    const localKey = getLocalEmbeddingRuntime().isReady()
-      ? LOCAL_EMBEDDING_MODEL_KEY
-      : 'configured-provider'
+    const localModelKey = getBoxToolLocalEmbeddingModelKey()
+    const localKey =
+      isBoxToolLocalEmbeddingReady() && localModelKey ? localModelKey : 'configured-provider'
     const cacheKey = `${localKey}:${query.trim().toLowerCase()}`
     const cached = this.queryCache.get(cacheKey)
     if (cached && Date.now() - cached.timestamp < EMBEDDING_CACHE_TTL) return cached
     try {
-      const result = await runWithEmbeddingPriority('interactive', () =>
+      const result = await runBoxToolWithEmbeddingPriority('interactive', () =>
         this.generate(query, signal, 'query')
       )
       if (!usableVector(result.vector) || !result.model) return null

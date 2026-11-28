@@ -348,8 +348,9 @@ const LIMITS = {
     // 2026-08-18 and has failed tuffex CI on every commit since — which cost
     // every tuffex change its build signal, this file's own audits included.
     'border-beam/src/styles.js': 80 * 1024,
-    // 48.1 KiB measured in CI on 2026-11-04. The barrel sits on the shared limit, so this override stays until it shrinks.
-    'components.js': 48.5 * 1024,
+    // 48.1 KiB measured in CI on 2026-11-04; 48.7 KiB after matrix-loader (194th) on 2026-11-26;
+    // 49.4 KiB after device-mockup (195th) on 2026-11-27; 51.7 KiB after distortion-wave, pixel-field, and voice-ring (198th) on 2026-11-28.
+    'components.js': 52.2 * 1024,
   },
   emptyStateAliasCssBytes: 128,
 }
@@ -419,7 +420,11 @@ const pageStyleBudgets = [
     // page carries too: 137.1 -> 137.4 KiB measured. Actuals plus minimal headroom, growth from here fails.
     // 137.5 -> 137.7 on 2026-11-04 for the same focus transitions and disabled tokens, which this page
     // carries too: 137.4 -> 137.6 KiB measured. Actuals plus minimal headroom, growth from here fails.
-    limit: 137.7 * 1024,
+    // 137.7 -> 139.1 on 2026-11-27 for TxEmptyState's redesigned 3-step guide illustration
+    // (`empty-state/style.css` replaces broken `%`-offset bounce/shimmer keyframes with contained
+    // user-unit progress and reduced-motion framing): 137.6 -> 139.0 KiB measured. Actuals plus
+    // minimal headroom, growth from here fails.
+    limit: 139.1 * 1024,
   },
   {
     label: 'chat',
@@ -503,11 +508,12 @@ const emptyStateStyleAliases = [
 // Declare that exact new edge for the existing consumers of the surface stack.
 const onDemandImportBudgets = [
   {
-    // TxAvatarGroup's overflow popover is opt-in at runtime but statically imported,
-    // so `avatar` now carries the whole anchor stack. Declared rather than left
-    // implicit: this is the edge that would otherwise grow unnoticed.
+    // TxAvatarGroup's overflow popover and TxAvatarEditor (TxModal + TxFileUploader)
+    // are opt-in at runtime but statically imported from `avatar`, so `avatar` carries
+    // the anchor stack, modal, and file-uploader. Declared explicitly so unexpected
+    // growth still fails the audit.
     subpath: 'avatar',
-    allowedComponentDirs: ['avatar', 'base-anchor', 'base-surface', 'card', 'flow-light', 'glass-surface', 'icon', 'popover', 'spinner', 'tooltip'],
+    allowedComponentDirs: ['avatar', 'base-anchor', 'base-surface', 'card', 'file-uploader', 'flow-light', 'glass-surface', 'icon', 'modal', 'popover', 'spinner', 'tooltip'],
     forbiddenStaticSpecifierPrefixes: ['gsap'],
   },
   {

@@ -19,6 +19,7 @@ const RUNTIME_MODULE_MANIFEST = Object.freeze({
     'drizzle-orm',
     'log4js',
     'chokidar',
+    'chokidar-fsevents',
     'pinyin-pro',
     'simple-plist',
     '@electron-toolkit/utils',

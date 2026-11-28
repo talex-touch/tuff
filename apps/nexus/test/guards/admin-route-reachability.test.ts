@@ -125,21 +125,14 @@ function loadAdminPages(): SourceFile[] {
 
 /**
  * Orphans that predate this guard. Self-expiring: `no waiver has gone stale`
- * fails as soon as one gains a navigation entry.
+ * fails as soon as one gains a navigation entry or turns into a forwarding page.
  *
- * `/admin/intelligence-chat` used to be here and is not any more: the console
- * made its rail the single navigation surface, the chat probe became an entry
- * under Intelligence instead of a URL-only page, and `5e6579e05` later retired
- * the probe together with its page.
+ * - `/admin/intelligence-chat` was retired in `5e6579e05`.
+ * - `/admin/codes` moved from a client-side `watch(user)` forward to a
+ *   route-level `definePageMeta({ redirect: '/admin/subscriptions' })` stub
+ *   matching `credits.vue` and `index.vue`, so `isForwardingPage` covers it.
  */
-const KNOWN_ORPHANS = [
-  {
-    route: '/admin/codes',
-    why: 'Activation codes. AdminNav highlights the Subscriptions entry while on this route so the '
-      + 'forward does not flash the wrong section, but nothing renders a link to it — the page is '
-      + 'a redirect stub that only an old bookmark or a hand-typed URL reaches.',
-  },
-]
+const KNOWN_ORPHANS: Array<{ route: string, why: string }> = []
 
 describe('guard: every admin page is reachable from the UI', () => {
   it('finds the admin pages and the links at all', () => {

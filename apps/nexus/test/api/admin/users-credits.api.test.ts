@@ -20,6 +20,7 @@ const creditsMocks = vi.hoisted(() => ({
 }))
 
 const h3Mocks = vi.hoisted(() => ({
+  getHeader: vi.fn(),
   getQuery: vi.fn(),
   readBody: vi.fn(),
 }))
@@ -28,6 +29,7 @@ vi.mock('h3', async () => {
   const actual = await vi.importActual<typeof import('h3')>('h3')
   return {
     ...actual,
+    getHeader: h3Mocks.getHeader,
     getQuery: h3Mocks.getQuery,
     readBody: h3Mocks.readBody,
   }
@@ -39,7 +41,11 @@ vi.mock('../../../server/utils/adminAuditStore', () => adminAuditMocks)
 // The refusal is matched with `instanceof`, so the handler gets the store's own error class.
 vi.mock('../../../server/utils/creditsStore', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../server/utils/creditsStore')>()
-  return { ...creditsMocks, CreditDeductLimitError: actual.CreditDeductLimitError }
+  return {
+    ...creditsMocks,
+    CreditDeductLimitError: actual.CreditDeductLimitError,
+    normalizeCreditIdempotencyKey: actual.normalizeCreditIdempotencyKey,
+  }
 })
 
 let getHandler: (event: any) => Promise<any>
@@ -122,6 +128,7 @@ describe('/api/admin/users/[id]/credits', () => {
       createdAt: '2026-06-21T01:00:00.000Z',
     })
     adminAuditMocks.logAdminAudit.mockResolvedValue(undefined)
+    h3Mocks.getHeader.mockReturnValue(undefined)
     h3Mocks.getQuery.mockReturnValue({ page: '2', limit: '2' })
     h3Mocks.readBody.mockResolvedValue({
       amount: 10,
@@ -228,5 +235,31 @@ describe('/api/admin/users/[id]/credits', () => {
       total: 1,
       totalPages: 1,
     })
+  })
+
+  it('forwards X-Idempotency-Key into adjustUserCredits and maps idempotency conflicts to 409 without auditing', async () => {
+    const reqEvent = {
+      context: { params: { id: 'user_1' } },
+      node: { req: { headers: { 'x-idempotency-key': 'admin-credit-key-01' } } },
+    }
+    h3Mocks.getHeader.mockReturnValue('admin-credit-key-01')
+
+    await patchHandler(reqEvent)
+    expect(creditsMocks.adjustUserCredits).toHaveBeenCalledWith(
+      reqEvent,
+      'user_1',
+      -10,
+      'manual correction',
+      { adminUserId: 'admin_1', source: 'admin-user-management' },
+      { idempotencyKey: 'admin-credit-key-01' },
+    )
+
+    adminAuditMocks.logAdminAudit.mockClear()
+    creditsMocks.adjustUserCredits.mockRejectedValueOnce(new Error('Credit idempotency conflict.'))
+    await expect(patchHandler(reqEvent)).rejects.toMatchObject({
+      statusCode: 409,
+      statusMessage: 'Credit idempotency conflict.',
+    })
+    expect(adminAuditMocks.logAdminAudit).not.toHaveBeenCalled()
   })
 })

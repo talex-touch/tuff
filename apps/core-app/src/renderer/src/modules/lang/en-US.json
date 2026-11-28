@@ -928,9 +928,22 @@
     "description": "Voice input and cloud routing.",
     "refresh": "Refresh",
     "customWords": {
-      "title": "Hotwords and terminology",
-      "description": "Enter specialized terms, names, or English abbreviations, separated by commas, to guide recognition and AI polishing.",
-      "placeholder": "For example: SGLang, vLLM, DeepSeek, Qwen"
+      "title": "Dictionary & hotwords",
+      "description": "Add specialized terms, names, or acronyms to bias speech recognition (Whisper, Doubao) and AI polishing.",
+      "placeholder": "Add terms (e.g. SGLang, vLLM, DeepSeek)",
+      "add": "Add",
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel",
+      "remove": "Remove",
+      "empty": "No custom terms yet.",
+      "ariaList": "Voice dictionary entries",
+      "editAria": "Edit term {term}",
+      "removeAria": "Remove term {term}",
+      "source": {
+        "manual": "Manual",
+        "auto": "Auto"
+      }
     },
     "input": {
       "title": "Voice input",
@@ -995,7 +1008,16 @@
     },
     "history": {
       "title": "Keep recognition records",
-      "description": "Saves source audio and transcripts; off keeps statistics only."
+      "description": "Stores source audio and transcripts locally on this device for the configured retention period so recordings can be replayed or retried, and auto-purges expired entries. Off keeps aggregate statistics only."
+    },
+    "historyRetention": {
+      "title": "History & audio retention",
+      "description": "Local transcripts and WAV recordings are kept on this device only and automatically deleted on expiry.",
+      "options": {
+        "7d": "7 days",
+        "30d": "30 days",
+        "off": "Off"
+      }
     },
     "noiseSuppression": {
       "title": "Noise suppression",
@@ -2171,7 +2193,7 @@
     "empty": {
       "title": "Your voice history starts here",
       "description": "Complete a successful, non-empty voice capture and this page will begin showing real totals, streaks, and daily activity.",
-      "privacy": "Only aggregate counts are kept. Raw audio, transcripts, app names, and paths are not part of voice input statistics."
+      "privacy": "Statistics keep only aggregate counts. When recognition history is enabled, transcripts and audio are stored locally on this device for retry and auto-deleted after the configured retention period."
     },
     "error": {
       "title": "Voice input statistics could not be loaded",
@@ -2221,11 +2243,40 @@
     "records": {
       "title": "Recognition records",
       "empty": "No recognition records yet.",
-      "retentionOff": "Nothing is being kept, so a dictation leaves no record behind.",
+      "emptyFiltered": "No recognition records match this source filter.",
+      "retentionOff": "History retention is off — new audio and transcripts are not saved on this device.",
       "retentionAction": "Keep recognition records",
+      "privacyNotice": "Stored locally on this device for {period} for replay and retry. Expired records and audio are auto-purged.",
       "clear": "Clear records",
       "clearSuccess": "Recognition records cleared",
       "clearFailed": "Recognition records could not be cleared",
+      "retry": "Retry",
+      "retrying": "Retrying…",
+      "retrySuccess": "Re-transcribed from local audio",
+      "retryEmpty": "Retried, but no speech was detected in the audio",
+      "retryFailed": "Retry failed. Check your recognition channel and try again.",
+      "retryAudioMissing": "Local audio file is no longer available (pruned or deleted).",
+      "retryPathInvalid": "Retained audio path failed local safety validation.",
+      "delete": "Delete",
+      "deleteSuccess": "Recognition record deleted",
+      "deleteFailed": "Could not delete recognition record",
+      "editText": "Edit transcript",
+      "saveText": "Save",
+      "cancelEdit": "Cancel",
+      "editSuccess": "Transcript updated",
+      "editLearned": "Transcript updated · learned {terms}",
+      "editFailed": "Could not update transcript",
+      "filters": {
+        "label": "Filter records by source",
+        "all": "All",
+        "dictate": "Dictate",
+        "ask": "Ask",
+        "file": "Audio file"
+      },
+      "days": {
+        "today": "Today",
+        "yesterday": "Yesterday"
+      },
       "audioLabel": "Recognition source audio",
       "audioUnavailable": "Source audio unavailable",
       "audioMeta": "Audio {duration} · {bytes} bytes",
@@ -2249,6 +2300,8 @@
       },
       "delivery": "Delivery",
       "sourceValues": {
+        "dictate": "Dictate",
+        "ask": "Ask",
         "microphone": "Microphone",
         "file": "Audio file"
       },
@@ -2263,7 +2316,8 @@
         "text": "Transcript",
         "capturedAt": "Captured",
         "status": "Status",
-        "model": "Recognition model"
+        "model": "Recognition model",
+        "actions": "Actions"
       },
       "status": {
         "success": "Success",
@@ -3117,6 +3171,7 @@
       "title": "Sidebar",
       "tabs": "Sidebar tabs",
       "newTab": "New tab / Quick launcher",
+      "moreActions": "More actions",
       "newTabMenu": "Quick new tab options",
       "searchPlaceholder": "Search or enter a URL or file path",
       "recentOpened": "Recent",
@@ -3164,11 +3219,55 @@
       "selectionComment": "Comment",
       "selectionExplain": "Explain",
       "selectionImprove": "Improve",
+      "selectionImproving": "Improving",
       "selectionQuote": "Quote to chat",
       "selectionTranslate": "Translate",
       "selectionPromptExplain": "Please explain the selected passage above.",
-      "selectionPromptImprove": "Please review and improve the selected passage above.",
+      "selectionPromptImprove": "Please polish and improve the selected passage above and apply the edit to this file (update only the selected passage while keeping the rest unchanged). Important: only state that the file was updated if you actually invoked a file-writing tool and it succeeded (never fabricate success: true without calling the tool); otherwise put the complete revised passage inside a single markdown fenced code block (without adding > blockquote prefixes) so the editor can apply it automatically.",
       "selectionPromptTranslate": "Please translate the selected passage above clearly.",
+      "canvasStatusOptimizing": "AI is editing document...",
+      "canvasStatusRewriting": "AI is writing revision...",
+      "canvasStatusApplying": "Applying edits...",
+      "canvasAppliedTitle": "Edits applied",
+      "canvasSyncedTitle": "Synced changes",
+      "canvasAccept": "Accept",
+      "canvasKeep": "Keep",
+      "canvasUndo": "Undo",
+      "canvasRetry": "Try again",
+      "canvasDone": "Done",
+      "canvasShowDiff": "Diff",
+      "canvasHideDiff": "Preview",
+      "canvasBusyEditing": "Editing",
+      "canvasLockedHint": "Editing locked while AI updates document",
+      "canvasComposeSelectionScope": "Improve selection",
+      "canvasComposeDocumentScope": "Improve document",
+      "canvasComposePlaceholder": "Describe how to improve, press Enter to polish...",
+      "canvasComposeSend": "Send edit instruction",
+      "canvasComposePresetPolish": "Polish",
+      "canvasComposePresetConcise": "Shorter",
+      "canvasComposePresetVivid": "More vivid",
+      "canvasComposePresetGrammar": "Fix flow",
+      "canvasComposePresetConcisePrompt": "Tighten the wording and trim redundancy for a crisper cadence.",
+      "canvasComposePresetVividPrompt": "Enhance imagery, rhythm, and emotional resonance while staying faithful to the meaning.",
+      "canvasComposePresetGrammarPrompt": "Fix typos, punctuation, and phrasing so it reads naturally and smoothly.",
+      "canvasImproveFullDoc": "AI improve document",
+      "canvasPromptFullDocument": "Please polish and improve the entire document and apply the edit to this file. Important: only state that the file was updated if you actually invoked a file-writing tool and it succeeded (never fabricate success: true without calling the tool); otherwise put the complete revised document inside a single markdown fenced code block so the editor can apply it automatically.",
+      "canvasUndone": "Changes reverted",
+      "canvasApplyFailed": "Could not apply edits to the file",
+      "canvasNoRevisionExtracted": "No directly applicable revision found — see the reply on the left",
+      "canvasFalseWriteClaim": "The AI claimed the file was updated without calling a file-write tool or outputting revised text — nothing changed on disk",
+      "editorPlaceholder": "Click to start writing, type / for commands...",
+      "editorUnsaved": "Unsaved",
+      "editorSaving": "Saving...",
+      "editorSaved": "Saved",
+      "editorSaveFailed": "Save failed",
+      "editorSaveRetry": "Click to retry saving",
+      "editorSaveConflict": "File changed externally — auto-save paused to avoid overwriting",
+      "editorConflictReload": "Load disk version",
+      "editorConflictOverwrite": "Overwrite disk",
+      "editorConflictDiff": "Compare",
+      "canvasUndoConflict": "File changed externally since this edit — refresh before undoing",
+      "canvasRefresh": "Refresh",
       "commentInputPlaceholder": "Write a comment or revision note for this selection...",
       "commentSubmitShortcut": "⌘/Ctrl + Enter to add",
       "commentAddToQueue": "Add comment",

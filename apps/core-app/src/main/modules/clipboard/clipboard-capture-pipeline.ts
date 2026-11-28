@@ -17,8 +17,8 @@ import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { clipboardHistory } from '../../db/schema'
 import { enterPerfContext } from '../../utils/perf-context'
 import { perfMonitor } from '../../utils/perf-monitor'
-import { windowManager } from '../box-tool/core-box/window'
 import { getClipboardTagSearchTerms } from '../clipboard-tagging'
+import { getClipboardPorts } from './clipboard-ports'
 import type { ClipboardRetentionClass } from '@talex-touch/utils/clipboard'
 import { classifyClipboardContent } from '@talex-touch/utils/clipboard'
 import type { ClipboardClassificationSettings } from './clipboard-classification-settings'
@@ -680,10 +680,11 @@ export class ClipboardCapturePipeline {
   }
 
   private forwardClipboardChangeToPlugin(persisted: IClipboardItem): void {
-    const activePlugin = windowManager.getAttachedPlugin()
+    const coreBoxPort = getClipboardPorts().coreBox
+    const activePlugin = coreBoxPort.getAttachedPlugin()
     if (
       activePlugin?._uniqueChannelKey &&
-      windowManager.shouldForwardClipboardChange(persisted.type)
+      coreBoxPort.shouldForwardClipboardChange(persisted.type)
     ) {
       this.options
         .getTransport()

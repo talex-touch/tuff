@@ -12,6 +12,10 @@ import {
   normalizeStartAppRecord,
   parsePowerShellJsonArray
 } from '../src/main/modules/platform/windows-capability-evidence'
+import {
+  buildWindowsPowerShellArgs,
+  classifyWindowsPowerShellError
+} from '../src/main/modules/platform/windows-powershell'
 import type {
   WindowsCapabilityCommandResult,
   WindowsCapabilityGateOptions,
@@ -207,11 +211,26 @@ async function runCommand(
 }
 
 async function runPowerShell(script: string, timeoutMs: number): Promise<CommandCapture> {
-  return runCommand(
-    'powershell',
-    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
-    timeoutMs
-  )
+  const result = await runCommand('powershell', buildWindowsPowerShellArgs(script), timeoutMs)
+  if (result.exitCode === 0) {
+    return {
+      ...result,
+      attempt: 'powershell'
+    }
+  }
+  const classified = classifyWindowsPowerShellError({
+    code: result.available ? result.exitCode : 'ENOENT',
+    message: result.error,
+    stderr: result.stderr,
+    stdout: result.stdout,
+    killed: result.timedOut
+  })
+  return {
+    ...result,
+    attempt: 'powershell',
+    reasonCode: classified.code,
+    recovery: classified.recovery
+  }
 }
 
 function buildEverythingTargetProbe(target: string, query: CommandCapture | undefined) {

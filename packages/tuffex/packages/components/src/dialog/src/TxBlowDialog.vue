@@ -270,18 +270,21 @@ provide('destroy', destroy)
   // it reads as depth rather than dirt. 18px radius matches the menu panels.
   &__container {
     // Positioned and stacked, so the surface sits under the content without leaving the card.
+    // Concentric corners: 24px outer radius minus 12px uniform side/bottom inset = 12px action radius.
+    --tx-blow-dialog-radius: 24px;
+    --tx-blow-dialog-inset: 12px;
     position: relative;
     z-index: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     width: min(360px, 100%);
     max-height: 100%;
     // The height comes from the spacing rhythm, not a floor: a floor left a hole between the message and the action.
-    padding: 32px 24px 24px;
+    padding: 24px var(--tx-blow-dialog-inset) var(--tx-blow-dialog-inset);
     box-sizing: border-box;
     transition: transform 0.5s;
-    @include tx-squircle(18px);
+    @include tx-squircle(24px);
 
     // The rim, the highlight and the shadow, on a layer of their own so they can fade while the
     // card does not (see the motion below). Above the surface, which would cover the rim.
@@ -314,11 +317,13 @@ provide('destroy', destroy)
   // Title / message / action: three steps, each one clearly under the last.
   &__title {
     margin: 0;
+    padding-inline: 12px;
     font-size: 17px;
     font-weight: var(--tx-font-weight-semibold, 600);
     line-height: 1.3;
     letter-spacing: -0.01em;
     text-align: center;
+    text-wrap: balance;
     color: var(--tx-text-color-primary, #303133);
   }
 
@@ -329,6 +334,7 @@ provide('destroy', destroy)
     // which `break-word` does not, so the panel stops being widened by it.
     overflow-wrap: anywhere;
     margin: 0;
+    padding-inline: 12px;
     max-height: 300px;
     overflow-y: auto;
     font-size: 13px;
@@ -338,13 +344,19 @@ provide('destroy', destroy)
       display: block;
       width: 100%;
       text-align: center;
+      text-wrap: pretty;
       color: var(--tx-text-color-secondary, #909399);
       white-space: pre-line;
     }
   }
 
   &__confirm {
-    margin-top: 14px;
+    margin-top: 16px;
+    --tx-button-height: 40px;
+    --tx-button-radius: 12px;
+    // Let fake-background::before inherit the concentric squircle geometry.
+    --fake-radius: inherit;
+    @include tx-squircle(24px, $inset: 12px);
   }
 }
 

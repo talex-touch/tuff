@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FusionProps } from './types'
-import { computed, getCurrentInstance, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
 
 defineOptions({ name: 'TxFusion' })
 
@@ -36,7 +36,7 @@ const active = computed({
   },
 })
 
-const uid = getCurrentInstance()?.uid ?? Math.floor(Math.random() * 1e9)
+const uid = useId()
 const filterId = `tx-fusion-goo-${uid}`
 
 function onEnter() {

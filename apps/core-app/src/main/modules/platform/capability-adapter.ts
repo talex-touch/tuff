@@ -1,12 +1,11 @@
 import type { PlatformCapability, PlatformCapabilitySupportLevel } from '@talex-touch/utils'
-import type { EverythingStatusResponse } from '../../../shared/events/everything'
 import { execFile } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
-import { everythingProvider } from '../box-tool/addon/files/everything-provider'
 import { isXdotoolAvailable } from '../system/linux-desktop-tools'
 import { t } from '../../utils/i18n-helper'
+import { getPlatformPorts, type PlatformEverythingStatusSnapshot } from './platform-ports'
 
 const execFileAsync = promisify(execFile)
 const TUFF_CLI_DETECT_CACHE_TTL_MS = 60_000
@@ -21,6 +20,8 @@ export interface PlatformCapabilityRuntimePatch {
   supportLevel: PlatformCapabilitySupportLevel
   issueCode?: string
   reason?: string
+  attempt?: string
+  recovery?: string
   limitations?: string[]
 }
 
@@ -66,12 +67,15 @@ function withLimitations(
   supportLevel: PlatformCapabilitySupportLevel,
   reason?: string,
   issueCode?: string,
-  limitations?: string[]
+  limitations?: string[],
+  diagnostics?: { attempt?: string; recovery?: string }
 ): PlatformCapabilityRuntimePatch {
   return {
     supportLevel,
     ...(issueCode ? { issueCode } : {}),
     ...(reason ? { reason } : {}),
+    ...(diagnostics?.attempt ? { attempt: diagnostics.attempt } : {}),
+    ...(diagnostics?.recovery ? { recovery: diagnostics.recovery } : {}),
     ...(limitations && limitations.length > 0 ? { limitations } : {})
   }
 }
@@ -110,6 +114,8 @@ export function applyCapabilityRuntimePatch(
     supportLevel: patch.supportLevel,
     issueCode: patch.issueCode,
     reason: patch.reason,
+    ...(patch.attempt ? { attempt: patch.attempt } : {}),
+    ...(patch.recovery ? { recovery: patch.recovery } : {}),
     limitations:
       patch.limitations && patch.limitations.length > 0 ? [...patch.limitations] : undefined
   }
@@ -130,7 +136,13 @@ export async function getActiveAppCapabilityPatch(): Promise<PlatformCapabilityR
       'best_effort',
       t('settings.settingPlatformCapabilities.items.activeApp.powershellReason'),
       'POWERSHELL_FOREGROUND_WINDOW',
-      [t('settings.settingPlatformCapabilities.items.activeApp.powershellLimit')]
+      [t('settings.settingPlatformCapabilities.items.activeApp.powershellLimit')],
+      {
+        attempt:
+          'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass (Win32 GetForegroundWindow)',
+        recovery:
+          'Ensure Windows PowerShell (powershell.exe) is available and not blocked by enterprise policy; active-app probing degrades cleanly when unavailable.'
+      }
     )
   }
 
@@ -246,7 +258,7 @@ export function getPermissionDeepLinkCapabilityPatch(): PlatformCapabilityRuntim
 }
 
 function getEverythingCapabilityPatchFromStatus(
-  status: EverythingStatusResponse
+  status: PlatformEverythingStatusSnapshot
 ): PlatformCapabilityRuntimePatch {
   if (process.platform !== 'win32') {
     const reason = t('settings.settingEverything.healthReasonUnsupported')
@@ -268,7 +280,7 @@ function getEverythingCapabilityPatchFromStatus(
 }
 
 export function getEverythingCapabilityPatch(): PlatformCapabilityRuntimePatch {
-  return getEverythingCapabilityPatchFromStatus(everythingProvider.getStatusSnapshot())
+  return getEverythingCapabilityPatchFromStatus(getPlatformPorts().everything.getStatusSnapshot())
 }
 
 export async function detectTuffCliAvailability(): Promise<boolean> {

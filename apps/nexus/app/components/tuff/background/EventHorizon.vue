@@ -4,7 +4,7 @@
 
 <script setup lang="ts">
 import { Mesh, Program, Renderer, Triangle, Vec2, Vec3 } from 'ogl'
-import { onMounted, onUnmounted, useTemplateRef } from 'vue'
+import { onMounted, onUnmounted, useTemplateRef, watch } from 'vue'
 import { useColorMode } from '#imports'
 import { hasWindow } from '@talex-touch/utils/env'
 
@@ -33,6 +33,9 @@ const props = withDefaults(defineProps<EventHorizonProps>(), {
 })
 
 const RIPPLE_IN_MS = 2680
+const MAX_DPR = 1.25
+const TARGET_FPS = 28
+const FRAME_INTERVAL_MS = 1000 / TARGET_FPS
 
 const canvasRef = useTemplateRef<HTMLCanvasElement>('canvasRef')
 const colorMode = useColorMode()
@@ -217,6 +220,7 @@ let program: Program | null = null
 let mesh: Mesh | null = null
 let frame: number | null = null
 let start = 0
+let lastFrameTime = 0
 let cssWidth = 0
 let cssHeight = 0
 let mouseX = 0
@@ -225,23 +229,145 @@ let targetMouseX = 0
 let targetMouseY = 0
 let theme = 0
 let reducedMotion = false
+let isVisible = true
+let isDocumentHidden = false
+let observer: IntersectionObserver | null = null
+let motionMediaQuery: MediaQueryList | null = null
+let stopThemeWatch: (() => void) | null = null
 
 function themeTarget() {
   return colorMode.value === 'dark' ? 0 : 1
 }
 
 function onPointerMove(event: PointerEvent) {
+  if (!isVisible || isDocumentHidden || reducedMotion)
+    return
   targetMouseX = (event.clientX / window.innerWidth) * 2 - 1
   targetMouseY = -((event.clientY / window.innerHeight) * 2 - 1)
 }
 
-function cleanup() {
-  if (frame) {
+function stopLoop() {
+  if (frame !== null) {
     cancelAnimationFrame(frame)
     frame = null
   }
+}
+
+function renderFrame(now: number) {
+  if (!program || !renderer || !mesh)
+    return
+
+  program.uniforms.uTime.value = reducedMotion
+    ? 8
+    : ((now - start) / 1000) * props.speed
+
+  if (!reducedMotion) {
+    mouseX += (targetMouseX - mouseX) * 0.05
+    mouseY += (targetMouseY - mouseY) * 0.05
+  }
+  program.uniforms.uMouse.value.set(mouseX, mouseY)
+
+  theme = reducedMotion ? themeTarget() : theme + (themeTarget() - theme) * 0.08
+  program.uniforms.uTheme.value = theme
+
+  if (props.rippleIn) {
+    const progress = reducedMotion
+      ? 1
+      : Math.min((now - start) / RIPPLE_IN_MS, 1)
+    program.uniforms.uReveal.value = 1 - (1 - progress) ** 3
+  }
+
+  const focus = props.focus
+  if (focus && focus.r > 0 && cssWidth > 0 && cssHeight > 0) {
+    program.uniforms.uFocus.value.set(
+      focus.x / cssWidth,
+      1 - focus.y / cssHeight,
+      focus.r / cssHeight,
+    )
+  }
+  else {
+    program.uniforms.uFocus.value.set(0.5, 0.5, 0)
+  }
+
+  renderer.render({ scene: mesh })
+}
+
+function loop(now: number) {
+  frame = null
+  if (!program || !renderer || !mesh || !isVisible || isDocumentHidden)
+    return
+
+  if (reducedMotion) {
+    renderFrame(now)
+    return
+  }
+
+  if (lastFrameTime > 0 && now - lastFrameTime < FRAME_INTERVAL_MS) {
+    frame = requestAnimationFrame(loop)
+    return
+  }
+
+  lastFrameTime = now
+  renderFrame(now)
+  frame = requestAnimationFrame(loop)
+}
+
+function startLoop() {
+  if (!program || !renderer || !mesh || !isVisible || isDocumentHidden)
+    return
+  if (reducedMotion) {
+    stopLoop()
+    renderFrame(performance.now())
+    return
+  }
+  if (frame !== null)
+    return
+  lastFrameTime = 0
+  frame = requestAnimationFrame(loop)
+}
+
+function onVisibilityChange() {
+  isDocumentHidden = document.hidden
+  if (isDocumentHidden) {
+    stopLoop()
+  }
+  else {
+    startLoop()
+  }
+}
+
+function onReducedMotionChange(event: MediaQueryListEvent) {
+  reducedMotion = event.matches
+  if (reducedMotion) {
+    stopLoop()
+    if (isVisible && !isDocumentHidden)
+      renderFrame(performance.now())
+  }
+  else {
+    startLoop()
+  }
+}
+
+function cleanup() {
+  stopLoop()
+
+  if (observer) {
+    observer.disconnect()
+    observer = null
+  }
+
+  if (stopThemeWatch) {
+    stopThemeWatch()
+    stopThemeWatch = null
+  }
+
+  if (motionMediaQuery) {
+    motionMediaQuery.removeEventListener('change', onReducedMotionChange)
+    motionMediaQuery = null
+  }
 
   if (hasWindow()) {
+    document.removeEventListener('visibilitychange', onVisibilityChange)
     window.removeEventListener('resize', resize)
     window.removeEventListener('pointermove', onPointerMove)
   }
@@ -275,66 +401,33 @@ function resize() {
 
   cssWidth = w
   cssHeight = h
+  renderer.dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR)
   renderer.setSize(w * props.resolutionScale, h * props.resolutionScale)
   program.uniforms.uResolution.value.set(
     renderer.gl.drawingBufferWidth,
     renderer.gl.drawingBufferHeight,
   )
-}
-
-function loop() {
-  if (!program || !renderer || !mesh)
-    return
-
-  program.uniforms.uTime.value = reducedMotion
-    ? 8
-    : ((performance.now() - start) / 1000) * props.speed
-
-  if (!reducedMotion) {
-    mouseX += (targetMouseX - mouseX) * 0.05
-    mouseY += (targetMouseY - mouseY) * 0.05
-  }
-  program.uniforms.uMouse.value.set(mouseX, mouseY)
-
-  theme += (themeTarget() - theme) * 0.08
-  program.uniforms.uTheme.value = theme
-
-  if (props.rippleIn) {
-    const progress = reducedMotion
-      ? 1
-      : Math.min((performance.now() - start) / RIPPLE_IN_MS, 1)
-    program.uniforms.uReveal.value = 1 - (1 - progress) ** 3
-  }
-
-  const focus = props.focus
-  if (focus && focus.r > 0 && cssWidth > 0 && cssHeight > 0) {
-    program.uniforms.uFocus.value.set(
-      focus.x / cssWidth,
-      1 - focus.y / cssHeight,
-      focus.r / cssHeight,
-    )
-  }
-  else {
-    program.uniforms.uFocus.value.set(0.5, 0.5, 0)
-  }
-
-  renderer.render({ scene: mesh })
-  frame = requestAnimationFrame(loop)
+  if (reducedMotion && isVisible && !isDocumentHidden)
+    renderFrame(performance.now())
 }
 
 onMounted(() => {
   if (!canvasRef.value || !hasWindow())
     return
 
-  reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  motionMediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  reducedMotion = motionMediaQuery.matches
+  motionMediaQuery.addEventListener('change', onReducedMotionChange)
+  isDocumentHidden = document.hidden
   theme = themeTarget()
 
   // WebGL init can fail on headless / locked-down GPUs. Fail closed to the
   // CSS fallback background instead of crashing the 404 page.
   try {
     renderer = new Renderer({
-      dpr: Math.min(window.devicePixelRatio || 1, 2),
+      dpr: Math.min(window.devicePixelRatio || 1, MAX_DPR),
       canvas: canvasRef.value,
+      powerPreference: 'low-power',
     })
 
     if (!renderer?.gl) {
@@ -361,12 +454,37 @@ onMounted(() => {
 
     mesh = new Mesh(gl, { geometry, program })
 
-    window.addEventListener('resize', resize)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('resize', resize, { passive: true })
     window.addEventListener('pointermove', onPointerMove, { passive: true })
+
+    if (typeof IntersectionObserver !== 'undefined') {
+      observer = new IntersectionObserver(
+        (entries) => {
+          const visible = entries.some(entry => entry.isIntersecting)
+          isVisible = visible
+          if (visible)
+            startLoop()
+          else
+            stopLoop()
+        },
+        { threshold: 0.01, rootMargin: '80px' },
+      )
+      observer.observe(canvasRef.value)
+    }
+
     resize()
 
+    stopThemeWatch = watch(
+      () => colorMode.value,
+      () => {
+        if (reducedMotion && isVisible && !isDocumentHidden)
+          renderFrame(performance.now())
+      },
+    )
+
     start = performance.now()
-    loop()
+    startLoop()
   }
   catch {
     cleanup()

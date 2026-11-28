@@ -19,15 +19,51 @@ import { remarkCloseComponentTags } from '~/utils/remark-close-component-tags'
 
 const nexusRoot = join(import.meta.dirname, '../..')
 const docsRoot = join(nexusRoot, 'content/docs')
-const componentDocsRoot = join(docsRoot, 'dev/components')
 
 /**
- * Pages that still carry sections after the source link. The 2026-09-26 report named
- * fusion-surface, choice-card and button; the 2026-10-08 docs rewrite removed those sections from
- * the last two, so stream-text and terminal stand in for them.
+ * Representative self-closing component tag fixtures (the TuffEx component docs moved to
+ * `apps/tuffex-docs`, while `remarkCloseComponentTags` still guards all Nexus docs).
  */
-const SPOT_CHECK_PAGES = ['fusion-surface', 'stream-text', 'terminal'].flatMap(slug =>
-  (['zh', 'en'] as const).map(locale => `${slug}.${locale}.mdc`))
+const SYNTHETIC_SELF_CLOSING_PAGES = [
+  {
+    name: 'en source link followed by sections',
+    source: [
+      '# Example',
+      '',
+      '## Implementation',
+      '',
+      '<TuffDocSourceLink label="View source" path="packages/example/index.ts" />',
+      '',
+      '## Usage Scenarios',
+      '',
+      '- First case.',
+      '',
+      '## Related',
+      '',
+      '- Companion note.',
+      '',
+    ].join('\n'),
+  },
+  {
+    name: 'zh source link followed by sections',
+    source: [
+      '# 示例',
+      '',
+      '## 技术实现',
+      '',
+      '<TuffDocSourceLink label="查看源码" path="packages/example/index.ts" />',
+      '',
+      '## 使用场景',
+      '',
+      '- 场景一。',
+      '',
+      '## 相关文档',
+      '',
+      '- 说明。',
+      '',
+    ].join('\n'),
+  },
+]
 
 type RemarkPlugins = NonNullable<NonNullable<MDCParseOptions['remark']>['plugins']>
 
@@ -134,10 +170,9 @@ describe('self-closing component tags in docs', () => {
     expect(entry && entry.options).toEqual({ revision: createHash('sha256').update(plugin).digest('hex').slice(0, 12) })
   })
 
-  it.each(SPOT_CHECK_PAGES)('%s renders the sections after its source link', async (fileName) => {
-    const source = readFileSync(join(componentDocsRoot, fileName), 'utf8')
+  it.each(SYNTHETIC_SELF_CLOSING_PAGES)('$name renders the sections after its self-closing tag', async ({ source }) => {
     const expected = headingsAfterSourceLink(source) ?? []
-    expect(expected.length, 'the page no longer has a section after a <TuffDocSourceLink /> line; pick another page').toBeGreaterThan(0)
+    expect(expected.length).toBeGreaterThan(0)
 
     // Control: MDC alone still swallows them, so this check can fail.
     const unfixed = await parseDoc(source, { configured: false })
@@ -150,7 +185,7 @@ describe('self-closing component tags in docs', () => {
 
   it('no docs page loses content to an unclosed component tag', async () => {
     const files = walkDocs(docsRoot)
-    expect(files.length).toBeGreaterThan(400)
+    expect(files.length).toBeGreaterThan(150)
 
     const problems: string[] = []
     for (const file of files) {

@@ -283,9 +283,10 @@ async function runFileAiAction(payload: WorkspaceFileAiActionPayload): Promise<b
     return true
   }
 
-  if (conversationId.value && draft.value.trim()) {
+  if (conversationId.value && (draft.value.trim() || payload.autoApply)) {
     try {
       await workspace.submit(prompt)
+      void nextTick(() => streamRef.value?.tweenToBottom(280))
       return true
     } catch (error) {
       reportSubmitError(error)
@@ -842,6 +843,7 @@ useHomeCommands({
         :gateway="gatewayApprovals"
         :pending-run="workspace.state.value?.pendingRun"
         :loading="workspace.loading.value"
+        :ai-streaming="isStreaming"
         :tabs="sidePanelTabs"
         :active-tab-id="activeSidePanelTabId"
         :recent-items="sidePanelRecentItems"

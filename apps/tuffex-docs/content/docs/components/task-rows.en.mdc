@@ -1,0 +1,112 @@
+---
+title: "TaskRows"
+description: "Agent task rows with status and expandable details."
+category: AiAgent
+status: beta
+since: 0.3.9
+tags: [ai, agent, task, status]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+### Capsules
+`variant` defaults to `capsules`, one card per row; hold the open set with `v-model:open-ids`.
+:::TuffDemoWrapper{demo="TaskRowsCapsulesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTaskRows
+      v-model:open-ids="openIds"
+      :rows="rows"
+      done-text="Completed"
+      error-text="Failed"
+    />
+  </template>
+---
+:::
+
+### List
+`variant="list"` puts every row in a single card.
+:::TuffDemoWrapper{demo="TaskRowsListDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTaskRows
+      variant="list"
+      :rows="rows"
+      :default-open-ids="['verify']"
+      done-text="Completed"
+      pending-text="Queued"
+    />
+  </template>
+---
+:::
+
+### Best Practices
+
+- Use `capsules` for a task group floating on the page and `list` inside an existing card, so containers don't stack.
+- Put a real retry button in the `trailing` slot, never in the row header.
+- Put a right-aligned quantity in `amount` ("12 suppliers"); in details, say what happened in `label` and put counts or ratios in `meta`.
+- For a single tool call (input, logs, result, retry), use [ToolCallCard](/en/tool-call-card); this component is for multi-row task status.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `rows` | `TaskRowItem[]` | — | The task rows. Required. |
+| `variant` | `'capsules' \| 'list'` | `'capsules'` | Container form. |
+| `defaultOpenIds` | `string[]` | — | Ids open before any interaction; ignored while `openIds` is bound. |
+| `openIds` | `string[]` | — | Open ids; bound, the host owns them, otherwise the component does. |
+| `doneText` | `string` | `'Completed'` | Pill text for `done` rows. |
+| `errorText` | `string` | `'Failed'` | Pill text for `error` rows. |
+| `runningText` | `string` | — | Pill text for `running` rows; unset, they show no pill. |
+| `pendingText` | `string` | — | Pill text for `pending` rows; unset, they show no pill. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|------|
+| `toggle` | `(id: string, open: boolean)` | Fires when a row is clicked, with its id and new state. |
+| `update:openIds` | `(ids: string[])` | Fires when the open set changes; supports `v-model:open-ids`. |
+
+### Slots
+
+| Name | Scope | Description |
+|------|------|------|
+| `badge` | `{ row }` | Replaces the badge (mark or ring). |
+| `detail` | `{ row, detail, index }` | Replaces one detail line. |
+| `trailing` | `{ row }` | Host controls rendered outside the toggle button. |
+
+### Types
+
+#### TaskRowItem
+
+| Field | Type | Description |
+|------|------|------|
+| `id` | `string` | Stable row id. |
+| `label` | `string` | Task name. |
+| `status` | `'pending' \| 'running' \| 'done' \| 'error'` | Task status, matching `AiToolCallPart.status`. |
+| `amount` | `string` | Right-aligned quantity in tabular figures, so it doesn't jitter as it updates. |
+| `index` | `number` | Number shown inside the ring while `pending` or `running`. |
+| `statusText` | `string` | This row's pill text; wins over the per-status text props. |
+| `details` | `{ label, meta? }[]` | Detail lines shown when open; `meta` renders in tabular figures. |
+| `retryable` | `boolean` | Shows the "retrying" arrow on a failed row, default `true`; it is an indicator, not a control. |
+
+## Overview
+
+- Bound or not, a toggle emits both `toggle` and `update:openIds`.
+- Each row header is a button whose `aria-controls` points at its own collapse; a closed collapse is `inert`, so its details leave the tab order.
+- Closing doesn't unmount the details; it collapses them to zero height.
+- Under reduced motion the radius morph, rotation, and entrances stop, while status keeps advancing.
+
+## Technologies
+
+- The badge and pill are keyed on `status`, so a status change rebuilds them and their entrance replays.
+- Adapted from [Beautiful UI](https://www.beautifului.dev) (© 2026 Shane Levine, MIT).
+- Source: `packages/tuffex/packages/components/src/task-rows/`.
+
+<TuffDocSourceLink />

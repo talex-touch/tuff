@@ -10,10 +10,10 @@ import { createArenaWithFallback } from './fallback-file-arena'
 import type { DbUtils, RecommendationHistoryEvent } from '../../../../../db/utils'
 import { encodeVectorBlob, readStoredVector } from '../../../../../db/embedding-vector-codec'
 import {
-  createUsageLimitError,
-  emptyUsageLimits,
-  notifyUsageLimitsChanged
-} from '../../../../ai/usage-ledger/usage-limits'
+  createBoxToolUsageLimitError,
+  createEmptyBoxToolUsageLimits,
+  notifyBoxToolUsageLimitsChanged
+} from '../../../ports/ai-capability-port'
 import { selectionSnapshotStore } from '../../../../system/selection-snapshot-store'
 import {
   APP_DESTINATION_ITEM_IDS,
@@ -3443,7 +3443,7 @@ async function runResourceSecurityScenario(
     let shouldFailLimit = true
     hooks.setEmbeddingGenerateImpl(async ({ text }) => {
       if (shouldFailLimit) {
-        throw createUsageLimitError('embedding.generate', {
+        throw createBoxToolUsageLimitError('embedding.generate', {
           key: 'requestsPerDay',
           used: 100,
           max: 100,
@@ -3472,7 +3472,7 @@ async function runResourceSecurityScenario(
 
         // Raising/clearing limit wakes semantic AI immediately
         shouldFailLimit = false
-        notifyUsageLimitsChanged(emptyUsageLimits())
+        notifyBoxToolUsageLimitsChanged(createEmptyBoxToolUsageLimits())
         await engine.recommend({ forceRefresh: true, limit: 10 })
         const callsAfterResume = hooks.getEmbeddingGenerateCallCount() - callsAfterTrip
 

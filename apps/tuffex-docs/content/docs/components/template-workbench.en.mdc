@@ -1,0 +1,107 @@
+---
+title: Workbench
+description: A plugin workbench with a file tree, code editor, terminal, and hot-reload preview.
+category: TemplateApp
+status: beta
+since: 0.9.1
+tags: [template, ide, code-editor, terminal, plugin]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+### Plugin development
+:::TuffDemoWrapper{demo="TemplateWorkbenchDemo" code-lang="vue" description="Starts dev once on entering the viewport and adds a trigger to the manifest; then edit a file and press ⌘/Ctrl+S, and the terminal and preview hot-reload."}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, reactive, ref, shallowRef } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // Two copies per file: value is the editor buffer, saved is what the dev server reads
+  const files = reactive(seedFiles())
+  const loaded = shallowRef<LoadedManifest | null>(null) // the last manifest that parsed
+  const terminal = shallowRef<TerminalInstance | null>(null)
+
+  // Only a save reaches the dev server: ⌘/Ctrl+S formats JSON first; autosave after 1 s idle
+  function saveFile(path: FilePath) {
+    files[path].saved = files[path].value
+    queueReload(path) // hot-reloads after 360ms; a manifest that fails to parse keeps the last good one
+  }
+
+  // Problems follow the buffer live; line and column come from the template's own JSON scan,
+  // not from browser-specific error messages
+  const problems = computed(() => lintManifest(files['manifest.json'].value))
+
+  // xterm swallows Ctrl+S / Ctrl+J, so shortcuts are handled in the root's capture phase
+  function onShortcut(event: KeyboardEvent) {
+    if ((event.metaKey || event.ctrlKey) && event.key === 's') {
+      event.preventDefault()
+      saveFile(activePath.value)
+    }
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="Workbench" :height="600" @enter="play">
+      <template #default="{ width }">
+        <div class="workbench" tabindex="-1" @keydown.capture="onShortcut">
+          <TxTree :nodes="tree" :model-value="activePath" :expanded-keys="openFolders" @select="onTreeSelect">
+            <template #item="{ node, expanded }">…</template>
+          </TxTree>
+
+          <div role="tablist">…</div>
+          <TxCodeEditorToolbar :actions="toolbarActions" @action="onToolbarAction" />
+          <TxCodeEditor
+            v-for="path in openTabs" v-show="path === activePath" :key="path"
+            :ref="el => setEditorRef(path, el)"
+            :model-value="files[path].value" :language="files[path].lang"
+            @update:model-value="value => onEditorInput(path, value)"
+          />
+
+          <TxTerminal ref="terminal" read-only :labels="{ ariaLabel: 'tuff dev output (simulated)' }" />
+
+          <!-- The CoreBox preview, wide only: matches against the manifest the dev server loaded -->
+          <aside v-if="width >= 960">
+            <TxSearchInput v-model="query" :disabled="!loaded" />
+            <TxSearchEmpty v-if="!hits.length" :title="`No feature answers to “${query}”`" />
+          </aside>
+
+          <TxStatusHint :text="hint.text" :tone="hint.tone" :pulse-key="hint.pulse" />
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## Overview
+
+A plugin workbench built around touch-translate, a translate-selection plugin: a file tree, editor tabs, a `pnpm dev` terminal, and a Problems panel, plus a CoreBox preview when wide. All terminal output is simulated and every duration is sample data.
+
+- Plays once on first entering the viewport (under 6 seconds): the terminal starts `pnpm dev`, then the trigger “dict” is typed into the first feature's `commands` in manifest.json and saved, and the preview goes from “No feature answers” to matching Translate selection. Any input from you stops the rest; a trigger being typed completes and saves at once, so the manifest is never left half-typed. With reduced motion the final state appears directly, without timers.
+- Only a save reaches the dev server: ⌘/Ctrl+S saves the current file, formatting JSON first; one second after you stop typing, every change saves itself (unformatted). manifest.json reloads the feature list, index.js restarts the Prelude, src and locales hot-update through Vite, and package.json only asks for a dev restart.
+- When manifest.json is saved as JSON that does not parse, the dev server keeps the last good version: the status bar reads “manifest.json failed to parse · line N” and the preview is marked Stale. Problems follows the editor buffer live, also flags features without triggers and duplicate triggers, and clicking one jumps to its line and column.
+- ⌘/Ctrl+J collapses or expands the terminal panel, and ⌘/Ctrl+Shift+F in the editor formats the current JSON file; editor tabs switch with ← / → and Home / End, close with Delete, and also close on a middle click.
+- Below 640px the explorer moves into a drawer (closed by Esc or a click elsewhere) and there is no preview; 640–959px shows the file tree, editor, and terminal; at 960px and up the CoreBox preview joins on the right.
+
+## Customization
+
+- To connect a real `tuff dev`, replace the timed output in `bootSteps()` and `reloadFile()` with logs the dev server pushes (WebSocket / SSE), writing each line to TxTerminal; have the preview read the feature list the dev server actually loaded instead of parsing the manifest in the page.
+- TxCodeEditor's built-in format is `JSON.stringify(value, null, 2)`, which puts every array item on its own line, and it is bound to Mod-Shift-F. The template intercepts that shortcut in the capture phase and formats with short arrays kept inline; it writes back only the span that differs, so the caret does not jump to the end.
+- Do not use CodeMirror's `scrollIntoView` to reveal a line, since it scrolls the page too. The template takes the EditorView from `getView()` and uses `requestMeasure` to scroll only the editor's own scroller.
+- TxCodeEditor and TxTerminal default to 160px-tall rounded cards; inside panels, override the minimum height, radius, and border. TxTerminal hands the host's computed background to xterm, so the background must be a plain color token, not `color-mix()`.
+- The toolbar's text labels are visible text; the template hides them visually and keeps them as the icon buttons' accessible names. TxCodeEditor's dark theme is a fixed `#0d1117`, so the neighboring tabs and terminal use `--tx-fill-color-blank` to stay close to it.
+
+## Related components
+
+| Region | Components | Role |
+|---|---|---|
+| Title bar | [TxIconButton](/en/button), [TxIconChip](/en/icon-chip), [TxTag](/en/tag), [TxWorkingIndicator](/en/working-indicator), [TxStatusBadge](/en/status-badge) | Panel toggles, project and branch, dev status |
+| Explorer | [TxTree](/en/tree) | File tree with a dot on unsaved files |
+| Editor | [TxCodeEditor](/en/code-editor), [TxCodeEditorToolbar](/en/code-editor), [TxEmptyState](/en/empty-state) | Tabbed editing, format, search, and copy |
+| Panel | [TxTerminal](/en/terminal), [TxIconButton](/en/button) | Simulated `pnpm dev` output and the Problems list |
+| CoreBox preview (wide) | [TxSearchInput](/en/search-input), [TxIconChip](/en/icon-chip), [TxTag](/en/tag), [TxKbd](/en/kbd), [TxSearchEmpty](/en/search-empty), [TxEmptyState](/en/empty-state), [TxStatusHint](/en/status-hint) | Matches features against the loaded manifest |
+| Status bar | [TxStatusHint](/en/status-hint), [TxKbd](/en/kbd) | Last hot reload, problem counts, and shortcuts |
+| Notifications | [TxToastPanel](/en/toast-panel) | Results of saving, formatting, and copying |

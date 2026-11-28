@@ -1,18 +1,31 @@
 <script setup lang="ts">
 import type { TxAiMarkdownProps } from '../../types'
 import { TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
+import { ref, watch } from 'vue'
 import TxAiReveal from '../foundation/TxAiReveal.vue'
 
 defineOptions({
   name: 'TxAiMarkdown',
 })
 
-withDefaults(defineProps<TxAiMarkdownProps>(), {
+const props = withDefaults(defineProps<TxAiMarkdownProps>(), {
   sanitize: true,
   theme: 'auto',
   streaming: false,
   reveal: true,
 })
+
+// Keep pacing active after a live stream completes so trailing buffered words drain smoothly
+// instead of snapping in all at once; already-complete historical turns stay unpaced.
+const hasStreamed = ref(Boolean(props.streaming))
+watch(
+  () => props.streaming,
+  (isStreaming) => {
+    if (isStreaming) {
+      hasStreamed.value = true
+    }
+  },
+)
 
 // `TxStreamMarkdown`, not `TxMarkdownView`: it re-lexes the content into blocks with
 // stable ids, so a stream chunk patches only the growing tail instead of replacing the
@@ -25,6 +38,7 @@ withDefaults(defineProps<TxAiMarkdownProps>(), {
     <TxStreamMarkdown
       :content="content"
       :streaming="streaming"
+      :paced="streaming || hasStreamed"
       :sanitize="sanitize"
       :theme="theme"
       reveal="blur"
@@ -36,6 +50,7 @@ withDefaults(defineProps<TxAiMarkdownProps>(), {
     :class="{ 'is-streaming': streaming }"
     :content="content"
     :streaming="streaming"
+    :paced="streaming || hasStreamed"
     :sanitize="sanitize"
     :theme="theme"
     reveal="blur"

@@ -1,0 +1,169 @@
+---
+title: Skeleton 骨架屏
+description: 在内容加载前占位的骨架形状
+category: Status
+status: beta
+since: 0.3.4
+tags: [skeleton, loading, placeholder]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 文本与头像
+`lines` 设定行数；`variant="circle"` 配合相同的 `width` 与 `height` 画出正圆。
+:::TuffDemoWrapper{demo="SkeletonSkeletonDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSkeleton :loading="true" :lines="3" />
+    <TxSkeleton variant="circle" :width="40" :height="40" />
+  </template>
+---
+:::
+
+### 卡片占位
+:::TuffDemoWrapper{demo="SkeletonCardPlaceholderDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard>
+      <TxSkeleton :loading="true" :lines="2" />
+    </TxCard>
+  </template>
+---
+:::
+
+### 后台数据运维面板
+表格旁的侧栏摘要用 `TxSkeleton` 与 `TxLayoutSkeleton` 保留结构。
+:::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSkeleton :loading="true" :lines="3" height="10px" />
+    <TxLayoutSkeleton />
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 宽度、高度、行数与圆角贴近最终内容，不要在加载期形成第二套布局。
+- 固定结构恰好匹配最终界面时，才用 `TxCardSkeleton` 或 `TxListItemSkeleton`。
+- 用 `loading=false` 交接真实内容，不在两个分支里分别维护骨架与内容。
+- 最终结构未知时，改用带文案的空态或加载态。
+- 表格用 [TxDataTable](/zh/data-table) 的 `loadingVariant="skeleton"`，不另拼骨架行。
+
+## API 参考
+
+### 属性
+::TuffPropsTable
+---
+rows:
+  - name: loading
+    type: 'boolean'
+    default: 'true'
+    description: '显示骨架；为 `false` 时渲染默认插槽。'
+  - name: lines
+    type: 'number'
+    default: '1'
+    description: '占位项数量，至少为 1。'
+  - name: variant
+    type: "'text' | 'rect' | 'circle'"
+    default: 'text'
+    description: '每个占位项的形状。'
+  - name: width
+    type: 'string | number'
+    default: '100%'
+    description: '宽度，数字按 px 计。'
+  - name: height
+    type: 'string | number'
+    default: '12'
+    description: '高度，数字按 px 计。'
+  - name: radius
+    type: 'string | number'
+    default: '8'
+    description: '非 circle 占位项的圆角，数字按 px 计。'
+  - name: gap
+    type: 'string | number'
+    default: '10'
+    description: '行间距，数字按 px 计。'
+---
+::
+
+### 插槽
+
+| 插槽名 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | `loading=false` 时渲染的真实内容。 |
+
+### 预设组件
+
+| 导出 | 用途 |
+|------|------|
+| `TxSkeleton` / `Skeleton` | 可配置的文本、矩形或圆形占位。 |
+| `TxCardSkeleton` / `CardSkeleton` | 卡片 / feed 占位：图标、标题、徽标与描述。 |
+| `TxListItemSkeleton` / `ListItemSkeleton` | 列表行占位：图标、名称、元信息与尾部徽标。 |
+| `TxRowSkeleton` / `RowSkeleton` | 设置项行占位：可选的图标、描述与尾部控件。 |
+
+### TxRowSkeleton
+
+#### 属性
+::TuffPropsTable
+---
+rows:
+  - name: rows
+    type: 'number'
+    default: '1'
+    description: '行数，至少为 1。'
+  - name: leading
+    type: 'boolean'
+    default: 'false'
+    description: '为行首图标预留位置。'
+  - name: description
+    type: 'boolean'
+    default: 'false'
+    description: '在标题下方加一条较窄的描述条。'
+  - name: trailing
+    type: 'boolean'
+    default: 'false'
+    description: '为尾部控件（开关、按钮、标签）预留位置。'
+  - name: separated
+    type: 'boolean'
+    default: 'false'
+    description: '在行间画分隔线，与真实列表的分隔线占同一像素。'
+  - name: titleWidth
+    type: 'string | number'
+    default: '38%'
+    description: '标题条的基准宽度，逐行略作变化；数字按 px 计。'
+  - name: descWidth
+    type: 'string | number'
+    default: '62%'
+    description: '描述条宽度，数字按 px 计。'
+---
+::
+
+### useDeferredLoading
+
+把原始加载标记转换为不闪烁的骨架显示标记。
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `source` | `MaybeRefOrGetter<boolean>` | - | 原始加载标记。 |
+| `options.delay` | `number` | `150` | 推迟显示的毫秒数；此前到达的数据不出现骨架。 |
+| `options.minDuration` | `number` | `400` | 骨架出现后至少保持的毫秒数。 |
+
+返回 `Ref<boolean>`，表示是否显示骨架。
+
+## 概述
+
+- `variant="circle"` 的圆角固定为 `999px`，忽略 `radius`。
+- `TxCardSkeleton`、`TxListItemSkeleton` 形状固定，没有属性、事件或插槽。
+- 根节点为 `aria-hidden="true"`；加载状态由宿主区域播报，例如 `aria-busy` 或 polite live region。
+
+## 技术实现
+
+- 源码：`packages/tuffex/packages/components/src/skeleton/`。
+
+<TuffDocSourceLink />

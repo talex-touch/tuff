@@ -11,6 +11,15 @@ import { reportAppScanError } from './app-error-reporter'
 import { getSteamApps } from './steam-provider'
 import { expandWindowsEnvironmentVariables } from './app-provider-path-utils'
 import { createLogger } from '../../../../utils/logger'
+import {
+  buildWindowsPowerShellArgs,
+  classifyWindowsPowerShellError,
+  parseRegQueryAppPathRecords,
+  parseRegQueryUninstallRecords,
+  type WindowsBackendAttempt,
+  type WindowsBackendKind,
+  type WindowsSourceDiagnostics
+} from '../../../platform/windows-powershell'
 
 type AppInfo = ScannedAppInfo
 export type WindowsAppSourceId =
@@ -25,6 +34,13 @@ export interface WindowsAppSourceScanResult {
   label: string
   apps: AppInfo[]
   error?: string
+  diagnostics?: WindowsSourceDiagnostics
+}
+
+interface WindowsSourceScanOutcome {
+  apps: AppInfo[]
+  error?: string
+  diagnostics: WindowsSourceDiagnostics
 }
 
 type StartAppRecord = {
@@ -86,6 +102,19 @@ const UWP_LOGO_ATTRIBUTE_CANDIDATES = [
   'StoreLogo',
   'Square150x150Logo',
   'Logo'
+]
+const WINDOWS_POWERSHELL_TIMEOUT_MS = 10_000
+const WINDOWS_REG_QUERY_TIMEOUT_MS = 10_000
+const WINDOWS_COMMAND_MAX_BUFFER = 16 * 1024 * 1024
+const WINDOWS_UNINSTALL_REG_KEYS = [
+  'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+  'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
+  'HKLM\\Software\\WOW6432Node\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall'
+]
+const WINDOWS_APP_PATHS_REG_KEYS = [
+  'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths',
+  'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths',
+  'HKLM\\Software\\WOW6432Node\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths'
 ]
 const windowsAppLog = createLogger('AppScanner').child('Windows')
 
@@ -322,54 +351,100 @@ function getImageMimeType(filePath: string): string {
   }
 }
 
-async function getWindowsStoreRecords(): Promise<StartAppRecord[]> {
-  try {
-    const script = [
-      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-      '$apps = Get-StartApps | Sort-Object Name | ForEach-Object {',
-      '  $appId = $_.AppId',
-      '  $name = $_.Name',
-      '  if (-not $appId -or -not $name) { return }',
-      "  $packageFamilyName = ''",
-      "  $installLocation = ''",
-      "  if ($appId -match '!') {",
-      "    $packageFamilyName = $appId.Split('!')[0]",
-      '    $package = Get-AppxPackage -PackageFamilyName $packageFamilyName -ErrorAction SilentlyContinue | Select-Object -First 1',
-      '    if ($package) {',
-      '      $installLocation = [string]$package.InstallLocation',
-      '      if (-not $packageFamilyName) { $packageFamilyName = [string]$package.PackageFamilyName }',
-      '    }',
-      '  }',
-      '  [PSCustomObject]@{',
-      '    Name = $name',
-      '    AppId = $appId',
-      '    PackageFamilyName = $packageFamilyName',
-      '    InstallLocation = $installLocation',
-      '  }',
-      '}',
-      '$apps | ConvertTo-Json -Compress'
-    ].join('\n')
-
-    const { stdout } = await execFileSafe(
-      'powershell',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
-      { windowsHide: true }
-    )
-    const raw = stdout.trim()
-    if (!raw) return []
-
-    const parsed = JSON.parse(raw) as StartAppRecord | StartAppRecord[]
-    return Array.isArray(parsed) ? parsed : [parsed]
-  } catch (error) {
-    const code =
-      error && typeof error === 'object' && 'code' in error
-        ? String((error as { code?: unknown }).code ?? '')
-        : ''
-    if (code !== 'ENOENT') {
-      windowsAppLog.warn('Failed to enumerate Windows Store apps', { error })
-    }
-    return []
+function isRegistryKeyMissingError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return /unable to find the specified registry key or value/i.test(String(error ?? ''))
   }
+  const err = error as { message?: unknown; stderr?: unknown }
+  const combined = [err.message, err.stderr]
+    .filter((part): part is string => typeof part === 'string' && part.length > 0)
+    .join('\n')
+  return /unable to find the specified registry key or value/i.test(combined)
+}
+
+async function runPowerShellJson<T>(script: string): Promise<{ records: T[]; durationMs: number }> {
+  const startedAt = Date.now()
+  const { stdout } = await execFileSafe('powershell', buildWindowsPowerShellArgs(script), {
+    windowsHide: true,
+    timeout: WINDOWS_POWERSHELL_TIMEOUT_MS,
+    maxBuffer: WINDOWS_COMMAND_MAX_BUFFER
+  })
+  const raw = stdout.trim()
+  if (!raw) {
+    return { records: [], durationMs: Date.now() - startedAt }
+  }
+  const parsed = JSON.parse(raw) as T | T[]
+  return {
+    records: Array.isArray(parsed) ? parsed : [parsed],
+    durationMs: Date.now() - startedAt
+  }
+}
+
+async function queryWindowsRegistryKeys(
+  keys: readonly string[]
+): Promise<{ stdout: string; durationMs: number }> {
+  const startedAt = Date.now()
+  const settled = await Promise.allSettled(
+    keys.map((key) =>
+      execFileSafe('reg', ['query', key, '/s'], {
+        windowsHide: true,
+        timeout: WINDOWS_REG_QUERY_TIMEOUT_MS,
+        maxBuffer: WINDOWS_COMMAND_MAX_BUFFER
+      })
+    )
+  )
+
+  const outputs: string[] = []
+  const fatalErrors: unknown[] = []
+  for (const result of settled) {
+    if (result.status === 'fulfilled') {
+      outputs.push(result.value.stdout)
+    } else if (!isRegistryKeyMissingError(result.reason)) {
+      fatalErrors.push(result.reason)
+    }
+  }
+
+  if (outputs.length > 0 || fatalErrors.length === 0) {
+    return {
+      stdout: outputs.join('\n'),
+      durationMs: Date.now() - startedAt
+    }
+  }
+
+  throw fatalErrors[0]
+}
+
+async function getWindowsStoreRecords(): Promise<{
+  records: StartAppRecord[]
+  durationMs: number
+}> {
+  const script = [
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+    '$apps = Get-StartApps | Sort-Object Name | ForEach-Object {',
+    '  $appId = $_.AppId',
+    '  $name = $_.Name',
+    '  if (-not $appId -or -not $name) { return }',
+    "  $packageFamilyName = ''",
+    "  $installLocation = ''",
+    "  if ($appId -match '!') {",
+    "    $packageFamilyName = $appId.Split('!')[0]",
+    '    $package = Get-AppxPackage -PackageFamilyName $packageFamilyName -ErrorAction SilentlyContinue | Select-Object -First 1',
+    '    if ($package) {',
+    '      $installLocation = [string]$package.InstallLocation',
+    '      if (-not $packageFamilyName) { $packageFamilyName = [string]$package.PackageFamilyName }',
+    '    }',
+    '  }',
+    '  [PSCustomObject]@{',
+    '    Name = $name',
+    '    AppId = $appId',
+    '    PackageFamilyName = $packageFamilyName',
+    '    InstallLocation = $installLocation',
+    '  }',
+    '}',
+    '$apps | ConvertTo-Json -Compress'
+  ].join('\n')
+
+  return await runPowerShellJson<StartAppRecord>(script)
 }
 
 async function readManifestContent(manifestPath: string): Promise<string | null> {
@@ -524,54 +599,109 @@ async function buildUwpAppInfo(
   }
 }
 
-async function listWindowsStoreApps(): Promise<AppInfo[]> {
-  const entries = await getWindowsStoreRecords()
-  const apps = await Promise.all(
-    entries.map(async (entry) => {
-      const appId = parseStartAppField(entry, ['appId', 'AppId', 'AppID'])
-      const name = parseStartAppField(entry, ['name', 'Name'])
-      if (!appId || !name) return null
+async function listWindowsStoreAppsWithDiagnostics(): Promise<WindowsSourceScanOutcome> {
+  const startedAt = Date.now()
+  try {
+    const { records: entries, durationMs } = await getWindowsStoreRecords()
+    const apps = await Promise.all(
+      entries.map(async (entry) => {
+        const appId = parseStartAppField(entry, ['appId', 'AppId', 'AppID'])
+        const name = parseStartAppField(entry, ['name', 'Name'])
+        if (!appId || !name) return null
 
-      const desktopPath = resolveStartAppDesktopPath(appId)
-      if (desktopPath) {
-        const stats = await fs.stat(desktopPath).catch(() => null)
-        if (!stats?.isFile()) {
-          return null
-        }
-        return await buildDesktopAppInfo(
-          desktopPath,
-          path.basename(desktopPath),
-          stats,
-          undefined,
-          {
-            preferredDisplayName: name,
-            displayNameSource: 'Get-StartApps',
-            displayNameQuality: 'system'
+        const desktopPath = resolveStartAppDesktopPath(appId)
+        if (desktopPath) {
+          const stats = await fs.stat(desktopPath).catch(() => null)
+          if (!stats?.isFile()) {
+            return null
           }
-        )
-      }
+          return await buildDesktopAppInfo(
+            desktopPath,
+            path.basename(desktopPath),
+            stats,
+            undefined,
+            {
+              preferredDisplayName: name,
+              displayNameSource: 'Get-StartApps',
+              displayNameQuality: 'system'
+            }
+          )
+        }
 
-      if (!appId.includes('!')) return null
+        if (!appId.includes('!')) return null
 
-      return await buildUwpAppInfo(appId, {
-        fallbackName: name,
-        lastModified: new Date(0),
-        record: entry
+        return await buildUwpAppInfo(appId, {
+          fallbackName: name,
+          lastModified: new Date(0),
+          record: entry
+        })
       })
-    })
-  )
+    )
 
-  return apps.filter(Boolean) as AppInfo[]
+    return {
+      apps: apps.filter(Boolean) as AppInfo[],
+      diagnostics: {
+        status: 'ready',
+        backend: 'powershell',
+        fallbackUsed: false,
+        attempts: [
+          {
+            backend: 'powershell',
+            command: 'powershell Get-StartApps',
+            status: 'ok',
+            durationMs
+          }
+        ]
+      }
+    }
+  } catch (error) {
+    const classified = classifyWindowsPowerShellError(error)
+    if (classified.code !== 'powershell-not-found') {
+      windowsAppLog.warn('Failed to enumerate Windows Store apps', {
+        error,
+        meta: { reasonCode: classified.code }
+      })
+    }
+    return {
+      apps: [],
+      error: `${classified.code}: ${classified.summary}`,
+      diagnostics: {
+        status: 'failed',
+        backend: 'unavailable',
+        fallbackUsed: false,
+        reasonCode: classified.code,
+        reason: classified.summary,
+        recovery: classified.recovery,
+        attempts: [
+          {
+            backend: 'powershell',
+            command: 'powershell Get-StartApps',
+            status: 'failed',
+            reasonCode: classified.code,
+            error: classified.summary,
+            durationMs: Date.now() - startedAt
+          }
+        ]
+      }
+    }
+  }
 }
 
 type RegistryAppRecord = {
   displayName?: string
+  DisplayName?: string
   displayIcon?: string
+  DisplayIcon?: string
   installLocation?: string
+  InstallLocation?: string
   publisher?: string
+  Publisher?: string
   systemComponent?: number
+  SystemComponent?: number
   releaseType?: string
+  ReleaseType?: string
   parentKeyName?: string
+  ParentKeyName?: string
 }
 
 type AppPathRegistryRecord = {
@@ -583,61 +713,51 @@ type AppPathRegistryRecord = {
   PathValue?: string
 }
 
-async function getRegistryAppRecords(): Promise<RegistryAppRecord[]> {
-  try {
-    const script = [
-      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-      '$paths = @(',
-      "  'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',",
-      "  'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',",
-      "  'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'",
-      ')',
-      '$apps = foreach ($path in $paths) {',
-      '  Get-ItemProperty -Path $path -ErrorAction SilentlyContinue | ForEach-Object {',
-      '    if (-not $_.DisplayName) { return }',
-      '    [PSCustomObject]@{',
-      '      DisplayName = [string]$_.DisplayName',
-      '      DisplayIcon = [string]$_.DisplayIcon',
-      '      InstallLocation = [string]$_.InstallLocation',
-      '      Publisher = [string]$_.Publisher',
-      '      SystemComponent = [int]($_.SystemComponent -as [int])',
-      '      ReleaseType = [string]$_.ReleaseType',
-      '      ParentKeyName = [string]$_.ParentKeyName',
-      '    }',
-      '  }',
-      '}',
-      '$apps | ConvertTo-Json -Compress'
-    ].join('\n')
+async function getRegistryAppRecordsViaPowerShell(): Promise<{
+  records: RegistryAppRecord[]
+  durationMs: number
+}> {
+  const script = [
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+    '$paths = @(',
+    "  'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',",
+    "  'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',",
+    "  'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'",
+    ')',
+    '$apps = foreach ($path in $paths) {',
+    '  Get-ItemProperty -Path $path -ErrorAction SilentlyContinue | ForEach-Object {',
+    '    if (-not $_.DisplayName) { return }',
+    '    [PSCustomObject]@{',
+    '      DisplayName = [string]$_.DisplayName',
+    '      DisplayIcon = [string]$_.DisplayIcon',
+    '      InstallLocation = [string]$_.InstallLocation',
+    '      Publisher = [string]$_.Publisher',
+    '      SystemComponent = [int]($_.SystemComponent -as [int])',
+    '      ReleaseType = [string]$_.ReleaseType',
+    '      ParentKeyName = [string]$_.ParentKeyName',
+    '    }',
+    '  }',
+    '}',
+    '$apps | ConvertTo-Json -Compress'
+  ].join('\n')
 
-    const { stdout } = await execFileSafe(
-      'powershell',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
-      { windowsHide: true }
-    )
-    const raw = stdout.trim()
-    if (!raw) return []
-
-    const parsed = JSON.parse(raw) as RegistryAppRecord | RegistryAppRecord[]
-    return Array.isArray(parsed) ? parsed : [parsed]
-  } catch (error) {
-    const code =
-      error && typeof error === 'object' && 'code' in error
-        ? String((error as { code?: unknown }).code ?? '')
-        : ''
-    if (code !== 'ENOENT') {
-      windowsAppLog.warn('Failed to enumerate registry apps', { error })
-    }
-    return []
-  }
+  return await runPowerShellJson<RegistryAppRecord>(script)
 }
 
 async function buildRegistryAppInfo(record: RegistryAppRecord): Promise<AppInfo | null> {
-  const displayName = record.displayName?.trim()
-  if (!displayName || shouldSkipRegistryAppName(displayName)) return null
-  if (record.systemComponent === 1 || record.releaseType || record.parentKeyName) return null
+  const displayName = (record.displayName ?? record.DisplayName)?.trim()
+  const systemComponent = record.systemComponent ?? record.SystemComponent
+  const releaseType = (record.releaseType ?? record.ReleaseType)?.trim()
+  const parentKeyName = (record.parentKeyName ?? record.ParentKeyName)?.trim()
+  const displayIcon = record.displayIcon ?? record.DisplayIcon
+  const installLocation = record.installLocation ?? record.InstallLocation
+  const publisher = (record.publisher ?? record.Publisher)?.trim()
 
-  const iconExePath = parseRegistryExePath(record.displayIcon)
-  const installExePath = await findExecutableInInstallLocation(record.installLocation)
+  if (!displayName || shouldSkipRegistryAppName(displayName)) return null
+  if (systemComponent === 1 || releaseType || parentKeyName) return null
+
+  const iconExePath = parseRegistryExePath(displayIcon)
+  const installExePath = await findExecutableInInstallLocation(installLocation)
   const targetPath = iconExePath || installExePath
   if (!targetPath || shouldSkipAppTarget(targetPath)) return null
 
@@ -654,7 +774,7 @@ async function buildRegistryAppInfo(record: RegistryAppRecord): Promise<AppInfo 
     displayNameSource: 'registry',
     displayNameQuality: 'registry',
     identityKind: 'windows-path',
-    description: record.publisher?.trim() || undefined,
+    description: publisher || undefined,
     path: targetPath,
     icon,
     iconSourcePath: targetPath,
@@ -670,55 +790,128 @@ async function buildRegistryAppInfo(record: RegistryAppRecord): Promise<AppInfo 
   }
 }
 
-async function listRegistryApps(): Promise<AppInfo[]> {
-  const records = await getRegistryAppRecords()
-  const apps = await Promise.all(records.map((record) => buildRegistryAppInfo(record)))
-  return apps.filter(Boolean) as AppInfo[]
+async function listRegistryAppsWithDiagnostics(): Promise<WindowsSourceScanOutcome> {
+  const attempts: WindowsBackendAttempt[] = []
+  const psStartedAt = Date.now()
+  try {
+    const { records, durationMs } = await getRegistryAppRecordsViaPowerShell()
+    const apps = (await Promise.all(records.map((record) => buildRegistryAppInfo(record)))).filter(
+      Boolean
+    ) as AppInfo[]
+    attempts.push({
+      backend: 'powershell',
+      command: 'powershell Get-ItemProperty Uninstall',
+      status: 'ok',
+      durationMs
+    })
+    return {
+      apps,
+      diagnostics: {
+        status: 'ready',
+        backend: 'powershell',
+        fallbackUsed: false,
+        attempts
+      }
+    }
+  } catch (error) {
+    const classified = classifyWindowsPowerShellError(error)
+    attempts.push({
+      backend: 'powershell',
+      command: 'powershell Get-ItemProperty Uninstall',
+      status: 'failed',
+      reasonCode: classified.code,
+      error: classified.summary,
+      durationMs: Date.now() - psStartedAt
+    })
+    if (classified.code !== 'powershell-not-found') {
+      windowsAppLog.warn('PowerShell Uninstall registry scan failed; falling back to reg.exe', {
+        error,
+        meta: { reasonCode: classified.code }
+      })
+    }
+
+    const regStartedAt = Date.now()
+    try {
+      const { stdout, durationMs } = await queryWindowsRegistryKeys(WINDOWS_UNINSTALL_REG_KEYS)
+      const records = parseRegQueryUninstallRecords(stdout)
+      const apps = (
+        await Promise.all(records.map((record) => buildRegistryAppInfo(record)))
+      ).filter(Boolean) as AppInfo[]
+      attempts.push({
+        backend: 'reg-query',
+        command: 'reg query Uninstall /s',
+        status: 'ok',
+        durationMs
+      })
+      return {
+        apps,
+        diagnostics: {
+          status: 'degraded',
+          backend: 'reg-query',
+          fallbackUsed: true,
+          reasonCode: classified.code,
+          reason: classified.summary,
+          recovery: classified.recovery,
+          attempts
+        }
+      }
+    } catch (regError) {
+      const regErrorMessage = regError instanceof Error ? regError.message : String(regError)
+      attempts.push({
+        backend: 'reg-query',
+        command: 'reg query Uninstall /s',
+        status: 'failed',
+        reasonCode: 'fallback-failed',
+        error: regErrorMessage,
+        durationMs: Date.now() - regStartedAt
+      })
+      windowsAppLog.warn('Both PowerShell and reg.exe Uninstall registry scans failed', {
+        error: regError,
+        meta: { reasonCode: classified.code }
+      })
+      return {
+        apps: [],
+        error: `${classified.code}: ${classified.summary} (reg.exe fallback failed: ${regErrorMessage})`,
+        diagnostics: {
+          status: 'failed',
+          backend: 'unavailable',
+          fallbackUsed: true,
+          reasonCode: classified.code,
+          reason: `${classified.summary}; reg.exe fallback failed: ${regErrorMessage}`,
+          recovery: classified.recovery,
+          attempts
+        }
+      }
+    }
+  }
 }
 
-async function getAppPathRegistryRecords(): Promise<AppPathRegistryRecord[]> {
-  try {
-    const script = [
-      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-      '$paths = @(',
-      "  'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\*',",
-      "  'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\*',",
-      "  'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\App Paths\\*'",
-      ')',
-      '$apps = foreach ($path in $paths) {',
-      '  Get-Item -Path $path -ErrorAction SilentlyContinue | ForEach-Object {',
-      "    $executablePath = [string]$_.GetValue('')",
-      '    if (-not $executablePath) { return }',
-      '    [PSCustomObject]@{',
-      '      Name = [string]$_.PSChildName',
-      '      ExecutablePath = $executablePath',
-      "      PathValue = [string]$_.GetValue('Path')",
-      '    }',
-      '  }',
-      '}',
-      '$apps | ConvertTo-Json -Compress'
-    ].join('\n')
+async function getAppPathRegistryRecordsViaPowerShell(): Promise<{
+  records: AppPathRegistryRecord[]
+  durationMs: number
+}> {
+  const script = [
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+    '$paths = @(',
+    "  'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\*',",
+    "  'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\*',",
+    "  'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\App Paths\\*'",
+    ')',
+    '$apps = foreach ($path in $paths) {',
+    '  Get-Item -Path $path -ErrorAction SilentlyContinue | ForEach-Object {',
+    "    $executablePath = [string]$_.GetValue('')",
+    '    if (-not $executablePath) { return }',
+    '    [PSCustomObject]@{',
+    '      Name = [string]$_.PSChildName',
+    '      ExecutablePath = $executablePath',
+    "      PathValue = [string]$_.GetValue('Path')",
+    '    }',
+    '  }',
+    '}',
+    '$apps | ConvertTo-Json -Compress'
+  ].join('\n')
 
-    const { stdout } = await execFileSafe(
-      'powershell',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
-      { windowsHide: true }
-    )
-    const raw = stdout.trim()
-    if (!raw) return []
-
-    const parsed = JSON.parse(raw) as AppPathRegistryRecord | AppPathRegistryRecord[]
-    return Array.isArray(parsed) ? parsed : [parsed]
-  } catch (error) {
-    const code =
-      error && typeof error === 'object' && 'code' in error
-        ? String((error as { code?: unknown }).code ?? '')
-        : ''
-    if (code !== 'ENOENT') {
-      windowsAppLog.warn('Failed to enumerate App Paths registry apps', { error })
-    }
-    return []
-  }
+  return await runPowerShellJson<AppPathRegistryRecord>(script)
 }
 
 async function buildAppPathRegistryAppInfo(record: AppPathRegistryRecord): Promise<AppInfo | null> {
@@ -764,10 +957,100 @@ async function buildAppPathRegistryAppInfo(record: AppPathRegistryRecord): Promi
   }
 }
 
-async function listAppPathRegistryApps(): Promise<AppInfo[]> {
-  const records = await getAppPathRegistryRecords()
-  const apps = await Promise.all(records.map((record) => buildAppPathRegistryAppInfo(record)))
-  return apps.filter(Boolean) as AppInfo[]
+async function listAppPathRegistryAppsWithDiagnostics(): Promise<WindowsSourceScanOutcome> {
+  const attempts: WindowsBackendAttempt[] = []
+  const psStartedAt = Date.now()
+  try {
+    const { records, durationMs } = await getAppPathRegistryRecordsViaPowerShell()
+    const apps = (
+      await Promise.all(records.map((record) => buildAppPathRegistryAppInfo(record)))
+    ).filter(Boolean) as AppInfo[]
+    attempts.push({
+      backend: 'powershell',
+      command: 'powershell Get-Item App Paths',
+      status: 'ok',
+      durationMs
+    })
+    return {
+      apps,
+      diagnostics: {
+        status: 'ready',
+        backend: 'powershell',
+        fallbackUsed: false,
+        attempts
+      }
+    }
+  } catch (error) {
+    const classified = classifyWindowsPowerShellError(error)
+    attempts.push({
+      backend: 'powershell',
+      command: 'powershell Get-Item App Paths',
+      status: 'failed',
+      reasonCode: classified.code,
+      error: classified.summary,
+      durationMs: Date.now() - psStartedAt
+    })
+    if (classified.code !== 'powershell-not-found') {
+      windowsAppLog.warn('PowerShell App Paths registry scan failed; falling back to reg.exe', {
+        error,
+        meta: { reasonCode: classified.code }
+      })
+    }
+
+    const regStartedAt = Date.now()
+    try {
+      const { stdout, durationMs } = await queryWindowsRegistryKeys(WINDOWS_APP_PATHS_REG_KEYS)
+      const records = parseRegQueryAppPathRecords(stdout)
+      const apps = (
+        await Promise.all(records.map((record) => buildAppPathRegistryAppInfo(record)))
+      ).filter(Boolean) as AppInfo[]
+      attempts.push({
+        backend: 'reg-query',
+        command: 'reg query App Paths /s',
+        status: 'ok',
+        durationMs
+      })
+      return {
+        apps,
+        diagnostics: {
+          status: 'degraded',
+          backend: 'reg-query',
+          fallbackUsed: true,
+          reasonCode: classified.code,
+          reason: classified.summary,
+          recovery: classified.recovery,
+          attempts
+        }
+      }
+    } catch (regError) {
+      const regErrorMessage = regError instanceof Error ? regError.message : String(regError)
+      attempts.push({
+        backend: 'reg-query',
+        command: 'reg query App Paths /s',
+        status: 'failed',
+        reasonCode: 'fallback-failed',
+        error: regErrorMessage,
+        durationMs: Date.now() - regStartedAt
+      })
+      windowsAppLog.warn('Both PowerShell and reg.exe App Paths registry scans failed', {
+        error: regError,
+        meta: { reasonCode: classified.code }
+      })
+      return {
+        apps: [],
+        error: `${classified.code}: ${classified.summary} (reg.exe fallback failed: ${regErrorMessage})`,
+        diagnostics: {
+          status: 'failed',
+          backend: 'unavailable',
+          fallbackUsed: true,
+          reasonCode: classified.code,
+          reason: `${classified.summary}; reg.exe fallback failed: ${regErrorMessage}`,
+          recovery: classified.recovery,
+          attempts
+        }
+      }
+    }
+  }
 }
 
 async function buildDesktopAppInfo(
@@ -905,22 +1188,25 @@ async function fileDisplay(filePath: string): Promise<AppInfo[]> {
 function buildWindowsAppSourceResult(
   sourceId: WindowsAppSourceId,
   apps: AppInfo[],
-  error?: unknown
+  error?: unknown,
+  diagnostics?: WindowsSourceDiagnostics
 ): WindowsAppSourceScanResult {
   return {
     sourceId,
     label: WINDOWS_APP_SOURCE_LABELS[sourceId],
     apps,
-    error: error instanceof Error ? error.message : error ? String(error) : undefined
+    error: error instanceof Error ? error.message : error ? String(error) : undefined,
+    diagnostics
   }
 }
 
 async function scanWindowsAppSource(
   sourceId: WindowsAppSourceId,
-  scan: () => Promise<AppInfo[]>
+  scan: () => Promise<WindowsSourceScanOutcome>
 ): Promise<WindowsAppSourceScanResult> {
   try {
-    return buildWindowsAppSourceResult(sourceId, await scan())
+    const outcome = await scan()
+    return buildWindowsAppSourceResult(sourceId, outcome.apps, outcome.error, outcome.diagnostics)
   } catch (error) {
     windowsAppLog.warn('Windows app source scan failed', {
       error,
@@ -928,6 +1214,32 @@ async function scanWindowsAppSource(
     })
     return buildWindowsAppSourceResult(sourceId, [], error)
   }
+}
+
+async function scanPureNodeSource(
+  sourceId: WindowsAppSourceId,
+  backend: WindowsBackendKind,
+  scan: () => Promise<AppInfo[]>
+): Promise<WindowsAppSourceScanResult> {
+  const startedAt = Date.now()
+  return await scanWindowsAppSource(sourceId, async () => {
+    const apps = await scan()
+    return {
+      apps,
+      diagnostics: {
+        status: 'ready',
+        backend,
+        fallbackUsed: false,
+        attempts: [
+          {
+            backend,
+            status: 'ok',
+            durationMs: Date.now() - startedAt
+          }
+        ]
+      }
+    }
+  })
 }
 
 function dedupeWindowsApps(allApps: AppInfo[]): AppInfo[] {
@@ -961,14 +1273,14 @@ function dedupeWindowsApps(allApps: AppInfo[]): AppInfo[] {
 
 export async function getAppsBySource(): Promise<WindowsAppSourceScanResult[]> {
   const sourceScans: Array<Promise<WindowsAppSourceScanResult>> = [
-    scanWindowsAppSource('windows-start-menu', async () => {
+    scanPureNodeSource('windows-start-menu', 'electron-shortcut', async () => {
       const results = await Promise.allSettled(START_MENU_PATHS.map((item) => fileDisplay(item)))
       return results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
     }),
-    scanWindowsAppSource('windows-uwp', listWindowsStoreApps),
-    scanWindowsAppSource('windows-registry', listRegistryApps),
-    scanWindowsAppSource('windows-app-paths', listAppPathRegistryApps),
-    scanWindowsAppSource('windows-steam', getSteamApps)
+    scanWindowsAppSource('windows-uwp', listWindowsStoreAppsWithDiagnostics),
+    scanWindowsAppSource('windows-registry', listRegistryAppsWithDiagnostics),
+    scanWindowsAppSource('windows-app-paths', listAppPathRegistryAppsWithDiagnostics),
+    scanPureNodeSource('windows-steam', 'filesystem', getSteamApps)
   ]
 
   return await Promise.all(sourceScans)
@@ -983,7 +1295,7 @@ export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
   try {
     const shellPathAppId = extractUwpAppId(filePath)
     if (/^shell:AppsFolder\\/i.test(filePath) && shellPathAppId) {
-      const windowsStoreApps = await listWindowsStoreApps()
+      const { apps: windowsStoreApps } = await listWindowsStoreAppsWithDiagnostics()
       const matchedApp = windowsStoreApps.find((app) => app.launchTarget === shellPathAppId)
       if (matchedApp) {
         return matchedApp

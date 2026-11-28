@@ -1,6 +1,6 @@
 {
   "name": "@talex-touch/core-app",
-  "version": "2.4.15-beta.14",
+  "version": "2.4.15-beta.15",
   "private": true,
   "description": "A strong adaptation more platform all-tool program.",
   "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",
@@ -16,6 +16,7 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "node scripts/ensure-tuffex-build.cjs && vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "scan:memory:benchmark": "pnpm exec tsx scripts/file-scan-memory-benchmark.mjs",
+    "reconcile:memory:benchmark": "pnpm exec tsx scripts/file-reconcile-memory-benchmark.mjs",
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",
     "test:omnipanel": "vitest run src/main/modules/omni-panel/index.test.ts src/renderer/src/views/omni-panel/filter-features.test.ts src/renderer/src/views/omni-panel/interaction.test.ts",
     "test:shortcut-lifecycle": "vitest run src/main/modules/global-shortcon.test.ts src/main/modules/division-box/shortcut-trigger.test.ts src/main/modules/omni-panel/index.test.ts",
@@ -90,7 +91,7 @@
     "check:app-root-single-source:self-test": "node scripts/check-app-root-single-source.mjs --self-test"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.141",
+    "@anthropic-ai/claude-agent-sdk": "0.3.331",
     "@arrow-js/core": "1.0.6",
     "@earendil-works/pi-agent-core": "0.85.1",
     "@earendil-works/pi-ai": "0.85.1",

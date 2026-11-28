@@ -1,0 +1,100 @@
+---
+title: Tool Call Card
+description: 单次工具调用的状态卡片
+category: AiAgent
+status: beta
+since: 0.3.9
+tags: [ai, tool, status]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+宿主推进 `toolCall.status`，展开区随状态切换内容。
+::::TuffDemoWrapper{demo="ToolCallCardToolCallCardDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const toolCall = {
+    type: 'tool-call',
+    id: 'call-1',
+    name: 'read_file',
+    status: 'done',
+    summary: '读取 src/main.ts',
+    input: '{ "path": "src/main.ts" }',
+    output: 'export function main() {}',
+  }
+  </script>
+
+  <template>
+    <TxToolCallCard :tool-call="toolCall" @retry="onRetry" />
+  </template>
+---
+::::
+
+### 最佳实践
+
+- 结构化结果（表格、图表、widget）放进 `result` 插槽，`output` 留作纯文本回退。
+- 收到 `retry` 后立即把 `status` 改回 `running`，避免重复点击。
+- 日志逐行追加，不要整段替换，尾部跟随才连贯。
+- 非英文界面一并覆盖文案 prop（含 `linesToggleFormatter`），避免中英混排。
+- `summary` 写这次调用做了什么，不要重复工具名：折叠态是用户唯一会扫读的内容。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `toolCall` | `AiToolCallPart` | — | 工具调用数据，必填。 |
+| `defaultExpanded` | `boolean` | `false` | 初始是否展开；只在挂载时读取。 |
+| `userOpen` | `boolean` | — | 宿主持有的展开状态，优先于用户点击与自动展开；不传则由组件自持。 |
+| `autoExpandDelayMs` | `number` | `500` | 进行中（`pending` / `running`）自动展开前的延迟（ms）；在此窗口内完成的短耗时调用保持单行折叠，不闪烁开合；传 `0` 则立即展开。 |
+| `retryLabel` | `string` | `'Retry'` | 重试按钮文案。 |
+| `pendingLabel` | `string` | `'Queued'` | `pending` 的状态文案。 |
+| `runningLabel` | `string` | `'Running'` | `running` 的状态文案。 |
+| `doneLabel` | `string` | `'Done'` | `done` 及其他未匹配状态的文案。 |
+| `errorLabel` | `string` | `'Failed'` | `error` 的状态文案。 |
+| `inputLabel` | `string` | `'Input'` | 入参区的无障碍名称，不显示为标题。 |
+| `emptyResultLabel` | `string` | `'No output'` | `done` 且无 `output`、无 `input`、未提供 `result` 插槽时，结果区显示的文案。 |
+| `showRetry` | `boolean` | — | 是否显示重试按钮；不传时，绑定了 `retry` 监听才显示。 |
+| `linesToggleFormatter` | `(hiddenCount: number, expanded: boolean) => string` | 英文 `N more lines` / `Show less` | 入参超过四行时，折叠与展开按钮的文案。 |
+
+`AiToolCallPart` 为 `{ type, id, name, status, summary?, input?, output?, error?, logs?, durationMs? }`，`status` 取 `'pending' | 'running' | 'done' | 'error'`。
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `retry` | `(id: string)` | 点击重试时触发，参数为 `toolCall.id`。 |
+| `toggle` | `(expanded: boolean)` | 点击头部时触发，参数为切换后的展开状态。 |
+
+### 插槽
+
+| 插槽名 | 作用域参数 | 说明 |
+|------|------|------|
+| `summary` | `{ toolCall }` | 替换标题中的参数文本（缺省为 `summary`，再缺省为入参首行）。 |
+| `result` | `{ toolCall }` | 结果区挂载点，供宿主渲染自己的组件；设置后不再渲染 `output`。 |
+| `icon` | `{ status }` | 替换状态图标。 |
+
+### CSS 变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `--tx-tool-call-card-log-color` | `#d6e2f0` | 日志区的文字颜色。 |
+
+## 概述
+
+- 展开区随 `status` 切换：`running` 显示 `logs`，`done` 显示 `result` 插槽（缺省为 `output`），`error` 显示 `error`；`input` 存在时始终显示。
+- 标题依次为计时（进行中显示 `(1.0)`）、名称（进行中扫光）、参数（`summary`，缺省为入参首行）与耗时（结算后由 `durationMs` 给出）。
+- `pending` 与 `running` 超过 `autoExpandDelayMs`（默认 `500ms`）后才自动展开，且一旦自动展开至少停留 `400ms` 再顺滑收起，避免 `0.1s` 级短耗时调用一闪一缩；`error` 状态始终立即展开。进行中若由用户手动折叠，收起态保留日志的最后两行预览；日志、输出与收起预览都滚动到底部，`logs` 每次变化都会滚到底。
+- 入参超过四行时只露出前四行，由 `linesToggleFormatter` 生成的按钮展开或收起；底栏显示状态。
+- 重试按钮只在 `error` 状态出现：`showRetry` 为真时显示，为假时隐藏；未设置时，绑定了 `retry` 监听才显示。
+- `status` 同步到根节点的 `data-status`，供外部定制样式。
+
+## 技术实现
+
+- `AiToolCallPart` 定义并导出于 `ai-elements`。
+- 源码：`packages/tuffex/packages/components/src/tool-call-card/`。

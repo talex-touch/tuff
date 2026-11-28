@@ -1,0 +1,424 @@
+---
+title: Concepts Overview
+description: "Tuffex concepts, suites, and the complete component index."
+category: Foundations
+status: beta
+since: 0.3.9
+tags: [concepts, overview, foundations, utils]
+syncStatus: reviewed
+verified: true
+---
+
+Tuffex (`@talex-touch/tuffex`) is the Vue 3 component library behind CoreBox, plugin surfaces, and this documentation site.
+
+## Concepts
+
+| Page | Covers |
+|------|--------|
+| [Installation](/en/installation) | Three import paths and their stylesheets |
+| [Design Foundations](/en/foundations) | G2 curvature, refraction shaders, dark optics, 13-14px typography, and token matrix |
+| [Design Concepts Manual](/en/concepts) | 18 in-depth topics: physical curvature, dispersion shaders, micro-motion, and anti-jitter |
+| [Theming](/en/theming) | Token overrides, dark mode, high contrast |
+| [Icons](/en/icons) | How `TxIcon` resolves and loads icons |
+| [Accessibility](/en/accessibility) | Focus, motion, contrast and ARIA conventions |
+| [Utils](/en/utils) | Stacking, toast, dialog and animation helpers |
+| [Sound](/en/sound) | Synthesized feedback sounds, off by default |
+| [Component Changelog](/en/changelog) | Release history and since index |
+
+## Suite Overview
+
+| Suite | Groups | Pages | Entry |
+|-------|--------|-------|-------|
+| [Concepts](/en) | Installation, design rules, concepts manual, helpers | 27 | Documentation only |
+| [Templates](/en/template-shell) | App shells / Content / AI apps / Data & flow | 25 | Compositions of existing entries |
+| [Basics Suite](/en/base-suite) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 100 | `@talex-touch/tuffex/base` |
+| [Pro Suite](/en/pro-suite) | Interaction / Effects / Primitives | 43 | `@talex-touch/tuffex/pro` |
+| [AI Suite](/en/ai-suite) | Chat / Agents / Reasoning / Context & Insight | 36 | `@talex-touch/tuffex/ai` |
+| [Data Suite](/en/data-suite) | Charts / Visualization | 12 | `@talex-touch/tuffex/pro` + `/charts` |
+| [Flow Suite](/en/flow-suite) | Flow | 1 | `@talex-touch/tuffex/ai` |
+| [Motion Suite](/en/motion-suite) | 10 groups: buttons, carousels, loaders, text, transitions… | 15 | `@talex-touch/tuffex/pro` + `/charts` |
+
+- Page counts are documentation entries, excluding suite overviews; they are not export counts.
+- There are only three suite entries: `base`, `pro` and `ai`. Data, Flow and Motion are documentation suites; charts also have `@talex-touch/tuffex/charts`.
+
+## Composition Example
+
+::TuffDemoWrapper{demo="ComponentsWorkflowPanelDemo" code-lang="vue" title="Release workspace" description="A baseline for Dashboard / Admin composition"}
+---
+code: |
+  <template>
+    <TxButton variant="primary" size="sm" icon="i-carbon-rocket">Deploy</TxButton>
+    <TuffInput v-model="query" placeholder="Search tasks" prefix-icon="i-carbon-search" clearable />
+    <TuffSwitch v-model="automationEnabled" />
+    <TxProgressBar :percentage="84" status="success" show-text />
+    <TxStatusBadge text="Reviewing" status="warning" />
+    <TxDataTable v-model:selected-keys="selectedKeys" :columns="columns" :data="rows" row-key="id" selectable />
+  </template>
+---
+::
+
+## Tutorial Path
+
+- Start with [Composing Tuffex interfaces](/en/composition): split a page into actions → status → data.
+- For a full-page scenario, start with the Templates section below. Each template is a ready-made page composition: adapt its structure, then swap in real data.
+- On list pages, `TxSearchInput`, `TxSearchSelect` and `TxSearchEmpty` carry search and no-match recovery; `TxDataTable` + `TxPagination` carry the data.
+- Design loading, empty and error states together: `TxLoadingState`, `TxEmptyState`, `TxErrorState`.
+- Compose dashboards from `TxDataTable`, `TxStatusBadge`, `TxProgressBar` and charts, not one-off SVG or status UI; settings pages use `TxTabs` for sections and `TxDrawer` for dense configuration.
+
+## Multi-Framework Adaptation & Sync Matrix
+
+Inspect live coverage for every TuffEx component across **Vue 3**, **React**, and **Web Components**, along with its tier (A–D), React exports, and custom element tags. Switch frameworks on any component page to preview and copy matching snippets.
+
+::DocsComponentSyncTable
+::
+
+## Templates
+
+A template is a full-page composition of existing components, shown in a shared stage. Templates exist only in these docs and are not importable components.
+
+### App shells
+
+- [Shell](/en/template-shell): An app shell with a sidebar, command palette, notifications, and a dashboard.
+- [Launcher](/en/template-launcher): A keyboard-first, CoreBox-style launcher with a live preview.
+- [Settings](/en/template-settings): A settings center with sectioned navigation and rows that save as you go.
+- [Onboarding](/en/template-onboarding): A five-step first run through sign-in, a workspace, preferences, and permissions.
+- [Workbench](/en/template-workbench): A plugin workbench with a file tree, a code editor, a terminal, and a hot-reload preview.
+- [Account](/en/template-account): Profile, security, sessions and notifications, with confirmed removal.
+
+### Content
+
+- [CMS](/en/template-cms): A content admin with status filters, bulk actions, and a drawer editor.
+- [Gallery](/en/template-gallery): A showcase wall with collections, three layouts, and artwork details.
+- [Inbox](/en/template-inbox): A three-pane inbox with keyboard shortcuts and new-mail alerts.
+- [Files](/en/template-files): A file manager with a folder tree, multi-select, a context menu, and drag-in upload.
+- [Store](/en/template-store): A plugin store with featured picks, search, permission details, and install flows.
+- [Docs](/en/template-docs): A help center reader with a contents tree, outline, and ⌘K search.
+- [Notes](/en/template-notes): A notes app with a notebook tree, WYSIWYG editing, and live collaboration.
+- [Showcase](/en/template-showcase): A release page that tells one update through a motion headline, a card carousel, and metrics.
+- [Search results](/en/template-search): A search results page with filters, paging, and an empty state.
+
+### AI apps
+
+- [Agent chat](/en/template-agent-chat): A coding agent session with a write gate, live plan, and changed files.
+- [AI answer](/en/template-ai-answer): A multi-turn Q&A with streamed answers, numbered citations, and follow-ups.
+- [Research](/en/template-research): A research copilot with its process, numbered citations, and an evidence rail.
+- [Voice notes](/en/template-voice): Voice notes that transcribe while recording and turn the recording into a summary and to-dos.
+- [Image studio](/en/template-image-studio): An image generation studio with style controls, generating placeholders, and a full-size viewer.
+
+### Data & flow
+
+- [Dashboard](/en/template-dashboard): A product analytics board with KPI cards, a trend chart, and a plugin table.
+- [Automation](/en/template-automation): An automation editor with a flow canvas, node settings, and a run log.
+- [Release](/en/template-release): A release console from CI build to a staged rollout a person approves.
+- [Experiments](/en/template-experiments): An experiment board that compares training runs by curves, a hyperparameter sweep, and configs.
+- [Kanban](/en/template-kanban): A four-column task board with drag, keyboard moves and a drawer.
+
+## Basics
+
+### General
+
+- [Button](/en/button)
+- [Icon](/en/icon)
+- [Avatar](/en/avatar)
+- [Avatar Variants](/en/avatar-variants)
+- [Tag](/en/tag)
+- [Badge](/en/badge)
+- [StatusBadge](/en/status-badge)
+- [IconChip](/en/icon-chip)
+- [Kbd](/en/kbd)
+- [Divider](/en/divider)
+- [Text](/en/text)
+
+### Form
+
+- [Form](/en/form)
+- [ModalForm](/en/modal-form)
+- [DrawerForm](/en/drawer-form)
+- [StepsForm](/en/steps-form)
+- [Input](/en/input)
+- [SensitiveInput](/en/sensitive-input)
+- [Textarea](/en/textarea)
+- [NumberInput](/en/number-input)
+- [SearchInput](/en/search-input)
+- [TagInput](/en/tag-input)
+- [ScrubField](/en/scrub-field)
+- [Select](/en/select)
+- [FlatSelect](/en/flat-select)
+- [SearchSelect](/en/search-select)
+- [TreeSelect](/en/tree-select)
+- [Cascader](/en/cascader)
+- [Picker](/en/picker)
+- [DatePicker](/en/date-picker)
+- [IconPicker](/en/icon-picker)
+- [Radio](/en/radio)
+- [FlatRadio](/en/flat-radio)
+- [Checkbox](/en/checkbox)
+- [Switch](/en/switch)
+- [Slider](/en/slider)
+- [SegmentedSlider](/en/segmented-slider)
+- [Rating](/en/rating)
+- [FileUploader](/en/file-uploader)
+- [ImageUploader](/en/image-uploader)
+
+### Layout
+
+- [Container](/en/container)
+- [Flex](/en/flex)
+- [Grid](/en/grid)
+- [GridLayout](/en/grid-layout)
+- [Stack](/en/stack)
+- [Splitter](/en/splitter)
+- [Scroll](/en/scroll)
+- [Collapse](/en/collapse)
+- [Card](/en/card)
+- [CardItem](/en/card-item)
+- [GroupBlock](/en/group-block)
+
+### Navigation
+
+- [Tabs](/en/tabs)
+- [TabBar](/en/tab-bar)
+- [NavBar](/en/nav-bar)
+- [SidebarNav](/en/sidebar-nav)
+- [Breadcrumb](/en/breadcrumb)
+- [Steps](/en/steps)
+- [Pagination](/en/pagination)
+- [DropdownMenu](/en/dropdown-menu)
+- [FlatDropdown](/en/flat-dropdown)
+- [ContextMenu](/en/context-menu)
+
+### Data Display
+
+- [DataTable](/en/data-table)
+- [Descriptions](/en/descriptions)
+- [Tree](/en/tree)
+- [SortableList](/en/sortable-list)
+- [Timeline](/en/timeline)
+- [Transfer](/en/transfer)
+- [StatCard](/en/stat-card)
+- [CellLink](/en/cell-link)
+- [DotIndicator](/en/dot-indicator)
+- [FilterChips](/en/filter-chips)
+- [MarkdownView](/en/markdown-view)
+- [ImageGallery](/en/image-gallery)
+- [ImagePreview](/en/image-preview)
+
+### Feedback
+
+- [Dialog](/en/dialog)
+- [Modal](/en/modal)
+- [Drawer](/en/drawer)
+- [Popover](/en/popover)
+- [Tooltip](/en/tooltip)
+- [Toast](/en/toast)
+- [ToastPanel](/en/toast-panel)
+- [Alert](/en/alert)
+- [StatusHint](/en/status-hint)
+- [Progress](/en/progress)
+- [ProgressBar](/en/progress-bar)
+- [Spinner](/en/spinner)
+- [LoadingOverlay](/en/loading-overlay)
+- [SelectionActions](/en/selection-actions)
+
+### Status & Empty
+
+- [Empty](/en/empty)
+- [EmptyState](/en/empty-state)
+- [NoData](/en/no-data)
+- [NoSelection](/en/no-selection)
+- [SearchEmpty](/en/search-empty)
+- [ErrorState](/en/error-state)
+- [OfflineState](/en/offline-state)
+- [PermissionState](/en/permission-state)
+- [GuideState](/en/guide-state)
+- [BlankSlate](/en/blank-slate)
+- [LoadingState](/en/loading-state)
+- [Skeleton](/en/skeleton)
+- [LayoutSkeleton](/en/layout-skeleton)
+
+## Pro
+
+### Interaction
+
+- [CommandPalette](/en/command-palette)
+- [SearchPanel](/en/search-panel)
+- [MarkdownEditor](/en/markdown-editor)
+- [CodeEditor](/en/code-editor)
+- [Terminal](/en/terminal)
+- [VirtualList](/en/virtual-list)
+- [DeviceMockup](/en/device-mockup)
+- [VersionCapsule](/en/version-capsule)
+- [MotionForm](/en/motion-form)
+- [MotionControl](/en/motion-control)
+- [MotionMetric](/en/motion-metric)
+
+### Effects
+
+- [GlassSurface](/en/glass-surface)
+- [TouchSurface](/en/touch-surface)
+- [GradientBorder](/en/gradient-border)
+- [OutlineBorder](/en/outline-border)
+- [BorderBeam](/en/border-beam)
+- [PrismGlow](/en/prism-glow)
+- [CornerOverlay](/en/corner-overlay)
+- [GradualBlur](/en/gradual-blur)
+- [EdgeFadeMask](/en/edge-fade-mask)
+- [GlowText](/en/glow-text)
+- [KeyframeStrokeText](/en/keyframe-stroke-text)
+- [TuffLogoStroke](/en/tuff-logo-stroke)
+- [TextMorph](/en/text-morph)
+- [IconMorph](/en/icon-morph)
+- [Morph](/en/morph)
+- [TextTransformer](/en/text-transformer)
+- [Transition](/en/transition)
+- [Stagger](/en/stagger)
+- [Fusion](/en/fusion)
+- [FusionSurface](/en/fusion-surface)
+- [FlowLight](/en/flow-light)
+- [Liquid](/en/liquid)
+- [FlipOverlay](/en/flip-overlay)
+- [FoldPage](/en/fold-page)
+- [ImageGeneration](/en/image-generation)
+- [MetalFx](/en/metal-fx)
+- [VoiceBeam](/en/voice-beam)
+
+### Primitives
+
+- [BaseSurface](/en/base-surface)
+- [BaseAnchor](/en/base-anchor)
+- [Floating](/en/floating)
+- [AutoSizer](/en/auto-sizer)
+- [ResizeBox](/en/resize-box)
+
+## AI Suite
+
+Partly adapted from [Beautiful UI](https://www.beautifului.dev) (MIT).
+
+### Chat
+
+- [Chat](/en/chat)
+- [ChatComposer](/en/chat-composer)
+- [PromptBar](/en/prompt-bar)
+- [AttachmentTray](/en/attachment-tray)
+- [ModeChip](/en/mode-chip)
+- [MessageActions](/en/message-actions)
+- [SuggestionChips](/en/suggestion-chips)
+- [ChoiceCard](/en/choice-card)
+- [TypingIndicator](/en/typing-indicator)
+- [ConversationStream](/en/conversation-stream)
+- [VoiceClip](/en/voice-clip)
+
+### Agents
+
+- [Agents](/en/agents)
+- [AgentScreen](/en/agent-screen)
+- [AgentTrace](/en/agent-trace)
+- [TaskRows](/en/task-rows)
+- [ToolCallCard](/en/tool-call-card)
+- [ToolChips](/en/tool-chips)
+- [ToolConfirmation](/en/tool-confirmation)
+- [ApprovalCard](/en/approval-card)
+- [WorkingIndicator](/en/working-indicator)
+- [BotAvatar](/en/bot-avatar)
+- [Miko](/en/miko)
+
+### Reasoning
+
+- [AI Elements](/en/ai-elements)
+- [ChainOfThought](/en/chain-of-thought)
+- [ReasoningDisclosure](/en/reasoning-disclosure)
+- [ThinkingOrb](/en/thinking-orb)
+- [MatrixLoader](/en/matrix-loader)
+- [StreamElement](/en/stream-element)
+- [StreamText](/en/stream-text)
+- [StreamMarkdown](/en/stream-markdown)
+- [CodeStream](/en/code-stream)
+- [InlineCitation](/en/inline-citation)
+- [Sources](/en/sources)
+
+### Context & Insight
+
+- [ContextCards](/en/context-cards)
+- [ContextIndicator](/en/context-indicator)
+- [InsightCards](/en/insight-cards)
+- [RecommendationCard](/en/recommendation-card)
+- [FineTuneCard](/en/fine-tune-card)
+
+## Data
+
+### Charts
+
+- [Charts](/en/charts)
+- [Chart Colors](/en/chart-colors)
+- [ECharts](/en/echart-charts)
+- [TimeseriesChart](/en/timeseries-chart)
+- [LearningCurve](/en/learning-curve)
+- [Maps](/en/maps)
+- [MonoChart](/en/mono-chart)
+- [SankeyChart](/en/sankey-chart)
+- [Custom Chart](/en/custom-chart)
+
+### Visualization
+
+- [SparkChart](/en/spark-chart)
+- [AllocationBar](/en/allocation-bar)
+- [DiffTable](/en/diff-table)
+- [SignalMeter](/en/signal-meter)
+
+## Flow
+
+### Flow
+
+- [Flowchart](/en/flowchart)
+
+## Motion
+
+### Buttons
+
+- [MotionButton](/en/motion-button)
+
+### Card Spreads
+
+- [CardSpread](/en/card-spread)
+
+### 3D Carousels
+
+- [Carousel3D](/en/carousel-3d)
+- [FlipBook](/en/flip-book)
+
+### Loaders
+
+- [MotionLoader](/en/motion-loader)
+
+### Dither Charts
+
+- [DitherChart](/en/dither-chart)
+
+### Text
+
+- [MotionText](/en/motion-text)
+
+### Physics
+
+- [PhysicsMotion](/en/physics-motion)
+
+### Hover, Cursor & Scroll
+
+- [MotionDock](/en/motion-dock)
+- [Motion](/en/motion)
+- [PixelField](/en/pixel-field)
+- [VoiceRing](/en/voice-ring)
+
+### Toggles
+
+- [MotionToggle](/en/motion-toggle)
+
+### Transitions
+
+- [MotionTransition](/en/motion-transition)
+- [DistortionWave](/en/distortion-wave)
+
+## Technologies
+
+- Exported slug set: `packages/tuffex/packages/components/src/components.ts`. This page must link every documented export; `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` enforces it.
+- Demo registry: `apps/nexus/app/components/content/demo-registry.ts`; suite preview grid: `apps/nexus/app/components/docs/DocsComponentsGallery.vue` (`suite` is required).

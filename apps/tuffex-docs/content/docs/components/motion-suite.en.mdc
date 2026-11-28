@@ -1,0 +1,91 @@
+---
+title: Motion Suite
+description: "Buttons, card spreads, carousels, loaders and dither charts."
+category: MotionSuite
+status: beta
+since: 0.6.3
+tags: [motion, interaction, animation, suite, overview]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+Each cell below renders its real component with caller-provided content or data. Hover, focus, click, drag or use the visible controls to try it. The reset button remounts only that specimen, including its local model and playback state; the component name opens the full variant gallery and API.
+
+::DocsComponentsGallery{suite="motion"}
+::
+
+### Best Practices
+
+- Drive values, items, status and navigation from your application. A visual press, loading cycle or submit request does not establish that a business operation succeeded.
+- Keep repeated or decorative motion out of live regions. Provide one readable text value and native keyboard controls.
+- Respect reduced motion and visibility. The shared activity gate suspends continuous work when the specimen is hidden, deactivated or unmounted.
+- Use the existing `TxTextMorph` engine for changing text values and the shared spring for motion; these families do not add another text-diff or physics engine.
+
+## API Reference
+
+### Imports
+
+```ts
+import {
+  TxCardSpread,
+  TxCarousel3D,
+  TxDistortionWave,
+  TxFlipBook,
+  TxMotion,
+  TxMotionButton,
+  TxMotionDock,
+  TxMotionLoader,
+  TxMotionText,
+  TxMotionToggle,
+  TxMotionTransition,
+  TxPhysicsMotion,
+  TxPixelField,
+  TxVoiceRing,
+} from '@talex-touch/tuffex/pro'
+import { TxDitherChart } from '@talex-touch/tuffex/charts'
+import '@talex-touch/tuffex/base.css'
+```
+
+The `suite="motion"` key above is a documentation grouping; there is no fourth installation suite barrel. `@talex-touch/tuffex/motion` is the legal single-component subpath for `TxMotion`. For manual component imports, follow the on-demand stylesheet instructions on [Installation](/en/installation) and each component's API page.
+
+### Props
+
+| Overview component | Prop | Value | Behavior |
+| --- | --- | --- | --- |
+| `DocsComponentsGallery` | `suite` | `motion` | Renders only the Motion band, with fifteen live specimens and per-specimen reset controls. |
+
+### Related Suites
+
+- [Data](/en/data-suite): MonoChart, the existing chart family and compact visualization.
+- [Pro](/en/pro-suite): MotionForm, MotionControl and MotionMetric, alongside existing effects and primitives.
+- [Concepts](/en): installation, theming, accessibility and the full component index.
+
+## Overview
+
+- The twelve families share visibility, reduced-motion and spring physics; continuous work stops when inactive.
+- Changing text values goes through `TxTextMorph`; no second text diff or physics engine is added.
+- Install from the Pro barrel; DitherChart also has the `@talex-touch/tuffex/charts` entry and ships in npm 0.7.0.
+
+## Technologies
+
+- Source adaptations keep Amicro's MIT attribution and source-file Apache-2.0 notices; Lucide glyph data keeps its ISC and applicable Feather-MIT notices, with no React or Lucide runtime dependency.
+
+## Related components
+
+- [MotionButton](/en/motion-button): native-semantic buttons with named effects and source presets.
+- [Card spread](/en/card-spread): arc, fan and stamp layouts.
+- [3D carousel](/en/carousel-3d): arc, CoverFlow and Time Machine paths.
+- [Flip book](/en/flip-book): two-sided pages that turn by dragging.
+- [Motion loader](/en/motion-loader): 137 source-defined loading scenes.
+- [DitherChart](/en/dither-chart): pixel, ordered-dither and SVG pattern charts.
+- [MotionText](/en/motion-text): character, word and paragraph text effects.
+- [Physics motion](/en/physics-motion): 61 grabbable physical scenes.
+- [Motion](/en/motion): entrances, hover, pointer and scroll-linked interactions.
+- [Motion dock](/en/motion-dock): magnifying, keyboard-reorderable caller items.
+- [PixelField](/en/pixel-field): interactive square-pixel particle stage with botanical presets and custom sampling.
+- [VoiceRing](/en/voice-ring): voice-reactive ring of light with emotion tint and directional lean.
+- [MotionToggle](/en/motion-toggle): controlled switch and action styles.
+- [MotionTransition](/en/motion-transition): door, liquid-wave, iris and curtain switching.
+- [DistortionWave](/en/distortion-wave): WebGL2 chromatic lens wave screen transition.

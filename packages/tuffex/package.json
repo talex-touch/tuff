@@ -1,6 +1,6 @@
 {
   "name": "@talex-touch/tuffex",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "engines": {
     "node": ">=26.0.0"
   },
@@ -26,6 +26,10 @@
     "glassmorphism"
   ],
   "type": "module",
+  "sideEffects": [
+    "**/*.css",
+    "**/*.scss"
+  ],
   "main": "dist/lib/index.js",
   "module": "dist/es/index.js",
   "types": "dist/es/index.d.ts",
@@ -57,6 +61,26 @@
       "types": "./dist/es/charts/src/*/index.d.ts",
       "import": "./dist/es/charts/src/*/index.js",
       "require": "./dist/lib/charts/src/*/index.js"
+    },
+    "./device-mockup/presets": {
+      "types": "./dist/es/device-mockup/presets/index.d.ts",
+      "import": "./dist/es/device-mockup/presets/index.js",
+      "require": "./dist/lib/device-mockup/presets/index.js"
+    },
+    "./device-mockup/presets/*": {
+      "types": "./dist/es/device-mockup/presets/*/index.d.ts",
+      "import": "./dist/es/device-mockup/presets/*/index.js",
+      "require": "./dist/lib/device-mockup/presets/*/index.js"
+    },
+    "./device-mockup/scenes": {
+      "types": "./dist/es/device-mockup/scenes/index.d.ts",
+      "import": "./dist/es/device-mockup/scenes/index.js",
+      "require": "./dist/lib/device-mockup/scenes/index.js"
+    },
+    "./device-mockup/export": {
+      "types": "./dist/es/device-mockup/export/index.d.ts",
+      "import": "./dist/es/device-mockup/export/index.js",
+      "require": "./dist/lib/device-mockup/export/index.js"
     },
     "./*": {
       "types": "./dist/es/*/index.d.ts",
@@ -115,12 +139,12 @@
     "@better-scroll/pull-down": "^2.5.1",
     "@better-scroll/pull-up": "^2.5.1",
     "@better-scroll/scroll-bar": "^2.5.1",
-    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/autocomplete": "^6.20.4",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-javascript": "^6.2.5",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/lang-yaml": "^6.1.3",
-    "@codemirror/language": "^6.12.4",
+    "@codemirror/language": "^6.13.1",
     "@codemirror/lint": "^6.9.7",
     "@codemirror/search": "^6.7.1",
     "@codemirror/state": "^6.7.1",

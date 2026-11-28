@@ -1,0 +1,124 @@
+---
+title: Settings
+description: A settings center with sectioned navigation and rows that save as you go.
+category: TemplateApp
+status: beta
+since: 0.6.0
+tags: [template, settings, form, preferences]
+syncStatus: reviewed
+verified: false
+---
+
+## Usage
+
+### Sectioned settings
+:::TuffDemoWrapper{demo="TemplateSettingsDemo" code-lang="vue" description="Change anything and the header goes from Saving… to Saved."}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive, ref, watch } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // TxTabs renders only the active panel and unmounts the rest, so every value lives in one object
+  const settings = reactive({ theme: 'system', opacity: 92, density: 'cozy', maxResults: 8 })
+  const page = ref('general')
+  const saveState = ref<'idle' | 'saving' | 'saved'>('idle')
+
+  let timer: ReturnType<typeof setTimeout> | undefined
+  watch(settings, () => {
+    saveState.value = 'saving'
+    clearTimeout(timer)
+    timer = setTimeout(() => (saveState.value = 'saved'), 600)
+  }, { deep: true })
+  </script>
+
+  <template>
+    <TemplateFrame title="Settings" @enter="play">
+      <template #default="{ width }">
+        <div class="settings">
+          <!-- navMinWidth is an inline style, so only the prop can move the nav to the top -->
+          <TxTabs
+            v-model="page"
+            :placement="width > 0 && width < 640 ? 'top' : 'left'"
+            :nav-min-width="184"
+            :content-padding="0"
+            borderless
+            indicator-variant="block"
+          >
+            <TxTabHeader>
+              <h3>{{ titles[page] }}</h3>
+              <TxStatusHint :text="saveText[saveState]" :tone="saveState === 'saved' ? 'success' : saveState === 'saving' ? 'info' : 'muted'" size="sm" />
+              <TxButton size="sm" variant="ghost" icon="i-carbon-reset" @click="ask('reset')">
+                Reset
+              </TxButton>
+            </TxTabHeader>
+
+            <TxTabItemGroup name="General">
+              <TxTabItem name="general" icon-class="i-carbon-settings">
+                <template #name>
+                  General
+                </template>
+                <TxGroupBlock name="Appearance" default-icon="i-carbon-color-palette" :collapsible="false">
+                  <TxBlockSlot title="Theme" description="Light, dark or follow the system">
+                    <TxFlatRadio v-model="settings.theme" size="sm">
+                      <TxFlatRadioItem value="light" label="Light" icon="i-carbon-sun" />
+                      <TxFlatRadioItem value="dark" label="Dark" icon="i-carbon-moon" />
+                      <TxFlatRadioItem value="system" label="System" icon="i-carbon-screen" />
+                    </TxFlatRadio>
+                  </TxBlockSlot>
+                  <TxBlockSlot title="Window opacity" description="How much desktop shows behind CoreBox">
+                    <TxSlider v-model="settings.opacity" :min="60" :max="100" show-value />
+                  </TxBlockSlot>
+                </TxGroupBlock>
+              </TxTabItem>
+              <!-- CoreBox, Shortcuts -->
+            </TxTabItemGroup>
+            <!-- Intelligence: AI models, Privacy; Account -->
+          </TxTabs>
+
+          <aside v-if="width >= 960" class="settings__preview">
+            <!-- A miniature CoreBox whose theme, opacity, density and count all read from settings -->
+          </aside>
+
+          <TxModal v-model="confirmOpen" :title="confirm.title">
+            {{ confirm.body }}
+          </TxModal>
+        </div>
+      </template>
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## Overview
+
+Tuff's settings center: every change saves on its own, so the header shows a save status instead of a Save button.
+
+- A change shows Saving… in the header, then Saved · just now once 600 ms pass without another change.
+- The summon shortcut is recordable: a combination must include ⌘, ⌃, or ⌥; Esc or clicking away cancels.
+- The Shortcuts page filters and toggles each shortcut; the API key on AI models is masked (a sample value).
+- Reset, clearing clipboard history, and signing out of other devices all confirm first.
+- It plays once in view and stops at any interaction; reduced motion shows the final state and turns off the tab animation.
+- Wide (≥ 960px) adds the live preview; narrow (< 640px) moves the navigation to the top and puts each control under its label.
+
+## Customization
+
+- For real storage, replace the timer in `watch(settings)` with a debounced write; on failure, set the status to Not saved and offer a retry.
+- Give a new section's TxTabItem a stable English `name` and put the label in the `#name` slot, so a language switch keeps the current section.
+- TxTabs unmounts panels you leave: keep values out of the row components, and hold your own copy of an avatar's object URL.
+- Keep TxGroupBlock at `collapsible=false` (its gsap-driven expand has no reduced-motion fallback), and leave out `memoryName`, which writes to localStorage.
+- Put sensitive fields in a group's body, not a 56px row; TxFlatSelect opens in place without teleporting, so keep it clear of clipping scroll containers.
+
+## Related components
+
+| Region | Components | Role |
+|---|---|---|
+| Navigation | [TxTabs / TxTabItemGroup / TxTabItem](/en/tabs) | Grouped section navigation |
+| Header | TxTabHeader from [TxTabs](/en/tabs), [TxStatusHint](/en/status-hint), [TxButton](/en/button) | Section title, save status, Reset |
+| Setting rows | [TxGroupBlock / TxBlockSlot / TxBlockLine](/en/group-block) | Open groups of setting rows |
+| General and CoreBox | [TuffSwitch](/en/switch), [TxFlatSelect](/en/flat-select), [TxFlatRadio](/en/flat-radio), [TxSlider](/en/slider), [TxSelect](/en/select), [TxSegmentedSlider](/en/segmented-slider), [TxNumberInput](/en/number-input), [TxInput](/en/input), [TxKbd](/en/kbd) | Appearance, shortcut, and result settings |
+| Shortcuts | [TxSearchInput](/en/search-input), [TxKbd](/en/kbd), [TuffSwitch](/en/switch), [TxSearchEmpty](/en/search-empty) | Filterable shortcuts with switches |
+| AI and privacy | [TxAlert](/en/alert), [TxSensitiveInput](/en/sensitive-input), [TxCheckbox](/en/checkbox), [TxRadioGroup / TxRadio](/en/radio) | Provider, key, and privacy options |
+| Account | [TxAvatar](/en/avatar), [TxImageUploader](/en/image-uploader) | Avatar, name, email, and plan |
+| Confirmations | [TxModal](/en/modal), [TxCheckbox](/en/checkbox) | Confirmations before destructive actions |
+| Live preview (wide) | [TxIconChip](/en/icon-chip), a hand-built miniature CoreBox | Miniature CoreBox preview |

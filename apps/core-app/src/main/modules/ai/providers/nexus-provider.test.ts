@@ -7,6 +7,8 @@ import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { NetworkHttpStatusError } from '@talex-touch/utils/network'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { transcribeNexusAudio } from '../../nexus/asr-client'
+import { registerAiPorts } from '../ai-ports'
 import { isNexusProviderConfig, NexusProvider } from './nexus-provider'
 
 const networkMocks = vi.hoisted(() => ({
@@ -98,6 +100,14 @@ async function settleWithin<T>(
 
 describe('nexusProvider', () => {
   beforeEach(() => {
+    registerAiPorts({
+      nexus: {
+        getRuntimeNexusBaseUrl: () => 'https://nexus.example.com',
+        runNexusScene: sceneMocks.runNexusScene,
+        extractTranslatedImageFromSceneRun: sceneMocks.extractTranslatedImageFromSceneRun,
+        transcribeNexusAudio
+      }
+    })
     vi.clearAllMocks()
     authMocks.performNexusRequestWithAuth.mockReset()
     networkMocks.request.mockResolvedValue({

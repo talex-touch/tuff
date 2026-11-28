@@ -1,0 +1,35 @@
+---
+title: 进阶套件
+description: 高级交互、视觉效果与底层原语
+category: ProSuite
+status: beta
+since: 0.3.9
+tags: [pro, suite, overview]
+syncStatus: reviewed
+verified: false
+---
+
+## 安装
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxCommandPalette, TxGlassSurface } from '@talex-touch/tuffex/pro'
+  import '@talex-touch/tuffex/base.css'
+  import '@talex-touch/tuffex/command-palette/style.css'
+  import '@talex-touch/tuffex/glass-surface/style.css'
+---
+:::
+
+## 用法
+
+::DocsComponentsGallery{suite="pro"}
+::
+
+## 概述
+
+进阶套件的组件从 `@talex-touch/tuffex/pro` 引入，分为三组。数据套件与动效套件中的组件同样从 `/pro` 引入；图表族（含 MonoChart、DitherChart）从 `@talex-touch/tuffex/charts` 引入。
+
+- **高级交互**：命令面板、代码编辑器、Markdown 编辑器、搜索面板、终端、虚拟列表、设备样机、版本胶囊，以及动效表单、动效控件与动效指标。
+- **视觉效果**：边框光束、玻璃与液态表面、渐变边框、渐进模糊、文字与图标变形、描边与棱镜光等表面效果。
+- **底层原语**：自适应尺寸、锚点定位、背景表面、视差浮动与尺寸过渡，是其余组件常用的基础层。

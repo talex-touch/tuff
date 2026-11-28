@@ -2,7 +2,7 @@ import * as nativeAudio from '@talex-touch/tuff-native/audio'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { StorageList } from '@talex-touch/utils'
 import type { AssistantVoiceCommandPayload } from '@talex-touch/utils/transport/events/assistant'
-import { omniPanelModule } from '../omni-panel'
+import { getVoiceSurfacePort } from './voice-ports'
 import { getMainConfig, subscribeMainConfig } from '../storage'
 import { createLogger } from '../../utils/logger'
 
@@ -28,7 +28,7 @@ interface VoiceGestureKeyListener {
 type VoiceGestureKeyRegistrar = (listener: VoiceGestureKeyListener) => () => void
 
 const registerPrimaryModifierGesture: VoiceGestureKeyRegistrar = (listener) =>
-  omniPanelModule.registerGlobalKeyListener({
+  getVoiceSurfacePort().registerGlobalKeyListener({
     onKeyDown: (event) => {
       if (event.key === 'escape') {
         listener.onEscapeKeyDown?.()

@@ -114,6 +114,7 @@ export interface VoiceUploadRequest {
   enableTimestamps?: boolean
   enableSpeakerDiarization?: boolean
   removeDisfluencies?: boolean
+  hotwords?: readonly string[]
   requestId: string
   signal?: AbortSignal
   timeoutMs?: number

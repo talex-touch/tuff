@@ -313,12 +313,18 @@ export function classifySnapshotContent(content: Buffer): FileReviewReason | und
   return undefined
 }
 
+export interface AtomicWriteResult {
+  size: number
+  mtimeMs: number
+}
+
 /** Restore bytes atomically: exclusive temp file in the same directory, then rename over target. */
 export async function writeFileAtomically(
   target: string,
   content: Buffer,
-  mode: number | undefined
-): Promise<void> {
+  mode: number | undefined,
+  options?: { minMtimeMs?: number }
+): Promise<AtomicWriteResult> {
   const directory = path.dirname(target)
   await fs.mkdir(directory, { recursive: true })
   const temporary = path.join(directory, `.${path.basename(target)}.tuff-review-${randomUUID()}`)
@@ -327,10 +333,24 @@ export async function writeFileAtomically(
     handle = await fs.open(temporary, 'wx', mode ?? 0o644)
     await handle.writeFile(content)
     await handle.sync()
+    let stagedStat = await handle.stat()
+    if (
+      options?.minMtimeMs !== undefined &&
+      Number.isFinite(options.minMtimeMs) &&
+      stagedStat.mtimeMs < options.minMtimeMs
+    ) {
+      const bumpedSec = options.minMtimeMs / 1000
+      await handle.utimes(bumpedSec, bumpedSec)
+      stagedStat = await handle.stat()
+    }
     await handle.close()
     handle = undefined
     if (mode !== undefined) await fs.chmod(temporary, mode)
     await fs.rename(temporary, target)
+    return {
+      size: stagedStat.size,
+      mtimeMs: stagedStat.mtimeMs
+    }
   } catch (error) {
     await handle?.close().catch(() => undefined)
     await fs.unlink(temporary).catch(() => undefined)

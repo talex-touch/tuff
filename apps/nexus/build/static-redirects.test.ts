@@ -26,15 +26,25 @@ describe('static redirects writer', () => {
     expect(isValidRedirectStatus({ status: 404 })).toBe(false)
   })
 
-  it('writes the docs rules into an empty file, static first', () => {
-    expect(mergeStaticRedirects('')).toBe('/docs /en/docs 308\n/docs/* /en/docs/:splat 308\n')
+  it('writes the docs rules into an empty file, static first and TuffEx splats before /docs/*', () => {
+    const merged = mergeStaticRedirects('')
+    const lines = merged.trim().split('\n')
+    expect(lines).toEqual(docsStaticRedirects.map(formatRedirectRule))
+    expect(lines.indexOf('/docs/dev/components/* /tuffex/en/:splat 308')).toBeLessThan(
+      lines.indexOf('/docs/* /en/docs/:splat 308'),
+    )
+    expect(lines).toContain('/en/docs/dev/components/* /tuffex/en/:splat 308')
+    expect(lines).toContain('/llms.txt /tuffex/llms.txt 308')
   })
 
   it('keeps every valid Nitro rule and puts static rules before dynamic ones', () => {
-    expect(mergeStaticRedirects(nitroRedirects)).toBe([
-      '/docs /en/docs 308',
+    const merged = mergeStaticRedirects(nitroRedirects)
+    const staticLines = docsStaticRedirects.filter(rule => !isDynamicRedirect(rule)).map(formatRedirectRule)
+    const dynamicLines = docsStaticRedirects.filter(rule => isDynamicRedirect(rule)).map(formatRedirectRule)
+    expect(merged).toBe([
+      ...staticLines,
       '/terms\t/license\t307',
-      '/docs/* /en/docs/:splat 308',
+      ...dynamicLines,
       '',
     ].join('\n'))
   })
@@ -54,7 +64,8 @@ describe('static redirects writer', () => {
     const merged = mergeStaticRedirects(stale)
     expect(merged.match(/^\/docs\s/gm)).toHaveLength(1)
     expect(merged).toContain('/docs /en/docs 308')
-    expect(merged).not.toContain('/zh/docs')
+    expect(merged).not.toContain('/docs\t/zh/docs\t301')
+    expect(merged).not.toContain('/docs /zh/docs')
   })
 })
 
@@ -67,28 +78,51 @@ describe('static redirects guard', () => {
 
   it('names a missing rule, a wrong target, and a missing file', () => {
     expect(checkStaticRedirects(null).findings).toEqual(['_redirects is missing'])
-    expect(checkStaticRedirects('/docs /en/docs 308\n').findings).toEqual(['/docs/*: no _redirects rule'])
-    expect(checkStaticRedirects('/docs /zh/docs 308\n/docs/* /en/docs/:splat 308\n').findings).toEqual([
+    const withoutDocsWildcard = docsStaticRedirects
+      .filter(rule => rule.from !== '/docs/*')
+      .map(formatRedirectRule)
+      .join('\n')
+    expect(checkStaticRedirects(`${withoutDocsWildcard}\n`).findings).toEqual(['/docs/*: no _redirects rule'])
+
+    const wrongDocsTarget = docsStaticRedirects
+      .map(rule => rule.from === '/docs' ? '/docs /zh/docs 308' : formatRedirectRule(rule))
+      .join('\n')
+    expect(checkStaticRedirects(`${wrongDocsTarget}\n`).findings).toEqual([
       '/docs: redirects to /zh/docs 308, expected /en/docs 308',
     ])
   })
 
   it('rejects a docs rule that sits below a /* catch-all, where Pages never reaches it', () => {
-    const shadowed = ['/docs /en/docs 308', '/* /index.html 200', '/docs/* /en/docs/:splat 308', ''].join('\n')
+    const beforeCatchAll = docsStaticRedirects.filter(rule => rule.from !== '/docs/*').map(formatRedirectRule)
+    const shadowed = [...beforeCatchAll, '/* /index.html 200', '/docs/* /en/docs/:splat 308', ''].join('\n')
     expect(checkStaticRedirects(shadowed).findings).toEqual([
       '/docs/*: listed after the /* catch-all; Pages reads rules in order',
     ])
   })
 
+  it('rejects a TuffEx /docs/.../* rule that sits below /docs/*, where /docs/* would shadow it', () => {
+    const reordered = [
+      ...docsStaticRedirects.filter(rule => !isDynamicRedirect(rule)),
+      ...docsStaticRedirects.filter(rule => rule.from === '/docs/*'),
+      ...docsStaticRedirects.filter(rule => isDynamicRedirect(rule) && rule.from !== '/docs/*'),
+    ].map(formatRedirectRule).join('\n')
+    const findings = checkStaticRedirects(`${reordered}\n`).findings
+    expect(findings).toContain('/docs/dev/components/*: listed after /docs/*; Pages reads rules in order')
+    expect(findings).toContain('/docs/dev/concepts/*: listed after /docs/*; Pages reads rules in order')
+  })
+
   it('rejects a static rule that drifted below the dynamic rules', () => {
-    const drifted = ['/docs/* /en/docs/:splat 308', '/docs /en/docs 308', ''].join('\n')
-    expect(checkStaticRedirects(drifted).findings).toEqual([
+    const drifted = [
+      ...docsStaticRedirects.filter(rule => rule.from !== '/docs'),
+      ...docsStaticRedirects.filter(rule => rule.from === '/docs'),
+    ].map(formatRedirectRule).join('\n')
+    expect(checkStaticRedirects(`${drifted}\n`).findings).toEqual([
       '/docs: static rule listed after dynamic rules; Pages documents static rules first',
     ])
   })
 
   it('rejects a line whose status Pages drops, so the invalid Nitro fallback cannot come back', () => {
-    const withInvalid = `${formatRedirectRule(docsStaticRedirects[0])}\n${formatRedirectRule(docsStaticRedirects[1])}\n/* /404.html 404\n`
+    const withInvalid = `${docsStaticRedirects.map(formatRedirectRule).join('\n')}\n/* /404.html 404\n`
     expect(checkStaticRedirects(withInvalid).findings).toEqual([
       '/* /404.html 404: status 404 is not a _redirects status Pages accepts; the line is dropped with a warning',
     ])

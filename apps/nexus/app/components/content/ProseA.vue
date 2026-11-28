@@ -44,12 +44,18 @@ const resolvedHref = computed(() => {
 
   return `${toLocalizedDocsPath(path, locale)}${suffix}`
 })
+
+const isExternalAppHref = computed(() => {
+  const href = resolvedHref.value
+  return Boolean(href && /^\/tuffex(?:\/|$|\?|#)/.test(href))
+})
 </script>
 
 <template>
   <NuxtLink
     v-bind="attrs"
     :href="resolvedHref"
+    :external="isExternalAppHref || undefined"
     :target="target"
   >
     <slot />

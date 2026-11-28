@@ -1,0 +1,38 @@
+---
+title: 数据套件
+description: 可视化与图表：主包数据展示组件与图表子路径
+category: DataSuite
+status: beta
+since: 0.4.0
+tags: [data, charts, visualization, suite, overview]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+每个格子都是可交互的真实组件，点击左上角名称进入对应组件文档。
+
+::DocsComponentsGallery{suite="data"}
+::
+
+## 选型
+
+| 要表达的 | 组件 |
+|------|------|
+| 指标随时间变化，带标记、阈值与刷选 | [TimeseriesChart 时序图](/zh/timeseries-chart) |
+| 训练过程：按步数比较多次运行与多个种子 | [LearningCurve 学习曲线](/zh/learning-curve) |
+| 地理分布 | [Maps 地图](/zh/maps) |
+| 流量、预算或转化的去向 | [SankeyChart 桑基图](/zh/sankey-chart) |
+| 折线、面积、柱、散点、环形的自由组合 | [Custom Chart 自定义图表](/zh/custom-chart) |
+| 单色风格的仪表盘小图与活动日历 | [MonoChart 单色图表](/zh/mono-chart) |
+| 漏斗、仪表、热力、雷达、矩形树图等其余类型 | [ECharts 图表](/zh/echart-charts) |
+| 带抖动质感的展示型图表 | [DitherChart 抖动图表](/zh/dither-chart)，归在[动效套件](/zh/motion-suite) |
+| 一行之内的趋势、占比、差异或强度 | [SparkChart](/zh/spark-chart)、[AllocationBar](/zh/allocation-bar)、[DiffTable](/zh/diff-table)、[SignalMeter](/zh/signal-meter) |
+
+## 概述
+
+- 图表从 `@talex-touch/tuffex/charts` 引入，可视化组件在主包内；两者都随 `@talex-touch/tuffex/pro` 入口提供。
+- 除 ECharts 图表外都由 Vue 直接渲染（SVG、Canvas 或 DOM/CSS），不加载 echarts；ECharts 图表挂载时才加载可选依赖 `echarts`。
+- 原生图表共用 `--tx-chart-*` 主题变量与 `ChartPalette`，随宿主明暗切换。
+- 原生图表按 ECharts 的默认时序播放动画：入场 1000ms、数据更新 500ms、状态切换 300ms；`prefers-reduced-motion: reduce` 下直接落到终帧。

@@ -1,8 +1,22 @@
 {
   "$schema": "./components-lifecycle.schema.json",
-  "currentVersion": "0.9.5",
-  "totalComponents": 193,
+  "currentVersion": "0.9.6",
+  "totalComponents": 198,
   "versions": [
+    {
+      "version": "0.9.6",
+      "date": "2026-11-28",
+      "title": "新增 AI 球面矩阵加载器、Pro 设备样机与三款动效组件 (AI MatrixLoader, Pro DeviceMockup & Motion FX Trio)",
+      "newComponents": [
+        "matrix-loader",
+        "device-mockup",
+        "distortion-wave",
+        "pixel-field",
+        "voice-ring"
+      ],
+      "updatedComponents": [],
+      "summary": "新增 @talex-touch/tuffex/ai 的 TxMatrixLoader 球面半调数学加载器，以及 @talex-touch/tuffex/pro 的 TxDeviceMockup 设备样机组件与三款动效组件：TxDistortionWave（WebGL2 色散折射波转场）、TxVoiceRing（玻璃光谱/双环语音光环与声源方位倾斜折射）、TxPixelField（Canvas 2D 方形像素点阵粒子舞台与植物脉络/文字图像采样）。"
+    },
     {
       "version": "0.9.5",
       "date": "2026-11-23",
@@ -125,11 +139,28 @@
       "title": "学习曲线、手势交互与折射材质 (Learning Curves, Gestures and Refraction)",
       "newComponents": [],
       "updatedComponents": [
-        "alert", "allocation-bar", "attachment-tray", "base-surface", "card-spread",
-        "carousel-3d", "charts", "command-palette", "dialog", "drawer",
-        "fine-tune-card", "flip-book", "image-gallery", "markdown-editor", "modal",
-        "motion-dock", "physics-motion", "stream-element", "stream-markdown",
-        "stream-text", "thinking-orb", "toast"
+        "alert",
+        "allocation-bar",
+        "attachment-tray",
+        "base-surface",
+        "card-spread",
+        "carousel-3d",
+        "charts",
+        "command-palette",
+        "dialog",
+        "drawer",
+        "fine-tune-card",
+        "flip-book",
+        "image-gallery",
+        "markdown-editor",
+        "modal",
+        "motion-dock",
+        "physics-motion",
+        "stream-element",
+        "stream-markdown",
+        "stream-text",
+        "thinking-orb",
+        "toast"
       ],
       "summary": "新增学习曲线与图表读数、缩放及平移，补齐拖动与动量交互；浮层采用折射材质，Markdown 编辑器支持块编辑与协作接口，图片预览统一焦点与无障碍行为。"
     },
@@ -137,11 +168,24 @@
       "version": "0.8.0",
       "date": "2026-10-14",
       "title": "流光、语音条与语义数据表 (Flow Light, Voice Clips and Semantic Tables)",
-      "newComponents": ["flow-light", "voice-clip"],
+      "newComponents": [
+        "flow-light",
+        "voice-clip"
+      ],
       "updatedComponents": [
-        "base-anchor", "base-surface", "button", "card", "conversation-stream",
-        "data-table", "dropdown-menu", "input", "number-input", "select",
-        "tag-input", "textarea", "voice-beam"
+        "base-anchor",
+        "base-surface",
+        "button",
+        "card",
+        "conversation-stream",
+        "data-table",
+        "dropdown-menu",
+        "input",
+        "number-input",
+        "select",
+        "tag-input",
+        "textarea",
+        "voice-beam"
       ],
       "summary": "新增固定品牌色流光底与语音播放条，语音光束支持 organic；按钮支持进度，数据表支持语义列与筛选，Select 自动开启长列表搜索，表单显式使用 border-box。"
     },
@@ -604,20 +648,15 @@
       "since": "0.3.4",
       "suite": "base"
     },
-    "card-item": {
-      "slug": "card-item",
-      "since": "0.3.4",
-      "suite": "base"
-    },
     "card": {
       "slug": "card",
       "since": "0.3.4",
       "suite": "base"
     },
-    "charts": {
-      "slug": "charts",
-      "since": "0.6.0",
-      "suite": "pro"
+    "card-item": {
+      "slug": "card-item",
+      "since": "0.3.4",
+      "suite": "base"
     },
     "card-spread": {
       "slug": "card-spread",
@@ -643,6 +682,11 @@
       "slug": "chain-of-thought",
       "since": "0.3.9",
       "suite": "ai"
+    },
+    "charts": {
+      "slug": "charts",
+      "since": "0.6.0",
+      "suite": "pro"
     },
     "chat": {
       "slug": "chat",
@@ -724,6 +768,11 @@
       "since": "0.6.3",
       "suite": "base"
     },
+    "device-mockup": {
+      "slug": "device-mockup",
+      "since": "0.9.6",
+      "suite": "pro"
+    },
     "dialog": {
       "slug": "dialog",
       "since": "0.3.4",
@@ -732,6 +781,11 @@
     "diff-table": {
       "slug": "diff-table",
       "since": "0.3.9",
+      "suite": "pro"
+    },
+    "distortion-wave": {
+      "slug": "distortion-wave",
+      "since": "0.9.6",
       "suite": "pro"
     },
     "divider": {
@@ -764,13 +818,13 @@
       "since": "0.3.4",
       "suite": "pro"
     },
-    "empty-state": {
-      "slug": "empty-state",
+    "empty": {
+      "slug": "empty",
       "since": "0.3.4",
       "suite": "base"
     },
-    "empty": {
-      "slug": "empty",
+    "empty-state": {
+      "slug": "empty-state",
       "since": "0.3.4",
       "suite": "base"
     },
@@ -824,11 +878,6 @@
       "since": "0.3.4",
       "suite": "pro"
     },
-    "fold-page": {
-      "slug": "fold-page",
-      "since": "0.9.5",
-      "suite": "pro"
-    },
     "floating": {
       "slug": "floating",
       "since": "0.3.4",
@@ -843,6 +892,11 @@
       "slug": "flowchart",
       "since": "0.6.0",
       "suite": "ai"
+    },
+    "fold-page": {
+      "slug": "fold-page",
+      "since": "0.9.5",
+      "suite": "pro"
     },
     "form": {
       "slug": "form",
@@ -879,13 +933,13 @@
       "since": "0.3.4",
       "suite": "pro"
     },
-    "grid-layout": {
-      "slug": "grid-layout",
+    "grid": {
+      "slug": "grid",
       "since": "0.3.4",
       "suite": "base"
     },
-    "grid": {
-      "slug": "grid",
+    "grid-layout": {
+      "slug": "grid-layout",
       "since": "0.3.4",
       "suite": "base"
     },
@@ -896,6 +950,11 @@
     },
     "guide-state": {
       "slug": "guide-state",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "icon": {
+      "slug": "icon",
       "since": "0.3.4",
       "suite": "base"
     },
@@ -912,11 +971,6 @@
     "icon-picker": {
       "slug": "icon-picker",
       "since": "0.6.0",
-      "suite": "base"
-    },
-    "icon": {
-      "slug": "icon",
-      "since": "0.3.4",
       "suite": "base"
     },
     "image-gallery": {
@@ -993,6 +1047,11 @@
       "slug": "markdown-view",
       "since": "0.3.4",
       "suite": "base"
+    },
+    "matrix-loader": {
+      "slug": "matrix-loader",
+      "since": "0.9.6",
+      "suite": "ai"
     },
     "message-actions": {
       "slug": "message-actions",
@@ -1129,6 +1188,11 @@
       "since": "0.3.4",
       "suite": "base"
     },
+    "pixel-field": {
+      "slug": "pixel-field",
+      "since": "0.9.6",
+      "suite": "pro"
+    },
     "popover": {
       "slug": "popover",
       "since": "0.3.4",
@@ -1139,13 +1203,13 @@
       "since": "0.6.0",
       "suite": "pro"
     },
-    "progress-bar": {
-      "slug": "progress-bar",
+    "progress": {
+      "slug": "progress",
       "since": "0.3.4",
       "suite": "base"
     },
-    "progress": {
-      "slug": "progress",
+    "progress-bar": {
+      "slug": "progress-bar",
       "since": "0.3.4",
       "suite": "base"
     },
@@ -1344,13 +1408,13 @@
       "since": "0.3.4",
       "suite": "base"
     },
-    "tag-input": {
-      "slug": "tag-input",
+    "tag": {
+      "slug": "tag",
       "since": "0.3.4",
       "suite": "base"
     },
-    "tag": {
-      "slug": "tag",
+    "tag-input": {
+      "slug": "tag-input",
       "since": "0.3.4",
       "suite": "base"
     },
@@ -1439,13 +1503,13 @@
       "since": "0.3.4",
       "suite": "pro"
     },
-    "tree-select": {
-      "slug": "tree-select",
+    "tree": {
+      "slug": "tree",
       "since": "0.3.4",
       "suite": "base"
     },
-    "tree": {
-      "slug": "tree",
+    "tree-select": {
+      "slug": "tree-select",
       "since": "0.3.4",
       "suite": "base"
     },
@@ -1473,6 +1537,11 @@
       "slug": "voice-clip",
       "since": "0.8.0",
       "suite": "ai"
+    },
+    "voice-ring": {
+      "slug": "voice-ring",
+      "since": "0.9.6",
+      "suite": "pro"
     },
     "working-indicator": {
       "slug": "working-indicator",

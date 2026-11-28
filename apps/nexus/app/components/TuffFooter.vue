@@ -171,12 +171,12 @@ onBeforeUnmount(() => {
           :blend="0.5"
           :speed="1.0"
           :intensity="1.0"
-          class="op-50 -scale-100"
+          class="op-35 -scale-100"
         />
       </ClientOnly>
     </div>
 
-    <div class="TuffFooter-Main relative left-0 top-0 z-10 h-full w-full bg-white/80 dark:bg-black/80">
+    <div class="TuffFooter-Main relative left-0 top-0 z-10 h-full w-full bg-white/88 dark:bg-black/84">
       <div class="mx-auto max-w-7xl px-6 py-16 lg:px-8">
         <!-- Main Content -->
         <div class="grid gap-12 lg:grid-cols-[2fr_3fr]">
@@ -279,8 +279,22 @@ onBeforeUnmount(() => {
   transform: translate(-50%, -50%);
 }
 
+/* Static translucent backdrop — avoids blurring a live WebGL2 canvas every frame. */
 .TuffFooter-Main {
-  backdrop-filter: blur(18px) saturate(180%);
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(255, 255, 255, 0.84) 100%
+  );
+}
+
+:global(.dark) .TuffFooter-Main,
+:global([data-theme='dark']) .TuffFooter-Main {
+  background-image: linear-gradient(
+    180deg,
+    rgba(10, 10, 14, 0.9) 0%,
+    rgba(8, 8, 12, 0.82) 100%
+  );
 }
 
 .TuffFooter-Main :deep(a) {

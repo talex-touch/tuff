@@ -1,16 +1,14 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('electron', () => ({
+  app: {
+    getLocale: () => 'en-US',
+    whenReady: () => Promise.resolve()
+  }
+}))
 
 const { isXdotoolAvailableMock } = vi.hoisted(() => ({
   isXdotoolAvailableMock: vi.fn()
-}))
-
-vi.mock('../box-tool/addon/files/everything-provider', () => ({
-  everythingProvider: {
-    getStatusSnapshot: vi.fn(() => ({
-      enabled: false,
-      available: false
-    }))
-  }
 }))
 
 vi.mock('../system/linux-desktop-tools', () => ({
@@ -21,9 +19,11 @@ vi.mock('../system/linux-desktop-tools', () => ({
 import {
   getActiveAppCapabilityPatch,
   getAutoPasteCapabilityPatch,
+  getEverythingCapabilityPatch,
   getNativeShareCapabilityPatch,
   getPermissionDeepLinkCapabilityPatch
 } from './capability-adapter'
+import { registerPlatformPorts, resetPlatformPorts } from './platform-ports'
 import {
   platformCapabilityRegistry,
   registerDefaultPlatformCapabilities
@@ -57,6 +57,29 @@ function expectActionableCapabilityMetadata(
 }
 
 describe('platform capability runtime patch', () => {
+  afterEach(() => {
+    resetPlatformPorts()
+  })
+
+  it('reads Windows Everything status through platform-ports with safe default fallback', () => {
+    const unregisteredPatch = withPlatform('win32', () => getEverythingCapabilityPatch())
+    expect(unregisteredPatch.supportLevel).toBe('unsupported')
+    expect(unregisteredPatch.issueCode).toBe('EVERYTHING_UNAVAILABLE')
+
+    const dispose = registerPlatformPorts({
+      everything: {
+        getStatusSnapshot: () => ({
+          enabled: true,
+          available: true,
+          errorCode: null
+        })
+      }
+    })
+    const registeredPatch = withPlatform('win32', () => getEverythingCapabilityPatch())
+    expect(registeredPatch.supportLevel).toBe('supported')
+    dispose()
+  })
+
   it('reports macOS active-app as best-effort because Automation permission is runtime dependent', async () => {
     const patch = await withPlatform('darwin', () => getActiveAppCapabilityPatch())
 
@@ -69,6 +92,9 @@ describe('platform capability runtime patch', () => {
 
     expect(patch.supportLevel).toBe('best_effort')
     expectActionableCapabilityMetadata(patch, 'POWERSHELL_FOREGROUND_WINDOW')
+    expect(patch.attempt).toContain('powershell')
+    expect(patch.recovery).toEqual(expect.any(String))
+    expect(patch.recovery?.length).toBeGreaterThan(0)
   })
 
   it('reports Linux active-app as unsupported when xdotool is missing', async () => {

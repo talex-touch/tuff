@@ -40,8 +40,7 @@ import {
   type SpeechModelCatalogItem,
   type SpeechRuntimeEntryV1
 } from '@talex-touch/tuff-voice'
-import { performNexusRequestWithAuth } from '../auth'
-import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
+import { getVoiceAuthPort, getVoiceNexusPort } from './voice-ports'
 import { createLogger } from '../../utils/logger'
 
 const speechModelLog = createLogger('SpeechModelCatalog')
@@ -151,7 +150,7 @@ export function clearSpeechCatalogCache(): void {
 export async function fetchSpeechCatalog(options?: {
   bypassCache?: boolean
 }): Promise<ParsedSpeechModelCatalog> {
-  const baseUrl = getRuntimeNexusBaseUrl()
+  const baseUrl = getVoiceNexusPort().getRuntimeNexusBaseUrl()
   const now = Date.now()
   if (
     !options?.bypassCache &&
@@ -163,7 +162,7 @@ export async function fetchSpeechCatalog(options?: {
   }
   let response: NexusResponsePayload | null
   try {
-    response = await performNexusRequestWithAuth(
+    response = await getVoiceAuthPort().performNexusRequestWithAuth(
       {
         url: `${baseUrl.replace(/\/+$/, '')}/api/v1/speech/models`,
         method: 'GET',

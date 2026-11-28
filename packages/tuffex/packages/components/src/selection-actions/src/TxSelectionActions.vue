@@ -3,6 +3,7 @@
 import type { SelectionActionItem, SelectionActionsEmits, SelectionActionsProps } from './types'
 import { computed, markRaw, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import TxBaseAnchor from '../../base-anchor/src/TxBaseAnchor.vue'
+import { registerSelectionHighlight } from './selection-highlight'
 
 defineOptions({ name: 'TxSelectionActions' })
 
@@ -50,6 +51,48 @@ const inputRef = ref<HTMLInputElement | null>(null)
 
 const internalExpanded = ref(false)
 const internalPrompt = ref('')
+const barFocused = ref(false)
+
+let disposeSelectionHighlight: (() => void) | null = null
+let isUnmounted = false
+
+function clearSelectionHighlight(): void {
+  if (disposeSelectionHighlight) {
+    disposeSelectionHighlight()
+    disposeSelectionHighlight = null
+  }
+}
+
+function isNativeSelectionCollapsed(): boolean {
+  if (typeof window === 'undefined' || typeof window.getSelection !== 'function')
+    return false
+  const live = window.getSelection()
+  return !live || live.isCollapsed || live.rangeCount === 0
+}
+
+function syncSelectionHighlight(): void {
+  clearSelectionHighlight()
+  if (isUnmounted)
+    return
+  const range = props.selection?.range
+  if (!range)
+    return
+  // Paint the persistent CSS Custom Highlight whenever focusing the bar's input
+  // (or transitioning to busy/result) has collapsed the browser's native selection,
+  // avoiding double-alpha over a live native highlight.
+  if (barFocused.value || props.state !== 'idle' || isNativeSelectionCollapsed())
+    disposeSelectionHighlight = registerSelectionHighlight(range)
+}
+
+watch(
+  [() => props.selection, () => props.state, barFocused],
+  () => {
+    if (!props.selection)
+      barFocused.value = false
+    syncSelectionHighlight()
+  },
+  { immediate: true },
+)
 
 const isExpanded = computed(() => props.expanded ?? internalExpanded.value)
 const promptText = computed(() => props.prompt ?? internalPrompt.value)
@@ -75,7 +118,19 @@ const runningLabel = computed(() => {
  */
 const virtualReference = markRaw({
   getBoundingClientRect: () => {
-    const rects = props.selection?.rects ?? []
+    const range = props.selection?.range
+    let rects: DOMRect[] = []
+    if (
+      range
+      && !range.collapsed
+      && range.startContainer?.isConnected
+      && range.endContainer?.isConnected
+      && typeof range.getClientRects === 'function'
+    ) {
+      rects = Array.from(range.getClientRects()).filter(rect => rect.width > 0 || rect.height > 0)
+    }
+    if (rects.length === 0)
+      rects = props.selection?.rects ?? []
     const last = rects.at(-1)
     if (!last)
       return { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 } as DOMRect
@@ -143,6 +198,8 @@ watch(() => props.state, async () => {
 })
 
 onBeforeUnmount(() => {
+  isUnmounted = true
+  clearSelectionHighlight()
   widthAnimation?.cancel()
   widthAnimation = null
 })
@@ -191,9 +248,25 @@ function updatePosition(): void {
 // wrapped in, and the root's blanket prevent wins again.
 function onBarPointerDown(event: PointerEvent): void {
   const target = event.target as HTMLElement | null
-  if (target?.closest('input, textarea, [contenteditable="true"]'))
+  if (target?.closest('input, textarea, [contenteditable="true"]')) {
+    // Arm the persistent highlight on the same tick the pointer lands on the field,
+    // so there is no single-frame gap as the browser collapses its native selection.
+    barFocused.value = true
     return
+  }
   event.preventDefault()
+}
+
+function onBarFocusIn(): void {
+  barFocused.value = true
+}
+
+function onBarFocusOut(event: FocusEvent): void {
+  const next = event.relatedTarget as Node | null
+  if (next && barRef.value?.contains(next))
+    return
+  barFocused.value = false
+  syncSelectionHighlight()
 }
 
 defineExpose({
@@ -248,6 +321,8 @@ defineExpose({
       role="group"
       :aria-label="ariaLabel"
       @pointerdown="onBarPointerDown"
+      @focusin="onBarFocusIn"
+      @focusout="onBarFocusOut"
     >
       <div ref="contentRef" class="tx-bui-selection-actions__content">
         <template v-if="isBusy">
@@ -424,6 +499,17 @@ defineExpose({
 @include bui-keyframes-spring-in;
 @include bui-keyframes-spin;
 @include bui-keyframes-shimmer-text;
+
+// Unscoped document-level Custom Highlight: keeps the selected passage visibly
+// tinted while focus lives inside the floating prompt field (or rewrite states).
+::highlight(tx-selection-actions) {
+  background-color: color-mix(in srgb, var(--tx-color-primary, #3b82f6) 24%, transparent);
+}
+
+.dark ::highlight(tx-selection-actions),
+[data-theme='dark'] ::highlight(tx-selection-actions) {
+  background-color: color-mix(in srgb, var(--tx-color-primary, #60a5fa) 32%, transparent);
+}
 
 .tx-bui-selection-actions {
   @include bui-scope;

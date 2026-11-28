@@ -81,6 +81,18 @@ function componentModuleFileName(chunk) {
   return '[name].js'
 }
 
+const deviceMockupSubpathEntries = {
+  'device-mockup/presets/index': './src/device-mockup/presets/index.ts',
+  'device-mockup/presets/ios/index': './src/device-mockup/presets/ios/index.ts',
+  'device-mockup/presets/android/index': './src/device-mockup/presets/android/index.ts',
+  'device-mockup/presets/tablet/index': './src/device-mockup/presets/tablet/index.ts',
+  'device-mockup/presets/desktop/index': './src/device-mockup/presets/desktop/index.ts',
+  'device-mockup/presets/watch/index': './src/device-mockup/presets/watch/index.ts',
+  'device-mockup/presets/browser/index': './src/device-mockup/presets/browser/index.ts',
+  'device-mockup/scenes/index': './src/device-mockup/scenes/index.ts',
+  'device-mockup/export/index': './src/device-mockup/export/index.ts',
+}
+
 export default defineConfig({
   css: {
     postcss: {
@@ -111,6 +123,7 @@ export default defineConfig({
         'utils/index': './src/utils/index.ts',
         ...utilInternalEntries,
         ...componentEntries,
+        ...deviceMockupSubpathEntries,
       },
       output: [
         {

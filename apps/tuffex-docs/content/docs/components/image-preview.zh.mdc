@@ -1,0 +1,293 @@
+---
+title: "ImagePreview 图片预览"
+description: "全屏查看图片，可缩放、旋转并滑动翻页"
+category: Data
+status: beta
+since: 0.9.2
+tags: [image, zoom, gesture, lightbox]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+### 基础
+`origin` 返回每张图片的缩略图，预览从它放大飞出、关闭时缩回原处；滚轮、触控板或双指缩放，左右滑动翻页，上下拖走关闭。
+::::TuffDemoWrapper{demo="ImagePreviewBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const images = [
+    { url: '/shots/search.jpg', thumbnail: '/shots/search-s.jpg', name: '文件搜索', width: 1668, height: 1080 },
+    { url: '/photos/fjord.jpg', thumbnail: '/photos/fjord-s.jpg', name: '峡湾全景', width: 3000, height: 1000 },
+    { url: '/photos/alley.jpg', thumbnail: '/photos/alley-s.jpg', name: '红砖巷', width: 1200, height: 1800 },
+  ]
+
+  const open = ref(false)
+  const index = ref(0)
+  const grid = ref<HTMLElement | null>(null)
+
+  // 第 i 张图片从第 i 个缩略图飞出，关闭时缩回它
+  function thumbOf(i: number) {
+    return grid.value?.children[i] ?? null
+  }
+
+  function show(at: number, event: MouseEvent) {
+    // WebKit 点击按钮不会聚焦它；先聚焦，关闭后焦点才能回来
+    ;(event.currentTarget as HTMLElement).focus()
+    index.value = at
+    open.value = true
+  }
+  </script>
+
+  <template>
+    <div ref="grid">
+      <button v-for="(image, i) in images" :key="image.url" type="button" @click="show(i, $event)">
+        <img :src="image.thumbnail" alt="">
+      </button>
+    </div>
+
+    <!-- 其余文案 prop 见「属性」表 -->
+    <TxImagePreview
+      v-model:open="open"
+      v-model:index="index"
+      :images="images"
+      :origin="thumbOf"
+      label="图片预览"
+      close-label="关闭"
+      previous-label="上一张"
+      next-label="下一张"
+    />
+  </template>
+---
+::::
+
+### 操作与长按菜单
+`actions` 选择工具栏与菜单中的操作及顺序，在 `action` 事件里调用 `preventDefault()` 可改由宿主执行；`contextMenu` 为 `false` 时长按与右键不再打开菜单。
+
+```vue
+<script setup lang="ts">
+import type { ImagePreviewActionEvent } from '@talex-touch/tuffex/image-preview'
+
+function onAction(event: ImagePreviewActionEvent) {
+  // 下载交给宿主：保存进自己的相册，预览不再处理
+  if (event.action === 'download') {
+    event.preventDefault()
+    saveToAlbum(event.item.url)
+  }
+}
+</script>
+
+<template>
+  <TxImagePreview
+    v-model:open="open"
+    :images="images"
+    :actions="['rotate', 'copy', 'download']"
+    @action="onAction"
+  />
+</template>
+```
+
+### 材质与底部条
+`indicator` 选择缩略图条、圆点或不显示，`maskSurface` / `controlSurface` 选择背景与控件的材质，`bounce` 调整翻页、跳转与飞出时的回弹。
+::::TuffDemoWrapper{demo="ImagePreviewOptionsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxImagePreview
+      v-model:open="open"
+      v-model:index="index"
+      :images="images"
+      :origin="thumbOf"
+      indicator="dots"
+      mask-surface="blur"
+      control-surface="glass"
+      :bounce="0.45"
+    />
+  </template>
+---
+::::
+
+### 单张图片
+只传一张时不显示计数、翻页按钮与底部条，图片可用的空间更大。
+
+```vue
+<template>
+  <button type="button" @click="open = true">
+    <img :src="cover" alt="封面">
+  </button>
+  <TxImagePreview v-model:open="open" :images="[cover]" />
+</template>
+```
+
+### 用代码打开
+`show(index)` 打开并定位到指定的图片，`close()` 关闭且不触发 `close` 事件。
+
+```vue
+<script setup lang="ts">
+import type { TxImagePreviewInstance } from '@talex-touch/tuffex/image-preview'
+import { ref } from 'vue'
+
+const preview = ref<TxImagePreviewInstance | null>(null)
+</script>
+
+<template>
+  <TxButton @click="preview?.show(2)">查看第三张</TxButton>
+  <TxImagePreview ref="preview" :images="images" />
+</template>
+```
+
+### 最佳实践
+
+- 传 `origin` 与 `width` / `height`：图片从缩略图长出、缩回原处，加载前的占位就是图片的形状。
+- 有小图时传 `thumbnail`：底部条用它，否则每一格都加载原图。
+- 缩略图已经加载失败的地址传给 `failed`，预览直接显示失败占位，不再请求一次。
+- 预设效果依赖 three.js（可选 peer）：装了 three，三种预设对所有引入方式都生效。没装 three 时，直接引入 `image-preview` 的构建会出现 three 相关的 `is not exported` 警告（不失败），运行时降级为 `skeleton` 占位；从包入口引入时则整页无法运行，这是包入口本身的既有问题。
+- 打开前让触发元素获得焦点：WebKit 点击按钮不会聚焦它，关闭后焦点就回不到原处。
+- 非英文界面覆盖全部文案 prop 与五个 formatter：按钮只有图标，读屏读到的就是这些名称。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `open` | `boolean` | `false` | 是否打开，配合 `v-model:open`。 |
+| `index` | `number` | `0` | 当前图片，配合 `v-model:index`；超出范围时收敛到两端。 |
+| `images` | `ImagePreviewSource[]` | `[]` | 图片地址，或带名称、尺寸与小图的对象；变为空时预览关闭。 |
+| `items` | `ImagePreviewSource[]` | — | 图片或自定义内容；传了就优先于 `images`。自定义内容只有 `svg` / `raw` 没有 `url` 时，复制与保存按文本进行：复制 `copyText`（缺省为标记本身），保存为 `.svg` 文件；分享仍不可用。 |
+| `origin` | `(index: number) => ImagePreviewOrigin \| null \| undefined` | - | 第 `index` 张图片在页面上的位置，打开时询问，关闭时再问当时那一张。 |
+| `transition` | `'zoom' \| 'fade'` | `'zoom'` | 开合方式；`zoom` 在没有 `origin`、缩略图不在视口内、图片来不及画出或减少动态效果时改为淡入淡出。 |
+| `maxScale` | `number` | `4` | 相对图片原始像素的最大缩放，`1` 即 100%；不会小于整张适配屏幕的比例。 |
+| `failed` | `ReadonlySet<string> \| string[]` | - | 宿主已知加载失败的地址，直接显示失败占位、不再请求。 |
+| `loadingEffect` | `'sweep-gradient' \| 'pixels-organic' \| 'pixels-mechanic' \| 'skeleton' \| 'none'` | `'sweep-gradient'` | 图片加载中在原位显示的效果：三种 [TxImageGeneration](/zh/image-generation) 预设、`skeleton` 闪烁占位或 `none` 不显示；只有加载中的图片才播放。预设效果依赖 three.js，见下文。 |
+| `actions` | `ImagePreviewAction[]` | `['rotate', 'copy', 'share', 'download']` | 工具栏与菜单中的操作，按此顺序；浏览器不支持分享时不显示分享。 |
+| `contextMenu` | `boolean` | `true` | 长按图片、右键或按菜单键时打开操作菜单。 |
+| `indicator` | `'thumbnails' \| 'dots' \| 'none'` | `'thumbnails'` | 底部条显示缩略图、圆点或不显示；只有一张时不显示。 |
+| `minimap` | `boolean` | `true` | 放大后在右下角显示整张图片，框出画面中的部分；点按或拖动它移动到那里。 |
+| `bounce` | `number` | `0.2` | 翻页、跳转、菜单弹出与从缩略图飞出时越过终点的程度，`0` 不回弹，最大 `0.9`。 |
+| `maskSurface` | `BaseSurfaceMode` | `'refraction'` | 图片背后的 [TxBaseSurface](/zh/base-surface) 材质。 |
+| `maskColor` | `string` | `'rgb(10, 10, 12)'` | 背景材质的颜色。 |
+| `maskOpacity` | `number` | `0.35` | 背景颜色的不透明度，`0`–`1`。 |
+| `maskBlur` | `number` | `12` | 背景对其后页面的模糊半径（px）。 |
+| `controlSurface` | `BaseSurfaceMode` | `'blur'` | 按钮、工具栏、圆点、提示与菜单的材质。 |
+| `controlColor` | `string` | `'rgb(64, 64, 70)'` | 控件材质的颜色。 |
+| `controlOpacity` | `number` | `0.6` | 控件颜色的不透明度，`0`–`1`。 |
+| `controlBlur` | `number` | `16` | 控件对其后内容的模糊半径（px）。 |
+| `label` | `string` | `'Image preview'` | 对话框的可访问名称，由 `labelFormatter` 接上当前图片的 `name`。 |
+| `closeLabel` | `string` | `'Close'` | 关闭按钮的可访问名称。 |
+| `previousLabel` | `string` | `'Previous image'` | 上一张按钮的可访问名称。 |
+| `nextLabel` | `string` | `'Next image'` | 下一张按钮的可访问名称。 |
+| `zoomInLabel` | `string` | `'Zoom in'` | 放大按钮的可访问名称。 |
+| `zoomOutLabel` | `string` | `'Zoom out'` | 缩小按钮的可访问名称。 |
+| `zoomLabel` | `string` | `'Zoom'` | 缩放读数打开的菜单的可访问名称；也由 `readoutLabelFormatter` 接在读数之后，作为读数按钮的名称。 |
+| `resetLabel` | `string` | `'Fit to screen'` | 缩放菜单的第一项，恢复整张图片。 |
+| `rotateLabel` | `string` | `'Rotate'` | 旋转操作的名称。 |
+| `copyLabel` | `string` | `'Copy image'` | 复制操作的名称。 |
+| `shareLabel` | `string` | `'Share'` | 分享操作的名称。 |
+| `downloadLabel` | `string` | `'Download'` | 下载操作的名称。 |
+| `menuLabel` | `string` | `'Image actions'` | 操作菜单的可访问名称。 |
+| `indicatorLabel` | `string` | `'Images'` | 底部条的可访问名称。 |
+| `copiedText` | `string` | `'Image copied'` | 图片放进剪贴板后的提示。 |
+| `linkCopiedText` | `string` | `'Link copied'` | 只复制了图片链接时的提示。 |
+| `copyFailedText` | `string` | `'Could not copy the image'` | 复制失败时的提示。 |
+| `failedText` | `string` | `'This image could not be loaded'` | 加载失败时显示在占位里的文字。 |
+| `counterFormatter` | `(current: number, total: number) => string` | `` (c, t) => `${c} / ${t}` `` | 顶栏的位置计数；只有一张时不显示。 |
+| `scaleFormatter` | `(scale: number) => string` | `` (s) => `${Math.round(s * 100)}%` `` | 缩放读数与缩放菜单中的各档比例，`scale` 相对图片原始像素。 |
+| `indicatorItemFormatter` | `(current: number, total: number, name?: string) => string` | `` (c, t, name) => name ? `${name}, ${c} of ${t}` : `Image ${c} of ${t}` `` | 底部条中每个缩略图或圆点的可访问名称。 |
+| `labelFormatter` | `(label: string, name: string) => string` | `` (label, name) => `${label}: ${name}` `` | 当前图片有 `name` 时对话框的可访问名称。 |
+| `readoutLabelFormatter` | `(readout: string, label: string) => string` | `` (readout, label) => `${readout}, ${label}` `` | 缩放读数按钮的可访问名称，由读数与 `zoomLabel` 拼成。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:open` | `(open: boolean)` | 打开或关闭时触发。 |
+| `update:index` | `(index: number)` | 当前图片改变时触发；滑动翻页时在新图片滑入一半时。 |
+| `close` | `()` | 用户关闭时触发：关闭按钮、Escape、点击背景或把图片拖走；宿主关闭时不触发。 |
+| `error` | `(url: string, index: number)` | 一张图片加载失败时触发，同一地址只触发一次；前后相邻的图片也会预加载。 |
+| `action` | `(event: ImagePreviewActionEvent)` | 选中操作后、预览执行前触发；调用 `preventDefault()` 后由宿主自己执行。 |
+
+### 插槽
+
+| 插槽名 | 说明 |
+|------|------|
+| `default` | 自定义每张图片的内容，`item` 未传时使用；参数 `{ item, index, scale, turns, view, stage }`。 |
+| `item` | 自定义每张图片的内容，优先于 `default`；参数同 `default`。 |
+| `thumbnail` | 替换底部条中的缩略图；参数 `{ item, index, current }`。 |
+| `minimap` | 替换右下角的小地图；参数 `{ item, index, turns, view, stage }`。 |
+| `loading` | 替换默认的加载占位；参数 `{ item, index }`，渲染在图片原位，宽高与占位一致。 |
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `show` | `(index?: number) => void` | 打开预览，可指定从哪一张开始。 |
+| `close` | `() => void` | 关闭预览，不触发 `close` 事件。 |
+| `next` / `prev` | `() => void` | 翻到下一张 / 上一张，到两端时无效。 |
+| `zoomIn` / `zoomOut` | `() => void` | 以画面中心放大 / 缩小 √2 倍。 |
+| `reset` | `() => void` | 恢复显示整张图片。 |
+| `rotate` | `(direction?: 1 \| -1) => void` | 顺时针（默认）或逆时针转四分之一圈，不受 `actions` 限制，也不触发 `action`。 |
+
+### 类型
+
+#### ImagePreviewItem
+
+`ImagePreviewSource` 是 `string | ImagePreviewItem`，字符串即图片地址。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `url` | `string` | 必填 | 图片地址，也是加载状态的键：换成新地址会重新加载；自定义内容可省略。 |
+| `type` | `'image' \| 'custom'` | `'image'` | 自定义内容设为 `'custom'`。 |
+| `name` | `string` | - | 显示在顶栏，并接在对话框名称之后；没有 `alt` 时也作替代文字。 |
+| `alt` | `string` | - | 图片的替代文字。 |
+| `width` / `height` | `number` | - | 图片的原始尺寸，加载前的占位按这个比例。 |
+| `thumbnail` | `string` | - | 底部条用的小图；缺省时用 `url`。 |
+| `component` | `Component` | - | 自定义内容的组件，接收 `item` 与 `payload` 属性。 |
+| `payload` | `unknown` | - | 传给 `component` 的数据。 |
+| `raw` | `string` | - | 可信的 HTML 或 SVG 标记；不可信内容需先净化。 |
+| `svg` | `string` | - | 可信的 SVG 标记，渲染时不请求外部图片。 |
+| `copyText` | `string` | - | 自定义内容没有 `url` 时，复制操作写入剪贴板的文本；缺省时复制 `svg` / `raw` 的标记文本。 |
+
+#### ImagePreviewOrigin
+
+`ImagePreviewOrigin` 是 `Element | ImagePreviewOriginRect`。传元素时读取它自己的 `<img>`（或其中第一张）的位置、圆角、`object-fit` 与祖先裁掉的部分，飞行期间隐藏这个元素，它已加载的像素在原图到达前顶替；传矩形时只用位置与圆角。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `x` / `y` | `number` | 必填 | 左上角的视口坐标（px）。 |
+| `width` / `height` | `number` | 必填 | 宽高（px）。 |
+| `radius` | `number` | `0` | 圆角半径（px）。 |
+
+#### ImagePreviewActionEvent
+
+`ImagePreviewAction` 是 `'rotate' | 'copy' | 'share' | 'download'`。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `action` | `ImagePreviewAction` | 选中的操作。 |
+| `index` | `number` | 当前图片的索引。 |
+| `item` | `ImagePreviewItem` | 当前图片；字符串地址已转成对象。 |
+| `preventDefault` | `() => void` | 跳过预览自己的处理。 |
+| `defaultPrevented` | `boolean` | 是否已调用 `preventDefault()`。 |
+
+## 概述
+
+- 开合与加载：有 `origin` 时图片按缩略图的裁切与圆角放大飞出，越过终点轻弹后停住；关闭时转正、缩回原处，飞行途中再开或再关都会就地掉头。翻页途中关闭时，露出一半以上的那张飞回原处，另一张随遮罩淡出并退回原位，索引不再变化。加载前按 `width` / `height`（缺省时按上一张看过的图片）留出位置，150 ms 后仍未到达才显示 `loadingEffect` 选定的加载效果；减少动态效果时预设效果静止在一帧上；加载失败显示占位与 `failedText`，同一地址不再请求。
+- 鼠标与触控板：滚轮以指针为中心缩放，捏合或 ⌘/Ctrl + 滚轮跟手缩放，Safari 的捏合手势同样生效；单击或双击图片都在指针处放大到细节，再单击或双击恢复，放大后拖动或双指滑动平移，松手滑行，越过边缘有橡皮筋阻力；未放大时横向拖动或一划翻页，上下拖走关闭。右键图片打开操作菜单，按住 Shift 右键仍是浏览器自己的菜单。
+- 触屏：双指捏合以两指中点缩放，抬起一指后接着单指拖动，画面不跳；双击放大或恢复，单击隐藏或显示控件；长按 480 ms 在手指上方弹出操作菜单，浏览器支持时轻震一下。
+- 键盘：`+` / `-` 缩放，`0` 恢复整张，← / → 翻页，放大后方向键平移；`R` / `Shift + R` 旋转，⌘/Ctrl + C 复制，菜单键或 Shift + F10 打开菜单，菜单中 ↑ / ↓ / Home / End 移动、Escape 或 Tab 关闭。Escape 先撤销进行中的手势，再关闭；Tab 在对话框内循环，关闭后焦点回到打开前的元素。
+- 缩放菜单：点按工具栏中的比例读数，在它上方弹出菜单：第一项 `resetLabel` 恢复整张，其后是 25%、50%、100%、200% 直到 1600% 中比整张大、又不超过 `maxScale` 的几档，当前比例打勾，选中后以画面中心缩放过去。菜单为 `role="menu"`、名称取自 `zoomLabel`，各项是 `menuitemradio`；打开时焦点落在打勾的一项，↑ / ↓ / Home / End 移动，Escape 或 Tab 关闭并回到读数，点按菜单以外只关闭菜单。图片还没有尺寸、或整张已是最大缩放时，读数设为 `aria-disabled`，不打开菜单。
+- 操作：旋转每次转四分之一圈并重新适配屏幕，翻页后恢复；复制把图片转为 PNG 放进剪贴板，跨站图片的服务器不允许 CORS 时只复制链接；分享网页图片时分享链接，`data:` / `blob:` 图片作为文件分享；下载同源与 `data:` / `blob:` 图片时按名称保存，跨站图片在新标签页打开。加载失败的图片不提供操作，结果提示是 `role="status"` 区域。
+- 底部条：缩略图条中当前一张展开成自己的比例，圆点在有更多图片的一端缩小；条随翻页移动，点击跳转，在条上拖动可快速划过各张，只有当前一项可用 Tab 到达。对话框为 `role="dialog"`、`aria-modal="true"`，名称由 `labelFormatter` 把 `label` 与当前图片的 `name` 接起来；顶栏的名称与计数是 `aria-live` 区域，翻到两端时翻页按钮设为 `aria-disabled` 而不禁用，焦点不会掉到 `body`。
+- 小地图：放大后右下角显示整张图片，画面中的部分加框、其余压暗，随平移与缩放同步；点按框外滑到那里，拖动框时画面跟手，拖动中按 Escape 回到按下时的位置，不关闭预览；在它上面滚动滚轮以画面中心缩放。它只响应指针，对辅助技术隐藏，键盘用方向键平移；开始恢复整张、翻页或旋转时淡出。
+
+## 技术实现
+
+- 动效：缩放与回弹用阻尼比 1、响应 0.35 s 的弹簧，翻页用 0.4 s、从缩略图飞出用 0.36 s，这两种的阻尼比为 `1 - bounce`，飞回缩略图不越过终点；底部条与菜单的过渡曲线也由 `bounce` 推出。松手按指针速度滑行，减少动态效果（`prefers-reduced-motion: reduce`）时直接落到终点。只在运动时开启 `will-change`，静止后放大的图片按新比例重新栅格化，保持清晰。
+- 外观：背景与控件都是 `fake` 模式的 TxBaseSurface；预览 teleport 到 `body`，层级取自共享的 z-index manager，始终是深色。宽度不超过 640px 或高度不超过 480px 时图片铺满屏幕，控件浮在图片上，工具栏只留操作，翻页按钮移到底部、有底部条时隐藏；按钮 44px，并避开安全区。按需样式插件会一并加载 TxBaseSurface 的样式；手动引入样式时另引 `base-surface`、`flow-light` 与 `glass-surface` 的 `style.css`。
+- 源码：`packages/tuffex/packages/components/src/image-preview/`。
+
+<TuffDocSourceLink />

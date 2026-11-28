@@ -68,6 +68,18 @@ describe('txEmpty', () => {
     expect(wrapper.find('.empty-state-stub').attributes('data-size')).toBe('small')
   })
 
+  it('renders the built-in empty illustration by default when iconClass is omitted', () => {
+    const wrapper = mount(TxEmpty, {
+      props: {
+        title: 'Nothing here yet',
+        description: 'Items you add will show up here.',
+      },
+    })
+
+    expect(wrapper.find('.tx-empty-state__illustration').attributes('data-variant')).toBe('empty')
+    expect(wrapper.find('.tuff-icon__class').exists()).toBe(false)
+  })
+
   it('maps wrapper slots to EmptyState slots', () => {
     const wrapper = mountEmpty({}, {
       icon: '<span>Custom icon</span>',

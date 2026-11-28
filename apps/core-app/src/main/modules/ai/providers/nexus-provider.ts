@@ -30,9 +30,7 @@ import { NetworkHttpStatusError } from '@talex-touch/utils/network'
 import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import { COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID } from '../../../../shared/events/corebox-scenes'
 import { getNetworkService } from '../../network'
-import { getRuntimeNexusBaseUrl } from '../../nexus/runtime-base'
-import { extractTranslatedImageFromSceneRun, runNexusScene } from '../../nexus/scene-client'
-import { transcribeNexusAudio } from '../../nexus/asr-client'
+import { getAiNexusPort } from '../ai-ports'
 import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
 import { normalizeIntelligenceError } from '../intelligence-error-normalizer'
 import { readReasoningPlan } from '../reasoning-effort-runtime'
@@ -215,11 +213,17 @@ function isGuestToken(value: unknown): boolean {
 }
 
 function buildInvokeUrl(): string {
-  return new URL('/api/v1/intelligence/invoke', `${getRuntimeNexusBaseUrl()}/`).toString()
+  return new URL(
+    '/api/v1/intelligence/invoke',
+    `${getAiNexusPort().getRuntimeNexusBaseUrl()}/`
+  ).toString()
 }
 
 function buildStreamUrl(): string {
-  return new URL('/api/v1/intelligence/stream', `${getRuntimeNexusBaseUrl()}/`).toString()
+  return new URL(
+    '/api/v1/intelligence/stream',
+    `${getAiNexusPort().getRuntimeNexusBaseUrl()}/`
+  ).toString()
 }
 
 function normalizeUsage(usage?: Partial<IntelligenceUsageInfo>): IntelligenceUsageInfo {
@@ -550,7 +554,8 @@ export class NexusProvider extends IntelligenceProvider {
   ): Promise<IntelligenceInvokeResult<IntelligenceImageTranslateE2eResult>> {
     this.assertAuthToken()
     const startedAt = Date.now()
-    const run = await runNexusScene(COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID, {
+    const nexusPort = getAiNexusPort()
+    const run = await nexusPort.runNexusScene(COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID, {
       input: {
         imageBase64: payload.imageBase64,
         targetLang: payload.targetLang || 'zh',
@@ -561,7 +566,7 @@ export class NexusProvider extends IntelligenceProvider {
       providerId: options.preferredProviderId,
       timeoutMs: options.timeout ?? this.config.timeout ?? 30_000
     })
-    const translated = extractTranslatedImageFromSceneRun(run)
+    const translated = nexusPort.extractTranslatedImageFromSceneRun(run)
     if (!translated) {
       throw new Error('NEXUS_IMAGE_TRANSLATE_EMPTY_RESPONSE')
     }
@@ -590,7 +595,7 @@ export class NexusProvider extends IntelligenceProvider {
       typeof options.metadata?.idempotencyKey === 'string'
         ? options.metadata.idempotencyKey
         : undefined
-    const result = await transcribeNexusAudio(payload, {
+    const result = await getAiNexusPort().transcribeNexusAudio(payload, {
       signal: options.signal,
       timeout: options.timeout ?? this.config.timeout,
       idempotencyKey

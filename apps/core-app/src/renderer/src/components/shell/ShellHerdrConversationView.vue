@@ -6,6 +6,7 @@ import type {
   HerdrProjectedToolCall
 } from '@talex-touch/utils/transport/sdk/domains/herdr'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxContextChunk, type ContextChunk } from '@talex-touch/tuffex/context-cards'
 import { TxRowSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
@@ -15,6 +16,10 @@ import { toast } from 'vue-sonner'
 import { herdrConversationRoute } from '../../../../shared/app-surface-routes'
 import { useHerdrRuntime } from '~/modules/herdr/useHerdrRuntime'
 import { vTdsLiveAnimation } from '~/modules/style/live-animation-clock'
+import {
+  parseQuotedUserMessage,
+  type ParsedQuotedUserMessage
+} from '~/views/base/home/user-message-quote'
 
 const props = defineProps<{
   address: string
@@ -50,6 +55,34 @@ const markdownLabels = computed(() => ({
   diagramCopyFailedText: t('home.diagram.copyFailed'),
   diagramErrorText: t('home.diagram.failed')
 }))
+
+function resolveUserQuote(
+  id: string,
+  text: string
+): { parsed: ParsedQuotedUserMessage; chunk: ContextChunk } | null {
+  const parsed = parseQuotedUserMessage(text)
+  if (!parsed) return null
+  const isZh = String(locale?.value ?? '')
+    .toLowerCase()
+    .startsWith('zh')
+  return {
+    parsed,
+    chunk: {
+      id: `herdr-quote-${id}`,
+      title: t('home.quote'),
+      body: parsed.quoteText,
+      chars: isZh ? `${parsed.charCount} 字` : `${parsed.charCount} chars`,
+      ...(parsed.sourceName
+        ? {
+            source: {
+              name: parsed.sourcePath || parsed.sourceName,
+              ...(parsed.badge ? { badge: parsed.badge, tone: 'neutral' as const } : {})
+            }
+          }
+        : {})
+    }
+  }
+}
 
 function handleOpenInMainStage(): void {
   if (!props.address) return
@@ -539,8 +572,26 @@ onBeforeUnmount(() => {
             class="ShellHerdrConv-MessageMarkdown"
             :content="msg.text"
             :streaming="false"
+            reveal="blur"
             v-bind="markdownLabels"
           />
+          <div
+            v-else-if="msg.text && msg.role === 'user' && resolveUserQuote(msg.id, msg.text)"
+            class="ShellHerdrConv-QuotedUser"
+          >
+            <TxContextChunk
+              class="ShellHerdrConv-UserQuoteChunk"
+              :chunk="resolveUserQuote(msg.id, msg.text)!.chunk"
+              :appear="false"
+              :chip-delay="0"
+            />
+            <p
+              v-if="resolveUserQuote(msg.id, msg.text)!.parsed.prompt"
+              class="ShellHerdrConv-MessageText"
+            >
+              {{ resolveUserQuote(msg.id, msg.text)!.parsed.prompt }}
+            </p>
+          </div>
           <p v-else-if="msg.text" class="ShellHerdrConv-MessageText">{{ msg.text }}</p>
 
           <div v-if="msg.toolCalls && msg.toolCalls.length > 0" class="ShellHerdrConv-Tools">
@@ -1159,6 +1210,33 @@ onBeforeUnmount(() => {
   font-size: 11px;
   font-weight: 500;
   color: var(--tx-text-color-secondary);
+}
+
+.ShellHerdrConv-QuotedUser {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ShellHerdrConv-UserQuoteChunk {
+  --tx-bui-surface: var(--tx-bg-color);
+  --tx-bui-inset: var(--tx-fill-color-light);
+  --tx-bui-hover: var(--tx-fill-color);
+  --tx-bui-line: var(--tx-border-color-lighter);
+  --tx-bui-ink: var(--tx-text-color-primary);
+  --tx-bui-ink-2: var(--tx-text-color-regular);
+  --tx-bui-ink-3: var(--tx-text-color-secondary);
+  --tx-bui-shadow-card: 0 0 0 1px var(--tx-border-color-lighter);
+  --tx-bui-shadow-btn: 0 0 0 1px var(--tx-border-color-lighter);
+
+  :deep(.tx-bui-context-chunk__body) {
+    margin: 8px 12px 9px;
+    padding: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 168px;
+    overflow-y: auto;
+  }
 }
 
 .ShellHerdrConv-CodePre {

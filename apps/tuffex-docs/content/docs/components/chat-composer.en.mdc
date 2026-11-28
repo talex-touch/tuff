@@ -1,0 +1,176 @@
+---
+title: "ChatComposer"
+description: "A message composer for AI chat, with an optional context tray."
+category: AiChat
+status: beta
+since: 1.0.0
+tags: [chat, composer, input, tray]
+syncStatus: reviewed
+verified: true
+---
+
+<script setup lang="ts">
+import { ref } from 'vue'
+const text = ref('')
+const sent = ref<string[]>([])
+function onSend(payload: { text: string }) {
+  sent.value.unshift(payload.text)
+  text.value = ''
+}
+</script>
+
+## Usage
+
+### Basic
+Plain text input and sending; for `@` sources or `/` commands, use [PromptBar](/en/prompt-bar) instead.
+:::TuffDemoWrapper{demo="ChatComposerChatComposerDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxChatComposer v-model="text" @send="onSend" />
+  </template>
+---
+:::
+
+### Tray Placement
+The `tray` slot renders a tray outside the card; `trayPlacement` puts it below the card (the default) or above it.
+:::TuffDemoWrapper{demo="ChatComposerTrayDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const text = ref('')
+  const placement = ref<'top' | 'bottom'>('bottom')
+  </script>
+
+  <template>
+    <TxChatComposer v-model="text" :tray-placement="placement" tray-label="Context" show-attachment-button>
+      <template #tray>
+        <TxModeChip v-if="placement === 'bottom'" icon="i-carbon-plug" label="Connect apps" @click="placement = 'top'" />
+        <TxModeChip v-else icon="i-carbon-folder" label="Select a project" @click="placement = 'bottom'" />
+      </template>
+    </TxChatComposer>
+  </template>
+---
+:::
+
+### With a Mode Chip
+Put a [ModeChip](/en/mode-chip) in the `toolbar-left` slot.
+:::TuffDemoWrapper{demo="ChatComposerModeChipDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const text = ref('')
+  const unrestricted = ref(false)
+  </script>
+
+  <template>
+    <TxChatComposer v-model="text">
+      <template #toolbar-left>
+        <TxModeChip
+          :icon="unrestricted ? 'i-carbon-unlocked' : 'i-carbon-touch-1'"
+          :label="unrestricted ? 'Unrestricted access' : 'Request approval'"
+          :tone="unrestricted ? 'danger' : 'muted'"
+          @click="unrestricted = !unrestricted"
+        />
+      </template>
+    </TxChatComposer>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Treat `send` as intent: clear `modelValue` once the request succeeds, and keep the text on failure for a retry.
+- Set `submitting` while a request is in flight to prevent duplicate sends.
+- Use `attachments` for status chips only; keep upload progress, removal, and retry in the host or the `attachments` slot.
+- Keep tray content to one line, equally tall on both sides, so a swap doesn't resize the box; use a muted `TxModeChip` for tray actions.
+- Move the tray when the context changes ("Connect apps" becoming "Select a project"); never loop the swap as decoration.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `string` | `''` | Textarea text, bound with `v-model`. |
+| `placeholder` | `string` | `'Message…'` | Placeholder text. |
+| `ariaLabel` | `string` | - | Accessible name of the textarea; falls back to `placeholder`. |
+| `disabled` | `boolean` | `false` | Disables input, sending, and attachment actions. |
+| `submitting` | `boolean` | `false` | Marks a request in flight and blocks sending. |
+| `allowAttachmentWhileSubmitting` | `boolean` | `false` | Keeps attachment actions available while `submitting`. |
+| `minRows` | `number` | `3` | Resting height in rows; the textarea grows with its content. |
+| `maxRows` | `number` | `6` | Growth cap in rows, then it scrolls; never below `minRows`. |
+| `sendOnEnter` | `boolean` | `true` | Enables keyboard sending. |
+| `sendOnMetaEnter` | `boolean` | `true` | Requires Meta/Ctrl+Enter to send from the keyboard. |
+| `allowEmptySend` | `boolean` | `false` | Allows sending attachments with empty text. |
+| `sendButtonText` | `string` | `'Send'` | Accessible name of the send icon button. |
+| `showAttachmentButton` | `boolean` | `false` | Shows the default `+` attachment button. |
+| `attachmentButtonText` | `string` | `'Attach'` | Accessible name of the `+` attachment button. |
+| `attachments` | `ChatComposerAttachment[]` | `[]` | Attachment chips above the textarea. |
+| `trayPlacement` | `'top' \| 'bottom'` | `'bottom'` | Puts the tray above or below the card; a change runs the swap motion. |
+| `trayLabel` | `string` | - | When set, the tray renders as a `role="group"` with this name. |
+
+### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `update:modelValue` | `string` | Fires on input. |
+| `send` | `{ text: string }` | Fires with trimmed text when sending is allowed. |
+| `attachmentClick` | - | Fires when the attachment button is clicked and attaching is allowed. |
+| `paste` | `ClipboardEvent` | Forwards the textarea's paste. |
+| `attachmentAdd` | `File[]` | Fires for pasted or dropped files; the host owns the upload. |
+| `focus` | `FocusEvent` | Forwards the textarea's focus. |
+| `blur` | `FocusEvent` | Forwards the textarea's blur. |
+
+### Slots
+
+| Name | Scope | Description |
+|------|-------|-------------|
+| `tray` | - | Tray content outside the card. |
+| `attachments` | `{ attachments }` | Replaces the default attachment chips. |
+| `toolbar` | `{ send, disabled, attachmentClick }` | Replaces the default action row. |
+| `toolbar-left` | `{ disabled }` | Adds content to the left of the default action row. |
+| `actions` | `{ send, disabled }` | Adds content before the send button. |
+| `footer` | - | Content inside the card, below the action row. |
+
+### Types
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface ChatComposerAttachment {
+    id: string // chip key
+    label: string // chip text; truncated with an ellipsis
+    kind?: string // type tag after the text, shown in uppercase
+    pending?: boolean // still processing; tints the chip amber
+  }
+---
+:::
+
+### CSS Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `--tx-chat-composer-radius` | `18px` | Corner radius shared by the shell and the card. |
+| `--tx-chat-composer-pending-color` | `#f59e0b` | The amber of a pending attachment chip, mixed in at 32% for the border and 14% for the fill. |
+
+## Overview
+
+- Sending needs non-empty trimmed text, or attachments with `allowEmptySend`. `disabled` and `submitting` both block it.
+- Attachment actions (button, paste, file drop) are blocked by `disabled`, and by `submitting` unless `allowAttachmentWhileSubmitting` is set.
+- With `sendOnMetaEnter`, Meta/Ctrl+Enter sends; without it, Enter sends and Shift+Enter inserts a newline.
+- The textarea grows from `minRows` lines and scrolls at `maxRows` (`field-sizing: content`); browsers without it stay at `minRows`.
+- The root is the shell, where fallthrough classes and attributes land; the input card is `.tx-chat-composer__card`. Adding or removing a tray never recreates the textarea, so focus and IME state survive.
+- The tray renders only with the `tray` slot. Focus inside the leaving tray moves to the textarea; under reduced motion or without the Web Animations API, the swap lands at once.
+
+## Technologies
+
+- On a swap the old tray fades out through a CSS transition; the card slide and shell height are a Web Animations FLIP: 70ms delay, 450ms, `cubic-bezier(0.65, 0.16, 0.1, 0.88)`.
+- Motion reference: [@flohoeller's Chatbox component clip](https://x.com/flohoeller/status/2102660458658582913).
+- Source: `packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue`.
+
+<TuffDocSourceLink />
