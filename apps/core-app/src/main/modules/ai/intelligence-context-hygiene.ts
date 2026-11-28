@@ -1147,11 +1147,8 @@ export class ContextHygieneService {
     const client = this.requireClient()
     const now = Date.now()
     const allowGlobal = options?.allowGlobal !== false
-    const scopeClause = allowGlobal
-      ? "(m.scope = 'global' OR (m.scope = 'session' AND m.source_session_id = ?))"
-      : "(m.scope = 'session' AND m.source_session_id = ?)"
-    const result = await client.execute({
-      sql: `
+    const sql = allowGlobal
+      ? `
         SELECT m.*
         FROM intelligence_memory_items m
         LEFT JOIN intelligence_memory_tombstones t ON t.memory_id = m.id
@@ -1159,10 +1156,24 @@ export class ContextHygieneService {
           AND m.privacy_level = 'normal'
           AND t.memory_id IS NULL
           AND (m.ttl IS NULL OR m.updated_at + m.ttl > ?)
-          AND ${scopeClause}
+          AND (m.scope = 'global' OR (m.scope = 'session' AND m.source_session_id = ?))
         ORDER BY m.updated_at DESC
         LIMIT 5
-      `,
+      `
+      : `
+        SELECT m.*
+        FROM intelligence_memory_items m
+        LEFT JOIN intelligence_memory_tombstones t ON t.memory_id = m.id
+        WHERE m.enabled = 1
+          AND m.privacy_level = 'normal'
+          AND t.memory_id IS NULL
+          AND (m.ttl IS NULL OR m.updated_at + m.ttl > ?)
+          AND (m.scope = 'session' AND m.source_session_id = ?)
+        ORDER BY m.updated_at DESC
+        LIMIT 5
+      `
+    const result = await client.execute({
+      sql,
       args: [now, sessionId]
     })
     return (result.rows as unknown as MemoryRow[])
