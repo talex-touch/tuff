@@ -1,0 +1,16 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "tuff-web",
+  "compatibility_date": "2026-11-24",
+  "routes": [
+    {
+      "pattern": "tuff.tagzxia.com/*",
+      "zone_name": "tagzxia.com"
+    }
+  ],
+  "assets": {
+    "directory": ".dist-cf",
+    "html_handling": "drop-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}

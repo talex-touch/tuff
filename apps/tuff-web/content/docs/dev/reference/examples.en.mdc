@@ -1,0 +1,52 @@
+# Examples
+
+This page is an index only. **The single source of truth (SoT) is the repository `apps/nexus/examples/` directory**. Large copied code blocks are intentionally removed.
+
+## Rules
+
+1. Update source files in `apps/nexus/examples/` first, then update this index.
+2. Keep this page as a file map + purpose notes only.
+3. If files are renamed/removed, update this index in the same change.
+
+## Plugin Basics & Lifecycle
+
+- `apps/nexus/examples/basic-usage.js`: basic SDK message flow (`search`/`translate`/`notify`).
+- `apps/nexus/examples/complete-example.js`: full plugin init + storage + notification + clipboard flow.
+- `apps/nexus/examples/index.js`: lightweight SDK wrapper (`sendMessage` / `communicateWithPlugin`).
+- `apps/nexus/examples/plugin-index-example.js`: `IFeatureLifeCycle` entry and message dispatch sample.
+- `apps/nexus/examples/plugin-receiver-example.js`: receiver-side plugin message handlers.
+
+## Plugin Communication / Channel
+
+- `apps/nexus/examples/communicate-example.js`: basic `communicateWithPlugin` usage.
+- `apps/nexus/examples/complete-communication-example.js`: batch messaging, error handling, status probing.
+
+## Messaging & Notifications
+
+- `apps/nexus/examples/message-system-example.js`: unified message sending examples.
+- `apps/nexus/examples/notification-example.js`: notification show/update/hide flow.
+
+## Power / Degradation Strategy
+
+- `apps/nexus/examples/power-sdk-example.js`: low-power degrade and recovery pattern.
+
+## DivisionBox
+
+- `apps/nexus/examples/division-box/README.md`
+- `apps/nexus/examples/division-box/basic-usage.ts`
+- `apps/nexus/examples/division-box/keepalive-mode.ts`
+- `apps/nexus/examples/division-box/custom-header.ts`
+- `apps/nexus/examples/division-box/flow-integration.ts`
+- `apps/nexus/examples/division-box/flow-usage-example.ts`
+- `apps/nexus/examples/division-box/manifest-example.json`
+
+## Utility Packages
+
+- `apps/nexus/examples/util-pkg/tuff-help`
+- `apps/nexus/examples/util-pkg/tuff-test`
+- `apps/nexus/examples/util-pkg/tuff-utils`
+
+## Maintenance Notes
+
+- Review behavior from source files in `apps/nexus/examples/`.
+- Use `packages/utils/` as the authority for runtime contracts and types.

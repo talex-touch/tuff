@@ -1,0 +1,304 @@
+name: Nexus Razor CI
+
+on:
+  pull_request:
+    paths:
+      - 'apps/nexus-api/**'
+      - 'apps/tuff-web/**'
+      - 'apps/nexus-console/**'
+      - 'packages/tuff-business/**'
+      - 'packages/tuff-intelligence/**'
+      - 'packages/tuffex/**'
+      - 'packages/tuffex-core/**'
+      - 'packages/utils/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/nexus-razor-ci.yml'
+  push:
+    branches:
+      - master
+      - main
+      - stage
+    paths:
+      - 'apps/nexus-api/**'
+      - 'apps/tuff-web/**'
+      - 'apps/nexus-console/**'
+      - 'packages/tuff-business/**'
+      - 'packages/tuff-intelligence/**'
+      - 'packages/tuffex/**'
+      - 'packages/tuffex-core/**'
+      - 'packages/utils/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/nexus-razor-ci.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_cloudflare:
+        description: 'Deploy built Nexus Razor apps to Cloudflare Workers'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexus-razor-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nexus_api_ci:
+    name: Nexus API (checks + Nitro CF build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify API route tree
+        run: pnpm -C apps/nexus-api run check:api-routes
+
+      - name: Typecheck Nexus API
+        run: pnpm -C apps/nexus-api run typecheck
+
+      - name: Run unit tests
+        run: pnpm -C apps/nexus-api exec vitest run
+
+      - name: Lint Nexus API
+        run: pnpm -C apps/nexus-api exec eslint --max-warnings=0 --no-warn-ignored .
+
+      - name: Build Nitro Cloudflare Workers bundle
+        run: pnpm -C apps/nexus-api run build
+
+      - name: Verify Nitro Cloudflare Workers output
+        run: |
+          test -f apps/nexus-api/.output/server/index.mjs
+
+      - name: Upload Nexus API bundle
+        if: ${{ github.ref == 'refs/heads/master' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true)) }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: nexus-api-output
+          path: apps/nexus-api/.output
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 3
+
+  tuff_web_ci:
+    name: Tuff Web (checks + Pure SSG)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace prerequisites
+        run: |
+          pnpm -C packages/tuffex-core run build
+          pnpm -C packages/tuffex run build
+
+      - name: Run unit tests
+        run: pnpm -C apps/tuff-web exec vitest run
+
+      - name: Lint Tuff Web
+        run: pnpm -C apps/tuff-web exec eslint --max-warnings=0 --no-warn-ignored .
+
+      - name: Typecheck Tuff Web
+        run: |
+          pnpm -C apps/tuff-web run prepare
+          pnpm -C apps/tuff-web exec vue-tsc --noEmit -p .nuxt/tsconfig.app.json
+
+      - name: Generate and stage Cloudflare static assets
+        run: pnpm -C apps/tuff-web run generate
+
+      - name: Verify staged Cloudflare asset contract
+        run: |
+          test -f apps/tuff-web/.dist-cf/_headers
+          test -f apps/tuff-web/.dist-cf/_redirects
+          test -f apps/tuff-web/.dist-cf/404.html
+          test -f apps/tuff-web/.dist-cf/en.html
+          test -f apps/tuff-web/.dist-cf/zh.html
+          test -f apps/tuff-web/.dist-cf/docs/llms.txt
+          test -f apps/tuff-web/.dist-cf/docs/search-index.en.json
+          test -f apps/tuff-web/.dist-cf/docs/search-index.zh.json
+          test -f apps/tuff-web/.dist-cf/sitemap.xml
+          if [ -d apps/tuff-web/.dist-cf/_i18n ]; then
+            echo "Unexpected _i18n directory in apps/tuff-web/.dist-cf"
+            exit 1
+          fi
+          if find apps/tuff-web/.dist-cf \( -name '_payload.json' -o -name '*.wasm' \) | grep -q .; then
+            echo "Unexpected _payload.json or .wasm artifact in apps/tuff-web/.dist-cf"
+            exit 1
+          fi
+
+      - name: Upload staged Tuff Web assets
+        if: ${{ github.ref == 'refs/heads/master' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true)) }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: tuff-web-dist-cf
+          path: apps/tuff-web/.dist-cf
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 3
+
+  nexus_console_ci:
+    name: Nexus Console (checks + SPA build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace prerequisites
+        run: |
+          pnpm -C packages/tuffex-core run build
+          pnpm -C packages/tuffex run build
+
+      - name: Typecheck Nexus Console
+        run: pnpm -C apps/nexus-console run typecheck
+
+      - name: Run unit tests
+        run: pnpm -C apps/nexus-console exec vitest run
+
+      - name: Lint Nexus Console
+        run: pnpm -C apps/nexus-console run lint
+
+      - name: Build Nexus Console SPA
+        run: pnpm -C apps/nexus-console run build:only
+
+      - name: Verify Nexus Console static asset contract
+        run: |
+          test -f apps/nexus-console/dist/index.html
+          test -f apps/nexus-console/dist/_headers
+          test -d apps/nexus-console/dist/_console
+
+      - name: Upload Nexus Console assets
+        if: ${{ github.ref == 'refs/heads/master' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true)) }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: nexus-console-dist
+          path: apps/nexus-console/dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 3
+
+  deploy_cloudflare:
+    name: Deploy Nexus Razor Apps (Cloudflare Workers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - nexus_api_ci
+      - tuff_web_ci
+      - nexus_console_ci
+    if: ${{ github.ref == 'refs/heads/master' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy_cloudflare == true)) }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Download Nexus API bundle
+        uses: actions/download-artifact@v7
+        with:
+          name: nexus-api-output
+          path: apps/nexus-api/.output
+
+      - name: Download staged Tuff Web assets
+        uses: actions/download-artifact@v7
+        with:
+          name: tuff-web-dist-cf
+          path: apps/tuff-web/.dist-cf
+
+      - name: Download Nexus Console assets
+        uses: actions/download-artifact@v7
+        with:
+          name: nexus-console-dist
+          path: apps/nexus-console/dist
+
+      - name: Install Wrangler dependencies without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter @talex-touch/nexus-api --filter @talex-touch/tuff-web --filter @talex-touch/nexus-console
+
+      - name: Preflight Cloudflare secrets and deploy Workers atomically
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ] || [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "Skipping Cloudflare Workers deploy: CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN not configured."
+            exit 0
+          fi
+
+          SECRETS_JSON="$(pnpm -C apps/nexus-api exec wrangler secret list --format json 2>/dev/null || echo '[]')"
+          export SECRETS_JSON
+          MISSING_SECRETS="$(node -e '
+            const required = ["AUTH_SECRET", "APP_AUTH_JWT_SECRET", "PROVIDER_REGISTRY_SECURE_STORE_KEY"];
+            const names = new Set();
+            try {
+              const parsed = JSON.parse(process.env.SECRETS_JSON || "[]");
+              if (Array.isArray(parsed)) {
+                for (const entry of parsed) {
+                  if (entry && typeof entry.name === "string") names.add(entry.name);
+                }
+              }
+            } catch {}
+            process.stdout.write(required.filter((k) => !names.has(k)).join(", "));
+          ')"
+
+          if [ -n "${MISSING_SECRETS}" ]; then
+            echo "Skipping Cloudflare Workers deploy until required tuff-nexus-api production secrets are configured: ${MISSING_SECRETS}"
+            exit 0
+          fi
+
+          pnpm -C apps/nexus-api exec wrangler deploy
+          pnpm -C apps/nexus-console exec wrangler deploy
+          pnpm -C apps/tuff-web exec wrangler deploy

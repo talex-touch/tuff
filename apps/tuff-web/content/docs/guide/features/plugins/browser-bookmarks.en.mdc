@@ -1,0 +1,24 @@
+# Browser Bookmarks (`touch-browser-bookmarks`)
+
+## When to Use
+- Keep frequently used links and recent visits in one place.
+
+## Trigger
+- Feature ID: `browser.bookmarks`
+- Commands: `bookmark / bookmarks`
+
+## Core Capabilities
+- Browser bookmarks: saved URLs, recent visits, and quick open.
+- Supported platforms: `win32, darwin, linux`
+
+## Config & Data
+- Config/data files: `bookmarks.json`, `recent-urls.json`
+- Plugin directory: `plugins/touch-browser-bookmarks`
+
+## Permissions
+- Optional: `clipboard.write`
+
+## Quick Start
+1. In CoreBox, type `bookmark`.
+2. Press Enter on the action you need.
+3. Grant permissions when prompted.

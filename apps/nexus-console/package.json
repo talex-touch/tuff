@@ -1,0 +1,41 @@
+{
+  "name": "@talex-touch/nexus-console",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone pure Vite + Vue 3 SPA for Tuff Auth, Device Approval, User Dashboard, and Slim Admin Console.",
+  "author": "TalexDreamSoul",
+  "license": "MPL-2.0",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 3420",
+    "build": "vue-tsc --noEmit -p tsconfig.json && vite build",
+    "build:only": "vite build",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "eslint --max-warnings=0 --no-warn-ignored \"src/**/*.{ts,vue,js}\"",
+    "preview": "vite preview --host 127.0.0.1 --port 3421"
+  },
+  "dependencies": {
+    "@talex-touch/tuffex": "workspace:*",
+    "@talex-touch/utils": "workspace:*",
+    "@vueuse/core": "catalog:frontend",
+    "vue": "catalog:frontend",
+    "vue-i18n": "11.4.16",
+    "vue-router": "catalog:"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "catalog:dev",
+    "@iconify-json/carbon": "catalog:icons",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/test-utils": "^2.4.11",
+    "eslint": "catalog:dev",
+    "jsdom": "^26.1.0",
+    "sass": "catalog:",
+    "typescript": "catalog:dev",
+    "unocss": "catalog:build",
+    "vite": "catalog:build",
+    "vitest": "catalog:",
+    "vue-tsc": "catalog:dev",
+    "wrangler": "catalog:dev"
+  }
+}

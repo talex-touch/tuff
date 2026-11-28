@@ -1,0 +1,70 @@
+# Download SDK
+
+## Overview
+
+The Download SDK is the typed renderer entrypoint for Download Center tasks. It
+supports application updates, resource prefetching, plugin downloads, task
+history, maintenance, and progress subscriptions without exposing raw IPC.
+
+## Runtime contract
+
+- `useDownloadSdk()` creates a typed SDK over TuffTransport.
+- Download Center in the main process owns scheduling and task state.
+- The renderer sends commands and subscribes to push events; it does not own a
+  duplicate task store.
+- `metadata.hidden` marks internal tasks so ordinary download views and
+  notifications can suppress them; Developer Mode may still expose them.
+
+## Operations
+
+The current SDK includes task add/pause/resume/cancel/retry/remove operations,
+bulk pause/resume/cancel, task and history queries, file actions, notification
+settings, maintenance, statistics, migration status, and lifecycle
+subscriptions.
+
+## Usage
+
+<!-- markdownlint-disable MD003 MD022 MD023 MD034 -->
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useDownloadSdk } from '@talex-touch/utils/renderer'
+
+  const download = useDownloadSdk()
+  const result = await download.addTask({
+    url: 'https://example.com/file.zip',
+    destination: '/path/to/save',
+    filename: 'file.zip',
+    priority: 50,
+    module: 'resource_download',
+    metadata: { hidden: true }
+  })
+
+  if (!result.success) {
+    throw new Error(result.error || 'Download failed')
+  }
+---
+:::
+
+<!-- markdownlint-enable MD003 MD022 MD023 MD034 -->
+
+Subscriptions return cleanup functions. Register them with the owning Vue
+lifecycle, or use the scoped helper where appropriate.
+
+## Best practices
+
+- Set meaningful `priority` and `module` values for scheduling and diagnostics.
+- Batch or debounce task creation instead of flooding the queue.
+- Handle failed operation responses and expose an appropriate retry path.
+- Unsubscribe from task events when the owning view or composable is disposed.
+- Use release/download routes through the update service contract; do not
+  bypass Download Center from the renderer.
+
+## Related documentation
+
+- [Download API index](./index.en.mdc)
+- [Release and download routes](../release/index.en.md)
+- [CoreApp Download Center](../../../../../core-app/src/main/modules/download/README.md)
+- [Release-assets checklist](../../../../../../docs/engineering/nexus-release-assets-checklist.md)
+- [Chinese version](./download.zh.mdc)

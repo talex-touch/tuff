@@ -1,0 +1,25 @@
+# Intelligence Ask (`touch-intelligence`)
+
+## When to Use
+- Ask AI directly in CoreBox and copy responses fast.
+
+## Trigger
+- Feature ID: `intelligence.ask`
+- Commands: `ai / @ai / /ai`
+
+## Core Capabilities
+- AI Q&A: ask directly in CoreBox and copy the response.
+- Conversation handoff: CoreBox turns are linked to an Intelligence Session with a recoverable `handoffSessionId`.
+- Supported platforms: `win32, darwin, linux`
+
+## Config & Data
+- Config/data files: None (handoff context is maintained by the Intelligence Session runtime)
+- Plugin directory: `plugins/touch-intelligence`
+
+## Permissions
+- Required: `intelligence.basic`, `intelligence.context`; Optional: `clipboard.write`
+
+## Quick Start
+1. In CoreBox, type `ai`.
+2. Press Enter on the action you need.
+3. Grant permissions when prompted.

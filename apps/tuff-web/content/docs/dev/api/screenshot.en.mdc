@@ -1,0 +1,75 @@
+# Screenshot SDK
+
+## Overview
+
+The Screenshot SDK exposes a permission-gated host facade at `context.utils.screenshot` and `context.utils.plugin.screenshot`. Plugins can discover support, list displays, and capture the cursor display, a selected display, or a global-DIP region.
+
+The host owns the native addon, Screen Recording checks, generation/coordinate mapping, clipboard policy, temporary storage, and `tfile` authorization. Plugins never receive native bindings, protocol carriers, attachment bytes, raw paths, base64, or data URLs.
+
+## Permissions
+
+Declare `window.capture` for every screenshot operation. Also declare and obtain `clipboard.write` when passing `writeClipboard: true`.
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "sdkapi": 260713,
+    "permissions": {
+      "required": ["window.capture"],
+      "optional": ["clipboard.write"]
+    }
+  }
+---
+:::
+
+The host requires a verified plugin context and checks permissions in the main process. Missing declarations, missing grants, or an unverified context fail closed before capture or clipboard mutation.
+
+## Quick Start
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const screenshot = context.utils.screenshot
+  const support = await screenshot.getSupport()
+  if (!support.supported) return
+
+  const displays = await screenshot.listDisplays()
+  const capture = await screenshot.capture({
+    target: 'display',
+    displayId: displays[0]?.id,
+    writeClipboard: false
+  })
+
+  preview.src = capture.tfileUrl
+---
+:::
+
+## API
+
+### `getSupport()`
+
+Returns bounded capability metadata such as `supported`, `platform`, `engine`, and `reason`. Treat these fields as runtime discovery; do not infer support from the operating-system name.
+
+### `listDisplays()`
+
+Returns display descriptors in the host's global DIP coordinate space. IDs are opaque and may change after topology refresh. Region rectangles use global DIP coordinates and positive finite dimensions.
+
+### `capture(request?)`
+
+Supported public targets:
+
+- `cursor-display`: capture the display nearest the current cursor.
+- `display`: capture `displayId`.
+- `region`: capture `region` in global DIP coordinates; `displayId` is optional metadata for selection workflows.
+
+The request has no output selector. Every successful result contains a required `tfileUrl`, image metadata, duration, size, and clipboard status. Use the URL directly in renderer media elements or Fetch-capable host APIs.
+
+`writeClipboard: true` asks the host to copy the captured image after validating `clipboard.write`. It never gives clipboard or native-image objects to the plugin.
+
+## Security Contract
+
+- Use only the typed SDK. Do not construct `NativeEvents`, raw channels, `NapiCarrier`, protocol subpaths, or `.node` loaders.
+- Do not decode `tfileUrl` into a local path. The host protocol handler owns canonicalization and allowlist checks.
+- Do not place screenshots, OCR text, URLs containing sensitive paths, request payloads, or image bytes in logs, storage synchronization, analytics, or errors.
+- A capability unavailable or permission-denied result has no legacy or runtime fallback. Present the host-provided recovery state to the user.

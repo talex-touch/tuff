@@ -1,0 +1,37 @@
+{
+  "name": "@talex-touch/nexus-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone Nitro / H3 Cloudflare Workers API backend for Tuff Nexus",
+  "scripts": {
+    "dev": "nitropack dev --port 3201",
+    "prepare": "nitropack prepare",
+    "build": "nitropack build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "check:api-routes": "node build/check-api-routes.mjs"
+  },
+  "dependencies": {
+    "@langchain/anthropic": "catalog:",
+    "@langchain/core": "catalog:",
+    "@langchain/openai": "catalog:",
+    "@panva/hkdf": "catalog:",
+    "@talex-touch/tuff-business": "workspace:*",
+    "@talex-touch/tuff-intelligence": "workspace:*",
+    "@talex-touch/utils": "workspace:*",
+    "h3": "catalog:",
+    "nitropack": "catalog:",
+    "uncrypto": "catalog:"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "catalog:dev",
+    "@cloudflare/workers-types": "catalog:dev",
+    "@types/node": "catalog:dev",
+    "eslint": "catalog:dev",
+    "typescript": "catalog:dev",
+    "vitest": "catalog:",
+    "wrangler": "catalog:dev"
+  }
+}

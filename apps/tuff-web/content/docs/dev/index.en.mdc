@@ -1,0 +1,57 @@
+# Developer Hub
+
+> Build plugins, extend capabilities, and integrate with the Tuff ecosystem.
+
+## Getting Started
+1. **[Developer Overview](./getting-started/overview.en.mdc)** — understand the plugin model and architecture.
+2. **[Quickstart](./getting-started/quickstart.en.mdc)** — scaffold your first plugin in minutes.
+3. **[Plugin Development Workflow](./getting-started/plugin-workflow.en.mdc)** — end-to-end path from Manifest and Prelude to SDK choices, build, and publish.
+4. **[Manifest Reference](./reference/manifest.en.mdc)** — configure capabilities and permissions.
+5. **[Release and Download](./release/index.en.md)** — find maintained release routes, desktop download guidance, and plugin publishing links.
+
+## Deep Dive
+- **[API Reference](./api/index.en.mdc)** — typed interfaces for storage, channels, and UI.
+- **[Search Matching API / SemanticAliasSDK](./api/search.en.mdc)** — integrate semantic aliases with the `App Semantic Alias Catalog / 应用语义别名目录` marker and `sdkapi: 260626`.
+- **[QuickOps SDK](./api/quickops.en.mdc)** — read built-in local tool capabilities, sessions, and recent audit summaries, then compose through Flow.
+- **[Extensions](./extensions/unplugin-export-plugin.en.mdc)** — advanced patterns for complex integrations.
+- **[Plugin Packages vs Content Packages](./getting-started/plugin-workflow.en.mdc#plugin-packages-vs-content-packages)** — separate `.tpex`, CloudShare content packages, and CloudSync private sync.
+- **[Core App startup and runtime env](./reference/runtime-startup-env.en.mdc)** — startup gates, dev.source fallback, env inventory, cleanup candidates.
+- **[Examples](./reference/examples.en.mdc)** — entry point backed by `apps/nexus/examples/`.
+- **[Code Snippets](./reference/snippets.en.mdc)** — copy-paste examples for common tasks.
+
+## Runtime Behavior
+- **[CoreBox Window & UI View Cache](./architecture/corebox-and-views.en.mdc)** — resize logic, recommendation flow, and WebContentsView caching.
+- **[CoreBox System Map](./architecture/corebox-system.en.mdc)** — CoreBox components/IPC/renderer files.
+- **[DeviceIdleService and Background Scan Scheduling](./architecture/device-idle-service.en.mdc)** — unified idle and power gating for scans.
+- **[App Technical Principles](./architecture/app-tech-principles.en.mdc)** — process model, modules, and repository layout.
+- **[Core Module Map (SearchEngine)](./architecture/module-map.en.mdc)** — map CoreBox/SearchEngine/plugins/channels/storage to real files.
+- **[SearchEngine Map](./architecture/search-engine.en.mdc)** — provider list, recommendation system, main flow.
+- **[Plugin System Map](./architecture/plugin-system.en.mdc)** — providers/adapters/widget pipeline and load flow.
+- **[Channel & IPC Event Map](./architecture/transport-events.en.mdc)** — event groups and definition files.
+- **[IPC Event List (Event Names)](./architecture/ipc-events-detail.en.mdc)** — per-event listing and handlers.
+- **[IPC Handler Index (Function Level)](./architecture/ipc-events-handlers.en.mdc)** — event → concrete handler methods.
+- **[SDK -> Event -> Handler Index](./architecture/ipc-events-sdk-map.en.mdc)** — SDK call chain plus internal/private transport.
+- **[DivisionBox Map](./architecture/division-box.en.mdc)** — sessions, windowing, IPC.
+- **[AI/Intelligence Module Map](./architecture/intelligence-module.en.mdc)** — capabilities, quota, agents.
+- **[Storage & Database Map](./architecture/storage-and-db.en.mdc)** — storage/db modules and update flow.
+
+## Developer Tools
+- **[TUFF CLI](./tools/tuff-cli.en.mdc)** — command-line tool for creating and managing plugin projects.
+- **[TuffEx](./tools/tuffex.en.mdc)** — Vue3 component library with unified design language.
+- **[Tuffex Components](/tuffex/en)** — component catalog, demos, and API (Ta Fu).
+
+
+## Design System & Concepts
+- **[Design System & Concepts Overview](/tuffex/en/concepts)** — In-depth breakdown across TDS tokens, geometry, surfaces, dark palette, typography, micro-motion, and AI streaming.
+- **[Tuff Design System (TDS) & Live Token Inspector](/tuffex/en/concepts/tds)** — Single-source `tokens.json`, live WCAG 2.1 refraction contrast checker, 3-layer Theme Packs, and Core 36 primitives.
+- **[G2 Continuous Curvature & Squircle Geometry](/tuffex/en/concepts/curvature)** — Beyond circular fillets, curvature continuity, and superellipses.
+- **[Surface 8-Material Taxonomy](/tuffex/en/concepts/surface-taxonomy)** — Refraction (default) and the 8-surface material matrix.
+- **[#141414 Canvas & 3-Tier Elevation](/tuffex/en/concepts/dark-palette)** — Preventing OLED smearing and the 3-tier dark scale.
+- **[Micro-Motion Philosophy & Sub-100ms Hover](/tuffex/en/concepts/micro-motion)** — Productivity micro-motion and instant 0ms hover feedback.
+- **[Stream Pacer & Reserve Layout](/tuffex/en/concepts/stream-pacer)** — useStreamPacer cadence and anti-jitter reserve geometry.
+## Publishing
+- **[Plugin workflow](./getting-started/plugin-workflow.en.mdc)**
+
+## Resources
+- Join the developer community on Discord for real-time support.
+- Browse open-source plugins on GitHub for inspiration.

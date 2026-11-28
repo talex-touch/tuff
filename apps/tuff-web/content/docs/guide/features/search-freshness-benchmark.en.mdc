@@ -1,0 +1,135 @@
+# File and App Indexing: 1,000 Add/Delete Runs
+
+> A new file shows up in CoreBox search about 1.2 seconds after it is written. A deleted file is gone from the very first search after the deletion. Below are the measurements from 1,000 add/delete iterations run back to back for 47 minutes on one Mac.
+
+## Results
+
+- All 1,000 iterations and all 2,100 checkpoints passed, with 0 failed searches.
+- New files are searchable at p50 1.2 s; newly installed apps at p50 1.9 s.
+- Deleted files, deleted directory trees and the old name of a renamed file are gone from the first search after the change.
+- An uninstalled app leaves the results at p50 1.1 s.
+- After the run the index held no leftover rows, and searching the test prefix returned nothing.
+- Latency did not drift over 47 minutes. Main-process memory grew about 75 MB in the first half and stayed flat in the second.
+
+## Method
+
+### Environment
+
+| Item | Setup |
+| --- | --- |
+| Machine | Apple M4 Pro, 14 cores, 48 GB memory |
+| OS | macOS 27.0, file watching through FSEvents |
+| Build | Mainline commit `b0f820ec9` plus the fix described in "Deletions take effect at once" |
+| Instance | Separate user-data directory; the everyday profile was not read or written |
+| Watched folder | A folder that held only test files |
+| App folder | `~/Applications` |
+
+### Scenarios
+
+Every 10 iterations form one cycle: 7 file scenarios and 3 app scenarios in turn. File extensions rotate through txt, md, json, csv, log and yaml.
+
+| Scenario | Runs | What it does |
+| --- | --- | --- |
+| Add a file, then delete it | 300 | Write a new file, wait until it is searchable, delete it |
+| Re-add a file with the same name | 100 | Delete it, create it again under the same name, delete it |
+| Rename a file | 100 | Create, rename, check the old name disappears and the new name appears, delete |
+| Delete within 30 ms of creating | 100 | Delete before the file settles, watch for 6 s, check for leftover entries |
+| Three-level directory | 100 | Create three nested folders with one file each, then delete the whole tree |
+| Install an app in one move | 100 | Move a complete `.app` into the app folder, then uninstall it |
+| Install an app file by file | 100 | Copy the `.app` into the app folder one file at a time, then uninstall it |
+| Reinstall an app | 100 | Uninstall, install again, then move it out of the app folder |
+
+### Pass criteria
+
+- "Indexed / removed from index": the row appears in or leaves the index database, checked every 50 ms.
+- "Searchable / gone": queried through the real CoreBox search interface every 150 ms. A search counts only once its end signal arrives.
+- An unfinished search never counts as "gone". Timeouts: 30 s for files, 60 s for apps.
+
+## Latency
+
+### Additions
+
+| Operation | Indexed p50 | Searchable p50 | Searchable p95 |
+| --- | --- | --- | --- |
+| Add a file | 860 ms | 1199 ms | 1345 ms |
+| Re-add with the same name | 854 ms | 1197 ms | 1228 ms |
+| New name after a rename | 912 ms | 1271 ms | 1305 ms |
+| Add a three-level directory | 894 ms | 1190 ms | 1348 ms |
+| Install an app in one move | 1148 ms | 1945 ms | 1979 ms |
+| Install an app file by file | 645 ms | 1471 ms | 1509 ms |
+| Reinstall an app | 1026 ms | 1786 ms | 1947 ms |
+
+Most of the time is spent waiting for the write to settle. A file is processed after it has stopped changing for 500 ms, and then passes a 300 ms batching window before it is indexed, so half-written files never enter the index.
+
+### Deletions
+
+| Operation | Removed from index p50 | Gone from search p50 | Gone from search p95 |
+| --- | --- | --- | --- |
+| Delete a file | 415 ms | First search | First search |
+| Old name after a rename | 404 ms | First search | First search |
+| Delete a directory tree | 2079 ms | First search | First search |
+| Uninstall an app | 455 ms | 1148 ms | 1316 ms |
+| Uninstall an app installed file by file | 521 ms | 1125 ms | 1300 ms |
+| Move an app out of the folder | 483 ms | 1135 ms | 1321 ms |
+
+"First search" means the first query after the deletion no longer returns the file (measured p50 2 ms, the cost of one query). Search confirms that each file is still on disk, so it does not wait for the index cleanup. Cleanup of a deleted directory tree starts 2 seconds after foreground searching stops, so it never competes with a search you are typing.
+
+## Deletions take effect at once
+
+The first run of this test found one problem: after a deletion, searching the same text again within 5 seconds still showed the deleted entry. Search results are cached for 5 seconds. Any other text was not affected, only "delete, then immediately search the same words again".
+
+The fix has two parts:
+
+- On a cache hit, each indexed file is checked on disk again, and deleted ones are dropped.
+- When the app list finishes reloading in the background, older cached results are invalidated.
+
+Time until gone from search, before and after the fix:
+
+| Operation | Before p50 | After p50 | Before p95 | After p95 |
+| --- | --- | --- | --- | --- |
+| Delete a file | 763 ms | 2 ms | 781 ms | 3 ms |
+| Old name after a rename | 837 ms | 3 ms | 904 ms | 4 ms |
+| Delete a directory tree | 5355 ms | 2 ms | 5424 ms | 3 ms |
+| Uninstall an app | 6183 ms | 1148 ms | 6345 ms | 1316 ms |
+| Move an app out of the folder | 6215 ms | 1135 ms | 6371 ms | 1321 ms |
+
+Index cleanup of a deleted directory tree also dropped from p50 7156 ms to 2079 ms. Before the fix, the test kept searching until the stale result went away, and cleanup waits until searching stops.
+
+## Long-running behaviour
+
+### No latency drift
+
+p50 per 100 iterations:
+
+| Iterations | File add searchable | File delete gone | App install searchable | App uninstall gone |
+| --- | --- | --- | --- | --- |
+| 1–100 | 1204 ms | 1 ms | 1922 ms | 1154 ms |
+| 101–200 | 1199 ms | 2 ms | 1781 ms | 1132 ms |
+| 201–300 | 1197 ms | 2 ms | 1779 ms | 1135 ms |
+| 301–400 | 1196 ms | 2 ms | 1766 ms | 1122 ms |
+| 401–500 | 1200 ms | 2 ms | 1772 ms | 1123 ms |
+| 501–600 | 1204 ms | 2 ms | 1785 ms | 1135 ms |
+| 601–700 | 1202 ms | 2 ms | 1805 ms | 1134 ms |
+| 701–800 | 1202 ms | 2 ms | 1784 ms | 1138 ms |
+| 801–900 | 1206 ms | 2 ms | 1797 ms | 1143 ms |
+| 901–1000 | 1200 ms | 3 ms | 1788 ms | 1134 ms |
+
+### Resource usage
+
+Sampled every 15 s, 189 samples:
+
+| Metric | Result |
+| --- | --- |
+| Main-process memory | 403 MB → 480 MB, peak 485 MB; flat in the second half |
+| All processes memory | 1589 MB → 1654 MB, peak 1683 MB |
+| Main-process CPU | p50 3.4%, p95 10.5% |
+| Index database | 2 MB, WAL at most 4 MB |
+| Error log entries | 0 |
+| Crashes | 0 |
+
+## Limits
+
+- Tested on one macOS machine only. File watching on Windows and Linux was not covered.
+- The watched folder held only test files; a large index with hundreds of thousands of files was not covered.
+- The test apps are minimal `.app` bundles with an `Info.plist` and a placeholder executable.
+- No heap snapshot was taken, so it is not confirmed that the first-half memory growth is all cache warm-up.

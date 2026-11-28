@@ -1,0 +1,39 @@
+# Developer Overview
+
+## Plugin Model
+- **BaseModule**: lifecycle = `created → onInit → start → stop → onDestroy`.
+- **Plugin Capsule**: every plugin runs in its own process, described by a manifest.
+- **Channel System**: `ChannelType.MAIN` and `ChannelType.PLUGIN` handle IPC with promise-based replies.
+
+## Directory Layout
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  apps/core-app/
+  ├── src/main/        # main process, modules, channels
+  ├── src/renderer/    # renderer (Vue 3)
+  └── ...
+  plugins/
+  └── my-plugin/
+      ├── manifest.json
+      ├── index.js
+      ├── assets/
+      └── widgets/
+---
+:::
+
+## Lifecycle
+1. **Load** – Manifest is parsed and the Prelude script referenced by `main` is loaded.
+2. **Register** – `index.js` reads context from `globalThis` and exports hooks such as `onFeatureTriggered` and `onItemAction`.
+3. **Run** – CoreBox triggers features, while the plugin returns items, renders UI, or exposes services.
+4. **Cleanup** – disabled or removed plugins clear timers, listeners, temporary files, and external resources.
+
+## Sandbox Policy
+- File access is scoped to the plugin directory.
+- HTTPS calls are allowed; sensitive domains must be declared.
+- Storage API enforces the 10 MB quota per plugin.
+
+## Developer Loop
+- `pnpm core:dev` launches Electron with hot reload for plugins.
+- `tuff validate --strict` checks Manifest, SDK API version, category, and permission declarations.
+- `tuff build` creates the `.tpex` plugin package.

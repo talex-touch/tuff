@@ -1,0 +1,249 @@
+---
+title: Tuff CLI
+description: 用于构建和发布 Tuff 插件的命令行工具
+---
+
+# Tuff CLI
+
+`@talex-touch/tuff-cli` 包提供名为 `tuff` 的 CLI 工具，用于构建和发布 Tuff 插件（内部依赖 `@talex-touch/unplugin-export-plugin` 以保持构建能力一致）。
+
+## 安装
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  # 全局安装
+  pnpm add -g @talex-touch/tuff-cli
+
+  # 或通过 npx 使用
+  npx @talex-touch/tuff-cli <command>
+---
+:::
+
+## 命令
+
+**`tuff create [name]`**
+
+通过交互式问题创建新插件（类型、语言、UI 框架、模板等）。
+
+**`tuff build`**
+
+执行 Vite 构建并打包输出 `.tpex`。
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff build --watch --dev --output dist
+---
+:::
+
+**选项:**
+- `--watch` - 监听文件变化并重复打包
+- `--dev` - 开发模式（不压缩、开启 sourcemap）
+- `--output <dir>` - 输出目录（默认 `dist`）
+
+**`tuff builder`**
+
+仅打包已有构建产物为 `.tpex`（不触发 Vite build）。
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff builder
+---
+:::
+
+## 构建输出约定
+
+使用默认 `outDir` 时，builder 管理三类生成产物：
+
+- `dist/out/`：作为打包输入的 Vite 暂存产物；
+- `dist/build/`：可直接安装的未压缩插件运行时；
+- `dist/<name>-<version>.tpex`：用于发布的插件归档。
+
+`outDir` 顶层的 `out`、`build` 和 `*.tpex` 都是保留的生成产物。`tuff builder` 重新暂存时会排除它们，因此重复构建不会把旧归档嵌套进新包，也不会把旧归档写入 `manifest._files`。插件自有资源不得放入这些保留项。
+
+**`tuff dev`**
+
+启动插件开发用的 Vite dev server。
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff dev --host --port 5173 --open
+---
+:::
+
+**选项:**
+- `--host [host]` - 绑定主机（省略值则监听所有地址）
+- `--port <port>` - 开发服务器端口
+- `--open` - 启动后打开浏览器
+
+**`tuff scan`**
+
+对最终 `.tpex` 产物执行版本化静态安全规则。报告绑定该归档的 SHA-256；命令不会执行插件代码，也不会用独立暂存目录冒充归档内容。
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff scan --package dist/com.example.plugin-1.0.0.tpex --json
+---
+:::
+
+`critical`/`high`、扫描超时、包完整性异常和规则不可用均 fail closed。报告只包含规则编码、相对路径、哈希和位置，不包含命中的秘密值或源码片段。
+
+**`tuff publish`**
+
+发布最新 `.tpex` 包到 Tuff。
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff publish --tag 1.0.0 --channel RELEASE
+---
+:::
+
+**选项:**
+- `--tag` - 版本标签（默认读取 package.json）
+- `--channel` - 发布通道：`RELEASE` / `BETA` / `SNAPSHOT`
+- `--notes` - 变更说明（Markdown）
+- `--dry-run` - 预览模式，不实际发布
+- `--api-url` - 自定义发布 API
+
+**`tuff login`**
+
+保存发布所需的认证令牌。
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff login <token>
+---
+:::
+
+令牌存储在 `~/.tuff/auth.json`。
+
+**`tuff logout`**
+
+删除已保存的认证凭据。
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff logout
+---
+:::
+
+**`tuff doctor`**
+
+只读检查本机 AI 工具、Codex/Claude 配置、Codex skills 根目录和推荐 skills 状态，不写入用户目录。
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff doctor
+---
+:::
+
+**`tuff setup skills`**
+
+显式安装可选 Codex skills。默认只安装低风险 core skills；需要外部服务或更高风险的 skills 必须通过 `--include-gated` 显式加入。
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  # 预览写入计划，不修改文件
+  tuff setup skills --dry-run
+
+  # 安装 core skills 到默认 ~/.codex/skills
+  tuff setup skills
+
+  # 包含 gated skills，并跳过确认
+  tuff setup skills --include-gated --yes
+---
+:::
+
+**选项:**
+- `--include-gated` - 包含 GitHub、Sentry、Linear、Cloudflare、Netlify 等 gated skills
+- `--target-dir <dir>` - 指定 skills 写入目录
+- `--overwrite` - 覆盖已有 `SKILL.md`
+- `--dry-run` - 仅预览写入计划
+- `--yes` - 跳过确认提示
+
+**`tuff setup mcp`**
+
+展示 MCP 配置边界和当前本地状态。当前 MVP 不会自动写 MCP profile；后续会在该入口补可审计的 profile manifest 写入。
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff setup mcp
+---
+:::
+
+**`tuff help`** / **`tuff about`**
+
+输出帮助或工具信息。
+
+**`tuff`**
+
+不带参数运行进入交互模式。
+
+## Vite 插件集成
+
+你也可以将 unplugin 作为 Vite 插件使用，实现自动构建：
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // vite.config.ts
+  import { defineConfig } from 'vite'
+  import TuffExport from '@talex-touch/unplugin-export-plugin/vite'
+
+  export default defineConfig({
+    plugins: [
+      TuffExport({
+        // 插件选项
+      })
+    ]
+  })
+---
+:::
+
+## 配置
+
+可选 `tuff.config.{ts,js,mjs,cjs}` 用于设置 build/dev/publish 的默认值。
+优先级: CLI 参数 > tuff.config > manifest > 默认值。
+
+## 发布工作流
+
+1. **构建插件:**
+   :::TuffCodeBlock{lang="bash"}
+   ---
+   code: |
+     tuff build
+   ---
+   :::
+   （或 `vite build && tuff builder`）
+
+2. **登录 Nexus:**
+   :::TuffCodeBlock{lang="bash"}
+   ---
+   code: |
+     tuff login YOUR_API_TOKEN
+   ---
+   :::
+
+3. **发布:**
+   :::TuffCodeBlock{lang="bash"}
+   ---
+   code: |
+     tuff publish --tag 1.0.0 --channel RELEASE
+   ---
+   :::
+
+CLI 将自动：
+- 扫描 `dist/build`（及 `dist`）中的 `.tpex`
+- 通过共享 Package Policy 校验源码 Manifest、最终 staging 清单、manifest/package 身份与最终归档大小
+- 在上传前拒绝危险路径/条目类型、过期文件清单、未关闭的打包态 dev mode 和 Nexus 身份/版本不一致
+- 上传最新且满足 admission 条件的 `.tpex` 到发布 API

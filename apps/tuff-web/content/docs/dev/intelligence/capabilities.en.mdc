@@ -1,0 +1,63 @@
+# Capabilities & Usage
+
+## Text
+
+- `text.chat`
+- `text.translate`
+- `text.summarize`
+- `text.rewrite`
+- `text.grammar`
+
+## Vision
+
+- `vision.ocr`
+
+**OCR example**
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
+
+  const intelligence = useIntelligenceSdk()
+  const res = await intelligence.vision.ocr({
+    source: { type: 'data-url', dataUrl },
+    includeLayout: true,
+    includeKeywords: true,
+  })
+
+  console.log(res.result.text)
+---
+:::
+
+## Embedding
+
+- `embedding.generate`
+
+**Embedding governance**
+
+`embedding.generate` applies:
+
+- normalize `string | string[]` into a single string
+- chunking + truncation (length limits)
+- multi-request embeddings, then vector aggregation (weighted average)
+
+So callers don't need to manually chunk the input.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
+
+  const intelligence = useIntelligenceSdk()
+  const res = await intelligence.embedding.generate({
+    text: veryLongText,
+  })
+
+  console.log(res.result.length)
+---
+:::
+
+## Agent
+
+- `agent.run`

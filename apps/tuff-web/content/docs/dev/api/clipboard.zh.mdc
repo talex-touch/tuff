@@ -1,0 +1,566 @@
+# Clipboard SDK
+
+## 概述
+
+Clipboard SDK 提供插件访问系统剪贴板的能力，包括：
+- **基础操作**：读写剪贴板内容（文本、HTML、图片、文件）
+- **历史管理**：查询、搜索、删除剪贴板历史记录
+- **复制粘贴**：将内容复制到剪贴板并自动粘贴到当前活动应用
+- **选中文本**：读取当前活动应用的文本选区，并在 fallback 后恢复原剪贴板内容
+- **自动标签**：为文本内容打标签（URL、API Key、Token、账号/密码、邮箱），便于分类与匹配
+
+所有操作通过 TuffTransport 在主进程执行，避免 WebContents 焦点问题导致的剪贴板操作失败。
+
+## 通信策略（Transport First）
+
+- `useClipboard()` 已切换到 `ClipboardEvents.*` 事件域（如 `getHistory`、`read`、`copyAndPaste`）。
+- Clipboard SDK 不再依赖 `clipboard:*` raw channel 事件作为主通道。
+- 插件代码必须使用 SDK / typed transport 入口。历史 `clipboard:*` raw channel 名称仅作为迁移参考，不再作为受支持的扩展面。
+- `system.captureSelection()` 使用 typed App/System event，要求 verified plugin 与 `clipboard.read`；不暴露 raw selection channel。
+
+## 介绍
+
+**快速开始**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { system, useClipboard } from '@talex-touch/utils/plugin/sdk'
+
+  const clipboard = useClipboard()
+
+  // 写入文本
+  await clipboard.writeText('Hello World')
+
+  // 读取剪贴板
+  const content = await clipboard.read()
+  console.log(content.text, content.formats)
+
+  // 复制并粘贴到当前应用
+  await clipboard.copyAndPaste({ text: 'Pasted content' })
+
+  // 读取当前活动应用的选中文本
+  const selection = await system.captureSelection()
+  if (!selection.text) console.warn(selection.issueCode)
+---
+:::
+
+## API 参考
+
+**useClipboard()**
+
+返回统一的剪贴板 SDK 实例。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const clipboard = useClipboard()
+---
+:::
+
+---
+
+## 选中文本捕获
+
+**system.captureSelection() / captureSelectedText()**
+
+读取当前活动应用的文本选区。宿主会在访问辅助功能 API、快捷键或剪贴板前验证插件 identity 与 `clipboard.read` 权限。macOS 优先使用 AXSelectedText；fallback 会保存全部剪贴板格式、发送平台复制快捷键并恢复原快照。
+
+返回值包含 `text`、`supportLevel`、`capturedAt`，以及可选的 `issueCode`、`issueMessage`、`limitations`。`empty`、`disabled`、`failed`、`unsupported` 都是显式非成功状态。不得把选中文本写入普通日志、持久历史或审计 metadata。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { system } from '@talex-touch/utils/plugin/sdk'
+
+  const result = await system.captureSelection()
+  if (!result.text) {
+    console.warn(result.issueCode, result.issueMessage)
+    return
+  }
+
+  // 仅在本次用户触发的动作中使用 result.text。
+---
+:::
+
+---
+
+## 基础操作
+
+**writeText(text)**
+
+写入纯文本到剪贴板。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await clipboard.writeText('Hello World')
+---
+:::
+
+**write(options)**
+
+写入多种格式内容到剪贴板。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // 写入文本和 HTML
+  await clipboard.write({
+    text: 'Hello',
+    html: '<b>Hello</b>'
+  })
+
+  // 写入图片（data URL）
+  await clipboard.write({
+    image: 'data:image/png;base64,...'
+  })
+
+  // 写入文件路径
+  await clipboard.write({
+    files: ['/path/to/file.txt', '/path/to/image.png']
+  })
+---
+:::
+
+**参数**：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `text` | `string` | 纯文本内容 |
+| `html` | `string` | HTML 格式内容 |
+| `image` | `string` | 图片 data URL |
+| `files` | `string[]` | 文件路径数组 |
+
+**read()**
+
+读取当前剪贴板内容。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const content = await clipboard.read()
+  // {
+  //   text: 'Hello',
+  //   html: '<b>Hello</b>',
+  //   hasImage: false,
+  //   hasFiles: false,
+  //   formats: ['text/plain', 'text/html']
+  // }
+---
+:::
+
+**返回值**：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `text` | `string` | 文本内容 |
+| `html` | `string` | HTML 内容 |
+| `hasImage` | `boolean` | 是否包含图片 |
+| `hasFiles` | `boolean` | 是否包含文件 |
+| `formats` | `string[]` | 可用格式列表 |
+
+**readImage()**
+
+读取剪贴板中的图片。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const image = await clipboard.readImage()
+  if (image) {
+    console.log(image.dataUrl, image.width, image.height)
+  }
+---
+:::
+
+**返回值**：`{ dataUrl: string, width: number, height: number } | null`
+
+**getHistoryImageUrl(id)**
+
+获取历史图片条目的原图地址（`tfile://`），适合避免在插件侧传输大体积 base64。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const url = await clipboard.getHistoryImageUrl(123)
+  if (url) {
+    console.log('original image:', url)
+  }
+---
+:::
+
+**history.annotate({ id, note, tags })**
+
+给一条历史记录写上用户自己的备注和标签。
+
+两个字段互相独立：只传 `note` 不会动标签，只传 `tags` 不会动备注，所以一个只编辑备注的输入框不必始终持有最新标签。传 `null` 或空字符串清空备注，传空数组清空标签。
+
+返回的是**实际入库**的内容——主进程会去首尾空白、把换行压成空格、按不区分大小写去重、并按上限截断（备注 200 字符，标签 24 字符 / 最多 12 个）。拿返回值回填界面，而不是回填用户输入的原文。
+
+标签和备注写在记录的 metadata 里，而 metadata 已经在关键词搜索的匹配范围内，所以打完标签立刻就能搜到。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const { note, tags } = await clipboard.history.annotate({
+    id: 123,
+    note: 'ego lite 的生产 key',
+    tags: ['prod', 'openai'],
+  })
+---
+:::
+
+**返回值**：`{ updated: boolean, note: string | null, tags: string[] }`，`updated` 为 `false` 表示这条记录已经不存在。
+
+**previewHistoryImage(id)**
+
+把历史图片条目交给操作系统自己的预览器打开（macOS 上是「预览」，其他平台是系统注册的默认程序）。
+
+传的是记录 id 而不是路径：主进程自己在剪贴板图片目录里查文件，所以插件无法借此打开目录之外的任何文件。记录里没有可用原图时返回 `false`。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const opened = await clipboard.previewHistoryImage(123)
+  if (!opened) {
+    console.warn('这条记录没有可预览的原图')
+  }
+---
+:::
+
+**返回值**：`boolean`
+
+**readFiles()**
+
+读取剪贴板中的文件路径。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const files = await clipboard.readFiles()
+  // ['/path/to/file1.txt', '/path/to/file2.png']
+---
+:::
+
+**clear()**
+
+清空剪贴板。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await clipboard.clear()
+---
+:::
+
+---
+
+## 复制并粘贴
+
+**copyAndPaste(options)**
+
+将内容写入剪贴板，然后模拟粘贴快捷键到当前活动应用。这是插件"输出"内容到用户当前应用的推荐方式。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // 粘贴文本
+  await clipboard.copyAndPaste({ text: 'Hello' })
+
+  // 粘贴带格式的文本
+  await clipboard.copyAndPaste({
+    text: 'Hello',
+    html: '<b>Hello</b>'
+  })
+
+  // 粘贴图片
+  await clipboard.copyAndPaste({
+    image: 'data:image/png;base64,...'
+  })
+
+  // 粘贴文件
+  await clipboard.copyAndPaste({
+    files: ['/path/to/file.txt']
+  })
+
+  // 自定义延迟和行为
+  await clipboard.copyAndPaste({
+    text: 'Hello',
+    delayMs: 200,        // 粘贴前延迟（默认 150ms）
+    hideCoreBox: true    // 粘贴前隐藏 CoreBox（默认 true）
+  })
+---
+:::
+
+**参数**：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `text` | `string` | 文本内容 |
+| `html` | `string` | HTML 内容 |
+| `image` | `string` | 图片 data URL |
+| `files` | `string[]` | 文件路径 |
+| `delayMs` | `number` | 粘贴前延迟毫秒数 |
+| `hideCoreBox` | `boolean` | 是否在粘贴前隐藏 CoreBox |
+
+**返回值**：`Promise<boolean>` - 操作是否成功
+
+---
+
+## 历史记录
+
+通过 `clipboard.history` 访问历史记录相关操作。
+
+**history.getLatest()**
+
+获取最新的剪贴板记录。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const latest = await clipboard.history.getLatest()
+  if (latest) {
+    console.log(latest.type, latest.content)
+  }
+---
+:::
+
+**history.getHistory(options)**
+
+分页获取剪贴板历史。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const { history, total, page, pageSize } = await clipboard.history.getHistory({
+    page: 1,
+    pageSize: 20
+  })
+---
+:::
+
+**history.searchHistory(options)**
+
+高级搜索剪贴板历史。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // 关键词搜索
+  const result = await clipboard.history.searchHistory({
+    keyword: 'hello'
+  })
+
+  // 按类型筛选
+  const textItems = await clipboard.history.searchHistory({
+    type: 'text'
+  })
+
+  // 时间范围筛选
+  const recent = await clipboard.history.searchHistory({
+    startTime: Date.now() - 24 * 60 * 60 * 1000  // 最近 24 小时
+  })
+
+  // 组合筛选
+  const filtered = await clipboard.history.searchHistory({
+    type: 'text',
+    isFavorite: true,
+    sourceApp: 'com.apple.Safari',
+    page: 1,
+    pageSize: 10
+  })
+---
+:::
+
+**搜索参数**：
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `keyword` | `string` | 内容关键词 |
+| `type` | `'text' \| 'image' \| 'files'` | 类型筛选 |
+| `startTime` | `number` | 开始时间戳 |
+| `endTime` | `number` | 结束时间戳 |
+| `isFavorite` | `boolean` | 是否收藏 |
+| `sourceApp` | `string` | 来源应用 |
+| `page` | `number` | 页码 |
+| `pageSize` | `number` | 每页数量 |
+| `sortOrder` | `'asc' \| 'desc'` | 排序方向 |
+
+**history.setFavorite(options)**
+
+设置收藏状态。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await clipboard.history.setFavorite({
+    id: 123,
+    isFavorite: true
+  })
+---
+:::
+
+**history.deleteItem(options)**
+
+删除历史记录。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await clipboard.history.deleteItem({ id: 123 })
+---
+:::
+
+**history.clearHistory()**
+
+清空所有历史记录。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await clipboard.history.clearHistory()
+---
+:::
+
+---
+
+## 监听剪贴板变化
+
+**history.onDidChange(callback)**
+
+监听剪贴板变化事件。
+
+> **重要**：插件必须先调用 `box.allowClipboard(types)` 声明要监听的类型，否则不会收到任何事件。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useBox, ClipboardType } from '@talex-touch/utils/plugin/sdk'
+
+  const box = useBox()
+  const clipboard = useClipboard()
+
+  // 1. 先声明要监听的类型
+  await box.allowClipboard(ClipboardType.TEXT | ClipboardType.IMAGE)
+
+  // 2. 注册监听器
+  const unsubscribe = clipboard.history.onDidChange((item) => {
+    console.log('剪贴板变化:', item.type, item.content)
+  })
+
+  // 3. 停止监听
+  unsubscribe()
+---
+:::
+
+**ClipboardType 枚举**：
+| 值 | 二进制 | 说明 |
+| --- | --- | --- |
+| `TEXT` | `0b0001` | 文本 |
+| `IMAGE` | `0b0010` | 图片 |
+| `FILE` | `0b0100` | 文件 |
+
+**预设组合**：
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { ClipboardTypePresets } from '@talex-touch/utils/plugin/sdk'
+
+  // 仅文本
+  await box.allowClipboard(ClipboardTypePresets.TEXT_ONLY)
+
+  // 文本和图片
+  await box.allowClipboard(ClipboardTypePresets.TEXT_AND_IMAGE)
+
+  // 所有类型
+  await box.allowClipboard(ClipboardTypePresets.ALL)
+---
+:::
+
+---
+
+## 剪贴板项目结构
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface PluginClipboardItem {
+    id?: number
+    type: 'text' | 'image' | 'files'
+    content: string           // 文本内容 / 图片 dataURL / 文件路径 JSON
+    thumbnail?: string        // 缩略图 dataURL
+    rawContent?: string       // HTML 原始内容
+    sourceApp?: string        // 来源应用
+    timestamp?: Date          // 时间戳
+    isFavorite?: boolean      // 是否收藏
+    meta?: Record<string, unknown>  // 元数据（含 tags）
+  }
+---
+:::
+
+---
+
+## 自动标签（tags）
+
+当剪贴板内容为文本时，系统会进行轻量规则识别并写入 `meta.tags`，用于快速分类、提示与匹配。标签仅表示**类别**，不会包含原始敏感值。
+
+**当前标签集合**：
+- `url`：URL/链接
+- `api_key`：API Key（常见前缀或字段形式）
+- `token`：Token/Bearer
+- `password`：密码字段
+- `account`：账号/用户名字段
+- `email`：邮箱
+
+**使用示例**：
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const latest = await clipboard.history.getLatest()
+  const tags = Array.isArray(latest?.meta?.tags) ? latest?.meta?.tags : []
+
+  if (tags.includes('api_key') || tags.includes('password')) {
+    // 例如：提示用户注意敏感信息
+  }
+---
+:::
+
+> 建议：对 `history.searchHistory()` 的结果在插件侧按 `meta.tags` 做二次筛选，以实现更精准的匹配逻辑。
+
+---
+
+## 技术原理
+
+- 读写、历史记录与自动粘贴均在主进程执行，通过 TuffTransport 返回结果，避免渲染进程焦点导致的剪贴板失败。
+- 历史记录落盘在数据库中，`meta`/`metadata` 承载附加信息并用于筛选与匹配。
+- 自动标签基于轻量规则匹配生成，只输出类别，不暴露原始敏感内容。
+
+## 迁移指南
+
+**从 useClipboardHistory 迁移**
+
+`useClipboardHistory()` 已废弃，请迁移到 `useClipboard()`：
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // 旧代码
+  const history = useClipboardHistory()
+  await history.getLatest()
+  await history.applyToActiveApp({ text: 'Hello' })
+
+  // 新代码
+  const clipboard = useClipboard()
+  await clipboard.history.getLatest()
+  await clipboard.copyAndPaste({ text: 'Hello' })
+---
+:::
+
+---
+
+## 最佳实践
+
+1. **使用 copyAndPaste 而非手动操作**：`copyAndPaste` 会自动处理 CoreBox 隐藏、延迟、跨平台粘贴等细节。
+
+2. **合理设置监听类型**：只监听需要的类型，避免不必要的性能开销。
+
+3. **及时取消监听**：在插件卸载或不需要时调用 `unsubscribe()`。
+
+4. **处理空值**：`readImage()` 和 `history.getLatest()` 可能返回 `null`。

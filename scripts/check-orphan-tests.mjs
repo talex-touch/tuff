@@ -72,6 +72,16 @@ export const COVERAGE = [
   },
   /* eslint-enable no-template-curly-in-string */
   {
+    root: 'apps/nexus-api',
+    workflow: '.github/workflows/nexus-razor-ci.yml',
+    command: 'pnpm -C apps/nexus-api exec vitest run',
+  },
+  {
+    root: 'apps/nexus-console',
+    workflow: '.github/workflows/nexus-razor-ci.yml',
+    command: 'pnpm -C apps/nexus-console exec vitest run',
+  },
+  {
     root: 'apps/tuffex-docs',
     workflow: '.github/workflows/tuffex-docs-ci.yml',
     command: 'pnpm -C apps/tuffex-docs exec vitest run',

@@ -1,0 +1,35 @@
+# Keyboard API
+
+## Current Contract
+
+Plugin UI keyboard handling is local to the plugin renderer. Use DOM/component keyboard events, or host-provided props such as `hostKeyEvent` when a host component passes them.
+
+`feature.onKeyEvent()`, `onCoreBoxKeyEvent()`, and the raw `core-box:key-event` channel are retired. The channel had no production sender, so it is not a supported extension surface.
+
+## ESC Behavior
+
+ESC is still handled by CoreBox. When a plugin UI view is attached, pressing ESC exits UI mode automatically; plugins do not need to subscribe to a keyboard channel for this.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // Handled by CoreBox host code, not by plugin SDK.
+  uiView.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'Escape' && input.type === 'keyDown') {
+      coreBoxManager.exitUIMode()
+      event.preventDefault()
+    }
+  })
+---
+:::
+
+## Supported Channels
+
+| Channel | Direction | Status |
+| --- | --- | --- |
+| `core-box:forward-key-event` | Renderer -> Main | Internal CoreBox renderer transport |
+| `core-box:get-ui-view-state` | Renderer -> Main | Internal CoreBox renderer transport |
+
+## Migration
+
+Replace `feature.onKeyEvent()` and raw `core-box:key-event` listeners with local keyboard handlers inside the plugin UI component. For attached widgets, prefer the host-provided `hostKeyEvent` prop when available.

@@ -1,0 +1,24 @@
+# Code Snippets (`touch-code-snippets`)
+
+## When to Use
+- Find reusable code templates by language and tags.
+
+## Trigger
+- Feature ID: `code-snippets.search`
+- Commands: `code / snippet`
+
+## Core Capabilities
+- Code snippets library: manage and copy templates by language/tag.
+- Supported platforms: `win32, darwin, linux`
+
+## Config & Data
+- Config/data files: `snippets.json`
+- Plugin directory: `plugins/touch-code-snippets`
+
+## Permissions
+- Required: `clipboard.write`; Optional: `clipboard.read`
+
+## Quick Start
+1. In CoreBox, type `code`.
+2. Press Enter on the action you need.
+3. Grant permissions when prompted.

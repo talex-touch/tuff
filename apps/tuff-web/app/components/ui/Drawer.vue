@@ -1,0 +1,58 @@
+<script setup lang="ts">
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
+
+const props = withDefaults(
+  defineProps<{
+    visible: boolean
+    title?: string
+    width?: string
+    direction?: 'left' | 'right'
+    showClose?: boolean
+    closeOnClickMask?: boolean
+    closeOnPressEscape?: boolean
+    mobileAdapt?: boolean
+    zIndex?: number
+  }>(),
+  {
+    title: 'Drawer',
+    width: '60%',
+    direction: 'right',
+    showClose: true,
+    closeOnClickMask: true,
+    closeOnPressEscape: true,
+    mobileAdapt: true,
+  },
+)
+
+const emit = defineEmits<{
+  (e: 'update:visible', value: boolean): void
+  (e: 'open'): void
+  (e: 'close'): void
+}>()
+
+const { t } = useI18n()
+</script>
+
+<template>
+  <TxDrawer
+    :visible="visible"
+    :title="title"
+    :width="width"
+    :direction="direction"
+    :show-close="showClose"
+    :close-on-click-mask="closeOnClickMask"
+    :close-on-press-escape="closeOnPressEscape"
+    :mobile-adapt="mobileAdapt"
+    :z-index="zIndex"
+    :close-label="t('common.close', 'Close')"
+    v-bind="$attrs"
+    @update:visible="(v) => emit('update:visible', v)"
+    @open="() => emit('open')"
+    @close="() => emit('close')"
+  >
+    <slot />
+    <template #footer>
+      <slot name="footer" />
+    </template>
+  </TxDrawer>
+</template>

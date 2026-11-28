@@ -1,0 +1,159 @@
+# Core App Startup and Runtime Env Reference
+
+> Updated: 2026-10-08
+> Scope: actual `process.env` / `import.meta.env` usage in `apps/core-app/src`
+
+## Startup and fallback status
+
+### 1) Assistant startup state (current)
+
+- `assistantModule` is always registered in the Core App startup module list; there is no environment-variable gate or Assistant-specific `shouldSkip` branch.
+- The module creates no window at startup: the voice HUD is created by the first Fn/Ctrl voice command and hidden when each session ends. Since 2026-10-08 the floating ball and its `assistant.enabled` switch are gone, and loading the settings drops any leftover `assistant` and `floatingBall` fields.
+- The Assistant has no separate switch any more; voice input is gated by `voiceInput.enabled` alone. The removed `TUFF_ENABLE_ASSISTANT_EXPERIMENT` flag is not a supported runtime variable, and startup no longer reports the old optional-module or environment-gate messages.
+
+### 2) dev.source probe + local fallback (fixed)
+
+- `DevPluginLoader` probes remote `manifest.json` first.
+- If remote probe fails:
+  - fall back to local `manifest.json` + local assets for current runtime only;
+  - runtime overrides `dev.source=false` (not persisted);
+  - records `DEV_SOURCE_FALLBACK_LOCAL` as warning.
+- `REMOTE_MANIFEST_FAILED` remains fatal only when both remote and local fallback fail.
+
+## Plugin Issue Codes (quick lookup)
+
+| Code                              | Default severity | Meaning                                                                                             |
+| --------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------- |
+| `MISSING_MANIFEST`                | error            | `manifest.json` missing                                                                             |
+| `INVALID_MANIFEST_JSON`           | error            | manifest parse/load failed                                                                          |
+| `NAME_MISMATCH`                   | error            | manifest name mismatches directory name                                                             |
+| `MANIFEST_MISSING_NAME`           | error            | missing `name`                                                                                      |
+| `MANIFEST_MISSING_VERSION`        | warning          | missing `version`                                                                                   |
+| `CATEGORY_MISSING`                | error            | `category` required for current `sdkapi`                                                            |
+| `SDKAPI_BLOCKED`                  | error            | plugin is blocked because `sdkapi` is missing, invalid, unsupported, or below the enforced baseline |
+| `PERMISSION_MISSING`              | warning          | required permissions not granted                                                                    |
+| `UNKNOWN_PERMISSION_IDS`          | warning          | unknown permission IDs declared                                                                     |
+| `INVALID_FEATURE_COMMANDS`        | warning          | invalid feature.commands shape                                                                      |
+| `OMNI_TRANSFER_SDK_TOO_LOW`       | warning          | omniTransfer declared with low sdkapi                                                               |
+| `DUPLICATE_PLUGIN_NAME`           | error            | plugin name collision                                                                               |
+| `LOADER_FATAL`                    | error            | fatal loader exception                                                                              |
+| `DEV_MODE_ACTIVE`                 | warning          | running from dev source mode                                                                        |
+| `DEV_ADDRESS_INVALID`             | error            | invalid `dev.address`                                                                               |
+| `DEV_SOURCE_DISABLED_IN_PACKAGED` | warning          | `dev.source` auto-disabled in packaged runtime                                                      |
+| `DEV_SOURCE_FALLBACK_LOCAL`       | warning          | remote manifest failed, local fallback activated                                                    |
+| `REMOTE_MANIFEST_FAILED`          | error            | remote failed and local fallback also failed                                                        |
+| `DEV_SERVER_DISCONNECTED`         | warning          | dev server heartbeat disconnected                                                                   |
+| `LIFECYCLE_SCRIPT_FAILED`         | error            | prelude lifecycle script failed                                                                     |
+| `RUNTIME_ERROR`                   | error            | runtime lifecycle execution error                                                                   |
+| `AUTO_DISABLED_EXCESSIVE_ERRORS`  | error            | auto-disabled after burst runtime errors                                                            |
+| `INVALID_VIEW_PATH`               | error            | invalid interaction/view path                                                                       |
+| `PROTOCOL_NOT_ALLOWED`            | error            | remote http/https view blocked in production                                                        |
+| `WIDGET_UNSUPPORTED_TYPE`         | error            | unsupported widget type                                                                             |
+| `WIDGET_INVALID_DEPENDENCY`       | error            | invalid widget dependency                                                                           |
+| `WIDGET_COMPILE_FAILED`           | error            | widget compile failed                                                                               |
+
+## Runtime Env Variables (by category)
+
+### A. Behavior flags / configurable vars
+
+Boolean flags share one parser, `parseBooleanFlag` / `getBooleanEnv` in `@talex-touch/utils/env`: `1` / `true` / `yes` / `on` is on, `0` / `false` / `no` / `off` is off, anything else is the documented default.
+
+| Variable                                                                                  | Purpose                                                                                                   |
+| ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `ELECTRON_RENDERER_URL`                                                                   | dev renderer entry URL for main windows and overlays                                                      |
+| `NODE_ENV`                                                                                | dev/test/prod behavior branching                                                                          |
+| `BUILD_TYPE`                                                                              | build channel for Sentry and runtime labeling                                                             |
+| `TUFF_ENABLE_RENDERER_OVERRIDE`                                                           | enables renderer override package                                                                         |
+| `TUFF_NEXUS_BASE_URL`                                                                     | explicit Core App runtime Nexus API base override; takes precedence over server mode settings             |
+| `TUFF_DISABLE_NATIVE_OCR`                                                                 | disables local OCR provider                                                                               |
+| `TUFF_DISABLE_NATIVE_AUDIO`                                                               | disables the native audio capture addon (dictation reports it as switched off)                            |
+| `TUFF_DISABLE_NATIVE_SCREENSHOT`                                                          | disables the native screenshot backend                                                                    |
+| `TUFF_DISABLE_GLOBAL_SHORTCUTS`                                                           | `1` skips global shortcut registration                                                                    |
+| `TUFF_OPAQUE_WINDOWS`                                                                     | forces opaque windows (no vibrancy / Mica); the recovery switch when effects break the launcher           |
+| `TUFF_CLIPBOARD_NATIVE_WATCH`                                                             | native clipboard change watcher instead of polling                                                        |
+| `TUFF_FILE_PROVIDER_BASE_WATCH_PATHS`                                                     | overrides the file provider's base watch roots                                                            |
+| `TUFF_DB_AUX_ENABLED`                                                                     | auxiliary (recommendation / telemetry) database; default on                                               |
+| `TUFF_DB_SEARCH_SPLIT_ENABLED`                                                            | search index in its own `search-index.db`; default on, `0` is the kill switch back to the shared file     |
+| `TUFF_DB_QOS_ENABLED`                                                                     | database write QoS scheduler; default on                                                                  |
+| `TUFF_STARTUP_DEGRADE_ENABLED`                                                            | 120 s startup write-degrade window; default on                                                            |
+| `TUFF_STARTUP_ANALYTICS_ENABLED`                                                          | startup analytics collection; default on                                                                  |
+| `TUFF_RECO_TIME_STATS_REBUILD`                                                            | `1` rebuilds recommendation time stats from usage logs                                                    |
+| `TUFF_INTELLIGENCE_CONTEXT_COREBOX_ONLY`                                                  | `1` rejects intelligence context sessions not owned by CoreBox                                            |
+| `TUFF_AGENT_TOOL_CONFIRM_TIMEOUT_MS`                                                      | agent tool confirmation timeout (minimum 250)                                                             |
+| `TUFF_SENTRY_TRACES_SAMPLE_RATE`                                                          | overrides the Sentry traces sample rate                                                                   |
+| `TUFF_PERF_STARTUP_LAG_GRACE_MS`                                                          | event-loop lag grace after startup (default 2500)                                                         |
+| `TUFF_V8_JITLESS`                                                                         | `1` starts V8 with `--jitless` (macOS Tahoe crash workaround; slower JS)                                  |
+| `TUFF_TRACE_DEPRECATION`                                                                  | `1` enables Node deprecation traces                                                                       |
+| `TUFF_PLUGIN_TRUST_ROOTS_JSON`                                                            | replaces the built-in plugin signing trust roots                                                          |
+| `TUFF_PLUGIN_REVOKED_PUBLISHER_KEYS_JSON`                                                 | revoked plugin publisher key ids                                                                          |
+| `TUFF_PI_CLI_PATH` / `TUFF_OMP_CLI_PATH` / `TUFF_CODEX_CLI_PATH` / `TUFF_CLAUDE_CLI_PATH` | pins the executable of the respective local AI CLI                                                        |
+| `TUFF_OMP_AGENT_DIR`                                                                      | omp agent directory (default `~/.omp/agent`)                                                              |
+| `TUFF_DEV_SERVER_HOST` / `TUFF_DEV_SERVER_PORT`                                           | dev renderer server bind address (electron-vite config)                                                   |
+| `TUFF_DEV_PARENT_PID`                                                                     | set by the dev wrapper; the app exits when that process is gone                                           |
+| `TALEX_CONFIG_STORAGE_BACKEND`                                                            | `sqlite` (default) or `legacy` app-config backend                                                         |
+| `TALEX_EVERYTHING_SDK_PATH`                                                               | custom Everything SDK addon path                                                                          |
+| `TALEX_EVERYTHING_DLL_PATH`                                                               | Windows `Everything64.dll` path for the native addon (CI sets it; the provider also writes it at runtime) |
+| `TALEX_FILE_PROVIDER_EXTRACT_ICONS`                                                       | file icon extraction switch                                                                               |
+| `TALEX_PLUGIN_LOG_STDOUT`                                                                 | mirrors plugin logs to stdout                                                                             |
+
+### B. Internal bootstrap vars
+
+| Variable                             | Purpose                                     |
+| ------------------------------------ | ------------------------------------------- |
+| `APP_VERSION`                        | runtime app version injection               |
+| `DEBUG`                              | debug logger switch from `debug.talex` file |
+| `ELECTRON_DISABLE_SECURITY_WARNINGS` | suppresses Electron security warning logs   |
+| `WS_NO_UTF_8_VALIDATE`               | disables optional ws native addon           |
+| `WS_NO_BUFFER_UTIL`                  | disables optional ws native addon           |
+
+### C. OS-provided env vars
+
+`HOME`, `LANG`, `LOCALAPPDATA`, `PROGRAMFILES`, `PROGRAMFILES(X86)`, `SystemRoot`, `USERPROFILE`, `WINDIR`, `TERM`, `TERMINAL` are consumed as runtime OS path/shell hints.
+
+### D. Renderer build-time vars
+
+`import.meta.env.DEV` and `import.meta.env.MODE` are consumed in renderer for dev-only UI and mode checks.
+
+### E. Acceptance / benchmark hooks (harness-only)
+
+Set by `scripts/coreapp-packaged-*.ts` for one launch; an ordinary launch has none of them. Production code reads the gates through `src/main/core/acceptance-mode.ts` (`isStartupBenchmarkMode`, `resolveStartupBenchmarkUserDataDir`, `isIsolatedAcceptanceMode`, `isVisibleEvidenceHookEnabled`) rather than `process.env` directly.
+
+| Variable                                                                                   | Purpose                                                                              |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `TUFF_STARTUP_BENCHMARK_ONCE`                                                              | timed benchmark launch that exits by itself; also unlocks the visible-evidence hooks |
+| `TUFF_STARTUP_BENCHMARK_USER_DATA_DIR`                                                     | isolated userData / sessionData root for that launch                                 |
+| `TUFF_STARTUP_BENCHMARK_DIAG_PATH`                                                         | where precore writes its userData diagnostic JSON                                    |
+| `TUFF_STARTUP_BENCHMARK_EXIT_DELAY_MS`                                                     | delay before the benchmark launch exits (default 1200)                               |
+| `TUFF_PACKAGED_ACCEPTANCE_ISOLATED`                                                        | skips the single-instance lock for an isolated acceptance profile                    |
+| `TUFF_VISIBLE_EVIDENCE_AUTH*` / `TUFF_VISIBLE_EVIDENCE_ASSISTANT_IMAGE_TRANSLATE*`         | scripted auth and image-translate outcomes for visible-evidence captures             |
+| `TUFF_MCP_SMOKE*`, `TUFF_PRIVACY_SMOKE_EXPECTED_ENTRYPOINT`, `TUFF_STUB_*`, `TUFF_PROBE_*` | smoke-test entry points and CLI stubs                                                |
+
+## Cleanup Candidates (list only, no removal yet)
+
+No pending cleanup candidates right now (all previously listed high/medium/low items have been completed).
+
+## Nexus Runtime API Server Resolution
+
+- Core App runtime API base resolution is centralized in `packages/utils/env.resolveTuffNexusBaseUrl()`. The only external override variable is `TUFF_NEXUS_BASE_URL`.
+- Resolution precedence is fixed: explicit `TUFF_NEXUS_BASE_URL` > Settings runtime API server set to local > official `https://tuff.tagzxia.com`.
+- Local mode defaults to `http://localhost:3200`, but dev/unpackaged runtime no longer enables local automatically. Local requires an explicit settings toggle or `TUFF_NEXUS_BASE_URL`.
+- Website, docs, Dashboard links, and update sources keep the official online URL by default and do not follow runtime API server mode.
+
+## Completed Cleanup
+
+- `trace-warnings`: removed runtime `process.env` assignment in `src/main/polyfills.ts` (2026-03-23).
+- `unhandledrejections`: removed runtime `process.env` assignment in `src/main/polyfills.ts` (2026-03-23).
+- `VITE_DEV_SERVER_URL` fallback in main: removed `AppProvider` fallback path; unified to `ELECTRON_RENDERER_URL` (2026-03-23).
+- `TALEX_WORKFLOW_DEBUG`: removed SID-bound debug toggle and file logging path in TPEX provider (2026-03-23).
+- `TUFF_RELEASE_SIGNATURE_*` aliases: removed legacy alias lookup; normalized to `TUFF_UPDATE_*` (2026-03-23).
+- `TUFF_OMNIPANEL_SMOKE`: removed startup smoke env gate and related probe logic (2026-03-23).
+- `USE_LOCAL_NEXUS`: removed PluginStoreService local Nexus env special-case; normalized to `getTpexApiBase()` (2026-03-23).
+- `VITE_NEXUS_URL` / `NEXUS_API_BASE` / `NEXUS_API_BASE_LOCAL` / `TPEX_API_BASE` / `AUTH_ORIGIN` / `TUFF_LOCAL_BASE_URL`: no longer participate in Core App runtime API base resolution; use `TUFF_NEXUS_BASE_URL` instead (2026-05-12).
+- `DIST` / `PUBLIC`: removed the runtime `process.env` writes in `src/main/polyfills.ts`; nothing read them (2026-10-07).
+- `TUFF_ENCRYPTION_KEY`: removed the secret injection and "official build" echo from the release workflow; no code reads it (2026-10-07).
+- `ELECTRON_PLATFORM` / `ELECTRON_ARCH`: removed from `scripts/build-target.js`; neither the repo nor electron-builder reads them (2026-10-07).
+- `BUILD_MAC_LSUIELEMENT`: alias dropped; `TUFF_MAC_LSUIELEMENT` is the only name (2026-10-07).
+- `TUFF_RELEASE_API_URL` / `TUFF_BUILD_SIGNATURE_URL` / `TUFF_BUILD_SIGNATURE_KEY_URL` / `TUFF_UPDATE_SIGNATURE_KEY_URL` / `TUFF_UPDATE_SIGNATURE_PUBLIC_KEY_URL`: delisted above; no reader is left in `apps/core-app/src` (2026-10-07).
+- `smoke:omnipanel` script: removed, it only set the already-removed `TUFF_OMNIPANEL_SMOKE` (2026-10-07).
+- `apps/core-app/.env` (`VITE_CLERK_PUBLISHABLE_KEY`, `VITE_NEXUS_URL`): deleted; neither key had a reader (2026-10-07).
+- Boolean flag parsing: the ten local copies collapsed onto `@talex-touch/utils/env` (2026-10-07).

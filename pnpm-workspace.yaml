@@ -4,7 +4,10 @@ packages:
   - packages/tuffex/packages/components # Nested tuffex component package
   - 'apps/core-app' # Electron main product
   - 'apps/screenshot-acceptance' # Standalone native screenshot acceptance app
-  - 'apps/nexus' # Documentation & ecosystem site (Nuxt)
+  - 'apps/nexus' # Documentation & ecosystem site (Nuxt, legacy rollback net)
+  - 'apps/nexus-api' # Standalone Nitro / H3 Cloudflare Workers API backend
+  - 'apps/tuff-web' # Standalone Nuxt 4 Pure SSG public web & compiled docs
+  - 'apps/nexus-console' # Standalone Vite + Vue 3 SPA auth/dashboard/admin console
   - 'apps/tuffex-docs' # Standalone TuffEx component docs (Nuxt pure SSG)
   - 'apps/reverse-proxy-design' # Nexus trust-boundary design publication
   - 'apps/tuff-analyse' # Internal Vite analysis dashboard

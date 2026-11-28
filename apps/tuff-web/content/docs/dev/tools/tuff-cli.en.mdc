@@ -1,0 +1,249 @@
+---
+title: Tuff CLI
+description: Command-line tools for building and publishing Tuff plugins
+---
+
+# Tuff CLI
+
+The `@talex-touch/tuff-cli` package provides the `tuff` CLI for building and publishing Tuff plugins (bundling `@talex-touch/unplugin-export-plugin` for the build pipeline).
+
+## Installation
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  # Global installation
+  pnpm add -g @talex-touch/tuff-cli
+
+  # Or use via npx
+  npx @talex-touch/tuff-cli <command>
+---
+:::
+
+## Commands
+
+**`tuff create [name]`**
+
+Create a new plugin via interactive prompts (type, language, UI framework, template).
+
+**`tuff build`**
+
+Run Vite build and then package `.tpex` output.
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff build --watch --dev --output dist
+---
+:::
+
+**Options:**
+- `--watch` - Watch files and repackage after build
+- `--dev` - Development mode (no minify, sourcemap enabled)
+- `--output <dir>` - Output directory (default: `dist`)
+
+**`tuff builder`**
+
+Package existing build output into `.tpex` (no Vite build).
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff builder
+---
+:::
+
+## Build Output Contract
+
+With the default `outDir`, the builder owns three generated outputs:
+
+- `dist/out/`: staged Vite output used as package input;
+- `dist/build/`: the unpacked, installable plugin runtime;
+- `dist/<name>-<version>.tpex`: the publishable archive.
+
+`out`, `build`, and top-level `*.tpex` entries inside `outDir` are reserved generated output. `tuff builder` excludes them while restaging, so rebuilding cannot nest an earlier archive or add it to `manifest._files`. Keep authored plugin resources outside these reserved entries.
+
+**`tuff dev`**
+
+Start the Vite dev server for plugin development.
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff dev --host --port 5173 --open
+---
+:::
+
+**Options:**
+- `--host [host]` - Bind host (omit value to listen on all)
+- `--port <port>` - Dev server port
+- `--open` - Open browser on start
+
+**`tuff scan`**
+
+Run the versioned static security rules against the finalized `.tpex` artifact. The report is bound to that archive's SHA-256; the command does not execute plugin code or scan a separate staging directory.
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff scan --package dist/com.example.plugin-1.0.0.tpex --json
+---
+:::
+
+`critical`/`high`, scanner timeout, invalid package integrity and unavailable rules fail closed. Reports contain rule codes, relative paths, hashes and positions, never matched secret values or source snippets.
+
+**`tuff publish`**
+
+Publish the latest `.tpex` package to Tuff.
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff publish --tag 1.0.0 --channel RELEASE
+---
+:::
+
+**Options:**
+- `--tag` - Version tag (default: package.json version)
+- `--channel` - `RELEASE`, `BETA`, or `SNAPSHOT`
+- `--notes` - Changelog/notes (Markdown)
+- `--dry-run` - Preview without publishing
+- `--api-url` - Custom publish API URL
+
+**`tuff login`**
+
+Save your authentication token for publishing.
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff login <token>
+---
+:::
+
+The token is stored in `~/.tuff/auth.json`.
+
+**`tuff logout`**
+
+Remove saved authentication credentials.
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff logout
+---
+:::
+
+**`tuff doctor`**
+
+Inspect local AI tools, Codex/Claude config files, the Codex skills root, and recommended skill readiness without writing user files.
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff doctor
+---
+:::
+
+**`tuff setup skills`**
+
+Explicitly install optional Codex skills. By default it installs low-risk core skills only; external-service or higher-risk skills require `--include-gated`.
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  # Preview the write plan without changing files
+  tuff setup skills --dry-run
+
+  # Install core skills into ~/.codex/skills
+  tuff setup skills
+
+  # Include gated skills and skip confirmation
+  tuff setup skills --include-gated --yes
+---
+:::
+
+**Options:**
+- `--include-gated` - Include GitHub, Sentry, Linear, Cloudflare, Netlify, and similar gated skills
+- `--target-dir <dir>` - Override the skills target directory
+- `--overwrite` - Replace existing `SKILL.md` files
+- `--dry-run` - Preview the write plan only
+- `--yes` - Skip confirmation prompts
+
+**`tuff setup mcp`**
+
+Show MCP setup boundaries and current local status. This MVP does not automatically write MCP profiles; a later slice should add auditable profile manifest writes behind this entry.
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff setup mcp
+---
+:::
+
+**`tuff help`** / **`tuff about`**
+
+Show help or tool information.
+
+**`tuff`**
+
+Run without arguments to enter interactive mode.
+
+## Vite Plugin Integration
+
+You can also use the unplugin as a Vite plugin for automatic plugin building:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // vite.config.ts
+  import { defineConfig } from 'vite'
+  import TuffExport from '@talex-touch/unplugin-export-plugin/vite'
+
+  export default defineConfig({
+    plugins: [
+      TuffExport({
+        // Plugin options
+      })
+    ]
+  })
+---
+:::
+
+## Configuration
+
+Optional `tuff.config.{ts,js,mjs,cjs}` can define defaults for build/dev/publish.
+Precedence: CLI flags > tuff.config > manifest > defaults.
+
+## Publishing Workflow
+
+1. **Build your plugin:**
+   :::TuffCodeBlock{lang="bash"}
+   ---
+   code: |
+     tuff build
+   ---
+   :::
+   (or `vite build && tuff builder`)
+
+2. **Login to Nexus:**
+   :::TuffCodeBlock{lang="bash"}
+   ---
+   code: |
+     tuff login YOUR_API_TOKEN
+   ---
+   :::
+
+3. **Publish:**
+   :::TuffCodeBlock{lang="bash"}
+   ---
+   code: |
+     tuff publish --tag 1.0.0 --channel RELEASE
+   ---
+   :::
+
+The CLI will:
+- Scan `dist/build` (and `dist`) for `.tpex` packages
+- Validate the source Manifest, staged inventory, manifest/package identity and final archive size through the shared Package Policy
+- Reject unsafe paths/types, stale file maps, enabled packaged dev mode and Nexus identity/version mismatches before upload
+- Upload the latest admissible `.tpex` to the publish API

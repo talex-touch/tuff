@@ -1,0 +1,86 @@
+# Channel API (Retired)
+
+::alert{type="warning"}
+**Retired for new development:** This page exists only to identify old Channel code during migration. Current plugins must use [TuffTransport](./transport.en.mdc) and domain SDKs such as [Box SDK](./box.en.mdc), [Clipboard SDK](./clipboard.en.mdc), and [Bridge Hooks](./bridge-hooks.en.mdc).
+::
+
+## Current Contract
+
+The Channel API is not a supported extension surface for new plugin work.
+
+| Old surface | Current replacement |
+|-------------|---------------------|
+| Raw string sends | `transport.send(TuffEvent, payload)` |
+| Raw string listeners | `transport.on(TuffEvent, handler)` or plugin bridge hooks |
+| CoreBox input listener | `onCoreBoxInputChange()` |
+| CoreBox clipboard listener | `onCoreBoxClipboardChange()` |
+| Synchronous sends | Removed by the hard-cut |
+
+## Migration Pattern
+
+Replace string event names with typed event objects in the same change. Do not keep dual Channel and TuffTransport paths.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { useTuffTransport, CoreBoxEvents } from '@talex-touch/utils/transport'
+
+  const transport = useTuffTransport()
+
+  const result = await transport.send(CoreBoxEvents.search.query, {
+    query: { text: 'hello' }
+  })
+---
+:::
+
+## Event Subscriptions
+
+For CoreBox input and clipboard updates, prefer bridge hooks because they include startup event caching.
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { onCoreBoxInputChange } from '@talex-touch/utils/plugin/sdk'
+
+  onCoreBoxInputChange(({ data, meta }) => {
+    console.log(data.query.text, meta.fromCache)
+  })
+---
+:::
+
+## Retired Built-In Names
+
+These names may appear in historical plugin code or migration notes. They are not the preferred API surface.
+
+| Retired name | Replacement |
+|--------------|-------------|
+| `core-box:input-change` | `onCoreBoxInputChange()` |
+| `core-box:clipboard-change` | `onCoreBoxClipboardChange()` |
+| `plugin:storage:update` | `PluginEvents.storage.update` through SDK / TuffTransport |
+
+`core-box:key-event` is fully retired. It had no production sender and must not be used for plugin keyboard handling.
+
+## Removed Sync Surface
+
+Synchronous sends were removed by the hard-cut. The plugin renderer SDK no longer exposes a synchronous channel method; old runtime calls fail with `plugin_channel_send_sync_removed`.
+
+## Type Shape
+
+Current renderer-side code should use `ITuffTransport` event APIs instead of Channel interfaces:
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface ITuffTransport {
+    send<TEvent extends TuffEvent<any, any>>(
+      event: TEvent,
+      payload: EventRequest<TEvent>
+    ): Promise<EventResponse<TEvent>>
+
+    on<TEvent extends TuffEvent<any, any>>(
+      event: TEvent,
+      handler: (payload: EventRequest<TEvent>) => EventResponse<TEvent> | Promise<EventResponse<TEvent>>
+    ): () => void
+  }
+---
+:::

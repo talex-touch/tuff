@@ -1,0 +1,7 @@
+.nuxt/
+.output/
+.dist-cf/
+.data/
+dist
+dist/
+node_modules/

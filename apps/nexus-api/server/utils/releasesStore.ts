@@ -1,0 +1,1394 @@
+import type { D1Database } from '@cloudflare/workers-types'
+import type { H3Event } from 'h3'
+import { randomUUID } from 'node:crypto'
+import { createError } from 'h3'
+import { useStorage } from 'nitropack/runtime'
+import { readCloudflareBindings } from './cloudflare'
+import { upsertReleaseUpdate } from './dashboardStore'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
+
+const RELEASES_KEY = 'app:releases'
+const RELEASE_ASSETS_KEY = 'app:release_assets'
+const RELEASE_REVISIONS_KEY = 'app:release_revisions'
+const RELEASES_TABLE = 'app_releases'
+const RELEASE_ASSETS_TABLE = 'app_release_assets'
+const RELEASE_REVISIONS_TABLE = 'app_release_revisions'
+
+let hasLoggedReleasesDb = false
+let hasLoggedReleasesFallback = false
+
+export type ReleaseChannel = 'RELEASE' | 'BETA' | 'SNAPSHOT'
+export type ReleaseStatus = 'draft' | 'published' | 'archived'
+export type AssetPlatform = 'darwin' | 'win32' | 'linux'
+export type AssetArch = 'x64' | 'arm64' | 'universal'
+export type AssetSourceType = 'github' | 'upload'
+export type ReleaseNoteLocale = 'zh' | 'en'
+
+export interface ReleaseNotes {
+  zh: string
+  en: string
+}
+
+export interface ReleaseAsset {
+  id: string
+  releaseId: string
+  platform: AssetPlatform
+  arch: AssetArch
+  filename: string
+  sourceType: AssetSourceType
+  fileKey: string | null
+  signatureKey: string | null
+  signatureUrl?: string | null
+  downloadUrl: string
+  size: number
+  sha256: string | null
+  contentType: string
+  downloadCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AppRelease {
+  id: string
+  tag: string
+  name: string
+  channel: ReleaseChannel
+  version: string
+  rollbackFromVersion: string
+  rollbackCompatible: boolean
+  notes: ReleaseNotes
+  notesHtml?: ReleaseNotes | null
+  status: ReleaseStatus
+  publishedAt: string | null
+  minAppVersion?: string | null
+  isCritical: boolean
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+  assets?: ReleaseAsset[]
+}
+
+export interface ReleaseRevision {
+  id: string
+  releaseId: string
+  tag: string
+  snapshot: AppRelease
+  createdBy: string
+  createdAt: string
+}
+
+interface D1ReleaseRow {
+  id: string
+  tag: string
+  name: string
+  channel: string
+  version: string
+  rollback_from_version: string
+  rollback_compatible: number
+  notes: string
+  notes_html: string | null
+  status: string
+  published_at: string | null
+  min_app_version: string | null
+  is_critical: number
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+interface D1ReleaseAssetRow {
+  id: string
+  release_id: string
+  platform: string
+  arch: string
+  filename: string
+  source_type: string
+  file_key: string | null
+  signature_key: string | null
+  signature_url: string | null
+  download_url: string
+  size: number
+  sha256: string | null
+  content_type: string
+  download_count: number
+  created_at: string
+  updated_at: string
+}
+
+interface D1ReleaseRevisionRow {
+  id: string
+  release_id: string
+  tag: string
+  snapshot: string
+  created_by: string
+  created_at: string
+}
+
+interface CreateReleaseInput {
+  tag: string
+  name: string
+  channel: ReleaseChannel
+  version: string
+  rollbackFromVersion: string
+  rollbackCompatible: boolean
+  notes: ReleaseNotes
+  notesHtml?: ReleaseNotes | null
+  status?: ReleaseStatus
+  minAppVersion?: string | null
+  isCritical?: boolean
+  createdBy: string
+}
+
+interface UpdateReleaseInput {
+  name?: string
+  notes?: ReleaseNotes
+  notesHtml?: ReleaseNotes | null
+  status?: ReleaseStatus
+  minAppVersion?: string | null
+  isCritical?: boolean
+  publishedAt?: string | null
+  rollbackFromVersion?: string
+  rollbackCompatible?: boolean
+}
+
+interface CreateAssetInput {
+  releaseId: string
+  platform: AssetPlatform
+  arch: AssetArch
+  filename: string
+  sourceType: AssetSourceType
+  fileKey?: string | null
+  signatureKey?: string | null
+  signatureUrl?: string | null
+  downloadUrl: string
+  size: number
+  sha256?: string | null
+  contentType: string
+}
+
+function getD1Database(event?: H3Event | null): D1Database | null {
+  if (!event)
+    return null
+
+  const bindings = readCloudflareBindings(event)
+  const db = bindings?.DB ?? null
+
+  if (db) {
+    if (!hasLoggedReleasesDb) {
+      console.warn('[releasesStore] Connected to D1 database.')
+      hasLoggedReleasesDb = true
+    }
+  }
+  else if (!hasLoggedReleasesFallback) {
+    console.warn(
+      '[releasesStore] No D1 binding detected, falling back to memory storage.',
+    )
+    hasLoggedReleasesFallback = true
+  }
+
+  return db
+}
+
+const RELEASES_SCHEMA = defineD1Schema('releases', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${RELEASES_TABLE} (
+        id TEXT PRIMARY KEY,
+        tag TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        version TEXT NOT NULL,
+        rollback_from_version TEXT NOT NULL DEFAULT '',
+        rollback_compatible INTEGER NOT NULL DEFAULT 0,
+        notes TEXT NOT NULL,
+        notes_html TEXT,
+        status TEXT NOT NULL DEFAULT 'draft',
+        published_at TEXT,
+        min_app_version TEXT,
+        is_critical INTEGER NOT NULL DEFAULT 0,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${RELEASE_ASSETS_TABLE} (
+        id TEXT PRIMARY KEY,
+        release_id TEXT NOT NULL,
+        platform TEXT NOT NULL,
+        arch TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        source_type TEXT NOT NULL DEFAULT 'upload',
+        file_key TEXT,
+        signature_key TEXT,
+        signature_url TEXT,
+        download_url TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        sha256 TEXT,
+        content_type TEXT NOT NULL,
+        download_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (release_id) REFERENCES ${RELEASES_TABLE}(id) ON DELETE CASCADE
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${RELEASE_REVISIONS_TABLE} (
+        id TEXT PRIMARY KEY,
+        release_id TEXT NOT NULL,
+        tag TEXT NOT NULL,
+        snapshot TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (release_id) REFERENCES ${RELEASES_TABLE}(id) ON DELETE CASCADE
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_releases_channel ON ${RELEASES_TABLE}(channel)`,
+    `CREATE INDEX IF NOT EXISTS idx_releases_status ON ${RELEASES_TABLE}(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_release_assets_release_id ON ${RELEASE_ASSETS_TABLE}(release_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_release_revisions_release_id ON ${RELEASE_REVISIONS_TABLE}(release_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_release_revisions_tag ON ${RELEASE_REVISIONS_TABLE}(tag)`,
+    // The update check's latest-release query orders by `datetime(published_at)`; only an index on that
+    // same expression serves the order, so it read and sorted every release of the channel (20 ms a run).
+    `CREATE INDEX IF NOT EXISTS idx_releases_channel_status_published ON ${RELEASES_TABLE}(channel, status, datetime(published_at) DESC)`,
+  ],
+  columns: [
+    {
+      table: RELEASES_TABLE,
+      columns: [
+        { name: 'notes_html', ddl: 'notes_html TEXT' },
+        { name: 'published_at', ddl: 'published_at TEXT' },
+        { name: 'min_app_version', ddl: 'min_app_version TEXT' },
+        { name: 'is_critical', ddl: 'is_critical INTEGER NOT NULL DEFAULT 0' },
+        { name: 'rollback_from_version', ddl: "rollback_from_version TEXT NOT NULL DEFAULT ''" },
+        { name: 'rollback_compatible', ddl: 'rollback_compatible INTEGER NOT NULL DEFAULT 0' },
+      ],
+    },
+    {
+      table: RELEASE_ASSETS_TABLE,
+      columns: [
+        { name: 'source_type', ddl: "source_type TEXT NOT NULL DEFAULT 'upload'" },
+        { name: 'file_key', ddl: 'file_key TEXT' },
+        { name: 'signature_key', ddl: 'signature_key TEXT' },
+        { name: 'signature_url', ddl: 'signature_url TEXT' },
+        { name: 'sha256', ddl: 'sha256 TEXT' },
+        { name: 'content_type', ddl: "content_type TEXT NOT NULL DEFAULT 'application/octet-stream'" },
+        { name: 'download_count', ddl: 'download_count INTEGER NOT NULL DEFAULT 0' },
+      ],
+    },
+  ],
+})
+
+async function ensureReleasesSchema(db: D1Database) {
+  await ensureD1Schema(db, RELEASES_SCHEMA)
+}
+
+function mapReleaseRow(row: D1ReleaseRow): AppRelease {
+  return {
+    id: row.id,
+    tag: row.tag,
+    name: row.name,
+    channel: row.channel as ReleaseChannel,
+    version: row.version,
+    rollbackFromVersion: row.rollback_from_version,
+    rollbackCompatible: row.rollback_compatible === 1,
+    notes: parseReleaseNotes(row.notes),
+    notesHtml: parseReleaseNotesHtml(row.notes_html),
+    status: row.status as ReleaseStatus,
+    publishedAt: row.published_at,
+    minAppVersion: row.min_app_version,
+    isCritical: Boolean(row.is_critical),
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+function mapAssetRow(row: D1ReleaseAssetRow): ReleaseAsset {
+  return {
+    id: row.id,
+    releaseId: row.release_id,
+    platform: row.platform as AssetPlatform,
+    arch: row.arch as AssetArch,
+    filename: row.filename,
+    sourceType: row.source_type as AssetSourceType,
+    fileKey: row.file_key,
+    signatureKey: row.signature_key ?? null,
+    signatureUrl: row.signature_url ?? null,
+    downloadUrl: row.download_url,
+    size: row.size,
+    sha256: row.sha256,
+    contentType: row.content_type,
+    downloadCount: row.download_count,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+async function readCollection<T>(key: string): Promise<T[]> {
+  const storage = useStorage()
+  const items = await storage.getItem<T[]>(key)
+  return items ?? []
+}
+
+async function writeCollection<T>(key: string, items: T[]) {
+  const storage = useStorage()
+  await storage.setItem(key, items)
+}
+
+function validateChannel(channel: string): asserts channel is ReleaseChannel {
+  const allowed: ReleaseChannel[] = ['RELEASE', 'BETA', 'SNAPSHOT']
+  if (!allowed.includes(channel as ReleaseChannel)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Invalid release channel.',
+    })
+  }
+}
+
+function validatePlatform(platform: string): asserts platform is AssetPlatform {
+  const allowed: AssetPlatform[] = ['darwin', 'win32', 'linux']
+  if (!allowed.includes(platform as AssetPlatform))
+    throw createError({ statusCode: 400, statusMessage: 'Invalid platform.' })
+}
+
+function validateArch(arch: string): asserts arch is AssetArch {
+  const allowed: AssetArch[] = ['x64', 'arm64', 'universal']
+  if (!allowed.includes(arch as AssetArch)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Invalid architecture.',
+    })
+  }
+}
+
+function validateSemanticVersion(version: string): boolean {
+  const semverPattern
+    = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*))*)?(?:\+[0-9a-z-]+(?:\.[0-9a-z-]+)*)?$/i
+  return semverPattern.test(version)
+}
+
+function normalizeReleaseNotes(
+  input: unknown,
+  fallback?: ReleaseNotes,
+): ReleaseNotes {
+  if (typeof input === 'string') {
+    return { zh: input, en: input }
+  }
+
+  if (input && typeof input === 'object') {
+    const zh = typeof (input as any).zh === 'string' ? (input as any).zh : ''
+    const en = typeof (input as any).en === 'string' ? (input as any).en : ''
+    const resolved = { zh: zh || en, en: en || zh }
+    if (resolved.zh || resolved.en) {
+      return resolved
+    }
+  }
+
+  return fallback ?? { zh: '', en: '' }
+}
+
+function parseReleaseNotes(raw: string | null | undefined): ReleaseNotes {
+  if (!raw) {
+    return { zh: '', en: '' }
+  }
+
+  const trimmed = raw.trim()
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown
+      return normalizeReleaseNotes(parsed)
+    }
+    catch {
+      return normalizeReleaseNotes(raw)
+    }
+  }
+
+  return normalizeReleaseNotes(raw)
+}
+
+function parseReleaseNotesHtml(
+  raw: string | null | undefined,
+): ReleaseNotes | null {
+  if (!raw) {
+    return null
+  }
+
+  const parsed = parseReleaseNotes(raw)
+  if (!parsed.zh && !parsed.en) {
+    return null
+  }
+  return parsed
+}
+
+function serializeReleaseNotes(notes: ReleaseNotes): string {
+  return JSON.stringify(normalizeReleaseNotes(notes))
+}
+
+function serializeReleaseNotesHtml(
+  notesHtml?: ReleaseNotes | null,
+): string | null {
+  if (!notesHtml) {
+    return null
+  }
+  const normalized = normalizeReleaseNotes(notesHtml)
+  if (!normalized.zh && !normalized.en) {
+    return null
+  }
+  return JSON.stringify(normalized)
+}
+
+function normalizeReleaseRecord(release: AppRelease): AppRelease {
+  const notes = normalizeReleaseNotes((release as any).notes)
+  const notesHtmlRaw = (release as any).notesHtml
+  const notesHtml = notesHtmlRaw ? normalizeReleaseNotes(notesHtmlRaw) : null
+  const rollbackFromVersion
+    = typeof (release as any).rollbackFromVersion === 'string'
+      ? (release as any).rollbackFromVersion
+      : ''
+  const rollbackCompatible = (release as any).rollbackCompatible === true
+  return {
+    ...release,
+    rollbackFromVersion,
+    rollbackCompatible,
+    notes,
+    notesHtml,
+  }
+}
+
+function fallbackRevisionSnapshot(raw: string): AppRelease {
+  const now = new Date().toISOString()
+  return {
+    id: '',
+    tag: '',
+    name: '',
+    channel: 'RELEASE',
+    version: '',
+    rollbackFromVersion: '',
+    rollbackCompatible: false,
+    notes: normalizeReleaseNotes(raw),
+    notesHtml: null,
+    status: 'draft',
+    publishedAt: null,
+    minAppVersion: null,
+    isCritical: false,
+    createdBy: 'unknown',
+    createdAt: now,
+    updatedAt: now,
+    assets: [],
+  }
+}
+
+function parseReleaseRevisionSnapshot(raw: string): AppRelease {
+  try {
+    const parsed = JSON.parse(raw) as AppRelease
+    return normalizeReleaseRecord(parsed)
+  }
+  catch {
+    return fallbackRevisionSnapshot(raw)
+  }
+}
+
+function mapReleaseRevisionRow(row: D1ReleaseRevisionRow): ReleaseRevision {
+  return {
+    id: row.id,
+    releaseId: row.release_id,
+    tag: row.tag,
+    snapshot: parseReleaseRevisionSnapshot(row.snapshot),
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  }
+}
+
+export async function listReleases(
+  event: H3Event | undefined,
+  options: {
+    channel?: ReleaseChannel
+    status?: ReleaseStatus
+    includeAssets?: boolean
+    assetMode?: 'featured'
+    limit?: number
+    offset?: number
+  } = {},
+): Promise<AppRelease[]> {
+  const db = getD1Database(event)
+
+  if (db) {
+    await ensureReleasesSchema(db)
+
+    let query = `
+      SELECT *
+      FROM ${RELEASES_TABLE}
+      WHERE 1=1
+    `
+    const bindings: unknown[] = []
+    let bindIndex = 1
+
+    if (options.channel) {
+      query += ` AND channel = ?${bindIndex++}`
+      bindings.push(options.channel)
+    }
+
+    if (options.status) {
+      query += ` AND status = ?${bindIndex++}`
+      bindings.push(options.status)
+    }
+
+    query += ` ORDER BY datetime(COALESCE(published_at, created_at)) DESC, datetime(created_at) DESC, id DESC`
+
+    if (options.limit) {
+      query += ` LIMIT ?${bindIndex++}`
+      bindings.push(options.limit)
+      if (options.offset) {
+        query += ` OFFSET ?${bindIndex++}`
+        bindings.push(options.offset)
+      }
+    }
+
+    const bound = (sql: string) => bindings.length ? db.prepare(sql).bind(...bindings) : db.prepare(sql)
+
+    if (!options.includeAssets) {
+      const { results } = await bound(query).all<D1ReleaseRow>()
+      return (results ?? []).map(mapReleaseRow)
+    }
+
+    const assetQuery = options.assetMode === 'featured'
+      ? `
+        SELECT *
+        FROM ${RELEASE_ASSETS_TABLE}
+        WHERE release_id IN (
+          SELECT id
+          FROM (
+            SELECT id,
+              ROW_NUMBER() OVER (
+                PARTITION BY channel
+                ORDER BY datetime(COALESCE(published_at, created_at)) DESC, datetime(created_at) DESC, id DESC
+              ) AS channel_rank
+            FROM (${query})
+          )
+          WHERE channel_rank = 1
+        )
+        ORDER BY platform, arch;
+      `
+      : `
+        SELECT *
+        FROM ${RELEASE_ASSETS_TABLE}
+        WHERE release_id IN (SELECT id FROM (${query}))
+        ORDER BY platform, arch;
+      `
+
+    // Keep the release page and its selected assets in one D1 batch. Featured mode only returns
+    // assets for the newest release in each channel represented by the page.
+    const [releaseResult, assetResults] = await db.batch([
+      bound(query),
+      bound(assetQuery),
+    ])
+    const releases = ((releaseResult?.results ?? []) as D1ReleaseRow[]).map(mapReleaseRow)
+
+    if (releases.length) {
+      const assets = ((assetResults?.results ?? []) as D1ReleaseAssetRow[]).map(mapAssetRow)
+
+      const assetsByRelease = new Map<string, ReleaseAsset[]>()
+      for (const asset of assets) {
+        if (!assetsByRelease.has(asset.releaseId))
+          assetsByRelease.set(asset.releaseId, [])
+        assetsByRelease.get(asset.releaseId)!.push(asset)
+      }
+
+      if (options.assetMode === 'featured') {
+        return releases.map((release) => {
+          const releaseAssets = assetsByRelease.get(release.id)
+          return releaseAssets ? { ...release, assets: releaseAssets } : release
+        })
+      }
+
+      return releases.map(release => ({
+        ...release,
+        assets: assetsByRelease.get(release.id) ?? [],
+      }))
+    }
+
+    return releases
+  }
+
+  // Memory fallback
+  let releases = (await readCollection<AppRelease>(RELEASES_KEY)).map(
+    normalizeReleaseRecord,
+  )
+
+  if (options.channel)
+    releases = releases.filter(r => r.channel === options.channel)
+
+  if (options.status)
+    releases = releases.filter(r => r.status === options.status)
+
+  releases = releases.sort(compareReleaseHistory)
+
+  if (options.offset)
+    releases = releases.slice(options.offset)
+
+  if (options.limit)
+    releases = releases.slice(0, options.limit)
+
+  if (options.includeAssets) {
+    const allAssets = await readCollection<ReleaseAsset>(RELEASE_ASSETS_KEY)
+    const assetsByRelease = new Map<string, ReleaseAsset[]>()
+    const featuredReleaseIds = new Set<string>()
+    const featuredChannels = new Set<ReleaseChannel>()
+
+    if (options.assetMode === 'featured') {
+      for (const release of releases) {
+        if (featuredChannels.has(release.channel))
+          continue
+        featuredChannels.add(release.channel)
+        featuredReleaseIds.add(release.id)
+      }
+    }
+
+    for (const asset of allAssets) {
+      if (!assetsByRelease.has(asset.releaseId))
+        assetsByRelease.set(asset.releaseId, [])
+      assetsByRelease.get(asset.releaseId)!.push(asset)
+    }
+
+    if (options.assetMode === 'featured') {
+      return releases.map((release) => {
+        const releaseAssets = assetsByRelease.get(release.id)
+        return featuredReleaseIds.has(release.id) && releaseAssets
+          ? { ...release, assets: releaseAssets }
+          : release
+      })
+    }
+
+    return releases.map(release => ({
+      ...release,
+      assets: assetsByRelease.get(release.id) ?? [],
+    }))
+  }
+
+  return releases
+}
+
+function compareReleaseHistory(left: AppRelease, right: AppRelease): number {
+  const publishedDelta = releaseTimestamp(right.publishedAt ?? right.createdAt)
+    - releaseTimestamp(left.publishedAt ?? left.createdAt)
+  if (publishedDelta !== 0)
+    return publishedDelta
+
+  const createdDelta = releaseTimestamp(right.createdAt) - releaseTimestamp(left.createdAt)
+  if (createdDelta !== 0)
+    return createdDelta
+
+  return right.id.localeCompare(left.id)
+}
+
+function releaseTimestamp(value: string): number {
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+export async function getLatestRelease(
+  event: H3Event | undefined,
+  channel: ReleaseChannel = 'RELEASE',
+  platform?: AssetPlatform,
+): Promise<AppRelease | null> {
+  const db = getD1Database(event)
+
+  if (db) {
+    await ensureReleasesSchema(db)
+
+    // The release and its assets in one round trip; the assets' release is the same subquery, read in
+    // the same transaction. They were two.
+    const latest = `
+      SELECT *
+      FROM ${RELEASES_TABLE}
+      WHERE channel = ?1 AND status = 'published'
+      ORDER BY datetime(published_at) DESC
+      LIMIT 1`
+    const bindings: unknown[] = platform ? [channel, platform] : [channel]
+    const [releaseResult, assetResults] = await db.batch([
+      db.prepare(`${latest};`).bind(channel),
+      db.prepare(`
+        SELECT *
+        FROM ${RELEASE_ASSETS_TABLE}
+        WHERE release_id = (SELECT id FROM (${latest}))${platform ? ' AND platform = ?2' : ''}
+        ORDER BY platform, arch;
+      `).bind(...bindings),
+    ])
+
+    const row = (releaseResult?.results?.[0] ?? null) as D1ReleaseRow | null
+    if (!row)
+      return null
+
+    const release = mapReleaseRow(row)
+    const assets = ((assetResults?.results ?? []) as D1ReleaseAssetRow[]).map(mapAssetRow)
+
+    return { ...release, assets }
+  }
+
+  // Memory fallback
+  const releases = (await readCollection<AppRelease>(RELEASES_KEY)).map(
+    normalizeReleaseRecord,
+  )
+  const published = releases
+    .filter(r => r.channel === channel && r.status === 'published')
+    .sort(
+      (a, b) =>
+        new Date(b.publishedAt ?? b.createdAt).getTime()
+          - new Date(a.publishedAt ?? a.createdAt).getTime(),
+    )
+
+  if (!published.length)
+    return null
+
+  const release = published[0]
+  if (!release)
+    return null
+  let assets = await readCollection<ReleaseAsset>(RELEASE_ASSETS_KEY)
+  assets = assets.filter(a => a.releaseId === release.id)
+
+  if (platform)
+    assets = assets.filter(a => a.platform === platform)
+
+  return { ...release, assets }
+}
+
+export async function getReleaseByTag(
+  event: H3Event | undefined,
+  tag: string,
+  includeAssets = true,
+): Promise<AppRelease | null> {
+  const db = getD1Database(event)
+
+  if (db) {
+    await ensureReleasesSchema(db)
+
+    const releaseQuery = db.prepare(`
+      SELECT *
+      FROM ${RELEASES_TABLE}
+      WHERE tag = ?1;
+    `).bind(tag)
+
+    if (!includeAssets) {
+      const row = await releaseQuery.first<D1ReleaseRow>()
+      return row ? mapReleaseRow(row) : null
+    }
+
+    // The release and its assets in one round trip; they were two.
+    const [releaseResult, assetResults] = await db.batch([
+      releaseQuery,
+      db.prepare(`
+        SELECT *
+        FROM ${RELEASE_ASSETS_TABLE}
+        WHERE release_id = (SELECT id FROM ${RELEASES_TABLE} WHERE tag = ?1)
+        ORDER BY platform, arch;
+      `).bind(tag),
+    ])
+
+    const row = (releaseResult?.results?.[0] ?? null) as D1ReleaseRow | null
+    if (!row)
+      return null
+
+    const assets = ((assetResults?.results ?? []) as D1ReleaseAssetRow[]).map(mapAssetRow)
+    return { ...mapReleaseRow(row), assets }
+  }
+
+  // Memory fallback
+  const releases = (await readCollection<AppRelease>(RELEASES_KEY)).map(
+    normalizeReleaseRecord,
+  )
+  const release = releases.find(r => r.tag === tag)
+
+  if (!release)
+    return null
+
+  if (!includeAssets)
+    return release
+
+  const allAssets = await readCollection<ReleaseAsset>(RELEASE_ASSETS_KEY)
+  const assets = allAssets.filter(a => a.releaseId === release.id)
+
+  return { ...release, assets }
+}
+
+export async function createRelease(
+  event: H3Event,
+  input: CreateReleaseInput,
+): Promise<AppRelease> {
+  validateChannel(input.channel)
+
+  if (!input.tag || typeof input.tag !== 'string') {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Release tag is required.',
+    })
+  }
+
+  if (!input.name || typeof input.name !== 'string') {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Release name is required.',
+    })
+  }
+
+  if (!input.version || !validateSemanticVersion(input.version)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Invalid semantic version.',
+    })
+  }
+
+  if (
+    typeof input.rollbackFromVersion !== 'string'
+    || !input.rollbackFromVersion
+  ) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'rollbackFromVersion is required.',
+    })
+  }
+
+  if (typeof input.rollbackCompatible !== 'boolean') {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'rollbackCompatible must be a boolean.',
+    })
+  }
+
+  // Check for duplicate tag
+  const existing = await getReleaseByTag(event, input.tag, false)
+  if (existing) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Release tag already exists.',
+    })
+  }
+
+  const now = new Date().toISOString()
+  const normalizedNotes = normalizeReleaseNotes(input.notes)
+  const normalizedNotesHtml = input.notesHtml
+    ? normalizeReleaseNotes(input.notesHtml)
+    : null
+  const status = input.status ?? 'draft'
+  const release: AppRelease = {
+    id: randomUUID(),
+    tag: input.tag,
+    name: input.name,
+    channel: input.channel,
+    version: input.version,
+    rollbackFromVersion: input.rollbackFromVersion,
+    rollbackCompatible: input.rollbackCompatible,
+    notes: normalizedNotes,
+    notesHtml: normalizedNotesHtml,
+    status,
+    publishedAt: status === 'published' ? now : null,
+    minAppVersion: input.minAppVersion ?? null,
+    isCritical: input.isCritical ?? false,
+    createdBy: input.createdBy,
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  const db = getD1Database(event)
+
+  if (db) {
+    await ensureReleasesSchema(db)
+    const serializedNotes = serializeReleaseNotes(normalizedNotes)
+    const serializedNotesHtml = serializeReleaseNotesHtml(normalizedNotesHtml)
+
+    await db
+      .prepare(
+        `
+      INSERT INTO ${RELEASES_TABLE} (
+        id, tag, name, channel, version, rollback_from_version, rollback_compatible, notes, notes_html,
+        status, published_at, min_app_version, is_critical,
+        created_by, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16);
+    `,
+      )
+      .bind(
+        release.id,
+        release.tag,
+        release.name,
+        release.channel,
+        release.version,
+        release.rollbackFromVersion,
+        release.rollbackCompatible ? 1 : 0,
+        serializedNotes,
+        serializedNotesHtml,
+        release.status,
+        release.publishedAt,
+        release.minAppVersion,
+        release.isCritical ? 1 : 0,
+        release.createdBy,
+        release.createdAt,
+        release.updatedAt,
+      )
+      .run()
+
+    if (release.status === 'published')
+      await upsertReleaseUpdate(event, release)
+
+    return release
+  }
+
+  // Memory fallback
+  const releases = await readCollection<AppRelease>(RELEASES_KEY)
+  releases.unshift(release)
+  await writeCollection(RELEASES_KEY, releases)
+
+  if (release.status === 'published')
+    await upsertReleaseUpdate(event, release)
+
+  return release
+}
+
+export async function updateRelease(
+  event: H3Event,
+  tag: string,
+  input: UpdateReleaseInput,
+): Promise<AppRelease> {
+  const existing = await getReleaseByTag(event, tag, false)
+  if (!existing)
+    throw createError({ statusCode: 404, statusMessage: 'Release not found.' })
+
+  if (
+    input.rollbackFromVersion !== undefined
+    && (typeof input.rollbackFromVersion !== 'string'
+      || !input.rollbackFromVersion)
+  ) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'rollbackFromVersion must be a non-empty string.',
+    })
+  }
+
+  if (
+    input.rollbackCompatible !== undefined
+    && typeof input.rollbackCompatible !== 'boolean'
+  ) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'rollbackCompatible must be a boolean.',
+    })
+  }
+
+  const now = new Date().toISOString()
+  const resolvedNotes = input.notes
+    ? normalizeReleaseNotes(input.notes)
+    : normalizeReleaseNotes(existing.notes)
+  const resolvedNotesHtml
+    = input.notesHtml === undefined
+      ? existing.notesHtml
+        ? normalizeReleaseNotes(existing.notesHtml)
+        : null
+      : input.notesHtml
+        ? normalizeReleaseNotes(input.notesHtml)
+        : null
+
+  const updated: AppRelease = {
+    ...existing,
+    name: input.name ?? existing.name,
+    notes: resolvedNotes,
+    notesHtml: resolvedNotesHtml,
+    status: input.status ?? existing.status,
+    minAppVersion:
+      input.minAppVersion !== undefined
+        ? input.minAppVersion
+        : existing.minAppVersion,
+    isCritical: input.isCritical ?? existing.isCritical,
+    publishedAt:
+      input.publishedAt !== undefined
+        ? input.publishedAt
+        : existing.publishedAt,
+    rollbackFromVersion:
+      input.rollbackFromVersion ?? existing.rollbackFromVersion,
+    rollbackCompatible: input.rollbackCompatible ?? existing.rollbackCompatible,
+    updatedAt: now,
+  }
+
+  // Auto-set publishedAt when status changes to published
+  if (input.status === 'published' && !updated.publishedAt)
+    updated.publishedAt = now
+
+  const db = getD1Database(event)
+
+  if (db) {
+    await ensureReleasesSchema(db)
+    const serializedNotes = serializeReleaseNotes(resolvedNotes)
+    const serializedNotesHtml = serializeReleaseNotesHtml(resolvedNotesHtml)
+
+    await db
+      .prepare(
+        `
+      UPDATE ${RELEASES_TABLE}
+      SET name = ?1, notes = ?2, notes_html = ?3, status = ?4,
+          min_app_version = ?5, is_critical = ?6, published_at = ?7,
+          rollback_from_version = ?8, rollback_compatible = ?9, updated_at = ?10
+      WHERE tag = ?11;
+    `,
+      )
+      .bind(
+        updated.name,
+        serializedNotes,
+        serializedNotesHtml,
+        updated.status,
+        updated.minAppVersion,
+        updated.isCritical ? 1 : 0,
+        updated.publishedAt,
+        updated.rollbackFromVersion,
+        updated.rollbackCompatible ? 1 : 0,
+        updated.updatedAt,
+        tag,
+      )
+      .run()
+
+    if (updated.status === 'published')
+      await upsertReleaseUpdate(event, updated)
+
+    return updated
+  }
+
+  // Memory fallback
+  const releases = await readCollection<AppRelease>(RELEASES_KEY)
+  const index = releases.findIndex(r => r.tag === tag)
+  if (index !== -1) {
+    releases[index] = updated
+    await writeCollection(RELEASES_KEY, releases)
+  }
+
+  if (updated.status === 'published')
+    await upsertReleaseUpdate(event, updated)
+
+  return updated
+}
+
+export async function createReleaseRevision(
+  event: H3Event,
+  release: AppRelease,
+  createdBy: string,
+): Promise<ReleaseRevision> {
+  const db = getD1Database(event)
+  const now = new Date().toISOString()
+  const snapshot = normalizeReleaseRecord(release)
+
+  const revision: ReleaseRevision = {
+    id: randomUUID(),
+    releaseId: release.id,
+    tag: release.tag,
+    snapshot,
+    createdBy,
+    createdAt: now,
+  }
+
+  if (db) {
+    await ensureReleasesSchema(db)
+    await db
+      .prepare(
+        `
+      INSERT INTO ${RELEASE_REVISIONS_TABLE} (
+        id, release_id, tag, snapshot, created_by, created_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6);
+    `,
+      )
+      .bind(
+        revision.id,
+        revision.releaseId,
+        revision.tag,
+        JSON.stringify(revision.snapshot),
+        revision.createdBy,
+        revision.createdAt,
+      )
+      .run()
+    return revision
+  }
+
+  const revisions = await readCollection<ReleaseRevision>(
+    RELEASE_REVISIONS_KEY,
+  )
+  revisions.unshift(revision)
+  await writeCollection(RELEASE_REVISIONS_KEY, revisions)
+  return revision
+}
+
+export async function listReleaseRevisions(
+  event: H3Event | undefined,
+  tag: string,
+): Promise<ReleaseRevision[]> {
+  const db = getD1Database(event)
+  if (db) {
+    await ensureReleasesSchema(db)
+    const { results } = await db
+      .prepare(
+        `
+      SELECT *
+      FROM ${RELEASE_REVISIONS_TABLE}
+      WHERE tag = ?1
+      ORDER BY datetime(created_at) DESC;
+    `,
+      )
+      .bind(tag)
+      .all<D1ReleaseRevisionRow>()
+    return (results ?? []).map(mapReleaseRevisionRow)
+  }
+
+  const revisions = await readCollection<ReleaseRevision>(
+    RELEASE_REVISIONS_KEY,
+  )
+  return revisions
+    .filter(revision => revision.tag === tag)
+    .map(revision => ({
+      ...revision,
+      snapshot: normalizeReleaseRecord(revision.snapshot),
+    }))
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )
+}
+
+export async function deleteRelease(
+  event: H3Event,
+  tag: string,
+): Promise<void> {
+  const db = getD1Database(event)
+
+  if (db) {
+    await ensureReleasesSchema(db)
+
+    // Delete assets first (if not using CASCADE)
+    const release = await getReleaseByTag(event, tag, false)
+    if (release) {
+      await db
+        .prepare(`DELETE FROM ${RELEASE_ASSETS_TABLE} WHERE release_id = ?1;`)
+        .bind(release.id)
+        .run()
+    }
+
+    const result = await db
+      .prepare(`DELETE FROM ${RELEASES_TABLE} WHERE tag = ?1;`)
+      .bind(tag)
+      .run()
+    const changes
+      = (result.meta as { changes?: number } | undefined)?.changes ?? 0
+
+    if (changes === 0) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Release not found.',
+      })
+    }
+
+    return
+  }
+
+  // Memory fallback
+  const releases = await readCollection<AppRelease>(RELEASES_KEY)
+  const release = releases.find(r => r.tag === tag)
+
+  if (!release)
+    throw createError({ statusCode: 404, statusMessage: 'Release not found.' })
+
+  const nextReleases = releases.filter(r => r.tag !== tag)
+  await writeCollection(RELEASES_KEY, nextReleases)
+
+  // Delete associated assets
+  const assets = await readCollection<ReleaseAsset>(RELEASE_ASSETS_KEY)
+  const nextAssets = assets.filter(a => a.releaseId !== release.id)
+  await writeCollection(RELEASE_ASSETS_KEY, nextAssets)
+}
+
+export async function createReleaseAsset(
+  event: H3Event,
+  input: CreateAssetInput,
+): Promise<ReleaseAsset> {
+  validatePlatform(input.platform)
+  validateArch(input.arch)
+
+  const now = new Date().toISOString()
+  const asset: ReleaseAsset = {
+    id: randomUUID(),
+    releaseId: input.releaseId,
+    platform: input.platform,
+    arch: input.arch,
+    filename: input.filename,
+    sourceType: input.sourceType,
+    fileKey: input.fileKey ?? null,
+    signatureKey: input.signatureKey ?? null,
+    signatureUrl: input.signatureUrl ?? null,
+    downloadUrl: input.downloadUrl,
+    size: input.size,
+    sha256: input.sha256 ?? null,
+    contentType: input.contentType,
+    downloadCount: 0,
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  const db = getD1Database(event)
+
+  if (db) {
+    await ensureReleasesSchema(db)
+
+    const existing = await db
+      .prepare(
+        `
+      SELECT *
+      FROM ${RELEASE_ASSETS_TABLE}
+      WHERE release_id = ?1 AND platform = ?2 AND arch = ?3
+      LIMIT 1;
+    `,
+      )
+      .bind(asset.releaseId, asset.platform, asset.arch)
+      .first<D1ReleaseAssetRow>()
+
+    if (existing) {
+      const existingAsset = mapAssetRow(existing)
+      const upsertedAsset: ReleaseAsset = {
+        ...existingAsset,
+        filename: asset.filename,
+        sourceType: asset.sourceType,
+        fileKey: asset.fileKey,
+        signatureKey: asset.signatureKey,
+        signatureUrl: asset.signatureUrl,
+        downloadUrl: asset.downloadUrl,
+        size: asset.size,
+        sha256: asset.sha256,
+        contentType: asset.contentType,
+        updatedAt: now,
+      }
+
+      await db
+        .prepare(
+          `
+        UPDATE ${RELEASE_ASSETS_TABLE}
+        SET
+          filename = ?1,
+          source_type = ?2,
+          file_key = ?3,
+          signature_key = ?4,
+          signature_url = ?5,
+          download_url = ?6,
+          size = ?7,
+          sha256 = ?8,
+          content_type = ?9,
+          updated_at = ?10
+        WHERE id = ?11;
+      `,
+        )
+        .bind(
+          upsertedAsset.filename,
+          upsertedAsset.sourceType,
+          upsertedAsset.fileKey,
+          upsertedAsset.signatureKey,
+          upsertedAsset.signatureUrl,
+          upsertedAsset.downloadUrl,
+          upsertedAsset.size,
+          upsertedAsset.sha256,
+          upsertedAsset.contentType,
+          upsertedAsset.updatedAt,
+          upsertedAsset.id,
+        )
+        .run()
+
+      return upsertedAsset
+    }
+
+    await db
+      .prepare(
+        `
+      INSERT INTO ${RELEASE_ASSETS_TABLE} (
+        id, release_id, platform, arch, filename, source_type, file_key,
+        signature_key, signature_url, download_url, size, sha256, content_type,
+        download_count, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16);
+    `,
+      )
+      .bind(
+        asset.id,
+        asset.releaseId,
+        asset.platform,
+        asset.arch,
+        asset.filename,
+        asset.sourceType,
+        asset.fileKey,
+        asset.signatureKey,
+        asset.signatureUrl,
+        asset.downloadUrl,
+        asset.size,
+        asset.sha256,
+        asset.contentType,
+        asset.downloadCount,
+        asset.createdAt,
+        asset.updatedAt,
+      )
+      .run()
+
+    return asset
+  }
+
+  // Memory fallback
+  const assets = await readCollection<ReleaseAsset>(RELEASE_ASSETS_KEY)
+  const existingIndex = assets.findIndex(
+    item =>
+      item.releaseId === asset.releaseId
+      && item.platform === asset.platform
+      && item.arch === asset.arch,
+  )
+
+  if (existingIndex >= 0) {
+    const existing = assets[existingIndex]
+    if (existing) {
+      assets[existingIndex] = {
+        ...existing,
+        filename: asset.filename,
+        sourceType: asset.sourceType,
+        fileKey: asset.fileKey,
+        signatureKey: asset.signatureKey,
+        signatureUrl: asset.signatureUrl,
+        downloadUrl: asset.downloadUrl,
+        size: asset.size,
+        sha256: asset.sha256,
+        contentType: asset.contentType,
+        updatedAt: now,
+      }
+      await writeCollection(RELEASE_ASSETS_KEY, assets)
+      return assets[existingIndex] as ReleaseAsset
+    }
+  }
+
+  assets.push(asset)
+  await writeCollection(RELEASE_ASSETS_KEY, assets)
+
+  return asset
+}
+
+export async function incrementDownloadCount(
+  event: H3Event,
+  assetId: string,
+): Promise<void> {
+  const db = getD1Database(event)
+
+  if (db) {
+    await ensureReleasesSchema(db)
+
+    await db
+      .prepare(
+        `
+      UPDATE ${RELEASE_ASSETS_TABLE}
+      SET download_count = download_count + 1, updated_at = ?1
+      WHERE id = ?2;
+    `,
+      )
+      .bind(new Date().toISOString(), assetId)
+      .run()
+
+    return
+  }
+
+  // Memory fallback
+  const assets = await readCollection<ReleaseAsset>(RELEASE_ASSETS_KEY)
+  const index = assets.findIndex(a => a.id === assetId)
+  if (index !== -1) {
+    const existing = assets[index]
+    if (!existing)
+      return
+    existing.downloadCount++
+    existing.updatedAt = new Date().toISOString()
+    await writeCollection(RELEASE_ASSETS_KEY, assets)
+  }
+}

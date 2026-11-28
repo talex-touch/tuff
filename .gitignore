@@ -48,6 +48,10 @@ web_modules/
 # ========================
 dist/
 release/
+!apps/nexus/content/docs/dev/release/
+!apps/nexus/content/docs/dev/release/**
+!apps/tuff-web/content/docs/dev/release/
+!apps/tuff-web/content/docs/dev/release/**
 lib-cov/
 coverage/
 *.lcov

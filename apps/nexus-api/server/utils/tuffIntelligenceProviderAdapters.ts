@@ -1,0 +1,146 @@
+import { IntelligenceProviderType } from "@talex-touch/tuff-intelligence/light";
+import type {
+  IntelligenceMessage,
+  IntelligenceUsageInfo,
+} from "@talex-touch/tuff-intelligence/light";
+import type { ReasoningEffortPlan } from "@talex-touch/utils/intelligence/reasoning-effort";
+import {
+  invokeAnthropicProviderAdapter,
+  invokeOpenAiCompatibleProviderAdapter,
+  streamAnthropicProviderAdapter,
+  streamOpenAiCompatibleProviderAdapter,
+} from "./tuffIntelligenceLangChainProviderAdapters";
+
+export interface IntelligenceProviderRecord {
+  id: string;
+  userId: string;
+  type: string;
+  name: string;
+  enabled: boolean;
+  hasApiKey: boolean;
+  baseUrl: string | null;
+  models: string[];
+  defaultModel: string | null;
+  instructions: string | null;
+  timeout: number;
+  priority: number;
+  rateLimit: Record<string, number> | null;
+  capabilities: string[] | null;
+  metadata: Record<string, any> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const OPENAI_COMPATIBLE_TYPES = new Set([
+  IntelligenceProviderType.OPENAI,
+  IntelligenceProviderType.DEEPSEEK,
+  IntelligenceProviderType.SILICONFLOW,
+  IntelligenceProviderType.CUSTOM,
+]);
+
+export interface IntelligenceProviderAdapterContext {
+  provider: IntelligenceProviderRecord;
+  model: string;
+  apiKey: string | null;
+  timeoutMs: number;
+}
+
+export interface IntelligenceProviderAdapterResult {
+  content: string;
+  model: string;
+  traceId: string;
+  endpoint: string;
+  status?: number;
+  latency: number;
+  usage?: IntelligenceUsageInfo;
+}
+
+export interface IntelligenceProviderAdapterPayload {
+  context: IntelligenceProviderAdapterContext;
+  messages: IntelligenceMessage[];
+  /**
+   * Output cap the caller asked for. Forwarded to the provider so the reply cannot
+   * outrun the credit hold that was sized from it; absent means the provider's own
+   * default applies.
+   */
+  maxTokens?: number;
+  signal?: AbortSignal;
+  /**
+   * The reasoning plan for this context's upstream, made by the service from the shared table.
+   * An adapter translates it (`toLangChain*` in `@talex-touch/utils/intelligence/reasoning-effort`)
+   * and never re-decides; absent, it builds exactly the request it always did.
+   */
+  reasoning?: ReasoningEffortPlan;
+}
+
+export type IntelligenceProviderAdapter = (
+  payload: IntelligenceProviderAdapterPayload,
+) => Promise<IntelligenceProviderAdapterResult>;
+
+export interface IntelligenceProviderAdapterStreamChunk {
+  delta: string;
+  done: boolean;
+  model: string;
+  traceId: string;
+  endpoint: string;
+  status?: number;
+  latency: number;
+  usage?: IntelligenceUsageInfo;
+}
+
+export type IntelligenceProviderStreamAdapter = (
+  payload: IntelligenceProviderAdapterPayload,
+) => AsyncGenerator<IntelligenceProviderAdapterStreamChunk>;
+
+const adapterRegistry = new Map<string, IntelligenceProviderAdapter>();
+const streamAdapterRegistry = new Map<
+  string,
+  IntelligenceProviderStreamAdapter
+>();
+
+export function registerIntelligenceProviderAdapterForTest(
+  providerType: string,
+  adapter: IntelligenceProviderAdapter,
+): void {
+  adapterRegistry.set(providerType, adapter);
+}
+
+export function registerIntelligenceProviderStreamAdapterForTest(
+  providerType: string,
+  adapter: IntelligenceProviderStreamAdapter,
+): void {
+  streamAdapterRegistry.set(providerType, adapter);
+}
+
+export function clearIntelligenceProviderAdaptersForTest(): void {
+  adapterRegistry.clear();
+  streamAdapterRegistry.clear();
+}
+
+export function resolveIntelligenceProviderAdapter(
+  providerType: string,
+): IntelligenceProviderAdapter | null {
+  const registered = adapterRegistry.get(providerType);
+  if (registered) return registered;
+  if (providerType === IntelligenceProviderType.ANTHROPIC)
+    return invokeAnthropicProviderAdapter;
+  if (providerType === IntelligenceProviderType.LOCAL)
+    return invokeOpenAiCompatibleProviderAdapter;
+  if (OPENAI_COMPATIBLE_TYPES.has(providerType as IntelligenceProviderType))
+    return invokeOpenAiCompatibleProviderAdapter;
+  return null;
+}
+
+export function resolveIntelligenceProviderStreamAdapter(
+  providerType: string,
+): IntelligenceProviderStreamAdapter | null {
+  const registered = streamAdapterRegistry.get(providerType);
+  if (registered) return registered;
+  if (providerType === IntelligenceProviderType.ANTHROPIC)
+    return streamAnthropicProviderAdapter;
+  if (providerType === IntelligenceProviderType.LOCAL)
+    return streamOpenAiCompatibleProviderAdapter;
+  if (OPENAI_COMPATIBLE_TYPES.has(providerType as IntelligenceProviderType))
+    return streamOpenAiCompatibleProviderAdapter;
+  return null;
+}

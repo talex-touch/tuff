@@ -1,0 +1,52 @@
+# Intelligence Provider Registry and Scene Routing
+
+Nexus uses one server-owned configuration model for AI, translation, OCR, image composition, and speech providers.
+
+## Source of truth
+
+- `provider_registry`: aggregation channels, explicit adapter format, scope, endpoint, safe metadata, and `authRef`.
+- `provider_capabilities`: capabilities declared by each channel.
+- `provider_secure_store`: encrypted credentials referenced by `authRef`.
+- `scene_registry`: product scenes and their required capabilities.
+- `scene_strategy_bindings`: ordered channel/model bindings and fallback order for each scene capability.
+
+The retired `intelligence_providers` table, provider mirror bridge, dashboard provider CRUD, migration endpoint, and CoreApp provider-sync endpoint are not runtime configuration sources.
+
+## Runtime contract
+
+Clients send a capability ID and input. They do not select a provider, endpoint, adapter, credential, price, or model. Nexus resolves the canonical scene, then selects its ordered binding:
+
+```text
+capability request
+  -> canonical scene
+  -> binding (provider + adapter + model + priority)
+  -> protected credential
+  -> provider adapter
+  -> credit settlement + safe usage trace
+```
+
+Fallback is sequential. Nexus tries the next binding only after a definitive pre-acceptance rejection. An accepted, uncertain, cancelled-after-send, or partially streamed request is never replayed through another upstream.
+
+## Configuration rules
+
+- `metadata.adapterKey` is mandatory when a provider declares capabilities and must name a registered adapter.
+- `metadata.defaultModel`, when present, must be included in `metadata.models`.
+- A scene binding may select a model only from its provider model list.
+- System providers are available to authenticated users and remain credit-gated. User providers are owner-only; unresolved workspace scope fails closed.
+- Missing provider/capability/adapter/model bindings project the scene as `degraded`; an incomplete scene must not appear healthy.
+- Credentials, prompts, media, transcripts, upstream response bodies, and native errors never enter ordinary provider metadata or usage ledgers.
+
+## Speech
+
+Nexus-owned buffered `audio.stt` and uploaded `audio.transcribe` use the same Scene + Provider Registry selection. Direct realtime voice transports remain CoreApp-owned. Nexus speech services retain media validation, idempotency, accepted/uncertain dispatch fencing, transcript privacy, and durable credit settlement.
+
+## Legacy table removal
+
+Application startup never runs destructive DDL. Operators use the guarded `provider:legacy:drop` command only after it:
+
+1. exports a D1 backup;
+2. confirms enabled registry providers and scenes exist;
+3. confirms every enabled credentialed provider has a secure-store row;
+4. receives both `--execute` and the explicit destructive acknowledgement environment variable.
+
+Audits, IP bans, provider health, usage ledgers, and credit records are independent of the retired provider table and remain available. The prompt registry, prompt bindings and runtime session/trace/checkpoint tables belonged to the admin agent workspace retired on 2026-10-02: their rows stay in D1 untouched, but no code reads or writes them any more.

@@ -1,0 +1,518 @@
+# Intelligence SDK
+
+## Overview
+
+The Intelligence SDK provides a unified interface for plugins to access AI capabilities, supporting multiple AI Providers (OpenAI, Anthropic, DeepSeek, SiliconFlow, etc.).
+
+## Introduction
+
+**Quick Start**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { intelligence } from '@talex-touch/utils/plugin/sdk'
+
+  const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.chat' })
+  const providers = await intelligence.getProviderModelOptions({ capabilityId: 'text.chat' })
+
+  if (status.available) {
+  const chatRes = await intelligence.text.chat({
+  messages: [{ role: 'user', content: 'Hello!' }]
+  }, {
+  allowedProviderIds: providers.filter(provider => provider.available).map(provider => provider.providerId)
+  })
+  console.log(chatRes.result)
+  }
+---
+:::
+Runtime plugin handlers can also use the same surface through `context.utils.intelligence` or `context.utils.plugin.intelligence` before rendering an AI action.
+
+## See also
+
+- `/docs/dev/intelligence` (Developer chapter)
+- `/docs/dev/intelligence/configuration`
+- `/docs/dev/intelligence/capabilities`
+- `/docs/dev/intelligence/troubleshooting`
+
+---
+
+## API Reference
+
+**Plugin intelligence SDK**
+
+Plugin UI and lifecycle code should use the plugin SDK export or `context.utils.intelligence`. Both resolve to the typed Intelligence domain SDK and carry the current plugin `sdkapi` marker through permission-checked calls.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { intelligence } from '@talex-touch/utils/plugin/sdk'
+
+  void intelligence
+---
+:::
+
+Renderer-only CoreApp code can use `useIntelligenceSdk()` from `@talex-touch/utils/renderer` to get the same typed domain SDK over TuffTransport.
+
+Returns an object with the following properties and methods:
+
+| Property/Method                                                 | Description                                                                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `invoke` / `stream`                                             | Generic capability invocation for custom or newly registered capability IDs                                   |
+| `contextInvoke` / `contextStream`                               | Host-assembled `text.chat` execution with new/continue/stateless intent and a metadata-only context summary   |
+| `text` / `embedding` / `code`                                   | Typed text, embedding, and code capability wrappers                                                           |
+| `intent` / `sentiment` / `content` / `keywords`                 | Typed analysis capability wrappers                                                                            |
+| `vision` / `image` / `audio`                                    | Typed OCR, image, and audio capability wrappers                                                               |
+| `rag` / `search`                                                | Typed RAG, semantic search, and rerank wrappers                                                               |
+| `workflow` / `agent`                                            | Typed workflow execution and agent-run wrappers                                                               |
+| `getCapabilityStatus`                                           | Read-only capability availability check                                                                       |
+| `getProviderModelOptions`                                       | Read-only provider/model discovery                                                                            |
+| `agentSession*` / `agentPlan` / `agentExecute` / `agentReflect` / `agentTool*` / `workflowList/Get/Save/Delete/Run/History/ReviewUpdate` | CoreApp renderer host-only control plane; absent from the plugin facade and rejected on raw plugin transport |
+
+The CoreApp renderer host SDK retains full context management and observability, low-level Agent sessions, and the persisted workflow control plane. The plugin facade hides raw context preparation, checkpoint/package-log queries, CompressionSnapshot and Memory management, all `agentSession*` / orchestrator / tool methods, and `workflowList/Get/Save/Delete/Run/History/ReviewUpdate`. Plugins use `contextInvoke()` / `contextStream()` for host-owned context assembly, `contextEvaluateMemory()` for pure policy preview, and `agent.run()` / `workflow.execute()` for governed high-level autonomy. Plugin-origin calls to hidden request or stream events fail with `INTELLIGENCE_HOST_ONLY_CAPABILITY` before runtime, service, or storage access.
+
+Until workspace/project memory has a stable `scopeRef`, it remains visible to host management UI but is never injected into a `ContextPackage`. Injection currently accepts only global memory and session memory whose `sourceSessionId` exactly matches. `ttl` is a positive lifetime in milliseconds from the latest save (`updatedAt`).
+
+`useIntelligence()` and `useIntelligenceStats()` remain available from the renderer barrel as compatibility wrappers for loading/error state and stats helpers.
+
+`getProviderModelOptions` applies the same runtime method checks as invocation. Capability bindings take precedence; when no binding is enabled, built-in OpenAI-compatible providers expose capability-specific defaults instead of leaking chat models into image, audio, or embedding-backed search pickers.
+
+---
+
+## Capability Invocation
+
+The plugin intelligence SDK exposes typed domain methods and does not restore the retired `chat` alias or host-only memory-management methods. Gate plugin actions with discovery first, then call the matching wrapper such as `intelligence.text.chat(payload, options)`, or fall back to `intelligence.invoke<Result>(capabilityId, payload, options)` for custom capabilities.
+
+For CoreBox-style conversational execution, prefer `contextInvoke()` or `contextStream()`. The current contract supports `text.chat`; caller-supplied user/assistant history is not trusted. The host keeps caller system messages, then appends validated summary, recent turns, Memory, retrieval context, and the current input in a bounded order. `mode` is `new`, `continue`, or `stateless`; a continuation must carry the `sessionId` returned by the previous safe context summary. Both calls need the `intelligence.context` permission; declaring `intelligence.basic` alone is not enough. `contextEvaluateMemory()` stays under `intelligence.basic`.
+
+```typescript
+let contextSessionId: string | undefined;
+
+const execution = await intelligence.contextInvoke({
+  capabilityId: "text.chat",
+  input: "Summarize the current selection",
+  payload: {
+    messages: [{ role: "system", content: "Answer concisely." }],
+  },
+  context: {
+    mode: contextSessionId ? "continue" : "new",
+    sessionId: contextSessionId,
+    scope: "retrieval",
+    tokenBudget: 1200,
+  },
+});
+
+console.log(execution.invocation.result);
+console.log(execution.context.packageId); // safe metadata only; no ContextPackage items
+contextSessionId = execution.context.sessionId;
+```
+
+### Capability IDs
+
+| Area      | Capability ID         | Domain wrapper         | Result                           |
+| --------- | --------------------- | ---------------------- | -------------------------------- |
+| Text      | `text.chat`           | `text.chat()`          | Chat response text               |
+| Text      | `text.translate`      | `text.translate()`     | Translated text                  |
+| Text      | `text.summarize`      | `text.summarize()`     | Summary text                     |
+| Text      | `text.rewrite`        | `text.rewrite()`       | Rewritten text                   |
+| Text      | `text.grammar`        | `text.grammar()`       | Grammar-check result             |
+| Text      | `text.classify`       | `text.classify()`      | Classification result            |
+| Embedding | `embedding.generate`  | `embedding.generate()` | Number vector                    |
+| Code      | `code.generate`       | `code.generate()`      | Generated code result            |
+| Code      | `code.explain`        | `code.explain()`       | Code explanation result          |
+| Code      | `code.review`         | `code.review()`        | Code review result               |
+| Code      | `code.refactor`       | `code.refactor()`      | Refactor result                  |
+| Code      | `code.debug`          | `code.debug()`         | Debug result                     |
+| Analysis  | `intent.detect`       | `intent.detect()`      | Intent result                    |
+| Analysis  | `sentiment.analyze`   | `sentiment.analyze()`  | Sentiment result                 |
+| Analysis  | `content.extract`     | `content.extract()`    | Entity/content extraction result |
+| Analysis  | `keywords.extract`    | `keywords.extract()`   | Keyword extraction result        |
+| Vision    | `vision.ocr`          | `vision.ocr()`         | OCR result                       |
+| Vision    | `image.caption`       | `image.caption()`      | Image caption result             |
+| Vision    | `image.analyze`       | `image.analyze()`      | Image analysis result            |
+| Vision    | `image.translate.e2e` | `image.translateE2e()` | Translated image result          |
+| Vision    | `image.generate`      | `image.generate()`     | Image generation result          |
+| Vision    | `image.edit`          | `image.edit()`         | Image edit result                |
+| Audio     | `audio.tts`           | `audio.tts()`          | TTS result                       |
+| Audio     | `audio.stt`           | `audio.stt()`          | Speech-to-text result            |
+| Audio     | `audio.transcribe`    | `audio.transcribe()`   | Audio transcription result       |
+| RAG       | `rag.query`           | `rag.query()`          | RAG answer result                |
+| RAG       | `search.semantic`     | `search.semantic()`    | Semantic search result           |
+| RAG       | `search.rerank`       | `search.rerank()`      | Rerank result                    |
+| Workflow  | `workflow.execute`    | `workflow.execute()`   | Workflow execution result        |
+| Agent     | `agent.run`           | `agent.run()`          | Agent result                     |
+
+Workflow execution and agent runs are internal orchestration capabilities. A provider that advertises `text.chat` is eligible; it does not need to separately advertise `workflow.execute` or `agent.run`. If either capability has no enabled binding, provider discovery and model selection inherit the enabled `text.chat` binding.
+
+The legacy renderer wrappers remain available from `useIntelligence()` for loading/error state and old call sites, but new plugin and renderer code should use the typed domain SDK wrappers plus capability discovery.
+
+### Text chat
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
+
+  const intelligence = useIntelligenceSdk()
+  const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.chat' })
+  const providers = await intelligence.getProviderModelOptions({ capabilityId: 'text.chat' })
+
+  if (status.available) {
+  const result = await intelligence.text.chat({
+  messages: [
+  { role: 'system', content: 'You are a helpful assistant' },
+  { role: 'user', content: 'Hello!' }
+  ],
+  temperature: 0.7,
+  maxTokens: 1000
+  }, {
+  allowedProviderIds: providers.filter(provider => provider.available).map(provider => provider.providerId)
+  })
+
+      console.log(result.result)
+      console.log(result.usage)
+
+  ## }
+---
+:::
+
+### Vision OCR
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await intelligence.vision.ocr({
+  source: {
+  type: 'data-url',
+  dataUrl: 'data:image/png;base64,...'
+  },
+  language: 'en',
+  includeLayout: true,
+  includeKeywords: true
+  })
+
+  ## console.log(result.result.text)
+---
+:::
+
+**Image Source Types**:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const sourceDataUrl = { type: 'data-url', dataUrl: 'data:image/png;base64,...' } as const
+  const sourceFile = { type: 'file', filePath: '/path/to/image.png' } as const
+  const sourceBase64 = { type: 'base64', base64: '...' } as const
+
+  ## console.log(sourceDataUrl.type, sourceFile.type, sourceBase64.type)
+---
+:::
+
+### RAG rerank
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await intelligence.search.rerank({
+  query: 'search query',
+  documents: searchResults,
+  topK: 5
+  })
+
+  ## console.log(result.result)
+---
+:::
+
+### Generic invocation
+
+Use `invoke` directly for custom capabilities or newly registered capability IDs that do not yet have a domain wrapper:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await intelligence.invoke('custom.extract-json', {
+  text: 'name: Ada Lovelace'
+  })
+
+  ## console.log(result.result)
+---
+:::
+
+### Invocation options
+
+`invoke(capabilityId, payload, options)` accepts the following third argument; typed wrappers such as `text.chat(payload, options)` accept the same object as their second argument:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface IntelligenceInvokeOptions {
+  strategy?: string // Strategy ID
+  modelPreference?: string[] // Preferred models list
+  costCeiling?: number // Cost ceiling
+  latencyTarget?: number // Target latency (ms)
+  timeout?: number // Timeout (ms)
+  stream?: boolean // Enable streaming
+  preferredProviderId?: string // Preferred Provider
+  allowedProviderIds?: string[] // Allowed Provider list
+  promptTemplate?: string // Explicit system prompt template for text.chat
+  promptVariables?: Record<string, unknown> // Mustache variables for the template
+  }
+
+  const \_invokeOptions: IntelligenceInvokeOptions = {}
+  void \_invokeOptions
+---
+:::
+`strategy` applies after an explicit `preferredProviderId` and `modelPreference`. Supported values are `adaptive-default` (the default), `rule-based-default`, and `round-robin`. `adaptive-default` and `rule-based-default` currently use deterministic capability-binding/provider priority order; they are not latency- or cost-based optimizers. `round-robin` rotates the sorted eligible providers per capability and preserves that cyclic order for fallback. Legacy `adaptive` and `priority` normalize to the first two values; an unknown strategy safely falls back to deterministic priority routing.
+
+### AI Command prompt templates
+
+For a plugin-defined AI Command, pass `promptTemplate` and `promptVariables` as first-class invoke options. The explicit template wins over the legacy metadata form and the configured capability binding. The host renders it once and preserves it when routing falls back to another provider.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.chat' })
+  if (!status.available) throw new Error(status.reason || 'AI unavailable')
+
+  const selectedText = 'Draft release notes for the latest changes.'
+  const response = await intelligence.text.chat(
+  { messages: [{ role: 'user', content: selectedText }] },
+  {
+  promptTemplate: 'Rewrite the input for a {{audience}} audience in a {{tone}} tone.',
+  promptVariables: { audience: 'developer', tone: 'concise' },
+  },
+  )
+
+  ## console.log(response.result)
+---
+:::
+
+Declare `intelligence.basic` in the plugin manifest and run capability discovery before rendering the action. Template variables become provider input, so never put credentials or secrets in them. Audit records retain the prompt hash, not the raw template.
+
+### Response Structure
+
+All `invoke` calls return a unified response structure:
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface IntelligenceInvokeResult<T> {
+  result: T // Result data
+  usage: {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  cost?: number
+  }
+  model: string // Model used
+  latency: number // Request latency (ms)
+  traceId: string // Trace ID
+  provider: string // Provider used
+  }
+
+  const \_invokeResult = {} as IntelligenceInvokeResult<string>
+  void \_invokeResult
+---
+:::
+
+### Streaming events
+
+`stream()` and `contextStream()` use callbacks and return a `Promise<StreamController>`. The current runtime only streams chat capabilities. The controller exposes `streamId`, `cancelled`, and `cancel()`.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  let answer = ''
+  let finalRoute: { traceId?: string; provider?: string; model?: string } = {}
+
+  const controller = await intelligence.stream<string>(
+  'text.chat',
+  {
+  messages: [{ role: 'user', content: 'Summarize this text.' }]
+  },
+  {
+  onDelta(delta, event) {
+  answer += delta
+  finalRoute = {
+  traceId: event.traceId,
+  provider: event.provider,
+  model: event.model
+  }
+  },
+  onUsage(usage, event) {
+  finalRoute = {
+  traceId: event.traceId,
+  provider: event.provider,
+  model: event.model
+  }
+  console.log(usage.totalTokens)
+  },
+  onEnd(event) {
+  finalRoute = {
+  traceId: event.traceId,
+  provider: event.provider,
+  model: event.model
+  }
+  console.log(answer, finalRoute, event.metadata?.latency)
+  },
+  onError(error) {
+  console.error(error)
+  }
+  }
+  )
+
+  // Call controller.cancel() when the owning UI is disposed.
+  void controller
+---
+:::
+
+Stream consumers must treat event boundaries as transport details:
+
+- A `start` event can carry provisional client routing metadata. Use the latest non-empty `traceId`, `provider`, and `model` from `delta`, `usage`, or `end` as the effective backend route.
+- Final usage is delivered by `onUsage`; final latency is exposed as `end.metadata.latency`.
+- A provider may complete without a text delta. Render `usage` / `end` independently from content.
+- The default Nexus provider uses authenticated `/api/v1/intelligence/stream` SSE and forwards real provider token deltas plus backend route metadata and terminal usage. Retry/fallback is allowed only before the first visible delta; a post-delta failure is surfaced instead of replaying duplicate text. Never depend on delta count or chunk size.
+- Providers that do not report backend metadata remain compatible, so route fields are optional.
+
+
+## Complete Examples
+
+**Translation plugin**
+
+Check availability before invoking: `getCapabilityStatus` returns `{ capabilityId, available, providerIds, reason? }`, and `available` is `false` when no configured provider serves that capability.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { intelligence, useClipboard } from '@talex-touch/utils/plugin/sdk'
+
+  const clipboard = useClipboard()
+
+  async function translateAndPaste(content: string, targetLang: string) {
+  const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.translate' })
+  if (!status.available) return
+
+      const result = await intelligence.text.translate({
+        text: content,
+        targetLang
+      })
+
+      await clipboard.copyAndPaste({ text: result.result })
+
+  }
+
+  void translateAndPaste
+---
+:::
+
+**OCR plugin**
+
+`vision.ocr` resolves to an `IntelligenceInvokeResult<IntelligenceVisionOcrResult>`, so the extracted text is at `result.result.text`. `keywords` is populated only when `includeKeywords` is set, and stays optional even then.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { intelligence } from '@talex-touch/utils/plugin/sdk'
+
+  async function recognizeText(imageDataUrl: string) {
+  // Same discovery gate as above: an unconfigured provider makes this unavailable.
+  const status = await intelligence.getCapabilityStatus({ capabilityId: 'vision.ocr' })
+  if (!status.available) return null
+
+  const result = await intelligence.vision.ocr({
+  source: { type: 'data-url', dataUrl: imageDataUrl },
+  includeKeywords: true
+  })
+
+      return {
+        text: result.result.text,
+        keywords: result.result.keywords
+      }
+
+  }
+
+  void recognizeText
+---
+:::
+
+---
+
+## State Management
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { watch } from 'vue'
+  import { useIntelligence } from '@talex-touch/utils/renderer'
+
+  const { isLoading, lastError } = useIntelligence()
+
+  // Watch loading state
+  watch(isLoading, loading => console.log('loading', loading))
+
+  // Watch errors
+  watch(lastError, error => console.log('error', error))
+---
+:::
+
+---
+
+## Provider Types
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  enum IntelligenceProviderType {
+  OPENAI = 'openai',
+  ANTHROPIC = 'anthropic',
+  DEEPSEEK = 'deepseek',
+  SILICONFLOW = 'siliconflow',
+  LOCAL = 'local',
+  CUSTOM = 'custom'
+  }
+
+  void IntelligenceProviderType.OPENAI
+---
+:::
+
+---
+
+## Capability Types
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { IntelligenceCapabilityType } from '@talex-touch/utils/types/intelligence'
+
+  // Text
+  void IntelligenceCapabilityType.CHAT // 'chat'
+  void IntelligenceCapabilityType.GRAMMAR_CHECK // 'grammar-check'
+
+  // Code
+  void IntelligenceCapabilityType.CODE_GENERATE // 'code-generate'
+  void IntelligenceCapabilityType.CODE_DEBUG // 'code-debug'
+
+  // Analysis
+  void IntelligenceCapabilityType.INTENT_DETECT // 'intent-detect'
+  void IntelligenceCapabilityType.SENTIMENT_ANALYZE // 'sentiment-analyze'
+
+  // Vision
+  void IntelligenceCapabilityType.VISION_OCR // 'vision-ocr'
+  void IntelligenceCapabilityType.IMAGE_TRANSLATE_E2E // 'image-translate-e2e'
+
+  // RAG / Workflow
+  void IntelligenceCapabilityType.SEMANTIC_SEARCH // 'semantic-search'
+  void IntelligenceCapabilityType.AGENT // 'agent'
+---
+:::
+
+## Best Practices
+
+- Gate calls by quota/subscription to avoid failures.
+- Redact sensitive input where appropriate and prompt for confirmation.
+- Cache or rate-limit high-frequency requests to control cost.
+
+## Technical Notes
+
+- The SDK wraps calls in the renderer, while the main process routes to concrete providers.
+- Unified responses include timing and token usage for monitoring.

@@ -30,7 +30,14 @@ function isWorkspaceDirectory(relativePath) {
 }
 
 function collectWorkspaceDirectories() {
-  const directWorkspaces = ['apps/core-app', 'apps/nexus', 'apps/tuffex-docs']
+  const directWorkspaces = [
+    'apps/core-app',
+    'apps/nexus',
+    'apps/nexus-api',
+    'apps/tuff-web',
+    'apps/nexus-console',
+    'apps/tuffex-docs',
+  ]
   const workspaceParents = ['packages', 'plugins']
   const workspaces = []
 

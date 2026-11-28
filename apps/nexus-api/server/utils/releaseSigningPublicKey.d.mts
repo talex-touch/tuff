@@ -1,0 +1,1 @@
+export declare const DEFAULT_RELEASE_SIGNATURE_PUBLIC_KEY: string

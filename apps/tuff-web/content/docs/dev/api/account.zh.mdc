@@ -1,0 +1,844 @@
+# Account SDK
+
+## 概述
+
+账户 SDK 提供用户信息、订阅状态、配额管理等能力，适用于插件需要根据用户身份或订阅等级提供差异化功能的场景。
+
+## 介绍
+
+**快速开始**
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { accountSDK, SubscriptionPlan } from '@talex-touch/utils'
+  import { useChannel } from '@talex-touch/utils/plugin/sdk'
+
+  accountSDK.setChannelSend(useChannel().send)
+
+  // 检查用户是否已登录
+  const isLoggedIn = await accountSDK.isLoggedIn()
+
+  // 获取当前订阅计划
+  const plan = await accountSDK.getPlan()
+
+  // 检查是否为付费用户
+  if (await accountSDK.isPaidUser()) {
+    // 显示高级功能
+  }
+---
+:::
+
+---
+
+## 订阅计划
+
+按等级从低到高排列，每一级都包含前面各级的全部功能。
+
+| 计划 | 枚举值 | 说明 |
+|------|--------|------|
+| 免费版 | `SubscriptionPlan.FREE` | 基础功能，有配额限制 |
+| 增强版 | `SubscriptionPlan.PLUS` | 更多配额，自定义模型，优先支持 |
+| 专业版 | `SubscriptionPlan.PRO` | 更高配额，高级分析 |
+| 团队版 | `SubscriptionPlan.TEAM` | 团队协作，管理功能 |
+| 企业版 | `SubscriptionPlan.ENTERPRISE` | 最高配额，更多团队席位 |
+
+---
+
+## SDK 参考
+
+**获取 SDK 实例**
+
+账户调用只能在插件页面里用，先导脚本（`index.js`）拿不到。`accountSDK` 是单例，用之前先把当前页面的通道交给它：
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { accountSDK } from '@talex-touch/utils'
+  import { useChannel } from '@talex-touch/utils/plugin/sdk'
+
+  accountSDK.setChannelSend(useChannel().send)
+  await accountSDK.getProfile()
+---
+:::
+
+插件要在 `manifest.json` 里声明 `account.read` 并得到用户授权，才能用这里的方法，打开登录页和账户页面也一样。没有授权时，`usePluginAccount()` 的调用以 `ACCOUNT_PERMISSION_DENIED` reject，`onDidChange` 不回调；`accountSDK` 的查询读成「没有」，打开页面的方法 reject。见 [Permission 权限系统](./permission.zh.mdc)。
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "permissions": {
+      "required": ["account.read"]
+    },
+    "permissionReasons": {
+      "account.read": "显示你的套餐和剩余额度"
+    }
+  }
+---
+:::
+
+::alert{type="warning"}
+**注意**：`accountSDK` 把调用失败当成「没有」：`getProfile()` 返回 `null`，`isLoggedIn()` 返回 `false`。要分清「已退出」和「调用失败」，或者要在登录状态变化时收到通知，用下面的 `usePluginAccount()`。
+::
+
+---
+
+**跟随登录状态**
+
+`usePluginAccount()` 是插件页面用的账户客户端。调用失败时它会 reject，不会读成已退出；`onDidChange` 在登录状态变化时通知插件。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { usePluginAccount } from '@talex-touch/utils/plugin/sdk'
+
+  const account = usePluginAccount()
+
+  const stop = account.onDidChange((session) => {
+    // 本次启动还没核对完保存的登录，这时的「未登录」可能马上变成已登录
+    if (!session.isSettled)
+      return
+    renderUser(session.user) // 未登录时为 null
+  })
+
+  // 页面卸载时
+  stop()
+---
+:::
+
+| 方法 | 返回值 | 说明 |
+|------|--------|------|
+| `getProfile()` | `UserProfile \| null` | 当前账户资料，未登录时为 `null` |
+| `getSubscription()` | `Subscription \| null` | 订阅 |
+| `getUsage()` | `UsageStats \| null` | 用量 |
+| `getFeatures()` | `FeatureFlag[]` | 套餐功能：`aiRequests`、`aiTokens` 的 `value` 是额度（`-1` 为不限），`customModels`、`prioritySupport`、`apiAccess` 只有开关 |
+| `getTeams()` | `Team[]` | 所属组织，没有时为空；个人团队不列出 |
+| `openUpgradePage(plan?)` | `void` | 在浏览器里打开定价页，传了 `plan` 时框出该套餐 |
+| `openBillingPage()` | `void` | 打开团队页，套餐和激活码在这里管理 |
+| `openAccountSettings()`、`openProfileEditor()` | `void` | 打开账户页 |
+| `requestLogin()` | `boolean` | 已登录或登录正在进行时沿用这次登录，否则打开登录页。返回 `true` 时用户可能还没登录，登录页打不开时返回 `false` |
+| `onDidChange(callback)` | `() => void` | 先回调一次当前状态，之后每次变化回调一次；返回停止订阅的函数 |
+
+`onDidChange` 收到的状态（`AccountSessionState`）：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `isSettled` | `boolean` | 本次启动已核对过保存的登录。为 `false` 时的未登录不代表账户已退出 |
+| `isSignedIn` | `boolean` | 是否已登录 |
+| `user` | `{ id: string, name?: string } \| null` | 当前账户，未登录时为 `null` |
+
+状态里没有凭据和邮箱；只改了这类看不到的资料时不会回调。
+
+---
+
+**Auth Token & 设备信息**
+
+Tuff 自身访问账户服务时用。插件拿不到凭据和设备 ID，在插件里调用返回 `null`。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const token = await accountSDK.getAuthToken()
+  const deviceId = await accountSDK.getDeviceId()
+---
+:::
+
+| 方法 | 返回值 | 说明 |
+|------|--------|------|
+| `getAuthToken()` | `string \| null` | Bearer token（不可用时为 null） |
+| `getDeviceId()` | `string \| null` | 设备 ID（不可用时为 null） |
+
+---
+
+**用户信息**
+
+**`getProfile()`**
+
+获取完整用户资料。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const profile = await accountSDK.getProfile()
+  // {
+  //   id: 'user_xxx',
+  //   displayName: '张三',
+  //   email: 'zhangsan@example.com',
+  //   avatarUrl: 'https://...',
+  //   emailVerified: true,
+  //   createdAt: 1702123456789,
+  //   twoFactorEnabled: false,
+  //   socialConnections: [...]
+  // }
+---
+:::
+
+| 返回值 | 类型 | 说明 |
+|--------|------|------|
+| `profile` | `UserProfile \| null` | 用户资料，未登录返回 `null` |
+
+**`isLoggedIn()`**
+
+检查用户是否已登录。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isLoggedIn()) {
+    // 已登录
+  }
+---
+:::
+
+**`getUserId()`**
+
+获取用户 ID。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const userId = await accountSDK.getUserId()
+  // 'user_xxx' 或 null
+---
+:::
+
+**`getDisplayName()`**
+
+获取显示名称。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const name = await accountSDK.getDisplayName()
+  // '张三'
+---
+:::
+
+**`getEmail()`**
+
+获取用户邮箱。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const email = await accountSDK.getEmail()
+  // 'zhangsan@example.com'
+---
+:::
+
+**`getAvatarUrl()`**
+
+获取头像 URL。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const avatar = await accountSDK.getAvatarUrl()
+  // 'https://...'
+---
+:::
+
+---
+
+**订阅检查**
+
+**`getPlan()`**
+
+获取当前订阅计划。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const plan = await accountSDK.getPlan()
+  // SubscriptionPlan.PRO
+---
+:::
+
+**`getSubscription()`**
+
+获取完整订阅详情。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const subscription = await accountSDK.getSubscription()
+  // {
+  //   id: 'sub_xxx',
+  //   plan: 'pro',
+  //   status: 'active',
+  //   billingCycle: 'monthly',
+  //   quota: { aiRequestsPerWeek: 2000, ... },
+  //   usage: { aiRequestsThisWeek: 123, ... },
+  //   currentPeriodEnd: 1704067200000,
+  //   autoRenew: true
+  // }
+---
+:::
+
+**`isPaidUser()`**
+
+检查是否为付费用户。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isPaidUser()) {
+    // 显示付费功能
+  }
+---
+:::
+
+**`isProOrAbove()`**
+
+检查是否为 Pro 或更高等级。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isProOrAbove()) {
+    // Pro / Team / Enterprise
+  }
+---
+:::
+
+**`isPlusOrAbove()`**
+
+检查是否为 Plus 或更高等级。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isPlusOrAbove()) {
+    // Plus / Pro / Team / Enterprise
+  }
+---
+:::
+
+**`isTeamOrAbove()`**
+
+检查是否为 Team 或更高等级。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isTeamOrAbove()) {
+    // Team / Enterprise
+  }
+---
+:::
+
+**`isEnterprise()`**
+
+检查是否为企业版。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isEnterprise()) {
+    // Enterprise only
+  }
+---
+:::
+
+**`isTrialing()`**
+
+检查是否在试用期。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isTrialing()) {
+    const days = await accountSDK.getTrialDaysRemaining()
+    console.log(`试用剩余 ${days} 天`)
+  }
+---
+:::
+
+**`getDaysRemaining()`**
+
+获取当前订阅周期剩余天数。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const days = await accountSDK.getDaysRemaining()
+  // 28
+---
+:::
+
+---
+
+**配额检查**
+
+**`getQuota()`**
+
+获取当前计划的配额限制。AI 请求和 Token 按周计，和 Nexus 一样每周一 00:00（UTC）重新计数，`-1` 表示不限。`aiRequestsPerDay`、`aiTokensPerMonth` 已弃用，装的也是这两个按周的数。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const quota = await accountSDK.getQuota()
+  // {
+  //   aiRequestsPerWeek: 500,
+  //   aiTokensPerWeek: 100000,
+  //   maxPlugins: 20,
+  //   maxStorageBytes: 1073741824,
+  //   customModelAccess: true,
+  //   apiAccess: true,
+  //   ...
+  // }
+---
+:::
+
+**`getUsage()`**
+
+获取当前使用量统计。AI 用量是本周的；`aiRequestsToday`、`aiRequestsThisMonth`、`aiTokensThisMonth` 已弃用，装的也是本周的数。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const usage = await accountSDK.getUsage()
+  // {
+  //   aiRequestsThisWeek: 123,
+  //   aiTokensThisWeek: 45678,
+  //   storageUsedBytes: 52428800,
+  //   pluginsInstalled: 8
+  // }
+---
+:::
+
+**`checkAiRequestQuota()`**
+
+检查本周的 AI 请求配额。用完时 `resetAt` 是下周一 00:00（UTC）。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const result = await accountSDK.checkAiRequestQuota()
+  if (!result.allowed) {
+    console.log(result.reason) // 'Weekly AI request limit reached'
+    console.log(`重置时间: ${new Date(result.resetAt)}`)
+  } else {
+    console.log(`剩余请求: ${result.remaining}`)
+  }
+---
+:::
+
+**`checkAiTokenQuota(estimatedTokens)`**
+
+检查本周的 AI Token 配额。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const result = await accountSDK.checkAiTokenQuota(1000)
+  if (!result.allowed) {
+    // 配额不足
+  }
+---
+:::
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `estimatedTokens` | `number` | 预估消耗的 Token 数量（可选，默认 0） |
+
+**`checkStorageQuota(additionalBytes)`**
+
+检查存储配额。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const result = await accountSDK.checkStorageQuota(1024 * 1024) // 1MB
+  if (!result.allowed) {
+    console.log('存储空间不足')
+  }
+---
+:::
+
+**`checkPluginQuota()`**
+
+检查插件安装配额。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const result = await accountSDK.checkPluginQuota()
+  if (!result.allowed) {
+    console.log('已达插件数量上限')
+  }
+---
+:::
+
+**`getUsagePercentage(type)`**
+
+获取特定配额的使用百分比。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const aiUsage = await accountSDK.getUsagePercentage('aiRequests')
+  console.log(`AI 请求使用率: ${aiUsage.toFixed(1)}%`)
+
+  const storageUsage = await accountSDK.getUsagePercentage('storage')
+  if (storageUsage > 80) {
+    console.warn('存储空间即将用尽')
+  }
+---
+:::
+
+| 参数 | 类型 | 可选值 |
+|------|------|--------|
+| `type` | `string` | `'aiRequests'`, `'aiTokens'`, `'storage'`, `'plugins'` |
+
+---
+
+**功能权限**
+
+**`hasApiAccess()`**
+
+检查是否有 API 访问权限。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.hasApiAccess()) {
+    // 允许使用 API
+  }
+---
+:::
+
+**`hasCustomModelAccess()`**
+
+检查是否可以使用自定义模型。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.hasCustomModelAccess()) {
+    // 显示自定义模型选项
+  }
+---
+:::
+
+**`hasPrioritySupport()`**
+
+检查是否享有优先支持。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.hasPrioritySupport()) {
+    // 显示优先支持入口
+  }
+---
+:::
+
+**`hasAdvancedAnalytics()`**
+
+检查是否有高级分析功能。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.hasAdvancedAnalytics()) {
+    // 显示高级分析面板
+  }
+---
+:::
+
+**`hasFeature(featureId)`**
+
+检查特定功能标志是否启用。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.hasFeature('beta-ai-v2')) {
+    // 启用 Beta 功能
+  }
+---
+:::
+
+---
+
+**团队管理**
+
+**`getTeams()`**
+
+获取账户所属的组织，最多一个；每个账户都有的个人团队不列出。账户服务不提供 slug 和创建时间，`slug` 与 `id` 相同，`createdAt` 为 `0`。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const teams = await accountSDK.getTeams()
+  // [
+  //   { id: 'team_xxx', name: '研发团队', slug: 'team_xxx', role: 'admin', memberCount: 5, createdAt: 0 }
+  // ]
+---
+:::
+
+**`isInTeam()`**
+
+检查用户是否在任何团队中。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isInTeam()) {
+    // 显示团队功能
+  }
+---
+:::
+
+**`isTeamOwner(teamId?)`**
+
+检查用户是否为团队所有者。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isTeamOwner()) {
+    // 用户是某个团队的所有者
+  }
+
+  if (await accountSDK.isTeamOwner('team_xxx')) {
+    // 用户是指定团队的所有者
+  }
+---
+:::
+
+**`isTeamAdmin(teamId?)`**
+
+检查用户是否为团队管理员（含所有者）。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isTeamAdmin()) {
+    // 显示管理功能
+  }
+---
+:::
+
+---
+
+**升级与账单**
+
+**`getUpgradeOptions()`**
+
+获取可用的升级选项。选项不带价格：Pioneer 阶段 Tuff 免费，Nexus 公布价格之前不会有价格字段。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const options = accountSDK.getUpgradeOptions()
+  // [
+  //   { plan: 'plus', name: 'Plus', features: ['500 AI requests/week', ...] },
+  //   { plan: 'pro', name: 'Pro', recommended: true, ... },
+  //   { plan: 'team', name: 'Team', ... }
+  // ]
+---
+:::
+
+**`getPlanComparison()`**
+
+获取计划对比表。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const comparison = accountSDK.getPlanComparison()
+  // [
+  //   { feature: 'AI Requests/Week', free: 50, plus: 500, pro: 2000, ... },
+  //   { feature: 'Custom Models', free: false, plus: true, ... }
+  // ]
+---
+:::
+
+**`openUpgradePage(plan?)`**
+
+在浏览器里打开定价页。传了 `plan` 时，定价页框出这个套餐的卡片。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await accountSDK.openUpgradePage() // 打开定价页
+  await accountSDK.openUpgradePage(SubscriptionPlan.PLUS) // 打开定价页，框出 Plus
+---
+:::
+
+**`openBillingPage()`**
+
+打开团队页，套餐和激活码在这里管理。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await accountSDK.openBillingPage()
+---
+:::
+
+---
+
+**账户操作**
+
+**`requestLogin()`**
+
+请用户登录。已经登录、或者登录正在进行时，不会再打开登录页，而是沿用这次登录；否则在浏览器里打开登录页。这几种情况都返回 `true`，但用户这时可能还没登录；登录页打不开时返回 `false`。登录结果用 `usePluginAccount().onDidChange` 接收。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await accountSDK.requestLogin()
+  // 用户在浏览器里登录完成后，onDidChange 收到 isSignedIn: true
+---
+:::
+
+**`logout()`**
+
+登出当前用户。只有 Tuff 自身能调用，插件里调用会 reject。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await accountSDK.logout()
+---
+:::
+
+**`openAccountSettings()`**
+
+打开账户页，设置和资料都在这里。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await accountSDK.openAccountSettings()
+---
+:::
+
+---
+
+## 技术原理
+
+- Account SDK 通过统一的账户服务查询用户登录态、订阅与配额信息。
+- 权限与配额判断在客户端进行，避免在 UI 侧散落重复逻辑。
+
+## 最佳实践
+
+**1. 付费功能门控**
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  async function showPremiumFeature() {
+    if (!await accountSDK.isPaidUser()) {
+      // 显示升级提示
+      const options = accountSDK.getUpgradeOptions()
+      showUpgradeDialog(options)
+      return
+    }
+
+    // 显示付费功能
+  }
+---
+:::
+
+**2. 配额预检**
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  async function beforeAiRequest(estimatedTokens: number) {
+    const quotaCheck = await accountSDK.checkAiTokenQuota(estimatedTokens)
+
+    if (!quotaCheck.allowed) {
+      throw new Error(`配额不足: ${quotaCheck.reason}`)
+    }
+
+    // 继续请求
+  }
+---
+:::
+
+**3. 团队功能适配**
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  async function initTeamFeatures() {
+    if (!await accountSDK.isTeamOrAbove()) {
+      return // 非团队版，跳过
+    }
+
+    const teams = await accountSDK.getTeams()
+
+    for (const team of teams) {
+      if (team.role === 'owner' || team.role === 'admin') {
+        // 显示管理功能
+      }
+    }
+  }
+---
+:::
+
+---
+
+## 类型定义
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  enum SubscriptionPlan {
+    FREE = 'free',
+    PLUS = 'plus',
+    PRO = 'pro',
+    TEAM = 'team',
+    ENTERPRISE = 'enterprise',
+  }
+
+  interface UserProfile {
+    id: string
+    displayName: string
+    username?: string
+    email: string
+    emailVerified: boolean
+    avatarUrl?: string
+    createdAt: number
+    twoFactorEnabled: boolean
+    socialConnections: SocialConnection[]
+  }
+
+  interface Subscription {
+    id: string
+    plan: SubscriptionPlan
+    status: SubscriptionStatus
+    quota: PlanQuota
+    usage: UsageStats
+    currentPeriodEnd: number
+    autoRenew: boolean
+  }
+
+  interface QuotaCheckResult {
+    allowed: boolean
+    reason?: string
+    remaining?: number
+    resetAt?: number
+  }
+
+  interface AccountSessionState {
+    isSettled: boolean
+    isSignedIn: boolean
+    user: { id: string, name?: string } | null
+  }
+---
+:::
+
+---
+
+## 相关文档
+
+- [Intelligence API](./intelligence.zh.mdc) - AI 能力调用
+- [Storage API](./storage.zh.mdc) - 插件数据持久化
+- [Plugin Context](./plugin-context.zh.mdc) - 插件全局上下文

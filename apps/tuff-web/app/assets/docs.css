@@ -1,0 +1,378 @@
+/* TuffEx Standalone Docs Stylesheet
+ * - Uses TuffEx `--tx-*` design tokens across light & dark themes.
+ * - Guards all prose rules with `:not(:where(.not-prose, .not-prose *))` so live
+ *   TuffEx demos and gallery specimens never inherit markdown styles.
+ * - Ships dual-theme Shiki CSS var rules (`--shiki-light` / `--shiki-dark`).
+ */
+
+:root {
+  --nexus-frame-max: 66rem;
+  --nexus-frame-compact: 840px;
+  --nexus-frame-gutter: 1rem;
+  --docs-frame-max: 66rem;
+  --docs-frame-compact: 840px;
+  --docs-frame-gutter: 1rem;
+  --docs-header-height: 76px;
+  --docs-edge-color: var(--tx-bg-color, #ffffff);
+  --docs-edge-bottom-height: 56px;
+
+  --docs-accent: var(--tx-color-primary, #409eff);
+  --docs-accent-strong: var(--tx-color-primary-dark-2, #337ecc);
+  --docs-ink: var(--tx-text-color-primary, #1f2328);
+  --docs-ink-regular: var(--tx-text-color-regular, #4c4f56);
+  --docs-muted: var(--tx-text-color-secondary, #6e7781);
+  --docs-border: var(--tx-border-color, #dcdfe6);
+  --docs-border-light: var(--tx-border-color-lighter, #ebeef5);
+  --docs-surface: var(--tx-bg-color, #ffffff);
+  --docs-surface-subtle: var(--tx-fill-color-light, #f5f7fa);
+  --docs-code-bg: var(--tx-fill-color-light, #f6f8fa);
+  --docs-code-border: var(--tx-border-color-light, #e4e7ed);
+  --docs-inline-code-bg: var(--tx-fill-color-lighter, #f0f2f5);
+  --docs-inline-code-border: var(--tx-border-color-lighter, #e4e7ed);
+  --docs-hr-color: color-mix(in srgb, var(--docs-border) 72%, transparent);
+  --docs-mono-font: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+}
+
+html.dark,
+[data-theme='dark'] {
+  color-scheme: dark;
+  --docs-edge-color: var(--tx-bg-color, #121212);
+  --docs-surface: var(--tx-bg-color, #121212);
+  --docs-surface-subtle: var(--tx-fill-color-lighter, #1b1c1f);
+  --docs-code-bg: color-mix(in srgb, var(--tx-fill-color-lighter, #1b1c1f) 92%, #0a0a0c);
+  --docs-code-border: rgba(255, 255, 255, 0.09);
+  --docs-inline-code-bg: rgba(255, 255, 255, 0.07);
+  --docs-inline-code-border: rgba(255, 255, 255, 0.1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#__nuxt {
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--docs-surface);
+  color: var(--docs-ink);
+  font-family:
+    'PingFang SC', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI',
+    'Microsoft YaHei', 'Noto Sans SC', 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+[id] {
+  scroll-margin-top: 108px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Smooth view-transition theme toggle (same contract as Nexus) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+.dark::view-transition-old(root) {
+  z-index: 9999999;
+}
+
+.dark::view-transition-new(root) {
+  z-index: 10000000;
+}
+
+::view-transition-old(root) {
+  z-index: 1000;
+}
+
+::view-transition-new(root) {
+  z-index: 99999;
+}
+
+/* ============================================================================
+ * Shiki Dual-Theme Tokens (build-time highlighted HTML — zero client hljs!)
+ * ============================================================================ */
+.shiki,
+.shiki code {
+  background-color: transparent !important;
+  font-family: var(--docs-mono-font);
+}
+
+.shiki span {
+  color: var(--shiki-light, inherit);
+  font-style: var(--shiki-light-font-style, inherit);
+  font-weight: var(--shiki-light-font-weight, inherit);
+  text-decoration: var(--shiki-light-text-decoration, inherit);
+}
+
+.dark .shiki,
+.dark .shiki span,
+[data-theme='dark'] .shiki,
+[data-theme='dark'] .shiki span {
+  color: var(--shiki-dark, inherit) !important;
+  font-style: var(--shiki-dark-font-style, inherit);
+  font-weight: var(--shiki-dark-font-weight, inherit);
+  text-decoration: var(--shiki-dark-text-decoration, inherit);
+}
+
+/* ============================================================================
+ * Docs Prose Typography (strictly guarded from `.not-prose` live demos)
+ * ============================================================================ */
+.docs-prose {
+  min-width: 0;
+  color: var(--docs-ink);
+  word-wrap: break-word;
+}
+
+.docs-prose--hero > h1:first-of-type,
+.docs-prose--hero > div:not(.not-prose):first-child > h1:first-of-type {
+  display: none;
+}
+
+.docs-prose h1:not(:where(.not-prose, .not-prose *)) {
+  margin: 0 0 1.5rem;
+  font-size: 2.35rem;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0;
+  color: var(--docs-ink);
+  text-wrap: balance;
+}
+
+.docs-prose h2:not(:where(.not-prose, .not-prose *)) {
+  margin: 3.25rem 0 0.9rem;
+  padding-bottom: 0;
+  border-bottom: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0;
+  color: var(--docs-ink);
+  text-wrap: balance;
+}
+
+.docs-prose > h2:first-child,
+.docs-prose > div:not(.not-prose):first-child > h2:first-child {
+  margin-top: 0;
+}
+
+.docs-prose h3:not(:where(.not-prose, .not-prose *)) {
+  margin: 2.1rem 0 0.6rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0;
+  color: var(--docs-ink);
+  text-wrap: balance;
+}
+
+.docs-prose h4:not(:where(.not-prose, .not-prose *)) {
+  margin: 1.6rem 0 0.45rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--docs-ink);
+}
+
+.docs-prose :is(h1, h2, h3, h4, h5, h6) a:not(:where(.not-prose, .not-prose *)) {
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+  border-bottom: 0;
+}
+
+.docs-prose :is(h1, h2, h3, h4, h5, h6) a:hover:not(:where(.not-prose, .not-prose *)) {
+  color: var(--docs-accent);
+}
+
+.docs-prose p:not(:where(.not-prose, .not-prose *)),
+.docs-prose ul:not(:where(.not-prose, .not-prose *)),
+.docs-prose ol:not(:where(.not-prose, .not-prose *)) {
+  margin: 0 0 1rem;
+  font-size: 0.96875rem;
+  line-height: 1.72;
+  color: var(--docs-ink);
+  text-wrap: pretty;
+}
+
+.docs-prose li:not(:where(.not-prose, .not-prose *)) {
+  margin: 0.35rem 0;
+  font-size: 0.96875rem;
+  line-height: 1.7;
+  color: var(--docs-ink);
+}
+
+.docs-prose ul:not(:where(.not-prose, .not-prose *)),
+.docs-prose ol:not(:where(.not-prose, .not-prose *)) {
+  padding-left: 1.5rem;
+}
+
+.docs-prose ul li:not(:where(.not-prose, .not-prose *))::marker,
+.docs-prose ol li:not(:where(.not-prose, .not-prose *))::marker {
+  color: var(--docs-accent);
+}
+
+.docs-prose strong:not(:where(.not-prose, .not-prose *)) {
+  font-weight: 600;
+  color: var(--docs-ink);
+}
+
+.docs-prose del:not(:where(.not-prose, .not-prose *)) {
+  color: var(--docs-muted);
+}
+
+.docs-prose a:not(:where(.not-prose, .not-prose *)) {
+  color: var(--docs-accent);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--docs-accent) 40%, transparent);
+}
+
+.docs-prose a:hover:not(:where(.not-prose, .not-prose *)) {
+  border-bottom-color: var(--docs-accent);
+}
+
+.docs-prose code:not(pre code):not(:where(.not-prose, .not-prose *)) {
+  font-family: var(--docs-mono-font);
+  font-size: 0.875em;
+  border-radius: 5px;
+  padding: 0.14rem 0.36rem;
+  background-color: var(--docs-inline-code-bg);
+  border: 1px solid var(--docs-inline-code-border);
+  color: var(--docs-ink);
+}
+
+.docs-prose code.docs-inline-code-copyable {
+  cursor: copy;
+}
+
+.docs-prose code.docs-inline-code-copyable:hover,
+.docs-prose code.docs-inline-code-copyable.is-copied {
+  border-color: color-mix(in srgb, var(--docs-accent) 45%, transparent);
+  background-color: color-mix(in srgb, var(--docs-accent) 12%, var(--docs-inline-code-bg));
+  color: var(--docs-accent);
+}
+
+/* Fenced markdown code blocks (build-time Shiki <pre class="shiki"> inside v-pre) */
+.docs-prose pre:not(.tuff-code-block__pre):not(.docs-pre__code):not(:where(.not-prose, .not-prose *)) {
+  position: relative;
+  margin: 1.25rem 0;
+  padding: 1rem 1.15rem;
+  border-radius: 12px;
+  background-color: var(--docs-code-bg) !important;
+  border: 1px solid var(--docs-code-border);
+  overflow-x: auto;
+  font-family: var(--docs-mono-font);
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+
+.docs-prose pre:not(.tuff-code-block__pre):not(.docs-pre__code) code:not(:where(.not-prose, .not-prose *)) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.docs-prose blockquote:not(:where(.not-prose, .not-prose *)) {
+  border: 0;
+  border-radius: 12px;
+  background: var(--docs-code-bg);
+  padding: 16px 18px;
+  margin: 1.5rem 0;
+  font-style: normal;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--docs-ink-regular);
+}
+
+.docs-prose blockquote > :last-child:not(:where(.not-prose, .not-prose *)) {
+  margin-bottom: 0;
+}
+
+/* Static subtle divider (R1/R3: zero infinite background-position shimmer!) */
+.docs-prose hr:not(:where(.not-prose, .not-prose *)) {
+  border: 0;
+  height: 1px;
+  margin: 2rem 0;
+  background: linear-gradient(90deg, transparent, var(--docs-hr-color) 20%, var(--docs-hr-color) 80%, transparent);
+  opacity: 0.7;
+}
+
+.docs-prose img:not(:where(.not-prose, .not-prose *)) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
+
+/* Markdown tables (responsive horizontal scroll without breaking layout) */
+.docs-prose table:not(:where(.not-prose, .not-prose *)) {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 1.25rem 0;
+  font-size: 0.875rem;
+}
+
+.docs-prose table th:not(:where(.not-prose, .not-prose *)),
+.docs-prose table td:not(:where(.not-prose, .not-prose *)) {
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--docs-border-light);
+  text-align: left;
+  vertical-align: top;
+  color: var(--docs-ink);
+}
+
+.docs-prose table th:not(:where(.not-prose, .not-prose *)) {
+  background: color-mix(in srgb, var(--docs-surface-subtle) 85%, transparent);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  color: var(--docs-ink-regular);
+  white-space: nowrap;
+}
+
+.docs-prose table tbody tr:last-child td:not(:where(.not-prose, .not-prose *)) {
+  border-bottom: 0;
+}
+
+/* Formulas & Mermaid blocks */
+.docs-prose .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}
+
+.docs-prose .docs-mermaid {
+  margin: 1.25rem 0;
+  padding: 1rem;
+  border-radius: 12px;
+  background: var(--docs-code-bg);
+  border: 1px solid var(--docs-code-border);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.docs-prose .docs-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}

@@ -1,0 +1,41 @@
+# Quick Start
+
+## 1. Install & Requirements
+| OS | Requirements | Distribution |
+| --- | --- | --- |
+| macOS | macOS 13+, Apple Silicon optimized | In-app update channel or TestFlight dmg |
+| Windows | Win11 22621+, WDDM 3.0 | Native installer with auto-update |
+| Linux | Ubuntu 22.04+, Fedora 38+, rolling Arch | AppImage + deb packages with SHA-256 checksum |
+
+> Node.js 22 runtime ships inside every build—no extra tooling needed.
+
+> On Ubuntu 24.04 and later, choose the `.deb` rather than the AppImage. 24.04 restricts
+> unprivileged user namespaces by default and Electron's sandbox needs them; the `.deb` registers
+> an AppArmor profile granting `userns` during installation, and an AppImage has no install step
+> in which to do that. If you must use the AppImage, allow it for the session with
+> `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`.
+
+## 2. First Launch
+1. Run the installer and allow CoreBox global shortcut.
+2. Sign in via Apple ID, GitHub, or email.
+3. Approve device trust to pull workspace + plugin inventory.
+
+## 3. Account & Sync
+- **Workspace**: starts with “Personal”; create more for teams or experiments.
+- **Sync mode**: choose “Instant” or “Low Frequency”; mobile syncs on Wi‑Fi only.
+- **Data ownership**: stored locally in LibSQL; cloud only sees encrypted config shards.
+
+## 4. Try It
+- `⌥ + Space` / `Alt + Space`: summon CoreBox. If pressing it opens another app instead (such as Raycast, Alfred or ChatGPT), that app holds the key: pick a different shortcut in Settings.
+- CoreBox includes **App Semantic Alias Catalog / 应用语义别名目录**: search `im`, `chat`, or `即时通讯` to recall installed messaging apps such as WeChat, Lark, and Telegram; search `design`, `ps`, or `设计` for Photoshop/Figma-style tools; search `vsc` or `code` for VS Code.
+- Drag the Dock icon to switch workspaces.
+- Notification widget shows workflow queue + plugin health.
+
+## 5. Troubleshooting
+- Logs: `~/Library/Logs/Tuff` or `%LOCALAPPDATA%/Tuff/logs`.
+- CoreBox `diagnose` command exports a health report.
+- Refer to `../tips/faq.en.md` for common fixes.
+
+## 6. Plugin Recommendations
+- New users can start from [Recommended Plugin Bundles](./features/recommended-plugins.en.mdc).
+- Every built-in plugin now has a dedicated page in [Built-in Plugin Catalog](./features/plugins/index.en.mdc).

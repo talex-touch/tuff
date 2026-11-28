@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["node", "@cloudflare/workers-types"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": false,
+    "baseUrl": ".",
+    "paths": {
+      "#shared/*": ["./shared/*"],
+      "@talex-touch/tuff-business": ["../../packages/tuff-business/src/index.ts"],
+      "@talex-touch/tuff-intelligence": ["../../packages/tuff-intelligence/src/index.ts"],
+      "@talex-touch/tuff-intelligence/*": ["../../packages/tuff-intelligence/src/*"],
+      "@talex-touch/utils": ["../../packages/utils/index.ts"],
+      "@talex-touch/utils/*": ["../../packages/utils/*"]
+    }
+  },
+  "include": [
+    "nitro.config.ts",
+    "vitest.config.ts",
+    "types/**/*.d.ts",
+    "shared/**/*.ts",
+    "server/**/*.ts",
+    "test/**/*.ts"
+  ],
+  "exclude": [
+    ".nitro",
+    ".output",
+    "dist",
+    "node_modules"
+  ]
+}

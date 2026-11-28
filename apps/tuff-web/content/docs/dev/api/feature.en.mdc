@@ -1,0 +1,261 @@
+# Feature SDK
+
+## Overview
+
+The Feature SDK provides plugins with the ability to manage CoreBox search result items (TuffItems).
+
+## Introduction
+
+**Quick Start**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useFeature } from '@talex-touch/utils/plugin/sdk'
+
+  const feature = useFeature()
+
+  // Push search results
+  feature.pushItems([
+    {
+      id: 'result-1',
+      title: { text: 'Search Result 1' },
+      subtitle: { text: 'Description' },
+      source: { id: 'my-plugin', name: 'My Plugin' }
+    }
+  ])
+
+  // Listen to input changes
+  feature.onInputChange((input) => {
+    console.log('User typed:', input)
+  })
+---
+:::
+
+---
+
+## API Reference
+
+**useFeature()**
+
+Get Feature SDK instance.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useFeature } from '@talex-touch/utils/plugin/sdk'
+
+  const feature = useFeature()
+---
+:::
+
+> **Note**: Must be called within plugin renderer context with `$boxItems` API available.
+
+---
+
+## Search Result Management
+
+**`pushItems(items)`**
+
+Push multiple items to CoreBox search results.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  feature.pushItems([
+    {
+      id: 'calc-result',
+      title: { text: '42' },
+      subtitle: { text: 'Calculation result' },
+      source: { id: 'calculator', name: 'Calculator' },
+      icon: 'ri:calculator-line'
+    }
+  ])
+---
+:::
+
+**`updateItem(id, updates)`**
+
+Update a specific item.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  feature.updateItem('result-1', {
+    title: { text: 'Updated Title' },
+    subtitle: { text: 'New description' }
+  })
+---
+:::
+
+**`removeItem(id)`**
+
+Remove a specific item.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  feature.removeItem('result-1')
+---
+:::
+
+**`clearItems()`**
+
+Clear all items from current plugin.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  feature.clearItems()
+---
+:::
+
+**`getItems()`**
+
+Get all items from current plugin.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const items = feature.getItems()
+  console.log(`Currently showing ${items.length} items`)
+---
+:::
+
+---
+
+## Event Listening
+
+**`onInputChange(handler)`**
+
+Listen to search input changes.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const unsubscribe = feature.onInputChange((input) => {
+    console.log('User typed:', input)
+
+    // Perform real-time search
+    const results = await search(input)
+    feature.pushItems(results)
+  })
+
+  // Stop listening
+  unsubscribe()
+---
+:::
+
+**Keyboard handling**
+
+`feature.onKeyEvent()` has been removed. The old `core-box:key-event` channel has no production sender, so plugin UI keyboard interactions should use local DOM/component keyboard handlers or host-provided `hostKeyEvent` props.
+
+---
+
+## TuffItem Structure
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface TuffItem {
+    id: string
+
+    title: {
+      text: string
+      highlight?: boolean
+    }
+
+    subtitle?: {
+      text: string
+      highlight?: boolean
+    }
+
+    source: {
+      id: string
+      name: string
+    }
+
+    icon?: string
+
+    actions?: TuffAction[]
+
+    meta?: Record<string, any>
+  }
+---
+:::
+
+---
+
+## Complete Example
+
+**Live search plugin**
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useFeature, useBox } from '@talex-touch/utils/plugin/sdk'
+  import { debounce } from 'lodash-es'
+
+  const feature = useFeature()
+  const box = useBox()
+
+  // Debounced search
+  const debouncedSearch = debounce(async (query: string) => {
+    if (!query.trim()) {
+      feature.clearItems()
+      return
+    }
+
+    const results = await fetchSearchResults(query)
+
+    feature.clearItems()
+    feature.pushItems(results.map((r, i) => ({
+      id: `result-${i}`,
+      title: { text: r.title },
+      subtitle: { text: r.description },
+      source: { id: 'my-search', name: 'Search' },
+      icon: r.icon
+    })))
+
+    // Resize the window
+    await box.expand({ length: results.length })
+  }, 300)
+
+  // Listen for input
+  feature.onInputChange(debouncedSearch)
+
+  // Handle keyboard interaction inside the plugin UI component with a local
+  // keydown listener or the hostKeyEvent props.
+---
+:::
+
+---
+
+## Type Definitions
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface FeatureSDK {
+    pushItems(items: TuffItem[]): void
+    updateItem(id: string, updates: Partial<TuffItem>): void
+    removeItem(id: string): void
+    clearItems(): void
+    getItems(): TuffItem[]
+    onInputChange(handler: InputChangeHandler): () => void
+  }
+
+  type InputChangeHandler = (input: string) => void
+---
+:::
+
+## Best Practices
+
+- Keep item IDs stable to avoid reordering jitter.
+- Debounce input changes before pushing results.
+- Tune ranking metadata carefully to avoid bias in recommendations.
+
+## Technical Notes
+
+- Feature SDK builds items in the renderer and renders them via the CoreBox manager in the main process.
+- Items flow through a unified ranking and recommendation pipeline before display.

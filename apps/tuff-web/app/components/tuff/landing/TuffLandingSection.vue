@@ -1,0 +1,134 @@
+<script setup lang="ts">
+import { ref, useSlots } from 'vue'
+import TuffStickyBar from '../TuffStickyBar.vue'
+import { useGsapReveal } from '~/composables/useGsapReveal'
+
+const props = withDefaults(defineProps<{
+  id?: string
+  sectionClass?: string
+  containerClass?: string
+  sticky?: string
+  stickyClass?: string
+  title?: string
+  subtitle?: string
+  titleTag?: string
+  headerClass?: string
+  titleClass?: string
+  subtitleClass?: string
+  revealOptions?: Parameters<typeof useGsapReveal>[1]
+}>(), {
+  sectionClass: 'absolute inset-0 h-full w-full flex flex-col justify-center',
+  containerClass: 'max-w-6xl w-full flex flex-col gap-12',
+  stickyClass: '',
+  titleTag: 'h2',
+  headerClass: '',
+  titleClass: 'text-[clamp(.75rem,1vw+1.5rem,1.3rem)] font-bold leading-[1.1] tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-black to-black/60 dark:from-white dark:to-white/60',
+  subtitleClass: 'mx-auto my-0 max-w-3xl text-[clamp(.6rem,1vw+1.3rem,1.1rem)] font-semibold leading-relaxed op-70',
+})
+
+const slots = useSlots()
+const sectionRef = ref<HTMLElement | null>(null)
+
+useGsapReveal(sectionRef, props.revealOptions ?? {})
+</script>
+
+<template>
+  <section
+    :id="props.id"
+    ref="sectionRef"
+    class="TuffLandingSection isolate overflow-hidden bg-transparent text-black dark:text-white" :class="[
+      props.sectionClass,
+    ]"
+  >
+    <div
+      v-if="slots.decoration"
+      class="pointer-events-none absolute inset-0 -z-10"
+    >
+      <slot name="decoration" />
+    </div>
+
+    <div
+      class="TuffLandingSection-Container flex flex-col min-h-0 relative mx-auto w-full h-full items-center"
+      :class="props.containerClass"
+    >
+      <template v-if="slots.sticky">
+        <slot name="sticky" />
+      </template>
+      <TuffStickyBar
+        v-else-if="props.sticky"
+        :class="props.stickyClass"
+        data-reveal
+      >
+        {{ props.sticky }}
+      </TuffStickyBar>
+
+      <template v-if="slots.header">
+        <slot name="header" />
+      </template>
+      <header
+        v-else-if="props.title || props.subtitle"
+        class="text-center" :class="[
+          props.headerClass,
+        ]"
+      >
+        <component
+          :is="props.titleTag"
+          v-if="props.title"
+          class="my-0 font-semibold leading-tight" :class="[
+            props.titleClass,
+          ]"
+          data-reveal
+        >
+          {{ props.title }}
+        </component>
+        <p
+          v-if="props.subtitle"
+          class="mx-auto my-0 text-base text-black/70 dark:text-white/70 leading-relaxed" :class="[
+            props.subtitleClass,
+          ]"
+          data-reveal
+        >
+          {{ props.subtitle }}
+        </p>
+      </header>
+
+      <div class="TuffLandingSection-Content">
+        <slot />
+      </div>
+    </div>
+  </section>
+</template>
+
+<style lang="scss" scoped>
+.TuffLandingSection {
+  /* Floating pill sits at top:1rem (~16px) with ~52-56px content height. */
+  --tuff-landing-header-height: 72px;
+  --tuff-landing-header-gap: 28px;
+  --tuff-landing-sticky-height: 40px;
+  --tuff-landing-sticky-gap: 2vh;
+  --tuff-landing-safe-top: calc(var(--tuff-landing-header-height) + var(--tuff-landing-header-gap));
+  --tuff-landing-safe-bottom: calc(var(--tuff-landing-sticky-height) + var(--tuff-landing-sticky-gap));
+}
+
+.TuffLandingSection header {
+  flex-shrink: 0;
+}
+
+.TuffLandingSection-Container {
+  height: 100%;
+  min-height: 0;
+  padding-top: var(--tuff-landing-safe-top);
+  padding-bottom: var(--tuff-landing-safe-bottom);
+  box-sizing: border-box;
+}
+
+.TuffLandingSection-Content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  width: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+</style>

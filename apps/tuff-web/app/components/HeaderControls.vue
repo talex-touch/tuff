@@ -1,0 +1,82 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import HeaderIconButton from '~/components/HeaderIconButton.vue'
+import { useGlobalSearchState } from '~/composables/useGlobalSearchState'
+
+interface Props {
+  githubUrl?: string
+  showSearchButton?: boolean
+  showDarkToggle?: boolean
+  showLanguageToggle?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  githubUrl: '',
+  showSearchButton: false,
+  showDarkToggle: true,
+  showLanguageToggle: true,
+})
+
+const { t } = useI18n()
+const { summonSearch } = useGlobalSearchState()
+
+const searchButtonLabel = computed(() => t('search.open'))
+const searchButtonAriaLabel = computed(() => t('search.openAria'))
+
+function onSearchClick(event: MouseEvent) {
+  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  summonSearch(target)
+}
+</script>
+
+<template>
+  <div class="HeaderControls flex shrink-0 items-center justify-end gap-2 text-sm">
+    <span
+      v-if="props.showSearchButton && props.showLanguageToggle"
+      class="HeaderControls-Divider"
+      aria-hidden="true"
+    />
+
+    <div v-if="props.showSearchButton" class="relative">
+      <HeaderIconButton
+        icon="i-carbon-search"
+        :label="searchButtonAriaLabel"
+        :title="searchButtonLabel"
+        data-role="global-search-trigger"
+        @click="onSearchClick"
+      />
+    </div>
+
+    <div class="relative flex shrink-0 items-center gap-1 sm:ml-auto">
+      <template v-if="props.showLanguageToggle">
+        <LanguageToggle />
+      </template>
+      <DarkToggle v-if="props.showDarkToggle" />
+      <a
+        v-if="props.githubUrl"
+        :href="props.githubUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="GitHub"
+        class="inline-flex items-center gap-2 rounded-full text-sm text-black font-semibold transition dark:text-white focus-visible:outline-none"
+      >
+        <span class="i-carbon-logo-github text-lg" aria-hidden="true" />
+      </a>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.HeaderControls-Divider {
+  display: inline-block;
+  width: 1px;
+  height: 20px;
+  min-height: 20px;
+  margin: 0 10px 0 8px;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.dark .HeaderControls-Divider {
+  background: rgba(255, 255, 255, 0.12);
+}
+</style>
