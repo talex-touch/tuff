@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import type { CodeEditorEmits, CodeEditorLanguage, CodeEditorProps, CodeEditorTheme } from './types'
+import type { CodeEditorEmits, CodeEditorLanguage, CodeEditorProps, CodeEditorTheme, CodeEditorViewMode } from './types'
 import type { Extension } from '@codemirror/state'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { Panel } from '@codemirror/view'
+import type { CodeEditorSearchState } from './TxCodeEditorSearchPanel.vue'
+import { computed, createVNode, getCurrentInstance, onBeforeUnmount, onMounted, reactive, ref, render, watch } from 'vue'
 import { EditorState, StateEffect } from '@codemirror/state'
 import {
   EditorView,
@@ -26,7 +28,8 @@ import {
 import { tags } from '@lezer/highlight'
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { openSearchPanel, search, searchKeymap } from '@codemirror/search'
+import { getSearchQuery, openSearchPanel, search, searchKeymap } from '@codemirror/search'
+import TxCodeEditorSearchPanel from './TxCodeEditorSearchPanel.vue'
 import type { Diagnostic } from '@codemirror/lint'
 import { lintGutter, lintKeymap, linter } from '@codemirror/lint'
 import { json, jsonParseLinter } from '@codemirror/lang-json'
@@ -35,6 +38,8 @@ import { yaml } from '@codemirror/lang-yaml'
 import { parse as parseYaml, parseDocument, stringify as stringifyYaml } from 'yaml'
 import { hasDocument, hasNavigator } from '@talex-touch/utils/env'
 import { iniParser, tomlParser } from './stream-parsers'
+import { isStructuredLanguage } from './tree-parser'
+import TxCodeEditorTree from './TxCodeEditorTree.vue'
 
 defineOptions({
   name: 'TxCodeEditorRuntime',
@@ -44,6 +49,8 @@ const props = withDefaults(defineProps<CodeEditorProps>(), {
   modelValue: '',
   language: 'json',
   theme: 'auto',
+  viewMode: undefined,
+  viewModeToggle: false,
   readOnly: false,
   lineNumbers: true,
   lineWrapping: false,
@@ -59,10 +66,34 @@ const props = withDefaults(defineProps<CodeEditorProps>(), {
 
 const emit = defineEmits<CodeEditorEmits>()
 
+const currentInstance = getCurrentInstance()
 const containerRef = ref<HTMLDivElement | null>(null)
 const viewRef = ref<EditorView | null>(null)
 const isFocused = ref(false)
 const autoTheme = ref<'light' | 'dark'>('light')
+const liveSource = ref(props.modelValue ?? '')
+const internalViewMode = ref<CodeEditorViewMode>(props.viewMode ?? 'code')
+const canTreePreview = computed(() => isStructuredLanguage(props.language))
+const activeViewMode = computed<CodeEditorViewMode>({
+  get: () => {
+    const mode = props.viewMode ?? internalViewMode.value
+    return mode === 'tree' && canTreePreview.value ? 'tree' : 'code'
+  },
+  set: (next) => {
+    const resolved: CodeEditorViewMode = next === 'tree' && canTreePreview.value ? 'tree' : 'code'
+    internalViewMode.value = resolved
+    emit('update:viewMode', resolved)
+  },
+})
+
+function setViewMode(mode: CodeEditorViewMode) {
+  activeViewMode.value = mode
+}
+
+function handleTreeUpdateSource(next: string) {
+  liveSource.value = next
+  applyValue(next, true)
+}
 let themeObserver: MutationObserver | null = null
 
 let suppressEmit = false
@@ -71,17 +102,33 @@ let allowEmit = false
 const baseTheme = EditorView.theme({
   '&': {
     fontSize: '13px',
+    lineHeight: '1.6',
     fontFamily: 'var(--tx-font-family-mono, ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace)',
     backgroundColor: 'transparent',
   },
   '.cm-content': {
-    padding: '12px',
+    padding: '10px 0',
+  },
+  '.cm-line': {
+    padding: '0 12px',
   },
   '.cm-scroller': {
     fontFamily: 'inherit',
+    minHeight: '160px',
+    alignItems: 'stretch',
   },
   '.cm-gutters': {
     border: 'none',
+    minHeight: '100%',
+    userSelect: 'none',
+    fontSize: '12px',
+  },
+  '.cm-lineNumbers .cm-gutterElement': {
+    minWidth: '30px',
+    padding: '0 8px 0 6px',
+  },
+  '.cm-foldGutter .cm-gutterElement': {
+    padding: '0 4px',
   },
   '&.cm-focused': {
     outline: 'none',
@@ -108,23 +155,23 @@ const themePalettes: Record<ResolvedTheme, {
     text: 'var(--tx-text-color-primary, #303133)',
     gutter: 'var(--tx-fill-color-lighter, #fafafa)',
     gutterText: 'var(--tx-text-color-secondary, #909399)',
-    border: 'var(--tx-border-color, #dcdfe6)',
-    selection: 'color-mix(in srgb, var(--tx-color-primary, #409eff) 20%, transparent)',
-    activeLine: 'var(--tx-fill-color-lighter, #fafafa)',
+    border: 'var(--tx-border-color-light, var(--tx-border-color, #e4e7ed))',
+    selection: 'color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent)',
+    activeLine: 'color-mix(in srgb, var(--tx-fill-color-light, #f5f7fa) 75%, transparent)',
     cursor: 'var(--tx-color-primary, #409eff)',
-    toolbarBg: 'color-mix(in srgb, var(--tx-fill-color-blank, #ffffff) 88%, transparent)',
+    toolbarBg: 'var(--tx-fill-color-lighter, #fafafa)',
   },
   dark: {
     dark: true,
-    background: '#0d1117',
-    text: '#e6edf3',
-    gutter: '#0d1117',
-    gutterText: '#7d8590',
-    border: '#30363d',
-    selection: 'rgba(56, 139, 253, 0.3)',
-    activeLine: '#161b22',
-    cursor: '#58a6ff',
-    toolbarBg: 'rgba(22, 27, 34, 0.9)',
+    background: 'var(--tx-bg-color-overlay, #14161a)',
+    text: 'var(--tx-text-color-primary, #e6edf3)',
+    gutter: 'color-mix(in srgb, var(--tx-fill-color-light, #1b1e24) 65%, transparent)',
+    gutterText: 'var(--tx-text-color-secondary, #8b949e)',
+    border: 'var(--tx-border-color, #2d323b)',
+    selection: 'color-mix(in srgb, var(--tx-color-primary, #58a6ff) 26%, transparent)',
+    activeLine: 'color-mix(in srgb, var(--tx-fill-color-light, #1f242d) 70%, transparent)',
+    cursor: 'var(--tx-color-primary, #58a6ff)',
+    toolbarBg: 'var(--tx-fill-color-light, #1b1e24)',
   },
   github: {
     dark: false,
@@ -295,8 +342,12 @@ const rootStyle = computed(() => ({
   '--tx-code-editor-bg': themeStyles.value.background,
   '--tx-code-editor-border': themeStyles.value.border,
   '--tx-code-editor-toolbar-bg': themeStyles.value.toolbarBg,
+  '--tx-code-editor-gutter-bg': themeStyles.value.gutter,
+  '--tx-code-editor-muted': themeStyles.value.gutterText,
   '--tx-code-editor-text': themeStyles.value.text,
   '--tx-code-editor-focus': themeStyles.value.cursor,
+  '--tx-code-editor-active-line': themeStyles.value.activeLine,
+  '--tx-code-editor-selection': themeStyles.value.selection,
 }))
 
 function normalizeTabSize(value?: number) {
@@ -476,6 +527,7 @@ const updateListener = EditorView.updateListener.of((update) => {
   if (!update.docChanged)
     return
   const value = update.state.doc.toString()
+  liveSource.value = value
   if (suppressEmit && !allowEmit)
     return
   emit('update:modelValue', value)
@@ -542,6 +594,50 @@ function getValue(): string {
   return view ? view.state.doc.toString() : ''
 }
 
+function createSearchPanel(view: EditorView): Panel {
+  const host = document.createElement('div')
+  host.className = 'cm-search'
+
+  const initial = getSearchQuery(view.state)
+  const searchState = reactive<CodeEditorSearchState>({
+    search: initial.search,
+    replace: initial.replace,
+    caseSensitive: initial.caseSensitive,
+    regexp: initial.regexp,
+    wholeWord: initial.wholeWord,
+    readOnly: view.state.readOnly,
+  })
+
+  const vnode = createVNode(TxCodeEditorSearchPanel, {
+    view,
+    state: searchState,
+  })
+  if (currentInstance?.appContext)
+    vnode.appContext = currentInstance.appContext
+  render(vnode, host)
+
+  return {
+    dom: host,
+    update(update) {
+      const next = getSearchQuery(update.state)
+      if (next.search !== searchState.search)
+        searchState.search = next.search
+      if (next.replace !== searchState.replace)
+        searchState.replace = next.replace
+      if (next.caseSensitive !== searchState.caseSensitive)
+        searchState.caseSensitive = next.caseSensitive
+      if (next.regexp !== searchState.regexp)
+        searchState.regexp = next.regexp
+      if (next.wholeWord !== searchState.wholeWord)
+        searchState.wholeWord = next.wholeWord
+      searchState.readOnly = update.state.readOnly
+    },
+    destroy() {
+      render(null, host)
+    },
+  }
+}
+
 function buildExtensions(): Extension[] {
   const language = normalizeLanguage(props.language)
   const tabSize = normalizeTabSize(props.tabSize)
@@ -590,7 +686,7 @@ function buildExtensions(): Extension[] {
     extensions.push(placeholder(props.placeholder))
 
   if (props.search)
-    extensions.push(search())
+    extensions.push(search({ createPanel: createSearchPanel }))
 
   if (props.completion) {
     extensions.push(autocompletion())
@@ -687,7 +783,9 @@ watch(
 watch(
   () => props.modelValue,
   (next) => {
-    applyValue(next ?? '', false)
+    const normalized = next ?? ''
+    liveSource.value = normalized
+    applyValue(normalized, false)
   },
 )
 
@@ -727,6 +825,8 @@ defineExpose({
   copy: () => copyToClipboard(),
   getValue: () => getValue(),
   getView: () => viewRef.value as unknown,
+  getViewMode: () => activeViewMode.value,
+  setViewMode,
 })
 </script>
 
@@ -736,6 +836,7 @@ defineExpose({
     :class="{
       'is-focused': isFocused,
       'is-readonly': readOnly,
+      'is-tree': activeViewMode === 'tree',
     }"
     :data-theme="resolvedTheme"
     :style="rootStyle"
@@ -749,8 +850,45 @@ defineExpose({
         :unfold-all="unfoldAllLines"
         :copy="copyToClipboard"
         :get-value="getValue"
+        :view-mode="activeViewMode"
+        :set-view-mode="setViewMode"
+        :can-tree-preview="canTreePreview"
       />
     </div>
-    <div ref="containerRef" class="tx-code-editor__view" />
+    <div v-else-if="viewModeToggle && canTreePreview" class="tx-code-editor__mode-bar">
+      <span class="tx-code-editor__lang">{{ language }}</span>
+      <div class="tx-code-editor__mode-switch" role="tablist" aria-label="Editor view mode">
+        <button
+          type="button"
+          role="tab"
+          class="tx-code-editor__mode-btn"
+          :class="{ 'is-active': activeViewMode === 'code' }"
+          :aria-selected="activeViewMode === 'code'"
+          @click="setViewMode('code')"
+        >
+          Code
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="tx-code-editor__mode-btn"
+          :class="{ 'is-active': activeViewMode === 'tree' }"
+          :aria-selected="activeViewMode === 'tree'"
+          @click="setViewMode('tree')"
+        >
+          Tree
+        </button>
+      </div>
+    </div>
+    <div v-show="activeViewMode === 'code'" ref="containerRef" class="tx-code-editor__view" />
+    <TxCodeEditorTree
+      v-if="activeViewMode === 'tree'"
+      :source="liveSource"
+      :language="language"
+      :tab-size="tabSize"
+      :read-only="readOnly"
+      @update-source="handleTreeUpdateSource"
+      @switch-to-code="setViewMode('code')"
+    />
   </div>
 </template>

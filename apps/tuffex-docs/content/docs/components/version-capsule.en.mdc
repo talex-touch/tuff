@@ -92,8 +92,12 @@ code: |
 | `version` | `string` | — (required) | Version tag shown as the headline, e.g. `v2.4.13-beta.19`. |
 | `channel` | `string` | - | Channel label beside the status dot, e.g. `BETA`; hidden when unset. |
 | `tone` | `TxVersionChannelTone` | `'preview'` | Color of the dot and channel label. |
-| `historyLabel` | `string` | `'History'` | Text of the right segment. |
+| `historyLabel` | `string` | `'History'` | Accessible name (and visible text when `showHistoryLabel` is true) of the right segment. |
+| `showHistoryLabel` | `boolean` | `false` | Shows `historyLabel` beside the chevron in the right segment instead of icon-only. |
 | `downloadLabel` | `string` | `'Download this build'` | Accessible name of the left segment. |
+| `viewMoreLabel` | `string` | `'View more'` | Footer action inside the download view that slides seamlessly to the history view. |
+| `backLabel` | `string` | `'Back'` | Top action inside the history view that slides back to the download view. |
+| `showViewMore` | `boolean` | `true` | Shows the bottom `View more` drill-down action when both `download` and `history` slots exist. |
 | `panel` | `TxVersionCapsulePanel` | - | Controlled open panel, for `v-model:panel`; omit for uncontrolled. |
 | `disabled` | `boolean` | `false` | Disables both segments and closes any open panel. |
 | `closeOnClickOutside` | `boolean` | `true` | Closes the panel on an outside `pointerdown`. |
@@ -111,8 +115,8 @@ code: |
 
 | Slot | Props | Description |
 |------|-------|-------------|
-| `download` | `{ close: () => void }` | Download panel content, anchored under the left segment. |
-| `history` | `{ close: () => void }` | History panel content, anchored under the right segment. |
+| `download` | `{ close: () => void; openHistory: () => void; openDownload: () => void }` | Download panel content inside the `TxPopover` surface. |
+| `history` | `{ close: () => void; openHistory: () => void; openDownload: () => void }` | History panel content inside the `TxPopover` surface, reached via horizontal slide drill-down. |
 
 #### Exposed Methods
 
@@ -159,12 +163,17 @@ code: |
 | `countLabel` | `string` | - | Right side of the header, e.g. `6 releases`. |
 | `notesLabel` | `string` | `"What's new"` | Call to action on the featured card. |
 | `emptyText` | `string` | `'No releases published yet.'` | Shown when there is neither `latest` nor any `entries`. |
+| `filters` | `TxVersionChannelFilter[]` | - | Custom channel filter chips (e.g. All / Beta / Release / Nightly); auto-derived from entry channels when omitted. |
+| `filter` | `string` | - | Controlled active filter value (`v-model:filter`). |
+| `filterable` | `boolean` | `true` | Enables the configurable channel filter bar above the history list. |
+| `allFilterLabel` | `string` | `'All'` | Label for the auto-derived catch-all filter option. |
 
 #### Events
 
 | Event | Params | Description |
 |------|------|------|
 | `select` | `(entry: TxVersionHistoryEntry)` | Fires when a release row or the featured card is chosen. |
+| `update:filter` | `(value: string)` | Fires when the active channel filter changes. |
 
 #### Slots
 
@@ -207,6 +216,14 @@ code: |
 | `date` | `string?` | Release date text. |
 | `note` | `string?` | One-line changelog, rendered only on `latest`. |
 | `href` | `string?` | Renders the row or card as a link. |
+
+#### TxVersionChannelFilter
+
+| Field | Type | Description |
+|------|------|------|
+| `value` | `string` | Filter key (`'all'` matches every entry; otherwise matched against `entry.channel`, `entry.tone`, or custom `match`). |
+| `label` | `string` | Display label shown on the filter chip. |
+| `match` | `((entry: TxVersionHistoryEntry) => boolean)?` | Optional custom predicate for filtering entries. |
 
 ## Overview
 

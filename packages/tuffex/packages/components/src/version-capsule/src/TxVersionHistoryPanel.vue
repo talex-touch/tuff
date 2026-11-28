@@ -1,6 +1,10 @@
 <script lang="ts" setup>
-import type { TxVersionHistoryEntry, TxVersionHistoryPanelProps } from './types'
-import { computed } from 'vue'
+import type {
+  TxVersionChannelFilter,
+  TxVersionHistoryEntry,
+  TxVersionHistoryPanelProps,
+} from './types'
+import { computed, ref, watch } from 'vue'
 
 defineOptions({ name: 'TxVersionHistoryPanel' })
 
@@ -12,13 +16,99 @@ const props = withDefaults(defineProps<TxVersionHistoryPanelProps>(), {
   countLabel: undefined,
   notesLabel: 'What\'s new',
   emptyText: 'No releases published yet.',
+  filters: undefined,
+  filter: undefined,
+  filterable: true,
+  allFilterLabel: 'All',
 })
 
 const emit = defineEmits<{
-  select: [entry: TxVersionHistoryEntry]
+  'select': [entry: TxVersionHistoryEntry]
+  'update:filter': [value: string]
 }>()
 
-const isEmpty = computed(() => !props.latest && !props.entries.length)
+const resolvedFilters = computed<TxVersionChannelFilter[]>(() => {
+  if (!props.filterable)
+    return []
+
+  if (props.filters?.length)
+    return props.filters
+
+  const allEntries: TxVersionHistoryEntry[] = [
+    ...(props.latest ? [props.latest] : []),
+    ...props.entries,
+  ]
+  const seen = new Map<string, string>()
+  for (const entry of allEntries) {
+    const raw = entry.channel?.trim()
+    if (!raw)
+      continue
+    const key = raw.toLowerCase()
+    if (!seen.has(key))
+      seen.set(key, raw)
+  }
+
+  if (seen.size < 2)
+    return []
+
+  return [
+    { value: 'all', label: props.allFilterLabel },
+    ...Array.from(seen.entries()).map(([value, label]) => ({
+      value,
+      label: label.length <= 4 ? label : `${label.charAt(0).toUpperCase()}${label.slice(1).toLowerCase()}`,
+    })),
+  ]
+})
+
+const internalFilter = ref<string>(props.filter ?? resolvedFilters.value[0]?.value ?? 'all')
+
+watch(
+  resolvedFilters,
+  (list) => {
+    if (!list.length)
+      return
+    if (props.filter === undefined && !list.some(item => item.value === internalFilter.value)) {
+      const next = list[0]!.value
+      internalFilter.value = next
+      emit('update:filter', next)
+    }
+  },
+  { immediate: true },
+)
+
+const activeFilter = computed<string>({
+  get: () => props.filter ?? internalFilter.value,
+  set: (value) => {
+    if (value === (props.filter ?? internalFilter.value))
+      return
+    internalFilter.value = value
+    emit('update:filter', value)
+  },
+})
+
+function matchesEntry(entry: TxVersionHistoryEntry): boolean {
+  const current = activeFilter.value
+  const hasExplicitFilter = props.filter !== undefined && props.filter !== ''
+  if (!hasExplicitFilter && !resolvedFilters.value.length)
+    return true
+  if (!current)
+    return true
+
+  const spec = (props.filters ?? resolvedFilters.value).find(item => item.value === current)
+  if (spec?.match)
+    return spec.match(entry)
+  if (current === 'all')
+    return true
+
+  const target = current.toLowerCase()
+  const channel = entry.channel?.trim().toLowerCase()
+  const tone = entry.tone?.toLowerCase()
+  return channel === target || tone === target
+}
+
+const filteredLatest = computed(() => (props.latest && matchesEntry(props.latest) ? props.latest : undefined))
+const filteredEntries = computed(() => props.entries.filter(matchesEntry))
+const isEmpty = computed(() => !filteredLatest.value && !filteredEntries.value.length)
 
 function toneClass(entry: TxVersionHistoryEntry) {
   return `tx-version-history-panel--${entry.tone ?? 'preview'}`
@@ -26,9 +116,9 @@ function toneClass(entry: TxVersionHistoryEntry) {
 </script>
 
 <template>
-  <div class="tx-version-history-panel">
-    <header class="tx-version-history-panel__head">
-      <span class="tx-version-history-panel__title">
+  <div class="tx-version-history-panel tx-vp">
+    <header class="tx-vh-hd">
+      <span class="tx-vh-ti">
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -44,41 +134,58 @@ function toneClass(entry: TxVersionHistoryEntry) {
         </svg>
         {{ title }}
       </span>
-      <span v-if="countLabel" class="tx-version-history-panel__count">{{ countLabel }}</span>
+      <span v-if="countLabel" class="tx-version-history-panel__count tx-vh-dt">{{ countLabel }}</span>
     </header>
 
-    <div class="tx-version-history-panel__body">
-      <p v-if="isEmpty" class="tx-version-history-panel__empty">
+    <div
+      v-if="resolvedFilters.length"
+      class="tx-vh-fs"
+      role="tablist"
+      aria-label="Filter releases by channel"
+    >
+      <button
+        v-for="item in resolvedFilters"
+        :key="item.value"
+        type="button"
+        role="tab"
+        class="tx-version-history-panel__filter tx-vh-f"
+        :class="{ 'is-active': activeFilter === item.value }"
+        :aria-selected="activeFilter === item.value"
+        @click="activeFilter = item.value"
+      >
+        {{ item.label }}
+      </button>
+    </div>
+
+    <div class="tx-vh-b">
+      <p v-if="isEmpty" class="tx-version-history-panel__empty tx-vh-em">
         {{ emptyText }}
       </p>
 
       <component
-        :is="latest.href ? 'a' : 'button'"
-        v-if="latest"
-        class="tx-version-history-panel__latest"
-        :class="toneClass(latest)"
-        :href="latest.href"
-        :type="latest.href ? undefined : 'button'"
-        @click="emit('select', latest)"
+        :is="filteredLatest.href ? 'a' : 'button'"
+        v-if="filteredLatest"
+        class="tx-version-history-panel__latest tx-vh-l"
+        :class="toneClass(filteredLatest)"
+        :href="filteredLatest.href"
+        :type="filteredLatest.href ? undefined : 'button'"
+        @click="emit('select', filteredLatest)"
       >
-        <div class="tx-version-history-panel__latest-top">
-          <span class="tx-version-history-panel__latest-ident">
-            <span v-if="latest.channel" class="tx-version-history-panel__chip">{{ latest.channel }}</span>
-            <span class="tx-version-history-panel__latest-tag">{{ latest.tag }}</span>
+        <div class="tx-vh-lt">
+          <span class="tx-vh-li">
+            <span v-if="filteredLatest.channel" class="tx-vh-ch">{{ filteredLatest.channel }}</span>
+            <span class="tx-version-history-panel__latest-tag tx-vh-ltag">{{ filteredLatest.tag }}</span>
           </span>
-          <span class="tx-version-history-panel__latest-badge">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z" />
-            </svg>
+          <span class="tx-vh-lb">
             {{ latestLabel }}
           </span>
         </div>
-        <p v-if="latest.note" class="tx-version-history-panel__latest-note">
-          {{ latest.note }}
+        <p v-if="filteredLatest.note" class="tx-version-history-panel__latest-note tx-vh-ln">
+          {{ filteredLatest.note }}
         </p>
-        <div class="tx-version-history-panel__latest-foot">
-          <span v-if="latest.date" class="tx-version-history-panel__date">{{ latest.date }}</span>
-          <span class="tx-version-history-panel__notes-cta">
+        <div class="tx-vh-lf">
+          <span v-if="filteredLatest.date" class="tx-vh-dt">{{ filteredLatest.date }}</span>
+          <span class="tx-vh-nc">
             {{ notesLabel }}
             <svg
               viewBox="0 0 24 24"
@@ -98,282 +205,76 @@ function toneClass(entry: TxVersionHistoryEntry) {
 
       <component
         :is="entry.href ? 'a' : 'button'"
-        v-for="entry in entries"
+        v-for="entry in filteredEntries"
         :key="entry.id"
-        class="tx-version-history-panel__row"
+        class="tx-version-history-panel__row tx-vh-r"
         :class="toneClass(entry)"
         :href="entry.href"
         :type="entry.href ? undefined : 'button'"
         @click="emit('select', entry)"
       >
-        <span class="tx-version-history-panel__row-main">
-          <span class="tx-version-history-panel__row-dot" aria-hidden="true" />
-          <span class="tx-version-history-panel__row-tag">{{ entry.tag }}</span>
+        <span class="tx-vh-rm">
+          <span class="tx-vh-rd" aria-hidden="true" />
+          <span class="tx-version-history-panel__row-tag tx-vh-rt">{{ entry.tag }}</span>
         </span>
-        <span class="tx-version-history-panel__row-meta">
-          <span v-if="entry.channel" class="tx-version-history-panel__row-channel">{{ entry.channel }}</span>
-          <span v-if="entry.date" class="tx-version-history-panel__date">{{ entry.date }}</span>
+        <span class="tx-vh-rme">
+          <span v-if="entry.channel" class="tx-vh-rc">{{ entry.channel }}</span>
+          <span v-if="entry.date" class="tx-vh-dt">{{ entry.date }}</span>
         </span>
       </component>
     </div>
 
-    <div v-if="$slots.footer" class="tx-version-history-panel__footer">
+    <div v-if="$slots.footer" class="tx-vp-ft">
       <slot name="footer" />
     </div>
   </div>
 </template>
 
-<style lang="scss" scoped>
+<style lang="scss">
 .tx-version-history-panel {
-  --tx-version-panel-bg: var(--tx-bg-color-overlay);
-  --tx-version-panel-border-color: var(--tx-border-color);
-  --tx-version-panel-radius: 16px;
-  --tx-version-panel-accent: var(--tx-color-primary);
-
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--tx-version-panel-border-color);
-  border-radius: var(--tx-version-panel-radius);
-  background: var(--tx-version-panel-bg);
-  box-shadow: var(--tx-box-shadow-dark, 0 24px 60px rgb(0 0 0 / 40%));
-  overflow: hidden;
+  &--stable { --tx-version-entry-tone: var(--tx-color-success); }
+  &--preview { --tx-version-entry-tone: var(--tx-color-primary); }
+  &--nightly { --tx-version-entry-tone: var(--tx-color-warning); }
+  &--neutral { --tx-version-entry-tone: var(--_mu); }
 }
+.tx-vh-hd, .tx-vh-lt, .tx-vh-lf { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tx-vh-hd { padding: 13px 16px; border-bottom: 1px solid var(--tx-version-panel-border-color); }
+.tx-vh-ti { display: inline-flex; align-items: center; gap: 7px; color: var(--_fg); font-size: 13.5px; font-weight: 680; svg { width: 14px; height: 14px; color: var(--_mu); } }
+.tx-vh-dt { color: var(--_pl); font-size: 11.5px; }
 
-/* Tone is resolved per row so a stable release stays readable inside a preview list. */
-.tx-version-history-panel--stable {
-  --tx-version-entry-tone: var(--tx-color-success);
+.tx-vh-fs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding-bottom: 8px; }
+.tx-vh-f {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border: 1px solid transparent; border-radius: 6px;
+  background: transparent; color: var(--_mu); font: inherit; font-size: 11px; font-weight: 500; line-height: 1; cursor: pointer;
+  &:hover:not(.is-active) { background: var(--_fl); color: var(--_fg); }
+  &.is-active { background: var(--_fl); border-color: var(--_bd); color: var(--_fg); font-weight: 600; }
 }
+.tx-vh-f:focus-visible, .tx-vh-l:focus-visible, .tx-vh-r:focus-visible { outline: 2px solid var(--tx-version-panel-accent); outline-offset: -2px; }
 
-.tx-version-history-panel--preview {
-  --tx-version-entry-tone: var(--tx-color-primary);
+.tx-vh-b { display: flex; flex-direction: column; gap: 4px; padding: 8px; }
+.tx-vh-em { margin: 0; padding: 8px; color: var(--_mu); font-size: 12px; text-align: center; }
+
+.tx-vh-l, .tx-vh-r { display: flex; width: 100%; box-sizing: border-box; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.tx-vh-l {
+  flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--_bd); border-radius: 8px; background: var(--_fl2); transition: background-color 0.16s, border-color 0.16s;
+  &:hover { background: var(--_fl); border-color: var(--tx-border-color); .tx-vh-nc { color: var(--_fg); } }
 }
+.tx-vh-li, .tx-vh-rm, .tx-vh-rme { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.tx-vh-ch, .tx-vh-lb { flex: none; padding: 2px 6px; border-radius: 5px; font-size: 10px; font-weight: 600; letter-spacing: 0.04em; }
+.tx-vh-ch { background: var(--tx-fill-color); color: var(--_re); }
+.tx-vh-lb { display: inline-flex; align-items: center; background: var(--tx-bg-color-overlay); border: 1px solid var(--_bd); color: var(--_mu); }
+.tx-vh-ltag, .tx-vh-rt { font-family: ui-monospace, monospace; color: var(--_fg); }
+.tx-vh-ltag { font-size: 13px; font-weight: 650; }
+.tx-vh-ln { margin: 0; color: var(--_mu); font-size: 12px; line-height: 1.45; }
+.tx-vh-nc { display: inline-flex; align-items: center; gap: 4px; color: var(--_re); font-size: 11.5px; font-weight: 500; svg { width: 12px; height: 12px; } }
 
-.tx-version-history-panel--nightly {
-  --tx-version-entry-tone: var(--tx-color-warning);
+.tx-vh-r {
+  align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent;
+  &:hover { background: var(--_fl); }
 }
-
-.tx-version-history-panel--neutral {
-  --tx-version-entry-tone: var(--tx-text-color-secondary);
-}
-
-.tx-version-history-panel__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 13px 16px;
-  border-bottom: 1px solid var(--tx-version-panel-border-color);
-}
-
-.tx-version-history-panel__title {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--tx-text-color-primary);
-  font-size: 13.5px;
-  font-weight: 680;
-
-  svg {
-    width: 14px;
-    height: 14px;
-    color: var(--tx-version-panel-accent);
-  }
-}
-
-.tx-version-history-panel__count {
-  color: var(--tx-text-color-placeholder);
-  font-size: 11.5px;
-}
-
-.tx-version-history-panel__body {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px;
-}
-
-.tx-version-history-panel__empty {
-  margin: 0;
-  padding: 4px 10px 8px;
-  color: var(--tx-text-color-secondary);
-  font-size: 12.5px;
-}
-
-.tx-version-history-panel__latest {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  padding: 12px;
-  box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, var(--tx-version-entry-tone) 24%, transparent);
-  border-radius: 12px;
-  background: var(--tx-fill-color);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.tx-version-history-panel__latest:focus-visible {
-  outline: 2px solid var(--tx-version-panel-accent);
-  outline-offset: -2px;
-}
-
-.tx-version-history-panel__latest-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.tx-version-history-panel__latest-ident {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.tx-version-history-panel__chip {
-  flex: none;
-  padding: 3px 7px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--tx-version-entry-tone) 20%, transparent);
-  color: var(--tx-version-entry-tone);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
-.tx-version-history-panel__latest-tag {
-  color: var(--tx-text-color-primary);
-  font-size: 13.5px;
-  font-weight: 680;
-}
-
-.tx-version-history-panel__latest-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex: none;
-  padding: 3px 7px;
-  border-radius: 999px;
-  background: var(--tx-fill-color-light);
-  color: var(--tx-color-warning);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-
-  svg {
-    width: 10px;
-    height: 10px;
-  }
-}
-
-.tx-version-history-panel__latest-note {
-  margin: 0;
-  color: var(--tx-text-color-secondary);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.tx-version-history-panel__latest-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.tx-version-history-panel__notes-cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--tx-version-panel-accent);
-  font-size: 11.5px;
-  font-weight: 640;
-
-  svg {
-    width: 12px;
-    height: 12px;
-  }
-}
-
-.tx-version-history-panel__date {
-  color: var(--tx-text-color-placeholder);
-  font-size: 11.5px;
-}
-
-.tx-version-history-panel__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  box-sizing: border-box;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.tx-version-history-panel__row:hover {
-  background: var(--tx-fill-color-light);
-}
-
-.tx-version-history-panel__row:focus-visible {
-  outline: 2px solid var(--tx-version-panel-accent);
-  outline-offset: -2px;
-}
-
-.tx-version-history-panel__row-main {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-}
-
-.tx-version-history-panel__row-dot {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  border-radius: 999px;
-  background: var(--tx-version-entry-tone);
-}
-
-.tx-version-history-panel__row-tag {
-  color: var(--tx-text-color-regular);
-  font-size: 12.5px;
-  font-weight: 600;
-}
-
-.tx-version-history-panel__row-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  flex: none;
-}
-
-.tx-version-history-panel__row-channel {
-  color: var(--tx-version-entry-tone);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
-.tx-version-history-panel__footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 12px 18px;
-  border-top: 1px solid var(--tx-version-panel-border-color);
-  background: var(--tx-fill-color-lighter);
-  font-size: 12px;
-}
+.tx-vh-rm { gap: 9px; }
+.tx-vh-rd { width: 6px; height: 6px; flex: none; border-radius: 999px; background: var(--tx-version-entry-tone); }
+.tx-vh-rt { font-size: 12.5px; font-weight: 500; }
+.tx-vh-rme { gap: 8px; flex: none; }
+.tx-vh-rc { color: var(--_mu); font-size: 10px; font-weight: 500; letter-spacing: 0.04em; }
 </style>

@@ -92,8 +92,12 @@ code: |
 | `version` | `string` | — （必填） | 标题位置的版本号，如 `v2.4.13-beta.19`。 |
 | `channel` | `string` | - | 状态点旁的通道标签，如 `BETA`；不设置则不显示。 |
 | `tone` | `TxVersionChannelTone` | `'preview'` | 状态点与通道标签的颜色。 |
-| `historyLabel` | `string` | `'History'` | 右侧分段的文案。 |
+| `historyLabel` | `string` | `'History'` | 右侧分段的无障碍名称（开启 `showHistoryLabel` 时同步展示文字）。 |
+| `showHistoryLabel` | `boolean` | `false` | 在右侧分段下拉箭头旁显示 `historyLabel`，默认仅展示图标。 |
 | `downloadLabel` | `string` | `'Download this build'` | 左侧分段的无障碍名称。 |
+| `viewMoreLabel` | `string` | `'View more'` | 下载面板底部按钮文案，点击后当前弹层无缝向左滑动展示历史版本。 |
+| `backLabel` | `string` | `'Back'` | 历史面板顶部返回按钮文案，点击后向右滑回下载列表。 |
+| `showViewMore` | `boolean` | `true` | 同时提供 `download` 与 `history` 插槽时，在下载面板底部显示「查看更多」入口。 |
 | `panel` | `TxVersionCapsulePanel` | - | 受控的打开面板，配合 `v-model:panel`；省略即非受控。 |
 | `disabled` | `boolean` | `false` | 禁用两个分段，并关闭已打开的面板。 |
 | `closeOnClickOutside` | `boolean` | `true` | 外部 `pointerdown` 时关闭面板。 |
@@ -111,8 +115,8 @@ code: |
 
 | 插槽 | 参数 | 说明 |
 |------|-------|-------------|
-| `download` | `{ close: () => void }` | 下载面板内容，锚定在左侧分段下方。 |
-| `history` | `{ close: () => void }` | 历史面板内容，锚定在右侧分段下方。 |
+| `download` | `{ close: () => void; openHistory: () => void; openDownload: () => void }` | `TxPopover` 弹层内的下载面板内容。 |
+| `history` | `{ close: () => void; openHistory: () => void; openDownload: () => void }` | `TxPopover` 弹层内的历史版本面板内容，支持水平滑动下钻进入。 |
 
 #### 暴露方法
 
@@ -159,12 +163,17 @@ code: |
 | `countLabel` | `string` | - | 头部右侧文案，如 `6 releases`。 |
 | `notesLabel` | `string` | `"What's new"` | 精选卡片上的行动文案。 |
 | `emptyText` | `string` | `'No releases published yet.'` | 既无 `latest` 也无 `entries` 时显示。 |
+| `filters` | `TxVersionChannelFilter[]` | - | 自定义通道筛选选项（如 全部 / Beta / 正式版 / Nightly）；省略时自动按条目的通道推导。 |
+| `filter` | `string` | - | 受控的当前筛选值（`v-model:filter`）。 |
+| `filterable` | `boolean` | `true` | 是否在历史列表上方启用可配置的通道筛选栏。 |
+| `allFilterLabel` | `string` | `'All'` | 自动推导筛选项时「全部」选项的文案。 |
 
 #### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
 | `select` | `(entry: TxVersionHistoryEntry)` | 选择历史行或精选卡片时触发。 |
+| `update:filter` | `(value: string)` | 当前通道筛选变化时触发。 |
 
 #### 插槽
 
@@ -207,6 +216,14 @@ code: |
 | `date` | `string?` | 发布日期文案。 |
 | `note` | `string?` | 单行更新摘要，只在 `latest` 上渲染。 |
 | `href` | `string?` | 存在时行或卡片渲染为链接。 |
+
+#### TxVersionChannelFilter
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `value` | `string` | 筛选键（`'all'` 匹配全部，否则匹配 `entry.channel`、`entry.tone` 或自定义 `match`）。 |
+| `label` | `string` | 筛选标签展示文案。 |
+| `match` | `((entry: TxVersionHistoryEntry) => boolean)?` | 可选的自定义条目过滤函数。 |
 
 ## 概述
 

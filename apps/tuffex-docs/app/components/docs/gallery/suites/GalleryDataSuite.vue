@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import './gallery-categories.css'
 import type { Component } from 'vue'
-import { computed, defineAsyncComponent, onMounted, ref, shallowRef } from 'vue'
+import { hasDocument, hasWindow } from '@talex-touch/utils/env'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { ClientOnly as NuxtClientOnly } from '#components'
 import { galleryText } from '../gallery-text'
 import ClientOnly from '../GallerySpecimenGate.vue'
@@ -10,6 +12,8 @@ const props = defineProps<{
   cellLabel: (en: string, zh: string) => string
   localeKey: 'en' | 'zh'
 }>()
+
+const { t } = useI18n()
 
 // Every chart specimen below sits inside `<ClientOnly>` and renders only on the client.
 // Guarding the async loaders with `import.meta.server` ensures chart runtimes (ECharts,
@@ -32,16 +36,113 @@ const GallerySankeyChart = clientAsync(() => import('../GallerySankeyChart.vue')
 const GallerySparkChart = clientAsync(() => import('../GallerySparkChart.vue'))
 const GalleryTimeseriesChart = clientAsync(() => import('../GalleryTimeseriesChart.vue'))
 
+type DataCategoryKey = 'charts' | 'visualization'
+
+const categoryMeta = computed<Record<DataCategoryKey, { label: string, desc: string, icon: string, count: number }>>(() => ({
+  charts: {
+    label: t('docsSidebar.categories.charts'),
+    desc: props.localeKey === 'zh'
+      ? '图表基础、配色、自定义图表、地图、桑基图、时序图、学习曲线、单色图与 ECharts'
+      : 'Chart primitives, palettes, custom charts, maps, Sankey, timeseries, learning curves, mono & ECharts',
+    icon: 'i-carbon-chart-line',
+    count: 9,
+  },
+  visualization: {
+    label: t('docsSidebar.categories.visualization'),
+    desc: props.localeKey === 'zh'
+      ? '迷你折线图、占比条、信号量表与差异表'
+      : 'Sparklines, allocation bars, signal meters, and diff tables',
+    icon: 'i-carbon-analytics',
+    count: 4,
+  },
+}))
+
+const categoryList = computed(() =>
+  (['charts', 'visualization'] as const).map(key => ({
+    key,
+    ...categoryMeta.value[key],
+  })),
+)
+
+const activeCategory = ref<DataCategoryKey>('charts')
+let catObserver: IntersectionObserver | null = null
+let manualLockUntil = 0
+let realignTimer: number | null = null
+const STICKY_LANDING_OFFSET = 178
+
+function scrollToCategory(key: DataCategoryKey) {
+  activeCategory.value = key
+  if (!import.meta.client || !hasDocument())
+    return
+  const el = document.getElementById(`data-cat-${key}`)
+  if (!el)
+    return
+  manualLockUntil = Date.now() + 950
+  if (realignTimer !== null) {
+    window.clearTimeout(realignTimer)
+    realignTimer = null
+  }
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  const scrollOnce = () => {
+    const top = el.getBoundingClientRect().top + window.scrollY - STICKY_LANDING_OFFSET
+    window.scrollTo({ top: Math.max(0, top), behavior: reduced ? 'auto' : 'smooth' })
+  }
+  scrollOnce()
+  realignTimer = window.setTimeout(() => {
+    realignTimer = null
+    const delta = Math.abs(el.getBoundingClientRect().top - STICKY_LANDING_OFFSET)
+    if (delta > 32)
+      scrollOnce()
+  }, 420)
+}
+
 onMounted(() => {
   void import('../GalleryAmicroSpecimen.vue').then(({ default: component }) => {
     galleryAmicroSpecimen.value = component
   })
+
+  if (!hasWindow() || !('IntersectionObserver' in window))
+    return
+  const keys: DataCategoryKey[] = ['charts', 'visualization']
+  const visible = new Set<DataCategoryKey>()
+  catObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        const key = entry.target.id.replace(/^data-cat-/, '') as DataCategoryKey
+        if (entry.isIntersecting)
+          visible.add(key)
+        else
+          visible.delete(key)
+      }
+      if (Date.now() < manualLockUntil)
+        return
+      const firstVisible = keys.find(k => visible.has(k))
+      if (firstVisible)
+        activeCategory.value = firstVisible
+    },
+    { rootMargin: '-180px 0px -65% 0px', threshold: 0 },
+  )
+  for (const key of keys) {
+    const el = document.getElementById(`data-cat-${key}`)
+    if (el)
+      catObserver.observe(el)
+  }
+})
+
+onBeforeUnmount(() => {
+  catObserver?.disconnect()
+  catObserver = null
+  if (realignTimer !== null && hasWindow()) {
+    window.clearTimeout(realignTimer)
+    realignTimer = null
+  }
 })
 
 const text = computed(() => galleryText[props.localeKey])
 
 const copy = computed(() => (props.localeKey === 'zh'
   ? {
+      categoryCount: (n: number) => `${n} 个组件`,
       allocation: [
         { key: 'stable', label: '稳定版', percent: 56, description: '面向所有用户的默认通道' },
         { key: 'beta', label: '测试版', percent: 30, description: '提前体验新特性' },
@@ -54,6 +155,7 @@ const copy = computed(() => (props.localeKey === 'zh'
       ],
     }
   : {
+      categoryCount: (n: number) => `${n} components`,
       allocation: [
         { key: 'stable', label: 'Stable', percent: 56, description: 'Default channel for everyone' },
         { key: 'beta', label: 'Beta', percent: 30, description: 'Early access to new features' },
@@ -77,207 +179,252 @@ const allocationKey = ref('stable')
 </script>
 
 <template>
-  <div class="docs-gallery__grid">
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('spark-chart')">
-        {{ cellLabel('SparkChart', '迷你折线图') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <GallerySparkChart />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
+  <div class="docs-gallery__data-suite">
+    <nav class="docs-gallery__cat-nav not-prose" aria-label="Data Suite categories">
+      <a
+        v-for="cat in categoryList"
+        :key="cat.key"
+        :href="`#data-cat-${cat.key}`"
+        class="docs-gallery__cat-pill"
+        :class="{ 'is-active': activeCategory === cat.key }"
+        @click.prevent="scrollToCategory(cat.key)"
+      >
+        <span :class="cat.icon" class="docs-gallery__cat-pill-icon" aria-hidden="true" />
+        <span>{{ cat.label }}</span>
+        <span class="docs-gallery__cat-pill-count">{{ cat.count }}</span>
+      </a>
+    </nav>
 
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('allocation-bar')">
-        {{ cellLabel('AllocationBar', '占比条') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxAllocationBar v-model="allocationKey" :segments="copy.allocation" detail v-bind="text.allocationBar" />
+    <!-- ── 1. Charts (9) ── -->
+    <section id="data-cat-charts" class="docs-gallery__cat-section">
+      <header class="docs-gallery__cat-head not-prose">
+        <div class="docs-gallery__cat-meta">
+          <span class="docs-gallery__cat-title-wrap">
+            <span :class="categoryMeta.charts.icon" class="docs-gallery__cat-icon" aria-hidden="true" />
+            <h3 class="docs-gallery__cat-title">{{ categoryMeta.charts.label }}</h3>
+          </span>
+          <span class="docs-gallery__cat-desc">{{ categoryMeta.charts.desc }}</span>
+        </div>
+        <span class="docs-gallery__cat-count">{{ copy.categoryCount(categoryMeta.charts.count) }}</span>
+      </header>
+      <div class="docs-gallery__grid">
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('chart-colors')">
+            {{ cellLabel('ChartColors', '图表配色') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__row">
+                <span
+                  v-for="index in 6"
+                  :key="index"
+                  class="docs-gallery__swatch"
+                  :style="{ background: categoricalVar(index - 1) }"
+                />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
           </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
+        </section>
 
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('signal-meter')">
-        {{ cellLabel('SignalMeter', '信号量表') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__row docs-gallery__row--loose">
-            <div v-for="level in copy.confidence" :key="level.value" class="docs-gallery__meter">
-              <TxSignalMeter :value="level.value" :max="3" :tone="level.tone" :bar-height="16" :bar-width="5" :label="level.label" />
-              <span class="docs-gallery__meter-text">{{ level.label }}</span>
-            </div>
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('charts')">
+            {{ cellLabel('Charts', '图表基础') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <GalleryChartLegend />
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
           </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
+        </section>
 
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('chart-colors')">
-        {{ cellLabel('ChartColors', '图表配色') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__row">
-            <span
-              v-for="index in 6"
-              :key="index"
-              class="docs-gallery__swatch"
-              :style="{ background: categoricalVar(index - 1) }"
-            />
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('custom-chart')">
+            {{ cellLabel('CustomChart', '自定义图表') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <GalleryCustomChart />
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
           </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
+        </section>
 
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('charts')">
-        {{ cellLabel('Charts', '图表基础') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <GalleryChartLegend />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('custom-chart')">
-        {{ cellLabel('CustomChart', '自定义图表') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <GalleryCustomChart />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('maps')">
-        {{ cellLabel('Maps', '地图') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 204px">
-        <ClientOnly>
-          <GalleryChoroplethMap />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('sankey-chart')">
-        {{ cellLabel('SankeyChart', '桑基图') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 198px; --docs-gallery-specimen-narrow: 216px">
-        <ClientOnly>
-          <GallerySankeyChart />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('timeseries-chart')">
-        {{ cellLabel('TimeseriesChart', '时序图') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 150px">
-        <ClientOnly>
-          <GalleryTimeseriesChart />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('learning-curve')">
-        {{ cellLabel('LearningCurve', '学习曲线') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 150px">
-        <ClientOnly>
-          <GalleryLearningCurve />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('mono-chart')">
-        {{ cellLabel('MonoChart', '单色图表') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 290px">
-        <NuxtClientOnly>
-          <ClientOnly>
-          <component :is="galleryAmicroSpecimen" v-if="galleryAmicroSpecimen" kind="mono-chart" />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-          </ClientOnly>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </NuxtClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('diff-table')">
-        {{ cellLabel('DiffTable', '差异表') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 119px">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxDiffTable :columns="text.diffColumns" :rows="text.diffRows" play="auto" />
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('maps')">
+            {{ cellLabel('Maps', '地图') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 204px">
+            <ClientOnly>
+              <GalleryChoroplethMap />
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
           </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('sankey-chart')">
+            {{ cellLabel('SankeyChart', '桑基图') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 198px; --docs-gallery-specimen-narrow: 216px">
+            <ClientOnly>
+              <GallerySankeyChart />
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('timeseries-chart')">
+            {{ cellLabel('TimeseriesChart', '时序图') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 150px">
+            <ClientOnly>
+              <GalleryTimeseriesChart />
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('learning-curve')">
+            {{ cellLabel('LearningCurve', '学习曲线') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 150px">
+            <ClientOnly>
+              <GalleryLearningCurve />
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('mono-chart')">
+            {{ cellLabel('MonoChart', '单色图表') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 290px">
+            <NuxtClientOnly>
+              <ClientOnly>
+                <component :is="galleryAmicroSpecimen" v-if="galleryAmicroSpecimen" kind="mono-chart" />
+                <template #fallback>
+                  <div class="docs-gallery__ph" />
+                </template>
+              </ClientOnly>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </NuxtClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('echart-charts')">
+            {{ cellLabel('ECharts', 'ECharts 图表') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <GalleryEChart />
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
       </div>
     </section>
 
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('echart-charts')">
-        {{ cellLabel('ECharts', 'ECharts 图表') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <GalleryEChart />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
+    <!-- ── 2. Visualization (4) ── -->
+    <section id="data-cat-visualization" class="docs-gallery__cat-section">
+      <header class="docs-gallery__cat-head not-prose">
+        <div class="docs-gallery__cat-meta">
+          <span class="docs-gallery__cat-title-wrap">
+            <span :class="categoryMeta.visualization.icon" class="docs-gallery__cat-icon" aria-hidden="true" />
+            <h3 class="docs-gallery__cat-title">{{ categoryMeta.visualization.label }}</h3>
+          </span>
+          <span class="docs-gallery__cat-desc">{{ categoryMeta.visualization.desc }}</span>
+        </div>
+        <span class="docs-gallery__cat-count">{{ copy.categoryCount(categoryMeta.visualization.count) }}</span>
+      </header>
+      <div class="docs-gallery__grid">
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('spark-chart')">
+            {{ cellLabel('SparkChart', '迷你折线图') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <GallerySparkChart />
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('allocation-bar')">
+            {{ cellLabel('AllocationBar', '占比条') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxAllocationBar v-model="allocationKey" :segments="copy.allocation" detail v-bind="text.allocationBar" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('signal-meter')">
+            {{ cellLabel('SignalMeter', '信号量表') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__row docs-gallery__row--loose">
+                <div v-for="level in copy.confidence" :key="level.value" class="docs-gallery__meter">
+                  <TxSignalMeter :value="level.value" :max="3" :tone="level.tone" :bar-height="16" :bar-width="5" :label="level.label" />
+                  <span class="docs-gallery__meter-text">{{ level.label }}</span>
+                </div>
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('diff-table')">
+            {{ cellLabel('DiffTable', '差异表') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 119px">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxDiffTable :columns="text.diffColumns" :rows="text.diffRows" play="auto" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
       </div>
     </section>
   </div>

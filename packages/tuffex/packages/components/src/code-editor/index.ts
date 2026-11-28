@@ -8,13 +8,14 @@ const CodeEditorToolbar = withInstall(TxCodeEditorToolbar)
 export { CodeEditor, CodeEditorToolbar, TxCodeEditor, TxCodeEditorToolbar }
 export type {
   CodeEditorEmits,
-  CodeEditorProps,
-  CodeEditorToolbarEmits,
-  CodeEditorToolbarProps,
   CodeEditorLanguage,
+  CodeEditorProps,
   CodeEditorTheme,
   CodeEditorToolbarAction,
   CodeEditorToolbarActionKey,
+  CodeEditorToolbarEmits,
+  CodeEditorToolbarProps,
+  CodeEditorViewMode,
 } from './src/types'
 export type TxCodeEditorInstance = InstanceType<typeof TxCodeEditor>
 export type TxCodeEditorToolbarInstance = InstanceType<typeof TxCodeEditorToolbar>

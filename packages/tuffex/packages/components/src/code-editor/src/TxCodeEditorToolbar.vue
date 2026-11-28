@@ -80,7 +80,7 @@ function handleAction(action: CodeEditorToolbarAction) {
   </div>
 </template>
 
-<style lang="scss" scoped>
+<style lang="scss">
 .tx-code-editor-toolbar {
   display: flex;
   align-items: center;

@@ -66,7 +66,7 @@ const modeClass = computed(() => ({
         <stop offset="100%" :stop-color="outerEndColor" stop-opacity="0.4" />
       </radialGradient>
       <filter :id="blurFilterId" x="-50%" y="-50%" width="200%" height="200%">
-        <feGaussianBlur in="SourceGraphic" stdDeviation="4" />
+        <feGaussianBlur in="SourceGraphic" stdDeviation="2.8" />
       </filter>
     </defs>
 
@@ -90,15 +90,7 @@ const modeClass = computed(() => ({
       r="32"
       fill="none"
       :stroke="`url(#${outerGradientId})`"
-      stroke-width="4"
-      pathLength="100"
-    />
-    <path
-      class="tx-tuff-logo-stroke__core-stroke"
-      d="M30,70 C35,65 45,65 50,70 Q55,75 60,70 L70,60 C75,55 75,45 70,40 L60,30 Q55,25 50,30 Q45,35 40,30 L30,40 C25,45 25,55 30,60 Z"
-      fill="none"
-      :stroke="`url(#${fillGradientId})`"
-      stroke-width="2.5"
+      stroke-width="3.6"
       pathLength="100"
     />
     <path
@@ -106,6 +98,14 @@ const modeClass = computed(() => ({
       d="M30,70 C35,65 45,65 50,70 Q55,75 60,70 L70,60 C75,55 75,45 70,40 L60,30 Q55,25 50,30 Q45,35 40,30 L30,40 C25,45 25,55 30,60 Z"
       :fill="`url(#${fillGradientId})`"
       :filter="`url(#${blurFilterId})`"
+    />
+    <path
+      class="tx-tuff-logo-stroke__core-stroke"
+      d="M30,70 C35,65 45,65 50,70 Q55,75 60,70 L70,60 C75,55 75,45 70,40 L60,30 Q55,25 50,30 Q45,35 40,30 L30,40 C25,45 25,55 30,60 Z"
+      fill="none"
+      :stroke="`url(#${fillGradientId})`"
+      stroke-width="2"
+      pathLength="100"
     />
   </svg>
 </template>
@@ -172,23 +172,52 @@ const modeClass = computed(() => ({
   cursor: pointer;
 }
 
-.tx-tuff-logo-stroke.is-hover .tx-tuff-logo-stroke__core-fill {
-  opacity: 0.14;
+/* Resting hover state renders a crisp wireframe silhouette with a whisper of
+   core glow so the logo reads clearly before pointer entry, then replays the
+   full stroke draw-in and fill bloom on hover. */
+.tx-tuff-logo-stroke.is-hover .tx-tuff-logo-stroke__outline {
+  stroke-dashoffset: 0;
+  opacity: 0.28;
+  transition: opacity 0.24s ease;
 }
 
-.tx-tuff-logo-stroke.is-hover:hover .tx-tuff-logo-stroke__outline {
+.tx-tuff-logo-stroke.is-hover .tx-tuff-logo-stroke__ring {
+  stroke-dashoffset: 0;
+  opacity: 0.62;
+  transition: opacity 0.24s ease;
+}
+
+.tx-tuff-logo-stroke.is-hover .tx-tuff-logo-stroke__core-stroke {
+  stroke-dashoffset: 0;
+  opacity: 0.85;
+  transition: opacity 0.24s ease;
+}
+
+.tx-tuff-logo-stroke.is-hover .tx-tuff-logo-stroke__core-fill {
+  opacity: 0.14;
+  transition: opacity 0.24s ease;
+}
+
+.tx-tuff-logo-stroke.is-hover:hover .tx-tuff-logo-stroke__outline,
+.tx-tuff-logo-stroke.is-hover:focus-visible .tx-tuff-logo-stroke__outline {
+  opacity: 1;
   animation: tx-tuff-logo-outline var(--tx-tuff-logo-duration, 2200ms) ease forwards;
 }
 
-.tx-tuff-logo-stroke.is-hover:hover .tx-tuff-logo-stroke__ring {
+.tx-tuff-logo-stroke.is-hover:hover .tx-tuff-logo-stroke__ring,
+.tx-tuff-logo-stroke.is-hover:focus-visible .tx-tuff-logo-stroke__ring {
+  opacity: 1;
   animation: tx-tuff-logo-ring var(--tx-tuff-logo-duration, 2200ms) ease forwards;
 }
 
-.tx-tuff-logo-stroke.is-hover:hover .tx-tuff-logo-stroke__core-stroke {
+.tx-tuff-logo-stroke.is-hover:hover .tx-tuff-logo-stroke__core-stroke,
+.tx-tuff-logo-stroke.is-hover:focus-visible .tx-tuff-logo-stroke__core-stroke {
+  opacity: 1;
   animation: tx-tuff-logo-core var(--tx-tuff-logo-duration, 2200ms) cubic-bezier(0.65, 0, 0.35, 1) forwards;
 }
 
-.tx-tuff-logo-stroke.is-hover:hover .tx-tuff-logo-stroke__core-fill {
+.tx-tuff-logo-stroke.is-hover:hover .tx-tuff-logo-stroke__core-fill,
+.tx-tuff-logo-stroke.is-hover:focus-visible .tx-tuff-logo-stroke__core-fill {
   animation: tx-tuff-logo-fill var(--tx-tuff-logo-duration, 2200ms) ease forwards;
 }
 
@@ -221,31 +250,37 @@ const modeClass = computed(() => ({
   0%,
   40% {
     stroke-dashoffset: 100;
+    opacity: 1;
+  }
+  82% {
+    stroke-dashoffset: 0;
+    opacity: 0.92;
   }
   100% {
     stroke-dashoffset: 0;
+    opacity: 0.45;
   }
 }
 
 @keyframes tx-tuff-logo-fill {
   0%,
-  60% {
+  55% {
     opacity: 0;
   }
   100% {
-    opacity: 1;
+    opacity: 0.96;
   }
 }
 
 @keyframes tx-tuff-logo-breathe {
   0%,
   100% {
-    transform: scale(1);
-    filter: brightness(1) saturate(1);
+    transform: scale(0.985);
+    filter: brightness(0.98) saturate(1);
   }
   50% {
-    transform: scale(1.03);
-    filter: brightness(1.08) saturate(1.1);
+    transform: scale(1.045);
+    filter: brightness(1.1) saturate(1.14);
   }
 }
 

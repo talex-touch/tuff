@@ -128,11 +128,12 @@
    otherwise restyle these anchors. */
 .docs-gallery .docs-gallery__cell a.docs-gallery__label {
   position: absolute;
-  top: 16px;
+  top: 13px;
   left: 20px;
   z-index: 1;
   font-size: 13px;
   font-weight: 500;
+  line-height: 18px;
   color: var(--docs-muted);
   text-decoration: none;
   border-bottom: none;
@@ -445,7 +446,7 @@
    size and rhythm are tuned for the cell; colours stay the component's. */
 .docs-gallery__doc {
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: inset 0 0 0 1px var(--docs-gallery-line);
   background: var(--docs-inline-code-bg);
 }
@@ -688,21 +689,29 @@
 }
 
 .docs-gallery__glow {
-  font-size: 24px;
-  font-weight: 650;
-  letter-spacing: 0.01em;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: color-mix(in srgb, var(--docs-ink) 64%, var(--docs-muted));
 }
 
-/* The adaptive mode's other half: a dark card is the surface `screen` was
-   designed for, so the same component that reads as nothing on the page reads
-   as a sweep here. Showing both is the point — the cell used to show neither. */
+/* Adaptive surface sweep on a theme-aware TuffEx pill card. */
 .docs-gallery__glow-card {
-  padding: 12px 18px;
-  border-radius: 12px;
-  background: #1f2124;
-  color: #f2f3f5;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: var(--tx-button-radius, 12px);
+  border: 1px solid color-mix(in srgb, var(--docs-accent) 26%, var(--docs-gallery-line));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--docs-accent) 12%, var(--tx-bg-color-overlay, var(--tx-bg-color))),
+    color-mix(in srgb, var(--docs-inline-code-bg) 82%, var(--tx-bg-color-overlay, var(--tx-bg-color)))
+  );
+  color: var(--docs-ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12.5px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .docs-gallery__beam-card {
@@ -833,8 +842,8 @@
    cell (the stage is not positioned), so it never shifts the specimen. */
 .docs-gallery__replay {
   position: absolute;
-  top: 11px;
-  right: 12px;
+  top: var(--docs-gallery-bar-pad, 8px);
+  right: var(--docs-gallery-bar-pad, 8px);
   z-index: 2;
   display: inline-flex;
   align-items: center;
@@ -843,7 +852,7 @@
   height: 28px;
   padding: 0;
   border: 1px solid var(--docs-gallery-line);
-  border-radius: 8px;
+  border-radius: var(--docs-gallery-control-radius, 9px);
   background: var(--tx-bg-color, transparent);
   color: var(--docs-muted);
   cursor: pointer;
@@ -894,9 +903,11 @@
   min-height: 0;
 }
 
-/* MarkdownEditor's cell: the draft's source, with the editor one click away. */
+/* MarkdownEditor's cell: the draft's source, with the editor one click away.
+   Symmetric 5px top/right/bottom inset around the 10px-radius sm button nests
+   concentrically inside the 16px (.docs-gallery__doc) frame with 1px hairline. */
 .docs-gallery__md-card .docs-gallery__doc-bar {
-  padding-block: 5px;
+  padding: 5px 5px 5px 12px;
 }
 
 .docs-gallery__md-source {
@@ -1030,7 +1041,7 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: var(--tx-button-radius, 10px);
   background: var(--docs-inline-code-bg);
   box-shadow: inset 0 0 0 1px var(--docs-gallery-line);
   font-size: 12px;
@@ -1066,7 +1077,7 @@
   display: grid;
   place-items: center;
   height: 140px;
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
 }
 
@@ -1180,7 +1191,7 @@
   position: relative;
   height: 140px;
   overflow: hidden;
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--docs-inline-code-bg);
 }
 
@@ -1218,7 +1229,7 @@
   display: block;
   width: 100%;
   aspect-ratio: 4 / 3;
-  border-radius: 8px;
+  border-radius: 7px;
   object-fit: cover;
 }
 

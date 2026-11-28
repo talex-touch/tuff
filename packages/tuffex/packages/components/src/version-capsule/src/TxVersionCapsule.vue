@@ -1,7 +1,9 @@
 <script lang="ts" setup>
 import type { TxVersionCapsulePanel, TxVersionCapsuleProps } from './types'
-import { computed, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
+import { computed, ref, useSlots, watch } from 'vue'
 import { useMorphWindow } from '../../../../utils/use-morph-window'
+import TxAutoSizer from '../../auto-sizer/src/TxAutoSizer.vue'
+import TxPopover from '../../popover/src/TxPopover.vue'
 
 defineOptions({ name: 'TxVersionCapsule' })
 
@@ -9,7 +11,11 @@ const props = withDefaults(defineProps<TxVersionCapsuleProps>(), {
   channel: undefined,
   tone: 'preview',
   historyLabel: 'History',
+  showHistoryLabel: false,
   downloadLabel: 'Download this build',
+  viewMoreLabel: 'View more',
+  backLabel: 'Back',
+  showViewMore: true,
   panel: undefined,
   disabled: false,
   closeOnClickOutside: true,
@@ -22,10 +28,10 @@ const emit = defineEmits<{
   'history': []
 }>()
 
-const rootRef = ref<HTMLElement | null>(null)
 const downloadRef = ref<HTMLButtonElement | null>(null)
 const historyRef = ref<HTMLButtonElement | null>(null)
 const internalPanel = ref<TxVersionCapsulePanel>(null)
+const slideDirection = ref<'none' | 'forward' | 'backward'>('none')
 
 /**
  * `panel` is optional, so the capsule works both controlled and uncontrolled.
@@ -41,35 +47,64 @@ const activePanel = computed<TxVersionCapsulePanel>({
     const current = isControlled.value ? props.panel! : internalPanel.value
     if (current === value)
       return
+    if (current === 'download' && value === 'history')
+      slideDirection.value = 'forward'
+    else if (current === 'history' && value === 'download')
+      slideDirection.value = 'backward'
+    else
+      slideDirection.value = 'none'
     internalPanel.value = value
     emit('update:panel', value)
   },
 })
 
-// Opening a panel eases the segment's tint; a hover repaints at once.
 const morphing = useMorphWindow(activePanel, 200)
 
-/**
- * A segment whose panel slot is empty is a plain trigger: it still emits, but
- * opens nothing, so a host can wire it to its own dialog without the capsule
- * flashing an empty popover underneath.
- */
 const slots = useSlots()
+const hasDownloadSlot = computed(() => Boolean(slots.download))
+const hasHistorySlot = computed(() => Boolean(slots.history))
+const hasBothSlots = computed(() => hasDownloadSlot.value && hasHistorySlot.value)
 
 function hasPanel(target: Exclude<TxVersionCapsulePanel, null>) {
-  return target === 'download' ? Boolean(slots.download) : Boolean(slots.history)
+  return target === 'download' ? hasDownloadSlot.value : hasHistorySlot.value
 }
+
+const popoverOpen = computed(() => Boolean(activePanel.value && hasPanel(activePanel.value)))
+
+const slideTransitionName = computed(() => {
+  if (slideDirection.value === 'forward')
+    return 'tx-vcf'
+  if (slideDirection.value === 'backward')
+    return 'tx-vcb'
+  return ''
+})
 
 function toggle(target: Exclude<TxVersionCapsulePanel, null>) {
   if (props.disabled)
     return
   if (hasPanel(target))
     activePanel.value = activePanel.value === target ? null : target
-  // Branched rather than `emit(target)` so each call resolves a single overload.
   if (target === 'download')
     emit('download')
   else
     emit('history')
+}
+
+function openHistory() {
+  if (props.disabled || !hasHistorySlot.value)
+    return
+  activePanel.value = 'history'
+}
+
+function openDownload() {
+  if (props.disabled || !hasDownloadSlot.value)
+    return
+  activePanel.value = 'download'
+}
+
+function handlePopoverModelUpdate(nextOpen: boolean) {
+  if (!nextOpen && activePanel.value !== null)
+    activePanel.value = null
 }
 
 /** Close and hand focus back to the segment that opened the panel. */
@@ -82,321 +117,290 @@ function close() {
     historyRef.value?.focus()
 }
 
-function onDocumentPointerDown(event: PointerEvent) {
-  if (!props.closeOnClickOutside)
-    return
-  const target = event.target as Node | null
-  if (target && rootRef.value?.contains(target))
-    return
-  activePanel.value = null
-}
-
-function onDocumentKeydown(event: KeyboardEvent) {
-  if (props.closeOnEsc && event.key === 'Escape')
-    close()
-}
-
-function bind() {
-  document.addEventListener('pointerdown', onDocumentPointerDown, true)
-  document.addEventListener('keydown', onDocumentKeydown)
-}
-
-function unbind() {
-  document.removeEventListener('pointerdown', onDocumentPointerDown, true)
-  document.removeEventListener('keydown', onDocumentKeydown)
-}
-
-watch(activePanel, (value) => {
-  if (value)
-    bind()
-  else
-    unbind()
-})
-
-// A capsule disabled while a panel is open would otherwise strand it.
 watch(() => props.disabled, (disabled) => {
   if (disabled)
     activePanel.value = null
 })
 
-// A controlled `panel` can already be open on first render. The activePanel
-// watch only fires on change, so bind the dismiss listeners here for the
-// mount-open case — otherwise closeOnClickOutside / closeOnEsc stay dead until
-// the first manual toggle.
-onMounted(() => {
-  if (activePanel.value)
-    bind()
+watch(activePanel, (next, prev) => {
+  if (prev === 'download' && next === 'history')
+    slideDirection.value = 'forward'
+  else if (prev === 'history' && next === 'download')
+    slideDirection.value = 'backward'
+  else
+    slideDirection.value = 'none'
 })
 
-onBeforeUnmount(unbind)
-
-defineExpose({ close, downloadRef, historyRef })
+defineExpose({ close, openDownload, openHistory, downloadRef, historyRef })
 </script>
 
 <template>
   <div
-    ref="rootRef"
     class="tx-version-capsule"
     :class="[`tx-version-capsule--${tone}`, { 'is-disabled': disabled, 'is-morphing': morphing }]"
   >
-    <div class="tx-version-capsule__bar">
-      <button
-        ref="downloadRef"
-        type="button"
-        class="tx-version-capsule__segment tx-version-capsule__segment--download"
-        :class="{ 'is-open': activePanel === 'download' }"
-        :disabled="disabled"
-        :aria-label="downloadLabel"
-        :aria-expanded="activePanel === 'download'"
-        aria-haspopup="dialog"
-        @click="toggle('download')"
-      >
-        <span class="tx-version-capsule__dot" aria-hidden="true" />
-        <span v-if="channel" class="tx-version-capsule__channel">{{ channel }}</span>
-        <span class="tx-version-capsule__version">{{ version }}</span>
-        <svg
-          class="tx-version-capsule__glyph"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <path d="m7 10 5 5 5-5" />
-          <path d="M12 15V3" />
-        </svg>
-      </button>
+    <TxPopover
+      :model-value="popoverOpen"
+      trigger="manual"
+      :toggle-on-reference-click="false"
+      placement="bottom"
+      :offset="8"
+      :width="0"
+      :min-width="292"
+      :max-width="324"
+      :match-reference-width="false"
+      :keep-alive-content="false"
+      panel-variant="solid"
+      panel-background="refraction"
+      panel-shadow="soft"
+      :panel-radius="16"
+      :panel-padding="8"
+      :disabled="disabled"
+      :close-on-click-outside="closeOnClickOutside"
+      :close-on-esc="closeOnEsc"
+      @update:model-value="handlePopoverModelUpdate"
+    >
+      <template #reference>
+        <div class="tx-vc-bar">
+          <button
+            ref="downloadRef"
+            type="button"
+            class="tx-vc-seg tx-version-capsule__segment--download"
+            :class="{ 'is-open': activePanel === 'download' }"
+            :disabled="disabled"
+            :aria-label="downloadLabel"
+            :aria-expanded="activePanel === 'download'"
+            aria-haspopup="dialog"
+            @click="toggle('download')"
+          >
+            <span v-if="channel" class="tx-vc-cb">
+              <span class="tx-vc-dot" aria-hidden="true" />
+              <span class="tx-version-capsule__channel tx-vc-ch-t">{{ channel }}</span>
+            </span>
+            <span v-else class="tx-vc-dot" aria-hidden="true" />
+            <span class="tx-version-capsule__version tx-vc-ver">{{ version }}</span>
+            <svg
+              class="tx-vc-gl"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <path d="m7 10 5 5 5-5" />
+              <path d="M12 15V3" />
+            </svg>
+          </button>
 
-      <span class="tx-version-capsule__divider" aria-hidden="true" />
+          <span class="tx-vc-div" aria-hidden="true" />
 
-      <button
-        ref="historyRef"
-        type="button"
-        class="tx-version-capsule__segment tx-version-capsule__segment--history"
-        :class="{ 'is-open': activePanel === 'history' }"
-        :disabled="disabled"
-        :aria-expanded="activePanel === 'history'"
-        aria-haspopup="dialog"
-        @click="toggle('history')"
-      >
-        <span class="tx-version-capsule__history">{{ historyLabel }}</span>
-        <svg
-          class="tx-version-capsule__chevron"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-      </button>
-    </div>
+          <button
+            ref="historyRef"
+            type="button"
+            class="tx-vc-seg tx-vc-hs tx-version-capsule__segment--history"
+            :class="{ 'is-open': activePanel === 'history', 'has-label': showHistoryLabel }"
+            :disabled="disabled"
+            :aria-label="historyLabel"
+            :title="historyLabel"
+            :aria-expanded="activePanel === 'history'"
+            aria-haspopup="dialog"
+            @click="toggle('history')"
+          >
+            <span v-if="showHistoryLabel" class="tx-vc-hl">{{ historyLabel }}</span>
+            <svg
+              class="tx-vc-ch"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.9"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+        </div>
+      </template>
 
-    <Transition name="tx-version-capsule-panel">
       <div
-        v-if="activePanel === 'download' && $slots.download"
-        class="tx-version-capsule__panel tx-version-capsule__panel--start"
-        role="dialog"
-        :aria-label="downloadLabel"
+        v-if="popoverOpen"
+        class="tx-vc-pop"
+        :class="{ 'has-drilldown': hasBothSlots }"
       >
-        <slot name="download" :close="close" />
-      </div>
-    </Transition>
+        <TxAutoSizer
+          :width="false"
+          :height="true"
+          :duration-ms="240"
+          easing="cubic-bezier(0.22, 1, 0.36, 1)"
+          outer-class="tx-vc-vp"
+        >
+          <Transition :name="slideTransitionName">
+            <div v-if="activePanel === 'download'" key="download" class="tx-vc-pn">
+              <slot
+                name="download"
+                :close="close"
+                :open-history="openHistory"
+                :open-download="openDownload"
+              />
+              <div v-if="hasBothSlots && showViewMore" class="tx-vc-mw">
+                <button
+                  type="button"
+                  class="tx-version-capsule__more-btn tx-vc-mb"
+                  @click="openHistory"
+                >
+                  <span>{{ viewMoreLabel }}</span>
+                  <svg
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m6 4 4 4-4 4" />
+                  </svg>
+                </button>
+              </div>
+            </div>
 
-    <Transition name="tx-version-capsule-panel">
-      <div
-        v-if="activePanel === 'history' && $slots.history"
-        class="tx-version-capsule__panel tx-version-capsule__panel--end"
-        role="dialog"
-        :aria-label="historyLabel"
-      >
-        <slot name="history" :close="close" />
+            <div v-else-if="activePanel === 'history'" key="history" class="tx-vc-pn">
+              <div v-if="hasBothSlots" class="tx-vc-nav">
+                <button
+                  type="button"
+                  class="tx-version-capsule__back-btn tx-vc-bb"
+                  @click="openDownload"
+                >
+                  <svg
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m10 4-4 4 4 4" />
+                  </svg>
+                  <span>{{ backLabel }}</span>
+                </button>
+                <span class="tx-vc-nt">{{ historyLabel }}</span>
+              </div>
+              <slot
+                name="history"
+                :close="close"
+                :open-history="openHistory"
+                :open-download="openDownload"
+              />
+            </div>
+          </Transition>
+        </TxAutoSizer>
       </div>
-    </Transition>
+    </TxPopover>
   </div>
 </template>
 
-<style lang="scss" scoped>
+<style lang="scss">
+.tx-version-capsule, .tx-vc-pop, .tx-vp {
+  --_fg: var(--tx-text-color-primary);
+  --_re: var(--tx-text-color-regular);
+  --_mu: var(--tx-text-color-secondary);
+  --_pl: var(--tx-text-color-placeholder);
+  --_fl: var(--tx-fill-color-light);
+  --_fl2: var(--tx-fill-color-lighter);
+  --_bd: var(--tx-border-color-lighter);
+}
 .tx-version-capsule {
-  --tx-version-capsule-height: 44px;
-  --tx-version-capsule-bg: var(--tx-fill-color-light);
+  --tx-version-capsule-height: 34px;
+  --tx-version-capsule-radius: var(--tx-button-radius, 12px);
+  --tx-version-capsule-bg: var(--tx-bg-color-overlay, var(--tx-bg-color, #fff));
   --tx-version-capsule-border-color: var(--tx-border-color);
-  --tx-version-capsule-padding: 0 16px;
-  --tx-version-capsule-gap: 9px;
-  --tx-version-capsule-font-size: var(--tx-font-size-base, 14px);
+  --tx-version-capsule-padding: 0 10px 0 7px;
+  --tx-version-capsule-gap: 7px;
+  --tx-version-capsule-font-size: 13px;
   --tx-version-capsule-tone: var(--tx-color-primary);
   --tx-version-capsule-accent: var(--tx-color-primary);
-  --tx-version-capsule-panel-offset: 10px;
-  --tx-version-capsule-panel-width: 394px;
-
   position: relative;
   display: inline-flex;
+  &--stable { --tx-version-capsule-tone: var(--tx-color-success); }
+  &--nightly { --tx-version-capsule-tone: var(--tx-color-warning); }
+  &--neutral { --tx-version-capsule-tone: var(--_mu); }
+  &.is-morphing .tx-vc-seg { transition: background-color 0.2s; }
+  &.is-morphing .tx-vc-gl { transition: color 0.2s; }
+  &.is-disabled .tx-vc-seg { cursor: not-allowed; opacity: 0.5; &:hover { background: transparent; } }
 }
+.tx-vp {
+  --tx-version-panel-bg: var(--tx-bg-color-overlay);
+  --tx-version-panel-border-color: var(--tx-border-color);
+  --tx-version-panel-radius: 16px;
+  --tx-version-panel-accent: var(--tx-color-primary);
+  display: flex; flex-direction: column;
+  border: 1px solid var(--tx-version-panel-border-color); border-radius: var(--tx-version-panel-radius);
+  background: var(--tx-version-panel-bg); box-shadow: var(--tx-box-shadow-dark, 0 24px 60px rgb(0 0 0 / 40%)); overflow: hidden;
+}
+.tx-vc-bar {
+  display: inline-flex; align-items: stretch; height: var(--tx-version-capsule-height);
+  border: 1px solid var(--tx-version-capsule-border-color); border-radius: var(--tx-version-capsule-radius);
+  background: var(--tx-version-capsule-bg); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); overflow: hidden; transition: border-color 0.2s, box-shadow 0.2s;
+}
+.tx-vc-seg {
+  display: inline-flex; align-items: center; gap: var(--tx-version-capsule-gap); padding: var(--tx-version-capsule-padding);
+  border: 0; background: transparent; color: var(--_fg); font: inherit; font-size: var(--tx-version-capsule-font-size); line-height: 1; cursor: pointer;
+  &:hover { background: var(--_fl); }
+  &.is-open { background: var(--tx-fill-color); }
+  &:hover, &.is-open { .tx-vc-gl, .tx-vc-ch { color: var(--_fg); } }
+  &:focus-visible { outline: 2px solid var(--tx-version-capsule-accent); outline-offset: -2px; }
+}
+.tx-vc-hs {
+  justify-content: center; min-width: calc(var(--tx-version-capsule-height) - 2px); padding: 0 8px;
+  &.has-label { padding: 0 11px; }
+  &.is-open .tx-vc-ch { transform: rotate(180deg); }
+}
+.tx-vc-cb {
+  display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 6px;
+  border-radius: max(5px, calc(var(--tx-version-capsule-radius) - 6px)); background: var(--_fl);
+}
+.tx-vc-dot { width: 6px; height: 6px; flex: none; border-radius: 999px; background: var(--tx-version-capsule-tone); }
+.tx-vc-ch-t { color: var(--_re); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; line-height: 1; }
+.tx-vc-ver { font: 600 12.5px/1 ui-monospace, monospace; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.tx-vc-gl, .tx-vc-ch { width: 14px; height: 14px; flex: none; color: var(--_mu); }
+.tx-vc-ch { transition: transform 0.2s, color 0.2s; }
+.tx-vc-div { width: 1px; flex: none; background: color-mix(in srgb, var(--tx-version-capsule-border-color) 75%, transparent); }
+.tx-vc-hl { color: var(--_re); font-size: 12.5px; font-weight: 500; }
 
-.tx-version-capsule--stable {
-  --tx-version-capsule-tone: var(--tx-color-success);
+.tx-vc-pop {
+  display: flex; flex-direction: column; width: 100%; text-align: left;
+  .tx-vp { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  .tx-vd-bs, .tx-vh-b { padding: 0; }
+  .tx-vd-n { margin-bottom: 6px; padding: 8px 10px; border: 1px solid var(--_bd); border-radius: 8px; }
+  &.has-drilldown .tx-vh-hd { display: none; }
 }
+.tx-vc-vp { position: relative; width: 100%; overflow: hidden; }
+.tx-vc-pn { width: 100%; }
+.tx-vc-mw { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--_bd); }
+.tx-vc-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--_bd); }
+.tx-vc-mb, .tx-vc-bb {
+  display: inline-flex; align-items: center; border: 0; background: transparent; color: var(--_mu);
+  font: inherit; font-size: 12px; font-weight: 500; line-height: 1; cursor: pointer; transition: background-color 0.16s, color 0.16s;
+  svg { width: 14px; height: 14px; flex: none; }
+  &:hover { background: var(--_fl); color: var(--_fg); }
+  &:focus-visible { outline: 2px solid var(--tx-color-primary); outline-offset: -2px; }
+}
+.tx-vc-mb { display: flex; justify-content: space-between; width: 100%; height: 30px; padding: 0 10px; border-radius: 7px; svg { transition: transform 0.16s; } &:hover svg { transform: translateX(2px); } }
+.tx-vc-bb { gap: 3px; height: 24px; padding: 0 7px 0 4px; border-radius: 6px; }
+.tx-vc-nt { font-size: 12px; font-weight: 600; color: var(--_fg); padding-right: 4px; }
 
-.tx-version-capsule--nightly {
-  --tx-version-capsule-tone: var(--tx-color-warning);
-}
-
-.tx-version-capsule--neutral {
-  --tx-version-capsule-tone: var(--tx-text-color-secondary);
-}
-
-.tx-version-capsule__bar {
-  display: inline-flex;
-  align-items: stretch;
-  height: var(--tx-version-capsule-height);
-  border: 1px solid var(--tx-version-capsule-border-color);
-  border-radius: 999px;
-  background: var(--tx-version-capsule-bg);
-  overflow: hidden;
-  transition:
-    border-color var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out),
-    transform var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out);
-}
-
-.tx-version-capsule__segment {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--tx-version-capsule-gap);
-  padding: var(--tx-version-capsule-padding);
-  border: 0;
-  background: transparent;
-  color: var(--tx-text-color-primary);
-  font: inherit;
-  font-size: var(--tx-version-capsule-font-size);
-  cursor: pointer;
-}
-
-.tx-version-capsule.is-morphing .tx-version-capsule__segment {
-  transition: background-color var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out);
-}
-
-.tx-version-capsule__segment:hover,
-.tx-version-capsule__segment.is-open {
-  background: color-mix(in srgb, var(--tx-version-capsule-accent) 16%, transparent);
-}
-
-.tx-version-capsule__segment:focus-visible {
-  outline: 2px solid var(--tx-version-capsule-accent);
-  outline-offset: -2px;
-}
-
-.tx-version-capsule__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--tx-version-capsule-tone);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--tx-version-capsule-tone) 70%, transparent);
-}
-
-.tx-version-capsule__channel {
-  color: var(--tx-version-capsule-tone);
-  font-size: calc(var(--tx-version-capsule-font-size) - 3px);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
-.tx-version-capsule__version {
-  font-weight: 680;
-}
-
-.tx-version-capsule__glyph,
-.tx-version-capsule__chevron {
-  width: calc(var(--tx-version-capsule-font-size) + 2px);
-  height: calc(var(--tx-version-capsule-font-size) + 2px);
-  flex: none;
-}
-
-.tx-version-capsule__glyph {
-  color: var(--tx-text-color-secondary);
-}
-
-.tx-version-capsule.is-morphing .tx-version-capsule__glyph {
-  transition: color var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out);
-}
-
-.tx-version-capsule__segment--download:hover .tx-version-capsule__glyph,
-.tx-version-capsule__segment--download.is-open .tx-version-capsule__glyph {
-  color: var(--tx-version-capsule-accent);
-}
-
-.tx-version-capsule__divider {
-  width: 1px;
-  flex: none;
-  background: var(--tx-version-capsule-border-color);
-}
-
-.tx-version-capsule__history {
-  color: var(--tx-version-capsule-accent);
-  font-weight: 620;
-}
-
-.tx-version-capsule__chevron {
-  color: var(--tx-version-capsule-accent);
-  transition: transform var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out);
-}
-
-.tx-version-capsule__segment--history.is-open .tx-version-capsule__chevron {
-  transform: rotate(180deg);
-}
-
-.tx-version-capsule.is-disabled .tx-version-capsule__segment {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.tx-version-capsule.is-disabled .tx-version-capsule__segment:hover {
-  background: transparent;
-}
-
-.tx-version-capsule__panel {
-  position: absolute;
-  top: calc(100% + var(--tx-version-capsule-panel-offset));
-  z-index: var(--tx-index-popper, 2000);
-  width: var(--tx-version-capsule-panel-width);
-  max-width: min(var(--tx-version-capsule-panel-width), calc(100vw - 32px));
-  text-align: left;
-}
-
-.tx-version-capsule__panel--start {
-  left: 0;
-}
-
-.tx-version-capsule__panel--end {
-  right: 0;
-}
-
-.tx-version-capsule-panel-enter-active,
-.tx-version-capsule-panel-leave-active {
-  transition:
-    opacity var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out),
-    transform var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out);
-}
-
-.tx-version-capsule-panel-enter-from,
-.tx-version-capsule-panel-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
-}
+.tx-vcf-enter-active, .tx-vcb-enter-active, .tx-vcf-leave-active, .tx-vcb-leave-active { transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease; }
+.tx-vcf-leave-active, .tx-vcb-leave-active { position: absolute; inset: 0 0 auto; width: 100%; pointer-events: none; }
+.tx-vcf-enter-from, .tx-vcb-leave-to { transform: translateX(100%); opacity: 0; }
+.tx-vcf-leave-to, .tx-vcb-enter-from { transform: translateX(-100%); opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {
-  .tx-version-capsule__bar,
-  .tx-version-capsule.is-morphing .tx-version-capsule__segment,
-  .tx-version-capsule.is-morphing .tx-version-capsule__glyph,
-  .tx-version-capsule__chevron,
-  .tx-version-capsule-panel-enter-active,
-  .tx-version-capsule-panel-leave-active {
-    transition: none;
-  }
+  .tx-vc-bar, .tx-vc-seg, .tx-vc-gl, .tx-vc-ch,
+  .tx-vcf-enter-active, .tx-vcf-leave-active, .tx-vcb-enter-active, .tx-vcb-leave-active { transition: none; }
 }
 </style>
