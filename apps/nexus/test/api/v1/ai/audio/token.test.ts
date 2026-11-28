@@ -23,7 +23,7 @@ const pricingMocks = vi.hoisted(() => ({
 
 const realtimeStoreMocks = vi.hoisted(() => ({
   REALTIME_ASR_MAX_CONCURRENT_SESSIONS: 2,
-  REALTIME_ASR_TTL_SECONDS: 300,
+  REALTIME_ASR_TTL_SECONDS: 60,
   REALTIME_ASR_SETTLE_GRACE_MS: 60_000,
   countActiveRealtimeAsrSessions: vi.fn(),
   createRealtimeAsrSession: vi.fn(),
@@ -115,36 +115,41 @@ describe('Nexus voice token issuance and settlement', () => {
       secondaryCreditsPerUnit: 1,
       minCredits: 1,
     })
-    pricingMocks.computeCreditReservation.mockReturnValue(1200)
+    pricingMocks.computeCreditReservation.mockReturnValue(240)
     creditsMocks.consumeCredits.mockResolvedValue({
       ledgerId: 'ledger-reserve-1',
-      amount: 1200,
+      amount: 240,
     })
     creditsMocks.releaseConsumedCredits.mockResolvedValue({
       ledgerId: 'ledger-release-1',
-      amount: 1175,
+      amount: 240,
     })
   })
 
   describe('POST /api/v1/ai/audio/token', () => {
-    it('requires verified email, reserves max 300s credits upfront, persists session, and returns sessionId', async () => {
+    it('requires verified email, reserves 60s minimum-TTL credits upfront, persists session, and returns sessionId', async () => {
       const result = await tokenHandler(fakeEvent)
 
       expect(authMocks.requireVerifiedEmail).toHaveBeenCalledWith(fakeEvent, { userId: 'user-123', deviceId: 'dev-1' })
-      expect(pricingMocks.computeCreditReservation).toHaveBeenCalledWith(expect.anything(), { seconds: 300 })
+      expect(pricingMocks.computeCreditReservation).toHaveBeenCalledWith(expect.anything(), { seconds: 60 })
       expect(creditsMocks.consumeCredits).toHaveBeenCalledWith(
         fakeEvent,
         'user-123',
-        1200,
+        240,
         'asr-realtime-reservation',
-        expect.objectContaining({ ttlSeconds: 300, reservedCredits: 1200 }),
+        expect.objectContaining({ ttlSeconds: 60, reservedCredits: 240 }),
         expect.objectContaining({ idempotencyKey: expect.stringMatching(/^asr-rt-reserve:/) }),
+      )
+      expect(dashscopeMocks.createDashScopeEphemeralToken).toHaveBeenCalledWith(
+        fakeEvent,
+        { id: 'dashscope-main', authRef: 'ref-1' },
+        60,
       )
       expect(realtimeStoreMocks.createRealtimeAsrSession).toHaveBeenCalledTimes(1)
       expect(result).toMatchObject({
         token: 'st-mock-token-xyz',
         expiresAt: 1791761400,
-        reservedCredits: 1200,
+        reservedCredits: 240,
         sessionId: expect.any(String),
       })
     })
@@ -178,14 +183,14 @@ describe('Nexus voice token issuance and settlement', () => {
       expect(creditsMocks.consumeCredits).not.toHaveBeenCalled()
     })
 
-    it('releases the credit hold when DashScope token issuance fails', async () => {
+    it('releases the credit hold when DashScope token issuance fails (no live token minted)', async () => {
       dashscopeMocks.createDashScopeEphemeralToken.mockRejectedValueOnce(new Error('upstream down'))
 
       await expect(tokenHandler(fakeEvent)).rejects.toThrow('upstream down')
       expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledWith(
         fakeEvent,
         'user-123',
-        1200,
+        240,
         'asr-realtime-reservation-release',
         expect.objectContaining({ reasonCode: 'provider_token_failed' }),
         expect.objectContaining({ reservationLedgerId: 'ledger-reserve-1' }),
@@ -195,17 +200,19 @@ describe('Nexus voice token issuance and settlement', () => {
   })
 
   describe('POST /api/v1/ai/audio/settle', () => {
-    it('settles against persisted reservation and refunds unused reserved credits', async () => {
+    it('refuses to refund a live non-revocable token when settled immediately at t=0 with durationMs=0 and transcriptUnits=0', async () => {
       const nowIso = new Date().toISOString()
-      const futureIso = new Date(Date.now() + 300_000).toISOString()
+      const futureIso = new Date(Date.now() + 60_000).toISOString()
       const session = {
-        id: 'session-abc-123',
+        id: 'session-zero-bypass',
         userId: 'user-123',
         providerId: 'dashscope-main',
         status: 'active',
-        ttlSeconds: 300,
-        reservedCredits: 1200,
+        ttlSeconds: 60,
+        reservedCredits: 240,
         chargedCredits: null,
+        durationMs: null,
+        transcriptUnits: null,
         reservationLedgerId: 'ledger-reserve-1',
         pricing: { creditsPerUnit: 4, secondaryCreditsPerUnit: 1, minCredits: 1 },
         createdAt: nowIso,
@@ -213,12 +220,18 @@ describe('Nexus voice token issuance and settlement', () => {
         creditsReleasedAt: null,
       }
       realtimeStoreMocks.getRealtimeAsrSession.mockResolvedValueOnce(session)
-      realtimeStoreMocks.claimRealtimeAsrSessionForSettlement.mockResolvedValueOnce({ ...session, status: 'settled', chargedCredits: 25 })
+      realtimeStoreMocks.claimRealtimeAsrSessionForSettlement.mockResolvedValueOnce({
+        ...session,
+        status: 'settled',
+        chargedCredits: 240,
+        durationMs: 0,
+        transcriptUnits: 0,
+      })
       h3Mocks.readBody.mockResolvedValueOnce({
-        sessionId: 'session-abc-123',
-        durationMs: 4200, // 5s -> 20 credits
-        transcriptUnits: 25, // 25 credits -> max = 25
-        requestId: 'req-realtime-1',
+        sessionId: 'session-zero-bypass',
+        durationMs: 0,
+        transcriptUnits: 0,
+        requestId: 'req-bypass-1',
       })
 
       const result = await settleHandler(fakeEvent)
@@ -226,57 +239,84 @@ describe('Nexus voice token issuance and settlement', () => {
       expect(realtimeStoreMocks.claimRealtimeAsrSessionForSettlement).toHaveBeenCalledWith(
         fakeEvent,
         'user-123',
-        'session-abc-123',
-        expect.objectContaining({ chargedCredits: 25, durationMs: 4200, transcriptUnits: 25 }),
+        'session-zero-bypass',
+        expect.objectContaining({
+          expectedChargedCredits: null,
+          chargedCredits: 240,
+          durationMs: 0,
+          transcriptUnits: 0,
+        }),
       )
-      expect(creditsMocks.releaseConsumedCredits).toHaveBeenCalledWith(
-        fakeEvent,
-        'user-123',
-        1175,
-        'asr-realtime-reservation-release',
-        expect.objectContaining({ sessionId: 'session-abc-123', chargedCredits: 25, reservedCredits: 1200 }),
-        { idempotencyKey: 'asr-rt-release:session-abc-123:25', reservationLedgerId: 'ledger-reserve-1' },
-      )
+      expect(creditsMocks.releaseConsumedCredits).not.toHaveBeenCalled()
+      expect(creditsMocks.consumeCredits).not.toHaveBeenCalled()
       expect(result).toEqual({
         settled: true,
-        creditsCharged: 25,
-        creditsRefunded: 1175,
+        creditsCharged: 240,
+        creditsRefunded: 0,
         ledgerId: 'ledger-reserve-1',
       })
     })
 
-    it('enforces server wall-clock elapsed floor so reporting 0ms after 60s still bills >= 60s', async () => {
-      const createdAt = new Date(Date.now() - 60_500).toISOString()
-      const expiresAt = new Date(Date.now() + 240_000).toISOString()
+    it('settles upward overage delta when cumulative transcript units exceed the reserved floor', async () => {
+      const nowIso = new Date().toISOString()
+      const futureIso = new Date(Date.now() + 60_000).toISOString()
       const session = {
-        id: 'session-floor',
+        id: 'session-overage',
         userId: 'user-123',
         providerId: 'dashscope-main',
-        status: 'active',
-        ttlSeconds: 300,
-        reservedCredits: 1200,
-        chargedCredits: null,
-        reservationLedgerId: 'ledger-reserve-2',
+        status: 'settled',
+        ttlSeconds: 60,
+        reservedCredits: 240,
+        chargedCredits: 240,
+        durationMs: 4200,
+        transcriptUnits: 25,
+        reservationLedgerId: 'ledger-reserve-1',
         pricing: { creditsPerUnit: 4, secondaryCreditsPerUnit: 1, minCredits: 1 },
-        createdAt,
-        expiresAt,
+        createdAt: nowIso,
+        expiresAt: futureIso,
         creditsReleasedAt: null,
       }
       realtimeStoreMocks.getRealtimeAsrSession.mockResolvedValueOnce(session)
-      realtimeStoreMocks.claimRealtimeAsrSessionForSettlement.mockImplementationOnce(async (_e, _u, _s, params) => ({
+      realtimeStoreMocks.claimRealtimeAsrSessionForSettlement.mockResolvedValueOnce({
         ...session,
         status: 'settled',
-        chargedCredits: params.chargedCredits,
-      }))
+        chargedCredits: 325,
+        durationMs: 14200,
+        transcriptUnits: 325,
+      })
+      creditsMocks.consumeCredits.mockResolvedValueOnce({
+        ledgerId: 'ledger-overage-1',
+        amount: 85,
+      })
       h3Mocks.readBody.mockResolvedValueOnce({
-        sessionId: 'session-floor',
-        durationMs: 0,
-        transcriptUnits: 0,
+        sessionId: 'session-overage',
+        durationMs: 10000,
+        transcriptUnits: 300,
+        requestId: 'req-overage-2',
       })
 
       const result = await settleHandler(fakeEvent)
-      expect(result.creditsCharged).toBeGreaterThanOrEqual(240)
-      expect(result.creditsRefunded).toBe(1200 - result.creditsCharged)
+
+      expect(creditsMocks.releaseConsumedCredits).not.toHaveBeenCalled()
+      expect(creditsMocks.consumeCredits).toHaveBeenCalledWith(
+        fakeEvent,
+        'user-123',
+        85,
+        'asr-realtime-overage',
+        expect.objectContaining({
+          sessionId: 'session-overage',
+          previousChargedCredits: 240,
+          chargedCredits: 325,
+          reservedCredits: 240,
+        }),
+        { idempotencyKey: 'asr-rt-overage:session-overage:240:325' },
+      )
+      expect(result).toEqual({
+        settled: true,
+        creditsCharged: 325,
+        creditsRefunded: 0,
+        ledgerId: 'ledger-overage-1',
+      })
     })
 
     it('rejects unknown sessionId with 404', async () => {

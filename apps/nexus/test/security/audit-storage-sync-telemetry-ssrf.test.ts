@@ -231,30 +231,57 @@ describe('audit regressions: image storage, sync chunks, telemetry, IP guard & S
     })
   })
 
-  it('#9: webhookUrlPolicy blocks IPv4-mapped IPv6, CGNAT, 0.0.0.0/8, userinfo, multicast, and localhost in production', async () => {
+  it('#9: webhookUrlPolicy blocks IPv4-mapped/compatible IPv6, 6to4, NAT64, discard, Teredo, ULA/link-local, CGNAT, userinfo, and localhost in production', async () => {
     const { evaluateWebhookUrl } = await import('../../server/utils/webhookUrlPolicy')
 
-    const blockedUrls = [
-      'http://[::ffff:127.0.0.1]/admin',
-      'http://[::ffff:7f00:1]/admin',
-      'http://[::ffff:169.254.169.254]/latest/meta-data/',
-      'http://[::127.0.0.1]/admin',
+    const privateHostHttpsUrls = [
+      'https://[::169.254.169.254]/hook',
+      'https://[::127.0.0.1]/hook',
+      'https://[::10.0.0.1]/hook',
+      'https://[::192.168.1.1]/hook',
+      'https://[::a9fe:a9fe]/hook',
+      'https://[::7f00:1]/hook',
+      'https://[::]/hook',
+      'https://[::1]/hook',
+      'https://[0:0:0:0:0:0:0:1]/hook',
+      'https://[::ffff:127.0.0.1]/admin',
+      'https://[::ffff:7f00:1]/admin',
+      'https://[::ffff:169.254.169.254]/latest/meta-data/',
+      'https://[::ffff:0:169.254.169.254]/hook',
+      'https://[64:ff9b::169.254.169.254]/hook',
+      'https://[64:ff9b:1::1]/hook',
+      'https://[100::1]/hook',
+      'https://[2002:a9fe:a9fe::1]/hook',
+      'https://[2001::1]/hook',
+      'https://[2001:db8::1]/hook',
+      'https://[fc00::1]/hook',
+      'https://[fd00::1]/hook',
+      'https://[fe80::1]/hook',
+      'https://[fec0::1]/hook',
+      'https://[ff02::1]/hook',
       'https://100.64.0.1/hook',
       'https://0.0.0.0/hook',
       'https://192.0.0.1/hook',
       'https://198.18.0.1/hook',
       'https://224.0.0.1/hook',
-      'https://user:pass@hooks.example.com/notify',
+      'https://127.0.0.1./hook',
       'http://localhost:8080/hook',
       'http://sub.localhost/hook',
-      'https://127.0.0.1./hook',
     ]
 
-    for (const url of blockedUrls) {
+    for (const url of privateHostHttpsUrls) {
       const verdict = evaluateWebhookUrl(url, { allowLocalhost: false })
-      expect(verdict.allowed, `expected blocked: ${url}`).toBe(false)
+      expect(verdict, `expected private-host block: ${url}`).toEqual({
+        allowed: false,
+        reason: 'private-host',
+      })
     }
 
+    expect(evaluateWebhookUrl('https://user:pass@hooks.example.com/notify', { allowLocalhost: false })).toEqual({
+      allowed: false,
+      reason: 'unparseable',
+    })
     expect(evaluateWebhookUrl('https://hooks.example.com/notify', { allowLocalhost: false }).allowed).toBe(true)
+    expect(evaluateWebhookUrl('https://[2606:4700:4700::1111]/hook', { allowLocalhost: false }).allowed).toBe(true)
   })
 })

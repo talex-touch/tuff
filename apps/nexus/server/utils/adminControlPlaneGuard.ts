@@ -4,7 +4,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { createError, getHeader } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { requireAdmin } from './auth'
-import { consumeLoginToken, getUserByEmail, getUserById } from './authStore'
+import { consumeLoginToken, getUserById } from './authStore'
 import { appendAdminBreakglassAudit, type AdminControlChannel } from './adminBreakglassAuditStore'
 import { consumeEmergencyJti, hashDeviceFingerprint, hashIpValue } from './adminEmergencyStore'
 import type { AdminRiskScope } from './adminEmergencyToken'
@@ -129,28 +129,41 @@ function constantTimeStringEqual(left: string, right: string): boolean {
   return timingSafeEqual(leftBuf, rightBuf)
 }
 
-function normalizeControlPlanePath(rawPath: string): string {
+function normalizeControlPlanePath(rawPath: string): { path: string, malformed: boolean } {
   if (!rawPath)
-    return ''
+    return { path: '', malformed: false }
   const [rawPathname = ''] = rawPath.split('?')
-  let pathname = rawPathname
-  try {
-    pathname = decodeURIComponent(rawPathname)
-  }
-  catch {
-    // Keep raw pathname if malformed percent-encoding.
-  }
+  let malformed = false
   const segments: string[] = []
-  for (const segment of pathname.split('/')) {
-    if (!segment || segment === '.')
+  for (const rawSegment of rawPathname.split('/')) {
+    if (!rawSegment)
       continue
-    if (segment === '..') {
-      segments.pop()
-      continue
+    let decoded = rawSegment
+    try {
+      decoded = decodeURIComponent(rawSegment)
     }
-    segments.push(segment)
+    catch {
+      malformed = true
+      decoded = rawSegment.replace(/%[0-9a-fA-F]{2}/g, (match) => {
+        try {
+          return decodeURIComponent(match)
+        }
+        catch {
+          return match
+        }
+      })
+    }
+    for (const part of decoded.split('/')) {
+      if (!part || part === '.')
+        continue
+      if (part === '..') {
+        segments.pop()
+        continue
+      }
+      segments.push(part)
+    }
   }
-  return `/${segments.join('/')}`
+  return { path: `/${segments.join('/')}`, malformed }
 }
 
 function resolveExpectedEmergencyIssuerVersion(event: H3Event): string {
@@ -270,32 +283,59 @@ async function tryEmergencyChannel(
   return context
 }
 
-async function resolveOobOperatorAdminId(event: H3Event): Promise<string | null> {
-  const operatorId = (getHeader(event, 'x-admin-operator-id') || '').trim()
-  if (operatorId) {
-    const user = await getUserById(event, operatorId)
-    if (!user || user.status !== 'active' || user.role !== 'admin') {
-      throw createError({
-        statusCode: 403,
-        statusMessage: 'Invalid OOB operator admin identity.',
-      })
+function parseMtlsAdminMap(raw: unknown): Map<string, string> {
+  const result = new Map<string, string>()
+  if (typeof raw === 'string') {
+    for (const entry of raw.split(',')) {
+      const trimmed = entry.trim()
+      if (!trimmed)
+        continue
+      const idx = trimmed.indexOf('=')
+      if (idx <= 0 || idx === trimmed.length - 1)
+        continue
+      const fp = trimmed.slice(0, idx).trim().toLowerCase()
+      const adminId = trimmed.slice(idx + 1).trim()
+      if (fp && adminId)
+        result.set(fp, adminId)
     }
-    return user.id
   }
-
-  const accessEmail = (getHeader(event, 'cf-access-authenticated-user-email') || '').trim()
-  if (accessEmail) {
-    const user = await getUserByEmail(event, accessEmail)
-    if (!user || user.status !== 'active' || user.role !== 'admin') {
-      throw createError({
-        statusCode: 403,
-        statusMessage: 'Invalid OOB operator admin identity.',
-      })
+  else if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      const fp = key.trim().toLowerCase()
+      const adminId = typeof value === 'string' ? value.trim() : ''
+      if (fp && adminId)
+        result.set(fp, adminId)
     }
-    return user.id
   }
+  return result
+}
 
-  return null
+async function resolveVerifiedOobAdminId(
+  event: H3Event,
+  mtlsFingerprint: string | null,
+): Promise<string | null> {
+  // Never trust client-asserted headers (e.g. x-admin-operator-id or unsigned cf-access-authenticated-user-email)
+  // for shared-token OOB attribution. Only attribute an admin ID from a server-configured,
+  // cryptographically verified per-admin mTLS client certificate mapping; otherwise leave adminId null.
+  if (!mtlsFingerprint)
+    return null
+  const config = useRuntimeConfig(event)
+  const adminControl = config.adminControl as Record<string, unknown> | undefined
+  if (!asBoolean(adminControl?.oobMtlsEnabled, false))
+    return null
+  const map = parseMtlsAdminMap(adminControl?.oobMtlsAdminMap)
+  const mappedAdminId = map.get(mtlsFingerprint.trim().toLowerCase())
+  if (!mappedAdminId)
+    return null
+
+  const user = await getUserById(event, mappedAdminId)
+  if (!user || user.status !== 'active' || user.role !== 'admin') {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Invalid OOB operator admin identity.',
+    })
+  }
+  return user.id
 }
 
 async function requireOobChannel(
@@ -305,7 +345,7 @@ async function requireOobChannel(
 ): Promise<AdminControlContext> {
   ensureAllowedChannel('C', options)
   const oob = requireAdminOobAuth(event)
-  const operatorAdminId = await resolveOobOperatorAdminId(event)
+  const operatorAdminId = await resolveVerifiedOobAdminId(event, oob.mtlsFingerprint)
   const scope = requiredScope ? [requiredScope] : [...ALL_RISK_SCOPES]
   const context: AdminControlContext = {
     adminId: operatorAdminId,
@@ -387,7 +427,13 @@ export async function requireAdminControlPlaneAuth(
   requiredScope?: AdminRiskScope,
   options?: GuardOptions,
 ): Promise<AdminControlContext> {
-  const path = normalizeControlPlanePath(event.path || event.node.req.url || '')
+  const { path, malformed } = normalizeControlPlanePath(event.path || event.node.req.url || '')
+  if (malformed) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Invalid request path encoding.',
+    })
+  }
   const shouldUseOob = path.startsWith('/api/admin/oob/risk/')
 
   if (isPreserveInExtremeEnabled(event) && await isExtremeMode(event)) {

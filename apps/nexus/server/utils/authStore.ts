@@ -667,6 +667,7 @@ export async function createUser(
   event: H3Event,
   data: {
     email: string
+    pendingEmail?: string | null
     name?: string | null
     image?: string | null
     locale?: string | null
@@ -680,16 +681,20 @@ export async function createUser(
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   const email = normalizeEmail(data.email)
+  const pendingEmail = typeof data.pendingEmail === 'string' && data.pendingEmail.trim()
+    ? normalizeEmail(data.pendingEmail)
+    : null
   const status: UserStatus = data.status ?? 'active'
   const emailVerified = data.emailVerified ?? null
   const emailState: EmailState = data.emailState ?? (emailVerified ? 'verified' : 'unverified')
   const locale = normalizeLocaleCode(data.locale ?? null)
   await db.prepare(`
-    INSERT INTO ${USERS_TABLE} (id, email, name, image, email_verified, email_state, role, locale, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'user', ?, ?, ?)
+    INSERT INTO ${USERS_TABLE} (id, email, pending_email, name, image, email_verified, email_state, role, locale, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'user', ?, ?, ?)
   `).bind(
     id,
     email,
+    pendingEmail,
     data.name ?? null,
     data.image ?? null,
     emailVerified,
@@ -701,7 +706,7 @@ export async function createUser(
   return {
     id,
     email,
-    pendingEmail: null,
+    pendingEmail,
     name: data.name ?? null,
     image: data.image ?? null,
     emailVerified,

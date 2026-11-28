@@ -35,6 +35,10 @@ vi.mock('../../server/utils/uploadGovernance', () => ({
   failUploadGovernance: vi.fn(),
 }))
 
+vi.mock('#auth', () => ({
+  getToken: vi.fn(async () => null),
+}))
+
 vi.mock('#imports', () => ({
   useRuntimeConfig: () => ({
     auth: { origin: 'https://nexus.example.com', secret: 'test-auth-secret-value-at-least-32-chars' },
@@ -42,6 +46,9 @@ vi.mock('#imports', () => ({
       emergencyJwtSecret: 'test-emergency-secret-at-least-32-chars',
       emergencyIssuerVersion: 'v2',
       dualControlEnabled: true,
+      oobAccessClientId: 'oob-service-id',
+      oobAccessClientSecret: 'oob-service-secret',
+      oobMtlsEnabled: false,
     },
   }),
 }))
@@ -120,9 +127,13 @@ describe('audit regressions: emergency revocation, CORS, team seats, WebAuthn, d
 
     for (const bypassPath of [
       '/api/%61dmin/users',
+      '/api/%61dmin/%ZZ',
+      '/%61pi/%61dmin/%ZZ',
       '/api/public/../admin/risk/mode.override',
       '/api//admin/emergency/init',
       '/api/dashboard/%69ntelligence/models',
+      '/api/dashboard/%69ntelligence/%ZZ',
+      '/api/public/%ZZ',
     ]) {
       for (const key of Object.keys(headersSet))
         delete headersSet[key]
@@ -138,6 +149,57 @@ describe('audit regressions: emergency revocation, CORS, team seats, WebAuthn, d
     }
 
     vi.unstubAllGlobals()
+  })
+
+  it('#16: requireAdminControlPlaneAuth ignores untrusted OOB operator headers and rejects malformed percent-encoded paths', async () => {
+    const authStore = await import('../../server/utils/authStore')
+    const { requireAdminControlPlaneAuth } = await import('../../server/utils/adminControlPlaneGuard')
+    await authStore.ensureAuthSchema(d1 as any)
+
+    d1.sqlite.prepare(`
+      INSERT INTO auth_users (id, email, name, email_state, role, status, created_at)
+      VALUES ('admin-victim', 'victim-admin@example.com', 'Victim Admin', 'verified', 'admin', 'active', ?)
+    `).run(new Date().toISOString())
+
+    const oobEvent = {
+      path: '/api/admin/oob/risk/mode.override',
+      context: {
+        cloudflare: {
+          env: { DB: d1 },
+        },
+      },
+      node: {
+        req: {
+          url: '/api/admin/oob/risk/mode.override',
+          headers: {
+            'cf-access-client-id': 'oob-service-id',
+            'cf-access-client-secret': 'oob-service-secret',
+            'x-admin-operator-id': 'admin-victim',
+            'cf-access-authenticated-user-email': 'victim-admin@example.com',
+          },
+        },
+      },
+    } as unknown as H3Event
+
+    // Shared-token OOB must ignore x-admin-operator-id and cf-access-authenticated-user-email so
+    // an operator cannot forge another admin's identity to self-confirm dual-control ops.
+    const ctx = await requireAdminControlPlaneAuth(oobEvent, 'risk.mode.override', {
+      allowedChannels: ['C'],
+      requireStepUp: false,
+      applyWriteRateLimit: false,
+    })
+    expect(ctx.channel).toBe('C')
+    expect(ctx.adminId).toBeNull()
+
+    // Malformed percent-encoded paths fail closed with 400.
+    const malformedEvent = {
+      ...oobEvent,
+      path: '/api/%61dmin/oob/risk/%ZZ',
+      node: { req: { url: '/api/%61dmin/oob/risk/%ZZ', headers: {} } },
+    } as unknown as H3Event
+    await expect(
+      requireAdminControlPlaneAuth(malformedEvent, 'risk.mode.override', { applyWriteRateLimit: false }),
+    ).rejects.toMatchObject({ statusCode: 400 })
   })
 
   it('#13: addTeamMemberWithinSeatLimit enforces seat limits atomically under concurrent joins', async () => {

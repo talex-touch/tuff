@@ -19,12 +19,128 @@ export interface EvaluateWebhookUrlOptions {
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
 
+function parseIpv6Hextets(rawHost: string): number[] | null {
+  const host = rawHost.replace(/^\[|\]$/g, '').replace(/\.+$/, '').toLowerCase()
+  if (!host || host.includes('%'))
+    return null
+
+  let normalized = host
+  const dottedTail = /^(.*:)(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(normalized)
+  if (dottedTail) {
+    const a = Number(dottedTail[2])
+    const b = Number(dottedTail[3])
+    const c = Number(dottedTail[4])
+    const d = Number(dottedTail[5])
+    if (a > 255 || b > 255 || c > 255 || d > 255)
+      return null
+    const hi = ((a << 8) | b).toString(16)
+    const lo = ((c << 8) | d).toString(16)
+    normalized = `${dottedTail[1]}${hi}:${lo}`
+  }
+
+  const doubleColonParts = normalized.split('::')
+  if (doubleColonParts.length > 2)
+    return null
+
+  let parts: string[]
+  if (doubleColonParts.length === 2) {
+    const left = doubleColonParts[0] ? doubleColonParts[0].split(':') : []
+    const right = doubleColonParts[1] ? doubleColonParts[1].split(':') : []
+    const missing = 8 - (left.length + right.length)
+    if (missing < 1)
+      return null
+    parts = [...left, ...Array.from({ length: missing }, () => '0'), ...right]
+  }
+  else {
+    parts = normalized.split(':')
+    if (parts.length !== 8)
+      return null
+  }
+
+  const hextets: number[] = []
+  for (const part of parts) {
+    if (!/^[0-9a-f]{1,4}$/.test(part))
+      return null
+    hextets.push(Number.parseInt(part, 16))
+  }
+  return hextets
+}
+
+function isIpv6LoopbackHextets(h: number[]): boolean {
+  return (
+    h[0] === 0
+    && h[1] === 0
+    && h[2] === 0
+    && h[3] === 0
+    && h[4] === 0
+    && h[5] === 0
+    && h[6] === 0
+    && h[7] === 1
+  )
+}
+
+function isPrivateIpv6Hextets(h: number[]): boolean {
+  const h0 = h[0]!
+  const h1 = h[1]!
+  const h2 = h[2]!
+  const h3 = h[3]!
+  const h4 = h[4]!
+  const h5 = h[5]!
+
+  // ::/96 — unspecified (::), loopback (::1), and all IPv4-compatible IPv6 (::a.b.c.d / ::w6:w7)
+  if (h0 === 0 && h1 === 0 && h2 === 0 && h3 === 0 && h4 === 0 && h5 === 0)
+    return true
+  // ::ffff:0:0/96 — IPv4-mapped IPv6
+  if (h0 === 0 && h1 === 0 && h2 === 0 && h3 === 0 && h4 === 0 && h5 === 0xffff)
+    return true
+  // ::ffff:0:0:0/96 — IPv4-translated IPv6 (SIIT / RFC 2765)
+  if (h0 === 0 && h1 === 0 && h2 === 0 && h3 === 0 && h4 === 0xffff && h5 === 0)
+    return true
+  // 64:ff9b::/96 — NAT64 Well-Known Prefix (RFC 6052)
+  if (h0 === 0x0064 && h1 === 0xff9b && h2 === 0 && h3 === 0 && h4 === 0 && h5 === 0)
+    return true
+  // 64:ff9b:1::/48 — NAT64 Local-Use Prefix (RFC 8215)
+  if (h0 === 0x0064 && h1 === 0xff9b && h2 === 0x0001)
+    return true
+  // 100::/64 — Discard-Only Address Block (RFC 6666)
+  if (h0 === 0x0100 && h1 === 0 && h2 === 0 && h3 === 0)
+    return true
+  // 2001:0::/32 (Teredo), 2001:2::/48 (Benchmarking), 2001:10::/28 & 2001:20::/28 (ORCHID), 2001:db8::/32 (Docs)
+  if (h0 === 0x2001) {
+    if (h1 === 0x0000 || h1 === 0x0db8)
+      return true
+    if (h1 === 0x0002 && h2 === 0)
+      return true
+    if ((h1 & 0xfff0) === 0x0010 || (h1 & 0xfff0) === 0x0020)
+      return true
+  }
+  // 2002::/16 — 6to4 (embeds IPv4 in h1:h2)
+  if (h0 === 0x2002)
+    return true
+  // fc00::/7 — Unique Local Address (ULA)
+  if ((h0 & 0xfe00) === 0xfc00)
+    return true
+  // fe80::/10 — Link-Local Unicast
+  if ((h0 & 0xffc0) === 0xfe80)
+    return true
+  // fec0::/10 — Deprecated Site-Local
+  if ((h0 & 0xffc0) === 0xfec0)
+    return true
+  // ff00::/8 — Multicast
+  if ((h0 & 0xff00) === 0xff00)
+    return true
+
+  return false
+}
+
 function isLoopbackHost(hostname: string): boolean {
   const normalized = hostname.replace(/^\[|\]$/g, '').replace(/\.+$/, '').toLowerCase()
   if (LOOPBACK_HOSTS.has(normalized) || normalized.endsWith('.localhost'))
     return true
-  if (normalized === '0:0:0:0:0:0:0:1')
-    return true
+  if (normalized.includes(':')) {
+    const hextets = parseIpv6Hextets(normalized)
+    return Boolean(hextets && isIpv6LoopbackHextets(hextets))
+  }
   return false
 }
 
@@ -84,19 +200,11 @@ export function isPrivateHost(hostname: string): boolean {
   }
 
   if (host.includes(':')) {
-    // Reject all IPv4-mapped IPv6 addresses (`::ffff:*` and `0:0:0:0:0:ffff:*`) unconditionally
-    // so neither dotted (`[::ffff:169.254.169.254]`) nor normalized hex (`[::ffff:a9fe:a9fe]`) can bypass checks.
-    if (/(?:^|:)ffff:/i.test(host))
+    const hextets = parseIpv6Hextets(host)
+    // Fail closed on malformed IPv6 literals or any non-global / special-purpose prefix.
+    if (!hextets)
       return true
-    // IPv4-compatible IPv6 (`::a.b.c.d`) or NAT64 (`64:ff9b::...`)
-    if (/^::\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) || /^64:ff9b:/i.test(host))
-      return true
-    // Unspecified / loopback in expanded form (`0:0:0:0:0:0:0:0`, `0:0:0:0:0:0:0:1`)
-    if (/^(?:0+:){6,7}0*[01]$/.test(host))
-      return true
-    // IPv6 unique-local (fc00::/7), link-local (fe80::/10), multicast (ff00::/8)
-    if (/^f[cd][0-9a-f]{2}:/.test(host) || /^fe[89ab][0-9a-f]:/.test(host) || /^ff[0-9a-f]{2}:/.test(host))
-      return true
+    return isPrivateIpv6Hextets(hextets)
   }
 
   return false

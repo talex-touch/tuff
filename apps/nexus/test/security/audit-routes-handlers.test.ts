@@ -14,6 +14,7 @@ const h3Mocks = vi.hoisted(() => ({
 }))
 
 const authMocks = vi.hoisted(() => ({
+  requireAppAuth: vi.fn(),
   requireAuth: vi.fn(),
   requireAdmin: vi.fn(),
   requireAuthOrApiKey: vi.fn(),
@@ -22,10 +23,26 @@ const authMocks = vi.hoisted(() => ({
 
 const authStoreMocks = vi.hoisted(() => ({
   consumeLoginToken: vi.fn(),
+  countActiveDevices: vi.fn(),
   getUserByEmail: vi.fn(),
   getUserById: vi.fn(),
+  readDeviceId: vi.fn((ev: any) => ev?.headers?.['x-device-id'] ?? null),
+  readDeviceMetadata: vi.fn(() => ({})),
   recordDeviceAuthAudit: vi.fn(),
+  revokeInactiveDevicesAndCountActive: vi.fn(),
+  revokeOldestDevices: vi.fn(),
   setDeviceTrusted: vi.fn(),
+  touchDevice: vi.fn(),
+}))
+
+const syncStoreMocks = vi.hoisted(() => ({
+  findExistingSyncBlob: vi.fn(),
+  getOrInitQuota: vi.fn(),
+  getSyncBlob: vi.fn(),
+  getSyncSession: vi.fn(),
+  handshakeSyncSession: vi.fn(),
+  reconcileSyncBlobsV1: vi.fn(),
+  validateQuota: vi.fn(),
 }))
 
 const handoffMocks = vi.hoisted(() => ({
@@ -112,6 +129,7 @@ vi.mock('../../server/utils/adminControlPlaneGuard', () => controlPlaneMocks)
 vi.mock('../../server/utils/adminBreakglassAuditStore', () => breakglassMocks)
 vi.mock('../../server/utils/pluginsStore', () => pluginsMocks)
 vi.mock('../../server/utils/imageStorage', () => imageStorageMocks)
+vi.mock('../../server/utils/syncStoreV1', () => syncStoreMocks)
 
 type Handler = (event: any) => Promise<any>
 
@@ -123,6 +141,11 @@ let acceptInviteHandler: Handler
 let auditExportHandler: Handler
 let dualControlConfirmHandler: Handler
 let createPluginHandler: Handler
+let syncPrepareHandler: Handler
+let syncDownloadHandler: Handler
+let syncHandshakeHandler: Handler
+let quotasIndexHandler: Handler
+let quotasValidateHandler: Handler
 
 beforeAll(async () => {
   vi.stubGlobal('defineEventHandler', (fn: unknown) => fn)
@@ -138,6 +161,11 @@ beforeAll(async () => {
   auditExportHandler = (await import('../../server/api/admin/audits/export.get')).default as Handler
   dualControlConfirmHandler = (await import('../../server/api/admin/risk/dual-control/confirm.post')).default as Handler
   createPluginHandler = (await import('../../server/api/dashboard/plugins.post')).default as Handler
+  syncPrepareHandler = (await import('../../server/api/v1/sync/blobs/prepare.post')).default as Handler
+  syncDownloadHandler = (await import('../../server/api/v1/sync/blobs/[blob_id]/download.get')).default as Handler
+  syncHandshakeHandler = (await import('../../server/api/v1/sync/handshake.post')).default as Handler
+  quotasIndexHandler = (await import('../../server/api/v1/quotas/index.get')).default as Handler
+  quotasValidateHandler = (await import('../../server/api/v1/quotas/validate.post')).default as Handler
 })
 
 afterAll(() => {
@@ -181,6 +209,35 @@ describe('audit regressions: route handlers (#2, #5, #12, #13, #16, #20, #24)', 
     expect(authStoreMocks.consumeLoginToken).toHaveBeenCalledWith(expect.anything(), 'step-up-tok', 'passkey')
     expect(authStoreMocks.setDeviceTrusted).toHaveBeenCalledWith(expect.anything(), 'user-1', 'dev-1', true)
     expect(ok).toEqual({ id: 'dev-1', isTrusted: true })
+  })
+
+  it('#2: sync/blobs/prepare, sync/blobs/download, sync/handshake, quotas, and quotas/validate reject unbound tokens and spoofed x-device-id', async () => {
+    const boundRoutes: Array<[string, Handler]> = [
+      ['sync/blobs/prepare', syncPrepareHandler],
+      ['sync/blobs/download', syncDownloadHandler],
+      ['sync/handshake', syncHandshakeHandler],
+      ['quotas/index', quotasIndexHandler],
+      ['quotas/validate', quotasValidateHandler],
+    ]
+
+    for (const [label, handler] of boundRoutes) {
+      // Unbound app token (deviceId: null) must be refused 403 even if x-device-id is supplied.
+      authMocks.requireAppAuth.mockResolvedValueOnce({ userId: 'user-1', deviceId: null })
+      await expect(handler({ headers: { 'x-device-id': 'dev-spoof' } }), `${label} unbound`).rejects.toMatchObject({
+        statusCode: 403,
+      })
+
+      // Mismatched x-device-id header must be refused 403.
+      authMocks.requireAppAuth.mockResolvedValueOnce({ userId: 'user-1', deviceId: 'dev-bound' })
+      await expect(handler({ headers: { 'x-device-id': 'dev-other' } }), `${label} mismatch`).rejects.toMatchObject({
+        statusCode: 403,
+      })
+    }
+
+    expect(syncStoreMocks.getSyncSession).not.toHaveBeenCalled()
+    expect(syncStoreMocks.getOrInitQuota).not.toHaveBeenCalled()
+    expect(syncStoreMocks.validateQuota).not.toHaveBeenCalled()
+    expect(authStoreMocks.touchDevice).not.toHaveBeenCalled()
   })
 
   it('#12: POST /api/v1/scenes/:id/run strips internal endpoint, authRef, region, candidates, fallbackTrail & trace for non-admins', async () => {

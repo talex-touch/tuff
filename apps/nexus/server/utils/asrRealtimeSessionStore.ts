@@ -11,7 +11,9 @@ import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const ASR_REALTIME_SESSIONS_TABLE = 'asr_realtime_sessions'
 
-export const REALTIME_ASR_TTL_SECONDS = 300
+// DashScope ephemeral tokens cannot be revoked once minted; use DashScope's 60s minimum TTL
+// so upfront non-refundable reservations stay tightly bounded while still covering cached client reuse.
+export const REALTIME_ASR_TTL_SECONDS = 60
 export const REALTIME_ASR_MAX_CONCURRENT_SESSIONS = 2
 export const REALTIME_ASR_SETTLE_GRACE_MS = 60_000
 
@@ -161,10 +163,12 @@ export async function countActiveRealtimeAsrSessions(
   const db = requireDb(event)
   await ensureRealtimeAsrSchema(db)
   const nowIso = new Date().toISOString()
+  // Minted DashScope ephemeral tokens cannot be revoked early, so settled sessions
+  // continue occupying their concurrency slot until expires_at passes.
   const row = await db.prepare(`
     SELECT COUNT(*) AS total
     FROM ${ASR_REALTIME_SESSIONS_TABLE}
-    WHERE user_id = ?1 AND status = 'active' AND expires_at > ?2
+    WHERE user_id = ?1 AND status IN ('active', 'settled') AND expires_at > ?2
   `).bind(userId, nowIso).first<{ total?: number | string }>()
   return Number(row?.total ?? 0)
 }
@@ -198,7 +202,7 @@ export async function createRealtimeAsrSession(
     SELECT ?1, ?2, ?3, 'active', ?4, ?5, ?6, NULL, NULL, NULL, ?7, ?8, NULL, NULL, ?9, ?9
     WHERE (
       SELECT COUNT(*) FROM ${ASR_REALTIME_SESSIONS_TABLE}
-      WHERE user_id = ?2 AND status = 'active' AND expires_at > ?9
+      WHERE user_id = ?2 AND status IN ('active', 'settled') AND expires_at > ?9
     ) < ?10
   `).bind(
     input.sessionId,
@@ -261,6 +265,7 @@ export async function claimRealtimeAsrSessionForSettlement(
   userId: string,
   sessionId: string,
   update: {
+    expectedChargedCredits: number | null
     chargedCredits: number
     durationMs: number
     transcriptUnits: number
@@ -272,12 +277,15 @@ export async function claimRealtimeAsrSessionForSettlement(
   const row = await db.prepare(`
     UPDATE ${ASR_REALTIME_SESSIONS_TABLE}
     SET status = 'settled',
-        charged_credits = ?1,
+        charged_credits = MAX(reserved_credits, COALESCE(charged_credits, reserved_credits), ?1),
         duration_ms = ?2,
         transcript_units = ?3,
-        settled_at = ?4,
+        settled_at = COALESCE(settled_at, ?4),
         updated_at = ?4
-    WHERE id = ?5 AND user_id = ?6 AND status = 'active'
+    WHERE id = ?5
+      AND user_id = ?6
+      AND status IN ('active', 'settled')
+      AND ((?7 IS NULL AND charged_credits IS NULL) OR charged_credits = ?7)
     RETURNING *
   `).bind(
     update.chargedCredits,
@@ -286,6 +294,7 @@ export async function claimRealtimeAsrSessionForSettlement(
     nowIso,
     sessionId,
     userId,
+    update.expectedChargedCredits,
   ).first<RealtimeAsrSessionRow>()
   return row ? mapSessionRow(row) : null
 }

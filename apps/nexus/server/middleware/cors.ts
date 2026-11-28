@@ -2,35 +2,47 @@
  * CORS middleware for API routes
  * Enables cross-origin requests for the store API endpoints
  */
-function normalizeCorsPath(rawPath: string): string {
+function normalizeCorsPath(rawPath: string): { path: string, malformed: boolean } {
   if (!rawPath)
-    return ''
+    return { path: '', malformed: false }
 
   const [rawPathname = ''] = rawPath.split('?')
-  let pathname = rawPathname
-  try {
-    pathname = decodeURIComponent(rawPathname)
-  }
-  catch {
-    // Keep raw pathname when percent-encoding is malformed so control-plane checks stay closed.
-  }
-
+  let malformed = false
   const segments: string[] = []
-  for (const segment of pathname.split('/')) {
-    if (!segment || segment === '.')
+  for (const rawSegment of rawPathname.split('/')) {
+    if (!rawSegment)
       continue
-    if (segment === '..') {
-      segments.pop()
-      continue
+    let decoded = rawSegment
+    try {
+      decoded = decodeURIComponent(rawSegment)
     }
-    segments.push(segment)
+    catch {
+      malformed = true
+      decoded = rawSegment.replace(/%[0-9a-fA-F]{2}/g, (match) => {
+        try {
+          return decodeURIComponent(match)
+        }
+        catch {
+          return match
+        }
+      })
+    }
+    for (const part of decoded.split('/')) {
+      if (!part || part === '.')
+        continue
+      if (part === '..') {
+        segments.pop()
+        continue
+      }
+      segments.push(part)
+    }
   }
 
-  return `/${segments.join('/')}`
+  return { path: `/${segments.join('/')}`, malformed }
 }
 
 export default defineEventHandler((event) => {
-  const path = normalizeCorsPath(event.path || event.node.req.url || '')
+  const { path, malformed } = normalizeCorsPath(event.path || event.node.req.url || '')
 
   // Only apply CORS to API routes
   if (path !== '/api' && !path.startsWith('/api/')) {
@@ -38,7 +50,8 @@ export default defineEventHandler((event) => {
   }
 
   const isControlPlanePath
-    = path === '/api/admin'
+    = malformed
+      || path === '/api/admin'
       || path.startsWith('/api/admin/')
       || path === '/api/dashboard/intelligence'
       || path.startsWith('/api/dashboard/intelligence/')

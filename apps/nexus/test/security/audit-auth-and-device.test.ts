@@ -70,29 +70,53 @@ describe('audit regressions: auth, account takeover, device binding, atomic toke
       } as any),
     ).rejects.toThrow(/unverified/i)
 
-    // Adapter createUser does NOT mark an untrusted/unverified provider (e.g. LinuxDO) as verified.
+    // Adapter createUser for an untrusted/unverified provider (e.g. LinuxDO) does NOT squat
+    // auth_users.email; it uses a placeholder address + pendingEmail so the real owner is never DoS'd.
     const linuxdoCreated = await adapter.createUser!({
       id: 'unused',
-      email: 'linuxdo-user@example.com',
-      name: 'LinuxDO User',
+      email: 'linuxdo-victim@example.com',
+      name: 'LinuxDO Attacker',
       emailVerified: null,
       oauthEmailVerified: false,
     } as any)
     const linuxdoRow = await authStore.getUserById(event, linuxdoCreated.id)
-    expect(linuxdoRow?.emailState).toBe('unverified')
+    expect(linuxdoRow?.email).toMatch(/^missing\+.+@tuff\.local$/)
+    expect(linuxdoRow?.pendingEmail).toBe('linuxdo-victim@example.com')
+    expect(linuxdoRow?.emailState).toBe('missing')
     expect(linuxdoRow?.emailVerified).toBeNull()
+    expect(await authStore.getUserByEmail(event, 'linuxdo-victim@example.com')).toBeNull()
 
-    // Adapter createUser marks verified OAuth/Magic-Link users as verified.
-    const githubCreated = await adapter.createUser!({
+    // Real owner can subsequently register via verified OAuth (GitHub) with that exact address cleanly.
+    const realOwnerGithub = await adapter.createUser!({
       id: 'unused',
-      email: 'github-user@example.com',
-      name: 'GitHub User',
+      email: 'linuxdo-victim@example.com',
+      name: 'Real Owner',
       emailVerified: null,
       oauthEmailVerified: true,
     } as any)
-    const githubRow = await authStore.getUserById(event, githubCreated.id)
-    expect(githubRow?.emailState).toBe('verified')
-    expect(githubRow?.emailVerified).toBeTruthy()
+    const realOwnerRow = await authStore.getUserById(event, realOwnerGithub.id)
+    expect(realOwnerRow?.id).not.toBe(linuxdoRow?.id)
+    expect(realOwnerRow?.email).toBe('linuxdo-victim@example.com')
+    expect(realOwnerRow?.emailState).toBe('verified')
+    expect(realOwnerRow?.emailVerified).toBeTruthy()
+
+    // Real owner can also register via Magic Link (emailVerified: Date) after an unverified LinuxDO claim.
+    await adapter.createUser!({
+      id: 'unused',
+      email: 'magic-victim@example.com',
+      name: 'LinuxDO Attacker 2',
+      emailVerified: null,
+      oauthEmailVerified: false,
+    } as any)
+    const magicOwner = await adapter.createUser!({
+      id: 'unused',
+      email: 'magic-victim@example.com',
+      name: 'Magic Owner',
+      emailVerified: new Date(),
+    } as any)
+    const magicRow = await authStore.getUserById(event, magicOwner.id)
+    expect(magicRow?.email).toBe('magic-victim@example.com')
+    expect(magicRow?.emailState).toBe('verified')
 
     // Committing pending email atomically promotes pending_email -> email and clears pending_email.
     const committed = await authStore.commitVerifiedPendingEmail(event, attacker.id, 'victim@example.com')
@@ -219,5 +243,83 @@ describe('audit regressions: auth, account takeover, device binding, atomic toke
       .prepare(`SELECT user_id FROM user_api_keys WHERE id = ?`)
       .get(createdKey.id) as { user_id: string }
     expect(keyRow.user_id).toBe(target.id)
+  })
+
+  it('#3: settled realtime ASR sessions retain concurrency slots until expires_at while failed-mint released sessions free slots', async () => {
+    const rtStore = await import('../../server/utils/asrRealtimeSessionStore')
+    const pricing = {
+      id: 'rule-audio-stt',
+      capability: 'audio.stt',
+      providerScope: 'all',
+      billingMode: 'unit',
+      creditsPerUnit: 4,
+      secondaryCreditsPerUnit: 1,
+      minCredits: 1,
+      currency: 'credits',
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } as any
+
+    const s1 = await rtStore.createRealtimeAsrSession(event, {
+      sessionId: 'rt-1',
+      userId: 'user-rt',
+      providerId: 'dashscope',
+      ttlSeconds: 60,
+      reservedCredits: 240,
+      reservationLedgerId: 'led-1',
+      pricing,
+      maxConcurrent: 2,
+    })
+    const s2 = await rtStore.createRealtimeAsrSession(event, {
+      sessionId: 'rt-2',
+      userId: 'user-rt',
+      providerId: 'dashscope',
+      ttlSeconds: 60,
+      reservedCredits: 240,
+      reservationLedgerId: 'led-2',
+      pricing,
+      maxConcurrent: 2,
+    })
+    expect(s1.created).toBe(true)
+    expect(s2.created).toBe(true)
+
+    // Settling rt-1 immediately at t=0 must keep the slot occupied until expires_at passes.
+    const settled = await rtStore.claimRealtimeAsrSessionForSettlement(event, 'user-rt', 'rt-1', {
+      expectedChargedCredits: null,
+      chargedCredits: 240,
+      durationMs: 0,
+      transcriptUnits: 0,
+    })
+    expect(settled?.status).toBe('settled')
+    expect(settled?.chargedCredits).toBe(240)
+    expect(await rtStore.countActiveRealtimeAsrSessions(event, 'user-rt')).toBe(2)
+
+    const s3Blocked = await rtStore.createRealtimeAsrSession(event, {
+      sessionId: 'rt-3',
+      userId: 'user-rt',
+      providerId: 'dashscope',
+      ttlSeconds: 60,
+      reservedCredits: 240,
+      reservationLedgerId: 'led-3',
+      pricing,
+      maxConcurrent: 2,
+    })
+    expect(s3Blocked.created).toBe(false)
+
+    // Marking rt-2 as released (DashScope token mint failed before issuing a live token) frees its slot.
+    await rtStore.markRealtimeAsrSessionReleased(event, 'rt-2')
+    expect(await rtStore.countActiveRealtimeAsrSessions(event, 'user-rt')).toBe(1)
+    const s3Allowed = await rtStore.createRealtimeAsrSession(event, {
+      sessionId: 'rt-3',
+      userId: 'user-rt',
+      providerId: 'dashscope',
+      ttlSeconds: 60,
+      reservedCredits: 240,
+      reservationLedgerId: 'led-3',
+      pricing,
+      maxConcurrent: 2,
+    })
+    expect(s3Allowed.created).toBe(true)
   })
 })
