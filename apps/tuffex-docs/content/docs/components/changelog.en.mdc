@@ -15,19 +15,22 @@ verified: false
 |------|-------|
 | Source version | **0.9.6** |
 | Release version | **0.9.6** (latest npm release) |
-| Component modules | **195**: Base 99 · Pro 59 · AI 37 |
+| Component modules | **198**: Base 99 · Pro 62 · AI 37 |
 
 ## Release History
 
-### Version 0.9.6 (2026-11-27)
+### Version 0.9.6 (2026-11-28)
 
-Add the AI pure-math spherical matrix loader and the Pro multi-device mockup container.
+Add the AI pure-math spherical matrix loader, the Pro multi-device mockup container, and three Motion FX components.
 
-- **New components**: matrix-loader, device-mockup
+- **New components**: matrix-loader, device-mockup, distortion-wave, pixel-field, voice-ring
 - **Main updated components**: none
 - **Key features**:
   - New `TxMatrixLoader` (`@talex-touch/tuffex/ai`): pure-math Canvas 2D spherical halftone loader with 8 AI semantic states, smooth state cross-morphing, 2D gradient noise modulation, and 5 electronic display eras (`oled`, `crt`, `vfd`, `dither`, `lcd`).
   - New `TxDeviceMockup` (`@talex-touch/tuffex/pro`): 75+ tree-shakeable phone, tablet, laptop, desktop, rounded/circular watch, and browser presets with an extruded 3D hardware chassis, decoupled floor shadows, 8 curated Shots.so scene pairings, 7 shadow styles, bleed framing, 12 gradients with film grain, spring morph transitions on device/orientation switch, and lazy client-side SVG/PNG/WebP export.
+  - New `TxDistortionWave` (`@talex-touch/tuffex/pro`): transparent WebGL2 chromatic lens wave view transition supporting `vertical`, `horizontal`, and `center` geometry, 5 palettes, sharp `#overlay` controls, `scrub` freezing, Vue `Ref` sources, and reduced-motion crossfade fallback.
+  - New `TxVoiceRing` (`@talex-touch/tuffex/pro`): voice-reactive glass spectrum (`ring`) and twin tube (`mono`) audio indicator with emotion tint, spatial `direction` lean with boundary refraction, `hoverBend`, and `useVoiceRingMicrophone`.
+  - New `TxPixelField` (`@talex-touch/tuffex/pro`): zero-dependency Canvas 2D interactive square-pixel particle stage with 6 botanical/geometric presets, aspect-preserving `src`/`text` sampling, 5 palettes, `obsidian`/`adaptive` stages, 4 pointer physics modes, click pulses, and `useMotionActivity` gating.
 
 ### Version 0.9.5 (2026-11-23)
 
@@ -289,6 +292,7 @@ Introduction versions and installation barrels for all 192 component modules. Do
 | [`device-mockup`](/en/device-mockup) | pro | 0.9.6 |
 | [`dialog`](/en/dialog) | base | 0.3.4 |
 | [`diff-table`](/en/diff-table) | pro | 0.3.9 |
+| [`distortion-wave`](/en/distortion-wave) | pro | 0.9.6 |
 | [`divider`](/en/divider) | base | 0.3.7 |
 | [`dot-indicator`](/en/dot-indicator) | base | 0.3.9 |
 | [`drawer`](/en/drawer) | base | 0.3.4 |
@@ -369,6 +373,7 @@ Introduction versions and installation barrels for all 192 component modules. Do
 | [`permission-state`](/en/permission-state) | base | 0.3.4 |
 | [`physics-motion`](/en/physics-motion) | pro | 0.7.0 |
 | [`picker`](/en/picker) | base | 0.3.4 |
+| [`pixel-field`](/en/pixel-field) | pro | 0.9.6 |
 | [`popover`](/en/popover) | base | 0.3.4 |
 | [`prism-glow`](/en/prism-glow) | pro | 0.6.0 |
 | [`progress`](/en/progress) | base | 0.3.4 |
@@ -438,6 +443,7 @@ Introduction versions and installation barrels for all 192 component modules. Do
 | [`virtual-list`](/en/virtual-list) | pro | 0.3.4 |
 | [`voice-beam`](/en/voice-beam) | pro | 0.6.2 |
 | [`voice-clip`](/en/voice-clip) | ai | 0.8.0 |
+| [`voice-ring`](/en/voice-ring) | pro | 0.9.6 |
 | [`working-indicator`](/en/working-indicator) | ai | 0.3.9 |
 
 ### Charts module additions

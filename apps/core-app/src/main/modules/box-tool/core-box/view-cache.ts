@@ -4,7 +4,7 @@ import type { TouchPlugin } from '../../plugin/plugin'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { useAliveWebContents } from '../../../hooks/use-electron-guard'
 import { createLogger } from '../../../utils/logger'
-import { closePluginWebContents } from '../../plugin/runtime/plugin-view-close'
+import { closeBoxToolPluginWebContents } from '../ports/plugin-host-port'
 
 const log = createLogger('ViewCache')
 
@@ -152,7 +152,7 @@ export class ViewCacheManager {
     const webContents = this.getWebContents(cached.view)
     if (options.close && webContents) {
       try {
-        closePluginWebContents(webContents)
+        closeBoxToolPluginWebContents(webContents)
       } catch {
         log.warn(`Failed to close view: ${key}`)
       }

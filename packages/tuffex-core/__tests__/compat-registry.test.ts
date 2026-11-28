@@ -46,7 +46,7 @@ describe('compat-registry Single Source of Truth', () => {
   const aiIds = new Set(extractExportedModules(resolve(tuffexSrcRoot, 'ai/index.ts'), '../'))
 
   it('covers every single module exported by packages/tuffex/packages/components/src/components.ts with zero drift', () => {
-    expect(componentIds).toHaveLength(195)
+    expect(componentIds).toHaveLength(198)
     expect(COMPAT_REGISTRY).toHaveLength(componentIds.length)
     expect(COMPAT_MAP.size).toBe(componentIds.length)
 
@@ -60,7 +60,7 @@ describe('compat-registry Single Source of Truth', () => {
 
   it('matches TuffEx base/pro/ai suite taxonomy exactly', () => {
     expect(baseIds.size).toBe(99)
-    expect(proIds.size).toBe(59)
+    expect(proIds.size).toBe(62)
     expect(aiIds.size).toBe(37)
 
     for (const entry of COMPAT_REGISTRY) {
@@ -118,7 +118,7 @@ describe('compat-registry Single Source of Truth', () => {
     }
 
     const proEntries = getCompatByCategory('pro')
-    expect(proEntries).toHaveLength(59)
+    expect(proEntries).toHaveLength(62)
     for (const entry of proEntries) {
       expect(entry.react).toBe('planned')
       expect(entry.wc).not.toBe('ready')
@@ -146,9 +146,9 @@ describe('compat-registry Single Source of Truth', () => {
     }
 
     const summary = getCompatSummary()
-    expect(summary.total).toBe(195)
-    expect(summary.byCategory).toEqual({ base: 99, pro: 59, ai: 37 })
-    expect(summary.vueReady).toBe(195)
+    expect(summary.total).toBe(198)
+    expect(summary.byCategory).toEqual({ base: 99, pro: 62, ai: 37 })
+    expect(summary.vueReady).toBe(198)
     expect(summary.reactReady).toBe(100)
     expect(summary.wcReady).toBe(100)
     expect(summary.wcUnsupported).toBe(summary.byTier.D - BASE_TIER_D_IDS.length)

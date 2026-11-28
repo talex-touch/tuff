@@ -12,6 +12,7 @@ import {
   TxButton,
   TxCardSpread,
   TxCarousel3D,
+  TxDistortionWave,
   TxFlipBook,
   TxMotion,
   TxMotionButton,
@@ -24,13 +25,15 @@ import {
   TxMotionToggle,
   TxMotionTransition,
   TxPhysicsMotion,
+  TxPixelField,
+  TxVoiceRing,
 } from '#components'
 
 const props = defineProps<{
   kind: 'motion-button' | 'card-spread' | 'carousel-3d' | 'flip-book' | 'motion-loader'
     | 'dither-chart' | 'mono-chart' | 'motion-text' | 'physics-motion' | 'motion-dock'
     | 'motion' | 'motion-toggle' | 'motion-transition' | 'motion-form' | 'motion-control'
-    | 'motion-metric'
+    | 'motion-metric' | 'distortion-wave' | 'voice-ring' | 'pixel-field'
 }>()
 const { locale } = useI18n()
 const zh = computed(() => locale.value === 'zh')
@@ -56,6 +59,8 @@ const copy = computed(() => zh.value
       save: '收藏', saved: '已收藏', control: '收藏项目',
       metric: '阅读目标', metricDescription: '本月目标 100 页',
       cardTitles: ['山路', '湖畔', '松林', '海岸', '雪原'], cardDates: ['10/3', '10/4', '10/5', '10/6', '10/7'],
+      waveTrigger: '发射折射波', waveBefore: '确认转账', waveAfter: '已送达',
+      voiceRingLabel: '语音光环', pixelFieldTitle: '视觉连续性', pixelFieldSub: '悬停或点击体验',
     }
   : {
       star: 'Mark project', starred: 'Project marked', cards: 'Trip photos', expand: 'Expand cards', collapse: 'Collapse cards',
@@ -78,6 +83,8 @@ const copy = computed(() => zh.value
       save: 'Save', saved: 'Saved', control: 'Save project',
       metric: 'Reading goal', metricDescription: 'Monthly target: 100 pages',
       cardTitles: ['Trail', 'Lake', 'Pines', 'Coast', 'Snow'], cardDates: ['Oct 3', 'Oct 4', 'Oct 5', 'Oct 6', 'Oct 7'],
+      waveTrigger: 'Trigger wave', waveBefore: 'Confirm transfer', waveAfter: 'Sent',
+      voiceRingLabel: 'Voice ring', pixelFieldTitle: 'Visual Continuity', pixelFieldSub: 'Hover or click',
     })
 
 // This component is mounted inside DocsGallerySpecimen. Its models belong to
@@ -93,6 +100,8 @@ const toggleValue = ref<MotionToggleValue>(false)
 const controlValue = ref<MotionControlValue>(false)
 const formValue = ref<MotionFormValue>('')
 const transitionKey = ref('one')
+const waveRevealed = ref(false)
+const waveTriggerRef = ref<HTMLButtonElement | null>(null)
 const dockOrder = ref<MotionDockId[]>(['home', 'search', 'files', 'calendar', 'settings'])
 const dockActive = ref<MotionDockId>('home')
 const monoMode = ref<MonoChartSeriesMode>('single')
@@ -258,6 +267,60 @@ const metricData = computed(() => ({
     </template>
     <TxMotionControl v-else-if="kind === 'motion-control'" v-model="controlValue" variant="yui-save-pill" :label="copy.control" :labels="{ control: copy.control, save: copy.save, saved: copy.saved }" size="sm" />
     <TxMotionMetric v-else-if="kind === 'motion-metric'" variant="m-progress-piano" :data="metricData" size="sm" />
+    <TxDistortionWave
+      v-else-if="kind === 'distortion-wave'"
+      class="gallery-amicro__wave"
+      :revealed="waveRevealed"
+      :source="waveTriggerRef"
+      type="vertical"
+      palette="colorful"
+      :corner-radius="14"
+    >
+      <div class="gallery-amicro__wave-face">
+        <strong>{{ copy.waveBefore }}</strong>
+        <span>$1,250.00</span>
+      </div>
+      <template #revealed>
+        <div class="gallery-amicro__wave-face gallery-amicro__wave-face--done">
+          <strong>{{ copy.waveAfter }}</strong>
+          <span>$1,250.00</span>
+        </div>
+      </template>
+      <template #overlay>
+        <div class="gallery-amicro__wave-overlay">
+          <button ref="waveTriggerRef" type="button" class="gallery-amicro__wave-btn" @click="waveRevealed = !waveRevealed">
+            {{ copy.waveTrigger }}
+          </button>
+        </div>
+      </template>
+    </TxDistortionWave>
+    <div v-else-if="kind === 'voice-ring'" class="gallery-amicro__voice-stage">
+      <TxVoiceRing
+        type="ring"
+        state="listening"
+        :size="148"
+        :level="0.58"
+        :direction="-0.35"
+        theme="dark"
+        :aria-label="copy.voiceRingLabel"
+      />
+    </div>
+    <TxPixelField
+      v-else-if="kind === 'pixel-field'"
+      class="gallery-amicro__pixel"
+      preset="leaf"
+      palette="emerald"
+      stage="obsidian"
+      :pixel-size="2.6"
+      :gap="1.5"
+      :radius="14"
+      :aria-label="copy.pixelFieldTitle"
+    >
+      <div class="gallery-amicro__pixel-copy">
+        <strong>{{ copy.pixelFieldTitle }}</strong>
+        <span>{{ copy.pixelFieldSub }}</span>
+      </div>
+    </TxPixelField>
   </div>
 </template>
 
@@ -335,5 +398,81 @@ const metricData = computed(() => ({
   align-self: stretch;
   overflow-wrap: anywhere;
   min-height: 18px;
+}
+.gallery-amicro__wave {
+  width: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--tx-border-color);
+}
+.gallery-amicro__wave-face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 20px 16px 60px;
+  background: var(--tx-bg-color-overlay, var(--tx-bg-color));
+}
+.gallery-amicro__wave-face--done {
+  background: var(--tx-color-success-light-9, var(--tx-bg-color));
+}
+.gallery-amicro__wave-face strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.gallery-amicro__wave-face span {
+  font-size: 12px;
+  color: var(--tx-text-color-regular);
+}
+.gallery-amicro__wave-overlay {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.gallery-amicro__wave-btn {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tx-text-color-primary);
+  color: var(--tx-bg-color);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.gallery-amicro__voice-stage {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 176px;
+  border-radius: 14px;
+  background: #0b0c0f;
+  overflow: hidden;
+}
+.gallery-amicro__pixel {
+  width: 100%;
+  min-height: 196px;
+  cursor: pointer;
+}
+.gallery-amicro__pixel-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px;
+  color: #f4f6f8;
+  pointer-events: none;
+}
+.gallery-amicro__pixel-copy strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.gallery-amicro__pixel-copy span {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.56);
 }
 </style>

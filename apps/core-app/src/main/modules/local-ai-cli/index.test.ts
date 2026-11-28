@@ -124,6 +124,16 @@ vi.mock('../omni-panel', () => ({
   }
 }))
 
+import { registerLocalAiCliPorts } from './local-ai-cli-ports'
+registerLocalAiCliPorts({
+  surface: {
+    showLocalAi: vi.fn(async () => undefined),
+    restoreLocalAi: vi.fn(async () => undefined),
+    hideForPasteBack: vi.fn(),
+    requestFeatureRefresh: requestFeatureRefreshMock
+  }
+})
+
 vi.mock('../system/active-app', () => ({
   activeAppService: { getActiveApp: vi.fn(async () => null) }
 }))

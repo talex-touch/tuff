@@ -78,7 +78,23 @@ vi.mock('./intelligence-quota-manager', () => ({
   }
 }))
 
+import { registerAiPorts } from './ai-ports'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
+
+registerAiPorts({
+  auth: {
+    getAuthToken: authMocks.getAuthToken,
+    getSanitizedAuthSessionState: () => ({ isLoaded: false, isSignedIn: false, user: null }),
+    subscribeAuthState: () => () => undefined,
+    performNexusRequestWithAuth: async () => null
+  },
+  nexus: {
+    getRuntimeNexusBaseUrl: () => 'https://nexus.example.com',
+    runNexusScene: vi.fn(async () => null),
+    extractTranslatedImageFromSceneRun: vi.fn(() => null),
+    transcribeNexusAudio: vi.fn()
+  }
+})
 import { TuffIntelligenceSDK, setIntelligenceProviderManager } from './intelligence-sdk'
 import { normalizeProviderForRuntime } from './provider-runtime'
 import { createCustomProvider } from './provider-factory'

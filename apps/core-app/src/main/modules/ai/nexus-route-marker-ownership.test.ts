@@ -228,6 +228,16 @@ vi.mock('../auth', () => ({
   getAuthToken: vi.fn(() => (authMocks.session.isSignedIn ? 'nexus-access-token' : null))
 }))
 
+import { registerAiPorts } from './ai-ports'
+registerAiPorts({
+  auth: {
+    subscribeAuthState: authMocks.subscribeAuthState,
+    getSanitizedAuthSessionState: authMocks.getSanitizedAuthSessionState,
+    getAuthToken: () => (authMocks.session.isSignedIn ? 'nexus-access-token' : null),
+    performNexusRequestWithAuth: async () => null
+  }
+})
+
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
@@ -295,6 +305,15 @@ function createStoredConfig(options: { nexusEnabled: boolean; override?: boolean
  */
 async function importFreshConfigModule() {
   vi.resetModules()
+  const aiPorts = await import('./ai-ports')
+  aiPorts.registerAiPorts({
+    auth: {
+      subscribeAuthState: authMocks.subscribeAuthState,
+      getSanitizedAuthSessionState: authMocks.getSanitizedAuthSessionState,
+      getAuthToken: () => (authMocks.session.isSignedIn ? 'nexus-access-token' : null),
+      performNexusRequestWithAuth: async () => null
+    }
+  })
   return import('./intelligence-config')
 }
 

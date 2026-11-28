@@ -11,20 +11,19 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { sql } from 'drizzle-orm'
 import { app } from 'electron'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
+import { resolveScanProgressSchemaShape } from '../../db/scan-progress-schema'
 import { config } from '../../db/schema'
 import { createLogger } from '../../utils/logger'
 import { appendWorkflowDebugLog } from '../../utils/workflow-debug'
 import { BaseModule } from '../abstract-base-module'
-import { fileProvider } from '../box-tool/addon/files/file-provider'
-import { resolveScanProgressSchemaShape } from '../box-tool/search-engine/scan-progress-schema'
 import { databaseModule } from '../database'
-import { ocrService } from '../ocr/ocr-service'
 import { activeAppService } from './active-app'
 import {
   projectFileIndexDashboardErrorCode,
   projectFileIndexDashboardFileName,
   projectFileIndexDashboardWorkerSnapshot
 } from './file-index-dashboard-projection'
+import { getSystemPorts } from './system-ports'
 
 const dashboardLog = createLogger('TuffDashboard')
 
@@ -221,9 +220,10 @@ export class TuffDashboardModule extends BaseModule {
   private async buildIndexingSection(limit: number, requestId: string | null) {
     const startedAt = performance.now()
     const db = this.ensureDb()
+    const dashboardPort = getSystemPorts().dashboard
 
     const [progress, scanRows] = await Promise.all([
-      fileProvider.getIndexingProgress(),
+      dashboardPort.getIndexingProgress(),
       db ? this.loadRecentScanProgressRows(db, limit) : Promise.resolve([])
     ])
 
@@ -247,7 +247,7 @@ export class TuffDashboardModule extends BaseModule {
 
     const section = {
       summary: progress.summary,
-      watchedPathNames: fileProvider
+      watchedPathNames: dashboardPort
         .getWatchedPaths()
         .map((watchedPath) => projectFileIndexDashboardFileName(watchedPath)),
       entries,
@@ -291,7 +291,7 @@ export class TuffDashboardModule extends BaseModule {
 
   private async buildOcrSection(limit: number, requestId: string | null) {
     const startedAt = performance.now()
-    const snapshot = await ocrService.getDashboardSnapshot(limit)
+    const snapshot = await getSystemPorts().dashboard.getOcrDashboardSnapshot(limit)
     appendWorkflowDebugLog({
       hid: 'H1',
       loc: 'tuff-dashboard.buildOcrSection',
@@ -458,7 +458,7 @@ export class TuffDashboardModule extends BaseModule {
   private async buildWorkerSection(requestId: string | null) {
     const startedAt = performance.now()
     try {
-      const rawSnapshot = await fileProvider.getWorkerStatusSnapshot()
+      const rawSnapshot = await getSystemPorts().dashboard.getWorkerStatusSnapshot()
       const snapshot = projectFileIndexDashboardWorkerSnapshot(rawSnapshot)
       appendWorkflowDebugLog({
         hid: 'H1',

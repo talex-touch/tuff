@@ -19,9 +19,9 @@ import {
 } from '../../core/eventbus/touch-event'
 import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
-import { teardownPluginStorage } from '../plugin/runtime/plugin-storage-lifecycle'
 import { setPermissionModule } from './permission-module-ref'
 import { PermissionGuard } from './permission-guard'
+import { teardownPermissionPluginStorage } from './permission-ports'
 import { PermissionStore } from './permission-store'
 
 const permLog = createLogger('Permission')
@@ -33,6 +33,8 @@ export { createProtectedRegister, registerProtectedChannels, withPermission } fr
 export type { ProtectedChannelDefinition, ProtectedChannelOptions } from './channel-guard'
 export { PermissionGuard } from './permission-guard'
 export { getPermissionModule, setPermissionModule } from './permission-module-ref'
+export { registerPermissionPluginBridge } from './permission-ports'
+export type { PermissionPluginBridge } from './permission-ports'
 export type { ApiPermissionMapping, PermissionCheckResult } from './permission-guard'
 
 /**
@@ -266,7 +268,7 @@ export class PermissionModule extends BaseModule {
     all: boolean
   ): Promise<void> {
     if (all || permissionIds.length > 0) {
-      await teardownPluginStorage(pluginId)
+      await teardownPermissionPluginStorage(pluginId)
     }
     if (permissionIds.length > 0) {
       touchEventBus.emit(

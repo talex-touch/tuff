@@ -6,11 +6,8 @@ import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, resolve } from 'node:path'
-import {
-  findCommandInSearchRoots,
-  withExecutableDirOnPath
-} from '../ai/providers/cli/cli-executable'
 import { createLogger } from '../../utils/logger'
+import { getTerminalPorts } from './terminal-ports'
 
 const ptyLog = createLogger('PtySessionCore')
 
@@ -153,7 +150,7 @@ async function resolveExecutable(command: string, cwd: string): Promise<string> 
     ? command
     : /[/\\]/.test(command)
       ? resolve(cwd, command)
-      : await findCommandInSearchRoots(command)
+      : await getTerminalPorts().executable.findCommandInSearchRoots(command)
   if (!executable) throw new Error('TERMINAL_EXECUTABLE_NOT_FOUND')
   try {
     if (!(await stat(executable)).isFile()) throw new Error('Not a file')
@@ -350,7 +347,7 @@ export class PtySessionCore {
           cols,
           rows,
           cwd,
-          env: withExecutableDirOnPath(env, executable)
+          env: getTerminalPorts().executable.withExecutableDirOnPath(env, executable)
         })
       } catch {
         throw new Error('TERMINAL_SPAWN_FAILED')

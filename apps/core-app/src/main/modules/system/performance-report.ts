@@ -23,11 +23,7 @@ import { sampleWorkerThreads } from '../../core/worker-thread-registry'
 import { createLogger } from '../../utils/logger'
 import { perfMonitor } from '../../utils/perf-monitor'
 import { BaseModule } from '../abstract-base-module'
-import { PI_RUNTIME_SERVICE_NAME } from '../ai/pi-agent-runtime-protocol'
-import { getCoreBoxWindow } from '../box-tool/core-box/window'
-import { OCR_PROCESS_SERVICE_NAME } from '../ocr/ocr-process-client'
-import { PLUGIN_RUNTIME_SERVICE_NAME } from '../plugin/host/plugin-runtime-electron-process'
-import { resolvePluginNameByWebContents } from '../plugin/runtime/plugin-view-registry'
+import { getSystemPorts } from './system-ports'
 
 const performanceLog = createLogger('PerformanceReport')
 
@@ -166,14 +162,15 @@ export class PerformanceReportModule extends BaseModule {
 
   /** Which windows and views each renderer process hosts, keyed by OS process id. */
   private collectSurfaces(): Map<number, PerformanceSurface[]> {
+    const performancePort = getSystemPorts().performance
     const mainWindowId = liveContentsId(this.getMainWindow())
-    const coreBoxWindowId = liveContentsId(getCoreBoxWindow()?.window ?? null)
+    const coreBoxWindowId = liveContentsId(performancePort.getCoreBoxWindow())
     const byPid = new Map<number, PerformanceSurface[]>()
     for (const contents of webContents.getAllWebContents()) {
       if (contents.isDestroyed()) continue
       const pid = contents.getOSProcessId()
       let surface: PerformanceSurface
-      const pluginName = resolvePluginNameByWebContents(contents.id)
+      const pluginName = performancePort.resolvePluginNameByWebContents(contents.id)
       if (contents.id === mainWindowId) surface = { kind: 'main-window', pluginName: null }
       else if (contents.id === coreBoxWindowId) surface = { kind: 'corebox', pluginName: null }
       else if (pluginName) surface = { kind: 'plugin-view', pluginName }
@@ -222,12 +219,15 @@ function resolveProcessRole(metric: ProcessMetric): PerformanceProcessRole {
       return 'gpu'
     case 'Tab':
       return 'renderer'
-    case 'Utility':
-      if (metric.name === PLUGIN_RUNTIME_SERVICE_NAME) return 'plugin-runtime'
-      if (metric.name === PI_RUNTIME_SERVICE_NAME) return 'pi-agent-runtime'
-      if (metric.name === OCR_PROCESS_SERVICE_NAME) return 'ocr-runtime'
+    case 'Utility': {
+      const registeredRole = getSystemPorts().performance.resolveUtilityProcessRole({
+        name: metric.name,
+        serviceName: metric.serviceName
+      })
+      if (registeredRole) return registeredRole
       if (metric.serviceName === NETWORK_SERVICE) return 'network-service'
       return 'utility'
+    }
     default:
       return 'other'
   }

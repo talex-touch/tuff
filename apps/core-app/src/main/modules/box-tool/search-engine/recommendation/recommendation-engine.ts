@@ -36,7 +36,7 @@ import { appTaskGate } from '../../../../service/app-task-gate'
 import { openValidatedExternalUrl } from '../../../../utils/external-url-policy'
 import { createLogger } from '../../../../utils/logger'
 import { enterPerfContext } from '../../../../utils/perf-context'
-import { onUsageLimitsChanged } from '../../../ai/usage-ledger/usage-limits'
+import { subscribeBoxToolUsageLimitsChanged } from '../../ports/ai-capability-port'
 import { createAppRecommendationSource } from './app-recommendation-source'
 import { createClipboardRecommendationSource } from './clipboard-recommendation-source'
 import { ContextProvider, hashContextContent } from './context-provider'
@@ -214,7 +214,7 @@ export class RecommendationEngine {
     })
     this.disposeOwnedSources.push(bindPluginRecommendationApi(this))
     this.disposeOwnedSources.push(
-      onUsageLimitsChanged(() => {
+      subscribeBoxToolUsageLimitsChanged(() => {
         if (this.semanticScorer.liftUsageLimitPause()) {
           this.invalidateCache()
         }

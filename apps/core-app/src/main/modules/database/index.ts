@@ -39,7 +39,7 @@ import { operationalErrorService } from '../observability'
 import {
   planScanProgressSourceScopeMigration,
   runScanProgressSourceScopeMigration
-} from '../box-tool/search-engine/scan-progress-schema'
+} from '../../db/scan-progress-schema'
 import {
   DB_WAL_INCREMENTAL_VACUUM_MAX_PAGES,
   DatabaseWalMaintenance,

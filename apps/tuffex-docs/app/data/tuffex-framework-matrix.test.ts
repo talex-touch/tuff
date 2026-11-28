@@ -65,12 +65,12 @@ describe('tuffex-framework-matrix', () => {
     const exportedSlugs = readExportedComponentSlugs()
     const matrixSlugs = TUFFEX_FRAMEWORK_MATRIX.map(entry => entry.id).sort((a, b) => a.localeCompare(b))
 
-    expect(exportedSlugs).toHaveLength(195)
+    expect(exportedSlugs).toHaveLength(198)
     expect(matrixSlugs).toEqual(exportedSlugs)
     expect(TUFFEX_FRAMEWORK_MAP.size).toBe(exportedSlugs.length)
   })
 
-  it('covers 99/99 Basics Suite modules plus stream-text (100/195 total) across React and WC', () => {
+  it('covers 99/99 Basics Suite modules plus stream-text (100/198 total) across React and WC', () => {
     const baseSlugs = readBaseSuiteSlugs()
     expect(baseSlugs).toHaveLength(99)
 
@@ -187,17 +187,17 @@ describe('tuffex-framework-matrix', () => {
 
   it('computes dynamic coverage summary counters accurately', () => {
     const summary = getFrameworkCoverageSummary()
-    expect(summary.total).toBe(195)
-    expect(summary.vue.ready).toBe(195)
+    expect(summary.total).toBe(198)
+    expect(summary.vue.ready).toBe(198)
     expect(summary.vue.percent).toBe(100)
     expect(summary.react.ready).toBe(100)
     expect(summary.wc.ready).toBe(100)
     expect(summary.byCategory.base).toEqual({ total: 99, reactReady: 99, wcReady: 99 })
-    expect(summary.byCategory.pro).toEqual({ total: 59, reactReady: 0, wcReady: 0 })
+    expect(summary.byCategory.pro).toEqual({ total: 62, reactReady: 0, wcReady: 0 })
     expect(summary.byCategory.ai).toEqual({ total: 37, reactReady: 1, wcReady: 1 })
     expect(summary.wc.unsupported).toBeGreaterThanOrEqual(8)
-    expect(summary.react.ready + summary.react.planned + summary.react.experimental + summary.react.unsupported).toBe(195)
-    expect(summary.wc.ready + summary.wc.planned + summary.wc.experimental + summary.wc.unsupported).toBe(195)
+    expect(summary.react.ready + summary.react.planned + summary.react.experimental + summary.react.unsupported).toBe(198)
+    expect(summary.wc.ready + summary.wc.planned + summary.wc.experimental + summary.wc.unsupported).toBe(198)
   })
 
   it('resolves component slugs from localized and unprefixed docs paths while ignoring overview/template pages', () => {
@@ -243,7 +243,7 @@ describe('tuffex-framework-matrix', () => {
     expect(normalizeDocsFramework('unknown')).toBe('vue')
   })
 
-  it('derives all 195 entries directly from @talex-touch/tuffex-core/compat Single Source of Truth', () => {
+  it('derives all 198 entries directly from @talex-touch/tuffex-core/compat Single Source of Truth', () => {
     expect(TUFFEX_FRAMEWORK_MATRIX).toHaveLength(COMPAT_REGISTRY.length)
     for (const coreEntry of COMPAT_REGISTRY) {
       const nexusEntry = getComponentFrameworkEntry(coreEntry.id)

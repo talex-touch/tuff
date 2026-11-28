@@ -36,7 +36,7 @@ Tuffex (`@talex-touch/tuffex`) is the Vue 3 component library behind CoreBox, pl
 | [AI Suite](/en/ai-suite) | Chat / Agents / Reasoning / Context & Insight | 36 | `@talex-touch/tuffex/ai` |
 | [Data Suite](/en/data-suite) | Charts / Visualization | 12 | `@talex-touch/tuffex/pro` + `/charts` |
 | [Flow Suite](/en/flow-suite) | Flow | 1 | `@talex-touch/tuffex/ai` |
-| [Motion Suite](/en/motion-suite) | 10 groups: buttons, carousels, loaders, text, transitions… | 12 | `@talex-touch/tuffex/pro` + `/charts` |
+| [Motion Suite](/en/motion-suite) | 10 groups: buttons, carousels, loaders, text, transitions… | 15 | `@talex-touch/tuffex/pro` + `/charts` |
 
 - Page counts are documentation entries, excluding suite overviews; they are not export counts.
 - There are only three suite entries: `base`, `pro` and `ai`. Data, Flow and Motion are documentation suites; charts also have `@talex-touch/tuffex/charts`.
@@ -406,6 +406,8 @@ Partly adapted from [Beautiful UI](https://www.beautifului.dev) (MIT).
 
 - [MotionDock](/en/motion-dock)
 - [Motion](/en/motion)
+- [PixelField](/en/pixel-field)
+- [VoiceRing](/en/voice-ring)
 
 ### Toggles
 
@@ -414,6 +416,7 @@ Partly adapted from [Beautiful UI](https://www.beautifului.dev) (MIT).
 ### Transitions
 
 - [MotionTransition](/en/motion-transition)
+- [DistortionWave](/en/distortion-wave)
 
 ## Technologies
 

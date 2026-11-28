@@ -5,7 +5,10 @@ import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/eve
 import type { WebContentsView } from 'electron'
 import type { TouchApp } from '../../../core/touch-app'
 import type { TouchPlugin } from '../../plugin/plugin'
-import type { ExistingUIViewReleaseResult } from '../../division-box/session'
+import type {
+  BoxToolDetachedDivisionBoxSession,
+  BoxToolDetachedUIViewReleaseResult
+} from '../ports/surface-bridge-port'
 import type { CoreBoxKeyEvent } from './key-event'
 import type {
   CoreBoxFocusFailurePayload,
@@ -33,14 +36,14 @@ import { TouchWindow } from '../../../core/touch-window'
 import { TalexTouch } from '../../../types'
 import { createLogger } from '../../../utils/logger'
 
-import { DivisionBoxManager } from '../../division-box/manager'
 import { getPermissionModule } from '../../permission'
-import { closePluginWebContents } from '../../plugin/runtime/plugin-view-close'
 import { getMainConfig, subscribeMainConfig } from '../../storage'
 import {
   captureForegroundAppSnapshot,
   foregroundAppSnapshotStore
 } from '../../system/foreground-app-snapshot'
+import { closeBoxToolPluginWebContents } from '../ports/plugin-host-port'
+import { getBoxToolSurfaceBridgePort } from '../ports/surface-bridge-port'
 import { WindowBoundsController } from './bounds-controller'
 import { CoreBoxFocusPolicy } from './focus-policy'
 import { CoreBoxFocusDiagnostics } from './focus-diagnostics'
@@ -1113,6 +1116,11 @@ export class WindowManager {
       return failure(error, 'Plugin view detach permission rejected.')
     }
 
+    const surfaceBridge = getBoxToolSurfaceBridgePort()
+    if (!surfaceBridge) {
+      return failure(null, 'DivisionBox surface bridge is unavailable.')
+    }
+
     const sourceBounds = sourceWindow.window.getBounds()
     const extracted = this.extractUIView()
     if (!extracted || extracted.plugin !== plugin) {
@@ -1123,8 +1131,7 @@ export class WindowManager {
     }
 
     const cacheEntry = viewCacheManager.relinquish(plugin, extracted.view, extracted.feature)
-    const divisionBoxManager = DivisionBoxManager.getInstance()
-    let session: Awaited<ReturnType<DivisionBoxManager['createSessionWithoutUI']>> | null = null
+    let session: BoxToolDetachedDivisionBoxSession | null = null
 
     try {
       const config: DivisionBoxConfig = {
@@ -1146,7 +1153,7 @@ export class WindowManager {
         }
       }
 
-      session = await divisionBoxManager.createSessionWithoutUI(config)
+      session = await surfaceBridge.createSessionWithoutUI(config)
       await session.attachExistingUIView(extracted.view, plugin)
       this.pluginViewController.completeExtractedUIViewTransfer()
 
@@ -1164,11 +1171,11 @@ export class WindowManager {
         }
       }
     } catch (error) {
-      let divisionViewRelease: ExistingUIViewReleaseResult = 'not-owned'
+      let divisionViewRelease: BoxToolDetachedUIViewReleaseResult = 'not-owned'
       if (session) {
         divisionViewRelease = session.releaseExistingUIView(extracted.view)
         try {
-          await divisionBoxManager.destroySession(session.sessionId)
+          await surfaceBridge.destroySession(session.sessionId)
         } catch (destroyError) {
           coreBoxWindowLog.error('Failed to destroy rolled-back DivisionBox session', {
             meta: { sessionId: session.sessionId },
@@ -1185,7 +1192,7 @@ export class WindowManager {
       }
       const cacheRestored = !cacheEntry || (restored && viewCacheManager.restore(cacheEntry))
       if (!restored) {
-        closePluginWebContents(extracted.view.webContents)
+        closeBoxToolPluginWebContents(extracted.view.webContents)
       }
 
       coreBoxWindowLog.error('Failed to detach plugin view into DivisionBox', {

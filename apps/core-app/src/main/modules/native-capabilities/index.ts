@@ -23,10 +23,8 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
-import { everythingProvider } from '../box-tool/addon/files/everything-provider'
-import { fileProvider } from '../box-tool/addon/files/file-provider'
-import { getVideoThumbnailSupport } from '../box-tool/addon/files/thumbnail-service'
 import { nativeFileService } from './native-file-service'
+import { getNativeCapabilitiesPorts, type NativeFileIndexPort } from './native-capabilities-ports'
 import { getPermissionModule } from '../permission'
 import { getNativeScreenshotService, type NativeScreenshotService } from './screenshot-service'
 import { NativeTransport } from './native-transport'
@@ -148,6 +146,16 @@ function limitSearchResult(result: TuffSearchResult, limit?: number): TuffSearch
   }
 }
 
+function requireNativeFileIndexPort(): NativeFileIndexPort {
+  const fileIndex = getNativeCapabilitiesPorts().fileIndex
+  if (!fileIndex) {
+    const error = new Error('Native file index provider is not registered') as CodedError
+    error.code = 'ERR_NATIVE_FILE_INDEX_UNAVAILABLE'
+    throw error
+  }
+  return fileIndex
+}
+
 export class NativeCapabilitiesModule extends BaseModule {
   static key: ModuleKey = Symbol.for('NativeCapabilitiesModule')
   name: ModuleKey = NativeCapabilitiesModule.key
@@ -241,11 +249,11 @@ export class NativeCapabilitiesModule extends BaseModule {
       }),
       transport.on(NativeEvents.fileIndex.getStatus, (_payload, context) => {
         enforceNativePermission(context, 'native:file-index:get-status')
-        return fileProvider.getIndexingStatus()
+        return requireNativeFileIndexPort().getIndexingStatus()
       }),
       transport.on(NativeEvents.fileIndex.getStats, (_payload, context) => {
         enforceNativePermission(context, 'native:file-index:get-stats')
-        return fileProvider.getIndexStats()
+        return requireNativeFileIndexPort().getIndexStats()
       }),
       transport.on(NativeEvents.fileIndex.query, async (payload, context) => {
         enforceNativePermission(context, 'native:file-index:query')
@@ -253,14 +261,13 @@ export class NativeCapabilitiesModule extends BaseModule {
         const provider = payload.provider ?? 'auto'
         const query = normalizeQuery(payload)
         const signal = new AbortController().signal
+        const { everything } = getNativeCapabilitiesPorts()
         const useEverything =
           provider === 'everything' ||
-          (provider === 'auto' &&
-            process.platform === 'win32' &&
-            everythingProvider.isSearchReady())
+          (provider === 'auto' && process.platform === 'win32' && everything.isSearchReady())
         const result = useEverything
-          ? await everythingProvider.onSearch(query, signal)
-          : await fileProvider.onSearch(query, signal)
+          ? await everything.onSearch(query, signal)
+          : await requireNativeFileIndexPort().onSearch(query, signal)
 
         return {
           provider: useEverything ? 'everything' : provider,
@@ -270,7 +277,7 @@ export class NativeCapabilitiesModule extends BaseModule {
       }),
       transport.on(NativeEvents.fileIndex.rebuild, async (payload, context) => {
         enforceNativePermission(context, 'native:file-index:rebuild')
-        return await fileProvider.rebuildIndex(payload ?? undefined)
+        return await requireNativeFileIndexPort().rebuildIndex(payload ?? undefined)
       }),
       transport.on(NativeEvents.fileIndex.addPath, async (payload, context) => {
         enforceNativePermission(context, 'native:file-index:add-path')
@@ -278,11 +285,11 @@ export class NativeCapabilitiesModule extends BaseModule {
         if (!inputPath) {
           return { success: false, status: 'invalid', reason: 'path-empty' }
         }
-        return await fileProvider.addWatchPath(inputPath)
+        return await requireNativeFileIndexPort().addWatchPath(inputPath)
       }),
       transport.onStream(NativeEvents.fileIndex.progress, (_payload, context) => {
         enforceNativePermission(context, 'native:file-index:progress')
-        fileProvider.registerProgressStream(context)
+        requireNativeFileIndexPort().registerProgressStream(context)
       })
     )
   }
@@ -340,8 +347,9 @@ export class NativeCapabilitiesModule extends BaseModule {
   }
 
   private getCapabilityStatus(id: string, context: HandlerContext): NativeCapabilityStatus {
+    const ports = getNativeCapabilitiesPorts()
     const screenshotSupport = () => this.screenshotService.getSupport()
-    const everythingStatus = () => everythingProvider.getStatusSnapshot()
+    const everythingStatus = () => ports.everything.getStatusSnapshot()
 
     switch (id) {
       case 'screenshot.display':
@@ -359,16 +367,19 @@ export class NativeCapabilitiesModule extends BaseModule {
           features: this.screenshotService.getFeatures()
         }
       }
-      case 'file-index.local':
+      case 'file-index.local': {
+        const available = ports.fileIndex !== null
         return {
           id,
           supported: true,
-          available: true,
+          available,
           platform: process.platform,
           engine: 'file-provider',
           permission: toPermissionState(context, 'native:file-index:query'),
+          ...(available ? {} : { degraded: true, reason: 'file-index-provider-unregistered' }),
           features: ['status', 'stats', 'query', 'rebuild', 'progress']
         }
+      }
       case 'file-index.everything': {
         const status = everythingStatus()
         return {
@@ -407,7 +418,7 @@ export class NativeCapabilitiesModule extends BaseModule {
           features: ['metadata', 'thumbnail']
         }
       case 'media.thumbnail': {
-        const videoSupport = getVideoThumbnailSupport()
+        const videoSupport = ports.thumbnail.getVideoThumbnailSupport()
         return {
           id,
           supported: true,

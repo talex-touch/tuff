@@ -452,8 +452,11 @@ const CANONICAL_SLUG_ORDER: string[] = [
   'physics-motion',
   'motion-dock',
   'motion',
+  'pixel-field',
+  'voice-ring',
   'motion-toggle',
   'motion-transition',
+  'distortion-wave',
 ]
 
 const CANONICAL_ORDER_INDEX = new Map<string, number>(

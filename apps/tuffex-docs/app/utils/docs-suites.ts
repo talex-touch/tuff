@@ -179,6 +179,7 @@ export const STATIC_COMPONENT_SUITE_MAP: Record<string, DocsSuiteKey> = {
   '/device-mockup': 'pro',
   '/dialog': 'base',
   '/diff-table': 'data',
+  '/distortion-wave': 'motion',
   '/dither-chart': 'motion',
   '/divider': 'base',
   '/dot-indicator': 'base',
@@ -270,6 +271,7 @@ export const STATIC_COMPONENT_SUITE_MAP: Record<string, DocsSuiteKey> = {
   '/permission-state': 'base',
   '/physics-motion': 'motion',
   '/picker': 'base',
+  '/pixel-field': 'motion',
   '/popover': 'base',
   '/prism-glow': 'pro',
   '/pro-suite': 'pro',
@@ -371,6 +373,7 @@ export const STATIC_COMPONENT_SUITE_MAP: Record<string, DocsSuiteKey> = {
   '/virtual-list': 'pro',
   '/voice-beam': 'pro',
   '/voice-clip': 'ai',
+  '/voice-ring': 'motion',
   '/working-indicator': 'ai',
 }
 

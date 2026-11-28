@@ -18,12 +18,11 @@ import {
   VIDEO_THUMBNAIL_EXTENSIONS,
   getThumbnailUnsupportedReason,
   isThumbnailCandidate
-} from '../box-tool/addon/files/thumbnail-config'
-import { ThumbnailWorkerClient } from '../box-tool/addon/files/workers/thumbnail-worker-client'
+} from '../../shared/thumbnail-policy'
 import { createLogger } from '../../utils/logger'
+import { getNativeCapabilitiesPorts } from './native-capabilities-ports'
 
 const nativeFileLog = createLogger('NativeFile')
-const thumbnailWorker = new ThumbnailWorkerClient()
 
 type CodedError = Error & { code?: string }
 
@@ -162,7 +161,7 @@ async function buildThumbnailRef(
 
   if (canGenerate) {
     try {
-      const thumbnail = await thumbnailWorker.generate(filePath, {
+      const thumbnail = await getNativeCapabilitiesPorts().thumbnail.generate(filePath, {
         extension,
         sizeBytes
       })

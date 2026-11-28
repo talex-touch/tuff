@@ -2,8 +2,12 @@ import type { ModuleDestroyContext, ModuleInitContext } from '@talex-touch/utils
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import { createTrustedTestPluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeEvents } from '@talex-touch/utils/transport/events'
+import {
+  registerNativeCapabilitiesPorts,
+  resetNativeCapabilitiesPorts
+} from './native-capabilities-ports'
 
 type NativeHandler = (payload: unknown, context: HandlerContext) => unknown | Promise<unknown>
 type NativeStreamHandler = (payload: unknown, context: unknown) => unknown | Promise<unknown>
@@ -180,29 +184,6 @@ vi.mock('../permission', () => ({
   }))
 }))
 
-vi.mock('../box-tool/addon/files/file-provider', () => ({
-  fileProvider: {
-    getIndexingStatus: mocks.getIndexingStatus,
-    getIndexStats: mocks.getIndexStats,
-    onSearch: mocks.fileIndexSearch,
-    rebuildIndex: mocks.rebuildIndex,
-    addWatchPath: mocks.addWatchPath,
-    registerProgressStream: mocks.registerProgressStream
-  }
-}))
-
-vi.mock('../box-tool/addon/files/everything-provider', () => ({
-  everythingProvider: {
-    getStatusSnapshot: mocks.getEverythingStatusSnapshot,
-    onSearch: mocks.everythingSearch,
-    isSearchReady: mocks.everythingIsSearchReady
-  }
-}))
-
-vi.mock('../box-tool/addon/files/thumbnail-service', () => ({
-  getVideoThumbnailSupport: mocks.getVideoThumbnailSupport
-}))
-
 vi.mock('./native-file-service', () => ({
   nativeFileService: {
     stat: mocks.stat,
@@ -259,6 +240,31 @@ function initNativeModule(module: { onInit: (ctx: ModuleInitContext<TalexEvents>
 }
 
 describe('NativeCapabilitiesModule', () => {
+  beforeEach(() => {
+    registerNativeCapabilitiesPorts({
+      fileIndex: {
+        getIndexingStatus: mocks.getIndexingStatus as never,
+        getIndexStats: mocks.getIndexStats,
+        onSearch: mocks.fileIndexSearch,
+        rebuildIndex: mocks.rebuildIndex,
+        addWatchPath: mocks.addWatchPath as never,
+        registerProgressStream: mocks.registerProgressStream
+      },
+      everything: {
+        getStatusSnapshot: mocks.getEverythingStatusSnapshot as never,
+        onSearch: mocks.everythingSearch as never,
+        isSearchReady: mocks.everythingIsSearchReady
+      },
+      thumbnail: {
+        getVideoThumbnailSupport: mocks.getVideoThumbnailSupport
+      }
+    })
+  })
+
+  afterEach(() => {
+    resetNativeCapabilitiesPorts()
+  })
+
   it('registers native screenshot handlers and allows internal renderer calls', async () => {
     const { NativeCapabilitiesModule } = await import('./index')
     const module = new NativeCapabilitiesModule()
@@ -438,6 +444,27 @@ describe('NativeCapabilitiesModule', () => {
       degraded: true,
       reason: 'ffmpeg-unavailable',
       features: ['image-thumbnail']
+    })
+  })
+
+  it('fails closed with ERR_NATIVE_FILE_INDEX_UNAVAILABLE when file-index port is unregistered', async () => {
+    resetNativeCapabilitiesPorts()
+    const { NativeCapabilitiesModule } = await import('./index')
+    const module = new NativeCapabilitiesModule()
+
+    initNativeModule(module)
+    const statusHandler = mocks.handlers.get(NativeEvents.capabilities.get.toEventName())
+    expect(statusHandler?.({ id: 'file-index.local' }, createContext())).toMatchObject({
+      id: 'file-index.local',
+      supported: true,
+      available: false,
+      degraded: true,
+      reason: 'file-index-provider-unregistered'
+    })
+
+    const queryHandler = mocks.handlers.get(NativeEvents.fileIndex.query.toEventName())
+    await expect(queryHandler?.({ text: 'demo' }, createContext())).rejects.toMatchObject({
+      code: 'ERR_NATIVE_FILE_INDEX_UNAVAILABLE'
     })
   })
 })

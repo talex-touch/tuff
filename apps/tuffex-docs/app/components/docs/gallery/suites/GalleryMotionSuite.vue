@@ -32,8 +32,11 @@ const motionGalleryItems = [
   { doc: 'physics-motion', name: 'PhysicsMotion', zh: '物理动效', kind: 'physics-motion', height: 128 },
   { doc: 'motion-dock', name: 'MotionDock', zh: '动态应用栏', kind: 'motion-dock' },
   { doc: 'motion', name: 'Motion', zh: '悬停与滚动', kind: 'motion', height: 150 },
+  { doc: 'pixel-field', name: 'PixelField', zh: '像素粒子场', kind: 'pixel-field', height: 220 },
+  { doc: 'voice-ring', name: 'VoiceRing', zh: '语音光环', kind: 'voice-ring', height: 196 },
   { doc: 'motion-toggle', name: 'MotionToggle', zh: '动效切换', kind: 'motion-toggle' },
   { doc: 'motion-transition', name: 'MotionTransition', zh: '动效转场', kind: 'motion-transition', height: 198 },
+  { doc: 'distortion-wave', name: 'DistortionWave', zh: '折射波转场', kind: 'distortion-wave', height: 196 },
 ] as const
 
 function specimenStyle(item: { readonly doc?: string, readonly name?: string, readonly zh?: string, readonly kind?: string, readonly height?: number, readonly narrowHeight?: number }) {

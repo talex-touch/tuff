@@ -325,8 +325,11 @@ const COMPONENT_ORDER: string[] = [
   '/physics-motion',
   '/motion-dock',
   '/motion',
+  '/pixel-field',
+  '/voice-ring',
   '/motion-toggle',
   '/motion-transition',
+  '/distortion-wave',
 ]
 
 const ORDER_MAP = new Map<string, number>(COMPONENT_ORDER.map((path, index) => [path, index]))

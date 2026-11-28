@@ -1,5 +1,6 @@
 import { DEFAULT_PROVIDERS, IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { registerAiPorts, resetAiPorts } from './ai-ports'
 import { normalizeProviderForRuntime } from './provider-runtime'
 
 const authMocks = vi.hoisted(() => ({
@@ -26,7 +27,19 @@ function shippedNexusDefault() {
 describe('provider-runtime', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    registerAiPorts({
+      auth: {
+        getAuthToken: authMocks.getAuthToken,
+        getSanitizedAuthSessionState: () => ({ isLoaded: false, isSignedIn: false, user: null }),
+        subscribeAuthState: () => () => undefined,
+        performNexusRequestWithAuth: async () => null
+      }
+    })
     providerCredentialMocks.resolveProviderCredential.mockReturnValue(undefined)
+  })
+
+  afterEach(() => {
+    resetAiPorts()
   })
 
   it('injects the app auth token without re-enabling disabled Nexus-managed providers', () => {
