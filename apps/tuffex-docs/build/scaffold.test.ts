@@ -278,7 +278,9 @@ describe('tuffex-docs phase 1 scaffold', () => {
     expect(galleryCss).toMatch(/\.docs-gallery-fw\s*\{[^}]*position:\s*sticky/)
 
     const baseSuiteCss = readFileSync(join(appRoot, 'app/components/docs/gallery/suites/GalleryBaseSuite.css'), 'utf8')
-    expect(baseSuiteCss).toMatch(/\.docs-gallery__cat-nav\s*\{[^}]*position:\s*sticky/)
+    const sharedCategoriesCss = readFileSync(join(appRoot, 'app/components/docs/gallery/suites/gallery-categories.css'), 'utf8')
+    expect(baseSuiteCss).toContain('./gallery-categories.css')
+    expect(sharedCategoriesCss).toMatch(/\.docs-gallery__cat-nav\s*\{[^}]*position:\s*sticky/)
 
     const demoWrapper = readFileSync(join(appRoot, 'app/components/content/TuffDemoWrapper.vue'), 'utf8')
     const demoWrapperStyleNoComments = (demoWrapper.match(/<style[\s\S]*?<\/style>/)?.[0] ?? '')

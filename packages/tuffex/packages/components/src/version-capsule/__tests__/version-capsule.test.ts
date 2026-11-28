@@ -1,13 +1,34 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createApp } from 'vue'
+import { createApp, defineComponent } from 'vue'
 import VersionCapsule, {
   TxVersionCapsule,
   TxVersionDownloadPanel,
   TxVersionHistoryPanel,
 } from '../index'
 
-function mountCapsule(props: Record<string, unknown> = {}) {
+const PopoverStub = defineComponent({
+  name: 'TxPopover',
+  props: {
+    modelValue: { type: Boolean, default: false },
+    disabled: { type: Boolean, default: false },
+    closeOnClickOutside: { type: Boolean, default: true },
+    closeOnEsc: { type: Boolean, default: true },
+  },
+  emits: ['update:modelValue'],
+  template: `
+    <div class="tx-popover-stub" :data-open="String(modelValue)">
+      <div class="tx-popover-stub__reference">
+        <slot name="reference" />
+      </div>
+      <div v-if="modelValue" class="tx-popover-stub__content">
+        <slot />
+      </div>
+    </div>
+  `,
+})
+
+function mountCapsule(props: Record<string, unknown> = {}, slots?: Record<string, string>) {
   return mount(TxVersionCapsule, {
     attachTo: document.body,
     props: {
@@ -15,9 +36,14 @@ function mountCapsule(props: Record<string, unknown> = {}) {
       channel: 'BETA',
       ...props,
     },
-    slots: {
+    slots: slots ?? {
       download: '<div class="download-slot">download</div>',
       history: '<div class="history-slot">history</div>',
+    },
+    global: {
+      stubs: {
+        TxPopover: PopoverStub,
+      },
     },
   })
 }
@@ -36,35 +62,45 @@ describe('txVersionCapsule', () => {
     expect(wrapper.find('.history-slot').exists()).toBe(false)
   })
 
-  it('opens only the download panel from the left segment', async () => {
+  it('opens only the download pane from the left segment via TxPopover', async () => {
     const wrapper = mountCapsule()
 
     await wrapper.find('.tx-version-capsule__segment--download').trigger('click')
 
+    expect(wrapper.findComponent(PopoverStub).props('modelValue')).toBe(true)
     expect(wrapper.find('.download-slot').exists()).toBe(true)
     expect(wrapper.find('.history-slot').exists()).toBe(false)
     expect(wrapper.emitted('download')).toHaveLength(1)
     expect(wrapper.emitted('update:panel')?.[0]).toEqual(['download'])
   })
 
-  it('opens only the history panel from the right segment', async () => {
+  it('opens only the history pane from the right segment via TxPopover', async () => {
     const wrapper = mountCapsule()
 
     await wrapper.find('.tx-version-capsule__segment--history').trigger('click')
 
+    expect(wrapper.findComponent(PopoverStub).props('modelValue')).toBe(true)
     expect(wrapper.find('.history-slot').exists()).toBe(true)
     expect(wrapper.find('.download-slot').exists()).toBe(false)
     expect(wrapper.emitted('history')).toHaveLength(1)
   })
 
-  it('swaps panels when the other segment is clicked', async () => {
-    const wrapper = mountCapsule()
+  it('slides to history via the bottom View more button and returns via Back', async () => {
+    const wrapper = mountCapsule({ viewMoreLabel: 'View more', backLabel: 'Back' })
 
     await wrapper.find('.tx-version-capsule__segment--download').trigger('click')
-    await wrapper.find('.tx-version-capsule__segment--history').trigger('click')
+    expect(wrapper.find('.download-slot').exists()).toBe(true)
+    expect(wrapper.find('.tx-version-capsule__more-btn').text()).toContain('View more')
 
+    await wrapper.find('.tx-version-capsule__more-btn').trigger('click')
     expect(wrapper.find('.download-slot').exists()).toBe(false)
     expect(wrapper.find('.history-slot').exists()).toBe(true)
+    expect(wrapper.emitted('update:panel')?.[1]).toEqual(['history'])
+
+    await wrapper.find('.tx-version-capsule__back-btn').trigger('click')
+    expect(wrapper.find('.download-slot').exists()).toBe(true)
+    expect(wrapper.find('.history-slot').exists()).toBe(false)
+    expect(wrapper.emitted('update:panel')?.[2]).toEqual(['download'])
   })
 
   it('toggles the same panel closed on a second click', async () => {
@@ -78,28 +114,21 @@ describe('txVersionCapsule', () => {
     expect(wrapper.emitted('update:panel')?.[1]).toEqual([null])
   })
 
-  it('closes on Escape', async () => {
-    const wrapper = mountCapsule()
+  it('closes when TxPopover emits modelValue=false (Escape / outside click)', async () => {
+    const wrapper = mountCapsule({ closeOnClickOutside: true, closeOnEsc: true })
+    const popover = wrapper.findComponent(PopoverStub)
+
+    expect(popover.props('closeOnClickOutside')).toBe(true)
+    expect(popover.props('closeOnEsc')).toBe(true)
 
     await wrapper.find('.tx-version-capsule__segment--history').trigger('click')
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(wrapper.find('.history-slot').exists()).toBe(true)
+
+    popover.vm.$emit('update:modelValue', false)
     await wrapper.vm.$nextTick()
 
     expect(wrapper.find('.history-slot').exists()).toBe(false)
-  })
-
-  it('closes on an outside pointerdown but not on an inside one', async () => {
-    const wrapper = mountCapsule()
-
-    await wrapper.find('.tx-version-capsule__segment--download').trigger('click')
-
-    wrapper.element.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-    await wrapper.vm.$nextTick()
-    expect(wrapper.find('.download-slot').exists()).toBe(true)
-
-    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-    await wrapper.vm.$nextTick()
-    expect(wrapper.find('.download-slot').exists()).toBe(false)
+    expect(wrapper.emitted('update:panel')?.[1]).toEqual([null])
   })
 
   it('honours a controlled panel prop', async () => {
@@ -110,19 +139,14 @@ describe('txVersionCapsule', () => {
     expect(wrapper.find('.history-slot').exists()).toBe(false)
   })
 
-  it('binds dismiss listeners when mounted with a panel already open', async () => {
-    // Regression: with a controlled panel open on first render, the activePanel
-    // watch never fires, so the outside-pointerdown / Escape listeners were never
-    // bound and closeOnClickOutside silently did nothing until a manual toggle.
+  it('dismisses controlled open panel when TxPopover closes', async () => {
     const wrapper = mountCapsule({ panel: 'download' })
     expect(wrapper.find('.download-slot').exists()).toBe(true)
 
-    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    wrapper.findComponent(PopoverStub).vm.$emit('update:modelValue', false)
     await wrapper.vm.$nextTick()
 
     expect(wrapper.emitted('update:panel')?.[0]).toEqual([null])
-
-    wrapper.unmount()
   })
 
   it('does not open while disabled, and closes when disabled mid-flight', async () => {
@@ -139,22 +163,17 @@ describe('txVersionCapsule', () => {
   })
 
   it('acts as a plain trigger when a panel slot is absent', async () => {
-    const wrapper = mount(TxVersionCapsule, {
-      attachTo: document.body,
-      props: { version: 'v1.0.0' },
-      slots: { download: '<div class="download-slot">download</div>' },
-    })
+    const wrapper = mountCapsule({}, { download: '<div class="download-slot">download</div>' })
 
     await wrapper.find('.tx-version-capsule__segment--history').trigger('click')
 
-    // Emits so the host can open its own dialog, but shows no empty popover.
     expect(wrapper.emitted('history')).toHaveLength(1)
-    expect(wrapper.find('.tx-version-capsule__panel--end').exists()).toBe(false)
+    expect(wrapper.findComponent(PopoverStub).props('modelValue')).toBe(false)
     expect(wrapper.emitted('update:panel')).toBeUndefined()
 
-    // The half that does have a slot still opens normally.
     await wrapper.find('.tx-version-capsule__segment--download').trigger('click')
     expect(wrapper.find('.download-slot').exists()).toBe(true)
+    expect(wrapper.find('.tx-version-capsule__more-btn').exists()).toBe(false)
   })
 
   it('registers the component through install', () => {
@@ -259,8 +278,6 @@ describe('txVersionHistoryPanel', () => {
   it('renders no-href latest and rows as keyboard-reachable buttons', () => {
     const wrapper = mount(TxVersionHistoryPanel, { props: { latest, entries } })
 
-    // These were bare <div>s with a click handler (mouse-only). They must now be
-    // real <button>s so `select` is reachable by keyboard, matching the download panel.
     const latestEl = wrapper.find('.tx-version-history-panel__latest')
     expect(latestEl.element.tagName).toBe('BUTTON')
     expect(latestEl.attributes('type')).toBe('button')
@@ -271,10 +288,39 @@ describe('txVersionHistoryPanel', () => {
       expect(row.attributes('type')).toBe('button')
     }
 
-    // A row that carries an href stays an anchor (no over-conversion).
     const linked = mount(TxVersionHistoryPanel, {
       props: { entries: [{ id: '9', tag: 'v1.0.0', tone: 'preview' as const, href: '/releases/1' }] },
     })
     expect(linked.find('.tx-version-history-panel__row').element.tagName).toBe('A')
+  })
+
+  it('filters releases by channel with auto-derived and custom filters', async () => {
+    const wrapper = mount(TxVersionHistoryPanel, {
+      props: {
+        latest,
+        entries,
+        filters: [
+          { value: 'all', label: 'All' },
+          { value: 'beta', label: 'Beta' },
+          { value: 'release', label: 'Release' },
+        ],
+      },
+    })
+
+    const filters = wrapper.findAll('.tx-version-history-panel__filter')
+    expect(filters.map(item => item.text())).toEqual(['All', 'Beta', 'Release'])
+    expect(wrapper.find('.tx-version-history-panel__latest').exists()).toBe(true)
+    expect(wrapper.findAll('.tx-version-history-panel__row')).toHaveLength(2)
+
+    await filters[2]!.trigger('click')
+    expect(wrapper.emitted('update:filter')?.[0]).toEqual(['release'])
+    expect(wrapper.find('.tx-version-history-panel__latest').exists()).toBe(false)
+    expect(wrapper.findAll('.tx-version-history-panel__row')).toHaveLength(1)
+    expect(wrapper.find('.tx-version-history-panel__row-tag').text()).toBe('v2.4.12')
+
+    await filters[1]!.trigger('click')
+    expect(wrapper.find('.tx-version-history-panel__latest').exists()).toBe(true)
+    expect(wrapper.findAll('.tx-version-history-panel__row')).toHaveLength(1)
+    expect(wrapper.find('.tx-version-history-panel__row-tag').text()).toBe('v2.4.13-beta.18')
   })
 })

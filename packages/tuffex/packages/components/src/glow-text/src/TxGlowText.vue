@@ -156,8 +156,9 @@ onBeforeUnmount(() => {
 // sixth of the gradient line makes `bandSize` a share of the element's width.
 .tx-glow-text {
   --tx-glow-band-dir: calc(90deg + var(--tx-glow-angle, 20deg));
-  --tx-glow-band-half: calc(var(--tx-glow-band, 38%) / 6);
-  --tx-glow-band-core: calc(var(--tx-glow-band, 38%) / 30);
+  --tx-glow-band-half: calc(var(--tx-glow-band, 38%) / 4.2);
+  --tx-glow-band-wing: calc(var(--tx-glow-band, 38%) / 7.5);
+  --tx-glow-band-core: calc(var(--tx-glow-band, 38%) / 18);
 
   position: relative;
   display: inline-block;
@@ -166,6 +167,11 @@ onBeforeUnmount(() => {
   border-radius: var(--tx-glow-radius, 10px);
   overflow: hidden;
   isolation: isolate;
+}
+
+.tx-glow-text.is-text-clip {
+  border-radius: 0;
+  overflow: visible;
 }
 
 .tx-glow-text > * {
@@ -189,7 +195,7 @@ onBeforeUnmount(() => {
 
 @supports (backdrop-filter: blur(0)) {
   .tx-glow-text.is-adaptive:not(.has-custom-backdrop) {
-    --tx-glow-backdrop: brightness(1.18) saturate(1.12);
+    --tx-glow-backdrop: brightness(1.14) saturate(1.1);
   }
 }
 
@@ -206,8 +212,10 @@ onBeforeUnmount(() => {
   background: linear-gradient(
     var(--tx-glow-band-dir),
     transparent calc(50% - var(--tx-glow-band-half)),
+    color-mix(in srgb, var(--tx-glow-color, rgba(255, 255, 255, 0.9)) 34%, transparent) calc(50% - var(--tx-glow-band-wing)),
     var(--tx-glow-color, rgba(255, 255, 255, 0.9)) calc(50% - var(--tx-glow-band-core)),
     var(--tx-glow-color, rgba(255, 255, 255, 0.9)) calc(50% + var(--tx-glow-band-core)),
+    color-mix(in srgb, var(--tx-glow-color, rgba(255, 255, 255, 0.9)) 34%, transparent) calc(50% + var(--tx-glow-band-wing)),
     transparent calc(50% + var(--tx-glow-band-half))
   );
 
@@ -228,10 +236,9 @@ onBeforeUnmount(() => {
   );
 
   transform: translateX(-33.333%);
-  filter: blur(0.4px);
-  animation: tx-glow-sweep var(--tx-glow-duration, 1400ms) var(--tx-glow-ease, linear) infinite;
+  animation: tx-glow-sweep var(--tx-glow-duration, 2000ms) var(--tx-glow-ease, cubic-bezier(0.4, 0, 0.2, 1)) infinite;
   animation-delay: var(--tx-glow-delay, 0ms);
-  will-change: transform, opacity, filter;
+  will-change: transform, opacity;
 }
 
 .tx-glow-text__clip-shine {
@@ -239,7 +246,7 @@ onBeforeUnmount(() => {
   inset: 0;
   z-index: 2;
   display: block;
-  overflow: hidden;
+  overflow: visible;
   pointer-events: none;
   white-space: pre-wrap;
   color: transparent;
@@ -253,15 +260,18 @@ onBeforeUnmount(() => {
   background-image: linear-gradient(
     var(--tx-glow-band-dir),
     transparent calc(50% - var(--tx-glow-band-half)),
+    color-mix(in srgb, var(--tx-glow-color, rgba(255, 255, 255, 0.9)) 42%, transparent) calc(50% - var(--tx-glow-band-wing)),
     var(--tx-glow-color, rgba(255, 255, 255, 0.9)) calc(50% - var(--tx-glow-band-core)),
     var(--tx-glow-color, rgba(255, 255, 255, 0.9)) calc(50% + var(--tx-glow-band-core)),
+    color-mix(in srgb, var(--tx-glow-color, rgba(255, 255, 255, 0.9)) 42%, transparent) calc(50% + var(--tx-glow-band-wing)),
     transparent calc(50% + var(--tx-glow-band-half))
   );
   background-repeat: no-repeat;
   background-size: 300% 100%;
-  background-position: 0 0;
-  opacity: var(--tx-glow-opacity, 0.75);
-  animation: tx-glow-text-sweep var(--tx-glow-duration, 2000ms) var(--tx-glow-ease, linear) infinite;
+  background-position: 100% 0;
+  opacity: var(--tx-glow-opacity, 0.9);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--tx-glow-color, rgba(255, 255, 255, 0.9)) 32%, transparent));
+  animation: tx-glow-text-sweep var(--tx-glow-duration, 2000ms) var(--tx-glow-ease, cubic-bezier(0.4, 0, 0.2, 1)) infinite;
   animation-delay: var(--tx-glow-delay, 0ms);
   will-change: background-position;
 }
@@ -323,11 +333,11 @@ onBeforeUnmount(() => {
     transform: translateX(-33.333%);
     opacity: var(--tx-glow-opacity, 0.75);
   }
-  65% {
+  78% {
     transform: translateX(33.333%);
     opacity: var(--tx-glow-opacity, 0.75);
   }
-  65.01%,
+  78.01%,
   100% {
     transform: translateX(33.333%);
     opacity: 0;
@@ -338,7 +348,7 @@ onBeforeUnmount(() => {
   0% {
     background-position: 100% 0;
   }
-  65%,
+  78%,
   100% {
     background-position: 0 0;
   }

@@ -65,7 +65,11 @@ const props = withDefaults(defineProps<MetalBadgeProps>(), {
   textColor: '#323232',
 })
 
-const radiusPx = computed(() => RADIUS * props.scale)
+const radiusNum = computed(() => RADIUS * props.scale)
+const radiusPx = computed(() => `${radiusNum.value}px`)
+const minWidthPx = computed(() => `${W * props.scale}px`)
+const heightPx = computed(() => `${H * props.scale}px`)
+const padXPx = computed(() => `${Math.max(10, PAD_X) * props.scale}px`)
 
 // Full-fill mask: the pill itself.
 const mask: MaskFn = (ctx, w, h, dpr) => {
@@ -76,8 +80,11 @@ const mask: MaskFn = (ctx, w, h, dpr) => {
 
 const boxStyle = computed<CSSProperties>(() => ({
   position: 'relative',
-  width: W * props.scale,
-  height: H * props.scale,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minWidth: minWidthPx.value,
+  height: heightPx.value,
   borderRadius: radiusPx.value,
 }))
 // layer 3b — clean white core under the label (rim-only metal)
@@ -99,14 +106,14 @@ const washStyle = computed<CSSProperties>(() => ({
 // same with or without a CSS framework on the host page.
 const labelStyle = computed<CSSProperties>(() => ({
   position: 'relative',
-  display: 'flex',
+  display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
   boxSizing: 'border-box',
-  width: W * props.scale,
-  height: H * props.scale,
-  paddingLeft: PAD_X * props.scale,
-  paddingRight: PAD_X * props.scale,
+  minWidth: minWidthPx.value,
+  height: heightPx.value,
+  paddingLeft: padXPx.value,
+  paddingRight: padXPx.value,
   font: `600 ${12.222 * props.scale}px/1.4 Inter, sans-serif`,
   color: props.textColor,
   letterSpacing: 0,
@@ -132,7 +139,7 @@ const label = computed<string>(() => slotText.value.trim() || props.children || 
     :mask="mask"
     glow-mode="ring"
     :reflection-targets="props.reflectionTargets"
-    :border-radius="radiusPx"
+    :border-radius="radiusNum"
     :style="{ background: '#ffffff', borderRadius: radiusPx }"
   >
     <div :style="boxStyle">

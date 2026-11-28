@@ -48,7 +48,28 @@ const emit = defineEmits<CommandPaletteEmits>()
 
 const inputRef = ref<HTMLInputElement | null>(null)
 const overlayRef = ref<HTMLElement | null>(null)
+const listRef = ref<HTMLElement | null>(null)
 const query = ref(props.query ?? '')
+
+const FLIP_DURATION = 220
+const FLIP_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)'
+let activeListAnimation: Animation | null = null
+let activeItemAnimations: Animation[] = []
+let flipRunId = 0
+
+function isReducedMotion(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+function cancelFlipAnimations(): void {
+  activeListAnimation?.cancel()
+  activeListAnimation = null
+  for (const animation of activeItemAnimations)
+    animation.cancel()
+  activeItemAnimations = []
+}
 
 // `update:query` was emitted with no matching prop, so v-model:query could only
 // ever be write-only. Accepting the prop closes the pair; leaving it undefined
@@ -143,6 +164,73 @@ watch(
   { immediate: true },
 )
 
+const flipSignature = computed(() => filteredCommands.value.map(cmd => cmd.id).join('\0'))
+
+watch(
+  flipSignature,
+  async () => {
+    const list = listRef.value
+    if (!visible.value || !list || typeof list.animate !== 'function' || isReducedMotion())
+      return
+
+    const runId = ++flipRunId
+    const firstHeight = list.getBoundingClientRect().height
+    const firstRects = new Map<string, number>()
+    for (const node of list.querySelectorAll<HTMLElement>('[data-flip-id]')) {
+      const id = node.dataset.flipId
+      if (id)
+        firstRects.set(id, node.getBoundingClientRect().top)
+    }
+
+    cancelFlipAnimations()
+    await nextTick()
+    if (runId !== flipRunId || !visible.value || !listRef.value)
+      return
+
+    const nextList = listRef.value
+    const lastHeight = nextList.getBoundingClientRect().height
+    if (firstHeight > 0 && lastHeight > 0 && Math.abs(firstHeight - lastHeight) > 0.5) {
+      const listAnim = nextList.animate(
+        [{ height: `${firstHeight}px` }, { height: `${lastHeight}px` }],
+        { duration: FLIP_DURATION, easing: FLIP_EASING },
+      )
+      activeListAnimation = listAnim
+      listAnim.finished.then(() => {
+        if (activeListAnimation === listAnim)
+          activeListAnimation = null
+      }, () => {})
+    }
+
+    const nextAnims: Animation[] = []
+    for (const node of nextList.querySelectorAll<HTMLElement>('[data-flip-id]')) {
+      const id = node.dataset.flipId
+      if (!id || typeof node.animate !== 'function')
+        continue
+      const prevTop = firstRects.get(id)
+      if (prevTop !== undefined) {
+        const dy = prevTop - node.getBoundingClientRect().top
+        if (Math.abs(dy) > 0.5) {
+          nextAnims.push(node.animate(
+            [{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }],
+            { duration: FLIP_DURATION, easing: FLIP_EASING },
+          ))
+        }
+      }
+      else {
+        nextAnims.push(node.animate(
+          [
+            { opacity: 0, transform: 'translateY(6px) scale(0.985)' },
+            { opacity: 1, transform: 'translateY(0) scale(1)' },
+          ],
+          { duration: FLIP_DURATION, easing: FLIP_EASING },
+        ))
+      }
+    }
+    activeItemAnimations = nextAnims
+  },
+  { flush: 'pre' },
+)
+
 watch(
   filteredCommands,
   () => {
@@ -194,6 +282,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  cancelFlipAnimations()
   document.removeEventListener('keydown', handleKeydown)
   focusReturn.restore()
 })
@@ -364,11 +453,12 @@ function onKeydown(e: KeyboardEvent) {
               >
             </div>
 
-            <div :id="listId" class="tx-command-palette__list" role="listbox" :aria-label="ariaLabel">
+            <div :id="listId" ref="listRef" class="tx-command-palette__list" role="listbox" :aria-label="ariaLabel">
               <button
                 v-for="(cmd, index) in filteredCommands"
                 :id="`${listId}-opt-${index}`"
                 :key="cmd.id"
+                :data-flip-id="cmd.id"
                 type="button"
                 class="tx-command-palette__item"
                 role="option"
@@ -513,6 +603,7 @@ function onKeydown(e: KeyboardEvent) {
   flex-direction: column;
   gap: 6px;
   padding: 12px;
+  box-sizing: border-box;
 }
 
 .tx-command-palette__item {

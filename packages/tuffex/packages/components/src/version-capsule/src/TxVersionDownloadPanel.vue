@@ -27,14 +27,14 @@ const highlightedId = computed(() => props.builds.find(build => build.recommende
 </script>
 
 <template>
-  <div class="tx-version-download-panel">
+  <div class="tx-version-download-panel tx-vp">
     <div
       v-if="notice"
-      class="tx-version-download-panel__notice"
+      class="tx-vd-n"
       :class="`tx-version-download-panel__notice--${noticeTone}`"
     >
-      <div class="tx-version-download-panel__notice-head">
-        <span class="tx-version-download-panel__notice-icon" aria-hidden="true">
+      <div class="tx-vd-nh">
+        <span class="tx-vd-ni" aria-hidden="true">
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -54,24 +54,24 @@ const highlightedId = computed(() => props.builds.find(build => build.recommende
             </template>
           </svg>
         </span>
-        <span class="tx-version-download-panel__notice-title">{{ notice.title }}</span>
+        <span class="tx-version-download-panel__notice-title tx-vd-nt">{{ notice.title }}</span>
       </div>
-      <p v-if="notice.description" class="tx-version-download-panel__notice-desc">
+      <p v-if="notice.description" class="tx-vd-nd">
         {{ notice.description }}
       </p>
-      <ul v-if="notice.points?.length" class="tx-version-download-panel__points">
+      <ul v-if="notice.points?.length" class="tx-version-download-panel__points tx-vd-pts">
         <li v-for="point in notice.points" :key="point">
           {{ point }}
         </li>
       </ul>
     </div>
 
-    <div class="tx-version-download-panel__builds">
-      <p class="tx-version-download-panel__builds-label">
+    <div class="tx-vd-bs">
+      <p v-if="buildsLabel" class="tx-vd-bl">
         {{ buildsLabel }}
       </p>
 
-      <p v-if="!builds.length" class="tx-version-download-panel__empty">
+      <p v-if="!builds.length" class="tx-version-download-panel__empty tx-vd-em">
         {{ emptyText }}
       </p>
 
@@ -79,22 +79,22 @@ const highlightedId = computed(() => props.builds.find(build => build.recommende
         :is="build.href ? 'a' : 'button'"
         v-for="build in builds"
         :key="build.id"
-        class="tx-version-download-panel__build"
+        class="tx-version-download-panel__build tx-vd-b"
         :class="{ 'is-recommended': build.id === highlightedId }"
         :href="build.href"
         :type="build.href ? undefined : 'button'"
         :download="build.href ? '' : undefined"
         @click="emit('select', build.id)"
       >
-        <span class="tx-version-download-panel__build-main">
-          <span v-if="build.icon" class="tx-version-download-panel__build-icon" :class="build.icon" aria-hidden="true" />
-          <span class="tx-version-download-panel__build-text">
-            <span class="tx-version-download-panel__build-name">{{ build.name }}</span>
-            <span v-if="build.meta" class="tx-version-download-panel__build-meta">{{ build.meta }}</span>
+        <span class="tx-vd-bm">
+          <span v-if="build.icon" class="tx-vd-bi" :class="build.icon" aria-hidden="true" />
+          <span class="tx-vd-bt">
+            <span class="tx-version-download-panel__build-name tx-vd-bn">{{ build.name }}</span>
+            <span v-if="build.meta" class="tx-vd-bme">{{ build.meta }}</span>
           </span>
         </span>
 
-        <span v-if="build.id === highlightedId" class="tx-version-download-panel__cta">
+        <span v-if="build.id === highlightedId" class="tx-version-download-panel__cta tx-vd-cta">
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -112,7 +112,7 @@ const highlightedId = computed(() => props.builds.find(build => build.recommende
         </span>
         <svg
           v-else
-          class="tx-version-download-panel__build-glyph"
+          class="tx-vd-bg"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -128,234 +128,47 @@ const highlightedId = computed(() => props.builds.find(build => build.recommende
       </component>
     </div>
 
-    <div v-if="$slots.footer" class="tx-version-download-panel__footer">
+    <div v-if="$slots.footer" class="tx-vp-ft">
       <slot name="footer" />
     </div>
   </div>
 </template>
 
-<style lang="scss" scoped>
-.tx-version-download-panel {
-  --tx-version-panel-bg: var(--tx-bg-color-overlay);
-  --tx-version-panel-border-color: var(--tx-border-color);
-  --tx-version-panel-radius: 16px;
-  --tx-version-panel-accent: var(--tx-color-primary);
-
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--tx-version-panel-border-color);
-  border-radius: var(--tx-version-panel-radius);
-  background: var(--tx-version-panel-bg);
-  box-shadow: var(--tx-box-shadow-dark, 0 24px 60px rgb(0 0 0 / 40%));
-  overflow: hidden;
-}
-
-.tx-version-download-panel__notice {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  padding: 16px 18px;
-  border-bottom: 1px solid var(--tx-version-panel-border-color);
-}
-
-.tx-version-download-panel__notice--warning {
-  --tx-version-notice-tone: var(--tx-color-warning);
-
-  background: color-mix(in srgb, var(--tx-color-warning) 8%, transparent);
-}
-
-.tx-version-download-panel__notice--success {
-  --tx-version-notice-tone: var(--tx-color-success);
-
-  background: color-mix(in srgb, var(--tx-color-success) 8%, transparent);
-}
-
-.tx-version-download-panel__notice-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.tx-version-download-panel__notice-icon {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  flex: none;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--tx-version-notice-tone) 22%, transparent);
-  color: var(--tx-version-notice-tone);
-
-  svg {
-    width: 14px;
-    height: 14px;
-  }
-}
-
-.tx-version-download-panel__notice-title {
-  color: var(--tx-text-color-primary);
-  font-size: 14px;
-  font-weight: 680;
-}
-
-.tx-version-download-panel__notice-desc {
-  margin: 0;
-  color: var(--tx-text-color-regular);
-  font-size: 12.5px;
-  line-height: 1.5;
-}
-
-.tx-version-download-panel__points {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 2px 0 0;
-  padding: 0;
-  list-style: none;
-
+<style lang="scss">
+.tx-vd-n { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--_bd); background: var(--_fl2); }
+.tx-version-download-panel__notice--warning { --tx-version-notice-tone: var(--_mu); }
+.tx-version-download-panel__notice--success { --tx-version-notice-tone: var(--tx-color-success); }
+.tx-vd-nh, .tx-vd-bm, .tx-vp-ft { display: flex; align-items: center; gap: 6px; }
+.tx-vd-ni { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; color: var(--tx-version-notice-tone); svg { width: 14px; height: 14px; } }
+.tx-vd-nt { color: var(--_fg); font-size: 12.5px; font-weight: 600; }
+.tx-vd-nd { margin: 0; color: var(--_re); font-size: 12.5px; line-height: 1.5; }
+.tx-vd-pts {
+  display: flex; flex-direction: column; gap: 6px; margin: 2px 0 0; padding: 0; list-style: none;
   li {
-    position: relative;
-    padding-left: 14px;
-    color: var(--tx-text-color-secondary);
-    font-size: 12px;
-    line-height: 1.5;
-  }
-
-  li::before {
-    content: '';
-    position: absolute;
-    top: 7px;
-    left: 2px;
-    width: 4px;
-    height: 4px;
-    border-radius: 999px;
-    background: var(--tx-version-notice-tone);
+    position: relative; padding-left: 14px; color: var(--_mu); font-size: 12px; line-height: 1.5;
+    &::before { content: ''; position: absolute; top: 7px; left: 2px; width: 4px; height: 4px; border-radius: 999px; background: var(--tx-version-notice-tone); }
   }
 }
-
-.tx-version-download-panel__builds {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 14px;
+.tx-vd-bs { display: flex; flex-direction: column; gap: 4px; padding: 8px; }
+.tx-vd-bl { margin: 2px 0; padding: 0 8px; color: var(--_pl); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+.tx-vd-em { margin: 0; padding: 6px 8px 8px; color: var(--_mu); font-size: 12.5px; }
+.tx-vd-b {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 7px;
+  background: transparent; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer;
+  &:hover { background: var(--_fl); }
+  &:focus-visible { outline: 2px solid var(--tx-version-panel-accent); outline-offset: -2px; }
+  &.is-recommended { background: var(--_fl2); .tx-vd-bn, .tx-vd-bi { color: var(--_fg); } }
 }
-
-.tx-version-download-panel__builds-label {
-  margin: 0 0 2px;
-  padding: 0 10px;
-  color: var(--tx-text-color-placeholder);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+.tx-vd-bm { gap: 10px; min-width: 0; }
+.tx-vd-bi { width: 16px; height: 16px; flex: none; color: var(--_mu); }
+.tx-vd-bt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tx-vd-bn { color: var(--_re); font-size: 13px; font-weight: 600; }
+.tx-vd-bme { color: var(--_pl); font-size: 11px; }
+.tx-vd-bg { width: 14px; height: 14px; flex: none; color: var(--_pl); }
+.tx-vd-cta {
+  display: inline-flex; align-items: center; gap: 5px; flex: none; height: 26px; padding: 0 9px; border-radius: 7px;
+  background: var(--_fg); color: var(--tx-bg-color); font-size: 11.5px; font-weight: 600;
+  svg { width: 12px; height: 12px; }
 }
-
-.tx-version-download-panel__empty {
-  margin: 0;
-  padding: 6px 10px 10px;
-  color: var(--tx-text-color-secondary);
-  font-size: 12.5px;
-}
-
-.tx-version-download-panel__build {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.tx-version-download-panel__build:hover {
-  background: var(--tx-fill-color-light);
-}
-
-.tx-version-download-panel__build:focus-visible {
-  outline: 2px solid var(--tx-version-panel-accent);
-  outline-offset: -2px;
-}
-
-.tx-version-download-panel__build.is-recommended {
-  background: var(--tx-fill-color);
-}
-
-.tx-version-download-panel__build-main {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.tx-version-download-panel__build-icon {
-  width: 16px;
-  height: 16px;
-  flex: none;
-  color: var(--tx-text-color-secondary);
-}
-
-.tx-version-download-panel__build-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.tx-version-download-panel__build-name {
-  color: var(--tx-text-color-regular);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.tx-version-download-panel__build.is-recommended .tx-version-download-panel__build-name,
-.tx-version-download-panel__build.is-recommended .tx-version-download-panel__build-icon {
-  color: var(--tx-text-color-primary);
-}
-
-.tx-version-download-panel__build-meta {
-  color: var(--tx-text-color-placeholder);
-  font-size: 11px;
-}
-
-.tx-version-download-panel__build-glyph {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  color: var(--tx-text-color-placeholder);
-}
-
-.tx-version-download-panel__cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex: none;
-  padding: 6px 11px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--tx-version-panel-accent) 20%, transparent);
-  color: var(--tx-version-panel-accent);
-  font-size: 11.5px;
-  font-weight: 700;
-
-  svg {
-    width: 12px;
-    height: 12px;
-  }
-}
-
-.tx-version-download-panel__footer {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 12px 18px;
-  border-top: 1px solid var(--tx-version-panel-border-color);
-  background: var(--tx-fill-color-lighter);
-  font-size: 12px;
-}
+.tx-vp-ft { padding: 12px 18px; border-top: 1px solid var(--tx-version-panel-border-color); background: var(--_fl2); font-size: 12px; justify-content: space-between; }
 </style>

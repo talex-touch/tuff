@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 import type { SearchPanelEmits, SearchPanelItem, SearchPanelProps } from './types'
-import { computed, ref, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { TxSearchEmpty } from '../../search-empty'
 
 defineOptions({ name: 'TxSearchPanel' })
@@ -33,10 +33,35 @@ defineSlots<{
 }>()
 
 const inputRef = ref<HTMLInputElement | null>(null)
+const bodyRef = ref<HTMLElement | null>(null)
 const activeIndex = ref(0)
 const composing = ref(false)
 const uid = useId()
 const listId = computed(() => `${uid}-list`)
+
+const FLIP_DURATION = 220
+const FLIP_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)'
+let activeBodyAnimation: Animation | null = null
+let activeItemAnimations: Animation[] = []
+let flipRunId = 0
+
+function isReducedMotion(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+function cancelFlipAnimations(): void {
+  activeBodyAnimation?.cancel()
+  activeBodyAnimation = null
+  for (const animation of activeItemAnimations)
+    animation.cancel()
+  activeItemAnimations = []
+  if (bodyRef.value)
+    bodyRef.value.style.overflow = ''
+}
+
+onBeforeUnmount(cancelFlipAnimations)
 
 const query = computed(() => props.modelValue ?? '')
 
@@ -104,6 +129,76 @@ function onHover(index: number, item: SearchPanelItem) {
   if (!item.disabled)
     activeIndex.value = index
 }
+
+const flipSignature = computed(() => `${showEmpty.value ? 'empty' : 'list'}:${results.value.map(item => item.id).join('\0')}`)
+
+watch(
+  flipSignature,
+  async () => {
+    const body = bodyRef.value
+    if (!body || typeof body.animate !== 'function' || isReducedMotion())
+      return
+
+    const runId = ++flipRunId
+    const firstHeight = body.getBoundingClientRect().height
+    const firstRects = new Map<string, number>()
+    for (const node of body.querySelectorAll<HTMLElement>('[data-flip-id]')) {
+      const id = node.dataset.flipId
+      if (id)
+        firstRects.set(id, node.getBoundingClientRect().top)
+    }
+
+    cancelFlipAnimations()
+    await nextTick()
+    if (runId !== flipRunId || !bodyRef.value)
+      return
+
+    const nextBody = bodyRef.value
+    const lastHeight = nextBody.getBoundingClientRect().height
+    if (firstHeight > 0 && lastHeight > 0 && Math.abs(firstHeight - lastHeight) > 0.5) {
+      nextBody.style.overflow = 'hidden'
+      const bodyAnim = nextBody.animate(
+        [{ height: `${firstHeight}px` }, { height: `${lastHeight}px` }],
+        { duration: FLIP_DURATION, easing: FLIP_EASING },
+      )
+      activeBodyAnimation = bodyAnim
+      bodyAnim.finished.then(() => {
+        if (activeBodyAnimation === bodyAnim) {
+          activeBodyAnimation = null
+          nextBody.style.overflow = ''
+        }
+      }, () => {})
+    }
+
+    const nextAnims: Animation[] = []
+    for (const node of nextBody.querySelectorAll<HTMLElement>('[data-flip-id]')) {
+      const id = node.dataset.flipId
+      if (!id || typeof node.animate !== 'function')
+        continue
+      const prevTop = firstRects.get(id)
+      if (prevTop !== undefined) {
+        const dy = prevTop - node.getBoundingClientRect().top
+        if (Math.abs(dy) > 0.5) {
+          nextAnims.push(node.animate(
+            [{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }],
+            { duration: FLIP_DURATION, easing: FLIP_EASING },
+          ))
+        }
+      }
+      else {
+        nextAnims.push(node.animate(
+          [
+            { opacity: 0, transform: 'translateY(6px) scale(0.985)' },
+            { opacity: 1, transform: 'translateY(0) scale(1)' },
+          ],
+          { duration: FLIP_DURATION, easing: FLIP_EASING },
+        ))
+      }
+    }
+    activeItemAnimations = nextAnims
+  },
+  { flush: 'pre' },
+)
 
 watch(results, () => {
   activeIndex.value = firstEnabledIndex()
@@ -240,46 +335,49 @@ defineExpose({
         </button>
       </div>
 
-      <div v-if="showEmpty" class="tx-bui-search-panel__empty">
-        <slot name="empty" :query="query">
-          <TxSearchEmpty :title="emptyTitle" :description="emptyDescription">
-            <template #icon>
-              <span class="tx-bui-search-panel__empty-icon">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="M21 21l-4.3-4.3" />
-                </svg>
-              </span>
-            </template>
-          </TxSearchEmpty>
-        </slot>
-      </div>
-
-      <div
-        v-else
-        :id="listId"
-        class="tx-bui-search-panel__list"
-        role="listbox"
-        :aria-label="listLabel"
-      >
-        <button
-          v-for="(item, index) in results"
-          :id="`${uid}-opt-${index}`"
-          :key="item.id"
-          type="button"
-          class="tx-bui-search-panel__option"
-          :class="{ 'is-active': index === activeIndex }"
-          role="option"
-          :aria-selected="index === activeIndex"
-          :aria-disabled="item.disabled || undefined"
-          tabindex="-1"
-          @click="selectItem(item)"
-          @mousemove="onHover(index, item)"
-        >
-          <slot name="item" :item="item" :active="index === activeIndex" :query="query">
-            {{ item.label }}
+      <div ref="bodyRef" class="tx-bui-search-panel__body">
+        <div v-if="showEmpty" class="tx-bui-search-panel__empty">
+          <slot name="empty" :query="query">
+            <TxSearchEmpty :title="emptyTitle" :description="emptyDescription">
+              <template #icon>
+                <span class="tx-bui-search-panel__empty-icon">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="M21 21l-4.3-4.3" />
+                  </svg>
+                </span>
+              </template>
+            </TxSearchEmpty>
           </slot>
-        </button>
+        </div>
+
+        <div
+          v-else
+          :id="listId"
+          class="tx-bui-search-panel__list"
+          role="listbox"
+          :aria-label="listLabel"
+        >
+          <button
+            v-for="(item, index) in results"
+            :id="`${uid}-opt-${index}`"
+            :key="item.id"
+            :data-flip-id="item.id"
+            type="button"
+            class="tx-bui-search-panel__option"
+            :class="{ 'is-active': index === activeIndex }"
+            role="option"
+            :aria-selected="index === activeIndex"
+            :aria-disabled="item.disabled || undefined"
+            tabindex="-1"
+            @click="selectItem(item)"
+            @mousemove="onHover(index, item)"
+          >
+            <slot name="item" :item="item" :active="index === activeIndex" :query="query">
+              {{ item.label }}
+            </slot>
+          </button>
+        </div>
       </div>
 
       <slot name="footer" />
@@ -377,6 +475,10 @@ defineExpose({
     }
   }
 
+  &__body {
+    will-change: height;
+  }
+
   &__list {
     padding: 4px;
   }
@@ -395,7 +497,7 @@ defineExpose({
     white-space: nowrap;
     cursor: pointer;
     border-radius: 6px;
-    animation: tx-bui-fade-in 200ms ease-out both;
+    will-change: transform, opacity;
 
     // Focus stays in the combobox, so the highlight is `is-active`, not
     // `:focus` — `:hover` alone would leave keyboard users with no cursor.

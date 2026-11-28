@@ -14,10 +14,18 @@ export interface TxVersionCapsuleProps {
   channel?: string
   /** Semantic tone driving the dot and channel colour. Default `'preview'`. */
   tone?: TxVersionChannelTone
-  /** Label for the right segment. Default `'History'`. */
+  /** Accessible label (and optional text) for the right dropdown segment. Default `'History'`. */
   historyLabel?: string
+  /** Show `historyLabel` visibly beside the dropdown chevron. Default `false` (icon-only chevron trigger). */
+  showHistoryLabel?: boolean
   /** Accessible name for the left segment. Default `'Download this build'`. */
   downloadLabel?: string
+  /** Bottom link label in the download view that slides to the history view. Default `'View more'`. */
+  viewMoreLabel?: string
+  /** Back button label in the history view that slides back to the download view. Default `'Back'`. */
+  backLabel?: string
+  /** Show the built-in bottom `viewMoreLabel` trigger when both download and history slots exist. Default `true`. */
+  showViewMore?: boolean
   /** Controlled open panel. Omit for uncontrolled (internal) behaviour. */
   panel?: TxVersionCapsulePanel
   /** Disable both segments. */
@@ -31,6 +39,10 @@ export interface TxVersionCapsuleProps {
 export interface TxVersionCapsulePanelSlotProps {
   /** Close the open panel and return focus to its segment. */
   close: () => void
+  /** Slide horizontally to the history view when available. */
+  openHistory: () => void
+  /** Slide horizontally back to the download view when available. */
+  openDownload: () => void
 }
 
 /** A single downloadable artifact for one platform/architecture. */
@@ -89,6 +101,16 @@ export interface TxVersionHistoryEntry {
   href?: string
 }
 
+/** Configurable channel filter chip for `TxVersionHistoryPanel`. */
+export interface TxVersionChannelFilter {
+  /** Stable filter value, e.g. `'all'`, `'beta'`, `'release'`, `'nightly'`. */
+  value: string
+  /** Display label rendered on the filter chip. */
+  label: string
+  /** Optional custom predicate; when omitted, `'all'` matches everything and other values match `channel` or `tone`. */
+  match?: (entry: TxVersionHistoryEntry) => boolean
+}
+
 export interface TxVersionHistoryPanelProps {
   /** Panel heading. Default `'Version history'`. */
   title?: string
@@ -101,6 +123,14 @@ export interface TxVersionHistoryPanelProps {
   countLabel?: string
   /** Call-to-action on the featured card. Default `'What's new'`. */
   notesLabel?: string
-  /** Shown when there is neither a `latest` nor any `entries`. */
+  /** Shown when there is neither a `latest` nor any `entries` matching the active filter. */
   emptyText?: string
+  /** Custom channel filters. When omitted and `filterable` is `true`, derived automatically from entries. */
+  filters?: TxVersionChannelFilter[]
+  /** Controlled active filter value (`v-model:filter`). Omit for uncontrolled internal state. */
+  filter?: string
+  /** Enable channel filtering bar when multiple channels exist or `filters` is provided. Default `true`. */
+  filterable?: boolean
+  /** Label for the auto-generated catch-all filter. Default `'All'`. */
+  allFilterLabel?: string
 }

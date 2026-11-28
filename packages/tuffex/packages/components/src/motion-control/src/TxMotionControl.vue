@@ -381,12 +381,12 @@ function focusFrequency() {
 
 <style lang="scss" scoped>
 .tx-motion-control {
-  --tx-mc-height: 36px; --tx-mc-pad: 14px; --tx-mc-radius: 14px;
+  --tx-mc-height: 36px; --tx-mc-pad: 14px; --tx-mc-radius: var(--tx-button-radius, 12px);
   display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
   color: var(--tx-text-color-primary); font-size: 13px;
-  &--xs { --tx-mc-height: 26px; --tx-mc-pad: 8px; --tx-mc-radius: 10px; }
-  &--sm { --tx-mc-height: 30px; --tx-mc-pad: 10px; --tx-mc-radius: 12px; }
-  &--lg { --tx-mc-height: 42px; --tx-mc-pad: 18px; --tx-mc-radius: 16px; }
+  &--xs { --tx-mc-height: 26px; --tx-mc-pad: 8px; --tx-mc-radius: 8px; }
+  &--sm { --tx-mc-height: 30px; --tx-mc-pad: 10px; --tx-mc-radius: 10px; }
+  &--lg { --tx-mc-height: 42px; --tx-mc-pad: 18px; --tx-mc-radius: 12px; }
   :deep(.tx-tabs) { flex-direction: column; gap: 0; background: transparent; min-width: 0; }
   :deep(.tx-tabs__nav) { width: auto; min-width: 0; max-width: 100%; padding: 0; border-radius: var(--tx-mc-radius); background: var(--tx-fill-color-light); }
   // The track's 3px goes on the tablist in place of TxTabs' own 6px 8px, and the divider
@@ -444,7 +444,6 @@ function focusFrequency() {
 .tx-motion-control__close-list { position: relative; }
 .tx-motion-control__close-button { min-height: 26px; padding: 3px 8px; font-size: 12px; }
 .tx-motion-control__close-button :deep(svg) { width: 12px; height: 12px; }
-.tx-motion-control__link, .tx-motion-control__state-pill, .tx-motion-control__magnetic, .tx-motion-control__morph-action { border-radius: 999px; }
 .tx-motion-control__hint { color: var(--tx-color-primary); }
 .tx-motion-control--question-tooltip .tx-motion-control__hint { border-radius: 999px; }
 .tx-motion-control__status-dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--tx-color-primary); }
@@ -488,7 +487,7 @@ function focusFrequency() {
 .tx-motion-control__wheel-buttons .tx-motion-control__button { min-height: 18px; padding: 0 3px; box-shadow: none; border-radius: 4px; }
 .tx-motion-control__wheel-buttons :deep(svg) { width: 14px; height: 14px; }
 .tx-motion-control__counter.is-simple { padding: 0; background: transparent; box-shadow: none; gap: 8px; }
-.tx-motion-control__counter.is-simple .tx-motion-control__counter-button { width: var(--tx-mc-height); min-height: var(--tx-mc-height); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--tx-border-color-light); }
+.tx-motion-control__counter.is-simple .tx-motion-control__counter-button { width: var(--tx-mc-height); min-height: var(--tx-mc-height); border-radius: var(--tx-mc-radius); box-shadow: inset 0 0 0 1px var(--tx-border-color-light); }
 .tx-motion-control__pip { width: 64px; height: 48px; }
 .tx-motion-control__pip.is-pip { background: var(--tx-color-primary-light-9); }
 .tx-motion-control__pip-window { position: absolute; right: 6px; bottom: 6px; width: 16px; height: 12px; border-radius: 3px; background: var(--tx-color-primary); box-shadow: 0 0 0 1px var(--tx-bg-color); }

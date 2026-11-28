@@ -49,9 +49,9 @@ function setHigh(value: number): void { ctx.setRange([ctx.range.value[0], Math.m
 </div>
 </section>
 </div>
-    <label class="tx-mm-field">{{ labels.minimum }}<TxSlider :model-value="ctx.range.value[0]" :min="data.min ?? 0" :max="Math.min(data.max ?? 120, ctx.range.value[1])" :aria-label="labels.minimum" :disabled="ctx.disabled.value" :thumb-surface="false" @update:model-value="setLow" /></label>
-    <label class="tx-mm-field">{{ labels.maximum }}<TxSlider :model-value="ctx.range.value[1]" :min="Math.max(data.min ?? 0, ctx.range.value[0])" :max="data.max ?? 120" :aria-label="labels.maximum" :disabled="ctx.disabled.value" :thumb-surface="false" @update:model-value="setHigh" /></label>
-    <label v-if="kind === 'noise-decibel-level'" class="tx-mm-field">{{ labels.current }}<TxSlider :model-value="ctx.value.value ?? 0" :min="data.min ?? 0" :max="data.max ?? 120" :aria-label="labels.current" :disabled="ctx.disabled.value" :thumb-surface="false" @update:model-value="ctx.setValue" /></label>
+    <label class="tx-mm-field">{{ labels.minimum }}<TxSlider :model-value="ctx.range.value[0]" :min="data.min ?? 0" :max="Math.min(data.max ?? 120, ctx.range.value[1])" :aria-label="labels.minimum" :disabled="ctx.disabled.value" @update:model-value="setLow" /></label>
+    <label class="tx-mm-field">{{ labels.maximum }}<TxSlider :model-value="ctx.range.value[1]" :min="Math.max(data.min ?? 0, ctx.range.value[0])" :max="data.max ?? 120" :aria-label="labels.maximum" :disabled="ctx.disabled.value" @update:model-value="setHigh" /></label>
+    <label v-if="kind === 'noise-decibel-level'" class="tx-mm-field">{{ labels.current }}<TxSlider :model-value="ctx.value.value ?? 0" :min="data.min ?? 0" :max="data.max ?? 120" :aria-label="labels.current" :disabled="ctx.disabled.value" @update:model-value="ctx.setValue" /></label>
   </div>
   <div v-else-if="kind === 'running-stats-card'" class="tx-mm-stack">
 <MetricValue :value="data.value" :unit="data.unit" /><MetricReadouts :items="data.metrics" compact /><MetricPlot :series="data.series" mode="bar" :height="160" />

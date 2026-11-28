@@ -79,6 +79,6 @@ function barHeight(value: number): number { return Math.max(0, value / maximum.v
     <div class="tx-mm-plot__ticks">
 <span>{{ points[0]?.label }}</span><span v-if="reference !== undefined">{{ ctx.labels.value.average }} {{ ctx.format(reference) }}</span><span>{{ points[points.length - 1]?.label }}</span>
 </div>
-    <TxSlider v-if="points.length && scrubber !== false" :model-value="index" :max="count - 1" :aria-label="ctx.labels.value.scrubber" :disabled="ctx.disabled.value" :thumb-surface="false" @update:model-value="ctx.select($event)" />
+    <TxSlider v-if="points.length && scrubber !== false" :model-value="index" :max="count - 1" :aria-label="ctx.labels.value.scrubber" :disabled="ctx.disabled.value" @update:model-value="ctx.select($event)" />
   </figure>
 </template>

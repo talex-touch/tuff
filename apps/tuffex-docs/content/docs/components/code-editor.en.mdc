@@ -82,13 +82,16 @@ code: |
 | `lint` | `boolean` | `true` | Shows diagnostics when the language has a linter. |
 | `search` | `boolean` | `true` | Enables the search panel and its shortcuts. |
 | `completion` | `boolean` | `true` | Enables autocompletion, bracket closing, and their shortcuts. |
+| `viewMode` | `CodeEditorViewMode` (`'code' \| 'tree'`) | `'code'` | Active display mode: raw code editor or interactive structured tree preview (`json`/`yaml`/`toml`/`ini`). |
+| `viewModeToggle` | `boolean` | `false` | Renders the built-in `Code \| Tree` mode switcher bar above the editor. |
 | `extensions` | `Extension[]` | `[]` | CodeMirror extensions appended after the built-ins. |
 
 #### Events
 
 | Event | Payload | Description |
 |------|---------|-------------|
-| `update:modelValue` | `string` | Fires when editing or formatting changes the document. |
+| `update:modelValue` | `string` | Fires when editing, formatting, or tree-mode boolean toggling changes the document. |
+| `update:viewMode` | `CodeEditorViewMode` | Fires when switching between `'code'` and `'tree'` modes. |
 | `change` | `string` | Fires together with `update:modelValue`. |
 | `focus` | `()` | Fires when the editor gains focus. |
 | `blur` | `()` | Fires when the editor loses focus. |

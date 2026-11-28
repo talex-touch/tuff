@@ -82,13 +82,16 @@ code: |
 | `lint` | `boolean` | `true` | 当前语言有校验器时显示诊断。 |
 | `search` | `boolean` | `true` | 启用搜索面板及其快捷键。 |
 | `completion` | `boolean` | `true` | 启用自动补全、括号闭合及其快捷键。 |
+| `viewMode` | `CodeEditorViewMode` (`'code' \| 'tree'`) | `'code'` | 当前视图模式：原始代码编辑或可交互的结构树预览（支持 `json`/`yaml`/`toml`/`ini`）。 |
+| `viewModeToggle` | `boolean` | `false` | 在编辑器顶部展示内置的 `Code \| Tree` 视图切换栏。 |
 | `extensions` | `Extension[]` | `[]` | 追加在内置扩展之后的 CodeMirror 扩展。 |
 
 #### 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `update:modelValue` | `string` | 编辑或格式化改变文档时触发。 |
+| `update:modelValue` | `string` | 编辑、格式化或在结构树模式切换布尔值改变文档时触发。 |
+| `update:viewMode` | `CodeEditorViewMode` | 在 `'code'` 与 `'tree'` 模式间切换时触发。 |
 | `change` | `string` | 与 `update:modelValue` 同时触发。 |
 | `focus` | `()` | 编辑器获得焦点时触发。 |
 | `blur` | `()` | 编辑器失去焦点时触发。 |

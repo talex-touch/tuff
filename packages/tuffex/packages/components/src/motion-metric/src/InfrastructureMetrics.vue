@@ -46,7 +46,7 @@ const patternId = `bandwidth-pattern-${useId()}`
   <div v-else-if="kind === 'progress-indicator-piano' || kind === 'progress-indicator'" class="tx-mm-stack">
     <MetricValue :value="ctx.value.value" :target="data.target" :unit="data.unit" :previous="data.previous" />
     <MetricSegments :value="ctx.value.value" :target="data.target" :count="kind === 'progress-indicator' ? 36 : 28" />
-    <TxSlider :model-value="ctx.value.value ?? data.min ?? 0" :min="data.min ?? 0" :max="data.target ?? 100" :aria-label="labels.current" :disabled="ctx.disabled.value" :thumb-surface="false" @update:model-value="ctx.setValue" />
+    <TxSlider :model-value="ctx.value.value ?? data.min ?? 0" :min="data.min ?? 0" :max="data.target ?? 100" :aria-label="labels.current" :disabled="ctx.disabled.value" @update:model-value="ctx.setValue" />
   </div>
   <div v-else-if="kind === 'server-performance-step-bars' || kind === 'server-performance'" class="tx-mm-stack">
     <MetricValue :value="data.value" :unit="data.unit" :previous="data.previous" /><MetricPlot :series="data.series" mode="step" />
@@ -68,7 +68,7 @@ const patternId = `bandwidth-pattern-${useId()}`
 </div>
   <div v-else-if="kind === 'real-time-alerts'" class="tx-mm-stack">
     <MetricValue :value="data.value" :unit="data.unit" :target="data.target" />
-    <label class="tx-mm-field">{{ labels.threshold }} {{ ctx.format(ctx.value.value ?? data.threshold, data.unit) }}<TxSlider :model-value="ctx.value.value ?? data.threshold ?? 0" :max="data.target ?? 100" :aria-label="labels.threshold" :disabled="ctx.disabled.value" :thumb-surface="false" @update:model-value="ctx.setValue" /></label>
+    <label class="tx-mm-field">{{ labels.threshold }} {{ ctx.format(ctx.value.value ?? data.threshold, data.unit) }}<TxSlider :model-value="ctx.value.value ?? data.threshold ?? 0" :max="data.target ?? 100" :aria-label="labels.threshold" :disabled="ctx.disabled.value" @update:model-value="ctx.setValue" /></label>
     <MetricPlot :series="data.series" mode="striped" :threshold="ctx.value.value ?? data.threshold" />
     <MetricReadouts :items="data.metrics" compact />
   </div>

@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import './gallery-categories.css'
 import type { AiChainStep, AiElementMessage } from '@tuffex-components/ai-elements'
 import type { ContextChunk } from '@tuffex-components/context-cards'
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { hasDocument, hasWindow } from '@talex-touch/utils/env'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
 import { galleryText } from '../gallery-text'
 import ClientOnly from '../GallerySpecimenGate.vue'
 
@@ -11,6 +13,8 @@ const props = defineProps<{
   localeKey: 'en' | 'zh'
 }>()
 
+const { t } = useI18n()
+
 const GalleryAttachmentTray = defineAsyncComponent(() => import('../GalleryAttachmentTray.vue'))
 const GalleryChoiceCard = defineAsyncComponent(() => import('../GalleryChoiceCard.vue'))
 const GalleryStreamElement = defineAsyncComponent(() => import('../GalleryStreamElement.vue'))
@@ -19,10 +23,125 @@ const GalleryStreamText = defineAsyncComponent(() => import('../GalleryStreamTex
 const GalleryThinkingOrb = defineAsyncComponent(() => import('../GalleryThinkingOrb.vue'))
 const GalleryVoiceClip = defineAsyncComponent(() => import('../GalleryVoiceClip.vue'))
 
+type AiCategoryKey = 'aichat' | 'aiagent' | 'aireasoning' | 'aicontext'
+
+const categoryMeta = computed<Record<AiCategoryKey, { label: string, desc: string, icon: string, count: number }>>(() => ({
+  aichat: {
+    label: t('docsSidebar.categories.aiChat'),
+    desc: props.localeKey === 'zh'
+      ? '对话列表、输入框、语音条、附件托盘、提示栏与建议胶囊'
+      : 'Chat lists, composers, voice clips, attachment trays, prompt bars, and suggestion chips',
+    icon: 'i-carbon-chat',
+    count: 11,
+  },
+  aiagent: {
+    label: t('docsSidebar.categories.aiAgent'),
+    desc: props.localeKey === 'zh'
+      ? '智能体列表、屏幕、轨迹、审批卡、工具确认与伴侣形象'
+      : 'Agent lists, screens, traces, approval cards, tool confirmations, and companion avatars',
+    icon: 'i-carbon-bot',
+    count: 11,
+  },
+  aireasoning: {
+    label: t('docsSidebar.categories.aiReasoning'),
+    desc: props.localeKey === 'zh'
+      ? '思考球、矩阵加载器、思维链、推理折叠、引用来源与流式渲染'
+      : 'Thinking orbs, matrix loaders, chains of thought, reasoning disclosures, citations, and streaming',
+    icon: 'i-carbon-machine-learning-model',
+    count: 11,
+  },
+  aicontext: {
+    label: t('docsSidebar.categories.aiContext'),
+    desc: props.localeKey === 'zh'
+      ? '上下文卡、用量指示、微调面板、洞察卡与推荐决策卡'
+      : 'Context cards, token usage indicators, fine-tune controls, insight cards, and recommendations',
+    icon: 'i-carbon-layers',
+    count: 5,
+  },
+}))
+
+const categoryList = computed(() =>
+  (['aichat', 'aiagent', 'aireasoning', 'aicontext'] as const).map(key => ({
+    key,
+    ...categoryMeta.value[key],
+  })),
+)
+
+const activeCategory = ref<AiCategoryKey>('aichat')
+let catObserver: IntersectionObserver | null = null
+let manualLockUntil = 0
+let realignTimer: number | null = null
+const STICKY_LANDING_OFFSET = 178
+
+function scrollToCategory(key: AiCategoryKey) {
+  activeCategory.value = key
+  if (!import.meta.client || !hasDocument())
+    return
+  const el = document.getElementById(`ai-cat-${key}`)
+  if (!el)
+    return
+  manualLockUntil = Date.now() + 950
+  if (realignTimer !== null) {
+    window.clearTimeout(realignTimer)
+    realignTimer = null
+  }
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  const scrollOnce = () => {
+    const top = el.getBoundingClientRect().top + window.scrollY - STICKY_LANDING_OFFSET
+    window.scrollTo({ top: Math.max(0, top), behavior: reduced ? 'auto' : 'smooth' })
+  }
+  scrollOnce()
+  realignTimer = window.setTimeout(() => {
+    realignTimer = null
+    const delta = Math.abs(el.getBoundingClientRect().top - STICKY_LANDING_OFFSET)
+    if (delta > 32)
+      scrollOnce()
+  }, 420)
+}
+
+onMounted(() => {
+  if (!hasWindow() || !('IntersectionObserver' in window))
+    return
+  const keys: AiCategoryKey[] = ['aichat', 'aiagent', 'aireasoning', 'aicontext']
+  const visible = new Set<AiCategoryKey>()
+  catObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        const key = entry.target.id.replace(/^ai-cat-/, '') as AiCategoryKey
+        if (entry.isIntersecting)
+          visible.add(key)
+        else
+          visible.delete(key)
+      }
+      if (Date.now() < manualLockUntil)
+        return
+      const firstVisible = keys.find(k => visible.has(k))
+      if (firstVisible)
+        activeCategory.value = firstVisible
+    },
+    { rootMargin: '-180px 0px -65% 0px', threshold: 0 },
+  )
+  for (const key of keys) {
+    const el = document.getElementById(`ai-cat-${key}`)
+    if (el)
+      catObserver.observe(el)
+  }
+})
+
+onBeforeUnmount(() => {
+  catObserver?.disconnect()
+  catObserver = null
+  if (realignTimer !== null && hasWindow()) {
+    window.clearTimeout(realignTimer)
+    realignTimer = null
+  }
+})
+
 const text = computed(() => galleryText[props.localeKey])
 
 const copy = computed(() => (props.localeKey === 'zh'
   ? {
+      categoryCount: (n: number) => `${n} 个组件`,
       suiteAi: 'AI',
       typeSomething: '输入点什么…',
       delete: '删除',
@@ -75,6 +194,7 @@ const copy = computed(() => (props.localeKey === 'zh'
       },
     }
   : {
+      categoryCount: (n: number) => `${n} components`,
       suiteAi: 'AI',
       typeSomething: 'Type something...',
       delete: 'Delete',
@@ -202,683 +322,755 @@ const citeSources = [
 </script>
 
 <template>
-  <div class="docs-gallery__grid">
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('thinking-orb')">
-        {{ cellLabel('ThinkingOrb', '思考指示球') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <GalleryThinkingOrb />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
+  <div class="docs-gallery__ai-suite">
+    <nav class="docs-gallery__cat-nav not-prose" aria-label="AI Suite categories">
+      <a
+        v-for="cat in categoryList"
+        :key="cat.key"
+        :href="`#ai-cat-${cat.key}`"
+        class="docs-gallery__cat-pill"
+        :class="{ 'is-active': activeCategory === cat.key }"
+        @click.prevent="scrollToCategory(cat.key)"
+      >
+        <span :class="cat.icon" class="docs-gallery__cat-pill-icon" aria-hidden="true" />
+        <span>{{ cat.label }}</span>
+        <span class="docs-gallery__cat-pill-count">{{ cat.count }}</span>
+      </a>
+    </nav>
 
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('matrix-loader')">
-        {{ cellLabel('MatrixLoader', '球面矩阵加载器') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <GalleryMatrixLoader />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('working-indicator')">
-        {{ cellLabel('WorkingIndicator', '工作指示器') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__stack docs-gallery__stack--center">
-            <TxWorkingIndicator :label="copy.working" variant="drive" />
-            <TxWorkingIndicator :label="copy.searching" variant="orbit" :show-elapsed="false" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('typing-indicator')">
-        {{ cellLabel('TypingIndicator', '打字中') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__row docs-gallery__row--loose">
-            <TxTypingIndicator variant="dots" :text="copy.typing" />
-            <TxTypingIndicator variant="ring" :show-text="false" :aria-label="copy.typing" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('suggestion-chips')">
-        {{ cellLabel('SuggestionChips', '建议胶囊') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxSuggestionChips :suggestions="copy.suggestions" layout="list" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('choice-card')">
-        {{ cellLabel('ChoiceCard', '选项卡片') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 272px">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <GalleryChoiceCard />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('mode-chip')">
-        {{ cellLabel('ModeChip', '模式芯片') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <TxModeChip
-            :icon="modeChipOn ? 'i-carbon-unlocked' : 'i-carbon-touch-1'"
-            :label="modeChipOn ? copy.unrestricted : copy.requestApproval"
-            :tone="modeChipOn ? 'danger' : 'muted'"
-            @click="modeChipOn = !modeChipOn"
-          />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('tool-chips')">
-        {{ cellLabel('ToolChips', '工具调用流') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block docs-gallery__block--wide">
-            <TxToolChips
-              :rows="copy.toolRows"
-              :diffs="[{ file: 'index.ts', add: 12, del: 3 }]"
-              :summary="copy.toolSummary"
-            />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('inline-citation')">
-        {{ cellLabel('InlineCitation', '行内引用') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__row">
-            <TxInlineCitation
-              v-for="source in citeSources"
-              :key="source.id"
-              :source="source"
-              :appear="false"
-            />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('attachment-tray')">
-        {{ cellLabel('AttachmentTray', '附件托盘') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <GalleryAttachmentTray />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('chat')">
-        {{ cellLabel('Chat', '对话') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 195px; --docs-gallery-specimen-narrow: 219px">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxChatList :messages="chatListMessages" markdown />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('chat-composer')">
-        {{ cellLabel('ChatComposer', '对话输入') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxChatComposer
-              v-model="chatDraft"
-              :min-rows="1"
-              :max-rows="3"
-              :placeholder="copy.typeSomething"
-              :tray-placement="composerTray"
-              :tray-label="copy.composerTray"
-              v-bind="text.chatComposer"
-            >
-              <template #tray>
-                <TxModeChip
-                  v-if="composerTray === 'bottom'"
-                  icon="i-carbon-plug"
-                  :label="copy.connectApps"
-                  @click="composerTray = 'top'"
-                />
-                <TxModeChip
-                  v-else
-                  icon="i-carbon-folder"
-                  :label="copy.selectProject"
-                  @click="composerTray = 'bottom'"
-                />
-              </template>
-              <template #toolbar-left>
-                <TxModeChip
-                  :icon="composerUnrestricted ? 'i-carbon-unlocked' : 'i-carbon-touch-1'"
-                  :label="composerUnrestricted ? copy.unrestricted : copy.requestApproval"
-                  :tone="composerUnrestricted ? 'danger' : 'muted'"
-                  @click="composerUnrestricted = !composerUnrestricted"
-                />
-              </template>
-            </TxChatComposer>
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('conversation-stream')">
-        {{ cellLabel('ConversationStream', '对话流') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block docs-gallery__stream">
-            <TxConversationStream :items="chatMessages" :item-key="(item: AiElementMessage) => item.id">
-              <template #item="{ item }">
-                <p class="docs-gallery__muted">
-                  {{ item.content }}
-                </p>
-              </template>
-            </TxConversationStream>
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('message-actions')">
-        {{ cellLabel('MessageActions', '消息操作') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <TxMessageActions :copy-text="copy.installBody" regenerable v-bind="text.messageActions" />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('prompt-bar')">
-        {{ cellLabel('PromptBar', '提示栏') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxPromptBar v-model="promptDraft" :placeholder="copy.typeSomething" v-bind="text.promptBar" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('voice-clip')">
-        {{ cellLabel('VoiceClip', '语音条') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <GalleryVoiceClip />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('agent-trace')">
-        {{ cellLabel('AgentTrace', '智能体轨迹') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxAgentTrace :rows="traceRows" working default-open v-bind="text.agentTrace" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('agent-screen')">
-        {{ cellLabel('AgentScreen', '智能体屏幕') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxAgentScreen
-              :aria-label="copy.screenAria"
-              :cursor="{ x: 46, y: 62, label: copy.screenCursor }"
-            >
-              <!-- A painted stand-in, as in the AgentScreen demo: the frame
-                   takes any surface, and a gallery tile should not ship a
-                   screenshot. -->
-              <div class="docs-gallery__desktop">
-                <span class="docs-gallery__desktop-window is-back" />
-                <span class="docs-gallery__desktop-window is-front" />
+    <!-- ── 1. AiChat (11) ── -->
+    <section id="ai-cat-aichat" class="docs-gallery__cat-section">
+      <header class="docs-gallery__cat-head not-prose">
+        <div class="docs-gallery__cat-meta">
+          <span class="docs-gallery__cat-title-wrap">
+            <span :class="categoryMeta.aichat.icon" class="docs-gallery__cat-icon" aria-hidden="true" />
+            <h3 class="docs-gallery__cat-title">{{ categoryMeta.aichat.label }}</h3>
+          </span>
+          <span class="docs-gallery__cat-desc">{{ categoryMeta.aichat.desc }}</span>
+        </div>
+        <span class="docs-gallery__cat-count">{{ copy.categoryCount(categoryMeta.aichat.count) }}</span>
+      </header>
+      <div class="docs-gallery__grid">
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('typing-indicator')">
+            {{ cellLabel('TypingIndicator', '打字中') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__row docs-gallery__row--loose">
+                <TxTypingIndicator variant="dots" :text="copy.typing" />
+                <TxTypingIndicator variant="ring" :show-text="false" :aria-label="copy.typing" />
               </div>
-            </TxAgentScreen>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
           </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('suggestion-chips')">
+            {{ cellLabel('SuggestionChips', '建议胶囊') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxSuggestionChips :suggestions="copy.suggestions" layout="list" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('choice-card')">
+            {{ cellLabel('ChoiceCard', '选项卡片') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 272px">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <GalleryChoiceCard />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('mode-chip')">
+            {{ cellLabel('ModeChip', '模式芯片') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <TxModeChip
+                :icon="modeChipOn ? 'i-carbon-unlocked' : 'i-carbon-touch-1'"
+                :label="modeChipOn ? copy.unrestricted : copy.requestApproval"
+                :tone="modeChipOn ? 'danger' : 'muted'"
+                @click="modeChipOn = !modeChipOn"
+              />
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('attachment-tray')">
+            {{ cellLabel('AttachmentTray', '附件托盘') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <GalleryAttachmentTray />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('chat')">
+            {{ cellLabel('Chat', '对话') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 195px; --docs-gallery-specimen-narrow: 219px">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxChatList :messages="chatListMessages" markdown />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('chat-composer')">
+            {{ cellLabel('ChatComposer', '对话输入') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxChatComposer
+                  v-model="chatDraft"
+                  :min-rows="1"
+                  :max-rows="3"
+                  :placeholder="copy.typeSomething"
+                  :tray-placement="composerTray"
+                  :tray-label="copy.composerTray"
+                  v-bind="text.chatComposer"
+                >
+                  <template #tray>
+                    <TxModeChip
+                      v-if="composerTray === 'bottom'"
+                      icon="i-carbon-plug"
+                      :label="copy.connectApps"
+                      @click="composerTray = 'top'"
+                    />
+                    <TxModeChip
+                      v-else
+                      icon="i-carbon-folder"
+                      :label="copy.selectProject"
+                      @click="composerTray = 'bottom'"
+                    />
+                  </template>
+                  <template #toolbar-left>
+                    <TxModeChip
+                      :icon="composerUnrestricted ? 'i-carbon-unlocked' : 'i-carbon-touch-1'"
+                      :label="composerUnrestricted ? copy.unrestricted : copy.requestApproval"
+                      :tone="composerUnrestricted ? 'danger' : 'muted'"
+                      @click="composerUnrestricted = !composerUnrestricted"
+                    />
+                  </template>
+                </TxChatComposer>
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('conversation-stream')">
+            {{ cellLabel('ConversationStream', '对话流') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block docs-gallery__stream">
+                <TxConversationStream :items="chatMessages" :item-key="(item: AiElementMessage) => item.id">
+                  <template #item="{ item }">
+                    <p class="docs-gallery__muted">
+                      {{ item.content }}
+                    </p>
+                  </template>
+                </TxConversationStream>
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('message-actions')">
+            {{ cellLabel('MessageActions', '消息操作') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <TxMessageActions :copy-text="copy.installBody" regenerable v-bind="text.messageActions" />
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('prompt-bar')">
+            {{ cellLabel('PromptBar', '提示栏') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxPromptBar v-model="promptDraft" :placeholder="copy.typeSomething" v-bind="text.promptBar" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('voice-clip')">
+            {{ cellLabel('VoiceClip', '语音条') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <GalleryVoiceClip />
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
       </div>
     </section>
 
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('agents')">
-        {{ cellLabel('Agents', '智能体列表') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxAgentsList :agents="aiAgents" v-bind="text.agentsList" />
+    <!-- ── 2. AiAgent (11) ── -->
+    <section id="ai-cat-aiagent" class="docs-gallery__cat-section">
+      <header class="docs-gallery__cat-head not-prose">
+        <div class="docs-gallery__cat-meta">
+          <span class="docs-gallery__cat-title-wrap">
+            <span :class="categoryMeta.aiagent.icon" class="docs-gallery__cat-icon" aria-hidden="true" />
+            <h3 class="docs-gallery__cat-title">{{ categoryMeta.aiagent.label }}</h3>
+          </span>
+          <span class="docs-gallery__cat-desc">{{ categoryMeta.aiagent.desc }}</span>
+        </div>
+        <span class="docs-gallery__cat-count">{{ copy.categoryCount(categoryMeta.aiagent.count) }}</span>
+      </header>
+      <div class="docs-gallery__grid">
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('working-indicator')">
+            {{ cellLabel('WorkingIndicator', '工作指示器') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__stack docs-gallery__stack--center">
+                <TxWorkingIndicator :label="copy.working" variant="drive" />
+                <TxWorkingIndicator :label="copy.searching" variant="orbit" :show-elapsed="false" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
           </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('tool-chips')">
+            {{ cellLabel('ToolChips', '工具调用流') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block docs-gallery__block--wide">
+                <TxToolChips
+                  :rows="copy.toolRows"
+                  :diffs="[{ file: 'index.ts', add: 12, del: 3 }]"
+                  :summary="copy.toolSummary"
+                />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('agent-trace')">
+            {{ cellLabel('AgentTrace', '智能体轨迹') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxAgentTrace :rows="traceRows" working default-open v-bind="text.agentTrace" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('agent-screen')">
+            {{ cellLabel('AgentScreen', '智能体屏幕') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxAgentScreen
+                  :aria-label="copy.screenAria"
+                  :cursor="{ x: 46, y: 62, label: copy.screenCursor }"
+                >
+                  <div class="docs-gallery__desktop">
+                    <span class="docs-gallery__desktop-window is-back" />
+                    <span class="docs-gallery__desktop-window is-front" />
+                  </div>
+                </TxAgentScreen>
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('agents')">
+            {{ cellLabel('Agents', '智能体列表') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxAgentsList :agents="aiAgents" v-bind="text.agentsList" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('approval-card')">
+            {{ cellLabel('ApprovalCard', '审批卡') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxApprovalCard
+                  v-bind="text.approvalCard"
+                  :title="copy.dialogTitle"
+                  :questions="[{
+                    id: 'confirm',
+                    question: copy.dialogMessage,
+                    options: [{ value: 'yes', label: copy.confirm }, { value: 'no', label: copy.delete }],
+                  }]"
+                />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('task-rows')">
+            {{ cellLabel('TaskRows', '任务行') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxTaskRows :rows="taskRowItems" v-bind="text.taskRows" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('tool-call-card')">
+            {{ cellLabel('ToolCallCard', '工具调用卡') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxToolCallCard :tool-call="toolCall" default-expanded v-bind="text.toolCallCard" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('tool-confirmation')">
+            {{ cellLabel('ToolConfirmation', '工具确认') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxToolConfirmation
+                  tool-name="write_file"
+                  risk="write"
+                  :summary="copy.dialogMessage"
+                  :input="toolConfirmationInput"
+                  v-bind="text.toolConfirmation"
+                  :aria-label="text.toolConfirmationName"
+                />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('bot-avatar')">
+            {{ cellLabel('BotAvatar', '机器人头像') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__stack docs-gallery__stack--center">
+                <TxBotAvatar type="clover" state="working" :size="64" :aria-label="text.botAvatars.clover" />
+                <TxBotAvatar type="mech" state="default" :size="64" :aria-label="text.botAvatars.mech" />
+                <TxBotAvatar type="star" state="working" :size="64" :aria-label="text.botAvatars.star" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('miko')">
+            {{ cellLabel('Miko', '伴侣猫') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__stack docs-gallery__stack--center">
+                <TxMiko state="idle" size="sm" />
+                <TxMiko state="working" size="sm" />
+                <TxMiko state="thinking" size="sm" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
       </div>
     </section>
 
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('approval-card')">
-        {{ cellLabel('ApprovalCard', '审批卡') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxApprovalCard
-              v-bind="text.approvalCard"
-              :title="copy.dialogTitle"
-              :questions="[{
-                id: 'confirm',
-                question: copy.dialogMessage,
-                options: [{ value: 'yes', label: copy.confirm }, { value: 'no', label: copy.delete }],
-              }]"
-            />
+    <!-- ── 3. AiReasoning (11) ── -->
+    <section id="ai-cat-aireasoning" class="docs-gallery__cat-section">
+      <header class="docs-gallery__cat-head not-prose">
+        <div class="docs-gallery__cat-meta">
+          <span class="docs-gallery__cat-title-wrap">
+            <span :class="categoryMeta.aireasoning.icon" class="docs-gallery__cat-icon" aria-hidden="true" />
+            <h3 class="docs-gallery__cat-title">{{ categoryMeta.aireasoning.label }}</h3>
+          </span>
+          <span class="docs-gallery__cat-desc">{{ categoryMeta.aireasoning.desc }}</span>
+        </div>
+        <span class="docs-gallery__cat-count">{{ copy.categoryCount(categoryMeta.aireasoning.count) }}</span>
+      </header>
+      <div class="docs-gallery__grid">
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('thinking-orb')">
+            {{ cellLabel('ThinkingOrb', '思考指示球') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <GalleryThinkingOrb />
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
           </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('matrix-loader')">
+            {{ cellLabel('MatrixLoader', '球面矩阵加载器') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <GalleryMatrixLoader />
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('inline-citation')">
+            {{ cellLabel('InlineCitation', '行内引用') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__row">
+                <TxInlineCitation
+                  v-for="source in citeSources"
+                  :key="source.id"
+                  :source="source"
+                  :appear="false"
+                />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('ai-elements')">
+            {{ cellLabel('AiElements', 'AI 元件') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxAiMessage :message="aiSampleMessage" :show-avatar="false" compact />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('chain-of-thought')">
+            {{ cellLabel('ChainOfThought', '思维链') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxChainOfThought :steps="cotSteps" default-open v-bind="text.chainOfThought" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('code-stream')">
+            {{ cellLabel('CodeStream', '代码流') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block docs-gallery__code">
+                <TxCodeStream :code="codeSample" lang="ts" filename="greet.ts" lang-label="TypeScript" v-bind="text.codeStream" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('reasoning-disclosure')">
+            {{ cellLabel('ReasoningDisclosure', '推理折叠') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxReasoningDisclosure :text="copy.aboutBody" :duration-ms="2400" default-open v-bind="text.reasoning" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('sources')">
+            {{ cellLabel('Sources', '来源') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxSources :sources="aiSources" variant="stack" v-bind="text.sources" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('stream-element')">
+            {{ cellLabel('StreamElement', '流式回答') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <GalleryStreamElement :markdown="copy.streamAnswer" :sources="streamSources" :locale="localeKey" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('stream-text')">
+            {{ cellLabel('StreamText', '流式文字') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <GalleryStreamText :text="copy.streamSentence" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('stream-markdown')">
+            {{ cellLabel('StreamMarkdown', '流式 Markdown') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 206px">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <GalleryStreamMarkdown :markdown="copy.streamMarkdown" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
+          </div>
+        </section>
       </div>
     </section>
 
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('task-rows')">
-        {{ cellLabel('TaskRows', '任务行') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxTaskRows :rows="taskRowItems" v-bind="text.taskRows" />
+    <!-- ── 4. AiContext (5) ── -->
+    <section id="ai-cat-aicontext" class="docs-gallery__cat-section">
+      <header class="docs-gallery__cat-head not-prose">
+        <div class="docs-gallery__cat-meta">
+          <span class="docs-gallery__cat-title-wrap">
+            <span :class="categoryMeta.aicontext.icon" class="docs-gallery__cat-icon" aria-hidden="true" />
+            <h3 class="docs-gallery__cat-title">{{ categoryMeta.aicontext.label }}</h3>
+          </span>
+          <span class="docs-gallery__cat-desc">{{ categoryMeta.aicontext.desc }}</span>
+        </div>
+        <span class="docs-gallery__cat-count">{{ copy.categoryCount(categoryMeta.aicontext.count) }}</span>
+      </header>
+      <div class="docs-gallery__grid">
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('context-cards')">
+            {{ cellLabel('ContextCards', '上下文卡') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxContextCards :chunks="contextChunks" :title="copy.contextTitle" :total="32" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
           </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
+        </section>
 
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('tool-call-card')">
-        {{ cellLabel('ToolCallCard', '工具调用卡') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxToolCallCard :tool-call="toolCall" default-expanded v-bind="text.toolCallCard" />
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('context-indicator')">
+            {{ cellLabel('ContextIndicator', '上下文用量') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <TxContextIndicator :used-tokens="48000" :max-tokens="128000" v-bind="text.contextIndicator" />
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
           </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
+        </section>
 
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('tool-confirmation')">
-        {{ cellLabel('ToolConfirmation', '工具确认') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxToolConfirmation
-              tool-name="write_file"
-              risk="write"
-              :summary="copy.dialogMessage"
-              :input="toolConfirmationInput"
-              v-bind="text.toolConfirmation"
-              :aria-label="text.toolConfirmationName"
-            />
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('fine-tune-card')">
+            {{ cellLabel('FineTuneCard', '微调卡') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxFineTuneCard :values="fineTuneValues" v-bind="copy.fineTune" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
           </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
+        </section>
 
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('bot-avatar')">
-        {{ cellLabel('BotAvatar', '机器人头像') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__stack docs-gallery__stack--center">
-            <TxBotAvatar type="clover" state="working" :size="64" :aria-label="text.botAvatars.clover" />
-            <TxBotAvatar type="mech" state="default" :size="64" :aria-label="text.botAvatars.mech" />
-            <TxBotAvatar type="star" state="working" :size="64" :aria-label="text.botAvatars.star" />
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('insight-cards')">
+            {{ cellLabel('InsightCards', '洞察卡') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxInsightCards :pages="insightPages" :title="copy.suiteAi" v-bind="text.insightCards" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
           </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('miko')">
-        {{ cellLabel('Miko', '伴侣猫') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__stack docs-gallery__stack--center">
-            <TxMiko state="idle" size="sm" />
-            <TxMiko state="working" size="sm" />
-            <TxMiko state="thinking" size="sm" />
+        </section>
+
+        <section class="docs-gallery__cell">
+          <NuxtLink class="docs-gallery__label" :to="docPath('recommendation-card')">
+            {{ cellLabel('RecommendationCard', '推荐卡') }}
+          </NuxtLink>
+          <div class="docs-gallery__stage not-prose">
+            <ClientOnly>
+              <div class="docs-gallery__block">
+                <TxRecommendationCard v-bind="text.recommendationCard" :options="text.recommendationOptions" />
+              </div>
+              <template #fallback>
+                <div class="docs-gallery__ph" />
+              </template>
+            </ClientOnly>
           </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('ai-elements')">
-        {{ cellLabel('AiElements', 'AI 元件') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxAiMessage :message="aiSampleMessage" :show-avatar="false" compact />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('chain-of-thought')">
-        {{ cellLabel('ChainOfThought', '思维链') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxChainOfThought :steps="cotSteps" default-open v-bind="text.chainOfThought" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('code-stream')">
-        {{ cellLabel('CodeStream', '代码流') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block docs-gallery__code">
-            <TxCodeStream :code="codeSample" lang="ts" filename="greet.ts" lang-label="TypeScript" v-bind="text.codeStream" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('reasoning-disclosure')">
-        {{ cellLabel('ReasoningDisclosure', '推理折叠') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxReasoningDisclosure :text="copy.aboutBody" :duration-ms="2400" default-open v-bind="text.reasoning" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('sources')">
-        {{ cellLabel('Sources', '来源') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxSources :sources="aiSources" variant="stack" v-bind="text.sources" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('stream-element')">
-        {{ cellLabel('StreamElement', '流式回答') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <GalleryStreamElement :markdown="copy.streamAnswer" :sources="streamSources" :locale="localeKey" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('stream-text')">
-        {{ cellLabel('StreamText', '流式文字') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <GalleryStreamText :text="copy.streamSentence" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('stream-markdown')">
-        {{ cellLabel('StreamMarkdown', '流式 Markdown') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose" style="--docs-gallery-specimen: 206px">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <GalleryStreamMarkdown :markdown="copy.streamMarkdown" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('context-cards')">
-        {{ cellLabel('ContextCards', '上下文卡') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxContextCards :chunks="contextChunks" :title="copy.contextTitle" :total="32" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('context-indicator')">
-        {{ cellLabel('ContextIndicator', '上下文用量') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <TxContextIndicator :used-tokens="48000" :max-tokens="128000" v-bind="text.contextIndicator" />
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('fine-tune-card')">
-        {{ cellLabel('FineTuneCard', '微调卡') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxFineTuneCard :values="fineTuneValues" v-bind="copy.fineTune" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('insight-cards')">
-        {{ cellLabel('InsightCards', '洞察卡') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxInsightCards :pages="insightPages" :title="copy.suiteAi" v-bind="text.insightCards" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
-      </div>
-    </section>
-
-    <section class="docs-gallery__cell">
-      <NuxtLink class="docs-gallery__label" :to="docPath('recommendation-card')">
-        {{ cellLabel('RecommendationCard', '推荐卡') }}
-      </NuxtLink>
-      <div class="docs-gallery__stage not-prose">
-        <ClientOnly>
-          <div class="docs-gallery__block">
-            <TxRecommendationCard v-bind="text.recommendationCard" :options="text.recommendationOptions" />
-          </div>
-          <template #fallback>
-            <div class="docs-gallery__ph" />
-          </template>
-        </ClientOnly>
+        </section>
       </div>
     </section>
   </div>
