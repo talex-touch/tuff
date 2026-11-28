@@ -108,7 +108,7 @@ code: |
 | `maxLagMs` | `number` | `600` | No word shows later than this after it arrives. |
 | `drainMs` | `number` | `320` | Once `streaming` turns false, releases the rest within this. |
 | `pauseMs` | `number` | `400` | Reports `paused` after this long without a new word. |
-| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | How a word enters, with `TxStreamText`'s presets; code keeps its syntax color. |
+| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'blur'` | How a word enters, defaulting to monochrome blur with `TxStreamText`'s presets; code keeps its syntax color. |
 | `caret` | `boolean` | `true` | Shows the caret at the write head while live. |
 | `reserve` | `boolean` | `false` | Holds the final layout during playback, plus the answer's current height from `replay()`; ignored while `streaming`. |
 | `renderers` | `Record<string, Component>` | — | Components for custom parts, by name; a `part-<name>` slot wins. |

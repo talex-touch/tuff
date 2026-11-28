@@ -25,6 +25,7 @@ withDefaults(defineProps<TxAiMarkdownProps>(), {
     <TxStreamMarkdown
       :content="content"
       :streaming="streaming"
+      :paced="streaming"
       :sanitize="sanitize"
       :theme="theme"
       reveal="blur"
@@ -36,6 +37,7 @@ withDefaults(defineProps<TxAiMarkdownProps>(), {
     :class="{ 'is-streaming': streaming }"
     :content="content"
     :streaming="streaming"
+    :paced="streaming"
     :sanitize="sanitize"
     :theme="theme"
     reveal="blur"

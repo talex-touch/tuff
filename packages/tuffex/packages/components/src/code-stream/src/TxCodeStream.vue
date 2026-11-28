@@ -38,7 +38,7 @@ const props = withDefaults(defineProps<CodeStreamProps>(), {
   // Vue casts an absent boolean prop to `false`; whether `streaming` is set at
   // all is what selects streaming mode.
   streaming: undefined,
-  reveal: 'aurora',
+  reveal: 'blur',
   reserve: false,
   paced: true,
   appear: false,

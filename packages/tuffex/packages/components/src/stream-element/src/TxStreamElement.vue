@@ -22,7 +22,7 @@ defineOptions({ name: 'TxStreamElement' })
 const props = withDefaults(defineProps<StreamElementProps>(), {
   content: '',
   streaming: false,
-  reveal: 'aurora',
+  reveal: 'blur',
   caret: true,
   reserve: false,
   runnable: false,
@@ -258,6 +258,7 @@ function renderLeaf(node: Exclude<PlanNode, { kind: 'list' | 'quote' }>, ctx: Re
         class: 'tx-stream-element__markdown',
         ...props.markdownProps,
         content,
+        paced: false,
         streaming: head,
         reveal,
         caret,

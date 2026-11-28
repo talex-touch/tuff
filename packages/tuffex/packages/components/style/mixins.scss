@@ -627,7 +627,7 @@ $skeleton-shimmer-duration: 1.2s !default;
   @keyframes tx-stream-fade-blur {
     0% {
       opacity: 0;
-      filter: blur(4px);
+      filter: blur(3.5px);
     }
   }
 
@@ -692,7 +692,7 @@ $skeleton-shimmer-duration: 1.2s !default;
     }
 
     &.is-reveal-blur #{$word} {
-      animation: tx-stream-fade-blur $duration $settle both;
+      animation: tx-stream-fade-blur $duration cubic-bezier(0.22, 1, 0.36, 1) both;
     }
 
     &.is-reveal-languid #{$word} {

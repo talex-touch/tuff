@@ -49,7 +49,13 @@ code: |
 |------|------|---------|------|
 | `content` | `string` | — | Markdown 原文，必填。 |
 | `streaming` | `boolean` | `false` | 仍在输出；控制光标、显影与尾部围栏的延迟渲染。 |
-| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | 新文字的进场方式，预设同 `TxStreamText`；`languid` 只保留缓慢模糊，不上浮。 |
+| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'blur'` | 新文字的进场方式，默认纯黑白模糊显影；预设同 `TxStreamText`，`languid` 只保留缓慢模糊，不上浮。 |
+| `paced` | `boolean` | `false` | 开启后通过 `useStreamPacer` 按词匀速放出突发 Markdown 内容；嵌套在 `TxStreamElement` 内时保持 `false`。 |
+| `wordMs` | `number` | `24` | `paced` 开启时，每 `wordMs` 放出一个词。 |
+| `maxLagMs` | `number` | `600` | `paced` 开启时，任何词都在到达后这段时间内显示。 |
+| `drainMs` | `number` | `320` | `paced` 开启且 `streaming` 变为 `false` 后，在这段时间内放完剩余积压。 |
+| `pauseMs` | `number` | `400` | `paced` 开启时，超过这段时间没有新词即进入 `paused`。 |
+| `locale` | `string` | `'zh'` | `paced` 开启时传给 `Intl.Segmenter` 的分词语言。 |
 | `caret` | `boolean` | `true` | `streaming` 时在写入位置显示 Tuff 光标；关闭时立即移除。 |
 | `sanitize` | `boolean` | `true` | 用 DOMPurify 净化 HTML。 |
 | `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | 配色主题；`auto` 跟随环境。 |

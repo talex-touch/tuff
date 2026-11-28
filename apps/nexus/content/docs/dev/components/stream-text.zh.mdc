@@ -113,7 +113,7 @@ code: |
 | `maxLagMs` | `number` | `600` | 任何词都在到达后这段时间内显示。 |
 | `drainMs` | `number` | `320` | `streaming` 变为 false 后，在这段时间内放完剩余部分。 |
 | `pauseMs` | `number` | `400` | 输出中超过这段时间没有新词即报告 `paused`。 |
-| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | 词的进场方式，见 `StreamRevealPreset`。 |
+| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'blur'` | 词的进场方式，默认纯黑白模糊显影，见 `StreamRevealPreset`。 |
 | `caret` | `boolean` | `true` | 流式进行时显示光标；关闭时立即移除。 |
 | `reserve` | `boolean` | `false` | 完整内容回放时用隐形副本占住最终版面；`streaming` 时忽略。 |
 | `paced` | `boolean` | `true` | 为 `false` 时词一到就显示（仍有进场）；`TxStreamElement` 统一控制节奏时传 `false`。 |
