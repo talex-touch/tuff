@@ -224,7 +224,7 @@ const previewDocument = computed(() => {
   const inner = props.lang === 'svg' || props.lang === 'xml'
     ? `<!doctype html><meta charset="utf-8"><body style="margin:0;display:grid;place-items:center">${props.code}</body>`
     : props.code
-  return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}"><style>html,body{margin:0;height:100%;background:#fff}iframe{display:block;width:100%;height:100%;border:0}</style><iframe sandbox="" srcdoc="${escapeAttribute(inner)}"></iframe>`
+  return `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}"><style>html,body{margin:0;height:100%;background:transparent}iframe{display:block;width:100%;height:100%;border:0}</style><iframe sandbox="" srcdoc="${escapeAttribute(inner)}"></iframe>`
 })
 
 function togglePreview(): void {
