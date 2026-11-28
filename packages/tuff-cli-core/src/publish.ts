@@ -588,10 +588,19 @@ export async function logout(): Promise<void> {
   }
 }
 
-const UNSAFE_CLI_ARG_RE = /[\0\r\n&|<>^%!"'`;$]/
+const UNSAFE_CLI_ARG_RE = /[\s()&|<>^%!"'`;$]/
+
+function hasControlChar(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i)
+    if (code <= 0x1F || code === 0x7F)
+      return true
+  }
+  return false
+}
 
 function assertSafeCliArg(value: string, label: string): string {
-  if (UNSAFE_CLI_ARG_RE.test(value))
+  if (UNSAFE_CLI_ARG_RE.test(value) || hasControlChar(value))
     throw new Error(`Invalid ${label}: contains disallowed shell or control characters.`)
   return value
 }

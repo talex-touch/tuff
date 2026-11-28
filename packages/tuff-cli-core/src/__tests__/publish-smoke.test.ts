@@ -444,6 +444,8 @@ describe('publish', () => {
       'https://registry.npmjs.org/%TEMP%',
       'latest^evil',
       'tag"bad',
+      'tag with space',
+      '(evil)',
     ]) {
       expect(() => resolveNpmPublishInvocation(['publish', '--registry', badArg], { platform: 'win32' }), badArg).toThrow(/disallowed/i)
     }

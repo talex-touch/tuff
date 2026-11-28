@@ -2,6 +2,7 @@
 import type { ViteDevServer } from 'vite'
 import type { Options } from './types'
 import { Buffer } from 'node:buffer'
+import nodePath from 'node:path'
 import process from 'node:process'
 import Debug from 'debug'
 import fs from 'fs-extra'
@@ -40,15 +41,42 @@ function getRequestSuffix(id: string): string {
   return suffixIndex === -1 ? '' : id.slice(suffixIndex)
 }
 
-function isContainedPath(rootDir: string, candidatePath: string): boolean {
-  const resolvedRoot = path.resolve(rootDir)
-  const resolvedCandidate = path.resolve(candidatePath)
-  const rel = path.relative(resolvedRoot, resolvedCandidate)
+const WINDOWS_DRIVE_PREFIX_RE = /^[a-z]:/i
+
+export function isContainedPath(rootDir: string, candidatePath: string): boolean {
+  const normalizedRoot = rootDir.replace(/\\/g, '/')
+  const normalizedCandidate = candidatePath.replace(/\\/g, '/')
+  const usesWindowsDrive = WINDOWS_DRIVE_PREFIX_RE.test(normalizedRoot)
+    || WINDOWS_DRIVE_PREFIX_RE.test(normalizedCandidate)
+
+  if (usesWindowsDrive) {
+    const resolvedRoot = nodePath.win32.resolve(rootDir)
+    const resolvedCandidate = nodePath.win32.resolve(candidatePath)
+    const rootDrive = WINDOWS_DRIVE_PREFIX_RE.exec(resolvedRoot)?.[0]?.toLowerCase() ?? ''
+    const candidateDrive = WINDOWS_DRIVE_PREFIX_RE.exec(resolvedCandidate)?.[0]?.toLowerCase() ?? ''
+    if (!rootDrive || rootDrive !== candidateDrive)
+      return false
+    const rel = nodePath.win32.relative(resolvedRoot, resolvedCandidate).replace(/\\/g, '/')
+    return Boolean(rel)
+      && rel !== '.'
+      && rel !== '..'
+      && !rel.startsWith('../')
+      && !rel.startsWith('/')
+      && !WINDOWS_DRIVE_PREFIX_RE.test(rel)
+      && !nodePath.win32.isAbsolute(rel)
+  }
+
+  const resolvedRoot = path.resolve(normalizedRoot)
+  const resolvedCandidate = path.resolve(normalizedCandidate)
+  const rel = path.relative(resolvedRoot, resolvedCandidate).replace(/\\/g, '/')
   return Boolean(rel)
     && rel !== '.'
     && rel !== '..'
     && !rel.startsWith('../')
+    && !rel.startsWith('/')
+    && !WINDOWS_DRIVE_PREFIX_RE.test(rel)
     && !path.isAbsolute(rel)
+    && !nodePath.win32.isAbsolute(rel)
 }
 
 type VirtualPathResolution
@@ -56,7 +84,7 @@ type VirtualPathResolution
     | { kind: 'traversal' }
     | { kind: 'unmatched' }
 
-function resolveAllowedVirtualFile(
+export function resolveAllowedVirtualFile(
   projectRoot: string,
   rawFileId: string,
   filesToVirtualize: readonly string[],
@@ -65,21 +93,35 @@ function resolveAllowedVirtualFile(
     return { kind: 'traversal' }
 
   const normalizedSeparators = rawFileId.replace(/\\/g, '/')
+  if (normalizedSeparators.startsWith('//'))
+    return { kind: 'traversal' }
+
   const cleaned = normalizedSeparators.replace(/^\/+/, '')
   if (!cleaned)
     return { kind: 'unmatched' }
+
+  if (WINDOWS_DRIVE_PREFIX_RE.test(cleaned) || nodePath.win32.isAbsolute(cleaned))
+    return { kind: 'traversal' }
 
   const segments = cleaned.split('/')
   if (segments.includes('..'))
     return { kind: 'traversal' }
 
-  const resolvedRoot = path.resolve(projectRoot)
-  const resolvedPath = path.resolve(resolvedRoot, cleaned)
+  const isWinProject = WINDOWS_DRIVE_PREFIX_RE.test(projectRoot.replace(/\\/g, '/'))
+  const resolvedRoot = isWinProject ? nodePath.win32.resolve(projectRoot) : path.resolve(projectRoot)
+  const resolvedPath = isWinProject
+    ? nodePath.win32.resolve(resolvedRoot, cleaned)
+    : path.resolve(resolvedRoot, cleaned)
   if (!isContainedPath(resolvedRoot, resolvedPath))
     return { kind: 'traversal' }
 
-  const normalizedRel = path.relative(resolvedRoot, resolvedPath).replace(/\\/g, '/')
-  const widgetsRoot = path.resolve(resolvedRoot, 'widgets')
+  const normalizedRel = (isWinProject
+    ? nodePath.win32.relative(resolvedRoot, resolvedPath)
+    : path.relative(resolvedRoot, resolvedPath)
+  ).replace(/\\/g, '/')
+  const widgetsRoot = isWinProject
+    ? nodePath.win32.resolve(resolvedRoot, 'widgets')
+    : path.resolve(resolvedRoot, 'widgets')
   const insideWidgets = isContainedPath(widgetsRoot, resolvedPath)
 
   if (filesToVirtualize.includes(normalizedRel) || insideWidgets) {
@@ -426,7 +468,14 @@ export default createUnplugin<Options | undefined>((options, meta) => {
             return
           }
 
-          if (rawDecodedPath.includes('\0') || /(?:^|[\\/])\.\.(?:[\\/]|$)/.test(rawDecodedPath)) {
+          if (
+            rawDecodedPath.includes('\0')
+            || /(?:^|[\\/])\.\.(?:[\\/]|$)/.test(rawDecodedPath)
+            || rawDecodedPath.startsWith('//')
+            || rawDecodedPath.startsWith('\\\\')
+            || /^\/+[a-z]:/i.test(rawDecodedPath)
+            || WINDOWS_DRIVE_PREFIX_RE.test(rawDecodedPath)
+          ) {
             res.statusCode = 403
             res.setHeader('Content-Type', 'text/plain; charset=utf-8')
             res.end('[Tuff DevKit] Forbidden path.')

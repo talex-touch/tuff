@@ -860,6 +860,7 @@ const MAX_REGEX_QUANTIFIERS = 20;
 const MAX_REGEX_GROUP_DEPTH = 12;
 const MAX_REGEX_FINITE_REPETITION = 100;
 const WIDE_QUANTIFIER_SPAN = 10;
+const MAX_OVERLAPPING_BRANCH_PRODUCT = 256;
 
 function createEmptyCharSet(): RegexCharSet {
   return { ascii: new Uint32Array(4), nonAscii: false };
@@ -1325,11 +1326,124 @@ function allCharSet(node: RegexAstNode): RegexCharSet {
   }
 }
 
-function isWideQuantifier(node: RegexAstNode): boolean {
-  return (
-    node.kind === "quantifier" &&
-    (!Number.isFinite(node.max) || node.max - node.min >= WIDE_QUANTIFIER_SPAN)
-  );
+function capBranchProduct(product: number): number {
+  return product > MAX_OVERLAPPING_BRANCH_PRODUCT
+    ? MAX_OVERLAPPING_BRANCH_PRODUCT + 1
+    : product;
+}
+
+function flattenSequenceItems(node: RegexAstNode): RegexAstNode[] {
+  if (node.kind === "group" && !node.lookaround) {
+    return flattenSequenceItems(node.body);
+  }
+  if (node.kind === "sequence") {
+    return node.items.flatMap(flattenSequenceItems);
+  }
+  return [node];
+}
+
+function getVariableQuantifierSpan(node: RegexAstNode): number {
+  switch (node.kind) {
+    case "empty":
+    case "anchor":
+    case "charset":
+    case "backref":
+      return 1;
+    case "group":
+      return node.lookaround ? 1 : getVariableQuantifierSpan(node.body);
+    case "quantifier": {
+      if (node.min !== node.max) {
+        return Number.isFinite(node.max)
+          ? node.max - node.min + 1
+          : Number.POSITIVE_INFINITY;
+      }
+      return getVariableQuantifierSpan(node.body);
+    }
+    case "alternation": {
+      let maxSpan = 1;
+      for (const branch of node.branches) {
+        const span = getVariableQuantifierSpan(branch);
+        if (span > maxSpan) maxSpan = span;
+      }
+      return maxSpan;
+    }
+    case "sequence": {
+      let maxSpan = 1;
+      for (const item of node.items) {
+        const span = getVariableQuantifierSpan(item);
+        if (span > maxSpan) maxSpan = span;
+      }
+      return maxSpan;
+    }
+  }
+}
+
+function getAlternationAmbiguityFactor(branches: RegexAstNode[]): number {
+  const sets = branches.map(firstCharSet);
+  const nullableFlags = branches.map(canMatchEmpty);
+  let ambiguousCount = 0;
+
+  for (let i = 0; i < branches.length; i += 1) {
+    if (nullableFlags[i]) {
+      ambiguousCount += 1;
+      continue;
+    }
+    let overlapsOther = false;
+    for (let j = 0; j < branches.length; j += 1) {
+      if (i !== j && charSetsOverlap(sets[i]!, sets[j]!)) {
+        overlapsOther = true;
+        break;
+      }
+    }
+    if (overlapsOther) ambiguousCount += 1;
+  }
+
+  // A single nullable branch in a multi-branch alternation (e.g. `(a|)`) still creates
+  // a 2-way choice (consume branch vs skip via empty branch).
+  if (ambiguousCount === 1 && nullableFlags.some(Boolean) && branches.length >= 2) {
+    return 2;
+  }
+  return Math.max(1, ambiguousCount);
+}
+
+function computeAmbiguousAlternationProduct(node: RegexAstNode): number {
+  switch (node.kind) {
+    case "empty":
+    case "anchor":
+    case "charset":
+    case "backref":
+      return 1;
+    case "group":
+      return node.lookaround ? 1 : computeAmbiguousAlternationProduct(node.body);
+    case "quantifier": {
+      const inner = computeAmbiguousAlternationProduct(node.body);
+      if (inner <= 1) return 1;
+      const reps = Number.isFinite(node.max) ? node.max : MAX_OVERLAPPING_BRANCH_PRODUCT + 1;
+      let product = 1;
+      for (let i = 0; i < reps; i += 1) {
+        product = capBranchProduct(product * inner);
+        if (product > MAX_OVERLAPPING_BRANCH_PRODUCT) return product;
+      }
+      return product;
+    }
+    case "alternation": {
+      const selfFactor = getAlternationAmbiguityFactor(node.branches);
+      let maxBranchProduct = 1;
+      for (const branch of node.branches) {
+        const bp = computeAmbiguousAlternationProduct(branch);
+        if (bp > maxBranchProduct) maxBranchProduct = bp;
+      }
+      return capBranchProduct(selfFactor * maxBranchProduct);
+    }
+    case "sequence": {
+      let product = 1;
+      for (const item of node.items) {
+        product = capBranchProduct(product * computeAmbiguousAlternationProduct(item));
+        if (product > MAX_OVERLAPPING_BRANCH_PRODUCT) return product;
+      }
+      return product;
+    }
+  }
 }
 
 function containsVariableQuantifier(node: RegexAstNode): boolean {
@@ -1426,26 +1540,57 @@ function inspectRegexAstRisk(node: RegexAstNode, insideRepeat: boolean): boolean
     case "alternation":
       return node.branches.some((branch) => inspectRegexAstRisk(branch, insideRepeat));
     case "sequence": {
+      const items = node.items.flatMap(flattenSequenceItems);
       let overlappingWideCount = 0;
-      for (let i = 0; i < node.items.length; i += 1) {
-        const current = node.items[i]!;
+      let followerOverlapProduct = 1;
+      const ambiguousVarIndices = new Set<number>();
+
+      for (let i = 0; i < items.length; i += 1) {
+        const current = items[i]!;
         if (inspectRegexAstRisk(current, insideRepeat)) return true;
-        if (!isWideQuantifier(current)) continue;
+
+        const currentSpan = getVariableQuantifierSpan(current);
+        if (currentSpan <= 1) continue;
 
         const currentChars = allCharSet(current);
-        let overlapsImmediateFollower = false;
-        for (let j = i + 1; j < node.items.length; j += 1) {
-          const next = node.items[j]!;
+        let overlapsAnyFollower = false;
+        for (let j = i + 1; j < items.length; j += 1) {
+          const next = items[j]!;
           const nextFirst = firstCharSet(next);
           if (charSetsOverlap(currentChars, nextFirst)) {
-            overlapsImmediateFollower = true;
-            if (isWideQuantifier(next)) return true;
+            overlapsAnyFollower = true;
+            const nextSpan = getVariableQuantifierSpan(next);
+            if (nextSpan > 1) {
+              if (currentSpan >= WIDE_QUANTIFIER_SPAN && nextSpan >= WIDE_QUANTIFIER_SPAN) {
+                return true;
+              }
+              ambiguousVarIndices.add(i);
+              ambiguousVarIndices.add(j);
+            }
           }
           if (!canMatchEmpty(next)) break;
         }
-        if (overlapsImmediateFollower) {
-          overlappingWideCount += 1;
-          if (overlappingWideCount >= 3) return true;
+        if (overlapsAnyFollower) {
+          const boundedFactor = Math.min(currentSpan, WIDE_QUANTIFIER_SPAN);
+          followerOverlapProduct = capBranchProduct(followerOverlapProduct * boundedFactor);
+          if (followerOverlapProduct > MAX_OVERLAPPING_BRANCH_PRODUCT) return true;
+          if (currentSpan >= WIDE_QUANTIFIER_SPAN) {
+            overlappingWideCount += 1;
+            if (overlappingWideCount >= 3) return true;
+          }
+        }
+      }
+
+      if (ambiguousVarIndices.size > 0) {
+        let varChainProduct = 1;
+        for (const idx of ambiguousVarIndices) {
+          const factor = Math.min(getVariableQuantifierSpan(items[idx]!), WIDE_QUANTIFIER_SPAN);
+          varChainProduct = capBranchProduct(varChainProduct * factor);
+          if (varChainProduct > MAX_OVERLAPPING_BRANCH_PRODUCT) return true;
+        }
+        const altProduct = computeAmbiguousAlternationProduct({ kind: "sequence", items });
+        if (capBranchProduct(varChainProduct * altProduct) > MAX_OVERLAPPING_BRANCH_PRODUCT) {
+          return true;
         }
       }
       return false;
@@ -1470,6 +1615,10 @@ export function hasRegexBacktrackingRisk(pattern: string, flags = ""): boolean {
   }
 
   if (parsed.quantifierCount > MAX_REGEX_QUANTIFIERS || parsed.maxDepth > MAX_REGEX_GROUP_DEPTH) {
+    return true;
+  }
+
+  if (computeAmbiguousAlternationProduct(parsed.ast) > MAX_OVERLAPPING_BRANCH_PRODUCT) {
     return true;
   }
 

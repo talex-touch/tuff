@@ -18,6 +18,15 @@ describe('QuickOpsDeveloperAbility regex ReDoS guard', () => {
       'regex /([a-z]+)*/ ',
       'regex /(a?)+/ ',
       'regex /((?=a+)a)+/ ',
+      'regex /(a+)(a+)(a+)(a+)b/ ',
+      'regex /(?:a*)(?:a*)(?:a*)(?:a*)b/ ',
+      'regex /a{0,9}a{0,9}a{0,9}a{0,9}a{0,9}a{0,9}a{0,9}b/ ',
+      'regex /a{0,5}a{0,5}a{0,5}a{0,5}b/ ',
+      'regex /a{0,9}aa{0,9}aa{0,9}aa{0,9}b/ ',
+      `regex /${'(a|a)'.repeat(25)}b/ `,
+      `regex /${'(a|ab)'.repeat(12)}c/ `,
+      `regex /${'(a|)'.repeat(12)}b/ `,
+      `regex /${'(a|a)x'.repeat(12)}!/ `,
     ]
 
     const start = performance.now()
@@ -36,6 +45,8 @@ describe('QuickOpsDeveloperAbility regex ReDoS guard', () => {
     expect(hasRegexBacktrackingRisk('(foo|bar)+')).toBe(false)
     expect(hasRegexBacktrackingRisk('[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}', 'i')).toBe(false)
     expect(hasRegexBacktrackingRisk('\\b\\d{4}-\\d{2}-\\d{2}\\b')).toBe(false)
+    expect(hasRegexBacktrackingRisk('(http|https)://(www|web)\\.(com|cn)')).toBe(false)
+    expect(hasRegexBacktrackingRisk('^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$')).toBe(false)
 
     const ability = new QuickOpsDeveloperAbility()
     const result = await ability.execute({

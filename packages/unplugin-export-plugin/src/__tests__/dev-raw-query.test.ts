@@ -2,7 +2,7 @@ import os from 'node:os'
 import path from 'node:path'
 import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
-import TouchPluginExport from '../index'
+import TouchPluginExport, { isContainedPath, resolveAllowedVirtualFile } from '../index'
 
 async function createPlugin(root: string) {
   await fs.writeJson(path.join(root, 'manifest.json'), {
@@ -88,6 +88,8 @@ describe('dev raw file loading', () => {
         '/widgets/../../secret.txt?raw',
         '/widgets/..%2F..%2Fsecret.txt?raw',
         '/../../secret.txt?raw',
+        '/C:/Windows/win.ini?raw',
+        '//server/share/secret.txt?raw',
       ]) {
         let statusCode = 0
         let body = ''
@@ -111,5 +113,30 @@ describe('dev raw file loading', () => {
       process.chdir(previousCwd)
       await fs.remove(parent)
     }
+  })
+
+  it('rejects Windows backslash traversal, drive-letter escapes, and UNC paths in path containment helpers', () => {
+    expect(isContainedPath('C:\\proj', 'C:\\Windows\\win.ini')).toBe(false)
+    expect(isContainedPath('C:\\proj', 'C:\\proj-other\\widgets\\a.vue')).toBe(false)
+    expect(isContainedPath('C:\\proj', 'D:\\proj\\widgets\\a.vue')).toBe(false)
+    expect(isContainedPath('C:\\proj', 'C:\\proj\\widgets\\ask-panel.vue')).toBe(true)
+
+    expect(resolveAllowedVirtualFile('C:\\proj', 'C:/Windows/win.ini', ['manifest.json'])).toEqual({
+      kind: 'traversal',
+    })
+    expect(resolveAllowedVirtualFile('C:\\proj', '/C:/Windows/win.ini', ['manifest.json'])).toEqual({
+      kind: 'traversal',
+    })
+    expect(resolveAllowedVirtualFile('C:\\proj', 'C:\\Windows\\win.ini', ['manifest.json'])).toEqual({
+      kind: 'traversal',
+    })
+    expect(resolveAllowedVirtualFile('C:\\proj', '//server/share/secret.txt', ['manifest.json'])).toEqual({
+      kind: 'traversal',
+    })
+    expect(resolveAllowedVirtualFile('C:\\proj', 'widgets/ask-panel.vue', ['manifest.json'])).toEqual({
+      kind: 'allowed',
+      fileId: 'widgets/ask-panel.vue',
+      filePath: 'C:\\proj\\widgets\\ask-panel.vue',
+    })
   })
 })
